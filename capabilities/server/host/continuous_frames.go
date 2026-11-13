@@ -2,7 +2,6 @@ package host
 
 import (
 	"context"
-	"crypto/sha256"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -10,6 +9,7 @@ import (
 	"platformkernel/kernel"
 	acceptedformat "platformserver/kernel/acceptedformat"
 	"platformserver/platform"
+	automation "platformserver/services/automate/runtime"
 	"platformserver/services/functions/runtime"
 	"slices"
 	"time"
@@ -73,18 +73,8 @@ func (t *Tenant) ConsumeFlowBatch(m platform.Member, id string, batch platform.F
 	if refusal != nil {
 		return platform.FlowBatchOutcome{}, refusal
 	}
-	digest, err := json.Marshal(batch)
-	if err != nil {
-		return platform.FlowBatchOutcome{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "A batch needs valid JSON signal values")
-	}
-	batchDigest := fmt.Sprintf("sha256:%x", sha256.Sum256(digest))
-	key := platform.FlowBatchKey(id, before.Version, batch.ID)
-	if prior := f.AcceptedLedger().AcceptedFor(t.ID, key); prior != nil {
-		var saved struct{ Batch, Digest string }
-		if json.Unmarshal(prior.GetSubmission().GetPayload(), &saved) != nil || saved.Batch != batch.ID || saved.Digest != batchDigest {
-			return platform.FlowBatchOutcome{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_IDEMPOTENCY_CONFLICT, "The batch identity was reused with different content")
-		}
-		return platform.FlowBatchOutcome{Cursor: batch.ID}, nil
+	if outcome, done, refusal := automation.ReplayBatch(f, t.ID, before, batch); done || refusal != nil {
+		return outcome, refusal
 	}
 	if before.CleanupPending {
 		if refusal := t.cleanupFlowArtifactsFor(m, id, now); refusal != nil {
@@ -310,21 +300,9 @@ func (t *Tenant) prepareContinuousDeadLetterReplay(m platform.Member, sub *pb.Su
 }
 
 func (t *Tenant) retireContinuousArtifacts(plan platform.FlowArtifactCleanupPreparation, now time.Time) *kernel.Error {
-	if plan == nil || plan.Instance() == "" || now.IsZero() {
-		return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Flow artifact cleanup is unavailable")
-	}
-	refs := plan.Artifacts()
-	if len(refs) == 0 {
-		return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The Flow artifact cleanup intent is empty")
-	}
 	store := t.frames()
-	for _, ref := range refs {
-		if ref.Tenant != t.ID {
-			return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "A retired Flow artifact belongs to another tenant")
-		}
-		if err := store.Discard(ref); err != nil {
-			return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "A superseded Flow artifact could not be retired: "+err.Error())
-		}
+	if refusal := automation.RetireArtifacts(plan, t.ID, now, store.Discard); refusal != nil {
+		return refusal
 	}
 
 	member := platform.Member{ID: "app:" + platform.FlowApp, Tenant: t.ID}
@@ -396,57 +374,34 @@ func (t *Tenant) retryContinuousCompute(member platform.Member, plan platform.Fl
 }
 
 func (t *Tenant) prepareContinuousOperationInput(member platform.Member, instance string, request platform.OperationRequest) (*preparedOperationInput, *kernel.Error) {
-	refuse := func(code pb.ErrorCode, message string) (*preparedOperationInput, *kernel.Error) {
-		return nil, platform.Refuse(code, message)
+	sealer := automation.OperationInputSealer{
+		Operation: func(request platform.OperationRequest) (platform.Operation, int, *kernel.Error) {
+			type binding struct {
+				operation platform.Operation
+				version   int
+			}
+			bound, refusal := recordRead(t, context.Background(), func(t *Tenant) (binding, *kernel.Error) {
+				current, ok := t.Member(member.ID)
+				owner := t.App(request.App)
+				if !ok || current.Tenant != t.ID || owner == nil {
+					return binding{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "The prepared window Compute owner or member is unavailable")
+				}
+				op, version, ok := compute.OperationDefinition(owner, request.Name, request.Version)
+				if !ok || op.Check() != nil {
+					return binding{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_NOT_FOUND, "The prepared window Compute operation is not retained")
+				}
+				return binding{op, version}, nil
+			})
+			return bound.operation, bound.version, refusal
+		},
+		Seal: func(app, key, member, definition, hash string, inputs json.RawMessage, budget int) (platform.OperationInputArtifact, error) {
+			return t.staged.SealInput(fmt.Sprintf("%s:%s:operation:%s:%s", t.ID, app, key, acceptedformat.OperationEndpoint), member, definition, hash, inputs, budget)
+		},
+		Discard: t.staged.DiscardInput,
 	}
-	if request.App == "" || request.Name == "" || request.Key == "" || request.OnBehalf != member.ID || request.Target != platform.FlowInstanceType+"/"+instance {
-		return refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "The prepared window names an invalid Compute operation")
-	}
-	type binding struct {
-		operation  platform.Operation
-		definition string
-		budget     int
-	}
-	bound, refusal := recordRead(t, context.Background(), func(t *Tenant) (binding, *kernel.Error) {
-		current, ok := t.Member(member.ID)
-		owner := t.App(request.App)
-		if !ok || current.Tenant != t.ID || owner == nil {
-			return binding{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "The prepared window Compute owner or member is unavailable")
-		}
-		op, version, ok := compute.OperationDefinition(owner, request.Name, request.Version)
-		if !ok || op.Check() != nil {
-			return binding{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_NOT_FOUND, "The prepared window Compute operation is not retained")
-		}
-		definition, err := platform.CanonicalDigest([]any{request.App, op, version})
-		if err != nil {
-			return binding{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The prepared window Compute definition cannot be bound")
-		}
-		return binding{op, definition, op.Limits.DataInputBytes}, nil
-	})
-	if refusal != nil {
+	ref, requestHash, sealed, refusal := sealer.Prepare(member, instance, request)
+	if refusal != nil || !sealed {
 		return nil, refusal
-	}
-	op, definition, budget := bound.operation, bound.definition, bound.budget
-	if budget == 0 {
-		return nil, nil
-	}
-	if err := op.Input.Validate(request.Inputs, budget); err != nil {
-		return refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "The window does not satisfy its Compute input: "+err.Error())
-	}
-	hash, err := platform.CanonicalDigest(request.Inputs)
-	if err != nil {
-		return refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "The prepared window Compute input cannot be encoded")
-	}
-	call := fmt.Sprintf("%s:%s:operation:%s:%s", t.ID, request.App, request.Key, acceptedformat.OperationEndpoint)
-	ref, err := t.staged.SealInput(call, member.ID, definition, hash, request.Inputs, budget)
-	if err != nil {
-		t.staged.DiscardInput(ref)
-		return refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The prepared window Compute input could not be sealed: "+err.Error())
-	}
-	requestHash, err := platform.CanonicalDigest(request)
-	if err != nil {
-		t.staged.DiscardInput(ref)
-		return refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The prepared window Compute request cannot be bound")
 	}
 	return &preparedOperationInput{ref: ref, requestHash: requestHash}, nil
 }

@@ -71,79 +71,22 @@ func (t *Tenant) projectDataset(object, app, dataset string, now time.Time) {
 	if refusal != nil || prepared.dataset.ID == "" {
 		return
 	}
-	ds, previous, known, data, version, marking, member, err := prepared.dataset, prepared.previous, prepared.known, prepared.data, prepared.version, prepared.marking, prepared.member, prepared.err
-	result := dataowner.DatasetProjection{Object: object, Version: ds.Version, At: now, Rows: len(data), MergeVersion: 1, Marking: marking, Compartments: slices.Clone(ds.Compartments)}
-	pause := func(reason string) {
-		result.Paused = reason
-		t.recordProjection(member, dataset, previous, known, result, now)
-	}
-	if err != nil {
-		pause(err.Error())
-		return
-	}
-	result.Version = version
-	if open := t.unguarded(object, marking); len(open) > 0 {
-		pause(fmt.Sprintf("The dataset is %s and the fields %v name no readers", marking, open))
-		return
-	}
-	at := now
-	if ds.Last != nil && ds.Last.Version == version {
-		at = ds.Last.At
-	}
-	rows, binding, err := t.declaredRows(object, "dataset", dataset, data, at)
-	if err != nil || binding == nil {
-		pause(fmt.Sprintf("The data source binding is unavailable: %v", err))
-		return
-	}
-	if _, refusal := t.prepareRows(member, object, "dataset:"+ds.Name, rows, now); refusal != nil {
-		pause(refusal.Message)
-		return
-	}
-	problem := func(row dataowner.SourceRow, message string) {
-		result.Refused++
-		if len(result.Problems) < 5 {
-			result.Problems = append(result.Problems, row.ID+": "+message)
-		}
-	}
-	for _, row := range rows {
-		result.Objects = append(result.Objects, row.ID)
-		if row.Error != "" {
-			problem(row, row.Error)
-			continue
-		}
-		key := fmt.Sprintf("dataset-merge-v1:%s:%s@%d:%s", object, dataset, version, row.Key)
-		if t.integrationRefused(app, key) {
-			problem(row, "refused")
-			continue
-		}
-		if !t.integrationAnswered(app, key) {
-			if err := t.submitIntegrationRow(member, app, object, binding, row, key, now); err != nil {
-				if !t.integrationRefused(app, key) {
-					pause(fmt.Sprintf("Paused at %s: %s", row.ID, err.Message))
-					return
-				}
-				problem(row, err.Message)
-				continue
-			}
-		}
-		result.Written++
-	}
-	if result.Refused == 0 {
-		removed, refusal := t.absentSourceRows(object, binding, rows, at)
-		if refusal != nil {
-			pause(refusal.Message)
-			return
-		}
-		for _, row := range removed {
-			key := fmt.Sprintf("dataset-merge-v1:%s:%s@%d:%s", object, dataset, version, row.Key)
-			if refusal := t.submitIntegrationRow(member, app, object, binding, row, key, now); refusal != nil {
-				problem(row, refusal.Message)
-			} else {
-				result.Deleted++
-			}
-		}
-	}
-	t.recordProjection(member, dataset, previous, known, result, now)
+	member := prepared.member
+	result := dataowner.DatasetMerge{Unguarded: t.unguarded,
+		DeclaredRows: t.declaredRows,
+		PrepareRows: func(object, producer string, rows []dataowner.SourceRow) *kernel.Error {
+			_, refusal := t.prepareRows(member, object, producer, rows, now)
+			return refusal
+		},
+		Refused:  func(key string) bool { return t.integrationRefused(app, key) },
+		Answered: func(key string) bool { return t.integrationAnswered(app, key) },
+		Submit: func(binding *platform.DataSourceBinding, row dataowner.SourceRow, key string) *kernel.Error {
+			return t.submitIntegrationRow(member, app, object, binding, row, key, now)
+		},
+		Absent: func(binding *platform.DataSourceBinding, rows []dataowner.SourceRow, at time.Time) ([]dataowner.SourceRow, *kernel.Error) {
+			return t.absentSourceRows(object, binding, rows, at)
+		}}.Project(object, dataset, prepared.dataset, prepared.data, prepared.version, prepared.marking, prepared.err, now)
+	t.recordProjection(member, dataset, prepared.previous, prepared.known, result, now)
 }
 
 func (t *Tenant) recordProjection(member platform.Member, dataset string, previous dataowner.DatasetProjection, known bool, result dataowner.DatasetProjection, now time.Time) {

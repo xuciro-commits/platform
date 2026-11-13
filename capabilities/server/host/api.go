@@ -7,6 +7,7 @@ import (
 	runtimekernel "platformserver/kernel"
 	"platformserver/services/actions"
 	dataowner "platformserver/services/data"
+	controlowner "platformserver/services/security/control"
 
 	"platformserver/kernel/transport"
 
@@ -31,7 +32,7 @@ var namedReads = []transport.Route{
 	{Pattern: "GET /v1/deliveries", Summary: "Delivery attempts of events to subscribers (administrators)", Answer: []platform.Delivery{}},
 	{Pattern: "GET /v1/work", Summary: "Owned work: deliveries and jobs (administrators)", Answer: []automation.Task{}},
 	{Pattern: "GET /v1/connectors", Summary: "Connectors with their health (administrators)", Answer: []runtimekernel.ConnectorView{}},
-	{Pattern: "GET /v1/settings", Summary: "Every app's settings with their values, in the caller's language (administrators)", Answer: []AppSettings{}},
+	{Pattern: "GET /v1/settings", Summary: "Every app's settings with their values, in the caller's language (administrators)", Answer: []controlowner.AppSettings{}},
 	{Pattern: "GET /v1/endpoints", Summary: "Outbound endpoints (administrators)", Answer: []actions.EndpointView{}},
 	{Pattern: "GET /v1/effects", Summary: "Outbound effects and their state (administrators)", Answer: []platform.Effect{}},
 	{Pattern: "GET /v1/health", Summary: "How the tenant's work stands: queues, failed work, deferral, breakers, failing connectors and endpoints (administrators)", Answer: TenantHealth{}},

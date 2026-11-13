@@ -17,7 +17,6 @@ import (
 	"platformserver/services/actions"
 	controlowner "platformserver/services/security/control"
 	"slices"
-	"strings"
 	"time"
 )
 
@@ -337,55 +336,23 @@ func (t *Tenant) notice(c platform.Caller, n platform.Notification, now time.Tim
 }
 
 func (t *Tenant) setting(c platform.Caller, name string) string {
-	app := c.App
-	if tenantWide, ok := strings.CutPrefix(name, controlowner.PlatformApp+"/"); ok {
-		app, name = controlowner.PlatformApp, tenantWide
-	}
-	a := t.App(app)
-	if a == nil {
-		return ""
-	}
-	if v, ok := t.settings.Get(app + "/" + name); ok {
-		return v
-	}
-	settings := transport.ManifestOf(a, t.definitionsFingerprint()).Settings
-	i := slices.IndexFunc(settings, func(s platform.Setting) bool { return s.Name == name })
-	if i < 0 {
-		return ""
-	}
-	return settings[i].Default
+	return t.settings.Value(c.App, name, func(app string) ([]platform.Setting, bool) {
+		a := t.App(app)
+		if a == nil {
+			return nil, false
+		}
+		return transport.ManifestOf(a, t.definitionsFingerprint()).Settings, true
+	})
 }
 
-type AppSettings struct {
-	App      string         `json:"app"`
-	Settings []SettingValue `json:"settings"`
-}
-
-type SettingValue struct {
-	platform.Setting
-	Value string `json:"value"`
-}
-
-func (t *Tenant) Settings() []AppSettings {
+func (t *Tenant) Settings() []controlowner.AppSettings {
 	t.opsMu.Lock()
 	defer t.opsMu.Unlock()
-	out := []AppSettings{}
+	manifests := make([]platform.Manifest, 0, len(t.apps))
 	for _, a := range t.apps {
-		m := a.Manifest()
-		if len(m.Settings) == 0 {
-			continue
-		}
-		s := AppSettings{App: m.ID}
-		for _, x := range m.Settings {
-			v, ok := t.settings.Get(m.ID + "/" + x.Name)
-			if !ok {
-				v = x.Default
-			}
-			s.Settings = append(s.Settings, SettingValue{Setting: x, Value: v})
-		}
-		out = append(out, s)
+		manifests = append(manifests, a.Manifest())
 	}
-	return out
+	return t.settings.Apps(manifests)
 }
 
 func (t *Tenant) decideConnector(_ platform.Caller, s *pb.Submission, _ time.Time) (func(*pb.ChangeRecord), *kernel.Error) {
@@ -398,59 +365,18 @@ func (t *Tenant) decideConnector(_ platform.Caller, s *pb.Submission, _ time.Tim
 }
 
 func (t *Tenant) decideSetting(c platform.Caller, s *pb.Submission, now time.Time) (func(*pb.ChangeRecord), *kernel.Error) {
-	id := s.GetTarget().GetId()
-	var p struct{ Value string }
-	json.Unmarshal(s.GetPayload(), &p)
-	app, name, _ := strings.Cut(id, "/")
-	a := t.App(app)
-	if a == nil {
-		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
-	}
-	if app == controlowner.PlatformApp && strings.HasPrefix(name, "logPolicy/") {
-		targetApp := strings.TrimPrefix(name, "logPolicy/")
-		if t.App(targetApp) == nil {
-			return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
-		}
-		if !c.Replaying {
-			if refusal := controlowner.CheckLogPolicy(p.Value, now); refusal != nil {
-				return nil, refusal
-			}
-		}
-		return func(*pb.ChangeRecord) { t.settings.Set(id, p.Value) }, nil
-	}
-	if !c.Replaying {
-		if refusal := t.logging().CheckSetting(name, p.Value, now); refusal != nil {
-			return nil, refusal
-		}
-	}
-	i := slices.IndexFunc(a.Manifest().Settings, func(x platform.Setting) bool { return x.Name == name })
-	if i < 0 {
-		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
-	}
-	if !a.Manifest().Settings[i].Accepts(p.Value) {
-		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
-	}
-	if !c.Replaying {
-		if err := t.checkEmbeddingSetting(id, p.Value); err != nil {
-			return nil, err
-		}
-		if err := t.modelResolver().CheckSetting(id, p.Value); err != nil {
-			return nil, err
-		}
-	}
-	if !c.Replaying && id == "platform/enterpriseRoot" && p.Value != "" {
-		element, ok := c.Enterprise().Element(p.Value, now)
-		if !ok || element.Stereotype != "ActualOrganization" || element.Owner != "" {
-			return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Choose an active local organization for this tenant")
-		}
+	id, value, refusal := controlowner.SettingChecks{App: t.App, Logging: t.logging().CheckSetting,
+		Values: []func(string, string) *kernel.Error{t.checkEmbeddingSetting, t.modelResolver().CheckSetting}}.Check(c, s, now)
+	if refusal != nil {
+		return nil, refusal
 	}
 	bindEmbedding := id == platform.KnowledgeApp+"/"+platform.SettingKnowledgeEmbeddingModel && !c.Replaying && c.Staging()
 	space := ""
-	if bindEmbedding && p.Value != "" {
-		space = t.vectorSpace(p.Value)
+	if bindEmbedding && value != "" {
+		space = t.vectorSpace(value)
 	}
 	return func(*pb.ChangeRecord) {
-		t.settings.Set(id, p.Value)
+		t.settings.Set(id, value)
 		if bindEmbedding {
 			t.settings.Set(embeddingActiveSpace, space)
 			t.settings.Set(platform.KnowledgeApp+"/"+platform.SettingKnowledgeEmbeddingNext, "")

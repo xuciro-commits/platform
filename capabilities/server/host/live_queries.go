@@ -10,9 +10,9 @@ import (
 	"net/http"
 	"net/url"
 	"path"
+	"platformserver/kernel/transport"
 	"platformserver/platform"
 	"platformserver/services/resources/authoring"
-	"slices"
 	"strings"
 	"time"
 )
@@ -28,37 +28,6 @@ type LiveQueryFrame struct {
 }
 
 const liveReadBudget = 8 << 20
-
-func liveReadAllowed(p string) bool {
-	if strings.HasPrefix(p, "/v1/packages/") && (strings.HasSuffix(p, "/preparation") || strings.HasSuffix(p, "/ownership")) {
-		return true
-	}
-	if strings.HasPrefix(p, "/v1/queries/") || strings.HasPrefix(p, "/v1/object-sets/") {
-		return true
-	}
-	if p == "/v1/page-model/read" {
-		return true
-	}
-	if strings.HasPrefix(p, "/v1/applications/") && (strings.HasSuffix(p, "/runs") || strings.HasSuffix(p, "/runtime") || strings.HasSuffix(p, "/diagnostic")) {
-		return true
-	}
-	if strings.HasPrefix(p, "/v1/dispatches/") && strings.HasSuffix(p, "/targets") {
-		return true
-	}
-	if strings.HasPrefix(p, "/v1/capabilities/") || strings.HasPrefix(p, "/v1/releases/candidates/") {
-		return true
-	}
-	if strings.HasPrefix(p, "/v1/records/") || strings.HasPrefix(p, "/v1/chain/") || p == "/v1/branches" || strings.HasPrefix(p, "/v1/branches/") || p == "/v1/resources" || strings.HasPrefix(p, "/v1/resources/") || strings.HasPrefix(p, "/v1/working-state/") {
-		return true
-	}
-	if rest, ok := strings.CutPrefix(p, "/v1/"); ok && rest != "" && !strings.Contains(rest, "/") {
-		return !slices.Contains([]string{"changes", "sign-in", "openapi.json"}, rest)
-	}
-	return slices.Contains([]string{"/v1/authz/explain", "/v1/ai/model-selection", "/v1/ai/knowledge-index", "/v1/ai/vendors", "/v1/releases/active", "/v1/releases/candidates", "/v1/releases/drafts/working", "/v1/build/drafts/actions", "/v1/page-model/rules"}, p)
-}
-func liveOperationRead(p string) bool {
-	return strings.HasPrefix(p, "/v1/applications/") && (strings.HasSuffix(p, "/runs") || strings.HasSuffix(p, "/runtime") || strings.HasSuffix(p, "/diagnostic")) || strings.HasPrefix(p, "/v1/dispatches/") && strings.HasSuffix(p, "/targets") || strings.HasPrefix(p, "/v1/capabilities/calls/compute/") || slices.Contains([]string{"/v1/health", "/v1/work", "/v1/deliveries", "/v1/effects", "/v1/integration-effects", "/v1/endpoints", "/v1/connectors", "/v1/protocols", "/v1/agent-overview", "/v1/ai-usage", "/v1/ai/knowledge-index"}, p)
-}
 
 type liveCapture struct {
 	header    http.Header
@@ -95,7 +64,7 @@ func followLiveQueries(w http.ResponseWriter, r *http.Request, t *Tenant, m plat
 	for _, query := range queries {
 		target, body, post := strings.Cut(query, "\n")
 		u, err := url.Parse(target)
-		if err != nil || len(query) > 8<<10 || u.Host != "" || u.Scheme != "" || u.Fragment != "" || path.Clean(u.Path) != u.Path || !liveReadAllowed(u.Path) || (post && ((!strings.HasPrefix(u.Path, "/v1/object-sets/") && u.Path != "/v1/page-model/read") || !json.Valid([]byte(body)))) {
+		if err != nil || len(query) > 8<<10 || u.Host != "" || u.Scheme != "" || u.Fragment != "" || path.Clean(u.Path) != u.Path || !transport.LiveReadAllowed(u.Path) || (post && ((!strings.HasPrefix(u.Path, "/v1/object-sets/") && u.Path != "/v1/page-model/read") || !json.Valid([]byte(body)))) {
 			http.Error(w, "unsupported live query", http.StatusBadRequest)
 			return
 		}
@@ -219,132 +188,30 @@ func (t *Tenant) liveVersion(query string) string {
 }
 
 func (t *Tenant) liveReadVersion(query string, global, meta, seq, published int64, owners, ops map[string]int64) string {
-	target, body, _ := strings.Cut(query, "\n")
-	u, _ := url.Parse(target)
-	p := u.Path
-	if p == "/v1/page-model/read" {
-		return fmt.Sprintf("%d/%d/%d", global, meta, t.Projection.Generation())
-	}
-	if strings.HasPrefix(p, "/v1/releases/candidates/") {
-		return fmt.Sprintf("%d/%d/%d/%d", global, meta, owners["ai"], owners["agent"])
-	}
-	if p == "/v1/ai/model-selection" {
-		return fmt.Sprintf("%d/%d/%d/%d", global, meta, owners["ai"], owners["agent"])
-	}
-	if strings.HasPrefix(p, "/v1/packages/") && (strings.HasSuffix(p, "/preparation") || strings.HasSuffix(p, "/ownership")) {
-		return fmt.Sprintf("%d/%d/%d/%d", global, meta, owners["ai"], owners["agent"])
-	}
-	if strings.HasPrefix(p, "/v1/queries/") {
-		t.Projection.Lock()
-		generation := t.Projection.Generation()
-		t.Projection.Unlock()
-		return fmt.Sprintf("%d/%d/%d", global, meta, generation)
-	}
-	if strings.HasPrefix(p, "/v1/applications/") && (strings.HasSuffix(p, "/runs") || strings.HasSuffix(p, "/runtime") || strings.HasSuffix(p, "/diagnostic")) {
-		parts := strings.Split(p, "/")
-		if len(parts) != 6 {
-			return fmt.Sprintf("%d/%d", seq, published)
-		}
-		ref := platform.AssetRef{App: parts[3], Kind: platform.AssetApp, Name: parts[4]}
-		_, graphs, err := t.applicationContext().Graphs(ref)
-		if err != nil {
-			return fmt.Sprint(global, meta, seq)
-		}
-		relevant := []string{}
-		for _, graph := range graphs {
-			for r := range graph {
-				if r.Kind == platform.AssetCompute {
-					relevant = append(relevant, r.App)
+	return transport.LiveVersions{BranchType: build.BranchType,
+		Lock:        func() func() { t.Projection.Lock(); return t.Projection.Unlock },
+		Generation:  t.Projection.Generation,
+		LiveVersion: t.Projection.LiveVersion,
+		Scoped: func(typ string) (bool, bool) {
+			et := t.Projection.Type(typ)
+			return et != nil, et != nil && (et.Info().Scope.Through != nil || et.Info().HasReadSources())
+		},
+		ComputeOwners: func(ref platform.AssetRef) ([]string, error) {
+			_, graphs, err := t.applicationContext().Graphs(ref)
+			relevant := []string{}
+			for _, graph := range graphs {
+				for r := range graph {
+					if r.Kind == platform.AssetCompute {
+						relevant = append(relevant, r.App)
+					}
 				}
 			}
-		}
-		slices.Sort(relevant)
-		relevant = slices.Compact(relevant)
-		operationVersion := ops[""]
-		for _, owner := range relevant {
-			operationVersion += ops[owner]
-		}
-		t.Projection.Lock()
-		a, b := t.Projection.LiveVersion("flow.instance"), t.Projection.LiveVersion("agent.run")
-		t.Projection.Unlock()
-		return fmt.Sprintf("%d/%d/%d/%d/%d/%d", global, meta, a, b, operationVersion, published)
-	}
-	if liveOperationRead(p) || strings.HasPrefix(p, "/v1/chain/") || p == "/v1/business-refusals" || p == "/v1/notifications" || p == "/v1/audit" || p == "/v1/inbox" || p == "/v1/personal-reads" {
-		return fmt.Sprintf("%d/%d", seq, published)
-	}
-	if strings.HasPrefix(p, "/v1/object-sets/") {
-		var request ObjectSetRequest
-		typ := ""
-		var walk func(platform.ObjectSet) bool
-		walk = func(set platform.ObjectSet) bool {
-			if set.Interface != "" || set.Around != nil || set.Object != "" && typ != "" && set.Object != typ {
-				return false
+			return relevant, err
+		},
+		ReadOwner: func(name string) string {
+			if app := t.App(t.owner["read:"+name]); app != nil {
+				return app.Manifest().ID
 			}
-			if set.Object != "" {
-				typ = set.Object
-			}
-			_, operands := set.Operation()
-			for _, operand := range operands {
-				if !walk(operand) {
-					return false
-				}
-			}
-			return true
-		}
-		t.Projection.Lock()
-		defer t.Projection.Unlock()
-		version := t.Projection.Generation()
-		if json.Unmarshal([]byte(body), &request) == nil && walk(request.Set) && request.Collection == nil {
-			if et := t.Projection.Type(typ); et != nil && et.Info().Scope.Through == nil && !et.Info().HasReadSources() {
-				version = t.Projection.LiveVersion(typ)
-			}
-		}
-		return fmt.Sprintf("%d/%d/%d", global, meta, version)
-	}
-	if p == "/v1/branches" || strings.HasPrefix(p, "/v1/branches/") || p == "/v1/resources" || strings.HasPrefix(p, "/v1/resources/") || strings.HasPrefix(p, "/v1/working-state/") {
-		t.Projection.Lock()
-		defer t.Projection.Unlock()
-		if strings.HasSuffix(p, "/changes") {
-			return fmt.Sprintf("%d/%d/%d", global, meta, t.Projection.LiveVersion(build.BranchType))
-		}
-		return fmt.Sprintf("%d/%d/%d", global, meta, t.Projection.Generation())
-	}
-	if rest, ok := strings.CutPrefix(p, "/v1/records/"); ok {
-		typ, tail, _ := strings.Cut(rest, "/")
-		t.Projection.Lock()
-		defer t.Projection.Unlock()
-		version := t.Projection.LiveVersion(typ)
-		if et := t.Projection.Type(typ); et != nil && (et.Info().Scope.Through != nil || et.Info().HasReadSources() || tail != "") {
-			version = t.Projection.Generation()
-		}
-		return fmt.Sprintf("%d/%d/%d", global, meta, version)
-	}
-	if p == "/v1/enterprise" || p == "/v1/enterprise-references" || p == "/v1/enterprise-usage" {
-		t.Projection.Lock()
-		generation := t.Projection.Generation()
-		t.Projection.Unlock()
-		return fmt.Sprintf("%d/%d/%d/%d", global, meta, owners["enterprise"], generation)
-	}
-	owner := "platform"
-	if name, ok := strings.CutPrefix(p, "/v1/"); ok && !strings.Contains(name, "/") {
-		if app := t.App(t.owner["read:"+name]); app != nil {
-			owner = app.Manifest().ID
-		}
-	}
-	switch p {
-	case "/v1/releases/active", "/v1/releases/candidates", "/v1/releases/drafts/working", "/v1/build/drafts/actions", "/v1/release-profile", "/v1/capabilities", "/v1/page-model/rules":
-		owner = "build"
-	case "/v1/ai-limits", "/v1/ai-models", "/v1/ai-providers", "/v1/ai/vendors":
-		owner = "ai"
-	case "/v1/organization", "/v1/enterprise", "/v1/enterprise-metamodel", "/v1/enterprise-published", "/v1/enterprise-references", "/v1/enterprise-usage",
-		"/v1/enterprise-query", "/v1/enterprise-resolve":
-		owner = "enterprise"
-	case "/v1/flows":
-		owner = "flow"
-	case "/v1/agents", "/v1/runs", "/v1/memories":
-		owner = "agent"
-	case "/v1/me", "/v1/actions", "/v1/entities", "/v1/definitions", "/v1/apps", "/v1/protocols":
-		return fmt.Sprintf("%d/%d", global, meta)
-	}
-	return fmt.Sprintf("%d/%d/%d", global, meta, owners[owner])
+			return ""
+		}}.Of(query, global, meta, seq, published, owners, ops)
 }

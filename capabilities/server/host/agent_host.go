@@ -18,7 +18,6 @@ import (
 	"platformserver/services/ai/evaluation"
 	"platformserver/services/resources/authoring"
 	"slices"
-	"strings"
 	"time"
 )
 
@@ -54,15 +53,7 @@ func (h hostView) AgentQuery(reader platform.Member, query platform.NamedQuery, 
 	if err != nil {
 		return platform.AgentObservation{}, err
 	}
-	raw, _ := json.Marshal(page.Records)
-	var ids []struct{ ID string }
-	_ = json.Unmarshal(raw, &ids)
-	out := platform.AgentObservation{}
-	for _, row := range ids {
-		out.Sources = append(out.Sources, query.Object+"/"+row.ID)
-	}
-	out.Body, _ = json.Marshal(page)
-	return out, nil
+	return agentowner.QueryObservation(query.Object, page.Records, page), nil
 }
 func (h hostView) AgentRead(reader platform.Member, name string, inputs ...json.RawMessage) (platform.AgentObservation, *kernel.Error) {
 	reader.AIContext = true
@@ -75,34 +66,22 @@ func (h hostView) AgentRead(reader platform.Member, name string, inputs ...json.
 }
 func (h hostView) AgentSurface(reader platform.Member, app string) platform.AgentSurface {
 	reader.AIContext = true
-	var out platform.AgentSurface
 	var call *platform.AgentAction
 	owner, action, found := h.Action(build.SchemaFunctionCall)
 	if found && slices.ContainsFunc(h.t.Catalog(reader), func(a platform.Action) bool { return a.Schema == action.Schema }) {
 		call = &platform.AgentAction{Owner: owner, Action: action}
 	}
-	for _, definition := range h.t.Definitions(reader) {
-		if app != "" && definition.Ref.App != app || definition.Ref.App == build.ID && definition.Source == "code" && definition.Function == nil {
-			continue
+	return agentowner.SurfaceSource{Builder: build.ID, Call: call, Conditions: func(ref platform.AssetRef) []string {
+		criteria, ok := h.t.modelCriteria(ref)
+		if !ok {
+			return nil
 		}
-		switch {
-		case definition.Entity != nil:
-			out.Entities = append(out.Entities, *definition.Entity)
-		case definition.Action != nil:
-			action := platform.AgentAction{Owner: definition.Ref.App, Action: *definition.Action}
-			if criteria, ok := h.t.modelCriteria(definition.Ref); ok {
-				for _, condition := range criteria.Conditions {
-					action.Conditions = append(action.Conditions, condition.Message)
-				}
-			}
-			out.Actions = append(out.Actions, action)
-		case definition.Function != nil:
-			if call != nil {
-				out.Functions = append(out.Functions, platform.AgentFunction{Owner: definition.Ref.App, Function: *definition.Function, Call: *call})
-			}
+		var out []string
+		for _, condition := range criteria.Conditions {
+			out = append(out, condition.Message)
 		}
-	}
-	return out
+		return out
+	}}.Surface(app, h.t.Definitions(reader))
 }
 
 const agentObjectRows = 50
@@ -133,17 +112,7 @@ func (h hostView) AgentObjects(reader platform.Member, op string, raw json.RawMe
 		if err != nil {
 			return out, err
 		}
-		body, _ := json.Marshal(page)
-		var rows struct {
-			Records []struct{ ID string } `json:"records"`
-		}
-		_ = json.Unmarshal(body, &rows)
-		for _, row := range rows.Records {
-			if object != "" && row.ID != "" {
-				out.Sources = append(out.Sources, object+"/"+row.ID)
-			}
-		}
-		out.Body = body
+		return agentowner.ObjectObservation(object, page), nil
 	case "aggregate":
 		if len(req.Sort) > 0 || req.Offset != 0 || req.Limit != 0 || req.Format || req.Window != nil || req.Histogram != nil || req.Collection != nil {
 			return invalid("An aggregate carries groups and measures only")
@@ -299,100 +268,36 @@ func aiContextReader(reader *platform.Member) *platform.Member {
 	return &copy
 }
 
-type agentEvaluationApp struct {
-	platform.App
-	agent string
-}
-
-func (a agentEvaluationApp) Fork(ledger *platform.Ledger) (platform.App, error) {
-	fork, err := a.App.Fork(ledger)
-	if err != nil {
-		return nil, err
-	}
-	return agentEvaluationApp{App: fork, agent: a.agent}, nil
-}
-
-func (a agentEvaluationApp) Manifest() platform.Manifest {
-	m := a.App.Manifest()
-	m.Agents = slices.DeleteFunc(slices.Clone(m.Agents), func(d platform.Agent) bool { return d.Name != a.agent })
-	return m
-}
-
 func (h hostView) AgentEvaluationApp(candidate, agent string) (platform.App, string, error) {
-	owner, name, valid := strings.Cut(agent, ".")
-	if !valid || owner != build.ID {
-		return nil, "", fmt.Errorf("candidate evaluations require a controlled builder agent")
-	}
-	saved, err := h.t.releases.Candidate(candidate)
-	if err != nil {
-		return nil, "", err
-	}
-	ref := platform.AssetRef{App: owner, Kind: platform.AssetAgent, Name: name}
-	i := slices.IndexFunc(saved.Assets, func(a platform.ReleaseAsset) bool { return a.Ref == ref })
-	if i < 0 {
-		return nil, "", fmt.Errorf("the saved candidate does not contain this agent")
-	}
-	compiler, ok := h.t.App(owner).(platform.ReleaseExecutionOwner)
-	if !ok {
-		return nil, "", fmt.Errorf("the agent's original execution owner is unavailable")
-	}
-	bound, err := compiler.ForkReleaseExecution(saved.Assets)
-	if err != nil {
-		return nil, "", err
-	}
-	digest, err := platform.CanonicalDigest(saved.Assets[i])
-	return agentEvaluationApp{App: bound, agent: name}, digest, err
+	return h.t.candidateEvaluation().App(candidate, agent)
 }
 
-func (t *Tenant) candidateAgentModel(candidate, name string) (string, platform.ModelOptions, error) {
-	app, _, err := (hostView{t: t}).AgentEvaluationApp(candidate, name)
-	if err != nil {
-		return "", platform.ModelOptions{}, err
-	}
-	defs := app.Manifest().Agents
-	if len(defs) != 1 {
-		return "", platform.ModelOptions{}, fmt.Errorf("candidate agent is unavailable")
-	}
-	model := defs[0].Model
-	if model == "" {
-		model = t.setting(t.automation(platform.AgentApp, false), platform.SettingAgentModel)
-	}
-	binding, _, problem := t.modelResolver().Resolve("agent", model, defs[0].ModelOptions)
-	if problem != nil {
-		return "", platform.ModelOptions{}, fmt.Errorf("%s", problem.Message)
-	}
-	return binding.Model, defs[0].ModelOptions, nil
+func (t *Tenant) candidateEvaluation() agentowner.CandidateEvaluation {
+	return agentowner.CandidateEvaluation{Builder: build.ID, Candidate: t.releases.Candidate,
+		Owner: func(app string) (platform.ReleaseExecutionOwner, bool) {
+			owner, ok := t.App(app).(platform.ReleaseExecutionOwner)
+			return owner, ok
+		}}
 }
 
 func (t *Tenant) evaluateReleaseAgentLocked(m platform.Member, request ReleaseEvaluationRequest, now time.Time) (string, error) {
 	if t.agents == nil {
 		return "", fmt.Errorf("the agent capability is unavailable")
 	}
-	identity, err := platform.CanonicalDigest([]string{t.ID, m.ID, request.CandidateID, request.Agent, request.Key})
-	if err != nil {
-		return "", err
-	}
-	id := "eval-" + identity[:32]
-	if prior, ok := platform.Get[platform.Evaluation](t.automation(platform.AgentApp, false), id); ok {
-		if prior.Candidate != request.CandidateID || prior.Agent != request.Agent || prior.Created.By != m.ID {
-			return "", fmt.Errorf("the original evaluation request differs")
-		}
-		return id, nil
-	}
-	model, _, err := t.candidateAgentModel(request.CandidateID, request.Agent)
-	if err != nil {
-		return "", err
-	}
-	if model == "" {
-		return "", fmt.Errorf("set the agent model before evaluating a candidate")
-	}
-	sub := &pb.Submission{TenantId: t.ID, PrincipalId: m.ID, Authority: platform.AgentApp,
-		IdempotencyKey: "evaluation:" + identity, Target: &pb.EntityRef{Type: platform.EvaluationType, Id: id},
-		Schema: &pb.SchemaRef{Name: platform.SchemaEvalStart, Version: 1}, Payload: platform.Raw(map[string]any{"agent": request.Agent, "model": model, "suite": true, "candidate": request.CandidateID})}
-	if _, refusal := t.accept(t.agents, m, sub, now, acceptOptions{automation: true}); refusal != nil {
-		return "", fmt.Errorf("agent evaluation was refused: %s", refusal.Message)
-	}
-	return id, nil
+	return agentowner.ReleaseEvaluation{Tenant: t.ID, Candidate: t.candidateEvaluation(),
+		Existing: func(id string) (platform.Evaluation, bool) {
+			return platform.Get[platform.Evaluation](t.automation(platform.AgentApp, false), id)
+		},
+		DefaultModel: func() string { return t.setting(t.automation(platform.AgentApp, false), platform.SettingAgentModel) },
+		Resolve: func(model string, options platform.ModelOptions) (string, *kernel.Error) {
+			binding, _, problem := t.modelResolver().Resolve("agent", model, options)
+			return binding.Model, problem
+		},
+		Accept: func(sub *pb.Submission) *kernel.Error {
+			_, refusal := t.accept(t.agents, m, sub, now, acceptOptions{automation: true})
+			return refusal
+		},
+	}.Start(m, request.CandidateID, request.Agent, request.Key)
 }
 
 func (t *Tenant) suspended(member string) bool {
@@ -417,10 +322,7 @@ func (t *Tenant) stillRunning(id string) bool {
 		run, known := platform.Get[platform.AgentRunRecord](t.automation(platform.AgentApp, false), id)
 		return known && run.State == "running", nil
 	})
-	if !running || refusal != nil {
-		return false
-	}
-	return true
+	return running && refusal == nil
 }
 
 func (t *Tenant) applyAgentStep(b platform.AgentResultStep, now time.Time) bool {
@@ -436,89 +338,49 @@ func (t *Tenant) applyAgentStep(b platform.AgentResultStep, now time.Time) bool 
 }
 
 func (t *Tenant) prepareAgentStep(b platform.AgentResultStep, now time.Time) bool {
-	if t.quarantined() {
-		return false
-	}
-	if t.Recording() {
-		now = now.Truncate(time.Microsecond)
-	}
-	run, known := platform.Get[platform.AgentRunRecord](t.automation(platform.AgentApp, false), b.Run)
-	if b.Evaluation != nil {
-		ev, waited := platform.Get[platform.Evaluation](t.automation(platform.AgentApp, false), b.Evaluation.ID)
-		if !waited || ev.State != "queued" || ev.Revision != b.Evaluation.Revision {
-			return false
-		}
-		run.Agent = b.Evaluation.Agent
-	} else if !known || run.State != "running" {
-		return false
-	}
-	if b.CallID != "" && (len(run.Pending) == 0 || run.Pending[0].ID != b.CallID) {
-		return false
-	}
-	if b.Stop == "" && run.OnBehalf != "" {
-		if !t.agents.AllowsAgentRun(run) {
-			b.Stop = "the person no longer has access to this agent's app"
-			b.Tool, b.Arguments, b.Observation, b.Calls, b.CallID = "", nil, nil, nil, ""
-		}
-	}
-	err := t.acceptAgentStep(b, now)
-	if err != nil && b.Stop == "" && !t.quarantined() {
-		err = t.acceptAgentStep(platform.AgentResultStep{Run: b.Run, Evaluation: b.Evaluation, Usage: b.Usage, Stop: "The agent step could not be accepted: " + err.Error()}, now)
-	}
-	if err != nil {
-		t.observeOwnerRun(now, "agent", b.Run, platform.AgentApp, "", "failed", "Agent step", err.Error())
-	}
-	return err == nil && !t.quarantined()
+	return agentowner.StepPreparation{Quarantined: t.quarantined, Recording: t.Recording,
+		Run: func(id string) (platform.AgentRunRecord, bool) {
+			return platform.Get[platform.AgentRunRecord](t.automation(platform.AgentApp, false), id)
+		},
+		Evaluation: t.evaluation,
+		Allows:     func(run platform.AgentRunRecord) bool { return t.agents.AllowsAgentRun(run) },
+		Accept:     t.acceptAgentStep,
+		Failed: func(at time.Time, run, detail string) {
+			t.observeOwnerRun(at, "agent", run, platform.AgentApp, "", "failed", "Agent step", detail)
+		},
+	}.Prepare(b, now)
+}
+
+func (t *Tenant) evaluation(id string) (platform.Evaluation, bool) {
+	return platform.Get[platform.Evaluation](t.automation(platform.AgentApp, false), id)
 }
 
 func (t *Tenant) Evaluate(now time.Time) {
 	if t.agents == nil || t.ai == nil {
 		return
 	}
-	for {
-		if t.businessStopped() {
-			return
-		}
-		evals, refusal := recordRead(t, context.Background(), func(t *Tenant) ([]platform.Evaluation, *kernel.Error) {
-			evals, _, refusal := platform.Find[platform.Evaluation](t.automation(platform.AgentApp, false), platform.Query{Domain: json.RawMessage(`[["state","=","queued"]]`), Sort: []string{"id"}, Limit: 1})
-			return evals, refusal
-		})
-		if refusal != nil || len(evals) == 0 {
-			return
-		}
-		report := t.agentEvaluator.Evaluate(t.agents.AgentEvaluationRuntime(), evals[0], now, func(ev *platform.Evaluation) bool {
-			revision := ev.Revision
-			t.applyAgentStep(platform.AgentResultStep{Run: ev.ID, Evaluation: ev}, now)
+	agentowner.EvaluationQueue{Stopped: t.businessStopped,
+		Queued: func() ([]platform.Evaluation, *kernel.Error) {
+			return recordRead(t, context.Background(), func(t *Tenant) ([]platform.Evaluation, *kernel.Error) {
+				evals, _, refusal := platform.Find[platform.Evaluation](t.automation(platform.AgentApp, false), platform.Query{Domain: json.RawMessage(`[["state","=","queued"]]`), Sort: []string{"id"}, Limit: 1})
+				return evals, refusal
+			})
+		},
+		Current: func(id string) (platform.Evaluation, bool) {
 			current, refusal := recordRead(t, context.Background(), func(t *Tenant) (platform.Evaluation, *kernel.Error) {
-				current, known := platform.Get[platform.Evaluation](t.automation(platform.AgentApp, false), ev.ID)
+				current, known := t.evaluation(id)
 				if !known {
 					return current, unknown()
 				}
 				return current, nil
 			})
-			known := refusal == nil
-			if !known || current.Revision != revision+1 {
-				return false
-			}
-			*ev = current
-			return true
-		})
-		if report.State != "done" {
-			return
-		}
-		t.applyAgentStep(platform.AgentResultStep{Run: report.ID, Evaluation: &report}, now)
-		current, refusal := recordRead(t, context.Background(), func(t *Tenant) (platform.Evaluation, *kernel.Error) {
-			current, known := platform.Get[platform.Evaluation](t.automation(platform.AgentApp, false), report.ID)
-			if !known {
-				return current, unknown()
-			}
-			return current, nil
-		})
-		known := refusal == nil
-		if !known || current.State == "queued" {
-			return
-		}
-	}
+			return current, refusal == nil
+		},
+		Evaluate: func(ev platform.Evaluation, at time.Time, step func(*platform.Evaluation) bool) platform.Evaluation {
+			return t.agentEvaluator.Evaluate(t.agents.AgentEvaluationRuntime(), ev, at, step)
+		},
+		Apply: t.applyAgentStep,
+	}.Drain(now)
 }
 
 func (h hostView) AgentModelConfigurationDigest(model platform.AIModel, provider platform.AIProvider, binding *platform.AIModelBinding) (string, error) {

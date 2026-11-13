@@ -1,7 +1,6 @@
 package host
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -16,8 +15,8 @@ import (
 )
 
 func (t *Tenant) InvokeOperation(member platform.Member, q platform.OperationRequest, now time.Time) (platform.OperationCall, *kernel.Error) {
-	if q.App == "" || q.Key == "" || len(q.Key) > 256 || q.Version < 0 || q.Target != "" || q.OnBehalf != "" || q.Release != nil {
-		return platform.OperationCall{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "A direct call requires an owner and stable key")
+	if refusal := compute.CheckDirectCall(q); refusal != nil {
+		return platform.OperationCall{}, refusal
 	}
 	q.Sources = slices.Clone(q.Sources)
 	var prepared *preparedOperationInput
@@ -39,9 +38,8 @@ func (t *Tenant) InvokeOperation(member platform.Member, q platform.OperationReq
 		}
 		callID := fmt.Sprintf("%s:%s:operation:%s:%s", t.ID, q.App, q.Key, acceptedformat.OperationEndpoint)
 		if x, ok := t.outbound.Get(callID); ok {
-			var previous compute.OperationBinding
-			if json.Unmarshal([]byte(x.Body), &previous) == nil && previous.SealedInput != nil {
-				op, version, declared = previous.Definition, previous.Call.Version, true
+			if prior, priorVersion, sealed := compute.PriorSealedDefinition(x.Body); sealed {
+				op, version, declared = prior, priorVersion, true
 			}
 		}
 		seal := declared && op.Limits.DataInputBytes > 0
@@ -64,22 +62,11 @@ func (t *Tenant) InvokeOperation(member platform.Member, q platform.OperationReq
 	}
 	current, op, version, id, seal := initial.member, initial.operation, initial.version, initial.id, initial.seal
 	if seal {
-
-		if len(q.Inputs) > op.Limits.DataInputBytes {
-			return platform.OperationCall{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "The input exceeds its declared data channel budget")
+		sealed, ref, requestHash, refusal := t.staged.SealCallInput(id, current.ID, q, op, version)
+		if refusal != nil {
+			return platform.OperationCall{}, refusal
 		}
-		raw := bytes.Clone(q.Inputs)
-		if err := op.Input.Validate(raw, op.Limits.DataInputBytes); err != nil {
-			return platform.OperationCall{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
-		}
-		hash, _ := platform.CanonicalDigest(json.RawMessage(raw))
-		definition, _ := platform.CanonicalDigest([]any{q.App, op, version})
-		ref, err := t.staged.SealInput(id, current.ID, definition, hash, raw, op.Limits.DataInputBytes)
-		if err != nil {
-			return platform.OperationCall{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, err.Error())
-		}
-		q.Inputs = platform.Raw(map[string]any{"sealedInput": map[string]any{"digest": ref.Digest, "size": ref.Size, "inputHash": ref.InputHash, "definition": ref.Definition}})
-		requestHash, _ := platform.CanonicalDigest(q)
+		q = sealed
 		prepared = &preparedOperationInput{ref: ref, requestHash: requestHash}
 	} else if len(q.Inputs) > 1<<20 {
 		return platform.OperationCall{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "The input exceeds the operation inline budget")
@@ -125,12 +112,15 @@ func (t *Tenant) InvokeOperation(member platform.Member, q platform.OperationReq
 		}
 	}
 	if x, ok := t.outbound.Get(id); ok {
-		var binding compute.OperationBinding
-		if json.Unmarshal([]byte(x.Body), &binding) == nil {
+		ticket := ""
+		if prepared != nil {
+			ticket = prepared.ref.Ticket
+		}
+		if call, keep, decoded := compute.AcceptedCall(x.Body, ticket, prepared != nil); decoded {
 			if prepared != nil {
-				retained = binding.SealedInput != nil && binding.SealedInput.Ticket == prepared.ref.Ticket
+				retained = keep
 			}
-			return binding.Call, nil
+			return call, nil
 		}
 	}
 	return platform.OperationCall{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Accepted operation intent is unavailable")

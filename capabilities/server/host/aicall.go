@@ -1,17 +1,14 @@
 package host
 
 import (
-	"cmp"
 	"context"
 	controlowner "platformserver/services/security/control"
 
 	"encoding/json"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
-	"net/http"
 	acceptedformat "platformserver/kernel/acceptedformat"
 	"strconv"
-	"strings"
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
@@ -51,41 +48,26 @@ func (t *Tenant) reserveCall(m platform.Member, model platform.AIModel, req plat
 	}, func(t *Tenant, candidate preparedAccepted, failure *platform.AIError, refusal *kernel.Error) (*platform.AIError, *kernel.Error) {
 		_, refusal = t.finishPreparedInput(platform.Member{ID: "app:" + platform.AIApp, Tenant: t.ID}, platform.AIReserveCall, candidate, nil, refusal)
 		if refusal != nil {
-			return modelReservationFailure(refusal), nil
+			return aigateway.ReservationFailure(refusal), nil
 		}
 		return failure, nil
 	})
 	if refusal != nil {
-		return modelReservationFailure(refusal)
-	}
-	return failure
-}
-
-func modelReservationFailure(refusal *kernel.Error) *platform.AIError {
-	failure := &platform.AIError{Status: 503, Detail: cmp.Or(refusal.Message, refusal.Error())}
-	if refusal.Code == pb.ErrorCode_ERROR_CODE_POLICY_DENIED {
-		failure.Status, failure.Quota = 429, true
+		return aigateway.ReservationFailure(refusal)
 	}
 	return failure
 }
 
 func (t *Tenant) prepareReserveCall(m platform.Member, model platform.AIModel, req platform.ChatRequest, input, output int, now time.Time) *platform.AIError {
-	if t.businessStopped() || t.recordReadRefusal() != nil {
-		return &platform.AIError{Status: 503, Detail: "Model dispatch is stopped until the tenant recovers"}
-	}
-	if prior, ok := t.ai.Reservation(req.Call); ok {
-		if prior.Member != m.ID || prior.Model != model.Name() || prior.Input != input || prior.Output != output || prior.RequestHash != req.RequestHash {
-			return &platform.AIError{Status: 409, Detail: "The model call identity already has different input"}
-		}
-		return &platform.AIError{Status: 409, Detail: "The model call already has an unsettled or saved result; reconcile it before retrying"}
-	}
-	r := platform.AIReservation{RequestHash: req.RequestHash, Call: req.Call, At: now, Member: m.ID, Agent: m.Agent, Model: model.Name(), Run: req.Run, Input: input, Output: output, State: "pending"}
-	body, _ := json.Marshal(platform.AIReserveInput{Reservation: r, Defaults: t.limits(), RunTokens: req.RunTokens})
-	_, refusal := t.inputAccepted(t.ai, platform.Member{ID: "app:" + platform.AIApp, Tenant: t.ID}, platform.AIReserveCall, body, now)
-	if refusal != nil {
-		return modelReservationFailure(refusal)
-	}
-	return nil
+	return aigateway.Reservations{
+		Stopped: func() bool { return t.businessStopped() || t.recordReadRefusal() != nil },
+		Prior:   func(call string) (platform.AIReservation, bool) { return t.ai.Reservation(call) },
+		Limits:  t.limits,
+		Accept: func(body []byte) *kernel.Error {
+			_, refusal := t.inputAccepted(t.ai, platform.Member{ID: "app:" + platform.AIApp, Tenant: t.ID}, platform.AIReserveCall, body, now)
+			return refusal
+		},
+	}.Prepare(m, model, req, input, output, now)
 }
 
 func (t *Tenant) releaseCall(call string, now time.Time) *kernel.Error {
@@ -121,43 +103,23 @@ func (t *Tenant) chatForStage(m platform.Member, req platform.ChatRequest, now t
 	var model platform.AIModel
 	var pv platform.AIProvider
 	_, refusal := recordRead(t, context.Background(), func(t *Tenant) (struct{}, *kernel.Error) {
-		if stage == platform.AIStageDesign {
-			c := platform.NewCaller(runtime{t: t}, m, build.ID, false, false)
-			if refusal := authorizationRefusal(t.authorizeNative(c, "POST /v1/build/ai/chat", "action", []string{build.Builder}, true)); refusal != nil {
-				return struct{}{}, refusal
-			}
-		}
-		if m.Agent && t.suspended(m.ID) {
-			return struct{}{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "The agent {agent} is suspended", m.ID)
-		}
 		var err *kernel.Error
-		model, pv, err = t.ai.Callable(m, req.Model)
-		if err != nil {
-			return struct{}{}, err
-		}
-		c := platform.NewCaller(runtime{t: t}, m, platform.AIApp, false, false)
-		decision := t.authorizeNative(c, "model:"+req.Model, "action", []string{platform.AnyMember}, true)
-		if refusal := authorizationRefusal(decision); refusal != nil {
-			return struct{}{}, refusal
-		}
-		options := req.Options
-		if req.MaxTokens > 0 {
-			options.MaxTokens = req.MaxTokens
-		}
-		if ceiling := t.modelResolver().MostTokens(); ceiling > 0 && options.MaxTokens > ceiling && req.Options.MaxTokens == 0 {
-			options.MaxTokens = ceiling
-		}
-		binding, problem := model.Resolve("generation", options, t.modelResolver().MostTokens())
-		if problem != nil {
-			return struct{}{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, problem.Error())
-		}
-		binding.Provider = &pv
-		binding, err = t.modelResolver().Stage(binding, pv, stage)
-		if err != nil {
-			return struct{}{}, err
-		}
-		req.Binding = &binding
-		return struct{}{}, nil
+		model, pv, req, err = aigateway.ChatSetup{
+			Design: func() *kernel.Error {
+				c := platform.NewCaller(runtime{t: t}, m, build.ID, false, false)
+				return authorizationRefusal(t.authorizeNative(c, "POST /v1/build/ai/chat", "action", []string{build.Builder}, true))
+			},
+			Suspended: t.suspended,
+			Callable: func(m platform.Member, name string) (platform.AIModel, platform.AIProvider, *kernel.Error) {
+				return t.ai.Callable(m, name)
+			},
+			Authorize: func(name string) *kernel.Error {
+				c := platform.NewCaller(runtime{t: t}, m, platform.AIApp, false, false)
+				return authorizationRefusal(t.authorizeNative(c, "model:"+name, "action", []string{platform.AnyMember}, true))
+			},
+			Resolver: t.modelResolver(),
+		}.Prepare(m, req, stage)
+		return struct{}{}, err
 	})
 	if refusal != nil {
 		return platform.ChatAnswer{}, refusal, nil
@@ -220,72 +182,30 @@ func (t *Tenant) meter(m platform.Member, u platform.AIUsage) *kernel.Error {
 }
 
 func (t *Tenant) modelProvider(pv platform.AIProvider, dispatch ...func()) providers.Client {
-	send := t.AIClient
-	if send == nil {
-		dialer := actions.GuardedDialer(pv.Kind == "local")
-		client := &http.Client{Transport: &http.Transport{DialContext: dialer.DialContext, Proxy: nil}, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
-		send = client.Do
-	}
-	return providers.Client{HTTP: doer(func(request *http.Request) (*http.Response, error) {
-		if len(dispatch) > 0 {
-			dispatch[0]()
-		}
-		response, err := send(request)
-		return controlowner.RedactCredentialFailure(response, request), err
-	}), Credential: func(provider platform.AIProvider) ([]byte, error) {
-		key, _, err := t.resolveCredential(provider.Secret, "ai/"+provider.ID, provider.BaseURL)
-		return key, err
-	}}
+	return aigateway.ProviderTransport{Send: t.AIClient, Redact: controlowner.RedactCredentialFailure,
+		Credential: func(provider platform.AIProvider) ([]byte, error) {
+			key, _, err := t.resolveCredential(provider.Secret, "ai/"+provider.ID, provider.BaseURL)
+			return key, err
+		}}.Client(pv, dispatch...)
 }
-
-type doer func(*http.Request) (*http.Response, error)
-
-func (d doer) Do(r *http.Request) (*http.Response, error) { return d(r) }
 
 func (t *Tenant) askModel(c platform.Caller, rec *pb.ChangeRecord, q platform.Request) {
 	t.outbound.Add(t.current(), t.planModelRequest(c, rec, q, nil))
 }
 
 func (t *Tenant) planModelRequest(c platform.Caller, rec *pb.ChangeRecord, q platform.Request, pending []platform.Effect) platform.Effect {
-	prompt, _ := q.Payload.(platform.Prompt)
-	options := platform.ModelOptions{MaxTokens: prompt.MaxTokens}
-	if q.EvaluationFunction != nil {
-		options = q.EvaluationFunction.ModelOptions.Override(options)
-	}
-	s := rec.GetSubmission()
-	model := cmp.Or(q.Model, t.setting(t.automation(platform.AIApp, false), platform.AISettingAppModel))
-	var binding *platform.AIModelBinding
-	failure := ""
-	if c.Staging() && !c.Replaying {
-		if resolved, _, err := t.modelResolver().Resolve("generation", model, options); err != nil {
-			failure = err.Message
-			if failure == "" {
-				failure = "The selected model is disabled or missing"
-			}
-		} else {
-			stage := platform.AIStageRuntime
-			if q.Evaluation || t.simulation {
-				stage = platform.AIStageDesign
-			}
-			_, provider, _ := t.ai.Model(resolved.Model)
-			if pinned, refusal := t.modelResolver().Stage(resolved, provider, stage); refusal != nil {
-				failure = refusal.Message
-			} else {
-				binding = &pinned
-			}
-		}
-	}
-	ask := aigateway.ModelAsk{Model: model, Binding: binding, ConfigurationError: failure, Prompt: prompt, Reply: q.Reply, Record: s.GetTarget().GetType() + "/" + s.GetTarget().GetId(), Call: q.Target, Evaluation: q.Evaluation, EvaluationConfig: q.EvaluationConfig, EvaluationFunction: q.EvaluationFunction}
-	ours := func(x platform.Effect) bool {
-		return x.Endpoint == acceptedformat.ModelEndpoint && x.App == c.App && strings.HasPrefix(x.Key, rec.GetChangeId()+"#")
-	}
-	n := len(t.outbound.Select(func(x actions.Queued) bool { return ours(x.Effect) }))
-	for _, x := range pending {
-		if ours(x) {
-			n++
-		}
-	}
-	return ask.Effect(t.ID, c.App, rec, q.Target, n, acceptedformat.ModelEndpoint)
+	return aigateway.ModelPlanning{
+		Resolver: t.modelResolver(),
+		Provider: func(model string) platform.AIProvider {
+			_, provider, _ := t.ai.Model(model)
+			return provider
+		},
+		Default:    func() string { return t.setting(t.automation(platform.AIApp, false), platform.AISettingAppModel) },
+		Simulation: t.simulation,
+		Queued: func(ours func(platform.Effect) bool) int {
+			return len(t.outbound.Select(func(x actions.Queued) bool { return ours(x.Effect) }))
+		},
+	}.Effect(t.ID, c, rec, q, pending, acceptedformat.ModelEndpoint)
 }
 
 func (t *Tenant) sendModel(x platform.Effect, now time.Time) (platform.Outcome, *platform.AIUsage) {
@@ -295,54 +215,22 @@ func (t *Tenant) sendModel(x platform.Effect, now time.Time) (platform.Outcome, 
 		out.Result, out.Detail = "rejected", "The saved model request is invalid"
 		return out, nil
 	}
-	model := ask.Model
 	m := platform.Member{ID: "app:" + x.App, Tenant: t.ID}
 	var enabled platform.AIModel
 	var pv platform.AIProvider
 	ready, refusal := recordRead(t, context.Background(), func(t *Tenant) (bool, *kernel.Error) {
-		if ask.Function != nil {
-			allowed := t.functionAllowed(x.App, ask, now)
-			if !allowed {
-				out.Result, out.Detail = "rejected", "The AI function input is no longer authorised"
-				return false, nil
-			}
-		}
-		if ask.ConfigurationError != "" {
-			out.Result, out.Detail = "rejected", ask.ConfigurationError
-			return false, nil
-		}
-		if t.ai == nil {
-			out.Result, out.Detail = "rejected", "The model capability is unavailable"
-			return false, nil
-		}
-		if model == "" {
-			out.Result, out.Detail = "rejected", "no model is set for apps"
-			return false, nil
-		}
-		var err *kernel.Error
-		enabled, pv, err = t.ai.Model(model)
-		if err != nil {
-			out.Result, out.Detail = "rejected", "the model "+model+" is not enabled"
-			return false, nil
-		}
-		c := platform.NewCaller(runtime{t: t}, m, x.App, false, true)
-		if refusal := authorizationRefusal(t.authorizeNative(c, "model:"+model, "action", nil, true)); refusal != nil {
-			out.Result, out.Detail = "rejected", refusal.Message
-			return false, nil
-		}
-		if ask.Evaluation {
-			if detail := ask.EvaluationDrift(enabled, pv, func(options platform.ModelOptions) (platform.AIModelBinding, *kernel.Error) {
-				current, _, refusal := t.modelResolver().Resolve("generation", model, options)
-				if refusal != nil {
-					return current, refusal
-				}
-				return t.modelResolver().Stage(current, pv, platform.AIStageDesign)
-			}); detail != "" {
-				out.Result, out.Detail = "rejected", detail
-				return false, nil
-			}
-		}
-		return true, nil
+		var ok bool
+		out, enabled, pv, ok = ask.Ready(out, aigateway.ModelSend{
+			Allowed:   func() bool { return t.functionAllowed(x.App, ask, now) },
+			Available: t.ai != nil,
+			Model:     func(name string) (platform.AIModel, platform.AIProvider, *kernel.Error) { return t.ai.Model(name) },
+			Authorize: func(name string) *kernel.Error {
+				c := platform.NewCaller(runtime{t: t}, m, x.App, false, true)
+				return authorizationRefusal(t.authorizeNative(c, "model:"+name, "action", nil, true))
+			},
+			Resolver: t.modelResolver(),
+		})
+		return ok, nil
 	})
 	if refusal != nil {
 		out.Result, out.Detail = "rejected", refusal.Message

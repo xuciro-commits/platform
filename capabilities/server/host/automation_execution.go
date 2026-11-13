@@ -3,7 +3,6 @@ package host
 import (
 	"encoding/json"
 	"fmt"
-	"maps"
 	persistence "platformserver/kernel/store"
 	automation "platformserver/services/automate/runtime"
 
@@ -78,26 +77,17 @@ func (h hostView) retainedExecution(c platform.Caller, release string, assets []
 			if err != nil {
 				return nil, err
 			}
-			for _, asset := range selected {
-				a := slices.IndexFunc(current, func(x platform.ReleaseAsset) bool { return x.Ref == asset.Ref })
-				before, _ := platform.CanonicalDigest(asset)
-				var after string
-				if a >= 0 {
-					selected := current[a]
-					if asset.Ref.Kind == platform.AssetFlow {
-						for _, flow := range owner.Manifest().Flows {
-							candidate, err := h.t.nativeFlowAsset(owner, flow.Name, flow.Version)
-							if err == nil && candidate.SourceVersion == asset.SourceVersion && candidate.Ref == asset.Ref {
-								selected = candidate
-								break
-							}
-						}
+			err = automation.RetainedCompatible(selected, current, func(asset platform.ReleaseAsset) (platform.ReleaseAsset, bool) {
+				for _, flow := range owner.Manifest().Flows {
+					candidate, err := h.t.nativeFlowAsset(owner, flow.Name, flow.Version)
+					if err == nil && candidate.SourceVersion == asset.SourceVersion && candidate.Ref == asset.Ref {
+						return candidate, true
 					}
-					after, _ = platform.CanonicalDigest(selected)
 				}
-				if before != after {
-					return nil, fmt.Errorf("retained dependency %s has no compatible execution owner", asset.Ref)
-				}
+				return platform.ReleaseAsset{}, false
+			})
+			if err != nil {
+				return nil, err
 			}
 			continue
 		}
@@ -125,29 +115,11 @@ func (h hostView) retainedExecution(c platform.Caller, release string, assets []
 		(hostView{t: view, app: bound, decision: h.decision}).bindOwner(bound)
 	}
 	view.ownerSet = view.with(apps)
-	view.definitions = slices.Clone(view.definitions)
-	for i, definition := range view.definitions {
-		for _, asset := range assets {
-			if asset.Ref != definition.Ref {
-				continue
-			}
-			switch asset.Ref.Kind {
-			case platform.AssetQuery:
-				var query platform.NamedQuery
-				if err := json.Unmarshal(asset.Body, &query); err != nil {
-					return nil, err
-				}
-				definition.Query = &query
-			case platform.AssetFunction:
-				var function platform.AIFunction
-				if err := json.Unmarshal(asset.Body, &function); err != nil {
-					return nil, err
-				}
-				definition.Function = &function
-			}
-			view.definitions[i] = definition
-		}
+	definitions, err := automation.RetainedDefinitions(view.definitions, assets)
+	if err != nil {
+		return nil, err
 	}
+	view.definitions = definitions
 	return flowExecution{hostView: h, rt: rt}, nil
 }
 
@@ -220,29 +192,18 @@ func (r *flowExecutionRuntime) retainedRow(current platform.EntityInfo, info pla
 	if err != nil {
 		return nil, conflictRefusal(err)
 	}
-	var fields map[string]json.RawMessage
-	if json.Unmarshal(raw, &fields) != nil {
-		return nil, conflictRefusal(fmt.Errorf("retained record cannot be decoded"))
-	}
-	var prior map[string]json.RawMessage
-	for _, old := range info.Fields {
-		next, found := current.Field(old.Name)
-		if found && next.AliasOf != "" {
-			fields[old.Name] = fields[next.AliasOf]
-		} else if !found || next.Type != old.Type || next.Ref != old.Ref || next.ReadOnly && !old.ReadOnly && records.ProjectionFor(value.Projection, r.release) != nil {
-			if prior == nil {
-				source := records.ProjectionFor(value.Projection, r.release)
-				shape, _ := platform.CanonicalDigest(info.Fields)
-				if source == nil || source.Shape != shape || json.Unmarshal(source.Value, &prior) != nil {
-					return nil, conflictRefusal(fmt.Errorf("retained field %s.%s has no saved source image", info.Type, old.Name))
-				}
-			}
-			fields[old.Name] = prior[old.Name]
+	fields, err := automation.RetainedFields(current, info, raw, func() (string, json.RawMessage, bool) {
+		source := records.ProjectionFor(value.Projection, r.release)
+		if source == nil {
+			return "", nil, false
 		}
+		return source.Shape, source.Value, true
+	})
+	if err != nil {
+		return nil, conflictRefusal(err)
 	}
 	decoded := reflect.New(info.Go)
-	raw, _ = json.Marshal(fields)
-	if err := json.Unmarshal(raw, decoded.Interface()); err != nil {
+	if err := json.Unmarshal(fields, decoded.Interface()); err != nil {
 		return nil, conflictRefusal(err)
 	}
 	return &records.Row{Value: decoded.Elem(), Format: value.Format, HistoryHead: value.HistoryHead, HistoryParent: value.HistoryParent, History: value.History, LoadHistory: value.LoadHistory, HistoryCount: value.HistoryCount}, nil
@@ -390,20 +351,12 @@ func (r *flowExecutionRuntime) ReadRecord(c platform.Caller, typ, id string, at 
 	if refusal != nil {
 		return nil, refusal
 	}
-	var fields map[string]json.RawMessage
-	_ = json.Unmarshal(raw, &fields)
+	var info *platform.EntityInfo
 	if current := r.Records.Type(typ); current != nil {
-		for name := range fields {
-			field, declared := current.Info().Field(name)
-			if declared && field.AliasOf != "" {
-				field, declared = current.Info().Field(field.AliasOf)
-			}
-			if declared && !field.ReadsAny(c.RolesIn(current.Info().App), c.Rules()) {
-				delete(fields, name)
-			}
-		}
+		stored := current.Info()
+		info = &stored
 	}
-	raw, marshalErr := json.Marshal(fields)
+	raw, marshalErr := automation.ReadableFields(raw, info, c)
 	return raw, conflictRefusal(marshalErr)
 }
 func (r *flowExecutionRuntime) ReadRecordPath(c platform.Caller, typ, id string, path []string, at time.Time) (output json.RawMessage, refs []string, refusal *kernel.Error) {
@@ -486,42 +439,24 @@ func (r *flowExecutionRuntime) Put(c platform.Caller, receipt *pb.ChangeRecord, 
 	}
 	current := r.Records.Type(old.Info().Type)
 	id := records.Header(records.Copy(old.Info().Go, entity)).ID
-	var input, before, result map[string]json.RawMessage
+	var input, before, stored map[string]json.RawMessage
 	if json.Unmarshal(jsonOf(entity), &input) != nil {
 		return conflictRefusal(fmt.Errorf("retained action wrote an invalid record"))
 	}
 	if prior := old.Rows().Get(id); prior != nil {
 		_ = json.Unmarshal(jsonOf(prior.Value.Interface()), &before)
 	}
-	mappedBefore, mappedInput, mappingErr := r.mapRetainedWrite(old.Info().Type, before, input)
-	if mappingErr != nil {
-		return conflictRefusal(mappingErr)
-	}
-	if prior := current.Rows().Get(id); prior != nil {
+	prior := current.Rows().Get(id)
+	if prior != nil {
 		raw, _ := prior.Image()
-		_ = json.Unmarshal(raw, &result)
-	} else {
-		result = maps.Clone(mappedInput)
+		_ = json.Unmarshal(raw, &stored)
 	}
-	fields := []string{}
-	for _, target := range current.Info().Fields {
-		if string(mappedInput[target.Name]) == string(mappedBefore[target.Name]) {
-			continue
-		}
-		name := target.Name
-		if target.AliasOf != "" {
-			target, _ = current.Info().Field(target.AliasOf)
-		}
-		lifecycle := current.Info().Lifecycle != nil && current.Info().Lifecycle.Field == target.Name
-		original, declared := old.Info().Field(name)
-		if target.ReadOnly && !lifecycle && (!declared || !original.ReadOnly) {
-			return conflictRefusal(fmt.Errorf("retained action writes a retired field %s", target.Name))
-		}
-		result[target.Name] = mappedInput[name]
-		fields = append(fields, target.Name)
+	result, fields, writeErr := automation.RetainedWrite(r.shapes[old.Info().Type], old.Info(), current.Info(), before, input, stored, prior != nil)
+	if writeErr != nil {
+		return conflictRefusal(writeErr)
 	}
 	question := platform.AuthzRequest{Principal: c.ID, Tenant: c.Tenant, Kind: "write", Type: current.Info().Type, Record: id, Fields: fields}
-	if current.Rows().Get(id) == nil {
+	if prior == nil {
 		question.Kind = "create"
 	}
 	grant := r.tenant.authorizeFrom(r.Records, c, question, r.At, false)
@@ -551,23 +486,4 @@ func (r *flowExecutionRuntime) Put(c platform.Caller, receipt *pb.ChangeRecord, 
 		current.SetRow(id, &updated)
 	}
 	return nil
-}
-
-func (r *flowExecutionRuntime) mapRetainedWrite(typ string, before, after map[string]json.RawMessage) (map[string]json.RawMessage, map[string]json.RawMessage, error) {
-	before, after = maps.Clone(before), maps.Clone(after)
-	declared := r.shapes
-	current := r.Records.Type(typ)
-	for _, target := range current.Info().Fields {
-		if string(before[target.Name]) == string(after[target.Name]) {
-			continue
-		}
-		if target.AliasOf != "" {
-			continue
-		}
-		field, found := declared[typ].Field(target.Name)
-		if !found || field.Type != target.Type || field.Ref != target.Ref {
-			return nil, nil, fmt.Errorf("retained write %s lacks its declared field conversion", target.Name)
-		}
-	}
-	return before, after, nil
 }
