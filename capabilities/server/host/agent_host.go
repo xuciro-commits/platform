@@ -6,6 +6,7 @@ import (
 	"platformserver/services/actions"
 	"platformserver/services/ai/gateway"
 	agentowner "platformserver/services/ai/runtime"
+	releaseowner "platformserver/services/devops/releases"
 	"platformserver/services/objects"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
@@ -206,7 +207,7 @@ func (t *Tenant) candidateEvaluation() agentowner.CandidateEvaluation {
 		}}
 }
 
-func (t *Tenant) evaluateReleaseAgentLocked(m platform.Member, request ReleaseEvaluationRequest, now time.Time) (string, error) {
+func (t *Tenant) evaluateReleaseAgentLocked(m platform.Member, request releaseowner.ReleaseEvaluationRequest, now time.Time) (string, error) {
 	return agentowner.ReleaseRunner{Tenant: t.ID, Candidate: t.candidateEvaluation(), Agent: t.agents != nil,
 		Existing: func(id string) (platform.Evaluation, bool) {
 			return platform.Get[platform.Evaluation](t.automation(platform.AgentApp, false), id)

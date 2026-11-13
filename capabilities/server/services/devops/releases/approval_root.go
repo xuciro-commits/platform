@@ -46,13 +46,33 @@ func ApprovalClosure(sealed platform.ReleaseCandidate, app, action, typ string) 
 	return sealed.Closure([]platform.AssetRef{root})
 }
 
-func ApprovedRelease(activated []string, app, action, typ string, candidate func(string) (platform.ReleaseCandidate, error),
+func StoredApprovalClosure(store *Store, release, app, action, typ string) (platform.ReleaseCandidate, error) {
+	if release == "" {
+		return platform.ReleaseCandidate{}, nil
+	}
+	sealed, err := store.Candidate(release)
+	if err != nil {
+		return platform.ReleaseCandidate{}, err
+	}
+	return ApprovalClosure(sealed, app, action, typ)
+}
+
+func StoredApprovalExecution(store *Store, release, app, action, typ string) (platform.ReleaseCandidate, error) {
+	sealed, err := store.Candidate(release)
+	if err != nil {
+		return platform.ReleaseCandidate{}, err
+	}
+	root, _ := ApprovalRoot(sealed.Assets, app, action, typ)
+	return sealed.Closure([]platform.AssetRef{root})
+}
+
+func ApprovedRelease(activated []string, app, action, typ string, store *Store,
 	running func(platform.ReleaseCandidate) (platform.ReleaseCandidate, error)) (string, error) {
 	for _, release := range activated {
 		if release == "" {
 			continue
 		}
-		sealed, err := candidate(release)
+		sealed, err := store.Candidate(release)
 		if err != nil {
 			return "", err
 		}

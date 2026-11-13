@@ -14,7 +14,7 @@ import (
 func (h hostView) ApprovalRelease(app, action, typ string) (string, *kernel.Error) {
 	release, err := releaseowner.ApprovedRelease(
 		releaseowner.ActivatedReleases(h.t.Committed.AllAnswers("active"), h.ActiveRelease()),
-		app, action, typ, h.t.releases.Candidate, h.t.runningReleaseLocked)
+		app, action, typ, &h.t.releases, h.t.releaseAcceptance().Running)
 	return release, conflictRefusal(err)
 }
 
@@ -27,14 +27,7 @@ func (h flowExecution) ApprovalRelease(app, action, typ string) (string, *kernel
 }
 
 func (t *Tenant) approvalClosure(release, app, action, typ string) (platform.ReleaseCandidate, *kernel.Error) {
-	if release == "" {
-		return platform.ReleaseCandidate{}, nil
-	}
-	sealed, err := t.releases.Candidate(release)
-	if err != nil {
-		return platform.ReleaseCandidate{}, conflictRefusal(err)
-	}
-	closed, err := releaseowner.ApprovalClosure(sealed, app, action, typ)
+	closed, err := releaseowner.StoredApprovalClosure(&t.releases, release, app, action, typ)
 	return closed, conflictRefusal(err)
 }
 
@@ -42,13 +35,8 @@ func (h hostView) ApprovalExecution(c platform.Caller, a platform.ApprovalReques
 	if a.Release == "" {
 		return h, nil
 	}
-	sealed, err := h.t.releases.Candidate(a.Release)
-	if err != nil {
-		return nil, conflictRefusal(err)
-	}
 	typ, _, _ := strings.Cut(a.Target, "/")
-	root, _ := releaseowner.ApprovalRoot(sealed.Assets, a.App, a.Action, typ)
-	closed, err := sealed.Closure([]platform.AssetRef{root})
+	closed, err := releaseowner.StoredApprovalExecution(&h.t.releases, a.Release, a.App, a.Action, typ)
 	if err != nil {
 		return nil, conflictRefusal(err)
 	}

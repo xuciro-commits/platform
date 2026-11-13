@@ -166,16 +166,16 @@ func (h *Host) routesBuild(rt *routes) {
 		if err != nil {
 			return releaseowner.ReleaseSaved{}, err
 		}
-		if _, err := t.SealCandidate(id, now); err != nil {
+		if _, err := t.sealer().Seal(id, now); err != nil {
 			return releaseowner.ReleaseSaved{}, errors.New("saved, but not sealed: " + err.Error())
 		}
 		return releaseowner.ReleaseSaved{ID: id}, nil
 	}, h.Now))
-	rt.authorized(transport.Route{Pattern: "POST /v1/releases/evaluations", Summary: "Run the original function or agent evaluator against a saved candidate", Body: ReleaseEvaluationRequest{}, Answer: ReleaseEvaluationStarted{}}, build.ID, builder, releaseCommand(func(request ReleaseEvaluationRequest) bool {
+	rt.authorized(transport.Route{Pattern: "POST /v1/releases/evaluations", Summary: "Run the original function or agent evaluator against a saved candidate", Body: releaseowner.ReleaseEvaluationRequest{}, Answer: releaseowner.ReleaseEvaluationStarted{}}, build.ID, builder, releaseCommand(func(request releaseowner.ReleaseEvaluationRequest) bool {
 		return request.CandidateID != "" && (request.PlanID == "") != (request.Agent == "") && request.Key != ""
-	}, func(m platform.Member, t *Tenant, request ReleaseEvaluationRequest, now time.Time) (ReleaseEvaluationStarted, error) {
+	}, func(m platform.Member, t *Tenant, request releaseowner.ReleaseEvaluationRequest, now time.Time) (releaseowner.ReleaseEvaluationStarted, error) {
 		id, err := t.EvaluateRelease(m, request, now)
-		return ReleaseEvaluationStarted{ID: id}, err
+		return releaseowner.ReleaseEvaluationStarted{ID: id}, err
 	}, h.Now))
 	rt.authorized(transport.Route{Pattern: "POST /v1/releases/active", Summary: "Builder and publisher atomic installation and activation of a saved object/page/application closure", Body: releaseowner.ReleaseActivateRequest{}, Answer: releaseowner.ReleaseActive{}}, build.ID, builderPublisher, releaseCommand(func(request releaseowner.ReleaseActivateRequest) bool {
 		return request.CandidateID != "" && request.Key != ""

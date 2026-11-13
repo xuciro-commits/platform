@@ -259,6 +259,15 @@ func ExtensionReview(candidate platform.ReleaseCandidate, entities []platform.En
 	return result, nil
 }
 
+func ReviewExtensions(candidate platform.ReleaseCandidate, apps []platform.App, entities []platform.EntityInfo,
+	lookup func(string) (platform.EntityInfo, bool), source func(string) (platform.AssetBinding, bool)) ([]ReleaseExtensionReview, error) {
+	shapes, err := AssetShapes(apps, candidate.Assets)
+	if err != nil {
+		return nil, err
+	}
+	return ExtensionReview(candidate, entities, shapes, lookup, source)
+}
+
 func AssetShapes(apps []platform.App, available []platform.ReleaseAsset) (map[string]platform.EntityInfo, error) {
 	shapes := map[string]platform.EntityInfo{}
 	for _, owner := range apps {
@@ -509,4 +518,28 @@ func StageReleaseInstallation(registry *platform.AssetRegistry, installations []
 		}
 	}
 	return nil
+}
+
+func RegisterInstalledDefinition(definitions []platform.Definition, plan platform.AssetInstallation,
+	resolve func(platform.AssetInstallation) (platform.Definition, bool, error), set func([]platform.Definition)) error {
+	definition, indexed, err := resolve(plan)
+	if err != nil || !indexed {
+		return err
+	}
+	for i, existing := range definitions {
+		if existing.Ref == plan.Ref {
+			definitions[i] = definition
+			return nil
+		}
+	}
+	set(append(definitions, definition))
+	return nil
+}
+
+func RegisterOwnedAssetMetadata(definitions []platform.Definition, owned func([]platform.Definition) ([]platform.Definition, error), set func([]platform.Definition)) error {
+	next, err := owned(definitions)
+	if err == nil {
+		set(next)
+	}
+	return err
 }

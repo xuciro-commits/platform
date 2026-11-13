@@ -263,6 +263,12 @@ type Closures struct {
 	Version  func(app string) string
 }
 
+func NewClosures(assets func() ([]platform.ReleaseAsset, error), describe func(platform.ReleaseAsset) (platform.ReleaseAsset, error),
+	retain func(platform.ReleaseCandidate, platform.AssetRef, string, *string) (platform.ReleaseCandidate, string, error),
+	version func(string) string) Closures {
+	return Closures{Assets: assets, Describe: describe, Retain: retain, Version: version}
+}
+
 func (c Closures) capability(ref platform.AssetRef, body json.RawMessage, sourceVersion string, retained *string) (platform.ReleaseCandidate, string, error) {
 	available, err := c.Assets()
 	if err != nil {

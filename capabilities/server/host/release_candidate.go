@@ -13,16 +13,6 @@ import (
 	"time"
 )
 
-func (t *Tenant) ReleaseCandidate(roots []platform.AssetRef) (platform.ReleaseCandidate, error) {
-	return readWithError(t, context.Background(), func(t *Tenant) (platform.ReleaseCandidate, error) {
-		available, err := t.releaseAssetsLocked(nil, false)
-		if err != nil {
-			return platform.ReleaseCandidate{}, err
-		}
-		return t.candidateWithBindings(roots, available, roots)
-	})
-}
-
 func (t *Tenant) draftWorldLocked(m platform.Member, branch string, now time.Time) (*Tenant, *kernel.Error) {
 	if branch == "" {
 		return t, nil
@@ -47,11 +37,7 @@ func (t *Tenant) ReferencedDrafts(m platform.Member, kind platform.AssetKind, id
 		if owner == nil {
 			return releaseowner.ReleaseDraftClosure{}, fmt.Errorf("tenant has no builder")
 		}
-		mine := ""
-		if branch == "" {
-			mine = m.ID
-		}
-		return releaseowner.ReferencedDraftClosure(owner, kind, id, mine)
+		return releaseowner.ReferencedDraftClosure(owner, kind, id, m.ID, branch)
 	})
 }
 
@@ -83,11 +69,7 @@ func (t *Tenant) DraftChange(m platform.Member, kind platform.AssetKind, id stri
 		if err != nil {
 			return build.DraftChange{}, err
 		}
-		change, found, err := owner.DraftChangeOf(m, kind, id)
-		if err == nil && !found {
-			err = fmt.Errorf("The draft has no working changes")
-		}
-		return change, err
+		return releaseowner.DraftChange(owner, m, kind, id)
 	})
 }
 
@@ -120,16 +102,11 @@ func (t *Tenant) PreviewReleaseDrafts(m platform.Member, drafts []build.JointDra
 		if refusal != nil {
 			return releaseowner.ReleasePreview{}, refusal
 		}
-		reply, err := world.releasePlannerLocked().PreviewWithActions(drafts, m)
-		if err != nil {
-			return reply, err
-		}
 		definitions, err := world.DefinitionsFor(m)
 		if err != nil {
-			return reply, err
+			return releaseowner.ReleasePreview{}, err
 		}
-		releaseowner.HideInvisibleDownstream(&reply, definitions)
-		return reply, nil
+		return world.releasePlannerLocked().VisiblePreview(drafts, m, definitions)
 	})
 }
 
@@ -165,10 +142,10 @@ func (t *Tenant) releaseAcceptance() releaseowner.ReleaseAcceptance {
 		Promoted: func(at time.Time, member, target string) {
 			t.AuditLog.Remember(platform.AuditEntry{At: at, Member: member, App: controlowner.PlatformApp, Action: "host.promotion", Target: target})
 		},
-		Enqueue:     t.enqueue,
-		Preview:     t.previewReleaseLocked,
-		UpgradePlan: t.releaseUpgradePlanLocked,
-		Lifecycle:   t.prepareReleaseLifecycleLocked,
+		Enqueue:   t.enqueue,
+		Preview:   t.previewReleaseLocked,
+		Lifecycle: t.prepareReleaseLifecycleLocked,
+		Assets:    t.acceptedAssets,
 		Bootstrap: func(app string, raw json.RawMessage) (*releaseowner.AcceptedBootstrap, error) {
 			batch, err := t.PrepareBatch(t.App(app).AcceptedLedger(), raw, t.batchApply())
 			if err != nil || batch == nil {
@@ -182,13 +159,15 @@ func (t *Tenant) releaseAcceptance() releaseowner.ReleaseAcceptance {
 				},
 				Publish: func() { t.publishAcceptedBatch(batch.Result) }}, nil
 		},
-		Stage: func(base *records.Store, candidateID string, installations []platform.ReleaseInstallation) (releaseowner.StagedInstallation, error) {
+		Stage: func(base *records.Store, candidateID string, installations []platform.ReleaseInstallation, upgrade bool) (releaseowner.StagedInstallation, error) {
 			view, err := t.assetInstallationView(base)
 			if err != nil {
 				return releaseowner.StagedInstallation{}, err
 			}
-			view.Projection.Current().SelectRelease(candidateID)
-			draft, err := view.stageReleaseInstallationLocked(installations, false)
+			if !upgrade {
+				view.Projection.Current().SelectRelease(candidateID)
+			}
+			draft, err := view.stageReleaseInstallationLocked(installations, upgrade, upgrade)
 			if err != nil {
 				return releaseowner.StagedInstallation{}, err
 			}
@@ -239,6 +218,15 @@ func (t *Tenant) applyPreparedRelease(m platform.Member) func(*Tenant, preparedA
 	}
 }
 
+func (t *Tenant) pendingWorkFitsLocked(candidateID string, raw []byte) error {
+	var caller *platform.Caller
+	if t.App(platform.WorkApp) != nil {
+		c := t.automation(platform.WorkApp, false)
+		caller = &c
+	}
+	return releaseowner.PendingWorkFits(candidateID, raw, caller, t.releases.Raw)
+}
+
 func (t *Tenant) acceptedAssets() releaseowner.AcceptedAssets {
 	return releaseowner.AcceptedAssets{
 		Available: func() ([]platform.ReleaseAsset, error) { return t.releaseAssetsLocked(nil, false) },
@@ -248,19 +236,6 @@ func (t *Tenant) acceptedAssets() releaseowner.AcceptedAssets {
 		Apps:       func() []platform.App { return t.apps },
 		CodeAssets: t.codeReleaseAssetsLocked,
 	}
-}
-
-func (t *Tenant) runningReleaseLocked(saved platform.ReleaseCandidate) (platform.ReleaseCandidate, error) {
-	return releaseowner.RunningRelease(saved, t.acceptedAssets())
-}
-
-func (t *Tenant) pendingWorkFitsLocked(candidateID string, raw []byte) error {
-	var caller *platform.Caller
-	if t.App(platform.WorkApp) != nil {
-		c := t.automation(platform.WorkApp, false)
-		caller = &c
-	}
-	return releaseowner.PendingWorkFits(candidateID, raw, caller, t.releases.Raw)
 }
 
 func (t *Tenant) ActiveRelease() string {

@@ -44,10 +44,10 @@ type ReleaseAcceptance struct {
 	Promoted    func(at time.Time, member, target string)
 	Enqueue     func(time.Time)
 	Preview     func(drafts []build.JointDraftRef, member platform.Member) (ReleasePreview, platform.ReleaseCandidate, error)
-	UpgradePlan func(candidate platform.ReleaseCandidate, member platform.Member) (*ReleaseUpgradePlan, error)
 	Lifecycle   func(candidate platform.ReleaseCandidate, member platform.Member, at time.Time, upgrade bool) ([]platform.ReleaseInstallation, json.RawMessage, error)
 	Bootstrap   func(app string, raw json.RawMessage) (*AcceptedBootstrap, error)
-	Stage       func(records *records.Store, candidateID string, installations []platform.ReleaseInstallation) (StagedInstallation, error)
+	Stage       func(records *records.Store, candidateID string, installations []platform.ReleaseInstallation, upgrade bool) (StagedInstallation, error)
+	Assets      func() AcceptedAssets
 	Journaled   func() bool
 	Prepare     func(ReleaseEntry) bool
 	Accept      func(ReleaseEntry) ([]byte, error)
@@ -83,7 +83,7 @@ func (a ReleaseAcceptance) Apply(raw []byte) (acceptedformat.Release, error) {
 			}
 			view = bootstrap.Records
 		}
-		staged, err := a.Stage(view, saved.CandidateID, saved.Installations)
+		staged, err := a.Stage(view, saved.CandidateID, saved.Installations, false)
 		if err != nil {
 			return saved, err
 		}
@@ -173,7 +173,7 @@ func (a ReleaseAcceptance) Activate(m platform.Member, candidateID, key, upgrade
 	}
 	installations, bootstrap, err := PlanActivation(candidateID, raw, upgradeID, Activation{
 		UpgradePlan: func(candidate platform.ReleaseCandidate) (*ReleaseUpgradePlan, error) {
-			return a.UpgradePlan(candidate, m)
+			return a.upgradePlan(candidate, m, now)
 		},
 		Lifecycle: func(candidate platform.ReleaseCandidate) ([]platform.ReleaseInstallation, json.RawMessage, error) {
 			return a.Lifecycle(candidate, m, now, upgradeID != "")
@@ -196,6 +196,41 @@ func (a ReleaseAcceptance) Activate(m platform.Member, candidateID, key, upgrade
 		return "", err
 	}
 	return a.Commit(m, saved)
+}
+
+func (a ReleaseAcceptance) Review(id string, member platform.Member, context ReviewContext) (SavedReleaseReview, error) {
+	context.Prepare = func(candidate platform.ReleaseCandidate, upgrade bool) error {
+		_, _, err := a.Lifecycle(candidate, member, time.Now().UTC(), upgrade)
+		return err
+	}
+	context.Upgrade = func(candidate platform.ReleaseCandidate) (*ReleaseUpgradePlan, error) {
+		return a.upgradePlan(candidate, member, time.Now().UTC())
+	}
+	return a.Store.Review(id, context)
+}
+
+func (a ReleaseAcceptance) Running(saved platform.ReleaseCandidate) (platform.ReleaseCandidate, error) {
+	return RunningRelease(saved, a.Assets())
+}
+
+func (a ReleaseAcceptance) upgradePlan(candidate platform.ReleaseCandidate, member platform.Member, now time.Time) (*ReleaseUpgradePlan, error) {
+	installations, bootstrap, err := a.Lifecycle(candidate, member, now, true)
+	if err != nil {
+		return nil, err
+	}
+	records := a.Projection
+	if len(bootstrap) > 0 {
+		prepared, err := a.Bootstrap(build.ID, bootstrap)
+		if err != nil || prepared == nil {
+			return nil, fmt.Errorf("upgrade bootstrap cannot prepare: %v", err)
+		}
+		records = prepared.Records
+	}
+	staged, err := a.Stage(records, candidate.ID, installations, true)
+	if err != nil {
+		return nil, err
+	}
+	return UpgradePlan(candidate.ID, a.Store.Active(), StoredShapes(a.Projection, staged.Records))
 }
 
 func (a ReleaseAcceptance) admitted(m platform.Member, candidateID, key string, now time.Time) error {

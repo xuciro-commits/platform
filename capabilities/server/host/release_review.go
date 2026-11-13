@@ -2,11 +2,10 @@ package host
 
 import (
 	"context"
-	"fmt"
+	"platformkernel/kernel"
 	"platformserver/platform"
 	releaseowner "platformserver/services/devops/releases"
 	"platformserver/services/resources/authoring"
-	"time"
 )
 
 func (h *Host) promotionSnapshots(source string) []releaseowner.PromotionSnapshot {
@@ -43,11 +42,11 @@ func (t *Tenant) SavedReleases(m platform.Member, offset, limit int, application
 		if err := t.buildAllowed(m, "GET /v1/releases/candidates", build.Builder, build.Publisher); err != nil {
 			return releaseowner.ReleasePage{}, err
 		}
-		var ref *platform.AssetRef
-		if len(application) > 0 && application[0] != "" {
-			ref = &platform.AssetRef{App: build.ID, Kind: platform.AssetApp, Name: application[0]}
+		name := ""
+		if len(application) > 0 {
+			name = application[0]
 		}
-		return t.releases.Page(offset, limit, ref)
+		return t.releases.PageFor(offset, limit, name)
 	})
 }
 
@@ -56,26 +55,15 @@ func (t *Tenant) ReviewSavedRelease(m platform.Member, id string) (releaseowner.
 		if err := t.buildAllowed(m, "GET /v1/releases/candidates/{id}", build.Builder, build.Publisher); err != nil {
 			return releaseowner.SavedReleaseReview{}, err
 		}
-		return t.releases.Review(id, releaseowner.ReviewContext{
-			AI: func(assets []platform.ReleaseAsset, visible map[platform.AssetRef]bool) ([]platform.ApplicationAI, error) {
-				ai, refusal := t.applicationAILocked(m, assets, visible)
-				if refusal != nil {
-					return nil, fmt.Errorf("candidate AI metadata is unavailable: %s", refusal.Message)
-				}
-				return ai, nil
-			}, Extensions: t.releaseExtensionReview, Running: t.runningReleaseLocked,
+		return t.releaseAcceptance().Review(id, m, releaseowner.ReviewContext{
+			AI: func(assets []platform.ReleaseAsset, visible map[platform.AssetRef]bool) ([]platform.ApplicationAI, *kernel.Error) {
+				return t.applicationAILocked(m, assets, visible)
+			}, Extensions: t.releaseExtensionReview, Running: t.releaseAcceptance().Running,
 			CheckExisting: func(id string, raw []byte) error {
 				if err := t.checkExtensionSet(); err != nil {
 					return err
 				}
 				return t.pendingWorkFitsLocked(id, raw)
-			},
-			Prepare: func(saved platform.ReleaseCandidate, upgrade bool) error {
-				_, _, err := t.prepareReleaseLifecycleLocked(saved, m, time.Now().UTC(), upgrade)
-				return err
-			},
-			Upgrade: func(saved platform.ReleaseCandidate) (*releaseowner.ReleaseUpgradePlan, error) {
-				return t.releaseUpgradePlanLocked(saved, m)
 			},
 		})
 	})

@@ -6,14 +6,9 @@ import (
 )
 
 func (t *Tenant) closures() functionauthoring.Closures {
-	return functionauthoring.Closures{
-		Assets: func() ([]platform.ReleaseAsset, error) { return t.releaseAssetsLocked(nil, false) },
-		Describe: func(asset platform.ReleaseAsset) (platform.ReleaseAsset, error) {
-			return t.describer().DescribeOwnedAsset(asset)
-		},
-		Retain: func(candidate platform.ReleaseCandidate, ref platform.AssetRef, sourceVersion string, retained *string) (platform.ReleaseCandidate, string, error) {
-			return t.releases.RetainedClosure(candidate, ref, sourceVersion, retained)
-		},
-		Version: func(app string) string { return t.App(app).Manifest().Version },
-	}
+	return functionauthoring.NewClosures(
+		func() ([]platform.ReleaseAsset, error) { return t.releaseAssetsLocked(nil, false) },
+		t.describer().DescribeOwnedAsset,
+		t.releases.RetainedClosure,
+		func(app string) string { return t.App(app).Manifest().Version })
 }

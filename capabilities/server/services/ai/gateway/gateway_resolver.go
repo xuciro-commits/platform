@@ -173,6 +173,23 @@ func (r Resolver) ResolveStaged(purpose, name string, override platform.ModelOpt
 	return binding, provider, refusal
 }
 
+func EvaluationModelConfig(name string, definition platform.AIFunction, lookup func(string) (platform.AIModel, platform.AIProvider, *kernel.Error),
+	resolver Resolver) (string, error) {
+	model, provider, refusal := lookup(name)
+	if refusal != nil {
+		return "", fmt.Errorf("the plan model is not enabled")
+	}
+	binding, _, refusal := resolver.Resolve("generation", model.Name(), definition.ModelOptions.Override(platform.ModelOptions{MaxTokens: definition.MaxTokens}))
+	if refusal != nil {
+		return "", fmt.Errorf("model options: %s", refusal.Message)
+	}
+	binding, refusal = resolver.Stage(binding, provider, platform.AIStageDesign)
+	if refusal != nil {
+		return "", fmt.Errorf("model stage: %s", refusal.Message)
+	}
+	return ConfigurationDigest(model, provider, &binding)
+}
+
 func (r Resolver) Describe(purpose, name string, override platform.ModelOptions) (string, string, bool) {
 	binding, pv, err := r.Resolve(purpose, name, override)
 	if err != nil {

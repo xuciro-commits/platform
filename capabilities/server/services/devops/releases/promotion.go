@@ -2,6 +2,7 @@ package releases
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -169,11 +170,10 @@ func (p PromotionPlan) Prepare(destination PromotionDestination, lifecycle func(
 
 type Sealer struct {
 	Tenant string
+	Files  platform.FileStore
 	Raw    func(id string) ([]byte, error)
-	Put    func(key string, raw []byte) error
 	Commit func(artifact platform.SealedArtifact) error
 	Find   func(id string) (platform.SealedArtifact, bool)
-	Open   func(key string) (io.ReadCloser, error)
 }
 
 func (s Sealer) Seal(id string, now time.Time) (platform.SealedArtifact, error) {
@@ -185,7 +185,7 @@ func (s Sealer) Seal(id string, now time.Time) (platform.SealedArtifact, error) 
 	if err != nil {
 		return platform.SealedArtifact{}, err
 	}
-	if err := s.Put(artifact.Key, raw); err != nil {
+	if err := s.Files.Put(context.Background(), artifact.Key, raw, "application/json"); err != nil {
 		return platform.SealedArtifact{}, fmt.Errorf("seal %s: %w", id, err)
 	}
 	if err := s.Commit(artifact); err != nil {
@@ -204,6 +204,9 @@ func (s Sealer) SealedOrSeal(id string, now time.Time) ([]byte, platform.SealedA
 	if !ok {
 		return nil, platform.SealedArtifact{}, fmt.Errorf("release candidate %s is not sealed", id)
 	}
-	raw, err := ReadSealed(id, artifact, func() (io.ReadCloser, error) { return s.Open(artifact.Key) })
+	raw, err := ReadSealed(id, artifact, func() (io.ReadCloser, error) {
+		reader, _, err := s.Files.Get(context.Background(), artifact.Key)
+		return reader, err
+	})
 	return raw, artifact, err
 }

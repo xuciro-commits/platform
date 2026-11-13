@@ -3,7 +3,9 @@ package releases
 import (
 	"encoding/json"
 	"fmt"
+	"platformkernel/kernel"
 	"platformserver/platform"
+	"platformserver/services/resources/authoring"
 
 	"time"
 )
@@ -44,6 +46,14 @@ type SavedReleaseReview struct {
 	From                 string                   `json:"from,omitempty"`
 	PromotedAt           time.Time                `json:"promotedAt,omitzero"`
 	PromotedTo           []PromotionTarget        `json:"promotedTo,omitempty"`
+}
+
+func (s *Store) PageFor(offset, limit int, application string) (ReleasePage, error) {
+	var ref *platform.AssetRef
+	if application != "" {
+		ref = &platform.AssetRef{App: build.ID, Kind: platform.AssetApp, Name: application}
+	}
+	return s.Page(offset, limit, ref)
 }
 
 func (s *Store) Page(offset, limit int, application *platform.AssetRef) (ReleasePage, error) {
@@ -119,9 +129,9 @@ func (s *Store) Review(id string, context ReviewContext) (SavedReleaseReview, er
 	for _, asset := range saved.Assets {
 		visible[asset.Ref] = true
 	}
-	ai, err := context.AI(saved.Assets, visible)
-	if err != nil {
-		return SavedReleaseReview{}, err
+	ai, refusal := context.AI(saved.Assets, visible)
+	if refusal != nil {
+		return SavedReleaseReview{}, fmt.Errorf("candidate AI metadata is unavailable: %s", refusal.Message)
 	}
 	reply := SavedReleaseReview{AI: ai, Assets: saved.Assets, Active: s.Active() == id, Preview: ReleasePreview{
 		CandidateID: id, Included: []platform.AssetRef{}, Added: []platform.AssetRef{}, Removed: []platform.AssetRef{}, Changed: []platform.AssetRef{},
@@ -167,7 +177,7 @@ func (s *Store) Review(id string, context ReviewContext) (SavedReleaseReview, er
 }
 
 type ReviewContext struct {
-	AI            func([]platform.ReleaseAsset, map[platform.AssetRef]bool) ([]platform.ApplicationAI, error)
+	AI            func([]platform.ReleaseAsset, map[platform.AssetRef]bool) ([]platform.ApplicationAI, *kernel.Error)
 	Extensions    func(platform.ReleaseCandidate) ([]ReleaseExtensionReview, error)
 	Running       func(platform.ReleaseCandidate) (platform.ReleaseCandidate, error)
 	CheckExisting func(string, []byte) error

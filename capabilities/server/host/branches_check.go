@@ -231,7 +231,7 @@ func (t *Tenant) saveBranchCandidate(m platform.Member, branchID, candidateID st
 	}
 	saved, err := t.SaveReleaseCandidates(m, drafts, candidateID, "branch:"+branchID+":merge", now)
 	if err == nil {
-		_, err = t.SealCandidate(saved, now)
+		_, err = t.sealer().Seal(saved, now)
 	}
 	return saved, err
 }

@@ -6,7 +6,11 @@ import (
 	"slices"
 )
 
-func ReferencedDraftClosure(owner build.ConstructionDrafts, kind platform.AssetKind, id, mine string) (ReleaseDraftClosure, error) {
+func ReferencedDraftClosure(owner build.ConstructionDrafts, kind platform.AssetKind, id, member, branch string) (ReleaseDraftClosure, error) {
+	mine := ""
+	if branch == "" {
+		mine = member
+	}
 	drafts, err := owner.ReferencedDrafts(kind, id, mine)
 	if err != nil {
 		return ReleaseDraftClosure{}, err
@@ -15,6 +19,15 @@ func ReferencedDraftClosure(owner build.ConstructionDrafts, kind platform.AssetK
 		drafts = []build.JointDraftRef{}
 	}
 	return ReleaseDraftClosure{Drafts: drafts}, nil
+}
+
+func (p Planner) VisiblePreview(drafts []build.JointDraftRef, member platform.Member, definitions []platform.Definition) (ReleasePreview, error) {
+	reply, err := p.PreviewWithActions(drafts, member)
+	if err != nil {
+		return reply, err
+	}
+	HideInvisibleDownstream(&reply, definitions)
+	return reply, nil
 }
 
 func WorkingDrafts(owner build.ConstructionDrafts, memberID string) (ReleaseWorkingState, error) {

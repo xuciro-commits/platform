@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io"
 	"platformkernel/kernel"
 	acceptedformat "platformserver/kernel/acceptedformat"
 	"slices"
@@ -19,15 +18,13 @@ import (
 func (t *Tenant) sealer() releaseowner.Sealer {
 	return releaseowner.Sealer{
 		Tenant: t.ID,
+		Files:  t.files(),
 		Raw: func(id string) ([]byte, error) {
 			raw, refusal := recordRead(t, context.Background(), func(t *Tenant) ([]byte, *kernel.Error) { return slices.Clone(t.releases.Raw(id)), nil })
 			if refusal != nil {
 				return nil, refusal
 			}
 			return raw, nil
-		},
-		Put: func(key string, raw []byte) error {
-			return t.files().Put(context.Background(), key, raw, "application/json")
 		},
 		Commit: func(artifact platform.SealedArtifact) error {
 			t.Lane.Lock()
@@ -40,15 +37,7 @@ func (t *Tenant) sealer() releaseowner.Sealer {
 			return nil
 		},
 		Find: t.SealedArtifact,
-		Open: func(key string) (io.ReadCloser, error) {
-			reader, _, err := t.files().Get(context.Background(), key)
-			return reader, err
-		},
 	}
-}
-
-func (t *Tenant) SealCandidate(id string, now time.Time) (platform.SealedArtifact, error) {
-	return t.sealer().Seal(id, now)
 }
 
 func (t *Tenant) SealedArtifact(id string) (platform.SealedArtifact, bool) {

@@ -97,6 +97,14 @@ type ReleaseSaved struct {
 	ID string `json:"id"`
 }
 
+func DraftChange(owner build.ConstructionDrafts, member platform.Member, kind platform.AssetKind, id string) (build.DraftChange, error) {
+	change, found, err := owner.DraftChangeOf(member, kind, id)
+	if err == nil && !found {
+		err = fmt.Errorf("The draft has no working changes")
+	}
+	return change, err
+}
+
 type ReleaseActivateRequest struct {
 	CandidateID string `json:"candidateId"`
 	Key         string `json:"key"`

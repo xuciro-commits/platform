@@ -7,7 +7,6 @@ import (
 	pageowner "platformserver/services/apps/pages"
 	releaseowner "platformserver/services/devops/releases"
 	"slices"
-	"time"
 )
 
 func (t *Tenant) stageReleaseInstallationLocked(installations []platform.ReleaseInstallation, validate bool, upgrade ...bool) (*Tenant, error) {
@@ -87,33 +86,5 @@ func (t *Tenant) checkExtensionSet() error {
 	return releaseowner.CheckExtensions(releaseowner.StoredEntities(t.Projection), t.Entity)
 }
 func (t *Tenant) releaseExtensionReview(candidate platform.ReleaseCandidate) ([]releaseowner.ReleaseExtensionReview, error) {
-	shapes, err := releaseowner.AssetShapes(t.apps, candidate.Assets)
-	if err != nil {
-		return nil, err
-	}
-	return releaseowner.ExtensionReview(candidate, releaseowner.StoredEntities(t.Projection), shapes, t.Entity, (hostView{t: t}).EntitySource)
-}
-
-func (t *Tenant) releaseUpgradePlanLocked(candidate platform.ReleaseCandidate, member platform.Member) (*releaseowner.ReleaseUpgradePlan, error) {
-	installations, bootstrap, err := t.prepareReleaseLifecycleLocked(candidate, member, time.Now().UTC(), true)
-	if err != nil {
-		return nil, err
-	}
-	records := t.Projection
-	if len(bootstrap) > 0 {
-		prepared, err := t.PrepareBatch(t.App("build").AcceptedLedger(), bootstrap, t.batchApply())
-		if err != nil || prepared == nil {
-			return nil, fmt.Errorf("upgrade bootstrap cannot prepare: %v", err)
-		}
-		records = prepared.Records
-	}
-	view, err := t.assetInstallationView(records)
-	if err != nil {
-		return nil, err
-	}
-	trial, err := view.stageReleaseInstallationLocked(installations, true, true)
-	if err != nil {
-		return nil, err
-	}
-	return releaseowner.UpgradePlan(candidate.ID, t.releases.Active(), releaseowner.StoredShapes(t.Projection, trial.Projection))
+	return releaseowner.ReviewExtensions(candidate, t.apps, releaseowner.StoredEntities(t.Projection), t.Entity, (hostView{t: t}).EntitySource)
 }

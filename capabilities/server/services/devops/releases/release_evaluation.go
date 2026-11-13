@@ -4,11 +4,24 @@ import (
 	"encoding/json"
 	"fmt"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
+	"platformkernel/kernel"
 	"platformserver/platform"
 	"platformserver/services/resources/authoring"
 	"strconv"
 	"strings"
+	"time"
 )
+
+type ReleaseEvaluationRequest struct {
+	CandidateID string `json:"candidateId"`
+	PlanID      string `json:"planId,omitempty"`
+	Agent       string `json:"agent,omitempty"`
+	Key         string `json:"key"`
+}
+
+type ReleaseEvaluationStarted struct {
+	ID string `json:"id"`
+}
 
 type EvaluationHooks struct {
 	Candidate      func(id string) (platform.ReleaseCandidate, error)
@@ -18,6 +31,34 @@ type EvaluationHooks struct {
 	AppModel       func() string
 	HasProvider    func() bool
 	ModelConfig    func(model string, definition platform.AIFunction) (string, error)
+	Admits         func(platform.Member) *kernel.Error
+	Quarantined    func() bool
+	Agent          func(platform.Member, ReleaseEvaluationRequest, time.Time) (string, error)
+	Accept         func(*pb.Submission, time.Time) *kernel.Error
+}
+
+func PrepareReleaseEvaluation(tenant string, member platform.Member, request ReleaseEvaluationRequest, now time.Time, hooks EvaluationHooks) (string, error) {
+	if err := hooks.Admits(member); err != nil {
+		return "", err
+	}
+	if !build.HoldsIndependentRole(member, build.Builder) || request.CandidateID == "" || (request.PlanID == "") == (request.Agent == "") ||
+		request.Key == "" || len(request.Key) > 200 || now.IsZero() {
+		return "", fmt.Errorf("a builder, saved candidate, test plan or agent, and idempotency key are required")
+	}
+	if hooks.Quarantined() {
+		return "", fmt.Errorf("tenant is quarantined")
+	}
+	if request.Agent != "" {
+		return hooks.Agent(member, request, now)
+	}
+	sub, id, err := PrepareEvaluation(tenant, request.CandidateID, request.PlanID, request.Key, hooks)
+	if err != nil {
+		return "", err
+	}
+	if refusal := hooks.Accept(sub, now); refusal != nil {
+		return "", fmt.Errorf("function evaluation was refused: %s", refusal.Message)
+	}
+	return id, nil
 }
 
 func PrepareEvaluation(tenant, candidateID, planID, key string, hooks EvaluationHooks) (*pb.Submission, string, error) {

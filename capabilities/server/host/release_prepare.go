@@ -178,24 +178,9 @@ func (r releaseInstallationRuntime) Pending(id string, raw []byte) error {
 }
 
 func (t *Tenant) registerInstalledAsset(plan platform.AssetInstallation) error {
-	definition, indexed, err := t.definitionOwners(false).Definition(plan)
-	if err != nil || !indexed {
-		return err
-	}
-	for i, existing := range t.definitions {
-		if existing.Ref == plan.Ref {
-			t.definitions[i] = definition
-			return nil
-		}
-	}
-	t.setDefinitions(append(t.definitions, definition))
-	return nil
+	return releaseowner.RegisterInstalledDefinition(t.definitions, plan, t.definitionOwners(false).Definition, t.setDefinitions)
 }
 
 func (t *Tenant) registerOwnedAssetMetadata() error {
-	definitions, err := t.ownedAssetDefinitions(t.definitions)
-	if err == nil {
-		t.setDefinitions(definitions)
-	}
-	return err
+	return releaseowner.RegisterOwnedAssetMetadata(t.definitions, t.ownedAssetDefinitions, t.setDefinitions)
 }
