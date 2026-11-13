@@ -5,11 +5,8 @@ import releaseowner "platformserver/services/devops/releases"
 import (
 	"encoding/json"
 	"fmt"
-	"reflect"
 
 	"slices"
-	"strconv"
-	"strings"
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
@@ -153,30 +150,9 @@ func (t *Tenant) bootstrapOwnerDraftsLockedWithArchived(candidate platform.Relea
 		if et == nil {
 			return nil, nil, fmt.Errorf("%s does not host %s", t.ID, draft.Type)
 		}
-		nameField, ok := et.Info().Field("name")
-		if !ok {
-			return nil, nil, fmt.Errorf("asset draft %s has no owner identity", draft.Type)
-		}
-		matches := 0
-		logicalName := draft.Ref.Name
-		if draft.Ref.Kind == platform.AssetObject || draft.Ref.Kind == platform.AssetFlow {
-			logicalName = strings.TrimPrefix(logicalName, build.ID+".")
-		}
-		for id, row := range et.Rows().All() {
-			archived := row.Value.FieldByName("Record").Interface().(platform.Record).Archived
-			if includeArchived && archived && row.Value.FieldByIndex(nameField.Index).String() == logicalName {
-				value := reflect.New(row.Value.Type()).Elem()
-				value.Set(row.Value)
-				records.Header(value).Archived = false
-				copy := *row
-				copy.Value = value
-				et.SetRow(id, &copy)
-				view.Projection.TrackWrite(et.Info().Type + "/" + id)
-				archived = false
-			}
-			if (context.ManagedBy != "" || !archived) && row.Value.FieldByIndex(nameField.Index).String() == logicalName {
-				matches++
-			}
+		matches, err := decision.Records.DraftMatches(draft.Type, releaseowner.DraftLogicalName(draft.Ref), includeArchived, context.ManagedBy != "")
+		if err != nil {
+			return nil, nil, err
 		}
 		if matches > 1 {
 			return nil, nil, fmt.Errorf("asset draft %s/%s is ambiguous", draft.Type, draft.Name)
@@ -186,25 +162,10 @@ func (t *Tenant) bootstrapOwnerDraftsLockedWithArchived(candidate platform.Relea
 		}
 		app := view.App(et.Info().App)
 		if matches == 0 {
-			raw, err := releaseowner.AssetDraftPayload(et.Info(), draft.Image)
+			submission, err := releaseowner.DraftSubmission(t.ID, candidate.ID, context, request, ordinal, draft, et.Info())
 			if err != nil {
 				return nil, nil, err
 			}
-			if context.Project != "" && build.BranchDraftType(draft.Type) && draft.Type != build.AppType {
-				var payload map[string]json.RawMessage
-				if json.Unmarshal(raw, &payload) != nil {
-					return nil, nil, fmt.Errorf("asset draft %s/%s is unreadable", draft.Type, draft.Name)
-				}
-				payload["project"] = platform.Raw(context.Project)
-				raw, _ = json.Marshal(payload)
-			}
-			key := "release-bootstrap:" + candidate.ID + ":" + context.Member.ID + ":" + draft.Type + "/" + draft.Name
-			if request != nil {
-				key = request.Key + "#" + strconv.Itoa(ordinal)
-			}
-			submission := &pb.Submission{TenantId: t.ID, PrincipalId: context.Member.ID, Authority: et.Info().App,
-				IdempotencyKey: key,
-				Target:         &pb.EntityRef{Type: draft.Type, Id: draft.Name}, Schema: &pb.SchemaRef{Name: draft.Schema, Version: 1}, Payload: raw}
 			if request != nil {
 				if refusal := t.delegatedBound(context.Member, submission); refusal != nil {
 					return nil, nil, refusal
@@ -212,14 +173,7 @@ func (t *Tenant) bootstrapOwnerDraftsLockedWithArchived(candidate platform.Relea
 			}
 			answer, rejected := platform.Decide(platform.NewCaller(decision, context.Member, et.Info().App, false, context.ManagedBy != ""), app, submission, context.At)
 			if rejected != nil {
-				if rejected.Code == pb.ErrorCode_ERROR_CODE_POLICY_DENIED {
-					action, _ := app.Manifest().Actions.Action(draft.Schema)
-					return nil, nil, fmt.Errorf("create target draft %s/%s needs the %s role and matching token scope: %w", draft.Type, draft.Name, strings.Join(action.Roles, " role or "), rejected)
-				}
-				if rejected.Message != "" {
-					return nil, nil, fmt.Errorf("create target draft %s/%s: %s: %w", draft.Type, draft.Name, rejected.Message, rejected)
-				}
-				return nil, nil, fmt.Errorf("create target draft %s/%s: %w", draft.Type, draft.Name, rejected)
+				return nil, nil, releaseowner.DraftRefusal(app, draft, rejected)
 			}
 			receipt = answer
 		}
