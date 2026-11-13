@@ -114,7 +114,7 @@ func (d *Console) Ready() error {
 	return nil
 }
 
-var _ platform.IdentityDirectory = (*Console)(nil)
+var _ IdentityOwner = (*Console)(nil)
 
 var _ platform.CompositionReady = (*Console)(nil)
 
@@ -499,12 +499,6 @@ func (d *Console) decideDelegate(c platform.Caller, s *pb.Submission) (func(*pb.
 		d.deriveRoles(to, d.currentMember(to).Today(time.Now()))
 	}, nil
 }
-
-var _ platform.IdentitySessions = (*Console)(nil)
-
-var _ platform.IdentityProfile = (*Console)(nil)
-
-var _ platform.HostIdentities = (*Console)(nil)
 
 func (d *Console) ProjectAccess(m platform.Member, project string) platform.ProjectAccessView {
 	out := platform.ProjectAccessView{Members: []platform.ProjectMember{}, Manage: platform.ProjectManager(m, d.ConsolePolicies.ProjectRole(m.ID, project))}

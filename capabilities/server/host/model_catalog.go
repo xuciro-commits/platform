@@ -3,7 +3,6 @@ package host
 import (
 	"platformserver/services/ai/gateway"
 	"platformserver/services/ai/gateway/providers"
-	controlowner "platformserver/services/security/control"
 
 	"platformkernel/kernel"
 
@@ -22,8 +21,8 @@ func (t *Tenant) ProviderModels(m platform.Member, provider string, refresh bool
 			return secret, err
 		},
 		Version: func(secret string) int {
-			if owner, ok := t.App(controlowner.PlatformApp).(platform.Credentials); ok {
-				if credential, ok := owner.Credential(secret); ok {
+			if t.identityOwner != nil {
+				if credential, ok := t.identityOwner.Credential(secret); ok {
 					return credential.Version
 				}
 			}

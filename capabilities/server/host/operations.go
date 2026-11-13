@@ -180,7 +180,7 @@ func (t *Tenant) Connectors(now time.Time) []runtimekernel.ConnectorView {
 func (t *Tenant) notify(c platform.Caller, n platform.Notification, now time.Time, to []platform.Recipient) []string {
 	members := t.recipients(c, now, to)
 	delivery := map[string]platform.Reach{}
-	if d, ok := t.App(controlowner.PlatformApp).(platform.IdentityProfile); ok {
+	if d := t.identityOwner; d != nil {
 		for _, m := range members {
 			delivery[m] = d.Reach(m)
 		}
@@ -197,8 +197,8 @@ func (t *Tenant) notify(c platform.Caller, n platform.Notification, now time.Tim
 func (t *Tenant) recipients(c platform.Caller, now time.Time, to []platform.Recipient) []string {
 	return controlowner.Recipients(c.App, to, now.UTC().Format(time.DateOnly),
 		func(app, role string) []string {
-			if d, ok := t.App(controlowner.PlatformApp).(platform.IdentityDirectory); ok {
-				return d.Holding(app, role)
+			if t.identityOwner != nil {
+				return t.identityOwner.Holding(app, role)
 			}
 			return nil
 		},

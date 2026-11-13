@@ -23,7 +23,7 @@ func (h *Host) routesDiscovery(rt *routes) {
 	rt.metadata(transport.Route{Pattern: "GET /v1/me", Summary: "Who the caller is on this host: tenant, member, the apps they may open, their language", Answer: MeView{}}, translating(func(r *http.Request, m platform.Member, t *Tenant) (MeView, *kernel.Error) {
 		view := MeView{TenantID: m.Tenant, PrincipalID: m.ID, Profile: m, Apps: t.AppsOf(m), Tenants: h.tenantsOf(r),
 			Language: t.Language(m, r), Languages: t.i18n.Languages(), Preferred: m.Language, Currency: t.setting(t.automation(controlowner.PlatformApp, false), controlowner.SettingCurrency)}
-		if d, ok := t.App(controlowner.PlatformApp).(platform.IdentityProfile); ok {
+		if d := t.identityOwner; d != nil {
 			view.Account, view.Tenant = d.Account(m.ID), d.TenantRecord()
 		}
 		return view, nil

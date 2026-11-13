@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"platformserver/platform"
-	controlowner "platformserver/services/security/control"
 	"time"
 
 	runtimekernel "platformserver/kernel"
@@ -18,8 +17,8 @@ func (t *Tenant) restoreRuntimeSnapshot(ctx context.Context, j Journals, state [
 		Delta:    storageDelta,
 		States:   func(app string) platform.AcceptedStateApp { return t.states[app] },
 		Complete: func() error {
-			if console, ok := t.App(controlowner.PlatformApp).(platform.IdentityRecovery); ok {
-				console.CloseTokenSecretWindows()
+			if t.identityOwner != nil {
+				t.identityOwner.CloseTokenSecretWindows()
 			}
 			if t.procs != nil {
 				if err := t.procs.Check(); err != nil {

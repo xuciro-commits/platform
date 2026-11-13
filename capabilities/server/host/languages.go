@@ -5,7 +5,6 @@ import (
 	"net/http"
 	"platformserver/kernel/transport"
 	ontology "platformserver/services/ontology"
-	controlowner "platformserver/services/security/control"
 	"strings"
 
 	"platformserver/platform"
@@ -28,8 +27,8 @@ func (t *Tenant) Language(m platform.Member, r *http.Request) string {
 	if lang, asked := t.asked(r); asked {
 		return lang
 	}
-	if d, ok := t.App(controlowner.PlatformApp).(platform.IdentityProfile); ok {
-		return d.Language("")
+	if t.identityOwner != nil {
+		return t.identityOwner.Language("")
 	}
 	return ""
 }

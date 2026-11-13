@@ -11,8 +11,7 @@ import (
 )
 
 func (t *Tenant) resolveCredential(name, consumer, address string) ([]byte, string, error) {
-	owner, _ := t.App(controlowner.PlatformApp).(platform.Credentials)
-	return controlowner.ResolveCredential(t.ID, owner, t.secret, name, consumer, address)
+	return controlowner.ResolveCredential(t.ID, t.identityOwner, t.secret, name, consumer, address)
 }
 func (t *Tenant) CredentialValue(name, consumer, address string) ([]byte, bool) {
 	value, _, err := t.resolveCredential(name, consumer, address)
@@ -35,7 +34,7 @@ func (h *Host) routesCredentials(rt *routes) {
 			Reply(w, nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "A valid credential and nonempty single-line value are required"))
 			return
 		}
-		answer, err := controlowner.SealCredential(t.ID, t.App(controlowner.PlatformApp).(platform.Credentials), request)
+		answer, err := controlowner.SealCredential(t.ID, t.identityOwner, request)
 		if err != nil {
 			Reply(w, nil, err)
 			return

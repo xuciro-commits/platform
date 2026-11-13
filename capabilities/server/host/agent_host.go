@@ -10,7 +10,6 @@ import (
 	"platformserver/services/ai/gateway"
 	agentowner "platformserver/services/ai/runtime"
 	"platformserver/services/objects"
-	controlowner "platformserver/services/security/control"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
@@ -121,11 +120,10 @@ func (h hostView) AgentGlossary(app string) string            { return h.t.gloss
 func (h hostView) AgentLanguage(language string) string       { return agents.LanguageName(language) }
 func (h hostView) AgentSuspended(member string) bool          { return h.t.suspended(member) }
 func (h hostView) ExternalAgentMembers() []platform.Member {
-	owner, ok := h.t.App(controlowner.PlatformApp).(platform.IdentityDirectory)
-	if !ok {
+	if h.t.identityOwner == nil {
 		return nil
 	}
-	return owner.AgentMembers()
+	return h.t.identityOwner.AgentMembers()
 }
 func (h hostView) AgentDecisionMembers() []string {
 	var out []string

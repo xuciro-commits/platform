@@ -109,8 +109,8 @@ func (h *Host) routesCore(rt *routes) {
 func (h *Host) loginIdentities() []platform.LoginIdentity {
 	var out []platform.LoginIdentity
 	for _, t := range h.currentTenants() {
-		if d, ok := t.App(controlowner.PlatformApp).(platform.HostIdentities); ok {
-			out = append(out, d.Identities()...)
+		if t.identityOwner != nil {
+			out = append(out, t.identityOwner.Identities()...)
 		}
 	}
 	return out

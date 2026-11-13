@@ -48,8 +48,8 @@ func (d *Deployment) tenantRestore(ctx context.Context, t *Tenant, j Journals, c
 			return t.runtimeStateDeltaLocked()
 		},
 		CloseTokenSecretWindows: func() {
-			if console, ok := t.App(controlowner.PlatformApp).(platform.IdentityRecovery); ok {
-				console.CloseTokenSecretWindows()
+			if t.identityOwner != nil {
+				t.identityOwner.CloseTokenSecretWindows()
 			}
 		},
 		CheckProcesses: func() error {

@@ -3,7 +3,6 @@ package host
 import (
 	"encoding/json"
 	runtimekernel "platformserver/kernel"
-	controlowner "platformserver/services/security/control"
 
 	"slices"
 	"strings"
@@ -20,7 +19,7 @@ func (t *Tenant) delegatedBound(m platform.Member, s *pb.Submission) *kernel.Err
 	if owner == nil || owner.Manifest().ID != build.ID {
 		return nil
 	}
-	access, _ := t.App(controlowner.PlatformApp).(platform.ProjectAccess)
+	access := t.identityOwner
 	return security.ProjectDelegation{
 		App:     build.ID,
 		Builder: build.Builder,

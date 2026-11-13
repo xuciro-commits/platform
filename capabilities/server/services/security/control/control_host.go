@@ -42,6 +42,17 @@ type Owners struct {
 	Actions  []platform.Action
 }
 
+type IdentityOwner interface {
+	platform.IdentityDirectory
+	platform.IdentityProfile
+	platform.IdentitySessions
+	platform.HostIdentities
+	platform.IdentityRecovery
+	platform.IdentityCounts
+	platform.Credentials
+	platform.ProjectAccess
+}
+
 type Console struct {
 	newOwners func(string) Owners
 	mu        sync.Mutex

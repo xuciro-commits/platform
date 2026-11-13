@@ -32,7 +32,7 @@ type AppPermissions struct {
 }
 
 func (t *Tenant) Permissions() []AppPermissions {
-	d, _ := t.App(controlowner.PlatformApp).(platform.IdentityDirectory)
+	d := t.identityOwner
 	out := []AppPermissions{}
 	for _, a := range t.LiveApps() {
 		m := a.Manifest()

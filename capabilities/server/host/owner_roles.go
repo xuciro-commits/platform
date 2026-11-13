@@ -9,19 +9,21 @@ import (
 	runtimekernel "platformserver/kernel"
 	"platformserver/platform"
 	"platformserver/services/ai/gateway"
+	controlowner "platformserver/services/security/control"
 )
 
 type ownerRoles struct {
-	identity  platform.IdentityDirectory
-	directory platform.Directory
-	linker    platform.Linker
-	ai        aigateway.Models
-	tasks     platform.Tasks
-	procs     platform.Processes
-	agents    platform.AgentRuntime
-	knowledge platform.Glossary
-	observers []platform.Observer
-	listeners []string
+	identity      platform.IdentityDirectory
+	identityOwner controlowner.IdentityOwner
+	directory     platform.Directory
+	linker        platform.Linker
+	ai            aigateway.Models
+	tasks         platform.Tasks
+	procs         platform.Processes
+	agents        platform.AgentRuntime
+	knowledge     platform.Glossary
+	observers     []platform.Observer
+	listeners     []string
 }
 
 func ownerRolesOf(owners ownerSet, active func(string) bool) (ownerRoles, error) {
@@ -37,7 +39,7 @@ func ownerRolesOf(owners ownerSet, active func(string) bool) (ownerRoles, error)
 		if _, ok := a.(platform.Listener); ok {
 			r.listeners = append(r.listeners, id)
 		}
-		if err := errors.Join(runtimekernel.ClaimRole(&r.identity, a, "identity"), runtimekernel.ClaimRole(&r.directory, a, "directory"),
+		if err := errors.Join(runtimekernel.ClaimRole(&r.identity, a, "identity"), runtimekernel.ClaimRole(&r.identityOwner, a, "identity owner"), runtimekernel.ClaimRole(&r.directory, a, "directory"),
 			runtimekernel.ClaimRole(&r.linker, a, "link"), runtimekernel.ClaimRole(&r.ai, a, "model"), runtimekernel.ClaimRole(&r.tasks, a, "task"),
 			runtimekernel.ClaimRole(&r.procs, a, "process"), runtimekernel.ClaimRole(&r.agents, a, "agent"), runtimekernel.ClaimRole(&r.knowledge, a, "glossary")); err != nil {
 			return ownerRoles{}, err
