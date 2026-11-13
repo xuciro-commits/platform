@@ -7,7 +7,6 @@ import (
 	"platformserver/platform"
 	releaseowner "platformserver/services/devops/releases"
 	"platformserver/services/resources/authoring"
-	"slices"
 	"time"
 )
 
@@ -56,22 +55,19 @@ func (t *Tenant) scopedReferencedDrafts(m platform.Member, kind platform.AssetKi
 	if branch == "" {
 		mine = m.ID
 	}
-	drafts, err := owner.ReferencedDrafts(kind, id, mine)
-	if err != nil {
-		return releaseowner.ReleaseDraftClosure{}, err
-	}
-	if drafts == nil {
-		drafts = []build.JointDraftRef{}
-	}
-	return releaseowner.ReleaseDraftClosure{Drafts: drafts}, nil
+	return releaseowner.ReferencedDraftClosure(owner, kind, id, mine)
 }
 
 func (t *Tenant) builderAllowed(m platform.Member, permission string) error {
+	return t.buildAllowed(m, permission, build.Builder)
+}
+
+func (t *Tenant) buildAllowed(m platform.Member, permission string, roles ...string) error {
 	if err := t.Admits(m); err != nil {
 		return err
 	}
 	c := platform.NewCaller(runtime{t: t}, m, build.ID, false, false)
-	if err := authorizationRefusal(t.authorizeNative(c, permission, "read", []string{build.Builder}, true)); err != nil {
+	if err := authorizationRefusal(t.authorizeNative(c, permission, "read", roles, true)); err != nil {
 		return err
 	}
 	return nil
@@ -127,15 +123,7 @@ func (t *Tenant) scopedWorkingDrafts(m platform.Member) (releaseowner.ReleaseWor
 	if err != nil {
 		return releaseowner.ReleaseWorkingState{}, err
 	}
-	changes, err := owner.WorkingDrafts(m.ID)
-	if err != nil {
-		return releaseowner.ReleaseWorkingState{}, err
-	}
-	state := releaseowner.ReleaseWorkingState{Drafts: []releaseowner.ReleaseWorkingDraft{}}
-	for _, change := range changes {
-		state.Drafts = append(state.Drafts, releaseowner.ReleaseWorkingDraft{Kind: change.Ref.Kind, ID: change.ID, Type: change.Type, Title: change.Title})
-	}
-	return state, nil
+	return releaseowner.WorkingDrafts(owner, m.ID)
 }
 
 func (t *Tenant) PreviewReleaseDrafts(m platform.Member, drafts []build.JointDraftRef, branch string, now time.Time) (releaseowner.ReleasePreview, error) {
@@ -160,15 +148,7 @@ func (t *Tenant) scopedPreviewReleaseDrafts(m platform.Member, drafts []build.Jo
 	if err != nil {
 		return reply, err
 	}
-	visible := map[platform.AssetRef]bool{}
-	for _, definition := range definitions {
-		visible[definition.Ref] = true
-	}
-	for i := range reply.DraftReviews {
-		reply.DraftReviews[i].Downstream = slices.DeleteFunc(reply.DraftReviews[i].Downstream, func(resource releaseowner.ReleaseDraftResource) bool {
-			return !visible[resource.Ref]
-		})
-	}
+	releaseowner.HideInvisibleDownstream(&reply, definitions)
 	return reply, nil
 }
 

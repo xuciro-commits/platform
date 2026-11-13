@@ -32,7 +32,7 @@ func (h observationSourceHost) ObservationDefinitions(m platform.Member) ([]plat
 }
 
 func (h observationSourceHost) ObservationSourceActive(record string) bool {
-	return h.t.observationSourceActive(record)
+	return h.t.Projection.ObservationSourceActive(record)
 }
 
 func (h observationSourceHost) Entity(typ string) (platform.EntityInfo, bool) { return h.t.Entity(typ) }

@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	runtimekernel "platformserver/kernel"
-	"slices"
 	"strings"
 	"time"
 
@@ -46,22 +45,10 @@ func (t *Tenant) prepareSourceSubmission(m platform.Member, sub *pb.Submission, 
 		}
 		return projected, claims, nil
 	}
-	var values map[string]json.RawMessage
-	if err := json.Unmarshal(sub.GetPayload(), &values); err != nil || len(values) == 0 || source.row.At == nil {
-		return nil, nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "The source row has no mapped values or source time")
+	values, attributes, refusal := dataowner.SourceAttributes(sub.GetPayload(), source.binding, source.row)
+	if refusal != nil {
+		return nil, nil, refusal
 	}
-	mapped := map[string]bool{}
-	for _, column := range source.binding.Columns {
-		mapped[column.Attribute] = true
-	}
-	attributes := make([]string, 0, len(values))
-	for name := range values {
-		if !mapped[name] {
-			return nil, nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "The source row has an undeclared attribute")
-		}
-		attributes = append(attributes, name)
-	}
-	slices.Sort(attributes)
 	caller := platform.NewCaller(runtime{t: t, scoped: true}, m, sub.GetAuthority(), false, false)
 	kind := "write"
 	if strings.HasSuffix(sub.GetSchema().GetName(), ".create") {
@@ -146,15 +133,12 @@ func (t *Tenant) prepareSourceDeletion(sub *pb.Submission, source *sourceSubmiss
 
 func (t *Tenant) absentSourceRows(object string, binding *platform.DataSourceBinding, current []dataowner.SourceRow, now time.Time) ([]dataowner.SourceRow, *kernel.Error) {
 	return recordRead(t, context.Background(), func(t *Tenant) ([]dataowner.SourceRow, *kernel.Error) {
-		present := map[string]bool{}
-		for _, row := range current {
-			if row.Error != "" {
-				return nil, nil
-			}
-			present[row.ID] = true
+		present, complete := dataowner.PresentSourceRows(current)
+		if !complete {
+			return nil, nil
 		}
-		connector := binding.Kind + ":" + binding.Source
-		var removed []dataowner.SourceRow
+		connector := dataowner.SourceConnector(binding)
+		var ids []string
 		t.Projection.Lock()
 		defer t.Projection.Unlock()
 		et := t.Projection.Type(object)
@@ -162,28 +146,10 @@ func (t *Tenant) absentSourceRows(object string, binding *platform.DataSourceBin
 			return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "The target object is no longer installed")
 		}
 		for id, row := range et.Rows().All() {
-			if present[id] || records.Header(row.Value).Archived {
-				continue
-			}
-			ref := &pb.EntityRef{Type: object, Id: id}
-			live, known := false, false
-			for _, claim := range t.claims.Facts.CurrentClaims(t.ID, ref, "$record") {
-				if claim.GetFact().GetProvenance().GetConnectorId() == connector {
-					live, known = string(claim.GetFact().GetPayload()) == "true", true
-				}
-			}
-			if !known {
-				for _, field := range et.Info().Fields {
-					live = live || slices.ContainsFunc(t.claims.Facts.CurrentClaims(t.ID, ref, field.Name), func(claim *pb.FactRecord) bool {
-						return claim.GetFact().GetProvenance().GetConnectorId() == connector
-					})
-				}
-			}
-			if live {
-				removed = append(removed, dataowner.SourceRow{ID: id, Verb: ".edit", Payload: json.RawMessage("{}"), Key: "delete:" + id, At: &now, Deleted: true})
+			if !present[id] && !records.Header(row.Value).Archived && dataowner.ClaimedBySource(t.claims.Facts, t.ID, object, id, connector, et.Info()) {
+				ids = append(ids, id)
 			}
 		}
-		slices.SortFunc(removed, func(a, b dataowner.SourceRow) int { return strings.Compare(a.ID, b.ID) })
-		return removed, nil
+		return dataowner.DeletionRows(ids, now), nil
 	})
 }

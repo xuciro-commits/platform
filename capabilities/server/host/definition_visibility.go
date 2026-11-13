@@ -151,7 +151,7 @@ func (t *Tenant) definitionsFrom(m platform.Member, registeredDefinitions []plat
 			if def.Observation == nil {
 				continue
 			}
-			if def.OwnerRecord != "" && !t.observationSourceActive(def.OwnerRecord) {
+			if def.OwnerRecord != "" && !t.Projection.ObservationSourceActive(def.OwnerRecord) {
 				continue
 			}
 			declaration := def.Observation

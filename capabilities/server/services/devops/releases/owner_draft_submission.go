@@ -3,6 +3,7 @@ package releases
 import (
 	"encoding/json"
 	"fmt"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -49,4 +50,15 @@ func DraftRefusal(app platform.App, draft platform.AssetDraft, rejected *kernel.
 		return fmt.Errorf("create target draft %s/%s: %s: %w", draft.Type, draft.Name, rejected.Message, rejected)
 	}
 	return fmt.Errorf("create target draft %s/%s: %w", draft.Type, draft.Name, rejected)
+}
+
+func BootstrapDrafts(registry *platform.AssetRegistry, candidate platform.ReleaseCandidate, context platform.AssetReleaseContext, request *OwnerDraftRequest) ([]platform.AssetDraft, error) {
+	drafts, err := registry.ReleaseDrafts(candidate.Assets, context)
+	if err != nil {
+		return nil, err
+	}
+	if context.ManagedAssets != nil {
+		drafts = slices.DeleteFunc(drafts, func(draft platform.AssetDraft) bool { return !context.ManagedAssets[draft.Ref] })
+	}
+	return SelectOwnerDrafts(drafts, context, request)
 }

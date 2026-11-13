@@ -2,19 +2,13 @@ package host
 
 import (
 	"context"
-	controlowner "platformserver/services/security/control"
-
-	"fmt"
 	"io"
-
-	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
 	"platformserver/kernel/records"
-	knowledgeindex "platformserver/services/ai/retrieval"
-
 	"platformserver/platform"
+	knowledgeindex "platformserver/services/ai/retrieval"
+	controlowner "platformserver/services/security/control"
 	"reflect"
-
 	"time"
 )
 
@@ -36,7 +30,6 @@ func (t *Tenant) corpus() knowledgeindex.Corpus {
 			return page.Records, page.Total, err
 		},
 		Row: t.knowledgeRow,
-
 		Blob: func(hash string) (string, bool) {
 			body, _, err := t.files().Get(context.Background(), t.ID+"/"+hash)
 			if err != nil {
@@ -70,22 +63,22 @@ func (t *Tenant) embed(name string, input []string, now time.Time) ([][]float32,
 		model    platform.AIModel
 		provider platform.AIProvider
 	}
-	value, err := recordRead(t, context.Background(), func(t *Tenant) (configured, *kernel.Error) {
-		model, provider, refusal := t.ai.Model(name)
-		return configured{model: model, provider: provider}, refusal
-	})
-	model, pv := value.model, value.provider
-	if err != nil {
-		return nil, fmt.Errorf("the model %s is not enabled", name)
-	}
-	binding, problem := model.Resolve("embedding", platform.ModelOptions{}, 0)
-	if problem != nil {
-		return nil, problem
-	}
-	if _, refusal := t.modelResolver().Stage(binding, pv, platform.AIStageRuntime); refusal != nil {
-		return nil, refusal
-	}
-	return t.gateway(nil).Embed(platform.Member{ID: "app:" + platform.KnowledgeApp, Tenant: t.ID}, name, model, pv, input, now)
+	return knowledgeindex.Embedder{
+		Model: func() (platform.AIModel, platform.AIProvider, *kernel.Error) {
+			value, err := recordRead(t, context.Background(), func(t *Tenant) (configured, *kernel.Error) {
+				model, provider, refusal := t.ai.Model(name)
+				return configured{model: model, provider: provider}, refusal
+			})
+			return value.model, value.provider, err
+		},
+		Stage: func(binding platform.AIModelBinding, pv platform.AIProvider) *kernel.Error {
+			_, refusal := t.modelResolver().Stage(binding, pv, platform.AIStageRuntime)
+			return refusal
+		},
+		Embed: func(model platform.AIModel, pv platform.AIProvider, input []string) ([][]float32, error) {
+			return t.gateway(nil).Embed(platform.Member{ID: "app:" + platform.KnowledgeApp, Tenant: t.ID}, name, model, pv, input, now)
+		},
+	}.Vectors(name, input)
 }
 
 func (t *Tenant) embeddingNeedsRebuild(name string) bool {
@@ -97,12 +90,7 @@ func (t *Tenant) vectorSpace(name string) string {
 	if t.ai == nil {
 		return name
 	}
-	m, pv, err := t.ai.Model(name)
-	if err != nil || m.Revision == 0 {
-		return name
-	}
-	digest, _ := platform.CanonicalDigest([]any{name, pv.BaseURL, pv.Wire, m.Revision, m.Capabilities})
-	return name + "@" + digest
+	return knowledgeindex.VectorSpace(name, t.ai.Model)
 }
 
 func (t *Tenant) KnowledgeIndexStatus(ctx context.Context, m platform.Member) (platform.KnowledgeIndexStatus, *kernel.Error) {
@@ -116,26 +104,13 @@ func (t *Tenant) KnowledgeIndexStatus(ctx context.Context, m platform.Member) (p
 }
 
 func (t *Tenant) checkEmbeddingSetting(id, value string) *kernel.Error {
-	if id != platform.KnowledgeApp+"/"+platform.SettingKnowledgeEmbeddingNext && id != platform.KnowledgeApp+"/"+platform.SettingKnowledgeEmbeddingModel {
-		return nil
-	}
-	if value == "" {
-		return nil
-	}
-	_, pv, err := t.modelResolver().Resolve("embedding", value, platform.ModelOptions{})
-	if err != nil {
-		return err
-	}
-	if pv.Wire != "openai" {
-		return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "This provider adapter does not support embeddings")
-	}
-	if id == platform.KnowledgeApp+"/"+platform.SettingKnowledgeEmbeddingModel {
-		status := t.knowledgeIndexStatus()
-		if status.Preparing != value || !status.Ready {
-			return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Build this model's index in AI configuration before activating it")
-		}
-	}
-	return nil
+	return knowledgeindex.EmbeddingSetting{
+		Resolve: func(value string) (platform.AIProvider, *kernel.Error) {
+			_, pv, err := t.modelResolver().Resolve("embedding", value, platform.ModelOptions{})
+			return pv, err
+		},
+		Status: t.knowledgeIndexStatus,
+	}.Check(id, value)
 }
 
 func (t *Tenant) knowledgeRow(typ, id string) (platform.EntityInfo, reflect.Value, bool) {
@@ -148,15 +123,19 @@ func (t *Tenant) knowledgeRow(typ, id string) (platform.EntityInfo, reflect.Valu
 	return et.Info(), et.Rows().Get(id).Value, true
 }
 
+func (t *Tenant) knowledgeScopeReadable(reader *platform.Member, scope string, at time.Time) bool {
+	member := t.host()
+	if reader != nil {
+		member = *reader
+	}
+	return t.readable(member, scope, at)
+}
+
 func (t *Tenant) knowledgePassageReadableInLane(document, scope string, apps []string, reader *platform.Member, app string, now time.Time) bool {
 	if scope == "" {
 		return knowledgeindex.DocumentReadable(t.knowledgeRow, document, reader, app)
 	}
-	m := t.host()
-	if reader != nil {
-		m = *reader
-	}
-	return t.readable(m, scope, now)
+	return t.knowledgeScopeReadable(reader, scope, now)
 }
 
 func (t *Tenant) knowledgeContext() knowledgeindex.Context {
@@ -174,16 +153,10 @@ func (t *Tenant) knowledgeContext() knowledgeindex.Context {
 		Read: func(read func(knowledgeindex.Context)) {
 			_, _ = recordRead(source, context.Background(), func(t *Tenant) (struct{}, *kernel.Error) { read(t.knowledgeContext()); return struct{}{}, nil })
 		},
-		Visible: t.knowledgePassageReadableInLane,
-		ScopeReadable: func(reader *platform.Member, scope string, at time.Time) bool {
-			member := t.host()
-			if reader != nil {
-				member = *reader
-			}
-			return t.readable(member, scope, at)
-		},
-		Active:    func() string { return setting(platform.SettingKnowledgeEmbeddingModel) },
-		Preparing: func() string { return setting(platform.SettingKnowledgeEmbeddingNext) },
+		Visible:       t.knowledgePassageReadableInLane,
+		ScopeReadable: t.knowledgeScopeReadable,
+		Active:        func() string { return setting(platform.SettingKnowledgeEmbeddingModel) },
+		Preparing:     func() string { return setting(platform.SettingKnowledgeEmbeddingNext) },
 		NeedsRebuild: func(name string) bool {
 			value, _ := recordRead(t, context.Background(), func(t *Tenant) (bool, *kernel.Error) { return t.embeddingNeedsRebuild(name), nil })
 			return value

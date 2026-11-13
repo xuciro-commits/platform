@@ -9,6 +9,7 @@ import (
 	runtimekernel "platformserver/kernel"
 	"platformserver/kernel/acceptedformat"
 	"platformserver/platform"
+	releaseowner "platformserver/services/devops/releases"
 	"platformserver/services/resources/authoring"
 	controlowner "platformserver/services/security/control"
 	"slices"
@@ -113,35 +114,18 @@ func (t *Tenant) prepareSaveReleaseCandidates(m platform.Member, drafts []build.
 	if err := t.Admits(m); err != nil {
 		return "", err
 	}
-	if !build.HoldsIndependentRole(m, build.Builder, build.Publisher) {
-		return "", fmt.Errorf("builder or publisher role required")
+	if err := releaseowner.CheckRequest(m, candidateID, key, now, t.quarantined); err != nil {
+		return "", err
 	}
-	if candidateID == "" || key == "" || len(key) > 200 || now.IsZero() {
-		return "", fmt.Errorf("candidate ID and idempotency key are required")
-	}
-	if t.quarantined() {
-		return "", fmt.Errorf("tenant is quarantined")
-	}
-	var candidateBytes []byte
-	if prior := t.releases.Raw(candidateID); prior != nil {
-		candidateBytes = slices.Clone(prior)
-	} else {
-		preview, candidate, err := t.previewReleaseLocked(drafts, m)
-		if err != nil {
-			return "", err
-		}
-		if preview.Diagnostic != "" {
-			return "", fmt.Errorf("release candidate: %s", preview.Diagnostic)
-		}
-		if candidate.ID != candidateID {
-			return "", fmt.Errorf("release candidate changed since preview")
-		}
-		candidateBytes = candidate.Bytes
+	candidateBytes, err := releaseowner.SavedCandidateBytes(t.releases.Raw(candidateID), func() (releaseowner.ReleasePreview, platform.ReleaseCandidate, error) {
+		return t.previewReleaseLocked(drafts, m)
+	}, candidateID)
+	if err != nil {
+		return "", err
 	}
 	saved := acceptedformat.Release{Version: 1, Kind: "release-result", Tenant: t.ID, App: build.ID,
 		Member: m.ID, Key: "release:" + key, At: now.UTC(), CandidateID: candidateID,
 		Bytes: candidateBytes}
-	var err error
 	saved.RequestHash, err = acceptedformat.ReleaseRequestHash(t.ID, m.ID, saved.Key, candidateID, false)
 	if err != nil {
 		return "", err
@@ -165,14 +149,8 @@ func (t *Tenant) prepareActivateReleaseWithUpgrade(m platform.Member, candidateI
 	if err := t.Admits(m); err != nil {
 		return "", err
 	}
-	if !build.HoldsIndependentRole(m, build.Builder, build.Publisher) {
-		return "", fmt.Errorf("builder or publisher role required")
-	}
-	if candidateID == "" || key == "" || len(key) > 200 || now.IsZero() {
-		return "", fmt.Errorf("candidate ID and idempotency key are required")
-	}
-	if t.quarantined() {
-		return "", fmt.Errorf("tenant is quarantined")
+	if err := releaseowner.CheckRequest(m, candidateID, key, now, t.quarantined); err != nil {
+		return "", err
 	}
 	if prior := t.Committed.Answer("release:activate:" + key); prior != nil {
 		saved, err := acceptedformat.DecodeRelease(prior)
@@ -186,26 +164,14 @@ func (t *Tenant) prepareActivateReleaseWithUpgrade(m platform.Member, candidateI
 	if raw == nil {
 		return "", fmt.Errorf("release candidate %s is not saved", candidateID)
 	}
-	var installations []platform.ReleaseInstallation
-	var bootstrap json.RawMessage
-	if upgradeID != "" {
-		candidate, err := platform.ReadCandidate(candidateID, raw)
-		if err != nil {
-			return "", err
-		}
-		plan, err := t.releaseUpgradePlanLocked(candidate, m)
-		if err != nil {
-			return "", err
-		}
-		if plan == nil || plan.ID != upgradeID {
-			return "", fmt.Errorf("storage upgrade plan changed; refresh and review it again")
-		}
-	}
-	candidate, err := platform.ReadCandidate(candidateID, raw)
-	if err != nil {
-		return "", err
-	}
-	installations, bootstrap, err = t.prepareReleaseLifecycleLocked(candidate, m, now, upgradeID != "")
+	installations, bootstrap, err := releaseowner.PlanActivation(candidateID, raw, upgradeID, releaseowner.Activation{
+		UpgradePlan: func(candidate platform.ReleaseCandidate) (*releaseowner.ReleaseUpgradePlan, error) {
+			return t.releaseUpgradePlanLocked(candidate, m)
+		},
+		Lifecycle: func(candidate platform.ReleaseCandidate) ([]platform.ReleaseInstallation, json.RawMessage, error) {
+			return t.prepareReleaseLifecycleLocked(candidate, m, now, upgradeID != "")
+		},
+	})
 	if err != nil {
 		return "", err
 	}
@@ -225,91 +191,46 @@ func (t *Tenant) prepareActivateReleaseWithUpgrade(m platform.Member, candidateI
 	return t.commitReleaseLocked(m, saved)
 }
 
+func (t *Tenant) acceptedAssets() releaseowner.AcceptedAssets {
+	return releaseowner.AcceptedAssets{
+		Available: func() ([]platform.ReleaseAsset, error) { return t.releaseAssetsLocked(nil, false) },
+		WithBindings: func(roots []platform.AssetRef, available []platform.ReleaseAsset) (platform.ReleaseCandidate, error) {
+			return t.candidateWithBindings(roots, available, nil)
+		},
+		Code: func() (map[platform.AssetRef]bool, error) {
+			code := map[platform.AssetRef]bool{}
+			for _, app := range t.apps {
+				assets, err := t.codeReleaseAssetsLocked(app)
+				if err != nil {
+					return nil, err
+				}
+				for _, asset := range assets {
+					code[asset.Ref] = true
+				}
+			}
+			return code, nil
+		},
+	}
+}
+
 func (t *Tenant) runningReleaseLocked(saved platform.ReleaseCandidate) (platform.ReleaseCandidate, error) {
-	available, err := t.releaseAssetsLocked(nil, false)
-	if err != nil {
-		return platform.ReleaseCandidate{}, err
-	}
-	roots := make([]platform.AssetRef, 0, len(saved.Assets))
-	installed := make(map[platform.AssetRef]bool, len(available))
-	for _, asset := range available {
-		installed[asset.Ref] = true
-	}
-	for _, asset := range saved.Assets {
-		if installed[asset.Ref] {
-			roots = append(roots, asset.Ref)
-		}
-	}
-	if len(roots) == 0 {
-		return platform.ReleaseCandidate{}, nil
-	}
-	return t.candidateWithBindings(roots, available, nil)
+	return releaseowner.RunningRelease(saved, t.acceptedAssets())
 }
 
 func (t *Tenant) acceptedInstallationReleaseLocked(saved platform.ReleaseCandidate) (platform.ReleaseCandidate, error) {
-	available, err := t.releaseAssetsLocked(nil, false)
-	if err != nil {
-		return platform.ReleaseCandidate{}, err
-	}
-	code := map[platform.AssetRef]bool{}
-	for _, app := range t.apps {
-		assets, err := t.codeReleaseAssetsLocked(app)
-		if err != nil {
-			return platform.ReleaseCandidate{}, err
-		}
-		for _, asset := range assets {
-			code[asset.Ref] = true
-		}
-	}
-	frozen := map[platform.AssetRef]platform.ReleaseAsset{}
-	roots := []platform.AssetRef{}
-	for _, asset := range saved.Assets {
-		roots = append(roots, asset.Ref)
-		if code[asset.Ref] {
-			frozen[asset.Ref] = asset
-		}
-	}
-	for index, asset := range available {
-		if original, exists := frozen[asset.Ref]; exists {
-			available[index] = original
-		}
-	}
-	return t.candidateWithBindings(roots, available, nil)
+	return releaseowner.AcceptedInstallationRelease(saved, t.acceptedAssets())
 }
 
 func (t *Tenant) pendingWorkFitsLocked(candidateID string, raw []byte) error {
-	if t.App(platform.WorkApp) == nil {
-		return nil
-	}
-	candidate, err := platform.ReadCandidate(candidateID, raw)
-	if err != nil {
-		return err
-	}
-	actionIn := func(c platform.ReleaseCandidate, name string) []byte {
-		for _, a := range c.Assets {
-			if a.Ref.Kind == platform.AssetAction && a.Ref.Name == name {
-				out, _ := json.Marshal(a)
-				return out
-			}
-		}
-		return nil
-	}
-	pending, _, _ := platform.Find[platform.ApprovalRequest](t.automation(platform.WorkApp, false),
-		platform.Query{Domain: json.RawMessage(`[["state","=","pending"]]`), Sort: []string{"id"}})
-	for _, request := range pending {
-		next := actionIn(candidate, request.Action)
-		if next == nil || request.Release == candidateID {
-			continue
-		}
-		if saved := t.releases.Raw(request.Release); saved != nil {
-			started, err := platform.ReadCandidate(request.Release, saved)
-			if err == nil && bytes.Equal(actionIn(started, request.Action), next) {
-				continue
-			}
-		}
-		return fmt.Errorf("pending approval %s holds %s under another release; decide or withdraw it before activating", request.ID, request.Action)
-	}
-	return nil
+	return releaseowner.PendingWorkFits(candidateID, raw, releaseowner.PendingWork{
+		Hosted: func() bool { return t.App(platform.WorkApp) != nil },
+		Approvals: func() []platform.ApprovalRequest {
+			pending, _, _ := platform.Find[platform.ApprovalRequest](t.automation(platform.WorkApp, false),
+				platform.Query{Domain: json.RawMessage(`[["state","=","pending"]]`), Sort: []string{"id"}})
+			return pending
+		},
+		Saved: func(id string) []byte { return t.releases.Raw(id) },
+	})
 }
 
 func (t *Tenant) ActiveRelease() string {

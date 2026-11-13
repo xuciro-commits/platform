@@ -11,7 +11,6 @@ import (
 	runtimekernel "platformserver/kernel"
 	acceptedformat "platformserver/kernel/acceptedformat"
 	"platformserver/services/devops/releases"
-	controlowner "platformserver/services/security/control"
 
 	"platformserver/kernel/records"
 	persistence "platformserver/kernel/store"
@@ -397,7 +396,7 @@ func (t *Tenant) Restore(raw json.RawMessage) error {
 		return err
 	}
 	t.audit.Restore(s.Audit, s.Deliveries)
-	if err := controlowner.ValidateHostImage(t.ID, platform.HostControlImage{Lifecycle: s.HostLifecycle, Support: s.Support, Migrations: s.Migrations, Requests: s.HostRequests, RuntimeSelection: s.RuntimeSelection, DisabledOwners: s.DisabledOwners}); err != nil {
+	if err := acceptedformat.ValidateHostImage(t.ID, platform.HostControlImage{Lifecycle: s.HostLifecycle, Support: s.Support, Migrations: s.Migrations, Requests: s.HostRequests, RuntimeSelection: s.RuntimeSelection, DisabledOwners: s.DisabledOwners}); err != nil {
 		return err
 	}
 	t.console.Restore(platform.HostControlImage{Lifecycle: s.HostLifecycle, Support: s.Support, Migrations: s.Migrations, Requests: s.HostRequests, RuntimeSelection: s.RuntimeSelection, DisabledOwners: s.DisabledOwners})

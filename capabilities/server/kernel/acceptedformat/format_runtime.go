@@ -10,14 +10,13 @@ import (
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	persistence "platformserver/kernel/store"
 	"platformserver/platform"
-	controlowner "platformserver/services/security/control"
 	"slices"
 	"strconv"
 	"strings"
 	"time"
 )
 
-const EffectApp = controlowner.PlatformApp
+const EffectApp = "platform"
 
 type RuntimeAgent struct {
 	Version     int                      `json:"version"`
@@ -107,12 +106,12 @@ func DecodeHostControl(raw []byte) (HostControl, error) {
 	}
 	hash, hashErr := HostRequestHash(r)
 	digest, digestErr := HostResultDigest(r)
-	if hashErr != nil || digestErr != nil || r.Version != 1 || r.Kind != "host-result" || r.Tenant == "" || r.App != controlowner.PlatformApp || r.Member == "" || r.At.IsZero() ||
+	if hashErr != nil || digestErr != nil || r.Version != 1 || r.Kind != "host-result" || r.Tenant == "" || r.App != EffectApp || r.Member == "" || r.At.IsZero() ||
 		!slices.Contains([]string{"lifecycle", "support.open", "support.use", "migration", "composition"}, r.Action) || r.Key != "host:"+r.Action+":"+hash || r.RequestHash != hash || r.Digest != digest || r.Before == "" || r.AuditBefore == "" ||
-		r.Audit.Member != r.Member || r.Audit.App != controlowner.PlatformApp || !r.Audit.At.Equal(r.At) || r.Audit.Action == "" {
+		r.Audit.Member != r.Member || r.Audit.App != EffectApp || !r.Audit.At.Equal(r.At) || r.Audit.Action == "" {
 		return r, fmt.Errorf("host result identity differs")
 	}
-	if err := controlowner.ValidateHostImage(r.Tenant, r.Image); err != nil {
+	if err := ValidateHostImage(r.Tenant, r.Image); err != nil {
 		return r, err
 	}
 	receipt, ok := r.Image.Requests[r.Key]
@@ -250,7 +249,7 @@ func DecodeOperationClaim(raw []byte) (OperationClaim, error) {
 	}
 	digest, err := OperationClaimDigest(saved)
 	hash, _ := platform.CanonicalDigest([]any{saved.Before, saved.PriorWork})
-	if err != nil || saved.Kind != "operation-claim" || saved.Version != 1 || saved.Tenant == "" || saved.App != controlowner.PlatformApp || saved.RequestHash != hash || saved.Digest != digest || saved.Before.Endpoint != OperationEndpoint || saved.Before.ID == "" || platform.EffectSettled(saved.Before.State) || saved.At.IsZero() {
+	if err != nil || saved.Kind != "operation-claim" || saved.Version != 1 || saved.Tenant == "" || saved.App != EffectApp || saved.RequestHash != hash || saved.Digest != digest || saved.Before.Endpoint != OperationEndpoint || saved.Before.ID == "" || platform.EffectSettled(saved.Before.State) || saved.At.IsZero() {
 		return saved, fmt.Errorf("invalid operation ownership result")
 	}
 	if saved.After.Generation == 0 || saved.Key != fmt.Sprintf("operation-claim:%s:%d", saved.Before.ID, saved.After.Generation) {
@@ -370,4 +369,67 @@ func DecodeComposite(raw []byte) (Composite, error) {
 		}
 	}
 	return saved, nil
+}
+
+func ValidateHostImage(tenant string, image platform.HostControlImage) error {
+	owners := map[string]bool{}
+	for _, id := range image.DisabledOwners {
+		if id == "" || len(id) > 128 || owners[id] {
+			return fmt.Errorf("invalid inactive owner")
+		}
+		owners[id] = true
+	}
+	if image.RuntimeSelection != nil {
+		if len(image.RuntimeSelection) != 3 {
+			return fmt.Errorf("invalid runtime selection")
+		}
+		for _, id := range []string{"platform.rules", "platform.authorization", "platform.kernel"} {
+			if _, found := image.RuntimeSelection[id]; !found {
+				return fmt.Errorf("missing runtime contract %s", id)
+			}
+		}
+	}
+	if !slices.Contains([]string{"", "open", "suspend", "decommission", "suspended", "decommissioned"}, image.Lifecycle) {
+		return fmt.Errorf("invalid host lifecycle")
+	}
+	ids := map[string]bool{}
+	for _, grant := range image.Support {
+		if grant.ID == "" || ids[grant.ID] || grant.Tenant != tenant || grant.Member == "" || grant.Reason == "" || grant.Opened == "" || grant.Expires.IsZero() || grant.Uses < 0 {
+			return fmt.Errorf("invalid host support grant")
+		}
+		ids[grant.ID] = true
+	}
+	for _, m := range image.Migrations {
+		if m.At.IsZero() || m.Key == "" || m.From == "" || m.To != tenant || m.From == m.To || m.Member == "" {
+			return fmt.Errorf("invalid host migration manifest")
+		}
+		for _, part := range m.Types {
+			if part.Type == "" || part.Rows < 0 || part.Written < 0 || part.Written > part.Rows {
+				return fmt.Errorf("invalid host migration counts")
+			}
+		}
+	}
+	for key, receipt := range image.Requests {
+		tag, _, found := strings.Cut(strings.TrimPrefix(key, "host:"), ":")
+		if !strings.HasPrefix(key, "host:") || !found || !slices.Contains([]string{"lifecycle", "support.open", "support.use", "migration", "composition"}, tag) || len(receipt.RequestHash) != 64 || !strings.HasSuffix(key, ":"+receipt.RequestHash) {
+			return fmt.Errorf("invalid host receipt")
+		}
+		if tag == "support.open" || tag == "support.use" {
+			i := slices.IndexFunc(image.Support, func(g platform.SupportGrant) bool { return g.ID == receipt.Answer.ID })
+			if i < 0 {
+				return fmt.Errorf("host receipt names no support grant")
+			}
+			current := image.Support[i]
+			if receipt.Answer.Uses < 0 || receipt.Answer.Uses > current.Uses {
+				return fmt.Errorf("host receipt has an invalid support count")
+			}
+			current.Uses = receipt.Answer.Uses
+			if current != receipt.Answer {
+				return fmt.Errorf("host receipt rewrites its support authority")
+			}
+		} else if receipt.Answer != (platform.SupportGrant{}) {
+			return fmt.Errorf("host receipt has an unrelated answer")
+		}
+	}
+	return nil
 }

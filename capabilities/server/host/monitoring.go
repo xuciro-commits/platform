@@ -3,12 +3,10 @@ package host
 import (
 	"cmp"
 	"encoding/json"
-	"fmt"
 	runtimekernel "platformserver/kernel"
 	dataowner "platformserver/services/data"
 	"platformserver/services/functions/runtime"
 	"platformserver/services/resources/monitoring"
-	"slices"
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
@@ -23,93 +21,27 @@ import (
 
 func (t *Tenant) monitoringRuns(m platform.Member, filter monitoring.MonitoringRunFilter, now time.Time) (monitoring.MonitoringRunPage, *kernel.Error) {
 	m = t.authorizationMember(m)
-	coverage, refusal := t.refreshRunIndex(m, now)
-	if refusal != nil {
-		page, fallback := t.monitoringRunsFromOwners(m, filter, now)
-		if fallback != nil {
-			return page, fallback
-		}
-		page.Coverage = append(page.Coverage, monitoring.MonitoringCoverage{Source: "run-index", Basis: "latest", Limitation: "index-unavailable"})
-		return page, nil
-	}
-	indexed, err := t.Log().QueryRunIndex(platform.RunIndexQuery{Tenant: t.ID, Scope: m.ID, Offset: 0, Limit: 1000})
-	if err != nil {
-		page, fallback := t.monitoringRunsFromOwners(m, filter, now)
-		if fallback != nil {
-			return page, fallback
-		}
-		page.Coverage = append(page.Coverage, monitoring.MonitoringCoverage{Source: "run-index", Basis: "latest", Limitation: "index-unavailable"})
-		return page, nil
-	}
-	return monitoring.FromIndex(indexed.Entries, filter, coverage), nil
-}
-
-func (t *Tenant) refreshRunIndex(m platform.Member, now time.Time) ([]monitoring.MonitoringCoverage, *kernel.Error) {
-	var refusal *kernel.Error
-	coverage := t.runIndex.Refresh(m.ID, now, func() ([]monitoring.MonitoringCoverage, bool) {
-		coverage, failed := t.rebuildRunIndex(m, now)
-		refusal = failed
-		return coverage, failed == nil
-	})
-	return slices.Clone(coverage), refusal
-}
-
-func (t *Tenant) rebuildRunIndex(m platform.Member, now time.Time) ([]monitoring.MonitoringCoverage, *kernel.Error) {
-	previous, _ := t.Log().QueryRunIndex(platform.RunIndexQuery{Tenant: t.ID, Scope: m.ID, Offset: 0, Limit: 1000})
-	previousStatus := map[string]string{}
-	for _, entry := range previous.Entries {
-		previousStatus[entry.ID] = entry.Status
-	}
-	var runs []monitoring.MonitoringRun
-	var coverage []monitoring.MonitoringCoverage
-	for offset := 0; ; {
-		page, refusal := t.monitoringRunsFromOwners(m, monitoring.MonitoringRunFilter{Offset: offset, Limit: 100}, now)
-		if refusal != nil {
-			return nil, refusal
-		}
-		coverage = page.Coverage
-		runs = append(runs, page.Runs...)
-		offset += len(page.Runs)
-		if len(page.Runs) == 0 || offset >= page.Total || offset >= 10000 {
-			break
-		}
-	}
-	entries := make([]platform.RunIndexEntry, 0, len(runs))
-	for _, run := range runs {
-		if len(previous.Entries) > 0 && (run.Source == "flow" || run.Source == "agent" || run.Source == "function" || run.Source == "compute" || run.Source == "projection" || run.Source == "code" || run.Source == "effect") &&
-			(run.Status == "failed" || run.Status == "cancelled") && previousStatus[run.ID] != run.Status {
+	return monitoring.RunIndex{
+		Tenant: t.ID, Scope: m.ID,
+		Query:   func(q platform.RunIndexQuery) (platform.RunIndexPage, error) { return t.Log().QueryRunIndex(q) },
+		Replace: func(entries []platform.RunIndexEntry) error { return t.Log().ReplaceRunIndex(t.ID, m.ID, entries) },
+		Refresh: func(rebuild func() ([]monitoring.MonitoringCoverage, bool)) []monitoring.MonitoringCoverage {
+			return t.runIndex.Refresh(m.ID, now, rebuild)
+		},
+		FromOwners: func(filter monitoring.MonitoringRunFilter) (monitoring.MonitoringRunPage, *kernel.Error) {
+			return t.monitoringRunsFromOwners(m, filter, now)
+		},
+		Observe: func(run monitoring.MonitoringRun) {
 			t.observeOwnerRun(now, "run", run.ID, monitoring.RunResourceApp(run), run.RecordRef, run.Status, run.Title, run.OwnerStatus)
-		}
-		raw, err := json.Marshal(run)
-		if err != nil {
-			return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT, Message: fmt.Sprintf("run index: %v", err)}
-		}
-		entries = append(entries, platform.RunIndexEntry{ID: run.ID, Scope: m.ID, Type: run.Type, Source: run.Source, App: monitoring.RunResourceApp(run), Status: run.Status, At: run.When, Payload: raw})
-	}
-	if err := t.Log().ReplaceRunIndex(t.ID, m.ID, entries); err != nil {
-		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_UNSPECIFIED, Message: err.Error()}
-	}
-	return coverage, nil
+		},
+	}.Runs(filter)
 }
 
 func monitoringRecords[T any](t *Tenant, m platform.Member, typ string, coverage *monitoring.MonitoringCoverage, now time.Time) ([]T, *kernel.Error) {
-	page, refusal := t.recordSelectionFrom(t.Projection, m, typ, platform.Query{Sort: []string{"id"}, Archived: true}, now)
-	if refusal != nil {
-		if refusal.Code == pb.ErrorCode_ERROR_CODE_POLICY_DENIED || refusal.Code == pb.ErrorCode_ERROR_CODE_NOT_FOUND {
-			coverage.Limitation = "permission-filtered"
-			return nil, nil
-		}
-		return nil, refusal
-	}
-	coverage.Readable = true
-	if page.Partial {
-		coverage.Limitation = "read-limit"
-	}
-	rows := make([]T, 0, len(page.Records))
-	for _, row := range page.Records {
-		rows = append(rows, row.(T))
-	}
-	return rows, nil
+	return monitoring.Records[T](func() ([]any, bool, *kernel.Error) {
+		page, refusal := t.recordSelectionFrom(t.Projection, m, typ, platform.Query{Sort: []string{"id"}, Archived: true}, now)
+		return page.Records, page.Partial, refusal
+	}, coverage)
 }
 
 func (t *Tenant) monitoringRunsFromOwners(m platform.Member, filter monitoring.MonitoringRunFilter, now time.Time) (monitoring.MonitoringRunPage, *kernel.Error) {
@@ -158,13 +90,10 @@ func (t *Tenant) monitoringRunsFromOwners(m platform.Member, filter monitoring.M
 	}
 	dataowner.PipelineRuns(runs, pipelines)
 	runs.Cover(coverage)
-	operations := []platform.Effect{}
-	for _, effect := range t.outbound.Select(func(x actions.Queued) bool { return x.Endpoint == acceptedformat.OperationEndpoint }) {
-		operations = append(operations, effect.Effect)
-	}
 	compilations := map[string]time.Time{}
 	coverage = monitoring.MonitoringCoverage{Source: "compute", Basis: "retained", Readable: true, Limitation: "caller-only"}
-	for _, effect := range operations {
+	for _, queued := range t.outbound.Select(func(x actions.Queued) bool { return x.Endpoint == acceptedformat.OperationEndpoint }) {
+		effect := queued.Effect
 		result, refused := t.operationResult(platform.NewCaller(runtime{t: t, scoped: true}, m, controlowner.PlatformApp, false, false), effect.ID)
 		if refused != nil {
 			if refused.Code != pb.ErrorCode_ERROR_CODE_POLICY_DENIED && refused.Code != pb.ErrorCode_ERROR_CODE_NOT_FOUND {
@@ -181,16 +110,7 @@ func (t *Tenant) monitoringRunsFromOwners(m platform.Member, filter monitoring.M
 			compilations[effect.ID] = effect.At
 			continue
 		}
-		status := "unknown"
-		switch result.State {
-		case "completed":
-			status = "ok"
-		case "failed", "pending", "running":
-			status = result.State
-		case "cancelled":
-			status = "cancelled"
-		}
-		runs.Add(monitoring.MonitoringRun{Type: "function", Source: "compute", ID: "compute:" + effect.ID, Title: cmp.Or(binding.Definition.Title, binding.Definition.Name), ResourceRef: result.Ref, RecordRef: effect.Target, When: effect.At, Status: status, OwnerStatus: result.State})
+		runs.Add(monitoring.MonitoringRun{Type: "function", Source: "compute", ID: "compute:" + effect.ID, Title: cmp.Or(binding.Definition.Title, binding.Definition.Name), ResourceRef: result.Ref, RecordRef: effect.Target, When: effect.At, Status: monitoring.ComputeStatus(result.State), OwnerStatus: result.State})
 	}
 	runs.Cover(coverage)
 	coverage = monitoring.MonitoringCoverage{Source: "code", Basis: "latest", Limitation: "latest-only"}
@@ -266,17 +186,7 @@ func (t *Tenant) monitoringRunsFromOwners(m platform.Member, filter monitoring.M
 	}
 	if refusal == nil {
 		coverage.Readable = true
-		for _, effect := range value.([]platform.Effect) {
-			if effect.Endpoint == acceptedformat.OperationEndpoint {
-				continue
-			}
-			effects[effect.ID] = true
-			run := monitoring.MonitoringRun{Type: "delivery", Source: "effect", ID: "effect:" + effect.ID, Title: effect.Event, RecordRef: effect.Target, When: effect.At, Status: monitoring.EffectStatus(effect.State), OwnerStatus: effect.State}
-			if !(effect.App == build.ID && effect.Event == build.ID+"/dispatch") {
-				runs.Retry(&run, controlowner.SchemaEffectRetry, controlowner.EffectType, effect.ID, "retry")
-			}
-			runs.Add(run)
-		}
+		effects = runs.Effects(value.([]platform.Effect), acceptedformat.OperationEndpoint, build.ID, controlowner.SchemaEffectRetry, controlowner.EffectType)
 	} else {
 		coverage.Limitation = "permission-filtered"
 	}

@@ -3,7 +3,6 @@ package host
 import (
 	"context"
 	"encoding/json"
-	"strconv"
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
@@ -192,38 +191,13 @@ func (t *Tenant) BranchDiff(m platform.Member, id string, now time.Time) (branch
 }
 
 func (t *Tenant) ReviewBranch(m platform.Member, id string, request branches.BranchReviewRequest, now time.Time) (branches.BranchDetail, *kernel.Error) {
-	branch, refusal := t.readBranch(m, id, now)
-	if refusal != nil {
-		return branches.BranchDetail{}, refusal
-	}
-	reviews := 0
-	if branch.Proposal != nil {
-		reviews = len(branch.Proposal.Reviews)
-	}
-	if refusal := t.submitBranch(m, "branch:"+id+":review:"+strconv.Itoa(len(branch.Changes))+":"+strconv.Itoa(reviews+1), build.BranchType+".review", id, map[string]any{"decision": request.Decision, "note": request.Note}, now); refusal != nil {
-		return branches.BranchDetail{}, refusal
-	}
-	return t.BranchDetail(m, id, now)
+	return t.branchFlow().Review(m, id, request, now)
 }
 
 func (t *Tenant) WithdrawBranch(m platform.Member, id string, now time.Time) (branches.BranchDetail, *kernel.Error) {
-	branch, refusal := t.readBranch(m, id, now)
-	if refusal != nil {
-		return branches.BranchDetail{}, refusal
-	}
-	if refusal := t.submitBranch(m, "branch:"+id+":withdraw:"+strconv.Itoa(int(branch.Record.Revision)), build.BranchType+".withdraw", id, map[string]any{}, now); refusal != nil {
-		return branches.BranchDetail{}, refusal
-	}
-	return t.BranchDetail(m, id, now)
+	return t.branchFlow().Finish(m, id, "withdraw", now)
 }
 
 func (t *Tenant) CloseBranch(m platform.Member, id string, now time.Time) (branches.BranchDetail, *kernel.Error) {
-	branch, refusal := t.readBranch(m, id, now)
-	if refusal != nil {
-		return branches.BranchDetail{}, refusal
-	}
-	if refusal := t.submitBranch(m, "branch:"+id+":close:"+strconv.Itoa(int(branch.Record.Revision)), build.BranchType+".close", id, map[string]any{}, now); refusal != nil {
-		return branches.BranchDetail{}, refusal
-	}
-	return t.BranchDetail(m, id, now)
+	return t.branchFlow().Finish(m, id, "close", now)
 }

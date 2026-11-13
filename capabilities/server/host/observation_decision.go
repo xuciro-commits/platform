@@ -3,11 +3,9 @@ package host
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	acceptedformat "platformserver/kernel/acceptedformat"
 	dataowner "platformserver/services/data"
 
-	"strings"
 	"time"
 
 	"google.golang.org/protobuf/encoding/protojson"
@@ -19,48 +17,23 @@ import (
 type ObservationDecisionEvidence = platform.ObservationDecisionEvidence
 
 func (t *Tenant) visibleObservationEvidence(m platform.Member, evidence *platform.ObservationDecisionEvidence, now time.Time) *platform.ObservationDecisionEvidence {
-	registry, err := t.assetRegistryLocked()
-	if err != nil {
-		return nil
-	}
-	asset, err := registry.ResolvePinned(evidence.Definition.Ref, evidence.Definition.SourceVersion)
-	if err != nil {
-		return nil
-	}
-	var definition platform.ObservationDefinition
-	if json.Unmarshal(asset.Body, &definition) != nil {
-		return nil
-	}
 	caller := platform.NewCaller(runtime{t: t, scoped: true}, m, evidence.Definition.Ref.App, false, false)
-	if !t.authorizeNative(caller, evidence.Definition.Ref.Name, "read", definition.Roles, true).Allow {
-		return nil
-	}
-	typ, id, valid := strings.Cut(evidence.Record, "/")
-	if !valid || typ != definition.Object.Name {
-		return nil
-	}
-	fields := []string{definition.DeviceField}
-	if definition.Decision != nil {
-		fields = append(fields, dataowner.ObservationDecisionFields(*definition.Decision)...)
-	}
-	permission := t.authorizeFrom(t.Projection, caller, platform.AuthzRequest{Principal: m.ID, Tenant: t.ID, Kind: "read", Type: typ, Record: id, Fields: fields}, now, false)
-	if !permission.Allow || len(permission.Withheld) > 0 {
-		return nil
-	}
-	copy := *evidence
-	if evidence.Intervals != nil {
-		intervals := evidence.Intervals.Clone()
-		copy.Intervals = &intervals
-	}
-	return &copy
-}
-
-func observationRequestIdentity(ref platform.AssetRef, q dataowner.ObservationEvaluate) (string, string, error) {
-	if q.Key == "" || len(q.Key) > 160 || strings.ContainsAny(q.Key, "/\x00\r\n") || q.Until.IsZero() {
-		return "", "", fmt.Errorf("choose a stable observation decision key and window end")
-	}
-	hash, err := platform.CanonicalDigest([]any{ref, q.Record, q.Until.UTC()})
-	return "observation:" + q.Key, "observation:" + hash, err
+	return dataowner.VisibleObservationEvidence(evidence,
+		func() (definition platform.ObservationDefinition, found bool) {
+			registry, err := t.assetRegistryLocked()
+			if err != nil {
+				return definition, false
+			}
+			asset, err := registry.ResolvePinned(evidence.Definition.Ref, evidence.Definition.SourceVersion)
+			return definition, err == nil && json.Unmarshal(asset.Body, &definition) == nil
+		},
+		func(name string, roles []string) bool {
+			return t.authorizeNative(caller, name, "read", roles, true).Allow
+		},
+		func(typ, id string, fields []string) bool {
+			permission := t.authorizeFrom(t.Projection, caller, platform.AuthzRequest{Principal: m.ID, Tenant: t.ID, Kind: "read", Type: typ, Record: id, Fields: fields}, now, false)
+			return permission.Allow && len(permission.Withheld) == 0
+		})
 }
 
 func (t *Tenant) observationPrior(m platform.Member, key, identity string) (*pb.ChangeRecord, *kernel.Error, bool) {
@@ -99,135 +72,69 @@ func (t *Tenant) observationPrior(m platform.Member, key, identity string) (*pb.
 	return nil, nil, false
 }
 
+func (t *Tenant) observationDecision() dataowner.ObservationDecision {
+	return dataowner.ObservationDecision{Tenant: t.ID, Sources: t.observationSources(), Admits: t.Admits, Prior: t.observationPrior,
+		Action: func(app, name string) (platform.Action, bool, bool) {
+			owner := t.App(app)
+			if owner == nil {
+				return platform.Action{}, false, false
+			}
+			action, declared := owner.Manifest().Actions.Action(name)
+			return action, declared, true
+		},
+		Authorize: func(m platform.Member, app string, action platform.Action, targets bool, at time.Time, sources []string) *kernel.Error {
+			caller := platform.NewCaller(runtime{t: t, scoped: true}, m, app, false, false)
+			return authorizationRefusal(t.authorizeCapability(caller, app, action.Schema, action.Roles, targets, authorizationDetails{At: at, Sources: sources}))
+		},
+		Accept: func(m platform.Member, submission *pb.Submission, evidence *platform.ObservationDecisionEvidence, at time.Time) (*pb.ChangeRecord, *kernel.Error) {
+			if refusal := t.delegatedBound(m, submission); refusal != nil {
+				return nil, refusal
+			}
+			owner := t.App(submission.GetAuthority())
+			if owner == nil {
+				return nil, unknown()
+			}
+			return t.accept(owner, m, t.currentSubmissionSchema(owner, submission), at, acceptOptions{observation: evidence})
+		}}
+}
+
+func observationEvaluation(a dataowner.ObservationAnswer) ObservationEvaluation {
+	answer := ObservationEvaluation{Observation: a.Observation, Matched: a.Matched, Reused: a.Reused}
+	if a.Receipt != nil {
+		answer.Receipt = &SubmissionAnswer{Record: a.Receipt}
+	}
+	return answer
+}
+
 func (t *Tenant) EvaluateObservation(ctx context.Context, m platform.Member, ref platform.AssetRef, q dataowner.ObservationEvaluate, now time.Time) (ObservationEvaluation, *kernel.Error) {
-	var answer ObservationEvaluation
-	key, identity, err := observationRequestIdentity(ref, q)
+	key, identity, err := dataowner.ObservationRequestIdentity(ref, q)
 	if err != nil {
-		return answer, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
+		return ObservationEvaluation{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
 	}
-	type prepared struct {
-		answer ObservationEvaluation
-		member platform.Member
-		plan   dataowner.ObservationPlan
-		read   dataowner.ObservationRead
-	}
-	initial, refusal := recordRead(t, ctx, func(t *Tenant) (prepared, *kernel.Error) {
-		var answer ObservationEvaluation
+	initial, refusal := recordRead(t, ctx, func(t *Tenant) (dataowner.ObservationPrepared, *kernel.Error) {
 		m = t.authorizationMember(m)
-		if refusal := t.Admits(m); refusal != nil {
-			return prepared{answer: answer}, refusal
-		}
-		if !m.Active() || m.Tenant != t.ID {
-			return prepared{answer: answer}, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "Observation member is unavailable")
-		}
-		if receipt, refusal, found := t.observationPrior(m, key, identity); found {
-			answer.Matched, answer.Reused = true, true
-			if receipt != nil {
-				answer.Receipt = &SubmissionAnswer{Record: receipt}
-			}
-			return prepared{answer: answer}, refusal
-		}
-		plan, refusal := t.observationSources().Prepare(m, ref, q.Record, now, true)
-		if refusal != nil {
-			return prepared{answer: answer}, refusal
-		}
-		read := dataowner.ObservationRead{Record: q.Record, Since: q.Until.Add(-time.Duration(plan.Info.Definition.WindowSeconds) * time.Second), Until: q.Until, Mode: "summary"}
-		if plan.Info.Definition.Decision.Mode == "intervals" {
-			read.Mode = "intervals"
-			read.Limit = platform.ObservationMaxPoints
-		}
-		if err := dataowner.CheckObservationRead(&read, now); err != nil {
-			return prepared{answer: answer}, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
-		}
-		decision := plan.Info.Definition.Decision
-		owner := t.App(decision.Action.App)
-		if owner == nil {
-			return prepared{answer: answer}, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "Observation decision action is unavailable")
-		}
-		action, declared := owner.Manifest().Actions.Action(decision.Action.Name)
-		if err := platform.CheckObservationAction(plan.Info.Definition, action); err != nil {
-			return prepared{answer: answer}, dataowner.ObservationUnavailable(err)
-		}
-		caller := platform.NewCaller(runtime{t: t, scoped: true}, m, decision.Action.App, false, false)
-		if refusal := authorizationRefusal(t.authorizeCapability(caller, decision.Action.App, action.Schema, action.Roles, declared && action.Target == plan.Entity.Type, authorizationDetails{At: now, Sources: plan.Sources})); refusal != nil {
-			return prepared{answer: answer}, refusal
-		}
-		return prepared{member: m, plan: plan, read: read}, nil
+		return t.observationDecision().Prepare(m, ref, q, key, identity, now)
 	})
-	if refusal != nil || initial.answer.Reused {
-		return initial.answer, refusal
+	if refusal != nil || initial.Answer.Reused {
+		return observationEvaluation(initial.Answer), refusal
 	}
-	m, plan, read := initial.member, initial.plan, initial.read
-	decision := plan.Info.Definition.Decision
-	result, err := t.observationSources().Fetch(ctx, plan, read, now)
-	if err != nil {
-		return answer, dataowner.ObservationUnavailable(err)
+	m = initial.Member
+	outcome, refusal := t.observationDecision().Observe(ctx, initial, now)
+	if refusal != nil {
+		return ObservationEvaluation{}, refusal
 	}
-	var matched bool
-	var inputs map[string]json.RawMessage
-	if result.Intervals != nil {
-		matched, inputs, err = platform.EvaluateObservationIntervals(plan.Info.Definition, plan.Entity, plan.Record, *result.Intervals, now, t.services.Rules)
-	} else {
-		matched, inputs, err = platform.EvaluateObservation(plan.Info.Definition, plan.Entity, plan.Record, result.Window, now, t.services.Rules)
-	}
-	if err != nil {
-		return answer, dataowner.ObservationUnavailable(err)
-	}
-	return decideOnImage(t, ctx, "observation:answer", func(t *Tenant) (ObservationEvaluation, *kernel.Error) {
+	answer, refusal := decideOnImage(t, ctx, "observation:answer", func(t *Tenant) (dataowner.ObservationAnswer, *kernel.Error) {
 		m = t.authorizationMember(m)
-		var answer ObservationEvaluation
-		current, refusal := t.observationSources().Prepare(m, ref, q.Record, now, true)
-		if refusal != nil {
-			return answer, refusal
-		}
-		if current.Stamp != plan.Stamp {
-			return answer, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Observation source or permissions changed while reading")
-		}
-		if receipt, refusal, found := t.observationPrior(m, key, identity); found {
-			answer.Matched, answer.Reused = true, true
-			if receipt != nil {
-				answer.Receipt = &SubmissionAnswer{Record: receipt}
-			}
-			return answer, refusal
-		}
-		answer.Observation, answer.Matched = &result, matched
-		if !matched {
-			return answer, nil
-		}
-		payload, err := json.Marshal(inputs)
-		if err != nil || len(payload) > 64<<10 {
-			return answer, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Observation decision inputs exceed their bounded scalar shape")
-		}
-		var source struct {
-			Revision uint32 `json:"revision"`
-		}
-		if json.Unmarshal(plan.Record, &source) != nil {
-			return answer, dataowner.ObservationUnavailable(fmt.Errorf("observation record revision is unavailable"))
-		}
-		submission := &pb.Submission{TenantId: t.ID, PrincipalId: m.ID, Authority: decision.Action.App, IdempotencyKey: key, CorrelationId: identity,
-			Target: &pb.EntityRef{Type: plan.Entity.Type, Id: q.Record}, Schema: &pb.SchemaRef{Name: decision.Action.Name, Version: 1}, ExpectedRevision: &source.Revision, Payload: payload}
-		if refusal := t.delegatedBound(m, submission); refusal != nil {
-			return answer, refusal
-		}
-		owner := t.App(decision.Action.App)
-		if owner == nil {
-			return answer, unknown()
-		}
-		submission = t.currentSubmissionSchema(owner, submission)
-		evidence := &platform.ObservationDecisionEvidence{Key: key, Definition: platform.AssetBinding{Ref: ref, SourceVersion: plan.Info.Version}, Record: plan.Entity.Type + "/" + q.Record, Device: plan.Device, Signal: plan.Info.Definition.Signal, Window: result.Window, Intervals: result.Intervals}
-		receipt, refusal := t.accept(owner, m, submission, now, acceptOptions{observation: evidence})
-		if receipt != nil {
-			answer.Receipt = &SubmissionAnswer{Record: receipt}
-		}
-		return answer, refusal
-	}, func(t *Tenant, candidate preparedAccepted, value ObservationEvaluation, refusal *kernel.Error) (ObservationEvaluation, *kernel.Error) {
+		return t.observationDecision().Commit(m, ref, q, key, identity, initial, outcome, now)
+	}, func(t *Tenant, candidate preparedAccepted, value dataowner.ObservationAnswer, refusal *kernel.Error) (dataowner.ObservationAnswer, *kernel.Error) {
 		if len(candidate.entry.Body) == 0 {
 			return value, refusal
 		}
 		receipt, refusal := t.finishPreparedSubmission(m, candidate, nil, refusal)
 		if receipt != nil {
-			value.Receipt = &SubmissionAnswer{Record: receipt}
+			value.Receipt = receipt
 		}
 		return value, refusal
 	})
+	return observationEvaluation(answer), refusal
 }

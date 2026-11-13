@@ -29,14 +29,7 @@ func (t *Tenant) bootstrapOwnerDraftsLockedWithArchived(candidate platform.Relea
 	if err != nil {
 		return nil, nil, err
 	}
-	drafts, err := registry.ReleaseDrafts(candidate.Assets, context)
-	if err != nil {
-		return nil, nil, err
-	}
-	if context.ManagedAssets != nil {
-		drafts = slices.DeleteFunc(drafts, func(draft platform.AssetDraft) bool { return !context.ManagedAssets[draft.Ref] })
-	}
-	drafts, err = releaseowner.SelectOwnerDrafts(drafts, context, request)
+	drafts, err := releaseowner.BootstrapDrafts(registry, candidate, context, request)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -55,11 +48,7 @@ func (t *Tenant) bootstrapOwnerDraftsLockedWithArchived(candidate platform.Relea
 		if err != nil {
 			return nil, nil, err
 		}
-		for typ, shape := range shapes {
-			if old := view.Projection.Type(typ); old != nil && old.Info().Go != shape.Go {
-				old.SetRows(records.Index[*records.Row]{})
-			}
-		}
+		view.Projection.ResetReshaped(shapes)
 	}
 	decision.tenant, decision.Records = view, view.Projection
 	decision.Records.Current().SelectRelease(candidate.ID)
@@ -232,32 +221,11 @@ func (r releaseInstallationRuntime) ReleaseProject(candidate platform.ReleaseCan
 	if resources == nil {
 		return ""
 	}
-	projects := func(apps bool) []string {
-		out := []string{}
-		for _, asset := range candidate.Assets {
-			if apps != (asset.Ref.Kind == platform.AssetApp) {
-				continue
-			}
-			for _, row := range resources.Rows().All() {
-				resource := row.Value.Interface().(build.Resource)
-				if resource.Ref == asset.Ref && resource.Project != "" && !slices.Contains(out, resource.Project) {
-					out = append(out, resource.Project)
-				}
-			}
-		}
-		return out
+	rows := []build.Resource{}
+	for _, row := range resources.Rows().All() {
+		rows = append(rows, row.Value.Interface().(build.Resource))
 	}
-	if found := projects(true); len(found) > 0 {
-		if len(found) == 1 {
-			return found[0]
-		}
-		return ""
-	}
-	found := projects(false)
-	if len(found) == 1 {
-		return found[0]
-	}
-	return ""
+	return releaseowner.ResourceProject(candidate, rows)
 }
 
 func (r releaseInstallationRuntime) Registry() (*platform.AssetRegistry, error) {
@@ -275,7 +243,7 @@ func (r releaseInstallationRuntime) Bootstrap(candidate platform.ReleaseCandidat
 	return releaseInstallationRuntime{view}, raw, nil
 }
 func (r releaseInstallationRuntime) Predecessor(record string) (string, error) {
-	return r.t.installationPredecessor(record)
+	return r.t.Projection.RowDigest(record)
 }
 func (r releaseInstallationRuntime) Stage(plans []platform.ReleaseInstallation, upgrade bool) (releaseowner.InstallationRuntime, error) {
 	trial, err := r.t.stageReleaseInstallationLocked(plans, true, upgrade)
