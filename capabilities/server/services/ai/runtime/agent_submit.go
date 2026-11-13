@@ -226,10 +226,9 @@ func (a *Agents) confirm(c platform.Caller, run platform.AgentRunRecord, d platf
 	}
 	key := fmt.Sprintf("agent:%s:%d:confirm", run.ID, d.Step+1)
 	if d.Kind == "effect" {
-		sender := platform.ActingCaller(c, c.Member, d.Owner, false)
-		endRun := h.ScopeAgentRun(run.ID)
+		sender := platform.AgentCaller(c, c.Member, d.Owner, run.ID)
+		sender.Automation = false
 		n, err := sender.Emit(d.Action, key, run.Ref, json.RawMessage(payload), now)
-		endRun()
 		if err != nil {
 			return "", err
 		}
@@ -323,10 +322,8 @@ func (a *Agents) replayLegacyAction(c platform.Caller, d *platform.CompiledAgent
 	}
 	if tool.Kind == "effect" {
 		key := fmt.Sprintf("%s:%d", run.ID, len(run.Steps)+1)
-		sender := platform.ActingCaller(c, a.AgentPrincipal(run.Agent), d.App, true)
-		endRun := h.ScopeAgentRun(run.ID)
+		sender := platform.AgentCaller(c, a.AgentPrincipal(run.Agent), d.App, run.ID)
 		n, err := sender.Emit(tool.Schema, key, cmp.Or(run.Ref, platform.RunType+"/"+run.ID), map[string]string{"message": str("message"), "run": run.ID, "agent": run.Agent}, now)
-		endRun()
 		switch {
 		case err != nil:
 			return "refused: " + err.Error(), nil
@@ -386,12 +383,10 @@ func (a *Agents) replayLegacyAction(c platform.Caller, d *platform.CompiledAgent
 				return draft("")
 			}
 		}
-		endRun := h.ScopeAgentRun(run.ID)
 		_, err := platform.Attempt(c, func() (*pb.ChangeRecord, *kernel.Error) {
 			_, record, err := h.InvokeDecision(agent, protocol, schema, target, body, key, run.ID, now)
 			return record, err
 		})
-		endRun()
 		if err != nil {
 			return "refused: " + err.Error(), nil
 		}
@@ -417,11 +412,9 @@ func (a *Agents) replayLegacyAction(c platform.Caller, d *platform.CompiledAgent
 			return draft(tool.Target)
 		}
 	}
-	endRun := h.ScopeAgentRun(run.ID)
 	record, err := platform.Attempt(c, func() (*pb.ChangeRecord, *kernel.Error) {
 		return platform.Decide(agent, app, s, now)
 	})
-	endRun()
 	if err != nil {
 		return "refused: " + err.Error(), nil
 	}

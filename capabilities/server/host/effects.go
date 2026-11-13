@@ -42,7 +42,7 @@ func (t *Tenant) emitFor(c platform.Caller, kind, key, entity string, data any, 
 }
 
 func (t *Tenant) planAppEffects(c platform.Caller, kind, key, entity string, data any, now time.Time, staged []platform.Effect) ([]platform.Effect, *kernel.Error) {
-	return actions.AppEffectPlan{Tenant: t.ID, App: t.App(c.App), Endpoints: t.endpoints.All(), Run: t.agentRun,
+	return actions.AppEffectPlan{Tenant: t.ID, App: t.App(c.App), Endpoints: t.endpoints.All(), Run: c.AgentRun(),
 		Bind: func(resource platform.AssetRef) ([]platform.AssetBinding, error) {
 			return t.bindApplications(resource, t.releases.Active(), "")
 		},

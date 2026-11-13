@@ -108,7 +108,6 @@ type AgentHost interface {
 	AgentDecisionMembers() []string
 	AgentUsage() []AIUsage
 	WithAgentRead(func(AgentEvaluationRuntime) *kernel.Error) *kernel.Error
-	ScopeAgentRun(string) func()
 	ResolveAgentModel(string, ModelOptions, string) (AIModelBinding, AIProvider, *kernel.Error)
 	AgentModel(string) (AIModel, AIProvider, *kernel.Error)
 	AgentModelConfigurationDigest(AIModel, AIProvider, *AIModelBinding) (string, error)

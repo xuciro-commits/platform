@@ -34,7 +34,7 @@ read-when: 每批开始（选当前批次）与结束（删除已完成条目、
 
 目标规范：[7-system §7.2–7.3](7-system/README.md)、[concurrency](7-system/concurrency.md)。完成标准（整段）：`host` 不超过 1.5 万行且没有 `acceptance_*.go`；`kernel` 不导入任何服务；K1、K2、K3、K13（含 `-race`）不改断言通过。
 
-- [ ] N5 接受路径迁入 `kernel`：`host/acceptance_*.go` 中属于接受语义的部分进 `kernel`，属于某类资源的部分进它的服务；`host` 只剩 HTTP、身份、租户装配与后台调度；已迁入 `kernel` 的有提交字节到 SQL 状态增量、结果身份、唯一键替换、直接行应用、单条与批量记录映像、拥有者状态、业务约束、宿主控制结果与通知草稿、控制映像的差异与前驱校验、副作用意图校验。各服务持有自己的状态：`host.Tenant` 余下的 55 个字段（工作板已是自带互斥的 `automation.WorkBoard`；连接器名册已是 `kernel.ConnectorRoster`；各服务的拥有者绑定与运行状态；副作用队列、协议绑定与端点登记已是 `actions.Outbox`、`actions.Bindings`、`actions.Endpoints`，各自带互斥）随所属路径迁出，读取映像不再复制整个 `Tenant`，随之进 `kernel.Sequence`；服务与宿主之间余下 196 处可选接口探测随之按注册时类型收敛（拥有者集合、角色、接受状态、输入、资产、副作用回调、控制面身份与构建草稿能力已在 `host/owner_roles.go` 一次登记）。
+- [ ] N5 接受路径迁入 `kernel`：`host/acceptance_*.go` 中属于接受语义的部分进 `kernel`，属于某类资源的部分进它的服务；`host` 只剩 HTTP、身份、租户装配与后台调度；已迁入 `kernel` 的有提交字节到 SQL 状态增量、结果身份、唯一键替换、直接行应用、单条与批量记录映像、拥有者状态、业务约束、宿主控制结果与通知草稿、控制映像的差异与前驱校验、副作用意图校验。各服务持有自己的状态：`host.Tenant` 余下的 54 个字段（工作板已是自带互斥的 `automation.WorkBoard`；连接器名册已是 `kernel.ConnectorRoster`；各服务的拥有者绑定与运行状态；副作用队列、协议绑定与端点登记已是 `actions.Outbox`、`actions.Bindings`、`actions.Endpoints`，各自带互斥）随所属路径迁出，读取映像不再复制整个 `Tenant`，随之进 `kernel.Sequence`；服务与宿主之间余下 196 处可选接口探测随之按注册时类型收敛（拥有者集合、角色、接受状态、输入、资产、副作用回调、控制面身份与构建草稿能力已在 `host/owner_roles.go` 一次登记）。
 
 ### 三、领域模型收敛
 

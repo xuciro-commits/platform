@@ -159,12 +159,6 @@ func (h hostView) WithAgentRead(read func(platform.AgentEvaluationRuntime) *kern
 	return refusal
 }
 
-func (h hostView) ScopeAgentRun(run string) func() {
-	previous := h.t.agentRun
-	h.t.agentRun = run
-	return func() { h.t.agentRun = previous }
-}
-
 func (h hostView) ResolveAgentModel(name string, options platform.ModelOptions, stage string) (platform.AIModelBinding, platform.AIProvider, *kernel.Error) {
 	value, refusal := readAgentHost(h, func(t *Tenant) (pair[platform.AIModelBinding, platform.AIProvider], *kernel.Error) {
 		binding, provider, refusal := t.modelResolver().ResolveStaged("agent", name, options, stage)

@@ -32,7 +32,6 @@ import (
 type Tenant struct {
 	runtimekernel.Sequence
 	agentEvaluator    platform.AgentEvaluator
-	agentRun          string
 	services          platform.RuntimeCapabilities
 	disabledOwners    map[string]bool
 	installingSet     bool
