@@ -85,81 +85,36 @@ func (t *Tenant) ResourceRole(m platform.Member, project string) string {
 }
 
 func (t *Tenant) ResourcePermission(store *records.Store, m platform.Member, typ, id, kind string, held bool) (bool, bool) {
-	if !build.ProjectDelegated(m) {
-		return true, false
-	}
-	if id == "" {
+	if !build.ProjectDelegated(m) || id == "" {
 		return true, false
 	}
 	if !held {
 		store.Lock()
 		defer store.Unlock()
 	}
-	project := ""
-	definition := build.BranchDraftType(typ)
-	switch typ {
-	case build.BranchType:
-		if row := store.Type(typ).Rows().Get(id); row != nil {
-			branch := row.Value.Interface().(build.Branch)
-			if len(branch.Changes) == 0 {
-				return branch.Created.By == m.ID, false
+	return build.ResourceRows{
+		Get: func(typ, id string) (any, bool) {
+			if row := store.Type(typ).Rows().Get(id); row != nil {
+				return row.Value.Interface(), true
 			}
-			for _, change := range branch.Changes {
-				if allowed, _ := t.ResourcePermission(store, m, change.Type, change.ID, kind, true); !allowed {
-					return false, false
-				}
-			}
-		}
-		return true, false
-	case build.AppType:
-		project = id
-		if resource, ok := findResource(store, []persistence.StateFilter{
-			{Path: []string{"value", "type"}, Values: []string{typ}},
-			{Path: []string{"value", "draft"}, Values: []string{id}},
-		}, func(resource build.Resource) bool { return resource.Type == typ && resource.Draft == id }); ok {
-			project = resource.Project
-		}
-	case build.FolderType:
-		if row := store.Type(typ).Rows().Get(id); row != nil {
-			project = row.Value.Interface().(build.Folder).Project
-		} else {
-			return true, false
-		}
-	case build.ResourceType:
-		if row := store.Type(typ).Rows().Get(id); row != nil {
-			project = row.Value.Interface().(build.Resource).Project
-		} else {
-			return true, false
-		}
-	default:
-		if resource, ok := findResource(store, []persistence.StateFilter{
-			{Path: []string{"value", "type"}, Values: []string{typ}},
-			{Path: []string{"value", "draft"}, Values: []string{id}},
-		}, func(resource build.Resource) bool { return resource.Type == typ && resource.Draft == id }); ok {
-			project = resource.Project
-		} else if !definition {
-			if resource, ok := findResource(store, []persistence.StateFilter{
+			return nil, false
+		},
+		ForDraft: func(typ, id string) (build.Resource, bool) {
+			return findResource(store, []persistence.StateFilter{
+				{Path: []string{"value", "type"}, Values: []string{typ}},
+				{Path: []string{"value", "draft"}, Values: []string{id}},
+			}, func(resource build.Resource) bool { return resource.Type == typ && resource.Draft == id })
+		},
+		ForObject: func(typ string) (build.Resource, bool) {
+			return findResource(store, []persistence.StateFilter{
 				{Path: []string{"value", "ref", "kind"}, Values: []string{string(platform.AssetObject)}},
 				{Path: []string{"value", "ref", "name"}, Values: []string{typ}},
 			}, func(resource build.Resource) bool {
 				return resource.Ref.Kind == platform.AssetObject && resource.Ref.Name == typ
-			}); ok {
-				project = resource.Project
-			}
-		}
-	}
-	if project == "" {
-		return definition, false
-	}
-	role := t.ResourceRole(m, project)
-	allowed := role != "" && role != platform.ProjectDiscovererRole
-	if typ == build.ResourceType || typ == build.FolderType {
-		allowed = role != ""
-	}
-	if !slices.Contains([]string{"read", "derive", "export"}, kind) {
-		allowed = role == platform.ProjectOwnerRole || role == platform.ProjectEditorRole
-	}
-	return allowed, definition && allowed
+			})
+		},
+		Role: func(project string) string { return t.ResourceRole(m, project) },
+	}.Permission(m, typ, id, kind)
 }
 
 func (t *Tenant) resourceDirectory(m platform.Member) build.ResourceDirectory {

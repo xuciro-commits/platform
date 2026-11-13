@@ -293,7 +293,7 @@ func (r releaseInstallationRuntime) Pending(id string, raw []byte) error {
 }
 
 func (t *Tenant) registerInstalledAsset(plan platform.AssetInstallation) error {
-	definition, indexed, err := t.ownedAssetDefinition(plan)
+	definition, indexed, err := t.definitionOwners(false).Definition(plan)
 	if err != nil || !indexed {
 		return err
 	}
