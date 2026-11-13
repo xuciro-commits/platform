@@ -10,6 +10,7 @@ import (
 	"platformserver/kernel/records"
 	pageowner "platformserver/services/apps/pages"
 	automation "platformserver/services/automate/runtime"
+	"platformserver/services/objects"
 	"reflect"
 	"strconv"
 	"strings"
@@ -256,7 +257,7 @@ func (h *Host) routesRecords(rt *routes) {
 		}
 		WriteJSON(w, http.StatusOK, out)
 	})
-	rt.recordRead(transport.Route{Pattern: "GET /v1/context/{type}/{id}", Summary: "A record with its history, references, links, flows and tasks: the context graph", Answer: ContextView{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
+	rt.recordRead(transport.Route{Pattern: "GET /v1/context/{type}/{id}", Summary: "A record with its history, references, links, flows and tasks: the context graph", Answer: objects.ContextView{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
 		view, err := t.contextRead(&m, r.PathValue("type"), r.PathValue("id"), h.Now())
 		if err != nil {
 			Reply(w, nil, err)

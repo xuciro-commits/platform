@@ -36,7 +36,7 @@ func (d *stagedDecision) putOwnedRelation(c platform.Caller, receipt *pb.ChangeR
 			for _, prior := range source.LegacyRelations() {
 				from, _, _ := strings.Cut(prior.From, "/")
 				to, _, _ := strings.Cut(prior.To, "/")
-				if (from == link.Parent.Name && to == link.Child.Name || to == link.Parent.Name && from == link.Child.Name) && d.tenant.legacyRelationActive(d.Records, prior) {
+				if (from == link.Parent.Name && to == link.Child.Name || to == link.Parent.Name && from == link.Child.Name) && d.Records.LegacyRelationActive(prior) {
 					return fail("Historical relationships require explicit migration first")
 				}
 			}

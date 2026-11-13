@@ -239,7 +239,7 @@ func (d *stagedDecision) Links(c platform.Caller, entity string) []string {
 	if d.tenant.linker != nil {
 		out = d.stateApp(d.tenant.linker.(platform.App)).(platform.Linker).Links(c, entity)
 	}
-	return appendOwnedRelationNeighbors(out, c.OwnedRelations(entity), entity)
+	return records.AppendRelationNeighbors(out, c.OwnedRelations(entity), entity)
 }
 func (d *stagedDecision) Link(c platform.Caller, from, to *pb.EntityRef, key string, now time.Time) *kernel.Error {
 	if d.tenant.linker == nil {

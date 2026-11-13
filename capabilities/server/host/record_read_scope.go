@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"platformserver/kernel/records"
+	"platformserver/services/objects"
 	"platformserver/services/resources/authoring"
 	enterprisemodel "platformserver/services/security/organization"
 
@@ -176,8 +177,8 @@ func (t *Tenant) RecordOf(ctx context.Context, m platform.Member, typ, id string
 	return recordRead(t, ctx, func(t *Tenant) (RecordView, *kernel.Error) { return t.recordOf(m, typ, id, now) })
 }
 
-func (t *Tenant) Context(ctx context.Context, reader *platform.Member, typ, id string, now time.Time) (ContextView, *kernel.Error) {
-	return recordRead(t, ctx, func(t *Tenant) (ContextView, *kernel.Error) { return t.contextRead(reader, typ, id, now) })
+func (t *Tenant) Context(ctx context.Context, reader *platform.Member, typ, id string, now time.Time) (objects.ContextView, *kernel.Error) {
+	return recordRead(t, ctx, func(t *Tenant) (objects.ContextView, *kernel.Error) { return t.contextRead(reader, typ, id, now) })
 }
 
 func (t *Tenant) Export(ctx context.Context, m platform.Member, typ string, q platform.Query, now time.Time) ([]byte, *kernel.Error) {
