@@ -28,7 +28,7 @@ func (h *Host) routesPackageOwnership(rt *routes) {
 				application := row.Value.Interface().(build.Application)
 				project = &application
 			}
-			plan, err := managed.Ownership(project, t.App(build.ID).(build.ConstructionDrafts))
+			plan, err := managed.Ownership(project, t.builders[build.ID])
 			if err != nil {
 				WriteJSON(w, http.StatusConflict, map[string]string{"error": err.Error()})
 				return

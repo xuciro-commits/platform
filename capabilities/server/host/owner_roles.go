@@ -9,6 +9,7 @@ import (
 	runtimekernel "platformserver/kernel"
 	"platformserver/platform"
 	"platformserver/services/ai/gateway"
+	"platformserver/services/resources/authoring"
 	controlowner "platformserver/services/security/control"
 )
 
@@ -64,6 +65,7 @@ type ownerSet struct {
 	inputs    map[string]platform.AcceptedInputApp
 	assets    map[string]platform.AssetLifecycleOwner
 	answerers map[string]platform.Answerer
+	builders  map[string]build.ConstructionDrafts
 }
 
 func newOwnerSet(apps []platform.App) (ownerSet, error) {
@@ -84,12 +86,14 @@ func (s *ownerSet) place(apps []platform.App) {
 	s.apps = apps
 	s.states, s.inputs, s.assets = map[string]platform.AcceptedStateApp{}, map[string]platform.AcceptedInputApp{}, map[string]platform.AssetLifecycleOwner{}
 	s.answerers = map[string]platform.Answerer{}
+	s.builders = map[string]build.ConstructionDrafts{}
 	for i, a := range apps {
 		id := s.ids[i]
 		runtimekernel.RegisterOwner(s.states, id, a)
 		runtimekernel.RegisterOwner(s.inputs, id, a)
 		runtimekernel.RegisterOwner(s.assets, id, a)
 		runtimekernel.RegisterOwner(s.answerers, id, a)
+		runtimekernel.RegisterOwner(s.builders, id, a)
 	}
 }
 

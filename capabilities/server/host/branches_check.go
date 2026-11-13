@@ -125,8 +125,8 @@ func (t *Tenant) stageGraphLocked(m platform.Member, stage branches.Stage[*stage
 			return nil, false, err
 		}
 		reader = view
-		owner, ok := view.App(build.ID).(build.ConstructionDrafts)
-		return owner, ok, nil
+		owner := view.builders[build.ID]
+		return owner, owner != nil, nil
 	}, func(drafts []build.JointDraftRef) (branches.GraphPreview, platform.ReleaseCandidate, error) {
 		return reader.branchPreview(m)(drafts)
 	}, actions)
@@ -306,8 +306,8 @@ func (t *Tenant) prepareBranchMerge(m platform.Member, id string, request Branch
 
 func (t *Tenant) saveBranchCandidate(m platform.Member, branchID string, merged mergedCandidate, now time.Time) (string, error) {
 	drafts, err := readWithError(t, context.Background(), func(t *Tenant) ([]build.JointDraftRef, error) {
-		owner, ok := t.App(build.ID).(build.ConstructionDrafts)
-		if !ok {
+		owner := t.builders[build.ID]
+		if owner == nil {
 			return nil, fmt.Errorf("the tenant has no builder")
 		}
 		drafts := branches.DraftSet(owner, merged.actions)

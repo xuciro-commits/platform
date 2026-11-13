@@ -100,8 +100,8 @@ func (h *Host) routesBuild(rt *routes) {
 			if refusal != nil {
 				return ProcessDiagnostics{}, refusal
 			}
-			owner, ok := world.App(build.ID).(build.ConstructionDrafts)
-			if !ok {
+			owner := world.builders[build.ID]
+			if owner == nil {
 				return ProcessDiagnostics{}, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
 			}
 			answer := ProcessDiagnostics{Valid: true, Issues: []ProcessDiagnostic{}}

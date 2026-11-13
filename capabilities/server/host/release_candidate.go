@@ -43,8 +43,8 @@ func (t *Tenant) ReferencedDrafts(m platform.Member, kind platform.AssetKind, id
 		if refusal != nil {
 			return releaseowner.ReleaseDraftClosure{}, refusal
 		}
-		owner, ok := world.App(build.ID).(build.ConstructionDrafts)
-		if !ok {
+		owner := world.builders[build.ID]
+		if owner == nil {
 			return releaseowner.ReleaseDraftClosure{}, fmt.Errorf("tenant has no builder")
 		}
 		mine := ""
@@ -70,8 +70,8 @@ func (t *Tenant) builderDrafts(m platform.Member, permission string) (build.Cons
 	if err := t.buildAllowed(m, permission, build.Builder); err != nil {
 		return nil, err
 	}
-	owner, ok := t.App(build.ID).(build.ConstructionDrafts)
-	if !ok {
+	owner := t.builders[build.ID]
+	if owner == nil {
 		return nil, fmt.Errorf("tenant has no builder")
 	}
 	return owner, nil
@@ -134,8 +134,7 @@ func (t *Tenant) PreviewReleaseDrafts(m platform.Member, drafts []build.JointDra
 }
 
 func (t *Tenant) releasePlannerLocked() releaseowner.Planner {
-	owner, _ := t.App(build.ID).(build.ConstructionDrafts)
-	return releaseowner.Planner{Definitions: t.definitions, Registry: t.assetRegistryLocked, Drafts: owner,
+	return releaseowner.Planner{Definitions: t.definitions, Registry: t.assetRegistryLocked, Drafts: t.builders[build.ID],
 		Validate: func(candidate platform.ReleaseCandidate, member platform.Member, at time.Time) error {
 			_, _, err := t.prepareReleaseInstallationLocked(candidate, member, at, true, false)
 			return err

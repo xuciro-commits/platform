@@ -49,10 +49,7 @@ func (t *Tenant) PackagePreparation(ctx context.Context, m platform.Member, id, 
 				source, ok := t.App(controlowner.PlatformApp).(packages.PreparationOwner)
 				return source, ok
 			},
-			Drafts: func() (build.ConstructionDrafts, bool) {
-				owner, ok := t.App(build.ID).(build.ConstructionDrafts)
-				return owner, ok
-			},
+			Drafts: func() (build.ConstructionDrafts, bool) { owner := t.builders[build.ID]; return owner, owner != nil },
 			Records: func(typ string, q platform.Query) (int, []any, *kernel.Error) {
 				page, refusal := t.recordsRead(m, typ, q, at)
 				return page.Total, page.Records, refusal
