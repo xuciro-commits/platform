@@ -73,7 +73,7 @@ func (t *Tenant) declaredRowsRead(object, kind, source string, input []map[strin
 	}
 	t.Projection.Unlock()
 	return dataowner.DeclaredSourceRows(info, kind, source, input, now, func(id string) string {
-		if resolved, failure := t.claims.Identity.Resolve(&pb.EntityRef{Type: object, Id: id}); failure == nil && len(resolved) == 1 && resolved[0].Type == object {
+		if resolved, failure := t.Claims.Identity.Resolve(&pb.EntityRef{Type: object, Id: id}); failure == nil && len(resolved) == 1 && resolved[0].Type == object {
 			return resolved[0].ID
 		}
 		return id

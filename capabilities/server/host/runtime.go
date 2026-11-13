@@ -95,7 +95,7 @@ func (r runtime) BoundProvider(c platform.Caller, protocol string) (string, *ker
 	return r.t.router().BoundProvider(c, protocol)
 }
 
-func (r runtime) Seen(c platform.Caller, keys ...string) { r.t.notices.MarkKeysRead(c.App, keys) }
+func (r runtime) Seen(c platform.Caller, keys ...string) { r.t.Notices.MarkKeysRead(c.App, keys) }
 func (r runtime) AuthorizationEngine() platform.AuthorizationEngine {
 	return r.t.services.Authorization
 }

@@ -187,7 +187,7 @@ func (t *Tenant) notify(c platform.Caller, n platform.Notification, now time.Tim
 	}
 	t.opsMu.Lock()
 	defer t.opsMu.Unlock()
-	out := t.notices.Deliver(c.App, n, now, members, delivery, func(x platform.Notification, to platform.Reach) {
+	out := t.Notices.Deliver(c.App, n, now, members, delivery, func(x platform.Notification, to platform.Reach) {
 		t.outbound.Add(trace.SpanContext{}, t.planMailNotice(x, to)...)
 	})
 	t.acted += len(out)
@@ -282,14 +282,14 @@ func (t *Tenant) decideWork(_ platform.Caller, s *pb.Submission, now time.Time) 
 
 func (t *Tenant) decideNotification(c platform.Caller, s *pb.Submission, _ time.Time) (func(*pb.ChangeRecord), *kernel.Error) {
 	id := s.GetTarget().GetId()
-	owner, found := t.notices.Owner(id)
+	owner, found := t.Notices.Owner(id)
 	if !found {
 		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
 	}
 	if owner != c.ID {
 		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_POLICY_DENIED}
 	}
-	return func(*pb.ChangeRecord) { t.notices.MarkRead(id) }, nil
+	return func(*pb.ChangeRecord) { t.Notices.MarkRead(id) }, nil
 }
 
 func (t *Tenant) workLoop() automation.WorkLoop {
@@ -334,7 +334,7 @@ func (t *Tenant) applyAcceptedNotices(n *acceptedformat.Notices) {
 	if n == nil {
 		return
 	}
-	t.notices.Restore(slices.Clone(n.Notices), n.Seq)
+	t.Notices.Restore(slices.Clone(n.Notices), n.Seq)
 	t.opsMu.Lock()
 	t.acted += n.Seq - n.Base
 	t.opsMu.Unlock()

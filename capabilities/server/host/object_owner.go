@@ -32,7 +32,7 @@ func (t *Tenant) objectOwner(store *records.Store) *objects.Owner {
 		Deliveries:             t.recordDeliveries,
 		AuditPersonal:          t.objectPersonalRead,
 		RecordSetBinding:       t.recordSetBinding,
-		Claims:                 t.claims.Facts,
+		Claims:                 t.Claims.Facts,
 	}
 }
 

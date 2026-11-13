@@ -99,14 +99,14 @@ func (t *Tenant) detachSnapshotRead() {
 
 func (t *Tenant) captureServices(s *runtimekernel.TenantImage[automation.Task, actions.Endpoint]) (func(), error) {
 	s.Audit, s.Deliveries = t.audit.SnapshotState()
-	if facts := t.claims.Facts.Records(t.ID); len(facts) > 0 {
+	if facts := t.Claims.Facts.Records(t.ID); len(facts) > 0 {
 		var err error
 		s.Facts, err = platform.Protos(facts)
 		if err != nil {
 			return nil, err
 		}
 	}
-	if identities := t.claims.Identity.State(); len(identities.Entities) > 0 || len(identities.Redirects) > 0 {
+	if identities := t.Claims.Identity.State(); len(identities.Entities) > 0 || len(identities.Redirects) > 0 {
 		s.Identities = &identities
 	}
 	releaseState := t.releases.SnapshotState()
@@ -138,7 +138,7 @@ func (t *Tenant) captureServices(s *runtimekernel.TenantImage[automation.Task, a
 	}
 	s.Marks = marks
 	s.LastError = t.connectors.LastErrors()
-	s.Notices, s.NoticeSeq = t.notices.State()
+	s.Notices, s.NoticeSeq = t.Notices.State()
 	s.Settings, s.Endpoints, s.Words = t.settings.Snapshot(), t.endpoints.Saved(), t.words.Clone()
 	s.Sequences = t.sequences.Clone()
 	for _, x := range t.outbound.Select(nil) {
@@ -157,10 +157,10 @@ func (t *Tenant) restoreDefinitions(s *runtimekernel.TenantImage[automation.Task
 		if err != nil {
 			return err
 		}
-		t.claims.Facts.Restore(t.ID, facts)
+		t.Claims.Facts.Restore(t.ID, facts)
 	}
 	if s.Identities != nil {
-		t.claims.Identity.Restore(*s.Identities)
+		t.Claims.Identity.Restore(*s.Identities)
 	}
 	if len(held) > 0 || s.Runtime != nil || build.PublishedDefinitionsMissing(s.Records,
 		func(ref platform.AssetRef) bool {
@@ -235,7 +235,7 @@ func (t *Tenant) restoreOperations(s *runtimekernel.TenantImage[automation.Task,
 		return err
 	}
 	t.connectors.Restore(descriptors, s.Marks, s.LastError)
-	t.notices.Restore(s.Notices, s.NoticeSeq)
+	t.Notices.Restore(s.Notices, s.NoticeSeq)
 	t.settings.Restore(s.Settings)
 	t.words.Restore(s.Words)
 	t.i18n.Reset()

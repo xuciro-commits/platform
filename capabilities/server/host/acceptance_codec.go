@@ -21,7 +21,7 @@ func (d *stagedDecision) sources() runtimekernel.ResultSources {
 func (t *Tenant) applyAcceptedResult(l *platform.Ledger, raw []byte) (bool, error) {
 	return t.ApplyRecordResult(l, raw, runtimekernel.RecordApply{App: t.App, CheckBindings: build.CheckRunApplicationBindings, DefinitionType: build.AppType,
 		Claims: func(result acceptedformat.Record, receipt *pb.ChangeRecord) (func() error, error) {
-			return t.claims.RecordClaims(t.ID, result, receipt)
+			return t.Claims.RecordClaims(t.ID, result, receipt)
 		}})
 }
 
@@ -67,7 +67,7 @@ func (t *Tenant) changeApply() runtimekernel.ChangeApply {
 			if err := t.validateAcceptedControl(plan.Control); err != nil {
 				return err
 			}
-			if err := t.notices.Check(plan.Notices); err != nil {
+			if err := t.Notices.Check(plan.Notices); err != nil {
 				return err
 			}
 			if err := t.validateAcceptedIntents(plan.Intents); err != nil {

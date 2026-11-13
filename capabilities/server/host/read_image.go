@@ -223,8 +223,8 @@ func (t *Tenant) forkReadState(ctx context.Context) (*Tenant, error) {
 	view.releases.Restore(t.releases.SnapshotState())
 	view.console.Restore(t.console.SnapshotState())
 	view.sequences.Restore(t.sequences.Clone())
-	notices, sequence := t.notices.State()
-	view.notices.Restore(notices, sequence)
+	notices, sequence := t.Notices.State()
+	view.Notices.Restore(notices, sequence)
 	view.tenantPorts = t.tenantPorts
 	view.Files = t.files()
 	view.index = t.index
@@ -237,7 +237,7 @@ func (t *Tenant) forkReadState(ctx context.Context) (*Tenant, error) {
 	t.work.Unlock()
 	view.staged = compute.NewChannel(t.ID, view.files)
 	view.staged.Restore(t.staged.Snapshot())
-	view.claims = t.claims.Fork(t.ID)
+	view.Claims = t.Claims.Fork(t.ID)
 	view.DefinitionEpoch.Store(t.DefinitionEpoch.Load())
 	view.runIndex.CopyGeneration(&t.runIndex)
 	view.includeArchivedDefinitions = t.includeArchivedDefinitions

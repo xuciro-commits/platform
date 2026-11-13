@@ -42,7 +42,7 @@ func (t *Tenant) newStagedDecisionOn(base *records.Store) *stagedDecision {
 	connectors := t.connectors.Clone()
 	return &stagedDecision{tenant: t, Decision: runtimekernel.Decision{Logs: map[*platform.Ledger]*kernel.ChangeLog{}, Simulation: t.simulation, Records: base,
 		Sequences: sequences, Allocated: map[string]int{}, SequenceBases: map[string]int{}, Active: map[string]bool{},
-		Notices: t.notices.Draft(), Writers: map[string][]string{}, Changed: map[string][]string{}, Connectors: connectors, BusinessQuery: objects.BusinessQuery,
+		Notices: t.Notices.Draft(), Writers: map[string][]string{}, Changed: map[string][]string{}, Connectors: connectors, BusinessQuery: objects.BusinessQuery,
 		Rules: runtimekernel.ConstraintRules{Definitions: func() []platform.Definition { return t.definitions }, RuleQuery: hostView{t: t}.RuleQuery, Binding: t.recordSetBinding,
 			Trace: func() func(platform.DecisionTrace) { return t.simulationTrace }},
 		DirectRows: func(rows []acceptedformat.InputRow, member string, at time.Time) error {

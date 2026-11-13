@@ -146,7 +146,7 @@ func (t *Tenant) absentSourceRows(object string, binding *platform.DataSourceBin
 			return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "The target object is no longer installed")
 		}
 		for id, row := range et.Rows().All() {
-			if !present[id] && !records.Header(row.Value).Archived && dataowner.ClaimedBySource(t.claims.Facts, t.ID, object, id, connector, et.Info()) {
+			if !present[id] && !records.Header(row.Value).Archived && dataowner.ClaimedBySource(t.Claims.Facts, t.ID, object, id, connector, et.Info()) {
 				ids = append(ids, id)
 			}
 		}

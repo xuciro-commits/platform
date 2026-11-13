@@ -194,7 +194,7 @@ func (t *Tenant) accept(a platform.App, m platform.Member, s *pb.Submission, now
 			return actions.Explained(r, a, s.GetSchema().GetName(), runtimekernel.Target(s))
 		},
 		Claims: func(record *pb.ChangeRecord, source *runtimekernel.ClaimSet) error {
-			_, err := t.claims.Prepare(t.ID, s.GetTarget().GetType(), s.GetTarget().GetId(), record.GetChangeId(), source)
+			_, err := t.Claims.Prepare(t.ID, s.GetTarget().GetType(), s.GetTarget().GetId(), record.GetChangeId(), source)
 			return err
 		}}, a.Manifest().ID, s, record, refusal, binding, opts.source, now)
 	if err != nil {

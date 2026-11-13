@@ -196,7 +196,7 @@ func (h hostView) Seen(c platform.Caller, keys ...string) {
 		platform.MarkSeen(c, keys...)
 		return
 	}
-	h.t.notices.MarkKeysRead(c.App, keys)
+	h.t.Notices.MarkKeysRead(c.App, keys)
 }
 
 func (h hostView) Invoke(c platform.Caller, protocol, action, id string, payload []byte, key, correlation string, now time.Time) (*pb.EntityRef, *kernel.Error) {

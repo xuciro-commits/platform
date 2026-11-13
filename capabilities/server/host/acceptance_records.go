@@ -32,7 +32,7 @@ func (t *Tenant) applyAcceptedBatch(l *platform.Ledger, raw []byte) (bool, error
 
 func (t *Tenant) batchApply() runtimekernel.BatchApply {
 	h := runtimekernel.BatchApply{App: t.App, OwnerLedger: runtimekernel.LedgerOf(t.App), CheckBindings: build.CheckRunApplicationBindings, DefinitionType: build.AppType,
-		Claims: t.claims.BatchPrepare(t.ID),
+		Claims: t.Claims.BatchPrepare(t.ID),
 		Rows: func(draft *records.Store, result acceptedformat.Batch) error {
 			return actions.CallbackRows{
 				Answerer: func(app string) bool { return t.answerers[app] != nil },
@@ -49,9 +49,9 @@ func (t *Tenant) batchApply() runtimekernel.BatchApply {
 				return installation.Projection, func() error { return t.installReleaseDefinitions(installation, definitions) }, nil
 			},
 			Publication: t.installPublicationLinkConstraint}.Install,
-		Installed: t.claims.BatchInstalled(t.ID),
+		Installed: t.Claims.BatchInstalled(t.ID),
 	}
-	return runtimekernel.BatchState{App: t.App, States: t.states, Notices: &t.notices, Sequences: &t.sequences,
+	return runtimekernel.BatchState{App: t.App, States: t.states, Notices: &t.Notices, Sequences: &t.sequences,
 		CheckControl: t.validateAcceptedControl, ApplyControl: t.applyAcceptedControl, CheckIntents: t.validateAcceptedIntents, InstallIntents: t.installAcceptedIntents,
 		ApplyNotices: t.applyAcceptedNotices, CheckOperations: t.operationCancellations().Validate, ApplyOperations: t.operationCancellations().Apply}.Hooks(h)
 }

@@ -16,6 +16,8 @@ type Sequence struct {
 	LastSlowHold     atomic.Pointer[LaneHold]
 	Committed        Committed
 	Projection       *records.Store
+	Claims           SourceClaims
+	Notices          NoticeBoard
 	Fault            atomic.Pointer[Fault]
 	StateEpoch       atomic.Uint64
 	WorkEpoch        atomic.Uint64

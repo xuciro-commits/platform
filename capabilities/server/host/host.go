@@ -48,7 +48,6 @@ type Tenant struct {
 	runIndex          runtimekernel.RunIndexCache[[]monitoring.MonitoringCoverage]
 	controlAnswer     func(platform.Effect, platform.Outcome, time.Time) *kernel.Error
 	ownerRoles
-	claims       runtimekernel.SourceClaims
 	index        *knowledgeindex.Index
 	i18n         transport.Translator
 	views        transport.ViewCache
@@ -73,7 +72,6 @@ type Tenant struct {
 	work          automation.WorkBoard
 	breakers      integrations.Breakers
 	connectors    *runtimekernel.ConnectorRoster
-	notices       runtimekernel.NoticeBoard
 	settings      controlowner.Settings
 	words         controlowner.Words
 	sequences     runtimekernel.Sequences
@@ -109,7 +107,7 @@ func NewTenantWithCapabilities(id string, services platform.RuntimeCapabilities,
 	t.Lane.BindReadScope(t.beginRecordRead, t.endLane)
 	t.observeLane()
 	t.services = services
-	t.claims = runtimekernel.NewSourceClaims()
+	t.Claims = runtimekernel.NewSourceClaims()
 	if services.NewAgentEvaluator != nil {
 		t.agentEvaluator = services.NewAgentEvaluator()
 	}
