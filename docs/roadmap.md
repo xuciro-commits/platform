@@ -43,6 +43,13 @@ read-when: 每批开始（选当前批次）与结束（删除已完成条目、
 目标规范：[6-domain R8](6-domain/README.md)、[7-system §7.2、§7.5.1、§7.7](7-system/README.md)。完成标准（整段）：`platform` 不超过 8 千行且只含 SDK 契约；7-system 的十条依赖差距清零；包名与目录名不一致为 0。
 
 - [ ] U1 动作引擎归位：`platform/ledger.go` 的规则引擎与 `entity.go` 的转换移入 `services/actions`，按动作类型的规则与提交条件表达；`Entity`、`Transition`、`Ledger` 不再是公开类型；`contract/go/kernel` 的实现随 Ledger 并入 `kernel`（Ledger 已直接持有其具体类型），`Error` 等值类型进 `platform`，`contract/go` 只留协议生成代码。
+  现状（2026-11-13 诊断）：`platform.Ledger` 是两件事的合体——接受变更日志（持有 `contract/go/kernel` 的 ChangeLog、Authorities、SchemaRegistry、Receiver）与规则引擎（`Receive` 的授权与输入校验、`Generated` 的标准增改归档与生命周期转换）。13 个服务各自 `NewLedger`，54 处调用 `Receive` / `Generated`，64 个文件用 `platform.Entity` 声明自己的记录类型，租户对象类型的动作也编译成 `Transition` 再执行。`contract/go/kernel` 被引用 2600 余次，其中 2572 次是 `kernel.Error`。
+  切分（每批独立验收，按顺序）：
+  - [ ] U1.1 窄入口：`platform` 只声明服务用到的动作入口接口（自定义规则的接收、声明式动作的执行、快照与恢复）；服务持有接口而不是 `*Ledger`，实例由宿主装配时注入；`Runtime` 中以 `*Ledger` 为参数的方法改用同一接口。行为不变。
+  - [ ] U1.2 引擎出平台：`Ledger` 具体类型与 `ledger.go`、`transaction_ledger.go`、`snapshot.go` 中它的方法移入 `services/actions`；`kernel` 与宿主经 U1.1 的接口使用它。
+  - [ ] U1.3 日志入内核：`contract/go/kernel` 的 Receiver、ChangeLog、FactLog、Authorities、SchemaRegistry、Works、Connectors、Identity 与 State 并入 `kernel`，引擎经宿主注入的日志接口使用；`contract/go` 只留协议生成代码。
+  - [ ] U1.4 值类型进平台：`Error`、`Caller`、`Policy`、`Ref` 等值类型进 `platform`（`kernel.Error` 约 2572 处的机械改名，单独一批，不夹带行为改动）。
+  - [ ] U1.5 一套模型：生命周期转换按动作类型表达（`From` 是对状态的提交条件，`To` 是修改对象的规则，`Do` 是函数支撑的规则，`After` 是副作用）；租户动作与内置声明走同一条执行路径，删除“动作编译成 `Transition`”的中间形状；`Entity`、`Transition` 的声明改用术语表的词，不再作为公开类型。
 - [ ] U2 业务事务出平台：`platform/transaction.go` 的 `BusinessTxn`、`TxnPost`、`TxnJournal` 改由产品包的本体与动作表达，平台只留通用的原子编辑集。
 - [ ] U3 页面模型归位：`platform/page_*` 移入 `services/apps`；`platform` 只留页面组件契约的生成入口。
 - [ ] U4 发布路径一张表：record 族与 versioned 族的发布步骤移入拥有它的服务并实现同一组钩子；`services/resources` 只编排，删除 Build 的“兼容公共类型”。
