@@ -6,6 +6,7 @@ import (
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
 	"platformserver/platform"
+	functionauthoring "platformserver/services/functions/authoring"
 	"platformserver/services/resources/authoring"
 	"strconv"
 	"strings"
@@ -26,7 +27,7 @@ type ReleaseEvaluationStarted struct {
 type EvaluationHooks struct {
 	Candidate      func(id string) (platform.ReleaseCandidate, error)
 	Plan           func(id string) (build.TestPlan, bool)
-	Function       func(id string) (build.Function, bool)
+	Function       func(id string) (functionauthoring.Function, bool)
 	BuilderVersion func() string
 	AppModel       func() string
 	HasProvider    func() bool

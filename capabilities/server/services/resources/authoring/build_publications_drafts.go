@@ -4,19 +4,22 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	appsauthoring "platformserver/services/apps/authoring"
+	"platformserver/services/ontology"
 	"reflect"
 	"slices"
 	"strings"
 
 	"platformserver/platform"
 	dataowner "platformserver/services/data"
+	"platformserver/services/resources/publication"
 )
 
 func (b *Build) SavedDraftChanges(c platform.Caller, application, typ, id string) ([]DraftChange, error) {
 	out := []DraftChange{}
 	held := map[platform.AssetRef]bool{}
 	if application != "" {
-		app, ok := platform.Get[Application](c, application)
+		app, ok := platform.Get[appsauthoring.Application](c, application)
 		if !ok || app.Archived {
 			return nil, fmt.Errorf("application draft is unavailable")
 		}
@@ -177,6 +180,10 @@ func (b *Build) DraftPublished(kind platform.AssetKind, id string) (string, stri
 				Published string
 			}
 			if json.Unmarshal(platform.Raw(row), &meta) == nil && meta.ID == id && !meta.Archived {
+				if hooks, found := publication.Kind(b.publications, kind); found {
+					raw, err := hooks.ReadFrozen(platform.Raw(row))
+					return entity.Type, string(raw), true, err
+				}
 				return entity.Type, meta.Published, true, nil
 			}
 		}
@@ -221,9 +228,9 @@ func (b *Build) draftComparison(record any, published string, info platform.Enti
 	if err != nil {
 		return
 	}
-	if _, object := record.(Object); object {
+	if _, object := record.(ontology.Object); object {
 		authoring := func(raw json.RawMessage) (json.RawMessage, error) {
-			var object Object
+			var object ontology.Object
 			if err := json.Unmarshal(raw, &object); err != nil {
 				return nil, err
 			}

@@ -3,20 +3,22 @@ package build
 import (
 	"encoding/json"
 	"fmt"
+	appsauthoring "platformserver/services/apps/authoring"
+	"platformserver/services/ontology"
 	"slices"
-	"strconv"
 
 	"platformserver/platform"
 	automationauthoring "platformserver/services/automate/authoring"
 	dataowner "platformserver/services/data"
 )
 
-func (b *Build) prepareReleasePublications(assets []platform.ReleaseAsset) ([]platform.ReleasePublication, error) {
+func (b *Build) prepareReleasePublications(assets []platform.ReleaseAsset) ([]platform.ReleasePublication, []platform.AssetInstallation, error) {
 	objects, pages, apps, err := b.releaseInventory()
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	var publications []platform.ReleasePublication
+	var installations []platform.AssetInstallation
 	add := func(schema string, record any) error {
 		raw, err := json.Marshal(record)
 		if err != nil {
@@ -29,25 +31,26 @@ func (b *Build) prepareReleasePublications(assets []platform.ReleaseAsset) ([]pl
 		if asset.Ref.App != ID {
 			continue
 		}
+		preparedAsset := asset
 		switch asset.Ref.Kind {
 		case platform.AssetObject:
 			code, err := b.retainedCodeObject(asset)
 			if err != nil {
-				return nil, err
+				return nil, nil, err
 			}
 			if code {
 				continue
 			}
-			var frozen Object
+			var frozen ontology.Object
 			if err := json.Unmarshal(asset.Body, &frozen); err != nil || TypeOf(frozen.Name) != asset.Ref.Name {
-				return nil, fmt.Errorf("invalid saved object %s", asset.Ref)
+				return nil, nil, fmt.Errorf("invalid saved object %s", asset.Ref)
 			}
 			if err := mapDispatchIntegrations(&frozen, b.data.IntegrationID); err != nil {
-				return nil, err
+				return nil, nil, err
 			}
-			i := slices.IndexFunc(objects, func(o Object) bool { return !o.Archived && o.Name == frozen.Name })
+			i := slices.IndexFunc(objects, func(o ontology.Object) bool { return !o.Archived && o.Name == frozen.Name })
 			if i < 0 {
-				return nil, fmt.Errorf("saved object %s has no matching draft; renamed or archived definitions need an upgrade plan", asset.Ref)
+				return nil, nil, fmt.Errorf("saved object %s has no matching draft; renamed or archived definitions need an upgrade plan", asset.Ref)
 			}
 			frozen.Record = objects[i].Record
 			objects[i].State, objects[i].Installed = "published", TypeOf(frozen.Name)
@@ -55,117 +58,75 @@ func (b *Build) prepareReleasePublications(assets []platform.ReleaseAsset) ([]pl
 			objects[i].ExtensionSource = frozen.ExtensionSource
 			objects[i].SchemaVersions = frozen.SchemaVersions
 			if err := add(SchemaPublish, objects[i]); err != nil {
-				return nil, err
+				return nil, nil, err
 			}
-			all, err := readDefinitionInventory[ActionType](b.host.Automation(platform.Caller{}, ID))
-			if err != nil {
-				return nil, err
-			}
-			bindings := slices.Clone(frozen.ActionTypes)
-			legacyBindings := len(bindings) == 0
-			if len(bindings) == 0 {
-				for _, definition := range frozen.Actions {
-					name := TypeOf(frozen.Name) + "." + definition.Name
-					index := slices.IndexFunc(all, func(action ActionType) bool { return action.Name == name })
-					if index >= 0 {
-						bindings = append(bindings, platform.AssetBinding{Ref: platform.AssetRef{App: ID, Kind: platform.AssetAction, Name: name}, SourceVersion: strconv.Itoa(all[index].Version)})
-					}
-				}
-			}
-			for _, binding := range bindings {
-				if !slices.ContainsFunc(assets, func(asset platform.ReleaseAsset) bool { return asset.Ref == binding.Ref }) {
-					continue
-				}
-				index := slices.IndexFunc(all, func(action ActionType) bool { return action.Name == binding.Ref.Name })
-				if index < 0 {
-					return nil, fmt.Errorf("action type %s is unavailable", binding.Ref.Name)
-				}
-				version, err := strconv.Atoi(binding.SourceVersion)
-				if err != nil || version < 1 {
-					return nil, fmt.Errorf("action type %s has no retained version %s", binding.Ref.Name, binding.SourceVersion)
-				}
-				definition := slices.IndexFunc(frozen.Actions, func(definition Action) bool { return TypeOf(frozen.Name)+"."+definition.Name == binding.Ref.Name })
-				if definition < 0 {
-					return nil, fmt.Errorf("action type %s has no frozen definition", binding.Ref.Name)
-				}
-				action := all[index]
-				if !legacyBindings {
-					if version > len(action.Versions) {
-						return nil, fmt.Errorf("action type %s has no retained version %d", binding.Ref.Name, version)
-					}
-					retained := action.Versions[version-1]
-					selected := ActionType{Record: platform.Record{ID: action.ID}, Name: action.Name, Object: action.Object, Title: retained.Definition.Title, Definition: retained.Definition, Commands: retained.Commands, State: "published", Version: version, Versions: slices.Clone(action.Versions[:version])}
-					selected.Published = selected.Snapshot(version)
-					if err := add(SchemaActionType, selected); err != nil {
-						return nil, err
-					}
-					continue
-				}
-				selected := ActionType{Record: platform.Record{ID: action.ID}, Name: action.Name, Object: action.Object, Title: frozen.Actions[definition].Title, Definition: frozen.Actions[definition], State: "published", Version: version}
-				if version <= len(action.Versions) && string(platform.Raw(action.Versions[version-1].Definition)) == string(platform.Raw(selected.Definition)) {
-					selected.Commands = action.Versions[version-1].Commands
-				}
-				action.State, action.Published = "published", string(platform.Raw(selected))
-				if err := add(SchemaActionType, action); err != nil {
-					return nil, err
-				}
-			}
+			preparedAsset.Body = platform.Raw(frozen)
 		case platform.AssetPage:
-			i := slices.IndexFunc(pages, func(p Page) bool { return !p.Archived && p.Name == asset.Ref.Name })
-			current := Page{Record: platform.Record{ID: asset.Ref.Name}, Name: asset.Ref.Name}
+			i := slices.IndexFunc(pages, func(p appsauthoring.Page) bool { return !p.Archived && p.Name == asset.Ref.Name })
+			current := appsauthoring.Page{Record: platform.Record{ID: asset.Ref.Name}, Name: asset.Ref.Name}
 			if i >= 0 {
 				current = pages[i]
 			}
 			prepared, generated, err := b.apps.PreparePagePublication(asset, assets, current)
 			if err != nil {
-				return nil, err
+				return nil, nil, err
 			}
 			if generated {
 				continue
 			}
 			if err := add(SchemaRelease, prepared); err != nil {
-				return nil, err
+				return nil, nil, err
 			}
 		case platform.AssetApp:
-			i := slices.IndexFunc(apps, func(a Application) bool { return !a.Archived && a.Name == asset.Ref.Name })
+			i := slices.IndexFunc(apps, func(a appsauthoring.Application) bool { return !a.Archived && a.Name == asset.Ref.Name })
 			if i < 0 {
-				return nil, fmt.Errorf("saved application %s has no matching draft", asset.Ref)
+				return nil, nil, fmt.Errorf("saved application %s has no matching draft", asset.Ref)
 			}
 			prepared, err := b.apps.PrepareApplicationPublication(asset, apps[i])
 			if err != nil {
-				return nil, err
+				return nil, nil, err
 			}
 			if err := add(SchemaHandOver, prepared); err != nil {
-				return nil, err
+				return nil, nil, err
 			}
+		}
+		for _, hooks := range b.publications {
+			if hooks.FreezeOn != asset.Ref.Kind {
+				continue
+			}
+			plans, err := hooks.Freeze(b.host.Automation(platform.Caller{}, ID), b.Manifest().Version, preparedAsset, assets)
+			if err != nil {
+				return nil, nil, err
+			}
+			installations = append(installations, plans...)
 		}
 	}
 	automationPublications, err := b.automation.PrepareReleasePublications(assets)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	publications = append(publications, automationPublications...)
 
 	for _, k := range definitionKinds {
 		images, err := k.prepare(b, assets)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 		publications = append(publications, images...)
 	}
 	images, err := b.functions.Prepare(assets)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	publications = append(publications, images...)
 	for _, prepare := range []func([]platform.ReleaseAsset) ([]platform.ReleasePublication, error){b.prepareAgentReleasePublications, b.prepareTestPlanPublications, b.PrepareCodeReleasePublications, b.prepareTablePublications} {
 		images, err := prepare(assets)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 		publications = append(publications, images...)
 	}
-	return publications, nil
+	return publications, installations, nil
 }
 
 type Draft struct {
@@ -177,7 +138,7 @@ type Draft struct {
 func (b *Build) releaseDraftsOf(candidate platform.ReleaseCandidate) ([]Draft, error) {
 	authored := map[string]bool{}
 	if b.host != nil {
-		pages, err := readDefinitionInventory[Page](b.host.Automation(platform.Caller{}, ID))
+		pages, err := readDefinitionInventory[appsauthoring.Page](b.host.Automation(platform.Caller{}, ID))
 		if err != nil {
 			return nil, err
 		}
@@ -202,7 +163,7 @@ func (b *Build) releaseDraftsOf(candidate platform.ReleaseCandidate) ([]Draft, e
 		}
 		switch asset.Ref.Kind {
 		case platform.AssetObject:
-			var o Object
+			var o ontology.Object
 			if err := json.Unmarshal(asset.Body, &o); err != nil || o.Name == "" {
 				continue
 			}

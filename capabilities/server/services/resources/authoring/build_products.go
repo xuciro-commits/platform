@@ -3,6 +3,7 @@ package build
 import (
 	"encoding/json"
 	"fmt"
+	appsauthoring "platformserver/services/apps/authoring"
 	"regexp"
 	"slices"
 	"strings"
@@ -81,7 +82,7 @@ func (b *Build) productEntity() platform.Entity {
 			if prior, exists := platform.Get[Product](c, product.ID); exists && prior.Project != product.Project {
 				return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "A product stays in the project that owns its contents")
 			}
-			project, exists := platform.Get[Application](c, product.Project)
+			project, exists := platform.Get[appsauthoring.Application](c, product.Project)
 			if !exists || project.Archived || !canEditProject(c, product.Project) {
 				return platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "Choose a project you can edit")
 			}

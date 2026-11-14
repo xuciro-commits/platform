@@ -6,6 +6,8 @@ import (
 	"platformserver/platform"
 	automationauthoring "platformserver/services/automate/authoring"
 	dataowner "platformserver/services/data"
+	functionauthoring "platformserver/services/functions/authoring"
+	"platformserver/services/ontology"
 )
 
 type automationEnvironment struct {
@@ -23,7 +25,7 @@ func (e automationEnvironment) FunctionCallAction() string {
 	return SchemaFunctionCall
 }
 func (e automationEnvironment) FunctionResult(c platform.Caller, id string) (automationauthoring.FunctionOutcome, bool) {
-	call, ok := platform.Get[FunctionRun](c, id)
+	call, ok := platform.Get[functionauthoring.FunctionRun](c, id)
 	if !ok {
 		return automationauthoring.FunctionOutcome{}, false
 	}
@@ -35,7 +37,7 @@ func (e automationEnvironment) InstalledObject(typ string) (platform.Entity, boo
 }
 
 func (e automationEnvironment) Objects(c platform.Caller) ([]platform.Entity, error) {
-	objects, err := readDefinitionInventory[Object](c)
+	objects, err := readDefinitionInventory[ontology.Object](c)
 	if err != nil {
 		return nil, err
 	}

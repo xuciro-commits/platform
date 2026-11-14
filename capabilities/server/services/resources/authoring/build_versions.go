@@ -3,21 +3,22 @@ package build
 import (
 	"encoding/json"
 	"fmt"
+	"platformserver/services/ontology"
 
 	"platformserver/platform"
 	"reflect"
 	"slices"
 )
 
-func businessVersionInstallOrder(objects []Object) ([]Object, error) {
-	byType := map[string]Object{}
+func businessVersionInstallOrder(objects []ontology.Object) ([]ontology.Object, error) {
+	byType := map[string]ontology.Object{}
 	for _, record := range objects {
-		if object, ok := ReadPublication[Object](record.Published); ok && !record.Archived {
+		if object, ok := ReadPublication[ontology.Object](record.Published); ok && !record.Archived {
 			byType["build."+object.Name] = object
 		}
 	}
 	status := map[string]int{}
-	ordered := []Object{}
+	ordered := []ontology.Object{}
 	var visit func(string) error
 	visit = func(typ string) error {
 		if status[typ] == 2 {
@@ -52,7 +53,7 @@ func businessVersionInstallOrder(objects []Object) ([]Object, error) {
 	return ordered, nil
 }
 
-func (b *Build) checkVersioning(o Object) error {
+func (b *Build) checkVersioning(o ontology.Object) error {
 	if o.Versioning == nil && len(o.VersionPins) == 0 {
 		return nil
 	}
@@ -69,13 +70,13 @@ func (b *Build) checkVersioning(o Object) error {
 	if err := platform.CheckVersioning(info, lookup); err != nil {
 		return err
 	}
-	if old, ok := ReadPublication[Object](o.Published); ok && (old.Versioning != nil && !reflect.DeepEqual(old.Versioning, o.Versioning) || len(old.VersionPins) > 0 && !reflect.DeepEqual(old.VersionPins, o.VersionPins)) {
+	if old, ok := ReadPublication[ontology.Object](o.Published); ok && (old.Versioning != nil && !reflect.DeepEqual(old.Versioning, o.Versioning) || len(old.VersionPins) > 0 && !reflect.DeepEqual(old.VersionPins, o.VersionPins)) {
 		return fmt.Errorf("published business versioning and pin bindings are retained")
 	}
 	return nil
 }
 
-func (b *Build) captureObjectSchema(object *Object) error {
+func (b *Build) captureObjectSchema(object *ontology.Object) error {
 	portable, err := b.dispatchSchemaObject(*object)
 	if err != nil {
 		return err
@@ -90,7 +91,7 @@ func (b *Build) captureObjectSchema(object *Object) error {
 	}
 	var versions []platform.SchemaVersion
 	family := uint32(1)
-	if previous, exists := ReadPublication[Object](object.Published); exists {
+	if previous, exists := ReadPublication[ontology.Object](object.Published); exists {
 		versions = slices.Clone(previous.SchemaVersions)
 		if len(versions) == 0 {
 			portable, err := b.dispatchSchemaObject(previous)
@@ -131,12 +132,12 @@ func (b *Build) captureObjectSchema(object *Object) error {
 	return nil
 }
 
-func objectSchemaBody(object Object) (json.RawMessage, error) {
+func objectSchemaBody(object ontology.Object) (json.RawMessage, error) {
 	object.SchemaVersions = nil
 	return definitionBody(object, TypeOf(object.Name))
 }
 
-func checkObjectSchemas(object Object) error {
+func checkObjectSchemas(object ontology.Object) error {
 	if len(object.SchemaVersions) == 0 {
 		return nil
 	}
@@ -161,8 +162,8 @@ func checkObjectSchemas(object Object) error {
 	return nil
 }
 
-func compatibleObjectSchema(previous, next Object) bool {
-	normalize := func(object Object) Object {
+func compatibleObjectSchema(previous, next ontology.Object) bool {
+	normalize := func(object ontology.Object) ontology.Object {
 		object.Record = platform.Record{}
 		object.Title, object.Plural, object.Description = "", "", ""
 		object.Icon, object.Color, object.Display = "", "", ""
@@ -180,7 +181,7 @@ func compatibleObjectSchema(previous, next Object) bool {
 	if !reflect.DeepEqual(normalize(previous), normalize(next)) {
 		return false
 	}
-	fieldContract := func(field Field) Field {
+	fieldContract := func(field ontology.Field) ontology.Field {
 		field.Title, field.SourceType = "", ""
 		field.AIInput = nil
 		field.Search = false
@@ -188,13 +189,13 @@ func compatibleObjectSchema(previous, next Object) bool {
 		return field
 	}
 	for _, old := range previous.Fields {
-		index := slices.IndexFunc(next.Fields, func(field Field) bool { return field.Name == old.Name })
+		index := slices.IndexFunc(next.Fields, func(field ontology.Field) bool { return field.Name == old.Name })
 		if index < 0 || !reflect.DeepEqual(fieldContract(old), fieldContract(next.Fields[index])) {
 			return false
 		}
 	}
 	for _, field := range next.Fields {
-		if slices.ContainsFunc(previous.Fields, func(old Field) bool { return old.Name == field.Name }) {
+		if slices.ContainsFunc(previous.Fields, func(old ontology.Field) bool { return old.Name == field.Name }) {
 			continue
 		}
 		if field.Required || field.Ref != "" || field.Property != nil || field.ValueType != nil || field.Formula != "" || field.FormulaExpr != nil || field.ReadOnly || field.AliasOf != "" || field.Choices != "" || !slices.Contains([]string{"text", "longtext", "integer", "decimal", "boolean", "date", "datetime"}, field.Type) {
@@ -204,7 +205,7 @@ func compatibleObjectSchema(previous, next Object) bool {
 	return true
 }
 
-func objectActions(object Object, entity platform.Entity) []platform.Action {
+func objectActions(object ontology.Object, entity platform.Entity) []platform.Action {
 	actions := platform.EntityActions(entity)
 	var binding platform.SchemaVersion
 	if len(object.SchemaVersions) > 0 {

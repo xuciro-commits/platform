@@ -2,6 +2,7 @@ package build
 
 import (
 	"encoding/json"
+	appsauthoring "platformserver/services/apps/authoring"
 	"slices"
 	"strings"
 
@@ -20,7 +21,7 @@ func StoreResourceRow(store *records.Store, tenant string, ref platform.AssetRef
 
 func StoreProjectTitle(store *records.Store, project string) string {
 	if row, ok := store.LockedRow(AppType, project); ok {
-		return row.(Application).Title
+		return row.(appsauthoring.Application).Title
 	}
 	return ""
 }

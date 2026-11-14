@@ -9,7 +9,7 @@ import (
 	ontology "platformserver/services/ontology"
 )
 
-func (b *Build) checkValueTypeFields(fields []Field) error {
+func (b *Build) checkValueTypeFields(fields []ontology.Field) error {
 	for _, f := range fields {
 		if f.ValueType == nil {
 			continue
@@ -28,7 +28,7 @@ func (b *Build) checkValueTypeFields(fields []Field) error {
 	return nil
 }
 
-func (b *Build) checkPresentation(o Object) error {
+func (b *Build) checkPresentation(o ontology.Object) error {
 	if err := ontology.CheckDisplay(o); err != nil {
 		return err
 	}
@@ -45,16 +45,16 @@ func (b *Build) checkPresentation(o Object) error {
 	return b.host.ValidateObjectPresentation(info)
 }
 
-var valueKind = resourceKind[ValueType, platform.ValueType]{
+var valueKind = resourceKind[ontology.ValueType, platform.ValueType]{
 	typ: ValueTypeType, prefix: "value", noun: "valueType", title: "Value type", plural: "Value types", capability: "valuetypes",
 	description: "A reusable scalar rule set: base type, bounds, pattern and listed values that fields bind to by version.",
 	transition:  "Install this value type as its next retained version.",
 	immutable:   "A published value type keeps its identity and base type",
-	records:     func(b *Build) map[string]ValueType { return b.valueTypes },
-	validate:    func(_ *Build, f ValueType) (ValueType, error) { return f, ontology.CheckValueType(f) },
-	identity:    func(a, b ValueType) bool { return a.Name == b.Name && a.Base == b.Base },
-	fromDeclaration: func(v platform.ValueType) ValueType {
-		return ValueType{Name: v.Name, Title: v.Title, Description: v.Description, Base: v.Base, Constraints: v.Constraints, Pattern: v.Pattern, Choices: slices.Clone(v.Choices)}
+	records:     func(b *Build) map[string]ontology.ValueType { return b.valueTypes },
+	validate:    func(_ *Build, f ontology.ValueType) (ontology.ValueType, error) { return f, ontology.CheckValueType(f) },
+	identity:    func(a, b ontology.ValueType) bool { return a.Name == b.Name && a.Base == b.Base },
+	fromDeclaration: func(v platform.ValueType) ontology.ValueType {
+		return ontology.ValueType{Name: v.Name, Title: v.Title, Description: v.Description, Base: v.Base, Constraints: v.Constraints, Pattern: v.Pattern, Choices: slices.Clone(v.Choices)}
 	},
 	install: func(h platform.BuildHost, c platform.Caller, d platform.ValueType, version int) error {
 		return h.InstallValueType(c, d, version)

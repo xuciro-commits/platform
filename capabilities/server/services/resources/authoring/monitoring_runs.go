@@ -2,6 +2,7 @@ package build
 
 import (
 	"cmp"
+	functionauthoring "platformserver/services/functions/authoring"
 	"time"
 
 	"platformserver/platform"
@@ -32,7 +33,7 @@ func CodeRuns(r *monitoring.Runs, codes []Code, compilations map[string]time.Tim
 	}
 }
 
-func FunctionRuns(r *monitoring.Runs, functions []FunctionRun) {
+func FunctionRuns(r *monitoring.Runs, functions []functionauthoring.FunctionRun) {
 	for _, function := range functions {
 		status := "unknown"
 		switch function.State {

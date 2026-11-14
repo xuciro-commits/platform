@@ -6,6 +6,7 @@ import (
 	"fmt"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
+	functionauthoring "platformserver/services/functions/authoring"
 
 	"platformserver/platform"
 	dataowner "platformserver/services/data"
@@ -188,13 +189,13 @@ func (b *Build) testPlanAssetName(asset platform.ReleaseAsset) (string, error) {
 
 func (b *Build) evaluationSetAsset(plan TestPlan, version int) (platform.ReleaseAsset, error) {
 	c := b.host.Automation(platform.Caller{}, ID)
-	function, ok := platform.Get[Function](c, string(plan.Function))
+	function, ok := platform.Get[functionauthoring.Function](c, string(plan.Function))
 	if !ok || function.Archived || len(plan.Evaluation) != 1 {
 		return platform.ReleaseAsset{}, fmt.Errorf("evaluation set needs its function and one saved policy")
 	}
 	definition, ordinal, ok := b.FunctionDefinition(function.Name, plan.FunctionVersion)
 	if selected, found := b.jointDeclarations[platform.AssetRef{App: ID, Kind: platform.AssetFunction, Name: function.Name}]; found {
-		var frozen Function
+		var frozen functionauthoring.Function
 		text, valid := strings.CutPrefix(selected.SourceVersion, b.Manifest().Version+".function-")
 		version, err := strconv.Atoi(text)
 		if valid && err == nil && version > 0 && (plan.FunctionVersion == 0 || plan.FunctionVersion == version) && dataowner.DecodeDescriptor(selected.Body, &frozen) == nil {
@@ -439,7 +440,7 @@ func (b *Build) testPlanDraft(asset platform.ReleaseAsset) (TestPlan, error) {
 	if !ok || err != nil || version < 1 {
 		return TestPlan{}, fmt.Errorf("evaluation needs a supported function owner")
 	}
-	return TestPlan{Variant: "evaluation-set", Name: descriptor.Name, Title: descriptor.Title, Function: platform.Ref[Function](functionID), FunctionVersion: version, Model: descriptor.Model, At: time.Date(2000, 1, 1, 0, 0, 0, 0, time.UTC), Steps: []platform.TestStep{{Type: FunctionCallType, ID: "evaluation", Action: SchemaFunctionCall, Payload: "{}", Expect: "accepted"}}, Evaluation: []platform.EvaluationPolicy{descriptor.Policy}}, nil
+	return TestPlan{Variant: "evaluation-set", Name: descriptor.Name, Title: descriptor.Title, Function: platform.Ref[functionauthoring.Function](functionID), FunctionVersion: version, Model: descriptor.Model, At: time.Date(2000, 1, 1, 0, 0, 0, 0, time.UTC), Steps: []platform.TestStep{{Type: FunctionCallType, ID: "evaluation", Action: SchemaFunctionCall, Payload: "{}", Expect: "accepted"}}, Evaluation: []platform.EvaluationPolicy{descriptor.Policy}}, nil
 }
 
 const (

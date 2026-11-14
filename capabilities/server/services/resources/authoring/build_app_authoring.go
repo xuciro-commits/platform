@@ -1,6 +1,7 @@
 package build
 
 import (
+	"platformserver/services/ontology"
 	"reflect"
 
 	"platformserver/platform"
@@ -19,7 +20,7 @@ func (e appEnvironment) Entity(typ string) (platform.EntityInfo, bool) {
 }
 
 func (e appEnvironment) DraftObjectLookup(c platform.Caller) (func(string) (platform.EntityInfo, bool), error) {
-	objects, err := readDefinitionInventory[Object](c)
+	objects, err := readDefinitionInventory[ontology.Object](c)
 	if err != nil {
 		return nil, err
 	}

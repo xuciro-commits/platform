@@ -2,6 +2,7 @@ package branches
 
 import (
 	"encoding/json"
+	appsauthoring "platformserver/services/apps/authoring"
 	"slices"
 	"strconv"
 	"strings"
@@ -19,7 +20,7 @@ type Workspace struct {
 	List      func(m platform.Member, typ string, q platform.Query, now time.Time) ([]any, *kernel.Error)
 	Fields    func(typ string) ([]platform.FieldInfo, bool)
 	Resources func() []build.Resource
-	Project   func(id string) (build.Application, bool)
+	Project   func(id string) (appsauthoring.Application, bool)
 	Role      func(m platform.Member, project string) string
 	Base      func() string
 	Stored    func(module string) bool

@@ -6,6 +6,7 @@ import (
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
 	"platformserver/platform"
+	"platformserver/services/ontology"
 	"reflect"
 	"slices"
 	"time"
@@ -15,7 +16,7 @@ type creator interface {
 	businessRuntime() platform.TransactionExecutor
 }
 
-func lifecycle(o Object, roles []string, creates creator, lookup func(string) (platform.EntityInfo, bool)) *platform.Lifecycle {
+func lifecycle(o ontology.Object, roles []string, creates creator, lookup func(string) (platform.EntityInfo, bool)) *platform.Lifecycle {
 	if len(o.States) == 0 {
 		return nil
 	}

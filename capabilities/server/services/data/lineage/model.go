@@ -2,12 +2,12 @@ package lineage
 
 import (
 	"maps"
+	"platformserver/services/ontology"
 	"slices"
 	"time"
 
 	"platformserver/platform"
 	dataowner "platformserver/services/data"
-	build "platformserver/services/resources/authoring"
 )
 
 type Basis string
@@ -37,7 +37,7 @@ type Input struct {
 	Sources     []dataowner.Source
 	Datasets    []dataowner.Dataset
 	Pipelines   []dataowner.Pipeline
-	Objects     []build.Object
+	Objects     []ontology.Object
 	Writebacks  []dataowner.Writeback
 	Meta        map[string]Meta
 	Evidence    []Evidence

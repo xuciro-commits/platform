@@ -14,7 +14,7 @@ import (
 	ontology "platformserver/services/ontology"
 )
 
-func (b *Build) captureExtensionSource(object *Object) error {
+func (b *Build) captureExtensionSource(object *ontology.Object) error {
 	if object.Extends == "" {
 		object.ExtensionSource = nil
 		return b.checkExtensionDependents(*object)
@@ -48,14 +48,14 @@ func (b *Build) captureExtensionSource(object *Object) error {
 	return platform.CheckExtension(info, base)
 }
 
-func (b *Build) checkExtensionDependents(object Object) error {
+func (b *Build) checkExtensionDependents(object ontology.Object) error {
 	objects, _, _, err := b.releaseInventory()
 	if err != nil {
 		return err
 	}
 	var base platform.EntityInfo
 	for _, record := range objects {
-		published, exists := ReadPublication[Object](record.Published)
+		published, exists := ReadPublication[ontology.Object](record.Published)
 		if !exists || published.Extends != ID+"."+object.Name {
 			continue
 		}
@@ -81,13 +81,13 @@ func (b *Build) checkExtensionDependents(object Object) error {
 }
 
 func (b *Build) objectEntity() platform.Entity {
-	return platform.Entity{Type: ObjectType, Title: "Object type", Plural: "Object types", Model: Object{}, Display: "title",
+	return platform.Entity{Type: ObjectType, Title: "Object type", Plural: "Object types", Model: ontology.Object{}, Display: "title",
 		Description: "An object this organisation defines itself: its name, what people call it and its fields. Publishing it installs it, and records of it are kept like any other app's.",
 		Validate: func(c platform.Caller, record any) *kernel.Error {
 			if c.Replaying {
 				return nil
 			}
-			if err := b.normalizeObjectRules(record.(*Object)); err != nil {
+			if err := b.normalizeObjectRules(record.(*ontology.Object)); err != nil {
 				return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
 			}
 			return nil
@@ -100,7 +100,7 @@ func (b *Build) objectEntity() platform.Entity {
 				Roles: []string{Builder}, Capability: "objects", Payload: []platform.Field{},
 				Description: "Install the object as it stands. Published again, it takes its new fields, and records keep the values of the fields that remain.",
 				Do: func(c platform.Caller, record any, _ json.RawMessage, now time.Time) *kernel.Error {
-					object, ok := record.(*Object)
+					object, ok := record.(*ontology.Object)
 					if !ok {
 						return &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 					}
@@ -140,7 +140,7 @@ func (b *Build) objectEntity() platform.Entity {
 							object.ActionTypes[i].SourceVersion = ""
 						}
 					}
-					*record.(*Object) = *object
+					*record.(*ontology.Object) = *object
 					return nil
 				}}}}}
 }
@@ -152,7 +152,7 @@ func (b *Build) conditionLookup(typ string) (platform.EntityInfo, bool) {
 	return b.lookupEntity(typ)
 }
 
-func (b *Build) Check(o Object, id string, engine platform.RuleEngine) error {
+func (b *Build) Check(o ontology.Object, id string, engine platform.RuleEngine) error {
 	if err := b.checkName(o.Name, id); err != nil {
 		return err
 	}
@@ -204,7 +204,7 @@ func (b *Build) Check(o Object, id string, engine platform.RuleEngine) error {
 	return ontology.CheckAccess(o, Builder, User)
 }
 
-func (b *Build) checkShape(o Object) error {
+func (b *Build) checkShape(o ontology.Object) error {
 	if len(o.Implements) == 0 && o.Extends == "" {
 		return nil
 	}
@@ -243,11 +243,11 @@ func (b *Build) fieldKnown(ref string) bool {
 	if !derived {
 		return false
 	}
-	objects, err := readDefinitionInventory[Object](b.host.Automation(platform.Caller{}, ID))
+	objects, err := readDefinitionInventory[ontology.Object](b.host.Automation(platform.Caller{}, ID))
 	if err != nil {
 		return false
 	}
-	return slices.ContainsFunc(objects, func(o Object) bool { return !o.Archived && o.Name == name })
+	return slices.ContainsFunc(objects, func(o ontology.Object) bool { return !o.Archived && o.Name == name })
 }
 
 func (b *Build) taken(name, id string) (string, bool, error) {
@@ -257,7 +257,7 @@ func (b *Build) taken(name, id string) (string, bool, error) {
 	if _, mine := b.installed[TypeOf(name)]; !mine && b.host.Declares(TypeOf(name)) {
 		return "an app's own type", true, nil
 	}
-	objects, err := readDefinitionInventory[Object](b.host.Automation(platform.Caller{}, ID))
+	objects, err := readDefinitionInventory[ontology.Object](b.host.Automation(platform.Caller{}, ID))
 	if err != nil {
 		return "", false, err
 	}
@@ -269,7 +269,7 @@ func (b *Build) taken(name, id string) (string, bool, error) {
 	return "", false, nil
 }
 
-func (b *Build) install(c platform.Caller, o Object) *kernel.Error {
+func (b *Build) install(c platform.Caller, o ontology.Object) *kernel.Error {
 	if c.Staging() {
 		return &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
 	}
@@ -298,13 +298,13 @@ func (b *Build) install(c platform.Caller, o Object) *kernel.Error {
 	return nil
 }
 
-func Entity(o Object) platform.Entity { return entityWith(o, nil, nil) }
+func Entity(o ontology.Object) platform.Entity { return entityWith(o, nil, nil) }
 
-func (b *Build) entity(o Object) platform.Entity {
+func (b *Build) entity(o ontology.Object) platform.Entity {
 	return entityWith(o, b, b.conditionLookup)
 }
 
-func entityWith(o Object, creates creator, lookup func(string) (platform.EntityInfo, bool)) platform.Entity {
+func entityWith(o ontology.Object, creates creator, lookup func(string) (platform.EntityInfo, bool)) platform.Entity {
 	creation := o.CreateTransaction
 	entity := ontology.CompileObjectShape(o, ID, Builder)
 	entity.DataSources = slices.Clone(o.DataSources)
@@ -328,7 +328,7 @@ func entityWith(o Object, creates creator, lookup func(string) (platform.EntityI
 	return entity
 }
 
-func validateOf(o Object, model any, lookup func(string) (platform.EntityInfo, bool)) func(c platform.Caller, record any) *kernel.Error {
+func validateOf(o ontology.Object, model any, lookup func(string) (platform.EntityInfo, bool)) func(c platform.Caller, record any) *kernel.Error {
 	if o.Extends == "" {
 		return nil
 	}

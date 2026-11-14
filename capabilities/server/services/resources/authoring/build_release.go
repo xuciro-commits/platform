@@ -3,6 +3,7 @@ package build
 import (
 	"encoding/json"
 	"fmt"
+	appsauthoring "platformserver/services/apps/authoring"
 	"reflect"
 	"slices"
 	"strings"
@@ -40,13 +41,13 @@ func (b *Build) declaresRole(role string) bool {
 	return slices.Contains((platform.Manifest{Actions: catalog, Roles: b.manifestRoles()}).AllRoles(), role)
 }
 
-func (b *Build) jointObjectEntities(objects []Object, drafts []JointDraftRef) map[string]platform.EntityInfo {
+func (b *Build) jointObjectEntities(objects []ontology.Object, drafts []JointDraftRef) map[string]platform.EntityInfo {
 	joint := map[string]platform.EntityInfo{}
 	for _, draft := range drafts {
 		if draft.Kind != platform.AssetObject {
 			continue
 		}
-		i := slices.IndexFunc(objects, func(o Object) bool { return o.ID == draft.ID && !o.Archived })
+		i := slices.IndexFunc(objects, func(o ontology.Object) bool { return o.ID == draft.ID && !o.Archived })
 		if i < 0 {
 			continue
 		}
@@ -90,12 +91,12 @@ func (b *Build) ReleaseAssets() ([]platform.ReleaseAsset, error) {
 	return b.bindDispatchAssets(assets)
 }
 
-func (b *Build) releaseInventory() ([]Object, []Page, []Application, error) {
+func (b *Build) releaseInventory() ([]ontology.Object, []appsauthoring.Page, []appsauthoring.Application, error) {
 	if b.host == nil {
 		return nil, nil, nil, fmt.Errorf("builder has no host")
 	}
 	c := b.host.Automation(platform.Caller{}, ID)
-	objects, err := readDefinitionInventory[Object](c)
+	objects, err := readDefinitionInventory[ontology.Object](c)
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("read builder objects: %w", err)
 	}
@@ -142,10 +143,10 @@ func readDefinitionInventoryOf(c platform.Caller, typ reflect.Type) ([]any, erro
 	}
 }
 
-func (b *Build) validateObjectInstallation(c platform.Caller, record Object) error {
+func (b *Build) validateObjectInstallation(c platform.Caller, record ontology.Object) error {
 	entity := Entity(record)
-	current, _ := platform.Get[Object](b.host.Automation(platform.Caller{}, ID), record.ID)
-	previous, _ := ReadPublication[Object](current.Published)
+	current, _ := platform.Get[ontology.Object](b.host.Automation(platform.Caller{}, ID), record.ID)
+	previous, _ := ReadPublication[ontology.Object](current.Published)
 	changed, compatible := false, false
 	if previous.Name != "" {
 		oldBody, err := definitionBody(previous, TypeOf(previous.Name))
@@ -172,7 +173,7 @@ func (b *Build) validateObjectInstallation(c platform.Caller, record Object) err
 	return b.host.ValidateInstallDependents(c, entity, objectActions(record, entity), generated, pages...)
 }
 
-func (b *Build) objectInstallationPages(record Object) ([]platform.Page, string, error) {
+func (b *Build) objectInstallationPages(record ontology.Object) ([]platform.Page, string, error) {
 	explicit, err := b.apps.HasPublishedPage(record.Name)
 	if err != nil {
 		return nil, "", err
@@ -183,7 +184,7 @@ func (b *Build) objectInstallationPages(record Object) ([]platform.Page, string,
 	return []platform.Page{ontology.CompileObjectPage(record, ID)}, record.Name, nil
 }
 
-func (b *Build) releaseAssets(objects []Object, pages []Page, apps []Application, processes []automationauthoring.Process, sourceVersion string) ([]platform.ReleaseAsset, error) {
+func (b *Build) releaseAssets(objects []ontology.Object, pages []appsauthoring.Page, apps []appsauthoring.Application, processes []automationauthoring.Process, sourceVersion string) ([]platform.ReleaseAsset, error) {
 	var assets []platform.ReleaseAsset
 	index := map[platform.AssetRef]int{}
 	add := func(asset platform.ReleaseAsset, replacesGeneratedPage bool) error {
@@ -202,7 +203,7 @@ func (b *Build) releaseAssets(objects []Object, pages []Page, apps []Application
 		if record.Archived || record.Published == "" {
 			continue
 		}
-		var saved Object
+		var saved ontology.Object
 		if err := json.Unmarshal([]byte(record.Published), &saved); err != nil {
 			return nil, fmt.Errorf("invalid published object %s: %w", record.ID, err)
 		}
@@ -260,7 +261,7 @@ func (b *Build) releaseAssets(objects []Object, pages []Page, apps []Application
 		if record.Archived || record.Published == "" {
 			continue
 		}
-		var saved Page
+		var saved appsauthoring.Page
 		if err := json.Unmarshal([]byte(record.Published), &saved); err != nil {
 			return nil, fmt.Errorf("invalid published page %s: %w", record.ID, err)
 		}
@@ -279,7 +280,7 @@ func (b *Build) releaseAssets(objects []Object, pages []Page, apps []Application
 		if record.Archived || record.Published == "" {
 			continue
 		}
-		var saved Application
+		var saved appsauthoring.Application
 		if err := json.Unmarshal([]byte(record.Published), &saved); err != nil {
 			return nil, fmt.Errorf("invalid published application %s: %w", record.ID, err)
 		}
@@ -307,7 +308,7 @@ func (b *Build) releaseAssets(objects []Object, pages []Page, apps []Application
 	return assets, nil
 }
 
-func definitionBody(value Object, typ string) (json.RawMessage, error) {
+func definitionBody(value ontology.Object, typ string) (json.RawMessage, error) {
 	raw, err := json.Marshal(value)
 	if err != nil {
 		return nil, err

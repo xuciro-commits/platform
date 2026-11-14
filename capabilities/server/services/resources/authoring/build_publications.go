@@ -3,9 +3,11 @@ package build
 import (
 	"encoding/json"
 	"fmt"
+	functionauthoring "platformserver/services/functions/authoring"
 
 	"platformserver/platform"
 	ontology "platformserver/services/ontology"
+	"platformserver/services/resources/publication"
 )
 
 func (b *Build) AcceptedPublicationSchemas() []string {
@@ -27,11 +29,11 @@ func (b *Build) publicationImage(schema string, image []byte) (platform.Entity, 
 		}
 		return b.agentEntity(), nil, nil, nil
 	case SchemaPublish:
-		var record Object
+		var record ontology.Object
 		if err := json.Unmarshal(image, &record); err != nil {
 			return platform.Entity{}, nil, nil, err
 		}
-		published, ok := ReadPublication[Object](record.Published)
+		published, ok := ReadPublication[ontology.Object](record.Published)
 		if !ok || record.State != "published" || record.ID != published.ID ||
 			record.Name != published.Name || record.Installed != TypeOf(published.Name) {
 			return platform.Entity{}, nil, nil, fmt.Errorf("accepted object has no matching published definition")
@@ -56,14 +58,14 @@ func (b *Build) publicationImage(schema string, image []byte) (platform.Entity, 
 }
 
 func (b *Build) ValidateAcceptedPublication(schema string, image []byte) error {
+	if hooks, found := publication.Schema(b.publications, schema); found {
+		return hooks.Validate(image)
+	}
 	if b.apps.HandlesPublication(schema) {
 		return b.apps.ValidateImage(schema, image)
 	}
 	if schema == SchemaFunction {
 		return b.functions.ValidateImage(image)
-	}
-	if schema == SchemaActionType {
-		return actionTypeImage(image)
 	}
 	if b.automation.HandlesPublication(schema) {
 		return b.automation.ValidateImage(schema, image)
@@ -107,11 +109,11 @@ func (b *Build) ValidateAcceptedPublication(schema string, image []byte) error {
 	}
 	switch schema {
 	case SchemaPublish:
-		var record Object
+		var record ontology.Object
 		if err := json.Unmarshal(image, &record); err != nil {
 			return err
 		}
-		published, ok := ReadPublication[Object](record.Published)
+		published, ok := ReadPublication[ontology.Object](record.Published)
 		if !ok {
 			return fmt.Errorf("accepted object has no published definition")
 		}
@@ -121,14 +123,14 @@ func (b *Build) ValidateAcceptedPublication(schema string, image []byte) error {
 }
 
 func (b *Build) ApplyAcceptedPublication(schema string, image []byte) error {
+	if hooks, found := publication.Schema(b.publications, schema); found {
+		return hooks.Install(image)
+	}
 	if b.apps.HandlesPublication(schema) {
 		return b.apps.ApplyImage(schema, image)
 	}
 	if schema == SchemaFunction {
 		return b.functions.ApplyImage(image)
-	}
-	if schema == SchemaActionType {
-		return actionTypeImage(image)
 	}
 	if b.automation.HandlesPublication(schema) {
 		return b.automation.ApplyImage(schema, image)
@@ -178,11 +180,11 @@ func (b *Build) ApplyAcceptedPublication(schema string, image []byte) error {
 	}
 	switch schema {
 	case SchemaPublish:
-		var record Object
+		var record ontology.Object
 		if err := json.Unmarshal(image, &record); err != nil {
 			return err
 		}
-		published, ok := ReadPublication[Object](record.Published)
+		published, ok := ReadPublication[ontology.Object](record.Published)
 		if !ok {
 			return fmt.Errorf("accepted object has no published definition")
 		}
@@ -204,22 +206,22 @@ func (b *Build) ApplyAcceptedPublication(schema string, image []byte) error {
 
 func published[T any](definition T) string {
 	switch value := any(definition).(type) {
-	case Object:
+	case ontology.Object:
 		value.Published = ""
 		definition = any(value).(T)
-	case PropertyType:
-		value.Published = ""
-		value.Versions = nil
-		definition = any(value).(T)
-	case ValueType:
+	case ontology.PropertyType:
 		value.Published = ""
 		value.Versions = nil
 		definition = any(value).(T)
-	case ObjectTypeGroup:
+	case ontology.ValueType:
 		value.Published = ""
 		value.Versions = nil
 		definition = any(value).(T)
-	case LinkType:
+	case ontology.ObjectTypeGroup:
+		value.Published = ""
+		value.Versions = nil
+		definition = any(value).(T)
+	case ontology.LinkType:
 		value.Published = ""
 		value.Versions = nil
 		definition = any(value).(T)
@@ -227,7 +229,7 @@ func published[T any](definition T) string {
 		value.Published = ""
 		value.Versions = nil
 		definition = any(value).(T)
-	case Function:
+	case functionauthoring.Function:
 		value.Published = ""
 		value.Versions = nil
 		definition = any(value).(T)

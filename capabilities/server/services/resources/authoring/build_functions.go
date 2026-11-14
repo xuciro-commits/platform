@@ -7,10 +7,6 @@ import (
 	functionauthoring "platformserver/services/functions/authoring"
 )
 
-type Function = functionauthoring.Function
-
-type FunctionRun = functionauthoring.FunctionRun
-
 const (
 	FunctionType         = functionauthoring.FunctionType
 	SchemaFunction       = functionauthoring.SchemaFunction

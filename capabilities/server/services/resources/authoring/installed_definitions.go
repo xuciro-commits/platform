@@ -2,6 +2,7 @@ package build
 
 import (
 	"fmt"
+	functionauthoring "platformserver/services/functions/authoring"
 	"reflect"
 	"slices"
 	"strings"
@@ -40,7 +41,7 @@ func CheckRunApplicationBindings(record any) error {
 		bindings = run.Applications
 	case platform.AgentRunRecord:
 		bindings = run.Applications
-	case FunctionRun:
+	case functionauthoring.FunctionRun:
 		bindings = run.Applications
 	}
 	return platform.CheckApplicationBindings(bindings)

@@ -8,11 +8,11 @@ import (
 	"net/http"
 	aigateway "platformserver/services/ai/gateway"
 	trialowner "platformserver/services/devops/trials"
+	functionauthoring "platformserver/services/functions/authoring"
 	controlowner "platformserver/services/security/control"
 	"time"
 
 	"platformserver/platform"
-	"platformserver/services/resources/authoring"
 )
 
 func configureFunctionFixtureModel(t *Tenant, model string, at time.Time) error {
@@ -65,7 +65,7 @@ func settleFunctionFixture(t *Tenant, actor platform.Member, fixture platform.Fu
 			if refusal != nil {
 				return "", nil, false
 			}
-			run, ok := view.Record.(build.FunctionRun)
+			run, ok := view.Record.(functionauthoring.FunctionRun)
 			return run.State, json.RawMessage(run.Output), ok
 		},
 	}.Apply(actor, fixture)

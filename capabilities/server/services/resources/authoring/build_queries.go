@@ -94,7 +94,7 @@ func (b *Build) QueryDefinition(name string, version int) (platform.NamedQuery, 
 	return queryKind.definition(b, name, version)
 }
 
-func (b *Build) checkRecordSets(o Object, engines ...platform.RuleEngine) error {
+func (b *Build) checkRecordSets(o ontology.Object, engines ...platform.RuleEngine) error {
 	if len(o.Sets) == 0 {
 		return nil
 	}

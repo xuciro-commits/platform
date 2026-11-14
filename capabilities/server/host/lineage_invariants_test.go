@@ -1,6 +1,7 @@
 package host
 
 import (
+	"platformserver/services/ontology"
 	"platformserver/services/resources/merge"
 	"slices"
 	"strconv"
@@ -140,7 +141,7 @@ func TestInvariantK12LineageImpactFieldsAndScope(t *testing.T) {
 		"steps": []platform.TransformStep{{Kind: "rename", From: "note", To: "title"}},
 	})
 	object := invariantObject("alpha", "Alpha")
-	object["fields"] = append(object["fields"].([]build.Field), build.Field{Name: "manual", Title: "Manual", Type: "text"})
+	object["fields"] = append(object["fields"].([]ontology.Field), ontology.Field{Name: "manual", Title: "Manual", Type: "text"})
 	binding := platform.DataSourceBinding{Kind: "dataset", Source: "OUTPUT", Key: "id", Columns: []platform.DataSourceColumn{{Column: "title", Attribute: "note"}}}
 	object["datasources"] = []platform.DataSourceBinding{binding, binding}
 	live.accept(t, "build.object.create", build.ObjectType, "OBJECT", object)
@@ -235,7 +236,7 @@ func TestInvariantK12UnresolvedLineageEdgesRemainVisible(t *testing.T) {
 
 func TestInvariantK12LineageGuardNeverFallsBelowWriteEvidence(t *testing.T) {
 	graph := lineage.Build(lineage.Input{
-		Objects:  []build.Object{{Name: "alpha", Title: "Alpha"}},
+		Objects:  []ontology.Object{{Name: "alpha", Title: "Alpha"}},
 		Evidence: []lineage.Evidence{{Target: "object:build.alpha", Marking: "restricted"}},
 	}, lineage.Guard)
 	for _, node := range graph.Nodes {
@@ -252,7 +253,7 @@ func TestInvariantK12LineageGuardNeverFallsBelowWriteEvidence(t *testing.T) {
 func TestInvariantK12LineageGuardFailsClosedWhenAcceptedDefinitionIsUnreadable(t *testing.T) {
 	live := newInvariantTenant(t, "invariant-k12-unreadable")
 	guard := lineage.NewReader(live.Tenant).Guard(lineage.Input{
-		Objects: []build.Object{{Name: "alpha", Title: "Alpha", Published: "{"}},
+		Objects: []ontology.Object{{Name: "alpha", Title: "Alpha", Published: "{"}},
 	})
 	graph := lineage.Build(guard, lineage.Guard)
 	if graph.Coverage.MarkingsComplete {
@@ -277,7 +278,7 @@ func TestInvariantK12LineageBranchReadsStagedDefinitionsWithoutChangingMain(t *t
 		t.Fatalf("create branch: %+v", refusal)
 	}
 	changed := invariantObject("alpha", "Alpha branch")
-	changed["fields"] = append(changed["fields"].([]build.Field), build.Field{Name: "detail", Title: "Detail", Type: "text"})
+	changed["fields"] = append(changed["fields"].([]ontology.Field), ontology.Field{Name: "detail", Title: "Detail", Type: "text"})
 	if _, refusal = live.SaveBranchResource(live.member(t), branch.ID, build.ObjectType, "OBJ", branches.BranchSaveRequest{Spec: platform.Raw(changed)}, invariantClock); refusal != nil {
 		t.Fatalf("save branch object: %+v", refusal)
 	}
@@ -345,9 +346,9 @@ func TestInvariantK12LineageFieldDerivationAndWriteback(t *testing.T) {
 			{Record: platform.Record{ID: "JOIN"}, Name: "join", Title: "Join", Input: "IN", OutputDataset: "JOINED",
 				Steps: []platform.TransformStep{{Kind: "join", Dataset: "LOOK"}}},
 		},
-		Objects: []build.Object{{
+		Objects: []ontology.Object{{
 			Record: platform.Record{ID: "OBJ"}, Name: "alpha", Title: "Alpha",
-			Fields: []build.Field{{Name: "note", Title: "Note", Type: "text"}, {Name: "manual", Title: "Manual", Type: "text"}},
+			Fields: []ontology.Field{{Name: "note", Title: "Note", Type: "text"}, {Name: "manual", Title: "Manual", Type: "text"}},
 		}},
 		Writebacks: []dataowner.Writeback{{
 			Record: platform.Record{ID: "WB"}, Name: "write", Title: "Write", Connection: "C", Object: "alpha",

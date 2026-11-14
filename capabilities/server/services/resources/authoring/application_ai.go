@@ -3,6 +3,7 @@ package build
 import (
 	"encoding/json"
 	"fmt"
+	"platformserver/services/ontology"
 	"slices"
 	"strconv"
 	"strings"
@@ -95,7 +96,7 @@ func (a ApplicationAI) List(m platform.Member, assets []platform.ReleaseAsset, v
 			if object.Ref.Kind != platform.AssetObject || object.Ref.App != asset.Ref.App {
 				continue
 			}
-			var declaration Object
+			var declaration ontology.Object
 			if json.Unmarshal(object.Body, &declaration) != nil {
 				continue
 			}
@@ -193,7 +194,7 @@ func CheckProposalFunctions(candidate platform.ReleaseCandidate) error {
 		if asset.Ref.App != ID || asset.Ref.Kind != platform.AssetObject {
 			continue
 		}
-		var object Object
+		var object ontology.Object
 		if json.Unmarshal(asset.Body, &object) != nil {
 			return fmt.Errorf("Proposal object declaration is invalid")
 		}

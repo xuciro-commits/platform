@@ -24,7 +24,7 @@ func (t *Tenant) readCapabilityAI(m platform.Member, id string, now time.Time) (
 		return answer, refusal
 	}
 	m = t.authorizationMember(m)
-	run, ok := platform.Get[build.FunctionRun](t.automation(build.ID, false), id)
+	run, ok := platform.Get[functions.FunctionRun](t.automation(build.ID, false), id)
 	if !ok {
 		return answer, platform.Refuse(pb.ErrorCode_ERROR_CODE_NOT_FOUND, "Function call is unavailable")
 	}

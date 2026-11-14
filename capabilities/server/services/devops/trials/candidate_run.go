@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	functionauthoring "platformserver/services/functions/authoring"
 	"slices"
 	"strings"
 	"time"
@@ -175,7 +176,7 @@ func (r *CandidateRun) Step(i int, step SimulationStep) (Simulation, *kernel.Err
 		records, _, problem := r.Sandbox.Records(actor, build.FunctionCallType, platform.Query{Limit: 100}, r.Now)
 		if problem == nil {
 			for _, record := range records {
-				result.Functions = append(result.Functions, record.(build.FunctionRun))
+				result.Functions = append(result.Functions, record.(functionauthoring.FunctionRun))
 			}
 		}
 	}

@@ -71,7 +71,7 @@ func (b *Build) agentDraftEntity() platform.Entity {
 		if c.Replaying {
 			return nil
 		}
-		objects, err := readDefinitionInventory[Object](c)
+		objects, err := readDefinitionInventory[ontology.Object](c)
 		if err != nil {
 			return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
 		}

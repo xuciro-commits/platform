@@ -2,6 +2,7 @@ package build
 
 import (
 	"encoding/json"
+	"platformserver/services/ontology"
 	"reflect"
 
 	"platformserver/platform"
@@ -12,7 +13,7 @@ func sameRuleAsset(left, right platform.ReleaseAsset) bool {
 	return json.Unmarshal(platform.Raw(left), &a) == nil && json.Unmarshal(platform.Raw(right), &b) == nil && reflect.DeepEqual(a, b)
 }
 
-func (b *Build) checkConstraints(o Object, engines ...platform.RuleEngine) error {
+func (b *Build) checkConstraints(o ontology.Object, engines ...platform.RuleEngine) error {
 	if len(o.Constraints) == 0 {
 		return nil
 	}

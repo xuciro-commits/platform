@@ -67,7 +67,7 @@ func txnUsesLegacyRows(steps []platform.TxnStep) bool {
 	return needed
 }
 
-func (b *Build) normalizeTransaction(object Object, action *Action, lookup func(string) (platform.EntityInfo, bool)) error {
+func (b *Build) normalizeTransaction(object ontology.Object, action *ontology.Action, lookup func(string) (platform.EntityInfo, bool)) error {
 	var lower func([]platform.TxnStep, platform.RuleReadSpec) error
 	lower = func(steps []platform.TxnStep, scope platform.RuleReadSpec) error {
 		scope.Inputs = maps.Clone(scope.Inputs)
@@ -221,7 +221,7 @@ func (b *Build) transactionLink(binding platform.AssetBinding) (platform.LinkTyp
 	return platform.LinkType{}, fmt.Errorf("transaction relationship %s version %s is unavailable", binding.Ref.Name, binding.SourceVersion)
 }
 
-func (b *Build) checkTransactions(object Object, engines ...platform.RuleEngine) error {
+func (b *Build) checkTransactions(object ontology.Object, engines ...platform.RuleEngine) error {
 	return ontology.CheckTransactions(object, ontology.TransactionContext{
 		App:         ID,
 		BuilderRole: Builder,
@@ -279,8 +279,8 @@ func (b *Build) checkTransactions(object Object, engines ...platform.RuleEngine)
 	}, engines...)
 }
 
-func (b *Build) CanonicalObject(object Object) (Object, error) {
-	var canonical Object
+func (b *Build) CanonicalObject(object ontology.Object) (ontology.Object, error) {
+	var canonical ontology.Object
 	if err := json.Unmarshal(platform.Raw(object), &canonical); err != nil {
 		return object, err
 	}

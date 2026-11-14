@@ -13,13 +13,14 @@ import (
 	dataowner "platformserver/services/data"
 	functionauthoring "platformserver/services/functions/authoring"
 	ontology "platformserver/services/ontology"
+	"platformserver/services/resources/publication"
 	"slices"
 	"strings"
 	"time"
 )
 
 func (b *Build) SavedObjectActions(c platform.Caller) ([]platform.Action, error) {
-	objects, err := readDefinitionInventory[Object](c)
+	objects, err := readDefinitionInventory[ontology.Object](c)
 	if err != nil {
 		return nil, err
 	}
@@ -36,6 +37,7 @@ func (b *Build) SavedObjectActions(c platform.Caller) ([]platform.Action, error)
 }
 
 type Build struct {
+	publications        []publication.Hooks
 	installationCatalog *platform.Catalog
 	host                platform.BuildHost
 	data                *dataowner.Owner
@@ -47,12 +49,12 @@ type Build struct {
 	jointAssets         map[platform.AssetRef]bool
 	jointDeclarations   map[platform.AssetRef]platform.ReleaseAsset
 	jointMode           bool
-	linkTypes           map[string]LinkType
-	propertyTypes       map[string]PropertyType
-	valueTypes          map[string]ValueType
-	objectTypeGroups    map[string]ObjectTypeGroup
+	linkTypes           map[string]ontology.LinkType
+	propertyTypes       map[string]ontology.PropertyType
+	valueTypes          map[string]ontology.ValueType
+	objectTypeGroups    map[string]ontology.ObjectTypeGroup
 	queries             map[string]Query
-	interfaces          map[string]InterfaceRecord
+	interfaces          map[string]ontology.InterfaceRecord
 	functions           *functionauthoring.Owner
 	apps                *appsauthoring.Owner
 	agents              map[string]Agent
@@ -63,8 +65,8 @@ type Build struct {
 func (b *Build) AttachBuild(h platform.BuildHost) { b.host = h }
 func (b *Build) AttachFiles(h platform.FileHost)  { b.data.AttachFiles(h) }
 
-func New(tenant string, authorities platform.Authorities) *Build {
-	b := &Build{installed: map[string]platform.Entity{}, linkTypes: map[string]LinkType{}, propertyTypes: map[string]PropertyType{}, valueTypes: map[string]ValueType{}, objectTypeGroups: map[string]ObjectTypeGroup{}, queries: map[string]Query{}, interfaces: map[string]InterfaceRecord{}, agents: map[string]Agent{}, codes: map[string]Code{}, tables: map[string]Table{}}
+func New(tenant string, authorities platform.Authorities, publications []publication.Hooks) *Build {
+	b := &Build{publications: publications, installed: map[string]platform.Entity{}, linkTypes: map[string]ontology.LinkType{}, propertyTypes: map[string]ontology.PropertyType{}, valueTypes: map[string]ontology.ValueType{}, objectTypeGroups: map[string]ontology.ObjectTypeGroup{}, queries: map[string]Query{}, interfaces: map[string]ontology.InterfaceRecord{}, agents: map[string]Agent{}, codes: map[string]Code{}, tables: map[string]Table{}}
 	b.data = dataowner.New(buildDataHost{b})
 	b.automation = automationauthoring.New(automationEnvironment{b})
 	b.functions = functionauthoring.NewOwner(functionEnvironment{b})
@@ -227,34 +229,34 @@ func (b *Build) checkDefinitionArchive(c platform.Caller, typ, id string) *kerne
 	published := false
 	switch typ {
 	case ObjectType:
-		record, _ := platform.Get[Object](c, id)
+		record, _ := platform.Get[ontology.Object](c, id)
 		published = record.Published != ""
 	case PageType:
-		record, _ := platform.Get[Page](c, id)
+		record, _ := platform.Get[appsauthoring.Page](c, id)
 		published = record.Published != ""
 	case AppType:
-		record, _ := platform.Get[Application](c, id)
+		record, _ := platform.Get[appsauthoring.Application](c, id)
 		published = record.Published != ""
 	case PropertyTypeType:
-		record, _ := platform.Get[PropertyType](c, id)
+		record, _ := platform.Get[ontology.PropertyType](c, id)
 		published = record.Published != ""
 	case ValueTypeType:
-		record, _ := platform.Get[ValueType](c, id)
+		record, _ := platform.Get[ontology.ValueType](c, id)
 		published = record.Published != ""
 	case ObjectTypeGroupType:
-		record, _ := platform.Get[ObjectTypeGroup](c, id)
+		record, _ := platform.Get[ontology.ObjectTypeGroup](c, id)
 		published = record.Published != ""
 	case LinkTypeType:
-		record, _ := platform.Get[LinkType](c, id)
+		record, _ := platform.Get[ontology.LinkType](c, id)
 		published = record.Published != ""
 	case QueryType:
 		record, _ := platform.Get[Query](c, id)
 		published = record.Published != ""
 	case InterfaceType:
-		record, _ := platform.Get[InterfaceRecord](c, id)
+		record, _ := platform.Get[ontology.InterfaceRecord](c, id)
 		published = record.Published != ""
 	case FunctionType:
-		record, _ := platform.Get[Function](c, id)
+		record, _ := platform.Get[functionauthoring.Function](c, id)
 		published = record.Published != ""
 	case TableType:
 		record, _ := platform.Get[Table](c, id)
@@ -377,8 +379,8 @@ func (b *Build) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb.
 	}
 	if name := s.GetSchema().GetName(); (name == ObjectType+".create" || name == ObjectType+".edit") && !c.Replaying {
 		var p struct {
-			Name   *string  `json:"name"`
-			Fields *[]Field `json:"fields"`
+			Name   *string           `json:"name"`
+			Fields *[]ontology.Field `json:"fields"`
 		}
 		if json.Unmarshal(s.GetPayload(), &p) == nil {
 			var err error
@@ -400,7 +402,7 @@ func (b *Build) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb.
 		}
 	}
 	if name := s.GetSchema().GetName(); (name == PageType+".create" || name == PageType+".edit") && !c.Replaying {
-		var p Page
+		var p appsauthoring.Page
 		if json.Unmarshal(s.GetPayload(), &p) == nil && p.Object != "" {
 			known, err := b.apps.CheckPageObject(c, p.Object)
 			if err != nil {
@@ -487,7 +489,9 @@ func (b *Build) Fork(ledger platform.Authority) (platform.App, error) {
 	return &fork, nil
 }
 
-func (b *Build) NewSimulationApp(tenant string) platform.App { return New(tenant, b.authorities) }
+func (b *Build) NewSimulationApp(tenant string) platform.App {
+	return New(tenant, b.authorities, b.publications)
+}
 func (b *Build) CandidateActions(asset platform.ReleaseAsset) ([]platform.Action, error) {
 	code, err := b.retainedCodeObject(asset)
 	if err != nil {
@@ -502,7 +506,7 @@ func (b *Build) CandidateActions(asset platform.ReleaseAsset) ([]platform.Action
 		}
 		return actions, nil
 	}
-	var object Object
+	var object ontology.Object
 	if asset.Ref.App != ID || asset.Ref.Kind != platform.AssetObject || json.Unmarshal(asset.Body, &object) != nil || TypeOf(object.Name) != asset.Ref.Name {
 		return nil, fmt.Errorf("invalid construction object descriptor")
 	}
@@ -538,7 +542,7 @@ type ConstructionDrafts interface {
 }
 
 type ConstructionDraftReader interface {
-	CanonicalObject(Object) (Object, error)
+	CanonicalObject(ontology.Object) (ontology.Object, error)
 }
 
 type ConstructionSandbox interface {

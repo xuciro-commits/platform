@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"maps"
+	"platformserver/services/ontology"
 	"reflect"
 	"slices"
 	"strings"
@@ -213,7 +214,7 @@ func (b *Build) BeginAssetBootstrap(assets []platform.ReleaseAsset) (func(), err
 		if code {
 			continue
 		}
-		var object Object
+		var object ontology.Object
 		if err := json.Unmarshal(asset.Body, &object); err != nil || TypeOf(object.Name) != asset.Ref.Name {
 			return nil, fmt.Errorf("invalid bootstrap object shape %s", asset.Ref)
 		}

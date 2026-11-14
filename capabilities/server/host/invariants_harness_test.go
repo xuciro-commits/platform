@@ -16,7 +16,9 @@ import (
 	"platformserver/services/actions"
 	"platformserver/services/devops/packages"
 	"platformserver/services/functions/authoring"
+	"platformserver/services/ontology"
 	"platformserver/services/resources/authoring"
+	"platformserver/services/resources/publication"
 	"platformserver/services/security"
 	controlowner "platformserver/services/security/control"
 )
@@ -97,7 +99,7 @@ func newInvariantTenantSetup(tb testing.TB, id string, apps []platform.App, seat
 		actions = append(actions, packages.Actions()...)
 		return controlowner.Owners{Policies: security.NewPolicies(), Packages: packages.New(id), Actions: actions}
 	}, append([]platform.Seat{seat}, seats...)...)
-	tenant, err := NewTenantWithCapabilities(id, services, append([]platform.App{console, build.New(id, actions.NewAuthority)}, apps...)...)
+	tenant, err := NewTenantWithCapabilities(id, services, append([]platform.App{console, build.New(id, actions.NewAuthority, []publication.Hooks{ontology.ActionTypePublication()})}, apps...)...)
 	if err != nil {
 		tb.Fatal(err)
 	}
@@ -211,7 +213,7 @@ func differingTypes(a, b map[string]json.RawMessage) []string {
 }
 
 func invariantObject(name, title string) map[string]any {
-	return map[string]any{"name": name, "title": title, "fields": []build.Field{{Name: "note", Title: "Note", Type: "text"}}}
+	return map[string]any{"name": name, "title": title, "fields": []ontology.Field{{Name: "note", Title: "Note", Type: "text"}}}
 }
 
 func invariantPublishData(t *testing.T, tenant *invariantTenant, member platform.Member, drafts []build.JointDraftRef, key string) string {

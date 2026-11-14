@@ -8,29 +8,30 @@ import (
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
 	"platformserver/platform"
+	functionauthoring "platformserver/services/functions/authoring"
 	"platformserver/services/resources/authoring"
 	"slices"
 	"time"
 )
 
 type Simulation struct {
-	Issues          []platform.FieldIssue    `json:"issues,omitempty"`
-	RefusalCode     string                   `json:"refusalCode,omitempty"`
-	Unsupported     bool                     `json:"unsupported,omitempty"`
-	TraceTruncated  bool                     `json:"traceTruncated,omitempty"`
-	Input           *SimulationStep          `json:"input,omitempty"`
-	Trace           []platform.DecisionTrace `json:"trace,omitempty"`
-	Read            json.RawMessage          `json:"read,omitempty"`
-	RolledBack      bool                     `json:"rolledBack,omitempty"`
-	Accepted        bool                     `json:"accepted"`
-	Refusal         string                   `json:"refusal,omitempty"`
-	Changes         []SimulatedChange        `json:"changes"`
-	Matched         *bool                    `json:"matched,omitempty"`
-	Flows           []SimulatedFlow          `json:"flows,omitempty"`
-	Tasks           []platform.WorkTask      `json:"tasks,omitempty"`
-	Functions       []build.FunctionRun      `json:"functions,omitempty"`
-	ComputeMatched  *bool                    `json:"computeMatched,omitempty"`
-	FunctionMatched *bool                    `json:"functionMatched,omitempty"`
+	Issues          []platform.FieldIssue           `json:"issues,omitempty"`
+	RefusalCode     string                          `json:"refusalCode,omitempty"`
+	Unsupported     bool                            `json:"unsupported,omitempty"`
+	TraceTruncated  bool                            `json:"traceTruncated,omitempty"`
+	Input           *SimulationStep                 `json:"input,omitempty"`
+	Trace           []platform.DecisionTrace        `json:"trace,omitempty"`
+	Read            json.RawMessage                 `json:"read,omitempty"`
+	RolledBack      bool                            `json:"rolledBack,omitempty"`
+	Accepted        bool                            `json:"accepted"`
+	Refusal         string                          `json:"refusal,omitempty"`
+	Changes         []SimulatedChange               `json:"changes"`
+	Matched         *bool                           `json:"matched,omitempty"`
+	Flows           []SimulatedFlow                 `json:"flows,omitempty"`
+	Tasks           []platform.WorkTask             `json:"tasks,omitempty"`
+	Functions       []functionauthoring.FunctionRun `json:"functions,omitempty"`
+	ComputeMatched  *bool                           `json:"computeMatched,omitempty"`
+	FunctionMatched *bool                           `json:"functionMatched,omitempty"`
 }
 
 type SimulatedFlow struct {

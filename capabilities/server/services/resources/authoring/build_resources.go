@@ -2,6 +2,7 @@ package build
 
 import (
 	"encoding/json"
+	appsauthoring "platformserver/services/apps/authoring"
 	"slices"
 	"strings"
 	"time"
@@ -45,7 +46,7 @@ func (b *Build) resourceEntities() []platform.Entity {
 		{Type: ResourceType, Title: "Resource", Plural: "Resources", Model: Resource{}, Display: "title", Scope: platform.Scope{Default: platform.ScopeTenant}},
 		{Type: FolderType, Title: "Folder", Plural: "Folders", Model: Folder{}, Display: "name", Scope: platform.Scope{Default: platform.ScopeTenant}, Standard: platform.Standard{Create: true, Edit: true, Archive: true, Roles: []string{Builder}, Capability: "resources"}, Validate: func(c platform.Caller, record any) *kernel.Error {
 			folder := record.(*Folder)
-			project, found := platform.Get[Application](c, folder.Project)
+			project, found := platform.Get[appsauthoring.Application](c, folder.Project)
 			if !found || project.Archived || !canEditProject(c, folder.Project) {
 				return platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "Choose a project you can edit")
 			}
@@ -142,7 +143,7 @@ func (b *Build) submitResource(c platform.Caller, s *pb.Submission, now time.Tim
 			}
 			for _, item := range input.Assignments {
 				resource, known := platform.Get[Resource](c, item.ID)
-				project, exists := platform.Get[Application](c, item.Project)
+				project, exists := platform.Get[appsauthoring.Application](c, item.Project)
 				if !known || resource.Project != WorkspaceProject || !exists || project.Archived || item.Project == WorkspaceProject {
 					return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The legacy resource project assignment is stale")
 				}
@@ -172,7 +173,7 @@ func (b *Build) submitResource(c platform.Caller, s *pb.Submission, now time.Tim
 			seen := map[string]bool{}
 			for _, item := range input.Entries {
 				resource, known := platform.Get[Resource](c, item.ID)
-				project, exists := platform.Get[Application](c, item.Project)
+				project, exists := platform.Get[appsauthoring.Application](c, item.Project)
 				if !known || !exists || project.Archived || item.Project == "" || seen[item.ID] {
 					return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The resource ownership request is stale")
 				}
@@ -206,7 +207,7 @@ func (b *Build) submitResource(c platform.Caller, s *pb.Submission, now time.Tim
 			if json.Unmarshal(s.GetPayload(), &input) != nil {
 				return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Choose a destination project and folder")
 			}
-			project, exists := platform.Get[Application](c, input.Project)
+			project, exists := platform.Get[appsauthoring.Application](c, input.Project)
 			if !exists || project.Archived || !canEditProject(c, resource.Project) || !canEditProject(c, input.Project) {
 				return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "Moving a resource requires editing both projects")
 			}
@@ -231,8 +232,8 @@ func (b *Build) submitResource(c platform.Caller, s *pb.Submission, now time.Tim
 }
 
 func (b *Build) ensureWorkspace(c platform.Caller, r *pb.ChangeRecord) {
-	if _, exists := platform.Get[Application](c, WorkspaceProject); !exists {
-		c.Put(r, Application{Record: platform.Record{ID: WorkspaceProject}, Name: WorkspaceProject, Title: "Workspace", Pages: []string{}, State: "draft"})
+	if _, exists := platform.Get[appsauthoring.Application](c, WorkspaceProject); !exists {
+		c.Put(r, appsauthoring.Application{Record: platform.Record{ID: WorkspaceProject}, Name: WorkspaceProject, Title: "Workspace", Pages: []string{}, State: "draft"})
 		ref := platform.AssetRef{App: ID, Kind: platform.AssetApp, Name: WorkspaceProject}
 		c.Put(r, Resource{Record: platform.Record{ID: platform.ResourceID(c.Tenant, ref)}, Ref: ref, Type: AppType, Draft: WorkspaceProject, Project: WorkspaceProject, Title: "Workspace", State: "active", Version: 1})
 	}
@@ -419,7 +420,7 @@ func (b *Build) saveResource(c platform.Caller, s *pb.Submission, now time.Time)
 				return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Choose the project that owns this resource")
 			}
 			if !c.Replaying {
-				project, exists := platform.Get[Application](c, input.Project)
+				project, exists := platform.Get[appsauthoring.Application](c, input.Project)
 				if (!exists || project.Archived) && !c.Automation {
 					return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Choose an existing project")
 				}

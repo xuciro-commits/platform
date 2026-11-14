@@ -1,6 +1,7 @@
 package build
 
 import (
+	functionauthoring "platformserver/services/functions/authoring"
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
@@ -122,7 +123,7 @@ func (x OwnerRuns) Page() (monitoring.MonitoringRunPage, *kernel.Error) {
 			return collectOwnerRuns(x, runs, "projection", "latest", "latest-only", dataowner.DatasetType, func(rows []dataowner.Dataset) { dataowner.DatasetRuns(runs, rows) })
 		},
 		func() *kernel.Error {
-			return collectOwnerRuns(x, runs, "function", "retained", "", FunctionCallType, func(rows []FunctionRun) { FunctionRuns(runs, rows) })
+			return collectOwnerRuns(x, runs, "function", "retained", "", FunctionCallType, func(rows []functionauthoring.FunctionRun) { FunctionRuns(runs, rows) })
 		},
 		func() *kernel.Error {
 			return collectOwnerRuns(x, runs, "flow", "retained", "permission-filtered", platform.FlowInstanceType, func(rows []platform.FlowInstance) { runs.Flows(rows, x.Schemas.FlowRetry) })

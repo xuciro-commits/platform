@@ -18,10 +18,10 @@ import (
 )
 
 func (b *Build) CompleteBlueprintAssets(input []platform.ReleaseAsset) ([]platform.ReleaseAsset, error) {
-	var objects []Object
+	var objects []ontology.Object
 	for _, asset := range input {
 		if asset.Ref.App == ID && asset.Ref.Kind == platform.AssetObject {
-			var object Object
+			var object ontology.Object
 			if err := json.Unmarshal(asset.Body, &object); err != nil {
 				return nil, fmt.Errorf("blueprint object %s: %w", asset.Ref, err)
 			}
@@ -111,7 +111,7 @@ func (b *Build) RootDrafts(roots []platform.AssetRef) ([]JointDraftRef, error) {
 }
 
 type proposalConsumption struct {
-	run        FunctionRun
+	run        functionauthoring.FunctionRun
 	binding    platform.ProposalAdoption
 	amendments json.RawMessage
 }
@@ -151,11 +151,11 @@ func (b *Build) prepareProposal(c platform.Caller, r *pb.ChangeRecord, txn *plat
 		return fail("Choose a retained proposal for this action")
 	}
 	visible, problem := c.ReadRecord(FunctionCallType, id, now)
-	var readable FunctionRun
+	var readable functionauthoring.FunctionRun
 	if problem != nil || json.Unmarshal(visible, &readable) != nil || readable.Withheld || readable.Output == "" {
 		return fail("The proposal and its current sources must be readable")
 	}
-	run, ok := platform.Get[FunctionRun](c, id)
+	run, ok := platform.Get[functionauthoring.FunctionRun](c, id)
 	if !ok || run.State != "ready" || run.Contract.Proposal == nil || run.Decision != "pending" || run.Source != txn.Subject+"/"+r.GetSubmission().GetTarget().GetId() || run.Function != binding.Function.Name || cmp.Or(run.App, ID) != cmp.Or(binding.Function.App, ID) || binding.Function.Version != 0 && run.Version != binding.Function.Version {
 		return fail("The proposal is not pending for this action and source")
 	}

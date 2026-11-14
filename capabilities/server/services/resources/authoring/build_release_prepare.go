@@ -76,7 +76,7 @@ func (b *Build) PrepareReleaseAssets(assets []platform.ReleaseAsset, ctx platfor
 		return nil, err
 	}
 	assets = ordered
-	publications, err := b.prepareReleasePublications(assets)
+	publications, installations, err := b.prepareReleasePublications(assets)
 	if err != nil {
 		return nil, err
 	}
@@ -86,6 +86,13 @@ func (b *Build) PrepareReleaseAssets(assets []platform.ReleaseAsset, ctx platfor
 		return nil, err
 	}
 	out = append(out, samples...)
+	for _, installation := range installations {
+		plan, err := b.DecodeAssetInstallation(installation.Schema, installation.Image)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, plan)
+	}
 	for _, publication := range publications {
 		plan, err := b.DecodeAssetInstallation(publication.Schema, publication.Image)
 		if err != nil {

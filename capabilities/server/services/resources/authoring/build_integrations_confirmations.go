@@ -3,6 +3,7 @@ package build
 import (
 	"encoding/json"
 	"fmt"
+	"platformserver/services/ontology"
 	"slices"
 	"strings"
 	"time"
@@ -40,7 +41,7 @@ func confirmationActions() []platform.Action {
 	}
 }
 
-func (b *Build) checkConfirmation(spec *platform.Confirmation, object Object) error {
+func (b *Build) checkConfirmation(spec *platform.Confirmation, object ontology.Object) error {
 	if spec == nil {
 		return nil
 	}
@@ -56,7 +57,7 @@ func (b *Build) checkConfirmation(spec *platform.Confirmation, object Object) er
 			if action.Transaction == nil || action.Transaction.Confirmation != spec {
 				continue
 			}
-			declared = slices.ContainsFunc(action.Inputs, func(input Input) bool {
+			declared = slices.ContainsFunc(action.Inputs, func(input ontology.Input) bool {
 				return input.Name == party.Reconcile.KeyInput && input.Required && (input.Type == "text" || input.Type == "reference")
 			})
 		}
@@ -65,7 +66,7 @@ func (b *Build) checkConfirmation(spec *platform.Confirmation, object Object) er
 		}
 	}
 	subject := "build." + object.Name
-	if spec.ReviewerRole != Builder && !slices.ContainsFunc(object.Access, func(a Access) bool { return a.Role == spec.ReviewerRole }) {
+	if spec.ReviewerRole != Builder && !slices.ContainsFunc(object.Access, func(a ontology.Access) bool { return a.Role == spec.ReviewerRole }) {
 		return fmt.Errorf("The confirmation reviewer role is not declared")
 	}
 	for _, name := range []string{spec.OnComplete, spec.OnPartialAction} {
@@ -77,7 +78,7 @@ func (b *Build) checkConfirmation(spec *platform.Confirmation, object Object) er
 			schema = subject + "." + name
 		}
 		name := strings.TrimPrefix(schema, subject+".")
-		i := slices.IndexFunc(object.Actions, func(a Action) bool { return a.Name == name })
+		i := slices.IndexFunc(object.Actions, func(a ontology.Action) bool { return a.Name == name })
 		if i < 0 || object.Actions[i].Approval != nil || object.Actions[i].Transaction != nil && object.Actions[i].Transaction.Confirmation != nil {
 			return fmt.Errorf("Confirmation completion needs a subject action without another approval or confirmation")
 		}
@@ -191,7 +192,7 @@ func (b *Build) bindConfirmationAssets(assets []platform.ReleaseAsset) ([]platfo
 		if asset.Ref.App != ID || asset.Ref.Kind != platform.AssetObject {
 			continue
 		}
-		var object Object
+		var object ontology.Object
 		if err := json.Unmarshal(asset.Body, &object); err != nil {
 			return nil, err
 		}

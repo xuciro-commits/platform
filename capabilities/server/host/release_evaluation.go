@@ -7,6 +7,7 @@ import (
 	"platformserver/platform"
 	aigateway "platformserver/services/ai/gateway"
 	releaseowner "platformserver/services/devops/releases"
+	functionauthoring "platformserver/services/functions/authoring"
 	"platformserver/services/resources/authoring"
 	"time"
 )
@@ -30,9 +31,11 @@ func (t *Tenant) EvaluateRelease(m platform.Member, request releaseowner.Release
 func (t *Tenant) prepareEvaluateRelease(m platform.Member, request releaseowner.ReleaseEvaluationRequest, now time.Time) (string, error) {
 	caller := t.automation(build.ID, false)
 	return releaseowner.PrepareReleaseEvaluation(t.ID, m, request, now, releaseowner.EvaluationHooks{
-		Candidate:      func(id string) (platform.ReleaseCandidate, error) { return t.releases.Candidate(id) },
-		Plan:           func(id string) (build.TestPlan, bool) { return platform.Get[build.TestPlan](caller, id) },
-		Function:       func(id string) (build.Function, bool) { return platform.Get[build.Function](caller, id) },
+		Candidate: func(id string) (platform.ReleaseCandidate, error) { return t.releases.Candidate(id) },
+		Plan:      func(id string) (build.TestPlan, bool) { return platform.Get[build.TestPlan](caller, id) },
+		Function: func(id string) (functionauthoring.Function, bool) {
+			return platform.Get[functionauthoring.Function](caller, id)
+		},
 		BuilderVersion: func() string { return t.App(build.ID).Manifest().Version },
 		AppModel:       func() string { return t.setting(t.automation(platform.AIApp, false), platform.AISettingAppModel) },
 		HasProvider:    func() bool { return t.ai != nil },

@@ -14,7 +14,7 @@ import (
 
 func protocolReadName(typ, name string) string { return "protocol:" + typ + ":" + name }
 
-func objectProvisions(object Object, entity platform.Entity) []platform.Provision {
+func objectProvisions(object ontology.Object, entity platform.Entity) []platform.Provision {
 	if len(object.Protocols) == 0 {
 		return nil
 	}
@@ -57,7 +57,7 @@ func objectProvisions(object Object, entity platform.Entity) []platform.Provisio
 	return out
 }
 
-func (b *Build) checkObjectProtocols(object Object) error {
+func (b *Build) checkObjectProtocols(object ontology.Object) error {
 	if len(object.Protocols) == 0 {
 		return nil
 	}

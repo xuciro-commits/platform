@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"maps"
 	"platformserver/platform"
+	"platformserver/services/ontology"
 	"platformserver/services/resources/authoring"
 	"slices"
 	"strings"
@@ -761,7 +762,7 @@ func (p Planner) PreviewWithActions(drafts []build.JointDraftRef, member platfor
 		if asset.Ref.App != build.ID || asset.Ref.Kind != platform.AssetObject {
 			continue
 		}
-		var object build.Object
+		var object ontology.Object
 		if err := json.Unmarshal(asset.Body, &object); err != nil {
 			return ReleasePreview{}, fmt.Errorf("candidate object %s: %w", asset.Ref, err)
 		}

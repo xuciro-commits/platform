@@ -1,6 +1,7 @@
 package lineage
 
 import (
+	"platformserver/services/ontology"
 	"slices"
 	"strconv"
 	"strings"
@@ -299,7 +300,7 @@ func (r Reader) Guard(input Input) Input {
 		}
 	}
 	for i, item := range input.Objects {
-		if fixed, ok := build.ReadPublication[build.Object](item.Published); ok {
+		if fixed, ok := build.ReadPublication[ontology.Object](item.Published); ok {
 			fixed.Record = item.Record
 			fixed.Archived = item.Archived
 			input.Objects[i] = fixed

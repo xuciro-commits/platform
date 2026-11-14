@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"platformserver/services/actions"
+	automationauthoring "platformserver/services/automate/authoring"
 	"platformserver/services/objects"
 	"sync"
 	"sync/atomic"
@@ -93,7 +94,7 @@ func TestInvariantK13BackgroundRoundReleasesLaneBetweenTasks(t *testing.T) {
 	live.accept(t, "build.object.publish", build.ObjectType, "OBJECT", map[string]any{})
 	live.accept(t, "build.process.create", build.ProcessType, "PROCESS", map[string]any{
 		"name": "scheduled", "title": "Scheduled", "kind": "automation", "every": "1m",
-		"steps": []build.ProcessStep{{Name: "create", Kind: "action", Act: "build.alpha.create",
+		"steps": []automationauthoring.ProcessStep{{Name: "create", Kind: "action", Act: "build.alpha.create",
 			Target: &platform.Binding{Source: "input", Path: []string{"period"}},
 			Inputs: map[string]platform.Binding{"note": {Source: "literal", Value: json.RawMessage(`"scheduled"`)}},
 		}},

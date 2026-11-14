@@ -3,6 +3,7 @@ package host
 import (
 	"context"
 	"encoding/json"
+	appsauthoring "platformserver/services/apps/authoring"
 	"time"
 
 	"platformkernel/kernel"
@@ -34,8 +35,8 @@ func (t *Tenant) branchWorkspace() branches.Workspace {
 		},
 		Fields:    func(typ string) ([]platform.FieldInfo, bool) { return records.LockedFields(t.Projection, typ) },
 		Resources: func() []build.Resource { return records.LockedRows[build.Resource](t.Projection, build.ResourceType) },
-		Project: func(id string) (build.Application, bool) {
-			return records.LockedRow[build.Application](t.Projection, build.AppType, id)
+		Project: func(id string) (appsauthoring.Application, bool) {
+			return records.LockedRow[appsauthoring.Application](t.Projection, build.AppType, id)
 		},
 		Stored: func(module string) bool { return t.artifacts().Stored(context.Background(), module) },
 	}

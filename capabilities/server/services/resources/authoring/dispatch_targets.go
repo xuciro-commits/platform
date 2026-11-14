@@ -2,6 +2,7 @@ package build
 
 import (
 	"encoding/json"
+	automationauthoring "platformserver/services/automate/authoring"
 	"slices"
 	"strings"
 	"time"
@@ -76,7 +77,7 @@ type ProcessDiagnostics struct {
 	Issues []ProcessDiagnostic `json:"issues"`
 }
 
-func DiagnoseProcess(owner ConstructionDrafts, c platform.Caller, process Process) ProcessDiagnostics {
+func DiagnoseProcess(owner ConstructionDrafts, c platform.Caller, process automationauthoring.Process) ProcessDiagnostics {
 	answer := ProcessDiagnostics{Valid: true, Issues: []ProcessDiagnostic{}}
 	if refusal := owner.CheckProcess(c, process); refusal != nil {
 		answer.Valid = false

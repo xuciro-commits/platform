@@ -2,12 +2,12 @@ package lineage
 
 import (
 	"fmt"
+	"platformserver/services/ontology"
 	"slices"
 	"strings"
 
 	"platformserver/platform"
 	dataowner "platformserver/services/data"
-	build "platformserver/services/resources/authoring"
 )
 
 type fieldState struct {
@@ -66,7 +66,7 @@ func Fields(g Graph, in Input) ([]FieldNode, []FieldEdge) {
 			addNode("dataset:"+dataset.ID, "dataset", dataset.ID, field.Name, field.Name, "unverified")
 		}
 	}
-	objects := map[string]build.Object{}
+	objects := map[string]ontology.Object{}
 	for _, object := range in.Objects {
 		name := objectType(object.Name)
 		objects[name] = object

@@ -12,7 +12,7 @@ import (
 	"time"
 )
 
-func validateLinkType(b *Build, f LinkType) (LinkType, error) {
+func validateLinkType(b *Build, f ontology.LinkType) (ontology.LinkType, error) {
 	parent, parentFound := b.lookupEntity(f.Parent)
 	info, childFound := b.lookupEntity(f.Child)
 	_, parentInstalled := b.installed[f.Parent]
@@ -44,21 +44,21 @@ func validateLinkType(b *Build, f LinkType) (LinkType, error) {
 	return f, nil
 }
 
-var linkKind = resourceKind[LinkType, platform.LinkType]{
+var linkKind = resourceKind[ontology.LinkType, platform.LinkType]{
 	typ: LinkTypeType, prefix: "link", noun: "linkType", title: "Link type", plural: "Link types", capability: "linktypes",
 	description: "A versioned relationship over an original reference; drafts do not change installed traversal.",
 	transition:  "Install this reference-backed relationship as its next retained version.",
 	immutable:   "A published link keeps its identity, objects, reference shape and retained constraints",
-	records:     func(b *Build) map[string]LinkType { return b.linkTypes },
+	records:     func(b *Build) map[string]ontology.LinkType { return b.linkTypes },
 	validate:    validateLinkType,
-	identity: func(a, b LinkType) bool {
+	identity: func(a, b ontology.LinkType) bool {
 		return a.Name == b.Name && a.Parent == b.Parent && a.Child == b.Child && a.Via == b.Via
 	},
-	stable: func(old, next LinkType) bool {
+	stable: func(old, next ontology.LinkType) bool {
 		return old.Definition().Storage != "reference" || old.Required == next.Required
 	},
 	guarantees:      linkKeepsGuarantees,
-	adopt:           func(record *LinkType, frozen LinkType) { record.Required = frozen.Required },
+	adopt:           func(record *ontology.LinkType, frozen ontology.LinkType) { record.Required = frozen.Required },
 	fromDeclaration: linkTypeFromDeclaration,
 	contract:        func(d platform.LinkType) int { return d.Contract() },
 	admit:           func(d platform.LinkType) bool { return d.Parent.App == ID && d.Child.App == ID },
@@ -70,8 +70,8 @@ var linkKind = resourceKind[LinkType, platform.LinkType]{
 
 func (b *Build) migrateLinkType(c platform.Caller, submission *pb.Submission, at time.Time) (*pb.ChangeRecord, *kernel.Error) {
 	return b.ledger.Receive(c, submission, at, nil, func() (func(*pb.ChangeRecord), *kernel.Error) {
-		record, ok := platform.Get[LinkType](c, submission.GetTarget().GetId())
-		installed, retained := ReadPublication[LinkType](record.Published)
+		record, ok := platform.Get[ontology.LinkType](c, submission.GetTarget().GetId())
+		installed, retained := ReadPublication[ontology.LinkType](record.Published)
 		if !ok || record.Archived || !retained || installed.Definition().Storage != "edge" {
 			return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Publish an owned relationship before migrating")
 		}
@@ -93,11 +93,11 @@ func (b *Build) LinkPublication(image []byte) (platform.LinkType, error) {
 	return saved.Definition(), nil
 }
 
-func linkKeepsGuarantees(old, next LinkType) bool {
+func linkKeepsGuarantees(old, next ontology.LinkType) bool {
 	before, after := old.Definition(), next.Definition()
 	return before.Storage == after.Storage && !(before.Required && !after.Required || before.Cardinality != "many-to-many" && after.Cardinality == "many-to-many" || before.Cardinality == "one-to-one" && after.Cardinality != "one-to-one" || before.DeletePolicy == "restrict-active" && after.DeletePolicy != "restrict-active")
 }
 
-func linkTypeFromDeclaration(l platform.LinkType) LinkType {
-	return LinkType{Name: l.Name, Title: l.Title, Description: l.Description, Parent: l.Parent.Name, Child: l.Child.Name, Via: l.Via, Forward: l.Forward, Reverse: l.Reverse, Required: l.Required, Storage: l.Storage, Roles: slices.Clone(l.Roles), Cardinality: l.Cardinality, DeletePolicy: l.DeletePolicy}
+func linkTypeFromDeclaration(l platform.LinkType) ontology.LinkType {
+	return ontology.LinkType{Name: l.Name, Title: l.Title, Description: l.Description, Parent: l.Parent.Name, Child: l.Child.Name, Via: l.Via, Forward: l.Forward, Reverse: l.Reverse, Required: l.Required, Storage: l.Storage, Roles: slices.Clone(l.Roles), Cardinality: l.Cardinality, DeletePolicy: l.DeletePolicy}
 }

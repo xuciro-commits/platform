@@ -34,7 +34,7 @@ func dispatchActions() []platform.Action {
 	}
 }
 
-func dispatchCommand(object Object, name string) (platform.DispatchCommand, bool) {
+func dispatchCommand(object ontology.Object, name string) (platform.DispatchCommand, bool) {
 	i := slices.IndexFunc(object.DispatchCommands, func(command platform.DispatchCommand) bool { return command.Name == name })
 	if i < 0 {
 		return platform.DispatchCommand{}, false
@@ -42,7 +42,7 @@ func dispatchCommand(object Object, name string) (platform.DispatchCommand, bool
 	return object.DispatchCommands[i], true
 }
 
-func (b *Build) checkDispatch(spec *platform.Dispatch, object Object, action Action, engines ...platform.RuleEngine) error {
+func (b *Build) checkDispatch(spec *platform.Dispatch, object ontology.Object, action ontology.Action, engines ...platform.RuleEngine) error {
 	if spec == nil {
 		return nil
 	}
@@ -56,7 +56,7 @@ func (b *Build) checkDispatch(spec *platform.Dispatch, object Object, action Act
 	if action.Transaction.Confirmation != nil {
 		return fmt.Errorf("A transaction declares either a confirmation or a device dispatch")
 	}
-	if spec.ReviewerRole != Builder && !slices.ContainsFunc(object.Access, func(access Access) bool { return access.Role == spec.ReviewerRole }) {
+	if spec.ReviewerRole != Builder && !slices.ContainsFunc(object.Access, func(access ontology.Access) bool { return access.Role == spec.ReviewerRole }) {
 		return fmt.Errorf("The dispatch reviewer role is not declared")
 	}
 	info, _ := platform.Describe(ID, Entity(object), func(reflect.Type) string { return "" })
@@ -119,7 +119,7 @@ type dispatchBindings struct {
 	Record              *platform.AssetRef           `json:"record,omitempty"`
 }
 
-func (b *Build) bindDispatch(spec platform.Dispatch, object Object) (dispatchBindings, error) {
+func (b *Build) bindDispatch(spec platform.Dispatch, object ontology.Object) (dispatchBindings, error) {
 	out := dispatchBindings{Commands: map[string]platform.AssetRef{}}
 	command, found := dispatchCommand(object, spec.Command)
 	if !found {
@@ -256,7 +256,7 @@ func (b *Build) bindDispatchAssets(assets []platform.ReleaseAsset) ([]platform.R
 		if asset.Ref.App != ID || asset.Ref.Kind != platform.AssetObject {
 			continue
 		}
-		var object Object
+		var object ontology.Object
 		if err := json.Unmarshal(asset.Body, &object); err != nil {
 			return nil, err
 		}
@@ -329,7 +329,7 @@ func (b *Build) bindDispatchAssets(assets []platform.ReleaseAsset) ([]platform.R
 	return assets, nil
 }
 
-func mapDispatchIntegrations(object *Object, resolve func(platform.AssetKind, string) (string, error)) error {
+func mapDispatchIntegrations(object *ontology.Object, resolve func(platform.AssetKind, string) (string, error)) error {
 	var failure error
 	mapTxn := func(txn *platform.BusinessTxn) {
 		if txn == nil {
@@ -376,7 +376,7 @@ func mapDispatchIntegrations(object *Object, resolve func(platform.AssetKind, st
 	return failure
 }
 
-func objectHasIntegrations(object Object) bool {
+func objectHasIntegrations(object ontology.Object) bool {
 	found := len(object.DispatchCommands) > 0
 	visit := func(txn *platform.BusinessTxn) {
 		if txn != nil {
@@ -407,11 +407,11 @@ func (b *Build) txnEffectBindings(txn *platform.BusinessTxn) (map[string]platfor
 	return refs, failure
 }
 
-func (b *Build) dispatchSchemaObject(object Object) (Object, error) {
+func (b *Build) dispatchSchemaObject(object ontology.Object) (ontology.Object, error) {
 	if !objectHasIntegrations(object) {
 		return object, nil
 	}
-	var portable Object
+	var portable ontology.Object
 	if err := json.Unmarshal(platform.Raw(object), &portable); err != nil {
 		return object, err
 	}

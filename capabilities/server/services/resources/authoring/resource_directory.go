@@ -3,6 +3,7 @@ package build
 import (
 	"encoding/json"
 	"maps"
+	appsauthoring "platformserver/services/apps/authoring"
 	"reflect"
 	"slices"
 	"strings"
@@ -145,7 +146,7 @@ func NewDirectory(resources []Resource, saved []Folder, role func(project string
 	return out
 }
 
-func LegacyProjectAssignments(apps []Application, resources []Resource) []LegacyResourceProject {
+func LegacyProjectAssignments(apps []appsauthoring.Application, resources []Resource) []LegacyResourceProject {
 	referenced := map[platform.AssetRef][]string{}
 	projects := map[string]bool{}
 	{
@@ -198,7 +199,7 @@ type ResourceBootstrap struct {
 	Definitions []platform.Definition
 	Drafts      func(match func(typ string) bool) []DraftRecord
 	Exists      func(rid string) bool
-	Snapshot    func() ([]Application, []Resource)
+	Snapshot    func() ([]appsauthoring.Application, []Resource)
 	Submit      func(*pb.Submission) error
 }
 

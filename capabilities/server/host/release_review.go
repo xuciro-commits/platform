@@ -28,14 +28,6 @@ func (h *Host) promotionSnapshots(source string) []releaseowner.PromotionSnapsho
 	return snapshots
 }
 
-func (h *Host) promotionsOf(source, candidate string) []releaseowner.PromotionTarget {
-	return releaseowner.PromotionTargets(source, candidate, h.promotionSnapshots(source))
-}
-
-func (h *Host) withPromotions(source string, page releaseowner.ReleasePage) releaseowner.ReleasePage {
-	return releaseowner.WithPromotions(page, source, h.promotionSnapshots(source))
-}
-
 func (t *Tenant) SavedReleases(m platform.Member, offset, limit int, application ...string) (releaseowner.ReleasePage, error) {
 	return buildRead(t, m, "GET /v1/releases/candidates", []string{build.Builder, build.Publisher}, func(t *Tenant) (releaseowner.ReleasePage, error) {
 		name := ""

@@ -1,6 +1,7 @@
 package packages
 
 import (
+	appsauthoring "platformserver/services/apps/authoring"
 	"slices"
 	"strings"
 
@@ -36,16 +37,16 @@ func OwnershipFor(views []platform.PackageView, id, version string, store *recor
 	}
 	managed := Managed{Descriptor: view.Descriptor, Resources: Resources(store)}
 	projectID, _ := managed.Project()
-	var project *build.Application
+	var project *appsauthoring.Application
 	if row := store.Type(build.AppType).Rows().Get(projectID); row != nil {
-		application := row.Value.Interface().(build.Application)
+		application := row.Value.Interface().(appsauthoring.Application)
 		project = &application
 	}
 	plan, err := managed.Ownership(project, owner)
 	return &plan, err
 }
 
-func (m Managed) Ownership(project *build.Application, owner build.ConstructionDrafts) (PackageOwnership, error) {
+func (m Managed) Ownership(project *appsauthoring.Application, owner build.ConstructionDrafts) (PackageOwnership, error) {
 	id, name := m.Project()
 	plan := PackageOwnership{ID: m.Descriptor.ID, Version: m.Descriptor.Version, Project: id, Name: name, Title: m.Descriptor.Title, CreateProject: project == nil, Entries: []PackageOwnershipEntry{}, Problems: []string{}}
 	if project != nil && project.Archived {

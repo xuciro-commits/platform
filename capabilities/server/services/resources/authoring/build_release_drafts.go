@@ -8,12 +8,16 @@ import (
 	"fmt"
 	"maps"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
+	appsauthoring "platformserver/services/apps/authoring"
+	automationauthoring "platformserver/services/automate/authoring"
+	"platformserver/services/ontology"
 	"reflect"
 	"slices"
 	"time"
 
 	"platformserver/platform"
 	dataowner "platformserver/services/data"
+	"platformserver/services/resources/publication"
 )
 
 func (b *Build) DraftReleaseAssetsMulti(drafts []JointDraftRef, member platform.Member, review bool) (result JointDraftAssets, err error) {
@@ -203,17 +207,30 @@ func findReleaseAsset(assets []platform.ReleaseAsset, ref platform.AssetRef) (pl
 }
 
 type draftInventories struct {
-	objects   []Object
-	pages     []Page
-	apps      []Application
-	processes []Process
+	objects   []ontology.Object
+	pages     []appsauthoring.Page
+	apps      []appsauthoring.Application
+	processes []automationauthoring.Process
 }
 
 func (b *Build) applyRecordDraft(inv *draftInventories, kind platform.AssetKind, id string, member platform.Member) (prior, next platform.AssetRef, hadPrior bool, err error) {
+	if hooks, found := publication.Kind(b.publications, kind); found {
+		closure, err := hooks.Closure(b.host.Automation(platform.Caller{}, ID), id)
+		if err != nil {
+			return prior, next, false, err
+		}
+		for _, dependency := range closure.Requires {
+			_, _, _, err = b.applyRecordDraft(inv, dependency.Kind, dependency.ID, member)
+			if err != nil {
+				break
+			}
+		}
+		return closure.Prior, closure.Next, closure.HasPrior, err
+	}
 	joint := b.jointMode
 	switch kind {
 	case platform.AssetFlow:
-		i := slices.IndexFunc(inv.processes, func(p Process) bool { return p.ID == id })
+		i := slices.IndexFunc(inv.processes, func(p automationauthoring.Process) bool { return p.ID == id })
 		if i < 0 {
 			return prior, next, false, fmt.Errorf("draft process %q not found", id)
 		}
@@ -230,28 +247,13 @@ func (b *Build) applyRecordDraft(inv *draftInventories, kind platform.AssetKind,
 				source = model
 			}
 		}
-		var prepared Process
+		var prepared automationauthoring.Process
 		prepared, prior, next, hadPrior, err = b.automation.CheckDraft(platform.Caller{}, record, source, models, member, !joint)
 		if err == nil {
 			inv.processes[i] = prepared
 		}
-	case platform.AssetAction:
-		action, found := platform.Get[ActionType](b.host.Automation(platform.Caller{}, ID), id)
-		if !found || action.Archived {
-			return prior, next, false, fmt.Errorf("action type %s is unavailable", id)
-		}
-		i := slices.IndexFunc(inv.objects, func(object Object) bool { return TypeOf(object.Name) == action.Object && !object.Archived })
-		if i < 0 {
-			return prior, next, false, fmt.Errorf("action type %s has no target object", id)
-		}
-		_, _, _, err = b.applyRecordDraft(inv, platform.AssetObject, inv.objects[i].ID, member)
-		next = platform.AssetRef{App: ID, Kind: platform.AssetAction, Name: action.Name}
-		original, _ := platform.Get[Object](b.host.Automation(platform.Caller{}, ID), inv.objects[i].ID)
-		if installed, found := ReadPublication[Object](original.Published); found && slices.ContainsFunc(installed.Actions, func(definition Action) bool { return definition.Name == action.Definition.Name }) {
-			prior, hadPrior = next, true
-		}
 	case platform.AssetObject:
-		i := slices.IndexFunc(inv.objects, func(o Object) bool { return o.ID == id && !o.Archived })
+		i := slices.IndexFunc(inv.objects, func(o ontology.Object) bool { return o.ID == id && !o.Archived })
 		if i < 0 {
 			return prior, next, false, fmt.Errorf("draft object %q not found", id)
 		}
@@ -263,7 +265,7 @@ func (b *Build) applyRecordDraft(inv *draftInventories, kind platform.AssetKind,
 				return prior, next, false, fmt.Errorf("Publishing the target object: %s", decision.Reason)
 			}
 		}
-		if was, ok := ReadPublication[Object](record.Published); ok {
+		if was, ok := ReadPublication[ontology.Object](record.Published); ok {
 			prior = platform.AssetRef{App: ID, Kind: kind, Name: TypeOf(was.Name)}
 			hadPrior = true
 		}
@@ -284,21 +286,21 @@ func (b *Build) applyRecordDraft(inv *draftInventories, kind platform.AssetKind,
 			inv.objects[i].Published = published(record)
 		}
 	case platform.AssetPage:
-		i := slices.IndexFunc(inv.pages, func(p Page) bool { return p.ID == id && !p.Archived })
+		i := slices.IndexFunc(inv.pages, func(p appsauthoring.Page) bool { return p.ID == id && !p.Archived })
 		if i < 0 {
 			return prior, next, false, fmt.Errorf("draft page %q not found", id)
 		}
-		var record Page
+		var record appsauthoring.Page
 		record, prior, next, hadPrior, err = b.apps.CheckPageDraft(inv.pages[i], !joint)
 		if err == nil {
 			inv.pages[i] = record
 		}
 	case platform.AssetApp:
-		i := slices.IndexFunc(inv.apps, func(a Application) bool { return a.ID == id && !a.Archived })
+		i := slices.IndexFunc(inv.apps, func(a appsauthoring.Application) bool { return a.ID == id && !a.Archived })
 		if i < 0 {
 			return prior, next, false, fmt.Errorf("draft application %q not found", id)
 		}
-		var record Application
+		var record appsauthoring.Application
 		record, prior, next, hadPrior, err = b.apps.CheckApplicationDraft(inv.apps[i], !joint)
 		if err == nil {
 			inv.apps[i] = record
@@ -425,7 +427,7 @@ func (b *Build) ReferencedDrafts(kind platform.AssetKind, id, owner string) ([]J
 		dependencies := map[platform.AssetKind][]string{}
 		switch next.Kind {
 		case platform.AssetObjectTypeGroup:
-			group, ok := platform.Get[ObjectTypeGroup](b.host.Automation(platform.Caller{}, ID), next.ID)
+			group, ok := platform.Get[ontology.ObjectTypeGroup](b.host.Automation(platform.Caller{}, ID), next.ID)
 			if !ok || group.Archived {
 				return nil, fmt.Errorf("no saved object type group draft %s", next.ID)
 			}
@@ -435,7 +437,7 @@ func (b *Build) ReferencedDrafts(kind platform.AssetKind, id, owner string) ([]J
 				}
 			}
 		case platform.AssetObject:
-			i := slices.IndexFunc(objects, func(o Object) bool { return o.ID == next.ID })
+			i := slices.IndexFunc(objects, func(o ontology.Object) bool { return o.ID == next.ID })
 			if i < 0 {
 				return nil, fmt.Errorf("no saved object draft %s", next.ID)
 			}
@@ -452,7 +454,7 @@ func (b *Build) ReferencedDrafts(kind platform.AssetKind, id, owner string) ([]J
 				}
 			}
 		case platform.AssetPage:
-			i := slices.IndexFunc(pages, func(p Page) bool { return p.ID == next.ID })
+			i := slices.IndexFunc(pages, func(p appsauthoring.Page) bool { return p.ID == next.ID })
 			if i < 0 {
 				return nil, fmt.Errorf("no saved page draft %s", next.ID)
 			}
@@ -460,7 +462,7 @@ func (b *Build) ReferencedDrafts(kind platform.AssetKind, id, owner string) ([]J
 				dependencies[platform.AssetObject] = append(dependencies[platform.AssetObject], pages[i].Object)
 			}
 		case platform.AssetApp:
-			i := slices.IndexFunc(apps, func(a Application) bool { return a.ID == next.ID })
+			i := slices.IndexFunc(apps, func(a appsauthoring.Application) bool { return a.ID == next.ID })
 			if i < 0 {
 				return nil, fmt.Errorf("no saved application draft %s", next.ID)
 			}
@@ -471,7 +473,7 @@ func (b *Build) ReferencedDrafts(kind platform.AssetKind, id, owner string) ([]J
 				dependencies[resource.Kind] = append(dependencies[resource.Kind], resource.Name)
 			}
 		case platform.AssetFlow:
-			i := slices.IndexFunc(processes, func(p Process) bool { return p.ID == next.ID })
+			i := slices.IndexFunc(processes, func(p automationauthoring.Process) bool { return p.ID == next.ID })
 			if i < 0 {
 				return nil, fmt.Errorf("no saved workflow draft %s", next.ID)
 			}
@@ -568,7 +570,7 @@ func breakingMembers(before, after json.RawMessage) (removed, retyped []string) 
 	return removed, retyped
 }
 
-func CompatibleObjectExpansion(previous, next Object) bool {
+func CompatibleObjectExpansion(previous, next ontology.Object) bool {
 	if previous.Name != next.Name || len(next.Fields) <= len(previous.Fields) || len(previous.States) != len(next.States) || len(previous.Access) != len(next.Access) {
 		return false
 	}
@@ -591,13 +593,13 @@ func CompatibleObjectExpansion(previous, next Object) bool {
 		return xe == nil && ye == nil && string(x) == string(y)
 	}
 	for _, field := range previous.Fields {
-		index := slices.IndexFunc(next.Fields, func(other Field) bool { return other.Name == field.Name })
+		index := slices.IndexFunc(next.Fields, func(other ontology.Field) bool { return other.Name == field.Name })
 		if index < 0 || !equal(field, next.Fields[index]) {
 			return false
 		}
 	}
 	for _, field := range next.Fields {
-		if slices.ContainsFunc(previous.Fields, func(old Field) bool { return old.Name == field.Name }) {
+		if slices.ContainsFunc(previous.Fields, func(old ontology.Field) bool { return old.Name == field.Name }) {
 			continue
 		}
 		if field.Required || field.Ref != "" || field.Property != nil || field.ValueType != nil || field.Choices != "" || !slices.Contains([]string{"text", "longtext", "integer", "decimal", "boolean", "date", "datetime"}, field.Type) {

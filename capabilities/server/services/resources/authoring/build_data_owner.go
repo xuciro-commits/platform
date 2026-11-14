@@ -1,6 +1,7 @@
 package build
 
 import (
+	"platformserver/services/ontology"
 	"reflect"
 
 	"platformserver/platform"
@@ -27,7 +28,7 @@ func (h buildDataHost) DraftEntity(typ string) (platform.EntityInfo, bool) {
 	if h.b.host == nil {
 		return platform.EntityInfo{}, false
 	}
-	objects, err := readDefinitionInventory[Object](h.b.host.Automation(platform.Caller{}, ID))
+	objects, err := readDefinitionInventory[ontology.Object](h.b.host.Automation(platform.Caller{}, ID))
 	if err != nil {
 		return platform.EntityInfo{}, false
 	}
@@ -52,7 +53,7 @@ func (h buildDataHost) ObjectActions(c platform.Caller, typ string) ([]platform.
 	if h.b.host == nil {
 		return nil, false
 	}
-	objects, err := readDefinitionInventory[Object](h.b.host.Automation(platform.Caller{}, ID))
+	objects, err := readDefinitionInventory[ontology.Object](h.b.host.Automation(platform.Caller{}, ID))
 	if err != nil {
 		return nil, false
 	}

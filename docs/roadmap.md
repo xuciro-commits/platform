@@ -72,12 +72,30 @@ read-when: 每批开始（选当前批次）与结束（删除已完成条目、
     - 验证：V1、V3。
     - 阻塞（2026-11-14，Terra 6.1 Max）：`platform/app.go:375` 的 `Manifest.Pages`、`platform/definition.go:81–87,243` 的应用与定义字段、`platform/definition_application.go:28–71` 的宿主接口直接引用页面类型，发布闭包与依赖解析也调用页面实现；U3.2 不能在它们之前或之后单独机械搬移。主会话须先确定共享契约边界：A 保留 SDK 的页面声明类型、把实现归 `services/apps`；B 页面声明与使用方同批归 `services/apps`，同时替换 SDK 跨边界契约。建议 A，避免重复模型和临时包装；由接续主会话核对完整清单后重划工单。
   - [ ] U3.2 `[易]` 搬移。前置 U3.1。`platform/page_*.go` 中契约之外的文件移入 `services/apps/pages`，改 import，下调 `platformLines`；`make contract` 无 diff。验证：V1、V3。
-- [ ] U4 发布路径一张表。
-  - [ ] U4.1 `[难]` 钩子与样板。（进行中：Terra 6.1 Max，2026-11-14）
-    - 方向：一组钩子声明在 `services/resources/publication/api.go`（校验、冻结版本、闭包、安装、读取冻结定义）；record 族（object、action-type）与 versioned 族（agent、evaluation-set、test-plan、compute、sample-set）各自在拥有它的服务实现，宿主登记成一张表；`services/resources` 只按表编排；删除 Build 的“兼容公共类型”。
-    - 产出：钩子签名写入 7-system §7.5.1；迁完 action-type 一种作样板；其余每种资源类型拆成一行 `[易]`。
-    - 验证：V1、V3。
-- [ ] U5 拆散 `build`。前置 U4.1。
+- [ ] U4 发布路径一张表。已完成（U4.1）：五项发布钩子由宿主登记，action-type 的发布步骤归本体服务；Build 的 apps、automation、functions、本体类型转接已删除。
+  - [ ] U4.2 `[难]` 其余家族钩子与状态边界定型（诊断与切分，不写代码）。前置已完成：U4.1。
+    - 读：`services/resources/publication/api.go`、`services/resources/authoring/build_release_drafts.go`、`build_artifacts.go`、`build_owner.go`、`build_agents.go`、`build_evaluations.go`、`build_tests.go`、`build_compute.go`、`build_tables.go`、`host/composition/tenant.go`。
+    - 必须定下：① agent、evaluation-set、test-plan、compute、sample-set 的 `singleDraftAssets` 在候选冻结前生成新 `ReleaseAsset` 并使用来源版本；其中 agent 与 evaluation-set 还读取当前联合声明。现有 `Closure` 只返回草稿依赖与引用，不能直接搬移。② code 与 decision-table 都是 `AssetCompute`，但分别用 `build.code.publish` 与 `build.table.publish`；定下唯一分派与两个 schema 的登记方式。③ object、agent、compute 依赖 `Build` 的 `jointEntities`、`installed`、`agents`、`codes`、`tables` 等状态；定下服务实例的装配、`Fork` 与 `NewSimulationApp` 的重绑，不能捕获源租户。④ evaluation-set 与 test-plan 共用 `build.testplan` 记录、发布 schema 与版本族，靠显式 variant 区分；`functions/authoring` 已导入 `ai/evaluation`，将完整记录搬入后者会成环。共享记录和版本族只保留一个拥有者与一套实现，AI 只接收评估专有 descriptor，不引入重复模型或兼容层。
+    - 产出：明确每个家族五项钩子的入参、结果、类型选择、依赖注入与分叉重绑，更新 7-system §7.5.1；逐行补齐 U4.3–U4.8 的完整文件清单、改法与完成判据，未补齐不得执行。保持历史字节和接受语义。
+  - [ ] U4.3 `[易]` object 发布归本体。前置 U4.2。
+    - 已知源：`services/resources/authoring/build_release_drafts.go`、`build_artifacts.go`、`build_publications.go`、`build_release.go`、`build_objects.go`、`build_versions.go`；目标 `services/ontology`。只迁发布校验、冻结、闭包、安装和读取，保留对象写入语义；细节由 U4.2 定下。
+    - 完成：五钩子由本体实现并由宿主登记，原发布分支删除；冻结映像及接受结果字节不变。验证：V1、V3。
+  - [ ] U4.4 `[易]` agent 发布归 AI。前置 U4.2。
+    - 已知源：`services/resources/authoring/build_agents.go`、`build_publications.go`、`build_artifacts.go`、`build_owner.go`；目标 `services/ai/runtime`。迁发布步骤与 `agents` 服务状态，按 U4.2 定下的方式重绑分叉与模拟；细节由 U4.2 补齐。
+    - 完成：五钩子由 AI 实现并由宿主登记，原发布分支删除；冻结版本和安装行为不变。验证：V1、V3。
+  - [ ] U4.5 `[易]` evaluation-set 发布归 AI。前置 U4.2。
+    - 已知源：`services/resources/authoring/build_evaluations.go`、`build_tests.go`、`build_publications.go`、`build_release_drafts.go`；目标 `services/ai/evaluation`。复用单一共享记录与版本族，只迁评估专有步骤；细节与先后顺序由 U4.2 补齐。
+    - 完成：评估集 variant 按表调用 AI 的五钩子，原专有发布分支删除；历史字节不变。验证：V1、V3。
+  - [ ] U4.6 `[易]` test-plan 发布归 DevOps。前置 U4.2。
+    - 已知源：`services/resources/authoring/build_evaluations.go`、`build_tests.go`、`build_publications.go`、`build_release_drafts.go`；目标 `services/devops`。复用单一共享记录与版本族，只迁业务测试专有步骤；细节与先后顺序由 U4.2 补齐。
+    - 完成：业务测试 variant 按表调用 DevOps 的五钩子，原专有发布分支删除；历史字节不变。验证：V1、V3。
+  - [ ] U4.7 `[易]` compute 发布归函数服务。前置 U4.2。
+    - 已知源：`services/resources/authoring/build_compute.go`、`build_tables.go`、`build_publications.go`、`build_artifacts.go`、`build_owner.go`；目标 `services/functions/authoring`。同时处理 code 与 decision-table 的两个 schema 和各自状态；细节由 U4.2 补齐。
+    - 完成：compute 五钩子与状态由函数服务拥有，原发布分支删除，分叉和模拟使用对应实例；历史字节不变。验证：V1、V3。
+  - [ ] U4.8 `[易]` sample-set 发布归 DevOps。前置 U4.2。
+    - 已知源：`services/resources/authoring/build_tests.go`、`build_artifacts_installation.go`、`build_release_prepare.go`、`build_release_drafts.go`；目标 `services/devops`。保留直接生成 `AssetInstallation` 的行为；细节由 U4.2 补齐。
+    - 完成：样本集五钩子由 DevOps 实现并由宿主登记，原发布分支删除；历史字节不变。验证：V1、V3。
+- [ ] U5 拆散 `build`。前置已完成：U4.1。
   - [ ] U5.1 `[难]` 样板。
     - 方向：定下“一类资源的编辑如何离开 `Build`”的模式（状态、注册、HTTP 路由、`host` 导入点怎么改），以 compute（`build_compute*.go` 634 行 → `services/functions/authoring`）迁完为样板。归属：objects、tables、kinds、action types、blueprints、transactions → `services/ontology`；agents → `services/ai`；integrations（1632 行）→ `services/data`；branches → `services/resources/merge`；release、publications、artifacts（约 3000 行）→ 按 U4 的表归 `services/devops` 与 `services/resources/publication`；`resources` 只留 RID、项目、文件夹、工作状态、分支、提案。每迁一类同时收走它在 `host.Tenant` 的字段与可选接口探测（N6），下调 `tenantFields`、`capabilityProbes` 与对应依赖差距。
     - 产出：模式写入 7-system §7.2；其余每类拆成一行 `[易]`，写明文件清单与目标包。

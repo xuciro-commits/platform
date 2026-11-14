@@ -7,7 +7,7 @@ import (
 	ontology "platformserver/services/ontology"
 )
 
-func (b *Build) checkPropertyFields(fields []Field) error {
+func (b *Build) checkPropertyFields(fields []ontology.Field) error {
 	for _, f := range fields {
 		if f.Property == nil {
 			continue
@@ -26,16 +26,18 @@ func (b *Build) checkPropertyFields(fields []Field) error {
 	return nil
 }
 
-var propertyKind = resourceKind[PropertyType, platform.PropertyType]{
+var propertyKind = resourceKind[ontology.PropertyType, platform.PropertyType]{
 	typ: PropertyTypeType, prefix: "property", noun: "propertyType", title: "Property type", plural: "Property types", capability: "propertytypes",
 	description: "Reusable scalar meaning; object fields keep their own identity and access.",
 	transition:  "Install this shared scalar property as its next retained version.",
 	immutable:   "A published property keeps its identity and scalar type",
-	records:     func(b *Build) map[string]PropertyType { return b.propertyTypes },
-	validate:    func(_ *Build, f PropertyType) (PropertyType, error) { return f, ontology.CheckPropertyType(f) },
-	identity:    func(a, b PropertyType) bool { return a.Name == b.Name && a.Type == b.Type },
-	fromDeclaration: func(p platform.PropertyType) PropertyType {
-		return PropertyType{Name: p.Name, Title: p.Title, Description: p.Description, Type: p.Type}
+	records:     func(b *Build) map[string]ontology.PropertyType { return b.propertyTypes },
+	validate: func(_ *Build, f ontology.PropertyType) (ontology.PropertyType, error) {
+		return f, ontology.CheckPropertyType(f)
+	},
+	identity: func(a, b ontology.PropertyType) bool { return a.Name == b.Name && a.Type == b.Type },
+	fromDeclaration: func(p platform.PropertyType) ontology.PropertyType {
+		return ontology.PropertyType{Name: p.Name, Title: p.Title, Description: p.Description, Type: p.Type}
 	},
 	install: func(h platform.BuildHost, c platform.Caller, d platform.PropertyType, version int) error {
 		return h.InstallPropertyType(c, d, version)

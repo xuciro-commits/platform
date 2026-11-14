@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"platformserver/services/ontology"
 	"slices"
 	"strings"
 	"time"
@@ -31,7 +32,7 @@ func (b *Build) openDispatch(c platform.Caller, receipt *pb.ChangeRecord, txn *p
 	if err != nil {
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "{why}", err.Error())
 	}
-	var object Object
+	var object ontology.Object
 	for _, asset := range assets {
 		if asset.Ref.App == ID && asset.Ref.Kind == platform.AssetObject && asset.Ref.Name == txn.Subject {
 			if err := json.Unmarshal(asset.Body, &object); err != nil {

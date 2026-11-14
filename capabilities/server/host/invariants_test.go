@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	dataowner "platformserver/services/data"
 	"platformserver/services/data/lineage"
+	"platformserver/services/ontology"
 	"platformserver/services/resources/merge"
 	"reflect"
 	"slices"
@@ -457,7 +458,7 @@ func TestInvariantK6BranchSavesIsolateMainAndMergeAsOneResult(t *testing.T) {
 		if refusal != nil {
 			t.Fatalf("read merged object %s: %v", object.id, refusal)
 		}
-		current, ok := view.Record.(build.Object)
+		current, ok := view.Record.(ontology.Object)
 		if !ok || current.Title != object.title+", branched" || current.Revision != 2 {
 			t.Fatalf("main object %s after merge: %+v; want the branch title at revision 2", object.id, view.Record)
 		}

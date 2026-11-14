@@ -25,7 +25,9 @@ import (
 	"platformserver/services/automate/runtime"
 	"platformserver/services/devops/packages"
 	"platformserver/services/functions/authoring"
+	"platformserver/services/ontology"
 	"platformserver/services/resources/authoring"
+	"platformserver/services/resources/publication"
 	"platformserver/services/security"
 	controlowner "platformserver/services/security/control"
 	"platformserver/services/work"
@@ -126,7 +128,7 @@ func newMonitoringTenant(tb testing.TB) *invariantTenant {
 	}
 	probe := &monitoringFixture{ledger: actions.NewAuthority(id, "probe", platform.NewCatalog(probeActions...), "probe.event"), undoBlocked: &atomic.Bool{}}
 	probe.undoBlocked.Store(true)
-	tenant, err := NewTenantWithCapabilities(id, services, console, build.New(id, actions.NewAuthority), work.New(id, actions.NewAuthority), automation.New(id, actions.NewAuthority), agents.New(id, actions.NewAuthority), probe)
+	tenant, err := NewTenantWithCapabilities(id, services, console, build.New(id, actions.NewAuthority, []publication.Hooks{ontology.ActionTypePublication()}), work.New(id, actions.NewAuthority), automation.New(id, actions.NewAuthority), agents.New(id, actions.NewAuthority), probe)
 	if err != nil {
 		tb.Fatal(err)
 	}

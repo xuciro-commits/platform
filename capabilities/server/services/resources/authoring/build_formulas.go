@@ -14,7 +14,7 @@ import (
 	ontology "platformserver/services/ontology"
 )
 
-func computeRulesOf(o Object, lookup func(string) (platform.EntityInfo, bool)) func(platform.Caller, any, time.Time) *kernel.Error {
+func computeRulesOf(o ontology.Object, lookup func(string) (platform.EntityInfo, bool)) func(platform.Caller, any, time.Time) *kernel.Error {
 	list, orderErr := ontology.FormulaOrder(o.Fields)
 	if len(list) == 0 {
 		return nil
@@ -29,7 +29,7 @@ func computeRulesOf(o Object, lookup func(string) (platform.EntityInfo, bool)) f
 			if err != nil {
 				return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
 			}
-			s := ruleSpec(o, Action{}, o.Reads)
+			s := ruleSpec(o, ontology.Action{}, o.Reads)
 			schema, err := platform.RuleSchema(e, s, lookup, c.Rules())
 			if f.Formula != "" {
 				refs := map[string]platform.ExprType{}
@@ -103,19 +103,19 @@ func computeRulesOf(o Object, lookup func(string) (platform.EntityInfo, bool)) f
 	}
 }
 
-func ruleLookup(o Object, lookup func(string) (platform.EntityInfo, bool)) func(string) (platform.EntityInfo, bool) {
+func ruleLookup(o ontology.Object, lookup func(string) (platform.EntityInfo, bool)) func(string) (platform.EntityInfo, bool) {
 	return ontology.RuleLookup(o, ID, Builder, lookup)
 }
 
-func ruleSpec(o Object, a Action, read *platform.RuleReadSpec) platform.RuleReadSpec {
+func ruleSpec(o ontology.Object, a ontology.Action, read *platform.RuleReadSpec) platform.RuleReadSpec {
 	return ontology.RuleSpec(o, ID, a, read)
 }
 
-func actionCriteria(o Object, a Action, lookup func(string) (platform.EntityInfo, bool)) (*platform.RuleCriteria, error) {
+func actionCriteria(o ontology.Object, a ontology.Action, lookup func(string) (platform.EntityInfo, bool)) (*platform.RuleCriteria, error) {
 	return ontology.ActionCriteria(o, ID, Builder, a, lookup)
 }
 
-func (b *Build) normalizeObjectRules(o *Object) error {
+func (b *Build) normalizeObjectRules(o *ontology.Object) error {
 	lookup := ruleLookup(*o, b.conditionLookup)
 	for i := range o.Fields {
 		f := &o.Fields[i]
@@ -143,9 +143,9 @@ func (b *Build) normalizeObjectRules(o *Object) error {
 		}
 	}
 	if o.CreateTransaction != nil {
-		action := Action{Name: "creation", Transaction: o.CreateTransaction}
+		action := ontology.Action{Name: "creation", Transaction: o.CreateTransaction}
 		for _, field := range o.Fields {
-			action.Inputs = append(action.Inputs, Input{Name: field.Name, Title: field.Title, Type: field.Type, Ref: field.Ref, Choices: field.Choices})
+			action.Inputs = append(action.Inputs, ontology.Input{Name: field.Name, Title: field.Title, Type: field.Type, Ref: field.Ref, Choices: field.Choices})
 		}
 		if err := b.normalizeTransaction(*o, &action, lookup); err != nil {
 			return err
@@ -154,7 +154,7 @@ func (b *Build) normalizeObjectRules(o *Object) error {
 	return nil
 }
 
-func (b *Build) checkObjectRules(o Object, engines ...platform.RuleEngine) error {
+func (b *Build) checkObjectRules(o ontology.Object, engines ...platform.RuleEngine) error {
 	if err := b.checkObjectProtocols(o); err != nil {
 		return err
 	}
@@ -182,7 +182,7 @@ func (b *Build) checkObjectRules(o Object, engines ...platform.RuleEngine) error
 			if platform.RuleFieldKind(f.Type) != platform.RuleFieldKind(f.FormulaExpr.Kind) {
 				return fmt.Errorf("field %s formula result type differs", f.Name)
 			}
-			if err := check(*f.FormulaExpr, ruleSpec(o, Action{}, o.Reads), "field "+f.Name); err != nil {
+			if err := check(*f.FormulaExpr, ruleSpec(o, ontology.Action{}, o.Reads), "field "+f.Name); err != nil {
 				return err
 			}
 		}

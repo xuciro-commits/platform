@@ -2,6 +2,8 @@ package build
 
 import (
 	"encoding/json"
+	appsauthoring "platformserver/services/apps/authoring"
+	"platformserver/services/ontology"
 	"slices"
 	"strings"
 
@@ -93,12 +95,12 @@ func StoreBootstrap(tenant string, definitions []platform.Definition, store *rec
 			existing := store.Type(ResourceType)
 			return existing != nil && existing.Rows().Get(rid) != nil
 		},
-		Snapshot: func() (apps []Application, resources []Resource) {
+		Snapshot: func() (apps []appsauthoring.Application, resources []Resource) {
 			store.Lock()
 			defer store.Unlock()
 			if rows := store.Type(AppType); rows != nil {
 				for _, row := range rows.Rows().All() {
-					apps = append(apps, row.Value.Interface().(Application))
+					apps = append(apps, row.Value.Interface().(appsauthoring.Application))
 				}
 			}
 			return apps, StoreResources(store)
@@ -215,7 +217,7 @@ func ProjectHidden(store *records.Store, tenant string, m platform.Member, et *r
 }
 
 func MaskDraftObject(record any, m platform.Member, reader ConstructionDraftReader, mask func(canonical any) any) (any, *kernel.Error) {
-	object, ok := record.(Object)
+	object, ok := record.(ontology.Object)
 	if !ok || !m.Holds(ID, Builder) || reader == nil {
 		return record, nil
 	}

@@ -6,6 +6,7 @@ import (
 	"maps"
 	"platformserver/kernel/records"
 	"platformserver/platform"
+	"platformserver/services/ontology"
 	build "platformserver/services/resources/authoring"
 	"slices"
 )
@@ -86,8 +87,8 @@ func (e Environment) CandidateApps(candidate platform.ReleaseCandidate, member p
 		if a.Ref.Kind != platform.AssetObject || a.Ref.App != build.ID {
 			return false
 		}
-		var object build.Object
-		return json.Unmarshal(a.Body, &object) == nil && slices.ContainsFunc(object.Actions, func(action build.Action) bool { return action.Approval != nil })
+		var object ontology.Object
+		return json.Unmarshal(a.Body, &object) == nil && slices.ContainsFunc(object.Actions, func(action ontology.Action) bool { return action.Approval != nil })
 	})
 	var owners []string
 	if (hasProposal || hasApproval) && !has(platform.AssetFlow) {
@@ -170,7 +171,7 @@ func (e Environment) InstallCandidate(candidate platform.ReleaseCandidate, b bui
 		if asset.Ref.Kind != platform.AssetObject {
 			return fmt.Errorf("unsupported test dependency %s", asset.Ref)
 		}
-		var object build.Object
+		var object ontology.Object
 		if err := json.Unmarshal(asset.Body, &object); err != nil {
 			return err
 		}

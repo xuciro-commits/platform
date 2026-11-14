@@ -2,7 +2,6 @@ package build
 
 import (
 	"encoding/json"
-	"fmt"
 	"slices"
 	"time"
 
@@ -13,42 +12,25 @@ import (
 )
 
 func (b *Build) actionTypeEntity() platform.Entity {
-	return platform.Entity{Type: ActionTypeType, Title: "Action type", Plural: "Action types", Model: ActionType{}, Display: "title",
+	return platform.Entity{Type: ActionTypeType, Title: "Action type", Plural: "Action types", Model: ontology.ActionType{}, Display: "title",
 		Scope:    platform.Scope{Default: platform.ScopeNone, Levels: map[string]string{Builder: platform.ScopeTenant}},
 		Standard: platform.Standard{Create: true, Edit: true, Archive: true, Roles: []string{Builder}, Capability: "objects"},
 		Lifecycle: &platform.Lifecycle{Field: "state", Initial: "draft", States: []platform.State{{Name: "draft", Title: "Draft"}, {Name: "published", Title: "Published"}},
 			Transitions: []platform.Transition{{Name: "publish", Title: "Publish", Description: "Retain this action definition for an object publication.", Roles: []string{Builder}, Capability: "objects", From: []string{"draft", "published"}, To: []string{"published"}, Payload: []platform.Field{},
 				Do: func(c platform.Caller, record any, _ json.RawMessage, _ time.Time) *kernel.Error {
-					action := record.(*ActionType)
-					objects, err := readDefinitionInventory[Object](c)
-					if err != nil {
-						return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, err.Error())
-					}
-					index := slices.IndexFunc(objects, func(object Object) bool { return TypeOf(object.Name) == action.Object && !object.Archived })
-					if index < 0 {
-						return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Choose an existing object type")
-					}
-					object := objects[index]
-					if err := b.bindObjectActions(c, &object); err != nil {
-						return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
-					}
-					object.Actions = slices.DeleteFunc(slices.Clone(object.Actions), func(definition Action) bool { return definition.Name == action.Definition.Name })
-					object.Actions = append(object.Actions, action.Definition)
-					if err := b.Check(object, object.ID, c.Rules()); err != nil {
-						return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
-					}
-					action.State, action.Published = "published", action.Snapshot(action.Version)
-					return nil
+					return ontology.PublishActionType(c, record.(*ontology.ActionType), b.bindObjectActions, func(object ontology.Object) error {
+						return b.Check(object, object.ID, c.Rules())
+					})
 				}}}},
 		Validate: func(c platform.Caller, value any) *kernel.Error {
 			if c.Replaying {
 				return nil
 			}
-			action := value.(*ActionType)
+			action := value.(*ontology.ActionType)
 			if err := action.CheckIdentity(); err != nil {
 				return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
 			}
-			all, err := readDefinitionInventory[ActionType](c)
+			all, err := readDefinitionInventory[ontology.ActionType](c)
 			if err != nil {
 				return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, err.Error())
 			}
@@ -57,8 +39,8 @@ func (b *Build) actionTypeEntity() platform.Entity {
 					return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "This action API name is already declared")
 				}
 			}
-			var previous *ActionType
-			if stored, found := platform.Get[ActionType](c, action.ID); found {
+			var previous *ontology.ActionType
+			if stored, found := platform.Get[ontology.ActionType](c, action.ID); found {
 				previous = &stored
 			}
 			if err := action.Revise(previous); err != nil {
@@ -68,26 +50,14 @@ func (b *Build) actionTypeEntity() platform.Entity {
 		}}
 }
 
-func actionTypeImage(raw []byte) error {
-	var action ActionType
-	if err := json.Unmarshal(raw, &action); err != nil {
-		return err
-	}
-	frozen, found := ReadPublication[ActionType](action.Published)
-	if !found {
-		return fmt.Errorf("accepted action type has no matching retained version")
-	}
-	return ontology.ValidateActionTypeImage(action, frozen)
-}
-
 func (b *Build) writeObject(c platform.Caller, r *pb.ChangeRecord, verb, id string, payload json.RawMessage, now time.Time) *kernel.Error {
 	var input map[string]json.RawMessage
 	if json.Unmarshal(payload, &input) != nil {
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "The object definition is one JSON object")
 	}
 	if raw, supplied := input["actions"]; supplied {
-		current, found := platform.Get[Object](c, id)
-		var actions []Action
+		current, found := platform.Get[ontology.Object](c, id)
+		var actions []ontology.Action
 		if json.Unmarshal(raw, &actions) != nil {
 			return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "The object actions are one JSON array")
 		}
@@ -104,7 +74,7 @@ func (b *Build) writeActionType(c platform.Caller, r *pb.ChangeRecord, verb, id 
 	if refusal := b.ledger.ApplyTxnRecord(c, r, b.actionTypeEntity(), verb, id, payload, now); refusal != nil {
 		return refusal
 	}
-	action, _ := platform.Get[ActionType](c, id)
+	action, _ := platform.Get[ontology.ActionType](c, id)
 	if !c.Replaying {
 		revision := r.GetRevision()
 		if revision == 0 {
@@ -118,11 +88,11 @@ func (b *Build) writeActionType(c platform.Caller, r *pb.ChangeRecord, verb, id 
 	if verb != "create" {
 		return nil
 	}
-	objects, err := readDefinitionInventory[Object](c)
+	objects, err := readDefinitionInventory[ontology.Object](c)
 	if err != nil {
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, err.Error())
 	}
-	index := slices.IndexFunc(objects, func(object Object) bool { return TypeOf(object.Name) == action.Object && !object.Archived })
+	index := slices.IndexFunc(objects, func(object ontology.Object) bool { return TypeOf(object.Name) == action.Object && !object.Archived })
 	if index < 0 {
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Choose an existing object type")
 	}
@@ -158,11 +128,11 @@ func (b *Build) submitOntologyWrite(c platform.Caller, s *pb.Submission, now tim
 	})
 }
 
-func (b *Build) bindObjectActions(c platform.Caller, object *Object) error {
+func (b *Build) bindObjectActions(c platform.Caller, object *ontology.Object) error {
 	if len(object.ActionTypes) == 0 {
 		return nil
 	}
-	all, err := readDefinitionInventory[ActionType](c)
+	all, err := readDefinitionInventory[ontology.ActionType](c)
 	if err != nil {
 		return err
 	}

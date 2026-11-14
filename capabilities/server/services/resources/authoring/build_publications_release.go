@@ -4,6 +4,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"maps"
+	appsauthoring "platformserver/services/apps/authoring"
+	automationauthoring "platformserver/services/automate/authoring"
+	"platformserver/services/ontology"
 	"reflect"
 	"slices"
 
@@ -53,7 +56,7 @@ func (b *Build) ForkReleaseExecution(assets []platform.ReleaseAsset) (platform.A
 	bound := app.(*Build)
 	bound.installed = map[string]platform.Entity{}
 	bound.queries = map[string]Query{}
-	bound.interfaces = map[string]InterfaceRecord{}
+	bound.interfaces = map[string]ontology.InterfaceRecord{}
 	bound.jointEntities = map[string]platform.EntityInfo{}
 	bound.jointMode = true
 	for _, asset := range assets {
@@ -88,7 +91,7 @@ func (b *Build) ForkReleaseExecution(assets []platform.ReleaseAsset) (platform.A
 		if code {
 			continue
 		}
-		var object Object
+		var object ontology.Object
 		if asset.SourceVersion != ValueDefinitionVersion || json.Unmarshal(asset.Body, &object) != nil || TypeOf(object.Name) != asset.Ref.Name {
 			return nil, fmt.Errorf("unsupported retained object descriptor %s", asset.Ref)
 		}
@@ -114,7 +117,7 @@ func (b *Build) ForkReleaseExecution(assets []platform.ReleaseAsset) (platform.A
 			if code {
 				continue
 			}
-			var object Object
+			var object ontology.Object
 			if err := json.Unmarshal(asset.Body, &object); err != nil {
 				return nil, err
 			}
@@ -303,22 +306,22 @@ func (b *Build) applicationDrafts(id string, selectDrafts map[JointDraftRef]bool
 			var err error
 			switch draft.Kind {
 			case platform.AssetObject:
-				i := slices.IndexFunc(objects, func(o Object) bool { return o.ID == draft.ID })
+				i := slices.IndexFunc(objects, func(o ontology.Object) bool { return o.ID == draft.ID })
 				o := objects[i]
 				o.Published = published(o)
-				assets, err = b.releaseAssets([]Object{o}, nil, nil, nil, b.Manifest().Version)
+				assets, err = b.releaseAssets([]ontology.Object{o}, nil, nil, nil, b.Manifest().Version)
 			case platform.AssetPage:
-				i := slices.IndexFunc(pages, func(p Page) bool { return p.ID == draft.ID })
+				i := slices.IndexFunc(pages, func(p appsauthoring.Page) bool { return p.ID == draft.ID })
 				p := pages[i]
 				p.Published = published(p)
-				assets, err = b.releaseAssets(nil, []Page{p}, nil, nil, b.Manifest().Version)
+				assets, err = b.releaseAssets(nil, []appsauthoring.Page{p}, nil, nil, b.Manifest().Version)
 			case platform.AssetApp:
-				i := slices.IndexFunc(apps, func(a Application) bool { return a.ID == draft.ID })
+				i := slices.IndexFunc(apps, func(a appsauthoring.Application) bool { return a.ID == draft.ID })
 				a := apps[i]
 				a.Published = published(a)
-				assets, err = b.releaseAssets(nil, nil, []Application{a}, nil, b.Manifest().Version)
+				assets, err = b.releaseAssets(nil, nil, []appsauthoring.Application{a}, nil, b.Manifest().Version)
 			case platform.AssetFlow:
-				i := slices.IndexFunc(processes, func(p Process) bool { return p.ID == draft.ID })
+				i := slices.IndexFunc(processes, func(p automationauthoring.Process) bool { return p.ID == draft.ID })
 				p := processes[i]
 				asset, problem := b.automation.DraftAsset(p, b.Manifest().Version)
 				assets, err = []platform.ReleaseAsset{asset}, problem
@@ -375,7 +378,7 @@ func (b *Build) applicationDrafts(id string, selectDrafts map[JointDraftRef]bool
 		if deps, ok := graph[ref]; ok {
 			queue = append(queue, deps...)
 		} else if draft.Kind == platform.AssetObject {
-			queue = append(queue, platform.AssetRef{App: ID, Kind: platform.AssetObject, Name: TypeOf(objects[slices.IndexFunc(objects, func(o Object) bool { return o.ID == draft.ID })].Name)})
+			queue = append(queue, platform.AssetRef{App: ID, Kind: platform.AssetObject, Name: TypeOf(objects[slices.IndexFunc(objects, func(o ontology.Object) bool { return o.ID == draft.ID })].Name)})
 		}
 	}
 	return out, nil

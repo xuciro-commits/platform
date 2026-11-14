@@ -11,6 +11,7 @@ import (
 	transport "platformserver/kernel/transport"
 	"platformserver/platform"
 	pageowner "platformserver/services/apps/pages"
+	automationauthoring "platformserver/services/automate/authoring"
 	dataowner "platformserver/services/data"
 	releaseowner "platformserver/services/devops/releases"
 	trialowner "platformserver/services/devops/trials"
@@ -85,8 +86,8 @@ func (h *Host) routesBuild(rt *routes) {
 		}
 		WriteJSON(w, http.StatusOK, platform.ComputeSDK{Source: string(source)})
 	})
-	rt.authorized(transport.Route{Pattern: "POST /v1/build/process/check", Summary: "Validate a workflow draft with its owner compiler without executing it", Query: []transport.Param{{Name: "branch", Description: "a branch id: the draft is validated against that branch's staged definitions, where objects that exist only on the branch resolve"}}, Body: build.Process{}, Answer: build.ProcessDiagnostics{}}, build.ID, builder, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
-		var p build.Process
+	rt.authorized(transport.Route{Pattern: "POST /v1/build/process/check", Summary: "Validate a workflow draft with its owner compiler without executing it", Query: []transport.Param{{Name: "branch", Description: "a branch id: the draft is validated against that branch's staged definitions, where objects that exist only on the branch resolve"}}, Body: automationauthoring.Process{}, Answer: build.ProcessDiagnostics{}}, build.ID, builder, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
+		var p automationauthoring.Process
 		if !transport.DecodeValueBody(w, r, &p, 128<<10) {
 			return
 		}
@@ -111,14 +112,14 @@ func (h *Host) routesBuild(rt *routes) {
 		}
 		answer, err := t.SavedReleases(m, offset, limit, r.URL.Query().Get("application"))
 		if err == nil {
-			answer = h.withPromotions(t.ID, answer)
+			answer = releaseowner.WithPromotions(answer, t.ID, h.promotionSnapshots(t.ID))
 		}
 		transport.AnswerOr(w, http.StatusConflict, answer, err)
 	})
 	rt.authorized(transport.Route{Pattern: "GET /v1/releases/candidates/{id}", Summary: "Builder and publisher review of sealed definitions against actual running definitions", Answer: releaseowner.SavedReleaseReview{}}, build.ID, builderPublisher, transport.AnsweringOr(http.StatusConflict, func(r *http.Request, m platform.Member, t *Tenant) (releaseowner.SavedReleaseReview, error) {
 		answer, err := t.ReviewSavedRelease(m, r.PathValue("id"))
 		if err == nil {
-			answer.PromotedTo = h.promotionsOf(t.ID, answer.Preview.CandidateID)
+			answer.PromotedTo = releaseowner.PromotionTargets(t.ID, answer.Preview.CandidateID, h.promotionSnapshots(t.ID))
 		}
 		return answer, err
 	}))
