@@ -7,6 +7,20 @@ import (
 	"time"
 )
 
+type ChangeArchive interface {
+	Records(tenant string, through int) []*pb.ChangeRecord
+	Accepted(tenant, key string, through int) *pb.ChangeRecord
+	Contains(tenant, change string, through int) bool
+}
+
+type ChangeLog interface {
+	Records(tenant string) []*pb.ChangeRecord
+	Last(tenant string) *pb.ChangeRecord
+	ApplyAccepted(*pb.ChangeRecord) (bool, error)
+	SubmitChecked(*pb.Submission, time.Time, func() *kernel.Error) (*pb.ChangeRecord, *kernel.Error)
+	Fork() ChangeLog
+}
+
 type Authority interface {
 	ID() string
 	Catalog() *Catalog
@@ -20,8 +34,8 @@ type Authority interface {
 	LastAccepted(tenant string) *pb.ChangeRecord
 	AcceptedFor(tenant, key string) *pb.ChangeRecord
 	ApplyAcceptedChange(record *pb.ChangeRecord) (bool, error)
-	UseChangeArchive(archive kernel.ChangeArchive)
-	ForkAcceptedChanges() *kernel.ChangeLog
+	UseChangeArchive(archive ChangeArchive)
+	ForkAcceptedChanges() ChangeLog
 	ForkRead() (Authority, error)
 	Snapshot() (json.RawMessage, error)
 	Restore(raw json.RawMessage) error

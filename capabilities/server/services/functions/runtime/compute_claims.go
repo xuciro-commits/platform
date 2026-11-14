@@ -12,10 +12,11 @@ import (
 	"google.golang.org/protobuf/proto"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
+	"platformserver/kernel/protocol"
 	"platformserver/platform"
 )
 
-func StartClaim(works *kernel.Works, id string) (generation uint32, prior, work json.RawMessage, ok bool) {
+func StartClaim(works *protocol.Works, id string) (generation uint32, prior, work json.RawMessage, ok bool) {
 	if old, err := works.Get(id); err == nil {
 		prior, _ = protojson.Marshal(old)
 		if old.GetState() == pb.WorkState_WORK_STATE_RUNNING && works.Cancel(id) != nil {
@@ -31,7 +32,7 @@ func StartClaim(works *kernel.Works, id string) (generation uint32, prior, work 
 	return generation, prior, work, true
 }
 
-func ReplayClaim(works *kernel.Works, before, after platform.Effect, key string, savedPrior, savedWork json.RawMessage) error {
+func ReplayClaim(works *protocol.Works, before, after platform.Effect, key string, savedPrior, savedWork json.RawMessage) error {
 	var prior json.RawMessage
 	if old, err := works.Get(before.ID); err == nil {
 		prior, _ = protojson.Marshal(old)
@@ -65,7 +66,7 @@ func ReplayClaim(works *kernel.Works, before, after platform.Effect, key string,
 	return nil
 }
 
-func FinishWork(works *kernel.Works, id string, generation uint32, failed bool) (prior, work json.RawMessage, err error) {
+func FinishWork(works *protocol.Works, id string, generation uint32, failed bool) (prior, work json.RawMessage, err error) {
 	old, _ := works.Get(id)
 	prior, _ = protojson.Marshal(old)
 	if refusal := works.Finish(id, generation, failed); refusal != nil {
@@ -76,7 +77,7 @@ func FinishWork(works *kernel.Works, id string, generation uint32, failed bool) 
 	return prior, work, nil
 }
 
-func CancelWork(works *kernel.Works, id string) (prior, work json.RawMessage, err error) {
+func CancelWork(works *protocol.Works, id string) (prior, work json.RawMessage, err error) {
 	old, refusal := works.Get(id)
 	if refusal != nil {
 		return nil, nil, nil
@@ -92,7 +93,7 @@ func CancelWork(works *kernel.Works, id string) (prior, work json.RawMessage, er
 	return prior, work, nil
 }
 
-func RestoreWork(works *kernel.Works, raw json.RawMessage) error {
+func RestoreWork(works *protocol.Works, raw json.RawMessage) error {
 	work := &pb.Work{}
 	if err := protojson.Unmarshal(raw, work); err != nil {
 		return err

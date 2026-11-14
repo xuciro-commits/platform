@@ -10,6 +10,7 @@ import (
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	contract "platformkernel/kernel"
+	"platformserver/kernel/protocol"
 	"platformserver/platform"
 
 	"google.golang.org/protobuf/proto"
@@ -35,13 +36,13 @@ type ConnectorError struct {
 type ConnectorRoster struct {
 	mu        sync.Mutex
 	tenant    string
-	kernel    *contract.Connectors
+	kernel    *protocol.Connectors
 	byID      map[string]*pb.ConnectorDescriptor
 	lastError map[string]ConnectorError
 }
 
 func NewConnectorRoster(tenant string) *ConnectorRoster {
-	return &ConnectorRoster{tenant: tenant, kernel: contract.NewConnectors(), byID: map[string]*pb.ConnectorDescriptor{}, lastError: map[string]ConnectorError{}}
+	return &ConnectorRoster{tenant: tenant, kernel: protocol.NewConnectors(), byID: map[string]*pb.ConnectorDescriptor{}, lastError: map[string]ConnectorError{}}
 }
 
 func (r *ConnectorRoster) Register(descriptors ...*pb.ConnectorDescriptor) error {
@@ -139,7 +140,7 @@ func (r *ConnectorRoster) Heartbeat(tenant, id string, now time.Time) *contract.
 	return r.kernel.Heartbeat(tenant, id, now)
 }
 
-func (r *ConnectorRoster) State() ([]*pb.ConnectorDescriptor, []contract.ConnectorMark) {
+func (r *ConnectorRoster) State() ([]*pb.ConnectorDescriptor, []protocol.ConnectorMark) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	return r.kernel.State()
@@ -151,7 +152,7 @@ func (r *ConnectorRoster) LastErrors() map[string]ConnectorError {
 	return maps.Clone(r.lastError)
 }
 
-func (r *ConnectorRoster) Clone() *contract.Connectors {
+func (r *ConnectorRoster) Clone() *protocol.Connectors {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	return CloneConnectors(r.kernel)
@@ -164,7 +165,7 @@ func (r *ConnectorRoster) Fork() *ConnectorRoster {
 	return out
 }
 
-func (r *ConnectorRoster) RestoreMarks(marks []contract.ConnectorMark) {
+func (r *ConnectorRoster) RestoreMarks(marks []protocol.ConnectorMark) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.kernel.Restore(nil, marks)
@@ -181,13 +182,13 @@ func (r *ConnectorRoster) Install(descriptors []*pb.ConnectorDescriptor) error {
 		}
 		byID[desc.GetConnectorId()] = desc
 	}
-	r.kernel = contract.NewConnectors()
+	r.kernel = protocol.NewConnectors()
 	r.kernel.Restore(descriptors, marks)
 	r.byID = byID
 	return nil
 }
 
-func (r *ConnectorRoster) Use(c *contract.Connectors) {
+func (r *ConnectorRoster) Use(c *protocol.Connectors) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.kernel = c
@@ -198,7 +199,7 @@ func (r *ConnectorRoster) Use(c *contract.Connectors) {
 	}
 }
 
-func (r *ConnectorRoster) Restore(descriptors []*pb.ConnectorDescriptor, marks []contract.ConnectorMark, lastError map[string]ConnectorError) {
+func (r *ConnectorRoster) Restore(descriptors []*pb.ConnectorDescriptor, marks []protocol.ConnectorMark, lastError map[string]ConnectorError) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.kernel.Restore(descriptors, marks)

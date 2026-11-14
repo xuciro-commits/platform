@@ -8,6 +8,7 @@ import (
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
 	"platformserver/kernel/acceptedformat"
+	"platformserver/kernel/protocol"
 	"platformserver/platform"
 )
 
@@ -21,7 +22,7 @@ type WorkDraft struct {
 
 type WorkAcceptance struct {
 	Tenant string
-	Fork   func() *kernel.Works
+	Fork   func() *protocol.Works
 	Retry  func(app string) platform.Retry
 	Draft  func(task *Task, now time.Time) WorkDraft
 	Bind   func(app string) ([]platform.AssetBinding, error)

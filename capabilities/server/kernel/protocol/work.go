@@ -1,14 +1,15 @@
-package kernel
+package protocol
 
 import (
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
+	"platformkernel/kernel"
 )
 
 type Works struct{ items map[string]*pb.Work }
 
 func NewWorks() *Works { return &Works{items: map[string]*pb.Work{}} }
 
-func (w *Works) running(id string, generation uint32) (*pb.Work, *Error) {
+func (w *Works) running(id string, generation uint32) (*pb.Work, *kernel.Error) {
 	work := w.items[id]
 	if work == nil {
 		return nil, errorf(pb.ErrorCode_ERROR_CODE_NOT_FOUND)
@@ -19,7 +20,7 @@ func (w *Works) running(id string, generation uint32) (*pb.Work, *Error) {
 	return work, nil
 }
 
-func (w *Works) Start(id, owner string) (uint32, string, *Error) {
+func (w *Works) Start(id, owner string) (uint32, string, *kernel.Error) {
 	if id == "" || owner == "" {
 		return 0, "", errorf(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT)
 	}
@@ -34,7 +35,7 @@ func (w *Works) Start(id, owner string) (uint32, string, *Error) {
 	return work.GetGeneration(), work.GetCheckpoint(), nil
 }
 
-func (w *Works) Finish(id string, generation uint32, failed bool) *Error {
+func (w *Works) Finish(id string, generation uint32, failed bool) *kernel.Error {
 	work, err := w.running(id, generation)
 	if err != nil {
 		return err
@@ -46,7 +47,7 @@ func (w *Works) Finish(id string, generation uint32, failed bool) *Error {
 	return nil
 }
 
-func (w *Works) Cancel(id string) *Error {
+func (w *Works) Cancel(id string) *kernel.Error {
 	work, err := w.running(id, w.items[id].GetGeneration())
 	if err != nil {
 		return err
@@ -55,7 +56,7 @@ func (w *Works) Cancel(id string) *Error {
 	return nil
 }
 
-func (w *Works) Get(id string) (*pb.Work, *Error) {
+func (w *Works) Get(id string) (*pb.Work, *kernel.Error) {
 	if work := w.items[id]; work != nil {
 		return work, nil
 	}

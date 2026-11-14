@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"time"
 
-	"platformkernel/kernel"
 	"platformserver/kernel/acceptedformat"
+	"platformserver/kernel/protocol"
 	"platformserver/platform"
 )
 
@@ -17,7 +17,7 @@ type EffectSettlement struct {
 	Usage       func(platform.AIUsage, platform.Effect) platform.AIUsage
 	NoReviewer  func() bool
 	Snapshot    func() (json.RawMessage, error)
-	Finish      func(platform.Effect, platform.Outcome) (*kernel.Works, json.RawMessage, json.RawMessage, error)
+	Finish      func(platform.Effect, platform.Outcome) (*protocol.Works, json.RawMessage, json.RawMessage, error)
 	Failed      func(before acceptedformat.EffectState, err error)
 	Stage       func(result *acceptedformat.Effect, before acceptedformat.EffectState, after platform.Effect, out platform.Outcome, usage *platform.AIUsage) error
 	Quarantined func() bool

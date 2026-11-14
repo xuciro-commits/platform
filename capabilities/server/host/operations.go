@@ -13,6 +13,7 @@ import (
 	"platformkernel/kernel"
 	runtimekernel "platformserver/kernel"
 	"platformserver/kernel/acceptedformat"
+	"platformserver/kernel/protocol"
 	"platformserver/platform"
 	"platformserver/services/actions"
 	automation "platformserver/services/automate/runtime"
@@ -294,4 +295,4 @@ func (t *Tenant) applyAcceptedWork(raw []byte) (bool, error) {
 		Task: t.work.Restorer(t.delivered)})
 }
 
-func (t *Tenant) forkWorkState() *kernel.Works { return runtimekernel.ForkWorks(t.Works) }
+func (t *Tenant) forkWorkState() *protocol.Works { return runtimekernel.ForkWorks(t.Works) }

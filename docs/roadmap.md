@@ -44,17 +44,11 @@ read-when: 每批开始（选当前批次）与结束（删除已完成条目、
 
 工单按技能 `platform-loop` 执行（分工见 [method 工单循环](method.md#工单循环)）：`[难]` 给强模型（方向内的设计、内核与语义），`[易]` 给执行模型（方向已定的搬移、改名、重复样板），`[独占]` 行执行时不得有别的行在进行中。每行的“方向”已由主会话定下，不重议；“验证”是该技能中的档位（V1 基本、V2 路径、V3 全量、V4 并发、W 前端）。同一编号下按顺序做；不同编号之间只受“前置”约束。
 
-- [ ] U1 动作引擎归位。已完成（U1.1、U1.2）：规则引擎在 `services/actions/authority*.go`，服务、内核与宿主只经 `platform.Authority` 使用，由宿主经 `platform.Authorities` 注入。
-  - [ ] U1.3 `[难]` 协议部件入 `kernel/protocol`。（进行中：Terra 6.1 Max，2026-11-14）
-    - 方向：`contract/go/kernel` 除 `errors.go` 外全部移到新叶层包 `capabilities/server/kernel/protocol`（只依赖协议生成代码与 `platform`）。服务可以导入它，与 `kernel/records`、`kernel/acceptedformat` 同列：同批改 7-system §7.2 的表与 `scripts/check-boundaries.mjs`，这是本行带的设计决定，写进提交正文。不为 Works、FactLog、Identity、Connectors 另写接口。
-    - `platform` 不得导入它，两处要先断开：① `ChangeArchive`（已是接口）原样搬进 `platform`，新增接口 `platform.ChangeLog`（`Records`、`Last`、`ApplyAccepted`、`SubmitChecked`、`Fork() ChangeLog`），保留 `kernel/decision_batch.go` 现有的常数时间尾记录校验，不以全历史扫描代替；`StagedDecision.DraftChanges`、`Authority.ForkAcceptedChanges`、`Authority.UseChangeArchive`、`kernel.Decision.Logs`、`kernel/sequence_batch.go` 的校验日志都改用它；② `platform/rules_intervals.go` 用到 `kernel.NewIdentity` 的函数连同只为它服务的类型，移到唯一调用它的服务（调用者若在 `platform` 内，整条调用链移到 `services/objects`）。
-    - 不做：不改 `kernel.Error`（U1.4）；不改任何接受语义与历史字节。
-    - 完成：`command ls contract/go/kernel` 只剩 `errors.go`；除 `kernel.Error` 外全树不再引用 `platformkernel/kernel` 的任何标识；7-system 差距“三处内核”改写为现状。
-    - 验证：V1、V3、V4。
-  - [ ] U1.4 `[易]` `[独占]` `Error` 进 `platform`。前置 U1.3。
-    - 方向：`contract/go/kernel/errors.go` 的 `Error` 搬为 `platform.Error`；用脚本把全树 `kernel.Error`（约 2580 处）改为 `platform.Error`（`platform` 包内为 `Error`），并修正 import（不再使用的 `platformkernel/kernel` 删除，缺 `platform` 的补上）；`kernel/protocol` 里 Receiver 的 `Caller`、`Policy`、`Ref` 留在 `protocol`。删除 `contract/go/kernel` 目录；7-system §7.2 中“`contract/go/kernel` 是可移植的协议接收与账本部件……”一条改为“`contract/go` 只含协议生成代码”。
+- [ ] U1 动作引擎归位。已完成（U1.1–U1.3）：规则引擎在 `services/actions/authority*.go`，服务、内核与宿主只经 `platform.Authority` 使用，由宿主经 `platform.Authorities` 注入；协议部件在 `kernel/protocol`，变更日志与归档通过 `platform` 接口解耦。
+  - [ ] U1.4 `[易]` `[独占]` `Error` 进 `platform`。前置已完成：U1.3。
+    - 方向：`contract/go/kernel/errors.go` 的 `Error` 搬为 `platform.Error`；用脚本把全树 `kernel.Error`（约 2580 处）改为 `platform.Error`（`platform` 包内为 `Error`），并修正 import（不再使用的 `platformkernel/kernel` 删除，缺 `platform` 的补上）；`kernel/protocol` 里 Receiver 的 `Caller`、`Policy`、`Ref` 留在 `protocol`。删除 `contract/go/kernel` 目录；7-system §7.2 中“`contract/go/kernel` 暂只保留错误类型 `Error`”一条改为“`contract/go` 只含协议生成代码”。
     - 不做：不改行为、错误码、文案；不夹带别的改名。
-    - 完成：`grep -rn '"platformkernel/kernel"' capabilities contract` 为空；`make contract` 不产生 diff；差距“三处内核”删除。
+    - 完成：`grep -rn '"platformkernel/kernel"' capabilities contract` 为空；`make contract` 不产生 diff；差距“内核错误类型”删除。
     - 验证：V1、V3。
   - [ ] U1.5 `[难]` 转换即动作类型。
     - 方向：删除 `platform.Transition`；`platform.Lifecycle.Transitions` 改为 `Actions []ActionType`。`ActionType` 的声明部分沿用 Transition 的 `Name`、`Title`、`Description`、`Roles`、`Capability`、`Approval`、`ConfirmationOnly`、`Adoption`、`DeferRequired`，`Payload` 改名 `Parameters`；执行部分按 [6-domain §6.7](6-domain/README.md) 的五部分：`Criteria`（`From` 表达为“状态属于……”的提交条件，`RuleCriteria` 并入）、`Rules`（`To`、`ToInput` 是修改对象状态的规则，`Do` 是函数支撑规则，`Txn`、`ApplyTxn` 暂作一条事务规则，留给 U2 拆）、`Effects`（`After`）。执行器只有一个：`services/actions/authority.go` 的 `transition` 改为按“参数 → 授权 → 提交条件 → 规则 → 一次接受写入 → 副作用”执行；审批的等待与驳回状态移动仍由执行器处理。

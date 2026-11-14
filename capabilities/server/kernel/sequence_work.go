@@ -6,8 +6,8 @@ import (
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 	"platformserver/kernel/acceptedformat"
+	"platformserver/kernel/protocol"
 	persistence "platformserver/kernel/store"
 	"platformserver/platform"
 
@@ -15,17 +15,17 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
-func ForkWorks(works *kernel.Works) *kernel.Works {
+func ForkWorks(works *protocol.Works) *protocol.Works {
 	items := works.All()
 	for i, item := range items {
 		items[i] = proto.Clone(item).(*pb.Work)
 	}
-	draft := kernel.NewWorks()
+	draft := protocol.NewWorks()
 	draft.Restore(items)
 	return draft
 }
 
-func InstallWork(works *kernel.Works, finished *pb.Work) {
+func InstallWork(works *protocol.Works, finished *pb.Work) {
 	all := works.All()
 	found := false
 	for i, work := range all {
@@ -42,7 +42,7 @@ func InstallWork(works *kernel.Works, finished *pb.Work) {
 
 type WorkApply struct {
 	Changes ChangeApply
-	Works   *kernel.Works
+	Works   *protocol.Works
 	App     func(string) platform.App
 	Task    func(acceptedformat.Work) (platform.ScheduledTaskState, string, func(*pb.Work), error)
 	Publish func(platform.Event, platform.AcceptedEventPlan)

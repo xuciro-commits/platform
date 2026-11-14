@@ -8,8 +8,8 @@ import (
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 	"platformserver/kernel/acceptedformat"
+	"platformserver/kernel/protocol"
 	"platformserver/platform"
 )
 
@@ -19,9 +19,9 @@ type OperationClaims struct {
 	Queued     func(id string) (effect platform.Effect, sending bool, ok bool)
 	Claimed    func(id string, after platform.Effect)
 	Live       func(id string, generation uint32) bool
-	Works      func() *kernel.Works
-	Fork       func() *kernel.Works
-	Install    func(*kernel.Works)
+	Works      func() *protocol.Works
+	Fork       func() *protocol.Works
+	Install    func(*protocol.Works)
 	Quarantine func(error)
 	Applied    func()
 }
@@ -98,7 +98,7 @@ func (c OperationClaims) Current(id string, generation uint32) bool {
 	return c.Live(id, generation)
 }
 
-func (c OperationClaims) PrepareFinish(before platform.Effect, out platform.Outcome) (*kernel.Works, json.RawMessage, json.RawMessage, error) {
+func (c OperationClaims) PrepareFinish(before platform.Effect, out platform.Outcome) (*protocol.Works, json.RawMessage, json.RawMessage, error) {
 	if before.Endpoint != acceptedformat.OperationEndpoint {
 		return nil, nil, nil, nil
 	}
@@ -117,8 +117,8 @@ type OperationCancellations struct {
 	Tenant  string
 	Effect  func(id string) (platform.Effect, bool)
 	Discard func(id string, after platform.Effect)
-	Works   func() *kernel.Works
-	Fork    func() *kernel.Works
+	Works   func() *protocol.Works
+	Fork    func() *protocol.Works
 	Cancel  func(id string)
 }
 

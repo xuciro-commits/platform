@@ -6,7 +6,6 @@ import (
 	"strings"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 	"platformserver/kernel/acceptedformat"
 	"platformserver/kernel/records"
 	"platformserver/platform"
@@ -145,7 +144,7 @@ func (s *Sequence) PrepareBatch(l platform.Authority, raw []byte, h BatchApply) 
 	if err := h.Sequences(result); err != nil {
 		return nil, err
 	}
-	checks := map[string]*kernel.ChangeLog{}
+	checks := map[string]platform.ChangeLog{}
 	for app, ledger := range ledgers {
 		checks[app] = ledger.ForkAcceptedChanges()
 	}

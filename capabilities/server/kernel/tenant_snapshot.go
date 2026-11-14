@@ -8,8 +8,8 @@ import (
 	"strings"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 	acceptedformat "platformserver/kernel/acceptedformat"
+	"platformserver/kernel/protocol"
 	"platformserver/kernel/records"
 	persistence "platformserver/kernel/store"
 	"platformserver/platform"
@@ -23,7 +23,7 @@ type TenantImage[Job, Endpoint any] struct {
 	Apps                map[string]json.RawMessage              `json:"apps"`
 	Records             map[string][]records.StoredState        `json:"records"`
 	Facts               json.RawMessage                         `json:"facts,omitempty"`
-	Identities          *kernel.IdentityState                   `json:"identities,omitempty"`
+	Identities          *protocol.IdentityState                 `json:"identities,omitempty"`
 	Audit               []platform.AuditEntry                   `json:"audit"`
 	Refusals            map[string]acceptedformat.Refusal       `json:"refusals,omitempty"`
 	AcceptedAnswers     map[string]json.RawMessage              `json:"acceptedAnswers,omitempty"`
@@ -41,7 +41,7 @@ type TenantImage[Job, Endpoint any] struct {
 	Tasks               []platform.ScheduledTaskState           `json:"tasks"`
 	Jobs                []Job                                   `json:"jobs"`
 	Connectors          json.RawMessage                         `json:"connectors"`
-	Marks               []kernel.ConnectorMark                  `json:"marks"`
+	Marks               []protocol.ConnectorMark                `json:"marks"`
 	LastError           map[string]ConnectorError               `json:"lastError"`
 	Notices             []platform.Notification                 `json:"notices"`
 	NoticeSeq           int                                     `json:"noticeSeq"`

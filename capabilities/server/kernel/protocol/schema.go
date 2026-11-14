@@ -1,7 +1,8 @@
-package kernel
+package protocol
 
 import (
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
+	"platformkernel/kernel"
 )
 
 type SchemaRegistry struct {
@@ -20,7 +21,7 @@ func (r *SchemaRegistry) Accepts(s *pb.SchemaRef) bool {
 	return r.known[schemaKey(s)]
 }
 
-func (r *SchemaRegistry) Learn(refs ...*pb.SchemaRef) *Error {
+func (r *SchemaRegistry) Learn(refs ...*pb.SchemaRef) *kernel.Error {
 	for _, s := range refs {
 		if s.GetName() == "" || s.GetVersion() < 1 {
 			return errorf(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT)

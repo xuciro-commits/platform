@@ -8,8 +8,8 @@ import (
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/timestamppb"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	contract "platformkernel/kernel"
 	"platformserver/kernel/acceptedformat"
+	"platformserver/kernel/protocol"
 	"platformserver/platform"
 )
 
@@ -20,18 +20,18 @@ type ClaimSet struct {
 }
 
 type SourceClaims struct {
-	schemas  *contract.SchemaRegistry
-	Facts    *contract.FactLog
-	Identity *contract.Identity
+	schemas  *protocol.SchemaRegistry
+	Facts    *protocol.FactLog
+	Identity *protocol.Identity
 }
 
 func NewSourceClaims() SourceClaims {
-	schemas := contract.NewSchemaRegistry([]*pb.SchemaRef{{Name: "integration.claim", Version: 1}})
-	return SourceClaims{schemas: schemas, Facts: contract.NewFactLog(schemas), Identity: contract.NewIdentity(nil)}
+	schemas := protocol.NewSchemaRegistry([]*pb.SchemaRef{{Name: "integration.claim", Version: 1}})
+	return SourceClaims{schemas: schemas, Facts: protocol.NewFactLog(schemas), Identity: protocol.NewIdentity(nil)}
 }
 
 func (c SourceClaims) Fork(tenant string) SourceClaims {
-	fork := SourceClaims{schemas: c.schemas, Facts: contract.NewFactLog(c.schemas), Identity: contract.NewIdentity(nil)}
+	fork := SourceClaims{schemas: c.schemas, Facts: protocol.NewFactLog(c.schemas), Identity: protocol.NewIdentity(nil)}
 	fork.Facts.Restore(tenant, c.Facts.Records(tenant))
 	fork.Identity.Restore(c.Identity.State())
 	return fork
@@ -54,7 +54,7 @@ func (c SourceClaims) Prepare(tenant, typ, id, change string, prepared *ClaimSet
 	}
 	if prepared.Origin != "" {
 		resolved, failure := c.Identity.Resolve(&pb.EntityRef{Type: typ, Id: prepared.Origin})
-		if failure == nil && (len(resolved) != 1 || resolved[0] != (contract.Ref{Type: typ, ID: id}) && resolved[0] != (contract.Ref{Type: typ, ID: prepared.Origin})) {
+		if failure == nil && (len(resolved) != 1 || resolved[0] != (protocol.Ref{Type: typ, ID: id}) && resolved[0] != (protocol.Ref{Type: typ, ID: prepared.Origin})) {
 			return nil, fmt.Errorf("source identity already resolves elsewhere")
 		}
 	}
@@ -87,9 +87,9 @@ func (c SourceClaims) Apply(tenant, typ, id, change string, at time.Time, prepar
 			if failure := c.Identity.Create(origin); failure != nil {
 				return fmt.Errorf("accepted source origin: %v", failure)
 			}
-			resolved = []contract.Ref{{Type: typ, ID: prepared.Origin}}
+			resolved = []protocol.Ref{{Type: typ, ID: prepared.Origin}}
 		}
-		if len(resolved) == 1 && resolved[0] == (contract.Ref{Type: typ, ID: prepared.Origin}) {
+		if len(resolved) == 1 && resolved[0] == (protocol.Ref{Type: typ, ID: prepared.Origin}) {
 			if failure := c.Identity.AddRedirect(&pb.Redirect{From: origin, To: []*pb.EntityRef{target}, Kind: pb.RedirectKind_REDIRECT_KIND_MERGE}); failure != nil {
 				return fmt.Errorf("accepted source redirect: %v", failure)
 			}

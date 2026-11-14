@@ -2,6 +2,7 @@ package objects
 
 import (
 	"platformkernel/kernel"
+	"platformserver/kernel/protocol"
 	"platformserver/kernel/records"
 	"platformserver/platform"
 	"platformserver/services/security"
@@ -33,7 +34,7 @@ type Owner struct {
 	Deliveries             func(string, time.Time) []RecordDelivery
 	AuditPersonal          func(platform.PersonalRead)
 	RecordSetBinding       func(platform.AssetBinding) (*platform.Definition, bool)
-	Claims                 *kernel.FactLog
+	Claims                 *protocol.FactLog
 }
 
 func (o *Owner) authorizationMember(m platform.Member) platform.Member {

@@ -134,7 +134,7 @@ func (c Caller) RolesHere() []string { return c.RolesIn(c.App) }
 
 type StagedDecision interface {
 	HoldChanges(Authority) (release func(), refusal *kernel.Error)
-	DraftChanges(Authority, func() *kernel.ChangeLog) *kernel.ChangeLog
+	DraftChanges(Authority, func() ChangeLog) ChangeLog
 	DecisionCatalog(Authority) *Catalog
 	FailDecision(*kernel.Error)
 	RecordAuthorization(Caller, AuthzRequest, AuthzDecision)

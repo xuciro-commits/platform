@@ -1,32 +1,30 @@
 package host
 
-import records "platformserver/kernel/records"
-
-import automation "platformserver/services/automate/runtime"
-
 import (
 	"fmt"
-	"platformkernel/kernel"
-	"platformserver/kernel/transport"
-	"platformserver/services/ai/gateway"
-	knowledgeindex "platformserver/services/ai/retrieval"
-	"platformserver/services/data/blobs"
-	"platformserver/services/data/transform"
-	"platformserver/services/functions/runtime"
-	"platformserver/services/resources/monitoring"
-
-	runtimekernel "platformserver/kernel"
-	"platformserver/services/devops/releases"
-	"platformserver/services/resources/authoring"
-	controlowner "platformserver/services/security/control"
-
-	"platformserver/platform"
-	"platformserver/services/actions"
-	dataowner "platformserver/services/data"
-	"platformserver/services/data/lineage"
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"platformkernel/kernel"
+	runtimekernel "platformserver/kernel"
+	"platformserver/kernel/protocol"
+	records "platformserver/kernel/records"
+	"platformserver/kernel/transport"
+	"platformserver/platform"
+	"platformserver/services/actions"
+	"platformserver/services/ai/gateway"
+	knowledgeindex "platformserver/services/ai/retrieval"
+	automation "platformserver/services/automate/runtime"
+	dataowner "platformserver/services/data"
+	"platformserver/services/data/blobs"
+	"platformserver/services/data/lineage"
+	"platformserver/services/data/transform"
+	"platformserver/services/devops/releases"
+	"platformserver/services/functions/runtime"
+	"platformserver/services/resources/authoring"
+	"platformserver/services/resources/monitoring"
+	controlowner "platformserver/services/security/control"
 )
 
 type Tenant struct {
@@ -96,7 +94,7 @@ func NewTenantWithCapabilities(id string, services platform.RuntimeCapabilities,
 	if err != nil {
 		return nil, fmt.Errorf("tenant %s: %w", id, err)
 	}
-	t := &Tenant{ID: id, ownerSet: owners, bindings: actions.NewBindings(nil), Works: kernel.NewWorks(), work: automation.NewWorkBoard(), index: &knowledgeindex.Index{},
+	t := &Tenant{ID: id, ownerSet: owners, bindings: actions.NewBindings(nil), Works: protocol.NewWorks(), work: automation.NewWorkBoard(), index: &knowledgeindex.Index{},
 		ConnectorRoster: runtimekernel.NewConnectorRoster(id), Projection: records.NewStore()}
 	t.bindAuditStore()
 	t.Lane.BindReadScope(t.beginRecordRead, t.endLane)

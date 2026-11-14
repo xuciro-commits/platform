@@ -1,4 +1,4 @@
-package kernel
+package protocol
 
 import (
 	"fmt"
@@ -9,13 +9,9 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
+	"platformkernel/kernel"
+	"platformserver/platform"
 )
-
-type ChangeArchive interface {
-	Records(tenant string, through int) []*pb.ChangeRecord
-	Accepted(tenant, key string, through int) *pb.ChangeRecord
-	Contains(tenant, change string, through int) bool
-}
 
 type ChangeLog struct {
 	schemas  interface{ Accepts(*pb.SchemaRef) bool }
@@ -23,7 +19,7 @@ type ChangeLog struct {
 	byKey    map[string]map[string]*pb.ChangeRecord
 	byID     map[string]map[string]bool
 	revs     map[[3]string]uint32
-	archive  ChangeArchive
+	archive  platform.ChangeArchive
 	archived map[string]int
 	last     map[string]time.Time
 	tail     map[string]*pb.ChangeRecord
@@ -84,7 +80,7 @@ func (l *ChangeLog) Last(tenant string) *pb.ChangeRecord {
 	return proto.Clone(r).(*pb.ChangeRecord)
 }
 
-func (l *ChangeLog) Compact(archive ChangeArchive) {
+func (l *ChangeLog) Compact(archive platform.ChangeArchive) {
 	if l.archived == nil {
 		l.archived = map[string]int{}
 	}
@@ -114,7 +110,7 @@ func (l *ChangeLog) lastTime(tenant string) time.Time {
 	return l.last[tenant]
 }
 
-func (l *ChangeLog) Fork() *ChangeLog {
+func (l *ChangeLog) Fork() platform.ChangeLog {
 	copy := &ChangeLog{schemas: l.schemas, logs: make(map[string][]*pb.ChangeRecord, len(l.logs)),
 		byKey: make(map[string]map[string]*pb.ChangeRecord, len(l.byKey)), byID: make(map[string]map[string]bool, len(l.byID)), revs: make(map[[3]string]uint32, len(l.revs)), next: l.next, Facts: l.Facts, archive: l.archive, archived: map[string]int{}, last: map[string]time.Time{}, tail: map[string]*pb.ChangeRecord{}}
 	for tenant, n := range l.archived {
@@ -148,7 +144,7 @@ func (l *ChangeLog) Fork() *ChangeLog {
 }
 
 func (l *ChangeLog) ForkWithSchemas(schemas interface{ Accepts(*pb.SchemaRef) bool }) *ChangeLog {
-	fork := l.Fork()
+	fork := l.Fork().(*ChangeLog)
 	fork.schemas = schemas
 	return fork
 }
@@ -186,7 +182,7 @@ func (l *ChangeLog) ApplyAccepted(saved *pb.ChangeRecord) (bool, error) {
 	return true, nil
 }
 
-func (l *ChangeLog) SubmitChecked(s *pb.Submission, now time.Time, check func() *Error) (*pb.ChangeRecord, *Error) {
+func (l *ChangeLog) SubmitChecked(s *pb.Submission, now time.Time, check func() *kernel.Error) (*pb.ChangeRecord, *kernel.Error) {
 	required := []string{s.GetTenantId(), s.GetPrincipalId(), s.GetAuthority(), s.GetIdempotencyKey(),
 		s.GetTarget().GetType(), s.GetTarget().GetId(), s.GetSchema().GetName()}
 	if slices.Contains(required, "") {

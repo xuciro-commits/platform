@@ -29,7 +29,7 @@ func (b *Runtime) txnIntervals(c platform.Caller, receipt *pb.ChangeRecord, subj
 			return platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "Interval projection contains withheld fields / 区间集合含不可见字段")
 		}
 	}
-	previous := make([]platform.IntervalIdentity, 0, len(ids))
+	previous := make([]intervalIdentity, 0, len(ids))
 	reviews := map[string]bool{}
 	for i, raw := range set.Records {
 		var row map[string]json.RawMessage
@@ -47,10 +47,10 @@ func (b *Runtime) txnIntervals(c platform.Caller, receipt *pb.ChangeRecord, subj
 		if owner != subjectID || source != p.Source || retired {
 			return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Interval collection contains another source or retired identity")
 		}
-		previous = append(previous, platform.IntervalIdentity{ID: ids[i], Interval: interval})
+		previous = append(previous, intervalIdentity{ID: ids[i], Interval: interval})
 		reviews[ids[i]] = review
 	}
-	plan, err := platform.ReconcileObservationIntervals(info.Type, previous, *proof.Intervals, func(i int) string { return receipt.GetChangeId() + "-" + step + "-" + strconv.Itoa(i) })
+	plan, err := reconcileObservationIntervals(info.Type, previous, *proof.Intervals, func(i int) string { return receipt.GetChangeId() + "-" + step + "-" + strconv.Itoa(i) })
 	if err != nil {
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "{why}", err.Error())
 	}

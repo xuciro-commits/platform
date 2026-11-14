@@ -5,6 +5,7 @@ import (
 	"fmt"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
+	"platformserver/kernel/protocol"
 	"platformserver/platform"
 	"reflect"
 	"slices"
@@ -18,11 +19,11 @@ type authority struct {
 	tenant       string
 	authority    string
 	declarations []*pb.AuthorityDeclaration
-	archive      kernel.ChangeArchive
-	changes      *kernel.ChangeLog
-	authorities  *kernel.Authorities
+	archive      platform.ChangeArchive
+	changes      *protocol.ChangeLog
+	authorities  *protocol.Authorities
 	schemaRefs   []*pb.SchemaRef
-	schemas      *kernel.SchemaRegistry
+	schemas      *protocol.SchemaRegistry
 	catalog      *platform.Catalog
 }
 
@@ -33,9 +34,9 @@ func NewAuthority(tenant, id string, catalog *platform.Catalog, classes ...strin
 			schemas = append(schemas, &pb.SchemaRef{Name: a.Schema, Version: family})
 		}
 	}
-	registry := kernel.NewSchemaRegistry(schemas)
-	l := &authority{tenant: tenant, authority: id, changes: kernel.NewChangeLog(registry), schemas: registry,
-		schemaRefs: slices.Clone(schemas), authorities: kernel.NewAuthorities(), catalog: catalog}
+	registry := protocol.NewSchemaRegistry(schemas)
+	l := &authority{tenant: tenant, authority: id, changes: protocol.NewChangeLog(registry), schemas: registry,
+		schemaRefs: slices.Clone(schemas), authorities: protocol.NewAuthorities(), catalog: catalog}
 	for _, class := range classes {
 		d := &pb.AuthorityDeclaration{TenantId: tenant, DataClass: class, Kind: pb.AuthorityKind_AUTHORITY_KIND_TENANT_SERVER, AuthorityId: id, Epoch: 1}
 		l.authorities.Declare(d)
@@ -94,14 +95,14 @@ func (l *authority) ApplyAcceptedChange(record *pb.ChangeRecord) (bool, error) {
 	return changed, err
 }
 
-func (l *authority) UseChangeArchive(archive kernel.ChangeArchive) {
+func (l *authority) UseChangeArchive(archive platform.ChangeArchive) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	l.archive = archive
 	l.changes.Compact(archive)
 }
 
-func (l *authority) ForkAcceptedChanges() *kernel.ChangeLog {
+func (l *authority) ForkAcceptedChanges() platform.ChangeLog {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	return l.changes.Fork()
@@ -110,11 +111,11 @@ func (l *authority) ForkAcceptedChanges() *kernel.ChangeLog {
 func (l *authority) ForkRead() (platform.Authority, error) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
-	registry := kernel.NewSchemaRegistry(l.schemaRefs)
+	registry := protocol.NewSchemaRegistry(l.schemaRefs)
 	fork := &authority{tenant: l.tenant, authority: l.authority, declarations: slices.Clone(l.declarations),
 		schemaRefs: slices.Clone(l.schemaRefs), schemas: registry,
 		changes: l.changes.ForkWithSchemas(registry), archive: l.archive,
-		authorities: kernel.NewAuthorities(), catalog: platform.NewCatalog(l.catalog.All()...)}
+		authorities: protocol.NewAuthorities(), catalog: platform.NewCatalog(l.catalog.All()...)}
 	for _, declaration := range fork.declarations {
 		if err := fork.authorities.Declare(declaration); err != nil {
 			return nil, err
@@ -163,7 +164,7 @@ func (l *authority) Receive(c platform.Caller, s *pb.Submission, now time.Time,
 	probing := c.Probing()
 	refused := false
 	var decision platform.AuthzDecision
-	changes := l.changes
+	var changes platform.ChangeLog = l.changes
 	if draft := c.StagedDecision(); draft != nil {
 		changes = draft.DraftChanges(l, l.changes.Fork)
 		if changes == nil || changes == l.changes {
@@ -173,7 +174,7 @@ func (l *authority) Receive(c platform.Caller, s *pb.Submission, now time.Time,
 	if probing {
 		changes = changes.Fork()
 	}
-	policy := func(kernel.Caller, *pb.Submission) bool {
+	policy := func(protocol.Caller, *pb.Submission) bool {
 		if !c.Replaying || probing {
 			decision = catalog.DecideSubmission(c, s, now)
 		}
@@ -184,8 +185,8 @@ func (l *authority) Receive(c platform.Caller, s *pb.Submission, now time.Time,
 	}
 	var apply func(*pb.ChangeRecord)
 	decided := false
-	receiver := kernel.Receiver{Changes: changes, Authorities: l.authorities, Policy: policy}
-	record, err := receiver.Receive(kernel.Caller{Tenant: l.tenant, Principal: c.ID}, s, now, func() *kernel.Error {
+	receiver := protocol.Receiver{Changes: changes, Authorities: l.authorities, Policy: policy}
+	record, err := receiver.Receive(protocol.Caller{Tenant: l.tenant, Principal: c.ID}, s, now, func() *kernel.Error {
 		decided = true
 		if rules == nil {
 			return nil

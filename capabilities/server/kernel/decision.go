@@ -10,11 +10,12 @@ import (
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
 	"platformserver/kernel/acceptedformat"
+	"platformserver/kernel/protocol"
 	"platformserver/platform"
 )
 
 type Decision struct {
-	Logs              map[platform.Authority]*kernel.ChangeLog
+	Logs              map[platform.Authority]platform.ChangeLog
 	Receiving         map[platform.Authority]bool
 	InputIssues       map[*kernel.Error][]platform.FieldIssue
 	Failure           *kernel.Error
@@ -50,7 +51,7 @@ type Decision struct {
 	PrivateApps       map[string]platform.App
 	States            map[string]platform.AcceptedStateApp
 	StateBases        map[string]json.RawMessage
-	Connectors        *kernel.Connectors
+	Connectors        *protocol.Connectors
 	OperationAnswers  map[string]platform.OperationResult
 	OperationCancels  map[string]bool
 	ObservationInput  *platform.ObservationDecisionEvidence
@@ -61,7 +62,7 @@ type Decision struct {
 }
 
 func NewDecision(base *records.Store, s *Sequence, simulation bool) Decision {
-	return Decision{Logs: map[platform.Authority]*kernel.ChangeLog{}, Simulation: simulation, Records: base,
+	return Decision{Logs: map[platform.Authority]platform.ChangeLog{}, Simulation: simulation, Records: base,
 		Sequences: s.Sequences.Clone(), Allocated: map[string]int{}, SequenceBases: map[string]int{}, Active: map[string]bool{},
 		Notices: s.Notices.Draft(), Writers: map[string][]string{}, Changed: map[string][]string{}, Connectors: s.ConnectorRoster.Clone()}
 }
@@ -104,7 +105,7 @@ func (d *Decision) FailDecision(err *kernel.Error) {
 	}
 }
 
-func (d *Decision) DraftChanges(l platform.Authority, fork func() *kernel.ChangeLog) *kernel.ChangeLog {
+func (d *Decision) DraftChanges(l platform.Authority, fork func() platform.ChangeLog) platform.ChangeLog {
 	if d.Logs[l] == nil {
 		d.Logs[l] = fork()
 	}

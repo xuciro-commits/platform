@@ -4,7 +4,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	contract "platformkernel/kernel"
+	"platformserver/kernel/protocol"
 	"platformserver/kernel/records"
 	persistence "platformserver/kernel/store"
 )
@@ -21,7 +21,7 @@ type Sequence struct {
 	Notices           NoticeBoard
 	Sequences         Sequences
 	ConnectorRoster   *ConnectorRoster
-	Works             *contract.Works
+	Works             *protocol.Works
 	AuditLog          AuditLog
 	ObservationBuffer ObservationBuffer
 	Fault             atomic.Pointer[Fault]

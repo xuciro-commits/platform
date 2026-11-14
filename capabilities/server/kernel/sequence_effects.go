@@ -6,15 +6,15 @@ import (
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 	"platformserver/kernel/acceptedformat"
+	"platformserver/kernel/protocol"
 	"platformserver/platform"
 )
 
 type EffectApply struct {
 	Changes ChangeApply
 	Current func(id string) (acceptedformat.EffectState, bool)
-	Finish  func(platform.Effect, platform.Outcome) (*kernel.Works, json.RawMessage, json.RawMessage, error)
+	Finish  func(platform.Effect, platform.Outcome) (*protocol.Works, json.RawMessage, json.RawMessage, error)
 	Usage   func() (json.RawMessage, error)
 	Settle  func(id string, after acceptedformat.EffectState, finished *pb.Work)
 	Meter   func(platform.AIUsage)

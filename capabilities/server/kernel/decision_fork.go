@@ -5,7 +5,6 @@ import (
 	"maps"
 	"slices"
 
-	"platformkernel/kernel"
 	"platformserver/kernel/acceptedformat"
 	"platformserver/platform"
 )
@@ -56,7 +55,7 @@ func (d Decision) Fork(owner func(string) platform.App) (Decision, bool) {
 	}
 	fork.Records = d.Records.ForkRecords()
 	fork.Records.InheritDecision(d.Records)
-	fork.Logs = map[platform.Authority]*kernel.ChangeLog{}
+	fork.Logs = map[platform.Authority]platform.ChangeLog{}
 	for ledger, log := range d.Logs {
 		suspended := d.Receiving[ledger]
 		for id := range d.Active {

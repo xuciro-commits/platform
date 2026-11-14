@@ -1,9 +1,10 @@
-package kernel
+package protocol
 
 import (
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
+	"platformkernel/kernel"
 )
 
 type Caller struct{ Tenant, Principal string }
@@ -12,18 +13,20 @@ type Policy func(caller Caller, s *pb.Submission) bool
 
 type Receiver struct {
 	Changes interface {
-		SubmitChecked(*pb.Submission, time.Time, func() *Error) (*pb.ChangeRecord, *Error)
+		SubmitChecked(*pb.Submission, time.Time, func() *kernel.Error) (*pb.ChangeRecord, *kernel.Error)
 		Records(string) []*pb.ChangeRecord
 	}
-	Authorities interface{ Authorize(*pb.Submission) *Error }
-	Policy      Policy
+	Authorities interface {
+		Authorize(*pb.Submission) *kernel.Error
+	}
+	Policy Policy
 }
 
-func (r *Receiver) Receive(c Caller, s *pb.Submission, now time.Time, domain func() *Error) (*pb.ChangeRecord, *Error) {
+func (r *Receiver) Receive(c Caller, s *pb.Submission, now time.Time, domain func() *kernel.Error) (*pb.ChangeRecord, *kernel.Error) {
 	if s.GetTenantId() != c.Tenant || s.GetPrincipalId() != c.Principal {
 		return nil, errorf(pb.ErrorCode_ERROR_CODE_POLICY_DENIED)
 	}
-	return r.Changes.SubmitChecked(s, now, func() *Error {
+	return r.Changes.SubmitChecked(s, now, func() *kernel.Error {
 		if err := r.Authorities.Authorize(s); err != nil {
 			return err
 		}
@@ -36,3 +39,5 @@ func (r *Receiver) Receive(c Caller, s *pb.Submission, now time.Time, domain fun
 		return nil
 	})
 }
+
+func errorf(code pb.ErrorCode) *kernel.Error { return &kernel.Error{Code: code} }
