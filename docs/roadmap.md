@@ -45,7 +45,7 @@ read-when: 每批开始（选当前批次）与结束（删除已完成条目、
 工单按技能 `platform-loop` 执行（分工见 [method 工单循环](method.md#工单循环)）：`[难]` 给强模型（方向内的设计、内核与语义），`[易]` 给执行模型（方向已定的搬移、改名、重复样板），`[独占]` 行执行时不得有别的行在进行中。每行的“方向”已由主会话定下，不重议；“验证”是该技能中的档位（V1 基本、V2 路径、V3 全量、V4 并发、W 前端）。同一编号下按顺序做；不同编号之间只受“前置”约束。
 
 - [ ] U1 动作引擎归位。已完成（U1.1–U1.3）：规则引擎在 `services/actions/authority*.go`，服务、内核与宿主只经 `platform.Authority` 使用，由宿主经 `platform.Authorities` 注入；协议部件在 `kernel/protocol`，变更日志与归档通过 `platform` 接口解耦。
-  - [ ] U1.4 `[易]` `[独占]` `Error` 进 `platform`。前置已完成：U1.3。
+  - [ ] U1.4 `[易]` `[独占]` `Error` 进 `platform`。前置已完成：U1.3。（进行中：Deepseek V4.1 Flash Max，2026-11-14）
     - 方向：`contract/go/kernel/errors.go` 的 `Error` 搬为 `platform.Error`；用脚本把全树 `kernel.Error`（约 2580 处）改为 `platform.Error`（`platform` 包内为 `Error`），并修正 import（不再使用的 `platformkernel/kernel` 删除，缺 `platform` 的补上）；`kernel/protocol` 里 Receiver 的 `Caller`、`Policy`、`Ref` 留在 `protocol`。删除 `contract/go/kernel` 目录；7-system §7.2 中“`contract/go/kernel` 暂只保留错误类型 `Error`”一条改为“`contract/go` 只含协议生成代码”。
     - 不做：不改行为、错误码、文案；不夹带别的改名。
     - 完成：`grep -rn '"platformkernel/kernel"' capabilities contract` 为空；`make contract` 不产生 diff；差距“内核错误类型”删除。
