@@ -35,7 +35,7 @@ read-when: 新建或移动 Go 包、改动写入或读取路径、接受结果�
 | `expr` | Expr 的解析、类型检查、求值与 SQL 下推编译；前端经 WASM 复用 | 无 |
 | `kernel` | 提交接收、幂等、修订、接受结果编码、车道、重放与快照；`kernel/store` 拥有 PostgreSQL、文件及内存持久化，`kernel/records` 拥有记录投影与读取计划；按 `platform` 契约实现 | `expr`、`platform`、`kernel/protocol` |
 | `kernel/protocol` | 协议接收、账本、身份、连接器与工作项部件 | `platform` |
-| `platform` | 应用 SDK：Manifest、Caller、动作目录、Expr 与 ObjectSet 接口、授权接口；稳定叶层，不依赖实现 | `expr` |
+| `platform` | 应用 SDK：Manifest、Caller、动作目录、页面与应用声明、Expr 与 ObjectSet 接口、授权接口；稳定叶层，不依赖实现 | `expr` |
 | `services/resources` | RID、项目、文件夹、资源生命周期、工作状态、分支、提案 | `platform`、`kernel/records`、`kernel/acceptedformat`、`kernel/protocol` |
 | `services/ontology` | 本体元数据与类型检查 | `platform`、resources、`kernel/records`、`kernel/acceptedformat`、`kernel/protocol` |
 | `services/objects` | 对象投影、编辑事实、索引、ObjectSet 执行 | `expr`、`platform`、ontology、`kernel/records`、`kernel/acceptedformat`、`kernel/protocol` |
