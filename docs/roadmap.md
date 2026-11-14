@@ -78,7 +78,7 @@ read-when: 每批开始（选当前批次）与结束（删除已完成条目、
     - 验证：V1、V3。
   - [ ] U3.2 `[易]` 搬移。前置 U3.1。`platform/page_*.go` 中契约之外的文件移入 `services/apps/pages`，改 import，下调 `platformLines`；`make contract` 无 diff。验证：V1、V3。
 - [ ] U4 发布路径一张表。
-  - [ ] U4.1 `[难]` 钩子与样板。
+  - [ ] U4.1 `[难]` 钩子与样板。（进行中：Terra 6.1 Max，2026-11-14）
     - 方向：一组钩子声明在 `services/resources/publication/api.go`（校验、冻结版本、闭包、安装、读取冻结定义）；record 族（object、action-type）与 versioned 族（agent、evaluation-set、test-plan、compute、sample-set）各自在拥有它的服务实现，宿主登记成一张表；`services/resources` 只按表编排；删除 Build 的“兼容公共类型”。
     - 产出：钩子签名写入 7-system §7.5.1；迁完 action-type 一种作样板；其余每种资源类型拆成一行 `[易]`。
     - 验证：V1、V3。
