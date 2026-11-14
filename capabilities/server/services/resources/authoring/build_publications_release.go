@@ -126,7 +126,7 @@ func (b *Build) ForkReleaseExecution(assets []platform.ReleaseAsset) (platform.A
 			actions = append(actions, objectActions(object, entity)...)
 		}
 	}
-	return &releaseExecution{Build: bound, catalog: b.ledger.Catalog.WithActions(actions)}, nil
+	return &releaseExecution{Build: bound, catalog: b.ledger.Catalog().WithActions(actions)}, nil
 }
 
 var _ platform.ReleaseExecutionOwner = (*Build)(nil)

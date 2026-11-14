@@ -104,7 +104,7 @@ type preparedArtifactCleanupDecision struct {
 	prepared *ArtifactCleanupPreparation
 }
 
-func (d preparedArtifactCleanupDecision) Fork(ledger *platform.Ledger) (platform.App, error) {
+func (d preparedArtifactCleanupDecision) Fork(ledger platform.Authority) (platform.App, error) {
 	fork, err := d.Flows.Fork(ledger)
 	if err != nil {
 		return nil, err

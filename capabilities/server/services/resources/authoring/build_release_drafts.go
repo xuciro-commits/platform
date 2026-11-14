@@ -259,7 +259,7 @@ func (b *Build) applyRecordDraft(inv *draftInventories, kind platform.AssetKind,
 		if member.ID != "" {
 			caller := b.host.Caller(platform.Caller{}, member, ID)
 			submission := &pb.Submission{TenantId: caller.Tenant, PrincipalId: member.ID, Authority: ID, Schema: &pb.SchemaRef{Name: SchemaPublish, Version: 1}, Target: &pb.EntityRef{Type: ObjectType, Id: record.ID}, Payload: platform.Raw(map[string]any{})}
-			if decision := b.ledger.Catalog.DecideSubmission(caller, submission, time.Now()); !decision.Allow {
+			if decision := b.ledger.Catalog().DecideSubmission(caller, submission, time.Now()); !decision.Allow {
 				return prior, next, false, fmt.Errorf("Publishing the target object: %s", decision.Reason)
 			}
 		}

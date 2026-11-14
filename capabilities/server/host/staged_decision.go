@@ -34,9 +34,9 @@ type stagedDecision struct {
 	operationInputs        map[string][]*preparedOperationInput
 }
 
-func (d *stagedDecision) StagedDecision() platform.StagedDecision            { return d }
-func (d *stagedDecision) ReadScoped() bool                                   { return true }
-func (d *stagedDecision) DecisionCatalog(*platform.Ledger) *platform.Catalog { return nil }
+func (d *stagedDecision) StagedDecision() platform.StagedDecision              { return d }
+func (d *stagedDecision) ReadScoped() bool                                     { return true }
+func (d *stagedDecision) DecisionCatalog(platform.Authority) *platform.Catalog { return nil }
 
 func (t *Tenant) newStagedDecision() *stagedDecision {
 	return t.newStagedDecisionOn(t.Projection.ForkRecords())

@@ -27,18 +27,19 @@ const (
 )
 
 type Agents struct {
-	host       platform.AgentHost
-	mu         sync.Mutex
-	tenant     string
-	ledger     *platform.Ledger
-	defs       map[string]*platform.CompiledAgent
-	buildStamp string
-	busy       map[string]bool
+	host        platform.AgentHost
+	mu          sync.Mutex
+	tenant      string
+	ledger      platform.Authority
+	authorities platform.Authorities
+	defs        map[string]*platform.CompiledAgent
+	buildStamp  string
+	busy        map[string]bool
 }
 
 func (a *Agents) AttachAgent(h platform.AgentHost) { a.host = h }
 
-func New(tenant string) *Agents {
+func New(tenant string, authorities platform.Authorities) *Agents {
 	var actions []platform.Action
 	for _, e := range agentEntities() {
 		actions = append(actions, platform.EntityActions(e)...)
@@ -69,10 +70,10 @@ func New(tenant string) *Agents {
 	actions = append(actions, platform.Action{Schema: platform.SchemaToolPropose, Target: platform.RunType, Capability: "runs", Title: "Propose a tool action", Description: "Save a tool's write as a proposal for the person to confirm; nothing changes until they do.", Roles: []string{platform.AnyMember}, Payload: []platform.Field{
 		{Name: "owner", Type: "string", Required: true}, {Name: "action", Type: "string", Required: true}, {Name: "target", Type: "string", Required: true}, {Name: "payload", Type: "json", Required: true}, {Name: "rationale", Type: "string"}}})
 	actions = append(actions, switchActions()...)
-	return &Agents{tenant: tenant, ledger: platform.NewLedger(tenant, platform.AgentApp, platform.NewCatalog(actions...), platform.RunType, platform.EvaluationType, platform.MemoryType, platform.SwitchType), defs: map[string]*platform.CompiledAgent{}, busy: map[string]bool{}}
+	return &Agents{tenant: tenant, authorities: authorities, ledger: authorities(tenant, platform.AgentApp, platform.NewCatalog(actions...), platform.RunType, platform.EvaluationType, platform.MemoryType, platform.SwitchType), defs: map[string]*platform.CompiledAgent{}, busy: map[string]bool{}}
 }
 
-func (a *Agents) NewSimulationApp(tenant string) platform.App { return New(tenant) }
+func (a *Agents) NewSimulationApp(tenant string) platform.App { return New(tenant, a.authorities) }
 
 func agentEntities() []platform.Entity {
 	return []platform.Entity{{Type: platform.RunType, Title: "Agent run", Model: platform.AgentRunRecord{}, Display: "title",
@@ -88,7 +89,7 @@ func agentEntities() []platform.Entity {
 }
 
 func (a *Agents) Manifest() platform.Manifest {
-	return platform.Manifest{Languages: languages, ID: platform.AgentApp, Title: platform.BuiltinManifestTitle(platform.AgentApp), Version: "1", Actions: a.ledger.Catalog, Entities: agentEntities(),
+	return platform.Manifest{Languages: languages, ID: platform.AgentApp, Title: platform.BuiltinManifestTitle(platform.AgentApp), Version: "1", Actions: a.ledger.Catalog(), Entities: agentEntities(),
 		Reads: []string{"agents", "runs", "memories", "agent-overview"}, Everyone: []string{"agents", "runs", "memories"},
 		ReadSources: map[string]string{"agents": "record", "agent-overview": "record"},
 		Settings: []platform.Setting{
@@ -106,7 +107,7 @@ func (a *Agents) Manifest() platform.Manifest {
 
 func (a *Agents) Declarations() []*pb.AuthorityDeclaration { return a.ledger.Declarations() }
 
-func (a *Agents) AcceptedLedger() *platform.Ledger { return a.ledger }
+func (a *Agents) Authority() platform.Authority { return a.ledger }
 
 func (a *Agents) SnapshotFormat() string { return "platform.ledger.v1" }
 
@@ -267,10 +268,10 @@ func (a *Agents) changedDefinition(run platform.AgentRunRecord, d *platform.Comp
 	return dynamic && run.DefinitionVersion != "" && run.DefinitionVersion != a.definitionVersion(d)
 }
 
-func (a *Agents) Fork(ledger *platform.Ledger) (platform.App, error) {
+func (a *Agents) Fork(ledger platform.Authority) (platform.App, error) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
-	return &Agents{tenant: a.tenant, host: a.host, ledger: ledger, defs: maps.Clone(a.defs),
+	return &Agents{tenant: a.tenant, host: a.host, ledger: ledger, authorities: a.authorities, defs: maps.Clone(a.defs),
 		buildStamp: a.buildStamp, busy: map[string]bool{}}, nil
 }
 

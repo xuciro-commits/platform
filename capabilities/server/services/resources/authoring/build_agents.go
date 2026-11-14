@@ -153,7 +153,7 @@ func (b *Build) checkAgentWithDrafts(a Agent, tools map[string]bool, roles []str
 		if b.jointAssets[platform.AssetRef{App: ID, Kind: platform.AssetAction, Name: tool}] {
 			return nil
 		}
-		if _, ok := b.ledger.Catalog.Action(tool); !ok || !strings.HasPrefix(tool, ID+".") || b.installedActionOf(tool) == "" {
+		if _, ok := b.ledger.Catalog().Action(tool); !ok || !strings.HasPrefix(tool, ID+".") || b.installedActionOf(tool) == "" {
 			return fmt.Errorf("The agent %s uses %s, which is not an action of a published object", a.Name, tool)
 		}
 		return nil

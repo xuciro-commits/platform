@@ -51,9 +51,10 @@ type WorkTask = platform.WorkTask
 type SavedView = platform.SavedView
 
 type Work struct {
-	mu     sync.Mutex
-	host   platform.WorkHost
-	ledger *platform.Ledger
+	mu          sync.Mutex
+	host        platform.WorkHost
+	ledger      platform.Authority
+	authorities platform.Authorities
 }
 
 var _ platform.ApprovalOwner = (*Work)(nil)
@@ -81,7 +82,7 @@ func (w *Work) RequestApproval(c platform.Caller, held *pb.Submission, now time.
 	return platform.Decide(automation, w, request, now)
 }
 
-func New(tenant string) *Work {
+func New(tenant string, authorities platform.Authorities) *Work {
 	w := &Work{}
 	var actions []platform.Action
 	actions = append(actions, refusalEscalationAction())
@@ -105,7 +106,8 @@ func New(tenant string) *Work {
 		platform.Action{Schema: SchemaUndelegate, Target: DelegationType, Capability: "delegation", Title: "End delegation",
 			Description: "End one of your delegations.", Payload: []platform.Field{}, Roles: []string{platform.AnyMember}})
 	actions = append(actions, w.policyActions()...)
-	w.ledger = platform.NewLedger(tenant, ID, platform.NewCatalog(actions...), ApprovalType, TaskType, ViewType, DelegationType, PolicyType)
+	w.authorities = authorities
+	w.ledger = authorities(tenant, ID, platform.NewCatalog(actions...), ApprovalType, TaskType, ViewType, DelegationType, PolicyType)
 	return w
 }
 
@@ -172,14 +174,14 @@ func (w *Work) Snapshot() (json.RawMessage, error) { return w.ledger.Snapshot() 
 func (w *Work) Restore(raw json.RawMessage) error { return w.ledger.Restore(raw) }
 
 func (w *Work) Manifest() platform.Manifest {
-	return platform.Manifest{ID: ID, Title: platform.BuiltinManifestTitle(ID), Version: "1", Actions: w.ledger.Catalog, Entities: w.entities(),
+	return platform.Manifest{ID: ID, Title: platform.BuiltinManifestTitle(ID), Version: "1", Actions: w.ledger.Catalog(), Entities: w.entities(),
 		Reads: []string{"inbox", "requests", "views"}, Everyone: []string{"inbox", "requests", "views"},
 		Jobs: []platform.Job{{Name: "overdue", Title: "Tell people about overdue tasks", Every: time.Minute}, {Name: "refusals", Title: "Escalate repeated business refusals", Every: time.Second}}}
 }
 
 func (w *Work) Declarations() []*pb.AuthorityDeclaration { return w.ledger.Declarations() }
 
-func (w *Work) AcceptedLedger() *platform.Ledger { return w.ledger }
+func (w *Work) Authority() platform.Authority { return w.ledger }
 
 func (w *Work) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *kernel.Error) {
 	w.mu.Lock()
@@ -647,8 +649,8 @@ func (w *Work) delegate(c platform.Caller, s *pb.Submission) (func(*pb.ChangeRec
 	return func(r *pb.ChangeRecord) { c.Put(r, d) }, nil
 }
 
-func (w *Work) Fork(ledger *platform.Ledger) (platform.App, error) {
-	return &Work{host: w.host, ledger: ledger}, nil
+func (w *Work) Fork(ledger platform.Authority) (platform.App, error) {
+	return &Work{host: w.host, ledger: ledger, authorities: w.authorities}, nil
 }
 
-func (a *Work) NewSimulationApp(tenant string) platform.App { return New(tenant) }
+func (a *Work) NewSimulationApp(tenant string) platform.App { return New(tenant, a.authorities) }

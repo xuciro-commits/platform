@@ -67,15 +67,16 @@ type AI struct {
 	daily              map[string]int
 	recent             map[string][]time.Time
 	reservations       map[string]platform.AIReservation
-	ledger             *platform.Ledger
+	ledger             platform.Authority
+	authorities        platform.Authorities
 }
 
-func New(tenant string) *AI {
+func New(tenant string, authorities platform.Authorities) *AI {
 	admin := []string{Admin}
 	f := func(name, typ, description string, required bool) platform.Field {
 		return platform.Field{Name: name, Type: typ, Required: required, Description: description}
 	}
-	return &AI{trainingPolicies: map[string]platform.AITrainingPolicy{}, trainingCandidates: map[string]platform.AITrainingCandidate{}, limits: map[string]Limit{}, daily: map[string]int{}, recent: map[string][]time.Time{}, reservations: map[string]platform.AIReservation{}, ledger: platform.NewLedger(tenant, ID, platform.NewCatalog(append(trainingActions(), []platform.Action{
+	return &AI{authorities: authorities, trainingPolicies: map[string]platform.AITrainingPolicy{}, trainingCandidates: map[string]platform.AITrainingCandidate{}, limits: map[string]Limit{}, daily: map[string]int{}, recent: map[string][]time.Time{}, reservations: map[string]platform.AIReservation{}, ledger: authorities(tenant, ID, platform.NewCatalog(append(trainingActions(), []platform.Action{
 		platform.Action{Schema: SchemaProviderAdd, Target: ProviderType, Capability: "providers", Title: "Add AI provider", Roles: admin,
 			Description: "Add a source of models: a vendor (Anthropic, OpenAI, Gemini, Moonshot, DeepSeek, Qwen, Zhipu, OpenRouter), a third-party OpenAI-compatible API, or a local model server (LM Studio, Ollama, llama.cpp).",
 			Payload: []platform.Field{f("kind", "string", "vendor, compatible or local", true), f("vendor", "string", "For a vendor: its ID", false),
@@ -142,7 +143,7 @@ func (a *AI) Restore(raw json.RawMessage) error {
 }
 
 func (a *AI) Manifest() platform.Manifest {
-	return platform.Manifest{Languages: languages, ID: ID, Title: platform.BuiltinManifestTitle(ID), Version: "1", Actions: a.ledger.Catalog, Reads: []string{"ai-providers", "ai-models", "ai-usage", "ai-limits", "ai-training"},
+	return platform.Manifest{Languages: languages, ID: ID, Title: platform.BuiltinManifestTitle(ID), Version: "1", Actions: a.ledger.Catalog(), Reads: []string{"ai-providers", "ai-models", "ai-usage", "ai-limits", "ai-training"},
 		ReadSources: map[string]string{"ai-providers": "record", "ai-models": "record", "ai-usage": "record", "ai-limits": "record", "ai-training": "record"},
 		Everyone:    []string{"ai-models", "ai-usage"}, Roles: []string{User},
 		Settings: []platform.Setting{
@@ -565,4 +566,4 @@ func (a *AI) Spent(member string, now time.Time) int {
 	return a.daily[now.UTC().Format(time.DateOnly)+"|"+member]
 }
 
-func (a *AI) NewSimulationApp(tenant string) platform.App { return New(tenant) }
+func (a *AI) NewSimulationApp(tenant string) platform.App { return New(tenant, a.authorities) }

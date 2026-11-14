@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"platformserver/services/actions"
 	dataowner "platformserver/services/data"
 	"slices"
 	"strings"
@@ -21,7 +22,7 @@ import (
 	controlowner "platformserver/services/security/control"
 )
 
-type listenerProbe struct{ ledger *platform.Ledger }
+type listenerProbe struct{ ledger platform.Authority }
 
 type listenerProbeRecord struct {
 	platform.Record
@@ -29,11 +30,11 @@ type listenerProbeRecord struct {
 }
 
 func newListenerProbe(tenant string) *listenerProbe {
-	return &listenerProbe{ledger: platform.NewLedger(tenant, "listenerprobe", platform.NewCatalog(platform.Action{Schema: "listenerprobe.receive", Target: "listenerprobe.event", Title: "Receive event", Description: "Accept one connector event.", Roles: []string{platform.AnyMember}, Payload: []platform.Field{{Name: "title", Type: "string", Required: true, Description: "Event title"}}}), "listenerprobe.event")}
+	return &listenerProbe{ledger: actions.NewAuthority(tenant, "listenerprobe", platform.NewCatalog(platform.Action{Schema: "listenerprobe.receive", Target: "listenerprobe.event", Title: "Receive event", Description: "Accept one connector event.", Roles: []string{platform.AnyMember}, Payload: []platform.Field{{Name: "title", Type: "string", Required: true, Description: "Event title"}}}), "listenerprobe.event")}
 }
 
-func (p *listenerProbe) AcceptedLedger() *platform.Ledger { return p.ledger }
-func (p *listenerProbe) Fork(ledger *platform.Ledger) (platform.App, error) {
+func (p *listenerProbe) Authority() platform.Authority { return p.ledger }
+func (p *listenerProbe) Fork(ledger platform.Authority) (platform.App, error) {
 	return &listenerProbe{ledger: ledger}, nil
 }
 func (p *listenerProbe) Declarations() []*pb.AuthorityDeclaration { return p.ledger.Declarations() }
@@ -41,7 +42,7 @@ func (p *listenerProbe) SnapshotFormat() string                   { return "plat
 func (p *listenerProbe) Snapshot() (json.RawMessage, error)       { return p.ledger.Snapshot() }
 func (p *listenerProbe) Restore(raw json.RawMessage) error        { return p.ledger.Restore(raw) }
 func (p *listenerProbe) Manifest() platform.Manifest {
-	return platform.Manifest{ID: "listenerprobe", Title: "Listener probe", Version: "1", Roles: []string{"sender"}, Actions: p.ledger.Catalog,
+	return platform.Manifest{ID: "listenerprobe", Title: "Listener probe", Version: "1", Roles: []string{"sender"}, Actions: p.ledger.Catalog(),
 		Entities: []platform.Entity{{Type: "listenerprobe.event", Title: "Event", Model: listenerProbeRecord{}}}, Inputs: map[string]bool{"listenerprobe": true}}
 }
 func (p *listenerProbe) AcceptedInputs() []string { return []string{"listenerprobe"} }
@@ -78,10 +79,10 @@ func TestInvariantK2ListenersAndMonitoringViews(t *testing.T) {
 		{Subjects: []string{"other"}, Member: platform.Member{ID: "other", Roles: map[string]string{}}},
 	}
 	fresh := func() *invariantTenant {
-		return newInvariantTenantWithApps(t, tenant, []platform.App{monitoring.New(tenant), newListenerProbe(tenant)}, seats...)
+		return newInvariantTenantWithApps(t, tenant, []platform.App{monitoring.New(tenant, actions.NewAuthority), newListenerProbe(tenant)}, seats...)
 	}
 	replay := func() *invariantTenant {
-		return newInvariantTenantReplayWithApps(t, tenant, []platform.App{monitoring.New(tenant), newListenerProbe(tenant)}, seats...)
+		return newInvariantTenantReplayWithApps(t, tenant, []platform.App{monitoring.New(tenant, actions.NewAuthority), newListenerProbe(tenant)}, seats...)
 	}
 	live := fresh()
 	live.Secrets = func(name string) ([]byte, bool) { return []byte("shared-value"), name == "listener-secret" }

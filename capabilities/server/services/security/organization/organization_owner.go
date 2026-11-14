@@ -43,10 +43,11 @@ const (
 )
 
 type Enterprise struct {
-	mu     sync.Mutex
-	tenant string
-	model  Model
-	ledger *platform.Ledger
+	mu          sync.Mutex
+	tenant      string
+	model       Model
+	ledger      platform.Authority
+	authorities platform.Authorities
 }
 
 func declarations() []platform.Action {
@@ -114,13 +115,13 @@ func declarations() []platform.Action {
 	return append(actions, change)
 }
 
-func New(tenant string, seed platform.OrgSeed) *Enterprise {
+func New(tenant string, authorities platform.Authorities, seed platform.OrgSeed) *Enterprise {
 	catalog := platform.NewCatalog(declarations()...)
-	return &Enterprise{tenant: tenant, model: FromOrgSeed(seed), ledger: platform.NewLedger(tenant, ID, catalog, ElementType, RelationshipType, ViewType, ModelType, TenantLinkType)}
+	return &Enterprise{tenant: tenant, model: FromOrgSeed(seed), authorities: authorities, ledger: authorities(tenant, ID, catalog, ElementType, RelationshipType, ViewType, ModelType, TenantLinkType)}
 }
 
-func (*Enterprise) NewSimulationOrganization(tenant string, seed platform.OrgSeed) platform.App {
-	return New(tenant, seed)
+func (e *Enterprise) NewSimulationOrganization(tenant string, seed platform.OrgSeed) platform.App {
+	return New(tenant, e.authorities, seed)
 }
 
 func (e *Enterprise) SnapshotFormat() string { return "enterprise.model.v1" }

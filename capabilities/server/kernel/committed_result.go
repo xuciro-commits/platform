@@ -15,8 +15,8 @@ import (
 type CommittedResult struct {
 	Settlement
 	App         func(string) platform.App
-	ApplyBatch  func(*platform.Ledger, []byte) (bool, error)
-	ApplyRecord func(*platform.Ledger, []byte) (bool, error)
+	ApplyBatch  func(platform.Authority, []byte) (bool, error)
+	ApplyRecord func(platform.Authority, []byte) (bool, error)
 	Publish     func(platform.Event, platform.AcceptedEventPlan)
 }
 
@@ -48,7 +48,7 @@ func (s *Sequence) FinishCommitted(a platform.App, m platform.Member, hash strin
 			h.Quarantine(fmt.Errorf("committed batch differs from the accepted request: %v", err))
 			return nil, conflict
 		}
-		applied, err := h.ApplyBatch(a.AcceptedLedger(), committed)
+		applied, err := h.ApplyBatch(a.Authority(), committed)
 		if err != nil {
 			h.Quarantine(fmt.Errorf("committed record batch could not be applied: %w", err))
 			return nil, conflict
@@ -74,7 +74,7 @@ func (s *Sequence) FinishCommitted(a platform.App, m platform.Member, hash strin
 			return nil, conflict
 		}
 	}
-	applied, err := h.ApplyRecord(a.AcceptedLedger(), committed)
+	applied, err := h.ApplyRecord(a.Authority(), committed)
 	if err != nil {
 		h.Quarantine(fmt.Errorf("committed accepted result could not be applied: %w", err))
 		return nil, conflict
@@ -93,7 +93,7 @@ func (s *Sequence) FinishCommitted(a platform.App, m platform.Member, hash strin
 }
 
 func (s *Sequence) ReplayPrior(a platform.App, sub *pb.Submission, binding *platform.SchemaVersion) (record *pb.ChangeRecord, hash string, refusal *kernel.Error, done bool) {
-	prior := s.Committed.Prior(a.Manifest().ID, a.AcceptedLedger(), s.ID, sub.GetIdempotencyKey())
+	prior := s.Committed.Prior(a.Manifest().ID, a.Authority(), s.ID, sub.GetIdempotencyKey())
 	if len(prior.Answer) > 0 {
 		result, receipt, err := acceptedformat.DecodeBatch(prior.Answer)
 		hash, hashErr := acceptedformat.SubmissionHash(sub, binding)
@@ -141,7 +141,7 @@ func (p Prior) SourceReplay(principal string, sub *pb.Submission, deleted bool) 
 	return nil, nil, false
 }
 
-func (s *Sequence) ApplyBatch(l *platform.Ledger, raw []byte, h BatchApply) (bool, error) {
+func (s *Sequence) ApplyBatch(l platform.Authority, raw []byte, h BatchApply) (bool, error) {
 	prepared, err := s.PrepareBatch(l, raw, h)
 	if err != nil || prepared == nil {
 		return false, err

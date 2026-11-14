@@ -86,7 +86,7 @@ func ReplayBatch(f platform.ContinuousFlowOwner, tenant string, before FlowInsta
 	}
 	batchDigest := fmt.Sprintf("sha256:%x", sha256.Sum256(digest))
 	key := platform.FlowBatchKey(before.ID, before.Version, batch.ID)
-	prior := f.AcceptedLedger().AcceptedFor(tenant, key)
+	prior := f.Authority().AcceptedFor(tenant, key)
 	if prior == nil {
 		return platform.FlowBatchOutcome{}, false, nil
 	}

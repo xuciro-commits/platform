@@ -16,7 +16,7 @@ type evaluationApp struct {
 	agent string
 }
 
-func (a evaluationApp) Fork(ledger *platform.Ledger) (platform.App, error) {
+func (a evaluationApp) Fork(ledger platform.Authority) (platform.App, error) {
 	fork, err := a.App.Fork(ledger)
 	if err != nil {
 		return nil, err

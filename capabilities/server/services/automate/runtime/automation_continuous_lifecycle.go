@@ -468,7 +468,7 @@ type preparedDecision struct {
 	prepared *PreparedBatch
 }
 
-func (d preparedDecision) Fork(ledger *platform.Ledger) (platform.App, error) {
+func (d preparedDecision) Fork(ledger platform.Authority) (platform.App, error) {
 	fork, err := d.Flows.Fork(ledger)
 	if err != nil {
 		return nil, err

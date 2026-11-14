@@ -54,7 +54,7 @@ func (t *Tenant) assetInstallationView(recordView *records.Store, includeArchive
 		if t.assets[app.Manifest().ID] == nil {
 			continue
 		}
-		fork, err := app.Fork(app.AcceptedLedger())
+		fork, err := app.Fork(app.Authority())
 		if err != nil || fork == nil {
 			return nil, fmt.Errorf("asset owner %s cannot fork: %v", app.Manifest().ID, err)
 		}

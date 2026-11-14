@@ -12,13 +12,13 @@ type automationEnvironment struct {
 	b *Build
 }
 
-func (e automationEnvironment) Application() platform.App { return e.b }
-func (e automationEnvironment) Host() platform.BuildHost  { return e.b.host }
-func (e automationEnvironment) Ledger() *platform.Ledger  { return e.b.ledger }
-func (e automationEnvironment) AppID() string             { return ID }
-func (e automationEnvironment) Version() string           { return e.b.Manifest().Version }
-func (e automationEnvironment) Roles() []string           { return e.b.Manifest().AllRoles() }
-func (e automationEnvironment) JointMode() bool           { return e.b.jointMode }
+func (e automationEnvironment) Application() platform.App  { return e.b }
+func (e automationEnvironment) Host() platform.BuildHost   { return e.b.host }
+func (e automationEnvironment) Ledger() platform.Authority { return e.b.ledger }
+func (e automationEnvironment) AppID() string              { return ID }
+func (e automationEnvironment) Version() string            { return e.b.Manifest().Version }
+func (e automationEnvironment) Roles() []string            { return e.b.Manifest().AllRoles() }
+func (e automationEnvironment) JointMode() bool            { return e.b.jointMode }
 func (e automationEnvironment) FunctionCallAction() string {
 	return SchemaFunctionCall
 }

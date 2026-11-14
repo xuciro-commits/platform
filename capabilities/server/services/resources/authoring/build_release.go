@@ -33,7 +33,7 @@ func (b *Build) declaresRole(role string) bool {
 			return true
 		}
 	}
-	catalog := b.ledger.Catalog
+	catalog := b.ledger.Catalog()
 	if b.installationCatalog != nil {
 		catalog = b.installationCatalog
 	}

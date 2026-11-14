@@ -74,8 +74,9 @@ type Console struct {
 	sessions        sessionTable
 	platform.ConsolePolicies
 	platform.ConsolePackages
-	ledger *platform.Ledger
-	host   platform.ConsoleHost
+	ledger      platform.Authority
+	authorities platform.Authorities
+	host        platform.ConsoleHost
 }
 
 func ConsoleActions(ownerActions []platform.Action) *platform.Catalog {
@@ -111,14 +112,15 @@ func ConsoleActions(ownerActions []platform.Action) *platform.Catalog {
 	return platform.NewCatalog(actions...)
 }
 
-func NewConsole(tenant string, newOwners func(string) Owners, seats ...platform.Seat) *Console {
+func NewConsole(tenant string, authorities platform.Authorities, newOwners func(string) Owners, seats ...platform.Seat) *Console {
 	owners := newOwners(tenant)
 	d := &Console{tenant: tenant, newOwners: newOwners, members: map[string]*platform.Member{}, subjects: map[string]string{}, profiles: map[string]*platform.Profile{},
 		ConsolePolicies: owners.Policies,
 		tokens:          map[string]*Token{}, minted: map[string]bool{}, accessRequests: map[string]*AccessRequest{}, lastSeen: map[string]time.Time{}, sessions: sessionTable{seen: map[string]map[string]*platform.Session{}, revoked: map[string]bool{}},
 		ConsolePackages: owners.Packages,
 		Credentials:     NewCredentials(tenant),
-		ledger:          platform.NewLedger(tenant, PlatformApp, ConsoleActions(owners.Actions), MemberType, ProfileType, platform.MarkingType, platform.RoleType, platform.PolicyType, platform.TeamType, TokenType, platform.ProjectType, AccessRequestType, platform.PackageType, CredentialType, ConnectorType, SettingType, WorkType, NotificationType, ProtocolType, EndpointType, EffectType, OperationType, TranslationType)}
+		authorities:     authorities,
+		ledger:          authorities(tenant, PlatformApp, ConsoleActions(owners.Actions), MemberType, ProfileType, platform.MarkingType, platform.RoleType, platform.PolicyType, platform.TeamType, TokenType, platform.ProjectType, AccessRequestType, platform.PackageType, CredentialType, ConnectorType, SettingType, WorkType, NotificationType, ProtocolType, EndpointType, EffectType, OperationType, TranslationType)}
 	for _, s := range seats {
 		m := s.Member
 		m.Tenant, m.Roles = tenant, maps.Clone(m.Roles)
@@ -256,7 +258,7 @@ func clone(m *platform.Member) platform.Member {
 }
 
 func (d *Console) Manifest() platform.Manifest {
-	return platform.Manifest{ID: PlatformApp, Title: platform.BuiltinManifestTitle(PlatformApp), Version: "1", Actions: d.ledger.Catalog, Roles: []string{Admin, platform.Auditor, "confidential", "restricted"},
+	return platform.Manifest{ID: PlatformApp, Title: platform.BuiltinManifestTitle(PlatformApp), Version: "1", Actions: d.ledger.Catalog(), Roles: []string{Admin, platform.Auditor, "confidential", "restricted"},
 		Reads:       []string{"members", "tenant", "account", "audit", "deliveries", "work", "connectors", "settings", "notifications", "endpoints", "effects", "health", "personal-reads", "permissions", "access", "access-requests", "packages", "contributions", "credentials", "markings"},
 		ReadSources: map[string]string{"members": "record", "tenant": "record", "account": "record", "audit": "record", "deliveries": "record", "connectors": "record", "settings": "record", "endpoints": "record", "health": "record", "personal-reads": "record", "permissions": "record", "access": "record", "access-requests": "record", "packages": "record", "credentials": "record", "contributions": "record", "markings": "record"},
 		Everyone:    []string{"notifications", "tenant", "account", "markings", "access-requests"}, Inputs: map[string]bool{"heartbeat": false},
@@ -265,14 +267,14 @@ func (d *Console) Manifest() platform.Manifest {
 
 func (d *Console) Declarations() []*pb.AuthorityDeclaration { return d.ledger.Declarations() }
 
-func (d *Console) AcceptedLedger() *platform.Ledger { return d.ledger }
+func (d *Console) Authority() platform.Authority { return d.ledger }
 
-func (d *Console) Fork(ledger *platform.Ledger) (platform.App, error) {
+func (d *Console) Fork(ledger platform.Authority) (platform.App, error) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 
 	state := d.state()
-	fork := NewConsole(d.tenant, d.newOwners)
+	fork := NewConsole(d.tenant, d.authorities, d.newOwners)
 	fork.ledger, fork.host = ledger, d.host
 	fork.ConsolePackages.Attach(d.host)
 	fork.ConsolePackages.BindPackageIndex(d.ConsolePackages.BoundIndex())
@@ -415,7 +417,7 @@ func (d *Console) ApplyAcceptedState(raw json.RawMessage) error {
 
 func (d *Console) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *kernel.Error) {
 	return d.ledger.Receive(c, s, now, nil, func() (func(*pb.ChangeRecord), *kernel.Error) {
-		declared, _ := d.ledger.Catalog.Action(s.GetSchema().GetName())
+		declared, _ := d.ledger.Catalog().Action(s.GetSchema().GetName())
 		if declared.Target == OperationType {
 			return d.decideOperation(c, s, now)
 		}

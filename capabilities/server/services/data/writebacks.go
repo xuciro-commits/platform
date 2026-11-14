@@ -152,7 +152,7 @@ func (o *Owner) checkWritebackConnection(c platform.Caller, w Writeback) *kernel
 	return nil
 }
 
-func (o *Owner) SubmitWritebackAnswered(ledger *platform.Ledger, c platform.Caller, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *kernel.Error) {
+func (o *Owner) SubmitWritebackAnswered(ledger platform.Authority, c platform.Caller, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *kernel.Error) {
 	return ledger.Receive(c, s, now, nil, func() (func(*pb.ChangeRecord), *kernel.Error) {
 		var payload struct {
 			Answer WritebackAns `json:"answer"`

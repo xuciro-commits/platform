@@ -81,7 +81,7 @@ func (s *Sequence) InstallRuntimeHistory(store AcceptedStateReader, position fun
 		ctx = s.Projection.Current().Context()
 	}
 	for _, a := range apps {
-		a.AcceptedLedger().UseChangeArchive(NewChangeArchive(ctx, store, s.ID, a.Manifest().ID))
+		a.Authority().UseChangeArchive(NewChangeArchive(ctx, store, s.ID, a.Manifest().ID))
 	}
 	s.Committed.UseStorage(ctx, store, s.ID, position)
 }
@@ -122,7 +122,7 @@ func (s *Sequence) RuntimeStateDelta(o RuntimeOwners) (persistence.StateDelta, e
 		return persistence.StateDelta{}, err
 	}
 	for _, a := range o.Apps {
-		for index, r := range a.AcceptedLedger().RecordsFor(s.ID) {
+		for index, r := range a.Authority().RecordsFor(s.ID) {
 			image, err := proto.MarshalOptions{Deterministic: true}.Marshal(r)
 			if err != nil {
 				return persistence.StateDelta{}, err

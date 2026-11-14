@@ -37,7 +37,7 @@ func (t *Tenant) Import(m platform.Member, typ string, data []byte, preview bool
 		},
 		Verb: func(key, id string) string {
 			verb, _ := recordRead(t, context.Background(), func(t *Tenant) (string, *kernel.Error) {
-				ledger := t.App(view.Info().App).AcceptedLedger()
+				ledger := t.App(view.Info().App).Authority()
 				if ledger.AcceptedFor(t.ID, key) != nil {
 					return ".create", nil
 				}

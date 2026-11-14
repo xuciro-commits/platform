@@ -30,7 +30,7 @@ func ScheduleActions() []platform.Action {
 	return []platform.Action{{Schema: platform.SchemaScheduleRan, Target: platform.ScheduleType, Title: "Keep scheduled build", Description: "Retain the accepted time that requested a pipeline build.", Capability: "integrations", Roles: []string{"builder", "integrator"}, Payload: []platform.Field{{Name: "at", Type: "datetime", Required: true}}}}
 }
 
-func SubmitScheduleRan(ledger *platform.Ledger, c platform.Caller, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *kernel.Error) {
+func SubmitScheduleRan(ledger platform.Authority, c platform.Caller, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *kernel.Error) {
 	return ledger.Receive(c, s, now, nil, func() (func(*pb.ChangeRecord), *kernel.Error) {
 		var payload struct {
 			At time.Time `json:"at"`

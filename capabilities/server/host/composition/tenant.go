@@ -30,14 +30,14 @@ func NewTenantWithCapabilities(id string, services platform.RuntimeCapabilities,
 func BuiltinApps(id string, seats ...platform.Seat) []platform.App {
 	apps := []platform.App{
 		NewConsole(id, seats...),
-		enterprise.New(id, platform.OrgSeed{Memberships: controlowner.Memberships(seats)}), relations.New(id), ai.New(id), work.New(id), monitoring.New(id), automation.New(id), knowledge.New(id),
-		agentowner.New(id), files.New(id), build.New(id),
+		enterprise.New(id, actions.NewAuthority, platform.OrgSeed{Memberships: controlowner.Memberships(seats)}), relations.New(id, actions.NewAuthority), ai.New(id, actions.NewAuthority), work.New(id, actions.NewAuthority), monitoring.New(id, actions.NewAuthority), automation.New(id, actions.NewAuthority), knowledge.New(id, actions.NewAuthority),
+		agentowner.New(id, actions.NewAuthority), files.New(id, actions.NewAuthority), build.New(id, actions.NewAuthority),
 	}
 	return apps
 }
 
 func NewConsole(tenant string, seats ...platform.Seat) *controlowner.Console {
-	return controlowner.NewConsole(tenant, func(id string) controlowner.Owners {
+	return controlowner.NewConsole(tenant, actions.NewAuthority, func(id string) controlowner.Owners {
 		actions := append(platform.AccessActions(), platform.ProjectActions()...)
 		actions = append(actions, packages.Actions()...)
 		return controlowner.Owners{Policies: security.NewPolicies(), Packages: packages.New(id), Actions: actions}

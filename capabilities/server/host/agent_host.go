@@ -322,7 +322,7 @@ func (t *Tenant) finishAgentStep(candidate preparedAccepted) {
 func (t *Tenant) applyAcceptedAgent(raw []byte) (acceptedformat.RuntimeAgent, error) {
 	h := runtimekernel.AgentApply{Usage: t.usage(), Batch: t.batchApply(), Published: t.publishAcceptedBatch}
 	if t.agents != nil {
-		h.Ledger = t.agents.AcceptedLedger()
+		h.Ledger = t.agents.Authority()
 	}
 	return t.ApplyAgentResult(raw, h)
 }

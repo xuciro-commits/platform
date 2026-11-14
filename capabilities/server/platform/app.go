@@ -133,9 +133,9 @@ func (c Caller) WithTransactionInput(input *pb.Submission) Caller {
 func (c Caller) RolesHere() []string { return c.RolesIn(c.App) }
 
 type StagedDecision interface {
-	HoldChanges(*Ledger) (release func(), refusal *kernel.Error)
-	DraftChanges(*Ledger, func() *kernel.ChangeLog) *kernel.ChangeLog
-	DecisionCatalog(*Ledger) *Catalog
+	HoldChanges(Authority) (release func(), refusal *kernel.Error)
+	DraftChanges(Authority, func() *kernel.ChangeLog) *kernel.ChangeLog
+	DecisionCatalog(Authority) *Catalog
 	FailDecision(*kernel.Error)
 	RecordAuthorization(Caller, AuthzRequest, AuthzDecision)
 	BusinessRefused(*kernel.Error, BusinessRefusalFact)
@@ -164,7 +164,7 @@ func (c Caller) StagedDecision() StagedDecision {
 
 func (c Caller) Staging() bool { return c.StagedDecision() != nil }
 
-func (c Caller) probing() bool {
+func (c Caller) Probing() bool {
 	decision := c.StagedDecision()
 	return decision != nil && decision.Probing()
 }
@@ -400,11 +400,11 @@ func (m Manifest) AllRoles() []string {
 }
 
 type App interface {
-	AcceptedLedger() *Ledger
+	Authority() Authority
 	Manifest() Manifest
 	Declarations() []*pb.AuthorityDeclaration
 	Submit(c Caller, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *kernel.Error)
-	Fork(ledger *Ledger) (App, error)
+	Fork(authority Authority) (App, error)
 	Snapshot() (json.RawMessage, error)
 	Restore(json.RawMessage) error
 	SnapshotFormat() string

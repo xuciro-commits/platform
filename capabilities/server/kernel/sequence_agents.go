@@ -39,7 +39,7 @@ func (s *Sequence) ApplyUsageResult(raw []byte, h UsageApply) (acceptedformat.Us
 
 type AgentApply struct {
 	Usage     UsageApply
-	Ledger    *platform.Ledger
+	Ledger    platform.Authority
 	Batch     BatchApply
 	Published func(acceptedformat.Batch)
 }

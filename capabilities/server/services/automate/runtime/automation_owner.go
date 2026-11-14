@@ -51,7 +51,8 @@ type flowDef struct {
 type Flows struct {
 	mu           sync.Mutex
 	host         platform.FlowHost
-	ledger       *platform.Ledger
+	ledger       platform.Authority
+	authorities  platform.Authorities
 	defs         map[string][]*flowDef
 	chosen, pins map[string]int
 }
@@ -82,7 +83,7 @@ func (f *Flows) version(c platform.Caller, flow string) (*flowDef, *kernel.Error
 
 func (f *Flows) AttachFlow(h platform.FlowHost) { f.host = h }
 
-func New(tenant string) *Flows {
+func New(tenant string, authorities platform.Authorities) *Flows {
 	admin := []string{Admin}
 	var actions []platform.Action
 	for _, e := range flowEntities() {
@@ -112,7 +113,7 @@ func New(tenant string) *Flows {
 			Description: "Move a running instance to its flow's next version, as that version's mapping says."},
 		platform.Action{Schema: SchemaFlowArtifactCleanup, Target: InstanceType, Capability: "flows", Title: "Retire superseded Flow artifacts", Payload: []platform.Field{{Name: "digest", Type: "text", Required: true}}, Automation: true,
 			Description: "Acknowledge host deletion of already-superseded frame and checkpoint artifacts."})
-	return &Flows{ledger: platform.NewLedger(tenant, ID, platform.NewCatalog(actions...), InstanceType, "flow.output", "flow.dead-letter"), defs: map[string][]*flowDef{}}
+	return &Flows{authorities: authorities, ledger: authorities(tenant, ID, platform.NewCatalog(actions...), InstanceType, "flow.output", "flow.dead-letter"), defs: map[string][]*flowDef{}}
 }
 
 func flowEntities() []platform.Entity {
@@ -128,14 +129,14 @@ func flowEntities() []platform.Entity {
 }
 
 func (f *Flows) Manifest() platform.Manifest {
-	return platform.Manifest{ID: ID, Title: platform.BuiltinManifestTitle(ID), Version: "1", Actions: f.ledger.Catalog, Entities: flowEntities(), Reads: []string{"flows"},
+	return platform.Manifest{ID: ID, Title: platform.BuiltinManifestTitle(ID), Version: "1", Actions: f.ledger.Catalog(), Entities: flowEntities(), Reads: []string{"flows"},
 		ReadSources: map[string]string{"flows": "record"},
 		Jobs:        []platform.Job{{Name: "timers", Title: "Take flows' due steps: retries, timeouts, times and conditions", Every: time.Second}}}
 }
 
 func (f *Flows) Declarations() []*pb.AuthorityDeclaration { return f.ledger.Declarations() }
 
-func (f *Flows) AcceptedLedger() *platform.Ledger { return f.ledger }
+func (f *Flows) Authority() platform.Authority { return f.ledger }
 
 func (f *Flows) SnapshotFormat() string { return "platform.ledger.v1" }
 
@@ -274,15 +275,15 @@ func (f *Flows) HasDefinition(app, name string, version int) bool {
 	return f.def(app+"."+name, version) != nil
 }
 
-func (f *Flows) Fork(ledger *platform.Ledger) (platform.App, error) {
+func (f *Flows) Fork(ledger platform.Authority) (platform.App, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	defs := maps.Clone(f.defs)
 	for id, versions := range defs {
 		defs[id] = slices.Clone(versions)
 	}
-	return &Flows{host: f.host, ledger: ledger, defs: defs,
+	return &Flows{host: f.host, ledger: ledger, authorities: f.authorities, defs: defs,
 		chosen: maps.Clone(f.chosen), pins: maps.Clone(f.pins)}, nil
 }
 
-func (a *Flows) NewSimulationApp(tenant string) platform.App { return New(tenant) }
+func (a *Flows) NewSimulationApp(tenant string) platform.App { return New(tenant, a.authorities) }

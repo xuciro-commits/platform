@@ -152,10 +152,10 @@ func (b BatchState) Changes(batch BatchApply) ChangeApply {
 		}}
 }
 
-func LedgerOf(app func(string) platform.App) func(string) *platform.Ledger {
-	return func(name string) *platform.Ledger {
+func LedgerOf(app func(string) platform.App) func(string) platform.Authority {
+	return func(name string) platform.Authority {
 		if owner := app(name); owner != nil {
-			return owner.AcceptedLedger()
+			return owner.Authority()
 		}
 		return nil
 	}

@@ -1,21 +1,22 @@
-package platform
+package actions
 
 import (
 	"encoding/json"
 	"google.golang.org/protobuf/proto"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
+	"platformserver/platform"
 	"reflect"
 	"slices"
 	"strings"
 	"time"
 )
 
-func (l *Ledger) ApplyTxnRecord(c Caller, r *pb.ChangeRecord, e Entity, verb, id string, payload json.RawMessage, now time.Time) (refusal *kernel.Error) {
+func (l *authority) ApplyTxnRecord(c platform.Caller, r *pb.ChangeRecord, e platform.Entity, verb, id string, payload json.RawMessage, now time.Time) (refusal *kernel.Error) {
 	if c.TraceEnabled() {
 		before, _ := c.ReadRecord(e.Type, id, now)
 		defer func() {
-			event := DecisionTrace{Kind: "transaction-change", Type: e.Type, ID: id, Operation: verb, Before: before}
+			event := platform.DecisionTrace{Kind: "transaction-change", Type: e.Type, ID: id, Operation: verb, Before: before}
 			if refusal != nil {
 				event.Refusal = refusal.Message
 			} else {
@@ -27,7 +28,7 @@ func (l *Ledger) ApplyTxnRecord(c Caller, r *pb.ChangeRecord, e Entity, verb, id
 	if !c.Staging() || c.Replaying || c.App != l.authority || r.GetSubmission().GetAuthority() != c.App ||
 		r.GetSubmission().GetTenantId() != l.tenant || r.GetSubmission().GetPrincipalId() != c.ID || r.GetChangeId() == "" || id == "" || !strings.HasPrefix(e.Type, c.App+".") ||
 		(verb != "create" && verb != "edit" && verb != "archive") {
-		return Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Transaction step is outside its private authority / 事务步骤超出私有权威范围")
+		return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Transaction step is outside its private authority / 事务步骤超出私有权威范围")
 	}
 	s := proto.Clone(r.GetSubmission()).(*pb.Submission)
 	s.Schema = &pb.SchemaRef{Name: e.Type + "." + verb, Version: 1}
@@ -36,7 +37,7 @@ func (l *Ledger) ApplyTxnRecord(c Caller, r *pb.ChangeRecord, e Entity, verb, id
 	catalog := l.catalogFor(c)
 	a, ok := catalog.Action(s.Schema.Name)
 	if !ok || a.Target != e.Type || verb == "create" && !e.Standard.Create || verb == "edit" && !e.Standard.Edit || verb == "archive" && !e.Standard.Archive {
-		return Refuse(pb.ErrorCode_ERROR_CODE_UNKNOWN_SCHEMA, "Transaction step action is unavailable / 事务步骤动作不可用")
+		return platform.Refuse(pb.ErrorCode_ERROR_CODE_UNKNOWN_SCHEMA, "Transaction step action is unavailable / 事务步骤动作不可用")
 	}
 	authorization := s
 	invocation := c.TransactionInput(r)
@@ -44,7 +45,7 @@ func (l *Ledger) ApplyTxnRecord(c Caller, r *pb.ChangeRecord, e Entity, verb, id
 		original := invocation.GetSchema().GetName()
 		declared := original == e.Type+".create" && e.CreateTxn != nil
 		if e.Lifecycle != nil {
-			declared = declared || slices.ContainsFunc(e.Lifecycle.Transitions, func(t Transition) bool { return t.Txn != nil && original == e.Type+"."+t.Name })
+			declared = declared || slices.ContainsFunc(e.Lifecycle.Transitions, func(t platform.Transition) bool { return t.Txn != nil && original == e.Type+"."+t.Name })
 		}
 		if declared {
 			authorization = invocation
@@ -56,31 +57,31 @@ func (l *Ledger) ApplyTxnRecord(c Caller, r *pb.ChangeRecord, e Entity, verb, id
 		if len(decision.Layers) > 0 {
 			layer = decision.Layers[len(decision.Layers)-1].Name
 		}
-		return Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "Authorization denied at {layer}: {reason}", layer, decision.Reason)
+		return platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "Authorization denied at {layer}: {reason}", layer, decision.Reason)
 	}
-	info, _ := Describe(c.App, e, func(_ reflect.Type) string { return "" })
+	info, _ := platform.Describe(c.App, e, func(_ reflect.Type) string { return "" })
 	var given map[string]json.RawMessage
 	if json.Unmarshal(payload, &given) != nil {
-		return Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Invalid transaction fields / 事务字段无效")
+		return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Invalid transaction fields / 事务字段无效")
 	}
 	for name, raw := range given {
 		if f, found := info.Field(name); found && f.Type == "reference" && f.Ref != "" {
 			var ref string
 			if json.Unmarshal(raw, &ref) != nil {
-				return Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Invalid transaction reference / 事务引用无效")
+				return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Invalid transaction reference / 事务引用无效")
 			}
-			if ref != "" && !c.rt.Readable(c, f.Ref+"/"+ref) {
+			if ref != "" && !c.Runtime().Readable(c, f.Ref+"/"+ref) {
 				return notFound()
 			}
 		}
 	}
 	if raw, exists := given["state"]; exists {
 		var state string
-		if verb != "create" && (e.Type != invocation.GetTarget().GetType() || id != invocation.GetTarget().GetId()) || e.Lifecycle == nil || e.Lifecycle.Field != "state" || json.Unmarshal(raw, &state) != nil || !slices.ContainsFunc(e.Lifecycle.States, func(s State) bool { return s.Name == state }) {
-			return Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Transaction state must be a declared state of its subject")
+		if verb != "create" && (e.Type != invocation.GetTarget().GetType() || id != invocation.GetTarget().GetId()) || e.Lifecycle == nil || e.Lifecycle.Field != "state" || json.Unmarshal(raw, &state) != nil || !slices.ContainsFunc(e.Lifecycle.States, func(s platform.State) bool { return s.Name == state }) {
+			return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Transaction state must be a declared state of its subject")
 		}
 		delete(given, "state")
-		payload = Raw(given)
+		payload = platform.Raw(given)
 		s.Payload = payload
 		compute := e.Compute
 		e.Compute = func(value any) {
@@ -98,17 +99,17 @@ func (l *Ledger) ApplyTxnRecord(c Caller, r *pb.ChangeRecord, e Entity, verb, id
 	return nil
 }
 
-func (l *Ledger) ApplyTxnRoute(c Caller, r *pb.ChangeRecord, e Entity, target TxnRef, now time.Time, run func(Caller, *pb.ChangeRecord, *BusinessTxn, time.Time) *kernel.Error) *kernel.Error {
+func (l *authority) ApplyTxnRoute(c platform.Caller, r *pb.ChangeRecord, e platform.Entity, target platform.TxnRef, now time.Time, run func(platform.Caller, *pb.ChangeRecord, *platform.BusinessTxn, time.Time) *kernel.Error) *kernel.Error {
 	if !c.Staging() || c.Replaying || c.App != l.authority || target.Type != e.Type || target.Action == "" || target.ID == "" || e.Lifecycle == nil || run == nil {
-		return Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Refusal route requires its original transaction owner / 拒绝改路须经原事务归属方")
+		return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Refusal route requires its original transaction owner / 拒绝改路须经原事务归属方")
 	}
-	index := slices.IndexFunc(e.Lifecycle.Transitions, func(t Transition) bool { return t.Name == target.Action })
+	index := slices.IndexFunc(e.Lifecycle.Transitions, func(t platform.Transition) bool { return t.Name == target.Action })
 	if index < 0 {
-		return Refuse(pb.ErrorCode_ERROR_CODE_UNKNOWN_SCHEMA, "Refusal route transaction is unavailable / 拒绝改路目标事务不可用")
+		return platform.Refuse(pb.ErrorCode_ERROR_CODE_UNKNOWN_SCHEMA, "Refusal route transaction is unavailable / 拒绝改路目标事务不可用")
 	}
 	tr := e.Lifecycle.Transitions[index]
 	if tr.Txn == nil || tr.Approval != nil || tr.Adoption != nil {
-		return Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Refusal routes require an ordinary declared transaction / 拒绝改路须指向已声明的普通事务")
+		return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Refusal routes require an ordinary declared transaction / 拒绝改路须指向已声明的普通事务")
 	}
 	c.Automation = false
 	routed := proto.Clone(r).(*pb.ChangeRecord)
@@ -117,10 +118,10 @@ func (l *Ledger) ApplyTxnRoute(c Caller, r *pb.ChangeRecord, e Entity, target Tx
 	catalog := l.catalogFor(c)
 	decision := catalog.DecideSubmission(c, routed.Submission, now)
 	if !decision.Allow {
-		return Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "Refusal route authorization denied: {reason} / 拒绝改路授权被拒：{reason}", decision.Reason, decision.Reason)
+		return platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "Refusal route authorization denied: {reason} / 拒绝改路授权被拒：{reason}", decision.Reason, decision.Reason)
 	}
 	var failure *kernel.Error
-	tr.ApplyTxn = func(c Caller, receipt *pb.ChangeRecord, at time.Time) *kernel.Error {
+	tr.ApplyTxn = func(c platform.Caller, receipt *pb.ChangeRecord, at time.Time) *kernel.Error {
 		failure = run(c.WithTransactionInput(routed.Submission), r, tr.Txn, at)
 		return failure
 	}
@@ -132,8 +133,4 @@ func (l *Ledger) ApplyTxnRoute(c Caller, r *pb.ChangeRecord, e Entity, target Tx
 	}
 	apply(r)
 	return failure
-}
-
-type TransactionHost interface {
-	CheckTxnCall(TxnCall) error
 }

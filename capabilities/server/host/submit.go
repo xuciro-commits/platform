@@ -258,7 +258,7 @@ func (t *Tenant) submitBackground(m platform.Member, s *pb.Submission, now time.
 	})
 }
 
-func (t *Tenant) applyAcceptedBatch(l *platform.Ledger, raw []byte) (bool, error) {
+func (t *Tenant) applyAcceptedBatch(l platform.Authority, raw []byte) (bool, error) {
 	return t.ApplyBatch(l, raw, t.batchApply())
 }
 
@@ -306,7 +306,7 @@ func (t *Tenant) publishAcceptedBatch(result acceptedformat.Batch) {
 	runtimekernel.PublishBatch(result, t.publishAccepted)
 }
 
-func (t *Tenant) applyAcceptedResult(l *platform.Ledger, raw []byte) (bool, error) {
+func (t *Tenant) applyAcceptedResult(l platform.Authority, raw []byte) (bool, error) {
 	return t.ApplyRecordResult(l, raw, runtimekernel.RecordApply{App: t.App, CheckBindings: build.CheckRunApplicationBindings, DefinitionType: build.AppType,
 		Claims: func(result acceptedformat.Record, receipt *pb.ChangeRecord) (func() error, error) {
 			return t.Claims.RecordClaims(t.ID, result, receipt)

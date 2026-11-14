@@ -272,7 +272,7 @@ func checkEvery(every string) *kernel.Error {
 	return nil
 }
 
-func (o *Owner) SubmitSourcePulled(ledger *platform.Ledger, c platform.Caller, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *kernel.Error) {
+func (o *Owner) SubmitSourcePulled(ledger platform.Authority, c platform.Caller, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *kernel.Error) {
 	return ledger.Receive(c, s, now, nil, func() (func(*pb.ChangeRecord), *kernel.Error) {
 		var payload struct {
 			Pull SourcePull `json:"pull"`

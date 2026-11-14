@@ -56,11 +56,11 @@ func (d Decision) Fork(owner func(string) platform.App) (Decision, bool) {
 	}
 	fork.Records = d.Records.ForkRecords()
 	fork.Records.InheritDecision(d.Records)
-	fork.Logs = map[*platform.Ledger]*kernel.ChangeLog{}
+	fork.Logs = map[platform.Authority]*kernel.ChangeLog{}
 	for ledger, log := range d.Logs {
 		suspended := d.Receiving[ledger]
 		for id := range d.Active {
-			if app := owner(id); app != nil && app.AcceptedLedger() == ledger {
+			if app := owner(id); app != nil && app.Authority() == ledger {
 				suspended = true
 				break
 			}
@@ -94,7 +94,7 @@ func (d Decision) Fork(owner func(string) platform.App) (Decision, bool) {
 			fork.States[id], fork.PrivateApps[id] = state, state
 			continue
 		}
-		app, err := state.Fork(state.AcceptedLedger())
+		app, err := state.Fork(state.Authority())
 		copy, ok := app.(platform.AcceptedStateApp)
 		if err != nil || !ok {
 			return Decision{}, false
@@ -109,8 +109,8 @@ func (d Decision) Fork(owner func(string) platform.App) (Decision, bool) {
 		if fork.PrivateApps[id] != nil {
 			continue
 		}
-		copy, err := app.Fork(app.AcceptedLedger())
-		if err != nil || copy == nil || copy.Manifest().ID != id || copy.AcceptedLedger() != app.AcceptedLedger() {
+		copy, err := app.Fork(app.Authority())
+		if err != nil || copy == nil || copy.Manifest().ID != id || copy.Authority() != app.Authority() {
 			return Decision{}, false
 		}
 		fork.PrivateApps[id] = copy
@@ -119,7 +119,7 @@ func (d Decision) Fork(owner func(string) platform.App) (Decision, bool) {
 }
 
 func (d *Decision) Shared(id string, app platform.App) bool {
-	return d.Active[id] || d.Receiving[app.AcceptedLedger()]
+	return d.Active[id] || d.Receiving[app.Authority()]
 }
 
 func cloneLists(src map[string][]string) map[string][]string {

@@ -29,14 +29,14 @@ var sha256Hex = regexp.MustCompile(`^[0-9a-f]{64}$`)
 type Files struct {
 	mu     sync.Mutex
 	host   platform.FileHost
-	ledger *platform.Ledger
+	ledger platform.Authority
 }
 
 func (f *Files) AttachFiles(h platform.FileHost) { f.host = h }
 
-func New(tenant string) *Files {
+func New(tenant string, authorities platform.Authorities) *Files {
 	any := []string{platform.AnyMember}
-	return &Files{ledger: platform.NewLedger(tenant, ID, platform.NewCatalog(
+	return &Files{ledger: authorities(tenant, ID, platform.NewCatalog(
 		platform.Action{Schema: SchemaAttach, Target: FileType, Capability: "files", Title: "Attach file", Roles: any,
 			Description: "Attach an uploaded file to a record you may read; whoever may read the record may read the file.",
 			Payload: []platform.Field{{Name: "hash", Type: "string", Required: true, Description: "The SHA-256 the upload answered with"},
@@ -58,13 +58,13 @@ func entities() []platform.Entity {
 }
 
 func (f *Files) Manifest() platform.Manifest {
-	return platform.Manifest{ID: ID, Title: platform.BuiltinManifestTitle(ID), Version: "1", Actions: f.ledger.Catalog, Entities: entities(),
+	return platform.Manifest{ID: ID, Title: platform.BuiltinManifestTitle(ID), Version: "1", Actions: f.ledger.Catalog(), Entities: entities(),
 		Settings: []platform.Setting{{Name: SettingMax, Title: "Largest file, MB", Type: "integer", Default: "25",
 			Description: "Uploads larger than this are refused."}}}
 }
 
 func (f *Files) Declarations() []*pb.AuthorityDeclaration { return f.ledger.Declarations() }
-func (f *Files) AcceptedLedger() *platform.Ledger         { return f.ledger }
+func (f *Files) Authority() platform.Authority            { return f.ledger }
 
 func (f *Files) SnapshotFormat() string { return "platform.ledger.v1" }
 
@@ -129,6 +129,6 @@ func (f *Files) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb.
 	})
 }
 
-func (f *Files) Fork(ledger *platform.Ledger) (platform.App, error) {
+func (f *Files) Fork(ledger platform.Authority) (platform.App, error) {
 	return &Files{host: f.host, ledger: ledger}, nil
 }

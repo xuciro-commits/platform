@@ -26,8 +26,8 @@ type ReplayHooks struct {
 	Rules         map[string]ReplayRule
 	HostControl   func() HostControlOwner
 	Work          func(body []byte) error
-	Batch         func(l *platform.Ledger, body []byte) (bool, error)
-	Record        func(l *platform.Ledger, body []byte) (bool, error)
+	Batch         func(l platform.Authority, body []byte) (bool, error)
+	Record        func(l platform.Authority, body []byte) (bool, error)
 	Invalidate    func()
 	Pin           func(versions map[string]int)
 	App           func(id string) platform.App
@@ -104,7 +104,7 @@ func (s *Sequence) replayResult(i int, e persistence.Entry, m platform.Member, a
 			return fmt.Errorf("entry %d: invalid refused result: %v", i+1, decodeErr)
 		}
 		key := e.App + "/" + sub.GetIdempotencyKey()
-		if _, duplicate := s.Committed.Refusal(key); duplicate || a.AcceptedLedger().AcceptedFor(s.ID, sub.GetIdempotencyKey()) != nil {
+		if _, duplicate := s.Committed.Refusal(key); duplicate || a.Authority().AcceptedFor(s.ID, sub.GetIdempotencyKey()) != nil {
 			return fmt.Errorf("entry %d: duplicate refused result key", i+1)
 		}
 		s.Committed.SaveRefusal(key, saved)
@@ -125,7 +125,7 @@ func (s *Sequence) replayResult(i int, e persistence.Entry, m platform.Member, a
 		if _, refused := s.Committed.Refusal(e.App + "/" + sub.GetIdempotencyKey()); refused {
 			return fmt.Errorf("entry %d: record batch reused a refused key", i+1)
 		}
-		applied, applyErr := h.Batch(a.AcceptedLedger(), e.Body)
+		applied, applyErr := h.Batch(a.Authority(), e.Body)
 		if applyErr != nil || !applied {
 			return fmt.Errorf("entry %d: record batch: %v (applied=%t)", i+1, applyErr, applied)
 		}
@@ -144,7 +144,7 @@ func (s *Sequence) replayResult(i int, e persistence.Entry, m platform.Member, a
 	if _, refused := s.Committed.Refusal(e.App + "/" + receipt.GetSubmission().GetIdempotencyKey()); refused {
 		return fmt.Errorf("entry %d: accepted result reused a refused key", i+1)
 	}
-	applied, applyErr := h.Record(a.AcceptedLedger(), e.Body)
+	applied, applyErr := h.Record(a.Authority(), e.Body)
 	if applyErr != nil || !applied {
 		return fmt.Errorf("entry %d: accepted result: %v (applied=%t)", i+1, applyErr, applied)
 	}

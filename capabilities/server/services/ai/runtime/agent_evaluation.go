@@ -16,7 +16,7 @@ func (a *Agents) evaluationDefinition(candidate, agent string) (*platform.Compil
 	if err != nil {
 		return nil, "", err
 	}
-	compiler := New(a.tenant)
+	compiler := New(a.tenant, a.authorities)
 	compiler.host = a.host
 	if err := compiler.DeclareAgentApp(app); err != nil {
 		return nil, "", err

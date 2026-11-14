@@ -430,7 +430,7 @@ func (r RetainedOwners) Select() ([]platform.App, map[string]platform.EntityInfo
 			continue
 		}
 		bound, err := compiler.ForkReleaseExecution(selected)
-		if err != nil || bound == nil || bound.AcceptedLedger() != owner.AcceptedLedger() {
+		if err != nil || bound == nil || bound.Authority() != owner.Authority() {
 			return nil, nil, fmt.Errorf("retained owner %s cannot select its original execution: %v", owner.Manifest().ID, err)
 		}
 		apps[i] = bound
@@ -471,9 +471,9 @@ func RetainedAction(owner platform.App, schema string) (string, platform.Action,
 	return owner.Manifest().ID, action, ok
 }
 
-func RetainedCatalog(apps []platform.App, ledger *platform.Ledger) *platform.Catalog {
+func RetainedCatalog(apps []platform.App, ledger platform.Authority) *platform.Catalog {
 	for _, owner := range apps {
-		if owner.AcceptedLedger() == ledger {
+		if owner.Authority() == ledger {
 			return owner.Manifest().Actions
 		}
 	}

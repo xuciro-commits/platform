@@ -15,7 +15,7 @@ import (
 type Environment interface {
 	Application() platform.App
 	Host() platform.BuildHost
-	Ledger() *platform.Ledger
+	Ledger() platform.Authority
 	AppID() string
 	Version() string
 	Roles() []string

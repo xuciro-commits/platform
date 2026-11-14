@@ -27,7 +27,7 @@ func (q *Sequence) RestoreCommitted(s CommittedState, releases ReleaseSnapshot, 
 		if owner == nil || request == "" || binding.Check() != nil {
 			return fmt.Errorf("tenant %s: schema snapshot %s is incompatible", q.ID, key)
 		}
-		receipt := owner.AcceptedLedger().AcceptedFor(q.ID, request)
+		receipt := owner.Authority().AcceptedFor(q.ID, request)
 		sub := receipt.GetSubmission()
 		if raw := s.AcceptedAnswers[key]; len(raw) > 0 {
 			result, answer, err := acceptedformat.DecodeBatch(raw)
@@ -71,7 +71,7 @@ func (q *Sequence) RestoreCommitted(s CommittedState, releases ReleaseSnapshot, 
 					return fmt.Errorf("invalid composite snapshot receipt")
 				}
 				owner := appOf(decision.Event.App)
-				if owner == nil || !proto.Equal(owner.AcceptedLedger().AcceptedFor(q.ID, receipt.GetSubmission().GetIdempotencyKey()), receipt) {
+				if owner == nil || !proto.Equal(owner.Authority().AcceptedFor(q.ID, receipt.GetSubmission().GetIdempotencyKey()), receipt) {
 					return fmt.Errorf("composite snapshot has no accepted receipt")
 				}
 			}
@@ -80,7 +80,7 @@ func (q *Sequence) RestoreCommitted(s CommittedState, releases ReleaseSnapshot, 
 	if len(s.DecisionDefinitions) > 0 {
 		receipts := map[string]*pb.ChangeRecord{}
 		for _, app := range apps {
-			for _, receipt := range app.AcceptedLedger().RecordsFor(q.ID) {
+			for _, receipt := range app.Authority().RecordsFor(q.ID) {
 				receipts[app.Manifest().ID+"/"+receipt.GetChangeId()] = receipt
 			}
 		}
@@ -107,7 +107,7 @@ func (q *Sequence) RestoreCommitted(s CommittedState, releases ReleaseSnapshot, 
 			return fmt.Errorf("tenant %s: accepted answer snapshot %s is incompatible", q.ID, key)
 		}
 		owner := appOf(receipt.GetSubmission().GetAuthority())
-		if owner == nil || !proto.Equal(owner.AcceptedLedger().AcceptedFor(q.ID, receipt.GetSubmission().GetIdempotencyKey()), receipt) {
+		if owner == nil || !proto.Equal(owner.Authority().AcceptedFor(q.ID, receipt.GetSubmission().GetIdempotencyKey()), receipt) {
 			return fmt.Errorf("tenant %s: accepted answer snapshot %s has no receipt", q.ID, key)
 		}
 		if _, refused := q.Committed.Refusal(key); refused {

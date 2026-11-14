@@ -290,7 +290,7 @@ func (b *Build) install(c platform.Caller, o Object) *kernel.Error {
 	if err := b.ledger.Extend([]string{entity.Type}, actions); err != nil {
 		return &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, Message: err.Error()}
 	}
-	b.ledger.Catalog.ReplaceTarget(entity.Type, actions)
+	b.ledger.Catalog().ReplaceTarget(entity.Type, actions)
 	if err := b.host.Install(c, entity, actions, pages...); err != nil {
 		return &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, Message: err.Error()}
 	}

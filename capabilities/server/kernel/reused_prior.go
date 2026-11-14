@@ -12,7 +12,7 @@ func (c *Committed) ReusedPrior(apps []platform.App, tenant, key, principal, cor
 	for _, app := range apps {
 		var original *pb.Submission
 		var receipt *pb.ChangeRecord
-		prior := c.Prior(app.Manifest().ID, app.AcceptedLedger(), tenant, key)
+		prior := c.Prior(app.Manifest().ID, app.Authority(), tenant, key)
 		if len(prior.Answer) > 0 {
 			result, saved, err := acceptedformat.DecodeBatch(prior.Answer)
 			if err != nil {

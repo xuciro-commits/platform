@@ -64,7 +64,7 @@ func connectionActions() []platform.Action {
 			Payload: []platform.Field{{Name: "revision", Type: "integer", Required: true, Description: "The connection revision checked"}, {Name: "check", Type: "json", Required: true, Description: "When, whether it answered and what"}}}}
 }
 
-func (o *Owner) ConfigureConnection(ledger *platform.Ledger, c platform.Caller, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *kernel.Error) {
+func (o *Owner) ConfigureConnection(ledger platform.Authority, c platform.Caller, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *kernel.Error) {
 	return ledger.Receive(c, s, now, nil, func() (func(*pb.ChangeRecord), *kernel.Error) {
 		connection, found := platform.Get[Connection](c, s.GetTarget().GetId())
 		if !found || connection.Archived {
@@ -137,7 +137,7 @@ func (o *Owner) validConnection(c Connection) *kernel.Error {
 	return nil
 }
 
-func (o *Owner) SubmitConnectionChecked(ledger *platform.Ledger, c platform.Caller, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *kernel.Error) {
+func (o *Owner) SubmitConnectionChecked(ledger platform.Authority, c platform.Caller, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *kernel.Error) {
 	return ledger.Receive(c, s, now, nil, func() (func(*pb.ChangeRecord), *kernel.Error) {
 		var payload struct {
 			Revision uint32          `json:"revision"`
@@ -199,7 +199,7 @@ func datasetActions() []platform.Action {
 			Payload: []platform.Field{{Name: "projection", Type: "json", Required: true, Description: "The object type, version, counts and why the projection paused"}}}}
 }
 
-func (o *Owner) SubmitDatasetProjected(ledger *platform.Ledger, c platform.Caller, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *kernel.Error) {
+func (o *Owner) SubmitDatasetProjected(ledger platform.Authority, c platform.Caller, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *kernel.Error) {
 	return ledger.Receive(c, s, now, nil, func() (func(*pb.ChangeRecord), *kernel.Error) {
 		var payload struct {
 			Projection DatasetProjection `json:"projection"`
@@ -259,7 +259,7 @@ func DatasetSchema(rows []map[string]any, order []string) []DatasetField {
 	return out
 }
 
-func (o *Owner) SubmitDatasetLoad(ledger *platform.Ledger, c platform.Caller, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *kernel.Error) {
+func (o *Owner) SubmitDatasetLoad(ledger platform.Authority, c platform.Caller, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *kernel.Error) {
 	return ledger.Receive(c, s, now, nil, func() (func(*pb.ChangeRecord), *kernel.Error) {
 		var payload struct {
 			Type         DatasetTransactionType `json:"type"`

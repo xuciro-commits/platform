@@ -135,7 +135,7 @@ type FunctionRun struct {
 
 type Environment interface {
 	Host() platform.BuildHost
-	Ledger() *platform.Ledger
+	Ledger() platform.Authority
 	App() string
 	Version() string
 	CallRoles() []string

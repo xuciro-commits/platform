@@ -44,7 +44,7 @@ func (s *Sequence) PrepareChanges(plan acceptedformat.ChangePlan, h ChangeApply)
 		if err := CheckDirectAndChild(plan.Rows, batch); err != nil {
 			return nil, err
 		}
-		prepared.Child, err = s.PrepareBatch(owner.AcceptedLedger(), plan.Changes, h.Batch)
+		prepared.Child, err = s.PrepareBatch(owner.Authority(), plan.Changes, h.Batch)
 		if err != nil || prepared.Child == nil {
 			return nil, fmt.Errorf("accepted child result: %v (already applied=%t)", err, prepared.Child == nil)
 		}

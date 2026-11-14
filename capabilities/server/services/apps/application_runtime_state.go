@@ -123,7 +123,7 @@ func (ctx Context) Runtime(m platform.Member, ref platform.AssetRef, now time.Ti
 			continue
 		}
 		owners[binding.Ref.App] = true
-		for _, receipt := range owner.AcceptedLedger().RecordsFor(ctx.Tenant) {
+		for _, receipt := range owner.Authority().RecordsFor(ctx.Tenant) {
 			sub := receipt.GetSubmission()
 			if sub == nil || !model[sub.GetTarget().GetType()] || sub.GetPrincipalId() != m.ID && !ctx.Readable(m, sub.GetTarget().GetType()+"/"+sub.GetTarget().GetId(), now) {
 				continue

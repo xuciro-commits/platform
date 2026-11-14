@@ -212,7 +212,7 @@ func (t *Tenant) settleAccepted(id string, out platform.Outcome, usage *platform
 					if len(recipients) == 0 || t.tasks == nil {
 						return
 					}
-					if failure := aigateway.StopHandoff(draft.appCaller(before.App), t.App(before.App).AcceptedLedger().RecordsFor(t.ID), before, out.Detail, recipients); failure != nil {
+					if failure := aigateway.StopHandoff(draft.appCaller(before.App), t.App(before.App).Authority().RecordsFor(t.ID), before, out.Detail, recipients); failure != nil {
 						draft.Failure = failure
 					}
 				},

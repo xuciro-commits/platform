@@ -9,14 +9,14 @@ type functionEnvironment struct {
 	b *Build
 }
 
-func (e functionEnvironment) Host() platform.BuildHost { return e.b.host }
-func (e functionEnvironment) Ledger() *platform.Ledger { return e.b.ledger }
-func (e functionEnvironment) App() string              { return ID }
-func (e functionEnvironment) Version() string          { return e.b.Manifest().Version }
-func (e functionEnvironment) CallRoles() []string      { return []string{Builder, User} }
-func (e functionEnvironment) AllRoles() []string       { return e.b.manifestRoles() }
+func (e functionEnvironment) Host() platform.BuildHost   { return e.b.host }
+func (e functionEnvironment) Ledger() platform.Authority { return e.b.ledger }
+func (e functionEnvironment) App() string                { return ID }
+func (e functionEnvironment) Version() string            { return e.b.Manifest().Version }
+func (e functionEnvironment) CallRoles() []string        { return []string{Builder, User} }
+func (e functionEnvironment) AllRoles() []string         { return e.b.manifestRoles() }
 func (e functionEnvironment) AddActions(actions ...platform.Action) {
-	e.b.ledger.Catalog.Add(actions...)
+	e.b.ledger.Catalog().Add(actions...)
 }
 func (e functionEnvironment) InstalledObject(typ string) (platform.Entity, bool) {
 	entity, ok := e.b.installed[typ]

@@ -92,12 +92,12 @@ func newInvariantTenantSetup(tb testing.TB, id string, apps []platform.App, seat
 	services.NewAgentEvaluator = authoring.NewAgentEvaluator
 	services.NewTransactionExecutor = actions.NewRuntime
 	seat := platform.Seat{Subjects: []string{"builder"}, Member: platform.Member{ID: "builder", Roles: map[string]string{build.ID: build.Builder}}}
-	console := controlowner.NewConsole(id, func(id string) controlowner.Owners {
+	console := controlowner.NewConsole(id, actions.NewAuthority, func(id string) controlowner.Owners {
 		actions := append(platform.AccessActions(), platform.ProjectActions()...)
 		actions = append(actions, packages.Actions()...)
 		return controlowner.Owners{Policies: security.NewPolicies(), Packages: packages.New(id), Actions: actions}
 	}, append([]platform.Seat{seat}, seats...)...)
-	tenant, err := NewTenantWithCapabilities(id, services, append([]platform.App{console, build.New(id)}, apps...)...)
+	tenant, err := NewTenantWithCapabilities(id, services, append([]platform.App{console, build.New(id, actions.NewAuthority)}, apps...)...)
 	if err != nil {
 		tb.Fatal(err)
 	}

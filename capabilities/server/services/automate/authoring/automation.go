@@ -74,7 +74,7 @@ func (o *Owner) Handles(s *pb.Submission) bool {
 	return s.GetTarget().GetType() == ProcessType || strings.HasPrefix(s.GetSchema().GetName(), ProcessType+".")
 }
 
-func (o *Owner) Decide(ledger *platform.Ledger, c platform.Caller, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *kernel.Error, bool) {
+func (o *Owner) Decide(ledger platform.Authority, c platform.Caller, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *kernel.Error, bool) {
 	if !o.Handles(s) {
 		return nil, nil, false
 	}

@@ -14,8 +14,8 @@ import (
 )
 
 type Decision struct {
-	Logs              map[*platform.Ledger]*kernel.ChangeLog
-	Receiving         map[*platform.Ledger]bool
+	Logs              map[platform.Authority]*kernel.ChangeLog
+	Receiving         map[platform.Authority]bool
 	InputIssues       map[*kernel.Error][]platform.FieldIssue
 	Failure           *kernel.Error
 	BusinessRefusals  map[*kernel.Error]platform.BusinessRefusalFact
@@ -61,7 +61,7 @@ type Decision struct {
 }
 
 func NewDecision(base *records.Store, s *Sequence, simulation bool) Decision {
-	return Decision{Logs: map[*platform.Ledger]*kernel.ChangeLog{}, Simulation: simulation, Records: base,
+	return Decision{Logs: map[platform.Authority]*kernel.ChangeLog{}, Simulation: simulation, Records: base,
 		Sequences: s.Sequences.Clone(), Allocated: map[string]int{}, SequenceBases: map[string]int{}, Active: map[string]bool{},
 		Notices: s.Notices.Draft(), Writers: map[string][]string{}, Changed: map[string][]string{}, Connectors: s.ConnectorRoster.Clone()}
 }
@@ -76,12 +76,12 @@ func (d *Decision) ReadableAt(check func(*records.Store, time.Time) bool) bool {
 	return check(d.Records, at)
 }
 
-func (d *Decision) HoldChanges(ledger *platform.Ledger) (func(), *kernel.Error) {
+func (d *Decision) HoldChanges(ledger platform.Authority) (func(), *kernel.Error) {
 	if d.Receiving[ledger] {
 		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The decision cannot re-enter its held ledger")
 	}
 	if d.Receiving == nil {
-		d.Receiving = map[*platform.Ledger]bool{}
+		d.Receiving = map[platform.Authority]bool{}
 	}
 	d.Receiving[ledger] = true
 	return func() { delete(d.Receiving, ledger) }, nil
@@ -104,7 +104,7 @@ func (d *Decision) FailDecision(err *kernel.Error) {
 	}
 }
 
-func (d *Decision) DraftChanges(l *platform.Ledger, fork func() *kernel.ChangeLog) *kernel.ChangeLog {
+func (d *Decision) DraftChanges(l platform.Authority, fork func() *kernel.ChangeLog) *kernel.ChangeLog {
 	if d.Logs[l] == nil {
 		d.Logs[l] = fork()
 	}

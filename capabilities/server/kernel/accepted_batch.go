@@ -15,7 +15,7 @@ import (
 	"platformserver/platform"
 )
 
-func ApplyBatchRows(draft *records.Store, result acceptedformat.Batch, tenant string, owner func(app string) *platform.Ledger, ledgers map[string]*platform.Ledger, changes map[string]*pb.ChangeRecord, check func(any) error) error {
+func ApplyBatchRows(draft *records.Store, result acceptedformat.Batch, tenant string, owner func(app string) platform.Authority, ledgers map[string]platform.Authority, changes map[string]*pb.ChangeRecord, check func(any) error) error {
 	draft.Lock()
 	defer draft.Unlock()
 	for _, image := range result.Rows {

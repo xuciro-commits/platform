@@ -116,35 +116,36 @@ type Environment struct {
 	Identity            platform.SimulationIdentityFactory
 	Modules             map[string][]byte
 	Manifests           []platform.Manifest
+	Authorities         platform.Authorities
 	Samples             []SimulationSample
 }
 
 type sampleOwner struct {
 	manifest platform.Manifest
-	ledger   *platform.Ledger
+	ledger   platform.Authority
 }
 
-func NewSampleOwner(tenant string, manifest platform.Manifest) *sampleOwner {
+func NewSampleOwner(tenant string, authorities platform.Authorities, manifest platform.Manifest) *sampleOwner {
 	var classes []string
 	for _, entity := range manifest.Entities {
 		classes = append(classes, entity.Type)
 	}
-	return &sampleOwner{manifest: manifest, ledger: platform.NewLedger(tenant, manifest.ID, manifest.Actions, classes...)}
+	return &sampleOwner{manifest: manifest, ledger: authorities(tenant, manifest.ID, manifest.Actions, classes...)}
 }
-func (a *sampleOwner) AcceptedLedger() *platform.Ledger         { return a.ledger }
+func (a *sampleOwner) Authority() platform.Authority            { return a.ledger }
 func (a *sampleOwner) Manifest() platform.Manifest              { return a.manifest }
 func (a *sampleOwner) Declarations() []*pb.AuthorityDeclaration { return a.ledger.Declarations() }
 func (a *sampleOwner) Snapshot() (json.RawMessage, error)       { return a.ledger.Snapshot() }
 func (a *sampleOwner) Restore(raw json.RawMessage) error        { return a.ledger.Restore(raw) }
 func (a *sampleOwner) SnapshotFormat() string                   { return "platform.ledger.v1" }
-func (a *sampleOwner) Fork(ledger *platform.Ledger) (platform.App, error) {
+func (a *sampleOwner) Fork(ledger platform.Authority) (platform.App, error) {
 	return &sampleOwner{manifest: a.manifest, ledger: ledger}, nil
 }
 func (a *sampleOwner) Submit(platform.Caller, *pb.Submission, time.Time) (*pb.ChangeRecord, *kernel.Error) {
 	return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Native business actions require an isolated owner test fixture")
 }
-func PrepareEnvironment(apps []platform.App, candidate platform.ReleaseCandidate, samples []SimulationSample) (Environment, error) {
-	environment := Environment{Modules: map[string][]byte{}, Samples: samples, Factories: map[string]platform.SimulationFactory{}}
+func PrepareEnvironment(apps []platform.App, authorities platform.Authorities, candidate platform.ReleaseCandidate, samples []SimulationSample) (Environment, error) {
+	environment := Environment{Authorities: authorities, Modules: map[string][]byte{}, Samples: samples, Factories: map[string]platform.SimulationFactory{}}
 	ownersByID := map[string]platform.App{}
 	for _, app := range apps {
 		ownersByID[app.Manifest().ID] = app

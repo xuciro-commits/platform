@@ -272,7 +272,7 @@ type Prior struct {
 
 func (p Prior) Known() bool { return len(p.Answer) > 0 || p.Record != nil || p.Refusal != nil }
 
-func (c *Committed) Prior(app string, ledger *platform.Ledger, tenant, key string) Prior {
+func (c *Committed) Prior(app string, ledger platform.Authority, tenant, key string) Prior {
 	if answer := c.Answer(app + "/" + key); len(answer) > 0 {
 		return Prior{Answer: answer}
 	}

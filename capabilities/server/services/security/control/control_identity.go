@@ -134,7 +134,7 @@ func (d *Console) NewSimulationIdentity(tenant string, members []platform.Member
 		member.Roles = maps.Clone(member.Roles)
 		seats = append(seats, platform.Seat{Subjects: []string{member.ID}, Member: member})
 	}
-	return NewConsole(tenant, d.newOwners, seats...)
+	return NewConsole(tenant, d.authorities, d.newOwners, seats...)
 }
 
 func (d *Console) UnitGrantUsage(unit, until string) []platform.UnitGrantUsage {

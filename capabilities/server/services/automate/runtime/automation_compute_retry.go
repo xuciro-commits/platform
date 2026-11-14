@@ -150,7 +150,7 @@ type preparedComputeRetryDecision struct {
 	prepared *PreparedComputeRetry
 }
 
-func (d preparedComputeRetryDecision) Fork(ledger *platform.Ledger) (platform.App, error) {
+func (d preparedComputeRetryDecision) Fork(ledger platform.Authority) (platform.App, error) {
 	fork, err := d.Flows.Fork(ledger)
 	if err != nil {
 		return nil, err

@@ -261,7 +261,7 @@ func checkStep(c platform.Caller, s platform.TransformStep) error {
 	return fmt.Errorf("is not one of %s", strings.Join(StepKinds, ", "))
 }
 
-func (o *Owner) SubmitPipelineRan(ledger *platform.Ledger, c platform.Caller, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *kernel.Error) {
+func (o *Owner) SubmitPipelineRan(ledger platform.Authority, c platform.Caller, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *kernel.Error) {
 	return ledger.Receive(c, s, now, nil, func() (func(*pb.ChangeRecord), *kernel.Error) {
 		var payload struct {
 			Run PipelineRun `json:"run"`

@@ -12,7 +12,7 @@ import (
 )
 
 func (s *Sequence) PriorOf(a platform.App, key string) Prior {
-	return s.Committed.Prior(a.Manifest().ID, a.AcceptedLedger(), s.ID, key)
+	return s.Committed.Prior(a.Manifest().ID, a.Authority(), s.ID, key)
 }
 
 func (s *Sequence) CurrentSchema(app platform.App, sub *pb.Submission) *pb.Submission {
@@ -64,7 +64,7 @@ func (s *Sequence) SchemaBinding(app platform.App, sub *pb.Submission, content s
 	}
 	if content == "" {
 		key := app.Manifest().ID + "/" + sub.GetIdempotencyKey()
-		if _, bound := s.Committed.SchemaVersion(key); !bound && app.AcceptedLedger().AcceptedFor(s.ID, sub.GetIdempotencyKey()) != nil {
+		if _, bound := s.Committed.SchemaVersion(key); !bound && app.Authority().AcceptedFor(s.ID, sub.GetIdempotencyKey()) != nil {
 			return nil, nil
 		}
 		if prior, exists := s.Committed.Refusal(key); exists && prior.SchemaVersion == nil {

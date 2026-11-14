@@ -1,6 +1,7 @@
 package host
 
 import (
+	"platformserver/services/actions"
 	"slices"
 	"testing"
 
@@ -15,7 +16,7 @@ func TestInvariantAccessRequestAppliesGrantOnApproval(t *testing.T) {
 	owner := platform.Seat{Subjects: []string{"owner"}, Member: platform.Member{ID: "owner"}}
 	requester := platform.Seat{Subjects: []string{"requester"}, Member: platform.Member{ID: "requester"}}
 	administrator := platform.Seat{Subjects: []string{"request-admin"}, Member: platform.Member{ID: "request-admin", Roles: map[string]string{"platform": "admin"}}}
-	tn := newInvariantTenantWithApps(t, "access-request", []platform.App{work.New("access-request")}, owner, requester, administrator)
+	tn := newInvariantTenantWithApps(t, "access-request", []platform.App{work.New("access-request", actions.NewAuthority)}, owner, requester, administrator)
 	if action, ok := tn.App("platform").Manifest().Actions.Action(controlowner.SchemaAccessRequest); !ok || action.Target != controlowner.AccessRequestType {
 		t.Fatal("the access request action is not declared for its target")
 	}

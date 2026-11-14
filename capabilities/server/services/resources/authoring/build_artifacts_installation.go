@@ -86,7 +86,7 @@ func (b *Build) ApplyAssetInstallation(plan platform.AssetInstallation, ctx plat
 	if ctx.Private {
 		saved := b.ledger
 		b.installationCatalog = platform.NewCatalog(b.Manifest().Actions.All()...)
-		b.ledger = platform.NewLedger("private-release", ID, b.installationCatalog)
+		b.ledger = b.authorities("private-release", ID, b.installationCatalog)
 		defer func() { b.ledger = saved }()
 	}
 	return b.ApplyAcceptedPublication(plan.Schema, plan.Image)

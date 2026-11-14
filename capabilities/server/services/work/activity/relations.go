@@ -49,15 +49,15 @@ type Relations struct {
 	mu     sync.Mutex
 	links  []Link
 	notes  []Note
-	ledger *platform.Ledger
+	ledger platform.Authority
 }
 
-func New(tenant string) *Relations {
+func New(tenant string, authorities platform.Authorities) *Relations {
 	any := []string{platform.AnyMember}
 	ref := func(name string) platform.Field {
 		return platform.Field{Name: name, Type: "entity", Required: true, Description: "<type>/<id> of an entity of an app you hold a role in"}
 	}
-	return &Relations{ledger: platform.NewLedger(tenant, ID, platform.NewCatalog(
+	return &Relations{ledger: authorities(tenant, ID, platform.NewCatalog(
 		platform.Action{Schema: SchemaLink, Target: LinkType, Capability: "links", Title: "Link entities",
 			Description: "Relate two entities, of the same or of different apps.", Payload: []platform.Field{ref("from"), ref("to")}, Roles: any},
 		platform.Action{Schema: SchemaUnlink, Target: LinkType, Capability: "links", Title: "Unlink entities",
@@ -103,14 +103,14 @@ func (r *Relations) LegacyRelations() []platform.RelationLink {
 }
 
 func (r *Relations) Manifest() platform.Manifest {
-	return platform.Manifest{ID: ID, Title: platform.BuiltinManifestTitle(ID), Version: "1", Actions: r.ledger.Catalog, Reads: []string{"links", "timeline"}, Everyone: []string{"links", "timeline"},
+	return platform.Manifest{ID: ID, Title: platform.BuiltinManifestTitle(ID), Version: "1", Actions: r.ledger.Catalog(), Reads: []string{"links", "timeline"}, Everyone: []string{"links", "timeline"},
 		Entities: entities()}
 }
 
 func (r *Relations) Declarations() []*pb.AuthorityDeclaration { return r.ledger.Declarations() }
-func (r *Relations) AcceptedLedger() *platform.Ledger         { return r.ledger }
+func (r *Relations) Authority() platform.Authority            { return r.ledger }
 
-func (r *Relations) Fork(ledger *platform.Ledger) (platform.App, error) {
+func (r *Relations) Fork(ledger platform.Authority) (platform.App, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	return &Relations{host: r.host, links: slices.Clone(r.links), ledger: ledger}, nil

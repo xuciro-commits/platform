@@ -62,7 +62,7 @@ read-when: 改动租户车道、协调读取、暂存决定、接受结果提交
 | 当前范围与 SQL 来源行的位置 | `records.Current()` | 映像记录 N；SQL 读取经 C4 校验 |
 | 授权上下文：成员、团队、许可、标记索引、项目授权 | `services/security`、`services/data/lineage`（`MarkingCache`） | 发布时冻结或改为持久结构；成员目录、资料、令牌与最近访问按句柄共享，第一次写入时复制 |
 | 资源目录与工作状态 | `host/resource_directory.go` | 同上 |
-| 拥有者命名读取所需的账本状态 | 各 `platform.Ledger` | 生产拥有者全部实现 `ReadForkApp`；未实现的测试或扩展拥有者回退车道 |
+| 拥有者命名读取所需的账本状态 | 各服务的 `platform.Authority` | 生产拥有者全部实现 `ReadForkApp`；未实现的测试或扩展拥有者回退车道 |
 | 已应用位置、隔离标记、业务停止标记 | `kernel.Sequence` | 原子值 |
 
 - 发布：车道内应用完成后，以原子指针替换“当前映像”。读取者 `Load` 一次，整次读取只用这一份。没有状态变化的持有不重复发布；状态变化以接受轮次、定义与记录代数、工作通知和 SQL 位置判定。

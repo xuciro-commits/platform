@@ -32,7 +32,7 @@ func (t *Tenant) prepareComposite(m platform.Member, key string, edits []platfor
 		Tenant: t.ID, Admits: t.Admits, Quarantined: t.quarantined, Bound: t.delegatedBound,
 		Hosted:      func() bool { return t.App(build.ID) != nil },
 		PriorAnswer: t.Committed.CompositeAnswer, PriorDigest: t.Committed.Composite,
-		Receipt:     func(id string) *pb.ChangeRecord { return t.App(build.ID).AcceptedLedger().AcceptedFor(t.ID, id) },
+		Receipt:     func(id string) *pb.ChangeRecord { return t.App(build.ID).Authority().AcceptedFor(t.ID, id) },
 		ActionOwner: func(schema string) platform.App { return t.App(t.owner["action:"+schema]) },
 		Begin: func() build.CompositeDraft {
 			draft = t.newStagedDecision()
@@ -87,7 +87,7 @@ func (t *Tenant) applyAcceptedComposite(raw []byte) (acceptedformat.Composite, e
 		Tenant: t.ID, PriorDigest: t.Committed.Composite, Remember: t.AuditLog.Remember, Enqueue: t.enqueue,
 		ApplyBatch: func(changes []byte) error {
 			batch, _, _ := acceptedformat.DecodeBatch(changes)
-			if _, err := t.applyAcceptedBatch(t.App(build.ID).AcceptedLedger(), changes); err != nil {
+			if _, err := t.applyAcceptedBatch(t.App(build.ID).Authority(), changes); err != nil {
 				return err
 			}
 			t.publishAcceptedBatch(batch)

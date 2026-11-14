@@ -214,7 +214,7 @@ func TableInput(reads RuleReadSpec, legacy bool, values map[string]any) ExprCont
 type BusinessRuntimeContext struct {
 	App      string
 	Entities map[string]Entity
-	Ledger   *Ledger
+	Ledger   Authority
 	Lookup   func(string) (EntityInfo, bool)
 	Prepare  func(Caller, *pb.ChangeRecord, *BusinessTxn, time.Time) (TransactionProposal, *kernel.Error)
 	Link     func(AssetBinding) (LinkType, error)

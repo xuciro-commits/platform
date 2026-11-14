@@ -15,12 +15,12 @@ import (
 	"platformserver/services/ai/state"
 )
 
-func (a *AI) AcceptedLedger() *platform.Ledger { return a.ledger }
+func (a *AI) Authority() platform.Authority { return a.ledger }
 
-func (a *AI) Fork(ledger *platform.Ledger) (platform.App, error) {
+func (a *AI) Fork(ledger platform.Authority) (platform.App, error) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
-	fork := &AI{ledger: ledger, trainingHost: a.trainingHost, trainingPolicies: maps.Clone(a.trainingPolicies), trainingCandidates: maps.Clone(a.trainingCandidates),
+	fork := &AI{ledger: ledger, authorities: a.authorities, trainingHost: a.trainingHost, trainingPolicies: maps.Clone(a.trainingPolicies), trainingCandidates: maps.Clone(a.trainingCandidates),
 		providers: slices.Clone(a.providers), models: slices.Clone(a.models),
 		limits: maps.Clone(a.limits), usage: slices.Clone(a.usage), daily: maps.Clone(a.daily),
 		recent: cloneCalls(a.recent), reservations: maps.Clone(a.reservations)}

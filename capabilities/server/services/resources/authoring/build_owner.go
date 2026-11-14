@@ -40,7 +40,8 @@ type Build struct {
 	host                platform.BuildHost
 	data                *dataowner.Owner
 	automation          *automationauthoring.Owner
-	ledger              *platform.Ledger
+	ledger              platform.Authority
+	authorities         platform.Authorities
 	installed           map[string]platform.Entity
 	jointEntities       map[string]platform.EntityInfo
 	jointAssets         map[platform.AssetRef]bool
@@ -62,7 +63,7 @@ type Build struct {
 func (b *Build) AttachBuild(h platform.BuildHost) { b.host = h }
 func (b *Build) AttachFiles(h platform.FileHost)  { b.data.AttachFiles(h) }
 
-func New(tenant string) *Build {
+func New(tenant string, authorities platform.Authorities) *Build {
 	b := &Build{installed: map[string]platform.Entity{}, linkTypes: map[string]LinkType{}, propertyTypes: map[string]PropertyType{}, valueTypes: map[string]ValueType{}, objectTypeGroups: map[string]ObjectTypeGroup{}, queries: map[string]Query{}, interfaces: map[string]InterfaceRecord{}, agents: map[string]Agent{}, codes: map[string]Code{}, tables: map[string]Table{}}
 	b.data = dataowner.New(buildDataHost{b})
 	b.automation = automationauthoring.New(automationEnvironment{b})
@@ -101,7 +102,8 @@ func New(tenant string) *Build {
 	actions = resourceActions(actions)
 	classes := []string{ObjectType, ActionTypeType, PageType, AppType, TestPlanType, automationauthoring.ProcessType, FunctionType, PropertyTypeType, ValueTypeType, ObjectTypeGroupType, LinkTypeType, QueryType, InterfaceType, FunctionCallType, EvaluationType, CodeType, TableType, AgentType, SampleSetType, BranchType, ResourceType, FolderType, WorkingStateType, ProductType, ProductVersionType, platform.OwnedRelationType(ID), confirmationType, platform.DispatchType}
 	classes = append(classes, b.data.Types()...)
-	b.ledger = platform.NewLedger(tenant, ID, platform.NewCatalog(actions...), classes...)
+	b.authorities = authorities
+	b.ledger = authorities(tenant, ID, platform.NewCatalog(actions...), classes...)
 	return b
 }
 
@@ -125,7 +127,7 @@ func (b *Build) manifestRoles() []string {
 }
 
 func (b *Build) Manifest() platform.Manifest {
-	catalog := b.ledger.Catalog
+	catalog := b.ledger.Catalog()
 	if b.installationCatalog != nil {
 		catalog = b.installationCatalog
 	}
@@ -195,7 +197,7 @@ func (b *Build) checkReleaseProfile(c platform.Caller, schema string) *kernel.Er
 }
 
 func (b *Build) Declarations() []*pb.AuthorityDeclaration { return b.ledger.Declarations() }
-func (b *Build) AcceptedLedger() *platform.Ledger         { return b.ledger }
+func (b *Build) Authority() platform.Authority            { return b.ledger }
 
 func (b *Build) SnapshotFormat() string { return "platform.ledger.v1" }
 
@@ -457,7 +459,7 @@ func (b *Build) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb.
 	return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_UNKNOWN_SCHEMA}
 }
 
-func (b *Build) Fork(ledger *platform.Ledger) (platform.App, error) {
+func (b *Build) Fork(ledger platform.Authority) (platform.App, error) {
 	catalog := b.installationCatalog
 	if catalog != nil {
 		catalog = platform.NewCatalog(catalog.All()...)
@@ -485,7 +487,7 @@ func (b *Build) Fork(ledger *platform.Ledger) (platform.App, error) {
 	return &fork, nil
 }
 
-func (b *Build) NewSimulationApp(tenant string) platform.App { return New(tenant) }
+func (b *Build) NewSimulationApp(tenant string) platform.App { return New(tenant, b.authorities) }
 func (b *Build) CandidateActions(asset platform.ReleaseAsset) ([]platform.Action, error) {
 	code, err := b.retainedCodeObject(asset)
 	if err != nil {

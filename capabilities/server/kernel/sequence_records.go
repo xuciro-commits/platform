@@ -18,7 +18,7 @@ type RecordApply struct {
 	DefinitionType string
 }
 
-func (s *Sequence) ApplyRecordResult(l *platform.Ledger, raw []byte, h RecordApply) (bool, error) {
+func (s *Sequence) ApplyRecordResult(l platform.Authority, raw []byte, h RecordApply) (bool, error) {
 	result, receipt, err := acceptedformat.DecodeRecord(raw)
 	if err != nil {
 		return false, err

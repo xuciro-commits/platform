@@ -25,15 +25,15 @@ type Term = platform.KnowledgeTerm
 
 type Knowledge struct {
 	host   platform.KnowledgeHost
-	ledger *platform.Ledger
+	ledger platform.Authority
 }
 
 func (k *Knowledge) AttachKnowledge(h platform.KnowledgeHost) { k.host = h }
 
-func New(tenant string) *Knowledge {
+func New(tenant string, authorities platform.Authorities) *Knowledge {
 	k := &Knowledge{}
 	es := knowledgeEntities()
-	k.ledger = platform.NewLedger(tenant, ID, platform.NewCatalog(append(platform.EntityActions(es[0]), platform.EntityActions(es[1])...)...), DocumentType, TermType)
+	k.ledger = authorities(tenant, ID, platform.NewCatalog(append(platform.EntityActions(es[0]), platform.EntityActions(es[1])...)...), DocumentType, TermType)
 	return k
 }
 
@@ -47,13 +47,13 @@ func knowledgeEntities() []platform.Entity {
 }
 
 func (k *Knowledge) Manifest() platform.Manifest {
-	return platform.Manifest{ID: ID, Title: platform.BuiltinManifestTitle(ID), Version: "1", Actions: k.ledger.Catalog, Entities: knowledgeEntities(),
+	return platform.Manifest{ID: ID, Title: platform.BuiltinManifestTitle(ID), Version: "1", Actions: k.ledger.Catalog(), Entities: knowledgeEntities(),
 		Settings: []platform.Setting{{Name: SettingEmbeddingModel, Title: "Embedding model", Type: "text", Default: "",
 			Description: "The enabled model that embeds passages, <provider>/<model>, on the OpenAI wire. Empty: knowledge is searched by words only."},
 			{Name: platform.SettingKnowledgeEmbeddingNext, Title: "Build vector index with", Type: "text", Default: "", Description: "Explicitly prepare an index with this model before activating it in AI configuration; indexing may incur provider charges."}}}
 }
 
-func (k *Knowledge) AcceptedLedger() *platform.Ledger { return k.ledger }
+func (k *Knowledge) Authority() platform.Authority { return k.ledger }
 
 func (k *Knowledge) Declarations() []*pb.AuthorityDeclaration { return k.ledger.Declarations() }
 func (k *Knowledge) SnapshotFormat() string                   { return "platform.ledger.v1" }
@@ -96,6 +96,6 @@ func (k *Knowledge) TermsFor(declaration string) []string {
 	return out
 }
 
-func (k *Knowledge) Fork(ledger *platform.Ledger) (platform.App, error) {
+func (k *Knowledge) Fork(ledger platform.Authority) (platform.App, error) {
 	return &Knowledge{host: k.host, ledger: ledger}, nil
 }

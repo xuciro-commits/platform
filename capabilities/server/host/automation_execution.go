@@ -95,7 +95,7 @@ func (r *flowExecutionRuntime) actionOwner(schema string) platform.App {
 }
 
 func (r *flowExecutionRuntime) StagedDecision() platform.StagedDecision { return r }
-func (r *flowExecutionRuntime) DecisionCatalog(ledger *platform.Ledger) *platform.Catalog {
+func (r *flowExecutionRuntime) DecisionCatalog(ledger platform.Authority) *platform.Catalog {
 	return automation.RetainedCatalog(r.view.apps, ledger)
 }
 func (r *flowExecutionRuntime) Decide(c platform.Caller, app platform.App, s *pb.Submission, at time.Time) (*pb.ChangeRecord, *kernel.Error) {

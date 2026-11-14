@@ -104,9 +104,9 @@ func (d *Decision) PrivateApp(app platform.App, bind func(platform.App)) (platfo
 		before, err = owner.AcceptedState()
 	}
 	if err == nil {
-		fork, err = app.Fork(app.AcceptedLedger())
+		fork, err = app.Fork(app.Authority())
 	}
-	if err != nil || fork == nil || fork.Manifest().ID != id || fork.AcceptedLedger() != app.AcceptedLedger() {
+	if err != nil || fork == nil || fork.Manifest().ID != id || fork.Authority() != app.Authority() {
 		return nil, false
 	}
 	if d.PrivateApps == nil {
@@ -241,11 +241,11 @@ func (d *Decision) PublishRecord(app platform.App, c platform.Caller, record *pb
 }
 
 func (d *Decision) DecideApp(c platform.Caller, app platform.App, s *pb.Submission, at time.Time, definition func() (*platform.DecisionDefinition, error)) (*pb.ChangeRecord, *kernel.Error, bool) {
-	if app.AcceptedLedger() == nil {
+	if app.Authority() == nil {
 		return nil, nil, false
 	}
 	id := app.Manifest().ID
-	if d.Receiving[app.AcceptedLedger()] {
+	if d.Receiving[app.Authority()] {
 		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The decision cannot re-enter its held owner"), true
 	}
 	if d.Active[id] || len(d.Active) >= acceptedformat.MaxHops {

@@ -135,7 +135,7 @@ func (t *Tenant) releaseAcceptance() releaseowner.ReleaseAcceptance {
 		Lifecycle: t.prepareReleaseLifecycleLocked,
 		Assets:    t.acceptedAssets,
 		Bootstrap: func(app string, raw json.RawMessage) (*releaseowner.AcceptedBootstrap, error) {
-			batch, err := t.PrepareBatch(t.App(app).AcceptedLedger(), raw, t.batchApply())
+			batch, err := t.PrepareBatch(t.App(app).Authority(), raw, t.batchApply())
 			if err != nil || batch == nil {
 				return nil, err
 			}

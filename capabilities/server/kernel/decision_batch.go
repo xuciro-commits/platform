@@ -77,11 +77,11 @@ func (d *Decision) BatchResult(src ResultSources, app string, request *pb.Submis
 	seen := map[string]bool{}
 	for _, event := range d.Events {
 		owner := src.App(event.App)
-		if owner == nil || d.Logs[owner.AcceptedLedger()] == nil {
+		if owner == nil || d.Logs[owner.Authority()] == nil {
 			return nil, fmt.Errorf("batch decision has no staged ledger for %s", event.App)
 		}
 		logged := false
-		for _, record := range d.Logs[owner.AcceptedLedger()].Records(src.Tenant) {
+		for _, record := range d.Logs[owner.Authority()].Records(src.Tenant) {
 			if proto.Equal(record, event.Record) {
 				logged = true
 				break

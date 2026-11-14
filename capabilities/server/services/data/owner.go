@@ -147,7 +147,7 @@ func (o *Owner) Handles(submission *pb.Submission) bool {
 		strings.HasPrefix(schema, ObservationType+".")
 }
 
-func (o *Owner) Decide(ledger *platform.Ledger, c platform.Caller, submission *pb.Submission, now time.Time) (*pb.ChangeRecord, *kernel.Error, bool) {
+func (o *Owner) Decide(ledger platform.Authority, c platform.Caller, submission *pb.Submission, now time.Time) (*pb.ChangeRecord, *kernel.Error, bool) {
 	if !o.Handles(submission) {
 		return nil, nil, false
 	}

@@ -111,7 +111,7 @@ func NewTenantWithCapabilities(id string, services platform.RuntimeCapabilities,
 	t.i18n = t.translator()
 	for i, a := range apps {
 		m := a.Manifest()
-		if a.AcceptedLedger() == nil {
+		if a.Authority() == nil {
 			return nil, fmt.Errorf("tenant %s: app %s has no decision ledger", id, m.ID)
 		}
 		if err := t.bindings.Bind(apps[:i], a); err != nil {

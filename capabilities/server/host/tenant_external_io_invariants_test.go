@@ -2,6 +2,7 @@ package host
 
 import (
 	"context"
+	"platformserver/services/actions"
 	"strings"
 	"sync"
 	"testing"
@@ -33,7 +34,7 @@ func (s *heldUploadDelete) Delete(ctx context.Context, key string) error {
 }
 
 func TestInvariantK13UploadCleanupKeepsReferencesAndReleasesLane(t *testing.T) {
-	live := newInvariantTenantWithApps(t, "invariant-upload-cleanup", []platform.App{filesowner.New("invariant-upload-cleanup")})
+	live := newInvariantTenantWithApps(t, "invariant-upload-cleanup", []platform.App{filesowner.New("invariant-upload-cleanup", actions.NewAuthority)})
 	store := &heldUploadDelete{FileStore: live.files(), started: make(chan struct{}), release: make(chan struct{})}
 	var release sync.Once
 	defer release.Do(func() { close(store.release) })
@@ -98,7 +99,7 @@ func TestInvariantK13UploadCleanupKeepsReferencesAndReleasesLane(t *testing.T) {
 }
 
 func TestInvariantK13AgentReadDoesNotAcquireTenantLane(t *testing.T) {
-	live := newInvariantTenantWithApps(t, "invariant-agent-read", []platform.App{agentowner.New("invariant-agent-read")})
+	live := newInvariantTenantWithApps(t, "invariant-agent-read", []platform.App{agentowner.New("invariant-agent-read", actions.NewAuthority)})
 	live.accept(t, "build.object.create", build.ObjectType, "OBJECT", invariantObject("alpha", "Alpha"))
 	live.accept(t, "build.object.publish", build.ObjectType, "OBJECT", map[string]any{})
 	live.accept(t, "build.alpha.create", "build.alpha", "A1", map[string]any{"note": "snapshot"})

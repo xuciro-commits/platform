@@ -127,7 +127,7 @@ func (t *Tenant) applicationContext() appowner.Context {
 			return view.History, nil
 		},
 		RecordOwner:     func(typ string) string { return t.Projection.Type(typ).Info().App },
-		Receipts:        func(owner string) []*pb.ChangeRecord { return t.App(owner).AcceptedLedger().RecordsFor(t.ID) },
+		Receipts:        func(owner string) []*pb.ChangeRecord { return t.App(owner).Authority().RecordsFor(t.ID) },
 		Decision:        func(key string) *platform.DecisionDefinition { return t.Committed.DecisionDefinition(key) },
 		SchemaVersion:   func(key string) (platform.SchemaVersion, bool) { return t.Committed.SchemaVersion(key) },
 		VisibleEvidence: t.visibleObservationEvidence,

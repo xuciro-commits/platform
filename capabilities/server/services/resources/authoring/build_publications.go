@@ -193,7 +193,7 @@ func (b *Build) ApplyAcceptedPublication(schema string, image []byte) error {
 		if err := b.ledger.Extend([]string{entity.Type}, actions); err != nil {
 			return fmt.Errorf("extend accepted object: %w", err)
 		}
-		b.ledger.Catalog.ReplaceTarget(entity.Type, actions)
+		b.ledger.Catalog().ReplaceTarget(entity.Type, actions)
 		if err := b.host.Install(platform.Caller{Replaying: true}, entity, actions, pages...); err != nil {
 			return fmt.Errorf("install accepted object: %w", err)
 		}

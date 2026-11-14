@@ -113,7 +113,7 @@ func (e Environment) CandidateApps(candidate platform.ReleaseCandidate, member p
 		if slices.ContainsFunc(apps, func(app platform.App) bool { return app.Manifest().ID == manifest.ID }) {
 			continue
 		}
-		apps = append(apps, NewSampleOwner(member.Tenant, manifest))
+		apps = append(apps, NewSampleOwner(member.Tenant, e.Authorities, manifest))
 	}
 	return append(apps, b), b, nil
 }

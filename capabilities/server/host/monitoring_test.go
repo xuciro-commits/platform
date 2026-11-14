@@ -32,7 +32,7 @@ import (
 )
 
 type monitoringFixture struct {
-	ledger      *platform.Ledger
+	ledger      platform.Authority
 	undoBlocked *atomic.Bool
 }
 
@@ -41,8 +41,8 @@ type monitoringEvent struct {
 	Title string `json:"title"`
 }
 
-func (a *monitoringFixture) AcceptedLedger() *platform.Ledger { return a.ledger }
-func (a *monitoringFixture) Fork(ledger *platform.Ledger) (platform.App, error) {
+func (a *monitoringFixture) Authority() platform.Authority { return a.ledger }
+func (a *monitoringFixture) Fork(ledger platform.Authority) (platform.App, error) {
 	return &monitoringFixture{ledger: ledger, undoBlocked: a.undoBlocked}, nil
 }
 func (a *monitoringFixture) Declarations() []*pb.AuthorityDeclaration {
@@ -89,7 +89,7 @@ func (a *monitoringFixture) Manifest() platform.Manifest {
 		}
 		flows = append(flows, flow)
 	}
-	return platform.Manifest{ID: "probe", Title: "Probe", Version: "1", Actions: a.ledger.Catalog, Roles: []string{"runner"},
+	return platform.Manifest{ID: "probe", Title: "Probe", Version: "1", Actions: a.ledger.Catalog(), Roles: []string{"runner"},
 		Entities: []platform.Entity{{Type: "probe.event", Title: "Probe event", Model: monitoringEvent{}, Display: "title"}}, Flows: flows,
 		Agents: []platform.Agent{{Name: "helper", Title: "Probe helper", Instructions: "Answer the goal", Budget: platform.Budget{Steps: 10, Tokens: 1000, Actions: 10}}},
 		Jobs:   []platform.Job{{Name: "failed", Title: "Failed probe job", Every: time.Minute}},
@@ -111,7 +111,7 @@ func newMonitoringTenant(tb testing.TB) *invariantTenant {
 	services.BindOwner = invariantBindOwner
 	services.NewAgentEvaluator = authoring.NewAgentEvaluator
 	services.NewTransactionExecutor = actions.NewRuntime
-	console := controlowner.NewConsole(id, func(id string) controlowner.Owners {
+	console := controlowner.NewConsole(id, actions.NewAuthority, func(id string) controlowner.Owners {
 		actions := append(platform.AccessActions(), platform.ProjectActions()...)
 		actions = append(actions, packages.Actions()...)
 		return controlowner.Owners{Policies: security.NewPolicies(), Packages: packages.New(id), Actions: actions}
@@ -120,13 +120,13 @@ func newMonitoringTenant(tb testing.TB) *invariantTenant {
 		platform.Seat{Subjects: []string{"other"}, Member: platform.Member{ID: "other", Roles: map[string]string{build.ID: build.Builder, "probe": "runner"}}},
 		platform.Seat{Subjects: []string{"scoped"}, Member: platform.Member{ID: "scoped", Roles: map[string]string{build.ID: build.Builder, controlowner.PlatformApp: controlowner.Admin, platform.FlowApp: automation.Admin, platform.AgentApp: platform.AgentAdmin}, Scopes: []string{dataowner.SchemaSourcePulled}}},
 		platform.Seat{Subjects: []string{"user"}, Member: platform.Member{ID: "user", Roles: map[string]string{}}})
-	var actions []platform.Action
+	var probeActions []platform.Action
 	for _, schema := range []string{"probe.start", "probe.step", "probe.undo"} {
-		actions = append(actions, platform.Action{Schema: schema, Target: "probe.event", Title: schema, Description: "Drive the monitoring owner boundary probe", Roles: []string{"runner"}, Payload: []platform.Field{{Name: "flow", Type: "text"}}})
+		probeActions = append(probeActions, platform.Action{Schema: schema, Target: "probe.event", Title: schema, Description: "Drive the monitoring owner boundary probe", Roles: []string{"runner"}, Payload: []platform.Field{{Name: "flow", Type: "text"}}})
 	}
-	probe := &monitoringFixture{ledger: platform.NewLedger(id, "probe", platform.NewCatalog(actions...), "probe.event"), undoBlocked: &atomic.Bool{}}
+	probe := &monitoringFixture{ledger: actions.NewAuthority(id, "probe", platform.NewCatalog(probeActions...), "probe.event"), undoBlocked: &atomic.Bool{}}
 	probe.undoBlocked.Store(true)
-	tenant, err := NewTenantWithCapabilities(id, services, console, build.New(id), work.New(id), automation.New(id), agents.New(id), probe)
+	tenant, err := NewTenantWithCapabilities(id, services, console, build.New(id, actions.NewAuthority), work.New(id, actions.NewAuthority), automation.New(id, actions.NewAuthority), agents.New(id, actions.NewAuthority), probe)
 	if err != nil {
 		tb.Fatal(err)
 	}

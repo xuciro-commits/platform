@@ -17,7 +17,7 @@ import (
 
 type BatchApply struct {
 	App            func(string) platform.App
-	OwnerLedger    func(string) *platform.Ledger
+	OwnerLedger    func(string) platform.Authority
 	CheckBindings  func(any) error
 	DefinitionType string
 	Claims         func(acceptedformat.Batch, *pb.ChangeRecord) error
@@ -33,20 +33,20 @@ type BatchApply struct {
 type PreparedBatch struct {
 	Result  acceptedformat.Batch
 	Records *records.Store
-	ledgers map[string]*platform.Ledger
+	ledgers map[string]platform.Authority
 	changes map[string]*pb.ChangeRecord
 	key     string
 	raw     []byte
 	install func() error
 }
 
-func (s *Sequence) PrepareBatch(l *platform.Ledger, raw []byte, h BatchApply) (*PreparedBatch, error) {
+func (s *Sequence) PrepareBatch(l platform.Authority, raw []byte, h BatchApply) (*PreparedBatch, error) {
 	result, receipt, err := acceptedformat.DecodeBatch(raw)
 	if err != nil {
 		return nil, err
 	}
 	owner, ok := h.App(result.App).(platform.App)
-	if result.Tenant != s.ID || !ok || owner.AcceptedLedger() != l {
+	if result.Tenant != s.ID || !ok || owner.Authority() != l {
 		return nil, fmt.Errorf("record batch belongs to another tenant or ledger")
 	}
 	sub, _ := acceptedformat.BatchSubmission(result, receipt)
@@ -65,20 +65,20 @@ func (s *Sequence) PrepareBatch(l *platform.Ledger, raw []byte, h BatchApply) (*
 	if !ok {
 		return nil, fmt.Errorf("record batch answer has no authority")
 	}
-	if prior := answerOwner.AcceptedLedger().AcceptedFor(s.ID, receipt.GetSubmission().GetIdempotencyKey()); prior != nil {
+	if prior := answerOwner.Authority().AcceptedFor(s.ID, receipt.GetSubmission().GetIdempotencyKey()); prior != nil {
 		if !proto.Equal(prior, receipt) {
 			return nil, fmt.Errorf("record batch key belongs to another result")
 		}
 		return nil, nil
 	}
-	ledgers := map[string]*platform.Ledger{}
+	ledgers := map[string]platform.Authority{}
 	changes := map[string]*pb.ChangeRecord{}
 	for _, decision := range result.Decisions {
 		ra, ok := h.App(decision.Event.App).(platform.App)
 		if !ok {
 			return nil, fmt.Errorf("record batch needs missing authority %s", decision.Event.App)
 		}
-		ledgers[decision.Event.App] = ra.AcceptedLedger()
+		ledgers[decision.Event.App] = ra.Authority()
 		for _, subscriber := range decision.Event.Subscribers {
 			if h.App(subscriber) == nil {
 				return nil, fmt.Errorf("record batch needs missing subscriber %s", subscriber)

@@ -23,10 +23,10 @@ const (
 type SavedView = platform.MonitoringView
 
 type Monitoring struct {
-	ledger *platform.Ledger
+	ledger platform.Authority
 }
 
-func New(tenant string) *Monitoring {
+func New(tenant string, authorities platform.Authorities) *Monitoring {
 	roles := []string{platform.AnyMember}
 	actions := []platform.Action{
 		{Schema: SchemaViewSave, Target: ViewType, Capability: "views", Title: "Save monitoring view", Description: "Save a named run type and status filter, or change your own.", Roles: roles,
@@ -44,19 +44,19 @@ func New(tenant string) *Monitoring {
 			}},
 		{Schema: SchemaViewRemove, Target: ViewType, Capability: "views", Title: "Remove monitoring view", Description: "Remove one of your saved monitoring filters.", Roles: roles, Payload: []platform.Field{}},
 	}
-	return &Monitoring{ledger: platform.NewLedger(tenant, ID, platform.NewCatalog(actions...), ViewType)}
+	return &Monitoring{ledger: authorities(tenant, ID, platform.NewCatalog(actions...), ViewType)}
 }
 
 func (m *Monitoring) Manifest() platform.Manifest {
-	return platform.Manifest{ID: ID, Title: platform.BuiltinManifestTitle(ID), Version: "1", Actions: m.ledger.Catalog,
+	return platform.Manifest{ID: ID, Title: platform.BuiltinManifestTitle(ID), Version: "1", Actions: m.ledger.Catalog(),
 		Entities: []platform.Entity{{Type: ViewType, Title: "Monitoring view", Model: SavedView{}, Display: "title",
 			Scope: platform.Scope{Default: platform.ScopeOwn, Owner: "owner", Participants: func(value any) []string { return []string{value.(SavedView).Owner} }}}},
 		Reads: []string{ReadViews}, Everyone: []string{ReadViews}}
 }
 
-func (m *Monitoring) AcceptedLedger() *platform.Ledger { return m.ledger }
+func (m *Monitoring) Authority() platform.Authority { return m.ledger }
 
-func (m *Monitoring) Fork(ledger *platform.Ledger) (platform.App, error) {
+func (m *Monitoring) Fork(ledger platform.Authority) (platform.App, error) {
 	return &Monitoring{ledger: ledger}, nil
 }
 func (m *Monitoring) Declarations() []*pb.AuthorityDeclaration { return m.ledger.Declarations() }

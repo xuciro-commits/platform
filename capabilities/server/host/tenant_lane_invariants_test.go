@@ -3,6 +3,7 @@ package host
 import (
 	"context"
 	"encoding/json"
+	"platformserver/services/actions"
 	"platformserver/services/objects"
 	"sync"
 	"sync/atomic"
@@ -47,7 +48,7 @@ type readImageSQLView struct {
 func (v readImageSQLView) Position() int64 { return v.position }
 
 func TestInvariantK13LaneWaitersLeaveAndDiagnosticsDoNotWait(t *testing.T) {
-	live := newInvariantTenantWithApps(t, "invariant-lane-wait", []platform.App{automation.New("invariant-lane-wait")})
+	live := newInvariantTenantWithApps(t, "invariant-lane-wait", []platform.App{automation.New("invariant-lane-wait", actions.NewAuthority)})
 	if err := live.Lane.Hold(context.Background(), "invariant-holder"); err != nil {
 		t.Fatal(err)
 	}
@@ -87,7 +88,7 @@ func TestInvariantK13LaneWaitersLeaveAndDiagnosticsDoNotWait(t *testing.T) {
 }
 
 func TestInvariantK13BackgroundRoundReleasesLaneBetweenTasks(t *testing.T) {
-	live := newInvariantTenantWithApps(t, "invariant-lane-round", []platform.App{automation.New("invariant-lane-round")})
+	live := newInvariantTenantWithApps(t, "invariant-lane-round", []platform.App{automation.New("invariant-lane-round", actions.NewAuthority)})
 	live.accept(t, "build.object.create", build.ObjectType, "OBJECT", invariantObject("alpha", "Alpha"))
 	live.accept(t, "build.object.publish", build.ObjectType, "OBJECT", map[string]any{})
 	live.accept(t, "build.process.create", build.ProcessType, "PROCESS", map[string]any{

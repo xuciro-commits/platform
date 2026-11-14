@@ -572,7 +572,7 @@ func FunctionAnswerFields() []Field {
 }
 
 func (c Caller) Request(r *pb.ChangeRecord, q Request) {
-	if c.rt != nil && !c.probing() {
+	if c.rt != nil && !c.Probing() {
 		c.rt.Request(c, r, q)
 	}
 }

@@ -35,7 +35,7 @@ func MediaSetActions() []platform.Action {
 	}
 }
 
-func SubmitMediaSet(ledger *platform.Ledger, files platform.FileHost, c platform.Caller, submission *pb.Submission, now time.Time) (*pb.ChangeRecord, *kernel.Error) {
+func SubmitMediaSet(ledger platform.Authority, files platform.FileHost, c platform.Caller, submission *pb.Submission, now time.Time) (*pb.ChangeRecord, *kernel.Error) {
 	return ledger.Receive(c, submission, now, nil, func() (func(*pb.ChangeRecord), *kernel.Error) {
 		invalid := &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 		var input struct {
