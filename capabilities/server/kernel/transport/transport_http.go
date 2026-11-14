@@ -586,3 +586,45 @@ func DecodeBodyLimit(r *http.Request, into any, limit int64) error {
 	}
 	return nil
 }
+
+func LimiterFromEnv() *Limiter {
+	rate, _ := strconv.ParseFloat(os.Getenv("PLATFORM_RATE_LIMIT"), 64)
+	if rate == 0 && os.Getenv("PLATFORM_RATE_LIMIT") == "" {
+		rate = 600
+	}
+	burst, _ := strconv.ParseFloat(os.Getenv("PLATFORM_RATE_BURST"), 64)
+	if burst == 0 {
+		burst = rate * 2
+	}
+	return NewLimiter(rate, burst)
+}
+
+func ScrapeAllowed(r *http.Request, authenticate func(string) (string, bool), admins map[string]bool) bool {
+	host := RemoteOf(r)
+	if host == "127.0.0.1" || host == "::1" || host == "localhost" {
+		return true
+	}
+	if authenticate == nil {
+		return false
+	}
+	credential := strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")
+	if credential == "" {
+		return false
+	}
+	subject, ok := authenticate(credential)
+	return ok && admins[subject]
+}
+
+func MetricsHandler(stats *Stats, allowed func(*http.Request) bool) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if !allowed(r) {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusForbidden)
+			_, _ = w.Write([]byte(`{"error":{"code":"ERROR_CODE_POLICY_DENIED","message":"Metrics need a credential or a loopback caller."}}`))
+			return
+		}
+		w.Header().Set("Content-Type", "text/plain; version=0.0.4; charset=utf-8")
+		w.Header().Set("Cache-Control", "no-store")
+		stats.WritePrometheus(w)
+	}
+}

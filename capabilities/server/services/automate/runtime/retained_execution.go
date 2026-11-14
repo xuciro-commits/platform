@@ -329,3 +329,136 @@ func NativeFlowCandidate(flows []platform.Flow, asset platform.ReleaseAsset, loa
 	}
 	return platform.ReleaseAsset{}, false
 }
+
+type RetainedPut struct {
+	Shapes    map[string]platform.EntityInfo
+	Release   string
+	Current   *records.Store
+	Authorize func(platform.AuthzRequest) *kernel.Error
+	Check     func(any) *kernel.Error
+	Put       func(any) *kernel.Error
+}
+
+func (p RetainedPut) Run(c platform.Caller, old *records.Type, entity any) *kernel.Error {
+	if old == nil {
+		return p.Put(entity)
+	}
+	if _, retained := p.Shapes[old.Info().Type]; !retained {
+		return p.Put(entity)
+	}
+	current := p.Current.Type(old.Info().Type)
+	id := records.Header(records.Copy(old.Info().Go, entity)).ID
+	var priorValue any
+	if row := old.Rows().Get(id); row != nil {
+		priorValue = row.Value.Interface()
+	}
+	prior := current.Rows().Get(id)
+	var stored json.RawMessage
+	if prior != nil {
+		stored, _ = prior.Image()
+	}
+	result, input, fields, writeErr := PlanRetainedPut(p.Shapes[old.Info().Type], old.Info(), current.Info(), entity, priorValue, stored, prior != nil)
+	if writeErr != nil {
+		return conflictOf(writeErr)
+	}
+	question := platform.AuthzRequest{Principal: c.ID, Tenant: c.Tenant, Kind: "write", Type: current.Info().Type, Record: id, Fields: fields}
+	if prior == nil {
+		question.Kind = "create"
+	}
+	if refusal := p.Authorize(question); refusal != nil {
+		return refusal
+	}
+	decoded, decodeErr := RetainedRecord(current.Info(), result, input)
+	if decodeErr != nil {
+		return conflictOf(decodeErr)
+	}
+	if refusal := p.Check(decoded); refusal != nil {
+		return refusal
+	}
+	if refusal := p.Put(decoded); refusal != nil {
+		return refusal
+	}
+	updated := *current.Rows().Get(id)
+	updated.Projection = records.CloneProjection(updated.Projection)
+	if source := records.ProjectionFor(updated.Projection, p.Release); source != nil {
+		source.Value, _ = json.Marshal(input)
+		if err := records.RefreshProjection(updated.Projection, updated.Value.Interface()); err != nil {
+			return conflictOf(err)
+		}
+		current.SetRow(id, &updated)
+	}
+	return nil
+}
+
+func conflictOf(err error) *kernel.Error {
+	if refusal, ok := err.(*kernel.Error); ok {
+		return refusal
+	}
+	return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, err.Error())
+}
+
+type RetainedOwners struct {
+	Apps    []platform.App
+	Assets  []platform.ReleaseAsset
+	Current func() ([]platform.ReleaseAsset, error)
+	Native  func(owner platform.App, name string, version int) (platform.ReleaseAsset, error)
+	Claim   func(i int, key string)
+	Bind    func(bound platform.App)
+}
+
+func (r RetainedOwners) Select() ([]platform.App, map[string]platform.EntityInfo, error) {
+	apps, shapes := slices.Clone(r.Apps), map[string]platform.EntityInfo{}
+	for i, owner := range apps {
+		selected := AssetsOf(r.Assets, owner.Manifest().ID)
+		if len(selected) == 0 {
+			continue
+		}
+		compiler, ok := owner.(platform.ReleaseExecutionOwner)
+		if !ok {
+			current, err := r.Current()
+			if err != nil {
+				return nil, nil, err
+			}
+			err = RetainedCompatible(selected, current, func(asset platform.ReleaseAsset) (platform.ReleaseAsset, bool) {
+				return NativeFlowCandidate(owner.Manifest().Flows, asset, func(name string, version int) (platform.ReleaseAsset, error) {
+					return r.Native(owner, name, version)
+				})
+			})
+			if err != nil {
+				return nil, nil, err
+			}
+			continue
+		}
+		bound, err := compiler.ForkReleaseExecution(selected)
+		if err != nil || bound == nil || bound.AcceptedLedger() != owner.AcceptedLedger() {
+			return nil, nil, fmt.Errorf("retained owner %s cannot select its original execution: %v", owner.Manifest().ID, err)
+		}
+		apps[i] = bound
+		for _, action := range bound.Manifest().Actions.All() {
+			r.Claim(i, "action:"+action.Schema)
+		}
+		found, err := RetainedShapes(bound.Manifest().ID, bound.Manifest().Entities, selected)
+		if err != nil {
+			return nil, nil, err
+		}
+		for _, info := range found {
+			shapes[info.Type] = info
+			r.Claim(i, info.Type)
+		}
+		r.Bind(bound)
+	}
+	return apps, shapes, nil
+}
+
+func ReadableRecord(raw json.RawMessage, current *records.Type, c platform.Caller) (json.RawMessage, *kernel.Error) {
+	var info *platform.EntityInfo
+	if current != nil {
+		stored := current.Info()
+		info = &stored
+	}
+	out, err := ReadableFields(raw, info, c)
+	if err != nil {
+		return out, conflictOf(err)
+	}
+	return out, nil
+}

@@ -99,3 +99,54 @@ func DeclaredTexts(m platform.Manifest) []any {
 	}
 	return parts
 }
+
+type Word struct {
+	Text         string            `json:"text"`
+	Translations map[string]string `json:"translations"`
+	Own          map[string]string `json:"own"`
+}
+
+type WordsView struct {
+	App       string   `json:"app"`
+	Apps      []string `json:"apps"`
+	Languages []string `json:"languages"`
+	Words     []Word   `json:"words"`
+}
+
+func WordsOf(app string, apps, languages, texts []string, say func(lang, s string) string, own map[string]map[string]string) WordsView {
+	view := WordsView{App: app, Apps: apps, Languages: languages, Words: []Word{}}
+	for _, s := range texts {
+		w := Word{Text: s, Translations: map[string]string{}, Own: map[string]string{}}
+		for _, lang := range languages {
+			if tr := say(lang, s); tr != s {
+				w.Translations[lang] = tr
+			}
+			if tr, ok := own[lang][s]; ok {
+				w.Own[lang] = tr
+			}
+		}
+		view.Words = append(view.Words, w)
+	}
+	return view
+}
+
+func TextsOf(app string, manifest *platform.Manifest, definitions []platform.Definition, infos []platform.EntityInfo) []string {
+	var m platform.Manifest
+	var parts []any
+	if manifest != nil {
+		m = *manifest
+		parts = append(parts, map[string]any{"title": m.Title}, m.Actions.All(), m.Pages, m.Settings, m.Emits)
+	}
+	for _, definition := range definitions {
+		if definition.Ref.App == app {
+			parts = append(parts, definition)
+		}
+	}
+	for _, info := range infos {
+		if info.App == app {
+			parts = append(parts, info)
+		}
+	}
+	parts = append(parts, DeclaredTexts(m)...)
+	return Texts(parts)
+}

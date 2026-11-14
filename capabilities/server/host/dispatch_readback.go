@@ -38,7 +38,7 @@ func (t *Tenant) ReadDispatches(at time.Time) {
 		Read: func(run platform.DispatchRun) platform.DispatchReading { return t.readDispatchStatus(run, at) },
 		Answer: func(plan dataowner.DispatchReadPlan, reading platform.DispatchReading) {
 			run := plan.Run
-			_, _ = decideOnImage(t, context.Background(), "dispatch:answer", func(t *Tenant) (*pb.ChangeRecord, *kernel.Error) {
+			_, _ = t.decideAutomated("dispatch:answer", build.ID, func(t *Tenant) (*pb.ChangeRecord, *kernel.Error) {
 				current, found := platform.Get[platform.DispatchRun](t.automation(build.ID, false), run.ID)
 				currentStamp, valid := t.statusReadStamp(current.Revision, current.Member, current.Source, current.Connection, current.Definition.Readback.Record != "")
 				if !found || current.Revision != run.Revision || !valid || currentStamp != plan.Stamp || t.readTransport().CheckDispatchRead(current, at) != nil {
@@ -50,8 +50,6 @@ func (t *Tenant) ReadDispatches(at time.Time) {
 					return nil, nil
 				}
 				return t.accept(t.App(build.ID), caller, submission, at, acceptOptions{automation: true})
-			}, func(t *Tenant, candidate preparedAccepted, record *pb.ChangeRecord, refusal *kernel.Error) (*pb.ChangeRecord, *kernel.Error) {
-				return t.finishPreparedSubmission(platform.Member{ID: "app:" + build.ID, Tenant: t.ID}, candidate, record, refusal)
 			})
 		}}.Run(at)
 }

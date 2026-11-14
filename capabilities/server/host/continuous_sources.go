@@ -29,7 +29,7 @@ func (t *Tenant) streamSourceLocked(m platform.Member, name string, intake *plat
 }
 
 func (t *Tenant) ConsumeFlowSource(m platform.Member, id string, now time.Time) (platform.FlowBatchOutcome, *kernel.Error) {
-	if refusal := t.cleanupFlowArtifactsFor(m, id, now); refusal != nil {
+	if refusal := t.flowIntake().Cleanup(m, id, now); refusal != nil {
 		return platform.FlowBatchOutcome{}, refusal
 	}
 	var before platform.FlowInstance
@@ -119,19 +119,17 @@ func (t *Tenant) pullContinuousSources(now time.Time) {
 					Caller: t.automation(platform.FlowApp, false),
 					Member: t.Member,
 					StreamPublished: func(record string) bool {
-						source, exists := platform.Get[dataowner.Source](t.automation(build.ID, false), record)
-						if exists {
-							var err error
-							source, err = t.DataOwner().ExecutionSource(source)
-							exists = err == nil
-						}
-						return exists && source.Stream && source.State == "published"
+						return t.DataOwner().StreamPublished(t.automation(build.ID, false), record)
 					},
 				}.Scan(now)
 			})
 		},
-		Retire: t.retireContinuousArtifacts,
-		Retry:  t.retryContinuousCompute,
+		Retire: func(plan platform.FlowArtifactCleanupPreparation, now time.Time) *kernel.Error {
+			return t.flowIntake().Retire(plan, now)
+		},
+		Retry: func(member platform.Member, plan platform.FlowComputeRetryPreparation, now time.Time) {
+			t.flowIntake().RetryCompute(member, plan, now)
+		},
 		Member: func(id string) (platform.Member, *kernel.Error) {
 			return recordRead(t, context.Background(), func(t *Tenant) (platform.Member, *kernel.Error) {
 				member, exists := t.Member(id)

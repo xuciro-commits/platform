@@ -1,19 +1,23 @@
 package host
 
-import automation "platformserver/services/automate/runtime"
-
 import (
 	"context"
-	"go.opentelemetry.io/otel/trace"
+	"fmt"
 	"log"
+	"slices"
+	"time"
+
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/trace"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
 	runtimekernel "platformserver/kernel"
-	acceptedformat "platformserver/kernel/acceptedformat"
+	"platformserver/kernel/acceptedformat"
 	"platformserver/platform"
 	"platformserver/services/actions"
+	automation "platformserver/services/automate/runtime"
+	"platformserver/services/resources/monitoring"
 	controlowner "platformserver/services/security/control"
-	"time"
 )
 
 const (
@@ -153,7 +157,7 @@ func (t *Tenant) notify(c platform.Caller, n platform.Notification, now time.Tim
 	t.opsMu.Lock()
 	defer t.opsMu.Unlock()
 	out := t.Notices.Deliver(c.App, n, now, members, delivery, func(x platform.Notification, to platform.Reach) {
-		t.outbound.Add(trace.SpanContext{}, t.planMailNotice(x, to)...)
+		t.outbound.Add(trace.SpanContext{}, actions.PlanMailNotice(t.ID, x, to, t.endpoints.All, func(lang, s string) string { return t.i18n.Say(lang, s) })...)
 	})
 	t.acted += len(out)
 	return out
@@ -221,7 +225,7 @@ func (d *stagedDecision) Notify(c platform.Caller, n platform.Notification, now 
 		router := d.routingTenant()
 		router.opsMu.Lock()
 		defer router.opsMu.Unlock()
-		return router.planMailNotice(x, reach)
+		return actions.PlanMailNotice(router.ID, x, reach, router.endpoints.All, func(lang, s string) string { return router.i18n.Say(lang, s) })
 	})
 }
 
@@ -234,3 +238,90 @@ func (t *Tenant) applyAcceptedNotices(n *acceptedformat.Notices) {
 	t.opsMu.Unlock()
 	t.outbound.Add(t.current(), effects...)
 }
+
+func (t *Tenant) acceptWork(task *automation.Task, now time.Time) (outcome string) {
+	if task.Event != nil {
+		end := t.begin("deliver "+task.Event.Record.GetSubmission().GetSchema().GetName()+" to "+task.App, task.Event.Span,
+			attribute.String("platform.app", task.App), attribute.String("platform.target", runtimekernel.Target(task.Event.Record.GetSubmission())))
+		defer func() { end(outcome); monitoring.Counted(t.ID, "delivery", task.App, outcome) }()
+	}
+	defer func() {
+		if p := recover(); p != nil {
+			t.hops = 0
+			t.observeOwnerRun(Now(), "work", "", task.App, "", "failed", "Accepted work", fmt.Sprint(p))
+			outcome = pb.ErrorCode_ERROR_CODE_CONFLICT.String()
+		}
+	}()
+	return automation.WorkAcceptance{Tenant: t.ID, Fork: t.forkWorkState, Retry: t.retryOf,
+		Bind: func(app string) ([]platform.AssetBinding, error) {
+			return t.bindApplications(platform.AssetRef{App: app, Kind: platform.AssetApp, Name: app}, "", "", app)
+		},
+		Draft: func(task *automation.Task, now time.Time) automation.WorkDraft {
+			draft := t.newStagedDecision()
+			draft.At = now
+			if task.Event != nil {
+				draft.Hops = task.Event.Hops + 1
+			}
+			c := draft.appCaller(task.App)
+			return automation.WorkDraft{
+				Decide: func() (*kernel.Error, []acceptedformat.AuthorizationEvidence) {
+					refusal := decideWork(t, draft, c, task, now)
+					return refusal, slices.Clone(draft.Authorizations)
+				},
+				Reset: func() { draft = t.newStagedDecision(); draft.At = now },
+				Failed: func(title, why, id string) {
+					t.failedWork(func() platform.Caller { return draft.appCaller(controlowner.PlatformApp) }, title, why, id, now)
+				},
+				Decision: func(result *acceptedformat.Work) error { return draft.WorkDecision(draft.sources(), result, now) },
+				Commit: func(result acceptedformat.Work) string {
+					conflict := pb.ErrorCode_ERROR_CODE_CONFLICT.String()
+					raw, err := runtimekernel.SealWork(result)
+					if err != nil {
+						return conflict
+					}
+					if _, err := t.PrepareChanges(result.ChangePlan(), t.changeApply()); err != nil {
+						return conflict
+					}
+					entry := runtimekernel.AcceptedEntry(task.App, c.Member, raw, now, draft.FlowVersions())
+					if t.stage(preparedAccepted{entry: entry, key: result.Key, hash: result.RequestHash}) {
+						return result.Outcome
+					}
+					committed, err := t.acceptResult(entry, result.Key, result.RequestHash)
+					if err != nil {
+						return conflict
+					}
+					return t.finishCommittedWork(task.App, result.Key, result.RequestHash, committed)
+				}}
+		}}.Accept(task, now)
+}
+
+func (t *Tenant) finishCommittedWork(app, key, hash string, committed []byte) string {
+	return t.FinishWork(app, key, hash, committed, runtimekernel.CommittedWork{Settlement: t.settlement(), Apply: t.applyAcceptedWork})
+}
+
+func decideWork(t *Tenant, d *stagedDecision, c platform.Caller, task *automation.Task, now time.Time) (refusal *kernel.Error) {
+	defer func() {
+		t.hops = 0
+		if p := recover(); p != nil {
+			refusal = platform.RefuseOutsideAcceptedBoundary()
+			if _, unsupported := p.(stagedEffectPanic); !unsupported {
+				refusal = platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The owner failed while handling this work: {reason}", fmt.Sprint(p))
+			}
+		}
+	}()
+	return automation.WorkDecision{Owner: t.App, Listens: func(app string) bool { return slices.Contains(t.listeners, app) },
+		Authorize: func(permission string, roles []string, declared bool) *kernel.Error {
+			return d.authorizeNative(c, permission, "action", roles, declared)
+		},
+		State:  func() platform.App { return d.stateApp(t.App(task.App)) },
+		Routed: func(e platform.Event) []string { return t.router().Events(e) },
+		Hops:   func(n int) { t.hops = n },
+		Finish: func() *kernel.Error { return d.finishStaged(now) }}.Decide(c, task, now)
+}
+
+func (t *Tenant) applyAcceptedWork(raw []byte) (bool, error) {
+	return t.ApplyWorkResult(raw, runtimekernel.WorkApply{Changes: t.changeApply(), Works: t.Works, App: t.App, Published: t.publishAcceptedChanges,
+		Task: t.work.Restorer(t.delivered)})
+}
+
+func (t *Tenant) forkWorkState() *kernel.Works { return runtimekernel.ForkWorks(t.Works) }

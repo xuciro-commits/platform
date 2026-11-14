@@ -127,7 +127,7 @@ func (d *Console) AttachConsole(h platform.ConsoleHost) {
 func (d *Console) MemberCount() int { d.mu.Lock(); defer d.mu.Unlock(); return len(d.members) }
 
 func (d *Console) NewSimulationIdentity(tenant string, members []platform.Member) platform.App {
-	members = append(slices.Clone(members), platform.Member{ID: "app:candidate-test", Tenant: tenant, Roles: map[string]string{PlatformApp: Admin, platform.AIApp: platform.AIAdmin}})
+	members = append(slices.Clone(members), CandidateTestMember(tenant))
 	seats := make([]platform.Seat, 0, len(members))
 	for _, member := range members {
 		member.Tenant = tenant
@@ -531,4 +531,15 @@ func (d *Console) ProjectAccess(m platform.Member, project string) platform.Proj
 	}
 	slices.SortFunc(out.People, func(a, b platform.ProjectPerson) int { return strings.Compare(a.Name, b.Name) })
 	return out
+}
+
+func JoinSubmission(d platform.IdentitySessions, tenant, subject string, principal func() string) (*pb.Submission, *kernel.Error) {
+	if _, known := d.MemberBySubject(subject); known {
+		return nil, nil
+	}
+	if !d.JoinableSubject(subject) || !d.JoinsSubject(subject) {
+		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_POLICY_DENIED}
+	}
+	payload, _ := json.Marshal(map[string]string{"subject": subject})
+	return &pb.Submission{TenantId: tenant, PrincipalId: principal(), Authority: PlatformApp, IdempotencyKey: "join:" + subject, Target: &pb.EntityRef{Type: MemberType, Id: d.JoinID(subject)}, Schema: &pb.SchemaRef{Name: SchemaJoin, Version: 1}, Payload: payload}, nil
 }

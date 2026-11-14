@@ -6,6 +6,7 @@ import (
 	"slices"
 	"testing"
 
+	"platformserver/kernel/transport"
 	"platformserver/platform"
 	"platformserver/services/devops/packages"
 	build "platformserver/services/resources/authoring"
@@ -67,7 +68,7 @@ func TestInvariantPackageRetireAndReinstallPreserveData(t *testing.T) {
 		t.Fatalf("install closure receipt: %+v", receipt)
 	}
 	words := target.Words(build.ID)
-	if !slices.Contains(words.Apps, build.ID) || !slices.ContainsFunc(words.Words, func(word Word) bool { return word.Text == "Alpha application" }) {
+	if !slices.Contains(words.Apps, build.ID) || !slices.ContainsFunc(words.Words, func(word transport.Word) bool { return word.Text == "Alpha application" }) {
 		t.Fatalf("installed application texts are not available for translation: %+v", words)
 	}
 

@@ -20,7 +20,7 @@ func (t *Tenant) actionCheck(m platform.Member, schema string, request pageowner
 	decision := t.authorizeFrom(t.Projection, caller, platform.AuthzRequest{Principal: m.ID, Tenant: t.ID, Kind: "action", Action: schema, Type: request.Target.Object, Record: request.Target.ID}, at, false)
 	return pageowner.ActionChecks{Caller: caller, Transition: transition, Lifecycle: lifecycle, Moves: hasTransition, Entity: t.Entity,
 		Read: func() (json.RawMessage, *kernel.Error) {
-			return t.readRecordFrom(t.Projection, caller, request.Target.Object, request.Target.ID, at)
+			return t.objectOwner(t.Projection).ReadRecordFrom(t.Projection, caller, request.Target.Object, request.Target.ID, at)
 		},
 		Say: func(message string) string { return t.i18n.SayInApp(appID, lang, message) },
 		Localize: func(issues []platform.FieldIssue) []platform.FieldIssue {

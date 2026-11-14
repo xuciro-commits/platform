@@ -133,7 +133,7 @@ func (t *Tenant) trialSandbox() trialowner.Sandbox {
 			return settleFunctionFixture(t, actor, fixture, now)
 		},
 		Records: func(actor platform.Member, typ string, q platform.Query, now time.Time) ([]any, int, *kernel.Error) {
-			page, refusal := t.recordsRead(actor, typ, q, now)
+			page, refusal := t.objectOwner(t.Projection).Records(actor, typ, q, now)
 			return page.Records, page.Total, refusal
 		},
 		Inbox: func(actor platform.Member) ([]platform.WorkTask, bool) {
@@ -143,7 +143,10 @@ func (t *Tenant) trialSandbox() trialowner.Sandbox {
 			}
 			return inbox.([]platform.WorkTask), true
 		},
-		Waiting: func() (bool, bool) { return len(pendingComputeEffects(t)) != 0, len(pendingFunctionCalls(t)) != 0 },
+		Waiting: func() (bool, bool) {
+			effects := t.outboundEffects()
+			return len(trialowner.PendingCompute(effects)) != 0, len(trialowner.PendingFunctionCalls(effects, t.modelAsk)) != 0
+		},
 		Faulted: func() string {
 			if fault := t.Fault.Load(); fault != nil {
 				return fault.Reason

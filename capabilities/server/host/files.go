@@ -8,6 +8,7 @@ import (
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
+	"platformserver/kernel/transport"
 	"platformserver/platform"
 	resources "platformserver/services/data/blobs"
 )
@@ -27,11 +28,7 @@ func (t *Tenant) Upload(m platform.Member, name, contentType string, body io.Rea
 		return platform.MaxFileSize(t.automation(platform.FileApp, false)), nil
 	})
 	if refusal != nil {
-		status := http.StatusServiceUnavailable
-		if refusal.Code == pb.ErrorCode_ERROR_CODE_NOT_FOUND {
-			status = http.StatusNotFound
-		}
-		return Upload{}, status, refusal
+		return Upload{}, resources.RefusalStatus(refusal), refusal
 	}
 	received, status, err := resources.Receive(&t.uploads, t.files(), t.ID, limit, contentType, body, now)
 	if err != nil {
@@ -75,15 +72,12 @@ func (t *Tenant) SweepUploads(now time.Time) {
 	if refusal != nil {
 		return
 	}
-	for hash := range pending {
-		err := t.files().Delete(context.Background(), t.ID+"/"+hash)
-		t.uploads.EndDelete(hash, err == nil)
-	}
+	t.uploads.Purge(t.files(), t.ID, pending)
 }
 
 func (t *Tenant) downloadBytes(w http.ResponseWriter, hash, name, contentType string) {
 	files := t.files()
-	outsideLane(w, func(w http.ResponseWriter) { resources.Stream(w, files, t.ID+"/"+hash, name, contentType) })
+	transport.OutsideLane(w, func(w http.ResponseWriter) { resources.Stream(w, files, t.ID+"/"+hash, name, contentType) })
 }
 
 func (t *Tenant) downloadMediaItem(w http.ResponseWriter, r *http.Request, member platform.Member, now time.Time) {

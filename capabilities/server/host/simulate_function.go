@@ -6,15 +6,11 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	acceptedformat "platformserver/kernel/acceptedformat"
-	"platformserver/services/ai/gateway"
+	aigateway "platformserver/services/ai/gateway"
 	trialowner "platformserver/services/devops/trials"
 	controlowner "platformserver/services/security/control"
-
-	"strings"
 	"time"
 
-	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformserver/platform"
 	"platformserver/services/resources/authoring"
 )
@@ -26,45 +22,28 @@ func configureFunctionFixtureModel(t *Tenant, model string, at time.Time) error 
 	if model == "" {
 		return nil
 	}
-	provider, name, ok := strings.Cut(model, "/")
-	if !ok || provider == "" || name == "" {
-		return fmt.Errorf("fixture model must identify provider/model")
+	admin, submissions, err := controlowner.FixtureModelSubmissions(t.ID, model)
+	if err != nil {
+		return err
 	}
-	admin := platform.Member{ID: "app:candidate-test", Tenant: t.ID, Roles: map[string]string{controlowner.PlatformApp: controlowner.Admin, platform.AIApp: platform.AIAdmin}}
-	settings := []struct {
-		app, schema, kind, id string
-		payload               any
-	}{
-		{platform.AIApp, platform.AISchemaProviderAdd, platform.AIProviderType, provider, map[string]string{"kind": "local", "baseUrl": "http://candidate.invalid", "wire": "openai"}},
-		{platform.AIApp, platform.AISchemaModelEnable, platform.AIModelType, model, map[string]string{"access": "users"}},
-		{controlowner.PlatformApp, controlowner.SchemaSettingSet, controlowner.SettingType, "ai/app-model", map[string]string{"value": model}},
-	}
-	for i, setting := range settings {
-		payload, _ := json.Marshal(setting.payload)
-		_, err := t.Submit(admin, &pb.Submission{TenantId: t.ID, PrincipalId: admin.ID, Authority: setting.app,
-			IdempotencyKey: fmt.Sprintf("fixture-model-%d", i), Target: &pb.EntityRef{Type: setting.kind, Id: setting.id},
-			Schema: &pb.SchemaRef{Name: setting.schema, Version: 1}, Payload: payload}, at)
-		if err != nil {
-			return fmt.Errorf("configure fixture model: %s", err.Message)
+	for _, s := range submissions {
+		if _, refusal := t.Submit(admin, s, at); refusal != nil {
+			return fmt.Errorf("configure fixture model: %s", refusal.Message)
 		}
 	}
 	return nil
 }
 
-func pendingFunctionCalls(t *Tenant) []trialowner.FunctionCall {
-	var pending []trialowner.FunctionCall
-	for _, effect := range t.outbound.Select(nil) {
-		var ask aigateway.ModelAsk
-		if effect.Endpoint == acceptedformat.ModelEndpoint && !platform.EffectSettled(effect.State) && json.Unmarshal([]byte(effect.Body), &ask) == nil && ask.Function != nil {
-			pending = append(pending, trialowner.FunctionCall{Effect: effect.Effect, Record: ask.Record})
-		}
-	}
-	return pending
+func (t *Tenant) modelAsk(effect platform.Effect) (string, bool) {
+	var ask aigateway.ModelAsk
+	err := json.Unmarshal([]byte(effect.Body), &ask)
+	return ask.Record, err == nil && ask.Function != nil
 }
 
 func settleFunctionFixture(t *Tenant, actor platform.Member, fixture platform.FunctionFixture, now time.Time) (bool, error) {
 	return trialowner.FunctionFixtureHooks{
-		Pending: func() []trialowner.FunctionCall { return pendingFunctionCalls(t) },
+		Outbound: t.outboundEffects,
+		Ask:      t.modelAsk,
 		Settle: func(call trialowner.FunctionCall, response []byte) error {
 			client := t.AIClient
 			defer func() { t.AIClient = client }()

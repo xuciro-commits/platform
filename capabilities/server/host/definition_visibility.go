@@ -1,7 +1,5 @@
 package host
 
-import records "platformserver/kernel/records"
-
 import (
 	"platformserver/services/actions"
 	pageowner "platformserver/services/apps/pages"
@@ -38,8 +36,10 @@ func (t *Tenant) definitionsFrom(m platform.Member, registeredDefinitions []plat
 		OwnerActive:  t.OwnerActive,
 		Denied:       func() bool { return t.Admits(m) != nil },
 		ResourceRole: func(project string) string { return t.ResourceRole(m, project) },
-		ResourceOf:   t.resourceRow,
-		ProjectTitle: t.projectTitle,
+		ResourceOf: func(ref platform.AssetRef) (build.Resource, bool) {
+			return build.StoreResourceRow(t.Projection, t.ID, ref)
+		},
+		ProjectTitle: func(project string) string { return build.StoreProjectTitle(t.Projection, project) },
 		Capability: func(app, name string, roles []string) bool {
 			return t.authorizeCapability(caller(app), app, name, roles, true, authorizationDetails{}).Allow
 		},
@@ -64,43 +64,10 @@ func (t *Tenant) definitionsFrom(m platform.Member, registeredDefinitions []plat
 		FilterNavigation:          pageowner.FilterNavigation,
 		FilterExplorationAssets:   pageowner.FilterExplorationAssets,
 		ProjectProtocol:           actions.ProjectProtocol,
-		ApplicationEntryWithdrawn: t.applicationEntryWithdrawn,
+		ApplicationEntryWithdrawn: func(ref platform.AssetRef) bool { return build.StoreApplicationEntryWithdrawn(t.Projection, ref) },
 		HasPublishedFlow:          func(name string) bool { return t.procs != nil && t.procs.HasPublishedFlow(name) },
 		Describe: func(def platform.Definition) (platform.Definition, error) {
 			return t.describer().DescribeDefinition(def)
 		},
 	}.Project()
-}
-
-func (t *Tenant) resourceRow(ref platform.AssetRef) (build.Resource, bool) {
-	row, ok := t.Projection.LockedRow(build.ResourceType, platform.ResourceID(t.ID, ref))
-	if !ok {
-		return build.Resource{}, false
-	}
-	return row.(build.Resource), true
-}
-
-func (t *Tenant) projectTitle(project string) string {
-	if row, ok := t.Projection.LockedRow(build.AppType, project); ok {
-		return row.(build.Application).Title
-	}
-	return ""
-}
-
-func (t *Tenant) applicationEntryWithdrawn(ref platform.AssetRef) bool {
-	if ref.App != build.ID || ref.Kind != platform.AssetApp {
-		return false
-	}
-	t.Projection.Lock()
-	defer t.Projection.Unlock()
-	entity := t.Projection.Type(build.AppType)
-	if entity == nil {
-		return false
-	}
-	for _, row := range entity.Rows().All() {
-		if !row.Value.FieldByName("Record").Interface().(platform.Record).Archived && records.BusinessField(entity.Info(), row.Value, "name") == ref.Name {
-			return records.BusinessField(entity.Info(), row.Value, "state") == "withdrawn"
-		}
-	}
-	return false
 }

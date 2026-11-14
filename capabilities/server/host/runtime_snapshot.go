@@ -2,7 +2,6 @@ package host
 
 import (
 	"context"
-	"fmt"
 	"platformserver/platform"
 	"time"
 
@@ -16,25 +15,10 @@ func (t *Tenant) restoreRuntimeSnapshot(ctx context.Context, j Journals, state [
 		Entries:  t.recoverEntries,
 		Delta:    storageDelta,
 		States:   func(app string) platform.AcceptedStateApp { return t.states[app] },
-		Complete: func() error {
-			if t.identityOwner != nil {
-				t.identityOwner.CloseTokenSecretWindows()
-			}
-			if t.procs != nil {
-				if err := t.procs.Check(); err != nil {
-					return fmt.Errorf("process recovery: %w", err)
-				}
-			}
-			t.flowArtifactRecoveryComplete(started)
-			return nil
-		},
+		Complete: func() error { return t.recoveryComplete(started) },
 		Attach: func() {
 			t.attachJournal(ctx, j)
 			t.enableCurrentReadScopes()
 		},
 	})
-}
-
-func (t *Tenant) checkpointRuntime(ctx context.Context, j Journals, code string) (int64, error) {
-	return t.snapshots().Checkpoint(&t.Sequence, ctx, j, code)
 }

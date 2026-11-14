@@ -21,7 +21,7 @@ type TenantRepair struct {
 	CheckProcesses   func() error
 	Project          func() (*records.SQLProjection, error)
 	Capture          func(position func() int64) (json.RawMessage, int64, error)
-	SnapshotKey      func(code string) (string, error)
+	Compatibility    func() (SnapshotCompatibility, error)
 	RecoveryComplete func(started time.Time)
 	Migrate          func() error
 	Attach           func()
@@ -54,7 +54,11 @@ func (r TenantRepair) Run(ctx context.Context, started time.Time) (*records.SQLP
 		if err != nil {
 			return nil, 0, fmt.Errorf("capture repaired tenant %s: %w", id, err)
 		}
-		key, err := r.SnapshotKey(r.Code)
+		compatibility, err := r.Compatibility()
+		if err != nil {
+			return nil, 0, fmt.Errorf("snapshot format %s: %w", id, err)
+		}
+		key, err := compatibility.Key(r.Code)
 		if err != nil {
 			return nil, 0, fmt.Errorf("snapshot format %s: %w", id, err)
 		}

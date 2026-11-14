@@ -3,13 +3,11 @@ package host
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"log"
 	"platformkernel/kernel"
 	dataowner "platformserver/services/data"
 	"time"
 
-	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformserver/platform"
 	"platformserver/services/resources/authoring"
 )
@@ -23,16 +21,9 @@ func (t *Tenant) CheckConnections(now time.Time) {
 		return rows, refusal
 	})
 	for _, c := range conns {
-		check := dataowner.ConnectionCheck{At: now}
 		detail, err := t.dataClient().Check(c)
-		check.OK, check.Detail = err == nil, detail
-		if err != nil {
-			check.Error = err.Error()
-		}
-		payload, _ := json.Marshal(map[string]any{"revision": c.Revision, "check": check})
 		caller := t.automation(build.ID, false)
-		sub := &pb.Submission{TenantId: t.ID, PrincipalId: caller.ID, Authority: build.ID, IdempotencyKey: fmt.Sprintf("checked:%s:%d:%s", c.ID, c.Revision, now.UTC().Format(time.RFC3339Nano)),
-			Target: &pb.EntityRef{Type: dataowner.ConnectionType, Id: c.ID}, Schema: &pb.SchemaRef{Name: dataowner.SchemaConnectionChecked, Version: 1}, Payload: payload}
+		sub := dataowner.ConnectionCheckSubmission(t.ID, build.ID, caller.Member, c, detail, err, now)
 		if _, err := t.submitBackground(caller.Member, sub, now); err != nil {
 			log.Printf("tenant %s: connection check result refused: %v", t.ID, err)
 		}

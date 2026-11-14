@@ -2,7 +2,6 @@ package host
 
 import (
 	releaseowner "platformserver/services/devops/releases"
-	"slices"
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
@@ -41,13 +40,9 @@ func (t *Tenant) invokeDiagnosed(m platform.Member, protocol, action, id string,
 }
 
 func (t *Tenant) Query(m platform.Member, protocol, read string) (any, *kernel.Error) {
-	b, bound := t.router().Resolve(protocol)
-	if !bound {
-		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
-	}
-	name, declared := b.Provision.Reads[read]
-	if !declared || !slices.Contains(b.Provision.Protocol.Reads, read) {
-		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
+	name, err := t.router().ReadName(protocol, read)
+	if err != nil {
+		return nil, err
 	}
 	return t.read(m, name)
 }

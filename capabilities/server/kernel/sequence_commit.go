@@ -4,7 +4,10 @@ import (
 	"errors"
 	"fmt"
 
+	pb "platformkernel/gen/platform/kernel/v1alpha1"
+	contract "platformkernel/kernel"
 	persistence "platformserver/kernel/store"
+	"platformserver/platform"
 )
 
 func (s *Sequence) Recording() bool { return s.AcceptResult != nil || s.Record != nil }
@@ -35,4 +38,40 @@ func (s *Sequence) Accept(entry persistence.Entry, key, hash string, delta func(
 		s.Committed.HoldPending(state)
 	}
 	return raw, err
+}
+
+func CommitRefusal(err error) *contract.Error {
+	if err == persistence.ErrAcceptedConflict {
+		return &contract.Error{Code: pb.ErrorCode_ERROR_CODE_IDEMPOTENCY_CONFLICT}
+	}
+	return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The accepted result could not be committed")
+}
+
+func (s *Sequence) ResultApplied(useCurrentRows bool) {
+	s.StateEpoch.Add(1)
+	s.Projection.Lock()
+	if s.Projection.Current().Position() != nil {
+		s.Projection.Current().MarkApplied(s.Projection.Current().Position()())
+	}
+	if useCurrentRows {
+		s.Projection.UseCurrentRows()
+	}
+	s.Projection.Unlock()
+}
+
+func ConflictRefusal(err error) *contract.Error {
+	if err == nil {
+		return nil
+	}
+	if refusal, ok := err.(*contract.Error); ok {
+		return refusal
+	}
+	return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, err.Error())
+}
+
+func OutcomeOf(err *contract.Error) string {
+	if err != nil {
+		return err.Code.String()
+	}
+	return "ok"
 }

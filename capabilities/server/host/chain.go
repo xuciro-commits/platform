@@ -16,7 +16,7 @@ func (t *Tenant) chainRead(m platform.Member, ref string, now time.Time) (automa
 			return view.Record, err
 		},
 		Find: func(typ string, query platform.Query) []any {
-			page, err := t.recordsRead(m, typ, query, now)
+			page, err := t.objectOwner(t.Projection).Records(m, typ, query, now)
 			if err != nil {
 				return nil
 			}

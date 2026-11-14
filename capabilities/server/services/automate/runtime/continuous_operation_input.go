@@ -63,3 +63,44 @@ func (s OperationInputSealer) Prepare(member platform.Member, instance string, r
 	}
 	return &OperationInput{Artifact: ref, RequestHash: requestHash}, nil
 }
+
+func GroupOperationInputs(inputs []*OperationInput) map[string][]*OperationInput {
+	if len(inputs) == 0 {
+		return nil
+	}
+	grouped := make(map[string][]*OperationInput, len(inputs))
+	for _, prepared := range inputs {
+		if prepared != nil {
+			grouped[prepared.RequestHash] = append(grouped[prepared.RequestHash], prepared)
+		}
+	}
+	return grouped
+}
+
+func PendingOperationInputs(inputs map[string][]*OperationInput) int {
+	pending := 0
+	for _, prepared := range inputs {
+		pending += len(prepared)
+	}
+	return pending
+}
+
+func TakeOperationInput(inputs map[string][]*OperationInput, c platform.Caller, q platform.OperationRequest, platformApp string) (*platform.OperationInputArtifact, *kernel.Error) {
+	hash, _ := platform.CanonicalDigest(q)
+	pending := inputs[hash]
+	if len(pending) == 0 {
+		return nil, nil
+	}
+	prepared := pending[0]
+	platformOwner := c.App == platformApp && c.ID == prepared.Artifact.Member
+	flowOwner := c.Automation && c.App == "flow" && c.ID == "app:flow" && q.OnBehalf == prepared.Artifact.Member
+	if !platformOwner && !flowOwner || hash != prepared.RequestHash {
+		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "The prepared input belongs to another operation request")
+	}
+	if len(pending) == 1 {
+		delete(inputs, hash)
+	} else {
+		inputs[hash] = pending[1:]
+	}
+	return &prepared.Artifact, nil
+}

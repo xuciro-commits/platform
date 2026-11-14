@@ -1,11 +1,17 @@
 package host
 
 import (
+	"encoding/json"
+	"fmt"
 	"maps"
 	runtimekernel "platformserver/kernel"
 	acceptedformat "platformserver/kernel/acceptedformat"
+	"platformserver/kernel/transport"
 	"platformserver/services/actions"
+	automation "platformserver/services/automate/runtime"
 	"platformserver/services/objects"
+	build "platformserver/services/resources/authoring"
+	controlowner "platformserver/services/security/control"
 
 	"platformserver/kernel/records"
 	"slices"
@@ -38,24 +44,19 @@ func (t *Tenant) newStagedDecision() *stagedDecision {
 }
 
 func (t *Tenant) newStagedDecisionOn(base *records.Store) *stagedDecision {
-	sequences := t.Sequences.Clone()
-	connectors := t.ConnectorRoster.Clone()
-	return &stagedDecision{tenant: t, Decision: runtimekernel.Decision{Logs: map[*platform.Ledger]*kernel.ChangeLog{}, Simulation: t.simulation, Records: base,
-		Sequences: sequences, Allocated: map[string]int{}, SequenceBases: map[string]int{}, Active: map[string]bool{},
-		Notices: t.Notices.Draft(), Writers: map[string][]string{}, Changed: map[string][]string{}, Connectors: connectors, BusinessQuery: objects.BusinessQuery,
-		Rules: runtimekernel.ConstraintRules{Definitions: func() []platform.Definition { return t.definitions }, RuleQuery: hostView{t: t}.RuleQuery, Binding: t.recordSetBinding,
-			Trace: func() func(platform.DecisionTrace) { return t.simulationTrace }},
-		DirectRows: func(rows []acceptedformat.InputRow, member string, at time.Time) error {
-			_, err := t.prepareAcceptedDirectRows(rows, member, at)
-			return err
-		}}}
+	decision := runtimekernel.NewDecision(base, &t.Sequence, t.simulation)
+	decision.BusinessQuery = objects.BusinessQuery
+	decision.Rules = runtimekernel.ConstraintRules{Definitions: func() []platform.Definition { return t.definitions }, RuleQuery: hostView{t: t}.RuleQuery, Binding: t.recordSetBinding,
+		Trace: func() func(platform.DecisionTrace) { return t.simulationTrace }}
+	decision.DirectRows = func(rows []acceptedformat.InputRow, member string, at time.Time) error {
+		_, err := t.prepareAcceptedDirectRows(rows, member, at)
+		return err
+	}
+	return &stagedDecision{tenant: t, Decision: decision}
 }
 
 func (d *stagedDecision) Decide(c platform.Caller, app platform.App, s *pb.Submission, at time.Time) (*pb.ChangeRecord, *kernel.Error) {
-	return d.decideApp(c, d.stateApp(app), s, at)
-}
-
-func (d *stagedDecision) decideApp(c platform.Caller, app platform.App, s *pb.Submission, at time.Time) (*pb.ChangeRecord, *kernel.Error) {
+	app = d.stateApp(app)
 	if d.Simulation {
 		if candidate, err := d.tenant.releases.Candidate(d.tenant.releases.Active()); err == nil {
 			return d.decideAppFrom(c, app, s, at, d.routingTenant(), candidate.ID, candidate.Assets)
@@ -83,13 +84,7 @@ func (d *stagedDecision) Publish(c platform.Caller, record *pb.ChangeRecord) {
 }
 
 func (d *stagedDecision) Readable(c platform.Caller, ref string) bool {
-	d.Records.Lock()
-	defer d.Records.Unlock()
-	at := d.At
-	if at.IsZero() {
-		at = time.Now()
-	}
-	return d.tenant.readableAs(d.Records, c, ref, at)
+	return d.ReadableAt(func(store *records.Store, at time.Time) bool { return d.tenant.readableAs(store, c, ref, at) })
 }
 
 type stagedEffectPanic struct{}
@@ -133,13 +128,6 @@ func (d *stagedDecision) Emit(c platform.Caller, kind, key, entity string, data 
 	return len(planned), nil
 }
 func (d *stagedDecision) CheckEnterpriseUsage(c platform.Caller, id, until string, deleting bool, now time.Time) *kernel.Error {
-	return d.enterpriseUsageTenant().checkEnterpriseUsage(c, d.Records, id, until, deleting, now)
-}
-func (d *stagedDecision) CheckEnterpriseTenantConnection(c platform.Caller, id string, now time.Time) *kernel.Error {
-	return d.routingTenant().checkTenantConnection(c, id, now)
-}
-
-func (d *stagedDecision) enterpriseUsageTenant() *Tenant {
 	original := d.routingTenant()
 	apps := make([]platform.App, len(original.apps))
 	for i, app := range original.apps {
@@ -147,7 +135,10 @@ func (d *stagedDecision) enterpriseUsageTenant() *Tenant {
 	}
 	view := &Tenant{services: original.services, disabledOwners: original.disabledOwners, ID: original.ID, ownerSet: original.with(apps), Projection: d.Records, identity: original.identity, Secrets: original.Secrets, releases: original.releases}
 	view.settings.Restore(original.settings.Snapshot())
-	return view
+	return view.checkEnterpriseUsage(c, d.Records, id, until, deleting, now)
+}
+func (d *stagedDecision) CheckEnterpriseTenantConnection(c platform.Caller, id string, now time.Time) *kernel.Error {
+	return d.routingTenant().checkTenantConnection(c, id, now)
 }
 
 func (d *stagedDecision) Units(c platform.Caller, structure string, now time.Time) []string {
@@ -287,4 +278,198 @@ func (d *stagedDecision) stageObservers() *kernel.Error {
 		unsupportedStagedEffect()
 	}
 	return refusal
+}
+
+func (d *stagedDecision) sources() runtimekernel.ResultSources {
+	return runtimekernel.ResultSources{Tenant: d.tenant.ID, App: d.tenant.App, Control: d.savedControl, Controlled: d.control != nil, Pending: len(d.requests) > 0,
+		Observers: len(d.tenant.observers) > 0, Operations: d.savedOperationCancellations, Plan: d.routingTenant().planAcceptedEvent,
+		Pure: build.CallbackFreeTransition}
+}
+
+func (d *stagedDecision) approvals() runtimekernel.ApprovalRequests {
+	return runtimekernel.ApprovalRequests{Tenant: d.tenant.ID, Runtime: d, App: d.tenant.App, Decide: d.Decide, Probe: d.ProbeDecision}
+}
+
+func (d *stagedDecision) RequestApproval(c platform.Caller, app string, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *kernel.Error) {
+	return d.approvals().Request(d.ProbeOnly, c, app, s, now)
+}
+
+func (d *stagedDecision) batchResult(app string, request *pb.Submission, receipt *pb.ChangeRecord, at time.Time) ([]byte, error) {
+	return d.BatchResult(d.sources(), app, request, receipt, at)
+}
+
+type controlDecision struct {
+	host *Tenant
+	base map[string]json.RawMessage
+}
+
+func (t *Tenant) captureControl() (map[string]json.RawMessage, error) {
+	t.opsMu.Lock()
+	defer t.opsMu.Unlock()
+	return t.CaptureControl(func() (any, error) {
+		t.work.Lock()
+		defer t.work.Unlock()
+		return t.work.ControlImage()
+	}, func() map[string]any {
+		return map[string]any{"settings": t.settings.Snapshot(), "bindings": t.bindings.All(),
+			"endpoints": t.endpoints.Saved(), "effects": t.outbound.States(), "words": t.words.Clone()}
+	})
+}
+
+func (t *Tenant) newControlFork() *Tenant {
+	view := &Tenant{services: t.services, disabledOwners: t.disabledOwners, ID: t.ID, Store: t.Log(), identity: t.identity, ownerSet: t.ownerSet, definitions: t.definitions, Projection: t.Projection, procs: t.procs, tasks: t.tasks, linker: t.linker, directory: t.directory, agents: t.agents, ai: t.ai,
+		bindings: t.bindings.Clone(), ConnectorRoster: runtimekernel.NewConnectorRoster(t.ID), work: automation.NewWorkBoard(), Works: t.forkWorkState()}
+	t.work.CopyJobs(&view.work)
+	return view
+}
+
+func (t *Tenant) forkControl(images map[string]json.RawMessage) (*Tenant, error) {
+	view := t.newControlFork()
+	_, marks := t.ConnectorRoster.State()
+	view.ConnectorRoster.RestoreMarks(marks)
+	view.i18n = transport.NewTranslator(func() []platform.App { return view.apps }, nil, view.words.Clone, PlatformLanguages)
+	view.i18n.InstallApplications(view.definitions)
+	for _, kind := range []string{"connectors", "settings", "bindings", "work", "endpoints", "effects", "words"} {
+		if err := view.installControl(kind, images[kind]); err != nil {
+			return nil, err
+		}
+	}
+	return view, nil
+}
+
+func (t *Tenant) installControl(kind string, raw json.RawMessage) error {
+	switch kind {
+	case "connectors":
+		return t.ConnectorRoster.InstallImage(raw)
+	case "settings":
+		return t.settings.InstallImage(raw)
+	case "bindings":
+		return actions.InstallBindings(raw, func() func(string, string) bool {
+			t.bindings = actions.NewBindings(nil)
+			return t.router().Rebind
+		})
+	case "work":
+		t.work.Lock()
+		defer t.work.Unlock()
+		return t.work.InstallImage(t.ID, raw, func(app string) bool { return t.App(app) != nil })
+	case "endpoints":
+		return t.endpoints.InstallImage(raw)
+	case "effects":
+		return t.outbound.InstallImage(raw)
+	case "words":
+		if err := t.words.InstallImage(raw); err != nil {
+			return err
+		}
+		t.i18n.Reset()
+		return nil
+	default:
+		return fmt.Errorf("unknown control owner %s", kind)
+	}
+}
+
+func (d *stagedDecision) controlHost() *Tenant {
+	if d.control != nil {
+		return d.control.host
+	}
+	base, err := d.tenant.captureControl()
+	if err != nil {
+		unsupportedStagedEffect()
+	}
+	d.control = &controlDecision{d.newControlView(base), base}
+	return d.control.host
+}
+
+func (d *stagedDecision) newControlView(images map[string]json.RawMessage) *Tenant {
+	view, err := d.tenant.forkControl(images)
+	if err != nil {
+		unsupportedStagedEffect()
+	}
+	view.Projection = d.Records
+	view.ConnectorRoster.Use(d.Connectors)
+	view.controlAnswer = func(x platform.Effect, out platform.Outcome, at time.Time) *kernel.Error {
+		d.answerControlEffect(x, out, at)
+		return d.Failure
+	}
+	if d.tenant.agents != nil {
+		view.agents = d.stateApp(d.tenant.agents).(platform.AgentRuntime)
+	}
+	return view
+}
+
+func (d *stagedDecision) savedControl() (*acceptedformat.Control, error) {
+	if d.control == nil {
+		return nil, nil
+	}
+	current, err := d.control.host.captureControl()
+	if err != nil {
+		return nil, err
+	}
+	return runtimekernel.ControlDiff(d.control.base, current, d.OperationCancels)
+}
+
+func (d *stagedDecision) answerControlEffect(x platform.Effect, out platform.Outcome, at time.Time) {
+	if err := d.tenant.stageEffectAnswer(d, x, out, nil, at); err != nil {
+		if refusal, ok := err.(*kernel.Error); ok {
+			d.Failure = refusal
+		} else {
+			unsupportedStagedEffect()
+		}
+	}
+}
+
+func (t *Tenant) validateAcceptedControl(saved *acceptedformat.Control) error {
+	return runtimekernel.ValidateControl(saved, t.captureControl, func(images map[string]json.RawMessage) error {
+		_, err := t.forkControl(images)
+		return err
+	})
+}
+
+func (t *Tenant) applyAcceptedControl(saved *acceptedformat.Control) error {
+	return runtimekernel.ApplyControl(saved, t.installControl, t.outbound.PatchImage)
+}
+
+func (t *Tenant) controlDecision(c platform.Caller, s *pb.Submission, at time.Time) (func(*pb.ChangeRecord), *kernel.Error) {
+	return controlowner.Deciders{
+		Connector: t.ConnectorRoster.ConnectorDecider(controlowner.SchemaConnectorOff),
+		Setting:   t.settingDecision(), Binding: t.router().DecideBinding, Work: t.work.Decide,
+		Notification: t.Notices.Decide, Endpoint: t.effectControl().EndpointDecider(controlowner.SchemaEndpointRemove),
+		Effect:      t.effectControl().EffectDecider(controlowner.SchemaEffectApprove, controlowner.SchemaEffectDiscard, controlowner.SchemaEffectResolve),
+		Translation: t.words.TranslationDecider(t.i18n.Reset)}.Decide(c, s, at)
+}
+
+func (r runtime) ControlDecision(c platform.Caller, s *pb.Submission, at time.Time) (func(*pb.ChangeRecord), *kernel.Error) {
+	if !c.Replaying {
+		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Control actions require a private decision")
+	}
+	return r.t.controlDecision(c, s, at)
+}
+
+func (d *stagedDecision) ControlDecision(c platform.Caller, s *pb.Submission, at time.Time) (func(*pb.ChangeRecord), *kernel.Error) {
+	if apply, refusal, handled := (controlowner.StagedControl{Tenant: d.tenant.ID, NoticeOwner: func(id string) (string, bool) { return d.Notices.Owner(id) }, MarkRead: func(id string) { d.Notices.MarkRead(id) },
+		Effect: func(id string) platform.Effect { queued, _ := d.tenant.outbound.Get(id); return queued.Effect },
+		Cancel: func(current, after platform.Effect, out platform.Outcome) {
+			d.MarkOperationCancelled(current.ID)
+			d.answerControlEffect(after, out, at)
+		}}).Decide(c, s); handled {
+		return apply, refusal
+	}
+	return d.controlHost().controlDecision(c, s, at)
+}
+
+func (d *stagedDecision) forkControlDecision(original *controlDecision) {
+	if original == nil {
+		return
+	}
+	images, err := original.host.captureControl()
+	if err != nil {
+		unsupportedStagedEffect()
+	}
+	d.control = &controlDecision{d.newControlView(images), maps.Clone(original.base)}
+}
+
+func (d *stagedDecision) routingTenant() *Tenant {
+	if d.control != nil {
+		return d.control.host
+	}
+	return d.tenant
 }

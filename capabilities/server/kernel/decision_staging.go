@@ -261,3 +261,11 @@ func (d *Decision) DecideApp(c platform.Caller, app platform.App, s *pb.Submissi
 	}
 	return r, nil, true
 }
+
+func (d *Decision) KeepChanges(receipt *pb.ChangeRecord) {
+	for i, event := range d.Events {
+		if event.Record == receipt {
+			d.Events[i].Changed = slices.Clone(d.Changed[event.App+"/"+receipt.GetChangeId()])
+		}
+	}
+}

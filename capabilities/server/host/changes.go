@@ -13,10 +13,7 @@ type changes struct {
 	pendingData map[string]bool
 }
 
-func (t *Tenant) changed() {
-	t.runIndex.Changed()
-	t.markChanged(true, "")
-}
+func (t *Tenant) changed() { t.changedOwner("") }
 
 func (t *Tenant) operationsChanged(owner ...string) {
 	name := ""
@@ -43,24 +40,22 @@ func (t *Tenant) markChanged(data bool, owner string) {
 		return
 	}
 	c.seq++
-	if data {
-		c.data++
-		if owner == "" {
-			c.global++
-		} else {
-			if c.owners == nil {
-				c.owners = map[string]int64{}
-			}
-			c.owners[owner]++
-		}
-	}
-	if !data {
+	switch {
+	case !data:
 		if c.opsOwners == nil {
 			c.opsOwners = map[string]int64{}
 		}
 		c.opsOwners[owner]++
+	case owner == "":
+		c.data++
+		c.global++
+	default:
+		c.data++
+		if c.owners == nil {
+			c.owners = map[string]int64{}
+		}
+		c.owners[owner]++
 	}
-
 	if c.wake != nil {
 		close(c.wake)
 		c.wake = nil

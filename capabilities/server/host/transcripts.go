@@ -8,12 +8,9 @@ import (
 	"platformserver/services/ai/gateway"
 )
 
-func (t *Tenant) transcriptDays() int {
-	return aigateway.TranscriptDays(func(name string) string { return t.setting(t.automation(platform.AgentApp, false), name) })
-}
-
 func (t *Tenant) transcripts() aigateway.Transcripts {
-	return aigateway.Transcripts{Tenant: t.ID, Days: t.transcriptDays(), Enabled: t.agents != nil, Store: t.Log()}
+	days := aigateway.TranscriptDays(func(name string) string { return t.setting(t.automation(platform.AgentApp, false), name) })
+	return aigateway.Transcripts{Tenant: t.ID, Days: days, Enabled: t.agents != nil, Store: t.Log()}
 }
 
 func (t *Tenant) transcribe(x Transcript) {
@@ -29,8 +26,9 @@ func (t *Tenant) PurgeTranscripts(now time.Time) {
 }
 
 func (t *Tenant) TranscriptsFor(m platform.Member, run string, limit int, now time.Time) ([]Transcript, *kernel.Error) {
-	return aigateway.Transcripts{Tenant: t.ID, Days: t.transcriptDays(), Enabled: t.agents != nil,
-		Store: t.Log(), Admits: t.Admits, Withheld: func(run string) bool { return t.withheld(m, run, now) }}.For(m, run, limit)
+	transcripts := t.transcripts()
+	transcripts.Admits, transcripts.Withheld = t.Admits, func(run string) bool { return t.withheld(m, run, now) }
+	return transcripts.For(m, run, limit)
 }
 
 func (t *Tenant) withheld(m platform.Member, run string, now time.Time) bool {

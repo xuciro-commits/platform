@@ -7,6 +7,7 @@ import (
 	"slices"
 	"strings"
 
+	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
 	acceptedformat "platformserver/kernel/acceptedformat"
 	"platformserver/kernel/records"
@@ -60,6 +61,66 @@ type TenantImage[Job, Endpoint any] struct {
 	Composites          map[string]string                       `json:"composites,omitempty"`
 	Staged              map[string]platform.StagedResult        `json:"staged,omitempty"`
 	Sequences           map[string]int                          `json:"sequences,omitempty"`
+}
+
+func (s *TenantImage[Job, Endpoint]) CaptureEvidence(q *Sequence) error {
+	s.Audit, s.Deliveries = q.AuditLog.SnapshotState()
+	if facts := q.Claims.Facts.Records(q.ID); len(facts) > 0 {
+		var err error
+		if s.Facts, err = platform.Protos(facts); err != nil {
+			return err
+		}
+	}
+	if identities := q.Claims.Identity.State(); len(identities.Entities) > 0 || len(identities.Redirects) > 0 {
+		s.Identities = &identities
+	}
+	return nil
+}
+
+func (s *TenantImage[Job, Endpoint]) RestoreEvidence(q *Sequence) error {
+	if len(s.Facts) > 0 {
+		facts, err := platform.Unprotos[*pb.FactRecord](s.Facts)
+		if err != nil {
+			return err
+		}
+		q.Claims.Facts.Restore(q.ID, facts)
+	}
+	if s.Identities != nil {
+		q.Claims.Identity.Restore(*s.Identities)
+	}
+	return nil
+}
+
+func (s *TenantImage[Job, Endpoint]) CaptureOperations(q *Sequence) error {
+	var err error
+	if s.Works, err = platform.Protos(q.Works.All()); err != nil {
+		return err
+	}
+	descriptors, marks := q.ConnectorRoster.State()
+	if s.Connectors, err = platform.Protos(descriptors); err != nil {
+		return err
+	}
+	s.Marks = marks
+	s.LastError = q.ConnectorRoster.LastErrors()
+	s.Notices, s.NoticeSeq = q.Notices.State()
+	s.Sequences = q.Sequences.Clone()
+	return nil
+}
+
+func (s *TenantImage[Job, Endpoint]) RestoreOperations(q *Sequence) error {
+	works, err := platform.Unprotos[*pb.Work](s.Works)
+	if err != nil {
+		return err
+	}
+	descriptors, err := platform.Unprotos[*pb.ConnectorDescriptor](s.Connectors)
+	if err != nil {
+		return err
+	}
+	q.Works.Restore(works)
+	q.ConnectorRoster.Restore(descriptors, s.Marks, s.LastError)
+	q.Notices.Restore(s.Notices, s.NoticeSeq)
+	q.Sequences.Restore(s.Sequences)
+	return nil
 }
 
 type TenantSnapshots[Job, Endpoint any] struct {

@@ -25,10 +25,7 @@ func (t *Tenant) draftWorldLocked(m platform.Member, branch string, now time.Tim
 }
 
 func (t *Tenant) ReferencedDrafts(m platform.Member, kind platform.AssetKind, id, branch string, now time.Time) (releaseowner.ReleaseDraftClosure, error) {
-	return readWithError(t, context.Background(), func(t *Tenant) (releaseowner.ReleaseDraftClosure, error) {
-		if err := t.buildAllowed(m, "POST /v1/releases/drafts/referenced", build.Builder); err != nil {
-			return releaseowner.ReleaseDraftClosure{}, err
-		}
+	return buildRead(t, m, "POST /v1/releases/drafts/referenced", []string{build.Builder}, func(t *Tenant) (releaseowner.ReleaseDraftClosure, error) {
 		world, refusal := t.draftWorldLocked(m, branch, now)
 		if refusal != nil {
 			return releaseowner.ReleaseDraftClosure{}, refusal
@@ -52,52 +49,47 @@ func (t *Tenant) buildAllowed(m platform.Member, permission string, roles ...str
 	return nil
 }
 
-func (t *Tenant) builderDrafts(m platform.Member, permission string) (build.ConstructionDrafts, error) {
-	if err := t.buildAllowed(m, permission, build.Builder); err != nil {
-		return nil, err
-	}
-	owner := t.builders[build.ID]
-	if owner == nil {
-		return nil, fmt.Errorf("tenant has no builder")
-	}
-	return owner, nil
+func buildRead[T any](t *Tenant, m platform.Member, permission string, roles []string, read func(*Tenant) (T, error)) (T, error) {
+	return readWithError(t, context.Background(), func(t *Tenant) (T, error) {
+		if err := t.buildAllowed(m, permission, roles...); err != nil {
+			var none T
+			return none, err
+		}
+		return read(t)
+	})
+}
+
+func builderRead[T any](t *Tenant, m platform.Member, permission string, read func(*Tenant, build.ConstructionDrafts) (T, error)) (T, error) {
+	return buildRead(t, m, permission, []string{build.Builder}, func(t *Tenant) (T, error) {
+		owner := t.builders[build.ID]
+		if owner == nil {
+			var none T
+			return none, fmt.Errorf("tenant has no builder")
+		}
+		return read(t, owner)
+	})
 }
 
 func (t *Tenant) DraftChange(m platform.Member, kind platform.AssetKind, id string) (build.DraftChange, error) {
-	return readWithError(t, context.Background(), func(t *Tenant) (build.DraftChange, error) {
-		owner, err := t.builderDrafts(m, "GET /v1/releases/drafts/change")
-		if err != nil {
-			return build.DraftChange{}, err
-		}
+	return builderRead(t, m, "GET /v1/releases/drafts/change", func(t *Tenant, owner build.ConstructionDrafts) (build.DraftChange, error) {
 		return releaseowner.DraftChange(owner, m, kind, id)
 	})
 }
 
 func (t *Tenant) DraftRestore(m platform.Member, kind platform.AssetKind, id string, now time.Time) (releaseowner.ReleaseDraftRestore, error) {
-	return readWithError(t, context.Background(), func(t *Tenant) (releaseowner.ReleaseDraftRestore, error) {
-		owner, err := t.builderDrafts(m, "GET /v1/releases/drafts/restore")
-		if err != nil {
-			return releaseowner.ReleaseDraftRestore{}, err
-		}
+	return builderRead(t, m, "GET /v1/releases/drafts/restore", func(t *Tenant, owner build.ConstructionDrafts) (releaseowner.ReleaseDraftRestore, error) {
 		return releaseowner.DraftRestore(owner, t.Entities(m), m, kind, id, now)
 	})
 }
 
 func (t *Tenant) WorkingDrafts(m platform.Member) (releaseowner.ReleaseWorkingState, error) {
-	return readWithError(t, context.Background(), func(t *Tenant) (releaseowner.ReleaseWorkingState, error) {
-		owner, err := t.builderDrafts(m, "GET /v1/releases/drafts/working")
-		if err != nil {
-			return releaseowner.ReleaseWorkingState{}, err
-		}
+	return builderRead(t, m, "GET /v1/releases/drafts/working", func(t *Tenant, owner build.ConstructionDrafts) (releaseowner.ReleaseWorkingState, error) {
 		return releaseowner.WorkingDrafts(owner, m.ID)
 	})
 }
 
 func (t *Tenant) PreviewReleaseDrafts(m platform.Member, drafts []build.JointDraftRef, branch string, now time.Time) (releaseowner.ReleasePreview, error) {
-	return readWithError(t, context.Background(), func(t *Tenant) (releaseowner.ReleasePreview, error) {
-		if err := t.buildAllowed(m, "POST /v1/releases/preview", build.Builder); err != nil {
-			return releaseowner.ReleasePreview{}, err
-		}
+	return buildRead(t, m, "POST /v1/releases/preview", []string{build.Builder}, func(t *Tenant) (releaseowner.ReleasePreview, error) {
 		world, refusal := t.draftWorldLocked(m, branch, now)
 		if refusal != nil {
 			return releaseowner.ReleasePreview{}, refusal

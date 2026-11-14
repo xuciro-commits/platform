@@ -33,8 +33,4 @@ func OpenFileJournal(dir string) (*persistence.File, error) {
 
 var journalPool = persistence.Pool
 
-var (
-	errAcceptedConflict = persistence.ErrAcceptedConflict
-	errTenantJournal    = persistence.ErrTenantJournal
-	errTenantSnapshot   = persistence.ErrTenantSnapshot
-)
+var errAcceptedConflict = persistence.ErrAcceptedConflict

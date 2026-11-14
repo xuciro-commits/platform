@@ -123,3 +123,15 @@ func ReadableBusinessFact(store *records.Store, m platform.Member, f platform.Bu
 	}
 	return f
 }
+
+func LocalizedFieldIssues(issues []platform.FieldIssue, language string, said func(message string) string) []platform.FieldIssue {
+	issues = slices.Clone(issues)
+	for i := range issues {
+		if translated := issues[i].Translations[language]; translated != "" {
+			issues[i].Message = translated
+		} else {
+			issues[i].Message = said(issues[i].Message)
+		}
+	}
+	return issues
+}

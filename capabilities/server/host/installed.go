@@ -5,7 +5,6 @@ import (
 	releaseowner "platformserver/services/devops/releases"
 
 	pageowner "platformserver/services/apps/pages"
-	"reflect"
 	"slices"
 	"strings"
 
@@ -14,40 +13,13 @@ import (
 )
 
 func (t *Tenant) Install(app platform.App, e platform.Entity, actions []platform.Action, pages ...platform.Page) error {
-	id := app.Manifest().ID
-	if other := t.App(t.owner["action:"+actions[0].Schema]); other != nil && (other.Manifest().ID != id || other.AcceptedLedger() != app.AcceptedLedger()) {
-		return fmt.Errorf("%s: another app owns %s", e.Type, actions[0].Schema)
-	}
-	info, err := platform.Describe(id, e, func(reflect.Type) string { return "" })
-	if err != nil {
-		return err
-	}
-	if !t.installingSet {
-		if err := t.checkObjectProperties(info); err != nil {
-			return err
-		}
-		if err := t.checkRecordSetDeclarations(info); err != nil {
-			return err
-		}
-		if err := platform.CheckConstraints(info, t.Entity, true); err != nil {
-			return err
-		}
-	}
-	if err := t.Projection.Install(info); err != nil {
-		return err
-	}
-	for _, action := range actions {
-		if action.Target != e.Type {
-			return fmt.Errorf("%s: action %s targets %s", e.Type, action.Schema, action.Target)
-		}
-		t.owner["action:"+action.Schema] = id
-	}
-	build.ReplaceProtocolReads(t.owner, id, e.Type, e.Protocols)
-	kept := build.PruneInstalledObject(t.definitions, id, info, actions)
-	if len(kept) != len(t.definitions) {
-		t.setDefinitions(kept)
-	}
-	return t.installDefinitions(id, info, actions, pages, e.Protocols...)
+	return build.ObjectInstall{
+		Owners: t.owner, Owner: t.App, Installing: func() bool { return t.installingSet },
+		Properties: t.checkObjectProperties, RecordSets: func(info platform.EntityInfo) error { return t.checkRecordSetDeclarations(info) }, Entity: t.Entity,
+		Install:     t.Projection.Install,
+		Definitions: func() []platform.Definition { return t.definitions }, SetDefinitions: t.setDefinitions,
+		Define: t.installDefinitions,
+	}.Run(app, e, actions, pages)
 }
 
 func (t *Tenant) storeDefinition(index int, def platform.Definition) {

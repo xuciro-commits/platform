@@ -7,8 +7,5 @@ func (h hostView) ValidateInstallQuery(q platform.NamedQuery) error {
 }
 
 func (h hostView) InstallQuery(c platform.Caller, q platform.NamedQuery, version int) error {
-	if c.Staging() {
-		unsupportedStagedEffect()
-	}
-	return h.definitionInstall().NamedQuery(q, version)
+	return h.definitionInstall().InstallQuery(c, q, version)
 }

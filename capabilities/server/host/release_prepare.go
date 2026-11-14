@@ -68,26 +68,9 @@ func (t *Tenant) bootstrapOwnerDraftsLockedWithArchived(candidate platform.Relea
 		Put: func(app string, receipt *pb.ChangeRecord, value any) *kernel.Error {
 			return decision.Put(platform.NewCaller(decision, context.Member, app, false, false), receipt, value)
 		},
-		MediaVersions: func(plan platform.AssetInstallation) ([]platform.MediaSetVersion, error) {
-			ref := plan.Ref
-			return records.PrepareMediaVersionImages(view.Projection, []platform.ReleaseInstallation{{ReleasePublication: platform.ReleasePublication{Schema: plan.Schema, Image: plan.Image}, Ref: &ref, Record: plan.Record}})
-		},
-		KeepChanges: func(receipt *pb.ChangeRecord) {
-			for i, event := range decision.Events {
-				if event.Record == receipt {
-					decision.Events[i].Changed = slices.Clone(decision.Changed[event.App+"/"+receipt.GetChangeId()])
-				}
-			}
-		},
-		Register: view.registerInstalledAsset,
-		Entity: func(typ, name string) (platform.EntityInfo, bool, bool) {
-			et := decision.Records.Type(typ)
-			if et == nil {
-				return platform.EntityInfo{}, false, false
-			}
-			return et.Info(), et.Rows().Get(name) != nil, true
-		},
-		Matches: decision.Records.DraftMatches,
+		Records:     decision.Records,
+		KeepChanges: decision.KeepChanges,
+		Register:    view.registerInstalledAsset,
 		Decide: func(info platform.EntityInfo, draft platform.AssetDraft, submission *pb.Submission) (*pb.ChangeRecord, error) {
 			app := view.App(info.App)
 			if request != nil {

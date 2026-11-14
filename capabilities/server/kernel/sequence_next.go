@@ -1,4 +1,4 @@
-package host
+package kernel
 
 import (
 	"fmt"
@@ -10,12 +10,10 @@ import (
 	"platformserver/platform"
 )
 
-func (r runtime) Next(c platform.Caller, rec *pb.ChangeRecord, sequence string, date time.Time) (string, *kernel.Error) {
-	t := r.t
+func (s *Sequences) Next(rec *pb.ChangeRecord, appID string, app platform.App, sequence string, date time.Time) (string, *kernel.Error) {
 	if rec.GetChangeId() == "" {
 		return "", &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 	}
-	app := t.App(c.App)
 	if app == nil {
 		return "", &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
 	}
@@ -24,10 +22,9 @@ func (r runtime) Next(c platform.Caller, rec *pb.ChangeRecord, sequence string, 
 	if i < 0 {
 		return "", &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
 	}
-	s, year := m.Sequences[i], 0
-	if s.Yearly {
+	seq, year := m.Sequences[i], 0
+	if seq.Yearly {
 		year = date.Year()
 	}
-	key := fmt.Sprintf("%s/%s/%d", c.App, sequence, year)
-	return s.Format(date.Year(), t.Sequences.Take(key)), nil
+	return seq.Format(date.Year(), s.Take(fmt.Sprintf("%s/%s/%d", appID, sequence, year))), nil
 }

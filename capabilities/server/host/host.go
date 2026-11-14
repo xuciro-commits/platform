@@ -108,16 +108,7 @@ func NewTenantWithCapabilities(id string, services platform.RuntimeCapabilities,
 	}
 	t.Projection.SetRules(services.Rules)
 	t.staged = compute.NewChannel(id, t.files)
-	t.i18n = transport.NewTranslator(func() []platform.App { return t.apps },
-		func(a platform.App) platform.Manifest { return transport.ManifestOf(a, t.definitionsFingerprint()) },
-		t.words.Clone, PlatformLanguages)
-	claim := func(name, owner string) error {
-		if other := t.owner[name]; other != "" {
-			return fmt.Errorf("tenant %s: %q is declared by %s and %s", id, name, other, owner)
-		}
-		t.owner[name] = owner
-		return nil
-	}
+	t.i18n = t.translator()
 	for i, a := range apps {
 		m := a.Manifest()
 		if a.AcceptedLedger() == nil {
@@ -141,20 +132,8 @@ func NewTenantWithCapabilities(id string, services platform.RuntimeCapabilities,
 		for _, j := range m.Jobs {
 			t.work.AddJob(&automation.Task{ScheduledTask: platform.ScheduledTask{ID: "job:" + m.ID + "/" + j.Name, Kind: "job", App: m.ID, Title: j.Title, State: "scheduled"}, Job: j})
 		}
-		var names []string
-		for _, r := range m.Reads {
-			names = append(names, "read:"+r)
-		}
-		for _, action := range m.Actions.All() {
-			names = append(names, "action:"+action.Schema)
-		}
-		for input := range m.Inputs {
-			names = append(names, "input:"+input)
-		}
-		for _, n := range names {
-			if err := claim(n, m.ID); err != nil {
-				return nil, err
-			}
+		if err := runtimekernel.ClaimNames(t.owner, id, m); err != nil {
+			return nil, err
 		}
 	}
 	roles, err := ownerRolesOf(t.ownerSet, func(string) bool { return true })
@@ -162,27 +141,11 @@ func NewTenantWithCapabilities(id string, services platform.RuntimeCapabilities,
 		return nil, fmt.Errorf("tenant %s has %w", id, err)
 	}
 	t.ownerRoles = roles
-	for _, a := range apps {
-		if len(a.Manifest().Agents) == 0 {
-			continue
-		}
-		if t.agents == nil {
-			return nil, fmt.Errorf("tenant %s: %s declares agents, and the tenant runs no agent app", id, a.Manifest().ID)
-		}
-		if err := t.agents.DeclareAgentApp(a); err != nil {
-			return nil, fmt.Errorf("tenant %s: %v", id, err)
-		}
+	if err := runtimekernel.DeclareOwned(id, apps, func(m platform.Manifest) bool { return len(m.Agents) > 0 }, t.agents, "agent", func(r platform.AgentRuntime, a platform.App) error { return r.DeclareAgentApp(a) }); err != nil {
+		return nil, err
 	}
-	for _, a := range apps {
-		if len(a.Manifest().Flows) == 0 {
-			continue
-		}
-		if t.procs == nil {
-			return nil, fmt.Errorf("tenant %s: %s declares flows, and the tenant runs no flow app", id, a.Manifest().ID)
-		}
-		if err := t.procs.Declare(a); err != nil {
-			return nil, fmt.Errorf("tenant %s: %v", id, err)
-		}
+	if err := runtimekernel.DeclareOwned(id, apps, func(m platform.Manifest) bool { return len(m.Flows) > 0 }, t.procs, "flow", func(r platform.Processes, a platform.App) error { return r.Declare(a) }); err != nil {
+		return nil, err
 	}
 	if err := t.registerDefinitions(); err != nil {
 		return nil, fmt.Errorf("tenant %s: %v", id, err)
@@ -225,4 +188,10 @@ func NewTenantWithCapabilities(id string, services platform.RuntimeCapabilities,
 
 func (t *Tenant) caller(m platform.Member, app platform.App, replaying bool) platform.Caller {
 	return platform.NewCaller(runtime{t: t, scoped: true}, m, app.Manifest().ID, replaying, false)
+}
+
+func (t *Tenant) translator() transport.Translator {
+	return transport.NewTranslator(func() []platform.App { return t.apps },
+		func(a platform.App) platform.Manifest { return transport.ManifestOf(a, t.definitionsFingerprint()) },
+		t.words.Clone, PlatformLanguages)
 }

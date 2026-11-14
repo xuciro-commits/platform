@@ -10,10 +10,7 @@ func (h hostView) ValidateInstallLinkType(l platform.LinkType) error {
 }
 
 func (h hostView) InstallLinkType(c platform.Caller, l platform.LinkType, version int) error {
-	if c.Staging() {
-		unsupportedStagedEffect()
-	}
-	return h.definitionInstall().LinkType(l, version)
+	return h.definitionInstall().InstallLinkType(c, l, version)
 }
 
 func (t *Tenant) visibleLink(m platform.Member, binding platform.AssetBinding) *platform.LinkType {

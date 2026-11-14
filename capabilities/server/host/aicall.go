@@ -5,18 +5,18 @@ import (
 	"encoding/json"
 	"time"
 
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/trace"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
+	runtimekernel "platformserver/kernel"
 	"platformserver/platform"
 	"platformserver/services/actions"
 	"platformserver/services/ai/gateway"
 	"platformserver/services/ai/gateway/providers"
 	"platformserver/services/resources/authoring"
-	controlowner "platformserver/services/security/control"
-
-	"go.opentelemetry.io/otel/attribute"
-	"go.opentelemetry.io/otel/trace"
 	"platformserver/services/resources/monitoring"
+	controlowner "platformserver/services/security/control"
 )
 
 func (t *Tenant) limits() platform.AIDefaults {
@@ -36,10 +36,7 @@ func (t *Tenant) gatewayRuntime() aigateway.Runtime {
 			c := platform.NewCaller(runtime{t: t}, m, build.ID, false, false)
 			return authorizationRefusal(t.authorizeNative(c, "POST /v1/build/ai/chat", "action", []string{build.Builder}, true))
 		},
-		ModelAllowed: func(m platform.Member, name string) *kernel.Error {
-			c := platform.NewCaller(runtime{t: t}, m, platform.AIApp, false, false)
-			return authorizationRefusal(t.authorizeNative(c, "model:"+name, "action", []string{platform.AnyMember}, true))
-		},
+		ModelAllowed:    func(m platform.Member, name string) *kernel.Error { return t.modelAllowed(platform.AIApp, m, name) },
 		FunctionAllowed: t.functionAllowed,
 		Available: func(provider string, at time.Time, claim bool) bool {
 			return t.breakers.Allow("ai:"+provider, at, claim)
@@ -69,9 +66,22 @@ func (t *Tenant) gatewayRuntime() aigateway.Runtime {
 	}
 }
 
+func (t *Tenant) modelAllowed(app string, m platform.Member, name string) *kernel.Error {
+	c := platform.NewCaller(runtime{t: t}, m, app, false, false)
+	return authorizationRefusal(t.authorizeNative(c, "model:"+name, "action", []string{platform.AnyMember}, true))
+}
+
 func (t *Tenant) reserveCall(m platform.Member, model platform.AIModel, req platform.ChatRequest, input, output int, now time.Time) *platform.AIError {
 	failure, refusal := decideOnImage(t, context.Background(), "model:reserve", func(t *Tenant) (*platform.AIError, *kernel.Error) {
-		return t.prepareReserveCall(m, model, req, input, output, now), nil
+		return aigateway.Reservations{
+			Stopped: func() bool { return t.businessStopped() || t.recordReadRefusal() != nil },
+			Prior:   func(call string) (platform.AIReservation, bool) { return t.ai.Reservation(call) },
+			Limits:  t.limits,
+			Accept: func(body []byte) *kernel.Error {
+				_, refusal := t.inputAccepted(t.ai, platform.Member{ID: "app:" + platform.AIApp, Tenant: t.ID}, platform.AIReserveCall, body, now)
+				return refusal
+			},
+		}.Prepare(m, model, req, input, output, now), nil
 	}, func(t *Tenant, candidate preparedAccepted, failure *platform.AIError, refusal *kernel.Error) (*platform.AIError, *kernel.Error) {
 		_, refusal = t.finishPreparedInput(platform.Member{ID: "app:" + platform.AIApp, Tenant: t.ID}, platform.AIReserveCall, candidate, nil, refusal)
 		if refusal != nil {
@@ -83,18 +93,6 @@ func (t *Tenant) reserveCall(m platform.Member, model platform.AIModel, req plat
 		return aigateway.ReservationFailure(refusal)
 	}
 	return failure
-}
-
-func (t *Tenant) prepareReserveCall(m platform.Member, model platform.AIModel, req platform.ChatRequest, input, output int, now time.Time) *platform.AIError {
-	return aigateway.Reservations{
-		Stopped: func() bool { return t.businessStopped() || t.recordReadRefusal() != nil },
-		Prior:   func(call string) (platform.AIReservation, bool) { return t.ai.Reservation(call) },
-		Limits:  t.limits,
-		Accept: func(body []byte) *kernel.Error {
-			_, refusal := t.inputAccepted(t.ai, platform.Member{ID: "app:" + platform.AIApp, Tenant: t.ID}, platform.AIReserveCall, body, now)
-			return refusal
-		},
-	}.Prepare(m, model, req, input, output, now)
 }
 
 func (t *Tenant) releaseCall(call string, now time.Time) *kernel.Error {
@@ -166,6 +164,47 @@ func (t *Tenant) sendModel(x platform.Effect, now time.Time) (platform.Outcome, 
 	return t.gatewayRuntime().Send(x, now)
 }
 
-func (t *Tenant) modelAnswerSubmission(x platform.Effect, o platform.Outcome, usage *platform.AIUsage) (platform.App, *pb.Submission) {
-	return t.gatewayRuntime().Answer(x, o, usage)
+func (t *Tenant) usage() runtimekernel.UsageApply {
+	if t.ai == nil {
+		return runtimekernel.UsageApply{}
+	}
+	return runtimekernel.UsageApply{Usage: t.ai.Snapshot, Meter: t.ai.Meter}
+}
+
+func (t *Tenant) usagePredecessor() (string, error) { return t.usage().Predecessor() }
+
+func (t *Tenant) usageAcceptance() aigateway.UsageAcceptance {
+	return aigateway.UsageAcceptance{Tenant: t.ID,
+		Prior: func() []platform.AIUsage { return t.ai.Usage() },
+		Caller: func(m platform.Member) platform.Caller {
+			return platform.NewCaller(runtime{t: t, scoped: true}, m, platform.AIApp, false, true)
+		},
+		Authorize: func(c platform.Caller, valid bool) (platform.AuthzDecision, *kernel.Error) {
+			decision := t.authorizeNative(c, "usage:observe", "derive", nil, valid)
+			return decision, authorizationRefusal(decision)
+		},
+		Predecessor: t.usagePredecessor,
+		Apply:       func(raw []byte) error { _, err := t.ApplyUsageResult(raw, t.usage()); return err },
+		Quarantine:  t.quarantine,
+		Applied:     func() { t.acceptedResultApplied(); t.operationsChanged(platform.AIApp) }}
+}
+
+func (t *Tenant) acceptUsage(m platform.Member, u platform.AIUsage) *kernel.Error {
+	r, raw, refusal := t.usageAcceptance().Seal(m, u)
+	if refusal != nil || raw == nil {
+		return refusal
+	}
+	candidate := preparedAccepted{entry: runtimekernel.AcceptedEntry(platform.AIApp, m, raw, r.At, nil), key: r.Key, hash: r.RequestHash}
+	if t.stage(candidate) {
+		return nil
+	}
+	return t.finishUsage(candidate)
+}
+
+func (t *Tenant) finishUsage(candidate preparedAccepted) *kernel.Error {
+	committed, err := t.acceptResult(candidate.entry, candidate.key, candidate.hash)
+	if err != nil {
+		return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The model usage was not accepted")
+	}
+	return t.usageAcceptance().Finish(committed, candidate.key, candidate.hash)
 }

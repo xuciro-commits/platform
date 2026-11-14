@@ -121,6 +121,37 @@ func (b BatchState) Hooks(h BatchApply) BatchApply {
 	return h
 }
 
+func (b BatchState) Changes(batch BatchApply) ChangeApply {
+	return ChangeApply{Batch: batch,
+		Check: func(plan acceptedformat.ChangePlan) error {
+			if err := b.CheckControl(plan.Control); err != nil {
+				return err
+			}
+			if err := b.Notices.Check(plan.Notices); err != nil {
+				return err
+			}
+			if err := b.CheckIntents(plan.Intents); err != nil {
+				return err
+			}
+			if err := CheckStates(b.States, plan.States); err != nil {
+				return err
+			}
+			return b.Sequences.Check(plan.SequenceBases, plan.Sequences)
+		},
+		Apply: func(plan acceptedformat.ChangePlan) error {
+			if err := b.ApplyControl(plan.Control); err != nil {
+				return err
+			}
+			if err := ApplyStates(b.States, plan.States); err != nil {
+				return err
+			}
+			b.ApplyNotices(plan.Notices)
+			b.InstallIntents(plan.Intents)
+			b.Sequences.Set(plan.Sequences)
+			return nil
+		}}
+}
+
 func LedgerOf(app func(string) platform.App) func(string) *platform.Ledger {
 	return func(name string) *platform.Ledger {
 		if owner := app(name); owner != nil {

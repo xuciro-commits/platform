@@ -37,7 +37,7 @@ type ObservationDecision struct {
 	Sources   Observations
 	Admits    func(platform.Member) *kernel.Error
 	Prior     func(m platform.Member, key, identity string) (*pb.ChangeRecord, *kernel.Error, bool)
-	Action    func(app, name string) (action platform.Action, declared, available bool)
+	App       func(app string) platform.App
 	Authorize func(m platform.Member, app string, action platform.Action, targets bool, at time.Time, sources []string) *kernel.Error
 	Accept    func(m platform.Member, s *pb.Submission, evidence *platform.ObservationDecisionEvidence, at time.Time) (*pb.ChangeRecord, *kernel.Error)
 }
@@ -81,10 +81,11 @@ func (d ObservationDecision) Prepare(m platform.Member, ref platform.AssetRef, q
 		return ObservationPrepared{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
 	}
 	decision := plan.Info.Definition.Decision
-	action, declared, available := d.Action(decision.Action.App, decision.Action.Name)
-	if !available {
+	owner := d.App(decision.Action.App)
+	if owner == nil {
 		return ObservationPrepared{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "Observation decision action is unavailable")
 	}
+	action, declared := owner.Manifest().Actions.Action(decision.Action.Name)
 	if err := platform.CheckObservationAction(plan.Info.Definition, action); err != nil {
 		return ObservationPrepared{}, ObservationUnavailable(err)
 	}

@@ -114,3 +114,28 @@ func AnswerSubmission(tenant string, x platform.Effect, o platform.Outcome, usag
 	}
 	return owner, ask.Submission(tenant, x, o, usage, authority)
 }
+
+func (r Resolver) FunctionDispatch(effect platform.Effect, options platform.ModelOptions, stage string) (agents.FunctionDispatch, *kernel.Error) {
+	var ask ModelAsk
+	_ = json.Unmarshal([]byte(effect.Body), &ask)
+	binding, provider, problem := r.Resolve("generation", ask.Model, options)
+	if problem != nil {
+		return agents.FunctionDispatch{}, problem
+	}
+	binding, problem = r.Stage(binding, provider, stage)
+	if problem != nil {
+		return agents.FunctionDispatch{}, problem
+	}
+	return agents.FunctionDispatch{Model: ask.Model, Binding: binding, Effect: effect}, nil
+}
+
+func BindFunction(effect platform.Effect, binding agents.FunctionBinding, model platform.AIModelBinding) platform.Effect {
+	var ask ModelAsk
+	_ = json.Unmarshal([]byte(effect.Body), &ask)
+	ask.Function = &binding
+	ask.Binding = &model
+	ask.ConfigurationError = ""
+	body, _ := json.Marshal(ask)
+	effect.Body = string(body)
+	return effect
+}

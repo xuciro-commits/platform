@@ -18,10 +18,6 @@ func (t *Tenant) host() platform.Member {
 	return m
 }
 
-func (t *Tenant) appReader(app string) *platform.Member {
-	return &platform.Member{ID: "app:" + app, Tenant: t.ID, Roles: map[string]string{app: platform.AnyMember}}
-}
-
 func (t *Tenant) contextRead(reader *platform.Member, typ, id string, now time.Time) (objects.ContextView, *kernel.Error) {
 	if reader == nil || reader.Tenant != t.ID {
 		return objects.ContextView{}, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
@@ -32,13 +28,13 @@ func (t *Tenant) contextRead(reader *platform.Member, typ, id string, now time.T
 			if !present {
 				return nil, false
 			}
-			page, err := t.recordsRead(m, typ, q, now)
+			page, err := t.objectOwner(t.Projection).Records(m, typ, q, now)
 			return page.Records, err == nil
 		}
 	}
 	return objects.ContextReader{
 		Detail: func(sections ...string) (objects.RecordView, *kernel.Error) {
-			return t.recordDetail(m, typ, id, now, sections...)
+			return t.objectOwner(t.Projection).RecordDetail(m, typ, id, now, sections...)
 		},
 		Info: func() platform.EntityInfo {
 			t.Projection.Lock()
@@ -65,7 +61,7 @@ func (t *Tenant) searchRead(reader *platform.Member, q string, now time.Time) []
 	m := *reader
 	search := build.Search{Resources: t.resourceDirectory(m).Resources, Entities: t.Entities(m), Names: t.names,
 		Read: func(typ string, query platform.Query) ([]any, *kernel.Error) {
-			page, err := t.recordsRead(m, typ, query, now)
+			page, err := t.objectOwner(t.Projection).Records(m, typ, query, now)
 			return page.Records, err
 		}}
 	if owner := t.App(build.ID); owner != nil {

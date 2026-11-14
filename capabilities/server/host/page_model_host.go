@@ -48,9 +48,14 @@ func (h pageModelHost) Rules() platform.RuleEngine { return h.t.services.Rules }
 func (h pageModelHost) VisibleLookup(m platform.Member) func(string) (platform.EntityInfo, bool) {
 	return h.t.modelVisibleLookup(m)
 }
-func (h pageModelHost) RuleEntities() map[string]platform.EntityInfo { return h.t.ruleEntitySnapshot() }
+func (h pageModelHost) RuleEntities() map[string]platform.EntityInfo {
+	return h.t.Projection.EntityInfos()
+}
 func (h pageModelHost) RuleRecord(typ, id string, fallback any) any {
-	return h.t.pageModelRuleRecord(typ, id, fallback)
+	if row, ok := h.t.Projection.LockedRow(typ, id); ok {
+		return row
+	}
+	return fallback
 }
 func (h pageModelHost) LoadObjectSet(c platform.Caller, set platform.ObjectSet, w objects.Window, at time.Time, bound ...platform.NamedQuery) (objects.RecordPage, string, *kernel.Error) {
 	return h.t.loadObjectSet(h.t.Projection, c, set, w, at, bound...)

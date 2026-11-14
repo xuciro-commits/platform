@@ -34,7 +34,7 @@ func (h hostView) BeginTxnCalls(c platform.Caller, at time.Time) (platform.TxnCa
 	}
 	return &actions.TxnCalls{Caller: c, Snapshot: h.decision.Records.ForkRecords(), Current: h.decision.Records, Check: hostView{t: h.decision.tenant}.CheckTxnCall,
 		Read: func(store *records.Store, c platform.Caller, call platform.TxnCall, inputs json.RawMessage, at time.Time) (json.RawMessage, *kernel.Error) {
-			return h.decision.tenant.readQueryVersionFrom(store, c, call.Ref.App, call.Ref.Name, call.Version, inputs, at)
+			return h.decision.tenant.queryReads(store).QueryVersion(c, call.Ref.App, call.Ref.Name, call.Version, inputs, at)
 		}}, nil
 }
 

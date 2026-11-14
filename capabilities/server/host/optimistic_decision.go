@@ -2,15 +2,16 @@ package host
 
 import (
 	"context"
+	runtimekernel "platformserver/kernel"
 	"platformserver/services/resources/monitoring"
 	"slices"
 	"time"
 
-	"go.opentelemetry.io/otel/attribute"
-	"go.opentelemetry.io/otel/metric"
-	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
 	"platformserver/platform"
+
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/metric"
 )
 
 type preparedAccepted struct {
@@ -21,70 +22,41 @@ type preparedAccepted struct {
 	uploads []string
 }
 
-func (t *Tenant) countDecision(ctx context.Context, outcome string) {
-	monitoring.Meters.Decisions.Add(ctx, 1, metric.WithAttributes(attribute.String("platform.tenant", t.ID), attribute.String("platform.outcome", outcome)))
-}
-
-func (t *Tenant) matchesReadImage(image *tenantReadImage) bool {
-	t.Projection.Lock()
-	generation := t.Projection.Generation()
-	t.Projection.Unlock()
-	return image.epoch == t.StateEpoch.Load() && image.definitions == t.DefinitionEpoch.Load() && image.records == generation && image.position == t.Projection.Current().Applied()
-}
-
-func decideOnImage[T any](t *Tenant, ctx context.Context, holder string, prepare func(*Tenant) (T, *kernel.Error), finish func(*Tenant, preparedAccepted, T, *kernel.Error) (T, *kernel.Error)) (value T, refusal *kernel.Error) {
-	for attempt := 0; attempt < 3; attempt++ {
-		if ctx.Err() != nil || t.businessStopped() {
-			return value, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
-		}
-		image := t.readImage.Load()
-		if image == nil {
-			break
-		}
-		var candidate preparedAccepted
-		value, refusal, err := readImageState(t, image.state, ctx, func(scope *Tenant) (T, *kernel.Error) {
+func decideOnImage[T any](t *Tenant, ctx context.Context, holder string, prepare func(*Tenant) (T, *kernel.Error), finish func(*Tenant, preparedAccepted, T, *kernel.Error) (T, *kernel.Error)) (T, *kernel.Error) {
+	attempt := func(state *Tenant) (value T, candidate preparedAccepted, refusal *kernel.Error, err error) {
+		value, refusal, err = readImageState(t, state, ctx, func(scope *Tenant) (T, *kernel.Error) {
 			scope.preparedResult = &candidate
 			return prepare(scope)
 		})
-		if err != nil {
-			if ctx.Err() != nil || t.quarantined() {
-				return value, refusal
+		return
+	}
+	return runtimekernel.ImageDecision[T, preparedAccepted]{
+		Stopped:     t.businessStopped,
+		Quarantined: t.quarantined,
+		Hold:        func() error { return t.Lane.Hold(ctx, holder) },
+		Unlock:      t.Lane.Unlock,
+		Unavailable: func() bool { return t.recordReadRefusal() != nil || t.businessStopped() },
+		Load: func() (func() (T, preparedAccepted, *kernel.Error, error), func(preparedAccepted) bool) {
+			image := t.readImage.Load()
+			if image == nil {
+				return nil, nil
 			}
-			break
-		}
-		if err := t.Lane.Hold(ctx, holder); err != nil {
-			return value, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
-		}
-		if refusal := t.recordReadRefusal(); refusal != nil || t.businessStopped() {
-			t.Lane.Unlock()
-			return value, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
-		}
-		if t.matchesReadImage(image) && !slices.ContainsFunc(candidate.uploads, t.uploads.Unavailable) && (holder != "work" || image.work == t.WorkEpoch.Load()) {
-			func() {
-				defer t.Lane.Unlock()
-				value, refusal = finish(t, candidate, value, refusal)
-			}()
-			return value, refusal
-		}
-		t.Lane.Unlock()
-		if attempt < 2 {
-			t.countDecision(ctx, "retried")
-		}
-	}
-	t.countDecision(ctx, "fallback")
-	if err := t.Lane.Hold(ctx, holder); err != nil {
-		return value, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
-	}
-	defer t.Lane.Unlock()
-	if refusal := t.recordReadRefusal(); refusal != nil || t.businessStopped() {
-		return value, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
-	}
-	var candidate preparedAccepted
-	value, refusal, err := readImageState(t, t, ctx, func(scope *Tenant) (T, *kernel.Error) { scope.preparedResult = &candidate; return prepare(scope) })
-	if err != nil {
-		return value, refusal
-	}
-	return finish(t, candidate, value, refusal)
+			return func() (T, preparedAccepted, *kernel.Error, error) { return attempt(image.state) },
+				func(candidate preparedAccepted) bool {
+					t.Projection.Lock()
+					generation := t.Projection.Generation()
+					t.Projection.Unlock()
+					return image.epoch == t.StateEpoch.Load() && image.definitions == t.DefinitionEpoch.Load() && image.records == generation && image.position == t.Projection.Current().Applied() && !slices.ContainsFunc(candidate.uploads, t.uploads.Unavailable) && (holder != "work" || image.work == t.WorkEpoch.Load())
+				}
+		},
+		Direct: func() (T, preparedAccepted, *kernel.Error, error) { return attempt(t) },
+		Finish: func(candidate preparedAccepted, value T, refusal *kernel.Error) (T, *kernel.Error) {
+			return finish(t, candidate, value, refusal)
+		},
+		Count: func(outcome string) {
+			monitoring.Meters.Decisions.Add(ctx, 1, metric.WithAttributes(attribute.String("platform.tenant", t.ID), attribute.String("platform.outcome", outcome)))
+		},
+	}.Run(ctx)
 }
 
 func decideWithError[T any](t *Tenant, holder string, prepare func(*Tenant) (T, error), apply func(*Tenant, preparedAccepted) (T, error)) (T, error) {
@@ -103,16 +75,10 @@ func decideWithError[T any](t *Tenant, holder string, prepare func(*Tenant) (T, 
 	return result.value, result.err
 }
 
-func (t *Tenant) preparedUploads() []string {
-	if t.preparedResult == nil {
-		return nil
-	}
-	return t.preparedResult.uploads
-}
-
 func (t *Tenant) stageCandidate(draft *stagedDecision, app string, body, principal []byte, key, hash string, at time.Time, finish func(preparedAccepted)) {
-	candidate := preparedAccepted{entry: Entry{App: app, Kind: "accepted-result", Principal: principal, Body: body, At: at, Versions: draft.FlowVersions()}, key: key, hash: hash, uploads: t.preparedUploads()}
+	candidate := preparedAccepted{entry: Entry{App: app, Kind: "accepted-result", Principal: principal, Body: body, At: at, Versions: draft.FlowVersions()}, key: key, hash: hash}
 	if t.preparedResult != nil {
+		candidate.uploads = t.preparedResult.uploads
 		*t.preparedResult = candidate
 		return
 	}

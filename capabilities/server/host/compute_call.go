@@ -68,7 +68,7 @@ func (t *Tenant) InvokeOperation(member platform.Member, q platform.OperationReq
 			if owner == nil {
 				return false, unknown()
 			}
-			known := t.priorOf(owner, q.Key).Known()
+			known := t.PriorOf(owner, q.Key).Known()
 			_, refusal := t.accept(owner, latest, s, now, acceptOptions{inputs: []*preparedOperationInput{prepared}})
 			return !known, refusal
 		}, func(t *Tenant, candidate preparedAccepted, keep bool, refusal *kernel.Error) (bool, *kernel.Error) {

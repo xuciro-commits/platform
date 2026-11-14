@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"maps"
+	"platformserver/kernel/records"
 	"platformserver/platform"
 	build "platformserver/services/resources/authoring"
 	"slices"
@@ -11,11 +12,22 @@ import (
 
 type CandidateSandbox struct {
 	PutModule          func(digest string, raw []byte) error
-	RestoreRecords     func(map[string][]json.RawMessage) (held bool, err error)
+	RestoreRecords     func(map[string][]records.StoredState) (held bool, err error)
 	InstallPage        func(platform.Page) error
 	InstallApplication func(platform.Application) error
 	AddDefinition      func(platform.Definition)
 	FinishInstall      func() error
+}
+
+func (s CandidateSandbox) Restore(rows map[string][]json.RawMessage) (bool, error) {
+	saved := make(map[string][]records.StoredState, len(rows))
+	for typ, values := range rows {
+		saved[typ] = []records.StoredState{}
+		for _, raw := range values {
+			saved[typ] = append(saved[typ], records.StoredState{Value: raw})
+		}
+	}
+	return s.RestoreRecords(saved)
 }
 
 func (e Environment) CandidateApps(candidate platform.ReleaseCandidate, member platform.Member, others ...platform.Member) ([]platform.App, build.ConstructionSandbox, error) {
@@ -171,7 +183,7 @@ func (e Environment) InstallCandidate(candidate platform.ReleaseCandidate, b bui
 		raw, _ := json.Marshal(object)
 		definitions[build.ObjectType] = append(definitions[build.ObjectType], raw)
 	}
-	if _, err := sandbox.RestoreRecords(definitions); err != nil {
+	if _, err := sandbox.Restore(definitions); err != nil {
 		return err
 	}
 	if err := b.Reinstall(); err != nil {
@@ -192,7 +204,7 @@ func (e Environment) InstallCandidate(candidate platform.ReleaseCandidate, b bui
 		}
 	}
 	if len(processes) != 0 {
-		if _, err := sandbox.RestoreRecords(processes); err != nil {
+		if _, err := sandbox.Restore(processes); err != nil {
 			return err
 		}
 		if err := b.Reinstall(); err != nil {
@@ -240,7 +252,7 @@ func (e Environment) InstallCandidate(candidate platform.ReleaseCandidate, b bui
 		}
 	}
 	if len(rows) > 0 {
-		held, err := sandbox.RestoreRecords(rows)
+		held, err := sandbox.Restore(rows)
 		if err != nil {
 			return err
 		}

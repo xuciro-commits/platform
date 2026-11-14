@@ -2,9 +2,11 @@ package host
 
 import (
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
+	runtimekernel "platformserver/kernel"
 	"platformserver/kernel/transport"
 	"platformserver/platform"
 	"platformserver/services/actions"
+	"slices"
 )
 
 func (t *Tenant) Catalog(m platform.Member) []platform.Action {
@@ -12,17 +14,15 @@ func (t *Tenant) Catalog(m platform.Member) []platform.Action {
 	if out, ok := t.viewCache().Catalog(gen, key); ok {
 		return out
 	}
-	out := t.buildCatalog(m)
+	m = m.WithAuthorization(t.services.Authorization)
+	out := actions.CatalogHooks{Apps: t.LiveApps, Entities: func() []platform.EntityInfo { return t.Entities(m) }, Provider: func(used string) (platform.App, string, bool) { return t.router().Provider(used) },
+		SchemaVersion: t.actionSchemaVersion}.Of(m)
 	t.viewCache().StoreCatalog(gen, key, out)
 	return out
 }
 
 func (t *Tenant) Declarations() []*pb.AuthorityDeclaration {
-	var out []*pb.AuthorityDeclaration
-	for _, a := range t.apps {
-		out = append(out, a.Declarations()...)
-	}
-	return out
+	return runtimekernel.DeclarationsOf(t.apps)
 }
 
 func (t *Tenant) manifests() []platform.Manifest {
@@ -48,20 +48,7 @@ func (t *Tenant) Member(id string) (platform.Member, bool) {
 	return member.WithAuthorization(t.services.Authorization), found
 }
 
-func (t *Tenant) buildCatalog(m platform.Member) []platform.Action {
-	m = m.WithAuthorization(t.services.Authorization)
-	return actions.CatalogHooks{Apps: t.LiveApps, Entities: func() []platform.EntityInfo { return t.Entities(m) }, Provider: func(used string) (platform.App, string, bool) { return t.router().Provider(used) },
-		SchemaVersion: t.actionSchemaVersion}.Of(m)
-}
-
-func (t *Tenant) AppIDs() []string {
-	gen := t.definitionsFingerprint()
-	out := make([]string, 0, len(t.apps))
-	for _, a := range t.apps {
-		out = append(out, transport.ManifestOf(a, gen).ID)
-	}
-	return out
-}
+func (t *Tenant) AppIDs() []string { return slices.Clone(t.ids) }
 
 func (t *Tenant) manifestById(id string) platform.Manifest {
 	a := t.App(id)

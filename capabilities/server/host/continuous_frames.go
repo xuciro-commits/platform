@@ -39,8 +39,11 @@ func (t *Tenant) continuousSnapshotLocked(m platform.Member, id string, now time
 	}.Take(m, id)
 }
 
-func (t *Tenant) cleanupFlowArtifactsFor(m platform.Member, id string, now time.Time) *kernel.Error {
-	return t.flowIntake().Cleanup(m, id, now)
+func (t *Tenant) decideAutomated(holder, app string, decide func(*Tenant) (*pb.ChangeRecord, *kernel.Error)) (*pb.ChangeRecord, *kernel.Error) {
+	member := platform.Member{ID: "app:" + app, Tenant: t.ID}
+	return decideOnImage(t, context.Background(), holder, decide, func(t *Tenant, candidate preparedAccepted, record *pb.ChangeRecord, refusal *kernel.Error) (*pb.ChangeRecord, *kernel.Error) {
+		return t.finishPreparedSubmission(member, candidate, record, refusal)
+	})
 }
 
 func (t *Tenant) ConsumeFlowBatch(m platform.Member, id string, batch platform.FlowBatch, now time.Time) (platform.FlowBatchOutcome, *kernel.Error) {
@@ -57,11 +60,11 @@ func (t *Tenant) prepareContinuousDeadLetterReplay(m platform.Member, sub *pb.Su
 		}
 		return automation.ReplayPreflight{Versioned: opts.versioned,
 			Version: func() (*platform.SchemaVersion, *kernel.Error) {
-				return t.submissionSchemaVersion(owner, sub, opts.contentVersion)
+				return t.SchemaBinding(owner, sub, opts.contentVersion, t.actionSchemaVersion)
 			},
-			Current: func(sub *pb.Submission) *pb.Submission { return t.currentSubmissionSchema(owner, sub) },
+			Current: func(sub *pb.Submission) *pb.Submission { return t.CurrentSchema(owner, sub) },
 			Settled: func() bool {
-				prior := t.priorOf(owner, sub.GetIdempotencyKey())
+				prior := t.PriorOf(owner, sub.GetIdempotencyKey())
 				return prior.Refusal != nil || prior.Record != nil
 			},
 			Accept: func(sub *pb.Submission, binding *platform.SchemaVersion, schemaRefusal *kernel.Error) (*pb.ChangeRecord, *kernel.Error) {
@@ -96,7 +99,7 @@ func (t *Tenant) prepareContinuousDeadLetterReplay(m platform.Member, sub *pb.Su
 		return nil, nil, false
 	}
 	if initial.Instance.CleanupPending {
-		if err := t.cleanupFlowArtifactsFor(initial.Member, initial.Instance.ID, now); err != nil {
+		if err := t.flowIntake().Cleanup(initial.Member, initial.Instance.ID, now); err != nil {
 			return nil, err, true
 		}
 	}
@@ -155,14 +158,6 @@ func (t *Tenant) prepareContinuousDeadLetterReplay(m platform.Member, sub *pb.Su
 	return record, err, true
 }
 
-func (t *Tenant) retireContinuousArtifacts(plan platform.FlowArtifactCleanupPreparation, now time.Time) *kernel.Error {
-	return t.flowIntake().Retire(plan, now)
-}
-
-func (t *Tenant) retryContinuousCompute(member platform.Member, plan platform.FlowComputeRetryPreparation, now time.Time) {
-	t.flowIntake().RetryCompute(member, plan, now)
-}
-
 func (t *Tenant) flowIntake() automation.BatchIntake {
 	return automation.BatchIntake{
 		Tenant:    t.ID,
@@ -170,20 +165,15 @@ func (t *Tenant) flowIntake() automation.BatchIntake {
 		Caller:    t.automation(platform.FlowApp, false),
 		Preparing: t.beginFlowArtifactPreparation,
 		Snapshot:  t.continuousSnapshot,
-		Prepare:   t.prepareFlowBatch,
-		PrepareRetry: func(member platform.Member, instance string, now time.Time, store platform.FlowFrameStore) (platform.FlowPreparedComputeRetry, *kernel.Error) {
-			prepared, refusal := recordRead(t, context.Background(), func(t *Tenant) (platform.FlowPreparedComputeRetry, *kernel.Error) {
-				f, latest, _, refusal := t.continuousSnapshotLocked(member, instance, now)
+		Read: func(member platform.Member, id string, now time.Time, use func(platform.ContinuousFlowOwner, platform.FlowInstance, platform.Caller) *kernel.Error) *kernel.Error {
+			_, refusal := recordRead(t, context.Background(), func(t *Tenant) (struct{}, *kernel.Error) {
+				f, latest, _, refusal := t.continuousSnapshotLocked(member, id, now)
 				if refusal != nil {
-					return nil, refusal
+					return struct{}{}, refusal
 				}
-				fresh, refusal := f.PlanComputeRetry(latest, t.automation(platform.FlowApp, false), now)
-				if refusal != nil {
-					return nil, refusal
-				}
-				return fresh.Prepare(now, store)
+				return struct{}{}, use(f, latest, t.automation(platform.FlowApp, false))
 			})
-			return prepared, refusal
+			return refusal
 		},
 		PrepareInput:  t.prepareContinuousOperationInput,
 		Commit:        t.commitFlow,
@@ -196,7 +186,7 @@ func (t *Tenant) flowIntake() automation.BatchIntake {
 
 func (t *Tenant) commitFlowCleanup(plan platform.FlowArtifactCleanupPreparation, now time.Time) *kernel.Error {
 	member := platform.Member{ID: "app:" + platform.FlowApp, Tenant: t.ID}
-	_, refusal := decideOnImage(t, context.Background(), "flow:cleanup", func(t *Tenant) (*pb.ChangeRecord, *kernel.Error) {
+	_, refusal := t.decideAutomated("flow:cleanup", platform.FlowApp, func(t *Tenant) (*pb.ChangeRecord, *kernel.Error) {
 		latest, ok := platform.Get[platform.FlowInstance](t.automation(platform.FlowApp, false), plan.Instance())
 		if !ok {
 			return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The Flow artifact cleanup owner is unavailable")
@@ -205,24 +195,8 @@ func (t *Tenant) commitFlowCleanup(plan platform.FlowArtifactCleanupPreparation,
 			return nil, nil
 		}
 		return t.accept(plan.Decision(t.App(platform.FlowApp)), member, plan.Submission(t.ID), now, acceptOptions{automation: true})
-	}, func(t *Tenant, candidate preparedAccepted, record *pb.ChangeRecord, refusal *kernel.Error) (*pb.ChangeRecord, *kernel.Error) {
-		return t.finishPreparedSubmission(member, candidate, record, refusal)
 	})
 	return refusal
-}
-
-func (t *Tenant) prepareFlowBatch(member platform.Member, id string, batch platform.FlowBatch, now time.Time, store platform.FlowFrameStore) (platform.FlowPreparedBatch, *kernel.Error) {
-	return recordRead(t, context.Background(), func(t *Tenant) (platform.FlowPreparedBatch, *kernel.Error) {
-		f, latest, _, refusal := t.continuousSnapshotLocked(member, id, now)
-		if refusal != nil {
-			return nil, refusal
-		}
-		plan, refusal := f.PlanBatch(latest, t.automation(platform.FlowApp, false))
-		if refusal != nil {
-			return nil, refusal
-		}
-		return plan.Prepare(batch, now, store)
-	})
 }
 
 func (t *Tenant) commitFlow(c automation.FlowCommit) (*pb.ChangeRecord, *kernel.Error) {

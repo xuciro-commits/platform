@@ -7,9 +7,12 @@ import (
 	"platformserver/platform"
 )
 
-func Meaning(infos []platform.EntityInfo) string {
+func Meaning(app string, infos []platform.EntityInfo) string {
 	var b strings.Builder
 	for _, info := range infos {
+		if info.App != app {
+			continue
+		}
 		var lines []string
 		for _, f := range info.Fields {
 			if f.Help == "" && f.Synonyms == "" && f.Example == "" {
@@ -52,7 +55,36 @@ func Meaning(infos []platform.EntityInfo) string {
 	return strings.TrimSpace(b.String())
 }
 
-func StripMention(q string, candidates []string) (string, bool) {
+func Declares(name string, infos []platform.EntityInfo, action func(string) bool) bool {
+	for _, info := range infos {
+		if info.Type == name {
+			return true
+		}
+		if field, ok := strings.CutPrefix(name, info.Type+"."); ok {
+			if _, ok := info.Field(field); ok {
+				return true
+			}
+		}
+	}
+	return action(name)
+}
+
+func Mention(q string, info platform.EntityInfo, languages []string, dictionary func(string) map[string]string, terms []string) (string, bool) {
+	candidates := []string{info.Type, info.Title, info.Plural}
+	candidates = append(candidates, strings.Split(info.Synonyms, ",")...)
+	for _, lang := range languages {
+		dict := dictionary(lang)
+		for _, s := range []string{info.Title, info.Plural, info.Synonyms} {
+			if tr := dict[s]; tr != "" {
+				candidates = append(candidates, strings.Split(tr, ",")...)
+			}
+		}
+	}
+	candidates = append(candidates, terms...)
+	return stripMention(q, candidates)
+}
+
+func stripMention(q string, candidates []string) (string, bool) {
 	lower := " " + strings.ToLower(strings.Join(strings.Fields(q), " ")) + " "
 	slices.SortFunc(candidates, func(a, b string) int { return len(b) - len(a) })
 	for _, c := range candidates {

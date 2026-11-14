@@ -8,6 +8,7 @@ import (
 	"platformkernel/kernel"
 	transport "platformserver/kernel/transport"
 	"platformserver/platform"
+	"platformserver/services/security"
 	controlowner "platformserver/services/security/control"
 	"strconv"
 	"strings"
@@ -64,7 +65,7 @@ func (h *Host) routesCore(rt *routes) {
 		refusal = t.i18n.Said(refusal, t.Language(m, r))
 		Reply(w, record, refusal, localized...)
 	})
-	rt.authorized(transport.Route{Pattern: "GET /v1/authz/explain", Summary: "Why a member may or may not exercise a permission: their roles, the roles it names, the engine's verdict (administrators, auditors)", Answer: Explanation{}, Query: []transport.Param{{Name: "member", Description: "the member to ask about"}, {Name: "permission", Description: "an action's schema, or <app>:read:<name>"}}}, controlowner.PlatformApp, []string{controlowner.Admin, platform.Auditor}, transport.Answering(func(r *http.Request, _ platform.Member, t *Tenant) (Explanation, *kernel.Error) {
+	rt.authorized(transport.Route{Pattern: "GET /v1/authz/explain", Summary: "Why a member may or may not exercise a permission: their roles, the roles it names, the engine's verdict (administrators, auditors)", Answer: security.Explanation{}, Query: []transport.Param{{Name: "member", Description: "the member to ask about"}, {Name: "permission", Description: "an action's schema, or <app>:read:<name>"}}}, controlowner.PlatformApp, []string{controlowner.Admin, platform.Auditor}, transport.Answering(func(r *http.Request, _ platform.Member, t *Tenant) (security.Explanation, *kernel.Error) {
 		return t.Explain(r.URL.Query().Get("member"), r.URL.Query().Get("permission"))
 	}))
 	rt.authorized(transport.Route{Pattern: "POST /v1/authz/explain", Summary: "Explain the ordered owner authorization decision for a record, fields and source", Body: platform.AuthzRequest{}, Answer: platform.AuthzDecision{}}, controlowner.PlatformApp, []string{controlowner.Admin, platform.Auditor}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
@@ -129,12 +130,7 @@ func (t *Tenant) namedRead(w http.ResponseWriter, r *http.Request, m platform.Me
 	}
 	out, refusal := read(app, inputs)
 	if refusal == nil {
-		if declarationReads[name] {
-			out = t.i18n.Translate(out, t.Language(m, r))
-		}
-		if messageReads[name] {
-			out = t.i18n.TranslateMessages(out, t.Language(m, r))
-		}
+		out = t.i18n.ForRead(name, out, t.Language(m, r))
 	}
 	transport.Answer(w, out, refusal)
 }

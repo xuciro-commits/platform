@@ -7,6 +7,7 @@ import (
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
+	"platformserver/kernel/records"
 	"platformserver/platform"
 	"platformserver/services/actions"
 	dataowner "platformserver/services/data"
@@ -24,18 +25,21 @@ func (t *Tenant) PullSources(now time.Time) {
 }
 
 func (t *Tenant) integrationPending(typ, id string, execution *dataowner.IntegrationExecution) bool {
-	value, _ := recordRead(t, context.Background(), func(t *Tenant) (bool, *kernel.Error) {
-		return dataowner.PendingExecution(t.automation(build.ID, false), typ, id, execution), nil
+	return readOnly(t, func(t *Tenant) bool {
+		return dataowner.PendingExecution(t.automation(build.ID, false), typ, id, execution)
 	})
+}
+
+func readOnly[T any](t *Tenant, read func(*Tenant) T) T {
+	value, _ := recordRead(t, context.Background(), func(t *Tenant) (T, *kernel.Error) { return read(t), nil })
 	return value
 }
 
 func (t *Tenant) integrationRefused(authority, key string) bool {
-	value, _ := recordRead(t, context.Background(), func(t *Tenant) (bool, *kernel.Error) {
+	return readOnly(t, func(t *Tenant) bool {
 		_, ok := t.Committed.Refusal(authority + "/" + key)
-		return ok, nil
+		return ok
 	})
-	return value
 }
 
 func (t *Tenant) connectionMarkings(connection string) platform.MarkingSet {
@@ -80,18 +84,12 @@ func (t *Tenant) integration() dataowner.Integration {
 		},
 		Quarantined: t.quarantined, Pending: t.integrationPending,
 		Target: func(object string) (string, bool) {
-			t.Projection.Lock()
-			defer t.Projection.Unlock()
-			if entity := t.Projection.Type(object); entity != nil {
-				return entity.Info().App, true
-			}
-			return "", false
+			info, found := records.LockedInfo(t.Projection, object)
+			return info.App, found
 		},
 		ReadSource: t.readSource,
 		ConnectionMarkings: func(connection string) (platform.MarkingSet, *kernel.Error) {
-			return recordRead(t, context.Background(), func(t *Tenant) (platform.MarkingSet, *kernel.Error) {
-				return t.connectionMarkings(connection), nil
-			})
+			return readOnly(t, func(t *Tenant) platform.MarkingSet { return t.connectionMarkings(connection) }), nil
 		},
 		Source: t.sourcePreparation(), DeclaredRows: t.declaredRows, PrepareRows: t.prepareRows, AbsentRows: t.absentSourceRows,
 		Refused: t.integrationRefused, Submit: t.Submit, SubmitBackground: t.submitBackground,
@@ -102,10 +100,10 @@ func (t *Tenant) integration() dataowner.Integration {
 		ObserveRun: t.observeOwnerRun, PipelineInputs: t.pipelineInputs,
 		Unguarded: t.unguarded, OutputVersion: t.datasetOutput,
 		PipelinePlan: func() (dataowner.PipelinePlan, *kernel.Error) {
-			return recordRead(t, context.Background(), func(t *Tenant) (dataowner.PipelinePlan, *kernel.Error) {
-				filter := platform.Expr{Op: "=", Kind: "boolean", Args: []platform.Expr{platform.ExprReference("text", "state"), platform.ExprLiteralValue("text", "published")}}
-				return t.DataOwner().PlanPipelines(caller(), platform.Query{Filter: &filter, Sort: []string{"id"}, Limit: 200}), nil
-			})
+			filter := platform.Expr{Op: "=", Kind: "boolean", Args: []platform.Expr{platform.ExprReference("text", "state"), platform.ExprLiteralValue("text", "published")}}
+			return readOnly(t, func(t *Tenant) dataowner.PipelinePlan {
+				return t.DataOwner().PlanPipelines(caller(), platform.Query{Filter: &filter, Sort: []string{"id"}, Limit: 200})
+			}), nil
 		},
 		CurrentPipeline: func(id string) (dataowner.Pipeline, *kernel.Error) {
 			return coordinatedRecordRead(t, context.Background(), func(t *Tenant) (dataowner.Pipeline, *kernel.Error) {
@@ -121,10 +119,7 @@ func (t *Tenant) integration() dataowner.Integration {
 			return exists
 		},
 		PipelineProject: func(id string) string {
-			project, _ := recordRead(t, context.Background(), func(t *Tenant) (string, *kernel.Error) {
-				return t.resourceProject(dataowner.PipelineType, id), nil
-			})
-			return project
+			return readOnly(t, func(t *Tenant) string { return t.resourceProject(dataowner.PipelineType, id) })
 		},
 		ExecutionSchedules: func() ([]platform.Schedule, *kernel.Error) {
 			return coordinatedRecordRead(t, context.Background(), func(t *Tenant) ([]platform.Schedule, *kernel.Error) {

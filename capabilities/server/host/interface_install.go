@@ -7,8 +7,5 @@ func (h hostView) ValidateInstallInterface(i platform.Interface) error {
 }
 
 func (h hostView) InstallInterface(c platform.Caller, i platform.Interface, version int) error {
-	if c.Staging() {
-		unsupportedStagedEffect()
-	}
-	return h.definitionInstall().Interface(i, version)
+	return h.definitionInstall().InstallInterface(c, i, version)
 }

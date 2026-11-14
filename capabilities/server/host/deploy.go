@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	runtimekernel "platformserver/kernel"
 	"platformserver/kernel/records"
+	persistence "platformserver/kernel/store"
 	"platformserver/kernel/transport"
 	"platformserver/platform"
 	fileowner "platformserver/services/data/blobs"
@@ -45,7 +46,7 @@ type Deployment struct {
 	RebuildWithCapabilities           func(id string, services platform.RuntimeCapabilities) (*Tenant, error)
 	RuntimeProviders                  *platform.RuntimeProviders
 	HostAuthorization                 platform.AuthorizationEngine
-	Storage                           *JournalProvider
+	Storage                           *persistence.JournalProvider
 	runtimeContext                    context.Context
 	background                        *sync.WaitGroup
 	Seed                              func(t *Tenant, now time.Time) error
@@ -77,13 +78,6 @@ func Flags(addr string) *Deployment {
 	return d
 }
 
-func (d *Deployment) idpKeyPath() string {
-	if d.IDPKey != "" {
-		return d.IDPKey
-	}
-	return filepath.Join(d.Data, "idp.key")
-}
-
 func (d *Deployment) validate() error {
 	profile, err := idp.Profile{Name: d.Profile, Data: d.Data, KeyFile: d.IDPKey, Database: d.Database, Files: d.Files,
 		Issuer: d.Issuer, Keys: d.Keys, Proxy: d.IdentityProxy, Project: d.Project}.Check()
@@ -91,20 +85,17 @@ func (d *Deployment) validate() error {
 	return err
 }
 
-func (d *Deployment) lightweightState() (Journals, platform.FileStore, *idp.Local, error) {
+func (d *Deployment) lightweightState() (Journals, platform.FileStore, error) {
 	journal, err := d.openJournals(context.Background())
 	if err != nil {
-		return nil, nil, nil, fmt.Errorf("journal: %w", err)
+		return nil, nil, fmt.Errorf("journal: %w", err)
 	}
 	files, err := fileowner.NewLocalFiles(filepath.Join(d.Data, "files"))
-	if err == nil {
-		var signer *idp.Local
-		if signer, err = idp.LoadLocal(d.idpKeyPath()); err == nil {
-			return journal, files, signer, nil
-		}
+	if err != nil {
+		journal.Close()
+		return nil, nil, err
 	}
-	journal.Close()
-	return nil, nil, nil, err
+	return journal, files, nil
 }
 
 func (d *Deployment) restoreTenants(ctx context.Context, j Journals, code string, tenants []*Tenant, restored map[string]int64, fresh map[string]bool) error {
@@ -139,30 +130,9 @@ func (d *Deployment) Serve(tenants ...*Tenant) (serveErr error) {
 	if err := d.validate(); err != nil {
 		return err
 	}
-	if d.NewKey {
-		if err := idp.MakeKeyFile(d.idpKeyPath()); err != nil {
-			return err
-		}
-		log.Printf("made the signing key %s", d.idpKeyPath())
-		return nil
-	}
-	var signer *idp.Local
-	if d.Profile == "lightweight" {
-		var err error
-		if signer, err = idp.LoadLocal(d.idpKeyPath()); err != nil {
-			return err
-		}
-	}
-	if d.Mint != "" {
-		if signer == nil {
-			return fmt.Errorf("-mint-token is the lightweight profile's; a delivery host signs in at its OpenID provider")
-		}
-		token, err := signer.Mint(d.Mint, d.TokenTTL, Now())
-		if err != nil {
-			return err
-		}
-		fmt.Println(token)
-		return nil
+	signer, done, err := idp.Startup{Profile: d.Profile, Data: d.Data, KeyFile: d.IDPKey, Mint: d.Mint, NewKey: d.NewKey, TokenTTL: d.TokenTTL}.Run(Now())
+	if err != nil || done {
+		return err
 	}
 	if err := controlowner.ConfigurePersonalTokens(d.Issuer); err != nil {
 		return err
@@ -194,7 +164,7 @@ func (d *Deployment) Serve(tenants ...*Tenant) (serveErr error) {
 	fresh := map[string]bool{}
 	switch {
 	case d.Profile == "lightweight":
-		if journal, files, signer, err = d.lightweightState(); err != nil {
+		if journal, files, err = d.lightweightState(); err != nil {
 			return err
 		}
 		log.Printf("journal and file bytes in %s", d.Data)
@@ -212,11 +182,11 @@ func (d *Deployment) Serve(tenants ...*Tenant) (serveErr error) {
 		if err := d.restoreTenants(ctx, journal, code, tenants, restored, fresh); err != nil {
 			return err
 		}
-		if err := d.restoreRuntimeSelections(ctx, journal, code, tenants); err != nil {
+		if err := d.restoreRuntimeSelections(ctx, journal, tenants); err != nil {
 			return err
 		}
 	}
-	registry := newTenantRegistry(tenants)
+	registry := controlowner.NewRegistry(tenants, func(t *Tenant) string { return t.ID }, func(t *Tenant) bool { return t.quarantined() })
 	memoryJournal := func(tenant *Tenant) {
 		if tenant.Record == nil {
 			tenant.Record = func(Entry) {}
@@ -250,16 +220,14 @@ func (d *Deployment) Serve(tenants ...*Tenant) (serveErr error) {
 	if err != nil {
 		return err
 	}
-	if pgPool, pg := journalPool(journal); journal != nil && d.Project && pg {
-		for _, t := range tenants {
-			if t.quarantined() {
-				continue
-			}
-			p, err := records.ProjectSQL(ctx, pgPool, t.ID, t.Projection, t.readRecords)
-			if err != nil {
-				log.Printf("projection %s: %v", t.ID, err)
-				continue
-			}
+	for _, t := range tenants {
+		if journal == nil || t.quarantined() {
+			continue
+		}
+		p, err := d.project(ctx, journal, t)
+		if err != nil {
+			log.Printf("projection %s: %v", t.ID, err)
+		} else if p != nil {
 			log.Printf("projected %s into schema %s (reader role %s)", t.ID, records.ProjectionSchema(t.ID), records.ReaderRole(t.ID))
 			d.runProjection(registry, t, p)
 		}

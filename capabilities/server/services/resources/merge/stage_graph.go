@@ -49,6 +49,15 @@ func PreviewDrafts[C any](drafts []build.JointDraftRef, preview func([]build.Joi
 	return reply, candidate, err
 }
 
+func CheckedDrafts[C any](owner build.ConstructionDrafts, actions []Action, candidateID string, preview func([]build.JointDraftRef) (GraphPreview, C, error)) ([]build.JointDraftRef, error) {
+	drafts := DraftSet(owner, actions)
+	reply, _, err := PreviewDrafts(drafts, preview)
+	if err == nil && reply.Candidate != candidateID {
+		err = fmt.Errorf("the release candidate differs from the checked candidate")
+	}
+	return drafts, err
+}
+
 func CheckGraph[C any](view func() (build.ConstructionDrafts, bool, error), preview func([]build.JointDraftRef) (GraphPreview, C, error), actions []Action) (BranchGraphCheck, []build.JointDraftRef, C) {
 	graph := BranchGraphCheck{Messages: []string{}}
 	var none C

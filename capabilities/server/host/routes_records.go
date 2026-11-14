@@ -119,7 +119,7 @@ func (h *Host) routesRecords(rt *routes) {
 		exportCSV(w, r, m, t, *q)
 	})
 	rt.recordRead(transport.Route{Pattern: "GET /v1/records/{type}", Summary: "A page of an entity type's records within the caller's scope", Answer: RecordPage{}, Query: []transport.Param{{Name: "domain", Description: "Filters in the prefix form, JSON: [[\"stage\",\"=\",\"open\"]]"}, {Name: "search", Description: "Words to find"}, {Name: "sort", Description: "Fields, comma-separated; -field for descending"}, {Name: "offset", Description: "Records to skip"}, {Name: "limit", Description: "Records in the page"}, {Name: "archived", Description: "true: archived records too"}}}, transport.Answering(func(r *http.Request, m platform.Member, t *Tenant) (RecordPage, *kernel.Error) {
-		page, err := t.recordsRead(m, r.PathValue("type"), objects.PagedQueryFromValues(r.URL.Query()), h.Now())
+		page, err := t.objectOwner(t.Projection).Records(m, r.PathValue("type"), objects.PagedQueryFromValues(r.URL.Query()), h.Now())
 		if err == nil && r.PathValue("type") == build.ObjectType {
 			page, err = t.objectDraftPage(m, page)
 		}
@@ -129,7 +129,7 @@ func (h *Host) routesRecords(rt *routes) {
 		return t.enterpriseUsageRead(m, r.URL.Query().Get("element"), r.URL.Query().Get("until"), h.Now())
 	}))
 	rt.recordRead(transport.Route{Pattern: "GET /v1/enterprise-references", Summary: "Records that name an enterprise element, at any nesting depth, by entity type and page", Answer: []records.EnterpriseReferenceGroup{}, Query: []transport.Param{{Name: "element", Description: "The element's id"}, {Name: "offset", Description: "Records to skip, by column"}, {Name: "limit", Description: "Records per column (default 50, at most 200)"}}}, transport.Answering(func(r *http.Request, m platform.Member, t *Tenant) ([]records.EnterpriseReferenceGroup, *kernel.Error) {
-		offset, limit := pageBounds(r, 0, 50)
+		offset, limit := transport.PageBounds(r, 0, 50)
 		if offset < 0 || limit < 0 {
 			return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "offset and limit are numbers")
 		}

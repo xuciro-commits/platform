@@ -3,20 +3,22 @@ package host
 import (
 	"context"
 	"encoding/json"
+	"fmt"
+	"slices"
+	"time"
+
+	pb "platformkernel/gen/platform/kernel/v1alpha1"
+	"platformkernel/kernel"
+	runtimekernel "platformserver/kernel"
+	"platformserver/kernel/acceptedformat"
+	"platformserver/platform"
 	"platformserver/services/actions"
+	"platformserver/services/ai/evaluation"
 	"platformserver/services/ai/gateway"
 	agentowner "platformserver/services/ai/runtime"
 	releaseowner "platformserver/services/devops/releases"
 	"platformserver/services/objects"
-
-	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
-
-	"platformserver/platform"
-	"platformserver/services/ai/evaluation"
 	"platformserver/services/resources/authoring"
-	"slices"
-	"time"
 )
 
 func (h hostView) ProtocolActions(protocol string) []platform.Action {
@@ -83,11 +85,13 @@ func (h hostView) AgentSources(value any) []string { return h.t.refsIn(value) }
 func (h hostView) AgentKnowledge(reader *platform.Member, app, q string, limit int, now time.Time) json.RawMessage {
 	return agentowner.KnowledgeObservation(h.t.Knowledge(aiContextReader(reader), app, q, limit, now))
 }
-func (h hostView) AgentAppReader(app string) *platform.Member { return h.t.appReader(app) }
-func (h hostView) AgentMeaning(app string) string             { return h.t.meaning(app) }
-func (h hostView) AgentGlossary(app string) string            { return h.t.glossary(app) }
-func (h hostView) AgentLanguage(language string) string       { return agents.LanguageName(language) }
-func (h hostView) AgentSuspended(member string) bool          { return h.t.suspended(member) }
+func (h hostView) AgentAppReader(app string) *platform.Member {
+	return &platform.Member{ID: "app:" + app, Tenant: h.t.ID, Roles: map[string]string{app: platform.AnyMember}}
+}
+func (h hostView) AgentMeaning(app string) string       { return h.t.meaning(app) }
+func (h hostView) AgentGlossary(app string) string      { return h.t.glossary(app) }
+func (h hostView) AgentLanguage(language string) string { return agents.LanguageName(language) }
+func (h hostView) AgentSuspended(member string) bool    { return h.t.suspended(member) }
 func (h hostView) ExternalAgentMembers() []platform.Member {
 	if h.t.identityOwner == nil {
 		return nil
@@ -97,19 +101,20 @@ func (h hostView) ExternalAgentMembers() []platform.Member {
 func (h hostView) AgentDecisionMembers() []string {
 	return agentowner.DecisionMembers(h.t.Audit())
 }
-func readAgentHost[T any](h hostView, read func(*Tenant) (T, *kernel.Error)) (T, *kernel.Error) {
+func (h hostView) readAgent(read func(*Tenant) *kernel.Error) *kernel.Error {
 	if h.decision != nil {
 		return read(h.t)
 	}
-	return recordRead(h.t, context.Background(), read)
+	_, refusal := recordRead(h.t, context.Background(), func(t *Tenant) (struct{}, *kernel.Error) { return struct{}{}, read(t) })
+	return refusal
 }
 
-func (h hostView) AgentUsage() []platform.AIUsage {
-	values, _ := readAgentHost(h, func(t *Tenant) ([]platform.AIUsage, *kernel.Error) {
-		if t.ai == nil {
-			return nil, nil
+func (h hostView) AgentUsage() (values []platform.AIUsage) {
+	h.readAgent(func(t *Tenant) *kernel.Error {
+		if t.ai != nil {
+			values = t.ai.Usage()
 		}
-		return t.ai.Usage(), nil
+		return nil
 	})
 	return values
 }
@@ -124,22 +129,22 @@ func (h hostView) WithAgentRead(read func(platform.AgentEvaluationRuntime) *kern
 	return refusal
 }
 
-func (h hostView) ResolveAgentModel(name string, options platform.ModelOptions, stage string) (platform.AIModelBinding, platform.AIProvider, *kernel.Error) {
-	value, refusal := readAgentHost(h, func(t *Tenant) (pair[platform.AIModelBinding, platform.AIProvider], *kernel.Error) {
-		binding, provider, refusal := t.modelResolver().ResolveStaged("agent", name, options, stage)
-		return pair[platform.AIModelBinding, platform.AIProvider]{binding, provider}, refusal
+func (h hostView) ResolveAgentModel(name string, options platform.ModelOptions, stage string) (binding platform.AIModelBinding, provider platform.AIProvider, refusal *kernel.Error) {
+	refusal = h.readAgent(func(t *Tenant) (failure *kernel.Error) {
+		binding, provider, failure = t.modelResolver().ResolveStaged("agent", name, options, stage)
+		return failure
 	})
-	return value.first, value.second, refusal
+	return binding, provider, refusal
 }
-func (h hostView) AgentModel(name string) (platform.AIModel, platform.AIProvider, *kernel.Error) {
-	value, refusal := readAgentHost(h, func(t *Tenant) (pair[platform.AIModel, platform.AIProvider], *kernel.Error) {
+func (h hostView) AgentModel(name string) (model platform.AIModel, provider platform.AIProvider, refusal *kernel.Error) {
+	refusal = h.readAgent(func(t *Tenant) (failure *kernel.Error) {
 		if t.ai == nil {
-			return pair[platform.AIModel, platform.AIProvider]{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_NOT_FOUND, "AI capability unavailable")
+			return platform.Refuse(pb.ErrorCode_ERROR_CODE_NOT_FOUND, "AI capability unavailable")
 		}
-		model, provider, refusal := t.ai.Model(name)
-		return pair[platform.AIModel, platform.AIProvider]{model, provider}, refusal
+		model, provider, failure = t.ai.Model(name)
+		return failure
 	})
-	return value.first, value.second, refusal
+	return model, provider, refusal
 }
 
 func (h hostView) AgentProviderAvailable(provider string, now time.Time) bool {
@@ -149,8 +154,7 @@ func (h hostView) CallAgentModel(provider platform.AIProvider, model platform.AI
 	return aigateway.AgentCall{
 		Authorize: func(member platform.Member, request platform.ChatRequest) *platform.AIError {
 			_, refusal := recordRead(h.t, context.Background(), func(t *Tenant) (struct{}, *kernel.Error) {
-				c := platform.NewCaller(runtime{t: t}, member, platform.AgentApp, false, false)
-				return struct{}{}, authorizationRefusal(t.authorizeNative(c, "model:"+request.Model, "action", []string{platform.AnyMember}, true))
+				return struct{}{}, t.modelAllowed(platform.AgentApp, member, request.Model)
 			})
 			if refusal != nil {
 				return &platform.AIError{Status: 403, Detail: refusal.Message}
@@ -210,7 +214,7 @@ func (t *Tenant) candidateEvaluation() agentowner.CandidateEvaluation {
 func (t *Tenant) evaluateReleaseAgentLocked(m platform.Member, request releaseowner.ReleaseEvaluationRequest, now time.Time) (string, error) {
 	return agentowner.ReleaseRunner{Tenant: t.ID, Candidate: t.candidateEvaluation(), Agent: t.agents != nil,
 		Existing: func(id string) (platform.Evaluation, bool) {
-			return platform.Get[platform.Evaluation](t.automation(platform.AgentApp, false), id)
+			return t.evaluation(id)
 		},
 		DefaultModel: func() string { return t.setting(t.automation(platform.AgentApp, false), platform.SettingAgentModel) },
 		Resolve: func(model string, options platform.ModelOptions) (string, *kernel.Error) {
@@ -229,57 +233,33 @@ func (t *Tenant) suspended(member string) bool {
 	return ok && v.(platform.Switch).Suspended
 }
 
+func (t *Tenant) agentRun(id string) (platform.AgentRunRecord, bool) {
+	return platform.Get[platform.AgentRunRecord](t.automation(platform.AgentApp, false), id)
+}
+
 func (t *Tenant) agentSchedule() agentowner.Schedule {
 	return agentowner.Schedule{Agents: t.agents, Stopped: t.businessStopped, Quarantined: t.quarantined, Recording: t.Recording,
-		DueTurns: func(now time.Time) []platform.AgentTurn {
-			turns, _ := recordRead(t, context.Background(), func(t *Tenant) ([]platform.AgentTurn, *kernel.Error) { return t.agents.DueAgentTurns(now), nil })
-			return turns
-		},
-		Allowed: func(run platform.AgentRunRecord) (bool, *kernel.Error) {
-			return recordRead(t, context.Background(), func(t *Tenant) (bool, *kernel.Error) { return t.agents.AllowsAgentRun(run), nil })
-		},
-		Running: func(id string) bool {
-			running, refusal := recordRead(t, context.Background(), func(t *Tenant) (bool, *kernel.Error) {
-				run, known := platform.Get[platform.AgentRunRecord](t.automation(platform.AgentApp, false), id)
-				return known && run.State == "running", nil
+		Read: func(read func(agentowner.ScheduleView) *kernel.Error) *kernel.Error {
+			_, refusal := recordRead(t, context.Background(), func(t *Tenant) (struct{}, *kernel.Error) {
+				return struct{}{}, read(agentowner.ScheduleView{Agents: t.agents, Run: t.agentRun, Evaluation: t.evaluation,
+					Queued: func() ([]platform.Evaluation, *kernel.Error) {
+						evals, _, refusal := platform.Find[platform.Evaluation](t.automation(platform.AgentApp, false), platform.Query{Domain: json.RawMessage(`[["state","=","queued"]]`), Sort: []string{"id"}, Limit: 1})
+						return evals, refusal
+					}})
 			})
-			return running && refusal == nil
+			return refusal
 		},
-		Call: t.call, Meter: t.meter, Step: t.applyAgentStep, Wake: wakeWork,
-		Run: func(id string) (platform.AgentRunRecord, bool) {
-			return platform.Get[platform.AgentRunRecord](t.automation(platform.AgentApp, false), id)
-		},
-		Evaluation: t.evaluation, Accept: t.acceptAgentStep,
+		Call: t.call, Meter: t.meter, Step: t.applyAgentStep, Wake: wakeWork, Run: t.agentRun, Evaluation: t.evaluation, Accept: t.acceptAgentStep,
 		Failed: func(at time.Time, run, detail string) {
 			t.observeOwnerRun(at, "agent", run, platform.AgentApp, "", "failed", "Agent step", detail)
-		},
-		Queued: func() ([]platform.Evaluation, *kernel.Error) {
-			return recordRead(t, context.Background(), func(t *Tenant) ([]platform.Evaluation, *kernel.Error) {
-				evals, _, refusal := platform.Find[platform.Evaluation](t.automation(platform.AgentApp, false), platform.Query{Domain: json.RawMessage(`[["state","=","queued"]]`), Sort: []string{"id"}, Limit: 1})
-				return evals, refusal
-			})
-		},
-		Current: func(id string) (platform.Evaluation, bool) {
-			current, refusal := recordRead(t, context.Background(), func(t *Tenant) (platform.Evaluation, *kernel.Error) {
-				current, known := t.evaluation(id)
-				if !known {
-					return current, unknown()
-				}
-				return current, nil
-			})
-			return current, refusal == nil
 		},
 		Evaluator: t.agentEvaluator,
 	}
 }
 
-func (t *Tenant) agentTurns() agentowner.Turns {
-	return t.agentSchedule().Turns()
-}
-
 func (t *Tenant) applyAgentStep(b platform.AgentResultStep, now time.Time) bool {
 	applied, refusal := decideOnImage(t, context.Background(), "agent:settle", func(t *Tenant) (bool, *kernel.Error) {
-		return t.prepareAgentStep(b, now), nil
+		return t.agentSchedule().Prepare(b, now), nil
 	}, func(t *Tenant, candidate preparedAccepted, applied bool, refusal *kernel.Error) (bool, *kernel.Error) {
 		if len(candidate.entry.Body) != 0 {
 			t.finishAgentStep(candidate)
@@ -287,10 +267,6 @@ func (t *Tenant) applyAgentStep(b platform.AgentResultStep, now time.Time) bool 
 		return applied && !t.quarantined(), refusal
 	})
 	return applied && refusal == nil
-}
-
-func (t *Tenant) prepareAgentStep(b platform.AgentResultStep, now time.Time) bool {
-	return t.agentSchedule().Prepare(b, now)
 }
 
 func (t *Tenant) evaluation(id string) (platform.Evaluation, bool) {
@@ -309,3 +285,44 @@ func (h hostView) AgentModelConfigurationDigest(model platform.AIModel, provider
 }
 
 func (h hostView) AgentAnswerText(outcome platform.Outcome) string { return actions.AnswerOf(outcome) }
+
+func (t *Tenant) acceptAgentStep(b platform.AgentResultStep, at time.Time) (err error) {
+	defer func() {
+		if p := recover(); p != nil {
+			err = fmt.Errorf("agent answer cannot stage: %v", p)
+		}
+	}()
+	draft := t.newStagedDecision()
+	draft.At = at
+	return agentowner.AgentAcceptance{Tenant: t.ID, Agent: draft.stateApp(t.agents).(platform.AgentRuntime), Draft: draft,
+		RunAgent: func(run string) string {
+			record, _ := t.agentRun(run)
+			return record.Agent
+		},
+		UsageBefore: t.usagePredecessor, Answer: draft.answerRequests, Observers: draft.stageObservers,
+		Failure: func() *kernel.Error { return draft.Failure },
+		Events:  func() []platform.Event { return draft.Events },
+		Changes: func(last platform.Event, at time.Time) ([]byte, error) {
+			return draft.batchResult(last.App, last.Record.GetSubmission(), last.Record, at)
+		},
+		Prepared: func(body, principal []byte, key, hash string) {
+			t.stageCandidate(draft, platform.AgentApp, body, principal, key, hash, at, t.finishAgentStep)
+		}}.Accept(b, at)
+}
+
+func (t *Tenant) finishAgentStep(candidate preparedAccepted) {
+	runtimekernel.AgentFinish{Settlement: t.settlement(),
+		Commit: func() ([]byte, error) { return t.acceptResult(candidate.entry, candidate.key, candidate.hash) },
+		Apply: func(committed []byte) error {
+			_, err := t.applyAcceptedAgent(committed)
+			return err
+		}}.Finish(candidate.key, candidate.hash)
+}
+
+func (t *Tenant) applyAcceptedAgent(raw []byte) (acceptedformat.RuntimeAgent, error) {
+	h := runtimekernel.AgentApply{Usage: t.usage(), Batch: t.batchApply(), Published: t.publishAcceptedBatch}
+	if t.agents != nil {
+		h.Ledger = t.agents.AcceptedLedger()
+	}
+	return t.ApplyAgentResult(raw, h)
+}

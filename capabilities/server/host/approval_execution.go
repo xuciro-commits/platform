@@ -1,6 +1,7 @@
 package host
 
 import (
+	runtimekernel "platformserver/kernel"
 	releaseowner "platformserver/services/devops/releases"
 	"strings"
 	"time"
@@ -15,7 +16,7 @@ func (h hostView) ApprovalRelease(app, action, typ string) (string, *kernel.Erro
 	release, err := releaseowner.ApprovedRelease(
 		releaseowner.ActivatedReleases(h.t.Committed.AllAnswers("active"), h.ActiveRelease()),
 		app, action, typ, &h.t.releases, h.t.releaseAcceptance().Running)
-	return release, conflictRefusal(err)
+	return release, runtimekernel.ConflictRefusal(err)
 }
 
 func (h flowExecution) ApprovalRelease(app, action, typ string) (string, *kernel.Error) {
@@ -28,7 +29,7 @@ func (h flowExecution) ApprovalRelease(app, action, typ string) (string, *kernel
 
 func (t *Tenant) approvalClosure(release, app, action, typ string) (platform.ReleaseCandidate, *kernel.Error) {
 	closed, err := releaseowner.StoredApprovalClosure(&t.releases, release, app, action, typ)
-	return closed, conflictRefusal(err)
+	return closed, runtimekernel.ConflictRefusal(err)
 }
 
 func (h hostView) ApprovalExecution(c platform.Caller, a platform.ApprovalRequest) (platform.WorkHost, *kernel.Error) {
@@ -38,11 +39,11 @@ func (h hostView) ApprovalExecution(c platform.Caller, a platform.ApprovalReques
 	typ, _, _ := strings.Cut(a.Target, "/")
 	closed, err := releaseowner.StoredApprovalExecution(&h.t.releases, a.Release, a.App, a.Action, typ)
 	if err != nil {
-		return nil, conflictRefusal(err)
+		return nil, runtimekernel.ConflictRefusal(err)
 	}
 	execution, err := h.retainedExecution(c, a.Release, closed.Assets)
 	if err != nil {
-		return nil, conflictRefusal(err)
+		return nil, runtimekernel.ConflictRefusal(err)
 	}
 	bound := execution.(platform.WorkHost)
 	app, action, known := bound.Action(a.Action)

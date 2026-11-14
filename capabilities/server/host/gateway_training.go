@@ -33,17 +33,7 @@ func (t *Tenant) training() aiowner.TrainingWorld {
 			if !ok {
 				return nil, false
 			}
-			t.Projection.Lock()
-			entity := t.Projection.Type(typ)
-			var row *records.Row
-			if entity != nil {
-				row = entity.Rows().Get(id)
-			}
-			t.Projection.Unlock()
-			if row == nil {
-				return nil, false
-			}
-			return row.ImageAt(change)
+			return records.LockedImage(t.Projection, typ, id, change)
 		}}
 }
 

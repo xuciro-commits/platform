@@ -23,6 +23,19 @@ func (t *Tenant) attachJournal(ctx context.Context, journal Journals) {
 	}
 }
 
+func (t *Tenant) recoveryComplete(started time.Time) error {
+	if t.identityOwner != nil {
+		t.identityOwner.CloseTokenSecretWindows()
+	}
+	if t.procs != nil {
+		if err := t.procs.Check(); err != nil {
+			return fmt.Errorf("process recovery: %w", err)
+		}
+	}
+	t.flowArtifactRecoveryComplete(started)
+	return nil
+}
+
 func (d *Deployment) tenantRestore(ctx context.Context, t *Tenant, j Journals, code string, restored map[string]int64, fresh map[string]bool) runtimekernel.TenantRestore {
 	return runtimekernel.TenantRestore{
 		ID: t.ID, Code: code, SnapshotEvery: d.SnapshotEvery, Journal: j,
@@ -32,33 +45,21 @@ func (d *Deployment) tenantRestore(ctx context.Context, t *Tenant, j Journals, c
 			page, err := t.Log().QueryAuditEntries(platform.AuditQuery{Tenant: t.ID, Limit: 1})
 			return err == nil && len(page.Entries) == 0
 		},
-		BackfillAudit:      t.backfillAudit,
-		RuntimeSnapshotKey: t.runtimeSnapshotKey,
-		SnapshotKey:        t.snapshotKey,
-		CheckCheckpoint:    t.checkSnapshotCheckpoint,
+		BackfillAudit: t.backfillAudit,
+		Compatibility: t.snapshotCompatibility,
+		Build:         snapshotBuild,
 		RestoreRuntimeSnapshot: func(state []byte, seq, position int64, started time.Time) error {
 			return t.restoreRuntimeSnapshot(ctx, j, state, seq, position, started)
 		},
-		CheckpointRuntime: func() (int64, error) { return t.checkpointRuntime(ctx, j, code) },
+		CheckpointRuntime: func() (int64, error) { return t.snapshots().Checkpoint(&t.Sequence, ctx, j, code) },
 		RecoverSnapshot:   t.recoverSnapshot,
 		RecoverEntries:    t.recoverEntries,
 		StateDelta: func() (persistence.StateDelta, error) {
 			t.Lane.Lock()
 			defer t.Lane.Unlock()
-			return t.runtimeStateDeltaLocked()
+			return t.RuntimeStateDelta(t.runtimeOwners())
 		},
-		CloseTokenSecretWindows: func() {
-			if t.identityOwner != nil {
-				t.identityOwner.CloseTokenSecretWindows()
-			}
-		},
-		CheckProcesses: func() error {
-			if t.procs == nil {
-				return nil
-			}
-			return t.procs.Check()
-		},
-		RecoveryComplete: t.flowArtifactRecoveryComplete,
+		Complete: t.recoveryComplete,
 		Migrate: func(prefix *persistence.StateCheckpoint) error {
 			return t.MigrateRuntimeState(ctx, j, prefix, t.runtimeOwners())
 		},
@@ -117,16 +118,11 @@ func (d *Deployment) retryTenant(ctx context.Context, journal Journals, registry
 			}
 			return fresh.procs.Check()
 		},
-		Project: func() (*records.SQLProjection, error) {
-			if pgPool, pg := journalPool(journal); d.Project && pg {
-				return records.ProjectSQL(ctx, pgPool, fresh.ID, fresh.Projection, fresh.readRecords)
-			}
-			return nil, nil
-		},
+		Project:          func() (*records.SQLProjection, error) { return d.project(ctx, journal, fresh) },
 		Capture:          fresh.Snapshot,
-		SnapshotKey:      fresh.snapshotKey,
+		Compatibility:    fresh.snapshotCompatibility,
 		RecoveryComplete: fresh.flowArtifactRecoveryComplete,
-		Migrate:          func() error { return fresh.migrateRuntimeState(ctx, journal) },
+		Migrate:          func() error { return fresh.MigrateRuntimeState(ctx, journal, nil, fresh.runtimeOwners()) },
 		Attach:           func() { fresh.attachJournal(context.Background(), journal) },
 		Deactivate:       func() error { return fresh.deactivateOwners(fresh.desiredDisabledOwners()) },
 		Replace:          func() error { return registry.Replace(id, old, fresh) },
@@ -159,6 +155,9 @@ func (d *Deployment) runProjection(registry *controlowner.Registry[*Tenant], ten
 	})
 }
 
-func newTenantRegistry(tenants []*Tenant) *controlowner.Registry[*Tenant] {
-	return controlowner.NewRegistry(tenants, func(t *Tenant) string { return t.ID }, func(t *Tenant) bool { return t.quarantined() })
+func (d *Deployment) project(ctx context.Context, journal Journals, t *Tenant) (*records.SQLProjection, error) {
+	if pgPool, pg := journalPool(journal); d.Project && pg {
+		return records.ProjectSQL(ctx, pgPool, t.ID, t.Projection, t.readRecords)
+	}
+	return nil, nil
 }

@@ -1,7 +1,6 @@
 package host
 
 import (
-	"context"
 	"platformkernel/kernel"
 	"platformserver/platform"
 	releaseowner "platformserver/services/devops/releases"
@@ -38,10 +37,7 @@ func (h *Host) withPromotions(source string, page releaseowner.ReleasePage) rele
 }
 
 func (t *Tenant) SavedReleases(m platform.Member, offset, limit int, application ...string) (releaseowner.ReleasePage, error) {
-	return readWithError(t, context.Background(), func(t *Tenant) (releaseowner.ReleasePage, error) {
-		if err := t.buildAllowed(m, "GET /v1/releases/candidates", build.Builder, build.Publisher); err != nil {
-			return releaseowner.ReleasePage{}, err
-		}
+	return buildRead(t, m, "GET /v1/releases/candidates", []string{build.Builder, build.Publisher}, func(t *Tenant) (releaseowner.ReleasePage, error) {
 		name := ""
 		if len(application) > 0 {
 			name = application[0]
@@ -51,10 +47,7 @@ func (t *Tenant) SavedReleases(m platform.Member, offset, limit int, application
 }
 
 func (t *Tenant) ReviewSavedRelease(m platform.Member, id string) (releaseowner.SavedReleaseReview, error) {
-	return readWithError(t, context.Background(), func(t *Tenant) (releaseowner.SavedReleaseReview, error) {
-		if err := t.buildAllowed(m, "GET /v1/releases/candidates/{id}", build.Builder, build.Publisher); err != nil {
-			return releaseowner.SavedReleaseReview{}, err
-		}
+	return buildRead(t, m, "GET /v1/releases/candidates/{id}", []string{build.Builder, build.Publisher}, func(t *Tenant) (releaseowner.SavedReleaseReview, error) {
 		return t.releaseAcceptance().Review(id, m, releaseowner.ReviewContext{
 			AI: func(assets []platform.ReleaseAsset, visible map[platform.AssetRef]bool) ([]platform.ApplicationAI, *kernel.Error) {
 				return t.applicationAILocked(m, assets, visible)

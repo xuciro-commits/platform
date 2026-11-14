@@ -2,16 +2,17 @@ package ontology
 
 import (
 	"fmt"
+	"reflect"
 	"slices"
 	"strings"
 
+	"platformserver/kernel/records"
 	"platformserver/platform"
 )
 
 type InstallDraft struct {
-	Reset        func()
+	Records      *records.Store
 	Install      func() error
-	Types        func() []platform.EntityInfo
 	CheckSets    func(info platform.EntityInfo, engine platform.RuleEngine) error
 	Entity       func(typ string) (platform.EntityInfo, bool)
 	App          func(id string) platform.App
@@ -51,15 +52,18 @@ func (c InstallDependents) Validate() error {
 		}
 	}
 	draft := c.Begin()
-	draft.Reset()
+	if current := draft.Records.Type(e.Type); current != nil && current.Info().Go != reflect.TypeOf(e.Model) {
+		current.SetRows(records.Index[*records.Row]{})
+	}
 	if err := draft.Install(); err != nil {
 		return err
 	}
-	for _, et := range draft.Types() {
-		if err := draft.CheckSets(et, c.Engine); err != nil {
+	for _, et := range draft.Records.SortedTypes() {
+		info := et.Info()
+		if err := draft.CheckSets(info, c.Engine); err != nil {
 			return err
 		}
-		if err := platform.CheckConstraints(et, draft.Entity, true, c.Engine); err != nil {
+		if err := platform.CheckConstraints(info, draft.Entity, true, c.Engine); err != nil {
 			return err
 		}
 	}

@@ -11,7 +11,7 @@ import (
 
 func (t *Tenant) BranchCompile(m platform.Member, id, typ, draft string, now time.Time) (branches.BranchDetail, *kernel.Error) {
 	return branches.CompileHooks{
-		Read: t.readBranch,
+		Read: t.ReadBranch,
 		Main: func(m platform.Member, typ, draft string, now time.Time) (branches.MainDraft, *kernel.Error) {
 			return branchRead(t, func(w branches.Workspace) (branches.MainDraft, *kernel.Error) { return w.Main(m, typ, draft, now) })
 		},

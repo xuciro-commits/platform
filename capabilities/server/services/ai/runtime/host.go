@@ -103,30 +103,49 @@ func DecisionMembers(values []platform.AuditEntry) []string {
 	return out
 }
 
+type ScheduleView struct {
+	Agents     platform.AgentRuntime
+	Run        func(string) (platform.AgentRunRecord, bool)
+	Evaluation func(string) (platform.Evaluation, bool)
+	Queued     func() ([]platform.Evaluation, *kernel.Error)
+}
+
 type Schedule struct {
 	Agents      platform.AgentRuntime
 	Stopped     func() bool
 	Quarantined func() bool
 	Recording   func() bool
-	DueTurns    func(time.Time) []platform.AgentTurn
-	Allowed     func(platform.AgentRunRecord) (bool, *kernel.Error)
-	Running     func(string) bool
+	Read        func(func(ScheduleView) *kernel.Error) *kernel.Error
 	Call        func(platform.AIProvider, platform.AIModel, platform.Member, platform.ChatRequest, time.Time) (platform.ChatAnswer, *platform.AIError)
 	Meter       func(platform.Member, platform.AIUsage) *kernel.Error
 	Step        func(platform.AgentResultStep, time.Time) bool
 	Wake        func()
 	Run         func(string) (platform.AgentRunRecord, bool)
 	Evaluation  func(string) (platform.Evaluation, bool)
-	Current     func(string) (platform.Evaluation, bool)
 	Accept      func(platform.AgentResultStep, time.Time) error
 	Failed      func(time.Time, string, string)
-	Queued      func() ([]platform.Evaluation, *kernel.Error)
 	Evaluator   platform.AgentEvaluator
 }
 
 func (s Schedule) Turns() Turns {
-	return Turns{Agents: s.Agents, Stopped: s.Stopped, Quarantined: s.Quarantined, DueTurns: s.DueTurns, Allowed: s.Allowed,
-		Running: s.Running, Call: s.Call, Meter: s.Meter, Step: s.Step, Wake: s.Wake}
+	return Turns{Agents: s.Agents, Stopped: s.Stopped, Quarantined: s.Quarantined, Call: s.Call, Meter: s.Meter, Step: s.Step, Wake: s.Wake,
+		DueTurns: func(now time.Time) []platform.AgentTurn {
+			var turns []platform.AgentTurn
+			s.Read(func(v ScheduleView) *kernel.Error { turns = v.Agents.DueAgentTurns(now); return nil })
+			return turns
+		},
+		Allowed: func(run platform.AgentRunRecord) (allowed bool, refusal *kernel.Error) {
+			refusal = s.Read(func(v ScheduleView) *kernel.Error { allowed = v.Agents.AllowsAgentRun(run); return nil })
+			return allowed, refusal
+		},
+		Running: func(id string) (running bool) {
+			refusal := s.Read(func(v ScheduleView) *kernel.Error {
+				run, known := v.Run(id)
+				running = known && run.State == "running"
+				return nil
+			})
+			return running && refusal == nil
+		}}
 }
 
 func (s Schedule) Prepare(b platform.AgentResultStep, now time.Time) bool {
@@ -135,7 +154,16 @@ func (s Schedule) Prepare(b platform.AgentResultStep, now time.Time) bool {
 }
 
 func (s Schedule) Drain(now time.Time) {
-	EvaluationQueue{Stopped: s.Stopped, Queued: s.Queued, Current: s.Current, Evaluate: func(ev platform.Evaluation, at time.Time, step func(*platform.Evaluation) bool) platform.Evaluation {
-		return s.Evaluator.Evaluate(s.Agents.AgentEvaluationRuntime(), ev, at, step)
-	}, Apply: s.Step}.Drain(now)
+	EvaluationQueue{Stopped: s.Stopped,
+		Queued: func() (evals []platform.Evaluation, refusal *kernel.Error) {
+			refusal = s.Read(func(v ScheduleView) (inner *kernel.Error) { evals, inner = v.Queued(); return })
+			return evals, refusal
+		},
+		Current: func(id string) (current platform.Evaluation, known bool) {
+			refusal := s.Read(func(v ScheduleView) *kernel.Error { current, known = v.Evaluation(id); return nil })
+			return current, known && refusal == nil
+		},
+		Evaluate: func(ev platform.Evaluation, at time.Time, step func(*platform.Evaluation) bool) platform.Evaluation {
+			return s.Evaluator.Evaluate(s.Agents.AgentEvaluationRuntime(), ev, at, step)
+		}, Apply: s.Step}.Drain(now)
 }

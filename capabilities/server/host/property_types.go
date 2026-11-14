@@ -24,6 +24,7 @@ func (h hostView) definitionInstall() ontology.DefinitionInstall {
 		Query: func(q platform.NamedQuery, info platform.EntityInfo) error {
 			return objects.CheckNamedQuery(q, info, h.t.services.Rules)
 		},
+		Staged:    unsupportedStagedEffect,
 		Link:      func(l platform.LinkType) error { return h.t.Projection.CheckLinkInstall(l) },
 		Constrain: func(l platform.LinkType) error { return h.t.Projection.InstallLinkConstraint(l) },
 	}
@@ -47,10 +48,7 @@ func (h hostView) ResolvePropertyType(binding platform.AssetBinding) (platform.P
 func (h hostView) ValidateInstallPropertyType(p platform.PropertyType) error { return p.Check() }
 
 func (h hostView) InstallPropertyType(c platform.Caller, p platform.PropertyType, version int) error {
-	if c.Staging() {
-		unsupportedStagedEffect()
-	}
-	return h.definitionInstall().PropertyType(p, version)
+	return h.definitionInstall().InstallPropertyType(c, p, version)
 }
 
 func (t *Tenant) checkObjectProperties(info platform.EntityInfo) error {

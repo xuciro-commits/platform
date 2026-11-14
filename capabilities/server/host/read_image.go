@@ -15,8 +15,6 @@ import (
 	persistence "platformserver/kernel/store"
 	"platformserver/kernel/transport"
 	"platformserver/platform"
-	"platformserver/services/actions"
-	automation "platformserver/services/automate/runtime"
 	"platformserver/services/data/lineage"
 	releaseowner "platformserver/services/devops/releases"
 	"platformserver/services/functions/runtime"
@@ -126,6 +124,10 @@ func readImageState[T any](t *Tenant, state *Tenant, ctx context.Context, read f
 			panic(recovered)
 		}
 	}()
+	return readInView(state, ctx, read)
+}
+
+func readInView[T any](state *Tenant, ctx context.Context, read func(*Tenant) (T, *kernel.Error)) (value T, refusal *kernel.Error, failure error) {
 	view, err := state.forkReadState(ctx)
 	if err != nil {
 		return value, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The read scope could not be prepared: {reason}", err.Error()), err
@@ -166,23 +168,8 @@ func (t *Tenant) forkReadState(ctx context.Context) (*Tenant, error) {
 	view.settings.Restore(t.settings.Snapshot())
 	view.words.Restore(t.words.Clone())
 	view.endpoints.Restore(t.endpoints.Saved())
-	var effects []actions.Queued
-	for _, effect := range t.outbound.Select(nil) {
-		effects = append(effects, actions.Queued{Effect: effect.Effect, Since: effect.Since})
-	}
-	view.outbound.Restore(effects)
-	t.work.Lock()
-	work, err := t.work.Snapshot()
-	for _, job := range t.work.Jobs {
-		if current := view.work.Job(job.ID); current != nil {
-			current.NextRun = job.NextRun
-		}
-	}
-	t.work.Unlock()
-	if err != nil {
-		return nil, err
-	}
-	if err := view.work.Install(t.ID, automation.WorkState{Queues: work.Queues, Failed: work.Failed, Tasks: work.Tasks, Jobs: work.Jobs}, func(app string) bool { return view.App(app) != nil }); err != nil {
+	t.outbound.CopyTo(&view.outbound)
+	if err := t.work.ForkInto(t.ID, &view.work, func(app string) bool { return view.App(app) != nil }); err != nil {
 		return nil, err
 	}
 	view.readScope = &recordReadScope{ctx: ctx}
@@ -201,17 +188,9 @@ func (t *Tenant) forkReadState(ctx context.Context) (*Tenant, error) {
 	view.Projection.Current().Detach()
 	view.definitions = slices.Clone(t.definitions)
 	view.disabledOwners = maps.Clone(t.disabledOwners)
-	apps := make([]platform.App, len(t.apps))
-	for i, app := range t.apps {
-		ledger, err := app.AcceptedLedger().ForkRead()
-		if err != nil {
-			return nil, err
-		}
-		fork, err := app.Fork(ledger)
-		if err != nil {
-			return nil, err
-		}
-		apps[i] = fork
+	apps, err := runtimekernel.ForkApps(t.apps)
+	if err != nil {
+		return nil, err
 	}
 	view.ownerSet = t.with(apps)
 	roles, err := ownerRolesOf(view.ownerSet, view.OwnerActive)
@@ -232,19 +211,14 @@ func (t *Tenant) forkReadState(ctx context.Context) (*Tenant, error) {
 		view.agentEvaluator = t.services.NewAgentEvaluator()
 	}
 	view.breakers = t.breakers.Fork()
-	t.work.Lock()
-	view.work.Rotation = t.work.Rotation
-	t.work.Unlock()
+	view.work.CopyRotation(&t.work)
 	view.staged = compute.NewChannel(t.ID, view.files)
 	view.staged.Restore(t.staged.Snapshot())
 	view.Claims = t.Claims.Fork(t.ID)
 	view.DefinitionEpoch.Store(t.DefinitionEpoch.Load())
 	view.runIndex.CopyGeneration(&t.runIndex)
 	view.includeArchivedDefinitions = t.includeArchivedDefinitions
-	view.i18n = transport.NewTranslator(func() []platform.App { return view.apps },
-		func(app platform.App) platform.Manifest {
-			return transport.ManifestOf(app, view.definitionsFingerprint())
-		}, view.words.Clone, PlatformLanguages)
+	view.i18n = view.translator()
 	view.i18n.InstallApplications(view.definitions)
 	view.AuditLog = t.AuditLog.Fork()
 	view.AuditLog.SetSink(view.readOrigin.AuditLog.Remember, view.readOrigin.AuditLog.ReadPersonal)

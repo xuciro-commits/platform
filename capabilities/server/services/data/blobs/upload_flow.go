@@ -151,3 +151,17 @@ func MediaItem(set platform.MediaSet, versions []platform.MediaSetVersion, versi
 	}
 	return platform.MediaItem{}, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
 }
+
+func (u *Uploads) Purge(files platform.FileStore, tenant string, pending map[string]bool) {
+	for hash := range pending {
+		err := files.Delete(context.Background(), tenant+"/"+hash)
+		u.EndDelete(hash, err == nil)
+	}
+}
+
+func RefusalStatus(refusal *kernel.Error) int {
+	if refusal.Code == pb.ErrorCode_ERROR_CODE_NOT_FOUND {
+		return http.StatusNotFound
+	}
+	return http.StatusServiceUnavailable
+}

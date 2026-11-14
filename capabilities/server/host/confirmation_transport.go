@@ -7,10 +7,11 @@ import (
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
+	runtimekernel "platformserver/kernel"
 	"platformserver/platform"
 	"platformserver/services/actions"
 	dataowner "platformserver/services/data"
-	"platformserver/services/resources/authoring"
+	build "platformserver/services/resources/authoring"
 	controlowner "platformserver/services/security/control"
 )
 
@@ -55,7 +56,7 @@ func (d *stagedDecision) transport() dataowner.Transport {
 	x.Complete = func(c platform.Caller, run platform.ConfirmationRun, member platform.Member, action string, sub *pb.Submission, at time.Time) (*pb.ChangeRecord, *kernel.Error) {
 		execution, err := h.retainedExecution(c, run.Release, run.Assets)
 		if err != nil {
-			return nil, conflictRefusal(err)
+			return nil, runtimekernel.ConflictRefusal(err)
 		}
 		bound := execution.(interface {
 			Caller(platform.Caller, platform.Member, string) platform.Caller

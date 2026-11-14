@@ -2,16 +2,16 @@ package host
 
 import (
 	"context"
-	"platformkernel/kernel"
-	runtimekernel "platformserver/kernel"
-	acceptedformat "platformserver/kernel/acceptedformat"
-	"platformserver/services/functions/runtime"
-	controlowner "platformserver/services/security/control"
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
+	"platformkernel/kernel"
+	runtimekernel "platformserver/kernel"
+	"platformserver/kernel/acceptedformat"
 	"platformserver/platform"
 	"platformserver/services/actions"
+	"platformserver/services/functions/runtime"
+	controlowner "platformserver/services/security/control"
 )
 
 func (t *Tenant) operationClaims() compute.OperationClaims {
@@ -46,8 +46,15 @@ func (t *Tenant) claimOperation(id string, now time.Time) (platform.Effect, bool
 		claimed bool
 	}
 	value, refusal := decideOnImage(t, context.Background(), "operation:claim", func(t *Tenant) (claim, *kernel.Error) {
-		effect, claimed := t.prepareOperationClaim(id, now)
-		return claim{effect, claimed}, nil
+		if t.businessStopped() {
+			return claim{}, nil
+		}
+		r, raw, ok := t.operationClaims().Prepare(id, now)
+		if !ok {
+			return claim{}, nil
+		}
+		candidate := preparedAccepted{entry: runtimekernel.AcceptedEntry(controlowner.PlatformApp, t.automation(controlowner.PlatformApp, false).Member, raw, now, nil), key: r.Key, hash: r.RequestHash}
+		return claim{r.After, t.stage(candidate) || t.finishOperationClaim(candidate)}, nil
 	}, func(t *Tenant, candidate preparedAccepted, value claim, refusal *kernel.Error) (claim, *kernel.Error) {
 		if len(candidate.entry.Body) > 0 {
 			busy := t.outbound.Any(func(x actions.Queued) bool { return x.ID == id && x.Sending })
@@ -59,21 +66,6 @@ func (t *Tenant) claimOperation(id string, now time.Time) (platform.Effect, bool
 		return value, refusal
 	})
 	return value.effect, value.claimed && refusal == nil
-}
-
-func (t *Tenant) prepareOperationClaim(id string, now time.Time) (platform.Effect, bool) {
-	if t.businessStopped() {
-		return platform.Effect{}, false
-	}
-	r, raw, ok := t.operationClaims().Prepare(id, now)
-	if !ok {
-		return platform.Effect{}, false
-	}
-	candidate := preparedAccepted{entry: runtimekernel.AcceptedEntry(controlowner.PlatformApp, t.automation(controlowner.PlatformApp, false).Member, raw, now, nil), key: r.Key, hash: r.RequestHash}
-	if t.stage(candidate) {
-		return r.After, true
-	}
-	return r.After, t.finishOperationClaim(candidate)
 }
 
 func (t *Tenant) finishOperationClaim(candidate preparedAccepted) bool {

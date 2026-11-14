@@ -47,7 +47,7 @@ func (t *Tenant) ReconcileConfirmations(at time.Time) {
 		},
 		Answer: func(plan dataowner.ConfirmationReadPlan, i int, diff platform.ConfirmationDifference, outcome string) {
 			run := plan.Run
-			_, _ = decideOnImage(t, context.Background(), "confirmation:answer", func(t *Tenant) (*pb.ChangeRecord, *kernel.Error) {
+			_, _ = t.decideAutomated("confirmation:answer", build.ID, func(t *Tenant) (*pb.ChangeRecord, *kernel.Error) {
 				current, exists := platform.Get[platform.ConfirmationRun](t.automation(build.ID, false), run.ID)
 				valid := exists && current.Revision == run.Revision && i < len(current.Parties) && dataowner.ConfirmationOpen(current)
 				if valid {
@@ -66,8 +66,6 @@ func (t *Tenant) ReconcileConfirmations(at time.Time) {
 					return nil, nil
 				}
 				return t.accept(t.App(build.ID), caller, submission, at, acceptOptions{automation: true})
-			}, func(t *Tenant, candidate preparedAccepted, record *pb.ChangeRecord, refusal *kernel.Error) (*pb.ChangeRecord, *kernel.Error) {
-				return t.finishPreparedSubmission(platform.Member{ID: "app:" + build.ID, Tenant: t.ID}, candidate, record, refusal)
 			})
 		}}.Run(at)
 }

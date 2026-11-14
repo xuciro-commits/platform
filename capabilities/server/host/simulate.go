@@ -25,7 +25,7 @@ func (t *Tenant) Simulate(member platform.Member, as, branch string, s *pb.Submi
 			},
 			Member:  t.member,
 			Owner:   func(schema string) platform.App { return t.App(t.owner["action:"+schema]) },
-			Current: t.currentSubmissionSchema,
+			Current: t.CurrentSchema,
 			Bound:   t.delegatedBound,
 			Tenant:  t.ID,
 		}.Prepare(member, as, branch, s)
@@ -58,7 +58,7 @@ func (t *Tenant) Simulate(member platform.Member, as, branch string, s *pb.Submi
 		out.Accepted = true
 		view := &Tenant{services: t.services, disabledOwners: t.disabledOwners, ID: t.ID, identity: t.identity, ownerSet: t.ownerSet, Projection: draft.Records, directory: t.directory}
 		out.Changes = trialowner.SimulatedChanges(slices.Sorted(draft.Records.Writes()), func(typ string, q platform.Query) ([]any, *kernel.Error) {
-			page, refusal := view.recordsRead(member, typ, q, now)
+			page, refusal := view.objectOwner(view.Projection).Records(member, typ, q, now)
 			return page.Records, refusal
 		})
 		return out, nil

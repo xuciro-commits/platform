@@ -90,24 +90,24 @@ func (h *Host) routesBuild(rt *routes) {
 		}
 		WriteJSON(w, http.StatusOK, platform.ComputeSDK{Source: string(source)})
 	})
-	rt.authorized(transport.Route{Pattern: "POST /v1/build/process/check", Summary: "Validate a workflow draft with its owner compiler without executing it", Query: []transport.Param{{Name: "branch", Description: "a branch id: the draft is validated against that branch's staged definitions, where objects that exist only on the branch resolve"}}, Body: build.Process{}, Answer: ProcessDiagnostics{}}, build.ID, builder, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
+	rt.authorized(transport.Route{Pattern: "POST /v1/build/process/check", Summary: "Validate a workflow draft with its owner compiler without executing it", Query: []transport.Param{{Name: "branch", Description: "a branch id: the draft is validated against that branch's staged definitions, where objects that exist only on the branch resolve"}}, Body: build.Process{}, Answer: build.ProcessDiagnostics{}}, build.ID, builder, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
 		var p build.Process
 		if !transport.DecodeValueBody(w, r, &p, 128<<10) {
 			return
 		}
-		answer, refusal := recordRead(t, r.Context(), func(t *Tenant) (ProcessDiagnostics, *kernel.Error) {
+		answer, refusal := recordRead(t, r.Context(), func(t *Tenant) (build.ProcessDiagnostics, *kernel.Error) {
 			world, refusal := t.draftWorldLocked(m, r.URL.Query().Get("branch"), h.Now())
 			if refusal != nil {
-				return ProcessDiagnostics{}, refusal
+				return build.ProcessDiagnostics{}, refusal
 			}
 			owner := world.builders[build.ID]
 			if owner == nil {
-				return ProcessDiagnostics{}, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
+				return build.ProcessDiagnostics{}, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
 			}
-			answer := ProcessDiagnostics{Valid: true, Issues: []ProcessDiagnostic{}}
+			answer := build.ProcessDiagnostics{Valid: true, Issues: []build.ProcessDiagnostic{}}
 			if refusal := owner.CheckProcess(platform.NewCaller(runtime{t: world, scoped: true}, m, build.ID, false, false), p); refusal != nil {
 				answer.Valid = false
-				answer.Issues = append(answer.Issues, ProcessDiagnostic{Node: build.ProcessIssueNode(refusal.Message), Code: refusal.Code.String(), Message: refusal.Message})
+				answer.Issues = append(answer.Issues, build.ProcessDiagnostic{Node: build.ProcessIssueNode(refusal.Message), Code: refusal.Code.String(), Message: refusal.Message})
 			}
 			return answer, nil
 		})
@@ -184,7 +184,7 @@ func (h *Host) routesBuild(rt *routes) {
 		return releaseowner.ReleaseActive{ID: id}, err
 	}, h.Now))
 	rt.recordRead(transport.Route{Pattern: "GET /v1/queries/{app}/{name}", Summary: "Run a declared query as the caller: its conditions, and the record it is run for", Query: []transport.Param{{Name: "for", Description: "the ID of the record it is run for, when it takes one"}, {Name: "version", Description: "An exact published source version"}, {Name: "search", Description: "Words to find within the declared conditions"}, {Name: "offset", Description: "Records to skip"}, {Name: "limit", Description: "Records in this bounded window"}}, Answer: RecordPage{}}, transport.Answering(func(r *http.Request, m platform.Member, t *Tenant) (RecordPage, *kernel.Error) {
-		offset, limit := pageBounds(r, 0, 0)
+		offset, limit := transport.PageBounds(r, 0, 0)
 		if offset < 0 || limit < 0 {
 			return RecordPage{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "offset and limit are non-negative")
 		}

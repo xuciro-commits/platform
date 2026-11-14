@@ -783,3 +783,31 @@ func (p Planner) PreviewWithActions(drafts []build.JointDraftRef, member platfor
 	return reply, nil
 
 }
+
+func ActionSchemaVersion(definitions []platform.Definition, app platform.App, action platform.Action) (platform.SchemaVersion, error) {
+	if action.SchemaVersion != nil {
+		return *action.SchemaVersion, nil
+	}
+	manifest := app.Manifest()
+	contract := struct {
+		App, Version   string
+		Action, Object any
+	}{App: manifest.ID, Version: manifest.Version, Action: CodeActionDescriptor(action)}
+	for _, definition := range definitions {
+		if definition.Source != "code" || definition.Ref.App != manifest.ID || definition.Ref.Kind != platform.AssetObject || definition.Ref.Name != action.Target || definition.Entity == nil {
+			continue
+		}
+		for _, entity := range manifest.Entities {
+			if entity.Type == action.Target {
+				contract.Object = CodeObjectDescriptor(entity, *definition.Entity)
+				break
+			}
+		}
+	}
+	raw, err := json.Marshal(contract)
+	if err != nil {
+		return platform.SchemaVersion{}, err
+	}
+	version, err := platform.SchemaContentVersion(raw)
+	return platform.SchemaVersion{Version: version, Family: 1}, err
+}

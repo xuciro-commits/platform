@@ -164,6 +164,21 @@ func (x *Translator) SayInApp(app, lang, s string) string {
 	return x.say(app, lang, s, 0)
 }
 
+var (
+	declarationReads = map[string]bool{"settings": true, "flows": true, "agents": true}
+	messageReads     = map[string]bool{"notifications": true, "inbox": true, "requests": true, "timeline": true}
+)
+
+func (x *Translator) ForRead(name string, out any, lang string) any {
+	if declarationReads[name] {
+		out = x.Translate(out, lang)
+	}
+	if messageReads[name] {
+		out = x.TranslateMessages(out, lang)
+	}
+	return out
+}
+
 func (x *Translator) Translate(v any, lang string) any {
 	return x.TranslateInApp(v, "", lang)
 }

@@ -21,6 +21,7 @@ type DefinitionInstall struct {
 	Query       func(platform.NamedQuery, platform.EntityInfo) error
 	Link        func(platform.LinkType) error
 	Constrain   func(platform.LinkType) error
+	Staged      func()
 }
 
 func RetainedDefinitionVersions[T any](history map[string]T, previousVersion string, previous *T, version string, current T) (map[string]T, bool) {
@@ -272,4 +273,40 @@ func CheckObjectBindings(info platform.EntityInfo, property func(platform.AssetB
 		}
 	}
 	return nil
+}
+
+func (in DefinitionInstall) refuseStaged(c platform.Caller) {
+	if c.Staging() {
+		in.Staged()
+	}
+}
+
+func (in DefinitionInstall) InstallPropertyType(c platform.Caller, p platform.PropertyType, version int) error {
+	in.refuseStaged(c)
+	return in.PropertyType(p, version)
+}
+
+func (in DefinitionInstall) InstallValueType(c platform.Caller, v platform.ValueType, version int) error {
+	in.refuseStaged(c)
+	return in.ValueType(v, version)
+}
+
+func (in DefinitionInstall) InstallLinkType(c platform.Caller, l platform.LinkType, version int) error {
+	in.refuseStaged(c)
+	return in.LinkType(l, version)
+}
+
+func (in DefinitionInstall) InstallQuery(c platform.Caller, q platform.NamedQuery, version int) error {
+	in.refuseStaged(c)
+	return in.NamedQuery(q, version)
+}
+
+func (in DefinitionInstall) InstallInterface(c platform.Caller, i platform.Interface, version int) error {
+	in.refuseStaged(c)
+	return in.Interface(i, version)
+}
+
+func (in DefinitionInstall) InstallObjectTypeGroup(c platform.Caller, g platform.ObjectTypeGroup, version int) error {
+	in.refuseStaged(c)
+	return in.ObjectTypeGroup(g, version)
 }

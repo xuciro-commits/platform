@@ -6,6 +6,7 @@ import (
 	"context"
 	"fmt"
 	"maps"
+	runtimekernel "platformserver/kernel"
 	"platformserver/services/security"
 	"reflect"
 )
@@ -42,55 +43,42 @@ func (d *Deployment) composeRuntime(id string, selection map[string]string) (*Te
 	return tenant, nil
 }
 
-func (d *Deployment) restoreRuntimeSelections(ctx context.Context, journal Journals, code string, tenants []*Tenant) error {
+func (d *Deployment) restoreRuntimeSelections(ctx context.Context, journal Journals, tenants []*Tenant) error {
 	for index, old := range tenants {
-		if old.quarantined() {
-			continue
-		}
 		selection := old.desiredRuntime()
-		if missingRuntime(selection) {
+		if old.quarantined() || missingRuntime(selection) {
 			continue
 		}
-		if maps.Equal(selection, old.services.Selection()) {
-			if err := old.deactivateOwners(old.desiredDisabledOwners()); err != nil {
-				old.quarantine(err)
-			}
-			continue
-		}
-		if !old.console.Suspended() {
-			old.quarantine(fmt.Errorf("provider change requires maintenance"))
-			continue
-		}
-		fresh, err := d.composeRuntime(old.ID, selection)
-		if err != nil {
-			old.quarantine(err)
-			continue
-		}
-		before, err := old.snapshotCompatibility()
-		after, afterErr := fresh.snapshotCompatibility()
-		if err != nil || afterErr != nil || !reflect.DeepEqual(before, after) || old.services.KernelModule.StateFormat != fresh.services.KernelModule.StateFormat {
-			old.quarantine(fmt.Errorf("replacement has incompatible owner or kernel restore formats"))
-			continue
-		}
-		fresh.tenantPorts = old.tenantPorts
-		entries, err := journal.Entries(ctx, old.ID, 0)
+		var fresh *Tenant
+		replaced, err := runtimekernel.SelectionRestore{
+			ID: old.ID, Journal: journal, Selection: selection, Current: old.services.Selection(),
+			Suspended: old.console.Suspended, Quarantine: old.quarantine,
+			Deactivate: func() error { return old.deactivateOwners(old.desiredDisabledOwners()) },
+			Compose: func() (runtimekernel.SelectionReplacement, error) {
+				var err error
+				if fresh, err = d.composeRuntime(old.ID, selection); err != nil {
+					return runtimekernel.SelectionReplacement{}, err
+				}
+				return runtimekernel.SelectionReplacement{
+					Compatible: func() bool {
+						before, err := old.snapshotCompatibility()
+						after, afterErr := fresh.snapshotCompatibility()
+						return err == nil && afterErr == nil && reflect.DeepEqual(before, after) && old.services.KernelModule.StateFormat == fresh.services.KernelModule.StateFormat
+					},
+					Adopt:      func() { fresh.tenantPorts = old.tenantPorts },
+					Recover:    fresh.recoverEntries,
+					Migrate:    func() error { return fresh.MigrateRuntimeState(ctx, journal, nil, fresh.runtimeOwners()) },
+					Attach:     func() { fresh.attachJournal(ctx, journal) },
+					Deactivate: func() error { return fresh.deactivateOwners(fresh.desiredDisabledOwners()) },
+				}, nil
+			},
+		}.Run(ctx)
 		if err != nil {
 			return err
 		}
-		if err = fresh.recoverEntries(entries); err != nil {
-			old.quarantine(err)
-			continue
+		if replaced {
+			tenants[index] = fresh
 		}
-		if err = fresh.migrateRuntimeState(ctx, journal); err != nil {
-			old.quarantine(err)
-			continue
-		}
-		fresh.attachJournal(ctx, journal)
-		if err := fresh.deactivateOwners(fresh.desiredDisabledOwners()); err != nil {
-			old.quarantine(err)
-			continue
-		}
-		tenants[index] = fresh
 	}
 	return nil
 }

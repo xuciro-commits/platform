@@ -84,17 +84,11 @@ func newOwnerSet(apps []platform.App) (ownerSet, error) {
 
 func (s *ownerSet) place(apps []platform.App) {
 	s.apps = apps
-	s.states, s.inputs, s.assets = map[string]platform.AcceptedStateApp{}, map[string]platform.AcceptedInputApp{}, map[string]platform.AssetLifecycleOwner{}
-	s.answerers = map[string]platform.Answerer{}
-	s.builders = map[string]build.ConstructionDrafts{}
-	for i, a := range apps {
-		id := s.ids[i]
-		runtimekernel.RegisterOwner(s.states, id, a)
-		runtimekernel.RegisterOwner(s.inputs, id, a)
-		runtimekernel.RegisterOwner(s.assets, id, a)
-		runtimekernel.RegisterOwner(s.answerers, id, a)
-		runtimekernel.RegisterOwner(s.builders, id, a)
-	}
+	s.states = runtimekernel.OwnersOf[platform.AcceptedStateApp](s.ids, apps)
+	s.inputs = runtimekernel.OwnersOf[platform.AcceptedInputApp](s.ids, apps)
+	s.assets = runtimekernel.OwnersOf[platform.AssetLifecycleOwner](s.ids, apps)
+	s.answerers = runtimekernel.OwnersOf[platform.Answerer](s.ids, apps)
+	s.builders = runtimekernel.OwnersOf[build.ConstructionDrafts](s.ids, apps)
 }
 
 func (s ownerSet) with(apps []platform.App) ownerSet {

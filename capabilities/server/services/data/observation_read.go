@@ -18,20 +18,20 @@ import (
 
 const observationResponseBytes = 1 << 20
 
-type ObservationHost interface {
-	ObservationMember(platform.Member) (platform.Member, *kernel.Error)
-	ObservationDefinitions(platform.Member) ([]platform.Definition, error)
-	ObservationSourceActive(record string) bool
-	Entity(typ string) (platform.EntityInfo, bool)
-	AuthorizeObservation(m platform.Member, app, permission, kind string, roles []string, at time.Time) *kernel.Error
-	AuthorizeRead(m platform.Member, app string, q platform.AuthzRequest, at time.Time) (withheld bool, refusal *kernel.Error)
-	ReadRecord(m platform.Member, app, typ, id string, at time.Time) (json.RawMessage, *kernel.Error)
-	ObservationConnections() ([]Connection, int, *kernel.Error)
-	DataOwner() *Owner
-	CredentialHeader(secret, scope, address string) ([]byte, bool)
-	ActionSchemaVersion(platform.AssetRef) (platform.SchemaVersion, error)
-	Send(*http.Request, bool) (*http.Response, error)
-	Rules() platform.RuleEngine
+type ObservationHost struct {
+	ObservationMember       func(platform.Member) (platform.Member, *kernel.Error)
+	ObservationDefinitions  func(platform.Member) ([]platform.Definition, error)
+	ObservationSourceActive func(record string) bool
+	Entity                  func(typ string) (platform.EntityInfo, bool)
+	AuthorizeObservation    func(m platform.Member, app, permission, kind string, roles []string, at time.Time) *kernel.Error
+	AuthorizeRead           func(m platform.Member, app string, q platform.AuthzRequest, at time.Time) (withheld bool, refusal *kernel.Error)
+	ReadRecord              func(m platform.Member, app, typ, id string, at time.Time) (json.RawMessage, *kernel.Error)
+	ObservationConnections  func() ([]Connection, int, *kernel.Error)
+	DataOwner               func() *Owner
+	CredentialHeader        func(secret, scope, address string) ([]byte, bool)
+	ActionSchemaVersion     func(platform.AssetRef) (platform.SchemaVersion, error)
+	Send                    func(*http.Request, bool) (*http.Response, error)
+	Rules                   func() platform.RuleEngine
 }
 
 type Observations struct{ host ObservationHost }

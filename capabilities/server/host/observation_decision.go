@@ -40,14 +40,7 @@ func (t *Tenant) observationPrior(m platform.Member, key, identity string) (*pb.
 
 func (t *Tenant) observationDecision() dataowner.ObservationDecision {
 	return dataowner.ObservationDecision{Tenant: t.ID, Sources: t.observationSources(), Admits: t.Admits, Prior: t.observationPrior,
-		Action: func(app, name string) (platform.Action, bool, bool) {
-			owner := t.App(app)
-			if owner == nil {
-				return platform.Action{}, false, false
-			}
-			action, declared := owner.Manifest().Actions.Action(name)
-			return action, declared, true
-		},
+		App: t.App,
 		Authorize: func(m platform.Member, app string, action platform.Action, targets bool, at time.Time, sources []string) *kernel.Error {
 			caller := platform.NewCaller(runtime{t: t, scoped: true}, m, app, false, false)
 			return authorizationRefusal(t.authorizeCapability(caller, app, action.Schema, action.Roles, targets, authorizationDetails{At: at, Sources: sources}))
@@ -60,7 +53,7 @@ func (t *Tenant) observationDecision() dataowner.ObservationDecision {
 			if owner == nil {
 				return nil, unknown()
 			}
-			return t.accept(owner, m, t.currentSubmissionSchema(owner, submission), at, acceptOptions{observation: evidence})
+			return t.accept(owner, m, t.CurrentSchema(owner, submission), at, acceptOptions{observation: evidence})
 		}}
 }
 

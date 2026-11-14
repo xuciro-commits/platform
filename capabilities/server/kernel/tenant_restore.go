@@ -5,35 +5,33 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"maps"
 	"time"
 
 	persistence "platformserver/kernel/store"
 )
 
 type TenantRestore struct {
-	ID                      string
-	Code                    string
-	SnapshotEvery           int64
-	Journal                 persistence.Journals
-	Quarantine              func(error)
-	Fault                   func() string
-	AuditEmpty              func() bool
-	BackfillAudit           func([]persistence.Entry)
-	RuntimeSnapshotKey      func(code string) (string, error)
-	SnapshotKey             func(code string) (string, error)
-	CheckCheckpoint         func(state []byte, seq int64) error
-	RestoreRuntimeSnapshot  func(state []byte, seq, statePosition int64, started time.Time) error
-	CheckpointRuntime       func() (int64, error)
-	RecoverSnapshot         func(state []byte, seq int64) error
-	RecoverEntries          func([]persistence.Entry) error
-	StateDelta              func() (persistence.StateDelta, error)
-	CloseTokenSecretWindows func()
-	CheckProcesses          func() error
-	RecoveryComplete        func(started time.Time)
-	Migrate                 func(prefix *persistence.StateCheckpoint) error
-	AttachJournal           func()
-	SetRestored             func(int64)
-	SetFresh                func(bool)
+	ID                     string
+	Code                   string
+	SnapshotEvery          int64
+	Journal                persistence.Journals
+	Quarantine             func(error)
+	Fault                  func() string
+	AuditEmpty             func() bool
+	BackfillAudit          func([]persistence.Entry)
+	Compatibility          func() (SnapshotCompatibility, error)
+	Build                  func() string
+	RestoreRuntimeSnapshot func(state []byte, seq, statePosition int64, started time.Time) error
+	CheckpointRuntime      func() (int64, error)
+	RecoverSnapshot        func(state []byte, seq int64) error
+	RecoverEntries         func([]persistence.Entry) error
+	StateDelta             func() (persistence.StateDelta, error)
+	Complete               func(started time.Time) error
+	Migrate                func(prefix *persistence.StateCheckpoint) error
+	AttachJournal          func()
+	SetRestored            func(int64)
+	SetFresh               func(bool)
 }
 
 func (r TenantRestore) Run(ctx context.Context) error {
@@ -60,13 +58,17 @@ func (r TenantRestore) Run(ctx context.Context) error {
 	}
 	var after int64
 	if r.SnapshotEvery > 0 {
-		key, err := r.RuntimeSnapshotKey(r.Code)
+		compatibility, err := r.Compatibility()
+		if err != nil {
+			return fmt.Errorf("snapshot format %s: %w", r.ID, err)
+		}
+		key, err := compatibility.RuntimeKey(r.Code)
 		if err != nil {
 			return fmt.Errorf("snapshot format %s: %w", r.ID, err)
 		}
 		seq, state, ok, err := j.Snapshot(ctx, r.ID, key)
 		if err == nil && !ok {
-			key, err = r.SnapshotKey(r.Code)
+			key, err = compatibility.Key(r.Code)
 			if err == nil {
 				seq, state, ok, err = j.Snapshot(ctx, r.ID, key)
 			}
@@ -82,7 +84,7 @@ func (r TenantRestore) Run(ctx context.Context) error {
 			return fmt.Errorf("snapshot %s: %w", r.ID, err)
 		}
 		if ok && (!stateActive || seq <= statePosition) {
-			if err := r.CheckCheckpoint(state, seq); err != nil {
+			if err := compatibility.Check(r.ID, state, seq, r.Build()); err != nil {
 				quarantine(err)
 				return nil
 			}
@@ -153,13 +155,11 @@ func (r TenantRestore) Run(ctx context.Context) error {
 		failed()
 		return nil
 	}
-	r.CloseTokenSecretWindows()
 	r.SetFresh(after == 0 && len(entries) == 0)
-	if err := r.CheckProcesses(); err != nil {
-		quarantine(fmt.Errorf("process recovery: %w", err))
+	if err := r.Complete(started); err != nil {
+		quarantine(err)
 		return nil
 	}
-	r.RecoveryComplete(started)
 	if after > 0 {
 		log.Printf("restored %s from the snapshot at %d, then replayed %d entries", r.ID, after, len(entries))
 	} else {
@@ -179,4 +179,63 @@ func (r TenantRestore) Run(ctx context.Context) error {
 		r.SetRestored(seq)
 	}
 	return nil
+}
+
+type SelectionReplacement struct {
+	Compatible func() bool
+	Adopt      func()
+	Recover    func([]persistence.Entry) error
+	Migrate    func() error
+	Attach     func()
+	Deactivate func() error
+}
+
+type SelectionRestore struct {
+	ID         string
+	Journal    persistence.Journals
+	Selection  map[string]string
+	Current    map[string]string
+	Suspended  func() bool
+	Quarantine func(error)
+	Deactivate func() error
+	Compose    func() (SelectionReplacement, error)
+}
+
+func (r SelectionRestore) Run(ctx context.Context) (bool, error) {
+	if maps.Equal(r.Selection, r.Current) {
+		if err := r.Deactivate(); err != nil {
+			r.Quarantine(err)
+		}
+		return false, nil
+	}
+	if !r.Suspended() {
+		r.Quarantine(fmt.Errorf("provider change requires maintenance"))
+		return false, nil
+	}
+	fresh, err := r.Compose()
+	if err != nil {
+		r.Quarantine(err)
+		return false, nil
+	}
+	if !fresh.Compatible() {
+		r.Quarantine(fmt.Errorf("replacement has incompatible owner or kernel restore formats"))
+		return false, nil
+	}
+	fresh.Adopt()
+	entries, err := r.Journal.Entries(ctx, r.ID, 0)
+	if err != nil {
+		return false, err
+	}
+	for _, step := range []func() error{func() error { return fresh.Recover(entries) }, fresh.Migrate} {
+		if err := step(); err != nil {
+			r.Quarantine(err)
+			return false, nil
+		}
+	}
+	fresh.Attach()
+	if err := fresh.Deactivate(); err != nil {
+		r.Quarantine(err)
+		return false, nil
+	}
+	return true, nil
 }

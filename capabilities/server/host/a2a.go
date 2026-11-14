@@ -23,11 +23,6 @@ func (t *Tenant) published(agent string) bool {
 	return slices.ContainsFunc(list, func(s string) bool { return strings.TrimSpace(s) == agent })
 }
 
-func (h *Host) agentCard(r *http.Request, t *Tenant, agent string) map[string]any {
-	d, _ := t.agents.AgentDeclaration(agent)
-	return actions.A2ACard(d, agent, t.ID, r.Host, r.TLS != nil || r.Header.Get("X-Forwarded-Proto") == "https", h.Issuer)
-}
-
 func (h *Host) serveA2A(w http.ResponseWriter, r *http.Request) {
 	tenant, agent := r.PathValue("tenant"), r.PathValue("agent")
 	r.Header.Set(TenantHeader, tenant)

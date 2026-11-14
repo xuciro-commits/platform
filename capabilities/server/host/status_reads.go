@@ -8,37 +8,13 @@ import (
 )
 
 func (t *Tenant) statusReadStamp(revision uint32, applicant string, sourceRaw, connectionRaw json.RawMessage, localRecords bool) (string, bool) {
-	member, found := t.Member(applicant)
-	if !found {
-		return "", false
-	}
-	var connection dataowner.Connection
-	_ = json.Unmarshal(connectionRaw, &connection)
-	var credential []byte
-	if connection.Secret != "" {
-		credential, _ = t.CredentialValue(connection.Secret, "connection/"+connection.ID, connection.Address)
-	}
-	var source dataowner.Source
-	_ = json.Unmarshal(sourceRaw, &source)
-	publisher, _ := t.sourcePublisher(source)
-	marking := platform.MarkingSet{}
-	if connection.ID != "" {
-		marking = t.connectionMarkings(connection.ID)
-	}
-	var generation uint64
-	if localRecords {
+	return dataowner.StatusStamp{Member: t.Member, Publisher: t.sourcePublisher, Credential: t.CredentialValue, Markings: t.connectionMarkings, Generation: func() uint64 {
 		t.Projection.Lock()
-		generation = t.Projection.Generation()
-		t.Projection.Unlock()
-	}
-	stamp, err := platform.CanonicalDigest([]any{revision, member, publisher, marking, credential, generation})
-	return stamp, err == nil
+		defer t.Projection.Unlock()
+		return t.Projection.Generation()
+	}}.Of(revision, applicant, sourceRaw, connectionRaw, localRecords)
 }
 
 func (t *Tenant) sourcePublisher(source dataowner.Source) (platform.Member, bool) {
-	member, known := t.Member(source.Publisher)
-	if known && source.PublisherScopes != "" && json.Unmarshal([]byte(source.PublisherScopes), &member.Scopes) != nil {
-		return platform.Member{}, false
-	}
-	return member, known
+	return source.PublisherAs(t.Member)
 }

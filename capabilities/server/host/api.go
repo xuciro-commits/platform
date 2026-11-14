@@ -1,7 +1,6 @@
 package host
 
 import (
-	"encoding/json"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	runtimekernel "platformserver/kernel"
 	"platformserver/kernel/transport"
@@ -11,6 +10,7 @@ import (
 	dataowner "platformserver/services/data"
 	"platformserver/services/objects"
 	"platformserver/services/resources/authoring"
+	"platformserver/services/security"
 	controlowner "platformserver/services/security/control"
 	enterprisemodel "platformserver/services/security/organization"
 	"reflect"
@@ -22,7 +22,7 @@ var namedReads = []transport.Route{
 	{Pattern: "GET /v1/packages", Summary: "Administrators read the package index; application builders discover installed blueprints", Answer: []platform.PackageView{}},
 	{Pattern: "GET /v1/notifications", Summary: "The caller's notifications, newest first, in their language", Answer: []platform.Notification{}},
 	{Pattern: "GET /v1/members", Summary: "The tenant's members with their roles and profiles (administrators, auditors)", Answer: []platform.MemberView{}},
-	{Pattern: "GET /v1/permissions", Summary: "The permission catalog: every app's roles and what each may do, derived from the manifests (administrators, auditors)", Answer: []AppPermissions{}},
+	{Pattern: "GET /v1/permissions", Summary: "The permission catalog: every app's roles and what each may do, derived from the manifests (administrators, auditors)", Answer: []security.AppPermissions{}},
 	{Pattern: "GET /v1/access", Summary: "The tenant's own access configuration: custom roles, policies and teams (administrators, auditors)", Answer: platform.AccessConfig{}},
 	{Pattern: "GET /v1/tenant", Summary: "The tenant's record: its settings, apps and standing (every member)", Answer: platform.TenantRecord{}},
 	{Pattern: "GET /v1/account", Summary: "The caller's profile over the tenant's defaults", Answer: platform.Account{}},
@@ -58,26 +58,6 @@ var namedReads = []transport.Route{
 type SubmissionAnswer struct {
 	Record *pb.ChangeRecord    `json:"record,omitempty"`
 	Error  *platform.ErrorBody `json:"error,omitempty"`
-}
-
-type ProtocolCall struct {
-	Target         string          `json:"target"`
-	IdempotencyKey string          `json:"idempotencyKey"`
-	Payload        json.RawMessage `json:"payload"`
-}
-
-type MeView struct {
-	TenantID    string                `json:"tenantId"`
-	PrincipalID string                `json:"principalId"`
-	Profile     platform.Member       `json:"profile"`
-	Apps        []transport.AppEntry  `json:"apps"`
-	Tenants     []transport.MeTenant  `json:"tenants"`
-	Language    string                `json:"language"`
-	Languages   []string              `json:"languages"`
-	Preferred   string                `json:"preferred,omitempty"`
-	Currency    string                `json:"currency"`
-	Account     platform.Account      `json:"account"`
-	Tenant      platform.TenantRecord `json:"tenant"`
 }
 
 func (h *Host) OpenAPI(t *Tenant, m *platform.Member) map[string]any {

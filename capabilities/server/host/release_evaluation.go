@@ -36,17 +36,15 @@ func (t *Tenant) prepareEvaluateRelease(m platform.Member, request releaseowner.
 		BuilderVersion: func() string { return t.App(build.ID).Manifest().Version },
 		AppModel:       func() string { return t.setting(t.automation(platform.AIApp, false), platform.AISettingAppModel) },
 		HasProvider:    func() bool { return t.ai != nil },
-		ModelConfig:    t.evaluationModelConfig,
-		Admits:         t.Admits,
-		Quarantined:    t.quarantined,
-		Agent:          t.evaluateReleaseAgentLocked,
+		ModelConfig: func(name string, definition platform.AIFunction) (string, error) {
+			return aigateway.EvaluationModelConfig(name, definition, t.ai.Model, t.modelResolver())
+		},
+		Admits:      t.Admits,
+		Quarantined: t.quarantined,
+		Agent:       t.evaluateReleaseAgentLocked,
 		Accept: func(sub *pb.Submission, at time.Time) *kernel.Error {
 			_, refusal := t.accept(t.App(build.ID).(platform.App), platform.Member{ID: sub.PrincipalId, Tenant: t.ID}, sub, at, acceptOptions{automation: true})
 			return refusal
 		},
 	})
-}
-
-func (t *Tenant) evaluationModelConfig(name string, definition platform.AIFunction) (string, error) {
-	return aigateway.EvaluationModelConfig(name, definition, t.ai.Model, t.modelResolver())
 }

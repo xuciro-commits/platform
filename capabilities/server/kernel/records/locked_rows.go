@@ -41,6 +41,28 @@ func LockedFields(s *Store, typ string) ([]platform.FieldInfo, bool) {
 	return nil, false
 }
 
+func LockedInfo(s *Store, typ string) (platform.EntityInfo, bool) {
+	s.Lock()
+	defer s.Unlock()
+	if et := s.Type(typ); et != nil {
+		return et.Info(), true
+	}
+	return platform.EntityInfo{}, false
+}
+
+func LockedImage(s *Store, typ, id, change string) (json.RawMessage, bool) {
+	s.Lock()
+	var row *Row
+	if et := s.Type(typ); et != nil {
+		row = et.Rows().Get(id)
+	}
+	s.Unlock()
+	if row == nil {
+		return nil, false
+	}
+	return row.ImageAt(change)
+}
+
 func LockedActive(s *Store, typ, id string) (platform.EntityInfo, bool) {
 	s.Lock()
 	defer s.Unlock()

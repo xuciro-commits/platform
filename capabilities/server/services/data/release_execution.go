@@ -27,6 +27,16 @@ func (o *Owner) ExecutionSource(live Source) (Source, error) {
 	return r, nil
 }
 
+func (o *Owner) StreamPublished(c platform.Caller, record string) bool {
+	source, exists := platform.Get[Source](c, record)
+	if exists {
+		var err error
+		source, err = o.ExecutionSource(source)
+		exists = err == nil
+	}
+	return exists && source.Stream && source.State == "published"
+}
+
 func (o *Owner) ConnectionConfiguration(live Connection) (Connection, error) {
 	fixed, err := o.acceptedIntegration(live, platform.AssetConnection)
 	if err != nil {

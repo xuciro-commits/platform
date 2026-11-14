@@ -155,3 +155,22 @@ func ApplyControl(saved *acceptedformat.Control, install func(kind string, image
 	}
 	return nil
 }
+
+func (s *Sequence) CaptureControl(work func() (any, error), values func() map[string]any) (map[string]json.RawMessage, error) {
+	connectors, err := s.ConnectorRoster.Image()
+	if err != nil {
+		return nil, err
+	}
+	image, err := work()
+	if err != nil {
+		return nil, err
+	}
+	all := values()
+	all["work"] = image
+	out, err := ControlImages(all)
+	if err != nil {
+		return nil, err
+	}
+	out["connectors"] = connectors
+	return out, nil
+}

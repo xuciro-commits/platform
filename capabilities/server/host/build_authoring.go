@@ -3,7 +3,6 @@ package host
 import (
 	"context"
 	"fmt"
-	"slices"
 
 	"platformserver/services/functions/authoring"
 	"platformserver/services/resources/authoring"
@@ -31,19 +30,5 @@ func (t *Tenant) scopedDraftActionCapabilities(m platform.Member) ([]platform.Ca
 	if err != nil {
 		return nil, err
 	}
-	result := []platform.CapabilityDescriptor{}
-	for _, action := range actions {
-		if action.Automation {
-			continue
-		}
-		block := authoring.ActionBlock(platform.AssetRef{App: build.ID, Kind: platform.AssetAction, Name: action.Schema}, "draft", "", action)
-		block.Side = platform.CapabilityAuthoritative
-		block.Parameters = slices.Clone(action.Payload)
-		input := platform.CapabilityFieldsSchema(action.Payload)
-		if input.Type != "" {
-			block.Input = &input
-		}
-		result = append(result, block)
-	}
-	return result, nil
+	return authoring.DraftActionBlocks(build.ID, actions), nil
 }

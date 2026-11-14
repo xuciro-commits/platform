@@ -245,6 +245,14 @@ func (c *Committed) Input(key string) json.RawMessage {
 func (c *Committed) Refusal(key string) (acceptedformat.Refusal, bool) {
 	return storedValue(c, "refusal", key, c.refusals)
 }
+func (c *Committed) RefusedIssues(app string, s *pb.Submission, binding *platform.SchemaVersion) ([]platform.FieldIssue, bool) {
+	prior, ok := c.Refusal(app + "/" + s.GetIdempotencyKey())
+	if !ok {
+		return nil, false
+	}
+	hash, _ := acceptedformat.SubmissionHash(s, binding)
+	return prior.Issues, prior.RequestHash == hash
+}
 func (c *Committed) CompositeAnswer(key string) json.RawMessage {
 	v, _ := storedValue(c, "composite-answer", key, c.compositeAnswers)
 	return v

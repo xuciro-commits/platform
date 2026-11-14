@@ -424,6 +424,16 @@ type ConnectionCheck struct {
 	Detail string    `json:"detail,omitempty"`
 }
 
+func ConnectionCheckSubmission(tenant, authority string, caller platform.Member, c Connection, detail string, checkErr error, now time.Time) *pb.Submission {
+	check := ConnectionCheck{At: now, OK: checkErr == nil, Detail: detail}
+	if checkErr != nil {
+		check.Error = checkErr.Error()
+	}
+	payload, _ := json.Marshal(map[string]any{"revision": c.Revision, "check": check})
+	return &pb.Submission{TenantId: tenant, PrincipalId: caller.ID, Authority: authority, IdempotencyKey: fmt.Sprintf("checked:%s:%d:%s", c.ID, c.Revision, now.UTC().Format(time.RFC3339Nano)),
+		Target: &pb.EntityRef{Type: ConnectionType, Id: c.ID}, Schema: &pb.SchemaRef{Name: SchemaConnectionChecked, Version: 1}, Payload: payload}
+}
+
 func (c Connection) Resolve(ref string) string {
 	if ref == "" {
 		return c.Address

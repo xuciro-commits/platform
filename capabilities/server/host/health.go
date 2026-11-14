@@ -2,6 +2,7 @@ package host
 
 import (
 	"context"
+	"errors"
 	"platformkernel/kernel"
 	runtimekernel "platformserver/kernel"
 	"platformserver/platform"
@@ -140,3 +141,26 @@ func (t *Tenant) queueHealth(now time.Time) ([]monitoring.QueueHealth, int) {
 }
 
 func (t *Tenant) Breakers(now time.Time) []platform.Breaker { return t.breakers.View(now) }
+
+func (t *Tenant) storageReady(ctx context.Context) error {
+	if t.Log() == nil {
+		return errors.New("operational store is unavailable")
+	}
+	if t.Store == nil {
+		return nil
+	}
+	journal, ok := t.Store.(Journals)
+	if !ok {
+		return errors.New("tenant journal is unavailable")
+	}
+	if _, err := journal.Entries(ctx, t.ID, journal.Position(t.ID)); err != nil {
+		return err
+	}
+	if _, err := t.Log().QueryObservations(platform.ObservationQuery{Tenant: t.ID, To: time.Now().UTC(), Limit: 1}); err != nil {
+		return err
+	}
+	if _, err := t.Log().QueryAuditEntries(platform.AuditQuery{Tenant: t.ID, To: time.Now().UTC(), Limit: 1}); err != nil {
+		return err
+	}
+	return nil
+}

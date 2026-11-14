@@ -2,8 +2,6 @@ package host
 
 import (
 	"encoding/json"
-	"fmt"
-	acceptedformat "platformserver/kernel/acceptedformat"
 	trialowner "platformserver/services/devops/trials"
 	"platformserver/services/functions/runtime"
 	controlowner "platformserver/services/security/control"
@@ -13,47 +11,33 @@ import (
 	"platformserver/platform"
 )
 
-func pendingComputeEffects(t *Tenant) []platform.Effect {
+func (t *Tenant) outboundEffects() []platform.Effect {
 	var out []platform.Effect
-	for _, effect := range t.outbound.Select(nil) {
-		if effect.Endpoint == acceptedformat.OperationEndpoint && !platform.EffectSettled(effect.State) {
-			out = append(out, effect.Effect)
-		}
+	for _, queued := range t.outbound.Select(nil) {
+		out = append(out, queued.Effect)
 	}
 	return out
 }
+
 func settleComputeFixture(t *Tenant, actor platform.Member, fixture platform.ComputeFixture, now time.Time) (bool, error) {
-	var matched []platform.Effect
-	for _, effect := range pendingComputeEffects(t) {
-		var binding compute.OperationBinding
-		if json.Unmarshal([]byte(effect.Body), &binding) == nil && binding.Definition.Name == fixture.Name && (fixture.App == "" || fixture.App == effect.App) {
-			matched = append(matched, effect)
-		}
-	}
-	return trialowner.ComputeFixtureResult(matched, fixture, func(effect platform.Effect) (string, json.RawMessage, error) {
-		var binding compute.OperationBinding
-		json.Unmarshal([]byte(effect.Body), &binding)
-		outcome := platform.Outcome{Effect: effect.ID, Result: "rejected", Detail: fixture.Error}
-		if fixture.ExpectState == "completed" {
-			if err := binding.Definition.Output.Validate([]byte(fixture.Output), binding.Definition.Limits.MaxOutputBytes); err != nil {
-				return "", nil, err
+	return trialowner.ComputeFixtureHooks{
+		Outbound: t.outboundEffects,
+		Binding: func(effect platform.Effect) (platform.Operation, bool) {
+			var binding compute.OperationBinding
+			err := json.Unmarshal([]byte(effect.Body), &binding)
+			return binding.Definition, err == nil
+		},
+		Claim: func(effect string) (platform.Effect, bool) { return t.claimOperation(effect, now) },
+		Settle: func(id string, outcome platform.Outcome) bool {
+			t.settleWithUsage(id, outcome, nil, now)
+			return !t.quarantined()
+		},
+		Result: func(id string) (string, json.RawMessage, error) {
+			result, refusal := t.operationResult(platform.NewCaller(runtime{t: t, scoped: true}, actor, controlowner.PlatformApp, false, false), id)
+			if refusal != nil {
+				return "", nil, refusal
 			}
-			outcome.Result = "delivered"
-			outcome.Answer = json.RawMessage(fixture.Output)
-		}
-		claimed, ok := t.claimOperation(effect.ID, now)
-		if !ok {
-			return "", nil, fmt.Errorf("compute fixture could not claim original work")
-		}
-		outcome.Generation = claimed.Generation
-		t.settleWithUsage(claimed.ID, outcome, nil, now)
-		if t.quarantined() {
-			return "", nil, fmt.Errorf("compute fixture settlement failed")
-		}
-		result, refusal := t.operationResult(platform.NewCaller(runtime{t: t, scoped: true}, actor, controlowner.PlatformApp, false, false), claimed.ID)
-		if refusal != nil {
-			return "", nil, refusal
-		}
-		return result.State, json.RawMessage(result.Output), nil
-	})
+			return result.State, json.RawMessage(result.Output), nil
+		},
+	}.Apply(fixture)
 }

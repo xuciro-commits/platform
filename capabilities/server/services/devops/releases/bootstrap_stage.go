@@ -6,6 +6,7 @@ import (
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
+	"platformserver/kernel/records"
 	"platformserver/platform"
 )
 
@@ -18,11 +19,9 @@ type BootstrapStage struct {
 	Registry        *platform.AssetRegistry
 	Drafts          []platform.AssetDraft
 	Put             func(app string, receipt *pb.ChangeRecord, value any) *kernel.Error
-	MediaVersions   func(plan platform.AssetInstallation) ([]platform.MediaSetVersion, error)
+	Records         *records.Store
 	KeepChanges     func(receipt *pb.ChangeRecord)
 	Register        func(plan platform.AssetInstallation) error
-	Entity          func(typ, name string) (info platform.EntityInfo, hasRow, ok bool)
-	Matches         func(typ, name string, reopen, managed bool) (int, error)
 	Decide          func(info platform.EntityInfo, draft platform.AssetDraft, submission *pb.Submission) (*pb.ChangeRecord, error)
 	Rebind          func(app string) (*platform.AssetRegistry, error)
 	AttachHosts     func()
@@ -48,7 +47,8 @@ func (s BootstrapStage) Run() (*pb.ChangeRecord, error) {
 				if refusal := s.Put(plan.Ref.App, receipt, set); refusal != nil {
 					return refusal
 				}
-				images, err := s.MediaVersions(plan)
+				ref := plan.Ref
+				images, err := records.PrepareMediaVersionImages(s.Records, []platform.ReleaseInstallation{{ReleasePublication: platform.ReleasePublication{Schema: plan.Schema, Image: plan.Image}, Ref: &ref, Record: plan.Record}})
 				if err != nil {
 					return err
 				}
@@ -88,11 +88,12 @@ func (s BootstrapStage) Run() (*pb.ChangeRecord, error) {
 		}
 	}
 	for ordinal, draft := range s.Drafts {
-		info, hasRow, ok := s.Entity(draft.Type, draft.Name)
-		if !ok {
+		et := s.Records.Type(draft.Type)
+		if et == nil {
 			return nil, fmt.Errorf("%s does not host %s", s.Tenant, draft.Type)
 		}
-		matches, err := s.Matches(draft.Type, DraftLogicalName(draft.Ref), s.IncludeArchived, context.ManagedBy != "")
+		info, hasRow := et.Info(), et.Rows().Get(draft.Name) != nil
+		matches, err := s.Records.DraftMatches(draft.Type, DraftLogicalName(draft.Ref), s.IncludeArchived, context.ManagedBy != "")
 		if err != nil {
 			return nil, err
 		}

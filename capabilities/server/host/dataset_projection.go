@@ -59,9 +59,8 @@ func (t *Tenant) datasetMerge() dataowner.DatasetMerge {
 }
 
 func (t *Tenant) integrationAnswered(authority, key string) bool {
-	value, _ := recordRead(t, context.Background(), func(t *Tenant) (bool, *kernel.Error) {
+	return readOnly(t, func(t *Tenant) bool {
 		owner := t.App(authority)
-		return owner != nil && t.priorOf(owner, key).Known(), nil
+		return owner != nil && t.PriorOf(owner, key).Known()
 	})
-	return value
 }

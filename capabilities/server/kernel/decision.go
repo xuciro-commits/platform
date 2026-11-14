@@ -60,6 +60,22 @@ type Decision struct {
 	BusinessQuery     func(platform.EntityInfo, platform.Query, platform.Member, time.Time) platform.Query
 }
 
+func NewDecision(base *records.Store, s *Sequence, simulation bool) Decision {
+	return Decision{Logs: map[*platform.Ledger]*kernel.ChangeLog{}, Simulation: simulation, Records: base,
+		Sequences: s.Sequences.Clone(), Allocated: map[string]int{}, SequenceBases: map[string]int{}, Active: map[string]bool{},
+		Notices: s.Notices.Draft(), Writers: map[string][]string{}, Changed: map[string][]string{}, Connectors: s.ConnectorRoster.Clone()}
+}
+
+func (d *Decision) ReadableAt(check func(*records.Store, time.Time) bool) bool {
+	d.Records.Lock()
+	defer d.Records.Unlock()
+	at := d.At
+	if at.IsZero() {
+		at = time.Now()
+	}
+	return check(d.Records, at)
+}
+
 func (d *Decision) HoldChanges(ledger *platform.Ledger) (func(), *kernel.Error) {
 	if d.Receiving[ledger] {
 		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The decision cannot re-enter its held ledger")

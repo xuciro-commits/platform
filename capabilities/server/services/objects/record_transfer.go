@@ -13,6 +13,8 @@ import (
 	"strings"
 	"time"
 
+	pb "platformkernel/gen/platform/kernel/v1alpha1"
+	"platformkernel/kernel"
 	"platformserver/platform"
 )
 
@@ -170,4 +172,38 @@ func toCSV(v any) string {
 		return strings.Join(parts, ";")
 	}
 	return fmt.Sprint(v)
+}
+
+func (o *Owner) ExportRead(m platform.Member, typ string, q platform.Query, now time.Time) ([]byte, *kernel.Error) {
+	m = o.AuthorizationMember(m)
+	if err := o.Admit(m); err != nil {
+		return nil, err
+	}
+	o.Store.Lock()
+	et := o.Store.Type(typ)
+	o.Store.Unlock()
+	if et == nil {
+		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
+	}
+	c := o.Caller(m, et.Info().App)
+	if err := AuthorizationRefusal(o.Authorize(o.Store, c, platform.AuthzRequest{Principal: m.ID, Tenant: m.Tenant, Kind: "export", Type: typ}, now, false)); err != nil {
+		return nil, err
+	}
+	view, _ := ViewOf(m, et)
+	export := NewExport(view.Info())
+	q.Offset, q.Limit = 0, 500
+	for {
+		page, err := o.Records(m, typ, q, now)
+		if err != nil {
+			return nil, err
+		}
+		for _, r := range page.Records {
+			export.Add(r)
+		}
+		q.Offset += len(page.Records)
+		if len(page.Records) == 0 || q.Offset >= page.Total {
+			break
+		}
+	}
+	return export.Bytes(), nil
 }

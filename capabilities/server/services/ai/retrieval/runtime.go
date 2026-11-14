@@ -29,7 +29,7 @@ type Runtime struct {
 	Store       VectorStore
 	Read        func(func(Runtime) *kernel.Error) *kernel.Error
 	Current     func() bool
-	Reader      func(*platform.Member) platform.Member
+	Host        func() platform.Member
 	Readable    func(platform.Member, string, time.Time) bool
 	Setting     func(string) string
 	ActiveSpace func() string
@@ -116,7 +116,10 @@ func (r Runtime) VectorSpace(name string) string {
 }
 
 func (r Runtime) ScopeReadable(reader *platform.Member, scope string, at time.Time) bool {
-	return r.Readable(r.Reader(reader), scope, at)
+	if reader == nil {
+		return r.Readable(r.Host(), scope, at)
+	}
+	return r.Readable(*reader, scope, at)
 }
 
 func (r Runtime) PassageReadable(document, scope string, apps []string, reader *platform.Member, app string, now time.Time) bool {

@@ -32,24 +32,16 @@ func (h *Host) routesAI(rt *routes) {
 		}
 		WriteJSON(w, http.StatusOK, answer)
 	})
-	rt.handle(transport.Route{Pattern: "GET /v1/ai/knowledge-index", Summary: "Original knowledge vector index preparation and current retrieval mode", Answer: platform.KnowledgeIndexStatus{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
+	rt.handle(transport.Route{Pattern: "GET /v1/ai/knowledge-index", Summary: "Original knowledge vector index preparation and current retrieval mode", Answer: platform.KnowledgeIndexStatus{}}, transport.Answering(func(r *http.Request, m platform.Member, t *Tenant) (platform.KnowledgeIndexStatus, *kernel.Error) {
 		status, err := t.KnowledgeIndexStatus(r.Context(), m)
-		if err != nil {
-			Reply(w, nil, err)
-		} else {
-			status.Problem = t.i18n.Say(t.Language(m, r), status.Problem)
-			WriteJSON(w, http.StatusOK, status)
-		}
-	})
-	rt.handle(transport.Route{Pattern: "GET /v1/ai/model-selection", Summary: "Purpose-compatible models and effective configuration from the original AI and settings owners", Answer: aigateway.ModelSelection{}, Query: []transport.Param{{Name: "purpose", Description: "generation, agent or embedding"}}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
+		status.Problem = t.i18n.Say(t.Language(m, r), status.Problem)
+		return status, err
+	}))
+	rt.handle(transport.Route{Pattern: "GET /v1/ai/model-selection", Summary: "Purpose-compatible models and effective configuration from the original AI and settings owners", Answer: aigateway.ModelSelection{}, Query: []transport.Param{{Name: "purpose", Description: "generation, agent or embedding"}}}, transport.Answering(func(r *http.Request, m platform.Member, t *Tenant) (aigateway.ModelSelection, *kernel.Error) {
 		selection, err := t.ModelSelection(r.Context(), m, r.URL.Query().Get("purpose"))
-		if err != nil {
-			Reply(w, nil, err)
-		} else {
-			selection.Localize(func(s string) string { return t.i18n.Say(t.Language(m, r), s) })
-			WriteJSON(w, http.StatusOK, selection)
-		}
-	})
+		selection.Localize(func(s string) string { return t.i18n.Say(t.Language(m, r), s) })
+		return selection, err
+	}))
 	for _, endpoint := range []struct {
 		path   string
 		design bool
@@ -83,12 +75,7 @@ func (h *Host) routesAI(rt *routes) {
 	rt.handle(transport.Route{Pattern: "GET /v1/ai/vendors", Summary: "The vendors a provider may be", Answer: []platform.AIVendor{}}, func(w http.ResponseWriter, _ *http.Request, _ platform.Member, _ *Tenant) {
 		WriteJSON(w, http.StatusOK, platform.AIVendors)
 	})
-	rt.handle(transport.Route{Pattern: "GET /v1/capabilities/calls/ai/{id}", Summary: "Read the original typed AI call result after member and source checks", Answer: platform.OperationResult{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
-		answer, err := t.ReadCapabilityAI(r.Context(), m, r.PathValue("id"), h.Now())
-		if err != nil {
-			Reply(w, nil, err)
-			return
-		}
-		WriteJSON(w, http.StatusOK, answer)
-	})
+	rt.handle(transport.Route{Pattern: "GET /v1/capabilities/calls/ai/{id}", Summary: "Read the original typed AI call result after member and source checks", Answer: platform.OperationResult{}}, transport.Answering(func(r *http.Request, m platform.Member, t *Tenant) (platform.OperationResult, *kernel.Error) {
+		return t.ReadCapabilityAI(r.Context(), m, r.PathValue("id"), h.Now())
+	}))
 }

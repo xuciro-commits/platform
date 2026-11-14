@@ -3,14 +3,16 @@ package host
 import (
 	"context"
 	"encoding/json"
-	"go.opentelemetry.io/otel/attribute"
-	"go.opentelemetry.io/otel/trace"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
+	runtimekernel "platformserver/kernel"
 	"platformserver/platform"
 	controlowner "platformserver/services/security/control"
 	"slices"
 	"time"
+
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/trace"
 )
 
 func (t *Tenant) Input(m platform.Member, name string, body []byte, now time.Time) (out any, err *kernel.Error) {
@@ -47,7 +49,7 @@ func (t *Tenant) input(m platform.Member, name string, body []byte, now time.Tim
 		return nil, refusal
 	}
 	end := t.begin("input "+name, trace.SpanContext{}, attribute.String("platform.app", a.Manifest().ID), attribute.String("platform.member", m.ID))
-	defer func() { end(outcomeOf(err)) }()
+	defer func() { end(runtimekernel.OutcomeOf(err)) }()
 	if a.Manifest().Inputs[name] {
 		accepted := t.inputs[a.Manifest().ID]
 		if accepted == nil || !slices.Contains(accepted.AcceptedInputs(), name) {

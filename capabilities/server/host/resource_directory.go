@@ -96,7 +96,7 @@ func (h *Host) routesResources(rt *routes) {
 	})
 	rt.recordRead(transport.Route{Pattern: "GET /v1/working-state/{branch}", Summary: "All current builder's private resource edits on this branch", Answer: build.WorkingStateList{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
 		list, refusal, err := build.ReadWorkingStates(r.PathValue("branch"), func(query platform.Query) ([]any, *kernel.Error) {
-			page, refusal := t.recordsRead(m, build.WorkingStateType, query, h.Now())
+			page, refusal := t.objectOwner(t.Projection).Records(m, build.WorkingStateType, query, h.Now())
 			return page.Records, refusal
 		})
 		if err != nil {
@@ -107,7 +107,7 @@ func (h *Host) routesResources(rt *routes) {
 	})
 	rt.recordRead(transport.Route{Pattern: "GET /v1/working-state/{branch}/{type}/{draft}", Summary: "Only the current builder's private working state", Answer: build.WorkingStateView{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
 		id := build.WorkingStateID(m.ID, r.PathValue("branch"), r.PathValue("type"), r.PathValue("draft"))
-		raw, refusal := t.readRecordFrom(t.Projection, t.branchCaller(m), build.WorkingStateType, id, h.Now())
+		raw, refusal := t.objectOwner(t.Projection).ReadRecordFrom(t.Projection, t.branchCaller(m), build.WorkingStateType, id, h.Now())
 		view, refusal, err := build.ReadWorkingState(id, raw, refusal)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)

@@ -4,6 +4,8 @@ import records "platformserver/kernel/records"
 
 import "platformserver/services/functions/runtime"
 
+import automation "platformserver/services/automate/runtime"
+
 import (
 	"context"
 	"encoding/json"
@@ -18,43 +20,28 @@ import (
 	"platformserver/services/actions"
 )
 
-func pendingOperationInputs(inputs map[string][]*preparedOperationInput) int {
-	pending := 0
-	for _, prepared := range inputs {
-		pending += len(prepared)
-	}
-	return pending
-}
-
-func (d *stagedDecision) RequestOperation(c platform.Caller, r *pb.ChangeRecord, q platform.OperationRequest) (platform.OperationCall, *kernel.Error) {
-	var input *platform.OperationInputArtifact
-	hash, _ := platform.CanonicalDigest(q)
-	if pending := d.operationInputs[hash]; len(pending) > 0 {
-		prepared := pending[0]
-		platformOwner := c.App == controlowner.PlatformApp && c.ID == prepared.Artifact.Member
-		flowOwner := c.Automation && c.App == "flow" && c.ID == "app:flow" && q.OnBehalf == prepared.Artifact.Member
-		if !platformOwner && !flowOwner || hash != prepared.RequestHash {
-			d.Failure = platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "The prepared input belongs to another operation request")
-			return platform.OperationCall{}, d.Failure
-		}
-		input = &prepared.Artifact
-		if len(pending) == 1 {
-			delete(d.operationInputs, hash)
-		} else {
-			d.operationInputs[hash] = pending[1:]
-		}
-	}
-	call, intent, err := d.tenant.planOperation(c, r, q, d.Records, d.Intents, input)
+func intend[C any](d *stagedDecision, call C, intent platform.Effect, err *kernel.Error) (C, *kernel.Error) {
 	if err != nil {
 		if d.Failure == nil {
 			d.Failure = err
 		}
-		return platform.OperationCall{}, err
+		var none C
+		return none, err
 	}
 	if !d.ProbeOnly {
 		d.Intents = append(d.Intents, intent)
 	}
 	return call, nil
+}
+
+func (d *stagedDecision) RequestOperation(c platform.Caller, r *pb.ChangeRecord, q platform.OperationRequest) (platform.OperationCall, *kernel.Error) {
+	input, refusal := automation.TakeOperationInput(d.operationInputs, c, q, controlowner.PlatformApp)
+	if refusal != nil {
+		d.Failure = refusal
+		return platform.OperationCall{}, refusal
+	}
+	call, intent, err := d.tenant.planOperation(c, r, q, d.Records, d.Intents, input)
+	return intend(d, call, intent, err)
 }
 func (t *Tenant) planOperation(c platform.Caller, r *pb.ChangeRecord, q platform.OperationRequest, store *records.Store, pending []platform.Effect, sealed ...*platform.OperationInputArtifact) (platform.OperationCall, platform.Effect, *kernel.Error) {
 	var input *platform.OperationInputArtifact
@@ -115,16 +102,7 @@ func (t *Tenant) operationAuthorization(member platform.Member, owner string, bi
 
 func (d *stagedDecision) RequestCompilation(c platform.Caller, r *pb.ChangeRecord, key, target string, q platform.CodeBuildRequest) (platform.OperationCall, *kernel.Error) {
 	call, intent, err := compute.PlanCompilation(d.tenant.ID, c, r, key, target, q, d.tenant.queuedOperations(), d.Intents)
-	if err != nil {
-		if d.Failure == nil {
-			d.Failure = err
-		}
-		return platform.OperationCall{}, err
-	}
-	if !d.ProbeOnly {
-		d.Intents = append(d.Intents, intent)
-	}
-	return call, nil
+	return intend(d, call, intent, err)
 }
 
 func (t *Tenant) artifacts() compute.Artifacts {
@@ -141,31 +119,18 @@ func (t *Tenant) executeOperation(x platform.Effect, now time.Time) platform.Out
 	t.cancels.Add(x.ID, cancel)
 	defer t.cancels.Remove(x.ID)
 	return compute.Execute(ctx, compute.ExecutionHost{
-		Authorised: func(ctx context.Context, x platform.Effect, b compute.OperationBinding, now time.Time) (platform.Member, *kernel.Error) {
-			return recordRead(t, ctx, func(t *Tenant) (platform.Member, *kernel.Error) {
-				member, ok := t.Member(b.Member)
-				if !ok || member.Tenant != t.ID {
-					return member, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "Operation member is no longer authorised")
-				}
-				if !t.operationClaims().Current(x.ID, x.Generation) {
-					return member, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Operation was cancelled")
-				}
-				return member, authorizationRefusal(t.operationAuthorization(member, x.App, b, now))
-			})
-		},
-		StillAuthorised: func(ctx context.Context, x platform.Effect, b compute.OperationBinding, now time.Time) (bool, *kernel.Error) {
-			return recordRead(t, ctx, func(t *Tenant) (bool, *kernel.Error) {
-				latest, ok := t.Member(b.Member)
-				return ok && t.operationAuthorization(latest, x.App, b, now).Allow && t.operationClaims().Current(x.ID, x.Generation), nil
-			})
-		},
-		RulesRevoked: func(ctx context.Context, member platform.Member, rules platform.RuleTablePlan) (string, *kernel.Error) {
-			return recordRead(t, ctx, func(t *Tenant) (string, *kernel.Error) {
-				return compute.RulesRevoked(member, rules, func(ref platform.AssetRef, version int) (platform.NamedQuery, bool) {
-					query, _, ok := t.memberQueryVersion(member, ref, version)
+		Read: func(ctx context.Context, read func(compute.ExecutionReads)) *kernel.Error {
+			_, refusal := recordRead(t, ctx, func(t *Tenant) (struct{}, *kernel.Error) {
+				read(compute.ExecutionReads{Member: t.Member, Current: t.operationClaims().Current, Query: func(m platform.Member, ref platform.AssetRef, version int) (platform.NamedQuery, bool) {
+					query, _, ok := t.memberQueryVersion(m, ref, version)
 					return query, ok
-				}, t.Entity, t.services.Authorization), nil
+				}, Entity: t.Entity, Authz: t.services.Authorization,
+					Refusal: func(member platform.Member, app string, b compute.OperationBinding, now time.Time) *kernel.Error {
+						return authorizationRefusal(t.operationAuthorization(member, app, b, now))
+					}})
+				return struct{}{}, nil
 			})
+			return refusal
 		},
 		BuildCode: func(ctx context.Context, q platform.CodeBuildRequest) (platform.CodeBuildResult, error) {
 			return t.artifacts().Build(ctx, q)

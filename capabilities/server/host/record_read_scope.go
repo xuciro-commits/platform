@@ -3,10 +3,8 @@ package host
 import (
 	"context"
 	"errors"
-	"fmt"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
-	runtimekernel "platformserver/kernel"
 	"platformserver/kernel/records"
 	persistence "platformserver/kernel/store"
 	"platformserver/platform"
@@ -56,33 +54,16 @@ func (t *Tenant) openRecordRead(ctx context.Context) {
 	if !t.currentReadScopes || t.quarantined() {
 		return
 	}
-	view, err := t.Projection.Current().Open(ctx)
-	if err != nil {
+	if err := t.OpenReadScope(ctx, t.apps, t.readOrigin != nil, t.quarantine); err != nil {
 		t.readScope.err = err
-		var mismatch *persistence.StatePositionError
-		if errors.As(err, &mismatch) && (t.readOrigin == nil || mismatch.Position < mismatch.Applied) {
-			t.quarantine(err)
-		}
-		return
-	}
-	if view != nil {
-		t.installRuntimeHistory(view, view.Position)
 	}
 }
 func (t *Tenant) closeRecordRead() {
 	if !t.currentReadScopes {
 		return
 	}
-	if t.scopeSource() == nil && t.Projection.Current().Position() != nil && t.Projection.Current().Position()() != t.Projection.Current().Applied() {
-		t.quarantine(fmt.Errorf("SQL commit is at %d before in-memory application at %d", t.Projection.Current().Position()(), t.Projection.Current().Applied()))
-	}
-	if view := t.Projection.Current().Detach(); view != nil {
-		if store, ok := t.Projection.Current().Backend().(runtimekernel.AcceptedStateReader); ok {
-			t.installRuntimeHistory(store, t.Projection.Current().Position())
-		}
-		if err := view.Close(); err != nil && t.readError() == nil {
-			t.readScope.err = err
-		}
+	if err := t.CloseReadScope(t.apps, t.scopeSource() == nil, t.quarantine); err != nil && t.readError() == nil {
+		t.readScope.err = err
 	}
 }
 
@@ -96,9 +77,6 @@ func recordRead[T any](t *Tenant, ctx context.Context, read func(*Tenant) (T, *k
 	if ctx.Err() != nil {
 		return value, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The read was cancelled while waiting for the tenant")
 	}
-	if t.scopeSource() != nil {
-		return read(t)
-	}
 	return coordinatedRecordRead(t, ctx, read)
 }
 func coordinatedRecordRead[T any](t *Tenant, ctx context.Context, read func(*Tenant) (T, *kernel.Error)) (value T, refusal *kernel.Error) {
@@ -110,22 +88,8 @@ func coordinatedRecordRead[T any](t *Tenant, ctx context.Context, read func(*Ten
 
 func readFromLane[T any](t *Tenant, ctx context.Context, read func(*Tenant) (T, *kernel.Error)) (value T, refusal *kernel.Error) {
 	return lockedRecordRead(t, ctx, func(t *Tenant) (value T, refusal *kernel.Error) {
-		view, err := t.forkReadState(ctx)
-		if err != nil {
-			return value, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The read scope could not be prepared: {reason}", err.Error())
-		}
-		view.openRecordRead(ctx)
-		defer func() {
-			view.closeRecordRead()
-			if view.readError() != nil {
-				var zero T
-				value, refusal = zero, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
-			}
-		}()
-		if refusal := view.recordReadRefusal(); refusal != nil {
-			return value, refusal
-		}
-		return read(view)
+		value, refusal, _ = readInView(t, ctx, read)
+		return value, refusal
 	})
 }
 
@@ -157,7 +121,9 @@ func lockedRecordRead[T any](t *Tenant, ctx context.Context, read func(*Tenant) 
 }
 
 func (t *Tenant) Records(ctx context.Context, m platform.Member, typ string, q platform.Query, now time.Time) (RecordPage, *kernel.Error) {
-	return recordRead(t, ctx, func(t *Tenant) (RecordPage, *kernel.Error) { return t.recordsRead(m, typ, q, now) })
+	return recordRead(t, ctx, func(t *Tenant) (RecordPage, *kernel.Error) {
+		return t.objectOwner(t.Projection).Records(m, typ, q, now)
+	})
 }
 func (t *Tenant) RecordOf(ctx context.Context, m platform.Member, typ, id string, now time.Time) (objects.RecordView, *kernel.Error) {
 	return recordRead(t, ctx, func(t *Tenant) (objects.RecordView, *kernel.Error) { return t.recordOf(m, typ, id, now) })

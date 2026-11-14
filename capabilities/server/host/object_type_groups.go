@@ -7,8 +7,5 @@ func (h hostView) ValidateInstallObjectTypeGroup(g platform.ObjectTypeGroup) err
 }
 
 func (h hostView) InstallObjectTypeGroup(c platform.Caller, g platform.ObjectTypeGroup, version int) error {
-	if c.Staging() {
-		unsupportedStagedEffect()
-	}
-	return h.definitionInstall().ObjectTypeGroup(g, version)
+	return h.definitionInstall().InstallObjectTypeGroup(c, g, version)
 }

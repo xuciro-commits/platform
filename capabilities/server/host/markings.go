@@ -13,7 +13,7 @@ func (t *Tenant) markingsIn(store *records.Store, held bool) lineage.MarkingInde
 		defer store.Unlock()
 	}
 	return t.markings.Get(store, store.Generation(), store == t.Projection, func() lineage.MarkingIndex {
-		return lineage.IndexMarkings(lineage.Build(lineage.NewReader(t).Guard(lineageInputs(store)), lineage.Guard), store.Generation())
+		return lineage.IndexMarkings(lineage.Build(lineage.NewReader(t).Guard(lineage.StoreInput(store)), lineage.Guard), store.Generation())
 	})
 }
 

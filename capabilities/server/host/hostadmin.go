@@ -29,10 +29,6 @@ type SupportRead struct {
 
 type hostAuthorizationKey struct{}
 
-func (h *Host) hostAuthorization(subject string, authenticated bool, permission, tenant string) platform.AuthzDecision {
-	return h.AuthorizationEngine.Decide(controlowner.HostAuthorizationInput(subject, authenticated, h.HostAdmins[subject], permission, tenant))
-}
-
 func hostRequestAuthorization(r *http.Request, tenant string) []acceptedformat.AuthorizationEvidence {
 	evidence, found := r.Context().Value(hostAuthorizationKey{}).(acceptedformat.AuthorizationEvidence)
 	if !found {
@@ -46,23 +42,15 @@ func (h *Host) hostRoute(mux *http.ServeMux, route transport.Route, f func(http.
 	h.routes = append(h.routes, route)
 	mux.HandleFunc(route.Pattern, func(w http.ResponseWriter, r *http.Request) {
 		subject, authenticated := h.authenticate(strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer "))
-		decision := h.hostAuthorization(subject, authenticated, route.Pattern, r.PathValue("tenant"))
+		decision := h.AuthorizationEngine.Decide(controlowner.HostAuthorizationInput(subject, authenticated, h.HostAdmins[subject], route.Pattern, r.PathValue("tenant")))
 		if refusal := authorizationRefusal(decision); refusal != nil {
 			WriteJSON(w, http.StatusUnauthorized, map[string]any{"error": platform.ErrorBody{Code: refusal.Error(), Message: refusal.Message}})
 			return
 		}
-		var tenant *Tenant
-		if id := r.PathValue("tenant"); id != "" {
-			for _, t := range h.currentTenants() {
-				if t.ID == id {
-					tenant = t
-					break
-				}
-			}
-			if tenant == nil {
-				w.WriteHeader(http.StatusNotFound)
-				return
-			}
+		tenant := h.tenantByID(r.PathValue("tenant"))
+		if tenant == nil && r.PathValue("tenant") != "" {
+			w.WriteHeader(http.StatusNotFound)
+			return
 		}
 		question := platform.AuthzRequest{Principal: "host:" + subject, Tenant: r.PathValue("tenant"), Kind: "action", Action: route.Pattern}
 		evidence := acceptedformat.AuthorizationEvidence{Request: question, Decision: decision, Roles: []string{"host-admin"}}
@@ -98,36 +86,31 @@ func (h *Host) hostConsoleRoutes(mux *http.ServeMux) {
 			WriteJSON(w, http.StatusOK, h.tenantView(t))
 		})
 	h.hostRoute(mux, transport.Route{Pattern: "POST /v1/host/tenants/{tenant}/lifecycle", Summary: "Open, suspend, resume or decommission a tenant, with a reason recorded in its audit (host administrators)", Body: controlowner.LifecycleRequest{}, Answer: controlowner.HostTenantView{}},
-		func(w http.ResponseWriter, r *http.Request, subject string, t *Tenant) {
-			var body controlowner.LifecycleRequest
-			if err := transport.DecodeBodyLimit(r, &body, 1<<20); err != nil {
-				transport.AnswerOr(w, http.StatusBadRequest, nil, err)
-				return
-			}
+		transport.CommandOr(1<<20, http.StatusConflict, func(r *http.Request, subject string, t *Tenant, body controlowner.LifecycleRequest) (controlowner.HostTenantView, error) {
 			if err := t.setHostLifecycle(body, subject, h.Now(), hostRequestAuthorization(r, t.ID)...); err != nil {
-				transport.AnswerOr(w, http.StatusConflict, nil, err)
-				return
+				return controlowner.HostTenantView{}, err
 			}
-			WriteJSON(w, http.StatusOK, h.tenantView(t))
-		})
+			return h.tenantView(t), nil
+		}))
 	h.hostRoute(mux, transport.Route{Pattern: "GET /v1/host/tenants/{tenant}/artifacts", Summary: "The tenant's trusted releases and saved candidates with their compatibility (host administrators)", Answer: []controlowner.HostArtifactView{}},
 		func(w http.ResponseWriter, _ *http.Request, _ string, t *Tenant) {
-			WriteJSON(w, http.StatusOK, t.hostArtifacts())
+			state := t
+			if image := t.readImage.Load(); image != nil {
+				state = image.state
+			} else {
+				t.Lane.Lock()
+				defer t.Lane.Unlock()
+			}
+			WriteJSON(w, http.StatusOK, controlowner.HostArtifacts(state.releases.Ids(), state.releases.Active(), func(id string) []byte { return state.releases.Raw(id) }))
 		})
 	h.hostRoute(mux, transport.Route{Pattern: "GET /v1/host/tenants/{tenant}/support", Summary: "Support sessions opened for a tenant (host administrators)", Answer: []platform.SupportGrant{}},
 		func(w http.ResponseWriter, _ *http.Request, _ string, t *Tenant) {
 			WriteJSON(w, http.StatusOK, t.console.SupportGrants())
 		})
 	h.hostRoute(mux, transport.Route{Pattern: "POST /v1/host/tenants/{tenant}/support", Summary: "Open an authorized support session for a tenant member, with a reason and an end (host administrators)", Answer: platform.SupportGrant{}},
-		func(w http.ResponseWriter, r *http.Request, subject string, t *Tenant) {
-			var body controlowner.SupportOpenRequest
-			if err := transport.DecodeBodyLimit(r, &body, 1<<20); err != nil {
-				transport.AnswerOr(w, http.StatusBadRequest, nil, err)
-				return
-			}
-			grant, err := t.openSupport(body, subject, h.Now(), hostRequestAuthorization(r, t.ID)...)
-			transport.AnswerOr(w, http.StatusConflict, grant, err)
-		})
+		transport.CommandOr(1<<20, http.StatusConflict, func(r *http.Request, subject string, t *Tenant, body controlowner.SupportOpenRequest) (platform.SupportGrant, error) {
+			return t.openSupport(body, subject, h.Now(), hostRequestAuthorization(r, t.ID)...)
+		}))
 	h.hostRoute(mux, transport.Route{Pattern: "POST /v1/host/support/{grant}", Summary: "Use an authorized support session: read the tenant's health and audit as its granted member; every use is recorded (host administrators)", Answer: SupportRead{}},
 		func(w http.ResponseWriter, r *http.Request, subject string, _ *Tenant) {
 			grant := r.PathValue("grant")
@@ -174,55 +157,51 @@ func (h *Host) tenantView(t *Tenant) controlowner.HostTenantView {
 	return view
 }
 
+func hostTransfer[B any](h *Host, required string, complete func(B) bool, source func(B) string, f func(*http.Request, *Tenant, *Tenant, B) (any, int, error)) func(http.ResponseWriter, *http.Request, string, *Tenant) {
+	return func(w http.ResponseWriter, r *http.Request, _ string, to *Tenant) {
+		var body B
+		if err := transport.DecodeBodyLimit(r, &body, 1<<20); err != nil || !complete(body) {
+			WriteJSON(w, http.StatusBadRequest, map[string]any{"error": required})
+			return
+		}
+		from := h.tenantByID(source(body))
+		if from == nil {
+			WriteJSON(w, http.StatusNotFound, map[string]any{"error": "no such source tenant"})
+			return
+		}
+		out, failure, err := f(r, from, to, body)
+		transport.AnswerOr(w, failure, out, err)
+	}
+}
+
 func (h *Host) environmentRoutes(mux *http.ServeMux) {
 	h.hostRoute(mux, transport.Route{Pattern: "POST /v1/host/tenants/{tenant}/promotions", Summary: "Promote a sealed release candidate from another tenant into this one, optionally activating it (host administrators)", Answer: releaseowner.PromotionResult{}},
-		func(w http.ResponseWriter, r *http.Request, subject string, to *Tenant) {
-			var body releaseowner.PromotionRequest
-			if err := transport.DecodeBodyLimit(r, &body, 1<<20); err != nil || !body.Complete() {
-				WriteJSON(w, http.StatusBadRequest, map[string]any{"error": "from, candidate, key and targetGrant are required"})
-				return
-			}
-			from := h.tenantByID(body.From)
-			if from == nil {
-				WriteJSON(w, http.StatusNotFound, map[string]any{"error": "no such source tenant"})
-				return
-			}
-			member, err := to.grantMember(body.TargetGrant, "the support session names no member", h.Now())
-			if err != nil {
-				transport.AnswerOr(w, http.StatusForbidden, nil, err)
-				return
-			}
-			result, err := PromoteCandidate(from, to, body.Candidate, body.Key, body.Activate, member, h.Now())
-			transport.AnswerOr(w, http.StatusConflict, result, err)
-		})
+		hostTransfer(h, "from, candidate, key and targetGrant are required", releaseowner.PromotionRequest.Complete, func(b releaseowner.PromotionRequest) string { return b.From },
+			func(_ *http.Request, from, to *Tenant, body releaseowner.PromotionRequest) (any, int, error) {
+				member, err := to.grantMember(body.TargetGrant, "the support session names no member", h.Now())
+				if err != nil {
+					return nil, http.StatusForbidden, err
+				}
+				result, err := PromoteCandidate(from, to, body.Candidate, body.Key, body.Activate, member, h.Now())
+				return result, http.StatusConflict, err
+			}))
 	h.hostRoute(mux, transport.Route{Pattern: "POST /v1/host/tenants/{tenant}/migrations", Summary: "Migrate real records from another tenant into this one through its generated actions (host administrators)", Answer: platform.MigrationResult{}},
-		func(w http.ResponseWriter, r *http.Request, _ string, to *Tenant) {
-			var body controlowner.MigrationRequest
-			if err := transport.DecodeBodyLimit(r, &body, 1<<20); err != nil || !body.Complete() {
-				WriteJSON(w, http.StatusBadRequest, map[string]any{"error": "from, types, sourceGrant and targetGrant are required"})
-				return
-			}
-			from := h.tenantByID(body.From)
-			if from == nil {
-				WriteJSON(w, http.StatusNotFound, map[string]any{"error": "no such source tenant"})
-				return
-			}
-			source, err := from.grantMember(body.SourceGrant, "the source support session names no member", h.Now())
-			if err != nil {
-				transport.AnswerOr(w, http.StatusForbidden, nil, err)
-				return
-			}
-			target, err := to.grantMember(body.TargetGrant, "the target support session names no member", h.Now())
-			if err != nil {
-				transport.AnswerOr(w, http.StatusForbidden, nil, err)
-				return
-			}
-			result, err := MigrateRecords(from, to, source, target, body.Types, h.Now())
-			if err == nil {
-				err = to.rememberMigration(result, target.ID, h.Now(), hostRequestAuthorization(r, to.ID)...)
-			}
-			transport.AnswerOr(w, http.StatusConflict, result, err)
-		})
+		hostTransfer(h, "from, types, sourceGrant and targetGrant are required", controlowner.MigrationRequest.Complete, func(b controlowner.MigrationRequest) string { return b.From },
+			func(r *http.Request, from, to *Tenant, body controlowner.MigrationRequest) (any, int, error) {
+				source, err := from.grantMember(body.SourceGrant, "the source support session names no member", h.Now())
+				if err != nil {
+					return nil, http.StatusForbidden, err
+				}
+				target, err := to.grantMember(body.TargetGrant, "the target support session names no member", h.Now())
+				if err != nil {
+					return nil, http.StatusForbidden, err
+				}
+				result, err := MigrateRecords(from, to, source, target, body.Types, h.Now())
+				if err == nil {
+					err = to.rememberMigration(result, target.ID, h.Now(), hostRequestAuthorization(r, to.ID)...)
+				}
+				return result, http.StatusConflict, err
+			}))
 	h.hostRoute(mux, transport.Route{Pattern: "GET /v1/host/tenants/{tenant}/migrations", Summary: "What the host console moved in or out of this tenant (host administrators)", Answer: []platform.MigrationManifest{}},
 		func(w http.ResponseWriter, _ *http.Request, _ string, t *Tenant) {
 			WriteJSON(w, http.StatusOK, t.console.Migrations())
@@ -236,17 +215,6 @@ func (h *Host) tenantByID(id string) *Tenant {
 		}
 	}
 	return nil
-}
-
-func (t *Tenant) hostArtifacts() []controlowner.HostArtifactView {
-	state := t
-	if image := t.readImage.Load(); image != nil {
-		state = image.state
-	} else {
-		t.Lane.Lock()
-		defer t.Lane.Unlock()
-	}
-	return controlowner.HostArtifacts(state.releases.Ids(), state.releases.Active(), func(id string) []byte { return state.releases.Raw(id) })
 }
 
 func (t *Tenant) setHostLifecycle(request controlowner.LifecycleRequest, subject string, now time.Time, evidence ...acceptedformat.AuthorizationEvidence) error {

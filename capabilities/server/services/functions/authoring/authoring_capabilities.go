@@ -83,6 +83,24 @@ func ActionBlock(ref platform.AssetRef, source, version string, action platform.
 	return c
 }
 
+func DraftActionBlocks(app string, actions []platform.Action) []platform.CapabilityDescriptor {
+	result := []platform.CapabilityDescriptor{}
+	for _, action := range actions {
+		if action.Automation {
+			continue
+		}
+		block := ActionBlock(platform.AssetRef{App: app, Kind: platform.AssetAction, Name: action.Schema}, "draft", "", action)
+		block.Side = platform.CapabilityAuthoritative
+		block.Parameters = slices.Clone(action.Payload)
+		input := platform.CapabilityFieldsSchema(action.Payload)
+		if input.Type != "" {
+			block.Input = &input
+		}
+		result = append(result, block)
+	}
+	return result
+}
+
 func entityValueSchema(info platform.EntityInfo) (platform.ValueSchema, bool) {
 	stamp := platform.ValueSchema{Type: "object", Properties: map[string]platform.ValueSchema{"by": {Type: "string"}, "at": {Type: "string"}, "change": {Type: "string"}}}
 	s := platform.ValueSchema{Type: "object", Properties: map[string]platform.ValueSchema{

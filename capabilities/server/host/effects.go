@@ -2,18 +2,27 @@ package host
 
 import (
 	"context"
-	"go.opentelemetry.io/otel/attribute"
+	"errors"
+	"fmt"
 	"net/http"
+	"slices"
+	"time"
+
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/trace"
+	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
-	acceptedformat "platformserver/kernel/acceptedformat"
+	runtimekernel "platformserver/kernel"
+	"platformserver/kernel/acceptedformat"
 	"platformserver/platform"
 	"platformserver/services/actions"
+	"platformserver/services/ai/gateway"
 	dataowner "platformserver/services/data"
 	"platformserver/services/data/transform"
+	"platformserver/services/functions/runtime"
 	"platformserver/services/resources/authoring"
 	"platformserver/services/resources/monitoring"
 	controlowner "platformserver/services/security/control"
-	"time"
 )
 
 func (t *Tenant) emit(e platform.Event, names []string) {
@@ -123,7 +132,16 @@ func (t *Tenant) settle(effect string, o platform.Outcome, now time.Time) {
 
 func (t *Tenant) settleWithUsage(effect string, o platform.Outcome, usage *platform.AIUsage, now time.Time) {
 	_, _ = decideOnImage(t, context.Background(), "effect:settle", func(t *Tenant) (struct{}, *kernel.Error) {
-		t.prepareEffectSettlement(effect, o, usage, now)
+		if t.quarantined() || o.Generation != 0 && !t.operationClaims().Current(effect, o.Generation) {
+			return struct{}{}, nil
+		}
+		if o.Generation != 0 && o.Result == "delivered" {
+			current, _ := t.outbound.Get(effect)
+			if !t.operationAllowed(current.Effect, now) {
+				o.Result, o.Detail, o.Answer, o.Digest = "rejected", "Operation permission or source access was revoked", nil, ""
+			}
+		}
+		t.settleAccepted(effect, o, usage, now)
 		return struct{}{}, nil
 	}, func(t *Tenant, candidate preparedAccepted, value struct{}, refusal *kernel.Error) (struct{}, *kernel.Error) {
 		if len(candidate.entry.Body) != 0 {
@@ -131,22 +149,6 @@ func (t *Tenant) settleWithUsage(effect string, o platform.Outcome, usage *platf
 		}
 		return value, refusal
 	})
-}
-
-func (t *Tenant) prepareEffectSettlement(effect string, o platform.Outcome, usage *platform.AIUsage, now time.Time) {
-	if t.quarantined() {
-		return
-	}
-	if o.Generation != 0 && !t.operationClaims().Current(effect, o.Generation) {
-		return
-	}
-	if o.Generation != 0 && o.Result == "delivered" {
-		current, _ := t.outbound.Get(effect)
-		if !t.operationAllowed(current.Effect, now) {
-			o.Result, o.Detail, o.Answer, o.Digest = "rejected", "Operation permission or source access was revoked", nil, ""
-		}
-	}
-	t.settleAccepted(effect, o, usage, now)
 }
 
 func (t *Tenant) told(x platform.Effect, o platform.Outcome, now time.Time, replaying bool) {
@@ -179,4 +181,151 @@ func guarded(req *http.Request, allowPrivate bool) (*http.Response, error) {
 		CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
 	response, err := client.Do(req)
 	return controlowner.RedactCredentialFailure(response, req), err
+}
+
+func (t *Tenant) applyAcceptedEffect(raw []byte) (acceptedformat.Effect, bool, error) {
+	h := runtimekernel.EffectApply{Changes: t.changeApply(), Finish: t.operationClaims().PrepareFinish, Published: t.publishAcceptedChanges, Current: t.outbound.State,
+		Settle: func(id string, after acceptedformat.EffectState, finished *pb.Work) {
+			t.outbound.Settled(id, after)
+			if finished != nil {
+				runtimekernel.InstallWork(t.Works, finished)
+			}
+		}}
+	if t.ai != nil {
+		h.Usage, h.Meter = t.ai.Snapshot, t.ai.Meter
+	}
+	return t.ApplyEffectResult(raw, h)
+}
+
+func (t *Tenant) settleAccepted(id string, out platform.Outcome, usage *platform.AIUsage, at time.Time) {
+	var draft *stagedDecision
+	reset := func() { draft = t.newStagedDecision(); draft.At = at }
+	settlement := actions.EffectSettlement{Tenant: t.ID, App: controlowner.PlatformApp, Queued: t.outbound.Get, Usage: aigateway.EffectUsage,
+		NoReviewer: func() bool {
+			return t.tasks == nil || len((hostView{t: t}).Holding(controlowner.PlatformApp, controlowner.Admin)) == 0
+		},
+		Finish: t.operationClaims().PrepareFinish,
+		Failed: func(before acceptedformat.EffectState, err error) {
+			t.observeOwnerRun(at, "effect", id, before.App, before.Endpoint, "failed", "Effect answer", err.Error())
+		},
+		Stage: func(result *acceptedformat.Effect, before acceptedformat.EffectState, after platform.Effect, out platform.Outcome, usage *platform.AIUsage) error {
+			reset()
+			return actions.EffectStaging{App: controlowner.PlatformApp, Admin: controlowner.Admin, Console: t.App(controlowner.PlatformApp) != nil, At: at,
+				Caller:         func(app string) platform.Caller { return draft.appCaller(app) },
+				Answer:         func() error { return t.stageEffectAnswer(draft, after, out, usage, at) },
+				Quarantined:    t.quarantined,
+				Authorizations: func() []acceptedformat.AuthorizationEvidence { return slices.Clone(draft.Authorizations) },
+				Reset:          reset,
+				Handoff: func() {
+					recipients := (hostView{t: t, app: t.App(before.App)}).Holding(controlowner.PlatformApp, controlowner.Admin)
+					if len(recipients) == 0 || t.tasks == nil {
+						return
+					}
+					if failure := aigateway.StopHandoff(draft.appCaller(before.App), t.App(before.App).AcceptedLedger().RecordsFor(t.ID), before, out.Detail, recipients); failure != nil {
+						draft.Failure = failure
+					}
+				},
+				Result: func() error {
+					return draft.EffectResult(draft.sources(), result, before.App, at, func(plan acceptedformat.ChangePlan) error {
+						_, err := t.PrepareChanges(plan, t.changeApply())
+						return err
+					})
+				}}.Stage(result, before, after)
+		},
+		Quarantined: t.quarantined,
+		Reset:       reset,
+		Principal:   func() platform.Member { return t.automation(controlowner.PlatformApp, false).Member },
+		Prepared: func(body, principal []byte, key, hash string) {
+			t.stageCandidate(draft, controlowner.PlatformApp, body, principal, key, hash, at, func(candidate preparedAccepted) { t.finishEffect(id, candidate) })
+		}}
+	if t.ai != nil {
+		settlement.Snapshot = t.ai.Snapshot
+	}
+	settlement.Settle(id, out, usage, at)
+}
+
+func (d *stagedDecision) appCaller(app string) platform.Caller {
+	return platform.NewCaller(d, platform.Member{ID: "app:" + app, Tenant: d.tenant.ID}, app, false, true)
+}
+
+func (t *Tenant) finishEffect(id string, candidate preparedAccepted) {
+	runtimekernel.EffectFinish{Settlement: t.settlement(),
+		Commit:   func() ([]byte, error) { return t.acceptResult(candidate.entry, candidate.key, candidate.hash) },
+		Conflict: func(err error) bool { return errors.Is(err, errAcceptedConflict) },
+		Release:  func() { t.outbound.Update(id, func(x *actions.Queued) { x.Sending = false }) },
+		Apply:    t.applyAcceptedEffect}.Finish(id, candidate.key, candidate.hash)
+}
+
+func (t *Tenant) stageEffectAnswer(draft *stagedDecision, x platform.Effect, out platform.Outcome, usage *platform.AIUsage, at time.Time) (err error) {
+	defer func() {
+		if p := recover(); p != nil {
+			err = fmt.Errorf("unsupported effect callback: %v", p)
+		}
+	}()
+	return actions.EffectAnswer{Tenant: t.ID, Draft: draft,
+		Authorize: func(c platform.Caller, permission string) *kernel.Error {
+			return draft.authorizeNative(c, permission, "action", nil, t.App(c.App) != nil)
+		},
+		Model: func() (platform.App, *pb.Submission) { return t.gatewayRuntime().Answer(x, out, usage) },
+		Decide: func(c platform.Caller, a platform.App, s *pb.Submission, at time.Time) *kernel.Error {
+			_, refusal := draft.Decide(c, a, s, at)
+			return refusal
+		},
+		Operation: func(x platform.Effect) {
+			draft.OperationAnswers = map[string]platform.OperationResult{x.ID: compute.ResultOf(x)}
+		},
+		Completion: func() platform.OperationCompletion {
+			owner := t.procs
+			if app, ok := t.procs.(platform.App); ok {
+				owner = draft.stateApp(app).(platform.Processes)
+			}
+			completion, _ := owner.(platform.OperationCompletion)
+			return completion
+		},
+		Answerer: func(app string) platform.Answerer {
+			if t.answerers[app] == nil {
+				return nil
+			}
+			return draft.stateApp(t.App(app)).(platform.Answerer)
+		},
+		Source: t.outbound.Get,
+		Origin: draft.AnswerWithOrigin,
+		Agents: func(c platform.Caller, x platform.Effect, out platform.Outcome, at time.Time) {
+			if t.agents != nil {
+				draft.stateApp(t.agents).(platform.AgentRuntime).AgentEffectEnded(t.automated(c, platform.AgentApp), nil, x, out, at)
+			}
+		},
+		Finish: draft.finishStaged}.Stage(x, out, at)
+}
+
+func (d *stagedDecision) finishStaged(at time.Time) *kernel.Error {
+	if d.Failure != nil {
+		return d.Failure
+	}
+	if err := d.answerRequests(at); err != nil {
+		return err
+	}
+	return d.stageObservers()
+}
+
+func (d *stagedDecision) answerRequests(now time.Time) *kernel.Error {
+	return actions.RequestAnswers{Tenant: d.tenant.ID,
+		Pending: func() bool { return len(d.requests) > 0 },
+		Pop: func() actions.PendingRequest {
+			q := d.requests[0]
+			d.requests = d.requests[1:]
+			return q
+		},
+		Begin: func(name, app, target string) func(string) {
+			return d.tenant.begin(name, trace.SpanContext{}, attribute.String("platform.app", app), attribute.String("platform.target", target))
+		},
+		Attempt:   d.Attempt,
+		Router:    func() actions.Router { return d.routingTenant().router() },
+		Automated: d.tenant.automated,
+		Reply: func(c platform.Caller, reply *pb.Submission, at time.Time) *kernel.Error {
+			_, err := platform.Decide(c, d.tenant.App(c.App), reply, at)
+			return err
+		},
+		Failure:     func() *kernel.Error { return d.Failure },
+		Unsupported: unsupportedStagedEffect}.Run(now)
 }

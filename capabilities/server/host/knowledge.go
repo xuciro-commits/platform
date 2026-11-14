@@ -31,7 +31,7 @@ func (t *Tenant) knowledgeRuntime() knowledgeindex.Runtime {
 		},
 		Projection: t.Projection, SyncStore: source.Projection,
 		Page: func(typ string, offset int) ([]any, int, *kernel.Error) {
-			page, err := t.recordsRead(t.host(), typ, platform.Query{Sort: []string{"id"}, Offset: offset, Limit: 500}, time.Now())
+			page, err := t.objectOwner(t.Projection).Records(t.host(), typ, platform.Query{Sort: []string{"id"}, Offset: offset, Limit: 500}, time.Now())
 			return page.Records, page.Total, err
 		},
 		FilesStore: t.files(), Store: t.Log(),
@@ -45,18 +45,10 @@ func (t *Tenant) knowledgeRuntime() knowledgeindex.Runtime {
 			image := source.readImage.Load()
 			return image != nil && image.records == source.Projection.Generation()
 		},
-		Reader: func(reader *platform.Member) platform.Member {
-			if reader != nil {
-				return *reader
-			}
-			return t.host()
-		},
+		Host:     t.host,
 		Readable: func(m platform.Member, scope string, at time.Time) bool { return t.readable(m, scope, at) },
 		Setting: func(name string) string {
-			value, _ := recordRead(t, context.Background(), func(t *Tenant) (string, *kernel.Error) {
-				return t.setting(t.automation(platform.KnowledgeApp, false), name), nil
-			})
-			return value
+			return readOnly(t, func(t *Tenant) string { return t.setting(t.automation(platform.KnowledgeApp, false), name) })
 		},
 		ActiveSpace: func() string {
 			value, _ := t.settings.Get(embeddingActiveSpace)
@@ -87,14 +79,6 @@ func (t *Tenant) knowledgeRuntime() knowledgeindex.Runtime {
 
 func (t *Tenant) knowledgeSourceReadable(store *records.Store, m platform.Member, id, field string) bool {
 	return t.knowledgeRuntime().SourceReadable(store, m, id, field)
-}
-
-func (t *Tenant) embed(name string, input []string, now time.Time) ([][]float32, error) {
-	return t.knowledgeRuntime().Embed(name, input, now)
-}
-
-func (t *Tenant) embeddingNeedsRebuild(name string) bool {
-	return t.knowledgeRuntime().NeedsRebuild(name)
 }
 
 func (t *Tenant) vectorSpace(name string) string {

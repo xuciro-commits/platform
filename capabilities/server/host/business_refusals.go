@@ -5,10 +5,8 @@ import (
 	runtimekernel "platformserver/kernel"
 	"platformserver/services/actions"
 
-	"reflect"
 	"time"
 
-	"google.golang.org/protobuf/encoding/protojson"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
 	"platformserver/platform"
@@ -16,20 +14,7 @@ import (
 )
 
 func (t *Tenant) checkBusinessCorrection(m platform.Member, sub *pb.Submission, binding *platform.SchemaVersion) *kernel.Error {
-	key := actions.CorrectionOf(sub)
-	if key == "" {
-		return nil
-	}
-	prior, ok := t.Committed.Refusal(sub.GetAuthority() + "/" + key)
-	var original pb.Submission
-	if !ok || key == sub.GetIdempotencyKey() || protojson.Unmarshal(prior.Submission, &original) != nil || original.GetPrincipalId() != m.ID || original.GetAuthority() != sub.GetAuthority() || original.GetSchema().GetName() != sub.GetSchema().GetName() || original.GetTarget().GetType() != sub.GetTarget().GetType() || original.GetTarget().GetId() != sub.GetTarget().GetId() {
-		return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "A correction needs the same applicant, action and target as its original refused request")
-	}
-	sameSchema := original.GetSchema().GetVersion() == sub.GetSchema().GetVersion() && reflect.DeepEqual(prior.SchemaVersion, binding)
-	if sameSchema && len(actions.ChangedBusinessInputs(original.GetPayload(), sub.GetPayload())) == 0 {
-		return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Unchanged inputs must repeat the original request key")
-	}
-	return nil
+	return actions.CheckCorrection(m.ID, sub, binding, t.Committed.Refusal)
 }
 
 func (t *Tenant) BusinessRefusals(m platform.Member, typ, id string, offset, limit int, at time.Time, keys ...string) (platform.BusinessRefusalPage, *kernel.Error) {

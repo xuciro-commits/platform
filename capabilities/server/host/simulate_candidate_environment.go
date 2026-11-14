@@ -2,7 +2,6 @@ package host
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	records "platformserver/kernel/records"
 	"platformserver/platform"
@@ -38,14 +37,7 @@ func candidateTestTenantWithEnvironment(candidate platform.ReleaseCandidate, mem
 		PutModule: func(digest string, raw []byte) error {
 			return sandbox.artifacts().Put(context.Background(), digest, raw)
 		},
-		RestoreRecords: func(rows map[string][]json.RawMessage) (bool, error) {
-			saved := make(map[string][]records.StoredState, len(rows))
-			for typ, values := range rows {
-				saved[typ] = []records.StoredState{}
-				for _, raw := range values {
-					saved[typ] = append(saved[typ], records.StoredState{Value: raw})
-				}
-			}
+		RestoreRecords: func(saved map[string][]records.StoredState) (bool, error) {
 			held, err := sandbox.restoreRecords(saved)
 			return len(held) > 0, err
 		},

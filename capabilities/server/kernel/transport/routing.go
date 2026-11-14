@@ -65,3 +65,28 @@ func SignInOf(issuer, client string, development bool, identities func() []platf
 	}
 	return out
 }
+
+func CommandOr[M, T, B, R any](limit int64, failure int, f func(*http.Request, M, T, B) (R, error)) func(http.ResponseWriter, *http.Request, M, T) {
+	return func(w http.ResponseWriter, r *http.Request, m M, t T) {
+		var body B
+		if err := DecodeBodyLimit(r, &body, limit); err != nil {
+			AnswerOr(w, http.StatusBadRequest, nil, err)
+			return
+		}
+		out, err := f(r, m, t, body)
+		AnswerOr(w, failure, out, err)
+	}
+}
+
+func Unavailable(w http.ResponseWriter, r *http.Request, quarantined, suspended bool) bool {
+	if quarantined && (r.Method != http.MethodGet || r.URL.Path != "/v1/health" && r.Pattern != "GET /v1/applications/{app}/{name}/runtime") &&
+		(r.Method != http.MethodPost || r.URL.Path != "/v1/recovery/retry") {
+		WriteJSON(w, http.StatusServiceUnavailable, map[string]any{"error": map[string]string{"code": "TENANT_QUARANTINED"}})
+		return true
+	}
+	if suspended && (r.Method != http.MethodGet || r.URL.Path != "/v1/health") {
+		WriteJSON(w, http.StatusServiceUnavailable, map[string]any{"error": map[string]string{"code": "TENANT_SUSPENDED"}})
+		return true
+	}
+	return false
+}

@@ -20,8 +20,8 @@ import (
 )
 
 func (h *Host) routesDiscovery(rt *routes) {
-	rt.metadata(transport.Route{Pattern: "GET /v1/me", Summary: "Who the caller is on this host: tenant, member, the apps they may open, their language", Answer: MeView{}}, translating(func(r *http.Request, m platform.Member, t *Tenant) (MeView, *kernel.Error) {
-		view := MeView{TenantID: m.Tenant, PrincipalID: m.ID, Profile: m, Apps: t.AppsOf(m), Tenants: h.tenantsOf(r),
+	rt.metadata(transport.Route{Pattern: "GET /v1/me", Summary: "Who the caller is on this host: tenant, member, the apps they may open, their language", Answer: transport.MeView{}}, translating(func(r *http.Request, m platform.Member, t *Tenant) (transport.MeView, *kernel.Error) {
+		view := transport.MeView{TenantID: m.Tenant, PrincipalID: m.ID, Profile: m, Apps: t.AppsOf(m), Tenants: h.tenantsOf(r),
 			Language: t.Language(m, r), Languages: t.i18n.Languages(), Preferred: m.Language, Currency: t.setting(t.automation(controlowner.PlatformApp, false), controlowner.SettingCurrency)}
 		if d := t.identityOwner; d != nil {
 			view.Account, view.Tenant = d.Account(m.ID), d.TenantRecord()
@@ -40,9 +40,9 @@ func (h *Host) routesDiscovery(rt *routes) {
 	rt.metadata(transport.Route{Pattern: "GET /v1/apps", Summary: "The tenant's apps from their manifests", Answer: []transport.AppInfo{}}, translating(func(_ *http.Request, _ platform.Member, t *Tenant) ([]transport.AppInfo, *kernel.Error) {
 		return t.Apps(), nil
 	}))
-	rt.metadata(transport.Route{Pattern: "GET /v1/words", Summary: "An app's declaration texts (?app=, default build: what the tenant defined) with what every language says for each (administrators)", Query: []transport.Param{{Name: "app", Description: "App ID"}}, Answer: WordsView{}}, transport.Answering(func(r *http.Request, m platform.Member, t *Tenant) (WordsView, *kernel.Error) {
+	rt.metadata(transport.Route{Pattern: "GET /v1/words", Summary: "An app's declaration texts (?app=, default build: what the tenant defined) with what every language says for each (administrators)", Query: []transport.Param{{Name: "app", Description: "App ID"}}, Answer: transport.WordsView{}}, transport.Answering(func(r *http.Request, m platform.Member, t *Tenant) (transport.WordsView, *kernel.Error) {
 		if !m.Holds(controlowner.PlatformApp, controlowner.Admin) {
-			return WordsView{}, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_POLICY_DENIED}
+			return transport.WordsView{}, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_POLICY_DENIED}
 		}
 		return t.Words(cmp.Or(r.URL.Query().Get("app"), controlowner.BuildApp)), nil
 	}))
@@ -60,7 +60,7 @@ func (h *Host) routesDiscovery(rt *routes) {
 		return t.DispatchTargets(m, r.PathValue("id"), h.Now())
 	}))
 	rt.handle(transport.Route{Pattern: "GET /v1/applications/{app}/{name}/runs", Summary: "Authorized runs related to current or retained application resources; shared use does not imply exclusive application origin", Answer: platform.ApplicationRunPage{}, Query: []transport.Param{{Name: "offset", Description: "Nonnegative run offset"}, {Name: "limit", Description: "1–100, default 50"}, {Name: "kind", Description: "Run kind"}, {Name: "state", Description: "Original owner state"}, {Name: "subject", Description: "Exact type/id"}, {Name: "since", Description: "Inclusive RFC3339 startup time"}, {Name: "until", Description: "Inclusive RFC3339 startup time"}}}, transport.Answering(func(r *http.Request, m platform.Member, t *Tenant) (platform.ApplicationRunPage, *kernel.Error) {
-		offset, limit := pageBounds(r, 0, 50)
+		offset, limit := transport.PageBounds(r, 0, 50)
 		filter, refusal := transport.ApplicationRunFilterOf(r.URL.Query())
 		if refusal != nil {
 			return platform.ApplicationRunPage{}, refusal

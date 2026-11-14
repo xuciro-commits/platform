@@ -1,7 +1,6 @@
 package host
 
 import (
-	"encoding/json"
 	"fmt"
 	"platformserver/kernel/records"
 	"platformserver/services/ai/gateway"
@@ -9,7 +8,6 @@ import (
 	functionauthoring "platformserver/services/functions/authoring"
 	"platformserver/services/resources/authoring"
 
-	"strings"
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
@@ -19,16 +17,7 @@ import (
 
 func (d *stagedDecision) RequestFunction(c platform.Caller, r *pb.ChangeRecord, request platform.FunctionRequest) (platform.FunctionCall, *kernel.Error) {
 	call, effect, refusal := d.tenant.planFunction(c, r, request, d.Records, d.Intents)
-	if refusal != nil {
-		if d.Failure == nil {
-			d.Failure = refusal
-		}
-		return platform.FunctionCall{}, refusal
-	}
-	if !d.ProbeOnly {
-		d.Intents = append(d.Intents, effect)
-	}
-	return call, nil
+	return intend(d, call, effect, refusal)
 }
 
 func (t *Tenant) planFunction(c platform.Caller, r *pb.ChangeRecord, request platform.FunctionRequest, store *records.Store, pending []platform.Effect) (platform.FunctionCall, platform.Effect, *kernel.Error) {
@@ -37,24 +26,9 @@ func (t *Tenant) planFunction(c platform.Caller, r *pb.ChangeRecord, request pla
 			return authorizationRefusal(t.authorizeCapability(c, owner, f.Name, f.Roles, f.Check() == nil, authorizationDetails{Store: store, At: at, Sources: sources, Definition: definition}))
 		},
 		Source: func(member platform.Member, request platform.FunctionRequest, f platform.AIFunction, owner, sourceRef, definition string, version int) (agentowner.FunctionSource, *kernel.Error) {
-			var raw []byte
-			var historySources []string
-			var conversationErr, err error
-			revision, values, refusal := records.LockedAISource(store, f, strings.TrimPrefix(sourceRef, f.Object+"/"), func() bool { return t.readableIn(store, member, sourceRef, r.GetRecordedTime().AsTime()) }, func(input map[string]any) {
-				payload, preparedSources, preparedErr := agentowner.FunctionConversation(request, f, owner, sourceRef, definition, version, input, func(id string) (agentowner.FunctionHistory, error) { return t.functionHistory(store, member, id) })
-				historySources, conversationErr = preparedSources, preparedErr
-				raw, err = json.Marshal(payload)
-			})
-			if refusal != nil {
-				return agentowner.FunctionSource{}, refusal
-			}
-			if conversationErr != nil {
-				return agentowner.FunctionSource{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, conversationErr.Error())
-			}
-			if err != nil {
-				return agentowner.FunctionSource{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "The AI function input exceeds its byte budget")
-			}
-			return agentowner.FunctionSource{Revision: revision, Values: values, Raw: raw, HistorySources: historySources}, nil
+			return agentowner.ReadFunctionSource(store, request, f, owner, sourceRef, definition, version,
+				func() bool { return t.readableIn(store, member, sourceRef, r.GetRecordedTime().AsTime()) },
+				func(id string) (agentowner.FunctionHistory, error) { return t.functionHistory(store, member, id) })
 		},
 		Readable: func(m platform.Member, ref string, at time.Time) bool {
 			return t.mayReadIn(t.Projection, m, at, false)(ref)
@@ -62,32 +36,13 @@ func (t *Tenant) planFunction(c platform.Caller, r *pb.ChangeRecord, request pla
 			return t.bindApplications(ref, release, dependencies)
 		},
 		Model: func(c platform.Caller, r *pb.ChangeRecord, q platform.Request, pending []platform.Effect, options platform.ModelOptions) (agentowner.FunctionDispatch, *kernel.Error) {
-			effect := t.planModelRequest(c, r, q, pending)
-			var ask aigateway.ModelAsk
-			_ = json.Unmarshal([]byte(effect.Body), &ask)
-			binding, provider, problem := t.modelResolver().Resolve("generation", ask.Model, options)
-			if problem != nil {
-				return agentowner.FunctionDispatch{}, problem
-			}
 			stage := platform.AIStageRuntime
 			if t.simulation {
 				stage = platform.AIStageDesign
 			}
-			binding, problem = t.modelResolver().Stage(binding, provider, stage)
-			if problem != nil {
-				return agentowner.FunctionDispatch{}, problem
-			}
-			return agentowner.FunctionDispatch{Model: ask.Model, Binding: binding, Effect: effect}, nil
-		}, Bind: func(effect platform.Effect, binding agentowner.FunctionBinding, model platform.AIModelBinding) platform.Effect {
-			var ask aigateway.ModelAsk
-			_ = json.Unmarshal([]byte(effect.Body), &ask)
-			ask.Function = &binding
-			ask.Binding = &model
-			ask.ConfigurationError = ""
-			body, _ := json.Marshal(ask)
-			effect.Body = string(body)
-			return effect
+			return t.modelResolver().FunctionDispatch(t.planModelRequest(c, r, q, pending), options, stage)
 		},
+		Bind: aigateway.BindFunction,
 	}
 	return agentowner.PlanFunction(ctx, c, r, request, pending)
 }

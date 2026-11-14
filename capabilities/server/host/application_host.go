@@ -58,7 +58,7 @@ func (t *Tenant) applicationContext() appowner.Context {
 		Assets: func() ([]platform.ReleaseAsset, error) { return t.releaseAssetsLocked(nil, false) }, Candidate: t.releases.Candidate,
 		Candidates: func() map[string]json.RawMessage { return t.releases.Candidates() }, CloseCandidate: t.candidateWithBindings,
 		Rows: func(m platform.Member, typ string, q platform.Query, at time.Time) ([]any, *kernel.Error) {
-			page, err := t.recordSelectionFrom(t.Projection, m, typ, q, at)
+			page, err := t.objectOwner(t.Projection).SelectionFrom(t.Projection, m, typ, q, at)
 			return page.Records, err
 		},
 		Computations: func(m platform.Member) []appowner.Computation {
@@ -120,7 +120,7 @@ func (t *Tenant) applicationContext() appowner.Context {
 		RuntimeOf: t.ApplicationRuntimeOf,
 		RunsPage:  t.ApplicationRuns,
 		RecordHistory: func(m platform.Member, typ, id string, now time.Time) ([]records.RecordChange, *kernel.Error) {
-			view, refusal := t.recordDetail(m, typ, id, now, objects.RecordSectionHistory)
+			view, refusal := t.objectOwner(t.Projection).RecordDetail(m, typ, id, now, objects.RecordSectionHistory)
 			if refusal != nil {
 				return nil, refusal
 			}

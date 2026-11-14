@@ -2,7 +2,6 @@ package host
 
 import (
 	"context"
-	dataowner "platformserver/services/data"
 	build "platformserver/services/resources/authoring"
 	"time"
 
@@ -12,23 +11,12 @@ import (
 	"platformserver/services/data/lineage"
 )
 
-func lineageInputs(store *records.Store) lineage.Input {
-	return lineage.Input{
-		Connections: records.RowsOf[dataowner.Connection](store, dataowner.ConnectionType),
-		Sources:     records.RowsOf[dataowner.Source](store, dataowner.SourceType),
-		Datasets:    records.RowsOf[dataowner.Dataset](store, dataowner.DatasetType),
-		Pipelines:   records.RowsOf[dataowner.Pipeline](store, dataowner.PipelineType),
-		Objects:     records.RowsOf[build.Object](store, build.ObjectType),
-		Writebacks:  records.RowsOf[dataowner.Writeback](store, dataowner.WritebackType),
-	}
-}
-
 func (t *Tenant) RecordGeneration() uint64 { return t.Projection.Generation() }
 
 func (t *Tenant) LineageState() (lineage.Input, []build.Resource, uint64) {
 	t.Projection.Lock()
 	defer t.Projection.Unlock()
-	return lineageInputs(t.Projection), records.RowsOf[build.Resource](t.Projection, build.ResourceType), t.Projection.Generation()
+	return lineage.StoreInput(t.Projection), records.RowsOf[build.Resource](t.Projection, build.ResourceType), t.Projection.Generation()
 }
 
 func (t *Tenant) LineageResources() []build.Resource {

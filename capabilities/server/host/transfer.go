@@ -65,35 +65,5 @@ func (t *Tenant) probeDiagnosed(m platform.Member, s *pb.Submission, now time.Ti
 }
 
 func (t *Tenant) exportRead(m platform.Member, typ string, q platform.Query, now time.Time) ([]byte, *kernel.Error) {
-	m = t.authorizationMember(m)
-	if err := t.Admits(m); err != nil {
-		return nil, err
-	}
-	t.Projection.Lock()
-	et := t.Projection.Type(typ)
-	t.Projection.Unlock()
-	if et == nil {
-		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
-	}
-	c := platform.NewCaller(runtime{t: t, scoped: true}, m, et.Info().App, false, false)
-	if err := authorizationRefusal(t.authorizeFrom(t.Projection, c, platform.AuthzRequest{Principal: m.ID, Tenant: m.Tenant, Kind: "export", Type: typ}, now, false)); err != nil {
-		return nil, err
-	}
-	view, _ := objects.ViewOf(m, et)
-	export := objects.NewExport(view.Info())
-	q.Offset, q.Limit = 0, 500
-	for {
-		page, err := t.recordsRead(m, typ, q, now)
-		if err != nil {
-			return nil, err
-		}
-		for _, r := range page.Records {
-			export.Add(r)
-		}
-		q.Offset += len(page.Records)
-		if len(page.Records) == 0 || q.Offset >= page.Total {
-			break
-		}
-	}
-	return export.Bytes(), nil
+	return t.objectOwner(t.Projection).ExportRead(m, typ, q, now)
 }

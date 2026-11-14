@@ -8,7 +8,6 @@ import (
 	"slices"
 	"sync"
 
-	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	runtimekernel "platformserver/kernel"
 	acceptedformat "platformserver/kernel/acceptedformat"
 	"platformserver/kernel/records"
@@ -32,36 +31,12 @@ func (t *Tenant) snapshotCompatibility() (runtimekernel.SnapshotCompatibility, e
 	return runtimekernel.Compatibility(t.apps)
 }
 
-func (t *Tenant) snapshotKey(code string) (string, error) {
-	compatibility, err := t.snapshotCompatibility()
-	if err != nil {
-		return "", err
-	}
-	return compatibility.Key(code)
-}
-
-func (t *Tenant) runtimeSnapshotKey(code string) (string, error) {
-	compatibility, err := t.snapshotCompatibility()
-	if err != nil {
-		return "", err
-	}
-	return compatibility.RuntimeKey(code)
-}
-
 func (t *Tenant) snapshotStorageKey(code string, raw []byte) (string, error) {
 	compatibility, err := t.snapshotCompatibility()
 	if err != nil {
 		return "", err
 	}
 	return compatibility.StorageKey(code, raw)
-}
-
-func (t *Tenant) checkSnapshotCheckpoint(raw []byte, position int64) error {
-	compatibility, err := t.snapshotCompatibility()
-	if err != nil {
-		return err
-	}
-	return compatibility.Check(t.ID, raw, position, snapshotBuild())
 }
 
 func (t *Tenant) snapshots() runtimekernel.TenantSnapshots[automation.Task, actions.Endpoint] {
@@ -98,16 +73,8 @@ func (t *Tenant) detachSnapshotRead() {
 }
 
 func (t *Tenant) captureServices(s *runtimekernel.TenantImage[automation.Task, actions.Endpoint]) (func(), error) {
-	s.Audit, s.Deliveries = t.AuditLog.SnapshotState()
-	if facts := t.Claims.Facts.Records(t.ID); len(facts) > 0 {
-		var err error
-		s.Facts, err = platform.Protos(facts)
-		if err != nil {
-			return nil, err
-		}
-	}
-	if identities := t.Claims.Identity.State(); len(identities.Entities) > 0 || len(identities.Redirects) > 0 {
-		s.Identities = &identities
+	if err := s.CaptureEvidence(&t.Sequence); err != nil {
+		return nil, err
 	}
 	releaseState := t.releases.SnapshotState()
 	s.ReleaseRequests, s.ReleaseCandidates, s.ReleaseApplied = releaseState.ReleaseRequests, releaseState.ReleaseCandidates, releaseState.ReleaseApplied
@@ -115,8 +82,7 @@ func (t *Tenant) captureServices(s *runtimekernel.TenantImage[automation.Task, a
 	t.opsMu.Lock()
 	s.Acted, s.Failed = t.acted, []string{}
 	maps.Copy(s.Bindings, t.bindings.All())
-	var err error
-	if s.Works, err = platform.Protos(t.Works.All()); err != nil {
+	if err := s.CaptureOperations(&t.Sequence); err != nil {
 		t.opsMu.Unlock()
 		return nil, err
 	}
@@ -131,16 +97,7 @@ func (t *Tenant) captureServices(s *runtimekernel.TenantImage[automation.Task, a
 		t.opsMu.Unlock()
 		return nil, workErr
 	}
-	descriptors, marks := t.ConnectorRoster.State()
-	if s.Connectors, err = platform.Protos(descriptors); err != nil {
-		t.opsMu.Unlock()
-		return nil, err
-	}
-	s.Marks = marks
-	s.LastError = t.ConnectorRoster.LastErrors()
-	s.Notices, s.NoticeSeq = t.Notices.State()
 	s.Settings, s.Endpoints, s.Words = t.settings.Snapshot(), t.endpoints.Saved(), t.words.Clone()
-	s.Sequences = t.Sequences.Clone()
 	for _, x := range t.outbound.Select(nil) {
 		s.Outbound = append(s.Outbound, acceptedformat.EffectState{Effect: x.Effect, Since: x.Since})
 	}
@@ -152,15 +109,8 @@ func (t *Tenant) captureServices(s *runtimekernel.TenantImage[automation.Task, a
 }
 
 func (t *Tenant) restoreDefinitions(s *runtimekernel.TenantImage[automation.Task, actions.Endpoint], held map[string][]records.StoredState) error {
-	if len(s.Facts) > 0 {
-		facts, err := platform.Unprotos[*pb.FactRecord](s.Facts)
-		if err != nil {
-			return err
-		}
-		t.Claims.Facts.Restore(t.ID, facts)
-	}
-	if s.Identities != nil {
-		t.Claims.Identity.Restore(*s.Identities)
+	if err := s.RestoreEvidence(&t.Sequence); err != nil {
+		return err
 	}
 	if len(held) > 0 || s.Runtime != nil || build.PublishedDefinitionsMissing(s.Records,
 		func(ref platform.AssetRef) bool {
@@ -216,31 +166,22 @@ func (t *Tenant) restoreOperations(s *runtimekernel.TenantImage[automation.Task,
 			return err
 		}
 	}
-	works, err := platform.Unprotos[*pb.Work](s.Works)
-	if err != nil {
-		return err
-	}
-	descriptors, err := platform.Unprotos[*pb.ConnectorDescriptor](s.Connectors)
-	if err != nil {
-		return err
-	}
 	t.opsMu.Lock()
 	defer t.opsMu.Unlock()
 	t.acted = s.Acted
-	t.Works.Restore(works)
+	if err := s.RestoreOperations(&t.Sequence); err != nil {
+		return err
+	}
 	t.work.Lock()
-	err = t.work.Restore(t.ID, automation.WorkState{Queues: s.Queues, Failed: s.Failed, Tasks: s.Tasks, Jobs: s.Jobs})
+	err := t.work.Restore(t.ID, automation.WorkState{Queues: s.Queues, Failed: s.Failed, Tasks: s.Tasks, Jobs: s.Jobs})
 	t.work.Unlock()
 	if err != nil {
 		return err
 	}
-	t.ConnectorRoster.Restore(descriptors, s.Marks, s.LastError)
-	t.Notices.Restore(s.Notices, s.NoticeSeq)
 	t.settings.Restore(s.Settings)
 	t.words.Restore(s.Words)
 	t.i18n.Reset()
 	t.endpoints.Restore(s.Endpoints)
-	t.Sequences.Restore(s.Sequences)
 	effects := make([]actions.Queued, 0, len(s.Outbound))
 	for _, x := range s.Outbound {
 		effects = append(effects, actions.Queued{Effect: x.Effect, Since: x.Since})

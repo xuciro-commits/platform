@@ -28,7 +28,6 @@ type Owner struct {
 	BindInterface          func(platform.NamedQuery, ...platform.EntityInfo) (platform.NamedQuery, error)
 	ValidateInterfaceQuery func(platform.NamedQuery) error
 	VisibleLink            func(platform.Member, platform.AssetBinding) *platform.LinkType
-	OwnedRelationTargets   func(*records.Store, platform.Caller, platform.LinkType, string, string, time.Time) ([]string, bool, *kernel.Error)
 	HasProcesses           func() bool
 	Follows                func(platform.Member, string) bool
 	Deliveries             func(string, time.Time) []RecordDelivery
@@ -91,10 +90,6 @@ func (o *Owner) validateInterfaceQuery(q platform.NamedQuery) error {
 
 func (o *Owner) visibleLink(m platform.Member, binding platform.AssetBinding) *platform.LinkType {
 	return o.VisibleLink(m, binding)
-}
-
-func (o *Owner) ownedRelationTargets(store *records.Store, c platform.Caller, link platform.LinkType, direction, id string, at time.Time) ([]string, bool, *kernel.Error) {
-	return o.OwnedRelationTargets(store, c, link, direction, id, at)
 }
 
 func (o *Owner) recordSetBinding(binding platform.AssetBinding) (*platform.Definition, bool) {

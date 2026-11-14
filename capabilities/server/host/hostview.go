@@ -3,9 +3,9 @@ package host
 import (
 	"fmt"
 	pageowner "platformserver/services/apps/pages"
+	"platformserver/services/objects"
 	"platformserver/services/ontology"
 	"platformserver/services/security"
-	"reflect"
 	"slices"
 	"time"
 
@@ -35,14 +35,7 @@ func (h hostView) ReadProtocolRecords(c platform.Caller, typ string) ([]any, *ke
 	if h.decision != nil {
 		store = h.decision.Records
 	}
-	page, refusal := h.t.recordsFrom(store, c.Member, typ, platform.Query{Limit: 200}, time.Now())
-	if refusal != nil {
-		return nil, refusal
-	}
-	if page.Total > 200 {
-		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Protocol record reads support at most 200 visible records")
-	}
-	return page.Records, nil
+	return objects.ProtocolRecords(h.t.objectOwner(store).RecordsFrom(store, c.Member, typ, platform.Query{Limit: 200}, time.Now()))
 }
 
 func (h hostView) Install(c platform.Caller, e platform.Entity, actions []platform.Action, pages ...platform.Page) error {
@@ -75,19 +68,8 @@ func (h hostView) ValidateInstallDependents(c platform.Caller, e platform.Entity
 			draft := h.installationDraft()
 			owner := func(id string) hostView { return hostView{t: draft, app: h.t.App(id)} }
 			return ontology.InstallDraft{
-				Reset: func() {
-					if current := draft.Projection.Type(e.Type); current != nil && current.Info().Go != reflect.TypeOf(e.Model) {
-						current.SetRows(records.Index[*records.Row]{})
-					}
-				},
+				Records: draft.Projection,
 				Install: func() error { return draft.Install(h.app, e, actions, pages...) },
-				Types: func() []platform.EntityInfo {
-					var out []platform.EntityInfo
-					for _, et := range draft.Projection.SortedTypes() {
-						out = append(out, et.Info())
-					}
-					return out
-				},
 				CheckSets: func(info platform.EntityInfo, engine platform.RuleEngine) error {
 					return draft.checkRecordSetDeclarations(info, engine)
 				},
@@ -103,12 +85,7 @@ func (h hostView) ValidateInstallDependents(c platform.Caller, e platform.Entity
 }
 
 func (h hostView) OwnerOf(dataClass string) (string, bool) {
-	for _, a := range h.t.apps {
-		if slices.ContainsFunc(a.Declarations(), func(d *pb.AuthorityDeclaration) bool { return d.GetDataClass() == dataClass }) {
-			return a.Manifest().ID, true
-		}
-	}
-	return "", false
+	return runtimekernel.OwnerOfClass(h.t.apps, dataClass)
 }
 
 func (h hostView) ProtocolEvent(name string) (platform.ProtocolEvent, bool) {
@@ -153,28 +130,19 @@ func (h hostView) Holding(app, role string) []string {
 }
 
 func (h hostView) Action(schema string) (string, platform.Action, bool) {
-	return ontology.DeclaredAction(h.t.App(h.t.owner["action:"+schema]), h.t.definitions, schema)
+	return ontology.DeclaredAction(h.actionOwner(schema), h.t.definitions, schema)
+}
+
+func (h hostView) actionOwner(schema string) platform.App {
+	return h.t.App(h.t.owner["action:"+schema])
 }
 
 func (h hostView) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *kernel.Error) {
-	a := h.t.App(h.t.owner["action:"+s.GetSchema().GetName()])
-	if a == nil {
-		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
-	}
-	if declared, ok := a.Manifest().Actions.Action(s.GetSchema().GetName()); ok && declared.Approval != nil && !c.Automation {
-		return c.RequestApproval(a.Manifest().ID, s, now)
-	}
-	return platform.Decide(c, a, s, now)
+	return runtimekernel.SubmitTo(c, h.actionOwner(s.GetSchema().GetName()), &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}, s, now)
 }
 
 func (h hostView) Attempt(c platform.Caller, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *kernel.Error) {
-	return platform.Attempt(c, func() (*pb.ChangeRecord, *kernel.Error) {
-		a := h.t.App(h.t.owner["action:"+s.GetSchema().GetName()])
-		if a == nil {
-			return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
-		}
-		return platform.Decide(c, a, s, now)
-	})
+	return runtimekernel.AttemptTo(c, func() platform.App { return h.actionOwner(s.GetSchema().GetName()) }, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}, s, now)
 }
 
 func (h hostView) Recipients(c platform.Caller, now time.Time, to []platform.Recipient) []string {
@@ -307,18 +275,15 @@ func (h hostView) Record(ref string) (any, bool) {
 }
 
 func (h hostView) BuildProcesses() platform.ProcessDefinitions { return h.Processes() }
-func (h hostView) roles() runtimekernel.OptionalRoles {
-	return runtimekernel.OptionalRoles{Directory: h.Directory()}
-}
 
 func (h hostView) Calendar(party string, day platform.Date) platform.Calendar {
-	return h.roles().Calendar(party, day)
+	return runtimekernel.OptionalRoles{Directory: h.Directory()}.Calendar(party, day)
 }
 func (h hostView) Units(party, structure string, day platform.Date) []string {
-	return h.roles().PartyUnits(party, structure, day)
+	return runtimekernel.OptionalRoles{Directory: h.Directory()}.PartyUnits(party, structure, day)
 }
 func (h hostView) Holders(structure, unit, role string, day platform.Date) []string {
-	return h.roles().Holders(structure, unit, role, day)
+	return runtimekernel.OptionalRoles{Directory: h.Directory()}.Holders(structure, unit, role, day)
 }
 
 func (h hostView) RuleQuery(app, name string, version int) (platform.NamedQuery, int, bool) {
@@ -362,11 +327,11 @@ func (h hostView) CheckResourceSchema(schema string, version *platform.SchemaVer
 	if version == nil {
 		return nil
 	}
-	owner := h.t.App(h.t.owner["action:"+schema])
+	owner := h.actionOwner(schema)
 	if owner == nil {
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_UNKNOWN_SCHEMA, "The action definition is unavailable; refresh definitions")
 	}
-	_, refusal := h.t.submissionSchemaVersion(owner, &pb.Submission{Schema: &pb.SchemaRef{Name: schema, Version: version.Family}}, version.Version)
+	_, refusal := h.t.SchemaBinding(owner, &pb.Submission{Schema: &pb.SchemaRef{Name: schema, Version: version.Family}}, version.Version, h.t.actionSchemaVersion)
 	return refusal
 }
 

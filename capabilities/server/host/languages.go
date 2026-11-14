@@ -5,7 +5,6 @@ import (
 	"net/http"
 	"platformserver/kernel/transport"
 	ontology "platformserver/services/ontology"
-	"strings"
 
 	"platformserver/platform"
 )
@@ -15,16 +14,11 @@ var platformFiles embed.FS
 
 var PlatformLanguages = platform.LoadLanguages(platformFiles, "i18n")
 
-var (
-	declarationReads = map[string]bool{"settings": true, "flows": true, "agents": true}
-	messageReads     = map[string]bool{"notifications": true, "inbox": true, "requests": true, "timeline": true}
-)
-
 func (t *Tenant) Language(m platform.Member, r *http.Request) string {
 	if m.Language != "" {
 		return m.Language
 	}
-	if lang, asked := t.asked(r); asked {
+	if lang, asked := transport.NegotiateLanguage(r.Header.Get("Accept-Language"), t.i18n.Languages); asked {
 		return lang
 	}
 	if t.identityOwner != nil {
@@ -33,80 +27,46 @@ func (t *Tenant) Language(m platform.Member, r *http.Request) string {
 	return ""
 }
 
-func (t *Tenant) asked(r *http.Request) (string, bool) {
-	return transport.NegotiateLanguage(r.Header.Get("Accept-Language"), t.i18n.Languages)
-}
-
-func (t *Tenant) Texts(app string) []string {
-	var m platform.Manifest
-	var parts []any
+func (t *Tenant) Words(app string) transport.WordsView {
+	apps := []string{}
+	for _, a := range t.apps {
+		apps = append(apps, a.Manifest().ID)
+	}
+	var manifest *platform.Manifest
 	if a := t.App(app); a != nil {
-		m = a.Manifest()
-		parts = append(parts, map[string]any{"title": m.Title}, m.Actions.All(), m.Pages, m.Settings, m.Emits)
+		m := a.Manifest()
+		manifest = &m
 	}
-	for _, definition := range t.definitions {
-		if definition.Ref.App == app {
-			parts = append(parts, definition)
-		}
-	}
-	for _, et := range t.Projection.Types() {
-		if et.Info().App == app {
-			parts = append(parts, et.Info())
-		}
-	}
-	parts = append(parts, transport.DeclaredTexts(m)...)
-	return transport.Texts(parts)
+	return transport.WordsOf(app, apps, t.i18n.Languages(), transport.TextsOf(app, manifest, t.definitions, t.typeInfos()), t.i18n.Say, t.words.Clone())
 }
 
-func (t *Tenant) meaning(app string) string {
+func (t *Tenant) typeInfos() []platform.EntityInfo {
 	var infos []platform.EntityInfo
 	for _, et := range t.Projection.SortedTypes() {
-		if et.Info().App == app {
-			infos = append(infos, et.Info())
-		}
+		infos = append(infos, et.Info())
 	}
-	return ontology.Meaning(infos)
+	return infos
 }
 
 func (t *Tenant) names(info platform.EntityInfo, q string) (string, bool) {
-	candidates := []string{info.Type, info.Title, info.Plural}
-	candidates = append(candidates, strings.Split(info.Synonyms, ",")...)
-	for _, lang := range t.i18n.Languages() {
-		dict := t.i18n.Dictionary(lang)
-		for _, s := range []string{info.Title, info.Plural, info.Synonyms} {
-			if tr := dict[s]; tr != "" {
-				candidates = append(candidates, strings.Split(tr, ",")...)
-			}
-		}
+	var terms []string
+	if t.knowledge != nil {
+		terms = t.knowledge.TermsFor(info.Type)
 	}
-	candidates = append(candidates, t.termsFor(info.Type)...)
-	return ontology.StripMention(q, candidates)
+	return ontology.Mention(q, info, t.i18n.Languages(), t.i18n.Dictionary, terms)
 }
 
-func (t *Tenant) termsFor(declaration string) []string {
-	if t.knowledge == nil {
-		return nil
-	}
-	return t.knowledge.TermsFor(declaration)
-}
+func (t *Tenant) meaning(app string) string { return ontology.Meaning(app, t.typeInfos()) }
 
 func (t *Tenant) declares(name string) bool {
-	for _, et := range t.Projection.SortedTypes() {
-		if et.Info().Type == name {
-			return true
-		}
-		if field, ok := strings.CutPrefix(name, et.Info().Type+"."); ok {
-			if _, ok := et.Info().Field(field); ok {
+	return ontology.Declares(name, t.typeInfos(), func(action string) bool {
+		for _, a := range t.apps {
+			if _, ok := a.Manifest().Actions.Action(action); ok {
 				return true
 			}
 		}
-	}
-	for _, a := range t.apps {
-		if _, ok := a.Manifest().Actions.Action(name); ok {
-			return true
-		}
-	}
-	return false
+		return false
+	})
 }
 
 func (t *Tenant) glossary(app string) string {

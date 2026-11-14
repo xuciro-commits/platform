@@ -403,3 +403,15 @@ func Explained(err *kernel.Error, a platform.App, schema, target string) *kernel
 	}
 	return platform.Refuse(err.Code, text, action, target)
 }
+
+func (r Router) ReadName(protocol, read string) (string, *kernel.Error) {
+	b, bound := r.Resolve(protocol)
+	if !bound {
+		return "", &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
+	}
+	name, declared := b.Provision.Reads[read]
+	if !declared || !slices.Contains(b.Provision.Protocol.Reads, read) {
+		return "", &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
+	}
+	return name, nil
+}

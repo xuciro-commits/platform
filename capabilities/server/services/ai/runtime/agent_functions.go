@@ -5,6 +5,7 @@ import (
 	"fmt"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
+	"platformserver/kernel/records"
 	"platformserver/platform"
 	"strings"
 	"time"
@@ -248,4 +249,25 @@ func FunctionAllowed(ctx FunctionAccess, app string, binding *FunctionBinding, m
 		}
 	}
 	return true
+}
+
+func ReadFunctionSource(store *records.Store, request platform.FunctionRequest, f platform.AIFunction, owner, sourceRef, definition string, version int, readable func() bool, history func(string) (FunctionHistory, error)) (FunctionSource, *kernel.Error) {
+	var raw []byte
+	var historySources []string
+	var conversationErr, err error
+	revision, values, refusal := records.LockedAISource(store, f, strings.TrimPrefix(sourceRef, f.Object+"/"), readable, func(input map[string]any) {
+		payload, preparedSources, preparedErr := FunctionConversation(request, f, owner, sourceRef, definition, version, input, history)
+		historySources, conversationErr = preparedSources, preparedErr
+		raw, err = json.Marshal(payload)
+	})
+	if refusal != nil {
+		return FunctionSource{}, refusal
+	}
+	if conversationErr != nil {
+		return FunctionSource{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, conversationErr.Error())
+	}
+	if err != nil {
+		return FunctionSource{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "The AI function input exceeds its byte budget")
+	}
+	return FunctionSource{Revision: revision, Values: values, Raw: raw, HistorySources: historySources}, nil
 }

@@ -87,6 +87,10 @@ func (r runtime) Assign(c platform.Caller, rec *pb.ChangeRecord, a platform.Assi
 	return r.roles().Assign(c, rec, a)
 }
 
+func (r runtime) Next(c platform.Caller, rec *pb.ChangeRecord, sequence string, date time.Time) (string, *kernel.Error) {
+	return r.t.Sequences.Next(rec, c.App, r.t.App(c.App), sequence, date)
+}
+
 func (r runtime) Readable(c platform.Caller, ref string) bool {
 	return r.t.readable(c.Member, ref, time.Now())
 }

@@ -26,10 +26,10 @@ func (t *Tenant) branchCaller(m platform.Member) platform.Caller {
 func (t *Tenant) branchWorkspace() branches.Workspace {
 	return branches.Workspace{Tenant: t.ID, Role: t.ResourceRole, Base: func() string { return t.Projection.BranchBase(t.releases.Active(), build.BranchDraftType) },
 		Read: func(m platform.Member, typ, id string, now time.Time) (json.RawMessage, *kernel.Error) {
-			return t.readRecordFrom(t.Projection, t.branchCaller(m), typ, id, now)
+			return t.objectOwner(t.Projection).ReadRecordFrom(t.Projection, t.branchCaller(m), typ, id, now)
 		},
 		List: func(m platform.Member, typ string, q platform.Query, now time.Time) ([]any, *kernel.Error) {
-			page, refusal := t.recordsFrom(t.Projection, m, typ, q, now)
+			page, refusal := t.objectOwner(t.Projection).RecordsFrom(t.Projection, m, typ, q, now)
 			return page.Records, refusal
 		},
 		Fields:    func(typ string) ([]platform.FieldInfo, bool) { return records.LockedFields(t.Projection, typ) },
@@ -45,12 +45,8 @@ func branchRead[T any](t *Tenant, read func(branches.Workspace) (T, *kernel.Erro
 	return recordRead(t, context.Background(), func(t *Tenant) (T, *kernel.Error) { return read(t.branchWorkspace()) })
 }
 
-func (t *Tenant) readBranch(m platform.Member, id string, now time.Time) (build.Branch, *kernel.Error) {
-	return branchRead(t, func(w branches.Workspace) (build.Branch, *kernel.Error) { return w.Branch(m, id, now) })
-}
-
 func (t *Tenant) ReadBranch(m platform.Member, id string, now time.Time) (build.Branch, *kernel.Error) {
-	return t.readBranch(m, id, now)
+	return branchRead(t, func(w branches.Workspace) (build.Branch, *kernel.Error) { return w.Branch(m, id, now) })
 }
 
 func (t *Tenant) resourceProject(typ, draft string) string {

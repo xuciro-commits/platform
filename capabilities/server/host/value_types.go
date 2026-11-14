@@ -36,8 +36,5 @@ func (h hostView) ValidateObjectPresentation(info platform.EntityInfo) error {
 }
 
 func (h hostView) InstallValueType(c platform.Caller, v platform.ValueType, version int) error {
-	if c.Staging() {
-		unsupportedStagedEffect()
-	}
-	return h.definitionInstall().ValueType(v, version)
+	return h.definitionInstall().InstallValueType(c, v, version)
 }

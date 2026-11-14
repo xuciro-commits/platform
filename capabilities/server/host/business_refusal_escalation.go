@@ -3,9 +3,6 @@ package host
 import (
 	"platformserver/services/actions"
 
-	"encoding/json"
-	acceptedformat "platformserver/kernel/acceptedformat"
-
 	"slices"
 
 	"time"
@@ -19,24 +16,9 @@ func (d *stagedDecision) PendingRefusalEscalations(c platform.Caller, at time.Ti
 	if !c.Staging() || !c.Automation || c.App != platform.WorkApp || c.ID != "app:"+platform.WorkApp || c.Replaying || c.Tenant != d.tenant.ID {
 		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "Business refusal escalation requires the private Work owner")
 	}
-	var events []actions.RefusalEvent
-	for key, r := range d.tenant.Committed.AllRefusals("business") {
-		if r.Business != nil {
-			events = append(events, actions.RefusalEvent{Key: key, Fact: *r.Business})
-		}
-	}
-	for key, raw := range d.tenant.Committed.AllAnswers("business") {
-		var envelope struct{ Kind string }
-		if json.Unmarshal(raw, &envelope) != nil || envelope.Kind != "record-batch" {
-			continue
-		}
-		r, _, err := acceptedformat.DecodeBatch(raw)
-		if err != nil {
-			return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The accepted refusal history cannot be read")
-		}
-		for _, fact := range r.Business {
-			events = append(events, actions.RefusalEvent{Key: key, Fact: fact})
-		}
+	events, err := actions.BusinessRefusalEvents(d.tenant.Committed.AllRefusals("business"), d.tenant.Committed.AllAnswers("business"))
+	if err != nil {
+		return nil, err
 	}
 	return actions.RefusalEscalations(events, at, func(id string) bool {
 		_, exists := platform.Get[platform.WorkTask](c, id)

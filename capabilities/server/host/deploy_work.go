@@ -2,31 +2,16 @@ package host
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"fmt"
-	"io"
 	"log"
-	"os"
-	runtimekernel "platformserver/kernel"
-	"platformserver/services/data/transform"
 	"sync"
 	"time"
+
+	runtimekernel "platformserver/kernel"
+	"platformserver/services/data/transform"
 )
 
 const roundSize = 10
-
-func Schedule(tenants []*Tenant, now time.Time, size int, within time.Duration) {
-	started := time.Now()
-	for more := true; more && time.Since(started) < within; {
-		more = false
-		for _, t := range tenants {
-			if t.Round(now, size) {
-				more = true
-			}
-		}
-	}
-}
 
 type snapshotter struct {
 	journal Journals
@@ -67,95 +52,52 @@ func (s *snapshotter) save(ctx context.Context, t *Tenant, final bool) {
 }
 
 func CodeOf(tenants ...*Tenant) string {
-	h := sha256.New()
-	if exe, err := os.Executable(); err == nil {
-		if f, err := os.Open(exe); err == nil {
-			io.Copy(h, f)
-			f.Close()
-		}
-	}
+	var parts []string
 	for _, t := range tenants {
 		for _, a := range t.apps {
-			fmt.Fprintf(h, "%s %s@%s\n", t.ID, a.Manifest().ID, a.Manifest().Version)
+			parts = append(parts, fmt.Sprintf("%s %s@%s\n", t.ID, a.Manifest().ID, a.Manifest().Version))
 		}
 	}
-	return hex.EncodeToString(h.Sum(nil))
+	return runtimekernel.CodeDigest(parts...)
 }
 
-var workReady = make(chan struct{}, 1)
+var workReady = runtimekernel.NewWake()
 
-func wakeWork() {
-	select {
-	case workReady <- struct{}{}:
-	default:
-	}
-}
+func wakeWork() { workReady.Signal() }
+
+var tenantTicks = []func(*Tenant, time.Time){func(t *Tenant, _ time.Time) { t.FlushObservations() }, (*Tenant).PurgeObservations}
+
+var activeTicks = []func(*Tenant, time.Time){(*Tenant).Evaluate, (*Tenant).PullSources, (*Tenant).CheckConnections, (*Tenant).RunPipelines,
+	(*Tenant).ProjectDatasets, (*Tenant).Embed, (*Tenant).PurgeTranscripts, (*Tenant).SweepUploads}
 
 func runWorkFrom(current func() []*Tenant) func(context.Context) error {
 	ctx, cancel := context.WithCancel(context.Background())
-	var loops, outsideRuns sync.WaitGroup
-	loops.Add(2)
-	go func() {
-		defer loops.Done()
-		ticker := time.NewTicker(time.Second)
-		defer ticker.Stop()
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			case <-workReady:
-			case <-ticker.C:
-			}
-			if ctx.Err() != nil {
-				return
-			}
-			tenants := current()
-			Schedule(tenants, Now(), roundSize, 900*time.Millisecond)
-			var outside []func()
-			for _, t := range tenants {
-				outside = append(append(outside, t.dispatches(Now())...), t.agentTurns().Due(Now())...)
-				outside = append(outside, t.continuousSources(Now())...)
-			}
-			outsideRuns.Add(1)
-			go func() { defer outsideRuns.Done(); integrations.OnLane(outside) }()
+	var background sync.WaitGroup
+	runtimekernel.Pulse(ctx, &background, time.Second, workReady, func() bool {
+		tenants, now := current(), Now()
+		runtimekernel.Rotate(tenants, 900*time.Millisecond, func(t *Tenant) bool { return t.Round(now, roundSize) })
+		var outside []func()
+		for _, t := range tenants {
+			outside = append(append(outside, t.dispatches(Now())...), t.agentSchedule().Turns().Due(Now())...)
+			outside = append(outside, t.continuousSources(Now())...)
 		}
-	}()
-	go func() {
-		defer loops.Done()
-		ticker := time.NewTicker(5 * time.Second)
-		defer ticker.Stop()
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			case <-ticker.C:
+		background.Add(1)
+		go func() { defer background.Done(); integrations.OnLane(outside) }()
+		return true
+	})
+	runtimekernel.Every(ctx, &background, 5*time.Second, func() bool {
+		for _, t := range current() {
+			for _, tick := range tenantTicks {
+				tick(t, Now())
 			}
-			for _, t := range current() {
-				t.FlushObservations()
-				t.PurgeObservations(Now())
-				if t.businessStopped() {
-					continue
-				}
-				t.Evaluate(Now())
-				t.PullSources(Now())
-				t.CheckConnections(Now())
-				t.RunPipelines(Now())
-				t.ProjectDatasets(Now())
-				t.Embed(Now())
-				t.PurgeTranscripts(Now())
-				t.SweepUploads(Now())
+			if t.businessStopped() {
+				continue
+			}
+			for _, tick := range activeTicks {
+				tick(t, Now())
 			}
 		}
-	}()
-	done := make(chan struct{})
-	var stop sync.Once
-	return func(ctx context.Context) error {
-		stop.Do(func() { cancel(); go func() { loops.Wait(); outsideRuns.Wait(); close(done) }() })
-		select {
-		case <-done:
-			return nil
-		case <-ctx.Done():
-			return ctx.Err()
-		}
-	}
+		return true
+	})
+	return runtimekernel.Drain(cancel, &background)
 }

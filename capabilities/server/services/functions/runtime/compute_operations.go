@@ -40,21 +40,67 @@ func (b OperationBinding) Timeout() time.Duration {
 }
 
 type ExecutionHost struct {
-	Authorised      func(ctx context.Context, x platform.Effect, b OperationBinding, now time.Time) (platform.Member, *kernel.Error)
-	StillAuthorised func(ctx context.Context, x platform.Effect, b OperationBinding, now time.Time) (bool, *kernel.Error)
-	RulesRevoked    func(ctx context.Context, member platform.Member, rules platform.RuleTablePlan) (string, *kernel.Error)
-	BuildCode       func(ctx context.Context, q platform.CodeBuildRequest) (platform.CodeBuildResult, error)
-	ReadInput       func(ctx context.Context, ref platform.OperationInputArtifact) ([]byte, error)
-	StageOutput     func(op platform.Operation, call string, output []byte) (json.RawMessage, *platform.StagedResult, error)
-	App             func(id string) platform.App
-	ReadArtifact    func(ctx context.Context, digest string) ([]byte, error)
-	Rules           func() platform.RuleEngine
+	Read         func(ctx context.Context, read func(ExecutionReads)) *kernel.Error
+	BuildCode    func(ctx context.Context, q platform.CodeBuildRequest) (platform.CodeBuildResult, error)
+	ReadInput    func(ctx context.Context, ref platform.OperationInputArtifact) ([]byte, error)
+	StageOutput  func(op platform.Operation, call string, output []byte) (json.RawMessage, *platform.StagedResult, error)
+	App          func(id string) platform.App
+	ReadArtifact func(ctx context.Context, digest string) ([]byte, error)
+	Rules        func() platform.RuleEngine
+}
+
+type ExecutionReads struct {
+	Member  func(id string) (platform.Member, bool)
+	Current func(id string, generation uint32) bool
+	Refusal func(member platform.Member, app string, b OperationBinding, now time.Time) *kernel.Error
+	Query   func(member platform.Member, ref platform.AssetRef, version int) (platform.NamedQuery, bool)
+	Entity  func(string) (platform.EntityInfo, bool)
+	Authz   platform.AuthorizationEngine
+}
+
+func (h ExecutionHost) authorised(ctx context.Context, tenant string, x platform.Effect, b OperationBinding, now time.Time) (platform.Member, *kernel.Error) {
+	var member platform.Member
+	var refusal *kernel.Error
+	if err := h.Read(ctx, func(r ExecutionReads) {
+		var ok bool
+		member, ok = r.Member(b.Member)
+		switch {
+		case !ok || member.Tenant != tenant:
+			refusal = platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "Operation member is no longer authorised")
+		case !r.Current(x.ID, x.Generation):
+			refusal = platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Operation was cancelled")
+		default:
+			refusal = r.Refusal(member, x.App, b, now)
+		}
+	}); err != nil {
+		return member, err
+	}
+	return member, refusal
+}
+
+func (h ExecutionHost) stillAuthorised(ctx context.Context, x platform.Effect, b OperationBinding, now time.Time) (bool, *kernel.Error) {
+	var allowed bool
+	err := h.Read(ctx, func(r ExecutionReads) {
+		latest, ok := r.Member(b.Member)
+		allowed = ok && r.Refusal(latest, x.App, b, now) == nil && r.Current(x.ID, x.Generation)
+	})
+	return allowed, err
+}
+
+func (h ExecutionHost) rulesRevoked(ctx context.Context, member platform.Member, rules platform.RuleTablePlan) (string, *kernel.Error) {
+	var why string
+	err := h.Read(ctx, func(r ExecutionReads) {
+		why = RulesRevoked(member, rules, func(ref platform.AssetRef, version int) (platform.NamedQuery, bool) {
+			return r.Query(member, ref, version)
+		}, r.Entity, r.Authz)
+	})
+	return why, err
 }
 
 func Execute(ctx context.Context, host ExecutionHost, tenant string, x platform.Effect, b OperationBinding, now time.Time) platform.Outcome {
 	out := platform.Outcome{Effect: x.ID, Result: "rejected", Generation: x.Generation}
 	start := time.Now()
-	member, refusal := host.Authorised(ctx, x, b, now)
+	member, refusal := host.authorised(ctx, tenant, x, b, now)
 	if refusal != nil {
 		out.Detail = refusal.Message
 		return out
@@ -97,14 +143,14 @@ func Execute(ctx context.Context, host ExecutionHost, tenant string, x platform.
 				out.Detail = err.Error()
 				return out
 			}
-			authorised, refusal := host.StillAuthorised(ctx, x, b, now)
+			authorised, refusal := host.stillAuthorised(ctx, x, b, now)
 			if refusal != nil || !authorised {
 				out.Detail = "Operation permission or generation changed while its input was read"
 				return out
 			}
 		}
 		if op.Rules != nil {
-			why, refusal := host.RulesRevoked(ctx, member, *op.Rules)
+			why, refusal := host.rulesRevoked(ctx, member, *op.Rules)
 			if refusal != nil {
 				out.Detail = "Operation collection access could not be read"
 				return out

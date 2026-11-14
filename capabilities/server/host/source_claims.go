@@ -62,12 +62,7 @@ func (t *Tenant) declaredRows(object, kind, source string, input []map[string]an
 		binding *platform.DataSourceBinding
 	}
 	value, err := readWithError(t, context.Background(), func(t *Tenant) (answer, error) {
-		var info platform.EntityInfo
-		t.Projection.Lock()
-		if entity := t.Projection.Type(object); entity != nil {
-			info = entity.Info()
-		}
-		t.Projection.Unlock()
+		info, _ := records.LockedInfo(t.Projection, object)
 		rows, binding, err := dataowner.DeclaredSourceRows(info, kind, source, input, now, func(id string) string {
 			if resolved, failure := t.Claims.Identity.Resolve(&pb.EntityRef{Type: object, Id: id}); failure == nil && len(resolved) == 1 && resolved[0].Type == object {
 				return resolved[0].ID
@@ -83,7 +78,7 @@ func (t *Tenant) prepareRows(member platform.Member, object, producer string, ro
 	return recordRead(t, context.Background(), func(t *Tenant) (int, *kernel.Error) {
 		merged := 0
 		resolver := t.DataOwner().MatchResolver(t.automation(build.ID, false), object, producer, func(offset int) ([]any, int, *kernel.Error) {
-			page, err := t.recordsRead(member, object, platform.Query{Limit: 500, Offset: offset, Sort: []string{"id"}}, now)
+			page, err := t.objectOwner(t.Projection).Records(member, object, platform.Query{Limit: 500, Offset: offset, Sort: []string{"id"}}, now)
 			return page.Records, page.Total, err
 		})
 		if resolver != nil {

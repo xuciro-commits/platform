@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"platformkernel/kernel"
+	"platformserver/kernel/records"
 	"platformserver/platform"
 	dataowner "platformserver/services/data"
 	"platformserver/services/resources/authoring"
@@ -28,19 +29,16 @@ func (t *Tenant) pipelineInputs(pipeline dataowner.Pipeline, marking string, com
 }
 
 func (t *Tenant) unguarded(object, marking string) []string {
-	value, _ := recordRead(t, context.Background(), func(t *Tenant) ([]string, *kernel.Error) {
+	return readOnly(t, func(t *Tenant) []string {
 		if !dataowner.Guarded(marking) {
-			return nil, nil
+			return nil
 		}
-		t.Projection.Lock()
-		entity := t.Projection.Type(object)
-		t.Projection.Unlock()
-		if entity == nil {
-			return nil, nil
+		info, found := records.LockedInfo(t.Projection, object)
+		if !found {
+			return nil
 		}
-		return dataowner.UnguardedFields(entity.Info(), nil), nil
+		return dataowner.UnguardedFields(info, nil)
 	})
-	return value
 }
 
 func (t *Tenant) datasetOutput(dataset, key string) (int, error) {

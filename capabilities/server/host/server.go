@@ -4,14 +4,11 @@ import transport "platformserver/kernel/transport"
 
 import (
 	"context"
-	"encoding/json"
 	"log"
 	"net/http"
-	"os"
 	"platformserver/services/security"
 	controlowner "platformserver/services/security/control"
 	"platformserver/services/security/idp"
-	"strconv"
 	"strings"
 	"time"
 
@@ -89,61 +86,29 @@ const TenantHeader = "Platform-Tenant"
 const chatMaxBytes = 1 << 20
 
 func (h *Host) member(r *http.Request) (platform.Member, *Tenant, bool) {
-	credential := strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")
-	want := r.Header.Get(TenantHeader)
-	now := h.Now()
-	if strings.HasPrefix(credential, controlowner.TokenPrefix) {
+	return idp.Members[*Tenant]{Authenticate: h.authenticate, SecondFactor: h.SecondFactor, Now: h.Now, Consoles: func() []idp.Console[*Tenant] {
+		var consoles []idp.Console[*Tenant]
 		for _, t := range h.currentTenants() {
-			if d := consoleOf(t); d != nil && (want == "" || t.ID == want) {
-				if m, ok := d.MemberByToken(credential, now); ok && d.NoticeSession(m.ID, credential, r.UserAgent(), "token", now) {
-					return m, t, true
-				}
-			}
+			consoles = append(consoles, idp.Console[*Tenant]{Tenant: t, ID: t.ID, Sessions: consoleOf(t), Join: func(subject string, now time.Time) bool { return h.join(t, subject, now) }})
 		}
-		return platform.Member{}, nil, false
-	}
-	subject, ok := h.authenticate(credential)
-	if !ok {
-		return platform.Member{}, nil, false
-	}
-	for _, t := range h.currentTenants() {
-		if d := consoleOf(t); d == nil || want != "" && t.ID != want {
-			continue
-		} else if m, ok := d.MemberBySubject(subject); ok {
-			if d.SecondFactorRequired() && (h.SecondFactor == nil || !h.SecondFactor(credential)) {
-				return platform.Member{}, nil, false
-			}
-			if !d.NoticeSession(m.ID, credential, r.UserAgent(), "sign-in", now) {
-				return platform.Member{}, nil, false
-			}
-			d.SeenMember(m.ID, now)
-			return m, t, true
-		}
-	}
-	for _, t := range h.currentTenants() {
-		if d := consoleOf(t); d != nil && (want == "" || t.ID == want) && (!d.SecondFactorRequired() || h.SecondFactor != nil && h.SecondFactor(credential)) && d.JoinsSubject(subject) && h.join(t, d, subject, now) {
-			return h.member(r)
-		}
-	}
-	return platform.Member{}, nil, false
+		return consoles
+	}}.Resolve(r.Header.Get("Authorization"), r.Header.Get(TenantHeader), r.UserAgent())
 }
 
-func (h *Host) join(t *Tenant, _ platform.IdentitySessions, subject string, now time.Time) bool {
+func (h *Host) join(t *Tenant, subject string, now time.Time) bool {
 	_, refusal := decideOnImage(t, context.Background(), "identity:join", func(t *Tenant) (*pb.ChangeRecord, *kernel.Error) {
-		d := t.identityOwner
-		if d == nil {
+		if t.identityOwner == nil {
 			return nil, unknown()
 		}
-		if _, known := d.MemberBySubject(subject); known {
-			return nil, nil
+		var caller platform.Caller
+		sub, refusal := controlowner.JoinSubmission(t.identityOwner, t.ID, subject, func() string {
+			caller = t.automation(controlowner.PlatformApp, false)
+			return caller.ID
+		})
+		if sub == nil {
+			return nil, refusal
 		}
-		if !d.JoinableSubject(subject) || !d.JoinsSubject(subject) {
-			return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_POLICY_DENIED}
-		}
-		payload, _ := json.Marshal(map[string]string{"subject": subject})
-		caller := t.automation(controlowner.PlatformApp, false)
-		sub := &pb.Submission{TenantId: t.ID, PrincipalId: caller.ID, Authority: controlowner.PlatformApp, IdempotencyKey: "join:" + subject, Target: &pb.EntityRef{Type: controlowner.MemberType, Id: d.JoinID(subject)}, Schema: &pb.SchemaRef{Name: controlowner.SchemaJoin, Version: 1}, Payload: payload}
-		return t.accept(d, caller.Member, sub, now, acceptOptions{automation: true})
+		return t.accept(t.identityOwner, caller.Member, sub, now, acceptOptions{automation: true})
 	}, func(t *Tenant, candidate preparedAccepted, record *pb.ChangeRecord, refusal *kernel.Error) (*pb.ChangeRecord, *kernel.Error) {
 		return t.finishPreparedSubmission(platform.Member{ID: "app:" + controlowner.PlatformApp, Tenant: t.ID}, candidate, record, refusal)
 	})
@@ -179,7 +144,6 @@ func (h *Host) Handler() http.Handler {
 	h.routesDiscovery(rt)
 	h.routesApplications(rt)
 	h.routesMonitoring(rt)
-	h.routesObservability(rt)
 	h.routesRecords(rt)
 	h.routesResources(rt)
 	h.routesEditProposals(rt)
@@ -212,48 +176,16 @@ func (h *Host) Handler() http.Handler {
 		web := h.web
 		mux.Handle("GET /", web)
 	}
-	mux.HandleFunc("GET /metrics", func(w http.ResponseWriter, r *http.Request) {
-		if !h.scrapeAllowed(r) {
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusForbidden)
-			_, _ = w.Write([]byte(`{"error":{"code":"ERROR_CODE_POLICY_DENIED","message":"Metrics need a credential or a loopback caller."}}`))
-			return
-		}
-		w.Header().Set("Content-Type", "text/plain; version=0.0.4; charset=utf-8")
-		w.Header().Set("Cache-Control", "no-store")
-		h.stats.WritePrometheus(w)
-	})
 	if h.limiter == nil {
-		rate, _ := strconv.ParseFloat(os.Getenv("PLATFORM_RATE_LIMIT"), 64)
-		if rate == 0 && os.Getenv("PLATFORM_RATE_LIMIT") == "" {
-			rate = 600
-		}
-		burst, _ := strconv.ParseFloat(os.Getenv("PLATFORM_RATE_BURST"), 64)
-		if burst == 0 {
-			burst = rate * 2
-		}
-		h.limiter = transport.NewLimiter(rate, burst)
+		h.limiter = transport.LimiterFromEnv()
 	}
 	if h.stats == nil {
 		h.stats = transport.NewStats()
 	}
+	mux.HandleFunc("GET /metrics", transport.MetricsHandler(h.stats, func(r *http.Request) bool {
+		return transport.ScrapeAllowed(r, h.authenticate, h.HostAdmins)
+	}))
 	return transport.Edge(mux, h.stats, h.limiter, TenantHeader, SchemaVersionHeader)
-}
-
-func (h *Host) scrapeAllowed(r *http.Request) bool {
-	host := transport.RemoteOf(r)
-	if host == "127.0.0.1" || host == "::1" || host == "localhost" {
-		return true
-	}
-	if h.authenticate == nil {
-		return false
-	}
-	credential := strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")
-	if credential == "" {
-		return false
-	}
-	subject, ok := h.authenticate(credential)
-	return ok && h.HostAdmins[subject]
 }
 
 func Reply(w http.ResponseWriter, record *pb.ChangeRecord, err *kernel.Error, issues ...platform.FieldIssue) {
@@ -261,7 +193,3 @@ func Reply(w http.ResponseWriter, record *pb.ChangeRecord, err *kernel.Error, is
 }
 
 func WriteJSON(w http.ResponseWriter, status int, v any) { transport.WriteJSON(w, status, v) }
-
-func pageBounds(r *http.Request, offsetDefault, limitDefault int) (int, int) {
-	return transport.PageBounds(r, offsetDefault, limitDefault)
-}

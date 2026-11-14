@@ -27,7 +27,7 @@ func (t *Tenant) decideBranchStep(draft *stagedDecision, m platform.Member, sche
 	if a == nil {
 		return branches.StageChild{Refusal: platform.Refuse(pb.ErrorCode_ERROR_CODE_UNKNOWN_SCHEMA, "The resource type has no {action} action", schema)}
 	}
-	s := t.currentSubmissionSchema(a, submission)
+	s := t.CurrentSchema(a, submission)
 	if refusal := t.delegatedBound(m, s); refusal != nil {
 		return branches.StageChild{Refusal: actions.Explained(refusal, a, s.GetSchema().GetName(), runtimekernel.Target(s))}
 	}
@@ -124,7 +124,7 @@ func (t *Tenant) evaluateBranch(m platform.Member, branch build.Branch, resoluti
 }
 
 func (t *Tenant) BranchChecks(m platform.Member, id string, request BranchCheckRequest, now time.Time) (BranchChecks, *kernel.Error) {
-	return branches.ReadChecks(t.readBranch, t.evaluateBranch, m, id, request, now)
+	return branches.ReadChecks(t.ReadBranch, t.evaluateBranch, m, id, request, now)
 }
 
 func (t *Tenant) RecheckBranch(m platform.Member, id string, request BranchCheckRequest, now time.Time) (branches.BranchDetail, *kernel.Error) {
@@ -134,7 +134,7 @@ func (t *Tenant) RecheckBranch(m platform.Member, id string, request BranchCheck
 func (t *Tenant) branchFlow() branches.Flow {
 	return branches.Flow{
 		Tenant: t.ID,
-		Read:   t.readBranch,
+		Read:   t.ReadBranch,
 		Submit: func(m platform.Member, submission *pb.Submission, now time.Time) *kernel.Error {
 			_, refusal := t.Submit(m, submission, now)
 			return refusal
@@ -202,7 +202,7 @@ func (t *Tenant) prepareBranchMerge(m platform.Member, id string, resolutions []
 	if owner == nil {
 		return none, unknown()
 	}
-	s = t.currentSubmissionSchema(owner, s)
+	s = t.CurrentSchema(owner, s)
 	if refusal := t.delegatedBound(m, s); refusal != nil {
 		return none, refusal
 	}
@@ -219,12 +219,7 @@ func (t *Tenant) saveBranchCandidate(m platform.Member, branchID, candidateID st
 		if owner == nil {
 			return nil, fmt.Errorf("the tenant has no builder")
 		}
-		drafts := branches.DraftSet(owner, actions)
-		preview, _, err := branches.PreviewDrafts(drafts, t.branchPreview(m))
-		if err == nil && preview.Candidate != candidateID {
-			err = fmt.Errorf("the release candidate differs from the checked candidate")
-		}
-		return drafts, err
+		return branches.CheckedDrafts(owner, actions, candidateID, t.branchPreview(m))
 	})
 	if err != nil {
 		return "", err
