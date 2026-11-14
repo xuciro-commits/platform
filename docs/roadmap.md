@@ -72,7 +72,7 @@ read-when: 每批开始（选当前批次）与结束（删除已完成条目、
     - 方向：① 平台只留通用原子编辑集：创建、修改、删除对象，增删关系，函数支撑，forEach，编号分配；② `post`、`journal`（含关账期）是会计形状，不得留在任何 Go 类型里：能用通用规则加 Expr 表达的改写产品包，不能的改成产品包内的函数支撑规则；函数运行时做不到的登记为差距并阻塞；③ `effect`、`work` 归副作用；④ 类型定义离开 `platform`：执行在 `services/actions`，定义校验在 `services/ontology`；⑤ 格式纪元未冻结（C26），产品包 JSON 直接改写，不留旧形状的读取。
     - 产出：每种 kind → §6.7 哪种规则或副作用的映射表，写入 6-domain §6.7；把 U2 拆成后续行（同本格式，标档位与验证）。
 - [ ] U3 页面模型归位。
-  - [ ] U3.1 `[难]` 切断依赖。
+  - [ ] U3.1 `[难]` 切断依赖。（进行中：Terra 6.1 Max，2026-11-14）
     - 方向：列出 `platform` 内 8 个文件及 `services/ontology`、`services/devops`、`services/resources` 对 `platform.Page*` 的每处使用；留在 `platform` 的只有 `cmd/page-contract` 生成 `pageui/safety.ts` 与 `page_compat.json` 所需的最小页面组件契约；其余使用改为把使用方代码移入 `services/apps`，或在 `services/apps` 的 `api.go` 声明接口由宿主注入。不新增依赖差距。
     - 完成：除契约类型外，`platform` 自身与上述三个服务不再引用页面模型类型；清单写进提交正文。
     - 验证：V1、V3。
