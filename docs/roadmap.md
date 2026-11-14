@@ -47,7 +47,7 @@ read-when: 每批开始（选当前批次）与结束（删除已完成条目、
 - [ ] U1 动作引擎归位。已完成（U1.1、U1.2）：规则引擎在 `services/actions/authority*.go`，服务、内核与宿主只经 `platform.Authority` 使用，由宿主经 `platform.Authorities` 注入。
   - [ ] U1.3 `[难]` 协议部件入 `kernel/protocol`。（进行中：Terra 6.1 Max，2026-11-14）
     - 方向：`contract/go/kernel` 除 `errors.go` 外全部移到新叶层包 `capabilities/server/kernel/protocol`（只依赖协议生成代码与 `platform`）。服务可以导入它，与 `kernel/records`、`kernel/acceptedformat` 同列：同批改 7-system §7.2 的表与 `scripts/check-boundaries.mjs`，这是本行带的设计决定，写进提交正文。不为 Works、FactLog、Identity、Connectors 另写接口。
-    - `platform` 不得导入它，两处要先断开：① `ChangeArchive`（已是接口）原样搬进 `platform`，新增接口 `platform.ChangeLog`（`Records`、`ApplyAccepted`、`SubmitChecked`、`Fork() ChangeLog`），`StagedDecision.DraftChanges`、`Authority.ForkAcceptedChanges`、`Authority.UseChangeArchive`、`kernel.Decision.Logs`、`kernel/sequence_batch.go` 的校验日志都改用它；② `platform/rules_intervals.go` 用到 `kernel.NewIdentity` 的函数连同只为它服务的类型，移到唯一调用它的服务（调用者若在 `platform` 内，整条调用链移到 `services/objects`）。
+    - `platform` 不得导入它，两处要先断开：① `ChangeArchive`（已是接口）原样搬进 `platform`，新增接口 `platform.ChangeLog`（`Records`、`Last`、`ApplyAccepted`、`SubmitChecked`、`Fork() ChangeLog`），保留 `kernel/decision_batch.go` 现有的常数时间尾记录校验，不以全历史扫描代替；`StagedDecision.DraftChanges`、`Authority.ForkAcceptedChanges`、`Authority.UseChangeArchive`、`kernel.Decision.Logs`、`kernel/sequence_batch.go` 的校验日志都改用它；② `platform/rules_intervals.go` 用到 `kernel.NewIdentity` 的函数连同只为它服务的类型，移到唯一调用它的服务（调用者若在 `platform` 内，整条调用链移到 `services/objects`）。
     - 不做：不改 `kernel.Error`（U1.4）；不改任何接受语义与历史字节。
     - 完成：`command ls contract/go/kernel` 只剩 `errors.go`；除 `kernel.Error` 外全树不再引用 `platformkernel/kernel` 的任何标识；7-system 差距“三处内核”改写为现状。
     - 验证：V1、V3、V4。
@@ -72,10 +72,11 @@ read-when: 每批开始（选当前批次）与结束（删除已完成条目、
     - 方向：① 平台只留通用原子编辑集：创建、修改、删除对象，增删关系，函数支撑，forEach，编号分配；② `post`、`journal`（含关账期）是会计形状，不得留在任何 Go 类型里：能用通用规则加 Expr 表达的改写产品包，不能的改成产品包内的函数支撑规则；函数运行时做不到的登记为差距并阻塞；③ `effect`、`work` 归副作用；④ 类型定义离开 `platform`：执行在 `services/actions`，定义校验在 `services/ontology`；⑤ 格式纪元未冻结（C26），产品包 JSON 直接改写，不留旧形状的读取。
     - 产出：每种 kind → §6.7 哪种规则或副作用的映射表，写入 6-domain §6.7；把 U2 拆成后续行（同本格式，标档位与验证）。
 - [ ] U3 页面模型归位。
-  - [ ] U3.1 `[难]` 切断依赖。（进行中：Terra 6.1 Max，2026-11-14）
+  - [ ] U3.1 `[难]` 切断依赖。
     - 方向：列出 `platform` 内 8 个文件及 `services/ontology`、`services/devops`、`services/resources` 对 `platform.Page*` 的每处使用；留在 `platform` 的只有 `cmd/page-contract` 生成 `pageui/safety.ts` 与 `page_compat.json` 所需的最小页面组件契约；其余使用改为把使用方代码移入 `services/apps`，或在 `services/apps` 的 `api.go` 声明接口由宿主注入。不新增依赖差距。
     - 完成：除契约类型外，`platform` 自身与上述三个服务不再引用页面模型类型；清单写进提交正文。
     - 验证：V1、V3。
+    - 阻塞（2026-11-14，Terra 6.1 Max）：`platform/app.go:375` 的 `Manifest.Pages`、`platform/definition.go:81–87,243` 的应用与定义字段、`platform/definition_application.go:28–71` 的宿主接口直接引用页面类型，发布闭包与依赖解析也调用页面实现；U3.2 不能在它们之前或之后单独机械搬移。主会话须先确定共享契约边界：A 保留 SDK 的页面声明类型、把实现归 `services/apps`；B 页面声明与使用方同批归 `services/apps`，同时替换 SDK 跨边界契约。建议 A，避免重复模型和临时包装；由接续主会话核对完整清单后重划工单。
   - [ ] U3.2 `[易]` 搬移。前置 U3.1。`platform/page_*.go` 中契约之外的文件移入 `services/apps/pages`，改 import，下调 `platformLines`；`make contract` 无 diff。验证：V1、V3。
 - [ ] U4 发布路径一张表。
   - [ ] U4.1 `[难]` 钩子与样板。（进行中：Terra 6.1 Max，2026-11-14）
