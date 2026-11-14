@@ -45,7 +45,7 @@ read-when: 每批开始（选当前批次）与结束（删除已完成条目、
 工单按技能 `platform-loop` 执行（分工见 [method 工单循环](method.md#工单循环)）：`[难]` 给强模型（方向内的设计、内核与语义），`[易]` 给执行模型（方向已定的搬移、改名、重复样板），`[独占]` 行执行时不得有别的行在进行中。每行的“方向”已由主会话定下，不重议；“验证”是该技能中的档位（V1 基本、V2 路径、V3 全量、V4 并发、W 前端）。同一编号下按顺序做；不同编号之间只受“前置”约束。
 
 - [ ] U1 动作引擎归位。已完成（U1.1、U1.2）：规则引擎在 `services/actions/authority*.go`，服务、内核与宿主只经 `platform.Authority` 使用，由宿主经 `platform.Authorities` 注入。
-  - [ ] U1.3 `[难]` 协议部件入 `kernel/protocol`。
+  - [ ] U1.3 `[难]` 协议部件入 `kernel/protocol`。（进行中：Terra 6.1 Max，2026-11-14）
     - 方向：`contract/go/kernel` 除 `errors.go` 外全部移到新叶层包 `capabilities/server/kernel/protocol`（只依赖协议生成代码与 `platform`）。服务可以导入它，与 `kernel/records`、`kernel/acceptedformat` 同列：同批改 7-system §7.2 的表与 `scripts/check-boundaries.mjs`，这是本行带的设计决定，写进提交正文。不为 Works、FactLog、Identity、Connectors 另写接口。
     - `platform` 不得导入它，两处要先断开：① `ChangeArchive`（已是接口）原样搬进 `platform`，新增接口 `platform.ChangeLog`（`Records`、`ApplyAccepted`、`SubmitChecked`、`Fork() ChangeLog`），`StagedDecision.DraftChanges`、`Authority.ForkAcceptedChanges`、`Authority.UseChangeArchive`、`kernel.Decision.Logs`、`kernel/sequence_batch.go` 的校验日志都改用它；② `platform/rules_intervals.go` 用到 `kernel.NewIdentity` 的函数连同只为它服务的类型，移到唯一调用它的服务（调用者若在 `platform` 内，整条调用链移到 `services/objects`）。
     - 不做：不改 `kernel.Error`（U1.4）；不改任何接受语义与历史字节。
