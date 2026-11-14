@@ -32,6 +32,42 @@ func ClaimJobs(outbox *Outbox, endpoints []Endpoint, model string, allow func(id
 	return jobs
 }
 
+type DispatchRound struct {
+	Model       string
+	Stopped     func() bool
+	Quarantined func() bool
+	Allow       func(id string) bool
+	Begin       func(platform.Effect) bool
+	Span        func(DispatchJob) func(outcome string)
+	Count       func(app, result string)
+	Send        func(Endpoint, platform.Effect) (platform.Outcome, *platform.AIUsage)
+	Report      func(id string, ok bool)
+	Settle      func(id string, o platform.Outcome, usage *platform.AIUsage)
+}
+
+func (r DispatchRound) Sends(outbox *Outbox, endpoints []Endpoint, now time.Time) []func() {
+	var sends []func()
+	for _, j := range ClaimJobs(outbox, endpoints, r.Model, r.Allow, now) {
+		sends = append(sends, func() {
+			if r.Stopped() || !r.Begin(j.Effect) {
+				return
+			}
+			end := r.Span(j)
+			outcome, usage := r.Send(j.Endpoint, j.Effect)
+			end(map[bool]string{true: "ok", false: outcome.Result + ": " + outcome.Detail}[outcome.Result == "delivered"])
+			if r.Quarantined() {
+				return
+			}
+			r.Count(j.Effect.App, outcome.Result)
+			if j.Endpoint.Kind != r.Model {
+				r.Report(j.Endpoint.ID, outcome.Result != "retry")
+			}
+			r.Settle(j.Effect.ID, outcome, usage)
+		})
+	}
+	return sends
+}
+
 func RunnableIDs(queued []Queued, now time.Time, limit int) []string {
 	ids := []string{}
 	active := 0

@@ -3,7 +3,6 @@ package host
 import (
 	runtimekernel "platformserver/kernel"
 	releaseowner "platformserver/services/devops/releases"
-	"strings"
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
@@ -20,35 +19,26 @@ func (h hostView) ApprovalRelease(app, action, typ string) (string, *kernel.Erro
 }
 
 func (h flowExecution) ApprovalRelease(app, action, typ string) (string, *kernel.Error) {
-	closed, refusal := h.rt.view.approvalClosure(h.rt.release, app, action, typ)
-	if refusal != nil || closed.ID == "" {
-		return "", refusal
+	closed, err := releaseowner.StoredApprovalClosure(&h.rt.view.releases, h.rt.release, app, action, typ)
+	if err != nil || closed.ID == "" {
+		return "", runtimekernel.ConflictRefusal(err)
 	}
 	return h.rt.release, nil
-}
-
-func (t *Tenant) approvalClosure(release, app, action, typ string) (platform.ReleaseCandidate, *kernel.Error) {
-	closed, err := releaseowner.StoredApprovalClosure(&t.releases, release, app, action, typ)
-	return closed, runtimekernel.ConflictRefusal(err)
 }
 
 func (h hostView) ApprovalExecution(c platform.Caller, a platform.ApprovalRequest) (platform.WorkHost, *kernel.Error) {
 	if a.Release == "" {
 		return h, nil
 	}
-	typ, _, _ := strings.Cut(a.Target, "/")
-	closed, err := releaseowner.StoredApprovalExecution(&h.t.releases, a.Release, a.App, a.Action, typ)
+	bound, err := releaseowner.ApprovalExecution(&h.t.releases, a, func(assets []platform.ReleaseAsset) (platform.WorkHost, error) {
+		execution, err := h.retainedExecution(c, a.Release, assets)
+		if err != nil {
+			return nil, err
+		}
+		return execution.(platform.WorkHost), nil
+	})
 	if err != nil {
 		return nil, runtimekernel.ConflictRefusal(err)
-	}
-	execution, err := h.retainedExecution(c, a.Release, closed.Assets)
-	if err != nil {
-		return nil, runtimekernel.ConflictRefusal(err)
-	}
-	bound := execution.(platform.WorkHost)
-	app, action, known := bound.Action(a.Action)
-	if !known || app != a.App || action.Target != "" && action.Target != typ || action.Approval == nil {
-		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The retained approval action is unavailable")
 	}
 	return bound, nil
 }

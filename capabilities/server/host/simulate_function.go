@@ -50,7 +50,7 @@ func settleFunctionFixture(t *Tenant, actor platform.Member, fixture platform.Fu
 			t.AIClient = func(*http.Request) (*http.Response, error) {
 				return &http.Response{StatusCode: http.StatusOK, Header: make(http.Header), Body: io.NopCloser(bytes.NewReader(response))}, nil
 			}
-			outcome, usage := t.sendModel(call.Effect, now)
+			outcome, usage := t.gatewayRuntime().Send(call.Effect, now)
 			if usage != nil {
 				usage.Millis = 0
 			}

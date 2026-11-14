@@ -1,18 +1,5 @@
 package host
 
-import "sync"
-
-type changes struct {
-	mu          sync.Mutex
-	seq         int64
-	data        int64
-	wake        chan struct{}
-	global      int64
-	owners      map[string]int64
-	opsOwners   map[string]int64
-	pendingData map[string]bool
-}
-
 func (t *Tenant) changed() { t.changedOwner("") }
 
 func (t *Tenant) operationsChanged(owner ...string) {
@@ -29,51 +16,12 @@ func (t *Tenant) changedOwner(owner string) {
 }
 
 func (t *Tenant) markChanged(data bool, owner string) {
-	c := &t.change
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	if data && t.readOrigin == nil && t.readImage.Load() != nil && !t.quarantined() {
-		if c.pendingData == nil {
-			c.pendingData = map[string]bool{}
-		}
-		c.pendingData[owner] = true
-		return
+	if t.change.Mark(data, owner, func() bool { return t.readOrigin == nil && t.readImage.Load() != nil && !t.quarantined() }) {
+		wakeWork()
 	}
-	c.seq++
-	switch {
-	case !data:
-		if c.opsOwners == nil {
-			c.opsOwners = map[string]int64{}
-		}
-		c.opsOwners[owner]++
-	case owner == "":
-		c.data++
-		c.global++
-	default:
-		c.data++
-		if c.owners == nil {
-			c.owners = map[string]int64{}
-		}
-		c.owners[owner]++
-	}
-	if c.wake != nil {
-		close(c.wake)
-		c.wake = nil
-	}
-	wakeWork()
 }
 
 func (t *Tenant) Changes() (int64, <-chan struct{}) {
-	seq, _, wake := t.changeState()
+	seq, _, wake := t.change.State()
 	return seq, wake
-}
-
-func (t *Tenant) changeState() (int64, int64, <-chan struct{}) {
-	c := &t.change
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	if c.wake == nil {
-		c.wake = make(chan struct{})
-	}
-	return c.seq, c.data, c.wake
 }

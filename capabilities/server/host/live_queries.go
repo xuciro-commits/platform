@@ -18,18 +18,7 @@ func (t *Tenant) liveFollow(m platform.Member, mux *http.ServeMux) transport.Liv
 }
 
 func (t *Tenant) liveVersion(query string) string {
-	c := &t.change
-	c.mu.Lock()
-	global, meta, seq := c.global, c.owners["platform"]+c.owners["enterprise"]+c.owners["build"], c.seq
-	owners := make(map[string]int64, len(c.owners))
-	for k, v := range c.owners {
-		owners[k] = v
-	}
-	ops := make(map[string]int64)
-	for k, v := range c.opsOwners {
-		ops[k] = v
-	}
-	c.mu.Unlock()
+	global, meta, seq, owners, ops := t.change.Versions()
 	if image := t.readImage.Load(); image != nil {
 		return image.state.liveReadVersion(query, global, meta, seq, image.operations, owners, ops)
 	}

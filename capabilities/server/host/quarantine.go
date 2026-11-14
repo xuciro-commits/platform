@@ -10,7 +10,7 @@ func (t *Tenant) quarantine(err error) {
 	if err == nil {
 		return
 	}
-	if source := t.scopeSource(); source != nil {
+	if source := t.readOrigin; source != nil {
 		source.quarantine(err)
 		return
 	}
@@ -20,7 +20,7 @@ func (t *Tenant) quarantine(err error) {
 }
 
 func (t *Tenant) quarantined() bool {
-	if source := t.scopeSource(); source != nil {
+	if source := t.readOrigin; source != nil {
 		return source.quarantined()
 	}
 	return t.Fault.Load() != nil

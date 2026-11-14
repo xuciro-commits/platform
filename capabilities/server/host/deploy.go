@@ -2,8 +2,6 @@ package host
 
 import (
 	"context"
-	"errors"
-	"flag"
 	"fmt"
 	"log"
 	"os"
@@ -24,65 +22,23 @@ import (
 )
 
 type Deployment struct {
-	Addr, Database, Issuer, Keys, Web string
-	IdentityProxy                     string
-	HostAdmins                        string
-	TenantsFile, TemplatesDir         string
-	Release                           int
-	ReleaseDigest                     string
-	specs                             *controlowner.Specs
-	Files                             string
-	Project                           bool
-	SnapshotEvery                     int64
-	Profile                           string
-	Data                              string
-	IDPKey                            string
-	Mint                              string
-	NewKey                            bool
-	TokenTTL                          time.Duration
-	Packages                          string
-	packageIndex                      *platform.PackageIndex
-	Rebuild                           func(id string) (*Tenant, error)
-	RebuildWithCapabilities           func(id string, services platform.RuntimeCapabilities) (*Tenant, error)
-	RuntimeProviders                  *platform.RuntimeProviders
-	HostAuthorization                 platform.AuthorizationEngine
-	Storage                           *persistence.JournalProvider
-	runtimeContext                    context.Context
-	background                        *sync.WaitGroup
-	Seed                              func(t *Tenant, now time.Time) error
+	idp.Flags
+	specs                   *controlowner.Specs
+	packageIndex            *platform.PackageIndex
+	Rebuild                 func(id string) (*Tenant, error)
+	RebuildWithCapabilities func(id string, services platform.RuntimeCapabilities) (*Tenant, error)
+	RuntimeProviders        *platform.RuntimeProviders
+	HostAuthorization       platform.AuthorizationEngine
+	Storage                 *persistence.JournalProvider
+	runtimeContext          context.Context
+	background              *sync.WaitGroup
+	Seed                    func(t *Tenant, now time.Time) error
 }
 
 func Flags(addr string) *Deployment {
 	d := &Deployment{}
-	flag.StringVar(&d.Addr, "addr", addr, "listen address")
-	flag.StringVar(&d.Database, "database", "", "PostgreSQL URL of the journal (empty: memory only)")
-	flag.StringVar(&d.Issuer, "oidc-issuer", "", "OpenID issuer whose access tokens are accepted (empty: development tokens, the token is the subject)")
-	flag.StringVar(&d.HostAdmins, "host-admins", "", "comma-separated authenticated subjects allowed to administer this host; empty: no host administrators")
-	flag.StringVar(&d.Keys, "oidc-keys", "", "JWKS URL of the issuer, when the server reaches it on another address")
-	flag.StringVar(&d.IdentityProxy, "oidc-proxy", "", "fixed identity service upstream exposed at /auth on this host")
-	flag.StringVar(&d.Files, "files", "", "S3-compatible store of file bytes, http(s)://host:port/bucket, keys from PLATFORM_S3_ACCESS_KEY and PLATFORM_S3_SECRET_KEY (empty: memory)")
-	flag.StringVar(&d.TenantsFile, "tenants", "", "JSON file with the host's tenants, their seats and starting settings; the host console appends to it (empty: the built-in development tenant)")
-	flag.StringVar(&d.TemplatesDir, "templates", "", "directory of tenant templates the host console offers (empty: none)")
-	flag.BoolVar(&d.Project, "project", false, "copy records into PostgreSQL tables per tenant for tools outside the host (needs -database)")
-	flag.Int64Var(&d.SnapshotEvery, "snapshot-every", 10000, "save each tenant's state every this many journal entries and at shutdown, and start from the newest compatible snapshot (0: replay the whole journal)")
-	flag.StringVar(&d.Web, "web", "", "directory of the workspace's build, served at / (empty: API only)")
-	flag.StringVar(&d.Profile, "profile", "delivery", "delivery: PostgreSQL journal, S3 file bytes, external OpenID provider; lightweight: one -data directory, an internal signing key, no external services")
-	flag.StringVar(&d.Data, "data", "", "directory of a lightweight host's state, journals and file bytes (required with -profile lightweight)")
-	flag.StringVar(&d.IDPKey, "idp-key", "", "file with the lightweight host's token signing key (default: <data>/idp.key)")
-	flag.BoolVar(&d.NewKey, "idp-new-key", false, "make a signing key when none exists, refuse to replace one, and stop")
-	flag.StringVar(&d.Mint, "mint-token", "", "print an access token for this subject and stop (<user:email> or <client:id>, as the seats name them)")
-	flag.DurationVar(&d.TokenTTL, "token-ttl", 12*time.Hour, "how long a minted token is accepted")
-	flag.StringVar(&d.Packages, "packages", os.Getenv("PLATFORM_PACKAGES_DIR"), "directory of package descriptors the console offers (empty: no packages)")
-	flag.IntVar(&d.Release, "release", 0, "the system release this binary serves (0: a development build)")
-	flag.StringVar(&d.ReleaseDigest, "release-digest", "", "sha256 of this binary as the system release recorded it")
+	d.Register(addr)
 	return d
-}
-
-func (d *Deployment) validate() error {
-	profile, err := idp.Profile{Name: d.Profile, Data: d.Data, KeyFile: d.IDPKey, Database: d.Database, Files: d.Files,
-		Issuer: d.Issuer, Keys: d.Keys, Proxy: d.IdentityProxy, Project: d.Project}.Check()
-	d.Profile = profile
-	return err
 }
 
 func (d *Deployment) lightweightState() (Journals, platform.FileStore, error) {
@@ -122,15 +78,11 @@ func (d *Deployment) Serve(tenants ...*Tenant) (serveErr error) {
 	d.runtimeContext, d.background = ctx, &background
 	defer func() { d.runtimeContext, d.background = nil, nil }()
 	_ = resources.Track("background observers", runtimekernel.Drain(cancel, &background))
-	defer func() {
-		closing, done := context.WithTimeout(context.Background(), 15*time.Second)
-		defer done()
-		serveErr = errors.Join(serveErr, resources.Close(closing))
-	}()
-	if err := d.validate(); err != nil {
+	defer func() { serveErr = runtimekernel.CloseAll(&resources, serveErr) }()
+	if err := d.Validate(); err != nil {
 		return err
 	}
-	signer, done, err := idp.Startup{Profile: d.Profile, Data: d.Data, KeyFile: d.IDPKey, Mint: d.Mint, NewKey: d.NewKey, TokenTTL: d.TokenTTL}.Run(Now())
+	signer, done, err := d.Startup().Run(Now())
 	if err != nil || done {
 		return err
 	}
@@ -235,21 +187,19 @@ func (d *Deployment) Serve(tenants ...*Tenant) (serveErr error) {
 	unregister := observeFrom(registry.List)
 	_ = resources.Track("metrics callback", func(context.Context) error { return unregister() })
 	_ = resources.Track("background work", runWorkFrom(registry.List))
-	var snapshots *snapshotter
+	var snapshots *runtimekernel.SnapshotSaver
 	watch := func(original *Tenant) {
 		if snapshots == nil {
 			return
 		}
-		snapshots.mu.Lock()
-		snapshots.saved[original.ID] = restored[original.ID]
-		snapshots.mu.Unlock()
+		snapshots.Note(original.ID, restored[original.ID])
 		runtimekernel.Every(ctx, &background, 5*time.Second, func() bool {
-			snapshots.save(ctx, registry.Current(original.ID), false)
+			snapshots.Save(ctx, registry.Current(original.ID).snapshotSource(ctx, journal, code), false)
 			return true
 		})
 	}
 	if journal != nil && d.SnapshotEvery > 0 {
-		snapshots = &snapshotter{journal: journal, code: code, every: d.SnapshotEvery, saved: map[string]int64{}}
+		snapshots = runtimekernel.NewSnapshotSaver(journal, d.SnapshotEvery)
 		for _, original := range tenants {
 			watch(original)
 		}
@@ -292,9 +242,7 @@ func (d *Deployment) Serve(tenants ...*Tenant) (serveErr error) {
 				return err
 			}
 			if snapshots != nil {
-				snapshots.mu.Lock()
-				snapshots.saved[id] = journal.Position(id)
-				snapshots.mu.Unlock()
+				snapshots.Note(id, journal.Position(id))
 			}
 			return nil
 		}
@@ -318,7 +266,7 @@ func (d *Deployment) Serve(tenants ...*Tenant) (serveErr error) {
 		cancel()
 		if snapshots != nil {
 			for _, t := range registry.List() {
-				snapshots.save(shutdown, t, true)
+				snapshots.Save(shutdown, t.snapshotSource(shutdown, journal, code), true)
 			}
 		}
 		return nil

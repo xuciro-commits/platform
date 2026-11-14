@@ -162,3 +162,49 @@ func RunActors(request CandidateSimulationRequest, out CandidateSimulation, m pl
 	}
 	return out, nil
 }
+
+type CandidateHooks[E any] struct {
+	Quarantined func() bool
+	Member      func(string) (platform.Member, bool)
+	Source      CandidateSource
+	Environment func(candidate platform.ReleaseCandidate) (E, error)
+	Modules     func(E) map[string][]byte
+	ReadModule  func(string) ([]byte, error)
+	Run         func(candidate platform.ReleaseCandidate, environment E, actor platform.Member, members []platform.Member, functionName string) (CandidateSimulation, *kernel.Error)
+}
+
+func SimulateCandidate[E any](request CandidateSimulationRequest, builder platform.Member, selected *StagedCandidate, h CandidateHooks[E]) (CandidateSimulation, *kernel.Error) {
+	var empty CandidateSimulation
+	var staged *platform.ReleaseCandidate
+	if selected != nil {
+		staged = &selected.Candidate
+	}
+	if refusal := request.Check(staged); refusal != nil {
+		return empty, refusal
+	}
+	if h.Quarantined() {
+		return empty, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
+	}
+	m, members, refusal := request.Members(builder, h.Member)
+	if refusal != nil {
+		return empty, refusal
+	}
+	candidate, functionName, err := request.Select(h.Source, selected)
+	environment, environmentErr := h.Environment(candidate)
+	if err == nil {
+		err = environmentErr
+	}
+	if err != nil {
+		return empty, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "The candidate cannot be tested: {why}", err.Error())
+	}
+	if refusal := CandidateModules(candidate, h.Modules(environment), h.ReadModule); refusal != nil {
+		return empty, refusal
+	}
+	out, problem := h.Run(candidate, environment, m, members, functionName)
+	if problem != nil {
+		return empty, problem
+	}
+	return RunActors(request, out, m, members, func(actor platform.Member) (CandidateSimulation, *kernel.Error) {
+		return h.Run(candidate, environment, actor, members, functionName)
+	})
+}

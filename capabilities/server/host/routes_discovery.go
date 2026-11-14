@@ -5,7 +5,6 @@ import (
 	"context"
 	"encoding/json"
 	"google.golang.org/protobuf/encoding/protojson"
-	"io"
 	"net/http"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
@@ -173,10 +172,8 @@ func (h *Host) routesApplications(rt *routes) {
 			return t.Applications(m), nil
 		}))
 	rt.metadata(transport.Route{Pattern: "POST /v1/page-view", Summary: "One page of an application resolved for the caller: its object, fields and the actions they may take", Body: PageRequest{}, Answer: platform.PageView{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
-		var body PageRequest
-		decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<16))
-		decoder.DisallowUnknownFields()
-		if decoder.Decode(&body) != nil || decoder.Decode(new(any)) != io.EOF || body.App == "" || body.Page == "" {
+		body, ok := transport.DecodeOne[PageRequest](w, r, 1<<16)
+		if !ok || body.App == "" || body.Page == "" {
 			Reply(w, nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "A page view names one application and one page"))
 			return
 		}

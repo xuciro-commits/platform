@@ -79,6 +79,17 @@ func (c OperationClaims) Settle(committed []byte) bool {
 	return true
 }
 
+func (c OperationClaims) Revalidated(id string, o platform.Outcome, allowed func(platform.Effect) bool) platform.Outcome {
+	if o.Generation == 0 || o.Result != "delivered" {
+		return o
+	}
+	x, _, _ := c.Queued(id)
+	if !allowed(x) {
+		o.Result, o.Detail, o.Answer, o.Digest = "rejected", "Operation permission or source access was revoked", nil, ""
+	}
+	return o
+}
+
 func (c OperationClaims) Current(id string, generation uint32) bool {
 	work, err := c.Works().Get(id)
 	if err != nil || work.GetGeneration() != generation || work.GetState() != pb.WorkState_WORK_STATE_RUNNING {

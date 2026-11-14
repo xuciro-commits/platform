@@ -2,11 +2,9 @@ package host
 
 import (
 	"context"
-	"errors"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
 	"platformserver/kernel/records"
-	persistence "platformserver/kernel/store"
 	"platformserver/platform"
 	releaseowner "platformserver/services/devops/releases"
 	"platformserver/services/objects"
@@ -15,6 +13,8 @@ import (
 )
 
 import "platformserver/kernel/transport"
+
+import runtimekernel "platformserver/kernel"
 
 type recordReadScope struct {
 	ctx         context.Context
@@ -34,10 +34,6 @@ func (t *Tenant) readError() error {
 		return t.readScope.err
 	}
 	return nil
-}
-
-func (t *Tenant) scopeSource() *Tenant {
-	return t.readOrigin
 }
 
 func (t *Tenant) beginRecordRead(ctx context.Context) {
@@ -62,7 +58,7 @@ func (t *Tenant) closeRecordRead() {
 	if !t.currentReadScopes {
 		return
 	}
-	if err := t.CloseReadScope(t.apps, t.scopeSource() == nil, t.quarantine); err != nil && t.readError() == nil {
+	if err := t.CloseReadScope(t.apps, t.readOrigin == nil, t.quarantine); err != nil && t.readError() == nil {
 		t.readScope.err = err
 	}
 }
@@ -80,7 +76,7 @@ func recordRead[T any](t *Tenant, ctx context.Context, read func(*Tenant) (T, *k
 	return coordinatedRecordRead(t, ctx, read)
 }
 func coordinatedRecordRead[T any](t *Tenant, ctx context.Context, read func(*Tenant) (T, *kernel.Error)) (value T, refusal *kernel.Error) {
-	if t.scopeSource() != nil {
+	if t.readOrigin != nil {
 		return read(t)
 	}
 	return readFromImage(t, ctx, read)
@@ -98,22 +94,7 @@ func lockedRecordRead[T any](t *Tenant, ctx context.Context, read func(*Tenant) 
 		return value, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The read was cancelled while waiting for the tenant")
 	}
 	defer t.Lane.Unlock()
-	defer func() {
-		if failure := recover(); failure != nil {
-			if err, ok := failure.(error); ok {
-				t.readScope.err = err
-				var mismatch *persistence.StatePositionError
-				if errors.As(err, &mismatch) {
-					t.quarantine(err)
-				}
-				var zero T
-				value = zero
-				refusal = &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
-				return
-			}
-			panic(failure)
-		}
-	}()
+	defer runtimekernel.RecoverLockedRead(func(err error) { t.readScope.err = err }, t.quarantine, &value, &refusal)
 	if err := t.recordReadRefusal(); err != nil {
 		return value, err
 	}

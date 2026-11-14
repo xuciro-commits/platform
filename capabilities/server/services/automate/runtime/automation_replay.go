@@ -9,6 +9,15 @@ import (
 	"platformserver/platform"
 )
 
+var deliveryRetry = platform.Retry{Initial: 2 * time.Second, Max: time.Minute, Attempts: 5}
+
+func RetryOf(a platform.App) platform.Retry {
+	if a != nil && a.Manifest().Retry != nil {
+		return *a.Manifest().Retry
+	}
+	return deliveryRetry
+}
+
 type EventRoute struct {
 	MaxHops    int
 	Apps       []platform.App

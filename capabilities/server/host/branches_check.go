@@ -15,13 +15,6 @@ import (
 	"platformserver/services/resources/authoring"
 )
 
-func (t *Tenant) decideBranchChild(draft *stagedDecision, m platform.Member, item branches.Action, key string, now time.Time) branches.StageChild {
-	return branches.DecideChild(draft, t.ID, m, item, key, func(p any) bool { _, ok := p.(stagedEffectPanic); return ok },
-		func(draft *stagedDecision, schema string, s *pb.Submission, automation bool) branches.StageChild {
-			return t.decideBranchStep(draft, m, schema, s, automation, now)
-		})
-}
-
 func (t *Tenant) decideBranchStep(draft *stagedDecision, m platform.Member, schema string, submission *pb.Submission, automation bool, now time.Time) branches.StageChild {
 	a := t.App(t.owner["action:"+schema])
 	if a == nil {
@@ -41,7 +34,10 @@ func (t *Tenant) decideBranchStep(draft *stagedDecision, m platform.Member, sche
 
 func (t *Tenant) branchDecider(m platform.Member, now time.Time) func(*stagedDecision, branches.Action, string) branches.StageChild {
 	return func(draft *stagedDecision, item branches.Action, key string) branches.StageChild {
-		return t.decideBranchChild(draft, m, item, key, now)
+		return branches.DecideChild(draft, t.ID, m, item, key, func(p any) bool { _, ok := p.(stagedEffectPanic); return ok },
+			func(draft *stagedDecision, schema string, s *pb.Submission, automation bool) branches.StageChild {
+				return t.decideBranchStep(draft, m, schema, s, automation, now)
+			})
 	}
 }
 
@@ -172,17 +168,12 @@ func (t *Tenant) MergeBranch(m platform.Member, id string, request BranchMergeRe
 }
 
 func (t *Tenant) applyBranch(m platform.Member, id string, resolutions []branches.BranchResolution, simulate bool, now time.Time) (branches.MergePlan, *kernel.Error) {
-	type prepared struct {
-		plan branches.MergePlan
-	}
-	value, refusal := decideOnImage(t, context.Background(), "branch:merge", func(t *Tenant) (prepared, *kernel.Error) {
-		plan, refusal := t.prepareBranchMerge(m, id, resolutions, simulate, now)
-		return prepared{plan: plan}, refusal
-	}, func(t *Tenant, candidate preparedAccepted, value prepared, refusal *kernel.Error) (prepared, *kernel.Error) {
+	return decideOnImage(t, context.Background(), "branch:merge", func(t *Tenant) (branches.MergePlan, *kernel.Error) {
+		return t.prepareBranchMerge(m, id, resolutions, simulate, now)
+	}, func(t *Tenant, candidate preparedAccepted, plan branches.MergePlan, refusal *kernel.Error) (branches.MergePlan, *kernel.Error) {
 		_, refusal = t.finishPreparedSubmission(m, candidate, nil, refusal)
-		return value, refusal
+		return plan, refusal
 	})
-	return value.plan, refusal
 }
 
 func (t *Tenant) prepareBranchMerge(m platform.Member, id string, resolutions []branches.BranchResolution, simulate bool, now time.Time) (branches.MergePlan, *kernel.Error) {

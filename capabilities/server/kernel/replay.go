@@ -3,7 +3,6 @@ package kernel
 import (
 	"encoding/json"
 	"fmt"
-	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	acceptedformat "platformserver/kernel/acceptedformat"
 	persistence "platformserver/kernel/store"
 	"platformserver/platform"
@@ -29,13 +28,10 @@ type ReplayHooks struct {
 	Work          func(body []byte) error
 	Batch         func(l *platform.Ledger, body []byte) (bool, error)
 	Record        func(l *platform.Ledger, body []byte) (bool, error)
-	Submitted     func(member string, a platform.App, s *pb.Submission, at time.Time) platform.AuditEntry
 	Invalidate    func()
 	Pin           func(versions map[string]int)
 	App           func(id string) platform.App
-	Audit         func(platform.AuditEntry)
 	Enqueue       func(time.Time)
-	PublishBatch  func(acceptedformat.Batch)
 	PublishRecord func(platform.Event, platform.AcceptedEventPlan)
 }
 
@@ -133,8 +129,8 @@ func (s *Sequence) replayResult(i int, e persistence.Entry, m platform.Member, a
 		if applyErr != nil || !applied {
 			return fmt.Errorf("entry %d: record batch: %v (applied=%t)", i+1, applyErr, applied)
 		}
-		h.Audit(h.Submitted(m.ID, a, sub, saved.At))
-		h.PublishBatch(saved)
+		s.AuditLog.Remember(Submitted(m.ID, a, sub, saved.At))
+		PublishBatch(saved, h.PublishRecord)
 		h.Enqueue(e.At)
 		return nil
 	}
@@ -152,7 +148,7 @@ func (s *Sequence) replayResult(i int, e persistence.Entry, m platform.Member, a
 	if applyErr != nil || !applied {
 		return fmt.Errorf("entry %d: accepted result: %v (applied=%t)", i+1, applyErr, applied)
 	}
-	h.Audit(h.Submitted(m.ID, a, receipt.GetSubmission(), e.At))
+	s.AuditLog.Remember(Submitted(m.ID, a, receipt.GetSubmission(), e.At))
 	h.PublishRecord(platform.Event{App: e.App, Record: receipt, Changed: saved.Event.Changed}, saved.Event)
 	h.Enqueue(e.At)
 	return nil

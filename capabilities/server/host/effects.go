@@ -25,11 +25,6 @@ import (
 	controlowner "platformserver/services/security/control"
 )
 
-func (t *Tenant) emit(e platform.Event, names []string) {
-	planned, _ := t.eventEffects(e, names, false)
-	t.outbound.Add(t.current(), planned...)
-}
-
 func (t *Tenant) eventEffects(e platform.Event, names []string, preparing bool) ([]platform.Effect, *kernel.Error) {
 	planned, refusal := t.writebackEffects(e, preparing)
 	if refusal != nil {
@@ -37,6 +32,11 @@ func (t *Tenant) eventEffects(e platform.Event, names []string, preparing bool) 
 	}
 	planned = append(planned, actions.EventEffects(t.ID, t.endpoints.All(), e, names)...)
 	return planned, nil
+}
+
+func (t *Tenant) emit(e platform.Event, names []string) {
+	planned, _ := t.eventEffects(e, names, false)
+	t.outbound.Add(t.current(), planned...)
 }
 
 func (t *Tenant) emitFor(c platform.Caller, kind, key, entity string, data any, now time.Time) (int, *kernel.Error) {
@@ -54,7 +54,7 @@ func (t *Tenant) planAppEffects(c platform.Caller, kind, key, entity string, dat
 		Bind: func(resource platform.AssetRef) ([]platform.AssetBinding, error) {
 			return t.bindApplications(resource, t.releases.Active(), "")
 		},
-		Exists: func(id string) bool { return t.outbound.Any(func(x actions.Queued) bool { return x.ID == id }) }}.Plan(c, kind, key, entity, data, now, staged)
+		Exists: t.outbound.Has}.Plan(c, kind, key, entity, data, now, staged)
 }
 
 func (t *Tenant) askHeldEffects(c platform.Caller, kind, entity string, planned []platform.Effect, now time.Time) {
@@ -85,37 +85,33 @@ func (t *Tenant) dispatches(now time.Time) []func() {
 	if t.businessStopped() {
 		return nil
 	}
-	var sends []func()
-	for _, j := range actions.ClaimJobs(&t.outbound, append(t.endpoints.All(), actions.ConnectionEndpoints(t.outbound.Select(nil), dataowner.WritebackEndpoint)...), acceptedformat.ModelEndpoint,
-		func(id string) bool { return t.breakers.Allow("endpoint:"+id, now, true) }, now) {
-		sends = append(sends, func() {
-			if t.businessStopped() {
-				return
-			}
-			if !t.beginDispatchAttempt(j.Effect, now) {
-				return
-			}
+	sends := actions.DispatchRound{Model: acceptedformat.ModelEndpoint, Stopped: t.businessStopped, Quarantined: t.quarantined,
+		Allow: func(id string) bool { return t.breakers.Allow("endpoint:"+id, now, true) },
+		Begin: func(x platform.Effect) bool { return t.beginDispatchAttempt(x, now) },
+		Span: func(j actions.DispatchJob) func(string) {
 			span := monitoring.Outside(j.Span, "send "+j.Effect.Event+" to "+j.Endpoint.ID, attribute.String("platform.tenant", t.ID),
 				attribute.String("platform.endpoint", j.Endpoint.ID), attribute.String("platform.effect", j.Effect.ID))
-			outcome, usage := t.sendWithUsage(j.Endpoint, j.Effect, now)
-			monitoring.End(span, map[bool]string{true: "ok", false: outcome.Result + ": " + outcome.Detail}[outcome.Result == "delivered"])
-			if t.quarantined() {
-				return
-			}
-			monitoring.Counted(t.ID, "effect", j.Effect.App, outcome.Result)
-			if j.Endpoint.Kind != acceptedformat.ModelEndpoint {
-				t.breakers.Report("endpoint:"+j.Endpoint.ID, outcome.Result != "retry", now)
-			}
-			t.settleWithUsage(j.Effect.ID, outcome, usage, now)
-		})
+			return func(outcome string) { monitoring.End(span, outcome) }
+		},
+		Count: func(app, result string) { monitoring.Counted(t.ID, "effect", app, result) },
+		Send: func(ep actions.Endpoint, x platform.Effect) (platform.Outcome, *platform.AIUsage) {
+			return t.sendWithUsage(ep, x, now)
+		},
+		Report: func(id string, ok bool) { t.breakers.Report("endpoint:"+id, ok, now) },
+		Settle: func(id string, o platform.Outcome, usage *platform.AIUsage) { t.settleWithUsage(id, o, usage, now) },
+	}.Sends(&t.outbound, append(t.endpoints.All(), actions.ConnectionEndpoints(t.outbound.Select(nil), dataowner.WritebackEndpoint)...), now)
+	for _, id := range actions.RunnableIDs(t.outbound.Select(func(x actions.Queued) bool { return x.Endpoint == acceptedformat.OperationEndpoint }), now, 4) {
+		if x, ok := t.claimOperation(id, now); ok {
+			sends = append(sends, func() { out := t.executeOperation(x, now); t.settleWithUsage(x.ID, out, nil, time.Now().UTC()) })
+		}
 	}
-	return append(sends, t.operationDispatches(now)...)
+	return sends
 }
 
 func (t *Tenant) sendWithUsage(ep actions.Endpoint, x platform.Effect, now time.Time) (platform.Outcome, *platform.AIUsage) {
 	switch ep.Kind {
 	case acceptedformat.ModelEndpoint:
-		return t.sendModel(x, now)
+		return t.gatewayRuntime().Send(x, now)
 	case "email":
 		return t.transport().Mail(ep, x, now), nil
 	case "a2a":
@@ -135,12 +131,7 @@ func (t *Tenant) settleWithUsage(effect string, o platform.Outcome, usage *platf
 		if t.quarantined() || o.Generation != 0 && !t.operationClaims().Current(effect, o.Generation) {
 			return struct{}{}, nil
 		}
-		if o.Generation != 0 && o.Result == "delivered" {
-			current, _ := t.outbound.Get(effect)
-			if !t.operationAllowed(current.Effect, now) {
-				o.Result, o.Detail, o.Answer, o.Digest = "rejected", "Operation permission or source access was revoked", nil, ""
-			}
-		}
+		o = t.operationClaims().Revalidated(effect, o, func(x platform.Effect) bool { return t.operationAllowed(x, now) })
 		t.settleAccepted(effect, o, usage, now)
 		return struct{}{}, nil
 	}, func(t *Tenant, candidate preparedAccepted, value struct{}, refusal *kernel.Error) (struct{}, *kernel.Error) {
@@ -184,7 +175,7 @@ func guarded(req *http.Request, allowPrivate bool) (*http.Response, error) {
 }
 
 func (t *Tenant) applyAcceptedEffect(raw []byte) (acceptedformat.Effect, bool, error) {
-	h := runtimekernel.EffectApply{Changes: t.changeApply(), Finish: t.operationClaims().PrepareFinish, Published: t.publishAcceptedChanges, Current: t.outbound.State,
+	h := runtimekernel.EffectApply{Changes: t.changeApply(), Finish: t.operationClaims().PrepareFinish, Publish: t.publishAccepted, Current: t.outbound.State,
 		Settle: func(id string, after acceptedformat.EffectState, finished *pb.Work) {
 			t.outbound.Settled(id, after)
 			if finished != nil {

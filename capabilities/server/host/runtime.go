@@ -43,7 +43,7 @@ func (r runtime) Request(c platform.Caller, rec *pb.ChangeRecord, q platform.Req
 		unsupportedStagedEffect()
 	}
 	if q.Protocol == "" {
-		r.t.askModel(c, rec, q)
+		r.t.outbound.Add(r.t.current(), r.t.gatewayRuntime().Plan(c, rec, q, nil))
 	}
 }
 
@@ -109,5 +109,3 @@ func (d *stagedDecision) AuthorizationEngine() platform.AuthorizationEngine {
 
 func (r runtime) Rules() platform.RuleEngine         { return r.t.services.Rules }
 func (d *stagedDecision) Rules() platform.RuleEngine { return d.tenant.services.Rules }
-
-func (t *Tenant) RuntimeCapabilities() platform.RuntimeCapabilities { return t.services }

@@ -2,7 +2,6 @@ package host
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"maps"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
@@ -77,15 +76,9 @@ func (t *Tenant) submit(m platform.Member, s *pb.Submission, now time.Time, opts
 		if refusal := t.recordReadRefusal(); refusal != nil {
 			return out, refusal
 		}
-		a := t.App(t.owner["action:"+s.GetSchema().GetName()])
-		if a == nil {
-			a = t.App(s.GetAuthority())
-			if a == nil {
-				return out, unknown()
-			}
-			if !t.PriorOf(a, s.GetIdempotencyKey()).Known() {
-				return out, platform.Refuse(pb.ErrorCode_ERROR_CODE_UNKNOWN_SCHEMA, "The action definition is unavailable; refresh definitions")
-			}
+		a, refusal := t.ActionOwner(t.App(t.owner["action:"+s.GetSchema().GetName()]), t.App(s.GetAuthority()), s.GetIdempotencyKey())
+		if refusal != nil {
+			return out, refusal
 		}
 		source := opts.source
 		if source != nil {
@@ -150,10 +143,8 @@ func (t *Tenant) accept(a platform.App, m platform.Member, s *pb.Submission, now
 	if done {
 		return record, refusal
 	}
-	if s.GetSchema().GetName() == controlowner.SchemaCredentialSave {
-		if _, failure := controlowner.DecodeCredentialWrite(t.ID, s.GetPayload()); failure != nil {
-			return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Invalid credential configuration or encrypted value")
-		}
+	if refusal := controlowner.CheckCredentialSave(t.ID, s); refusal != nil {
+		return nil, refusal
 	}
 
 	if err := t.checkBusinessCorrection(m, s, binding); err != nil {
@@ -177,14 +168,7 @@ func (t *Tenant) accept(a platform.App, m platform.Member, s *pb.Submission, now
 			record, refusal = decideAcceptedAs(a, draft, m, s, now, opts.automation)
 		}
 	}
-	if draft.Failure != nil {
-		refusal = draft.Failure
-		record = nil
-	}
-	if refusal == nil && automation.PendingOperationInputs(draft.operationInputs) > 0 {
-		record = nil
-		refusal = platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "A prepared Compute input was not consumed by this accepted Flow decision")
-	}
+	record, refusal = draft.Settled(record, refusal, automation.PendingOperationInputs(draft.operationInputs))
 	raw, refusal, err := draft.Outcome(draft.sources(), runtimekernel.OutcomeHooks{
 		Explain: func(r *kernel.Error) *kernel.Error {
 			return actions.Explained(r, a, s.GetSchema().GetName(), runtimekernel.Target(s))
@@ -196,8 +180,7 @@ func (t *Tenant) accept(a platform.App, m platform.Member, s *pb.Submission, now
 	if err != nil {
 		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "This action cannot produce a bounded accepted result")
 	}
-	member, _ := json.Marshal(m)
-	entry := Entry{App: a.Manifest().ID, Kind: "accepted-result", Principal: member, Body: raw, At: now}
+	entry := runtimekernel.AcceptedEntry(a.Manifest().ID, m, raw, now, nil)
 	if t.preparedResult != nil {
 		*t.preparedResult = preparedAccepted{entry: entry, key: s.GetIdempotencyKey(), hash: hash, issues: draft.InputIssues[refusal], uploads: t.preparedResult.uploads}
 		return record, refusal
@@ -217,11 +200,7 @@ func (t *Tenant) finishCommittedResult(a platform.App, m platform.Member, hash s
 			refusal = &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
 		}
 	}()
-	return t.FinishCommitted(a, m, hash, committed, runtimekernel.CommittedResult{Settlement: t.settlement(), App: t.App, ApplyBatch: t.applyAcceptedBatch, ApplyRecord: t.applyAcceptedResult,
-		Remember: func(member string, a platform.App, s *pb.Submission, at time.Time) {
-			t.AuditLog.Remember(submitted(member, a, s, at))
-		},
-		PublishBatch: t.publishAcceptedBatch, Publish: t.publishAccepted})
+	return t.FinishCommitted(a, m, hash, committed, runtimekernel.CommittedResult{Settlement: t.settlement(), App: t.App, ApplyBatch: t.applyAcceptedBatch, ApplyRecord: t.applyAcceptedResult, Publish: t.publishAccepted})
 }
 
 func decideAcceptedAs(a platform.App, draft *stagedDecision, m platform.Member, s *pb.Submission, now time.Time, automation bool) (record *pb.ChangeRecord, refusal *kernel.Error) {
@@ -366,12 +345,6 @@ func (t *Tenant) changeApply() runtimekernel.ChangeApply {
 	return t.batchState().Changes(t.batchApply())
 }
 
-func (t *Tenant) publishAcceptedChanges(p *runtimekernel.PreparedChanges) {
-	if p.Child != nil {
-		t.publishAcceptedBatch(p.Child.Result)
-	}
-}
-
 func (t *Tenant) prepareAcceptedDirectRows(rows []acceptedformat.InputRow, member string, at time.Time) (*records.Store, error) {
 	return runtimekernel.ApplyDirectRows(t.Projection, rows, member, at, build.CheckRunApplicationBindings)
 }
@@ -390,16 +363,17 @@ func (t *Tenant) inputAccepted(a platform.AcceptedInputApp, m platform.Member, n
 			_, err := t.PrepareChanges(plan, t.changeApply())
 			return err
 		},
-		Flows: t.procs != nil,
-		Stage: func(entry Entry, key, hash string) bool {
-			return t.stage(preparedAccepted{entry: entry, key: key, hash: hash})
-		},
+		Flows:  t.procs != nil,
+		Stage:  t.stageEntry,
 		Commit: t.acceptResult})
 }
 
 func (t *Tenant) committedInput() runtimekernel.CommittedInput {
-	return runtimekernel.CommittedInput{Settlement: t.settlement(), Apply: t.applyAcceptedInput,
-		Remember: func(e platform.AuditEntry) { t.AuditLog.Remember(e) }}
+	return runtimekernel.CommittedInput{Settlement: t.settlement(), Apply: t.applyAcceptedInput}
+}
+
+func (t *Tenant) stageEntry(entry Entry, key, hash string) bool {
+	return t.stage(preparedAccepted{entry: entry, key: key, hash: hash})
 }
 
 func (t *Tenant) stage(candidate preparedAccepted) bool {
@@ -428,7 +402,7 @@ func decideAcceptedInput(a platform.AcceptedInputApp, draft *stagedDecision, m p
 }
 
 func (t *Tenant) applyAcceptedInput(raw []byte) (acceptedformat.Input, bool, error) {
-	return t.ApplyInputResult(raw, runtimekernel.InputApply{Changes: t.changeApply(), Published: t.publishAcceptedChanges, Refused: t.ConnectorRoster.Refused,
+	return t.ApplyInputResult(raw, runtimekernel.InputApply{Changes: t.changeApply(), Publish: t.publishAccepted, Refused: t.ConnectorRoster.Refused,
 		Input: func(app string) platform.AcceptedInputApp { return t.inputs[app] }})
 }
 

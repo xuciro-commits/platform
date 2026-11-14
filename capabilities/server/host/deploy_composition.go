@@ -68,7 +68,7 @@ func (d *Deployment) restoreRuntimeSelections(ctx context.Context, journal Journ
 					Adopt:      func() { fresh.tenantPorts = old.tenantPorts },
 					Recover:    fresh.recoverEntries,
 					Migrate:    func() error { return fresh.MigrateRuntimeState(ctx, journal, nil, fresh.runtimeOwners()) },
-					Attach:     func() { fresh.attachJournal(ctx, journal) },
+					Attach:     func() { fresh.AttachJournal(ctx, journal) },
 					Deactivate: func() error { return fresh.deactivateOwners(fresh.desiredDisabledOwners()) },
 				}, nil
 			},

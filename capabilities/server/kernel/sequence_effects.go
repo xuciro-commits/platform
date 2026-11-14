@@ -12,13 +12,13 @@ import (
 )
 
 type EffectApply struct {
-	Changes   ChangeApply
-	Current   func(id string) (acceptedformat.EffectState, bool)
-	Finish    func(platform.Effect, platform.Outcome) (*kernel.Works, json.RawMessage, json.RawMessage, error)
-	Usage     func() (json.RawMessage, error)
-	Settle    func(id string, after acceptedformat.EffectState, finished *pb.Work)
-	Meter     func(platform.AIUsage)
-	Published func(*PreparedChanges)
+	Changes ChangeApply
+	Current func(id string) (acceptedformat.EffectState, bool)
+	Finish  func(platform.Effect, platform.Outcome) (*kernel.Works, json.RawMessage, json.RawMessage, error)
+	Usage   func() (json.RawMessage, error)
+	Settle  func(id string, after acceptedformat.EffectState, finished *pb.Work)
+	Meter   func(platform.AIUsage)
+	Publish func(platform.Event, platform.AcceptedEventPlan)
 }
 
 func (s *Sequence) ApplyEffectResult(raw []byte, h EffectApply) (acceptedformat.Effect, bool, error) {
@@ -73,7 +73,7 @@ func (s *Sequence) ApplyEffectResult(raw []byte, h EffectApply) (acceptedformat.
 	if result.Usage != nil {
 		h.Meter(*result.Usage)
 	}
-	h.Published(prepared)
+	prepared.PublishChild(h.Publish)
 	return result, true, nil
 }
 

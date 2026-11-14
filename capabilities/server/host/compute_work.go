@@ -7,7 +7,6 @@ import (
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
 	runtimekernel "platformserver/kernel"
-	"platformserver/kernel/acceptedformat"
 	"platformserver/platform"
 	"platformserver/services/actions"
 	"platformserver/services/functions/runtime"
@@ -20,9 +19,7 @@ func (t *Tenant) operationClaims() compute.OperationClaims {
 			x, ok := t.outbound.Get(id)
 			return x.Effect, x.Sending, ok
 		},
-		Claimed: func(id string, after platform.Effect) {
-			t.outbound.Update(id, func(x *actions.Queued) { x.Effect, x.Sending = after, true })
-		},
+		Claimed: func(id string, after platform.Effect) { t.outbound.Reserve(id, after, true) },
 		Live: func(id string, generation uint32) bool {
 			return t.outbound.Any(func(x actions.Queued) bool {
 				return x.ID == id && x.Generation == generation && !platform.EffectSettled(x.State)
@@ -34,10 +31,8 @@ func (t *Tenant) operationClaims() compute.OperationClaims {
 
 func (t *Tenant) operationCancellations() compute.OperationCancellations {
 	return compute.OperationCancellations{Tenant: t.ID, Effect: t.operationEffect,
-		Discard: func(id string, after platform.Effect) {
-			t.outbound.Update(id, func(x *actions.Queued) { x.Effect, x.Sending = after, false })
-		},
-		Works: func() *kernel.Works { return t.Works }, Fork: t.forkWorkState, Cancel: func(id string) { t.cancels.Cancel(id) }}
+		Discard: func(id string, after platform.Effect) { t.outbound.Reserve(id, after, false) },
+		Works:   func() *kernel.Works { return t.Works }, Fork: t.forkWorkState, Cancel: func(id string) { t.cancels.Cancel(id) }}
 }
 
 func (t *Tenant) claimOperation(id string, now time.Time) (platform.Effect, bool) {
@@ -73,16 +68,6 @@ func (t *Tenant) finishOperationClaim(candidate preparedAccepted) bool {
 	return err == nil && t.operationClaims().Settle(saved)
 }
 
-func (t *Tenant) operationDispatches(now time.Time) []func() {
-	var runs []func()
-	for _, id := range actions.RunnableIDs(t.outbound.Select(func(x actions.Queued) bool { return x.Endpoint == acceptedformat.OperationEndpoint }), now, 4) {
-		if x, ok := t.claimOperation(id, now); ok {
-			runs = append(runs, func() { out := t.executeOperation(x, now); t.settleWithUsage(x.ID, out, nil, time.Now().UTC()) })
-		}
-	}
-	return runs
-}
-
 func (d *stagedDecision) CancelOperation(c platform.Caller, r *pb.ChangeRecord, id string) *kernel.Error {
 	record, refusal := compute.CheckCancel(d.tenant.ID, c, r, id, d.tenant.operationEffect)
 	if refusal != nil || !record {
@@ -93,10 +78,6 @@ func (d *stagedDecision) CancelOperation(c platform.Caller, r *pb.ChangeRecord, 
 	}
 	d.OperationCancels[id] = true
 	return nil
-}
-
-func (d *stagedDecision) savedOperationCancellations() ([]acceptedformat.OperationCancellation, error) {
-	return d.tenant.operationCancellations().Saved(d.OperationCancels)
 }
 
 func (h hostView) Operation(app, name string, version int) (platform.Operation, int, bool) {

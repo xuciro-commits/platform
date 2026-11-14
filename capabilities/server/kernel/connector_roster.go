@@ -66,6 +66,16 @@ func (r *ConnectorRoster) Refused(member, input string, err *contract.Error, now
 	}
 }
 
+func (r *ConnectorRoster) Failing(now time.Time) int {
+	failing := 0
+	for _, c := range r.Views(now) {
+		if !slices.Contains([]string{"healthy", "unspecified", "unknown"}, c.Health) && !c.Disabled {
+			failing++
+		}
+	}
+	return failing
+}
+
 func (r *ConnectorRoster) Views(now time.Time) []ConnectorView {
 	r.mu.Lock()
 	defer r.mu.Unlock()

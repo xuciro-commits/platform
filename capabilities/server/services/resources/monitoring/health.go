@@ -77,6 +77,67 @@ func Quarantined(reason string) []HealthCondition {
 	return []HealthCondition{{Name: "journal", Ready: false, Detail: reason}, {Name: "observations", Ready: false, Detail: "tenant is quarantined"}, {Name: "work-loop", Ready: false, Detail: "tenant is quarantined"}}
 }
 
+type Health struct {
+	Status        string             `json:"status"`
+	RecoveryError string             `json:"recoveryError,omitempty"`
+	Started       time.Time          `json:"started"`
+	Built         string             `json:"built,omitempty"`
+	Apps          int                `json:"apps"`
+	Queues        []QueueHealth      `json:"queues"`
+	Failed        int                `json:"failed"`
+	Breakers      []platform.Breaker `json:"breakers"`
+	OpenBreakers  int                `json:"openBreakers"`
+	Connectors    int                `json:"connectorsFailing"`
+	Endpoints     int                `json:"endpointsFailing"`
+	Observations  ObservationHealth  `json:"observations"`
+	Readiness     []HealthCondition  `json:"readiness"`
+}
+
+type HealthSource struct {
+	Apps         int
+	Fault        func() (string, bool)
+	Dropped      func() int64
+	Breakers     func() []platform.Breaker
+	Queues       func() ([]QueueHealth, int)
+	Connectors   func() int
+	Endpoints    func() int
+	Suspended    func() bool
+	Observations func() ObservationHealth
+}
+
+func (s HealthSource) Assess() Health {
+	if reason, faulted := s.Fault(); faulted {
+		return Health{Status: "quarantined", RecoveryError: reason, Started: Started, Built: Built(), Apps: s.Apps, Queues: []QueueHealth{}, Breakers: []platform.Breaker{},
+			Observations: ObservationHealth{Dropped: s.Dropped()}, Readiness: Quarantined(reason)}
+	}
+	h := Health{Status: "ok", Started: Started, Built: Built(), Apps: s.Apps, Queues: []QueueHealth{}, Breakers: s.Breakers()}
+	h.Queues, h.Failed = s.Queues()
+	h.OpenBreakers = OpenBreakers(h.Breakers)
+	h.Connectors, h.Endpoints = s.Connectors(), s.Endpoints()
+	if h.Failed > 0 || h.OpenBreakers > 0 || h.Connectors > 0 || h.Endpoints > 0 {
+		h.Status = "degraded"
+	}
+	if s.Suspended() {
+		h.Status = "suspended"
+	}
+	h.Observations = s.Observations()
+	return h
+}
+
+func (h *Health) Complete(retainedFrom func() (time.Time, bool), journalReady bool, journalDetail string, businessOpen bool) {
+	if h.Status == "quarantined" {
+		return
+	}
+	if from, ok := retainedFrom(); ok {
+		h.Observations.Available = true
+		h.Observations.RetainedFrom = from
+	}
+	h.Readiness = Readiness(journalReady, journalDetail, h.Observations.Available, businessOpen)
+	if !h.Observations.Available {
+		h.Status = "degraded"
+	}
+}
+
 func Built() string {
 	info, ok := debug.ReadBuildInfo()
 	if !ok {

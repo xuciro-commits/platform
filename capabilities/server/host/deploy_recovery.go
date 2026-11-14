@@ -7,21 +7,10 @@ import (
 	runtimekernel "platformserver/kernel"
 	"platformserver/kernel/records"
 	persistence "platformserver/kernel/store"
-	"platformserver/platform"
 	controlowner "platformserver/services/security/control"
 	"reflect"
 	"time"
 )
-
-func (t *Tenant) attachJournal(ctx context.Context, journal Journals) {
-	t.RuntimePosition = func() int64 { return journal.Position(t.ID) }
-	t.Store = journal
-	t.AuditLog.Backfill()
-	id := t.ID
-	t.AcceptResult = func(e Entry, key, hash string) ([]byte, error) {
-		return journal.AppendAccepted(ctx, id, e, key, hash)
-	}
-}
 
 func (t *Tenant) recoveryComplete(started time.Time) error {
 	if t.identityOwner != nil {
@@ -39,12 +28,9 @@ func (t *Tenant) recoveryComplete(started time.Time) error {
 func (d *Deployment) tenantRestore(ctx context.Context, t *Tenant, j Journals, code string, restored map[string]int64, fresh map[string]bool) runtimekernel.TenantRestore {
 	return runtimekernel.TenantRestore{
 		ID: t.ID, Code: code, SnapshotEvery: d.SnapshotEvery, Journal: j,
-		Quarantine: t.quarantine,
-		Fault:      func() string { return t.Fault.Load().Reason },
-		AuditEmpty: func() bool {
-			page, err := t.Log().QueryAuditEntries(platform.AuditQuery{Tenant: t.ID, Limit: 1})
-			return err == nil && len(page.Entries) == 0
-		},
+		Quarantine:    t.quarantine,
+		Fault:         func() string { return t.Fault.Load().Reason },
+		AuditEmpty:    t.AuditEmpty,
 		BackfillAudit: t.backfillAudit,
 		Compatibility: t.snapshotCompatibility,
 		Build:         snapshotBuild,
@@ -63,7 +49,7 @@ func (d *Deployment) tenantRestore(ctx context.Context, t *Tenant, j Journals, c
 		Migrate: func(prefix *persistence.StateCheckpoint) error {
 			return t.MigrateRuntimeState(ctx, j, prefix, t.runtimeOwners())
 		},
-		AttachJournal: func() { t.attachJournal(ctx, j) },
+		AttachJournal: func() { t.AttachJournal(ctx, j) },
 		SetRestored:   func(position int64) { restored[t.ID] = position },
 		SetFresh:      func(value bool) { fresh[t.ID] = value },
 	}
@@ -123,7 +109,7 @@ func (d *Deployment) retryTenant(ctx context.Context, journal Journals, registry
 		Compatibility:    fresh.snapshotCompatibility,
 		RecoveryComplete: fresh.flowArtifactRecoveryComplete,
 		Migrate:          func() error { return fresh.MigrateRuntimeState(ctx, journal, nil, fresh.runtimeOwners()) },
-		Attach:           func() { fresh.attachJournal(context.Background(), journal) },
+		Attach:           func() { fresh.AttachJournal(context.Background(), journal) },
 		Deactivate:       func() error { return fresh.deactivateOwners(fresh.desiredDisabledOwners()) },
 		Replace:          func() error { return registry.Replace(id, old, fresh) },
 	}.Run(ctx, recoveryStarted)

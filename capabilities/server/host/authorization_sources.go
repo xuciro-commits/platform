@@ -50,7 +50,7 @@ func (s authorizationSources) InputGranted(m platform.Member, app, name string) 
 	return s.t.ConnectorRoster.Granted(m.ID, app, name)
 }
 func (s authorizationSources) KnowledgeReadable(store *records.Store, m platform.Member, id, field string) bool {
-	return s.t.knowledgeSourceReadable(store, m, id, field)
+	return s.t.knowledgeRuntime().SourceReadable(store, m, id, field)
 }
 func (s authorizationSources) Directory() platform.Directory { return s.t.directory }
 func (s authorizationSources) DerivationSources(store *records.Store, m platform.Member, at time.Time, held bool) security.DerivationSource {

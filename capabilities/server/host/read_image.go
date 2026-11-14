@@ -2,19 +2,15 @@ package host
 
 import (
 	"context"
-	"errors"
 	"log"
 	"maps"
 	"platformserver/services/resources/monitoring"
 	"slices"
 
-	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
 
 	runtimekernel "platformserver/kernel"
-	persistence "platformserver/kernel/store"
 	"platformserver/kernel/transport"
-	"platformserver/platform"
 	"platformserver/services/data/lineage"
 	releaseowner "platformserver/services/devops/releases"
 	"platformserver/services/functions/runtime"
@@ -51,9 +47,7 @@ func (t *Tenant) endLane() {
 	if t.readError() != nil || t.quarantined() {
 		return
 	}
-	t.change.mu.Lock()
-	operations := t.change.seq + int64(len(t.change.pendingData))
-	t.change.mu.Unlock()
+	operations := t.change.Operations()
 	epoch, work, definitions, position := t.StateEpoch.Load(), t.WorkEpoch.Load(), t.DefinitionEpoch.Load(), t.Projection.Current().Applied()
 	t.Projection.Lock()
 	generation := t.Projection.Generation()
@@ -64,7 +58,7 @@ func (t *Tenant) endLane() {
 	}
 	state, err := t.forkReadState(context.Background())
 	if err != nil {
-		t.countReadImage(context.Background(), "unpublished")
+		monitoring.CountReadImage(context.Background(), t.ID, "unpublished")
 		log.Printf("tenant %s: publish read image: %v", t.ID, err)
 		return
 	}
@@ -79,72 +73,23 @@ func (t *Tenant) endLane() {
 	if previous := t.readImage.Swap(image); previous != nil {
 		close(previous.next)
 	}
-	t.change.mu.Lock()
-	pending := len(t.change.pendingData) > 0
-	for owner := range t.change.pendingData {
-		t.change.seq++
-		t.change.data++
-		if owner == "" {
-			t.change.global++
-		} else {
-			if t.change.owners == nil {
-				t.change.owners = map[string]int64{}
-			}
-			t.change.owners[owner]++
-		}
-	}
-	t.change.pendingData = nil
-	if t.change.wake != nil {
-		close(t.change.wake)
-		t.change.wake = nil
-	}
-	t.change.mu.Unlock()
-	if pending {
+	if t.change.Flush() {
 		wakeWork()
 	}
 }
 
-func (t *Tenant) countReadImage(ctx context.Context, outcome string) {
-	monitoring.CountReadImage(ctx, t.ID, outcome)
+func readView() runtimekernel.ReadView[*Tenant] {
+	return runtimekernel.ReadView[*Tenant]{Fork: (*Tenant).forkReadState, Open: (*Tenant).openRecordRead, Close: (*Tenant).closeRecordRead,
+		Failure: (*Tenant).readError, Refusal: (*Tenant).recordReadRefusal}
 }
 
 func readImageState[T any](t *Tenant, state *Tenant, ctx context.Context, read func(*Tenant) (T, *kernel.Error)) (value T, refusal *kernel.Error, failure error) {
-	defer func() {
-		if recovered := recover(); recovered != nil {
-			if err, ok := recovered.(error); ok {
-				failure = err
-				var mismatch *persistence.StatePositionError
-				if errors.As(err, &mismatch) && mismatch.Position < mismatch.Applied {
-					t.quarantine(err)
-				}
-				var zero T
-				value, refusal = zero, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
-				return
-			}
-			panic(recovered)
-		}
-	}()
+	defer runtimekernel.RecoverImageRead(t.quarantine, &value, &refusal, &failure)
 	return readInView(state, ctx, read)
 }
 
-func readInView[T any](state *Tenant, ctx context.Context, read func(*Tenant) (T, *kernel.Error)) (value T, refusal *kernel.Error, failure error) {
-	view, err := state.forkReadState(ctx)
-	if err != nil {
-		return value, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The read scope could not be prepared: {reason}", err.Error()), err
-	}
-	defer func() {
-		view.closeRecordRead()
-		if err := view.readError(); err != nil {
-			var zero T
-			value, refusal, failure = zero, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}, err
-		}
-	}()
-	view.openRecordRead(ctx)
-	if refusal := view.recordReadRefusal(); refusal != nil {
-		return value, refusal, view.readError()
-	}
-	value, refusal = read(view)
-	return value, refusal, nil
+func readInView[T any](state *Tenant, ctx context.Context, read func(*Tenant) (T, *kernel.Error)) (T, *kernel.Error, error) {
+	return runtimekernel.ReadInView(readView(), state, ctx, read)
 }
 
 func readFromImage[T any](t *Tenant, ctx context.Context, read func(*Tenant) (T, *kernel.Error)) (T, *kernel.Error) {
@@ -157,7 +102,7 @@ func readFromImage[T any](t *Tenant, ctx context.Context, read func(*Tenant) (T,
 			}
 			return func() (T, *kernel.Error, error) { return readImageState(t, image.state, ctx, read) }, image.next
 		},
-		Count:    func(outcome string) { t.countReadImage(ctx, outcome) },
+		Count:    func(outcome string) { monitoring.CountReadImage(ctx, t.ID, outcome) },
 		Fallback: func() (T, *kernel.Error) { return readFromLane(t, ctx, read) },
 	}.Run(ctx)
 }

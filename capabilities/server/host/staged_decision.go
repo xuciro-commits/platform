@@ -2,7 +2,6 @@ package host
 
 import (
 	"encoding/json"
-	"fmt"
 	"maps"
 	runtimekernel "platformserver/kernel"
 	acceptedformat "platformserver/kernel/acceptedformat"
@@ -29,7 +28,7 @@ type stagedDecision struct {
 	runtimekernel.Decision
 	sourceProjection       *runtimekernel.ClaimSet
 	confirmationCompleting *confirmationCompletion
-	control                *controlDecision
+	control                *runtimekernel.ControlStage[*Tenant]
 	tenant                 *Tenant
 	requests               []actions.PendingRequest
 	operationInputs        map[string][]*preparedOperationInput
@@ -91,11 +90,6 @@ type stagedEffectPanic struct{}
 
 func unsupportedStagedEffect() { panic(stagedEffectPanic{}) }
 
-func isStagedEffect(failure any) bool {
-	_, ok := failure.(stagedEffectPanic)
-	return ok
-}
-
 func (d *stagedDecision) Probe(c platform.Caller, protocol, action, id string, payload []byte, at time.Time) *kernel.Error {
 	return d.routingTenant().router().Probe(c, protocol, action, id, payload, at)
 }
@@ -104,7 +98,7 @@ func (d *stagedDecision) Request(c platform.Caller, r *pb.ChangeRecord, q platfo
 		unsupportedStagedEffect()
 	}
 	if q.Protocol == "" {
-		d.Intents = append(d.Intents, d.routingTenant().planModelRequest(c, r, q, d.Intents))
+		d.Intents = append(d.Intents, d.routingTenant().gatewayRuntime().Plan(c, r, q, d.Intents))
 		return
 	}
 	q.Payload = slices.Clone(platform.Raw(q.Payload))
@@ -212,26 +206,9 @@ func (d *stagedDecision) attachPrivateHosts() {
 	}
 }
 
-func (d *stagedDecision) Attempt(decide func() (*pb.ChangeRecord, *kernel.Error)) (r *pb.ChangeRecord, err *kernel.Error) {
-	saved := *d
-	*d = *d.privateFork()
-	d.attachPrivateHosts()
-	defer func() {
-		if p := recover(); p != nil {
-			*d = saved
-			d.attachPrivateHosts()
-			panic(p)
-		}
-	}()
-	r, err = decide()
-	if err == nil {
-		err = d.CheckAttempt(r, len(saved.Events))
-	}
-	if err != nil {
-		*d = saved
-		d.attachPrivateHosts()
-	}
-	return r, err
+func (d *stagedDecision) Attempt(decide func() (*pb.ChangeRecord, *kernel.Error)) (*pb.ChangeRecord, *kernel.Error) {
+	events := len(d.Events)
+	return runtimekernel.Attempt(d, d.privateFork, d.attachPrivateHosts, decide, func(r *pb.ChangeRecord) *kernel.Error { return d.CheckAttempt(r, events) })
 }
 
 func (d *stagedDecision) privateFork() *stagedDecision {
@@ -265,14 +242,15 @@ func (d *stagedDecision) ProbeDecision(c platform.Caller, decide func(platform.C
 }
 
 func (d *stagedDecision) runProbe(c platform.Caller, decide func(platform.Caller) *kernel.Error) *kernel.Error {
-	return d.RunProbe(d, c, decide, isStagedEffect)
+	return d.RunProbe(d, c, decide, func(failure any) bool {
+		_, ok := failure.(stagedEffectPanic)
+		return ok
+	})
 }
 
 func (d *stagedDecision) stageObservers() *kernel.Error {
 	refusal, ok := d.StageObservers(runtimekernel.ObserverHooks{Apps: d.tenant.LiveApps, Private: d.stateApp,
-		Caller: func(id string) platform.Caller {
-			return platform.NewCaller(d, platform.Member{ID: "app:" + id, Tenant: d.tenant.ID}, id, false, true)
-		},
+		Caller: d.appCaller,
 		Events: func(e platform.Event) []string { return d.tenant.router().Events(e) }})
 	if !ok {
 		unsupportedStagedEffect()
@@ -282,7 +260,9 @@ func (d *stagedDecision) stageObservers() *kernel.Error {
 
 func (d *stagedDecision) sources() runtimekernel.ResultSources {
 	return runtimekernel.ResultSources{Tenant: d.tenant.ID, App: d.tenant.App, Control: d.savedControl, Controlled: d.control != nil, Pending: len(d.requests) > 0,
-		Observers: len(d.tenant.observers) > 0, Operations: d.savedOperationCancellations, Plan: d.routingTenant().planAcceptedEvent,
+		Observers: len(d.tenant.observers) > 0, Operations: func() ([]acceptedformat.OperationCancellation, error) {
+			return d.tenant.operationCancellations().Saved(d.OperationCancels)
+		}, Plan: d.routingTenant().planAcceptedEvent,
 		Pure: build.CallbackFreeTransition}
 }
 
@@ -296,11 +276,6 @@ func (d *stagedDecision) RequestApproval(c platform.Caller, app string, s *pb.Su
 
 func (d *stagedDecision) batchResult(app string, request *pb.Submission, receipt *pb.ChangeRecord, at time.Time) ([]byte, error) {
 	return d.BatchResult(d.sources(), app, request, receipt, at)
-}
-
-type controlDecision struct {
-	host *Tenant
-	base map[string]json.RawMessage
 }
 
 func (t *Tenant) captureControl() (map[string]json.RawMessage, error) {
@@ -329,54 +304,44 @@ func (t *Tenant) forkControl(images map[string]json.RawMessage) (*Tenant, error)
 	view.ConnectorRoster.RestoreMarks(marks)
 	view.i18n = transport.NewTranslator(func() []platform.App { return view.apps }, nil, view.words.Clone, PlatformLanguages)
 	view.i18n.InstallApplications(view.definitions)
-	for _, kind := range []string{"connectors", "settings", "bindings", "work", "endpoints", "effects", "words"} {
-		if err := view.installControl(kind, images[kind]); err != nil {
-			return nil, err
-		}
+	if err := view.controlOwners().InstallAll(images); err != nil {
+		return nil, err
 	}
 	return view, nil
 }
 
-func (t *Tenant) installControl(kind string, raw json.RawMessage) error {
-	switch kind {
-	case "connectors":
-		return t.ConnectorRoster.InstallImage(raw)
-	case "settings":
-		return t.settings.InstallImage(raw)
-	case "bindings":
-		return actions.InstallBindings(raw, func() func(string, string) bool {
-			t.bindings = actions.NewBindings(nil)
-			return t.router().Rebind
-		})
-	case "work":
-		t.work.Lock()
-		defer t.work.Unlock()
-		return t.work.InstallImage(t.ID, raw, func(app string) bool { return t.App(app) != nil })
-	case "endpoints":
-		return t.endpoints.InstallImage(raw)
-	case "effects":
-		return t.outbound.InstallImage(raw)
-	case "words":
-		if err := t.words.InstallImage(raw); err != nil {
-			return err
-		}
-		t.i18n.Reset()
-		return nil
-	default:
-		return fmt.Errorf("unknown control owner %s", kind)
-	}
+func (t *Tenant) controlOwners() runtimekernel.ControlOwners {
+	return runtimekernel.ControlOwners{Connectors: t.ConnectorRoster.InstallImage, Settings: t.settings.InstallImage, Endpoints: t.endpoints.InstallImage, Effects: t.outbound.InstallImage,
+		Bindings: func(raw json.RawMessage) error {
+			return actions.InstallBindings(raw, func() func(string, string) bool {
+				t.bindings = actions.NewBindings(nil)
+				return t.router().Rebind
+			})
+		},
+		Work: func(raw json.RawMessage) error {
+			t.work.Lock()
+			defer t.work.Unlock()
+			return t.work.InstallImage(t.ID, raw, func(app string) bool { return t.App(app) != nil })
+		},
+		Words: func(raw json.RawMessage) error {
+			if err := t.words.InstallImage(raw); err != nil {
+				return err
+			}
+			t.i18n.Reset()
+			return nil
+		}}
 }
 
 func (d *stagedDecision) controlHost() *Tenant {
 	if d.control != nil {
-		return d.control.host
+		return d.control.Host
 	}
 	base, err := d.tenant.captureControl()
 	if err != nil {
 		unsupportedStagedEffect()
 	}
-	d.control = &controlDecision{d.newControlView(base), base}
-	return d.control.host
+	d.control = &runtimekernel.ControlStage[*Tenant]{Host: d.newControlView(base), Base: base}
+	return d.control.Host
 }
 
 func (d *stagedDecision) newControlView(images map[string]json.RawMessage) *Tenant {
@@ -397,14 +362,7 @@ func (d *stagedDecision) newControlView(images map[string]json.RawMessage) *Tena
 }
 
 func (d *stagedDecision) savedControl() (*acceptedformat.Control, error) {
-	if d.control == nil {
-		return nil, nil
-	}
-	current, err := d.control.host.captureControl()
-	if err != nil {
-		return nil, err
-	}
-	return runtimekernel.ControlDiff(d.control.base, current, d.OperationCancels)
+	return d.control.Saved((*Tenant).captureControl, d.OperationCancels)
 }
 
 func (d *stagedDecision) answerControlEffect(x platform.Effect, out platform.Outcome, at time.Time) {
@@ -425,7 +383,7 @@ func (t *Tenant) validateAcceptedControl(saved *acceptedformat.Control) error {
 }
 
 func (t *Tenant) applyAcceptedControl(saved *acceptedformat.Control) error {
-	return runtimekernel.ApplyControl(saved, t.installControl, t.outbound.PatchImage)
+	return runtimekernel.ApplyControl(saved, t.controlOwners().Install, t.outbound.PatchImage)
 }
 
 func (t *Tenant) controlDecision(c platform.Caller, s *pb.Submission, at time.Time) (func(*pb.ChangeRecord), *kernel.Error) {
@@ -456,20 +414,17 @@ func (d *stagedDecision) ControlDecision(c platform.Caller, s *pb.Submission, at
 	return d.controlHost().controlDecision(c, s, at)
 }
 
-func (d *stagedDecision) forkControlDecision(original *controlDecision) {
-	if original == nil {
-		return
-	}
-	images, err := original.host.captureControl()
+func (d *stagedDecision) forkControlDecision(original *runtimekernel.ControlStage[*Tenant]) {
+	forked, err := original.Fork((*Tenant).captureControl, d.newControlView)
 	if err != nil {
 		unsupportedStagedEffect()
 	}
-	d.control = &controlDecision{d.newControlView(images), maps.Clone(original.base)}
+	d.control = forked
 }
 
 func (d *stagedDecision) routingTenant() *Tenant {
 	if d.control != nil {
-		return d.control.host
+		return d.control.Host
 	}
 	return d.tenant
 }

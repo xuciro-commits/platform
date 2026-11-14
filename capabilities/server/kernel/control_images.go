@@ -174,3 +174,52 @@ func (s *Sequence) CaptureControl(work func() (any, error), values func() map[st
 	out["connectors"] = connectors
 	return out, nil
 }
+
+type ControlStage[H any] struct {
+	Host H
+	Base map[string]json.RawMessage
+}
+
+func (c *ControlStage[H]) Saved(capture func(H) (map[string]json.RawMessage, error), cancelled map[string]bool) (*acceptedformat.Control, error) {
+	if c == nil {
+		return nil, nil
+	}
+	current, err := capture(c.Host)
+	if err != nil {
+		return nil, err
+	}
+	return ControlDiff(c.Base, current, cancelled)
+}
+
+func (c *ControlStage[H]) Fork(capture func(H) (map[string]json.RawMessage, error), view func(map[string]json.RawMessage) H) (*ControlStage[H], error) {
+	if c == nil {
+		return nil, nil
+	}
+	images, err := capture(c.Host)
+	if err != nil {
+		return nil, err
+	}
+	return &ControlStage[H]{Host: view(images), Base: maps.Clone(c.Base)}, nil
+}
+
+type ControlOwners struct {
+	Connectors, Settings, Bindings, Work, Endpoints, Effects, Words func(json.RawMessage) error
+}
+
+func (o ControlOwners) Install(kind string, raw json.RawMessage) error {
+	owner, ok := map[string]func(json.RawMessage) error{"connectors": o.Connectors, "settings": o.Settings, "bindings": o.Bindings, "work": o.Work,
+		"endpoints": o.Endpoints, "effects": o.Effects, "words": o.Words}[kind]
+	if !ok {
+		return fmt.Errorf("unknown control owner %s", kind)
+	}
+	return owner(raw)
+}
+
+func (o ControlOwners) InstallAll(images map[string]json.RawMessage) error {
+	for _, kind := range []string{"connectors", "settings", "bindings", "work", "endpoints", "effects", "words"} {
+		if err := o.Install(kind, images[kind]); err != nil {
+			return err
+		}
+	}
+	return nil
+}

@@ -79,7 +79,7 @@ func MigrateRecords(from, to *Tenant, source, target platform.Member, types []st
 		return platform.MigrationResult{}, fmt.Errorf("migration needs two different environments")
 	}
 	return controlowner.MigrateRecords(from.ID, to.ID, types, controlowner.MigrationHooks{
-		Hosted: to.hostedTypes,
+		Hosted: to.Projection.TypeNames,
 		Export: func(typ string) ([]byte, *kernel.Error) {
 			return from.Export(context.Background(), source, typ, platform.Query{}, now)
 		},
@@ -87,14 +87,6 @@ func MigrateRecords(from, to *Tenant, source, target platform.Member, types []st
 			return to.Import(target, typ, data, false, now)
 		},
 	})
-}
-
-func (t *Tenant) hostedTypes() map[string]bool {
-	out := map[string]bool{}
-	for _, et := range t.Projection.SortedTypes() {
-		out[et.Info().Type] = true
-	}
-	return out
 }
 
 func (t *Tenant) rememberMigration(result platform.MigrationResult, member string, now time.Time, evidence ...acceptedformat.AuthorizationEvidence) error {

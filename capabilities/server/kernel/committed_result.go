@@ -14,12 +14,10 @@ import (
 
 type CommittedResult struct {
 	Settlement
-	App          func(string) platform.App
-	ApplyBatch   func(*platform.Ledger, []byte) (bool, error)
-	ApplyRecord  func(*platform.Ledger, []byte) (bool, error)
-	Remember     func(member string, a platform.App, s *pb.Submission, at time.Time)
-	PublishBatch func(acceptedformat.Batch)
-	Publish      func(platform.Event, platform.AcceptedEventPlan)
+	App         func(string) platform.App
+	ApplyBatch  func(*platform.Ledger, []byte) (bool, error)
+	ApplyRecord func(*platform.Ledger, []byte) (bool, error)
+	Publish     func(platform.Event, platform.AcceptedEventPlan)
 }
 
 func (s *Sequence) FinishCommitted(a platform.App, m platform.Member, hash string, committed []byte, h CommittedResult) (*pb.ChangeRecord, *kernel.Error) {
@@ -57,8 +55,8 @@ func (s *Sequence) FinishCommitted(a platform.App, m platform.Member, hash strin
 		}
 		h.Applied()
 		if applied {
-			h.Remember(m.ID, a, sub, saved.At)
-			h.PublishBatch(saved)
+			s.AuditLog.Remember(Submitted(m.ID, a, sub, saved.At))
+			PublishBatch(saved, h.Publish)
 			h.ChangedOwner(saved.App)
 		}
 		h.Enqueue(saved.At)
@@ -86,7 +84,7 @@ func (s *Sequence) FinishCommitted(a platform.App, m platform.Member, hash strin
 		saved.At = receipt.GetRecordedTime().AsTime()
 	}
 	if applied {
-		h.Remember(m.ID, a, receipt.GetSubmission(), saved.At)
+		s.AuditLog.Remember(Submitted(m.ID, a, receipt.GetSubmission(), saved.At))
 		h.Publish(platform.Event{App: a.Manifest().ID, Record: receipt, Changed: saved.Event.Changed}, saved.Event)
 		h.ChangedOwner(saved.App)
 	}
@@ -159,4 +157,9 @@ func (s *Sequence) CheckSubmission(m platform.Member, sub *pb.Submission) *kerne
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "The submission has an invalid identity")
 	}
 	return nil
+}
+
+func Submitted(member string, a platform.App, s *pb.Submission, at time.Time) platform.AuditEntry {
+	return platform.AuditEntry{ID: "submit:" + a.Manifest().ID + ":" + s.GetIdempotencyKey(), At: at, Member: member, App: a.Manifest().ID, Action: s.GetSchema().GetName(),
+		Target: s.GetTarget().GetType() + "/" + s.GetTarget().GetId()}
 }

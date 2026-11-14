@@ -15,6 +15,16 @@ type OutcomeHooks struct {
 	Claims  func(*pb.ChangeRecord, *ClaimSet) error
 }
 
+func (d *Decision) Settled(record *pb.ChangeRecord, refusal *kernel.Error, unconsumed int) (*pb.ChangeRecord, *kernel.Error) {
+	if d.Failure != nil {
+		return nil, d.Failure
+	}
+	if refusal == nil && unconsumed > 0 {
+		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "A prepared Compute input was not consumed by this accepted Flow decision")
+	}
+	return record, refusal
+}
+
 func (d *Decision) Outcome(src ResultSources, h OutcomeHooks, app string, s *pb.Submission, record *pb.ChangeRecord, refusal *kernel.Error, binding *platform.SchemaVersion, source *ClaimSet, now time.Time) ([]byte, *kernel.Error, error) {
 	var raw []byte
 	var err error

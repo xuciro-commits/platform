@@ -77,10 +77,7 @@ func decideWithError[T any](t *Tenant, holder string, prepare func(*Tenant) (T, 
 
 func (t *Tenant) stageCandidate(draft *stagedDecision, app string, body, principal []byte, key, hash string, at time.Time, finish func(preparedAccepted)) {
 	candidate := preparedAccepted{entry: Entry{App: app, Kind: "accepted-result", Principal: principal, Body: body, At: at, Versions: draft.FlowVersions()}, key: key, hash: hash}
-	if t.preparedResult != nil {
-		candidate.uploads = t.preparedResult.uploads
-		*t.preparedResult = candidate
-		return
+	if !t.stage(candidate) {
+		finish(candidate)
 	}
-	finish(candidate)
 }

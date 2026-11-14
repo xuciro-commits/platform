@@ -2,37 +2,17 @@ package host
 
 import (
 	"context"
-	"errors"
 	"platformkernel/kernel"
 	runtimekernel "platformserver/kernel"
 	"platformserver/platform"
+	"platformserver/services/actions"
 	"platformserver/services/resources/monitoring"
-	"slices"
 	"time"
 )
 
 type TenantHealth struct {
-	Status        string                       `json:"status"`
-	RecoveryError string                       `json:"recoveryError,omitempty"`
-	Started       time.Time                    `json:"started"`
-	Built         string                       `json:"built,omitempty"`
-	Apps          int                          `json:"apps"`
-	Queues        []monitoring.QueueHealth     `json:"queues"`
-	Failed        int                          `json:"failed"`
-	Breakers      []platform.Breaker           `json:"breakers"`
-	OpenBreakers  int                          `json:"openBreakers"`
-	Connectors    int                          `json:"connectorsFailing"`
-	Endpoints     int                          `json:"endpointsFailing"`
-	Observations  monitoring.ObservationHealth `json:"observations"`
-	Readiness     []monitoring.HealthCondition `json:"readiness"`
-	Lane          LaneHealth                   `json:"lane"`
-}
-
-type LaneHealth struct {
-	Holder      string                  `json:"holder,omitempty"`
-	HeldSeconds float64                 `json:"heldSeconds"`
-	Waiters     int64                   `json:"waiters"`
-	LastSlow    *runtimekernel.LaneHold `json:"lastSlow,omitempty"`
+	monitoring.Health
+	Lane runtimekernel.LaneHealth `json:"lane"`
 }
 
 func (t *Tenant) Health(now time.Time) TenantHealth {
@@ -41,7 +21,7 @@ func (t *Tenant) Health(now time.Time) TenantHealth {
 	}
 	health, refusal := recordRead(t, context.Background(), func(t *Tenant) (TenantHealth, *kernel.Error) { return t.health(now), nil })
 	if refusal != nil {
-		return TenantHealth{Status: "degraded", Readiness: []monitoring.HealthCondition{{Name: "journal", Ready: false, Detail: refusal.Error()}}, Lane: t.laneHealth(now, true)}
+		return TenantHealth{Health: monitoring.Health{Status: "degraded", Readiness: []monitoring.HealthCondition{{Name: "journal", Ready: false, Detail: refusal.Error()}}}, Lane: t.laneHealth(now, true)}
 	}
 	return health
 }
@@ -49,78 +29,56 @@ func (t *Tenant) Health(now time.Time) TenantHealth {
 func (t *Tenant) health(now time.Time) TenantHealth {
 	h := t.healthState(now)
 	t.finishHealth(&h, now)
-	h.Lane = t.laneHealth(now, false)
-	return h
+	return TenantHealth{Health: h, Lane: t.laneHealth(now, false)}
 }
 
-func (t *Tenant) laneHealth(now time.Time, outside bool) LaneHealth {
-	if source := t.scopeSource(); source != nil {
+func (t *Tenant) laneHealth(now time.Time, outside bool) runtimekernel.LaneHealth {
+	if source := t.readOrigin; source != nil {
 		return source.laneHealth(now, true)
 	}
-	state := t.Lane.State()
-	lane := LaneHealth{Waiters: state.Waiters, LastSlow: t.LastSlowHold.Load()}
-	if outside && !state.Since.IsZero() {
-		lane.Holder, lane.HeldSeconds = state.Holder, now.Sub(state.Since).Seconds()
-	}
-	return lane
+	return t.Sequence.LaneHealth(now, outside)
 }
 
-func (t *Tenant) healthState(now time.Time) TenantHealth {
+func (t *Tenant) healthState(now time.Time) monitoring.Health {
 	operational := t
-	if source := t.scopeSource(); source != nil {
+	if source := t.readOrigin; source != nil {
 		operational = source
 	}
-	if fault := operational.Fault.Load(); fault != nil {
-		return TenantHealth{Status: "quarantined", RecoveryError: fault.Reason, Started: monitoring.Started,
-			Built: monitoring.Built(), Apps: len(t.apps), Queues: []monitoring.QueueHealth{}, Breakers: []platform.Breaker{},
-			Observations: monitoring.ObservationHealth{Dropped: t.ObservationBuffer.Dropped()},
-			Readiness:    monitoring.Quarantined(fault.Reason)}
-	}
-	h := TenantHealth{Status: "ok", Started: monitoring.Started, Built: monitoring.Built(), Apps: len(t.apps), Queues: []monitoring.QueueHealth{}, Breakers: t.Breakers(now)}
-	h.Queues, h.Failed = t.queueHealth(now)
-	h.OpenBreakers = monitoring.OpenBreakers(h.Breakers)
-	for _, c := range t.ConnectorRoster.Views(now) {
-		if !slices.Contains([]string{"healthy", "unspecified", "unknown"}, c.Health) && !c.Disabled {
-			h.Connectors++
-		}
-	}
-	for _, e := range t.Endpoints() {
-		if e.Health != "ok" {
-			h.Endpoints++
-		}
-	}
-	if h.Failed > 0 || h.OpenBreakers > 0 || h.Connectors > 0 || h.Endpoints > 0 {
-		h.Status = "degraded"
-	}
-	if t.console.Suspended() {
-		h.Status = "suspended"
-	}
-	counts := operational.ObservationBuffer.Counts()
-	h.Observations = monitoring.ObservationHealth{
-		Enabled: t.logging().RetentionDays() > 0, Pending: counts.Pending, Dropped: counts.Dropped, Written: counts.Written,
-		WriteFailures: counts.WriteFailures, Purged: counts.Purged, QuotaBytes: t.logging().QuotaBytes(),
-		LastWrite: counts.LastWrite, LastPurge: counts.LastPurge,
-	}
-	return h
+	return monitoring.HealthSource{
+		Apps: len(t.apps),
+		Fault: func() (string, bool) {
+			fault := operational.Fault.Load()
+			if fault == nil {
+				return "", false
+			}
+			return fault.Reason, true
+		},
+		Dropped:    t.ObservationBuffer.Dropped,
+		Breakers:   func() []platform.Breaker { return t.Breakers(now) },
+		Queues:     func() ([]monitoring.QueueHealth, int) { return t.queueHealth(now) },
+		Connectors: func() int { return t.ConnectorRoster.Failing(now) },
+		Endpoints:  func() int { return actions.FailingEndpoints(t.Endpoints()) },
+		Suspended:  t.console.Suspended,
+		Observations: func() monitoring.ObservationHealth {
+			counts := operational.ObservationBuffer.Counts()
+			return monitoring.ObservationHealth{
+				Enabled: t.logging().RetentionDays() > 0, Pending: counts.Pending, Dropped: counts.Dropped, Written: counts.Written,
+				WriteFailures: counts.WriteFailures, Purged: counts.Purged, QuotaBytes: t.logging().QuotaBytes(),
+				LastWrite: counts.LastWrite, LastPurge: counts.LastPurge,
+			}
+		},
+	}.Assess()
 }
 
-func (t *Tenant) finishHealth(h *TenantHealth, now time.Time) {
-	if h.Status == "quarantined" {
-		return
-	}
-	if page, err := t.Log().QueryObservations(platform.ObservationQuery{Tenant: t.ID, To: now, Limit: 1}); err == nil {
-		h.Observations.Available = true
-		h.Observations.RetainedFrom = page.Coverage.RetainedFrom
-	}
-	journalReady := t.Log() != nil
+func (t *Tenant) finishHealth(h *monitoring.Health, now time.Time) {
 	journalDetail := ""
 	if t.Store == nil {
 		journalDetail = "in-memory test store"
 	}
-	h.Readiness = monitoring.Readiness(journalReady, journalDetail, h.Observations.Available, !t.businessStopped())
-	if !h.Observations.Available {
-		h.Status = "degraded"
-	}
+	h.Complete(func() (time.Time, bool) {
+		page, err := t.Log().QueryObservations(platform.ObservationQuery{Tenant: t.ID, To: now, Limit: 1})
+		return page.Coverage.RetainedFrom, err == nil
+	}, t.Log() != nil, journalDetail, !t.businessStopped())
 }
 
 func (t *Tenant) queueHealth(now time.Time) ([]monitoring.QueueHealth, int) {
@@ -141,26 +99,3 @@ func (t *Tenant) queueHealth(now time.Time) ([]monitoring.QueueHealth, int) {
 }
 
 func (t *Tenant) Breakers(now time.Time) []platform.Breaker { return t.breakers.View(now) }
-
-func (t *Tenant) storageReady(ctx context.Context) error {
-	if t.Log() == nil {
-		return errors.New("operational store is unavailable")
-	}
-	if t.Store == nil {
-		return nil
-	}
-	journal, ok := t.Store.(Journals)
-	if !ok {
-		return errors.New("tenant journal is unavailable")
-	}
-	if _, err := journal.Entries(ctx, t.ID, journal.Position(t.ID)); err != nil {
-		return err
-	}
-	if _, err := t.Log().QueryObservations(platform.ObservationQuery{Tenant: t.ID, To: time.Now().UTC(), Limit: 1}); err != nil {
-		return err
-	}
-	if _, err := t.Log().QueryAuditEntries(platform.AuditQuery{Tenant: t.ID, To: time.Now().UTC(), Limit: 1}); err != nil {
-		return err
-	}
-	return nil
-}

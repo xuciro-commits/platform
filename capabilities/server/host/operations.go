@@ -24,14 +24,7 @@ const (
 	workBurst = 100
 )
 
-var deliveryRetry = platform.Retry{Initial: 2 * time.Second, Max: time.Minute, Attempts: 5}
-
-func (t *Tenant) retryOf(app string) platform.Retry {
-	if a := t.App(app); a != nil && a.Manifest().Retry != nil {
-		return *a.Manifest().Retry
-	}
-	return deliveryRetry
-}
+func (t *Tenant) retryOf(app string) platform.Retry { return automation.RetryOf(t.App(app)) }
 
 func (t *Tenant) enqueue(now time.Time) {
 	for len(t.events) > 0 {
@@ -168,11 +161,7 @@ func (t *Tenant) recipients(c platform.Caller, now time.Time, to []platform.Reci
 }
 
 func (t *Tenant) recipientBook() controlowner.RecipientBook {
-	var identity controlowner.IdentityOwner
-	if t.identityOwner != nil {
-		identity = t.identityOwner
-	}
-	return controlowner.RecipientBook{Identity: identity, Directory: t.directory}
+	return controlowner.RecipientBook{Identity: t.identityOwner, Directory: t.directory}
 }
 
 func (t *Tenant) setting(c platform.Caller, name string) string {
@@ -188,12 +177,12 @@ func (t *Tenant) Settings() []controlowner.AppSettings {
 func (t *Tenant) settingDecision() controlowner.Decider {
 	return controlowner.SettingDecision{
 		Checks: controlowner.SettingChecks{App: t.App, Logging: t.logging().CheckSetting,
-			Values: []func(string, string) *kernel.Error{t.checkEmbeddingSetting, t.modelResolver().CheckSetting}},
+			Values: []func(string, string) *kernel.Error{func(id, value string) *kernel.Error { return t.knowledgeRuntime().CheckSetting(id, value) }, t.modelResolver().CheckSetting}},
 		Settings:       &t.settings,
 		EmbeddingModel: platform.KnowledgeApp + "/" + platform.SettingKnowledgeEmbeddingModel,
 		EmbeddingNext:  platform.KnowledgeApp + "/" + platform.SettingKnowledgeEmbeddingNext,
 		ActiveSpace:    embeddingActiveSpace,
-		VectorSpace:    t.vectorSpace,
+		VectorSpace:    func(name string) string { return t.knowledgeRuntime().VectorSpace(name) },
 	}.Decide
 }
 
@@ -203,9 +192,7 @@ func (t *Tenant) workLoop() automation.WorkLoop {
 }
 
 func (t *Tenant) validateAcceptedIntents(intents []platform.Effect) error {
-	return runtimekernel.CheckIntents(t.ID, intents, func(app string) bool { return t.App(app) != nil }, func(id string) bool {
-		return t.outbound.Any(func(e actions.Queued) bool { return e.ID == id })
-	})
+	return runtimekernel.CheckIntents(t.ID, intents, func(app string) bool { return t.App(app) != nil }, t.outbound.Has)
 }
 
 func (t *Tenant) installAcceptedIntents(intents []platform.Effect) {
@@ -228,8 +215,6 @@ func (d *stagedDecision) Notify(c platform.Caller, n platform.Notification, now 
 		return actions.PlanMailNotice(router.ID, x, reach, router.endpoints.All, func(lang, s string) string { return router.i18n.Say(lang, s) })
 	})
 }
-
-func (d *stagedDecision) Seen(c platform.Caller, keys ...string) { d.Notices.Seen(c.App, keys) }
 
 func (t *Tenant) applyAcceptedNotices(n *acceptedformat.Notices) {
 	delta, effects := t.Notices.Apply(n)
@@ -274,23 +259,8 @@ func (t *Tenant) acceptWork(task *automation.Task, now time.Time) (outcome strin
 				},
 				Decision: func(result *acceptedformat.Work) error { return draft.WorkDecision(draft.sources(), result, now) },
 				Commit: func(result acceptedformat.Work) string {
-					conflict := pb.ErrorCode_ERROR_CODE_CONFLICT.String()
-					raw, err := runtimekernel.SealWork(result)
-					if err != nil {
-						return conflict
-					}
-					if _, err := t.PrepareChanges(result.ChangePlan(), t.changeApply()); err != nil {
-						return conflict
-					}
-					entry := runtimekernel.AcceptedEntry(task.App, c.Member, raw, now, draft.FlowVersions())
-					if t.stage(preparedAccepted{entry: entry, key: result.Key, hash: result.RequestHash}) {
-						return result.Outcome
-					}
-					committed, err := t.acceptResult(entry, result.Key, result.RequestHash)
-					if err != nil {
-						return conflict
-					}
-					return t.finishCommittedWork(task.App, result.Key, result.RequestHash, committed)
+					return t.CommitWork(task.App, c.Member, result, now, runtimekernel.WorkCommit{Changes: t.changeApply(), Versions: draft.FlowVersions,
+						Stage: t.stageEntry, Commit: t.acceptResult, Finish: t.finishCommittedWork})
 				}}
 		}}.Accept(task, now)
 }
@@ -320,7 +290,7 @@ func decideWork(t *Tenant, d *stagedDecision, c platform.Caller, task *automatio
 }
 
 func (t *Tenant) applyAcceptedWork(raw []byte) (bool, error) {
-	return t.ApplyWorkResult(raw, runtimekernel.WorkApply{Changes: t.changeApply(), Works: t.Works, App: t.App, Published: t.publishAcceptedChanges,
+	return t.ApplyWorkResult(raw, runtimekernel.WorkApply{Changes: t.changeApply(), Works: t.Works, App: t.App, Publish: t.publishAccepted,
 		Task: t.work.Restorer(t.delivered)})
 }
 

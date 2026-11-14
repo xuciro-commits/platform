@@ -67,7 +67,7 @@ func (h hostView) GovernanceRead(c platform.Caller, name string) (any, *kernel.E
 }
 func (h hostView) ConnectorHeartbeat(c platform.Caller, now time.Time) *kernel.Error {
 	t := h.t
-	if source := t.scopeSource(); source != nil {
+	if source := t.readOrigin; source != nil {
 		t = source
 	}
 	return t.ConnectorRoster.Heartbeat(c.Tenant, c.ID, now)

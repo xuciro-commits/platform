@@ -51,6 +51,14 @@ func (o *Outbox) Get(id string) (Queued, bool) {
 	return Queued{}, false
 }
 
+func (o *Outbox) Has(id string) bool {
+	return o.Any(func(x Queued) bool { return x.ID == id })
+}
+
+func (o *Outbox) Reserve(id string, after platform.Effect, sending bool) {
+	o.Update(id, func(x *Queued) { x.Effect, x.Sending = after, sending })
+}
+
 func (o *Outbox) Any(match func(Queued) bool) bool {
 	o.mu.Lock()
 	defer o.mu.Unlock()

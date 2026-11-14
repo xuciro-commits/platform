@@ -17,7 +17,7 @@ func (t *Tenant) restoreRuntimeSnapshot(ctx context.Context, j Journals, state [
 		States:   func(app string) platform.AcceptedStateApp { return t.states[app] },
 		Complete: func() error { return t.recoveryComplete(started) },
 		Attach: func() {
-			t.attachJournal(ctx, j)
+			t.AttachJournal(ctx, j)
 			t.enableCurrentReadScopes()
 		},
 	})

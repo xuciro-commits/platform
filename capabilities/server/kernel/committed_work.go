@@ -40,8 +40,7 @@ func (s *Sequence) FinishWork(app, key, hash string, committed []byte, h Committ
 
 type CommittedInput struct {
 	Settlement
-	Apply    func([]byte) (acceptedformat.Input, bool, error)
-	Remember func(platform.AuditEntry)
+	Apply func([]byte) (acceptedformat.Input, bool, error)
 }
 
 func (s *Sequence) AnswerInput(a platform.AcceptedInputApp, raw []byte, quarantine func(error)) (any, *kernel.Error) {
@@ -79,7 +78,7 @@ func (s *Sequence) FinishInput(a platform.AcceptedInputApp, m platform.Member, n
 	}
 	h.Applied()
 	if applied && result.Refusal == nil {
-		h.Remember(platform.AuditEntry{At: result.At, Member: m.ID, App: result.App, Action: "input:" + name})
+		s.AuditLog.Remember(platform.AuditEntry{At: result.At, Member: m.ID, App: result.App, Action: "input:" + name})
 		h.Enqueue(result.At)
 		h.ChangedOwner(result.App)
 	}

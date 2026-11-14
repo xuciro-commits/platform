@@ -40,7 +40,7 @@ func (t *Tenant) planFunction(c platform.Caller, r *pb.ChangeRecord, request pla
 			if t.simulation {
 				stage = platform.AIStageDesign
 			}
-			return t.modelResolver().FunctionDispatch(t.planModelRequest(c, r, q, pending), options, stage)
+			return t.modelResolver().FunctionDispatch(t.gatewayRuntime().Plan(c, r, q, pending), options, stage)
 		},
 		Bind: aigateway.BindFunction,
 	}

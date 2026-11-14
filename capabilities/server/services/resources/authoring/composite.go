@@ -2,6 +2,7 @@ package build
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strconv"
 	"strings"
@@ -17,6 +18,15 @@ import (
 type CompositeRefusal string
 
 func (r CompositeRefusal) Error() string { return string(r) }
+
+func CompositeFailure(err error) map[string]any {
+	failure := map[string]any{"error": err.Error()}
+	var refusal CompositeRefusal
+	if errors.As(err, &refusal) {
+		failure["outcome"] = "refused"
+	}
+	return failure
+}
 
 func CompositeAnswerOf(saved acceptedformat.Composite) (platform.CompositeAnswer, error) {
 	if saved.Refusal != "" {

@@ -130,6 +130,24 @@ func (s *Store) PromoteRecords(draft *Store) error {
 	return nil
 }
 
+func (s *Store) EntityInfo(name string) (platform.EntityInfo, bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	et := s.types[name]
+	if et == nil {
+		return platform.EntityInfo{}, false
+	}
+	return et.Info(), true
+}
+
+func (s *Store) TypeNames() map[string]bool {
+	out := map[string]bool{}
+	for _, et := range s.SortedTypes() {
+		out[et.Info().Type] = true
+	}
+	return out
+}
+
 func (s *Store) SortedTypes() []*Type {
 	s.mu.Lock()
 	defer s.mu.Unlock()

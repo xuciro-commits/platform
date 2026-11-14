@@ -63,13 +63,13 @@ func firstDecisions(t *Tenant, spec platform.TenantSpec, tpl platform.TenantTemp
 
 func (h *Host) tenantRoutes(mux *http.ServeMux) {
 	h.hostRoute(mux, transport.Route{Pattern: "GET /v1/host/templates", Summary: "Tenant templates this host offers (host administrators)", Answer: []platform.TenantTemplate{}},
-		func(w http.ResponseWriter, _ *http.Request, _ string, _ *Tenant) {
+		hostAnswer(func(string, *Tenant) any {
 			out := []platform.TenantTemplate{}
 			if h.Templates != nil {
 				out = h.Templates()
 			}
-			WriteJSON(w, http.StatusOK, out)
-		})
+			return out
+		}))
 	h.hostRoute(mux, transport.Route{Pattern: "POST /v1/host/tenants", Summary: "Create a tenant from a template with its first administrator; it serves on the next request and survives restarts (host administrators)", Body: platform.CreateTenantRequest{}, Answer: controlowner.HostTenantView{}},
 		func(w http.ResponseWriter, r *http.Request, subject string, _ *Tenant) {
 			if h.CreateTenant == nil {

@@ -23,62 +23,42 @@ func (t *Tenant) SimulateCandidate(builder platform.Member, request trialowner.C
 
 func (t *Tenant) simulateCandidate(builder platform.Member, request trialowner.CandidateSimulationRequest, staged *stagedCandidate) (trialowner.CandidateSimulation, *kernel.Error) {
 	return recordRead(t, context.Background(), func(t *Tenant) (trialowner.CandidateSimulation, *kernel.Error) {
-		var empty trialowner.CandidateSimulation
-		if err := t.Admits(builder); err != nil {
-			return empty, err
+		if err := t.buildAllowed(builder, "POST /v1/simulate/candidate", build.Builder); err != nil {
+			return trialowner.CandidateSimulation{}, err
 		}
-		caller := platform.NewCaller(runtime{t: t}, builder, build.ID, false, false)
-		if err := authorizationRefusal(t.authorizeNative(caller, "POST /v1/simulate/candidate", "read", []string{build.Builder}, true)); err != nil {
-			return empty, err
-		}
-		var stagedCandidate *platform.ReleaseCandidate
 		reader := t
 		var selected *trialowner.StagedCandidate
 		if staged != nil {
-			stagedCandidate, reader, selected = &staged.Candidate, staged.reader, &staged.StagedCandidate
+			reader, selected = staged.reader, &staged.StagedCandidate
 		}
-		if refusal := request.Check(stagedCandidate); refusal != nil {
-			return empty, refusal
-		}
-		if t.quarantined() {
-			return empty, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
-		}
-		m, members, refusal := request.Members(builder, t.member)
-		if refusal != nil {
-			return empty, refusal
-		}
-		candidate, functionName, err := request.Select(trialowner.CandidateSource{
-			Drafts:    func() (build.ConstructionDrafts, bool) { owner := t.builders[build.ID]; return owner, owner != nil },
-			Candidate: func(id string) (platform.ReleaseCandidate, error) { return t.releases.Candidate(id) },
-			Preview: func(drafts []build.JointDraftRef) (string, platform.ReleaseCandidate, error) {
-				review, prepared, problem := reader.previewReleaseLocked(drafts, builder)
-				return review.Diagnostic, prepared, problem
+		return trialowner.SimulateCandidate(request, builder, selected, trialowner.CandidateHooks[simulationEnvironment]{
+			Quarantined: t.quarantined,
+			Member:      t.member,
+			Source: trialowner.CandidateSource{
+				Drafts:    func() (build.ConstructionDrafts, bool) { owner := t.builders[build.ID]; return owner, owner != nil },
+				Candidate: func(id string) (platform.ReleaseCandidate, error) { return t.releases.Candidate(id) },
+				Preview: func(drafts []build.JointDraftRef) (string, platform.ReleaseCandidate, error) {
+					review, prepared, problem := reader.previewReleaseLocked(drafts, builder)
+					return review.Diagnostic, prepared, problem
+				},
+				Function: func(id string) string {
+					selected, _ := platform.Get[build.Function](reader.automation(build.ID, false), id)
+					return selected.Name
+				},
 			},
-			Function: func(id string) string {
-				selected, _ := platform.Get[build.Function](reader.automation(build.ID, false), id)
-				return selected.Name
+			Environment: func(candidate platform.ReleaseCandidate) (simulationEnvironment, error) {
+				environment, err := t.simulationEnvironment(candidate, request.Samples)
+				if err == nil {
+					err = platform.CheckSimulationOrganization(request.Organization)
+					environment.Organization = request.Organization
+				}
+				return environment, err
 			},
-		}, selected)
-		environment, environmentErr := t.simulationEnvironment(candidate, request.Samples)
-		if environmentErr == nil {
-			environmentErr = platform.CheckSimulationOrganization(request.Organization)
-			environment.Organization = request.Organization
-		}
-		if err == nil {
-			err = environmentErr
-		}
-		if err != nil {
-			return empty, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "The candidate cannot be tested: {why}", err.Error())
-		}
-		if refusal := trialowner.CandidateModules(candidate, environment.Modules, func(module string) ([]byte, error) { return t.artifacts().Read(context.Background(), module) }); refusal != nil {
-			return empty, refusal
-		}
-		out, problem := runCandidateSimulation(request, candidate, environment, m, members, functionName)
-		if problem != nil {
-			return empty, problem
-		}
-		return trialowner.RunActors(request, out, m, members, func(actor platform.Member) (trialowner.CandidateSimulation, *kernel.Error) {
-			return runCandidateSimulation(request, candidate, environment, actor, members, functionName)
+			Modules:    func(environment simulationEnvironment) map[string][]byte { return environment.Modules },
+			ReadModule: func(module string) ([]byte, error) { return t.artifacts().Read(context.Background(), module) },
+			Run: func(candidate platform.ReleaseCandidate, environment simulationEnvironment, actor platform.Member, members []platform.Member, functionName string) (trialowner.CandidateSimulation, *kernel.Error) {
+				return runCandidateSimulation(request, candidate, environment, actor, members, functionName)
+			},
 		})
 	})
 }

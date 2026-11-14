@@ -11,7 +11,6 @@ import (
 	"platformserver/services/actions"
 	dataowner "platformserver/services/data"
 	"platformserver/services/data/lineage"
-	"slices"
 )
 
 func (h *Host) routesIntegration(rt *routes) {
@@ -92,14 +91,13 @@ func (h *Host) routesIntegration(rt *routes) {
 		return t.ReadOperation(r.Context(), m, r.PathValue("id"))
 	}))
 	rt.public(transport.Route{Pattern: "GET /a2a/{tenant}/{agent}/.well-known/agent-card.json", Summary: "A published agent's A2A 1.0 card"}, func(w http.ResponseWriter, r *http.Request) {
-		tenants := h.currentTenants()
-		i := slices.IndexFunc(tenants, func(t *Tenant) bool { return t.ID == r.PathValue("tenant") })
-		if i < 0 || !tenants[i].published(r.PathValue("agent")) {
+		tenant := h.tenantByID(r.PathValue("tenant"))
+		if tenant == nil || !tenant.published(r.PathValue("agent")) {
 			w.WriteHeader(http.StatusNotFound)
 			return
 		}
-		d, _ := tenants[i].agents.AgentDeclaration(r.PathValue("agent"))
-		WriteJSON(w, http.StatusOK, actions.A2ACard(d, r.PathValue("agent"), tenants[i].ID, r.Host, r.TLS != nil || r.Header.Get("X-Forwarded-Proto") == "https", h.Issuer))
+		d, _ := tenant.agents.AgentDeclaration(r.PathValue("agent"))
+		WriteJSON(w, http.StatusOK, actions.A2ACard(d, r.PathValue("agent"), tenant.ID, r.Host, r.TLS != nil || r.Header.Get("X-Forwarded-Proto") == "https", h.Issuer))
 	})
 	rt.public(transport.Route{Pattern: "POST /a2a/{tenant}/{agent}", Summary: "A2A 1.0 JSON-RPC to a published agent; the caller signs in with the host's issuer", Body: json.RawMessage{}}, h.serveA2A)
 	rt.handle(transport.Route{Pattern: "POST /mcp", Summary: "MCP: the caller's catalog as tools (JSON-RPC)", Body: json.RawMessage{}}, h.mcp)

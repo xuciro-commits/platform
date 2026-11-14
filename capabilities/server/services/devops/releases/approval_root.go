@@ -3,6 +3,7 @@ package releases
 import (
 	"encoding/json"
 	"maps"
+	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	acceptedformat "platformserver/kernel/acceptedformat"
 	"platformserver/platform"
 	"slices"
@@ -64,6 +65,23 @@ func StoredApprovalExecution(store *Store, release, app, action, typ string) (pl
 	}
 	root, _ := ApprovalRoot(sealed.Assets, app, action, typ)
 	return sealed.Closure([]platform.AssetRef{root})
+}
+
+func ApprovalExecution(store *Store, a platform.ApprovalRequest, retained func([]platform.ReleaseAsset) (platform.WorkHost, error)) (platform.WorkHost, error) {
+	typ, _, _ := strings.Cut(a.Target, "/")
+	closed, err := StoredApprovalExecution(store, a.Release, a.App, a.Action, typ)
+	if err != nil {
+		return nil, err
+	}
+	bound, err := retained(closed.Assets)
+	if err != nil {
+		return nil, err
+	}
+	app, action, known := bound.Action(a.Action)
+	if !known || app != a.App || action.Target != "" && action.Target != typ || action.Approval == nil {
+		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The retained approval action is unavailable")
+	}
+	return bound, nil
 }
 
 func ApprovedRelease(activated []string, app, action, typ string, store *Store,

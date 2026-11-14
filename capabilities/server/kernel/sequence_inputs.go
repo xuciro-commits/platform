@@ -38,10 +38,10 @@ func SealInput(result acceptedformat.Input) ([]byte, error) {
 }
 
 type InputApply struct {
-	Changes   ChangeApply
-	Input     func(app string) platform.AcceptedInputApp
-	Published func(*PreparedChanges)
-	Refused   func(member, name string, refusal *kernel.Error, at time.Time)
+	Changes ChangeApply
+	Input   func(app string) platform.AcceptedInputApp
+	Publish func(platform.Event, platform.AcceptedEventPlan)
+	Refused func(member, name string, refusal *kernel.Error, at time.Time)
 }
 
 func (s *Sequence) ApplyInputResult(raw []byte, h InputApply) (acceptedformat.Input, bool, error) {
@@ -72,7 +72,7 @@ func (s *Sequence) ApplyInputResult(raw []byte, h InputApply) (acceptedformat.In
 	if err := s.PromoteChanges(prepared, h.Changes); err != nil {
 		return result, false, err
 	}
-	h.Published(prepared)
+	prepared.PublishChild(h.Publish)
 	if result.Refusal != nil {
 		h.Refused(result.Member, result.Name, result.Refusal, result.At)
 	}

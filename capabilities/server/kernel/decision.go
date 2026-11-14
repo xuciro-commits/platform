@@ -96,6 +96,8 @@ func (d *Decision) InputRefused(err *kernel.Error, issues []platform.FieldIssue)
 
 func (d *Decision) Probing() bool { return d.ProbeOnly }
 
+func (d *Decision) Seen(c platform.Caller, keys ...string) { d.Notices.Seen(c.App, keys) }
+
 func (d *Decision) FailDecision(err *kernel.Error) {
 	if d.Failure == nil {
 		d.Failure = err

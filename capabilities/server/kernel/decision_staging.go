@@ -49,6 +49,28 @@ func (d *Decision) CheckAttempt(r *pb.ChangeRecord, events int) *kernel.Error {
 	return nil
 }
 
+func Attempt[D any](d *D, private func() *D, attach func(), decide func() (*pb.ChangeRecord, *kernel.Error), check func(*pb.ChangeRecord) *kernel.Error) (r *pb.ChangeRecord, err *kernel.Error) {
+	saved := *d
+	*d = *private()
+	attach()
+	defer func() {
+		if p := recover(); p != nil {
+			*d = saved
+			attach()
+			panic(p)
+		}
+	}()
+	r, err = decide()
+	if err == nil {
+		err = check(r)
+	}
+	if err != nil {
+		*d = saved
+		attach()
+	}
+	return r, err
+}
+
 func (d *Decision) RunProbe(rt platform.Runtime, c platform.Caller, decide func(platform.Caller) *kernel.Error, unsupported func(any) bool) (err *kernel.Error) {
 	defer func() {
 		if failure := recover(); failure != nil {

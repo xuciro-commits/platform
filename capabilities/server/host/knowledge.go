@@ -5,7 +5,6 @@ import (
 	"time"
 
 	"platformkernel/kernel"
-	"platformserver/kernel/records"
 	"platformserver/platform"
 	knowledgeindex "platformserver/services/ai/retrieval"
 	controlowner "platformserver/services/security/control"
@@ -77,14 +76,6 @@ func (t *Tenant) knowledgeRuntime() knowledgeindex.Runtime {
 	}
 }
 
-func (t *Tenant) knowledgeSourceReadable(store *records.Store, m platform.Member, id, field string) bool {
-	return t.knowledgeRuntime().SourceReadable(store, m, id, field)
-}
-
-func (t *Tenant) vectorSpace(name string) string {
-	return t.knowledgeRuntime().VectorSpace(name)
-}
-
 func (t *Tenant) KnowledgeIndexStatus(ctx context.Context, m platform.Member) (platform.KnowledgeIndexStatus, *kernel.Error) {
 	return recordRead(t, ctx, func(t *Tenant) (platform.KnowledgeIndexStatus, *kernel.Error) {
 		c := platform.NewCaller(runtime{t: t}, m, controlowner.PlatformApp, false, false)
@@ -93,10 +84,6 @@ func (t *Tenant) KnowledgeIndexStatus(ctx context.Context, m platform.Member) (p
 		}
 		return t.knowledgeRuntime().Status(), nil
 	})
-}
-
-func (t *Tenant) checkEmbeddingSetting(id, value string) *kernel.Error {
-	return t.knowledgeRuntime().CheckSetting(id, value)
 }
 
 func (t *Tenant) Knowledge(reader *platform.Member, app, q string, limit int, at time.Time) []platform.Passage {

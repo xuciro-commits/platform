@@ -28,7 +28,7 @@ func (h *Host) routesCore(rt *routes) {
 			t.liveFollow(m, mux).Serve(w, r)
 			return
 		}
-		transport.FollowChanges(w, r, t.changeState)
+		transport.FollowChanges(w, r, t.change.State)
 	})
 	rt.authorized(transport.Route{Pattern: "POST /v1/recovery/retry", Summary: "Retry recovery of this quarantined tenant from the durable journal after an operator repairs its cause", Answer: TenantHealth{}}, controlowner.PlatformApp, []string{controlowner.Admin}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
 		if h.Recover == nil {
@@ -39,13 +39,12 @@ func (h *Host) routesCore(rt *routes) {
 			WriteJSON(w, http.StatusConflict, map[string]any{"error": err.Error(), "health": t.Health(h.Now())})
 			return
 		}
-		for _, current := range h.currentTenants() {
-			if current.ID == t.ID {
-				WriteJSON(w, http.StatusOK, current.Health(h.Now()))
-				return
-			}
+		current := h.tenantByID(t.ID)
+		if current == nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			return
 		}
-		w.WriteHeader(http.StatusInternalServerError)
+		WriteJSON(w, http.StatusOK, current.Health(h.Now()))
 	})
 	rt.handle(transport.Route{Pattern: "POST /v1/submissions", Summary: "Submit a decision: an action on a target, received in the kernel's order (K6) and journaled once accepted", Body: pb.Submission{}, Answer: SubmissionAnswer{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
 		var sub *pb.Submission

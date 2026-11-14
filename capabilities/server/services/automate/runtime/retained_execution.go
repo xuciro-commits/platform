@@ -462,3 +462,29 @@ func ReadableRecord(raw json.RawMessage, current *records.Type, c platform.Calle
 	}
 	return out, nil
 }
+
+func RetainedAction(owner platform.App, schema string) (string, platform.Action, bool) {
+	if owner == nil {
+		return "", platform.Action{}, false
+	}
+	action, ok := owner.Manifest().Actions.Action(schema)
+	return owner.Manifest().ID, action, ok
+}
+
+func RetainedCatalog(apps []platform.App, ledger *platform.Ledger) *platform.Catalog {
+	for _, owner := range apps {
+		if owner.AcceptedLedger() == ledger {
+			return owner.Manifest().Actions
+		}
+	}
+	return nil
+}
+
+func GuardedRead[V, T any](fail func(*kernel.Error), view func() (V, *kernel.Error), read func(V) (T, *kernel.Error)) (output T, refusal *kernel.Error) {
+	defer RecoverRetained(fail, &refusal)
+	scope, err := view()
+	if err != nil {
+		return output, err
+	}
+	return read(scope)
+}

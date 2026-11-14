@@ -75,3 +75,12 @@ type ProcessDiagnostics struct {
 	Valid  bool                `json:"valid"`
 	Issues []ProcessDiagnostic `json:"issues"`
 }
+
+func DiagnoseProcess(owner ConstructionDrafts, c platform.Caller, process Process) ProcessDiagnostics {
+	answer := ProcessDiagnostics{Valid: true, Issues: []ProcessDiagnostic{}}
+	if refusal := owner.CheckProcess(c, process); refusal != nil {
+		answer.Valid = false
+		answer.Issues = append(answer.Issues, ProcessDiagnostic{Node: ProcessIssueNode(refusal.Message), Code: refusal.Code.String(), Message: refusal.Message})
+	}
+	return answer
+}

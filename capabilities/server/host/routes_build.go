@@ -68,12 +68,7 @@ func (h *Host) routesBuild(rt *routes) {
 		}
 		answer, err := t.Composite(m, request.Key, request.Edits, h.Now())
 		if err != nil {
-			failure := map[string]any{"error": err.Error()}
-			var refusal build.CompositeRefusal
-			if errors.As(err, &refusal) {
-				failure["outcome"] = "refused"
-			}
-			WriteJSON(w, http.StatusConflict, failure)
+			WriteJSON(w, http.StatusConflict, build.CompositeFailure(err))
 			return
 		}
 		WriteJSON(w, http.StatusOK, answer)
@@ -104,12 +99,7 @@ func (h *Host) routesBuild(rt *routes) {
 			if owner == nil {
 				return build.ProcessDiagnostics{}, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
 			}
-			answer := build.ProcessDiagnostics{Valid: true, Issues: []build.ProcessDiagnostic{}}
-			if refusal := owner.CheckProcess(platform.NewCaller(runtime{t: world, scoped: true}, m, build.ID, false, false), p); refusal != nil {
-				answer.Valid = false
-				answer.Issues = append(answer.Issues, build.ProcessDiagnostic{Node: build.ProcessIssueNode(refusal.Message), Code: refusal.Code.String(), Message: refusal.Message})
-			}
-			return answer, nil
+			return build.DiagnoseProcess(owner, platform.NewCaller(runtime{t: world, scoped: true}, m, build.ID, false, false), p), nil
 		})
 		transport.Answer(w, answer, refusal)
 	})
@@ -141,26 +131,18 @@ func (h *Host) routesBuild(rt *routes) {
 	rt.authorized(transport.Route{Pattern: "GET /v1/releases/drafts/working", Summary: "Builder-only working state on main: the drafts whose latest edit is the caller's and that differ from what is installed", Answer: releaseowner.ReleaseWorkingState{}}, build.ID, builder, transport.AnsweringOr(http.StatusBadRequest, func(_ *http.Request, m platform.Member, t *Tenant) (releaseowner.ReleaseWorkingState, error) {
 		return t.WorkingDrafts(m)
 	}))
-	rt.authorized(transport.Route{Pattern: "POST /v1/releases/drafts/referenced", Summary: "Builder-only list of the saved drafts a chosen draft depends on and that are not installed yet; on main an application closure keeps only the caller's working state", Body: releaseowner.ReleaseDraftsRequest{}, Answer: releaseowner.ReleaseDraftClosure{}}, build.ID, builder, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
-		var request releaseowner.ReleaseDraftsRequest
-		if !transport.DecodeCommand(w, r, &request, 4096, func() bool { return request.ID != "" }, "a draft kind and id are required") {
-			return
-		}
-		answer, err := t.ReferencedDrafts(m, request.Kind, request.ID, request.Branch, h.Now())
-		transport.AnswerOr(w, http.StatusBadRequest, answer, err)
-	})
-	rt.authorized(transport.Route{Pattern: "POST /v1/releases/preview", Summary: "Builder-only read-only comparison of up to 128 saved drafts with their installed development definitions", Body: releaseowner.ReleasePreviewRequest{}, Answer: releaseowner.ReleasePreview{}}, build.ID, builder, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
-		var request releaseowner.ReleasePreviewRequest
-		if !transport.DecodeCommand(w, r, &request, releaseCommandBytes, func() bool { return len(request.Drafts) > 0 && len(request.Drafts) <= build.JointDraftLimit }, "between 1 and 128 drafts are required") {
-			return
-		}
+	rt.authorized(transport.Route{Pattern: "POST /v1/releases/drafts/referenced", Summary: "Builder-only list of the saved drafts a chosen draft depends on and that are not installed yet; on main an application closure keeps only the caller's working state", Body: releaseowner.ReleaseDraftsRequest{}, Answer: releaseowner.ReleaseDraftClosure{}}, build.ID, builder, transport.Checked(4096, "a draft kind and id are required", func(request releaseowner.ReleaseDraftsRequest) bool { return request.ID != "" }, http.StatusBadRequest, func(_ *http.Request, m platform.Member, t *Tenant, request releaseowner.ReleaseDraftsRequest) (releaseowner.ReleaseDraftClosure, error) {
+		return t.ReferencedDrafts(m, request.Kind, request.ID, request.Branch, h.Now())
+	}))
+	rt.authorized(transport.Route{Pattern: "POST /v1/releases/preview", Summary: "Builder-only read-only comparison of up to 128 saved drafts with their installed development definitions", Body: releaseowner.ReleasePreviewRequest{}, Answer: releaseowner.ReleasePreview{}}, build.ID, builder, transport.Checked(releaseCommandBytes, "between 1 and 128 drafts are required", func(request releaseowner.ReleasePreviewRequest) bool {
+		return len(request.Drafts) > 0 && len(request.Drafts) <= build.JointDraftLimit
+	}, http.StatusConflict, func(r *http.Request, m platform.Member, t *Tenant, request releaseowner.ReleasePreviewRequest) (any, error) {
 		answer, err := t.PreviewReleaseDrafts(m, request.Drafts, request.Branch, h.Now())
 		if err != nil {
-			WriteJSON(w, http.StatusConflict, map[string]any{"error": err.Error()})
-			return
+			return nil, err
 		}
-		WriteJSON(w, http.StatusOK, t.i18n.Translate(answer, t.Language(m, r)))
-	})
+		return t.i18n.Translate(answer, t.Language(m, r)), nil
+	}))
 	rt.authorized(transport.Route{Pattern: "POST /v1/releases/candidates", Summary: "Persist exact, immutable bytes for a builder-reviewed candidate; does not activate it", Body: releaseowner.ReleaseSaveRequest{}, Answer: releaseowner.ReleaseSaved{}}, build.ID, builderPublisher, releaseCommand(func(request releaseowner.ReleaseSaveRequest) bool { return request.Valid() }, func(m platform.Member, t *Tenant, request releaseowner.ReleaseSaveRequest, now time.Time) (releaseowner.ReleaseSaved, error) {
 		id, err := t.SaveReleaseCandidates(m, request.Refs(), request.CandidateID, request.Key, now)
 		if err != nil {

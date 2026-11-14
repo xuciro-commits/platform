@@ -5,6 +5,7 @@ import (
 
 	"platformserver/kernel/acceptedformat"
 	"platformserver/kernel/records"
+	"platformserver/platform"
 )
 
 type ChangeApply struct {
@@ -17,6 +18,12 @@ type PreparedChanges struct {
 	plan    acceptedformat.ChangePlan
 	records *records.Store
 	Child   *PreparedBatch
+}
+
+func (p *PreparedChanges) PublishChild(publish func(platform.Event, platform.AcceptedEventPlan)) {
+	if p.Child != nil {
+		PublishBatch(p.Child.Result, publish)
+	}
 }
 
 func (s *Sequence) PrepareChanges(plan acceptedformat.ChangePlan, h ChangeApply) (*PreparedChanges, error) {

@@ -126,6 +126,16 @@ func openCredential(tenant string, w platform.CredentialWrite) ([]byte, error) {
 	}
 	return value, nil
 }
+func CheckCredentialSave(tenant string, s *pb.Submission) *kernel.Error {
+	if s.GetSchema().GetName() != SchemaCredentialSave {
+		return nil
+	}
+	if _, failure := DecodeCredentialWrite(tenant, s.GetPayload()); failure != nil {
+		return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Invalid credential configuration or encrypted value")
+	}
+	return nil
+}
+
 func DecodeCredentialWrite(tenant string, raw []byte) (platform.CredentialWrite, error) {
 	var w platform.CredentialWrite
 	decoder := json.NewDecoder(bytes.NewReader(raw))

@@ -3,11 +3,9 @@ package host
 import automation "platformserver/services/automate/runtime"
 
 import (
-	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
 
 	"platformserver/platform"
-	"time"
 )
 
 func (t *Tenant) publish(e platform.Event) {
@@ -34,8 +32,3 @@ func (t *Tenant) publishAccepted(e platform.Event, plan platform.AcceptedEventPl
 }
 
 func (t *Tenant) Deliveries() []platform.Delivery { return t.AuditLog.RecentDeliveries() }
-
-func submitted(member string, a platform.App, s *pb.Submission, at time.Time) platform.AuditEntry {
-	return platform.AuditEntry{ID: "submit:" + a.Manifest().ID + ":" + s.GetIdempotencyKey(), At: at, Member: member, App: a.Manifest().ID, Action: s.GetSchema().GetName(),
-		Target: s.GetTarget().GetType() + "/" + s.GetTarget().GetId()}
-}

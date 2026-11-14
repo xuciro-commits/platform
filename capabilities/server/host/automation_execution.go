@@ -84,12 +84,7 @@ func (h flowExecution) Attempt(c platform.Caller, s *pb.Submission, at time.Time
 	return runtimekernel.AttemptTo(c, func() platform.App { return h.rt.actionOwner(s.GetSchema().GetName()) }, platform.Refuse(pb.ErrorCode_ERROR_CODE_UNKNOWN_SCHEMA, "The held action has no retained owner"), s, at)
 }
 func (h flowExecution) Action(schema string) (string, platform.Action, bool) {
-	owner := h.rt.actionOwner(schema)
-	if owner == nil {
-		return "", platform.Action{}, false
-	}
-	a, ok := owner.Manifest().Actions.Action(schema)
-	return owner.Manifest().ID, a, ok
+	return automation.RetainedAction(h.rt.actionOwner(schema), schema)
 }
 func (h flowExecution) Submit(c platform.Caller, s *pb.Submission, at time.Time) (*pb.ChangeRecord, *kernel.Error) {
 	return runtimekernel.SubmitTo(c, h.rt.actionOwner(s.GetSchema().GetName()), &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_UNKNOWN_SCHEMA}, s, at)
@@ -101,12 +96,7 @@ func (r *flowExecutionRuntime) actionOwner(schema string) platform.App {
 
 func (r *flowExecutionRuntime) StagedDecision() platform.StagedDecision { return r }
 func (r *flowExecutionRuntime) DecisionCatalog(ledger *platform.Ledger) *platform.Catalog {
-	for _, owner := range r.view.apps {
-		if owner.AcceptedLedger() == ledger {
-			return owner.Manifest().Actions
-		}
-	}
-	return nil
+	return automation.RetainedCatalog(r.view.apps, ledger)
 }
 func (r *flowExecutionRuntime) Decide(c platform.Caller, app platform.App, s *pb.Submission, at time.Time) (*pb.ChangeRecord, *kernel.Error) {
 	if app.Manifest().ID == platform.WorkApp {
@@ -141,13 +131,8 @@ func (r *flowExecutionRuntime) Get(c platform.Caller, typ reflect.Type, id strin
 	}
 	return value, ok
 }
-func retainedRead[T any](r *flowExecutionRuntime, read func(view *Tenant) (T, *kernel.Error)) (output T, refusal *kernel.Error) {
-	defer automation.RecoverRetained(r.FailDecision, &refusal)
-	view, err := r.readView()
-	if err != nil {
-		return output, err
-	}
-	return read(view)
+func retainedRead[T any](r *flowExecutionRuntime, read func(view *Tenant) (T, *kernel.Error)) (T, *kernel.Error) {
+	return automation.GuardedRead(r.FailDecision, r.readView, read)
 }
 
 func (r *flowExecutionRuntime) Check(c platform.Caller, entity any) *kernel.Error {

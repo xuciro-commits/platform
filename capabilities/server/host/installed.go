@@ -111,15 +111,7 @@ func (t *Tenant) pageBindings() pageowner.Bindings {
 	}
 }
 
-func (t *Tenant) Entity(typ string) (platform.EntityInfo, bool) {
-	t.Projection.Lock()
-	defer t.Projection.Unlock()
-	et := t.Projection.Type(typ)
-	if et == nil {
-		return platform.EntityInfo{}, false
-	}
-	return et.Info(), true
-}
+func (t *Tenant) Entity(typ string) (platform.EntityInfo, bool) { return t.Projection.EntityInfo(typ) }
 
 func (t *Tenant) InstallApplication(app platform.App, a platform.Application) error {
 	id := app.Manifest().ID

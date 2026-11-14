@@ -152,18 +152,6 @@ func (t *Tenant) modelProvider(pv platform.AIProvider, dispatch ...func()) provi
 		}}.Client(pv, dispatch...)
 }
 
-func (t *Tenant) askModel(c platform.Caller, rec *pb.ChangeRecord, q platform.Request) {
-	t.outbound.Add(t.current(), t.planModelRequest(c, rec, q, nil))
-}
-
-func (t *Tenant) planModelRequest(c platform.Caller, rec *pb.ChangeRecord, q platform.Request, pending []platform.Effect) platform.Effect {
-	return t.gatewayRuntime().Plan(c, rec, q, pending)
-}
-
-func (t *Tenant) sendModel(x platform.Effect, now time.Time) (platform.Outcome, *platform.AIUsage) {
-	return t.gatewayRuntime().Send(x, now)
-}
-
 func (t *Tenant) usage() runtimekernel.UsageApply {
 	if t.ai == nil {
 		return runtimekernel.UsageApply{}

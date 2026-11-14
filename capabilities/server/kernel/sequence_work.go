@@ -8,6 +8,7 @@ import (
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
 	"platformserver/kernel/acceptedformat"
+	persistence "platformserver/kernel/store"
 	"platformserver/platform"
 
 	"google.golang.org/protobuf/encoding/protojson"
@@ -40,11 +41,11 @@ func InstallWork(works *kernel.Works, finished *pb.Work) {
 }
 
 type WorkApply struct {
-	Changes   ChangeApply
-	Works     *kernel.Works
-	App       func(string) platform.App
-	Task      func(acceptedformat.Work) (platform.ScheduledTaskState, string, func(*pb.Work), error)
-	Published func(*PreparedChanges)
+	Changes ChangeApply
+	Works   *kernel.Works
+	App     func(string) platform.App
+	Task    func(acceptedformat.Work) (platform.ScheduledTaskState, string, func(*pb.Work), error)
+	Publish func(platform.Event, platform.AcceptedEventPlan)
 }
 
 func (s *Sequence) ApplyWorkResult(raw []byte, h WorkApply) (bool, error) {
@@ -92,7 +93,7 @@ func (s *Sequence) ApplyWorkResult(raw []byte, h WorkApply) (bool, error) {
 	}
 	InstallWork(h.Works, finished)
 	settle(finished)
-	h.Published(prepared)
+	prepared.PublishChild(h.Publish)
 	return true, nil
 }
 
@@ -117,6 +118,34 @@ func (d *Decision) WorkDecision(src ResultSources, result *acceptedformat.Work, 
 	}
 	result.Unique = d.SavedUniqueChanges()
 	return nil
+}
+
+type WorkCommit struct {
+	Changes  ChangeApply
+	Versions func() map[string]int
+	Stage    func(entry persistence.Entry, key, hash string) bool
+	Commit   func(entry persistence.Entry, key, hash string) ([]byte, error)
+	Finish   func(app, key, hash string, committed []byte) string
+}
+
+func (s *Sequence) CommitWork(app string, member platform.Member, result acceptedformat.Work, at time.Time, h WorkCommit) string {
+	conflict := pb.ErrorCode_ERROR_CODE_CONFLICT.String()
+	raw, err := SealWork(result)
+	if err != nil {
+		return conflict
+	}
+	if _, err := s.PrepareChanges(result.ChangePlan(), h.Changes); err != nil {
+		return conflict
+	}
+	entry := AcceptedEntry(app, member, raw, at, h.Versions())
+	if h.Stage(entry, result.Key, result.RequestHash) {
+		return result.Outcome
+	}
+	committed, err := h.Commit(entry, result.Key, result.RequestHash)
+	if err != nil {
+		return conflict
+	}
+	return h.Finish(app, result.Key, result.RequestHash, committed)
 }
 
 func SealWork(result acceptedformat.Work) ([]byte, error) {

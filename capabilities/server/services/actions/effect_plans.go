@@ -16,6 +16,16 @@ type EndpointView struct {
 	Delivers int    `json:"delivered"`
 }
 
+func FailingEndpoints(views []EndpointView) int {
+	failing := 0
+	for _, e := range views {
+		if e.Health != "ok" {
+			failing++
+		}
+	}
+	return failing
+}
+
 func EventEffects(tenant string, endpoints []Endpoint, e platform.Event, names []string) []platform.Effect {
 	s := e.Record.GetSubmission()
 	target := s.GetTarget().GetType() + "/" + s.GetTarget().GetId()

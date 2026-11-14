@@ -56,7 +56,6 @@ func (t *Tenant) Replay(entries []Entry) error {
 		},
 		Batch:      t.applyAcceptedBatch,
 		Record:     t.applyAcceptedResult,
-		Submitted:  submitted,
 		Invalidate: t.invalidateReadImage,
 		Pin: func(versions map[string]int) {
 			if t.procs != nil {
@@ -64,9 +63,7 @@ func (t *Tenant) Replay(entries []Entry) error {
 			}
 		},
 		App:           t.App,
-		Audit:         func(entry platform.AuditEntry) { t.AuditLog.Remember(entry) },
 		Enqueue:       t.enqueue,
-		PublishBatch:  t.publishAcceptedBatch,
 		PublishRecord: t.publishAccepted,
 	})
 }

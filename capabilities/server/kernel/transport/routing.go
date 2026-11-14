@@ -78,6 +78,17 @@ func CommandOr[M, T, B, R any](limit int64, failure int, f func(*http.Request, M
 	}
 }
 
+func Checked[M, T, B, R any](limit int, message string, valid func(B) bool, failure int, f func(*http.Request, M, T, B) (R, error)) func(http.ResponseWriter, *http.Request, M, T) {
+	return func(w http.ResponseWriter, r *http.Request, m M, t T) {
+		var body B
+		if !DecodeCommand(w, r, &body, limit, func() bool { return valid(body) }, message) {
+			return
+		}
+		out, err := f(r, m, t, body)
+		AnswerOr(w, failure, out, err)
+	}
+}
+
 func Unavailable(w http.ResponseWriter, r *http.Request, quarantined, suspended bool) bool {
 	if quarantined && (r.Method != http.MethodGet || r.URL.Path != "/v1/health" && r.Pattern != "GET /v1/applications/{app}/{name}/runtime") &&
 		(r.Method != http.MethodPost || r.URL.Path != "/v1/recovery/retry") {

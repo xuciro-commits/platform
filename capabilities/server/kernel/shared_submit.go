@@ -8,6 +8,19 @@ import (
 	"platformserver/platform"
 )
 
+func (s *Sequence) ActionOwner(owner, authority platform.App, key string) (platform.App, *kernel.Error) {
+	if owner != nil {
+		return owner, nil
+	}
+	if authority == nil {
+		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_UNKNOWN_SCHEMA}
+	}
+	if !s.PriorOf(authority, key).Known() {
+		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_UNKNOWN_SCHEMA, "The action definition is unavailable; refresh definitions")
+	}
+	return authority, nil
+}
+
 func SubmitTo(c platform.Caller, owner platform.App, missing *kernel.Error, s *pb.Submission, at time.Time) (*pb.ChangeRecord, *kernel.Error) {
 	if owner == nil {
 		return nil, missing

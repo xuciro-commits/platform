@@ -62,7 +62,7 @@ type Tenant struct {
 	flowArtifacts automation.FrameCollector
 	events        []automation.QueuedEvent
 	bindings      *actions.Bindings
-	change        changes
+	change        runtimekernel.ChangeFeed
 	hops          int
 	acted         int
 	opsMu         sync.Mutex

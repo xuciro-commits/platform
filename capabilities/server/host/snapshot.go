@@ -20,6 +20,12 @@ import (
 
 var snapshotBuild = sync.OnceValue(func() string { return CodeOf() })
 
+func (t *Tenant) snapshotSource(ctx context.Context, j Journals, code string) runtimekernel.SnapshotSource {
+	return runtimekernel.SnapshotSource{ID: t.ID, Quarantined: t.quarantined,
+		Capture: func() ([]byte, int64, error) { return t.snapshotRuntime(ctx, j) },
+		Key:     func(state []byte) (string, error) { return t.snapshotStorageKey(code, state) }}
+}
+
 func (t *Tenant) restoreRecords(saved map[string][]records.StoredState) (map[string][]records.StoredState, error) {
 	return t.RestoreRecords(saved, build.CheckRunApplicationBindings)
 }

@@ -39,7 +39,7 @@ func (h *Host) routesMonitoring(rt *routes) {
 	}))
 	rt.public(transport.Route{Pattern: "GET /readyz", Summary: "Whether this process can serve tenant reads from its journals and operational store"}, func(w http.ResponseWriter, r *http.Request) {
 		for _, t := range h.currentTenants() {
-			if err := t.storageReady(r.Context()); err != nil {
+			if err := t.StorageReady(r.Context()); err != nil {
 				WriteJSON(w, http.StatusServiceUnavailable, map[string]string{"status": "unavailable"})
 				return
 			}

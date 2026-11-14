@@ -38,15 +38,11 @@ func (t *Tenant) ReferencedDrafts(m platform.Member, kind platform.AssetKind, id
 	})
 }
 
-func (t *Tenant) buildAllowed(m platform.Member, permission string, roles ...string) error {
+func (t *Tenant) buildAllowed(m platform.Member, permission string, roles ...string) *kernel.Error {
 	if err := t.Admits(m); err != nil {
 		return err
 	}
-	c := platform.NewCaller(runtime{t: t}, m, build.ID, false, false)
-	if err := authorizationRefusal(t.authorizeNative(c, permission, "read", roles, true)); err != nil {
-		return err
-	}
-	return nil
+	return authorizationRefusal(t.authorizeNative(platform.NewCaller(runtime{t: t}, m, build.ID, false, false), permission, "read", roles, true))
 }
 
 func buildRead[T any](t *Tenant, m platform.Member, permission string, roles []string, read func(*Tenant) (T, error)) (T, error) {
