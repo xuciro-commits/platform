@@ -330,7 +330,7 @@ func CheckSelections(p platform.Page, entity func(string) (platform.EntityInfo, 
 		if !ok {
 			continue
 		}
-		info = platform.ModelFields(info, b.PrimaryModel(), entity)
+		info = ModelFields(info, b.PrimaryModel(), entity)
 		where := fmt.Sprintf("page %s, binding %s", p.Name, b.ID)
 		selection, parentSelection, relation := b.Ports["selection"], b.Ports["parentSelection"], b.Ports["relation"]
 		parentType := safe.Object.Name

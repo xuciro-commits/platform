@@ -8,16 +8,6 @@ import (
 
 var pageNodeID = regexp.MustCompile(`^[A-Za-z][A-Za-z0-9._:-]{0,79}$`)
 
-type PageEmbedding struct {
-	ReadOnly         bool                 `json:"readOnly,omitempty"`
-	Kind             string               `json:"kind"`
-	Page             AssetBinding         `json:"page"`
-	ContentVersion   string               `json:"contentVersion"`
-	InterfaceVersion int                  `json:"interfaceVersion"`
-	Inputs           map[string]PageValue `json:"inputs,omitempty"`
-	Results          map[string]string    `json:"results,omitempty"`
-}
-
 func (e PageEmbedding) Navigation() PageNavigation {
 	return PageNavigation{Page: e.Page.Ref, InterfaceVersion: e.InterfaceVersion, Inputs: e.Inputs, Results: e.Results}
 }

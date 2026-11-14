@@ -8,39 +8,6 @@ import (
 	"strings"
 )
 
-type PageVariable struct {
-	RuleType *ExprType           `json:"ruleType,omitempty"`
-	Rule     *Expr               `json:"rule,omitempty"`
-	Writable bool                `json:"writable,omitempty"`
-	Title    string              `json:"title,omitempty"`
-	Scope    string              `json:"scope"`
-	Owner    string              `json:"owner,omitempty"`
-	Type     string              `json:"type"`
-	Mode     string              `json:"mode"`
-	Initial  json.RawMessage     `json:"initial,omitempty"`
-	Source   *PageResourceSource `json:"source,omitempty"`
-}
-
-type PageResourceSource struct {
-	Compute *PageComputeResource `json:"compute,omitempty"`
-	Port    string               `json:"port,omitempty"`
-	Measure string               `json:"measure,omitempty"`
-	Field   string               `json:"field,omitempty"`
-	Fields  []string             `json:"fields,omitempty"`
-
-	Object   *AssetRef `json:"object,omitempty"`
-	Query    string    `json:"query,omitempty"`
-	Variable string    `json:"variable,omitempty"`
-	Kind     string    `json:"kind"`
-	Section  string    `json:"section,omitempty"`
-	Node     string    `json:"node,omitempty"`
-}
-
-type PageValue struct {
-	Variable string          `json:"variable,omitempty"`
-	Literal  json.RawMessage `json:"literal,omitempty"`
-}
-
 type pageRuntimeContract struct {
 	Composite struct {
 		RequiredUIProfile string `json:"requiredUIProfile"`

@@ -10,16 +10,6 @@ import (
 	"strings"
 )
 
-const PageModelMaxFields = 64
-
-type FieldRef struct {
-	Name string   `json:"name,omitempty"`
-	Path []string `json:"path,omitempty"`
-
-	Slot      string `json:"slot,omitempty"`
-	Transform string `json:"transform,omitempty"`
-}
-
 func (f FieldRef) Segments() []string {
 	if len(f.Path) > 0 {
 		return f.Path
@@ -29,40 +19,6 @@ func (f FieldRef) Segments() []string {
 
 func (f FieldRef) Key() string {
 	return strings.Join(f.Segments(), ".")
-}
-
-type ModelRelation struct {
-	ParentType      string `json:"parentType"`
-	ParentSelection string `json:"parentSelection,omitempty"`
-	Field           string `json:"field"`
-	Name            string `json:"name,omitempty"`
-}
-
-type ModelRecordSet struct {
-	RecordVariable string        `json:"recordVariable,omitempty"`
-	Name           string        `json:"name,omitempty"`
-	Query          *AssetBinding `json:"query,omitempty"`
-}
-
-type ModelRule struct {
-	Action AssetRef          `json:"action"`
-	Inputs map[string]string `json:"inputs,omitempty"`
-}
-
-type OptionsRef struct {
-	Set  *ModelRecordSet `json:"set,omitempty"`
-	Rule *ModelRule      `json:"rule,omitempty"`
-}
-
-type ModelBinding struct {
-	Type       string          `json:"type"`
-	Fields     []FieldRef      `json:"fields,omitempty"`
-	Relation   *ModelRelation  `json:"relation,omitempty"`
-	Set        *ModelRecordSet `json:"set,omitempty"`
-	Where      []Expr          `json:"where,omitempty"`
-	Label      *Expr           `json:"label,omitempty"`
-	Options    *OptionsRef     `json:"options,omitempty"`
-	Visibility string          `json:"visibility,omitempty" enum:"hide,mark"`
 }
 
 func ModelObject(typ string) AssetRef {
@@ -148,101 +104,6 @@ func (p Page) ModelDependencies() []AssetRef {
 		}
 	}
 	return refs
-}
-
-func ModelFields(info EntityInfo, model *ModelBinding, lookup func(string) (EntityInfo, bool)) EntityInfo {
-	if model == nil {
-		return info
-	}
-	info.Fields = slices.Clone(info.Fields)
-	for _, ref := range model.Fields {
-		if len(ref.Segments()) < 2 {
-			continue
-		}
-		field, err := RecordPathField(model.Type, ref.Segments(), lookup)
-		if err != nil {
-			continue
-		}
-		field.Name, field.Title, field.ReadOnly = ref.Key(), strings.Join(ref.Segments(), " → "), true
-		info.Fields = append(info.Fields, field)
-	}
-	return info
-}
-
-type PageDataBinding struct {
-	Value      *Expr                       `json:"value,omitempty"`
-	Acyclic    bool                        `json:"acyclic,omitempty"`
-	ID         string                      `json:"id"`
-	Owner      string                      `json:"owner,omitempty"`
-	Kind       string                      `json:"kind"`
-	Object     AssetRef                    `json:"object"`
-	Model      *ModelBinding               `json:"model,omitempty"`
-	Models     map[string]ModelViewBinding `json:"models,omitempty"`
-	Fields     []FieldRef                  `json:"fields,omitempty"`
-	FieldSlots map[string][]FieldRef       `json:"fieldSlots,omitempty"`
-	Ports      map[string]string           `json:"ports,omitempty"`
-	Query      *AssetBinding               `json:"query,omitempty"`
-	Resources  []PageResourceBinding       `json:"resources,omitempty"`
-	Limit      int                         `json:"limit,omitempty"`
-}
-
-type PageResourceBinding struct {
-	ReadOnly         bool                 `json:"readOnly,omitempty"`
-	ID               string               `json:"id"`
-	Kind             string               `json:"kind"`
-	Asset            *AssetBinding        `json:"asset,omitempty"`
-	Object           *AssetRef            `json:"object,omitempty"`
-	URL              string               `json:"url,omitempty"`
-	Origin           string               `json:"origin,omitempty"`
-	ContentVersion   string               `json:"contentVersion,omitempty"`
-	InterfaceVersion int                  `json:"interfaceVersion,omitempty"`
-	Inputs           map[string]PageValue `json:"inputs,omitempty"`
-	Outputs          map[string]string    `json:"outputs,omitempty"`
-	Fields           []FieldRef           `json:"fields,omitempty"`
-	Source           string               `json:"source,omitempty"`
-	Limit            int                  `json:"limit,omitempty"`
-}
-
-type PageActionTrigger struct {
-	ID         string                `json:"id"`
-	Owner      string                `json:"owner,omitempty"`
-	Binding    string                `json:"binding"`
-	Actions    []AssetRef            `json:"actions,omitzero"`
-	Function   *AssetBinding         `json:"function,omitempty"`
-	Operation  *AssetBinding         `json:"operation,omitempty"`
-	Inputs     map[string]Binding    `json:"inputs,omitempty"`
-	Defaults   []PageActionParameter `json:"defaults,omitempty"`
-	InlineEdit *PageInlineEdit       `json:"inlineEdit,omitempty"`
-	Events     []PageEventBinding    `json:"events,omitempty"`
-}
-
-type PageInputSchema struct {
-	profile    string
-	Variables  map[string]PageVariable `json:"variables,omitempty"`
-	Queries    map[string]PageQuery    `json:"queries,omitempty"`
-	Interface  *PageInterface          `json:"interface,omitempty"`
-	Selections []SelectionVariable     `json:"selections,omitempty"`
-}
-
-type PageScope struct {
-	ID            string            `json:"id"`
-	Parent        string            `json:"parent,omitempty"`
-	Kind          string            `json:"kind"`
-	Binding       string            `json:"binding,omitempty"`
-	Bindings      map[string]string `json:"bindings,omitempty"`
-	MaxIterations int               `json:"maxIterations,omitempty"`
-	Inactive      bool              `json:"inactive,omitempty"`
-}
-
-type PageScopeVisibility struct {
-	Scopes []PageScope       `json:"scopes"`
-	Owners map[string]string `json:"owners"`
-	Root   string            `json:"root"`
-}
-
-type PageWidgetSpec struct {
-	Format string          `json:"format"`
-	Body   json.RawMessage `json:"body"`
 }
 
 func (b PageWidgetSpec) IsZero() bool { return b.Format == "" && len(b.Body) == 0 }
@@ -390,12 +251,6 @@ func (b PageDataBinding) EffectiveFields(info EntityInfo) []FieldRef {
 	return fields
 }
 
-type ModelViewBinding struct {
-	Model       ModelBinding        `json:"model"`
-	Roles       map[string]FieldRef `json:"roles,omitempty"`
-	Expressions map[string]Expr     `json:"expressions,omitempty"`
-}
-
 func CompositeLimits() (records, cells, bytes int) {
 	limits := pageWidgets.Runtime.Composite
 	return limits.MaxRecords, limits.MaxCells, limits.MaxBytes
@@ -429,16 +284,6 @@ func CheckPageContentVersion(version string) error {
 		return fmt.Errorf("invalid page content version")
 	}
 	return nil
-}
-
-type PageExternalFrame struct {
-	URL    string `json:"url"`
-	Origin string `json:"origin"`
-}
-
-type PageActionParameter struct {
-	Parameter string `json:"parameter"`
-	Field     string `json:"field"`
 }
 
 func ActionParameterCompatible(f FieldInfo, p Field) bool {
@@ -626,29 +471,4 @@ func (p Page) ResolveBindings(lookup func(string) (EntityInfo, bool)) Page {
 		p.DataBindings[i] = binding
 	}
 	return p
-}
-
-type Page struct {
-	Format            int                 `json:"format"`
-	Name              string              `json:"name"`
-	Title             string              `json:"title"`
-	Description       string              `json:"description,omitempty"`
-	Object            AssetRef            `json:"object"`
-	DataBindings      []PageDataBinding   `json:"dataBindings"`
-	ActionTriggers    []PageActionTrigger `json:"actionTriggers"`
-	InputSchema       PageInputSchema     `json:"inputSchema"`
-	ScopeVisibility   PageScopeVisibility `json:"scopeVisibility"`
-	WidgetSpec        PageWidgetSpec      `json:"widgetSpec"`
-	PresentationWords map[string]string   `json:"presentationWords,omitempty"`
-	retainedVersion   string
-}
-
-type SelectionVariable struct {
-	Name   string   `json:"name"`
-	Object AssetRef `json:"object"`
-}
-
-type PageInlineEdit struct {
-	Action AssetRef `json:"action"`
-	Fields []string `json:"fields"`
 }

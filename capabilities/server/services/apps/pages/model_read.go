@@ -253,7 +253,7 @@ func (r ModelReader) source(member platform.Member, page platform.Page, section 
 			}
 		}
 	}
-	projected := platform.ModelFields(visibleInfo, model, visibleLookup)
+	projected := ModelFields(visibleInfo, model, visibleLookup)
 	for _, field := range projected.Fields {
 		if slices.ContainsFunc(fieldRefs, func(ref platform.FieldRef) bool { return ref.Key() == field.Name }) {
 			result.Fields = append(result.Fields, field)

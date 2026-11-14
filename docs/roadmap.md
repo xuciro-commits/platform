@@ -65,16 +65,9 @@ read-when: 每批开始（选当前批次）与结束（删除已完成条目、
     - 读：`platform/transaction*.go`（1047 行）、`services/actions/business_*.go`、`services/resources/authoring/build_transactions.go`、`deploy/packages/*.json` 中每种 step kind 的使用次数。
     - 方向：① 平台只留通用原子编辑集：创建、修改、删除对象，增删关系，函数支撑，forEach，编号分配；② `post`、`journal`（含关账期）是会计形状，不得留在任何 Go 类型里：能用通用规则加 Expr 表达的改写产品包，不能的改成产品包内的函数支撑规则；函数运行时做不到的登记为差距并阻塞；③ `effect`、`work` 归副作用；④ 类型定义离开 `platform`：执行在 `services/actions`，定义校验在 `services/ontology`；⑤ 格式纪元未冻结（C26），产品包 JSON 直接改写，不留旧形状的读取。
     - 产出：每种 kind → §6.7 哪种规则或副作用的映射表，写入 6-domain §6.7；把 U2 拆成后续行（同本格式，标档位与验证）。
-- [ ] U3 页面模型归位。
-  - 边界裁定：页面声明是 SDK 契约，`Manifest.Pages`、`Definition.Page`、`Application.Variables/Queries` 与宿主接口继续使用同一组有类型声明。页面生成、求值、校验、依赖解析与版本计算属于实现，不能因为声明留在 SDK 就一并保留。原先“先清除具体类型引用、再整文件搬移”的两步不成立，按下面两行重新切分；不引入重复类型、包装或兼容层。
-  - [ ] U3.1 `[易]` 分离页面声明与字段解析。（进行中：Deepseek V4.1 Flash Max，2026-11-14）
-    - 方向：把 `platform/page_collections.go`、`page_document.go`、`page_events.go`、`page_model.go`、`page_queries.go`、`page_variables.go` 中的 33 个导出类型与 `PageModelMaxFields` 常量原样集中到 `platform/page_types.go`，删除原位置的声明；数据字段、标签、包名、未导出字段和方法实现均不变。未导出的运行时契约类型继续随实现留在原文件。
-    - 文件归位：页面 JSON 解码与外框校验已没有旧格式分支，`page_model_legacy.go` 的实现原样并入 `page_model_safety.go`，删除误名旧文件；合并重复的包头与导入，声明拆分不得增加 SDK 行数。
-    - 独立实现：`ModelFields` 只有 `services/apps/pages/model_read.go` 与 `page_safe_bindings.go` 两个调用方，原样迁入该包现有的 `model_rules.go`，两处改为包内调用；删除 SDK 原实现，不新增接口。
-    - 不做：不搬其余实现、不改方法签名、不改 `Definition`、`Application`、`BuildHost`，不改生成文件。
-    - 完成：上述导出类型各只有一处定义，全部在 `page_types.go`；原文件的声明删除；`platform.ModelFields` 引用清零且新包只有一个实现；生成契约没有差异。
-    - 验证：V1、V3。
-  - [ ] U3.2 `[难]` 切分实现依赖（不写代码）。前置 U3.1、U4.1。
+- [ ] U3 页面模型归位。已完成（U3.1）：33 个页面声明类型集中在 SDK，模型字段解析归 `services/apps/pages`；其余页面求值、校验与发布闭包实现仍待迁移。
+  - 边界裁定：页面声明是 SDK 契约，`Manifest.Pages`、`Definition.Page`、`Application.Variables/Queries` 与宿主接口继续使用同一组有类型声明。页面生成、求值、校验、依赖解析与版本计算属于实现，不能因为声明留在 SDK 就一并保留。实现迁移按实际调用依赖切分，不引入重复类型、包装或兼容层。
+  - [ ] U3.2 `[难]` 切分实现依赖（不写代码）。前置已完成：U3.1、U4.1。
     - 读：`platform/page_*.go` 的实现、`definition*.go`、`dependencies*.go`、`revision*.go`，`kernel/acceptedformat/format_release.go`、`kernel/committed_restore.go`、`kernel/records/owned_definitions.go`，以及 ontology/devops/resources 中的页面调用方。
     - 方向：分别列清页面校验、资源发布闭包与历史字节读取三条调用链。页面语义归 `services/apps/pages`，通用依赖解析与发布编排归 `services/resources/publication`；内核不导入服务，恢复的校验与逐字节语义不得减弱。跨服务调用复用已有发布钩子与宿主装配，不让 SDK 反向调用实现；SDK 只留声明与声明助手。
     - 产出：所有页面实现到唯一拥有者的映射、共享发布代码的先后顺序与后续 `[易]` 工单；每行列完整文件、删除路径、无循环依赖的中间完成态、`make contract` 无差异及验证档位，不以旧的整文件搬移工单代替切分。

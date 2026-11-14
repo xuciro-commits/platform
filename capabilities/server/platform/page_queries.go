@@ -7,30 +7,6 @@ import (
 	"strings"
 )
 
-type PageQuery struct {
-	Input     string        `json:"input,omitempty"`
-	Direction string        `json:"direction,omitempty"`
-	ItemOwner string        `json:"itemOwner,omitempty"`
-	Set       *PageQuerySet `json:"set,omitempty"`
-	Owner     string        `json:"owner,omitempty"`
-	Title     string        `json:"title,omitempty"`
-	Object    AssetRef      `json:"object"`
-	Interface string        `json:"interface,omitempty"`
-	Query     *AssetBinding `json:"query,omitempty"`
-	Filter    *Expr         `json:"filter,omitempty"`
-
-	Search *PageValue `json:"search,omitempty"`
-	For    *PageValue `json:"for,omitempty"`
-	Sort   []string   `json:"sort,omitempty"`
-	Limit  int        `json:"limit"`
-	Offset int        `json:"offset,omitempty"`
-}
-
-type PageQuerySet struct {
-	Op     string   `json:"op"`
-	Inputs []string `json:"inputs"`
-}
-
 func (q PageQuery) Values() []PageValue {
 	values := []PageValue{}
 	if q.Search != nil {

@@ -117,17 +117,6 @@ func (p Page) checkCollectionBuilderGraph() error {
 	return nil
 }
 
-type PageCollectionInput struct {
-	Kind      string             `json:"kind"`
-	Object    AssetRef           `json:"object"`
-	Predicate RecordSetPredicate `json:"predicate"`
-	Sort      []string           `json:"sort"`
-
-	SortLocked bool           `json:"sortLocked,omitempty"`
-	Traversal  *LinkTraversal `json:"traversal,omitempty"`
-	Bindings   []AssetBinding `json:"bindings,omitempty"`
-}
-
 func (p Page) CollectionInputObject(variable string) AssetRef {
 	return p.collectionInputObject(variable, map[string]bool{})
 }
@@ -169,13 +158,6 @@ func (p Page) collectionInputObject(variable string, seen map[string]bool) Asset
 		}
 	}
 	return AssetRef{}
-}
-
-type PageComputeResource struct {
-	Operation      AssetBinding       `json:"operation"`
-	RecordVariable string             `json:"recordVariable"`
-	Inputs         map[string]Binding `json:"inputs"`
-	OutputField    string             `json:"outputField,omitempty"`
 }
 
 func (d PageInputSchema) checkComputeResource(v PageVariable) error {

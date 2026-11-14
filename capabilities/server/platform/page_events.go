@@ -6,28 +6,6 @@ import (
 	"slices"
 )
 
-type PageEventBinding struct {
-	Control string       `json:"control,omitempty"`
-	Source  string       `json:"source"`
-	Event   string       `json:"event"`
-	Effects []PageEffect `json:"effects"`
-}
-
-type PageEffect struct {
-	Kind     string            `json:"kind"`
-	Target   string            `json:"target,omitempty"`
-	Value    json.RawMessage   `json:"value,omitempty"`
-	From     string            `json:"from,omitempty"`
-	Action   *PageActionEffect `json:"action,omitempty"`
-	Navigate *PageNavigation   `json:"navigate,omitempty"`
-}
-
-type PageActionEffect struct {
-	Ref            AssetRef             `json:"ref"`
-	RecordVariable string               `json:"recordVariable,omitempty"`
-	Inputs         map[string]PageValue `json:"inputs,omitempty"`
-}
-
 const maxPageEffects = 8
 
 func (b PageEventBinding) Navigation() *PageNavigation {
@@ -184,26 +162,6 @@ func (p Page) checkEvents() error {
 	}
 
 	return nil
-}
-
-type PageInterface struct {
-	Version int                 `json:"version"`
-	Inputs  map[string]PagePort `json:"inputs,omitempty"`
-	Outputs map[string]PagePort `json:"outputs,omitempty"`
-}
-
-type PagePort struct {
-	Variable string    `json:"variable"`
-	Type     string    `json:"type"`
-	Object   *AssetRef `json:"object,omitempty"`
-	Required bool      `json:"required,omitempty"`
-}
-
-type PageNavigation struct {
-	Page             AssetRef             `json:"page"`
-	InterfaceVersion int                  `json:"interfaceVersion"`
-	Inputs           map[string]PageValue `json:"inputs,omitempty"`
-	Results          map[string]string    `json:"results,omitempty"`
 }
 
 func (d PageInputSchema) checkInterface() error {
