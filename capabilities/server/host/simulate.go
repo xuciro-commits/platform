@@ -3,7 +3,6 @@ package host
 import (
 	"context"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 	runtimekernel "platformserver/kernel"
 	"platformserver/platform"
 	"platformserver/services/actions"
@@ -13,13 +12,13 @@ import (
 	"time"
 )
 
-func (t *Tenant) Simulate(member platform.Member, as, branch string, s *pb.Submission, now time.Time) (trialowner.Simulation, *kernel.Error) {
-	return recordRead(t, context.Background(), func(t *Tenant) (trialowner.Simulation, *kernel.Error) {
+func (t *Tenant) Simulate(member platform.Member, as, branch string, s *pb.Submission, now time.Time) (trialowner.Simulation, *platform.Error) {
+	return recordRead(t, context.Background(), func(t *Tenant) (trialowner.Simulation, *platform.Error) {
 		member, m, a, s, refusal := trialowner.SubmissionTrial{
 			Admits:        t.Admits,
 			Authorization: t.authorizationMember,
 			Quarantined:   t.quarantined,
-			Authorize: func(member platform.Member) *kernel.Error {
+			Authorize: func(member platform.Member) *platform.Error {
 				caller := platform.NewCaller(runtime{t: t, scoped: true}, member, build.ID, false, false)
 				return authorizationRefusal(t.authorizeNative(caller, "POST /v1/simulate", "action", []string{build.Builder}, true))
 			},
@@ -57,7 +56,7 @@ func (t *Tenant) Simulate(member platform.Member, as, branch string, s *pb.Submi
 		}
 		out.Accepted = true
 		view := &Tenant{services: t.services, disabledOwners: t.disabledOwners, ID: t.ID, identity: t.identity, ownerSet: t.ownerSet, Projection: draft.Records, directory: t.directory}
-		out.Changes = trialowner.SimulatedChanges(slices.Sorted(draft.Records.Writes()), func(typ string, q platform.Query) ([]any, *kernel.Error) {
+		out.Changes = trialowner.SimulatedChanges(slices.Sorted(draft.Records.Writes()), func(typ string, q platform.Query) ([]any, *platform.Error) {
 			page, refusal := view.objectOwner(view.Projection).Records(member, typ, q, now)
 			return page.Records, refusal
 		})

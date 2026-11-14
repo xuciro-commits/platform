@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 	"slices"
 	"strings"
 	"time"
@@ -16,11 +15,11 @@ const ConfirmationAnswerSchema = ConfirmationType + ".answer"
 type ConfirmationTransport interface {
 	FreezeConfirmationProtocol(ConfirmationParty) (*ConfirmationProtocol, error)
 	FreezeConfirmation(Caller, string, Confirmation, time.Time) (string, []ReleaseAsset, error)
-	QueueConfirmation(Caller, *pb.ChangeRecord, ConfirmationRun, int, bool, time.Time) *kernel.Error
-	CompleteConfirmation(Caller, *pb.ChangeRecord, ConfirmationRun, string, time.Time) (string, *kernel.Error)
-	ResolveConfirmationDelivery(Caller, ConfirmationRun, int, bool, time.Time) *kernel.Error
-	RetryConfirmationDelivery(Caller, ConfirmationRun, int, bool, time.Time) *kernel.Error
-	CheckConfirmationRead(ConfirmationRun, int, time.Time) *kernel.Error
+	QueueConfirmation(Caller, *pb.ChangeRecord, ConfirmationRun, int, bool, time.Time) *Error
+	CompleteConfirmation(Caller, *pb.ChangeRecord, ConfirmationRun, string, time.Time) (string, *Error)
+	ResolveConfirmationDelivery(Caller, ConfirmationRun, int, bool, time.Time) *Error
+	RetryConfirmationDelivery(Caller, ConfirmationRun, int, bool, time.Time) *Error
+	CheckConfirmationRead(ConfirmationRun, int, time.Time) *Error
 }
 
 func (c Caller) ConfirmationCompletion(object, id, action string) bool {
@@ -154,7 +153,7 @@ type ConfirmationDifference struct {
 	Error    string          `json:"error,omitempty"`
 }
 
-func PendingConfirmations(c Caller) ([]ConfirmationRun, *kernel.Error) {
+func PendingConfirmations(c Caller) ([]ConfirmationRun, *Error) {
 	var all []ConfirmationRun
 	for {
 		rows, count, err := Find[ConfirmationRun](c, Query{Domain: json.RawMessage(`[["state","!=","compensated"],["completion","=",""],["completionError","=",""]]`), Sort: []string{"id"}, Limit: 500, Offset: len(all)})
@@ -315,10 +314,10 @@ type DispatchReading struct {
 
 type DispatchTransport interface {
 	FreezeDispatch(Caller, string, string, Dispatch, time.Time) (string, []ReleaseAsset, error)
-	QueueDispatch(Caller, *pb.ChangeRecord, DispatchRun, time.Time) *kernel.Error
-	ResolveDispatchDelivery(Caller, DispatchRun, time.Time) *kernel.Error
-	CheckDispatchRead(DispatchRun, time.Time) *kernel.Error
-	RetargetDispatch(Caller, DispatchRun, string, time.Time) (json.RawMessage, json.RawMessage, *kernel.Error)
+	QueueDispatch(Caller, *pb.ChangeRecord, DispatchRun, time.Time) *Error
+	ResolveDispatchDelivery(Caller, DispatchRun, time.Time) *Error
+	CheckDispatchRead(DispatchRun, time.Time) *Error
+	RetargetDispatch(Caller, DispatchRun, string, time.Time) (json.RawMessage, json.RawMessage, *Error)
 }
 
 func (c Caller) DispatchTransport() DispatchTransport {
@@ -329,7 +328,7 @@ func (c Caller) DispatchTransport() DispatchTransport {
 	return rt.DispatchTransport()
 }
 
-func PendingDispatches(c Caller) ([]DispatchRun, *kernel.Error) {
+func PendingDispatches(c Caller) ([]DispatchRun, *Error) {
 	var all []DispatchRun
 	for {
 		rows, count, err := Find[DispatchRun](c, Query{Domain: json.RawMessage(`[["state","!=","completed"],["state","!=","cancelled"],["state","!=","compensated"]]`), Sort: []string{"id"}, Limit: 500, Offset: len(all)})
@@ -401,7 +400,7 @@ type StagedResult struct {
 	Size   int    `json:"size"`
 }
 
-func (c Caller) Emit(kind, key, entity string, data any, now time.Time) (int, *kernel.Error) {
+func (c Caller) Emit(kind, key, entity string, data any, now time.Time) (int, *Error) {
 	if c.rt == nil {
 		return 0, notFound()
 	}
@@ -503,9 +502,9 @@ type ProviderResult struct {
 	Result   any
 }
 
-func (c Caller) Probe(protocol, action, id string, payload any, now time.Time) *kernel.Error {
+func (c Caller) Probe(protocol, action, id string, payload any, now time.Time) *Error {
 	if c.rt == nil {
-		return &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_POLICY_DENIED}
+		return &Error{Code: pb.ErrorCode_ERROR_CODE_POLICY_DENIED}
 	}
 	return c.rt.Probe(c, protocol, action, id, Raw(payload), now)
 }
@@ -588,16 +587,16 @@ func Raw(v any) []byte {
 	return out
 }
 
-func (c Caller) Query(protocol, read string, provider ...string) ([]ProviderResult, *kernel.Error) {
+func (c Caller) Query(protocol, read string, provider ...string) ([]ProviderResult, *Error) {
 	if c.rt == nil {
-		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_POLICY_DENIED}
+		return nil, &Error{Code: pb.ErrorCode_ERROR_CODE_POLICY_DENIED}
 	}
 	return c.rt.Query(c, protocol, read, provider...)
 }
 
-func (c Caller) BoundProvider(protocol string) (string, *kernel.Error) {
+func (c Caller) BoundProvider(protocol string) (string, *Error) {
 	if c.rt == nil {
-		return "", &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_POLICY_DENIED}
+		return "", &Error{Code: pb.ErrorCode_ERROR_CODE_POLICY_DENIED}
 	}
 	return c.rt.BoundProvider(c, protocol)
 }
@@ -659,7 +658,7 @@ func (c Caller) Links(entity string) []string {
 	return c.rt.Links(c, entity)
 }
 
-func (c Caller) Link(from, to *pb.EntityRef, key string, now time.Time) *kernel.Error {
+func (c Caller) Link(from, to *pb.EntityRef, key string, now time.Time) *Error {
 	if c.rt == nil {
 		return notFound()
 	}

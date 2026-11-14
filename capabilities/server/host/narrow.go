@@ -2,7 +2,6 @@ package host
 
 import (
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 	"platformserver/kernel/records"
 	"platformserver/platform"
 	"platformserver/services/objects"
@@ -10,9 +9,9 @@ import (
 	"time"
 )
 
-func (t *Tenant) Admits(m platform.Member) *kernel.Error {
+func (t *Tenant) Admits(m platform.Member) *platform.Error {
 	if m.Tenant != t.ID {
-		return &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
+		return &platform.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
 	}
 	return nil
 }

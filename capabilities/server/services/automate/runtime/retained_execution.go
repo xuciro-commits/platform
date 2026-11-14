@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"maps"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 	"platformserver/kernel/records"
 	"platformserver/platform"
 	"reflect"
@@ -51,7 +50,7 @@ func RetainedView(reads *records.ForkCache, base *records.Store, release string,
 				List:  func(after string, limit int) []string { return rows.IDs(after, limit) },
 				Fetch: func(id string) *records.Row { return rows.Get(id) },
 				Batch: func(ids []string) map[string]*records.Row { return rows.GetBatch(ids) },
-				Convert: func(row *records.Row) (*records.Row, *kernel.Error) {
+				Convert: func(row *records.Row) (*records.Row, *platform.Error) {
 					converted, err := RetainedRow(stored, info, release, row)
 					if err != nil {
 						return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, err.Error())
@@ -241,9 +240,9 @@ func RetainedShapes(app string, entities []platform.Entity, selected []platform.
 	return out, nil
 }
 
-type retainedReadRefusal struct{ refusal *kernel.Error }
+type retainedReadRefusal struct{ refusal *platform.Error }
 
-func RecoverRetained(fail func(*kernel.Error), refusal **kernel.Error) {
+func RecoverRetained(fail func(*platform.Error), refusal **platform.Error) {
 	if failure := recover(); failure != nil {
 		saved, ok := failure.(retainedReadRefusal)
 		if !ok {
@@ -260,7 +259,7 @@ type RetainedRows[R comparable] struct {
 	List    func(after string, limit int) []string
 	Fetch   func(id string) R
 	Batch   func(ids []string) map[string]R
-	Convert func(R) (R, *kernel.Error)
+	Convert func(R) (R, *platform.Error)
 }
 
 func (s RetainedRows[R]) IDs(after string, limit int) []string { return s.List(after, limit) }
@@ -334,12 +333,12 @@ type RetainedPut struct {
 	Shapes    map[string]platform.EntityInfo
 	Release   string
 	Current   *records.Store
-	Authorize func(platform.AuthzRequest) *kernel.Error
-	Check     func(any) *kernel.Error
-	Put       func(any) *kernel.Error
+	Authorize func(platform.AuthzRequest) *platform.Error
+	Check     func(any) *platform.Error
+	Put       func(any) *platform.Error
 }
 
-func (p RetainedPut) Run(c platform.Caller, old *records.Type, entity any) *kernel.Error {
+func (p RetainedPut) Run(c platform.Caller, old *records.Type, entity any) *platform.Error {
 	if old == nil {
 		return p.Put(entity)
 	}
@@ -390,8 +389,8 @@ func (p RetainedPut) Run(c platform.Caller, old *records.Type, entity any) *kern
 	return nil
 }
 
-func conflictOf(err error) *kernel.Error {
-	if refusal, ok := err.(*kernel.Error); ok {
+func conflictOf(err error) *platform.Error {
+	if refusal, ok := err.(*platform.Error); ok {
 		return refusal
 	}
 	return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, err.Error())
@@ -450,7 +449,7 @@ func (r RetainedOwners) Select() ([]platform.App, map[string]platform.EntityInfo
 	return apps, shapes, nil
 }
 
-func ReadableRecord(raw json.RawMessage, current *records.Type, c platform.Caller) (json.RawMessage, *kernel.Error) {
+func ReadableRecord(raw json.RawMessage, current *records.Type, c platform.Caller) (json.RawMessage, *platform.Error) {
 	var info *platform.EntityInfo
 	if current != nil {
 		stored := current.Info()
@@ -480,7 +479,7 @@ func RetainedCatalog(apps []platform.App, ledger platform.Authority) *platform.C
 	return nil
 }
 
-func GuardedRead[V, T any](fail func(*kernel.Error), view func() (V, *kernel.Error), read func(V) (T, *kernel.Error)) (output T, refusal *kernel.Error) {
+func GuardedRead[V, T any](fail func(*platform.Error), view func() (V, *platform.Error), read func(V) (T, *platform.Error)) (output T, refusal *platform.Error) {
 	defer RecoverRetained(fail, &refusal)
 	scope, err := view()
 	if err != nil {

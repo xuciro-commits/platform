@@ -9,7 +9,6 @@ import (
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 	"platformserver/platform"
 	dataowner "platformserver/services/data"
 )
@@ -258,7 +257,7 @@ func (b *Build) consumedProtocols() []platform.Consumption {
 	return out
 }
 
-func (b *Build) openConfirmation(c platform.Caller, r *pb.ChangeRecord, txn *platform.BusinessTxn, at time.Time) *kernel.Error {
+func (b *Build) openConfirmation(c platform.Caller, r *pb.ChangeRecord, txn *platform.BusinessTxn, at time.Time) *platform.Error {
 	if txn.Confirmation == nil {
 		return nil
 	}
@@ -370,8 +369,8 @@ func (b *Build) openConfirmation(c platform.Caller, r *pb.ChangeRecord, txn *pla
 	return nil
 }
 
-func (b *Build) updateConfirmation(c platform.Caller, s *pb.Submission, at time.Time) (*pb.ChangeRecord, *kernel.Error) {
-	return b.ledger.Receive(c, s, at, nil, func() (func(*pb.ChangeRecord), *kernel.Error) {
+func (b *Build) updateConfirmation(c platform.Caller, s *pb.Submission, at time.Time) (*pb.ChangeRecord, *platform.Error) {
+	return b.ledger.Receive(c, s, at, nil, func() (func(*pb.ChangeRecord), *platform.Error) {
 		run, ok := platform.Get[platform.ConfirmationRun](c, s.GetTarget().GetId())
 		if !ok {
 			return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_NOT_FOUND, "The confirmation does not exist")

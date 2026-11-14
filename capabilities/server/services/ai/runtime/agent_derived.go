@@ -12,7 +12,6 @@ import (
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 	"platformserver/platform"
 )
 
@@ -199,7 +198,7 @@ func functionTool(f platform.AgentFunction) platform.CompiledAgentTool {
 			Properties:  properties, Required: required}}
 }
 
-func (a *Agents) objects(run platform.AgentRunRecord, tool platform.CompiledAgentTool, args map[string]any, now time.Time) (platform.AgentObservation, *kernel.Error) {
+func (a *Agents) objects(run platform.AgentRunRecord, tool platform.CompiledAgentTool, args map[string]any, now time.Time) (platform.AgentObservation, *platform.Error) {
 	reader := a.readsAs(run)
 	if reader == nil {
 		return platform.AgentObservation{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "A read needs a reader")

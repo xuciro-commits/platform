@@ -10,7 +10,6 @@ import (
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 	"platformserver/platform"
 )
 
@@ -91,7 +90,7 @@ type ProtocolHost interface {
 	OwnerActive(id string) bool
 	App(id string) platform.App
 	AuthorityOf(dataClass string) string
-	StageSubmission(c platform.Caller, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *kernel.Error)
+	StageSubmission(c platform.Caller, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *platform.Error)
 }
 
 type Router struct {
@@ -100,12 +99,12 @@ type Router struct {
 	Tenant   string
 }
 
-func (r Router) DecideBinding(_ platform.Caller, s *pb.Submission, _ time.Time) (func(*pb.ChangeRecord), *kernel.Error) {
+func (r Router) DecideBinding(_ platform.Caller, s *pb.Submission, _ time.Time) (func(*pb.ChangeRecord), *platform.Error) {
 	id := s.GetTarget().GetId()
 	var p struct{ Provider string }
 	json.Unmarshal(s.GetPayload(), &p)
 	if !slices.ContainsFunc(r.Providers(id), func(b Binding) bool { return b.ID() == p.Provider }) {
-		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
+		return nil, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 	}
 	return func(*pb.ChangeRecord) { r.Rebind(id, p.Provider) }, nil
 }
@@ -186,9 +185,9 @@ func (r Router) consumes(c platform.Caller, protocol string) bool {
 	return self != nil && slices.ContainsFunc(self.Manifest().Consumes, func(x platform.Consumption) bool { return x.Protocol == protocol })
 }
 
-type call func(Binding, platform.Caller) (*pb.EntityRef, *pb.ChangeRecord, *kernel.Error)
+type call func(Binding, platform.Caller) (*pb.EntityRef, *pb.ChangeRecord, *platform.Error)
 
-func (r Router) Invoke(c platform.Caller, protocol, action, id string, payload []byte, key, correlation string, now time.Time, original ...string) (*pb.EntityRef, *pb.ChangeRecord, *kernel.Error) {
+func (r Router) Invoke(c platform.Caller, protocol, action, id string, payload []byte, key, correlation string, now time.Time, original ...string) (*pb.EntityRef, *pb.ChangeRecord, *platform.Error) {
 	if !r.consumes(c, protocol) {
 		return nil, nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "{app} does not consume {protocol}", c.App, protocol)
 	}
@@ -206,7 +205,7 @@ func (r Router) Invoke(c platform.Caller, protocol, action, id string, payload [
 	if _, mapped := b.Provision.Actions[action]; !ok || !mapped {
 		return nil, nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_NOT_FOUND, "No app provides {protocol} here", protocol)
 	}
-	send := func(b Binding, c platform.Caller) (*pb.EntityRef, *pb.ChangeRecord, *kernel.Error) {
+	send := func(b Binding, c platform.Caller) (*pb.EntityRef, *pb.ChangeRecord, *platform.Error) {
 		schema := b.Provision.Actions[action]
 		declared, _ := b.Provider.Manifest().Actions.Action(schema)
 		target := &pb.EntityRef{Type: declared.Target, Id: id}
@@ -214,7 +213,7 @@ func (r Router) Invoke(c platform.Caller, protocol, action, id string, payload [
 		sub := &pb.Submission{TenantId: r.Tenant, PrincipalId: c.ID, Authority: r.Host.AuthorityOf(declared.Target),
 			Target: target, Schema: &pb.SchemaRef{Name: schema, Version: 1}, IdempotencyKey: key, CorrelationId: correlation, Payload: payload}
 		var record *pb.ChangeRecord
-		var err *kernel.Error
+		var err *platform.Error
 		if c.Staging() {
 			record, err = r.Host.StageSubmission(called, sub, now)
 		} else {
@@ -230,7 +229,7 @@ func (r Router) Invoke(c platform.Caller, protocol, action, id string, payload [
 
 func (r Router) holder(c platform.Caller, bound Binding, protocol, action string, send call) Binding {
 	knows := func(b Binding) bool {
-		err := platform.ProbeDecision(c, func(probe platform.Caller) *kernel.Error {
+		err := platform.ProbeDecision(c, func(probe platform.Caller) *platform.Error {
 			_, _, err := send(b, probe)
 			return err
 		})
@@ -247,25 +246,25 @@ func (r Router) holder(c platform.Caller, bound Binding, protocol, action string
 	return bound
 }
 
-func (r Router) Probe(c platform.Caller, protocol, action, id string, payload []byte, now time.Time) *kernel.Error {
+func (r Router) Probe(c platform.Caller, protocol, action, id string, payload []byte, now time.Time) *platform.Error {
 	if c.Replaying {
 		if _, _, bound := r.Provider(platform.ProtocolAction(protocol, action)); !bound {
-			return &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
+			return &platform.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
 		}
 		return nil
 	}
-	return platform.ProbeDecision(c, func(probe platform.Caller) *kernel.Error {
+	return platform.ProbeDecision(c, func(probe platform.Caller) *platform.Error {
 		_, _, err := r.Invoke(probe, protocol, action, id, payload, "probe", "", now)
 		return err
 	})
 }
 
-func (r Router) Query(c platform.Caller, protocol, read string, provider ...string) ([]platform.ProviderResult, *kernel.Error) {
+func (r Router) Query(c platform.Caller, protocol, read string, provider ...string) ([]platform.ProviderResult, *platform.Error) {
 	if len(provider) > 1 {
-		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
+		return nil, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 	}
 	if !r.consumes(c, protocol) {
-		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_POLICY_DENIED}
+		return nil, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_POLICY_DENIED}
 	}
 	all := r.Providers(protocol)
 	if b, ok := r.Bound(protocol); ok {
@@ -280,7 +279,7 @@ func (r Router) Query(c platform.Caller, protocol, read string, provider ...stri
 		called := platform.RouteCaller(c, b.ID())
 		name, ok := b.Provision.Reads[read]
 		if !ok || !slices.Contains(b.Provision.Protocol.Reads, read) {
-			return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
+			return nil, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
 		}
 		result, err := platform.CallRead(b.Provider, called, name)
 		if err != nil {
@@ -291,9 +290,9 @@ func (r Router) Query(c platform.Caller, protocol, read string, provider ...stri
 	return out, nil
 }
 
-func (r Router) BoundProvider(c platform.Caller, protocol string) (string, *kernel.Error) {
+func (r Router) BoundProvider(c platform.Caller, protocol string) (string, *platform.Error) {
 	if !r.consumes(c, protocol) {
-		return "", &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_POLICY_DENIED}
+		return "", &platform.Error{Code: pb.ErrorCode_ERROR_CODE_POLICY_DENIED}
 	}
 	if b, ok := r.Resolve(protocol); ok {
 		return b.ID(), nil
@@ -380,7 +379,7 @@ func (r Router) Protocols() []ProtocolInfo {
 	return out
 }
 
-func Explained(err *kernel.Error, a platform.App, schema, target string) *kernel.Error {
+func Explained(err *platform.Error, a platform.App, schema, target string) *platform.Error {
 	if err == nil || err.Message != "" {
 		return err
 	}
@@ -404,14 +403,14 @@ func Explained(err *kernel.Error, a platform.App, schema, target string) *kernel
 	return platform.Refuse(err.Code, text, action, target)
 }
 
-func (r Router) ReadName(protocol, read string) (string, *kernel.Error) {
+func (r Router) ReadName(protocol, read string) (string, *platform.Error) {
 	b, bound := r.Resolve(protocol)
 	if !bound {
-		return "", &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
+		return "", &platform.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
 	}
 	name, declared := b.Provision.Reads[read]
 	if !declared || !slices.Contains(b.Provision.Protocol.Reads, read) {
-		return "", &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
+		return "", &platform.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
 	}
 	return name, nil
 }

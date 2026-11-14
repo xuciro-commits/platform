@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"maps"
-	"platformkernel/kernel"
 	"platformserver/platform"
 	"slices"
 	"strings"
@@ -32,7 +31,7 @@ func (f *Flows) Interested(names []string, e platform.Event) bool {
 	return s.GetSchema().GetName() == "work.task.complete" && e.App == platform.WorkApp
 }
 
-func (f *Flows) Listen(c platform.Caller, e platform.Event, names []string, now time.Time) *kernel.Error {
+func (f *Flows) Listen(c platform.Caller, e platform.Event, names []string, now time.Time) *platform.Error {
 	s := e.Record.GetSubmission()
 	for _, id := range slices.Sorted(maps.Keys(f.defs)) {
 		latest, _ := f.latest(id)
@@ -137,7 +136,7 @@ func (f *Flows) Listen(c platform.Caller, e platform.Event, names []string, now 
 	return nil
 }
 
-func (f *Flows) Run(c platform.Caller, _ string, now time.Time) *kernel.Error {
+func (f *Flows) Run(c platform.Caller, _ string, now time.Time) *platform.Error {
 	if err := f.tick(c, now); err != nil {
 		return err
 	}
@@ -170,7 +169,7 @@ func (f *Flows) Run(c platform.Caller, _ string, now time.Time) *kernel.Error {
 			if !due && !holds {
 				continue
 			}
-			var err *kernel.Error
+			var err *platform.Error
 			switch {
 			case holds:
 				err = f.step(c, x.ID, now, func(ss *session, in *FlowInstance) {
@@ -210,7 +209,7 @@ func (f *Flows) run(x *FlowInstance) *platform.Run {
 	return &platform.Run{ID: x.ID, Flow: x.Flow, Version: x.Version, Key: x.Key, Subject: x.Subject, OnBehalf: x.OnBehalf, Release: x.Release, Sequence: x.Seq, Sources: slices.Clone(x.Sources), Outputs: maps.Clone(x.Outputs), Data: json.RawMessage(cmp.Or(x.Data, "null")), Answer: x.Answer}
 }
 
-func (f *Flows) OperationEnded(c platform.Caller, call string, now time.Time) *kernel.Error {
+func (f *Flows) OperationEnded(c platform.Caller, call string, now time.Time) *platform.Error {
 	c = f.host.Automation(c, ID)
 	running, err := f.running(c)
 	if err != nil {
@@ -228,7 +227,7 @@ func (f *Flows) OperationEnded(c platform.Caller, call string, now time.Time) *k
 	return nil
 }
 
-func (f *Flows) resumeInvocation(c platform.Caller, id string, token int, now time.Time) *kernel.Error {
+func (f *Flows) resumeInvocation(c platform.Caller, id string, token int, now time.Time) *platform.Error {
 	c = f.host.Automation(c, ID)
 	x, ok := platform.Get[FlowInstance](c, id)
 	if !ok || ended(x.State) {
@@ -271,7 +270,7 @@ func (f *Flows) resumeInvocation(c platform.Caller, id string, token int, now ti
 		run.Outputs = maps.Clone(tok.Outputs)
 		run.Frames = slices.Clone(tok.Frames)
 		var done bool
-		var err *kernel.Error
+		var err *platform.Error
 		output, done, err = step.Invoke.Result(f.host.Automation(c, f.def(x.Flow, x.Version).app), run, tok.Child)
 		sources = run.Sources
 		if !done && err == nil {

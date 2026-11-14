@@ -3,12 +3,11 @@ package objects
 import (
 	"encoding/json"
 
-	"platformkernel/kernel"
 	"platformserver/platform"
 )
 
 type ContextReader struct {
-	Detail   func(sections ...string) (RecordView, *kernel.Error)
+	Detail   func(sections ...string) (RecordView, *platform.Error)
 	Info     func() platform.EntityInfo
 	Links    func(entity string) []string
 	Readable func(ref string) bool
@@ -16,7 +15,7 @@ type ContextReader struct {
 	Tasks    func(q platform.Query) ([]any, bool)
 }
 
-func (r ContextReader) Read(typ, id string) (ContextView, *kernel.Error) {
+func (r ContextReader) Read(typ, id string) (ContextView, *platform.Error) {
 	view, err := r.Detail(RecordSectionHistory, RecordSectionLinks)
 	if err != nil {
 		return ContextView{}, err

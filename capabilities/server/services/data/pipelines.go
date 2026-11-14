@@ -9,7 +9,6 @@ import (
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 	"platformserver/platform"
 )
 
@@ -17,7 +16,7 @@ var StepKinds = []string{"select", "rename", "cast", "filter", "compute", "looku
 
 func (o *Owner) pipelineEntity() platform.Entity {
 	return platform.Entity{Type: PipelineType, Title: "Pipeline", Plural: "Pipelines", Model: Pipeline{}, Display: "title",
-		Validate: func(c platform.Caller, record any) *kernel.Error {
+		Validate: func(c platform.Caller, record any) *platform.Error {
 			p := record.(*Pipeline)
 			if !c.Replaying {
 				if err := p.NormalizeFormulaRules(); err != nil {
@@ -48,10 +47,10 @@ func pipelineActions() []platform.Action {
 		Payload: []platform.Field{{Name: "run", Type: "json", Required: true, Description: "The run's counts, quarantine and failures"}}}}
 }
 
-func requestRun(c platform.Caller, record any, _ json.RawMessage, _ time.Time) *kernel.Error {
+func requestRun(c platform.Caller, record any, _ json.RawMessage, _ time.Time) *platform.Error {
 	p, ok := record.(*Pipeline)
 	if !ok {
-		return &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
+		return &platform.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 	}
 	if !c.Replaying {
 		if !c.Member.CanDeclassify(p.PublishedDeclassifications()) {
@@ -63,10 +62,10 @@ func requestRun(c platform.Caller, record any, _ json.RawMessage, _ time.Time) *
 	return nil
 }
 
-func (o *Owner) publishPipeline(c platform.Caller, record any, _ json.RawMessage, _ time.Time) *kernel.Error {
+func (o *Owner) publishPipeline(c platform.Caller, record any, _ json.RawMessage, _ time.Time) *platform.Error {
 	p, ok := record.(*Pipeline)
 	if !ok {
-		return &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
+		return &platform.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 	}
 	if !c.Replaying {
 		if !c.Automation && !c.Member.CanDeclassify(p.Declassifications()) {
@@ -92,12 +91,12 @@ func (o *Owner) publishPipeline(c platform.Caller, record any, _ json.RawMessage
 	return nil
 }
 
-func (o *Owner) CheckPipeline(c platform.Caller, p Pipeline) *kernel.Error {
+func (o *Owner) CheckPipeline(c platform.Caller, p Pipeline) *platform.Error {
 	return o.checkPipeline(c, p)
 }
 
-func (o *Owner) checkPipeline(c platform.Caller, p Pipeline) *kernel.Error {
-	refuse := func(message string, args ...any) *kernel.Error {
+func (o *Owner) checkPipeline(c platform.Caller, p Pipeline) *platform.Error {
+	refuse := func(message string, args ...any) *platform.Error {
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, message, args...)
 	}
 	if err := o.checkName(p.Name, p.ID); err != nil {
@@ -261,8 +260,8 @@ func checkStep(c platform.Caller, s platform.TransformStep) error {
 	return fmt.Errorf("is not one of %s", strings.Join(StepKinds, ", "))
 }
 
-func (o *Owner) SubmitPipelineRan(ledger platform.Authority, c platform.Caller, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *kernel.Error) {
-	return ledger.Receive(c, s, now, nil, func() (func(*pb.ChangeRecord), *kernel.Error) {
+func (o *Owner) SubmitPipelineRan(ledger platform.Authority, c platform.Caller, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *platform.Error) {
+	return ledger.Receive(c, s, now, nil, func() (func(*pb.ChangeRecord), *platform.Error) {
 		var payload struct {
 			Run PipelineRun `json:"run"`
 		}

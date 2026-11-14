@@ -4,13 +4,12 @@ import (
 	"encoding/json"
 	"maps"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 	"platformserver/platform"
 	"strconv"
 	"time"
 )
 
-func (b *Runtime) txnIntervals(c platform.Caller, receipt *pb.ChangeRecord, subject, subjectID, step string, p platform.TxnIntervals, iterations *int, now time.Time, reserve func(string) *kernel.Error) *kernel.Error {
+func (b *Runtime) txnIntervals(c platform.Caller, receipt *pb.ChangeRecord, subject, subjectID, step string, p platform.TxnIntervals, iterations *int, now time.Time, reserve func(string) *platform.Error) *platform.Error {
 	proof := c.ObservationContext()
 	if proof == nil || proof.Intervals == nil || proof.Record != subject+"/"+subjectID || proof.Definition.Ref != (platform.AssetRef{App: b.App, Kind: platform.AssetObservation, Name: p.Source}) {
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "Interval projection requires its accepted observation / 区间写入须有对应观测依据")
@@ -54,7 +53,7 @@ func (b *Runtime) txnIntervals(c platform.Caller, receipt *pb.ChangeRecord, subj
 	if err != nil {
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "{why}", err.Error())
 	}
-	write := func(id, verb string, patch map[string]any) *kernel.Error {
+	write := func(id, verb string, patch map[string]any) *platform.Error {
 		if failure := c.TxnTransport().TakeTxnStep(); failure != nil {
 			return failure
 		}
@@ -98,7 +97,7 @@ func (b *Runtime) txnIntervals(c platform.Caller, receipt *pb.ChangeRecord, subj
 	return nil
 }
 
-func txnMath(engine platform.RuleEngine, kind, op string, left, right platform.ExprValue, now time.Time) (platform.ExprValue, *kernel.Error) {
+func txnMath(engine platform.RuleEngine, kind, op string, left, right platform.ExprValue, now time.Time) (platform.ExprValue, *platform.Error) {
 	expr := platform.Expr{Op: op, Kind: kind, Args: []platform.Expr{platform.ExprReference(left.Kind, "left"), platform.ExprReference(right.Kind, "right")}}
 	program, err := engine.CompileExpr(expr, platform.ExprSchema{Refs: map[string]platform.ExprType{"left": {Kind: left.Kind}, "right": {Kind: right.Kind}}})
 	if err != nil {
@@ -111,8 +110,8 @@ func txnMath(engine platform.RuleEngine, kind, op string, left, right platform.E
 	return result.Value, nil
 }
 
-func (b *Runtime) txnRangeRows(c platform.Caller, span platform.TxnRange, scope platform.RuleReadSpec, subject any, inputs map[string]any, now time.Time) ([]map[string]any, *kernel.Error) {
-	invalid := func() ([]map[string]any, *kernel.Error) {
+func (b *Runtime) txnRangeRows(c platform.Caller, span platform.TxnRange, scope platform.RuleReadSpec, subject any, inputs map[string]any, now time.Time) ([]map[string]any, *platform.Error) {
+	invalid := func() ([]map[string]any, *platform.Error) {
 		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Range iteration needs an ordered, aligned interval within its declared limit / 范围迭代需要顺序正确、步长对齐且未超出上限的区间")
 	}
 	if span.Step < 1 || span.Step > platform.TxnMaxIterations || span.Limit < 1 || span.Limit > platform.TxnMaxIterations {
@@ -183,7 +182,7 @@ func (b *Runtime) txnRangeRows(c platform.Caller, span platform.TxnRange, scope 
 	return rows, nil
 }
 
-func (b *Runtime) txnRecordRows(c platform.Caller, receipt *pb.ChangeRecord, subject, id, name, step string, iterations *int, now time.Time) (platform.RecordSetResult, platform.EntityInfo, []string, *kernel.Error) {
+func (b *Runtime) txnRecordRows(c platform.Caller, receipt *pb.ChangeRecord, subject, id, name, step string, iterations *int, now time.Time) (platform.RecordSetResult, platform.EntityInfo, []string, *platform.Error) {
 	set, failure := c.ReadRecordSet(subject, id, name, now)
 	if failure != nil {
 		return set, platform.EntityInfo{}, nil, failure
@@ -211,7 +210,7 @@ func (b *Runtime) txnRecordRows(c platform.Caller, receipt *pb.ChangeRecord, sub
 	return set, info, ids, failure
 }
 
-func txnRowInputs(c platform.Caller, info platform.EntityInfo, raw json.RawMessage, inputs map[string]any) (map[string]any, *kernel.Error) {
+func txnRowInputs(c platform.Caller, info platform.EntityInfo, raw json.RawMessage, inputs map[string]any) (map[string]any, *platform.Error) {
 	var fields map[string]json.RawMessage
 	if json.Unmarshal(raw, &fields) != nil {
 		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Iteration row is invalid")

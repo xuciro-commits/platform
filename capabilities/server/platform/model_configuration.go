@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"platformkernel/kernel"
 	"slices"
 	"time"
 )
@@ -168,9 +167,9 @@ type ModelToolProposal struct {
 }
 type ModelToolHost interface {
 	ModelToolSurface(Member) AgentSurface
-	AgentObjects(Member, string, json.RawMessage, time.Time) (AgentObservation, *kernel.Error)
+	AgentObjects(Member, string, json.RawMessage, time.Time) (AgentObservation, *Error)
 	Catalog(Member) []Action
 	ModelToolReads(Member) []string
-	Read(context.Context, Member, string, ...json.RawMessage) (any, *kernel.Error)
-	ProposeModelTool(Member, ModelToolProposal, time.Time) *kernel.Error
+	Read(context.Context, Member, string, ...json.RawMessage) (any, *Error)
+	ProposeModelTool(Member, ModelToolProposal, time.Time) *Error
 }

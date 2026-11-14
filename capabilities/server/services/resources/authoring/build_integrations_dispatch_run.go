@@ -11,12 +11,11 @@ import (
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 	"platformserver/platform"
 	dataowner "platformserver/services/data"
 )
 
-func (b *Build) openDispatch(c platform.Caller, receipt *pb.ChangeRecord, txn *platform.BusinessTxn, scope platform.RuleReadSpec, subject map[string]any, values map[string]any, at time.Time) *kernel.Error {
+func (b *Build) openDispatch(c platform.Caller, receipt *pb.ChangeRecord, txn *platform.BusinessTxn, scope platform.RuleReadSpec, subject map[string]any, values map[string]any, at time.Time) *platform.Error {
 	if txn.Dispatch == nil {
 		return nil
 	}
@@ -170,7 +169,7 @@ func (b *Build) openDispatch(c platform.Caller, receipt *pb.ChangeRecord, txn *p
 	return c.Put(receipt, run)
 }
 
-func (b *Build) queueDispatch(c platform.Caller, receipt *pb.ChangeRecord, run *platform.DispatchRun, at time.Time) *kernel.Error {
+func (b *Build) queueDispatch(c platform.Caller, receipt *pb.ChangeRecord, run *platform.DispatchRun, at time.Time) *platform.Error {
 	run.Attempt++
 	run.Intent = fmt.Sprintf("%s:%s:dispatch:%s:%d:%s%s", c.Tenant, ID, run.ID, run.Attempt, dataowner.WritebackEndpoint, run.Target)
 	run.Attempts = append(run.Attempts, platform.DispatchAttempt{Number: run.Attempt, Intent: run.Intent, Target: run.Target, State: "pending", At: at, Compensation: run.Compensating})
@@ -188,8 +187,8 @@ func dispatchTerminal(state string) bool {
 	return slices.Contains([]string{"completed", "cancelled", "compensated"}, state)
 }
 
-func (b *Build) updateDispatch(c platform.Caller, submission *pb.Submission, at time.Time) (*pb.ChangeRecord, *kernel.Error) {
-	return b.ledger.Receive(c, submission, at, nil, func() (func(*pb.ChangeRecord), *kernel.Error) {
+func (b *Build) updateDispatch(c platform.Caller, submission *pb.Submission, at time.Time) (*pb.ChangeRecord, *platform.Error) {
+	return b.ledger.Receive(c, submission, at, nil, func() (func(*pb.ChangeRecord), *platform.Error) {
 		run, found := platform.Get[platform.DispatchRun](c, submission.GetTarget().GetId())
 		if !found {
 			return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_NOT_FOUND, "The dispatch does not exist")
@@ -241,7 +240,7 @@ func (b *Build) updateDispatch(c platform.Caller, submission *pb.Submission, at 
 		}
 		var replacementRequest, replacementConnection, replacementCompensation json.RawMessage
 		if manual && in.Outcome == "retarget" {
-			var problem *kernel.Error
+			var problem *platform.Error
 			replacementRequest, replacementConnection, problem = transport.RetargetDispatch(c, run, in.Target, at)
 			if problem != nil {
 				return nil, problem
@@ -256,7 +255,7 @@ func (b *Build) updateDispatch(c platform.Caller, submission *pb.Submission, at 
 			}
 		}
 		return func(receipt *pb.ChangeRecord) {
-			fail := func(problem *kernel.Error) bool {
+			fail := func(problem *platform.Error) bool {
 				if problem != nil {
 					c.FailDecision(problem)
 					return true
@@ -350,7 +349,7 @@ func (b *Build) updateDispatch(c platform.Caller, submission *pb.Submission, at 
 	})
 }
 
-func (b *Build) dispatchState(c platform.Caller, receipt *pb.ChangeRecord, run *platform.DispatchRun, at time.Time) *kernel.Error {
+func (b *Build) dispatchState(c platform.Caller, receipt *pb.ChangeRecord, run *platform.DispatchRun, at time.Time) *platform.Error {
 	if dispatchTerminal(run.State) {
 		if err := c.DispatchTransport().ResolveDispatchDelivery(c, *run, at); err != nil {
 			return err
@@ -401,7 +400,7 @@ func (b *Build) dispatchState(c platform.Caller, receipt *pb.ChangeRecord, run *
 	return nil
 }
 
-func (b *Build) runDispatches(c platform.Caller, at time.Time) *kernel.Error {
+func (b *Build) runDispatches(c platform.Caller, at time.Time) *platform.Error {
 	runs, err := platform.PendingDispatches(c)
 	if err != nil {
 		return err

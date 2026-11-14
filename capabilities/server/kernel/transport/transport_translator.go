@@ -2,7 +2,6 @@ package transport
 
 import (
 	"encoding/json"
-	"platformkernel/kernel"
 	"platformserver/platform"
 	"regexp"
 	"slices"
@@ -306,11 +305,11 @@ func (x *Translator) patterns(app, lang string) []pattern {
 	return d.patterns
 }
 
-func (x *Translator) Said(err *kernel.Error, lang string) *kernel.Error {
+func (x *Translator) Said(err *platform.Error, lang string) *platform.Error {
 	if err == nil || err.Message == "" {
 		return err
 	}
-	return &kernel.Error{Code: err.Code, Message: x.Say(lang, err.Message)}
+	return &platform.Error{Code: err.Code, Message: x.Say(lang, err.Message)}
 }
 
 func (x *Translator) Say(lang, s string) string { return x.say("", lang, s, 0) }

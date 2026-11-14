@@ -12,7 +12,6 @@ import (
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 	"platformserver/kernel/records"
 	"platformserver/platform"
 	dataowner "platformserver/services/data"
@@ -24,7 +23,7 @@ type ManagedRows struct {
 	Decode   func(typ string, image json.RawMessage) (any, error)
 	Image    func(record string) json.RawMessage
 	Install  func(platform.ReleaseInstallation)
-	Fail     func(*kernel.Error)
+	Fail     func(*platform.Error)
 }
 
 type Managed struct {
@@ -52,7 +51,7 @@ type ManagedPreparation struct {
 	CheckStorage    func(upgrade, downgrade bool) error
 }
 
-func NewManaged(caller platform.Caller, descriptor platform.PackageDescriptor, rows func() *records.Store, install func(platform.ReleaseInstallation), fail func(*kernel.Error)) Managed {
+func NewManaged(caller platform.Caller, descriptor platform.PackageDescriptor, rows func() *records.Store, install func(platform.ReleaseInstallation), fail func(*platform.Error)) Managed {
 	return Managed{Caller: caller, Descriptor: descriptor, Resources: Resources(rows()), Rows: ManagedRows{
 		Archived: func(resource build.Resource, archived bool) any {
 			return rows().ArchivedCopy(resource.Type, resource.Draft, archived)
@@ -102,7 +101,7 @@ func RestoreReferencedResources(store *records.Store, installations []platform.R
 	}
 }
 
-func (p ManagedPreparation) Prepare() (func(*pb.ChangeRecord), *kernel.Error) {
+func (p ManagedPreparation) Prepare() (func(*pb.ChangeRecord), *platform.Error) {
 	if p.Descriptor.Blueprint == nil && !p.Archive {
 		return nil, nil
 	}
@@ -196,7 +195,7 @@ func (m Managed) Archive(r *pb.ChangeRecord) {
 	}
 }
 
-func (m Managed) Owned(code, owned []platform.ReleaseAsset) (map[platform.AssetRef]bool, *kernel.Error) {
+func (m Managed) Owned(code, owned []platform.ReleaseAsset) (map[platform.AssetRef]bool, *platform.Error) {
 	native := map[platform.AssetRef]bool{}
 	for _, asset := range code {
 		native[asset.Ref] = true
@@ -260,7 +259,7 @@ func (m Managed) Install(r *pb.ChangeRecord, refs map[platform.AssetRef]bool, pl
 	}
 }
 
-func TenantSourceRefusal(fixed dataowner.Connection, credential func() string) *kernel.Error {
+func TenantSourceRefusal(fixed dataowner.Connection, credential func() string) *platform.Error {
 	if fixed.Archived || fixed.State != "ready" || fixed.Kind != "http" {
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "The tenant source needs a ready HTTP connection")
 	}

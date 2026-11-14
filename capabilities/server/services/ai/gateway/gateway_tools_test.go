@@ -7,7 +7,6 @@ import (
 	"testing"
 	"time"
 
-	"platformkernel/kernel"
 	"platformserver/platform"
 )
 
@@ -23,7 +22,7 @@ func (h *proposalHost) ModelToolSurface(platform.Member) platform.AgentSurface {
 	}
 }
 
-func (*proposalHost) AgentObjects(platform.Member, string, json.RawMessage, time.Time) (platform.AgentObservation, *kernel.Error) {
+func (*proposalHost) AgentObjects(platform.Member, string, json.RawMessage, time.Time) (platform.AgentObservation, *platform.Error) {
 	return platform.AgentObservation{}, nil
 }
 
@@ -33,11 +32,11 @@ func (h *proposalHost) Catalog(platform.Member) []platform.Action {
 
 func (*proposalHost) ModelToolReads(platform.Member) []string { return nil }
 
-func (*proposalHost) Read(context.Context, platform.Member, string, ...json.RawMessage) (any, *kernel.Error) {
+func (*proposalHost) Read(context.Context, platform.Member, string, ...json.RawMessage) (any, *platform.Error) {
 	return nil, nil
 }
 
-func (h *proposalHost) ProposeModelTool(_ platform.Member, proposal platform.ModelToolProposal, _ time.Time) *kernel.Error {
+func (h *proposalHost) ProposeModelTool(_ platform.Member, proposal platform.ModelToolProposal, _ time.Time) *platform.Error {
 	h.proposed = proposal
 	return nil
 }

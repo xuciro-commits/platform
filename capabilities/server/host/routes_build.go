@@ -7,7 +7,6 @@ import (
 	"io"
 	"net/http"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 	transport "platformserver/kernel/transport"
 	"platformserver/platform"
 	pageowner "platformserver/services/apps/pages"
@@ -45,11 +44,11 @@ func (h *Host) routesBuild(rt *routes) {
 	h.routesPackages(rt)
 	builder := []string{build.Builder}
 	builderPublisher := []string{build.Builder, build.Publisher}
-	rt.handle(transport.Route{Pattern: "POST /v1/actions/{schema}/check", Summary: "Check any known action's authorization, state and each submission condition for this member and target; conditions that read unsupplied inputs are marked needsInputs and not counted", Body: pageowner.ActionCheckRequest{}, Answer: pageowner.ActionCheckResult{}}, transport.Bounded(64<<10, actionCheckMessage, func(r *http.Request, m platform.Member, t *Tenant, request pageowner.ActionCheckRequest) (pageowner.ActionCheckResult, *kernel.Error) {
+	rt.handle(transport.Route{Pattern: "POST /v1/actions/{schema}/check", Summary: "Check any known action's authorization, state and each submission condition for this member and target; conditions that read unsupplied inputs are marked needsInputs and not counted", Body: pageowner.ActionCheckRequest{}, Answer: pageowner.ActionCheckResult{}}, transport.Bounded(64<<10, actionCheckMessage, func(r *http.Request, m platform.Member, t *Tenant, request pageowner.ActionCheckRequest) (pageowner.ActionCheckResult, *platform.Error) {
 		if request.Target.Object == "" || request.Target.ID == "" {
 			return pageowner.ActionCheckResult{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, actionCheckMessage)
 		}
-		return recordRead(t, r.Context(), func(t *Tenant) (pageowner.ActionCheckResult, *kernel.Error) {
+		return recordRead(t, r.Context(), func(t *Tenant) (pageowner.ActionCheckResult, *platform.Error) {
 			return t.actionCheck(m, r.PathValue("schema"), request, h.Now(), t.Language(m, r))
 		})
 	}))
@@ -91,14 +90,14 @@ func (h *Host) routesBuild(rt *routes) {
 		if !transport.DecodeValueBody(w, r, &p, 128<<10) {
 			return
 		}
-		answer, refusal := recordRead(t, r.Context(), func(t *Tenant) (build.ProcessDiagnostics, *kernel.Error) {
+		answer, refusal := recordRead(t, r.Context(), func(t *Tenant) (build.ProcessDiagnostics, *platform.Error) {
 			world, refusal := t.draftWorldLocked(m, r.URL.Query().Get("branch"), h.Now())
 			if refusal != nil {
 				return build.ProcessDiagnostics{}, refusal
 			}
 			owner := world.builders[build.ID]
 			if owner == nil {
-				return build.ProcessDiagnostics{}, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
+				return build.ProcessDiagnostics{}, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
 			}
 			return build.DiagnoseProcess(owner, platform.NewCaller(runtime{t: world, scoped: true}, m, build.ID, false, false), p), nil
 		})
@@ -166,14 +165,14 @@ func (h *Host) routesBuild(rt *routes) {
 		id, err := t.ActivateReleaseWithUpgrade(m, request.CandidateID, request.Key, request.UpgradeID, now)
 		return releaseowner.ReleaseActive{ID: id}, err
 	}, h.Now))
-	rt.recordRead(transport.Route{Pattern: "GET /v1/queries/{app}/{name}", Summary: "Run a declared query as the caller: its conditions, and the record it is run for", Query: []transport.Param{{Name: "for", Description: "the ID of the record it is run for, when it takes one"}, {Name: "version", Description: "An exact published source version"}, {Name: "search", Description: "Words to find within the declared conditions"}, {Name: "offset", Description: "Records to skip"}, {Name: "limit", Description: "Records in this bounded window"}}, Answer: RecordPage{}}, transport.Answering(func(r *http.Request, m platform.Member, t *Tenant) (RecordPage, *kernel.Error) {
+	rt.recordRead(transport.Route{Pattern: "GET /v1/queries/{app}/{name}", Summary: "Run a declared query as the caller: its conditions, and the record it is run for", Query: []transport.Param{{Name: "for", Description: "the ID of the record it is run for, when it takes one"}, {Name: "version", Description: "An exact published source version"}, {Name: "search", Description: "Words to find within the declared conditions"}, {Name: "offset", Description: "Records to skip"}, {Name: "limit", Description: "Records in this bounded window"}}, Answer: RecordPage{}}, transport.Answering(func(r *http.Request, m platform.Member, t *Tenant) (RecordPage, *platform.Error) {
 		offset, limit := transport.PageBounds(r, 0, 0)
 		if offset < 0 || limit < 0 {
 			return RecordPage{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "offset and limit are non-negative")
 		}
 		return t.queryWindowRead(m, r.PathValue("app"), r.PathValue("name"), r.URL.Query().Get("for"), r.URL.Query().Get("version"), platform.Query{Search: r.URL.Query().Get("search"), Offset: offset, Limit: limit}, h.Now())
 	}))
-	rt.authorized(transport.Route{Pattern: "POST /v1/pipelines/preview", Summary: "Try the current pipeline draft on authorized dataset samples without publishing or writing output", Body: dataowner.PipelinePreviewRequest{}, Answer: dataowner.PipelinePreview{}}, build.ID, []string{build.Builder, build.Integrator}, transport.Bounded(1<<20, "The pipeline trial must be a valid bounded JSON object", func(_ *http.Request, m platform.Member, t *Tenant, request dataowner.PipelinePreviewRequest) (dataowner.PipelinePreview, *kernel.Error) {
+	rt.authorized(transport.Route{Pattern: "POST /v1/pipelines/preview", Summary: "Try the current pipeline draft on authorized dataset samples without publishing or writing output", Body: dataowner.PipelinePreviewRequest{}, Answer: dataowner.PipelinePreview{}}, build.ID, []string{build.Builder, build.Integrator}, transport.Bounded(1<<20, "The pipeline trial must be a valid bounded JSON object", func(_ *http.Request, m platform.Member, t *Tenant, request dataowner.PipelinePreviewRequest) (dataowner.PipelinePreview, *platform.Error) {
 		return t.PreviewPipeline(m, request, h.Now())
 	}))
 	rt.handle(transport.Route{Pattern: "POST /v1/simulate", Summary: "Try an authorized action as yourself in a private decision; only a builder may choose another member", Query: []transport.Param{{Name: "as", Description: "the member it is tried as; empty: yourself; another member requires a builder"}, {Name: "branch", Description: "a branch id: the action is tried in that branch's staged world, where resources that exist only on the branch can be tried; requires a builder"}}, Body: []byte{}, Answer: trialowner.Simulation{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
@@ -186,13 +185,13 @@ func (h *Host) routesBuild(rt *routes) {
 		out, err := t.Simulate(m, r.URL.Query().Get("as"), r.URL.Query().Get("branch"), s, h.Now())
 		transport.Answer(w, out, err)
 	})
-	rt.authorized(transport.Route{Pattern: "POST /v1/simulate/candidate", Summary: "Test an application draft closure or retained candidate with synthetic samples, controlled members and original executor traces", Body: trialowner.CandidateSimulationRequest{}, Answer: trialowner.CandidateSimulation{}}, build.ID, builder, transport.Bounded(1<<20, "The test plan must be a valid bounded JSON object", func(_ *http.Request, m platform.Member, t *Tenant, request trialowner.CandidateSimulationRequest) (trialowner.CandidateSimulation, *kernel.Error) {
+	rt.authorized(transport.Route{Pattern: "POST /v1/simulate/candidate", Summary: "Test an application draft closure or retained candidate with synthetic samples, controlled members and original executor traces", Body: trialowner.CandidateSimulationRequest{}, Answer: trialowner.CandidateSimulation{}}, build.ID, builder, transport.Bounded(1<<20, "The test plan must be a valid bounded JSON object", func(_ *http.Request, m platform.Member, t *Tenant, request trialowner.CandidateSimulationRequest) (trialowner.CandidateSimulation, *platform.Error) {
 		return t.SimulateCandidate(m, request)
 	}))
-	rt.handle(transport.Route{Pattern: "GET /v1/projects/{id}/access", Summary: "A project's members and roles; owners, builders and administrators also get the people they may add", Answer: platform.ProjectAccessView{}}, transport.Answering(func(r *http.Request, m platform.Member, t *Tenant) (platform.ProjectAccessView, *kernel.Error) {
+	rt.handle(transport.Route{Pattern: "GET /v1/projects/{id}/access", Summary: "A project's members and roles; owners, builders and administrators also get the people they may add", Answer: platform.ProjectAccessView{}}, transport.Answering(func(r *http.Request, m platform.Member, t *Tenant) (platform.ProjectAccessView, *platform.Error) {
 		d, _ := t.App(controlowner.PlatformApp).(platform.ProjectAccess)
 		if d == nil || !m.Holds(build.ID, build.Builder) && !m.Holds(controlowner.PlatformApp, controlowner.Admin) {
-			return platform.ProjectAccessView{}, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_POLICY_DENIED}
+			return platform.ProjectAccessView{}, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_POLICY_DENIED}
 		}
 		return d.ProjectAccess(m, r.PathValue("id")), nil
 	}))

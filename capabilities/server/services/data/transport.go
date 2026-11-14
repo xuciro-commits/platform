@@ -10,7 +10,6 @@ import (
 
 	"google.golang.org/protobuf/proto"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 	"platformserver/platform"
 )
 
@@ -24,17 +23,17 @@ type Transport struct {
 	Applicant       func(platform.Member) platform.Caller
 	ApplicantReads  func(platform.Caller, string) bool
 	Bind            func(object, release string) ([]platform.AssetBinding, error)
-	Credential      func(WritebackRequest) *kernel.Error
+	Credential      func(WritebackRequest) *platform.Error
 	Intend          func(platform.Effect)
-	Complete        func(c platform.Caller, run platform.ConfirmationRun, member platform.Member, action string, sub *pb.Submission, at time.Time) (*pb.ChangeRecord, *kernel.Error)
+	Complete        func(c platform.Caller, run platform.ConfirmationRun, member platform.Member, action string, sub *pb.Submission, at time.Time) (*pb.ChangeRecord, *platform.Error)
 	InFlight        func(owned func(platform.Effect) bool) bool
 	Queued          func(id string) (platform.Effect, bool, bool)
 	Settle          func(id, state, reason string, at time.Time)
 	SettleAll       func(owned func(platform.Effect) bool, state, reason string, at time.Time)
-	Retry           func(c platform.Caller, id string, at time.Time) *kernel.Error
+	Retry           func(c platform.Caller, id string, at time.Time) *platform.Error
 	Publisher       func(Source) (platform.Member, bool)
 	Markings        func(connection string) platform.MarkingSet
-	ObservationRead func(member platform.Member, definition platform.ObservationDefinition, typ, id string, at time.Time) (bool, *kernel.Error)
+	ObservationRead func(member platform.Member, definition platform.ObservationDefinition, typ, id string, at time.Time) (bool, *platform.Error)
 	Record          func(string) (any, bool)
 	Owner           *Owner
 }
@@ -92,7 +91,7 @@ func (t Transport) FreezeConfirmation(c platform.Caller, subject string, spec pl
 	return t.Release(), closed.Assets, nil
 }
 
-func (t Transport) QueueConfirmation(c platform.Caller, r *pb.ChangeRecord, run platform.ConfirmationRun, index int, compensate bool, at time.Time) *kernel.Error {
+func (t Transport) QueueConfirmation(c platform.Caller, r *pb.ChangeRecord, run platform.ConfirmationRun, index int, compensate bool, at time.Time) *platform.Error {
 	if !c.Staging() || c.App != App || index < 0 || index >= len(run.Parties) {
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "Confirmation transport requires its original owner")
 	}
@@ -158,7 +157,7 @@ func (t Transport) QueueConfirmation(c platform.Caller, r *pb.ChangeRecord, run 
 	return nil
 }
 
-func (t Transport) CompleteConfirmation(c platform.Caller, r *pb.ChangeRecord, run platform.ConfirmationRun, action string, at time.Time) (string, *kernel.Error) {
+func (t Transport) CompleteConfirmation(c platform.Caller, r *pb.ChangeRecord, run platform.ConfirmationRun, action string, at time.Time) (string, *platform.Error) {
 	if !c.Staging() {
 		return "", platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Confirmation completion requires a private decision")
 	}
@@ -178,7 +177,7 @@ func (t Transport) CompleteConfirmation(c platform.Caller, r *pb.ChangeRecord, r
 	return receipt.GetChangeId(), nil
 }
 
-func (t Transport) ResolveConfirmationDelivery(c platform.Caller, run platform.ConfirmationRun, index int, compensated bool, at time.Time) *kernel.Error {
+func (t Transport) ResolveConfirmationDelivery(c platform.Caller, run platform.ConfirmationRun, index int, compensated bool, at time.Time) *platform.Error {
 	if !c.Staging() || c.App != App || index < 0 || index >= len(run.Parties) {
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "Confirmation resolution requires its original owner")
 	}
@@ -187,7 +186,7 @@ func (t Transport) ResolveConfirmationDelivery(c platform.Caller, run platform.C
 	if inFlight {
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The confirmation delivery is still in flight")
 	}
-	resolve := func(id, state, reason string) *kernel.Error {
+	resolve := func(id, state, reason string) *platform.Error {
 		effect, sending, ok := t.Queued(id)
 		if !ok || platform.EffectSettled(effect.State) {
 			return nil
@@ -220,7 +219,7 @@ func (t Transport) ResolveConfirmationDelivery(c platform.Caller, run platform.C
 	return nil
 }
 
-func (t Transport) RetryConfirmationDelivery(c platform.Caller, run platform.ConfirmationRun, index int, compensated bool, at time.Time) *kernel.Error {
+func (t Transport) RetryConfirmationDelivery(c platform.Caller, run platform.ConfirmationRun, index int, compensated bool, at time.Time) *platform.Error {
 	if !c.Staging() || c.App != App || index < 0 || index >= len(run.Parties) {
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "Confirmation resolution requires its original owner")
 	}
@@ -235,7 +234,7 @@ func (t Transport) RetryConfirmationDelivery(c platform.Caller, run platform.Con
 	return t.Retry(c, id, at)
 }
 
-func (t Transport) CheckConfirmationRead(run platform.ConfirmationRun, index int, at time.Time) *kernel.Error {
+func (t Transport) CheckConfirmationRead(run platform.ConfirmationRun, index int, at time.Time) *platform.Error {
 	if index < 0 || index >= len(run.Parties) || index >= len(run.Definition.Parties) {
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The confirmation declaration is unavailable")
 	}
@@ -289,7 +288,7 @@ func (t Transport) FreezeDispatch(c platform.Caller, subject, action string, spe
 	return t.Release(), closed.Assets, nil
 }
 
-func (t Transport) QueueDispatch(c platform.Caller, r *pb.ChangeRecord, run platform.DispatchRun, at time.Time) *kernel.Error {
+func (t Transport) QueueDispatch(c platform.Caller, r *pb.ChangeRecord, run platform.DispatchRun, at time.Time) *platform.Error {
 	if !c.Staging() || c.App != App || run.Intent == "" {
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "Dispatch transport requires its original owner")
 	}
@@ -318,7 +317,7 @@ func (t Transport) QueueDispatch(c platform.Caller, r *pb.ChangeRecord, run plat
 	return nil
 }
 
-func (t Transport) ResolveDispatchDelivery(c platform.Caller, run platform.DispatchRun, at time.Time) *kernel.Error {
+func (t Transport) ResolveDispatchDelivery(c platform.Caller, run platform.DispatchRun, at time.Time) *platform.Error {
 	if !c.Staging() || c.App != App {
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "Dispatch resolution requires its original owner")
 	}
@@ -338,7 +337,7 @@ func (t Transport) ResolveDispatchDelivery(c platform.Caller, run platform.Dispa
 	return nil
 }
 
-func (t Transport) CheckDispatchRead(run platform.DispatchRun, at time.Time) *kernel.Error {
+func (t Transport) CheckDispatchRead(run platform.DispatchRun, at time.Time) *platform.Error {
 	member, known := t.Member(run.Member)
 	if !known || !member.Active() || !t.Readable(member, run.Subject, at) {
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "The dispatch applicant can no longer read the subject")
@@ -380,7 +379,7 @@ func (t Transport) CheckDispatchRead(run platform.DispatchRun, at time.Time) *ke
 	return nil
 }
 
-func (t Transport) RetargetDispatch(c platform.Caller, run platform.DispatchRun, target string, at time.Time) (json.RawMessage, json.RawMessage, *kernel.Error) {
+func (t Transport) RetargetDispatch(c platform.Caller, run platform.DispatchRun, target string, at time.Time) (json.RawMessage, json.RawMessage, *platform.Error) {
 	if !c.Staging() || c.App != App || c.Agent || !c.Holds(App, run.Definition.ReviewerRole) || target == "" {
 		return nil, nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "Dispatch retargeting requires its original owner")
 	}

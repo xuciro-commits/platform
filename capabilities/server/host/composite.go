@@ -6,7 +6,6 @@ import (
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 	"platformserver/kernel/acceptedformat"
 	"platformserver/platform"
 	"platformserver/services/resources/authoring"
@@ -37,7 +36,7 @@ func (t *Tenant) prepareComposite(m platform.Member, key string, edits []platfor
 		Begin: func() build.CompositeDraft {
 			draft = t.newStagedDecision()
 			return build.CompositeDraft{
-				Decide: func(m platform.Member, app platform.App, s *pb.Submission, at time.Time) (*pb.ChangeRecord, *kernel.Error) {
+				Decide: func(m platform.Member, app platform.App, s *pb.Submission, at time.Time) (*pb.ChangeRecord, *platform.Error) {
 					return platform.Decide(platform.NewCaller(draft, m, build.ID, false, false), app, s, at)
 				},
 				AnswerRequests: draft.answerRequests, StageObservers: draft.stageObservers,

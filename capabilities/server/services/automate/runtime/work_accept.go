@@ -6,14 +6,13 @@ import (
 
 	"google.golang.org/protobuf/encoding/protojson"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 	"platformserver/kernel/acceptedformat"
 	"platformserver/kernel/protocol"
 	"platformserver/platform"
 )
 
 type WorkDraft struct {
-	Decide   func() (*kernel.Error, []acceptedformat.AuthorizationEvidence)
+	Decide   func() (*platform.Error, []acceptedformat.AuthorizationEvidence)
 	Reset    func()
 	Failed   func(title, why, id string)
 	Decision func(*acceptedformat.Work) error

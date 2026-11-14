@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 
 	"platformserver/platform"
 	dataowner "platformserver/services/data"
@@ -55,7 +54,7 @@ func (b *Build) agentEntity() platform.Entity {
 		Description: "An AI agent over the ontology: bounded tools, a budget, checkpoints and cases; publishing installs it.",
 		Scope:       platform.Scope{Default: platform.ScopeNone, Levels: map[string]string{Builder: platform.ScopeTenant}},
 		Standard:    platform.Standard{Create: true, Edit: true, Archive: true, Roles: []string{Builder}, Capability: "functions"},
-		Validate: func(c platform.Caller, record any) *kernel.Error {
+		Validate: func(c platform.Caller, record any) *platform.Error {
 			if err := b.checkAgent(*record.(*Agent)); err != nil {
 				return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "{why}", err.Error())
 			}
@@ -67,7 +66,7 @@ func (b *Build) agentEntity() platform.Entity {
 
 func (b *Build) agentDraftEntity() platform.Entity {
 	entity := b.agentEntity()
-	entity.Validate = func(c platform.Caller, record any) *kernel.Error {
+	entity.Validate = func(c platform.Caller, record any) *platform.Error {
 		if c.Replaying {
 			return nil
 		}
@@ -201,13 +200,13 @@ func (b *Build) installedActionOf(schema string) string {
 	return ""
 }
 
-func (b *Build) publishAgent(c platform.Caller, record any, _ json.RawMessage, _ time.Time) *kernel.Error {
+func (b *Build) publishAgent(c platform.Caller, record any, _ json.RawMessage, _ time.Time) *platform.Error {
 	a, ok := record.(*Agent)
 	if !ok {
-		return &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
+		return &platform.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 	}
 	if err := b.checkAgent(*a); err != nil {
-		return &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, Message: err.Error()}
+		return &platform.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, Message: err.Error()}
 	}
 	if a.Version >= 64 {
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "An agent may retain at most 64 published versions")
@@ -250,7 +249,7 @@ func (a Agent) Definition() platform.Agent {
 	role := a.HandoffRole
 	d := platform.Agent{Model: a.Model, ModelOptions: a.ModelOptions, Name: a.Name, Title: a.Title, Description: a.Description, Instructions: a.Instructions, Tools: slices.Clone(a.Tools), Checkpoints: checkpoints,
 		Budget: platform.Budget{Steps: a.Steps, Tokens: a.Tokens, Actions: a.Actions, Cost: a.Cost},
-		Guard: func(c platform.Caller, r platform.AgentRun, action, target string, payload json.RawMessage) *kernel.Error {
+		Guard: func(c platform.Caller, r platform.AgentRun, action, target string, payload json.RawMessage) *platform.Error {
 			if slices.Contains(checkpoints, action) && r.OnBehalf == "" {
 				return platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "This step waits for a person: ask, or finish with what you propose.")
 			}

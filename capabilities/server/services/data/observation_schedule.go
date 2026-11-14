@@ -5,7 +5,6 @@ import (
 	"strings"
 	"time"
 
-	"platformkernel/kernel"
 	"platformserver/platform"
 )
 
@@ -22,9 +21,9 @@ type ObservationSchedule struct {
 	Definitions func() ([]platform.Definition, error)
 	Active      func(record string) bool
 	Publisher   func(record string) (string, []string, bool)
-	Records     func(m platform.Member, object string, q platform.Query, at time.Time) ([]any, int, *kernel.Error)
+	Records     func(m platform.Member, object string, q platform.Query, at time.Time) ([]any, int, *platform.Error)
 	Windows     *ObservationWindows
-	Evaluate    func(m platform.Member, ref platform.AssetRef, q ObservationEvaluate, at time.Time) *kernel.Error
+	Evaluate    func(m platform.Member, ref platform.AssetRef, q ObservationEvaluate, at time.Time) *platform.Error
 }
 
 func (s ObservationSchedule) RunDue(at time.Time) {

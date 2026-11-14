@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"maps"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 	"platformserver/platform"
 	"slices"
 	"strings"
@@ -35,7 +34,7 @@ func trainingActions() []platform.Action {
 	}
 }
 
-func (a *AI) trainingDecision(c platform.Caller, s *pb.Submission, now time.Time) (func(*pb.ChangeRecord), *kernel.Error) {
+func (a *AI) trainingDecision(c platform.Caller, s *pb.Submission, now time.Time) (func(*pb.ChangeRecord), *platform.Error) {
 	id := s.GetTarget().GetId()
 	switch s.GetSchema().GetName() {
 	case trainingPolicySet:
@@ -80,7 +79,7 @@ func (a *AI) trainingDecision(c platform.Caller, s *pb.Submission, now time.Time
 func (*AI) Interested(_ []string, event platform.Event) bool {
 	return event.Record.GetSubmission().GetTarget().GetType() == "agent.run" || slices.ContainsFunc(event.Changed, func(ref string) bool { return strings.HasPrefix(ref, "build.function-call/") })
 }
-func (a *AI) Listen(c platform.Caller, event platform.Event, _ []string, now time.Time) *kernel.Error {
+func (a *AI) Listen(c platform.Caller, event platform.Event, _ []string, now time.Time) *platform.Error {
 	if a.trainingHost == nil {
 		return nil
 	}
@@ -205,7 +204,7 @@ func (a *AI) trainingProblem(member platform.Member, candidate platform.AITraini
 	return a.trainingHost.TrainingReadable(member, candidate, now)
 }
 
-func (a *AI) TrainingExport(c platform.Caller, format string, now time.Time) (platform.AITrainingExport, *kernel.Error) {
+func (a *AI) TrainingExport(c platform.Caller, format string, now time.Time) (platform.AITrainingExport, *platform.Error) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	if !c.Holds(ID, Admin) || c.Agent {

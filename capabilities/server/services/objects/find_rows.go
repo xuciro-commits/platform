@@ -5,17 +5,16 @@ import (
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 	"platformserver/kernel/records"
 	"platformserver/platform"
 )
 
-func FindRows(s *records.Store, c platform.Caller, t reflect.Type, q platform.Query, now time.Time) ([]any, int, *kernel.Error) {
+func FindRows(s *records.Store, c platform.Caller, t reflect.Type, q platform.Query, now time.Time) ([]any, int, *platform.Error) {
 	s.Lock()
 	defer s.Unlock()
 	et := s.Of(c, t)
 	if et == nil {
-		return nil, 0, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
+		return nil, 0, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
 	}
 	if len(q.Sort) == 0 {
 		q.Sort = []string{"id"}

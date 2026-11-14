@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 	"platformserver/platform"
 	functionauthoring "platformserver/services/functions/authoring"
 	"platformserver/services/resources/authoring"
@@ -32,10 +31,10 @@ type EvaluationHooks struct {
 	AppModel       func() string
 	HasProvider    func() bool
 	ModelConfig    func(model string, definition platform.AIFunction) (string, error)
-	Admits         func(platform.Member) *kernel.Error
+	Admits         func(platform.Member) *platform.Error
 	Quarantined    func() bool
 	Agent          func(platform.Member, ReleaseEvaluationRequest, time.Time) (string, error)
-	Accept         func(*pb.Submission, time.Time) *kernel.Error
+	Accept         func(*pb.Submission, time.Time) *platform.Error
 }
 
 func PrepareReleaseEvaluation(tenant string, member platform.Member, request ReleaseEvaluationRequest, now time.Time, hooks EvaluationHooks) (string, error) {

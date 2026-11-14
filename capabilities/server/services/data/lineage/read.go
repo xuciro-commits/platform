@@ -8,7 +8,6 @@ import (
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 	"platformserver/platform"
 	dataowner "platformserver/services/data"
 	build "platformserver/services/resources/authoring"
@@ -72,19 +71,19 @@ type LineageRequest struct {
 	Field     string
 }
 
-func (r Reader) Read(m platform.Member, request LineageRequest) (Lineage, *kernel.Error) {
+func (r Reader) Read(m platform.Member, request LineageRequest) (Lineage, *platform.Error) {
 	if err := r.host.Admits(m); err != nil {
 		return Lineage{}, err
 	}
 	if !m.Holds(build.ID, build.Builder) && !m.Holds(build.ID, build.Integrator) {
-		return Lineage{}, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_POLICY_DENIED}
+		return Lineage{}, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_POLICY_DENIED}
 	}
 	now := time.Now()
 	var snapshot Snapshot
 	var meta map[string]Meta
 	var visible map[string]bool
 	var focus string
-	var refusal *kernel.Error
+	var refusal *platform.Error
 	if request.Branch != "" {
 		mainGeneration := r.host.RecordGeneration()
 		branch, branchRefusal := r.host.ReadBranch(m, request.Branch, now)
@@ -233,7 +232,7 @@ func (r Reader) access(m platform.Member, base map[string]Meta) (map[string]Meta
 	return meta, visible
 }
 
-func focusOf(resources []build.Resource, request LineageRequest) (string, *kernel.Error) {
+func focusOf(resources []build.Resource, request LineageRequest) (string, *platform.Error) {
 	value := strings.TrimSpace(request.Focus)
 	if value == "" {
 		value = strings.TrimSpace(request.Ref)

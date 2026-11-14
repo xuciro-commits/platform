@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 	"reflect"
 	"strings"
 	"time"
@@ -31,7 +30,7 @@ type TxnLink struct {
 	Child   TxnRef       `json:"child"`
 }
 
-func (c Caller) PutOwnedRelation(receipt *pb.ChangeRecord, link TxnLink, remove bool, at time.Time) *kernel.Error {
+func (c Caller) PutOwnedRelation(receipt *pb.ChangeRecord, link TxnLink, remove bool, at time.Time) *Error {
 	runtime := c.StagedDecision()
 	if runtime == nil {
 		return Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Owned relation writes require a private host")
@@ -52,7 +51,7 @@ type RelationMigrationPlan struct {
 	Migrated bool           `json:"migrated"`
 }
 
-func (c Caller) MigrateOwnedRelations(receipt *pb.ChangeRecord, binding AssetBinding, at time.Time) *kernel.Error {
+func (c Caller) MigrateOwnedRelations(receipt *pb.ChangeRecord, binding AssetBinding, at time.Time) *Error {
 	runtime := c.StagedDecision()
 	if runtime == nil {
 		return Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Relationship migration requires a private decision")

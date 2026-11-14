@@ -8,7 +8,6 @@ import (
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 	"platformserver/platform"
 )
 
@@ -35,11 +34,11 @@ type ObservationOutcome struct {
 type ObservationDecision struct {
 	Tenant    string
 	Sources   Observations
-	Admits    func(platform.Member) *kernel.Error
-	Prior     func(m platform.Member, key, identity string) (*pb.ChangeRecord, *kernel.Error, bool)
+	Admits    func(platform.Member) *platform.Error
+	Prior     func(m platform.Member, key, identity string) (*pb.ChangeRecord, *platform.Error, bool)
 	App       func(app string) platform.App
-	Authorize func(m platform.Member, app string, action platform.Action, targets bool, at time.Time, sources []string) *kernel.Error
-	Accept    func(m platform.Member, s *pb.Submission, evidence *platform.ObservationDecisionEvidence, at time.Time) (*pb.ChangeRecord, *kernel.Error)
+	Authorize func(m platform.Member, app string, action platform.Action, targets bool, at time.Time, sources []string) *platform.Error
+	Accept    func(m platform.Member, s *pb.Submission, evidence *platform.ObservationDecisionEvidence, at time.Time) (*pb.ChangeRecord, *platform.Error)
 }
 
 func ObservationRequestIdentity(ref platform.AssetRef, q ObservationEvaluate) (string, string, error) {
@@ -50,7 +49,7 @@ func ObservationRequestIdentity(ref platform.AssetRef, q ObservationEvaluate) (s
 	return "observation:" + q.Key, "observation:" + hash, err
 }
 
-func (d ObservationDecision) reused(m platform.Member, key, identity string) (ObservationAnswer, *kernel.Error, bool) {
+func (d ObservationDecision) reused(m platform.Member, key, identity string) (ObservationAnswer, *platform.Error, bool) {
 	receipt, refusal, found := d.Prior(m, key, identity)
 	if !found {
 		return ObservationAnswer{}, nil, false
@@ -58,7 +57,7 @@ func (d ObservationDecision) reused(m platform.Member, key, identity string) (Ob
 	return ObservationAnswer{Matched: true, Reused: true, Receipt: receipt}, refusal, true
 }
 
-func (d ObservationDecision) Prepare(m platform.Member, ref platform.AssetRef, q ObservationEvaluate, key, identity string, now time.Time) (ObservationPrepared, *kernel.Error) {
+func (d ObservationDecision) Prepare(m platform.Member, ref platform.AssetRef, q ObservationEvaluate, key, identity string, now time.Time) (ObservationPrepared, *platform.Error) {
 	if refusal := d.Admits(m); refusal != nil {
 		return ObservationPrepared{}, refusal
 	}
@@ -95,7 +94,7 @@ func (d ObservationDecision) Prepare(m platform.Member, ref platform.AssetRef, q
 	return ObservationPrepared{Member: m, Plan: plan, Read: read}, nil
 }
 
-func (d ObservationDecision) Observe(ctx context.Context, p ObservationPrepared, now time.Time) (ObservationOutcome, *kernel.Error) {
+func (d ObservationDecision) Observe(ctx context.Context, p ObservationPrepared, now time.Time) (ObservationOutcome, *platform.Error) {
 	result, err := d.Sources.Fetch(ctx, p.Plan, p.Read, now)
 	if err != nil {
 		return ObservationOutcome{}, ObservationUnavailable(err)
@@ -113,7 +112,7 @@ func (d ObservationDecision) Observe(ctx context.Context, p ObservationPrepared,
 	return outcome, nil
 }
 
-func (d ObservationDecision) Commit(m platform.Member, ref platform.AssetRef, q ObservationEvaluate, key, identity string, p ObservationPrepared, o ObservationOutcome, now time.Time) (ObservationAnswer, *kernel.Error) {
+func (d ObservationDecision) Commit(m platform.Member, ref platform.AssetRef, q ObservationEvaluate, key, identity string, p ObservationPrepared, o ObservationOutcome, now time.Time) (ObservationAnswer, *platform.Error) {
 	plan := p.Plan
 	current, refusal := d.Sources.Prepare(m, ref, q.Record, now, true)
 	if refusal != nil {
@@ -157,7 +156,7 @@ func ObservationInfos(definitions []platform.Definition) []ObservationInfo {
 	return out
 }
 
-func (o Observations) Read(ctx context.Context, q ObservationRead, now time.Time, prepare func() (ObservationPlan, *kernel.Error)) (platform.ObservationResult, *kernel.Error) {
+func (o Observations) Read(ctx context.Context, q ObservationRead, now time.Time, prepare func() (ObservationPlan, *platform.Error)) (platform.ObservationResult, *platform.Error) {
 	if err := CheckObservationRead(&q, now); err != nil {
 		return platform.ObservationResult{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
 	}

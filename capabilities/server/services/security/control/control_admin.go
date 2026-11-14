@@ -8,7 +8,6 @@ import (
 	"log"
 	"os"
 	"path/filepath"
-	"platformkernel/kernel"
 	"platformserver/platform"
 	"regexp"
 	"slices"
@@ -111,8 +110,8 @@ func TailAudit(entries []platform.AuditEntry, n int) []platform.AuditEntry {
 
 type MigrationHooks struct {
 	Hosted func() map[string]bool
-	Export func(typ string) ([]byte, *kernel.Error)
-	Import func(typ string, data []byte) ([]platform.ImportRow, *kernel.Error)
+	Export func(typ string) ([]byte, *platform.Error)
+	Import func(typ string, data []byte) ([]platform.ImportRow, *platform.Error)
 }
 
 func MigrateRecords(from, to string, types []string, h MigrationHooks) (platform.MigrationResult, error) {

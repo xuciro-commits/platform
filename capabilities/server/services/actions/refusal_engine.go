@@ -4,14 +4,13 @@ import (
 	"cmp"
 	"encoding/json"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 	"platformserver/platform"
 	"slices"
 	"strings"
 	"time"
 )
 
-func RefusalCategory(answer kernel.Error, business *platform.BusinessRefusalFact, issues []platform.FieldIssue) (string, string) {
+func RefusalCategory(answer platform.Error, business *platform.BusinessRefusalFact, issues []platform.FieldIssue) (string, string) {
 	if business != nil {
 		return "business", business.Code
 	}
@@ -64,7 +63,7 @@ type RefusalEvent struct {
 	Fact platform.BusinessRefusalFact
 }
 
-func RefusalEscalations(events []RefusalEvent, at time.Time, exists func(string) bool, recipients func(platform.RefusalEscalationRequest, string) []string) ([]platform.RefusalEscalationRequest, *kernel.Error) {
+func RefusalEscalations(events []RefusalEvent, at time.Time, exists func(string) bool, recipients func(platform.RefusalEscalationRequest, string) []string) ([]platform.RefusalEscalationRequest, *platform.Error) {
 
 	type group struct {
 		app, subject, action, code string

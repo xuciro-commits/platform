@@ -4,11 +4,10 @@ import (
 	"encoding/json"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 	"platformserver/platform"
 )
 
-func DeclaredQueryFor(inputs json.RawMessage) (string, *kernel.Error) {
+func DeclaredQueryFor(inputs json.RawMessage) (string, *platform.Error) {
 	values := struct {
 		For string `json:"for,omitempty"`
 	}{}
@@ -32,7 +31,7 @@ func DeclaredQueryFor(inputs json.RawMessage) (string, *kernel.Error) {
 	return values.For, nil
 }
 
-func DeclaredQueryAnswer(c platform.Caller, q platform.NamedQuery, info platform.EntityInfo, found bool, records []any, total int) (json.RawMessage, *kernel.Error) {
+func DeclaredQueryAnswer(c platform.Caller, q platform.NamedQuery, info platform.EntityInfo, found bool, records []any, total int) (json.RawMessage, *platform.Error) {
 	sources := []string{}
 	for _, value := range records {
 		if row, ok := value.(InterfaceRecord); ok {

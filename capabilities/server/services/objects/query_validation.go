@@ -3,7 +3,6 @@ package objects
 import (
 	"fmt"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 	"platformserver/kernel/records"
 	"platformserver/platform"
 )
@@ -53,7 +52,7 @@ func DeclaredQuery(definitions []platform.Definition, app, name, version string)
 	return nil
 }
 
-func DeclaredWindow(q platform.NamedQuery, of string, window platform.Query) (platform.ObjectSet, Window, *kernel.Error) {
+func DeclaredWindow(q platform.NamedQuery, of string, window platform.Query) (platform.ObjectSet, Window, *platform.Error) {
 	if q.By != "" && of == "" {
 		return platform.ObjectSet{}, Window{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "{query} needs the record it is run for", q.Title)
 	}

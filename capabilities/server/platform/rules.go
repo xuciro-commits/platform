@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 	ruleexpr "platformserver/expr"
 	"slices"
 	"strings"
@@ -21,7 +20,7 @@ type RuleCriteria struct {
 	Conditions []RuleCriterion `json:"conditions"`
 }
 
-func EvaluateRule(expr Expr, reads RuleReadSpec, caller Caller, record any, inputs map[string]any, at time.Time, lookup func(string) (EntityInfo, bool)) (result ExprResult, refusal *kernel.Error) {
+func EvaluateRule(expr Expr, reads RuleReadSpec, caller Caller, record any, inputs map[string]any, at time.Time, lookup func(string) (EntityInfo, bool)) (result ExprResult, refusal *Error) {
 	var observed *ExprContext
 	if caller.TraceEnabled() {
 		defer func() {
@@ -37,8 +36,8 @@ func EvaluateRule(expr Expr, reads RuleReadSpec, caller Caller, record any, inpu
 			ID string `json:"id"`
 		}
 		_ = json.Unmarshal(Raw(record), &subject)
-		var check func(Expr) *kernel.Error
-		check = func(value Expr) *kernel.Error {
+		var check func(Expr) *Error
+		check = func(value Expr) *Error {
 			if value.Ref != "" && !strings.Contains(value.Ref, ".") && subject.ID != "" {
 				fields := []string{value.Ref}
 				if value.Ref == "id" {
@@ -91,7 +90,7 @@ func EvaluateRule(expr Expr, reads RuleReadSpec, caller Caller, record any, inpu
 	return value, nil
 }
 
-func (plan RuleCriteria) Check(c Caller, record any, inputs map[string]any, at time.Time, lookup func(string) (EntityInfo, bool)) *kernel.Error {
+func (plan RuleCriteria) Check(c Caller, record any, inputs map[string]any, at time.Time, lookup func(string) (EntityInfo, bool)) *Error {
 	matched, reason, err := plan.Evaluate(c, record, inputs, at, lookup)
 	if err != nil {
 		return err
@@ -102,7 +101,7 @@ func (plan RuleCriteria) Check(c Caller, record any, inputs map[string]any, at t
 	return nil
 }
 
-func (plan RuleCriteria) Evaluate(c Caller, record any, inputs map[string]any, at time.Time, lookup func(string) (EntityInfo, bool)) (bool, string, *kernel.Error) {
+func (plan RuleCriteria) Evaluate(c Caller, record any, inputs map[string]any, at time.Time, lookup func(string) (EntityInfo, bool)) (bool, string, *Error) {
 	for _, condition := range plan.Conditions {
 		value, err := EvaluateRule(condition.Expr, plan.Reads, c, record, inputs, at, lookup)
 		if err != nil {

@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"platformkernel/kernel"
 	"platformserver/kernel/records"
 	"platformserver/platform"
 	releaseowner "platformserver/services/devops/releases"
@@ -13,7 +12,7 @@ import (
 	"time"
 )
 
-func (t *Tenant) draftWorldLocked(m platform.Member, branch string, now time.Time) (*Tenant, *kernel.Error) {
+func (t *Tenant) draftWorldLocked(m platform.Member, branch string, now time.Time) (*Tenant, *platform.Error) {
 	if branch == "" {
 		return t, nil
 	}
@@ -38,7 +37,7 @@ func (t *Tenant) ReferencedDrafts(m platform.Member, kind platform.AssetKind, id
 	})
 }
 
-func (t *Tenant) buildAllowed(m platform.Member, permission string, roles ...string) *kernel.Error {
+func (t *Tenant) buildAllowed(m platform.Member, permission string, roles ...string) *platform.Error {
 	if err := t.Admits(m); err != nil {
 		return err
 	}
@@ -233,6 +232,6 @@ func (t *Tenant) ActiveRelease() string {
 	if image := t.readImage.Load(); image != nil {
 		return image.state.releases.Active()
 	}
-	value, _ := recordRead(t, context.Background(), func(t *Tenant) (string, *kernel.Error) { return t.releases.Active(), nil })
+	value, _ := recordRead(t, context.Background(), func(t *Tenant) (string, *platform.Error) { return t.releases.Active(), nil })
 	return value
 }

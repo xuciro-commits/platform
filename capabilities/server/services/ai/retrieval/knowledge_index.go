@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"log"
 
-	"platformkernel/kernel"
 	persistence "platformserver/kernel/store"
 	"platformserver/platform"
 
@@ -323,7 +322,7 @@ func ConsistentVectors(vectors [][]float32, expected int) error {
 type Changes struct {
 	Take    func() (map[string]bool, bool)
 	Restore func(changed map[string]bool)
-	Corpus  func(changed map[string]bool, walked bool) ([]Source, *kernel.Error)
+	Corpus  func(changed map[string]bool, walked bool) ([]Source, *platform.Error)
 }
 
 func (c Changes) Load(walked bool) ([]Source, map[string]bool, bool) {

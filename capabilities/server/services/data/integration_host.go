@@ -9,11 +9,10 @@ import (
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 	"platformserver/platform"
 )
 
-func (o *Owner) ExecutionSources(c platform.Caller) ([]Source, *kernel.Error) {
+func (o *Owner) ExecutionSources(c platform.Caller) ([]Source, *platform.Error) {
 	found, _, err := platform.Find[Source](c, platform.Query{Domain: json.RawMessage(`[["state","=","published"]]`), Sort: []string{"id"}, Limit: 200})
 	if err != nil {
 		return nil, err
@@ -49,7 +48,7 @@ func PendingExecution(c platform.Caller, typ, id string, execution *IntegrationE
 	return current != nil && current.Pending && current.ID == execution.ID && current.Snapshot == execution.Snapshot && current.Member == execution.Member && slices.Equal(current.Scopes, execution.Scopes)
 }
 
-func RunOutcome(failure string, err *kernel.Error) (string, string) {
+func RunOutcome(failure string, err *platform.Error) (string, string) {
 	status, detail := "ok", failure
 	if failure != "" || err != nil {
 		status = "failed"
@@ -99,7 +98,7 @@ func DeclaredSourceRows(info platform.EntityInfo, kind, source string, input []m
 	return rows, &binding, err
 }
 
-func (o *Owner) MatchResolver(c platform.Caller, object, producer string, page func(offset int) ([]any, int, *kernel.Error)) *Resolver {
+func (o *Owner) MatchResolver(c platform.Caller, object, producer string, page func(offset int) ([]any, int, *platform.Error)) *Resolver {
 	rules, _, _ := platform.Find[Match](c, platform.Query{Limit: 500})
 	var fixed []Match
 	for _, rule := range rules {
@@ -138,7 +137,7 @@ type RowApplication struct {
 	Quarantined func() bool
 	Pending     func(typ, id string, execution *IntegrationExecution) bool
 	Target      func(object string) (app string, installed bool)
-	Submit      func(member platform.Member, app, object string, binding *platform.DataSourceBinding, row SourceRow, key string, now time.Time) *kernel.Error
+	Submit      func(member platform.Member, app, object string, binding *platform.DataSourceBinding, row SourceRow, key string, now time.Time) *platform.Error
 	Refused     func(app, key string) bool
 }
 
@@ -273,7 +272,7 @@ func DeletionRows(ids []string, now time.Time) []SourceRow {
 	return removed
 }
 
-func SourceAttributes(payload []byte, binding *platform.DataSourceBinding, row SourceRow) (map[string]json.RawMessage, []string, *kernel.Error) {
+func SourceAttributes(payload []byte, binding *platform.DataSourceBinding, row SourceRow) (map[string]json.RawMessage, []string, *platform.Error) {
 	var values map[string]json.RawMessage
 	if err := json.Unmarshal(payload, &values); err != nil || len(values) == 0 || row.At == nil {
 		return nil, nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "The source row has no mapped values or source time")

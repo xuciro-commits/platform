@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 	runtimekernel "platformserver/kernel"
 	"platformserver/platform"
 	controlowner "platformserver/services/security/control"
@@ -15,11 +14,11 @@ import (
 	"go.opentelemetry.io/otel/trace"
 )
 
-func (t *Tenant) Input(m platform.Member, name string, body []byte, now time.Time) (out any, err *kernel.Error) {
+func (t *Tenant) Input(m platform.Member, name string, body []byte, now time.Time) (out any, err *platform.Error) {
 	if t.businessStopped() {
-		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
+		return nil, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
 	}
-	accepted, refusal := recordRead(t, context.Background(), func(t *Tenant) (bool, *kernel.Error) {
+	accepted, refusal := recordRead(t, context.Background(), func(t *Tenant) (bool, *platform.Error) {
 		owner := t.App(t.owner["input:"+name])
 		if owner == nil {
 			return false, unknown()
@@ -30,16 +29,16 @@ func (t *Tenant) Input(m platform.Member, name string, body []byte, now time.Tim
 		return nil, refusal
 	}
 	if accepted {
-		return decideOnImage(t, context.Background(), "input", func(t *Tenant) (any, *kernel.Error) {
+		return decideOnImage(t, context.Background(), "input", func(t *Tenant) (any, *platform.Error) {
 			return t.input(m, name, body, now)
-		}, func(t *Tenant, candidate preparedAccepted, answer any, refusal *kernel.Error) (any, *kernel.Error) {
+		}, func(t *Tenant, candidate preparedAccepted, answer any, refusal *platform.Error) (any, *platform.Error) {
 			return t.finishPreparedInput(m, name, candidate, answer, refusal)
 		})
 	}
-	return recordRead(t, context.Background(), func(t *Tenant) (any, *kernel.Error) { return t.input(m, name, body, now) })
+	return recordRead(t, context.Background(), func(t *Tenant) (any, *platform.Error) { return t.input(m, name, body, now) })
 }
 
-func (t *Tenant) input(m platform.Member, name string, body []byte, now time.Time) (out any, err *kernel.Error) {
+func (t *Tenant) input(m platform.Member, name string, body []byte, now time.Time) (out any, err *platform.Error) {
 	a := t.App(t.owner["input:"+name])
 	if a == nil {
 		return nil, unknown()
@@ -65,43 +64,43 @@ func (t *Tenant) input(m platform.Member, name string, body []byte, now time.Tim
 	return out, err
 }
 
-func (t *Tenant) Read(ctx context.Context, m platform.Member, name string, inputs ...json.RawMessage) (any, *kernel.Error) {
+func (t *Tenant) Read(ctx context.Context, m platform.Member, name string, inputs ...json.RawMessage) (any, *platform.Error) {
 	if name == "health" && t.quarantined() {
 		t.Lane.Lock()
 		defer t.Lane.Unlock()
 		return t.read(m, name, inputs...)
 	}
-	return coordinatedRecordRead(t, ctx, func(t *Tenant) (any, *kernel.Error) { return t.read(m, name, inputs...) })
+	return coordinatedRecordRead(t, ctx, func(t *Tenant) (any, *platform.Error) { return t.read(m, name, inputs...) })
 }
-func (t *Tenant) read(m platform.Member, name string, inputs ...json.RawMessage) (any, *kernel.Error) {
+func (t *Tenant) read(m platform.Member, name string, inputs ...json.RawMessage) (any, *platform.Error) {
 	return t.readFrom(m, t.App(t.owner["read:"+name]), name, inputs...)
 }
 
-func (t *Tenant) ReadFrom(ctx context.Context, m platform.Member, app, name string, inputs ...json.RawMessage) (any, *kernel.Error) {
-	return coordinatedRecordRead(t, ctx, func(t *Tenant) (any, *kernel.Error) { return t.readFromApp(m, app, name, inputs...) })
+func (t *Tenant) ReadFrom(ctx context.Context, m platform.Member, app, name string, inputs ...json.RawMessage) (any, *platform.Error) {
+	return coordinatedRecordRead(t, ctx, func(t *Tenant) (any, *platform.Error) { return t.readFromApp(m, app, name, inputs...) })
 }
-func (t *Tenant) readFromApp(m platform.Member, app, name string, inputs ...json.RawMessage) (any, *kernel.Error) {
+func (t *Tenant) readFromApp(m platform.Member, app, name string, inputs ...json.RawMessage) (any, *platform.Error) {
 	a := t.App(app)
 	if a == nil || !slices.Contains(a.Manifest().Reads, name) {
-		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
+		return nil, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
 	}
 	return t.readFrom(m, a, name, inputs...)
 }
 
-func (t *Tenant) readFrom(m platform.Member, a platform.App, name string, inputs ...json.RawMessage) (any, *kernel.Error) {
+func (t *Tenant) readFrom(m platform.Member, a platform.App, name string, inputs ...json.RawMessage) (any, *platform.Error) {
 	m = t.authorizationMember(m)
 	if err := t.Admits(m); err != nil {
 		return nil, err
 	}
 	if a == nil {
-		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
+		return nil, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
 	}
 	entry := t.authorizeEntry(m, a.Manifest().ID, name, "read", Now())
 	if name == "packages" && !m.Holds(controlowner.PlatformApp, controlowner.Admin) && !m.Holds(controlowner.PlatformApp, platform.Auditor) {
 		caller := t.caller(m, a, false)
 		entry = caller.May("build", "build.app.create", []string{"builder"})
 		if !m.InScope("build.app.create") {
-			return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_POLICY_DENIED}
+			return nil, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_POLICY_DENIED}
 		}
 	}
 	if refusal := authorizationRefusal(entry); refusal != nil {
@@ -114,7 +113,7 @@ func (t *Tenant) readFrom(m platform.Member, a platform.App, name string, inputs
 	return t.objectOwner(t.Projection).NarrowedSource(m, out, Now(), false, a.Manifest().ReadSources[name]), nil
 }
 
-func inputApp(app platform.App, c platform.Caller, name string, body []byte, at time.Time) (any, *kernel.Error) {
+func inputApp(app platform.App, c platform.Caller, name string, body []byte, at time.Time) (any, *platform.Error) {
 	if receiver, ok := app.(platform.InputReceiver); ok {
 		return receiver.Input(c, name, body, at)
 	}

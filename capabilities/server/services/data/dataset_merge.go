@@ -9,23 +9,22 @@ import (
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 	"platformserver/platform"
 )
 
 type DatasetMerge struct {
 	Tenant       string
 	Authority    string
-	Targets      func() ([]DatasetTarget, *kernel.Error)
-	Prepare      func(object, dataset string, at time.Time) (DatasetPreparation, *kernel.Error)
-	SubmitResult func(member platform.Member, dataset string, submission *pb.Submission, at time.Time) *kernel.Error
+	Targets      func() ([]DatasetTarget, *platform.Error)
+	Prepare      func(object, dataset string, at time.Time) (DatasetPreparation, *platform.Error)
+	SubmitResult func(member platform.Member, dataset string, submission *pb.Submission, at time.Time) *platform.Error
 	Unguarded    func(object, marking string) []string
 	DeclaredRows func(object, kind, source string, input []map[string]any, at time.Time) ([]SourceRow, *platform.DataSourceBinding, error)
-	PrepareRows  func(member platform.Member, object, producer string, rows []SourceRow, at time.Time) *kernel.Error
+	PrepareRows  func(member platform.Member, object, producer string, rows []SourceRow, at time.Time) *platform.Error
 	Refused      func(authority, key string) bool
 	Answered     func(authority, key string) bool
-	Submit       func(member platform.Member, app, object string, binding *platform.DataSourceBinding, row SourceRow, key string, at time.Time) *kernel.Error
-	Absent       func(object string, binding *platform.DataSourceBinding, rows []SourceRow, at time.Time) ([]SourceRow, *kernel.Error)
+	Submit       func(member platform.Member, app, object string, binding *platform.DataSourceBinding, row SourceRow, key string, at time.Time) *platform.Error
+	Absent       func(object string, binding *platform.DataSourceBinding, rows []SourceRow, at time.Time) ([]SourceRow, *platform.Error)
 }
 
 type DatasetTarget struct {

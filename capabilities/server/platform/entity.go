@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 	ruleexpr "platformserver/expr"
 	"reflect"
 	"slices"
@@ -45,7 +44,7 @@ type Entity struct {
 	EnterpriseUse     *Expr
 	Protocols         []Provision
 	CreateTxn         *BusinessTxn
-	ApplyCreateTxn    func(Caller, *pb.ChangeRecord, time.Time) *kernel.Error
+	ApplyCreateTxn    func(Caller, *pb.ChangeRecord, time.Time) *Error
 	Versioning        *Versioning
 	VersionPins       []VersionPinBinding
 	Sets              []RecordSet
@@ -54,8 +53,8 @@ type Entity struct {
 	ValueTypeBindings map[string]AssetBinding
 	Format            map[string][]FormatRule
 	Compute           func(record any)
-	ComputeAt         func(c Caller, record any, now time.Time) *kernel.Error
-	Validate          func(c Caller, record any) *kernel.Error
+	ComputeAt         func(c Caller, record any, now time.Time) *Error
+	Validate          func(c Caller, record any) *Error
 
 	Type            string
 	Title           string
@@ -138,10 +137,10 @@ type Transition struct {
 	DeferRequired    bool `json:"-"`
 	Capability       string
 	Approval         *Approval
-	Do               func(c Caller, record any, payload json.RawMessage, now time.Time) *kernel.Error
+	Do               func(c Caller, record any, payload json.RawMessage, now time.Time) *Error
 	After            func(c Caller, r *pb.ChangeRecord, record any, now time.Time)
-	Txn              *BusinessTxn                                                    `json:"-"`
-	ApplyTxn         func(c Caller, r *pb.ChangeRecord, now time.Time) *kernel.Error `json:"-"`
+	Txn              *BusinessTxn                                             `json:"-"`
+	ApplyTxn         func(c Caller, r *pb.ChangeRecord, now time.Time) *Error `json:"-"`
 }
 
 type LifecycleInfo struct {
@@ -440,7 +439,7 @@ type Query struct {
 	Archived     bool                 `json:"archived,omitempty"`
 }
 
-func (c Caller) Put(r *pb.ChangeRecord, entity any) *kernel.Error {
+func (c Caller) Put(r *pb.ChangeRecord, entity any) *Error {
 	if c.rt == nil {
 		return notFound()
 	}
@@ -459,7 +458,7 @@ func Get[T any](c Caller, id string) (T, bool) {
 	return v.(T), true
 }
 
-func Find[T any](c Caller, q Query) ([]T, int, *kernel.Error) {
+func Find[T any](c Caller, q Query) ([]T, int, *Error) {
 	if c.rt == nil {
 		return nil, 0, notFound()
 	}
@@ -471,14 +470,14 @@ func Find[T any](c Caller, q Query) ([]T, int, *kernel.Error) {
 	return out, total, err
 }
 
-func (c Caller) FindOf(t reflect.Type, q Query) ([]any, int, *kernel.Error) {
+func (c Caller) FindOf(t reflect.Type, q Query) ([]any, int, *Error) {
 	if c.rt == nil {
 		return nil, 0, notFound()
 	}
 	return c.rt.Find(c, t, q)
 }
 
-func (c Caller) Check(entity any) *kernel.Error {
+func (c Caller) Check(entity any) *Error {
 	if c.rt == nil {
 		return notFound()
 	}

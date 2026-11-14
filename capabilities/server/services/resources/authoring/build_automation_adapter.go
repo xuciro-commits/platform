@@ -2,7 +2,6 @@ package build
 
 import (
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 	"platformserver/platform"
 	automationauthoring "platformserver/services/automate/authoring"
 	dataowner "platformserver/services/data"
@@ -67,7 +66,7 @@ func (e automationEnvironment) ValidateQuery(query platform.NamedQuery) error {
 	return e.b.host.ValidateInstallQuery(query)
 }
 
-func (e automationEnvironment) CheckIntake(c platform.Caller, process automationauthoring.Process) *kernel.Error {
+func (e automationEnvironment) CheckIntake(c platform.Caller, process automationauthoring.Process) *platform.Error {
 	if process.Continuous == nil || process.Continuous.Intake == nil {
 		return nil
 	}

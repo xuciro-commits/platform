@@ -5,7 +5,6 @@ import (
 	"fmt"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 	"platformserver/kernel/records"
 	"platformserver/platform"
 )
@@ -18,7 +17,7 @@ type BootstrapStage struct {
 	IncludeArchived bool
 	Registry        *platform.AssetRegistry
 	Drafts          []platform.AssetDraft
-	Put             func(app string, receipt *pb.ChangeRecord, value any) *kernel.Error
+	Put             func(app string, receipt *pb.ChangeRecord, value any) *platform.Error
 	Records         *records.Store
 	KeepChanges     func(receipt *pb.ChangeRecord)
 	Register        func(plan platform.AssetInstallation) error

@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"maps"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 
 	"platformserver/platform"
 	functionauthoring "platformserver/services/functions/authoring"
@@ -116,7 +115,7 @@ type proposalConsumption struct {
 	amendments json.RawMessage
 }
 
-func (b *Build) prepareProposal(c platform.Caller, r *pb.ChangeRecord, txn *platform.BusinessTxn, now time.Time) (*proposalConsumption, *kernel.Error) {
+func (b *Build) prepareProposal(c platform.Caller, r *pb.ChangeRecord, txn *platform.BusinessTxn, now time.Time) (*proposalConsumption, *platform.Error) {
 	entity := b.installed[txn.Subject]
 	if entity.Lifecycle == nil {
 		return nil, nil
@@ -132,7 +131,7 @@ func (b *Build) prepareProposal(c platform.Caller, r *pb.ChangeRecord, txn *plat
 	if action == nil || action.Adoption == nil {
 		return nil, nil
 	}
-	fail := func(message string) (*proposalConsumption, *kernel.Error) {
+	fail := func(message string) (*proposalConsumption, *platform.Error) {
 		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, message)
 	}
 	if c.Simulating() {
@@ -194,7 +193,7 @@ func (b *Build) prepareProposal(c platform.Caller, r *pb.ChangeRecord, txn *plat
 	}
 	return &proposalConsumption{run: run, binding: binding, amendments: platform.Raw(amendments)}, nil
 }
-func (b *Build) finishProposal(c platform.Caller, r *pb.ChangeRecord, p *proposalConsumption, now time.Time) *kernel.Error {
+func (b *Build) finishProposal(c platform.Caller, r *pb.ChangeRecord, p *proposalConsumption, now time.Time) *platform.Error {
 	if p == nil {
 		return nil
 	}
@@ -247,7 +246,7 @@ func proposalEntity(e platform.Entity, info platform.EntityInfo, changed map[str
 		}
 	}
 	compute := e.ComputeAt
-	e.ComputeAt = func(c platform.Caller, record any, at time.Time) *kernel.Error {
+	e.ComputeAt = func(c platform.Caller, record any, at time.Time) *platform.Error {
 		rv := reflect.ValueOf(record).Elem()
 		for name, value := range generated {
 			field, _ := info.Field(name)

@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"time"
 
-	"platformkernel/kernel"
 	"platformserver/kernel/acceptedformat"
 	"platformserver/platform"
 )
@@ -16,9 +15,9 @@ type AgentAcceptance struct {
 	Draft       platform.Runtime
 	RunAgent    func(run string) string
 	UsageBefore func() (string, error)
-	Answer      func(time.Time) *kernel.Error
-	Observers   func() *kernel.Error
-	Failure     func() *kernel.Error
+	Answer      func(time.Time) *platform.Error
+	Observers   func() *platform.Error
+	Failure     func() *platform.Error
 	Events      func() []platform.Event
 	Changes     func(last platform.Event, at time.Time) ([]byte, error)
 	Prepared    func(body, principal []byte, key, hash string)

@@ -6,7 +6,6 @@ import (
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 	"platformserver/platform"
 	transform "platformserver/services/data/transform"
 )
@@ -29,7 +28,7 @@ type PipelinePreview struct {
 	Compartments []string                  `json:"compartments,omitempty"`
 }
 
-func (o *Owner) PreviewPipeline(caller platform.Caller, request PipelinePreviewRequest, at time.Time, rules platform.RuleEngine, authorize func(sources []string) *kernel.Error) (PipelinePreview, *kernel.Error) {
+func (o *Owner) PreviewPipeline(caller platform.Caller, request PipelinePreviewRequest, at time.Time, rules platform.RuleEngine, authorize func(sources []string) *platform.Error) (PipelinePreview, *platform.Error) {
 	out := PipelinePreview{Rows: []map[string]any{}, Quarantine: []platform.QuarantinedRow{}}
 	p := request.Pipeline
 	raw, err := json.Marshal(p)

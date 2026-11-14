@@ -2,11 +2,10 @@ package objects
 
 import (
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 	"platformserver/platform"
 )
 
-func authorizationRefusal(decision platform.AuthzDecision) *kernel.Error {
+func authorizationRefusal(decision platform.AuthzDecision) *platform.Error {
 	if decision.Allow {
 		return nil
 	}
@@ -17,6 +16,6 @@ func authorizationRefusal(decision platform.AuthzDecision) *kernel.Error {
 	return platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "Authorization denied at {layer}: {reason}", layer, decision.Reason)
 }
 
-func AuthorizationRefusal(decision platform.AuthzDecision) *kernel.Error {
+func AuthorizationRefusal(decision platform.AuthzDecision) *platform.Error {
 	return authorizationRefusal(decision)
 }

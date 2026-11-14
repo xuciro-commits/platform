@@ -7,7 +7,6 @@ import (
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 	"platformserver/platform"
 )
 
@@ -35,9 +34,9 @@ func MediaSetActions() []platform.Action {
 	}
 }
 
-func SubmitMediaSet(ledger platform.Authority, files platform.FileHost, c platform.Caller, submission *pb.Submission, now time.Time) (*pb.ChangeRecord, *kernel.Error) {
-	return ledger.Receive(c, submission, now, nil, func() (func(*pb.ChangeRecord), *kernel.Error) {
-		invalid := &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
+func SubmitMediaSet(ledger platform.Authority, files platform.FileHost, c platform.Caller, submission *pb.Submission, now time.Time) (*pb.ChangeRecord, *platform.Error) {
+	return ledger.Receive(c, submission, now, nil, func() (func(*pb.ChangeRecord), *platform.Error) {
+		invalid := &platform.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 		var input struct {
 			Hash        string `json:"hash"`
 			Name        string `json:"name"`
@@ -46,7 +45,7 @@ func SubmitMediaSet(ledger platform.Authority, files platform.FileHost, c platfo
 		}
 		set, ok := platform.Get[platform.MediaSet](c, submission.GetTarget().GetId())
 		if !ok || set.Archived {
-			return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
+			return nil, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
 		}
 		if json.Unmarshal(submission.GetPayload(), &input) != nil || !platform.ValidMediaHash(input.Hash) {
 			return nil, invalid
@@ -58,7 +57,7 @@ func SubmitMediaSet(ledger platform.Authority, files platform.FileHost, c platfo
 				return nil, invalid
 			}
 			if index >= 0 {
-				return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
+				return nil, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
 			}
 			if !c.Replaying && (files == nil || !files.Stored(c.Tenant, input.Hash)) {
 				return nil, invalid
@@ -66,11 +65,11 @@ func SubmitMediaSet(ledger platform.Authority, files platform.FileHost, c platfo
 			set.Items = append(slices.Clone(set.Items), platform.MediaItem{Hash: input.Hash, Name: strings.TrimSpace(input.Name), ContentType: input.ContentType, Size: *input.Size, By: c.ID, At: now})
 		case platform.SchemaMediaSetRemove:
 			if index < 0 {
-				return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
+				return nil, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
 			}
 			set.Items = slices.Delete(slices.Clone(set.Items), index, index+1)
 		default:
-			return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_UNKNOWN_SCHEMA}
+			return nil, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_UNKNOWN_SCHEMA}
 		}
 		set.Version++
 		if err := c.Check(set); err != nil {

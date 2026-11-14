@@ -11,7 +11,6 @@ import (
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 	"platformserver/kernel/protocol"
 	"platformserver/platform"
 )
@@ -165,7 +164,7 @@ func (a Artifacts) Build(ctx context.Context, q platform.CodeBuildRequest) (plat
 	return result, err
 }
 
-func PlanCompilation(tenant string, c platform.Caller, r *pb.ChangeRecord, key, target string, q platform.CodeBuildRequest, queued int, pending []platform.Effect) (platform.OperationCall, platform.Effect, *kernel.Error) {
+func PlanCompilation(tenant string, c platform.Caller, r *pb.ChangeRecord, key, target string, q platform.CodeBuildRequest, queued int, pending []platform.Effect) (platform.OperationCall, platform.Effect, *platform.Error) {
 	if c.App != "build" || c.Automation || r.GetSubmission().GetAuthority() != c.App || key == "" || len(q.Source) == 0 || len(q.Source) > 256<<10 || q.Language != "go" && q.Language != "tinygo" || q.Input.Check() != nil || q.Output.Check() != nil {
 		return platform.OperationCall{}, platform.Effect{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Compilation needs a bounded Go/TinyGo code asset")
 	}
@@ -185,7 +184,7 @@ func PlanCompilation(tenant string, c platform.Caller, r *pb.ChangeRecord, key, 
 	return call, platform.Effect{ID: id, Endpoint: operationEndpoint, Event: "build/operation", App: "build", Key: key, Target: target, At: at, Due: at, State: "pending", Body: string(body)}, nil
 }
 
-func ReadableBy(tenant string, c platform.Caller, id string, lookup func(string) (platform.Effect, bool), member func(string) (platform.Member, bool), authorize func(platform.Member, string, OperationBinding) *kernel.Error) (platform.OperationResult, *kernel.Error) {
+func ReadableBy(tenant string, c platform.Caller, id string, lookup func(string) (platform.Effect, bool), member func(string) (platform.Member, bool), authorize func(platform.Member, string, OperationBinding) *platform.Error) (platform.OperationResult, *platform.Error) {
 	x, found := lookup(id)
 	if !found || x.Endpoint != operationEndpoint {
 		return platform.OperationResult{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_NOT_FOUND, "Operation call was not found")
@@ -207,7 +206,7 @@ func ReadableBy(tenant string, c platform.Caller, id string, lookup func(string)
 	return ResultOf(x), nil
 }
 
-func CheckCancel(tenant string, c platform.Caller, r *pb.ChangeRecord, id string, lookup func(string) (platform.Effect, bool)) (bool, *kernel.Error) {
+func CheckCancel(tenant string, c platform.Caller, r *pb.ChangeRecord, id string, lookup func(string) (platform.Effect, bool)) (bool, *platform.Error) {
 	if r == nil || c.Tenant != tenant || r.GetSubmission().GetAuthority() != c.App {
 		return false, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "Cancellation needs its accepted owner decision")
 	}

@@ -2,13 +2,12 @@ package build
 
 import (
 	"fmt"
-	"platformkernel/kernel"
 	"platformserver/platform"
 	"slices"
 	"time"
 )
 
-func (b *Build) Run(c platform.Caller, job string, at time.Time) *kernel.Error {
+func (b *Build) Run(c platform.Caller, job string, at time.Time) *platform.Error {
 	if job == "dispatches" {
 		return b.runDispatches(c, at)
 	}

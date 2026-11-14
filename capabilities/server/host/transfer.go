@@ -7,11 +7,10 @@ import (
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 	"platformserver/platform"
 )
 
-func (t *Tenant) Import(m platform.Member, typ string, data []byte, preview bool, now time.Time) ([]platform.ImportRow, *kernel.Error) {
+func (t *Tenant) Import(m platform.Member, typ string, data []byte, preview bool, now time.Time) ([]platform.ImportRow, *platform.Error) {
 	if err := t.Admits(m); err != nil {
 		return nil, err
 	}
@@ -19,16 +18,16 @@ func (t *Tenant) Import(m platform.Member, typ string, data []byte, preview bool
 	et := t.Projection.Type(typ)
 	t.Projection.Unlock()
 	if et == nil {
-		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
+		return nil, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
 	}
 	view, _ := objects.ViewOf(m, et)
 	currency := t.setting(t.automation(controlowner.PlatformApp, false), controlowner.SettingCurrency)
 	file, lines, ok := objects.ParseImport(view.Info(), data, currency)
 	if !ok {
-		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
+		return nil, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 	}
 	return objects.Importer{Tenant: t.ID, Member: m.ID,
-		Submit: func(s *pb.Submission) (*kernel.Error, []platform.FieldIssue) {
+		Submit: func(s *pb.Submission) (*platform.Error, []platform.FieldIssue) {
 			if preview {
 				return t.probeDiagnosed(m, s, now)
 			}
@@ -36,7 +35,7 @@ func (t *Tenant) Import(m platform.Member, typ string, data []byte, preview bool
 			return err, issues
 		},
 		Verb: func(key, id string) string {
-			verb, _ := recordRead(t, context.Background(), func(t *Tenant) (string, *kernel.Error) {
+			verb, _ := recordRead(t, context.Background(), func(t *Tenant) (string, *platform.Error) {
 				ledger := t.App(view.Info().App).Authority()
 				if ledger.AcceptedFor(t.ID, key) != nil {
 					return ".create", nil
@@ -50,8 +49,8 @@ func (t *Tenant) Import(m platform.Member, typ string, data []byte, preview bool
 		}}.Rows(view.Info(), file, lines), nil
 }
 
-func (t *Tenant) probeDiagnosed(m platform.Member, s *pb.Submission, now time.Time) (*kernel.Error, []platform.FieldIssue) {
-	issues, refusal := recordRead(t, context.Background(), func(t *Tenant) ([]platform.FieldIssue, *kernel.Error) {
+func (t *Tenant) probeDiagnosed(m platform.Member, s *pb.Submission, now time.Time) (*platform.Error, []platform.FieldIssue) {
+	issues, refusal := recordRead(t, context.Background(), func(t *Tenant) ([]platform.FieldIssue, *platform.Error) {
 		app := t.App(t.owner["action:"+s.GetSchema().GetName()])
 		if app == nil {
 			return nil, unknown()
@@ -64,6 +63,6 @@ func (t *Tenant) probeDiagnosed(m platform.Member, s *pb.Submission, now time.Ti
 	return refusal, issues
 }
 
-func (t *Tenant) exportRead(m platform.Member, typ string, q platform.Query, now time.Time) ([]byte, *kernel.Error) {
+func (t *Tenant) exportRead(m platform.Member, typ string, q platform.Query, now time.Time) ([]byte, *platform.Error) {
 	return t.objectOwner(t.Projection).ExportRead(m, typ, q, now)
 }

@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"google.golang.org/protobuf/proto"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 	"reflect"
 	"regexp"
 	"slices"
@@ -103,7 +102,7 @@ type Caller struct {
 	Automation       bool
 	sourceProjection bool
 	restoreSource    bool
-	inputRefused     func(*kernel.Error, []FieldIssue)
+	inputRefused     func(*Error, []FieldIssue)
 	rt               Runtime
 	creationDepth    int
 	transactionInput *pb.Submission
@@ -133,25 +132,25 @@ func (c Caller) WithTransactionInput(input *pb.Submission) Caller {
 func (c Caller) RolesHere() []string { return c.RolesIn(c.App) }
 
 type StagedDecision interface {
-	HoldChanges(Authority) (release func(), refusal *kernel.Error)
+	HoldChanges(Authority) (release func(), refusal *Error)
 	DraftChanges(Authority, func() ChangeLog) ChangeLog
 	DecisionCatalog(Authority) *Catalog
-	FailDecision(*kernel.Error)
+	FailDecision(*Error)
 	RecordAuthorization(Caller, AuthzRequest, AuthzDecision)
-	BusinessRefused(*kernel.Error, BusinessRefusalFact)
-	CaptureBusinessRefusal(Caller, *pb.ChangeRecord, BusinessRefusalFact) *kernel.Error
-	RefuseBusinessCondition(Caller, string, string, any, map[string]any, time.Time) *kernel.Error
-	PendingRefusalEscalations(Caller, time.Time) ([]RefusalEscalationRequest, *kernel.Error)
-	PrepareBusinessVersions(Caller, any, time.Time) *kernel.Error
+	BusinessRefused(*Error, BusinessRefusalFact)
+	CaptureBusinessRefusal(Caller, *pb.ChangeRecord, BusinessRefusalFact) *Error
+	RefuseBusinessCondition(Caller, string, string, any, map[string]any, time.Time) *Error
+	PendingRefusalEscalations(Caller, time.Time) ([]RefusalEscalationRequest, *Error)
+	PrepareBusinessVersions(Caller, any, time.Time) *Error
 	ConfirmationTransport() ConfirmationTransport
 	ConfirmationCompletion(Caller, string, string, string) bool
 	DispatchTransport() DispatchTransport
-	ReadRecordSetCandidate(Caller, string, string, string, json.RawMessage, time.Time) (RecordSetResult, *kernel.Error)
+	ReadRecordSetCandidate(Caller, string, string, string, json.RawMessage, time.Time) (RecordSetResult, *Error)
 	ObservationContext(Caller) *ObservationContext
 	TxnTransport() TxnTransport
-	CaptureTxnIteration(Caller, *pb.ChangeRecord, TxnIteration) *kernel.Error
-	PutOwnedRelation(Caller, *pb.ChangeRecord, TxnLink, bool, time.Time) *kernel.Error
-	MigrateOwnedRelations(Caller, *pb.ChangeRecord, AssetBinding, time.Time) *kernel.Error
+	CaptureTxnIteration(Caller, *pb.ChangeRecord, TxnIteration) *Error
+	PutOwnedRelation(Caller, *pb.ChangeRecord, TxnLink, bool, time.Time) *Error
+	MigrateOwnedRelations(Caller, *pb.ChangeRecord, AssetBinding, time.Time) *Error
 	Probing() bool
 }
 
@@ -171,7 +170,7 @@ func (c Caller) Probing() bool {
 
 func (c Caller) ReadScoped() bool { return c.rt != nil && c.rt.ReadScoped() }
 
-func (c Caller) FailDecision(err *kernel.Error) {
+func (c Caller) FailDecision(err *Error) {
 	if err == nil {
 		return
 	}
@@ -226,7 +225,7 @@ func AgentCaller(parent Caller, m Member, app, run string) Caller {
 	return c
 }
 
-func Attempt(c Caller, decide func() (*pb.ChangeRecord, *kernel.Error)) (*pb.ChangeRecord, *kernel.Error) {
+func Attempt(c Caller, decide func() (*pb.ChangeRecord, *Error)) (*pb.ChangeRecord, *Error) {
 	if c.rt == nil {
 		return decide()
 	}
@@ -239,14 +238,14 @@ func MarkSeen(c Caller, keys ...string) {
 	}
 }
 
-func ProbeDecision(c Caller, decide func(Caller) *kernel.Error) *kernel.Error {
+func ProbeDecision(c Caller, decide func(Caller) *Error) *Error {
 	if c.rt == nil {
-		return &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
+		return &Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
 	}
 	return c.rt.ProbeDecision(c, decide)
 }
 
-func Decide(c Caller, app App, s *pb.Submission, at time.Time) (*pb.ChangeRecord, *kernel.Error) {
+func Decide(c Caller, app App, s *pb.Submission, at time.Time) (*pb.ChangeRecord, *Error) {
 	if c.Simulating() {
 		if action, ok := app.Manifest().Actions.Action(s.GetSchema().GetName()); ok && action.Adoption != nil {
 			return nil, Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "Proposal adoption does not execute in isolated trials")
@@ -260,31 +259,31 @@ func Decide(c Caller, app App, s *pb.Submission, at time.Time) (*pb.ChangeRecord
 }
 
 type DecisionRuntime interface {
-	Decide(Caller, App, *pb.Submission, time.Time) (*pb.ChangeRecord, *kernel.Error)
-	Attempt(func() (*pb.ChangeRecord, *kernel.Error)) (*pb.ChangeRecord, *kernel.Error)
-	ProbeDecision(Caller, func(Caller) *kernel.Error) *kernel.Error
+	Decide(Caller, App, *pb.Submission, time.Time) (*pb.ChangeRecord, *Error)
+	Attempt(func() (*pb.ChangeRecord, *Error)) (*pb.ChangeRecord, *Error)
+	ProbeDecision(Caller, func(Caller) *Error) *Error
 }
 
 type ReadRuntime interface {
-	ReadQuery(Caller, string, string, json.RawMessage, time.Time) (json.RawMessage, *kernel.Error)
-	ReadQueryVersion(Caller, string, string, int, json.RawMessage, time.Time) (json.RawMessage, *kernel.Error)
-	ReadRecord(Caller, string, string, time.Time) (json.RawMessage, *kernel.Error)
-	ReadRecordPath(Caller, string, string, []string, time.Time) (json.RawMessage, []string, *kernel.Error)
+	ReadQuery(Caller, string, string, json.RawMessage, time.Time) (json.RawMessage, *Error)
+	ReadQueryVersion(Caller, string, string, int, json.RawMessage, time.Time) (json.RawMessage, *Error)
+	ReadRecord(Caller, string, string, time.Time) (json.RawMessage, *Error)
+	ReadRecordPath(Caller, string, string, []string, time.Time) (json.RawMessage, []string, *Error)
 }
 
 type OperationRuntime interface {
-	RequestOperation(Caller, *pb.ChangeRecord, OperationRequest) (OperationCall, *kernel.Error)
-	OperationResult(Caller, string) (OperationResult, *kernel.Error)
-	CancelOperation(Caller, *pb.ChangeRecord, string) *kernel.Error
-	RequestCompilation(Caller, *pb.ChangeRecord, string, string, CodeBuildRequest) (OperationCall, *kernel.Error)
+	RequestOperation(Caller, *pb.ChangeRecord, OperationRequest) (OperationCall, *Error)
+	OperationResult(Caller, string) (OperationResult, *Error)
+	CancelOperation(Caller, *pb.ChangeRecord, string) *Error
+	RequestCompilation(Caller, *pb.ChangeRecord, string, string, CodeBuildRequest) (OperationCall, *Error)
 }
 
 type FunctionRuntime interface {
-	RequestFunction(Caller, *pb.ChangeRecord, FunctionRequest) (FunctionCall, *kernel.Error)
+	RequestFunction(Caller, *pb.ChangeRecord, FunctionRequest) (FunctionCall, *Error)
 }
 
 type ApprovalRuntime interface {
-	RequestApproval(Caller, string, *pb.Submission, time.Time) (*pb.ChangeRecord, *kernel.Error)
+	RequestApproval(Caller, string, *pb.Submission, time.Time) (*pb.ChangeRecord, *Error)
 }
 
 type NotificationRuntime interface {
@@ -293,14 +292,14 @@ type NotificationRuntime interface {
 }
 
 type InputDiagnosticRuntime interface {
-	InputRefused(*kernel.Error, []FieldIssue)
+	InputRefused(*Error, []FieldIssue)
 }
 
 type ControlRuntime interface {
-	ControlDecision(Caller, *pb.Submission, time.Time) (func(*pb.ChangeRecord), *kernel.Error)
+	ControlDecision(Caller, *pb.Submission, time.Time) (func(*pb.ChangeRecord), *Error)
 }
 
-func ControlDecision(c Caller, s *pb.Submission, at time.Time) (func(*pb.ChangeRecord), *kernel.Error) {
+func ControlDecision(c Caller, s *pb.Submission, at time.Time) (func(*pb.ChangeRecord), *Error) {
 	if c.rt == nil {
 		return nil, Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Host controls require a private decision")
 	}
@@ -317,36 +316,36 @@ type Runtime interface {
 	InputDiagnosticRuntime
 	ControlRuntime
 	Publish(c Caller, record *pb.ChangeRecord)
-	Probe(c Caller, protocol, action, id string, payload []byte, now time.Time) *kernel.Error
+	Probe(c Caller, protocol, action, id string, payload []byte, now time.Time) *Error
 	Request(c Caller, r *pb.ChangeRecord, q Request)
-	Query(c Caller, protocol, read string, provider ...string) ([]ProviderResult, *kernel.Error)
-	BoundProvider(c Caller, protocol string) (string, *kernel.Error)
+	Query(c Caller, protocol, read string, provider ...string) ([]ProviderResult, *Error)
+	BoundProvider(c Caller, protocol string) (string, *Error)
 	Setting(c Caller, name string) string
-	Emit(c Caller, kind, key, entity string, data any, now time.Time) (int, *kernel.Error)
+	Emit(c Caller, kind, key, entity string, data any, now time.Time) (int, *Error)
 	Units(c Caller, structure string, now time.Time) []string
 	Element(c Caller, id string, now time.Time) (ElementInfo, bool)
 	Related(c Caller, element, stereotype string, outgoing bool, now time.Time) []string
 	Links(c Caller, entity string) []string
-	Link(c Caller, from, to *pb.EntityRef, key string, now time.Time) *kernel.Error
-	Put(c Caller, r *pb.ChangeRecord, entity any) *kernel.Error
+	Link(c Caller, from, to *pb.EntityRef, key string, now time.Time) *Error
+	Put(c Caller, r *pb.ChangeRecord, entity any) *Error
 	Get(c Caller, t reflect.Type, id string) (any, bool)
-	Find(c Caller, t reflect.Type, q Query) ([]any, int, *kernel.Error)
-	Check(c Caller, entity any) *kernel.Error
-	Assign(c Caller, r *pb.ChangeRecord, a Assignment) *kernel.Error
+	Find(c Caller, t reflect.Type, q Query) ([]any, int, *Error)
+	Check(c Caller, entity any) *Error
+	Assign(c Caller, r *pb.ChangeRecord, a Assignment) *Error
 	Readable(c Caller, ref string) bool
-	Next(c Caller, r *pb.ChangeRecord, sequence string, date time.Time) (string, *kernel.Error)
+	Next(c Caller, r *pb.ChangeRecord, sequence string, date time.Time) (string, *Error)
 	Authorize(Caller, AuthzRequest, time.Time) AuthzDecision
 	AuthorizationEngine() AuthorizationEngine
 	Rules() RuleEngine
-	ReadRuleQuery(Caller, RuleCollection, json.RawMessage, time.Time) (json.RawMessage, *kernel.Error)
-	ReadRecordSet(Caller, string, string, string, time.Time) (RecordSetResult, *kernel.Error)
+	ReadRuleQuery(Caller, RuleCollection, json.RawMessage, time.Time) (json.RawMessage, *Error)
+	ReadRecordSet(Caller, string, string, string, time.Time) (RecordSetResult, *Error)
 	ResolveValueType(AssetBinding) (ValueType, bool)
 	Simulating() bool
 	OwnedRelations(Caller, string) []RelationLink
 	LegacyRelationActive(Caller, RelationLink) bool
 	LegacyRelationWritable(Caller, string, string) bool
-	CheckEnterpriseUsage(Caller, string, string, bool, time.Time) *kernel.Error
-	CheckEnterpriseTenantConnection(Caller, string, time.Time) *kernel.Error
+	CheckEnterpriseUsage(Caller, string, string, bool, time.Time) *Error
+	CheckEnterpriseTenantConnection(Caller, string, time.Time) *Error
 	VisibleApplications(Caller) []AssetRef
 	TraceEnabled() bool
 	RecordDecisionTrace(DecisionTrace)
@@ -403,7 +402,7 @@ type App interface {
 	Authority() Authority
 	Manifest() Manifest
 	Declarations() []*pb.AuthorityDeclaration
-	Submit(c Caller, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *kernel.Error)
+	Submit(c Caller, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *Error)
 	Fork(authority Authority) (App, error)
 	Snapshot() (json.RawMessage, error)
 	Restore(json.RawMessage) error
@@ -411,15 +410,15 @@ type App interface {
 }
 
 type Reader interface {
-	Read(c Caller, name string) (any, *kernel.Error)
+	Read(c Caller, name string) (any, *Error)
 }
 
 type ParameterizedReader interface {
-	ReadInput(c Caller, name string, inputs json.RawMessage) (any, *kernel.Error)
+	ReadInput(c Caller, name string, inputs json.RawMessage) (any, *Error)
 }
 
 type InputReceiver interface {
-	Input(c Caller, name string, body []byte, now time.Time) (any, *kernel.Error)
+	Input(c Caller, name string, body []byte, now time.Time) (any, *Error)
 }
 
 type Event struct {
@@ -429,22 +428,22 @@ type Event struct {
 }
 
 type Subscriber interface {
-	Handle(c Caller, e Event) *kernel.Error
+	Handle(c Caller, e Event) *Error
 }
 
 type Runner interface {
-	Run(c Caller, job string, now time.Time) *kernel.Error
+	Run(c Caller, job string, now time.Time) *Error
 }
 
 type Answerer interface {
-	Answer(c Caller, e Effect, o Outcome, now time.Time) *kernel.Error
+	Answer(c Caller, e Effect, o Outcome, now time.Time) *Error
 }
 
-func notFound() *kernel.Error { return &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND} }
+func notFound() *Error { return &Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND} }
 
 var slot = regexp.MustCompile(`\{\w+\}`)
 
-func Refuse(code pb.ErrorCode, text string, values ...any) *kernel.Error {
+func Refuse(code pb.ErrorCode, text string, values ...any) *Error {
 	i := 0
 	message := slot.ReplaceAllStringFunc(text, func(p string) string {
 		if i >= len(values) {
@@ -453,7 +452,7 @@ func Refuse(code pb.ErrorCode, text string, values ...any) *kernel.Error {
 		i++
 		return fmt.Sprint(values[i-1])
 	})
-	return &kernel.Error{Code: code, Message: message}
+	return &Error{Code: code, Message: message}
 }
 
 const (
@@ -461,15 +460,15 @@ const (
 	inputOutsideAcceptedBoundary  = "This input uses an effect outside the accepted-result boundary"
 )
 
-func RefuseOutsideAcceptedBoundary() *kernel.Error {
-	return &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT, Message: actionOutsideAcceptedBoundary}
+func RefuseOutsideAcceptedBoundary() *Error {
+	return &Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT, Message: actionOutsideAcceptedBoundary}
 }
 
-func RefuseInputOutsideAcceptedBoundary() *kernel.Error {
-	return &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT, Message: inputOutsideAcceptedBoundary}
+func RefuseInputOutsideAcceptedBoundary() *Error {
+	return &Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT, Message: inputOutsideAcceptedBoundary}
 }
 
-func IsOutsideAcceptedBoundary(err *kernel.Error) bool {
+func IsOutsideAcceptedBoundary(err *Error) bool {
 	return err != nil && err.Code == pb.ErrorCode_ERROR_CODE_CONFLICT &&
 		(err.Message == actionOutsideAcceptedBoundary || err.Message == inputOutsideAcceptedBoundary)
 }
@@ -502,14 +501,14 @@ type AppCatalog interface {
 
 type ConsoleHost interface {
 	PackageLifecycleImpact(Caller, string, []ReleaseAsset) (PackageLifecycleImpact, error)
-	PrepareManagedPackage(Caller, PackageDescriptor, []ReleaseAsset, bool, bool, bool) (func(*pb.ChangeRecord), *kernel.Error)
+	PrepareManagedPackage(Caller, PackageDescriptor, []ReleaseAsset, bool, bool, bool) (func(*pb.ChangeRecord), *Error)
 	AppCatalog
 	CodeReleaseAssets() ([]ReleaseAsset, error)
 	ConsoleSetting(name string) string
 	Languages() []string
 	TenantSuspended() bool
-	GovernanceRead(Caller, string) (any, *kernel.Error)
-	ConnectorHeartbeat(Caller, time.Time) *kernel.Error
+	GovernanceRead(Caller, string) (any, *Error)
+	ConnectorHeartbeat(Caller, time.Time) *Error
 	PutPackageArtifact(key string, raw []byte) error
 	GetPackageArtifact(key string) ([]byte, error)
 	BaseModules() []CapabilityModule
@@ -520,7 +519,7 @@ type ConsoleAttached interface{ AttachConsole(ConsoleHost) }
 
 type Listener interface {
 	Interested(names []string, e Event) bool
-	Listen(c Caller, e Event, names []string, now time.Time) *kernel.Error
+	Listen(c Caller, e Event, names []string, now time.Time) *Error
 }
 
 type Observer interface {
@@ -536,7 +535,7 @@ type AcceptedObserver interface {
 
 type Linker interface {
 	Links(c Caller, entity string) []string
-	Link(c Caller, from, to *pb.EntityRef, key string, now time.Time) *kernel.Error
+	Link(c Caller, from, to *pb.EntityRef, key string, now time.Time) *Error
 }
 
 type AuthzRequest struct {

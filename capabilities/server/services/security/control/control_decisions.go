@@ -4,18 +4,17 @@ import (
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 	"platformserver/kernel/acceptedformat"
 	"platformserver/platform"
 )
 
-type Decider func(platform.Caller, *pb.Submission, time.Time) (func(*pb.ChangeRecord), *kernel.Error)
+type Decider func(platform.Caller, *pb.Submission, time.Time) (func(*pb.ChangeRecord), *platform.Error)
 
 type Deciders struct {
 	Connector, Setting, Binding, Work, Notification, Endpoint, Effect, Translation Decider
 }
 
-func (d Deciders) Decide(c platform.Caller, s *pb.Submission, at time.Time) (func(*pb.ChangeRecord), *kernel.Error) {
+func (d Deciders) Decide(c platform.Caller, s *pb.Submission, at time.Time) (func(*pb.ChangeRecord), *platform.Error) {
 	switch s.GetTarget().GetType() {
 	case ConnectorType:
 		return d.Connector(c, s, at)
@@ -34,7 +33,7 @@ func (d Deciders) Decide(c platform.Caller, s *pb.Submission, at time.Time) (fun
 	case TranslationType:
 		return d.Translation(c, s, at)
 	default:
-		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_UNKNOWN_SCHEMA}
+		return nil, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_UNKNOWN_SCHEMA}
 	}
 }
 
@@ -46,7 +45,7 @@ type StagedControl struct {
 	Cancel      func(current, after platform.Effect, out platform.Outcome)
 }
 
-func (s StagedControl) Decide(c platform.Caller, sub *pb.Submission) (func(*pb.ChangeRecord), *kernel.Error, bool) {
+func (s StagedControl) Decide(c platform.Caller, sub *pb.Submission) (func(*pb.ChangeRecord), *platform.Error, bool) {
 	if c.App != PlatformApp || sub.GetAuthority() != PlatformApp || c.ID != sub.GetPrincipalId() || c.Tenant != s.Tenant || sub.GetTenantId() != s.Tenant {
 		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "Only the console may decide tenant controls"), true
 	}

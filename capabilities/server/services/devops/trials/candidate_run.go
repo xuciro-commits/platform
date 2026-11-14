@@ -10,7 +10,6 @@ import (
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 	"platformserver/platform"
 	"platformserver/services/resources/authoring"
 )
@@ -20,15 +19,15 @@ type Sandbox struct {
 	AI, Flows bool
 	Member    func(id string) (platform.Member, bool)
 	Trace     func(func(platform.DecisionTrace)) func(platform.DecisionTrace)
-	Read      func(actor platform.Member, typ, id string, now time.Time) (json.RawMessage, *kernel.Error)
+	Read      func(actor platform.Member, typ, id string, now time.Time) (json.RawMessage, *platform.Error)
 	Flow      func(id string) (platform.FlowInstance, bool)
-	Current   func(actor platform.Member, typ, id string, now time.Time) *kernel.Error
+	Current   func(actor platform.Member, typ, id string, now time.Time) *platform.Error
 	Owner     func(schema string) string
-	Submit    func(actor platform.Member, s *pb.Submission, now time.Time) (*kernel.Error, []platform.FieldIssue)
+	Submit    func(actor platform.Member, s *pb.Submission, now time.Time) (*platform.Error, []platform.FieldIssue)
 	Work      func(now time.Time)
 	Compute   func(actor platform.Member, fixture platform.ComputeFixture, now time.Time) (bool, error)
 	Function  func(actor platform.Member, fixture platform.FunctionFixture, now time.Time) (bool, error)
-	Records   func(actor platform.Member, typ string, q platform.Query, now time.Time) ([]any, int, *kernel.Error)
+	Records   func(actor platform.Member, typ string, q platform.Query, now time.Time) ([]any, int, *platform.Error)
 	Inbox     func(actor platform.Member) ([]platform.WorkTask, bool)
 	Waiting   func() (compute, functions bool)
 	Faulted   func() string
@@ -45,7 +44,7 @@ type CandidateRun struct {
 	Now       time.Time
 }
 
-func (r *CandidateRun) Step(i int, step SimulationStep) (Simulation, *kernel.Error) {
+func (r *CandidateRun) Step(i int, step SimulationStep) (Simulation, *platform.Error) {
 	actor := r.Member
 	if step.As != "" {
 		actor, _ = r.Sandbox.Member(step.As)
@@ -60,7 +59,7 @@ func (r *CandidateRun) Step(i int, step SimulationStep) (Simulation, *kernel.Err
 	r.Sandbox.Trace(trace.Record)
 	defer r.Sandbox.Trace(nil)
 	var read json.RawMessage
-	var refusal *kernel.Error
+	var refusal *platform.Error
 	var issues []platform.FieldIssue
 	var sub *pb.Submission
 	if step.Read {

@@ -9,7 +9,6 @@ import (
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 	"platformserver/platform"
 	ontology "platformserver/services/ontology"
 )
@@ -83,7 +82,7 @@ func (b *Build) checkExtensionDependents(object ontology.Object) error {
 func (b *Build) objectEntity() platform.Entity {
 	return platform.Entity{Type: ObjectType, Title: "Object type", Plural: "Object types", Model: ontology.Object{}, Display: "title",
 		Description: "An object this organisation defines itself: its name, what people call it and its fields. Publishing it installs it, and records of it are kept like any other app's.",
-		Validate: func(c platform.Caller, record any) *kernel.Error {
+		Validate: func(c platform.Caller, record any) *platform.Error {
 			if c.Replaying {
 				return nil
 			}
@@ -99,10 +98,10 @@ func (b *Build) objectEntity() platform.Entity {
 			Transitions: []platform.Transition{{Name: "publish", Title: "Publish", From: []string{"draft", "published"}, To: []string{"published"},
 				Roles: []string{Builder}, Capability: "objects", Payload: []platform.Field{},
 				Description: "Install the object as it stands. Published again, it takes its new fields, and records keep the values of the fields that remain.",
-				Do: func(c platform.Caller, record any, _ json.RawMessage, now time.Time) *kernel.Error {
+				Do: func(c platform.Caller, record any, _ json.RawMessage, now time.Time) *platform.Error {
 					object, ok := record.(*ontology.Object)
 					if !ok {
-						return &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
+						return &platform.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 					}
 					compiled := *object
 					if !c.Replaying {
@@ -124,10 +123,10 @@ func (b *Build) objectEntity() platform.Entity {
 					}
 					if c.Staging() {
 						if err := b.Check(*object, object.ID, c.Rules()); err != nil {
-							return &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, Message: err.Error()}
+							return &platform.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, Message: err.Error()}
 						}
 						if err := b.validateObjectInstallation(c, *object); err != nil {
-							return &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, Message: err.Error()}
+							return &platform.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, Message: err.Error()}
 						}
 					} else if err := b.install(c, *object); err != nil {
 						return err
@@ -269,30 +268,30 @@ func (b *Build) taken(name, id string) (string, bool, error) {
 	return "", false, nil
 }
 
-func (b *Build) install(c platform.Caller, o ontology.Object) *kernel.Error {
+func (b *Build) install(c platform.Caller, o ontology.Object) *platform.Error {
 	if c.Staging() {
-		return &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
+		return &platform.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
 	}
 	if !c.Replaying {
 		if err := b.Check(o, o.ID, c.Rules()); err != nil {
-			return &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, Message: err.Error()}
+			return &platform.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, Message: err.Error()}
 		}
 	}
 	if err := b.validateObjectInstallation(c, o); err != nil {
-		return &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, Message: err.Error()}
+		return &platform.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, Message: err.Error()}
 	}
 	entity := b.entity(o)
 	actions := objectActions(o, entity)
 	pages, _, err := b.objectInstallationPages(o)
 	if err != nil {
-		return &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, Message: err.Error()}
+		return &platform.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, Message: err.Error()}
 	}
 	if err := b.ledger.Extend([]string{entity.Type}, actions); err != nil {
-		return &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, Message: err.Error()}
+		return &platform.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, Message: err.Error()}
 	}
 	b.ledger.Catalog().ReplaceTarget(entity.Type, actions)
 	if err := b.host.Install(c, entity, actions, pages...); err != nil {
-		return &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, Message: err.Error()}
+		return &platform.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, Message: err.Error()}
 	}
 	b.installed[entity.Type] = entity
 	return nil
@@ -318,7 +317,7 @@ func entityWith(o ontology.Object, creates creator, lookup func(string) (platfor
 	entity.EnterpriseUse = o.EnterpriseUse
 	entity.Protocols = objectProvisions(o, entity)
 	if creation != nil {
-		entity.ApplyCreateTxn = func(c platform.Caller, r *pb.ChangeRecord, now time.Time) *kernel.Error {
+		entity.ApplyCreateTxn = func(c platform.Caller, r *pb.ChangeRecord, now time.Time) *platform.Error {
 			if creates == nil {
 				return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Creation transactions need their original owner")
 			}
@@ -328,12 +327,12 @@ func entityWith(o ontology.Object, creates creator, lookup func(string) (platfor
 	return entity
 }
 
-func validateOf(o ontology.Object, model any, lookup func(string) (platform.EntityInfo, bool)) func(c platform.Caller, record any) *kernel.Error {
+func validateOf(o ontology.Object, model any, lookup func(string) (platform.EntityInfo, bool)) func(c platform.Caller, record any) *platform.Error {
 	if o.Extends == "" {
 		return nil
 	}
 	typ := reflect.TypeOf(model)
-	return func(c platform.Caller, record any) *kernel.Error {
+	return func(c platform.Caller, record any) *platform.Error {
 		if !c.Replaying && lookup != nil {
 			base, exists := lookup(o.Extends)
 			if !exists {

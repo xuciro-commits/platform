@@ -1,7 +1,6 @@
 package objects
 
 import (
-	"platformkernel/kernel"
 	"platformserver/kernel/protocol"
 	"platformserver/kernel/records"
 	"platformserver/platform"
@@ -14,13 +13,13 @@ type Owner struct {
 	Store                  *records.Store
 	BaseStore              *records.Store
 	TenantID               string
-	Admit                  func(platform.Member) *kernel.Error
+	Admit                  func(platform.Member) *platform.Error
 	AuthorizationMember    func(platform.Member) platform.Member
 	Caller                 func(platform.Member, string) platform.Caller
 	Authorize              func(*records.Store, platform.Caller, platform.AuthzRequest, time.Time, bool) platform.AuthzDecision
 	AuthorizeDepth         func(*records.Store, platform.Caller, platform.AuthzRequest, time.Time, bool, int, *security.Traversal) platform.AuthzDecision
-	Visible                func(*records.Store, platform.Member, *records.Type, time.Time) (func(reflect.Value) bool, *kernel.Error)
-	VisibleForCaller       func(*records.Store, platform.Caller, *records.Type, time.Time) (func(reflect.Value) bool, *kernel.Error)
+	Visible                func(*records.Store, platform.Member, *records.Type, time.Time) (func(reflect.Value) bool, *platform.Error)
+	VisibleForCaller       func(*records.Store, platform.Caller, *records.Type, time.Time) (func(reflect.Value) bool, *platform.Error)
 	MayRead                func(*records.Store, platform.Member, time.Time, bool) func(string) bool
 	MayCallRead            func(platform.Member, string) bool
 	Definitions            func(platform.Member) []platform.Definition
@@ -45,7 +44,7 @@ func (o *Owner) caller(m platform.Member, app string) platform.Caller {
 	return o.Caller(m, app)
 }
 
-func (o *Owner) admits(m platform.Member) *kernel.Error {
+func (o *Owner) admits(m platform.Member) *platform.Error {
 	return o.Admit(m)
 }
 
@@ -57,11 +56,11 @@ func (o *Owner) authorizeDepth(store *records.Store, c platform.Caller, q platfo
 	return o.AuthorizeDepth(store, c, q, at, held, depth, walk)
 }
 
-func (o *Owner) visible(m platform.Member, et *records.Type, at time.Time) (func(reflect.Value) bool, *kernel.Error) {
+func (o *Owner) visible(m platform.Member, et *records.Type, at time.Time) (func(reflect.Value) bool, *platform.Error) {
 	return o.Visible(o.Store, m, et, at)
 }
 
-func (o *Owner) visibleForCallerIn(store *records.Store, c platform.Caller, et *records.Type, at time.Time) (func(reflect.Value) bool, *kernel.Error) {
+func (o *Owner) visibleForCallerIn(store *records.Store, c platform.Caller, et *records.Type, at time.Time) (func(reflect.Value) bool, *platform.Error) {
 	return o.VisibleForCaller(store, c, et, at)
 }
 

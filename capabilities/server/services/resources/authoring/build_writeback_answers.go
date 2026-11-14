@@ -8,12 +8,11 @@ import (
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 	"platformserver/platform"
 	dataowner "platformserver/services/data"
 )
 
-func (b *Build) answered(c platform.Caller, effect platform.Effect, out platform.Outcome, now time.Time) *kernel.Error {
+func (b *Build) answered(c platform.Caller, effect platform.Effect, out platform.Outcome, now time.Time) *platform.Error {
 	var req dataowner.WritebackRequest
 	if json.Unmarshal([]byte(effect.Body), &req) != nil || req.Writeback == "" {
 		return nil

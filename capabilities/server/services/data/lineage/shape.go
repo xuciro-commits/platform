@@ -4,7 +4,6 @@ import (
 	"slices"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 	"platformserver/platform"
 )
 
@@ -24,7 +23,7 @@ type Shaped struct {
 	Impact     *Impact
 }
 
-func Shape(r Request, raw Input, preview, guard Graph, meta map[string]Meta, visible map[string]bool) (Shaped, *kernel.Error) {
+func Shape(r Request, raw Input, preview, guard Graph, meta map[string]Meta, visible map[string]bool) (Shaped, *platform.Error) {
 	p := r.Params
 	if p.Mode == "" {
 		if p.Focus != "" || r.Ref != "" {

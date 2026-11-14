@@ -44,12 +44,7 @@ read-when: 每批开始（选当前批次）与结束（删除已完成条目、
 
 工单按技能 `platform-loop` 执行（分工见 [method 工单循环](method.md#工单循环)）：`[难]` 给强模型（方向内的设计、内核与语义），`[易]` 给执行模型（方向已定的搬移、改名、重复样板），`[独占]` 行执行时不得有别的行在进行中。每行的“方向”已由主会话定下，不重议；“验证”是该技能中的档位（V1 基本、V2 路径、V3 全量、V4 并发、W 前端）。同一编号下按顺序做；不同编号之间只受“前置”约束。
 
-- [ ] U1 动作引擎归位。已完成（U1.1–U1.3）：规则引擎在 `services/actions/authority*.go`，服务、内核与宿主只经 `platform.Authority` 使用，由宿主经 `platform.Authorities` 注入；协议部件在 `kernel/protocol`，变更日志与归档通过 `platform` 接口解耦。
-  - [ ] U1.4 `[易]` `[独占]` `Error` 进 `platform`。前置已完成：U1.3。（进行中：Deepseek V4.1 Flash Max，2026-11-14）
-    - 方向：`contract/go/kernel/errors.go` 的 `Error` 搬为 `platform.Error`；用脚本把全树 `kernel.Error`（约 2580 处）改为 `platform.Error`（`platform` 包内为 `Error`），并修正 import（不再使用的 `platformkernel/kernel` 删除，缺 `platform` 的补上）；`kernel/protocol` 里 Receiver 的 `Caller`、`Policy`、`Ref` 留在 `protocol`。删除 `contract/go/kernel` 目录；7-system §7.2 中“`contract/go/kernel` 暂只保留错误类型 `Error`”一条改为“`contract/go` 只含协议生成代码”。
-    - 不做：不改行为、错误码、文案；不夹带别的改名。
-    - 完成：`grep -rn '"platformkernel/kernel"' capabilities contract` 为空；`make contract` 不产生 diff；差距“内核错误类型”删除。
-    - 验证：V1、V3。
+- [ ] U1 动作引擎归位。已完成（U1.1–U1.4）：规则引擎在 `services/actions/authority*.go`，服务、内核与宿主只经 `platform.Authority` 使用，由宿主经 `platform.Authorities` 注入；协议部件在 `kernel/protocol`，变更日志与归档通过 `platform` 接口解耦；`Error` 归 `platform`，`contract/go` 只含协议生成代码。
   - [ ] U1.5 `[难]` 转换即动作类型。
     - 方向：删除 `platform.Transition`；`platform.Lifecycle.Transitions` 改为 `Actions []ActionType`。`ActionType` 的声明部分沿用 Transition 的 `Name`、`Title`、`Description`、`Roles`、`Capability`、`Approval`、`ConfirmationOnly`、`Adoption`、`DeferRequired`，`Payload` 改名 `Parameters`；执行部分按 [6-domain §6.7](6-domain/README.md) 的五部分：`Criteria`（`From` 表达为“状态属于……”的提交条件，`RuleCriteria` 并入）、`Rules`（`To`、`ToInput` 是修改对象状态的规则，`Do` 是函数支撑规则，`Txn`、`ApplyTxn` 暂作一条事务规则，留给 U2 拆）、`Effects`（`After`）。执行器只有一个：`services/actions/authority.go` 的 `transition` 改为按“参数 → 授权 → 提交条件 → 规则 → 一次接受写入 → 副作用”执行；审批的等待与驳回状态移动仍由执行器处理。
     - 23 个声明转换的文件随批改写（`grep -rln 'platform.Transition{' capabilities/server`）；`services/resources/authoring/build_actions.go` 的 `lifecycle()` 直接产出 `ActionType`；`TransitionInfo` 的 JSON 形状不变（`make contract` 无 diff，前端不动）。

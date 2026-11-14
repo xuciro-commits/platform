@@ -7,7 +7,6 @@ import (
 
 	"google.golang.org/protobuf/proto"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 	"platformserver/kernel/acceptedformat"
 	"platformserver/platform"
 )
@@ -20,8 +19,8 @@ type CommittedResult struct {
 	Publish     func(platform.Event, platform.AcceptedEventPlan)
 }
 
-func (s *Sequence) FinishCommitted(a platform.App, m platform.Member, hash string, committed []byte, h CommittedResult) (*pb.ChangeRecord, *kernel.Error) {
-	conflict := &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
+func (s *Sequence) FinishCommitted(a platform.App, m platform.Member, hash string, committed []byte, h CommittedResult) (*pb.ChangeRecord, *platform.Error) {
+	conflict := &platform.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
 	var envelope struct{ Kind string }
 	if err := json.Unmarshal(committed, &envelope); err != nil {
 		h.Quarantine(fmt.Errorf("committed result is not an envelope: %w", err))
@@ -92,23 +91,23 @@ func (s *Sequence) FinishCommitted(a platform.App, m platform.Member, hash strin
 	return receipt, nil
 }
 
-func (s *Sequence) ReplayPrior(a platform.App, sub *pb.Submission, binding *platform.SchemaVersion) (record *pb.ChangeRecord, hash string, refusal *kernel.Error, done bool) {
+func (s *Sequence) ReplayPrior(a platform.App, sub *pb.Submission, binding *platform.SchemaVersion) (record *pb.ChangeRecord, hash string, refusal *platform.Error, done bool) {
 	prior := s.Committed.Prior(a.Manifest().ID, a.Authority(), s.ID, sub.GetIdempotencyKey())
 	if len(prior.Answer) > 0 {
 		result, receipt, err := acceptedformat.DecodeBatch(prior.Answer)
 		hash, hashErr := acceptedformat.SubmissionHash(sub, binding)
 		if err != nil || hashErr != nil || result.RequestHash != hash {
-			return nil, "", &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_IDEMPOTENCY_CONFLICT}, true
+			return nil, "", &platform.Error{Code: pb.ErrorCode_ERROR_CODE_IDEMPOTENCY_CONFLICT}, true
 		}
 		return receipt, "", nil, true
 	}
 	if prior.Record != nil {
 		if !proto.Equal(prior.Record.GetSubmission(), sub) {
-			return nil, "", &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_IDEMPOTENCY_CONFLICT}, true
+			return nil, "", &platform.Error{Code: pb.ErrorCode_ERROR_CODE_IDEMPOTENCY_CONFLICT}, true
 		}
 		saved, bound := s.Committed.SchemaVersion(a.Manifest().ID + "/" + sub.GetIdempotencyKey())
 		if bound != (binding != nil) || binding != nil && saved != *binding {
-			return nil, "", &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_IDEMPOTENCY_CONFLICT}, true
+			return nil, "", &platform.Error{Code: pb.ErrorCode_ERROR_CODE_IDEMPOTENCY_CONFLICT}, true
 		}
 		return prior.Record, "", nil, true
 	}
@@ -118,7 +117,7 @@ func (s *Sequence) ReplayPrior(a platform.App, sub *pb.Submission, binding *plat
 	}
 	if prior.Refusal != nil {
 		if prior.Refusal.RequestHash != hash {
-			return nil, "", &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_IDEMPOTENCY_CONFLICT}, true
+			return nil, "", &platform.Error{Code: pb.ErrorCode_ERROR_CODE_IDEMPOTENCY_CONFLICT}, true
 		}
 		saved := prior.Refusal.Error
 		return nil, "", &saved, true
@@ -126,11 +125,11 @@ func (s *Sequence) ReplayPrior(a platform.App, sub *pb.Submission, binding *plat
 	return nil, hash, nil, false
 }
 
-func (p Prior) SourceReplay(principal string, sub *pb.Submission, deleted bool) (*pb.ChangeRecord, *kernel.Error, bool) {
+func (p Prior) SourceReplay(principal string, sub *pb.Submission, deleted bool) (*pb.ChangeRecord, *platform.Error, bool) {
 	if p.Record != nil {
 		previous := p.Record.GetSubmission()
 		if previous.GetPrincipalId() != principal || !proto.Equal(previous.GetTarget(), sub.GetTarget()) || !proto.Equal(previous.GetSchema(), sub.GetSchema()) && !deleted {
-			return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_IDEMPOTENCY_CONFLICT}, true
+			return nil, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_IDEMPOTENCY_CONFLICT}, true
 		}
 		return p.Record, nil, true
 	}
@@ -149,9 +148,9 @@ func (s *Sequence) ApplyBatch(l platform.Authority, raw []byte, h BatchApply) (b
 	return s.PromoteBatch(prepared, h)
 }
 
-func (s *Sequence) CheckSubmission(m platform.Member, sub *pb.Submission) *kernel.Error {
+func (s *Sequence) CheckSubmission(m platform.Member, sub *pb.Submission) *platform.Error {
 	if sub.GetTenantId() != s.ID || sub.GetPrincipalId() != m.ID {
-		return &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_POLICY_DENIED}
+		return &platform.Error{Code: pb.ErrorCode_ERROR_CODE_POLICY_DENIED}
 	}
 	if sub.GetIdempotencyKey() == "" || sub.GetTarget() == nil || sub.GetSchema() == nil {
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "The submission has an invalid identity")

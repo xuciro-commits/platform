@@ -6,7 +6,6 @@ import (
 	"strings"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 	"platformserver/platform"
 )
 
@@ -29,15 +28,15 @@ type Chain struct {
 }
 
 type ChainReader struct {
-	Record  func(typ, id string) (any, *kernel.Error)
+	Record  func(typ, id string) (any, *platform.Error)
 	Find    func(typ string, query platform.Query) []any
 	Effects func() []platform.Effect
 }
 
-func (c ChainReader) Read(ref string) (Chain, *kernel.Error) {
+func (c ChainReader) Read(ref string) (Chain, *platform.Error) {
 	typ, id, _ := strings.Cut(ref, "/")
 	if typ != platform.RunType && typ != platform.FlowInstanceType {
-		return Chain{}, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
+		return Chain{}, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 	}
 	if _, err := c.Record(typ, id); err != nil {
 		return Chain{}, err

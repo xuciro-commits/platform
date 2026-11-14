@@ -10,7 +10,6 @@ import (
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 	"platformserver/platform"
 )
 
@@ -22,7 +21,7 @@ const (
 
 func (b *Build) tableEntity() platform.Entity {
 	return platform.Entity{Type: TableType, Title: "Decision table", Plural: "Decision tables", Model: Table{}, Display: "title", Description: "Condition columns to result columns; the first matching row decides. Published as a native operation.",
-		Validate: func(c platform.Caller, record any) *kernel.Error {
+		Validate: func(c platform.Caller, record any) *platform.Error {
 			if c.Replaying {
 				return nil
 			}
@@ -41,10 +40,10 @@ func (b *Build) tableEntity() platform.Entity {
 			Transitions: []platform.Transition{{Name: "publish", Title: "Publish", Description: "Check the table and install it as an operation at once.", From: []string{"draft", "published"}, To: []string{"published"}, Roles: []string{Builder}, Capability: "compute", Payload: []platform.Field{}, Do: b.publishTable}}}}
 }
 
-func (b *Build) publishTable(c platform.Caller, record any, _ json.RawMessage, _ time.Time) *kernel.Error {
+func (b *Build) publishTable(c platform.Caller, record any, _ json.RawMessage, _ time.Time) *platform.Error {
 	tb, ok := record.(*Table)
 	if !ok {
-		return &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
+		return &platform.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 	}
 	if !c.Replaying {
 		if err := tb.NormalizeRules(); err != nil {

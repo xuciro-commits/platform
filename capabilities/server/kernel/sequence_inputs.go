@@ -6,7 +6,6 @@ import (
 	"slices"
 	"time"
 
-	"platformkernel/kernel"
 	"platformserver/kernel/acceptedformat"
 	"platformserver/platform"
 )
@@ -41,7 +40,7 @@ type InputApply struct {
 	Changes ChangeApply
 	Input   func(app string) platform.AcceptedInputApp
 	Publish func(platform.Event, platform.AcceptedEventPlan)
-	Refused func(member, name string, refusal *kernel.Error, at time.Time)
+	Refused func(member, name string, refusal *platform.Error, at time.Time)
 }
 
 func (s *Sequence) ApplyInputResult(raw []byte, h InputApply) (acceptedformat.Input, bool, error) {

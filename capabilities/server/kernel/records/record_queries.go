@@ -6,7 +6,6 @@ import (
 	"math"
 	"math/big"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 	persistence "platformserver/kernel/store"
 	"platformserver/platform"
 	"reflect"
@@ -17,17 +16,17 @@ import (
 	"time"
 )
 
-func (s *Store) Find(et *Type, q platform.Query, visible func(reflect.Value) bool) ([]reflect.Value, int, *kernel.Error) {
+func (s *Store) Find(et *Type, q platform.Query, visible func(reflect.Value) bool) ([]reflect.Value, int, *platform.Error) {
 	if err := q.CheckSet(); err != nil {
-		return nil, 0, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
+		return nil, 0, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 	}
 	order, err := CompileOrder(et.info, q.Sort)
 	if err != nil {
-		return nil, 0, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
+		return nil, 0, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 	}
 	plan, err := CompileSet(et.info, platform.RecordSetPredicate{Domain: q.Domain, Search: q.Search, Set: q.Set}, s.rules)
 	if err != nil {
-		return nil, 0, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
+		return nil, 0, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 	}
 	effective, refusal := s.EffectivePredicate(et, q)
 	if refusal != nil {
@@ -65,19 +64,19 @@ func (s *Store) FindPlan(et *Type, plan Plan, visible func(reflect.Value) bool, 
 	return page, total, matched
 }
 
-func (s *Store) MatchingQuery(et *Type, q platform.Query, visible func(reflect.Value) bool) ([]reflect.Value, *kernel.Error) {
+func (s *Store) MatchingQuery(et *Type, q platform.Query, visible func(reflect.Value) bool) ([]reflect.Value, *platform.Error) {
 	var out []reflect.Value
 	refusal := s.VisitMatching(et, q, visible, func(value reflect.Value) { out = append(out, value) })
 	return out, refusal
 }
 
-func (s *Store) VisitMatching(et *Type, q platform.Query, visible func(reflect.Value) bool, accept func(reflect.Value)) *kernel.Error {
+func (s *Store) VisitMatching(et *Type, q platform.Query, visible func(reflect.Value) bool, accept func(reflect.Value)) *platform.Error {
 	if err := q.CheckSet(); err != nil {
-		return &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
+		return &platform.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 	}
 	plan, err := CompileSet(et.info, platform.RecordSetPredicate{Domain: q.Domain, Search: q.Search, Set: q.Set}, s.rules)
 	if err != nil {
-		return &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
+		return &platform.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 	}
 	effective, refusal := s.EffectivePredicate(et, q)
 	if refusal != nil {
@@ -249,8 +248,8 @@ func (et *Type) Measure(name string) (measure, bool) {
 	return measure{column: col, op: op, field: f, kind: kind}, true
 }
 
-func (s *Store) Aggregate(et *Type, q AggregateQuery, rows []reflect.Value, composed bool) (Aggregate, *kernel.Error) {
-	invalid := &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
+func (s *Store) Aggregate(et *Type, q AggregateQuery, rows []reflect.Value, composed bool) (Aggregate, *platform.Error) {
+	invalid := &platform.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 	if q.MaxRows < 0 || q.MaxRows > AggregateSetMaxRows {
 		return Aggregate{}, invalid
 	}
@@ -471,8 +470,8 @@ func histogramBound(value *big.Rat) string {
 	return text
 }
 
-func (s *Store) Histogram(et *Type, q AggregateQuery, rows []reflect.Value) (Aggregate, *kernel.Error) {
-	invalid := &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
+func (s *Store) Histogram(et *Type, q AggregateQuery, rows []reflect.Value) (Aggregate, *platform.Error) {
+	invalid := &platform.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 	h := q.Histogram
 	field, ok := et.info.Field(h.Field)
 	if !ok || !slices.Contains([]string{"integer", "decimal"}, field.Type) || h.Bins < 1 || h.Bins > HistogramMaxBins || len(q.Groups) > 0 || len(q.Measures) > 0 && !slices.Equal(q.Measures, []string{"count"}) || q.MaxRows > 0 && q.MaxRows < h.Bins {
@@ -605,9 +604,9 @@ func windowTime(value reflect.Value) (time.Time, bool, bool) {
 	return instant, true, true
 }
 
-func (s *Store) AggregateWindow(et *Type, q AggregateQuery, rows []reflect.Value) (Aggregate, *kernel.Error) {
-	invalid := func(message string) (Aggregate, *kernel.Error) {
-		return Aggregate{}, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, Message: message}
+func (s *Store) AggregateWindow(et *Type, q AggregateQuery, rows []reflect.Value) (Aggregate, *platform.Error) {
+	invalid := func(message string) (Aggregate, *platform.Error) {
+		return Aggregate{}, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, Message: message}
 	}
 	w := q.Window
 	when, hasTime := et.info.Field(w.TimeField)
@@ -714,7 +713,7 @@ func BusinessField(info platform.EntityInfo, value reflect.Value, name string) s
 	return fmt.Sprint(v.Interface())
 }
 
-func (s *Store) EffectivePredicate(et *Type, q platform.Query) (func(reflect.Value) bool, *kernel.Error) {
+func (s *Store) EffectivePredicate(et *Type, q platform.Query) (func(reflect.Value) bool, *platform.Error) {
 	v := et.info.Versioning
 	if q.BusinessTime != nil && q.BusinessTime.All && q.BusinessTime.At != "" {
 		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Business time selects either an instant or all versions")

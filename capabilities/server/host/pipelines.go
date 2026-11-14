@@ -4,7 +4,6 @@ import (
 	"context"
 	"time"
 
-	"platformkernel/kernel"
 	"platformserver/kernel/records"
 	"platformserver/platform"
 	dataowner "platformserver/services/data"
@@ -18,12 +17,12 @@ func (t *Tenant) RunPipelines(now time.Time) {
 	t.integration().RunPipelines(now)
 }
 
-func (t *Tenant) pipelineResult(member platform.Member, pipeline dataowner.Pipeline, run dataowner.PipelineRun, phase string, revision *uint32, now time.Time) *kernel.Error {
+func (t *Tenant) pipelineResult(member platform.Member, pipeline dataowner.Pipeline, run dataowner.PipelineRun, phase string, revision *uint32, now time.Time) *platform.Error {
 	return t.integration().PipelineResult(member, pipeline, run, phase, revision, now)
 }
 
-func (t *Tenant) pipelineInputs(pipeline dataowner.Pipeline, marking string, compartments []string) (dataowner.PipelineInputs, *kernel.Error) {
-	return recordRead(t, context.Background(), func(t *Tenant) (dataowner.PipelineInputs, *kernel.Error) {
+func (t *Tenant) pipelineInputs(pipeline dataowner.Pipeline, marking string, compartments []string) (dataowner.PipelineInputs, *platform.Error) {
+	return recordRead(t, context.Background(), func(t *Tenant) (dataowner.PipelineInputs, *platform.Error) {
 		return t.DataOwner().CollectPipelineInputs(t.automation(build.ID, false), pipeline, marking, compartments), nil
 	})
 }

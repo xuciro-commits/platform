@@ -5,7 +5,6 @@ import (
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 	"platformserver/kernel/acceptedformat"
 	"platformserver/platform"
 )
@@ -13,16 +12,16 @@ import (
 type EffectAnswer struct {
 	Tenant     string
 	Draft      platform.Runtime
-	Authorize  func(c platform.Caller, permission string) *kernel.Error
+	Authorize  func(c platform.Caller, permission string) *platform.Error
 	Model      func() (platform.App, *pb.Submission)
-	Decide     func(c platform.Caller, a platform.App, s *pb.Submission, at time.Time) *kernel.Error
+	Decide     func(c platform.Caller, a platform.App, s *pb.Submission, at time.Time) *platform.Error
 	Operation  func(platform.Effect)
 	Completion func() platform.OperationCompletion
 	Answerer   func(app string) platform.Answerer
 	Source     func(id string) (Queued, bool)
-	Origin     func(*platform.Effect, func() *kernel.Error) *kernel.Error
+	Origin     func(*platform.Effect, func() *platform.Error) *platform.Error
 	Agents     func(c platform.Caller, x platform.Effect, out platform.Outcome, at time.Time)
-	Finish     func(time.Time) *kernel.Error
+	Finish     func(time.Time) *platform.Error
 }
 
 func (a EffectAnswer) Stage(x platform.Effect, out platform.Outcome, at time.Time) error {
@@ -61,7 +60,7 @@ func (a EffectAnswer) Stage(x platform.Effect, out platform.Outcome, at time.Tim
 		if source.ID == "" || source.App != x.App {
 			return fmt.Errorf("effect callback has no accepted source")
 		}
-		if refusal := a.Origin(&source.Effect, func() *kernel.Error { return app.Answer(c, x, out, at) }); refusal != nil {
+		if refusal := a.Origin(&source.Effect, func() *platform.Error { return app.Answer(c, x, out, at) }); refusal != nil {
 			return refusal
 		}
 	}

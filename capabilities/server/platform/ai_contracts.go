@@ -3,7 +3,6 @@ package platform
 import (
 	"encoding/json"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 	"slices"
 	"time"
 )
@@ -18,7 +17,7 @@ type Agent struct {
 	Tools        []string
 	Budget       Budget
 	Checkpoints  []string
-	Guard        func(c Caller, r AgentRun, action, target string, payload json.RawMessage) *kernel.Error
+	Guard        func(c Caller, r AgentRun, action, target string, payload json.RawMessage) *Error
 	To           func(c Caller, r AgentRun) []Recipient
 	Cases        []Case
 }
@@ -90,13 +89,13 @@ type AgentHost interface {
 	AgentFlows() AgentFlowCompletion
 	ProtocolActions(string) []Action
 	ProtocolProvider(string) (App, string, bool)
-	InvokeDecision(Caller, string, string, string, []byte, string, string, time.Time) (*pb.EntityRef, *pb.ChangeRecord, *kernel.Error)
-	AgentContext(*Member, string, string, time.Time) (AgentObservation, *kernel.Error)
+	InvokeDecision(Caller, string, string, string, []byte, string, string, time.Time) (*pb.EntityRef, *pb.ChangeRecord, *Error)
+	AgentContext(*Member, string, string, time.Time) (AgentObservation, *Error)
 	AgentSearch(*Member, string, time.Time) AgentObservation
-	AgentQuery(Member, NamedQuery, string, time.Time) (AgentObservation, *kernel.Error)
-	AgentRead(Member, string, ...json.RawMessage) (AgentObservation, *kernel.Error)
+	AgentQuery(Member, NamedQuery, string, time.Time) (AgentObservation, *Error)
+	AgentRead(Member, string, ...json.RawMessage) (AgentObservation, *Error)
 	AgentSurface(Member, string) AgentSurface
-	AgentObjects(Member, string, json.RawMessage, time.Time) (AgentObservation, *kernel.Error)
+	AgentObjects(Member, string, json.RawMessage, time.Time) (AgentObservation, *Error)
 	AgentSources(any) []string
 	AgentKnowledge(*Member, string, string, int, time.Time) json.RawMessage
 	AgentAppReader(string) *Member
@@ -107,14 +106,14 @@ type AgentHost interface {
 	ExternalAgentMembers() []Member
 	AgentDecisionMembers() []string
 	AgentUsage() []AIUsage
-	WithAgentRead(func(AgentEvaluationRuntime) *kernel.Error) *kernel.Error
-	ResolveAgentModel(string, ModelOptions, string) (AIModelBinding, AIProvider, *kernel.Error)
-	AgentModel(string) (AIModel, AIProvider, *kernel.Error)
+	WithAgentRead(func(AgentEvaluationRuntime) *Error) *Error
+	ResolveAgentModel(string, ModelOptions, string) (AIModelBinding, AIProvider, *Error)
+	AgentModel(string) (AIModel, AIProvider, *Error)
 	AgentModelConfigurationDigest(AIModel, AIProvider, *AIModelBinding) (string, error)
 	AgentProviderAvailable(string, time.Time) bool
 	AgentAnswerText(Outcome) string
 	CallAgentModel(AIProvider, AIModel, Member, ChatRequest, time.Time) (ChatAnswer, *AIError)
-	MeterAgentUsage(Member, AIUsage) *kernel.Error
+	MeterAgentUsage(Member, AIUsage) *Error
 	ReplayAgentUsage(AIUsage)
 }
 
@@ -372,8 +371,8 @@ type AgentRuntime interface {
 	AgentPrincipal(string) Member
 	AllowsAgentRun(AgentRunRecord) bool
 	ObserveAgentKnowledge(AgentRunRecord, json.RawMessage, time.Time) json.RawMessage
-	ApplyAgentStep(AgentResultStep, time.Time, bool) *kernel.Error
-	ApplyAgentStepCaller(Caller, AgentResultStep, time.Time) *kernel.Error
+	ApplyAgentStep(AgentResultStep, time.Time, bool) *Error
+	ApplyAgentStepCaller(Caller, AgentResultStep, time.Time) *Error
 	AgentEvaluationRuntime() AgentEvaluationRuntime
 	RecordAgentSignal(Caller, *pb.ChangeRecord, string, Signal, time.Time)
 	AgentEffectEnded(Caller, *pb.ChangeRecord, Effect, Outcome, time.Time)

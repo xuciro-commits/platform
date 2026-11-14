@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 	"platformserver/platform"
 	"platformserver/services/ai/gateway/providers"
 	"slices"
@@ -27,23 +26,23 @@ type cachedCatalog struct {
 type ProviderCatalog struct {
 	Tenant     string
 	Available  bool
-	Authorize  func() *kernel.Error
+	Authorize  func() *platform.Error
 	Provider   func(id string) (platform.AIProvider, bool)
 	Credential func(provider platform.AIProvider) ([]byte, error)
 	Version    func(secret string) int
 	Client     func(provider platform.AIProvider) providers.Client
 }
 
-func (c ProviderCatalog) Models(provider string, refresh bool) ([]platform.CatalogModel, *kernel.Error, *platform.AIError) {
+func (c ProviderCatalog) Models(provider string, refresh bool) ([]platform.CatalogModel, *platform.Error, *platform.AIError) {
 	if !c.Available {
-		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}, nil
+		return nil, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}, nil
 	}
 	if err := c.Authorize(); err != nil {
 		return nil, err, nil
 	}
 	pv, ok := c.Provider(provider)
 	if !ok {
-		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}, nil
+		return nil, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}, nil
 	}
 	secret, err := c.Credential(pv)
 	if err != nil && (pv.Kind != "local" || pv.Secret != "") {

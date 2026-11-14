@@ -6,7 +6,6 @@ import (
 	"reflect"
 	"time"
 
-	"platformkernel/kernel"
 	"platformserver/kernel/records"
 	"platformserver/platform"
 )
@@ -24,18 +23,18 @@ type Runtime struct {
 	Files       func() (platform.Caller, bool)
 	Projection  *records.Store
 	SyncStore   *records.Store
-	Page        func(string, int) ([]any, int, *kernel.Error)
+	Page        func(string, int) ([]any, int, *platform.Error)
 	FilesStore  platform.FileStore
 	Store       VectorStore
-	Read        func(func(Runtime) *kernel.Error) *kernel.Error
+	Read        func(func(Runtime) *platform.Error) *platform.Error
 	Current     func() bool
 	Host        func() platform.Member
 	Readable    func(platform.Member, string, time.Time) bool
 	Setting     func(string) string
 	ActiveSpace func() string
-	Model       func(string) (platform.AIModel, platform.AIProvider, *kernel.Error)
-	Resolve     func(string) (platform.AIProvider, *kernel.Error)
-	Stage       func(platform.AIModelBinding, platform.AIProvider) *kernel.Error
+	Model       func(string) (platform.AIModel, platform.AIProvider, *platform.Error)
+	Resolve     func(string) (platform.AIProvider, *platform.Error)
+	Stage       func(platform.AIModelBinding, platform.AIProvider) *platform.Error
 	EmbedModel  func(string, platform.AIModel, platform.AIProvider, []string) ([][]float32, error)
 	Stopped     func() bool
 	Changed     func()
@@ -93,7 +92,7 @@ func (r Runtime) SourceReadable(store *records.Store, m platform.Member, id, fie
 
 func (r Runtime) Embed(name string, input []string, now time.Time) ([][]float32, error) {
 	return Embedder{
-		Model: func() (platform.AIModel, platform.AIProvider, *kernel.Error) {
+		Model: func() (platform.AIModel, platform.AIProvider, *platform.Error) {
 			return r.Model(name)
 		},
 		Stage: r.Stage,
@@ -132,7 +131,7 @@ func (r Runtime) PassageReadable(document, scope string, apps []string, reader *
 func (r Runtime) Context() Context {
 	return Context{Tenant: r.Tenant, Store: r.Store, Sync: r.Sync,
 		Read: func(read func(Context)) {
-			r.Read(func(current Runtime) *kernel.Error {
+			r.Read(func(current Runtime) *platform.Error {
 				read(current.Context())
 				return nil
 			})
@@ -170,9 +169,9 @@ func (r Runtime) Sync() {
 				r.SyncStore.MarkDirty(ref)
 			}
 		},
-		Corpus: func(changed map[string]bool, walked bool) ([]Source, *kernel.Error) {
+		Corpus: func(changed map[string]bool, walked bool) ([]Source, *platform.Error) {
 			var out []Source
-			refusal := r.Read(func(current Runtime) *kernel.Error {
+			refusal := r.Read(func(current Runtime) *platform.Error {
 				if walked {
 					out = current.Corpus().Changed(changed)
 				} else {
@@ -204,9 +203,9 @@ func (r Runtime) Status() platform.KnowledgeIndexStatus {
 	return r.Index.Status(r.Context())
 }
 
-func (r Runtime) CheckSetting(id, value string) *kernel.Error {
+func (r Runtime) CheckSetting(id, value string) *platform.Error {
 	return EmbeddingSetting{
-		Resolve: func(value string) (platform.AIProvider, *kernel.Error) {
+		Resolve: func(value string) (platform.AIProvider, *platform.Error) {
 			return r.Resolve(value)
 		},
 		Status: r.Status,

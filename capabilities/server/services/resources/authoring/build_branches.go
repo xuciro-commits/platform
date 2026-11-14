@@ -9,7 +9,6 @@ import (
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 
 	"platformserver/platform"
 	ontology "platformserver/services/ontology"
@@ -139,7 +138,7 @@ func (b *Build) branchEntity() platform.Entity {
 		Description: "A named overlay of resource drafts: saves append to its change set, instance data is never part of it, and a reviewed proposal merges it into the drafts as one release.",
 		Scope:       platform.Scope{Default: platform.ScopeNone, Levels: map[string]string{Builder: platform.ScopeTenant}},
 		Standard:    platform.Standard{Create: true, Edit: true, Archive: true, Roles: builder, Capability: "branches"},
-		Validate: func(c platform.Caller, record any) *kernel.Error {
+		Validate: func(c platform.Caller, record any) *platform.Error {
 			branch := record.(*Branch)
 			if !ontology.Named(branch.Name) || len(branch.Name) > 64 || len(branch.Title) > 200 || len(branch.Description) > 4096 {
 				return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "A branch name is lower-case letters and digits, 64 at most")
@@ -165,7 +164,7 @@ func (b *Build) branchEntity() platform.Entity {
 					Payload: []platform.Field{{Name: "decision", Type: "string", Required: true, Choices: []string{"approve", "changes"}, Description: "The decision"}, {Name: "note", Type: "string", Description: "Why"}},
 					Do:      reviewBranch},
 				{Name: "withdraw", Title: "Withdraw proposal", Description: "Return a proposed branch to editing.", From: []string{BranchProposed}, To: []string{BranchOpen}, Roles: builder, Capability: "branches", Payload: []platform.Field{},
-					Do: func(_ platform.Caller, record any, _ json.RawMessage, _ time.Time) *kernel.Error {
+					Do: func(_ platform.Caller, record any, _ json.RawMessage, _ time.Time) *platform.Error {
 						record.(*Branch).Proposal = nil
 						return nil
 					}},
@@ -175,11 +174,11 @@ func (b *Build) branchEntity() platform.Entity {
 				{Name: "close", Title: "Close", Description: "Abandon the branch.", From: []string{BranchOpen, BranchProposed}, To: []string{BranchClosed}, Roles: builder, Capability: "branches", Payload: []platform.Field{}}}}}
 }
 
-func branchInvalid(message string) *kernel.Error {
+func branchInvalid(message string) *platform.Error {
 	return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, message)
 }
 
-func saveBranchChange(c platform.Caller, record any, payload json.RawMessage, at time.Time) *kernel.Error {
+func saveBranchChange(c platform.Caller, record any, payload json.RawMessage, at time.Time) *platform.Error {
 	branch := record.(*Branch)
 	var raw map[string]json.RawMessage
 	var change BranchChange
@@ -227,7 +226,7 @@ func saveBranchChange(c platform.Caller, record any, payload json.RawMessage, at
 	return nil
 }
 
-func recordBranchCheck(_ platform.Caller, record any, payload json.RawMessage, _ time.Time) *kernel.Error {
+func recordBranchCheck(_ platform.Caller, record any, payload json.RawMessage, _ time.Time) *platform.Error {
 	branch := record.(*Branch)
 	var p struct {
 		Check json.RawMessage `json:"check"`
@@ -240,7 +239,7 @@ func recordBranchCheck(_ platform.Caller, record any, payload json.RawMessage, _
 	return nil
 }
 
-func (b *Build) proposeBranch(c platform.Caller, record any, payload json.RawMessage, at time.Time) *kernel.Error {
+func (b *Build) proposeBranch(c platform.Caller, record any, payload json.RawMessage, at time.Time) *platform.Error {
 	branch := record.(*Branch)
 	var p struct {
 		Reviewers []string        `json:"reviewers"`
@@ -285,7 +284,7 @@ func (b *Build) proposeBranch(c platform.Caller, record any, payload json.RawMes
 	return nil
 }
 
-func reviewBranch(c platform.Caller, record any, payload json.RawMessage, at time.Time) *kernel.Error {
+func reviewBranch(c platform.Caller, record any, payload json.RawMessage, at time.Time) *platform.Error {
 	branch := record.(*Branch)
 	var p struct {
 		Decision string `json:"decision"`
@@ -328,7 +327,7 @@ func (b Branch) Approved() error {
 	return nil
 }
 
-func mergeBranch(c platform.Caller, record any, payload json.RawMessage, at time.Time) *kernel.Error {
+func mergeBranch(c platform.Caller, record any, payload json.RawMessage, at time.Time) *platform.Error {
 	branch := record.(*Branch)
 	var p struct {
 		Candidate string          `json:"candidate"`

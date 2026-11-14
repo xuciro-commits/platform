@@ -6,7 +6,6 @@ import (
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 	"platformserver/kernel/records"
 	"platformserver/platform"
 )
@@ -86,16 +85,16 @@ func (o OptionalRoles) Links(c platform.Caller, entity string) []string {
 	return records.AppendRelationNeighbors(out, c.OwnedRelations(entity), entity)
 }
 
-func (o OptionalRoles) Link(c platform.Caller, from, to *pb.EntityRef, key string, now time.Time) *kernel.Error {
+func (o OptionalRoles) Link(c platform.Caller, from, to *pb.EntityRef, key string, now time.Time) *platform.Error {
 	if o.Linker == nil {
-		return &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
+		return &platform.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
 	}
 	return o.Linker.Link(c, from, to, key, now)
 }
 
-func (o OptionalRoles) Assign(c platform.Caller, rec *pb.ChangeRecord, a platform.Assignment) *kernel.Error {
+func (o OptionalRoles) Assign(c platform.Caller, rec *pb.ChangeRecord, a platform.Assignment) *platform.Error {
 	if o.Tasks == nil {
-		return &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
+		return &platform.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
 	}
 	return o.Tasks.Assign(c, rec, a)
 }

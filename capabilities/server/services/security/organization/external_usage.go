@@ -5,7 +5,6 @@ import (
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 	"platformserver/kernel/records"
 	"platformserver/platform"
 	controlowner "platformserver/services/security/control"
@@ -16,12 +15,12 @@ type ExternalUsage struct {
 	Store      *records.Store
 	Paths      func(*records.Store) map[string][][]string
 	Rules      platform.RuleEngine
-	Admit      func(platform.Member) *kernel.Error
+	Admit      func(platform.Member) *platform.Error
 	Record     func(m platform.Member, typ, id string, now time.Time) (any, bool)
 	GrantUsage func(id, until string) []platform.UnitGrantUsage
 	Root       func(platform.Caller) string
 	Caller     func(m platform.Member, app string) platform.Caller
-	Model      func() (Model, *kernel.Error)
+	Model      func() (Model, *platform.Error)
 }
 
 func (u ExternalUsage) External(c platform.Caller, id, until string, now time.Time, details bool) EnterpriseUsage {
@@ -56,7 +55,7 @@ func (u ExternalUsage) External(c platform.Caller, id, until string, now time.Ti
 	return result
 }
 
-func (u ExternalUsage) Check(c platform.Caller, id, until string, deleting bool, now time.Time) *kernel.Error {
+func (u ExternalUsage) Check(c platform.Caller, id, until string, deleting bool, now time.Time) *platform.Error {
 	if c.Replaying {
 		return nil
 	}
@@ -67,7 +66,7 @@ func (u ExternalUsage) Check(c platform.Caller, id, until string, deleting bool,
 	return nil
 }
 
-func (u ExternalUsage) Read(m platform.Member, id, until string, now time.Time) (EnterpriseUsage, *kernel.Error) {
+func (u ExternalUsage) Read(m platform.Member, id, until string, now time.Time) (EnterpriseUsage, *platform.Error) {
 	if err := u.Admit(m); err != nil {
 		return EnterpriseUsage{}, err
 	}

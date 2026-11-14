@@ -2,7 +2,6 @@ package platform
 
 import (
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 	"slices"
 	"strings"
 	"time"
@@ -373,8 +372,8 @@ type ConsolePolicies interface {
 	MarkingViews() []Marking
 	MarkingClearances(string) ([]string, []string)
 	Restore(AuthorizationState)
-	PrepareAccess(Caller, *pb.Submission, []string) (func(*pb.ChangeRecord), *kernel.Error)
-	PrepareProject(Caller, *pb.Submission, []string) (func(*pb.ChangeRecord), *kernel.Error)
+	PrepareAccess(Caller, *pb.Submission, []string) (func(*pb.ChangeRecord), *Error)
+	PrepareProject(Caller, *pb.Submission, []string) (func(*pb.ChangeRecord), *Error)
 	TeamGrants(string) []Grant
 	Access() AccessConfig
 	ProjectViews() []BuildProject

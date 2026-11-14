@@ -3,15 +3,14 @@ package host
 import (
 	"time"
 
-	"platformkernel/kernel"
 	"platformserver/platform"
 	automation "platformserver/services/automate/runtime"
 	controlowner "platformserver/services/security/control"
 )
 
-func (t *Tenant) chainRead(m platform.Member, ref string, now time.Time) (automation.Chain, *kernel.Error) {
+func (t *Tenant) chainRead(m platform.Member, ref string, now time.Time) (automation.Chain, *platform.Error) {
 	return automation.ChainReader{
-		Record: func(typ, id string) (any, *kernel.Error) {
+		Record: func(typ, id string) (any, *platform.Error) {
 			view, err := t.recordOf(m, typ, id, now)
 			return view.Record, err
 		},

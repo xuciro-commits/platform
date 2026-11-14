@@ -6,7 +6,6 @@ import (
 	"slices"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 	"platformserver/platform"
 )
 
@@ -16,12 +15,12 @@ type RunIndex struct {
 	Query      func(platform.RunIndexQuery) (platform.RunIndexPage, error)
 	Replace    func(entries []platform.RunIndexEntry) error
 	Refresh    func(rebuild func() ([]MonitoringCoverage, bool)) []MonitoringCoverage
-	FromOwners func(filter MonitoringRunFilter) (MonitoringRunPage, *kernel.Error)
+	FromOwners func(filter MonitoringRunFilter) (MonitoringRunPage, *platform.Error)
 	Observe    func(run MonitoringRun)
 }
 
-func (x RunIndex) Runs(filter MonitoringRunFilter) (MonitoringRunPage, *kernel.Error) {
-	var refusal *kernel.Error
+func (x RunIndex) Runs(filter MonitoringRunFilter) (MonitoringRunPage, *platform.Error) {
+	var refusal *platform.Error
 	coverage := slices.Clone(x.Refresh(func() ([]MonitoringCoverage, bool) {
 		coverage, failed := x.rebuild()
 		refusal = failed
@@ -37,7 +36,7 @@ func (x RunIndex) Runs(filter MonitoringRunFilter) (MonitoringRunPage, *kernel.E
 	return FromIndex(indexed.Entries, filter, coverage), nil
 }
 
-func (x RunIndex) fallback(filter MonitoringRunFilter) (MonitoringRunPage, *kernel.Error) {
+func (x RunIndex) fallback(filter MonitoringRunFilter) (MonitoringRunPage, *platform.Error) {
 	page, refusal := x.FromOwners(filter)
 	if refusal != nil {
 		return page, refusal
@@ -46,7 +45,7 @@ func (x RunIndex) fallback(filter MonitoringRunFilter) (MonitoringRunPage, *kern
 	return page, nil
 }
 
-func (x RunIndex) rebuild() ([]MonitoringCoverage, *kernel.Error) {
+func (x RunIndex) rebuild() ([]MonitoringCoverage, *platform.Error) {
 	previous, _ := x.Query(platform.RunIndexQuery{Tenant: x.Tenant, Scope: x.Scope, Offset: 0, Limit: 1000})
 	previousStatus := map[string]string{}
 	for _, entry := range previous.Entries {
@@ -74,17 +73,17 @@ func (x RunIndex) rebuild() ([]MonitoringCoverage, *kernel.Error) {
 		}
 		raw, err := json.Marshal(run)
 		if err != nil {
-			return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT, Message: fmt.Sprintf("run index: %v", err)}
+			return nil, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT, Message: fmt.Sprintf("run index: %v", err)}
 		}
 		entries = append(entries, platform.RunIndexEntry{ID: run.ID, Scope: x.Scope, Type: run.Type, Source: run.Source, App: RunResourceApp(run), Status: run.Status, At: run.When, Payload: raw})
 	}
 	if err := x.Replace(entries); err != nil {
-		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_UNSPECIFIED, Message: err.Error()}
+		return nil, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_UNSPECIFIED, Message: err.Error()}
 	}
 	return coverage, nil
 }
 
-func Records[T any](read func() ([]any, bool, *kernel.Error), coverage *MonitoringCoverage) ([]T, *kernel.Error) {
+func Records[T any](read func() ([]any, bool, *platform.Error), coverage *MonitoringCoverage) ([]T, *platform.Error) {
 	records, partial, refusal := read()
 	if refusal != nil {
 		if refusal.Code == pb.ErrorCode_ERROR_CODE_POLICY_DENIED || refusal.Code == pb.ErrorCode_ERROR_CODE_NOT_FOUND {

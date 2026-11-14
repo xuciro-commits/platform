@@ -7,7 +7,6 @@ import (
 	"iter"
 	"maps"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 	ruleexpr "platformserver/expr"
 	persistence "platformserver/kernel/store"
 	"platformserver/platform"
@@ -72,17 +71,17 @@ func FieldView(m platform.Member, source platform.EntityInfo) (view platform.Ent
 	return info, hidden
 }
 
-func ScopePolicy(info platform.EntityInfo, m platform.Member, directory ScopeDirectory, now time.Time, through func(reflect.Value) bool, engines ...platform.RuleEngine) (*RowFilter, *kernel.Error) {
+func ScopePolicy(info platform.EntityInfo, m platform.Member, directory ScopeDirectory, now time.Time, through func(reflect.Value) bool, engines ...platform.RuleEngine) (*RowFilter, *platform.Error) {
 	roles, scope := m.RolesIn(info.App), info.Scope
 	text := ruleexpr.Type{Kind: "text"}
-	deny := func() (*RowFilter, *kernel.Error) {
+	deny := func() (*RowFilter, *platform.Error) {
 		filter, err := CompilePolicy(info, boolLit(false), nil, engines...)
 		if err != nil {
-			return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_POLICY_DENIED}
+			return nil, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_POLICY_DENIED}
 		}
 		return filter, nil
 	}
-	compiled := func(expr ruleexpr.Expr, attributes ...RowAttribute) (*RowFilter, *kernel.Error) {
+	compiled := func(expr ruleexpr.Expr, attributes ...RowAttribute) (*RowFilter, *platform.Error) {
 		filter, err := CompilePolicy(info, expr, attributes, engines...)
 		if err != nil {
 			return deny()
@@ -102,7 +101,7 @@ func ScopePolicy(info platform.EntityInfo, m platform.Member, directory ScopeDir
 	}
 	if len(roles) == 0 {
 		if scope.Participants == nil {
-			return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_POLICY_DENIED}
+			return nil, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_POLICY_DENIED}
 		}
 		return compiled(participantExpr, participant...)
 	}
@@ -197,7 +196,7 @@ func scopeExpr(directory ScopeDirectory, m platform.Member, info platform.Entity
 	return ruleexpr.Expr{}, false
 }
 
-func Write(info platform.EntityInfo, receipt *pb.ChangeRecord, prev *Row, v reflect.Value) (*Row, *kernel.Error) {
+func Write(info platform.EntityInfo, receipt *pb.ChangeRecord, prev *Row, v reflect.Value) (*Row, *platform.Error) {
 	rec := Header(v)
 	stamp := platform.Stamp{By: receipt.GetSubmission().GetPrincipalId(), At: receipt.GetRecordedTime().AsTime(), Change: receipt.GetChangeId()}
 	change := RecordChange{Change: receipt.GetChangeId(), Schema: receipt.GetSubmission().GetSchema().GetName(), By: stamp.By, At: stamp.At, Fields: []FieldChange{}}

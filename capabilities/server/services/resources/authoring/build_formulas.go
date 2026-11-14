@@ -9,18 +9,17 @@ import (
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 	"platformserver/platform"
 	ontology "platformserver/services/ontology"
 )
 
-func computeRulesOf(o ontology.Object, lookup func(string) (platform.EntityInfo, bool)) func(platform.Caller, any, time.Time) *kernel.Error {
+func computeRulesOf(o ontology.Object, lookup func(string) (platform.EntityInfo, bool)) func(platform.Caller, any, time.Time) *platform.Error {
 	list, orderErr := ontology.FormulaOrder(o.Fields)
 	if len(list) == 0 {
 		return nil
 	}
 	lookup = ruleLookup(o, lookup)
-	return func(c platform.Caller, record any, now time.Time) *kernel.Error {
+	return func(c platform.Caller, record any, now time.Time) *platform.Error {
 		if orderErr != nil {
 			return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, orderErr.Error())
 		}

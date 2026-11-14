@@ -10,7 +10,6 @@ import (
 	"strings"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 	"platformserver/platform"
 )
 
@@ -54,7 +53,7 @@ func Inventory[T any](c platform.Caller) ([]T, error) {
 	}
 }
 
-func PublishRetained[T any](c platform.Caller, record *T, get func(*T) Family, set func(*T, Family), limit string, image func(*T) string, install func(platform.Caller, T) error) *kernel.Error {
+func PublishRetained[T any](c platform.Caller, record *T, get func(*T) Family, set func(*T, Family), limit string, image func(*T) string, install func(platform.Caller, T) error) *platform.Error {
 	family := get(record)
 	if family.Version >= 64 {
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, limit)

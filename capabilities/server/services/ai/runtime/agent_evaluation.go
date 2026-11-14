@@ -3,7 +3,6 @@ package agents
 import (
 	"fmt"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 	"platformserver/platform"
 )
 
@@ -46,9 +45,9 @@ func (a *Agents) evaluationVersion(d *platform.CompiledAgent) string {
 func (a *Agents) startEvaluation(c platform.Caller, id string, p struct {
 	Agent, Model, Candidate string
 	Suite                   bool
-}) (func(*pb.ChangeRecord), *kernel.Error) {
+}) (func(*pb.ChangeRecord), *platform.Error) {
 	if _, known := platform.Get[platform.Evaluation](c, id); known {
-		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
+		return nil, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
 	}
 	d := a.def(p.Agent)
 	digest, config := "", ""
@@ -75,7 +74,7 @@ func (a *Agents) startEvaluation(c platform.Caller, id string, p struct {
 		}
 	}
 	if d == nil || p.Model == "" {
-		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
+		return nil, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 	}
 	if p.Suite && len(d.Cases) == 0 {
 		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "The agent {agent} declares no cases", p.Agent)
@@ -96,7 +95,7 @@ func (a *Agents) AgentEvaluationRuntime() platform.AgentEvaluationRuntime {
 	return platform.AgentEvaluationRuntime{Tenant: a.tenant, Host: a.host, Definition: a.def, Compile: a.evaluationDefinition, Version: a.evaluationVersion, Prompt: a.prompt, Principal: a.AgentPrincipal, Reader: a.reader, Automation: a.automation, View: a.run, Use: a.use, ObserveKnowledge: a.ObserveAgentKnowledge, Compiled: a.Compiled}
 }
 
-func reason(err *kernel.Error) string {
+func reason(err *platform.Error) string {
 	if err.Message == "" {
 		return err.Error()
 	}

@@ -8,7 +8,6 @@ import (
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 	"platformserver/kernel/acceptedformat"
 	"platformserver/kernel/protocol"
 	"platformserver/platform"
@@ -17,9 +16,9 @@ import (
 type Decision struct {
 	Logs              map[platform.Authority]platform.ChangeLog
 	Receiving         map[platform.Authority]bool
-	InputIssues       map[*kernel.Error][]platform.FieldIssue
-	Failure           *kernel.Error
-	BusinessRefusals  map[*kernel.Error]platform.BusinessRefusalFact
+	InputIssues       map[*platform.Error][]platform.FieldIssue
+	Failure           *platform.Error
+	BusinessRefusals  map[*platform.Error]platform.BusinessRefusalFact
 	ProbeOnly         bool
 	Installations     []platform.ReleaseInstallation
 	CurrentSubmission *pb.Submission
@@ -77,7 +76,7 @@ func (d *Decision) ReadableAt(check func(*records.Store, time.Time) bool) bool {
 	return check(d.Records, at)
 }
 
-func (d *Decision) HoldChanges(ledger platform.Authority) (func(), *kernel.Error) {
+func (d *Decision) HoldChanges(ledger platform.Authority) (func(), *platform.Error) {
 	if d.Receiving[ledger] {
 		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The decision cannot re-enter its held ledger")
 	}
@@ -88,9 +87,9 @@ func (d *Decision) HoldChanges(ledger platform.Authority) (func(), *kernel.Error
 	return func() { delete(d.Receiving, ledger) }, nil
 }
 
-func (d *Decision) InputRefused(err *kernel.Error, issues []platform.FieldIssue) {
+func (d *Decision) InputRefused(err *platform.Error, issues []platform.FieldIssue) {
 	if d.InputIssues == nil {
-		d.InputIssues = map[*kernel.Error][]platform.FieldIssue{}
+		d.InputIssues = map[*platform.Error][]platform.FieldIssue{}
 	}
 	d.InputIssues[err] = issues
 }
@@ -99,7 +98,7 @@ func (d *Decision) Probing() bool { return d.ProbeOnly }
 
 func (d *Decision) Seen(c platform.Caller, keys ...string) { d.Notices.Seen(c.App, keys) }
 
-func (d *Decision) FailDecision(err *kernel.Error) {
+func (d *Decision) FailDecision(err *platform.Error) {
 	if d.Failure == nil {
 		d.Failure = err
 	}
@@ -112,7 +111,7 @@ func (d *Decision) DraftChanges(l platform.Authority, fork func() platform.Chang
 	return d.Logs[l]
 }
 
-func (d *Decision) BusinessRefused(answer *kernel.Error, fact platform.BusinessRefusalFact) {
+func (d *Decision) BusinessRefused(answer *platform.Error, fact platform.BusinessRefusalFact) {
 	if answer == nil {
 		return
 	}
@@ -122,7 +121,7 @@ func (d *Decision) BusinessRefused(answer *kernel.Error, fact platform.BusinessR
 		return
 	}
 	if d.BusinessRefusals == nil {
-		d.BusinessRefusals = map[*kernel.Error]platform.BusinessRefusalFact{}
+		d.BusinessRefusals = map[*platform.Error]platform.BusinessRefusalFact{}
 	}
 	d.BusinessRefusals[answer] = acceptedformat.CloneBusinessFact(fact)
 	d.InputRefused(answer, []platform.FieldIssue{{Code: "business_refusal", BusinessCode: fact.Code, Record: fact.Subject, Message: fact.Message, Translations: maps.Clone(fact.Translations), Path: []string{"$business"}}})

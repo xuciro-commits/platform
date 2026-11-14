@@ -7,13 +7,12 @@ import (
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 	"platformserver/platform"
 	functions "platformserver/services/functions/authoring"
 	"platformserver/services/resources/authoring"
 )
 
-func (t *Tenant) InvokeCapability(ctx context.Context, m platform.Member, q platform.CapabilityInvocation, now time.Time) (platform.CapabilityResult, *kernel.Error) {
+func (t *Tenant) InvokeCapability(ctx context.Context, m platform.Member, q platform.CapabilityInvocation, now time.Time) (platform.CapabilityResult, *platform.Error) {
 	answer := platform.CapabilityResult{Ref: q.Ref}
 	if refusal := t.Admits(m); refusal != nil {
 		return answer, refusal
@@ -21,7 +20,7 @@ func (t *Tenant) InvokeCapability(ctx context.Context, m platform.Member, q plat
 	if refusal := functions.CheckInvocation(q); refusal != nil {
 		return answer, refusal
 	}
-	prepared, refusal := recordRead(t, ctx, func(t *Tenant) (functions.CapabilityPreparation, *kernel.Error) {
+	prepared, refusal := recordRead(t, ctx, func(t *Tenant) (functions.CapabilityPreparation, *platform.Error) {
 		return t.prepareCapability(m, q, now)
 	})
 	if refusal != nil {
@@ -65,14 +64,14 @@ func (t *Tenant) InvokeCapability(ctx context.Context, m platform.Member, q plat
 	}
 }
 
-func (t *Tenant) prepareCapability(m platform.Member, q platform.CapabilityInvocation, now time.Time) (functions.CapabilityPreparation, *kernel.Error) {
+func (t *Tenant) prepareCapability(m platform.Member, q platform.CapabilityInvocation, now time.Time) (functions.CapabilityPreparation, *platform.Error) {
 	return functions.PrepareCapability(functions.CapabilityHooks{
 		Retained: func() (platform.CapabilityDescriptor, bool) { return t.retainedCapability(m, q.Ref, q.Version) },
 		Palette:  func() []platform.CapabilityDescriptor { return t.capabilities(m) },
-		ReadQuery: func() (json.RawMessage, *kernel.Error) {
+		ReadQuery: func() (json.RawMessage, *platform.Error) {
 			return platform.NewCaller(runtime{t: t}, m, q.Ref.App, false, false).ReadQueryVersion(q.Ref.App, q.Ref.Name, q.Version, q.Inputs, now)
 		},
-		Bind: func() (json.RawMessage, []string, *kernel.Error) {
+		Bind: func() (json.RawMessage, []string, *platform.Error) {
 			return pages.BindCapabilityInputs(platform.NewCaller(runtime{t: t, scoped: true}, m, q.Ref.App, false, false), q, now)
 		},
 	}, q)

@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 	"slices"
 	"strconv"
 	"strings"
@@ -113,19 +112,19 @@ func (k *resourceKind[T, D]) entity(b *Build) platform.Entity {
 		Standard:    platform.Standard{Create: true, Edit: true, Archive: true, Roles: []string{Builder}, Capability: k.capability},
 		Lifecycle: &platform.Lifecycle{Field: "state", Initial: "draft", States: []platform.State{{Name: "draft", Title: "Draft", Tone: "warning"}, {Name: "published", Title: "Published", Tone: "success"}},
 			Transitions: []platform.Transition{{Name: "publish", Title: "Publish", Description: k.transition, From: []string{"draft", "published"}, To: []string{"published"}, Roles: []string{Builder}, Capability: k.capability, Payload: []platform.Field{},
-				Do: func(c platform.Caller, record any, _ json.RawMessage, _ time.Time) *kernel.Error {
+				Do: func(c platform.Caller, record any, _ json.RawMessage, _ time.Time) *platform.Error {
 					return k.publish(b, c, record)
 				}}}}}
 }
 
-func (k *resourceKind[T, D]) publish(b *Build, c platform.Caller, record any) *kernel.Error {
+func (k *resourceKind[T, D]) publish(b *Build, c platform.Caller, record any) *platform.Error {
 	f, ok := record.(*T)
 	if !ok {
-		return &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
+		return &platform.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 	}
 	bound, err := k.check(b, *f)
 	if err != nil {
-		return &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, Message: err.Error()}
+		return &platform.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, Message: err.Error()}
 	}
 	*f = bound
 	message := k.limitMessage

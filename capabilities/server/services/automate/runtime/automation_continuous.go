@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"maps"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 	"platformserver/platform"
 	"slices"
 	"time"
@@ -26,7 +25,7 @@ type ContinuousWindowInput = platform.FlowWindowInput
 
 type BatchStateReference = platform.FlowBatchStateReference
 
-func admitBatch(frame *BatchFrame, declared platform.Continuous, batch Batch) *kernel.Error {
+func admitBatch(frame *BatchFrame, declared platform.Continuous, batch Batch) *platform.Error {
 	if declared.Intake != nil && batch.Source == nil || declared.Intake == nil && batch.Source != nil {
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "A source checkpoint must match the declared intake")
 	}
@@ -45,10 +44,10 @@ func admitBatch(frame *BatchFrame, declared platform.Continuous, batch Batch) *k
 		}
 	}
 	if batch.ID == "" {
-		return &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, Message: "the batch has no identity"}
+		return &platform.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, Message: "the batch has no identity"}
 	}
 	if declared.Batch > 0 && len(batch.Signals) > declared.Batch {
-		return &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT,
+		return &platform.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT,
 			Message: fmt.Sprintf("the batch carries %d signals, the flow accepts %d", len(batch.Signals), declared.Batch)}
 	}
 	if declared.Batch < 0 || declared.State < 0 || declared.FrameBytes < 0 || declared.CheckpointEvery < 0 || declared.CheckpointEvery > 1_000_000 {
@@ -65,7 +64,7 @@ func admitBatch(frame *BatchFrame, declared platform.Continuous, batch Batch) *k
 		return nil
 	}
 	if batch.Predecessor != frame.Cursor {
-		return &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT,
+		return &platform.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT,
 			Message: fmt.Sprintf("the batch follows %s, the flow consumed %s", batch.Predecessor, frame.Cursor)}
 	}
 	return nil
@@ -79,7 +78,7 @@ func sameSourceCheckpoint(a, b *SourceCheckpoint) bool {
 		a.Offset == b.Offset && a.Initialized == b.Initialized && slices.Equal(a.Sources, b.Sources)
 }
 
-func foldBatch(frame *BatchFrame, declared platform.Continuous, batch Batch, acceptedAt ...time.Time) (folded, rejected int, refusal *kernel.Error) {
+func foldBatch(frame *BatchFrame, declared platform.Continuous, batch Batch, acceptedAt ...time.Time) (folded, rejected int, refusal *platform.Error) {
 	if err := admitBatch(frame, declared, batch); err != nil {
 		return 0, 0, err
 	}
@@ -105,7 +104,7 @@ func foldBatch(frame *BatchFrame, declared platform.Continuous, batch Batch, acc
 			if len(acceptedAt) != 1 || acceptedAt[0].IsZero() {
 				return 0, 0, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "An event-time batch needs its accepted decision time")
 			}
-			var err *kernel.Error
+			var err *platform.Error
 			folded, rejected, err = foldWindow(&next, declared, batch, acceptedAt[0])
 			if err != nil {
 				return 0, 0, err
@@ -217,7 +216,7 @@ func pruneDeadLetters(frame *BatchFrame, declared platform.Continuous, now time.
 	}
 }
 
-func fold(frame *BatchFrame, declared platform.Continuous, signal Signal) *kernel.Error {
+func fold(frame *BatchFrame, declared platform.Continuous, signal Signal) *platform.Error {
 	state := map[string]any{}
 	if raw := frame.State["window"]; len(raw) > 0 {
 		if json.Unmarshal(raw, &state) != nil || state == nil {

@@ -3,8 +3,6 @@ package host
 import automation "platformserver/services/automate/runtime"
 
 import (
-	"platformkernel/kernel"
-
 	"platformserver/platform"
 )
 
@@ -14,10 +12,10 @@ func (t *Tenant) publish(e platform.Event) {
 	t.acted++
 }
 
-func (t *Tenant) planAcceptedEvent(e platform.Event) (platform.AcceptedEventPlan, *kernel.Error) {
+func (t *Tenant) planAcceptedEvent(e platform.Event) (platform.AcceptedEventPlan, *platform.Error) {
 	return automation.AcceptedEventPlanner{
 		Routed: t.router().Events,
-		Effects: func(e platform.Event, names []string) ([]platform.Effect, *kernel.Error) {
+		Effects: func(e platform.Event, names []string) ([]platform.Effect, *platform.Error) {
 			return t.eventEffects(e, names, true)
 		},
 		Apps:      t.LiveApps,

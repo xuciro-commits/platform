@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 	"time"
 )
 
@@ -19,7 +18,7 @@ type Assignment struct {
 	Answers []string
 }
 
-func (c Caller) Assign(r *pb.ChangeRecord, a Assignment) *kernel.Error {
+func (c Caller) Assign(r *pb.ChangeRecord, a Assignment) *Error {
 	if c.rt == nil {
 		return notFound()
 	}
@@ -36,18 +35,18 @@ type WorkHost interface {
 	Units(string, string, Date) []string
 	Holders(string, string, string, Date) []string
 	Recipients(Caller, time.Time, []Recipient) []string
-	Attempt(Caller, *pb.Submission, time.Time) (*pb.ChangeRecord, *kernel.Error)
-	Submit(Caller, *pb.Submission, time.Time) (*pb.ChangeRecord, *kernel.Error)
+	Attempt(Caller, *pb.Submission, time.Time) (*pb.ChangeRecord, *Error)
+	Submit(Caller, *pb.Submission, time.Time) (*pb.ChangeRecord, *Error)
 	ActiveRelease() string
-	ApprovalRelease(string, string, string) (string, *kernel.Error)
-	ApprovalExecution(Caller, ApprovalRequest) (WorkHost, *kernel.Error)
+	ApprovalRelease(string, string, string) (string, *Error)
+	ApprovalExecution(Caller, ApprovalRequest) (WorkHost, *Error)
 	Seen(Caller, ...string)
 }
 
 type AttachedWork interface{ AttachWork(WorkHost) }
 
 type Tasks interface {
-	Assign(c Caller, r *pb.ChangeRecord, a Assignment) *kernel.Error
+	Assign(c Caller, r *pb.ChangeRecord, a Assignment) *Error
 	Close(c Caller, r *pb.ChangeRecord, id string)
 }
 
@@ -63,7 +62,7 @@ const (
 
 type ApprovalOwner interface {
 	App
-	RequestApproval(Caller, *pb.Submission, time.Time) (*pb.ChangeRecord, *kernel.Error)
+	RequestApproval(Caller, *pb.Submission, time.Time) (*pb.ChangeRecord, *Error)
 }
 
 type ApprovalRequest struct {

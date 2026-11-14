@@ -4,7 +4,6 @@ import transport "platformserver/kernel/transport"
 
 import (
 	"net/http"
-	"platformkernel/kernel"
 	"time"
 
 	"platformserver/platform"
@@ -52,12 +51,12 @@ func (rt *routes) authorized(route transport.Route, app string, roles []string, 
 		if r.Method == http.MethodGet {
 			kind = "read"
 		}
-		authorize := func(t *Tenant) (platform.AuthzDecision, *kernel.Error) {
+		authorize := func(t *Tenant) (platform.AuthzDecision, *platform.Error) {
 			c := platform.NewCaller(runtime{t: t}, m, app, false, false)
 			return t.authorizeNative(c, route.Pattern, kind, roles, true), nil
 		}
 		var decision platform.AuthzDecision
-		var err *kernel.Error
+		var err *platform.Error
 		if t.quarantined() {
 			decision, err = authorize(t)
 		} else {
@@ -84,7 +83,7 @@ func (rt *routes) recordRead(route transport.Route, f func(http.ResponseWriter, 
 			return
 		}
 		buffered := transport.NewLaneBuffer(w)
-		_, err := coordinatedRecordRead(t, transport.WithLaneHolder(r.Context(), route.Pattern), func(t *Tenant) (struct{}, *kernel.Error) {
+		_, err := coordinatedRecordRead(t, transport.WithLaneHolder(r.Context(), route.Pattern), func(t *Tenant) (struct{}, *platform.Error) {
 			f(buffered, r, m, t)
 			return struct{}{}, nil
 		})

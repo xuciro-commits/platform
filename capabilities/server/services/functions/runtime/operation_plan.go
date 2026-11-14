@@ -8,7 +8,6 @@ import (
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 	"platformserver/platform"
 )
 
@@ -18,7 +17,7 @@ type OperationPlan struct {
 	Tenant    string
 	Member    func(string) (platform.Member, bool)
 	App       func(string) platform.App
-	Authorize func(applicant platform.Caller, owner string, op platform.Operation, at time.Time, sources []string, definition string) *kernel.Error
+	Authorize func(applicant platform.Caller, owner string, op platform.Operation, at time.Time, sources []string, definition string) *platform.Error
 	Closure   func(owner string, op platform.Operation, version int, release *string) (string, string, error)
 	InputKey  func(platform.OperationInputArtifact) error
 	Recording bool
@@ -30,8 +29,8 @@ type OperationPlan struct {
 	Rules     platform.RuleEngine
 }
 
-func (p OperationPlan) Plan(c platform.Caller, r *pb.ChangeRecord, q platform.OperationRequest, pending []platform.Effect, input *platform.OperationInputArtifact) (platform.OperationCall, platform.Effect, *kernel.Error) {
-	refuse := func(code pb.ErrorCode, msg string) (platform.OperationCall, platform.Effect, *kernel.Error) {
+func (p OperationPlan) Plan(c platform.Caller, r *pb.ChangeRecord, q platform.OperationRequest, pending []platform.Effect, input *platform.OperationInputArtifact) (platform.OperationCall, platform.Effect, *platform.Error) {
+	refuse := func(code pb.ErrorCode, msg string) (platform.OperationCall, platform.Effect, *platform.Error) {
 		return platform.OperationCall{}, platform.Effect{}, platform.Refuse(code, msg)
 	}
 	owner := q.App

@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"maps"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 	"platformserver/platform"
 	"slices"
 	"strings"
@@ -415,8 +414,8 @@ func (d *Console) ApplyAcceptedState(raw json.RawMessage) error {
 	return nil
 }
 
-func (d *Console) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *kernel.Error) {
-	return d.ledger.Receive(c, s, now, nil, func() (func(*pb.ChangeRecord), *kernel.Error) {
+func (d *Console) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *platform.Error) {
+	return d.ledger.Receive(c, s, now, nil, func() (func(*pb.ChangeRecord), *platform.Error) {
 		declared, _ := d.ledger.Catalog().Action(s.GetSchema().GetName())
 		if declared.Target == OperationType {
 			return d.decideOperation(c, s, now)
@@ -451,7 +450,7 @@ func (d *Console) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*p
 				}
 			}
 			var apply func(*pb.ChangeRecord)
-			var err *kernel.Error
+			var err *platform.Error
 			switch {
 			case declared.Target == ProfileType:
 				apply, err = d.decideProfile(c, s)
@@ -543,14 +542,14 @@ func (d *Console) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*p
 			}, err
 		}
 		if d.host == nil {
-			return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
+			return nil, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 		}
 		return platform.ControlDecision(c, s, now)
 	})
 }
 
-func (d *Console) decideMember(c platform.Caller, s *pb.Submission) (func(*pb.ChangeRecord), *kernel.Error) {
-	invalid := &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
+func (d *Console) decideMember(c platform.Caller, s *pb.Submission) (func(*pb.ChangeRecord), *platform.Error) {
+	invalid := &platform.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 	var p struct {
 		Subject, App, Role, Unit, Structure, From, Until, Reason string
 		Agent                                                    bool
@@ -567,7 +566,7 @@ func (d *Console) decideMember(c platform.Caller, s *pb.Submission) (func(*pb.Ch
 		}
 		bound := d.members[d.subjects[p.Subject]]
 		if m != nil || bound != nil && bound.Status != platform.MemberLeft {
-			return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
+			return nil, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
 		}
 		return func(*pb.ChangeRecord) {
 			d.members[id] = &platform.Member{ID: id, Tenant: d.tenant, Roles: map[string]string{}, Agent: p.Agent}
@@ -575,7 +574,7 @@ func (d *Console) decideMember(c platform.Caller, s *pb.Submission) (func(*pb.Ch
 		}, nil
 	}
 	if m == nil {
-		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
+		return nil, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
 	}
 	if s.GetSchema().GetName() == SchemaRevoke {
 		if p.App == "" {
@@ -614,7 +613,7 @@ func (d *Console) decideMember(c platform.Caller, s *pb.Submission) (func(*pb.Ch
 	}, nil
 }
 
-func (d *Console) Read(c platform.Caller, name string) (any, *kernel.Error) {
+func (d *Console) Read(c platform.Caller, name string) (any, *platform.Error) {
 	h := d.host
 	if h != nil && name == "notifications" {
 		return h.GovernanceRead(c, name)
@@ -656,7 +655,7 @@ func (d *Console) Read(c platform.Caller, name string) (any, *kernel.Error) {
 		return d.AccessRequests(c), nil
 	}
 	if h == nil || !c.Holds(PlatformApp, Admin) && (!c.Holds(PlatformApp, platform.Auditor) || !platform.AuditorMayRead(name)) {
-		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_POLICY_DENIED}
+		return nil, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_POLICY_DENIED}
 	}
 	switch name {
 	case "audit", "deliveries", "work", "connectors", "settings", "endpoints", "effects", "health", "personal-reads", "permissions":
@@ -684,9 +683,9 @@ func (d *Console) Read(c platform.Caller, name string) (any, *kernel.Error) {
 	return out, nil
 }
 
-func (d *Console) Input(c platform.Caller, name string, _ []byte, now time.Time) (any, *kernel.Error) {
+func (d *Console) Input(c platform.Caller, name string, _ []byte, now time.Time) (any, *platform.Error) {
 	if name != "heartbeat" || d.host == nil {
-		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_UNKNOWN_SCHEMA}
+		return nil, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_UNKNOWN_SCHEMA}
 	}
 	return nil, d.host.ConnectorHeartbeat(c, now)
 }
@@ -714,7 +713,7 @@ func operationActions() []platform.Action {
 	return []platform.Action{{Schema: SchemaOperationCall, Target: OperationType, Capability: "compute", Title: "Call operation", Description: "Invoke a registered typed operation through its owner and accepted work.", Roles: []string{platform.AnyMember}, Payload: []platform.Field{{Name: "app", Type: "string", Required: true, Description: "The operation owner"}, {Name: "name", Type: "string", Required: true, Description: "The registered operation name"}, {Name: "version", Type: "integer", Description: "The retained owner version"}, {Name: "key", Type: "string", Required: true, Description: "The stable invocation key"}, {Name: "inputs", Type: "json", Required: true, Description: "The typed operation input"}, {Name: "sources", Type: "string[]", Description: "Protected source references"}}}}
 }
 
-func (d *Console) decideOperation(c platform.Caller, s *pb.Submission, _ time.Time) (func(*pb.ChangeRecord), *kernel.Error) {
+func (d *Console) decideOperation(c platform.Caller, s *pb.Submission, _ time.Time) (func(*pb.ChangeRecord), *platform.Error) {
 	var q platform.OperationRequest
 	if json.Unmarshal(s.GetPayload(), &q) != nil || q.Key != s.GetIdempotencyKey() || s.GetTarget().GetId() != q.Key || q.App == "" {
 		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Choose an operation and stable input key")

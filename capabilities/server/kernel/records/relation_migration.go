@@ -6,7 +6,6 @@ import (
 	"strings"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 	"platformserver/platform"
 )
 
@@ -63,7 +62,7 @@ func (s *Store) LegacyRelationWritable(from, to string) bool {
 	return !fromOK || !toOK || a == nil || b == nil || a.Info().App != b.Info().App
 }
 
-func (s *Store) RelationMigrationPlan(c platform.Caller, binding platform.AssetBinding, link *platform.LinkType, legacy func() []platform.RelationLink, readable func(ref string) bool) (platform.RelationMigrationPlan, *kernel.Error) {
+func (s *Store) RelationMigrationPlan(c platform.Caller, binding platform.AssetBinding, link *platform.LinkType, legacy func() []platform.RelationLink, readable func(ref string) bool) (platform.RelationMigrationPlan, *platform.Error) {
 	plan := platform.RelationMigrationPlan{Binding: binding, Links: []platform.RelationLink{}}
 	if !slices.ContainsFunc(link.Roles, func(role string) bool { return slices.Contains(c.RolesHere(), role) }) {
 		return plan, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "The caller cannot migrate this relationship")
@@ -130,7 +129,7 @@ func MigrationLinks(binding platform.AssetBinding, link *platform.LinkType, plan
 	return out
 }
 
-func (s *Store) MigrationOverlaps(app string, m MigratedLink) *kernel.Error {
+func (s *Store) MigrationOverlaps(app string, m MigratedLink) *platform.Error {
 	parent, child := m.Request.Parent.Type+"/"+m.Request.Parent.ID, m.Request.Child.Type+"/"+m.Request.Child.ID
 	prior := s.Type(platform.RelationEntity(app).Type).Rows().Get(RelationID(m.Request.Binding.Ref.String(), parent, child))
 	if prior != nil && !Header(prior.Value).Archived {

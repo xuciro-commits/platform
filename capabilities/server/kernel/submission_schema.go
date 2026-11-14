@@ -6,7 +6,6 @@ import (
 
 	"google.golang.org/protobuf/proto"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 	"platformserver/kernel/acceptedformat"
 	"platformserver/platform"
 )
@@ -46,7 +45,7 @@ func (s *Sequence) CurrentSchema(app platform.App, sub *pb.Submission) *pb.Submi
 	return copy
 }
 
-func (s *Sequence) SchemaBinding(app platform.App, sub *pb.Submission, content string, schemaOf func(platform.App, platform.Action) (platform.SchemaVersion, error)) (*platform.SchemaVersion, *kernel.Error) {
+func (s *Sequence) SchemaBinding(app platform.App, sub *pb.Submission, content string, schemaOf func(platform.App, platform.Action) (platform.SchemaVersion, error)) (*platform.SchemaVersion, *platform.Error) {
 	var binding *platform.SchemaVersion
 	if content != "" {
 		binding = &platform.SchemaVersion{Version: content, Family: sub.GetSchema().GetVersion()}

@@ -8,7 +8,6 @@ import (
 	"strconv"
 	"strings"
 
-	"platformkernel/kernel"
 	"platformserver/platform"
 )
 
@@ -382,7 +381,7 @@ func (o *Owner) DraftAssets(before []platform.ReleaseAsset, kind platform.AssetK
 		return
 	}
 	c := o.host.Automation(platform.Caller{}, App)
-	var problem *kernel.Error
+	var problem *platform.Error
 	switch r := record.(type) {
 	case Source:
 		problem = o.checkSource(c, r)

@@ -2,7 +2,6 @@ package host
 
 import (
 	"context"
-	"platformkernel/kernel"
 	runtimekernel "platformserver/kernel"
 	"platformserver/platform"
 	"platformserver/services/actions"
@@ -19,7 +18,7 @@ func (t *Tenant) Health(now time.Time) TenantHealth {
 	if t.quarantined() {
 		return t.health(now)
 	}
-	health, refusal := recordRead(t, context.Background(), func(t *Tenant) (TenantHealth, *kernel.Error) { return t.health(now), nil })
+	health, refusal := recordRead(t, context.Background(), func(t *Tenant) (TenantHealth, *platform.Error) { return t.health(now), nil })
 	if refusal != nil {
 		return TenantHealth{Health: monitoring.Health{Status: "degraded", Readiness: []monitoring.HealthCondition{{Name: "journal", Ready: false, Detail: refusal.Error()}}}, Lane: t.laneHealth(now, true)}
 	}

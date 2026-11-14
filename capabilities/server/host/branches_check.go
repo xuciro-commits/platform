@@ -9,7 +9,6 @@ import (
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 	"platformserver/platform"
 	trialowner "platformserver/services/devops/trials"
 	"platformserver/services/resources/authoring"
@@ -66,7 +65,7 @@ func (t *Tenant) stageViewLocked(stage branches.Stage[*stagedDecision], now time
 	return view, nil
 }
 
-func (t *Tenant) branchWorldLocked(m platform.Member, id string, now time.Time) (*Tenant, *kernel.Error) {
+func (t *Tenant) branchWorldLocked(m platform.Member, id string, now time.Time) (*Tenant, *platform.Error) {
 	return branches.StagedWorld(t.branchWorkspace(), m, id, now, func(plan branches.WorldPlan) branches.Stage[*stagedDecision] {
 		return t.stageBranchLocked(m, plan.Branch.ID, plan.Actions, now)
 	}, func(stage branches.Stage[*stagedDecision]) (*Tenant, error) {
@@ -100,8 +99,8 @@ func (t *Tenant) stageGraphLocked(m platform.Member, stage branches.Stage[*stage
 	return graph, &stagedCandidate{StagedCandidate: trialowner.StagedCandidate{Candidate: candidate, Drafts: drafts}, reader: reader}
 }
 
-func (t *Tenant) evaluateBranch(m platform.Member, branch build.Branch, resolutions []branches.BranchResolution, sim *trialowner.CandidateSimulationRequest, now time.Time) (branches.Evaluation[trialowner.CandidateSimulation], *kernel.Error) {
-	return recordRead(t, context.Background(), func(t *Tenant) (branches.Evaluation[trialowner.CandidateSimulation], *kernel.Error) {
+func (t *Tenant) evaluateBranch(m platform.Member, branch build.Branch, resolutions []branches.BranchResolution, sim *trialowner.CandidateSimulationRequest, now time.Time) (branches.Evaluation[trialowner.CandidateSimulation], *platform.Error) {
+	return recordRead(t, context.Background(), func(t *Tenant) (branches.Evaluation[trialowner.CandidateSimulation], *platform.Error) {
 		return branches.Evaluate(t.branchWorkspace(), branches.Evaluator[stagedCandidate, trialowner.CandidateSimulation]{
 			Stage: func(actions []branches.Action) ([]branches.BranchResourceCheck, bool, branches.BranchGraphCheck, *stagedCandidate) {
 				stage := t.stageBranchLocked(m, branch.ID, actions, now)
@@ -111,7 +110,7 @@ func (t *Tenant) evaluateBranch(m platform.Member, branch build.Branch, resoluti
 				graph, staged := t.stageGraphLocked(m, stage, actions, now)
 				return stage.Resources, true, graph, staged
 			},
-			Simulate: func(staged *stagedCandidate) (trialowner.CandidateSimulation, *kernel.Error) {
+			Simulate: func(staged *stagedCandidate) (trialowner.CandidateSimulation, *platform.Error) {
 				return t.simulateCandidate(m, *sim, staged)
 			},
 			Summarize: trialowner.CandidateSimulation.Summary,
@@ -119,11 +118,11 @@ func (t *Tenant) evaluateBranch(m platform.Member, branch build.Branch, resoluti
 	})
 }
 
-func (t *Tenant) BranchChecks(m platform.Member, id string, request BranchCheckRequest, now time.Time) (BranchChecks, *kernel.Error) {
+func (t *Tenant) BranchChecks(m platform.Member, id string, request BranchCheckRequest, now time.Time) (BranchChecks, *platform.Error) {
 	return branches.ReadChecks(t.ReadBranch, t.evaluateBranch, m, id, request, now)
 }
 
-func (t *Tenant) RecheckBranch(m platform.Member, id string, request BranchCheckRequest, now time.Time) (branches.BranchDetail, *kernel.Error) {
+func (t *Tenant) RecheckBranch(m platform.Member, id string, request BranchCheckRequest, now time.Time) (branches.BranchDetail, *platform.Error) {
 	return branches.Recheck(t.branchFlow(), t.evaluateBranch, m, id, request, now)
 }
 
@@ -131,17 +130,17 @@ func (t *Tenant) branchFlow() branches.Flow {
 	return branches.Flow{
 		Tenant: t.ID,
 		Read:   t.ReadBranch,
-		Submit: func(m platform.Member, submission *pb.Submission, now time.Time) *kernel.Error {
+		Submit: func(m platform.Member, submission *pb.Submission, now time.Time) *platform.Error {
 			_, refusal := t.Submit(m, submission, now)
 			return refusal
 		},
 		Detail: t.BranchDetail,
-		Plan: func(m platform.Member, branch build.Branch, resolutions []branches.BranchResolution, now time.Time) ([]branches.ResourcePlan, *kernel.Error) {
-			return branchRead(t, func(w branches.Workspace) ([]branches.ResourcePlan, *kernel.Error) {
+		Plan: func(m platform.Member, branch build.Branch, resolutions []branches.BranchResolution, now time.Time) ([]branches.ResourcePlan, *platform.Error) {
+			return branchRead(t, func(w branches.Workspace) ([]branches.ResourcePlan, *platform.Error) {
 				return w.Plan(m, branch, resolutions, now)
 			})
 		},
-		Evaluate: func(m platform.Member, branch build.Branch, now time.Time) (branches.BranchCheck, *kernel.Error) {
+		Evaluate: func(m platform.Member, branch build.Branch, now time.Time) (branches.BranchCheck, *platform.Error) {
 			evaluation, refusal := t.evaluateBranch(m, branch, nil, nil, now)
 			return evaluation.Check, refusal
 		},
@@ -152,34 +151,34 @@ func (t *Tenant) branchFlow() branches.Flow {
 	}
 }
 
-func (t *Tenant) RebaseBranch(m platform.Member, id string, request branches.BranchResolveRequest, now time.Time) (branches.BranchDetail, []branches.BranchResourceDiff, *kernel.Error) {
+func (t *Tenant) RebaseBranch(m platform.Member, id string, request branches.BranchResolveRequest, now time.Time) (branches.BranchDetail, []branches.BranchResourceDiff, *platform.Error) {
 	return t.branchFlow().Rebase(m, id, request, now)
 }
 
-func (t *Tenant) ProposeBranch(m platform.Member, id string, request BranchProposeRequest, now time.Time) (branches.BranchDetail, *kernel.Error) {
+func (t *Tenant) ProposeBranch(m platform.Member, id string, request BranchProposeRequest, now time.Time) (branches.BranchDetail, *platform.Error) {
 	return branches.Propose(t.branchFlow(), t.evaluateBranch, m, id, request, now)
 }
 
-func (t *Tenant) MergeBranch(m platform.Member, id string, request BranchMergeRequest, now time.Time) (BranchMergeResult, *kernel.Error) {
+func (t *Tenant) MergeBranch(m platform.Member, id string, request BranchMergeRequest, now time.Time) (BranchMergeResult, *platform.Error) {
 	if refusal := t.Admits(m); refusal != nil {
 		return BranchMergeResult{}, refusal
 	}
 	return branches.MergeBranch[trialowner.CandidateSimulation](m, id, request.Resolutions, request.Simulation != nil, now, t.applyBranch, t.saveBranchCandidate, t.BranchDetail)
 }
 
-func (t *Tenant) applyBranch(m platform.Member, id string, resolutions []branches.BranchResolution, simulate bool, now time.Time) (branches.MergePlan, *kernel.Error) {
-	return decideOnImage(t, context.Background(), "branch:merge", func(t *Tenant) (branches.MergePlan, *kernel.Error) {
+func (t *Tenant) applyBranch(m platform.Member, id string, resolutions []branches.BranchResolution, simulate bool, now time.Time) (branches.MergePlan, *platform.Error) {
+	return decideOnImage(t, context.Background(), "branch:merge", func(t *Tenant) (branches.MergePlan, *platform.Error) {
 		return t.prepareBranchMerge(m, id, resolutions, simulate, now)
-	}, func(t *Tenant, candidate preparedAccepted, plan branches.MergePlan, refusal *kernel.Error) (branches.MergePlan, *kernel.Error) {
+	}, func(t *Tenant, candidate preparedAccepted, plan branches.MergePlan, refusal *platform.Error) (branches.MergePlan, *platform.Error) {
 		_, refusal = t.finishPreparedSubmission(m, candidate, nil, refusal)
 		return plan, refusal
 	})
 }
 
-func (t *Tenant) prepareBranchMerge(m platform.Member, id string, resolutions []branches.BranchResolution, simulate bool, now time.Time) (branches.MergePlan, *kernel.Error) {
+func (t *Tenant) prepareBranchMerge(m platform.Member, id string, resolutions []branches.BranchResolution, simulate bool, now time.Time) (branches.MergePlan, *platform.Error) {
 	var none branches.MergePlan
 	if t.quarantined() {
-		return none, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
+		return none, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
 	}
 	if refusal := t.recordReadRefusal(); refusal != nil {
 		return none, refusal

@@ -11,7 +11,6 @@ import (
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 	runtimekernel "platformserver/kernel"
 	"platformserver/kernel/acceptedformat"
 	"platformserver/platform"
@@ -25,7 +24,7 @@ import (
 	controlowner "platformserver/services/security/control"
 )
 
-func (t *Tenant) eventEffects(e platform.Event, names []string, preparing bool) ([]platform.Effect, *kernel.Error) {
+func (t *Tenant) eventEffects(e platform.Event, names []string, preparing bool) ([]platform.Effect, *platform.Error) {
 	planned, refusal := t.writebackEffects(e, preparing)
 	if refusal != nil {
 		return nil, refusal
@@ -39,7 +38,7 @@ func (t *Tenant) emit(e platform.Event, names []string) {
 	t.outbound.Add(t.current(), planned...)
 }
 
-func (t *Tenant) emitFor(c platform.Caller, kind, key, entity string, data any, now time.Time) (int, *kernel.Error) {
+func (t *Tenant) emitFor(c platform.Caller, kind, key, entity string, data any, now time.Time) (int, *platform.Error) {
 	planned, err := t.planAppEffects(c, kind, key, entity, data, now, nil)
 	if err != nil {
 		return 0, err
@@ -49,7 +48,7 @@ func (t *Tenant) emitFor(c platform.Caller, kind, key, entity string, data any, 
 	return len(planned), nil
 }
 
-func (t *Tenant) planAppEffects(c platform.Caller, kind, key, entity string, data any, now time.Time, staged []platform.Effect) ([]platform.Effect, *kernel.Error) {
+func (t *Tenant) planAppEffects(c platform.Caller, kind, key, entity string, data any, now time.Time, staged []platform.Effect) ([]platform.Effect, *platform.Error) {
 	return actions.AppEffectPlan{Tenant: t.ID, App: t.App(c.App), Endpoints: t.endpoints.All(), Run: c.AgentRun(),
 		Bind: func(resource platform.AssetRef) ([]platform.AssetBinding, error) {
 			return t.bindApplications(resource, t.releases.Active(), "")
@@ -127,14 +126,14 @@ func (t *Tenant) settle(effect string, o platform.Outcome, now time.Time) {
 }
 
 func (t *Tenant) settleWithUsage(effect string, o platform.Outcome, usage *platform.AIUsage, now time.Time) {
-	_, _ = decideOnImage(t, context.Background(), "effect:settle", func(t *Tenant) (struct{}, *kernel.Error) {
+	_, _ = decideOnImage(t, context.Background(), "effect:settle", func(t *Tenant) (struct{}, *platform.Error) {
 		if t.quarantined() || o.Generation != 0 && !t.operationClaims().Current(effect, o.Generation) {
 			return struct{}{}, nil
 		}
 		o = t.operationClaims().Revalidated(effect, o, func(x platform.Effect) bool { return t.operationAllowed(x, now) })
 		t.settleAccepted(effect, o, usage, now)
 		return struct{}{}, nil
-	}, func(t *Tenant, candidate preparedAccepted, value struct{}, refusal *kernel.Error) (struct{}, *kernel.Error) {
+	}, func(t *Tenant, candidate preparedAccepted, value struct{}, refusal *platform.Error) (struct{}, *platform.Error) {
 		if len(candidate.entry.Body) != 0 {
 			t.finishEffect(effect, candidate)
 		}
@@ -254,11 +253,11 @@ func (t *Tenant) stageEffectAnswer(draft *stagedDecision, x platform.Effect, out
 		}
 	}()
 	return actions.EffectAnswer{Tenant: t.ID, Draft: draft,
-		Authorize: func(c platform.Caller, permission string) *kernel.Error {
+		Authorize: func(c platform.Caller, permission string) *platform.Error {
 			return draft.authorizeNative(c, permission, "action", nil, t.App(c.App) != nil)
 		},
 		Model: func() (platform.App, *pb.Submission) { return t.gatewayRuntime().Answer(x, out, usage) },
-		Decide: func(c platform.Caller, a platform.App, s *pb.Submission, at time.Time) *kernel.Error {
+		Decide: func(c platform.Caller, a platform.App, s *pb.Submission, at time.Time) *platform.Error {
 			_, refusal := draft.Decide(c, a, s, at)
 			return refusal
 		},
@@ -289,7 +288,7 @@ func (t *Tenant) stageEffectAnswer(draft *stagedDecision, x platform.Effect, out
 		Finish: draft.finishStaged}.Stage(x, out, at)
 }
 
-func (d *stagedDecision) finishStaged(at time.Time) *kernel.Error {
+func (d *stagedDecision) finishStaged(at time.Time) *platform.Error {
 	if d.Failure != nil {
 		return d.Failure
 	}
@@ -299,7 +298,7 @@ func (d *stagedDecision) finishStaged(at time.Time) *kernel.Error {
 	return d.stageObservers()
 }
 
-func (d *stagedDecision) answerRequests(now time.Time) *kernel.Error {
+func (d *stagedDecision) answerRequests(now time.Time) *platform.Error {
 	return actions.RequestAnswers{Tenant: d.tenant.ID,
 		Pending: func() bool { return len(d.requests) > 0 },
 		Pop: func() actions.PendingRequest {
@@ -313,10 +312,10 @@ func (d *stagedDecision) answerRequests(now time.Time) *kernel.Error {
 		Attempt:   d.Attempt,
 		Router:    func() actions.Router { return d.routingTenant().router() },
 		Automated: d.tenant.automated,
-		Reply: func(c platform.Caller, reply *pb.Submission, at time.Time) *kernel.Error {
+		Reply: func(c platform.Caller, reply *pb.Submission, at time.Time) *platform.Error {
 			_, err := platform.Decide(c, d.tenant.App(c.App), reply, at)
 			return err
 		},
-		Failure:     func() *kernel.Error { return d.Failure },
+		Failure:     func() *platform.Error { return d.Failure },
 		Unsupported: unsupportedStagedEffect}.Run(now)
 }

@@ -7,7 +7,6 @@ import (
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 	"platformserver/platform"
 )
 
@@ -48,13 +47,13 @@ type ActionChecks struct {
 	Transition platform.Transition
 	Lifecycle  string
 	Moves      bool
-	Read       func() (json.RawMessage, *kernel.Error)
+	Read       func() (json.RawMessage, *platform.Error)
 	Entity     func(string) (platform.EntityInfo, bool)
 	Say        func(string) string
 	Localize   func([]platform.FieldIssue) []platform.FieldIssue
 }
 
-func (a ActionChecks) Check(action platform.Action, request ActionCheckRequest, decision platform.AuthzDecision, at time.Time) (ActionCheckResult, *kernel.Error) {
+func (a ActionChecks) Check(action platform.Action, request ActionCheckRequest, decision platform.AuthzDecision, at time.Time) (ActionCheckResult, *platform.Error) {
 	caller, transition, lifecycle, hasTransition, read, entity, say, localize := a.Caller, a.Transition, a.Lifecycle, a.Moves, a.Read, a.Entity, a.Say, a.Localize
 	result := ActionCheckResult{Allowed: decision.Allow, Conditions: []ActionConditionCheck{}, Authorization: &decision}
 	if !decision.Allow {

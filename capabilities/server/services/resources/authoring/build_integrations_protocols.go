@@ -7,7 +7,6 @@ import (
 	"strings"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 	"platformserver/platform"
 	ontology "platformserver/services/ontology"
 )
@@ -156,7 +155,7 @@ func protocolReadSources(reads []string) map[string]string {
 	return sources
 }
 
-func (b *Build) readProtocol(c platform.Caller, name string) (any, *kernel.Error) {
+func (b *Build) readProtocol(c platform.Caller, name string) (any, *platform.Error) {
 	for _, typ := range sortedTypes(b.installed) {
 		entity := b.installed[typ]
 		for _, provision := range entity.Protocols {
@@ -165,7 +164,7 @@ func (b *Build) readProtocol(c platform.Caller, name string) (any, *kernel.Error
 					continue
 				}
 				if owner, ok := b.host.(interface {
-					ReadProtocolRecords(platform.Caller, string) ([]any, *kernel.Error)
+					ReadProtocolRecords(platform.Caller, string) ([]any, *platform.Error)
 				}); ok {
 					return owner.ReadProtocolRecords(c, typ)
 				}
@@ -173,7 +172,7 @@ func (b *Build) readProtocol(c platform.Caller, name string) (any, *kernel.Error
 			}
 		}
 	}
-	return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
+	return nil, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
 }
 
 type ConnectionKind struct {

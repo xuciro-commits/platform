@@ -6,22 +6,21 @@ import (
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 	persistence "platformserver/kernel/store"
 	"platformserver/platform"
 )
 
 type ImageRead[T any] struct {
 	Quarantined func() bool
-	Load        func() (read func() (T, *kernel.Error, error), next <-chan struct{})
+	Load        func() (read func() (T, *platform.Error, error), next <-chan struct{})
 	Count       func(outcome string)
-	Fallback    func() (T, *kernel.Error)
+	Fallback    func() (T, *platform.Error)
 }
 
-func (r ImageRead[T]) Run(ctx context.Context) (value T, refusal *kernel.Error) {
+func (r ImageRead[T]) Run(ctx context.Context) (value T, refusal *platform.Error) {
 	for attempt := 0; attempt < 3; attempt++ {
 		if ctx.Err() != nil || r.Quarantined() {
-			return value, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
+			return value, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
 		}
 		read, next := r.Load()
 		if read == nil {
@@ -46,7 +45,7 @@ func (r ImageRead[T]) Run(ctx context.Context) (value T, refusal *kernel.Error) 
 		select {
 		case <-ctx.Done():
 			timer.Stop()
-			return value, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
+			return value, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
 		case <-next:
 			timer.Stop()
 		case <-timer.C:
@@ -61,10 +60,10 @@ type ReadView[S any] struct {
 	Open    func(S, context.Context)
 	Close   func(S)
 	Failure func(S) error
-	Refusal func(S) *kernel.Error
+	Refusal func(S) *platform.Error
 }
 
-func ReadInView[S, T any](v ReadView[S], state S, ctx context.Context, read func(S) (T, *kernel.Error)) (value T, refusal *kernel.Error, failure error) {
+func ReadInView[S, T any](v ReadView[S], state S, ctx context.Context, read func(S) (T, *platform.Error)) (value T, refusal *platform.Error, failure error) {
 	view, err := v.Fork(state, ctx)
 	if err != nil {
 		return value, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The read scope could not be prepared: {reason}", err.Error()), err
@@ -73,7 +72,7 @@ func ReadInView[S, T any](v ReadView[S], state S, ctx context.Context, read func
 		v.Close(view)
 		if err := v.Failure(view); err != nil {
 			var zero T
-			value, refusal, failure = zero, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}, err
+			value, refusal, failure = zero, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}, err
 		}
 	}()
 	v.Open(view, ctx)
@@ -84,7 +83,7 @@ func ReadInView[S, T any](v ReadView[S], state S, ctx context.Context, read func
 	return value, refusal, nil
 }
 
-func RecoverImageRead[T any](quarantine func(error), value *T, refusal **kernel.Error, failure *error) {
+func RecoverImageRead[T any](quarantine func(error), value *T, refusal **platform.Error, failure *error) {
 	recovered := recover()
 	if recovered == nil {
 		return
@@ -99,10 +98,10 @@ func RecoverImageRead[T any](quarantine func(error), value *T, refusal **kernel.
 		quarantine(err)
 	}
 	var zero T
-	*value, *refusal = zero, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
+	*value, *refusal = zero, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
 }
 
-func RecoverLockedRead[T any](record, quarantine func(error), value *T, refusal **kernel.Error) {
+func RecoverLockedRead[T any](record, quarantine func(error), value *T, refusal **platform.Error) {
 	recovered := recover()
 	if recovered == nil {
 		return
@@ -117,5 +116,5 @@ func RecoverLockedRead[T any](record, quarantine func(error), value *T, refusal 
 		quarantine(err)
 	}
 	var zero T
-	*value, *refusal = zero, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
+	*value, *refusal = zero, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
 }

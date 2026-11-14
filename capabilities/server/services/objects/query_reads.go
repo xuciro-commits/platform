@@ -5,7 +5,6 @@ import (
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 	"platformserver/kernel/records"
 	"platformserver/platform"
 )
@@ -17,10 +16,10 @@ type QueryReads struct {
 	Schema        func(q platform.NamedQuery) platform.ValueSchema
 	Entity        func(typ string) (platform.EntityInfo, bool)
 	Authorization platform.AuthorizationEngine
-	Run           func(m platform.Member, q platform.NamedQuery, of string, now time.Time) (RecordPage, *kernel.Error)
+	Run           func(m platform.Member, q platform.NamedQuery, of string, now time.Time) (RecordPage, *platform.Error)
 }
 
-func (r QueryReads) Query(c platform.Caller, app, name string, inputs json.RawMessage, now time.Time) (json.RawMessage, *kernel.Error) {
+func (r QueryReads) Query(c platform.Caller, app, name string, inputs json.RawMessage, now time.Time) (json.RawMessage, *platform.Error) {
 	q, ok := r.Named(app, name)
 	if !ok {
 		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_NOT_FOUND, "Named query is unavailable")
@@ -28,7 +27,7 @@ func (r QueryReads) Query(c platform.Caller, app, name string, inputs json.RawMe
 	return r.declared(c, q, inputs, now)
 }
 
-func (r QueryReads) QueryVersion(c platform.Caller, app, name string, version int, inputs json.RawMessage, now time.Time) (json.RawMessage, *kernel.Error) {
+func (r QueryReads) QueryVersion(c platform.Caller, app, name string, version int, inputs json.RawMessage, now time.Time) (json.RawMessage, *platform.Error) {
 	q, ok := r.Version(c.Member, platform.AssetRef{App: app, Kind: platform.AssetQuery, Name: name}, version)
 	if !ok {
 		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "Retained query is unavailable to this member")
@@ -40,7 +39,7 @@ func (r QueryReads) QueryVersion(c platform.Caller, app, name string, version in
 	return r.declared(c, q, inputs, now)
 }
 
-func (r QueryReads) RuleQuery(c platform.Caller, set platform.RuleCollection, input json.RawMessage, now time.Time) (json.RawMessage, *kernel.Error) {
+func (r QueryReads) RuleQuery(c platform.Caller, set platform.RuleCollection, input json.RawMessage, now time.Time) (json.RawMessage, *platform.Error) {
 	q, ok := r.Version(c.Member, platform.AssetRef{App: set.App, Kind: platform.AssetQuery, Name: set.Query}, set.Version)
 	if !ok || q.Object != set.Object || (q.By == "") != (set.Of == "") {
 		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "Rule collection declaration is unavailable")
@@ -55,7 +54,7 @@ func (r QueryReads) RuleQuery(c platform.Caller, set platform.RuleCollection, in
 	return r.QueryVersion(c, set.App, set.Query, set.Version, input, now)
 }
 
-func (r QueryReads) declared(c platform.Caller, q platform.NamedQuery, inputs json.RawMessage, now time.Time) (json.RawMessage, *kernel.Error) {
+func (r QueryReads) declared(c platform.Caller, q platform.NamedQuery, inputs json.RawMessage, now time.Time) (json.RawMessage, *platform.Error) {
 	target, refusal := DeclaredQueryFor(inputs)
 	if refusal != nil {
 		return nil, refusal

@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 	functionauthoring "platformserver/services/functions/authoring"
 
 	"platformserver/platform"
@@ -35,8 +34,8 @@ func evalEqual(a, b []byte) bool {
 	return (platform.EvaluationPolicy{}).Matches(a, b)
 }
 
-func (b *Build) submitEvaluation(c platform.Caller, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *kernel.Error) {
-	return b.ledger.Receive(c, s, now, nil, func() (func(*pb.ChangeRecord), *kernel.Error) {
+func (b *Build) submitEvaluation(c platform.Caller, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *platform.Error) {
+	return b.ledger.Receive(c, s, now, nil, func() (func(*pb.ChangeRecord), *platform.Error) {
 		if !c.Automation || !c.Staging() {
 			return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "Function evaluations require the accepted model effect path")
 		}
@@ -48,7 +47,7 @@ func (b *Build) submitEvaluation(c platform.Caller, s *pb.Submission, now time.T
 				start.PlanRevision == 0 || start.PlanDigest == "" || start.Model == "" || start.ModelConfig == "" ||
 				start.Version < 1 || start.Definition.Name != start.Function || start.Definition.Check() != nil ||
 				len(start.Policy.Cases) < 1 || len(start.Policy.Cases) > 5 {
-				return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
+				return nil, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 			}
 			installed, _, ok := b.FunctionDefinition(start.Function, start.Version)
 			if start.Set == nil && (!ok || !evalEqual(platform.Raw(installed), platform.Raw(start.Definition))) {
@@ -64,7 +63,7 @@ func (b *Build) submitEvaluation(c platform.Caller, s *pb.Submission, now time.T
 				Model: start.Model, ModelConfig: start.ModelConfig, Policy: []platform.EvaluationPolicy{start.Policy}, State: "pending", CostComplete: true}
 			for i, test := range start.Policy.Cases {
 				if start.Definition.ValidateOutput(test.Expected) != nil || len(test.Input) > start.Definition.MaxInputBytes {
-					return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
+					return nil, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 				}
 				for repeat := 1; repeat <= EvaluationRepeats; repeat++ {
 					run.Attempts = append(run.Attempts, EvaluationAttempt{Case: test.Name, Repeat: repeat,
@@ -84,7 +83,7 @@ func (b *Build) submitEvaluation(c platform.Caller, s *pb.Submission, now time.T
 		var answer platform.Answer
 		if !exists || run.State != "pending" || json.Unmarshal(s.GetPayload(), &answer) != nil ||
 			(answer.Outcome != "accepted" && answer.Outcome != "refused") || answer.Call == "" {
-			return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
+			return nil, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 		}
 		index := -1
 		for i := range run.Attempts {
@@ -94,12 +93,12 @@ func (b *Build) submitEvaluation(c platform.Caller, s *pb.Submission, now time.T
 			}
 		}
 		if index < 0 || answer.InputTokens < 0 || answer.OutputTokens < 0 || answer.CostUSD < 0 || answer.LatencyMillis < 0 {
-			return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
+			return nil, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 		}
 		a := &run.Attempts[index]
 		var definition platform.AIFunction
 		if json.Unmarshal([]byte(run.Definition), &definition) != nil || len(run.Policy) != 1 {
-			return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
+			return nil, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 		}
 		a.Outcome, a.Reason = answer.Outcome, cmp.Or(answer.Reason, answer.Code)
 		if len(a.Reason) > 1024 {
@@ -256,10 +255,10 @@ func (b *Build) checkTestPlanAsset(asset platform.ReleaseAsset, name string, ver
 	return nil
 }
 
-func (b *Build) submitTestPlan(c platform.Caller, s *pb.Submission, at time.Time) (*pb.ChangeRecord, *kernel.Error) {
-	return b.ledger.Receive(c, s, at, nil, func() (func(*pb.ChangeRecord), *kernel.Error) {
+func (b *Build) submitTestPlan(c platform.Caller, s *pb.Submission, at time.Time) (*pb.ChangeRecord, *platform.Error) {
+	return b.ledger.Receive(c, s, at, nil, func() (func(*pb.ChangeRecord), *platform.Error) {
 		if !c.Holds(ID, Builder) {
-			return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_POLICY_DENIED}
+			return nil, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_POLICY_DENIED}
 		}
 		plan, ok := platform.Get[TestPlan](c, s.GetTarget().GetId())
 		if !ok || plan.Archived || plan.DefinitionVersion >= 64 {

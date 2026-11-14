@@ -10,14 +10,13 @@ import (
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 	"platformserver/platform"
 )
 
 type DispatchReadback struct {
 	Client       Client
 	Observations Observations
-	Records      func(member, typ string, query platform.Query, at time.Time) ([]any, *kernel.Error)
+	Records      func(member, typ string, query platform.Query, at time.Time) ([]any, *platform.Error)
 }
 
 func (d DispatchReadback) Read(run platform.DispatchRun, at time.Time) platform.DispatchReading {
@@ -149,8 +148,8 @@ type DispatchReadPlan struct {
 
 type DispatchPoll struct {
 	Schedule *StatusReads
-	Pending  func() ([]platform.DispatchRun, *kernel.Error)
-	Plan     func(id string) (DispatchReadPlan, *kernel.Error)
+	Pending  func() ([]platform.DispatchRun, *platform.Error)
+	Plan     func(id string) (DispatchReadPlan, *platform.Error)
 	Read     func(run platform.DispatchRun) platform.DispatchReading
 	Answer   func(plan DispatchReadPlan, reading platform.DispatchReading)
 }

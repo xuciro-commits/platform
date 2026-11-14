@@ -9,7 +9,6 @@ import (
 
 	"go.opentelemetry.io/otel/trace"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 	"platformserver/platform"
 )
 
@@ -93,14 +92,14 @@ type AppEffectPlan struct {
 	Exists    func(id string) bool
 }
 
-func (p AppEffectPlan) Plan(c platform.Caller, kind, key, entity string, data any, now time.Time, staged []platform.Effect) ([]platform.Effect, *kernel.Error) {
+func (p AppEffectPlan) Plan(c platform.Caller, kind, key, entity string, data any, now time.Time, staged []platform.Effect) ([]platform.Effect, *platform.Error) {
 	if p.App == nil || key == "" {
-		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
+		return nil, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 	}
 	emits := p.App.Manifest().Emits
 	i := slices.IndexFunc(emits, func(e platform.EffectKind) bool { return e.Name == kind })
 	if i < 0 {
-		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
+		return nil, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 	}
 	typ, _, _ := strings.Cut(entity, "/")
 	resource := platform.AssetRef{App: c.App, Kind: platform.AssetObject, Name: typ}
@@ -117,7 +116,7 @@ func (p AppEffectPlan) Plan(c platform.Caller, kind, key, entity string, data an
 	}
 	body, err := json.Marshal(map[string]any{"type": c.App + "/" + kind, "timestamp": now, "data": data})
 	if err != nil {
-		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
+		return nil, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 	}
 	exists := func(id string) bool {
 		return p.Exists(id) || slices.ContainsFunc(staged, func(x platform.Effect) bool { return x.ID == id })

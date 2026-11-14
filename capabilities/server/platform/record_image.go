@@ -6,41 +6,40 @@ import (
 	"fmt"
 	"io"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 	"reflect"
 	"slices"
 	"time"
 )
 
-func (c Caller) ReadQuery(app, name string, inputs json.RawMessage, now time.Time) (json.RawMessage, *kernel.Error) {
+func (c Caller) ReadQuery(app, name string, inputs json.RawMessage, now time.Time) (json.RawMessage, *Error) {
 	if c.rt != nil {
 		return c.rt.ReadQuery(c, app, name, inputs, now)
 	}
 	return nil, Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Named queries require the host read path")
 }
 
-func (c Caller) ReadQueryVersion(app, name string, version int, inputs json.RawMessage, now time.Time) (json.RawMessage, *kernel.Error) {
+func (c Caller) ReadQueryVersion(app, name string, version int, inputs json.RawMessage, now time.Time) (json.RawMessage, *Error) {
 	if c.rt != nil {
 		return c.rt.ReadQueryVersion(c, app, name, version, inputs, now)
 	}
 	return nil, Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Retained queries require the host read path")
 }
 
-func (c Caller) ReadRecord(typ, id string, now time.Time) (json.RawMessage, *kernel.Error) {
+func (c Caller) ReadRecord(typ, id string, now time.Time) (json.RawMessage, *Error) {
 	if c.rt != nil {
 		return c.rt.ReadRecord(c, typ, id, now)
 	}
 	return nil, Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Record bindings require the host read path")
 }
 
-func (c Caller) ReadRecordPath(typ, id string, path []string, now time.Time) (json.RawMessage, []string, *kernel.Error) {
+func (c Caller) ReadRecordPath(typ, id string, path []string, now time.Time) (json.RawMessage, []string, *Error) {
 	if c.rt != nil {
 		return c.rt.ReadRecordPath(c, typ, id, path, now)
 	}
 	return nil, nil, Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Record paths require the host's scoped reads")
 }
 
-func (c Caller) RequestApproval(app string, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *kernel.Error) {
+func (c Caller) RequestApproval(app string, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *Error) {
 	if c.rt != nil {
 		return c.rt.RequestApproval(c, app, s, now)
 	}
@@ -165,7 +164,7 @@ type RecordSetRef struct {
 	Name   string `json:"name"`
 }
 
-func (c Caller) ruleRecordSet(object, id, name string, record any, at time.Time) (RecordSetResult, *kernel.Error) {
+func (c Caller) ruleRecordSet(object, id, name string, record any, at time.Time) (RecordSetResult, *Error) {
 	if runtime := c.StagedDecision(); runtime != nil {
 		return runtime.ReadRecordSetCandidate(c, object, id, name, Raw(record), at)
 	}
@@ -210,7 +209,7 @@ func LowerRecordSetPredicate(set RecordSet, expr Expr, lookup func(string) (Enti
 	return lowered, err
 }
 
-func (c Caller) ReadRecordSet(object, id, name string, at time.Time) (RecordSetResult, *kernel.Error) {
+func (c Caller) ReadRecordSet(object, id, name string, at time.Time) (RecordSetResult, *Error) {
 	if c.rt == nil {
 		return RecordSetResult{}, Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Declared record sets require the host")
 	}

@@ -4,13 +4,12 @@ import (
 	"fmt"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 	"platformserver/platform"
 )
 
 type Embedder struct {
-	Model func() (platform.AIModel, platform.AIProvider, *kernel.Error)
-	Stage func(binding platform.AIModelBinding, provider platform.AIProvider) *kernel.Error
+	Model func() (platform.AIModel, platform.AIProvider, *platform.Error)
+	Stage func(binding platform.AIModelBinding, provider platform.AIProvider) *platform.Error
 	Embed func(model platform.AIModel, provider platform.AIProvider, input []string) ([][]float32, error)
 }
 
@@ -29,7 +28,7 @@ func (e Embedder) Vectors(name string, input []string) ([][]float32, error) {
 	return e.Embed(model, pv, input)
 }
 
-func VectorSpace(name string, lookup func(string) (platform.AIModel, platform.AIProvider, *kernel.Error)) string {
+func VectorSpace(name string, lookup func(string) (platform.AIModel, platform.AIProvider, *platform.Error)) string {
 	m, pv, err := lookup(name)
 	if err != nil || m.Revision == 0 {
 		return name
@@ -39,11 +38,11 @@ func VectorSpace(name string, lookup func(string) (platform.AIModel, platform.AI
 }
 
 type EmbeddingSetting struct {
-	Resolve func(value string) (platform.AIProvider, *kernel.Error)
+	Resolve func(value string) (platform.AIProvider, *platform.Error)
 	Status  func() platform.KnowledgeIndexStatus
 }
 
-func (s EmbeddingSetting) Check(id, value string) *kernel.Error {
+func (s EmbeddingSetting) Check(id, value string) *platform.Error {
 	if id != platform.KnowledgeApp+"/"+platform.SettingKnowledgeEmbeddingNext && id != platform.KnowledgeApp+"/"+platform.SettingKnowledgeEmbeddingModel {
 		return nil
 	}

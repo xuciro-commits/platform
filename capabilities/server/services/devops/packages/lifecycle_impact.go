@@ -5,7 +5,6 @@ import (
 	"slices"
 	"strings"
 
-	"platformkernel/kernel"
 	"platformserver/kernel/records"
 	"platformserver/platform"
 	dataowner "platformserver/services/data"
@@ -18,10 +17,10 @@ type Impact struct {
 	Connection func(id string) (platform.PackageImpactConnection, bool, error)
 	Removals   func(removed, replaced map[platform.AssetRef]bool) []platform.PackageImpactReference
 	Extensions func(platform.ReleaseCandidate) ([]platform.PackageImpactExtension, error)
-	Runs       func(ref platform.AssetRef, offset int) (platform.ApplicationRunPage, *kernel.Error)
+	Runs       func(ref platform.AssetRef, offset int) (platform.ApplicationRunPage, *platform.Error)
 }
 
-func StoredImpact(store *records.Store, definitions []platform.Definition, active func(string) bool, extensions func(platform.ReleaseCandidate) ([]platform.PackageImpactExtension, error), runs func(platform.AssetRef, int) (platform.ApplicationRunPage, *kernel.Error)) Impact {
+func StoredImpact(store *records.Store, definitions []platform.Definition, active func(string) bool, extensions func(platform.ReleaseCandidate) ([]platform.PackageImpactExtension, error), runs func(platform.AssetRef, int) (platform.ApplicationRunPage, *platform.Error)) Impact {
 	resources := Resources(store)
 	return Impact{Resources: resources,
 		Records: func(typ string) (int, bool) {

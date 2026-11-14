@@ -4,19 +4,18 @@ import (
 	"encoding/json"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 	"platformserver/platform"
 )
 
 type EditProposalSource struct {
-	Operation func() (platform.OperationResult, *kernel.Error)
-	AI        func() (platform.OperationResult, *kernel.Error)
-	FlowRun   func() (platform.FlowInstance, *kernel.Error)
+	Operation func() (platform.OperationResult, *platform.Error)
+	AI        func() (platform.OperationResult, *platform.Error)
+	FlowRun   func() (platform.FlowInstance, *platform.Error)
 }
 
-func (s EditProposalSource) Read(engine, step string) (platform.EditProposal, *kernel.Error) {
+func (s EditProposalSource) Read(engine, step string) (platform.EditProposal, *platform.Error) {
 	var result platform.OperationResult
-	var refusal *kernel.Error
+	var refusal *platform.Error
 	switch engine {
 	case "compute":
 		result, refusal = s.Operation()

@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"maps"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 	"platformserver/platform"
 	"platformserver/services/ai/evaluation"
 	"slices"
@@ -203,7 +202,7 @@ func (a *Agents) runs(c platform.Caller, state ...string) []platform.AgentRunRec
 	return out
 }
 
-func (a *Agents) Read(c platform.Caller, name string) (any, *kernel.Error) {
+func (a *Agents) Read(c platform.Caller, name string) (any, *platform.Error) {
 	if name == "memories" {
 		about, _ := json.Marshal([]any{[]any{"for", "=", c.ID}, []any{"state", "!=", "forgotten"}})
 		out, _, _ := platform.Find[platform.Memory](a.host.Automation(c, platform.AgentApp), platform.Query{Domain: about, Sort: []string{"-created"}, Limit: 100})
@@ -211,7 +210,7 @@ func (a *Agents) Read(c platform.Caller, name string) (any, *kernel.Error) {
 	}
 	if name == "agent-overview" {
 		if c.Roles[platform.AgentApp] != platform.AgentAdmin {
-			return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_POLICY_DENIED}
+			return nil, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_POLICY_DENIED}
 		}
 		return a.AgentOverview(), nil
 	}
@@ -324,7 +323,7 @@ func (a *Agents) Finished(c platform.Caller, flow, step string) []string {
 
 func (a *Agents) Interested(_ []string, e platform.Event) bool { return a.interested(e) }
 
-func (a *Agents) Listen(c platform.Caller, e platform.Event, _ []string, now time.Time) *kernel.Error {
+func (a *Agents) Listen(c platform.Caller, e platform.Event, _ []string, now time.Time) *platform.Error {
 	return a.handle(c, e, now)
 }
 
@@ -333,7 +332,7 @@ func (a *Agents) interested(e platform.Event) bool {
 	return e.App == platform.WorkApp && s.GetSchema().GetName() == "work.task.complete" && strings.HasPrefix(s.GetTarget().GetId(), platform.AgentApp+":")
 }
 
-func (a *Agents) handle(c platform.Caller, e platform.Event, now time.Time) *kernel.Error {
+func (a *Agents) handle(c platform.Caller, e platform.Event, now time.Time) *platform.Error {
 	id := e.Record.GetSubmission().GetTarget().GetId()
 	for _, run := range a.runs(c, "waiting") {
 		if run.Task != id {
@@ -342,7 +341,7 @@ func (a *Agents) handle(c platform.Caller, e platform.Event, now time.Time) *ker
 		task, _ := platform.Get[platform.WorkTask](a.host.Automation(c, platform.WorkApp), id)
 		s := &pb.Submission{TenantId: a.tenant, PrincipalId: c.ID, Authority: platform.AgentApp, IdempotencyKey: fmt.Sprintf("%s:%d", run.ID, run.Revision+1),
 			Target: &pb.EntityRef{Type: platform.RunType, Id: run.ID}, Schema: &pb.SchemaRef{Name: platform.SchemaRunStep, Version: 1}, Payload: []byte("{}")}
-		_, err := a.ledger.Receive(c, s, now, nil, func() (func(*pb.ChangeRecord), *kernel.Error) {
+		_, err := a.ledger.Receive(c, s, now, nil, func() (func(*pb.ChangeRecord), *platform.Error) {
 			last := &run.Steps[len(run.Steps)-1]
 			last.Outcome += fmt.Sprintf("\nanswered by %s: %s", task.Assignee, cmp.Or(task.Answer, "done"))
 			run.State, run.Task = "running", ""
@@ -376,7 +375,7 @@ func (a *Agents) AgentEffectEnded(c platform.Caller, r *pb.ChangeRecord, x platf
 		ac := a.host.Automation(c, platform.AgentApp)
 		s := &pb.Submission{TenantId: a.tenant, PrincipalId: ac.ID, Authority: platform.AgentApp, IdempotencyKey: fmt.Sprintf("%s:%d", run.ID, run.Revision+1),
 			Target: &pb.EntityRef{Type: platform.RunType, Id: run.ID}, Schema: &pb.SchemaRef{Name: platform.SchemaRunStep, Version: 1}, Payload: []byte("{}")}
-		a.ledger.Receive(ac, s, now, nil, func() (func(*pb.ChangeRecord), *kernel.Error) {
+		a.ledger.Receive(ac, s, now, nil, func() (func(*pb.ChangeRecord), *platform.Error) {
 			return func(r *pb.ChangeRecord) { ac.Put(r, run) }, nil
 		})
 		return

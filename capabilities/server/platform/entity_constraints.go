@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 	"slices"
 	"strings"
 )
@@ -135,7 +134,7 @@ func ConstraintScopePath(info EntityInfo, scope string) ([]string, error) {
 	return path, nil
 }
 
-func (c Caller) RefuseConstraint(constraint Constraint, record string, values map[string]json.RawMessage, reason string) *kernel.Error {
+func (c Caller) RefuseConstraint(constraint Constraint, record string, values map[string]json.RawMessage, reason string) *Error {
 	issue := FieldIssue{Code: "constraint_violation", Constraint: constraint.Name, Record: record, Message: constraint.Message, Translations: constraint.Translations, Values: values, Reason: reason, Path: []string{constraint.Fields[0]}}
 	for _, field := range constraint.Fields[1:] {
 		issue.RelatedPaths = append(issue.RelatedPaths, []string{field})

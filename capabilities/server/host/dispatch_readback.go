@@ -7,7 +7,6 @@ import (
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 	"platformserver/platform"
 	"platformserver/services/resources/authoring"
 )
@@ -17,13 +16,13 @@ func (t *Tenant) ReadDispatches(at time.Time) {
 		return
 	}
 	dataowner.DispatchPoll{Schedule: &t.schedules.Dispatches,
-		Pending: func() ([]platform.DispatchRun, *kernel.Error) {
-			return recordRead(t, context.Background(), func(t *Tenant) ([]platform.DispatchRun, *kernel.Error) {
+		Pending: func() ([]platform.DispatchRun, *platform.Error) {
+			return recordRead(t, context.Background(), func(t *Tenant) ([]platform.DispatchRun, *platform.Error) {
 				return platform.PendingDispatches(t.automation(build.ID, false))
 			})
 		},
-		Plan: func(id string) (dataowner.DispatchReadPlan, *kernel.Error) {
-			return recordRead(t, context.Background(), func(t *Tenant) (dataowner.DispatchReadPlan, *kernel.Error) {
+		Plan: func(id string) (dataowner.DispatchReadPlan, *platform.Error) {
+			return recordRead(t, context.Background(), func(t *Tenant) (dataowner.DispatchReadPlan, *platform.Error) {
 				run, exists := platform.Get[platform.DispatchRun](t.automation(build.ID, false), id)
 				plan := dataowner.DispatchReadPlan{Run: run, Valid: exists && !slices.Contains([]string{"completed", "cancelled", "compensated"}, run.State)}
 				if plan.Valid {
@@ -38,7 +37,7 @@ func (t *Tenant) ReadDispatches(at time.Time) {
 		Read: func(run platform.DispatchRun) platform.DispatchReading { return t.readDispatchStatus(run, at) },
 		Answer: func(plan dataowner.DispatchReadPlan, reading platform.DispatchReading) {
 			run := plan.Run
-			_, _ = t.decideAutomated("dispatch:answer", build.ID, func(t *Tenant) (*pb.ChangeRecord, *kernel.Error) {
+			_, _ = t.decideAutomated("dispatch:answer", build.ID, func(t *Tenant) (*pb.ChangeRecord, *platform.Error) {
 				current, found := platform.Get[platform.DispatchRun](t.automation(build.ID, false), run.ID)
 				currentStamp, valid := t.statusReadStamp(current.Revision, current.Member, current.Source, current.Connection, current.Definition.Readback.Record != "")
 				if !found || current.Revision != run.Revision || !valid || currentStamp != plan.Stamp || t.readTransport().CheckDispatchRead(current, at) != nil {
@@ -55,7 +54,7 @@ func (t *Tenant) ReadDispatches(at time.Time) {
 }
 
 func (t *Tenant) readDispatchStatus(run platform.DispatchRun, at time.Time) platform.DispatchReading {
-	return dataowner.DispatchReadback{Client: t.dataClient(), Observations: t.observationSources(), Records: func(id, typ string, query platform.Query, at time.Time) ([]any, *kernel.Error) {
+	return dataowner.DispatchReadback{Client: t.dataClient(), Observations: t.observationSources(), Records: func(id, typ string, query platform.Query, at time.Time) ([]any, *platform.Error) {
 		member, _ := t.Member(id)
 		page, refusal := t.Records(context.Background(), member, typ, query, at)
 		return page.Records, refusal

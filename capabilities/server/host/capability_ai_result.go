@@ -6,19 +6,18 @@ import (
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 	"platformserver/platform"
 	functions "platformserver/services/functions/authoring"
 	"platformserver/services/resources/authoring"
 )
 
-func (t *Tenant) ReadCapabilityAI(ctx context.Context, m platform.Member, id string, now time.Time) (platform.OperationResult, *kernel.Error) {
-	return recordRead(t, ctx, func(t *Tenant) (platform.OperationResult, *kernel.Error) {
+func (t *Tenant) ReadCapabilityAI(ctx context.Context, m platform.Member, id string, now time.Time) (platform.OperationResult, *platform.Error) {
+	return recordRead(t, ctx, func(t *Tenant) (platform.OperationResult, *platform.Error) {
 		return t.readCapabilityAI(m, id, now)
 	})
 }
 
-func (t *Tenant) readCapabilityAI(m platform.Member, id string, now time.Time) (platform.OperationResult, *kernel.Error) {
+func (t *Tenant) readCapabilityAI(m platform.Member, id string, now time.Time) (platform.OperationResult, *platform.Error) {
 	answer := platform.OperationResult{ID: id}
 	if refusal := t.Admits(m); refusal != nil {
 		return answer, refusal

@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 	"platformserver/platform"
 	"slices"
 	"time"
@@ -136,7 +135,7 @@ func (h FlowBindingContext) Closure(app, name string, version int) (platform.Rel
 	closure, err := h.CloseCandidate([]platform.AssetRef{asset.Ref}, available, nil)
 	return closure, asset.Ref, err
 }
-func ReadRecordPath(c platform.Caller, typ, id string, path []string, now time.Time, entity func(string) (platform.EntityInfo, bool), read func(string, string, time.Time) (json.RawMessage, *kernel.Error)) (json.RawMessage, []string, *kernel.Error) {
+func ReadRecordPath(c platform.Caller, typ, id string, path []string, now time.Time, entity func(string) (platform.EntityInfo, bool), read func(string, string, time.Time) (json.RawMessage, *platform.Error)) (json.RawMessage, []string, *platform.Error) {
 	if len(path) == 0 || len(path) > 16 {
 		return nil, nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Record paths need 1–16 fields")
 	}

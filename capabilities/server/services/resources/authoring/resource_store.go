@@ -8,7 +8,6 @@ import (
 	"strings"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 	"platformserver/kernel/records"
 	"platformserver/platform"
 )
@@ -157,7 +156,7 @@ type WorkingStateList struct {
 	Resources []WorkingState `json:"resources"`
 }
 
-func ReadWorkingStates(branch string, read func(platform.Query) ([]any, *kernel.Error)) (WorkingStateList, *kernel.Error, error) {
+func ReadWorkingStates(branch string, read func(platform.Query) ([]any, *platform.Error)) (WorkingStateList, *platform.Error, error) {
 	states := []WorkingState{}
 	query := platform.Query{Domain: platform.Raw([][]any{{"branch", "=", branch}}), Limit: 500, Sort: []string{"id"}}
 	for {
@@ -181,7 +180,7 @@ func ReadWorkingStates(branch string, read func(platform.Query) ([]any, *kernel.
 	}
 }
 
-func ReadWorkingState(id string, raw json.RawMessage, refusal *kernel.Error) (WorkingStateView, *kernel.Error, error) {
+func ReadWorkingState(id string, raw json.RawMessage, refusal *platform.Error) (WorkingStateView, *platform.Error, error) {
 	view := WorkingStateView{ID: id}
 	if refusal != nil {
 		if refusal.Code != pb.ErrorCode_ERROR_CODE_NOT_FOUND {
@@ -216,7 +215,7 @@ func ProjectHidden(store *records.Store, tenant string, m platform.Member, et *r
 	return held == "" || held == platform.ProjectDiscovererRole
 }
 
-func MaskDraftObject(record any, m platform.Member, reader ConstructionDraftReader, mask func(canonical any) any) (any, *kernel.Error) {
+func MaskDraftObject(record any, m platform.Member, reader ConstructionDraftReader, mask func(canonical any) any) (any, *platform.Error) {
 	object, ok := record.(ontology.Object)
 	if !ok || !m.Holds(ID, Builder) || reader == nil {
 		return record, nil

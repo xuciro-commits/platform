@@ -13,7 +13,6 @@ import (
 
 	"google.golang.org/protobuf/proto"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 	persistence "platformserver/kernel/store"
 	"platformserver/platform"
 	"platformserver/services/automate/runtime"
@@ -54,9 +53,9 @@ func TestInvariantK13LaneWaitersLeaveAndDiagnosticsDoNotWait(t *testing.T) {
 		t.Fatal(err)
 	}
 	ctx, cancel := context.WithCancel(context.Background())
-	answered := make(chan *kernel.Error, 1)
+	answered := make(chan *platform.Error, 1)
 	go func() {
-		_, refusal := lockedRecordRead(live.Tenant, ctx, func(t *Tenant) (struct{}, *kernel.Error) { return struct{}{}, nil })
+		_, refusal := lockedRecordRead(live.Tenant, ctx, func(t *Tenant) (struct{}, *platform.Error) { return struct{}{}, nil })
 		answered <- refusal
 	}()
 	deadline := time.Now().Add(2 * time.Second)
@@ -83,7 +82,7 @@ func TestInvariantK13LaneWaitersLeaveAndDiagnosticsDoNotWait(t *testing.T) {
 		t.Fatalf("cancelled waiter still counted: %d", waiters)
 	}
 	live.Lane.Unlock()
-	if _, refusal := lockedRecordRead(live.Tenant, context.Background(), func(t *Tenant) (struct{}, *kernel.Error) { return struct{}{}, nil }); refusal != nil {
+	if _, refusal := lockedRecordRead(live.Tenant, context.Background(), func(t *Tenant) (struct{}, *platform.Error) { return struct{}{}, nil }); refusal != nil {
 		t.Fatalf("read after release: %v", refusal)
 	}
 }
@@ -228,7 +227,7 @@ func TestInvariantK13PublishedReadsDoNotWaitForBackgroundLane(t *testing.T) {
 	case <-time.After(time.Second):
 		t.Fatal("published changes did not wake live readers")
 	}
-	retained, refusal, err := readImageState(live.Tenant, image.state, t.Context(), func(scope *Tenant) (objects.RecordView, *kernel.Error) {
+	retained, refusal, err := readImageState(live.Tenant, image.state, t.Context(), func(scope *Tenant) (objects.RecordView, *platform.Error) {
 		return scope.recordOf(member, "build.alpha", "A1", invariantClock)
 	})
 	if err != nil || refusal != nil || json.Unmarshal(platform.Raw(retained.Record), &record) != nil || record["note"] != "before" {
@@ -254,11 +253,11 @@ func TestInvariantK13SQLReadsRetryWithoutMixingPositions(t *testing.T) {
 	type result struct {
 		position int64
 		sequence int
-		refusal  *kernel.Error
+		refusal  *platform.Error
 	}
 	answered := make(chan result, 1)
 	go func() {
-		value, refusal := coordinatedRecordRead(live.Tenant, t.Context(), func(scope *Tenant) (result, *kernel.Error) {
+		value, refusal := coordinatedRecordRead(live.Tenant, t.Context(), func(scope *Tenant) (result, *platform.Error) {
 			return result{position: scope.Projection.Current().Applied(), sequence: scope.Sequences.Clone()["position"]}, nil
 		})
 		value.refusal = refusal
@@ -286,7 +285,7 @@ func TestInvariantK13SQLReadsRetryWithoutMixingPositions(t *testing.T) {
 	}
 	state.position.Store(1)
 	executed := false
-	_, refusal := coordinatedRecordRead(live.Tenant, t.Context(), func(scope *Tenant) (struct{}, *kernel.Error) {
+	_, refusal := coordinatedRecordRead(live.Tenant, t.Context(), func(scope *Tenant) (struct{}, *platform.Error) {
 		executed = true
 		return struct{}{}, nil
 	})
@@ -312,7 +311,7 @@ func TestInvariantK13ConcurrentSubmissionsKeepOneSerialHistory(t *testing.T) {
 	type answer struct {
 		index   int
 		record  *pb.ChangeRecord
-		refusal *kernel.Error
+		refusal *platform.Error
 	}
 	answered := make(chan answer, len(submissions))
 	live.Lane.Lock()

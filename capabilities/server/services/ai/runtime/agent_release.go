@@ -7,7 +7,6 @@ import (
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 	"platformserver/platform"
 )
 
@@ -67,8 +66,8 @@ type ReleaseEvaluation struct {
 	Candidate    CandidateEvaluation
 	Existing     func(id string) (platform.Evaluation, bool)
 	DefaultModel func() string
-	Resolve      func(model string, options platform.ModelOptions) (string, *kernel.Error)
-	Accept       func(*pb.Submission) *kernel.Error
+	Resolve      func(model string, options platform.ModelOptions) (string, *platform.Error)
+	Accept       func(*pb.Submission) *platform.Error
 }
 
 func (r ReleaseEvaluation) model(candidate, name string) (string, error) {
@@ -167,7 +166,7 @@ func (s StepPreparation) Prepare(b platform.AgentResultStep, now time.Time) bool
 
 type EvaluationQueue struct {
 	Stopped  func() bool
-	Queued   func() ([]platform.Evaluation, *kernel.Error)
+	Queued   func() ([]platform.Evaluation, *platform.Error)
 	Current  func(id string) (platform.Evaluation, bool)
 	Evaluate func(ev platform.Evaluation, now time.Time, step func(*platform.Evaluation) bool) platform.Evaluation
 	Apply    func(platform.AgentResultStep, time.Time) bool

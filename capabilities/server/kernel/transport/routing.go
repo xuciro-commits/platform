@@ -6,11 +6,10 @@ import (
 	"google.golang.org/protobuf/encoding/protojson"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 	"platformserver/platform"
 )
 
-func Answering[M, T, R any](f func(*http.Request, M, T) (R, *kernel.Error)) func(http.ResponseWriter, *http.Request, M, T) {
+func Answering[M, T, R any](f func(*http.Request, M, T) (R, *platform.Error)) func(http.ResponseWriter, *http.Request, M, T) {
 	return func(w http.ResponseWriter, r *http.Request, m M, t T) {
 		out, refusal := f(r, m, t)
 		Answer(w, out, refusal)
@@ -24,7 +23,7 @@ func AnsweringOr[M, T, R any](failure int, f func(*http.Request, M, T) (R, error
 	}
 }
 
-func Bounded[M, T, B, R any](limit int64, message string, f func(*http.Request, M, T, B) (R, *kernel.Error)) func(http.ResponseWriter, *http.Request, M, T) {
+func Bounded[M, T, B, R any](limit int64, message string, f func(*http.Request, M, T, B) (R, *platform.Error)) func(http.ResponseWriter, *http.Request, M, T) {
 	return func(w http.ResponseWriter, r *http.Request, m M, t T) {
 		var body B
 		if DecodeBodyLimit(r, &body, limit) != nil {
@@ -36,10 +35,10 @@ func Bounded[M, T, B, R any](limit int64, message string, f func(*http.Request, 
 	}
 }
 
-func DecodeSubmission(body []byte, correctionOf string) (*pb.Submission, *kernel.Error) {
+func DecodeSubmission(body []byte, correctionOf string) (*pb.Submission, *platform.Error) {
 	sub := &pb.Submission{}
 	if protojson.Unmarshal(body, sub) != nil {
-		return sub, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
+		return sub, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 	}
 	if correctionOf != "" {
 		correlation := "correction:" + correctionOf

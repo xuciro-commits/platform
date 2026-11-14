@@ -6,7 +6,6 @@ import (
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 	"platformserver/kernel/records"
 	"platformserver/platform"
 	"platformserver/services/actions"
@@ -31,7 +30,7 @@ func (t *Tenant) integrationPending(typ, id string, execution *dataowner.Integra
 }
 
 func readOnly[T any](t *Tenant, read func(*Tenant) T) T {
-	value, _ := recordRead(t, context.Background(), func(t *Tenant) (T, *kernel.Error) { return read(t), nil })
+	value, _ := recordRead(t, context.Background(), func(t *Tenant) (T, *platform.Error) { return read(t), nil })
 	return value
 }
 
@@ -77,8 +76,8 @@ func (t *Tenant) integration() dataowner.Integration {
 	return dataowner.Integration{
 		Tenant: t.ID, Authority: build.ID, Rules: t.services.Rules, Files: t.files, Member: t.Member,
 		Automation: func() platform.Member { return caller().Member },
-		Sources: func() ([]dataowner.Source, *kernel.Error) {
-			return coordinatedRecordRead(t, context.Background(), func(t *Tenant) ([]dataowner.Source, *kernel.Error) {
+		Sources: func() ([]dataowner.Source, *platform.Error) {
+			return coordinatedRecordRead(t, context.Background(), func(t *Tenant) ([]dataowner.Source, *platform.Error) {
 				return t.DataOwner().ExecutionSources(caller())
 			})
 		},
@@ -88,31 +87,31 @@ func (t *Tenant) integration() dataowner.Integration {
 			return info.App, found
 		},
 		ReadSource: t.readSource,
-		ConnectionMarkings: func(connection string) (platform.MarkingSet, *kernel.Error) {
+		ConnectionMarkings: func(connection string) (platform.MarkingSet, *platform.Error) {
 			return readOnly(t, func(t *Tenant) platform.MarkingSet { return t.connectionMarkings(connection) }), nil
 		},
 		Source: t.sourcePreparation(), DeclaredRows: t.declaredRows, PrepareRows: t.prepareRows, AbsentRows: t.absentSourceRows,
 		Refused: t.integrationRefused, Submit: t.Submit, SubmitBackground: t.submitBackground,
-		SubmitSource: func(member platform.Member, submission *pb.Submission, binding *platform.DataSourceBinding, row dataowner.SourceRow, now time.Time) *kernel.Error {
+		SubmitSource: func(member platform.Member, submission *pb.Submission, binding *platform.DataSourceBinding, row dataowner.SourceRow, now time.Time) *platform.Error {
 			_, err := t.submit(member, submission, now, submitOptions{source: &dataowner.SourceApplication{Binding: binding, Row: row, Deleted: row.Deleted}})
 			return err
 		},
 		ObserveRun: t.observeOwnerRun, PipelineInputs: t.pipelineInputs,
 		Unguarded: t.unguarded, OutputVersion: t.datasetOutput,
-		PipelinePlan: func() (dataowner.PipelinePlan, *kernel.Error) {
+		PipelinePlan: func() (dataowner.PipelinePlan, *platform.Error) {
 			filter := platform.Expr{Op: "=", Kind: "boolean", Args: []platform.Expr{platform.ExprReference("text", "state"), platform.ExprLiteralValue("text", "published")}}
 			return readOnly(t, func(t *Tenant) dataowner.PipelinePlan {
 				return t.DataOwner().PlanPipelines(caller(), platform.Query{Filter: &filter, Sort: []string{"id"}, Limit: 200})
 			}), nil
 		},
-		CurrentPipeline: func(id string) (dataowner.Pipeline, *kernel.Error) {
-			return coordinatedRecordRead(t, context.Background(), func(t *Tenant) (dataowner.Pipeline, *kernel.Error) {
+		CurrentPipeline: func(id string) (dataowner.Pipeline, *platform.Error) {
+			return coordinatedRecordRead(t, context.Background(), func(t *Tenant) (dataowner.Pipeline, *platform.Error) {
 				pipeline, _ := platform.Get[dataowner.Pipeline](caller(), id)
 				return pipeline, nil
 			})
 		},
 		ScheduleExists: func(id string) bool {
-			exists, _ := coordinatedRecordRead(t, context.Background(), func(t *Tenant) (bool, *kernel.Error) {
+			exists, _ := coordinatedRecordRead(t, context.Background(), func(t *Tenant) (bool, *platform.Error) {
 				_, ok := platform.Get[platform.Schedule](caller(), id)
 				return ok, nil
 			})
@@ -121,8 +120,8 @@ func (t *Tenant) integration() dataowner.Integration {
 		PipelineProject: func(id string) string {
 			return readOnly(t, func(t *Tenant) string { return t.resourceProject(dataowner.PipelineType, id) })
 		},
-		ExecutionSchedules: func() ([]platform.Schedule, *kernel.Error) {
-			return coordinatedRecordRead(t, context.Background(), func(t *Tenant) ([]platform.Schedule, *kernel.Error) {
+		ExecutionSchedules: func() ([]platform.Schedule, *platform.Error) {
+			return coordinatedRecordRead(t, context.Background(), func(t *Tenant) ([]platform.Schedule, *platform.Error) {
 				return t.DataOwner().ExecutionSchedules(caller())
 			})
 		},

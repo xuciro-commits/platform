@@ -7,7 +7,6 @@ import (
 
 	"google.golang.org/protobuf/proto"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 	acceptedformat "platformserver/kernel/acceptedformat"
 	"platformserver/kernel/records"
 	"platformserver/platform"
@@ -41,16 +40,16 @@ type SourcePrepared struct {
 }
 
 type SourcePreparation struct {
-	Record    func(typ, id string, required bool) (SourceRecord, *kernel.Error)
-	Objects   func(object string) (platform.EntityInfo, map[string]bool, *kernel.Error)
-	Authorize func(m platform.Member, app, typ, id, action, kind string, fields []string, at time.Time) *kernel.Error
+	Record    func(typ, id string, required bool) (SourceRecord, *platform.Error)
+	Objects   func(object string) (platform.EntityInfo, map[string]bool, *platform.Error)
+	Authorize func(m platform.Member, app, typ, id, action, kind string, fields []string, at time.Time) *platform.Error
 	Selected  func(typ, id, attribute string, history []records.RecordChange, incoming *acceptedformat.SourceClaim) SelectedSourceValue
 	Restores  func(typ, id, change string) bool
 	Deletes   func(typ, id, connector string) bool
 	Claimed   func(object, id, connector string, info platform.EntityInfo) bool
 }
 
-func (s SourcePreparation) Prepare(m platform.Member, submission *pb.Submission, source *SourceApplication, now time.Time) (*SourcePrepared, *kernel.Error) {
+func (s SourcePreparation) Prepare(m platform.Member, submission *pb.Submission, source *SourceApplication, now time.Time) (*SourcePrepared, *platform.Error) {
 	if source.Deleted {
 		return s.prepareDeletion(m, submission, source, now)
 	}
@@ -94,7 +93,7 @@ func (s SourcePreparation) Prepare(m platform.Member, submission *pb.Submission,
 	return &SourcePrepared{Submission: copy, Origin: origin, Claims: claims, Restore: restore}, nil
 }
 
-func (s SourcePreparation) prepareDeletion(m platform.Member, submission *pb.Submission, source *SourceApplication, now time.Time) (*SourcePrepared, *kernel.Error) {
+func (s SourcePreparation) prepareDeletion(m platform.Member, submission *pb.Submission, source *SourceApplication, now time.Time) (*SourcePrepared, *platform.Error) {
 	typ, id := submission.GetTarget().GetType(), submission.GetTarget().GetId()
 	record, refusal := s.Record(typ, id, true)
 	if refusal != nil {
@@ -131,7 +130,7 @@ func (s SourcePreparation) prepareDeletion(m platform.Member, submission *pb.Sub
 	return &SourcePrepared{Submission: copy, Claims: claims}, nil
 }
 
-func (s SourcePreparation) Absent(object string, binding *platform.DataSourceBinding, current []SourceRow, now time.Time) ([]SourceRow, *kernel.Error) {
+func (s SourcePreparation) Absent(object string, binding *platform.DataSourceBinding, current []SourceRow, now time.Time) ([]SourceRow, *platform.Error) {
 	present, complete := PresentSourceRows(current)
 	if !complete {
 		return nil, nil

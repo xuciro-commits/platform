@@ -7,7 +7,6 @@ import (
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 
 	"platformserver/platform"
 )
@@ -38,7 +37,7 @@ func (h hostView) ConsoleSetting(name string) string {
 }
 func (h hostView) Languages() []string   { return h.t.i18n.Languages() }
 func (h hostView) TenantSuspended() bool { return h.t.console.Suspended() }
-func (h hostView) GovernanceRead(c platform.Caller, name string) (any, *kernel.Error) {
+func (h hostView) GovernanceRead(c platform.Caller, name string) (any, *platform.Error) {
 	switch name {
 	case "notifications":
 		return h.t.Notices.ForMember(c.ID), nil
@@ -63,9 +62,9 @@ func (h hostView) GovernanceRead(c platform.Caller, name string) (any, *kernel.E
 	case "permissions":
 		return h.t.Permissions(), nil
 	}
-	return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_UNKNOWN_SCHEMA}
+	return nil, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_UNKNOWN_SCHEMA}
 }
-func (h hostView) ConnectorHeartbeat(c platform.Caller, now time.Time) *kernel.Error {
+func (h hostView) ConnectorHeartbeat(c platform.Caller, now time.Time) *platform.Error {
 	t := h.t
 	if source := t.readOrigin; source != nil {
 		t = source

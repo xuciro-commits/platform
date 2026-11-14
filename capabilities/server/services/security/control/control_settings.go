@@ -8,7 +8,6 @@ import (
 	"sync/atomic"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 	"platformserver/platform"
 	"time"
 )
@@ -96,12 +95,12 @@ func (w *Words) Restore(words map[string]map[string]string) {
 	}
 }
 
-func (w *Words) Decide(s *pb.Submission, reset func()) (func(*pb.ChangeRecord), *kernel.Error) {
+func (w *Words) Decide(s *pb.Submission, reset func()) (func(*pb.ChangeRecord), *platform.Error) {
 	lang := strings.TrimSpace(s.GetTarget().GetId())
 	var p struct{ Text, Translation string }
 	json.Unmarshal(s.GetPayload(), &p)
 	if lang == "" || strings.ContainsAny(lang, " /") || strings.TrimSpace(p.Text) == "" {
-		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
+		return nil, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 	}
 	return func(*pb.ChangeRecord) {
 		w.Set(lang, p.Text, strings.TrimSpace(p.Translation))
@@ -110,7 +109,7 @@ func (w *Words) Decide(s *pb.Submission, reset func()) (func(*pb.ChangeRecord), 
 }
 
 func (w *Words) TranslationDecider(reset func()) Decider {
-	return func(_ platform.Caller, s *pb.Submission, _ time.Time) (func(*pb.ChangeRecord), *kernel.Error) {
+	return func(_ platform.Caller, s *pb.Submission, _ time.Time) (func(*pb.ChangeRecord), *platform.Error) {
 		return w.Decide(s, reset)
 	}
 }

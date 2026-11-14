@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 	"platformserver/platform"
 	"platformserver/services/functions/runtime"
 	controlowner "platformserver/services/security/control"
@@ -12,19 +11,19 @@ import (
 	"time"
 )
 
-func (t *Tenant) InvokeOperation(member platform.Member, q platform.OperationRequest, now time.Time) (platform.OperationCall, *kernel.Error) {
+func (t *Tenant) InvokeOperation(member platform.Member, q platform.OperationRequest, now time.Time) (platform.OperationCall, *platform.Error) {
 	if refusal := compute.CheckDirectCall(q); refusal != nil {
 		return platform.OperationCall{}, refusal
 	}
 	q.Sources = slices.Clone(q.Sources)
 	var prepared *preparedOperationInput
-	initial, refusal := recordRead(t, context.Background(), func(t *Tenant) (compute.CallPlan, *kernel.Error) {
+	initial, refusal := recordRead(t, context.Background(), func(t *Tenant) (compute.CallPlan, *platform.Error) {
 		return compute.CallSetup{Tenant: t.ID, Member: t.Member, App: t.App, Quarantined: t.quarantined,
 			Prior: func(callID string) (string, bool) {
 				x, ok := t.outbound.Get(callID)
 				return x.Body, ok
 			},
-			Authorize: func(current platform.Member, op platform.Operation) *kernel.Error {
+			Authorize: func(current platform.Member, op platform.Operation) *platform.Error {
 				c := platform.NewCaller(runtime{t: t, scoped: true}, current, q.App, false, false)
 				return authorizationRefusal(t.authorizeCapability(c, q.App, op.Name, op.Roles, op.Check() == nil, authorizationDetails{At: now, Sources: q.Sources}))
 			}}.Prepare(member, q)
@@ -59,7 +58,7 @@ func (t *Tenant) InvokeOperation(member platform.Member, q platform.OperationReq
 			return platform.OperationCall{}, err
 		}
 	} else {
-		keep, refusal := decideOnImage(t, context.Background(), "operation:call", func(t *Tenant) (bool, *kernel.Error) {
+		keep, refusal := decideOnImage(t, context.Background(), "operation:call", func(t *Tenant) (bool, *platform.Error) {
 			latest, ok := t.Member(current.ID)
 			if !ok || t.quarantined() || t.Admits(latest) != nil {
 				return false, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "The operation member is unavailable")
@@ -71,7 +70,7 @@ func (t *Tenant) InvokeOperation(member platform.Member, q platform.OperationReq
 			known := t.PriorOf(owner, q.Key).Known()
 			_, refusal := t.accept(owner, latest, s, now, acceptOptions{inputs: []*preparedOperationInput{prepared}})
 			return !known, refusal
-		}, func(t *Tenant, candidate preparedAccepted, keep bool, refusal *kernel.Error) (bool, *kernel.Error) {
+		}, func(t *Tenant, candidate preparedAccepted, keep bool, refusal *platform.Error) (bool, *platform.Error) {
 			_, refusal = t.finishPreparedSubmission(current, candidate, nil, refusal)
 			if _, rejected := t.Committed.Refusal(controlowner.PlatformApp + "/" + q.Key); rejected {
 				keep = false
@@ -98,8 +97,8 @@ func (t *Tenant) InvokeOperation(member platform.Member, q platform.OperationReq
 	return platform.OperationCall{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Accepted operation intent is unavailable")
 }
 
-func (t *Tenant) ReadOperation(ctx context.Context, member platform.Member, id string) (platform.OperationResult, *kernel.Error) {
-	return recordRead(t, ctx, func(t *Tenant) (platform.OperationResult, *kernel.Error) {
+func (t *Tenant) ReadOperation(ctx context.Context, member platform.Member, id string) (platform.OperationResult, *platform.Error) {
+	return recordRead(t, ctx, func(t *Tenant) (platform.OperationResult, *platform.Error) {
 		return t.operationResult(platform.NewCaller(runtime{t: t, scoped: true}, member, controlowner.PlatformApp, false, false), id)
 	})
 }

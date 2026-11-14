@@ -8,7 +8,6 @@ import (
 	"strings"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 	"platformserver/platform"
 )
 
@@ -34,7 +33,7 @@ func (h *Host) serveA2A(w http.ResponseWriter, r *http.Request) {
 	WriteJSON(w, http.StatusOK, actions.A2AServe(r.Body, r.Header.Get("A2A-Version"), agent, m.ID, actions.A2AHooks{
 		Published: t.published,
 		Run: func(id string) (platform.AgentRunRecord, bool) {
-			value, refusal := recordRead(t, r.Context(), func(t *Tenant) (pair[platform.AgentRunRecord, bool], *kernel.Error) {
+			value, refusal := recordRead(t, r.Context(), func(t *Tenant) (pair[platform.AgentRunRecord, bool], *platform.Error) {
 				x, ok := platform.Get[platform.AgentRunRecord](t.automation(platform.AgentApp, false), id)
 				return pair[platform.AgentRunRecord, bool]{x, ok}, nil
 			})

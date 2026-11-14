@@ -2,7 +2,6 @@ package automation
 
 import (
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 	"platformserver/platform"
 )
 
@@ -26,7 +25,7 @@ func (r *Retention) Release() {
 	}
 }
 
-func GuardPrepared(prepared platform.FlowPreparedDecision, f platform.ContinuousFlowOwner, caller platform.Caller, latest platform.FlowInstance, changed string, source *platform.FlowSourceCheckpoint, check func(platform.FlowBatchPreparation, platform.FlowSourceCheckpoint) *kernel.Error) *kernel.Error {
+func GuardPrepared(prepared platform.FlowPreparedDecision, f platform.ContinuousFlowOwner, caller platform.Caller, latest platform.FlowInstance, changed string, source *platform.FlowSourceCheckpoint, check func(platform.FlowBatchPreparation, platform.FlowSourceCheckpoint) *platform.Error) *platform.Error {
 	if !prepared.Matches(latest) {
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, changed)
 	}

@@ -5,21 +5,20 @@ import (
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 	"platformserver/platform"
 )
 
 type WorkDecision struct {
 	Owner     func(app string) platform.App
 	Listens   func(app string) bool
-	Authorize func(permission string, roles []string, declared bool) *kernel.Error
+	Authorize func(permission string, roles []string, declared bool) *platform.Error
 	State     func() platform.App
 	Routed    func(platform.Event) []string
 	Hops      func(int)
-	Finish    func() *kernel.Error
+	Finish    func() *platform.Error
 }
 
-func (w WorkDecision) Decide(c platform.Caller, task *Task, now time.Time) *kernel.Error {
+func (w WorkDecision) Decide(c platform.Caller, task *Task, now time.Time) *platform.Error {
 	owner := w.Owner(task.App)
 	if owner == nil {
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "Authorization denied at {layer}: {reason}", "verb", "The operation is unavailable in its owner declaration")
@@ -34,7 +33,7 @@ func (w WorkDecision) Decide(c platform.Caller, task *Task, now time.Time) *kern
 	if refusal := w.Authorize(permission, owner.Manifest().AllRoles(), declared); refusal != nil {
 		return refusal
 	}
-	var refusal *kernel.Error
+	var refusal *platform.Error
 	if task.Kind == "job" {
 		refusal = w.State().(platform.Runner).Run(c, task.Job.Name, now)
 	} else {

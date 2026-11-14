@@ -11,7 +11,6 @@ import (
 	controlowner "platformserver/services/security/control"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 	acceptedformat "platformserver/kernel/acceptedformat"
 	"platformserver/kernel/records"
 	"platformserver/platform"
@@ -24,20 +23,20 @@ import (
 func (t *Tenant) Applications(m platform.Member) []platform.ApplicationView {
 	return appowner.Applications(t.Definitions(m))
 }
-func (t *Tenant) PageView(m platform.Member, app, owner, page string) (platform.PageView, *kernel.Error) {
+func (t *Tenant) PageView(m platform.Member, app, owner, page string) (platform.PageView, *platform.Error) {
 	return appowner.PageView(t.Definitions(m), t.Entities(m), t.Catalog(m), app, owner, page)
 }
-func (t *Tenant) ApplicationRuns(m platform.Member, ref platform.AssetRef, offset, limit int, now time.Time, filters ...platform.ApplicationRunFilter) (platform.ApplicationRunPage, *kernel.Error) {
-	return recordRead(t, context.Background(), func(t *Tenant) (platform.ApplicationRunPage, *kernel.Error) {
+func (t *Tenant) ApplicationRuns(m platform.Member, ref platform.AssetRef, offset, limit int, now time.Time, filters ...platform.ApplicationRunFilter) (platform.ApplicationRunPage, *platform.Error) {
+	return recordRead(t, context.Background(), func(t *Tenant) (platform.ApplicationRunPage, *platform.Error) {
 		return t.applicationContext().ScopedRuns(m, ref, offset, limit, now, filters...)
 	})
 }
 
-func (t *Tenant) ApplicationRuntimeOf(m platform.Member, ref platform.AssetRef, now time.Time) (platform.ApplicationRuntime, *kernel.Error) {
+func (t *Tenant) ApplicationRuntimeOf(m platform.Member, ref platform.AssetRef, now time.Time) (platform.ApplicationRuntime, *platform.Error) {
 	if t.quarantined() {
 		return t.applicationContext().Runtime(m, ref, now)
 	}
-	return recordRead(t, context.Background(), func(t *Tenant) (platform.ApplicationRuntime, *kernel.Error) {
+	return recordRead(t, context.Background(), func(t *Tenant) (platform.ApplicationRuntime, *platform.Error) {
 		return t.applicationContext().Runtime(m, ref, now)
 	})
 }
@@ -47,8 +46,8 @@ func (t *Tenant) bindApplications(resource platform.AssetRef, release, dependenc
 func (h hostView) ApplicationBindings(resource platform.AssetRef, release, dependencies string) ([]platform.AssetBinding, error) {
 	return h.t.bindApplications(resource, release, dependencies)
 }
-func (t *Tenant) ApplicationRecordDiagnostic(m platform.Member, ref platform.AssetRef, typ, id string, now time.Time) (platform.ApplicationDiagnostic, *kernel.Error) {
-	return recordRead(t, context.Background(), func(t *Tenant) (platform.ApplicationDiagnostic, *kernel.Error) {
+func (t *Tenant) ApplicationRecordDiagnostic(m platform.Member, ref platform.AssetRef, typ, id string, now time.Time) (platform.ApplicationDiagnostic, *platform.Error) {
+	return recordRead(t, context.Background(), func(t *Tenant) (platform.ApplicationDiagnostic, *platform.Error) {
 		return t.applicationContext().RecordDiagnostic(m, ref, typ, id, now)
 	})
 }
@@ -57,7 +56,7 @@ func (t *Tenant) applicationContext() appowner.Context {
 	return appowner.Context{Tenant: t.ID, Admit: t.Admits, Definitions: t.Definitions, Entity: t.Entity, App: t.App,
 		Assets: func() ([]platform.ReleaseAsset, error) { return t.releaseAssetsLocked(nil, false) }, Candidate: t.releases.Candidate,
 		Candidates: func() map[string]json.RawMessage { return t.releases.Candidates() }, CloseCandidate: t.candidateWithBindings,
-		Rows: func(m platform.Member, typ string, q platform.Query, at time.Time) ([]any, *kernel.Error) {
+		Rows: func(m platform.Member, typ string, q platform.Query, at time.Time) ([]any, *platform.Error) {
 			page, err := t.objectOwner(t.Projection).SelectionFrom(t.Projection, m, typ, q, at)
 			return page.Records, err
 		},
@@ -79,13 +78,13 @@ func (t *Tenant) applicationContext() appowner.Context {
 				out = append(out, appowner.Computation{Effect: effect, Ref: platform.AssetRef{App: effect.App, Kind: platform.AssetCompute, Name: binding.Definition.Name}, Title: binding.Definition.Title, Call: binding.Call, Result: result})
 			}
 			return out
-		}, Effects: func(m platform.Member) ([]platform.Effect, *kernel.Error) {
+		}, Effects: func(m platform.Member) ([]platform.Effect, *platform.Error) {
 			value, err := t.read(m, "effects")
 			effects, _ := value.([]platform.Effect)
 			effects = slices.DeleteFunc(effects, func(effect platform.Effect) bool { return effect.Endpoint == acceptedformat.OperationEndpoint })
 			return effects, err
 		},
-		Jobs: func(m platform.Member) ([]appowner.Job, *kernel.Error) {
+		Jobs: func(m platform.Member) ([]appowner.Job, *platform.Error) {
 			value, err := t.read(m, "work")
 			tasks, _ := value.([]automation.Task)
 			out := []appowner.Job{}
@@ -94,7 +93,7 @@ func (t *Tenant) applicationContext() appowner.Context {
 			}
 			return out, err
 		},
-		Readable: t.readable, Quarantined: t.quarantined, RecoveryAllowed: func(m platform.Member) *kernel.Error {
+		Readable: t.readable, Quarantined: t.quarantined, RecoveryAllowed: func(m platform.Member) *platform.Error {
 			c := platform.NewCaller(runtime{t: t}, m, controlowner.PlatformApp, false, false)
 			return authorizationRefusal(t.authorizeNative(c, "application recovery", "read", []string{controlowner.Admin}, true))
 		},
@@ -119,7 +118,7 @@ func (t *Tenant) applicationContext() appowner.Context {
 		},
 		RuntimeOf: t.ApplicationRuntimeOf,
 		RunsPage:  t.ApplicationRuns,
-		RecordHistory: func(m platform.Member, typ, id string, now time.Time) ([]records.RecordChange, *kernel.Error) {
+		RecordHistory: func(m platform.Member, typ, id string, now time.Time) ([]records.RecordChange, *platform.Error) {
 			view, refusal := t.objectOwner(t.Projection).RecordDetail(m, typ, id, now, objects.RecordSectionHistory)
 			if refusal != nil {
 				return nil, refusal
@@ -131,7 +130,7 @@ func (t *Tenant) applicationContext() appowner.Context {
 		Decision:        func(key string) *platform.DecisionDefinition { return t.Committed.DecisionDefinition(key) },
 		SchemaVersion:   func(key string) (platform.SchemaVersion, bool) { return t.Committed.SchemaVersion(key) },
 		VisibleEvidence: t.visibleObservationEvidence,
-		AI:              t.applicationAILocked, AIUsage: t.applicationAIUsage, RecordCount: func(m platform.Member, typ string, at time.Time) (int, *kernel.Error) {
+		AI:              t.applicationAILocked, AIUsage: t.applicationAIUsage, RecordCount: func(m platform.Member, typ string, at time.Time) (int, *platform.Error) {
 			page, err := t.Records(t.readContext(), m, typ, platform.Query{Limit: 1}, at)
 			return page.Total, err
 		},

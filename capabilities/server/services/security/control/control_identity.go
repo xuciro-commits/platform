@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"maps"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 
 	"platformserver/platform"
 	"slices"
@@ -356,14 +355,14 @@ func (d *Console) Location(member string) *time.Location {
 	return time.UTC
 }
 
-func (d *Console) decideProfile(c platform.Caller, s *pb.Submission) (func(*pb.ChangeRecord), *kernel.Error) {
-	invalid := &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
+func (d *Console) decideProfile(c platform.Caller, s *pb.Submission) (func(*pb.ChangeRecord), *platform.Error) {
+	invalid := &platform.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 	id := s.GetTarget().GetId()
 	if d.members[id] == nil {
-		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
+		return nil, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
 	}
 	if c.ID != id && !c.Holds(PlatformApp, Admin) && !c.Replaying {
-		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_POLICY_DENIED}
+		return nil, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_POLICY_DENIED}
 	}
 	var fields map[string]json.RawMessage
 	if json.Unmarshal(s.GetPayload(), &fields) != nil {
@@ -476,8 +475,8 @@ func (d *Console) Reach(member string) platform.Reach {
 	return out
 }
 
-func (d *Console) decideDelegate(c platform.Caller, s *pb.Submission) (func(*pb.ChangeRecord), *kernel.Error) {
-	invalid := &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
+func (d *Console) decideDelegate(c platform.Caller, s *pb.Submission) (func(*pb.ChangeRecord), *platform.Error) {
+	invalid := &platform.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 	var p struct{ App, Until, Reason string }
 	to := d.members[s.GetTarget().GetId()]
 	if json.Unmarshal(s.GetPayload(), &p) != nil || to == nil || to.ID == c.ID || d.host == nil || d.host.App(p.App) == nil {
@@ -533,12 +532,12 @@ func (d *Console) ProjectAccess(m platform.Member, project string) platform.Proj
 	return out
 }
 
-func JoinSubmission(d platform.IdentitySessions, tenant, subject string, principal func() string) (*pb.Submission, *kernel.Error) {
+func JoinSubmission(d platform.IdentitySessions, tenant, subject string, principal func() string) (*pb.Submission, *platform.Error) {
 	if _, known := d.MemberBySubject(subject); known {
 		return nil, nil
 	}
 	if !d.JoinableSubject(subject) || !d.JoinsSubject(subject) {
-		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_POLICY_DENIED}
+		return nil, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_POLICY_DENIED}
 	}
 	payload, _ := json.Marshal(map[string]string{"subject": subject})
 	return &pb.Submission{TenantId: tenant, PrincipalId: principal(), Authority: PlatformApp, IdempotencyKey: "join:" + subject, Target: &pb.EntityRef{Type: MemberType, Id: d.JoinID(subject)}, Schema: &pb.SchemaRef{Name: SchemaJoin, Version: 1}, Payload: payload}, nil

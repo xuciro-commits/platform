@@ -3,7 +3,6 @@ package objects
 import (
 	"encoding/json"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 	"platformserver/kernel/records"
 	"platformserver/platform"
 	"reflect"
@@ -82,9 +81,9 @@ type recordBase struct {
 	hidden []platform.FieldInfo
 }
 
-func (t *Owner) readRecordBase(m platform.Member, typ, id string, now time.Time) (recordBase, *kernel.Error) {
+func (t *Owner) readRecordBase(m platform.Member, typ, id string, now time.Time) (recordBase, *platform.Error) {
 	m = t.authorizationMember(m)
-	notFound := &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
+	notFound := &platform.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
 	if err := t.admits(m); err != nil {
 		return recordBase{}, err
 	}
@@ -139,7 +138,7 @@ func (t *Owner) readRecordBase(m platform.Member, typ, id string, now time.Time)
 	return recordBase{view: view, entity: et, row: r, hidden: hidden}, nil
 }
 
-func (t *Owner) recordOf(m platform.Member, typ, id string, now time.Time) (RecordView, *kernel.Error) {
+func (t *Owner) recordOf(m platform.Member, typ, id string, now time.Time) (RecordView, *platform.Error) {
 	base, err := t.readRecordBase(m, typ, id, now)
 	if err != nil {
 		return RecordView{}, err
@@ -147,7 +146,7 @@ func (t *Owner) recordOf(m platform.Member, typ, id string, now time.Time) (Reco
 	return base.view, nil
 }
 
-func (t *Owner) recordSection(m platform.Member, typ, id, section string, now time.Time) (RecordSectionView, *kernel.Error) {
+func (t *Owner) recordSection(m platform.Member, typ, id, section string, now time.Time) (RecordSectionView, *platform.Error) {
 	base, err := t.readRecordBase(m, typ, id, now)
 	if err != nil {
 		return RecordSectionView{}, err
@@ -169,12 +168,12 @@ func (t *Owner) recordSection(m platform.Member, typ, id, section string, now ti
 	case RecordSectionComments:
 		out.Comments, out.Following, out.Partial = t.recordComments(m, typ, id, now)
 	default:
-		return RecordSectionView{}, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
+		return RecordSectionView{}, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
 	}
 	return out, nil
 }
 
-func (t *Owner) recordDetail(m platform.Member, typ, id string, now time.Time, sections ...string) (RecordView, *kernel.Error) {
+func (t *Owner) recordDetail(m platform.Member, typ, id string, now time.Time, sections ...string) (RecordView, *platform.Error) {
 	base, err := t.readRecordBase(m, typ, id, now)
 	if err != nil {
 		return RecordView{}, err
@@ -368,14 +367,14 @@ func (t *Owner) readPersonal(m platform.Member, view *records.Type, ids []string
 	t.AuditPersonal(platform.PersonalRead{At: now, Member: m.ID, Type: view.Info().Type, IDs: ids, Fields: fields})
 }
 
-func (t *Owner) RecordOf(m platform.Member, typ, id string, now time.Time) (RecordView, *kernel.Error) {
+func (t *Owner) RecordOf(m platform.Member, typ, id string, now time.Time) (RecordView, *platform.Error) {
 	return t.recordOf(m, typ, id, now)
 }
 
-func (t *Owner) RecordSection(m platform.Member, typ, id, section string, now time.Time) (RecordSectionView, *kernel.Error) {
+func (t *Owner) RecordSection(m platform.Member, typ, id, section string, now time.Time) (RecordSectionView, *platform.Error) {
 	return t.recordSection(m, typ, id, section, now)
 }
 
-func (t *Owner) RecordDetail(m platform.Member, typ, id string, now time.Time, sections ...string) (RecordView, *kernel.Error) {
+func (t *Owner) RecordDetail(m platform.Member, typ, id string, now time.Time, sections ...string) (RecordView, *platform.Error) {
 	return t.recordDetail(m, typ, id, now, sections...)
 }

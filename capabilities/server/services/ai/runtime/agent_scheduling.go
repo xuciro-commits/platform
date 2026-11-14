@@ -7,7 +7,6 @@ import (
 	"sync"
 	"time"
 
-	"platformkernel/kernel"
 	"platformserver/platform"
 )
 
@@ -16,10 +15,10 @@ type Turns struct {
 	Stopped     func() bool
 	Quarantined func() bool
 	DueTurns    func(time.Time) []platform.AgentTurn
-	Allowed     func(platform.AgentRunRecord) (bool, *kernel.Error)
+	Allowed     func(platform.AgentRunRecord) (bool, *platform.Error)
 	Running     func(run string) bool
 	Call        func(platform.AIProvider, platform.AIModel, platform.Member, platform.ChatRequest, time.Time) (platform.ChatAnswer, *platform.AIError)
-	Meter       func(platform.Member, platform.AIUsage) *kernel.Error
+	Meter       func(platform.Member, platform.AIUsage) *platform.Error
 	Step        func(platform.AgentResultStep, time.Time) bool
 	Wake        func()
 }

@@ -8,7 +8,6 @@ import (
 	"io/fs"
 	"path"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 	"strings"
 	"sync"
 	"unicode"
@@ -118,14 +117,14 @@ func (s *Resources) Close(ctx context.Context) error {
 	}
 }
 
-func CallRead(app App, c Caller, name string, inputs ...json.RawMessage) (any, *kernel.Error) {
+func CallRead(app App, c Caller, name string, inputs ...json.RawMessage) (any, *Error) {
 	if app == nil {
-		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
+		return nil, &Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
 	}
 	parameterized, hasParameterized := app.(ParameterizedReader)
 	_, hasPlain := app.(Reader)
 	if !hasParameterized && !hasPlain {
-		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
+		return nil, &Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
 	}
 	if fields, declared := app.Manifest().ReadInputs[name]; declared {
 		if reader, ok := parameterized, hasParameterized; ok {
@@ -142,10 +141,10 @@ func CallRead(app App, c Caller, name string, inputs ...json.RawMessage) (any, *
 			}
 			return reader.ReadInput(c, name, raw)
 		}
-		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
+		return nil, &Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
 	}
 	if reader, ok := app.(Reader); ok {
 		return reader.Read(c, name)
 	}
-	return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
+	return nil, &Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
 }

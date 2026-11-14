@@ -5,7 +5,6 @@ import (
 	"slices"
 	"time"
 
-	"platformkernel/kernel"
 	"platformserver/platform"
 )
 
@@ -102,7 +101,7 @@ func (r Replay) Attempt(task *Task, now time.Time) string {
 	generation := r.Start(task.ID)
 	r.SetHops(task.Event.Hops + 1)
 	outcome := "ok"
-	var err *kernel.Error
+	var err *platform.Error
 	if x, ok := r.App(task.App).(platform.Listener); ok {
 		names := append([]string{task.Event.Record.GetSubmission().GetSchema().GetName()}, r.Names(task.Event.Event)...)
 		if task.Event.Plan != nil {

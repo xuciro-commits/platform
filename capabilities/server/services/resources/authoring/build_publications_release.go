@@ -11,7 +11,6 @@ import (
 	"slices"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 	"platformserver/platform"
 	dataowner "platformserver/services/data"
 )
@@ -134,7 +133,7 @@ func (b *Build) ForkReleaseExecution(assets []platform.ReleaseAsset) (platform.A
 
 var _ platform.ReleaseExecutionOwner = (*Build)(nil)
 
-func (b *Build) checkManagedDefinitionWrite(s *pb.Submission) *kernel.Error {
+func (b *Build) checkManagedDefinitionWrite(s *pb.Submission) *platform.Error {
 	typ, id := s.GetTarget().GetType(), s.GetTarget().GetId()
 	schema := s.GetSchema().GetName()
 	if schema != typ+".create" && schema != typ+".edit" && schema != typ+".archive" && !slices.Contains(b.AcceptedPublicationSchemas(), schema) {

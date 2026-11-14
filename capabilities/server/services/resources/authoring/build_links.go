@@ -3,7 +3,6 @@ package build
 import (
 	"fmt"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 
 	"platformserver/platform"
 	ontology "platformserver/services/ontology"
@@ -68,8 +67,8 @@ var linkKind = resourceKind[ontology.LinkType, platform.LinkType]{
 	validateInstall: func(h platform.BuildHost, d platform.LinkType) error { return h.ValidateInstallLinkType(d) },
 }
 
-func (b *Build) migrateLinkType(c platform.Caller, submission *pb.Submission, at time.Time) (*pb.ChangeRecord, *kernel.Error) {
-	return b.ledger.Receive(c, submission, at, nil, func() (func(*pb.ChangeRecord), *kernel.Error) {
+func (b *Build) migrateLinkType(c platform.Caller, submission *pb.Submission, at time.Time) (*pb.ChangeRecord, *platform.Error) {
+	return b.ledger.Receive(c, submission, at, nil, func() (func(*pb.ChangeRecord), *platform.Error) {
 		record, ok := platform.Get[ontology.LinkType](c, submission.GetTarget().GetId())
 		installed, retained := ReadPublication[ontology.LinkType](record.Published)
 		if !ok || record.Archived || !retained || installed.Definition().Storage != "edge" {

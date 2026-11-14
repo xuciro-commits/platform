@@ -6,23 +6,22 @@ import (
 	"net/http"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 	"platformserver/platform"
 )
 
 type ChatEndpoint struct {
-	Chat     func(req platform.ChatRequest, delta ...func(string)) (platform.ChatAnswer, *kernel.Error, *platform.AIError)
+	Chat     func(req platform.ChatRequest, delta ...func(string)) (platform.ChatAnswer, *platform.Error, *platform.AIError)
 	MaxBytes int64
 	Say      func(string) string
-	Said     func(*kernel.Error) *kernel.Error
-	Reply    func(http.ResponseWriter, *kernel.Error)
+	Said     func(*platform.Error) *platform.Error
+	Reply    func(http.ResponseWriter, *platform.Error)
 	JSON     func(http.ResponseWriter, int, any)
 }
 
 func (e ChatEndpoint) Serve(w http.ResponseWriter, r *http.Request) {
 	var req platform.ChatRequest
 	if json.NewDecoder(http.MaxBytesReader(w, r.Body, e.MaxBytes)).Decode(&req) != nil {
-		e.Reply(w, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT})
+		e.Reply(w, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT})
 		return
 	}
 	if req.Stream {

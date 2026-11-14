@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"platformkernel/kernel"
 	"platformserver/platform"
 	"platformserver/services/ai/gateway/providers"
 	"time"
@@ -16,12 +15,12 @@ type Calls struct {
 	Inference  platform.AIInferencePolicy
 	MostTokens func() int
 	Reserve    func(platform.Member, platform.AIModel, platform.ChatRequest, int, int, time.Time) *platform.AIError
-	Release    func(string, time.Time) *kernel.Error
+	Release    func(string, time.Time) *platform.Error
 	Available  func(string, time.Time, bool) bool
 	Report     func(string, bool, time.Time)
 	Provider   func(platform.AIProvider, func()) providers.Client
 	Transcribe func(time.Time, string, string, string, []byte, []byte, string)
-	Meter      func(platform.Member, platform.AIUsage) *kernel.Error
+	Meter      func(platform.Member, platform.AIUsage) *platform.Error
 }
 
 func Unavailable(e *platform.AIError) bool {

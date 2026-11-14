@@ -11,7 +11,6 @@ import (
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 	"platformserver/platform"
 	dataowner "platformserver/services/data"
 	ontology "platformserver/services/ontology"
@@ -292,17 +291,17 @@ func (b *Build) CanonicalObject(object ontology.Object) (ontology.Object, error)
 
 func (b *Build) businessRuntime() platform.TransactionExecutor {
 	return b.host.TransactionRuntime(platform.BusinessRuntimeContext{App: ID, Entities: b.installed, Ledger: b.ledger, Lookup: b.conditionLookup, Link: b.transactionLink, Dispatch: b.openDispatch, Confirm: b.openConfirmation,
-		Prepare: func(c platform.Caller, r *pb.ChangeRecord, txn *platform.BusinessTxn, now time.Time) (platform.TransactionProposal, *kernel.Error) {
+		Prepare: func(c platform.Caller, r *pb.ChangeRecord, txn *platform.BusinessTxn, now time.Time) (platform.TransactionProposal, *platform.Error) {
 			p, err := b.prepareProposal(c, r, txn, now)
 			if err != nil {
 				return platform.TransactionProposal{}, err
 			}
 			return platform.TransactionProposal{Apply: func(entity platform.Entity, info platform.EntityInfo, patch map[string]any, sources []string) (platform.Entity, map[string]any) {
 				return proposalEntity(entity, info, patch, p, sources)
-			}, Finish: func(c platform.Caller, r *pb.ChangeRecord, now time.Time) *kernel.Error {
+			}, Finish: func(c platform.Caller, r *pb.ChangeRecord, now time.Time) *platform.Error {
 				return b.finishProposal(c, r, p, now)
 			}}, nil
-		}, Effect: func(c platform.Caller, id string) (platform.TransactionEffectDefinition, *kernel.Error) {
+		}, Effect: func(c platform.Caller, id string) (platform.TransactionEffectDefinition, *platform.Error) {
 			w, found := platform.Get[dataowner.Writeback](c, id)
 			if !found {
 				return platform.TransactionEffectDefinition{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Transaction writeback is unavailable")
@@ -319,7 +318,7 @@ func (b *Build) businessRuntime() platform.TransactionExecutor {
 			if err != nil {
 				return platform.TransactionEffectDefinition{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "{why}", err.Error())
 			}
-			return platform.TransactionEffectDefinition{Request: func(id string, payload json.RawMessage) (json.RawMessage, *kernel.Error) {
+			return platform.TransactionEffectDefinition{Request: func(id string, payload json.RawMessage) (json.RawMessage, *platform.Error) {
 				request, err := w.Request(conn, id, payload)
 				if err != nil {
 					return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "{why}", err.Error())

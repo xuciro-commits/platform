@@ -7,7 +7,7 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
+	"platformserver/platform"
 )
 
 type Connectors struct {
@@ -20,7 +20,7 @@ func NewConnectors() *Connectors {
 	return &Connectors{descriptors: map[[2]string]*pb.ConnectorDescriptor{}, cursors: map[[2]string]string{}, lastSeen: map[[2]string]time.Time{}}
 }
 
-func (c *Connectors) Register(d *pb.ConnectorDescriptor) *kernel.Error {
+func (c *Connectors) Register(d *pb.ConnectorDescriptor) *platform.Error {
 	if d.GetTenantId() == "" || d.GetConnectorId() == "" || len(d.GetDataClasses()) == 0 ||
 		d.GetDirection() == pb.ConnectorDirection_CONNECTOR_DIRECTION_UNSPECIFIED {
 		return errorf(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT)
@@ -33,7 +33,7 @@ func (c *Connectors) Register(d *pb.ConnectorDescriptor) *kernel.Error {
 	return nil
 }
 
-func (c *Connectors) Deliver(tenant, connector, dataClass, cursorFrom, cursorTo string, now time.Time) *kernel.Error {
+func (c *Connectors) Deliver(tenant, connector, dataClass, cursorFrom, cursorTo string, now time.Time) *platform.Error {
 	key := [2]string{tenant, connector}
 	d := c.descriptors[key]
 	if d == nil {
@@ -56,7 +56,7 @@ func (c *Connectors) Deliver(tenant, connector, dataClass, cursorFrom, cursorTo 
 	return nil
 }
 
-func (c *Connectors) Heartbeat(tenant, connector string, now time.Time) *kernel.Error {
+func (c *Connectors) Heartbeat(tenant, connector string, now time.Time) *platform.Error {
 	key := [2]string{tenant, connector}
 	if c.descriptors[key] == nil {
 		return errorf(pb.ErrorCode_ERROR_CODE_NOT_FOUND)
@@ -65,7 +65,7 @@ func (c *Connectors) Heartbeat(tenant, connector string, now time.Time) *kernel.
 	return nil
 }
 
-func (c *Connectors) Status(tenant, connector string, now time.Time) (*pb.ConnectorStatus, *kernel.Error) {
+func (c *Connectors) Status(tenant, connector string, now time.Time) (*pb.ConnectorStatus, *platform.Error) {
 	key := [2]string{tenant, connector}
 	d := c.descriptors[key]
 	if d == nil {

@@ -7,7 +7,6 @@ import (
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 
 	"platformserver/platform"
 )
@@ -60,18 +59,18 @@ func (k *Knowledge) SnapshotFormat() string                   { return "platform
 
 func (k *Knowledge) Snapshot() (json.RawMessage, error) { return k.ledger.Snapshot() }
 func (k *Knowledge) Restore(raw json.RawMessage) error  { return k.ledger.Restore(raw) }
-func (k *Knowledge) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *kernel.Error) {
+func (k *Knowledge) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *platform.Error) {
 	if name := s.GetSchema().GetName(); (name == TermType+".create" || name == TermType+".edit") && !c.Replaying {
 		var p struct{ RefersTo *string }
 		json.Unmarshal(s.GetPayload(), &p)
 		if p.RefersTo != nil && *p.RefersTo != "" && !k.host.Declares(*p.RefersTo) {
-			return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
+			return nil, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 		}
 	}
 	if record, err, ok := k.ledger.Generated(c, s, now, nil, knowledgeEntities()...); ok {
 		return record, err
 	}
-	return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_UNKNOWN_SCHEMA}
+	return nil, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_UNKNOWN_SCHEMA}
 }
 
 func (k *Knowledge) Terms(app string) []Term {

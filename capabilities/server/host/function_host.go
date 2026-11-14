@@ -11,21 +11,20 @@ import (
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 	"platformserver/platform"
 )
 
-func (d *stagedDecision) RequestFunction(c platform.Caller, r *pb.ChangeRecord, request platform.FunctionRequest) (platform.FunctionCall, *kernel.Error) {
+func (d *stagedDecision) RequestFunction(c platform.Caller, r *pb.ChangeRecord, request platform.FunctionRequest) (platform.FunctionCall, *platform.Error) {
 	call, effect, refusal := d.tenant.planFunction(c, r, request, d.Records, d.Intents)
 	return intend(d, call, effect, refusal)
 }
 
-func (t *Tenant) planFunction(c platform.Caller, r *pb.ChangeRecord, request platform.FunctionRequest, store *records.Store, pending []platform.Effect) (platform.FunctionCall, platform.Effect, *kernel.Error) {
+func (t *Tenant) planFunction(c platform.Caller, r *pb.ChangeRecord, request platform.FunctionRequest, store *records.Store, pending []platform.Effect) (platform.FunctionCall, platform.Effect, *platform.Error) {
 	ctx := agentowner.FunctionContext{Tenant: t.ID, App: t.App, Member: t.Member, AuthorityOf: t.AuthorityOf,
-		Authorize: func(c platform.Caller, owner string, f platform.AIFunction, sources []string, definition string, at time.Time) *kernel.Error {
+		Authorize: func(c platform.Caller, owner string, f platform.AIFunction, sources []string, definition string, at time.Time) *platform.Error {
 			return authorizationRefusal(t.authorizeCapability(c, owner, f.Name, f.Roles, f.Check() == nil, authorizationDetails{Store: store, At: at, Sources: sources, Definition: definition}))
 		},
-		Source: func(member platform.Member, request platform.FunctionRequest, f platform.AIFunction, owner, sourceRef, definition string, version int) (agentowner.FunctionSource, *kernel.Error) {
+		Source: func(member platform.Member, request platform.FunctionRequest, f platform.AIFunction, owner, sourceRef, definition string, version int) (agentowner.FunctionSource, *platform.Error) {
 			return agentowner.ReadFunctionSource(store, request, f, owner, sourceRef, definition, version,
 				func() bool { return t.readableIn(store, member, sourceRef, r.GetRecordedTime().AsTime()) },
 				func(id string) (agentowner.FunctionHistory, error) { return t.functionHistory(store, member, id) })
@@ -35,7 +34,7 @@ func (t *Tenant) planFunction(c platform.Caller, r *pb.ChangeRecord, request pla
 		}, Closure: t.closures().Function, BindApplications: func(ref platform.AssetRef, release, dependencies string) ([]platform.AssetBinding, error) {
 			return t.bindApplications(ref, release, dependencies)
 		},
-		Model: func(c platform.Caller, r *pb.ChangeRecord, q platform.Request, pending []platform.Effect, options platform.ModelOptions) (agentowner.FunctionDispatch, *kernel.Error) {
+		Model: func(c platform.Caller, r *pb.ChangeRecord, q platform.Request, pending []platform.Effect, options platform.ModelOptions) (agentowner.FunctionDispatch, *platform.Error) {
 			stage := platform.AIStageRuntime
 			if t.simulation {
 				stage = platform.AIStageDesign

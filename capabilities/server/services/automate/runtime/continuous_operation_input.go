@@ -3,12 +3,11 @@ package automation
 import (
 	"encoding/json"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 	"platformserver/platform"
 )
 
 type OperationInputSealer struct {
-	Operation func(request platform.OperationRequest) (platform.Operation, int, *kernel.Error)
+	Operation func(request platform.OperationRequest) (platform.Operation, int, *platform.Error)
 	Seal      func(app, key, member, definition, hash string, inputs json.RawMessage, budget int) (platform.OperationInputArtifact, error)
 	Discard   func(platform.OperationInputArtifact)
 }
@@ -25,8 +24,8 @@ func (i *OperationInput) ArtifactPointer() *platform.OperationInputArtifact {
 	return &i.Artifact
 }
 
-func (s OperationInputSealer) Prepare(member platform.Member, instance string, request platform.OperationRequest) (*OperationInput, *kernel.Error) {
-	refuse := func(code pb.ErrorCode, message string) (*OperationInput, *kernel.Error) {
+func (s OperationInputSealer) Prepare(member platform.Member, instance string, request platform.OperationRequest) (*OperationInput, *platform.Error) {
+	refuse := func(code pb.ErrorCode, message string) (*OperationInput, *platform.Error) {
 		return nil, platform.Refuse(code, message)
 	}
 	if request.App == "" || request.Name == "" || request.Key == "" || request.OnBehalf != member.ID || request.Target != platform.FlowInstanceType+"/"+instance {
@@ -85,7 +84,7 @@ func PendingOperationInputs(inputs map[string][]*OperationInput) int {
 	return pending
 }
 
-func TakeOperationInput(inputs map[string][]*OperationInput, c platform.Caller, q platform.OperationRequest, platformApp string) (*platform.OperationInputArtifact, *kernel.Error) {
+func TakeOperationInput(inputs map[string][]*OperationInput, c platform.Caller, q platform.OperationRequest, platformApp string) (*platform.OperationInputArtifact, *platform.Error) {
 	hash, _ := platform.CanonicalDigest(q)
 	pending := inputs[hash]
 	if len(pending) == 0 {

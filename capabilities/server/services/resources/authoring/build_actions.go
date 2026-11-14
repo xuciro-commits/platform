@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 	"platformserver/platform"
 	"platformserver/services/ontology"
 	"reflect"
@@ -48,7 +47,7 @@ func lifecycle(o ontology.Object, roles []string, creates creator, lookup func(s
 		}
 		l.Transitions = append(l.Transitions, platform.Transition{ConfirmationOnly: a.ConfirmationOnly, Adoption: a.Adoption, Criteria: criteria, Name: a.Name, Title: a.Title, Description: description,
 			From: slices.Clone(a.From), To: slices.Clone(a.From), Roles: takers, Capability: o.Name, Payload: payload, Approval: approval, DeferRequired: true, Txn: a.Transaction,
-			ApplyTxn: func(c platform.Caller, r *pb.ChangeRecord, now time.Time) *kernel.Error {
+			ApplyTxn: func(c platform.Caller, r *pb.ChangeRecord, now time.Time) *platform.Error {
 				if creates == nil {
 					return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Business transactions need their original owner")
 				}

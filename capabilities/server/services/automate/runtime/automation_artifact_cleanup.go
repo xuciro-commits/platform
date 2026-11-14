@@ -5,7 +5,6 @@ import (
 	"crypto/sha256"
 	"fmt"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 	"platformserver/platform"
 	"slices"
 	"time"
@@ -59,7 +58,7 @@ type ArtifactCleanupPreparation struct {
 	tenant string
 }
 
-func (f *Flows) PlanArtifactCleanup(x FlowInstance, at time.Time) (platform.FlowArtifactCleanupPreparation, *kernel.Error) {
+func (f *Flows) PlanArtifactCleanup(x FlowInstance, at time.Time) (platform.FlowArtifactCleanupPreparation, *platform.Error) {
 	if !x.CleanupPending || len(x.ArtifactCleanup) == 0 || at.IsZero() {
 		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The Flow has no due artifact cleanup")
 	}
@@ -112,14 +111,14 @@ func (d preparedArtifactCleanupDecision) Fork(ledger platform.Authority) (platfo
 	return preparedArtifactCleanupDecision{Flows: fork.(*Flows), prepared: d.prepared}, nil
 }
 
-func (d preparedArtifactCleanupDecision) Submit(c platform.Caller, sub *pb.Submission, now time.Time) (*pb.ChangeRecord, *kernel.Error) {
+func (d preparedArtifactCleanupDecision) Submit(c platform.Caller, sub *pb.Submission, now time.Time) (*pb.ChangeRecord, *platform.Error) {
 	p := d.prepared
 	if p == nil || !c.Automation || c.ID != "app:"+ID || c.Tenant != p.tenant || sub.GetTenantId() != p.tenant || sub.GetAuthority() != ID || sub.GetPrincipalId() != c.ID ||
 		sub.GetTarget().GetType() != InstanceType || sub.GetTarget().GetId() != p.before.ID || sub.GetSchema().GetName() != SchemaFlowArtifactCleanup || sub.GetSchema().GetVersion() != 1 ||
 		!bytes.Equal(sub.GetPayload(), p.Submission(p.tenant).GetPayload()) || sub.GetIdempotencyKey() != p.Submission(p.tenant).GetIdempotencyKey() || !now.Equal(p.at) {
 		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "Only the host can acknowledge retired Flow artifacts")
 	}
-	return d.ledger.Receive(c, sub, now, nil, func() (func(*pb.ChangeRecord), *kernel.Error) {
+	return d.ledger.Receive(c, sub, now, nil, func() (func(*pb.ChangeRecord), *platform.Error) {
 		ss := d.session(c, now)
 		x := ss.load(p.before.ID)
 		if x == nil || !p.Matches(*x) {

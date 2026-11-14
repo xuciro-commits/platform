@@ -6,7 +6,6 @@ import (
 	"net/url"
 	"strings"
 
-	"platformkernel/kernel"
 	"platformserver/platform"
 )
 
@@ -36,7 +35,7 @@ func LocalizeImportRows(rows []platform.ImportRow, localize func([]platform.Fiel
 	}
 }
 
-func DraftPage(page RecordPage, draft func(any) (any, *kernel.Error)) (RecordPage, *kernel.Error) {
+func DraftPage(page RecordPage, draft func(any) (any, *platform.Error)) (RecordPage, *platform.Error) {
 	for index, record := range page.Records {
 		canonical, err := draft(record)
 		if err != nil {
@@ -47,7 +46,7 @@ func DraftPage(page RecordPage, draft func(any) (any, *kernel.Error)) (RecordPag
 	return page, nil
 }
 
-func DraftView(view *RecordView, draft func(any) (any, *kernel.Error)) {
+func DraftView(view *RecordView, draft func(any) (any, *platform.Error)) {
 	if record, refusal := draft(view.Record); refusal == nil {
 		view.Record = record
 	} else {

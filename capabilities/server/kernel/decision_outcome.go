@@ -5,17 +5,16 @@ import (
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 	"platformserver/kernel/acceptedformat"
 	"platformserver/platform"
 )
 
 type OutcomeHooks struct {
-	Explain func(*kernel.Error) *kernel.Error
+	Explain func(*platform.Error) *platform.Error
 	Claims  func(*pb.ChangeRecord, *ClaimSet) error
 }
 
-func (d *Decision) Settled(record *pb.ChangeRecord, refusal *kernel.Error, unconsumed int) (*pb.ChangeRecord, *kernel.Error) {
+func (d *Decision) Settled(record *pb.ChangeRecord, refusal *platform.Error, unconsumed int) (*pb.ChangeRecord, *platform.Error) {
 	if d.Failure != nil {
 		return nil, d.Failure
 	}
@@ -25,7 +24,7 @@ func (d *Decision) Settled(record *pb.ChangeRecord, refusal *kernel.Error, uncon
 	return record, refusal
 }
 
-func (d *Decision) Outcome(src ResultSources, h OutcomeHooks, app string, s *pb.Submission, record *pb.ChangeRecord, refusal *kernel.Error, binding *platform.SchemaVersion, source *ClaimSet, now time.Time) ([]byte, *kernel.Error, error) {
+func (d *Decision) Outcome(src ResultSources, h OutcomeHooks, app string, s *pb.Submission, record *pb.ChangeRecord, refusal *platform.Error, binding *platform.SchemaVersion, source *ClaimSet, now time.Time) ([]byte, *platform.Error, error) {
 	var raw []byte
 	var err error
 	if refusal != nil {
@@ -47,7 +46,7 @@ func (d *Decision) Outcome(src ResultSources, h OutcomeHooks, app string, s *pb.
 	}
 	if err != nil {
 		refusal = platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The action could not be accepted: {reason}", err.Error())
-		var preparationRefusal *kernel.Error
+		var preparationRefusal *platform.Error
 		if errors.As(err, &preparationRefusal) {
 			refusal = preparationRefusal
 		}
@@ -60,7 +59,7 @@ func (d *Decision) Outcome(src ResultSources, h OutcomeHooks, app string, s *pb.
 	return raw, refusal, err
 }
 
-func (d *Decision) AnswerWithOrigin(origin *platform.Effect, answer func() *kernel.Error) *kernel.Error {
+func (d *Decision) AnswerWithOrigin(origin *platform.Effect, answer func() *platform.Error) *platform.Error {
 	previous := d.CallbackOrigin
 	d.CallbackOrigin = origin
 	defer func() { d.CallbackOrigin = previous }()
@@ -79,7 +78,7 @@ func (d *Decision) EffectResult(src ResultSources, result *acceptedformat.Effect
 	return prepare(result.ChangePlan())
 }
 
-func (d *Decision) TakeTxnStep() *kernel.Error {
+func (d *Decision) TakeTxnStep() *platform.Error {
 	if d != nil && d.Failure != nil {
 		return d.Failure
 	}

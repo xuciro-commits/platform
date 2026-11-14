@@ -5,7 +5,6 @@ import (
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 	"platformserver/platform"
 	"platformserver/services/objects"
 )
@@ -25,7 +24,7 @@ func (t *Tenant) ownedRelationWriter(store *records.Store) objects.OwnedRelation
 func (d *stagedDecision) ownedRelationWriter() objects.OwnedRelations {
 	writer := d.tenant.ownedRelationWriter(d.Records)
 	writer.Readable, writer.Put = d.Readable, d.Put
-	writer.Fail = func(err *kernel.Error) *kernel.Error {
+	writer.Fail = func(err *platform.Error) *platform.Error {
 		if d.Failure == nil {
 			d.Failure = err
 		}
@@ -34,15 +33,15 @@ func (d *stagedDecision) ownedRelationWriter() objects.OwnedRelations {
 	return writer
 }
 
-func (t *Tenant) relationMigrationPlan(store *records.Store, c platform.Caller, binding platform.AssetBinding, at time.Time) (platform.RelationMigrationPlan, *kernel.Error) {
+func (t *Tenant) relationMigrationPlan(store *records.Store, c platform.Caller, binding platform.AssetBinding, at time.Time) (platform.RelationMigrationPlan, *platform.Error) {
 	return t.ownedRelationWriter(store).Plan(c, binding, at)
 }
 
-func (d *stagedDecision) MigrateOwnedRelations(c platform.Caller, receipt *pb.ChangeRecord, binding platform.AssetBinding, at time.Time) *kernel.Error {
+func (d *stagedDecision) MigrateOwnedRelations(c platform.Caller, receipt *pb.ChangeRecord, binding platform.AssetBinding, at time.Time) *platform.Error {
 	return d.ownedRelationWriter().Migrate(c, receipt, binding, at)
 }
 
-func (d *stagedDecision) PutOwnedRelation(c platform.Caller, receipt *pb.ChangeRecord, request platform.TxnLink, remove bool, at time.Time) *kernel.Error {
+func (d *stagedDecision) PutOwnedRelation(c platform.Caller, receipt *pb.ChangeRecord, request platform.TxnLink, remove bool, at time.Time) *platform.Error {
 	return d.ownedRelationWriter().Write(c, receipt, request, remove, at, nil)
 }
 

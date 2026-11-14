@@ -4,7 +4,6 @@ import (
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 	"platformserver/platform"
 )
 
@@ -14,12 +13,12 @@ type PipelineSchedule struct {
 	NextDue   *time.Time `json:"nextDue,omitempty"`
 }
 
-func (o *Owner) PipelineSchedules(rows []any, pipeline func(id string) (Pipeline, bool)) ([]PipelineSchedule, *kernel.Error) {
+func (o *Owner) PipelineSchedules(rows []any, pipeline func(id string) (Pipeline, bool)) ([]PipelineSchedule, *platform.Error) {
 	out := []PipelineSchedule{}
 	for _, row := range rows {
 		schedule, err := o.ExecutionSchedule(row.(platform.Schedule))
 		if err != nil {
-			return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
+			return nil, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
 		}
 		item := PipelineSchedule{Schedule: schedule, NextDue: schedule.NextDue()}
 		if found, ok := pipeline(schedule.Pipeline); ok && found.Last != nil {

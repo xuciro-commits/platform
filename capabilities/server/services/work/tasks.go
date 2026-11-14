@@ -7,7 +7,6 @@ import (
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 	"platformserver/platform"
 )
 
@@ -19,7 +18,7 @@ func taskActions() []platform.Action {
 	}}}
 }
 
-func (w *Work) createTask(c platform.Caller, s *pb.Submission, now time.Time) (func(*pb.ChangeRecord), *kernel.Error) {
+func (w *Work) createTask(c platform.Caller, s *pb.Submission, now time.Time) (func(*pb.ChangeRecord), *platform.Error) {
 	var input struct {
 		Title      string    `json:"title"`
 		Body       string    `json:"body"`
@@ -64,7 +63,7 @@ func (w *Work) createTask(c platform.Caller, s *pb.Submission, now time.Time) (f
 	}, nil
 }
 
-func (w *Work) cancelTask(c platform.Caller, record any, _ json.RawMessage, _ time.Time) *kernel.Error {
+func (w *Work) cancelTask(c platform.Caller, record any, _ json.RawMessage, _ time.Time) *platform.Error {
 	task := record.(*WorkTask)
 	if strings.HasPrefix(task.Ref, ApprovalType+"/") {
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Approval work items close with their approval request")

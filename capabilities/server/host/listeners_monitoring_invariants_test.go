@@ -15,7 +15,6 @@ import (
 
 	"google.golang.org/protobuf/encoding/protojson"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 	"platformserver/platform"
 	"platformserver/services/resources/authoring"
 	"platformserver/services/resources/monitoring"
@@ -51,19 +50,19 @@ func (p *listenerProbe) DecodeAcceptedInput(raw json.RawMessage) (any, error) {
 	err := protojson.Unmarshal(raw, record)
 	return record, err
 }
-func (p *listenerProbe) Input(c platform.Caller, _ string, body []byte, at time.Time) (any, *kernel.Error) {
+func (p *listenerProbe) Input(c platform.Caller, _ string, body []byte, at time.Time) (any, *platform.Error) {
 	var input struct{ ID, Title string }
 	if json.Unmarshal(body, &input) != nil || input.ID == "" {
-		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
+		return nil, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 	}
 	return platform.Decide(c, p, &pb.Submission{TenantId: c.Tenant, PrincipalId: c.ID, Authority: "listenerprobe", IdempotencyKey: input.ID,
 		Schema: &pb.SchemaRef{Name: "listenerprobe.receive", Version: 1}, Target: &pb.EntityRef{Type: "listenerprobe.event", Id: input.ID}, Payload: platform.Raw(map[string]string{"title": input.Title})}, at)
 }
-func (p *listenerProbe) Submit(c platform.Caller, s *pb.Submission, at time.Time) (*pb.ChangeRecord, *kernel.Error) {
-	return p.ledger.Receive(c, s, at, nil, func() (func(*pb.ChangeRecord), *kernel.Error) {
+func (p *listenerProbe) Submit(c platform.Caller, s *pb.Submission, at time.Time) (*pb.ChangeRecord, *platform.Error) {
+	return p.ledger.Receive(c, s, at, nil, func() (func(*pb.ChangeRecord), *platform.Error) {
 		var payload struct{ Title string }
 		if json.Unmarshal(s.GetPayload(), &payload) != nil {
-			return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
+			return nil, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 		}
 		return func(r *pb.ChangeRecord) {
 			c.Put(r, listenerProbeRecord{Record: platform.Record{ID: s.GetTarget().GetId()}, Title: payload.Title})
@@ -153,7 +152,7 @@ func TestInvariantK2ListenersAndMonitoringViews(t *testing.T) {
 		t.Fatal("listener has no asset lifecycle owner")
 	}
 	var original platform.ReleaseAsset
-	_, refusal := coordinatedRecordRead(live.Tenant, context.Background(), func(view *Tenant) (any, *kernel.Error) {
+	_, refusal := coordinatedRecordRead(live.Tenant, context.Background(), func(view *Tenant) (any, *platform.Error) {
 		assets, err := view.App(build.ID).(*build.Build).ReleaseAssets()
 		if err != nil {
 			t.Fatal(err)
@@ -200,7 +199,7 @@ func TestInvariantK2ListenersAndMonitoringViews(t *testing.T) {
 	if response := request(http.MethodPost, "/v1/listeners/incoming-token", "sender", "shared-value", body); response.Code == http.StatusOK {
 		t.Fatal("old published path remained active after release installation")
 	}
-	_, refusal = coordinatedRecordRead(live.Tenant, context.Background(), func(view *Tenant) (any, *kernel.Error) {
+	_, refusal = coordinatedRecordRead(live.Tenant, context.Background(), func(view *Tenant) (any, *platform.Error) {
 		retained, err := view.App(build.ID).(*build.Build).ResolvePinned(original.Ref, original.SourceVersion)
 		if err != nil || !bytes.Equal(retained.Body, original.Body) {
 			t.Fatalf("original listener version not retained: %v", err)
@@ -254,7 +253,7 @@ func TestInvariantK2ListenersAndMonitoringViews(t *testing.T) {
 	if differing := differingTypes(live.recordImage(t), restored.recordImage(t)); len(differing) != 0 {
 		t.Fatalf("replay changed records: %v", differing)
 	}
-	_, refusal = coordinatedRecordRead(restored.Tenant, context.Background(), func(view *Tenant) (any, *kernel.Error) {
+	_, refusal = coordinatedRecordRead(restored.Tenant, context.Background(), func(view *Tenant) (any, *platform.Error) {
 		record, found := platform.Get[listenerProbeRecord](view.automation("listenerprobe", false), "event1")
 		if !found || record.Title != "Inbound payload" {
 			t.Fatal("accepted connector payload was not restored")

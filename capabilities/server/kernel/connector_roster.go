@@ -9,7 +9,6 @@ import (
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	contract "platformkernel/kernel"
 	"platformserver/kernel/protocol"
 	"platformserver/platform"
 
@@ -59,7 +58,7 @@ func (r *ConnectorRoster) Register(descriptors ...*pb.ConnectorDescriptor) error
 	return nil
 }
 
-func (r *ConnectorRoster) Refused(member, input string, err *contract.Error, now time.Time) {
+func (r *ConnectorRoster) Refused(member, input string, err *platform.Error, now time.Time) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	if r.byID[member] != nil {
@@ -119,22 +118,22 @@ func (r *ConnectorRoster) SetDisabled(id string, off bool) {
 	}
 }
 
-func (r *ConnectorRoster) Decide(s *pb.Submission, offSchema string) (func(*pb.ChangeRecord), *contract.Error) {
+func (r *ConnectorRoster) Decide(s *pb.Submission, offSchema string) (func(*pb.ChangeRecord), *platform.Error) {
 	id := s.GetTarget().GetId()
 	if !r.Known(id) {
-		return nil, &contract.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
+		return nil, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
 	}
 	off := s.GetSchema().GetName() == offSchema
 	return func(*pb.ChangeRecord) { r.SetDisabled(id, off) }, nil
 }
 
-func (r *ConnectorRoster) ConnectorDecider(offSchema string) func(platform.Caller, *pb.Submission, time.Time) (func(*pb.ChangeRecord), *contract.Error) {
-	return func(_ platform.Caller, s *pb.Submission, _ time.Time) (func(*pb.ChangeRecord), *contract.Error) {
+func (r *ConnectorRoster) ConnectorDecider(offSchema string) func(platform.Caller, *pb.Submission, time.Time) (func(*pb.ChangeRecord), *platform.Error) {
+	return func(_ platform.Caller, s *pb.Submission, _ time.Time) (func(*pb.ChangeRecord), *platform.Error) {
 		return r.Decide(s, offSchema)
 	}
 }
 
-func (r *ConnectorRoster) Heartbeat(tenant, id string, now time.Time) *contract.Error {
+func (r *ConnectorRoster) Heartbeat(tenant, id string, now time.Time) *platform.Error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	return r.kernel.Heartbeat(tenant, id, now)

@@ -8,13 +8,12 @@ import (
 	"strings"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 	"platformserver/platform"
 )
 
 var markingName = regexp.MustCompile(`^[a-z][a-z0-9-]{0,63}$`)
 
-func (d *Policies) decideMarking(c platform.Caller, s *pb.Submission, members []string) (func(*pb.ChangeRecord), *kernel.Error) {
+func (d *Policies) decideMarking(c platform.Caller, s *pb.Submission, members []string) (func(*pb.ChangeRecord), *platform.Error) {
 	id := s.GetTarget().GetId()
 	if !markingName.MatchString(id) {
 		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "A marking ID uses lowercase letters, digits and hyphens")

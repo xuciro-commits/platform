@@ -6,7 +6,6 @@ import (
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 	"platformserver/kernel/records"
 	persistence "platformserver/kernel/store"
 	"platformserver/platform"
@@ -28,7 +27,7 @@ type Input struct {
 	RequestHash    string                    `json:"requestHash"`
 	Digest         string                    `json:"digest"`
 	Answer         json.RawMessage           `json:"answer,omitempty"`
-	Refusal        *kernel.Error             `json:"refusal,omitempty"`
+	Refusal        *platform.Error           `json:"refusal,omitempty"`
 	Changes        json.RawMessage           `json:"changes,omitempty"`
 	Rows           []InputRow                `json:"rows,omitempty"`
 	States         []State                   `json:"states,omitempty"`

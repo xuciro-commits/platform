@@ -13,7 +13,6 @@ import (
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 	"platformserver/platform"
 )
 
@@ -96,7 +95,7 @@ func (h *Host) member(r *http.Request) (platform.Member, *Tenant, bool) {
 }
 
 func (h *Host) join(t *Tenant, subject string, now time.Time) bool {
-	_, refusal := decideOnImage(t, context.Background(), "identity:join", func(t *Tenant) (*pb.ChangeRecord, *kernel.Error) {
+	_, refusal := decideOnImage(t, context.Background(), "identity:join", func(t *Tenant) (*pb.ChangeRecord, *platform.Error) {
 		if t.identityOwner == nil {
 			return nil, unknown()
 		}
@@ -109,7 +108,7 @@ func (h *Host) join(t *Tenant, subject string, now time.Time) bool {
 			return nil, refusal
 		}
 		return t.accept(t.identityOwner, caller.Member, sub, now, acceptOptions{automation: true})
-	}, func(t *Tenant, candidate preparedAccepted, record *pb.ChangeRecord, refusal *kernel.Error) (*pb.ChangeRecord, *kernel.Error) {
+	}, func(t *Tenant, candidate preparedAccepted, record *pb.ChangeRecord, refusal *platform.Error) (*pb.ChangeRecord, *platform.Error) {
 		return t.finishPreparedSubmission(platform.Member{ID: "app:" + controlowner.PlatformApp, Tenant: t.ID}, candidate, record, refusal)
 	})
 	if refusal != nil {
@@ -188,7 +187,7 @@ func (h *Host) Handler() http.Handler {
 	return transport.Edge(mux, h.stats, h.limiter, TenantHeader, SchemaVersionHeader)
 }
 
-func Reply(w http.ResponseWriter, record *pb.ChangeRecord, err *kernel.Error, issues ...platform.FieldIssue) {
+func Reply(w http.ResponseWriter, record *pb.ChangeRecord, err *platform.Error, issues ...platform.FieldIssue) {
 	transport.Reply(w, record, err, issues...)
 }
 

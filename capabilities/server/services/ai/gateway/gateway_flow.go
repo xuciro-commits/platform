@@ -8,13 +8,12 @@ import (
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 	"platformserver/platform"
 	"platformserver/services/actions"
 	"platformserver/services/ai/gateway/providers"
 )
 
-func ReservationFailure(refusal *kernel.Error) *platform.AIError {
+func ReservationFailure(refusal *platform.Error) *platform.AIError {
 	failure := &platform.AIError{Status: 503, Detail: cmp.Or(refusal.Message, refusal.Error())}
 	if refusal.Code == pb.ErrorCode_ERROR_CODE_POLICY_DENIED {
 		failure.Status, failure.Quota = 429, true
@@ -26,7 +25,7 @@ type Reservations struct {
 	Stopped func() bool
 	Prior   func(call string) (platform.AIReservation, bool)
 	Limits  func() platform.AIDefaults
-	Accept  func(body []byte) *kernel.Error
+	Accept  func(body []byte) *platform.Error
 }
 
 func (r Reservations) Prepare(m platform.Member, model platform.AIModel, req platform.ChatRequest, input, output int, now time.Time) *platform.AIError {
@@ -48,14 +47,14 @@ func (r Reservations) Prepare(m platform.Member, model platform.AIModel, req pla
 }
 
 type ChatSetup struct {
-	Design    func() *kernel.Error
+	Design    func() *platform.Error
 	Suspended func(member string) bool
-	Callable  func(m platform.Member, name string) (platform.AIModel, platform.AIProvider, *kernel.Error)
-	Authorize func(model string) *kernel.Error
+	Callable  func(m platform.Member, name string) (platform.AIModel, platform.AIProvider, *platform.Error)
+	Authorize func(model string) *platform.Error
 	Resolver  Resolver
 }
 
-func (s ChatSetup) Prepare(m platform.Member, req platform.ChatRequest, stage string) (platform.AIModel, platform.AIProvider, platform.ChatRequest, *kernel.Error) {
+func (s ChatSetup) Prepare(m platform.Member, req platform.ChatRequest, stage string) (platform.AIModel, platform.AIProvider, platform.ChatRequest, *platform.Error) {
 	var model platform.AIModel
 	var pv platform.AIProvider
 	if stage == platform.AIStageDesign {
@@ -95,17 +94,17 @@ func (s ChatSetup) Prepare(m platform.Member, req platform.ChatRequest, stage st
 
 type ChatRun struct {
 	Available bool
-	Setup     func(req platform.ChatRequest) (platform.AIModel, platform.AIProvider, platform.ChatRequest, *kernel.Error)
+	Setup     func(req platform.ChatRequest) (platform.AIModel, platform.AIProvider, platform.ChatRequest, *platform.Error)
 	Call      func(pv platform.AIProvider, model platform.AIModel, m platform.Member, req platform.ChatRequest, now time.Time) (platform.ChatAnswer, *platform.AIError)
-	Meter     func(m platform.Member, usage platform.AIUsage) *kernel.Error
+	Meter     func(m platform.Member, usage platform.AIUsage) *platform.Error
 }
 
-func (c ChatRun) Run(m platform.Member, req platform.ChatRequest, now time.Time, delta ...func(string)) (platform.ChatAnswer, *kernel.Error, *platform.AIError) {
+func (c ChatRun) Run(m platform.Member, req platform.ChatRequest, now time.Time, delta ...func(string)) (platform.ChatAnswer, *platform.Error, *platform.AIError) {
 	if !c.Available {
-		return platform.ChatAnswer{}, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}, nil
+		return platform.ChatAnswer{}, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}, nil
 	}
 	if len(req.Messages) == 0 {
-		return platform.ChatAnswer{}, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}, nil
+		return platform.ChatAnswer{}, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}, nil
 	}
 	model, pv, req, refusal := c.Setup(req)
 	if refusal != nil {
@@ -124,7 +123,7 @@ func (c ChatRun) Run(m platform.Member, req platform.ChatRequest, now time.Time,
 }
 
 type ModelDispatch struct {
-	Gate func(ask ModelAsk, m platform.Member, out platform.Outcome) (platform.Outcome, platform.AIModel, platform.AIProvider, bool, *kernel.Error)
+	Gate func(ask ModelAsk, m platform.Member, out platform.Outcome) (platform.Outcome, platform.AIModel, platform.AIProvider, bool, *platform.Error)
 	Call func(pv platform.AIProvider, model platform.AIModel, m platform.Member, req platform.ChatRequest, now time.Time) (platform.ChatAnswer, *platform.AIError)
 }
 
@@ -200,8 +199,8 @@ func (p ModelPlanning) Effect(tenant string, c platform.Caller, rec *pb.ChangeRe
 type ModelSend struct {
 	Allowed   func() bool
 	Available bool
-	Model     func(name string) (platform.AIModel, platform.AIProvider, *kernel.Error)
-	Authorize func(model string) *kernel.Error
+	Model     func(name string) (platform.AIModel, platform.AIProvider, *platform.Error)
+	Authorize func(model string) *platform.Error
 	Resolver  Resolver
 }
 
@@ -225,7 +224,7 @@ func (ask ModelAsk) Ready(out platform.Outcome, s ModelSend) (platform.Outcome, 
 	if model == "" {
 		return reject("no model is set for apps")
 	}
-	var err *kernel.Error
+	var err *platform.Error
 	enabled, pv, err = s.Model(model)
 	if err != nil {
 		return reject("the model " + model + " is not enabled")
@@ -234,7 +233,7 @@ func (ask ModelAsk) Ready(out platform.Outcome, s ModelSend) (platform.Outcome, 
 		return reject(refusal.Message)
 	}
 	if ask.Evaluation {
-		if detail := ask.EvaluationDrift(enabled, pv, func(options platform.ModelOptions) (platform.AIModelBinding, *kernel.Error) {
+		if detail := ask.EvaluationDrift(enabled, pv, func(options platform.ModelOptions) (platform.AIModelBinding, *platform.Error) {
 			current, _, refusal := s.Resolver.Resolve("generation", model, options)
 			if refusal != nil {
 				return current, refusal

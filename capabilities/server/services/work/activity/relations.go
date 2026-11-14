@@ -10,7 +10,6 @@ import (
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 
 	"platformserver/platform"
 )
@@ -158,7 +157,7 @@ func (r *Relations) sees(c platform.Caller, entity string) bool {
 
 func (r *Relations) AttachRelations(h platform.RelationsHost) { r.host = h }
 
-func (r *Relations) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *kernel.Error) {
+func (r *Relations) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *platform.Error) {
 	switch s.GetSchema().GetName() {
 	case SchemaComment, SchemaFollow, SchemaUnfollow:
 		return r.collaborate(c, s, now)
@@ -171,8 +170,8 @@ func (r *Relations) Submit(c platform.Caller, s *pb.Submission, now time.Time) (
 	allowed := func() bool {
 		return !slices.ContainsFunc(entities, func(e string) bool { return !r.sees(c, e) })
 	}
-	return r.ledger.Receive(c, s, now, allowed, func() (func(*pb.ChangeRecord), *kernel.Error) {
-		invalid := &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
+	return r.ledger.Receive(c, s, now, allowed, func() (func(*pb.ChangeRecord), *platform.Error) {
+		invalid := &platform.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 		if slices.ContainsFunc(entities, func(e string) bool { return !strings.Contains(e, "/") }) {
 			return nil, invalid
 		}
@@ -183,22 +182,22 @@ func (r *Relations) Submit(c platform.Caller, s *pb.Submission, now time.Time) (
 		switch s.GetSchema().GetName() {
 		case SchemaLink:
 			if linked >= 0 {
-				return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
+				return nil, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
 			}
 			return func(rec *pb.ChangeRecord) {
 				r.links = append(r.links, Link{From: p.From, To: p.To, By: c.ID, At: rec.GetRecordedTime().AsTime()})
 			}, nil
 		case SchemaUnlink:
 			if linked < 0 {
-				return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
+				return nil, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
 			}
 			return func(*pb.ChangeRecord) { r.links = slices.Delete(r.links, linked, linked+1) }, nil
 		}
-		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_UNKNOWN_SCHEMA}
+		return nil, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_UNKNOWN_SCHEMA}
 	})
 }
 
-func (r *Relations) Read(c platform.Caller, name string) (any, *kernel.Error) {
+func (r *Relations) Read(c platform.Caller, name string) (any, *platform.Error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	if name == "links" {
@@ -298,47 +297,47 @@ func (r *Relations) Links(c platform.Caller, entity string) []string {
 	return out
 }
 
-func (r *Relations) Link(c platform.Caller, from, to *pb.EntityRef, key string, now time.Time) *kernel.Error {
+func (r *Relations) Link(c platform.Caller, from, to *pb.EntityRef, key string, now time.Time) *platform.Error {
 	payload, _ := json.Marshal(map[string]string{"from": from.GetType() + "/" + from.GetId(), "to": to.GetType() + "/" + to.GetId()})
 	_, err := r.Submit(r.host.As(c, ID), &pb.Submission{TenantId: c.Tenant, PrincipalId: c.ID, Authority: ID,
 		Target: &pb.EntityRef{Type: LinkType, Id: key}, Schema: &pb.SchemaRef{Name: SchemaLink, Version: 1}, IdempotencyKey: key, Payload: payload}, now)
 	return err
 }
 
-func (r *Relations) collaborate(c platform.Caller, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *kernel.Error) {
+func (r *Relations) collaborate(c platform.Caller, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *platform.Error) {
 	var p struct{ Target, Text string }
 	json.Unmarshal(s.GetPayload(), &p)
-	return r.ledger.Receive(c, s, now, nil, func() (func(*pb.ChangeRecord), *kernel.Error) {
+	return r.ledger.Receive(c, s, now, nil, func() (func(*pb.ChangeRecord), *platform.Error) {
 		id := s.GetTarget().GetId()
 		if s.GetSchema().GetName() == SchemaUnfollow {
 			f, ok := platform.Get[Follow](c, id)
 			if !ok || f.Archived || f.Member != c.ID && !c.Replaying {
-				return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
+				return nil, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
 			}
 			f.Archived = true
 			return func(rec *pb.ChangeRecord) { c.Put(rec, f) }, nil
 		}
 		if !strings.Contains(p.Target, "/") || !c.Replaying && !r.host.Readable(c.Member, p.Target, now) {
-			return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
+			return nil, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
 		}
 		follow := Follow{Record: platform.Record{ID: platform.FollowID(c.ID, p.Target)}, Member: c.ID, Target: p.Target}
 		existing, following := platform.Get[Follow](c, follow.ID)
 		following = following && !existing.Archived
 		if s.GetSchema().GetName() == SchemaFollow {
 			if s.GetTarget().GetId() != follow.ID {
-				return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
+				return nil, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 			}
 			if following {
-				return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
+				return nil, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
 			}
 			return func(rec *pb.ChangeRecord) { c.Put(rec, follow) }, nil
 		}
 		text := strings.TrimSpace(p.Text)
 		if text == "" {
-			return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
+			return nil, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 		}
 		if _, known := platform.Get[Comment](c, id); known {
-			return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
+			return nil, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
 		}
 		comment := Comment{Record: platform.Record{ID: id}, Target: p.Target, Text: text, By: c.ID}
 		for _, m := range mention.FindAllStringSubmatch(text, -1) {

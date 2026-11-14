@@ -8,7 +8,6 @@ import (
 	"maps"
 	"math"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 	"slices"
 	"strconv"
 	"strings"
@@ -113,7 +112,7 @@ func AssignmentExpr(kind string, set TxnSet, spec RuleReadSpec) (Expr, error) {
 	}
 }
 
-func RuleAssignment(e Expr, s RuleReadSpec, c Caller, record any, inputs map[string]any, now time.Time, lookup func(string) (EntityInfo, bool), provenance ...*[]string) (any, *kernel.Error) {
+func RuleAssignment(e Expr, s RuleReadSpec, c Caller, record any, inputs map[string]any, now time.Time, lookup func(string) (EntityInfo, bool), provenance ...*[]string) (any, *Error) {
 	r, err := EvaluateRule(e, s, c, record, inputs, now, lookup)
 	for _, refs := range provenance {
 		*refs = append(*refs, r.Sources...)
@@ -216,20 +215,20 @@ type BusinessRuntimeContext struct {
 	Entities map[string]Entity
 	Ledger   Authority
 	Lookup   func(string) (EntityInfo, bool)
-	Prepare  func(Caller, *pb.ChangeRecord, *BusinessTxn, time.Time) (TransactionProposal, *kernel.Error)
+	Prepare  func(Caller, *pb.ChangeRecord, *BusinessTxn, time.Time) (TransactionProposal, *Error)
 	Link     func(AssetBinding) (LinkType, error)
-	Effect   func(Caller, string) (TransactionEffectDefinition, *kernel.Error)
-	Dispatch func(Caller, *pb.ChangeRecord, *BusinessTxn, RuleReadSpec, map[string]any, map[string]any, time.Time) *kernel.Error
-	Confirm  func(Caller, *pb.ChangeRecord, *BusinessTxn, time.Time) *kernel.Error
+	Effect   func(Caller, string) (TransactionEffectDefinition, *Error)
+	Dispatch func(Caller, *pb.ChangeRecord, *BusinessTxn, RuleReadSpec, map[string]any, map[string]any, time.Time) *Error
+	Confirm  func(Caller, *pb.ChangeRecord, *BusinessTxn, time.Time) *Error
 }
 
 type TransactionProposal struct {
 	Apply  func(Entity, EntityInfo, map[string]any, []string) (Entity, map[string]any)
-	Finish func(Caller, *pb.ChangeRecord, time.Time) *kernel.Error
+	Finish func(Caller, *pb.ChangeRecord, time.Time) *Error
 }
 
 type TransactionEffectDefinition struct {
-	Request func(string, json.RawMessage) (json.RawMessage, *kernel.Error)
+	Request func(string, json.RawMessage) (json.RawMessage, *Error)
 }
 
 func WalkTxnSteps(steps []TxnStep, visit func(TxnStep)) {
@@ -305,5 +304,5 @@ func TxnIterationSource(owner, subject, of string, lookup func(string) (EntityIn
 }
 
 type TransactionExecutor interface {
-	Transact(Caller, *pb.ChangeRecord, *BusinessTxn, time.Time) *kernel.Error
+	Transact(Caller, *pb.ChangeRecord, *BusinessTxn, time.Time) *Error
 }

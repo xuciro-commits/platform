@@ -15,12 +15,11 @@ import (
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 	"platformserver/platform"
 	"platformserver/services/actions"
 )
 
-func intend[C any](d *stagedDecision, call C, intent platform.Effect, err *kernel.Error) (C, *kernel.Error) {
+func intend[C any](d *stagedDecision, call C, intent platform.Effect, err *platform.Error) (C, *platform.Error) {
 	if err != nil {
 		if d.Failure == nil {
 			d.Failure = err
@@ -34,7 +33,7 @@ func intend[C any](d *stagedDecision, call C, intent platform.Effect, err *kerne
 	return call, nil
 }
 
-func (d *stagedDecision) RequestOperation(c platform.Caller, r *pb.ChangeRecord, q platform.OperationRequest) (platform.OperationCall, *kernel.Error) {
+func (d *stagedDecision) RequestOperation(c platform.Caller, r *pb.ChangeRecord, q platform.OperationRequest) (platform.OperationCall, *platform.Error) {
 	input, refusal := automation.TakeOperationInput(d.operationInputs, c, q, controlowner.PlatformApp)
 	if refusal != nil {
 		d.Failure = refusal
@@ -43,13 +42,13 @@ func (d *stagedDecision) RequestOperation(c platform.Caller, r *pb.ChangeRecord,
 	call, intent, err := d.tenant.planOperation(c, r, q, d.Records, d.Intents, input)
 	return intend(d, call, intent, err)
 }
-func (t *Tenant) planOperation(c platform.Caller, r *pb.ChangeRecord, q platform.OperationRequest, store *records.Store, pending []platform.Effect, sealed ...*platform.OperationInputArtifact) (platform.OperationCall, platform.Effect, *kernel.Error) {
+func (t *Tenant) planOperation(c platform.Caller, r *pb.ChangeRecord, q platform.OperationRequest, store *records.Store, pending []platform.Effect, sealed ...*platform.OperationInputArtifact) (platform.OperationCall, platform.Effect, *platform.Error) {
 	var input *platform.OperationInputArtifact
 	if len(sealed) == 1 {
 		input = sealed[0]
 	}
 	return compute.OperationPlan{Tenant: t.ID, Member: t.Member, App: t.App, Recording: t.Recording(), Queued: t.queuedOperations(), Entity: t.Entity, Rules: t.services.Rules,
-		Authorize: func(applicant platform.Caller, owner string, op platform.Operation, at time.Time, sources []string, definition string) *kernel.Error {
+		Authorize: func(applicant platform.Caller, owner string, op platform.Operation, at time.Time, sources []string, definition string) *platform.Error {
 			return authorizationRefusal(t.authorizeCapability(applicant, owner, op.Name, op.Roles, op.Check() == nil, authorizationDetails{Store: store, At: at, Sources: sources, Definition: definition}))
 		},
 		Closure: func(owner string, op platform.Operation, version int, release *string) (string, string, error) {
@@ -67,15 +66,15 @@ func (t *Tenant) operationEffect(id string) (platform.Effect, bool) {
 	queued, ok := t.outbound.Get(id)
 	return queued.Effect, ok
 }
-func (t *Tenant) operationResult(c platform.Caller, id string) (platform.OperationResult, *kernel.Error) {
-	return compute.ReadableBy(t.ID, c, id, t.operationEffect, t.Member, func(member platform.Member, app string, b compute.OperationBinding) *kernel.Error {
+func (t *Tenant) operationResult(c platform.Caller, id string) (platform.OperationResult, *platform.Error) {
+	return compute.ReadableBy(t.ID, c, id, t.operationEffect, t.Member, func(member platform.Member, app string, b compute.OperationBinding) *platform.Error {
 		return authorizationRefusal(t.operationAuthorization(member, app, b, time.Now().UTC()))
 	})
 }
-func (r runtime) OperationResult(c platform.Caller, id string) (platform.OperationResult, *kernel.Error) {
+func (r runtime) OperationResult(c platform.Caller, id string) (platform.OperationResult, *platform.Error) {
 	return r.t.operationResult(c, id)
 }
-func (d *stagedDecision) OperationResult(c platform.Caller, id string) (platform.OperationResult, *kernel.Error) {
+func (d *stagedDecision) OperationResult(c platform.Caller, id string) (platform.OperationResult, *platform.Error) {
 	if x, ok := d.OperationAnswers[id]; ok {
 		return x, nil
 	}
@@ -100,7 +99,7 @@ func (t *Tenant) operationAuthorization(member platform.Member, owner string, bi
 	return t.authorizeCapability(c, owner, permission, allowed, declared, authorizationDetails{At: at, Sources: binding.Call.Sources, Definition: binding.Call.Definition})
 }
 
-func (d *stagedDecision) RequestCompilation(c platform.Caller, r *pb.ChangeRecord, key, target string, q platform.CodeBuildRequest) (platform.OperationCall, *kernel.Error) {
+func (d *stagedDecision) RequestCompilation(c platform.Caller, r *pb.ChangeRecord, key, target string, q platform.CodeBuildRequest) (platform.OperationCall, *platform.Error) {
 	call, intent, err := compute.PlanCompilation(d.tenant.ID, c, r, key, target, q, d.tenant.queuedOperations(), d.Intents)
 	return intend(d, call, intent, err)
 }
@@ -119,13 +118,13 @@ func (t *Tenant) executeOperation(x platform.Effect, now time.Time) platform.Out
 	t.cancels.Add(x.ID, cancel)
 	defer t.cancels.Remove(x.ID)
 	return compute.Execute(ctx, compute.ExecutionHost{
-		Read: func(ctx context.Context, read func(compute.ExecutionReads)) *kernel.Error {
-			_, refusal := recordRead(t, ctx, func(t *Tenant) (struct{}, *kernel.Error) {
+		Read: func(ctx context.Context, read func(compute.ExecutionReads)) *platform.Error {
+			_, refusal := recordRead(t, ctx, func(t *Tenant) (struct{}, *platform.Error) {
 				read(compute.ExecutionReads{Member: t.Member, Current: t.operationClaims().Current, Query: func(m platform.Member, ref platform.AssetRef, version int) (platform.NamedQuery, bool) {
 					query, _, ok := t.memberQueryVersion(m, ref, version)
 					return query, ok
 				}, Entity: t.Entity, Authz: t.services.Authorization,
-					Refusal: func(member platform.Member, app string, b compute.OperationBinding, now time.Time) *kernel.Error {
+					Refusal: func(member platform.Member, app string, b compute.OperationBinding, now time.Time) *platform.Error {
 						return authorizationRefusal(t.operationAuthorization(member, app, b, now))
 					}})
 				return struct{}{}, nil

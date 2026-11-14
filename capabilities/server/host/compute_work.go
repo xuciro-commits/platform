@@ -5,7 +5,6 @@ import (
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 	runtimekernel "platformserver/kernel"
 	"platformserver/kernel/protocol"
 	"platformserver/platform"
@@ -41,7 +40,7 @@ func (t *Tenant) claimOperation(id string, now time.Time) (platform.Effect, bool
 		effect  platform.Effect
 		claimed bool
 	}
-	value, refusal := decideOnImage(t, context.Background(), "operation:claim", func(t *Tenant) (claim, *kernel.Error) {
+	value, refusal := decideOnImage(t, context.Background(), "operation:claim", func(t *Tenant) (claim, *platform.Error) {
 		if t.businessStopped() {
 			return claim{}, nil
 		}
@@ -51,7 +50,7 @@ func (t *Tenant) claimOperation(id string, now time.Time) (platform.Effect, bool
 		}
 		candidate := preparedAccepted{entry: runtimekernel.AcceptedEntry(controlowner.PlatformApp, t.automation(controlowner.PlatformApp, false).Member, raw, now, nil), key: r.Key, hash: r.RequestHash}
 		return claim{r.After, t.stage(candidate) || t.finishOperationClaim(candidate)}, nil
-	}, func(t *Tenant, candidate preparedAccepted, value claim, refusal *kernel.Error) (claim, *kernel.Error) {
+	}, func(t *Tenant, candidate preparedAccepted, value claim, refusal *platform.Error) (claim, *platform.Error) {
 		if len(candidate.entry.Body) > 0 {
 			busy := t.outbound.Any(func(x actions.Queued) bool { return x.ID == id && x.Sending })
 			if busy {
@@ -69,7 +68,7 @@ func (t *Tenant) finishOperationClaim(candidate preparedAccepted) bool {
 	return err == nil && t.operationClaims().Settle(saved)
 }
 
-func (d *stagedDecision) CancelOperation(c platform.Caller, r *pb.ChangeRecord, id string) *kernel.Error {
+func (d *stagedDecision) CancelOperation(c platform.Caller, r *pb.ChangeRecord, id string) *platform.Error {
 	record, refusal := compute.CheckCancel(d.tenant.ID, c, r, id, d.tenant.operationEffect)
 	if refusal != nil || !record {
 		return refusal

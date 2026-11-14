@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"log"
-	"platformkernel/kernel"
 	dataowner "platformserver/services/data"
 	"time"
 
@@ -16,7 +15,7 @@ func (t *Tenant) CheckConnections(now time.Time) {
 	if t.businessStopped() || !t.OwnerActive(build.ID) {
 		return
 	}
-	conns, _ := recordRead(t, context.Background(), func(t *Tenant) ([]dataowner.Connection, *kernel.Error) {
+	conns, _ := recordRead(t, context.Background(), func(t *Tenant) ([]dataowner.Connection, *platform.Error) {
 		rows, _, refusal := platform.Find[dataowner.Connection](t.automation(build.ID, false), platform.Query{Domain: json.RawMessage(`[["requested","=",true]]`), Sort: []string{"id"}, Limit: 50})
 		return rows, refusal
 	})

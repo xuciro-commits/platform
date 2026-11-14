@@ -5,7 +5,6 @@ import (
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 	"platformserver/platform"
 )
 
@@ -16,7 +15,7 @@ type FlowCommit struct {
 	At       time.Time
 	Prepared platform.FlowPreparedDecision
 	Input    *OperationInput
-	Guard    func(platform.ContinuousFlowOwner, FlowInstance, platform.Member) (bool, *kernel.Error)
+	Guard    func(platform.ContinuousFlowOwner, FlowInstance, platform.Member) (bool, *platform.Error)
 	Accepted func(bool)
 }
 
@@ -25,17 +24,17 @@ type BatchIntake struct {
 	Frames        platform.FlowFrameStore
 	Caller        platform.Caller
 	Preparing     func() func()
-	Snapshot      func(platform.Member, string, time.Time) (platform.ContinuousFlowOwner, FlowInstance, platform.Member, *kernel.Error)
-	Read          func(member platform.Member, id string, now time.Time, use func(platform.ContinuousFlowOwner, FlowInstance, platform.Caller) *kernel.Error) *kernel.Error
-	PrepareInput  func(platform.Member, string, platform.OperationRequest) (*OperationInput, *kernel.Error)
-	Commit        func(FlowCommit) (*pb.ChangeRecord, *kernel.Error)
-	CommitCleanup func(platform.FlowArtifactCleanupPreparation, time.Time) *kernel.Error
-	Instance      func(string) (FlowInstance, *kernel.Error)
-	CheckSource   func(platform.Member, platform.FlowBatchPreparation, FlowInstance, SourceCheckpoint, bool, time.Time) *kernel.Error
+	Snapshot      func(platform.Member, string, time.Time) (platform.ContinuousFlowOwner, FlowInstance, platform.Member, *platform.Error)
+	Read          func(member platform.Member, id string, now time.Time, use func(platform.ContinuousFlowOwner, FlowInstance, platform.Caller) *platform.Error) *platform.Error
+	PrepareInput  func(platform.Member, string, platform.OperationRequest) (*OperationInput, *platform.Error)
+	Commit        func(FlowCommit) (*pb.ChangeRecord, *platform.Error)
+	CommitCleanup func(platform.FlowArtifactCleanupPreparation, time.Time) *platform.Error
+	Instance      func(string) (FlowInstance, *platform.Error)
+	CheckSource   func(platform.Member, platform.FlowBatchPreparation, FlowInstance, SourceCheckpoint, bool, time.Time) *platform.Error
 	DiscardInput  func(platform.OperationInputArtifact)
 }
 
-func (b BatchIntake) ConsumeBatch(m platform.Member, id string, batch Batch, now time.Time) (platform.FlowBatchOutcome, *kernel.Error) {
+func (b BatchIntake) ConsumeBatch(m platform.Member, id string, batch Batch, now time.Time) (platform.FlowBatchOutcome, *platform.Error) {
 	releasePreparation := b.Preparing()
 	defer releasePreparation()
 	f, before, _, refusal := b.Snapshot(m, id, now)
@@ -72,8 +71,8 @@ func (b BatchIntake) ConsumeBatch(m platform.Member, id string, batch Batch, now
 		At:       now,
 		Prepared: prepared,
 		Input:    input,
-		Guard: func(f platform.ContinuousFlowOwner, latest FlowInstance, current platform.Member) (bool, *kernel.Error) {
-			return true, GuardPrepared(prepared, f, b.Caller, latest, "The Flow changed while its source batch was prepared", batch.Source, func(plan platform.FlowBatchPreparation, checkpoint SourceCheckpoint) *kernel.Error {
+		Guard: func(f platform.ContinuousFlowOwner, latest FlowInstance, current platform.Member) (bool, *platform.Error) {
+			return true, GuardPrepared(prepared, f, b.Caller, latest, "The Flow changed while its source batch was prepared", batch.Source, func(plan platform.FlowBatchPreparation, checkpoint SourceCheckpoint) *platform.Error {
 				return b.CheckSource(current, plan, latest, checkpoint, batch.Tick, now)
 			})
 		},
@@ -94,8 +93,8 @@ func (b BatchIntake) ConsumeBatch(m platform.Member, id string, batch Batch, now
 	return platform.FlowBatchOutcome{Cursor: x.Batch.Cursor, Watermark: x.Batch.Watermark, Consumed: x.Batch.Consumed, Rejected: x.Batch.Rejected, StateSize: x.Batch.StateBytes}, nil
 }
 
-func (b BatchIntake) prepare(member platform.Member, id string, batch Batch, now time.Time) (prepared platform.FlowPreparedBatch, refusal *kernel.Error) {
-	refusal = b.Read(member, id, now, func(f platform.ContinuousFlowOwner, latest FlowInstance, caller platform.Caller) *kernel.Error {
+func (b BatchIntake) prepare(member platform.Member, id string, batch Batch, now time.Time) (prepared platform.FlowPreparedBatch, refusal *platform.Error) {
+	refusal = b.Read(member, id, now, func(f platform.ContinuousFlowOwner, latest FlowInstance, caller platform.Caller) *platform.Error {
 		plan, refusal := f.PlanBatch(latest, caller)
 		if refusal != nil {
 			return refusal
@@ -106,8 +105,8 @@ func (b BatchIntake) prepare(member platform.Member, id string, batch Batch, now
 	return prepared, refusal
 }
 
-func (b BatchIntake) prepareRetry(member platform.Member, id string, now time.Time) (prepared platform.FlowPreparedComputeRetry, refusal *kernel.Error) {
-	refusal = b.Read(member, id, now, func(f platform.ContinuousFlowOwner, latest FlowInstance, caller platform.Caller) *kernel.Error {
+func (b BatchIntake) prepareRetry(member platform.Member, id string, now time.Time) (prepared platform.FlowPreparedComputeRetry, refusal *platform.Error) {
+	refusal = b.Read(member, id, now, func(f platform.ContinuousFlowOwner, latest FlowInstance, caller platform.Caller) *platform.Error {
 		fresh, refusal := f.PlanComputeRetry(latest, caller, now)
 		if refusal != nil {
 			return refusal
@@ -118,7 +117,7 @@ func (b BatchIntake) prepareRetry(member platform.Member, id string, now time.Ti
 	return prepared, refusal
 }
 
-func (b BatchIntake) Cleanup(m platform.Member, id string, now time.Time) *kernel.Error {
+func (b BatchIntake) Cleanup(m platform.Member, id string, now time.Time) *platform.Error {
 	f, before, _, refusal := b.Snapshot(m, id, now)
 	if refusal != nil || !before.CleanupPending {
 		return refusal
@@ -130,7 +129,7 @@ func (b BatchIntake) Cleanup(m platform.Member, id string, now time.Time) *kerne
 	return b.Retire(plan, now)
 }
 
-func (b BatchIntake) Retire(plan platform.FlowArtifactCleanupPreparation, now time.Time) *kernel.Error {
+func (b BatchIntake) Retire(plan platform.FlowArtifactCleanupPreparation, now time.Time) *platform.Error {
 	if refusal := RetireArtifacts(plan, b.Tenant, now, b.Frames.Discard); refusal != nil {
 		return refusal
 	}
@@ -159,7 +158,7 @@ func (b BatchIntake) RetryCompute(member platform.Member, plan platform.FlowComp
 		At:       now,
 		Prepared: prepared,
 		Input:    input,
-		Guard: func(_ platform.ContinuousFlowOwner, latest FlowInstance, _ platform.Member) (bool, *kernel.Error) {
+		Guard: func(_ platform.ContinuousFlowOwner, latest FlowInstance, _ platform.Member) (bool, *platform.Error) {
 			if prepared.Matches(latest) {
 				return true, nil
 			}

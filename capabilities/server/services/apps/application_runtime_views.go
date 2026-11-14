@@ -3,7 +3,6 @@ package applications
 import (
 	"encoding/json"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 	"platformserver/kernel/acceptedformat"
 	"platformserver/kernel/records"
 	"platformserver/platform"
@@ -15,7 +14,7 @@ import (
 
 type Context struct {
 	Tenant              string
-	Admit               func(platform.Member) *kernel.Error
+	Admit               func(platform.Member) *platform.Error
 	Definitions         func(platform.Member) []platform.Definition
 	Entity              func(string) (platform.EntityInfo, bool)
 	App                 func(string) platform.App
@@ -23,26 +22,26 @@ type Context struct {
 	Candidate           func(string) (platform.ReleaseCandidate, error)
 	Candidates          func() map[string]json.RawMessage
 	CloseCandidate      func([]platform.AssetRef, []platform.ReleaseAsset, []platform.AssetRef) (platform.ReleaseCandidate, error)
-	Rows                func(platform.Member, string, platform.Query, time.Time) ([]any, *kernel.Error)
+	Rows                func(platform.Member, string, platform.Query, time.Time) ([]any, *platform.Error)
 	Computations        func(platform.Member) []Computation
-	Effects             func(platform.Member) ([]platform.Effect, *kernel.Error)
-	Jobs                func(platform.Member) ([]Job, *kernel.Error)
+	Effects             func(platform.Member) ([]platform.Effect, *platform.Error)
+	Jobs                func(platform.Member) ([]Job, *platform.Error)
 	Readable            func(platform.Member, string, time.Time) bool
 	Quarantined         func() bool
-	RecoveryAllowed     func(platform.Member) *kernel.Error
+	RecoveryAllowed     func(platform.Member) *platform.Error
 	Quota               func(platform.Member, time.Time) *platform.AIQuota
 	Refusals            func(field ...string) map[string]acceptedformat.Refusal
 	Answers             func(field ...string) map[string]json.RawMessage
-	AI                  func(platform.Member, []platform.ReleaseAsset, map[platform.AssetRef]bool) ([]platform.ApplicationAI, *kernel.Error)
+	AI                  func(platform.Member, []platform.ReleaseAsset, map[platform.AssetRef]bool) ([]platform.ApplicationAI, *platform.Error)
 	AIUsage             func(platform.Member, platform.AssetRef, []platform.ApplicationAI) []platform.ApplicationAI
-	RecordCount         func(platform.Member, string, time.Time) (int, *kernel.Error)
+	RecordCount         func(platform.Member, string, time.Time) (int, *platform.Error)
 	AuthorizationMember func(platform.Member) platform.Member
 	RefreshRunIndex     func(key string, now time.Time, rebuild func() bool)
 	ReplaceRunIndex     func(key string, entries []platform.RunIndexEntry) error
 	QueryRunIndex       func(scope string) ([]platform.RunIndexEntry, error)
-	RuntimeOf           func(platform.Member, platform.AssetRef, time.Time) (platform.ApplicationRuntime, *kernel.Error)
-	RunsPage            func(platform.Member, platform.AssetRef, int, int, time.Time, ...platform.ApplicationRunFilter) (platform.ApplicationRunPage, *kernel.Error)
-	RecordHistory       func(platform.Member, string, string, time.Time) ([]records.RecordChange, *kernel.Error)
+	RuntimeOf           func(platform.Member, platform.AssetRef, time.Time) (platform.ApplicationRuntime, *platform.Error)
+	RunsPage            func(platform.Member, platform.AssetRef, int, int, time.Time, ...platform.ApplicationRunFilter) (platform.ApplicationRunPage, *platform.Error)
+	RecordHistory       func(platform.Member, string, string, time.Time) ([]records.RecordChange, *platform.Error)
 	RecordOwner         func(typ string) string
 	Receipts            func(owner string) []*pb.ChangeRecord
 	Decision            func(key string) *platform.DecisionDefinition
@@ -115,7 +114,7 @@ func Applications(definitions []platform.Definition) []platform.ApplicationView 
 	return out
 }
 
-func PageView(definitions []platform.Definition, entities []platform.EntityInfo, catalog []platform.Action, app, owner, page string) (platform.PageView, *kernel.Error) {
+func PageView(definitions []platform.Definition, entities []platform.EntityInfo, catalog []platform.Action, app, owner, page string) (platform.PageView, *platform.Error) {
 	var application *platform.Definition
 	for i := range definitions {
 		definition := &definitions[i]

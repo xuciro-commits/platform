@@ -14,7 +14,6 @@ import (
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 	"platformserver/platform"
 )
 
@@ -54,11 +53,11 @@ type Retention struct {
 	Build func() (platform.Caller, bool)
 }
 
-func (r Retention) Hashes() (map[string]bool, *kernel.Error) {
+func (r Retention) Hashes() (map[string]bool, *platform.Error) {
 	retained := map[string]bool{}
 	if caller, ok := r.File(); ok {
 		if !retainHashes[platform.File](caller, func(file platform.File) { retained[file.Hash] = true }) {
-			return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
+			return nil, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
 		}
 	}
 	if caller, ok := r.Build(); ok {
@@ -68,7 +67,7 @@ func (r Retention) Hashes() (map[string]bool, *kernel.Error) {
 			}
 		}
 		if !retainHashes[platform.MediaSet](caller, func(set platform.MediaSet) { keep(set.Items) }) || !retainHashes[platform.MediaSetVersion](caller, func(version platform.MediaSetVersion) { keep(version.Items) }) {
-			return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
+			return nil, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
 		}
 	}
 	return retained, nil
@@ -124,12 +123,12 @@ func Stream(w http.ResponseWriter, files platform.FileStore, key, name, contentT
 	io.Copy(w, body)
 }
 
-func MediaItem(set platform.MediaSet, versions []platform.MediaSetVersion, version, hash string) (platform.MediaItem, *kernel.Error) {
+func MediaItem(set platform.MediaSet, versions []platform.MediaSetVersion, version, hash string) (platform.MediaItem, *platform.Error) {
 	items := set.Items
 	if version != "" {
 		number, err := strconv.Atoi(version)
 		if err != nil || number < 1 {
-			return platform.MediaItem{}, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
+			return platform.MediaItem{}, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 		}
 		if number != set.Version {
 			items = nil
@@ -149,7 +148,7 @@ func MediaItem(set platform.MediaSet, versions []platform.MediaSetVersion, versi
 			return item, nil
 		}
 	}
-	return platform.MediaItem{}, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
+	return platform.MediaItem{}, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
 }
 
 func (u *Uploads) Purge(files platform.FileStore, tenant string, pending map[string]bool) {
@@ -159,7 +158,7 @@ func (u *Uploads) Purge(files platform.FileStore, tenant string, pending map[str
 	}
 }
 
-func RefusalStatus(refusal *kernel.Error) int {
+func RefusalStatus(refusal *platform.Error) int {
 	if refusal.Code == pb.ErrorCode_ERROR_CODE_NOT_FOUND {
 		return http.StatusNotFound
 	}

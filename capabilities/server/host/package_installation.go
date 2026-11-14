@@ -5,7 +5,6 @@ import (
 	"strings"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 	"platformserver/kernel/records"
 	"platformserver/platform"
 	"platformserver/services/devops/packages"
@@ -13,7 +12,7 @@ import (
 	"platformserver/services/resources/authoring"
 )
 
-func (h hostView) PrepareManagedPackage(c platform.Caller, descriptor platform.PackageDescriptor, available []platform.ReleaseAsset, archive, upgrade, downgrade bool) (func(*pb.ChangeRecord), *kernel.Error) {
+func (h hostView) PrepareManagedPackage(c platform.Caller, descriptor platform.PackageDescriptor, available []platform.ReleaseAsset, archive, upgrade, downgrade bool) (func(*pb.ChangeRecord), *platform.Error) {
 	if c.Replaying || descriptor.Blueprint == nil && !archive {
 		return nil, nil
 	}

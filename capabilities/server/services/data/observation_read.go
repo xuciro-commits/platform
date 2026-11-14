@@ -12,21 +12,20 @@ import (
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 	"platformserver/platform"
 )
 
 const observationResponseBytes = 1 << 20
 
 type ObservationHost struct {
-	ObservationMember       func(platform.Member) (platform.Member, *kernel.Error)
+	ObservationMember       func(platform.Member) (platform.Member, *platform.Error)
 	ObservationDefinitions  func(platform.Member) ([]platform.Definition, error)
 	ObservationSourceActive func(record string) bool
 	Entity                  func(typ string) (platform.EntityInfo, bool)
-	AuthorizeObservation    func(m platform.Member, app, permission, kind string, roles []string, at time.Time) *kernel.Error
-	AuthorizeRead           func(m platform.Member, app string, q platform.AuthzRequest, at time.Time) (withheld bool, refusal *kernel.Error)
-	ReadRecord              func(m platform.Member, app, typ, id string, at time.Time) (json.RawMessage, *kernel.Error)
-	ObservationConnections  func() ([]Connection, int, *kernel.Error)
+	AuthorizeObservation    func(m platform.Member, app, permission, kind string, roles []string, at time.Time) *platform.Error
+	AuthorizeRead           func(m platform.Member, app string, q platform.AuthzRequest, at time.Time) (withheld bool, refusal *platform.Error)
+	ReadRecord              func(m platform.Member, app, typ, id string, at time.Time) (json.RawMessage, *platform.Error)
+	ObservationConnections  func() ([]Connection, int, *platform.Error)
 	DataOwner               func() *Owner
 	CredentialHeader        func(secret, scope, address string) ([]byte, bool)
 	ActionSchemaVersion     func(platform.AssetRef) (platform.SchemaVersion, error)
@@ -69,11 +68,11 @@ type ObservationPlan struct {
 	Sources    []string
 }
 
-func ObservationUnavailable(err error) *kernel.Error {
+func ObservationUnavailable(err error) *platform.Error {
 	return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Observation read is unavailable: {reason}", err.Error())
 }
 
-func (o Observations) Prepare(m platform.Member, ref platform.AssetRef, record string, at time.Time, evaluate bool) (ObservationPlan, *kernel.Error) {
+func (o Observations) Prepare(m platform.Member, ref platform.AssetRef, record string, at time.Time, evaluate bool) (ObservationPlan, *platform.Error) {
 	var plan ObservationPlan
 	m, refusal := o.host.ObservationMember(m)
 	if refusal != nil {

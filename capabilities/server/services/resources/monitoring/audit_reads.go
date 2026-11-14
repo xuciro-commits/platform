@@ -3,11 +3,10 @@ package monitoring
 import (
 	"net/url"
 
-	"platformkernel/kernel"
 	"platformserver/platform"
 )
 
-func (o ObservationReads) AuditPage(values url.Values) (platform.AuditPage, *kernel.Error) {
+func (o ObservationReads) AuditPage(values url.Values) (platform.AuditPage, *platform.Error) {
 	query, refusal := AuditQuery(values, o.Tenant, o.Now)
 	if refusal != nil {
 		return platform.AuditPage{}, refusal
@@ -20,7 +19,7 @@ func (o ObservationReads) AuditPage(values url.Values) (platform.AuditPage, *ker
 	return page, nil
 }
 
-func (o ObservationReads) PersonalReadPage(values url.Values) (platform.PersonalReadPage, *kernel.Error) {
+func (o ObservationReads) PersonalReadPage(values url.Values) (platform.PersonalReadPage, *platform.Error) {
 	query, refusal := PersonalReadQuery(values, o.Tenant, o.Now)
 	if refusal != nil {
 		return platform.PersonalReadPage{}, refusal

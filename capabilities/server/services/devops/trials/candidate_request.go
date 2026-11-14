@@ -6,12 +6,11 @@ import (
 	"slices"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 	"platformserver/platform"
 	"platformserver/services/resources/authoring"
 )
 
-func (request *CandidateSimulationRequest) Check(staged *platform.ReleaseCandidate) *kernel.Error {
+func (request *CandidateSimulationRequest) Check(staged *platform.ReleaseCandidate) *platform.Error {
 	if staged != nil {
 		request.ObjectID, request.ProcessID, request.ApplicationID, request.Roots, request.CandidateID = "", "", "", nil, ""
 		if request.FunctionID == "" {
@@ -34,7 +33,7 @@ func (request *CandidateSimulationRequest) Check(staged *platform.ReleaseCandida
 			seen[root] = true
 		}
 		if len(request.Roots) > 16 {
-			return &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
+			return &platform.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 		}
 	}
 	if roots != 1 || len(request.Model) > 256 || request.At.IsZero() || len(request.Steps) == 0 || len(request.Steps) > 20 || len(request.Actors) > 3 || len(request.Sample) > 64 || len(request.Actors) > 0 && request.As != "" {
@@ -43,7 +42,7 @@ func (request *CandidateSimulationRequest) Check(staged *platform.ReleaseCandida
 	return nil
 }
 
-func (request *CandidateSimulationRequest) Members(builder platform.Member, member func(string) (platform.Member, bool)) (platform.Member, []platform.Member, *kernel.Error) {
+func (request *CandidateSimulationRequest) Members(builder platform.Member, member func(string) (platform.Member, bool)) (platform.Member, []platform.Member, *platform.Error) {
 	m := builder
 	if len(request.Actors) > 0 {
 		request.As = request.Actors[0]
@@ -127,7 +126,7 @@ func (request *CandidateSimulationRequest) SelectSample(candidate platform.Relea
 	return fmt.Errorf("Choose a sample asset in this application's draft closure")
 }
 
-func CandidateModules(candidate platform.ReleaseCandidate, modules map[string][]byte, read func(string) ([]byte, error)) *kernel.Error {
+func CandidateModules(candidate platform.ReleaseCandidate, modules map[string][]byte, read func(string) ([]byte, error)) *platform.Error {
 	for _, asset := range candidate.Assets {
 		if asset.Ref.Kind != platform.AssetCompute {
 			continue
@@ -147,7 +146,7 @@ func CandidateModules(candidate platform.ReleaseCandidate, modules map[string][]
 	return nil
 }
 
-func RunActors(request CandidateSimulationRequest, out CandidateSimulation, m platform.Member, members []platform.Member, run func(platform.Member) (CandidateSimulation, *kernel.Error)) (CandidateSimulation, *kernel.Error) {
+func RunActors(request CandidateSimulationRequest, out CandidateSimulation, m platform.Member, members []platform.Member, run func(platform.Member) (CandidateSimulation, *platform.Error)) (CandidateSimulation, *platform.Error) {
 	if len(request.Actors) == 0 {
 		return out, nil
 	}
@@ -170,10 +169,10 @@ type CandidateHooks[E any] struct {
 	Environment func(candidate platform.ReleaseCandidate) (E, error)
 	Modules     func(E) map[string][]byte
 	ReadModule  func(string) ([]byte, error)
-	Run         func(candidate platform.ReleaseCandidate, environment E, actor platform.Member, members []platform.Member, functionName string) (CandidateSimulation, *kernel.Error)
+	Run         func(candidate platform.ReleaseCandidate, environment E, actor platform.Member, members []platform.Member, functionName string) (CandidateSimulation, *platform.Error)
 }
 
-func SimulateCandidate[E any](request CandidateSimulationRequest, builder platform.Member, selected *StagedCandidate, h CandidateHooks[E]) (CandidateSimulation, *kernel.Error) {
+func SimulateCandidate[E any](request CandidateSimulationRequest, builder platform.Member, selected *StagedCandidate, h CandidateHooks[E]) (CandidateSimulation, *platform.Error) {
 	var empty CandidateSimulation
 	var staged *platform.ReleaseCandidate
 	if selected != nil {
@@ -183,7 +182,7 @@ func SimulateCandidate[E any](request CandidateSimulationRequest, builder platfo
 		return empty, refusal
 	}
 	if h.Quarantined() {
-		return empty, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
+		return empty, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
 	}
 	m, members, refusal := request.Members(builder, h.Member)
 	if refusal != nil {
@@ -204,7 +203,7 @@ func SimulateCandidate[E any](request CandidateSimulationRequest, builder platfo
 	if problem != nil {
 		return empty, problem
 	}
-	return RunActors(request, out, m, members, func(actor platform.Member) (CandidateSimulation, *kernel.Error) {
+	return RunActors(request, out, m, members, func(actor platform.Member) (CandidateSimulation, *platform.Error) {
 		return h.Run(candidate, environment, actor, members, functionName)
 	})
 }

@@ -8,22 +8,21 @@ import (
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 	"platformserver/platform"
 	"platformserver/services/objects"
 )
 
-func (t *Tenant) checkBusinessCorrection(m platform.Member, sub *pb.Submission, binding *platform.SchemaVersion) *kernel.Error {
+func (t *Tenant) checkBusinessCorrection(m platform.Member, sub *pb.Submission, binding *platform.SchemaVersion) *platform.Error {
 	return actions.CheckCorrection(m.ID, sub, binding, t.Committed.Refusal)
 }
 
-func (t *Tenant) BusinessRefusals(m platform.Member, typ, id string, offset, limit int, at time.Time, keys ...string) (platform.BusinessRefusalPage, *kernel.Error) {
-	return recordRead(t, context.Background(), func(t *Tenant) (platform.BusinessRefusalPage, *kernel.Error) {
+func (t *Tenant) BusinessRefusals(m platform.Member, typ, id string, offset, limit int, at time.Time, keys ...string) (platform.BusinessRefusalPage, *platform.Error) {
+	return recordRead(t, context.Background(), func(t *Tenant) (platform.BusinessRefusalPage, *platform.Error) {
 		return t.scopedBusinessRefusals(m, typ, id, offset, limit, at, keys...)
 	})
 }
 
-func (t *Tenant) scopedBusinessRefusals(m platform.Member, typ, id string, offset, limit int, at time.Time, keys ...string) (platform.BusinessRefusalPage, *kernel.Error) {
+func (t *Tenant) scopedBusinessRefusals(m platform.Member, typ, id string, offset, limit int, at time.Time, keys ...string) (platform.BusinessRefusalPage, *platform.Error) {
 	if err := t.Admits(m); err != nil {
 		return platform.BusinessRefusalPage{Records: []platform.BusinessRefusalEntry{}}, err
 	}

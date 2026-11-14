@@ -7,7 +7,6 @@ import (
 	"strconv"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 	"platformserver/platform"
 	"platformserver/services/resources/publication"
 )
@@ -21,7 +20,7 @@ func ActionTypePublication() publication.Hooks {
 	}
 }
 
-func PublishActionType(c platform.Caller, action *ActionType, bind func(platform.Caller, *Object) error, check func(Object) error) *kernel.Error {
+func PublishActionType(c platform.Caller, action *ActionType, bind func(platform.Caller, *Object) error, check func(Object) error) *platform.Error {
 	objects, err := publication.Inventory[Object](c)
 	if err != nil {
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, err.Error())

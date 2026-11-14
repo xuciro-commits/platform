@@ -14,7 +14,6 @@ import (
 	"google.golang.org/protobuf/encoding/protojson"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 	"platformserver/platform"
 )
 
@@ -30,7 +29,7 @@ var statuses = map[pb.ErrorCode]int{
 	pb.ErrorCode_ERROR_CODE_INVALID_REFERENCE:    http.StatusUnprocessableEntity,
 }
 
-func Reply(w http.ResponseWriter, record *pb.ChangeRecord, err *kernel.Error, issues ...platform.FieldIssue) {
+func Reply(w http.ResponseWriter, record *pb.ChangeRecord, err *platform.Error, issues ...platform.FieldIssue) {
 	switch {
 	case err != nil:
 		body := platform.ErrorBody{Code: err.Error(), Message: err.Message, Issues: issues}
@@ -57,7 +56,7 @@ func WriteJSON(w http.ResponseWriter, status int, v any) {
 	json.NewEncoder(w).Encode(v)
 }
 
-func Answer(w http.ResponseWriter, answer any, refusal *kernel.Error) {
+func Answer(w http.ResponseWriter, answer any, refusal *platform.Error) {
 	if refusal != nil {
 		Reply(w, nil, refusal)
 		return
@@ -105,7 +104,7 @@ func PageBounds(r *http.Request, offsetDefault, limitDefault int) (int, int) {
 	return offset, limit
 }
 
-func NamedReadInputs(app platform.App, name string, query url.Values) (json.RawMessage, *kernel.Error) {
+func NamedReadInputs(app platform.App, name string, query url.Values) (json.RawMessage, *platform.Error) {
 	if app == nil {
 		return nil, nil
 	}
@@ -195,7 +194,7 @@ type SignIn struct {
 	Identities []platform.LoginIdentity `json:"identities,omitempty"`
 }
 
-func ApplicationRunFilterOf(query url.Values) (platform.ApplicationRunFilter, *kernel.Error) {
+func ApplicationRunFilterOf(query url.Values) (platform.ApplicationRunFilter, *platform.Error) {
 	filter := platform.ApplicationRunFilter{Kind: query.Get("kind"), State: query.Get("state"), Subject: query.Get("subject")}
 	for key, target := range map[string]*time.Time{"since": &filter.Since, "until": &filter.Until} {
 		if value := query.Get(key); value != "" {

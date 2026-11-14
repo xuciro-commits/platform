@@ -7,7 +7,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"maps"
-	"platformkernel/kernel"
 	"reflect"
 	"slices"
 	"strings"
@@ -483,7 +482,7 @@ type FlowDefinitionPresence interface {
 }
 
 type OperationCompletion interface {
-	OperationEnded(Caller, string, time.Time) *kernel.Error
+	OperationEnded(Caller, string, time.Time) *Error
 }
 
 type NativeFlowAssets interface {

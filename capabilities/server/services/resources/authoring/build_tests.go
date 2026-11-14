@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"io"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 	automationauthoring "platformserver/services/automate/authoring"
 	functionauthoring "platformserver/services/functions/authoring"
 
@@ -40,7 +39,7 @@ func (b *Build) sampleSetEntity() platform.Entity {
 	return platform.Entity{Type: SampleSetType, Title: "Sample set", Plural: "Sample sets", Model: SampleSetRecord{}, Display: "title",
 		Scope:    platform.Scope{Default: platform.ScopeNone, Levels: map[string]string{Builder: platform.ScopeTenant}},
 		Standard: platform.Standard{Create: true, Edit: true, Archive: true, Roles: []string{Builder}, Capability: "objects"},
-		Validate: func(c platform.Caller, record any) *kernel.Error {
+		Validate: func(c platform.Caller, record any) *platform.Error {
 			if c.Replaying {
 				return nil
 			}
@@ -51,7 +50,7 @@ func (b *Build) sampleSetEntity() platform.Entity {
 			return nil
 		},
 		Lifecycle: &platform.Lifecycle{Field: "state", Initial: "draft", States: []platform.State{{Name: "draft", Title: "Draft", Tone: "warning"}, {Name: "published", Title: "Published", Tone: "success"}},
-			Transitions: []platform.Transition{{Name: "publish", Title: "Publish", Description: "Retain these synthetic records as an immutable application sample asset", From: []string{"draft", "published"}, To: []string{"published"}, Roles: []string{Builder}, Capability: "objects", Payload: []platform.Field{}, Do: func(c platform.Caller, record any, _ json.RawMessage, _ time.Time) *kernel.Error {
+			Transitions: []platform.Transition{{Name: "publish", Title: "Publish", Description: "Retain these synthetic records as an immutable application sample asset", From: []string{"draft", "published"}, To: []string{"published"}, Roles: []string{Builder}, Capability: "objects", Payload: []platform.Field{}, Do: func(c platform.Caller, record any, _ json.RawMessage, _ time.Time) *platform.Error {
 				m := record.(*SampleSetRecord)
 				next, err := b.retainSampleSet(*m)
 				if err != nil {
@@ -225,10 +224,10 @@ func (*Build) testPlanEntity() platform.Entity {
 		Standard:    platform.Standard{Create: true, Edit: true, Archive: true, Roles: []string{Builder}, Capability: "objects"}}
 }
 
-func checkTestPlanFields(raw []byte) *kernel.Error {
+func checkTestPlanFields(raw []byte) *platform.Error {
 	var fields map[string]json.RawMessage
 	if json.Unmarshal(raw, &fields) != nil {
-		return &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
+		return &platform.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 	}
 	if given, ok := fields["at"]; ok {
 		var at time.Time
@@ -260,9 +259,9 @@ func checkTestPlanFields(raw []byte) *kernel.Error {
 	return nil
 }
 
-func (b *Build) checkTestPlan(c platform.Caller, s *pb.Submission) *kernel.Error {
+func (b *Build) checkTestPlan(c platform.Caller, s *pb.Submission) *platform.Error {
 	if !c.Holds(c.App, Builder) {
-		return &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_POLICY_DENIED}
+		return &platform.Error{Code: pb.ErrorCode_ERROR_CODE_POLICY_DENIED}
 	}
 	if err := checkTestPlanFields(s.GetPayload()); err != nil {
 		return err
@@ -274,7 +273,7 @@ func (b *Build) checkTestPlan(c platform.Caller, s *pb.Submission) *kernel.Error
 		previous = plan
 	}
 	if json.Unmarshal(s.GetPayload(), &plan) != nil {
-		return &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
+		return &platform.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 	}
 	if previous.Published != "" && plan.Name != previous.Name {
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "A published definition cannot be renamed; create another definition")
@@ -297,7 +296,7 @@ func (b *Build) checkTestPlan(c platform.Caller, s *pb.Submission) *kernel.Error
 	if plan.Name != "" {
 		rows, err := readDefinitionInventory[TestPlan](b.host.Automation(c, ID))
 		if err != nil {
-			return &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
+			return &platform.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
 		}
 		for _, row := range rows {
 			if row.ID != s.GetTarget().GetId() && row.Name == plan.Name {

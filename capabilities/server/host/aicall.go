@@ -8,7 +8,6 @@ import (
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 	runtimekernel "platformserver/kernel"
 	"platformserver/platform"
 	"platformserver/services/actions"
@@ -32,11 +31,11 @@ func (t *Tenant) gatewayRuntime() aigateway.Runtime {
 		Tenant: t.ID, Models: t.ai, Inference: policy,
 		Settings: func(app, name string) string { return t.setting(t.automation(app, false), name) },
 		Resolver: t.modelResolver(), Suspended: t.suspended,
-		DesignAllowed: func(m platform.Member) *kernel.Error {
+		DesignAllowed: func(m platform.Member) *platform.Error {
 			c := platform.NewCaller(runtime{t: t}, m, build.ID, false, false)
 			return authorizationRefusal(t.authorizeNative(c, "POST /v1/build/ai/chat", "action", []string{build.Builder}, true))
 		},
-		ModelAllowed:    func(m platform.Member, name string) *kernel.Error { return t.modelAllowed(platform.AIApp, m, name) },
+		ModelAllowed:    func(m platform.Member, name string) *platform.Error { return t.modelAllowed(platform.AIApp, m, name) },
 		FunctionAllowed: t.functionAllowed,
 		Available: func(provider string, at time.Time, claim bool) bool {
 			return t.breakers.Allow("ai:"+provider, at, claim)
@@ -57,8 +56,8 @@ func (t *Tenant) gatewayRuntime() aigateway.Runtime {
 			return provider
 		},
 		Simulation: t.simulation, App: t.App, Authority: t.AuthorityOf,
-		Read: func(read func(aigateway.Runtime) *kernel.Error) *kernel.Error {
-			_, refusal := recordRead(t, context.Background(), func(t *Tenant) (struct{}, *kernel.Error) {
+		Read: func(read func(aigateway.Runtime) *platform.Error) *platform.Error {
+			_, refusal := recordRead(t, context.Background(), func(t *Tenant) (struct{}, *platform.Error) {
 				return struct{}{}, read(t.gatewayRuntime())
 			})
 			return refusal
@@ -66,23 +65,23 @@ func (t *Tenant) gatewayRuntime() aigateway.Runtime {
 	}
 }
 
-func (t *Tenant) modelAllowed(app string, m platform.Member, name string) *kernel.Error {
+func (t *Tenant) modelAllowed(app string, m platform.Member, name string) *platform.Error {
 	c := platform.NewCaller(runtime{t: t}, m, app, false, false)
 	return authorizationRefusal(t.authorizeNative(c, "model:"+name, "action", []string{platform.AnyMember}, true))
 }
 
 func (t *Tenant) reserveCall(m platform.Member, model platform.AIModel, req platform.ChatRequest, input, output int, now time.Time) *platform.AIError {
-	failure, refusal := decideOnImage(t, context.Background(), "model:reserve", func(t *Tenant) (*platform.AIError, *kernel.Error) {
+	failure, refusal := decideOnImage(t, context.Background(), "model:reserve", func(t *Tenant) (*platform.AIError, *platform.Error) {
 		return aigateway.Reservations{
 			Stopped: func() bool { return t.businessStopped() || t.recordReadRefusal() != nil },
 			Prior:   func(call string) (platform.AIReservation, bool) { return t.ai.Reservation(call) },
 			Limits:  t.limits,
-			Accept: func(body []byte) *kernel.Error {
+			Accept: func(body []byte) *platform.Error {
 				_, refusal := t.inputAccepted(t.ai, platform.Member{ID: "app:" + platform.AIApp, Tenant: t.ID}, platform.AIReserveCall, body, now)
 				return refusal
 			},
 		}.Prepare(m, model, req, input, output, now), nil
-	}, func(t *Tenant, candidate preparedAccepted, failure *platform.AIError, refusal *kernel.Error) (*platform.AIError, *kernel.Error) {
+	}, func(t *Tenant, candidate preparedAccepted, failure *platform.AIError, refusal *platform.Error) (*platform.AIError, *platform.Error) {
 		_, refusal = t.finishPreparedInput(platform.Member{ID: "app:" + platform.AIApp, Tenant: t.ID}, platform.AIReserveCall, candidate, nil, refusal)
 		if refusal != nil {
 			return aigateway.ReservationFailure(refusal), nil
@@ -95,31 +94,31 @@ func (t *Tenant) reserveCall(m platform.Member, model platform.AIModel, req plat
 	return failure
 }
 
-func (t *Tenant) releaseCall(call string, now time.Time) *kernel.Error {
+func (t *Tenant) releaseCall(call string, now time.Time) *platform.Error {
 	member := platform.Member{ID: "app:" + platform.AIApp, Tenant: t.ID}
-	_, refusal := decideOnImage(t, context.Background(), "model:release", func(t *Tenant) (any, *kernel.Error) {
+	_, refusal := decideOnImage(t, context.Background(), "model:release", func(t *Tenant) (any, *platform.Error) {
 		r, ok := t.ai.Reservation(call)
 		if !ok {
 			return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The model reservation is unavailable")
 		}
 		body, _ := json.Marshal(platform.AIReserveInput{Reservation: r, Cancel: true})
 		return t.inputAccepted(t.ai, member, platform.AIReserveCall, body, now)
-	}, func(t *Tenant, candidate preparedAccepted, answer any, refusal *kernel.Error) (any, *kernel.Error) {
+	}, func(t *Tenant, candidate preparedAccepted, answer any, refusal *platform.Error) (any, *platform.Error) {
 		return t.finishPreparedInput(member, platform.AIReserveCall, candidate, answer, refusal)
 	})
 	return refusal
 }
 
-func (t *Tenant) Chat(m platform.Member, req platform.ChatRequest, now time.Time, delta ...func(string)) (platform.ChatAnswer, *kernel.Error, *platform.AIError) {
+func (t *Tenant) Chat(m platform.Member, req platform.ChatRequest, now time.Time, delta ...func(string)) (platform.ChatAnswer, *platform.Error, *platform.AIError) {
 	return t.gatewayRuntime().Chat(m, req, platform.AIStageRuntime, now, delta...)
 }
 
-func (t *Tenant) DesignChat(m platform.Member, req platform.ChatRequest, now time.Time, delta ...func(string)) (platform.ChatAnswer, *kernel.Error, *platform.AIError) {
+func (t *Tenant) DesignChat(m platform.Member, req platform.ChatRequest, now time.Time, delta ...func(string)) (platform.ChatAnswer, *platform.Error, *platform.AIError) {
 	return t.gatewayRuntime().Chat(m, req, platform.AIStageDesign, now, delta...)
 }
 
 func (t *Tenant) call(pv platform.AIProvider, model platform.AIModel, m platform.Member, req platform.ChatRequest, now time.Time) (platform.ChatAnswer, *platform.AIError) {
-	ceiling, _ := recordRead(t, context.Background(), func(t *Tenant) (int, *kernel.Error) { return t.modelResolver().MostTokens(), nil })
+	ceiling, _ := recordRead(t, context.Background(), func(t *Tenant) (int, *platform.Error) { return t.modelResolver().MostTokens(), nil })
 	gateway := t.gatewayRuntime().Calls(func() int { return ceiling })
 	span := monitoring.Outside(trace.SpanContext{}, "chat "+model.Model, attribute.String("gen_ai.operation.name", "chat"), attribute.String("gen_ai.provider.name", pv.ID), attribute.String("gen_ai.request.model", model.Model), attribute.String("platform.tenant", t.ID))
 	answer, failure := gateway.Call(pv, model, m, req, now)
@@ -132,10 +131,10 @@ func (t *Tenant) call(pv platform.AIProvider, model platform.AIModel, m platform
 	return answer, failure
 }
 
-func (t *Tenant) meter(m platform.Member, u platform.AIUsage) *kernel.Error {
-	_, refusal := decideOnImage(t, context.Background(), "model:usage", func(t *Tenant) (struct{}, *kernel.Error) {
+func (t *Tenant) meter(m platform.Member, u platform.AIUsage) *platform.Error {
+	_, refusal := decideOnImage(t, context.Background(), "model:usage", func(t *Tenant) (struct{}, *platform.Error) {
 		return struct{}{}, t.acceptUsage(m, u)
-	}, func(t *Tenant, candidate preparedAccepted, value struct{}, refusal *kernel.Error) (struct{}, *kernel.Error) {
+	}, func(t *Tenant, candidate preparedAccepted, value struct{}, refusal *platform.Error) (struct{}, *platform.Error) {
 		if len(candidate.entry.Body) == 0 {
 			return value, refusal
 		}
@@ -167,7 +166,7 @@ func (t *Tenant) usageAcceptance() aigateway.UsageAcceptance {
 		Caller: func(m platform.Member) platform.Caller {
 			return platform.NewCaller(runtime{t: t, scoped: true}, m, platform.AIApp, false, true)
 		},
-		Authorize: func(c platform.Caller, valid bool) (platform.AuthzDecision, *kernel.Error) {
+		Authorize: func(c platform.Caller, valid bool) (platform.AuthzDecision, *platform.Error) {
 			decision := t.authorizeNative(c, "usage:observe", "derive", nil, valid)
 			return decision, authorizationRefusal(decision)
 		},
@@ -177,7 +176,7 @@ func (t *Tenant) usageAcceptance() aigateway.UsageAcceptance {
 		Applied:     func() { t.acceptedResultApplied(); t.operationsChanged(platform.AIApp) }}
 }
 
-func (t *Tenant) acceptUsage(m platform.Member, u platform.AIUsage) *kernel.Error {
+func (t *Tenant) acceptUsage(m platform.Member, u platform.AIUsage) *platform.Error {
 	r, raw, refusal := t.usageAcceptance().Seal(m, u)
 	if refusal != nil || raw == nil {
 		return refusal
@@ -189,7 +188,7 @@ func (t *Tenant) acceptUsage(m platform.Member, u platform.AIUsage) *kernel.Erro
 	return t.finishUsage(candidate)
 }
 
-func (t *Tenant) finishUsage(candidate preparedAccepted) *kernel.Error {
+func (t *Tenant) finishUsage(candidate preparedAccepted) *platform.Error {
 	committed, err := t.acceptResult(candidate.entry, candidate.key, candidate.hash)
 	if err != nil {
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The model usage was not accepted")

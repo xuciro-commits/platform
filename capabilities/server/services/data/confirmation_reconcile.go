@@ -10,7 +10,6 @@ import (
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 	"platformserver/platform"
 )
 
@@ -24,8 +23,8 @@ type ConfirmationReadPlan struct {
 
 type ConfirmationReconcile struct {
 	Schedule *StatusReads
-	Pending  func() ([]platform.ConfirmationRun, *kernel.Error)
-	Plan     func(id string, index int) (ConfirmationReadPlan, *kernel.Error)
+	Pending  func() ([]platform.ConfirmationRun, *platform.Error)
+	Plan     func(id string, index int) (ConfirmationReadPlan, *platform.Error)
 	Read     func(Source, *Connection) ([]map[string]any, error)
 	Answer   func(plan ConfirmationReadPlan, index int, diff platform.ConfirmationDifference, outcome string)
 }

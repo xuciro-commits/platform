@@ -4,7 +4,6 @@ import (
 	"platformserver/kernel/records"
 	"time"
 
-	"platformkernel/kernel"
 	enterprisemodel "platformserver/services/security/organization"
 
 	"platformserver/platform"
@@ -24,10 +23,10 @@ func (t *Tenant) enterpriseUsage(store *records.Store) enterprisemodel.ExternalU
 	return usage
 }
 
-func (t *Tenant) checkEnterpriseUsage(c platform.Caller, store *records.Store, id, until string, deleting bool, now time.Time) *kernel.Error {
+func (t *Tenant) checkEnterpriseUsage(c platform.Caller, store *records.Store, id, until string, deleting bool, now time.Time) *platform.Error {
 	return t.enterpriseUsage(store).Check(c, id, until, deleting, now)
 }
 
-func (t *Tenant) enterpriseUsageRead(m platform.Member, id, until string, now time.Time) (enterprisemodel.EnterpriseUsage, *kernel.Error) {
+func (t *Tenant) enterpriseUsageRead(m platform.Member, id, until string, now time.Time) (enterprisemodel.EnterpriseUsage, *platform.Error) {
 	return t.enterpriseUsage(t.Projection).Read(m, id, until, now)
 }

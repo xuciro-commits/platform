@@ -8,18 +8,17 @@ import (
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 	"platformserver/platform"
 )
 
 const maxObservationWindow = 30 * 24 * time.Hour
 const maxAuditWindow = 400 * 24 * time.Hour
 
-func invalidArgument() *kernel.Error {
-	return &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
+func invalidArgument() *platform.Error {
+	return &platform.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 }
 
-func AuditQuery(values url.Values, tenant string, now time.Time) (platform.AuditQuery, *kernel.Error) {
+func AuditQuery(values url.Values, tenant string, now time.Time) (platform.AuditQuery, *platform.Error) {
 	query, refusal := auditWindow(values, now)
 	if refusal != nil {
 		return platform.AuditQuery{}, refusal
@@ -38,7 +37,7 @@ func AuditQuery(values url.Values, tenant string, now time.Time) (platform.Audit
 	return query, nil
 }
 
-func PersonalReadQuery(values url.Values, tenant string, now time.Time) (platform.PersonalReadQuery, *kernel.Error) {
+func PersonalReadQuery(values url.Values, tenant string, now time.Time) (platform.PersonalReadQuery, *platform.Error) {
 	window, refusal := auditWindow(values, now)
 	if refusal != nil {
 		return platform.PersonalReadQuery{}, refusal
@@ -54,7 +53,7 @@ func PersonalReadQuery(values url.Values, tenant string, now time.Time) (platfor
 	}, nil
 }
 
-func auditWindow(values url.Values, now time.Time) (platform.AuditQuery, *kernel.Error) {
+func auditWindow(values url.Values, now time.Time) (platform.AuditQuery, *platform.Error) {
 	to := now.UTC()
 	if text := values.Get("to"); text != "" {
 		parsed, err := time.Parse(time.RFC3339, text)
@@ -77,7 +76,7 @@ func auditWindow(values url.Values, now time.Time) (platform.AuditQuery, *kernel
 	return platform.AuditQuery{From: from, To: to}, nil
 }
 
-func pageLimit(values url.Values) (int, *kernel.Error) {
+func pageLimit(values url.Values) (int, *platform.Error) {
 	limit := 100
 	if text := values.Get("limit"); text != "" {
 		parsed, err := strconv.Atoi(text)
@@ -120,7 +119,7 @@ func ObservationFilterSummary(query platform.ObservationQuery) string {
 		filter{"requestId", query.RequestID}, filter{"traceId", query.TraceID}, filter{"runId", query.RunID}, filter{"resource", query.Resource})
 }
 
-func ObservationQuery(values url.Values, tenant string, now time.Time, levelRank func(string) int) (platform.ObservationQuery, *kernel.Error) {
+func ObservationQuery(values url.Values, tenant string, now time.Time, levelRank func(string) int) (platform.ObservationQuery, *platform.Error) {
 	to := now.UTC()
 	if text := values.Get("to"); text != "" {
 		parsed, err := time.Parse(time.RFC3339, text)
@@ -170,7 +169,7 @@ func ObservationQuery(values url.Values, tenant string, now time.Time, levelRank
 	}, nil
 }
 
-func RunFilterFrom(values url.Values) (MonitoringRunFilter, *kernel.Error) {
+func RunFilterFrom(values url.Values) (MonitoringRunFilter, *platform.Error) {
 	filter := MonitoringRunFilter{Type: values.Get("type"), Status: values.Get("status"), Limit: 50}
 	for key, dest := range map[string]*int{"offset": &filter.Offset, "limit": &filter.Limit} {
 		if values.Has(key) {
@@ -187,11 +186,11 @@ func RunFilterFrom(values url.Values) (MonitoringRunFilter, *kernel.Error) {
 	return filter, nil
 }
 
-func QueryFailure(err error, cursor, cursorMarker, unavailable string) *kernel.Error {
+func QueryFailure(err error, cursor, cursorMarker, unavailable string) *platform.Error {
 	if cursor != "" && strings.Contains(err.Error(), cursorMarker) {
 		return invalidArgument()
 	}
-	return &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_UNSPECIFIED, Message: unavailable}
+	return &platform.Error{Code: pb.ErrorCode_ERROR_CODE_UNSPECIFIED, Message: unavailable}
 }
 
 type ObservationReads struct {
@@ -210,7 +209,7 @@ type ObservationReads struct {
 	RequestPercent func() int
 }
 
-func (o ObservationReads) Logs(values url.Values) (platform.ObservationPage, *kernel.Error) {
+func (o ObservationReads) Logs(values url.Values) (platform.ObservationPage, *platform.Error) {
 	query, refusal := ObservationQuery(values, o.Tenant, o.Now, o.LevelRank)
 	if refusal != nil {
 		return platform.ObservationPage{}, refusal
@@ -234,7 +233,7 @@ func (o ObservationReads) Logs(values url.Values) (platform.ObservationPage, *ke
 	return page, nil
 }
 
-func (o ObservationReads) Traces(values url.Values) (platform.ObservationPage, *kernel.Error) {
+func (o ObservationReads) Traces(values url.Values) (platform.ObservationPage, *platform.Error) {
 	query, refusal := ObservationQuery(values, o.Tenant, o.Now, o.LevelRank)
 	if refusal != nil {
 		return platform.ObservationPage{}, refusal
@@ -256,7 +255,7 @@ func (o ObservationReads) Traces(values url.Values) (platform.ObservationPage, *
 	return page, nil
 }
 
-func (o ObservationReads) Metrics(values url.Values) (platform.ObservationSummary, *kernel.Error) {
+func (o ObservationReads) Metrics(values url.Values) (platform.ObservationSummary, *platform.Error) {
 	query, refusal := ObservationQuery(values, o.Tenant, o.Now, o.LevelRank)
 	if refusal != nil {
 		return platform.ObservationSummary{}, refusal

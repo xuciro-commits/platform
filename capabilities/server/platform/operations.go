@@ -9,7 +9,6 @@ import (
 	"math"
 	"math/big"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 	"slices"
 	"strconv"
 	"strings"
@@ -415,20 +414,20 @@ type OperationResult struct {
 	Millis       int64           `json:"millis,omitempty"`
 }
 
-func (c Caller) RequestOperation(r *pb.ChangeRecord, q OperationRequest) (OperationCall, *kernel.Error) {
+func (c Caller) RequestOperation(r *pb.ChangeRecord, q OperationRequest) (OperationCall, *Error) {
 	if c.rt != nil {
 		return c.rt.RequestOperation(c, r, q)
 	}
 	return OperationCall{}, Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Operations require an accepted decision")
 }
-func (c Caller) OperationResult(id string) (OperationResult, *kernel.Error) {
+func (c Caller) OperationResult(id string) (OperationResult, *Error) {
 	if c.rt != nil {
 		return c.rt.OperationResult(c, id)
 	}
 	return OperationResult{}, notFound()
 }
 
-func (c Caller) CancelOperation(r *pb.ChangeRecord, id string) *kernel.Error {
+func (c Caller) CancelOperation(r *pb.ChangeRecord, id string) *Error {
 	if c.rt != nil {
 		return c.rt.CancelOperation(c, r, id)
 	}
@@ -450,7 +449,7 @@ type CodeBuildResult struct {
 	Diagnostics string `json:"diagnostics,omitempty"`
 }
 
-func (c Caller) RequestCompilation(r *pb.ChangeRecord, key, target string, q CodeBuildRequest) (OperationCall, *kernel.Error) {
+func (c Caller) RequestCompilation(r *pb.ChangeRecord, key, target string, q CodeBuildRequest) (OperationCall, *Error) {
 	if c.rt != nil {
 		return c.rt.RequestCompilation(c, r, key, target, q)
 	}

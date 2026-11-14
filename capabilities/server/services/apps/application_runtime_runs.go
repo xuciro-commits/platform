@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 	"platformserver/platform"
 	"platformserver/services/resources/publication"
 	"slices"
@@ -12,7 +11,7 @@ import (
 	"time"
 )
 
-func (ctx Context) Runs(m platform.Member, ref platform.AssetRef, offset, limit int, now time.Time, filters ...platform.ApplicationRunFilter) (platform.ApplicationRunPage, *kernel.Error) {
+func (ctx Context) Runs(m platform.Member, ref platform.AssetRef, offset, limit int, now time.Time, filters ...platform.ApplicationRunFilter) (platform.ApplicationRunPage, *platform.Error) {
 	out := platform.ApplicationRunPage{Application: ref, Runs: []platform.ApplicationRun{}}
 	if ref.Kind != platform.AssetApp || ref.Check() != nil || offset < 0 || limit < 1 || limit > 100 {
 		return out, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Choose an application and a run page of 1–100")
@@ -118,7 +117,7 @@ func (ctx Context) Runs(m platform.Member, ref platform.AssetRef, offset, limit 
 			out.Summary.WaitingFlows++
 		}
 	}
-	records := func(typ string, domain json.RawMessage) ([]any, *kernel.Error) {
+	records := func(typ string, domain json.RawMessage) ([]any, *platform.Error) {
 		rows, err := ctx.Rows(m, typ, platform.Query{Domain: domain, Archived: true}, now)
 		if err != nil && (err.Code == pb.ErrorCode_ERROR_CODE_POLICY_DENIED || err.Code == pb.ErrorCode_ERROR_CODE_NOT_FOUND) {
 			return nil, nil

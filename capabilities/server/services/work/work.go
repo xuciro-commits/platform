@@ -11,7 +11,6 @@ import (
 	"google.golang.org/protobuf/encoding/protojson"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 
 	"platformserver/platform"
 )
@@ -62,17 +61,17 @@ var _ platform.AttachedWork = (*Work)(nil)
 
 func (w *Work) AttachWork(h platform.WorkHost) { w.host = h }
 
-func (w *Work) RequestApproval(c platform.Caller, held *pb.Submission, now time.Time) (*pb.ChangeRecord, *kernel.Error) {
+func (w *Work) RequestApproval(c platform.Caller, held *pb.Submission, now time.Time) (*pb.ChangeRecord, *platform.Error) {
 	if c.Automation || c.Tenant == "" || held.GetTenantId() != c.Tenant || held.GetPrincipalId() != c.ID || held.GetAuthority() != c.App {
 		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "The approval needs its original authorised member")
 	}
 	raw, err := protojson.Marshal(held)
 	if err != nil {
-		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
+		return nil, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 	}
 	payload, err := json.Marshal(map[string]any{"requester": c.ID, "submission": json.RawMessage(raw)})
 	if err != nil {
-		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
+		return nil, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 	}
 	id := c.App + "." + held.GetIdempotencyKey()
 	automation := w.host.Automation(c, ID)
@@ -183,13 +182,13 @@ func (w *Work) Declarations() []*pb.AuthorityDeclaration { return w.ledger.Decla
 
 func (w *Work) Authority() platform.Authority { return w.ledger }
 
-func (w *Work) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *kernel.Error) {
+func (w *Work) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *platform.Error) {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 	if record, err, ok := w.ledger.Generated(c, s, now, nil, w.entities()...); ok {
 		return record, err
 	}
-	return w.ledger.Receive(c, s, now, nil, func() (func(*pb.ChangeRecord), *kernel.Error) {
+	return w.ledger.Receive(c, s, now, nil, func() (func(*pb.ChangeRecord), *platform.Error) {
 		switch s.GetSchema().GetName() {
 		case SchemaTaskCreate:
 			return w.createTask(c, s, now)
@@ -203,14 +202,14 @@ func (w *Work) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb.C
 			return w.policy(c, s)
 		}
 		if w.host == nil || s.GetSchema().GetName() != SchemaRequest {
-			return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_UNKNOWN_SCHEMA}
+			return nil, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_UNKNOWN_SCHEMA}
 		}
 		return w.request(c, s, now)
 	})
 }
 
-func (w *Work) request(c platform.Caller, s *pb.Submission, now time.Time) (func(*pb.ChangeRecord), *kernel.Error) {
-	invalid := &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
+func (w *Work) request(c platform.Caller, s *pb.Submission, now time.Time) (func(*pb.ChangeRecord), *platform.Error) {
+	invalid := &platform.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 	var p struct {
 		Requester  string          `json:"requester"`
 		Submission json.RawMessage `json:"submission"`
@@ -232,7 +231,7 @@ func (w *Work) request(c platform.Caller, s *pb.Submission, now time.Time) (func
 		}
 		approvers := slices.DeleteFunc(w.approvers(level, requester, app, now), func(m string) bool { return m == requester.ID })
 		if len(approvers) == 0 {
-			return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_POLICY_DENIED}
+			return nil, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_POLICY_DENIED}
 		}
 		step := ApprovalStep{Title: level.Title, Approvers: approvers, All: level.All, Approved: []string{}, Delegates: w.delegates(c, approvers, now)}
 		step.Count = CountFor(step, level.All, w.PolicyCount(c, app, declared.Schema), len(approvers))
@@ -253,7 +252,7 @@ func (w *Work) request(c platform.Caller, s *pb.Submission, now time.Time) (func
 	request := ApprovalRequest{Record: platform.Record{ID: s.GetTarget().GetId()}, Action: declared.Schema, Title: declared.Title, App: app,
 		Target: held.GetTarget().GetType() + "/" + held.GetTarget().GetId(), Requester: requester.ID, Submission: string(raw), Levels: steps, State: "pending", Release: release}
 	if _, known := platform.Get[ApprovalRequest](c, request.ID); known {
-		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
+		return nil, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
 	}
 	return func(r *pb.ChangeRecord) {
 		if len(steps) == 0 {
@@ -313,17 +312,17 @@ func (w *Work) close(c platform.Caller, r *pb.ChangeRecord, a ApprovalRequest, l
 	}
 }
 
-func (w *Work) decider(c platform.Caller, record any, _ json.RawMessage, _ time.Time) *kernel.Error {
+func (w *Work) decider(c platform.Caller, record any, _ json.RawMessage, _ time.Time) *platform.Error {
 	a := record.(*ApprovalRequest)
 	step := a.Levels[a.Level]
 	who := approvalActingFor(step, c.ID)
 	if c.Agent || c.ID == a.Requester || who == "" || slices.Contains(step.Approved, who) {
-		return &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_POLICY_DENIED}
+		return &platform.Error{Code: pb.ErrorCode_ERROR_CODE_POLICY_DENIED}
 	}
 	return nil
 }
 
-func (w *Work) approve(c platform.Caller, record any, payload json.RawMessage, now time.Time) *kernel.Error {
+func (w *Work) approve(c platform.Caller, record any, payload json.RawMessage, now time.Time) *platform.Error {
 	if err := w.decider(c, record, payload, now); err != nil {
 		return err
 	}
@@ -403,7 +402,7 @@ func (w *Work) ended(c platform.Caller, r *pb.ChangeRecord, record any, now time
 		Key: "request:" + a.ID}, now, to...)
 }
 
-func (w *Work) reject(c platform.Caller, record any, payload json.RawMessage, now time.Time) *kernel.Error {
+func (w *Work) reject(c platform.Caller, record any, payload json.RawMessage, now time.Time) *platform.Error {
 	if err := w.decider(c, record, payload, now); err != nil {
 		return err
 	}
@@ -431,35 +430,35 @@ func (w *Work) move(c platform.Caller, a ApprovalRequest, suffix string, now tim
 		Target: held.GetTarget(), Schema: &pb.SchemaRef{Name: schema, Version: 1}, Payload: []byte("{}")}, now)
 }
 
-func (w *Work) requester(c platform.Caller, record any, _ json.RawMessage, _ time.Time) *kernel.Error {
+func (w *Work) requester(c platform.Caller, record any, _ json.RawMessage, _ time.Time) *platform.Error {
 	if record.(*ApprovalRequest).Requester != c.ID {
-		return &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_POLICY_DENIED}
+		return &platform.Error{Code: pb.ErrorCode_ERROR_CODE_POLICY_DENIED}
 	}
 	return nil
 }
 
-func (w *Work) claim(c platform.Caller, record any, _ json.RawMessage, _ time.Time) *kernel.Error {
+func (w *Work) claim(c platform.Caller, record any, _ json.RawMessage, _ time.Time) *platform.Error {
 	t := record.(*WorkTask)
 	if !slices.Contains(t.Candidates, c.ID) || t.Assignee != "" && t.Assignee != c.ID {
-		return &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_POLICY_DENIED}
+		return &platform.Error{Code: pb.ErrorCode_ERROR_CODE_POLICY_DENIED}
 	}
 	t.Assignee = c.ID
 	return nil
 }
 
-func (w *Work) completer(c platform.Caller, record any, payload json.RawMessage, _ time.Time) *kernel.Error {
+func (w *Work) completer(c platform.Caller, record any, payload json.RawMessage, _ time.Time) *platform.Error {
 	t := record.(*WorkTask)
 	var p struct{ Answer string }
 	json.Unmarshal(payload, &p)
 	if len(t.Answers) > 0 && !slices.Contains(t.Answers, p.Answer) || len(t.Answers) == 0 && p.Answer != "" {
-		return &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
+		return &platform.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 	}
 	t.Answer = p.Answer
 	if strings.HasPrefix(t.Ref, ApprovalType+"/") {
-		return &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
+		return &platform.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
 	}
 	if !slices.Contains(t.Candidates, c.ID) || t.Assignee != "" && t.Assignee != c.ID {
-		return &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_POLICY_DENIED}
+		return &platform.Error{Code: pb.ErrorCode_ERROR_CODE_POLICY_DENIED}
 	}
 	t.Assignee = c.ID
 	return nil
@@ -481,22 +480,22 @@ func (w *Work) inbox(c platform.Caller, now time.Time) []WorkTask {
 	return out
 }
 
-func (w *Work) view(c platform.Caller, s *pb.Submission) (func(*pb.ChangeRecord), *kernel.Error) {
+func (w *Work) view(c platform.Caller, s *pb.Submission) (func(*pb.ChangeRecord), *platform.Error) {
 	id := s.GetTarget().GetId()
 	v, exists := platform.Get[SavedView](c, id)
 	if exists && v.Owner != c.ID {
-		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_POLICY_DENIED}
+		return nil, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_POLICY_DENIED}
 	}
 	if s.GetSchema().GetName() == SchemaViewRemove {
 		if !exists || v.Archived {
-			return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
+			return nil, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
 		}
 		v.Archived = true
 		return func(r *pb.ChangeRecord) { c.Put(r, v) }, nil
 	}
 	var p struct{ Title, Entity, State string }
 	if json.Unmarshal(s.GetPayload(), &p) != nil || exists && p.Entity != v.Entity {
-		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
+		return nil, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 	}
 	if err := platform.CheckWorkViewState(p.State); err != nil {
 		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
@@ -508,7 +507,7 @@ func (w *Work) view(c platform.Caller, s *pb.Submission) (func(*pb.ChangeRecord)
 	return func(r *pb.ChangeRecord) { c.Put(r, v) }, nil
 }
 
-func (w *Work) Read(c platform.Caller, name string) (any, *kernel.Error) {
+func (w *Work) Read(c platform.Caller, name string) (any, *platform.Error) {
 	if name == "inbox" {
 		return w.inbox(c, time.Now()), nil
 	}
@@ -525,7 +524,7 @@ func (w *Work) Read(c platform.Caller, name string) (any, *kernel.Error) {
 	return out, nil
 }
 
-func (w *Work) Run(c platform.Caller, name string, now time.Time) *kernel.Error {
+func (w *Work) Run(c platform.Caller, name string, now time.Time) *platform.Error {
 	if name == "refusals" {
 		return w.runRefusalEscalations(c, now)
 	}
@@ -544,7 +543,7 @@ func (w *Work) Run(c platform.Caller, name string, now time.Time) *kernel.Error 
 	return nil
 }
 
-func (w *Work) Assign(c platform.Caller, r *pb.ChangeRecord, a platform.Assignment) *kernel.Error {
+func (w *Work) Assign(c platform.Caller, r *pb.ChangeRecord, a platform.Assignment) *platform.Error {
 	if a.Close {
 		if a.Key == "" {
 			return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Closing an assignment needs its original owner key")
@@ -622,25 +621,25 @@ func (w *Work) delegates(c platform.Caller, approvers []string, now time.Time) m
 	return out
 }
 
-func (w *Work) delegate(c platform.Caller, s *pb.Submission) (func(*pb.ChangeRecord), *kernel.Error) {
+func (w *Work) delegate(c platform.Caller, s *pb.Submission) (func(*pb.ChangeRecord), *platform.Error) {
 	id := s.GetTarget().GetId()
 	existing, known := platform.Get[Delegation](c, id)
 	if s.GetSchema().GetName() == SchemaUndelegate {
 		if !known || existing.Archived || existing.From != c.ID && !c.Replaying {
-			return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
+			return nil, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
 		}
 		existing.Archived = true
 		return func(r *pb.ChangeRecord) { c.Put(r, existing) }, nil
 	}
 	var p struct{ To, Start, End string }
 	if json.Unmarshal(s.GetPayload(), &p) != nil || p.To == "" || p.To == c.ID || p.End < p.Start {
-		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
+		return nil, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 	}
 	if known {
-		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
+		return nil, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
 	}
 	if _, ok := w.host.Member(p.To); !ok && !c.Replaying {
-		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
+		return nil, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 	}
 	d := Delegation{Record: platform.Record{ID: id}, From: c.ID, To: p.To, Start: p.Start, End: p.End}
 	if err := c.Check(d); err != nil {

@@ -3,7 +3,6 @@ package host
 import (
 	"net/http"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 	transport "platformserver/kernel/transport"
 	"platformserver/platform"
 	"platformserver/services/resources/authoring"
@@ -13,14 +12,14 @@ import (
 
 const branchBodyMessage = "The request must be one valid bounded JSON object"
 
-func branchByID[R any](now func() time.Time, f func(*Tenant, platform.Member, string, time.Time) (R, *kernel.Error)) func(http.ResponseWriter, *http.Request, platform.Member, *Tenant) {
-	return transport.Answering(func(r *http.Request, m platform.Member, t *Tenant) (R, *kernel.Error) {
+func branchByID[R any](now func() time.Time, f func(*Tenant, platform.Member, string, time.Time) (R, *platform.Error)) func(http.ResponseWriter, *http.Request, platform.Member, *Tenant) {
+	return transport.Answering(func(r *http.Request, m platform.Member, t *Tenant) (R, *platform.Error) {
 		return f(t, m, r.PathValue("id"), now())
 	})
 }
 
-func branchByIDBody[B, R any](now func() time.Time, f func(*Tenant, platform.Member, string, B, time.Time) (R, *kernel.Error)) func(http.ResponseWriter, *http.Request, platform.Member, *Tenant) {
-	return transport.Bounded(build.BranchMaxSpec+4096, branchBodyMessage, func(r *http.Request, m platform.Member, t *Tenant, body B) (R, *kernel.Error) {
+func branchByIDBody[B, R any](now func() time.Time, f func(*Tenant, platform.Member, string, B, time.Time) (R, *platform.Error)) func(http.ResponseWriter, *http.Request, platform.Member, *Tenant) {
+	return transport.Bounded(build.BranchMaxSpec+4096, branchBodyMessage, func(r *http.Request, m platform.Member, t *Tenant, body B) (R, *platform.Error) {
 		return f(t, m, r.PathValue("id"), body, now())
 	})
 }
@@ -29,24 +28,24 @@ func (h *Host) routesBranches(rt *routes) {
 	branch := func(route transport.Route, f func(http.ResponseWriter, *http.Request, platform.Member, *Tenant)) {
 		rt.authorized(route, build.ID, []string{build.Builder}, f)
 	}
-	branch(transport.Route{Pattern: "GET /v1/branches", Summary: "Builder-only list of named branches with the resources each changes", Answer: []branches.BranchDetail{}}, transport.Answering(func(_ *http.Request, m platform.Member, t *Tenant) ([]branches.BranchDetail, *kernel.Error) {
+	branch(transport.Route{Pattern: "GET /v1/branches", Summary: "Builder-only list of named branches with the resources each changes", Answer: []branches.BranchDetail{}}, transport.Answering(func(_ *http.Request, m platform.Member, t *Tenant) ([]branches.BranchDetail, *platform.Error) {
 		return t.ListBranches(m, h.Now())
 	}))
-	branch(transport.Route{Pattern: "POST /v1/branches", Summary: "Open a named branch: a metadata overlay whose saves append to a change set; instance data is never part of it", Body: branches.BranchCreateRequest{}, Answer: branches.BranchDetail{}}, transport.Bounded(build.BranchMaxSpec+4096, branchBodyMessage, func(_ *http.Request, m platform.Member, t *Tenant, request branches.BranchCreateRequest) (branches.BranchDetail, *kernel.Error) {
+	branch(transport.Route{Pattern: "POST /v1/branches", Summary: "Open a named branch: a metadata overlay whose saves append to a change set; instance data is never part of it", Body: branches.BranchCreateRequest{}, Answer: branches.BranchDetail{}}, transport.Bounded(build.BranchMaxSpec+4096, branchBodyMessage, func(_ *http.Request, m platform.Member, t *Tenant, request branches.BranchCreateRequest) (branches.BranchDetail, *platform.Error) {
 		return t.CreateBranch(m, request, h.Now())
 	}))
 	branch(transport.Route{Pattern: "GET /v1/branches/{id}", Summary: "A branch with its resources, proposal and merge record", Answer: branches.BranchDetail{}}, branchByID(h.Now, (*Tenant).BranchDetail))
-	branch(transport.Route{Pattern: "GET /v1/branches/{id}/changes", Summary: "The branch change set in save order; specs=true adds each saved spec and base", Query: []transport.Param{{Name: "specs", Description: "true: include base and spec bodies"}}, Answer: []branches.BranchChangeEntry{}}, transport.Answering(func(r *http.Request, m platform.Member, t *Tenant) ([]branches.BranchChangeEntry, *kernel.Error) {
+	branch(transport.Route{Pattern: "GET /v1/branches/{id}/changes", Summary: "The branch change set in save order; specs=true adds each saved spec and base", Query: []transport.Param{{Name: "specs", Description: "true: include base and spec bodies"}}, Answer: []branches.BranchChangeEntry{}}, transport.Answering(func(r *http.Request, m platform.Member, t *Tenant) ([]branches.BranchChangeEntry, *platform.Error) {
 		return t.BranchChanges(m, r.PathValue("id"), r.URL.Query().Get("specs") == "true", h.Now())
 	}))
 	branch(transport.Route{Pattern: "GET /v1/branches/{id}/diff", Summary: "Per resource, the JSON path changes of the branch and of main since the branch's base, their conflicts, and the three-way merged spec", Answer: branches.BranchDiff{}}, branchByID(h.Now, (*Tenant).BranchDiff))
-	branch(transport.Route{Pattern: "GET /v1/branches/{id}/resources/{type}/{draft}", Summary: "One resource's base, current main and branch spec", Answer: branches.BranchResourceView{}}, transport.Answering(func(r *http.Request, m platform.Member, t *Tenant) (branches.BranchResourceView, *kernel.Error) {
+	branch(transport.Route{Pattern: "GET /v1/branches/{id}/resources/{type}/{draft}", Summary: "One resource's base, current main and branch spec", Answer: branches.BranchResourceView{}}, transport.Answering(func(r *http.Request, m platform.Member, t *Tenant) (branches.BranchResourceView, *platform.Error) {
 		return t.BranchResource(m, r.PathValue("id"), r.PathValue("type"), r.PathValue("draft"), h.Now())
 	}))
-	branch(transport.Route{Pattern: "PUT /v1/branches/{id}/resources/{type}/{draft}", Summary: "Save a resource's full authored spec into the branch (appends to the change set); op delete drops it", Body: branches.BranchSaveRequest{}, Answer: branches.BranchDetail{}}, transport.Bounded(build.BranchMaxSpec+4096, branchBodyMessage, func(r *http.Request, m platform.Member, t *Tenant, request branches.BranchSaveRequest) (branches.BranchDetail, *kernel.Error) {
+	branch(transport.Route{Pattern: "PUT /v1/branches/{id}/resources/{type}/{draft}", Summary: "Save a resource's full authored spec into the branch (appends to the change set); op delete drops it", Body: branches.BranchSaveRequest{}, Answer: branches.BranchDetail{}}, transport.Bounded(build.BranchMaxSpec+4096, branchBodyMessage, func(r *http.Request, m platform.Member, t *Tenant, request branches.BranchSaveRequest) (branches.BranchDetail, *platform.Error) {
 		return t.SaveBranchResource(m, r.PathValue("id"), r.PathValue("type"), r.PathValue("draft"), request, h.Now())
 	}))
-	branch(transport.Route{Pattern: "POST /v1/branches/{id}/resources/{type}/{draft}/compile", Summary: "Compile a code function on the branch with the isolated controlled compiler; the content-addressed artifact reference is saved into the branch's code spec, never into main, and merges with the code resource without recompiling", Answer: branches.BranchDetail{}}, transport.Answering(func(r *http.Request, m platform.Member, t *Tenant) (branches.BranchDetail, *kernel.Error) {
+	branch(transport.Route{Pattern: "POST /v1/branches/{id}/resources/{type}/{draft}/compile", Summary: "Compile a code function on the branch with the isolated controlled compiler; the content-addressed artifact reference is saved into the branch's code spec, never into main, and merges with the code resource without recompiling", Answer: branches.BranchDetail{}}, transport.Answering(func(r *http.Request, m platform.Member, t *Tenant) (branches.BranchDetail, *platform.Error) {
 		return t.BranchCompile(m, r.PathValue("id"), r.PathValue("type"), r.PathValue("draft"), h.Now())
 	}))
 	branch(transport.Route{Pattern: "POST /v1/branches/{id}/checks", Summary: "Dry-run staged check, recording nothing: three-way conflicts, then the merged resources applied in a staged world, the whole definition graph validated there, and optionally a candidate simulation", Body: BranchCheckRequest{}, Answer: BranchChecks{}}, branchByIDBody(h.Now, (*Tenant).BranchChecks))

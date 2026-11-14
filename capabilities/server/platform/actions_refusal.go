@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 	"time"
 )
 
@@ -41,7 +40,7 @@ type BusinessRefusalFact struct {
 	Escalation   *RefusalEscalation         `json:"escalation,omitempty"`
 }
 
-func (c Caller) RefuseBusiness(fact BusinessRefusalFact) *kernel.Error {
+func (c Caller) RefuseBusiness(fact BusinessRefusalFact) *Error {
 	owner := c.StagedDecision()
 	if owner == nil || c.Replaying {
 		return Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Business refusal facts need the accepted decision owner / 业务拒绝事实须经接受决策归属方")
@@ -51,7 +50,7 @@ func (c Caller) RefuseBusiness(fact BusinessRefusalFact) *kernel.Error {
 	return answer
 }
 
-func (c Caller) CaptureBusinessRefusal(receipt *pb.ChangeRecord, fact BusinessRefusalFact) *kernel.Error {
+func (c Caller) CaptureBusinessRefusal(receipt *pb.ChangeRecord, fact BusinessRefusalFact) *Error {
 	owner := c.StagedDecision()
 	if owner == nil || c.Replaying {
 		return Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Business refusal facts need the accepted decision owner / 业务拒绝事实须经接受决策归属方")
@@ -59,7 +58,7 @@ func (c Caller) CaptureBusinessRefusal(receipt *pb.ChangeRecord, fact BusinessRe
 	return owner.CaptureBusinessRefusal(c, receipt, fact)
 }
 
-func (c Caller) RefuseBusinessCondition(code, message string, record any, inputs map[string]any, at time.Time) *kernel.Error {
+func (c Caller) RefuseBusinessCondition(code, message string, record any, inputs map[string]any, at time.Time) *Error {
 	if owner := c.StagedDecision(); owner != nil && !c.Replaying {
 		return owner.RefuseBusinessCondition(c, code, message, record, inputs, at)
 	}
@@ -99,7 +98,7 @@ type RefusalEscalationRequest struct {
 
 func (r RefusalEscalationRequest) TaskID() string { return r.App + ":refusal:" + r.Key }
 
-func PendingRefusalEscalations(c Caller, at time.Time) ([]RefusalEscalationRequest, *kernel.Error) {
+func PendingRefusalEscalations(c Caller, at time.Time) ([]RefusalEscalationRequest, *Error) {
 	rt := c.StagedDecision()
 	if rt == nil || c.Replaying || !c.Automation || c.App != WorkApp || c.ID != "app:"+WorkApp {
 		return nil, Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "Business refusal escalation requires the private Work owner")

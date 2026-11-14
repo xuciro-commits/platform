@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"maps"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 	runtimekernel "platformserver/kernel"
 	acceptedformat "platformserver/kernel/acceptedformat"
 	"platformserver/kernel/records"
@@ -23,10 +22,10 @@ import (
 	"go.opentelemetry.io/otel/trace"
 )
 
-func unknown() *kernel.Error { return &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_UNKNOWN_SCHEMA} }
+func unknown() *platform.Error { return &platform.Error{Code: pb.ErrorCode_ERROR_CODE_UNKNOWN_SCHEMA} }
 
 type submitOptions struct {
-	report         func(*kernel.Error, []platform.FieldIssue)
+	report         func(*platform.Error, []platform.FieldIssue)
 	source         *dataowner.SourceApplication
 	versioned      bool
 	contentVersion string
@@ -35,29 +34,29 @@ type submitOptions struct {
 type acceptOptions struct {
 	automation    bool
 	binding       *platform.SchemaVersion
-	schemaRefusal *kernel.Error
+	schemaRefusal *platform.Error
 	observation   *platform.ObservationDecisionEvidence
 	source        *runtimekernel.ClaimSet
-	before        func(*stagedDecision) *kernel.Error
+	before        func(*stagedDecision) *platform.Error
 	inputs        []*preparedOperationInput
 }
 
-func (t *Tenant) Submit(m platform.Member, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *kernel.Error) {
+func (t *Tenant) Submit(m platform.Member, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *platform.Error) {
 	return t.submit(m, s, now, submitOptions{})
 }
 
-func (t *Tenant) submitDiagnosed(m platform.Member, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *kernel.Error, []platform.FieldIssue) {
+func (t *Tenant) submitDiagnosed(m platform.Member, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *platform.Error, []platform.FieldIssue) {
 	var issues []platform.FieldIssue
-	record, err := t.submit(m, s, now, submitOptions{report: func(_ *kernel.Error, found []platform.FieldIssue) { issues = found }})
+	record, err := t.submit(m, s, now, submitOptions{report: func(_ *platform.Error, found []platform.FieldIssue) { issues = found }})
 	return record, err, issues
 }
 
-func (t *Tenant) submit(m platform.Member, s *pb.Submission, now time.Time, opts submitOptions) (*pb.ChangeRecord, *kernel.Error) {
+func (t *Tenant) submit(m platform.Member, s *pb.Submission, now time.Time, opts submitOptions) (*pb.ChangeRecord, *platform.Error) {
 	if err := t.Admits(m); err != nil {
 		return nil, err
 	}
 	if t.quarantined() {
-		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
+		return nil, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
 	}
 	if s.GetSchema().GetName() == "flow.dead-letter.replay" {
 		record, refusal, handled := t.prepareContinuousDeadLetterReplay(m, s, now, opts)
@@ -72,7 +71,7 @@ func (t *Tenant) submit(m platform.Member, s *pb.Submission, now time.Time, opts
 		record *pb.ChangeRecord
 		issues []platform.FieldIssue
 	}
-	result, refusal := decideOnImage(t, context.Background(), "submit", func(t *Tenant) (out answer, err *kernel.Error) {
+	result, refusal := decideOnImage(t, context.Background(), "submit", func(t *Tenant) (out answer, err *platform.Error) {
 		if refusal := t.recordReadRefusal(); refusal != nil {
 			return out, refusal
 		}
@@ -118,7 +117,7 @@ func (t *Tenant) submit(m platform.Member, s *pb.Submission, now time.Time, opts
 			out.issues = t.readableFieldIssues(m, prior, now)
 		}
 		return out, err
-	}, func(t *Tenant, candidate preparedAccepted, value answer, refusal *kernel.Error) (answer, *kernel.Error) {
+	}, func(t *Tenant, candidate preparedAccepted, value answer, refusal *platform.Error) (answer, *platform.Error) {
 		value.record, refusal = t.finishPreparedSubmission(m, candidate, value.record, refusal)
 		return value, refusal
 	})
@@ -128,7 +127,7 @@ func (t *Tenant) submit(m platform.Member, s *pb.Submission, now time.Time, opts
 	return result.record, refusal
 }
 
-func (t *Tenant) accept(a platform.App, m platform.Member, s *pb.Submission, now time.Time, opts acceptOptions) (record *pb.ChangeRecord, refusal *kernel.Error) {
+func (t *Tenant) accept(a platform.App, m platform.Member, s *pb.Submission, now time.Time, opts acceptOptions) (record *pb.ChangeRecord, refusal *platform.Error) {
 	binding := opts.binding
 	if binding == nil {
 		s = t.CurrentSchema(a, s)
@@ -170,7 +169,7 @@ func (t *Tenant) accept(a platform.App, m platform.Member, s *pb.Submission, now
 	}
 	record, refusal = draft.Settled(record, refusal, automation.PendingOperationInputs(draft.operationInputs))
 	raw, refusal, err := draft.Outcome(draft.sources(), runtimekernel.OutcomeHooks{
-		Explain: func(r *kernel.Error) *kernel.Error {
+		Explain: func(r *platform.Error) *platform.Error {
 			return actions.Explained(r, a, s.GetSchema().GetName(), runtimekernel.Target(s))
 		},
 		Claims: func(record *pb.ChangeRecord, source *runtimekernel.ClaimSet) error {
@@ -192,18 +191,18 @@ func (t *Tenant) accept(a platform.App, m platform.Member, s *pb.Submission, now
 	return t.finishCommittedResult(a, m, hash, committed)
 }
 
-func (t *Tenant) finishCommittedResult(a platform.App, m platform.Member, hash string, committed []byte) (record *pb.ChangeRecord, refusal *kernel.Error) {
+func (t *Tenant) finishCommittedResult(a platform.App, m platform.Member, hash string, committed []byte) (record *pb.ChangeRecord, refusal *platform.Error) {
 	defer func() {
 		if failure := recover(); failure != nil {
 			t.quarantine(fmt.Errorf("apply committed result: %v", failure))
 			record = nil
-			refusal = &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
+			refusal = &platform.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
 		}
 	}()
 	return t.FinishCommitted(a, m, hash, committed, runtimekernel.CommittedResult{Settlement: t.settlement(), App: t.App, ApplyBatch: t.applyAcceptedBatch, ApplyRecord: t.applyAcceptedResult, Publish: t.publishAccepted})
 }
 
-func decideAcceptedAs(a platform.App, draft *stagedDecision, m platform.Member, s *pb.Submission, now time.Time, automation bool) (record *pb.ChangeRecord, refusal *kernel.Error) {
+func decideAcceptedAs(a platform.App, draft *stagedDecision, m platform.Member, s *pb.Submission, now time.Time, automation bool) (record *pb.ChangeRecord, refusal *platform.Error) {
 	defer func() {
 		if p := recover(); p != nil {
 			if _, ok := p.(stagedEffectPanic); !ok {
@@ -235,7 +234,7 @@ func decideAcceptedAs(a platform.App, draft *stagedDecision, m platform.Member, 
 	return record, refusal
 }
 
-func (t *Tenant) finishPreparedSubmission(m platform.Member, candidate preparedAccepted, record *pb.ChangeRecord, refusal *kernel.Error) (*pb.ChangeRecord, *kernel.Error) {
+func (t *Tenant) finishPreparedSubmission(m platform.Member, candidate preparedAccepted, record *pb.ChangeRecord, refusal *platform.Error) (*pb.ChangeRecord, *platform.Error) {
 	if len(candidate.entry.Body) == 0 {
 		return record, refusal
 	}
@@ -246,14 +245,14 @@ func (t *Tenant) finishPreparedSubmission(m platform.Member, candidate preparedA
 	return t.finishCommittedResult(t.App(candidate.entry.App), m, candidate.hash, committed)
 }
 
-func (t *Tenant) submitBackground(m platform.Member, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *kernel.Error) {
-	return decideOnImage(t, context.Background(), "submit:background", func(t *Tenant) (*pb.ChangeRecord, *kernel.Error) {
+func (t *Tenant) submitBackground(m platform.Member, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *platform.Error) {
+	return decideOnImage(t, context.Background(), "submit:background", func(t *Tenant) (*pb.ChangeRecord, *platform.Error) {
 		app := t.App(s.GetAuthority())
 		if app == nil {
 			return nil, unknown()
 		}
 		return t.accept(app, m, s, now, acceptOptions{automation: true})
-	}, func(t *Tenant, candidate preparedAccepted, record *pb.ChangeRecord, refusal *kernel.Error) (*pb.ChangeRecord, *kernel.Error) {
+	}, func(t *Tenant, candidate preparedAccepted, record *pb.ChangeRecord, refusal *platform.Error) (*pb.ChangeRecord, *platform.Error) {
 		return t.finishPreparedSubmission(m, candidate, record, refusal)
 	})
 }
@@ -349,12 +348,12 @@ func (t *Tenant) prepareAcceptedDirectRows(rows []acceptedformat.InputRow, membe
 	return runtimekernel.ApplyDirectRows(t.Projection, rows, member, at, build.CheckRunApplicationBindings)
 }
 
-func (t *Tenant) inputAccepted(a platform.AcceptedInputApp, m platform.Member, name string, body []byte, now time.Time) (any, *kernel.Error) {
+func (t *Tenant) inputAccepted(a platform.AcceptedInputApp, m platform.Member, name string, body []byte, now time.Time) (any, *platform.Error) {
 	return t.AcceptInput(a, m, name, body, now, runtimekernel.InputAcceptance{CommittedInput: t.committedInput(),
 		Draft: func() runtimekernel.InputDraft {
 			draft := t.newStagedDecision()
 			return runtimekernel.InputDraft{Decision: &draft.Decision, Sources: draft.sources,
-				Decide: func(a platform.AcceptedInputApp, m platform.Member, name string, body []byte, at time.Time) (any, *kernel.Error, bool) {
+				Decide: func(a platform.AcceptedInputApp, m platform.Member, name string, body []byte, at time.Time) (any, *platform.Error, bool) {
 					return decideAcceptedInput(a, draft, m, name, body, at)
 				}}
 		},
@@ -385,7 +384,7 @@ func (t *Tenant) stage(candidate preparedAccepted) bool {
 	return true
 }
 
-func decideAcceptedInput(a platform.AcceptedInputApp, draft *stagedDecision, m platform.Member, name string, body []byte, at time.Time) (answer any, refusal *kernel.Error, unsupported bool) {
+func decideAcceptedInput(a platform.AcceptedInputApp, draft *stagedDecision, m platform.Member, name string, body []byte, at time.Time) (answer any, refusal *platform.Error, unsupported bool) {
 	defer func() {
 		if p := recover(); p != nil {
 			if _, unsupported := p.(stagedEffectPanic); !unsupported {
@@ -406,13 +405,13 @@ func (t *Tenant) applyAcceptedInput(raw []byte) (acceptedformat.Input, bool, err
 		Input: func(app string) platform.AcceptedInputApp { return t.inputs[app] }})
 }
 
-func (t *Tenant) finishPreparedInput(m platform.Member, name string, candidate preparedAccepted, answer any, refusal *kernel.Error) (any, *kernel.Error) {
+func (t *Tenant) finishPreparedInput(m platform.Member, name string, candidate preparedAccepted, answer any, refusal *platform.Error) (any, *platform.Error) {
 	if len(candidate.entry.Body) == 0 {
 		return answer, refusal
 	}
 	committed, err := t.acceptResult(candidate.entry, candidate.key, candidate.hash)
 	if err != nil {
-		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
+		return nil, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
 	}
 	return t.FinishInput(t.App(candidate.entry.App).(platform.AcceptedInputApp), m, name, candidate.key, candidate.hash, committed, t.committedInput())
 }

@@ -11,7 +11,6 @@ import (
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 	"platformserver/kernel/acceptedformat"
 	"platformserver/platform"
 	"platformserver/services/actions"
@@ -19,7 +18,7 @@ import (
 	controlowner "platformserver/services/security/control"
 )
 
-func (t *Tenant) monitoringRuns(m platform.Member, filter monitoring.MonitoringRunFilter, now time.Time) (monitoring.MonitoringRunPage, *kernel.Error) {
+func (t *Tenant) monitoringRuns(m platform.Member, filter monitoring.MonitoringRunFilter, now time.Time) (monitoring.MonitoringRunPage, *platform.Error) {
 	m = t.authorizationMember(m)
 	return monitoring.RunIndex{
 		Tenant: t.ID, Scope: m.ID,
@@ -28,7 +27,7 @@ func (t *Tenant) monitoringRuns(m platform.Member, filter monitoring.MonitoringR
 		Refresh: func(rebuild func() ([]monitoring.MonitoringCoverage, bool)) []monitoring.MonitoringCoverage {
 			return t.runIndex.Refresh(m.ID, now, rebuild)
 		},
-		FromOwners: func(filter monitoring.MonitoringRunFilter) (monitoring.MonitoringRunPage, *kernel.Error) {
+		FromOwners: func(filter monitoring.MonitoringRunFilter) (monitoring.MonitoringRunPage, *platform.Error) {
 			return t.monitoringRunsFromOwners(m, filter, now)
 		},
 		Observe: func(run monitoring.MonitoringRun) {
@@ -37,17 +36,17 @@ func (t *Tenant) monitoringRuns(m platform.Member, filter monitoring.MonitoringR
 	}.Runs(filter)
 }
 
-func monitoringRecords[T any](t *Tenant, m platform.Member, typ string, coverage *monitoring.MonitoringCoverage, now time.Time) ([]T, *kernel.Error) {
-	return monitoring.Records[T](func() ([]any, bool, *kernel.Error) {
+func monitoringRecords[T any](t *Tenant, m platform.Member, typ string, coverage *monitoring.MonitoringCoverage, now time.Time) ([]T, *platform.Error) {
+	return monitoring.Records[T](func() ([]any, bool, *platform.Error) {
 		page, refusal := t.objectOwner(t.Projection).SelectionFrom(t.Projection, m, typ, platform.Query{Sort: []string{"id"}, Archived: true}, now)
 		return page.Records, page.Partial, refusal
 	}, coverage)
 }
 
-func (t *Tenant) monitoringRunsFromOwners(m platform.Member, filter monitoring.MonitoringRunFilter, now time.Time) (monitoring.MonitoringRunPage, *kernel.Error) {
+func (t *Tenant) monitoringRunsFromOwners(m platform.Member, filter monitoring.MonitoringRunFilter, now time.Time) (monitoring.MonitoringRunPage, *platform.Error) {
 	m = t.authorizationMember(m)
 	return build.OwnerRuns{Filter: filter, Now: now, Data: t.DataOwner(),
-		Admits:      func() *kernel.Error { return t.Admits(m) },
+		Admits:      func() *platform.Error { return t.Admits(m) },
 		Definitions: func() ([]platform.Definition, error) { return t.DefinitionsFor(m) },
 		Catalog:     func() []platform.Action { return t.Catalog(m) },
 		Readable:    func(ref string) bool { return t.readable(m, ref, now) },
@@ -56,7 +55,7 @@ func (t *Tenant) monitoringRunsFromOwners(m platform.Member, filter monitoring.M
 			decision := t.authorizeFrom(t.Projection, c, platform.AuthzRequest{Principal: m.ID, Tenant: m.Tenant, Kind: "action", Action: schema, Type: typ, Record: id}, now, false)
 			return decision.Allow && t.delegatedBound(m, &pb.Submission{Schema: &pb.SchemaRef{Name: schema}, Target: &pb.EntityRef{Type: typ, Id: id}}) == nil
 		},
-		Select: func(typ string) ([]any, bool, *kernel.Error) {
+		Select: func(typ string) ([]any, bool, *platform.Error) {
 			page, refusal := t.objectOwner(t.Projection).SelectionFrom(t.Projection, m, typ, platform.Query{Sort: []string{"id"}, Archived: true}, now)
 			return page.Records, page.Partial, refusal
 		},
@@ -74,7 +73,7 @@ func (t *Tenant) monitoringRunsFromOwners(m platform.Member, filter monitoring.M
 			}
 			return operations
 		},
-		Work: func() ([]build.WorkRun, *kernel.Error) {
+		Work: func() ([]build.WorkRun, *platform.Error) {
 			value, refusal := t.read(m, "work")
 			if refusal != nil {
 				return nil, refusal
@@ -89,7 +88,7 @@ func (t *Tenant) monitoringRunsFromOwners(m platform.Member, filter monitoring.M
 			}
 			return tasks, nil
 		},
-		Effects: func() ([]platform.Effect, *kernel.Error) {
+		Effects: func() ([]platform.Effect, *platform.Error) {
 			value, refusal := t.read(m, "effects")
 			if refusal != nil {
 				return nil, refusal
@@ -97,6 +96,6 @@ func (t *Tenant) monitoringRunsFromOwners(m platform.Member, filter monitoring.M
 			return value.([]platform.Effect), nil
 		},
 		Schemas:      build.OwnerRunSchemas{FlowRetry: automation.SchemaFlowRetry, WorkRetry: controlowner.SchemaWorkRetry, WorkType: controlowner.WorkType, EffectRetry: controlowner.SchemaEffectRetry, EffectType: controlowner.EffectType},
-		Integrations: func() ([]dataowner.IntegrationEffect, *kernel.Error) { return t.integrationEffects(m, now) },
+		Integrations: func() ([]dataowner.IntegrationEffect, *platform.Error) { return t.integrationEffects(m, now) },
 	}.Page()
 }

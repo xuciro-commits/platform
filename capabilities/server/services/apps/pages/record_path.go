@@ -5,16 +5,15 @@ import (
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 	"platformserver/platform"
 )
 
 type RecordPath struct {
-	Record func(c platform.Caller, typ, id string, at time.Time) (json.RawMessage, *kernel.Error)
+	Record func(c platform.Caller, typ, id string, at time.Time) (json.RawMessage, *platform.Error)
 	Entity func(typ string) (platform.EntityInfo, bool)
 }
 
-func (h RecordPath) Read(c platform.Caller, typ, id string, path []string, at time.Time) (json.RawMessage, []string, *kernel.Error) {
+func (h RecordPath) Read(c platform.Caller, typ, id string, path []string, at time.Time) (json.RawMessage, []string, *platform.Error) {
 	if len(path) == 0 || len(path) > 16 {
 		return nil, nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Record paths need 1–16 fields")
 	}

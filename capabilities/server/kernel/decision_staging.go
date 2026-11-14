@@ -10,7 +10,6 @@ import (
 	"google.golang.org/protobuf/proto"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 	"platformserver/kernel/acceptedformat"
 	"platformserver/kernel/records"
 	"platformserver/platform"
@@ -32,7 +31,7 @@ func (d *Decision) NextRequest(key string) int {
 	return n
 }
 
-func (d *Decision) AdoptRefusal(probe *Decision, err *kernel.Error) {
+func (d *Decision) AdoptRefusal(probe *Decision, err *platform.Error) {
 	if fact, ok := probe.BusinessRefusals[err]; ok {
 		d.BusinessRefused(err, fact)
 	} else if issues := probe.InputIssues[err]; len(issues) > 0 {
@@ -40,7 +39,7 @@ func (d *Decision) AdoptRefusal(probe *Decision, err *kernel.Error) {
 	}
 }
 
-func (d *Decision) CheckAttempt(r *pb.ChangeRecord, events int) *kernel.Error {
+func (d *Decision) CheckAttempt(r *pb.ChangeRecord, events int) *platform.Error {
 	if r != nil && len(d.Events) > events && slices.ContainsFunc(d.Events[events:], func(event platform.Event) bool {
 		return event.App == r.GetSubmission().GetAuthority() && event.Record.GetChangeId() == r.GetChangeId()
 	}) {
@@ -49,7 +48,7 @@ func (d *Decision) CheckAttempt(r *pb.ChangeRecord, events int) *kernel.Error {
 	return nil
 }
 
-func Attempt[D any](d *D, private func() *D, attach func(), decide func() (*pb.ChangeRecord, *kernel.Error), check func(*pb.ChangeRecord) *kernel.Error) (r *pb.ChangeRecord, err *kernel.Error) {
+func Attempt[D any](d *D, private func() *D, attach func(), decide func() (*pb.ChangeRecord, *platform.Error), check func(*pb.ChangeRecord) *platform.Error) (r *pb.ChangeRecord, err *platform.Error) {
 	saved := *d
 	*d = *private()
 	attach()
@@ -71,7 +70,7 @@ func Attempt[D any](d *D, private func() *D, attach func(), decide func() (*pb.C
 	return r, err
 }
 
-func (d *Decision) RunProbe(rt platform.Runtime, c platform.Caller, decide func(platform.Caller) *kernel.Error, unsupported func(any) bool) (err *kernel.Error) {
+func (d *Decision) RunProbe(rt platform.Runtime, c platform.Caller, decide func(platform.Caller) *platform.Error, unsupported func(any) bool) (err *platform.Error) {
 	defer func() {
 		if failure := recover(); failure != nil {
 			if !unsupported(failure) {
@@ -135,7 +134,7 @@ type ObserverHooks struct {
 	Events  func(platform.Event) []string
 }
 
-func (d *Decision) StageObservers(h ObserverHooks) (*kernel.Error, bool) {
+func (d *Decision) StageObservers(h ObserverHooks) (*platform.Error, bool) {
 	if d.Observed {
 		return d.Failure, true
 	}
@@ -153,19 +152,19 @@ func (d *Decision) StageObservers(h ObserverHooks) (*kernel.Error, bool) {
 			id := app.Manifest().ID
 			raw, err := owner.PlanObserved(h.Caller(id), e, h.Events(e))
 			if err != nil || owner.ValidateObserved(raw) != nil {
-				return &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}, true
+				return &platform.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}, true
 			}
 			d.Observations = append(d.Observations, acceptedformat.Observation{App: id, Body: raw})
 		}
 	}
 	if len(d.Events) != count {
-		return &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}, true
+		return &platform.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}, true
 	}
 	d.Observed = true
 	return d.Failure, true
 }
 
-func (d *Decision) AllocateNumber(c platform.Caller, tenant string, owner func(string) platform.App, rec *pb.ChangeRecord, name string, date time.Time) (number string, err *kernel.Error) {
+func (d *Decision) AllocateNumber(c platform.Caller, tenant string, owner func(string) platform.App, rec *pb.ChangeRecord, name string, date time.Time) (number string, err *platform.Error) {
 	defer func() {
 		if err != nil {
 			d.FailDecision(err)
@@ -173,15 +172,15 @@ func (d *Decision) AllocateNumber(c platform.Caller, tenant string, owner func(s
 	}()
 	if rec.GetChangeId() == "" || rec.GetSubmission().GetAuthority() != c.App ||
 		rec.GetSubmission().GetTenantId() != tenant {
-		return "", &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
+		return "", &platform.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 	}
 	app := owner(c.App)
 	if app == nil {
-		return "", &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
+		return "", &platform.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
 	}
 	i := slices.IndexFunc(app.Manifest().Sequences, func(s platform.Sequence) bool { return s.Name == name })
 	if i < 0 {
-		return "", &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
+		return "", &platform.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
 	}
 	s, year := app.Manifest().Sequences[i], 0
 	if s.Yearly {
@@ -240,7 +239,7 @@ func (d *Decision) PublishRecord(app platform.App, c platform.Caller, record *pb
 	return true
 }
 
-func (d *Decision) DecideApp(c platform.Caller, app platform.App, s *pb.Submission, at time.Time, definition func() (*platform.DecisionDefinition, error)) (*pb.ChangeRecord, *kernel.Error, bool) {
+func (d *Decision) DecideApp(c platform.Caller, app platform.App, s *pb.Submission, at time.Time, definition func() (*platform.DecisionDefinition, error)) (*pb.ChangeRecord, *platform.Error, bool) {
 	if app.Authority() == nil {
 		return nil, nil, false
 	}

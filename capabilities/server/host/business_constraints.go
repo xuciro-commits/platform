@@ -3,8 +3,6 @@ package host
 import (
 	"time"
 
-	"platformkernel/kernel"
-
 	"platformserver/platform"
 	"platformserver/services/objects"
 )
@@ -17,6 +15,6 @@ func (t *Tenant) readableFieldIssues(member platform.Member, issues []platform.F
 
 func (t *Tenant) localizedFieldIssues(member platform.Member, issues []platform.FieldIssue, language string) []platform.FieldIssue {
 	return objects.LocalizedFieldIssues(issues, language, func(message string) string {
-		return t.i18n.Said(&kernel.Error{Message: message}, language).Message
+		return t.i18n.Said(&platform.Error{Message: message}, language).Message
 	})
 }

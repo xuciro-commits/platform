@@ -14,7 +14,6 @@ import (
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 	"platformserver/platform"
 	dataowner "platformserver/services/data"
 	"platformserver/services/resources/authoring"
@@ -250,13 +249,13 @@ type PreparationOwner interface {
 }
 
 type PreparationHooks struct {
-	Authorize func() *kernel.Error
+	Authorize func() *platform.Error
 	Source    func() (PreparationOwner, bool)
 	Drafts    func() (build.ConstructionDrafts, bool)
-	Records   func(typ string, q platform.Query) (int, []any, *kernel.Error)
+	Records   func(typ string, q platform.Query) (int, []any, *platform.Error)
 	App       func(string) platform.App
-	Resolve   func(purpose, model string, options platform.ModelOptions) (string, *kernel.Error)
-	Callable  func(model string) *kernel.Error
+	Resolve   func(purpose, model string, options platform.ModelOptions) (string, *platform.Error)
+	Callable  func(model string) *platform.Error
 }
 
 func (h PreparationHooks) modelProblem(purpose, model string, options platform.ModelOptions) (string, string) {
@@ -274,8 +273,8 @@ func (h PreparationHooks) modelProblem(purpose, model string, options platform.M
 	return resolved, ""
 }
 
-func Prepare(id, version string, m platform.Member, hooks PreparationHooks) (PackagePreparation, *kernel.Error) {
-	fail := func(err error) (PackagePreparation, *kernel.Error) {
+func Prepare(id, version string, m platform.Member, hooks PreparationHooks) (PackagePreparation, *platform.Error) {
+	fail := func(err error) (PackagePreparation, *platform.Error) {
 		return PackagePreparation{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "{why}", err.Error())
 	}
 	if refusal := hooks.Authorize(); refusal != nil {

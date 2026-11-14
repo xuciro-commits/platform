@@ -3,7 +3,6 @@ package records
 import (
 	"encoding/json"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 	"platformserver/platform"
 	"reflect"
 	"slices"
@@ -16,7 +15,7 @@ type EnterpriseElements interface {
 	Element(id string, now time.Time) (platform.ElementInfo, bool)
 }
 
-func CheckEnterpriseReferences(elements EnterpriseElements, replaying bool, fields []platform.FieldInfo, value, previous reflect.Value, now time.Time) *kernel.Error {
+func CheckEnterpriseReferences(elements EnterpriseElements, replaying bool, fields []platform.FieldInfo, value, previous reflect.Value, now time.Time) *platform.Error {
 	if replaying {
 		return nil
 	}
@@ -211,8 +210,8 @@ func requiredEmpty(value reflect.Value) bool {
 	}
 }
 
-func CheckFields(info platform.EntityInfo, entity any, v reflect.Value, replaying bool, lookup RecordLookup, resolve func(platform.AssetBinding) (platform.ValueType, bool), engines ...platform.RuleEngine) ([]platform.FieldIssue, *kernel.Error) {
-	invalid := &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
+func CheckFields(info platform.EntityInfo, entity any, v reflect.Value, replaying bool, lookup RecordLookup, resolve func(platform.AssetBinding) (platform.ValueType, bool), engines ...platform.RuleEngine) ([]platform.FieldIssue, *platform.Error) {
+	invalid := &platform.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 	stringOf := func(name string) string {
 		i := slices.IndexFunc(info.Fields, func(x platform.FieldInfo) bool { return x.Name == name })
 		if i < 0 {
@@ -324,7 +323,7 @@ func CheckFields(info platform.EntityInfo, entity any, v reflect.Value, replayin
 			}
 			media, ok := lookup.(interface{ HasMediaItem(string, string) bool })
 			if !ok || !media.HasMediaItem(attachment.MediaSet, attachment.Item) {
-				return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_REFERENCE}
+				return nil, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_REFERENCE}
 			}
 		case "money":
 			if m := fv.Interface().(platform.Money); m.Amount != 0 && len(m.Currency) != 3 {
@@ -343,7 +342,7 @@ func CheckFields(info platform.EntityInfo, entity any, v reflect.Value, replayin
 			}
 			for _, id := range ids {
 				if id != "" && !lookup.HasRecord(f.Ref, id) {
-					return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_REFERENCE}
+					return nil, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_REFERENCE}
 				}
 			}
 		}

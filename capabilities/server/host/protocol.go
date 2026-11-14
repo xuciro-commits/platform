@@ -5,7 +5,6 @@ import (
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 	"platformserver/platform"
 	"platformserver/services/actions"
 )
@@ -14,7 +13,7 @@ func (t *Tenant) router() actions.Router {
 	return actions.Router{Host: t, Bindings: t.bindings, Tenant: t.ID}
 }
 
-func (t *Tenant) StageSubmission(c platform.Caller, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *kernel.Error) {
+func (t *Tenant) StageSubmission(c platform.Caller, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *platform.Error) {
 	return (hostView{t: t}).Submit(c, s, now)
 }
 
@@ -22,15 +21,15 @@ func (t *Tenant) ProtocolProvider(protocol string) (string, bool) {
 	return t.router().ProtocolProvider(protocol)
 }
 
-func (t *Tenant) Invoke(m platform.Member, protocol, action, id string, payload []byte, key string, now time.Time) (*pb.EntityRef, *pb.ChangeRecord, *kernel.Error) {
+func (t *Tenant) Invoke(m platform.Member, protocol, action, id string, payload []byte, key string, now time.Time) (*pb.EntityRef, *pb.ChangeRecord, *platform.Error) {
 	target, record, err, _ := t.invokeDiagnosed(m, protocol, action, id, payload, key, now)
 	return target, record, err
 }
 
-func (t *Tenant) invokeDiagnosed(m platform.Member, protocol, action, id string, payload []byte, key string, now time.Time) (*pb.EntityRef, *pb.ChangeRecord, *kernel.Error, []platform.FieldIssue) {
+func (t *Tenant) invokeDiagnosed(m platform.Member, protocol, action, id string, payload []byte, key string, now time.Time) (*pb.EntityRef, *pb.ChangeRecord, *platform.Error, []platform.FieldIssue) {
 	provider, schema, ok := t.router().Provider(platform.ProtocolAction(protocol, action))
 	if !ok {
-		return nil, nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}, nil
+		return nil, nil, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}, nil
 	}
 	declared, _ := provider.Manifest().Actions.Action(schema)
 	target := &pb.EntityRef{Type: declared.Target, Id: id}
@@ -39,7 +38,7 @@ func (t *Tenant) invokeDiagnosed(m platform.Member, protocol, action, id string,
 	return target, record, err, issues
 }
 
-func (t *Tenant) Query(m platform.Member, protocol, read string) (any, *kernel.Error) {
+func (t *Tenant) Query(m platform.Member, protocol, read string) (any, *platform.Error) {
 	name, err := t.router().ReadName(protocol, read)
 	if err != nil {
 		return nil, err

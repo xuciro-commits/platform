@@ -6,7 +6,6 @@ import (
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 	"platformserver/platform"
 )
 
@@ -16,7 +15,7 @@ func refusalEscalationAction() platform.Action {
 	return platform.Action{Schema: schemaRefusalEscalation, Target: TaskType, Capability: "tasks", Title: "Escalate repeated business refusal", Description: "Open a normal review task from distinct durable business refusals.", Automation: true, Payload: []platform.Field{}}
 }
 
-func (w *Work) runRefusalEscalations(c platform.Caller, at time.Time) *kernel.Error {
+func (w *Work) runRefusalEscalations(c platform.Caller, at time.Time) *platform.Error {
 	pending, err := platform.PendingRefusalEscalations(c, at)
 	if err != nil || len(pending) == 0 {
 		return err
@@ -26,7 +25,7 @@ func (w *Work) runRefusalEscalations(c platform.Caller, at time.Time) *kernel.Er
 	return err
 }
 
-func (w *Work) escalateRefusal(c platform.Caller, s *pb.Submission, at time.Time) (func(*pb.ChangeRecord), *kernel.Error) {
+func (w *Work) escalateRefusal(c platform.Caller, s *pb.Submission, at time.Time) (func(*pb.ChangeRecord), *platform.Error) {
 	var request platform.RefusalEscalationRequest
 	if json.Unmarshal(s.GetPayload(), &request) != nil || s.GetTarget().GetId() != request.TaskID() || s.GetIdempotencyKey() != "refusal-escalation:"+request.Key {
 		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "A refusal escalation needs its original durable business facts")

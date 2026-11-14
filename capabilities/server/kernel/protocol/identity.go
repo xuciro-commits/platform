@@ -4,7 +4,7 @@ import (
 	"slices"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
+	"platformserver/platform"
 )
 
 type Ref struct{ Type, ID string }
@@ -24,7 +24,7 @@ func NewIdentity(entities []*pb.EntityRef) *Identity {
 	return id
 }
 
-func (id *Identity) Create(r *pb.EntityRef) *kernel.Error {
+func (id *Identity) Create(r *pb.EntityRef) *platform.Error {
 	ref := RefOf(r)
 	if ref.Type == "" || ref.ID == "" {
 		return errorf(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT)
@@ -36,7 +36,7 @@ func (id *Identity) Create(r *pb.EntityRef) *kernel.Error {
 	return nil
 }
 
-func (id *Identity) AddRedirect(r *pb.Redirect) *kernel.Error {
+func (id *Identity) AddRedirect(r *pb.Redirect) *platform.Error {
 	from, to := RefOf(r.GetFrom()), make([]Ref, 0, len(r.GetTo()))
 	for _, t := range r.GetTo() {
 		to = append(to, RefOf(t))
@@ -59,7 +59,7 @@ func (id *Identity) AddRedirect(r *pb.Redirect) *kernel.Error {
 	return nil
 }
 
-func (id *Identity) Resolve(r *pb.EntityRef) ([]Ref, *kernel.Error) {
+func (id *Identity) Resolve(r *pb.EntityRef) ([]Ref, *platform.Error) {
 	ref := RefOf(r)
 	if !id.entities[ref] {
 		return nil, errorf(pb.ErrorCode_ERROR_CODE_NOT_FOUND)

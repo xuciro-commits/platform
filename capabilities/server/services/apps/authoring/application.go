@@ -8,7 +8,6 @@ import (
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 	"platformserver/platform"
 	ontology "platformserver/services/ontology"
 )
@@ -49,7 +48,7 @@ type Group struct {
 func (o *Owner) ApplicationEntity() platform.Entity {
 	return platform.Entity{Type: AppType, Title: "Project", Plural: "Projects", Model: Application{}, Display: "title",
 		Description: "An application this organisation hands to its people: a name, an icon, its pages and shared resource references. It gives nobody new access; each page is offered to whoever may read what it shows.",
-		Validate: func(c platform.Caller, record any) *kernel.Error {
+		Validate: func(c platform.Caller, record any) *platform.Error {
 			a := record.(*Application)
 			return o.ValidateApplication(c, a)
 		},
@@ -67,7 +66,7 @@ func (o *Owner) ApplicationEntity() platform.Entity {
 					Do:          o.publishApplication}}}}
 }
 
-func (o *Owner) ValidateApplication(c platform.Caller, a *Application) *kernel.Error {
+func (o *Owner) ValidateApplication(c platform.Caller, a *Application) *platform.Error {
 	if c.Replaying {
 		return nil
 	}
@@ -105,17 +104,17 @@ func (o *Owner) ValidateApplication(c platform.Caller, a *Application) *kernel.E
 	return nil
 }
 
-func (o *Owner) publishApplication(c platform.Caller, record any, _ json.RawMessage, _ time.Time) *kernel.Error {
+func (o *Owner) publishApplication(c platform.Caller, record any, _ json.RawMessage, _ time.Time) *platform.Error {
 	application, ok := record.(*Application)
 	if !ok {
-		return &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
+		return &platform.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 	}
 	if c.Staging() {
 		if err := o.checkApplication(*application); err != nil {
-			return &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, Message: err.Error()}
+			return &platform.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, Message: err.Error()}
 		}
 		if err := o.env.Host().ValidateInstallApplication(ApplicationDescriptor(*application)); err != nil {
-			return &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, Message: err.Error()}
+			return &platform.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, Message: err.Error()}
 		}
 	} else if err := o.installApplication(c, *application); err != nil {
 		return err
@@ -124,12 +123,12 @@ func (o *Owner) publishApplication(c platform.Caller, record any, _ json.RawMess
 	return nil
 }
 
-func (o *Owner) installApplication(c platform.Caller, a Application) *kernel.Error {
+func (o *Owner) installApplication(c platform.Caller, a Application) *platform.Error {
 	if err := o.checkApplication(a); err != nil {
-		return &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, Message: err.Error()}
+		return &platform.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, Message: err.Error()}
 	}
 	if err := o.env.Host().InstallApplication(c, ApplicationDescriptor(a)); err != nil {
-		return &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, Message: err.Error()}
+		return &platform.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, Message: err.Error()}
 	}
 	return nil
 }

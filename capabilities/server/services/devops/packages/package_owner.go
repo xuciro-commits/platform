@@ -14,7 +14,6 @@ import (
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 	"platformserver/platform"
 	"platformserver/services/resources/authoring"
 )
@@ -58,7 +57,7 @@ func (d *Owner) Restore(s platform.PackageState) {
 	}
 }
 
-func (d *Owner) Prepare(c platform.Caller, s *pb.Submission) (func(*pb.ChangeRecord), *kernel.Error) {
+func (d *Owner) Prepare(c platform.Caller, s *pb.Submission) (func(*pb.ChangeRecord), *platform.Error) {
 	apply, err := d.decide(c, s)
 	if apply == nil {
 		return nil, err
@@ -393,11 +392,11 @@ func latestRetained(retained []platform.RetainedArtifact) (platform.RetainedArti
 	return latest, true
 }
 
-func (d *Owner) decide(c platform.Caller, s *pb.Submission) (func(*pb.ChangeRecord), *kernel.Error) {
+func (d *Owner) decide(c platform.Caller, s *pb.Submission) (func(*pb.ChangeRecord), *platform.Error) {
 	if s.GetSchema().GetName() == SchemaPackageImport || s.GetSchema().GetName() == SchemaPackageRemoveSource {
 		return d.decidePackageSource(c, s)
 	}
-	invalid := &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
+	invalid := &platform.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 	var p struct {
 		ID, Version string
 	}
@@ -409,7 +408,7 @@ func (d *Owner) decide(c platform.Caller, s *pb.Submission) (func(*pb.ChangeReco
 		installed := d.packagesOf()
 		held := installed[p.ID]
 		if held == nil || held.State == "retired" {
-			return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
+			return nil, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
 		}
 		state := "draining"
 		removal := &platform.PackageRemoval{ID: p.ID}
@@ -434,7 +433,7 @@ func (d *Owner) decide(c platform.Caller, s *pb.Submission) (func(*pb.ChangeReco
 		}
 		var archive func(*pb.ChangeRecord)
 		if schema == SchemaPackageRetire {
-			var refusal *kernel.Error
+			var refusal *platform.Error
 			archive, refusal = d.host.PrepareManagedPackage(c, platform.PackageDescriptor{ID: p.ID}, nil, true, false, false)
 			if refusal != nil {
 				return nil, refusal
@@ -460,7 +459,7 @@ func (d *Owner) decide(c platform.Caller, s *pb.Submission) (func(*pb.ChangeReco
 	var ok bool
 	if rollback {
 		if prior == nil || prior.State == "retired" {
-			return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
+			return nil, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
 		}
 		previous, found := latestRetained(prior.Retained)
 		if !found || previous.Version != p.Version {
@@ -485,7 +484,7 @@ func (d *Owner) decide(c platform.Caller, s *pb.Submission) (func(*pb.ChangeReco
 				artifact = prior.Retained[i].Digest
 			}
 			if artifact == "" {
-				return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
+				return nil, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
 			}
 			sealed, err := d.sealedPackageDescriptor(p.ID, p.Version, artifact)
 			if err != nil {
@@ -497,7 +496,7 @@ func (d *Owner) decide(c platform.Caller, s *pb.Submission) (func(*pb.ChangeReco
 		}
 	}
 	if !ok {
-		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
+		return nil, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
 	}
 	if descriptor.Blueprint != nil && p.Version == "" {
 		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "A versioned package requires its exact version")
@@ -514,7 +513,7 @@ func (d *Owner) decide(c platform.Caller, s *pb.Submission) (func(*pb.ChangeReco
 	rollbackUpgrade := false
 	if upgrade || downgrade {
 		if prior == nil || prior.State == "retired" {
-			return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
+			return nil, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
 		}
 		direction := platform.ComparePackageVersions(descriptor.Version, prior.Version)
 		if upgrade && direction <= 0 || downgrade && direction >= 0 {

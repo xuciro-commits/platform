@@ -5,7 +5,6 @@ import (
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 	acceptedformat "platformserver/kernel/acceptedformat"
 	"platformserver/kernel/records"
 	"platformserver/platform"
@@ -15,24 +14,24 @@ import (
 
 func (t *Tenant) sourcePreparation() dataowner.SourcePreparation {
 	return dataowner.SourcePreparation{
-		Record: func(typ, id string, required bool) (dataowner.SourceRecord, *kernel.Error) {
-			return recordRead(t, context.Background(), func(t *Tenant) (dataowner.SourceRecord, *kernel.Error) {
+		Record: func(typ, id string, required bool) (dataowner.SourceRecord, *platform.Error) {
+			return recordRead(t, context.Background(), func(t *Tenant) (dataowner.SourceRecord, *platform.Error) {
 				history, fields, archived, change, refusal := t.objectOwner(t.Projection).SourceState(typ, id, required)
 				return dataowner.SourceRecord{History: history, Fields: fields, Archived: archived, Change: change}, refusal
 			})
 		},
-		Objects: func(object string) (platform.EntityInfo, map[string]bool, *kernel.Error) {
+		Objects: func(object string) (platform.EntityInfo, map[string]bool, *platform.Error) {
 			type answer struct {
 				info platform.EntityInfo
 				rows map[string]bool
 			}
-			value, refusal := recordRead(t, context.Background(), func(t *Tenant) (answer, *kernel.Error) {
+			value, refusal := recordRead(t, context.Background(), func(t *Tenant) (answer, *platform.Error) {
 				info, rows, refusal := t.objectOwner(t.Projection).SourceObjectStates(object)
 				return answer{info: info, rows: rows}, refusal
 			})
 			return value.info, value.rows, refusal
 		},
-		Authorize: func(m platform.Member, app, typ, id, action, kind string, fields []string, at time.Time) *kernel.Error {
+		Authorize: func(m platform.Member, app, typ, id, action, kind string, fields []string, at time.Time) *platform.Error {
 			caller := platform.NewCaller(runtime{t: t, scoped: true}, m, app, false, false)
 			decision := t.authorizeFrom(t.Projection, caller, platform.AuthzRequest{Principal: m.ID, Tenant: t.ID, Kind: kind, Type: typ, Record: id, Action: action, Fields: fields}, at, false)
 			if !decision.Allow || fields != nil && len(decision.Withheld) > 0 {
@@ -74,10 +73,10 @@ func (t *Tenant) declaredRows(object, kind, source string, input []map[string]an
 	return value.rows, value.binding, err
 }
 
-func (t *Tenant) prepareRows(member platform.Member, object, producer string, rows []dataowner.SourceRow, now time.Time) (int, *kernel.Error) {
-	return recordRead(t, context.Background(), func(t *Tenant) (int, *kernel.Error) {
+func (t *Tenant) prepareRows(member platform.Member, object, producer string, rows []dataowner.SourceRow, now time.Time) (int, *platform.Error) {
+	return recordRead(t, context.Background(), func(t *Tenant) (int, *platform.Error) {
 		merged := 0
-		resolver := t.DataOwner().MatchResolver(t.automation(build.ID, false), object, producer, func(offset int) ([]any, int, *kernel.Error) {
+		resolver := t.DataOwner().MatchResolver(t.automation(build.ID, false), object, producer, func(offset int) ([]any, int, *platform.Error) {
 			page, err := t.objectOwner(t.Projection).Records(member, object, platform.Query{Limit: 500, Offset: offset, Sort: []string{"id"}}, now)
 			return page.Records, page.Total, err
 		})
@@ -95,6 +94,6 @@ func (t *Tenant) prepareRows(member platform.Member, object, producer string, ro
 	})
 }
 
-func (t *Tenant) absentSourceRows(object string, binding *platform.DataSourceBinding, current []dataowner.SourceRow, now time.Time) ([]dataowner.SourceRow, *kernel.Error) {
+func (t *Tenant) absentSourceRows(object string, binding *platform.DataSourceBinding, current []dataowner.SourceRow, now time.Time) ([]dataowner.SourceRow, *platform.Error) {
 	return t.sourcePreparation().Absent(object, binding, current, now)
 }

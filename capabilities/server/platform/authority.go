@@ -3,7 +3,6 @@ package platform
 import (
 	"encoding/json"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 	"time"
 )
 
@@ -17,7 +16,7 @@ type ChangeLog interface {
 	Records(tenant string) []*pb.ChangeRecord
 	Last(tenant string) *pb.ChangeRecord
 	ApplyAccepted(*pb.ChangeRecord) (bool, error)
-	SubmitChecked(*pb.Submission, time.Time, func() *kernel.Error) (*pb.ChangeRecord, *kernel.Error)
+	SubmitChecked(*pb.Submission, time.Time, func() *Error) (*pb.ChangeRecord, *Error)
 	Fork() ChangeLog
 }
 
@@ -26,10 +25,10 @@ type Authority interface {
 	Catalog() *Catalog
 	Declarations() []*pb.AuthorityDeclaration
 	Extend(classes []string, actions []Action) error
-	Receive(c Caller, s *pb.Submission, now time.Time, allowed func() bool, rules func() (func(*pb.ChangeRecord), *kernel.Error)) (*pb.ChangeRecord, *kernel.Error)
-	Generated(c Caller, s *pb.Submission, now time.Time, allowed func() bool, entities ...Entity) (*pb.ChangeRecord, *kernel.Error, bool)
-	ApplyTxnRecord(c Caller, r *pb.ChangeRecord, e Entity, verb, id string, payload json.RawMessage, now time.Time) *kernel.Error
-	ApplyTxnRoute(c Caller, r *pb.ChangeRecord, e Entity, target TxnRef, now time.Time, run func(Caller, *pb.ChangeRecord, *BusinessTxn, time.Time) *kernel.Error) *kernel.Error
+	Receive(c Caller, s *pb.Submission, now time.Time, allowed func() bool, rules func() (func(*pb.ChangeRecord), *Error)) (*pb.ChangeRecord, *Error)
+	Generated(c Caller, s *pb.Submission, now time.Time, allowed func() bool, entities ...Entity) (*pb.ChangeRecord, *Error, bool)
+	ApplyTxnRecord(c Caller, r *pb.ChangeRecord, e Entity, verb, id string, payload json.RawMessage, now time.Time) *Error
+	ApplyTxnRoute(c Caller, r *pb.ChangeRecord, e Entity, target TxnRef, now time.Time, run func(Caller, *pb.ChangeRecord, *BusinessTxn, time.Time) *Error) *Error
 	RecordsFor(tenant string) []*pb.ChangeRecord
 	LastAccepted(tenant string) *pb.ChangeRecord
 	AcceptedFor(tenant, key string) *pb.ChangeRecord

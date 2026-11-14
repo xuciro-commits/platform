@@ -9,7 +9,6 @@ import (
 	"strings"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 	"platformserver/platform"
 )
 
@@ -19,11 +18,11 @@ type ApplicationAI struct {
 	Evaluations platform.Caller
 }
 
-func conflict(err error) *kernel.Error {
+func conflict(err error) *platform.Error {
 	return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, err.Error())
 }
 
-func (a ApplicationAI) List(m platform.Member, assets []platform.ReleaseAsset, visible map[platform.AssetRef]bool) ([]platform.ApplicationAI, *kernel.Error) {
+func (a ApplicationAI) List(m platform.Member, assets []platform.ReleaseAsset, visible map[platform.AssetRef]bool) ([]platform.ApplicationAI, *platform.Error) {
 	out := []platform.ApplicationAI{}
 	for _, asset := range assets {
 		if !visible[asset.Ref] {

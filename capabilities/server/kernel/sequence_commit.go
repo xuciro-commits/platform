@@ -5,7 +5,6 @@ import (
 	"fmt"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	contract "platformkernel/kernel"
 	persistence "platformserver/kernel/store"
 	"platformserver/platform"
 )
@@ -40,9 +39,9 @@ func (s *Sequence) Accept(entry persistence.Entry, key, hash string, delta func(
 	return raw, err
 }
 
-func CommitRefusal(err error) *contract.Error {
+func CommitRefusal(err error) *platform.Error {
 	if err == persistence.ErrAcceptedConflict {
-		return &contract.Error{Code: pb.ErrorCode_ERROR_CODE_IDEMPOTENCY_CONFLICT}
+		return &platform.Error{Code: pb.ErrorCode_ERROR_CODE_IDEMPOTENCY_CONFLICT}
 	}
 	return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The accepted result could not be committed")
 }
@@ -59,17 +58,17 @@ func (s *Sequence) ResultApplied(useCurrentRows bool) {
 	s.Projection.Unlock()
 }
 
-func ConflictRefusal(err error) *contract.Error {
+func ConflictRefusal(err error) *platform.Error {
 	if err == nil {
 		return nil
 	}
-	if refusal, ok := err.(*contract.Error); ok {
+	if refusal, ok := err.(*platform.Error); ok {
 		return refusal
 	}
 	return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, err.Error())
 }
 
-func OutcomeOf(err *contract.Error) string {
+func OutcomeOf(err *platform.Error) string {
 	if err != nil {
 		return err.Code.String()
 	}

@@ -6,7 +6,6 @@ import (
 	"strings"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 	"platformserver/kernel/records"
 	"platformserver/platform"
 )
@@ -32,7 +31,7 @@ func EntityView(store *records.Store, m platform.Member, hidden func(*records.Ty
 	return out
 }
 
-func EnterpriseReferencesRead(store *records.Store, m platform.Member, element string, offset, limit int, admit func(platform.Member) *kernel.Error, visible func(*records.Type) (func(reflect.Value) bool, *kernel.Error)) ([]records.EnterpriseReferenceGroup, *kernel.Error) {
+func EnterpriseReferencesRead(store *records.Store, m platform.Member, element string, offset, limit int, admit func(platform.Member) *platform.Error, visible func(*records.Type) (func(reflect.Value) bool, *platform.Error)) ([]records.EnterpriseReferenceGroup, *platform.Error) {
 	if element == "" {
 		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "A reference read names the element")
 	}
@@ -55,7 +54,7 @@ func EnterpriseReferencesRead(store *records.Store, m platform.Member, element s
 	}, m.RolesIn), nil
 }
 
-func ProtocolRecords(page RecordPage, refusal *kernel.Error) ([]any, *kernel.Error) {
+func ProtocolRecords(page RecordPage, refusal *platform.Error) ([]any, *platform.Error) {
 	if refusal != nil {
 		return nil, refusal
 	}

@@ -16,7 +16,6 @@ import (
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 	"platformserver/platform"
 )
 
@@ -39,29 +38,29 @@ type Integration struct {
 	Files              func() platform.FileStore
 	Member             func(id string) (platform.Member, bool)
 	Automation         func() platform.Member
-	Sources            func() ([]Source, *kernel.Error)
+	Sources            func() ([]Source, *platform.Error)
 	Quarantined        func() bool
 	Pending            func(typ, id string, execution *IntegrationExecution) bool
 	Target             func(object string) (string, bool)
 	ReadSource         func(Source) ([]map[string]any, error)
-	ConnectionMarkings func(connection string) (platform.MarkingSet, *kernel.Error)
+	ConnectionMarkings func(connection string) (platform.MarkingSet, *platform.Error)
 	Source             SourcePreparation
 	DeclaredRows       func(object, kind, source string, input []map[string]any, now time.Time) ([]SourceRow, *platform.DataSourceBinding, error)
-	PrepareRows        func(member platform.Member, object, producer string, rows []SourceRow, now time.Time) (int, *kernel.Error)
-	AbsentRows         func(object string, binding *platform.DataSourceBinding, current []SourceRow, now time.Time) ([]SourceRow, *kernel.Error)
+	PrepareRows        func(member platform.Member, object, producer string, rows []SourceRow, now time.Time) (int, *platform.Error)
+	AbsentRows         func(object string, binding *platform.DataSourceBinding, current []SourceRow, now time.Time) ([]SourceRow, *platform.Error)
 	Refused            func(authority, key string) bool
-	Submit             func(member platform.Member, submission *pb.Submission, now time.Time) (*pb.ChangeRecord, *kernel.Error)
-	SubmitSource       func(member platform.Member, submission *pb.Submission, binding *platform.DataSourceBinding, row SourceRow, now time.Time) *kernel.Error
-	SubmitBackground   func(member platform.Member, submission *pb.Submission, now time.Time) (*pb.ChangeRecord, *kernel.Error)
+	Submit             func(member platform.Member, submission *pb.Submission, now time.Time) (*pb.ChangeRecord, *platform.Error)
+	SubmitSource       func(member platform.Member, submission *pb.Submission, binding *platform.DataSourceBinding, row SourceRow, now time.Time) *platform.Error
+	SubmitBackground   func(member platform.Member, submission *pb.Submission, now time.Time) (*pb.ChangeRecord, *platform.Error)
 	ObserveRun         func(at time.Time, kind, key, app, resource, status, title, detail string)
-	PipelineInputs     func(p Pipeline, marking string, compartments []string) (PipelineInputs, *kernel.Error)
-	PipelinePlan       func() (PipelinePlan, *kernel.Error)
-	CurrentPipeline    func(id string) (Pipeline, *kernel.Error)
+	PipelineInputs     func(p Pipeline, marking string, compartments []string) (PipelineInputs, *platform.Error)
+	PipelinePlan       func() (PipelinePlan, *platform.Error)
+	CurrentPipeline    func(id string) (Pipeline, *platform.Error)
 	Unguarded          func(object, marking string) []string
 	OutputVersion      func(dataset, key string) (int, error)
 	ScheduleExists     func(id string) bool
 	PipelineProject    func(id string) string
-	ExecutionSchedules func() ([]platform.Schedule, *kernel.Error)
+	ExecutionSchedules func() ([]platform.Schedule, *platform.Error)
 	Composite          func(member platform.Member, key string, edits []platform.CompositeEdit, now time.Time) error
 }
 
@@ -189,7 +188,7 @@ func (g Integration) PullSource(s Source, now time.Time) {
 			}
 			if pull.Error == "" {
 				plan.Rows = rows
-				var refusal *kernel.Error
+				var refusal *platform.Error
 				pull.Merged, refusal = g.PrepareRows(member, s.Object, s.Name, plan.Rows, now)
 				if refusal != nil {
 					log.Printf("source row preparation unavailable: %v", refusal)
@@ -334,7 +333,7 @@ func (g Integration) RunPipeline(p Pipeline, now time.Time) {
 								plan.Binding = binding
 							}
 							plan.Rows = rows
-							var refusal *kernel.Error
+							var refusal *platform.Error
 							run.Merged, refusal = g.PrepareRows(member, p.OutputObject, p.Name, plan.Rows, now)
 							if refusal != nil {
 								log.Printf("pipeline row preparation unavailable: %v", refusal)

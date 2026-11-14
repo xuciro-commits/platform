@@ -5,11 +5,10 @@ import (
 	"strconv"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 	"platformserver/platform"
 )
 
-func requestInt(values url.Values, name string) (int, *kernel.Error) {
+func requestInt(values url.Values, name string) (int, *platform.Error) {
 	raw := values.Get(name)
 	if raw == "" {
 		return 0, nil
@@ -21,7 +20,7 @@ func requestInt(values url.Values, name string) (int, *kernel.Error) {
 	return value, nil
 }
 
-func (r Reader) ReadValues(m platform.Member, values url.Values) (Lineage, *kernel.Error) {
+func (r Reader) ReadValues(m platform.Member, values url.Values) (Lineage, *platform.Error) {
 	request := LineageRequest{Mode: values.Get("mode"), Project: values.Get("project"), Focus: values.Get("focus"), Ref: values.Get("ref"),
 		Direction: values.Get("direction"), Branch: values.Get("branch"), Fields: values.Get("fields") == "on", Field: values.Get("field")}
 	if request.Focus == "" {

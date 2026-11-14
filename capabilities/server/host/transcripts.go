@@ -3,7 +3,6 @@ package host
 import (
 	"time"
 
-	"platformkernel/kernel"
 	"platformserver/platform"
 	"platformserver/services/ai/gateway"
 )
@@ -25,7 +24,7 @@ func (t *Tenant) PurgeTranscripts(now time.Time) {
 	t.transcripts().Purge(now)
 }
 
-func (t *Tenant) TranscriptsFor(m platform.Member, run string, limit int, now time.Time) ([]Transcript, *kernel.Error) {
+func (t *Tenant) TranscriptsFor(m platform.Member, run string, limit int, now time.Time) ([]Transcript, *platform.Error) {
 	transcripts := t.transcripts()
 	transcripts.Admits, transcripts.Withheld = t.Admits, func(run string) bool { return t.withheld(m, run, now) }
 	return transcripts.For(m, run, limit)

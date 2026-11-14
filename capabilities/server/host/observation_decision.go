@@ -8,7 +8,6 @@ import (
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 	"platformserver/platform"
 )
 
@@ -34,18 +33,18 @@ func (t *Tenant) visibleObservationEvidence(m platform.Member, evidence *platfor
 		})
 }
 
-func (t *Tenant) observationPrior(m platform.Member, key, identity string) (*pb.ChangeRecord, *kernel.Error, bool) {
+func (t *Tenant) observationPrior(m platform.Member, key, identity string) (*pb.ChangeRecord, *platform.Error, bool) {
 	return t.Committed.ReusedPrior(t.apps, t.ID, key, m.ID, identity)
 }
 
 func (t *Tenant) observationDecision() dataowner.ObservationDecision {
 	return dataowner.ObservationDecision{Tenant: t.ID, Sources: t.observationSources(), Admits: t.Admits, Prior: t.observationPrior,
 		App: t.App,
-		Authorize: func(m platform.Member, app string, action platform.Action, targets bool, at time.Time, sources []string) *kernel.Error {
+		Authorize: func(m platform.Member, app string, action platform.Action, targets bool, at time.Time, sources []string) *platform.Error {
 			caller := platform.NewCaller(runtime{t: t, scoped: true}, m, app, false, false)
 			return authorizationRefusal(t.authorizeCapability(caller, app, action.Schema, action.Roles, targets, authorizationDetails{At: at, Sources: sources}))
 		},
-		Accept: func(m platform.Member, submission *pb.Submission, evidence *platform.ObservationDecisionEvidence, at time.Time) (*pb.ChangeRecord, *kernel.Error) {
+		Accept: func(m platform.Member, submission *pb.Submission, evidence *platform.ObservationDecisionEvidence, at time.Time) (*pb.ChangeRecord, *platform.Error) {
 			if refusal := t.delegatedBound(m, submission); refusal != nil {
 				return nil, refusal
 			}
@@ -65,12 +64,12 @@ func observationEvaluation(a dataowner.ObservationAnswer) ObservationEvaluation 
 	return answer
 }
 
-func (t *Tenant) EvaluateObservation(ctx context.Context, m platform.Member, ref platform.AssetRef, q dataowner.ObservationEvaluate, now time.Time) (ObservationEvaluation, *kernel.Error) {
+func (t *Tenant) EvaluateObservation(ctx context.Context, m platform.Member, ref platform.AssetRef, q dataowner.ObservationEvaluate, now time.Time) (ObservationEvaluation, *platform.Error) {
 	key, identity, err := dataowner.ObservationRequestIdentity(ref, q)
 	if err != nil {
 		return ObservationEvaluation{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
 	}
-	initial, refusal := recordRead(t, ctx, func(t *Tenant) (dataowner.ObservationPrepared, *kernel.Error) {
+	initial, refusal := recordRead(t, ctx, func(t *Tenant) (dataowner.ObservationPrepared, *platform.Error) {
 		m = t.authorizationMember(m)
 		return t.observationDecision().Prepare(m, ref, q, key, identity, now)
 	})
@@ -82,10 +81,10 @@ func (t *Tenant) EvaluateObservation(ctx context.Context, m platform.Member, ref
 	if refusal != nil {
 		return ObservationEvaluation{}, refusal
 	}
-	answer, refusal := decideOnImage(t, ctx, "observation:answer", func(t *Tenant) (dataowner.ObservationAnswer, *kernel.Error) {
+	answer, refusal := decideOnImage(t, ctx, "observation:answer", func(t *Tenant) (dataowner.ObservationAnswer, *platform.Error) {
 		m = t.authorizationMember(m)
 		return t.observationDecision().Commit(m, ref, q, key, identity, initial, outcome, now)
-	}, func(t *Tenant, candidate preparedAccepted, value dataowner.ObservationAnswer, refusal *kernel.Error) (dataowner.ObservationAnswer, *kernel.Error) {
+	}, func(t *Tenant, candidate preparedAccepted, value dataowner.ObservationAnswer, refusal *platform.Error) (dataowner.ObservationAnswer, *platform.Error) {
 		if len(candidate.entry.Body) == 0 {
 			return value, refusal
 		}

@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"platformkernel/kernel"
 	"slices"
 	"strings"
 	"time"
@@ -14,7 +13,7 @@ import (
 type BuildHost interface {
 	CompartmentExists(string) bool
 	ProjectApprovals(string) int
-	CheckResourceSchema(string, *SchemaVersion) *kernel.Error
+	CheckResourceSchema(string, *SchemaVersion) *Error
 	TransactionRuntime(BusinessRuntimeContext) TransactionExecutor
 	ManagedDefinition(AssetRef) bool
 	Action(schema string) (app string, a Action, ok bool)

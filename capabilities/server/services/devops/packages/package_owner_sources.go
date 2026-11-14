@@ -11,7 +11,6 @@ import (
 	"strings"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 	"platformserver/platform"
 )
 
@@ -39,7 +38,7 @@ func OfferKey(tenant, digest string) string {
 	return "packages/" + tenant + "/offers/" + strings.TrimPrefix(digest, "sha256:") + ".json"
 }
 
-func (d *Owner) decidePackageSource(_ platform.Caller, s *pb.Submission) (func(*pb.ChangeRecord), *kernel.Error) {
+func (d *Owner) decidePackageSource(_ platform.Caller, s *pb.Submission) (func(*pb.ChangeRecord), *platform.Error) {
 	var input struct{ ID, Digest string }
 	if json.Unmarshal(s.GetPayload(), &input) != nil || input.ID == "" || !platform.ValidDigest(input.Digest) {
 		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Choose the reviewed package content")

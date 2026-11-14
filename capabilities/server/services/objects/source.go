@@ -1,7 +1,6 @@
 package objects
 
 import (
-	"platformkernel/kernel"
 	"platformserver/kernel/records"
 	"platformserver/platform"
 	"slices"
@@ -15,7 +14,7 @@ type RecordProvenance struct {
 	Fields map[string]RecordFieldProvenance `json:"fields"`
 }
 
-func (t *Owner) SourceState(typ, id string, required bool) ([]records.RecordChange, []platform.FieldInfo, bool, string, *kernel.Error) {
+func (t *Owner) SourceState(typ, id string, required bool) ([]records.RecordChange, []platform.FieldInfo, bool, string, *platform.Error) {
 	t.Store.Lock()
 	defer t.Store.Unlock()
 	entity := t.Store.Type(typ)
@@ -37,7 +36,7 @@ func (t *Owner) SourceState(typ, id string, required bool) ([]records.RecordChan
 	return row.RecordHistory(), fields, header.Archived, header.Changed.Change, nil
 }
 
-func (t *Owner) SourceObjectStates(object string) (platform.EntityInfo, map[string]bool, *kernel.Error) {
+func (t *Owner) SourceObjectStates(object string) (platform.EntityInfo, map[string]bool, *platform.Error) {
 	t.Store.Lock()
 	defer t.Store.Unlock()
 	entity := t.Store.Type(object)
@@ -51,7 +50,7 @@ func (t *Owner) SourceObjectStates(object string) (platform.EntityInfo, map[stri
 	return entity.Info(), rows, nil
 }
 
-func (t *Owner) RecordProvenance(m platform.Member, typ, id string, now time.Time) (RecordProvenance, *kernel.Error) {
+func (t *Owner) RecordProvenance(m platform.Member, typ, id string, now time.Time) (RecordProvenance, *platform.Error) {
 	m = t.authorizationMember(m)
 	caller := t.caller(m, "")
 	if _, refusal := t.readRecordFrom(t.Store, caller, typ, id, now); refusal != nil {

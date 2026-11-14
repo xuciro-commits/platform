@@ -9,14 +9,13 @@ import (
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 	"platformserver/platform"
 	"platformserver/services/objects"
 )
 
 type ModelHost interface {
-	ModelMember(platform.Member) (platform.Member, *kernel.Error)
-	AuthorizePreview(platform.Member) *kernel.Error
+	ModelMember(platform.Member) (platform.Member, *platform.Error)
+	AuthorizePreview(platform.Member) *platform.Error
 	ModelCaller(m platform.Member, app string) platform.Caller
 	FilterCaller(platform.Caller) platform.Caller
 	Entity(typ string) (platform.EntityInfo, bool)
@@ -28,7 +27,7 @@ type ModelHost interface {
 	VisibleLookup(platform.Member) func(string) (platform.EntityInfo, bool)
 	RuleEntities() map[string]platform.EntityInfo
 	RuleRecord(typ, id string, fallback any) any
-	LoadObjectSet(c platform.Caller, set platform.ObjectSet, w objects.Window, at time.Time, bound ...platform.NamedQuery) (objects.RecordPage, string, *kernel.Error)
+	LoadObjectSet(c platform.Caller, set platform.ObjectSet, w objects.Window, at time.Time, bound ...platform.NamedQuery) (objects.RecordPage, string, *platform.Error)
 }
 
 type ModelReader struct{ host ModelHost }
@@ -93,7 +92,7 @@ type pageModelFilter struct {
 	lookup   func(string) (platform.EntityInfo, bool)
 	at       time.Time
 	partial  bool
-	err      *kernel.Error
+	err      *platform.Error
 }
 
 func (f *pageModelFilter) match(value reflect.Value) bool {
@@ -132,7 +131,7 @@ func (f *pageModelFilter) match(value reflect.Value) bool {
 	return true
 }
 
-func (r ModelReader) Read(member platform.Member, request PageModelRead, at time.Time) (PageModelResult, *kernel.Error) {
+func (r ModelReader) Read(member platform.Member, request PageModelRead, at time.Time) (PageModelResult, *platform.Error) {
 	result := PageModelResult{Records: []map[string]any{}, Fields: []platform.FieldInfo{}, Access: map[string]map[string]platform.AuthzDecision{}}
 	if request.Offset < 0 || request.Limit < 1 || request.Limit > 200 || len(request.Records) > 128 || len(request.Values) > 128 || len(request.Search) > 1024 || len(request.Sort) > 16 {
 		return result, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Model read exceeds its bounded window")
@@ -205,7 +204,7 @@ func (r ModelReader) Read(member platform.Member, request PageModelRead, at time
 	return r.source(member, page, section, request, at)
 }
 
-func (r ModelReader) source(member platform.Member, page platform.Page, section platform.PageDataBinding, request PageModelRead, at time.Time) (PageModelResult, *kernel.Error) {
+func (r ModelReader) source(member platform.Member, page platform.Page, section platform.PageDataBinding, request PageModelRead, at time.Time) (PageModelResult, *platform.Error) {
 	result := PageModelResult{Records: []map[string]any{}, Fields: []platform.FieldInfo{}, Access: map[string]map[string]platform.AuthzDecision{}}
 	model := section.Model
 	result.Model, result.Object = model, model.Type
@@ -388,7 +387,7 @@ func (r ModelReader) source(member platform.Member, page platform.Page, section 
 	return result, nil
 }
 
-func (r ModelReader) rows(c platform.Caller, page platform.Page, section platform.PageDataBinding, request PageModelRead, projection []string, criteria *platform.RuleCriteria, inputs map[string]any, at time.Time) (pageModelRowsResult, *kernel.Error) {
+func (r ModelReader) rows(c platform.Caller, page platform.Page, section platform.PageDataBinding, request PageModelRead, projection []string, criteria *platform.RuleCriteria, inputs map[string]any, at time.Time) (pageModelRowsResult, *platform.Error) {
 	model := section.Model
 	result := pageModelRowsResult{records: []map[string]any{}, sort: slices.Clone(request.Sort)}
 	collection := model.Set
@@ -498,7 +497,7 @@ func (r ModelReader) rows(c platform.Caller, page platform.Page, section platfor
 			},
 		}
 	}
-	var projectedErr *kernel.Error
+	var projectedErr *platform.Error
 	window := objects.Window{
 		Sort: result.sort, Offset: request.Offset, Limit: request.Limit, Bounded: true,
 		Project: func(_ platform.EntityInfo, _ reflect.Value, record any) any {
@@ -593,7 +592,7 @@ type PageCompositeResult struct {
 	Cells   []PageMatrixCell               `json:"cells,omitempty"`
 }
 
-func (r ModelReader) composite(member platform.Member, page platform.Page, section platform.PageDataBinding, request PageModelRead, at time.Time) (PageModelResult, *kernel.Error) {
+func (r ModelReader) composite(member platform.Member, page platform.Page, section platform.PageDataBinding, request PageModelRead, at time.Time) (PageModelResult, *platform.Error) {
 	result := PageModelResult{Object: section.PrimaryModel().Type, Records: []map[string]any{}, Fields: []platform.FieldInfo{}, Access: map[string]map[string]platform.AuthzDecision{}, Composite: &PageCompositeResult{Sources: map[string]PageCompositeSource{}}}
 	c := section
 	recordLimit, cellLimit, byteLimit := platform.CompositeLimits()

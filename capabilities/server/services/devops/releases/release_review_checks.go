@@ -3,7 +3,6 @@ package releases
 import (
 	"encoding/json"
 	"fmt"
-	"platformkernel/kernel"
 	"platformserver/platform"
 	"platformserver/services/resources/authoring"
 
@@ -177,7 +176,7 @@ func (s *Store) Review(id string, context ReviewContext) (SavedReleaseReview, er
 }
 
 type ReviewContext struct {
-	AI            func([]platform.ReleaseAsset, map[platform.AssetRef]bool) ([]platform.ApplicationAI, *kernel.Error)
+	AI            func([]platform.ReleaseAsset, map[platform.AssetRef]bool) ([]platform.ApplicationAI, *platform.Error)
 	Extensions    func(platform.ReleaseCandidate) ([]ReleaseExtensionReview, error)
 	Running       func(platform.ReleaseCandidate) (platform.ReleaseCandidate, error)
 	CheckExisting func(string, []byte) error

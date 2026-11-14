@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"maps"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 	"platformserver/platform"
 	"slices"
 	"strings"
@@ -61,18 +60,18 @@ var _ platform.ContinuousFlowOwner = (*Flows)(nil)
 
 var _ platform.AttachedFlow = (*Flows)(nil)
 
-func (f *Flows) version(c platform.Caller, flow string) (*flowDef, *kernel.Error) {
+func (f *Flows) version(c platform.Caller, flow string) (*flowDef, *platform.Error) {
 	if c.Replaying {
 		if v, ok := f.pins[flow]; ok {
 			if d := f.def(flow, v); d != nil {
 				return d, nil
 			}
-			return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
+			return nil, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
 		}
 	}
 	d, ok := f.latest(flow)
 	if !ok {
-		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
+		return nil, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
 	}
 	if f.chosen == nil {
 		f.chosen = map[string]int{}
@@ -215,10 +214,10 @@ func (f *Flows) eachRunning(c platform.Caller, visit func(FlowInstance) error) e
 	}
 }
 
-func (f *Flows) running(c platform.Caller) ([]FlowInstance, *kernel.Error) {
+func (f *Flows) running(c platform.Caller) ([]FlowInstance, *platform.Error) {
 	var out []FlowInstance
 	if err := f.eachRunning(c, func(x FlowInstance) error { out = append(out, x); return nil }); err != nil {
-		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT, Message: err.Error()}
+		return nil, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT, Message: err.Error()}
 	}
 	return out, nil
 }
@@ -249,7 +248,7 @@ type FlowDefinition = platform.FlowDefinition
 
 type FlowStep = platform.FlowStep
 
-func (f *Flows) Read(c platform.Caller, _ string) (any, *kernel.Error) {
+func (f *Flows) Read(c platform.Caller, _ string) (any, *platform.Error) {
 	out := []FlowDefinition{}
 	for _, id := range slices.Sorted(maps.Keys(f.defs)) {
 		for _, d := range f.defs[id] {
@@ -260,7 +259,7 @@ func (f *Flows) Read(c platform.Caller, _ string) (any, *kernel.Error) {
 	return out, nil
 }
 
-func (f *Flows) StartManual(c platform.Caller, app, name string, version int, key, subject string, input json.RawMessage, now time.Time) *kernel.Error {
+func (f *Flows) StartManual(c platform.Caller, app, name string, version int, key, subject string, input json.RawMessage, now time.Time) *platform.Error {
 	d := f.def(app+"."+name, version)
 	if d == nil || (!d.Start.Manual && d.Start.OnBehalf == "" || d.Start.Continuous) || key == "" || len(key) > 256 || len(input) > 64<<10 || !json.Valid(input) {
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Choose an installed manual flow, bounded key and JSON input")

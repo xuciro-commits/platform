@@ -8,11 +8,10 @@ import (
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 	"platformserver/platform"
 )
 
-func (o *Owner) WritebackEffects(tenant string, c platform.Caller, e platform.Event, preparing bool, credential func(WritebackRequest) *kernel.Error) ([]platform.Effect, *kernel.Error) {
+func (o *Owner) WritebackEffects(tenant string, c platform.Caller, e platform.Event, preparing bool, credential func(WritebackRequest) *platform.Error) ([]platform.Effect, *platform.Error) {
 	s := e.Record.GetSubmission()
 	schema := s.GetSchema().GetName()
 	writebacks, _, refusal := platform.Find[Writeback](c, platform.Query{Domain: json.RawMessage(`[["state","=","published"]]`), Sort: []string{"id"}, Limit: 200})
@@ -114,7 +113,7 @@ func IntegrationEffects(effects []platform.Effect) []IntegrationEffect {
 	return out
 }
 
-func TxnWritebackEffect(c platform.Caller, receipt *pb.ChangeRecord, step string, target platform.TxnRef, raw json.RawMessage, at time.Time, private bool, credential func(WritebackRequest) *kernel.Error, bind func(typ string) ([]platform.AssetBinding, error), declared func() []platform.Effect) (platform.Effect, *kernel.Error) {
+func TxnWritebackEffect(c platform.Caller, receipt *pb.ChangeRecord, step string, target platform.TxnRef, raw json.RawMessage, at time.Time, private bool, credential func(WritebackRequest) *platform.Error, bind func(typ string) ([]platform.AssetBinding, error), declared func() []platform.Effect) (platform.Effect, *platform.Error) {
 	if !private || !c.Staging() || c.App != App || receipt.GetSubmission().GetAuthority() != c.App || step == "" {
 		return platform.Effect{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "Transaction effects require their original private owner")
 	}

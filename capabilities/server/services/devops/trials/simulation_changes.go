@@ -4,12 +4,11 @@ import (
 	"encoding/json"
 	"strings"
 
-	"platformkernel/kernel"
 	"platformserver/platform"
 	branches "platformserver/services/resources/merge"
 )
 
-func SimulatedChanges(refs []string, read func(typ string, q platform.Query) ([]any, *kernel.Error)) []SimulatedChange {
+func SimulatedChanges(refs []string, read func(typ string, q platform.Query) ([]any, *platform.Error)) []SimulatedChange {
 	out := []SimulatedChange{}
 	for _, ref := range refs {
 		typ, id, _ := strings.Cut(ref, "/")

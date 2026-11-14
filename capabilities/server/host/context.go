@@ -4,7 +4,6 @@ import (
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 	"platformserver/platform"
 	"platformserver/services/objects"
 	"platformserver/services/resources/authoring"
@@ -18,9 +17,9 @@ func (t *Tenant) host() platform.Member {
 	return m
 }
 
-func (t *Tenant) contextRead(reader *platform.Member, typ, id string, now time.Time) (objects.ContextView, *kernel.Error) {
+func (t *Tenant) contextRead(reader *platform.Member, typ, id string, now time.Time) (objects.ContextView, *platform.Error) {
 	if reader == nil || reader.Tenant != t.ID {
-		return objects.ContextView{}, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
+		return objects.ContextView{}, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
 	}
 	m := *reader
 	records := func(present bool, typ string) func(q platform.Query) ([]any, bool) {
@@ -33,7 +32,7 @@ func (t *Tenant) contextRead(reader *platform.Member, typ, id string, now time.T
 		}
 	}
 	return objects.ContextReader{
-		Detail: func(sections ...string) (objects.RecordView, *kernel.Error) {
+		Detail: func(sections ...string) (objects.RecordView, *platform.Error) {
 			return t.objectOwner(t.Projection).RecordDetail(m, typ, id, now, sections...)
 		},
 		Info: func() platform.EntityInfo {
@@ -60,7 +59,7 @@ func (t *Tenant) searchRead(reader *platform.Member, q string, now time.Time) []
 	}
 	m := *reader
 	search := build.Search{Resources: t.resourceDirectory(m).Resources, Entities: t.Entities(m), Names: t.names,
-		Read: func(typ string, query platform.Query) ([]any, *kernel.Error) {
+		Read: func(typ string, query platform.Query) ([]any, *platform.Error) {
 			page, err := t.objectOwner(t.Projection).Records(m, typ, query, now)
 			return page.Records, err
 		}}

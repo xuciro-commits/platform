@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"google.golang.org/protobuf/proto"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 	"platformserver/platform"
 	"platformserver/services/ai/evaluation"
 	"slices"
@@ -15,11 +14,11 @@ import (
 	"time"
 )
 
-func (a *Agents) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *kernel.Error) {
+func (a *Agents) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *platform.Error) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	if s.GetSchema().GetName() == platform.SchemaRunStep {
-		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_POLICY_DENIED}
+		return nil, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_POLICY_DENIED}
 	}
 	if record, err, ok := a.ledger.Generated(c, s, now, nil, agentEntities()...); ok {
 		return record, err
@@ -47,14 +46,14 @@ func (a *Agents) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb
 		}
 		return known && !c.Agent && !c.Automation && (run.OnBehalf == c.ID || slices.Contains(run.Reviewers, c.ID))
 	}
-	return a.ledger.Receive(c, s, now, allowed, func() (func(*pb.ChangeRecord), *kernel.Error) {
+	return a.ledger.Receive(c, s, now, allowed, func() (func(*pb.ChangeRecord), *platform.Error) {
 		switch s.GetSchema().GetName() {
 		case platform.SchemaRunStart:
 			if known {
-				return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
+				return nil, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
 			}
 			if d == nil || strings.TrimSpace(p.Goal) == "" {
-				return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
+				return nil, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 			}
 			if a.host.AgentSuspended("agent:"+p.Agent) && !c.Replaying {
 				return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "The agent {agent} is suspended", p.Agent)
@@ -100,7 +99,7 @@ func (a *Agents) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb
 			return a.switchDecision(c, s, struct{ Reason string }{p.Reason})
 		case platform.SchemaRunCancel:
 			if !known || run.State == "done" || run.State == "stopped" {
-				return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
+				return nil, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
 			}
 			return func(r *pb.ChangeRecord) {
 				a.stop(c, r, &run, "stopped by "+c.ID, now)
@@ -108,7 +107,7 @@ func (a *Agents) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb
 			}, nil
 		case platform.SchemaRunConfirm, platform.SchemaRunReject:
 			if len(run.Draft) == 0 || run.State != "waiting" {
-				return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
+				return nil, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
 			}
 			draft, proposed := run.Draft[0], (*platform.Signal)(nil)
 			originalDraft := draft
@@ -192,11 +191,11 @@ func (a *Agents) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb
 				}
 			}, nil
 		}
-		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_UNKNOWN_SCHEMA}
+		return nil, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_UNKNOWN_SCHEMA}
 	})
 }
 
-func (a *Agents) confirm(c platform.Caller, run platform.AgentRunRecord, d platform.Draft, payload string, now time.Time) (string, *kernel.Error) {
+func (a *Agents) confirm(c platform.Caller, run platform.AgentRunRecord, d platform.Draft, payload string, now time.Time) (string, *platform.Error) {
 	if !run.ToolOnly && a.changedDefinition(run, a.def(run.Agent)) {
 		return "", platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The agent definition changed; start a new run")
 	}
@@ -247,7 +246,7 @@ func (a *Agents) confirm(c platform.Caller, run platform.AgentRunRecord, d platf
 	}
 	app := h.App(a.authorityOf(d.Type))
 	if app == nil {
-		return "", &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
+		return "", &platform.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
 	}
 	record, err := platform.Decide(c, app, &pb.Submission{TenantId: a.tenant, PrincipalId: c.ID, Authority: app.Manifest().ID, IdempotencyKey: key,
 		Target: &pb.EntityRef{Type: d.Type, Id: d.Target}, Schema: &pb.SchemaRef{Name: d.Action, Version: 1}, Payload: []byte(payload), CorrelationId: run.ID}, now)
@@ -383,7 +382,7 @@ func (a *Agents) replayLegacyAction(c platform.Caller, d *platform.CompiledAgent
 				return draft("")
 			}
 		}
-		_, err := platform.Attempt(c, func() (*pb.ChangeRecord, *kernel.Error) {
+		_, err := platform.Attempt(c, func() (*pb.ChangeRecord, *platform.Error) {
 			_, record, err := h.InvokeDecision(agent, protocol, schema, target, body, key, run.ID, now)
 			return record, err
 		})
@@ -401,7 +400,7 @@ func (a *Agents) replayLegacyAction(c platform.Caller, d *platform.CompiledAgent
 		request := proto.Clone(s).(*pb.Submission)
 		request.PrincipalId = person.ID
 		asked := platform.ActingCaller(c, *person, app.Manifest().ID, false)
-		err := platform.ProbeDecision(asked, func(probe platform.Caller) *kernel.Error {
+		err := platform.ProbeDecision(asked, func(probe platform.Caller) *platform.Error {
 			_, err := platform.Decide(probe, app, request, now)
 			return err
 		})
@@ -412,7 +411,7 @@ func (a *Agents) replayLegacyAction(c platform.Caller, d *platform.CompiledAgent
 			return draft(tool.Target)
 		}
 	}
-	record, err := platform.Attempt(c, func() (*pb.ChangeRecord, *kernel.Error) {
+	record, err := platform.Attempt(c, func() (*pb.ChangeRecord, *platform.Error) {
 		return platform.Decide(agent, app, s, now)
 	})
 	if err != nil {

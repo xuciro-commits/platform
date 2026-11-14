@@ -9,7 +9,6 @@ import (
 	"strings"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 	"platformserver/platform"
 )
 
@@ -46,7 +45,7 @@ type Search struct {
 	Owned     []platform.Entity
 	Entities  []platform.EntityInfo
 	Names     func(platform.EntityInfo, string) (string, bool)
-	Read      func(typ string, query platform.Query) ([]any, *kernel.Error)
+	Read      func(typ string, query platform.Query) ([]any, *platform.Error)
 }
 
 var searchScopes = map[byte]string{'#': AppType, ':': ObjectType, '@': memberType}

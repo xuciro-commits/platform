@@ -3,7 +3,6 @@ package organization
 import (
 	"encoding/json"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 	"platformserver/platform"
 	"slices"
 	"strconv"
@@ -33,7 +32,7 @@ func project(e Element, today platform.Date) platform.EnterpriseQueryElement {
 		Legal: e.Legal, From: e.From, Until: e.Until, Periods: slices.Clone(e.Periods), Closed: !e.ActiveOn(today)}
 }
 
-func (e *Enterprise) Query(stereotypes []string, kind, q, alive string, limit int, now time.Time) (platform.EnterpriseQueryResult, *kernel.Error) {
+func (e *Enterprise) Query(stereotypes []string, kind, q, alive string, limit int, now time.Time) (platform.EnterpriseQueryResult, *platform.Error) {
 	today := platform.Date(now.UTC().Format(time.DateOnly))
 	if alive != "" && alive != "all" {
 		if len(alive) != len("2006-01-02") {
@@ -77,7 +76,7 @@ func (e *Enterprise) Query(stereotypes []string, kind, q, alive string, limit in
 	return out, nil
 }
 
-func (e *Enterprise) Resolve(ids []string, now time.Time) (platform.EnterpriseQueryResult, *kernel.Error) {
+func (e *Enterprise) Resolve(ids []string, now time.Time) (platform.EnterpriseQueryResult, *platform.Error) {
 	if len(ids) > 100 {
 		return platform.EnterpriseQueryResult{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "resolve takes at most 100 ids")
 	}
@@ -191,7 +190,7 @@ func payloadFieldType(a platform.Action, f platform.Field) string {
 	}
 }
 
-func pinRecord(c platform.Caller, ref string, now time.Time) (map[string]any, *kernel.Error) {
+func pinRecord(c platform.Caller, ref string, now time.Time) (map[string]any, *platform.Error) {
 	typ, id, _ := strings.Cut(strings.TrimPrefix(ref, "record:"), "/")
 	raw, err := c.ReadRecord(typ, id, now)
 	if err != nil {

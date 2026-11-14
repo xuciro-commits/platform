@@ -3,7 +3,6 @@ package security
 import (
 	"encoding/json"
 	"maps"
-	"platformkernel/kernel"
 	"platformserver/platform"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
@@ -62,13 +61,13 @@ func (d *Policies) Restore(state platform.AuthorizationState) {
 	}
 	d.applyAccess()
 }
-func (d *Policies) PrepareAccess(c platform.Caller, s *pb.Submission, members []string) (func(*pb.ChangeRecord), *kernel.Error) {
+func (d *Policies) PrepareAccess(c platform.Caller, s *pb.Submission, members []string) (func(*pb.ChangeRecord), *platform.Error) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	apply, err := d.decideAccess(c, s, members)
 	return d.accepted(apply), err
 }
-func (d *Policies) PrepareProject(c platform.Caller, s *pb.Submission, members []string) (func(*pb.ChangeRecord), *kernel.Error) {
+func (d *Policies) PrepareProject(c platform.Caller, s *pb.Submission, members []string) (func(*pb.ChangeRecord), *platform.Error) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	apply, err := d.decideProject(c, s, members)
@@ -81,8 +80,8 @@ func (d *Policies) accepted(apply func(*pb.ChangeRecord)) func(*pb.ChangeRecord)
 	return func(r *pb.ChangeRecord) { d.mu.Lock(); defer d.mu.Unlock(); apply(r) }
 }
 
-func (d *Policies) decideAccess(c platform.Caller, s *pb.Submission, members []string) (func(*pb.ChangeRecord), *kernel.Error) {
-	invalid := &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
+func (d *Policies) decideAccess(c platform.Caller, s *pb.Submission, members []string) (func(*pb.ChangeRecord), *platform.Error) {
+	invalid := &platform.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 	id := s.GetTarget().GetId()
 	if id == "" || d.host == nil {
 		return nil, invalid
@@ -115,7 +114,7 @@ func (d *Policies) decideAccess(c platform.Caller, s *pb.Submission, members []s
 	case platform.SchemaRoleRemove:
 		r := d.roles[id]
 		if r == nil {
-			return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
+			return nil, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
 		}
 		return func(*pb.ChangeRecord) {
 			delete(d.roles, id)
@@ -137,7 +136,7 @@ func (d *Policies) decideAccess(c platform.Caller, s *pb.Submission, members []s
 		return func(*pb.ChangeRecord) { d.policies[id] = &p }, nil
 	case platform.SchemaPolicyDrop:
 		if d.policies[id] == nil {
-			return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
+			return nil, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
 		}
 		return func(*pb.ChangeRecord) { delete(d.policies, id) }, nil
 	case platform.SchemaTeamSave:
@@ -167,7 +166,7 @@ func (d *Policies) decideAccess(c platform.Caller, s *pb.Submission, members []s
 		return func(*pb.ChangeRecord) { d.teams[id] = &p }, nil
 	case platform.SchemaTeamRemove:
 		if d.teams[id] == nil {
-			return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
+			return nil, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
 		}
 		return func(*pb.ChangeRecord) { delete(d.teams, id) }, nil
 	}
@@ -244,8 +243,8 @@ func (d *Policies) Access() platform.AccessConfig {
 
 var projectRoles = []string{platform.ProjectOwnerRole, platform.ProjectEditorRole, platform.ProjectViewerRole, platform.ProjectDiscovererRole}
 
-func (d *Policies) decideProject(c platform.Caller, s *pb.Submission, members []string) (func(*pb.ChangeRecord), *kernel.Error) {
-	invalid := &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
+func (d *Policies) decideProject(c platform.Caller, s *pb.Submission, members []string) (func(*pb.ChangeRecord), *platform.Error) {
+	invalid := &platform.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 	id := s.GetTarget().GetId()
 	var p struct {
 		Title     string                   `json:"title"`

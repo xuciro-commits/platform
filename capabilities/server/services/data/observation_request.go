@@ -6,11 +6,10 @@ import (
 	"io"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 	"platformserver/platform"
 )
 
-func DecodeObservationRequest(body io.Reader, value any) *kernel.Error {
+func DecodeObservationRequest(body io.Reader, value any) *platform.Error {
 	raw, err := io.ReadAll(io.LimitReader(body, (16<<10)+1))
 	if err != nil || len(raw) > 16<<10 {
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Observation request exceeds its bounded shape")

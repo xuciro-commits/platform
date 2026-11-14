@@ -10,7 +10,6 @@ import (
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 	"platformserver/platform"
 )
 
@@ -68,7 +67,7 @@ func (b *Build) productEntity() platform.Entity {
 		Description: "A product chooses the project resources that DevOps packages into immutable versions.",
 		Scope:       platform.Scope{Default: platform.ScopeTenant, Levels: map[string]string{Builder: platform.ScopeTenant, Publisher: platform.ScopeTenant}},
 		Standard:    platform.Standard{Create: true, Edit: true, Archive: true, Roles: []string{Builder, Publisher}, Capability: "releases"},
-		Validate: func(c platform.Caller, value any) *kernel.Error {
+		Validate: func(c platform.Caller, value any) *platform.Error {
 			product, ok := value.(*Product)
 			if !ok {
 				return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "The product definition is unreadable")
@@ -118,7 +117,7 @@ func productVersionActions() []platform.Action {
 	}}
 }
 
-func (b *Build) submitProductVersion(c platform.Caller, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *kernel.Error) {
+func (b *Build) submitProductVersion(c platform.Caller, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *platform.Error) {
 	if !c.Replaying && !c.Holds(ID, Builder) && !c.Holds(ID, Publisher) && !c.Holds("platform", "admin") {
 		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "Publishing a product version requires a builder or publisher role")
 	}
@@ -154,7 +153,7 @@ func (b *Build) submitProductVersion(c platform.Caller, s *pb.Submission, now ti
 	if err != nil {
 		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The product version cannot be frozen: {reason}", err.Error())
 	}
-	return b.ledger.Receive(c, s, now, nil, func() (func(*pb.ChangeRecord), *kernel.Error) {
+	return b.ledger.Receive(c, s, now, nil, func() (func(*pb.ChangeRecord), *platform.Error) {
 		return func(r *pb.ChangeRecord) {
 			if _, exists := platform.Get[ProductVersion](c, s.GetTarget().GetId()); exists {
 				c.FailDecision(platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "A product version cannot be replaced"))

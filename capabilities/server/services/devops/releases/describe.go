@@ -7,7 +7,6 @@ import (
 	"strings"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 	"platformserver/platform"
 )
 
@@ -16,7 +15,7 @@ type DescribeHost interface {
 	Entity(typ string) (platform.EntityInfo, bool)
 	AuthorityOf(dataClass string) string
 	ProtocolProvider(protocol string) (string, bool)
-	Admits(platform.Member) *kernel.Error
+	Admits(platform.Member) *platform.Error
 	DefinitionsFor(platform.Member) ([]platform.Definition, error)
 }
 
@@ -243,7 +242,7 @@ func dependencyDirections(descriptors []platform.Dependencies, focus platform.As
 	return slices.DeleteFunc(requires, func(ref platform.AssetRef) bool { return ref == focus }), slices.DeleteFunc(usedBy, func(ref platform.AssetRef) bool { return ref == focus }), nil
 }
 
-func (ds Describer) DependencyView(m platform.Member, focus platform.AssetRef, app string) (DependencyView, *kernel.Error) {
+func (ds Describer) DependencyView(m platform.Member, focus platform.AssetRef, app string) (DependencyView, *platform.Error) {
 	view := DependencyView{Descriptors: []platform.Dependencies{}, Requires: []platform.AssetRef{}, UsedBy: []platform.AssetRef{}}
 	if err := ds.host.Admits(m); err != nil {
 		return view, err
@@ -277,7 +276,7 @@ func (ds Describer) DependencyView(m platform.Member, focus platform.AssetRef, a
 	return view, nil
 }
 
-func (ds Describer) ProvidedCapabilities(m platform.Member, kind, side string) ([]ProvidedCapability, *kernel.Error) {
+func (ds Describer) ProvidedCapabilities(m platform.Member, kind, side string) ([]ProvidedCapability, *platform.Error) {
 	if err := ds.host.Admits(m); err != nil {
 		return nil, err
 	}

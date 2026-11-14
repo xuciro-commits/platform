@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 	"platformserver/kernel/acceptedformat"
 	"platformserver/platform"
 	"slices"
@@ -14,15 +13,15 @@ type UsageAcceptance struct {
 	Tenant      string
 	Prior       func() []platform.AIUsage
 	Caller      func(platform.Member) platform.Caller
-	Authorize   func(c platform.Caller, valid bool) (platform.AuthzDecision, *kernel.Error)
+	Authorize   func(c platform.Caller, valid bool) (platform.AuthzDecision, *platform.Error)
 	Predecessor func() (string, error)
 	Apply       func([]byte) error
 	Quarantine  func(error)
 	Applied     func()
 }
 
-func (a UsageAcceptance) Seal(m platform.Member, u platform.AIUsage) (acceptedformat.Usage, []byte, *kernel.Error) {
-	unknown := &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_UNKNOWN_SCHEMA}
+func (a UsageAcceptance) Seal(m platform.Member, u platform.AIUsage) (acceptedformat.Usage, []byte, *platform.Error) {
+	unknown := &platform.Error{Code: pb.ErrorCode_ERROR_CODE_UNKNOWN_SCHEMA}
 	if u.Call != "" {
 		for _, prior := range a.Prior() {
 			if prior.Call != u.Call {
@@ -65,8 +64,8 @@ func (a UsageAcceptance) Seal(m platform.Member, u platform.AIUsage) (acceptedfo
 	return r, raw, nil
 }
 
-func (a UsageAcceptance) Finish(committed []byte, key, hash string) *kernel.Error {
-	unknown := &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_UNKNOWN_SCHEMA}
+func (a UsageAcceptance) Finish(committed []byte, key, hash string) *platform.Error {
+	unknown := &platform.Error{Code: pb.ErrorCode_ERROR_CODE_UNKNOWN_SCHEMA}
 	saved, err := acceptedformat.DecodeUsage(committed)
 	if err != nil || saved.Key != key || saved.RequestHash != hash {
 		a.Quarantine(fmt.Errorf("committed model usage differs: %v", err))

@@ -9,7 +9,6 @@ import (
 	"fmt"
 	"io"
 	"maps"
-	"platformkernel/kernel"
 	"platformserver/platform"
 	"platformserver/services/ontology"
 	"platformserver/services/resources/publication"
@@ -257,14 +256,14 @@ func (o *Owner) check(f Function) (Function, error) {
 	return f, nil
 }
 
-func (o *Owner) publish(c platform.Caller, record any, _ json.RawMessage, _ time.Time) *kernel.Error {
+func (o *Owner) publish(c platform.Caller, record any, _ json.RawMessage, _ time.Time) *platform.Error {
 	f, ok := record.(*Function)
 	if !ok {
-		return &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
+		return &platform.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 	}
 	bound, err := o.check(*f)
 	if err != nil {
-		return &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, Message: err.Error()}
+		return &platform.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, Message: err.Error()}
 	}
 	*f = bound
 	return publication.PublishRetained(c, f, func(f *Function) publication.Family { return f.family() }, setFamily, "An AI function may retain at most 64 published versions", func(f *Function) string { return f.image() }, o.installRecord)
@@ -456,18 +455,18 @@ func (o *Owner) Definition(name string, version int) (platform.AIFunction, int, 
 	return o.Function(name, version)
 }
 
-func (o *Owner) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *kernel.Error) {
+func (o *Owner) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *platform.Error) {
 	switch s.GetSchema().GetName() {
 	case SchemaFunctionCall, SchemaFunctionAnswer:
 		return o.submitCall(c, s, now)
 	case SchemaProposalReview:
 		return o.submitProposalReview(c, s, now)
 	}
-	return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_UNKNOWN_SCHEMA}
+	return nil, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_UNKNOWN_SCHEMA}
 }
 
-func (o *Owner) submitCall(c platform.Caller, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *kernel.Error) {
-	return o.env.Ledger().Receive(c, s, now, nil, func() (func(*pb.ChangeRecord), *kernel.Error) {
+func (o *Owner) submitCall(c platform.Caller, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *platform.Error) {
+	return o.env.Ledger().Receive(c, s, now, nil, func() (func(*pb.ChangeRecord), *platform.Error) {
 		if !c.Staging() {
 			return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, platform.FunctionNeedsDecision)
 		}
@@ -475,11 +474,11 @@ func (o *Owner) submitCall(c platform.Caller, s *pb.Submission, now time.Time) (
 		run, exists := platform.Get[FunctionRun](c, id)
 		if s.GetSchema().GetName() == SchemaFunctionCall {
 			if exists {
-				return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
+				return nil, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
 			}
 			var request platform.FunctionRequest
 			if json.Unmarshal(s.GetPayload(), &request) != nil {
-				return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
+				return nil, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 			}
 			request.Reply = SchemaFunctionAnswer
 			return func(r *pb.ChangeRecord) {
@@ -507,7 +506,7 @@ func (o *Owner) submitCall(c platform.Caller, s *pb.Submission, now time.Time) (
 		var answer platform.Answer
 		if !exists || run.State != "pending" || json.Unmarshal(s.GetPayload(), &answer) != nil || answer.Call != id ||
 			answer.Outcome != "accepted" && answer.Outcome != "refused" {
-			return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
+			return nil, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 		}
 		run.State, run.Code, run.Reason = "rejected", answer.Code, answer.Reason
 		run.Metered, run.TokensReported = answer.Metered, answer.TokensReported
@@ -516,7 +515,7 @@ func (o *Owner) submitCall(c platform.Caller, s *pb.Submission, now time.Time) (
 		run.LatencyMillis, run.ServedModel = answer.LatencyMillis, answer.ServedModel
 		if answer.Outcome == "accepted" {
 			if run.Contract.ValidateOutput([]byte(answer.Text)) != nil {
-				return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
+				return nil, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 			}
 			run.Output, run.State, run.Code, run.Reason = answer.Text, "ready", "", ""
 		}
@@ -540,8 +539,8 @@ func (o *Owner) submitCall(c platform.Caller, s *pb.Submission, now time.Time) (
 	})
 }
 
-func (o *Owner) submitProposalReview(c platform.Caller, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *kernel.Error) {
-	return o.env.Ledger().Receive(c, s, now, nil, func() (func(*pb.ChangeRecord), *kernel.Error) {
+func (o *Owner) submitProposalReview(c platform.Caller, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *platform.Error) {
+	return o.env.Ledger().Receive(c, s, now, nil, func() (func(*pb.ChangeRecord), *platform.Error) {
 		raw, err := c.ReadRecord(FunctionCallType, s.GetTarget().GetId(), now)
 		var visible FunctionRun
 		run, ok := platform.Get[FunctionRun](c, s.GetTarget().GetId())

@@ -7,7 +7,6 @@ import (
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 	"platformserver/platform"
 )
 
@@ -60,7 +59,7 @@ func RequestObservation(at time.Time, member, route, requestID, traceID, spanID 
 	}
 }
 
-func SubmissionObservation(at time.Time, member, requestID, traceID, spanID string, sub *pb.Submission, record *pb.ChangeRecord, refusal *kernel.Error) platform.Observation {
+func SubmissionObservation(at time.Time, member, requestID, traceID, spanID string, sub *pb.Submission, record *pb.ChangeRecord, refusal *platform.Error) platform.Observation {
 	level, outcome := "info", "ok"
 	if refusal != nil {
 		level, outcome = "warn", "refused"

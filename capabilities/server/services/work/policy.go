@@ -5,7 +5,6 @@ import (
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 	"platformserver/platform"
 )
 
@@ -73,18 +72,18 @@ func CountFor(step ApprovalStep, all bool, policy int, approvers int) int {
 	return policy
 }
 
-func (w *Work) inputPolicy(_ platform.Caller, payload json.RawMessage, _ time.Time) *kernel.Error {
+func (w *Work) inputPolicy(_ platform.Caller, payload json.RawMessage, _ time.Time) *platform.Error {
 	var p struct {
 		App, Schema, Title string
 		Approvals          int `json:"approvals"`
 	}
 	if err := json.Unmarshal(payload, &p); err != nil || p.App == "" || p.Schema == "" || p.Approvals < 1 {
-		return &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
+		return &platform.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 	}
 	return nil
 }
 
-func (w *Work) policy(c platform.Caller, s *pb.Submission) (func(*pb.ChangeRecord), *kernel.Error) {
+func (w *Work) policy(c platform.Caller, s *pb.Submission) (func(*pb.ChangeRecord), *platform.Error) {
 	if err := w.inputPolicy(c, s.GetPayload(), time.Now()); err != nil {
 		return nil, err
 	}
@@ -92,7 +91,7 @@ func (w *Work) policy(c platform.Caller, s *pb.Submission) (func(*pb.ChangeRecor
 	existing, known := platform.Get[ApprovalPolicy](c, id)
 	if s.GetSchema().GetName() == SchemaPolicyRemove {
 		if !known || existing.Archived {
-			return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
+			return nil, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
 		}
 		existing.Archived = true
 		return func(r *pb.ChangeRecord) { c.Put(r, existing) }, nil
@@ -102,7 +101,7 @@ func (w *Work) policy(c platform.Caller, s *pb.Submission) (func(*pb.ChangeRecor
 		Approvals          int `json:"approvals"`
 	}
 	if json.Unmarshal(s.GetPayload(), &p) != nil {
-		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
+		return nil, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 	}
 	policy := ApprovalPolicy{App: p.App, Schema: p.Schema, Approvals: p.Approvals, Title: p.Title}
 	policy.ID, policy.Archived = id, false

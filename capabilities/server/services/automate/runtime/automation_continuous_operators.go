@@ -7,7 +7,6 @@ import (
 	"maps"
 	"math"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 	"platformserver/platform"
 	"slices"
 	"time"
@@ -188,7 +187,7 @@ func checkOperators(declared platform.Continuous) error {
 	return nil
 }
 
-func foldDeclaredOperators(frame *BatchFrame, declared platform.Continuous, batchID string, now time.Time) (stats []AggregateRecord, alerts []Alert, refusal *kernel.Error) {
+func foldDeclaredOperators(frame *BatchFrame, declared platform.Continuous, batchID string, now time.Time) (stats []AggregateRecord, alerts []Alert, refusal *platform.Error) {
 	stats, alerts = []AggregateRecord{}, []Alert{}
 	frame.Workers = 0
 	if err := checkOperators(declared); err != nil {
@@ -272,7 +271,7 @@ func foldDeclaredOperators(frame *BatchFrame, declared platform.Continuous, batc
 		}
 		partitionGroups[partition] = append(partitionGroups[partition], i)
 	}
-	peak, err := (foldPool{limit: declared.Concurrency}).run(len(partitions), func(partition int, cancelled func() bool) *kernel.Error {
+	peak, err := (foldPool{limit: declared.Concurrency}).run(len(partitions), func(partition int, cancelled func() bool) *platform.Error {
 		for _, i := range partitionGroups[partitions[partition]] {
 			if cancelled() {
 				return nil
@@ -367,7 +366,7 @@ type rowClass struct {
 	why   string
 }
 
-func classifyAggregateRows(a *platform.StreamAggregate, rows []Signal, declared platform.Continuous) ([]rowClass, int, *kernel.Error) {
+func classifyAggregateRows(a *platform.StreamAggregate, rows []Signal, declared platform.Continuous) ([]rowClass, int, *platform.Error) {
 	classes := make([]rowClass, len(rows))
 	if declared.Concurrency <= 1 {
 		for i, row := range rows {
@@ -384,7 +383,7 @@ func classifyAggregateRows(a *platform.StreamAggregate, rows []Signal, declared 
 		}
 		byPartition[row.Partition] = append(byPartition[row.Partition], i)
 	}
-	peak, refusal := (foldPool{limit: declared.Concurrency}).run(len(partitions), func(g int, cancelled func() bool) *kernel.Error {
+	peak, refusal := (foldPool{limit: declared.Concurrency}).run(len(partitions), func(g int, cancelled func() bool) *platform.Error {
 		for _, i := range byPartition[partitions[g]] {
 			if cancelled() {
 				return nil

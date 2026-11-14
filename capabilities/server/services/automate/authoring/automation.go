@@ -6,7 +6,6 @@ import (
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 	"platformserver/platform"
 )
 
@@ -17,7 +16,7 @@ func processSubject(object string, run *platform.Run) string {
 	return run.Key
 }
 
-func (o *Owner) automationOwnerRefusal(c platform.Caller, id string, p Process, now time.Time) *kernel.Error {
+func (o *Owner) automationOwnerRefusal(c platform.Caller, id string, p Process, now time.Time) *platform.Error {
 	if p.Kind != "automation" && p.Scheduler == "" {
 		return nil
 	}
@@ -50,7 +49,7 @@ func (o *Owner) pauseAutomation(c platform.Caller, id, reason string, now time.T
 	}
 }
 
-func (o *Owner) Run(c platform.Caller, now time.Time) *kernel.Error {
+func (o *Owner) Run(c platform.Caller, now time.Time) *platform.Error {
 	if c.Replaying {
 		return nil
 	}
@@ -74,13 +73,13 @@ func (o *Owner) Handles(s *pb.Submission) bool {
 	return s.GetTarget().GetType() == ProcessType || strings.HasPrefix(s.GetSchema().GetName(), ProcessType+".")
 }
 
-func (o *Owner) Decide(ledger platform.Authority, c platform.Caller, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *kernel.Error, bool) {
+func (o *Owner) Decide(ledger platform.Authority, c platform.Caller, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *platform.Error, bool) {
 	if !o.Handles(s) {
 		return nil, nil, false
 	}
 	if s.GetSchema().GetName() == ProcessType+".archive" && !c.Replaying {
 		if !c.Holds(c.App, Builder) {
-			return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_POLICY_DENIED}, true
+			return nil, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_POLICY_DENIED}, true
 		}
 		if record, _ := platform.Get[Process](c, s.GetTarget().GetId()); record.Published != "" {
 			return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "A published definition cannot be archived; its installed version must be retained"), true

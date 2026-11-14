@@ -13,7 +13,6 @@ import (
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 	"platformserver/platform"
 	"platformserver/services/ai/state"
 )
@@ -174,12 +173,12 @@ func (a *AI) provider(id string) (Provider, bool) {
 	return a.providers[i], true
 }
 
-func (a *AI) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *kernel.Error) {
+func (a *AI) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *platform.Error) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
-	return a.ledger.Receive(c, s, now, nil, func() (func(*pb.ChangeRecord), *kernel.Error) {
-		invalid := &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
-		notFound := &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
+	return a.ledger.Receive(c, s, now, nil, func() (func(*pb.ChangeRecord), *platform.Error) {
+		invalid := &platform.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
+		notFound := &platform.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
 		id := s.GetTarget().GetId()
 		if s.GetSchema().GetName() == trainingPolicySet || s.GetSchema().GetName() == trainingReview || s.GetSchema().GetName() == trainingRevoke {
 			return a.trainingDecision(c, s, now)
@@ -198,7 +197,7 @@ func (a *AI) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb.Cha
 		case SchemaProviderAdd, SchemaProviderEdit:
 			_, known := a.provider(id)
 			if s.GetSchema().GetName() == SchemaProviderAdd && known {
-				return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
+				return nil, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
 			}
 			if s.GetSchema().GetName() == SchemaProviderEdit && !known {
 				return nil, notFound
@@ -315,12 +314,12 @@ func (a *AI) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb.Cha
 	})
 }
 
-func (a *AI) Callable(m platform.Member, name string) (Model, Provider, *kernel.Error) {
+func (a *AI) Callable(m platform.Member, name string) (Model, Provider, *platform.Error) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	i := slices.IndexFunc(a.models, func(x Model) bool { return x.Name() == name })
 	if i < 0 {
-		return Model{}, Provider{}, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
+		return Model{}, Provider{}, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
 	}
 	if !a.allows(m, a.models[i]) {
 		return Model{}, Provider{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "This model is enabled for members holding a role in the AI application; ask an administrator for access")
@@ -440,7 +439,7 @@ func (a *AI) Reservation(call string) (platform.AIReservation, bool) {
 
 type Total = platform.AITotal
 
-func (a *AI) Read(c platform.Caller, name string) (any, *kernel.Error) {
+func (a *AI) Read(c platform.Caller, name string) (any, *platform.Error) {
 	visibleApps := c.VisibleApplications()
 	a.mu.Lock()
 	defer a.mu.Unlock()
@@ -466,12 +465,12 @@ func (a *AI) Read(c platform.Caller, name string) (any, *kernel.Error) {
 		return report, nil
 	case "ai-providers":
 		if !admin {
-			return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_POLICY_DENIED}
+			return nil, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_POLICY_DENIED}
 		}
 		return append([]Provider{}, a.providers...), nil
 	case "ai-limits":
 		if !admin {
-			return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_POLICY_DENIED}
+			return nil, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_POLICY_DENIED}
 		}
 		out := slices.Collect(maps.Values(a.limits))
 		slices.SortFunc(out, func(x, y Limit) int { return strings.Compare(x.Member, y.Member) })
@@ -549,12 +548,12 @@ func (a *AI) Read(c platform.Caller, name string) (any, *kernel.Error) {
 
 type AIUsage = platform.AIUsageReport
 
-func (a *AI) Model(name string) (Model, Provider, *kernel.Error) {
+func (a *AI) Model(name string) (Model, Provider, *platform.Error) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	i := slices.IndexFunc(a.models, func(x Model) bool { return x.Name() == name })
 	if i < 0 {
-		return Model{}, Provider{}, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
+		return Model{}, Provider{}, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
 	}
 	pv, _ := a.provider(a.models[i].Provider)
 	return a.models[i], pv, nil

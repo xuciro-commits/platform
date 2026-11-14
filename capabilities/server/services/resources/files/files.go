@@ -8,7 +8,6 @@ import (
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 
 	"platformserver/platform"
 )
@@ -70,11 +69,11 @@ func (f *Files) SnapshotFormat() string { return "platform.ledger.v1" }
 
 func (f *Files) Snapshot() (json.RawMessage, error) { return f.ledger.Snapshot() }
 func (f *Files) Restore(raw json.RawMessage) error  { return f.ledger.Restore(raw) }
-func (f *Files) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *kernel.Error) {
+func (f *Files) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *platform.Error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	return f.ledger.Receive(c, s, now, nil, func() (func(*pb.ChangeRecord), *kernel.Error) {
-		invalid := &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
+	return f.ledger.Receive(c, s, now, nil, func() (func(*pb.ChangeRecord), *platform.Error) {
+		invalid := &platform.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 		id := s.GetTarget().GetId()
 		existing, known := platform.Get[File](c, id)
 		switch s.GetSchema().GetName() {
@@ -87,11 +86,11 @@ func (f *Files) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb.
 				return nil, invalid
 			}
 			if known {
-				return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
+				return nil, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
 			}
 			if !c.Replaying {
 				if !f.host.Readable(c.Member, p.Target, now) {
-					return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
+					return nil, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
 				}
 				if p.Size > platform.MaxFileSize(c) || !f.host.Stored(c.Tenant, p.Hash) {
 					return nil, invalid
@@ -101,31 +100,31 @@ func (f *Files) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb.
 			return func(r *pb.ChangeRecord) { c.Put(r, file) }, nil
 		case SchemaDetach:
 			if !known || existing.Archived {
-				return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
+				return nil, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
 			}
 			if existing.By != c.ID && !c.Automation && !c.Replaying {
-				return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_POLICY_DENIED}
+				return nil, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_POLICY_DENIED}
 			}
 			existing.Archived = true
 			return func(r *pb.ChangeRecord) { c.Put(r, existing) }, nil
 		case SchemaAnnotate:
 			if !known || existing.Archived {
-				return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
+				return nil, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
 			}
 			if !c.Replaying && (!f.host.Readable(c.Member, existing.Target, now) || existing.By != c.ID) {
-				return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_POLICY_DENIED}
+				return nil, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_POLICY_DENIED}
 			}
 			p, err := imageRegionsPayload(s.GetPayload())
 			if err != nil || p.Hash != existing.Hash || !rasterAttachment(existing.ContentType) || s.GetExpectedRevision() == 0 {
 				return nil, invalid
 			}
 			if s.GetExpectedRevision() != existing.Revision {
-				return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
+				return nil, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
 			}
 			existing.Regions = p.Regions
 			return func(r *pb.ChangeRecord) { c.Put(r, existing) }, nil
 		}
-		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_UNKNOWN_SCHEMA}
+		return nil, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_UNKNOWN_SCHEMA}
 	})
 }
 

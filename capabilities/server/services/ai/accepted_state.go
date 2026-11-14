@@ -7,7 +7,6 @@ import (
 	"io"
 	"maps"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 	"slices"
 	"time"
 
@@ -88,7 +87,7 @@ func (*AI) DecodeAcceptedInput(raw json.RawMessage) (any, error) {
 	}
 	return r, nil
 }
-func (a *AI) Input(c platform.Caller, name string, raw []byte, now time.Time) (any, *kernel.Error) {
+func (a *AI) Input(c platform.Caller, name string, raw []byte, now time.Time) (any, *platform.Error) {
 	if c.ID != "app:"+ID || !c.Staging() || name != platform.AIReserveCall {
 		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "Only the AI meter can reserve model usage")
 	}

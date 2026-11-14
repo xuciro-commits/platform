@@ -10,13 +10,12 @@ import (
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 	"platformserver/platform"
 )
 
 func (o *Owner) sourceEntity() platform.Entity {
 	return platform.Entity{Type: SourceType, Title: "Data source", Plural: "Data sources", Model: Source{}, Display: "title", Description: "An external JSON endpoint whose rows become records of one object, pulled on a period or on request.",
-		Validate: func(c platform.Caller, record any) *kernel.Error {
+		Validate: func(c platform.Caller, record any) *platform.Error {
 			s := record.(*Source)
 			if s.State == "published" {
 				fixed, err := o.ExecutionSource(*s)
@@ -45,10 +44,10 @@ func sourceActions() []platform.Action {
 		Payload: []platform.Field{{Name: "pull", Type: "json", Required: true, Description: "The pull's counts and first failures"}}}}
 }
 
-func (o *Owner) requestPull(c platform.Caller, record any, _ json.RawMessage, _ time.Time) *kernel.Error {
+func (o *Owner) requestPull(c platform.Caller, record any, _ json.RawMessage, _ time.Time) *platform.Error {
 	s, ok := record.(*Source)
 	if !ok {
-		return &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
+		return &platform.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 	}
 	if s.Stream && s.Dataset == "" {
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "A continuous source is consumed through its Flow instance")
@@ -63,10 +62,10 @@ func (o *Owner) requestPull(c platform.Caller, record any, _ json.RawMessage, _ 
 	return nil
 }
 
-func (o *Owner) resetCursor(c platform.Caller, record any, _ json.RawMessage, _ time.Time) *kernel.Error {
+func (o *Owner) resetCursor(c platform.Caller, record any, _ json.RawMessage, _ time.Time) *platform.Error {
 	s, ok := record.(*Source)
 	if !ok {
-		return &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
+		return &platform.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 	}
 	if s.Stream && s.Dataset == "" {
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "A continuous source cursor belongs to its Flow instance")
@@ -88,7 +87,7 @@ func (o *Owner) resetCursor(c platform.Caller, record any, _ json.RawMessage, _ 
 	return nil
 }
 
-func (o *Owner) prepareSourcePull(c platform.Caller, source *Source) *kernel.Error {
+func (o *Owner) prepareSourcePull(c platform.Caller, source *Source) *platform.Error {
 	if c.Replaying {
 		return nil
 	}
@@ -111,10 +110,10 @@ func (o *Owner) prepareSourcePull(c platform.Caller, source *Source) *kernel.Err
 	return nil
 }
 
-func (o *Owner) publishSource(c platform.Caller, record any, _ json.RawMessage, _ time.Time) *kernel.Error {
+func (o *Owner) publishSource(c platform.Caller, record any, _ json.RawMessage, _ time.Time) *platform.Error {
 	s, ok := record.(*Source)
 	if !ok {
-		return &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
+		return &platform.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 	}
 	if err := o.checkSource(c, *s); err != nil {
 		return err
@@ -136,8 +135,8 @@ func (o *Owner) publishSource(c platform.Caller, record any, _ json.RawMessage, 
 	return nil
 }
 
-func (o *Owner) checkSource(c platform.Caller, s Source) *kernel.Error {
-	refuse := func(message string, args ...any) *kernel.Error {
+func (o *Owner) checkSource(c platform.Caller, s Source) *platform.Error {
+	refuse := func(message string, args ...any) *platform.Error {
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, message, args...)
 	}
 	if err := o.checkName(s.Name, s.ID); err != nil {
@@ -217,12 +216,12 @@ func (o *Owner) checkSource(c platform.Caller, s Source) *kernel.Error {
 	return checkEvery(s.Every)
 }
 
-func (o *Owner) CheckSource(c platform.Caller, s Source) *kernel.Error {
+func (o *Owner) CheckSource(c platform.Caller, s Source) *platform.Error {
 	return o.checkSource(c, s)
 }
 
-func (o *Owner) checkSourceConnection(c platform.Caller, s Source) *kernel.Error {
-	refuse := func(message string, args ...any) *kernel.Error {
+func (o *Owner) checkSourceConnection(c platform.Caller, s Source) *platform.Error {
+	refuse := func(message string, args ...any) *platform.Error {
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, message, args...)
 	}
 	if s.Connection == "" {
@@ -262,7 +261,7 @@ func (o *Owner) checkSourceConnection(c platform.Caller, s Source) *kernel.Error
 	return nil
 }
 
-func checkEvery(every string) *kernel.Error {
+func checkEvery(every string) *platform.Error {
 	if every != "" {
 		d, parseErr := time.ParseDuration(every)
 		if parseErr != nil || d < time.Minute || d > 366*24*time.Hour {
@@ -272,8 +271,8 @@ func checkEvery(every string) *kernel.Error {
 	return nil
 }
 
-func (o *Owner) SubmitSourcePulled(ledger platform.Authority, c platform.Caller, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *kernel.Error) {
-	return ledger.Receive(c, s, now, nil, func() (func(*pb.ChangeRecord), *kernel.Error) {
+func (o *Owner) SubmitSourcePulled(ledger platform.Authority, c platform.Caller, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *platform.Error) {
+	return ledger.Receive(c, s, now, nil, func() (func(*pb.ChangeRecord), *platform.Error) {
 		var payload struct {
 			Pull SourcePull `json:"pull"`
 		}

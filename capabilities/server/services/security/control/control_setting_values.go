@@ -7,7 +7,6 @@ import (
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 	"platformserver/platform"
 )
 
@@ -86,7 +85,7 @@ type SettingDecision struct {
 	VectorSpace    func(string) string
 }
 
-func (d SettingDecision) Decide(c platform.Caller, s *pb.Submission, now time.Time) (func(*pb.ChangeRecord), *kernel.Error) {
+func (d SettingDecision) Decide(c platform.Caller, s *pb.Submission, now time.Time) (func(*pb.ChangeRecord), *platform.Error) {
 	id, value, refusal := d.Checks.Check(c, s, now)
 	if refusal != nil {
 		return nil, refusal
@@ -107,22 +106,22 @@ func (d SettingDecision) Decide(c platform.Caller, s *pb.Submission, now time.Ti
 
 type SettingChecks struct {
 	App     func(id string) platform.App
-	Logging func(name, value string, at time.Time) *kernel.Error
-	Values  []func(id, value string) *kernel.Error
+	Logging func(name, value string, at time.Time) *platform.Error
+	Values  []func(id, value string) *platform.Error
 }
 
-func (c SettingChecks) Check(caller platform.Caller, s *pb.Submission, now time.Time) (string, string, *kernel.Error) {
+func (c SettingChecks) Check(caller platform.Caller, s *pb.Submission, now time.Time) (string, string, *platform.Error) {
 	id := s.GetTarget().GetId()
 	var p struct{ Value string }
 	json.Unmarshal(s.GetPayload(), &p)
 	app, name, _ := strings.Cut(id, "/")
 	a := c.App(app)
 	if a == nil {
-		return id, p.Value, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
+		return id, p.Value, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
 	}
 	if app == PlatformApp && strings.HasPrefix(name, "logPolicy/") {
 		if c.App(strings.TrimPrefix(name, "logPolicy/")) == nil {
-			return id, p.Value, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
+			return id, p.Value, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
 		}
 		if !caller.Replaying {
 			return id, p.Value, CheckLogPolicy(p.Value, now)
@@ -136,10 +135,10 @@ func (c SettingChecks) Check(caller platform.Caller, s *pb.Submission, now time.
 	}
 	i := slices.IndexFunc(a.Manifest().Settings, func(x platform.Setting) bool { return x.Name == name })
 	if i < 0 {
-		return id, p.Value, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
+		return id, p.Value, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
 	}
 	if !a.Manifest().Settings[i].Accepts(p.Value) {
-		return id, p.Value, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
+		return id, p.Value, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 	}
 	if caller.Replaying {
 		return id, p.Value, nil

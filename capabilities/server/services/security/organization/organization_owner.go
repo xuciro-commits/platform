@@ -3,7 +3,6 @@ package organization
 import (
 	"encoding/json"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 	"platformserver/platform"
 	"slices"
 	"strings"
@@ -151,7 +150,7 @@ func (e *Enterprise) Interested(names []string, _ platform.Event) bool {
 	return slices.Contains(names, memberOffboard)
 }
 
-func (e *Enterprise) Listen(c platform.Caller, ev platform.Event, _ []string, _ time.Time) *kernel.Error {
+func (e *Enterprise) Listen(c platform.Caller, ev platform.Event, _ []string, _ time.Time) *platform.Error {
 	sub := ev.Record.GetSubmission()
 	if sub.GetSchema().GetName() != memberOffboard {
 		return nil
@@ -209,7 +208,7 @@ type payload struct {
 	ConnectionRevision                                                                   uint32
 }
 
-func (e *Enterprise) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *kernel.Error) {
+func (e *Enterprise) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *platform.Error) {
 	if !c.Replaying {
 		var p struct {
 			Until, Connection, Link string
@@ -232,12 +231,12 @@ func (e *Enterprise) Submit(c platform.Caller, s *pb.Submission, now time.Time) 
 	}
 	e.mu.Lock()
 	defer e.mu.Unlock()
-	return e.ledger.Receive(c, s, now, nil, func() (func(*pb.ChangeRecord), *kernel.Error) {
-		invalid := func(msg string, args ...any) *kernel.Error {
+	return e.ledger.Receive(c, s, now, nil, func() (func(*pb.ChangeRecord), *platform.Error) {
+		invalid := func(msg string, args ...any) *platform.Error {
 			return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, msg, args...)
 		}
-		notFound := &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
-		conflict := &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
+		notFound := &platform.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
+		conflict := &platform.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
 		var p payload
 		if s.GetSchema().GetName() == SchemaSliceSync {
 			var head struct {
@@ -488,7 +487,7 @@ func (e *Enterprise) Submit(c platform.Caller, s *pb.Submission, now time.Time) 
 			}
 			return func(*pb.ChangeRecord) { *el = next }, nil
 		}
-		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_UNKNOWN_SCHEMA}
+		return nil, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_UNKNOWN_SCHEMA}
 	})
 }
 
@@ -584,7 +583,7 @@ func (e *Enterprise) Related(element, stereotype string, outgoing bool, day plat
 	return e.model.Of(element, stereotype, outgoing, day)
 }
 
-func (e *Enterprise) Read(c platform.Caller, name string) (any, *kernel.Error) {
+func (e *Enterprise) Read(c platform.Caller, name string) (any, *platform.Error) {
 	if name == ReadModel {
 		return readableModel(c, e.Model(), time.Now()), nil
 	}
@@ -600,7 +599,7 @@ func (e *Enterprise) Read(c platform.Caller, name string) (any, *kernel.Error) {
 		return Metamodel{Version: mm.Version, URI: mm.URI, Domains: mm.Domains, Profile: Profile(), Stereotypes: mm.Stereotypes, Enumerations: mm.Enumerations,
 			Views: Views(mm), Contracts: Contracts(mm)}, nil
 	}
-	return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
+	return nil, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
 }
 
 type ProfileEntry struct {

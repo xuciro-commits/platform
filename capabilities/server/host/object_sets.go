@@ -5,7 +5,6 @@ import (
 	"io"
 	"net/http"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 	"platformserver/kernel/records"
 	transport "platformserver/kernel/transport"
 	"platformserver/platform"
@@ -14,11 +13,11 @@ import (
 	"time"
 )
 
-func (t *Tenant) loadObjectSet(store *records.Store, c platform.Caller, set platform.ObjectSet, w objects.Window, now time.Time, bound ...platform.NamedQuery) (objects.RecordPage, string, *kernel.Error) {
+func (t *Tenant) loadObjectSet(store *records.Store, c platform.Caller, set platform.ObjectSet, w objects.Window, now time.Time, bound ...platform.NamedQuery) (objects.RecordPage, string, *platform.Error) {
 	return t.objectOwner(store).LoadObjectSet(store, c, set, w, now, bound...)
 }
 
-func (t *Tenant) aggregateObjectSet(m platform.Member, req objects.ObjectSetRequest, now time.Time) (records.Aggregate, *kernel.Error) {
+func (t *Tenant) aggregateObjectSet(m platform.Member, req objects.ObjectSetRequest, now time.Time) (records.Aggregate, *platform.Error) {
 	return t.objectOwner(t.Projection).AggregateObjectSet(m, req, now)
 }
 
@@ -28,7 +27,7 @@ func (h *Host) objectSetRoutes(rt *routes) {
 		decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, platform.QuerySetMaxBytes))
 		decoder.DisallowUnknownFields()
 		if decoder.Decode(&req) != nil || req == nil || decoder.Decode(new(any)) != io.EOF || req.Offset < 0 || req.Limit < 0 || req.Set.Check() != nil {
-			Reply(w, nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT})
+			Reply(w, nil, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT})
 			return objects.ObjectSetRequest{}, false
 		}
 		paged := len(req.Sort) > 0 || req.Offset != 0 || req.Limit != 0

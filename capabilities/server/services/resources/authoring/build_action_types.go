@@ -6,7 +6,6 @@ import (
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 	"platformserver/platform"
 	ontology "platformserver/services/ontology"
 )
@@ -17,12 +16,12 @@ func (b *Build) actionTypeEntity() platform.Entity {
 		Standard: platform.Standard{Create: true, Edit: true, Archive: true, Roles: []string{Builder}, Capability: "objects"},
 		Lifecycle: &platform.Lifecycle{Field: "state", Initial: "draft", States: []platform.State{{Name: "draft", Title: "Draft"}, {Name: "published", Title: "Published"}},
 			Transitions: []platform.Transition{{Name: "publish", Title: "Publish", Description: "Retain this action definition for an object publication.", Roles: []string{Builder}, Capability: "objects", From: []string{"draft", "published"}, To: []string{"published"}, Payload: []platform.Field{},
-				Do: func(c platform.Caller, record any, _ json.RawMessage, _ time.Time) *kernel.Error {
+				Do: func(c platform.Caller, record any, _ json.RawMessage, _ time.Time) *platform.Error {
 					return ontology.PublishActionType(c, record.(*ontology.ActionType), b.bindObjectActions, func(object ontology.Object) error {
 						return b.Check(object, object.ID, c.Rules())
 					})
 				}}}},
-		Validate: func(c platform.Caller, value any) *kernel.Error {
+		Validate: func(c platform.Caller, value any) *platform.Error {
 			if c.Replaying {
 				return nil
 			}
@@ -50,7 +49,7 @@ func (b *Build) actionTypeEntity() platform.Entity {
 		}}
 }
 
-func (b *Build) writeObject(c platform.Caller, r *pb.ChangeRecord, verb, id string, payload json.RawMessage, now time.Time) *kernel.Error {
+func (b *Build) writeObject(c platform.Caller, r *pb.ChangeRecord, verb, id string, payload json.RawMessage, now time.Time) *platform.Error {
 	var input map[string]json.RawMessage
 	if json.Unmarshal(payload, &input) != nil {
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "The object definition is one JSON object")
@@ -70,7 +69,7 @@ func (b *Build) writeObject(c platform.Caller, r *pb.ChangeRecord, verb, id stri
 	return b.ledger.ApplyTxnRecord(c, r, b.objectEntity(), verb, id, payload, now)
 }
 
-func (b *Build) writeActionType(c platform.Caller, r *pb.ChangeRecord, verb, id string, payload json.RawMessage, now time.Time) *kernel.Error {
+func (b *Build) writeActionType(c platform.Caller, r *pb.ChangeRecord, verb, id string, payload json.RawMessage, now time.Time) *platform.Error {
 	if refusal := b.ledger.ApplyTxnRecord(c, r, b.actionTypeEntity(), verb, id, payload, now); refusal != nil {
 		return refusal
 	}
@@ -108,14 +107,14 @@ func (b *Build) writeActionType(c platform.Caller, r *pb.ChangeRecord, verb, id 
 	return nil
 }
 
-func (b *Build) submitOntologyWrite(c platform.Caller, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *kernel.Error) {
-	return b.ledger.Receive(c, s, now, nil, func() (func(*pb.ChangeRecord), *kernel.Error) {
+func (b *Build) submitOntologyWrite(c platform.Caller, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *platform.Error) {
+	return b.ledger.Receive(c, s, now, nil, func() (func(*pb.ChangeRecord), *platform.Error) {
 		return func(r *pb.ChangeRecord) {
 			verb := "edit"
 			if s.GetSchema().GetName() == s.GetTarget().GetType()+".create" {
 				verb = "create"
 			}
-			var refusal *kernel.Error
+			var refusal *platform.Error
 			if s.GetTarget().GetType() == ActionTypeType {
 				refusal = b.writeActionType(c, r, verb, s.GetTarget().GetId(), s.GetPayload(), now)
 			} else {

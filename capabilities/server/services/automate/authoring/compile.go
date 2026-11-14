@@ -10,7 +10,6 @@ import (
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 	"platformserver/platform"
 )
 
@@ -45,13 +44,13 @@ func CompileProcess(p Process, execution ProcessExecution) platform.Flow {
 		if s.RetryAttempts > 0 || s.RetryBackoffMs > 0 {
 			step.Retry = &platform.RetryPolicy{Attempts: s.RetryAttempts, Backoff: time.Duration(s.RetryBackoffMs) * time.Millisecond}
 		}
-		subject := func(c platform.Caller, r *platform.Run) (json.RawMessage, *kernel.Error) {
+		subject := func(c platform.Caller, r *platform.Run) (json.RawMessage, *platform.Error) {
 			if p.Object == "" {
 				return json.RawMessage("{}"), nil
 			}
 			return execution.Subject(c, r)
 		}
-		resolve := func(c platform.Caller, r *platform.Run, binding platform.Binding) (json.RawMessage, *kernel.Error) {
+		resolve := func(c platform.Caller, r *platform.Run, binding platform.Binding) (json.RawMessage, *platform.Error) {
 			if binding.Source == "subject" && len(binding.Path) > 0 && binding.Path[0] != "id" {
 				value, sources, err := execution.SubjectPath(c, r, binding.Path)
 				r.Sources = append(r.Sources, sources...)
@@ -59,7 +58,7 @@ func CompileProcess(p Process, execution ProcessExecution) platform.Flow {
 			}
 			var raw json.RawMessage
 			if binding.Source == "subject" {
-				var err *kernel.Error
+				var err *platform.Error
 				raw, err = subject(c, r)
 				if err != nil {
 					return nil, err
@@ -71,7 +70,7 @@ func CompileProcess(p Process, execution ProcessExecution) platform.Flow {
 			}
 			return value, nil
 		}
-		inputs := func(c platform.Caller, r *platform.Run) (json.RawMessage, *kernel.Error) {
+		inputs := func(c platform.Caller, r *platform.Run) (json.RawMessage, *platform.Error) {
 			values := map[string]json.RawMessage{}
 			for _, name := range slices.Sorted(maps.Keys(s.Inputs)) {
 				value, err := resolve(c, r, s.Inputs[name])
@@ -82,10 +81,10 @@ func CompileProcess(p Process, execution ProcessExecution) platform.Flow {
 			}
 			return platform.Raw(values), nil
 		}
-		predicate := func(c platform.Caller, r *platform.Run) (bool, *kernel.Error) {
+		predicate := func(c platform.Caller, r *platform.Run) (bool, *platform.Error) {
 			raw := json.RawMessage("{}")
 			if slices.ContainsFunc(platform.ConditionRefs(*s.Condition), func(ref string) bool { return ref == "subject" || strings.HasPrefix(ref, "subject.") }) {
-				var err *kernel.Error
+				var err *platform.Error
 				raw, err = subject(c, r)
 				if err != nil {
 					return false, err
@@ -111,7 +110,7 @@ func CompileProcess(p Process, execution ProcessExecution) platform.Flow {
 		}
 		switch s.Kind {
 		case "payload", "transform":
-			step.Evaluate = &platform.Evaluate{Run: func(c platform.Caller, r *platform.Run) (json.RawMessage, *kernel.Error) {
+			step.Evaluate = &platform.Evaluate{Run: func(c platform.Caller, r *platform.Run) (json.RawMessage, *platform.Error) {
 				if s.Value != nil {
 					return resolve(c, r, *s.Value)
 				}
@@ -121,7 +120,7 @@ func CompileProcess(p Process, execution ProcessExecution) platform.Flow {
 				return inputs(c, r)
 			}}
 		case "notify":
-			step.Evaluate = &platform.Evaluate{Run: func(c platform.Caller, r *platform.Run) (json.RawMessage, *kernel.Error) {
+			step.Evaluate = &platform.Evaluate{Run: func(c platform.Caller, r *platform.Run) (json.RawMessage, *platform.Error) {
 				raw, err := subject(c, r)
 				if err != nil {
 					return nil, err
@@ -129,7 +128,7 @@ func CompileProcess(p Process, execution ProcessExecution) platform.Flow {
 				return execution.Notify(c, r, s.Name, *s.Notify, raw)
 			}}
 		case "query":
-			step.Evaluate = &platform.Evaluate{Run: func(c platform.Caller, r *platform.Run) (json.RawMessage, *kernel.Error) {
+			step.Evaluate = &platform.Evaluate{Run: func(c platform.Caller, r *platform.Run) (json.RawMessage, *platform.Error) {
 				raw, err := inputs(c, r)
 				if err != nil {
 					return nil, err
@@ -145,13 +144,13 @@ func CompileProcess(p Process, execution ProcessExecution) platform.Flow {
 				return answer, err
 			}}
 		case "branch":
-			step.Branch = &platform.Branch{Paths: []string{s.Cases["true"], s.Cases["false"]}, Choose: func(c platform.Caller, r *platform.Run) (string, string, *kernel.Error) {
+			step.Branch = &platform.Branch{Paths: []string{s.Cases["true"], s.Cases["false"]}, Choose: func(c platform.Caller, r *platform.Run) (string, string, *platform.Error) {
 				holds, err := predicate(c, r)
 				name := fmt.Sprint(holds)
 				return s.Cases[name], name, err
 			}}
 		case "switch":
-			step.Branch = &platform.Branch{Paths: append([]string{s.Next}, slices.Collect(maps.Values(s.Cases))...), Choose: func(c platform.Caller, r *platform.Run) (string, string, *kernel.Error) {
+			step.Branch = &platform.Branch{Paths: append([]string{s.Next}, slices.Collect(maps.Values(s.Cases))...), Choose: func(c platform.Caller, r *platform.Run) (string, string, *platform.Error) {
 				raw, err := resolve(c, r, *s.Value)
 				if err != nil {
 					return "", "", err
@@ -166,14 +165,14 @@ func CompileProcess(p Process, execution ProcessExecution) platform.Flow {
 			step.Loop = &platform.Loop{Body: s.Body, MaxIterations: s.MaxIterations, Concurrency: max(1, s.Concurrency)}
 			if s.Kind == "while" {
 				step.Loop.While = predicate
-				step.Loop.Initial = func(c platform.Caller, r *platform.Run) (json.RawMessage, *kernel.Error) {
+				step.Loop.Initial = func(c platform.Caller, r *platform.Run) (json.RawMessage, *platform.Error) {
 					if s.Value != nil {
 						return resolve(c, r, *s.Value)
 					}
 					return inputs(c, r)
 				}
 			} else {
-				step.Loop.Items = func(c platform.Caller, r *platform.Run) ([]json.RawMessage, *kernel.Error) {
+				step.Loop.Items = func(c platform.Caller, r *platform.Run) ([]json.RawMessage, *platform.Error) {
 					raw, err := resolve(c, r, *s.Collection)
 					if err != nil {
 						return nil, err
@@ -194,20 +193,20 @@ func CompileProcess(p Process, execution ProcessExecution) platform.Flow {
 		case "break", "continue":
 			step.LoopControl = s.Kind
 			if s.Value != nil {
-				step.Output = func(c platform.Caller, r *platform.Run) (json.RawMessage, *kernel.Error) {
+				step.Output = func(c platform.Caller, r *platform.Run) (json.RawMessage, *platform.Error) {
 					return resolve(c, r, *s.Value)
 				}
 			}
 		case "join", "end":
 			step.End = true
 			if s.Value != nil {
-				step.Output = func(c platform.Caller, r *platform.Run) (json.RawMessage, *kernel.Error) {
+				step.Output = func(c platform.Caller, r *platform.Run) (json.RawMessage, *platform.Error) {
 					return resolve(c, r, *s.Value)
 				}
 			}
 		case "fail":
 			step.NoRetry = true
-			step.Evaluate = &platform.Evaluate{Run: func(c platform.Caller, r *platform.Run) (json.RawMessage, *kernel.Error) {
+			step.Evaluate = &platform.Evaluate{Run: func(c platform.Caller, r *platform.Run) (json.RawMessage, *platform.Error) {
 				return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, cmp.Or(s.Title, "Flow failed"))
 			}}
 		case "action":
@@ -215,7 +214,7 @@ func CompileProcess(p Process, execution ProcessExecution) platform.Flow {
 			if !strings.Contains(schema, ".") {
 				schema = p.Object + "." + schema
 			}
-			step.Act = &platform.Act{Action: schema, Protocol: s.Protocol, AsMember: s.Protocol == "", Target: target, TargetValue: func(c platform.Caller, r *platform.Run) (string, *kernel.Error) {
+			step.Act = &platform.Act{Action: schema, Protocol: s.Protocol, AsMember: s.Protocol == "", Target: target, TargetValue: func(c platform.Caller, r *platform.Run) (string, *platform.Error) {
 				if s.Target == nil {
 					return r.Key, nil
 				}
@@ -241,7 +240,7 @@ func CompileProcess(p Process, execution ProcessExecution) platform.Flow {
 			}, To: func(platform.Caller, *platform.Run) []platform.Recipient {
 				return []platform.Recipient{{AppRole: s.Ask}}
 			}}
-			step.Output = func(_ platform.Caller, r *platform.Run) (json.RawMessage, *kernel.Error) {
+			step.Output = func(_ platform.Caller, r *platform.Run) (json.RawMessage, *platform.Error) {
 				return platform.Raw(map[string]string{"answer": r.Answer}), nil
 			}
 			if len(s.Cases) > 0 {
@@ -252,7 +251,7 @@ func CompileProcess(p Process, execution ProcessExecution) platform.Flow {
 		case "wait":
 			step.Wait = &platform.Wait{}
 			if s.WaitUntil != nil {
-				step.Wait.At = func(c platform.Caller, r *platform.Run) (time.Time, *kernel.Error) {
+				step.Wait.At = func(c platform.Caller, r *platform.Run) (time.Time, *platform.Error) {
 					raw, err := resolve(c, r, *s.WaitUntil)
 					if err != nil {
 						return time.Time{}, err
@@ -271,7 +270,7 @@ func CompileProcess(p Process, execution ProcessExecution) platform.Flow {
 					return err == nil && holds
 				}
 			} else {
-				step.Wait.At = func(_ platform.Caller, r *platform.Run) (time.Time, *kernel.Error) {
+				step.Wait.At = func(_ platform.Caller, r *platform.Run) (time.Time, *platform.Error) {
 					return r.Now.Add(time.Duration(s.UntilSeconds) * time.Second), nil
 				}
 			}
@@ -284,7 +283,7 @@ func CompileProcess(p Process, execution ProcessExecution) platform.Flow {
 				return raw
 			}}
 		case "compute":
-			step.Operation = &platform.OperationStep{Request: func(c platform.Caller, r *platform.Run) (platform.OperationRequest, *kernel.Error) {
+			step.Operation = &platform.OperationStep{Request: func(c platform.Caller, r *platform.Run) (platform.OperationRequest, *platform.Error) {
 				raw, err := inputs(c, r)
 				if s.Value != nil {
 					raw, err = resolve(c, r, *s.Value)
@@ -299,7 +298,7 @@ func CompileProcess(p Process, execution ProcessExecution) platform.Flow {
 				return fmt.Sprintf("%s:%s:%d", r.ID, s.Name, r.Sequence)
 			}, Payload: func(c platform.Caller, r *platform.Run) any {
 				return platform.FunctionRequest{App: s.Function.App, Name: s.Function.Name, Version: s.Function.Version, Source: target(c, r), OnBehalf: r.OnBehalf, Release: &r.Release}
-			}}, Result: func(c platform.Caller, r *platform.Run, id string) (json.RawMessage, bool, *kernel.Error) {
+			}}, Result: func(c platform.Caller, r *platform.Run, id string) (json.RawMessage, bool, *platform.Error) {
 				call, ok := execution.FunctionResult(c, id)
 				if !ok || call.State == "pending" {
 					return nil, false, nil

@@ -6,7 +6,6 @@ import (
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 	"platformserver/platform"
 )
 
@@ -94,7 +93,7 @@ func (u *EnterpriseUsage) AddGrants(usages []platform.UnitGrantUsage, visible bo
 	}
 }
 
-func UsageUntil(until string, now time.Time) (string, *kernel.Error) {
+func UsageUntil(until string, now time.Time) (string, *platform.Error) {
 	if until == "" {
 		until = now.UTC().Format(time.DateOnly)
 	}

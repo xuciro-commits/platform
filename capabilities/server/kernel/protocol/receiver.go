@@ -4,7 +4,7 @@ import (
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
+	"platformserver/platform"
 )
 
 type Caller struct{ Tenant, Principal string }
@@ -13,20 +13,20 @@ type Policy func(caller Caller, s *pb.Submission) bool
 
 type Receiver struct {
 	Changes interface {
-		SubmitChecked(*pb.Submission, time.Time, func() *kernel.Error) (*pb.ChangeRecord, *kernel.Error)
+		SubmitChecked(*pb.Submission, time.Time, func() *platform.Error) (*pb.ChangeRecord, *platform.Error)
 		Records(string) []*pb.ChangeRecord
 	}
 	Authorities interface {
-		Authorize(*pb.Submission) *kernel.Error
+		Authorize(*pb.Submission) *platform.Error
 	}
 	Policy Policy
 }
 
-func (r *Receiver) Receive(c Caller, s *pb.Submission, now time.Time, domain func() *kernel.Error) (*pb.ChangeRecord, *kernel.Error) {
+func (r *Receiver) Receive(c Caller, s *pb.Submission, now time.Time, domain func() *platform.Error) (*pb.ChangeRecord, *platform.Error) {
 	if s.GetTenantId() != c.Tenant || s.GetPrincipalId() != c.Principal {
 		return nil, errorf(pb.ErrorCode_ERROR_CODE_POLICY_DENIED)
 	}
-	return r.Changes.SubmitChecked(s, now, func() *kernel.Error {
+	return r.Changes.SubmitChecked(s, now, func() *platform.Error {
 		if err := r.Authorities.Authorize(s); err != nil {
 			return err
 		}
@@ -40,4 +40,4 @@ func (r *Receiver) Receive(c Caller, s *pb.Submission, now time.Time, domain fun
 	})
 }
 
-func errorf(code pb.ErrorCode) *kernel.Error { return &kernel.Error{Code: code} }
+func errorf(code pb.ErrorCode) *platform.Error { return &platform.Error{Code: code} }

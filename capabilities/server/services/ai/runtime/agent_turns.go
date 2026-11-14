@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"maps"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 	"platformserver/platform"
 	"platformserver/services/ai/evaluation"
 	"slices"
@@ -119,11 +118,11 @@ func (a *Agents) DueAgentTurns(now time.Time) []platform.AgentTurn {
 	return out
 }
 
-func (a *Agents) ApplyAgentStep(b platform.AgentResultStep, now time.Time, replaying bool) *kernel.Error {
+func (a *Agents) ApplyAgentStep(b platform.AgentResultStep, now time.Time, replaying bool) *platform.Error {
 	return a.ApplyAgentStepCaller(a.automation(platform.AgentApp, replaying), b, now)
 }
 
-func (a *Agents) ApplyAgentStepCaller(c platform.Caller, b platform.AgentResultStep, now time.Time) *kernel.Error {
+func (a *Agents) ApplyAgentStepCaller(c platform.Caller, b platform.AgentResultStep, now time.Time) *platform.Error {
 	h := a.host
 	if ev := b.Evaluation; ev != nil {
 		key := ev.ID + ":report"
@@ -132,9 +131,9 @@ func (a *Agents) ApplyAgentStepCaller(c platform.Caller, b platform.AgentResultS
 		}
 		s := &pb.Submission{TenantId: c.Tenant, PrincipalId: c.ID, Authority: platform.AgentApp, IdempotencyKey: key,
 			Target: &pb.EntityRef{Type: platform.EvaluationType, Id: ev.ID}, Schema: &pb.SchemaRef{Name: platform.SchemaRunStep, Version: 1}, Payload: []byte("{}")}
-		_, err := a.ledger.Receive(c, s, now, nil, func() (func(*pb.ChangeRecord), *kernel.Error) {
+		_, err := a.ledger.Receive(c, s, now, nil, func() (func(*pb.ChangeRecord), *platform.Error) {
 			if _, known := platform.Get[platform.Evaluation](c, ev.ID); !known {
-				return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
+				return nil, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
 			}
 			return func(r *pb.ChangeRecord) { c.Put(r, *ev) }, nil
 		})
@@ -142,14 +141,14 @@ func (a *Agents) ApplyAgentStepCaller(c platform.Caller, b platform.AgentResultS
 	}
 	run, known := platform.Get[platform.AgentRunRecord](c, b.Run)
 	if !known {
-		return &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
+		return &platform.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
 	}
 	if !c.Staging() {
 		h.ReplayAgentUsage(b.Usage)
 	}
 	s := &pb.Submission{TenantId: c.Tenant, PrincipalId: c.ID, Authority: platform.AgentApp, IdempotencyKey: fmt.Sprintf("%s:%d", run.ID, run.Revision+1),
 		Target: &pb.EntityRef{Type: platform.RunType, Id: run.ID}, Schema: &pb.SchemaRef{Name: platform.SchemaRunStep, Version: 1}, Payload: []byte("{}")}
-	_, err := a.ledger.Receive(c, s, now, nil, func() (func(*pb.ChangeRecord), *kernel.Error) {
+	_, err := a.ledger.Receive(c, s, now, nil, func() (func(*pb.ChangeRecord), *platform.Error) {
 		return a.take(c, run, b, now), nil
 	})
 	return err
@@ -354,7 +353,7 @@ func (a *Agents) use(c platform.Caller, d *platform.CompiledAgent, run *platform
 		}
 		inputs, _ := json.Marshal(values)
 		var view platform.AgentObservation
-		var err *kernel.Error
+		var err *platform.Error
 		if m := a.reader(*run); m != nil {
 			view, err = h.AgentRead(*m, tool.Schema, inputs)
 		} else {

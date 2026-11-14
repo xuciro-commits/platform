@@ -5,7 +5,6 @@ import (
 	"io"
 	"net/http"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 	transport "platformserver/kernel/transport"
 	"platformserver/platform"
 	"platformserver/services/security"
@@ -17,7 +16,7 @@ import (
 
 func (h *Host) routesCore(rt *routes) {
 	mux := rt.mux
-	rt.handle(transport.Route{Pattern: "GET /v1/business-refusals", Summary: "Read the original record's durable refusal and correction evidence", Answer: platform.BusinessRefusalPage{}, Query: []transport.Param{{Name: "type", Description: "original record type"}, {Name: "id", Description: "original record ID"}, {Name: "key", Description: "optional original request key"}, {Name: "offset", Description: "first result"}, {Name: "limit", Description: "at most 200 results"}}}, transport.Answering(func(r *http.Request, m platform.Member, t *Tenant) (platform.BusinessRefusalPage, *kernel.Error) {
+	rt.handle(transport.Route{Pattern: "GET /v1/business-refusals", Summary: "Read the original record's durable refusal and correction evidence", Answer: platform.BusinessRefusalPage{}, Query: []transport.Param{{Name: "type", Description: "original record type"}, {Name: "id", Description: "original record ID"}, {Name: "key", Description: "optional original request key"}, {Name: "offset", Description: "first result"}, {Name: "limit", Description: "at most 200 results"}}}, transport.Answering(func(r *http.Request, m platform.Member, t *Tenant) (platform.BusinessRefusalPage, *platform.Error) {
 		q := r.URL.Query()
 		offset, _ := strconv.Atoi(q.Get("offset"))
 		limit, _ := strconv.Atoi(q.Get("limit"))
@@ -49,7 +48,7 @@ func (h *Host) routesCore(rt *routes) {
 	rt.handle(transport.Route{Pattern: "POST /v1/submissions", Summary: "Submit a decision: an action on a target, received in the kernel's order (K6) and journaled once accepted", Body: pb.Submission{}, Answer: SubmissionAnswer{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
 		var sub *pb.Submission
 		var record *pb.ChangeRecord
-		var refusal *kernel.Error
+		var refusal *platform.Error
 		defer func() {
 			t.observeSubmission(r, m, sub, record, refusal, h.Now())
 		}()
@@ -64,7 +63,7 @@ func (h *Host) routesCore(rt *routes) {
 		refusal = t.i18n.Said(refusal, t.Language(m, r))
 		Reply(w, record, refusal, localized...)
 	})
-	rt.authorized(transport.Route{Pattern: "GET /v1/authz/explain", Summary: "Why a member may or may not exercise a permission: their roles, the roles it names, the engine's verdict (administrators, auditors)", Answer: security.Explanation{}, Query: []transport.Param{{Name: "member", Description: "the member to ask about"}, {Name: "permission", Description: "an action's schema, or <app>:read:<name>"}}}, controlowner.PlatformApp, []string{controlowner.Admin, platform.Auditor}, transport.Answering(func(r *http.Request, _ platform.Member, t *Tenant) (security.Explanation, *kernel.Error) {
+	rt.authorized(transport.Route{Pattern: "GET /v1/authz/explain", Summary: "Why a member may or may not exercise a permission: their roles, the roles it names, the engine's verdict (administrators, auditors)", Answer: security.Explanation{}, Query: []transport.Param{{Name: "member", Description: "the member to ask about"}, {Name: "permission", Description: "an action's schema, or <app>:read:<name>"}}}, controlowner.PlatformApp, []string{controlowner.Admin, platform.Auditor}, transport.Answering(func(r *http.Request, _ platform.Member, t *Tenant) (security.Explanation, *platform.Error) {
 		return t.Explain(r.URL.Query().Get("member"), r.URL.Query().Get("permission"))
 	}))
 	rt.authorized(transport.Route{Pattern: "POST /v1/authz/explain", Summary: "Explain the ordered owner authorization decision for a record, fields and source", Body: platform.AuthzRequest{}, Answer: platform.AuthzDecision{}}, controlowner.PlatformApp, []string{controlowner.Admin, platform.Auditor}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
@@ -84,20 +83,20 @@ func (h *Host) routesCore(rt *routes) {
 	rt.handle(transport.Route{Pattern: "GET /v1/tokens", Summary: "The caller's personal tokens, never their secrets", Answer: []platform.TokenView{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
 		WriteJSON(w, http.StatusOK, consoleOf(t).Tokens(m.ID, h.Now()))
 	})
-	rt.handle(transport.Route{Pattern: "GET /v1/tokens/{id}/secret", Summary: "The secret of a token the caller just issued, once", Answer: map[string]string{}}, transport.Answering(func(r *http.Request, m platform.Member, t *Tenant) (map[string]string, *kernel.Error) {
+	rt.handle(transport.Route{Pattern: "GET /v1/tokens/{id}/secret", Summary: "The secret of a token the caller just issued, once", Answer: map[string]string{}}, transport.Answering(func(r *http.Request, m platform.Member, t *Tenant) (map[string]string, *platform.Error) {
 		secret, ok := consoleOf(t).Minted(r.PathValue("id"), m.ID, time.Now())
 		if !ok {
-			return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
+			return nil, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
 		}
 		return map[string]string{"secret": secret}, nil
 	}))
 	rt.recordRead(transport.Route{Pattern: "GET /v1/{read}", Summary: "A named read of an app, such as inbox, requests, notifications, views, settings, members or audit; the app decides who may read it"}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
-		t.namedRead(w, r, m, t.owner["read:"+r.PathValue("read")], func(app string, inputs json.RawMessage) (any, *kernel.Error) {
+		t.namedRead(w, r, m, t.owner["read:"+r.PathValue("read")], func(app string, inputs json.RawMessage) (any, *platform.Error) {
 			return t.read(m, r.PathValue("read"), inputs)
 		})
 	})
 	rt.recordRead(transport.Route{Pattern: "GET /v1/apps/{app}/reads/{read}", Summary: "A named read selected by its original app; the same owner authorization and field filtering apply"}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
-		t.namedRead(w, r, m, r.PathValue("app"), func(app string, inputs json.RawMessage) (any, *kernel.Error) {
+		t.namedRead(w, r, m, r.PathValue("app"), func(app string, inputs json.RawMessage) (any, *platform.Error) {
 			return t.readFromApp(m, app, r.PathValue("read"), inputs)
 		})
 	})
@@ -120,7 +119,7 @@ func bearer(r *http.Request) string {
 	return strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")
 }
 
-func (t *Tenant) namedRead(w http.ResponseWriter, r *http.Request, m platform.Member, app string, read func(app string, inputs json.RawMessage) (any, *kernel.Error)) {
+func (t *Tenant) namedRead(w http.ResponseWriter, r *http.Request, m platform.Member, app string, read func(app string, inputs json.RawMessage) (any, *platform.Error)) {
 	name := r.PathValue("read")
 	inputs, refusal := transport.NamedReadInputs(t.App(app), name, r.URL.Query())
 	if refusal != nil {

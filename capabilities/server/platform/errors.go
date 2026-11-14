@@ -1,4 +1,4 @@
-package kernel
+package platform
 
 import pb "platformkernel/gen/platform/kernel/v1alpha1"
 

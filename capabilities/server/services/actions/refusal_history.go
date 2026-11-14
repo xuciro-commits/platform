@@ -6,12 +6,11 @@ import (
 
 	"google.golang.org/protobuf/encoding/protojson"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 	acceptedformat "platformserver/kernel/acceptedformat"
 	"platformserver/platform"
 )
 
-func CheckCorrection(memberID string, sub *pb.Submission, binding *platform.SchemaVersion, refusal func(string) (acceptedformat.Refusal, bool)) *kernel.Error {
+func CheckCorrection(memberID string, sub *pb.Submission, binding *platform.SchemaVersion, refusal func(string) (acceptedformat.Refusal, bool)) *platform.Error {
 	key := CorrectionOf(sub)
 	if key == "" {
 		return nil
@@ -28,7 +27,7 @@ func CheckCorrection(memberID string, sub *pb.Submission, binding *platform.Sche
 	return nil
 }
 
-func BusinessRefusalEvents(refusals map[string]acceptedformat.Refusal, answers map[string]json.RawMessage) ([]RefusalEvent, *kernel.Error) {
+func BusinessRefusalEvents(refusals map[string]acceptedformat.Refusal, answers map[string]json.RawMessage) ([]RefusalEvent, *platform.Error) {
 	var events []RefusalEvent
 	for key, r := range refusals {
 		if r.Business != nil {

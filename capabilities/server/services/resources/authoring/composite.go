@@ -10,7 +10,6 @@ import (
 
 	"google.golang.org/protobuf/proto"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 	"platformserver/kernel/acceptedformat"
 	"platformserver/platform"
 )
@@ -36,15 +35,15 @@ func CompositeAnswerOf(saved acceptedformat.Composite) (platform.CompositeAnswer
 }
 
 type CompositeDraft struct {
-	Decide         func(m platform.Member, app platform.App, s *pb.Submission, at time.Time) (*pb.ChangeRecord, *kernel.Error)
-	AnswerRequests func(at time.Time) *kernel.Error
-	StageObservers func() *kernel.Error
+	Decide         func(m platform.Member, app platform.App, s *pb.Submission, at time.Time) (*pb.ChangeRecord, *platform.Error)
+	AnswerRequests func(at time.Time) *platform.Error
+	StageObservers func() *platform.Error
 	BatchResult    func(receipt *pb.ChangeRecord, at time.Time) ([]byte, error)
 }
 
 type CompositePlan struct {
 	Tenant      string
-	Admits      func(platform.Member) *kernel.Error
+	Admits      func(platform.Member) *platform.Error
 	Hosted      func() bool
 	Quarantined func() bool
 	PriorAnswer func(key string) json.RawMessage
@@ -52,7 +51,7 @@ type CompositePlan struct {
 	Receipt     func(id string) *pb.ChangeRecord
 	Begin       func() CompositeDraft
 	ActionOwner func(schema string) platform.App
-	Bound       func(platform.Member, *pb.Submission) *kernel.Error
+	Bound       func(platform.Member, *pb.Submission) *platform.Error
 }
 
 type CompositePrepared struct {

@@ -2,7 +2,6 @@ package platform
 
 import (
 	"encoding/json"
-	"platformkernel/kernel"
 	"time"
 )
 
@@ -74,5 +73,5 @@ type AITrainingExport struct {
 }
 
 type AITrainingOwner interface {
-	TrainingExport(Caller, string, time.Time) (AITrainingExport, *kernel.Error)
+	TrainingExport(Caller, string, time.Time) (AITrainingExport, *Error)
 }

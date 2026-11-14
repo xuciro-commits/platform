@@ -7,7 +7,6 @@ import (
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 	"platformserver/platform"
 )
 
@@ -20,26 +19,26 @@ type EffectControl struct {
 	Reviewed  func(Queued) bool
 }
 
-func (e EffectControl) EndpointDecider(remove string) func(platform.Caller, *pb.Submission, time.Time) (func(*pb.ChangeRecord), *kernel.Error) {
-	return func(c platform.Caller, s *pb.Submission, now time.Time) (func(*pb.ChangeRecord), *kernel.Error) {
+func (e EffectControl) EndpointDecider(remove string) func(platform.Caller, *pb.Submission, time.Time) (func(*pb.ChangeRecord), *platform.Error) {
+	return func(c platform.Caller, s *pb.Submission, now time.Time) (func(*pb.ChangeRecord), *platform.Error) {
 		return e.DecideEndpoint(c, s, now, remove)
 	}
 }
 
-func (e EffectControl) EffectDecider(approve, discard, resolve string) func(platform.Caller, *pb.Submission, time.Time) (func(*pb.ChangeRecord), *kernel.Error) {
-	return func(c platform.Caller, s *pb.Submission, now time.Time) (func(*pb.ChangeRecord), *kernel.Error) {
+func (e EffectControl) EffectDecider(approve, discard, resolve string) func(platform.Caller, *pb.Submission, time.Time) (func(*pb.ChangeRecord), *platform.Error) {
+	return func(c platform.Caller, s *pb.Submission, now time.Time) (func(*pb.ChangeRecord), *platform.Error) {
 		return e.DecideEffect(c, s, now, approve, discard, resolve)
 	}
 }
 
-func (e EffectControl) DecideEndpoint(c platform.Caller, s *pb.Submission, now time.Time, remove string) (func(*pb.ChangeRecord), *kernel.Error) {
+func (e EffectControl) DecideEndpoint(c platform.Caller, s *pb.Submission, now time.Time, remove string) (func(*pb.ChangeRecord), *platform.Error) {
 	if s.GetSchema().GetName() == remove {
 		return e.RemoveEndpoint(c, s.GetTarget().GetId(), now)
 	}
 	return e.AddEndpoint(s.GetTarget().GetId(), s.GetPayload())
 }
 
-func (e EffectControl) DecideEffect(c platform.Caller, s *pb.Submission, now time.Time, approve, discard, resolve string) (func(*pb.ChangeRecord), *kernel.Error) {
+func (e EffectControl) DecideEffect(c platform.Caller, s *pb.Submission, now time.Time, approve, discard, resolve string) (func(*pb.ChangeRecord), *platform.Error) {
 	id := s.GetTarget().GetId()
 	switch s.GetSchema().GetName() {
 	case approve:
@@ -52,9 +51,9 @@ func (e EffectControl) DecideEffect(c platform.Caller, s *pb.Submission, now tim
 	return e.Retry(id, now)
 }
 
-func (e EffectControl) RemoveEndpoint(c platform.Caller, id string, now time.Time) (func(*pb.ChangeRecord), *kernel.Error) {
+func (e EffectControl) RemoveEndpoint(c platform.Caller, id string, now time.Time) (func(*pb.ChangeRecord), *platform.Error) {
 	if !e.Endpoints.Has(id) {
-		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
+		return nil, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
 	}
 	if e.Outbox.Any(func(x Queued) bool { return x.Endpoint == id && x.State == "unknown" }) {
 		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Resolve unknown deliveries before removing their endpoint")
@@ -74,19 +73,19 @@ func (e EffectControl) RemoveEndpoint(c platform.Caller, id string, now time.Tim
 	}, nil
 }
 
-func (e EffectControl) AddEndpoint(id string, payload []byte) (func(*pb.ChangeRecord), *kernel.Error) {
+func (e EffectControl) AddEndpoint(id string, payload []byte) (func(*pb.ChangeRecord), *platform.Error) {
 	var ep Endpoint
 	if json.Unmarshal(payload, &ep) != nil || id == "" || !e.Valid(ep) {
-		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
+		return nil, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 	}
 	if e.Endpoints.Has(id) {
-		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
+		return nil, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
 	}
 	ep.ID = id
 	return func(*pb.ChangeRecord) { e.Endpoints.Add(ep) }, nil
 }
 
-func (e EffectControl) find(id string) (Queued, bool, *kernel.Error) {
+func (e EffectControl) find(id string) (Queued, bool, *platform.Error) {
 	x, found := e.Outbox.Get(id)
 	if found && e.Reviewed(x) {
 		return x, found, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "Manage this command through its dispatch review and declared reviewer role")
@@ -94,16 +93,16 @@ func (e EffectControl) find(id string) (Queued, bool, *kernel.Error) {
 	return x, found, nil
 }
 
-func (e EffectControl) Approve(c platform.Caller, id string, now time.Time) (func(*pb.ChangeRecord), *kernel.Error) {
+func (e EffectControl) Approve(c platform.Caller, id string, now time.Time) (func(*pb.ChangeRecord), *platform.Error) {
 	x, found, refusal := e.find(id)
 	if refusal != nil {
 		return nil, refusal
 	}
 	if !found || x.State != "held" {
-		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
+		return nil, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
 	}
 	if c.Agent {
-		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_POLICY_DENIED}
+		return nil, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_POLICY_DENIED}
 	}
 	return func(r *pb.ChangeRecord) {
 		e.Outbox.Update(id, func(q *Queued) { q.State, q.Due = "pending", now })
@@ -113,7 +112,7 @@ func (e EffectControl) Approve(c platform.Caller, id string, now time.Time) (fun
 	}, nil
 }
 
-func (e EffectControl) Discard(c platform.Caller, id string, now time.Time) (func(*pb.ChangeRecord), *kernel.Error) {
+func (e EffectControl) Discard(c platform.Caller, id string, now time.Time) (func(*pb.ChangeRecord), *platform.Error) {
 	x, found, refusal := e.find(id)
 	if refusal != nil {
 		return nil, refusal
@@ -122,7 +121,7 @@ func (e EffectControl) Discard(c platform.Caller, id string, now time.Time) (fun
 		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "An unknown delivery needs reconciliation or a recorded human decision")
 	}
 	if !found || platform.EffectSettled(x.State) {
-		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
+		return nil, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
 	}
 	return func(r *pb.ChangeRecord) {
 		held := false
@@ -141,7 +140,7 @@ func (e EffectControl) Discard(c platform.Caller, id string, now time.Time) (fun
 	}, nil
 }
 
-func (e EffectControl) Resolve(c platform.Caller, id string, payload []byte, now time.Time) (func(*pb.ChangeRecord), *kernel.Error) {
+func (e EffectControl) Resolve(c platform.Caller, id string, payload []byte, now time.Time) (func(*pb.ChangeRecord), *platform.Error) {
 	x, found, refusal := e.find(id)
 	if refusal != nil {
 		return nil, refusal
@@ -162,13 +161,13 @@ func (e EffectControl) Resolve(c platform.Caller, id string, payload []byte, now
 	}, nil
 }
 
-func (e EffectControl) Retry(id string, now time.Time) (func(*pb.ChangeRecord), *kernel.Error) {
+func (e EffectControl) Retry(id string, now time.Time) (func(*pb.ChangeRecord), *platform.Error) {
 	x, found, refusal := e.find(id)
 	if refusal != nil {
 		return nil, refusal
 	}
 	if !found || (x.State != "failed" && x.State != "rejected") {
-		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
+		return nil, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
 	}
 	return func(*pb.ChangeRecord) {
 		e.Outbox.Update(id, func(q *Queued) {

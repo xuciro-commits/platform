@@ -4,13 +4,12 @@ import (
 	runtimekernel "platformserver/kernel"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 	"platformserver/platform"
 	"platformserver/services/resources/authoring"
 	"platformserver/services/security"
 )
 
-func (t *Tenant) delegatedBound(m platform.Member, s *pb.Submission) *kernel.Error {
+func (t *Tenant) delegatedBound(m platform.Member, s *pb.Submission) *platform.Error {
 	owner := t.App(t.owner["action:"+s.GetSchema().GetName()])
 	if owner == nil || owner.Manifest().ID != build.ID {
 		return nil

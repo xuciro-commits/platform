@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 	"platformserver/kernel/records"
 	"platformserver/platform"
 	"strings"
@@ -34,12 +33,12 @@ type FunctionContext struct {
 	App              func(string) platform.App
 	Member           func(string) (platform.Member, bool)
 	AuthorityOf      func(string) string
-	Authorize        func(platform.Caller, string, platform.AIFunction, []string, string, time.Time) *kernel.Error
-	Source           func(platform.Member, platform.FunctionRequest, platform.AIFunction, string, string, string, int) (FunctionSource, *kernel.Error)
+	Authorize        func(platform.Caller, string, platform.AIFunction, []string, string, time.Time) *platform.Error
+	Source           func(platform.Member, platform.FunctionRequest, platform.AIFunction, string, string, string, int) (FunctionSource, *platform.Error)
 	Readable         func(platform.Member, string, time.Time) bool
 	Closure          func(string, platform.AIFunction, int, *string) (platform.ReleaseCandidate, string, error)
 	BindApplications func(platform.AssetRef, string, string) ([]platform.AssetBinding, error)
-	Model            func(platform.Caller, *pb.ChangeRecord, platform.Request, []platform.Effect, platform.ModelOptions) (FunctionDispatch, *kernel.Error)
+	Model            func(platform.Caller, *pb.ChangeRecord, platform.Request, []platform.Effect, platform.ModelOptions) (FunctionDispatch, *platform.Error)
 	Bind             func(platform.Effect, FunctionBinding, platform.AIModelBinding) platform.Effect
 }
 type FunctionHistory struct {
@@ -48,8 +47,8 @@ type FunctionHistory struct {
 	Version                                                    int
 }
 
-func PlanFunction(ctx FunctionContext, c platform.Caller, r *pb.ChangeRecord, request platform.FunctionRequest, pending []platform.Effect) (platform.FunctionCall, platform.Effect, *kernel.Error) {
-	refuse := func(code pb.ErrorCode, message string) (platform.FunctionCall, platform.Effect, *kernel.Error) {
+func PlanFunction(ctx FunctionContext, c platform.Caller, r *pb.ChangeRecord, request platform.FunctionRequest, pending []platform.Effect) (platform.FunctionCall, platform.Effect, *platform.Error) {
+	refuse := func(code pb.ErrorCode, message string) (platform.FunctionCall, platform.Effect, *platform.Error) {
 		return platform.FunctionCall{}, platform.Effect{}, platform.Refuse(code, message)
 	}
 	if c.Tenant != ctx.Tenant || r.GetSubmission().GetTenantId() != ctx.Tenant || r.GetSubmission().GetAuthority() != c.App ||
@@ -251,7 +250,7 @@ func FunctionAllowed(ctx FunctionAccess, app string, binding *FunctionBinding, m
 	return true
 }
 
-func ReadFunctionSource(store *records.Store, request platform.FunctionRequest, f platform.AIFunction, owner, sourceRef, definition string, version int, readable func() bool, history func(string) (FunctionHistory, error)) (FunctionSource, *kernel.Error) {
+func ReadFunctionSource(store *records.Store, request platform.FunctionRequest, f platform.AIFunction, owner, sourceRef, definition string, version int, readable func() bool, history func(string) (FunctionHistory, error)) (FunctionSource, *platform.Error) {
 	var raw []byte
 	var historySources []string
 	var conversationErr, err error

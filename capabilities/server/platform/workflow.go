@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 	"strings"
 	"time"
 )
@@ -99,7 +98,7 @@ type FlowStateArtifact struct {
 type Start struct {
 	Manual     bool
 	Repeat     bool
-	Refused    func(Caller, *kernel.Error, time.Time)
+	Refused    func(Caller, *Error, time.Time)
 	Continuous bool
 	Paused     func(Caller) bool
 	Enabled    func(Caller) bool
@@ -134,7 +133,7 @@ type Step struct {
 	Invoke      *Invocation
 	End         bool
 	LoopControl string
-	Output      func(c Caller, r *Run) (json.RawMessage, *kernel.Error)
+	Output      func(c Caller, r *Run) (json.RawMessage, *Error)
 	Next        string
 	Choose      func(c Caller, r *Run) (next, reason string)
 	Timeout     time.Duration
@@ -151,8 +150,8 @@ type Act struct {
 	Protocol    string
 	Action      string
 	AsMember    bool
-	Inputs      func(Caller, *Run) (json.RawMessage, *kernel.Error)
-	TargetValue func(Caller, *Run) (string, *kernel.Error)
+	Inputs      func(Caller, *Run) (json.RawMessage, *Error)
+	TargetValue func(Caller, *Run) (string, *Error)
 	Target      func(c Caller, r *Run) string
 	Payload     func(c Caller, r *Run) any
 	Done        func(c Caller, r *Run, target *pb.EntityRef)
@@ -162,7 +161,7 @@ type Wait struct {
 	On    string
 	Match func(c Caller, r *Run, e Event) bool
 	Until func(c Caller, r *Run) bool
-	At    func(c Caller, r *Run) (time.Time, *kernel.Error)
+	At    func(c Caller, r *Run) (time.Time, *Error)
 }
 
 type Ask struct {
@@ -208,19 +207,19 @@ type Run struct {
 }
 
 type Evaluate struct {
-	Run func(Caller, *Run) (json.RawMessage, *kernel.Error)
+	Run func(Caller, *Run) (json.RawMessage, *Error)
 }
 
 type Branch struct {
-	Choose func(Caller, *Run) (string, string, *kernel.Error)
+	Choose func(Caller, *Run) (string, string, *Error)
 	Paths  []string
 }
 
 type Loop struct {
-	Initial       func(Caller, *Run) (json.RawMessage, *kernel.Error)
+	Initial       func(Caller, *Run) (json.RawMessage, *Error)
 	Body          string
-	Items         func(Caller, *Run) ([]json.RawMessage, *kernel.Error)
-	While         func(Caller, *Run) (bool, *kernel.Error)
+	Items         func(Caller, *Run) ([]json.RawMessage, *Error)
+	While         func(Caller, *Run) (bool, *Error)
 	MaxIterations int
 	Concurrency   int
 }
@@ -232,12 +231,12 @@ type Frame struct {
 }
 
 type OperationStep struct {
-	Request func(Caller, *Run) (OperationRequest, *kernel.Error)
+	Request func(Caller, *Run) (OperationRequest, *Error)
 }
 
 type Invocation struct {
 	Act    Act
-	Result func(Caller, *Run, string) (json.RawMessage, bool, *kernel.Error)
+	Result func(Caller, *Run, string) (json.RawMessage, bool, *Error)
 }
 
 func (r *Run) Set(v any) {
@@ -254,11 +253,11 @@ type FlowHost interface {
 	Runs() Runs
 	BindFlow(string, string, int, FlowBinding) (FlowBinding, error)
 	FlowExecution(Caller, string, string, int, FlowBinding) (FlowHost, error)
-	Invoke(Caller, string, string, string, []byte, string, string, time.Time) (*pb.EntityRef, *kernel.Error)
+	Invoke(Caller, string, string, string, []byte, string, string, time.Time) (*pb.EntityRef, *Error)
 	Action(string) (string, Action, bool)
 	Caller(Caller, Member, string) Caller
 	OwnerOf(string) (string, bool)
-	Submit(Caller, *pb.Submission, time.Time) (*pb.ChangeRecord, *kernel.Error)
+	Submit(Caller, *pb.Submission, time.Time) (*pb.ChangeRecord, *Error)
 }
 
 type AttachedFlow interface{ AttachFlow(FlowHost) }
@@ -548,19 +547,19 @@ type FlowFrameStore interface {
 
 type ContinuousFlowOwner interface {
 	App
-	PlanBatch(FlowInstance, Caller) (FlowBatchPreparation, *kernel.Error)
-	PlanComputeRetry(FlowInstance, Caller, time.Time) (FlowComputeRetryPreparation, *kernel.Error)
-	PlanArtifactCleanup(FlowInstance, time.Time) (FlowArtifactCleanupPreparation, *kernel.Error)
-	PlanDeadLetterReplay(FlowInstance, Caller, FlowDeadLetterAsset) (FlowDeadLetterReplayPreparation, *kernel.Error)
+	PlanBatch(FlowInstance, Caller) (FlowBatchPreparation, *Error)
+	PlanComputeRetry(FlowInstance, Caller, time.Time) (FlowComputeRetryPreparation, *Error)
+	PlanArtifactCleanup(FlowInstance, time.Time) (FlowArtifactCleanupPreparation, *Error)
+	PlanDeadLetterReplay(FlowInstance, Caller, FlowDeadLetterAsset) (FlowDeadLetterReplayPreparation, *Error)
 	ExpandFrame(FlowInstance, FlowFrameStore) (*FlowBatchFrame, error)
 }
 type FlowDeadLetterReplayPreparation interface {
-	Prepare(*pb.Submission, time.Time, FlowFrameStore) (FlowPreparedBatch, *kernel.Error)
+	Prepare(*pb.Submission, time.Time, FlowFrameStore) (FlowPreparedBatch, *Error)
 }
 type FlowBatchPreparation interface {
 	Intake() (string, *StreamIntake, int)
-	WindowTick(time.Time, FlowFrameStore) (FlowBatch, bool, *kernel.Error)
-	Prepare(FlowBatch, time.Time, FlowFrameStore) (FlowPreparedBatch, *kernel.Error)
+	WindowTick(time.Time, FlowFrameStore) (FlowBatch, bool, *Error)
+	Prepare(FlowBatch, time.Time, FlowFrameStore) (FlowPreparedBatch, *Error)
 }
 type FlowPreparedDecision interface {
 	Decision(App) App
@@ -575,7 +574,7 @@ type FlowPreparedBatch interface {
 }
 type FlowComputeRetryPreparation interface {
 	Instance() string
-	Prepare(time.Time, FlowFrameStore) (FlowPreparedComputeRetry, *kernel.Error)
+	Prepare(time.Time, FlowFrameStore) (FlowPreparedComputeRetry, *Error)
 }
 type FlowPreparedComputeRetry interface {
 	FlowPreparedDecision

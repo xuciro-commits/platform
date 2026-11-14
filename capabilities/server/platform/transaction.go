@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"io"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 	"regexp"
 	"strconv"
 	"strings"
@@ -125,7 +124,7 @@ func (s Sequence) Format(year, n int) string {
 	})
 }
 
-func (c Caller) Next(r *pb.ChangeRecord, sequence string, date time.Time) (string, *kernel.Error) {
+func (c Caller) Next(r *pb.ChangeRecord, sequence string, date time.Time) (string, *Error) {
 	if c.rt == nil {
 		return "", notFound()
 	}
@@ -249,13 +248,13 @@ type TxnCall struct {
 }
 
 type TxnCalls interface {
-	Call(TxnCall, json.RawMessage, time.Time) (json.RawMessage, *kernel.Error)
+	Call(TxnCall, json.RawMessage, time.Time) (json.RawMessage, *Error)
 }
 
 type TxnTransport interface {
-	TakeTxnStep() *kernel.Error
-	BeginTxnCalls(Caller, time.Time) (TxnCalls, *kernel.Error)
-	QueueTxnEffect(Caller, *pb.ChangeRecord, string, TxnRef, json.RawMessage, time.Time) *kernel.Error
+	TakeTxnStep() *Error
+	BeginTxnCalls(Caller, time.Time) (TxnCalls, *Error)
+	QueueTxnEffect(Caller, *pb.ChangeRecord, string, TxnRef, json.RawMessage, time.Time) *Error
 }
 
 func (c Caller) TxnTransport() TxnTransport {
@@ -290,7 +289,7 @@ type TxnIteration struct {
 	IDs        []string `json:"ids"`
 }
 
-func (c Caller) CaptureTxnIteration(receipt *pb.ChangeRecord, iteration TxnIteration) *kernel.Error {
+func (c Caller) CaptureTxnIteration(receipt *pb.ChangeRecord, iteration TxnIteration) *Error {
 	runtime := c.StagedDecision()
 	if runtime == nil {
 		return Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Transaction iteration requires a private decision")

@@ -5,7 +5,6 @@ import (
 	"platformserver/services/security"
 	"time"
 
-	"platformkernel/kernel"
 	"platformserver/platform"
 	pageowner "platformserver/services/apps/pages"
 )
@@ -28,7 +27,7 @@ func (r pageModelRuntime) Authorize(c platform.Caller, q platform.AuthzRequest, 
 	return r.t.authorizeDepth(r.t.Projection, c, q, at, true, 0, security.NewTraversal())
 }
 
-func (r pageModelRuntime) ReadRecordPath(c platform.Caller, typ, id string, path []string, at time.Time) (json.RawMessage, []string, *kernel.Error) {
+func (r pageModelRuntime) ReadRecordPath(c platform.Caller, typ, id string, path []string, at time.Time) (json.RawMessage, []string, *platform.Error) {
 	t := r.t
 	return pageowner.RecordPath{Record: t.objectOwner(t.Projection).HeldRecordJSON, Entity: func(typ string) (platform.EntityInfo, bool) {
 		entity := t.Projection.Type(typ)

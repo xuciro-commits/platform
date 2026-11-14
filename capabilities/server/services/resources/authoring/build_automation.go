@@ -1,12 +1,11 @@
 package build
 
 import (
-	"platformkernel/kernel"
 	"platformserver/platform"
 	automationauthoring "platformserver/services/automate/authoring"
 )
 
-func (b *Build) CheckProcess(c platform.Caller, process automationauthoring.Process) *kernel.Error {
+func (b *Build) CheckProcess(c platform.Caller, process automationauthoring.Process) *platform.Error {
 	return b.automation.Check(c, process)
 }
 

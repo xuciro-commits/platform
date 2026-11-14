@@ -5,11 +5,10 @@ import (
 	"encoding/json"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 	"platformserver/platform"
 )
 
-func CheckDirectCall(q platform.OperationRequest) *kernel.Error {
+func CheckDirectCall(q platform.OperationRequest) *platform.Error {
 	if q.App == "" || q.Key == "" || len(q.Key) > 256 || q.Version < 0 || q.Target != "" || q.OnBehalf != "" || q.Release != nil {
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "A direct call requires an owner and stable key")
 	}
@@ -24,7 +23,7 @@ func PriorSealedDefinition(body string) (platform.Operation, int, bool) {
 	return platform.Operation{}, 0, false
 }
 
-func (c *Channel) SealCallInput(call, member string, q platform.OperationRequest, op platform.Operation, version int) (platform.OperationRequest, platform.OperationInputArtifact, string, *kernel.Error) {
+func (c *Channel) SealCallInput(call, member string, q platform.OperationRequest, op platform.Operation, version int) (platform.OperationRequest, platform.OperationInputArtifact, string, *platform.Error) {
 	if len(q.Inputs) > op.Limits.DataInputBytes {
 		return q, platform.OperationInputArtifact{}, "", platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "The input exceeds its declared data channel budget")
 	}

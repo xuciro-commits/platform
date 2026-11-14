@@ -2,7 +2,7 @@ package host
 
 import (
 	"context"
-	"platformkernel/kernel"
+	"platformserver/platform"
 )
 
 type readAnswer[T any] struct {
@@ -11,7 +11,7 @@ type readAnswer[T any] struct {
 }
 
 func readWithError[T any](t *Tenant, ctx context.Context, read func(*Tenant) (T, error)) (T, error) {
-	result, refusal := recordRead(t, ctx, func(scope *Tenant) (readAnswer[T], *kernel.Error) {
+	result, refusal := recordRead(t, ctx, func(scope *Tenant) (readAnswer[T], *platform.Error) {
 		value, err := read(scope)
 		return readAnswer[T]{value: value, err: err}, nil
 	})

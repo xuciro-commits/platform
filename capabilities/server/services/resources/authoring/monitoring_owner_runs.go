@@ -5,7 +5,6 @@ import (
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 	"platformserver/kernel/acceptedformat"
 	"platformserver/platform"
 	dataowner "platformserver/services/data"
@@ -15,7 +14,7 @@ import (
 type OperationRun struct {
 	Effect  platform.Effect
 	Result  platform.OperationResult
-	Refusal *kernel.Error
+	Refusal *platform.Error
 	Title   string
 	Build   bool
 	Invalid bool
@@ -34,22 +33,22 @@ type OwnerRuns struct {
 	Filter       monitoring.MonitoringRunFilter
 	Now          time.Time
 	Data         *dataowner.Owner
-	Admits       func() *kernel.Error
+	Admits       func() *platform.Error
 	Definitions  func() ([]platform.Definition, error)
 	Catalog      func() []platform.Action
 	Readable     func(ref string) bool
 	CanRetry     func(schema, typ, id string) bool
-	Select       func(typ string) ([]any, bool, *kernel.Error)
+	Select       func(typ string) ([]any, bool, *platform.Error)
 	Operations   func() []OperationRun
-	Work         func() ([]WorkRun, *kernel.Error)
-	Effects      func() ([]platform.Effect, *kernel.Error)
+	Work         func() ([]WorkRun, *platform.Error)
+	Effects      func() ([]platform.Effect, *platform.Error)
 	Schemas      OwnerRunSchemas
-	Integrations func() ([]dataowner.IntegrationEffect, *kernel.Error)
+	Integrations func() ([]dataowner.IntegrationEffect, *platform.Error)
 }
 
-func collectOwnerRuns[T any](x OwnerRuns, runs *monitoring.Runs, source, basis, limitation, typ string, add func([]T)) *kernel.Error {
+func collectOwnerRuns[T any](x OwnerRuns, runs *monitoring.Runs, source, basis, limitation, typ string, add func([]T)) *platform.Error {
 	coverage := monitoring.MonitoringCoverage{Source: source, Basis: basis, Limitation: limitation}
-	rows, refusal := monitoring.Records[T](func() ([]any, bool, *kernel.Error) { return x.Select(typ) }, &coverage)
+	rows, refusal := monitoring.Records[T](func() ([]any, bool, *platform.Error) { return x.Select(typ) }, &coverage)
 	if refusal != nil {
 		return refusal
 	}
@@ -58,14 +57,14 @@ func collectOwnerRuns[T any](x OwnerRuns, runs *monitoring.Runs, source, basis, 
 	return nil
 }
 
-func (x OwnerRuns) Page() (monitoring.MonitoringRunPage, *kernel.Error) {
+func (x OwnerRuns) Page() (monitoring.MonitoringRunPage, *platform.Error) {
 	out := monitoring.MonitoringRunPage{Runs: []monitoring.MonitoringRun{}, Offset: x.Filter.Offset, Limit: x.Filter.Limit, Coverage: []monitoring.MonitoringCoverage{}}
 	if refusal := x.Admits(); refusal != nil {
 		return out, refusal
 	}
 	definitions, err := x.Definitions()
 	if err != nil {
-		return out, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
+		return out, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
 	}
 	visible := map[platform.AssetRef]bool{}
 	for _, definition := range definitions {
@@ -85,7 +84,7 @@ func (x OwnerRuns) Page() (monitoring.MonitoringRunPage, *kernel.Error) {
 		run.RetrySchemaVersion, run.RetryKind = action.SchemaVersion, kind
 	})
 	coverage := monitoring.MonitoringCoverage{Source: "source", Basis: "latest", Limitation: "latest-only"}
-	sources, refusal := monitoring.Records[dataowner.Source](func() ([]any, bool, *kernel.Error) { return x.Select(dataowner.SourceType) }, &coverage)
+	sources, refusal := monitoring.Records[dataowner.Source](func() ([]any, bool, *platform.Error) { return x.Select(dataowner.SourceType) }, &coverage)
 	if refusal != nil {
 		return runs.Partial(), refusal
 	}
@@ -115,20 +114,20 @@ func (x OwnerRuns) Page() (monitoring.MonitoringRunPage, *kernel.Error) {
 		runs.Add(monitoring.MonitoringRun{Type: "function", Source: "compute", ID: "compute:" + effect.ID, Title: operation.Title, ResourceRef: result.Ref, RecordRef: effect.Target, When: effect.At, Status: monitoring.ComputeStatus(result.State), OwnerStatus: result.State})
 	}
 	runs.Cover(coverage)
-	for _, collect := range []func() *kernel.Error{
-		func() *kernel.Error {
+	for _, collect := range []func() *platform.Error{
+		func() *platform.Error {
 			return collectOwnerRuns(x, runs, "code", "latest", "latest-only", CodeType, func(rows []Code) { CodeRuns(runs, rows, compilations) })
 		},
-		func() *kernel.Error {
+		func() *platform.Error {
 			return collectOwnerRuns(x, runs, "projection", "latest", "latest-only", dataowner.DatasetType, func(rows []dataowner.Dataset) { dataowner.DatasetRuns(runs, rows) })
 		},
-		func() *kernel.Error {
+		func() *platform.Error {
 			return collectOwnerRuns(x, runs, "function", "retained", "", FunctionCallType, func(rows []functionauthoring.FunctionRun) { FunctionRuns(runs, rows) })
 		},
-		func() *kernel.Error {
+		func() *platform.Error {
 			return collectOwnerRuns(x, runs, "flow", "retained", "permission-filtered", platform.FlowInstanceType, func(rows []platform.FlowInstance) { runs.Flows(rows, x.Schemas.FlowRetry) })
 		},
-		func() *kernel.Error {
+		func() *platform.Error {
 			return collectOwnerRuns(x, runs, "agent", "retained", "permission-filtered", platform.RunType, runs.Agents)
 		},
 	} {

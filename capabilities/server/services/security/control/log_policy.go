@@ -8,7 +8,6 @@ import (
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 	"platformserver/platform"
 )
 
@@ -146,7 +145,7 @@ func (l Logging) Policies(apps []string) []LogPolicyView {
 	return out
 }
 
-func (l Logging) CheckSetting(name, value string, now time.Time) *kernel.Error {
+func (l Logging) CheckSetting(name, value string, now time.Time) *platform.Error {
 	switch name {
 	case SettingLogQuota:
 		quota, err := strconv.Atoi(value)
@@ -175,7 +174,7 @@ func (l Logging) CheckSetting(name, value string, now time.Time) *kernel.Error {
 	return nil
 }
 
-func CheckLogPolicy(raw string, now time.Time) *kernel.Error {
+func CheckLogPolicy(raw string, now time.Time) *platform.Error {
 	var policy LogPolicy
 	if strings.TrimSpace(raw) == "" || json.Unmarshal([]byte(raw), &policy) != nil {
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "A log policy needs a JSON object")
@@ -201,7 +200,7 @@ func CheckLogPolicy(raw string, now time.Time) *kernel.Error {
 	return nil
 }
 
-func checkDebugWindow(raw string, now time.Time) *kernel.Error {
+func checkDebugWindow(raw string, now time.Time) *platform.Error {
 	until, err := time.Parse(time.RFC3339, raw)
 	if err != nil || until.Before(now) || until.After(now.Add(30*time.Minute)) {
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Temporary debug must end within the next 30 minutes")

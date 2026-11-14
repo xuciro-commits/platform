@@ -9,7 +9,7 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
+	"platformserver/platform"
 )
 
 type FactLog struct {
@@ -36,7 +36,7 @@ func (l *FactLog) Contains(tenant, id string) bool {
 	return slices.ContainsFunc(l.logs[tenant], func(r *pb.FactRecord) bool { return r.GetFactId() == id })
 }
 
-func (l *FactLog) Record(f *pb.Fact, now time.Time) (*pb.FactRecord, *kernel.Error) {
+func (l *FactLog) Record(f *pb.Fact, now time.Time) (*pb.FactRecord, *platform.Error) {
 	invalid := errorf(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT)
 	required := []string{f.GetTenantId(), f.GetSubject().GetType(), f.GetSubject().GetId(),
 		f.GetAttribute(), f.GetSchema().GetName(), f.GetIdempotencyKey()}

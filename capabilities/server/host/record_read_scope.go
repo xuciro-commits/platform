@@ -3,7 +3,6 @@ package host
 import (
 	"context"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 	"platformserver/kernel/records"
 	"platformserver/platform"
 	releaseowner "platformserver/services/devops/releases"
@@ -63,33 +62,33 @@ func (t *Tenant) closeRecordRead() {
 	}
 }
 
-func (t *Tenant) recordReadRefusal() *kernel.Error {
+func (t *Tenant) recordReadRefusal() *platform.Error {
 	if t.readError() != nil || t.quarantined() {
-		return &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
+		return &platform.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
 	}
 	return nil
 }
-func recordRead[T any](t *Tenant, ctx context.Context, read func(*Tenant) (T, *kernel.Error)) (value T, refusal *kernel.Error) {
+func recordRead[T any](t *Tenant, ctx context.Context, read func(*Tenant) (T, *platform.Error)) (value T, refusal *platform.Error) {
 	if ctx.Err() != nil {
 		return value, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The read was cancelled while waiting for the tenant")
 	}
 	return coordinatedRecordRead(t, ctx, read)
 }
-func coordinatedRecordRead[T any](t *Tenant, ctx context.Context, read func(*Tenant) (T, *kernel.Error)) (value T, refusal *kernel.Error) {
+func coordinatedRecordRead[T any](t *Tenant, ctx context.Context, read func(*Tenant) (T, *platform.Error)) (value T, refusal *platform.Error) {
 	if t.readOrigin != nil {
 		return read(t)
 	}
 	return readFromImage(t, ctx, read)
 }
 
-func readFromLane[T any](t *Tenant, ctx context.Context, read func(*Tenant) (T, *kernel.Error)) (value T, refusal *kernel.Error) {
-	return lockedRecordRead(t, ctx, func(t *Tenant) (value T, refusal *kernel.Error) {
+func readFromLane[T any](t *Tenant, ctx context.Context, read func(*Tenant) (T, *platform.Error)) (value T, refusal *platform.Error) {
+	return lockedRecordRead(t, ctx, func(t *Tenant) (value T, refusal *platform.Error) {
 		value, refusal, _ = readInView(t, ctx, read)
 		return value, refusal
 	})
 }
 
-func lockedRecordRead[T any](t *Tenant, ctx context.Context, read func(*Tenant) (T, *kernel.Error)) (value T, refusal *kernel.Error) {
+func lockedRecordRead[T any](t *Tenant, ctx context.Context, read func(*Tenant) (T, *platform.Error)) (value T, refusal *platform.Error) {
 	if err := t.Lane.Hold(ctx, transport.LaneHolderOf(ctx, "read")); err != nil {
 		return value, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The read was cancelled while waiting for the tenant")
 	}
@@ -101,25 +100,25 @@ func lockedRecordRead[T any](t *Tenant, ctx context.Context, read func(*Tenant) 
 	return read(t)
 }
 
-func (t *Tenant) Records(ctx context.Context, m platform.Member, typ string, q platform.Query, now time.Time) (RecordPage, *kernel.Error) {
-	return recordRead(t, ctx, func(t *Tenant) (RecordPage, *kernel.Error) {
+func (t *Tenant) Records(ctx context.Context, m platform.Member, typ string, q platform.Query, now time.Time) (RecordPage, *platform.Error) {
+	return recordRead(t, ctx, func(t *Tenant) (RecordPage, *platform.Error) {
 		return t.objectOwner(t.Projection).Records(m, typ, q, now)
 	})
 }
-func (t *Tenant) RecordOf(ctx context.Context, m platform.Member, typ, id string, now time.Time) (objects.RecordView, *kernel.Error) {
-	return recordRead(t, ctx, func(t *Tenant) (objects.RecordView, *kernel.Error) { return t.recordOf(m, typ, id, now) })
+func (t *Tenant) RecordOf(ctx context.Context, m platform.Member, typ, id string, now time.Time) (objects.RecordView, *platform.Error) {
+	return recordRead(t, ctx, func(t *Tenant) (objects.RecordView, *platform.Error) { return t.recordOf(m, typ, id, now) })
 }
 
-func (t *Tenant) Export(ctx context.Context, m platform.Member, typ string, q platform.Query, now time.Time) ([]byte, *kernel.Error) {
-	return recordRead(t, ctx, func(t *Tenant) ([]byte, *kernel.Error) { return t.exportRead(m, typ, q, now) })
+func (t *Tenant) Export(ctx context.Context, m platform.Member, typ string, q platform.Query, now time.Time) ([]byte, *platform.Error) {
+	return recordRead(t, ctx, func(t *Tenant) ([]byte, *platform.Error) { return t.exportRead(m, typ, q, now) })
 }
 
 func (t *Tenant) Search(ctx context.Context, reader *platform.Member, q string, now time.Time) []build.Hit {
-	out, _ := recordRead(t, ctx, func(t *Tenant) ([]build.Hit, *kernel.Error) { return t.searchRead(reader, q, now), nil })
+	out, _ := recordRead(t, ctx, func(t *Tenant) ([]build.Hit, *platform.Error) { return t.searchRead(reader, q, now), nil })
 	return out
 }
 func (t *Tenant) readRecords(ctx context.Context, read func(*records.Store)) error {
-	_, refusal := recordRead(t, ctx, func(t *Tenant) (struct{}, *kernel.Error) {
+	_, refusal := recordRead(t, ctx, func(t *Tenant) (struct{}, *platform.Error) {
 		read(t.Projection)
 		return struct{}{}, nil
 	})

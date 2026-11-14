@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 	"platformserver/platform"
 )
 
@@ -74,7 +73,7 @@ func LockedActive(s *Store, typ, id string) (platform.EntityInfo, bool) {
 	return et.Info(), row != nil && !Header(row.Value).Archived
 }
 
-func LockedAISource(s *Store, f platform.AIFunction, id string, readable func() bool, prepare func(input map[string]any)) (uint32, map[string]json.RawMessage, *kernel.Error) {
+func LockedAISource(s *Store, f platform.AIFunction, id string, readable func() bool, prepare func(input map[string]any)) (uint32, map[string]json.RawMessage, *platform.Error) {
 	s.Lock()
 	defer s.Unlock()
 	et := s.Type(f.Object)

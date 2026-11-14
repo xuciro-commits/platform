@@ -3,7 +3,6 @@ package objects
 import (
 	"encoding/json"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 
 	"platformserver/kernel/records"
 	"platformserver/platform"
@@ -19,47 +18,47 @@ type RecordPage struct {
 	Formats map[string]map[string]platform.FieldFormat `json:"formats,omitempty"`
 }
 
-func (t *Owner) recordsRead(m platform.Member, typ string, q platform.Query, now time.Time) (RecordPage, *kernel.Error) {
+func (t *Owner) recordsRead(m platform.Member, typ string, q platform.Query, now time.Time) (RecordPage, *platform.Error) {
 	return t.recordsFrom(t.Store, m, typ, q, now)
 }
 
-func (t *Owner) recordsFrom(s *records.Store, m platform.Member, typ string, q platform.Query, now time.Time) (RecordPage, *kernel.Error) {
+func (t *Owner) recordsFrom(s *records.Store, m platform.Member, typ string, q platform.Query, now time.Time) (RecordPage, *platform.Error) {
 	if q.Limit < 1 || q.Limit > 500 {
 		q.Limit = 500
 	}
 	return t.recordSelectionFrom(s, m, typ, q, now)
 }
 
-func (t *Owner) recordSelectionFrom(s *records.Store, m platform.Member, typ string, q platform.Query, now time.Time) (RecordPage, *kernel.Error) {
+func (t *Owner) recordSelectionFrom(s *records.Store, m platform.Member, typ string, q platform.Query, now time.Time) (RecordPage, *platform.Error) {
 	return t.recordSelectionForCallerFrom(s, t.caller(m, ""), typ, q, now)
 }
 
-func (t *Owner) recordSelectionForCallerFrom(s *records.Store, c platform.Caller, typ string, q platform.Query, now time.Time) (RecordPage, *kernel.Error) {
+func (t *Owner) recordSelectionForCallerFrom(s *records.Store, c platform.Caller, typ string, q platform.Query, now time.Time) (RecordPage, *platform.Error) {
 	c.Member = t.authorizationMember(c.Member)
 	around, err := t.traversalAround(s, c.Member, typ, q)
 	if err != nil {
 		return RecordPage{}, err
 	}
 	if q.Set != nil && q.CheckSet() != nil {
-		return RecordPage{}, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
+		return RecordPage{}, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 	}
 	page, _, err := t.LoadObjectSet(s, c, q.ObjectSet(typ, around), Window{Sort: q.Sort, Offset: q.Offset, Limit: q.Limit}, now)
 	return page, err
 }
 
-func (t *Owner) Records(m platform.Member, typ string, q platform.Query, now time.Time) (RecordPage, *kernel.Error) {
+func (t *Owner) Records(m platform.Member, typ string, q platform.Query, now time.Time) (RecordPage, *platform.Error) {
 	return t.recordsRead(m, typ, q, now)
 }
 
-func (t *Owner) RecordsFrom(store *records.Store, m platform.Member, typ string, q platform.Query, now time.Time) (RecordPage, *kernel.Error) {
+func (t *Owner) RecordsFrom(store *records.Store, m platform.Member, typ string, q platform.Query, now time.Time) (RecordPage, *platform.Error) {
 	return t.recordsFrom(store, m, typ, q, now)
 }
 
-func (t *Owner) SelectionFrom(store *records.Store, m platform.Member, typ string, q platform.Query, now time.Time) (RecordPage, *kernel.Error) {
+func (t *Owner) SelectionFrom(store *records.Store, m platform.Member, typ string, q platform.Query, now time.Time) (RecordPage, *platform.Error) {
 	return t.recordSelectionFrom(store, m, typ, q, now)
 }
 
-func (t *Owner) readRecordFrom(store *records.Store, c platform.Caller, typ, id string, now time.Time) (json.RawMessage, *kernel.Error) {
+func (t *Owner) readRecordFrom(store *records.Store, c platform.Caller, typ, id string, now time.Time) (json.RawMessage, *platform.Error) {
 	domain, _ := json.Marshal([]any{[]any{"id", "=", id}})
 	page, refusal := t.recordSelectionForCallerFrom(store, c, typ, platform.Query{Domain: domain, Limit: 1, BusinessTime: &platform.BusinessTime{All: true}}, now)
 	if refusal != nil {
@@ -110,6 +109,6 @@ func (t *Owner) readRecordFrom(store *records.Store, c platform.Caller, typ, id 
 	return raw, nil
 }
 
-func (t *Owner) ReadRecordFrom(store *records.Store, c platform.Caller, typ, id string, now time.Time) (json.RawMessage, *kernel.Error) {
+func (t *Owner) ReadRecordFrom(store *records.Store, c platform.Caller, typ, id string, now time.Time) (json.RawMessage, *platform.Error) {
 	return t.readRecordFrom(store, c, typ, id, now)
 }

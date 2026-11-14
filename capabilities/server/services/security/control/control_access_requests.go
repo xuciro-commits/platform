@@ -8,7 +8,6 @@ import (
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 	"platformserver/platform"
 )
 
@@ -88,8 +87,8 @@ func (d *Console) AccessRequests(c platform.Caller) []AccessRequest {
 	return out
 }
 
-func (d *Console) decideAccessRequest(c platform.Caller, s *pb.Submission, now time.Time) (func(*pb.ChangeRecord), func(*pb.ChangeRecord) *kernel.Error, *kernel.Error) {
-	invalid := &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
+func (d *Console) decideAccessRequest(c platform.Caller, s *pb.Submission, now time.Time) (func(*pb.ChangeRecord), func(*pb.ChangeRecord) *platform.Error, *platform.Error) {
+	invalid := &platform.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 	id := s.GetTarget().GetId()
 	if id == "" || d.host == nil || c.Agent || strings.HasPrefix(c.ID, "app:") || !c.Active() {
 		return nil, nil, invalid
@@ -161,7 +160,7 @@ func (d *Console) decideAccessRequest(c platform.Caller, s *pb.Submission, now t
 		}
 		request.Created, request.Changed = platform.Stamp{By: c.ID, At: now}, platform.Stamp{By: c.ID, At: now}
 		apply := func(*pb.ChangeRecord) { d.accessRequests[id] = &request }
-		after := func(r *pb.ChangeRecord) *kernel.Error {
+		after := func(r *pb.ChangeRecord) *platform.Error {
 			return c.Assign(r, platform.Assignment{
 				Title: "Access request: " + accessRequestTarget(request),
 				Body:  fmt.Sprintf("%s requests %s. Reason: %s. Until: %s.", request.Requester, accessRequestTarget(request), request.Reason, request.Until),
@@ -174,7 +173,7 @@ func (d *Console) decideAccessRequest(c platform.Caller, s *pb.Submission, now t
 	case SchemaAccessApprove, SchemaAccessReject, SchemaAccessWithdraw:
 		request := d.accessRequests[id]
 		if request == nil {
-			return nil, nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
+			return nil, nil, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
 		}
 		if request.State != "pending" {
 			return nil, nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Access request {request} is {state}", id, request.State)
@@ -219,7 +218,7 @@ func (d *Console) decideAccessRequest(c platform.Caller, s *pb.Submission, now t
 	return nil, nil, invalid
 }
 
-func (d *Console) prepareAccessGrant(c platform.Caller, request *AccessRequest) (func(*pb.ChangeRecord), *kernel.Error) {
+func (d *Console) prepareAccessGrant(c platform.Caller, request *AccessRequest) (func(*pb.ChangeRecord), *platform.Error) {
 	switch request.Scope {
 	case "project":
 		project, found := d.project(request.Project)
@@ -243,7 +242,7 @@ func (d *Console) prepareAccessGrant(c platform.Caller, request *AccessRequest) 
 		}
 		payload, err := json.Marshal(map[string]any{"title": project.Title, "approvals": max(1, project.Approvals), "members": members})
 		if err != nil {
-			return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
+			return nil, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 		}
 		ids := make([]string, 0, len(d.members))
 		for member := range d.members {
@@ -265,17 +264,17 @@ func (d *Console) prepareAccessGrant(c platform.Caller, request *AccessRequest) 
 		}
 		payload, err := json.Marshal(map[string]string{"app": request.App, "role": request.Role, "until": request.Until, "reason": request.Reason})
 		if err != nil {
-			return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
+			return nil, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 		}
 		s := &pb.Submission{TenantId: c.Tenant, PrincipalId: c.ID, Authority: PlatformApp, IdempotencyKey: "access-grant:" + request.ID,
 			Target: &pb.EntityRef{Type: MemberType, Id: request.Requester}, Schema: &pb.SchemaRef{Name: SchemaGrant, Version: 1}, Payload: payload}
 		return d.decideMember(c, s)
 	}
-	return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
+	return nil, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 }
 
-func (d *Console) accessRequestClosed(c platform.Caller, request AccessRequest, now time.Time, notify []string) func(*pb.ChangeRecord) *kernel.Error {
-	return func(r *pb.ChangeRecord) *kernel.Error {
+func (d *Console) accessRequestClosed(c platform.Caller, request AccessRequest, now time.Time, notify []string) func(*pb.ChangeRecord) *platform.Error {
+	return func(r *pb.ChangeRecord) *platform.Error {
 		if err := c.Assign(r, platform.Assignment{Close: true, Key: "access:" + request.ID}); err != nil {
 			return err
 		}

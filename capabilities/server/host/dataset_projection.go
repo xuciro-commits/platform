@@ -5,7 +5,6 @@ import (
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 	"platformserver/platform"
 	dataowner "platformserver/services/data"
 	"platformserver/services/resources/authoring"
@@ -21,8 +20,8 @@ func (t *Tenant) ProjectDatasets(now time.Time) {
 func (t *Tenant) datasetMerge() dataowner.DatasetMerge {
 	return dataowner.DatasetMerge{
 		Tenant: t.ID, Authority: build.ID,
-		Targets: func() ([]dataowner.DatasetTarget, *kernel.Error) {
-			return recordRead(t, context.Background(), func(t *Tenant) ([]dataowner.DatasetTarget, *kernel.Error) {
+		Targets: func() ([]dataowner.DatasetTarget, *platform.Error) {
+			return recordRead(t, context.Background(), func(t *Tenant) ([]dataowner.DatasetTarget, *platform.Error) {
 				var targets []dataowner.DatasetTarget
 				for _, entity := range t.Projection.SortedTypes() {
 					info := entity.Info()
@@ -35,23 +34,23 @@ func (t *Tenant) datasetMerge() dataowner.DatasetMerge {
 				return targets, nil
 			})
 		},
-		Prepare: func(object, dataset string, at time.Time) (dataowner.DatasetPreparation, *kernel.Error) {
-			return recordRead(t, context.Background(), func(t *Tenant) (dataowner.DatasetPreparation, *kernel.Error) {
+		Prepare: func(object, dataset string, at time.Time) (dataowner.DatasetPreparation, *platform.Error) {
+			return recordRead(t, context.Background(), func(t *Tenant) (dataowner.DatasetPreparation, *platform.Error) {
 				return t.DataOwner().PrepareProjection(t.automation(build.ID, false), build.ID, build.Builder, object, dataset), nil
 			})
 		},
-		SubmitResult: func(member platform.Member, dataset string, submission *pb.Submission, at time.Time) *kernel.Error {
+		SubmitResult: func(member platform.Member, dataset string, submission *pb.Submission, at time.Time) *platform.Error {
 			_, refusal := t.Submit(member, submission, at)
 			return refusal
 		},
 		Unguarded:    t.unguarded,
 		DeclaredRows: t.declaredRows,
-		PrepareRows: func(member platform.Member, object, producer string, rows []dataowner.SourceRow, at time.Time) *kernel.Error {
+		PrepareRows: func(member platform.Member, object, producer string, rows []dataowner.SourceRow, at time.Time) *platform.Error {
 			_, refusal := t.prepareRows(member, object, producer, rows, at)
 			return refusal
 		},
 		Refused: t.integrationRefused, Answered: t.integrationAnswered,
-		Submit: func(member platform.Member, app, object string, binding *platform.DataSourceBinding, row dataowner.SourceRow, key string, at time.Time) *kernel.Error {
+		Submit: func(member platform.Member, app, object string, binding *platform.DataSourceBinding, row dataowner.SourceRow, key string, at time.Time) *platform.Error {
 			return t.integration().SubmitIntegrationRow(member, app, object, binding, row, key, at)
 		},
 		Absent: t.absentSourceRows,

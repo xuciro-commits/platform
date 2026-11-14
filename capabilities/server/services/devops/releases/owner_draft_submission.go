@@ -8,7 +8,6 @@ import (
 	"strings"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 	"platformserver/platform"
 	build "platformserver/services/resources/authoring"
 )
@@ -41,7 +40,7 @@ func DraftSubmission(tenant, candidate string, context platform.AssetReleaseCont
 		Target: &pb.EntityRef{Type: draft.Type, Id: draft.Name}, Schema: &pb.SchemaRef{Name: draft.Schema, Version: 1}, Payload: raw}, nil
 }
 
-func DraftRefusal(app platform.App, draft platform.AssetDraft, rejected *kernel.Error) error {
+func DraftRefusal(app platform.App, draft platform.AssetDraft, rejected *platform.Error) error {
 	if rejected.Code == pb.ErrorCode_ERROR_CODE_POLICY_DENIED {
 		action, _ := app.Manifest().Actions.Action(draft.Schema)
 		return fmt.Errorf("create target draft %s/%s needs the %s role and matching token scope: %w", draft.Type, draft.Name, strings.Join(action.Roles, " role or "), rejected)

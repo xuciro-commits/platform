@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 	"platformserver/kernel/protocol"
 	"platformserver/platform"
 	"reflect"
@@ -143,7 +142,7 @@ func (l *authority) AcceptedFor(tenant, key string) *pb.ChangeRecord {
 }
 
 func (l *authority) Receive(c platform.Caller, s *pb.Submission, now time.Time,
-	allowed func() bool, rules func() (func(*pb.ChangeRecord), *kernel.Error)) (*pb.ChangeRecord, *kernel.Error) {
+	allowed func() bool, rules func() (func(*pb.ChangeRecord), *platform.Error)) (*pb.ChangeRecord, *platform.Error) {
 	catalog := l.catalogFor(c)
 	if draft := c.StagedDecision(); draft != nil {
 		release, refusal := draft.HoldChanges(l)
@@ -151,14 +150,14 @@ func (l *authority) Receive(c platform.Caller, s *pb.Submission, now time.Time,
 			return nil, refusal
 		}
 		if release == nil {
-			return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
+			return nil, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
 		}
 		defer release()
 	}
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	if !c.Replaying && !catalog.Enabled(s.GetSchema().GetName()) {
-		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_UNKNOWN_SCHEMA}
+		return nil, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_UNKNOWN_SCHEMA}
 	}
 	rules = l.checked(c, s, now, catalog, rules)
 	probing := c.Probing()
@@ -168,7 +167,7 @@ func (l *authority) Receive(c platform.Caller, s *pb.Submission, now time.Time,
 	if draft := c.StagedDecision(); draft != nil {
 		changes = draft.DraftChanges(l, l.changes.Fork)
 		if changes == nil || changes == l.changes {
-			return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
+			return nil, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
 		}
 	}
 	if probing {
@@ -186,12 +185,12 @@ func (l *authority) Receive(c platform.Caller, s *pb.Submission, now time.Time,
 	var apply func(*pb.ChangeRecord)
 	decided := false
 	receiver := protocol.Receiver{Changes: changes, Authorities: l.authorities, Policy: policy}
-	record, err := receiver.Receive(protocol.Caller{Tenant: l.tenant, Principal: c.ID}, s, now, func() *kernel.Error {
+	record, err := receiver.Receive(protocol.Caller{Tenant: l.tenant, Principal: c.ID}, s, now, func() *platform.Error {
 		decided = true
 		if rules == nil {
 			return nil
 		}
-		var err *kernel.Error
+		var err *platform.Error
 		apply, err = rules()
 		return err
 	})
@@ -228,9 +227,9 @@ func (l *authority) catalogFor(c platform.Caller) *platform.Catalog {
 	return l.catalog
 }
 
-func (l *authority) checked(c platform.Caller, s *pb.Submission, now time.Time, catalog *platform.Catalog, rules func() (func(*pb.ChangeRecord), *kernel.Error)) func() (func(*pb.ChangeRecord), *kernel.Error) {
+func (l *authority) checked(c platform.Caller, s *pb.Submission, now time.Time, catalog *platform.Catalog, rules func() (func(*pb.ChangeRecord), *platform.Error)) func() (func(*pb.ChangeRecord), *platform.Error) {
 	declared, _ := catalog.Action(s.GetSchema().GetName())
-	return func() (func(*pb.ChangeRecord), *kernel.Error) {
+	return func() (func(*pb.ChangeRecord), *platform.Error) {
 		if !c.Replaying {
 			var payload map[string]any
 			json.Unmarshal(s.GetPayload(), &payload)
@@ -276,7 +275,7 @@ func (l *authority) checked(c platform.Caller, s *pb.Submission, now time.Time, 
 	}
 }
 
-func (l *authority) Generated(c platform.Caller, s *pb.Submission, now time.Time, allowed func() bool, entities ...platform.Entity) (*pb.ChangeRecord, *kernel.Error, bool) {
+func (l *authority) Generated(c platform.Caller, s *pb.Submission, now time.Time, allowed func() bool, entities ...platform.Entity) (*pb.ChangeRecord, *platform.Error, bool) {
 	schema := s.GetSchema().GetName()
 	for _, e := range entities {
 		verb, found := strings.CutPrefix(schema, e.Type+".")
@@ -284,7 +283,7 @@ func (l *authority) Generated(c platform.Caller, s *pb.Submission, now time.Time
 			continue
 		}
 		if verb == "create" && e.Standard.Create || verb == "edit" && e.Standard.Edit || verb == "archive" && e.Standard.Archive {
-			record, err := l.Receive(c, s, now, allowed, func() (func(*pb.ChangeRecord), *kernel.Error) {
+			record, err := l.Receive(c, s, now, allowed, func() (func(*pb.ChangeRecord), *platform.Error) {
 				return standard(c, e, verb, s, now)
 			})
 			return record, err, true
@@ -294,18 +293,18 @@ func (l *authority) Generated(c platform.Caller, s *pb.Submission, now time.Time
 		}
 		if i := slices.IndexFunc(e.Lifecycle.Transitions, func(t platform.Transition) bool { return t.Name == verb }); i >= 0 {
 			tr := e.Lifecycle.Transitions[i]
-			var failure *kernel.Error
+			var failure *platform.Error
 			if tr.Txn != nil {
 				if !c.Staging() || c.Replaying || tr.ApplyTxn == nil || tr.After != nil {
 					return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Business transactions require a private accepted decision / 业务事务须经私有接受决策"), true
 				}
 				apply := tr.ApplyTxn
-				tr.ApplyTxn = func(c platform.Caller, r *pb.ChangeRecord, at time.Time) *kernel.Error {
+				tr.ApplyTxn = func(c platform.Caller, r *pb.ChangeRecord, at time.Time) *platform.Error {
 					failure = apply(c, r, at)
 					return failure
 				}
 			}
-			record, err := l.Receive(c, s, now, allowed, func() (func(*pb.ChangeRecord), *kernel.Error) {
+			record, err := l.Receive(c, s, now, allowed, func() (func(*pb.ChangeRecord), *platform.Error) {
 				return transition(c, e, tr, s, now)
 			})
 			if err == nil && failure != nil {
@@ -321,7 +320,7 @@ func (l *authority) Generated(c platform.Caller, s *pb.Submission, now time.Time
 			if !found || i < 0 {
 				continue
 			}
-			record, err := l.Receive(c, s, now, allowed, func() (func(*pb.ChangeRecord), *kernel.Error) {
+			record, err := l.Receive(c, s, now, allowed, func() (func(*pb.ChangeRecord), *platform.Error) {
 				return transition(c, e, approvalMove(e.Lifecycle.Transitions[i], suffix), s, now)
 			})
 			return record, err, true
@@ -343,7 +342,7 @@ func approvalMove(t platform.Transition, suffix string) platform.Transition {
 	return platform.Transition{Name: t.Name + suffix, From: []string{t.Approval.Pending}, To: []string{back}}
 }
 
-func transition(c platform.Caller, e platform.Entity, t platform.Transition, s *pb.Submission, now time.Time) (func(*pb.ChangeRecord), *kernel.Error) {
+func transition(c platform.Caller, e platform.Entity, t platform.Transition, s *pb.Submission, now time.Time) (func(*pb.ChangeRecord), *platform.Error) {
 	if c.Runtime() == nil {
 		return nil, notFound()
 	}
@@ -375,7 +374,7 @@ func transition(c platform.Caller, e platform.Entity, t platform.Transition, s *
 	} else if to == from && !slices.Contains(t.To, from) {
 		status.SetString(t.To[0])
 	} else if !slices.Contains(t.To, to) {
-		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
+		return nil, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 	}
 	if err := c.PrepareBusinessVersions(v.Interface(), now); err != nil {
 		return nil, err
@@ -411,8 +410,8 @@ func transition(c platform.Caller, e platform.Entity, t platform.Transition, s *
 	}, nil
 }
 
-func standard(c platform.Caller, e platform.Entity, verb string, s *pb.Submission, now time.Time) (func(*pb.ChangeRecord), *kernel.Error) {
-	invalid := &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
+func standard(c platform.Caller, e platform.Entity, verb string, s *pb.Submission, now time.Time) (func(*pb.ChangeRecord), *platform.Error) {
+	invalid := &platform.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 	if c.Runtime() == nil {
 		return nil, notFound()
 	}
@@ -425,7 +424,7 @@ func standard(c platform.Caller, e platform.Entity, verb string, s *pb.Submissio
 	v := reflect.New(t)
 	switch {
 	case verb == "create" && known:
-		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
+		return nil, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
 	case verb != "create" && !known:
 		return nil, notFound()
 	case verb != "create":
@@ -513,4 +512,4 @@ func inScope(c platform.Caller, typ, id string) bool {
 func (l *authority) ID() string                 { return l.authority }
 func (l *authority) Catalog() *platform.Catalog { return l.catalog }
 
-func notFound() *kernel.Error { return &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND} }
+func notFound() *platform.Error { return &platform.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND} }

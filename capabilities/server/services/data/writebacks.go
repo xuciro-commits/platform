@@ -9,7 +9,6 @@ import (
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 	"platformserver/platform"
 )
 
@@ -37,7 +36,7 @@ func simpleWhere(s string) bool { return s == "" || simpleWhereRE.MatchString(st
 func (o *Owner) writebackEntity() platform.Entity {
 	return platform.Entity{Type: WritebackType, Title: "Writeback", Plural: "Writebacks", Model: Writeback{}, Display: "title",
 		Description: "An accepted action on an object sent to an external system through a connection: queued, in order, retried with the same key for receiver deduplication.",
-		Validate: func(c platform.Caller, record any) *kernel.Error {
+		Validate: func(c platform.Caller, record any) *platform.Error {
 			w := record.(*Writeback)
 			if w.State == "published" {
 				fixed, err := o.ExecutionWriteback(*w)
@@ -64,10 +63,10 @@ func writebackActions() []platform.Action {
 		Payload: []platform.Field{{Name: "answer", Type: "json", Required: true, Description: "The attempt's result and the answer's first bytes"}}}}
 }
 
-func (o *Owner) publishWriteback(c platform.Caller, record any, _ json.RawMessage, _ time.Time) *kernel.Error {
+func (o *Owner) publishWriteback(c platform.Caller, record any, _ json.RawMessage, _ time.Time) *platform.Error {
 	w, ok := record.(*Writeback)
 	if !ok {
-		return &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
+		return &platform.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 	}
 	if err := o.checkWriteback(c, *w); err != nil {
 		return err
@@ -83,8 +82,8 @@ func (o *Owner) publishWriteback(c platform.Caller, record any, _ json.RawMessag
 	return nil
 }
 
-func (o *Owner) checkWriteback(c platform.Caller, w Writeback) *kernel.Error {
-	refuse := func(message string, args ...any) *kernel.Error {
+func (o *Owner) checkWriteback(c platform.Caller, w Writeback) *platform.Error {
+	refuse := func(message string, args ...any) *platform.Error {
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, message, args...)
 	}
 	if err := o.checkName(w.Name, w.ID); err != nil {
@@ -128,8 +127,8 @@ func (o *Owner) checkWriteback(c platform.Caller, w Writeback) *kernel.Error {
 	return nil
 }
 
-func (o *Owner) checkWritebackConnection(c platform.Caller, w Writeback) *kernel.Error {
-	refuse := func(message string, args ...any) *kernel.Error {
+func (o *Owner) checkWritebackConnection(c platform.Caller, w Writeback) *platform.Error {
+	refuse := func(message string, args ...any) *platform.Error {
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, message, args...)
 	}
 	conn, ok := platform.Get[Connection](c, w.Connection)
@@ -152,8 +151,8 @@ func (o *Owner) checkWritebackConnection(c platform.Caller, w Writeback) *kernel
 	return nil
 }
 
-func (o *Owner) SubmitWritebackAnswered(ledger platform.Authority, c platform.Caller, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *kernel.Error) {
-	return ledger.Receive(c, s, now, nil, func() (func(*pb.ChangeRecord), *kernel.Error) {
+func (o *Owner) SubmitWritebackAnswered(ledger platform.Authority, c platform.Caller, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *platform.Error) {
+	return ledger.Receive(c, s, now, nil, func() (func(*pb.ChangeRecord), *platform.Error) {
 		var payload struct {
 			Answer WritebackAns `json:"answer"`
 		}

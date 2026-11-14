@@ -12,7 +12,6 @@ import (
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 	"platformserver/platform"
 )
 
@@ -36,7 +35,7 @@ func integrationStandard() platform.Standard {
 
 func (o *Owner) connectionEntity() platform.Entity {
 	return platform.Entity{Type: ConnectionType, Title: "Connection", Plural: "Connections", Model: Connection{}, Display: "title",
-		Validate: func(c platform.Caller, record any) *kernel.Error {
+		Validate: func(c platform.Caller, record any) *platform.Error {
 			next := record.(*Connection)
 			if current, ok := platform.Get[Connection](c, next.ID); ok && (platform.MarkingRank(next.Marking) < platform.MarkingRank(current.Marking) || slices.ContainsFunc(current.Compartments, func(id string) bool { return !slices.Contains(next.Compartments, id) })) {
 				return platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "Use a pipeline declassification step to remove data markings")
@@ -64,11 +63,11 @@ func connectionActions() []platform.Action {
 			Payload: []platform.Field{{Name: "revision", Type: "integer", Required: true, Description: "The connection revision checked"}, {Name: "check", Type: "json", Required: true, Description: "When, whether it answered and what"}}}}
 }
 
-func (o *Owner) ConfigureConnection(ledger platform.Authority, c platform.Caller, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *kernel.Error) {
-	return ledger.Receive(c, s, now, nil, func() (func(*pb.ChangeRecord), *kernel.Error) {
+func (o *Owner) ConfigureConnection(ledger platform.Authority, c platform.Caller, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *platform.Error) {
+	return ledger.Receive(c, s, now, nil, func() (func(*pb.ChangeRecord), *platform.Error) {
 		connection, found := platform.Get[Connection](c, s.GetTarget().GetId())
 		if !found || connection.Archived {
-			return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
+			return nil, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
 		}
 		var input struct {
 			Address      string `json:"address"`
@@ -76,7 +75,7 @@ func (o *Owner) ConfigureConnection(ledger platform.Authority, c platform.Caller
 			AllowPrivate bool   `json:"allowPrivate"`
 		}
 		if json.Unmarshal(s.GetPayload(), &input) != nil {
-			return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
+			return nil, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 		}
 		connection.Address, connection.Secret, connection.AllowPrivate = input.Address, input.Secret, input.AllowPrivate
 		if refusal := o.connectionEntity().Validate(c, &connection); refusal != nil {
@@ -86,10 +85,10 @@ func (o *Owner) ConfigureConnection(ledger platform.Authority, c platform.Caller
 	})
 }
 
-func (o *Owner) checkConnection(_ platform.Caller, record any, _ json.RawMessage, _ time.Time) *kernel.Error {
+func (o *Owner) checkConnection(_ platform.Caller, record any, _ json.RawMessage, _ time.Time) *platform.Error {
 	c, ok := record.(*Connection)
 	if !ok {
-		return &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
+		return &platform.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 	}
 	if err := o.validConnection(*c); err != nil {
 		return err
@@ -101,11 +100,11 @@ func (o *Owner) checkConnection(_ platform.Caller, record any, _ json.RawMessage
 	return nil
 }
 
-func (o *Owner) validConnection(c Connection) *kernel.Error {
+func (o *Owner) validConnection(c Connection) *platform.Error {
 	if err := o.checkCompartments(c.Compartments); err != nil {
 		return err
 	}
-	refuse := func(message string, args ...any) *kernel.Error {
+	refuse := func(message string, args ...any) *platform.Error {
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, message, args...)
 	}
 	if err := o.checkName(c.Name, c.ID); err != nil {
@@ -137,8 +136,8 @@ func (o *Owner) validConnection(c Connection) *kernel.Error {
 	return nil
 }
 
-func (o *Owner) SubmitConnectionChecked(ledger platform.Authority, c platform.Caller, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *kernel.Error) {
-	return ledger.Receive(c, s, now, nil, func() (func(*pb.ChangeRecord), *kernel.Error) {
+func (o *Owner) SubmitConnectionChecked(ledger platform.Authority, c platform.Caller, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *platform.Error) {
+	return ledger.Receive(c, s, now, nil, func() (func(*pb.ChangeRecord), *platform.Error) {
 		var payload struct {
 			Revision uint32          `json:"revision"`
 			Check    ConnectionCheck `json:"check"`
@@ -161,7 +160,7 @@ func (o *Owner) SubmitConnectionChecked(ledger platform.Authority, c platform.Ca
 
 func (o *Owner) datasetEntity() platform.Entity {
 	return platform.Entity{Type: DatasetType, Title: "Dataset", Plural: "Datasets", Model: Dataset{}, Display: "title",
-		Validate: func(c platform.Caller, value any) *kernel.Error {
+		Validate: func(c platform.Caller, value any) *platform.Error {
 			next := value.(*Dataset)
 			if err := o.checkCompartments(next.Compartments); err != nil {
 				return err
@@ -199,8 +198,8 @@ func datasetActions() []platform.Action {
 			Payload: []platform.Field{{Name: "projection", Type: "json", Required: true, Description: "The object type, version, counts and why the projection paused"}}}}
 }
 
-func (o *Owner) SubmitDatasetProjected(ledger platform.Authority, c platform.Caller, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *kernel.Error) {
-	return ledger.Receive(c, s, now, nil, func() (func(*pb.ChangeRecord), *kernel.Error) {
+func (o *Owner) SubmitDatasetProjected(ledger platform.Authority, c platform.Caller, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *platform.Error) {
+	return ledger.Receive(c, s, now, nil, func() (func(*pb.ChangeRecord), *platform.Error) {
 		var payload struct {
 			Projection DatasetProjection `json:"projection"`
 		}
@@ -259,8 +258,8 @@ func DatasetSchema(rows []map[string]any, order []string) []DatasetField {
 	return out
 }
 
-func (o *Owner) SubmitDatasetLoad(ledger platform.Authority, c platform.Caller, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *kernel.Error) {
-	return ledger.Receive(c, s, now, nil, func() (func(*pb.ChangeRecord), *kernel.Error) {
+func (o *Owner) SubmitDatasetLoad(ledger platform.Authority, c platform.Caller, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *platform.Error) {
+	return ledger.Receive(c, s, now, nil, func() (func(*pb.ChangeRecord), *platform.Error) {
 		var payload struct {
 			Type         DatasetTransactionType `json:"type"`
 			Rows         []map[string]any       `json:"rows"`
@@ -289,7 +288,7 @@ func (o *Owner) SubmitDatasetLoad(ledger platform.Authority, c platform.Caller, 
 		switch payload.Type {
 		case DatasetTransactionSnapshot, DatasetTransactionAppend, DatasetTransactionUpdate, DatasetTransactionDelete:
 		default:
-			return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
+			return nil, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 		}
 		var order []string
 		for _, f := range ds.Schema {
@@ -369,7 +368,7 @@ func (o *Owner) SubmitDatasetLoad(ledger platform.Authority, c platform.Caller, 
 	})
 }
 
-func checkIntegrationExecution(prior, next *IntegrationExecution, member platform.Member) *kernel.Error {
+func checkIntegrationExecution(prior, next *IntegrationExecution, member platform.Member) *platform.Error {
 	if next == nil {
 		if prior != nil {
 			return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The pending integration execution must finish first")
@@ -562,7 +561,7 @@ type IntegrationExecution struct {
 	Inputs   map[string]int `json:"inputs,omitempty"`
 }
 
-func (o *Owner) checkCompartments(ids []string) *kernel.Error {
+func (o *Owner) checkCompartments(ids []string) *platform.Error {
 	for _, id := range ids {
 		if !o.host.CompartmentExists(id) {
 			return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Compartment marking {marking} is unavailable", id)

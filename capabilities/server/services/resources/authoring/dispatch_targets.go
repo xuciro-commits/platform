@@ -8,7 +8,6 @@ import (
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 	"platformserver/platform"
 	dataowner "platformserver/services/data"
 )
@@ -19,13 +18,13 @@ type DispatchTarget struct {
 }
 
 type DispatchTargetHooks struct {
-	Admits     func(platform.Member) *kernel.Error
+	Admits     func(platform.Member) *platform.Error
 	Caller     func() platform.Caller
 	Automation func() platform.Caller
 	Readable   func(member platform.Member, subject string, at time.Time) bool
 }
 
-func DispatchTargets(h DispatchTargetHooks, member platform.Member, id string, at time.Time) ([]DispatchTarget, *kernel.Error) {
+func DispatchTargets(h DispatchTargetHooks, member platform.Member, id string, at time.Time) ([]DispatchTarget, *platform.Error) {
 	if refusal := h.Admits(member); refusal != nil {
 		return nil, refusal
 	}

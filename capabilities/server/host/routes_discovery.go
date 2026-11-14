@@ -7,7 +7,6 @@ import (
 	"google.golang.org/protobuf/encoding/protojson"
 	"net/http"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 	transport "platformserver/kernel/transport"
 	"platformserver/platform"
 	"platformserver/services/actions"
@@ -19,7 +18,7 @@ import (
 )
 
 func (h *Host) routesDiscovery(rt *routes) {
-	rt.metadata(transport.Route{Pattern: "GET /v1/me", Summary: "Who the caller is on this host: tenant, member, the apps they may open, their language", Answer: transport.MeView{}}, translating(func(r *http.Request, m platform.Member, t *Tenant) (transport.MeView, *kernel.Error) {
+	rt.metadata(transport.Route{Pattern: "GET /v1/me", Summary: "Who the caller is on this host: tenant, member, the apps they may open, their language", Answer: transport.MeView{}}, translating(func(r *http.Request, m platform.Member, t *Tenant) (transport.MeView, *platform.Error) {
 		view := transport.MeView{TenantID: m.Tenant, PrincipalID: m.ID, Profile: m, Apps: t.AppsOf(m), Tenants: h.tenantsOf(r),
 			Language: t.Language(m, r), Languages: t.i18n.Languages(), Preferred: m.Language, Currency: t.setting(t.automation(controlowner.PlatformApp, false), controlowner.SettingCurrency)}
 		if d := t.identityOwner; d != nil {
@@ -27,7 +26,7 @@ func (h *Host) routesDiscovery(rt *routes) {
 		}
 		return view, nil
 	}))
-	rt.metadata(transport.Route{Pattern: "GET /v1/declarations", Summary: "The data classes and their authorities the tenant's apps declare (K5)", Answer: []*pb.AuthorityDeclaration{}}, transport.Answering(func(_ *http.Request, _ platform.Member, t *Tenant) ([]json.RawMessage, *kernel.Error) {
+	rt.metadata(transport.Route{Pattern: "GET /v1/declarations", Summary: "The data classes and their authorities the tenant's apps declare (K5)", Answer: []*pb.AuthorityDeclaration{}}, transport.Answering(func(_ *http.Request, _ platform.Member, t *Tenant) ([]json.RawMessage, *platform.Error) {
 		out := []json.RawMessage{}
 		for _, d := range t.Declarations() {
 			raw, _ := protojson.Marshal(d)
@@ -36,16 +35,16 @@ func (h *Host) routesDiscovery(rt *routes) {
 		return out, nil
 	}))
 	rt.metadata(transport.Route{Pattern: "GET /v1/actions", Summary: "The caller's catalog: the actions their roles permit, in their language", Answer: []platform.Action{}}, viewRoute("catalog", "Catalog is unavailable"))
-	rt.metadata(transport.Route{Pattern: "GET /v1/apps", Summary: "The tenant's apps from their manifests", Answer: []transport.AppInfo{}}, translating(func(_ *http.Request, _ platform.Member, t *Tenant) ([]transport.AppInfo, *kernel.Error) {
+	rt.metadata(transport.Route{Pattern: "GET /v1/apps", Summary: "The tenant's apps from their manifests", Answer: []transport.AppInfo{}}, translating(func(_ *http.Request, _ platform.Member, t *Tenant) ([]transport.AppInfo, *platform.Error) {
 		return t.Apps(), nil
 	}))
-	rt.metadata(transport.Route{Pattern: "GET /v1/words", Summary: "An app's declaration texts (?app=, default build: what the tenant defined) with what every language says for each (administrators)", Query: []transport.Param{{Name: "app", Description: "App ID"}}, Answer: transport.WordsView{}}, transport.Answering(func(r *http.Request, m platform.Member, t *Tenant) (transport.WordsView, *kernel.Error) {
+	rt.metadata(transport.Route{Pattern: "GET /v1/words", Summary: "An app's declaration texts (?app=, default build: what the tenant defined) with what every language says for each (administrators)", Query: []transport.Param{{Name: "app", Description: "App ID"}}, Answer: transport.WordsView{}}, transport.Answering(func(r *http.Request, m platform.Member, t *Tenant) (transport.WordsView, *platform.Error) {
 		if !m.Holds(controlowner.PlatformApp, controlowner.Admin) {
-			return transport.WordsView{}, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_POLICY_DENIED}
+			return transport.WordsView{}, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_POLICY_DENIED}
 		}
 		return t.Words(cmp.Or(r.URL.Query().Get("app"), controlowner.BuildApp)), nil
 	}))
-	rt.metadata(transport.Route{Pattern: "GET /v1/protocols", Summary: "The protocols apps provide and consume, and the provider bound to each", Answer: []actions.ProtocolInfo{}}, translating(func(_ *http.Request, m platform.Member, t *Tenant) ([]actions.ProtocolInfo, *kernel.Error) {
+	rt.metadata(transport.Route{Pattern: "GET /v1/protocols", Summary: "The protocols apps provide and consume, and the provider bound to each", Answer: []actions.ProtocolInfo{}}, translating(func(_ *http.Request, m platform.Member, t *Tenant) ([]actions.ProtocolInfo, *platform.Error) {
 		protocols := t.router().Protocols()
 		if !m.Holds(controlowner.BuildApp, "builder") && !m.Holds(controlowner.PlatformApp, controlowner.Admin) {
 			for i := range protocols {
@@ -55,10 +54,10 @@ func (h *Host) routesDiscovery(rt *routes) {
 		return protocols, nil
 	}))
 	rt.metadata(transport.Route{Pattern: "GET /v1/entities", Summary: "The entity types of the apps the caller holds a role in, with their meaning, in their language", Answer: []platform.EntityInfo{}}, viewRoute("entities", "Entity declarations are unavailable"))
-	rt.handle(transport.Route{Pattern: "GET /v1/dispatches/{id}/targets", Summary: "Ready external target identities available to the dispatch's current human reviewer; no environment addresses or credentials", Answer: []build.DispatchTarget{}}, saying(func(r *http.Request, m platform.Member, t *Tenant) ([]build.DispatchTarget, *kernel.Error) {
+	rt.handle(transport.Route{Pattern: "GET /v1/dispatches/{id}/targets", Summary: "Ready external target identities available to the dispatch's current human reviewer; no environment addresses or credentials", Answer: []build.DispatchTarget{}}, saying(func(r *http.Request, m platform.Member, t *Tenant) ([]build.DispatchTarget, *platform.Error) {
 		return t.DispatchTargets(m, r.PathValue("id"), h.Now())
 	}))
-	rt.handle(transport.Route{Pattern: "GET /v1/applications/{app}/{name}/runs", Summary: "Authorized runs related to current or retained application resources; shared use does not imply exclusive application origin", Answer: platform.ApplicationRunPage{}, Query: []transport.Param{{Name: "offset", Description: "Nonnegative run offset"}, {Name: "limit", Description: "1–100, default 50"}, {Name: "kind", Description: "Run kind"}, {Name: "state", Description: "Original owner state"}, {Name: "subject", Description: "Exact type/id"}, {Name: "since", Description: "Inclusive RFC3339 startup time"}, {Name: "until", Description: "Inclusive RFC3339 startup time"}}}, transport.Answering(func(r *http.Request, m platform.Member, t *Tenant) (platform.ApplicationRunPage, *kernel.Error) {
+	rt.handle(transport.Route{Pattern: "GET /v1/applications/{app}/{name}/runs", Summary: "Authorized runs related to current or retained application resources; shared use does not imply exclusive application origin", Answer: platform.ApplicationRunPage{}, Query: []transport.Param{{Name: "offset", Description: "Nonnegative run offset"}, {Name: "limit", Description: "1–100, default 50"}, {Name: "kind", Description: "Run kind"}, {Name: "state", Description: "Original owner state"}, {Name: "subject", Description: "Exact type/id"}, {Name: "since", Description: "Inclusive RFC3339 startup time"}, {Name: "until", Description: "Inclusive RFC3339 startup time"}}}, transport.Answering(func(r *http.Request, m platform.Member, t *Tenant) (platform.ApplicationRunPage, *platform.Error) {
 		offset, limit := transport.PageBounds(r, 0, 50)
 		filter, refusal := transport.ApplicationRunFilterOf(r.URL.Query())
 		if refusal != nil {
@@ -66,14 +65,14 @@ func (h *Host) routesDiscovery(rt *routes) {
 		}
 		return t.ApplicationRuns(m, applicationRef(r), offset, limit, h.Now(), filter)
 	}))
-	rt.handle(transport.Route{Pattern: "GET /v1/applications/{app}/{name}/runtime", Summary: "Installed application artifact, retained versions, authorized capacity and original-owner recovery projection", Answer: platform.ApplicationRuntime{}}, transport.Answering(func(r *http.Request, m platform.Member, t *Tenant) (platform.ApplicationRuntime, *kernel.Error) {
+	rt.handle(transport.Route{Pattern: "GET /v1/applications/{app}/{name}/runtime", Summary: "Installed application artifact, retained versions, authorized capacity and original-owner recovery projection", Answer: platform.ApplicationRuntime{}}, transport.Answering(func(r *http.Request, m platform.Member, t *Tenant) (platform.ApplicationRuntime, *platform.Error) {
 		return t.ApplicationRuntimeOf(m, applicationRef(r), h.Now())
 	}))
-	rt.handle(transport.Route{Pattern: "GET /v1/applications/{app}/{name}/records/{type}/{id}/diagnostic", Summary: "Original authorized record decisions and application runs without time-based execution attribution", Answer: platform.ApplicationDiagnostic{}}, transport.Answering(func(r *http.Request, m platform.Member, t *Tenant) (platform.ApplicationDiagnostic, *kernel.Error) {
+	rt.handle(transport.Route{Pattern: "GET /v1/applications/{app}/{name}/records/{type}/{id}/diagnostic", Summary: "Original authorized record decisions and application runs without time-based execution attribution", Answer: platform.ApplicationDiagnostic{}}, transport.Answering(func(r *http.Request, m platform.Member, t *Tenant) (platform.ApplicationDiagnostic, *platform.Error) {
 		return t.ApplicationRecordDiagnostic(m, applicationRef(r), r.PathValue("type"), r.PathValue("id"), h.Now())
 	}))
 	rt.metadata(transport.Route{Pattern: "GET /v1/definitions", Summary: "Installed object, action and page definitions the caller may discover, with qualified references and dependencies", Answer: []platform.Definition{}}, viewRoute("definitions", "Asset discovery is unavailable because accepted owner metadata could not be read"))
-	rt.metadata(transport.Route{Pattern: "GET /v1/dependencies", Summary: "Authorized declarations with forward dependencies and reverse impact from the same frozen description", Query: []transport.Param{{Name: "app", Description: "Asset owner; used alone to select an application"}, {Name: "kind", Description: "Focused asset kind"}, {Name: "name", Description: "Focused asset name"}}, Answer: releaseowner.DependencyView{}}, translating(func(r *http.Request, m platform.Member, t *Tenant) (releaseowner.DependencyView, *kernel.Error) {
+	rt.metadata(transport.Route{Pattern: "GET /v1/dependencies", Summary: "Authorized declarations with forward dependencies and reverse impact from the same frozen description", Query: []transport.Param{{Name: "app", Description: "Asset owner; used alone to select an application"}, {Name: "kind", Description: "Focused asset kind"}, {Name: "name", Description: "Focused asset name"}}, Answer: releaseowner.DependencyView{}}, translating(func(r *http.Request, m platform.Member, t *Tenant) (releaseowner.DependencyView, *platform.Error) {
 		query := r.URL.Query()
 		var focus platform.AssetRef
 		if query.Get("kind") != "" || query.Get("name") != "" {
@@ -81,13 +80,13 @@ func (h *Host) routesDiscovery(rt *routes) {
 		}
 		return t.describer().DependencyView(m, focus, query.Get("app"))
 	}))
-	rt.metadata(transport.Route{Pattern: "GET /v1/provides", Summary: "Capabilities offered by the same authorized asset descriptions, optionally selected by kind and side", Query: []transport.Param{{Name: "kind", Description: "action, query, function, operation, protocol or interface"}, {Name: "side", Description: "pure, effect or authoritative"}}, Answer: []releaseowner.ProvidedCapability{}}, translating(func(r *http.Request, m platform.Member, t *Tenant) ([]releaseowner.ProvidedCapability, *kernel.Error) {
+	rt.metadata(transport.Route{Pattern: "GET /v1/provides", Summary: "Capabilities offered by the same authorized asset descriptions, optionally selected by kind and side", Query: []transport.Param{{Name: "kind", Description: "action, query, function, operation, protocol or interface"}, {Name: "side", Description: "pure, effect or authoritative"}}, Answer: []releaseowner.ProvidedCapability{}}, translating(func(r *http.Request, m platform.Member, t *Tenant) ([]releaseowner.ProvidedCapability, *platform.Error) {
 		return t.describer().ProvidedCapabilities(m, r.URL.Query().Get("kind"), r.URL.Query().Get("side"))
 	}))
-	rt.metadata(transport.Route{Pattern: "GET /v1/pages/{app}/{name}/{contentVersion}", Summary: "Read exact published page content through current member discovery permissions", Answer: platform.Definition{}}, translating(func(r *http.Request, m platform.Member, t *Tenant) (platform.Definition, *kernel.Error) {
+	rt.metadata(transport.Route{Pattern: "GET /v1/pages/{app}/{name}/{contentVersion}", Summary: "Read exact published page content through current member discovery permissions", Answer: platform.Definition{}}, translating(func(r *http.Request, m platform.Member, t *Tenant) (platform.Definition, *platform.Error) {
 		return t.PageContentDefinition(m, platform.AssetRef{App: r.PathValue("app"), Kind: platform.AssetPage, Name: r.PathValue("name")}, r.PathValue("contentVersion"))
 	}))
-	rt.metadata(transport.Route{Pattern: "GET /v1/capabilities", Summary: "Typed Block projections of the caller's installed owner capabilities", Answer: []platform.CapabilityDescriptor{}}, translating(func(_ *http.Request, m platform.Member, t *Tenant) ([]platform.CapabilityDescriptor, *kernel.Error) {
+	rt.metadata(transport.Route{Pattern: "GET /v1/capabilities", Summary: "Typed Block projections of the caller's installed owner capabilities", Answer: []platform.CapabilityDescriptor{}}, translating(func(_ *http.Request, m platform.Member, t *Tenant) ([]platform.CapabilityDescriptor, *platform.Error) {
 		return t.capabilities(m), nil
 	}))
 	rt.metadata(transport.Route{Pattern: "GET /v1/capabilities/{app}/{kind}/{name}", Summary: "Read a callable owner's exact retained input/output schema", Query: []transport.Param{{Name: "version", Description: "Retained query/compute/AI ordinal; zero selects code declarations or the installed compute/AI version"}}, Answer: platform.CapabilityDescriptor{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
@@ -117,29 +116,29 @@ func viewRoute(kind, failure string) func(http.ResponseWriter, *http.Request, pl
 	}
 }
 
-func translating[R any](f func(*http.Request, platform.Member, *Tenant) (R, *kernel.Error)) func(http.ResponseWriter, *http.Request, platform.Member, *Tenant) {
+func translating[R any](f func(*http.Request, platform.Member, *Tenant) (R, *platform.Error)) func(http.ResponseWriter, *http.Request, platform.Member, *Tenant) {
 	return func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
 		out, refusal := f(r, m, t)
 		t.answerIn(w, r, m, out, refusal)
 	}
 }
 
-func (t *Tenant) answerIn(w http.ResponseWriter, r *http.Request, m platform.Member, answer any, refusal *kernel.Error) {
+func (t *Tenant) answerIn(w http.ResponseWriter, r *http.Request, m platform.Member, answer any, refusal *platform.Error) {
 	if refusal == nil {
 		answer = t.i18n.Translate(answer, t.Language(m, r))
 	}
 	transport.Answer(w, answer, refusal)
 }
 
-func saying[R any](f func(*http.Request, platform.Member, *Tenant) (R, *kernel.Error)) func(http.ResponseWriter, *http.Request, platform.Member, *Tenant) {
+func saying[R any](f func(*http.Request, platform.Member, *Tenant) (R, *platform.Error)) func(http.ResponseWriter, *http.Request, platform.Member, *Tenant) {
 	return func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
 		out, refusal := f(r, m, t)
 		transport.Answer(w, out, t.i18n.Said(refusal, t.Language(m, r)))
 	}
 }
 
-func (t *Tenant) DispatchTargets(member platform.Member, id string, at time.Time) ([]build.DispatchTarget, *kernel.Error) {
-	return recordRead(t, context.Background(), func(t *Tenant) ([]build.DispatchTarget, *kernel.Error) {
+func (t *Tenant) DispatchTargets(member platform.Member, id string, at time.Time) ([]build.DispatchTarget, *platform.Error) {
+	return recordRead(t, context.Background(), func(t *Tenant) ([]build.DispatchTarget, *platform.Error) {
 		return build.DispatchTargets(build.DispatchTargetHooks{
 			Admits:     t.Admits,
 			Caller:     func() platform.Caller { return platform.NewCaller(runtime{t: t}, member, build.ID, false, false) },
@@ -168,7 +167,7 @@ func (t *Tenant) WriteView(kind string, m platform.Member, lang string, w http.R
 
 func (h *Host) routesApplications(rt *routes) {
 	rt.metadata(transport.Route{Pattern: "GET /v1/applications", Summary: "Every application this member may open, with the pages each offers", Answer: []platform.ApplicationView{}},
-		translating(func(_ *http.Request, m platform.Member, t *Tenant) ([]platform.ApplicationView, *kernel.Error) {
+		translating(func(_ *http.Request, m platform.Member, t *Tenant) ([]platform.ApplicationView, *platform.Error) {
 			return t.Applications(m), nil
 		}))
 	rt.metadata(transport.Route{Pattern: "POST /v1/page-view", Summary: "One page of an application resolved for the caller: its object, fields and the actions they may take", Body: PageRequest{}, Answer: platform.PageView{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {

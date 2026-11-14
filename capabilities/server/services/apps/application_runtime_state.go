@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"google.golang.org/protobuf/encoding/protojson"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 	"platformserver/kernel/acceptedformat"
 	"platformserver/platform"
 	"platformserver/services/actions"
@@ -44,7 +43,7 @@ func (ctx Context) maintenance(artifact platform.ApplicationArtifact) platform.A
 	return out
 }
 
-func (ctx Context) Runtime(m platform.Member, ref platform.AssetRef, now time.Time) (platform.ApplicationRuntime, *kernel.Error) {
+func (ctx Context) Runtime(m platform.Member, ref platform.AssetRef, now time.Time) (platform.ApplicationRuntime, *platform.Error) {
 	out := platform.ApplicationRuntime{Scope: "authorized", State: "healthy", Versions: []platform.ApplicationVersion{}, Data: []platform.ApplicationData{}, Warnings: []platform.ApplicationWarning{}}
 	if ref.Kind != platform.AssetApp || ref.Check() != nil {
 		return out, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Choose a published application")
@@ -231,7 +230,7 @@ func (ctx Context) Runtime(m platform.Member, ref platform.AssetRef, now time.Ti
 		out.Artifact.Profile = &profile
 	}
 	out.Maintenance = ctx.maintenance(out.Artifact)
-	var refusal *kernel.Error
+	var refusal *platform.Error
 	out.AI, refusal = ctx.AI(m, candidate.Assets, visible)
 	if refusal != nil {
 		return out, refusal

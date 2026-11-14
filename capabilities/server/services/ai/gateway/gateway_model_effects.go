@@ -3,7 +3,6 @@ package aigateway
 import (
 	"encoding/json"
 	"fmt"
-	"platformkernel/kernel"
 	"strconv"
 	"strings"
 
@@ -85,7 +84,7 @@ func (ask ModelAsk) Submission(tenant string, x platform.Effect, o platform.Outc
 		Schema: &pb.SchemaRef{Name: ask.Reply, Version: 1}, IdempotencyKey: "answer:" + x.ID, Payload: payload}
 }
 
-func (ask ModelAsk) EvaluationDrift(model platform.AIModel, provider platform.AIProvider, rebind func(platform.ModelOptions) (platform.AIModelBinding, *kernel.Error)) string {
+func (ask ModelAsk) EvaluationDrift(model platform.AIModel, provider platform.AIProvider, rebind func(platform.ModelOptions) (platform.AIModelBinding, *platform.Error)) string {
 	f := ask.EvaluationFunction
 	if f == nil || f.Check() != nil || ask.Prompt.System != f.SystemPrompt() || ask.Prompt.MaxTokens != f.MaxTokens || len(ask.Prompt.User) > f.MaxInputBytes {
 		return "the evaluation function binding changed"
@@ -115,7 +114,7 @@ func AnswerSubmission(tenant string, x platform.Effect, o platform.Outcome, usag
 	return owner, ask.Submission(tenant, x, o, usage, authority)
 }
 
-func (r Resolver) FunctionDispatch(effect platform.Effect, options platform.ModelOptions, stage string) (agents.FunctionDispatch, *kernel.Error) {
+func (r Resolver) FunctionDispatch(effect platform.Effect, options platform.ModelOptions, stage string) (agents.FunctionDispatch, *platform.Error) {
 	var ask ModelAsk
 	_ = json.Unmarshal([]byte(effect.Body), &ask)
 	binding, provider, problem := r.Resolve("generation", ask.Model, options)

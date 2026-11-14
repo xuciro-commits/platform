@@ -8,7 +8,6 @@ import (
 	"google.golang.org/protobuf/proto"
 	"maps"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 	"platformserver/platform"
 	"slices"
 	"time"
@@ -19,7 +18,7 @@ type deadLetterReplayPreparation struct {
 	asset platform.FlowDeadLetterAsset
 }
 
-func (f *Flows) PlanDeadLetterReplay(x FlowInstance, c platform.Caller, asset platform.FlowDeadLetterAsset) (platform.FlowDeadLetterReplayPreparation, *kernel.Error) {
+func (f *Flows) PlanDeadLetterReplay(x FlowInstance, c platform.Caller, asset platform.FlowDeadLetterAsset) (platform.FlowDeadLetterReplayPreparation, *platform.Error) {
 	d := f.def(x.Flow, x.Version)
 	if asset.Instance != x.ID || asset.Flow != x.Flow || asset.Version != x.Version || asset.OnBehalf != x.OnBehalf || asset.Replayed || asset.Archived || asset.Withheld || asset.Action != "" || !json.Valid([]byte(asset.Letter.Value)) || d == nil || d.Continuous == nil || !d.Continuous.DeadLetterRetry || d.Continuous.Window == nil {
 		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The retained signal dead letter is unavailable for replay")
@@ -35,7 +34,7 @@ func (f *Flows) PlanDeadLetterReplay(x FlowInstance, c platform.Caller, asset pl
 	return &deadLetterReplayPreparation{batch: batch, asset: asset}, nil
 }
 
-func (p *deadLetterReplayPreparation) Prepare(sub *pb.Submission, at time.Time, store platform.FlowFrameStore) (platform.FlowPreparedBatch, *kernel.Error) {
+func (p *deadLetterReplayPreparation) Prepare(sub *pb.Submission, at time.Time, store platform.FlowFrameStore) (platform.FlowPreparedBatch, *platform.Error) {
 	if !p.batch.owner.deadLetterReplayAllowed(p.batch.caller, p.asset, at) {
 		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The retained signal dead letter is unavailable for replay")
 	}
@@ -79,8 +78,8 @@ func (ss *session) deadLetterAct(x *FlowInstance, token *Token, step *platform.S
 	x.Seq++
 }
 
-func (f *Flows) replayDeadLetter(c platform.Caller, sub *pb.Submission, now time.Time) (*pb.ChangeRecord, *kernel.Error) {
-	return f.ledger.Receive(c, sub, now, nil, func() (func(*pb.ChangeRecord), *kernel.Error) {
+func (f *Flows) replayDeadLetter(c platform.Caller, sub *pb.Submission, now time.Time) (*pb.ChangeRecord, *platform.Error) {
+	return f.ledger.Receive(c, sub, now, nil, func() (func(*pb.ChangeRecord), *platform.Error) {
 		asset, ok := platform.Get[platform.FlowDeadLetterAsset](c, sub.GetTarget().GetId())
 		if !ok {
 			return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_NOT_FOUND, "The Flow dead letter is unavailable")
@@ -166,7 +165,7 @@ func (f *Flows) deadLetterReplayAllowed(c platform.Caller, asset platform.FlowDe
 	return true
 }
 
-func (f *Flows) deadLetterArchives(c platform.Caller, x FlowInstance, now time.Time, pending []platform.FlowDeadLetterAsset) ([]platform.FlowDeadLetterAsset, []platform.FlowDeadLetterAsset, *kernel.Error) {
+func (f *Flows) deadLetterArchives(c platform.Caller, x FlowInstance, now time.Time, pending []platform.FlowDeadLetterAsset) ([]platform.FlowDeadLetterAsset, []platform.FlowDeadLetterAsset, *platform.Error) {
 	d := f.def(x.Flow, x.Version)
 	if d == nil || d.Continuous == nil {
 		return nil, pending, nil
@@ -231,7 +230,7 @@ func (f *Flows) deadLetterArchives(c platform.Caller, x FlowInstance, now time.T
 	return archived, pending, nil
 }
 
-func (ss *session) retainDeadLetters() *kernel.Error {
+func (ss *session) retainDeadLetters() *platform.Error {
 	groups := map[string]*FlowInstance{}
 	for id, x := range ss.changed {
 		groups[id] = x
@@ -281,7 +280,7 @@ func (ss *session) retainDeadLetters() *kernel.Error {
 	return nil
 }
 
-func (f *Flows) retainExpiredDeadLetters(c platform.Caller, now time.Time) (bool, *kernel.Error) {
+func (f *Flows) retainExpiredDeadLetters(c platform.Caller, now time.Time) (bool, *platform.Error) {
 	for offset := 0; ; {
 		rows, total, err := platform.Find[FlowInstance](c, platform.Query{Archived: true, Sort: []string{"id"}, Limit: 128, Offset: offset})
 		if err != nil {
@@ -295,7 +294,7 @@ func (f *Flows) retainExpiredDeadLetters(c platform.Caller, now time.Time) (bool
 			if len(archived) == 0 {
 				continue
 			}
-			if _, err := f.decide(c, SchemaFlowStep, x.ID, fmt.Sprintf("%s:%d", x.ID, x.Revision+1), now, func(ss *session) *kernel.Error { ss.load(x.ID); return nil }); err != nil {
+			if _, err := f.decide(c, SchemaFlowStep, x.ID, fmt.Sprintf("%s:%d", x.ID, x.Revision+1), now, func(ss *session) *platform.Error { ss.load(x.ID); return nil }); err != nil {
 				return false, err
 			}
 			return true, nil
@@ -305,7 +304,7 @@ func (f *Flows) retainExpiredDeadLetters(c platform.Caller, now time.Time) (bool
 			return false, nil
 		}
 		if len(rows) == 0 {
-			return false, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT, Message: "The retained Flow inventory is incomplete"}
+			return false, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT, Message: "The retained Flow inventory is incomplete"}
 		}
 	}
 }

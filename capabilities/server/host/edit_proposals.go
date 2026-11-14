@@ -6,7 +6,6 @@ import (
 	"net/http"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 	"platformserver/kernel/transport"
 	"platformserver/platform"
 	"platformserver/services/objects"
@@ -17,14 +16,14 @@ type ApplyEditsRequest struct {
 	Step string `json:"step,omitempty"`
 }
 
-func (t *Tenant) readEditProposal(ctx context.Context, member platform.Member, engine, id, step string) (platform.EditProposal, *kernel.Error) {
+func (t *Tenant) readEditProposal(ctx context.Context, member platform.Member, engine, id, step string) (platform.EditProposal, *platform.Error) {
 	source := objects.EditProposalSource{
-		Operation: func() (platform.OperationResult, *kernel.Error) { return t.ReadOperation(ctx, member, id) },
-		AI:        func() (platform.OperationResult, *kernel.Error) { return t.ReadCapabilityAI(ctx, member, id, Now()) },
+		Operation: func() (platform.OperationResult, *platform.Error) { return t.ReadOperation(ctx, member, id) },
+		AI:        func() (platform.OperationResult, *platform.Error) { return t.ReadCapabilityAI(ctx, member, id, Now()) },
 	}
 	if engine == "flow" {
-		return recordRead(t, ctx, func(t *Tenant) (platform.EditProposal, *kernel.Error) {
-			source.FlowRun = func() (platform.FlowInstance, *kernel.Error) {
+		return recordRead(t, ctx, func(t *Tenant) (platform.EditProposal, *platform.Error) {
+			source.FlowRun = func() (platform.FlowInstance, *platform.Error) {
 				view, refusal := t.recordOf(member, platform.FlowInstanceType, id, Now())
 				if refusal != nil {
 					return platform.FlowInstance{}, refusal

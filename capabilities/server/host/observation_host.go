@@ -6,7 +6,6 @@ import (
 	"net/http"
 	"time"
 
-	"platformkernel/kernel"
 	"platformserver/platform"
 	dataowner "platformserver/services/data"
 	"platformserver/services/resources/authoring"
@@ -17,24 +16,24 @@ func (t *Tenant) observationSources() dataowner.Observations {
 		return platform.NewCaller(runtime{t: t, scoped: true}, m, app, false, false)
 	}
 	return dataowner.NewObservations(dataowner.ObservationHost{
-		ObservationMember: func(m platform.Member) (platform.Member, *kernel.Error) {
+		ObservationMember: func(m platform.Member) (platform.Member, *platform.Error) {
 			m = t.authorizationMember(m)
 			return m, t.Admits(m)
 		},
 		ObservationDefinitions:  t.observationDefinitions,
 		ObservationSourceActive: func(record string) bool { return t.Projection.ObservationSourceActive(record) },
 		Entity:                  t.Entity,
-		AuthorizeObservation: func(m platform.Member, app, permission, kind string, roles []string, at time.Time) *kernel.Error {
+		AuthorizeObservation: func(m platform.Member, app, permission, kind string, roles []string, at time.Time) *platform.Error {
 			return authorizationRefusal(t.authorizeNative(caller(m, app), permission, kind, roles, true, authorizationDetails{At: at}))
 		},
-		AuthorizeRead: func(m platform.Member, app string, q platform.AuthzRequest, at time.Time) (bool, *kernel.Error) {
+		AuthorizeRead: func(m platform.Member, app string, q platform.AuthzRequest, at time.Time) (bool, *platform.Error) {
 			decision := t.authorizeFrom(t.Projection, caller(m, app), q, at, false)
 			return len(decision.Withheld) > 0, authorizationRefusal(decision)
 		},
-		ReadRecord: func(m platform.Member, app, typ, id string, at time.Time) (json.RawMessage, *kernel.Error) {
+		ReadRecord: func(m platform.Member, app, typ, id string, at time.Time) (json.RawMessage, *platform.Error) {
 			return t.objectOwner(t.Projection).ReadRecordFrom(t.Projection, caller(m, app), typ, id, at)
 		},
-		ObservationConnections: func() ([]dataowner.Connection, int, *kernel.Error) {
+		ObservationConnections: func() ([]dataowner.Connection, int, *platform.Error) {
 			return platform.Find[dataowner.Connection](t.automation(build.ID, false), platform.Query{Limit: 500})
 		},
 		DataOwner:        t.DataOwner,

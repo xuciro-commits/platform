@@ -1,20 +1,19 @@
 package automation
 
 import (
-	"platformkernel/kernel"
 	"platformserver/platform"
 	"slices"
 )
 
 type AcceptedEventPlanner struct {
 	Routed    func(platform.Event) []string
-	Effects   func(e platform.Event, names []string) ([]platform.Effect, *kernel.Error)
+	Effects   func(e platform.Event, names []string) ([]platform.Effect, *platform.Error)
 	Apps      func() []platform.App
 	Listeners []string
 	Listener  func(id string) platform.Listener
 }
 
-func (p AcceptedEventPlanner) Plan(e platform.Event) (platform.AcceptedEventPlan, *kernel.Error) {
+func (p AcceptedEventPlanner) Plan(e platform.Event) (platform.AcceptedEventPlan, *platform.Error) {
 	names := append([]string{e.Record.GetSubmission().GetSchema().GetName()}, p.Routed(e)...)
 	effects, refusal := p.Effects(e, names)
 	if refusal != nil {

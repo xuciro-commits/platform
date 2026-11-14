@@ -8,11 +8,10 @@ import (
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 	"platformserver/platform"
 )
 
-func (b *Runtime) txnPost(c platform.Caller, r *pb.ChangeRecord, step platform.TxnStep, scope platform.RuleReadSpec, subject any, inputs map[string]any, now time.Time, reserve func(string) *kernel.Error) (string, *kernel.Error) {
+func (b *Runtime) txnPost(c platform.Caller, r *pb.ChangeRecord, step platform.TxnStep, scope platform.RuleReadSpec, subject any, inputs map[string]any, now time.Time, reserve func(string) *platform.Error) (string, *platform.Error) {
 	p := step.Post
 	entity, found := b.Entities[step.Target.Type]
 	if !found {
@@ -106,7 +105,7 @@ func constructionText(value any) string {
 	}
 }
 
-func txnCallValue(call platform.TxnCall, raw json.RawMessage) (platform.ExprValue, *kernel.Error) {
+func txnCallValue(call platform.TxnCall, raw json.RawMessage) (platform.ExprValue, *platform.Error) {
 	var value any
 	decoder := json.NewDecoder(strings.NewReader(string(raw)))
 	decoder.UseNumber()
@@ -134,7 +133,7 @@ func txnCallValue(call platform.TxnCall, raw json.RawMessage) (platform.ExprValu
 	return platform.ExprPresent(call.ResultType.Kind, value), nil
 }
 
-func (b *Runtime) txnParameters(c platform.Caller, sets []platform.TxnSet, scope platform.RuleReadSpec, subject any, inputs map[string]any, now time.Time) (json.RawMessage, *kernel.Error) {
+func (b *Runtime) txnParameters(c platform.Caller, sets []platform.TxnSet, scope platform.RuleReadSpec, subject any, inputs map[string]any, now time.Time) (json.RawMessage, *platform.Error) {
 	values := map[string]any{}
 	for _, set := range sets {
 		expr, err := platform.DispatchParameter(set, scope)

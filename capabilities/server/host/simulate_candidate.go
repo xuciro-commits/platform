@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 	"platformserver/platform"
 	trialowner "platformserver/services/devops/trials"
 	functionauthoring "platformserver/services/functions/authoring"
@@ -18,12 +17,12 @@ type stagedCandidate struct {
 	reader *Tenant
 }
 
-func (t *Tenant) SimulateCandidate(builder platform.Member, request trialowner.CandidateSimulationRequest) (trialowner.CandidateSimulation, *kernel.Error) {
+func (t *Tenant) SimulateCandidate(builder platform.Member, request trialowner.CandidateSimulationRequest) (trialowner.CandidateSimulation, *platform.Error) {
 	return t.simulateCandidate(builder, request, nil)
 }
 
-func (t *Tenant) simulateCandidate(builder platform.Member, request trialowner.CandidateSimulationRequest, staged *stagedCandidate) (trialowner.CandidateSimulation, *kernel.Error) {
-	return recordRead(t, context.Background(), func(t *Tenant) (trialowner.CandidateSimulation, *kernel.Error) {
+func (t *Tenant) simulateCandidate(builder platform.Member, request trialowner.CandidateSimulationRequest, staged *stagedCandidate) (trialowner.CandidateSimulation, *platform.Error) {
+	return recordRead(t, context.Background(), func(t *Tenant) (trialowner.CandidateSimulation, *platform.Error) {
 		if err := t.buildAllowed(builder, "POST /v1/simulate/candidate", build.Builder); err != nil {
 			return trialowner.CandidateSimulation{}, err
 		}
@@ -57,14 +56,14 @@ func (t *Tenant) simulateCandidate(builder platform.Member, request trialowner.C
 			},
 			Modules:    func(environment simulationEnvironment) map[string][]byte { return environment.Modules },
 			ReadModule: func(module string) ([]byte, error) { return t.artifacts().Read(context.Background(), module) },
-			Run: func(candidate platform.ReleaseCandidate, environment simulationEnvironment, actor platform.Member, members []platform.Member, functionName string) (trialowner.CandidateSimulation, *kernel.Error) {
+			Run: func(candidate platform.ReleaseCandidate, environment simulationEnvironment, actor platform.Member, members []platform.Member, functionName string) (trialowner.CandidateSimulation, *platform.Error) {
 				return runCandidateSimulation(request, candidate, environment, actor, members, functionName)
 			},
 		})
 	})
 }
 
-func runCandidateSimulation(request trialowner.CandidateSimulationRequest, candidate platform.ReleaseCandidate, environment simulationEnvironment, m platform.Member, members []platform.Member, functionName string) (trialowner.CandidateSimulation, *kernel.Error) {
+func runCandidateSimulation(request trialowner.CandidateSimulationRequest, candidate platform.ReleaseCandidate, environment simulationEnvironment, m platform.Member, members []platform.Member, functionName string) (trialowner.CandidateSimulation, *platform.Error) {
 	compose := func() (trialowner.Runtime, error) {
 		sandbox, err := candidateTestTenantWithEnvironment(candidate, m, environment, slices.DeleteFunc(slices.Clone(members), func(actor platform.Member) bool { return actor.ID == m.ID })...)
 		if err != nil {
@@ -87,13 +86,13 @@ func (t *Tenant) trialSandbox() trialowner.Sandbox {
 			t.simulationTrace = record
 			return previous
 		},
-		Read: func(actor platform.Member, typ, id string, now time.Time) (json.RawMessage, *kernel.Error) {
+		Read: func(actor platform.Member, typ, id string, now time.Time) (json.RawMessage, *platform.Error) {
 			return t.caller(actor, t.App(build.ID), false).ReadRecord(typ, id, now)
 		},
 		Flow: func(id string) (platform.FlowInstance, bool) {
 			return platform.Get[platform.FlowInstance](t.automation(platform.FlowApp, false), id)
 		},
-		Current: func(actor platform.Member, typ, id string, now time.Time) *kernel.Error {
+		Current: func(actor platform.Member, typ, id string, now time.Time) *platform.Error {
 			_, refusal := t.recordOf(actor, typ, id, now)
 			return refusal
 		},
@@ -103,7 +102,7 @@ func (t *Tenant) trialSandbox() trialowner.Sandbox {
 			}
 			return ""
 		},
-		Submit: func(actor platform.Member, s *pb.Submission, now time.Time) (*kernel.Error, []platform.FieldIssue) {
+		Submit: func(actor platform.Member, s *pb.Submission, now time.Time) (*platform.Error, []platform.FieldIssue) {
 			_, refusal, issues := t.submitDiagnosed(actor, s, now)
 			return refusal, issues
 		},
@@ -113,7 +112,7 @@ func (t *Tenant) trialSandbox() trialowner.Sandbox {
 		Function: func(actor platform.Member, fixture platform.FunctionFixture, now time.Time) (bool, error) {
 			return settleFunctionFixture(t, actor, fixture, now)
 		},
-		Records: func(actor platform.Member, typ string, q platform.Query, now time.Time) ([]any, int, *kernel.Error) {
+		Records: func(actor platform.Member, typ string, q platform.Query, now time.Time) ([]any, int, *platform.Error) {
 			page, refusal := t.objectOwner(t.Projection).Records(actor, typ, q, now)
 			return page.Records, page.Total, refusal
 		},

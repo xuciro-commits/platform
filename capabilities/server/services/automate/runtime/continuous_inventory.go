@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"log"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 	"platformserver/platform"
 	"slices"
 	"strings"
@@ -21,7 +20,7 @@ type ContinuousRetry struct {
 type ContinuousCleanup struct {
 	Plan     platform.FlowArtifactCleanupPreparation
 	Instance string
-	Refusal  *kernel.Error
+	Refusal  *platform.Error
 }
 
 type ContinuousInventory struct {
@@ -37,7 +36,7 @@ type ContinuousWork struct {
 	Cleanups []ContinuousCleanup
 }
 
-func (i ContinuousInventory) Scan(now time.Time) (ContinuousWork, *kernel.Error) {
+func (i ContinuousInventory) Scan(now time.Time) (ContinuousWork, *platform.Error) {
 	var work ContinuousWork
 	instances, total, queryErr := platform.Find[platform.FlowInstance](i.Caller, platform.Query{Sort: []string{"id"}})
 	if queryErr != nil {
@@ -79,7 +78,7 @@ func (i ContinuousInventory) Scan(now time.Time) (ContinuousWork, *kernel.Error)
 	return work, nil
 }
 
-func ReplayBatch(f platform.ContinuousFlowOwner, tenant string, before FlowInstance, batch platform.FlowBatch) (platform.FlowBatchOutcome, bool, *kernel.Error) {
+func ReplayBatch(f platform.ContinuousFlowOwner, tenant string, before FlowInstance, batch platform.FlowBatch) (platform.FlowBatchOutcome, bool, *platform.Error) {
 	digest, err := json.Marshal(batch)
 	if err != nil {
 		return platform.FlowBatchOutcome{}, false, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "A batch needs valid JSON signal values")
@@ -97,7 +96,7 @@ func ReplayBatch(f platform.ContinuousFlowOwner, tenant string, before FlowInsta
 	return platform.FlowBatchOutcome{Cursor: batch.ID}, true, nil
 }
 
-func RetireArtifacts(plan platform.FlowArtifactCleanupPreparation, tenant string, now time.Time, discard func(platform.FlowStateArtifact) error) *kernel.Error {
+func RetireArtifacts(plan platform.FlowArtifactCleanupPreparation, tenant string, now time.Time, discard func(platform.FlowStateArtifact) error) *platform.Error {
 	if plan == nil || plan.Instance() == "" || now.IsZero() {
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Flow artifact cleanup is unavailable")
 	}
@@ -116,7 +115,7 @@ func RetireArtifacts(plan platform.FlowArtifactCleanupPreparation, tenant string
 	return nil
 }
 
-func DrainSource(rounds int, consume func() (platform.FlowBatchOutcome, *kernel.Error)) *kernel.Error {
+func DrainSource(rounds int, consume func() (platform.FlowBatchOutcome, *platform.Error)) *platform.Error {
 	for round := 0; round < rounds; round++ {
 		outcome, refusal := consume()
 		if refusal != nil {
@@ -131,11 +130,11 @@ func DrainSource(rounds int, consume func() (platform.FlowBatchOutcome, *kernel.
 
 type SourcePull struct {
 	Stopped   func() bool
-	Inventory func(now time.Time) (ContinuousWork, *kernel.Error)
-	Retire    func(plan platform.FlowArtifactCleanupPreparation, now time.Time) *kernel.Error
+	Inventory func(now time.Time) (ContinuousWork, *platform.Error)
+	Retire    func(plan platform.FlowArtifactCleanupPreparation, now time.Time) *platform.Error
 	Retry     func(member platform.Member, plan platform.FlowComputeRetryPreparation, now time.Time)
-	Member    func(id string) (platform.Member, *kernel.Error)
-	Consume   func(member platform.Member, id string, now time.Time) (platform.FlowBatchOutcome, *kernel.Error)
+	Member    func(id string) (platform.Member, *platform.Error)
+	Consume   func(member platform.Member, id string, now time.Time) (platform.FlowBatchOutcome, *platform.Error)
 	Collect   func(now time.Time) error
 }
 
@@ -165,7 +164,7 @@ func (p SourcePull) Run(now time.Time) {
 		if refusal != nil {
 			continue
 		}
-		if refusal := DrainSource(8, func() (platform.FlowBatchOutcome, *kernel.Error) {
+		if refusal := DrainSource(8, func() (platform.FlowBatchOutcome, *platform.Error) {
 			return p.Consume(member, instance.ID, now)
 		}); refusal != nil {
 			log.Printf("continuous source intake %s refused: %s", instance.ID, refusal.Code)
@@ -178,10 +177,10 @@ func (p SourcePull) Run(now time.Time) {
 
 type ReplayPreflight struct {
 	Versioned bool
-	Version   func() (*platform.SchemaVersion, *kernel.Error)
+	Version   func() (*platform.SchemaVersion, *platform.Error)
 	Current   func(sub *pb.Submission) *pb.Submission
 	Settled   func() bool
-	Accept    func(sub *pb.Submission, binding *platform.SchemaVersion, schemaRefusal *kernel.Error) (*pb.ChangeRecord, *kernel.Error)
+	Accept    func(sub *pb.Submission, binding *platform.SchemaVersion, schemaRefusal *platform.Error) (*pb.ChangeRecord, *platform.Error)
 }
 
 type ReplayPreflightResult struct {
@@ -191,9 +190,9 @@ type ReplayPreflightResult struct {
 	Handled bool
 }
 
-func (p ReplayPreflight) Run(sub *pb.Submission) (ReplayPreflightResult, *kernel.Error) {
+func (p ReplayPreflight) Run(sub *pb.Submission) (ReplayPreflightResult, *platform.Error) {
 	value := ReplayPreflightResult{Sub: sub}
-	var refusal *kernel.Error
+	var refusal *platform.Error
 	if p.Versioned {
 		value.Binding, refusal = p.Version()
 		if refusal != nil && refusal.Code == pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT {
@@ -214,12 +213,12 @@ type FlowSnapshot struct {
 	Tenant      string
 	Quarantined func() bool
 	Member      func(id string) (platform.Member, bool)
-	Admits      func(platform.Member) *kernel.Error
+	Admits      func(platform.Member) *platform.Error
 	Owner       func() (platform.ContinuousFlowOwner, bool)
-	Record      func(m platform.Member, id string) (any, *kernel.Error)
+	Record      func(m platform.Member, id string) (any, *platform.Error)
 }
 
-func (s FlowSnapshot) Take(m platform.Member, id string) (platform.ContinuousFlowOwner, platform.FlowInstance, platform.Member, *kernel.Error) {
+func (s FlowSnapshot) Take(m platform.Member, id string) (platform.ContinuousFlowOwner, platform.FlowInstance, platform.Member, *platform.Error) {
 	if s.Quarantined() || m.Tenant != s.Tenant {
 		return nil, platform.FlowInstance{}, m, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "The Flow member is unavailable")
 	}
@@ -230,7 +229,7 @@ func (s FlowSnapshot) Take(m platform.Member, id string) (platform.ContinuousFlo
 	}
 	f, ok := s.Owner()
 	if !ok {
-		return nil, platform.FlowInstance{}, current, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_UNKNOWN_SCHEMA}
+		return nil, platform.FlowInstance{}, current, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_UNKNOWN_SCHEMA}
 	}
 	record, refusal := s.Record(current, id)
 	if refusal != nil {
@@ -250,11 +249,11 @@ type ReplayContext struct {
 }
 
 type DeadLetterLoad struct {
-	Record   func(id string) (any, *kernel.Error)
-	Snapshot func(instance string) (platform.FlowInstance, platform.Member, *kernel.Error)
+	Record   func(id string) (any, *platform.Error)
+	Snapshot func(instance string) (platform.FlowInstance, platform.Member, *platform.Error)
 }
 
-func (l DeadLetterLoad) Load(id string) (ReplayContext, *kernel.Error) {
+func (l DeadLetterLoad) Load(id string) (ReplayContext, *platform.Error) {
 	record, refusal := l.Record(id)
 	if refusal != nil {
 		return ReplayContext{}, refusal

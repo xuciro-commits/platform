@@ -5,7 +5,6 @@ import (
 	"strings"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 	"platformserver/platform"
 	controlowner "platformserver/services/security/control"
 )
@@ -79,10 +78,10 @@ type PermissionExplainer struct {
 	Caller func(m platform.Member, app string) platform.Caller
 }
 
-func (e PermissionExplainer) Explain(member, permission string) (Explanation, *kernel.Error) {
+func (e PermissionExplainer) Explain(member, permission string) (Explanation, *platform.Error) {
 	m, ok := e.Member(member)
 	if !ok {
-		return Explanation{}, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
+		return Explanation{}, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
 	}
 	out := Explanation{Member: member, Permission: permission, Roles: []string{}, Allowed: []string{}}
 	if app, name, isRead := strings.Cut(permission, ":read:"); isRead {

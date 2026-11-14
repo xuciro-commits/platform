@@ -7,7 +7,6 @@ import (
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 	"platformserver/kernel/records"
 	"platformserver/platform"
 )
@@ -19,15 +18,15 @@ type OwnedRelations struct {
 	Legacy     func() []platform.RelationLink
 	Readable   func(platform.Caller, string) bool
 	ReadableAt func(m platform.Member, ref string, at time.Time) bool
-	Put        func(platform.Caller, *pb.ChangeRecord, any) *kernel.Error
-	Fail       func(*kernel.Error) *kernel.Error
+	Put        func(platform.Caller, *pb.ChangeRecord, any) *platform.Error
+	Fail       func(*platform.Error) *platform.Error
 }
 
 func (o OwnedRelations) authority(c platform.Caller, receipt *pb.ChangeRecord) bool {
 	return c.Staging() && !c.Replaying && receipt.GetChangeId() != "" && receipt.GetSubmission().GetAuthority() == c.App && receipt.GetSubmission().GetPrincipalId() == c.ID && receipt.GetSubmission().GetTenantId() == o.Tenant
 }
 
-func (o OwnedRelations) Plan(c platform.Caller, binding platform.AssetBinding, at time.Time) (platform.RelationMigrationPlan, *kernel.Error) {
+func (o OwnedRelations) Plan(c platform.Caller, binding platform.AssetBinding, at time.Time) (platform.RelationMigrationPlan, *platform.Error) {
 	definition, ok := o.Binding(binding)
 	if !ok || definition.LinkType == nil || definition.LinkType.Storage != "edge" || binding.Ref.App != c.App {
 		return platform.RelationMigrationPlan{Binding: binding, Links: []platform.RelationLink{}}, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Migration needs the owner's retained edge declaration")
@@ -35,7 +34,7 @@ func (o OwnedRelations) Plan(c platform.Caller, binding platform.AssetBinding, a
 	return o.Records.RelationMigrationPlan(c, binding, definition.LinkType, o.Legacy, func(ref string) bool { return o.ReadableAt(c.Member, ref, at) })
 }
 
-func (o OwnedRelations) Migrate(c platform.Caller, receipt *pb.ChangeRecord, binding platform.AssetBinding, at time.Time) *kernel.Error {
+func (o OwnedRelations) Migrate(c platform.Caller, receipt *pb.ChangeRecord, binding platform.AssetBinding, at time.Time) *platform.Error {
 	if !o.authority(c, receipt) {
 		return o.Fail(platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Migration is outside its private authority"))
 	}
@@ -61,8 +60,8 @@ func (o OwnedRelations) Migrate(c platform.Caller, receipt *pb.ChangeRecord, bin
 	return o.Put(c, receipt, records.MigrationMarker(c.App, binding, plan.Links))
 }
 
-func (o OwnedRelations) Write(c platform.Caller, receipt *pb.ChangeRecord, request platform.TxnLink, remove bool, at time.Time, legacy []platform.RelationLink) *kernel.Error {
-	fail := func(message string) *kernel.Error {
+func (o OwnedRelations) Write(c platform.Caller, receipt *pb.ChangeRecord, request platform.TxnLink, remove bool, at time.Time, legacy []platform.RelationLink) *platform.Error {
+	fail := func(message string) *platform.Error {
 		return o.Fail(platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, message))
 	}
 	if !o.authority(c, receipt) || request.Binding.Ref.App != c.App || request.Parent.ID == "" || request.Child.ID == "" || request.Parent.Via != "" || request.Child.Via != "" {
@@ -146,7 +145,7 @@ func (o *Owner) OwnedRelations(store *records.Store, c platform.Caller, entity s
 	return out
 }
 
-func (o *Owner) ownedRelationTargets(store *records.Store, c platform.Caller, link platform.LinkType, direction, id string, at time.Time) ([]string, bool, *kernel.Error) {
+func (o *Owner) ownedRelationTargets(store *records.Store, c platform.Caller, link platform.LinkType, direction, id string, at time.Time) ([]string, bool, *platform.Error) {
 	object, target := link.Parent.Name, link.Child.Name
 	if direction == "reverse" {
 		object, target = target, object

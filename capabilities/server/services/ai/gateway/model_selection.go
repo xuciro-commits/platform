@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 	"platformserver/platform"
 )
 
@@ -25,7 +24,7 @@ type ModelSelection struct {
 	Models          []ModelChoice         `json:"models"`
 }
 
-func (r Resolver) Selection(m platform.Member, purpose string, apps []platform.App, read func() ([]platform.AIModel, *kernel.Error)) (ModelSelection, *kernel.Error) {
+func (r Resolver) Selection(m platform.Member, purpose string, apps []platform.App, read func() ([]platform.AIModel, *platform.Error)) (ModelSelection, *platform.Error) {
 	out := ModelSelection{Purpose: purpose, Models: []ModelChoice{}}
 	if purpose != "generation" && purpose != "agent" && purpose != "embedding" {
 		return out, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Choose a model purpose")

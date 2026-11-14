@@ -11,7 +11,6 @@ import (
 	"maps"
 	"os"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 	"platformserver/platform"
 	"regexp"
 	"slices"
@@ -85,8 +84,8 @@ func lifecycleActions() []platform.Action {
 	}
 }
 
-func (d *Console) decideLifecycle(c platform.Caller, s *pb.Submission) (func(*pb.ChangeRecord), *kernel.Error) {
-	invalid := &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
+func (d *Console) decideLifecycle(c platform.Caller, s *pb.Submission) (func(*pb.ChangeRecord), *platform.Error) {
+	invalid := &platform.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 	var p struct {
 		Subject, Reason, Successor string
 		Agent                      bool
@@ -103,7 +102,7 @@ func (d *Console) decideLifecycle(c platform.Caller, s *pb.Submission) (func(*pb
 		}
 		bound := d.members[d.subjects[p.Subject]]
 		if m != nil || bound != nil && (s.GetSchema().GetName() == SchemaJoin || bound.Status != platform.MemberLeft) {
-			return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
+			return nil, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
 		}
 		if s.GetSchema().GetName() == SchemaJoin {
 			if !c.Automation || !c.Replaying && !d.JoinsSubject(p.Subject) {
@@ -126,7 +125,7 @@ func (d *Console) decideLifecycle(c platform.Caller, s *pb.Submission) (func(*pb
 		}, nil
 	}
 	if m == nil {
-		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
+		return nil, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
 	}
 	if m.Status == platform.MemberLeft || id == c.ID && !c.Replaying {
 		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "{member} may not change their own standing, and one who left has none", c.ID)
@@ -174,8 +173,8 @@ func (d *Console) decideLifecycle(c platform.Caller, s *pb.Submission) (func(*pb
 	return nil, invalid
 }
 
-func (d *Console) decideToken(c platform.Caller, s *pb.Submission) (func(*pb.ChangeRecord), *kernel.Error) {
-	invalid := &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
+func (d *Console) decideToken(c platform.Caller, s *pb.Submission) (func(*pb.ChangeRecord), *platform.Error) {
+	invalid := &platform.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 	id := s.GetTarget().GetId()
 	if id == "" {
 		return nil, invalid
@@ -183,10 +182,10 @@ func (d *Console) decideToken(c platform.Caller, s *pb.Submission) (func(*pb.Cha
 	if s.GetSchema().GetName() == SchemaTokenRevoke {
 		t := d.tokens[id]
 		if t == nil {
-			return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
+			return nil, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
 		}
 		if t.Member != c.ID && !c.Holds(PlatformApp, Admin) && !c.Replaying {
-			return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_POLICY_DENIED}
+			return nil, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_POLICY_DENIED}
 		}
 		return func(r *pb.ChangeRecord) {
 			delete(d.tokens, id)
@@ -205,7 +204,7 @@ func (d *Console) decideToken(c platform.Caller, s *pb.Submission) (func(*pb.Cha
 		return nil, invalid
 	}
 	if c.Scopes != nil && !c.Replaying {
-		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_POLICY_DENIED}
+		return nil, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_POLICY_DENIED}
 	}
 	return func(r *pb.ChangeRecord) {
 		d.tokens[id] = &Token{ID: id, Member: c.ID, Label: p.Label, Change: r.GetChangeId(), Scopes: p.Scopes, Until: p.Until, Issued: r.GetRecordedTime().AsTime()}

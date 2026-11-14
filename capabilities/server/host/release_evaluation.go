@@ -3,7 +3,6 @@ package host
 import (
 	"context"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 	"platformserver/platform"
 	aigateway "platformserver/services/ai/gateway"
 	releaseowner "platformserver/services/devops/releases"
@@ -13,10 +12,10 @@ import (
 )
 
 func (t *Tenant) EvaluateRelease(m platform.Member, request releaseowner.ReleaseEvaluationRequest, now time.Time) (string, error) {
-	result, refusal := decideOnImage(t, context.Background(), "release:evaluate", func(t *Tenant) (readAnswer[string], *kernel.Error) {
+	result, refusal := decideOnImage(t, context.Background(), "release:evaluate", func(t *Tenant) (readAnswer[string], *platform.Error) {
 		id, err := t.prepareEvaluateRelease(m, request, now)
 		return readAnswer[string]{value: id, err: err}, nil
-	}, func(t *Tenant, candidate preparedAccepted, result readAnswer[string], refusal *kernel.Error) (readAnswer[string], *kernel.Error) {
+	}, func(t *Tenant, candidate preparedAccepted, result readAnswer[string], refusal *platform.Error) (readAnswer[string], *platform.Error) {
 		if len(candidate.entry.Body) != 0 {
 			_, refusal = t.finishPreparedSubmission(platform.Member{ID: "app:" + candidate.entry.App, Tenant: t.ID}, candidate, nil, refusal)
 		}
@@ -45,7 +44,7 @@ func (t *Tenant) prepareEvaluateRelease(m platform.Member, request releaseowner.
 		Admits:      t.Admits,
 		Quarantined: t.quarantined,
 		Agent:       t.evaluateReleaseAgentLocked,
-		Accept: func(sub *pb.Submission, at time.Time) *kernel.Error {
+		Accept: func(sub *pb.Submission, at time.Time) *platform.Error {
 			_, refusal := t.accept(t.App(build.ID).(platform.App), platform.Member{ID: sub.PrincipalId, Tenant: t.ID}, sub, at, acceptOptions{automation: true})
 			return refusal
 		},

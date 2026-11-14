@@ -12,7 +12,6 @@ import (
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 	"platformserver/platform"
 )
 
@@ -66,7 +65,7 @@ func (t *Owner) checkRecordSetDeclarations(info platform.EntityInfo, engines ...
 	return nil
 }
 
-func (t *Owner) ReadRecordSetFrom(store *records.Store, c platform.Caller, object, id, name string, at time.Time) (platform.RecordSetResult, *kernel.Error) {
+func (t *Owner) ReadRecordSetFrom(store *records.Store, c platform.Caller, object, id, name string, at time.Time) (platform.RecordSetResult, *platform.Error) {
 	result := platform.RecordSetResult{Records: []json.RawMessage{}}
 	lookup := func(typ string) (platform.EntityInfo, bool) {
 		store.Lock()
@@ -113,7 +112,7 @@ func (t *Owner) ReadRecordSetFrom(store *records.Store, c platform.Caller, objec
 		if query := definition.Query; query != nil {
 			if len(query.Domain) > 0 {
 				if json.Unmarshal(query.Domain, &domain) != nil {
-					return result, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_UNKNOWN_SCHEMA}
+					return result, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_UNKNOWN_SCHEMA}
 				}
 			}
 			if query.By != "" {
@@ -174,7 +173,7 @@ func (t *Owner) ReadRecordSetFrom(store *records.Store, c platform.Caller, objec
 	view, hidden := read.view, read.hidden
 	decisions := map[string]platform.AuthzDecision{}
 	var rows []any
-	if refusal := func() *kernel.Error {
+	if refusal := func() *platform.Error {
 		store.Lock()
 		defer store.Unlock()
 		rawRead := *read
@@ -236,7 +235,7 @@ func (t *Owner) ReadRecordSetFrom(store *records.Store, c platform.Caller, objec
 		}
 		predicates[i] = lowered
 	}
-	evaluate := func(expr platform.Expr, row any) (platform.ExprValue, *kernel.Error) {
+	evaluate := func(expr platform.Expr, row any) (platform.ExprValue, *platform.Error) {
 		key := string(platform.Raw(expr))
 		program := programs[key]
 		if program == nil {

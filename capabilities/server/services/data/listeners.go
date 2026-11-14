@@ -9,7 +9,6 @@ import (
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 	"platformserver/platform"
 	ontology "platformserver/services/ontology"
 )
@@ -38,10 +37,10 @@ func (o *Owner) listenerEntity() platform.Entity {
 		Description: "An inbound webhook that delivers payloads to an existing connector input.",
 		Scope:       integrationScope(),
 		Standard:    platform.Standard{Create: true, Edit: true, Archive: true, Roles: roles, Capability: "integrations"},
-		Validate: func(c platform.Caller, value any) *kernel.Error {
+		Validate: func(c platform.Caller, value any) *platform.Error {
 			next := value.(*Listener)
 			if !ontology.Named(next.Name) || !listenerSegment.MatchString(next.Path) || !listenerSegment.MatchString(next.Secret) || strings.TrimSpace(next.Connector) == "" {
-				return &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
+				return &platform.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 			}
 			filter := platform.Expr{Op: "or", Kind: "boolean", Args: []platform.Expr{
 				{Op: "=", Kind: "boolean", Args: []platform.Expr{platform.ExprReference("text", "path"), platform.ExprLiteralValue("text", next.Path)}},
@@ -53,7 +52,7 @@ func (o *Owner) listenerEntity() platform.Entity {
 			}
 			for _, row := range rows {
 				if row.ID != next.ID {
-					return &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
+					return &platform.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
 				}
 			}
 			return nil
@@ -61,7 +60,7 @@ func (o *Owner) listenerEntity() platform.Entity {
 		Lifecycle: &platform.Lifecycle{Field: "state", Initial: "draft", States: []platform.State{{Name: "draft", Title: "Draft", Tone: "warning"}, {Name: "published", Title: "Published", Tone: "success"}},
 			Transitions: []platform.Transition{
 				{Name: "publish", Title: "Publish", From: []string{"draft", "published"}, To: []string{"published"}, Roles: roles, Capability: "integrations", Payload: []platform.Field{}, Do: o.publishListener},
-				{Name: "pause", Title: "Pause", From: []string{"published"}, To: []string{"draft"}, Roles: roles, Capability: "integrations", Payload: []platform.Field{}, Do: func(_ platform.Caller, value any, _ json.RawMessage, _ time.Time) *kernel.Error {
+				{Name: "pause", Title: "Pause", From: []string{"published"}, To: []string{"draft"}, Roles: roles, Capability: "integrations", Payload: []platform.Field{}, Do: func(_ platform.Caller, value any, _ json.RawMessage, _ time.Time) *platform.Error {
 					value.(*Listener).Enabled = false
 					return nil
 				}},
@@ -69,7 +68,7 @@ func (o *Owner) listenerEntity() platform.Entity {
 	}
 }
 
-func (o *Owner) publishListener(c platform.Caller, value any, _ json.RawMessage, _ time.Time) *kernel.Error {
+func (o *Owner) publishListener(c platform.Caller, value any, _ json.RawMessage, _ time.Time) *platform.Error {
 	listener := value.(*Listener)
 	if !c.Replaying {
 		fixed, err := o.freezeDirectIntegration(platform.AssetListener, *listener)
@@ -96,7 +95,7 @@ func (o *Owner) ExecutionListener(live Listener) (Listener, error) {
 	return listener, nil
 }
 
-func (o *Owner) AuthorizeListener(live []Listener, path, secret, origin string, credential func(name, consumer, address string) ([]byte, bool)) (string, *kernel.Error) {
+func (o *Owner) AuthorizeListener(live []Listener, path, secret, origin string, credential func(name, consumer, address string) ([]byte, bool)) (string, *platform.Error) {
 	var matches []Listener
 	for _, row := range live {
 		if !row.Enabled || row.State != "published" {
@@ -104,19 +103,19 @@ func (o *Owner) AuthorizeListener(live []Listener, path, secret, origin string, 
 		}
 		listener, err := o.ExecutionListener(row)
 		if err != nil {
-			return "", &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
+			return "", &platform.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
 		}
 		if listener.Path == path {
 			matches = append(matches, listener)
 		}
 	}
 	if len(matches) != 1 {
-		return "", &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
+		return "", &platform.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
 	}
 	listener := matches[0]
 	value, ok := credential(listener.Secret, "listener/"+listener.ID, origin)
 	if !ok || len(value) == 0 || secret == "" || !hmac.Equal(value, []byte(secret)) {
-		return "", &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_POLICY_DENIED}
+		return "", &platform.Error{Code: pb.ErrorCode_ERROR_CODE_POLICY_DENIED}
 	}
 	return listener.Connector, nil
 }

@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 	"reflect"
 	"slices"
 	"strings"
@@ -407,7 +406,7 @@ func (c Caller) RuleContext(expr Expr, spec RuleReadSpec, lookup func(string) (E
 			queryInputs["for"] = of
 		}
 		var raw json.RawMessage
-		var readErr *kernel.Error
+		var readErr *Error
 		if set.Set != "" {
 			var subjectID string
 			_ = json.Unmarshal(values["id"], &subjectID)
@@ -497,7 +496,7 @@ func (c Caller) RuleContext(expr Expr, spec RuleReadSpec, lookup func(string) (E
 	return ctx, nil
 }
 
-func rulePathStatus(err *kernel.Error) string {
+func rulePathStatus(err *Error) string {
 	if err.Code == pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT {
 		return "missing"
 	}
@@ -537,7 +536,7 @@ func ruleInputName(name string) string {
 	return "input." + name
 }
 
-func (c Caller) readRuleQuery(set RuleCollection, inputs json.RawMessage, now time.Time) (json.RawMessage, *kernel.Error) {
+func (c Caller) readRuleQuery(set RuleCollection, inputs json.RawMessage, now time.Time) (json.RawMessage, *Error) {
 	if c.rt == nil {
 		return nil, Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Scoped rule collections require the host")
 	}

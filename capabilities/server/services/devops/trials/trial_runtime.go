@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"maps"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 	"platformserver/platform"
 	functionauthoring "platformserver/services/functions/authoring"
 	"platformserver/services/resources/authoring"
@@ -142,7 +141,7 @@ func (a *sampleOwner) SnapshotFormat() string                   { return "platfo
 func (a *sampleOwner) Fork(ledger platform.Authority) (platform.App, error) {
 	return &sampleOwner{manifest: a.manifest, ledger: ledger}, nil
 }
-func (a *sampleOwner) Submit(platform.Caller, *pb.Submission, time.Time) (*pb.ChangeRecord, *kernel.Error) {
+func (a *sampleOwner) Submit(platform.Caller, *pb.Submission, time.Time) (*pb.ChangeRecord, *platform.Error) {
 	return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Native business actions require an isolated owner test fixture")
 }
 func PrepareEnvironment(apps []platform.App, authorities platform.Authorities, candidate platform.ReleaseCandidate, samples []SimulationSample) (Environment, error) {
@@ -297,7 +296,7 @@ func (trace *Trace) Record(event platform.DecisionTrace) {
 }
 
 type Runtime interface {
-	Step(int, SimulationStep) (Simulation, *kernel.Error)
+	Step(int, SimulationStep) (Simulation, *platform.Error)
 	HasAI() bool
 	Pending() (compute, functions bool)
 	Fault() string
@@ -306,7 +305,7 @@ type Runtime interface {
 	Check() error
 }
 
-func RunCandidate(request CandidateSimulationRequest, candidate platform.ReleaseCandidate, member platform.Member, members []platform.Member, functionName string, compose func() (Runtime, error)) (CandidateSimulation, *kernel.Error) {
+func RunCandidate(request CandidateSimulationRequest, candidate platform.ReleaseCandidate, member platform.Member, members []platform.Member, functionName string, compose func() (Runtime, error)) (CandidateSimulation, *platform.Error) {
 	var empty CandidateSimulation
 	sandbox, err := compose()
 	if err != nil {

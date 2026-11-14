@@ -6,7 +6,6 @@ import (
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 	runtimekernel "platformserver/kernel"
 	"platformserver/platform"
 	"platformserver/services/actions"
@@ -24,7 +23,7 @@ type confirmationCompletion struct{ Member, Subject, Action string }
 func (t *Tenant) readTransport() dataowner.Transport {
 	h := hostView{t: t}
 	return dataowner.Transport{Member: h.Member, Readable: h.Readable, Publisher: t.sourcePublisher, Markings: t.connectionMarkings,
-		ObservationRead: func(member platform.Member, definition platform.ObservationDefinition, typ, id string, at time.Time) (bool, *kernel.Error) {
+		ObservationRead: func(member platform.Member, definition platform.ObservationDefinition, typ, id string, at time.Time) (bool, *platform.Error) {
 			caller := platform.NewCaller(runtime{t: t}, member, definition.Object.App, false, false)
 			if refusal := authorizationRefusal(t.authorizeNative(caller, definition.Name, "read", definition.Roles, true, authorizationDetails{At: at})); refusal != nil {
 				return false, refusal
@@ -53,16 +52,16 @@ func (d *stagedDecision) transport() dataowner.Transport {
 			d.Intents = append(d.Intents, effect)
 		}
 	}
-	x.Complete = func(c platform.Caller, run platform.ConfirmationRun, member platform.Member, action string, sub *pb.Submission, at time.Time) (*pb.ChangeRecord, *kernel.Error) {
+	x.Complete = func(c platform.Caller, run platform.ConfirmationRun, member platform.Member, action string, sub *pb.Submission, at time.Time) (*pb.ChangeRecord, *platform.Error) {
 		execution, err := h.retainedExecution(c, run.Release, run.Assets)
 		if err != nil {
 			return nil, runtimekernel.ConflictRefusal(err)
 		}
 		bound := execution.(interface {
 			Caller(platform.Caller, platform.Member, string) platform.Caller
-			Submit(platform.Caller, *pb.Submission, time.Time) (*pb.ChangeRecord, *kernel.Error)
+			Submit(platform.Caller, *pb.Submission, time.Time) (*pb.ChangeRecord, *platform.Error)
 		})
-		return platform.Attempt(c, func() (*pb.ChangeRecord, *kernel.Error) {
+		return platform.Attempt(c, func() (*pb.ChangeRecord, *platform.Error) {
 			previous := d.confirmationCompleting
 			d.confirmationCompleting = &confirmationCompletion{Member: member.ID, Subject: run.Subject, Action: action}
 			defer func() { d.confirmationCompleting = previous }()
@@ -89,7 +88,7 @@ func (d *stagedDecision) transport() dataowner.Transport {
 			}
 		})
 	}
-	x.Retry = func(c platform.Caller, id string, at time.Time) *kernel.Error {
+	x.Retry = func(c platform.Caller, id string, at time.Time) *platform.Error {
 		apply, err := d.controlHost().effectControl().DecideEffect(c, &pb.Submission{Target: &pb.EntityRef{Id: id}, Schema: &pb.SchemaRef{Name: controlowner.SchemaEffectRetry}}, at,
 			controlowner.SchemaEffectApprove, controlowner.SchemaEffectDiscard, controlowner.SchemaEffectResolve)
 		if err != nil {

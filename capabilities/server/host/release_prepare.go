@@ -11,7 +11,6 @@ import (
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformserver/services/resources/authoring"
 
-	"platformkernel/kernel"
 	"platformserver/kernel/records"
 	"platformserver/platform"
 )
@@ -65,7 +64,7 @@ func (t *Tenant) bootstrapOwnerDraftsLockedWithArchived(candidate platform.Relea
 	decision.attachPrivateHosts()
 	receipt, err := releaseowner.BootstrapStage{
 		Tenant: t.ID, Candidate: candidate, Context: context, Request: request, IncludeArchived: includeArchived, Registry: registry, Drafts: drafts,
-		Put: func(app string, receipt *pb.ChangeRecord, value any) *kernel.Error {
+		Put: func(app string, receipt *pb.ChangeRecord, value any) *platform.Error {
 			return decision.Put(platform.NewCaller(decision, context.Member, app, false, false), receipt, value)
 		},
 		Records:     decision.Records,

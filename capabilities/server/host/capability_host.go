@@ -1,7 +1,6 @@
 package host
 
 import (
-	"platformkernel/kernel"
 	"platformserver/platform"
 	agentowner "platformserver/services/ai/runtime"
 	"platformserver/services/functions/authoring"
@@ -17,7 +16,7 @@ func (t *Tenant) capabilities(m platform.Member) []platform.CapabilityDescriptor
 	})
 }
 
-func (t *Tenant) describeCapability(m platform.Member, ref platform.AssetRef, version int) (platform.CapabilityDescriptor, *kernel.Error) {
+func (t *Tenant) describeCapability(m platform.Member, ref platform.AssetRef, version int) (platform.CapabilityDescriptor, *platform.Error) {
 	if refusal := t.Admits(m); refusal != nil {
 		return platform.CapabilityDescriptor{}, refusal
 	}

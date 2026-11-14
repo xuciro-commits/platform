@@ -5,14 +5,13 @@ import (
 	"fmt"
 	"maps"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 	"platformserver/platform"
 	"slices"
 	"strings"
 	"time"
 )
 
-func (ss *session) failed(x *FlowInstance, token int, step *platform.Step, why string, refusals ...*kernel.Error) {
+func (ss *session) failed(x *FlowInstance, token int, step *platform.Step, why string, refusals ...*platform.Error) {
 	if len(refusals) > 0 && refusals[0].Code == pb.ErrorCode_ERROR_CODE_POLICY_DENIED && ss.def(x).Start.Refused != nil {
 		ss.def(x).Start.Refused(ss.c, refusals[0], ss.now)
 	}
@@ -236,7 +235,7 @@ func (ss *session) finish(x *FlowInstance, state string) {
 	ss.advance(parent)
 }
 
-func (f *Flows) tick(c platform.Caller, now time.Time) *kernel.Error {
+func (f *Flows) tick(c platform.Caller, now time.Time) *platform.Error {
 	continuous := map[string]*flowDef{}
 	for _, id := range slices.Sorted(maps.Keys(f.defs)) {
 		d, ok := f.latest(id)
@@ -251,7 +250,7 @@ func (f *Flows) tick(c platform.Caller, now time.Time) *kernel.Error {
 			return nil
 		})
 		if err != nil {
-			return &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT, Message: err.Error()}
+			return &platform.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT, Message: err.Error()}
 		}
 	}
 	for _, id := range slices.Sorted(maps.Keys(f.defs)) {

@@ -3,7 +3,6 @@ package host
 import (
 	"time"
 
-	"platformkernel/kernel"
 	"platformserver/platform"
 	"platformserver/services/security"
 )
@@ -17,7 +16,7 @@ func (t *Tenant) Permissions() []security.AppPermissions {
 	}}.Permissions()
 }
 
-func (t *Tenant) ExplainOperation(request platform.AuthzRequest, at time.Time) (platform.AuthzDecision, *kernel.Error) {
+func (t *Tenant) ExplainOperation(request platform.AuthzRequest, at time.Time) (platform.AuthzDecision, *platform.Error) {
 	m, known := t.member(request.Principal)
 	if !known {
 		m = platform.Member{ID: request.Principal, Tenant: request.Tenant}
@@ -29,7 +28,7 @@ func (t *Tenant) ExplainOperation(request platform.AuthzRequest, at time.Time) (
 	return t.authorizeFrom(t.Projection, t.objectCaller(m, app), request, at, false), nil
 }
 
-func (t *Tenant) Explain(member, permission string) (security.Explanation, *kernel.Error) {
+func (t *Tenant) Explain(member, permission string) (security.Explanation, *platform.Error) {
 	return security.PermissionExplainer{Member: t.member, App: t.App, Apps: t.LiveApps, Caller: t.objectCaller,
 		Entry: func(m platform.Member, app, name string) platform.AuthzDecision {
 			return t.authorizeEntry(m, app, name, "read", Now())

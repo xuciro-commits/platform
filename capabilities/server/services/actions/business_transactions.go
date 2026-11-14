@@ -7,7 +7,6 @@ import (
 	"google.golang.org/protobuf/proto"
 	"maps"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 	"platformserver/platform"
 	"reflect"
 	"slices"
@@ -26,7 +25,7 @@ type txnRefusalResult struct {
 	inputs      map[string]any
 }
 
-func (b *Runtime) refusalRecord(c platform.Caller, receipt *pb.ChangeRecord, step platform.TxnStep, scope platform.RuleReadSpec, subject map[string]any, inputs map[string]any, now time.Time, ref string) *kernel.Error {
+func (b *Runtime) refusalRecord(c platform.Caller, receipt *pb.ChangeRecord, step platform.TxnStep, scope platform.RuleReadSpec, subject map[string]any, inputs map[string]any, now time.Time, ref string) *platform.Error {
 	entity, ok := b.Entities[step.Target.Type]
 	if !ok || step.Kind != "create" {
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Refusal records need a declared create step / 拒绝记录须为已声明的创建步骤")
@@ -63,17 +62,17 @@ func decodeTxnValues(raw json.RawMessage) (map[string]any, error) {
 	return value, err
 }
 
-func (b *Runtime) Transact(c platform.Caller, receipt *pb.ChangeRecord, txn *platform.BusinessTxn, now time.Time) *kernel.Error {
+func (b *Runtime) Transact(c platform.Caller, receipt *pb.ChangeRecord, txn *platform.BusinessTxn, now time.Time) *platform.Error {
 	return b.transactDepth(c, receipt, txn, now, 0, c.TransactionInput(receipt).GetSchema().GetName())
 }
 
-func (b *Runtime) transactDepth(c platform.Caller, receipt *pb.ChangeRecord, txn *platform.BusinessTxn, now time.Time, depth int, action string) *kernel.Error {
+func (b *Runtime) transactDepth(c platform.Caller, receipt *pb.ChangeRecord, txn *platform.BusinessTxn, now time.Time, depth int, action string) *platform.Error {
 	if depth > 16 {
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Refusal routes exceed their limit / 拒绝改路超出上限")
 	}
 	var result *txnRefusalResult
-	var failure *kernel.Error
-	_, rollback := platform.Attempt(c, func() (*pb.ChangeRecord, *kernel.Error) {
+	var failure *platform.Error
+	_, rollback := platform.Attempt(c, func() (*pb.ChangeRecord, *platform.Error) {
 		failure = b.transactAttempt(c, receipt, txn, now, &result, action)
 		if result != nil && result.fact.Level == "route" {
 			return receipt, failure
@@ -102,12 +101,12 @@ func (b *Runtime) transactDepth(c platform.Caller, receipt *pb.ChangeRecord, txn
 	if !ok {
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Refusal route object is unavailable / 拒绝改路目标对象不可用")
 	}
-	return b.Ledger.ApplyTxnRoute(c, receipt, entity, target, now, func(c platform.Caller, routed *pb.ChangeRecord, alternative *platform.BusinessTxn, at time.Time) *kernel.Error {
+	return b.Ledger.ApplyTxnRoute(c, receipt, entity, target, now, func(c platform.Caller, routed *pb.ChangeRecord, alternative *platform.BusinessTxn, at time.Time) *platform.Error {
 		return b.transactDepth(c, routed, alternative, at, depth+1, target.Type+"."+target.Action)
 	})
 }
 
-func (b *Runtime) transactAttempt(c platform.Caller, receipt *pb.ChangeRecord, txn *platform.BusinessTxn, now time.Time, refused **txnRefusalResult, action string) *kernel.Error {
+func (b *Runtime) transactAttempt(c platform.Caller, receipt *pb.ChangeRecord, txn *platform.BusinessTxn, now time.Time, refused **txnRefusalResult, action string) *platform.Error {
 	transport := c.TxnTransport()
 	if transport == nil {
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Transaction transport is unavailable")
@@ -130,7 +129,7 @@ func (b *Runtime) transactAttempt(c platform.Caller, receipt *pb.ChangeRecord, t
 		digest := sha256.Sum256(platform.Raw([]string{txn.Subject, subjectID}))
 		framePrefix = fmt.Sprintf("create-%x", digest[:8])
 	}
-	readSubject := func() (map[string]any, *kernel.Error) {
+	readSubject := func() (map[string]any, *platform.Error) {
 		raw, refusal := c.ReadRecord(txn.Subject, subjectID, now)
 		if refusal != nil {
 			return nil, refusal
@@ -154,7 +153,7 @@ func (b *Runtime) transactAttempt(c platform.Caller, receipt *pb.ChangeRecord, t
 		if transport == nil {
 			return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Transaction calls require their original owner")
 		}
-		var problem *kernel.Error
+		var problem *platform.Error
 		calls, problem = transport.BeginTxnCalls(c, now)
 		if problem != nil {
 			return problem
@@ -227,7 +226,7 @@ func (b *Runtime) transactAttempt(c platform.Caller, receipt *pb.ChangeRecord, t
 	originalScope.Inputs = maps.Clone(spec.Inputs)
 	written := map[string]bool{}
 	iterations := 0
-	resolve := func(ref platform.TxnRef, facts map[string]any, rowID string) (platform.TxnRef, *kernel.Error) {
+	resolve := func(ref platform.TxnRef, facts map[string]any, rowID string) (platform.TxnRef, *platform.Error) {
 		id := ref.ID
 		switch {
 		case id == "$subject":
@@ -254,14 +253,14 @@ func (b *Runtime) transactAttempt(c platform.Caller, receipt *pb.ChangeRecord, t
 		}
 		return platform.TxnRef{Type: ref.Type, ID: id, Action: ref.Action}, nil
 	}
-	reserve := func(ref string) *kernel.Error {
+	reserve := func(ref string) *platform.Error {
 		if written[ref] {
 			return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Transaction wrote {record} more than once / 事务重复写入 {record}", ref, ref)
 		}
 		written[ref] = true
 		return nil
 	}
-	refusals := func(declarations []platform.Refusal, scope platform.RuleReadSpec, facts map[string]any, rowID, frame string) *kernel.Error {
+	refusals := func(declarations []platform.Refusal, scope platform.RuleReadSpec, facts map[string]any, rowID, frame string) *platform.Error {
 		for _, declaration := range declarations {
 			if declaration.When == nil || declaration.Level != "block" && declaration.Level != "flag" && declaration.Level != "route" || declaration.Level == "route" && declaration.Route == nil {
 				return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Business refusal declaration is incomplete / 业务拒绝声明不完整")
@@ -313,8 +312,8 @@ func (b *Runtime) transactAttempt(c platform.Caller, receipt *pb.ChangeRecord, t
 		}
 		return nil
 	}
-	var run func([]platform.TxnStep, platform.RuleReadSpec, map[string]any, string, string) *kernel.Error
-	run = func(steps []platform.TxnStep, scope platform.RuleReadSpec, facts map[string]any, rowID, frame string) *kernel.Error {
+	var run func([]platform.TxnStep, platform.RuleReadSpec, map[string]any, string, string) *platform.Error
+	run = func(steps []platform.TxnStep, scope platform.RuleReadSpec, facts map[string]any, rowID, frame string) *platform.Error {
 		for _, step := range steps {
 			if err := transport.TakeTxnStep(); err != nil {
 				return err
@@ -611,7 +610,7 @@ func (b *Runtime) transactAttempt(c platform.Caller, receipt *pb.ChangeRecord, t
 				platform.TxnResult(&scope, step)
 			}
 			if entity.Type == txn.Subject && id == subjectID {
-				var err *kernel.Error
+				var err *platform.Error
 				subject, err = readSubject()
 				if err != nil {
 					return err

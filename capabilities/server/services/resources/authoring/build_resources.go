@@ -8,7 +8,6 @@ import (
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 	"platformserver/platform"
 )
 
@@ -44,7 +43,7 @@ type Folder struct {
 func (b *Build) resourceEntities() []platform.Entity {
 	return []platform.Entity{
 		{Type: ResourceType, Title: "Resource", Plural: "Resources", Model: Resource{}, Display: "title", Scope: platform.Scope{Default: platform.ScopeTenant}},
-		{Type: FolderType, Title: "Folder", Plural: "Folders", Model: Folder{}, Display: "name", Scope: platform.Scope{Default: platform.ScopeTenant}, Standard: platform.Standard{Create: true, Edit: true, Archive: true, Roles: []string{Builder}, Capability: "resources"}, Validate: func(c platform.Caller, record any) *kernel.Error {
+		{Type: FolderType, Title: "Folder", Plural: "Folders", Model: Folder{}, Display: "name", Scope: platform.Scope{Default: platform.ScopeTenant}, Standard: platform.Standard{Create: true, Edit: true, Archive: true, Roles: []string{Builder}, Capability: "resources"}, Validate: func(c platform.Caller, record any) *platform.Error {
 			folder := record.(*Folder)
 			project, found := platform.Get[appsauthoring.Application](c, folder.Project)
 			if !found || project.Archived || !canEditProject(c, folder.Project) {
@@ -102,11 +101,11 @@ func IsResourceCreate(s *pb.Submission) bool {
 	return BranchDraftType(s.GetTarget().GetType()) && s.GetSchema().GetName() == s.GetTarget().GetType()+".create"
 }
 
-func (b *Build) submitResource(c platform.Caller, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *kernel.Error) {
+func (b *Build) submitResource(c platform.Caller, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *platform.Error) {
 	if IsResourceSave(s) || IsResourceCreate(s) {
 		return b.saveResource(c, s, now)
 	}
-	return b.ledger.Receive(c, s, now, nil, func() (func(*pb.ChangeRecord), *kernel.Error) {
+	return b.ledger.Receive(c, s, now, nil, func() (func(*pb.ChangeRecord), *platform.Error) {
 		id := s.GetTarget().GetId()
 		resource, found := platform.Get[Resource](c, id)
 		if s.GetSchema().GetName() == SchemaResourceRegister {
@@ -324,8 +323,8 @@ func (b *Build) ResourceInventory(c platform.Caller) ([]Resource, error) {
 	return inventory, err
 }
 
-func (b *Build) saveResource(c platform.Caller, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *kernel.Error) {
-	return b.ledger.Receive(c, s, now, nil, func() (func(*pb.ChangeRecord), *kernel.Error) {
+func (b *Build) saveResource(c platform.Caller, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *platform.Error) {
+	return b.ledger.Receive(c, s, now, nil, func() (func(*pb.ChangeRecord), *platform.Error) {
 		var input struct {
 			Spec       json.RawMessage         `json:"spec"`
 			Project    string                  `json:"project"`
@@ -464,7 +463,7 @@ func (b *Build) saveResource(c platform.Caller, s *pb.Submission, now time.Time)
 			if resource.Project == WorkspaceProject {
 				b.ensureWorkspace(c, r)
 			}
-			var refusal *kernel.Error
+			var refusal *platform.Error
 			if typ == ObjectType {
 				refusal = b.writeObject(c, r, verb, id, input.Spec, now)
 			} else if typ == ActionTypeType {

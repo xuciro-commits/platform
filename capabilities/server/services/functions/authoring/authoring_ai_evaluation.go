@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"maps"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 	"platformserver/platform"
 	"platformserver/services/ai/evaluation"
 	"slices"
@@ -120,7 +119,7 @@ func (a *AgentEvaluator) Evaluate(ctx platform.AgentEvaluationRuntime, ev platfo
 	var definitionErr error
 	var model platform.AIModel
 	var pv platform.AIProvider
-	var err *kernel.Error
+	var err *platform.Error
 	var who platform.Member
 	digest, config, initialize := "", "", false
 	if refusal := a.read(func() {
@@ -537,7 +536,7 @@ func (a *AgentEvaluator) dryUseScoped(d *platform.CompiledAgent, run, dry platfo
 		}
 		for _, who := range as {
 			s.PrincipalId = who.ID
-			err := platform.ProbeDecision(who, func(probe platform.Caller) *kernel.Error {
+			err := platform.ProbeDecision(who, func(probe platform.Caller) *platform.Error {
 				_, err := platform.Decide(probe, app, s, now)
 				return err
 			})
@@ -549,8 +548,8 @@ func (a *AgentEvaluator) dryUseScoped(d *platform.CompiledAgent, run, dry platfo
 	return "would do: " + tool.Schema + " " + target
 }
 
-func (a *AgentEvaluator) read(work func()) *kernel.Error {
-	return a.context.Host.WithAgentRead(func(current platform.AgentEvaluationRuntime) *kernel.Error {
+func (a *AgentEvaluator) read(work func()) *platform.Error {
+	return a.context.Host.WithAgentRead(func(current platform.AgentEvaluationRuntime) *platform.Error {
 		previous := a.context
 		a.context = current
 		defer func() { a.context = previous }()

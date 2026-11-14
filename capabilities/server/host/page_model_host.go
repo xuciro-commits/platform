@@ -3,7 +3,6 @@ package host
 import (
 	"time"
 
-	"platformkernel/kernel"
 	"platformserver/platform"
 	pageowner "platformserver/services/apps/pages"
 	"platformserver/services/objects"
@@ -15,12 +14,12 @@ func (t *Tenant) pageModels() pageowner.ModelReader {
 	return pageowner.NewModelReader(pageModelHost{t})
 }
 
-func (h pageModelHost) ModelMember(m platform.Member) (platform.Member, *kernel.Error) {
+func (h pageModelHost) ModelMember(m platform.Member) (platform.Member, *platform.Error) {
 	m = h.t.authorizationMember(m)
 	return m, h.t.Admits(m)
 }
 
-func (h pageModelHost) AuthorizePreview(m platform.Member) *kernel.Error {
+func (h pageModelHost) AuthorizePreview(m platform.Member) *platform.Error {
 	caller := platform.NewCaller(runtime{t: h.t, scoped: true}, m, "build", false, false)
 	return authorizationRefusal(h.t.authorizeNative(caller, "POST /v1/page-model/preview", "read", []string{"builder"}, true))
 }
@@ -57,6 +56,6 @@ func (h pageModelHost) RuleRecord(typ, id string, fallback any) any {
 	}
 	return fallback
 }
-func (h pageModelHost) LoadObjectSet(c platform.Caller, set platform.ObjectSet, w objects.Window, at time.Time, bound ...platform.NamedQuery) (objects.RecordPage, string, *kernel.Error) {
+func (h pageModelHost) LoadObjectSet(c platform.Caller, set platform.ObjectSet, w objects.Window, at time.Time, bound ...platform.NamedQuery) (objects.RecordPage, string, *platform.Error) {
 	return h.t.loadObjectSet(h.t.Projection, c, set, w, at, bound...)
 }

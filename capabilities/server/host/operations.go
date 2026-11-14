@@ -10,7 +10,6 @@ import (
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 	runtimekernel "platformserver/kernel"
 	"platformserver/kernel/acceptedformat"
 	"platformserver/kernel/protocol"
@@ -89,24 +88,24 @@ func (t *Tenant) step(now time.Time) (more bool) {
 		took  int
 		scope *Tenant
 	}
-	result, refusal := decideOnImage(t, context.Background(), "work", func(scope *Tenant) (progress, *kernel.Error) {
+	result, refusal := decideOnImage(t, context.Background(), "work", func(scope *Tenant) (progress, *platform.Error) {
 		more, took := scope.workLoop().Round(now, 1)
 		if scope.readOrigin == nil && took > 0 {
 			scope.WorkEpoch.Add(1)
 		}
 		return progress{more: more, took: took, scope: scope}, nil
-	}, func(t *Tenant, candidate preparedAccepted, value progress, refusal *kernel.Error) (progress, *kernel.Error) {
+	}, func(t *Tenant, candidate preparedAccepted, value progress, refusal *platform.Error) (progress, *platform.Error) {
 		if value.took == 0 {
 			return value, refusal
 		}
 		if len(candidate.entry.Body) > 0 {
 			committed, err := t.acceptResult(candidate.entry, candidate.key, candidate.hash)
 			if err != nil {
-				return progress{}, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
+				return progress{}, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
 			}
 			t.finishCommittedWork(candidate.entry.App, candidate.key, candidate.hash, committed)
 			if t.quarantined() {
-				return progress{}, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
+				return progress{}, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
 			}
 		}
 		t.work.Adopt(&value.scope.work)
@@ -178,7 +177,7 @@ func (t *Tenant) Settings() []controlowner.AppSettings {
 func (t *Tenant) settingDecision() controlowner.Decider {
 	return controlowner.SettingDecision{
 		Checks: controlowner.SettingChecks{App: t.App, Logging: t.logging().CheckSetting,
-			Values: []func(string, string) *kernel.Error{func(id, value string) *kernel.Error { return t.knowledgeRuntime().CheckSetting(id, value) }, t.modelResolver().CheckSetting}},
+			Values: []func(string, string) *platform.Error{func(id, value string) *platform.Error { return t.knowledgeRuntime().CheckSetting(id, value) }, t.modelResolver().CheckSetting}},
 		Settings:       &t.settings,
 		EmbeddingModel: platform.KnowledgeApp + "/" + platform.SettingKnowledgeEmbeddingModel,
 		EmbeddingNext:  platform.KnowledgeApp + "/" + platform.SettingKnowledgeEmbeddingNext,
@@ -250,7 +249,7 @@ func (t *Tenant) acceptWork(task *automation.Task, now time.Time) (outcome strin
 			}
 			c := draft.appCaller(task.App)
 			return automation.WorkDraft{
-				Decide: func() (*kernel.Error, []acceptedformat.AuthorizationEvidence) {
+				Decide: func() (*platform.Error, []acceptedformat.AuthorizationEvidence) {
 					refusal := decideWork(t, draft, c, task, now)
 					return refusal, slices.Clone(draft.Authorizations)
 				},
@@ -270,7 +269,7 @@ func (t *Tenant) finishCommittedWork(app, key, hash string, committed []byte) st
 	return t.FinishWork(app, key, hash, committed, runtimekernel.CommittedWork{Settlement: t.settlement(), Apply: t.applyAcceptedWork})
 }
 
-func decideWork(t *Tenant, d *stagedDecision, c platform.Caller, task *automation.Task, now time.Time) (refusal *kernel.Error) {
+func decideWork(t *Tenant, d *stagedDecision, c platform.Caller, task *automation.Task, now time.Time) (refusal *platform.Error) {
 	defer func() {
 		t.hops = 0
 		if p := recover(); p != nil {
@@ -281,13 +280,13 @@ func decideWork(t *Tenant, d *stagedDecision, c platform.Caller, task *automatio
 		}
 	}()
 	return automation.WorkDecision{Owner: t.App, Listens: func(app string) bool { return slices.Contains(t.listeners, app) },
-		Authorize: func(permission string, roles []string, declared bool) *kernel.Error {
+		Authorize: func(permission string, roles []string, declared bool) *platform.Error {
 			return d.authorizeNative(c, permission, "action", roles, declared)
 		},
 		State:  func() platform.App { return d.stateApp(t.App(task.App)) },
 		Routed: func(e platform.Event) []string { return t.router().Events(e) },
 		Hops:   func(n int) { t.hops = n },
-		Finish: func() *kernel.Error { return d.finishStaged(now) }}.Decide(c, task, now)
+		Finish: func() *platform.Error { return d.finishStaged(now) }}.Decide(c, task, now)
 }
 
 func (t *Tenant) applyAcceptedWork(raw []byte) (bool, error) {

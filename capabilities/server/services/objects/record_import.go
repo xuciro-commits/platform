@@ -5,13 +5,12 @@ import (
 	"slices"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 	"platformserver/platform"
 )
 
 type Importer struct {
 	Tenant, Member string
-	Submit         func(*pb.Submission) (*kernel.Error, []platform.FieldIssue)
+	Submit         func(*pb.Submission) (*platform.Error, []platform.FieldIssue)
 	Verb           func(key, id string) string
 }
 
@@ -20,11 +19,11 @@ func (i Importer) Rows(info platform.EntityInfo, file string, lines []ImportLine
 	for _, line := range lines {
 		r := platform.ImportRow{Row: line.Row, ID: line.ID, Outcome: line.Outcome}
 		if r.Outcome == "" {
-			try := func(verb, key string) *kernel.Error {
+			try := func(verb, key string) *platform.Error {
 				r.Error = nil
 				r.Action = info.Type + verb
 				if !slices.Contains(info.Standard, r.Action) {
-					return &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
+					return &platform.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 				}
 				s := &pb.Submission{TenantId: i.Tenant, PrincipalId: i.Member, Authority: info.App, IdempotencyKey: key,
 					Target: &pb.EntityRef{Type: info.Type, Id: r.ID}, Schema: &pb.SchemaRef{Name: r.Action, Version: 1}, Payload: line.Payload}

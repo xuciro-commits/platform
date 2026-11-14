@@ -5,7 +5,6 @@ import (
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 	"platformserver/platform"
 	ontology "platformserver/services/ontology"
 	build "platformserver/services/resources/authoring"
@@ -47,7 +46,7 @@ type MergeResult[R any] struct {
 	Simulation     *R                    `json:"simulation,omitempty"`
 }
 
-func Create(f Flow, m platform.Member, request BranchCreateRequest, now time.Time) (BranchDetail, *kernel.Error) {
+func Create(f Flow, m platform.Member, request BranchCreateRequest, now time.Time) (BranchDetail, *platform.Error) {
 	if !ontology.Named(request.Name) {
 		return BranchDetail{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "A branch name is lower-case letters and digits")
 	}
@@ -59,7 +58,7 @@ func Create(f Flow, m platform.Member, request BranchCreateRequest, now time.Tim
 }
 
 func StagedWorld[D, T any](w Workspace, m platform.Member, id string, now time.Time,
-	stage func(WorldPlan) Stage[D], view func(Stage[D]) (T, error)) (T, *kernel.Error) {
+	stage func(WorldPlan) Stage[D], view func(Stage[D]) (T, error)) (T, *platform.Error) {
 	var none T
 	plan, refusal := w.WorldPlan(m, id, now)
 	if refusal != nil {
@@ -76,9 +75,9 @@ func StagedWorld[D, T any](w Workspace, m platform.Member, id string, now time.T
 	return value, nil
 }
 
-func ReadChecks[S, R any](read func(platform.Member, string, time.Time) (build.Branch, *kernel.Error),
-	evaluate func(platform.Member, build.Branch, []BranchResolution, *S, time.Time) (Evaluation[R], *kernel.Error),
-	m platform.Member, id string, request CheckRequest[S], now time.Time) (Checks[R], *kernel.Error) {
+func ReadChecks[S, R any](read func(platform.Member, string, time.Time) (build.Branch, *platform.Error),
+	evaluate func(platform.Member, build.Branch, []BranchResolution, *S, time.Time) (Evaluation[R], *platform.Error),
+	m platform.Member, id string, request CheckRequest[S], now time.Time) (Checks[R], *platform.Error) {
 	branch, refusal := read(m, id, now)
 	if refusal != nil {
 		return Checks[R]{}, refusal
@@ -97,8 +96,8 @@ func ReadChecks[S, R any](read func(platform.Member, string, time.Time) (build.B
 	return out, nil
 }
 
-func Recheck[S, R any](flow Flow, evaluate func(platform.Member, build.Branch, []BranchResolution, *S, time.Time) (Evaluation[R], *kernel.Error),
-	m platform.Member, id string, request CheckRequest[S], now time.Time) (BranchDetail, *kernel.Error) {
+func Recheck[S, R any](flow Flow, evaluate func(platform.Member, build.Branch, []BranchResolution, *S, time.Time) (Evaluation[R], *platform.Error),
+	m platform.Member, id string, request CheckRequest[S], now time.Time) (BranchDetail, *platform.Error) {
 	branch, refusal := flow.Read(m, id, now)
 	if refusal != nil {
 		return BranchDetail{}, refusal
@@ -116,18 +115,18 @@ func Recheck[S, R any](flow Flow, evaluate func(platform.Member, build.Branch, [
 	return flow.Detail(m, id, now)
 }
 
-func Propose[S, R any](flow Flow, evaluate func(platform.Member, build.Branch, []BranchResolution, *S, time.Time) (Evaluation[R], *kernel.Error),
-	m platform.Member, id string, request ProposeRequest[S], now time.Time) (BranchDetail, *kernel.Error) {
-	return flow.Propose(m, id, request.Reviewers, request.Note, func(branch build.Branch) (BranchCheck, []BranchResourceDiff, *kernel.Error) {
+func Propose[S, R any](flow Flow, evaluate func(platform.Member, build.Branch, []BranchResolution, *S, time.Time) (Evaluation[R], *platform.Error),
+	m platform.Member, id string, request ProposeRequest[S], now time.Time) (BranchDetail, *platform.Error) {
+	return flow.Propose(m, id, request.Reviewers, request.Note, func(branch build.Branch) (BranchCheck, []BranchResourceDiff, *platform.Error) {
 		evaluation, refusal := evaluate(m, branch, request.Resolutions, request.Simulation, now)
 		return evaluation.Check, evaluation.Conflicts, refusal
 	}, now)
 }
 
 func MergeBranch[R any](m platform.Member, id string, resolutions []BranchResolution, simulate bool, now time.Time,
-	apply func(platform.Member, string, []BranchResolution, bool, time.Time) (MergePlan, *kernel.Error),
+	apply func(platform.Member, string, []BranchResolution, bool, time.Time) (MergePlan, *platform.Error),
 	save func(platform.Member, string, string, []Action, time.Time) (string, error),
-	detail func(platform.Member, string, time.Time) (BranchDetail, *kernel.Error)) (MergeResult[R], *kernel.Error) {
+	detail func(platform.Member, string, time.Time) (BranchDetail, *platform.Error)) (MergeResult[R], *platform.Error) {
 	var out MergeResult[R]
 	plan, refusal := apply(m, id, resolutions, simulate, now)
 	if refusal != nil {

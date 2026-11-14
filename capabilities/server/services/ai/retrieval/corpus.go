@@ -6,7 +6,6 @@ import (
 	"slices"
 	"strings"
 
-	"platformkernel/kernel"
 	"platformserver/platform"
 )
 
@@ -14,7 +13,7 @@ type Corpus struct {
 	Documents platform.Caller
 	Files     *platform.Caller
 	Types     func() []platform.EntityInfo
-	Page      func(typ string, offset int) ([]any, int, *kernel.Error)
+	Page      func(typ string, offset int) ([]any, int, *platform.Error)
 	Row       func(typ, id string) (platform.EntityInfo, reflect.Value, bool)
 	Blob      func(hash string) (string, bool)
 	Index     *Index

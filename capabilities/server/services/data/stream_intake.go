@@ -6,7 +6,6 @@ import (
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 	"platformserver/platform"
 )
 
@@ -42,8 +41,8 @@ func (r StreamRecords) connection(id string) (Connection, bool, error) {
 	return connection, ok, nil
 }
 
-func (r StreamRecords) Resolve(m platform.Member, name string, intake *platform.StreamIntake) (Source, Connection, string, *kernel.Error) {
-	refuse := func(message string) (Source, Connection, string, *kernel.Error) {
+func (r StreamRecords) Resolve(m platform.Member, name string, intake *platform.StreamIntake) (Source, Connection, string, *platform.Error) {
+	refuse := func(message string) (Source, Connection, string, *platform.Error) {
 		return Source{}, Connection{}, "", platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, message)
 	}
 	if intake == nil {
@@ -68,12 +67,12 @@ func (r StreamRecords) Resolve(m platform.Member, name string, intake *platform.
 }
 
 type StreamReader struct {
-	Check  func() *kernel.Error
+	Check  func() *platform.Error
 	Latest func(Source, Connection) (string, error)
 	Read   func(Source, Connection, ...string) ([]map[string]any, error)
 }
 
-func (r StreamReader) Rows(intake *platform.StreamIntake, source Source, connection Connection, latestBootstrap bool, columns []string) ([]map[string]any, string, *kernel.Error) {
+func (r StreamReader) Rows(intake *platform.StreamIntake, source Source, connection Connection, latestBootstrap bool, columns []string) ([]map[string]any, string, *platform.Error) {
 	retry := intake.Retry
 	if err := retry.Check(); err != nil {
 		return nil, "", platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
@@ -112,7 +111,7 @@ func StreamColumns(source Source, intake *platform.StreamIntake) []string {
 	return slices.Compact(slices.Sorted(slices.Values(append(columns, intake.Fields...))))
 }
 
-func TrimStreamRows(source Source, rows []map[string]any, budget int) ([]map[string]any, *kernel.Error) {
+func TrimStreamRows(source Source, rows []map[string]any, budget int) ([]map[string]any, *platform.Error) {
 	if len(rows) > budget {
 		if source.Advance(rows[:budget]) == source.Advance(rows[:budget+1]) {
 			return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The source cursor group exceeds the Flow batch budget")
@@ -122,7 +121,7 @@ func TrimStreamRows(source Source, rows []map[string]any, budget int) ([]map[str
 	return rows, nil
 }
 
-func StreamBatch(before platform.FlowInstance, source Source, connection Connection, hash string, intake *platform.StreamIntake, rows []map[string]any) (platform.FlowBatch, *kernel.Error) {
+func StreamBatch(before platform.FlowInstance, source Source, connection Connection, hash string, intake *platform.StreamIntake, rows []map[string]any) (platform.FlowBatch, *platform.Error) {
 	bootstrap := len(rows) == 0
 	cursor := source.Cursor
 	if !bootstrap {
@@ -184,7 +183,7 @@ func StreamBatch(before platform.FlowInstance, source Source, connection Connect
 	return batch, nil
 }
 
-func (source Source) Resume(before platform.FlowInstance, hash string, intake *platform.StreamIntake) (Source, *kernel.Error) {
+func (source Source) Resume(before platform.FlowInstance, hash string, intake *platform.StreamIntake) (Source, *platform.Error) {
 	if before.Batch == nil || before.Batch.Source == nil {
 		return source, nil
 	}
@@ -206,9 +205,9 @@ type StreamStart struct {
 	Bootstrap  bool
 }
 
-func BeginStream(plan platform.FlowBatchPreparation, before platform.FlowInstance, resolve func(string, *platform.StreamIntake) (Source, Connection, string, *kernel.Error)) (StreamStart, *kernel.Error) {
+func BeginStream(plan platform.FlowBatchPreparation, before platform.FlowInstance, resolve func(string, *platform.StreamIntake) (Source, Connection, string, *platform.Error)) (StreamStart, *platform.Error) {
 	var s StreamStart
-	var refusal *kernel.Error
+	var refusal *platform.Error
 	s.Name, s.Intake, s.Budget = plan.Intake()
 	s.Source, s.Connection, s.Hash, refusal = resolve(s.Name, s.Intake)
 	if refusal != nil {
@@ -224,12 +223,12 @@ func (s StreamStart) Unchanged(source Source, connection Connection, hash string
 }
 
 type StreamConsumption struct {
-	Read    func(source Source, columns []string) ([]map[string]any, string, *kernel.Error)
-	Tick    func() (platform.FlowBatch, bool, *kernel.Error)
-	Consume func(batch platform.FlowBatch) (platform.FlowBatchOutcome, *kernel.Error)
+	Read    func(source Source, columns []string) ([]map[string]any, string, *platform.Error)
+	Tick    func() (platform.FlowBatch, bool, *platform.Error)
+	Consume func(batch platform.FlowBatch) (platform.FlowBatchOutcome, *platform.Error)
 }
 
-func (c StreamConsumption) Run(before platform.FlowInstance, start StreamStart) (platform.FlowBatchOutcome, *kernel.Error) {
+func (c StreamConsumption) Run(before platform.FlowInstance, start StreamStart) (platform.FlowBatchOutcome, *platform.Error) {
 	source := start.Source
 	rows, cursor, refusal := c.Read(source, StreamColumns(source, start.Intake))
 	if refusal != nil {

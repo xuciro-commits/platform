@@ -9,7 +9,6 @@ import (
 	"io"
 	"maps"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 	"platformserver/platform"
 	"slices"
 	"time"
@@ -95,7 +94,7 @@ type BatchPreparation struct {
 	caller    platform.Caller
 }
 
-func (f *Flows) PlanBatch(x FlowInstance, c platform.Caller) (platform.FlowBatchPreparation, *kernel.Error) {
+func (f *Flows) PlanBatch(x FlowInstance, c platform.Caller) (platform.FlowBatchPreparation, *platform.Error) {
 	d := f.def(x.Flow, x.Version)
 	if d == nil || d.Continuous == nil || ended(x.State) {
 		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The continuous instance is unavailable")
@@ -156,7 +155,7 @@ func (plan *BatchPreparation) Intake() (string, *platform.StreamIntake, int) {
 	return plan.rule.Source, &intake, plan.rule.Batch
 }
 
-func (plan *BatchPreparation) WindowTick(now time.Time, store platform.FlowFrameStore) (Batch, bool, *kernel.Error) {
+func (plan *BatchPreparation) WindowTick(now time.Time, store platform.FlowFrameStore) (Batch, bool, *platform.Error) {
 	if plan == nil || plan.rule.Intake == nil || plan.rule.Window == nil || plan.before.Batch == nil || plan.before.Batch.Source == nil || now.IsZero() {
 		return Batch{}, false, nil
 	}
@@ -194,7 +193,7 @@ func (plan *BatchPreparation) WindowTick(now time.Time, store platform.FlowFrame
 	return Batch{ID: id, Predecessor: frame.Cursor, Tick: true, Source: &checkpoint}, true, nil
 }
 
-func (plan *BatchPreparation) Prepare(batch Batch, now time.Time, store platform.FlowFrameStore) (platform.FlowPreparedBatch, *kernel.Error) {
+func (plan *BatchPreparation) Prepare(batch Batch, now time.Time, store platform.FlowFrameStore) (platform.FlowPreparedBatch, *platform.Error) {
 	var retry *platform.StreamPreparationRetry
 	if plan.rule.Window != nil {
 		retry = plan.rule.Window.Retry
@@ -203,7 +202,7 @@ func (plan *BatchPreparation) Prepare(batch Batch, now time.Time, store platform
 		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
 	}
 	var prepared platform.FlowPreparedBatch
-	var refusal *kernel.Error
+	var refusal *platform.Error
 	for attempt := 0; attempt < retry.Tries(); attempt++ {
 		if attempt > 0 && retry.BackoffMS > 0 {
 			time.Sleep(time.Duration(retry.BackoffMS) * time.Millisecond)
@@ -240,7 +239,7 @@ func (s *preparationFrameStore) Seal(instance string, version int, raw []byte, b
 	return ref, err
 }
 
-func (plan *BatchPreparation) prepare(batch Batch, now time.Time, store platform.FlowFrameStore) (platform.FlowPreparedBatch, *kernel.Error) {
+func (plan *BatchPreparation) prepare(batch Batch, now time.Time, store platform.FlowFrameStore) (platform.FlowPreparedBatch, *platform.Error) {
 	x := plan.before
 	if err := validateArtifactCleanup(x); err != nil {
 		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, err.Error())
@@ -476,7 +475,7 @@ func (d preparedDecision) Fork(ledger platform.Authority) (platform.App, error) 
 	return preparedDecision{Flows: fork.(*Flows), prepared: d.prepared}, nil
 }
 
-func (d preparedDecision) Submit(c platform.Caller, sub *pb.Submission, now time.Time) (*pb.ChangeRecord, *kernel.Error) {
+func (d preparedDecision) Submit(c platform.Caller, sub *pb.Submission, now time.Time) (*pb.ChangeRecord, *platform.Error) {
 	p := d.prepared
 	validPrincipal := c.Automation && c.ID == "app:"+ID
 	if p.replaySubmission != nil {
@@ -485,7 +484,7 @@ func (d preparedDecision) Submit(c platform.Caller, sub *pb.Submission, now time
 	if !validPrincipal || c.Tenant != p.frame.Sealed.Tenant || !proto.Equal(sub, p.Submission(c.Tenant)) || !now.Equal(p.at) {
 		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "Only the host can accept a prepared Flow batch")
 	}
-	return d.ledger.Receive(c, sub, now, nil, func() (func(*pb.ChangeRecord), *kernel.Error) {
+	return d.ledger.Receive(c, sub, now, nil, func() (func(*pb.ChangeRecord), *platform.Error) {
 		ss := d.session(d.host.Automation(c, ID), now)
 		if p.replayAsset != nil {
 			asset, ok := platform.Get[platform.FlowDeadLetterAsset](c, p.replayAsset.ID)

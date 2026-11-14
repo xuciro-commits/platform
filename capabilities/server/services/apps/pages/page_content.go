@@ -5,12 +5,11 @@ import (
 	"slices"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 	"platformserver/platform"
 )
 
 type ContentHost struct {
-	Admits      func(platform.Member) *kernel.Error
+	Admits      func(platform.Member) *platform.Error
 	Current     func() []platform.Definition
 	Visible     func(platform.Member) []platform.Definition
 	Pinned      func(ref platform.AssetRef, version, content string) (platform.ReleaseAsset, error)
@@ -18,14 +17,14 @@ type ContentHost struct {
 	Definitions func(m platform.Member, registered []platform.Definition) []platform.Definition
 }
 
-func (h ContentHost) Definition(m platform.Member, ref platform.AssetRef, version string) (platform.Definition, *kernel.Error) {
+func (h ContentHost) Definition(m platform.Member, ref platform.AssetRef, version string) (platform.Definition, *platform.Error) {
 	if refusal := h.Admits(m); refusal != nil {
 		return platform.Definition{}, refusal
 	}
 	if ref.Check() != nil || ref.Kind != platform.AssetPage || platform.CheckPageContentVersion(version) != nil {
 		return platform.Definition{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Invalid page content identity")
 	}
-	denied := func() (platform.Definition, *kernel.Error) {
+	denied := func() (platform.Definition, *platform.Error) {
 		return platform.Definition{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "Page content is unavailable to this member")
 	}
 	definitions := h.Current()

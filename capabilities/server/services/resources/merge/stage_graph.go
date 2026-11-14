@@ -4,7 +4,6 @@ import (
 	"fmt"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 	"platformserver/platform"
 	build "platformserver/services/resources/authoring"
 )
@@ -86,8 +85,8 @@ func CheckGraph[C any](view func() (build.ConstructionDrafts, bool, error), prev
 	return graph, drafts, candidate
 }
 
-func MergeBefore[D any](id string, actions []Action, decide func(D, Action, string) StageChild) func(D) *kernel.Error {
-	return func(draft D) *kernel.Error {
+func MergeBefore[D any](id string, actions []Action, decide func(D, Action, string) StageChild) func(D) *platform.Error {
+	return func(draft D) *platform.Error {
 		for _, item := range actions {
 			if item.Action == "none" {
 				continue

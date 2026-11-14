@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"net/http"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 	"platformserver/kernel/transport"
 	"platformserver/platform"
 	"platformserver/services/devops/packages"
@@ -16,7 +15,7 @@ import (
 
 func (h *Host) routesPackages(rt *routes) {
 	h.routesPackageOwnership(rt)
-	rt.authorized(transport.Route{Pattern: "GET /v1/packages/{id}/preparation", Summary: "Describe every application and target-environment prerequisite before creating or publishing a package", Answer: packages.PackagePreparation{}}, build.ID, []string{build.Builder}, transport.Answering(func(r *http.Request, m platform.Member, t *Tenant) (packages.PackagePreparation, *kernel.Error) {
+	rt.authorized(transport.Route{Pattern: "GET /v1/packages/{id}/preparation", Summary: "Describe every application and target-environment prerequisite before creating or publishing a package", Answer: packages.PackagePreparation{}}, build.ID, []string{build.Builder}, transport.Answering(func(r *http.Request, m platform.Member, t *Tenant) (packages.PackagePreparation, *platform.Error) {
 		value, err := t.PackagePreparation(r.Context(), m, r.PathValue("id"), r.URL.Query().Get("version"), h.Now())
 		for i := range value.AI {
 			value.AI[i].Problem = t.i18n.Say(t.Language(m, r), value.AI[i].Problem)
@@ -40,10 +39,10 @@ func (h *Host) routesPackages(rt *routes) {
 	h.routesComposition(rt)
 }
 
-func (t *Tenant) PackagePreparation(ctx context.Context, m platform.Member, id, version string, at time.Time) (packages.PackagePreparation, *kernel.Error) {
-	return coordinatedRecordRead(t, ctx, func(t *Tenant) (packages.PackagePreparation, *kernel.Error) {
+func (t *Tenant) PackagePreparation(ctx context.Context, m platform.Member, id, version string, at time.Time) (packages.PackagePreparation, *platform.Error) {
+	return coordinatedRecordRead(t, ctx, func(t *Tenant) (packages.PackagePreparation, *platform.Error) {
 		return packages.Prepare(id, version, m, packages.PreparationHooks{
-			Authorize: func() *kernel.Error {
+			Authorize: func() *platform.Error {
 				if !build.HoldsIndependentRole(m, build.Builder) {
 					return platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "Builder role required")
 				}
@@ -55,16 +54,16 @@ func (t *Tenant) PackagePreparation(ctx context.Context, m platform.Member, id, 
 				return source, ok
 			},
 			Drafts: func() (build.ConstructionDrafts, bool) { owner := t.builders[build.ID]; return owner, owner != nil },
-			Records: func(typ string, q platform.Query) (int, []any, *kernel.Error) {
+			Records: func(typ string, q platform.Query) (int, []any, *platform.Error) {
 				page, refusal := t.objectOwner(t.Projection).Records(m, typ, q, at)
 				return page.Total, page.Records, refusal
 			},
 			App: (hostView{t: t}).App,
-			Resolve: func(purpose, model string, options platform.ModelOptions) (string, *kernel.Error) {
+			Resolve: func(purpose, model string, options platform.ModelOptions) (string, *platform.Error) {
 				binding, _, refusal := t.modelResolver().Resolve(purpose, model, options)
 				return binding.Model, refusal
 			},
-			Callable: func(model string) *kernel.Error {
+			Callable: func(model string) *platform.Error {
 				_, _, refusal := t.ai.Callable(m, model)
 				return refusal
 			},
@@ -75,7 +74,7 @@ func (t *Tenant) PackagePreparation(ctx context.Context, m platform.Member, id, 
 func (t *Tenant) inspectPackage(ctx context.Context, request platform.PackageInspectRequest) (platform.PackagePreview, error) {
 	send := t.sender()
 	return packages.Inspect(ctx, t.ID, request, send, t.files(), func(ctx context.Context, descriptor platform.PackageDescriptor) (platform.Precheck, error) {
-		precheck, refusal := recordRead(t, ctx, func(t *Tenant) (platform.Precheck, *kernel.Error) {
+		precheck, refusal := recordRead(t, ctx, func(t *Tenant) (platform.Precheck, *platform.Error) {
 			owner, ok := t.App(controlowner.PlatformApp).(interface {
 				Precheck(platform.PackageDescriptor) platform.Precheck
 			})

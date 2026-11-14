@@ -9,7 +9,6 @@ import (
 
 	"google.golang.org/protobuf/encoding/protojson"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 	"platformserver/platform"
 	"platformserver/services/functions/runtime"
 )
@@ -24,11 +23,11 @@ type CapabilityPreparation struct {
 type CapabilityHooks struct {
 	Retained  func() (platform.CapabilityDescriptor, bool)
 	Palette   func() []platform.CapabilityDescriptor
-	ReadQuery func() (json.RawMessage, *kernel.Error)
-	Bind      func() (json.RawMessage, []string, *kernel.Error)
+	ReadQuery func() (json.RawMessage, *platform.Error)
+	Bind      func() (json.RawMessage, []string, *platform.Error)
 }
 
-func CheckInvocation(q platform.CapabilityInvocation) *kernel.Error {
+func CheckInvocation(q platform.CapabilityInvocation) *platform.Error {
 	if len(q.Key) == 0 || len(q.Key) > 200 || strings.ContainsAny(q.Key, "/\x00\r\n") || q.Version < 0 {
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Choose a capability and bounded stable invocation key")
 	}
@@ -38,7 +37,7 @@ func CheckInvocation(q platform.CapabilityInvocation) *kernel.Error {
 	return nil
 }
 
-func PrepareCapability(h CapabilityHooks, q platform.CapabilityInvocation) (CapabilityPreparation, *kernel.Error) {
+func PrepareCapability(h CapabilityHooks, q platform.CapabilityInvocation) (CapabilityPreparation, *platform.Error) {
 	out := CapabilityPreparation{}
 	selected := false
 	if q.Version > 0 {
@@ -58,7 +57,7 @@ func PrepareCapability(h CapabilityHooks, q platform.CapabilityInvocation) (Capa
 		if out.Descriptor.Source == "tenant" && q.Version == 0 || q.Target != "" || q.ExpectedRevision != nil || len(q.Sources) != 0 || q.Record != "" || len(q.Bindings) != 0 {
 			return out, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Query takes only its declared inputs")
 		}
-		var refusal *kernel.Error
+		var refusal *platform.Error
 		out.Query, refusal = h.ReadQuery()
 		return out, refusal
 	}
@@ -69,14 +68,14 @@ func PrepareCapability(h CapabilityHooks, q platform.CapabilityInvocation) (Capa
 		return out, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Compute takes typed inputs and protected source references")
 	}
 	if out.Descriptor.Kind == "compute" || out.Descriptor.Kind == "action" && (len(q.Bindings) > 0 || q.Record != "") {
-		var refusal *kernel.Error
+		var refusal *platform.Error
 		out.Inputs, out.Sources, refusal = h.Bind()
 		return out, refusal
 	}
 	return out, nil
 }
 
-func BoundActionPayload(q platform.CapabilityInvocation, bound json.RawMessage) (json.RawMessage, *kernel.Error) {
+func BoundActionPayload(q platform.CapabilityInvocation, bound json.RawMessage) (json.RawMessage, *platform.Error) {
 	if len(q.Bindings) == 0 && q.Record == "" {
 		return q.Inputs, nil
 	}
@@ -91,7 +90,7 @@ func BoundActionPayload(q platform.CapabilityInvocation, bound json.RawMessage) 
 	return payload, nil
 }
 
-func FunctionCallPayload(q platform.CapabilityInvocation) ([]byte, *kernel.Error) {
+func FunctionCallPayload(q platform.CapabilityInvocation) ([]byte, *platform.Error) {
 	if q.Target != "" || q.ExpectedRevision != nil || len(q.Sources) != 0 || q.Record != "" || len(q.Bindings) != 0 {
 		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "AI function takes a readable source record")
 	}
@@ -179,7 +178,7 @@ func VisibleCapabilities(definitions []platform.Definition, builder bool, allowe
 	return CapabilityPalette(visible, builder)
 }
 
-func DescribeCapability(ref platform.AssetRef, version int, retained func() (platform.CapabilityDescriptor, bool), palette func() []platform.CapabilityDescriptor) (platform.CapabilityDescriptor, *kernel.Error) {
+func DescribeCapability(ref platform.AssetRef, version int, retained func() (platform.CapabilityDescriptor, bool), palette func() []platform.CapabilityDescriptor) (platform.CapabilityDescriptor, *platform.Error) {
 	if version > 0 {
 		if descriptor, ok := retained(); ok {
 			return descriptor, nil

@@ -6,12 +6,11 @@ import (
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 	"platformserver/kernel/records"
 	"platformserver/platform"
 )
 
-func (o *Owner) HeldRecordJSON(c platform.Caller, typ, id string, at time.Time) (json.RawMessage, *kernel.Error) {
+func (o *Owner) HeldRecordJSON(c platform.Caller, typ, id string, at time.Time) (json.RawMessage, *platform.Error) {
 	entity := o.BaseStore.Type(typ)
 	if entity == nil {
 		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_NOT_FOUND, "Record path object is unavailable")

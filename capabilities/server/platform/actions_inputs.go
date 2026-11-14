@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"math"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 	"regexp"
 	"slices"
 	"strings"
@@ -324,7 +323,7 @@ func InputIssues(fields []Field, values map[string]any) []FieldIssue {
 	return issues
 }
 
-func (c Caller) RefuseFields(issues []FieldIssue) *kernel.Error {
+func (c Caller) RefuseFields(issues []FieldIssue) *Error {
 	err := Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Correct the highlighted fields.")
 	if c.inputRefused != nil {
 		c.inputRefused(err, issues)

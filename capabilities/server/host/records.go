@@ -2,7 +2,6 @@ package host
 
 import (
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 	"platformserver/kernel/records"
 	"platformserver/kernel/transport"
 	"platformserver/platform"
@@ -59,21 +58,21 @@ func (t *Tenant) readable(m platform.Member, ref string, now time.Time) bool {
 	return t.readableIn(t.Projection, m, ref, now)
 }
 
-func (t *Tenant) recordOf(m platform.Member, typ, id string, now time.Time) (objects.RecordView, *kernel.Error) {
+func (t *Tenant) recordOf(m platform.Member, typ, id string, now time.Time) (objects.RecordView, *platform.Error) {
 	return t.objectOwner(t.Projection).RecordOf(m, typ, id, now)
 }
 
 func (t *Tenant) PersonalReads() []platform.PersonalRead { return t.AuditLog.PersonalReads() }
 
-func (t *Tenant) enterpriseReferencesRead(m platform.Member, element string, offset, limit int, now time.Time) ([]records.EnterpriseReferenceGroup, *kernel.Error) {
-	return objects.EnterpriseReferencesRead(t.Projection, m, element, offset, limit, t.Admits, func(et *records.Type) (func(reflect.Value) bool, *kernel.Error) {
+func (t *Tenant) enterpriseReferencesRead(m platform.Member, element string, offset, limit int, now time.Time) ([]records.EnterpriseReferenceGroup, *platform.Error) {
+	return objects.EnterpriseReferencesRead(t.Projection, m, element, offset, limit, t.Admits, func(et *records.Type) (func(reflect.Value) bool, *platform.Error) {
 		return t.visibleIn(t.Projection, m, et, now)
 	})
 }
 
 type RecordPage = objects.RecordPage
 
-func (r runtime) Put(c platform.Caller, rec *pb.ChangeRecord, entity any) *kernel.Error {
+func (r runtime) Put(c platform.Caller, rec *pb.ChangeRecord, entity any) *platform.Error {
 	if !c.Replaying {
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "A new record write requires a private runtime")
 	}
@@ -84,10 +83,10 @@ func (r runtime) Get(c platform.Caller, t reflect.Type, id string) (any, bool) {
 	return r.t.Projection.Get(c, t, id)
 }
 
-func (r runtime) Find(c platform.Caller, t reflect.Type, q platform.Query) ([]any, int, *kernel.Error) {
+func (r runtime) Find(c platform.Caller, t reflect.Type, q platform.Query) ([]any, int, *platform.Error) {
 	return objects.FindRows(r.t.Projection, c, t, q, time.Now())
 }
 
-func (r runtime) Check(c platform.Caller, entity any) *kernel.Error {
+func (r runtime) Check(c platform.Caller, entity any) *platform.Error {
 	return r.t.Projection.Check(c, entity, time.Now())
 }

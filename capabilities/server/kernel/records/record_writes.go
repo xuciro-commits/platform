@@ -6,7 +6,6 @@ import (
 	"fmt"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 	persistence "platformserver/kernel/store"
 	"platformserver/platform"
 
@@ -71,22 +70,22 @@ func (s *Store) Of(c platform.Caller, t reflect.Type) *Type {
 	return et
 }
 
-func (s *Store) Put(c platform.Caller, r *pb.ChangeRecord, entity any) *kernel.Error {
+func (s *Store) Put(c platform.Caller, r *pb.ChangeRecord, entity any) *platform.Error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.sealed {
-		return &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
+		return &platform.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
 	}
 	et := s.Of(c, reflect.TypeOf(entity))
 	if et == nil || r == nil {
-		return &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
+		return &platform.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 	}
 	v := Copy(et.info.Go, entity)
 	platform.ApplyFieldAliases(et.info, v)
 	EmptyLists(v)
 	rec := Header(v)
 	if rec.ID == "" {
-		return &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
+		return &platform.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 	}
 	if err := s.CheckLinkWriteLocked(et, v); err != nil {
 		return err
@@ -126,12 +125,12 @@ func (s *Store) Get(c platform.Caller, t reflect.Type, id string) (any, bool) {
 	return Copy(t, row.Value.Interface()).Interface(), true
 }
 
-func (s *Store) Check(c platform.Caller, entity any, now time.Time) *kernel.Error {
+func (s *Store) Check(c platform.Caller, entity any, now time.Time) *platform.Error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	et := s.Of(c, reflect.TypeOf(entity))
 	if et == nil {
-		return &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
+		return &platform.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 	}
 	v := Copy(et.info.Go, entity)
 	platform.ApplyFieldAliases(et.info, v)
@@ -311,7 +310,7 @@ func (s *Store) InstallLinkConstraint(l platform.LinkType) error {
 	return nil
 }
 
-func (s *Store) CheckLinkWriteLocked(et *Type, value reflect.Value) *kernel.Error {
+func (s *Store) CheckLinkWriteLocked(et *Type, value reflect.Value) *platform.Error {
 	id := value.Field(0).Interface().(platform.Record).ID
 	for _, l := range s.uniqueLinks {
 		if l.Child.Name != et.info.Type {
@@ -358,9 +357,9 @@ func (s *Store) ValidateArchiveLinkLocked(l platform.LinkType) error {
 	return nil
 }
 
-func (s *Store) CheckArchiveWriteLocked(et *Type, value reflect.Value) *kernel.Error {
+func (s *Store) CheckArchiveWriteLocked(et *Type, value reflect.Value) *platform.Error {
 	rec := value.Field(0).Interface().(platform.Record)
-	fail := func() *kernel.Error { return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, linkArchiveFailure) }
+	fail := func() *platform.Error { return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, linkArchiveFailure) }
 	for _, l := range s.archiveLinks {
 		child, parent := s.types[l.Child.Name], s.types[l.Parent.Name]
 		if child == nil || parent == nil {

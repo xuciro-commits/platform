@@ -14,7 +14,6 @@ import (
 	"net/url"
 	"os"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 	"platformserver/platform"
 	"regexp"
 	"slices"
@@ -126,7 +125,7 @@ func openCredential(tenant string, w platform.CredentialWrite) ([]byte, error) {
 	}
 	return value, nil
 }
-func CheckCredentialSave(tenant string, s *pb.Submission) *kernel.Error {
+func CheckCredentialSave(tenant string, s *pb.Submission) *platform.Error {
 	if s.GetSchema().GetName() != SchemaCredentialSave {
 		return nil
 	}
@@ -171,7 +170,7 @@ func (d *Credentials) Catalog() platform.CredentialCatalog {
 	slices.SortFunc(out.Credentials, func(a, b platform.CredentialInfo) int { return strings.Compare(a.ID, b.ID) })
 	return out
 }
-func (d *Credentials) Prepare(c platform.Caller, s *pb.Submission, now time.Time) (func(*pb.ChangeRecord), *kernel.Error) {
+func (d *Credentials) Prepare(c platform.Caller, s *pb.Submission, now time.Time) (func(*pb.ChangeRecord), *platform.Error) {
 	id := s.GetTarget().GetId()
 	previous, exists := d.Credential(id)
 	version := previous.Version
@@ -231,7 +230,7 @@ func ResolveCredential(tenant string, owner platform.Credentials, secret func(st
 	return value, record.Kind, nil
 }
 
-func SealCredential(tenant string, owner platform.Credentials, request platform.CredentialSealRequest) (platform.CredentialWrite, *kernel.Error) {
+func SealCredential(tenant string, owner platform.Credentials, request platform.CredentialSealRequest) (platform.CredentialWrite, *platform.Error) {
 	if request.Source != "managed" || request.Sealed != "" || len(request.Value) > 8192 || strings.ContainsAny(request.Value, "\r\n") || checkCredentialDefinition(request.CredentialWrite) != nil {
 		return platform.CredentialWrite{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "A valid credential and nonempty single-line value are required")
 	}

@@ -6,7 +6,6 @@ import (
 	"strings"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 	"platformserver/platform"
 )
 
@@ -21,7 +20,7 @@ type ProjectDelegation struct {
 	Edits     func(member string, access platform.ProjectAccess, kind string, names []string) bool
 }
 
-func (p ProjectDelegation) Bound(m platform.Member, s *pb.Submission, access platform.ProjectAccess) *kernel.Error {
+func (p ProjectDelegation) Bound(m platform.Member, s *pb.Submission, access platform.ProjectAccess) *platform.Error {
 	if p.Exempt(s) {
 		return nil
 	}
@@ -39,7 +38,7 @@ func (p ProjectDelegation) Bound(m platform.Member, s *pb.Submission, access pla
 	if !viaProject || slices.Contains(independent, p.Builder) || p.Permits(independent, s.GetSchema().GetName()) {
 		return nil
 	}
-	outside := func() *kernel.Error {
+	outside := func() *platform.Error {
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "Project roles cover only the resources of projects where you are an owner or editor; {action} on {target} is outside them", s.GetSchema().GetName(), p.Target(s))
 	}
 	if p.Create(s) {

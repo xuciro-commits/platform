@@ -6,7 +6,6 @@ import (
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 	"platformserver/platform"
 )
 
@@ -14,11 +13,11 @@ type ScheduleRuns struct {
 	Member    func(string) (platform.Member, bool)
 	Exists    func(schedule string) bool
 	Project   func(pipeline string) string
-	Schedules func() ([]platform.Schedule, *kernel.Error)
+	Schedules func() ([]platform.Schedule, *platform.Error)
 	Composite func(platform.Member, string, []platform.CompositeEdit, time.Time) error
 }
 
-func (o *Owner) ExecutionSchedules(c platform.Caller) ([]platform.Schedule, *kernel.Error) {
+func (o *Owner) ExecutionSchedules(c platform.Caller) ([]platform.Schedule, *platform.Error) {
 	rows, _, err := platform.Find[platform.Schedule](c, platform.Query{Sort: []string{"id"}, Limit: 1000})
 	if err != nil {
 		return nil, err

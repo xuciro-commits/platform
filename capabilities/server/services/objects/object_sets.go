@@ -10,7 +10,6 @@ import (
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 )
 
 type ObjectSetRequest struct {
@@ -91,7 +90,7 @@ type setRead struct {
 	ifaces    map[string]*interfaceRead
 }
 
-func (t *Owner) newSetRead(store *records.Store, c platform.Caller, now time.Time, bound ...platform.NamedQuery) (*setRead, *kernel.Error) {
+func (t *Owner) newSetRead(store *records.Store, c platform.Caller, now time.Time, bound ...platform.NamedQuery) (*setRead, *platform.Error) {
 	c.Member = t.authorizationMember(c.Member)
 	if err := t.admits(c.Member); err != nil {
 		return nil, err
@@ -103,11 +102,11 @@ func (t *Owner) newSetRead(store *records.Store, c platform.Caller, now time.Tim
 	return r, nil
 }
 
-func invalidSet(message string) *kernel.Error {
+func invalidSet(message string) *platform.Error {
 	return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, message)
 }
 
-func (r *setRead) typeRead(name string) (*typeRead, *kernel.Error) {
+func (r *setRead) typeRead(name string) (*typeRead, *platform.Error) {
 	if read, ok := r.types[name]; ok {
 		return read, nil
 	}
@@ -115,7 +114,7 @@ func (r *setRead) typeRead(name string) (*typeRead, *kernel.Error) {
 	et := r.store.Type(name)
 	r.store.Unlock()
 	if et == nil {
-		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
+		return nil, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
 	}
 	visible, err := r.t.visibleForCallerIn(r.store, r.c, et, r.now)
 	if err != nil {
@@ -132,7 +131,7 @@ func (r *setRead) typeRead(name string) (*typeRead, *kernel.Error) {
 	return read, nil
 }
 
-func (r *setRead) interfaceRead(name string) (*interfaceRead, *kernel.Error) {
+func (r *setRead) interfaceRead(name string) (*interfaceRead, *platform.Error) {
 	if read, ok := r.ifaces[name]; ok {
 		return read, nil
 	}
@@ -187,7 +186,7 @@ func interfaceShapeInfo(q platform.NamedQuery) platform.EntityInfo {
 	return info
 }
 
-func (r *setRead) prepare(s platform.ObjectSet, archived bool, asOf *platform.BusinessTime) (*setNode, *kernel.Error) {
+func (r *setRead) prepare(s platform.ObjectSet, archived bool, asOf *platform.BusinessTime) (*setNode, *platform.Error) {
 	n := &setNode{set: s, archived: archived || s.Archived, asOf: asOf}
 	if s.AsOf != nil {
 		n.asOf = s.AsOf
@@ -248,7 +247,7 @@ func explicitIDs(s platform.ObjectSet) ([]string, bool) {
 	return s.IDs, true
 }
 
-func (r *setRead) around(a platform.SearchAround) (string, []setCondition, *kernel.Error) {
+func (r *setRead) around(a platform.SearchAround) (string, []setCondition, *platform.Error) {
 	t, m := r.t, r.c.Member
 	notFound := platform.Refuse(pb.ErrorCode_ERROR_CODE_NOT_FOUND, "Link type or start record is unavailable")
 	if a.Link.Ref.Kind != platform.AssetLinkType || a.Link.SourceVersion == "" || a.Direction != "forward" && a.Direction != "reverse" {
@@ -355,7 +354,7 @@ func (r *setRead) around(a platform.SearchAround) (string, []setCondition, *kern
 	return target, []setCondition{{"id", "in", parents}}, nil
 }
 
-func (r *setRead) startRows(node *setNode) ([]reflect.Value, *typeRead, *kernel.Error) {
+func (r *setRead) startRows(node *setNode) ([]reflect.Value, *typeRead, *platform.Error) {
 	read := r.types[node.object]
 	r.store.Lock()
 	defer r.store.Unlock()
@@ -371,8 +370,8 @@ func (r *setRead) startRows(node *setNode) ([]reflect.Value, *typeRead, *kernel.
 	return rows, read, nil
 }
 
-func (r *setRead) leaf(n *setNode, read *typeRead) (records.Plan, *kernel.Error) {
-	invalid := &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
+func (r *setRead) leaf(n *setNode, read *typeRead) (records.Plan, *platform.Error) {
+	invalid := &platform.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 	info := read.view.Info()
 	var parts []ruleexpr.Expr
 	for _, term := range n.terms {
@@ -391,8 +390,8 @@ func (r *setRead) leaf(n *setNode, read *typeRead) (records.Plan, *kernel.Error)
 	}
 	if n.set.Filter != nil {
 		filter := *n.set.Filter
-		var bind func(*ruleexpr.Expr) *kernel.Error
-		bind = func(expr *ruleexpr.Expr) *kernel.Error {
+		var bind func(*ruleexpr.Expr) *platform.Error
+		bind = func(expr *ruleexpr.Expr) *platform.Error {
 			if expr.Ref != "" {
 				if value, ok := n.set.Parameters[expr.Ref]; ok {
 					if value.Kind != expr.Kind {
@@ -436,7 +435,7 @@ func (r *setRead) leaf(n *setNode, read *typeRead) (records.Plan, *kernel.Error)
 	return plan, nil
 }
 
-func (r *setRead) compile(n *setNode) (compiledSet, *kernel.Error) {
+func (r *setRead) compile(n *setNode) (compiledSet, *platform.Error) {
 	var reads []*typeRead
 	if n.iface != "" {
 		reads = r.ifaces[n.iface].reads
@@ -501,7 +500,7 @@ func (r *setRead) narrowRecord(read *typeRead, w *Narrower, value reflect.Value)
 	return record
 }
 
-func (t *Owner) LoadObjectSet(store *records.Store, c platform.Caller, set platform.ObjectSet, w Window, now time.Time, bound ...platform.NamedQuery) (RecordPage, string, *kernel.Error) {
+func (t *Owner) LoadObjectSet(store *records.Store, c platform.Caller, set platform.ObjectSet, w Window, now time.Time, bound ...platform.NamedQuery) (RecordPage, string, *platform.Error) {
 	r, err := t.newSetRead(store, c, now, bound...)
 	if err != nil {
 		return RecordPage{}, "", err
@@ -518,7 +517,7 @@ func (t *Owner) LoadObjectSet(store *records.Store, c platform.Caller, set platf
 	return page, node.object, err
 }
 
-func (r *setRead) loadObjects(node *setNode, w Window) (RecordPage, *kernel.Error) {
+func (r *setRead) loadObjects(node *setNode, w Window) (RecordPage, *platform.Error) {
 	t, m, store := r.t, r.c.Member, r.store
 	read := r.types[node.object]
 	if w.Bounded && (w.Limit < 1 || w.Limit > objectSetObjectRows) {
@@ -528,7 +527,7 @@ func (r *setRead) loadObjects(node *setNode, w Window) (RecordPage, *kernel.Erro
 	defer store.Unlock()
 	order, problem := records.CompileOrder(read.view.Info(), w.Sort)
 	if problem != nil {
-		return RecordPage{}, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
+		return RecordPage{}, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 	}
 	cs, err := r.compile(node)
 	if err != nil {
@@ -570,7 +569,7 @@ type interfaceRow struct {
 	keys  []any
 }
 
-func (r *setRead) loadInterface(node *setNode, w Window) (RecordPage, *kernel.Error) {
+func (r *setRead) loadInterface(node *setNode, w Window) (RecordPage, *platform.Error) {
 	t, m, store := r.t, r.c.Member, r.store
 	if w.Offset < 0 || w.Limit < 0 {
 		return RecordPage{}, invalidSet("offset and limit are non-negative")
@@ -598,7 +597,7 @@ func (r *setRead) loadInterface(node *setNode, w Window) (RecordPage, *kernel.Er
 		var problem error
 		order, problem = records.CompileOrder(read.view.Info(), w.Sort)
 		if problem != nil {
-			return RecordPage{}, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
+			return RecordPage{}, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 		}
 		store.VisitPlan(read.view, cs.plans[i], read.visible, func(value reflect.Value) {
 			rows = append(rows, interfaceRow{read: read, value: value, keys: append(order.Keys(value), read.entity.Info().Type)})
@@ -625,7 +624,7 @@ func (r *setRead) loadInterface(node *setNode, w Window) (RecordPage, *kernel.Er
 	return out, nil
 }
 
-func (t *Owner) CountObjectSet(store *records.Store, c platform.Caller, set platform.ObjectSet, now time.Time) (ObjectSetCount, *kernel.Error) {
+func (t *Owner) CountObjectSet(store *records.Store, c platform.Caller, set platform.ObjectSet, now time.Time) (ObjectSetCount, *platform.Error) {
 	r, err := t.newSetRead(store, c, now)
 	if err != nil {
 		return ObjectSetCount{}, err
@@ -649,7 +648,7 @@ func (t *Owner) CountObjectSet(store *records.Store, c platform.Caller, set plat
 	return out, nil
 }
 
-func (t *Owner) AggregateObjectSet(m platform.Member, req ObjectSetRequest, now time.Time) (records.Aggregate, *kernel.Error) {
+func (t *Owner) AggregateObjectSet(m platform.Member, req ObjectSetRequest, now time.Time) (records.Aggregate, *platform.Error) {
 	c := t.caller(m, "")
 	r, err := t.newSetRead(t.Store, c, now)
 	if err != nil {
@@ -686,7 +685,7 @@ func (t *Owner) AggregateObjectSet(m platform.Member, req ObjectSetRequest, now 
 	return out, refusal
 }
 
-func (t *Owner) VisitRawSet(store *records.Store, c platform.Caller, set platform.ObjectSet, now time.Time, visit func(reflect.Value)) *kernel.Error {
+func (t *Owner) VisitRawSet(store *records.Store, c platform.Caller, set platform.ObjectSet, now time.Time, visit func(reflect.Value)) *platform.Error {
 	reader, err := t.newSetRead(store, c, now)
 	if err != nil {
 		return err
@@ -710,7 +709,7 @@ func (t *Owner) VisitRawSet(store *records.Store, c platform.Caller, set platfor
 	return nil
 }
 
-func (r *setRead) aggregateCollection(req ObjectSetRequest, options records.AggregateQuery) (records.Aggregate, *kernel.Error) {
+func (r *setRead) aggregateCollection(req ObjectSetRequest, options records.AggregateQuery) (records.Aggregate, *platform.Error) {
 	t, m := r.t, r.c.Member
 	set := req.Set
 	typ := set.Object

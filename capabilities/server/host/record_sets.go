@@ -3,7 +3,6 @@ package host
 import (
 	"encoding/json"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 	"platformserver/kernel/records"
 	"platformserver/platform"
 	"platformserver/services/objects"
@@ -24,15 +23,15 @@ func (t *Tenant) checkRecordSetDeclarations(info platform.EntityInfo, engines ..
 	return t.objectOwner(t.Projection).CheckRecordSetDeclarations(info, engines...)
 }
 
-func (r runtime) ReadRecordSet(c platform.Caller, object, id, name string, at time.Time) (platform.RecordSetResult, *kernel.Error) {
+func (r runtime) ReadRecordSet(c platform.Caller, object, id, name string, at time.Time) (platform.RecordSetResult, *platform.Error) {
 	return r.t.readRecordSetFrom(r.t.Projection, c, object, id, name, at)
 }
 
-func (d *stagedDecision) ReadRecordSet(c platform.Caller, object, id, name string, at time.Time) (platform.RecordSetResult, *kernel.Error) {
+func (d *stagedDecision) ReadRecordSet(c platform.Caller, object, id, name string, at time.Time) (platform.RecordSetResult, *platform.Error) {
 	return d.tenant.readRecordSetFrom(d.Records, c, object, id, name, at)
 }
 
-func (d *stagedDecision) ReadRecordSetCandidate(c platform.Caller, object, id, name string, raw json.RawMessage, at time.Time) (platform.RecordSetResult, *kernel.Error) {
+func (d *stagedDecision) ReadRecordSetCandidate(c platform.Caller, object, id, name string, raw json.RawMessage, at time.Time) (platform.RecordSetResult, *platform.Error) {
 	store := d.Records.ForkRecords()
 	et := store.Type(object)
 	if !c.Staging() || et == nil || et.Info().App != c.App || id == "" {
@@ -51,6 +50,6 @@ func (d *stagedDecision) ReadRecordSetCandidate(c platform.Caller, object, id, n
 	return d.tenant.readRecordSetFrom(store, c, object, id, name, at)
 }
 
-func (t *Tenant) readRecordSetFrom(store *records.Store, c platform.Caller, object, id, name string, at time.Time) (platform.RecordSetResult, *kernel.Error) {
+func (t *Tenant) readRecordSetFrom(store *records.Store, c platform.Caller, object, id, name string, at time.Time) (platform.RecordSetResult, *platform.Error) {
 	return t.objectOwner(store).ReadRecordSetFrom(store, c, object, id, name, at)
 }

@@ -4,7 +4,7 @@ import (
 	"context"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
+	"platformserver/platform"
 )
 
 type ImageDecision[T, C any] struct {
@@ -13,14 +13,14 @@ type ImageDecision[T, C any] struct {
 	Hold        func() error
 	Unlock      func()
 	Unavailable func() bool
-	Load        func() (read func() (T, C, *kernel.Error, error), matches func(C) bool)
-	Direct      func() (T, C, *kernel.Error, error)
-	Finish      func(C, T, *kernel.Error) (T, *kernel.Error)
+	Load        func() (read func() (T, C, *platform.Error, error), matches func(C) bool)
+	Direct      func() (T, C, *platform.Error, error)
+	Finish      func(C, T, *platform.Error) (T, *platform.Error)
 	Count       func(outcome string)
 }
 
-func (r ImageDecision[T, C]) Run(ctx context.Context) (value T, refusal *kernel.Error) {
-	conflict := func() *kernel.Error { return &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT} }
+func (r ImageDecision[T, C]) Run(ctx context.Context) (value T, refusal *platform.Error) {
+	conflict := func() *platform.Error { return &platform.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT} }
 	for attempt := 0; attempt < 3; attempt++ {
 		if ctx.Err() != nil || r.Stopped() {
 			return value, conflict()

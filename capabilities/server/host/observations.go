@@ -6,8 +6,6 @@ import (
 	"slices"
 	"time"
 
-	"platformkernel/kernel"
-
 	"platformserver/platform"
 	dataowner "platformserver/services/data"
 )
@@ -19,11 +17,11 @@ type ObservationEvaluation struct {
 	Reused      bool                        `json:"reused,omitempty"`
 }
 
-func (t *Tenant) Observations(m platform.Member) ([]dataowner.ObservationInfo, *kernel.Error) {
-	return recordRead(t, context.Background(), func(t *Tenant) ([]dataowner.ObservationInfo, *kernel.Error) { return t.scopedObservations(m) })
+func (t *Tenant) Observations(m platform.Member) ([]dataowner.ObservationInfo, *platform.Error) {
+	return recordRead(t, context.Background(), func(t *Tenant) ([]dataowner.ObservationInfo, *platform.Error) { return t.scopedObservations(m) })
 }
 
-func (t *Tenant) scopedObservations(m platform.Member) ([]dataowner.ObservationInfo, *kernel.Error) {
+func (t *Tenant) scopedObservations(m platform.Member) ([]dataowner.ObservationInfo, *platform.Error) {
 	if refusal := t.Admits(m); refusal != nil {
 		return nil, refusal
 	}
@@ -43,9 +41,9 @@ func (t *Tenant) observationDefinitions(m platform.Member) ([]platform.Definitio
 	return t.definitionsFrom(m, definitions), nil
 }
 
-func (t *Tenant) ReadObservation(ctx context.Context, m platform.Member, ref platform.AssetRef, q dataowner.ObservationRead, now time.Time) (platform.ObservationResult, *kernel.Error) {
-	return t.observationSources().Read(ctx, q, now, func() (dataowner.ObservationPlan, *kernel.Error) {
-		return recordRead(t, ctx, func(t *Tenant) (dataowner.ObservationPlan, *kernel.Error) {
+func (t *Tenant) ReadObservation(ctx context.Context, m platform.Member, ref platform.AssetRef, q dataowner.ObservationRead, now time.Time) (platform.ObservationResult, *platform.Error) {
+	return t.observationSources().Read(ctx, q, now, func() (dataowner.ObservationPlan, *platform.Error) {
+		return recordRead(t, ctx, func(t *Tenant) (dataowner.ObservationPlan, *platform.Error) {
 			return t.observationSources().Prepare(m, ref, q.Record, now, false)
 		})
 	})

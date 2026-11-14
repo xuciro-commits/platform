@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 	"platformserver/platform"
 	"platformserver/services/ai/evaluation"
 	"slices"
@@ -119,7 +118,7 @@ func (a *Agents) DeclareAgentApp(app platform.App) error {
 	return nil
 }
 
-func (a *Agents) create(id, agent, goal, ref, onBehalf, flow, step string, token int, now time.Time, captureBinding bool) (platform.AgentRunRecord, *kernel.Error) {
+func (a *Agents) create(id, agent, goal, ref, onBehalf, flow, step string, token int, now time.Time, captureBinding bool) (platform.AgentRunRecord, *platform.Error) {
 	title := goal
 	if len(title) > 80 {
 		title = title[:77] + "..."
@@ -176,7 +175,7 @@ func (a *Agents) create(id, agent, goal, ref, onBehalf, flow, step string, token
 	return run, nil
 }
 
-func (a *Agents) toolDraft(c platform.Caller, run platform.AgentRunRecord, draft platform.Draft, now time.Time) (platform.Draft, *kernel.Error) {
+func (a *Agents) toolDraft(c platform.Caller, run platform.AgentRunRecord, draft platform.Draft, now time.Time) (platform.Draft, *platform.Error) {
 	h := a.host
 	member := a.AgentPrincipal(run.Agent)
 	if run.OnBehalf != "" {
@@ -209,7 +208,7 @@ func (a *Agents) toolDraft(c platform.Caller, run platform.AgentRunRecord, draft
 			return draft, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "AI tools cannot change static platform controls")
 		}
 		declaration = []any{draft.Owner, draft.Action, action, action.Roles, action.NeedsApproval}
-		if refusal := platform.ProbeDecision(actor, func(probe platform.Caller) *kernel.Error {
+		if refusal := platform.ProbeDecision(actor, func(probe platform.Caller) *platform.Error {
 			_, _, err := h.InvokeDecision(probe, protocol, schema, draft.Target, []byte(draft.Payload), "probe:"+run.ID, run.ID, now)
 			return err
 		}); refusal != nil {
@@ -231,7 +230,7 @@ func (a *Agents) toolDraft(c platform.Caller, run platform.AgentRunRecord, draft
 		}
 		declaration = []any{draft.Owner, action, action.Roles, action.NeedsApproval}
 		submission := &pb.Submission{TenantId: a.tenant, PrincipalId: member.ID, Authority: draft.Owner, IdempotencyKey: "probe:" + run.ID, Target: &pb.EntityRef{Type: draft.Type, Id: draft.Target}, Schema: &pb.SchemaRef{Name: draft.Action, Version: 1}, Payload: []byte(draft.Payload)}
-		if refusal := platform.ProbeDecision(actor, func(probe platform.Caller) *kernel.Error {
+		if refusal := platform.ProbeDecision(actor, func(probe platform.Caller) *platform.Error {
 			_, err := platform.Decide(probe, app, submission, now)
 			return err
 		}); refusal != nil && !(draft.Kind == "function" && platform.AwaitsDecision(refusal)) {
@@ -299,16 +298,16 @@ func switchActions() []platform.Action {
 	}
 }
 
-func (a *Agents) switchDecision(c platform.Caller, s *pb.Submission, p struct{ Reason string }) (func(*pb.ChangeRecord), *kernel.Error) {
+func (a *Agents) switchDecision(c platform.Caller, s *pb.Submission, p struct{ Reason string }) (func(*pb.ChangeRecord), *platform.Error) {
 	id := s.GetTarget().GetId()
 	if id == "" {
-		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
+		return nil, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 	}
 	app := a.host.Automation(c, platform.AgentApp)
 	sw, _ := platform.Get[platform.Switch](app, id)
 	suspend := s.GetSchema().GetName() == platform.SchemaSuspend
 	if sw.Suspended == suspend {
-		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
+		return nil, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
 	}
 	sw.ID, sw.Suspended, sw.By, sw.Reason = id, suspend, c.ID, strings.TrimSpace(p.Reason)
 	return func(r *pb.ChangeRecord) { app.Put(r, sw) }, nil

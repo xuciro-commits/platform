@@ -4,7 +4,6 @@ import (
 	"context"
 	"time"
 
-	"platformkernel/kernel"
 	"platformserver/platform"
 	knowledgeindex "platformserver/services/ai/retrieval"
 	controlowner "platformserver/services/security/control"
@@ -29,13 +28,13 @@ func (t *Tenant) knowledgeRuntime() knowledgeindex.Runtime {
 			return t.automation(platform.FileApp, false), true
 		},
 		Projection: t.Projection, SyncStore: source.Projection,
-		Page: func(typ string, offset int) ([]any, int, *kernel.Error) {
+		Page: func(typ string, offset int) ([]any, int, *platform.Error) {
 			page, err := t.objectOwner(t.Projection).Records(t.host(), typ, platform.Query{Sort: []string{"id"}, Offset: offset, Limit: 500}, time.Now())
 			return page.Records, page.Total, err
 		},
 		FilesStore: t.files(), Store: t.Log(),
-		Read: func(read func(knowledgeindex.Runtime) *kernel.Error) *kernel.Error {
-			_, refusal := recordRead(source, context.Background(), func(t *Tenant) (struct{}, *kernel.Error) {
+		Read: func(read func(knowledgeindex.Runtime) *platform.Error) *platform.Error {
+			_, refusal := recordRead(source, context.Background(), func(t *Tenant) (struct{}, *platform.Error) {
 				return struct{}{}, read(t.knowledgeRuntime())
 			})
 			return refusal
@@ -53,18 +52,18 @@ func (t *Tenant) knowledgeRuntime() knowledgeindex.Runtime {
 			value, _ := t.settings.Get(embeddingActiveSpace)
 			return value
 		},
-		Model: func(name string) (platform.AIModel, platform.AIProvider, *kernel.Error) {
-			value, err := recordRead(t, context.Background(), func(t *Tenant) (pair[platform.AIModel, platform.AIProvider], *kernel.Error) {
+		Model: func(name string) (platform.AIModel, platform.AIProvider, *platform.Error) {
+			value, err := recordRead(t, context.Background(), func(t *Tenant) (pair[platform.AIModel, platform.AIProvider], *platform.Error) {
 				model, provider, refusal := t.ai.Model(name)
 				return pair[platform.AIModel, platform.AIProvider]{model, provider}, refusal
 			})
 			return value.first, value.second, err
 		},
-		Resolve: func(value string) (platform.AIProvider, *kernel.Error) {
+		Resolve: func(value string) (platform.AIProvider, *platform.Error) {
 			_, provider, refusal := t.modelResolver().Resolve("embedding", value, platform.ModelOptions{})
 			return provider, refusal
 		},
-		Stage: func(binding platform.AIModelBinding, pv platform.AIProvider) *kernel.Error {
+		Stage: func(binding platform.AIModelBinding, pv platform.AIProvider) *platform.Error {
 			_, refusal := t.modelResolver().Stage(binding, pv, platform.AIStageRuntime)
 			return refusal
 		},
@@ -76,8 +75,8 @@ func (t *Tenant) knowledgeRuntime() knowledgeindex.Runtime {
 	}
 }
 
-func (t *Tenant) KnowledgeIndexStatus(ctx context.Context, m platform.Member) (platform.KnowledgeIndexStatus, *kernel.Error) {
-	return recordRead(t, ctx, func(t *Tenant) (platform.KnowledgeIndexStatus, *kernel.Error) {
+func (t *Tenant) KnowledgeIndexStatus(ctx context.Context, m platform.Member) (platform.KnowledgeIndexStatus, *platform.Error) {
+	return recordRead(t, ctx, func(t *Tenant) (platform.KnowledgeIndexStatus, *platform.Error) {
 		c := platform.NewCaller(runtime{t: t}, m, controlowner.PlatformApp, false, false)
 		if err := authorizationRefusal(t.authorizeNative(c, "GET /v1/ai/knowledge-index", "read", []string{controlowner.Admin}, true)); err != nil {
 			return platform.KnowledgeIndexStatus{}, err

@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"maps"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 	"platformserver/platform"
 	"slices"
 	"time"
@@ -213,10 +212,10 @@ func (ss *session) run(x *FlowInstance, token ...int) *platform.Run {
 	return r
 }
 
-func (f *Flows) decide(c platform.Caller, schema, id, key string, now time.Time, build func(ss *session) *kernel.Error) (*pb.ChangeRecord, *kernel.Error) {
+func (f *Flows) decide(c platform.Caller, schema, id, key string, now time.Time, build func(ss *session) *platform.Error) (*pb.ChangeRecord, *platform.Error) {
 	s := &pb.Submission{TenantId: c.Tenant, PrincipalId: c.ID, Authority: ID, IdempotencyKey: key,
 		Target: &pb.EntityRef{Type: InstanceType, Id: id}, Schema: &pb.SchemaRef{Name: schema, Version: 1}, Payload: []byte("{}")}
-	return f.ledger.Receive(c, s, now, nil, func() (func(*pb.ChangeRecord), *kernel.Error) {
+	return f.ledger.Receive(c, s, now, nil, func() (func(*pb.ChangeRecord), *platform.Error) {
 		ss := f.session(c, now)
 		if err := build(ss); err != nil {
 			return nil, err
@@ -228,22 +227,22 @@ func (f *Flows) decide(c platform.Caller, schema, id, key string, now time.Time,
 	})
 }
 
-func (f *Flows) step(c platform.Caller, id string, now time.Time, change func(*session, *FlowInstance)) *kernel.Error {
-	return f.update(c, id, now, func(ss *session, in *FlowInstance) *kernel.Error {
+func (f *Flows) step(c platform.Caller, id string, now time.Time, change func(*session, *FlowInstance)) *platform.Error {
+	return f.update(c, id, now, func(ss *session, in *FlowInstance) *platform.Error {
 		change(ss, in)
 		return nil
 	})
 }
 
-func (f *Flows) update(c platform.Caller, id string, now time.Time, change func(*session, *FlowInstance) *kernel.Error) *kernel.Error {
+func (f *Flows) update(c platform.Caller, id string, now time.Time, change func(*session, *FlowInstance) *platform.Error) *platform.Error {
 	x, ok := platform.Get[FlowInstance](c, id)
 	if !ok {
-		return &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
+		return &platform.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
 	}
 	if err := f.checkBinding(x); err != nil {
-		return &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT, Message: err.Error()}
+		return &platform.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT, Message: err.Error()}
 	}
-	_, err := f.decide(c, SchemaFlowStep, id, fmt.Sprintf("%s:%d", id, x.Revision+1), now, func(ss *session) *kernel.Error {
+	_, err := f.decide(c, SchemaFlowStep, id, fmt.Sprintf("%s:%d", id, x.Revision+1), now, func(ss *session) *platform.Error {
 		in := ss.load(id)
 		if err := change(ss, in); err != nil {
 			return err
@@ -254,7 +253,7 @@ func (f *Flows) update(c platform.Caller, id string, now time.Time, change func(
 	return err
 }
 
-func (f *Flows) start(c platform.Caller, d *flowDef, key string, data any, onBehalf string, e *platform.Event, parent, subject string, now time.Time, deferAdvance ...bool) *kernel.Error {
+func (f *Flows) start(c platform.Caller, d *flowDef, key string, data any, onBehalf string, e *platform.Event, parent, subject string, now time.Time, deferAdvance ...bool) *platform.Error {
 	if d.Start.Paused != nil && d.Start.Paused(f.host.Automation(c, d.app)) {
 		if d.Start.Manual {
 			return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The process is paused")
@@ -275,9 +274,9 @@ func (f *Flows) start(c platform.Caller, d *flowDef, key string, data any, onBeh
 	}
 	bound, bindingErr := f.host.BindFlow(d.app, d.Name, d.Version, platform.FlowBinding{})
 	if bindingErr != nil {
-		return &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT, Message: bindingErr.Error()}
+		return &platform.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT, Message: bindingErr.Error()}
 	}
-	_, err := f.decide(c, SchemaFlowStart, id, "start:"+id, now, func(ss *session) *kernel.Error {
+	_, err := f.decide(c, SchemaFlowStart, id, "start:"+id, now, func(ss *session) *platform.Error {
 		ss.event = e
 		x := ss.create(d, id, key, data, onBehalf, parent)
 		if subject != "" && d.Subject != "" {
@@ -373,31 +372,31 @@ func (ss *session) advance(x *FlowInstance) {
 	}
 }
 
-func (f *Flows) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *kernel.Error) {
+func (f *Flows) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *platform.Error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	id := s.GetTarget().GetId()
 	schema := s.GetSchema().GetName()
 	if schema == SchemaFlowStart || schema == SchemaFlowStep || schema == SchemaFlowBatch || schema == SchemaFlowArtifactCleanup {
-		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_POLICY_DENIED}
+		return nil, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_POLICY_DENIED}
 	}
 	var p struct{ Token int }
 	json.Unmarshal(s.GetPayload(), &p)
 	if schema == SchemaFlowReplay {
 		return f.replayDeadLetter(c, s, now)
 	}
-	return f.ledger.Receive(c, s, now, nil, func() (func(*pb.ChangeRecord), *kernel.Error) {
+	return f.ledger.Receive(c, s, now, nil, func() (func(*pb.ChangeRecord), *platform.Error) {
 		ss := f.session(f.host.Automation(c, ID), now)
 		x := ss.load(id)
 		if x == nil {
-			return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
+			return nil, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
 		}
 		if ended(x.State) && schema != SchemaFlowResume && schema != SchemaFlowRetire {
-			return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
+			return nil, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
 		}
 		if schema != SchemaFlowStop && schema != SchemaFlowRetire {
 			if err := f.checkBinding(*x); err != nil {
-				return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT, Message: err.Error()}
+				return nil, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT, Message: err.Error()}
 			}
 		}
 		switch schema {
@@ -426,7 +425,7 @@ func (f *Flows) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb.
 		case SchemaFlowSkip:
 			t := ss.token(x, p.Token)
 			if t.ID < 0 || t.Waits == "join" {
-				return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
+				return nil, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 			}
 			if t.Task != "" {
 				ss.close = append(ss.close, t.Task)
@@ -476,7 +475,7 @@ func (f *Flows) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb.
 			versions := f.defs[x.Flow]
 			i := slices.IndexFunc(versions, func(d *flowDef) bool { return d.Version == x.Version })
 			if i < 0 || i+1 >= len(versions) || versions[i+1].From == nil {
-				return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
+				return nil, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
 			}
 			to := versions[i+1]
 			for j := range x.Tokens {
@@ -486,7 +485,7 @@ func (f *Flows) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb.
 				}
 				moved, ok := to.From[t.Step]
 				if !ok {
-					return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
+					return nil, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
 				}
 				t.Step = moved
 			}
@@ -498,7 +497,7 @@ func (f *Flows) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb.
 			x.Version = to.Version
 			x.Dependencies, x.Release, x.Applications = binding.Dependencies, binding.Release, binding.Applications
 		default:
-			return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_UNKNOWN_SCHEMA}
+			return nil, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_UNKNOWN_SCHEMA}
 		}
 		ss.advance(x)
 		return ss.apply, nil

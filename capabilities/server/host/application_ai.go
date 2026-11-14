@@ -3,11 +3,9 @@ package host
 import (
 	"platformserver/platform"
 	"platformserver/services/resources/authoring"
-
-	"platformkernel/kernel"
 )
 
-func (t *Tenant) applicationAILocked(m platform.Member, assets []platform.ReleaseAsset, visible map[platform.AssetRef]bool) ([]platform.ApplicationAI, *kernel.Error) {
+func (t *Tenant) applicationAILocked(m platform.Member, assets []platform.ReleaseAsset, visible map[platform.AssetRef]bool) ([]platform.ApplicationAI, *platform.Error) {
 	var agents *platform.Caller
 	if t.agents != nil {
 		caller := t.automation(platform.AgentApp, false)

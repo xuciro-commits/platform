@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 	"platformserver/kernel/records"
 	"reflect"
 	"slices"
@@ -50,7 +49,7 @@ func (d *Decision) Get(c platform.Caller, typ reflect.Type, id string) (any, boo
 	return d.Records.Get(c, typ, id)
 }
 
-func (d *Decision) Check(c platform.Caller, entity any) *kernel.Error {
+func (d *Decision) Check(c platform.Caller, entity any) *platform.Error {
 	at := d.At
 	if at.IsZero() {
 		at = time.Now()
@@ -58,7 +57,7 @@ func (d *Decision) Check(c platform.Caller, entity any) *kernel.Error {
 	return d.Records.Check(c, entity, at)
 }
 
-func (d *Decision) CaptureBusinessRefusal(c platform.Caller, receipt *pb.ChangeRecord, fact platform.BusinessRefusalFact) *kernel.Error {
+func (d *Decision) CaptureBusinessRefusal(c platform.Caller, receipt *pb.ChangeRecord, fact platform.BusinessRefusalFact) *platform.Error {
 	if !c.Staging() || c.Replaying || receipt.GetSubmission().GetAuthority() != c.App || receipt.GetSubmission().GetPrincipalId() != c.ID || fact.Member != c.ID || !fact.At.Equal(d.At) || fact.Subject != Target(receipt.GetSubmission()) || fact.Action != receipt.GetSubmission().GetSchema().GetName() || fact.Level == "block" {
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "Business refusal evidence must belong to its original decision")
 	}
@@ -72,7 +71,7 @@ func (d *Decision) CaptureBusinessRefusal(c platform.Caller, receipt *pb.ChangeR
 	return nil
 }
 
-func (d *Decision) RefuseBusinessCondition(c platform.Caller, code, message string, original any, inputs map[string]any, at time.Time) *kernel.Error {
+func (d *Decision) RefuseBusinessCondition(c platform.Caller, code, message string, original any, inputs map[string]any, at time.Time) *platform.Error {
 	sub := d.CurrentSubmission
 	if sub == nil || sub.GetAuthority() != c.App || sub.GetPrincipalId() != c.ID {
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "{message}", message)
@@ -84,7 +83,7 @@ func (d *Decision) RefuseBusinessCondition(c platform.Caller, code, message stri
 	return c.RefuseBusiness(fact)
 }
 
-func (d *Decision) PrepareBusinessRecord(c platform.Caller, entity any, at time.Time) (any, *kernel.Error) {
+func (d *Decision) PrepareBusinessRecord(c platform.Caller, entity any, at time.Time) (any, *platform.Error) {
 	d.Records.Lock()
 	et := d.Records.Of(c, reflect.TypeOf(entity))
 	if et == nil {
@@ -105,7 +104,7 @@ func (d *Decision) PrepareBusinessRecord(c platform.Caller, entity any, at time.
 		field, _ := info.Field(info.Lifecycle.Field)
 		value.FieldByIndex(field.Index).SetString(info.Lifecycle.Initial)
 	}
-	refuse := func(message string) (any, *kernel.Error) {
+	refuse := func(message string) (any, *platform.Error) {
 		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, message)
 	}
 	if versioning := info.Versioning; versioning != nil {
@@ -200,7 +199,7 @@ func (d *Decision) PrepareBusinessRecord(c platform.Caller, entity any, at time.
 	return value.Interface(), nil
 }
 
-func (d *Decision) PrepareBusinessVersions(c platform.Caller, record any, at time.Time) *kernel.Error {
+func (d *Decision) PrepareBusinessVersions(c platform.Caller, record any, at time.Time) *platform.Error {
 	value := reflect.ValueOf(record)
 	if value.Kind() != reflect.Pointer || value.IsNil() {
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Business version preparation requires a record")
@@ -212,12 +211,12 @@ func (d *Decision) PrepareBusinessVersions(c platform.Caller, record any, at tim
 	return err
 }
 
-func (d *Decision) Find(c platform.Caller, typ reflect.Type, q platform.Query) ([]any, int, *kernel.Error) {
+func (d *Decision) Find(c platform.Caller, typ reflect.Type, q platform.Query) ([]any, int, *platform.Error) {
 	d.Records.Lock()
 	defer d.Records.Unlock()
 	et := d.Records.Of(c, typ)
 	if et == nil {
-		return nil, 0, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
+		return nil, 0, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
 	}
 	if len(q.Sort) == 0 {
 		q.Sort = []string{"id"}
@@ -260,7 +259,7 @@ func (d *Decision) SavedCallbackRows(published map[string]bool) ([]acceptedforma
 	return rows, nil
 }
 
-func (d *Decision) Put(c platform.Caller, r *pb.ChangeRecord, entity any) *kernel.Error {
+func (d *Decision) Put(c platform.Caller, r *pb.ChangeRecord, entity any) *platform.Error {
 	var before *records.Row
 	var info platform.EntityInfo
 	var ref string
@@ -353,7 +352,7 @@ func (d *Decision) CaptureDirectRows(owner string, refs []string, exclude map[st
 	return rows, nil
 }
 
-func (d *Decision) CheckFinalConstraints() *kernel.Error {
+func (d *Decision) CheckFinalConstraints() *platform.Error {
 	if d.Failure == nil {
 		d.Failure = d.ConstraintCheck().Final()
 	}

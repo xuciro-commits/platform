@@ -8,7 +8,6 @@ import (
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 	runtimekernel "platformserver/kernel"
 	"platformserver/kernel/acceptedformat"
 	"platformserver/platform"
@@ -27,10 +26,10 @@ func (h hostView) ProtocolActions(protocol string) []platform.Action {
 func (h hostView) ProtocolProvider(schema string) (platform.App, string, bool) {
 	return h.t.router().Provider(schema)
 }
-func (h hostView) InvokeDecision(c platform.Caller, protocol, action, id string, raw []byte, key, correlation string, now time.Time) (*pb.EntityRef, *pb.ChangeRecord, *kernel.Error) {
+func (h hostView) InvokeDecision(c platform.Caller, protocol, action, id string, raw []byte, key, correlation string, now time.Time) (*pb.EntityRef, *pb.ChangeRecord, *platform.Error) {
 	return h.t.router().Invoke(c, protocol, action, id, raw, key, correlation, now)
 }
-func (h hostView) AgentContext(reader *platform.Member, typ, id string, now time.Time) (platform.AgentObservation, *kernel.Error) {
+func (h hostView) AgentContext(reader *platform.Member, typ, id string, now time.Time) (platform.AgentObservation, *platform.Error) {
 	view, err := h.t.contextRead(aiContextReader(reader), typ, id, now)
 	if err != nil {
 		return platform.AgentObservation{}, err
@@ -40,7 +39,7 @@ func (h hostView) AgentContext(reader *platform.Member, typ, id string, now time
 func (h hostView) AgentSearch(reader *platform.Member, q string, now time.Time) platform.AgentObservation {
 	return agentowner.SearchObservation(h.t.searchRead(aiContextReader(reader), q, now), func(hit build.Hit) string { return hit.Type + "/" + hit.ID })
 }
-func (h hostView) AgentQuery(reader platform.Member, query platform.NamedQuery, of string, now time.Time) (platform.AgentObservation, *kernel.Error) {
+func (h hostView) AgentQuery(reader platform.Member, query platform.NamedQuery, of string, now time.Time) (platform.AgentObservation, *platform.Error) {
 	reader.AIContext = true
 	page, err := h.t.runDeclaredQueryFrom(h.t.Projection, reader, query, of, now)
 	if err != nil {
@@ -48,7 +47,7 @@ func (h hostView) AgentQuery(reader platform.Member, query platform.NamedQuery, 
 	}
 	return agentowner.QueryObservation(query.Object, page.Records, page), nil
 }
-func (h hostView) AgentRead(reader platform.Member, name string, inputs ...json.RawMessage) (platform.AgentObservation, *kernel.Error) {
+func (h hostView) AgentRead(reader platform.Member, name string, inputs ...json.RawMessage) (platform.AgentObservation, *platform.Error) {
 	reader.AIContext = true
 	value, err := h.t.read(reader, name, inputs...)
 	if err != nil {
@@ -66,15 +65,15 @@ func (h hostView) AgentSurface(reader platform.Member, app string) platform.Agen
 	return agentowner.SurfaceSource{Builder: build.ID, Call: call, Criteria: h.t.modelCriteria}.Surface(app, h.t.Definitions(reader))
 }
 
-func (h hostView) AgentObjects(reader platform.Member, op string, raw json.RawMessage, now time.Time) (platform.AgentObservation, *kernel.Error) {
+func (h hostView) AgentObjects(reader platform.Member, op string, raw json.RawMessage, now time.Time) (platform.AgentObservation, *platform.Error) {
 	reader.AIContext = true
 	return agentowner.Objects{
-		Load: func(q agentowner.ObjectQuery, now time.Time) (any, string, *kernel.Error) {
+		Load: func(q agentowner.ObjectQuery, now time.Time) (any, string, *platform.Error) {
 			caller := platform.NewCaller(runtime{t: h.t}, reader, "", false, false)
 			page, object, err := h.t.loadObjectSet(h.t.Projection, caller, q.Set, objects.Window{Sort: q.Sort, Offset: q.Offset, Limit: q.Limit, Bounded: true}, now)
 			return page, object, err
 		},
-		Aggregate: func(q agentowner.ObjectQuery, now time.Time) (any, *kernel.Error) {
+		Aggregate: func(q agentowner.ObjectQuery, now time.Time) (any, *platform.Error) {
 			return h.t.aggregateObjectSet(reader, objects.ObjectSetRequest{Set: q.Set, Sort: q.Sort, Offset: q.Offset, Limit: q.Limit,
 				Groups: q.Groups, Measures: q.Measures, Window: q.Window, Histogram: q.Histogram, MaxRows: q.MaxRows, Collection: q.Collection, Format: q.Format}, now)
 		},
@@ -101,16 +100,16 @@ func (h hostView) ExternalAgentMembers() []platform.Member {
 func (h hostView) AgentDecisionMembers() []string {
 	return agentowner.DecisionMembers(h.t.Audit())
 }
-func (h hostView) readAgent(read func(*Tenant) *kernel.Error) *kernel.Error {
+func (h hostView) readAgent(read func(*Tenant) *platform.Error) *platform.Error {
 	if h.decision != nil {
 		return read(h.t)
 	}
-	_, refusal := recordRead(h.t, context.Background(), func(t *Tenant) (struct{}, *kernel.Error) { return struct{}{}, read(t) })
+	_, refusal := recordRead(h.t, context.Background(), func(t *Tenant) (struct{}, *platform.Error) { return struct{}{}, read(t) })
 	return refusal
 }
 
 func (h hostView) AgentUsage() (values []platform.AIUsage) {
-	h.readAgent(func(t *Tenant) *kernel.Error {
+	h.readAgent(func(t *Tenant) *platform.Error {
 		if t.ai != nil {
 			values = t.ai.Usage()
 		}
@@ -119,8 +118,8 @@ func (h hostView) AgentUsage() (values []platform.AIUsage) {
 	return values
 }
 
-func (h hostView) WithAgentRead(read func(platform.AgentEvaluationRuntime) *kernel.Error) *kernel.Error {
-	_, refusal := recordRead(h.t.readOriginOrSelf(), context.Background(), func(t *Tenant) (struct{}, *kernel.Error) {
+func (h hostView) WithAgentRead(read func(platform.AgentEvaluationRuntime) *platform.Error) *platform.Error {
+	_, refusal := recordRead(h.t.readOriginOrSelf(), context.Background(), func(t *Tenant) (struct{}, *platform.Error) {
 		if t.agents == nil {
 			return struct{}{}, unknown()
 		}
@@ -129,15 +128,15 @@ func (h hostView) WithAgentRead(read func(platform.AgentEvaluationRuntime) *kern
 	return refusal
 }
 
-func (h hostView) ResolveAgentModel(name string, options platform.ModelOptions, stage string) (binding platform.AIModelBinding, provider platform.AIProvider, refusal *kernel.Error) {
-	refusal = h.readAgent(func(t *Tenant) (failure *kernel.Error) {
+func (h hostView) ResolveAgentModel(name string, options platform.ModelOptions, stage string) (binding platform.AIModelBinding, provider platform.AIProvider, refusal *platform.Error) {
+	refusal = h.readAgent(func(t *Tenant) (failure *platform.Error) {
 		binding, provider, failure = t.modelResolver().ResolveStaged("agent", name, options, stage)
 		return failure
 	})
 	return binding, provider, refusal
 }
-func (h hostView) AgentModel(name string) (model platform.AIModel, provider platform.AIProvider, refusal *kernel.Error) {
-	refusal = h.readAgent(func(t *Tenant) (failure *kernel.Error) {
+func (h hostView) AgentModel(name string) (model platform.AIModel, provider platform.AIProvider, refusal *platform.Error) {
+	refusal = h.readAgent(func(t *Tenant) (failure *platform.Error) {
 		if t.ai == nil {
 			return platform.Refuse(pb.ErrorCode_ERROR_CODE_NOT_FOUND, "AI capability unavailable")
 		}
@@ -153,7 +152,7 @@ func (h hostView) AgentProviderAvailable(provider string, now time.Time) bool {
 func (h hostView) CallAgentModel(provider platform.AIProvider, model platform.AIModel, member platform.Member, request platform.ChatRequest, now time.Time) (platform.ChatAnswer, *platform.AIError) {
 	return aigateway.AgentCall{
 		Authorize: func(member platform.Member, request platform.ChatRequest) *platform.AIError {
-			_, refusal := recordRead(h.t, context.Background(), func(t *Tenant) (struct{}, *kernel.Error) {
+			_, refusal := recordRead(h.t, context.Background(), func(t *Tenant) (struct{}, *platform.Error) {
 				return struct{}{}, t.modelAllowed(platform.AgentApp, member, request.Model)
 			})
 			if refusal != nil {
@@ -163,7 +162,7 @@ func (h hostView) CallAgentModel(provider platform.AIProvider, model platform.AI
 		},
 		Call: h.t.call,
 		Answer: func(request platform.ChatRequest, answer platform.ChatAnswer) platform.ChatAnswer {
-			_, _ = recordRead(h.t, context.Background(), func(t *Tenant) (struct{}, *kernel.Error) {
+			_, _ = recordRead(h.t, context.Background(), func(t *Tenant) (struct{}, *platform.Error) {
 				if value, ok := t.held(platform.RunType + "/" + request.Run); ok {
 					if run, ok := value.(platform.AgentRunRecord); ok {
 						answer.Usage = agentowner.RunUsage(answer.Usage, run)
@@ -176,7 +175,7 @@ func (h hostView) CallAgentModel(provider platform.AIProvider, model platform.AI
 	}.Run(provider, model, member, request, now)
 }
 
-func (h hostView) MeterAgentUsage(member platform.Member, usage platform.AIUsage) *kernel.Error {
+func (h hostView) MeterAgentUsage(member platform.Member, usage platform.AIUsage) *platform.Error {
 	return h.t.meter(member, usage)
 }
 func (h hostView) ReplayAgentUsage(usage platform.AIUsage) {
@@ -217,11 +216,11 @@ func (t *Tenant) evaluateReleaseAgentLocked(m platform.Member, request releaseow
 			return t.evaluation(id)
 		},
 		DefaultModel: func() string { return t.setting(t.automation(platform.AgentApp, false), platform.SettingAgentModel) },
-		Resolve: func(model string, options platform.ModelOptions) (string, *kernel.Error) {
+		Resolve: func(model string, options platform.ModelOptions) (string, *platform.Error) {
 			binding, _, problem := t.modelResolver().Resolve("agent", model, options)
 			return binding.Model, problem
 		},
-		Accept: func(sub *pb.Submission) *kernel.Error {
+		Accept: func(sub *pb.Submission) *platform.Error {
 			_, refusal := t.accept(t.agents, m, sub, now, acceptOptions{automation: true})
 			return refusal
 		},
@@ -239,10 +238,10 @@ func (t *Tenant) agentRun(id string) (platform.AgentRunRecord, bool) {
 
 func (t *Tenant) agentSchedule() agentowner.Schedule {
 	return agentowner.Schedule{Agents: t.agents, Stopped: t.businessStopped, Quarantined: t.quarantined, Recording: t.Recording,
-		Read: func(read func(agentowner.ScheduleView) *kernel.Error) *kernel.Error {
-			_, refusal := recordRead(t, context.Background(), func(t *Tenant) (struct{}, *kernel.Error) {
+		Read: func(read func(agentowner.ScheduleView) *platform.Error) *platform.Error {
+			_, refusal := recordRead(t, context.Background(), func(t *Tenant) (struct{}, *platform.Error) {
 				return struct{}{}, read(agentowner.ScheduleView{Agents: t.agents, Run: t.agentRun, Evaluation: t.evaluation,
-					Queued: func() ([]platform.Evaluation, *kernel.Error) {
+					Queued: func() ([]platform.Evaluation, *platform.Error) {
 						evals, _, refusal := platform.Find[platform.Evaluation](t.automation(platform.AgentApp, false), platform.Query{Domain: json.RawMessage(`[["state","=","queued"]]`), Sort: []string{"id"}, Limit: 1})
 						return evals, refusal
 					}})
@@ -258,9 +257,9 @@ func (t *Tenant) agentSchedule() agentowner.Schedule {
 }
 
 func (t *Tenant) applyAgentStep(b platform.AgentResultStep, now time.Time) bool {
-	applied, refusal := decideOnImage(t, context.Background(), "agent:settle", func(t *Tenant) (bool, *kernel.Error) {
+	applied, refusal := decideOnImage(t, context.Background(), "agent:settle", func(t *Tenant) (bool, *platform.Error) {
 		return t.agentSchedule().Prepare(b, now), nil
-	}, func(t *Tenant, candidate preparedAccepted, applied bool, refusal *kernel.Error) (bool, *kernel.Error) {
+	}, func(t *Tenant, candidate preparedAccepted, applied bool, refusal *platform.Error) (bool, *platform.Error) {
 		if len(candidate.entry.Body) != 0 {
 			t.finishAgentStep(candidate)
 		}
@@ -300,7 +299,7 @@ func (t *Tenant) acceptAgentStep(b platform.AgentResultStep, at time.Time) (err 
 			return record.Agent
 		},
 		UsageBefore: t.usagePredecessor, Answer: draft.answerRequests, Observers: draft.stageObservers,
-		Failure: func() *kernel.Error { return draft.Failure },
+		Failure: func() *platform.Error { return draft.Failure },
 		Events:  func() []platform.Event { return draft.Events },
 		Changes: func(last platform.Event, at time.Time) ([]byte, error) {
 			return draft.batchResult(last.App, last.Record.GetSubmission(), last.Record, at)

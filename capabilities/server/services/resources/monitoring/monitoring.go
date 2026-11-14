@@ -8,7 +8,6 @@ import (
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 	"platformserver/platform"
 )
 
@@ -64,20 +63,20 @@ func (m *Monitoring) SnapshotFormat() string                   { return "platfor
 func (m *Monitoring) Snapshot() (json.RawMessage, error)       { return m.ledger.Snapshot() }
 func (m *Monitoring) Restore(raw json.RawMessage) error        { return m.ledger.Restore(raw) }
 
-func (m *Monitoring) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *kernel.Error) {
-	return m.ledger.Receive(c, s, now, nil, func() (func(*pb.ChangeRecord), *kernel.Error) {
+func (m *Monitoring) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *platform.Error) {
+	return m.ledger.Receive(c, s, now, nil, func() (func(*pb.ChangeRecord), *platform.Error) {
 		name := s.GetSchema().GetName()
 		if name != SchemaViewSave && name != SchemaViewRemove {
-			return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_UNKNOWN_SCHEMA}
+			return nil, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_UNKNOWN_SCHEMA}
 		}
 		id := s.GetTarget().GetId()
 		view, exists := platform.Get[SavedView](c, id)
 		if exists && view.Owner != c.ID {
-			return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_POLICY_DENIED}
+			return nil, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_POLICY_DENIED}
 		}
 		if name == SchemaViewRemove {
 			if !exists || view.Archived {
-				return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
+				return nil, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
 			}
 			view.Archived = true
 		} else {
@@ -85,7 +84,7 @@ func (m *Monitoring) Submit(c platform.Caller, s *pb.Submission, now time.Time) 
 				Title, Family, Query, Time, From, To, Columns, Density, Type, Status string
 			}
 			if json.Unmarshal(s.GetPayload(), &payload) != nil || strings.TrimSpace(payload.Title) == "" {
-				return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
+				return nil, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 			}
 			if payload.Family == "" {
 				payload.Family = "runs"
@@ -126,9 +125,9 @@ func (m *Monitoring) Submit(c platform.Caller, s *pb.Submission, now time.Time) 
 	})
 }
 
-func (m *Monitoring) Read(c platform.Caller, name string) (any, *kernel.Error) {
+func (m *Monitoring) Read(c platform.Caller, name string) (any, *platform.Error) {
 	if name != ReadViews {
-		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
+		return nil, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
 	}
 	filter := platform.Expr{Op: "=", Kind: "boolean", Args: []platform.Expr{platform.ExprReference("text", "owner"), platform.ExprLiteralValue("text", c.ID)}}
 	views, _, err := platform.Find[SavedView](c, platform.Query{Filter: &filter, Sort: []string{"title"}})

@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 	"strings"
 	"time"
 )
@@ -325,7 +324,7 @@ type PackageState struct {
 
 type PackageHost interface {
 	PackageLifecycleImpact(Caller, string, []ReleaseAsset) (PackageLifecycleImpact, error)
-	PrepareManagedPackage(Caller, PackageDescriptor, []ReleaseAsset, bool, bool, bool) (func(*pb.ChangeRecord), *kernel.Error)
+	PrepareManagedPackage(Caller, PackageDescriptor, []ReleaseAsset, bool, bool, bool) (func(*pb.ChangeRecord), *Error)
 	Apps() []App
 	CodeReleaseAssets() ([]ReleaseAsset, error)
 	PutPackageArtifact(string, []byte) error
@@ -342,7 +341,7 @@ type ConsolePackages interface {
 	BoundIndex() *PackageIndex
 	SnapshotState() PackageState
 	Restore(PackageState)
-	Prepare(Caller, *pb.Submission) (func(*pb.ChangeRecord), *kernel.Error)
+	Prepare(Caller, *pb.Submission) (func(*pb.ChangeRecord), *Error)
 	BlueprintViews() []PackageView
 	PackageViews() []PackageView
 	Contributions() []Contribution

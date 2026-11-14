@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 	"platformserver/platform"
 	"slices"
 	"sync"
@@ -27,7 +26,7 @@ func checkWindow(w platform.StreamWindow) error {
 	return nil
 }
 
-func foldWindow(frame *BatchFrame, declared platform.Continuous, batch Batch, now time.Time) (folded, rejected int, refusal *kernel.Error) {
+func foldWindow(frame *BatchFrame, declared platform.Continuous, batch Batch, now time.Time) (folded, rejected int, refusal *platform.Error) {
 	w := *declared.Window
 	if err := checkWindow(w); err != nil {
 		return 0, 0, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
@@ -171,7 +170,7 @@ func maxTime(a, b time.Time) time.Time {
 
 type foldPool struct{ limit int }
 
-func (p foldPool) run(jobs int, job func(i int, cancelled func() bool) *kernel.Error) (int, *kernel.Error) {
+func (p foldPool) run(jobs int, job func(i int, cancelled func() bool) *platform.Error) (int, *platform.Error) {
 	if jobs == 0 {
 		return 0, nil
 	}
@@ -183,7 +182,7 @@ func (p foldPool) run(jobs int, job func(i int, cancelled func() bool) *kernel.E
 		active atomic.Int64
 		peak   atomic.Int64
 		mu     sync.Mutex
-		first  *kernel.Error
+		first  *platform.Error
 	)
 	limit := min(max(p.limit, 1), jobs)
 	stopped := func() bool {
@@ -194,7 +193,7 @@ func (p foldPool) run(jobs int, job func(i int, cancelled func() bool) *kernel.E
 			return false
 		}
 	}
-	stop := func(err *kernel.Error) {
+	stop := func(err *platform.Error) {
 		once.Do(func() {
 			mu.Lock()
 			first = err

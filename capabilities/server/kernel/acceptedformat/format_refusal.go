@@ -6,7 +6,6 @@ import (
 	"google.golang.org/protobuf/encoding/protojson"
 	"maps"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 	"platformserver/platform"
 	"slices"
 	"time"
@@ -24,14 +23,14 @@ type Refusal struct {
 	Digest        string                        `json:"digest"`
 	Submission    json.RawMessage               `json:"submission"`
 	Issues        []platform.FieldIssue         `json:"issues,omitempty"`
-	Error         kernel.Error                  `json:"error"`
+	Error         platform.Error                `json:"error"`
 }
 
-func EncodeSchemaRefusal(s *pb.Submission, at time.Time, refusal *kernel.Error, binding *platform.SchemaVersion, issues ...platform.FieldIssue) ([]byte, error) {
+func EncodeSchemaRefusal(s *pb.Submission, at time.Time, refusal *platform.Error, binding *platform.SchemaVersion, issues ...platform.FieldIssue) ([]byte, error) {
 	return EncodeBusinessRefusal(s, at, refusal, binding, nil, issues...)
 }
 
-func EncodeBusinessRefusal(s *pb.Submission, at time.Time, refusal *kernel.Error, binding *platform.SchemaVersion, business *platform.BusinessRefusalFact, issues ...platform.FieldIssue) ([]byte, error) {
+func EncodeBusinessRefusal(s *pb.Submission, at time.Time, refusal *platform.Error, binding *platform.SchemaVersion, business *platform.BusinessRefusalFact, issues ...platform.FieldIssue) ([]byte, error) {
 	if s == nil || refusal == nil {
 		return nil, fmt.Errorf("refused result needs a submission and answer")
 	}

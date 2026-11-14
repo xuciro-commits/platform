@@ -7,7 +7,7 @@ import (
 	"platformserver/services/resources/monitoring"
 	"slices"
 
-	"platformkernel/kernel"
+	"platformserver/platform"
 
 	runtimekernel "platformserver/kernel"
 	"platformserver/kernel/transport"
@@ -83,27 +83,27 @@ func readView() runtimekernel.ReadView[*Tenant] {
 		Failure: (*Tenant).readError, Refusal: (*Tenant).recordReadRefusal}
 }
 
-func readImageState[T any](t *Tenant, state *Tenant, ctx context.Context, read func(*Tenant) (T, *kernel.Error)) (value T, refusal *kernel.Error, failure error) {
+func readImageState[T any](t *Tenant, state *Tenant, ctx context.Context, read func(*Tenant) (T, *platform.Error)) (value T, refusal *platform.Error, failure error) {
 	defer runtimekernel.RecoverImageRead(t.quarantine, &value, &refusal, &failure)
 	return readInView(state, ctx, read)
 }
 
-func readInView[T any](state *Tenant, ctx context.Context, read func(*Tenant) (T, *kernel.Error)) (T, *kernel.Error, error) {
+func readInView[T any](state *Tenant, ctx context.Context, read func(*Tenant) (T, *platform.Error)) (T, *platform.Error, error) {
 	return runtimekernel.ReadInView(readView(), state, ctx, read)
 }
 
-func readFromImage[T any](t *Tenant, ctx context.Context, read func(*Tenant) (T, *kernel.Error)) (T, *kernel.Error) {
+func readFromImage[T any](t *Tenant, ctx context.Context, read func(*Tenant) (T, *platform.Error)) (T, *platform.Error) {
 	return runtimekernel.ImageRead[T]{
 		Quarantined: t.quarantined,
-		Load: func() (func() (T, *kernel.Error, error), <-chan struct{}) {
+		Load: func() (func() (T, *platform.Error, error), <-chan struct{}) {
 			image := t.readImage.Load()
 			if image == nil {
 				return nil, nil
 			}
-			return func() (T, *kernel.Error, error) { return readImageState(t, image.state, ctx, read) }, image.next
+			return func() (T, *platform.Error, error) { return readImageState(t, image.state, ctx, read) }, image.next
 		},
 		Count:    func(outcome string) { monitoring.CountReadImage(ctx, t.ID, outcome) },
-		Fallback: func() (T, *kernel.Error) { return readFromLane(t, ctx, read) },
+		Fallback: func() (T, *platform.Error) { return readFromLane(t, ctx, read) },
 	}.Run(ctx)
 }
 

@@ -5,7 +5,6 @@ import (
 	"go.opentelemetry.io/otel/trace"
 	"maps"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 	"platformserver/platform"
 	"slices"
 	"sync"
@@ -144,13 +143,13 @@ func (b *WorkBoard) Retry(id string, now time.Time) bool {
 	return false
 }
 
-func (b *WorkBoard) Decide(_ platform.Caller, s *pb.Submission, now time.Time) (func(*pb.ChangeRecord), *kernel.Error) {
+func (b *WorkBoard) Decide(_ platform.Caller, s *pb.Submission, now time.Time) (func(*pb.ChangeRecord), *platform.Error) {
 	id := s.GetTarget().GetId()
 	b.Lock()
 	known := b.Knows(id)
 	b.Unlock()
 	if !known {
-		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
+		return nil, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
 	}
 	return func(*pb.ChangeRecord) { b.Retried(id, now) }, nil
 }

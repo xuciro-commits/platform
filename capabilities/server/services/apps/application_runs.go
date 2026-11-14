@@ -6,11 +6,10 @@ import (
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 	"platformserver/platform"
 )
 
-func (c Context) ScopedRuns(m platform.Member, ref platform.AssetRef, offset, limit int, now time.Time, filters ...platform.ApplicationRunFilter) (platform.ApplicationRunPage, *kernel.Error) {
+func (c Context) ScopedRuns(m platform.Member, ref platform.AssetRef, offset, limit int, now time.Time, filters ...platform.ApplicationRunFilter) (platform.ApplicationRunPage, *platform.Error) {
 	if ref.Kind != platform.AssetApp || ref.Check() != nil || offset < 0 || limit < 1 || limit > 100 {
 		return platform.ApplicationRunPage{Application: ref, Runs: []platform.ApplicationRun{}}, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Choose an application and a run page of 1–100")
 	}
@@ -30,9 +29,9 @@ func (c Context) ScopedRuns(m platform.Member, ref platform.AssetRef, offset, li
 	return c.Runs(m, ref, offset, limit, now, filters...)
 }
 
-func (c Context) refreshRunIndex(m platform.Member, ref platform.AssetRef, now time.Time) *kernel.Error {
+func (c Context) refreshRunIndex(m platform.Member, ref platform.AssetRef, now time.Time) *platform.Error {
 	key := "application/" + ref.App + "/" + ref.Name + "/" + m.ID
-	var refusal *kernel.Error
+	var refusal *platform.Error
 	c.RefreshRunIndex(key, now, func() bool {
 		refusal = c.rebuildRunIndex(m, ref, key, now)
 		return refusal == nil
@@ -40,7 +39,7 @@ func (c Context) refreshRunIndex(m platform.Member, ref platform.AssetRef, now t
 	return refusal
 }
 
-func (c Context) rebuildRunIndex(m platform.Member, ref platform.AssetRef, key string, now time.Time) *kernel.Error {
+func (c Context) rebuildRunIndex(m platform.Member, ref platform.AssetRef, key string, now time.Time) *platform.Error {
 	runs := []platform.ApplicationRun{}
 	for skip := 0; ; {
 		page, refusal := c.Runs(m, ref, skip, 100, now)
@@ -57,12 +56,12 @@ func (c Context) rebuildRunIndex(m platform.Member, ref platform.AssetRef, key s
 	for _, run := range runs {
 		raw, err := json.Marshal(run)
 		if err != nil {
-			return &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
+			return &platform.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
 		}
 		entries = append(entries, platform.RunIndexEntry{ID: run.Kind + "/" + run.ID, Scope: m.ID, Type: "application", App: ref.Name, Status: run.State, At: run.Created, Payload: raw})
 	}
 	if err := c.ReplaceRunIndex(key, entries); err != nil {
-		return &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_UNSPECIFIED, Message: err.Error()}
+		return &platform.Error{Code: pb.ErrorCode_ERROR_CODE_UNSPECIFIED, Message: err.Error()}
 	}
 	return nil
 }
@@ -82,7 +81,7 @@ func (c Context) runsFromIndex(m platform.Member, ref platform.AssetRef, offset,
 	return IndexedRuns(indexed, ref, title, offset, limit, filters...), nil
 }
 
-func (c Context) RecordDiagnostic(m platform.Member, ref platform.AssetRef, typ, id string, now time.Time) (platform.ApplicationDiagnostic, *kernel.Error) {
+func (c Context) RecordDiagnostic(m platform.Member, ref platform.AssetRef, typ, id string, now time.Time) (platform.ApplicationDiagnostic, *platform.Error) {
 	out := platform.ApplicationDiagnostic{Application: ref, Type: typ, Record: id, Decisions: []platform.ApplicationDecisionTrace{}, Runs: []platform.ApplicationRun{}}
 	runtime, refusal := c.RuntimeOf(m, ref, now)
 	if refusal != nil {

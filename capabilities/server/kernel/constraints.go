@@ -8,7 +8,6 @@ import (
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	contract "platformkernel/kernel"
 	"platformserver/kernel/records"
 	"platformserver/platform"
 )
@@ -63,7 +62,7 @@ func (k ConstraintCheck) lookup(typ string) (platform.EntityInfo, bool) {
 	return platform.ConstraintEntity(et.Info()), true
 }
 
-func (k ConstraintCheck) check(c platform.Caller, info platform.EntityInfo, rule platform.Constraint, after *records.Row, before *records.Row) (refusal *contract.Error) {
+func (k ConstraintCheck) check(c platform.Caller, info platform.EntityInfo, rule platform.Constraint, after *records.Row, before *records.Row) (refusal *platform.Error) {
 	if k.Trace != nil {
 		defer func() {
 			event := platform.DecisionTrace{Kind: "constraint", Name: rule.Name, Type: info.Type, ID: records.Header(after.Value).ID, Operation: rule.Kind}
@@ -74,7 +73,7 @@ func (k ConstraintCheck) check(c platform.Caller, info platform.EntityInfo, rule
 		}()
 	}
 	values := records.ConstraintValues(info, after.Value)
-	fail := func(reason string) *contract.Error {
+	fail := func(reason string) *platform.Error {
 		visible := map[string]json.RawMessage{}
 		read, readErr := c.ReadRecord(info.Type, records.Header(after.Value).ID, k.At)
 		var readable map[string]json.RawMessage
@@ -92,7 +91,7 @@ func (k ConstraintCheck) check(c platform.Caller, info platform.EntityInfo, rule
 		}
 		return c.RefuseConstraint(rule, info.Type+"/"+records.Header(after.Value).ID, visible, reason)
 	}
-	evaluate := func(subject map[string]any) (bool, *contract.Error) {
+	evaluate := func(subject map[string]any) (bool, *platform.Error) {
 		spec := platform.ConstraintSpec(info, rule)
 		lookup := func(typ string) (platform.EntityInfo, bool) {
 			other, ok := k.lookup(typ)
@@ -149,7 +148,7 @@ func (k ConstraintCheck) check(c platform.Caller, info platform.EntityInfo, rule
 	case "immutable":
 		locked := constraintLocked(info, before)
 		if before != nil && rule.Expr != nil {
-			var err *contract.Error
+			var err *platform.Error
 			locked, err = evaluate(records.ConstraintValues(info, before.Value))
 			if err != nil {
 				return err
@@ -178,7 +177,7 @@ func (k ConstraintCheck) check(c platform.Caller, info platform.EntityInfo, rule
 	return nil
 }
 
-func (k ConstraintCheck) Record(c platform.Caller, info platform.EntityInfo, after, before *records.Row) *contract.Error {
+func (k ConstraintCheck) Record(c platform.Caller, info platform.EntityInfo, after, before *records.Row) *platform.Error {
 	for _, rule := range info.Constraints {
 		if rule.Level == "txn" {
 			continue
@@ -190,7 +189,7 @@ func (k ConstraintCheck) Record(c platform.Caller, info platform.EntityInfo, aft
 	return nil
 }
 
-func (k ConstraintCheck) Final() *contract.Error {
+func (k ConstraintCheck) Final() *platform.Error {
 	if err := k.versionPins(); err != nil {
 		return err
 	}
@@ -571,7 +570,7 @@ func (k ConstraintCheck) setDepends(info platform.EntityInfo, root *records.Row,
 	return true
 }
 
-func (k ConstraintCheck) versionPins() *contract.Error {
+func (k ConstraintCheck) versionPins() *platform.Error {
 	types := k.Records.SortedTypes()
 	if !slices.ContainsFunc(types, func(et *records.Type) bool { return et.Info().Versioning != nil }) {
 		return nil
@@ -625,7 +624,7 @@ func (k ConstraintCheck) versionPins() *contract.Error {
 	return nil
 }
 
-func (k ConstraintCheck) ownedRelations() *contract.Error {
+func (k ConstraintCheck) ownedRelations() *platform.Error {
 	for _, definition := range k.Definitions {
 		link := definition.LinkType
 		if link == nil || link.Storage != "edge" {

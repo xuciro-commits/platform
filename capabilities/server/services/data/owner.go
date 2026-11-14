@@ -6,7 +6,6 @@ import (
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 	"platformserver/platform"
 	"platformserver/services/ontology"
 )
@@ -75,7 +74,7 @@ func cloneDraftIDs(ids map[platform.AssetRef]string) map[platform.AssetRef]strin
 	return out
 }
 
-func (o *Owner) checkName(name, id string) *kernel.Error {
+func (o *Owner) checkName(name, id string) *platform.Error {
 	if !ontology.Named(name) {
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "the name %q is not lower-case letters and digits", name)
 	}
@@ -147,7 +146,7 @@ func (o *Owner) Handles(submission *pb.Submission) bool {
 		strings.HasPrefix(schema, ObservationType+".")
 }
 
-func (o *Owner) Decide(ledger platform.Authority, c platform.Caller, submission *pb.Submission, now time.Time) (*pb.ChangeRecord, *kernel.Error, bool) {
+func (o *Owner) Decide(ledger platform.Authority, c platform.Caller, submission *pb.Submission, now time.Time) (*pb.ChangeRecord, *platform.Error, bool) {
 	if !o.Handles(submission) {
 		return nil, nil, false
 	}
@@ -183,7 +182,7 @@ func (o *Owner) Decide(ledger platform.Authority, c platform.Caller, submission 
 	}
 	if typ, archive := strings.CutSuffix(name, ".archive"); archive && typ == ObservationType && !c.Replaying {
 		if !c.Holds(c.App, Builder) && !c.Holds(c.App, Integrator) {
-			return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_POLICY_DENIED}, true
+			return nil, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_POLICY_DENIED}, true
 		}
 		if observation, ok := platform.Get[Observation](c, submission.GetTarget().GetId()); ok && observation.Published != "" {
 			return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "A published definition cannot be archived; its installed version must be retained"), true

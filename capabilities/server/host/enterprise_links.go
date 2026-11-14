@@ -7,7 +7,6 @@ import (
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 	"platformserver/services/resources/authoring"
 	enterprisemodel "platformserver/services/security/organization"
 
@@ -16,7 +15,7 @@ import (
 
 type enterpriseLinkModel interface{ Model() enterprisemodel.Model }
 
-func (t *Tenant) tenantLinkModel() (enterprisemodel.Model, *kernel.Error) {
+func (t *Tenant) tenantLinkModel() (enterprisemodel.Model, *platform.Error) {
 	owner, ok := t.App(enterprisemodel.ID).(enterpriseLinkModel)
 	if !ok {
 		return enterprisemodel.Model{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_NOT_FOUND, "The enterprise model is unavailable")
@@ -24,7 +23,7 @@ func (t *Tenant) tenantLinkModel() (enterprisemodel.Model, *kernel.Error) {
 	return owner.Model(), nil
 }
 
-func (t *Tenant) tenantConnection(c platform.Caller, id string, now time.Time) (dataowner.Connection, *kernel.Error) {
+func (t *Tenant) tenantConnection(c platform.Caller, id string, now time.Time) (dataowner.Connection, *platform.Error) {
 	c = platform.RouteCaller(c, build.ID)
 	c.Automation = false
 	permission := c.Authorize(platform.AuthzRequest{Principal: c.ID, Tenant: c.Tenant, Kind: "read", Type: dataowner.ConnectionType, Record: id, Fields: []string{"kind", "address", "secret", "allowPrivate", "state", "published", "marking"}}, now)
@@ -56,7 +55,7 @@ func (t *Tenant) tenantConnection(c platform.Caller, id string, now time.Time) (
 	return fixed, nil
 }
 
-func (t *Tenant) checkTenantConnection(c platform.Caller, id string, now time.Time) *kernel.Error {
+func (t *Tenant) checkTenantConnection(c platform.Caller, id string, now time.Time) *platform.Error {
 	_, err := t.tenantConnection(c, id, now)
 	return err
 }

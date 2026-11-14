@@ -4,7 +4,6 @@ import (
 	"cmp"
 	"net/http"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 	"platformserver/kernel/records"
 	"platformserver/kernel/transport"
 	"platformserver/platform"
@@ -63,7 +62,7 @@ func (t *Tenant) initializeResources(now time.Time) error {
 }
 
 func (h *Host) routesResources(rt *routes) {
-	rt.recordRead(transport.Route{Pattern: "GET /v1/markings/{id}/resources", Summary: "Resources carrying a marking, without their data", Answer: []build.ResourceEntry{}}, transport.Answering(func(r *http.Request, m platform.Member, t *Tenant) ([]build.ResourceEntry, *kernel.Error) {
+	rt.recordRead(transport.Route{Pattern: "GET /v1/markings/{id}/resources", Summary: "Resources carrying a marking, without their data", Answer: []build.ResourceEntry{}}, transport.Answering(func(r *http.Request, m platform.Member, t *Tenant) ([]build.ResourceEntry, *platform.Error) {
 		caller := t.caller(m, t.App("platform"), false)
 		if refusal := authorizationRefusal(t.authorizeNative(caller, "GET /v1/markings/{id}/resources", "read", []string{"admin", platform.Auditor}, true)); refusal != nil {
 			return nil, refusal
@@ -95,7 +94,7 @@ func (h *Host) routesResources(rt *routes) {
 			}}.Eligible(branch, m.ID, projects, required))
 	})
 	rt.recordRead(transport.Route{Pattern: "GET /v1/working-state/{branch}", Summary: "All current builder's private resource edits on this branch", Answer: build.WorkingStateList{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
-		list, refusal, err := build.ReadWorkingStates(r.PathValue("branch"), func(query platform.Query) ([]any, *kernel.Error) {
+		list, refusal, err := build.ReadWorkingStates(r.PathValue("branch"), func(query platform.Query) ([]any, *platform.Error) {
 			page, refusal := t.objectOwner(t.Projection).Records(m, build.WorkingStateType, query, h.Now())
 			return page.Records, refusal
 		})
@@ -118,7 +117,7 @@ func (h *Host) routesResources(rt *routes) {
 	rt.recordRead(transport.Route{Pattern: "GET /v1/resources", Summary: "Visible resource identities and their project and folder locations", Answer: build.ResourceDirectory{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
 		WriteJSON(w, http.StatusOK, t.resourceDirectory(m))
 	})
-	rt.recordRead(transport.Route{Pattern: "GET /v1/resources/{rid}", Summary: "Resolve one stable resource identity", Answer: build.ResourceEntry{}}, transport.Answering(func(r *http.Request, m platform.Member, t *Tenant) (build.ResourceEntry, *kernel.Error) {
+	rt.recordRead(transport.Route{Pattern: "GET /v1/resources/{rid}", Summary: "Resolve one stable resource identity", Answer: build.ResourceEntry{}}, transport.Answering(func(r *http.Request, m platform.Member, t *Tenant) (build.ResourceEntry, *platform.Error) {
 		entries := t.resourceDirectory(m).Resources
 		index := slices.IndexFunc(entries, func(entry build.ResourceEntry) bool { return entry.ID == r.PathValue("rid") })
 		if index < 0 {

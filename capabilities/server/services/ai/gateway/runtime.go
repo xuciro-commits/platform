@@ -4,7 +4,6 @@ import (
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 	acceptedformat "platformserver/kernel/acceptedformat"
 	"platformserver/platform"
 	"platformserver/services/ai/gateway/providers"
@@ -17,35 +16,35 @@ type Runtime struct {
 	Settings        func(string, string) string
 	Resolver        Resolver
 	Suspended       func(string) bool
-	DesignAllowed   func(platform.Member) *kernel.Error
-	ModelAllowed    func(platform.Member, string) *kernel.Error
+	DesignAllowed   func(platform.Member) *platform.Error
+	ModelAllowed    func(platform.Member, string) *platform.Error
 	FunctionAllowed func(string, ModelAsk, time.Time) bool
 	Available       func(string, time.Time, bool) bool
 	Report          func(string, bool, time.Time)
 	Provider        func(platform.AIProvider, func()) providers.Client
 	Transcribe      func(time.Time, string, string, string, []byte, []byte, string)
 	Reserve         func(platform.Member, platform.AIModel, platform.ChatRequest, int, int, time.Time) *platform.AIError
-	Release         func(string, time.Time) *kernel.Error
-	Meter           func(platform.Member, platform.AIUsage) *kernel.Error
+	Release         func(string, time.Time) *platform.Error
+	Meter           func(platform.Member, platform.AIUsage) *platform.Error
 	Call            func(platform.AIProvider, platform.AIModel, platform.Member, platform.ChatRequest, time.Time) (platform.ChatAnswer, *platform.AIError)
 	Queued          func(func(platform.Effect) bool) int
 	ProviderOf      func(string) platform.AIProvider
 	Simulation      bool
 	App             func(string) platform.App
 	Authority       func(string) string
-	Read            func(func(Runtime) *kernel.Error) *kernel.Error
+	Read            func(func(Runtime) *platform.Error) *platform.Error
 }
 
 func (r Runtime) Limits() platform.AIDefaults {
 	return Limits(func(app, name string) string { return r.Settings(app, name) })
 }
 
-func (r Runtime) Chat(m platform.Member, req platform.ChatRequest, stage string, now time.Time, delta ...func(string)) (platform.ChatAnswer, *kernel.Error, *platform.AIError) {
+func (r Runtime) Chat(m platform.Member, req platform.ChatRequest, stage string, now time.Time, delta ...func(string)) (platform.ChatAnswer, *platform.Error, *platform.AIError) {
 	return ChatRun{Available: r.Models != nil, Call: r.Call, Meter: r.Meter,
-		Setup: func(req platform.ChatRequest) (model platform.AIModel, pv platform.AIProvider, prepared platform.ChatRequest, refusal *kernel.Error) {
-			read := r.Read(func(current Runtime) *kernel.Error {
+		Setup: func(req platform.ChatRequest) (model platform.AIModel, pv platform.AIProvider, prepared platform.ChatRequest, refusal *platform.Error) {
+			read := r.Read(func(current Runtime) *platform.Error {
 				model, pv, prepared, refusal = ChatSetup{
-					Design: func() *kernel.Error {
+					Design: func() *platform.Error {
 						if stage != platform.AIStageDesign {
 							return nil
 						}
@@ -53,7 +52,7 @@ func (r Runtime) Chat(m platform.Member, req platform.ChatRequest, stage string,
 					},
 					Suspended: current.Suspended,
 					Callable:  current.Models.Callable,
-					Authorize: func(name string) *kernel.Error {
+					Authorize: func(name string) *platform.Error {
 						return current.ModelAllowed(m, name)
 					},
 					Resolver: current.Resolver,
@@ -88,17 +87,17 @@ func (r Runtime) Plan(c platform.Caller, rec *pb.ChangeRecord, q platform.Reques
 
 func (r Runtime) Send(x platform.Effect, now time.Time) (platform.Outcome, *platform.AIUsage) {
 	return ModelDispatch{Call: r.Call,
-		Gate: func(ask ModelAsk, m platform.Member, out platform.Outcome) (platform.Outcome, platform.AIModel, platform.AIProvider, bool, *kernel.Error) {
+		Gate: func(ask ModelAsk, m platform.Member, out platform.Outcome) (platform.Outcome, platform.AIModel, platform.AIProvider, bool, *platform.Error) {
 			var gated platform.Outcome
 			var enabled platform.AIModel
 			var pv platform.AIProvider
 			var ready bool
-			refusal := r.Read(func(current Runtime) *kernel.Error {
+			refusal := r.Read(func(current Runtime) *platform.Error {
 				gated, enabled, pv, ready = ask.Ready(out, ModelSend{
 					Allowed:   func() bool { return current.FunctionAllowed(x.App, ask, now) },
 					Available: current.Models != nil,
 					Model:     current.Models.Model,
-					Authorize: func(name string) *kernel.Error {
+					Authorize: func(name string) *platform.Error {
 						return current.ModelAllowed(m, name)
 					},
 					Resolver: current.Resolver,

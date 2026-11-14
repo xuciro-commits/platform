@@ -18,7 +18,6 @@ import (
 	"go.opentelemetry.io/otel/trace"
 	"google.golang.org/protobuf/encoding/protojson"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 	"platformserver/platform"
 	"platformserver/services/actions"
 	"platformserver/services/ai/runtime"
@@ -55,8 +54,8 @@ func (a *monitoringFixture) Snapshot() (json.RawMessage, error) {
 	return a.ledger.Snapshot()
 }
 func (a *monitoringFixture) Restore(raw json.RawMessage) error { return a.ledger.Restore(raw) }
-func (a *monitoringFixture) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *kernel.Error) {
-	return a.ledger.Receive(c, s, now, nil, func() (func(*pb.ChangeRecord), *kernel.Error) {
+func (a *monitoringFixture) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *platform.Error) {
+	return a.ledger.Receive(c, s, now, nil, func() (func(*pb.ChangeRecord), *platform.Error) {
 		if s.GetSchema().GetName() == "probe.undo" && a.undoBlocked.Load() {
 			return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The probe undo failed")
 		}
@@ -66,7 +65,7 @@ func (a *monitoringFixture) Submit(c platform.Caller, s *pb.Submission, now time
 	})
 }
 func (a *monitoringFixture) Manifest() platform.Manifest {
-	failed := platform.Step{Name: "fail", End: true, NoRetry: true, Output: func(platform.Caller, *platform.Run) (json.RawMessage, *kernel.Error) {
+	failed := platform.Step{Name: "fail", End: true, NoRetry: true, Output: func(platform.Caller, *platform.Run) (json.RawMessage, *platform.Error) {
 		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The probe Flow failed")
 	}}
 	target := func(_ platform.Caller, r *platform.Run) string { return "step:" + r.ID }
@@ -99,7 +98,7 @@ func (a *monitoringFixture) Manifest() platform.Manifest {
 			Input: platform.ValueSchema{Type: "string"}, Output: platform.ValueSchema{Type: "string"}, Binding: platform.OperationBinding{Kind: "native"},
 			Limits: platform.OperationLimits{TimeoutMillis: 100, MemoryPages: 1, MaxInputBytes: 1024, MaxOutputBytes: 1024}}}}
 }
-func (a *monitoringFixture) Run(platform.Caller, string, time.Time) *kernel.Error {
+func (a *monitoringFixture) Run(platform.Caller, string, time.Time) *platform.Error {
 	return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The probe job failed")
 }
 func (a *monitoringFixture) Compute(_ context.Context, _ string, input json.RawMessage) (json.RawMessage, error) {
@@ -543,7 +542,7 @@ func TestInvariantK4MonitoringOwnerBoundaries(t *testing.T) {
 		if recorder.Code != http.StatusUnauthorized {
 			t.Fatalf("anonymous monitoring: HTTP %d", recorder.Code)
 		}
-		_, refusal := recordRead(live.Tenant, context.Background(), func(t *Tenant) (monitoring.MonitoringRunPage, *kernel.Error) {
+		_, refusal := recordRead(live.Tenant, context.Background(), func(t *Tenant) (monitoring.MonitoringRunPage, *platform.Error) {
 			return t.monitoringRuns(platform.Member{ID: "admin", Tenant: "another-tenant", Roles: admin.Roles}, monitoring.MonitoringRunFilter{Limit: 50}, now)
 		})
 		if refusal == nil {

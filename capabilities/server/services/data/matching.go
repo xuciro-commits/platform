@@ -7,7 +7,6 @@ import (
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 	"platformserver/platform"
 )
 
@@ -16,7 +15,7 @@ const MatchType = "build.match"
 func (o *Owner) matchEntity() platform.Entity {
 	return platform.Entity{Type: MatchType, Title: "Matching rule", Plural: "Matching rules", Model: Match{}, Display: "title",
 		Description: "When rows from different systems are one party, material or site, and whose value wins per field.",
-		Validate: func(c platform.Caller, record any) *kernel.Error {
+		Validate: func(c platform.Caller, record any) *platform.Error {
 			m := record.(*Match)
 			if m.State == "published" {
 				fixed, err := o.ExecutionMatching(*m)
@@ -35,10 +34,10 @@ func (o *Owner) matchEntity() platform.Entity {
 				{Name: "pause", Title: "Pause", Description: "Stop matching; records stay as they are.", From: []string{"published"}, To: []string{"draft"}, Roles: []string{Builder, Integrator}, Capability: "integrations", Payload: []platform.Field{}}}}}
 }
 
-func (o *Owner) publishMatch(c platform.Caller, record any, _ json.RawMessage, _ time.Time) *kernel.Error {
+func (o *Owner) publishMatch(c platform.Caller, record any, _ json.RawMessage, _ time.Time) *platform.Error {
 	m, ok := record.(*Match)
 	if !ok {
-		return &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
+		return &platform.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 	}
 	if err := o.checkMatch(c, *m); err != nil {
 		return err
@@ -54,8 +53,8 @@ func (o *Owner) publishMatch(c platform.Caller, record any, _ json.RawMessage, _
 	return nil
 }
 
-func (o *Owner) checkMatch(c platform.Caller, m Match) *kernel.Error {
-	refuse := func(message string, args ...any) *kernel.Error {
+func (o *Owner) checkMatch(c platform.Caller, m Match) *platform.Error {
+	refuse := func(message string, args ...any) *platform.Error {
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, message, args...)
 	}
 	if err := o.checkName(m.Name, m.ID); err != nil {

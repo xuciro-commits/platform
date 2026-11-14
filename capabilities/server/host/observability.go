@@ -7,7 +7,6 @@ import (
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 	runtimekernel "platformserver/kernel"
 	"platformserver/kernel/transport"
 	"platformserver/platform"
@@ -78,7 +77,7 @@ func (h *Host) observeRequest(t *Tenant, m platform.Member, correlation transpor
 	t.recordObservation(monitoring.RequestObservation(h.Now(), m.ID, route, correlation.RequestID, correlation.TraceID, correlation.SpanID, status, duration))
 }
 
-func (t *Tenant) observeSubmission(r *http.Request, m platform.Member, sub *pb.Submission, record *pb.ChangeRecord, refusal *kernel.Error, at time.Time) {
+func (t *Tenant) observeSubmission(r *http.Request, m platform.Member, sub *pb.Submission, record *pb.ChangeRecord, refusal *platform.Error, at time.Time) {
 	correlation := transport.CorrelationOf(r.Context())
 	t.recordObservation(monitoring.SubmissionObservation(at, m.ID, correlation.RequestID, correlation.TraceID, correlation.SpanID, sub, record, refusal))
 }

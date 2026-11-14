@@ -3,7 +3,6 @@ package platform
 import (
 	"encoding/json"
 	"fmt"
-	"platformkernel/kernel"
 	"slices"
 	"strings"
 	"time"
@@ -116,7 +115,7 @@ func VersioningConstraints(v *Versioning) []Constraint {
 	}
 }
 
-func (c Caller) PrepareBusinessVersions(record any, at time.Time) *kernel.Error {
+func (c Caller) PrepareBusinessVersions(record any, at time.Time) *Error {
 	if c.Replaying {
 		return nil
 	}

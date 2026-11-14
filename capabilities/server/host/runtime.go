@@ -4,7 +4,6 @@ import (
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 	runtimekernel "platformserver/kernel"
 	"platformserver/platform"
 )
@@ -19,14 +18,14 @@ func (r runtime) ReadScoped() bool { return r.scoped || r.t != nil && r.t.readOr
 
 var _ platform.Runtime = runtime{}
 
-func (r runtime) CheckEnterpriseUsage(c platform.Caller, id, until string, deleting bool, now time.Time) *kernel.Error {
+func (r runtime) CheckEnterpriseUsage(c platform.Caller, id, until string, deleting bool, now time.Time) *platform.Error {
 	return r.t.checkEnterpriseUsage(c, r.t.Projection, id, until, deleting, now)
 }
-func (r runtime) CheckEnterpriseTenantConnection(c platform.Caller, id string, now time.Time) *kernel.Error {
+func (r runtime) CheckEnterpriseTenantConnection(c platform.Caller, id string, now time.Time) *platform.Error {
 	return r.t.checkTenantConnection(c, id, now)
 }
 
-func (r runtime) ProbeDecision(c platform.Caller, decide func(platform.Caller) *kernel.Error) *kernel.Error {
+func (r runtime) ProbeDecision(c platform.Caller, decide func(platform.Caller) *platform.Error) *platform.Error {
 	return r.t.newStagedDecision().runProbe(c, decide)
 }
 
@@ -34,7 +33,7 @@ func (r runtime) Publish(c platform.Caller, record *pb.ChangeRecord) {
 	r.t.publish(platform.Event{App: c.App, Record: record})
 }
 
-func (r runtime) Probe(c platform.Caller, protocol, action, id string, payload []byte, now time.Time) *kernel.Error {
+func (r runtime) Probe(c platform.Caller, protocol, action, id string, payload []byte, now time.Time) *platform.Error {
 	return r.t.router().Probe(c, protocol, action, id, payload, now)
 }
 
@@ -47,7 +46,7 @@ func (r runtime) Request(c platform.Caller, rec *pb.ChangeRecord, q platform.Req
 	}
 }
 
-func (r runtime) Query(c platform.Caller, protocol, read string, provider ...string) ([]platform.ProviderResult, *kernel.Error) {
+func (r runtime) Query(c platform.Caller, protocol, read string, provider ...string) ([]platform.ProviderResult, *platform.Error) {
 	return r.t.router().Query(c, protocol, read, provider...)
 }
 
@@ -57,7 +56,7 @@ func (r runtime) Notify(c platform.Caller, n platform.Notification, now time.Tim
 
 func (r runtime) Setting(c platform.Caller, name string) string { return r.t.setting(c, name) }
 
-func (r runtime) Emit(c platform.Caller, kind, key, entity string, data any, now time.Time) (int, *kernel.Error) {
+func (r runtime) Emit(c platform.Caller, kind, key, entity string, data any, now time.Time) (int, *platform.Error) {
 	return r.t.emitFor(c, kind, key, entity, data, now)
 }
 
@@ -79,15 +78,15 @@ func (r runtime) Related(_ platform.Caller, element, stereotype string, outgoing
 
 func (r runtime) Links(c platform.Caller, entity string) []string { return r.roles().Links(c, entity) }
 
-func (r runtime) Link(c platform.Caller, from, to *pb.EntityRef, key string, now time.Time) *kernel.Error {
+func (r runtime) Link(c platform.Caller, from, to *pb.EntityRef, key string, now time.Time) *platform.Error {
 	return r.roles().Link(c, from, to, key, now)
 }
 
-func (r runtime) Assign(c platform.Caller, rec *pb.ChangeRecord, a platform.Assignment) *kernel.Error {
+func (r runtime) Assign(c platform.Caller, rec *pb.ChangeRecord, a platform.Assignment) *platform.Error {
 	return r.roles().Assign(c, rec, a)
 }
 
-func (r runtime) Next(c platform.Caller, rec *pb.ChangeRecord, sequence string, date time.Time) (string, *kernel.Error) {
+func (r runtime) Next(c platform.Caller, rec *pb.ChangeRecord, sequence string, date time.Time) (string, *platform.Error) {
 	return r.t.Sequences.Next(rec, c.App, r.t.App(c.App), sequence, date)
 }
 
@@ -95,7 +94,7 @@ func (r runtime) Readable(c platform.Caller, ref string) bool {
 	return r.t.readable(c.Member, ref, time.Now())
 }
 
-func (r runtime) BoundProvider(c platform.Caller, protocol string) (string, *kernel.Error) {
+func (r runtime) BoundProvider(c platform.Caller, protocol string) (string, *platform.Error) {
 	return r.t.router().BoundProvider(c, protocol)
 }
 

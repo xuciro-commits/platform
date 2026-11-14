@@ -7,7 +7,6 @@ import (
 
 	"google.golang.org/protobuf/encoding/protojson"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 	"platformserver/kernel/acceptedformat"
 	"platformserver/platform"
 )
@@ -17,7 +16,7 @@ type RefusalView struct {
 	Readable   func(ref string) bool
 	Exists     func() bool
 	Correction func(*pb.Submission) string
-	Category   func(kernel.Error, *platform.BusinessRefusalFact, []platform.FieldIssue) (string, string)
+	Category   func(platform.Error, *platform.BusinessRefusalFact, []platform.FieldIssue) (string, string)
 	Changes    func(before, after []byte) []platform.BusinessInputChange
 	Issues     func([]platform.FieldIssue) []platform.FieldIssue
 	Fact       func(platform.BusinessRefusalFact) platform.BusinessRefusalFact

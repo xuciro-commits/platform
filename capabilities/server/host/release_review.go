@@ -1,7 +1,6 @@
 package host
 
 import (
-	"platformkernel/kernel"
 	"platformserver/platform"
 	releaseowner "platformserver/services/devops/releases"
 	"platformserver/services/resources/authoring"
@@ -41,7 +40,7 @@ func (t *Tenant) SavedReleases(m platform.Member, offset, limit int, application
 func (t *Tenant) ReviewSavedRelease(m platform.Member, id string) (releaseowner.SavedReleaseReview, error) {
 	return buildRead(t, m, "GET /v1/releases/candidates/{id}", []string{build.Builder, build.Publisher}, func(t *Tenant) (releaseowner.SavedReleaseReview, error) {
 		return t.releaseAcceptance().Review(id, m, releaseowner.ReviewContext{
-			AI: func(assets []platform.ReleaseAsset, visible map[platform.AssetRef]bool) ([]platform.ApplicationAI, *kernel.Error) {
+			AI: func(assets []platform.ReleaseAsset, visible map[platform.AssetRef]bool) ([]platform.ApplicationAI, *platform.Error) {
 				return t.applicationAILocked(m, assets, visible)
 			}, Extensions: t.releaseExtensionReview, Running: t.releaseAcceptance().Running,
 			CheckExisting: func(id string, raw []byte) error {

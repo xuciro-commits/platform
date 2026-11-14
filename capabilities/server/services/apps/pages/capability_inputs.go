@@ -7,12 +7,11 @@ import (
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 	"platformserver/platform"
 )
 
-func BindCapabilityInputs(caller platform.Caller, q platform.CapabilityInvocation, now time.Time) (json.RawMessage, []string, *kernel.Error) {
-	refuse := func(message string) (json.RawMessage, []string, *kernel.Error) {
+func BindCapabilityInputs(caller platform.Caller, q platform.CapabilityInvocation, now time.Time) (json.RawMessage, []string, *platform.Error) {
+	refuse := func(message string) (json.RawMessage, []string, *platform.Error) {
 		return nil, nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, message)
 	}
 	if len(q.Bindings) > 64 {
@@ -55,7 +54,7 @@ func BindCapabilityInputs(caller platform.Caller, q platform.CapabilityInvocatio
 				if !ok || id == "" {
 					return refuse("Source needs an object and record ID")
 				}
-				var err *kernel.Error
+				var err *platform.Error
 				subject, err = caller.ReadRecord(typ, id, now)
 				if err != nil {
 					return nil, nil, err

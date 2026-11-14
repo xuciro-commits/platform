@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"platformkernel/kernel"
 	acceptedformat "platformserver/kernel/acceptedformat"
 	"slices"
 	"time"
@@ -20,7 +19,7 @@ func (t *Tenant) sealer() releaseowner.Sealer {
 		Tenant: t.ID,
 		Files:  t.files(),
 		Raw: func(id string) ([]byte, error) {
-			raw, refusal := recordRead(t, context.Background(), func(t *Tenant) ([]byte, *kernel.Error) { return slices.Clone(t.releases.Raw(id)), nil })
+			raw, refusal := recordRead(t, context.Background(), func(t *Tenant) ([]byte, *platform.Error) { return slices.Clone(t.releases.Raw(id)), nil })
 			if refusal != nil {
 				return nil, refusal
 			}
@@ -80,10 +79,10 @@ func MigrateRecords(from, to *Tenant, source, target platform.Member, types []st
 	}
 	return controlowner.MigrateRecords(from.ID, to.ID, types, controlowner.MigrationHooks{
 		Hosted: to.Projection.TypeNames,
-		Export: func(typ string) ([]byte, *kernel.Error) {
+		Export: func(typ string) ([]byte, *platform.Error) {
 			return from.Export(context.Background(), source, typ, platform.Query{}, now)
 		},
-		Import: func(typ string, data []byte) ([]platform.ImportRow, *kernel.Error) {
+		Import: func(typ string, data []byte) ([]platform.ImportRow, *platform.Error) {
 			return to.Import(target, typ, data, false, now)
 		},
 	})

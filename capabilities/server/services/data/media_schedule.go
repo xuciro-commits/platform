@@ -3,13 +3,12 @@ package data
 import (
 	"fmt"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 	"platformserver/platform"
 	"slices"
 )
 
 func (o *Owner) scheduleEntity() platform.Entity {
-	return ScheduleEntity(func(c platform.Caller, schedule *platform.Schedule) *kernel.Error {
+	return ScheduleEntity(func(c platform.Caller, schedule *platform.Schedule) *platform.Error {
 		if err := o.checkName(schedule.Name, schedule.ID); err != nil {
 			return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
 		}

@@ -7,7 +7,6 @@ import (
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 	"platformserver/kernel/acceptedformat"
 	persistence "platformserver/kernel/store"
 	"platformserver/platform"
@@ -43,8 +42,8 @@ type CommittedInput struct {
 	Apply func([]byte) (acceptedformat.Input, bool, error)
 }
 
-func (s *Sequence) AnswerInput(a platform.AcceptedInputApp, raw []byte, quarantine func(error)) (any, *kernel.Error) {
-	conflict := &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
+func (s *Sequence) AnswerInput(a platform.AcceptedInputApp, raw []byte, quarantine func(error)) (any, *platform.Error) {
+	conflict := &platform.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
 	result, err := acceptedformat.DecodeInput(raw)
 	if err != nil || result.Tenant != s.ID || result.App != a.Manifest().ID {
 		quarantine(fmt.Errorf("saved connector answer is incompatible: %v", err))
@@ -61,8 +60,8 @@ func (s *Sequence) AnswerInput(a platform.AcceptedInputApp, raw []byte, quaranti
 	return answer, nil
 }
 
-func (s *Sequence) FinishInput(a platform.AcceptedInputApp, m platform.Member, name, key, hash string, committed []byte, h CommittedInput) (answer any, refusal *kernel.Error) {
-	conflict := &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
+func (s *Sequence) FinishInput(a platform.AcceptedInputApp, m platform.Member, name, key, hash string, committed []byte, h CommittedInput) (answer any, refusal *platform.Error) {
+	conflict := &platform.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
 	defer func() {
 		if failure := recover(); failure != nil {
 			h.Quarantine(fmt.Errorf("apply committed connector result: %v", failure))
@@ -88,7 +87,7 @@ func (s *Sequence) FinishInput(a platform.AcceptedInputApp, m platform.Member, n
 type InputDraft struct {
 	Decision *Decision
 	Sources  func() ResultSources
-	Decide   func(a platform.AcceptedInputApp, m platform.Member, name string, body []byte, at time.Time) (any, *kernel.Error, bool)
+	Decide   func(a platform.AcceptedInputApp, m platform.Member, name string, body []byte, at time.Time) (any, *platform.Error, bool)
 }
 
 type InputAcceptance struct {
@@ -101,14 +100,14 @@ type InputAcceptance struct {
 	Commit    func(entry persistence.Entry, key, hash string) ([]byte, error)
 }
 
-func (s *Sequence) AcceptInput(a platform.AcceptedInputApp, m platform.Member, name string, body []byte, now time.Time, h InputAcceptance) (any, *kernel.Error) {
+func (s *Sequence) AcceptInput(a platform.AcceptedInputApp, m platform.Member, name string, body []byte, now time.Time, h InputAcceptance) (any, *platform.Error) {
 	app := a.Manifest().ID
 	if m.ID == "" || m.Tenant != s.ID || name == "" {
 		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "The connector input has an invalid identity")
 	}
 	hash, hashErr := acceptedformat.InputHash(s.ID, app, name, m.ID, body)
 	if hashErr != nil {
-		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
+		return nil, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 	}
 	key := "input:" + hash
 	if saved := s.Committed.Input(app + "/" + key); len(saved) != 0 {
@@ -140,7 +139,7 @@ func (s *Sequence) AcceptInput(a platform.AcceptedInputApp, m platform.Member, n
 		err = h.Prepare(result.ChangePlan())
 	}
 	if err != nil {
-		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
+		return nil, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
 	}
 	var versions map[string]int
 	if h.Flows {
@@ -152,7 +151,7 @@ func (s *Sequence) AcceptInput(a platform.AcceptedInputApp, m platform.Member, n
 	}
 	committed, err := h.Commit(candidate, key, hash)
 	if err != nil {
-		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
+		return nil, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
 	}
 	return s.FinishInput(a, m, name, key, hash, committed, h.CommittedInput)
 }

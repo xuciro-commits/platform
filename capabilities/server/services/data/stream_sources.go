@@ -4,12 +4,11 @@ import (
 	"slices"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 	"platformserver/platform"
 )
 
-func BindStream(name string, intake *platform.StreamIntake, source Source, connection Connection, m platform.Member) (string, *kernel.Error) {
-	refuse := func(message string) (string, *kernel.Error) {
+func BindStream(name string, intake *platform.StreamIntake, source Source, connection Connection, m platform.Member) (string, *platform.Error) {
+	refuse := func(message string) (string, *platform.Error) {
 		return "", platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, message)
 	}
 	if !source.Stream || source.State != "published" || source.Name != name || source.Since == "" || source.Profile != "table" {
@@ -35,7 +34,7 @@ func BindStream(name string, intake *platform.StreamIntake, source Source, conne
 	return hash, nil
 }
 
-func (source Source) CheckCheckpoint(connection Connection, hash string, intake *platform.StreamIntake, x platform.FlowInstance, checkpoint platform.FlowSourceCheckpoint, tick bool) *kernel.Error {
+func (source Source) CheckCheckpoint(connection Connection, hash string, intake *platform.StreamIntake, x platform.FlowInstance, checkpoint platform.FlowSourceCheckpoint, tick bool) *platform.Error {
 	refs := []string{SourceType + "/" + source.ID, ConnectionType + "/" + connection.ID}
 	if checkpoint.Record != source.ID || checkpoint.Config != hash || !slices.Equal(checkpoint.Sources, refs) || x.Batch != nil && x.Batch.Source != nil && (x.Batch.Source.Record != source.ID || x.Batch.Source.Config != hash) || intake.Offset == "latest" && (!checkpoint.Initialized || checkpoint.Offset != "latest") || checkpoint.Initialized && checkpoint.Offset != intake.Offset {
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The Flow source configuration or protected references changed")

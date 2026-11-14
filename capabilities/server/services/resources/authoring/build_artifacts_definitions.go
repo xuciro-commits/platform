@@ -10,7 +10,6 @@ import (
 	"strings"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 	"platformserver/platform"
 	dataowner "platformserver/services/data"
 )
@@ -187,7 +186,7 @@ func portableDefinitionInstallation[T, D any](image json.RawMessage, typ, label 
 	return platform.AssetInstallation{Ref: asset.Ref, Schema: descriptor.publication(), Record: descriptor.record(family.ID), Image: slices.Clone(image)}, nil
 }
 
-func publishRetainedDefinition[T any](c platform.Caller, record *T, limitMessage string, install func(platform.Caller, T) error) *kernel.Error {
+func publishRetainedDefinition[T any](c platform.Caller, record *T, limitMessage string, install func(platform.Caller, T) error) *platform.Error {
 	family := definitionFamilyOf(*record)
 	if family.Version >= 64 {
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, limitMessage)

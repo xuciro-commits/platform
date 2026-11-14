@@ -3,12 +3,11 @@ package objects
 import (
 	"encoding/json"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 	"platformserver/kernel/records"
 	"platformserver/platform"
 )
 
-func (t *Owner) traversalAround(store *records.Store, m platform.Member, typ string, q platform.Query) (*platform.SearchAround, *kernel.Error) {
+func (t *Owner) traversalAround(store *records.Store, m platform.Member, typ string, q platform.Query) (*platform.SearchAround, *platform.Error) {
 	edge := q.Traversal
 	if edge == nil {
 		return nil, nil

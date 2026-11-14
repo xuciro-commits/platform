@@ -6,7 +6,6 @@ import (
 	"fmt"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 
 	"platformserver/platform"
 	"platformserver/services/ai/evaluation"
@@ -107,7 +106,7 @@ func memoryEntity() platform.Entity {
 				{Name: "forgotten", Title: "Forgotten", Tone: "neutral"}},
 			Transitions: []platform.Transition{
 				{Name: "keep", Title: "Keep", From: []string{"proposed", "active"}, To: []string{"active"}, Roles: people, Capability: "memory",
-					Description: "Keep a memory for good: an agent administrator any, a person those about them.", Do: func(c platform.Caller, record any, _ json.RawMessage, _ time.Time) *kernel.Error {
+					Description: "Keep a memory for good: an agent administrator any, a person those about them.", Do: func(c platform.Caller, record any, _ json.RawMessage, _ time.Time) *platform.Error {
 						m := record.(*platform.Memory)
 						if err := mayRemember(c, *m); err != nil {
 							return err
@@ -116,17 +115,17 @@ func memoryEntity() platform.Entity {
 						return nil
 					}},
 				{Name: "forget", Title: "Forget", From: []string{"proposed", "active"}, To: []string{"forgotten"}, Roles: people, Capability: "memory",
-					Description: "Forget a memory: an agent administrator any, a person those about them.", Do: func(c platform.Caller, record any, _ json.RawMessage, _ time.Time) *kernel.Error {
+					Description: "Forget a memory: an agent administrator any, a person those about them.", Do: func(c platform.Caller, record any, _ json.RawMessage, _ time.Time) *platform.Error {
 						return mayRemember(c, *record.(*platform.Memory))
 					}},
 			}}}
 }
 
-func mayRemember(c platform.Caller, m platform.Memory) *kernel.Error {
+func mayRemember(c platform.Caller, m platform.Memory) *platform.Error {
 	if c.Replaying || c.Roles[platform.AgentApp] == platform.AgentAdmin || m.For != "" && m.For == c.ID {
 		return nil
 	}
-	return &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_POLICY_DENIED}
+	return &platform.Error{Code: pb.ErrorCode_ERROR_CODE_POLICY_DENIED}
 }
 
 func (a *Agents) remember(c platform.Caller, run *platform.AgentRunRecord, fact string, aboutPerson bool, now time.Time) (string, func(*pb.ChangeRecord)) {

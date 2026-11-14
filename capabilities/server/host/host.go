@@ -6,7 +6,6 @@ import (
 	"sync/atomic"
 	"time"
 
-	"platformkernel/kernel"
 	runtimekernel "platformserver/kernel"
 	"platformserver/kernel/protocol"
 	records "platformserver/kernel/records"
@@ -43,7 +42,7 @@ type Tenant struct {
 	simulationTrace   func(platform.DecisionTrace)
 	schedules         dataowner.ReadSchedules
 	runIndex          runtimekernel.RunIndexCache[[]monitoring.MonitoringCoverage]
-	controlAnswer     func(platform.Effect, platform.Outcome, time.Time) *kernel.Error
+	controlAnswer     func(platform.Effect, platform.Outcome, time.Time) *platform.Error
 	ownerRoles
 	index        *knowledgeindex.Index
 	i18n         transport.Translator

@@ -11,7 +11,6 @@ import (
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 	"platformserver/kernel/acceptedformat"
 	"platformserver/platform"
 )
@@ -25,7 +24,7 @@ type ResultSources struct {
 	App        func(string) platform.App
 	Control    func() (*acceptedformat.Control, error)
 	Operations func() ([]acceptedformat.OperationCancellation, error)
-	Plan       func(platform.Event) (platform.AcceptedEventPlan, *kernel.Error)
+	Plan       func(platform.Event) (platform.AcceptedEventPlan, *platform.Error)
 }
 
 func (d *Decision) BatchResult(src ResultSources, app string, request *pb.Submission, receipt *pb.ChangeRecord, at time.Time) ([]byte, error) {

@@ -7,7 +7,6 @@ import (
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 	"platformserver/platform"
 	automateowner "platformserver/services/automate"
 )
@@ -24,7 +23,7 @@ type Environment interface {
 	Entity(string) (platform.EntityInfo, bool)
 	Query(string, int) (platform.NamedQuery, int, bool)
 	ValidateQuery(platform.NamedQuery) error
-	CheckIntake(platform.Caller, Process) *kernel.Error
+	CheckIntake(platform.Caller, Process) *platform.Error
 	FunctionCallAction() string
 	FunctionResult(platform.Caller, string) (FunctionOutcome, bool)
 	JointMode() bool
@@ -49,7 +48,7 @@ func (o *Owner) ProcessEntity() platform.Entity {
 		Lifecycle: &platform.Lifecycle{Field: "state", Initial: "draft", States: []platform.State{{Name: "draft", Title: "Draft", Tone: "warning"}, {Name: "published", Title: "Published", Tone: "success"}},
 			Transitions: []platform.Transition{{Name: "publish", Title: "Publish", From: []string{"draft", "published"}, To: []string{"published"}, Roles: []string{Builder}, Capability: "processes", Payload: []platform.Field{}, Do: o.publishProcess},
 				{Name: "run", Title: "Run", From: []string{"published"}, To: []string{"published"}, Roles: []string{Builder}, Capability: "processes", Payload: []platform.Field{{Name: "subject", Type: "string", Description: "Record to run the automation on"}, {Name: "key", Type: "string", Description: "Stable run key"}, {Name: "input", Type: "string", Description: "Typed JSON input"}}, Do: o.runProcess},
-				{Name: "pause", Title: "Pause", From: []string{"published"}, To: []string{"published"}, Roles: []string{Builder}, Capability: "processes", Payload: []platform.Field{{Name: "reason", Type: "string"}}, Do: func(_ platform.Caller, record any, raw json.RawMessage, _ time.Time) *kernel.Error {
+				{Name: "pause", Title: "Pause", From: []string{"published"}, To: []string{"published"}, Roles: []string{Builder}, Capability: "processes", Payload: []platform.Field{{Name: "reason", Type: "string"}}, Do: func(_ platform.Caller, record any, raw json.RawMessage, _ time.Time) *platform.Error {
 					var input struct {
 						Reason string `json:"reason"`
 					}
@@ -58,7 +57,7 @@ func (o *Owner) ProcessEntity() platform.Entity {
 					record.(*Process).Paused = true
 					return nil
 				}},
-				{Name: "resume", Title: "Resume", From: []string{"published"}, To: []string{"published"}, Roles: []string{Builder}, Capability: "processes", Payload: []platform.Field{}, Do: func(c platform.Caller, record any, _ json.RawMessage, now time.Time) *kernel.Error {
+				{Name: "resume", Title: "Resume", From: []string{"published"}, To: []string{"published"}, Roles: []string{Builder}, Capability: "processes", Payload: []platform.Field{}, Do: func(c platform.Caller, record any, _ json.RawMessage, now time.Time) *platform.Error {
 					current := record.(*Process)
 					installed, _ := readPublished[Process](current.Published)
 					if reason := o.automationOwnerRefusal(c, current.ID, installed, now); reason != nil {
@@ -87,7 +86,7 @@ func (o *Owner) Inventory() ([]Process, error) {
 	return readInventory[Process](c, "process")
 }
 
-func (o *Owner) Check(c platform.Caller, p Process) *kernel.Error {
+func (o *Owner) Check(c platform.Caller, p Process) *platform.Error {
 	models, err := o.env.Objects(c)
 	if err != nil {
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "The object inventory cannot be checked")
@@ -137,7 +136,7 @@ func (o *Owner) CheckDraft(c platform.Caller, record Process, source platform.En
 	return record, priorRef, nextRef, hadPrior, nil
 }
 
-func (o *Owner) checkFlow(p Process, entity platform.Entity, objects []platform.Entity, engines ...platform.RuleEngine) *kernel.Error {
+func (o *Owner) checkFlow(p Process, entity platform.Entity, objects []platform.Entity, engines ...platform.RuleEngine) *platform.Error {
 	plans, err := o.Inventory()
 	if err != nil {
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "The process inventory cannot be checked")
@@ -151,7 +150,7 @@ func (o *Owner) checkFlow(p Process, entity platform.Entity, objects []platform.
 	return o.checkFlowOn(p, entity, objects, engines...)
 }
 
-func (o *Owner) checkFlowOn(p Process, entity platform.Entity, objects []platform.Entity, engines ...platform.RuleEngine) *kernel.Error {
+func (o *Owner) checkFlowOn(p Process, entity platform.Entity, objects []platform.Entity, engines ...platform.RuleEngine) *platform.Error {
 	lookup := ProcessLookup{
 		App:           o.env.AppID(),
 		Entity:        o.env.Entity,
@@ -164,10 +163,10 @@ func (o *Owner) checkFlowOn(p Process, entity platform.Entity, objects []platfor
 	return CheckProcess(p, entity, lookup, objects, engines...)
 }
 
-func (o *Owner) publishProcess(c platform.Caller, record any, _ json.RawMessage, _ time.Time) *kernel.Error {
+func (o *Owner) publishProcess(c platform.Caller, record any, _ json.RawMessage, _ time.Time) *platform.Error {
 	p, ok := record.(*Process)
 	if !ok {
-		return &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
+		return &platform.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 	}
 	procs := o.env.Host().BuildProcesses()
 	if procs == nil {
@@ -204,10 +203,10 @@ func (o *Owner) publishProcess(c platform.Caller, record any, _ json.RawMessage,
 	return nil
 }
 
-func (o *Owner) runProcess(c platform.Caller, record any, raw json.RawMessage, now time.Time) *kernel.Error {
+func (o *Owner) runProcess(c platform.Caller, record any, raw json.RawMessage, now time.Time) *platform.Error {
 	p, ok := record.(*Process)
 	if !ok {
-		return &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
+		return &platform.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 	}
 	if p.Paused {
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The process is paused")
@@ -261,7 +260,7 @@ func (o *Owner) runProcess(c platform.Caller, record any, raw json.RawMessage, n
 		}
 	}
 	start, ok := o.env.Host().BuildProcesses().(interface {
-		StartManual(platform.Caller, string, string, int, string, string, json.RawMessage, time.Time) *kernel.Error
+		StartManual(platform.Caller, string, string, int, string, string, json.RawMessage, time.Time) *platform.Error
 	})
 	if !ok {
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "This tenant runs no manual processes")
@@ -275,12 +274,12 @@ func (o *Owner) Flow(p Process) platform.Flow {
 		FunctionAction: o.env.FunctionCallAction(),
 		FunctionResult: o.env.FunctionResult,
 		StateField:     "state",
-		Refused: func(c platform.Caller, refusal *kernel.Error, now time.Time) {
+		Refused: func(c platform.Caller, refusal *platform.Error, now time.Time) {
 			if p.Kind == "automation" || !p.Manual {
 				o.pauseAutomation(c, p.ID, "The automation owner is no longer authorized", now)
 			}
 		},
-		Notify: func(c platform.Caller, r *platform.Run, step string, n automateowner.NotificationEffect, subject json.RawMessage) (json.RawMessage, *kernel.Error) {
+		Notify: func(c platform.Caller, r *platform.Run, step string, n automateowner.NotificationEffect, subject json.RawMessage) (json.RawMessage, *platform.Error) {
 			member, ok := o.env.Host().Member(r.OnBehalf)
 			if !ok {
 				return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "The initiating member is no longer available")
@@ -299,7 +298,7 @@ func (o *Owner) Flow(p Process) platform.Flow {
 			current, ok := platform.Get[Process](o.env.Host().Automation(c, o.env.AppID()), p.ID)
 			return ok && current.State == "published" && current.Version == p.Version && current.Name == p.Name
 		},
-		Subject: func(c platform.Caller, r *platform.Run) (json.RawMessage, *kernel.Error) {
+		Subject: func(c platform.Caller, r *platform.Run) (json.RawMessage, *platform.Error) {
 			member, ok := o.env.Host().Member(r.OnBehalf)
 			if !ok {
 				return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "The initiating member is no longer available")
@@ -318,14 +317,14 @@ func (o *Owner) Flow(p Process) platform.Flow {
 			}
 			return raw, err
 		},
-		SubjectPath: func(c platform.Caller, r *platform.Run, path []string) (json.RawMessage, []string, *kernel.Error) {
+		SubjectPath: func(c platform.Caller, r *platform.Run, path []string) (json.RawMessage, []string, *platform.Error) {
 			member, known := o.env.Host().Member(r.OnBehalf)
 			if !known {
 				return nil, nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "The initiating member is no longer available")
 			}
 			return o.env.Host().Caller(c, member, o.env.AppID()).ReadRecordPath(p.Object, processSubject(p.Object, r), path, r.Now)
 		},
-		Query: func(c platform.Caller, r *platform.Run, app, name string, version int, input json.RawMessage) (json.RawMessage, *kernel.Error) {
+		Query: func(c platform.Caller, r *platform.Run, app, name string, version int, input json.RawMessage) (json.RawMessage, *platform.Error) {
 			member, ok := o.env.Host().Member(r.OnBehalf)
 			if !ok {
 				return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "The initiating member is no longer available")

@@ -6,7 +6,6 @@ import (
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 	"platformserver/kernel/acceptedformat"
 	"platformserver/platform"
 )
@@ -23,15 +22,15 @@ type RequestAnswers struct {
 	Pending     func() bool
 	Pop         func() PendingRequest
 	Begin       func(name, app, target string) func(outcome string)
-	Attempt     func(func() (*pb.ChangeRecord, *kernel.Error)) (*pb.ChangeRecord, *kernel.Error)
+	Attempt     func(func() (*pb.ChangeRecord, *platform.Error)) (*pb.ChangeRecord, *platform.Error)
 	Router      func() Router
 	Automated   func(platform.Caller, string) platform.Caller
-	Reply       func(c platform.Caller, reply *pb.Submission, now time.Time) *kernel.Error
-	Failure     func() *kernel.Error
+	Reply       func(c platform.Caller, reply *pb.Submission, now time.Time) *platform.Error
+	Failure     func() *platform.Error
 	Unsupported func()
 }
 
-func (r RequestAnswers) Run(now time.Time) *kernel.Error {
+func (r RequestAnswers) Run(now time.Time) *platform.Error {
 	for count := 0; r.Pending(); count++ {
 		if count >= acceptedformat.MaxHops {
 			r.Unsupported()
@@ -43,7 +42,7 @@ func (r RequestAnswers) Run(now time.Time) *kernel.Error {
 	return r.Failure()
 }
 
-func (r RequestAnswers) answer(q PendingRequest, now time.Time) (refusal *kernel.Error) {
+func (r RequestAnswers) answer(q PendingRequest, now time.Time) (refusal *platform.Error) {
 	end := r.Begin("request "+q.Protocol+"#"+q.Action, q.Caller.App, q.Target)
 	outcome := "ok"
 	defer func() {
@@ -60,9 +59,9 @@ func (r RequestAnswers) answer(q PendingRequest, now time.Time) (refusal *kernel
 	}
 	answer := platform.Answer{Tag: q.Tag, Call: q.Target, Action: q.Action, Outcome: "accepted"}
 	var ref *pb.EntityRef
-	_, err := r.Attempt(func() (*pb.ChangeRecord, *kernel.Error) {
+	_, err := r.Attempt(func() (*pb.ChangeRecord, *platform.Error) {
 		var record *pb.ChangeRecord
-		var refusal *kernel.Error
+		var refusal *platform.Error
 		ref, record, refusal = r.Router().Invoke(q.Caller, q.Protocol, q.Action, q.Target,
 			platform.Raw(q.Payload), providerKey, s.GetIdempotencyKey(), now, q.Provider)
 		return record, refusal

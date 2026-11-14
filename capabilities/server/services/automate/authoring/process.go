@@ -7,7 +7,6 @@ import (
 	"slices"
 	"time"
 
-	"platformkernel/kernel"
 	"platformserver/platform"
 	automateowner "platformserver/services/automate"
 )
@@ -142,13 +141,13 @@ type ProcessExecution struct {
 	FunctionAction    string
 	FunctionResult    func(platform.Caller, string) (FunctionOutcome, bool)
 	StateField        string
-	Refused           func(platform.Caller, *kernel.Error, time.Time)
-	Notify            func(platform.Caller, *platform.Run, string, automateowner.NotificationEffect, json.RawMessage) (json.RawMessage, *kernel.Error)
+	Refused           func(platform.Caller, *platform.Error, time.Time)
+	Notify            func(platform.Caller, *platform.Run, string, automateowner.NotificationEffect, json.RawMessage) (json.RawMessage, *platform.Error)
 	Paused            func(platform.Caller) bool
 	ContinuousEnabled func(platform.Caller) bool
-	Subject           func(platform.Caller, *platform.Run) (json.RawMessage, *kernel.Error)
-	SubjectPath       func(platform.Caller, *platform.Run, []string) (json.RawMessage, []string, *kernel.Error)
-	Query             func(platform.Caller, *platform.Run, string, string, int, json.RawMessage) (json.RawMessage, *kernel.Error)
+	Subject           func(platform.Caller, *platform.Run) (json.RawMessage, *platform.Error)
+	SubjectPath       func(platform.Caller, *platform.Run, []string) (json.RawMessage, []string, *platform.Error)
+	Query             func(platform.Caller, *platform.Run, string, string, int, json.RawMessage) (json.RawMessage, *platform.Error)
 }
 
 type FunctionOutcome struct {

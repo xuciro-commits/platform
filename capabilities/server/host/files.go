@@ -7,7 +7,6 @@ import (
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 	"platformserver/kernel/transport"
 	"platformserver/platform"
 	resources "platformserver/services/data/blobs"
@@ -21,9 +20,9 @@ type Upload struct {
 }
 
 func (t *Tenant) Upload(m platform.Member, name, contentType string, body io.Reader, now time.Time) (Upload, int, error) {
-	limit, refusal := recordRead(t, context.Background(), func(t *Tenant) (int, *kernel.Error) {
+	limit, refusal := recordRead(t, context.Background(), func(t *Tenant) (int, *platform.Error) {
 		if t.App(platform.FileApp) == nil {
-			return 0, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
+			return 0, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
 		}
 		return platform.MaxFileSize(t.automation(platform.FileApp, false)), nil
 	})
@@ -49,7 +48,7 @@ func (t *Tenant) SweepUploads(now time.Time) {
 		}
 		return pending
 	}
-	pending, refusal := decideOnImage(t, context.Background(), "uploads:reserve", func(t *Tenant) (map[string]bool, *kernel.Error) {
+	pending, refusal := decideOnImage(t, context.Background(), "uploads:reserve", func(t *Tenant) (map[string]bool, *platform.Error) {
 		retained, refusal := resources.Retention{
 			File: func() (platform.Caller, bool) {
 				return t.automation(platform.FileApp, false), t.App(platform.FileApp) != nil
@@ -63,7 +62,7 @@ func (t *Tenant) SweepUploads(now time.Time) {
 			return reserve(t, retained), nil
 		}
 		return retained, nil
-	}, func(t *Tenant, _ preparedAccepted, retained map[string]bool, refusal *kernel.Error) (map[string]bool, *kernel.Error) {
+	}, func(t *Tenant, _ preparedAccepted, retained map[string]bool, refusal *platform.Error) (map[string]bool, *platform.Error) {
 		if refusal != nil {
 			return nil, refusal
 		}

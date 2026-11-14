@@ -10,7 +10,6 @@ import (
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 
 	runtimekernel "platformserver/kernel"
 	"platformserver/kernel/records"
@@ -30,7 +29,7 @@ func (h hostView) ProtocolContract(id string) (platform.Protocol, bool) {
 	return platform.Protocol{}, false
 }
 
-func (h hostView) ReadProtocolRecords(c platform.Caller, typ string) ([]any, *kernel.Error) {
+func (h hostView) ReadProtocolRecords(c platform.Caller, typ string) ([]any, *platform.Error) {
 	store := h.t.Projection
 	if h.decision != nil {
 		store = h.decision.Records
@@ -137,12 +136,12 @@ func (h hostView) actionOwner(schema string) platform.App {
 	return h.t.App(h.t.owner["action:"+schema])
 }
 
-func (h hostView) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *kernel.Error) {
-	return runtimekernel.SubmitTo(c, h.actionOwner(s.GetSchema().GetName()), &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}, s, now)
+func (h hostView) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *platform.Error) {
+	return runtimekernel.SubmitTo(c, h.actionOwner(s.GetSchema().GetName()), &platform.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}, s, now)
 }
 
-func (h hostView) Attempt(c platform.Caller, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *kernel.Error) {
-	return runtimekernel.AttemptTo(c, func() platform.App { return h.actionOwner(s.GetSchema().GetName()) }, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}, s, now)
+func (h hostView) Attempt(c platform.Caller, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *platform.Error) {
+	return runtimekernel.AttemptTo(c, func() platform.App { return h.actionOwner(s.GetSchema().GetName()) }, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}, s, now)
 }
 
 func (h hostView) Recipients(c platform.Caller, now time.Time, to []platform.Recipient) []string {
@@ -167,7 +166,7 @@ func (h hostView) Seen(c platform.Caller, keys ...string) {
 	h.t.Notices.MarkKeysRead(c.App, keys)
 }
 
-func (h hostView) Invoke(c platform.Caller, protocol, action, id string, payload []byte, key, correlation string, now time.Time) (*pb.EntityRef, *kernel.Error) {
+func (h hostView) Invoke(c platform.Caller, protocol, action, id string, payload []byte, key, correlation string, now time.Time) (*pb.EntityRef, *platform.Error) {
 	ref, _, err := h.t.router().Invoke(c, protocol, action, id, payload, key, correlation, now)
 	return ref, err
 }
@@ -323,7 +322,7 @@ func (h hostView) ProjectApprovals(project string) int {
 	return security.ProjectApprovals(h.t.App("platform"), project)
 }
 
-func (h hostView) CheckResourceSchema(schema string, version *platform.SchemaVersion) *kernel.Error {
+func (h hostView) CheckResourceSchema(schema string, version *platform.SchemaVersion) *platform.Error {
 	if version == nil {
 		return nil
 	}

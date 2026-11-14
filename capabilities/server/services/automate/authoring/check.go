@@ -11,13 +11,12 @@ import (
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 	"platformserver/platform"
 	ontology "platformserver/services/ontology"
 )
 
-func CheckProcess(p Process, entity platform.Entity, lookup ProcessLookup, objects []platform.Entity, engines ...platform.RuleEngine) *kernel.Error {
-	refuse := func(message string, args ...any) *kernel.Error {
+func CheckProcess(p Process, entity platform.Entity, lookup ProcessLookup, objects []platform.Entity, engines ...platform.RuleEngine) *platform.Error {
+	refuse := func(message string, args ...any) *platform.Error {
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, message, args...)
 	}
 	actionModels := map[string]platform.Entity{}
@@ -111,7 +110,7 @@ func CheckProcess(p Process, entity platform.Entity, lookup ProcessLookup, objec
 	}
 	parents := map[string]string{}
 	for _, step := range p.Steps {
-		problem := func(message string) *kernel.Error { return refuse("Node " + step.Name + ": " + message) }
+		problem := func(message string) *platform.Error { return refuse("Node " + step.Name + ": " + message) }
 		if !slices.Contains([]string{"payload", "query", "notify", "action", "transform", "branch", "switch", "foreach", "while", "fork", "join", "ask", "wait", "subflow", "ai", "compute", "end", "fail", "break", "continue"}, step.Kind) {
 			return problem("choose one typed block kind")
 		}
@@ -405,8 +404,8 @@ func CheckProcess(p Process, entity platform.Entity, lookup ProcessLookup, objec
 	return nil
 }
 
-func CheckAutomation(p Process) *kernel.Error {
-	refuse := func(message string, args ...any) *kernel.Error {
+func CheckAutomation(p Process) *platform.Error {
+	refuse := func(message string, args ...any) *platform.Error {
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, message, args...)
 	}
 	if p.Manual || p.Every == "" && (p.Object == "" || p.When == "" && p.Trigger == nil) {

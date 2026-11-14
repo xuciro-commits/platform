@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"google.golang.org/protobuf/proto"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 	"platformserver/platform"
 	"reflect"
 	"slices"
@@ -12,7 +11,7 @@ import (
 	"time"
 )
 
-func (l *authority) ApplyTxnRecord(c platform.Caller, r *pb.ChangeRecord, e platform.Entity, verb, id string, payload json.RawMessage, now time.Time) (refusal *kernel.Error) {
+func (l *authority) ApplyTxnRecord(c platform.Caller, r *pb.ChangeRecord, e platform.Entity, verb, id string, payload json.RawMessage, now time.Time) (refusal *platform.Error) {
 	if c.TraceEnabled() {
 		before, _ := c.ReadRecord(e.Type, id, now)
 		defer func() {
@@ -91,7 +90,7 @@ func (l *authority) ApplyTxnRecord(c platform.Caller, r *pb.ChangeRecord, e plat
 			reflect.ValueOf(value).Elem().FieldByName("State").SetString(state)
 		}
 	}
-	apply, err := l.checked(c, s, now, catalog, func() (func(*pb.ChangeRecord), *kernel.Error) { return standard(c, e, verb, s, now) })()
+	apply, err := l.checked(c, s, now, catalog, func() (func(*pb.ChangeRecord), *platform.Error) { return standard(c, e, verb, s, now) })()
 	if err != nil {
 		return err
 	}
@@ -99,7 +98,7 @@ func (l *authority) ApplyTxnRecord(c platform.Caller, r *pb.ChangeRecord, e plat
 	return nil
 }
 
-func (l *authority) ApplyTxnRoute(c platform.Caller, r *pb.ChangeRecord, e platform.Entity, target platform.TxnRef, now time.Time, run func(platform.Caller, *pb.ChangeRecord, *platform.BusinessTxn, time.Time) *kernel.Error) *kernel.Error {
+func (l *authority) ApplyTxnRoute(c platform.Caller, r *pb.ChangeRecord, e platform.Entity, target platform.TxnRef, now time.Time, run func(platform.Caller, *pb.ChangeRecord, *platform.BusinessTxn, time.Time) *platform.Error) *platform.Error {
 	if !c.Staging() || c.Replaying || c.App != l.authority || target.Type != e.Type || target.Action == "" || target.ID == "" || e.Lifecycle == nil || run == nil {
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Refusal route requires its original transaction owner / 拒绝改路须经原事务归属方")
 	}
@@ -120,12 +119,12 @@ func (l *authority) ApplyTxnRoute(c platform.Caller, r *pb.ChangeRecord, e platf
 	if !decision.Allow {
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "Refusal route authorization denied: {reason} / 拒绝改路授权被拒：{reason}", decision.Reason, decision.Reason)
 	}
-	var failure *kernel.Error
-	tr.ApplyTxn = func(c platform.Caller, receipt *pb.ChangeRecord, at time.Time) *kernel.Error {
+	var failure *platform.Error
+	tr.ApplyTxn = func(c platform.Caller, receipt *pb.ChangeRecord, at time.Time) *platform.Error {
 		failure = run(c.WithTransactionInput(routed.Submission), r, tr.Txn, at)
 		return failure
 	}
-	apply, err := l.checked(c, routed.Submission, now, catalog, func() (func(*pb.ChangeRecord), *kernel.Error) {
+	apply, err := l.checked(c, routed.Submission, now, catalog, func() (func(*pb.ChangeRecord), *platform.Error) {
 		return transition(c, e, tr, routed.Submission, now)
 	})()
 	if err != nil {

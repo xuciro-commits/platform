@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"platformkernel/kernel"
 	"platformserver/kernel/acceptedformat"
 	"platformserver/kernel/records"
 	"platformserver/platform"
@@ -37,7 +36,7 @@ type ReleaseAcceptance struct {
 	Store       *Store
 	Projection  *records.Store
 	Builder     func() bool
-	Admits      func(platform.Member) *kernel.Error
+	Admits      func(platform.Member) *platform.Error
 	Quarantined func() bool
 	Answer      func(key string) json.RawMessage
 	SaveAnswer  func(key string, raw json.RawMessage)

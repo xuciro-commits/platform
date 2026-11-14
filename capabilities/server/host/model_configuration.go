@@ -3,14 +3,13 @@ package host
 import (
 	"context"
 
-	"platformkernel/kernel"
 	"platformserver/platform"
 	"platformserver/services/ai/gateway"
 )
 
-func (t *Tenant) ModelSelection(ctx context.Context, m platform.Member, purpose string) (aigateway.ModelSelection, *kernel.Error) {
-	return recordRead(t, ctx, func(t *Tenant) (aigateway.ModelSelection, *kernel.Error) {
-		return t.modelResolver().Selection(m, purpose, t.apps, func() ([]platform.AIModel, *kernel.Error) {
+func (t *Tenant) ModelSelection(ctx context.Context, m platform.Member, purpose string) (aigateway.ModelSelection, *platform.Error) {
+	return recordRead(t, ctx, func(t *Tenant) (aigateway.ModelSelection, *platform.Error) {
+		return t.modelResolver().Selection(m, purpose, t.apps, func() ([]platform.AIModel, *platform.Error) {
 			models, err := t.read(m, "ai-models")
 			if err != nil {
 				return nil, err

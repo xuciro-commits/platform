@@ -3,7 +3,6 @@ package host
 import (
 	"context"
 	"encoding/json"
-	"platformkernel/kernel"
 	dataowner "platformserver/services/data"
 	"time"
 
@@ -18,13 +17,13 @@ func (t *Tenant) ReconcileConfirmations(at time.Time) {
 		return
 	}
 	dataowner.ConfirmationReconcile{Schedule: &t.schedules.Confirmations,
-		Pending: func() ([]platform.ConfirmationRun, *kernel.Error) {
-			return recordRead(t, context.Background(), func(t *Tenant) ([]platform.ConfirmationRun, *kernel.Error) {
+		Pending: func() ([]platform.ConfirmationRun, *platform.Error) {
+			return recordRead(t, context.Background(), func(t *Tenant) ([]platform.ConfirmationRun, *platform.Error) {
 				return platform.PendingConfirmations(t.automation(build.ID, false))
 			})
 		},
-		Plan: func(id string, i int) (dataowner.ConfirmationReadPlan, *kernel.Error) {
-			return recordRead(t, context.Background(), func(t *Tenant) (dataowner.ConfirmationReadPlan, *kernel.Error) {
+		Plan: func(id string, i int) (dataowner.ConfirmationReadPlan, *platform.Error) {
+			return recordRead(t, context.Background(), func(t *Tenant) (dataowner.ConfirmationReadPlan, *platform.Error) {
 				run, exists := platform.Get[platform.ConfirmationRun](t.automation(build.ID, false), id)
 				plan := dataowner.ConfirmationReadPlan{Run: run}
 				plan.Valid = exists && i < len(run.Parties) && i < len(run.Definition.Parties) && dataowner.ConfirmationOpen(run)
@@ -47,7 +46,7 @@ func (t *Tenant) ReconcileConfirmations(at time.Time) {
 		},
 		Answer: func(plan dataowner.ConfirmationReadPlan, i int, diff platform.ConfirmationDifference, outcome string) {
 			run := plan.Run
-			_, _ = t.decideAutomated("confirmation:answer", build.ID, func(t *Tenant) (*pb.ChangeRecord, *kernel.Error) {
+			_, _ = t.decideAutomated("confirmation:answer", build.ID, func(t *Tenant) (*pb.ChangeRecord, *platform.Error) {
 				current, exists := platform.Get[platform.ConfirmationRun](t.automation(build.ID, false), run.ID)
 				valid := exists && current.Revision == run.Revision && i < len(current.Parties) && dataowner.ConfirmationOpen(current)
 				if valid {

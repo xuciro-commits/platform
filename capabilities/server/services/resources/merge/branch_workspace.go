@@ -9,15 +9,14 @@ import (
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 	"platformserver/platform"
 	build "platformserver/services/resources/authoring"
 )
 
 type Workspace struct {
 	Tenant    string
-	Read      func(m platform.Member, typ, id string, now time.Time) (json.RawMessage, *kernel.Error)
-	List      func(m platform.Member, typ string, q platform.Query, now time.Time) ([]any, *kernel.Error)
+	Read      func(m platform.Member, typ, id string, now time.Time) (json.RawMessage, *platform.Error)
+	List      func(m platform.Member, typ string, q platform.Query, now time.Time) ([]any, *platform.Error)
 	Fields    func(typ string) ([]platform.FieldInfo, bool)
 	Resources func() []build.Resource
 	Project   func(id string) (appsauthoring.Application, bool)
@@ -45,7 +44,7 @@ type WorldPlan struct {
 	Actions []Action
 }
 
-func Refuse(message string, args ...any) *kernel.Error {
+func Refuse(message string, args ...any) *platform.Error {
 	return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, message, args...)
 }
 
@@ -55,7 +54,7 @@ func Submission(tenant string, m platform.Member, key, schema, id string, payloa
 		Target: &pb.EntityRef{Type: build.BranchType, Id: id}, Schema: &pb.SchemaRef{Name: schema, Version: 1}, Payload: raw}
 }
 
-func (w Workspace) Branch(m platform.Member, id string, now time.Time) (build.Branch, *kernel.Error) {
+func (w Workspace) Branch(m platform.Member, id string, now time.Time) (build.Branch, *platform.Error) {
 	var branch build.Branch
 	raw, refusal := w.Read(m, build.BranchType, id, now)
 	if refusal != nil {
@@ -87,7 +86,7 @@ func (w Workspace) canEdit(m platform.Member, project string) bool {
 	return role == platform.ProjectOwnerRole || role == platform.ProjectEditorRole
 }
 
-func (w Workspace) fields(typ string) (map[string]bool, *kernel.Error) {
+func (w Workspace) fields(typ string) (map[string]bool, *platform.Error) {
 	infos, ok := w.Fields(typ)
 	if !ok {
 		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_NOT_FOUND, "{type} is not an installed resource type", typ)
@@ -101,7 +100,7 @@ func (w Workspace) fields(typ string) (map[string]bool, *kernel.Error) {
 	return fields, nil
 }
 
-func (w Workspace) Main(m platform.Member, typ, id string, now time.Time) (MainDraft, *kernel.Error) {
+func (w Workspace) Main(m platform.Member, typ, id string, now time.Time) (MainDraft, *platform.Error) {
 	var out MainDraft
 	if !build.BranchDraftType(typ) {
 		return out, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "{type} is not a resource draft type", typ)
@@ -161,7 +160,7 @@ func summary(branch build.Branch) BranchDetail {
 		Created: branch.Created, Changed: branch.Changed, Changes: len(branch.Changes), Resources: []BranchResourceStatus{}, Proposal: branch.Proposal, Check: DecodeCheck(branch), Merge: branch.Merge}
 }
 
-func (w Workspace) Detail(m platform.Member, branch build.Branch, now time.Time) (BranchDetail, *kernel.Error) {
+func (w Workspace) Detail(m platform.Member, branch build.Branch, now time.Time) (BranchDetail, *platform.Error) {
 	detail := summary(branch)
 	if detail.Check != nil && (branch.State == build.BranchOpen || branch.State == build.BranchProposed) {
 		detail.CheckStale = detail.Check.Base != w.Base()
@@ -193,7 +192,7 @@ func (w Workspace) Detail(m platform.Member, branch build.Branch, now time.Time)
 	return detail, nil
 }
 
-func (w Workspace) DetailOf(m platform.Member, id string, now time.Time) (BranchDetail, *kernel.Error) {
+func (w Workspace) DetailOf(m platform.Member, id string, now time.Time) (BranchDetail, *platform.Error) {
 	branch, refusal := w.Branch(m, id, now)
 	if refusal != nil {
 		return BranchDetail{}, refusal
@@ -201,7 +200,7 @@ func (w Workspace) DetailOf(m platform.Member, id string, now time.Time) (Branch
 	return w.Detail(m, branch, now)
 }
 
-func (w Workspace) Branches(m platform.Member, now time.Time) ([]BranchDetail, *kernel.Error) {
+func (w Workspace) Branches(m platform.Member, now time.Time) ([]BranchDetail, *platform.Error) {
 	records, refusal := w.List(m, build.BranchType, platform.Query{Limit: 500, Sort: []string{"id"}}, now)
 	if refusal != nil {
 		return nil, refusal
@@ -230,7 +229,7 @@ func (w Workspace) Branches(m platform.Member, now time.Time) ([]BranchDetail, *
 	return out, nil
 }
 
-func (w Workspace) Changes(m platform.Member, id string, specs bool, now time.Time) ([]BranchChangeEntry, *kernel.Error) {
+func (w Workspace) Changes(m platform.Member, id string, specs bool, now time.Time) ([]BranchChangeEntry, *platform.Error) {
 	branch, refusal := w.Branch(m, id, now)
 	if refusal != nil {
 		return nil, refusal
@@ -246,7 +245,7 @@ func (w Workspace) Changes(m platform.Member, id string, specs bool, now time.Ti
 	return out, nil
 }
 
-func (w Workspace) PrepareSave(m platform.Member, id, typ, draft string, request BranchSaveRequest, now time.Time) (SavePlan, *kernel.Error) {
+func (w Workspace) PrepareSave(m platform.Member, id, typ, draft string, request BranchSaveRequest, now time.Time) (SavePlan, *platform.Error) {
 	branch, refusal := w.Branch(m, id, now)
 	if refusal != nil {
 		return SavePlan{}, refusal
@@ -357,7 +356,7 @@ func (p SavePlan) Save(tenant string, m platform.Member, typ, draft string) *pb.
 	return Submission(tenant, m, "branch:"+p.Branch.ID+":save:"+strconv.Itoa(len(p.Branch.Changes)+1), build.BranchType+".save", p.Branch.ID, payload)
 }
 
-func (w Workspace) Resource(m platform.Member, id, typ, draft string, now time.Time) (BranchResourceView, *kernel.Error) {
+func (w Workspace) Resource(m platform.Member, id, typ, draft string, now time.Time) (BranchResourceView, *platform.Error) {
 	branch, refusal := w.Branch(m, id, now)
 	if refusal != nil {
 		return BranchResourceView{}, refusal
@@ -379,7 +378,7 @@ func (w Workspace) Resource(m platform.Member, id, typ, draft string, now time.T
 	return BranchResourceView{Type: typ, ID: draft, Project: project, RID: current.RID, Op: latest.Op, Base: base, Main: current.Spec, Branch: spec}, nil
 }
 
-func (w Workspace) Plan(m platform.Member, branch build.Branch, resolutions []BranchResolution, now time.Time) ([]ResourcePlan, *kernel.Error) {
+func (w Workspace) Plan(m platform.Member, branch build.Branch, resolutions []BranchResolution, now time.Time) ([]ResourcePlan, *platform.Error) {
 	var plans []ResourcePlan
 	for _, key := range branch.Resources() {
 		typ, id, _ := strings.Cut(key, "/")
@@ -415,7 +414,7 @@ func (w Workspace) Plan(m platform.Member, branch build.Branch, resolutions []Br
 	return plans, nil
 }
 
-func (w Workspace) BranchDiff(m platform.Member, id string, now time.Time) (BranchDiff, *kernel.Error) {
+func (w Workspace) BranchDiff(m platform.Member, id string, now time.Time) (BranchDiff, *platform.Error) {
 	branch, refusal := w.Branch(m, id, now)
 	if refusal != nil {
 		return BranchDiff{}, refusal
@@ -432,7 +431,7 @@ func (w Workspace) BranchDiff(m platform.Member, id string, now time.Time) (Bran
 	return out, nil
 }
 
-func (w Workspace) PlanMerge(m platform.Member, id string, resolutions []BranchResolution, simulate bool, now time.Time) (MergePlan, *kernel.Error) {
+func (w Workspace) PlanMerge(m platform.Member, id string, resolutions []BranchResolution, simulate bool, now time.Time) (MergePlan, *platform.Error) {
 	branch, refusal := w.Branch(m, id, now)
 	if refusal != nil {
 		return MergePlan{}, refusal
@@ -448,7 +447,7 @@ func (w Workspace) PlanMerge(m platform.Member, id string, resolutions []BranchR
 	return MergePlan{Check: check, Submission: submission, Actions: actions, Applied: applied}, nil
 }
 
-func (w Workspace) WorldPlan(m platform.Member, id string, now time.Time) (WorldPlan, *kernel.Error) {
+func (w Workspace) WorldPlan(m platform.Member, id string, now time.Time) (WorldPlan, *platform.Error) {
 	branch, refusal := w.Branch(m, id, now)
 	if refusal != nil {
 		return WorldPlan{}, refusal
@@ -485,7 +484,7 @@ func (w Workspace) splitCodeBuild(plan ResourcePlan) (json.RawMessage, json.RawM
 	return authored, raw
 }
 
-func (w Workspace) Actions(plans []ResourcePlan) ([]Action, *kernel.Error) {
+func (w Workspace) Actions(plans []ResourcePlan) ([]Action, *platform.Error) {
 	var actions []Action
 	for _, plan := range plans {
 		item := Action{Plan: plan, Action: "none"}

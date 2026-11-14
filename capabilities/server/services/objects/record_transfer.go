@@ -14,7 +14,6 @@ import (
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 	"platformserver/platform"
 )
 
@@ -174,7 +173,7 @@ func toCSV(v any) string {
 	return fmt.Sprint(v)
 }
 
-func (o *Owner) ExportRead(m platform.Member, typ string, q platform.Query, now time.Time) ([]byte, *kernel.Error) {
+func (o *Owner) ExportRead(m platform.Member, typ string, q platform.Query, now time.Time) ([]byte, *platform.Error) {
 	m = o.AuthorizationMember(m)
 	if err := o.Admit(m); err != nil {
 		return nil, err
@@ -183,7 +182,7 @@ func (o *Owner) ExportRead(m platform.Member, typ string, q platform.Query, now 
 	et := o.Store.Type(typ)
 	o.Store.Unlock()
 	if et == nil {
-		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
+		return nil, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
 	}
 	c := o.Caller(m, et.Info().App)
 	if err := AuthorizationRefusal(o.Authorize(o.Store, c, platform.AuthzRequest{Principal: m.ID, Tenant: m.Tenant, Kind: "export", Type: typ}, now, false)); err != nil {

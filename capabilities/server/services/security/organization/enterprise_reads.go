@@ -7,15 +7,14 @@ import (
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 	"platformserver/platform"
 )
 
-func noModel() *kernel.Error {
+func noModel() *platform.Error {
 	return platform.Refuse(pb.ErrorCode_ERROR_CODE_NOT_FOUND, "This tenant has no enterprise model")
 }
 
-func QueryRead(app platform.EnterpriseQueries, values url.Values, now time.Time) (platform.EnterpriseQueryResult, *kernel.Error) {
+func QueryRead(app platform.EnterpriseQueries, values url.Values, now time.Time) (platform.EnterpriseQueryResult, *platform.Error) {
 	limit := 200
 	if raw := values.Get("limit"); raw != "" {
 		n, err := strconv.Atoi(raw)
@@ -30,7 +29,7 @@ func QueryRead(app platform.EnterpriseQueries, values url.Values, now time.Time)
 	return app.Query(strings.Split(values.Get("stereotype"), ","), values.Get("kind"), values.Get("q"), values.Get("alive"), limit, now)
 }
 
-func ResolveRead(app platform.EnterpriseQueries, values url.Values, now time.Time) (platform.EnterpriseQueryResult, *kernel.Error) {
+func ResolveRead(app platform.EnterpriseQueries, values url.Values, now time.Time) (platform.EnterpriseQueryResult, *platform.Error) {
 	if app == nil {
 		return platform.EnterpriseQueryResult{}, noModel()
 	}

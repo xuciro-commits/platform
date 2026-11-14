@@ -6,7 +6,6 @@ import (
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 	"platformserver/platform"
 	ontology "platformserver/services/ontology"
 )
@@ -36,7 +35,7 @@ type Page struct {
 func (o *Owner) PageEntity() platform.Entity {
 	return platform.Entity{Type: PageType, Title: "Page", Plural: "Pages", Model: Page{}, Display: "title",
 		Description: "A list and detail page this organisation composed over an object it may read: the fields it shows and the actions it offers.",
-		Validate: func(c platform.Caller, record any) *kernel.Error {
+		Validate: func(c platform.Caller, record any) *platform.Error {
 			if c.Replaying {
 				return nil
 			}
@@ -57,7 +56,7 @@ func (o *Owner) PageEntity() platform.Entity {
 
 func (o *Owner) PageDraftEntity() platform.Entity {
 	entity := o.PageEntity()
-	entity.Validate = func(c platform.Caller, record any) *kernel.Error {
+	entity.Validate = func(c platform.Caller, record any) *platform.Error {
 		page := record.(*Page)
 		if c.Replaying {
 			return nil
@@ -86,10 +85,10 @@ func (o *Owner) CheckPageObject(c platform.Caller, object string) (bool, error) 
 	return known, nil
 }
 
-func (o *Owner) publishPage(c platform.Caller, record any, _ json.RawMessage, _ time.Time) *kernel.Error {
+func (o *Owner) publishPage(c platform.Caller, record any, _ json.RawMessage, _ time.Time) *platform.Error {
 	page, ok := record.(*Page)
 	if !ok {
-		return &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
+		return &platform.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 	}
 	if !c.Replaying {
 		if owner, ok := o.env.Host().(platform.ModelPageHost); ok {
@@ -104,10 +103,10 @@ func (o *Owner) publishPage(c platform.Caller, record any, _ json.RawMessage, _ 
 	}
 	if c.Staging() {
 		if err := o.checkPage(*page); err != nil {
-			return &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, Message: err.Error()}
+			return &platform.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, Message: err.Error()}
 		}
 		if err := o.env.Host().ValidateInstallPage(Descriptor(*page, o.env.AppID(), o.env.Version())); err != nil {
-			return &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, Message: err.Error()}
+			return &platform.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, Message: err.Error()}
 		}
 	} else if err := o.installPage(c, *page); err != nil {
 		return err
@@ -116,12 +115,12 @@ func (o *Owner) publishPage(c platform.Caller, record any, _ json.RawMessage, _ 
 	return nil
 }
 
-func (o *Owner) installPage(c platform.Caller, p Page) *kernel.Error {
+func (o *Owner) installPage(c platform.Caller, p Page) *platform.Error {
 	if err := o.checkPage(p); err != nil {
-		return &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, Message: err.Error()}
+		return &platform.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, Message: err.Error()}
 	}
 	if err := o.env.Host().InstallPage(c, Descriptor(p, o.env.AppID(), o.env.Version())); err != nil {
-		return &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, Message: err.Error()}
+		return &platform.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, Message: err.Error()}
 	}
 	return nil
 }

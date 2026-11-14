@@ -9,7 +9,6 @@ import (
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 	"platformserver/platform"
 	agentowner "platformserver/services/ai/runtime"
 	build "platformserver/services/resources/authoring"
@@ -52,7 +51,7 @@ func TestInvariantK13UploadCleanupKeepsReferencesAndReleasesLane(t *testing.T) {
 		}
 		return value
 	}
-	attach := func(id string, value Upload) *kernel.Error {
+	attach := func(id string, value Upload) *platform.Error {
 		submission := live.submission(filesowner.SchemaAttach, platform.FileType, id, map[string]any{"hash": value.Hash, "size": value.Size, "name": value.Name, "contentType": value.ContentType, "target": "build.alpha/A1"})
 		submission.Authority = platform.FileApp
 		_, refusal := live.Submit(member, submission, invariantClock)
@@ -106,9 +105,9 @@ func TestInvariantK13AgentReadDoesNotAcquireTenantLane(t *testing.T) {
 	if err := live.Lane.Hold(t.Context(), "background"); err != nil {
 		t.Fatal(err)
 	}
-	finished := make(chan *kernel.Error, 1)
+	finished := make(chan *platform.Error, 1)
 	go func() {
-		finished <- (hostView{t: live.Tenant}).WithAgentRead(func(runtime platform.AgentEvaluationRuntime) *kernel.Error {
+		finished <- (hostView{t: live.Tenant}).WithAgentRead(func(runtime platform.AgentEvaluationRuntime) *platform.Error {
 			if _, found := runtime.Host.Record("build.alpha/A1"); !found {
 				return platform.Refuse(pb.ErrorCode_ERROR_CODE_NOT_FOUND, "missing snapshot record")
 			}

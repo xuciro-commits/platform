@@ -7,7 +7,6 @@ import (
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 	"platformserver/platform"
 )
 
@@ -16,7 +15,7 @@ func (o *Owner) observationEntity() platform.Entity {
 		Description: "Read external time-series summaries and apply declared business decisions without retaining raw points.",
 		Scope:       integrationScope(),
 		Standard:    integrationStandard(),
-		Validate: func(c platform.Caller, value any) *kernel.Error {
+		Validate: func(c platform.Caller, value any) *platform.Error {
 			if c.Replaying {
 				return nil
 			}
@@ -34,7 +33,7 @@ func (o *Owner) observationEntity() platform.Entity {
 		},
 		Lifecycle: &platform.Lifecycle{Field: "state", Initial: "draft", States: []platform.State{{Name: "draft", Title: "Draft", Tone: "warning"}, {Name: "published", Title: "Published", Tone: "success"}, {Name: "retired", Title: "Retired", Tone: "neutral"}},
 			Transitions: []platform.Transition{
-				{Name: "publish", Title: "Publish", Description: "Retain the logical source, authorized reads and declared decision as one immutable version.", From: []string{"draft", "published", "retired"}, To: []string{"published"}, Roles: []string{Builder, Integrator}, Capability: "integrations", Payload: []platform.Field{}, Do: func(c platform.Caller, value any, _ json.RawMessage, _ time.Time) *kernel.Error {
+				{Name: "publish", Title: "Publish", Description: "Retain the logical source, authorized reads and declared decision as one immutable version.", From: []string{"draft", "published", "retired"}, To: []string{"published"}, Roles: []string{Builder, Integrator}, Capability: "integrations", Payload: []platform.Field{}, Do: func(c platform.Caller, value any, _ json.RawMessage, _ time.Time) *platform.Error {
 					record := value.(*Observation)
 					if c.Replaying {
 						return nil

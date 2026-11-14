@@ -9,7 +9,6 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 	"platformserver/platform"
 )
 
@@ -182,7 +181,7 @@ func (l *ChangeLog) ApplyAccepted(saved *pb.ChangeRecord) (bool, error) {
 	return true, nil
 }
 
-func (l *ChangeLog) SubmitChecked(s *pb.Submission, now time.Time, check func() *kernel.Error) (*pb.ChangeRecord, *kernel.Error) {
+func (l *ChangeLog) SubmitChecked(s *pb.Submission, now time.Time, check func() *platform.Error) (*pb.ChangeRecord, *platform.Error) {
 	required := []string{s.GetTenantId(), s.GetPrincipalId(), s.GetAuthority(), s.GetIdempotencyKey(),
 		s.GetTarget().GetType(), s.GetTarget().GetId(), s.GetSchema().GetName()}
 	if slices.Contains(required, "") {

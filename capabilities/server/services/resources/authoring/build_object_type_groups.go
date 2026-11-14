@@ -5,7 +5,6 @@ import (
 	"slices"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 	"platformserver/platform"
 	ontology "platformserver/services/ontology"
 )
@@ -37,7 +36,7 @@ func (b *Build) checkObjectTypeGroup(g ontology.ObjectTypeGroup, published bool)
 
 func (b *Build) objectTypeGroupEntity() platform.Entity {
 	entity := objectTypeGroupKind.entity(b)
-	entity.Validate = func(c platform.Caller, record any) *kernel.Error {
+	entity.Validate = func(c platform.Caller, record any) *platform.Error {
 		if !c.Replaying {
 			if err := b.checkObjectTypeGroup(*record.(*ontology.ObjectTypeGroup), false); err != nil {
 				return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())

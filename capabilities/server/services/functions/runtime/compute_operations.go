@@ -10,7 +10,6 @@ import (
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 	"platformserver/platform"
 )
 
@@ -40,7 +39,7 @@ func (b OperationBinding) Timeout() time.Duration {
 }
 
 type ExecutionHost struct {
-	Read         func(ctx context.Context, read func(ExecutionReads)) *kernel.Error
+	Read         func(ctx context.Context, read func(ExecutionReads)) *platform.Error
 	BuildCode    func(ctx context.Context, q platform.CodeBuildRequest) (platform.CodeBuildResult, error)
 	ReadInput    func(ctx context.Context, ref platform.OperationInputArtifact) ([]byte, error)
 	StageOutput  func(op platform.Operation, call string, output []byte) (json.RawMessage, *platform.StagedResult, error)
@@ -52,15 +51,15 @@ type ExecutionHost struct {
 type ExecutionReads struct {
 	Member  func(id string) (platform.Member, bool)
 	Current func(id string, generation uint32) bool
-	Refusal func(member platform.Member, app string, b OperationBinding, now time.Time) *kernel.Error
+	Refusal func(member platform.Member, app string, b OperationBinding, now time.Time) *platform.Error
 	Query   func(member platform.Member, ref platform.AssetRef, version int) (platform.NamedQuery, bool)
 	Entity  func(string) (platform.EntityInfo, bool)
 	Authz   platform.AuthorizationEngine
 }
 
-func (h ExecutionHost) authorised(ctx context.Context, tenant string, x platform.Effect, b OperationBinding, now time.Time) (platform.Member, *kernel.Error) {
+func (h ExecutionHost) authorised(ctx context.Context, tenant string, x platform.Effect, b OperationBinding, now time.Time) (platform.Member, *platform.Error) {
 	var member platform.Member
-	var refusal *kernel.Error
+	var refusal *platform.Error
 	if err := h.Read(ctx, func(r ExecutionReads) {
 		var ok bool
 		member, ok = r.Member(b.Member)
@@ -78,7 +77,7 @@ func (h ExecutionHost) authorised(ctx context.Context, tenant string, x platform
 	return member, refusal
 }
 
-func (h ExecutionHost) stillAuthorised(ctx context.Context, x platform.Effect, b OperationBinding, now time.Time) (bool, *kernel.Error) {
+func (h ExecutionHost) stillAuthorised(ctx context.Context, x platform.Effect, b OperationBinding, now time.Time) (bool, *platform.Error) {
 	var allowed bool
 	err := h.Read(ctx, func(r ExecutionReads) {
 		latest, ok := r.Member(b.Member)
@@ -87,7 +86,7 @@ func (h ExecutionHost) stillAuthorised(ctx context.Context, x platform.Effect, b
 	return allowed, err
 }
 
-func (h ExecutionHost) rulesRevoked(ctx context.Context, member platform.Member, rules platform.RuleTablePlan) (string, *kernel.Error) {
+func (h ExecutionHost) rulesRevoked(ctx context.Context, member platform.Member, rules platform.RuleTablePlan) (string, *platform.Error) {
 	var why string
 	err := h.Read(ctx, func(r ExecutionReads) {
 		why = RulesRevoked(member, rules, func(ref platform.AssetRef, version int) (platform.NamedQuery, bool) {
@@ -257,7 +256,7 @@ type CallSetup struct {
 	App         func(id string) platform.App
 	Prior       func(callID string) (string, bool)
 	Quarantined func() bool
-	Authorize   func(current platform.Member, op platform.Operation) *kernel.Error
+	Authorize   func(current platform.Member, op platform.Operation) *platform.Error
 }
 
 type CallPlan struct {
@@ -268,7 +267,7 @@ type CallPlan struct {
 	Seal      bool
 }
 
-func (h CallSetup) Prepare(member platform.Member, q platform.OperationRequest) (CallPlan, *kernel.Error) {
+func (h CallSetup) Prepare(member platform.Member, q platform.OperationRequest) (CallPlan, *platform.Error) {
 	current, seated := h.Member(member.ID)
 	app := h.App(q.App)
 	var op platform.Operation

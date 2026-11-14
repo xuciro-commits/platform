@@ -10,7 +10,6 @@ import (
 	"slices"
 	"time"
 
-	"platformkernel/kernel"
 	"platformserver/platform"
 	"platformserver/services/objects"
 	"platformserver/services/resources/authoring"
@@ -54,7 +53,7 @@ func (t *Tenant) authorizeNative(c platform.Caller, permission, kind string, all
 	if c.ReadScoped() {
 		return t.authorizer().Native(c, permission, kind, allowed, declared && t.resourceActionActive(permission), details...)
 	}
-	decision, _ := recordRead(t, context.Background(), func(t *Tenant) (platform.AuthzDecision, *kernel.Error) {
+	decision, _ := recordRead(t, context.Background(), func(t *Tenant) (platform.AuthzDecision, *platform.Error) {
 		c := platform.NewCaller(runtime{t: t}, c.Member, c.App, c.Replaying, c.Automation)
 		return t.authorizer().Native(c, permission, kind, allowed, declared && t.resourceActionActive(permission), details...), nil
 	})
@@ -71,13 +70,13 @@ func (t *Tenant) authorizeCapability(c platform.Caller, owner, permission string
 	return decision
 }
 
-func (d *stagedDecision) authorizeNative(c platform.Caller, permission, kind string, allowed []string, declared bool) *kernel.Error {
+func (d *stagedDecision) authorizeNative(c platform.Caller, permission, kind string, allowed []string, declared bool) *platform.Error {
 	decision := d.tenant.authorizeNative(c, permission, kind, allowed, declared)
 	d.Authorizations = append(d.Authorizations, acceptedformat.AuthorizationEvidence{Request: platform.AuthzRequest{Principal: c.ID, Tenant: c.Tenant, Kind: kind, Action: permission}, Decision: decision, Roles: slices.Clone(c.RolesHere())})
 	return authorizationRefusal(decision)
 }
 
-func authorizationRefusal(decision platform.AuthzDecision) *kernel.Error {
+func authorizationRefusal(decision platform.AuthzDecision) *platform.Error {
 	return objects.AuthorizationRefusal(decision)
 }
 
@@ -94,7 +93,7 @@ func (t *Tenant) authorizeFrom(store *records.Store, c platform.Caller, q platfo
 	if held || c.ReadScoped() {
 		return t.authorizeDepth(store, c, q, at, held, 0, security.NewTraversal())
 	}
-	decision, _ = recordRead(t, context.Background(), func(t *Tenant) (platform.AuthzDecision, *kernel.Error) {
+	decision, _ = recordRead(t, context.Background(), func(t *Tenant) (platform.AuthzDecision, *platform.Error) {
 		c := platform.NewCaller(runtime{t: t}, c.Member, c.App, c.Replaying, c.Automation)
 		return t.authorizeDepth(t.Projection, c, q, at, false, 0, security.NewTraversal()), nil
 	})
@@ -105,11 +104,11 @@ func (t *Tenant) authorizeDepth(store *records.Store, c platform.Caller, q platf
 	return t.authorizer().Authorize(store, c, q, at, held, depth, walk)
 }
 
-func (t *Tenant) visibleIn(store *records.Store, m platform.Member, et *records.Type, at time.Time) (func(reflect.Value) bool, *kernel.Error) {
+func (t *Tenant) visibleIn(store *records.Store, m platform.Member, et *records.Type, at time.Time) (func(reflect.Value) bool, *platform.Error) {
 	return t.visibleForCallerIn(store, platform.NewCaller(runtime{t: t}, m, et.Info().App, false, false), et, at)
 }
 
-func (t *Tenant) visibleForCallerIn(store *records.Store, c platform.Caller, et *records.Type, at time.Time) (func(reflect.Value) bool, *kernel.Error) {
+func (t *Tenant) visibleForCallerIn(store *records.Store, c platform.Caller, et *records.Type, at time.Time) (func(reflect.Value) bool, *platform.Error) {
 	question := platform.AuthzRequest{Principal: c.ID, Tenant: c.Tenant, Kind: "read", Type: et.Info().Type}
 	if refusal := authorizationRefusal(t.authorizeFrom(store, c, question, at, true)); refusal != nil {
 		return nil, refusal

@@ -3,7 +3,6 @@ package organization
 import (
 	"fmt"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 	"platformserver/platform"
 	"strings"
 )
@@ -92,12 +91,12 @@ func anyEnd(mm *DirectoryModel, ends []string, stereotype string) bool {
 	return false
 }
 
-func decideRelationship(m *Model, mm *DirectoryModel, id string, p payload, strict, sourceImport bool) (func(*pb.ChangeRecord), *kernel.Error) {
-	invalid := func(msg string, args ...any) *kernel.Error {
+func decideRelationship(m *Model, mm *DirectoryModel, id string, p payload, strict, sourceImport bool) (func(*pb.ChangeRecord), *platform.Error) {
+	invalid := func(msg string, args ...any) *platform.Error {
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, msg, args...)
 	}
-	notFound := &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
-	conflict := &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
+	notFound := &platform.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
+	conflict := &platform.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
 	st := mm.Stereotypes[p.Stereotype]
 	switch {
 	case st == nil || !mm.Relationship(p.Stereotype) && p.Stereotype != Typed && p.Stereotype != Membership:

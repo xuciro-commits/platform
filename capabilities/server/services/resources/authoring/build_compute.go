@@ -7,7 +7,6 @@ import (
 	"encoding/json"
 	"fmt"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 
 	"platformserver/platform"
 	dataowner "platformserver/services/data"
@@ -79,7 +78,7 @@ func (c Code) buildHash() string {
 func (b *Build) codeEntity() platform.Entity {
 	return platform.Entity{Type: CodeType, Title: "Code function", Plural: "Code functions", Model: Code{}, Display: "title", Description: "A typed Go/TinyGo algorithm built in isolation and activated with its application.", Scope: platform.Scope{Default: platform.ScopeNone, Levels: map[string]string{Builder: platform.ScopeTenant}}, Standard: platform.Standard{Create: true, Edit: true, Archive: true, Roles: []string{Builder}, Capability: "compute"}, Lifecycle: &platform.Lifecycle{Field: "state", Initial: "draft", States: []platform.State{{Name: "draft", Title: "Draft", Tone: "warning"}, {Name: "compiling", Title: "Compiling", Tone: "warning"}, {Name: "compiled", Title: "Compiled", Tone: "success"}, {Name: "failed", Title: "Build failed", Tone: "danger"}, {Name: "published", Title: "Published", Tone: "success"}}, Transitions: []platform.Transition{{Name: "compile", Title: "Compile", Description: "Build the current source with an isolated pinned Go/TinyGo toolchain.", From: []string{"draft", "compiled", "failed", "published"}, To: []string{"compiling"}, Roles: []string{Builder}, Capability: "compute", Payload: []platform.Field{}, Do: b.compileCode}}}}
 }
-func (b *Build) compileCode(c platform.Caller, record any, _ json.RawMessage, _ time.Time) *kernel.Error {
+func (b *Build) compileCode(c platform.Caller, record any, _ json.RawMessage, _ time.Time) *platform.Error {
 	code, ok := record.(*Code)
 	if !ok {
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Code requires Go/TinyGo source and bounded input/output schemas")
@@ -87,7 +86,7 @@ func (b *Build) compileCode(c platform.Caller, record any, _ json.RawMessage, _ 
 	return checkCodeBuildable(code)
 }
 
-func checkCodeBuildable(code *Code) *kernel.Error {
+func checkCodeBuildable(code *Code) *platform.Error {
 	if code.Language != "go" && code.Language != "tinygo" || code.Input.Check() != nil || code.Output.Check() != nil || len(code.Source) == 0 || len(code.Source) > 256<<10 {
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Code requires Go/TinyGo source and bounded input/output schemas")
 	}
@@ -111,7 +110,7 @@ func (a CodeArtifact) Matches(spec json.RawMessage) bool {
 	return err == nil && a.Module != "" && a.Toolchain != "" && a.SourceHash == expected.SourceHash && a.BuildHash == expected.BuildHash
 }
 
-func CodeBuildOf(spec json.RawMessage) (platform.CodeBuildRequest, CodeArtifact, *kernel.Error) {
+func CodeBuildOf(spec json.RawMessage) (platform.CodeBuildRequest, CodeArtifact, *platform.Error) {
 	var code Code
 	if json.Unmarshal(spec, &code) != nil {
 		return platform.CodeBuildRequest{}, CodeArtifact{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "The code spec is unreadable")
@@ -122,8 +121,8 @@ func CodeBuildOf(spec json.RawMessage) (platform.CodeBuildRequest, CodeArtifact,
 	return platform.CodeBuildRequest{ABI: code.ABI, Language: code.Language, Source: code.Source, Input: code.Input, Output: code.Output}, CodeArtifact{SourceHash: code.sourceHash(), BuildHash: code.buildHash()}, nil
 }
 
-func (b *Build) submitCodeAttach(c platform.Caller, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *kernel.Error) {
-	return b.ledger.Receive(c, s, now, nil, func() (func(*pb.ChangeRecord), *kernel.Error) {
+func (b *Build) submitCodeAttach(c platform.Caller, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *platform.Error) {
+	return b.ledger.Receive(c, s, now, nil, func() (func(*pb.ChangeRecord), *platform.Error) {
 		var artifact CodeArtifact
 		code, ok := platform.Get[Code](c, s.GetTarget().GetId())
 		if !ok || json.Unmarshal(s.GetPayload(), &artifact) != nil || code.State == "compiling" {
@@ -144,8 +143,8 @@ func (b *Build) submitCodeAttach(c platform.Caller, s *pb.Submission, now time.T
 	})
 }
 
-func (b *Build) submitCodeCompile(c platform.Caller, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *kernel.Error) {
-	return b.ledger.Receive(c, s, now, nil, func() (func(*pb.ChangeRecord), *kernel.Error) {
+func (b *Build) submitCodeCompile(c platform.Caller, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *platform.Error) {
+	return b.ledger.Receive(c, s, now, nil, func() (func(*pb.ChangeRecord), *platform.Error) {
 		code, ok := platform.Get[Code](c, s.GetTarget().GetId())
 		if !ok || code.State == "compiling" {
 			return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Code is missing or already compiling")
@@ -166,8 +165,8 @@ func (b *Build) submitCodeCompile(c platform.Caller, s *pb.Submission, now time.
 func codeActions() []platform.Action {
 	return []platform.Action{{Schema: SchemaCodeAttach, Target: CodeType, Capability: "compute", Title: "Attach code build", Description: "Retain an isolated build made on a branch on the code asset it was built from.", Automation: true, Payload: []platform.Field{{Name: "module", Type: "string", Required: true, Description: "The content digest of the built module"}, {Name: "sourceHash", Type: "string", Required: true, Description: "The digest of the built source"}, {Name: "buildHash", Type: "string", Required: true, Description: "The digest of the source and schema snapshot"}, {Name: "toolchain", Type: "string", Required: true, Description: "The pinned toolchain that built it"}}}, {Schema: SchemaCodeCompiled, Target: CodeType, Capability: "compute", Title: "Keep code build result", Description: "Retain the accepted compiler output on its source asset.", Automation: true, Payload: []platform.Field{{Name: "call", Type: "string", Required: true, Description: "The accepted compilation call"}, {Name: "result", Type: "json", Required: true, Description: "Validated compiler result"}, {Name: "request", Type: "json", Required: true, Description: "The accepted source and SDK schema snapshot"}}}}
 }
-func (b *Build) submitCodeCompiled(c platform.Caller, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *kernel.Error) {
-	return b.ledger.Receive(c, s, now, nil, func() (func(*pb.ChangeRecord), *kernel.Error) {
+func (b *Build) submitCodeCompiled(c platform.Caller, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *platform.Error) {
+	return b.ledger.Receive(c, s, now, nil, func() (func(*pb.ChangeRecord), *platform.Error) {
 		var payload struct {
 			Call    string                    `json:"call"`
 			Result  platform.CodeBuildResult  `json:"result"`
@@ -193,7 +192,7 @@ func (b *Build) submitCodeCompiled(c platform.Caller, s *pb.Submission, now time
 		}, nil
 	})
 }
-func (b *Build) Answer(c platform.Caller, effect platform.Effect, out platform.Outcome, now time.Time) *kernel.Error {
+func (b *Build) Answer(c platform.Caller, effect platform.Effect, out platform.Outcome, now time.Time) *platform.Error {
 	if strings.HasPrefix(effect.Endpoint, dataowner.WritebackEndpoint) {
 		return b.answered(c, effect, out, now)
 	}

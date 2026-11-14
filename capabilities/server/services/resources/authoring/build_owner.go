@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"maps"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 
 	"platformserver/platform"
 	appsauthoring "platformserver/services/apps/authoring"
@@ -189,12 +188,12 @@ const (
 	ProfileDevelopment = "development"
 )
 
-func (b *Build) checkReleaseProfile(c platform.Caller, schema string) *kernel.Error {
+func (b *Build) checkReleaseProfile(c platform.Caller, schema string) *platform.Error {
 	directInstall := directInstallSchemas()
 	if c.Setting(SettingReleaseProfile) != ProfileProduction || !slices.Contains(directInstall, schema) {
 		return nil
 	}
-	return &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_POLICY_DENIED, Message: fmt.Sprintf(
+	return &platform.Error{Code: pb.ErrorCode_ERROR_CODE_POLICY_DENIED, Message: fmt.Sprintf(
 		"%s installs a definition for operators at once, and this tenant delivers through a saved release candidate: review the draft and activate the candidate (POST /v1/releases/candidates). Direct install is limited to the development and import profiles.", schema)}
 }
 
@@ -206,7 +205,7 @@ func (b *Build) SnapshotFormat() string { return "platform.ledger.v1" }
 func (b *Build) Snapshot() (json.RawMessage, error) { return b.ledger.Snapshot() }
 func (b *Build) Restore(raw json.RawMessage) error  { return b.ledger.Restore(raw) }
 
-func (b *Build) Read(c platform.Caller, name string) (any, *kernel.Error) {
+func (b *Build) Read(c platform.Caller, name string) (any, *platform.Error) {
 	if name != ReadReleaseProfile {
 		return b.readProtocol(c, name)
 	}
@@ -222,9 +221,9 @@ type ReleaseProfile struct {
 	DirectInstall bool   `json:"directInstall"`
 }
 
-func (b *Build) checkDefinitionArchive(c platform.Caller, typ, id string) *kernel.Error {
+func (b *Build) checkDefinitionArchive(c platform.Caller, typ, id string) *platform.Error {
 	if !c.Holds(c.App, Builder) && !(typ == dataowner.ObservationType && c.Holds(c.App, Integrator)) {
-		return &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_POLICY_DENIED}
+		return &platform.Error{Code: pb.ErrorCode_ERROR_CODE_POLICY_DENIED}
 	}
 	published := false
 	switch typ {
@@ -298,7 +297,7 @@ func (b *Build) checkDefinitionArchive(c platform.Caller, typ, id string) *kerne
 	return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "A published definition cannot be archived; its installed version must be retained")
 }
 
-func (b *Build) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *kernel.Error) {
+func (b *Build) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *platform.Error) {
 	if !c.Replaying && strings.HasSuffix(s.GetSchema().GetName(), ".edit") && BranchDraftType(s.GetTarget().GetType()) {
 		var input struct {
 			Name string `json:"name"`
@@ -397,7 +396,7 @@ func (b *Build) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb.
 				}
 			}
 			if err != nil {
-				return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, Message: err.Error()}
+				return nil, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, Message: err.Error()}
 			}
 		}
 	}
@@ -406,10 +405,10 @@ func (b *Build) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb.
 		if json.Unmarshal(s.GetPayload(), &p) == nil && p.Object != "" {
 			known, err := b.apps.CheckPageObject(c, p.Object)
 			if err != nil {
-				return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, Message: err.Error()}
+				return nil, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, Message: err.Error()}
 			}
 			if !known {
-				return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, Message: fmt.Sprintf("this tenant has no object %q", p.Object)}
+				return nil, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, Message: fmt.Sprintf("this tenant has no object %q", p.Object)}
 			}
 		}
 	}
@@ -458,7 +457,7 @@ func (b *Build) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb.
 	if record, err, ok := b.ledger.Generated(c, s, now, nil, entities...); ok {
 		return record, err
 	}
-	return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_UNKNOWN_SCHEMA}
+	return nil, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_UNKNOWN_SCHEMA}
 }
 
 func (b *Build) Fork(ledger platform.Authority) (platform.App, error) {
@@ -538,7 +537,7 @@ type ConstructionDrafts interface {
 	SavedObjectActions(platform.Caller) ([]platform.Action, error)
 	DraftReleaseAssetsMulti([]JointDraftRef, platform.Member, bool) (JointDraftAssets, error)
 	CandidateActions(platform.ReleaseAsset) ([]platform.Action, error)
-	CheckProcess(platform.Caller, automationauthoring.Process) *kernel.Error
+	CheckProcess(platform.Caller, automationauthoring.Process) *platform.Error
 }
 
 type ConstructionDraftReader interface {

@@ -3,8 +3,6 @@ package platform
 import (
 	"slices"
 	"time"
-
-	"platformkernel/kernel"
 )
 
 type Date = string
@@ -115,7 +113,7 @@ type Enterprise struct{ c Caller }
 
 func (c Caller) Enterprise() Enterprise { return Enterprise{c} }
 
-func (e Enterprise) CheckUsage(id, until string, deleting bool, now time.Time) *kernel.Error {
+func (e Enterprise) CheckUsage(id, until string, deleting bool, now time.Time) *Error {
 	if e.c.Replaying {
 		return nil
 	}
@@ -125,7 +123,7 @@ func (e Enterprise) CheckUsage(id, until string, deleting bool, now time.Time) *
 	return nil
 }
 
-func (e Enterprise) CheckTenantConnection(id string, now time.Time) *kernel.Error {
+func (e Enterprise) CheckTenantConnection(id string, now time.Time) *Error {
 	if e.c.Replaying {
 		return nil
 	}
@@ -173,8 +171,8 @@ type EnterpriseQueryResult struct {
 }
 
 type EnterpriseQueries interface {
-	Query(stereotypes []string, kind, words, alive string, limit int, now time.Time) (EnterpriseQueryResult, *kernel.Error)
-	Resolve(ids []string, now time.Time) (EnterpriseQueryResult, *kernel.Error)
+	Query(stereotypes []string, kind, words, alive string, limit int, now time.Time) (EnterpriseQueryResult, *Error)
+	Resolve(ids []string, now time.Time) (EnterpriseQueryResult, *Error)
 }
 
 type Directory interface {

@@ -19,7 +19,6 @@ import (
 	"google.golang.org/protobuf/proto"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 
 	"platformserver/platform"
 )
@@ -54,7 +53,7 @@ func (t *Tenant) newStagedDecisionOn(base *records.Store) *stagedDecision {
 	return &stagedDecision{tenant: t, Decision: decision}
 }
 
-func (d *stagedDecision) Decide(c platform.Caller, app platform.App, s *pb.Submission, at time.Time) (*pb.ChangeRecord, *kernel.Error) {
+func (d *stagedDecision) Decide(c platform.Caller, app platform.App, s *pb.Submission, at time.Time) (*pb.ChangeRecord, *platform.Error) {
 	app = d.stateApp(app)
 	if d.Simulation {
 		if candidate, err := d.tenant.releases.Candidate(d.tenant.releases.Active()); err == nil {
@@ -64,7 +63,7 @@ func (d *stagedDecision) Decide(c platform.Caller, app platform.App, s *pb.Submi
 	return d.decideAppFrom(c, app, s, at, d.routingTenant(), d.tenant.releases.Active())
 }
 
-func (d *stagedDecision) decideAppFrom(c platform.Caller, app platform.App, s *pb.Submission, at time.Time, view *Tenant, release string, retained ...[]platform.ReleaseAsset) (*pb.ChangeRecord, *kernel.Error) {
+func (d *stagedDecision) decideAppFrom(c platform.Caller, app platform.App, s *pb.Submission, at time.Time, view *Tenant, release string, retained ...[]platform.ReleaseAsset) (*pb.ChangeRecord, *platform.Error) {
 	r, err, ok := d.DecideApp(c, app, s, at, func() (*platform.DecisionDefinition, error) {
 		return view.decisionDefinition(app.Manifest().ID, s, release, retained...)
 	})
@@ -90,7 +89,7 @@ type stagedEffectPanic struct{}
 
 func unsupportedStagedEffect() { panic(stagedEffectPanic{}) }
 
-func (d *stagedDecision) Probe(c platform.Caller, protocol, action, id string, payload []byte, at time.Time) *kernel.Error {
+func (d *stagedDecision) Probe(c platform.Caller, protocol, action, id string, payload []byte, at time.Time) *platform.Error {
 	return d.routingTenant().router().Probe(c, protocol, action, id, payload, at)
 }
 func (d *stagedDecision) Request(c platform.Caller, r *pb.ChangeRecord, q platform.Request) {
@@ -105,13 +104,13 @@ func (d *stagedDecision) Request(c platform.Caller, r *pb.ChangeRecord, q platfo
 	d.requests = append(d.requests, actions.PendingRequest{Request: q, Caller: c,
 		Record: proto.Clone(r).(*pb.ChangeRecord), N: d.NextRequest(c.App + "/" + r.GetChangeId())})
 }
-func (d *stagedDecision) Query(c platform.Caller, protocol, read string, provider ...string) ([]platform.ProviderResult, *kernel.Error) {
+func (d *stagedDecision) Query(c platform.Caller, protocol, read string, provider ...string) ([]platform.ProviderResult, *platform.Error) {
 	return d.routingTenant().router().Query(c, protocol, read, provider...)
 }
 func (d *stagedDecision) Setting(c platform.Caller, name string) string {
 	return d.routingTenant().setting(c, name)
 }
-func (d *stagedDecision) Emit(c platform.Caller, kind, key, entity string, data any, now time.Time) (int, *kernel.Error) {
+func (d *stagedDecision) Emit(c platform.Caller, kind, key, entity string, data any, now time.Time) (int, *platform.Error) {
 	planned, err := d.routingTenant().planAppEffects(c, kind, key, entity, data, now, d.Intents)
 	if err != nil {
 		d.FailDecision(err)
@@ -121,7 +120,7 @@ func (d *stagedDecision) Emit(c platform.Caller, kind, key, entity string, data 
 	d.tenant.askHeldEffects(c, kind, entity, planned, now)
 	return len(planned), nil
 }
-func (d *stagedDecision) CheckEnterpriseUsage(c platform.Caller, id, until string, deleting bool, now time.Time) *kernel.Error {
+func (d *stagedDecision) CheckEnterpriseUsage(c platform.Caller, id, until string, deleting bool, now time.Time) *platform.Error {
 	original := d.routingTenant()
 	apps := make([]platform.App, len(original.apps))
 	for i, app := range original.apps {
@@ -131,7 +130,7 @@ func (d *stagedDecision) CheckEnterpriseUsage(c platform.Caller, id, until strin
 	view.settings.Restore(original.settings.Snapshot())
 	return view.checkEnterpriseUsage(c, d.Records, id, until, deleting, now)
 }
-func (d *stagedDecision) CheckEnterpriseTenantConnection(c platform.Caller, id string, now time.Time) *kernel.Error {
+func (d *stagedDecision) CheckEnterpriseTenantConnection(c platform.Caller, id string, now time.Time) *platform.Error {
 	return d.routingTenant().checkTenantConnection(c, id, now)
 }
 
@@ -160,28 +159,28 @@ func (d *stagedDecision) Links(c platform.Caller, entity string) []string {
 	}
 	return records.AppendRelationNeighbors(out, c.OwnedRelations(entity), entity)
 }
-func (d *stagedDecision) Link(c platform.Caller, from, to *pb.EntityRef, key string, now time.Time) *kernel.Error {
+func (d *stagedDecision) Link(c platform.Caller, from, to *pb.EntityRef, key string, now time.Time) *platform.Error {
 	if d.tenant.linker == nil {
-		return &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
+		return &platform.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
 	}
 	owner := d.stateApp(d.tenant.linker.(platform.App))
 	err := owner.(platform.Linker).Link(c, from, to, key, now)
 	d.FailDecision(err)
 	return err
 }
-func (d *stagedDecision) Assign(c platform.Caller, r *pb.ChangeRecord, a platform.Assignment) *kernel.Error {
+func (d *stagedDecision) Assign(c platform.Caller, r *pb.ChangeRecord, a platform.Assignment) *platform.Error {
 	if d.tenant.tasks == nil {
-		return &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
+		return &platform.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
 	}
 	err := d.tenant.tasks.Assign(c, r, a)
 	d.FailDecision(err)
 	return err
 }
-func (d *stagedDecision) Next(c platform.Caller, rec *pb.ChangeRecord, name string, date time.Time) (string, *kernel.Error) {
+func (d *stagedDecision) Next(c platform.Caller, rec *pb.ChangeRecord, name string, date time.Time) (string, *platform.Error) {
 	return d.AllocateNumber(c, d.tenant.ID, d.tenant.App, rec, name, date)
 }
 
-func (d *stagedDecision) BoundProvider(c platform.Caller, protocol string) (string, *kernel.Error) {
+func (d *stagedDecision) BoundProvider(c platform.Caller, protocol string) (string, *platform.Error) {
 	return d.routingTenant().router().BoundProvider(c, protocol)
 }
 
@@ -206,9 +205,9 @@ func (d *stagedDecision) attachPrivateHosts() {
 	}
 }
 
-func (d *stagedDecision) Attempt(decide func() (*pb.ChangeRecord, *kernel.Error)) (*pb.ChangeRecord, *kernel.Error) {
+func (d *stagedDecision) Attempt(decide func() (*pb.ChangeRecord, *platform.Error)) (*pb.ChangeRecord, *platform.Error) {
 	events := len(d.Events)
-	return runtimekernel.Attempt(d, d.privateFork, d.attachPrivateHosts, decide, func(r *pb.ChangeRecord) *kernel.Error { return d.CheckAttempt(r, events) })
+	return runtimekernel.Attempt(d, d.privateFork, d.attachPrivateHosts, decide, func(r *pb.ChangeRecord) *platform.Error { return d.CheckAttempt(r, events) })
 }
 
 func (d *stagedDecision) privateFork() *stagedDecision {
@@ -232,7 +231,7 @@ func (d *stagedDecision) privateFork() *stagedDecision {
 	return &fork
 }
 
-func (d *stagedDecision) ProbeDecision(c platform.Caller, decide func(platform.Caller) *kernel.Error) *kernel.Error {
+func (d *stagedDecision) ProbeDecision(c platform.Caller, decide func(platform.Caller) *platform.Error) *platform.Error {
 	probe := d.privateFork()
 	err := probe.runProbe(c, decide)
 	if err != nil {
@@ -241,14 +240,14 @@ func (d *stagedDecision) ProbeDecision(c platform.Caller, decide func(platform.C
 	return err
 }
 
-func (d *stagedDecision) runProbe(c platform.Caller, decide func(platform.Caller) *kernel.Error) *kernel.Error {
+func (d *stagedDecision) runProbe(c platform.Caller, decide func(platform.Caller) *platform.Error) *platform.Error {
 	return d.RunProbe(d, c, decide, func(failure any) bool {
 		_, ok := failure.(stagedEffectPanic)
 		return ok
 	})
 }
 
-func (d *stagedDecision) stageObservers() *kernel.Error {
+func (d *stagedDecision) stageObservers() *platform.Error {
 	refusal, ok := d.StageObservers(runtimekernel.ObserverHooks{Apps: d.tenant.LiveApps, Private: d.stateApp,
 		Caller: d.appCaller,
 		Events: func(e platform.Event) []string { return d.tenant.router().Events(e) }})
@@ -270,7 +269,7 @@ func (d *stagedDecision) approvals() runtimekernel.ApprovalRequests {
 	return runtimekernel.ApprovalRequests{Tenant: d.tenant.ID, Runtime: d, App: d.tenant.App, Decide: d.Decide, Probe: d.ProbeDecision}
 }
 
-func (d *stagedDecision) RequestApproval(c platform.Caller, app string, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *kernel.Error) {
+func (d *stagedDecision) RequestApproval(c platform.Caller, app string, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *platform.Error) {
 	return d.approvals().Request(d.ProbeOnly, c, app, s, now)
 }
 
@@ -351,7 +350,7 @@ func (d *stagedDecision) newControlView(images map[string]json.RawMessage) *Tena
 	}
 	view.Projection = d.Records
 	view.ConnectorRoster.Use(d.Connectors)
-	view.controlAnswer = func(x platform.Effect, out platform.Outcome, at time.Time) *kernel.Error {
+	view.controlAnswer = func(x platform.Effect, out platform.Outcome, at time.Time) *platform.Error {
 		d.answerControlEffect(x, out, at)
 		return d.Failure
 	}
@@ -367,7 +366,7 @@ func (d *stagedDecision) savedControl() (*acceptedformat.Control, error) {
 
 func (d *stagedDecision) answerControlEffect(x platform.Effect, out platform.Outcome, at time.Time) {
 	if err := d.tenant.stageEffectAnswer(d, x, out, nil, at); err != nil {
-		if refusal, ok := err.(*kernel.Error); ok {
+		if refusal, ok := err.(*platform.Error); ok {
 			d.Failure = refusal
 		} else {
 			unsupportedStagedEffect()
@@ -386,7 +385,7 @@ func (t *Tenant) applyAcceptedControl(saved *acceptedformat.Control) error {
 	return runtimekernel.ApplyControl(saved, t.controlOwners().Install, t.outbound.PatchImage)
 }
 
-func (t *Tenant) controlDecision(c platform.Caller, s *pb.Submission, at time.Time) (func(*pb.ChangeRecord), *kernel.Error) {
+func (t *Tenant) controlDecision(c platform.Caller, s *pb.Submission, at time.Time) (func(*pb.ChangeRecord), *platform.Error) {
 	return controlowner.Deciders{
 		Connector: t.ConnectorRoster.ConnectorDecider(controlowner.SchemaConnectorOff),
 		Setting:   t.settingDecision(), Binding: t.router().DecideBinding, Work: t.work.Decide,
@@ -395,14 +394,14 @@ func (t *Tenant) controlDecision(c platform.Caller, s *pb.Submission, at time.Ti
 		Translation: t.words.TranslationDecider(t.i18n.Reset)}.Decide(c, s, at)
 }
 
-func (r runtime) ControlDecision(c platform.Caller, s *pb.Submission, at time.Time) (func(*pb.ChangeRecord), *kernel.Error) {
+func (r runtime) ControlDecision(c platform.Caller, s *pb.Submission, at time.Time) (func(*pb.ChangeRecord), *platform.Error) {
 	if !c.Replaying {
 		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Control actions require a private decision")
 	}
 	return r.t.controlDecision(c, s, at)
 }
 
-func (d *stagedDecision) ControlDecision(c platform.Caller, s *pb.Submission, at time.Time) (func(*pb.ChangeRecord), *kernel.Error) {
+func (d *stagedDecision) ControlDecision(c platform.Caller, s *pb.Submission, at time.Time) (func(*pb.ChangeRecord), *platform.Error) {
 	if apply, refusal, handled := (controlowner.StagedControl{Tenant: d.tenant.ID, NoticeOwner: func(id string) (string, bool) { return d.Notices.Owner(id) }, MarkRead: func(id string) { d.Notices.MarkRead(id) },
 		Effect: func(id string) platform.Effect { queued, _ := d.tenant.outbound.Get(id); return queued.Effect },
 		Cancel: func(current, after platform.Effect, out platform.Outcome) {

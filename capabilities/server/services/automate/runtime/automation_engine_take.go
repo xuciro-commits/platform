@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"maps"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 	"platformserver/platform"
 	"slices"
 	"strings"
@@ -80,7 +79,7 @@ func (ss *session) take(x *FlowInstance, token int) {
 		request, prepared := ss.preparedOperations[token]
 		delete(ss.preparedOperations, token)
 		if !prepared {
-			var err *kernel.Error
+			var err *platform.Error
 			request, err = step.Operation.Request(app, run)
 			if err != nil {
 				ss.failed(x, token, step, err.Error(), err)
@@ -227,7 +226,7 @@ func (ss *session) take(x *FlowInstance, token int) {
 		if step.Call.Version > 0 {
 			child = ss.f.def(d.app+"."+step.Call.Flow, step.Call.Version)
 			if child == nil {
-				err = &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
+				err = &platform.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
 			} else {
 				err = nil
 			}
@@ -290,7 +289,7 @@ func payloadOf(build func(platform.Caller, *platform.Run) any, c platform.Caller
 	return raw
 }
 
-func (ss *session) act(x *FlowInstance, appID, protocol, action, target string, payload json.RawMessage, key string, onBehalf ...string) (*pb.EntityRef, *kernel.Error) {
+func (ss *session) act(x *FlowInstance, appID, protocol, action, target string, payload json.RawMessage, key string, onBehalf ...string) (*pb.EntityRef, *platform.Error) {
 	h := ss.f.host
 	if x != nil {
 		h = ss.execution(x)
@@ -301,7 +300,7 @@ func (ss *session) act(x *FlowInstance, appID, protocol, action, target string, 
 	}
 	owner, declared, ok := h.Action(action)
 	if !ok || owner != appID && (len(onBehalf) == 0 || onBehalf[0] == "") {
-		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_UNKNOWN_SCHEMA}
+		return nil, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_UNKNOWN_SCHEMA}
 	}
 	if len(onBehalf) > 0 && onBehalf[0] != "" {
 		member, ok := h.Member(onBehalf[0])
@@ -313,7 +312,7 @@ func (ss *session) act(x *FlowInstance, appID, protocol, action, target string, 
 	authority, _ := h.OwnerOf(declared.Target)
 	s := &pb.Submission{TenantId: c.Tenant, PrincipalId: c.ID, Authority: authority, IdempotencyKey: key,
 		Target: &pb.EntityRef{Type: declared.Target, Id: target}, Schema: &pb.SchemaRef{Name: action, Version: 1}, Payload: payload}
-	r, err := platform.Attempt(c, func() (*pb.ChangeRecord, *kernel.Error) { return h.Submit(c, s, ss.now) })
+	r, err := platform.Attempt(c, func() (*pb.ChangeRecord, *platform.Error) { return h.Submit(c, s, ss.now) })
 	if err != nil {
 		return nil, err
 	}

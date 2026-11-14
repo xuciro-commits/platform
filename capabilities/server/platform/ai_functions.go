@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"io"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 	"regexp"
 	"slices"
 	"unicode/utf8"
@@ -67,7 +66,7 @@ type FunctionRef struct {
 	Version int    `json:"version"`
 }
 
-func (c Caller) RequestFunction(r *pb.ChangeRecord, request FunctionRequest) (FunctionCall, *kernel.Error) {
+func (c Caller) RequestFunction(r *pb.ChangeRecord, request FunctionRequest) (FunctionCall, *Error) {
 	if c.rt != nil {
 		return c.rt.RequestFunction(c, r, request)
 	}
@@ -76,7 +75,7 @@ func (c Caller) RequestFunction(r *pb.ChangeRecord, request FunctionRequest) (Fu
 
 const FunctionNeedsDecision = "AI functions require an accepted decision"
 
-func AwaitsDecision(err *kernel.Error) bool {
+func AwaitsDecision(err *Error) bool {
 	return err != nil && err.Code == pb.ErrorCode_ERROR_CODE_CONFLICT && err.Message == FunctionNeedsDecision
 }
 
