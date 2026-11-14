@@ -27,7 +27,7 @@
 | 前端包、路由、数据获取、i18n | [7-system/web](docs/7-system/web.md) |
 | 检查、钩子、验收用例 | [7-system/verification](docs/7-system/verification.md) |
 
-前端改动另用技能 `platform-design`；一批完整交付用技能 `platform-batch`；架构诊断用技能 `platform-diagnose`。
+前端改动另用技能 `platform-design`；工单循环用技能 `platform-loop`；一批完整交付用技能 `platform-batch`；架构诊断用技能 `platform-diagnose`。
 
 ## 硬规则
 

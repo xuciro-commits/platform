@@ -42,25 +42,75 @@ read-when: 每批开始（选当前批次）与结束（删除已完成条目、
 
 目标规范：[6-domain R8](6-domain/README.md)、[7-system §7.2、§7.5.1、§7.7](7-system/README.md)。完成标准（整段）：`platform` 不超过 8 千行且只含 SDK 契约；7-system 的十条依赖差距清零；包名与目录名不一致为 0。
 
-- [ ] U1 动作引擎归位：`platform/ledger.go` 的规则引擎与 `entity.go` 的转换移入 `services/actions`，按动作类型的规则与提交条件表达；`Entity`、`Transition`、`Ledger` 不再是公开类型；`contract/go/kernel` 的实现随 Ledger 并入 `kernel`（Ledger 已直接持有其具体类型），`Error` 等值类型进 `platform`，`contract/go` 只留协议生成代码。
-  现状（2026-11-13 诊断，U1.1、U1.2 之前）：`platform.Ledger` 是两件事的合体——接受变更日志（持有 `contract/go/kernel` 的 ChangeLog、Authorities、SchemaRegistry、Receiver）与规则引擎（`Receive` 的授权与输入校验、`Generated` 的标准增改归档与生命周期转换）。13 个服务各自 `NewLedger`，54 处调用 `Receive` / `Generated`，64 个文件用 `platform.Entity` 声明自己的记录类型，租户对象类型的动作也编译成 `Transition` 再执行。`contract/go/kernel` 被引用 2600 余次，其中 2572 次是 `kernel.Error`。
-  已完成（U1.1、U1.2）：规则引擎在 `services/actions/authority*.go`，服务、内核与宿主只经接口 `platform.Authority` 使用，实例由宿主装配时经 `platform.Authorities` 注入；接口仍露出 `kernel.ChangeLog`、`kernel.ChangeArchive`，由 U1.3 收走。
-  切分（每批独立验收，按顺序）：
-  - [ ] U1.3 日志入内核：`contract/go/kernel` 的 Receiver、ChangeLog、FactLog、Authorities、SchemaRegistry、Works、Connectors、Identity 与 State 并入 `kernel`，引擎经宿主注入的日志接口使用；`contract/go` 只留协议生成代码。
-  - [ ] U1.4 值类型进平台：`Error`、`Caller`、`Policy`、`Ref` 等值类型进 `platform`（`kernel.Error` 约 2572 处的机械改名，单独一批，不夹带行为改动）。
-  - [ ] U1.5 一套模型：生命周期转换按动作类型表达（`From` 是对状态的提交条件，`To` 是修改对象的规则，`Do` 是函数支撑的规则，`After` 是副作用）；租户动作与内置声明走同一条执行路径，删除“动作编译成 `Transition`”的中间形状；`Entity`、`Transition` 的声明改用术语表的词，不再作为公开类型。
-- [ ] U2 业务事务出平台：`platform/transaction.go` 的 `BusinessTxn`、`TxnPost`、`TxnJournal` 改由产品包的本体与动作表达，平台只留通用的原子编辑集。
-- [ ] U3 页面模型归位：`platform/page_*` 移入 `services/apps`；`platform` 只留页面组件契约的生成入口。
-- [ ] U4 发布路径一张表：record 族与 versioned 族的发布步骤移入拥有它的服务并实现同一组钩子；`services/resources` 只编排，删除 Build 的“兼容公共类型”。
-- [ ] U5 拆散 `build`：`services/resources/authoring` 中各资源类型的编辑移入拥有它的服务；`resources` 只留 RID、项目、文件夹、工作状态、分支、提案。
-- [ ] U6 改名：16 个包改为目录名；内核与服务的公开标识改用术语表的词，`candidate` 只留给发布候选。纯改名，单独成批，不夹带行为改动。
+工单按技能 `platform-loop` 执行（分工见 [method 工单循环](method.md#工单循环)）：`[难]` 给强模型（方向内的设计、内核与语义），`[易]` 给执行模型（方向已定的搬移、改名、重复样板），`[独占]` 行执行时不得有别的行在进行中。每行的“方向”已由主会话定下，不重议；“验证”是该技能中的档位（V1 基本、V2 路径、V3 全量、V4 并发、W 前端）。同一编号下按顺序做；不同编号之间只受“前置”约束。
+
+- [ ] U1 动作引擎归位。已完成（U1.1、U1.2）：规则引擎在 `services/actions/authority*.go`，服务、内核与宿主只经 `platform.Authority` 使用，由宿主经 `platform.Authorities` 注入。
+  - [ ] U1.3 `[难]` 协议部件入 `kernel/protocol`。
+    - 方向：`contract/go/kernel` 除 `errors.go` 外全部移到新叶层包 `capabilities/server/kernel/protocol`（只依赖协议生成代码与 `platform`）。服务可以导入它，与 `kernel/records`、`kernel/acceptedformat` 同列：同批改 7-system §7.2 的表与 `scripts/check-boundaries.mjs`，这是本行带的设计决定，写进提交正文。不为 Works、FactLog、Identity、Connectors 另写接口。
+    - `platform` 不得导入它，两处要先断开：① `ChangeArchive`（已是接口）原样搬进 `platform`，新增接口 `platform.ChangeLog`（`Records`、`ApplyAccepted`、`SubmitChecked`、`Fork() ChangeLog`），`StagedDecision.DraftChanges`、`Authority.ForkAcceptedChanges`、`Authority.UseChangeArchive`、`kernel.Decision.Logs`、`kernel/sequence_batch.go` 的校验日志都改用它；② `platform/rules_intervals.go` 用到 `kernel.NewIdentity` 的函数连同只为它服务的类型，移到唯一调用它的服务（调用者若在 `platform` 内，整条调用链移到 `services/objects`）。
+    - 不做：不改 `kernel.Error`（U1.4）；不改任何接受语义与历史字节。
+    - 完成：`command ls contract/go/kernel` 只剩 `errors.go`；除 `kernel.Error` 外全树不再引用 `platformkernel/kernel` 的任何标识；7-system 差距“三处内核”改写为现状。
+    - 验证：V1、V3、V4。
+  - [ ] U1.4 `[易]` `[独占]` `Error` 进 `platform`。前置 U1.3。
+    - 方向：`contract/go/kernel/errors.go` 的 `Error` 搬为 `platform.Error`；用脚本把全树 `kernel.Error`（约 2580 处）改为 `platform.Error`（`platform` 包内为 `Error`），并修正 import（不再使用的 `platformkernel/kernel` 删除，缺 `platform` 的补上）；`kernel/protocol` 里 Receiver 的 `Caller`、`Policy`、`Ref` 留在 `protocol`。删除 `contract/go/kernel` 目录；7-system §7.2 中“`contract/go/kernel` 是可移植的协议接收与账本部件……”一条改为“`contract/go` 只含协议生成代码”。
+    - 不做：不改行为、错误码、文案；不夹带别的改名。
+    - 完成：`grep -rn '"platformkernel/kernel"' capabilities contract` 为空；`make contract` 不产生 diff；差距“三处内核”删除。
+    - 验证：V1、V3。
+  - [ ] U1.5 `[难]` 转换即动作类型。
+    - 方向：删除 `platform.Transition`；`platform.Lifecycle.Transitions` 改为 `Actions []ActionType`。`ActionType` 的声明部分沿用 Transition 的 `Name`、`Title`、`Description`、`Roles`、`Capability`、`Approval`、`ConfirmationOnly`、`Adoption`、`DeferRequired`，`Payload` 改名 `Parameters`；执行部分按 [6-domain §6.7](6-domain/README.md) 的五部分：`Criteria`（`From` 表达为“状态属于……”的提交条件，`RuleCriteria` 并入）、`Rules`（`To`、`ToInput` 是修改对象状态的规则，`Do` 是函数支撑规则，`Txn`、`ApplyTxn` 暂作一条事务规则，留给 U2 拆）、`Effects`（`After`）。执行器只有一个：`services/actions/authority.go` 的 `transition` 改为按“参数 → 授权 → 提交条件 → 规则 → 一次接受写入 → 副作用”执行；审批的等待与驳回状态移动仍由执行器处理。
+    - 23 个声明转换的文件随批改写（`grep -rln 'platform.Transition{' capabilities/server`）；`services/resources/authoring/build_actions.go` 的 `lifecycle()` 直接产出 `ActionType`；`TransitionInfo` 的 JSON 形状不变（`make contract` 无 diff，前端不动）。
+    - 不做：不动 `Standard` 的增改归档（U1.6）；不动 `BusinessTxn` 内部（U2）；不改 `Entity` 的名字（U6.2）。
+    - 完成：`grep -rn 'platform\.Transition\b' capabilities/server` 为空；6-domain 差距“两套模型”改写。
+    - 验证：V1、V3、V4。
+  - [ ] U1.6 `[难]` 标准增改归档走同一执行器。前置 U1.5。
+    - 方向：`standard()` 的 create、edit、archive 表达为执行器内置的三种动作类型（规则分别是创建、修改、删除对象）；`Generated` 只剩“找到动作类型 → 执行”，`ApplyTxnRecord` 复用同一段；删除两条路径里重复的校验。
+    - 完成：`services/actions/authority*.go` 中没有 `standard` 与 `transition` 两个并行函数；行为不变（验收不改断言）。
+    - 验证：V1、V3、V4。
+- [ ] U2 业务事务出平台。前置 U1.5。
+  - [ ] U2.1 `[难]` 诊断与切分（不写代码）。
+    - 读：`platform/transaction*.go`（1047 行）、`services/actions/business_*.go`、`services/resources/authoring/build_transactions.go`、`deploy/packages/*.json` 中每种 step kind 的使用次数。
+    - 方向：① 平台只留通用原子编辑集：创建、修改、删除对象，增删关系，函数支撑，forEach，编号分配；② `post`、`journal`（含关账期）是会计形状，不得留在任何 Go 类型里：能用通用规则加 Expr 表达的改写产品包，不能的改成产品包内的函数支撑规则；函数运行时做不到的登记为差距并阻塞；③ `effect`、`work` 归副作用；④ 类型定义离开 `platform`：执行在 `services/actions`，定义校验在 `services/ontology`；⑤ 格式纪元未冻结（C26），产品包 JSON 直接改写，不留旧形状的读取。
+    - 产出：每种 kind → §6.7 哪种规则或副作用的映射表，写入 6-domain §6.7；把 U2 拆成后续行（同本格式，标档位与验证）。
+- [ ] U3 页面模型归位。
+  - [ ] U3.1 `[难]` 切断依赖。
+    - 方向：列出 `platform` 内 8 个文件及 `services/ontology`、`services/devops`、`services/resources` 对 `platform.Page*` 的每处使用；留在 `platform` 的只有 `cmd/page-contract` 生成 `pageui/safety.ts` 与 `page_compat.json` 所需的最小页面组件契约；其余使用改为把使用方代码移入 `services/apps`，或在 `services/apps` 的 `api.go` 声明接口由宿主注入。不新增依赖差距。
+    - 完成：除契约类型外，`platform` 自身与上述三个服务不再引用页面模型类型；清单写进提交正文。
+    - 验证：V1、V3。
+  - [ ] U3.2 `[易]` 搬移。前置 U3.1。`platform/page_*.go` 中契约之外的文件移入 `services/apps/pages`，改 import，下调 `platformLines`；`make contract` 无 diff。验证：V1、V3。
+- [ ] U4 发布路径一张表。
+  - [ ] U4.1 `[难]` 钩子与样板。
+    - 方向：一组钩子声明在 `services/resources/publication/api.go`（校验、冻结版本、闭包、安装、读取冻结定义）；record 族（object、action-type）与 versioned 族（agent、evaluation-set、test-plan、compute、sample-set）各自在拥有它的服务实现，宿主登记成一张表；`services/resources` 只按表编排；删除 Build 的“兼容公共类型”。
+    - 产出：钩子签名写入 7-system §7.5.1；迁完 action-type 一种作样板；其余每种资源类型拆成一行 `[易]`。
+    - 验证：V1、V3。
+- [ ] U5 拆散 `build`。前置 U4.1。
+  - [ ] U5.1 `[难]` 样板。
+    - 方向：定下“一类资源的编辑如何离开 `Build`”的模式（状态、注册、HTTP 路由、`host` 导入点怎么改），以 compute（`build_compute*.go` 634 行 → `services/functions/authoring`）迁完为样板。归属：objects、tables、kinds、action types、blueprints、transactions → `services/ontology`；agents → `services/ai`；integrations（1632 行）→ `services/data`；branches → `services/resources/merge`；release、publications、artifacts（约 3000 行）→ 按 U4 的表归 `services/devops` 与 `services/resources/publication`；`resources` 只留 RID、项目、文件夹、工作状态、分支、提案。每迁一类同时收走它在 `host.Tenant` 的字段与可选接口探测（N6），下调 `tenantFields`、`capabilityProbes` 与对应依赖差距。
+    - 产出：模式写入 7-system §7.2；其余每类拆成一行 `[易]`，写明文件清单与目标包。
+    - 验证：V1、V3。
+- [ ] U7 `platform` 只留 SDK 契约（整段完成标准：不超过 8 千行）。前置 U2、U3。
+  - [ ] U7.1 `[难]` 诊断与切分（不写代码）。
+    - 现状（行数按文件名前缀）：rules 1775、asset 1622、entity 1414、dependencies 1411、definition 1381、app 1305、actions 1103、ai 1075、revision 938、protocol 674、workflow 638、operations 580。
+    - 方向：`platform` 只留类型、接口与声明助手；求值、解析、校验的实现移到唯一拥有者（规则求值 → `services/actions` 或 `expr`；依赖解析与修订 → `services/resources`；ai → `services/ai`；workflow → `services/automate`）；`Runtime` 接口的约 44 个方法按服务拆成窄接口。
+    - 产出：前缀 → 归属 → 留下什么的表，写入 7-system 差距；拆成后续行，以 `[易]` 为主。
+- [ ] U6 改名（纯改名，不夹带行为；协议包名、JSON 字段、URL 与已存字节不改）。前置 U1–U5、U7。
+  - [ ] U6.1 `[易]` `[独占]` 14 个包名改为目录名（清单见 7-system 差距）；`misnamedPackages` 降为 0。验证：V1、V3。
+  - [ ] U6.2 `[易]` `[独占]` `platform.Entity` → `RecordType`（`EntityInfo` → `RecordTypeInfo`），`platform.App` → `Service`，服务内的 `ledger` 字段 → `authority`；glossary 增加“Record type / 记录类型”。验证：V1、V3。
+  - [ ] U6.3 `[易]` `[独占]` `candidate`：`services/devops/releases`、`services/devops/trials` 与 DevOps 前端中指发布候选的保留，其余指决定的改为 `decision`；逐包改、逐包编译。验证：V1、V3、V4。
 
 ### 四、自举
 
 目标规范：[1-enterprise §1.1](1-enterprise.md)、[2-product R8](2-product.md)、[verification K8](7-system/verification.md)。前三段完成后解除产品矩阵冻结。
 
-- [ ] S1 自举一级：在构建租户里用 Ontology Manager、Workshop、Logic、DevOps 重新产出 heating、hospitality、manufacturing 三线产品包并发布版本，替换手工维护的 JSON。做不出来的地方登记为平台差距，不在 JSON 里绕过。完成标准：`deploy/packages/` 的每个文件都是 DevOps 导出的产品版本。
-- [ ] S2 自举二级：工作项、审批、通知收件箱、监控视图改为系统产品包并随宿主预装，删除对应 Go 与手写前端；K8 改为预装断言。逐个做，每个先在包里做到与现有界面等价再删代码。
+- [ ] S1 自举一级。完成标准：`deploy/packages/` 的每个文件都是 DevOps 导出的产品版本。
+  - [ ] S1.1 `[难]` 样板与导出管线（heating）。
+    - 方向：在构建租户里只经 Ontology Manager、Workshop、Logic、DevOps 的同一批 HTTP 接口（不直接写存储、不手改 JSON）重建 heating 的本体、动作与页面，发布版本并导出；与 `deploy/packages/heating.json` 语义等价后替换。做不出来的地方登记为平台差距并阻塞，不在 JSON 里绕过。
+    - 产出：可重复的导出命令（Makefile 目标）；差距清单；其余包（hospitality、manufacturing core / erp / mes、production consumer / provider）各拆一行 `[易]`。
+    - 验证：V1、V3。
+- [ ] S2 自举二级。前置 S1。逐个做，每个先在系统产品包里做到与现有界面等价（对应验收不改断言通过）并随宿主预装，再删除对应 Go 与手写前端；K8 改为预装断言。
+  - [ ] S2.1 `[难]` 工作项（样板；验收 F5）。产出其余三项的具体文件清单。验证：V1、V3、W。
+  - [ ] S2.2 `[难]` 审批。验证：V1、V3、W。
+  - [ ] S2.3 `[难]` 通知收件箱。验证：V1、V3、W。
+  - [ ] S2.4 `[难]` 监控视图。验证：V1、V3、W。
 
 ## 条件触发
 
