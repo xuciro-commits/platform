@@ -45,7 +45,7 @@ read-when: 每批开始（选当前批次）与结束（删除已完成条目、
 工单按技能 `platform-loop` 执行（分工见 [method 工单循环](method.md#工单循环)）：`[难]` 给强模型（方向内的设计、内核与语义），`[易]` 给执行模型（方向已定的搬移、改名、重复样板），`[独占]` 行执行时不得有别的行在进行中。每行的“方向”已由主会话定下，不重议；“验证”是该技能中的档位（V1 基本、V2 路径、V3 全量、V4 并发、W 前端）。同一编号下按顺序做；不同编号之间只受“前置”约束。
 
 - [ ] U1 动作引擎归位。已完成（U1.1–U1.5）：规则引擎在 `services/actions/authority*.go`，服务、内核与宿主只经 `platform.Authority` 使用，由宿主经 `platform.Authorities` 注入；协议部件在 `kernel/protocol`，变更日志与归档通过 `platform` 接口解耦；`Error` 归 `platform`，`contract/go` 只含协议生成代码；生命周期声明统一为 `ActionType`，状态条件、规则、收据与副作用仍在原接受阶段执行，动作目录生成归 `services/actions/catalog`。
-  - [ ] U1.6 `[难]` 标准增改归档走同一执行器。前置 U1.5。
+  - [ ] U1.6 `[难]` 标准增改归档走同一执行器。前置 U1.5 已完成。（进行中：Terra 6.1 Max，2026-11-14）
     - 方向：`standard()` 的 create、edit、archive 表达为执行器内置的三种动作类型（规则分别是创建、修改、删除对象）；`Generated` 只剩“找到动作类型 → 执行”，`ApplyTxnRecord` 复用同一段；删除两条路径里重复的校验。
     - 完成：`services/actions/authority*.go` 中没有 `standard` 与 `transition` 两个并行函数；行为不变（验收不改断言）。
     - 验证：V1、V3、V4。
@@ -61,7 +61,7 @@ read-when: 每批开始（选当前批次）与结束（删除已完成条目、
     - 方向：分别列清页面校验、资源发布闭包与历史字节读取三条调用链。页面语义归 `services/apps/pages`，通用依赖解析与发布编排归 `services/resources/publication`；内核不导入服务，恢复的校验与逐字节语义不得减弱。跨服务调用复用已有发布钩子与宿主装配，不让 SDK 反向调用实现；SDK 只留声明与声明助手。
     - 产出：所有页面实现到唯一拥有者的映射、共享发布代码的先后顺序与后续 `[易]` 工单；每行列完整文件、删除路径、无循环依赖的中间完成态、`make contract` 无差异及验证档位，不以旧的整文件搬移工单代替切分。
 - [ ] U4 发布路径一张表。已完成（U4.1）：五项发布钩子由宿主登记，action-type 的发布步骤归本体服务；Build 的 apps、automation、functions、本体类型转接已删除。
-  - [ ] U4.2 `[难]` 其余家族钩子与状态边界定型（诊断与切分，不写代码）。前置已完成：U4.1。
+  - [ ] U4.2 `[难]` 其余家族钩子与状态边界定型（诊断与切分，不写代码）。前置已完成：U4.1。（进行中：Terra 6.1 Max，2026-11-14）
     - 读：`services/resources/publication/api.go`、`services/resources/authoring/build_release_drafts.go`、`build_artifacts.go`、`build_owner.go`、`build_agents.go`、`build_evaluations.go`、`build_tests.go`、`build_compute.go`、`build_tables.go`、`host/composition/tenant.go`。
     - 必须定下：① agent、evaluation-set、test-plan、compute、sample-set 的 `singleDraftAssets` 在候选冻结前生成新 `ReleaseAsset` 并使用来源版本；其中 agent 与 evaluation-set 还读取当前联合声明。现有 `Closure` 只返回草稿依赖与引用，不能直接搬移。② code 与 decision-table 都是 `AssetCompute`，但分别用 `build.code.publish` 与 `build.table.publish`；定下唯一分派与两个 schema 的登记方式。③ object、agent、compute 依赖 `Build` 的 `jointEntities`、`installed`、`agents`、`codes`、`tables` 等状态；定下服务实例的装配、`Fork` 与 `NewSimulationApp` 的重绑，不能捕获源租户。④ evaluation-set 与 test-plan 共用 `build.testplan` 记录、发布 schema 与版本族，靠显式 variant 区分；`functions/authoring` 已导入 `ai/evaluation`，将完整记录搬入后者会成环。共享记录和版本族只保留一个拥有者与一套实现，AI 只接收评估专有 descriptor，不引入重复模型或兼容层。
     - 产出：明确每个家族五项钩子的入参、结果、类型选择、依赖注入与分叉重绑，更新 7-system §7.5.1；逐行补齐 U4.3–U4.8 的完整文件清单、改法与完成判据，未补齐不得执行。保持历史字节和接受语义。
