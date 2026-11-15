@@ -35,7 +35,8 @@ func (l *authority) ApplyTxnRecord(c platform.Caller, r *pb.ChangeRecord, e plat
 	s.Payload = payload
 	catalog := l.catalogFor(c)
 	a, ok := catalog.Action(s.Schema.Name)
-	if !ok || a.Target != e.Type || verb == "create" && !e.Standard.Create || verb == "edit" && !e.Standard.Edit || verb == "archive" && !e.Standard.Archive {
+	action, enabled := builtinAction(e, verb)
+	if !ok || a.Target != e.Type || !enabled {
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_UNKNOWN_SCHEMA, "Transaction step action is unavailable / 事务步骤动作不可用")
 	}
 	authorization := s
@@ -92,7 +93,7 @@ func (l *authority) ApplyTxnRecord(c platform.Caller, r *pb.ChangeRecord, e plat
 			reflect.ValueOf(value).Elem().FieldByName("State").SetString(state)
 		}
 	}
-	apply, err := l.checked(c, s, now, catalog, func() (func(*pb.ChangeRecord), *platform.Error) { return standard(c, e, verb, s, now) })()
+	apply, err := l.checked(c, s, now, catalog, func() (func(*pb.ChangeRecord), *platform.Error) { return executeAction(c, e, action, s, now) })()
 	if err != nil {
 		return err
 	}

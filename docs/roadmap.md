@@ -44,12 +44,7 @@ read-when: 每批开始（选当前批次）与结束（删除已完成条目、
 
 工单按技能 `platform-loop` 执行（分工见 [method 工单循环](method.md#工单循环)）：`[难]` 给强模型（方向内的设计、内核与语义），`[易]` 给执行模型（方向已定的搬移、改名、重复样板），`[独占]` 行执行时不得有别的行在进行中。每行的“方向”已由主会话定下，不重议；“验证”是该技能中的档位（V1 基本、V2 路径、V3 全量、V4 并发、W 前端）。同一编号下按顺序做；不同编号之间只受“前置”约束。
 
-- [ ] U1 动作引擎归位。已完成（U1.1–U1.5）：规则引擎在 `services/actions/authority*.go`，服务、内核与宿主只经 `platform.Authority` 使用，由宿主经 `platform.Authorities` 注入；协议部件在 `kernel/protocol`，变更日志与归档通过 `platform` 接口解耦；`Error` 归 `platform`，`contract/go` 只含协议生成代码；生命周期声明统一为 `ActionType`，状态条件、规则、收据与副作用仍在原接受阶段执行，动作目录生成归 `services/actions/catalog`。
-  - [ ] U1.6 `[难]` 标准增改归档走同一执行器。前置 U1.5 已完成。（进行中：Terra 6.1 Max，2026-11-14）
-    - 方向：`standard()` 的 create、edit、archive 表达为执行器内置的三种动作类型（规则分别是创建、修改、删除对象）；`Generated` 只剩“找到动作类型 → 执行”，`ApplyTxnRecord` 复用同一段；删除两条路径里重复的校验。
-    - 完成：`services/actions/authority*.go` 中没有 `standard` 与 `transition` 两个并行函数；行为不变（验收不改断言）。
-    - 验证：V1、V3、V4。
-- [ ] U2 业务事务出平台。前置 U1.5。
+- [ ] U2 业务事务出平台。前置 U1.5 已完成。
   - [ ] U2.1 `[难]` 诊断与切分（不写代码）。（进行中：Terra 6.1 Max，Deepseek Max 提供实际 step 使用清点，2026-11-14）
     - 读：`platform/transaction*.go`（1047 行）、`services/actions/business_*.go`、`services/resources/authoring/build_transactions.go`、`deploy/packages/*.json` 中每种 step kind 的使用次数。
     - 方向：① 平台只留通用原子编辑集：创建、修改、删除对象，增删关系，函数支撑，forEach，编号分配；② `post`、`journal`（含关账期）是会计形状，不得留在任何 Go 类型里：能用通用规则加 Expr 表达的改写产品包，不能的改成产品包内的函数支撑规则；函数运行时做不到的登记为差距并阻塞；③ `effect`、`work` 归副作用；④ 类型定义离开 `platform`：执行在 `services/actions`，定义校验在 `services/ontology`；⑤ 格式纪元未冻结（C26），产品包 JSON 直接改写，不留旧形状的读取。

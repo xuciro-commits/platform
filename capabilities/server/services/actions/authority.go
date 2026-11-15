@@ -278,61 +278,66 @@ func (l *authority) checked(c platform.Caller, s *pb.Submission, now time.Time, 
 func (l *authority) Generated(c platform.Caller, s *pb.Submission, now time.Time, allowed func() bool, entities ...platform.Entity) (*pb.ChangeRecord, *platform.Error, bool) {
 	schema := s.GetSchema().GetName()
 	for _, e := range entities {
-		verb, found := strings.CutPrefix(schema, e.Type+".")
+		verb, matches := strings.CutPrefix(schema, e.Type+".")
+		if !matches {
+			continue
+		}
+		action, found := builtinAction(e, verb)
+		if !found && e.Lifecycle != nil {
+			if i := slices.IndexFunc(e.Lifecycle.Actions, func(t platform.ActionType) bool { return t.Name == verb }); i >= 0 {
+				action, found = e.Lifecycle.Actions[i], true
+			} else {
+				for _, suffix := range []string{platform.ApprovalHeld, platform.ApprovalRejected, platform.ApprovalReturned} {
+					name, matches := strings.CutSuffix(verb, suffix)
+					if !matches {
+						continue
+					}
+					i := slices.IndexFunc(e.Lifecycle.Actions, func(t platform.ActionType) bool {
+						return t.Name == name && t.Approval != nil && t.Approval.Pending != ""
+					})
+					if i >= 0 {
+						action, found = approvalMove(e.Lifecycle.Actions[i], suffix), true
+						break
+					}
+				}
+			}
+		}
 		if !found {
 			continue
 		}
-		if verb == "create" && e.Standard.Create || verb == "edit" && e.Standard.Edit || verb == "archive" && e.Standard.Archive {
-			record, err := l.Receive(c, s, now, allowed, func() (func(*pb.ChangeRecord), *platform.Error) {
-				return standard(c, e, verb, s, now)
-			})
-			return record, err, true
-		}
-		if e.Lifecycle == nil {
-			continue
-		}
-		if i := slices.IndexFunc(e.Lifecycle.Actions, func(t platform.ActionType) bool { return t.Name == verb }); i >= 0 {
-			tr := e.Lifecycle.Actions[i]
-			var failure *platform.Error
-			for i, rule := range tr.Rules {
-				if rule.Transaction == nil {
-					continue
-				}
-				if !c.Staging() || c.Replaying || rule.Transaction.Run == nil || len(tr.Effects) > 0 || slices.ContainsFunc(tr.Rules, func(r platform.ActionRule) bool { return r.Receipt != nil }) {
-					return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Business transactions require a private accepted decision / 业务事务须经私有接受决策"), true
-				}
-				tr.Rules = slices.Clone(tr.Rules)
-				txn := *rule.Transaction
-				apply := txn.Run
-				txn.Run = func(c platform.Caller, r *pb.ChangeRecord, at time.Time) *platform.Error {
-					failure = apply(c, r, at)
-					return failure
-				}
-				tr.Rules[i].Transaction = &txn
-			}
-			record, err := l.Receive(c, s, now, allowed, func() (func(*pb.ChangeRecord), *platform.Error) {
-				return executeAction(c, e, tr, s, now)
-			})
-			if err == nil && failure != nil {
-				return nil, failure, true
-			}
-			return record, err, true
-		}
-		for _, suffix := range []string{platform.ApprovalHeld, platform.ApprovalRejected, platform.ApprovalReturned} {
-			name, found := strings.CutSuffix(verb, suffix)
-			i := slices.IndexFunc(e.Lifecycle.Actions, func(t platform.ActionType) bool {
-				return t.Name == name && t.Approval != nil && t.Approval.Pending != ""
-			})
-			if !found || i < 0 {
+		var failure *platform.Error
+		for i, rule := range action.Rules {
+			if rule.Transaction == nil {
 				continue
 			}
-			record, err := l.Receive(c, s, now, allowed, func() (func(*pb.ChangeRecord), *platform.Error) {
-				return executeAction(c, e, approvalMove(e.Lifecycle.Actions[i], suffix), s, now)
-			})
-			return record, err, true
+			if !c.Staging() || c.Replaying || rule.Transaction.Run == nil || len(action.Effects) > 0 || slices.ContainsFunc(action.Rules, func(r platform.ActionRule) bool { return r.Receipt != nil }) {
+				return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Business transactions require a private accepted decision / 业务事务须经私有接受决策"), true
+			}
+			action.Rules = slices.Clone(action.Rules)
+			txn := *rule.Transaction
+			apply := txn.Run
+			txn.Run = func(c platform.Caller, r *pb.ChangeRecord, at time.Time) *platform.Error {
+				failure = apply(c, r, at)
+				return failure
+			}
+			action.Rules[i].Transaction = &txn
 		}
+		record, err := l.Receive(c, s, now, allowed, func() (func(*pb.ChangeRecord), *platform.Error) {
+			return executeAction(c, e, action, s, now)
+		})
+		if err == nil && failure != nil {
+			return nil, failure, true
+		}
+		return record, err, true
 	}
 	return nil, nil, false
+}
+
+func builtinAction(e platform.Entity, verb string) (platform.ActionType, bool) {
+	if verb == "create" && e.Standard.Create || verb == "edit" && e.Standard.Edit || verb == "archive" && e.Standard.Archive {
+		return platform.ActionType{Name: verb}, true
+	}
+	return platform.ActionType{}, false
 }
 
 func approvalMove(t platform.ActionType, suffix string) platform.ActionType {
@@ -359,40 +364,82 @@ func executeAction(c platform.Caller, e platform.Entity, t platform.ActionType, 
 		return nil, notFound()
 	}
 	typ := reflect.TypeOf(e.Model)
-	existing, known := c.Runtime().Get(c, typ, s.GetTarget().GetId())
-	if !known || !inScope(c, e.Type, s.GetTarget().GetId()) {
-		return nil, notFound()
-	}
-	info, _ := platform.Describe("", e, func(reflect.Type) string { return "?" })
-	f, _ := info.Field(e.Lifecycle.Field)
-	v := reflect.New(typ)
-	v.Elem().Set(reflect.ValueOf(existing))
-	status := v.Elem().FieldByIndex(f.Index)
-	from := status.String()
-	pending := t.Approval != nil && t.Approval.Pending != "" && from == t.Approval.Pending && !c.Automation && !c.Probing()
 	id := s.GetTarget().GetId()
-	if v.Elem().Field(0).Interface().(platform.Record).Archived {
-		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "{record} is archived", id)
+	existing, known := c.Runtime().Get(c, typ, id)
+	v := reflect.New(typ)
+	if t.Name == "create" {
+		if known {
+			return nil, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
+		}
+	} else {
+		if !known || !inScope(c, e.Type, id) {
+			return nil, notFound()
+		}
+		v.Elem().Set(reflect.ValueOf(existing))
 	}
-	if !t.Criteria.State.Holds(from, c.Runtime().Rules()) && !pending {
-		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "{record} is {state}; {transition} takes it only from {states}", id, from, t.Name, strings.Join(t.Criteria.State.In, ", "))
-	}
-	for _, rule := range t.Rules {
-		if rule.Function != nil {
-			if err := rule.Function(c, v.Interface(), s.GetPayload(), now); err != nil {
-				return nil, err
+	switch t.Name {
+	case "create", "edit", "archive":
+		if t.Name == "archive" {
+			v.Elem().Field(0).Addr().Interface().(*platform.Record).Archived = true
+		} else {
+			invalid := &platform.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
+			var given map[string]json.RawMessage
+			if json.Unmarshal(s.GetPayload(), &given) != nil {
+				return nil, invalid
 			}
+			info, _ := platform.Describe("", e, func(reflect.Type) string { return "?" })
+			for name := range given {
+				if f, ok := info.Field(name); !ok || f.ReadOnly || !c.Replaying && !c.Automation && !f.WritesAny(c.RolesHere(), c.Rules()) {
+					return nil, invalid
+				}
+			}
+			base, err := json.Marshal(v.Interface())
+			var merged map[string]json.RawMessage
+			if err != nil || json.Unmarshal(base, &merged) != nil {
+				return nil, invalid
+			}
+			for name, value := range given {
+				merged[name] = value
+			}
+			raw, err := json.Marshal(merged)
+			v = reflect.New(typ)
+			if err != nil || json.Unmarshal(raw, v.Interface()) != nil {
+				return nil, invalid
+			}
+			v.Elem().Field(0).Addr().Interface().(*platform.Record).ID = id
 		}
-		if rule.Edit == nil {
-			continue
+		if c.RestoreSource() {
+			v.Elem().Field(0).Addr().Interface().(*platform.Record).Archived = false
 		}
-		field, _ := info.Field(rule.Edit.Field)
-		value := v.Elem().FieldByIndex(field.Index)
-		original := reflect.ValueOf(existing).FieldByIndex(field.Index).String()
-		if to := value.String(); to == original && !slices.Contains(rule.Edit.Allowed, original) {
-			value.SetString(rule.Edit.Allowed[0])
-		} else if !slices.Contains(rule.Edit.Allowed, to) {
-			return nil, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
+	default:
+		info, _ := platform.Describe("", e, func(reflect.Type) string { return "?" })
+		f, _ := info.Field(e.Lifecycle.Field)
+		status := v.Elem().FieldByIndex(f.Index)
+		from := status.String()
+		pending := t.Approval != nil && t.Approval.Pending != "" && from == t.Approval.Pending && !c.Automation && !c.Probing()
+		if v.Elem().Field(0).Interface().(platform.Record).Archived {
+			return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "{record} is archived", id)
+		}
+		if !t.Criteria.State.Holds(from, c.Runtime().Rules()) && !pending {
+			return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "{record} is {state}; {transition} takes it only from {states}", id, from, t.Name, strings.Join(t.Criteria.State.In, ", "))
+		}
+		for _, rule := range t.Rules {
+			if rule.Function != nil {
+				if err := rule.Function(c, v.Interface(), s.GetPayload(), now); err != nil {
+					return nil, err
+				}
+			}
+			if rule.Edit == nil {
+				continue
+			}
+			field, _ := info.Field(rule.Edit.Field)
+			value := v.Elem().FieldByIndex(field.Index)
+			original := reflect.ValueOf(existing).FieldByIndex(field.Index).String()
+			if to := value.String(); to == original && !slices.Contains(rule.Edit.Allowed, original) {
+				value.SetString(rule.Edit.Allowed[0])
+			} else if !slices.Contains(rule.Edit.Allowed, to) {
+				return nil, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
+			}
 		}
 	}
 	if err := c.PrepareBusinessVersions(v.Interface(), now); err != nil {
@@ -412,8 +459,10 @@ func executeAction(c platform.Caller, e platform.Entity, t platform.ActionType, 
 		}
 	}
 	value := v.Elem().Interface()
-	if err := c.Runtime().Check(c, value); err != nil {
-		return nil, err
+	if t.Name != "create" || e.CreateTxn == nil || c.Replaying || c.SourceProjection() {
+		if err := c.Runtime().Check(c, value); err != nil {
+			return nil, err
+		}
 	}
 	return func(r *pb.ChangeRecord) {
 		for _, rule := range t.Rules {
@@ -423,6 +472,23 @@ func executeAction(c platform.Caller, e platform.Entity, t platform.ActionType, 
 			}
 		}
 		c.Runtime().Put(c, r, value)
+		if t.Name == "create" && e.CreateTxn != nil && e.ApplyCreateTxn != nil && !c.Replaying && !c.SourceProjection() {
+			if c.CreationDepth() >= 16 {
+				c.FailDecision(platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Creation transactions exceed their depth limit"))
+				return
+			}
+			created := c.WithTransactionInput(s)
+			created = created.Deeper()
+			if err := e.ApplyCreateTxn(created, r, now); err != nil {
+				c.FailDecision(err)
+				return
+			}
+			if final, exists := c.Runtime().Get(c, typ, id); exists {
+				if err := c.Runtime().Check(c, final); err != nil {
+					c.FailDecision(err)
+				}
+			}
+		}
 		for _, rule := range t.Rules {
 			if rule.Receipt != nil {
 				after := reflect.New(typ)
@@ -434,101 +500,6 @@ func executeAction(c platform.Caller, e platform.Entity, t platform.ActionType, 
 			after := reflect.New(typ)
 			after.Elem().Set(reflect.ValueOf(value))
 			effect(c, r, after.Interface(), now)
-		}
-	}, nil
-}
-
-func standard(c platform.Caller, e platform.Entity, verb string, s *pb.Submission, now time.Time) (func(*pb.ChangeRecord), *platform.Error) {
-	invalid := &platform.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
-	if c.Runtime() == nil {
-		return nil, notFound()
-	}
-	t := reflect.TypeOf(e.Model)
-	id := s.GetTarget().GetId()
-	existing, known := c.Runtime().Get(c, t, id)
-	if known && verb != "create" && !inScope(c, e.Type, id) {
-		return nil, notFound()
-	}
-	v := reflect.New(t)
-	switch {
-	case verb == "create" && known:
-		return nil, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
-	case verb != "create" && !known:
-		return nil, notFound()
-	case verb != "create":
-		v.Elem().Set(reflect.ValueOf(existing))
-	}
-	if verb == "archive" {
-		v.Elem().Field(0).Addr().Interface().(*platform.Record).Archived = true
-	} else {
-		var given map[string]json.RawMessage
-		if json.Unmarshal(s.GetPayload(), &given) != nil {
-			return nil, invalid
-		}
-		info, _ := platform.Describe("", e, func(reflect.Type) string { return "?" })
-		for name := range given {
-			if f, ok := info.Field(name); !ok || f.ReadOnly || !c.Replaying && !c.Automation && !f.WritesAny(c.RolesHere(), c.Rules()) {
-				return nil, invalid
-			}
-		}
-		base, err := json.Marshal(v.Interface())
-		var merged map[string]json.RawMessage
-		if err != nil || json.Unmarshal(base, &merged) != nil {
-			return nil, invalid
-		}
-		for name, value := range given {
-			merged[name] = value
-		}
-		raw, err := json.Marshal(merged)
-		v = reflect.New(t)
-		if err != nil || json.Unmarshal(raw, v.Interface()) != nil {
-			return nil, invalid
-		}
-		v.Elem().Field(0).Addr().Interface().(*platform.Record).ID = id
-	}
-	if c.RestoreSource() {
-		v.Elem().Field(0).Addr().Interface().(*platform.Record).Archived = false
-	}
-	if err := c.PrepareBusinessVersions(v.Interface(), now); err != nil {
-		return nil, err
-	}
-	if e.ComputeAt != nil {
-		if err := e.ComputeAt(c, v.Interface(), now); err != nil {
-			return nil, err
-		}
-	}
-	if e.Compute != nil {
-		e.Compute(v.Interface())
-	}
-	if e.Validate != nil {
-		if err := e.Validate(c, v.Interface()); err != nil {
-			return nil, err
-		}
-	}
-	value := v.Elem().Interface()
-	if verb != "create" || e.CreateTxn == nil || c.Replaying || c.SourceProjection() {
-		if err := c.Runtime().Check(c, value); err != nil {
-			return nil, err
-		}
-	}
-	return func(r *pb.ChangeRecord) {
-		c.Runtime().Put(c, r, value)
-		if verb == "create" && e.CreateTxn != nil && e.ApplyCreateTxn != nil && !c.Replaying && !c.SourceProjection() {
-			if c.CreationDepth() >= 16 {
-				c.FailDecision(platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Creation transactions exceed their depth limit"))
-				return
-			}
-			created := c.WithTransactionInput(s)
-			created = created.Deeper()
-			if err := e.ApplyCreateTxn(created, r, now); err != nil {
-				c.FailDecision(err)
-				return
-			}
-			if final, exists := c.Runtime().Get(c, t, id); exists {
-				if err := c.Runtime().Check(c, final); err != nil {
-					c.FailDecision(err)
-				}
-			}
 		}
 	}, nil
 }
