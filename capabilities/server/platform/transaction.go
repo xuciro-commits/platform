@@ -157,7 +157,6 @@ type TxnStep struct {
 	When      *Expr         `json:"when,omitempty"`
 	Link      *TxnLink      `json:"link,omitempty"`
 	Post      *TxnPost      `json:"post,omitempty"`
-	Journal   *TxnJournal   `json:"journal,omitempty"`
 	Effect    *TxnEffect    `json:"effect,omitempty"`
 	Work      *TxnWork      `json:"work,omitempty"`
 	Call      *TxnCall      `json:"call,omitempty"`
@@ -198,26 +197,6 @@ type TxnPost struct {
 	Amount   Expr     `json:"amount"`
 	Subtract bool     `json:"subtract,omitempty"`
 	Floor    bool     `json:"floor,omitempty"`
-}
-
-type TxnJournal struct {
-	Reverses     string           `json:"reverses,omitempty"`
-	Set          string           `json:"set,omitempty"`
-	ClosedPeriod string           `json:"closedPeriod,omitempty" enum:"reject,next-open"`
-	Date         *Expr            `json:"date,omitempty"`
-	Text         *Expr            `json:"text,omitempty"`
-	Currency     *Expr            `json:"currency,omitempty"`
-	Lines        []TxnJournalLine `json:"lines"`
-}
-
-type TxnJournalLine struct {
-	When    *Expr `json:"when,omitempty"`
-	Account Expr  `json:"account"`
-	Debit   *Expr `json:"debit,omitempty"`
-	Credit  *Expr `json:"credit,omitempty"`
-	Text    *Expr `json:"text,omitempty"`
-	Object  *Expr `json:"object,omitempty"`
-	Partner *Expr `json:"partner,omitempty"`
 }
 
 type TxnEffect struct {

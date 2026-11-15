@@ -5538,26 +5538,6 @@ export type TxnIntervals = {
   fields: TxnIntervalFields;
 };
 
-export type TxnJournal = {
-  reverses?: string;
-  set?: string;
-  closedPeriod?: "reject" | "next-open";
-  date?: Expr;
-  text?: Expr;
-  currency?: Expr;
-  lines: TxnJournalLine[];
-};
-
-export type TxnJournalLine = {
-  when?: Expr;
-  account: Expr;
-  debit?: Expr;
-  credit?: Expr;
-  text?: Expr;
-  object?: Expr;
-  partner?: Expr;
-};
-
 export type TxnLink = {
   binding: AssetBinding;
   parent: TxnRef;
@@ -5602,7 +5582,6 @@ export type TxnStep = {
   when?: Expr;
   link?: TxnLink;
   post?: TxnPost;
-  journal?: TxnJournal;
   effect?: TxnEffect;
   work?: TxnWork;
   call?: TxnCall;

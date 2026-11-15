@@ -152,8 +152,7 @@ read-when: 新增能力或应用、判断能力归属、新增资源类型、处
 
 - 验证范围与尚未覆盖的运行模式统一见 [7-system/verification §7.13](7-system/verification.md#713-sql-模式)。
 - 内置应用（R8，第 7 层）：工作项、审批、通知收件箱与监控视图是 Go 与手写前端（`capabilities/server/services/work`、`web/packages/*`），没有系统产品包。
-- 行业概念在平台（R4，第 6 层）：`capabilities/server/platform/transaction.go` 的业务事务与日记账类型，见 [6-domain 现存差距](6-domain/README.md#现存差距)。
-- 能力归属（2.3，第 7 层）：动作执行不在 `services/actions`，资源编辑集中在 `services/resources/authoring`，位置见 [7-system 现存差距](7-system/README.md#现存差距)。
+- 能力归属（2.3，第 7 层）：资源编辑集中在 `services/resources/authoring`，位置见 [7-system 现存差距](7-system/README.md#现存差距)。
 
 ## 相关
 

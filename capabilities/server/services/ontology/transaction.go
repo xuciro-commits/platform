@@ -226,7 +226,7 @@ func CheckTransactions(object Object, ctx TransactionContext, engines ...platfor
 					return fmt.Errorf("%s: %w", where, err)
 				}
 				if step.Kind == "for-each" {
-					if loop != "" || step.ForEach == nil || len(step.ForEach.Steps) == 0 || step.Link != nil || step.Sequence != nil || step.Intervals != nil || step.Post != nil || step.Journal != nil || step.Effect != nil || step.Work != nil || step.Call != nil || step.Target != (platform.TxnRef{}) || len(step.Changes) > 0 || (step.ForEach.Set == "") == (step.ForEach.Range == nil) {
+					if loop != "" || step.ForEach == nil || len(step.ForEach.Steps) == 0 || step.Link != nil || step.Sequence != nil || step.Intervals != nil || step.Post != nil || step.Effect != nil || step.Work != nil || step.Call != nil || step.Target != (platform.TxnRef{}) || len(step.Changes) > 0 || (step.ForEach.Set == "") == (step.ForEach.Range == nil) {
 						return fmt.Errorf("%s needs one unnested declared iteration", where)
 					}
 					if step.ForEach.Range != nil {
@@ -264,12 +264,6 @@ func CheckTransactions(object Object, ctx TransactionContext, engines ...platfor
 				}
 				if step.ForEach != nil {
 					return fmt.Errorf("%s has unexpected iteration fields", where)
-				}
-				if step.Kind == "journal" {
-					if step.Journal == nil || step.Link != nil || step.Sequence != nil || step.Effect != nil || step.Work != nil || step.Call != nil || step.Intervals != nil || step.Post != nil || step.Target != (platform.TxnRef{}) || len(step.Changes) > 0 {
-						return fmt.Errorf("%s has invalid retired journal fields", where)
-					}
-					continue
 				}
 				typed := map[string]bool{"post": step.Post != nil, "effect": step.Effect != nil, "work": step.Work != nil, "call": step.Call != nil, "intervals": step.Intervals != nil}
 				count := 0

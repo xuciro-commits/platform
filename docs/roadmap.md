@@ -42,12 +42,6 @@ read-when: 每批开始（选当前批次）与结束（删除已完成条目、
 
 主代理按前置条件选择条目并独立完成。条目的验证组合见 [7-system/verification §7.12](7-system/verification.md#712-命令分层)；方向与实际不符时，根据代码和规范调整。
 
-- [ ] U2 业务事务出平台。前置 U1.5 已完成。已完成（U2.1）：七个产品包根制品去重后有 100 个事务、226 个步骤，其中 `post` 19（`build.pmsslot` 12、`build.erpstock` 6、`build.finishedstock` 1）、`work` 24、`intervals` 1；各 kind 的数量与归属见 [6-domain §6.7](6-domain/README.md#67-动作)。`call` 是同步查询，不是函数支撑规则。`work` 归副作用声明，但任务权威写入仍在私有决定封存前准备，并与动作落入同一接受结果。
-  - [ ] U2.2 `post` 归入通用编辑集，删除 `journal`。（主会话 2026-11-15 决定，解除原 U2.2、U2.3 的阻塞，取代“`post` 是会计形状”的旧方向）
-    - 依据：19 处 `post` 用在房态槽位（`build.pmsslot`）与库存（`build.erpstock`、`build.finishedstock`），是“按键匹配、增减数值、带下限”的通用计数编辑，不是会计形状；不为它扩张函数运行时（原可选①不做）。`journal` 使用数为 0，字段带 `omitempty`，没有任何已存字节含它。
-    - 方向：① 6-domain §6.7 把 `post` 列为通用规则“累加对象数值”（匹配键、数值属性、增减、下限），`intervals` 列为平台的观测区间对账规则；步骤 kind、JSON 字段名、已存字节与执行语义都不变。② 删除 `TxnJournal`、`TxnJournalLine`、`TxnStep.Journal` 及其执行、校验、拒绝分支与前端字典项；删除前用 `grep -rn '"journal"' deploy/packages capabilities web/e2e` 确认没有使用，有命中则停下按阻塞处理。③ 删除 6-domain 差距“函数返回编辑”，改写“两套模型”“当前纪元冻结定义”为现状。
-    - 不做：不迁移产品包；不新增函数能力；不搬动事务类型的位置（归 U7）。
-    - 完成：`grep -rn 'TxnJournal' capabilities/server` 为空；`make contract` 的差异只含 journal 的删除。验证：V1、V3、V4。完成后 U2 关闭。
 - [ ] U3 页面模型归位。已完成（U3.1、U3.3、U3.4 及资产生命周期注册表）：33 个页面声明类型集中在 SDK，模型字段解析归 `services/apps/pages`；候选读取、资产描述与安装映像解码经宿主注入内核和记录投影；历史查询版本、来源分派与生命周期注册表归 `services/resources/publication`，产品描述与蓝图校验归 `services/devops/descriptor`。关系版本仍由 SDK 的 `LinkVersion` 读取，其余页面求值、校验与发布闭包实现仍待迁移。
   - 边界裁定：页面声明是 SDK 契约，`Manifest.Pages`、`Definition.Page`、`Application.Variables/Queries` 与宿主接口继续使用同一组有类型声明；SDK 唯一保留确有格式语义的 `MarshalJSON`、`UnmarshalJSON` 及原始 `profile`、`retainedVersion` / `contentVersion` 信息。页面生成、求值、校验、依赖解析与版本计算属于实现。无租户状态的候选与资产语义读取由宿主单独装配，不放进有状态的五项发布钩子，也不依赖租户已创建；未来 `publication` 通过宿主注入的纯页面语义函数调用 `pages`，不得直接导入 `apps/pages` 或扩张 `pages` 已有的反向依赖。函数集合从实际调用提取，不预设框架；不引入重复类型、转发兼容层或 SDK 对实现的反向调用。
   - [ ] U3.2 切分实现依赖（不写代码）。前置已完成：U3.1、U4.1。（部分完成：页面校验、资源发布闭包、历史字节读取三链已诊断；通用发布与页面实现的切分由 U3.4–U3.6 确认）
