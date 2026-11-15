@@ -11,6 +11,7 @@ import (
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformserver/platform"
 	"platformserver/services/functions/runtime"
+	"platformserver/services/resources/publication"
 )
 
 type CapabilityPreparation struct {
@@ -155,7 +156,7 @@ func MemberQueryVersion(definitions []platform.Definition, appVersion string, re
 			break
 		}
 		source := appVersion + ".query-" + strconv.Itoa(version)
-		if selected := d.QueryVersion(source); selected != nil {
+		if selected := publication.QueryVersion(d, source); selected != nil {
 			return *selected.Query, source, true
 		}
 		break

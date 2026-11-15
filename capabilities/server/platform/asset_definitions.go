@@ -97,13 +97,6 @@ func (d Definition) LinkVersion(version string) *Definition {
 	return &d
 }
 
-func (d Definition) QuerySourceVersion(version string) *Definition {
-	if d.Ref.Kind == AssetLinkType {
-		return d.LinkVersion(version)
-	}
-	return d.QueryVersion(version)
-}
-
 func (q NamedQuery) Check() error {
 	if q.Name == "" || q.Title == "" || (q.Object == "") == (q.Interface == "") || len(q.Name) > 80 || len(q.Title) > 1024 || len(q.Description) > 4096 || q.Limit < 0 || q.Limit > 200 || len(q.Sort) > 4 || len(q.Domain) > 16384 {
 		return fmt.Errorf("query has an invalid identity or budget")
@@ -143,27 +136,6 @@ func (q NamedQuery) Dependencies() []AssetRef {
 	}
 	slices.SortFunc(refs, func(a, b AssetRef) int { return strings.Compare(a.String(), b.String()) })
 	return refs
-}
-
-func (d Definition) QueryVersion(version string) *Definition {
-	if version == d.Version && d.Query != nil {
-		return &d
-	}
-	q, ok := d.QueryVersions[version]
-	if !ok {
-		return nil
-	}
-	body, err := json.Marshal(q)
-	if err != nil {
-		return nil
-	}
-	description, err := DescribeAsset(ReleaseAsset{Ref: d.Ref, SourceVersion: version, Body: body})
-	if err != nil {
-		return nil
-	}
-	d.Query, d.Version, d.QueryVersions = &q, version, nil
-	d.Requires, d.Provides = description.Requires, description.Provides
-	return &d
 }
 
 type PropertyType struct {

@@ -8,6 +8,7 @@ import (
 	"maps"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformserver/platform"
+	"platformserver/services/resources/publication"
 	"reflect"
 	"slices"
 	"strconv"
@@ -662,7 +663,7 @@ func CheckTxnCall(call platform.TxnCall, definitions []platform.Definition, owne
 		if call.Version == 0 && definition.Source == "code" {
 			return nil
 		}
-		if call.Version > 0 && definition.Source == "tenant" && definition.QueryVersion(app.Manifest().Version+".query-"+strconv.Itoa(call.Version)) != nil {
+		if call.Version > 0 && definition.Source == "tenant" && publication.QueryVersion(definition, app.Manifest().Version+".query-"+strconv.Itoa(call.Version)) != nil {
 			return nil
 		}
 	}

@@ -56,7 +56,7 @@ read-when: 每批开始（选当前批次）与结束（删除已完成条目、
   - [ ] U3.2 切分实现依赖（不写代码）。前置已完成：U3.1、U4.1。（部分完成：页面校验、资源发布闭包、历史字节读取三链已诊断；通用发布与页面实现的切分由 U3.4–U3.6 确认）
     - 已确认：`describeAsset` 调页面安全与依赖；`Candidate` / `ReadCandidate` 同时校验资产描述、依赖图、冻结页面与规范字节；`DecodeRelease`、`RestoreCommitted` 读取候选，`OwnedDefinitions` 描述资产并经注册表解码历史安装映像。直接迁整文件会让 SDK 反向调用服务，或改变恢复校验。
     - 剩余产出：按实际调用补齐后续条目的文件、删除路径、无环且可编译的中间完成态、`make contract` 无差异和验证要求，再开始实施。
-  - [ ] U3.4 查询版本与产品蓝图的发布依赖（诊断与切分，不写代码）。前置 U3.3 已完成。核对 `platform/asset_definitions.go` 的 `QueryVersion` / `QuerySourceVersion`、`platform/asset_packages.go` 的蓝图校验及其调用方，保持历史查询的依赖与能力和蓝图资产校验；产出具体拥有者、完整文件与删除路径、逐行可编译的工单及验证档位。
+  - [ ] U3.4 查询版本与产品蓝图的发布依赖。前置 U3.3 已完成；历史查询版本解析及查询、关系来源分派已归 `services/resources/publication`，旧 SDK 查询方法已删除；关系版本仍由 SDK 的 `LinkVersion` 读取。剩余产品蓝图校验仍依赖 SDK 发布解析，须迁出并保持导入、历史候选与安装校验。
   - [ ] U3.5 通用发布闭包与历史读取迁出（诊断与切分，不写代码）。前置 U3.4。按 U3.3 的注入边界梳理 `platform/asset_lifecycle.go`、`dependencies*.go`、`revision*.go`、`definition_profile.go` 与全部调用方；确定通用解析、修订和编排归 `services/resources/publication` 的先后顺序及从实际调用提取的纯页面函数，产出每行完整文件、删除路径、无环中间态、`make contract` 无差异与 V1/V3/V4 验证。
   - [ ] U3.6 页面实现迁出（诊断与切分，不写代码）。前置 U3.5。逐项梳理 `platform/page_*.go` 与 `definition*.go` 中的页面生成、求值、校验、投影、依赖和版本计算，明确归 `services/apps/pages` 的实现及 SDK 必留的声明、格式方法和原始信息；产出每行完整文件、删除路径、无环中间态、`make contract` 无差异与验证档位，不退回整文件搬移。
 - [ ] U4 发布路径一张表。已完成（U4.1）：五项发布钩子由宿主登记，action-type 的发布步骤归本体服务；Build 的 apps、automation、functions、本体类型转接已删除。

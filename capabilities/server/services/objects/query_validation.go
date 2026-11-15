@@ -5,6 +5,7 @@ import (
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformserver/kernel/records"
 	"platformserver/platform"
+	"platformserver/services/resources/publication"
 )
 
 func CheckNamedQuery(q platform.NamedQuery, info platform.EntityInfo, engine platform.RuleEngine) error {
@@ -44,7 +45,7 @@ func DeclaredQuery(definitions []platform.Definition, app, name, version string)
 		if version == "" {
 			return d.Query
 		}
-		if bound := d.QueryVersion(version); bound != nil {
+		if bound := publication.QueryVersion(d, version); bound != nil {
 			return bound.Query
 		}
 		return nil

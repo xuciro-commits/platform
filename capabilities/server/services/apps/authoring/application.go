@@ -10,6 +10,7 @@ import (
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformserver/platform"
 	ontology "platformserver/services/ontology"
+	"platformserver/services/resources/publication"
 )
 
 const (
@@ -248,7 +249,7 @@ func ProjectApplication(registered platform.Definition, projection ApplicationPr
 		if q.Query != nil {
 			for _, d := range visible {
 				if d.Ref == q.Query.Ref {
-					named = d.QuerySourceVersion(q.Query.SourceVersion)
+					named = publication.QuerySourceVersion(d, q.Query.SourceVersion)
 					break
 				}
 			}

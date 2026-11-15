@@ -11,6 +11,7 @@ import (
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformserver/platform"
 	"platformserver/services/objects"
+	"platformserver/services/resources/publication"
 )
 
 type ModelHost interface {
@@ -569,7 +570,7 @@ func (r ModelReader) query(member platform.Member, collection *platform.ModelRec
 		if collection.Query.SourceVersion == "" {
 			return *definition.Query, true
 		}
-		if retained := definition.QueryVersion(collection.Query.SourceVersion); retained != nil && retained.Query != nil {
+		if retained := publication.QueryVersion(definition, collection.Query.SourceVersion); retained != nil && retained.Query != nil {
 			return *retained.Query, true
 		}
 		return platform.NamedQuery{}, false

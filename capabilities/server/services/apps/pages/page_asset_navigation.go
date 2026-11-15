@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"maps"
 	"platformserver/platform"
+	"platformserver/services/resources/publication"
 	"slices"
 )
 
@@ -126,7 +127,7 @@ func ExplorationAssetAvailable(definitions []platform.Definition, binding platfo
 			selected := d.LinkVersion(binding.SourceVersion)
 			return selected != nil && selected.LinkType != nil
 		case platform.AssetQuery:
-			selected := d.QueryVersion(binding.SourceVersion)
+			selected := publication.QueryVersion(d, binding.SourceVersion)
 			return selected != nil && selected.Query != nil
 		case platform.AssetPropertyType:
 			selected := d.PropertyVersion(binding.SourceVersion)

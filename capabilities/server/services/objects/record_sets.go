@@ -13,6 +13,7 @@ import (
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformserver/platform"
+	"platformserver/services/resources/publication"
 )
 
 func RecordSetBinding(definitions []platform.Definition, binding *platform.AssetBinding) *platform.Definition {
@@ -330,7 +331,7 @@ func QuerySourceDefinition(definitions []platform.Definition, binding *platform.
 	if binding != nil {
 		for i := range definitions {
 			if definitions[i].Ref == binding.Ref {
-				return definitions[i].QuerySourceVersion(binding.SourceVersion)
+				return publication.QuerySourceVersion(definitions[i], binding.SourceVersion)
 			}
 		}
 	}
