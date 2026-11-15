@@ -50,7 +50,7 @@ read-when: 每批开始（选当前批次）与结束（删除已完成条目、
     - 完成：`services/actions/authority*.go` 中没有 `standard` 与 `transition` 两个并行函数；行为不变（验收不改断言）。
     - 验证：V1、V3、V4。
 - [ ] U2 业务事务出平台。前置 U1.5。
-  - [ ] U2.1 `[难]` 诊断与切分（不写代码）。
+  - [ ] U2.1 `[难]` 诊断与切分（不写代码）。（进行中：Terra 6.1 Max，Deepseek Max 提供实际 step 使用清点，2026-11-14）
     - 读：`platform/transaction*.go`（1047 行）、`services/actions/business_*.go`、`services/resources/authoring/build_transactions.go`、`deploy/packages/*.json` 中每种 step kind 的使用次数。
     - 方向：① 平台只留通用原子编辑集：创建、修改、删除对象，增删关系，函数支撑，forEach，编号分配；② `post`、`journal`（含关账期）是会计形状，不得留在任何 Go 类型里：能用通用规则加 Expr 表达的改写产品包，不能的改成产品包内的函数支撑规则；函数运行时做不到的登记为差距并阻塞；③ `effect`、`work` 归副作用；④ 类型定义离开 `platform`：执行在 `services/actions`，定义校验在 `services/ontology`；⑤ 格式纪元未冻结（C26），产品包 JSON 直接改写，不留旧形状的读取。
     - 产出：每种 kind → §6.7 哪种规则或副作用的映射表，写入 6-domain §6.7；把 U2 拆成后续行（同本格式，标档位与验证）。
