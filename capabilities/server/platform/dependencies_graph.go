@@ -98,7 +98,7 @@ func NewReleaseDependencyGraph(assets []ReleaseAsset) (*DependencyGraph, error) 
 				}
 				if ref.App == asset.Ref.App && ref.Kind == AssetAction {
 					if target, ok := lookup[ref]; ok {
-						action, err := releaseActionDescriptor(target.Body)
+						action, err := ReleaseActionDescriptor(target.Body)
 						if err == nil && action.Target == asset.Ref.Name {
 							graph.containment[[2]AssetRef{asset.Ref, ref}] = true
 							graph.containment[[2]AssetRef{ref, asset.Ref}] = true
@@ -107,9 +107,9 @@ func NewReleaseDependencyGraph(assets []ReleaseAsset) (*DependencyGraph, error) 
 				}
 			}
 
-			info, err := queryObjectDescriptor(asset.Body)
+			info, err := QueryObjectDescriptor(asset.Body)
 			if err == nil {
-				if view := info.ObjectView; view != nil && checkObjectView(asset.Ref, *view, lookup) == nil {
+				if view := info.ObjectView; view != nil && CheckObjectView(asset.Ref, *view, lookup) == nil {
 					graph.objectViews[[2]AssetRef{asset.Ref, view.Application}] = true
 					graph.objectViews[[2]AssetRef{asset.Ref, view.Page}] = true
 				}

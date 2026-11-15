@@ -104,7 +104,7 @@ func describeAsset(asset ReleaseAsset, historical bool) (Dependencies, error) {
 		}
 		out.Requires = append(out.Requires, app.Dependencies(asset.Ref.App)...)
 	case AssetObject:
-		info, err := queryObjectDescriptor(asset.Body)
+		info, err := QueryObjectDescriptor(asset.Body)
 		if err != nil {
 			return out, err
 		}
@@ -256,7 +256,7 @@ func describeAsset(asset ReleaseAsset, historical bool) (Dependencies, error) {
 			}
 		}
 	case AssetAction:
-		action, err := releaseActionDescriptor(asset.Body)
+		action, err := ReleaseActionDescriptor(asset.Body)
 		if err != nil {
 			return out, err
 		}

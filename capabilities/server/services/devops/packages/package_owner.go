@@ -8,6 +8,7 @@ import (
 	"maps"
 	"os"
 	"path/filepath"
+	releasepub "platformserver/services/resources/publication"
 	"slices"
 	"strings"
 	"sync"
@@ -158,7 +159,7 @@ func BlueprintCandidate(b platform.PackageBlueprint, owner build.ConstructionDra
 			return platform.ReleaseCandidate{}, err
 		}
 	}
-	return platform.Candidate(b.Roots, append(assets, code...))
+	return releasepub.Candidate(b.Roots, append(assets, code...))
 }
 
 func (d *Owner) sealedPackageDescriptor(id, version, artifact string) (platform.PackageDescriptor, error) {

@@ -505,7 +505,7 @@ func frozenPageInterfaceQuery(q PageQuery, lookup map[AssetRef]ReleaseAsset) (*D
 	}
 	for _, ref := range named.Dependencies() {
 		implementation, exists := lookup[ref]
-		info, err := queryObjectDescriptor(implementation.Body)
+		info, err := QueryObjectDescriptor(implementation.Body)
 		if !exists || err != nil || info.Type != ref.Name || info.App != ref.App || !slices.Contains(info.Implements, named.Interface) || named.InterfaceShape.Implements(info) != nil {
 			return nil, fmt.Errorf("frozen interface query implementation %s is unavailable", ref.Name)
 		}

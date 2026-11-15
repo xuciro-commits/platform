@@ -2,6 +2,7 @@ package releases
 
 import (
 	"fmt"
+	releasepub "platformserver/services/resources/publication"
 	"slices"
 
 	"platformserver/platform"
@@ -25,7 +26,7 @@ func (r *Store) RetainedClosure(candidate platform.ReleaseCandidate, ref platfor
 		}
 		return candidate, "", nil
 	}
-	active, err := saved.Closure([]platform.AssetRef{ref})
+	active, err := releasepub.Closure(saved, []platform.AssetRef{ref})
 	if err != nil || !SameRetainedCapability(candidate, active) {
 		if retained == nil && sourceVersion != "" {
 			ids := r.Ids()
@@ -34,7 +35,7 @@ func (r *Store) RetainedClosure(candidate platform.ReleaseCandidate, ref platfor
 				if err != nil {
 					continue
 				}
-				closed, err := prior.Closure([]platform.AssetRef{ref})
+				closed, err := releasepub.Closure(prior, []platform.AssetRef{ref})
 				if err == nil && SameRetainedCapability(candidate, closed) {
 					return closed, id, nil
 				}

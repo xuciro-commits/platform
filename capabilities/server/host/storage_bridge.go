@@ -5,8 +5,8 @@ import (
 
 	runtimekernel "platformserver/kernel"
 	persistence "platformserver/kernel/store"
-	"platformserver/platform"
 	aistate "platformserver/services/ai/state"
+	releasepub "platformserver/services/resources/publication"
 )
 
 type (
@@ -17,7 +17,7 @@ type (
 )
 
 func acceptedIdentity(raw []byte) (persistence.Identity, error) {
-	return runtimekernel.AcceptedIdentity(raw, platform.ReadCandidate)
+	return runtimekernel.AcceptedIdentity(raw, releasepub.ReadCandidate)
 }
 
 func OpenJournal(ctx context.Context, url string) (*persistence.Postgres, error) {
@@ -29,7 +29,7 @@ func OpenJournal(ctx context.Context, url string) (*persistence.Postgres, error)
 }
 
 func storageDelta(raw []byte) (persistence.StateDelta, error) {
-	return runtimekernel.StorageDelta(raw, aistate.ApplyUsageState, platform.ReadCandidate)
+	return runtimekernel.StorageDelta(raw, aistate.ApplyUsageState, releasepub.ReadCandidate)
 }
 
 func OpenFileJournal(dir string) (*persistence.File, error) {

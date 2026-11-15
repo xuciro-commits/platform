@@ -1,21 +1,20 @@
 package host
 
-import transport "platformserver/kernel/transport"
-
 import (
 	"context"
 	"maps"
 	"net/http"
-	runtimekernel "platformserver/kernel"
-	acceptedformat "platformserver/kernel/acceptedformat"
-	releaseowner "platformserver/services/devops/releases"
-	controlowner "platformserver/services/security/control"
-
 	"slices"
 	"strings"
 	"time"
 
+	runtimekernel "platformserver/kernel"
+	acceptedformat "platformserver/kernel/acceptedformat"
+	transport "platformserver/kernel/transport"
 	"platformserver/platform"
+	releaseowner "platformserver/services/devops/releases"
+	releasepub "platformserver/services/resources/publication"
+	controlowner "platformserver/services/security/control"
 )
 
 type SupportRead struct {
@@ -105,7 +104,7 @@ func (h *Host) hostConsoleRoutes(mux *http.ServeMux) {
 				t.Lane.Lock()
 				defer t.Lane.Unlock()
 			}
-			return controlowner.HostArtifacts(state.releases.Ids(), state.releases.Active(), func(id string) []byte { return state.releases.Raw(id) })
+			return controlowner.HostArtifacts(state.releases.Ids(), state.releases.Active(), func(id string) []byte { return state.releases.Raw(id) }, releasepub.ReadCandidate)
 		}))
 	h.hostRoute(mux, transport.Route{Pattern: "GET /v1/host/tenants/{tenant}/support", Summary: "Support sessions opened for a tenant (host administrators)", Answer: []platform.SupportGrant{}},
 		hostAnswer(func(_ string, t *Tenant) any { return t.console.SupportGrants() }))

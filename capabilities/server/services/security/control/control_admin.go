@@ -25,12 +25,12 @@ type HostArtifactView struct {
 	Note      string `json:"note,omitempty"`
 }
 
-func HostArtifacts(ids []string, active string, raw func(string) []byte) []HostArtifactView {
+func HostArtifacts(ids []string, active string, raw func(string) []byte, readCandidate func(string, []byte) (platform.ReleaseCandidate, error)) []HostArtifactView {
 	out := []HostArtifactView{}
 	for _, id := range ids {
 		body := raw(id)
 		view := HostArtifactView{Candidate: id, Active: id == active, Size: len(body)}
-		if candidate, err := platform.ReadCandidate(id, body); err == nil {
+		if candidate, err := readCandidate(id, body); err == nil {
 			view.Digest, view.Assets, view.Verified = candidate.ID, len(candidate.Assets), true
 		} else {
 			view.Note = err.Error()

@@ -7,7 +7,7 @@ import (
 	"strings"
 )
 
-func checkFrozenQueries(original Page, assets map[AssetRef]ReleaseAsset) error {
+func CheckFrozenQueries(original Page, assets map[AssetRef]ReleaseAsset) error {
 	page, err := original.Safety()
 	if err != nil {
 		return err
@@ -23,12 +23,12 @@ func checkFrozenQueries(original Page, assets map[AssetRef]ReleaseAsset) error {
 				}
 			}
 		}
-		info, err := queryObjectDescriptor(asset.Body)
+		info, err := QueryObjectDescriptor(asset.Body)
 		return ConstraintEntity(info), ok && err == nil
 	}
 	criteria := func(ref AssetRef) (*RuleCriteria, bool) {
 		asset, ok := assets[ref]
-		action, err := releaseActionDescriptor(asset.Body)
+		action, err := ReleaseActionDescriptor(asset.Body)
 		if !ok || err != nil {
 			return nil, false
 		}
@@ -89,14 +89,14 @@ func checkFrozenQueries(original Page, assets map[AssetRef]ReleaseAsset) error {
 		}
 		for _, ref := range trigger.Actions {
 			asset, ok := assets[ref]
-			action, err := releaseActionDescriptor(asset.Body)
+			action, err := ReleaseActionDescriptor(asset.Body)
 			if !ok || err != nil || StaticControlAction(action) || action.Target != object {
 				return fmt.Errorf("page action owner or target is unavailable")
 			}
 		}
 		if trigger.InlineEdit != nil {
 			asset, ok := assets[trigger.InlineEdit.Action]
-			action, err := releaseActionDescriptor(asset.Body)
+			action, err := ReleaseActionDescriptor(asset.Body)
 			info, found := lookup(object)
 			if !ok || !found || err != nil || trigger.InlineEdit.CheckTableEdit(info, action) != nil {
 				return fmt.Errorf("page edit fields differ from original action")
@@ -106,7 +106,7 @@ func checkFrozenQueries(original Page, assets map[AssetRef]ReleaseAsset) error {
 			if len(trigger.Actions) != 1 {
 				return fmt.Errorf("page parameters need one original action")
 			}
-			action, err := releaseActionDescriptor(assets[trigger.Actions[0]].Body)
+			action, err := ReleaseActionDescriptor(assets[trigger.Actions[0]].Body)
 			if err != nil {
 				return err
 			}
@@ -178,7 +178,7 @@ func checkFrozenQueries(original Page, assets map[AssetRef]ReleaseAsset) error {
 			continue
 		}
 		asset, ok := assets[plan.Object]
-		object, err := queryObjectDescriptor(asset.Body)
+		object, err := QueryObjectDescriptor(asset.Body)
 		if !ok || err != nil {
 			return fmt.Errorf("page query %s object is unavailable", id)
 		}
@@ -195,8 +195,8 @@ func checkFrozenQueries(original Page, assets map[AssetRef]ReleaseAsset) error {
 				}
 				parentAsset, pok := assets[link.Parent]
 				childAsset, cok := assets[link.Child]
-				parent, pe := queryObjectDescriptor(parentAsset.Body)
-				child, ce := queryObjectDescriptor(childAsset.Body)
+				parent, pe := QueryObjectDescriptor(parentAsset.Body)
+				child, ce := QueryObjectDescriptor(childAsset.Body)
 				parent.App = link.Parent.App
 				child.App = link.Child.App
 				if !pok || !cok || pe != nil || ce != nil || link.CheckSchema(parent, child) != nil {
@@ -229,7 +229,7 @@ func checkFrozenQueries(original Page, assets map[AssetRef]ReleaseAsset) error {
 	return page.CheckQuerySetConditions(namedSources)
 }
 
-func queryObjectDescriptor(body []byte) (EntityInfo, error) {
+func QueryObjectDescriptor(body []byte) (EntityInfo, error) {
 	var shape struct {
 		Type            string                       `json:"type"`
 		Implements      []string                     `json:"implements"`
@@ -337,7 +337,7 @@ func queryObjectDescriptor(body []byte) (EntityInfo, error) {
 	return EntityInfo{App: owner, Type: shape.Type, ObjectView: shape.ObjectView, Standard: []string{shape.Type + ".create", shape.Type + ".edit", shape.Type + ".archive"}, Fields: fields, Lifecycle: shape.Lifecycle, Implements: shape.Implements, Extends: shape.Extends, ExtensionSource: shape.ExtensionSource}, nil
 }
 
-func releaseActionDescriptor(body json.RawMessage) (Action, error) {
+func ReleaseActionDescriptor(body json.RawMessage) (Action, error) {
 	var flat Action
 	if err := json.Unmarshal(body, &flat); err != nil {
 		return Action{}, err

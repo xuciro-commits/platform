@@ -4,6 +4,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
+	releasepub "platformserver/services/resources/publication"
 	"slices"
 	"strings"
 
@@ -16,7 +17,7 @@ func FreezeVersion(raw []byte, request platform.ProductVersionRequest, views fun
 	if len(raw) == 0 {
 		return platform.FrozenProductVersion{}, fmt.Errorf("release candidate %s is not saved", request.Candidate)
 	}
-	candidate, err := platform.ReadCandidate(request.Candidate, raw)
+	candidate, err := releasepub.ReadCandidate(request.Candidate, raw)
 	if err != nil {
 		return platform.FrozenProductVersion{}, err
 	}
@@ -37,7 +38,7 @@ func FreezeVersion(raw []byte, request platform.ProductVersionRequest, views fun
 }
 
 func productDescriptor(candidate platform.ReleaseCandidate, request platform.ProductVersionRequest, packageViews func() []platform.PackageView) (platform.PackageDescriptor, error) {
-	closed, err := candidate.Closure(request.Roots)
+	closed, err := releasepub.Closure(candidate, request.Roots)
 	if err != nil {
 		return platform.PackageDescriptor{}, err
 	}

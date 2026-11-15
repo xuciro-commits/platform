@@ -121,7 +121,7 @@ func (s *Store) Review(id string, context ReviewContext) (SavedReleaseReview, er
 	if !exists {
 		return SavedReleaseReview{}, fmt.Errorf("saved release candidate not found")
 	}
-	saved, err := platform.ReadCandidate(id, raw)
+	saved, err := publication.ReadCandidate(id, raw)
 	if err != nil {
 		return SavedReleaseReview{}, err
 	}

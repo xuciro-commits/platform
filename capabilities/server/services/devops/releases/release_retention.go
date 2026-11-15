@@ -44,7 +44,7 @@ func (r *Store) RememberRequest(key, hash string) {
 func (r *Store) Raw(id string) json.RawMessage { return r.candidates[id] }
 
 func (r *Store) Candidate(id string) (platform.ReleaseCandidate, error) {
-	return platform.ReadCandidate(id, r.candidates[id])
+	return publication.ReadCandidate(id, r.candidates[id])
 }
 
 func (r *Store) Ids() []string {

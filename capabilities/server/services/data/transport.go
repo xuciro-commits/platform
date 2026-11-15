@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/url"
+	releasepub "platformserver/services/resources/publication"
 	"slices"
 	"strings"
 	"time"
@@ -81,7 +82,7 @@ func (t Transport) FreezeConfirmation(c platform.Caller, subject string, spec pl
 			roots = append(roots, platform.AssetRef{App: App, Kind: platform.AssetSource, Name: s.Name})
 		}
 	}
-	closed, err := platform.Candidate(roots, assets)
+	closed, err := releasepub.Candidate(roots, assets)
 	if err != nil {
 		return "", nil, err
 	}
@@ -278,7 +279,7 @@ func (t Transport) FreezeDispatch(c platform.Caller, subject, action string, spe
 		}
 		roots = append(roots, platform.AssetRef{App: App, Kind: platform.AssetObservation, Name: observation.Name})
 	}
-	closed, err := platform.Candidate(roots, assets)
+	closed, err := releasepub.Candidate(roots, assets)
 	if err != nil {
 		return "", nil, err
 	}

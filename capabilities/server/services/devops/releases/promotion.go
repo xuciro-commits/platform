@@ -9,6 +9,7 @@ import (
 	"platformserver/kernel/acceptedformat"
 	"platformserver/platform"
 	"platformserver/services/resources/authoring"
+	releasepub "platformserver/services/resources/publication"
 	"slices"
 	"time"
 )
@@ -133,7 +134,7 @@ func PlanPromotion(from, to, candidateID, key string, activate bool, member plat
 	if err != nil {
 		return PromotionPlan{}, err
 	}
-	candidate, err := platform.ReadCandidate(candidateID, raw)
+	candidate, err := releasepub.ReadCandidate(candidateID, raw)
 	if err != nil {
 		return PromotionPlan{}, err
 	}

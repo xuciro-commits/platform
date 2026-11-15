@@ -437,7 +437,7 @@ func CandidateWithBindings(roots []platform.AssetRef, available []platform.Relea
 		}
 		assets[i] = asset
 	}
-	return platform.Candidate(roots, assets)
+	return publication.Candidate(roots, assets)
 }
 
 func CodeReleaseAssets(manifest platform.Manifest, definitions []platform.Definition, special map[platform.AssetRef]platform.ReleaseAsset) ([]platform.ReleaseAsset, error) {

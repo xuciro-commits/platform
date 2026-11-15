@@ -3,6 +3,7 @@ package host
 import (
 	"context"
 	"encoding/json"
+	releasepub "platformserver/services/resources/publication"
 	"slices"
 	"testing"
 
@@ -23,7 +24,7 @@ func TestInvariantPackageRetireAndReinstallPreserveData(t *testing.T) {
 		{Kind: platform.AssetObject, ID: "OBJ1"},
 		{Kind: platform.AssetApp, ID: "APP1"},
 	}, "package-lifecycle")
-	candidate, err := platform.ReadCandidate(candidateID, source.releases.Raw(candidateID))
+	candidate, err := releasepub.ReadCandidate(candidateID, source.releases.Raw(candidateID))
 	if err != nil {
 		t.Fatal(err)
 	}

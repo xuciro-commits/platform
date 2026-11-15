@@ -16,6 +16,7 @@ import (
 	automation "platformserver/services/automate/runtime"
 	"platformserver/services/devops/releases"
 	"platformserver/services/resources/authoring"
+	releasepub "platformserver/services/resources/publication"
 )
 
 var snapshotBuild = sync.OnceValue(func() string { return CodeOf() })
@@ -48,7 +49,7 @@ func (t *Tenant) snapshotStorageKey(code string, raw []byte) (string, error) {
 func (t *Tenant) snapshots() runtimekernel.TenantSnapshots[automation.Task, actions.Endpoint] {
 	return runtimekernel.TenantSnapshots[automation.Task, actions.Endpoint]{
 		Compatibility: t.snapshotCompatibility, Build: snapshotBuild, Apps: t.apps, AppOf: t.App,
-		ReadCandidate: platform.ReadCandidate,
+		ReadCandidate: releasepub.ReadCandidate,
 		Inputs:        func(app string) platform.AcceptedInputApp { return t.inputs[app] },
 		Quarantined:   t.quarantined,
 		Pending:       func() bool { return len(t.events) > 0 },

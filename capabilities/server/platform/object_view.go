@@ -18,7 +18,7 @@ func (v ObjectView) Check() error {
 	return nil
 }
 
-func checkObjectView(object AssetRef, view ObjectView, assets map[AssetRef]ReleaseAsset) error {
+func CheckObjectView(object AssetRef, view ObjectView, assets map[AssetRef]ReleaseAsset) error {
 	if err := view.Check(); err != nil {
 		return err
 	}

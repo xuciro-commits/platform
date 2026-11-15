@@ -6,6 +6,7 @@ import (
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	acceptedformat "platformserver/kernel/acceptedformat"
 	"platformserver/platform"
+	releasepub "platformserver/services/resources/publication"
 	"slices"
 	"strings"
 )
@@ -28,7 +29,7 @@ func ActivatedReleases(answers map[string]json.RawMessage, active string) []stri
 		if !strings.HasPrefix(key, "release:") {
 			continue
 		}
-		result, err := acceptedformat.DecodeRelease(raw, platform.ReadCandidate)
+		result, err := acceptedformat.DecodeRelease(raw, releasepub.ReadCandidate)
 		if err == nil && result.Active {
 			activated[result.CandidateID] = true
 		}
@@ -44,7 +45,7 @@ func ApprovalClosure(sealed platform.ReleaseCandidate, app, action, typ string) 
 	if !found {
 		return platform.ReleaseCandidate{}, nil
 	}
-	return sealed.Closure([]platform.AssetRef{root})
+	return releasepub.Closure(sealed, []platform.AssetRef{root})
 }
 
 func StoredApprovalClosure(store *Store, release, app, action, typ string) (platform.ReleaseCandidate, error) {
@@ -64,7 +65,7 @@ func StoredApprovalExecution(store *Store, release, app, action, typ string) (pl
 		return platform.ReleaseCandidate{}, err
 	}
 	root, _ := ApprovalRoot(sealed.Assets, app, action, typ)
-	return sealed.Closure([]platform.AssetRef{root})
+	return releasepub.Closure(sealed, []platform.AssetRef{root})
 }
 
 func ApprovalExecution(store *Store, a platform.ApprovalRequest, retained func([]platform.ReleaseAsset) (platform.WorkHost, error)) (platform.WorkHost, error) {

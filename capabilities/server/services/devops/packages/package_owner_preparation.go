@@ -9,6 +9,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	releasepub "platformserver/services/resources/publication"
 	"slices"
 	"strings"
 	"time"
@@ -92,7 +93,7 @@ func Preparation(id, version string, blueprint platform.PackageBlueprint, instal
 		if root.Kind != platform.AssetApp {
 			continue
 		}
-		artifact, err := platform.ArtifactOfApplication(root, candidate.Assets)
+		artifact, err := releasepub.ArtifactOfApplication(root, candidate.Assets)
 		if err != nil {
 			return PackagePreparation{}, err
 		}

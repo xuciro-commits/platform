@@ -286,7 +286,7 @@ func (c Closures) capability(ref platform.AssetRef, body json.RawMessage, source
 	if err != nil {
 		return platform.ReleaseCandidate{}, "", err
 	}
-	candidate, err := platform.Candidate([]platform.AssetRef{ref}, available)
+	candidate, err := publication.Candidate([]platform.AssetRef{ref}, available)
 	if err != nil {
 		return platform.ReleaseCandidate{}, "", err
 	}
