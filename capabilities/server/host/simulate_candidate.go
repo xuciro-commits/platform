@@ -38,7 +38,7 @@ func (t *Tenant) simulateCandidate(builder platform.Member, request trialowner.C
 				Drafts:    func() (build.ConstructionDrafts, bool) { owner := t.builders[build.ID]; return owner, owner != nil },
 				Candidate: func(id string) (platform.ReleaseCandidate, error) { return t.releases.Candidate(id) },
 				Preview: func(drafts []build.JointDraftRef) (string, platform.ReleaseCandidate, error) {
-					review, prepared, problem := reader.previewReleaseLocked(drafts, builder)
+					review, prepared, problem := reader.releasePlannerLocked().Preview(drafts, builder)
 					return review.Diagnostic, prepared, problem
 				},
 				Function: func(id string) string {

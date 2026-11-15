@@ -75,7 +75,7 @@ func (t *Tenant) branchWorldLocked(m platform.Member, id string, now time.Time) 
 
 func (t *Tenant) branchPreview(m platform.Member) func([]build.JointDraftRef) (branches.GraphPreview, platform.ReleaseCandidate, error) {
 	return func(drafts []build.JointDraftRef) (branches.GraphPreview, platform.ReleaseCandidate, error) {
-		preview, candidate, err := t.previewReleaseLocked(drafts, m)
+		preview, candidate, err := t.releasePlannerLocked().Preview(drafts, m)
 		return branches.GraphPreview{Diagnostic: preview.Diagnostic, Candidate: candidate.ID, Added: preview.Added, Removed: preview.Removed, Changed: preview.Changed}, candidate, err
 	}
 }

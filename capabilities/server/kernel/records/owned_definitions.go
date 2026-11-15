@@ -11,11 +11,13 @@ import (
 )
 
 type DefinitionOwners struct {
-	Owners          []platform.AssetLifecycleOwner
-	Active          func(app string) bool
-	Publishes       func(app string) bool
-	Reader          func(app string) (platform.AssetDefinitionReader, bool)
-	IncludeArchived bool
+	Owners              []platform.AssetLifecycleOwner
+	Active              func(app string) bool
+	Publishes           func(app string) bool
+	Reader              func(app string) (platform.AssetDefinitionReader, bool)
+	DescribeAsset       func(platform.ReleaseAsset) (platform.Dependencies, error)
+	InstallationDecoder func() (func(string, string, json.RawMessage) (platform.AssetInstallation, error), error)
+	IncludeArchived     bool
 }
 
 func (o DefinitionOwners) Metadata(ref platform.AssetRef) bool {
@@ -124,7 +126,7 @@ func (s *Store) OwnedDefinitions(base []platform.Definition, o DefinitionOwners)
 					}
 					base[i].Requires, base[i].Provides, base[i].Version = slices.Clone(asset.Requires), slices.Clone(asset.Provides), asset.SourceVersion
 					if base[i].Provides == nil {
-						descriptor, err := platform.DescribeAsset(asset)
+						descriptor, err := o.DescribeAsset(asset)
 						if err != nil {
 							return nil, err
 						}
@@ -158,13 +160,13 @@ func (s *Store) OwnedDefinitions(base []platform.Definition, o DefinitionOwners)
 	if len(images) == 0 {
 		return sorted(), nil
 	}
-	registry, err := platform.NewAssetRegistry(o.Owners...)
+	decode, err := o.InstallationDecoder()
 	if err != nil {
 		return nil, err
 	}
 	seen := map[platform.AssetRef]bool{}
 	for _, image := range images {
-		plan, err := registry.DecodeAssetInstallation(image.app, image.schema, image.raw)
+		plan, err := decode(image.app, image.schema, image.raw)
 		if err != nil {
 			return nil, fmt.Errorf("owned metadata %s: %w", image.record, err)
 		}

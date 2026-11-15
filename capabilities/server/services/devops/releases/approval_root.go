@@ -28,7 +28,7 @@ func ActivatedReleases(answers map[string]json.RawMessage, active string) []stri
 		if !strings.HasPrefix(key, "release:") {
 			continue
 		}
-		result, err := acceptedformat.DecodeRelease(raw)
+		result, err := acceptedformat.DecodeRelease(raw, platform.ReadCandidate)
 		if err == nil && result.Active {
 			activated[result.CandidateID] = true
 		}

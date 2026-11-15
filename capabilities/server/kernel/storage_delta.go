@@ -17,8 +17,8 @@ import (
 
 type UsageApplier func(json.RawMessage, platform.AIUsage) (json.RawMessage, error)
 
-func StorageDelta(raw []byte, applyUsage UsageApplier) (persistence.StateDelta, error) {
-	b := storageDeltaBuilder{applyUsage: applyUsage, records: map[string]persistence.StateRecord{}, changes: map[string]persistence.StateChange{}, values: map[string]persistence.StateValue{}, unique: map[string]persistence.StateUnique{}}
+func StorageDelta(raw []byte, applyUsage UsageApplier, readCandidate func(string, []byte) (platform.ReleaseCandidate, error)) (persistence.StateDelta, error) {
+	b := storageDeltaBuilder{applyUsage: applyUsage, readCandidate: readCandidate, records: map[string]persistence.StateRecord{}, changes: map[string]persistence.StateChange{}, values: map[string]persistence.StateValue{}, unique: map[string]persistence.StateUnique{}}
 	if err := b.accepted(raw); err != nil {
 		return persistence.StateDelta{}, err
 	}
@@ -30,14 +30,15 @@ func StorageDelta(raw []byte, applyUsage UsageApplier) (persistence.StateDelta, 
 }
 
 type storageDeltaBuilder struct {
-	applyUsage   UsageApplier
-	records      map[string]persistence.StateRecord
-	replacements []persistence.StateReplacement
-	changes      map[string]persistence.StateChange
-	changeOrder  []string
-	values       map[string]persistence.StateValue
-	valueUpdates []persistence.StateValueUpdate
-	unique       map[string]persistence.StateUnique
+	applyUsage    UsageApplier
+	readCandidate func(string, []byte) (platform.ReleaseCandidate, error)
+	records       map[string]persistence.StateRecord
+	replacements  []persistence.StateReplacement
+	changes       map[string]persistence.StateChange
+	changeOrder   []string
+	values        map[string]persistence.StateValue
+	valueUpdates  []persistence.StateValueUpdate
+	unique        map[string]persistence.StateUnique
 }
 
 func (b *storageDeltaBuilder) value(owner, key string, image any) {
@@ -233,7 +234,7 @@ func (b *storageDeltaBuilder) accepted(raw json.RawMessage) error {
 		b.value("composite", result.Key, result.Digest)
 		return b.plan(acceptedformat.ChangePlan{Changes: result.Changes})
 	case "release-result":
-		result, err := acceptedformat.DecodeRelease(raw)
+		result, err := acceptedformat.DecodeRelease(raw, b.readCandidate)
 		if err != nil {
 			return err
 		}

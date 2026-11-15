@@ -42,7 +42,7 @@ func ReleaseRequestHash(tenant, member, key, id string, active bool, upgrade ...
 	}{tenant, member, key, id, active, upgradeID})
 }
 
-func EncodeRelease(saved Release) ([]byte, error) {
+func EncodeRelease(saved Release, readCandidate func(string, []byte) (platform.ReleaseCandidate, error)) ([]byte, error) {
 	var err error
 	saved.Digest, err = DigestRelease(saved)
 	if err != nil {
@@ -52,7 +52,7 @@ func EncodeRelease(saved Release) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	_, err = DecodeRelease(raw)
+	_, err = DecodeRelease(raw, readCandidate)
 	return raw, err
 }
 
@@ -61,7 +61,7 @@ func DigestRelease(saved Release) (string, error) {
 	return platform.CanonicalDigest(saved)
 }
 
-func DecodeRelease(raw []byte) (Release, error) {
+func DecodeRelease(raw []byte, readCandidate func(string, []byte) (platform.ReleaseCandidate, error)) (Release, error) {
 	var saved Release
 	if len(raw) == 0 || len(raw) > 24<<20 {
 		return saved, fmt.Errorf("release result is empty or too large")
@@ -101,7 +101,7 @@ func DecodeRelease(raw []byte) (Release, error) {
 		}
 	}
 	if saved.Version >= 4 {
-		candidate, err := platform.ReadCandidate(saved.CandidateID, saved.Bytes)
+		candidate, err := readCandidate(saved.CandidateID, saved.Bytes)
 		if err != nil {
 			return saved, err
 		}
@@ -182,7 +182,7 @@ func DecodeRelease(raw []byte) (Release, error) {
 	if err != nil || saved.Digest != digest {
 		return saved, fmt.Errorf("release result digest differs")
 	}
-	if _, err := platform.ReadCandidate(saved.CandidateID, saved.Bytes); err != nil {
+	if _, err := readCandidate(saved.CandidateID, saved.Bytes); err != nil {
 		return saved, fmt.Errorf("release result candidate: %w", err)
 	}
 	return saved, nil

@@ -142,7 +142,7 @@ func (d *Deployment) runProjection(registry *controlowner.Registry[*Tenant], ten
 }
 
 func (d *Deployment) project(ctx context.Context, journal Journals, t *Tenant) (*records.SQLProjection, error) {
-	if pgPool, pg := journalPool(journal); d.Project && pg {
+	if pgPool, pg := persistence.Pool(journal); d.Project && pg {
 		return records.ProjectSQL(ctx, pgPool, t.ID, t.Projection, t.readRecords)
 	}
 	return nil, nil

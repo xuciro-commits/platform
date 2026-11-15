@@ -7,15 +7,7 @@ import (
 )
 
 func (h hostView) ValidateCodeAsset(asset platform.ReleaseAsset) error {
-	owner := h.t.App(asset.Ref.App)
-	if owner == nil {
-		return fmt.Errorf("code asset %s has no original owner", asset.Ref)
-	}
-	assets, err := h.t.codeReleaseAssetsLocked(owner)
-	if err != nil {
-		return err
-	}
-	return releaseowner.ValidateCodeAsset(owner, assets, asset)
+	return releaseowner.ValidateCodeAsset(asset, h.t.App, h.t.codeReleaseAssetsLocked)
 }
 func (t *Tenant) assetRegistryLocked() (*platform.AssetRegistry, error) {
 	return releaseowner.NewRegistry(t.LiveApps(), t.codeReleaseAssetsLocked, func(app platform.App, ref platform.AssetRef, source string) (platform.ReleaseAsset, error) {

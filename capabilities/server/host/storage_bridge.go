@@ -5,6 +5,7 @@ import (
 
 	runtimekernel "platformserver/kernel"
 	persistence "platformserver/kernel/store"
+	"platformserver/platform"
 	aistate "platformserver/services/ai/state"
 )
 
@@ -15,8 +16,12 @@ type (
 	Journals   = persistence.Journals
 )
 
+func acceptedIdentity(raw []byte) (persistence.Identity, error) {
+	return runtimekernel.AcceptedIdentity(raw, platform.ReadCandidate)
+}
+
 func OpenJournal(ctx context.Context, url string) (*persistence.Postgres, error) {
-	j, err := persistence.OpenPostgres(ctx, url, runtimekernel.AcceptedIdentity)
+	j, err := persistence.OpenPostgres(ctx, url, acceptedIdentity)
 	if err == nil {
 		j.Delta = storageDelta
 	}
@@ -24,13 +29,11 @@ func OpenJournal(ctx context.Context, url string) (*persistence.Postgres, error)
 }
 
 func storageDelta(raw []byte) (persistence.StateDelta, error) {
-	return runtimekernel.StorageDelta(raw, aistate.ApplyUsageState)
+	return runtimekernel.StorageDelta(raw, aistate.ApplyUsageState, platform.ReadCandidate)
 }
 
 func OpenFileJournal(dir string) (*persistence.File, error) {
-	return persistence.OpenFile(dir, runtimekernel.AcceptedIdentity)
+	return persistence.OpenFile(dir, acceptedIdentity)
 }
-
-var journalPool = persistence.Pool
 
 var errAcceptedConflict = persistence.ErrAcceptedConflict

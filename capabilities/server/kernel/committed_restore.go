@@ -20,7 +20,7 @@ type ReleaseSnapshot struct {
 	Active            string
 }
 
-func (q *Sequence) RestoreCommitted(s CommittedState, releases ReleaseSnapshot, apps []platform.App, appOf func(string) platform.App, inputs func(string) platform.AcceptedInputApp) error {
+func (q *Sequence) RestoreCommitted(s CommittedState, releases ReleaseSnapshot, apps []platform.App, appOf func(string) platform.App, inputs func(string) platform.AcceptedInputApp, readCandidate func(string, []byte) (platform.ReleaseCandidate, error)) error {
 	for key, binding := range s.SubmissionSchemas {
 		app, request, _ := strings.Cut(key, "/")
 		owner := appOf(app)
@@ -94,7 +94,7 @@ func (q *Sequence) RestoreCommitted(s CommittedState, releases ReleaseSnapshot, 
 	q.Committed.Restore(s)
 	for key, raw := range s.AcceptedAnswers {
 		if strings.HasPrefix(key, "release:") {
-			result, err := acceptedformat.DecodeRelease(raw)
+			result, err := acceptedformat.DecodeRelease(raw, readCandidate)
 			if err != nil || (result.Version != 3 && result.Version != 4) || result.Tenant != q.ID || key != "release:"+result.Key || releases.Applied[result.Key] != result.Digest || !bytes.Equal(releases.Candidates[result.CandidateID], result.Bytes) {
 				return fmt.Errorf("tenant %s: release answer snapshot %s is incompatible", q.ID, key)
 			}
@@ -127,7 +127,7 @@ func (q *Sequence) RestoreCommitted(s CommittedState, releases ReleaseSnapshot, 
 		}
 	}
 	for id, raw := range releases.Candidates {
-		if _, err := platform.ReadCandidate(id, raw); err != nil {
+		if _, err := readCandidate(id, raw); err != nil {
 			return fmt.Errorf("tenant %s: release snapshot %s is incompatible: %w", q.ID, id, err)
 		}
 	}

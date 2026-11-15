@@ -120,7 +120,7 @@ func (t *Tenant) InstallApplication(app platform.App, a platform.Application) er
 	}
 	err := t.pageBindings().CheckApplication(id, a, func(ref platform.AssetRef) (bool, error) {
 		known := slices.ContainsFunc(t.definitions, func(d platform.Definition) bool { return d.Ref == ref })
-		if !known && (ref.Kind == platform.AssetAgent || t.ownedMetadataKind(ref)) {
+		if !known && (ref.Kind == platform.AssetAgent || t.definitionOwners(false).Metadata(ref)) {
 			registered, err := t.ownedAssetDefinitions(t.definitions)
 			if err != nil {
 				return false, err

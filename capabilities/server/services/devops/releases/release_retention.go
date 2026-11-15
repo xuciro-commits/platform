@@ -267,7 +267,15 @@ func (o runtimeAssetOwner) ApplyAssetInstallation(plan platform.AssetInstallatio
 	return o.lifecycle.ApplyAssetInstallation(plan, context)
 }
 
-func ValidateCodeAsset(owner platform.App, code []platform.ReleaseAsset, asset platform.ReleaseAsset) error {
+func ValidateCodeAsset(asset platform.ReleaseAsset, app func(string) platform.App, codeAssets func(platform.App) ([]platform.ReleaseAsset, error)) error {
+	owner := app(asset.Ref.App)
+	if owner == nil {
+		return fmt.Errorf("code asset %s has no original owner", asset.Ref)
+	}
+	code, err := codeAssets(owner)
+	if err != nil {
+		return err
+	}
 	if !slices.ContainsFunc(code, func(current platform.ReleaseAsset) bool { return current.Ref == asset.Ref }) {
 		return fmt.Errorf("asset %s is not an original code declaration", asset.Ref)
 	}

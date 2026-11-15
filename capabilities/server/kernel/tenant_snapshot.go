@@ -129,6 +129,7 @@ type TenantSnapshots[Job, Endpoint any] struct {
 	Apps          []platform.App
 	AppOf         func(string) platform.App
 	Inputs        func(string) platform.AcceptedInputApp
+	ReadCandidate func(string, []byte) (platform.ReleaseCandidate, error)
 	Quarantined   func() bool
 	Pending       func() bool
 	Scopes        func() bool
@@ -395,7 +396,7 @@ func (h TenantSnapshots[Job, Endpoint]) Restore(q *Sequence, raw json.RawMessage
 	}
 	if err := q.RestoreCommitted(CommittedState{DecisionDefinitions: s.DecisionDefinitions, SubmissionSchemas: s.SubmissionSchemas, CompositeAnswers: s.CompositeAnswers, Refusals: s.Refusals, AcceptedAnswers: s.AcceptedAnswers, AcceptedInputs: s.AcceptedInputs, Composites: s.Composites},
 		ReleaseSnapshot{Requests: s.ReleaseRequests, Applied: s.ReleaseApplied, Candidates: s.ReleaseCandidates, Active: s.ActiveRelease},
-		h.Apps, h.AppOf, h.Inputs); err != nil {
+		h.Apps, h.AppOf, h.Inputs, h.ReadCandidate); err != nil {
 		return err
 	}
 	return h.Operations(&s)

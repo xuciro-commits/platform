@@ -56,7 +56,7 @@ type ReleaseAcceptance struct {
 }
 
 func (a ReleaseAcceptance) Apply(raw []byte) (acceptedformat.Release, error) {
-	saved, err := acceptedformat.DecodeRelease(raw)
+	saved, err := acceptedformat.DecodeRelease(raw, platform.ReadCandidate)
 	if err != nil {
 		return saved, err
 	}
@@ -159,7 +159,7 @@ func (a ReleaseAcceptance) Activate(m platform.Member, candidateID, key, upgrade
 		return "", err
 	}
 	if prior := a.Answer("release:activate:" + key); prior != nil {
-		saved, err := acceptedformat.DecodeRelease(prior)
+		saved, err := acceptedformat.DecodeRelease(prior, platform.ReadCandidate)
 		hash, hashErr := acceptedformat.ReleaseRequestHash(a.Tenant, m.ID, "activate:"+key, candidateID, true, upgradeID)
 		if err != nil || hashErr != nil || hash != saved.RequestHash {
 			return "", fmt.Errorf("activation key belongs to another request")
@@ -251,7 +251,7 @@ func (a ReleaseAcceptance) Commit(m platform.Member, saved acceptedformat.Releas
 			saved.MediaVersions = snapshots
 		}
 	}
-	raw, err := acceptedformat.EncodeRelease(saved)
+	raw, err := acceptedformat.EncodeRelease(saved, platform.ReadCandidate)
 	if err != nil {
 		return "", err
 	}
@@ -280,7 +280,7 @@ func (a ReleaseAcceptance) Commit(m platform.Member, saved acceptedformat.Releas
 }
 
 func (a ReleaseAcceptance) ApplyPrepared(m platform.Member, entry ReleaseEntry) (string, error) {
-	saved, err := acceptedformat.DecodeRelease(entry.Body)
+	saved, err := acceptedformat.DecodeRelease(entry.Body, platform.ReadCandidate)
 	if err != nil {
 		return "", err
 	}

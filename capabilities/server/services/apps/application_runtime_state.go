@@ -296,7 +296,7 @@ func (ctx Context) activeVersions() []ActiveVersion {
 		if !strings.HasPrefix(key, "release:") {
 			continue
 		}
-		release, err := acceptedformat.DecodeRelease(raw)
+		release, err := acceptedformat.DecodeRelease(raw, platform.ReadCandidate)
 		if err != nil || !release.Active {
 			continue
 		}

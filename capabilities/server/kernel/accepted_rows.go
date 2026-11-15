@@ -15,7 +15,7 @@ import (
 	"platformserver/platform"
 )
 
-func AcceptedIdentity(raw []byte) (persistence.Identity, error) {
+func AcceptedIdentity(raw []byte, readCandidate func(string, []byte) (platform.ReleaseCandidate, error)) (persistence.Identity, error) {
 	var identity persistence.Identity
 	var envelope struct{ Kind string }
 	if err := json.Unmarshal(raw, &envelope); err != nil {
@@ -80,7 +80,7 @@ func AcceptedIdentity(raw []byte) (persistence.Identity, error) {
 		return identity, err
 	}
 	if envelope.Kind == "release-result" {
-		result, err := acceptedformat.DecodeRelease(raw)
+		result, err := acceptedformat.DecodeRelease(raw, readCandidate)
 		identity.Tenant, identity.App, identity.Key, identity.Hash = result.Tenant, result.App, result.Key, result.RequestHash
 		return identity, err
 	}

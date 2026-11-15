@@ -110,10 +110,6 @@ func (t *Tenant) releaseAssetsLocked(assets []platform.ReleaseAsset, replace boo
 func (t *Tenant) codeReleaseAssetsLocked(app platform.App) ([]platform.ReleaseAsset, error) {
 	return releaseowner.CodeAssets(app, t.definitions, t.describer().DefinitionAsset, t.nativeFlowAsset, t.describer().DescribeOwnedAsset)
 }
-func (t *Tenant) previewReleaseLocked(drafts []build.JointDraftRef, member platform.Member) (releaseowner.ReleasePreview, platform.ReleaseCandidate, error) {
-	return t.releasePlannerLocked().Preview(drafts, member)
-}
-
 func (t *Tenant) candidateWithBindings(roots []platform.AssetRef, available []platform.ReleaseAsset, fixed []platform.AssetRef) (platform.ReleaseCandidate, error) {
 	return t.releasePlannerLocked().WithBindings(roots, available, fixed)
 }
@@ -129,8 +125,10 @@ func (t *Tenant) releaseAcceptance() releaseowner.ReleaseAcceptance {
 		Promoted: func(at time.Time, member, target string) {
 			t.AuditLog.Remember(platform.AuditEntry{At: at, Member: member, App: controlowner.PlatformApp, Action: "host.promotion", Target: target})
 		},
-		Enqueue:   t.enqueue,
-		Preview:   t.previewReleaseLocked,
+		Enqueue: t.enqueue,
+		Preview: func(drafts []build.JointDraftRef, member platform.Member) (releaseowner.ReleasePreview, platform.ReleaseCandidate, error) {
+			return t.releasePlannerLocked().Preview(drafts, member)
+		},
 		Lifecycle: t.prepareReleaseLifecycleLocked,
 		Assets:    t.acceptedAssets,
 		Bootstrap: func(app string, raw json.RawMessage) (*releaseowner.AcceptedBootstrap, error) {

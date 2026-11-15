@@ -441,7 +441,7 @@ func TestInvariantK6BranchSavesIsolateMainAndMergeAsOneResult(t *testing.T) {
 				}
 			}
 		case "release-result":
-			saved, err := acceptedformat.DecodeRelease(entry.Body)
+			saved, err := acceptedformat.DecodeRelease(entry.Body, platform.ReadCandidate)
 			if err != nil || saved.CandidateID != merged.Candidate || saved.Key != "release:branch:"+branch.ID+":merge" || saved.Active {
 				t.Fatalf("merge candidate save: result=%+v error=%v", saved, err)
 			}
