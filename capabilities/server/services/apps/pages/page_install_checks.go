@@ -37,7 +37,7 @@ func (b Bindings) CheckInstall(p platform.Page, id string, targets bool, engines
 			}
 		}
 	}
-	if err := p.CheckModelBindings(b.Entity, b.Criteria, engines...); err != nil {
+	if err := CheckModelBindings(p, b.Entity, b.Criteria, engines...); err != nil {
 		return p, platform.EntityInfo{}, err
 	}
 	if err := CheckModelQueries(p, b.Definitions, b.Entity); err != nil {

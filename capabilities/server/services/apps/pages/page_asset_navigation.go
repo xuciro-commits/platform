@@ -78,8 +78,8 @@ func FilterNavigation(definitions []platform.Definition) []platform.Definition {
 				page.DataBindings[j] = binding
 			}
 		}
-		page = page.VisibleSafety()
-		page = d.Page.WithSafetyProjection(page)
+		page = visibleSafety(page)
+		page = withSafetyProjection(*d.Page, page)
 		definitions[i].Page = &page
 	}
 	return definitions
@@ -173,8 +173,8 @@ func FilterExplorationAssets(definitions []platform.Definition) []platform.Defin
 			trigger.Events = slices.DeleteFunc(slices.Clone(trigger.Events), func(e platform.PageEventBinding) bool { return removed[e.Source][e.Control] })
 			page.ActionTriggers[j] = trigger
 		}
-		page = page.VisibleSafety()
-		page = d.Page.WithSafetyProjection(page)
+		page = visibleSafety(page)
+		page = withSafetyProjection(*d.Page, page)
 		definitions[i].Page = &page
 	}
 	return definitions

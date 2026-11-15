@@ -36,7 +36,7 @@ func (projection DefinitionProjection) Page(def platform.Definition) (platform.D
 	}
 	def.ContentVersion = digest
 	lookup := func(typ string) (platform.EntityInfo, bool) { info, ok := entities[typ]; return info, ok }
-	page = page.ResolveBindings(lookup)
+	page = resolveBindings(page, lookup)
 	visible := page
 	actionVisible := func(ref platform.AssetRef) bool {
 		action, ok := actions[ref.Name]
@@ -260,7 +260,7 @@ func (projection DefinitionProjection) Page(def platform.Definition) (platform.D
 			}
 		}
 	}
-	visible = page.WithSafetyProjection(visible.VisibleSafety())
+	visible = withSafetyProjection(page, visibleSafety(visible))
 	def.Page = &visible
 	return def, true
 }

@@ -5,7 +5,6 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"maps"
 	"slices"
 	"strings"
 )
@@ -24,30 +23,6 @@ func (f FieldRef) Key() string {
 func ModelObject(typ string) AssetRef {
 	app, _, _ := strings.Cut(typ, ".")
 	return AssetRef{App: app, Kind: AssetObject, Name: typ}
-}
-
-func (p *Page) NormalizeModelBindings(lookup func(string) (EntityInfo, bool)) error {
-	safe, err := p.Safety()
-	if err != nil {
-		return err
-	}
-	safe = safe.ResolveBindings(lookup)
-	safe.retainedVersion = ""
-	*p = safe
-	return nil
-}
-
-func (p Page) CheckModelBindings(lookup func(string) (EntityInfo, bool), criteria func(AssetRef) (*RuleCriteria, bool), engines ...RuleEngine) error {
-	safe, err := p.Safety()
-	if err != nil {
-		return err
-	}
-	for _, binding := range safe.DataBindings {
-		if err := safe.CheckDataBinding(binding, lookup, criteria, engines...); err != nil {
-			return err
-		}
-	}
-	return nil
 }
 
 func CheckRuleExpression(expr Expr, reads RuleReadSpec, lookup func(string) (EntityInfo, bool), engines ...RuleEngine) error {
@@ -229,28 +204,6 @@ func (p Page) RecordVariableInterface(variable string) string {
 	return ""
 }
 
-func (b PageDataBinding) EffectiveFields(info EntityInfo) []FieldRef {
-	if len(b.Fields) > 0 {
-		return slices.Clone(b.Fields)
-	}
-	if b.Model != nil && len(b.Model.Fields) > 0 {
-		fields := []FieldRef{}
-		for _, field := range b.Model.Fields {
-			if field.Slot == "" || field.Slot == "fields" {
-				fields = append(fields, field)
-			}
-		}
-		return fields
-	}
-	fields := []FieldRef{}
-	for _, field := range info.Fields {
-		if !field.Aside {
-			fields = append(fields, FieldRef{Name: field.Name})
-		}
-	}
-	return fields
-}
-
 func CompositeLimits() (records, cells, bytes int) {
 	limits := pageWidgets.Runtime.Composite
 	return limits.MaxRecords, limits.MaxCells, limits.MaxBytes
@@ -261,8 +214,8 @@ func MatrixRuleReads(c PageDataBinding) RuleReadSpec {
 }
 
 func PageContentVersion(page Page) (string, error) {
-	if page.retainedVersion != "" {
-		return page.retainedVersion, nil
+	if page.RetainedVersion != "" {
+		return page.RetainedVersion, nil
 	}
 	page.PresentationWords = nil
 	body, err := json.Marshal(page)
@@ -391,84 +344,4 @@ func pageBindingVariables(b PageDataBinding) []string {
 		}
 	}
 	return out
-}
-
-func defaultModelFields(widget string, info EntityInfo) []FieldRef {
-	fields := []FieldRef{}
-	if !slices.Contains([]string{"table", "detail", "form", "filter"}, widget) {
-		return fields
-	}
-	for _, field := range info.Fields {
-		if field.Aside || widget == "form" && field.ReadOnly || widget == "filter" && !slices.Contains(Filterable, field.Type) {
-			continue
-		}
-		fields = append(fields, FieldRef{Name: field.Name})
-	}
-	return fields
-}
-
-func (p Page) ResolveBindings(lookup func(string) (EntityInfo, bool)) Page {
-	p.DataBindings = slices.Clone(p.DataBindings)
-	for i, binding := range p.DataBindings {
-		if binding.Model == nil && len(binding.Models) == 0 && binding.Object.Name != "" && (binding.Kind == "record" || binding.Kind == "records") {
-			binding.Model = &ModelBinding{Type: binding.Object.Name, Fields: slices.Clone(binding.Fields)}
-		}
-		binding.Models = maps.Clone(binding.Models)
-		if binding.Model != nil {
-			model := *binding.Model
-			model.Fields = slices.Clone(model.Fields)
-			for n, field := range model.Fields {
-				if strings.Contains(field.Name, ".") {
-					field.Path = strings.Split(field.Name, ".")
-					field.Name = ""
-				}
-				model.Fields[n] = field
-			}
-			info, ok := lookup(model.Type)
-			if ok {
-				binding.Fields = binding.EffectiveFields(info)
-				if len(model.Fields) == 0 {
-					model.Fields = defaultModelFields(binding.Ports["widget"], info)
-				}
-				if model.Relation == nil && (binding.Ports["relation"] != "" || binding.Ports["parentSelection"] != "") {
-					parentType := p.Object.Name
-					for _, selection := range p.InputSchema.Selections {
-						if selection.Name == binding.Ports["parentSelection"] {
-							parentType = selection.Object.Name
-						}
-					}
-					for _, field := range info.Fields {
-						if field.Type == "reference" && field.Ref == parentType && (binding.Ports["relation"] == "" || field.Inverse == binding.Ports["relation"]) {
-							model.Relation = &ModelRelation{ParentType: parentType, ParentSelection: binding.Ports["parentSelection"], Field: field.Name, Name: field.Inverse}
-							break
-						}
-					}
-				}
-			}
-			binding.Model = &model
-		}
-		for port, view := range binding.Models {
-			info, ok := lookup(view.Model.Type)
-			if !ok {
-				continue
-			}
-			view.Roles = maps.Clone(view.Roles)
-			if view.Roles == nil {
-				view.Roles = map[string]FieldRef{}
-			}
-			if _, explicit := view.Roles["label"]; !explicit {
-				if _, computed := view.Expressions["label"]; !computed && view.Model.Label == nil && info.Display != "" && info.Display != "id" {
-					view.Roles["label"] = FieldRef{Name: info.Display}
-				}
-			}
-			if _, explicit := view.Roles["state"]; !explicit {
-				if _, computed := view.Expressions["state"]; !computed && info.Lifecycle != nil {
-					view.Roles["state"] = FieldRef{Name: info.Lifecycle.Field}
-				}
-			}
-			binding.Models[port] = view
-		}
-		p.DataBindings[i] = binding
-	}
-	return p
 }

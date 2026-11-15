@@ -7,6 +7,7 @@ import (
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformserver/platform"
+	pageowner "platformserver/services/apps/pages"
 	ontology "platformserver/services/ontology"
 )
 
@@ -162,7 +163,7 @@ func (o *Owner) checkPage(p Page) error {
 
 func (o *Owner) normalizePageModel(p *Page, lookup func(string) (platform.EntityInfo, bool)) error {
 	d := Descriptor(*p, o.env.AppID(), o.env.Version())
-	if err := d.NormalizeModelBindings(lookup); err != nil {
+	if err := pageowner.NormalizeModelBindings(&d, lookup); err != nil {
 		return err
 	}
 	if err := d.CheckQueryFilters(lookup); err != nil {

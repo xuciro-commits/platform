@@ -220,7 +220,7 @@ type Page struct {
 	ScopeVisibility   PageScopeVisibility `json:"scopeVisibility"`
 	WidgetSpec        PageWidgetSpec      `json:"widgetSpec"`
 	PresentationWords map[string]string   `json:"presentationWords,omitempty"`
-	retainedVersion   string
+	RetainedVersion   string              `json:"-"`
 }
 
 type SelectionVariable struct {

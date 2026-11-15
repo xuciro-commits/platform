@@ -149,7 +149,7 @@ func (r ModelReader) Read(member platform.Member, request PageModelRead, at time
 		if err := json.Unmarshal(platform.Raw(request.Draft), &page); err != nil {
 			return result, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Invalid page model")
 		}
-		if err := page.NormalizeModelBindings(r.host.Entity); err != nil {
+		if err := NormalizeModelBindings(&page, r.host.Entity); err != nil {
 			return result, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
 		}
 		projected, err := page.Safety()

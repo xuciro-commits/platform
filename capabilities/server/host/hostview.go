@@ -294,7 +294,7 @@ func (h hostView) ModelQueryBinding(ref platform.AssetRef) (platform.AssetBindin
 }
 
 func (h hostView) CheckPageModel(c platform.Caller, p platform.Page) error {
-	if err := p.CheckModelBindings(h.t.modelVisibleLookup(c.Member), h.t.modelCriteria, c.Rules()); err != nil {
+	if err := pageowner.CheckModelBindings(p, h.t.modelVisibleLookup(c.Member), h.t.modelCriteria, c.Rules()); err != nil {
 		return err
 	}
 	return pageowner.CheckModelQueries(p, h.t.definitions, h.t.Entity)
