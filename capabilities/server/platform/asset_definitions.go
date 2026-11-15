@@ -82,21 +82,6 @@ func (l LinkType) CheckSchema(parent, child EntityInfo) error {
 	return nil
 }
 
-func (d Definition) LinkVersion(version string) *Definition {
-	if d.Version == version && d.LinkType != nil {
-		return &d
-	}
-	l, ok := d.LinkVersions[version]
-	if !ok {
-		return nil
-	}
-	d.Version = version
-	d.LinkType = &l
-	d.ContractVersion = l.Contract()
-	d.LinkVersions = nil
-	return &d
-}
-
 func (q NamedQuery) Check() error {
 	if q.Name == "" || q.Title == "" || (q.Object == "") == (q.Interface == "") || len(q.Name) > 80 || len(q.Title) > 1024 || len(q.Description) > 4096 || q.Limit < 0 || q.Limit > 200 || len(q.Sort) > 4 || len(q.Domain) > 16384 {
 		return fmt.Errorf("query has an invalid identity or budget")

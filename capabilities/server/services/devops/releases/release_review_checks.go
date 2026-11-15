@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"platformserver/platform"
 	"platformserver/services/resources/authoring"
+	"platformserver/services/resources/publication"
 
 	"time"
 )
@@ -153,7 +154,7 @@ func (s *Store) Review(id string, context ReviewContext) (SavedReleaseReview, er
 	} else {
 		reply.Preview.CurrentID = running.ID
 		reply.RunningMatches = running.ID == id
-		reply.Preview.Added, reply.Preview.Removed, reply.Preview.Changed, err = platform.CandidateDiff(running, saved)
+		reply.Preview.Added, reply.Preview.Removed, reply.Preview.Changed, err = publication.CandidateDiff(running, saved)
 		if err != nil {
 			return reply, err
 		}

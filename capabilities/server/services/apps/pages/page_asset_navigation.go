@@ -124,7 +124,7 @@ func ExplorationAssetAvailable(definitions []platform.Definition, binding platfo
 		}
 		switch d.Ref.Kind {
 		case platform.AssetLinkType:
-			selected := d.LinkVersion(binding.SourceVersion)
+			selected := publication.LinkVersion(d, binding.SourceVersion)
 			return selected != nil && selected.LinkType != nil
 		case platform.AssetQuery:
 			selected := publication.QueryVersion(d, binding.SourceVersion)

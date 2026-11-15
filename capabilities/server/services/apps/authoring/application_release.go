@@ -9,7 +9,7 @@ import (
 )
 
 func (o *Owner) ApplicationAsset(a Application, sourceVersion string) (platform.ReleaseAsset, error) {
-	return platform.ApplicationReleaseAsset(o.env.AppID(), sourceVersion, ApplicationDescriptor(a))
+	return publication.ApplicationReleaseAsset(o.env.AppID(), sourceVersion, ApplicationDescriptor(a))
 }
 
 func (o *Owner) PrepareApplicationPublication(asset platform.ReleaseAsset, current Application) (Application, error) {

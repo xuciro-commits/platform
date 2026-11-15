@@ -36,33 +36,6 @@ type AssetBinding struct {
 	SourceVersion string   `json:"sourceVersion"`
 }
 
-func PageReleaseAsset(app, sourceVersion string, page Page) (ReleaseAsset, error) {
-	if err := page.CheckSafety(); err != nil {
-		return ReleaseAsset{}, err
-	}
-	body, err := json.Marshal(page)
-	if err != nil {
-		return ReleaseAsset{}, err
-	}
-	return WithDependencies(ReleaseAsset{Ref: AssetRef{App: app, Kind: AssetPage, Name: page.Name},
-		ContractVersion: 1, SourceVersion: sourceVersion, Body: body})
-}
-
-func ApplicationReleaseAsset(app, sourceVersion string, application Application) (ReleaseAsset, error) {
-	if err := application.CheckVariables(); err != nil {
-		return ReleaseAsset{}, err
-	}
-	if err := application.CheckResources(); err != nil {
-		return ReleaseAsset{}, err
-	}
-	body, err := json.Marshal(application)
-	if err != nil {
-		return ReleaseAsset{}, err
-	}
-	return WithDependencies(ReleaseAsset{Ref: AssetRef{App: app, Kind: AssetApp, Name: application.Name},
-		ContractVersion: 1, SourceVersion: sourceVersion, Body: body})
-}
-
 type ReleaseCandidate struct {
 	ID     string
 	Bytes  []byte

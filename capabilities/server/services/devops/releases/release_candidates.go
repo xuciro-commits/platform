@@ -545,7 +545,7 @@ func CodeReleaseAssets(manifest platform.Manifest, definitions []platform.Defini
 			if def.Page == nil {
 				return nil, fmt.Errorf("code page %s has no owner declaration", def.Ref)
 			}
-			asset, err := platform.PageReleaseAsset(manifest.ID, manifest.Version, *def.Page)
+			asset, err := publication.PageReleaseAsset(manifest.ID, manifest.Version, *def.Page)
 			if err != nil {
 				return nil, err
 			}
@@ -562,7 +562,7 @@ func CodeReleaseAssets(manifest platform.Manifest, definitions []platform.Defini
 			resources = append(resources, asset.Ref)
 		}
 	}
-	asset, err := platform.ApplicationReleaseAsset(manifest.ID, manifest.Version,
+	asset, err := publication.ApplicationReleaseAsset(manifest.ID, manifest.Version,
 		platform.Application{Name: manifest.ID, Title: manifest.Title, Pages: pages, Resources: UniqueRefs(resources)})
 	if err != nil {
 		return nil, err
@@ -735,7 +735,7 @@ func (p Planner) Preview(drafts []build.JointDraftRef, member platform.Member) (
 		}
 		return reply, candidate, nil
 	}
-	reply.Added, reply.Removed, reply.Changed, err = platform.CandidateDiff(current, candidate)
+	reply.Added, reply.Removed, reply.Changed, err = publication.CandidateDiff(current, candidate)
 	return reply, candidate, err
 }
 

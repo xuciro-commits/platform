@@ -7,9 +7,24 @@ import (
 
 func QuerySourceVersion(d platform.Definition, version string) *platform.Definition {
 	if d.Ref.Kind == platform.AssetLinkType {
-		return d.LinkVersion(version)
+		return LinkVersion(d, version)
 	}
 	return QueryVersion(d, version)
+}
+
+func LinkVersion(d platform.Definition, version string) *platform.Definition {
+	if d.Version == version && d.LinkType != nil {
+		return &d
+	}
+	l, ok := d.LinkVersions[version]
+	if !ok {
+		return nil
+	}
+	d.Version = version
+	d.LinkType = &l
+	d.ContractVersion = l.Contract()
+	d.LinkVersions = nil
+	return &d
 }
 
 func QueryVersion(d platform.Definition, version string) *platform.Definition {
