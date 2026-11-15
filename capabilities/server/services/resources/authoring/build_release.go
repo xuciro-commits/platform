@@ -181,7 +181,7 @@ func (b *Build) objectInstallationPages(record ontology.Object) ([]platform.Page
 	if explicit {
 		return nil, "", nil
 	}
-	return []platform.Page{ontology.CompileObjectPage(record, ID)}, record.Name, nil
+	return []platform.Page{appsauthoring.CompileObjectPage(record, ID)}, record.Name, nil
 }
 
 func (b *Build) releaseAssets(objects []ontology.Object, pages []appsauthoring.Page, apps []appsauthoring.Application, processes []automationauthoring.Process, sourceVersion string) ([]platform.ReleaseAsset, error) {

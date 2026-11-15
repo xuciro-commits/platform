@@ -6,6 +6,7 @@ import (
 	functionauthoring "platformserver/services/functions/authoring"
 
 	"platformserver/platform"
+	appsauthoring "platformserver/services/apps/authoring"
 	ontology "platformserver/services/ontology"
 	"platformserver/services/resources/publication"
 )
@@ -52,7 +53,7 @@ func (b *Build) publicationImage(schema string, image []byte) (platform.Entity, 
 			return platform.Entity{}, nil, nil, err
 		}
 		actions := objectActions(published, entity)
-		return entity, actions, []platform.Page{ontology.CompileObjectPage(published, ID)}, nil
+		return entity, actions, []platform.Page{appsauthoring.CompileObjectPage(published, ID)}, nil
 	}
 	return platform.Entity{}, nil, nil, fmt.Errorf("not an accepted builder publication: %s", schema)
 }

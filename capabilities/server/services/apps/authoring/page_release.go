@@ -30,7 +30,7 @@ func (o *Owner) PageAssetFromView(p platform.Page, sourceVersion string) (platfo
 }
 
 func (o *Owner) ObjectPageAsset(object ontology.Object, sourceVersion string) (platform.ReleaseAsset, error) {
-	return publication.PageReleaseAsset(o.env.AppID(), sourceVersion, ontology.CompileObjectPage(object, o.env.AppID()))
+	return publication.PageReleaseAsset(o.env.AppID(), sourceVersion, CompileObjectPage(object, o.env.AppID()))
 }
 
 func (o *Owner) PublishedPage(p Page) string {
@@ -204,7 +204,7 @@ func (o *Owner) generatedReleasePage(page platform.ReleaseAsset, assets []platfo
 		if o.env.AppID()+"."+object.Name != page.Ref.Name {
 			continue
 		}
-		generated, err := publication.PageReleaseAsset(o.env.AppID(), o.env.Version(), ontology.CompileObjectPage(object, o.env.AppID()))
+		generated, err := publication.PageReleaseAsset(o.env.AppID(), o.env.Version(), CompileObjectPage(object, o.env.AppID()))
 		if err != nil {
 			return false, err
 		}
