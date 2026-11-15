@@ -77,7 +77,7 @@ func visibleSafety(p platform.Page) platform.Page {
 			}
 		}
 		for id, q := range result.InputSchema.Queries {
-			missing := q.MissingSetInput(result.InputSchema.Queries)
+			missing := MissingQuerySetInput(q, result.InputSchema.Queries)
 			for _, v := range q.Variables() {
 				_, ok := result.InputSchema.Variables[v]
 				missing = missing || !ok

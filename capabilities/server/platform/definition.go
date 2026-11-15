@@ -180,28 +180,6 @@ type AppGroup struct {
 	Pages []string `json:"pages"`
 }
 
-func (a Application) CheckGroups() error {
-	grouped := map[string]string{}
-	for _, g := range a.Groups {
-		if strings.TrimSpace(g.Title) == "" {
-			return fmt.Errorf("a group needs a title")
-		}
-		if len(g.Pages) == 0 {
-			return fmt.Errorf("the group %q holds no page", g.Title)
-		}
-		for _, page := range g.Pages {
-			if !slices.Contains(a.Pages, page) {
-				return fmt.Errorf("the group %q names the page %q, which the application does not hold", g.Title, page)
-			}
-			if other, ok := grouped[page]; ok {
-				return fmt.Errorf("the page %q is under %q and %q", page, other, g.Title)
-			}
-			grouped[page] = g.Title
-		}
-	}
-	return nil
-}
-
 func IconName(s string) bool {
 	if s == "" || len(s) > 32 || s[0] == '-' || s[len(s)-1] == '-' {
 		return false

@@ -193,10 +193,10 @@ func (o *Owner) checkApplication(a Application) error {
 	if err := ApplicationDescriptor(a).CheckVariables(); err != nil {
 		return err
 	}
-	if err := ApplicationDescriptor(a).CheckHeader(); err != nil {
+	if err := pageowner.CheckApplicationHeader(ApplicationDescriptor(a)); err != nil {
 		return err
 	}
-	return ApplicationDescriptor(a).CheckGroups()
+	return pageowner.CheckApplicationGroups(ApplicationDescriptor(a))
 }
 
 type ApplicationProjection struct {
@@ -229,7 +229,7 @@ func ProjectApplication(registered platform.Definition, projection ApplicationPr
 		}
 	}
 	application.Groups = groups
-	application.Header = application.VisibleHeader()
+	application.Header = pageowner.VisibleApplicationHeader(application)
 	application.Resources = slices.DeleteFunc(slices.Clone(application.Resources), func(ref platform.AssetRef) bool {
 		if ref.Kind == platform.AssetFlow {
 			return !m.Holds("build", "builder") || !projection.PublishedFlows[ref]
@@ -270,7 +270,7 @@ func ProjectApplication(registered platform.Definition, projection ApplicationPr
 	for changed := true; changed; {
 		changed = false
 		for id, q := range application.Queries {
-			missing := q.MissingSetInput(application.Queries)
+			missing := pageowner.MissingQuerySetInput(q, application.Queries)
 			for _, param := range q.Variables() {
 				if _, ok := application.Variables[param]; !ok {
 					missing = true

@@ -47,10 +47,10 @@ func (b Bindings) CheckApplication(id string, a platform.Application, published 
 			return fmt.Errorf("application %s: no published resource %s", a.Name, ref)
 		}
 	}
-	if err := a.CheckHeader(); err != nil {
+	if err := CheckApplicationHeader(a); err != nil {
 		return err
 	}
-	if err := a.CheckGroups(); err != nil {
+	if err := CheckApplicationGroups(a); err != nil {
 		return fmt.Errorf("application %s: %v", a.Name, err)
 	}
 	return nil

@@ -72,48 +72,6 @@ type ApplicationHeaderItem struct {
 	Action string   `json:"action,omitempty"`
 }
 
-func (a Application) CheckHeader() error {
-	h := a.Header
-	if h == nil {
-		return nil
-	}
-	if !PageUIProfileSupports(a.UIProfile, "platform.page.v2.105") || len(h.Title) > 1024 || len(h.Items) == 0 || len(h.Items) > 24 {
-		return fmt.Errorf("application header exceeds its retained profile or content bound")
-	}
-	if h.Logo != "" && !ValidPageImageURL(h.Logo) {
-		return fmt.Errorf("application header logo needs a safe static image URL")
-	}
-	seen := map[string]bool{}
-	for _, item := range h.Items {
-		if len(item.Label) > 1024 || len(item.Text) > 1024 || len(item.Pages) > 32 {
-			return fmt.Errorf("application header item exceeds its budget")
-		}
-		for _, name := range item.Pages {
-			if !slices.Contains(a.Pages, name) || seen[name] {
-				return fmt.Errorf("application header navigation needs unique application pages")
-			}
-			seen[name] = true
-		}
-	}
-	return nil
-}
-
-func (a Application) VisibleHeader() *ApplicationHeader {
-	if a.Header == nil {
-		return nil
-	}
-	h := *a.Header
-	h.Items = nil
-	for _, item := range a.Header.Items {
-		item.Pages = slices.DeleteFunc(slices.Clone(item.Pages), func(p string) bool { return !slices.Contains(a.Pages, p) })
-		if item.Kind == "tabs" && len(item.Pages) == 0 {
-			continue
-		}
-		h.Items = append(h.Items, item)
-	}
-	return &h
-}
-
 func (v PageVariable) IsWritable() bool { return v.Mode == "state" || v.Mode == "shared" && v.Writable }
 
 func (a Application) CheckVariables() error {

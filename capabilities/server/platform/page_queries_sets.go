@@ -49,18 +49,6 @@ func (p Page) CheckQuerySetConditions(named map[AssetBinding]NamedQuery) error {
 	return nil
 }
 
-func (q PageQuery) MissingSetInput(plans map[string]PageQuery) bool {
-	if q.Set == nil {
-		return false
-	}
-	for _, id := range q.Set.Inputs {
-		if _, ok := plans[id]; !ok {
-			return true
-		}
-	}
-	return false
-}
-
 func (d PageInputSchema) CheckQuerySets() error {
 	for root, plan := range d.Queries {
 		if plan.Set == nil {

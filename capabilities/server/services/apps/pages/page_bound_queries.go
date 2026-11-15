@@ -164,3 +164,15 @@ func CheckModelQueries(page platform.Page, definitions []platform.Definition, en
 	}
 	return nil
 }
+
+func MissingQuerySetInput(q platform.PageQuery, plans map[string]platform.PageQuery) bool {
+	if q.Set == nil {
+		return false
+	}
+	for _, id := range q.Set.Inputs {
+		if _, ok := plans[id]; !ok {
+			return true
+		}
+	}
+	return false
+}
