@@ -7,6 +7,7 @@ import (
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformserver/platform"
+	actioncatalog "platformserver/services/actions/catalog"
 	"platformserver/services/ontology"
 )
 
@@ -110,7 +111,7 @@ func (o *Owner) Entities() []platform.Entity {
 func (o *Owner) Actions() []platform.Action {
 	var actions []platform.Action
 	for _, entity := range o.Entities() {
-		actions = append(actions, platform.EntityActions(entity)...)
+		actions = append(actions, actioncatalog.EntityActions(entity)...)
 	}
 	actions = append(actions, connectionActions()...)
 	actions = append(actions, datasetActions()...)

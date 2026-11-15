@@ -12,6 +12,7 @@ import (
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformserver/platform"
+	actioncatalog "platformserver/services/actions/catalog"
 	ontology "platformserver/services/ontology"
 )
 
@@ -199,7 +200,7 @@ func CheckProcess(p Process, entity platform.Entity, lookup ProcessLookup, objec
 			owner, action, ok := lookup.Action(schema)
 			if model, selected := actionModels[schema[:strings.LastIndex(schema, ".")]]; selected {
 				ok = false
-				for _, candidate := range platform.EntityActions(model) {
+				for _, candidate := range actioncatalog.EntityActions(model) {
 					if candidate.Schema == schema {
 						action = candidate
 						owner = lookup.App

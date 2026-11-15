@@ -164,22 +164,22 @@ func (b *Runtime) transactAttempt(c platform.Caller, receipt *pb.ChangeRecord, t
 	if txn.Reads != nil {
 		spec.Collections = txn.Reads.Collections
 	}
-	var transitions []platform.Transition
+	var transitions []platform.ActionType
 	if life := b.Entities[txn.Subject].Lifecycle; life != nil {
-		transitions = life.Transitions
+		transitions = life.Actions
 	}
 	for _, transition := range transitions {
-		if transition.Txn != nil && transition.Name == strings.TrimPrefix(action, txn.Subject+".") {
+		if transition.Name == strings.TrimPrefix(action, txn.Subject+".") && slices.ContainsFunc(transition.Rules, func(rule platform.ActionRule) bool { return rule.Transaction != nil && rule.Transaction.Spec != nil }) {
 			var submitted map[string]any
 			if json.Unmarshal(invocation.GetPayload(), &submitted) != nil {
 				return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Invalid transaction inputs / 事务输入无效")
 			}
-			if issues := platform.InputIssues(transition.Payload, submitted); len(issues) > 0 {
+			if issues := platform.InputIssues(transition.Parameters, submitted); len(issues) > 0 {
 				refusal := c.RefuseFields(issues)
 				for _, issue := range issues {
 					if issue.Code == "required" && len(issue.Path) > 0 {
 						label := issue.Path[0]
-						for _, field := range transition.Payload {
+						for _, field := range transition.Parameters {
 							if field.Name == label && field.Description != "" {
 								label = field.Description
 								break
@@ -191,7 +191,7 @@ func (b *Runtime) transactAttempt(c platform.Caller, receipt *pb.ChangeRecord, t
 				}
 				return refusal
 			}
-			for _, in := range transition.Payload {
+			for _, in := range transition.Parameters {
 				kind := platform.RuleFieldKind(in.Type)
 				if in.Ref != "" {
 					kind = "reference"

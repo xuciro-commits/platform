@@ -92,8 +92,8 @@ func CallbackFreeTransition(m platform.Manifest, schema string) bool {
 		if !match || entity.Lifecycle == nil {
 			continue
 		}
-		for _, transition := range entity.Lifecycle.Transitions {
-			if transition.Name == verb && transition.Do == nil && transition.After == nil && transition.Approval == nil {
+		for _, action := range entity.Lifecycle.Actions {
+			if action.Name == verb && action.Approval == nil && len(action.Effects) == 0 && !slices.ContainsFunc(action.Rules, func(rule platform.ActionRule) bool { return rule.Function != nil || rule.Receipt != nil }) {
 				return true
 			}
 		}

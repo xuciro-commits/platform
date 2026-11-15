@@ -6,6 +6,7 @@ import (
 	"maps"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformserver/platform"
+	actioncatalog "platformserver/services/actions/catalog"
 	"slices"
 	"strings"
 	"sync"
@@ -87,7 +88,7 @@ func New(tenant string, authorities platform.Authorities) *Flows {
 	var actions []platform.Action
 	for _, e := range flowEntities() {
 		if e.Type == InstanceType {
-			actions = append(actions, platform.EntityActions(e)...)
+			actions = append(actions, actioncatalog.EntityActions(e)...)
 		}
 	}
 	byHost := "Made by the host as the flow runs."

@@ -143,11 +143,24 @@ func CodeObjectDescriptor(entity platform.Entity, info platform.EntityInfo) any 
 	var steps *lifecycle
 	if entity.Lifecycle != nil {
 		steps = &lifecycle{Field: entity.Lifecycle.Field, Initial: entity.Lifecycle.Initial, States: entity.Lifecycle.States}
-		for _, step := range entity.Lifecycle.Transitions {
+		for _, step := range entity.Lifecycle.Actions {
+			from := step.Criteria.State.In
+			var to []string
+			hasFunction, hasAfter := false, len(step.Effects) > 0
+			for _, rule := range step.Rules {
+				if rule.Edit != nil && rule.Edit.Field == entity.Lifecycle.Field {
+					to = rule.Edit.Allowed
+				}
+				if rule.Transaction != nil {
+					to = slices.Clone(from)
+				}
+				hasFunction = hasFunction || rule.Function != nil
+				hasAfter = hasAfter || rule.Receipt != nil
+			}
 			steps.Transitions = append(steps.Transitions, transition{
-				Name: step.Name, Title: step.Title, Description: step.Description, From: step.From, To: step.To,
-				Roles: step.Roles, Payload: step.Payload, Capability: step.Capability,
-				Approval: codeApprovalDescriptor(step.Approval), Do: step.Do != nil, After: step.After != nil,
+				Name: step.Name, Title: step.Title, Description: step.Description, From: from, To: to,
+				Roles: step.Roles, Payload: step.Parameters, Capability: step.Capability,
+				Approval: codeApprovalDescriptor(step.Approval), Do: hasFunction, After: hasAfter,
 			})
 		}
 	}

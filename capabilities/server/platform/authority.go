@@ -54,7 +54,7 @@ func (c Caller) Deeper() Caller {
 	return c
 }
 
-func (a Action) EditsRecord() bool { return a.recordEdit }
+func (a Action) EditsRecord() bool { return a.RecordEdit }
 
 type TransactionHost interface {
 	CheckTxnCall(TxnCall) error

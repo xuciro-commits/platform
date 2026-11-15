@@ -45,14 +45,15 @@ func lifecycle(o ontology.Object, roles []string, creates creator, lookup func(s
 		if description == "" {
 			description = "Apply this business transaction."
 		}
-		l.Transitions = append(l.Transitions, platform.Transition{ConfirmationOnly: a.ConfirmationOnly, Adoption: a.Adoption, Criteria: criteria, Name: a.Name, Title: a.Title, Description: description,
-			From: slices.Clone(a.From), To: slices.Clone(a.From), Roles: takers, Capability: o.Name, Payload: payload, Approval: approval, DeferRequired: true, Txn: a.Transaction,
-			ApplyTxn: func(c platform.Caller, r *pb.ChangeRecord, now time.Time) *platform.Error {
+		l.Actions = append(l.Actions, platform.ActionType{ConfirmationOnly: a.ConfirmationOnly, Adoption: a.Adoption,
+			Criteria: platform.ActionCriteria{State: &platform.FieldCondition{Field: l.Field, In: slices.Clone(a.From)}, Business: criteria},
+			Name:     a.Name, Title: a.Title, Description: description, Roles: takers, Capability: o.Name, Parameters: payload, Approval: approval, DeferRequired: true,
+			Rules: []platform.ActionRule{{Transaction: &platform.TransactionRule{Spec: a.Transaction, Run: func(c platform.Caller, r *pb.ChangeRecord, now time.Time) *platform.Error {
 				if creates == nil {
 					return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Business transactions need their original owner")
 				}
 				return creates.businessRuntime().Transact(c, r, action.Transaction, now)
-			}})
+			}}}}})
 	}
 	return l
 }

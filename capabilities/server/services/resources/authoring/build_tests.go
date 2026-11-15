@@ -50,15 +50,24 @@ func (b *Build) sampleSetEntity() platform.Entity {
 			return nil
 		},
 		Lifecycle: &platform.Lifecycle{Field: "state", Initial: "draft", States: []platform.State{{Name: "draft", Title: "Draft", Tone: "warning"}, {Name: "published", Title: "Published", Tone: "success"}},
-			Transitions: []platform.Transition{{Name: "publish", Title: "Publish", Description: "Retain these synthetic records as an immutable application sample asset", From: []string{"draft", "published"}, To: []string{"published"}, Roles: []string{Builder}, Capability: "objects", Payload: []platform.Field{}, Do: func(c platform.Caller, record any, _ json.RawMessage, _ time.Time) *platform.Error {
-				m := record.(*SampleSetRecord)
-				next, err := b.retainSampleSet(*m)
-				if err != nil {
-					return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
-				}
-				*m = next
-				return nil
-			}}}}}
+			Actions: []platform.ActionType{{
+				Name:        "publish",
+				Title:       "Publish",
+				Description: "Retain these synthetic records as an immutable application sample asset",
+				Roles:       []string{Builder},
+				Capability:  "objects",
+				Parameters:  []platform.Field{},
+				Criteria:    platform.ActionCriteria{State: &platform.FieldCondition{Field: "state", In: []string{"draft", "published"}}},
+				Rules: []platform.ActionRule{{Function: func(c platform.Caller, record any, _ json.RawMessage, _ time.Time) *platform.Error {
+					m := record.(*SampleSetRecord)
+					next, err := b.retainSampleSet(*m)
+					if err != nil {
+						return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
+					}
+					*m = next
+					return nil
+				}}, {Edit: &platform.PropertyRule{Field: "state", Allowed: []string{"published"}}}},
+			}}}}
 }
 
 func (b *Build) sampleSetInventory() ([]SampleSetRecord, error) {

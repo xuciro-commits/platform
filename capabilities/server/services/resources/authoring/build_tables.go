@@ -37,7 +37,16 @@ func (b *Build) tableEntity() platform.Entity {
 		Scope:    platform.Scope{Default: platform.ScopeNone, Levels: map[string]string{Builder: platform.ScopeTenant}},
 		Standard: platform.Standard{Create: true, Edit: true, Archive: true, Roles: []string{Builder}, Capability: "compute"},
 		Lifecycle: &platform.Lifecycle{Field: "state", Initial: "draft", States: []platform.State{{Name: "draft", Title: "Draft", Tone: "warning"}, {Name: "published", Title: "Published", Tone: "success"}},
-			Transitions: []platform.Transition{{Name: "publish", Title: "Publish", Description: "Check the table and install it as an operation at once.", From: []string{"draft", "published"}, To: []string{"published"}, Roles: []string{Builder}, Capability: "compute", Payload: []platform.Field{}, Do: b.publishTable}}}}
+			Actions: []platform.ActionType{{
+				Name:        "publish",
+				Title:       "Publish",
+				Description: "Check the table and install it as an operation at once.",
+				Roles:       []string{Builder},
+				Capability:  "compute",
+				Parameters:  []platform.Field{},
+				Criteria:    platform.ActionCriteria{State: &platform.FieldCondition{Field: "state", In: []string{"draft", "published"}}},
+				Rules:       []platform.ActionRule{{Function: b.publishTable}, {Edit: &platform.PropertyRule{Field: "state", Allowed: []string{"published"}}}},
+			}}}}
 }
 
 func (b *Build) publishTable(c platform.Caller, record any, _ json.RawMessage, _ time.Time) *platform.Error {

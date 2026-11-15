@@ -35,13 +35,14 @@ read-when: 新建或移动 Go 包、改动写入或读取路径、接受结果�
 | `expr` | Expr 的解析、类型检查、求值与 SQL 下推编译；前端经 WASM 复用 | 无 |
 | `kernel` | 提交接收、幂等、修订、接受结果编码、车道、重放与快照；`kernel/store` 拥有 PostgreSQL、文件及内存持久化，`kernel/records` 拥有记录投影与读取计划；按 `platform` 契约实现 | `expr`、`platform`、`kernel/protocol` |
 | `kernel/protocol` | 协议接收、账本、身份、连接器与工作项部件 | `platform` |
-| `platform` | 应用 SDK：Manifest、Caller、动作目录、页面与应用声明、Expr 与 ObjectSet 接口、授权接口；稳定叶层，不依赖实现 | `expr` |
-| `services/resources` | RID、项目、文件夹、资源生命周期、工作状态、分支、提案 | `platform`、`kernel/records`、`kernel/acceptedformat`、`kernel/protocol` |
+| `platform` | 应用 SDK：Manifest、Caller、动作目录契约、页面与应用声明、Expr 与 ObjectSet 接口、授权接口；稳定叶层，不依赖实现 | `expr` |
+| `services/resources` | RID、项目、文件夹、资源生命周期、工作状态、分支、提案 | `platform`、actions/catalog、`kernel/records`、`kernel/acceptedformat`、`kernel/protocol` |
 | `services/ontology` | 本体元数据与类型检查 | `platform`、resources、`kernel/records`、`kernel/acceptedformat`、`kernel/protocol` |
 | `services/objects` | 对象投影、编辑事实、索引、ObjectSet 执行 | `expr`、`platform`、ontology、`kernel/records`、`kernel/acceptedformat`、`kernel/protocol` |
 | `services/actions` | 动作执行、提交条件、副作用调度 | `platform`、objects、functions、`kernel/records`、`kernel/acceptedformat`、`kernel/protocol` |
-| `services/functions` | 函数制品、受控编译、隔离执行 | `platform`、`kernel/records`、`kernel/acceptedformat`、`kernel/protocol` |
-| `services/data` | 连接、数据源、观测源、数据集、管道、调度、回写、匹配规则、血缘与标记推导 | `platform`、resources、`kernel/records`、`kernel/acceptedformat`、`kernel/protocol` |
+| `services/actions/catalog` | 从记录类型声明生成动作目录；标准参数、角色与生命周期动作共享一个生成器 | `platform` |
+| `services/functions` | 函数制品、受控编译、隔离执行 | `platform`、actions/catalog、`kernel/records`、`kernel/acceptedformat`、`kernel/protocol` |
+| `services/data` | 连接、数据源、观测源、数据集、管道、调度、回写、匹配规则、血缘与标记推导 | `platform`、resources、actions/catalog、`kernel/records`、`kernel/acceptedformat`、`kernel/protocol` |
 | `services/automate` | 自动化与其运行 | `platform`、actions、`kernel/records`、`kernel/acceptedformat`、`kernel/protocol` |
 | `services/apps` | Workshop 模块与页面运行；页面与应用 authoring | `platform`、objects、actions、ontology、resources/publication、`kernel/records`、`kernel/acceptedformat`、`kernel/protocol` |
 | `services/work` | 工作项、通知与投递 | `platform`、actions、`kernel/records`、`kernel/acceptedformat`、`kernel/protocol` |
@@ -73,6 +74,7 @@ POST /v1/submissions
 ```
 
 - 拥有者只返回编辑与意图，不直接写存储；应用发生在提交之后、且只从已提交字节解码。
+- `ActionType` 的状态条件、函数与属性规则在私有决定内求值。收据规则与副作用声明在私有记录准备后生成附加编辑和派发意图，一并封存进接受结果；外部派发沿既有提交后机制执行。
 - 成员提交只有一个入口（准入、映像、路由与诊断），已在范围内的决定只有一个入口；可选项各经一个选项结构传入；不按参数组合分出多层入口。
 - 幂等只判定两处：读取映像上的预检（重复请求不必排队）与车道内的提交（权威）。接受路径的其余步骤信任这两处的结论，不再查询。
 - 应用结果与提交字节不一致时隔离租户，停止写入，等待运维处理。隔离只在 7.5 列出的两种不一致上触发；其他错误是拒绝或运行失败，不隔离租户。
@@ -160,7 +162,7 @@ type DraftClosure struct { Requires []DraftRef; Prior, Next platform.AssetRef; H
 - 提交入口（7.3）：重放与快照校验（`host/replay.go`、`host/snapshot.go`）不经 `kernel.Committed.Prior` 而各自查询先前结果。
 - 服务位置（7.2）：分支读取、保存、检查、重检、提议、合并与编译编排已在 `services/resources/merge`；受管产品包的准备、安装闭包、生命周期影响、组合选择与所有权投影已在 `services/devops/packages`；知识检索、智能体观测与调度、模型网关运行时已在 `services/ai`；宿主只保留 HTTP、读取范围、暂存决定与接受提交。
 - 服务注册（7.2、7.7）：`platform/app.go` 的 `Runtime` 接口有约 44 个方法并嵌入 8 个接口；暂存决定能力（含保留发布执行的决定目录）经 `Runtime.StagedDecision()` 句柄取得；接受状态、输入、资产、副作用回调、控制面身份与构建草稿能力已在 `host/owner_roles.go` 按拥有者登记，分叉映像时一并重建；其余可选能力仍经约 195 处类型断言探测（形状棘轮的 `capabilityProbes`）；约 200 个函数用可变参数表达可选项。
-- `platform` 不是叶层 SDK（7.2）：页面声明集中在 `page_types.go`，模型字段解析归 `services/apps/pages`；其余 `page_*` 仍含页面求值与校验，`dependencies*`、`revision*` 仍调用这些实现；另有实体—转换—业务事务模型（`entity.go`、`transaction.go`，见 [6-domain 现存差距](../6-domain/README.md#现存差距)）。
+- `platform` 不是叶层 SDK（7.2）：页面声明集中在 `page_types.go`，模型字段解析归 `services/apps/pages`；其余 `page_*` 仍含页面求值与校验，`dependencies*`、`revision*` 仍调用这些实现；记录类型描述、业务事务及部分规则实现也仍在 SDK（`entity_describe.go`、`transaction*.go`、`rules*.go`，见 [6-domain 现存差距](../6-domain/README.md#现存差距)）。
 - `services/resources/authoring`（包名 `build`）仍编辑多类资源，具体编辑能力归位见路线图 U5；动作执行已在 `services/actions`，`platform` 提供 SDK 契约，`host` 负责装配。
 - 发布路径（7.5.1）：action-type 的发布校验、冻结、闭包、安装和冻结定义读取已由本体服务提供并由宿主登记；object 与 versioned 族（agent、evaluation-set、test-plan、compute、sample-set）仍在 `services/resources/authoring` 手写发布步骤，definition 族仍在 `build_kinds.go`。apps、function、automation 与本体的类型已直接引用拥有服务。
 - 包名与目录名不一致 14 处（7.7）：`services/apps`→applications、`services/automate/runtime`→automation、`services/ai/runtime` 与 `ai/evaluation`→agents、`ai/retrieval` 与 `ai/sources`→knowledge、`ai/gateway`→aigateway、`ai/state`→aistate、`services/data/blobs`→resources、`data/transform`→integrations、`services/functions/runtime`→compute、`services/resources/authoring`→build、`resources/merge`→branches、`services/work/activity`→relations。

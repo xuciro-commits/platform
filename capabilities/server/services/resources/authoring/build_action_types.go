@@ -15,12 +15,20 @@ func (b *Build) actionTypeEntity() platform.Entity {
 		Scope:    platform.Scope{Default: platform.ScopeNone, Levels: map[string]string{Builder: platform.ScopeTenant}},
 		Standard: platform.Standard{Create: true, Edit: true, Archive: true, Roles: []string{Builder}, Capability: "objects"},
 		Lifecycle: &platform.Lifecycle{Field: "state", Initial: "draft", States: []platform.State{{Name: "draft", Title: "Draft"}, {Name: "published", Title: "Published"}},
-			Transitions: []platform.Transition{{Name: "publish", Title: "Publish", Description: "Retain this action definition for an object publication.", Roles: []string{Builder}, Capability: "objects", From: []string{"draft", "published"}, To: []string{"published"}, Payload: []platform.Field{},
-				Do: func(c platform.Caller, record any, _ json.RawMessage, _ time.Time) *platform.Error {
+			Actions: []platform.ActionType{{
+				Name:        "publish",
+				Title:       "Publish",
+				Description: "Retain this action definition for an object publication.",
+				Roles:       []string{Builder},
+				Capability:  "objects",
+				Parameters:  []platform.Field{},
+				Criteria:    platform.ActionCriteria{State: &platform.FieldCondition{Field: "state", In: []string{"draft", "published"}}},
+				Rules: []platform.ActionRule{{Function: func(c platform.Caller, record any, _ json.RawMessage, _ time.Time) *platform.Error {
 					return ontology.PublishActionType(c, record.(*ontology.ActionType), b.bindObjectActions, func(object ontology.Object) error {
 						return b.Check(object, object.ID, c.Rules())
 					})
-				}}}},
+				}}, {Edit: &platform.PropertyRule{Field: "state", Allowed: []string{"published"}}}},
+			}}},
 		Validate: func(c platform.Caller, value any) *platform.Error {
 			if c.Replaying {
 				return nil

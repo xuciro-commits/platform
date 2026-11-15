@@ -164,5 +164,5 @@ read-when: 新增或改变资源类型、对象模型、动作、函数、自动
 ## 现存差距
 
 - 授权上下文的来源装配仍在宿主，尚未收进 `services/security` 的窄端口；重放继续显式使用 `NativeRules`。
-- 两套模型（R8，`capabilities/server/platform`）：`entity.go` 的 `Entity` / `Transition`、`transaction.go` 的 `BusinessTxn` / `TxnPost` / `TxnJournal` 是与资源—对象—动作并行的模型；规则引擎已在 `services/actions`（`platform.Authority` 的实现），但仍按 `Entity` / `Transition` 执行，租户动作也先编译成 `Transition`；会计形状的类型位于平台（违反 2-product R4）。
+- 动作模型（R8、6.7）：生命周期动作已统一为 `platform.ActionType`；标准增改归档仍走独立执行路径（U1.6）。业务事务仍是 `platform.BusinessTxn` 及 `TxnPost` / `TxnJournal`，作为事务规则执行；其会计形状与实现尚未归唯一拥有者（U2，违反 2-product R4）。
 - 内置对象类型（6.10）：工作项、审批与通知由 `services/work` 的 Go 代码定义，不是系统产品包中的本体资源（2-product R8）。

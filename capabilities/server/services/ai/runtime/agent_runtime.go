@@ -8,6 +8,7 @@ import (
 	"maps"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformserver/platform"
+	actioncatalog "platformserver/services/actions/catalog"
 	"platformserver/services/ai/evaluation"
 	"slices"
 	"strings"
@@ -41,7 +42,7 @@ func (a *Agents) AttachAgent(h platform.AgentHost) { a.host = h }
 func New(tenant string, authorities platform.Authorities) *Agents {
 	var actions []platform.Action
 	for _, e := range agentEntities() {
-		actions = append(actions, platform.EntityActions(e)...)
+		actions = append(actions, actioncatalog.EntityActions(e)...)
 	}
 	actions = append(actions,
 		platform.Action{Schema: platform.SchemaRunStart, Target: platform.RunType, Capability: "runs", Title: "Ask an agent", Roles: []string{platform.AnyMember},

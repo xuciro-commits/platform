@@ -52,9 +52,27 @@ func (o *Owner) connectionEntity() platform.Entity {
 		Scope:       integrationScope(),
 		Standard:    integrationStandard(),
 		Lifecycle: &platform.Lifecycle{Field: "state", Initial: "draft", States: []platform.State{{Name: "draft", Title: "Draft", Tone: "warning"}, {Name: "ready", Title: "Ready", Tone: "success"}},
-			Transitions: []platform.Transition{
-				{Name: "check", Title: "Check", Description: "Reach the system once from the host and keep what answered.", From: []string{"draft", "ready"}, To: []string{"draft"}, Roles: []string{Builder, Integrator}, Capability: "integrations", Payload: []platform.Field{}, Do: o.checkConnection},
-				{Name: "retire", Title: "Retire", Description: "Stop sources from using the connection; the definition stays.", From: []string{"ready"}, To: []string{"draft"}, Roles: []string{Builder, Integrator}, Capability: "integrations", Payload: []platform.Field{}}}}}
+			Actions: []platform.ActionType{
+				{
+					Name:        "check",
+					Title:       "Check",
+					Description: "Reach the system once from the host and keep what answered.",
+					Roles:       []string{Builder, Integrator},
+					Capability:  "integrations",
+					Parameters:  []platform.Field{},
+					Criteria:    platform.ActionCriteria{State: &platform.FieldCondition{Field: "state", In: []string{"draft", "ready"}}},
+					Rules:       []platform.ActionRule{{Function: o.checkConnection}, {Edit: &platform.PropertyRule{Field: "state", Allowed: []string{"draft"}}}},
+				},
+				{
+					Name:        "retire",
+					Title:       "Retire",
+					Description: "Stop sources from using the connection; the definition stays.",
+					Roles:       []string{Builder, Integrator},
+					Capability:  "integrations",
+					Parameters:  []platform.Field{},
+					Criteria:    platform.ActionCriteria{State: &platform.FieldCondition{Field: "state", In: []string{"ready"}}},
+					Rules:       []platform.ActionRule{{Edit: &platform.PropertyRule{Field: "state", Allowed: []string{"draft"}}}},
+				}}}}
 }
 
 func connectionActions() []platform.Action {

@@ -8,6 +8,7 @@ import (
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformserver/platform"
+	actioncatalog "platformserver/services/actions/catalog"
 	ontology "platformserver/services/ontology"
 )
 
@@ -17,7 +18,7 @@ func objectProvisions(object ontology.Object, entity platform.Entity) []platform
 	if len(object.Protocols) == 0 {
 		return nil
 	}
-	catalog := platform.NewCatalog(platform.EntityActions(entity)...)
+	catalog := platform.NewCatalog(actioncatalog.EntityActions(entity)...)
 	var out []platform.Provision
 	for _, declaration := range object.Protocols {
 		p := platform.Provision{Protocol: platform.Protocol{Name: declaration.Name, Version: declaration.Version, Reads: slices.Clone(declaration.Reads)}, Actions: map[string]string{}, Reads: map[string]string{}, Events: map[string]string{}}
@@ -77,7 +78,7 @@ func (b *Build) checkObjectProtocols(object ontology.Object) error {
 	if _, err := platform.Describe(ID, entity, func(reflect.Type) string { return "?" }); err != nil {
 		return err
 	}
-	catalog := platform.NewCatalog(platform.EntityActions(entity)...)
+	catalog := platform.NewCatalog(actioncatalog.EntityActions(entity)...)
 	generated := objectProvisions(draft, entity)
 	seen := map[string]bool{}
 	for i, declaration := range object.Protocols {

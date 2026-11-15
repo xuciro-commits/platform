@@ -84,22 +84,41 @@ func Describe(app string, e Entity, typeOf func(reflect.Type) string) (EntityInf
 			return EntityInfo{}, fmt.Errorf("entity %s: the lifecycle needs a read-only text or choice status field, unique states and an initial state among them", e.Type)
 		}
 		info.Lifecycle = &LifecycleInfo{Field: l.Field, Initial: l.Initial, States: l.States, Transitions: []TransitionInfo{}}
-		for i, t := range l.Transitions {
-			if to, input := transactionDestination(e.Type, l.Field, t.Txn, t.Payload); len(to) > 0 {
-				t.To, t.ToInput = to, input
-			}
-			ends := append(slices.Clone(t.From), t.To...)
-			if t.Name == "" || len(t.From) == 0 || len(t.To) == 0 || slices.ContainsFunc(ends, func(s string) bool { return !states[s] }) ||
-				slices.ContainsFunc(l.Transitions[:i], func(x Transition) bool { return x.Name == t.Name }) || t.Name == "create" || t.Name == "edit" || t.Name == "archive" {
+		for i, t := range l.Actions {
+			if t.Criteria.State == nil || t.Criteria.State.Field != l.Field {
 				return EntityInfo{}, fmt.Errorf("entity %s: transition %q needs a unique name and states of the lifecycle", e.Type, t.Name)
 			}
-			if t.ToInput != "" {
-				index := slices.IndexFunc(t.Payload, func(f Field) bool { return f.Name == t.ToInput })
+			from := t.Criteria.State.In
+			var to []string
+			var inputName string
+			hasFunction, hasTransaction := false, false
+			for _, rule := range t.Rules {
+				if rule.Function != nil {
+					hasFunction = true
+				}
+				if rule.Edit != nil && rule.Edit.Field == l.Field {
+					to, inputName = rule.Edit.Allowed, rule.Edit.Parameter
+				}
+				if rule.Transaction != nil {
+					hasTransaction = rule.Transaction.Spec != nil && rule.Transaction.Run != nil
+					to = slices.Clone(from)
+					if dest, input := transactionDestination(e.Type, l.Field, rule.Transaction.Spec, t.Parameters); len(dest) > 0 {
+						to, inputName = dest, input
+					}
+				}
+			}
+			ends := append(slices.Clone(from), to...)
+			if t.Name == "" || len(from) == 0 || len(to) == 0 || slices.ContainsFunc(ends, func(s string) bool { return !states[s] }) ||
+				slices.ContainsFunc(l.Actions[:i], func(x ActionType) bool { return x.Name == t.Name }) || t.Name == "create" || t.Name == "edit" || t.Name == "archive" {
+				return EntityInfo{}, fmt.Errorf("entity %s: transition %q needs a unique name and states of the lifecycle", e.Type, t.Name)
+			}
+			if inputName != "" {
+				index := slices.IndexFunc(t.Parameters, func(f Field) bool { return f.Name == inputName })
 				var input Field
 				if index >= 0 {
-					input = t.Payload[index]
+					input = t.Parameters[index]
 				}
-				if index < 0 || input.Type != "string" || !input.Required || input.Ref != "" || len(input.Choices) != len(t.To) || slices.ContainsFunc(t.To, func(state string) bool { return !slices.Contains(input.Choices, state) }) || t.Do == nil && (t.Txn == nil || t.ApplyTxn == nil) {
+				if index < 0 || input.Type != "string" || !input.Required || input.Ref != "" || len(input.Choices) != len(to) || slices.ContainsFunc(to, func(state string) bool { return !slices.Contains(input.Choices, state) }) || !hasFunction && !hasTransaction {
 					return EntityInfo{}, fmt.Errorf("entity %s: transition %s needs its required destination choice and original action", e.Type, t.Name)
 				}
 			}
@@ -107,7 +126,7 @@ func Describe(app string, e Entity, typeOf func(reflect.Type) string) (EntityInf
 			if title == "" {
 				title = strings.ToUpper(t.Name[:1]) + t.Name[1:]
 			}
-			info.Lifecycle.Transitions = append(info.Lifecycle.Transitions, TransitionInfo{Name: t.Name, Schema: e.Type + "." + t.Name, Title: title, From: t.From, To: t.To, ToInput: t.ToInput})
+			info.Lifecycle.Transitions = append(info.Lifecycle.Transitions, TransitionInfo{Name: t.Name, Schema: e.Type + "." + t.Name, Title: title, From: from, To: to, ToInput: inputName})
 		}
 	}
 	for _, x := range [][2]any{{e.Standard.Create, ".create"}, {e.Standard.Edit, ".edit"}, {e.Standard.Archive, ".archive"}} {
@@ -158,130 +177,6 @@ func ApplyFieldAliases(info EntityInfo, value reflect.Value) {
 
 func (info EntityInfo) HasReadSources() bool {
 	return len(info.Derived) > 0 || slices.ContainsFunc(info.Fields, func(field FieldInfo) bool { return field.AliasOf != "" })
-}
-
-func payloadColumns(columns []FieldInfo) []Field {
-	if len(columns) == 0 {
-		return nil
-	}
-	out := make([]Field, 0, len(columns))
-	for _, column := range columns {
-		if column.ReadOnly {
-			continue
-		}
-		typ := map[string]string{"integer": "integer", "decimal": "number", "boolean": "boolean", "date": "date", "datetime": "datetime",
-			"references": "string[]", "tags": "string[]", "money": "money", "attachment": "attachment", "json": "json", "lines": "lines"}[column.Type]
-		if typ == "" {
-			typ = "string"
-		}
-		field := Field{Name: column.Name, Type: typ, Required: column.Required && column.When == nil, Description: column.Title,
-			Choices: column.Choices, Constraints: column.Constraints, Range: column.Range, Fields: payloadColumns(column.Fields)}
-		if column.Ref == "enterprise.element" {
-			field.Ref, field.Stereotype, field.Stereotypes = column.Ref, column.Stereotype, slices.Clone(column.Stereotypes)
-		}
-		out = append(out, field)
-	}
-	return out
-}
-
-func EntityActions(e Entity) []Action {
-	info, err := Describe("", e, func(reflect.Type) string { return "?" })
-	if err != nil {
-		panic(err)
-	}
-	var fields, editable []Field
-	for _, f := range info.Fields {
-		if f.ReadOnly || f.Aside {
-			continue
-		}
-		typ := map[string]string{"integer": "integer", "decimal": "number", "boolean": "boolean", "date": "date", "datetime": "datetime",
-			"references": "string[]", "tags": "string[]", "money": "money", "attachment": "attachment", "json": "json", "lines": "lines"}[f.Type]
-		if typ == "" {
-			typ = "string"
-		}
-		description := f.Title
-		if f.Help != "" {
-			description += ": " + f.Help
-		}
-		if len(f.Choices) > 0 {
-			description += " (" + strings.Join(f.Choices, ", ") + ")"
-		}
-		if f.Example != "" {
-			description += ", e.g. " + f.Example
-		}
-		field := Field{Name: f.Name, Type: typ, Required: f.Required && f.When == nil, Description: description, Choices: f.Choices, Constraints: f.Constraints, ValueType: f.ValueType, Range: f.Range, Group: f.Group,
-			Fields: payloadColumns(f.Fields)}
-		if f.Ref == "enterprise.element" {
-			field.Ref, field.Stereotype, field.Stereotypes = f.Ref, f.Stereotype, slices.Clone(f.Stereotypes)
-		}
-		fields = append(fields, field)
-		field.Required = false
-		editable = append(editable, field)
-	}
-	var out []Action
-	capability := e.Standard.Capability
-	if capability == "" {
-		capability = e.Type
-	}
-	if e.Standard.Create {
-		if e.CreateTxn != nil {
-			for _, step := range e.CreateTxn.Steps {
-				if step.Kind == "update" && step.Target.Type == e.Type && step.Target.ID == "$subject" && step.When == nil {
-					for _, assignment := range step.Changes {
-						for i := range fields {
-							if fields[i].Name == assignment.Field {
-								fields[i].Required = false
-							}
-						}
-					}
-				}
-			}
-		}
-		out = append(out, Action{Schema: e.Type + ".create", Target: e.Type, New: true, Capability: capability, Title: "Create " + strings.ToLower(info.Title),
-			Description: "Create " + article(info.Title) + ".", Payload: fields, Roles: e.Standard.roles("create")})
-	}
-	if e.Standard.Edit {
-		out = append(out, Action{recordEdit: true, Schema: e.Type + ".edit", Target: e.Type, Capability: capability, Title: "Edit " + strings.ToLower(info.Title),
-			Description: "Change fields of " + article(info.Title) + "; fields left out keep their value.", Payload: editable, Roles: e.Standard.roles("edit")})
-	}
-	if e.Standard.Archive {
-		out = append(out, Action{Schema: e.Type + ".archive", Target: e.Type, Capability: capability, Title: "Archive " + strings.ToLower(info.Title),
-			Description: "Archive " + article(info.Title) + ": it leaves lists but stays referenced and in history.", Payload: []Field{}, Roles: e.Standard.roles("archive")})
-	}
-	if e.Lifecycle != nil {
-		for i, t := range e.Lifecycle.Transitions {
-			c := t.Capability
-			if c == "" {
-				c = e.Type
-			}
-			payload := t.Payload
-			if payload == nil {
-				payload = []Field{}
-			}
-			description := t.Description
-			if description == "" {
-				description = fmt.Sprintf("Move %s from %s to %s.", article(info.Title), strings.Join(t.From, " or "), strings.Join(t.To, " or "))
-			}
-			out = append(out, Action{Schema: e.Type + "." + t.Name, Target: e.Type, Capability: c, Title: info.Lifecycle.Transitions[i].Title,
-				Description: description, Payload: payload, Roles: t.Roles, Adoption: t.Adoption, Approval: t.Approval, DeferRequired: t.DeferRequired, ConfirmationOnly: t.ConfirmationOnly})
-			if t.Approval != nil && t.Approval.Pending != "" {
-				for _, m := range [][2]string{{ApprovalHeld, "Hold for approval"}, {ApprovalRejected, "Mark rejected"}, {ApprovalReturned, "Return from approval"}} {
-					suffix, title := m[0], m[1]
-					out = append(out, Action{Schema: e.Type + "." + t.Name + suffix, Target: e.Type, Capability: c, Title: title,
-						Description: "Moves the record while its approval runs; only the approval takes it.", Payload: []Field{}, Automation: true})
-				}
-			}
-		}
-	}
-	return out
-}
-
-func article(title string) string {
-	t := strings.ToLower(title)
-	if t != "" && strings.ContainsRune("aeiou", rune(t[0])) {
-		return "an " + t
-	}
-	return "a " + t
 }
 
 func describeFields(e Entity, t reflect.Type, from int, typeOf func(reflect.Type) string) ([]FieldInfo, error) {

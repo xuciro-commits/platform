@@ -121,10 +121,10 @@ func (b *Build) prepareProposal(c platform.Caller, r *pb.ChangeRecord, txn *plat
 		return nil, nil
 	}
 	name := strings.TrimPrefix(r.GetSubmission().GetSchema().GetName(), txn.Subject+".")
-	var action *platform.Transition
-	for i := range entity.Lifecycle.Transitions {
-		if entity.Lifecycle.Transitions[i].Name == name {
-			action = &entity.Lifecycle.Transitions[i]
+	var action *platform.ActionType
+	for i := range entity.Lifecycle.Actions {
+		if entity.Lifecycle.Actions[i].Name == name {
+			action = &entity.Lifecycle.Actions[i]
 			break
 		}
 	}
@@ -182,7 +182,7 @@ func (b *Build) prepareProposal(c platform.Caller, r *pb.ChangeRecord, txn *plat
 			return fail("This proposal needs its designated reviewer or approval checkpoint")
 		}
 	}
-	if err := binding.CheckMapping(run.Contract, action.Payload); err != nil {
+	if err := binding.CheckMapping(run.Contract, action.Parameters); err != nil {
 		return fail(err.Error())
 	}
 	amendments := map[string]json.RawMessage{}

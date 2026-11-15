@@ -111,10 +111,18 @@ func (k *resourceKind[T, D]) entity(b *Build) platform.Entity {
 		Scope:       platform.Scope{Default: platform.ScopeNone, Levels: map[string]string{Builder: platform.ScopeTenant}},
 		Standard:    platform.Standard{Create: true, Edit: true, Archive: true, Roles: []string{Builder}, Capability: k.capability},
 		Lifecycle: &platform.Lifecycle{Field: "state", Initial: "draft", States: []platform.State{{Name: "draft", Title: "Draft", Tone: "warning"}, {Name: "published", Title: "Published", Tone: "success"}},
-			Transitions: []platform.Transition{{Name: "publish", Title: "Publish", Description: k.transition, From: []string{"draft", "published"}, To: []string{"published"}, Roles: []string{Builder}, Capability: k.capability, Payload: []platform.Field{},
-				Do: func(c platform.Caller, record any, _ json.RawMessage, _ time.Time) *platform.Error {
+			Actions: []platform.ActionType{{
+				Name:        "publish",
+				Title:       "Publish",
+				Description: k.transition,
+				Roles:       []string{Builder},
+				Capability:  k.capability,
+				Parameters:  []platform.Field{},
+				Criteria:    platform.ActionCriteria{State: &platform.FieldCondition{Field: "state", In: []string{"draft", "published"}}},
+				Rules: []platform.ActionRule{{Function: func(c platform.Caller, record any, _ json.RawMessage, _ time.Time) *platform.Error {
 					return k.publish(b, c, record)
-				}}}}}
+				}}, {Edit: &platform.PropertyRule{Field: "state", Allowed: []string{"published"}}}},
+			}}}}
 }
 
 func (k *resourceKind[T, D]) publish(b *Build, c platform.Caller, record any) *platform.Error {

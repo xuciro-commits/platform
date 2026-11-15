@@ -27,9 +27,12 @@ func (b *Build) transactionSequences() []platform.Sequence {
 			})
 		}
 		if life := b.installed[typ].Lifecycle; life != nil {
-			for _, transition := range life.Transitions {
-				if transition.Txn != nil {
-					platform.WalkBusinessTxn(transition.Txn, func(step platform.TxnStep) {
+			for _, action := range life.Actions {
+				for _, rule := range action.Rules {
+					if rule.Transaction == nil || rule.Transaction.Spec == nil {
+						continue
+					}
+					platform.WalkBusinessTxn(rule.Transaction.Spec, func(step platform.TxnStep) {
 						if step.Sequence != nil {
 							byName[step.Sequence.Name] = *step.Sequence
 						}

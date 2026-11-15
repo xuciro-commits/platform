@@ -44,14 +44,7 @@ read-when: 每批开始（选当前批次）与结束（删除已完成条目、
 
 工单按技能 `platform-loop` 执行（分工见 [method 工单循环](method.md#工单循环)）：`[难]` 给强模型（方向内的设计、内核与语义），`[易]` 给执行模型（方向已定的搬移、改名、重复样板），`[独占]` 行执行时不得有别的行在进行中。每行的“方向”已由主会话定下，不重议；“验证”是该技能中的档位（V1 基本、V2 路径、V3 全量、V4 并发、W 前端）。同一编号下按顺序做；不同编号之间只受“前置”约束。
 
-- [ ] U1 动作引擎归位。已完成（U1.1–U1.4）：规则引擎在 `services/actions/authority*.go`，服务、内核与宿主只经 `platform.Authority` 使用，由宿主经 `platform.Authorities` 注入；协议部件在 `kernel/protocol`，变更日志与归档通过 `platform` 接口解耦；`Error` 归 `platform`，`contract/go` 只含协议生成代码。
-  - [ ] U1.5 `[难]` 转换即动作类型。（进行中：Terra 6.1 Max，Deepseek V4.1 Flash Max 协作声明迁移，2026-11-14）
-    - 方向：删除 `platform.Transition`；`platform.Lifecycle.Transitions` 改为 `Actions []ActionType`。声明部分保留名称、标题、说明、角色、能力、审批、提议采用和延迟必填，`Payload` 改为 `Parameters`。`ActionCriteria.State` 复用既有 `FieldCondition` 生成并通过同一 Expr 引擎执行状态集合条件；`Business` 保留原 `RuleCriteria`。原生状态检查读取动作已授权的原状态，不新增字段读取授权；事务 Guard 在原准备位置只执行一次，保留原错误优先级。
-    - 规则：`ActionRule` 是互斥字段表（`Edit`、`Function`、`Transaction`、`Receipt`）；属性规则保留字段、允许值和参数声明，事务规则保留既有事务与接受回调。函数先求值，再按原状态变化规则执行属性修改；事务继续自行修改状态。收据规则中的权威写入仍在私有决定中、最终封存前完成。`Effects` 使用原生回调切片，仅准备接受后派发的意图；Work 的 cancel/complete 通知闭环使用它，opened/ended 的对象写入和再次提交归收据规则。不把旧 After 机械搬到最终提交之后。
-    - 范围：22 份声明中，20 份规则已定的文件机械迁移；Work 和 `build_actions.go` 连同执行器、审批、事务调用和页面预检由强模型施工。`lifecycle()` 直接产出 ActionType；`TransitionInfo` JSON 与 58 份内置 CodeObjectDescriptor 字节不变，原 Do/After 标志从函数、收据和副作用规则推导；`make contract` 无差异，前端不动。
-    - 不做：不动 `Standard` 的增改归档（U1.6）；不动 `BusinessTxn` 内部（U2）；不改 `Entity` 的名字（U6.2）。
-    - 完成：`grep -rn 'platform\.Transition\b' capabilities/server` 为空；6-domain 差距“两套模型”改写。
-    - 验证：V1、V3、V4。
+- [ ] U1 动作引擎归位。已完成（U1.1–U1.5）：规则引擎在 `services/actions/authority*.go`，服务、内核与宿主只经 `platform.Authority` 使用，由宿主经 `platform.Authorities` 注入；协议部件在 `kernel/protocol`，变更日志与归档通过 `platform` 接口解耦；`Error` 归 `platform`，`contract/go` 只含协议生成代码；生命周期声明统一为 `ActionType`，状态条件、规则、收据与副作用仍在原接受阶段执行，动作目录生成归 `services/actions/catalog`。
   - [ ] U1.6 `[难]` 标准增改归档走同一执行器。前置 U1.5。
     - 方向：`standard()` 的 create、edit、archive 表达为执行器内置的三种动作类型（规则分别是创建、修改、删除对象）；`Generated` 只剩“找到动作类型 → 执行”，`ApplyTxnRecord` 复用同一段；删除两条路径里重复的校验。
     - 完成：`services/actions/authority*.go` 中没有 `standard` 与 `transition` 两个并行函数；行为不变（验收不改断言）。

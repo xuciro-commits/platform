@@ -148,7 +148,7 @@ func inputFieldSchema(field Field, columns []FieldInfo, roles []string) map[stri
 }
 
 type Action struct {
-	recordEdit       bool
+	RecordEdit       bool              `json:"-"`
 	Adoption         *ProposalAdoption `json:"adoption,omitempty"`
 	SchemaVersion    *SchemaVersion    `json:"schemaVersion,omitempty"`
 	Schema           string            `json:"schema"`

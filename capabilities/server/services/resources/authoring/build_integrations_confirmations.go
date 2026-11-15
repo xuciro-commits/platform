@@ -242,13 +242,15 @@ func (b *Build) consumedProtocols() []platform.Consumption {
 		if entity.Lifecycle == nil {
 			continue
 		}
-		for _, action := range entity.Lifecycle.Transitions {
-			if action.Txn == nil || action.Txn.Confirmation == nil {
-				continue
-			}
-			for _, p := range action.Txn.Confirmation.Parties {
-				if p.Protocol != "" && !slices.ContainsFunc(out, func(c platform.Consumption) bool { return c.Protocol == p.Protocol }) {
-					out = append(out, platform.Consumption{Protocol: p.Protocol, Optional: true})
+		for _, action := range entity.Lifecycle.Actions {
+			for _, rule := range action.Rules {
+				if rule.Transaction == nil || rule.Transaction.Spec == nil || rule.Transaction.Spec.Confirmation == nil {
+					continue
+				}
+				for _, p := range rule.Transaction.Spec.Confirmation.Parties {
+					if p.Protocol != "" && !slices.ContainsFunc(out, func(c platform.Consumption) bool { return c.Protocol == p.Protocol }) {
+						out = append(out, platform.Consumption{Protocol: p.Protocol, Optional: true})
+					}
 				}
 			}
 		}

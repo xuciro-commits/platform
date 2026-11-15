@@ -104,20 +104,34 @@ func memoryEntity() platform.Entity {
 		Lifecycle: &platform.Lifecycle{Field: "state", Initial: "proposed",
 			States: []platform.State{{Name: "proposed", Title: "Proposed", Tone: "warning"}, {Name: "active", Title: "Remembered", Tone: "success"},
 				{Name: "forgotten", Title: "Forgotten", Tone: "neutral"}},
-			Transitions: []platform.Transition{
-				{Name: "keep", Title: "Keep", From: []string{"proposed", "active"}, To: []string{"active"}, Roles: people, Capability: "memory",
-					Description: "Keep a memory for good: an agent administrator any, a person those about them.", Do: func(c platform.Caller, record any, _ json.RawMessage, _ time.Time) *platform.Error {
+			Actions: []platform.ActionType{
+				{
+					Name:        "keep",
+					Title:       "Keep",
+					Roles:       people,
+					Capability:  "memory",
+					Description: "Keep a memory for good: an agent administrator any, a person those about them.",
+					Criteria:    platform.ActionCriteria{State: &platform.FieldCondition{Field: "state", In: []string{"proposed", "active"}}},
+					Rules: []platform.ActionRule{{Function: func(c platform.Caller, record any, _ json.RawMessage, _ time.Time) *platform.Error {
 						m := record.(*platform.Memory)
 						if err := mayRemember(c, *m); err != nil {
 							return err
 						}
 						m.Expires = time.Time{}
 						return nil
-					}},
-				{Name: "forget", Title: "Forget", From: []string{"proposed", "active"}, To: []string{"forgotten"}, Roles: people, Capability: "memory",
-					Description: "Forget a memory: an agent administrator any, a person those about them.", Do: func(c platform.Caller, record any, _ json.RawMessage, _ time.Time) *platform.Error {
+					}}, {Edit: &platform.PropertyRule{Field: "state", Allowed: []string{"active"}}}},
+				},
+				{
+					Name:        "forget",
+					Title:       "Forget",
+					Roles:       people,
+					Capability:  "memory",
+					Description: "Forget a memory: an agent administrator any, a person those about them.",
+					Criteria:    platform.ActionCriteria{State: &platform.FieldCondition{Field: "state", In: []string{"proposed", "active"}}},
+					Rules: []platform.ActionRule{{Function: func(c platform.Caller, record any, _ json.RawMessage, _ time.Time) *platform.Error {
 						return mayRemember(c, *record.(*platform.Memory))
-					}},
+					}}, {Edit: &platform.PropertyRule{Field: "state", Allowed: []string{"forgotten"}}}},
+				},
 			}}}
 }
 

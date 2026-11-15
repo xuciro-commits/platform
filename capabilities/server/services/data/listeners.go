@@ -58,12 +58,28 @@ func (o *Owner) listenerEntity() platform.Entity {
 			return nil
 		},
 		Lifecycle: &platform.Lifecycle{Field: "state", Initial: "draft", States: []platform.State{{Name: "draft", Title: "Draft", Tone: "warning"}, {Name: "published", Title: "Published", Tone: "success"}},
-			Transitions: []platform.Transition{
-				{Name: "publish", Title: "Publish", From: []string{"draft", "published"}, To: []string{"published"}, Roles: roles, Capability: "integrations", Payload: []platform.Field{}, Do: o.publishListener},
-				{Name: "pause", Title: "Pause", From: []string{"published"}, To: []string{"draft"}, Roles: roles, Capability: "integrations", Payload: []platform.Field{}, Do: func(_ platform.Caller, value any, _ json.RawMessage, _ time.Time) *platform.Error {
-					value.(*Listener).Enabled = false
-					return nil
-				}},
+			Actions: []platform.ActionType{
+				{
+					Name:       "publish",
+					Title:      "Publish",
+					Roles:      roles,
+					Capability: "integrations",
+					Parameters: []platform.Field{},
+					Criteria:   platform.ActionCriteria{State: &platform.FieldCondition{Field: "state", In: []string{"draft", "published"}}},
+					Rules:      []platform.ActionRule{{Function: o.publishListener}, {Edit: &platform.PropertyRule{Field: "state", Allowed: []string{"published"}}}},
+				},
+				{
+					Name:       "pause",
+					Title:      "Pause",
+					Roles:      roles,
+					Capability: "integrations",
+					Parameters: []platform.Field{},
+					Criteria:   platform.ActionCriteria{State: &platform.FieldCondition{Field: "state", In: []string{"published"}}},
+					Rules: []platform.ActionRule{{Function: func(_ platform.Caller, value any, _ json.RawMessage, _ time.Time) *platform.Error {
+						value.(*Listener).Enabled = false
+						return nil
+					}}, {Edit: &platform.PropertyRule{Field: "state", Allowed: []string{"draft"}}}},
+				},
 			}},
 	}
 }

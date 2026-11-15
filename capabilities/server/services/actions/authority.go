@@ -291,21 +291,27 @@ func (l *authority) Generated(c platform.Caller, s *pb.Submission, now time.Time
 		if e.Lifecycle == nil {
 			continue
 		}
-		if i := slices.IndexFunc(e.Lifecycle.Transitions, func(t platform.Transition) bool { return t.Name == verb }); i >= 0 {
-			tr := e.Lifecycle.Transitions[i]
+		if i := slices.IndexFunc(e.Lifecycle.Actions, func(t platform.ActionType) bool { return t.Name == verb }); i >= 0 {
+			tr := e.Lifecycle.Actions[i]
 			var failure *platform.Error
-			if tr.Txn != nil {
-				if !c.Staging() || c.Replaying || tr.ApplyTxn == nil || tr.After != nil {
+			for i, rule := range tr.Rules {
+				if rule.Transaction == nil {
+					continue
+				}
+				if !c.Staging() || c.Replaying || rule.Transaction.Run == nil || len(tr.Effects) > 0 || slices.ContainsFunc(tr.Rules, func(r platform.ActionRule) bool { return r.Receipt != nil }) {
 					return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Business transactions require a private accepted decision / 业务事务须经私有接受决策"), true
 				}
-				apply := tr.ApplyTxn
-				tr.ApplyTxn = func(c platform.Caller, r *pb.ChangeRecord, at time.Time) *platform.Error {
+				tr.Rules = slices.Clone(tr.Rules)
+				txn := *rule.Transaction
+				apply := txn.Run
+				txn.Run = func(c platform.Caller, r *pb.ChangeRecord, at time.Time) *platform.Error {
 					failure = apply(c, r, at)
 					return failure
 				}
+				tr.Rules[i].Transaction = &txn
 			}
 			record, err := l.Receive(c, s, now, allowed, func() (func(*pb.ChangeRecord), *platform.Error) {
-				return transition(c, e, tr, s, now)
+				return executeAction(c, e, tr, s, now)
 			})
 			if err == nil && failure != nil {
 				return nil, failure, true
@@ -314,14 +320,14 @@ func (l *authority) Generated(c platform.Caller, s *pb.Submission, now time.Time
 		}
 		for _, suffix := range []string{platform.ApprovalHeld, platform.ApprovalRejected, platform.ApprovalReturned} {
 			name, found := strings.CutSuffix(verb, suffix)
-			i := slices.IndexFunc(e.Lifecycle.Transitions, func(t platform.Transition) bool {
+			i := slices.IndexFunc(e.Lifecycle.Actions, func(t platform.ActionType) bool {
 				return t.Name == name && t.Approval != nil && t.Approval.Pending != ""
 			})
 			if !found || i < 0 {
 				continue
 			}
 			record, err := l.Receive(c, s, now, allowed, func() (func(*pb.ChangeRecord), *platform.Error) {
-				return transition(c, e, approvalMove(e.Lifecycle.Transitions[i], suffix), s, now)
+				return executeAction(c, e, approvalMove(e.Lifecycle.Actions[i], suffix), s, now)
 			})
 			return record, err, true
 		}
@@ -329,20 +335,26 @@ func (l *authority) Generated(c platform.Caller, s *pb.Submission, now time.Time
 	return nil, nil, false
 }
 
-func approvalMove(t platform.Transition, suffix string) platform.Transition {
-	back := t.From[0]
+func approvalMove(t platform.ActionType, suffix string) platform.ActionType {
+	from := t.Criteria.State.In
+	back := from[0]
+	destination := back
 	switch suffix {
 	case platform.ApprovalHeld:
-		return platform.Transition{Name: t.Name + suffix, From: t.From, To: []string{t.Approval.Pending}}
+		destination = t.Approval.Pending
 	case platform.ApprovalRejected:
 		if t.Approval.Rejected != "" {
-			back = t.Approval.Rejected
+			destination = t.Approval.Rejected
 		}
 	}
-	return platform.Transition{Name: t.Name + suffix, From: []string{t.Approval.Pending}, To: []string{back}}
+	if suffix != platform.ApprovalHeld {
+		from = []string{t.Approval.Pending}
+	}
+	return platform.ActionType{Name: t.Name + suffix, Criteria: platform.ActionCriteria{State: &platform.FieldCondition{Field: t.Criteria.State.Field, In: from}},
+		Rules: []platform.ActionRule{{Edit: &platform.PropertyRule{Field: t.Criteria.State.Field, Allowed: []string{destination}}}}}
 }
 
-func transition(c platform.Caller, e platform.Entity, t platform.Transition, s *pb.Submission, now time.Time) (func(*pb.ChangeRecord), *platform.Error) {
+func executeAction(c platform.Caller, e platform.Entity, t platform.ActionType, s *pb.Submission, now time.Time) (func(*pb.ChangeRecord), *platform.Error) {
 	if c.Runtime() == nil {
 		return nil, notFound()
 	}
@@ -362,19 +374,26 @@ func transition(c platform.Caller, e platform.Entity, t platform.Transition, s *
 	if v.Elem().Field(0).Interface().(platform.Record).Archived {
 		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "{record} is archived", id)
 	}
-	if !slices.Contains(t.From, from) && !pending {
-		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "{record} is {state}; {transition} takes it only from {states}", id, from, t.Name, strings.Join(t.From, ", "))
+	if !t.Criteria.State.Holds(from, c.Runtime().Rules()) && !pending {
+		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "{record} is {state}; {transition} takes it only from {states}", id, from, t.Name, strings.Join(t.Criteria.State.In, ", "))
 	}
-	if t.Do != nil {
-		if err := t.Do(c, v.Interface(), s.GetPayload(), now); err != nil {
-			return nil, err
+	for _, rule := range t.Rules {
+		if rule.Function != nil {
+			if err := rule.Function(c, v.Interface(), s.GetPayload(), now); err != nil {
+				return nil, err
+			}
 		}
-	}
-	if to := status.String(); t.Txn != nil {
-	} else if to == from && !slices.Contains(t.To, from) {
-		status.SetString(t.To[0])
-	} else if !slices.Contains(t.To, to) {
-		return nil, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
+		if rule.Edit == nil {
+			continue
+		}
+		field, _ := info.Field(rule.Edit.Field)
+		value := v.Elem().FieldByIndex(field.Index)
+		original := reflect.ValueOf(existing).FieldByIndex(field.Index).String()
+		if to := value.String(); to == original && !slices.Contains(rule.Edit.Allowed, original) {
+			value.SetString(rule.Edit.Allowed[0])
+		} else if !slices.Contains(rule.Edit.Allowed, to) {
+			return nil, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
+		}
 	}
 	if err := c.PrepareBusinessVersions(v.Interface(), now); err != nil {
 		return nil, err
@@ -397,15 +416,24 @@ func transition(c platform.Caller, e platform.Entity, t platform.Transition, s *
 		return nil, err
 	}
 	return func(r *pb.ChangeRecord) {
-		if t.Txn != nil {
-			t.ApplyTxn(c, r, now)
-			return
+		for _, rule := range t.Rules {
+			if rule.Transaction != nil {
+				rule.Transaction.Run(c, r, now)
+				return
+			}
 		}
 		c.Runtime().Put(c, r, value)
-		if t.After != nil {
+		for _, rule := range t.Rules {
+			if rule.Receipt != nil {
+				after := reflect.New(typ)
+				after.Elem().Set(reflect.ValueOf(value))
+				rule.Receipt(c, r, after.Interface(), now)
+			}
+		}
+		for _, effect := range t.Effects {
 			after := reflect.New(typ)
 			after.Elem().Set(reflect.ValueOf(value))
-			t.After(c, r, after.Interface(), now)
+			effect(c, r, after.Interface(), now)
 		}
 	}, nil
 }

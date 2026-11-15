@@ -10,6 +10,7 @@ import (
 	"io"
 	"maps"
 	"platformserver/platform"
+	actioncatalog "platformserver/services/actions/catalog"
 	"platformserver/services/ontology"
 	"platformserver/services/resources/publication"
 	"slices"
@@ -183,8 +184,16 @@ func (o *Owner) Entity() platform.Entity {
 		Scope:       platform.Scope{Default: platform.ScopeNone, Levels: map[string]string{"builder": platform.ScopeTenant}},
 		Standard:    platform.Standard{Create: true, Edit: true, Archive: true, Roles: []string{"builder"}, Capability: "functions"},
 		Lifecycle: &platform.Lifecycle{Field: "state", Initial: "draft", States: []platform.State{{Name: "draft", Title: "Draft", Tone: "warning"}, {Name: "published", Title: "Published", Tone: "success"}},
-			Transitions: []platform.Transition{{Name: "publish", Title: "Publish", Description: "Install this typed function as its next retained version.", From: []string{"draft", "published"}, To: []string{"published"}, Roles: []string{"builder"}, Capability: "functions", Payload: []platform.Field{},
-				Do: o.publish}}}}
+			Actions: []platform.ActionType{{
+				Name:        "publish",
+				Title:       "Publish",
+				Description: "Install this typed function as its next retained version.",
+				Roles:       []string{"builder"},
+				Capability:  "functions",
+				Parameters:  []platform.Field{},
+				Criteria:    platform.ActionCriteria{State: &platform.FieldCondition{Field: "state", In: []string{"draft", "published"}}},
+				Rules:       []platform.ActionRule{{Function: o.publish}, {Edit: &platform.PropertyRule{Field: "state", Allowed: []string{"published"}}}},
+			}}}}
 }
 
 func (o *Owner) CallEntity() platform.Entity {
@@ -198,8 +207,8 @@ func (o *Owner) CallEntity() platform.Entity {
 }
 
 func (o *Owner) Actions() []platform.Action {
-	actions := platform.EntityActions(o.Entity())
-	actions = append(actions, platform.EntityActions(o.CallEntity())...)
+	actions := actioncatalog.EntityActions(o.Entity())
+	actions = append(actions, actioncatalog.EntityActions(o.CallEntity())...)
 	actions = append(actions, functionCallActions(append(o.env.CallRoles(), platform.AnyMember))...)
 	return actions
 }

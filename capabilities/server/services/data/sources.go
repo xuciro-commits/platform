@@ -32,11 +32,47 @@ func (o *Owner) sourceEntity() platform.Entity {
 		Scope:    integrationScope(),
 		Standard: integrationStandard(),
 		Lifecycle: &platform.Lifecycle{Field: "state", Initial: "draft", States: []platform.State{{Name: "draft", Title: "Draft", Tone: "warning"}, {Name: "published", Title: "Published", Tone: "success"}},
-			Transitions: []platform.Transition{
-				{Name: "publish", Title: "Publish", Description: "Publish this source definition. Use Pull now to start it.", From: []string{"draft", "published"}, To: []string{"published"}, Roles: []string{Builder, Integrator}, Capability: "integrations", Payload: []platform.Field{}, Do: o.publishSource},
-				{Name: "pull", Title: "Pull now", Description: "Ask for one pull at the next tick.", From: []string{"published"}, To: []string{"published"}, Roles: []string{Builder, Integrator}, Capability: "integrations", Payload: []platform.Field{}, Do: o.requestPull},
-				{Name: "reset", Title: "Reset cursor", Description: "Forget the incremental cursor and pull everything at the next tick.", From: []string{"published"}, To: []string{"published"}, Roles: []string{Builder, Integrator}, Capability: "integrations", Payload: []platform.Field{}, Do: o.resetCursor},
-				{Name: "pause", Title: "Pause", Description: "Stop pulling; the mapping stays.", From: []string{"published"}, To: []string{"draft"}, Roles: []string{Builder, Integrator}, Capability: "integrations", Payload: []platform.Field{}}}}}
+			Actions: []platform.ActionType{
+				{
+					Name:        "publish",
+					Title:       "Publish",
+					Description: "Publish this source definition. Use Pull now to start it.",
+					Roles:       []string{Builder, Integrator},
+					Capability:  "integrations",
+					Parameters:  []platform.Field{},
+					Criteria:    platform.ActionCriteria{State: &platform.FieldCondition{Field: "state", In: []string{"draft", "published"}}},
+					Rules:       []platform.ActionRule{{Function: o.publishSource}, {Edit: &platform.PropertyRule{Field: "state", Allowed: []string{"published"}}}},
+				},
+				{
+					Name:        "pull",
+					Title:       "Pull now",
+					Description: "Ask for one pull at the next tick.",
+					Roles:       []string{Builder, Integrator},
+					Capability:  "integrations",
+					Parameters:  []platform.Field{},
+					Criteria:    platform.ActionCriteria{State: &platform.FieldCondition{Field: "state", In: []string{"published"}}},
+					Rules:       []platform.ActionRule{{Function: o.requestPull}, {Edit: &platform.PropertyRule{Field: "state", Allowed: []string{"published"}}}},
+				},
+				{
+					Name:        "reset",
+					Title:       "Reset cursor",
+					Description: "Forget the incremental cursor and pull everything at the next tick.",
+					Roles:       []string{Builder, Integrator},
+					Capability:  "integrations",
+					Parameters:  []platform.Field{},
+					Criteria:    platform.ActionCriteria{State: &platform.FieldCondition{Field: "state", In: []string{"published"}}},
+					Rules:       []platform.ActionRule{{Function: o.resetCursor}, {Edit: &platform.PropertyRule{Field: "state", Allowed: []string{"published"}}}},
+				},
+				{
+					Name:        "pause",
+					Title:       "Pause",
+					Description: "Stop pulling; the mapping stays.",
+					Roles:       []string{Builder, Integrator},
+					Capability:  "integrations",
+					Parameters:  []platform.Field{},
+					Criteria:    platform.ActionCriteria{State: &platform.FieldCondition{Field: "state", In: []string{"published"}}},
+					Rules:       []platform.ActionRule{{Edit: &platform.PropertyRule{Field: "state", Allowed: []string{"draft"}}}},
+				}}}}
 }
 
 func sourceActions() []platform.Action {

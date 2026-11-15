@@ -57,13 +57,35 @@ func (o *Owner) ApplicationEntity() platform.Entity {
 			States: []platform.State{{Name: "draft", Title: "Draft", Tone: "warning", Description: "Being put together; nobody has it yet."},
 				{Name: "published", Title: "Published", Tone: "success", Description: "In the launcher of everyone who may open one of its pages."},
 				{Name: "withdrawn", Title: "Entry withdrawn", Tone: "warning", Description: "The application entry is closed; retained definitions, records and independent tasks remain."}},
-			Transitions: []platform.Transition{
-				{Name: "withdraw", Title: "Withdraw application entry", From: []string{"published"}, To: []string{"withdrawn"}, Roles: []string{ontology.BuilderRole}, Capability: "applications", Payload: []platform.Field{}},
-				{Name: "restore", Title: "Restore application entry", From: []string{"withdrawn"}, To: []string{"published"}, Roles: []string{ontology.BuilderRole}, Capability: "applications", Payload: []platform.Field{}},
-				{Name: "publish", Title: "Hand it over", From: []string{"draft", "published", "withdrawn"}, To: []string{"published"},
-					Roles: []string{ontology.BuilderRole}, Capability: "applications", Payload: []platform.Field{},
+			Actions: []platform.ActionType{
+				{
+					Name:       "withdraw",
+					Title:      "Withdraw application entry",
+					Roles:      []string{ontology.BuilderRole},
+					Capability: "applications",
+					Parameters: []platform.Field{},
+					Criteria:   platform.ActionCriteria{State: &platform.FieldCondition{Field: "state", In: []string{"published"}}},
+					Rules:      []platform.ActionRule{{Edit: &platform.PropertyRule{Field: "state", Allowed: []string{"withdrawn"}}}},
+				},
+				{
+					Name:       "restore",
+					Title:      "Restore application entry",
+					Roles:      []string{ontology.BuilderRole},
+					Capability: "applications",
+					Parameters: []platform.Field{},
+					Criteria:   platform.ActionCriteria{State: &platform.FieldCondition{Field: "state", In: []string{"withdrawn"}}},
+					Rules:      []platform.ActionRule{{Edit: &platform.PropertyRule{Field: "state", Allowed: []string{"published"}}}},
+				},
+				{
+					Name:        "publish",
+					Title:       "Hand it over",
+					Roles:       []string{ontology.BuilderRole},
+					Capability:  "applications",
+					Parameters:  []platform.Field{},
 					Description: "Put the application in people's launcher as it stands. Handed over again, it takes its new pages and name.",
-					Do:          o.publishApplication}}}}
+					Criteria:    platform.ActionCriteria{State: &platform.FieldCondition{Field: "state", In: []string{"draft", "published", "withdrawn"}}},
+					Rules:       []platform.ActionRule{{Function: o.publishApplication}, {Edit: &platform.PropertyRule{Field: "state", Allowed: []string{"published"}}}},
+				}}}}
 }
 
 func (o *Owner) ValidateApplication(c platform.Caller, a *Application) *platform.Error {

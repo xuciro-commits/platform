@@ -2,29 +2,29 @@ package pages
 
 import "platformserver/platform"
 
-func ModelTransition(owner platform.App, ref platform.AssetRef) (platform.Transition, string, bool) {
+func ModelTransition(owner platform.App, ref platform.AssetRef) (platform.ActionType, string, bool) {
 	if ref.Kind != platform.AssetAction || owner == nil || owner.Manifest().ID != ref.App {
-		return platform.Transition{}, "", false
+		return platform.ActionType{}, "", false
 	}
 	for _, entity := range owner.Manifest().Entities {
 		if entity.Lifecycle == nil {
 			continue
 		}
-		for _, transition := range entity.Lifecycle.Transitions {
+		for _, transition := range entity.Lifecycle.Actions {
 			if entity.Type+"."+transition.Name == ref.Name {
 				return transition, entity.Lifecycle.Field, true
 			}
 		}
 	}
-	return platform.Transition{}, "", false
+	return platform.ActionType{}, "", false
 }
 
 func ModelCriteria(owner platform.App, ref platform.AssetRef) (*platform.RuleCriteria, bool) {
 	transition, _, ok := ModelTransition(owner, ref)
-	if !ok || transition.Criteria == nil {
+	if !ok || transition.Criteria.Business == nil {
 		return nil, false
 	}
-	return transition.Criteria, true
+	return transition.Criteria.Business, true
 }
 
 func VisibleLookup(visible []platform.EntityInfo) func(string) (platform.EntityInfo, bool) {

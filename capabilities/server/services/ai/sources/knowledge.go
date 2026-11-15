@@ -9,6 +9,7 @@ import (
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 
 	"platformserver/platform"
+	actioncatalog "platformserver/services/actions/catalog"
 )
 
 const (
@@ -32,7 +33,7 @@ func (k *Knowledge) AttachKnowledge(h platform.KnowledgeHost) { k.host = h }
 func New(tenant string, authorities platform.Authorities) *Knowledge {
 	k := &Knowledge{}
 	es := knowledgeEntities()
-	k.ledger = authorities(tenant, ID, platform.NewCatalog(append(platform.EntityActions(es[0]), platform.EntityActions(es[1])...)...), DocumentType, TermType)
+	k.ledger = authorities(tenant, ID, platform.NewCatalog(append(actioncatalog.EntityActions(es[0]), actioncatalog.EntityActions(es[1])...)...), DocumentType, TermType)
 	return k
 }
 

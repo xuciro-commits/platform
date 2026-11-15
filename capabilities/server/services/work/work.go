@@ -13,6 +13,7 @@ import (
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 
 	"platformserver/platform"
+	actioncatalog "platformserver/services/actions/catalog"
 )
 
 const (
@@ -87,7 +88,7 @@ func New(tenant string, authorities platform.Authorities) *Work {
 	actions = append(actions, refusalEscalationAction())
 	actions = append(actions, taskActions()...)
 	for _, e := range w.entities() {
-		actions = append(actions, platform.EntityActions(e)...)
+		actions = append(actions, actioncatalog.EntityActions(e)...)
 	}
 	actions = append(actions, platform.Action{Schema: SchemaRequest, Target: ApprovalType, Capability: "approvals", Title: "Request approval",
 		Description: "Hold a submission until its approvers agree (made by the host when an action needs approval).", Payload: []platform.Field{}, Roles: []string{Admin}},
@@ -126,16 +127,19 @@ func (w *Work) entities() []platform.Entity {
 				States: []platform.State{{Name: "pending", Title: "Pending", Tone: "warning"}, {Name: "approved", Title: "Approved", Tone: "success"},
 					{Name: "rejected", Title: "Rejected", Tone: "danger"}, {Name: "refused", Title: "Refused when run", Tone: "danger"},
 					{Name: "withdrawn", Title: "Withdrawn", Tone: "neutral"}},
-				Transitions: []platform.Transition{
-					{Name: "approve", Title: "Approve", From: []string{"pending"}, To: []string{"pending", "approved", "refused"}, Roles: everyone, Capability: "approvals",
+				Actions: []platform.ActionType{
+					{Name: "approve", Title: "Approve", Roles: everyone, Capability: "approvals",
 						Description: "Approve at the level you are an approver of; the last approval runs the held action with the rules of that moment.",
-						Payload:     []platform.Field{{Name: "note", Type: "string", Description: "Why"}},
-						Do:          w.approve, After: w.opened},
-					{Name: "reject", Title: "Reject", From: []string{"pending"}, To: []string{"rejected"}, Roles: everyone, Capability: "approvals",
-						Description: "Reject the request at the level you are an approver of.", Payload: []platform.Field{{Name: "note", Type: "string", Description: "Why"}},
-						Do: w.reject, After: w.ended},
-					{Name: "withdraw", Title: "Withdraw", From: []string{"pending"}, To: []string{"withdrawn"}, Roles: everyone, Capability: "approvals",
-						Description: "Withdraw your own request.", Do: w.requester, After: w.ended},
+						Parameters:  []platform.Field{{Name: "note", Type: "string", Description: "Why"}},
+						Criteria:    platform.ActionCriteria{State: &platform.FieldCondition{Field: "state", In: []string{"pending"}}},
+						Rules:       []platform.ActionRule{{Function: w.approve}, {Edit: &platform.PropertyRule{Field: "state", Allowed: []string{"pending", "approved", "refused"}}}, {Receipt: w.opened}}},
+					{Name: "reject", Title: "Reject", Roles: everyone, Capability: "approvals",
+						Description: "Reject the request at the level you are an approver of.", Parameters: []platform.Field{{Name: "note", Type: "string", Description: "Why"}},
+						Criteria: platform.ActionCriteria{State: &platform.FieldCondition{Field: "state", In: []string{"pending"}}},
+						Rules:    []platform.ActionRule{{Function: w.reject}, {Edit: &platform.PropertyRule{Field: "state", Allowed: []string{"rejected"}}}, {Receipt: w.ended}}},
+					{Name: "withdraw", Title: "Withdraw", Roles: everyone, Capability: "approvals", Description: "Withdraw your own request.",
+						Criteria: platform.ActionCriteria{State: &platform.FieldCondition{Field: "state", In: []string{"pending"}}},
+						Rules:    []platform.ActionRule{{Function: w.requester}, {Edit: &platform.PropertyRule{Field: "state", Allowed: []string{"withdrawn"}}}, {Receipt: w.ended}}},
 				}}},
 		{Type: TaskType, Title: "Task", Model: WorkTask{}, Derived: []platform.Derivation{{From: "ref", Fields: []string{"title", "body"}}}, Withheld: "withheld",
 			Scope: platform.Scope{Participants: func(record any) []string {
@@ -144,18 +148,25 @@ func (w *Work) entities() []platform.Entity {
 			}},
 			Lifecycle: &platform.Lifecycle{Field: "state", Initial: "open",
 				States: []platform.State{{Name: "open", Title: "Open", Tone: "info"}, {Name: "done", Title: "Done", Tone: "success"}, {Name: "canceled", Title: "Canceled", Tone: "neutral"}},
-				Transitions: []platform.Transition{
-					{Name: "cancel", Title: "Cancel", Description: "Cancel a work item you created or were assigned.", From: []string{"open"}, To: []string{"canceled"}, Roles: everyone, Capability: "tasks", Payload: []platform.Field{}, Do: w.cancelTask, After: func(c platform.Caller, _ *pb.ChangeRecord, record any, _ time.Time) {
-						w.closed(c, record.(*WorkTask).ID)
-					}},
-					{Name: "claim", Title: "Take", From: []string{"open"}, To: []string{"open"}, Roles: everyone, Capability: "tasks",
-						Description: "Take a task offered to you, so others see it is yours.", Do: w.claim},
-					{Name: "complete", Title: "Done", From: []string{"open"}, To: []string{"done"}, Roles: everyone, Capability: "tasks",
-						Payload:     []platform.Field{{Name: "answer", Type: "string", Description: "One of the task's answers, when it has any"}},
-						Description: "Mark a task of yours done.", Do: w.completer,
-						After: func(c platform.Caller, _ *pb.ChangeRecord, record any, _ time.Time) {
+				Actions: []platform.ActionType{
+					{Name: "cancel", Title: "Cancel", Description: "Cancel a work item you created or were assigned.", Roles: everyone, Capability: "tasks", Parameters: []platform.Field{},
+						Criteria: platform.ActionCriteria{State: &platform.FieldCondition{Field: "state", In: []string{"open"}}},
+						Rules:    []platform.ActionRule{{Function: w.cancelTask}, {Edit: &platform.PropertyRule{Field: "state", Allowed: []string{"canceled"}}}},
+						Effects: []func(platform.Caller, *pb.ChangeRecord, any, time.Time){func(c platform.Caller, _ *pb.ChangeRecord, record any, _ time.Time) {
 							w.closed(c, record.(*WorkTask).ID)
-						}},
+						}}},
+					{Name: "claim", Title: "Take", Roles: everyone, Capability: "tasks",
+						Description: "Take a task offered to you, so others see it is yours.",
+						Criteria:    platform.ActionCriteria{State: &platform.FieldCondition{Field: "state", In: []string{"open"}}},
+						Rules:       []platform.ActionRule{{Function: w.claim}, {Edit: &platform.PropertyRule{Field: "state", Allowed: []string{"open"}}}}},
+					{Name: "complete", Title: "Done", Roles: everyone, Capability: "tasks",
+						Parameters:  []platform.Field{{Name: "answer", Type: "string", Description: "One of the task's answers, when it has any"}},
+						Description: "Mark a task of yours done.",
+						Criteria:    platform.ActionCriteria{State: &platform.FieldCondition{Field: "state", In: []string{"open"}}},
+						Rules:       []platform.ActionRule{{Function: w.completer}, {Edit: &platform.PropertyRule{Field: "state", Allowed: []string{"done"}}}},
+						Effects: []func(platform.Caller, *pb.ChangeRecord, any, time.Time){func(c platform.Caller, _ *pb.ChangeRecord, record any, _ time.Time) {
+							w.closed(c, record.(*WorkTask).ID)
+						}}},
 				}}},
 		policyEntity(),
 		{Type: ViewType, Title: "Saved view", Model: SavedView{},

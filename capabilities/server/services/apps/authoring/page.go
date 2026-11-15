@@ -48,10 +48,16 @@ func (o *Owner) PageEntity() platform.Entity {
 		Lifecycle: &platform.Lifecycle{Field: "state", Initial: "draft",
 			States: []platform.State{{Name: "draft", Title: "Draft", Tone: "warning", Description: "Being composed; nobody can open it yet."},
 				{Name: "published", Title: "Published", Tone: "success", Description: "Open to the members who may read its object."}},
-			Transitions: []platform.Transition{{Name: "publish", Title: "Publish", From: []string{"draft", "published"}, To: []string{"published"},
-				Roles: []string{ontology.BuilderRole}, Capability: "pages", Payload: []platform.Field{},
+			Actions: []platform.ActionType{{
+				Name:        "publish",
+				Title:       "Publish",
+				Roles:       []string{ontology.BuilderRole},
+				Capability:  "pages",
+				Parameters:  []platform.Field{},
 				Description: "Put the page in the workspace as it stands. Published again, it takes its new fields and actions.",
-				Do:          o.publishPage}}}}
+				Criteria:    platform.ActionCriteria{State: &platform.FieldCondition{Field: "state", In: []string{"draft", "published"}}},
+				Rules:       []platform.ActionRule{{Function: o.publishPage}, {Edit: &platform.PropertyRule{Field: "state", Allowed: []string{"published"}}}},
+			}}}}
 }
 
 func (o *Owner) PageDraftEntity() platform.Entity {

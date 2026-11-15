@@ -44,7 +44,9 @@ func (l *authority) ApplyTxnRecord(c platform.Caller, r *pb.ChangeRecord, e plat
 		original := invocation.GetSchema().GetName()
 		declared := original == e.Type+".create" && e.CreateTxn != nil
 		if e.Lifecycle != nil {
-			declared = declared || slices.ContainsFunc(e.Lifecycle.Transitions, func(t platform.Transition) bool { return t.Txn != nil && original == e.Type+"."+t.Name })
+			declared = declared || slices.ContainsFunc(e.Lifecycle.Actions, func(t platform.ActionType) bool {
+				return original == e.Type+"."+t.Name && slices.ContainsFunc(t.Rules, func(rule platform.ActionRule) bool { return rule.Transaction != nil && rule.Transaction.Spec != nil })
+			})
 		}
 		if declared {
 			authorization = invocation
@@ -102,12 +104,13 @@ func (l *authority) ApplyTxnRoute(c platform.Caller, r *pb.ChangeRecord, e platf
 	if !c.Staging() || c.Replaying || c.App != l.authority || target.Type != e.Type || target.Action == "" || target.ID == "" || e.Lifecycle == nil || run == nil {
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Refusal route requires its original transaction owner / 拒绝改路须经原事务归属方")
 	}
-	index := slices.IndexFunc(e.Lifecycle.Transitions, func(t platform.Transition) bool { return t.Name == target.Action })
+	index := slices.IndexFunc(e.Lifecycle.Actions, func(t platform.ActionType) bool { return t.Name == target.Action })
 	if index < 0 {
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_UNKNOWN_SCHEMA, "Refusal route transaction is unavailable / 拒绝改路目标事务不可用")
 	}
-	tr := e.Lifecycle.Transitions[index]
-	if tr.Txn == nil || tr.Approval != nil || tr.Adoption != nil {
+	tr := e.Lifecycle.Actions[index]
+	ruleIndex := slices.IndexFunc(tr.Rules, func(rule platform.ActionRule) bool { return rule.Transaction != nil && rule.Transaction.Spec != nil })
+	if ruleIndex < 0 || tr.Approval != nil || tr.Adoption != nil {
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Refusal routes require an ordinary declared transaction / 拒绝改路须指向已声明的普通事务")
 	}
 	c.Automation = false
@@ -120,12 +123,15 @@ func (l *authority) ApplyTxnRoute(c platform.Caller, r *pb.ChangeRecord, e platf
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "Refusal route authorization denied: {reason} / 拒绝改路授权被拒：{reason}", decision.Reason, decision.Reason)
 	}
 	var failure *platform.Error
-	tr.ApplyTxn = func(c platform.Caller, receipt *pb.ChangeRecord, at time.Time) *platform.Error {
-		failure = run(c.WithTransactionInput(routed.Submission), r, tr.Txn, at)
+	tr.Rules = slices.Clone(tr.Rules)
+	txn := *tr.Rules[ruleIndex].Transaction
+	txn.Run = func(c platform.Caller, receipt *pb.ChangeRecord, at time.Time) *platform.Error {
+		failure = run(c.WithTransactionInput(routed.Submission), r, txn.Spec, at)
 		return failure
 	}
+	tr.Rules[ruleIndex].Transaction = &txn
 	apply, err := l.checked(c, routed.Submission, now, catalog, func() (func(*pb.ChangeRecord), *platform.Error) {
-		return transition(c, e, tr, routed.Submission, now)
+		return executeAction(c, e, tr, routed.Submission, now)
 	})()
 	if err != nil {
 		return err

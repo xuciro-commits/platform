@@ -36,10 +36,37 @@ func (o *Owner) pipelineEntity() platform.Entity {
 		Scope:       integrationScope(),
 		Standard:    integrationStandard(),
 		Lifecycle: &platform.Lifecycle{Field: "state", Initial: "draft", States: []platform.State{{Name: "draft", Title: "Draft", Tone: "warning"}, {Name: "published", Title: "Published", Tone: "success"}},
-			Transitions: []platform.Transition{
-				{Name: "publish", Title: "Publish", Description: "Publish this pipeline definition. Use Run now to start it.", From: []string{"draft", "published"}, To: []string{"published"}, Roles: []string{Builder, Integrator}, Capability: "integrations", Payload: []platform.Field{}, Do: o.publishPipeline},
-				{Name: "run", Title: "Run now", Description: "Ask for one run at the next tick.", From: []string{"published"}, To: []string{"published"}, Roles: []string{Builder, Integrator}, Capability: "integrations", Payload: []platform.Field{}, Do: requestRun},
-				{Name: "pause", Title: "Pause", Description: "Stop running; the definition stays.", From: []string{"published"}, To: []string{"draft"}, Roles: []string{Builder, Integrator}, Capability: "integrations", Payload: []platform.Field{}}}}}
+			Actions: []platform.ActionType{
+				{
+					Name:        "publish",
+					Title:       "Publish",
+					Description: "Publish this pipeline definition. Use Run now to start it.",
+					Roles:       []string{Builder, Integrator},
+					Capability:  "integrations",
+					Parameters:  []platform.Field{},
+					Criteria:    platform.ActionCriteria{State: &platform.FieldCondition{Field: "state", In: []string{"draft", "published"}}},
+					Rules:       []platform.ActionRule{{Function: o.publishPipeline}, {Edit: &platform.PropertyRule{Field: "state", Allowed: []string{"published"}}}},
+				},
+				{
+					Name:        "run",
+					Title:       "Run now",
+					Description: "Ask for one run at the next tick.",
+					Roles:       []string{Builder, Integrator},
+					Capability:  "integrations",
+					Parameters:  []platform.Field{},
+					Criteria:    platform.ActionCriteria{State: &platform.FieldCondition{Field: "state", In: []string{"published"}}},
+					Rules:       []platform.ActionRule{{Function: requestRun}, {Edit: &platform.PropertyRule{Field: "state", Allowed: []string{"published"}}}},
+				},
+				{
+					Name:        "pause",
+					Title:       "Pause",
+					Description: "Stop running; the definition stays.",
+					Roles:       []string{Builder, Integrator},
+					Capability:  "integrations",
+					Parameters:  []platform.Field{},
+					Criteria:    platform.ActionCriteria{State: &platform.FieldCondition{Field: "state", In: []string{"published"}}},
+					Rules:       []platform.ActionRule{{Edit: &platform.PropertyRule{Field: "state", Allowed: []string{"draft"}}}},
+				}}}}
 }
 
 func pipelineActions() []platform.Action {

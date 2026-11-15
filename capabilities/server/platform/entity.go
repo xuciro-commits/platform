@@ -110,10 +110,10 @@ type DerivationInfo struct {
 }
 
 type Lifecycle struct {
-	Field       string
-	Initial     string
-	States      []State
-	Transitions []Transition
+	Field   string
+	Initial string
+	States  []State
+	Actions []ActionType
 }
 
 type State struct {
@@ -123,24 +123,43 @@ type State struct {
 	Description string `json:"description,omitempty"`
 }
 
-type Transition struct {
+type ActionType struct {
 	ConfirmationOnly bool
 	Adoption         *ProposalAdoption `json:"-"`
-	Criteria         *RuleCriteria     `json:"-"`
+	Criteria         ActionCriteria    `json:"-"`
 	Name             string
 	Title            string
 	Description      string
-	From, To         []string
-	ToInput          string
 	Roles            []string
-	Payload          []Field
+	Parameters       []Field
 	DeferRequired    bool `json:"-"`
 	Capability       string
 	Approval         *Approval
-	Do               func(c Caller, record any, payload json.RawMessage, now time.Time) *Error
-	After            func(c Caller, r *pb.ChangeRecord, record any, now time.Time)
-	Txn              *BusinessTxn                                             `json:"-"`
-	ApplyTxn         func(c Caller, r *pb.ChangeRecord, now time.Time) *Error `json:"-"`
+	Rules            []ActionRule                                                    `json:"-"`
+	Effects          []func(c Caller, r *pb.ChangeRecord, record any, now time.Time) `json:"-"`
+}
+
+type ActionCriteria struct {
+	State    *FieldCondition
+	Business *RuleCriteria
+}
+
+type ActionRule struct {
+	Edit        *PropertyRule
+	Function    func(c Caller, record any, payload json.RawMessage, now time.Time) *Error
+	Transaction *TransactionRule
+	Receipt     func(c Caller, r *pb.ChangeRecord, record any, now time.Time)
+}
+
+type PropertyRule struct {
+	Field     string
+	Allowed   []string
+	Parameter string
+}
+
+type TransactionRule struct {
+	Spec *BusinessTxn
+	Run  func(c Caller, r *pb.ChangeRecord, now time.Time) *Error
 }
 
 type LifecycleInfo struct {
@@ -205,14 +224,6 @@ type Standard struct {
 	Roles                                []string
 	Capability                           string
 	CreateRoles, EditRoles, ArchiveRoles []string
-}
-
-func (s Standard) roles(verb string) []string {
-	own := map[string][]string{"create": s.CreateRoles, "edit": s.EditRoles, "archive": s.ArchiveRoles}[verb]
-	if own != nil {
-		return own
-	}
-	return s.Roles
 }
 
 type Scope struct {

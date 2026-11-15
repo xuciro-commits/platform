@@ -29,9 +29,27 @@ func (o *Owner) matchEntity() platform.Entity {
 		Scope:    integrationScope(),
 		Standard: integrationStandard(),
 		Lifecycle: &platform.Lifecycle{Field: "state", Initial: "draft", States: []platform.State{{Name: "draft", Title: "Draft", Tone: "warning"}, {Name: "published", Title: "Published", Tone: "success"}},
-			Transitions: []platform.Transition{
-				{Name: "publish", Title: "Publish", Description: "Check the rule and apply it to every row landing in the object from now on.", From: []string{"draft", "published"}, To: []string{"published"}, Roles: []string{Builder, Integrator}, Capability: "integrations", Payload: []platform.Field{}, Do: o.publishMatch},
-				{Name: "pause", Title: "Pause", Description: "Stop matching; records stay as they are.", From: []string{"published"}, To: []string{"draft"}, Roles: []string{Builder, Integrator}, Capability: "integrations", Payload: []platform.Field{}}}}}
+			Actions: []platform.ActionType{
+				{
+					Name:        "publish",
+					Title:       "Publish",
+					Description: "Check the rule and apply it to every row landing in the object from now on.",
+					Roles:       []string{Builder, Integrator},
+					Capability:  "integrations",
+					Parameters:  []platform.Field{},
+					Criteria:    platform.ActionCriteria{State: &platform.FieldCondition{Field: "state", In: []string{"draft", "published"}}},
+					Rules:       []platform.ActionRule{{Function: o.publishMatch}, {Edit: &platform.PropertyRule{Field: "state", Allowed: []string{"published"}}}},
+				},
+				{
+					Name:        "pause",
+					Title:       "Pause",
+					Description: "Stop matching; records stay as they are.",
+					Roles:       []string{Builder, Integrator},
+					Capability:  "integrations",
+					Parameters:  []platform.Field{},
+					Criteria:    platform.ActionCriteria{State: &platform.FieldCondition{Field: "state", In: []string{"published"}}},
+					Rules:       []platform.ActionRule{{Edit: &platform.PropertyRule{Field: "state", Allowed: []string{"draft"}}}},
+				}}}}
 }
 
 func (o *Owner) publishMatch(c platform.Caller, record any, _ json.RawMessage, _ time.Time) *platform.Error {

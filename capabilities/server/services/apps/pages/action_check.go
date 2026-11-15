@@ -2,7 +2,6 @@ package pages
 
 import (
 	"encoding/json"
-	"slices"
 	"strings"
 	"time"
 
@@ -44,7 +43,7 @@ func ruleInputs(expr platform.Expr, into map[string]bool) {
 
 type ActionChecks struct {
 	Caller     platform.Caller
-	Transition platform.Transition
+	Transition platform.ActionType
 	Lifecycle  string
 	Moves      bool
 	Read       func() (json.RawMessage, *platform.Error)
@@ -77,7 +76,8 @@ func (a ActionChecks) Check(action platform.Action, request ActionCheckRequest, 
 	}
 	if hasTransition {
 		state, _ := record[lifecycle].(string)
-		if !slices.Contains(transition.From, state) && (transition.Approval == nil || transition.Approval.Pending != state) {
+		pending := transition.Approval != nil && transition.Approval.Pending != "" && transition.Approval.Pending == state && !caller.Automation && !caller.Probing()
+		if !transition.Criteria.State.Holds(state, caller.Rules()) && !pending {
 			result.Allowed = false
 			result.Message = "The action is unavailable while this record is " + state + "."
 		}
@@ -100,8 +100,8 @@ func (a ActionChecks) Check(action platform.Action, request ActionCheckRequest, 
 			result.Message = "Correct the highlighted fields."
 		}
 	}
-	if hasTransition && transition.Criteria != nil {
-		for _, condition := range transition.Criteria.Conditions {
+	if hasTransition && transition.Criteria.Business != nil {
+		for _, condition := range transition.Criteria.Business.Conditions {
 			check := ActionConditionCheck{Message: condition.Message}
 			read := map[string]bool{}
 			ruleInputs(condition.Expr, read)
@@ -115,7 +115,7 @@ func (a ActionChecks) Check(action platform.Action, request ActionCheckRequest, 
 				result.Conditions = append(result.Conditions, check)
 				continue
 			}
-			outcome, refusal := platform.EvaluateRule(condition.Expr, transition.Criteria.Reads, caller, record, inputs, at, entity)
+			outcome, refusal := platform.EvaluateRule(condition.Expr, transition.Criteria.Business.Reads, caller, record, inputs, at, entity)
 			if refusal != nil {
 				check.Message = refusal.Message
 			} else {

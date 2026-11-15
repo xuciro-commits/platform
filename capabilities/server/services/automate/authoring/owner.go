@@ -8,6 +8,7 @@ import (
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformserver/platform"
+	actioncatalog "platformserver/services/actions/catalog"
 	automateowner "platformserver/services/automate"
 )
 
@@ -46,31 +47,63 @@ func (o *Owner) ProcessEntity() platform.Entity {
 		Scope:    platform.Scope{Default: platform.ScopeNone, Levels: map[string]string{Builder: platform.ScopeTenant}},
 		Standard: platform.Standard{Create: true, Edit: true, Archive: true, Roles: []string{Builder}, Capability: "processes"},
 		Lifecycle: &platform.Lifecycle{Field: "state", Initial: "draft", States: []platform.State{{Name: "draft", Title: "Draft", Tone: "warning"}, {Name: "published", Title: "Published", Tone: "success"}},
-			Transitions: []platform.Transition{{Name: "publish", Title: "Publish", From: []string{"draft", "published"}, To: []string{"published"}, Roles: []string{Builder}, Capability: "processes", Payload: []platform.Field{}, Do: o.publishProcess},
-				{Name: "run", Title: "Run", From: []string{"published"}, To: []string{"published"}, Roles: []string{Builder}, Capability: "processes", Payload: []platform.Field{{Name: "subject", Type: "string", Description: "Record to run the automation on"}, {Name: "key", Type: "string", Description: "Stable run key"}, {Name: "input", Type: "string", Description: "Typed JSON input"}}, Do: o.runProcess},
-				{Name: "pause", Title: "Pause", From: []string{"published"}, To: []string{"published"}, Roles: []string{Builder}, Capability: "processes", Payload: []platform.Field{{Name: "reason", Type: "string"}}, Do: func(_ platform.Caller, record any, raw json.RawMessage, _ time.Time) *platform.Error {
-					var input struct {
-						Reason string `json:"reason"`
-					}
-					_ = json.Unmarshal(raw, &input)
-					record.(*Process).PauseReason = input.Reason
-					record.(*Process).Paused = true
-					return nil
-				}},
-				{Name: "resume", Title: "Resume", From: []string{"published"}, To: []string{"published"}, Roles: []string{Builder}, Capability: "processes", Payload: []platform.Field{}, Do: func(c platform.Caller, record any, _ json.RawMessage, now time.Time) *platform.Error {
-					current := record.(*Process)
-					installed, _ := readPublished[Process](current.Published)
-					if reason := o.automationOwnerRefusal(c, current.ID, installed, now); reason != nil {
-						return reason
-					}
-					record.(*Process).PauseReason = ""
-					record.(*Process).Paused = false
-					return nil
-				}}}}}
+			Actions: []platform.ActionType{{
+				Name:       "publish",
+				Title:      "Publish",
+				Roles:      []string{Builder},
+				Capability: "processes",
+				Parameters: []platform.Field{},
+				Criteria:   platform.ActionCriteria{State: &platform.FieldCondition{Field: "state", In: []string{"draft", "published"}}},
+				Rules:      []platform.ActionRule{{Function: o.publishProcess}, {Edit: &platform.PropertyRule{Field: "state", Allowed: []string{"published"}}}},
+			},
+				{
+					Name:       "run",
+					Title:      "Run",
+					Roles:      []string{Builder},
+					Capability: "processes",
+					Parameters: []platform.Field{{Name: "subject", Type: "string", Description: "Record to run the automation on"}, {Name: "key", Type: "string", Description: "Stable run key"}, {Name: "input", Type: "string", Description: "Typed JSON input"}},
+					Criteria:   platform.ActionCriteria{State: &platform.FieldCondition{Field: "state", In: []string{"published"}}},
+					Rules:      []platform.ActionRule{{Function: o.runProcess}, {Edit: &platform.PropertyRule{Field: "state", Allowed: []string{"published"}}}},
+				},
+				{
+					Name:       "pause",
+					Title:      "Pause",
+					Roles:      []string{Builder},
+					Capability: "processes",
+					Parameters: []platform.Field{{Name: "reason", Type: "string"}},
+					Criteria:   platform.ActionCriteria{State: &platform.FieldCondition{Field: "state", In: []string{"published"}}},
+					Rules: []platform.ActionRule{{Function: func(_ platform.Caller, record any, raw json.RawMessage, _ time.Time) *platform.Error {
+						var input struct {
+							Reason string `json:"reason"`
+						}
+						_ = json.Unmarshal(raw, &input)
+						record.(*Process).PauseReason = input.Reason
+						record.(*Process).Paused = true
+						return nil
+					}}, {Edit: &platform.PropertyRule{Field: "state", Allowed: []string{"published"}}}},
+				},
+				{
+					Name:       "resume",
+					Title:      "Resume",
+					Roles:      []string{Builder},
+					Capability: "processes",
+					Parameters: []platform.Field{},
+					Criteria:   platform.ActionCriteria{State: &platform.FieldCondition{Field: "state", In: []string{"published"}}},
+					Rules: []platform.ActionRule{{Function: func(c platform.Caller, record any, _ json.RawMessage, now time.Time) *platform.Error {
+						current := record.(*Process)
+						installed, _ := readPublished[Process](current.Published)
+						if reason := o.automationOwnerRefusal(c, current.ID, installed, now); reason != nil {
+							return reason
+						}
+						record.(*Process).PauseReason = ""
+						record.(*Process).Paused = false
+						return nil
+					}}, {Edit: &platform.PropertyRule{Field: "state", Allowed: []string{"published"}}}},
+				}}}}
 }
 
 func (o *Owner) ProcessActions() []platform.Action {
-	return platform.EntityActions(o.ProcessEntity())
+	return actioncatalog.EntityActions(o.ProcessEntity())
 }
 
 func (o *Owner) Entities() []platform.Entity {

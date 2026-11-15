@@ -6,6 +6,7 @@ import (
 	"platformserver/services/ontology"
 
 	"platformserver/platform"
+	actioncatalog "platformserver/services/actions/catalog"
 	"reflect"
 	"slices"
 )
@@ -206,7 +207,7 @@ func compatibleObjectSchema(previous, next ontology.Object) bool {
 }
 
 func objectActions(object ontology.Object, entity platform.Entity) []platform.Action {
-	actions := platform.EntityActions(entity)
+	actions := actioncatalog.EntityActions(entity)
 	var binding platform.SchemaVersion
 	if len(object.SchemaVersions) > 0 {
 		binding = object.SchemaVersions[len(object.SchemaVersions)-1]

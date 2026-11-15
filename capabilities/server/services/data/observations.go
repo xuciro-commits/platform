@@ -32,25 +32,43 @@ func (o *Owner) observationEntity() platform.Entity {
 			return nil
 		},
 		Lifecycle: &platform.Lifecycle{Field: "state", Initial: "draft", States: []platform.State{{Name: "draft", Title: "Draft", Tone: "warning"}, {Name: "published", Title: "Published", Tone: "success"}, {Name: "retired", Title: "Retired", Tone: "neutral"}},
-			Transitions: []platform.Transition{
-				{Name: "publish", Title: "Publish", Description: "Retain the logical source, authorized reads and declared decision as one immutable version.", From: []string{"draft", "published", "retired"}, To: []string{"published"}, Roles: []string{Builder, Integrator}, Capability: "integrations", Payload: []platform.Field{}, Do: func(c platform.Caller, value any, _ json.RawMessage, _ time.Time) *platform.Error {
-					record := value.(*Observation)
-					if c.Replaying {
+			Actions: []platform.ActionType{
+				{
+					Name:        "publish",
+					Title:       "Publish",
+					Description: "Retain the logical source, authorized reads and declared decision as one immutable version.",
+					Roles:       []string{Builder, Integrator},
+					Capability:  "integrations",
+					Parameters:  []platform.Field{},
+					Criteria:    platform.ActionCriteria{State: &platform.FieldCondition{Field: "state", In: []string{"draft", "published", "retired"}}},
+					Rules: []platform.ActionRule{{Function: func(c platform.Caller, value any, _ json.RawMessage, _ time.Time) *platform.Error {
+						record := value.(*Observation)
+						if c.Replaying {
+							return nil
+						}
+						if err := o.checkObservation(c, *record); err != nil {
+							return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "{why}", err.Error())
+						}
+						record.Publisher = c.ID
+						record.PublisherScopes = string(platform.Raw(c.Member.Scopes))
+						fixed, err := o.freezeDirectIntegration(platform.AssetObservation, *record)
+						if err != nil {
+							return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "{why}", err.Error())
+						}
+						*record = fixed.(Observation)
 						return nil
-					}
-					if err := o.checkObservation(c, *record); err != nil {
-						return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "{why}", err.Error())
-					}
-					record.Publisher = c.ID
-					record.PublisherScopes = string(platform.Raw(c.Member.Scopes))
-					fixed, err := o.freezeDirectIntegration(platform.AssetObservation, *record)
-					if err != nil {
-						return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "{why}", err.Error())
-					}
-					*record = fixed.(Observation)
-					return nil
-				}},
-				{Name: "retire", Title: "Retire", Description: "Stop new reads and evaluations while retaining every published definition.", From: []string{"published"}, To: []string{"retired"}, Roles: []string{Builder, Integrator}, Capability: "integrations", Payload: []platform.Field{}},
+					}}, {Edit: &platform.PropertyRule{Field: "state", Allowed: []string{"published"}}}},
+				},
+				{
+					Name:        "retire",
+					Title:       "Retire",
+					Description: "Stop new reads and evaluations while retaining every published definition.",
+					Roles:       []string{Builder, Integrator},
+					Capability:  "integrations",
+					Parameters:  []platform.Field{},
+					Criteria:    platform.ActionCriteria{State: &platform.FieldCondition{Field: "state", In: []string{"published"}}},
+					Rules:       []platform.ActionRule{{Edit: &platform.PropertyRule{Field: "state", Allowed: []string{"retired"}}}},
+				},
 			}},
 	}
 }

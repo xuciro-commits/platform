@@ -41,6 +41,7 @@ for (const line of section("现存差距").split("\n")) {
 }
 
 const unitOf = (pkg) => {
+  if (pkg === "services/actions/catalog") return pkg;
   const parts = pkg.split("/");
   if (parts[0] === "services" || (parts[0] === "kernel" && parts[1] === "protocol")) return parts.slice(0, 2).join("/");
   return parts[0];

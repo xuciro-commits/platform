@@ -9,7 +9,7 @@ import (
 	pageowner "platformserver/services/apps/pages"
 )
 
-func (t *Tenant) modelTransition(ref platform.AssetRef) (platform.Transition, string, bool) {
+func (t *Tenant) modelTransition(ref platform.AssetRef) (platform.ActionType, string, bool) {
 	return pageowner.ModelTransition(t.App(t.owner["action:"+ref.Name]), ref)
 }
 

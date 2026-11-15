@@ -95,10 +95,15 @@ func (b *Build) objectEntity() platform.Entity {
 		Lifecycle: &platform.Lifecycle{Field: "state", Initial: "draft",
 			States: []platform.State{{Name: "draft", Title: "Draft", Tone: "warning", Description: "Being defined; nothing is installed yet."},
 				{Name: "published", Title: "Published", Tone: "success", Description: "Installed in this tenant: people work with its records."}},
-			Transitions: []platform.Transition{{Name: "publish", Title: "Publish", From: []string{"draft", "published"}, To: []string{"published"},
-				Roles: []string{Builder}, Capability: "objects", Payload: []platform.Field{},
+			Actions: []platform.ActionType{{
+				Name:        "publish",
+				Title:       "Publish",
+				Roles:       []string{Builder},
+				Capability:  "objects",
+				Parameters:  []platform.Field{},
 				Description: "Install the object as it stands. Published again, it takes its new fields, and records keep the values of the fields that remain.",
-				Do: func(c platform.Caller, record any, _ json.RawMessage, now time.Time) *platform.Error {
+				Criteria:    platform.ActionCriteria{State: &platform.FieldCondition{Field: "state", In: []string{"draft", "published"}}},
+				Rules: []platform.ActionRule{{Function: func(c platform.Caller, record any, _ json.RawMessage, now time.Time) *platform.Error {
 					object, ok := record.(*ontology.Object)
 					if !ok {
 						return &platform.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
@@ -141,7 +146,8 @@ func (b *Build) objectEntity() platform.Entity {
 					}
 					*record.(*ontology.Object) = *object
 					return nil
-				}}}}}
+				}}, {Edit: &platform.PropertyRule{Field: "state", Allowed: []string{"published"}}}},
+			}}}}
 }
 
 func (b *Build) conditionLookup(typ string) (platform.EntityInfo, bool) {
