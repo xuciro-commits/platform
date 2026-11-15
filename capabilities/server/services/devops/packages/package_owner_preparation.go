@@ -16,6 +16,7 @@ import (
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformserver/platform"
 	dataowner "platformserver/services/data"
+	packagedesc "platformserver/services/devops/descriptor"
 	"platformserver/services/resources/authoring"
 )
 
@@ -223,7 +224,7 @@ func Inspect(ctx context.Context, tenant string, request platform.PackageInspect
 	if err != nil {
 		return preview, err
 	}
-	if err := descriptor.Validate(); err != nil {
+	if err := packagedesc.Validate(descriptor); err != nil {
 		return preview, err
 	}
 	precheck, err := check(ctx, descriptor)

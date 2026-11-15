@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"platformserver/platform"
+	packagedesc "platformserver/services/devops/descriptor"
 	build "platformserver/services/resources/authoring"
 )
 
@@ -69,7 +70,7 @@ func productDescriptor(candidate platform.ReleaseCandidate, request platform.Pro
 	}
 	assets := slices.DeleteFunc(slices.Clone(closed.Assets), func(asset platform.ReleaseAsset) bool { return external[asset.Ref] })
 	product.Blueprint = &platform.PackageBlueprint{Roots: slices.Clone(request.Roots), Assets: assets}
-	if err := product.Validate(); err != nil {
+	if err := packagedesc.Validate(product); err != nil {
 		return platform.PackageDescriptor{}, err
 	}
 	return product, nil

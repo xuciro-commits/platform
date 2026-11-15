@@ -12,6 +12,7 @@ import (
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformserver/platform"
+	packagedesc "platformserver/services/devops/descriptor"
 )
 
 func DecodeContent(raw []byte) (platform.PackageDescriptor, error) {
@@ -275,7 +276,7 @@ func (d *Owner) Offer(digest string) (platform.Offer, error) {
 	if err = platform.DecodeJSON(raw, &offer, "reviewed package"); err != nil {
 		return offer, err
 	}
-	if err := offer.Descriptor.Validate(); err != nil {
+	if err := packagedesc.Validate(offer.Descriptor); err != nil {
 		return offer, err
 	}
 	return offer, nil

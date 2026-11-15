@@ -36,7 +36,7 @@ read-when: 新建或移动 Go 包、改动写入或读取路径、接受结果�
 | `kernel` | 提交接收、幂等、修订、接受结果编码、车道、重放与快照；`kernel/store` 拥有 PostgreSQL、文件及内存持久化，`kernel/records` 拥有记录投影与读取计划；按 `platform` 契约实现 | `expr`、`platform`、`kernel/protocol` |
 | `kernel/protocol` | 协议接收、账本、身份、连接器与工作项部件 | `platform` |
 | `platform` | 应用 SDK：Manifest、Caller、动作目录契约、页面与应用声明、Expr 与 ObjectSet 接口、授权接口；稳定叶层，不依赖实现 | `expr` |
-| `services/resources` | RID、项目、文件夹、资源生命周期、工作状态、分支、提案 | `platform`、actions/catalog、resources/publication、`kernel/records`、`kernel/acceptedformat`、`kernel/protocol` |
+| `services/resources` | RID、项目、文件夹、资源生命周期、工作状态、分支、提案 | `platform`、actions/catalog、devops/descriptor、resources/publication、`kernel/records`、`kernel/acceptedformat`、`kernel/protocol` |
 | `services/resources/publication` | 资产依赖、发布版本解析与发布钩子 | `platform` |
 | `services/ontology` | 本体元数据与类型检查 | `platform`、resources、`kernel/records`、`kernel/acceptedformat`、`kernel/protocol` |
 | `services/objects` | 对象投影、编辑事实、索引、ObjectSet 执行 | `expr`、`platform`、ontology、resources/publication、`kernel/records`、`kernel/acceptedformat`、`kernel/protocol` |
@@ -47,7 +47,8 @@ read-when: 新建或移动 Go 包、改动写入或读取路径、接受结果�
 | `services/automate` | 自动化与其运行 | `platform`、actions、`kernel/records`、`kernel/acceptedformat`、`kernel/protocol` |
 | `services/apps` | Workshop 模块与页面运行；页面与应用 authoring | `platform`、objects、actions、ontology、resources/publication、`kernel/records`、`kernel/acceptedformat`、`kernel/protocol` |
 | `services/work` | 工作项、通知与投递 | `platform`、actions、`kernel/records`、`kernel/acceptedformat`、`kernel/protocol` |
-| `services/devops` | 产品、版本、安装、升级 | `platform`、resources、`services/apps`、functions、ontology、`kernel/records`、`kernel/acceptedformat`、`kernel/protocol` |
+| `services/devops` | 产品、版本、安装、升级 | `platform`、devops/descriptor、resources、`services/apps`、functions、ontology、`kernel/records`、`kernel/acceptedformat`、`kernel/protocol` |
+| `services/devops/descriptor` | 产品描述与蓝图的校验 | `platform` |
 | `services/security` | 成员、团队、组织单元、业务角色、标记；授权上下文构造与唯一决定函数 | `platform`、`kernel/records`、`kernel/acceptedformat`、`kernel/protocol` |
 | `services/ai` | 模型网关、AIP Logic、智能体运行、AIP Assist | `platform`、functions、actions、`kernel/records`、`kernel/acceptedformat`、`kernel/protocol` |
 | `apps/*` | 内置应用的编译部分（R3） | `platform` |
@@ -58,6 +59,7 @@ read-when: 新建或移动 Go 包、改动写入或读取路径、接受结果�
 - 租户的提交序列是 `kernel` 的一个类型，只持有车道、日志、已提交状态、记录存储、读取映像、位置与隔离状态。每个服务经同一个拥有者接口（决定、应用、分叉、读取）向它注册自己的状态；`host` 不持有服务状态，也不实现接受路径的任何一步（接受路径散在装配层时，每个调用点都会各自补一遍校验）。
 - 服务可导入 `kernel/records`（记录投影与读取计划）、`kernel/acceptedformat`（接受结果的字节格式）与 `kernel/protocol`（协议接收与账本部件）：它们是 `kernel` 下的叶层数据包，只依赖协议生成代码、`expr`、`platform`，由服务读写自己的接受结果与记录；`kernel` 其余部分与 `host` 不被服务导入，`kernel` 不导入任何服务。
 - `services/resources/publication` 是只依赖 SDK 的共享叶层；其他服务直接复用其中的版本和发布解析，不依赖资源服务的实现。
+- `services/devops/descriptor` 是只依赖 SDK 的产品描述校验叶层，供产品编辑和安装共用。
 - 服务之间的调用面在被调服务的 `api.go` 中声明为接口；装配在 `host` 完成。
 - 产品包中的行业逻辑不进入任何 Go 包。
 
@@ -165,7 +167,7 @@ type DraftClosure struct { Requires []DraftRef; Prior, Next platform.AssetRef; H
 - 提交入口（7.3）：重放与快照校验（`host/replay.go`、`host/snapshot.go`）不经 `kernel.Committed.Prior` 而各自查询先前结果。
 - 服务位置（7.2）：分支读取、保存、检查、重检、提议、合并与编译编排已在 `services/resources/merge`；受管产品包的准备、安装闭包、生命周期影响、组合选择与所有权投影已在 `services/devops/packages`；知识检索、智能体观测与调度、模型网关运行时已在 `services/ai`；宿主只保留 HTTP、读取范围、暂存决定与接受提交。
 - 服务注册（7.2、7.7）：`platform/app.go` 的 `Runtime` 接口有约 44 个方法并嵌入 8 个接口；暂存决定能力（含保留发布执行的决定目录）经 `Runtime.StagedDecision()` 句柄取得；接受状态、输入、资产、副作用回调、控制面身份与构建草稿能力已在 `host/owner_roles.go` 按拥有者登记，分叉映像时一并重建；其余可选能力仍经约 195 处类型断言探测（形状棘轮的 `capabilityProbes`）；约 200 个函数用可变参数表达可选项。
-- `platform` 不是叶层 SDK（7.2）：页面声明集中在 `page_types.go`，模型字段解析归 `services/apps/pages`；其余 `page_*` 仍含页面求值与校验，`dependencies*`、`revision*` 仍调用这些实现。无租户状态的候选读取、资产描述和安装映像解码已由宿主注入内核与记录投影，历史查询版本与查询来源分派在 `services/resources/publication`，关系版本仍由 SDK 的 `LinkVersion` 读取；产品蓝图校验仍在 SDK。SDK 最终只留页面声明、确有格式语义的 `MarshalJSON` / `UnmarshalJSON` 和原始 `profile`、`retainedVersion` / `contentVersion` 信息；页面运行语义归 `services/apps/pages`，通用依赖、修订与发布编排归 `services/resources/publication`。未来 `publication` 经宿主注入的纯页面语义函数调用 `pages`，不直接导入 `apps/pages`，函数按实际调用确定。记录类型描述、业务事务及部分规则实现也仍在 SDK（`entity_describe.go`、`transaction*.go`、`rules*.go`，见 [6-domain 现存差距](../6-domain/README.md#现存差距)）。
+- `platform` 不是叶层 SDK（7.2）：页面声明集中在 `page_types.go`，模型字段解析归 `services/apps/pages`；其余 `page_*` 仍含页面求值与校验，`dependencies*`、`revision*` 仍调用这些实现。无租户状态的候选读取、资产描述和安装映像解码已由宿主注入内核与记录投影，历史查询版本与查询来源分派在 `services/resources/publication`，关系版本仍由 SDK 的 `LinkVersion` 读取；产品描述与蓝图校验在 `services/devops/descriptor`。SDK 最终只留页面声明、确有格式语义的 `MarshalJSON` / `UnmarshalJSON` 和原始 `profile`、`retainedVersion` / `contentVersion` 信息；页面运行语义归 `services/apps/pages`，通用依赖、修订与发布编排归 `services/resources/publication`。未来 `publication` 经宿主注入的纯页面语义函数调用 `pages`，不直接导入 `apps/pages`，函数按实际调用确定。记录类型描述、业务事务及部分规则实现也仍在 SDK（`entity_describe.go`、`transaction*.go`、`rules*.go`，见 [6-domain 现存差距](../6-domain/README.md#现存差距)）。
 - `services/resources/authoring`（包名 `build`）仍编辑多类资源，具体编辑能力归位见路线图 U5；动作执行已在 `services/actions`，`platform` 提供 SDK 契约，`host` 负责装配。
 - 发布路径（7.5.1）：action-type 的发布校验、冻结、闭包、安装和冻结定义读取已由本体服务提供并由宿主登记；object 与 versioned 族（agent、evaluation-set、test-plan、compute、sample-set）仍在 `services/resources/authoring` 手写发布步骤，definition 族仍在 `build_kinds.go`。apps、function、automation 与本体的类型已直接引用拥有服务。
 - 包名与目录名不一致 14 处（7.7）：`services/apps`→applications、`services/automate/runtime`→automation、`services/ai/runtime` 与 `ai/evaluation`→agents、`ai/retrieval` 与 `ai/sources`→knowledge、`ai/gateway`→aigateway、`ai/state`→aistate、`services/data/blobs`→resources、`data/transform`→integrations、`services/functions/runtime`→compute、`services/resources/authoring`→build、`resources/merge`→branches、`services/work/activity`→relations。

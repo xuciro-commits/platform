@@ -15,6 +15,7 @@ import (
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformserver/platform"
+	packagedesc "platformserver/services/devops/descriptor"
 	"platformserver/services/resources/authoring"
 )
 
@@ -127,7 +128,7 @@ func LoadPackageIndex(dir string) (*platform.PackageIndex, error) {
 			list = []platform.PackageDescriptor{one}
 		}
 		for _, p := range list {
-			if err := p.Validate(); err != nil {
+			if err := packagedesc.Validate(p); err != nil {
 				return nil, fmt.Errorf("package index %s: %w", entry.Name(), err)
 			}
 			index.Packages = append(index.Packages, p)
@@ -224,7 +225,7 @@ func (d *Owner) precheck(p platform.PackageDescriptor, index *platform.PackageIn
 	if len(planned) > 0 {
 		proposed = planned[0]
 	}
-	if err := p.Validate(); err != nil {
+	if err := packagedesc.Validate(p); err != nil {
 		out.OK, out.Problems = false, []string{err.Error()}
 		return out
 	}

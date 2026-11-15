@@ -51,12 +51,11 @@ read-when: 每批开始（选当前批次）与结束（删除已完成条目、
     - 证据：`platform/revision_queries.go:232` 的冻结对象描述读取 `BusinessTxn`；`platform/transaction.go:313` 的事务解码拒绝未知字段；`kernel/acceptedformat/format_release.go:104` 经 `platform/revision.go:384` 读取冻结候选。移除 `post` / `journal` 字段会使含它们的当前纪元冻结定义无法按现有路径读取。`platform/entity.go:46,160` 与 `platform/authority.go:31` 也引用事务类型，而 `services/ontology/action_publication.go:10` 和 `services/resources/publication/api.go:6` 依赖 `platform`；直接让 `platform` 导入 ontology 或 publication 会成环。
     - 可选：① 设计同纪元版本化迁移与冻结字节读取，使新规则可运行且既有接受结果、定义字节和对象身份不变；② 保持当前类型和历史读取，暂缓类型归位。建议本批采用②；不清数据、不推进纪元、不删除现有历史读取，①须先证明旧发布版本、恢复和安装的行为。
     - 完成：负责人确定历史与公共契约边界后，列出定义校验归 ontology、执行归 actions、发布与恢复无反向依赖的完整切分及文件清单；最终移除 `post` / `journal`（含关账期）专有 Go 类型，不换名保留，在此之前不删除旧类型。验证：后续方案定下时确定；须覆盖原冻结字节、既有对象身份、恢复和安装，并跑 V1、V3、V4。
-- [ ] U3 页面模型归位。已完成（U3.1、U3.3）：33 个页面声明类型集中在 SDK，模型字段解析归 `services/apps/pages`；候选读取、资产描述与安装映像解码经宿主注入内核和记录投影。其余页面求值、校验与发布闭包实现仍待迁移。
+- [ ] U3 页面模型归位。已完成（U3.1、U3.3、U3.4）：33 个页面声明类型集中在 SDK，模型字段解析归 `services/apps/pages`；候选读取、资产描述与安装映像解码经宿主注入内核和记录投影；历史查询版本与来源分派归 `services/resources/publication`，产品描述与蓝图校验归 `services/devops/descriptor`。关系版本仍由 SDK 的 `LinkVersion` 读取，其余页面求值、校验与发布闭包实现仍待迁移。
   - 边界裁定：页面声明是 SDK 契约，`Manifest.Pages`、`Definition.Page`、`Application.Variables/Queries` 与宿主接口继续使用同一组有类型声明；SDK 唯一保留确有格式语义的 `MarshalJSON`、`UnmarshalJSON` 及原始 `profile`、`retainedVersion` / `contentVersion` 信息。页面生成、求值、校验、依赖解析与版本计算属于实现。无租户状态的候选与资产语义读取由宿主单独装配，不放进有状态的五项发布钩子，也不依赖租户已创建；未来 `publication` 通过宿主注入的纯页面语义函数调用 `pages`，不得直接导入 `apps/pages` 或扩张 `pages` 已有的反向依赖。函数集合从实际调用提取，不预设框架；不引入重复类型、转发兼容层或 SDK 对实现的反向调用。
   - [ ] U3.2 切分实现依赖（不写代码）。前置已完成：U3.1、U4.1。（部分完成：页面校验、资源发布闭包、历史字节读取三链已诊断；通用发布与页面实现的切分由 U3.4–U3.6 确认）
     - 已确认：`describeAsset` 调页面安全与依赖；`Candidate` / `ReadCandidate` 同时校验资产描述、依赖图、冻结页面与规范字节；`DecodeRelease`、`RestoreCommitted` 读取候选，`OwnedDefinitions` 描述资产并经注册表解码历史安装映像。直接迁整文件会让 SDK 反向调用服务，或改变恢复校验。
     - 剩余产出：按实际调用补齐后续条目的文件、删除路径、无环且可编译的中间完成态、`make contract` 无差异和验证要求，再开始实施。
-  - [ ] U3.4 查询版本与产品蓝图的发布依赖。前置 U3.3 已完成；历史查询版本解析及查询、关系来源分派已归 `services/resources/publication`，旧 SDK 查询方法已删除；关系版本仍由 SDK 的 `LinkVersion` 读取。剩余产品蓝图校验仍依赖 SDK 发布解析，须迁出并保持导入、历史候选与安装校验。
   - [ ] U3.5 通用发布闭包与历史读取迁出（诊断与切分，不写代码）。前置 U3.4。按 U3.3 的注入边界梳理 `platform/asset_lifecycle.go`、`dependencies*.go`、`revision*.go`、`definition_profile.go` 与全部调用方；确定通用解析、修订和编排归 `services/resources/publication` 的先后顺序及从实际调用提取的纯页面函数，产出每行完整文件、删除路径、无环中间态、`make contract` 无差异与 V1/V3/V4 验证。
   - [ ] U3.6 页面实现迁出（诊断与切分，不写代码）。前置 U3.5。逐项梳理 `platform/page_*.go` 与 `definition*.go` 中的页面生成、求值、校验、投影、依赖和版本计算，明确归 `services/apps/pages` 的实现及 SDK 必留的声明、格式方法和原始信息；产出每行完整文件、删除路径、无环中间态、`make contract` 无差异与验证档位，不退回整文件搬移。
 - [ ] U4 发布路径一张表。已完成（U4.1）：五项发布钩子由宿主登记，action-type 的发布步骤归本体服务；Build 的 apps、automation、functions、本体类型转接已删除。

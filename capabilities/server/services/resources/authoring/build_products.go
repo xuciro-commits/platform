@@ -11,6 +11,7 @@ import (
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformserver/platform"
+	packagedesc "platformserver/services/devops/descriptor"
 )
 
 const ProductType = "build.product"
@@ -48,7 +49,7 @@ func (p Product) Check() error {
 	if namespace == "" {
 		namespace = p.Name
 	}
-	return (platform.PackageDescriptor{ID: p.Name, Version: "0.0.0", Namespace: namespace, Requires: p.Requires}).Validate()
+	return packagedesc.Validate(platform.PackageDescriptor{ID: p.Name, Version: "0.0.0", Namespace: namespace, Requires: p.Requires})
 }
 
 type ProductVersion struct {

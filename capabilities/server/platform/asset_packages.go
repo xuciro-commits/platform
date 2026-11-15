@@ -2,9 +2,7 @@ package platform
 
 import (
 	"encoding/json"
-	"fmt"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"strings"
 	"time"
 )
 
@@ -53,27 +51,6 @@ type PackageSetupStep struct {
 	Schema  string        `json:"schema"`
 	Target  *pb.EntityRef `json:"target"`
 	Payload string        `json:"payload"`
-}
-
-func (p PackageSetup) Check() error {
-	if len(p.Steps) == 0 || len(p.Steps) > 128 || len(p.Roles) > 32 {
-		return fmt.Errorf("a setup plan needs 1–128 requests and at most 32 role requirements")
-	}
-	for _, role := range p.Roles {
-		if role.App == "" || role.Role == "" || len(role.App) > 128 || len(role.Role) > 128 {
-			return fmt.Errorf("setup role requirements need an app and role")
-		}
-	}
-	seen := map[string]bool{}
-	for _, step := range p.Steps {
-		if step.Name == "" || len(step.Name) > 128 || seen[step.Name] || step.App == "" ||
-			!strings.HasPrefix(step.Schema, step.App+".") || step.Target.GetType() == "" || step.Target.GetId() == "" ||
-			len(step.Payload) > 64<<10 || !json.Valid([]byte(step.Payload)) {
-			return fmt.Errorf("setup requests need unique names, an owner, schema, target and bounded JSON payload")
-		}
-		seen[step.Name] = true
-	}
-	return nil
 }
 
 type InstalledPackage struct {
@@ -157,76 +134,6 @@ type Contribution struct {
 type PackageIndex struct {
 	Packages  []PackageDescriptor
 	Directory string
-}
-
-func (p PackageDescriptor) Validate() error {
-	if p.ID == "" || p.Version == "" || p.Namespace == "" {
-		return fmt.Errorf("a package needs an ID, a version and a namespace")
-	}
-	for _, value := range []string{p.ID, p.Namespace, p.Version} {
-		if len(value) > 200 || value == "." || value == ".." || strings.ContainsAny(value, "/\\") || strings.IndexFunc(value, func(r rune) bool { return r <= ' ' || r == 127 }) >= 0 {
-			return fmt.Errorf("package ID, namespace and version must be safe path segments")
-		}
-	}
-	if _, err := ParsePackageVersion(p.Version); err != nil {
-		return err
-	}
-	for _, need := range p.Requires {
-		id, constraint := PackageDependency(need)
-		if id == "" || id == p.ID {
-			return fmt.Errorf("a product dependency names another product")
-		}
-		if constraint != "" && constraint != "*" {
-			for _, alternative := range strings.Split(constraint, "||") {
-				for _, term := range strings.Fields(alternative) {
-					if _, err := ParsePackageVersion(strings.TrimLeft(term, "<>=^~")); err != nil {
-						return err
-					}
-				}
-			}
-		}
-	}
-	for _, c := range p.Contributions {
-		if c.View == "" {
-			return fmt.Errorf("package %s: a contribution needs a view", p.ID)
-		}
-	}
-	for _, need := range p.Capabilities {
-		if err := need.Check(); err != nil {
-			return err
-		}
-	}
-	if p.Blueprint != nil {
-		return p.Blueprint.Check()
-	}
-	return nil
-}
-
-func (b PackageBlueprint) Check() error {
-	if len(b.Roots) == 0 || len(b.Assets) == 0 || len(b.Assets) > 1000 {
-		return fmt.Errorf("a blueprint needs roots and at most 1000 owner definitions")
-	}
-	if b.Setup != nil {
-		if err := b.Setup.Check(); err != nil {
-			return err
-		}
-	}
-	for _, root := range b.Roots {
-		if root.Check() != nil || root.App != "build" {
-			return fmt.Errorf("a package blueprint has only Build-owned roots")
-		}
-	}
-	seen := map[AssetRef]bool{}
-	for _, asset := range b.Assets {
-		if seen[asset.Ref] || asset.Ref.App != "build" || asset.ContractVersion < 1 || asset.SourceVersion == "" {
-			return fmt.Errorf("blueprint owner definitions need unique pinned identities")
-		}
-		seen[asset.Ref] = true
-		if _, err := WithDependencies(asset); err != nil {
-			return err
-		}
-	}
-	return nil
 }
 
 func (i *PackageIndex) Latest(id string) (PackageDescriptor, bool) {
