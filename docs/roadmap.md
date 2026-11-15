@@ -56,7 +56,7 @@ read-when: 每批开始（选当前批次）与结束（删除已完成条目、
     - 产出：每种 kind → §6.7 哪种规则或副作用的映射表，写入 6-domain §6.7；把 U2 拆成后续行（同本格式，标档位与验证）。
 - [ ] U3 页面模型归位。已完成（U3.1）：33 个页面声明类型集中在 SDK，模型字段解析归 `services/apps/pages`；其余页面求值、校验与发布闭包实现仍待迁移。
   - 边界裁定：页面声明是 SDK 契约，`Manifest.Pages`、`Definition.Page`、`Application.Variables/Queries` 与宿主接口继续使用同一组有类型声明。页面生成、求值、校验、依赖解析与版本计算属于实现，不能因为声明留在 SDK 就一并保留。实现迁移按实际调用依赖切分，不引入重复类型、包装或兼容层。
-  - [ ] U3.2 `[难]` 切分实现依赖（不写代码）。前置已完成：U3.1、U4.1。
+  - [ ] U3.2 `[难]` 切分实现依赖（不写代码）。前置已完成：U3.1、U4.1。（进行中：Terra 6.1 Max，2026-11-14）
     - 读：`platform/page_*.go` 的实现、`definition*.go`、`dependencies*.go`、`revision*.go`，`kernel/acceptedformat/format_release.go`、`kernel/committed_restore.go`、`kernel/records/owned_definitions.go`，以及 ontology/devops/resources 中的页面调用方。
     - 方向：分别列清页面校验、资源发布闭包与历史字节读取三条调用链。页面语义归 `services/apps/pages`，通用依赖解析与发布编排归 `services/resources/publication`；内核不导入服务，恢复的校验与逐字节语义不得减弱。跨服务调用复用已有发布钩子与宿主装配，不让 SDK 反向调用实现；SDK 只留声明与声明助手。
     - 产出：所有页面实现到唯一拥有者的映射、共享发布代码的先后顺序与后续 `[易]` 工单；每行列完整文件、删除路径、无循环依赖的中间完成态、`make contract` 无差异及验证档位，不以旧的整文件搬移工单代替切分。
