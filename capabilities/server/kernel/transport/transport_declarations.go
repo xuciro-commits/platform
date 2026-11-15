@@ -167,6 +167,10 @@ func (s *schemas) ref(t reflect.Type) map[string]any {
 			if name == "Model" {
 				name = "EnterpriseModel"
 			}
+		case "platformserver/services/resources/merge":
+			if base, _, generic := strings.Cut(name, "["); generic {
+				name = "Branch" + base
+			}
 		}
 		if name == "" || strings.Contains(name, "[") {
 			return s.object(t)

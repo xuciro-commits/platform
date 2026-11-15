@@ -805,6 +805,22 @@ export type BranchCheck = {
   simulation?: BranchSimulationCheck;
 };
 
+export type BranchCheckRequest = {
+  resolutions?: BranchResolution[];
+  simulation?: CandidateSimulationRequest;
+};
+
+export type BranchChecks = {
+  at: string;
+  conflicts: BranchResourceDiff[];
+  resources: BranchResourceCheck[];
+  approved: boolean;
+  approval?: string;
+  ready: boolean;
+  check: BranchCheck;
+  simulation?: CandidateSimulation;
+};
+
 export type BranchCreateRequest = {
   name: string;
   title: string;
@@ -850,6 +866,19 @@ export type BranchMerge = {
   base?: string;
 };
 
+export type BranchMergeRequest = {
+  resolutions?: BranchResolution[];
+  simulation?: CandidateSimulationRequest;
+};
+
+export type BranchMergeResult = {
+  branch: BranchDetail;
+  candidate?: string;
+  candidateError?: string;
+  applied: BranchResourceCheck[];
+  simulation?: CandidateSimulation;
+};
+
 export type BranchProposal = {
   requiredApprovals: number;
   projects?: string[];
@@ -859,6 +888,13 @@ export type BranchProposal = {
   reviewers: string[];
   reviews: BranchReview[];
   checks?: unknown;
+};
+
+export type BranchProposeRequest = {
+  reviewers?: string[];
+  note?: string;
+  resolutions?: BranchResolution[];
+  simulation?: CandidateSimulationRequest;
 };
 
 export type BranchResolution = {

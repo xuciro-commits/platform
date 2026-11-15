@@ -137,7 +137,7 @@ type DraftClosure struct { Requires []DraftRef; Prior, Next platform.AssetRef; H
 
 ## 7.6 协议与版本
 
-- `contract/proto` 是协议的唯一来源；Go 与 TypeScript 类型由它与宿主类型生成（`go run ./cmd/api-types` 生成 `web/packages/api/src/gen/host.ts`），生成文件不手改。
+- `contract/proto` 是协议的唯一来源；Go 与 TypeScript 类型由它与宿主类型生成（`go run ./cmd/api-types` 生成 `web/packages/api/src/gen/host.ts`），生成文件不手改。路由使用的分支泛型请求和响应以 `Branch` 前缀导出，字段取自实际实例。
 - `web/packages/app/src/pageui/manifest.ts` 手写，是页面组件契约的唯一来源；`capabilities/server/platform/page_compat.json` 与 `web/packages/app/src/pageui/safety.ts` 由 `go run ./cmd/page-contract` 生成，服务器专用规则在 `capabilities/server/platform/page_compat_rules.json`。
 - 每个提交带模式版本头；接受结果格式带版本；存储格式演进只经版本化迁移，迁移本身是接受结果。
 - 格式纪元：宿主声明一个格式纪元，当前为 1；租户日志记录自己的纪元，宿主只打开纪元相同的日志，不同则拒绝装载并提示重建。纪元内的接受结果、记录与发布字节逐字节保留。纪元之前的格式不读取、不迁移、不留解码分支：产品包按当前格式重新产出，开发与演示租户重建（尚无客户租户；为不存在的历史保留解码路径，只会让每条读取都多一组防御分支）。第一个客户租户装载后纪元不再重置，此后格式只经迁移演进。
