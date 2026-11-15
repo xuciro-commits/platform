@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"maps"
 	"platformserver/platform"
+	releasepub "platformserver/services/resources/publication"
 	"slices"
 	"strconv"
 	"time"
@@ -93,7 +94,7 @@ func (f *Flows) NativeFlowAsset(manifest platform.Manifest, name string, version
 	if err != nil {
 		return platform.ReleaseAsset{}, err
 	}
-	return platform.WithDependencies(platform.ReleaseAsset{Ref: platform.AssetRef{App: manifest.ID, Kind: platform.AssetFlow, Name: descriptor.Name}, ContractVersion: 1, SourceVersion: manifest.Version + ".native-flow-" + strconv.Itoa(version), Body: raw})
+	return releasepub.WithDependencies(platform.ReleaseAsset{Ref: platform.AssetRef{App: manifest.ID, Kind: platform.AssetFlow, Name: descriptor.Name}, ContractVersion: 1, SourceVersion: manifest.Version + ".native-flow-" + strconv.Itoa(version), Body: raw})
 }
 
 func (f *Flows) Consumptions(app string) []platform.Consumption {

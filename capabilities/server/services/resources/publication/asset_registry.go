@@ -114,7 +114,7 @@ func (r *AssetRegistry) freezeAsset(asset platform.ReleaseAsset) (platform.Relea
 	}
 	slices.SortFunc(asset.Requires, platform.CompareAssetRef)
 	asset.Requires = slices.Compact(asset.Requires)
-	if err := platform.CheckAssetDependencies(asset); err != nil {
+	if err := CheckAssetDependencies(asset); err != nil {
 		return platform.ReleaseAsset{}, err
 	}
 	return asset, nil

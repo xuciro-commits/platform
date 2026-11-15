@@ -14,7 +14,7 @@ func PageReleaseAsset(app, sourceVersion string, page platform.Page) (platform.R
 	if err != nil {
 		return platform.ReleaseAsset{}, err
 	}
-	return platform.WithDependencies(platform.ReleaseAsset{Ref: platform.AssetRef{App: app, Kind: platform.AssetPage, Name: page.Name},
+	return WithDependencies(platform.ReleaseAsset{Ref: platform.AssetRef{App: app, Kind: platform.AssetPage, Name: page.Name},
 		ContractVersion: 1, SourceVersion: sourceVersion, Body: body})
 }
 
@@ -29,6 +29,6 @@ func ApplicationReleaseAsset(app, sourceVersion string, application platform.App
 	if err != nil {
 		return platform.ReleaseAsset{}, err
 	}
-	return platform.WithDependencies(platform.ReleaseAsset{Ref: platform.AssetRef{App: app, Kind: platform.AssetApp, Name: application.Name},
+	return WithDependencies(platform.ReleaseAsset{Ref: platform.AssetRef{App: app, Kind: platform.AssetApp, Name: application.Name},
 		ContractVersion: 1, SourceVersion: sourceVersion, Body: body})
 }

@@ -1,4 +1,4 @@
-package platform
+package publication
 
 import (
 	"bytes"
@@ -6,14 +6,16 @@ import (
 	"fmt"
 	"slices"
 	"strings"
+
+	"platformserver/platform"
 )
 
-func describeAsset(asset ReleaseAsset, historical bool) (Dependencies, error) {
-	out := Dependencies{Ref: asset.Ref, Requires: []AssetRef{}, Provides: []Capability{}, Version: asset.SourceVersion}
+func describeAsset(asset platform.ReleaseAsset, historical bool) (platform.Dependencies, error) {
+	out := platform.Dependencies{Ref: asset.Ref, Requires: []platform.AssetRef{}, Provides: []platform.Capability{}, Version: asset.SourceVersion}
 	if err := asset.Ref.Check(); err != nil {
 		return out, err
 	}
-	if _, err := CanonicalAssetBody(asset.Body); err != nil {
+	if _, err := platform.CanonicalAssetBody(asset.Body); err != nil {
 		return out, fmt.Errorf("%s: %w", asset.Ref, err)
 	}
 	var identity struct{ Name, Type, Schema string }
@@ -21,23 +23,23 @@ func describeAsset(asset ReleaseAsset, historical bool) (Dependencies, error) {
 		return out, err
 	}
 	name := identity.Name
-	if asset.Ref.Kind == AssetObject {
+	if asset.Ref.Kind == platform.AssetObject {
 		name = identity.Type
 	}
-	if asset.Ref.Kind == AssetAction {
+	if asset.Ref.Kind == platform.AssetAction {
 		name = identity.Schema
 	}
 	if name != asset.Ref.Name {
 		return out, fmt.Errorf("release asset %s descriptor identity differs", asset.Ref)
 	}
 	var bindings struct {
-		Objects   map[string]AssetRef `json:"objectBindings"`
-		Protocols map[string]AssetRef `json:"protocolBindings"`
+		Objects   map[string]platform.AssetRef `json:"objectBindings"`
+		Protocols map[string]platform.AssetRef `json:"protocolBindings"`
 	}
 	if err := json.Unmarshal(asset.Body, &bindings); err != nil {
 		return out, err
 	}
-	object := func(name string) AssetRef {
+	object := func(name string) platform.AssetRef {
 		if ref, ok := bindings.Objects[name]; ok {
 			return ref
 		}
@@ -45,9 +47,9 @@ func describeAsset(asset ReleaseAsset, historical bool) (Dependencies, error) {
 		if !ok {
 			app = asset.Ref.App
 		}
-		return AssetRef{App: app, Kind: AssetObject, Name: name}
+		return platform.AssetRef{App: app, Kind: platform.AssetObject, Name: name}
 	}
-	add := func(ref AssetRef) {
+	add := func(ref platform.AssetRef) {
 		if ref.Name != "" {
 			out.Requires = append(out.Requires, ref)
 		}
@@ -56,32 +58,32 @@ func describeAsset(asset ReleaseAsset, historical bool) (Dependencies, error) {
 		if name == "enterprise.element" {
 			return
 		}
-		if asset.Ref.Kind == AssetObject && name == asset.Ref.Name {
+		if asset.Ref.Kind == platform.AssetObject && name == asset.Ref.Name {
 			return
 		}
 		if name != "" {
 			add(object(name))
 		}
 	}
-	readSpec := func(spec *RuleReadSpec) {
+	readSpec := func(spec *platform.RuleReadSpec) {
 		if spec == nil {
 			return
 		}
 		for _, collection := range spec.Collections {
 			if collection.Query != "" {
-				add(AssetRef{App: collection.App, Kind: AssetQuery, Name: collection.Query})
+				add(platform.AssetRef{App: collection.App, Kind: platform.AssetQuery, Name: collection.Query})
 			}
 			if collection.Object != "" && collection.Object != asset.Ref.Name {
 				addObject(collection.Object)
 			}
 		}
 	}
-	capability := func(kind, name, side string, roles []string, input, output ValueSchema, fields []Field) {
-		out.Provides = append(out.Provides, Capability{Kind: kind, Name: name, Side: side, Roles: slices.Clone(roles), Inputs: input, Outputs: output, Parameters: fields})
+	capability := func(kind, name, side string, roles []string, input, output platform.ValueSchema, fields []platform.Field) {
+		out.Provides = append(out.Provides, platform.Capability{Kind: kind, Name: name, Side: side, Roles: slices.Clone(roles), Inputs: input, Outputs: output, Parameters: fields})
 	}
 	switch asset.Ref.Kind {
-	case AssetPage:
-		var p Page
+	case platform.AssetPage:
+		var p platform.Page
 		if err := json.Unmarshal(asset.Body, &p); err != nil {
 			return out, err
 		}
@@ -89,8 +91,8 @@ func describeAsset(asset ReleaseAsset, historical bool) (Dependencies, error) {
 			return out, err
 		}
 		out.Requires = append(out.Requires, pageDependencies(p)...)
-	case AssetApp:
-		var app Application
+	case platform.AssetApp:
+		var app platform.Application
 		decoder := json.NewDecoder(bytes.NewReader(asset.Body))
 		decoder.DisallowUnknownFields()
 		if err := decoder.Decode(&app); err != nil {
@@ -103,8 +105,8 @@ func describeAsset(asset ReleaseAsset, historical bool) (Dependencies, error) {
 			return out, err
 		}
 		out.Requires = append(out.Requires, app.Dependencies(asset.Ref.App)...)
-	case AssetObject:
-		info, err := QueryObjectDescriptor(asset.Body)
+	case platform.AssetObject:
+		info, err := queryObjectDescriptor(asset.Body)
 		if err != nil {
 			return out, err
 		}
@@ -129,10 +131,10 @@ func describeAsset(asset ReleaseAsset, historical bool) (Dependencies, error) {
 			add(info.ObjectView.Application)
 			add(info.ObjectView.Page)
 		}
-		capability("interface", asset.Ref.Name, CapabilityPure, nil, ValueSchema{}, CapabilityEntitySchema(info), nil)
+		capability("interface", asset.Ref.Name, platform.CapabilityPure, nil, platform.ValueSchema{}, platform.CapabilityEntitySchema(info), nil)
 		for _, name := range info.Implements {
 			owner, _, _ := strings.Cut(name, ".")
-			add(AssetRef{App: owner, Kind: AssetInterface, Name: name})
+			add(platform.AssetRef{App: owner, Kind: platform.AssetInterface, Name: name})
 		}
 		if info.Extends != "" {
 			addObject(info.Extends)
@@ -141,15 +143,15 @@ func describeAsset(asset ReleaseAsset, historical bool) (Dependencies, error) {
 			add(info.ExtensionSource.Base.Ref)
 		}
 		var declaration struct {
-			Creation    *BusinessTxn  `json:"createTransaction"`
-			Reads       *RuleReadSpec `json:"reads"`
-			Constraints []Constraint  `json:"constraints"`
-			Sets        []RecordSet   `json:"sets"`
+			Creation    *platform.BusinessTxn  `json:"createTransaction"`
+			Reads       *platform.RuleReadSpec `json:"reads"`
+			Constraints []platform.Constraint  `json:"constraints"`
+			Sets        []platform.RecordSet   `json:"sets"`
 			Actions     []struct {
-				Name        string            `json:"name"`
-				Reads       *RuleReadSpec     `json:"reads"`
-				Transaction *BusinessTxn      `json:"transaction"`
-				Adoption    *ProposalAdoption `json:"adoption"`
+				Name        string                     `json:"name"`
+				Reads       *platform.RuleReadSpec     `json:"reads"`
+				Transaction *platform.BusinessTxn      `json:"transaction"`
+				Adoption    *platform.ProposalAdoption `json:"adoption"`
 				Creates     []struct {
 					Object string `json:"object"`
 				} `json:"creates"`
@@ -163,8 +165,8 @@ func describeAsset(asset ReleaseAsset, historical bool) (Dependencies, error) {
 		}
 		readSpec(declaration.Reads)
 		if declaration.Creation != nil {
-			var visit func(TxnStep)
-			visit = func(step TxnStep) {
+			var visit func(platform.TxnStep)
+			visit = func(step platform.TxnStep) {
 				if step.Target.Type != "" {
 					addObject(step.Target.Type)
 				}
@@ -211,24 +213,24 @@ func describeAsset(asset ReleaseAsset, historical bool) (Dependencies, error) {
 				if owner == "" {
 					owner = asset.Ref.App
 				}
-				add(AssetRef{App: owner, Kind: AssetFunction, Name: ref.Name})
+				add(platform.AssetRef{App: owner, Kind: platform.AssetFunction, Name: ref.Name})
 			}
 			if txn := action.Transaction; txn != nil {
 				readSpec(txn.Reads)
-				var refusal func([]Refusal)
-				var step func(TxnStep)
-				refusal = func(rules []Refusal) {
+				var refusal func([]platform.Refusal)
+				var step func(platform.TxnStep)
+				refusal = func(rules []platform.Refusal) {
 					for _, r := range rules {
 						if r.Record != nil {
 							step(*r.Record)
 						}
 						if r.Route != nil {
 							addObject(r.Route.Type)
-							add(AssetRef{App: asset.Ref.App, Kind: AssetAction, Name: r.Route.Type + "." + r.Route.Action})
+							add(platform.AssetRef{App: asset.Ref.App, Kind: platform.AssetAction, Name: r.Route.Type + "." + r.Route.Action})
 						}
 					}
 				}
-				step = func(s TxnStep) {
+				step = func(s platform.TxnStep) {
 					if s.Call != nil {
 						add(s.Call.Ref)
 					}
@@ -255,8 +257,8 @@ func describeAsset(asset ReleaseAsset, historical bool) (Dependencies, error) {
 
 			}
 		}
-	case AssetAction:
-		action, err := ReleaseActionDescriptor(asset.Body)
+	case platform.AssetAction:
+		action, err := releaseActionDescriptor(asset.Body)
 		if err != nil {
 			return out, err
 		}
@@ -283,16 +285,16 @@ func describeAsset(asset ReleaseAsset, historical bool) (Dependencies, error) {
 		var confirmation struct {
 			Bindings *struct {
 				Parties []struct {
-					Name                string    `json:"name"`
-					Writeback           *AssetRef `json:"writeback"`
-					CompensateWriteback *AssetRef `json:"compensateWriteback"`
-					Source              *AssetRef `json:"source"`
-					Protocol            *AssetRef `json:"protocol"`
-					Action              *AssetRef `json:"action"`
-					CompensateAction    *AssetRef `json:"compensateAction"`
+					Name                string             `json:"name"`
+					Writeback           *platform.AssetRef `json:"writeback"`
+					CompensateWriteback *platform.AssetRef `json:"compensateWriteback"`
+					Source              *platform.AssetRef `json:"source"`
+					Protocol            *platform.AssetRef `json:"protocol"`
+					Action              *platform.AssetRef `json:"action"`
+					CompensateAction    *platform.AssetRef `json:"compensateAction"`
 				} `json:"parties"`
-				OnComplete      AssetRef  `json:"onComplete"`
-				OnPartialAction *AssetRef `json:"onPartialAction"`
+				OnComplete      platform.AssetRef  `json:"onComplete"`
+				OnPartialAction *platform.AssetRef `json:"onPartialAction"`
 			} `json:"confirmationBindings"`
 		}
 		if err := json.Unmarshal(asset.Body, &confirmation); err != nil {
@@ -304,7 +306,7 @@ func describeAsset(asset ReleaseAsset, historical bool) (Dependencies, error) {
 				add(*resolved.OnPartialAction)
 			}
 			for _, party := range resolved.Parties {
-				for _, ref := range []*AssetRef{party.Writeback, party.CompensateWriteback, party.Source, party.Protocol, party.Action, party.CompensateAction} {
+				for _, ref := range []*platform.AssetRef{party.Writeback, party.CompensateWriteback, party.Source, party.Protocol, party.Action, party.CompensateAction} {
 					if ref != nil {
 						add(*ref)
 					}
@@ -313,13 +315,13 @@ func describeAsset(asset ReleaseAsset, historical bool) (Dependencies, error) {
 		}
 		var dispatch struct {
 			Bindings *struct {
-				Commands            map[string]AssetRef `json:"commands"`
-				Writeback           AssetRef            `json:"writeback"`
-				Target              AssetRef            `json:"target"`
-				CompensateWriteback *AssetRef           `json:"compensateWriteback"`
-				Source              *AssetRef           `json:"source"`
-				Observation         *AssetRef           `json:"observation"`
-				Record              *AssetRef           `json:"record"`
+				Commands            map[string]platform.AssetRef `json:"commands"`
+				Writeback           platform.AssetRef            `json:"writeback"`
+				Target              platform.AssetRef            `json:"target"`
+				CompensateWriteback *platform.AssetRef           `json:"compensateWriteback"`
+				Source              *platform.AssetRef           `json:"source"`
+				Observation         *platform.AssetRef           `json:"observation"`
+				Record              *platform.AssetRef           `json:"record"`
 			} `json:"dispatchBindings"`
 		}
 		if err := json.Unmarshal(asset.Body, &dispatch); err != nil {
@@ -331,14 +333,14 @@ func describeAsset(asset ReleaseAsset, historical bool) (Dependencies, error) {
 			}
 			add(binding.Writeback)
 			add(binding.Target)
-			for _, ref := range []*AssetRef{binding.CompensateWriteback, binding.Source, binding.Observation, binding.Record} {
+			for _, ref := range []*platform.AssetRef{binding.CompensateWriteback, binding.Source, binding.Observation, binding.Record} {
 				if ref != nil {
 					add(*ref)
 				}
 			}
 		}
 		var transaction struct {
-			Bindings map[string]AssetRef `json:"transactionBindings"`
+			Bindings map[string]platform.AssetRef `json:"transactionBindings"`
 		}
 		if err := json.Unmarshal(asset.Body, &transaction); err != nil {
 			return out, err
@@ -346,9 +348,9 @@ func describeAsset(asset ReleaseAsset, historical bool) (Dependencies, error) {
 		for _, ref := range transaction.Bindings {
 			add(ref)
 		}
-		capability("action", action.Schema, CapabilityAuthoritative, action.Roles, CapabilityFieldsSchema(action.Payload), ValueSchema{}, action.Payload)
-	case AssetObservation:
-		var observation ObservationDefinition
+		capability("action", action.Schema, platform.CapabilityAuthoritative, action.Roles, platform.CapabilityFieldsSchema(action.Payload), platform.ValueSchema{}, action.Payload)
+	case platform.AssetObservation:
+		var observation platform.ObservationDefinition
 		if err := json.Unmarshal(asset.Body, &observation); err != nil {
 			return out, err
 		}
@@ -361,13 +363,13 @@ func describeAsset(asset ReleaseAsset, historical bool) (Dependencies, error) {
 		if observation.Intervals != nil {
 			modes = append(modes, "intervals")
 		}
-		capability("query", observation.Name, CapabilityPure, observation.Roles, ValueSchema{Type: "object", Properties: map[string]ValueSchema{"record": {Type: "string"}, "since": {Type: "string"}, "until": {Type: "string"}, "mode": {Type: "string", Enum: modes}, "limit": {Type: "integer"}}, Required: []string{"record", "since", "until", "mode"}}, ValueSchema{}, nil)
+		capability("query", observation.Name, platform.CapabilityPure, observation.Roles, platform.ValueSchema{Type: "object", Properties: map[string]platform.ValueSchema{"record": {Type: "string"}, "since": {Type: "string"}, "until": {Type: "string"}, "mode": {Type: "string", Enum: modes}, "limit": {Type: "integer"}}, Required: []string{"record", "since", "until", "mode"}}, platform.ValueSchema{}, nil)
 		if observation.Decision != nil {
 			add(observation.Decision.Action)
-			capability("operation", observation.Name+".evaluate", CapabilityAuthoritative, observation.Roles, ValueSchema{Type: "object", Properties: map[string]ValueSchema{"record": {Type: "string"}, "until": {Type: "string"}, "key": {Type: "string"}}, Required: []string{"record", "until", "key"}}, ValueSchema{}, nil)
+			capability("operation", observation.Name+".evaluate", platform.CapabilityAuthoritative, observation.Roles, platform.ValueSchema{Type: "object", Properties: map[string]platform.ValueSchema{"record": {Type: "string"}, "until": {Type: "string"}, "key": {Type: "string"}}, Required: []string{"record", "until", "key"}}, platform.ValueSchema{}, nil)
 		}
-	case AssetQuery:
-		var query NamedQuery
+	case platform.AssetQuery:
+		var query platform.NamedQuery
 		if err := json.Unmarshal(asset.Body, &query); err != nil {
 			return out, err
 		}
@@ -375,23 +377,23 @@ func describeAsset(asset ReleaseAsset, historical bool) (Dependencies, error) {
 			return out, err
 		}
 		for _, dep := range query.Dependencies() {
-			if !historical && dep.Kind == AssetObject {
+			if !historical && dep.Kind == platform.AssetObject {
 				dep = object(dep.Name)
 			}
 			add(dep)
 		}
 		if !historical && query.Interface != "" {
 			owner, _, _ := strings.Cut(query.Interface, ".")
-			add(AssetRef{App: owner, Kind: AssetInterface, Name: query.Interface})
+			add(platform.AssetRef{App: owner, Kind: platform.AssetInterface, Name: query.Interface})
 		}
-		input := ValueSchema{Type: "object", Properties: map[string]ValueSchema{}}
+		input := platform.ValueSchema{Type: "object", Properties: map[string]platform.ValueSchema{}}
 		if query.By != "" {
-			input.Properties["for"] = ValueSchema{Type: "string"}
+			input.Properties["for"] = platform.ValueSchema{Type: "string"}
 			input.Required = []string{"for"}
 		}
-		capability("query", query.Name, CapabilityPure, nil, input, ValueSchema{}, nil)
-	case AssetLinkType:
-		var link LinkType
+		capability("query", query.Name, platform.CapabilityPure, nil, input, platform.ValueSchema{}, nil)
+	case platform.AssetLinkType:
+		var link platform.LinkType
 		if err := json.Unmarshal(asset.Body, &link); err != nil {
 			return out, err
 		}
@@ -403,8 +405,8 @@ func describeAsset(asset ReleaseAsset, historical bool) (Dependencies, error) {
 		}
 		add(link.Parent)
 		add(link.Child)
-	case AssetObjectTypeGroup:
-		var group ObjectTypeGroup
+	case platform.AssetObjectTypeGroup:
+		var group platform.ObjectTypeGroup
 		if err := json.Unmarshal(asset.Body, &group); err != nil {
 			return out, err
 		}
@@ -412,24 +414,24 @@ func describeAsset(asset ReleaseAsset, historical bool) (Dependencies, error) {
 			return out, err
 		}
 		out.Requires = append(out.Requires, group.Members...)
-	case AssetPropertyType:
-		var property PropertyType
+	case platform.AssetPropertyType:
+		var property platform.PropertyType
 		if err := json.Unmarshal(asset.Body, &property); err != nil {
 			return out, err
 		}
 		if err := property.Check(); err != nil {
 			return out, err
 		}
-	case AssetValueType:
-		var value ValueType
+	case platform.AssetValueType:
+		var value platform.ValueType
 		if err := json.Unmarshal(asset.Body, &value); err != nil {
 			return out, err
 		}
 		if err := value.Check(); err != nil {
 			return out, err
 		}
-	case AssetFunction:
-		var f AIFunction
+	case platform.AssetFunction:
+		var f platform.AIFunction
 		if err := json.Unmarshal(asset.Body, &f); err != nil {
 			return out, err
 		}
@@ -437,13 +439,13 @@ func describeAsset(asset ReleaseAsset, historical bool) (Dependencies, error) {
 			return out, err
 		}
 		if historical {
-			add(AssetRef{App: asset.Ref.App, Kind: AssetObject, Name: f.Object})
+			add(platform.AssetRef{App: asset.Ref.App, Kind: platform.AssetObject, Name: f.Object})
 		} else {
 			addObject(f.Object)
 		}
-		capability("function", f.Name, CapabilityEffect, f.Roles, ValueSchema{Type: "object", Properties: map[string]ValueSchema{"source": {Type: "string"}}, Required: []string{"source"}}, CapabilityFieldsSchema(f.Output), nil)
-	case AssetCompute:
-		var operation Operation
+		capability("function", f.Name, platform.CapabilityEffect, f.Roles, platform.ValueSchema{Type: "object", Properties: map[string]platform.ValueSchema{"source": {Type: "string"}}, Required: []string{"source"}}, platform.CapabilityFieldsSchema(f.Output), nil)
+	case platform.AssetCompute:
+		var operation platform.Operation
 		if err := json.Unmarshal(asset.Body, &operation); err != nil {
 			return out, err
 		}
@@ -454,13 +456,13 @@ func describeAsset(asset ReleaseAsset, historical bool) (Dependencies, error) {
 			addObject(operation.Rules.Reads.Object)
 			readSpec(&operation.Rules.Reads)
 		}
-		capability("operation", operation.Name, CapabilityPure, operation.Roles, operation.Input, operation.Output, nil)
-	case AssetFlow:
-		var flow FlowReleaseDescriptor
+		capability("operation", operation.Name, platform.CapabilityPure, operation.Roles, operation.Input, operation.Output, nil)
+	case platform.AssetFlow:
+		var flow platform.FlowReleaseDescriptor
 		if err := json.Unmarshal(asset.Body, &flow); err != nil {
 			return out, err
 		}
-		if flow.Subject.Name != "" && flow.Subject.Kind != AssetObject || !json.Valid(flow.Definition) || len(flow.Definition) == 0 || flow.Definition[0] != '{' {
+		if flow.Subject.Name != "" && flow.Subject.Kind != platform.AssetObject || !json.Valid(flow.Definition) || len(flow.Definition) == 0 || flow.Definition[0] != '{' {
 			return out, fmt.Errorf("release flow %s needs an optional subject and complete definition", asset.Ref)
 		}
 		add(flow.Subject)
@@ -468,7 +470,7 @@ func describeAsset(asset ReleaseAsset, historical bool) (Dependencies, error) {
 			add(binding.Ref)
 		}
 		for _, ref := range flow.Actions {
-			if ref.Kind != AssetAction {
+			if ref.Kind != platform.AssetAction {
 				return out, fmt.Errorf("flow %s binds a non-action", asset.Ref)
 			}
 			add(ref)
@@ -476,9 +478,9 @@ func describeAsset(asset ReleaseAsset, historical bool) (Dependencies, error) {
 		for _, ref := range flow.Dependencies {
 			add(ref)
 		}
-		capability("operation", flow.Name, CapabilityAuthoritative, nil, ValueSchema{}, ValueSchema{}, nil)
-	case AssetAgent:
-		var agent AgentReleaseDescriptor
+		capability("operation", flow.Name, platform.CapabilityAuthoritative, nil, platform.ValueSchema{}, platform.ValueSchema{}, nil)
+	case platform.AssetAgent:
+		var agent platform.AgentReleaseDescriptor
 		if err := json.Unmarshal(asset.Body, &agent); err != nil {
 			return out, err
 		}
@@ -493,7 +495,7 @@ func describeAsset(asset ReleaseAsset, historical bool) (Dependencies, error) {
 			for _, tool := range agent.Tools {
 				if protocol, _, ok := strings.Cut(tool, "#"); ok {
 					ref, found := bindings.Protocols[protocol]
-					if !found || ref.Kind != AssetProtocol || ref.Check() != nil {
+					if !found || ref.Kind != platform.AssetProtocol || ref.Check() != nil {
 						return out, fmt.Errorf("agent %s tool %s needs its declared provider protocol binding", asset.Ref, tool)
 					}
 					add(ref)
@@ -507,10 +509,10 @@ func describeAsset(asset ReleaseAsset, historical bool) (Dependencies, error) {
 				}
 				query, queryTool := strings.CutPrefix(tool, "query:")
 				if ref, fixed := agent.ToolBindings[tool]; fixed {
-					kind := AssetAction
+					kind := platform.AssetAction
 					name := tool
 					if queryTool {
-						kind = AssetQuery
+						kind = platform.AssetQuery
 						name = query
 					}
 					if ref.Kind != kind || ref.App != asset.Ref.App || ref.Name != name {
@@ -523,32 +525,32 @@ func describeAsset(asset ReleaseAsset, historical bool) (Dependencies, error) {
 					return out, fmt.Errorf("agent %s tool %s needs a fixed declared asset binding", asset.Ref, tool)
 				}
 				if queryTool && query != "" {
-					add(AssetRef{App: asset.Ref.App, Kind: AssetQuery, Name: query})
+					add(platform.AssetRef{App: asset.Ref.App, Kind: platform.AssetQuery, Name: query})
 					continue
 				}
 				if !strings.HasPrefix(tool, asset.Ref.App+".") || strings.ContainsAny(tool, "#:") {
 					return out, fmt.Errorf("agent %s tool %s is not a declared local action", asset.Ref, tool)
 				}
-				add(AssetRef{App: asset.Ref.App, Kind: AssetAction, Name: tool})
+				add(platform.AssetRef{App: asset.Ref.App, Kind: platform.AssetAction, Name: tool})
 			}
 		}
-		capability("operation", agent.Name, CapabilityEffect, nil, ValueSchema{}, ValueSchema{}, nil)
-	case AssetEvaluation:
-		evaluation, err := ReadEvaluationSet(asset.Body)
+		capability("operation", agent.Name, platform.CapabilityEffect, nil, platform.ValueSchema{}, platform.ValueSchema{}, nil)
+	case platform.AssetEvaluation:
+		evaluation, err := platform.ReadEvaluationSet(asset.Body)
 		if err != nil {
 			return out, err
 		}
 		add(evaluation.Function.Ref)
-	case AssetTestPlan:
-		plan, err := ReadTestPlan(asset.Body)
+	case platform.AssetTestPlan:
+		plan, err := platform.ReadTestPlan(asset.Body)
 		if err != nil {
 			return out, err
 		}
 		for _, root := range plan.Dependencies() {
 			add(root)
 		}
-	case AssetSampleSet:
-		var samples SampleSet
+	case platform.AssetSampleSet:
+		var samples platform.SampleSet
 		if err := json.Unmarshal(asset.Body, &samples); err != nil {
 			return out, err
 		}
@@ -556,27 +558,27 @@ func describeAsset(asset ReleaseAsset, historical bool) (Dependencies, error) {
 			return out, err
 		}
 		out.Requires = append(out.Requires, samples.Dependencies()...)
-	case AssetInterface:
-		var shape Interface
+	case platform.AssetInterface:
+		var shape platform.Interface
 		if err := json.Unmarshal(asset.Body, &shape); err != nil {
 			return out, err
 		}
 		if err := shape.Check(asset.Ref.App); err != nil {
 			return out, err
 		}
-		fields := make([]Field, 0, len(shape.Fields))
+		fields := make([]platform.Field, 0, len(shape.Fields))
 		for _, field := range shape.Fields {
-			fields = append(fields, Field{Name: field.Name, Type: field.Type, Description: field.Title})
+			fields = append(fields, platform.Field{Name: field.Name, Type: field.Type, Description: field.Title})
 		}
-		capability("interface", shape.Name, CapabilityPure, nil, ValueSchema{}, CapabilityFieldsSchema(fields), fields)
-	case AssetProtocol:
+		capability("interface", shape.Name, platform.CapabilityPure, nil, platform.ValueSchema{}, platform.CapabilityFieldsSchema(fields), fields)
+	case platform.AssetProtocol:
 		dependencies, err := describeProtocolDependencies(asset)
 		if err != nil {
 			return out, err
 		}
 		out.Requires = append(out.Requires, dependencies.Requires...)
 		out.Provides = append(out.Provides, dependencies.Provides...)
-	case AssetMediaSet, AssetSchedule, AssetListener, AssetConnection, AssetDataset, AssetSource, AssetPipeline, AssetWriteback, AssetMatching:
+	case platform.AssetMediaSet, platform.AssetSchedule, platform.AssetListener, platform.AssetConnection, platform.AssetDataset, platform.AssetSource, platform.AssetPipeline, platform.AssetWriteback, platform.AssetMatching:
 		dependencies, err := describeIntegrationDependencies(asset, historical, object)
 		if err != nil {
 			return out, err

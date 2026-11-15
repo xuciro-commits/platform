@@ -310,7 +310,7 @@ func (o *Owner) fromAsset(asset platform.ReleaseAsset) (Function, error) {
 	var zero Function
 	version := o.env.AssetVersion(asset)
 	var d platform.AIFunction
-	if version == 0 || strictDecode(asset.Body, &d) != nil || asset.ContractVersion != 1 || d.Check() != nil || d.Name != asset.Ref.Name || platform.CheckAssetDependencies(asset) != nil {
+	if version == 0 || strictDecode(asset.Body, &d) != nil || asset.ContractVersion != 1 || d.Check() != nil || d.Name != asset.Ref.Name || publication.CheckAssetDependencies(asset) != nil {
 		return zero, fmt.Errorf("invalid builder function asset %s", asset.Ref)
 	}
 	f := functionFromDeclaration(d)
@@ -391,7 +391,7 @@ func (o *Owner) Prepare(assets []platform.ReleaseAsset) ([]platform.ReleasePubli
 			family := record.family()
 			prior, retained := publication.Read[Function](family.Published)
 			var d platform.AIFunction
-			if version != family.Version+1 || strictDecode(asset.Body, &d) != nil || asset.ContractVersion != 1 || d.Check() != nil || platform.CheckAssetDependencies(asset) != nil {
+			if version != family.Version+1 || strictDecode(asset.Body, &d) != nil || asset.ContractVersion != 1 || d.Check() != nil || publication.CheckAssetDependencies(asset) != nil {
 				return record, fmt.Errorf("invalid next function version")
 			}
 			frozen := functionFromDeclaration(d)

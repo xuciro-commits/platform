@@ -138,7 +138,7 @@ func ReleaseAsset(ref platform.AssetRef, version string, definition any) (platfo
 	if link, ok := definition.(platform.LinkType); ok {
 		contract = link.Contract()
 	}
-	return platform.WithDependencies(platform.ReleaseAsset{Ref: ref, ContractVersion: contract, SourceVersion: version, Body: body})
+	return WithDependencies(platform.ReleaseAsset{Ref: ref, ContractVersion: contract, SourceVersion: version, Body: body})
 }
 
 func RetainedAsset[D any](app, source, prefix, label string, kind platform.AssetKind, name, versionText string, lookup func(string, int) (D, int, bool)) (platform.ReleaseAsset, error) {

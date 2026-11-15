@@ -3,6 +3,7 @@ package releases
 import (
 	"encoding/json"
 	"fmt"
+	releasepub "platformserver/services/resources/publication"
 	"slices"
 	"strings"
 
@@ -92,7 +93,7 @@ func (ds Describer) DefinitionAsset(def platform.Definition) (platform.ReleaseAs
 
 func (ds Describer) DescribeOwnedAsset(asset platform.ReleaseAsset) (platform.ReleaseAsset, error) {
 	if !slices.Contains([]platform.AssetKind{platform.AssetObject, platform.AssetAction, platform.AssetAgent, platform.AssetQuery, platform.AssetFunction, platform.AssetCompute}, asset.Ref.Kind) {
-		return platform.WithDependencies(asset)
+		return releasepub.WithDependencies(asset)
 	}
 	var body map[string]json.RawMessage
 	if err := json.Unmarshal(asset.Body, &body); err != nil {
@@ -210,7 +211,7 @@ func (ds Describer) DescribeOwnedAsset(asset platform.ReleaseAsset) (platform.Re
 		return asset, err
 	}
 	asset.Body = raw
-	return platform.WithDependencies(asset)
+	return releasepub.WithDependencies(asset)
 }
 
 func (ds Describer) DescribeDefinition(def platform.Definition) (platform.Definition, error) {
@@ -227,7 +228,7 @@ func (ds Describer) DescribeDefinition(def platform.Definition) (platform.Defini
 }
 
 func dependencyDirections(descriptors []platform.Dependencies, focus platform.AssetRef) ([]platform.AssetRef, []platform.AssetRef, error) {
-	graph, err := platform.NewDependencyGraph(descriptors)
+	graph, err := releasepub.NewDependencyGraph(descriptors)
 	if err != nil {
 		return nil, nil, err
 	}

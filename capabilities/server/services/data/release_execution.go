@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	releasepub "platformserver/services/resources/publication"
 	"reflect"
 	"slices"
 	"strconv"
@@ -430,7 +431,7 @@ func (p Pipeline) ExecutionVersion() string { return ValueIntegrationExecutionVe
 
 func ValueValidateIntegrationDependencies(asset platform.ReleaseAsset) error {
 	if asset.Provides != nil {
-		return platform.CheckAssetDependencies(asset)
+		return releasepub.CheckAssetDependencies(asset)
 	}
 	if asset.Ref.Kind == platform.AssetObservation {
 		return fmt.Errorf("observation source requires its complete dependency description")

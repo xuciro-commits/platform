@@ -1,38 +1,40 @@
-package platform
+package publication
 
 import (
 	"encoding/json"
 	"fmt"
 	"slices"
 	"strings"
+
+	"platformserver/platform"
 )
 
-func CheckFrozenQueries(original Page, assets map[AssetRef]ReleaseAsset) error {
+func checkFrozenQueries(original platform.Page, assets map[platform.AssetRef]platform.ReleaseAsset) error {
 	page, err := original.Safety()
 	if err != nil {
 		return err
 	}
-	lookup := func(typ string) (EntityInfo, bool) {
-		asset, ok := assets[ModelObject(typ)]
+	lookup := func(typ string) (platform.EntityInfo, bool) {
+		asset, ok := assets[platform.ModelObject(typ)]
 		if !ok {
 			for ref, value := range assets {
-				if ref.Kind == AssetObject && ref.Name == typ {
+				if ref.Kind == platform.AssetObject && ref.Name == typ {
 					asset = value
 					ok = true
 					break
 				}
 			}
 		}
-		info, err := QueryObjectDescriptor(asset.Body)
-		return ConstraintEntity(info), ok && err == nil
+		info, err := queryObjectDescriptor(asset.Body)
+		return platform.ConstraintEntity(info), ok && err == nil
 	}
-	criteria := func(ref AssetRef) (*RuleCriteria, bool) {
+	criteria := func(ref platform.AssetRef) (*platform.RuleCriteria, bool) {
 		asset, ok := assets[ref]
-		action, err := ReleaseActionDescriptor(asset.Body)
+		action, err := releaseActionDescriptor(asset.Body)
 		if !ok || err != nil {
 			return nil, false
 		}
-		reads := RuleReadSpec{Object: action.Target, Inputs: map[string]ExprType{}}
+		reads := platform.RuleReadSpec{Object: action.Target, Inputs: map[string]platform.ExprType{}}
 		mapped := map[string]bool{}
 		for _, binding := range page.DataBindings {
 			for _, model := range binding.ModelBindings() {
@@ -45,17 +47,17 @@ func CheckFrozenQueries(original Page, assets map[AssetRef]ReleaseAsset) error {
 		}
 		for _, field := range action.Payload {
 			if mapped[field.Name] {
-				reads.Inputs[field.Name] = ExprType{Kind: RuleFieldKind(field.Type), Object: field.Ref}
+				reads.Inputs[field.Name] = platform.ExprType{Kind: platform.RuleFieldKind(field.Type), Object: field.Ref}
 			}
 		}
-		return &RuleCriteria{Reads: reads}, true
+		return &platform.RuleCriteria{Reads: reads}, true
 	}
 	for _, binding := range page.DataBindings {
 		if err := page.CheckDataBinding(binding, lookup, criteria); err != nil {
 			return err
 		}
 		for _, model := range binding.ModelBindings() {
-			sets := []*ModelRecordSet{model.Set}
+			sets := []*platform.ModelRecordSet{model.Set}
 			if model.Options != nil {
 				sets = append(sets, model.Options.Set)
 			}
@@ -64,7 +66,7 @@ func CheckFrozenQueries(original Page, assets map[AssetRef]ReleaseAsset) error {
 					continue
 				}
 				asset, ok := assets[set.Query.Ref]
-				var query NamedQuery
+				var query platform.NamedQuery
 				if !ok || asset.SourceVersion != set.Query.SourceVersion || json.Unmarshal(asset.Body, &query) != nil || query.Object != model.Type {
 					return fmt.Errorf("binding %s frozen model source differs", binding.ID)
 				}
@@ -89,14 +91,14 @@ func CheckFrozenQueries(original Page, assets map[AssetRef]ReleaseAsset) error {
 		}
 		for _, ref := range trigger.Actions {
 			asset, ok := assets[ref]
-			action, err := ReleaseActionDescriptor(asset.Body)
-			if !ok || err != nil || StaticControlAction(action) || action.Target != object {
+			action, err := releaseActionDescriptor(asset.Body)
+			if !ok || err != nil || platform.StaticControlAction(action) || action.Target != object {
 				return fmt.Errorf("page action owner or target is unavailable")
 			}
 		}
 		if trigger.InlineEdit != nil {
 			asset, ok := assets[trigger.InlineEdit.Action]
-			action, err := ReleaseActionDescriptor(asset.Body)
+			action, err := releaseActionDescriptor(asset.Body)
 			info, found := lookup(object)
 			if !ok || !found || err != nil || trigger.InlineEdit.CheckTableEdit(info, action) != nil {
 				return fmt.Errorf("page edit fields differ from original action")
@@ -106,29 +108,29 @@ func CheckFrozenQueries(original Page, assets map[AssetRef]ReleaseAsset) error {
 			if len(trigger.Actions) != 1 {
 				return fmt.Errorf("page parameters need one original action")
 			}
-			action, err := ReleaseActionDescriptor(assets[trigger.Actions[0]].Body)
+			action, err := releaseActionDescriptor(assets[trigger.Actions[0]].Body)
 			if err != nil {
 				return err
 			}
 			info, _ := lookup(object)
 			for _, mapping := range trigger.Defaults {
 				field, ok := info.Field(mapping.Field)
-				index := slices.IndexFunc(action.Payload, func(f Field) bool { return f.Name == mapping.Parameter })
-				if !ok || index < 0 || !ActionParameterCompatible(field, action.Payload[index]) {
+				index := slices.IndexFunc(action.Payload, func(f platform.Field) bool { return f.Name == mapping.Parameter })
+				if !ok || index < 0 || !platform.ActionParameterCompatible(field, action.Payload[index]) {
 					return fmt.Errorf("page action parameter differs from original readable field")
 				}
 			}
 		}
 		if trigger.Function != nil {
 			asset, ok := assets[trigger.Function.Ref]
-			var function AIFunction
+			var function platform.AIFunction
 			if !ok || asset.SourceVersion != trigger.Function.SourceVersion || json.Unmarshal(asset.Body, &function) != nil || function.Object != object {
 				return fmt.Errorf("page function original source is unavailable")
 			}
 		}
 		if trigger.Operation != nil {
 			asset, ok := assets[trigger.Operation.Ref]
-			var operation Operation
+			var operation platform.Operation
 			if !ok || asset.SourceVersion != trigger.Operation.SourceVersion || json.Unmarshal(asset.Body, &operation) != nil || operation.Check() != nil {
 				return fmt.Errorf("page operation original source is unavailable")
 			}
@@ -142,7 +144,7 @@ func CheckFrozenQueries(original Page, assets map[AssetRef]ReleaseAsset) error {
 	}
 	for id, compute := range page.ComputeResources() {
 		asset, ok := assets[compute.Operation.Ref]
-		var op Operation
+		var op platform.Operation
 		object, found := lookup(page.RecordResourceObject(compute.RecordVariable).Name)
 		if !ok || !found || asset.SourceVersion != compute.Operation.SourceVersion || json.Unmarshal(asset.Body, &op) != nil || page.CheckComputeResource(compute, object, op, page.InputSchema.Variables[id].Type, lookup) != nil {
 			return fmt.Errorf("frozen compute resource contract is unavailable")
@@ -160,12 +162,12 @@ func CheckFrozenQueries(original Page, assets map[AssetRef]ReleaseAsset) error {
 		}
 		if v.Scope == "application" && v.Mode == "resource" && v.Type == "filter" && v.Source.Object != nil {
 			info, ok := lookup(v.Source.Object.Name)
-			if !ok || CheckFilterSchema(*v.Source, info) != nil {
+			if !ok || platform.CheckFilterSchema(*v.Source, info) != nil {
 				return fmt.Errorf("frozen application filter schema is unavailable")
 			}
 		}
 	}
-	namedSources := map[AssetBinding]NamedQuery{}
+	namedSources := map[platform.AssetBinding]platform.NamedQuery{}
 	for id, plan := range page.InputSchema.Queries {
 		if plan.Interface != "" {
 			named, err := frozenPageInterfaceQuery(plan, assets)
@@ -178,37 +180,37 @@ func CheckFrozenQueries(original Page, assets map[AssetRef]ReleaseAsset) error {
 			continue
 		}
 		asset, ok := assets[plan.Object]
-		object, err := QueryObjectDescriptor(asset.Body)
+		object, err := queryObjectDescriptor(asset.Body)
 		if !ok || err != nil {
 			return fmt.Errorf("page query %s object is unavailable", id)
 		}
-		var named *Definition
+		var named *platform.Definition
 		if plan.Query != nil {
 			asset, ok := assets[plan.Query.Ref]
 			if !ok || asset.SourceVersion != plan.Query.SourceVersion {
 				return fmt.Errorf("page query %s exact source is unavailable", id)
 			}
-			if plan.Query.Ref.Kind == AssetLinkType {
-				var link LinkType
+			if plan.Query.Ref.Kind == platform.AssetLinkType {
+				var link platform.LinkType
 				if json.Unmarshal(asset.Body, &link) != nil {
 					return fmt.Errorf("frozen link source is invalid")
 				}
 				parentAsset, pok := assets[link.Parent]
 				childAsset, cok := assets[link.Child]
-				parent, pe := QueryObjectDescriptor(parentAsset.Body)
-				child, ce := QueryObjectDescriptor(childAsset.Body)
+				parent, pe := queryObjectDescriptor(parentAsset.Body)
+				child, ce := queryObjectDescriptor(childAsset.Body)
 				parent.App = link.Parent.App
 				child.App = link.Child.App
 				if !pok || !cok || pe != nil || ce != nil || link.CheckSchema(parent, child) != nil {
 					return fmt.Errorf("frozen link endpoints are unavailable")
 				}
-				named = &Definition{Ref: asset.Ref, Version: asset.SourceVersion, LinkType: &link}
+				named = &platform.Definition{Ref: asset.Ref, Version: asset.SourceVersion, LinkType: &link}
 			} else {
-				var query NamedQuery
+				var query platform.NamedQuery
 				if json.Unmarshal(asset.Body, &query) != nil {
 					return fmt.Errorf("frozen named query is invalid")
 				}
-				named = &Definition{Ref: asset.Ref, Version: asset.SourceVersion, Query: &query}
+				named = &platform.Definition{Ref: asset.Ref, Version: asset.SourceVersion, Query: &query}
 				namedSources[*plan.Query] = query
 			}
 		}
@@ -229,22 +231,22 @@ func CheckFrozenQueries(original Page, assets map[AssetRef]ReleaseAsset) error {
 	return page.CheckQuerySetConditions(namedSources)
 }
 
-func QueryObjectDescriptor(body []byte) (EntityInfo, error) {
+func queryObjectDescriptor(body []byte) (platform.EntityInfo, error) {
 	var shape struct {
 		Type            string                       `json:"type"`
 		Implements      []string                     `json:"implements"`
 		Extends         string                       `json:"extends"`
-		ExtensionSource *ExtensionSource             `json:"extensionSource"`
-		Entity          *EntityInfo                  `json:"entity"`
-		ObjectView      *ObjectView                  `json:"objectView,omitempty"`
+		ExtensionSource *platform.ExtensionSource    `json:"extensionSource"`
+		Entity          *platform.EntityInfo         `json:"entity"`
+		ObjectView      *platform.ObjectView         `json:"objectView,omitempty"`
 		Fields          []map[string]json.RawMessage `json:"fields"`
-		Lifecycle       *LifecycleInfo               `json:"lifecycle"`
-		States          []State                      `json:"states"`
+		Lifecycle       *platform.LifecycleInfo      `json:"lifecycle"`
+		States          []platform.State             `json:"states"`
 		Actions         []struct {
-			Transaction *BusinessTxn `json:"transaction"`
-			Name        string       `json:"name"`
-			Title       string       `json:"title"`
-			From        []string     `json:"from"`
+			Transaction *platform.BusinessTxn `json:"transaction"`
+			Name        string                `json:"name"`
+			Title       string                `json:"title"`
+			From        []string              `json:"from"`
 			Inputs      []struct {
 				Name     string `json:"name"`
 				Type     string `json:"type"`
@@ -254,15 +256,15 @@ func QueryObjectDescriptor(body []byte) (EntityInfo, error) {
 		} `json:"actions"`
 	}
 	if err := json.Unmarshal(body, &shape); err != nil {
-		return EntityInfo{}, err
+		return platform.EntityInfo{}, err
 	}
 	if shape.Entity != nil {
 		if shape.Entity.Type != shape.Type {
-			return EntityInfo{}, fmt.Errorf("frozen native object identity differs")
+			return platform.EntityInfo{}, fmt.Errorf("frozen native object identity differs")
 		}
 		return *shape.Entity, nil
 	}
-	var fields []FieldInfo
+	var fields []platform.FieldInfo
 	for _, raw := range shape.Fields {
 		if choicesRaw, ok := raw["choices"]; ok {
 			var source string
@@ -279,9 +281,9 @@ func QueryObjectDescriptor(body []byte) (EntityInfo, error) {
 		if whenRaw, ok := raw["when"]; ok {
 			var source string
 			if json.Unmarshal(whenRaw, &source) == nil {
-				condition, err := ParseWhen(source)
+				condition, err := platform.ParseWhen(source)
 				if err != nil {
-					return EntityInfo{}, err
+					return platform.EntityInfo{}, err
 				}
 				if condition == nil {
 					delete(raw, "when")
@@ -292,24 +294,24 @@ func QueryObjectDescriptor(body []byte) (EntityInfo, error) {
 		}
 		encoded, err := json.Marshal(raw)
 		if err != nil {
-			return EntityInfo{}, err
+			return platform.EntityInfo{}, err
 		}
-		var field FieldInfo
+		var field platform.FieldInfo
 		if err := json.Unmarshal(encoded, &field); err != nil {
-			return EntityInfo{}, err
+			return platform.EntityInfo{}, err
 		}
 		fields = append(fields, field)
 	}
 	owner, _, _ := strings.Cut(shape.Type, ".")
 	if shape.Lifecycle == nil && len(shape.States) > 0 {
-		l := LifecycleInfo{Field: "state", Initial: shape.States[0].Name, States: shape.States}
+		l := platform.LifecycleInfo{Field: "state", Initial: shape.States[0].Name, States: shape.States}
 		choices := []string{}
 		for _, s := range shape.States {
 			choices = append(choices, s.Name)
 		}
-		fields = append(fields, FieldInfo{Name: "state", Title: "State", Type: "choice", ReadOnly: true, Choices: choices})
+		fields = append(fields, platform.FieldInfo{Name: "state", Title: "State", Type: "choice", ReadOnly: true, Choices: choices})
 		for _, a := range shape.Actions {
-			inputs := make([]Field, 0, len(a.Inputs))
+			inputs := make([]platform.Field, 0, len(a.Inputs))
 			for _, input := range a.Inputs {
 				kind := input.Type
 				if kind == "choice" {
@@ -321,36 +323,36 @@ func QueryObjectDescriptor(body []byte) (EntityInfo, error) {
 						options = append(options, value)
 					}
 				}
-				inputs = append(inputs, Field{Name: input.Name, Type: kind, Required: input.Required, Choices: options})
+				inputs = append(inputs, platform.Field{Name: input.Name, Type: kind, Required: input.Required, Choices: options})
 			}
-			if to, input := transactionDestination(shape.Type, "state", a.Transaction, inputs); len(to) > 0 {
+			if to, input := platform.TransactionDestination(shape.Type, "state", a.Transaction, inputs); len(to) > 0 {
 				if slices.ContainsFunc(to, func(state string) bool { return !slices.Contains(choices, state) }) {
-					return EntityInfo{}, fmt.Errorf("frozen object transaction destination differs")
+					return platform.EntityInfo{}, fmt.Errorf("frozen object transaction destination differs")
 				}
-				l.Transitions = append(l.Transitions, TransitionInfo{Name: a.Name, Schema: shape.Type + "." + a.Name, Title: a.Title, From: a.From, To: to, ToInput: input})
+				l.Transitions = append(l.Transitions, platform.TransitionInfo{Name: a.Name, Schema: shape.Type + "." + a.Name, Title: a.Title, From: a.From, To: to, ToInput: input})
 				continue
 			}
-			l.Transitions = append(l.Transitions, TransitionInfo{Name: a.Name, Schema: shape.Type + "." + a.Name, Title: a.Title, From: a.From, To: slices.Clone(a.From)})
+			l.Transitions = append(l.Transitions, platform.TransitionInfo{Name: a.Name, Schema: shape.Type + "." + a.Name, Title: a.Title, From: a.From, To: slices.Clone(a.From)})
 		}
 		shape.Lifecycle = &l
 	}
-	return EntityInfo{App: owner, Type: shape.Type, ObjectView: shape.ObjectView, Standard: []string{shape.Type + ".create", shape.Type + ".edit", shape.Type + ".archive"}, Fields: fields, Lifecycle: shape.Lifecycle, Implements: shape.Implements, Extends: shape.Extends, ExtensionSource: shape.ExtensionSource}, nil
+	return platform.EntityInfo{App: owner, Type: shape.Type, ObjectView: shape.ObjectView, Standard: []string{shape.Type + ".create", shape.Type + ".edit", shape.Type + ".archive"}, Fields: fields, Lifecycle: shape.Lifecycle, Implements: shape.Implements, Extends: shape.Extends, ExtensionSource: shape.ExtensionSource}, nil
 }
 
-func ReleaseActionDescriptor(body json.RawMessage) (Action, error) {
-	var flat Action
+func releaseActionDescriptor(body json.RawMessage) (platform.Action, error) {
+	var flat platform.Action
 	if err := json.Unmarshal(body, &flat); err != nil {
-		return Action{}, err
+		return platform.Action{}, err
 	}
 	var envelope struct {
-		Action *Action `json:"action"`
+		Action *platform.Action `json:"action"`
 	}
 	if err := json.Unmarshal(body, &envelope); err != nil {
-		return Action{}, err
+		return platform.Action{}, err
 	}
 	if envelope.Action != nil {
 		if envelope.Action.Schema != flat.Schema || envelope.Action.Target != flat.Target {
-			return Action{}, fmt.Errorf("frozen action declaration identity differs")
+			return platform.Action{}, fmt.Errorf("frozen action declaration identity differs")
 		}
 		return *envelope.Action, nil
 	}

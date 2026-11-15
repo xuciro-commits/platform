@@ -71,7 +71,7 @@ func productDescriptor(candidate platform.ReleaseCandidate, request platform.Pro
 	}
 	assets := slices.DeleteFunc(slices.Clone(closed.Assets), func(asset platform.ReleaseAsset) bool { return external[asset.Ref] })
 	product.Blueprint = &platform.PackageBlueprint{Roots: slices.Clone(request.Roots), Assets: assets}
-	if err := packagedesc.Validate(product); err != nil {
+	if err := packagedesc.Validate(product, releasepub.WithDependencies); err != nil {
 		return platform.PackageDescriptor{}, err
 	}
 	return product, nil

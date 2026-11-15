@@ -39,7 +39,7 @@ func QueryVersion(d platform.Definition, version string) *platform.Definition {
 	if err != nil {
 		return nil
 	}
-	description, err := platform.DescribeAsset(platform.ReleaseAsset{Ref: d.Ref, SourceVersion: version, Body: body})
+	description, err := DescribeAsset(platform.ReleaseAsset{Ref: d.Ref, SourceVersion: version, Body: body})
 	if err != nil {
 		return nil
 	}

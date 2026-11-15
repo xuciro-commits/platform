@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
+	releasepub "platformserver/services/resources/publication"
 
 	"platformserver/platform"
 	dataowner "platformserver/services/data"
@@ -325,7 +326,7 @@ func codeReleaseAsset(code Code, manifest string) (platform.ReleaseAsset, error)
 	if err != nil {
 		return platform.ReleaseAsset{}, err
 	}
-	return platform.WithDependencies(platform.ReleaseAsset{Ref: platform.AssetRef{App: ID, Kind: platform.AssetCompute, Name: code.Name}, ContractVersion: 1, SourceVersion: manifest + ".compute-" + strconv.Itoa(code.Version), Body: raw})
+	return releasepub.WithDependencies(platform.ReleaseAsset{Ref: platform.AssetRef{App: ID, Kind: platform.AssetCompute, Name: code.Name}, ContractVersion: 1, SourceVersion: manifest + ".compute-" + strconv.Itoa(code.Version), Body: raw})
 }
 func (b *Build) CodeReleaseAssets() ([]platform.ReleaseAsset, error) {
 	out := []platform.ReleaseAsset{}
@@ -357,13 +358,13 @@ func (b *Build) OperationReleaseAsset(name, version string) (platform.ReleaseAss
 	if err != nil {
 		return platform.ReleaseAsset{}, err
 	}
-	return platform.WithDependencies(platform.ReleaseAsset{Ref: platform.AssetRef{App: ID, Kind: platform.AssetCompute, Name: name}, ContractVersion: 1, SourceVersion: version, Body: raw})
+	return releasepub.WithDependencies(platform.ReleaseAsset{Ref: platform.AssetRef{App: ID, Kind: platform.AssetCompute, Name: name}, ContractVersion: 1, SourceVersion: version, Body: raw})
 }
 func (b *Build) InstallOperationAsset(asset platform.ReleaseAsset) error {
 	var op platform.Operation
 	text, ok := strings.CutPrefix(asset.SourceVersion, b.Manifest().Version+".compute-")
 	ordinal, err := strconv.Atoi(text)
-	if !ok || err != nil || ordinal < 1 || ordinal > 64 || asset.Ref.App != ID || asset.Ref.Kind != platform.AssetCompute || asset.ContractVersion != 1 || json.Unmarshal(asset.Body, &op) != nil || op.Name != asset.Ref.Name || op.Check() != nil || platform.CheckAssetDependencies(asset) != nil {
+	if !ok || err != nil || ordinal < 1 || ordinal > 64 || asset.Ref.App != ID || asset.Ref.Kind != platform.AssetCompute || asset.ContractVersion != 1 || json.Unmarshal(asset.Body, &op) != nil || op.Name != asset.Ref.Name || op.Check() != nil || releasepub.CheckAssetDependencies(asset) != nil {
 		return fmt.Errorf("invalid compute candidate asset")
 	}
 	if op.Binding.Kind == "native" {
@@ -482,14 +483,14 @@ func (b *Build) PrepareCodeReleasePublications(assets []platform.ReleaseAsset) (
 }
 
 func tableReleaseAsset(table Table, manifest string) (platform.ReleaseAsset, error) {
-	return platform.WithDependencies(platform.ReleaseAsset{Ref: platform.AssetRef{App: ID, Kind: platform.AssetCompute, Name: table.Name}, ContractVersion: 1, SourceVersion: manifest + ".compute-" + strconv.Itoa(table.Version), Body: platform.Raw(table.Definition())})
+	return releasepub.WithDependencies(platform.ReleaseAsset{Ref: platform.AssetRef{App: ID, Kind: platform.AssetCompute, Name: table.Name}, ContractVersion: 1, SourceVersion: manifest + ".compute-" + strconv.Itoa(table.Version), Body: platform.Raw(table.Definition())})
 }
 
 func tableFromAsset(asset platform.ReleaseAsset) (Table, error) {
 	var op platform.Operation
 	text, found := strings.CutPrefix(asset.SourceVersion, ValueDefinitionVersion+".compute-")
 	version, err := strconv.Atoi(text)
-	if !found || err != nil || strconv.Itoa(version) != text || version < 1 || version > 64 || asset.Ref.App != ID || asset.Ref.Kind != platform.AssetCompute || asset.ContractVersion != 1 || json.Unmarshal(asset.Body, &op) != nil || op.Name != asset.Ref.Name || op.Binding.Kind != "native" || op.Rules == nil || op.Check() != nil || platform.CheckAssetDependencies(asset) != nil {
+	if !found || err != nil || strconv.Itoa(version) != text || version < 1 || version > 64 || asset.Ref.App != ID || asset.Ref.Kind != platform.AssetCompute || asset.ContractVersion != 1 || json.Unmarshal(asset.Body, &op) != nil || op.Name != asset.Ref.Name || op.Binding.Kind != "native" || op.Rules == nil || op.Check() != nil || releasepub.CheckAssetDependencies(asset) != nil {
 		return Table{}, fmt.Errorf("invalid decision table asset %s", asset.Ref)
 	}
 	tb := Table{Name: op.Name, Title: op.Title, Description: op.Description, Reads: &op.Rules.Reads, State: "published", Version: version}

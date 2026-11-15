@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"maps"
 	"platformserver/services/ontology"
+	releasepub "platformserver/services/resources/publication"
 	"reflect"
 	"slices"
 	"strings"
@@ -96,7 +97,7 @@ func (b *Build) ApplyAssetInstallation(plan platform.AssetInstallation, ctx plat
 var _ platform.AssetLifecycleOwner = (*Build)(nil)
 
 func orderOwnerAssets(assets []platform.ReleaseAsset) ([]platform.ReleaseAsset, error) {
-	graph, err := platform.NewReleaseDependencyGraph(assets)
+	graph, err := releasepub.NewReleaseDependencyGraph(assets)
 	if err != nil {
 		return nil, err
 	}

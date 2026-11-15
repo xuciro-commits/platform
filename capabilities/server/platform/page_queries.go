@@ -494,25 +494,6 @@ func (d PageInputSchema) CheckApplicationQueries() error {
 	return (Page{Format: 4, InputSchema: d}).checkQueries("application")
 }
 
-func frozenPageInterfaceQuery(q PageQuery, lookup map[AssetRef]ReleaseAsset) (*Definition, error) {
-	if q.Query == nil {
-		return nil, fmt.Errorf("interface page query needs a published binding")
-	}
-	asset, ok := lookup[q.Query.Ref]
-	var named NamedQuery
-	if !ok || asset.SourceVersion != q.Query.SourceVersion || json.Unmarshal(asset.Body, &named) != nil || named.InterfaceShape == nil || named.Check() != nil {
-		return nil, fmt.Errorf("frozen interface query version or shape is unavailable")
-	}
-	for _, ref := range named.Dependencies() {
-		implementation, exists := lookup[ref]
-		info, err := QueryObjectDescriptor(implementation.Body)
-		if !exists || err != nil || info.Type != ref.Name || info.App != ref.App || !slices.Contains(info.Implements, named.Interface) || named.InterfaceShape.Implements(info) != nil {
-			return nil, fmt.Errorf("frozen interface query implementation %s is unavailable", ref.Name)
-		}
-	}
-	return &Definition{Ref: asset.Ref, Version: asset.SourceVersion, Query: &named}, nil
-}
-
 func (p Page) CheckInterfaceQuery(q PageQuery, named *Definition) error {
 	if q.Query == nil || named == nil || named.Ref != q.Query.Ref || named.Version != q.Query.SourceVersion || named.Query == nil || named.Query.Interface != q.Interface || named.Query.InterfaceShape == nil || named.Query.Check() != nil {
 		return fmt.Errorf("interface page query needs its exact published query and frozen shape")

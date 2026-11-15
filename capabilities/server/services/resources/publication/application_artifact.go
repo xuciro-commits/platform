@@ -142,7 +142,7 @@ func applicationAssetRoles(asset platform.ReleaseAsset) ([]platform.ApplicationR
 	}
 	var fields []platform.FieldInfo
 	if asset.Ref.Kind == platform.AssetObject {
-		info, err := platform.QueryObjectDescriptor(asset.Body)
+		info, err := queryObjectDescriptor(asset.Body)
 		if err != nil {
 			return nil, err
 		}

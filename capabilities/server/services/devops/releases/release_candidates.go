@@ -19,7 +19,7 @@ func DependentRoots(ref platform.AssetRef, available []platform.ReleaseAsset) []
 	for _, asset := range available {
 		descriptors = append(descriptors, platform.Dependencies{Ref: asset.Ref, Requires: asset.Requires, Provides: asset.Provides, Version: asset.SourceVersion})
 	}
-	graph, err := platform.NewDependencyGraph(descriptors)
+	graph, err := publication.NewDependencyGraph(descriptors)
 	if err != nil {
 		return []platform.AssetRef{ref}
 	}

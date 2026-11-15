@@ -30,7 +30,7 @@ func (t *Tenant) assetRegistryLocked() (*publication.AssetRegistry, error) {
 func (t *Tenant) definitionOwners(includeArchived bool) records.DefinitionOwners {
 	owners := t.assetOwners(t.OwnerActive)
 	return records.DefinitionOwners{Owners: owners, Active: t.OwnerActive, IncludeArchived: includeArchived,
-		DescribeAsset: platform.DescribeAsset,
+		DescribeAsset: publication.DescribeAsset,
 		InstallationDecoder: func() (func(string, string, json.RawMessage) (platform.AssetInstallation, error), error) {
 			registry, err := publication.NewAssetRegistry(owners...)
 			if err != nil {

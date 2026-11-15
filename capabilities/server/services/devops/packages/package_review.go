@@ -2,6 +2,7 @@ package packages
 
 import (
 	"encoding/json"
+	releasepub "platformserver/services/resources/publication"
 	"reflect"
 	"slices"
 	"strings"
@@ -83,7 +84,7 @@ func (rv Review) Of(views []platform.PackageView, chosen *platform.PackageView, 
 			return answer, err
 		}
 		for _, asset := range assets {
-			complete, err := platform.WithDependencies(asset)
+			complete, err := releasepub.WithDependencies(asset)
 			if err != nil {
 				return answer, err
 			}

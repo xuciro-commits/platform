@@ -153,3 +153,9 @@ func DecodeJSON(raw []byte, target any, name string) error {
 	}
 	return nil
 }
+
+func ValidDigest(value string) bool {
+	value = strings.TrimPrefix(value, "sha256:")
+	decoded, err := hex.DecodeString(value)
+	return err == nil && len(decoded) == sha256.Size
+}

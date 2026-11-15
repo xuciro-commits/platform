@@ -3,6 +3,7 @@ package releases
 import (
 	"encoding/json"
 	"fmt"
+	releasepub "platformserver/services/resources/publication"
 
 	"platformserver/platform"
 
@@ -22,10 +23,10 @@ func ImmutableCodeAssetMatches(current, retained platform.ReleaseAsset) (bool, e
 		after, err := platform.CanonicalDigest(retained)
 		return err == nil && before == after, err
 	}
-	if err := platform.CheckAssetDependencies(retained); err != nil {
+	if err := releasepub.CheckAssetDependencies(retained); err != nil {
 		return false, nil
 	}
-	if err := platform.CheckAssetDependencies(current); err != nil {
+	if err := releasepub.CheckAssetDependencies(current); err != nil {
 		return false, err
 	}
 	for _, dependency := range retained.Requires {

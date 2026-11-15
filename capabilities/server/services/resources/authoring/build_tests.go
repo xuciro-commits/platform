@@ -8,6 +8,7 @@ import (
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	automationauthoring "platformserver/services/automate/authoring"
 	functionauthoring "platformserver/services/functions/authoring"
+	releasepub "platformserver/services/resources/publication"
 
 	"platformserver/platform"
 	ontology "platformserver/services/ontology"
@@ -107,7 +108,7 @@ func decodeSampleAsset(asset platform.ReleaseAsset) (platform.SampleSet, int, er
 	var d platform.SampleSet
 	ordinal, ok := strings.CutPrefix(asset.SourceVersion, ValueDefinitionVersion+".samples-")
 	version, err := strconv.Atoi(ordinal)
-	if !ok || err != nil || version < 1 || version > 64 || strconv.Itoa(version) != ordinal || asset.Ref.App != ID || asset.Ref.Kind != platform.AssetSampleSet || asset.ContractVersion != 1 || json.Unmarshal(asset.Body, &d) != nil || d.Name != asset.Ref.Name || d.Check() != nil || platform.CheckAssetDependencies(asset) != nil {
+	if !ok || err != nil || version < 1 || version > 64 || strconv.Itoa(version) != ordinal || asset.Ref.App != ID || asset.Ref.Kind != platform.AssetSampleSet || asset.ContractVersion != 1 || json.Unmarshal(asset.Body, &d) != nil || d.Name != asset.Ref.Name || d.Check() != nil || releasepub.CheckAssetDependencies(asset) != nil {
 		return d, 0, fmt.Errorf("Invalid sample asset")
 	}
 	return d, version, nil

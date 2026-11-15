@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	appsauthoring "platformserver/services/apps/authoring"
+	releasepub "platformserver/services/resources/publication"
 	"regexp"
 	"slices"
 	"strings"
@@ -49,7 +50,7 @@ func (p Product) Check() error {
 	if namespace == "" {
 		namespace = p.Name
 	}
-	return packagedesc.Validate(platform.PackageDescriptor{ID: p.Name, Version: "0.0.0", Namespace: namespace, Requires: p.Requires})
+	return packagedesc.Validate(platform.PackageDescriptor{ID: p.Name, Version: "0.0.0", Namespace: namespace, Requires: p.Requires}, releasepub.WithDependencies)
 }
 
 type ProductVersion struct {

@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"platformserver/platform"
 	"platformserver/services/resources/authoring"
+	releasepub "platformserver/services/resources/publication"
 	"slices"
 )
 
@@ -42,7 +43,7 @@ func (p Planner) reviewDrafts(reply *ReleasePreview) error {
 	if err != nil {
 		return err
 	}
-	graph, err := platform.NewReleaseDependencyGraph(available)
+	graph, err := releasepub.NewReleaseDependencyGraph(available)
 	if err != nil {
 		return err
 	}

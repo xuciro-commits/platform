@@ -38,7 +38,7 @@ func candidate(roots []platform.AssetRef, available []platform.ReleaseAsset, his
 	lookup := make(map[platform.AssetRef]platform.ReleaseAsset, len(available))
 	for i, asset := range available {
 		if !historical && asset.Provides == nil {
-			description, err := platform.DescribeAsset(asset)
+			description, err := DescribeAsset(asset)
 			if err != nil {
 				return empty, err
 			}
@@ -53,7 +53,7 @@ func candidate(roots []platform.AssetRef, available []platform.ReleaseAsset, his
 		}
 		lookup[asset.Ref] = asset
 	}
-	graph, err := platform.NewReleaseDependencyGraph(available)
+	graph, err := NewReleaseDependencyGraph(available)
 	if err != nil {
 		return empty, err
 	}
@@ -65,12 +65,12 @@ func candidate(roots []platform.AssetRef, available []platform.ReleaseAsset, his
 		if ref.Kind != platform.AssetObject {
 			continue
 		}
-		info, err := platform.QueryObjectDescriptor(lookup[ref].Body)
+		info, err := queryObjectDescriptor(lookup[ref].Body)
 		if err != nil {
 			return empty, err
 		}
 		if info.ObjectView != nil {
-			if err := platform.CheckObjectView(ref, *info.ObjectView, lookup); err != nil {
+			if err := checkObjectView(ref, *info.ObjectView, lookup); err != nil {
 				return empty, fmt.Errorf("%s: %w", ref, err)
 			}
 		}
@@ -89,7 +89,7 @@ func candidate(roots []platform.AssetRef, available []platform.ReleaseAsset, his
 		if err != nil {
 			return empty, fmt.Errorf("release asset %s: %w", ref, err)
 		}
-		if err := platform.CheckAssetDependencies(asset); err != nil {
+		if err := CheckAssetDependencies(asset); err != nil {
 			return empty, err
 		}
 		if ref.Kind == platform.AssetObservation {
@@ -102,14 +102,14 @@ func candidate(roots []platform.AssetRef, available []platform.ReleaseAsset, his
 				if typ != observation.Object.Name || !exists {
 					return platform.EntityInfo{}, false
 				}
-				info, err := platform.QueryObjectDescriptor(target.Body)
+				info, err := queryObjectDescriptor(target.Body)
 				return info, err == nil
 			}); err != nil {
 				return empty, fmt.Errorf("observation %s: %w", ref, err)
 			}
 			if observation.Decision != nil {
 				actionAsset, exists := lookup[observation.Decision.Action]
-				action, err := platform.ReleaseActionDescriptor(actionAsset.Body)
+				action, err := releaseActionDescriptor(actionAsset.Body)
 				if !exists || err != nil {
 					return empty, fmt.Errorf("observation %s action is unavailable", ref)
 				}
@@ -125,13 +125,13 @@ func candidate(roots []platform.AssetRef, available []platform.ReleaseAsset, his
 			}
 		}
 		if ref.Kind == platform.AssetObject {
-			info, err := platform.QueryObjectDescriptor(body)
+			info, err := queryObjectDescriptor(body)
 			if err != nil {
 				return empty, err
 			}
 			if source := info.ExtensionSource; source != nil {
 				base, exists := lookup[source.Base.Ref]
-				shape, err := platform.QueryObjectDescriptor(base.Body)
+				shape, err := queryObjectDescriptor(base.Body)
 				if !exists || err != nil || !slices.Contains(asset.Requires, source.Base.Ref) {
 					return empty, fmt.Errorf("extension %s needs its base object in the frozen closure", ref)
 				}
@@ -210,7 +210,7 @@ func candidate(roots []platform.AssetRef, available []platform.ReleaseAsset, his
 			if err := checkApplicationProfileClosure(ref, contracts); err != nil {
 				return empty, err
 			}
-			if err := platform.CheckFrozenQueries(application.QueryPage(), lookup); err != nil {
+			if err := checkFrozenQueries(application.QueryPage(), lookup); err != nil {
 				return empty, err
 			}
 			for _, name := range application.Pages {
@@ -244,7 +244,7 @@ func candidate(roots []platform.AssetRef, available []platform.ReleaseAsset, his
 						for _, effect := range event.Effects {
 							if effect.Kind == "action" && effect.Action != nil {
 								asset, ok := lookup[effect.Action.Ref]
-								action, err := platform.ReleaseActionDescriptor(asset.Body)
+								action, err := releaseActionDescriptor(asset.Body)
 								if !ok || err != nil || action.New == (effect.Action.RecordVariable != "") {
 									return empty, fmt.Errorf("page action effect %s is unavailable", effect.Action.Ref)
 								}
@@ -270,7 +270,7 @@ func candidate(roots []platform.AssetRef, available []platform.ReleaseAsset, his
 				if err := platform.CheckPageEmbeddingGraph(ref, lookup); err != nil {
 					return empty, err
 				}
-				if err := platform.CheckFrozenQueries(page, lookup); err != nil {
+				if err := checkFrozenQueries(page, lookup); err != nil {
 					return empty, err
 				}
 

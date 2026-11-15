@@ -129,7 +129,7 @@ func LoadPackageIndex(dir string) (*platform.PackageIndex, error) {
 			list = []platform.PackageDescriptor{one}
 		}
 		for _, p := range list {
-			if err := packagedesc.Validate(p); err != nil {
+			if err := packagedesc.Validate(p, releasepub.WithDependencies); err != nil {
 				return nil, fmt.Errorf("package index %s: %w", entry.Name(), err)
 			}
 			index.Packages = append(index.Packages, p)
@@ -154,7 +154,7 @@ func BlueprintCandidate(b platform.PackageBlueprint, owner build.ConstructionDra
 			return platform.ReleaseCandidate{}, fmt.Errorf("a package blueprint contains only Build-owned definitions")
 		}
 		var err error
-		assets[i], err = platform.WithDependencies(asset)
+		assets[i], err = releasepub.WithDependencies(asset)
 		if err != nil {
 			return platform.ReleaseCandidate{}, err
 		}
@@ -226,7 +226,7 @@ func (d *Owner) precheck(p platform.PackageDescriptor, index *platform.PackageIn
 	if len(planned) > 0 {
 		proposed = planned[0]
 	}
-	if err := packagedesc.Validate(p); err != nil {
+	if err := packagedesc.Validate(p, releasepub.WithDependencies); err != nil {
 		out.OK, out.Problems = false, []string{err.Error()}
 		return out
 	}

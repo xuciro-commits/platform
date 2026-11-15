@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"maps"
+	releasepub "platformserver/services/resources/publication"
 	"reflect"
 	"slices"
 	"strconv"
@@ -53,7 +54,7 @@ func (b *Build) DefinitionDescriptor(asset platform.ReleaseAsset) (platform.Defi
 		return definition, err
 	}
 	if definition.Provides == nil {
-		descriptor, err := platform.DescribeAsset(asset)
+		descriptor, err := releasepub.DescribeAsset(asset)
 		if err != nil {
 			return definition, err
 		}
@@ -295,13 +296,13 @@ func definitionReleaseAsset(ref platform.AssetRef, version string, definition an
 	} else if query, ok := any(definition).(platform.NamedQuery); ok {
 		contract = query.ContractVersion()
 	}
-	return platform.WithDependencies(platform.ReleaseAsset{Ref: ref, ContractVersion: contract, SourceVersion: version, Body: body})
+	return releasepub.WithDependencies(platform.ReleaseAsset{Ref: ref, ContractVersion: contract, SourceVersion: version, Body: body})
 }
 
 func (b *Build) definitionAssetVersion(asset platform.ReleaseAsset, kind platform.AssetKind, prefix string) int {
 	ordinal, ok := strings.CutPrefix(asset.SourceVersion, b.Manifest().Version+"."+prefix+"-")
 	version, err := strconv.Atoi(ordinal)
-	if !ok || err != nil || version < 1 || version > 64 || strconv.Itoa(version) != ordinal || asset.Ref.App != ID || asset.Ref.Kind != kind || platform.CheckAssetDependencies(asset) != nil {
+	if !ok || err != nil || version < 1 || version > 64 || strconv.Itoa(version) != ordinal || asset.Ref.App != ID || asset.Ref.Kind != kind || releasepub.CheckAssetDependencies(asset) != nil {
 		return 0
 	}
 	return version

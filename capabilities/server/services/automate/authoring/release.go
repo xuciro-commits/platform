@@ -3,6 +3,7 @@ package authoring
 import (
 	"encoding/json"
 	"fmt"
+	releasepub "platformserver/services/resources/publication"
 	"reflect"
 	"slices"
 	"strconv"
@@ -118,7 +119,7 @@ func (o *Owner) FlowReleaseAsset(name string, version int) (platform.ReleaseAsse
 func (o *Owner) ProcessFromAsset(asset platform.ReleaseAsset) (Process, error) {
 	var envelope platform.FlowReleaseDescriptor
 	var p Process
-	if asset.Ref.App != o.env.AppID() || asset.Ref.Kind != platform.AssetFlow || asset.ContractVersion != 1 || platform.CheckAssetDependencies(asset) != nil {
+	if asset.Ref.App != o.env.AppID() || asset.Ref.Kind != platform.AssetFlow || asset.ContractVersion != 1 || releasepub.CheckAssetDependencies(asset) != nil {
 		return p, fmt.Errorf("unsupported process release asset %s", asset.Ref)
 	}
 	if err := json.Unmarshal(asset.Body, &envelope); err != nil {
@@ -239,7 +240,7 @@ func (o *Owner) processReleaseAsset(saved Process, sourceVersion string) (platfo
 	if err != nil {
 		return platform.ReleaseAsset{}, err
 	}
-	return platform.WithDependencies(platform.ReleaseAsset{Ref: ref, ContractVersion: 1, SourceVersion: sourceVersion, Body: body})
+	return releasepub.WithDependencies(platform.ReleaseAsset{Ref: ref, ContractVersion: 1, SourceVersion: sourceVersion, Body: body})
 }
 
 func (o *Owner) Draft(asset platform.ReleaseAsset) (string, any, bool, error) {

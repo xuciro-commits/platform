@@ -6,6 +6,7 @@ import (
 	"fmt"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	functionauthoring "platformserver/services/functions/authoring"
+	releasepub "platformserver/services/resources/publication"
 
 	"platformserver/platform"
 	dataowner "platformserver/services/data"
@@ -158,7 +159,7 @@ func (b *Build) testPlanAsset(plan TestPlan, version int) (platform.ReleaseAsset
 	if err != nil {
 		return platform.ReleaseAsset{}, err
 	}
-	return platform.WithDependencies(platform.ReleaseAsset{Ref: platform.AssetRef{App: ID, Kind: platform.AssetTestPlan, Name: plan.Name}, ContractVersion: 1, SourceVersion: b.Manifest().Version + ".tests-" + strconv.Itoa(version), Body: body})
+	return releasepub.WithDependencies(platform.ReleaseAsset{Ref: platform.AssetRef{App: ID, Kind: platform.AssetTestPlan, Name: plan.Name}, ContractVersion: 1, SourceVersion: b.Manifest().Version + ".tests-" + strconv.Itoa(version), Body: body})
 }
 
 func testPlanKind(plan TestPlan) platform.AssetKind {
@@ -220,7 +221,7 @@ func (b *Build) evaluationSetAsset(plan TestPlan, version int) (platform.Release
 	if err != nil {
 		return platform.ReleaseAsset{}, err
 	}
-	return platform.WithDependencies(platform.ReleaseAsset{Ref: platform.AssetRef{App: ID, Kind: platform.AssetEvaluation, Name: plan.Name}, ContractVersion: 1, SourceVersion: b.Manifest().Version + ".evaluation-" + strconv.Itoa(version), Body: body})
+	return releasepub.WithDependencies(platform.ReleaseAsset{Ref: platform.AssetRef{App: ID, Kind: platform.AssetEvaluation, Name: plan.Name}, ContractVersion: 1, SourceVersion: b.Manifest().Version + ".evaluation-" + strconv.Itoa(version), Body: body})
 }
 
 func (b *Build) testPlanImage(raw []byte) (TestPlan, platform.ReleaseAsset, error) {
@@ -249,7 +250,7 @@ func (b *Build) testPlanImage(raw []byte) (TestPlan, platform.ReleaseAsset, erro
 
 func (b *Build) checkTestPlanAsset(asset platform.ReleaseAsset, name string, version int) error {
 	actual, err := b.testPlanAssetName(asset)
-	if err != nil || actual != name || asset.Ref.App != ID || asset.Ref.Name != name || asset.ContractVersion != 1 || asset.SourceVersion != b.Manifest().Version+testPlanVersionPrefix(asset.Ref.Kind)+strconv.Itoa(version) || platform.CheckAssetDependencies(asset) != nil {
+	if err != nil || actual != name || asset.Ref.App != ID || asset.Ref.Name != name || asset.ContractVersion != 1 || asset.SourceVersion != b.Manifest().Version+testPlanVersionPrefix(asset.Ref.Kind)+strconv.Itoa(version) || releasepub.CheckAssetDependencies(asset) != nil {
 		return fmt.Errorf("evaluation set publication differs from its descriptor")
 	}
 	return nil

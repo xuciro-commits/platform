@@ -354,22 +354,6 @@ func (d PageInputSchema) checkNavigationEffect(effect PageEffect) error {
 	return nil
 }
 
-func pageNavigationEdge(asset ReleaseAsset, target AssetRef) bool {
-	if asset.Ref.Kind != AssetPage || target.Kind != AssetPage {
-		return false
-	}
-	var p Page
-	if json.Unmarshal(asset.Body, &p) != nil {
-		return false
-	}
-	for _, ref := range p.NavigationTargets() {
-		if ref == target {
-			return true
-		}
-	}
-	return false
-}
-
 func (d PageInputSchema) sharedContextRecord(id string) bool {
 	v := d.Variables[id]
 	return v.Type == "record" && v.Scope == "application" && v.Mode == "shared" && v.Source != nil && v.Source.Kind == "application" && v.Source.Object != nil && v.Source.Object.Kind == AssetObject && v.Source.Object.Check() == nil

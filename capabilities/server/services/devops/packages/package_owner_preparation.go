@@ -225,7 +225,7 @@ func Inspect(ctx context.Context, tenant string, request platform.PackageInspect
 	if err != nil {
 		return preview, err
 	}
-	if err := packagedesc.Validate(descriptor); err != nil {
+	if err := packagedesc.Validate(descriptor, releasepub.WithDependencies); err != nil {
 		return preview, err
 	}
 	precheck, err := check(ctx, descriptor)

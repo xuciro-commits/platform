@@ -178,7 +178,7 @@ type TransitionInfo struct {
 	To      []string `json:"to"`
 }
 
-func transactionDestination(subject, field string, txn *BusinessTxn, inputs []Field) ([]string, string) {
+func TransactionDestination(subject, field string, txn *BusinessTxn, inputs []Field) ([]string, string) {
 	if txn == nil || txn.Subject != subject {
 		return nil, ""
 	}

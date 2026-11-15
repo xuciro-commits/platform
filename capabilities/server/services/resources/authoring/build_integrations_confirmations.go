@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"platformserver/services/ontology"
+	releasepub "platformserver/services/resources/publication"
 	"slices"
 	"strings"
 	"time"
@@ -224,7 +225,7 @@ func (b *Build) bindConfirmationAssets(assets []platform.ReleaseAsset) ([]platfo
 		if err != nil {
 			return nil, err
 		}
-		assets[i], err = platform.WithDependencies(asset)
+		assets[i], err = releasepub.WithDependencies(asset)
 		if err != nil {
 			return nil, err
 		}

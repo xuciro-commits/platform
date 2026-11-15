@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/url"
+	releasepub "platformserver/services/resources/publication"
 	"reflect"
 	"slices"
 	"strings"
@@ -297,7 +298,7 @@ func (b *Build) bindDispatchAssets(assets []platform.ReleaseAsset) ([]platform.R
 			if err != nil {
 				return nil, err
 			}
-			assets[i], err = platform.WithDependencies(asset)
+			assets[i], err = releasepub.WithDependencies(asset)
 			if err != nil {
 				return nil, err
 			}
@@ -321,7 +322,7 @@ func (b *Build) bindDispatchAssets(assets []platform.ReleaseAsset) ([]platform.R
 		}
 		asset.Body = platform.Raw(body)
 		var err error
-		assets[i], err = platform.WithDependencies(asset)
+		assets[i], err = releasepub.WithDependencies(asset)
 		if err != nil {
 			return nil, err
 		}

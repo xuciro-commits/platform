@@ -126,12 +126,3 @@ func (a ReleaseAsset) MarshalJSON() ([]byte, error) {
 		Provides *[]Capability `json:"provides,omitempty"`
 	}{wire: wire(a), Provides: provides})
 }
-
-func WithDependencies(asset ReleaseAsset) (ReleaseAsset, error) {
-	description, err := DescribeAsset(asset)
-	if err != nil {
-		return ReleaseAsset{}, err
-	}
-	asset.Requires, asset.Provides = description.Requires, description.Provides
-	return asset, nil
-}

@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	appsauthoring "platformserver/services/apps/authoring"
+	releasepub "platformserver/services/resources/publication"
 	"reflect"
 	"slices"
 	"strings"
@@ -215,7 +216,7 @@ func (b *Build) releaseAssets(objects []ontology.Object, pages []appsauthoring.P
 		if err != nil {
 			return nil, err
 		}
-		asset, err := platform.WithDependencies(platform.ReleaseAsset{Ref: ref, ContractVersion: 1, SourceVersion: sourceVersion, Body: body})
+		asset, err := releasepub.WithDependencies(platform.ReleaseAsset{Ref: ref, ContractVersion: 1, SourceVersion: sourceVersion, Body: body})
 		if err != nil {
 			return nil, err
 		}
@@ -238,7 +239,7 @@ func (b *Build) releaseAssets(objects []ontology.Object, pages []appsauthoring.P
 					actionVersion += ".action-" + binding.SourceVersion
 				}
 			}
-			asset, err := platform.WithDependencies(platform.ReleaseAsset{
+			asset, err := releasepub.WithDependencies(platform.ReleaseAsset{
 				Ref:             platform.AssetRef{App: ID, Kind: platform.AssetAction, Name: action.Schema},
 				ContractVersion: 1, SourceVersion: actionVersion, Body: actionBody,
 			})

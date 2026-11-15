@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"maps"
+	releasepub "platformserver/services/resources/publication"
 	"slices"
 	"strings"
 
@@ -178,7 +179,7 @@ func (d *Owner) prerequisiteAssets(root platform.PackageDescriptor, index *platf
 				return nil, err
 			}
 			for _, asset := range assets {
-				complete, err := platform.WithDependencies(asset)
+				complete, err := releasepub.WithDependencies(asset)
 				if err != nil {
 					return nil, err
 				}

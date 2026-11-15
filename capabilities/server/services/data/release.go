@@ -3,6 +3,7 @@ package data
 import (
 	"encoding/json"
 	"fmt"
+	releasepub "platformserver/services/resources/publication"
 	"reflect"
 	"slices"
 	"strconv"
@@ -199,7 +200,7 @@ func (o *Owner) integrationAsset(kind platform.AssetKind, record any, ordinal in
 		return asset, err
 	}
 	asset.Body = raw
-	return platform.WithDependencies(asset)
+	return releasepub.WithDependencies(asset)
 }
 
 func integrationCandidateAsset(asset platform.ReleaseAsset) (platform.ReleaseAsset, error) {
@@ -291,7 +292,7 @@ func integrationCandidateAsset(asset platform.ReleaseAsset) (platform.ReleaseAss
 	}
 	projected := asset
 	projected.Body = body
-	projected, err = platform.WithDependencies(projected)
+	projected, err = releasepub.WithDependencies(projected)
 	if err != nil {
 		return asset, err
 	}

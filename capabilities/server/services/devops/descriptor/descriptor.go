@@ -8,7 +8,7 @@ import (
 	"platformserver/platform"
 )
 
-func Validate(p platform.PackageDescriptor) error {
+func Validate(p platform.PackageDescriptor, withDependencies func(platform.ReleaseAsset) (platform.ReleaseAsset, error)) error {
 	if p.ID == "" || p.Version == "" || p.Namespace == "" {
 		return fmt.Errorf("a package needs an ID, a version and a namespace")
 	}
@@ -83,7 +83,7 @@ func Validate(p platform.PackageDescriptor) error {
 			return fmt.Errorf("blueprint owner definitions need unique pinned identities")
 		}
 		seen[asset.Ref] = true
-		if _, err := platform.WithDependencies(asset); err != nil {
+		if _, err := withDependencies(asset); err != nil {
 			return err
 		}
 	}
