@@ -35,7 +35,7 @@ func (b Bindings) CheckQueries(p platform.Page) error {
 			return err
 		}
 	}
-	if err := p.BindRuleTypes(b.Entity); err != nil {
+	if err := BindRuleTypes(p, b.Entity); err != nil {
 		return err
 	}
 	if err := p.InputSchema.CheckVariables(); err != nil {

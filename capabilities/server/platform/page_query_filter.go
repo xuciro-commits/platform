@@ -29,7 +29,7 @@ func (q PageQuery) Variables() []string {
 	return ids
 }
 
-func (p Page) checkQueryFilter(filter Expr, object EntityInfo, engines ...RuleEngine) error {
+func (p Page) CheckQueryFilter(filter Expr, object EntityInfo, engines ...RuleEngine) error {
 	if filter.Kind != "boolean" {
 		return fmt.Errorf("page query filter must return boolean")
 	}
@@ -147,20 +147,4 @@ func (p Page) checkQueryFilter(filter Expr, object EntityInfo, engines ...RuleEn
 	}
 	_, err := ruleEngineOf(engines).CompileExpr(filter, schema)
 	return err
-}
-
-func (p Page) CheckQueryFilters(lookup func(string) (EntityInfo, bool)) error {
-	for id, query := range p.InputSchema.Queries {
-		if query.Filter == nil {
-			continue
-		}
-		object, ok := lookup(query.Object.Name)
-		if !ok || object.App != query.Object.App {
-			return fmt.Errorf("page query %s object is unavailable", id)
-		}
-		if err := p.checkQueryFilter(*query.Filter, object); err != nil {
-			return fmt.Errorf("page query %s: %w", id, err)
-		}
-	}
-	return nil
 }

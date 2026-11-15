@@ -137,7 +137,7 @@ func (o *Owner) validatePageDocument(page *Page, lookup func(string) (platform.E
 		return err
 	}
 	d := Descriptor(*page, o.env.AppID(), o.env.Version())
-	if err := d.BindRuleTypes(lookup); err != nil {
+	if err := pageowner.BindRuleTypes(d, lookup); err != nil {
 		return err
 	}
 	if err := d.InputSchema.CheckVariables(engines...); err != nil {
@@ -166,7 +166,7 @@ func (o *Owner) normalizePageModel(p *Page, lookup func(string) (platform.Entity
 	if err := pageowner.NormalizeModelBindings(&d, lookup); err != nil {
 		return err
 	}
-	if err := d.CheckQueryFilters(lookup); err != nil {
+	if err := pageowner.CheckQueryFilters(d, lookup); err != nil {
 		return err
 	}
 	for i, binding := range d.DataBindings {

@@ -269,7 +269,7 @@ func (p Page) CheckQuerySchema(q PageQuery, object EntityInfo, named *Definition
 		return fmt.Errorf("query object is unavailable")
 	}
 	if q.Filter != nil {
-		if err := p.checkQueryFilter(*q.Filter, object, engines...); err != nil {
+		if err := p.CheckQueryFilter(*q.Filter, object, engines...); err != nil {
 			return err
 		}
 	}

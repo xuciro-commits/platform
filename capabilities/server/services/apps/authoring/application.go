@@ -9,6 +9,7 @@ import (
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformserver/platform"
+	pageowner "platformserver/services/apps/pages"
 	ontology "platformserver/services/ontology"
 	"platformserver/services/resources/publication"
 )
@@ -116,7 +117,7 @@ func (o *Owner) ValidateApplication(c platform.Caller, a *Application) *platform
 			break
 		}
 	}
-	if err := ApplicationDescriptor(*a).QueryPage().CheckQueryFilters(lookup); err != nil {
+	if err := pageowner.CheckQueryFilters(ApplicationDescriptor(*a).QueryPage(), lookup); err != nil {
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
 	}
 	if a.Profile != nil {
