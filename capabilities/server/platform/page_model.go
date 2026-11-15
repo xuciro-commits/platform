@@ -205,7 +205,7 @@ func (p Page) RecordVariableInterface(variable string) string {
 }
 
 func CompositeLimits() (records, cells, bytes int) {
-	limits := pageWidgets.Runtime.Composite
+	limits := PageWidgets.Runtime.Composite
 	return limits.MaxRecords, limits.MaxCells, limits.MaxBytes
 }
 
@@ -270,7 +270,7 @@ func (edit *PageInlineEdit) CheckTableEdit(info EntityInfo, action Action) error
 	}
 	for _, name := range edit.Fields {
 		f, ok := info.Field(name)
-		if !ok || f.ReadOnly || f.Aside || info.Lifecycle != nil && info.Lifecycle.Field == name || !slices.Contains(pageWidgets.Runtime.TableEditing.FieldTypes, f.Type) || !slices.ContainsFunc(action.Payload, func(p Field) bool {
+		if !ok || f.ReadOnly || f.Aside || info.Lifecycle != nil && info.Lifecycle.Field == name || !slices.Contains(PageWidgets.Runtime.TableEditing.FieldTypes, f.Type) || !slices.ContainsFunc(action.Payload, func(p Field) bool {
 			return p.Name == name
 		}) {
 			return fmt.Errorf("table edit field is unavailable or not accepted by its original action")
@@ -279,7 +279,7 @@ func (edit *PageInlineEdit) CheckTableEdit(info EntityInfo, action Action) error
 	return nil
 }
 
-func (p Page) checkEnvelope() error {
+func (p Page) CheckEnvelope() error {
 	if len(p.DataBindings) > 128 || len(p.ActionTriggers) > 256 || len(p.ScopeVisibility.Scopes) > 512 || len(p.WidgetSpec.Body) > 2<<20 || !json.Valid(p.WidgetSpec.Body) {
 		return fmt.Errorf("page safety declaration exceeds its bounded format")
 	}
@@ -298,7 +298,7 @@ func (b PageDataBinding) HasRecordOutput(port, variable string) bool {
 	return false
 }
 
-func (p Page) scopeOwner(owner, kind string) string {
+func (p Page) ScopeOwner(owner, kind string) string {
 	seen := map[string]bool{}
 	for owner != "" && !seen[owner] {
 		seen[owner] = true
@@ -325,10 +325,10 @@ func (p Page) rootPresentationSource(source string) bool {
 	if owner == "" {
 		owner = source
 	}
-	return p.scopeOwner(owner, "overlay") == "" && p.scopeOwner(owner, "loop") == ""
+	return p.ScopeOwner(owner, "overlay") == "" && p.ScopeOwner(owner, "loop") == ""
 }
 
-func pageBindingVariables(b PageDataBinding) []string {
+func PageBindingVariables(b PageDataBinding) []string {
 	out := []string{}
 	for key, id := range b.Ports {
 		if strings.HasSuffix(key, "Variable") {

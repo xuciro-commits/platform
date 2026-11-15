@@ -63,7 +63,7 @@ func (o *Owner) WritebackEffects(tenant string, c platform.Caller, e platform.Ev
 			}
 			continue
 		}
-		req, err := w.Request(conn, s.GetTarget().GetId(), s.GetPayload())
+		req, err := o.PrepareWritebackRequest(w, conn, s.GetTarget().GetId(), s.GetPayload())
 		if err != nil {
 			if preparing {
 				return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "{why}", err.Error())

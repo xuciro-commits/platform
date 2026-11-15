@@ -18,12 +18,13 @@ type assetOwnerKey struct {
 }
 
 type AssetRegistry struct {
-	owners map[string]platform.AssetLifecycleOwner
-	kinds  map[assetOwnerKey]platform.AssetLifecycleOwner
+	resolver Resolver
+	owners   map[string]platform.AssetLifecycleOwner
+	kinds    map[assetOwnerKey]platform.AssetLifecycleOwner
 }
 
-func NewAssetRegistry(owners ...platform.AssetLifecycleOwner) (*AssetRegistry, error) {
-	registry := &AssetRegistry{owners: map[string]platform.AssetLifecycleOwner{}, kinds: map[assetOwnerKey]platform.AssetLifecycleOwner{}}
+func (resolver Resolver) NewAssetRegistry(owners ...platform.AssetLifecycleOwner) (*AssetRegistry, error) {
+	registry := &AssetRegistry{resolver: resolver, owners: map[string]platform.AssetLifecycleOwner{}, kinds: map[assetOwnerKey]platform.AssetLifecycleOwner{}}
 	for _, owner := range owners {
 		if err := registry.Register(owner); err != nil {
 			return nil, err
@@ -114,7 +115,7 @@ func (r *AssetRegistry) freezeAsset(asset platform.ReleaseAsset) (platform.Relea
 	}
 	slices.SortFunc(asset.Requires, platform.CompareAssetRef)
 	asset.Requires = slices.Compact(asset.Requires)
-	if err := CheckAssetDependencies(asset); err != nil {
+	if err := r.resolver.CheckAssetDependencies(asset); err != nil {
 		return platform.ReleaseAsset{}, err
 	}
 	return asset, nil

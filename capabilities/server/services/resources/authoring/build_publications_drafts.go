@@ -210,7 +210,7 @@ func (b *Build) draftComparison(record any, published string, info platform.Enti
 			if !compiled {
 				switch r := record.(type) {
 				case SampleSetRecord:
-					asset, err = sampleSetAsset(r, max(1, r.DefinitionVersion))
+					asset, err = sampleSetAsset(b.resolver, r, max(1, r.DefinitionVersion))
 				case TestPlan:
 					asset, err = b.testPlanAsset(r, max(1, r.DefinitionVersion))
 				default:

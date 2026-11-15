@@ -9,6 +9,7 @@ import (
 	"platformserver/platform"
 	actioncatalog "platformserver/services/actions/catalog"
 	"platformserver/services/ontology"
+	"platformserver/services/resources/publication"
 )
 
 const (
@@ -30,6 +31,7 @@ type Host interface {
 }
 
 type Owner struct {
+	resolver        publication.Resolver
 	host            Host
 	files           platform.FileHost
 	releaseDraftIDs map[platform.AssetRef]string
@@ -38,8 +40,8 @@ type Owner struct {
 
 type IntegrationInventory func(platform.AssetKind) ([]any, error)
 
-func New(host Host) *Owner {
-	return &Owner{host: host}
+func New(host Host, resolver publication.Resolver) *Owner {
+	return &Owner{host: host, resolver: resolver}
 }
 
 func (o *Owner) AttachFiles(files platform.FileHost) {
@@ -47,7 +49,7 @@ func (o *Owner) AttachFiles(files platform.FileHost) {
 }
 
 func (o *Owner) Fork(host Host) *Owner {
-	return &Owner{host: host, files: o.files, releaseDraftIDs: cloneDraftIDs(o.releaseDraftIDs)}
+	return &Owner{host: host, resolver: o.resolver, files: o.files, releaseDraftIDs: cloneDraftIDs(o.releaseDraftIDs)}
 }
 
 func (o *Owner) WithInventory(inventory IntegrationInventory) *Owner {

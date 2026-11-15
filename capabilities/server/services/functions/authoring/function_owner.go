@@ -150,16 +150,17 @@ type Environment interface {
 }
 
 type Owner struct {
-	env     Environment
-	records map[string]Function
+	resolver publication.Resolver
+	env      Environment
+	records  map[string]Function
 }
 
-func NewOwner(env Environment) *Owner {
-	return &Owner{env: env, records: map[string]Function{}}
+func NewOwner(env Environment, resolver publication.Resolver) *Owner {
+	return &Owner{env: env, resolver: resolver, records: map[string]Function{}}
 }
 
 func (o *Owner) Fork(env Environment) *Owner {
-	return &Owner{env: env, records: maps.Clone(o.records)}
+	return &Owner{env: env, resolver: o.resolver, records: maps.Clone(o.records)}
 }
 
 func (o *Owner) Function(name string, version int) (platform.AIFunction, int, bool) {
@@ -310,7 +311,7 @@ func (o *Owner) fromAsset(asset platform.ReleaseAsset) (Function, error) {
 	var zero Function
 	version := o.env.AssetVersion(asset)
 	var d platform.AIFunction
-	if version == 0 || strictDecode(asset.Body, &d) != nil || asset.ContractVersion != 1 || d.Check() != nil || d.Name != asset.Ref.Name || publication.CheckAssetDependencies(asset) != nil {
+	if version == 0 || strictDecode(asset.Body, &d) != nil || asset.ContractVersion != 1 || d.Check() != nil || d.Name != asset.Ref.Name || o.resolver.CheckAssetDependencies(asset) != nil {
 		return zero, fmt.Errorf("invalid builder function asset %s", asset.Ref)
 	}
 	f := functionFromDeclaration(d)
@@ -378,11 +379,11 @@ func (o *Owner) Assets() ([]platform.ReleaseAsset, error) {
 
 func (o *Owner) releaseAsset(f Function) (platform.ReleaseAsset, error) {
 	ref := platform.AssetRef{App: o.env.App(), Kind: platform.AssetFunction, Name: f.Name}
-	return publication.ReleaseAsset(ref, o.env.Version()+".function-"+fmt.Sprint(f.Version), f.Definition())
+	return o.resolver.ReleaseAsset(ref, o.env.Version()+".function-"+fmt.Sprint(f.Version), f.Definition())
 }
 
 func (o *Owner) Resolve(name, sourceVersion string) (platform.ReleaseAsset, error) {
-	return publication.RetainedAsset(o.env.App(), o.env.Version(), "function", "AI function", platform.AssetFunction, name, sourceVersion, o.Function)
+	return publication.RetainedAsset(o.resolver, o.env.App(), o.env.Version(), "function", "AI function", platform.AssetFunction, name, sourceVersion, o.Function)
 }
 
 func (o *Owner) Prepare(assets []platform.ReleaseAsset) ([]platform.ReleasePublication, error) {
@@ -391,7 +392,7 @@ func (o *Owner) Prepare(assets []platform.ReleaseAsset) ([]platform.ReleasePubli
 			family := record.family()
 			prior, retained := publication.Read[Function](family.Published)
 			var d platform.AIFunction
-			if version != family.Version+1 || strictDecode(asset.Body, &d) != nil || asset.ContractVersion != 1 || d.Check() != nil || publication.CheckAssetDependencies(asset) != nil {
+			if version != family.Version+1 || strictDecode(asset.Body, &d) != nil || asset.ContractVersion != 1 || d.Check() != nil || o.resolver.CheckAssetDependencies(asset) != nil {
 				return record, fmt.Errorf("invalid next function version")
 			}
 			frozen := functionFromDeclaration(d)

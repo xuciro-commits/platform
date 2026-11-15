@@ -43,7 +43,7 @@ func (p Page) CheckQueryFilter(filter Expr, object EntityInfo, engines ...RuleEn
 			if name, ok := strings.CutPrefix(expression.Ref, "root."); ok {
 				name, suffix, _ := strings.Cut(name, "#")
 				variable, exists := p.InputSchema.Variables[name]
-				if !exists || !pageNodeID.MatchString(name) {
+				if !exists || !PageNodeID.MatchString(name) {
 					return fmt.Errorf("page query filter parameter is unavailable")
 				}
 				kind := ""
@@ -122,7 +122,7 @@ func (p Page) CheckQueryFilter(filter Expr, object EntityInfo, engines ...RuleEn
 						kind = field.Type
 					}
 				}
-				if kind == "" || expression.Kind != kind || !pageNodeID.MatchString(name) {
+				if kind == "" || expression.Kind != kind || !PageNodeID.MatchString(name) {
 					return fmt.Errorf("page query filter field type differs")
 				}
 				typ := ExprType{Kind: kind}

@@ -3,6 +3,7 @@ package releases
 import (
 	"encoding/json"
 	"fmt"
+	pageowner "platformserver/services/apps/pages"
 	releasepub "platformserver/services/resources/publication"
 	"slices"
 	"strings"
@@ -93,7 +94,7 @@ func (ds Describer) DefinitionAsset(def platform.Definition) (platform.ReleaseAs
 
 func (ds Describer) DescribeOwnedAsset(asset platform.ReleaseAsset) (platform.ReleaseAsset, error) {
 	if !slices.Contains([]platform.AssetKind{platform.AssetObject, platform.AssetAction, platform.AssetAgent, platform.AssetQuery, platform.AssetFunction, platform.AssetCompute}, asset.Ref.Kind) {
-		return releasepub.WithDependencies(asset)
+		return pageowner.PublicationResolver().WithDependencies(asset)
 	}
 	var body map[string]json.RawMessage
 	if err := json.Unmarshal(asset.Body, &body); err != nil {
@@ -211,7 +212,7 @@ func (ds Describer) DescribeOwnedAsset(asset platform.ReleaseAsset) (platform.Re
 		return asset, err
 	}
 	asset.Body = raw
-	return releasepub.WithDependencies(asset)
+	return pageowner.PublicationResolver().WithDependencies(asset)
 }
 
 func (ds Describer) DescribeDefinition(def platform.Definition) (platform.Definition, error) {

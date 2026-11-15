@@ -272,7 +272,7 @@ func (b *Build) ResolvePinned(ref platform.AssetRef, version string, contentVers
 	}
 	if ref.Kind == platform.AssetAgent {
 		for _, record := range b.agents {
-			asset, err := agentReleaseAsset(record, b.Manifest().Version)
+			asset, err := b.agentReleaseAsset(record, b.Manifest().Version)
 			if err != nil {
 				return platform.ReleaseAsset{}, err
 			}

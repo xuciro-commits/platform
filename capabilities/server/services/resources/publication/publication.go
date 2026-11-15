@@ -129,7 +129,7 @@ func Retained[D any, T any](installed map[string]T, inventory func() ([]T, error
 	return out, 0, false
 }
 
-func ReleaseAsset(ref platform.AssetRef, version string, definition any) (platform.ReleaseAsset, error) {
+func (resolver Resolver) ReleaseAsset(ref platform.AssetRef, version string, definition any) (platform.ReleaseAsset, error) {
 	body, err := json.Marshal(definition)
 	if err != nil {
 		return platform.ReleaseAsset{}, err
@@ -138,10 +138,10 @@ func ReleaseAsset(ref platform.AssetRef, version string, definition any) (platfo
 	if link, ok := definition.(platform.LinkType); ok {
 		contract = link.Contract()
 	}
-	return WithDependencies(platform.ReleaseAsset{Ref: ref, ContractVersion: contract, SourceVersion: version, Body: body})
+	return resolver.WithDependencies(platform.ReleaseAsset{Ref: ref, ContractVersion: contract, SourceVersion: version, Body: body})
 }
 
-func RetainedAsset[D any](app, source, prefix, label string, kind platform.AssetKind, name, versionText string, lookup func(string, int) (D, int, bool)) (platform.ReleaseAsset, error) {
+func RetainedAsset[D any](resolver Resolver, app, source, prefix, label string, kind platform.AssetKind, name, versionText string, lookup func(string, int) (D, int, bool)) (platform.ReleaseAsset, error) {
 	ordinalText, found := strings.CutPrefix(versionText, source+"."+prefix+"-")
 	version, err := strconv.Atoi(ordinalText)
 	if !found || err != nil || strconv.Itoa(version) != ordinalText {
@@ -151,7 +151,7 @@ func RetainedAsset[D any](app, source, prefix, label string, kind platform.Asset
 	if !ok || ordinal != version || version < 1 {
 		return platform.ReleaseAsset{}, fmt.Errorf("%s %s version %d is not retained", kind, name, version)
 	}
-	return ReleaseAsset(platform.AssetRef{App: app, Kind: kind, Name: name}, versionText, definition)
+	return resolver.ReleaseAsset(platform.AssetRef{App: app, Kind: kind, Name: name}, versionText, definition)
 }
 
 func Prepare[T any](app, sourceVersion string, assets []platform.ReleaseAsset, kind platform.AssetKind, prefix, schema string, inventory func() ([]T, error), get func(T) Family, set func(*T, Family), resolve func(string, string) (platform.ReleaseAsset, error), freeze func(T, platform.ReleaseAsset, int) (T, error)) ([]platform.ReleasePublication, error) {

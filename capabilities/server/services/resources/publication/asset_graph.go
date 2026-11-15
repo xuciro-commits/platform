@@ -5,11 +5,11 @@ import (
 	"platformserver/platform"
 )
 
-func QuerySourceVersion(d platform.Definition, version string) *platform.Definition {
+func (resolver Resolver) QuerySourceVersion(d platform.Definition, version string) *platform.Definition {
 	if d.Ref.Kind == platform.AssetLinkType {
 		return LinkVersion(d, version)
 	}
-	return QueryVersion(d, version)
+	return resolver.QueryVersion(d, version)
 }
 
 func LinkVersion(d platform.Definition, version string) *platform.Definition {
@@ -27,7 +27,7 @@ func LinkVersion(d platform.Definition, version string) *platform.Definition {
 	return &d
 }
 
-func QueryVersion(d platform.Definition, version string) *platform.Definition {
+func (resolver Resolver) QueryVersion(d platform.Definition, version string) *platform.Definition {
 	if version == d.Version && d.Query != nil {
 		return &d
 	}
@@ -39,7 +39,7 @@ func QueryVersion(d platform.Definition, version string) *platform.Definition {
 	if err != nil {
 		return nil
 	}
-	description, err := DescribeAsset(platform.ReleaseAsset{Ref: d.Ref, SourceVersion: version, Body: body})
+	description, err := resolver.DescribeAsset(platform.ReleaseAsset{Ref: d.Ref, SourceVersion: version, Body: body})
 	if err != nil {
 		return nil
 	}

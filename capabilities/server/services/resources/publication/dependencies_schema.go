@@ -65,8 +65,8 @@ func pageDependencies(original platform.Page) []platform.AssetRef {
 	return refs
 }
 
-func checkReleaseBindings(ref platform.AssetRef, body []byte, declared []platform.AssetRef) error {
-	description, err := describeAsset(platform.ReleaseAsset{Ref: ref, Body: body}, true)
+func (resolver Resolver) checkReleaseBindings(ref platform.AssetRef, body []byte, declared []platform.AssetRef) error {
+	description, err := resolver.describeAsset(platform.ReleaseAsset{Ref: ref, Body: body}, true)
 	if err != nil {
 		return err
 	}
@@ -78,11 +78,11 @@ func checkReleaseBindings(ref platform.AssetRef, body []byte, declared []platfor
 	return nil
 }
 
-func CheckAssetDependencies(asset platform.ReleaseAsset) error {
+func (resolver Resolver) CheckAssetDependencies(asset platform.ReleaseAsset) error {
 	if asset.Provides == nil {
-		return checkReleaseBindings(asset.Ref, asset.Body, asset.Requires)
+		return resolver.checkReleaseBindings(asset.Ref, asset.Body, asset.Requires)
 	}
-	description, err := DescribeAsset(asset)
+	description, err := resolver.DescribeAsset(asset)
 	if err != nil {
 		return err
 	}

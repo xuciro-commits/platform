@@ -5,8 +5,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"platformserver/platform"
+	pageowner "platformserver/services/apps/pages"
 	"platformserver/services/resources/authoring"
-	releasepub "platformserver/services/resources/publication"
+
 	"slices"
 	"time"
 )
@@ -74,7 +75,7 @@ func PendingWorkFits(candidateID string, raw []byte, caller *platform.Caller, sa
 	if caller == nil {
 		return nil
 	}
-	candidate, err := releasepub.ReadCandidate(candidateID, raw)
+	candidate, err := pageowner.PublicationResolver().ReadCandidate(candidateID, raw)
 	if err != nil {
 		return err
 	}
@@ -95,7 +96,7 @@ func PendingWorkFits(candidateID string, raw []byte, caller *platform.Caller, sa
 			continue
 		}
 		if raw := saved(request.Release); raw != nil {
-			started, err := releasepub.ReadCandidate(request.Release, raw)
+			started, err := pageowner.PublicationResolver().ReadCandidate(request.Release, raw)
 			if err == nil && bytes.Equal(actionIn(started, request.Action), next) {
 				continue
 			}
@@ -152,7 +153,7 @@ type Activation struct {
 }
 
 func PlanActivation(candidateID string, raw []byte, upgradeID string, activation Activation) ([]platform.ReleaseInstallation, json.RawMessage, error) {
-	candidate, err := releasepub.ReadCandidate(candidateID, raw)
+	candidate, err := pageowner.PublicationResolver().ReadCandidate(candidateID, raw)
 	if err != nil {
 		return nil, nil, err
 	}

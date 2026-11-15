@@ -10,6 +10,7 @@ import (
 	"platformserver/platform"
 	actioncatalog "platformserver/services/actions/catalog"
 	automateowner "platformserver/services/automate"
+	"platformserver/services/resources/publication"
 )
 
 type Environment interface {
@@ -31,15 +32,16 @@ type Environment interface {
 }
 
 type Owner struct {
-	env Environment
+	resolver publication.Resolver
+	env      Environment
 }
 
-func New(env Environment) *Owner {
-	return &Owner{env: env}
+func New(env Environment, resolver publication.Resolver) *Owner {
+	return &Owner{env: env, resolver: resolver}
 }
 
 func (o *Owner) Fork(env Environment) *Owner {
-	return &Owner{env: env}
+	return &Owner{env: env, resolver: o.resolver}
 }
 
 func (o *Owner) ProcessEntity() platform.Entity {

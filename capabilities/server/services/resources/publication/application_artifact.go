@@ -9,12 +9,12 @@ import (
 	"platformserver/platform"
 )
 
-func ArtifactOfApplication(root platform.AssetRef, available []platform.ReleaseAsset) (platform.ApplicationArtifact, error) {
+func (resolver Resolver) ArtifactOfApplication(root platform.AssetRef, available []platform.ReleaseAsset) (platform.ApplicationArtifact, error) {
 	artifact := platform.ApplicationArtifact{Ref: root, Model: []platform.AssetBinding{}, Rules: []platform.AssetBinding{}, Pages: []platform.AssetBinding{}, Flows: []platform.AssetBinding{}, AI: []platform.AssetBinding{}, Integrations: []platform.AssetBinding{}, Samples: []platform.AssetBinding{}, Roles: []platform.ApplicationRole{}, Depends: []platform.AssetBinding{}, Environment: []platform.ApplicationBinding{}}
 	if root.Kind != platform.AssetApp {
 		return artifact, fmt.Errorf("an application artifact needs its application root")
 	}
-	candidate, err := Candidate([]platform.AssetRef{root}, available)
+	candidate, err := resolver.Candidate([]platform.AssetRef{root}, available)
 	if err != nil {
 		return artifact, err
 	}

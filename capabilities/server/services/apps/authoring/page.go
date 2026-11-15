@@ -143,14 +143,14 @@ func (o *Owner) validatePageDocument(page *Page, lookup func(string) (platform.E
 	if err := d.InputSchema.CheckVariables(engines...); err != nil {
 		return err
 	}
-	return Descriptor(*page, o.env.AppID(), o.env.Version()).CheckSafety()
+	return pageowner.CheckSafety(Descriptor(*page, o.env.AppID(), o.env.Version()))
 }
 
 func (o *Owner) checkPage(p Page) error {
 	if !ontology.Named(p.Name) {
 		return fmt.Errorf("the name %q is not lower-case letters and digits", p.Name)
 	}
-	if err := Descriptor(p, o.env.AppID(), o.env.Version()).CheckSafety(); err != nil {
+	if err := pageowner.CheckSafety(Descriptor(p, o.env.AppID(), o.env.Version())); err != nil {
 		return err
 	}
 	if o.env.Host() != nil {

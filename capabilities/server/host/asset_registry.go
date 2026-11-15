@@ -5,9 +5,12 @@ import (
 	"fmt"
 	"platformserver/kernel/records"
 	"platformserver/platform"
+	pageowner "platformserver/services/apps/pages"
 	releaseowner "platformserver/services/devops/releases"
 	"platformserver/services/resources/publication"
 )
+
+func PublicationResolver() publication.Resolver { return pageowner.PublicationResolver() }
 
 func (h hostView) ValidateCodeAsset(asset platform.ReleaseAsset) error {
 	return releaseowner.ValidateCodeAsset(asset, h.t.App, h.t.codeReleaseAssetsLocked)
@@ -30,9 +33,9 @@ func (t *Tenant) assetRegistryLocked() (*publication.AssetRegistry, error) {
 func (t *Tenant) definitionOwners(includeArchived bool) records.DefinitionOwners {
 	owners := t.assetOwners(t.OwnerActive)
 	return records.DefinitionOwners{Owners: owners, Active: t.OwnerActive, IncludeArchived: includeArchived,
-		DescribeAsset: publication.DescribeAsset,
+		DescribeAsset: PublicationResolver().DescribeAsset,
 		InstallationDecoder: func() (func(string, string, json.RawMessage) (platform.AssetInstallation, error), error) {
-			registry, err := publication.NewAssetRegistry(owners...)
+			registry, err := PublicationResolver().NewAssetRegistry(owners...)
 			if err != nil {
 				return nil, err
 			}

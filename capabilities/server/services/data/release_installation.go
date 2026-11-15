@@ -182,7 +182,7 @@ func (o *Owner) Prepare(assets []platform.ReleaseAsset, ctx platform.AssetReleas
 		if current == nil {
 			return nil, fmt.Errorf("asset %s has no target draft", asset.Ref)
 		}
-		record, err := retainIntegration(current, asset)
+		record, err := o.retainIntegration(current, asset)
 		if err != nil {
 			return nil, err
 		}
@@ -226,10 +226,10 @@ func (o *Owner) DecodeInstallation(schema string, image json.RawMessage) (platfo
 	if integrationRecord(record).ID == "" || version < 1 || ValueDecodeIntegration([]byte(raw), &asset) != nil || asset.Ref != (platform.AssetRef{App: App, Kind: resource.kind, Name: name}) {
 		return platform.AssetInstallation{}, fmt.Errorf("invalid integration installation")
 	}
-	if err := validateIntegrationFamily(record, asset); err != nil {
+	if err := o.validateIntegrationFamily(record, asset); err != nil {
 		return platform.AssetInstallation{}, err
 	}
-	if err := ValueValidateIntegrationDescriptor(asset); err != nil {
+	if err := o.validateIntegrationDescriptor(asset); err != nil {
 		return platform.AssetInstallation{}, err
 	}
 	return platform.AssetInstallation{Ref: asset.Ref, Schema: schema, Record: resource.record(integrationRecord(record).ID), Image: slices.Clone(image)}, nil

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"maps"
 	"platformserver/platform"
+	pageowner "platformserver/services/apps/pages"
 	"platformserver/services/ontology"
 	"platformserver/services/resources/authoring"
 	"platformserver/services/resources/publication"
@@ -437,7 +438,7 @@ func CandidateWithBindings(roots []platform.AssetRef, available []platform.Relea
 		}
 		assets[i] = asset
 	}
-	return publication.Candidate(roots, assets)
+	return pageowner.PublicationResolver().Candidate(roots, assets)
 }
 
 func CodeReleaseAssets(manifest platform.Manifest, definitions []platform.Definition, special map[platform.AssetRef]platform.ReleaseAsset) ([]platform.ReleaseAsset, error) {
@@ -545,7 +546,7 @@ func CodeReleaseAssets(manifest platform.Manifest, definitions []platform.Defini
 			if def.Page == nil {
 				return nil, fmt.Errorf("code page %s has no owner declaration", def.Ref)
 			}
-			asset, err := publication.PageReleaseAsset(manifest.ID, manifest.Version, *def.Page)
+			asset, err := pageowner.PublicationResolver().PageReleaseAsset(manifest.ID, manifest.Version, *def.Page)
 			if err != nil {
 				return nil, err
 			}
@@ -562,7 +563,7 @@ func CodeReleaseAssets(manifest platform.Manifest, definitions []platform.Defini
 			resources = append(resources, asset.Ref)
 		}
 	}
-	asset, err := publication.ApplicationReleaseAsset(manifest.ID, manifest.Version,
+	asset, err := pageowner.PublicationResolver().ApplicationReleaseAsset(manifest.ID, manifest.Version,
 		platform.Application{Name: manifest.ID, Title: manifest.Title, Pages: pages, Resources: UniqueRefs(resources)})
 	if err != nil {
 		return nil, err
@@ -735,7 +736,7 @@ func (p Planner) Preview(drafts []build.JointDraftRef, member platform.Member) (
 		}
 		return reply, candidate, nil
 	}
-	reply.Added, reply.Removed, reply.Changed, err = publication.CandidateDiff(current, candidate)
+	reply.Added, reply.Removed, reply.Changed, err = pageowner.PublicationResolver().CandidateDiff(current, candidate)
 	return reply, candidate, err
 }
 

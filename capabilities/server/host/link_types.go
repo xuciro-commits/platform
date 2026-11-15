@@ -14,7 +14,7 @@ func (h hostView) InstallLinkType(c platform.Caller, l platform.LinkType, versio
 }
 
 func (t *Tenant) visibleLink(m platform.Member, binding platform.AssetBinding) *platform.LinkType {
-	if selected := objects.QuerySourceDefinition(t.Definitions(m), &binding); selected != nil {
+	if selected := objects.QuerySourceDefinition(t.Definitions(m), &binding, PublicationResolver()); selected != nil {
 		return selected.LinkType
 	}
 	return nil

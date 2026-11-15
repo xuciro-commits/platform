@@ -74,7 +74,7 @@ func (b *Build) ForkReleaseExecution(assets []platform.ReleaseAsset) (platform.A
 			bound.interfaces[shape.Name] = shape
 		}
 		if asset.Ref.App == ID && asset.Ref.Kind == platform.AssetAgent {
-			agent, err := decodeAgentAsset(asset)
+			agent, err := b.decodeAgentAsset(asset)
 			if err != nil {
 				return nil, err
 			}
@@ -330,7 +330,7 @@ func (b *Build) applicationDrafts(id string, selectDrafts map[JointDraftRef]bool
 					return nil, fmt.Errorf("saved agent draft is unavailable")
 				}
 				agent.Version++
-				asset, problem := agentReleaseAsset(agent, b.Manifest().Version)
+				asset, problem := b.agentReleaseAsset(agent, b.Manifest().Version)
 				assets, err = []platform.ReleaseAsset{asset}, problem
 			default:
 				if record, ok := integrations[draft]; ok {

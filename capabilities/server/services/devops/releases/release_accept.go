@@ -7,8 +7,9 @@ import (
 	"platformserver/kernel/acceptedformat"
 	"platformserver/kernel/records"
 	"platformserver/platform"
+	pageowner "platformserver/services/apps/pages"
 	"platformserver/services/resources/authoring"
-	releasepub "platformserver/services/resources/publication"
+
 	"slices"
 	"time"
 )
@@ -57,7 +58,7 @@ type ReleaseAcceptance struct {
 }
 
 func (a ReleaseAcceptance) Apply(raw []byte) (acceptedformat.Release, error) {
-	saved, err := acceptedformat.DecodeRelease(raw, releasepub.ReadCandidate)
+	saved, err := acceptedformat.DecodeRelease(raw, pageowner.PublicationResolver().ReadCandidate)
 	if err != nil {
 		return saved, err
 	}
@@ -91,7 +92,7 @@ func (a ReleaseAcceptance) Apply(raw []byte) (acceptedformat.Release, error) {
 			return saved, err
 		}
 		if saved.Version >= 4 {
-			candidate, err := releasepub.ReadCandidate(saved.CandidateID, saved.Bytes)
+			candidate, err := pageowner.PublicationResolver().ReadCandidate(saved.CandidateID, saved.Bytes)
 			if err != nil {
 				return saved, err
 			}
@@ -160,7 +161,7 @@ func (a ReleaseAcceptance) Activate(m platform.Member, candidateID, key, upgrade
 		return "", err
 	}
 	if prior := a.Answer("release:activate:" + key); prior != nil {
-		saved, err := acceptedformat.DecodeRelease(prior, releasepub.ReadCandidate)
+		saved, err := acceptedformat.DecodeRelease(prior, pageowner.PublicationResolver().ReadCandidate)
 		hash, hashErr := acceptedformat.ReleaseRequestHash(a.Tenant, m.ID, "activate:"+key, candidateID, true, upgradeID)
 		if err != nil || hashErr != nil || hash != saved.RequestHash {
 			return "", fmt.Errorf("activation key belongs to another request")
@@ -252,7 +253,7 @@ func (a ReleaseAcceptance) Commit(m platform.Member, saved acceptedformat.Releas
 			saved.MediaVersions = snapshots
 		}
 	}
-	raw, err := acceptedformat.EncodeRelease(saved, releasepub.ReadCandidate)
+	raw, err := acceptedformat.EncodeRelease(saved, pageowner.PublicationResolver().ReadCandidate)
 	if err != nil {
 		return "", err
 	}
@@ -281,7 +282,7 @@ func (a ReleaseAcceptance) Commit(m platform.Member, saved acceptedformat.Releas
 }
 
 func (a ReleaseAcceptance) ApplyPrepared(m platform.Member, entry ReleaseEntry) (string, error) {
-	saved, err := acceptedformat.DecodeRelease(entry.Body, releasepub.ReadCandidate)
+	saved, err := acceptedformat.DecodeRelease(entry.Body, pageowner.PublicationResolver().ReadCandidate)
 	if err != nil {
 		return "", err
 	}

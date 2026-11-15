@@ -5,6 +5,7 @@ import (
 	"fmt"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformserver/platform"
+	pageowner "platformserver/services/apps/pages"
 	"platformserver/services/resources/publication"
 	"slices"
 	"strings"
@@ -382,7 +383,7 @@ func (ctx Context) Graphs(root platform.AssetRef) (map[platform.AssetRef]platfor
 	}
 	graphs := map[string]map[platform.AssetRef]bool{"": publication.RunGraph(root, current)}
 	for id, raw := range ctx.Candidates() {
-		candidate, err := publication.ReadCandidate(id, raw)
+		candidate, err := pageowner.PublicationResolver().ReadCandidate(id, raw)
 		if err != nil {
 			return nil, nil, err
 		}

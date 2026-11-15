@@ -274,7 +274,7 @@ type WritebackRequest struct {
 	Body              map[string]any `json:"body"`
 }
 
-func (w Writeback) Request(conn Connection, id string, payload json.RawMessage) (WritebackRequest, error) {
+func (o *Owner) PrepareWritebackRequest(w Writeback, conn Connection, id string, payload json.RawMessage) (WritebackRequest, error) {
 	if err := CheckWritebackTransport(w.Transport, w.Method); err != nil {
 		return WritebackRequest{}, err
 	}
@@ -290,7 +290,7 @@ func (w Writeback) Request(conn Connection, id string, payload json.RawMessage) 
 		if asset.Ref != (platform.AssetRef{App: App, Kind: platform.AssetWriteback, Name: w.Name}) {
 			return WritebackRequest{}, fmt.Errorf("writeback publication identity differs")
 		}
-		if err := ValueValidateIntegrationDescriptor(asset); err != nil {
+		if err := o.validateIntegrationDescriptor(asset); err != nil {
 			return WritebackRequest{}, err
 		}
 		version, err := ValueIntegrationOrdinal(asset)

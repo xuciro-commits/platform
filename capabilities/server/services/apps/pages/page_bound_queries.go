@@ -8,7 +8,7 @@ import (
 )
 
 func VisibleInterfaceQuery(p platform.Page, q platform.PageQuery, entities map[string]platform.EntityInfo, definitions []platform.Definition) *platform.Definition {
-	named := objects.QuerySourceDefinition(definitions, q.Query)
+	named := objects.QuerySourceDefinition(definitions, q.Query, PublicationResolver())
 	if named == nil || named.Query == nil {
 		return nil
 	}
@@ -77,7 +77,7 @@ func (b Bindings) CheckQueries(p platform.Page) error {
 		}
 	}
 	for id, q := range p.InputSchema.Queries {
-		named := objects.QuerySourceDefinition(b.Definitions, q.Query)
+		named := objects.QuerySourceDefinition(b.Definitions, q.Query, PublicationResolver())
 		if q.Interface != "" {
 			if err := p.CheckInterfaceQuery(q, named); err != nil {
 				return fmt.Errorf("page query %s: %w", id, err)
@@ -146,7 +146,7 @@ func CheckModelQueries(page platform.Page, definitions []platform.Definition, en
 				if set == nil || set.Query == nil {
 					continue
 				}
-				named := objects.QuerySourceDefinition(definitions, set.Query)
+				named := objects.QuerySourceDefinition(definitions, set.Query, PublicationResolver())
 				if named == nil || named.Query == nil || named.Query.Object != m.Type {
 					return fmt.Errorf("section %s: retained model query type or version is unavailable", section.ID)
 				}

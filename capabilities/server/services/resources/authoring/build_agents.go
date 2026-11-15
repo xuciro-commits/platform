@@ -4,10 +4,9 @@ import (
 	"encoding/json"
 	"fmt"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	releasepub "platformserver/services/resources/publication"
 
 	"platformserver/platform"
-	dataowner "platformserver/services/data"
+
 	ontology "platformserver/services/ontology"
 	"slices"
 	"strconv"
@@ -301,7 +300,7 @@ func (a Agent) Definition() platform.Agent {
 
 func (b *Build) AgentVersion(name string) int { return b.agents[name].Version }
 
-func agentReleaseAsset(a Agent, source string) (platform.ReleaseAsset, error) {
+func (b *Build) agentReleaseAsset(a Agent, source string) (platform.ReleaseAsset, error) {
 	cases, err := json.Marshal(a.Cases)
 	if err != nil {
 		return platform.ReleaseAsset{}, err
@@ -317,14 +316,14 @@ func agentReleaseAsset(a Agent, source string) (platform.ReleaseAsset, error) {
 	if err != nil {
 		return platform.ReleaseAsset{}, err
 	}
-	return releasepub.WithDependencies(platform.ReleaseAsset{Ref: platform.AssetRef{App: ID, Kind: platform.AssetAgent, Name: a.Name}, ContractVersion: 1, SourceVersion: source + ".agent-" + strconv.Itoa(a.Version), Body: body})
+	return b.resolver.WithDependencies(platform.ReleaseAsset{Ref: platform.AssetRef{App: ID, Kind: platform.AssetAgent, Name: a.Name}, ContractVersion: 1, SourceVersion: source + ".agent-" + strconv.Itoa(a.Version), Body: body})
 }
 
-func decodeAgentAsset(asset platform.ReleaseAsset) (Agent, error) {
+func (b *Build) decodeAgentAsset(asset platform.ReleaseAsset) (Agent, error) {
 	var descriptor platform.AgentReleaseDescriptor
 	versionText, found := strings.CutPrefix(asset.SourceVersion, "1.agent-")
 	version, err := strconv.Atoi(versionText)
-	if !found || err != nil || version < 1 || version > 64 || strconv.Itoa(version) != versionText || asset.Ref.App != ID || asset.Ref.Kind != platform.AssetAgent || asset.ContractVersion != 1 || json.Unmarshal(asset.Body, &descriptor) != nil || descriptor.Native || descriptor.Name != asset.Ref.Name || descriptor.Check() != nil || releasepub.CheckAssetDependencies(asset) != nil {
+	if !found || err != nil || version < 1 || version > 64 || strconv.Itoa(version) != versionText || asset.Ref.App != ID || asset.Ref.Kind != platform.AssetAgent || asset.ContractVersion != 1 || json.Unmarshal(asset.Body, &descriptor) != nil || descriptor.Native || descriptor.Name != asset.Ref.Name || descriptor.Check() != nil || b.resolver.CheckAssetDependencies(asset) != nil {
 		return Agent{}, fmt.Errorf("invalid builder agent asset")
 	}
 	record := Agent{Model: descriptor.Model, ModelOptions: descriptor.ModelOptions, Name: descriptor.Name, Title: descriptor.Title, Description: descriptor.Description, Instructions: descriptor.Instructions, Tools: slices.Clone(descriptor.Tools), Steps: descriptor.Budget.Steps, Tokens: descriptor.Budget.Tokens, Actions: descriptor.Budget.Actions, Cost: descriptor.Budget.Cost, Checkpoints: slices.Clone(descriptor.Checkpoints), HandoffRole: descriptor.HandoffRole, Version: version, State: "published"}
@@ -337,7 +336,7 @@ func decodeAgentAsset(asset platform.ReleaseAsset) (Agent, error) {
 }
 
 func (b *Build) InstallAgentAsset(asset platform.ReleaseAsset) error {
-	record, err := decodeAgentAsset(asset)
+	record, err := b.decodeAgentAsset(asset)
 	if err != nil {
 		return err
 	}
@@ -362,7 +361,7 @@ func (b *Build) retainedAgentAsset(ref platform.AssetRef, sourceVersion string) 
 			if !ok {
 				continue
 			}
-			asset, err := agentReleaseAsset(retained, b.Manifest().Version)
+			asset, err := b.agentReleaseAsset(retained, b.Manifest().Version)
 			if err == nil && asset.Ref == ref && asset.SourceVersion == sourceVersion {
 				return asset, nil
 			}
@@ -373,7 +372,7 @@ func (b *Build) retainedAgentAsset(ref platform.AssetRef, sourceVersion string) 
 
 func (b *Build) agentAssets() ([]platform.ReleaseAsset, error) {
 	return installedDefinitionAssets(b.agents, func(record Agent) (platform.ReleaseAsset, error) {
-		return agentReleaseAsset(record, b.Manifest().Version)
+		return b.agentReleaseAsset(record, b.Manifest().Version)
 	})
 }
 
@@ -406,7 +405,7 @@ func (b *Build) agentDraftAssets(id string) (before, after []platform.ReleaseAss
 	}
 	record.Version++
 	next = platform.AssetRef{App: ID, Kind: platform.AssetAgent, Name: record.Name}
-	asset, problem := agentReleaseAsset(record, b.Manifest().Version)
+	asset, problem := b.agentReleaseAsset(record, b.Manifest().Version)
 	if problem != nil {
 		err = problem
 		return
@@ -426,7 +425,7 @@ func (b *Build) prepareAgentReleasePublications(assets []platform.ReleaseAsset) 
 		if asset.Ref.App != ID || asset.Ref.Kind != platform.AssetAgent {
 			continue
 		}
-		frozen, err := decodeAgentAsset(asset)
+		frozen, err := b.decodeAgentAsset(asset)
 		if err != nil {
 			return nil, err
 		}
@@ -437,7 +436,7 @@ func (b *Build) prepareAgentReleasePublications(assets []platform.ReleaseAsset) 
 		record := rows[index]
 		if frozen.Version <= record.Version {
 			retained, err := b.retainedAgentAsset(asset.Ref, asset.SourceVersion)
-			if err != nil || !dataowner.EqualAsset(retained, asset) {
+			if err != nil || !b.data.EqualAsset(retained, asset) {
 				return nil, fmt.Errorf("retained agent bytes differ")
 			}
 		} else if record.Version != 0 && frozen.Version != record.Version+1 {

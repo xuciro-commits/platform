@@ -40,7 +40,7 @@ func valueInputType(base string) string {
 }
 
 func (v ValueType) Check() error {
-	if !pageNodeID.MatchString(v.Name) || v.Title == "" || len(v.Title) > 1024 || strings.ContainsAny(v.Title, "\"\\") || v.Description == "" || len(v.Description) > 16384 || !slices.Contains(valueBases, v.Base) {
+	if !PageNodeID.MatchString(v.Name) || v.Title == "" || len(v.Title) > 1024 || strings.ContainsAny(v.Title, "\"\\") || v.Description == "" || len(v.Description) > 16384 || !slices.Contains(valueBases, v.Base) {
 		return fmt.Errorf("value type needs an identity, base type and bounded meaning")
 	}
 	textual := v.Base == "text" || v.Base == "longtext"

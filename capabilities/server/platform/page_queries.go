@@ -18,14 +18,14 @@ func (q PageQuery) Values() []PageValue {
 	return values
 }
 
-func (p Page) checkQueries(inputScope string) error {
+func (p Page) CheckQueries(inputScope string) error {
 	d := p.InputSchema
 	sections := p.DataBindings
 	scopes := map[string]PageScope{}
 	for _, scope := range p.ScopeVisibility.Scopes {
 		scopes[scope.ID] = scope
 	}
-	c := pageWidgets.Runtime.Query
+	c := PageWidgets.Runtime.Query
 	activePlans := p.ActiveQueryPlans()
 	declaredMax := c.MaxPlans
 	if PageUIProfileSupports(d.profileVersion(), c.InventoryUIProfile) && p.ScopeVisibility.Root != "" {
@@ -96,9 +96,9 @@ func (p Page) checkQueries(inputScope string) error {
 		}
 		validSource := q.Object.Check() == nil && q.Object.Kind == AssetObject && q.Interface == ""
 		if q.Interface != "" {
-			validSource = PageUIProfileSupports(d.profileVersion(), c.InterfaceUIProfile) && pageNodeID.MatchString(q.Interface) && q.Object == (AssetRef{}) && q.Query != nil && q.Query.Ref.Kind == AssetQuery && q.Input == "" && q.For == nil && q.Set == nil && q.Direction == "" && q.ItemOwner == "" && q.Filter == nil && inputScope != "application"
+			validSource = PageUIProfileSupports(d.profileVersion(), c.InterfaceUIProfile) && PageNodeID.MatchString(q.Interface) && q.Object == (AssetRef{}) && q.Query != nil && q.Query.Ref.Kind == AssetQuery && q.Input == "" && q.For == nil && q.Set == nil && q.Direction == "" && q.ItemOwner == "" && q.Filter == nil && inputScope != "application"
 		}
-		if !pageNodeID.MatchString(id) || len(q.Title) > 1024 || !validSource || q.Limit < 1 || q.Limit > c.MaxLimit || q.Offset < 0 || q.Offset > c.MaxOffset || len(q.Sort) > c.MaxSort {
+		if !PageNodeID.MatchString(id) || len(q.Title) > 1024 || !validSource || q.Limit < 1 || q.Limit > c.MaxLimit || q.Offset < 0 || q.Offset > c.MaxOffset || len(q.Sort) > c.MaxSort {
 			return fmt.Errorf("page query %s has an invalid identity, object or budget", id)
 		}
 		if q.Filter != nil && q.Filter.Kind != "boolean" {
@@ -120,7 +120,7 @@ func (p Page) checkQueries(inputScope string) error {
 		}
 		factor := 1
 		if q.ItemOwner != "" {
-			if inputScope == "application" || !PageUIProfileSupports(d.profileVersion(), "platform.page.v2.20") || scopes[q.ItemOwner].Kind != "loop" || p.scopeOwner(q.ItemOwner, "overlay") != q.Owner {
+			if inputScope == "application" || !PageUIProfileSupports(d.profileVersion(), "platform.page.v2.20") || scopes[q.ItemOwner].Kind != "loop" || p.ScopeOwner(q.ItemOwner, "overlay") != q.Owner {
 				return fmt.Errorf("item query %s needs a matching parent loop scope", id)
 			}
 			var err error
@@ -151,7 +151,7 @@ func (p Page) checkQueries(inputScope string) error {
 			return fmt.Errorf("page query %s parent input requires a named query", id)
 		}
 		for _, field := range q.Sort {
-			if !pageNodeID.MatchString(strings.TrimPrefix(field, "-")) {
+			if !PageNodeID.MatchString(strings.TrimPrefix(field, "-")) {
 				return fmt.Errorf("page query %s has an invalid sort", id)
 			}
 		}
@@ -199,7 +199,7 @@ func (p Page) checkQueries(inputScope string) error {
 				name, _, _ = strings.Cut(name, "#")
 				variable, exists := d.Variables[name]
 				plannedInput := dependsOnPlan(name, map[string]bool{})
-				if !exists || !pageNodeID.MatchString(name) || inputScope == "application" && variable.Scope != "application" || variable.Scope != "page" && variable.Scope != "application" && !(variable.Scope == "overlay" && variable.Owner == q.Owner && q.Owner != "") && !(variable.Scope == "loop-item" && variable.Owner == q.ItemOwner && q.ItemOwner != "") || !slices.Contains([]string{"string", "boolean", "record", "decimal", "number", "string-set"}, variable.Type) || plannedInput {
+				if !exists || !PageNodeID.MatchString(name) || inputScope == "application" && variable.Scope != "application" || variable.Scope != "page" && variable.Scope != "application" && !(variable.Scope == "overlay" && variable.Owner == q.Owner && q.Owner != "") && !(variable.Scope == "loop-item" && variable.Owner == q.ItemOwner && q.ItemOwner != "") || !slices.Contains([]string{"string", "boolean", "record", "decimal", "number", "string-set"}, variable.Type) || plannedInput {
 					return fmt.Errorf("page query %s filter parameter escapes its input scope", id)
 				}
 			}
@@ -235,7 +235,7 @@ func (p Page) checkQueries(inputScope string) error {
 			}
 		}
 	}
-	if aggregates > pageWidgets.Runtime.Aggregate.MaxVariables || expanded > pageWidgets.Runtime.Aggregate.MaxExpandedReads {
+	if aggregates > PageWidgets.Runtime.Aggregate.MaxVariables || expanded > PageWidgets.Runtime.Aggregate.MaxExpandedReads {
 		return fmt.Errorf("count variable read budget exceeded")
 	}
 	return nil
@@ -464,7 +464,7 @@ func (p Page) variableDependsOnQuery(variable, target string) bool {
 				if s.ID != v.Source.Section {
 					continue
 				}
-				for _, input := range pageBindingVariables(s) {
+				for _, input := range PageBindingVariables(s) {
 					if variableDepends(input) {
 						return true
 					}
@@ -491,7 +491,7 @@ func (p Page) CheckBoundQuery(id string, named *Definition) error {
 }
 
 func (d PageInputSchema) CheckApplicationQueries() error {
-	return (Page{Format: 4, InputSchema: d}).checkQueries("application")
+	return (Page{Format: 4, InputSchema: d}).CheckQueries("application")
 }
 
 func (p Page) CheckInterfaceQuery(q PageQuery, named *Definition) error {

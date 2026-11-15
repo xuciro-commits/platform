@@ -11,6 +11,7 @@ import (
 )
 
 type FlowBindingContext struct {
+	Resolver       releasepub.Resolver
 	App            func(string) platform.App
 	Asset          func(string, string, int) (platform.ReleaseAsset, error)
 	Assets         func() ([]platform.ReleaseAsset, error)
@@ -77,7 +78,7 @@ func (h FlowBindingContext) BindFlow(app, name string, version int, prior platfo
 		binding.Release = ""
 		return binding, nil
 	}
-	closed, err := releasepub.Closure(saved, []platform.AssetRef{root})
+	closed, err := h.Resolver.Closure(saved, []platform.AssetRef{root})
 	if err != nil || !h.SameRetained(closure, closed) {
 		return binding, fmt.Errorf("flow %s version %d differs from its activated release", root, version)
 	}
@@ -97,7 +98,7 @@ func (h FlowBindingContext) Retained(app, name string, version int, prior platfo
 	if err != nil {
 		return platform.ReleaseCandidate{}, err
 	}
-	closed, err := releasepub.Closure(saved, []platform.AssetRef{root.Ref})
+	closed, err := h.Resolver.Closure(saved, []platform.AssetRef{root.Ref})
 	if err != nil || closed.ID != prior.Dependencies {
 		return platform.ReleaseCandidate{}, fmt.Errorf("flow starting dependency descriptor differs")
 	}

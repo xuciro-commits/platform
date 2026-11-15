@@ -65,13 +65,13 @@ func (d PageInputSchema) CheckQuerySets() error {
 			if q.Query != nil && q.Query.Ref.Kind == AssetLinkType {
 				return fmt.Errorf("link traversal is not a set predicate source")
 			}
-			if !ok || !pageNodeID.MatchString(id) || path[id] || depth > QuerySetMaxDepth || nodes > QuerySetMaxNodes || q.Object != plan.Object || q.Owner != plan.Owner || q.ItemOwner != plan.ItemOwner {
+			if !ok || !PageNodeID.MatchString(id) || path[id] || depth > QuerySetMaxDepth || nodes > QuerySetMaxNodes || q.Object != plan.Object || q.Owner != plan.Owner || q.ItemOwner != plan.ItemOwner {
 				return fmt.Errorf("query set %s has a missing, cyclic, incompatible or oversized source", root)
 			}
 			if q.Set == nil {
 				return nil
 			}
-			if !slices.Contains(pageWidgets.Runtime.Query.Set.Operations, q.Set.Op) || len(q.Set.Inputs) != 2 {
+			if !slices.Contains(PageWidgets.Runtime.Query.Set.Operations, q.Set.Op) || len(q.Set.Inputs) != 2 {
 				return fmt.Errorf("query set %s needs a binary supported operation", id)
 			}
 			path[id] = true

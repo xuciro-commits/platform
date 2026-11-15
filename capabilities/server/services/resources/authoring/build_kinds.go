@@ -212,11 +212,11 @@ func (k *resourceKind[T, D]) definition(b *Build, name string, version int) (D, 
 
 func (k *resourceKind[T, D]) releaseAsset(b *Build, f T) (platform.ReleaseAsset, error) {
 	family := definitionFamilyOf(f)
-	return definitionReleaseAsset(platform.AssetRef{App: ID, Kind: k.assetKind(), Name: family.Name}, b.Manifest().Version+"."+k.prefix+"-"+strconv.Itoa(family.Version), f.Definition())
+	return definitionReleaseAsset(b.resolver, platform.AssetRef{App: ID, Kind: k.assetKind(), Name: family.Name}, b.Manifest().Version+"."+k.prefix+"-"+strconv.Itoa(family.Version), f.Definition())
 }
 
 func (k *resourceKind[T, D]) resolve(b *Build, name, sourceVersion string) (platform.ReleaseAsset, error) {
-	return retainedDefinitionAsset(b.Manifest().Version, k.prefix, k.label(), k.assetKind(), name, sourceVersion, func(name string, version int) (D, int, bool) { return k.definition(b, name, version) })
+	return retainedDefinitionAsset(b.resolver, b.Manifest().Version, k.prefix, k.label(), k.assetKind(), name, sourceVersion, func(name string, version int) (D, int, bool) { return k.definition(b, name, version) })
 }
 
 func (k *resourceKind[T, D]) assets(b *Build) ([]platform.ReleaseAsset, error) {

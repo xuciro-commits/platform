@@ -13,7 +13,7 @@ type ObjectTypeGroup struct {
 }
 
 func (g ObjectTypeGroup) Check() error {
-	if !pageNodeID.MatchString(g.Name) || strings.TrimSpace(g.Title) == "" || len(g.Title) > 1024 || len(g.Description) > 16384 || len(g.Members) > 1000 {
+	if !PageNodeID.MatchString(g.Name) || strings.TrimSpace(g.Title) == "" || len(g.Title) > 1024 || len(g.Description) > 16384 || len(g.Members) > 1000 {
 		return fmt.Errorf("Object type group needs a valid name, title and at most 1000 members")
 	}
 	seen := map[AssetRef]bool{}

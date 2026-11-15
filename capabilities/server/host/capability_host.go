@@ -39,5 +39,5 @@ func (t *Tenant) memberQueryVersion(m platform.Member, ref platform.AssetRef, ve
 	if app == nil {
 		return platform.NamedQuery{}, "", false
 	}
-	return authoring.MemberQueryVersion(t.Definitions(m), app.Manifest().Version, ref, version)
+	return authoring.MemberQueryVersion(t.Definitions(m), app.Manifest().Version, ref, version, PublicationResolver())
 }

@@ -97,13 +97,13 @@ func (a Application) CheckVariables() error {
 		if v.Type == "filter" && !PageUIProfileSupports(a.UIProfile, "platform.page.v2.15") {
 			return fmt.Errorf("application filter %s requires v2.15", id)
 		}
-		if v.Type == "record-set" && !PageUIProfileSupports(a.UIProfile, pageWidgets.Runtime.RecordSelection.SharedUIProfile) {
+		if v.Type == "record-set" && !PageUIProfileSupports(a.UIProfile, PageWidgets.Runtime.RecordSelection.SharedUIProfile) {
 			return fmt.Errorf("application record-set %s requires its shared profile", id)
 		}
 		if v.Type == "record" && !PageUIProfileSupports(a.UIProfile, "platform.page.v2.14") {
 			return fmt.Errorf("application record %s requires v2.14", id)
 		}
-		if v.Scope != "application" || !slices.Contains(pageWidgets.Runtime.Application.Modes, v.Mode) {
+		if v.Scope != "application" || !slices.Contains(PageWidgets.Runtime.Application.Modes, v.Mode) {
 			return fmt.Errorf("application variable %s needs its own pure scalar declaration", id)
 		}
 	}

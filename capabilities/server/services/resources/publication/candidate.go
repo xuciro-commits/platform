@@ -17,19 +17,19 @@ type releaseBytes struct {
 	Assets []platform.ReleaseAsset `json:"assets"`
 }
 
-func Closure(c platform.ReleaseCandidate, roots []platform.AssetRef) (platform.ReleaseCandidate, error) {
-	checked, err := ReadCandidate(c.ID, c.Bytes)
+func (resolver Resolver) Closure(c platform.ReleaseCandidate, roots []platform.AssetRef) (platform.ReleaseCandidate, error) {
+	checked, err := resolver.ReadCandidate(c.ID, c.Bytes)
 	if err != nil {
 		return platform.ReleaseCandidate{}, err
 	}
-	return candidate(roots, checked.Assets, true)
+	return resolver.candidate(roots, checked.Assets, true)
 }
 
-func Candidate(roots []platform.AssetRef, available []platform.ReleaseAsset) (platform.ReleaseCandidate, error) {
-	return candidate(roots, available, false)
+func (resolver Resolver) Candidate(roots []platform.AssetRef, available []platform.ReleaseAsset) (platform.ReleaseCandidate, error) {
+	return resolver.candidate(roots, available, false)
 }
 
-func candidate(roots []platform.AssetRef, available []platform.ReleaseAsset, historical bool) (platform.ReleaseCandidate, error) {
+func (resolver Resolver) candidate(roots []platform.AssetRef, available []platform.ReleaseAsset, historical bool) (platform.ReleaseCandidate, error) {
 	var empty platform.ReleaseCandidate
 	if len(roots) == 0 {
 		return empty, fmt.Errorf("a release needs at least one root")
@@ -38,7 +38,7 @@ func candidate(roots []platform.AssetRef, available []platform.ReleaseAsset, his
 	lookup := make(map[platform.AssetRef]platform.ReleaseAsset, len(available))
 	for i, asset := range available {
 		if !historical && asset.Provides == nil {
-			description, err := DescribeAsset(asset)
+			description, err := resolver.DescribeAsset(asset)
 			if err != nil {
 				return empty, err
 			}
@@ -89,7 +89,7 @@ func candidate(roots []platform.AssetRef, available []platform.ReleaseAsset, his
 		if err != nil {
 			return empty, fmt.Errorf("release asset %s: %w", ref, err)
 		}
-		if err := CheckAssetDependencies(asset); err != nil {
+		if err := resolver.CheckAssetDependencies(asset); err != nil {
 			return empty, err
 		}
 		if ref.Kind == platform.AssetObservation {
@@ -324,7 +324,7 @@ func candidate(roots []platform.AssetRef, available []platform.ReleaseAsset, his
 	return platform.ReleaseCandidate{ID: "sha256-v1:" + hex.EncodeToString(hash[:]), Bytes: raw, Assets: closed}, nil
 }
 
-func ReadCandidate(id string, raw []byte) (platform.ReleaseCandidate, error) {
+func (resolver Resolver) ReadCandidate(id string, raw []byte) (platform.ReleaseCandidate, error) {
 	var wire releaseBytes
 	if len(raw) == 0 || len(raw) > 16<<20 {
 		return platform.ReleaseCandidate{}, fmt.Errorf("release candidate is empty or exceeds 16 MiB")
@@ -341,7 +341,7 @@ func ReadCandidate(id string, raw []byte) (platform.ReleaseCandidate, error) {
 	for i, asset := range wire.Assets {
 		roots[i] = asset.Ref
 	}
-	checked, err := candidate(roots, wire.Assets, true)
+	checked, err := resolver.candidate(roots, wire.Assets, true)
 	if err != nil {
 		return platform.ReleaseCandidate{}, err
 	}

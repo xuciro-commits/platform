@@ -37,6 +37,7 @@ func (b *Build) SavedObjectActions(c platform.Caller) ([]platform.Action, error)
 }
 
 type Build struct {
+	resolver            publication.Resolver
 	publications        []publication.Hooks
 	installationCatalog *platform.Catalog
 	host                platform.BuildHost
@@ -65,11 +66,11 @@ type Build struct {
 func (b *Build) AttachBuild(h platform.BuildHost) { b.host = h }
 func (b *Build) AttachFiles(h platform.FileHost)  { b.data.AttachFiles(h) }
 
-func New(tenant string, authorities platform.Authorities, publications []publication.Hooks) *Build {
-	b := &Build{publications: publications, installed: map[string]platform.Entity{}, linkTypes: map[string]ontology.LinkType{}, propertyTypes: map[string]ontology.PropertyType{}, valueTypes: map[string]ontology.ValueType{}, objectTypeGroups: map[string]ontology.ObjectTypeGroup{}, queries: map[string]Query{}, interfaces: map[string]ontology.InterfaceRecord{}, agents: map[string]Agent{}, codes: map[string]Code{}, tables: map[string]Table{}}
-	b.data = dataowner.New(buildDataHost{b})
-	b.automation = automationauthoring.New(automationEnvironment{b})
-	b.functions = functionauthoring.NewOwner(functionEnvironment{b})
+func New(tenant string, authorities platform.Authorities, publications []publication.Hooks, resolver publication.Resolver) *Build {
+	b := &Build{resolver: resolver, publications: publications, installed: map[string]platform.Entity{}, linkTypes: map[string]ontology.LinkType{}, propertyTypes: map[string]ontology.PropertyType{}, valueTypes: map[string]ontology.ValueType{}, objectTypeGroups: map[string]ontology.ObjectTypeGroup{}, queries: map[string]Query{}, interfaces: map[string]ontology.InterfaceRecord{}, agents: map[string]Agent{}, codes: map[string]Code{}, tables: map[string]Table{}}
+	b.data = dataowner.New(buildDataHost{b}, resolver)
+	b.automation = automationauthoring.New(automationEnvironment{b}, resolver)
+	b.functions = functionauthoring.NewOwner(functionEnvironment{b}, resolver)
 	b.apps = appsauthoring.NewOwner(appEnvironment{b})
 	actions := append(actioncatalog.EntityActions(b.objectEntity()), actioncatalog.EntityActions(b.apps.PageEntity())...)
 	actions = append(actions, actioncatalog.EntityActions(b.actionTypeEntity())...)
@@ -490,7 +491,7 @@ func (b *Build) Fork(ledger platform.Authority) (platform.App, error) {
 }
 
 func (b *Build) NewSimulationApp(tenant string) platform.App {
-	return New(tenant, b.authorities, b.publications)
+	return New(tenant, b.authorities, b.publications, b.resolver)
 }
 func (b *Build) CandidateActions(asset platform.ReleaseAsset) ([]platform.Action, error) {
 	code, err := b.retainedCodeObject(asset)

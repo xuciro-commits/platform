@@ -227,7 +227,7 @@ func CheckRecordSets(info EntityInfo, lookup func(string) (EntityInfo, bool), en
 	}
 	seen := map[string]bool{}
 	for _, set := range info.Sets {
-		if !pageNodeID.MatchString(set.Name) || seen[set.Name] || set.From == "" || set.Limit < 1 || set.Limit > RecordSetMaxRows || len(set.Path) > 16 || len(set.Where) > 32 || len(set.Order) == 0 || len(set.Order) > 16 {
+		if !PageNodeID.MatchString(set.Name) || seen[set.Name] || set.From == "" || set.Limit < 1 || set.Limit > RecordSetMaxRows || len(set.Path) > 16 || len(set.Where) > 32 || len(set.Order) == 0 || len(set.Order) > 16 {
 			return fmt.Errorf("set %s needs a unique name, declared source, stable order and limit 1-%d", set.Name, RecordSetMaxRows)
 		}
 		seen[set.Name] = true

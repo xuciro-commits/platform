@@ -6,7 +6,7 @@ import (
 )
 
 func (t *Tenant) closures() functionauthoring.Closures {
-	return functionauthoring.NewClosures(
+	return functionauthoring.NewClosures(PublicationResolver(),
 		func() ([]platform.ReleaseAsset, error) { return t.releaseAssetsLocked(nil, false) },
 		t.describer().DescribeOwnedAsset,
 		t.releases.RetainedClosure,

@@ -324,7 +324,7 @@ func (o *Owner) SubmitSourcePulled(ledger platform.Authority, c platform.Caller,
 				return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Integration execution changed before its result was accepted")
 			}
 		} else {
-			equivalent, versionErr := retainedExecutionEquivalent(src, payload.Pull.DefinitionVersion)
+			equivalent, versionErr := o.retainedExecutionEquivalent(src, payload.Pull.DefinitionVersion)
 			if versionErr != nil || !equivalent {
 				return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Integration definition changed before its result was accepted")
 			}

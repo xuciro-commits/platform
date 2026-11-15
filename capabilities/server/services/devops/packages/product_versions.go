@@ -4,7 +4,8 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
-	releasepub "platformserver/services/resources/publication"
+	pageowner "platformserver/services/apps/pages"
+
 	"slices"
 	"strings"
 
@@ -17,7 +18,7 @@ func FreezeVersion(raw []byte, request platform.ProductVersionRequest, views fun
 	if len(raw) == 0 {
 		return platform.FrozenProductVersion{}, fmt.Errorf("release candidate %s is not saved", request.Candidate)
 	}
-	candidate, err := releasepub.ReadCandidate(request.Candidate, raw)
+	candidate, err := pageowner.PublicationResolver().ReadCandidate(request.Candidate, raw)
 	if err != nil {
 		return platform.FrozenProductVersion{}, err
 	}
@@ -38,7 +39,7 @@ func FreezeVersion(raw []byte, request platform.ProductVersionRequest, views fun
 }
 
 func productDescriptor(candidate platform.ReleaseCandidate, request platform.ProductVersionRequest, packageViews func() []platform.PackageView) (platform.PackageDescriptor, error) {
-	closed, err := releasepub.Closure(candidate, request.Roots)
+	closed, err := pageowner.PublicationResolver().Closure(candidate, request.Roots)
 	if err != nil {
 		return platform.PackageDescriptor{}, err
 	}
@@ -71,7 +72,7 @@ func productDescriptor(candidate platform.ReleaseCandidate, request platform.Pro
 	}
 	assets := slices.DeleteFunc(slices.Clone(closed.Assets), func(asset platform.ReleaseAsset) bool { return external[asset.Ref] })
 	product.Blueprint = &platform.PackageBlueprint{Roots: slices.Clone(request.Roots), Assets: assets}
-	if err := packagedesc.Validate(product, releasepub.WithDependencies); err != nil {
+	if err := packagedesc.Validate(product, pageowner.PublicationResolver().WithDependencies); err != nil {
 		return platform.PackageDescriptor{}, err
 	}
 	return product, nil

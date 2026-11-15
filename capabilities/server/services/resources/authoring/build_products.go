@@ -32,7 +32,7 @@ type Product struct {
 	Requires    []string            `json:"requires,omitempty" type:"json"`
 }
 
-func (p Product) Check() error {
+func (p Product) Check(resolver releasepub.Resolver) error {
 	if !productName.MatchString(p.Name) || strings.TrimSpace(p.Title) == "" || len(p.Title) > 256 || len(p.Description) > 4096 {
 		return fmt.Errorf("a product needs a lower-case name and a title")
 	}
@@ -50,7 +50,7 @@ func (p Product) Check() error {
 	if namespace == "" {
 		namespace = p.Name
 	}
-	return packagedesc.Validate(platform.PackageDescriptor{ID: p.Name, Version: "0.0.0", Namespace: namespace, Requires: p.Requires}, releasepub.WithDependencies)
+	return packagedesc.Validate(platform.PackageDescriptor{ID: p.Name, Version: "0.0.0", Namespace: namespace, Requires: p.Requires}, resolver.WithDependencies)
 }
 
 type ProductVersion struct {
@@ -77,7 +77,7 @@ func (b *Build) productEntity() platform.Entity {
 			if product.Namespace == "" {
 				product.Namespace = product.Name
 			}
-			if err := product.Check(); err != nil {
+			if err := product.Check(b.resolver); err != nil {
 				return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "{reason}", err.Error())
 			}
 			if prior, exists := platform.Get[Product](c, product.ID); exists && prior.Project != product.Project {

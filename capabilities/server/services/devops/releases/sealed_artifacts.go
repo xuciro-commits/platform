@@ -5,7 +5,8 @@ import (
 	"encoding/hex"
 	"fmt"
 	"platformserver/platform"
-	releasepub "platformserver/services/resources/publication"
+	pageowner "platformserver/services/apps/pages"
+
 	"strings"
 	"time"
 )
@@ -14,7 +15,7 @@ func SealArtifact(tenant, id string, raw []byte, now time.Time) (platform.Sealed
 	if raw == nil {
 		return platform.SealedArtifact{}, fmt.Errorf("release candidate %s is not saved", id)
 	}
-	candidate, err := releasepub.ReadCandidate(id, raw)
+	candidate, err := pageowner.PublicationResolver().ReadCandidate(id, raw)
 	if err != nil {
 		return platform.SealedArtifact{}, fmt.Errorf("release candidate %s: %w", id, err)
 	}
@@ -28,7 +29,7 @@ func VerifySealed(id string, artifact platform.SealedArtifact, data []byte) erro
 	if "sha256:"+hex.EncodeToString(sum[:]) != artifact.Digest {
 		return fmt.Errorf("sealed candidate %s: bytes differ from the sealed digest", id)
 	}
-	if _, err := releasepub.ReadCandidate(id, data); err != nil {
+	if _, err := pageowner.PublicationResolver().ReadCandidate(id, data); err != nil {
 		return fmt.Errorf("sealed candidate %s: %w", id, err)
 	}
 	return nil

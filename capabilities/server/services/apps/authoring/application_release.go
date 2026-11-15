@@ -3,13 +3,14 @@ package authoring
 import (
 	"encoding/json"
 	"fmt"
+	pageowner "platformserver/services/apps/pages"
 
 	"platformserver/platform"
 	"platformserver/services/resources/publication"
 )
 
 func (o *Owner) ApplicationAsset(a Application, sourceVersion string) (platform.ReleaseAsset, error) {
-	return publication.ApplicationReleaseAsset(o.env.AppID(), sourceVersion, ApplicationDescriptor(a))
+	return pageowner.PublicationResolver().ApplicationReleaseAsset(o.env.AppID(), sourceVersion, ApplicationDescriptor(a))
 }
 
 func (o *Owner) PrepareApplicationPublication(asset platform.ReleaseAsset, current Application) (Application, error) {

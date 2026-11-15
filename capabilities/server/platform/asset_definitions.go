@@ -34,7 +34,7 @@ type LinkType struct {
 
 func (l LinkType) Check() error {
 	if l.Storage == "edge" {
-		if !pageNodeID.MatchString(l.Name) || l.Title == "" || l.Description == "" || len(l.Title) > 1024 || len(l.Description) > 16384 || l.Parent.Check() != nil || l.Child.Check() != nil || l.Parent.Kind != AssetObject || l.Child.Kind != AssetObject || l.Parent.App != l.Child.App || l.Via != "" || !pageNodeID.MatchString(l.Forward) || !pageNodeID.MatchString(l.Reverse) || !slices.Contains([]string{"one-to-many", "one-to-one", "many-to-many"}, l.Cardinality) || !slices.Contains([]string{"owner", "restrict-active"}, l.DeletePolicy) || len(l.Roles) == 0 || len(l.Roles) > 16 {
+		if !PageNodeID.MatchString(l.Name) || l.Title == "" || l.Description == "" || len(l.Title) > 1024 || len(l.Description) > 16384 || l.Parent.Check() != nil || l.Child.Check() != nil || l.Parent.Kind != AssetObject || l.Child.Kind != AssetObject || l.Parent.App != l.Child.App || l.Via != "" || !PageNodeID.MatchString(l.Forward) || !PageNodeID.MatchString(l.Reverse) || !slices.Contains([]string{"one-to-many", "one-to-one", "many-to-many"}, l.Cardinality) || !slices.Contains([]string{"owner", "restrict-active"}, l.DeletePolicy) || len(l.Roles) == 0 || len(l.Roles) > 16 {
 			return fmt.Errorf("owned edge needs same-owner objects, explicit roles and supported cardinality")
 		}
 		seen := map[string]bool{}
@@ -46,7 +46,7 @@ func (l LinkType) Check() error {
 		}
 		return nil
 	}
-	if !pageNodeID.MatchString(l.Name) || l.Title == "" || l.Description == "" || len(l.Title) > 1024 || len(l.Description) > 16384 || !pageNodeID.MatchString(l.Via) || !pageNodeID.MatchString(l.Forward) || !pageNodeID.MatchString(l.Reverse) || l.Parent.Check() != nil || l.Child.Check() != nil || l.Parent.Kind != AssetObject || l.Child.Kind != AssetObject || l.Storage != "reference" || !slices.Contains([]string{"one-to-many", "one-to-one"}, l.Cardinality) || !slices.Contains([]string{"owner", "restrict-active"}, l.DeletePolicy) || l.DeletePolicy == "restrict-active" && l.Parent.App != l.Child.App {
+	if !PageNodeID.MatchString(l.Name) || l.Title == "" || l.Description == "" || len(l.Title) > 1024 || len(l.Description) > 16384 || !PageNodeID.MatchString(l.Via) || !PageNodeID.MatchString(l.Forward) || !PageNodeID.MatchString(l.Reverse) || l.Parent.Check() != nil || l.Child.Check() != nil || l.Parent.Kind != AssetObject || l.Child.Kind != AssetObject || l.Storage != "reference" || !slices.Contains([]string{"one-to-many", "one-to-one"}, l.Cardinality) || !slices.Contains([]string{"owner", "restrict-active"}, l.DeletePolicy) || l.DeletePolicy == "restrict-active" && l.Parent.App != l.Child.App {
 		return fmt.Errorf("link type needs typed objects, two names and a supported reference cardinality profile")
 	}
 	return nil
@@ -131,7 +131,7 @@ type PropertyType struct {
 }
 
 func (p PropertyType) Check() error {
-	if !pageNodeID.MatchString(p.Name) || p.Title == "" || len(p.Title) > 1024 || strings.ContainsAny(p.Title, "\"\\") || p.Description == "" || len(p.Description) > 16384 || !slices.Contains([]string{"text", "longtext", "integer", "decimal", "date", "datetime", "boolean", "attachment"}, p.Type) {
+	if !PageNodeID.MatchString(p.Name) || p.Title == "" || len(p.Title) > 1024 || strings.ContainsAny(p.Title, "\"\\") || p.Description == "" || len(p.Description) > 16384 || !slices.Contains([]string{"text", "longtext", "integer", "decimal", "date", "datetime", "boolean", "attachment"}, p.Type) {
 		return fmt.Errorf("property type needs an identity, scalar type and bounded meaning")
 	}
 	return nil

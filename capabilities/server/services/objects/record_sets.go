@@ -16,8 +16,8 @@ import (
 	"platformserver/services/resources/publication"
 )
 
-func RecordSetBinding(definitions []platform.Definition, binding *platform.AssetBinding) *platform.Definition {
-	return QuerySourceDefinition(definitions, binding)
+func RecordSetBinding(definitions []platform.Definition, binding *platform.AssetBinding, resolver publication.Resolver) *platform.Definition {
+	return QuerySourceDefinition(definitions, binding, resolver)
 }
 
 func (t *Owner) ValidateRecordSet(info platform.EntityInfo, set platform.RecordSet) error {
@@ -327,11 +327,11 @@ func (t *Owner) CheckRecordSetDeclarations(info platform.EntityInfo, engines ...
 	return t.checkRecordSetDeclarations(info, engines...)
 }
 
-func QuerySourceDefinition(definitions []platform.Definition, binding *platform.AssetBinding) *platform.Definition {
+func QuerySourceDefinition(definitions []platform.Definition, binding *platform.AssetBinding, resolver publication.Resolver) *platform.Definition {
 	if binding != nil {
 		for i := range definitions {
 			if definitions[i].Ref == binding.Ref {
-				return publication.QuerySourceVersion(definitions[i], binding.SourceVersion)
+				return resolver.QuerySourceVersion(definitions[i], binding.SourceVersion)
 			}
 		}
 	}

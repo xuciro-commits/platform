@@ -18,7 +18,7 @@ type DecimalValue struct {
 var decimalText = regexp.MustCompile(`^-?(0|[1-9][0-9]*)(\.[0-9]+)?$`)
 
 func ParseDecimal(text string) (DecimalValue, error) {
-	if len(text) > pageWidgets.Runtime.Decimal.MaxBytes || !decimalText.MatchString(text) {
+	if len(text) > PageWidgets.Runtime.Decimal.MaxBytes || !decimalText.MatchString(text) {
 		return DecimalValue{}, fmt.Errorf("invalid bounded decimal")
 	}
 	if strings.Contains(text, ".") {
@@ -109,7 +109,7 @@ func (d PageInputSchema) CheckAggregateScalar(v PageVariable, info EntityInfo) e
 	_, field, ok := stringsCutMeasure(v.Source.Measure)
 	if v.Source.Kind == "statistics" {
 		field = v.Source.Measure
-		ok = pageNodeID.MatchString(field)
+		ok = PageNodeID.MatchString(field)
 	}
 	f, found := info.Field(field)
 	if !ok || !found || (f.Type != "integer" && f.Type != "decimal") {
@@ -120,5 +120,5 @@ func (d PageInputSchema) CheckAggregateScalar(v PageVariable, info EntityInfo) e
 
 func stringsCutMeasure(measure string) (string, string, bool) {
 	op, field, ok := strings.Cut(measure, ":")
-	return op, field, ok && (op == "sum" || op == "avg" || op == "min" || op == "max") && pageNodeID.MatchString(field)
+	return op, field, ok && (op == "sum" || op == "avg" || op == "min" || op == "max") && PageNodeID.MatchString(field)
 }

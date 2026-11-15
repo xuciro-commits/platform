@@ -169,7 +169,7 @@ func pageLiteralType(raw json.RawMessage) string {
 	case bool:
 		return "boolean"
 	case string:
-		if len(v) <= pageWidgets.Runtime.MaxStringBytes {
+		if len(v) <= PageWidgets.Runtime.MaxStringBytes {
 			return "string"
 		}
 	}
@@ -177,7 +177,7 @@ func pageLiteralType(raw json.RawMessage) string {
 }
 
 func (d PageInputSchema) CheckVariables(engines ...RuleEngine) error {
-	contract := pageWidgets.Runtime
+	contract := PageWidgets.Runtime
 	if len(d.Variables) > contract.MaxVariables {
 		return fmt.Errorf("page variable limit exceeded")
 	}
@@ -186,7 +186,7 @@ func (d PageInputSchema) CheckVariables(engines ...RuleEngine) error {
 		ids = append(ids, id)
 	}
 	sort.Strings(ids)
-	if len((Page{Format: 4, InputSchema: d}).ComputeResources()) > pageWidgets.Runtime.ComputeResource.MaxResources {
+	if len((Page{Format: 4, InputSchema: d}).ComputeResources()) > PageWidgets.Runtime.ComputeResource.MaxResources {
 		return fmt.Errorf("page compute resources exceed their bound")
 	}
 	visiting, visited := map[string]bool{}, map[string]bool{}
@@ -205,10 +205,10 @@ func (d PageInputSchema) CheckVariables(engines ...RuleEngine) error {
 		if visited[id] {
 			return v.Type, nil
 		}
-		if !pageNodeID.MatchString(id) || (v.Scope != contract.Scope && v.Scope != contract.Loop.Scope && v.Scope != contract.Overlay.Scope && v.Scope != contract.Application.Scope) || ((v.Scope == contract.Scope || v.Scope == contract.Application.Scope) && v.Owner != "") || ((v.Scope == contract.Loop.Scope || v.Scope == contract.Overlay.Scope) && !pageNodeID.MatchString(v.Owner)) || !slices.Contains(contract.ValueTypes, v.Type) || len(v.Title) > 1024 {
+		if !PageNodeID.MatchString(id) || (v.Scope != contract.Scope && v.Scope != contract.Loop.Scope && v.Scope != contract.Overlay.Scope && v.Scope != contract.Application.Scope) || ((v.Scope == contract.Scope || v.Scope == contract.Application.Scope) && v.Owner != "") || ((v.Scope == contract.Loop.Scope || v.Scope == contract.Overlay.Scope) && !PageNodeID.MatchString(v.Owner)) || !slices.Contains(contract.ValueTypes, v.Type) || len(v.Title) > 1024 {
 			return fail("unsupported identity, scope or type")
 		}
-		if v.Type == "record-set" && !((PageUIProfileSupports(d.profileVersion(), "platform.page.v2.32") && v.Mode == "resource" && v.Source != nil && v.Source.Kind == "records" && slices.Contains([]string{"page", "overlay"}, v.Scope)) || (PageUIProfileSupports(d.profileVersion(), pageWidgets.Runtime.RecordSelection.SharedUIProfile) && v.Scope == "application" && (v.Mode == "shared" || v.Mode == "resource"))) {
+		if v.Type == "record-set" && !((PageUIProfileSupports(d.profileVersion(), "platform.page.v2.32") && v.Mode == "resource" && v.Source != nil && v.Source.Kind == "records" && slices.Contains([]string{"page", "overlay"}, v.Scope)) || (PageUIProfileSupports(d.profileVersion(), PageWidgets.Runtime.RecordSelection.SharedUIProfile) && v.Scope == "application" && (v.Mode == "shared" || v.Mode == "resource"))) {
 			return fail("record-set needs a v2.32 local table resource")
 		}
 		if v.Scope == contract.Overlay.Scope && (!slices.Contains(contract.Overlay.ValueTypes, v.Type) || !slices.Contains(contract.Overlay.Modes, v.Mode)) {
@@ -227,10 +227,10 @@ func (d PageInputSchema) CheckVariables(engines ...RuleEngine) error {
 		if v.Source != nil && v.Source.Compute != nil && (v.Mode != "resource" || v.Source.Kind != "compute") {
 			return fail("compute needs its original source kind")
 		}
-		if v.Type == "number" && (!PageUIProfileSupports(d.profileVersion(), "platform.page.v2.49") || !(slices.Contains([]string{"aggregate", "constant", "derived"}, v.Mode) || v.Mode == "resource" && v.Source != nil && v.Source.Kind == "compute" && PageUIProfileSupports(d.profileVersion(), pageWidgets.Runtime.ComputeResource.RequiredUIProfile)) || v.Scope == "application") {
+		if v.Type == "number" && (!PageUIProfileSupports(d.profileVersion(), "platform.page.v2.49") || !(slices.Contains([]string{"aggregate", "constant", "derived"}, v.Mode) || v.Mode == "resource" && v.Source != nil && v.Source.Kind == "compute" && PageUIProfileSupports(d.profileVersion(), PageWidgets.Runtime.ComputeResource.RequiredUIProfile)) || v.Scope == "application") {
 			return fail("number needs its read-only scoped profile")
 		}
-		if v.Source != nil && v.Source.Port != "" && (!PageUIProfileSupports(d.profileVersion(), pageWidgets.Runtime.Exploration.RequiredUIProfile) || !pageNodeID.MatchString(v.Source.Port) || v.Type != "record" || v.Mode != "resource" || v.Source.Kind != "record" || !slices.Contains([]string{"page", "overlay"}, v.Scope)) {
+		if v.Source != nil && v.Source.Port != "" && (!PageUIProfileSupports(d.profileVersion(), PageWidgets.Runtime.Exploration.RequiredUIProfile) || !PageNodeID.MatchString(v.Source.Port) || v.Type != "record" || v.Mode != "resource" || v.Source.Kind != "record" || !slices.Contains([]string{"page", "overlay"}, v.Scope)) {
 			return fail("record output port needs its scoped finite graph profile")
 		}
 		if v.Source != nil && v.Source.Measure != "" && (v.Mode != "aggregate" || v.Source.Kind != "aggregate" && v.Source.Kind != "statistics") {
@@ -253,7 +253,7 @@ func (d PageInputSchema) CheckVariables(engines ...RuleEngine) error {
 		}
 		switch v.Mode {
 		case "aggregate":
-			if v.Source == nil || !((v.Type == "decimal" && v.Source.Kind == contract.Aggregate.Source && v.Source.Measure == "") || (v.Type == "number" && v.Source.Kind == "aggregate") || (v.Type == "statistics" && v.Source.Kind == "statistics" && pageNodeID.MatchString(v.Source.Measure))) || !pageNodeID.MatchString(v.Source.Query) || v.Source.Section != "" || v.Source.Node != "" || v.Source.Variable != "" || len(v.Initial) > 0 {
+			if v.Source == nil || !((v.Type == "decimal" && v.Source.Kind == contract.Aggregate.Source && v.Source.Measure == "") || (v.Type == "number" && v.Source.Kind == "aggregate") || (v.Type == "statistics" && v.Source.Kind == "statistics" && PageNodeID.MatchString(v.Source.Measure))) || !PageNodeID.MatchString(v.Source.Query) || v.Source.Section != "" || v.Source.Node != "" || v.Source.Variable != "" || len(v.Initial) > 0 {
 				return fail("aggregate needs only a count query source")
 			}
 			if v.Source.Kind == "aggregate" {
@@ -262,7 +262,7 @@ func (d PageInputSchema) CheckVariables(engines ...RuleEngine) error {
 				}
 			}
 		case "property":
-			if v.Source == nil || v.Source.Kind != "property" || !pageNodeID.MatchString(v.Source.Variable) || !pageNodeID.MatchString(v.Source.Field) || v.Source.Object == nil || v.Source.Object.Check() != nil || v.Source.Object.Kind != AssetObject || v.Source.Section != "" || v.Source.Node != "" || v.Source.Query != "" || len(v.Source.Fields) > 0 || len(v.Initial) > 0 || !slices.Contains([]string{"string", "boolean", "decimal"}, v.Type) {
+			if v.Source == nil || v.Source.Kind != "property" || !PageNodeID.MatchString(v.Source.Variable) || !PageNodeID.MatchString(v.Source.Field) || v.Source.Object == nil || v.Source.Object.Check() != nil || v.Source.Object.Kind != AssetObject || v.Source.Section != "" || v.Source.Node != "" || v.Source.Query != "" || len(v.Source.Fields) > 0 || len(v.Initial) > 0 || !slices.Contains([]string{"string", "boolean", "decimal"}, v.Type) {
 				return fail("property needs a typed record and field source")
 			}
 			parent := d.Variables[v.Source.Variable]
@@ -283,7 +283,7 @@ func (d PageInputSchema) CheckVariables(engines ...RuleEngine) error {
 			if v.Type == "object-set" && (v.Writable || v.Source == nil || v.Source.Object == nil || v.Source.Object.Check() != nil || v.Source.Object.Kind != AssetObject) {
 				return fail("shared window needs a read-only object requirement")
 			}
-			if v.Scope != "application" || v.Source == nil || v.Source.Kind != "application" || !pageNodeID.MatchString(v.Source.Variable) || v.Source.Section != "" || v.Source.Node != "" || v.Source.Query != "" || len(v.Initial) != 0 {
+			if v.Scope != "application" || v.Source == nil || v.Source.Kind != "application" || !PageNodeID.MatchString(v.Source.Variable) || v.Source.Section != "" || v.Source.Node != "" || v.Source.Query != "" || len(v.Initial) != 0 {
 				return fail("shared binding needs only an application variable source")
 			}
 		case "input":
@@ -316,7 +316,7 @@ func (d PageInputSchema) CheckVariables(engines ...RuleEngine) error {
 					}
 					seen := map[string]bool{}
 					for _, field := range v.Source.Fields {
-						if !pageNodeID.MatchString(field) || seen[field] {
+						if !PageNodeID.MatchString(field) || seen[field] {
 							return fail("invalid filter field")
 						}
 						seen[field] = true
@@ -325,7 +325,7 @@ func (d PageInputSchema) CheckVariables(engines ...RuleEngine) error {
 				break
 			}
 			if v.Source.Kind == "plan" {
-				if (v.Scope != "page" && v.Scope != "overlay" && v.Scope != "application" && v.Scope != "loop-item") || v.Type != "object-set" || !pageNodeID.MatchString(v.Source.Query) || v.Source.Section != "" || v.Source.Node != "" {
+				if (v.Scope != "page" && v.Scope != "overlay" && v.Scope != "application" && v.Scope != "loop-item") || v.Type != "object-set" || !PageNodeID.MatchString(v.Source.Query) || v.Source.Section != "" || v.Source.Node != "" {
 					return fail("plan source needs a scoped query window")
 				}
 				break
@@ -339,7 +339,7 @@ func (d PageInputSchema) CheckVariables(engines ...RuleEngine) error {
 				}
 				break
 			}
-			if v.Scope == "application" || !pageNodeID.MatchString(v.Source.Section) || v.Source.Node != "" {
+			if v.Scope == "application" || !PageNodeID.MatchString(v.Source.Section) || v.Source.Node != "" {
 				return fail("resource source needs a section")
 			}
 			found := false
@@ -413,7 +413,7 @@ func (d PageInputSchema) CheckVariables(engines ...RuleEngine) error {
 	return nil
 }
 
-func (d PageInputSchema) checkProfile() error {
+func (d PageInputSchema) CheckProfile() error {
 	for id, v := range d.Variables {
 		if err := d.checkVariableProfile(id, v); err != nil {
 			return err
@@ -424,7 +424,7 @@ func (d PageInputSchema) checkProfile() error {
 
 func (d PageInputSchema) checkVariableProfile(id string, v PageVariable) error {
 	supports := func(feature string) bool {
-		return PageUIProfileSupports(d.profileVersion(), pageWidgets.Features[feature])
+		return PageUIProfileSupports(d.profileVersion(), PageWidgets.Features[feature])
 	}
 	switch {
 	case v.Mode == "property" && !supports("propertyVariables"):
@@ -445,7 +445,7 @@ func (d PageInputSchema) checkVariableProfile(id string, v PageVariable) error {
 		return fmt.Errorf("overlay resource %s requires UI profile v2.11", id)
 	case v.Scope == "overlay" && !supports("overlayVariables"):
 		return fmt.Errorf("page variable %s requires UI profile v2.7", id)
-	case v.Scope == pageWidgets.Runtime.Loop.Scope && !supports("loopVariables"):
+	case v.Scope == PageWidgets.Runtime.Loop.Scope && !supports("loopVariables"):
 		return fmt.Errorf("page variable %s requires UI profile v2.5", id)
 	case v.Mode == "resource" && !supports("resourceVariables"):
 		return fmt.Errorf("page variable %s requires UI profile v2.3", id)

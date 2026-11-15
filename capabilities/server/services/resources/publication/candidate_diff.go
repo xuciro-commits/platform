@@ -9,12 +9,12 @@ import (
 	"platformserver/platform"
 )
 
-func CandidateDiff(before, after platform.ReleaseCandidate) (added, removed, changed []platform.AssetRef, err error) {
-	before, err = ReadCandidate(before.ID, before.Bytes)
+func (resolver Resolver) CandidateDiff(before, after platform.ReleaseCandidate) (added, removed, changed []platform.AssetRef, err error) {
+	before, err = resolver.ReadCandidate(before.ID, before.Bytes)
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("previous candidate: %w", err)
 	}
-	after, err = ReadCandidate(after.ID, after.Bytes)
+	after, err = resolver.ReadCandidate(after.ID, after.Bytes)
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("next candidate: %w", err)
 	}

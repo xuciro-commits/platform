@@ -7,7 +7,8 @@ import (
 	"platformserver/kernel/acceptedformat"
 	"platformserver/platform"
 	"platformserver/services/actions"
-	releasepub "platformserver/services/resources/publication"
+	pageowner "platformserver/services/apps/pages"
+
 	"slices"
 	"strings"
 	"time"
@@ -90,7 +91,7 @@ func (ctx Context) Runtime(m platform.Member, ref platform.AssetRef, now time.Ti
 	if err != nil {
 		return out, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Application runtime dependencies are unavailable")
 	}
-	artifact, err := releasepub.ArtifactOfApplication(ref, candidate.Assets)
+	artifact, err := pageowner.PublicationResolver().ArtifactOfApplication(ref, candidate.Assets)
 	if err != nil {
 		return out, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Application runtime dependencies are unavailable")
 	}
@@ -181,7 +182,7 @@ func (ctx Context) Runtime(m platform.Member, ref platform.AssetRef, now time.Ti
 		if !slices.ContainsFunc(candidate.Assets, func(asset platform.ReleaseAsset) bool { return asset.Ref == ref }) {
 			continue
 		}
-		version, err := releasepub.ArtifactOfApplication(ref, candidate.Assets)
+		version, err := pageowner.PublicationResolver().ArtifactOfApplication(ref, candidate.Assets)
 		if err != nil {
 			return out, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Application version history is unavailable")
 		}
@@ -297,11 +298,11 @@ func (ctx Context) activeVersions() []ActiveVersion {
 		if !strings.HasPrefix(key, "release:") {
 			continue
 		}
-		release, err := acceptedformat.DecodeRelease(raw, releasepub.ReadCandidate)
+		release, err := acceptedformat.DecodeRelease(raw, pageowner.PublicationResolver().ReadCandidate)
 		if err != nil || !release.Active {
 			continue
 		}
-		candidate, err := releasepub.ReadCandidate(release.CandidateID, release.Bytes)
+		candidate, err := pageowner.PublicationResolver().ReadCandidate(release.CandidateID, release.Bytes)
 		if err == nil {
 			out = append(out, ActiveVersion{Candidate: candidate, At: release.At})
 		}

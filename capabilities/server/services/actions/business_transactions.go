@@ -645,7 +645,7 @@ func NewRuntime(context platform.BusinessRuntimeContext) platform.TransactionExe
 	return &Runtime{BusinessRuntimeContext: context}
 }
 
-func CheckTxnCall(call platform.TxnCall, definitions []platform.Definition, owner func(string) platform.App) error {
+func CheckTxnCall(call platform.TxnCall, definitions []platform.Definition, owner func(string) platform.App, resolver publication.Resolver) error {
 	if call.Ref.Check() != nil || call.Ref.Kind != platform.AssetQuery || call.Version < 0 || !slices.Contains([]string{"", "snapshot", "current"}, call.View) {
 		return fmt.Errorf("Transaction calls need a synchronous pure query with snapshot or current reads")
 	}
@@ -660,7 +660,7 @@ func CheckTxnCall(call platform.TxnCall, definitions []platform.Definition, owne
 		if call.Version == 0 && definition.Source == "code" {
 			return nil
 		}
-		if call.Version > 0 && definition.Source == "tenant" && publication.QueryVersion(definition, app.Manifest().Version+".query-"+strconv.Itoa(call.Version)) != nil {
+		if call.Version > 0 && definition.Source == "tenant" && resolver.QueryVersion(definition, app.Manifest().Version+".query-"+strconv.Itoa(call.Version)) != nil {
 			return nil
 		}
 	}

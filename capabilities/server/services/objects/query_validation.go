@@ -37,7 +37,7 @@ func CheckQueryFields(q platform.NamedQuery, info platform.EntityInfo, engine pl
 	return err
 }
 
-func DeclaredQuery(definitions []platform.Definition, app, name, version string) *platform.NamedQuery {
+func DeclaredQuery(definitions []platform.Definition, app, name, version string, resolver publication.Resolver) *platform.NamedQuery {
 	for _, d := range definitions {
 		if d.Ref != (platform.AssetRef{App: app, Kind: platform.AssetQuery, Name: name}) {
 			continue
@@ -45,7 +45,7 @@ func DeclaredQuery(definitions []platform.Definition, app, name, version string)
 		if version == "" {
 			return d.Query
 		}
-		if bound := publication.QueryVersion(d, version); bound != nil {
+		if bound := resolver.QueryVersion(d, version); bound != nil {
 			return bound.Query
 		}
 		return nil

@@ -174,7 +174,7 @@ func (o *Owner) ExecutionObservation(record Observation) (platform.ObservationDe
 	if record.Published == "" || ValueDecodeIntegration([]byte(record.Published), &asset) != nil || asset.Ref != (platform.AssetRef{App: App, Kind: platform.AssetObservation, Name: record.Name}) {
 		return platform.ObservationDefinition{}, fmt.Errorf("The observation source is not published")
 	}
-	if err := validateIntegrationFamily(record, asset); err != nil {
+	if err := o.validateIntegrationFamily(record, asset); err != nil {
 		return platform.ObservationDefinition{}, err
 	}
 	var definition platform.ObservationDefinition

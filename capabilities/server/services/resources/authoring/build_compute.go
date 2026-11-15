@@ -7,7 +7,6 @@ import (
 	"encoding/json"
 	"fmt"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	releasepub "platformserver/services/resources/publication"
 
 	"platformserver/platform"
 	dataowner "platformserver/services/data"
@@ -321,25 +320,25 @@ func codeImage(image []byte) (Code, error) {
 	selected.Versions = code.Versions
 	return selected, nil
 }
-func codeReleaseAsset(code Code, manifest string) (platform.ReleaseAsset, error) {
+func (b *Build) codeReleaseAsset(code Code, manifest string) (platform.ReleaseAsset, error) {
 	raw, err := json.Marshal(code.Definition())
 	if err != nil {
 		return platform.ReleaseAsset{}, err
 	}
-	return releasepub.WithDependencies(platform.ReleaseAsset{Ref: platform.AssetRef{App: ID, Kind: platform.AssetCompute, Name: code.Name}, ContractVersion: 1, SourceVersion: manifest + ".compute-" + strconv.Itoa(code.Version), Body: raw})
+	return b.resolver.WithDependencies(platform.ReleaseAsset{Ref: platform.AssetRef{App: ID, Kind: platform.AssetCompute, Name: code.Name}, ContractVersion: 1, SourceVersion: manifest + ".compute-" + strconv.Itoa(code.Version), Body: raw})
 }
 func (b *Build) CodeReleaseAssets() ([]platform.ReleaseAsset, error) {
 	out := []platform.ReleaseAsset{}
 	for _, op := range b.operationDeclarations() {
 		if op.Binding.Kind == "native" {
-			asset, err := tableReleaseAsset(b.tables[op.Name], b.Manifest().Version)
+			asset, err := b.tableReleaseAsset(b.tables[op.Name], b.Manifest().Version)
 			if err != nil {
 				return nil, err
 			}
 			out = append(out, asset)
 			continue
 		}
-		asset, err := codeReleaseAsset(b.codes[op.Name], b.Manifest().Version)
+		asset, err := b.codeReleaseAsset(b.codes[op.Name], b.Manifest().Version)
 		if err != nil {
 			return nil, err
 		}
@@ -358,17 +357,17 @@ func (b *Build) OperationReleaseAsset(name, version string) (platform.ReleaseAss
 	if err != nil {
 		return platform.ReleaseAsset{}, err
 	}
-	return releasepub.WithDependencies(platform.ReleaseAsset{Ref: platform.AssetRef{App: ID, Kind: platform.AssetCompute, Name: name}, ContractVersion: 1, SourceVersion: version, Body: raw})
+	return b.resolver.WithDependencies(platform.ReleaseAsset{Ref: platform.AssetRef{App: ID, Kind: platform.AssetCompute, Name: name}, ContractVersion: 1, SourceVersion: version, Body: raw})
 }
 func (b *Build) InstallOperationAsset(asset platform.ReleaseAsset) error {
 	var op platform.Operation
 	text, ok := strings.CutPrefix(asset.SourceVersion, b.Manifest().Version+".compute-")
 	ordinal, err := strconv.Atoi(text)
-	if !ok || err != nil || ordinal < 1 || ordinal > 64 || asset.Ref.App != ID || asset.Ref.Kind != platform.AssetCompute || asset.ContractVersion != 1 || json.Unmarshal(asset.Body, &op) != nil || op.Name != asset.Ref.Name || op.Check() != nil || releasepub.CheckAssetDependencies(asset) != nil {
+	if !ok || err != nil || ordinal < 1 || ordinal > 64 || asset.Ref.App != ID || asset.Ref.Kind != platform.AssetCompute || asset.ContractVersion != 1 || json.Unmarshal(asset.Body, &op) != nil || op.Name != asset.Ref.Name || op.Check() != nil || b.resolver.CheckAssetDependencies(asset) != nil {
 		return fmt.Errorf("invalid compute candidate asset")
 	}
 	if op.Binding.Kind == "native" {
-		table, err := tableFromAsset(asset)
+		table, err := b.tableFromAsset(asset)
 		if err != nil {
 			return err
 		}
@@ -406,7 +405,7 @@ func (b *Build) CodeDraftAssets(id string) (before, after []platform.ReleaseAsse
 		return
 	}
 	code.Version++
-	asset, problem := codeReleaseAsset(code, b.Manifest().Version)
+	asset, problem := b.codeReleaseAsset(code, b.Manifest().Version)
 	if problem != nil {
 		err = problem
 		return
@@ -447,7 +446,7 @@ func (b *Build) PrepareCodeReleasePublications(assets []platform.ReleaseAsset) (
 		}
 		if ordinal <= record.Version {
 			retained, err := b.OperationReleaseAsset(asset.Ref.Name, asset.SourceVersion)
-			if err != nil || !dataowner.EqualAsset(retained, asset) {
+			if err != nil || !b.data.EqualAsset(retained, asset) {
 				return nil, fmt.Errorf("retained compute bytes differ")
 			}
 			if len(record.Versions) != record.Version {
@@ -482,15 +481,15 @@ func (b *Build) PrepareCodeReleasePublications(assets []platform.ReleaseAsset) (
 	return out, nil
 }
 
-func tableReleaseAsset(table Table, manifest string) (platform.ReleaseAsset, error) {
-	return releasepub.WithDependencies(platform.ReleaseAsset{Ref: platform.AssetRef{App: ID, Kind: platform.AssetCompute, Name: table.Name}, ContractVersion: 1, SourceVersion: manifest + ".compute-" + strconv.Itoa(table.Version), Body: platform.Raw(table.Definition())})
+func (b *Build) tableReleaseAsset(table Table, manifest string) (platform.ReleaseAsset, error) {
+	return b.resolver.WithDependencies(platform.ReleaseAsset{Ref: platform.AssetRef{App: ID, Kind: platform.AssetCompute, Name: table.Name}, ContractVersion: 1, SourceVersion: manifest + ".compute-" + strconv.Itoa(table.Version), Body: platform.Raw(table.Definition())})
 }
 
-func tableFromAsset(asset platform.ReleaseAsset) (Table, error) {
+func (b *Build) tableFromAsset(asset platform.ReleaseAsset) (Table, error) {
 	var op platform.Operation
 	text, found := strings.CutPrefix(asset.SourceVersion, ValueDefinitionVersion+".compute-")
 	version, err := strconv.Atoi(text)
-	if !found || err != nil || strconv.Itoa(version) != text || version < 1 || version > 64 || asset.Ref.App != ID || asset.Ref.Kind != platform.AssetCompute || asset.ContractVersion != 1 || json.Unmarshal(asset.Body, &op) != nil || op.Name != asset.Ref.Name || op.Binding.Kind != "native" || op.Rules == nil || op.Check() != nil || releasepub.CheckAssetDependencies(asset) != nil {
+	if !found || err != nil || strconv.Itoa(version) != text || version < 1 || version > 64 || asset.Ref.App != ID || asset.Ref.Kind != platform.AssetCompute || asset.ContractVersion != 1 || json.Unmarshal(asset.Body, &op) != nil || op.Name != asset.Ref.Name || op.Binding.Kind != "native" || op.Rules == nil || op.Check() != nil || b.resolver.CheckAssetDependencies(asset) != nil {
 		return Table{}, fmt.Errorf("invalid decision table asset %s", asset.Ref)
 	}
 	tb := Table{Name: op.Name, Title: op.Title, Description: op.Description, Reads: &op.Rules.Reads, State: "published", Version: version}
@@ -582,7 +581,7 @@ func (b *Build) tableDraftAssets(id string) (before, after []platform.ReleaseAss
 	}
 	tb.Version++
 	next = platform.AssetRef{App: ID, Kind: platform.AssetCompute, Name: tb.Name}
-	asset, problem := tableReleaseAsset(tb, b.Manifest().Version)
+	asset, problem := b.tableReleaseAsset(tb, b.Manifest().Version)
 	if problem != nil {
 		err = problem
 		return
@@ -606,7 +605,7 @@ func (b *Build) prepareTablePublications(assets []platform.ReleaseAsset) ([]plat
 		if json.Unmarshal(asset.Body, &operation) != nil || operation.Binding.Kind != "native" {
 			continue
 		}
-		frozen, err := tableFromAsset(asset)
+		frozen, err := b.tableFromAsset(asset)
 		if err != nil {
 			return nil, err
 		}

@@ -44,7 +44,7 @@ func (t *Tenant) submitAutomated(app platform.App, caller platform.Caller, sub *
 }
 
 func (h hostView) CheckTxnCall(call platform.TxnCall) error {
-	return actions.CheckTxnCall(call, h.t.definitions, h.t.App)
+	return actions.CheckTxnCall(call, h.t.definitions, h.t.App, PublicationResolver())
 }
 
 func (h hostView) QueueTxnEffect(c platform.Caller, receipt *pb.ChangeRecord, step string, target platform.TxnRef, raw json.RawMessage, at time.Time) *platform.Error {

@@ -7,7 +7,7 @@ import (
 	"platformserver/services/data/lineage"
 	"platformserver/services/ontology"
 	"platformserver/services/resources/merge"
-	releasepub "platformserver/services/resources/publication"
+
 	"reflect"
 	"slices"
 	"strings"
@@ -442,7 +442,7 @@ func TestInvariantK6BranchSavesIsolateMainAndMergeAsOneResult(t *testing.T) {
 				}
 			}
 		case "release-result":
-			saved, err := acceptedformat.DecodeRelease(entry.Body, releasepub.ReadCandidate)
+			saved, err := acceptedformat.DecodeRelease(entry.Body, PublicationResolver().ReadCandidate)
 			if err != nil || saved.CandidateID != merged.Candidate || saved.Key != "release:branch:"+branch.ID+":merge" || saved.Active {
 				t.Fatalf("merge candidate save: result=%+v error=%v", saved, err)
 			}

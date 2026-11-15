@@ -11,7 +11,7 @@ import (
 )
 
 func (t *Tenant) recordSetBinding(binding platform.AssetBinding) (*platform.Definition, bool) {
-	selected := objects.RecordSetBinding(t.definitions, &binding)
+	selected := objects.RecordSetBinding(t.definitions, &binding, PublicationResolver())
 	return selected, selected != nil
 }
 

@@ -10,7 +10,7 @@ import (
 	"platformserver/platform"
 )
 
-func describeAsset(asset platform.ReleaseAsset, historical bool) (platform.Dependencies, error) {
+func (resolver Resolver) describeAsset(asset platform.ReleaseAsset, historical bool) (platform.Dependencies, error) {
 	out := platform.Dependencies{Ref: asset.Ref, Requires: []platform.AssetRef{}, Provides: []platform.Capability{}, Version: asset.SourceVersion}
 	if err := asset.Ref.Check(); err != nil {
 		return out, err
@@ -87,7 +87,7 @@ func describeAsset(asset platform.ReleaseAsset, historical bool) (platform.Depen
 		if err := json.Unmarshal(asset.Body, &p); err != nil {
 			return out, err
 		}
-		if err := p.CheckSafety(); err != nil {
+		if err := resolver.CheckPage(p); err != nil {
 			return out, err
 		}
 		out.Requires = append(out.Requires, pageDependencies(p)...)

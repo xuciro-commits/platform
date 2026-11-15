@@ -24,7 +24,7 @@ func (b *Build) DecodeAssetInstallation(schema string, image json.RawMessage) (p
 		return b.data.DecodeInstallation(schema, image)
 	}
 	if descriptor.kind == platform.AssetSampleSet {
-		return sampleSetInstallation(image)
+		return b.sampleSetInstallation(image)
 	}
 	if descriptor.typ == automationauthoring.ProcessType {
 		return b.automation.DecodeInstallation(schema, image)
@@ -161,13 +161,13 @@ func (b *Build) declarationReleaseDraft(asset platform.ReleaseAsset) (string, an
 	}
 	switch asset.Ref.Kind {
 	case platform.AssetSampleSet:
-		d, _, err := decodeSampleAsset(asset)
+		d, _, err := b.decodeSampleAsset(asset)
 		return SampleSetType, SampleSetRecord{Name: d.Name, Title: d.Title, Samples: d.Samples}, err
 	case platform.AssetEvaluation, platform.AssetTestPlan:
 		d, err := b.testPlanDraft(asset)
 		return TestPlanType, d, err
 	case platform.AssetAgent:
-		d, err := decodeAgentAsset(asset)
+		d, err := b.decodeAgentAsset(asset)
 		if err != nil {
 			return "", nil, err
 		}
@@ -176,7 +176,7 @@ func (b *Build) declarationReleaseDraft(asset platform.ReleaseAsset) (string, an
 	case platform.AssetCompute:
 		var operation platform.Operation
 		if json.Unmarshal(asset.Body, &operation) == nil && operation.Binding.Kind == "native" {
-			table, err := tableFromAsset(asset)
+			table, err := b.tableFromAsset(asset)
 			table.State, table.Version = "draft", 0
 			return TableType, table, err
 		}

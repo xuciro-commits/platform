@@ -208,7 +208,7 @@ func integrationMetadata(record any) (name string, version int, published string
 		value.FieldByName("Published").String(), value.FieldByName("Versions").Interface().([]string)
 }
 
-func retainIntegration(record any, asset platform.ReleaseAsset) (any, error) {
+func (o *Owner) retainIntegration(record any, asset platform.ReleaseAsset) (any, error) {
 	raw, err := json.Marshal(asset)
 	if err != nil {
 		return nil, err
@@ -230,7 +230,7 @@ func retainIntegration(record any, asset platform.ReleaseAsset) (any, error) {
 			return nil, fmt.Errorf("invalid retained integration version")
 		}
 		if accepted.SourceVersion == asset.SourceVersion {
-			if !equalIntegrationAsset(accepted, asset) {
+			if !o.EqualAsset(accepted, asset) {
 				return nil, fmt.Errorf("integration version already denotes another descriptor")
 			}
 			raw = []byte(old)

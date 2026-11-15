@@ -9,8 +9,8 @@ import (
 	"platformserver/platform"
 )
 
-func WithDependencies(asset platform.ReleaseAsset) (platform.ReleaseAsset, error) {
-	description, err := DescribeAsset(asset)
+func (resolver Resolver) WithDependencies(asset platform.ReleaseAsset) (platform.ReleaseAsset, error) {
+	description, err := resolver.DescribeAsset(asset)
 	if err != nil {
 		return platform.ReleaseAsset{}, err
 	}
@@ -150,6 +150,6 @@ func completeAssetDependencies(asset platform.ReleaseAsset, out platform.Depende
 	return out, nil
 }
 
-func DescribeAsset(asset platform.ReleaseAsset) (platform.Dependencies, error) {
-	return describeAsset(asset, false)
+func (resolver Resolver) DescribeAsset(asset platform.ReleaseAsset) (platform.Dependencies, error) {
+	return resolver.describeAsset(asset, false)
 }

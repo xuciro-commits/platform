@@ -116,7 +116,7 @@ type pageUIContract struct {
 	Runtime           pageRuntimeContract  `json:"runtime"`
 }
 
-var pageWidgets = func() pageUIContract {
+var PageWidgets = func() pageUIContract {
 	var frozen struct {
 		RetainedContract pageUIContract `json:"retainedContract"`
 	}
@@ -130,24 +130,24 @@ func SupportsPageUIProfile(profile string) bool {
 	if profile == "platform.page.v3" {
 		return true
 	}
-	return slices.Contains(pageWidgets.SupportedProfiles, profile)
+	return slices.Contains(PageWidgets.SupportedProfiles, profile)
 }
 
 func pageWidget(id string) *pageWidgetContract {
-	for i := range pageWidgets.Widgets {
-		if pageWidgets.Widgets[i].ComponentID == id {
-			return &pageWidgets.Widgets[i]
+	for i := range PageWidgets.Widgets {
+		if PageWidgets.Widgets[i].ComponentID == id {
+			return &PageWidgets.Widgets[i]
 		}
 	}
 	return nil
 }
 
-func (p Page) checkWidgetPorts(binding PageDataBinding, owner string) error {
+func (p Page) CheckWidgetPorts(binding PageDataBinding, owner string) error {
 	widget := binding.Ports["widget"]
 	if pageWidget(widget) == nil {
 		return nil
 	}
-	loop, overlay := p.scopeOwner(owner, "loop"), p.scopeOwner(owner, "overlay")
+	loop, overlay := p.ScopeOwner(owner, "loop"), p.ScopeOwner(owner, "overlay")
 	for field, id := range binding.Ports {
 		port := widgetPort(widget, field)
 		if port != nil && port.ScopeRule != "" && field != "enabledWhen" {
@@ -181,10 +181,10 @@ func (p Page) checkWidgetPorts(binding PageDataBinding, owner string) error {
 	if id := binding.Ports["collectionVariable"]; id != "" && known && p.WindowVariableObject(id) != object {
 		return fmt.Errorf("table window object does not match its plan")
 	}
-	local := p.scopeOwner(owner, "loop") != "" || p.scopeOwner(owner, "overlay") != ""
+	local := p.ScopeOwner(owner, "loop") != "" || p.ScopeOwner(owner, "overlay") != ""
 	if id := binding.Ports["filterVariable"]; id != "" {
 		v := p.InputSchema.Variables[id]
-		if p.scopeOwner(owner, "loop") != "" || binding.Ports["collectionVariable"] != "" || v.Type != "filter" || v.Mode != "shared" || widget == "filter" && (!v.Writable || p.scopeOwner(owner, "overlay") != "") {
+		if p.ScopeOwner(owner, "loop") != "" || binding.Ports["collectionVariable"] != "" || v.Type != "filter" || v.Mode != "shared" || widget == "filter" && (!v.Writable || p.ScopeOwner(owner, "overlay") != "") {
 			return fmt.Errorf("page section %s has an invalid shared filter port", binding.ID)
 		}
 		if known && (v.Source == nil || v.Source.Object == nil || v.Source.Object.Name != object) {
@@ -206,18 +206,18 @@ func (p Page) checkWidgetPorts(binding PageDataBinding, owner string) error {
 func sharedRecordProfile(widget string) string {
 	switch widget {
 	case "scene-3d", "observation":
-		return pageWidgets.Runtime.Telemetry.SharedUIProfile
+		return PageWidgets.Runtime.Telemetry.SharedUIProfile
 	case "vertex-graph":
-		return pageWidgets.Runtime.Exploration.SharedVertexUIProfile
+		return PageWidgets.Runtime.Exploration.SharedVertexUIProfile
 	case "graph-explorer", "breadcrumb", "avatar-stack":
-		return pageWidgets.Runtime.ContextViews.SharedUIProfile
+		return PageWidgets.Runtime.ContextViews.SharedUIProfile
 	}
 	return "platform.page.v2.14"
 }
 
 var pageVariablePortFields = func() map[string]bool {
 	fields := map[string]bool{}
-	for _, widget := range pageWidgets.Widgets {
+	for _, widget := range PageWidgets.Widgets {
 		for _, port := range append(slices.Clone(widget.InputPorts), widget.OutputPorts...) {
 			if port.BindingField != "enabledWhen" {
 				fields[port.BindingField] = true
@@ -246,13 +246,13 @@ func PageUIProfileSupports(profile, required string) bool {
 	if profile == "platform.page.v3" {
 		return true
 	}
-	current, minimum := slices.Index(pageWidgets.SupportedProfiles, profile), slices.Index(pageWidgets.SupportedProfiles, required)
+	current, minimum := slices.Index(PageWidgets.SupportedProfiles, profile), slices.Index(PageWidgets.SupportedProfiles, required)
 	return current >= 0 && minimum >= 0 && current >= minimum
 }
 
 var Widgets = func() []string {
-	ids := make([]string, 0, len(pageWidgets.Widgets))
-	for _, widget := range pageWidgets.Widgets {
+	ids := make([]string, 0, len(PageWidgets.Widgets))
+	for _, widget := range PageWidgets.Widgets {
 		ids = append(ids, widget.ComponentID)
 	}
 	return ids

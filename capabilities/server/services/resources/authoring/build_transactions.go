@@ -322,7 +322,7 @@ func (b *Build) businessRuntime() platform.TransactionExecutor {
 				return platform.TransactionEffectDefinition{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "{why}", err.Error())
 			}
 			return platform.TransactionEffectDefinition{Request: func(id string, payload json.RawMessage) (json.RawMessage, *platform.Error) {
-				request, err := w.Request(conn, id, payload)
+				request, err := b.data.PrepareWritebackRequest(w, conn, id, payload)
 				if err != nil {
 					return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "{why}", err.Error())
 				}

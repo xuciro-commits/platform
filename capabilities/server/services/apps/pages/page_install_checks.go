@@ -16,7 +16,7 @@ func (b Bindings) CheckInstall(p platform.Page, id string, targets bool, engines
 		return p, platform.EntityInfo{}, err
 	}
 	p = safe
-	if err := p.CheckSafety(); err != nil {
+	if err := CheckSafety(p); err != nil {
 		return p, platform.EntityInfo{}, err
 	}
 	for _, trigger := range p.ActionTriggers {
@@ -91,7 +91,7 @@ func (b Bindings) CheckSections(p platform.Page, page platform.EntityInfo) error
 	}); err != nil {
 		return err
 	}
-	if err := safe.CheckSafety(); err != nil {
+	if err := CheckSafety(safe); err != nil {
 		return err
 	}
 	if err := safe.CheckRecordPorts(); err != nil {
@@ -102,7 +102,7 @@ func (b Bindings) CheckSections(p platform.Page, page platform.EntityInfo) error
 			return fmt.Errorf("page %s binding %s: %w", p.Name, binding.ID, err)
 		}
 		if binding.Query != nil {
-			query := objects.QuerySourceDefinition(b.Definitions, binding.Query)
+			query := objects.QuerySourceDefinition(b.Definitions, binding.Query, PublicationResolver())
 			if query == nil || query.Query == nil || query.Query.Object != binding.Object.Name {
 				return fmt.Errorf("page binding query owner or version is unavailable")
 			}

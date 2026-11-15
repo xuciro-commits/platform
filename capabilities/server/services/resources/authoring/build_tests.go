@@ -100,15 +100,15 @@ func (b *Build) checkSampleSet(m SampleSetRecord) error {
 	return nil
 }
 
-func sampleSetAsset(m SampleSetRecord, version int) (platform.ReleaseAsset, error) {
-	return definitionReleaseAsset(platform.AssetRef{App: ID, Kind: platform.AssetSampleSet, Name: m.Name}, ValueDefinitionVersion+".samples-"+strconv.Itoa(version), m.descriptor())
+func sampleSetAsset(resolver releasepub.Resolver, m SampleSetRecord, version int) (platform.ReleaseAsset, error) {
+	return definitionReleaseAsset(resolver, platform.AssetRef{App: ID, Kind: platform.AssetSampleSet, Name: m.Name}, ValueDefinitionVersion+".samples-"+strconv.Itoa(version), m.descriptor())
 }
 
-func decodeSampleAsset(asset platform.ReleaseAsset) (platform.SampleSet, int, error) {
+func (b *Build) decodeSampleAsset(asset platform.ReleaseAsset) (platform.SampleSet, int, error) {
 	var d platform.SampleSet
 	ordinal, ok := strings.CutPrefix(asset.SourceVersion, ValueDefinitionVersion+".samples-")
 	version, err := strconv.Atoi(ordinal)
-	if !ok || err != nil || version < 1 || version > 64 || strconv.Itoa(version) != ordinal || asset.Ref.App != ID || asset.Ref.Kind != platform.AssetSampleSet || asset.ContractVersion != 1 || json.Unmarshal(asset.Body, &d) != nil || d.Name != asset.Ref.Name || d.Check() != nil || releasepub.CheckAssetDependencies(asset) != nil {
+	if !ok || err != nil || version < 1 || version > 64 || strconv.Itoa(version) != ordinal || asset.Ref.App != ID || asset.Ref.Kind != platform.AssetSampleSet || asset.ContractVersion != 1 || json.Unmarshal(asset.Body, &d) != nil || d.Name != asset.Ref.Name || d.Check() != nil || b.resolver.CheckAssetDependencies(asset) != nil {
 		return d, 0, fmt.Errorf("Invalid sample asset")
 	}
 	return d, version, nil
@@ -121,7 +121,7 @@ func (b *Build) retainSampleSet(m SampleSetRecord) (SampleSetRecord, error) {
 	if m.DefinitionVersion >= 64 {
 		return m, fmt.Errorf("The sample set version family is full")
 	}
-	asset, err := sampleSetAsset(m, m.DefinitionVersion+1)
+	asset, err := sampleSetAsset(b.resolver, m, m.DefinitionVersion+1)
 	if err != nil {
 		return m, err
 	}
@@ -135,11 +135,11 @@ func (b *Build) retainSampleSet(m SampleSetRecord) (SampleSetRecord, error) {
 }
 
 func (b *Build) sampleSetAssets() ([]platform.ReleaseAsset, error) {
-	return portableDefinitionAssets(b.sampleSetInventory, decodeSampleAsset, "sample set")
+	return portableDefinitionAssets(b.sampleSetInventory, b.decodeSampleAsset, "sample set")
 }
 
 func (b *Build) sampleSetPinned(ref platform.AssetRef, version string) (platform.ReleaseAsset, error) {
-	return pinnedDefinitionAsset(b.sampleSetInventory, decodeSampleAsset, ref, version, "sample set")
+	return pinnedDefinitionAsset(b.sampleSetInventory, b.decodeSampleAsset, ref, version, "sample set")
 }
 
 func (b *Build) sampleSetDraftAssets(id string) (before, after []platform.ReleaseAsset, prior, next platform.AssetRef, hadPrior bool, err error) {
@@ -167,7 +167,7 @@ func (b *Build) sampleSetDraftAssets(id string) (before, after []platform.Releas
 	}
 	next = platform.AssetRef{App: ID, Kind: platform.AssetSampleSet, Name: m.Name}
 	prior, hadPrior = next, m.Published != ""
-	a, e := sampleSetAsset(m, m.DefinitionVersion+1)
+	a, e := sampleSetAsset(b.resolver, m, m.DefinitionVersion+1)
 	if e != nil {
 		err = e
 		return
@@ -188,7 +188,7 @@ func (b *Build) prepareSampleSetInstallations(assets []platform.ReleaseAsset) ([
 		if a.Ref.Kind != platform.AssetSampleSet || a.Ref.App != ID {
 			continue
 		}
-		d, version, err := decodeSampleAsset(a)
+		d, version, err := b.decodeSampleAsset(a)
 		if err != nil {
 			return nil, err
 		}
@@ -223,8 +223,8 @@ func equalSampleAssets(a, b platform.ReleaseAsset) bool {
 	return a.Ref == b.Ref && a.SourceVersion == b.SourceVersion && a.ContractVersion == b.ContractVersion && slices.Equal(a.Requires, b.Requires) && json.Unmarshal(a.Body, &x) == nil && json.Unmarshal(b.Body, &y) == nil && reflect.DeepEqual(x, y)
 }
 
-func sampleSetInstallation(image json.RawMessage) (platform.AssetInstallation, error) {
-	return portableDefinitionInstallation[SampleSetRecord](image, SampleSetType, "sample", decodeSampleAsset)
+func (b *Build) sampleSetInstallation(image json.RawMessage) (platform.AssetInstallation, error) {
+	return portableDefinitionInstallation[SampleSetRecord](image, SampleSetType, "sample", b.decodeSampleAsset)
 }
 
 func (*Build) testPlanEntity() platform.Entity {

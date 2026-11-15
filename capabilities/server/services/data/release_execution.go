@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	releasepub "platformserver/services/resources/publication"
 	"reflect"
 	"slices"
 	"strconv"
@@ -145,7 +144,7 @@ func (o *Owner) matchingProducer(name string) (platform.AssetRef, error) {
 	return matches[0], nil
 }
 
-func validateIntegrationFamily(record any, current platform.ReleaseAsset) error {
+func (o *Owner) validateIntegrationFamily(record any, current platform.ReleaseAsset) error {
 	_, version, raw, history := integrationMetadata(record)
 	if len(history) == 0 || len(history) > 64 {
 		return fmt.Errorf("integration has no bounded retained version family")
@@ -162,7 +161,7 @@ func validateIntegrationFamily(record any, current platform.ReleaseAsset) error 
 		if err != nil {
 			return err
 		}
-		if err := ValueValidateIntegrationDescriptor(asset); err != nil {
+		if err := o.validateIntegrationDescriptor(asset); err != nil {
 			return err
 		}
 		if asset.Ref != current.Ref || asset.ContractVersion != 1 {
@@ -198,11 +197,11 @@ func (o *Owner) freezeDirectIntegration(kind platform.AssetKind, record any) (an
 			return nil, err
 		}
 		prior.SourceVersion = asset.SourceVersion
-		if equalIntegrationAsset(prior, asset) {
+		if o.EqualAsset(prior, asset) {
 			return record, nil
 		}
 	}
-	fixed, err := retainIntegration(record, asset)
+	fixed, err := o.retainIntegration(record, asset)
 	if err != nil {
 		return nil, err
 	}
@@ -216,16 +215,16 @@ func (o *Owner) freezeDirectIntegration(kind platform.AssetKind, record any) (an
 	return fixed, nil
 }
 
-func equalIntegrationAsset(a, z platform.ReleaseAsset) bool {
+func (o *Owner) EqualAsset(a, z platform.ReleaseAsset) bool {
 	if a.Ref != z.Ref || a.SourceVersion != z.SourceVersion || a.ContractVersion != z.ContractVersion || !slices.Equal(a.Requires, z.Requires) {
 		return false
 	}
 	if ValueIntegrationKind(a.Ref.Kind) && (a.Provides == nil) != (z.Provides == nil) {
 		var err error
 		if a.Provides == nil {
-			a, err = integrationCandidateAsset(a)
+			a, err = o.integrationCandidateAsset(a)
 		} else {
-			z, err = integrationCandidateAsset(z)
+			z, err = o.integrationCandidateAsset(z)
 		}
 		if err != nil {
 			return false
@@ -238,9 +237,7 @@ func equalIntegrationAsset(a, z platform.ReleaseAsset) bool {
 	return json.Unmarshal(a.Body, &left) == nil && json.Unmarshal(z.Body, &right) == nil && reflect.DeepEqual(left, right)
 }
 
-func EqualAsset(a, z platform.ReleaseAsset) bool { return equalIntegrationAsset(a, z) }
-
-func retainedExecutionEquivalent(record any, issuedVersion string) (bool, error) {
+func (o *Owner) retainedExecutionEquivalent(record any, issuedVersion string) (bool, error) {
 	_, ordinal, accepted, history := integrationMetadata(record)
 	if accepted == "" {
 		return ordinal == 0 && issuedVersion == "", nil
@@ -252,7 +249,7 @@ func retainedExecutionEquivalent(record any, issuedVersion string) (bool, error)
 	if err := ValueDecodeIntegration([]byte(accepted), &current); err != nil {
 		return false, err
 	}
-	if err := validateIntegrationFamily(record, current); err != nil {
+	if err := o.validateIntegrationFamily(record, current); err != nil {
 		return false, err
 	}
 	if current.Ref.Kind != platform.AssetSource && current.Ref.Kind != platform.AssetPipeline {
@@ -429,9 +426,9 @@ func (s Source) ExecutionVersion() string { return ValueIntegrationExecutionVers
 
 func (p Pipeline) ExecutionVersion() string { return ValueIntegrationExecutionVersion(p.Published) }
 
-func ValueValidateIntegrationDependencies(asset platform.ReleaseAsset) error {
+func (o *Owner) validateIntegrationDependencies(asset platform.ReleaseAsset) error {
 	if asset.Provides != nil {
-		return releasepub.CheckAssetDependencies(asset)
+		return o.resolver.CheckAssetDependencies(asset)
 	}
 	if asset.Ref.Kind == platform.AssetObservation {
 		return fmt.Errorf("observation source requires its complete dependency description")
@@ -516,7 +513,7 @@ func ValueValidateIntegrationDependencies(asset platform.ReleaseAsset) error {
 	return nil
 }
 
-func ValueValidateIntegrationDescriptor(asset platform.ReleaseAsset) error {
+func (o *Owner) validateIntegrationDescriptor(asset platform.ReleaseAsset) error {
 	if asset.Ref.App != App || !ValueIntegrationKind(asset.Ref.Kind) || asset.ContractVersion != 1 {
 		return fmt.Errorf("unsupported integration descriptor")
 	}
@@ -599,5 +596,5 @@ func ValueValidateIntegrationDescriptor(asset platform.ReleaseAsset) error {
 			return fmt.Errorf("invalid matching rule")
 		}
 	}
-	return ValueValidateIntegrationDependencies(asset)
+	return o.validateIntegrationDependencies(asset)
 }

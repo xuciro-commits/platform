@@ -106,7 +106,7 @@ func (b *Build) openDispatch(c platform.Caller, receipt *pb.ChangeRecord, txn *p
 			reverseInput["key"] = run.Key + ":compensate"
 			requestInput = platform.Raw(reverseInput)
 		}
-		req, err := w.Request(conn, receipt.GetSubmission().GetTarget().GetId(), requestInput)
+		req, err := b.data.PrepareWritebackRequest(w, conn, receipt.GetSubmission().GetTarget().GetId(), requestInput)
 		if err != nil {
 			return nil, err
 		}

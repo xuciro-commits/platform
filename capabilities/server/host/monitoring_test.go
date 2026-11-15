@@ -127,7 +127,7 @@ func newMonitoringTenant(tb testing.TB) *invariantTenant {
 	}
 	probe := &monitoringFixture{ledger: actions.NewAuthority(id, "probe", platform.NewCatalog(probeActions...), "probe.event"), undoBlocked: &atomic.Bool{}}
 	probe.undoBlocked.Store(true)
-	tenant, err := NewTenantWithCapabilities(id, services, console, build.New(id, actions.NewAuthority, []publication.Hooks{ontology.ActionTypePublication()}), work.New(id, actions.NewAuthority), automation.New(id, actions.NewAuthority), agents.New(id, actions.NewAuthority), probe)
+	tenant, err := NewTenantWithCapabilities(id, services, console, build.New(id, actions.NewAuthority, []publication.Hooks{ontology.ActionTypePublication()}, PublicationResolver()), work.New(id, actions.NewAuthority), automation.New(id, actions.NewAuthority, PublicationResolver()), agents.New(id, actions.NewAuthority), probe)
 	if err != nil {
 		tb.Fatal(err)
 	}

@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"platformserver/platform"
+	pageowner "platformserver/services/apps/pages"
 	"platformserver/services/resources/authoring"
 )
 
@@ -17,19 +18,17 @@ func (t *Tenant) registerDefinitions() error {
 	for _, et := range t.Projection.SortedTypes() {
 		entities = append(entities, et.Info())
 	}
-	err := build.CodeDefinitions{Apps: t.apps, Entities: entities,
+	err := build.CodeDefinitions{Apps: t.apps, Entities: entities, CheckPage: pageowner.CheckSafety,
 		Narrowable:    func(info platform.EntityInfo) []string { return t.narrowable(t.Projection.Type(info.Type)) },
 		CheckSections: t.checkSections,
 		BindInterface: func(q platform.NamedQuery) (platform.NamedQuery, error) { return t.bindInterfaceQuery(q) },
 		InstallLink:   t.Projection.InstallLinkConstraint,
 		NativeFlow:    t.nativeFlowAsset,
 		CheckObject:   t.checkObjectProperties,
-		Describe: func(def platform.Definition) (platform.Definition, error) {
-			return t.describer().DescribeDefinition(def)
-		},
-		Store:      func(def platform.Definition) { t.setDefinitions(append(t.definitions, def)) },
-		Current:    func() []platform.Definition { return t.definitions },
-		UniqueRefs: releaseowner.UniqueRefs,
+		Describe:      t.describer().DescribeDefinition,
+		Store:         func(def platform.Definition) { t.setDefinitions(append(t.definitions, def)) },
+		Current:       func() []platform.Definition { return t.definitions },
+		UniqueRefs:    releaseowner.UniqueRefs,
 	}.Register()
 	if err != nil {
 		return err

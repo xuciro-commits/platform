@@ -8,6 +8,7 @@ import (
 )
 
 type CodeDefinitions struct {
+	CheckPage     func(platform.Page) error
 	Apps          []platform.App
 	Entities      []platform.EntityInfo
 	Narrowable    func(info platform.EntityInfo) []string
@@ -43,7 +44,7 @@ func (h CodeDefinitions) Register() error {
 		declarations.Entities = append(declarations.Entities, info)
 		declarations.NarrowedFields[info.Type] = h.Narrowable(info)
 	}
-	if err := declarations.Check(); err != nil {
+	if err := declarations.Check(h.CheckPage); err != nil {
 		return err
 	}
 	seen := map[platform.AssetRef]bool{}

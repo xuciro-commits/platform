@@ -52,7 +52,7 @@ func CheckConstraints(info EntityInfo, lookup func(string) (EntityInfo, bool), t
 		return ConstraintEntity(other), ok && other.App == info.App
 	}
 	for _, c := range info.Constraints {
-		if !pageNodeID.MatchString(c.Name) || len(c.Name) > 64 || seen[c.Name] || strings.TrimSpace(c.Message) == "" || len(c.Message) > 512 || len(c.Fields) == 0 || len(c.Fields) > 16 {
+		if !PageNodeID.MatchString(c.Name) || len(c.Name) > 64 || seen[c.Name] || strings.TrimSpace(c.Message) == "" || len(c.Message) > 512 || len(c.Fields) == 0 || len(c.Fields) > 16 {
 			return fmt.Errorf("constraint needs a unique stable name, message and 1-16 fields")
 		}
 		seen[c.Name] = true

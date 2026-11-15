@@ -36,7 +36,7 @@ func compositeRole(view ModelViewBinding, role string, info EntityInfo) *FieldRe
 func (p Page) checkComposite(b PageDataBinding, lookup func(string) (EntityInfo, bool), engines ...RuleEngine) error {
 	widget := b.Ports["widget"]
 	if widget == "" {
-		for _, candidate := range pageWidgets.Widgets {
+		for _, candidate := range PageWidgets.Widgets {
 			fits := len(candidate.ModelPorts) > 0 && len(b.Models) > 0
 			for key := range b.Models {
 				fits = fits && slices.ContainsFunc(candidate.ModelPorts, func(port pageModelPort) bool { return port.ID == key })
@@ -142,7 +142,7 @@ func ValidPageImageURL(raw string) bool {
 	if raw == "" {
 		return true
 	}
-	if len(raw) > pageWidgets.Runtime.ContextViews.MaxURLBytes || !utf8.ValidString(raw) {
+	if len(raw) > PageWidgets.Runtime.ContextViews.MaxURLBytes || !utf8.ValidString(raw) {
 		return false
 	}
 	decoded, err := url.PathUnescape(raw)

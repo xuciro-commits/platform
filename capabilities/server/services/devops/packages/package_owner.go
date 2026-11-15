@@ -8,7 +8,8 @@ import (
 	"maps"
 	"os"
 	"path/filepath"
-	releasepub "platformserver/services/resources/publication"
+	pageowner "platformserver/services/apps/pages"
+
 	"slices"
 	"strings"
 	"sync"
@@ -129,7 +130,7 @@ func LoadPackageIndex(dir string) (*platform.PackageIndex, error) {
 			list = []platform.PackageDescriptor{one}
 		}
 		for _, p := range list {
-			if err := packagedesc.Validate(p, releasepub.WithDependencies); err != nil {
+			if err := packagedesc.Validate(p, pageowner.PublicationResolver().WithDependencies); err != nil {
 				return nil, fmt.Errorf("package index %s: %w", entry.Name(), err)
 			}
 			index.Packages = append(index.Packages, p)
@@ -154,12 +155,12 @@ func BlueprintCandidate(b platform.PackageBlueprint, owner build.ConstructionDra
 			return platform.ReleaseCandidate{}, fmt.Errorf("a package blueprint contains only Build-owned definitions")
 		}
 		var err error
-		assets[i], err = releasepub.WithDependencies(asset)
+		assets[i], err = pageowner.PublicationResolver().WithDependencies(asset)
 		if err != nil {
 			return platform.ReleaseCandidate{}, err
 		}
 	}
-	return releasepub.Candidate(b.Roots, append(assets, code...))
+	return pageowner.PublicationResolver().Candidate(b.Roots, append(assets, code...))
 }
 
 func (d *Owner) sealedPackageDescriptor(id, version, artifact string) (platform.PackageDescriptor, error) {
@@ -226,7 +227,7 @@ func (d *Owner) precheck(p platform.PackageDescriptor, index *platform.PackageIn
 	if len(planned) > 0 {
 		proposed = planned[0]
 	}
-	if err := packagedesc.Validate(p, releasepub.WithDependencies); err != nil {
+	if err := packagedesc.Validate(p, pageowner.PublicationResolver().WithDependencies); err != nil {
 		out.OK, out.Problems = false, []string{err.Error()}
 		return out
 	}

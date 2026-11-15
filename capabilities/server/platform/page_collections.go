@@ -20,7 +20,7 @@ func (p Page) LoopFactor(owner string) (int, error) {
 			}
 			found = true
 			if scope.Kind == "loop" {
-				if scope.MaxIterations < 1 || scope.MaxIterations > pageWidgets.Runtime.Loop.MaxItems || factor > pageWidgets.Runtime.Query.MaxTotalLimit/scope.MaxIterations {
+				if scope.MaxIterations < 1 || scope.MaxIterations > PageWidgets.Runtime.Loop.MaxItems || factor > PageWidgets.Runtime.Query.MaxTotalLimit/scope.MaxIterations {
 					return 0, fmt.Errorf("page loop read budget exceeded")
 				}
 				factor *= scope.MaxIterations
@@ -66,7 +66,7 @@ func (p Page) collectionBuilderInput(id, owner string, object AssetRef) bool {
 func (p Page) checkCollectionBuilderGraph() error {
 	d := p.InputSchema
 	sections := p.DataBindings
-	c := pageWidgets.Runtime.Query
+	c := PageWidgets.Runtime.Query
 	for root := range d.Queries {
 		nodes := 0
 		var visit func(string, int, map[string]bool) error
@@ -162,7 +162,7 @@ func (p Page) collectionInputObject(variable string, seen map[string]bool) Asset
 
 func (d PageInputSchema) checkComputeResource(v PageVariable) error {
 	c := v.Source.Compute
-	if !PageUIProfileSupports(d.profileVersion(), pageWidgets.Runtime.ComputeResource.RequiredUIProfile) || !slices.Contains([]string{"number", "decimal"}, v.Type) || v.Mode != "resource" || v.Writable || !slices.Contains([]string{"page", "overlay"}, v.Scope) || c == nil || !pageNodeID.MatchString(c.RecordVariable) || c.Operation.Ref.Kind != AssetCompute || c.Operation.Ref.Check() != nil || c.Operation.SourceVersion == "" || len(c.Inputs) == 0 || len(c.Inputs) > 64 || c.OutputField != "" && !pageNodeID.MatchString(c.OutputField) {
+	if !PageUIProfileSupports(d.profileVersion(), PageWidgets.Runtime.ComputeResource.RequiredUIProfile) || !slices.Contains([]string{"number", "decimal"}, v.Type) || v.Mode != "resource" || v.Writable || !slices.Contains([]string{"page", "overlay"}, v.Scope) || c == nil || !PageNodeID.MatchString(c.RecordVariable) || c.Operation.Ref.Kind != AssetCompute || c.Operation.Ref.Check() != nil || c.Operation.SourceVersion == "" || len(c.Inputs) == 0 || len(c.Inputs) > 64 || c.OutputField != "" && !PageNodeID.MatchString(c.OutputField) {
 		return fmt.Errorf("compute resource needs its finite typed operation and original record")
 	}
 	parent := d.Variables[c.RecordVariable]
@@ -171,8 +171,8 @@ func (d PageInputSchema) checkComputeResource(v PageVariable) error {
 	}
 	subject := false
 	for name, b := range c.Inputs {
-		if !pageNodeID.MatchString(name) || b.Check() != nil || b.Source != "literal" && b.Source != "subject" || b.Source == "subject" && (len(b.Path) < 1 || len(b.Path) > 16 || slices.ContainsFunc(b.Path, func(part string) bool {
-			return !pageNodeID.MatchString(part)
+		if !PageNodeID.MatchString(name) || b.Check() != nil || b.Source != "literal" && b.Source != "subject" || b.Source == "subject" && (len(b.Path) < 1 || len(b.Path) > 16 || slices.ContainsFunc(b.Path, func(part string) bool {
+			return !PageNodeID.MatchString(part)
 		})) {
 			return fmt.Errorf("compute input needs a scalar source field or typed literal")
 		}

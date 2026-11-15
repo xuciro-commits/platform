@@ -11,14 +11,14 @@ import (
 )
 
 func (t *Tenant) namedQuery(app, name string) (platform.NamedQuery, bool) {
-	if q := objects.DeclaredQuery(t.definitions, app, name, ""); q != nil {
+	if q := objects.DeclaredQuery(t.definitions, app, name, "", PublicationResolver()); q != nil {
 		return *q, true
 	}
 	return platform.NamedQuery{}, false
 }
 
 func (t *Tenant) queryWindowRead(m platform.Member, app, name, of, version string, window platform.Query, now time.Time) (RecordPage, *platform.Error) {
-	declared := objects.DeclaredQuery(t.Definitions(m), app, name, version)
+	declared := objects.DeclaredQuery(t.Definitions(m), app, name, version, PublicationResolver())
 	if declared == nil {
 		return RecordPage{}, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
 	}

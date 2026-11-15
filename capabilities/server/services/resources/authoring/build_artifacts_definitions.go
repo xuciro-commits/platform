@@ -54,7 +54,7 @@ func (b *Build) DefinitionDescriptor(asset platform.ReleaseAsset) (platform.Defi
 		return definition, err
 	}
 	if definition.Provides == nil {
-		descriptor, err := releasepub.DescribeAsset(asset)
+		descriptor, err := b.resolver.DescribeAsset(asset)
 		if err != nil {
 			return definition, err
 		}
@@ -272,7 +272,7 @@ func definitionDeclarations[T interface{ Definition() D }, D any](installed map[
 	return out
 }
 
-func retainedDefinitionAsset[D any](source, prefix, label string, kind platform.AssetKind, name, versionText string, lookup func(string, int) (D, int, bool)) (platform.ReleaseAsset, error) {
+func retainedDefinitionAsset[D any](resolver releasepub.Resolver, source, prefix, label string, kind platform.AssetKind, name, versionText string, lookup func(string, int) (D, int, bool)) (platform.ReleaseAsset, error) {
 	ordinalText, found := strings.CutPrefix(versionText, source+"."+prefix+"-")
 	version, err := strconv.Atoi(ordinalText)
 	if !found || err != nil || strconv.Itoa(version) != ordinalText {
@@ -282,10 +282,10 @@ func retainedDefinitionAsset[D any](source, prefix, label string, kind platform.
 	if !ok || ordinal != version || version < 1 {
 		return platform.ReleaseAsset{}, fmt.Errorf("%s %s version %d is not retained", kind, name, version)
 	}
-	return definitionReleaseAsset(platform.AssetRef{App: ID, Kind: kind, Name: name}, versionText, definition)
+	return definitionReleaseAsset(resolver, platform.AssetRef{App: ID, Kind: kind, Name: name}, versionText, definition)
 }
 
-func definitionReleaseAsset(ref platform.AssetRef, version string, definition any) (platform.ReleaseAsset, error) {
+func definitionReleaseAsset(resolver releasepub.Resolver, ref platform.AssetRef, version string, definition any) (platform.ReleaseAsset, error) {
 	body, err := json.Marshal(definition)
 	if err != nil {
 		return platform.ReleaseAsset{}, err
@@ -296,13 +296,13 @@ func definitionReleaseAsset(ref platform.AssetRef, version string, definition an
 	} else if query, ok := any(definition).(platform.NamedQuery); ok {
 		contract = query.ContractVersion()
 	}
-	return releasepub.WithDependencies(platform.ReleaseAsset{Ref: ref, ContractVersion: contract, SourceVersion: version, Body: body})
+	return resolver.WithDependencies(platform.ReleaseAsset{Ref: ref, ContractVersion: contract, SourceVersion: version, Body: body})
 }
 
 func (b *Build) definitionAssetVersion(asset platform.ReleaseAsset, kind platform.AssetKind, prefix string) int {
 	ordinal, ok := strings.CutPrefix(asset.SourceVersion, b.Manifest().Version+"."+prefix+"-")
 	version, err := strconv.Atoi(ordinal)
-	if !ok || err != nil || version < 1 || version > 64 || strconv.Itoa(version) != ordinal || asset.Ref.App != ID || asset.Ref.Kind != kind || releasepub.CheckAssetDependencies(asset) != nil {
+	if !ok || err != nil || version < 1 || version > 64 || strconv.Itoa(version) != ordinal || asset.Ref.App != ID || asset.Ref.Kind != kind || b.resolver.CheckAssetDependencies(asset) != nil {
 		return 0
 	}
 	return version
@@ -337,7 +337,7 @@ func prepareDefinitionPublications[T any](b *Build, assets []platform.ReleaseAss
 			same := err == nil
 			if same {
 				if kind == platform.AssetFunction {
-					same = dataowner.EqualAsset(prior, asset)
+					same = b.data.EqualAsset(prior, asset)
 				} else {
 					var retained, candidate any
 					same = json.Unmarshal(prior.Body, &retained) == nil && json.Unmarshal(asset.Body, &candidate) == nil && reflect.DeepEqual(retained, candidate)

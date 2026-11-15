@@ -11,7 +11,6 @@ import (
 	"platformserver/platform"
 	pageowner "platformserver/services/apps/pages"
 	ontology "platformserver/services/ontology"
-	"platformserver/services/resources/publication"
 )
 
 const (
@@ -250,7 +249,7 @@ func ProjectApplication(registered platform.Definition, projection ApplicationPr
 		if q.Query != nil {
 			for _, d := range visible {
 				if d.Ref == q.Query.Ref {
-					named = publication.QuerySourceVersion(d, q.Query.SourceVersion)
+					named = pageowner.PublicationResolver().QuerySourceVersion(d, q.Query.SourceVersion)
 					break
 				}
 			}

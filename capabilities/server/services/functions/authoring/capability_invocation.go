@@ -138,7 +138,7 @@ func QueryEntity(entities []platform.EntityInfo, object string) platform.EntityI
 	return platform.EntityInfo{}
 }
 
-func MemberQueryVersion(definitions []platform.Definition, appVersion string, ref platform.AssetRef, version int) (platform.NamedQuery, string, bool) {
+func MemberQueryVersion(definitions []platform.Definition, appVersion string, ref platform.AssetRef, version int, resolver publication.Resolver) (platform.NamedQuery, string, bool) {
 	if ref.Kind != platform.AssetQuery || version < 0 || version > 64 {
 		return platform.NamedQuery{}, "", false
 	}
@@ -156,7 +156,7 @@ func MemberQueryVersion(definitions []platform.Definition, appVersion string, re
 			break
 		}
 		source := appVersion + ".query-" + strconv.Itoa(version)
-		if selected := publication.QueryVersion(d, source); selected != nil {
+		if selected := resolver.QueryVersion(d, source); selected != nil {
 			return *selected.Query, source, true
 		}
 		break
@@ -257,16 +257,17 @@ func AIAnswer(id, state, output, reason string) platform.OperationResult {
 }
 
 type Closures struct {
+	Resolver publication.Resolver
 	Assets   func() ([]platform.ReleaseAsset, error)
 	Describe func(platform.ReleaseAsset) (platform.ReleaseAsset, error)
 	Retain   func(candidate platform.ReleaseCandidate, ref platform.AssetRef, sourceVersion string, retained *string) (platform.ReleaseCandidate, string, error)
 	Version  func(app string) string
 }
 
-func NewClosures(assets func() ([]platform.ReleaseAsset, error), describe func(platform.ReleaseAsset) (platform.ReleaseAsset, error),
+func NewClosures(resolver publication.Resolver, assets func() ([]platform.ReleaseAsset, error), describe func(platform.ReleaseAsset) (platform.ReleaseAsset, error),
 	retain func(platform.ReleaseCandidate, platform.AssetRef, string, *string) (platform.ReleaseCandidate, string, error),
 	version func(string) string) Closures {
-	return Closures{Assets: assets, Describe: describe, Retain: retain, Version: version}
+	return Closures{Resolver: resolver, Assets: assets, Describe: describe, Retain: retain, Version: version}
 }
 
 func (c Closures) capability(ref platform.AssetRef, body json.RawMessage, sourceVersion string, retained *string) (platform.ReleaseCandidate, string, error) {
@@ -286,7 +287,7 @@ func (c Closures) capability(ref platform.AssetRef, body json.RawMessage, source
 	if err != nil {
 		return platform.ReleaseCandidate{}, "", err
 	}
-	candidate, err := publication.Candidate([]platform.AssetRef{ref}, available)
+	candidate, err := c.Resolver.Candidate([]platform.AssetRef{ref}, available)
 	if err != nil {
 		return platform.ReleaseCandidate{}, "", err
 	}

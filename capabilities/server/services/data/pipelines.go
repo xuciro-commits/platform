@@ -304,7 +304,7 @@ func (o *Owner) SubmitPipelineRan(ledger platform.Authority, c platform.Caller, 
 				return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Integration execution changed before its result was accepted")
 			}
 		} else {
-			equivalent, versionErr := retainedExecutionEquivalent(p, payload.Run.DefinitionVersion)
+			equivalent, versionErr := o.retainedExecutionEquivalent(p, payload.Run.DefinitionVersion)
 			if versionErr != nil || !equivalent {
 				return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Integration definition changed before its result was accepted")
 			}

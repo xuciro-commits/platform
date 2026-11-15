@@ -3,7 +3,6 @@ package data
 import (
 	"encoding/json"
 	"fmt"
-	releasepub "platformserver/services/resources/publication"
 	"reflect"
 	"slices"
 	"strconv"
@@ -200,10 +199,10 @@ func (o *Owner) integrationAsset(kind platform.AssetKind, record any, ordinal in
 		return asset, err
 	}
 	asset.Body = raw
-	return releasepub.WithDependencies(asset)
+	return o.resolver.WithDependencies(asset)
 }
 
-func integrationCandidateAsset(asset platform.ReleaseAsset) (platform.ReleaseAsset, error) {
+func (o *Owner) integrationCandidateAsset(asset platform.ReleaseAsset) (platform.ReleaseAsset, error) {
 	if asset.Provides != nil {
 		return asset, nil
 	}
@@ -292,7 +291,7 @@ func integrationCandidateAsset(asset platform.ReleaseAsset) (platform.ReleaseAss
 	}
 	projected := asset
 	projected.Body = body
-	projected, err = releasepub.WithDependencies(projected)
+	projected, err = o.resolver.WithDependencies(projected)
 	if err != nil {
 		return asset, err
 	}
@@ -301,7 +300,7 @@ func integrationCandidateAsset(asset platform.ReleaseAsset) (platform.ReleaseAss
 	if !slices.Equal(requires, projected.Requires) {
 		return asset, fmt.Errorf("retained integration %s references differ from its original closure", asset.Ref)
 	}
-	if err := ValueValidateIntegrationDescriptor(projected); err != nil {
+	if err := o.validateIntegrationDescriptor(projected); err != nil {
 		return asset, err
 	}
 	return projected, nil
@@ -322,7 +321,7 @@ func (o *Owner) Assets() ([]platform.ReleaseAsset, error) {
 				if err := ValueDecodeIntegration([]byte(published), &asset); err != nil {
 					return nil, err
 				}
-				asset, err = integrationCandidateAsset(asset)
+				asset, err = o.integrationCandidateAsset(asset)
 				if err != nil {
 					return nil, err
 				}
@@ -464,7 +463,7 @@ func (o *Owner) integrationConfiguration(asset platform.ReleaseAsset) (any, erro
 	if _, err := ValueIntegrationOrdinal(asset); err != nil {
 		return nil, err
 	}
-	if err := ValueValidateIntegrationDependencies(asset); err != nil {
+	if err := o.validateIntegrationDependencies(asset); err != nil {
 		return nil, err
 	}
 	var record any
@@ -483,7 +482,7 @@ func (o *Owner) integrationConfiguration(asset platform.ReleaseAsset) (any, erro
 		if err := ValueDecodeIntegration(asset.Body, &d); err != nil {
 			return nil, err
 		}
-		if err := ValueValidateIntegrationDescriptor(asset); err != nil {
+		if err := o.validateIntegrationDescriptor(asset); err != nil {
 			return nil, err
 		}
 		record = Listener{Name: d.Name, Title: d.Title, Connector: d.Connector, Path: d.Path, Secret: d.Secret}

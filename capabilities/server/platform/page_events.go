@@ -66,7 +66,7 @@ func (b PageEventBinding) Reads() []string {
 	return ids
 }
 
-func (p Page) checkEvents() error {
+func (p Page) CheckEvents() error {
 	d := p.InputSchema
 	events := []PageEventBinding{}
 	overlays := map[string]PageScope{}
@@ -93,7 +93,7 @@ func (p Page) checkEvents() error {
 	for id, overlay := range overlays {
 		variable := d.Variables[overlay.Bindings["openVariable"]]
 		var initial bool
-		if !pageNodeID.MatchString(id) || !pageNodeID.MatchString(overlay.Bindings["root"]) || variable.Mode != "state" || variable.Type != "boolean" || json.Unmarshal(variable.Initial, &initial) != nil || initial || open[overlay.Bindings["openVariable"]] {
+		if !PageNodeID.MatchString(id) || !PageNodeID.MatchString(overlay.Bindings["root"]) || variable.Mode != "state" || variable.Type != "boolean" || json.Unmarshal(variable.Initial, &initial) != nil || initial || open[overlay.Bindings["openVariable"]] {
 			return fmt.Errorf("page overlay %s needs a separate root, title, supported kind and unique boolean state initialized false", id)
 		}
 		open[overlay.Bindings["openVariable"]] = true
@@ -140,11 +140,11 @@ func (p Page) checkEvents() error {
 				if v := d.Variables[a.RecordVariable]; a.RecordVariable != "" && v.Type != "record" {
 					return fmt.Errorf("page action effect %s needs a record variable", event.Source)
 				}
-				if len(a.Inputs) > 0 && !PageUIProfileSupports(d.profileVersion(), "platform.page.v2.108") || len(a.Inputs) > pageWidgets.Runtime.Interface.MaxPorts {
+				if len(a.Inputs) > 0 && !PageUIProfileSupports(d.profileVersion(), "platform.page.v2.108") || len(a.Inputs) > PageWidgets.Runtime.Interface.MaxPorts {
 					return fmt.Errorf("page action effect %s inputs need UI profile v2.108 and a bounded count", event.Source)
 				}
 				for parameter, arg := range a.Inputs {
-					if !pageNodeID.MatchString(parameter) || (arg.Variable != "") == (len(arg.Literal) != 0) || arg.Variable != "" && d.Variables[arg.Variable].Type == "" || arg.Variable == "" && pageLiteralType(arg.Literal) == "" {
+					if !PageNodeID.MatchString(parameter) || (arg.Variable != "") == (len(arg.Literal) != 0) || arg.Variable != "" && d.Variables[arg.Variable].Type == "" || arg.Variable == "" && pageLiteralType(arg.Literal) == "" {
 						return fmt.Errorf("page action effect %s input %s is invalid", event.Source, parameter)
 					}
 				}
@@ -164,7 +164,7 @@ func (p Page) checkEvents() error {
 	return nil
 }
 
-func (d PageInputSchema) checkInterface() error {
+func (d PageInputSchema) CheckInterface() error {
 	if d.Interface == nil {
 		for id, v := range d.Variables {
 			if v.Mode == "input" {
@@ -173,7 +173,7 @@ func (d PageInputSchema) checkInterface() error {
 		}
 		return nil
 	}
-	i, c := d.Interface, pageWidgets.Runtime.Interface
+	i, c := d.Interface, PageWidgets.Runtime.Interface
 	if !PageUIProfileSupports(d.profileVersion(), "platform.page.v2.6") || i.Version < 1 || i.Version > c.MaxVersion || len(i.Inputs) > c.MaxPorts || len(i.Outputs) > c.MaxPorts {
 		return fmt.Errorf("page interface needs v2.6, a version and bounded ports")
 	}
@@ -181,7 +181,7 @@ func (d PageInputSchema) checkInterface() error {
 	for _, ports := range []map[string]PagePort{i.Inputs, i.Outputs} {
 		for id, p := range ports {
 			v, ok := d.Variables[p.Variable]
-			if !pageNodeID.MatchString(id) || !ok || v.Scope != "page" || v.Type != p.Type || !slices.Contains(c.ValueTypes, p.Type) || (p.Type == "record" || p.Type == "object-set") && (p.Object == nil || p.Object.Check() != nil || p.Object.Kind != AssetObject) || p.Type != "record" && p.Type != "object-set" && p.Object != nil {
+			if !PageNodeID.MatchString(id) || !ok || v.Scope != "page" || v.Type != p.Type || !slices.Contains(c.ValueTypes, p.Type) || (p.Type == "record" || p.Type == "object-set") && (p.Object == nil || p.Object.Check() != nil || p.Object.Kind != AssetObject) || p.Type != "record" && p.Type != "object-set" && p.Object != nil {
 				return fmt.Errorf("page port %s needs a typed page variable and record object", id)
 			}
 		}
@@ -283,7 +283,7 @@ func (p Page) CheckRecordPorts() error {
 	}
 	selections := map[string]AssetRef{}
 	for _, selection := range safe.InputSchema.Selections {
-		if !pageNodeID.MatchString(selection.Name) || selections[selection.Name].Name != "" || selection.Object.Check() != nil {
+		if !PageNodeID.MatchString(selection.Name) || selections[selection.Name].Name != "" || selection.Object.Check() != nil {
 			return fmt.Errorf("page selections need unique typed record names")
 		}
 		selections[selection.Name] = selection.Object
@@ -342,12 +342,12 @@ func (d PageInputSchema) checkNavigationEffect(effect PageEffect) error {
 		return nil
 	}
 	n := effect.Navigate
-	c := pageWidgets.Runtime.Interface
+	c := PageWidgets.Runtime.Interface
 	if n == nil || n.Page.Check() != nil || n.Page.Kind != AssetPage || n.InterfaceVersion < 0 || n.InterfaceVersion > c.MaxVersion || len(n.Inputs) > c.MaxPorts || len(n.Results) > c.MaxPorts {
 		return fmt.Errorf("page navigation needs a page and bounded interface bindings")
 	}
 	for id, arg := range n.Inputs {
-		if !pageNodeID.MatchString(id) || (arg.Variable != "") == (len(arg.Literal) != 0) || arg.Variable != "" && d.Variables[arg.Variable].Type == "" || arg.Variable == "" && pageLiteralType(arg.Literal) == "" {
+		if !PageNodeID.MatchString(id) || (arg.Variable != "") == (len(arg.Literal) != 0) || arg.Variable != "" && d.Variables[arg.Variable].Type == "" || arg.Variable == "" && pageLiteralType(arg.Literal) == "" {
 			return fmt.Errorf("page navigation input %s is invalid", id)
 		}
 	}

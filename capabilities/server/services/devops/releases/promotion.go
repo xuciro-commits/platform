@@ -8,8 +8,9 @@ import (
 	"io"
 	"platformserver/kernel/acceptedformat"
 	"platformserver/platform"
+	pageowner "platformserver/services/apps/pages"
 	"platformserver/services/resources/authoring"
-	releasepub "platformserver/services/resources/publication"
+
 	"slices"
 	"time"
 )
@@ -134,7 +135,7 @@ func PlanPromotion(from, to, candidateID, key string, activate bool, member plat
 	if err != nil {
 		return PromotionPlan{}, err
 	}
-	candidate, err := releasepub.ReadCandidate(candidateID, raw)
+	candidate, err := pageowner.PublicationResolver().ReadCandidate(candidateID, raw)
 	if err != nil {
 		return PromotionPlan{}, err
 	}

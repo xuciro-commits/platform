@@ -282,7 +282,7 @@ type CodeDeclarations struct {
 	NativeExecutors map[string]bool
 }
 
-func (c CodeDeclarations) Check() error {
+func (c CodeDeclarations) Check(checkPage func(platform.Page) error) error {
 	objects := map[string]platform.AssetRef{}
 	infos := map[string]platform.EntityInfo{}
 	for _, info := range c.Entities {
@@ -333,7 +333,7 @@ func (c CodeDeclarations) Check() error {
 	for _, m := range c.Manifests {
 		for _, page := range m.Pages {
 			ref := platform.AssetRef{App: m.ID, Kind: platform.AssetPage, Name: page.Name}
-			if err := page.CheckSafety(); err != nil {
+			if err := checkPage(page); err != nil {
 				return fmt.Errorf("asset %s: %w", ref, err)
 			}
 			if page.Object.Kind != platform.AssetObject || objects[page.Object.Name] != page.Object {

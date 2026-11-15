@@ -6,7 +6,7 @@ import (
 	"regexp"
 )
 
-var pageNodeID = regexp.MustCompile(`^[A-Za-z][A-Za-z0-9._:-]{0,79}$`)
+var PageNodeID = regexp.MustCompile(`^[A-Za-z][A-Za-z0-9._:-]{0,79}$`)
 
 func (e PageEmbedding) Navigation() PageNavigation {
 	return PageNavigation{Page: e.Page.Ref, InterfaceVersion: e.InterfaceVersion, Inputs: e.Inputs, Results: e.Results}
@@ -41,7 +41,7 @@ func CheckPageEmbeddingGraph(root AssetRef, lookup map[AssetRef]ReleaseAsset) er
 	instances, queries, records, sections := 0, 0, 0, 0
 	var visit func(AssetRef, int) error
 	visit = func(ref AssetRef, depth int) error {
-		if depth > pageWidgets.Runtime.Embedding.MaxDepth || active[ref] {
+		if depth > PageWidgets.Runtime.Embedding.MaxDepth || active[ref] {
 			return fmt.Errorf("embedded page cycle or depth budget exceeded")
 		}
 		asset, ok := lookup[ref]
@@ -62,7 +62,7 @@ func CheckPageEmbeddingGraph(root AssetRef, lookup map[AssetRef]ReleaseAsset) er
 			}
 		}
 		sections += len(safe.DataBindings)
-		if instances > pageWidgets.Runtime.Embedding.MaxInstances || sections > pageWidgets.Runtime.Embedding.MaxSections {
+		if instances > PageWidgets.Runtime.Embedding.MaxInstances || sections > PageWidgets.Runtime.Embedding.MaxSections {
 			return fmt.Errorf("embedded page instance budget exceeded")
 		}
 		if len(safe.InputSchema.Queries) > 0 {
@@ -83,7 +83,7 @@ func CheckPageEmbeddingGraph(root AssetRef, lookup map[AssetRef]ReleaseAsset) er
 				records += q.Limit * factor
 			}
 		}
-		if queries > pageWidgets.Runtime.Embedding.MaxQueries || records > pageWidgets.Runtime.Embedding.MaxRecords {
+		if queries > PageWidgets.Runtime.Embedding.MaxQueries || records > PageWidgets.Runtime.Embedding.MaxRecords {
 			return fmt.Errorf("embedded page read budget exceeded")
 		}
 		active[ref] = true

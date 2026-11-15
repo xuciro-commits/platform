@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"maps"
+	pageowner "platformserver/services/apps/pages"
 	"reflect"
 	"slices"
 	"strings"
@@ -22,15 +23,15 @@ func Descriptor(p Page, app, version string) platform.Page {
 }
 
 func (o *Owner) PageAsset(p Page, sourceVersion string) (platform.ReleaseAsset, error) {
-	return publication.PageReleaseAsset(o.env.AppID(), sourceVersion, Descriptor(p, o.env.AppID(), o.env.Version()))
+	return pageowner.PublicationResolver().PageReleaseAsset(o.env.AppID(), sourceVersion, Descriptor(p, o.env.AppID(), o.env.Version()))
 }
 
 func (o *Owner) PageAssetFromView(p platform.Page, sourceVersion string) (platform.ReleaseAsset, error) {
-	return publication.PageReleaseAsset(o.env.AppID(), sourceVersion, p)
+	return pageowner.PublicationResolver().PageReleaseAsset(o.env.AppID(), sourceVersion, p)
 }
 
 func (o *Owner) ObjectPageAsset(object ontology.Object, sourceVersion string) (platform.ReleaseAsset, error) {
-	return publication.PageReleaseAsset(o.env.AppID(), sourceVersion, CompileObjectPage(object, o.env.AppID()))
+	return pageowner.PublicationResolver().PageReleaseAsset(o.env.AppID(), sourceVersion, CompileObjectPage(object, o.env.AppID()))
 }
 
 func (o *Owner) PublishedPage(p Page) string {
@@ -52,7 +53,7 @@ func (o *Owner) RetainPagePublication(p *Page) error {
 			return fmt.Errorf("invalid original page publication history")
 		}
 		view := Descriptor(saved, o.env.AppID(), o.env.Version())
-		if _, err := publication.PageReleaseAsset(o.env.AppID(), "", view); err != nil {
+		if _, err := pageowner.PublicationResolver().PageReleaseAsset(o.env.AppID(), "", view); err != nil {
 			return err
 		}
 		version, err := platform.PageContentVersion(view)
@@ -204,7 +205,7 @@ func (o *Owner) generatedReleasePage(page platform.ReleaseAsset, assets []platfo
 		if o.env.AppID()+"."+object.Name != page.Ref.Name {
 			continue
 		}
-		generated, err := publication.PageReleaseAsset(o.env.AppID(), o.env.Version(), CompileObjectPage(object, o.env.AppID()))
+		generated, err := pageowner.PublicationResolver().PageReleaseAsset(o.env.AppID(), o.env.Version(), CompileObjectPage(object, o.env.AppID()))
 		if err != nil {
 			return false, err
 		}

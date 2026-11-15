@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"maps"
+	pageowner "platformserver/services/apps/pages"
 	"slices"
 
 	"platformserver/platform"
@@ -44,7 +45,7 @@ func (r *Store) RememberRequest(key, hash string) {
 func (r *Store) Raw(id string) json.RawMessage { return r.candidates[id] }
 
 func (r *Store) Candidate(id string) (platform.ReleaseCandidate, error) {
-	return publication.ReadCandidate(id, r.candidates[id])
+	return pageowner.PublicationResolver().ReadCandidate(id, r.candidates[id])
 }
 
 func (r *Store) Ids() []string {
@@ -291,7 +292,7 @@ func ValidateCodeAsset(asset platform.ReleaseAsset, app func(string) platform.Ap
 }
 
 func NewRegistry(apps []platform.App, codeAssets func(platform.App) ([]platform.ReleaseAsset, error), nativeFlow func(platform.App, platform.AssetRef, string) (platform.ReleaseAsset, error)) (*publication.AssetRegistry, error) {
-	registry, err := publication.NewAssetRegistry()
+	registry, err := pageowner.PublicationResolver().NewAssetRegistry()
 	if err != nil {
 		return nil, err
 	}

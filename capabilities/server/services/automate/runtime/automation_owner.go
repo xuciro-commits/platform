@@ -7,6 +7,7 @@ import (
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformserver/platform"
 	actioncatalog "platformserver/services/actions/catalog"
+	"platformserver/services/resources/publication"
 	"slices"
 	"strings"
 	"sync"
@@ -49,6 +50,7 @@ type flowDef struct {
 }
 
 type Flows struct {
+	resolver     publication.Resolver
 	mu           sync.Mutex
 	host         platform.FlowHost
 	ledger       platform.Authority
@@ -83,7 +85,7 @@ func (f *Flows) version(c platform.Caller, flow string) (*flowDef, *platform.Err
 
 func (f *Flows) AttachFlow(h platform.FlowHost) { f.host = h }
 
-func New(tenant string, authorities platform.Authorities) *Flows {
+func New(tenant string, authorities platform.Authorities, resolver publication.Resolver) *Flows {
 	admin := []string{Admin}
 	var actions []platform.Action
 	for _, e := range flowEntities() {
@@ -113,7 +115,7 @@ func New(tenant string, authorities platform.Authorities) *Flows {
 			Description: "Move a running instance to its flow's next version, as that version's mapping says."},
 		platform.Action{Schema: SchemaFlowArtifactCleanup, Target: InstanceType, Capability: "flows", Title: "Retire superseded Flow artifacts", Payload: []platform.Field{{Name: "digest", Type: "text", Required: true}}, Automation: true,
 			Description: "Acknowledge host deletion of already-superseded frame and checkpoint artifacts."})
-	return &Flows{authorities: authorities, ledger: authorities(tenant, ID, platform.NewCatalog(actions...), InstanceType, "flow.output", "flow.dead-letter"), defs: map[string][]*flowDef{}}
+	return &Flows{resolver: resolver, authorities: authorities, ledger: authorities(tenant, ID, platform.NewCatalog(actions...), InstanceType, "flow.output", "flow.dead-letter"), defs: map[string][]*flowDef{}}
 }
 
 func flowEntities() []platform.Entity {
@@ -282,8 +284,10 @@ func (f *Flows) Fork(ledger platform.Authority) (platform.App, error) {
 	for id, versions := range defs {
 		defs[id] = slices.Clone(versions)
 	}
-	return &Flows{host: f.host, ledger: ledger, authorities: f.authorities, defs: defs,
+	return &Flows{host: f.host, ledger: ledger, authorities: f.authorities, resolver: f.resolver, defs: defs,
 		chosen: maps.Clone(f.chosen), pins: maps.Clone(f.pins)}, nil
 }
 
-func (a *Flows) NewSimulationApp(tenant string) platform.App { return New(tenant, a.authorities) }
+func (a *Flows) NewSimulationApp(tenant string) platform.App {
+	return New(tenant, a.authorities, a.resolver)
+}

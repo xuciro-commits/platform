@@ -9,7 +9,8 @@ import (
 	"io"
 	"net/http"
 	"net/url"
-	releasepub "platformserver/services/resources/publication"
+	pageowner "platformserver/services/apps/pages"
+
 	"slices"
 	"strings"
 	"time"
@@ -93,7 +94,7 @@ func Preparation(id, version string, blueprint platform.PackageBlueprint, instal
 		if root.Kind != platform.AssetApp {
 			continue
 		}
-		artifact, err := releasepub.ArtifactOfApplication(root, candidate.Assets)
+		artifact, err := pageowner.PublicationResolver().ArtifactOfApplication(root, candidate.Assets)
 		if err != nil {
 			return PackagePreparation{}, err
 		}
@@ -225,7 +226,7 @@ func Inspect(ctx context.Context, tenant string, request platform.PackageInspect
 	if err != nil {
 		return preview, err
 	}
-	if err := packagedesc.Validate(descriptor, releasepub.WithDependencies); err != nil {
+	if err := packagedesc.Validate(descriptor, pageowner.PublicationResolver().WithDependencies); err != nil {
 		return preview, err
 	}
 	precheck, err := check(ctx, descriptor)

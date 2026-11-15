@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"platformserver/services/ontology"
-	releasepub "platformserver/services/resources/publication"
+
 	"slices"
 	"strings"
 	"time"
@@ -225,7 +225,7 @@ func (b *Build) bindConfirmationAssets(assets []platform.ReleaseAsset) ([]platfo
 		if err != nil {
 			return nil, err
 		}
-		assets[i], err = releasepub.WithDependencies(asset)
+		assets[i], err = b.resolver.WithDependencies(asset)
 		if err != nil {
 			return nil, err
 		}
@@ -312,7 +312,7 @@ func (b *Build) openConfirmation(c platform.Caller, r *pb.ChangeRecord, txn *pla
 			if err != nil {
 				return nil, 0, err
 			}
-			req, err := w.Request(conn, r.GetSubmission().GetTarget().GetId(), run.Input)
+			req, err := b.data.PrepareWritebackRequest(w, conn, r.GetSubmission().GetTarget().GetId(), run.Input)
 			if err != nil {
 				return nil, 0, err
 			}

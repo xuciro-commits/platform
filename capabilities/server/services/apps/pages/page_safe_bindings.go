@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"maps"
 	"platformserver/platform"
-	"platformserver/services/resources/publication"
 	"regexp"
 	"slices"
 	"strings"
@@ -105,7 +104,7 @@ func (projection DefinitionProjection) Page(def platform.Definition) (platform.D
 				if definition.Ref != binding.Query.Ref {
 					continue
 				}
-				selected := publication.QuerySourceVersion(definition, binding.Query.SourceVersion)
+				selected := PublicationResolver().QuerySourceVersion(definition, binding.Query.SourceVersion)
 				if selected == nil {
 					continue
 				}
@@ -225,7 +224,7 @@ func (projection DefinitionProjection) Page(def platform.Definition) (platform.D
 			found := false
 			for _, definition := range projection.Definitions {
 				if definition.Ref == query.Query.Ref {
-					if selected := publication.QuerySourceVersion(definition, query.Query.SourceVersion); selected != nil && selected.Query != nil {
+					if selected := PublicationResolver().QuerySourceVersion(definition, query.Query.SourceVersion); selected != nil && selected.Query != nil {
 						found = projection.CheckQuery(*selected.Query, info) == nil
 					}
 				}
