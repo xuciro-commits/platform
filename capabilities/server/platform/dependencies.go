@@ -64,7 +64,7 @@ func (a AgentReleaseDescriptor) Dependencies(owner string) []AssetRef {
 		}
 		refs = append(refs, AssetRef{App: owner, Kind: AssetAction, Name: tool})
 	}
-	slices.SortFunc(refs, compareRef)
+	slices.SortFunc(refs, CompareAssetRef)
 	return slices.Compact(refs)
 }
 

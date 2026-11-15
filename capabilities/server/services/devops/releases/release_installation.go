@@ -10,6 +10,7 @@ import (
 	"platformserver/kernel/records"
 	"platformserver/platform"
 	"platformserver/services/resources/authoring"
+	"platformserver/services/resources/publication"
 	"slices"
 )
 
@@ -99,7 +100,7 @@ func CompatibleStoredRemoval(old, next platform.EntityInfo) bool {
 
 type ReleaseExtensionReview = platform.PackageImpactExtension
 
-func InstallationPlan(registry *platform.AssetRegistry, installation platform.ReleaseInstallation) (platform.AssetInstallation, error) {
+func InstallationPlan(registry *publication.AssetRegistry, installation platform.ReleaseInstallation) (platform.AssetInstallation, error) {
 	app := build.ID
 	if installation.Ref != nil {
 		app = installation.Ref.App
@@ -366,7 +367,7 @@ func PrepareLifecycle(runtime InstallationRuntime, candidate platform.ReleaseCan
 
 type InstallationRuntime interface {
 	HasAgentRuntime() bool
-	Registry() (*platform.AssetRegistry, error)
+	Registry() (*publication.AssetRegistry, error)
 	Bootstrap(platform.ReleaseCandidate, platform.AssetReleaseContext, bool) (InstallationRuntime, json.RawMessage, error)
 	Predecessor(string) (string, error)
 	Stage([]platform.ReleaseInstallation, bool) (InstallationRuntime, error)
@@ -477,7 +478,7 @@ type ValidationContext struct {
 	Navigation  func(platform.Page, string) error
 }
 
-func StageInstallations(registry *platform.AssetRegistry, installations []platform.ReleaseInstallation, apply platform.AssetApplyContext, check func(platform.AssetInstallation, platform.ReleaseInstallation) error, record func(platform.AssetInstallation) error) error {
+func StageInstallations(registry *publication.AssetRegistry, installations []platform.ReleaseInstallation, apply platform.AssetApplyContext, check func(platform.AssetInstallation, platform.ReleaseInstallation) error, record func(platform.AssetInstallation) error) error {
 	for _, installation := range installations {
 		plan, err := InstallationPlan(registry, installation)
 		if err != nil {
@@ -496,7 +497,7 @@ func StageInstallations(registry *platform.AssetRegistry, installations []platfo
 	return nil
 }
 
-func StageReleaseInstallation(registry *platform.AssetRegistry, installations []platform.ReleaseInstallation, projection *records.Store,
+func StageReleaseInstallation(registry *publication.AssetRegistry, installations []platform.ReleaseInstallation, projection *records.Store,
 	apply platform.AssetApplyContext, register func(platform.AssetInstallation) error) error {
 	for _, installation := range installations {
 		plan, err := InstallationPlan(registry, installation)

@@ -10,6 +10,7 @@ import (
 	"platformserver/services/devops/packages"
 	releaseowner "platformserver/services/devops/releases"
 	"platformserver/services/resources/authoring"
+	"platformserver/services/resources/publication"
 )
 
 func (h hostView) PrepareManagedPackage(c platform.Caller, descriptor platform.PackageDescriptor, available []platform.ReleaseAsset, archive, upgrade, downgrade bool) (func(*pb.ChangeRecord), *platform.Error) {
@@ -30,7 +31,7 @@ func (h hostView) PrepareManagedPackage(c platform.Caller, descriptor platform.P
 			_, _, err := h.t.bootstrapOwnerDraftsLockedWithArchived(candidate, context, false, nil, true, d)
 			return err
 		},
-		Registry:        func() (*platform.AssetRegistry, error) { return d.tenant.assetRegistryLocked() },
+		Registry:        func() (*publication.AssetRegistry, error) { return d.tenant.assetRegistryLocked() },
 		Projection:      h.t.Projection,
 		CheckExtensions: func() error { return d.tenant.checkExtensionSet() },
 		CheckStorage:    func(upgrade, downgrade bool) error { return h.t.validateAssetStorage(d.tenant, upgrade, downgrade) },

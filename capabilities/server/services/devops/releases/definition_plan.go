@@ -41,7 +41,7 @@ func (c *DefinitionPlanCache) Lookup(generation, resources uint64, key Definitio
 	return definition, err
 }
 
-func DecisionDefinition(app, appVersion string, action platform.Action, release string, contract platform.SchemaVersion, registry *platform.AssetRegistry, store Store, retained ...[]platform.ReleaseAsset) (*platform.DecisionDefinition, error) {
+func DecisionDefinition(app, appVersion string, action platform.Action, release string, contract platform.SchemaVersion, registry *publication.AssetRegistry, store Store, retained ...[]platform.ReleaseAsset) (*platform.DecisionDefinition, error) {
 	root := platform.AssetRef{App: app, Kind: platform.AssetAction, Name: action.Schema}
 	out := &platform.DecisionDefinition{
 		Definition:        platform.AssetBinding{Ref: root, SourceVersion: appVersion},

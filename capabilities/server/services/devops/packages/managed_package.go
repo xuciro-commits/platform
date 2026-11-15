@@ -16,6 +16,7 @@ import (
 	"platformserver/platform"
 	dataowner "platformserver/services/data"
 	build "platformserver/services/resources/authoring"
+	"platformserver/services/resources/publication"
 )
 
 type ManagedRows struct {
@@ -44,7 +45,7 @@ type ManagedPreparation struct {
 	Code       func() ([]platform.ReleaseAsset, error)
 	Impact     func(string, []platform.ReleaseAsset) (platform.PackageLifecycleImpact, error)
 	Bootstrap  func(platform.ReleaseCandidate, platform.AssetReleaseContext) error
-	Registry   func() (*platform.AssetRegistry, error)
+	Registry   func() (*publication.AssetRegistry, error)
 	Projection *records.Store
 
 	CheckExtensions func() error

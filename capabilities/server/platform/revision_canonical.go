@@ -11,7 +11,7 @@ import (
 	"strings"
 )
 
-func canonicalBody(raw []byte) ([]byte, error) {
+func CanonicalAssetBody(raw []byte) ([]byte, error) {
 	if len(raw) == 0 || len(raw) > 1<<20 {
 		return nil, fmt.Errorf("descriptor is empty or exceeds 1 MiB")
 	}
@@ -116,7 +116,7 @@ func canonicalNumber(number json.Number) (json.Number, error) {
 	return json.Number(strings.TrimSuffix(decimal, ".")), nil
 }
 
-func compareRef(a, b AssetRef) int {
+func CompareAssetRef(a, b AssetRef) int {
 	if a.App != b.App {
 		return compareString(a.App, b.App)
 	}
@@ -164,8 +164,8 @@ func CandidateDiff(before, after ReleaseCandidate) (added, removed, changed []As
 	for ref := range prior {
 		removed = append(removed, ref)
 	}
-	slices.SortFunc(added, compareRef)
-	slices.SortFunc(removed, compareRef)
-	slices.SortFunc(changed, compareRef)
+	slices.SortFunc(added, CompareAssetRef)
+	slices.SortFunc(removed, CompareAssetRef)
+	slices.SortFunc(changed, CompareAssetRef)
 	return added, removed, changed, nil
 }

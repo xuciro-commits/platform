@@ -269,7 +269,7 @@ func PageContentVersion(page Page) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	body, err = canonicalBody(body)
+	body, err = CanonicalAssetBody(body)
 	if err != nil {
 		return "", err
 	}

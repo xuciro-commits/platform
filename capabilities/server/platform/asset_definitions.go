@@ -220,7 +220,7 @@ func (s SampleSet) Dependencies() []AssetRef {
 	for _, group := range s.Samples {
 		refs = append(refs, ModelObject(group.Type))
 	}
-	slices.SortFunc(refs, compareRef)
+	slices.SortFunc(refs, CompareAssetRef)
 	return refs
 }
 
@@ -244,7 +244,7 @@ func (v SchemaVersion) Check() error {
 }
 
 func SchemaContentVersion(body json.RawMessage) (string, error) {
-	canonical, err := canonicalBody(body)
+	canonical, err := CanonicalAssetBody(body)
 	if err != nil {
 		return "", err
 	}

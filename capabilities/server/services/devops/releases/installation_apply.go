@@ -1,8 +1,11 @@
 package releases
 
-import "platformserver/platform"
+import (
+	"platformserver/platform"
+	"platformserver/services/resources/publication"
+)
 
-func ApplyInstallations(registry *platform.AssetRegistry, installations []platform.ReleaseInstallation) error {
+func ApplyInstallations(registry *publication.AssetRegistry, installations []platform.ReleaseInstallation) error {
 	for _, installation := range installations {
 		plan, err := InstallationPlan(registry, installation)
 		if err != nil {

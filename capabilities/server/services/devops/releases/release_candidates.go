@@ -8,6 +8,7 @@ import (
 	"platformserver/platform"
 	"platformserver/services/ontology"
 	"platformserver/services/resources/authoring"
+	"platformserver/services/resources/publication"
 	"slices"
 	"strings"
 	"time"
@@ -740,7 +741,7 @@ func (p Planner) Preview(drafts []build.JointDraftRef, member platform.Member) (
 
 type Planner struct {
 	Definitions []platform.Definition
-	Registry    func() (*platform.AssetRegistry, error)
+	Registry    func() (*publication.AssetRegistry, error)
 	Drafts      build.ConstructionDrafts
 	Validate    func(platform.ReleaseCandidate, platform.Member, time.Time) error
 	withReview  bool

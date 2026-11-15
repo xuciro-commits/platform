@@ -28,7 +28,7 @@ func NewDependencyGraph(descriptors []Dependencies) (*DependencyGraph, error) {
 			return nil, fmt.Errorf("asset %s is declared twice", description.Ref)
 		}
 		description.Requires = slices.Clone(description.Requires)
-		slices.SortFunc(description.Requires, compareRef)
+		slices.SortFunc(description.Requires, CompareAssetRef)
 		for i, ref := range description.Requires {
 			if err := ref.Check(); err != nil {
 				return nil, fmt.Errorf("%s: %w", description.Ref, err)
@@ -57,7 +57,7 @@ func NewDependencyGraph(descriptors []Dependencies) (*DependencyGraph, error) {
 		}
 	}
 	for ref, owners := range graph.usedBy {
-		slices.SortFunc(owners, compareRef)
+		slices.SortFunc(owners, CompareAssetRef)
 		graph.usedBy[ref] = slices.Compact(owners)
 	}
 	return graph, nil
@@ -149,7 +149,7 @@ func (g *DependencyGraph) InstallationOrder() ([]AssetRef, error) {
 	for ref := range g.nodes {
 		roots = append(roots, ref)
 	}
-	slices.SortFunc(roots, compareRef)
+	slices.SortFunc(roots, CompareAssetRef)
 	return g.walk(roots, true)
 }
 
@@ -250,7 +250,7 @@ func (g *DependencyGraph) Reachable(roots []AssetRef) ([]AssetRef, error) {
 	for ref := range seen {
 		out = append(out, ref)
 	}
-	slices.SortFunc(out, compareRef)
+	slices.SortFunc(out, CompareAssetRef)
 	return out, nil
 }
 
@@ -306,7 +306,7 @@ func (g *DependencyGraph) Impact(changed []AssetRef) ([]AssetRef, error) {
 	for ref := range seen {
 		out = append(out, ref)
 	}
-	slices.SortFunc(out, compareRef)
+	slices.SortFunc(out, CompareAssetRef)
 	return out, nil
 }
 

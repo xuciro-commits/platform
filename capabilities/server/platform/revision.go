@@ -142,7 +142,7 @@ func candidate(roots []AssetRef, available []ReleaseAsset, historical bool) (Rel
 		if asset.SourceVersion == "" || asset.ContractVersion <= 0 {
 			return empty, fmt.Errorf("release asset %s has no pinned source or contract", ref)
 		}
-		body, err := canonicalBody(asset.Body)
+		body, err := CanonicalAssetBody(asset.Body)
 		if err != nil {
 			return empty, fmt.Errorf("release asset %s: %w", ref, err)
 		}
@@ -372,7 +372,7 @@ func candidate(roots []AssetRef, available []ReleaseAsset, historical bool) (Rel
 		asset.Body = body
 		closed = append(closed, asset)
 	}
-	slices.SortFunc(closed, func(a, b ReleaseAsset) int { return compareRef(a.Ref, b.Ref) })
+	slices.SortFunc(closed, func(a, b ReleaseAsset) int { return CompareAssetRef(a.Ref, b.Ref) })
 	raw, err := json.Marshal(releaseBytes{Format: 1, Assets: closed})
 	if err != nil {
 		return empty, fmt.Errorf("encode release candidate: %w", err)

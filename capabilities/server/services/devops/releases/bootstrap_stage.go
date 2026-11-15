@@ -7,6 +7,7 @@ import (
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformserver/kernel/records"
 	"platformserver/platform"
+	"platformserver/services/resources/publication"
 )
 
 type BootstrapStage struct {
@@ -15,14 +16,14 @@ type BootstrapStage struct {
 	Context         platform.AssetReleaseContext
 	Request         *OwnerDraftRequest
 	IncludeArchived bool
-	Registry        *platform.AssetRegistry
+	Registry        *publication.AssetRegistry
 	Drafts          []platform.AssetDraft
 	Put             func(app string, receipt *pb.ChangeRecord, value any) *platform.Error
 	Records         *records.Store
 	KeepChanges     func(receipt *pb.ChangeRecord)
 	Register        func(plan platform.AssetInstallation) error
 	Decide          func(info platform.EntityInfo, draft platform.AssetDraft, submission *pb.Submission) (*pb.ChangeRecord, error)
-	Rebind          func(app string) (*platform.AssetRegistry, error)
+	Rebind          func(app string) (*publication.AssetRegistry, error)
 	AttachHosts     func()
 }
 

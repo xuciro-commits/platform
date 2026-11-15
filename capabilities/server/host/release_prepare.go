@@ -13,6 +13,7 @@ import (
 
 	"platformserver/kernel/records"
 	"platformserver/platform"
+	"platformserver/services/resources/publication"
 )
 
 func (t *Tenant) bootstrapOwnerDraftsLockedWithArchived(candidate platform.ReleaseCandidate, context platform.AssetReleaseContext, definitionOnly bool, request *releaseowner.OwnerDraftRequest, includeArchived bool, existing ...*stagedDecision) (*stagedDecision, json.RawMessage, error) {
@@ -83,7 +84,7 @@ func (t *Tenant) bootstrapOwnerDraftsLockedWithArchived(candidate platform.Relea
 			}
 			return answer, nil
 		},
-		Rebind: func(appID string) (*platform.AssetRegistry, error) {
+		Rebind: func(appID string) (*publication.AssetRegistry, error) {
 			private := decision.stateApp(view.App(appID))
 			apps := slices.Clone(view.apps)
 			apps[view.appIndex[appID]] = private
@@ -127,7 +128,7 @@ func (r releaseInstallationRuntime) ReleaseProject(candidate platform.ReleaseCan
 	return releaseowner.ResourceProject(candidate, records.LockedRows[build.Resource](r.t.Projection, build.ResourceType))
 }
 
-func (r releaseInstallationRuntime) Registry() (*platform.AssetRegistry, error) {
+func (r releaseInstallationRuntime) Registry() (*publication.AssetRegistry, error) {
 	return r.t.assetRegistryLocked()
 }
 func (r releaseInstallationRuntime) Bootstrap(candidate platform.ReleaseCandidate, context platform.AssetReleaseContext, definitionOnly bool) (releaseowner.InstallationRuntime, json.RawMessage, error) {

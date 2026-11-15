@@ -10,6 +10,7 @@ import (
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformserver/platform"
 	build "platformserver/services/resources/authoring"
+	"platformserver/services/resources/publication"
 )
 
 func DraftLogicalName(ref platform.AssetRef) string {
@@ -51,7 +52,7 @@ func DraftRefusal(app platform.App, draft platform.AssetDraft, rejected *platfor
 	return fmt.Errorf("create target draft %s/%s: %w", draft.Type, draft.Name, rejected)
 }
 
-func BootstrapDrafts(registry *platform.AssetRegistry, candidate platform.ReleaseCandidate, context platform.AssetReleaseContext, request *OwnerDraftRequest) ([]platform.AssetDraft, error) {
+func BootstrapDrafts(registry *publication.AssetRegistry, candidate platform.ReleaseCandidate, context platform.AssetReleaseContext, request *OwnerDraftRequest) ([]platform.AssetDraft, error) {
 	drafts, err := registry.ReleaseDrafts(candidate.Assets, context)
 	if err != nil {
 		return nil, err

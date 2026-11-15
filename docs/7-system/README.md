@@ -37,7 +37,7 @@ read-when: 新建或移动 Go 包、改动写入或读取路径、接受结果�
 | `kernel/protocol` | 协议接收、账本、身份、连接器与工作项部件 | `platform` |
 | `platform` | 应用 SDK：Manifest、Caller、动作目录契约、页面与应用声明、Expr 与 ObjectSet 接口、授权接口；稳定叶层，不依赖实现 | `expr` |
 | `services/resources` | RID、项目、文件夹、资源生命周期、工作状态、分支、提案 | `platform`、actions/catalog、devops/descriptor、resources/publication、`kernel/records`、`kernel/acceptedformat`、`kernel/protocol` |
-| `services/resources/publication` | 资产依赖、发布版本解析与发布钩子 | `platform` |
+| `services/resources/publication` | 资产生命周期注册表、依赖、发布版本解析与发布钩子 | `platform` |
 | `services/ontology` | 本体元数据与类型检查 | `platform`、resources、`kernel/records`、`kernel/acceptedformat`、`kernel/protocol` |
 | `services/objects` | 对象投影、编辑事实、索引、ObjectSet 执行 | `expr`、`platform`、ontology、resources/publication、`kernel/records`、`kernel/acceptedformat`、`kernel/protocol` |
 | `services/actions` | 动作执行、提交条件、副作用调度 | `platform`、objects、functions、resources/publication、`kernel/records`、`kernel/acceptedformat`、`kernel/protocol` |
@@ -58,7 +58,7 @@ read-when: 新建或移动 Go 包、改动写入或读取路径、接受结果�
 - `contract/go` 只含协议生成代码；错误类型 `Error` 属于 `platform`，协议接收与账本部件在 `kernel/protocol`，`kernel` 装配租户、存储与历史投影。浏览器客户端由 `@platform/api` 单独命名；已有历史映像不随目录整理改名。
 - 租户的提交序列是 `kernel` 的一个类型，只持有车道、日志、已提交状态、记录存储、读取映像、位置与隔离状态。每个服务经同一个拥有者接口（决定、应用、分叉、读取）向它注册自己的状态；`host` 不持有服务状态，也不实现接受路径的任何一步（接受路径散在装配层时，每个调用点都会各自补一遍校验）。
 - 服务可导入 `kernel/records`（记录投影与读取计划）、`kernel/acceptedformat`（接受结果的字节格式）与 `kernel/protocol`（协议接收与账本部件）：它们是 `kernel` 下的叶层数据包，只依赖协议生成代码、`expr`、`platform`，由服务读写自己的接受结果与记录；`kernel` 其余部分与 `host` 不被服务导入，`kernel` 不导入任何服务。
-- `services/resources/publication` 是只依赖 SDK 的共享叶层；其他服务直接复用其中的版本和发布解析，不依赖资源服务的实现。
+- `services/resources/publication` 是只依赖 SDK 的共享叶层；资产生命周期注册、安装映像解码与校验由它实现，拥有者接口和映像类型留在 SDK。其他服务直接复用其中的版本和发布解析，不依赖资源服务的实现。
 - `services/devops/descriptor` 是只依赖 SDK 的产品描述校验叶层，供产品编辑和安装共用。
 - 服务之间的调用面在被调服务的 `api.go` 中声明为接口；装配在 `host` 完成。
 - 产品包中的行业逻辑不进入任何 Go 包。

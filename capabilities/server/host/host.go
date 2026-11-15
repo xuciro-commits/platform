@@ -23,6 +23,7 @@ import (
 	"platformserver/services/functions/runtime"
 	"platformserver/services/resources/authoring"
 	"platformserver/services/resources/monitoring"
+	"platformserver/services/resources/publication"
 	controlowner "platformserver/services/security/control"
 )
 
@@ -164,7 +165,7 @@ func NewTenantWithCapabilities(id string, services platform.RuntimeCapabilities,
 			return nil, fmt.Errorf("tenant %s object %s: %w", id, et.Info().Type, err)
 		}
 	}
-	if _, err := platform.NewAssetRegistry(t.assetOwners(t.OwnerActive)...); err != nil {
+	if _, err := publication.NewAssetRegistry(t.assetOwners(t.OwnerActive)...); err != nil {
 		return nil, fmt.Errorf("tenant %s: %v", id, err)
 	}
 	for _, app := range apps {

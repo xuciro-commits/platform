@@ -137,7 +137,7 @@ func (a Application) Dependencies(owner string) []AssetRef {
 	for _, name := range a.Pages {
 		refs = append(refs, AssetRef{App: owner, Kind: AssetPage, Name: name})
 	}
-	slices.SortFunc(refs, compareRef)
+	slices.SortFunc(refs, CompareAssetRef)
 	return slices.Compact(refs)
 }
 

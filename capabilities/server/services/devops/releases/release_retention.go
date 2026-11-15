@@ -8,6 +8,7 @@ import (
 	"slices"
 
 	"platformserver/platform"
+	"platformserver/services/resources/publication"
 )
 
 type State struct {
@@ -289,8 +290,8 @@ func ValidateCodeAsset(asset platform.ReleaseAsset, app func(string) platform.Ap
 	return nil
 }
 
-func NewRegistry(apps []platform.App, codeAssets func(platform.App) ([]platform.ReleaseAsset, error), nativeFlow func(platform.App, platform.AssetRef, string) (platform.ReleaseAsset, error)) (*platform.AssetRegistry, error) {
-	registry, err := platform.NewAssetRegistry()
+func NewRegistry(apps []platform.App, codeAssets func(platform.App) ([]platform.ReleaseAsset, error), nativeFlow func(platform.App, platform.AssetRef, string) (platform.ReleaseAsset, error)) (*publication.AssetRegistry, error) {
+	registry, err := publication.NewAssetRegistry()
 	if err != nil {
 		return nil, err
 	}
