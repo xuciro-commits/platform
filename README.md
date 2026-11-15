@@ -193,7 +193,7 @@ make verify     # 静态检查、内核不变量、黄金路径验收
 make verify-sql # 在隔离 PostgreSQL 中验证写入与恢复
 ```
 
-代码、规范和钩子的工作约定见 [AGENTS.md](AGENTS.md)，按批交付见 `.claude/skills/platform-batch/SKILL.md`。
+代码、规范和钩子的工作约定见 [AGENTS.md](AGENTS.md)，工作方式见 [docs/method.md](docs/method.md)。
 
 ```text
 capabilities/server   Go 宿主、领域服务与隔离计算

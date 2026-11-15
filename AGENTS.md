@@ -9,7 +9,7 @@
 | 任务涉及 | 先读 |
 |---|---|
 | 选当前批次、看里程碑、记录新差距 | [roadmap](docs/roadmap.md) |
-| 分派子代理、做架构诊断、判断该不该问负责人、调整检查或提高自治级别 | [method](docs/method.md) |
+| 工作方式、架构诊断、判断该不该问负责人 | [method](docs/method.md) |
 | 命名、翻译 | [glossary](docs/glossary.md) |
 | 意图与下注、承重决定、判断是否属于平台、质量目标、外部依赖 | [1-enterprise](docs/1-enterprise.md) |
 | 新能力或资源类型放哪个应用、平台还是产品包 | [2-product](docs/2-product.md) |
@@ -27,7 +27,7 @@
 | 前端包、路由、数据获取、i18n | [7-system/web](docs/7-system/web.md) |
 | 检查、钩子、验收用例 | [7-system/verification](docs/7-system/verification.md) |
 
-前端改动另用技能 `platform-design`；工单循环用技能 `platform-loop`；一批完整交付用技能 `platform-batch`；架构诊断用技能 `platform-diagnose`。
+前端改动另用技能 `platform-design`。
 
 ## 硬规则
 
@@ -67,8 +67,8 @@
 ## 工作方式
 
 - 负责人掌舵，代理执行：负责人决定意图、承重决定与持久代价的取舍，并在浏览器走查观感；顺序、设计、实现、验证由代理决定（[method](docs/method.md)）。
-- 主会话诊断、定方案、审阅并提交；方案已定的施工写成工单派给实现代理（`.claude/agents/implementer.md`）。派不派是判断，不是流程。
-- 每批按技能 `platform-batch` 交付，结束时提交并推送 main。
+- 主代理独立完成调查、设计、实现、验证和交付，不分派子代理。
+- 按路线图推进，每批更新相关规范和实际差距，完成检查后提交并推送 main。
 - 提交信息用详细中文：标题写 `类型: 范围——行为变化`；正文按范围与行为变化、替代/删除/重构/新增、实际运行的检查命令与结果分组。未运行的检查不得写成通过，不写空泛总结。
 - 钩子在 Go 编辑后格式化，并在 `git commit` 前检查构建、类型、空白与规范同步；被拦下时修正后重试，不绕过。
 - 项目知识只写进仓库；外部评审不入库（docs/README §6）。

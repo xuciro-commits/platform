@@ -181,4 +181,4 @@ read-when: 判断一项工作是否属于平台、调整终局或阶段、引入
 - 能力归属：[2-product](2-product.md)
 - 黄金路径：[5-experience §5.2](5-experience.md)
 - 服务包：[7-system](7-system/README.md)
-- 里程碑：[roadmap](roadmap.md)；人与代理的分工、自治阶梯：[method](method.md)
+- 里程碑：[roadmap](roadmap.md)；工作方式：[method](method.md)

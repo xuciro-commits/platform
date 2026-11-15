@@ -81,7 +81,17 @@ Go 命令设置 `GOPROXY=https://goproxy.cn,direct`，所有长命令加超时�
 | `make e2e SPEC=F17` | 指定的黄金路径用例 | 按用例 | 改动某条任务路径时跑该路径 |
 | `make verify` | `check`、`check-web`、全部不变量与全部验收 | 数分钟 | 里程碑与段落完成时 |
 
-检查只在本机运行，没有远端 CI；钩子是唯一的强制关口。`-race` 只在改动车道或并发时对 K13 定点运行。关口超出预算时，先让最慢的一项变快或移到定点层，不把全量测试放回关口。
+路线图中使用以下检查组合；长命令加超时，Go 命令使用上文的 `GOPROXY`：
+
+| 组合 | 命令 |
+|---|---|
+| V1 基本 | `make check`、`make test`；在 `capabilities/server` 运行 `go test ./host ./kernel/... ./services/...` |
+| V2 路径 | `make e2e SPEC=…`，运行条目指定的用例 |
+| V3 全量 | `make e2e`、`make verify-sql` |
+| V4 并发 | 在 `capabilities/server` 运行 `go test -race ./host -run 'TestInvariantK(1|2|3|13)' -count=1` |
+| W 前端 | `make check-web`，在改动的包内运行 `pnpm exec tsc -p .` |
+
+检查只在本机运行，没有远端 CI；钩子是唯一的强制关口。未指定 V4 的车道或并发改动对 K13 定点运行 `-race`。关口超出预算时，先让最慢的一项变快或移到定点层，不把全量测试放回关口。
 
 ## 7.13 SQL 模式
 
