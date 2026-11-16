@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import {
   Activity, AlertTriangle, Award, BadgeCheck, BarChart3, Bell, BookOpen, Bookmark, Boxes, Braces, Briefcase, Building, Building2, CalendarDays, ClipboardList, Clock, Cog,
   Crown, Database, DoorOpen, FileSpreadsheet, FileText, Filter, Flag, Folder, FolderTree, Factory, Gauge, GitBranch, Globe2, Handshake, Home, Hotel, IdCard, Landmark, Layers, LayoutGrid,
@@ -6,8 +6,11 @@ import {
   Plug, Target, TrendingUp, Truck, UserCheck, UserRound, Users, Warehouse, Workflow, Wrench, Zap,
 } from "lucide-react";
 import { cn } from "../lib/cn";
+import { Button } from "../primitives/button";
 import { t } from "../i18n";
-import { Tooltip } from "../primitives/tooltip";
+import { Popover } from "@astryxdesign/core/Popover";
+import { HStack, VStack } from "@astryxdesign/core/Stack";
+import { Text } from "@astryxdesign/core/Text";
 import { TextInput } from "@astryxdesign/core/TextInput";
 
 export type IconName = string;
@@ -51,39 +54,23 @@ export function IconPicker({ value, onChange, disabled, label, id }: {
 }) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
-  const box = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    if (!open) return;
-    const close = (event: MouseEvent) => { if (!box.current?.contains(event.target as Node)) setOpen(false); };
-    const key = (event: KeyboardEvent) => { if (event.key === "Escape") setOpen(false); };
-    window.addEventListener("mousedown", close); window.addEventListener("keydown", key);
-    return () => { window.removeEventListener("mousedown", close); window.removeEventListener("keydown", key); };
-  }, [open]);
   const needle = query.trim().toLowerCase();
   const groups = useMemo(() => iconGroups.map((g) => ({ ...g, names: g.names.filter((n) => !needle || n.includes(needle) || t(n).toLowerCase().includes(needle)) })).filter((g) => g.names.length), [needle]);
-  return <div ref={box} className="relative">
-    <button type="button" id={id} disabled={disabled} aria-haspopup="dialog" aria-expanded={open} aria-label={label}
-      onClick={() => setOpen(!open)} className={cn("flex h-8 w-full items-center gap-2 rounded-md border border-border bg-surface px-2 text-left text-sm", disabled && "opacity-60")}>
-      {value ? <><IconGlyph name={value} /><span className="truncate">{t(value)}</span><span className="ml-auto font-mono text-2xs text-muted">{value}</span></>
-        : <span className="text-muted">{t("No icon")}</span>}
-    </button>
-    {open && <div role="dialog" aria-label={t("Choose an icon")} className="absolute left-0 top-full z-30 mt-1 w-80 rounded-md border border-border bg-surface p-2 shadow-lg">
-      <TextInput label={t("Find an icon…")} isLabelHidden size="sm" startIcon={Search} value={query} onChange={(value) => setQuery(value)}
-        placeholder={t("Find an icon…")} hasAutoFocus containerClassName="mb-2" />
+  return <Popover label={t("Choose an icon")} role="dialog" placement="below" alignment="start" width={320} padding={2} isOpen={open} onOpenChange={setOpen}
+    content={<VStack gap={2}>
+      <TextInput label={t("Find an icon…")} isLabelHidden size="sm" startIcon={Search} value={query} onChange={(value) => setQuery(value)} placeholder={t("Find an icon…")} hasAutoFocus />
       <div className="max-h-64 overflow-auto">
         {groups.map((g) => <div key={g.id} className="mb-2">
-          <p className="px-1 pb-1 text-2xs font-semibold uppercase tracking-wide text-muted">{t(g.title)}</p>
-          <div className="grid grid-cols-6 gap-1">{g.names.map((n) => <Tooltip key={n} content={t(n)}><button type="button" aria-label={t(n)} aria-pressed={n === value}
-            onClick={() => { onChange(n); setOpen(false); setQuery(""); }}
-            className={cn("flex h-8 items-center justify-center rounded-md border border-transparent text-muted hover:border-border hover:bg-row-hover hover:text-foreground", n === value && "border-border bg-row-selected text-foreground")}>
-            <IconGlyph name={n} /></button></Tooltip>)}</div>
+          <Text type="label" weight="semibold">{t(g.title)}</Text>
+          <div className="grid grid-cols-6 gap-1">{g.names.map((n) => <Button key={n} type="button" size="icon" variant={n === value ? "default" : "ghost"} aria-label={t(n)} aria-pressed={n === value} title={t(n)}
+            onClick={() => { onChange(n); setOpen(false); setQuery(""); }}><IconGlyph name={n} /></Button>)}</div>
         </div>)}
-        {!groups.length && <p className="p-2 text-xs text-muted">{t("Nothing matches.")}</p>}
+        {!groups.length && <Text type="supporting">{t("Nothing matches.")}</Text>}
       </div>
-      <div className="mt-1 flex justify-between border-t border-border pt-1">
-        <button type="button" className="rounded px-2 py-1 text-xs text-muted hover:bg-row-hover" onClick={() => { onChange(""); setOpen(false); }}>{t("No icon")}</button>
-        <button type="button" className="rounded px-2 py-1 text-xs text-muted hover:bg-row-hover" onClick={() => setOpen(false)}>{t("Close")}</button>
-      </div>
-    </div>}
-  </div>;
+      <HStack gap={1} justify="between"><Button type="button" size="sm" variant="ghost" onClick={() => { onChange(""); setOpen(false); }}>{t("No icon")}</Button><Button type="button" size="sm" variant="ghost" onClick={() => setOpen(false)}>{t("Close")}</Button></HStack>
+    </VStack>}>
+    <Button type="button" id={id} disabled={disabled} aria-label={label ?? t("Choose an icon")} className="h-8 w-full justify-start gap-2 px-2 text-sm">
+      {value ? <><IconGlyph name={value} /><span className="truncate">{t(value)}</span><span className="ml-auto font-mono text-2xs text-muted">{value}</span></> : <span className="text-muted">{t("No icon")}</span>}
+    </Button>
+  </Popover>;
 }
