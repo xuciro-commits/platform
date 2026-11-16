@@ -78,7 +78,7 @@ func visibleSafety(p platform.Page) platform.Page {
 		}
 		for id, q := range result.InputSchema.Queries {
 			missing := MissingQuerySetInput(q, result.InputSchema.Queries)
-			for _, v := range q.Variables() {
+			for _, v := range QueryVariables(q) {
 				_, ok := result.InputSchema.Variables[v]
 				missing = missing || !ok
 			}
@@ -149,7 +149,7 @@ func visibleSafety(p platform.Page) platform.Page {
 		copy.Events = nil
 		for _, event := range trigger.Events {
 			valid := true
-			for _, id := range append(event.Variables(), event.Reads()...) {
+			for _, id := range append(eventVariables(event), eventReads(event)...) {
 				_, ok := result.InputSchema.Variables[id]
 				valid = valid && ok
 			}

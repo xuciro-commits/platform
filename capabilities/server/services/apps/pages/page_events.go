@@ -72,7 +72,7 @@ func checkEvents(p platform.Page) error {
 					if !platform.PageUIProfileSupports(d.ProfileVersion(), "platform.page.v2.108") || len(effect.Value) != 0 || effect.From == effect.Target || source.Type == "" || source.Type != variable.Type || !variable.IsWritable() {
 						return fmt.Errorf("page event %s needs a readable source variable of the target's type", event.Source)
 					}
-				} else if !variable.IsWritable() || platform.PageLiteralType(effect.Value) != variable.Type {
+				} else if !variable.IsWritable() || literalType(effect.Value) != variable.Type {
 					return fmt.Errorf("page event %s needs a matching state value", event.Source)
 				}
 
@@ -88,7 +88,7 @@ func checkEvents(p platform.Page) error {
 					return fmt.Errorf("page action effect %s inputs need UI profile v2.108 and a bounded count", event.Source)
 				}
 				for parameter, arg := range a.Inputs {
-					if !platform.PageNodeID.MatchString(parameter) || (arg.Variable != "") == (len(arg.Literal) != 0) || arg.Variable != "" && d.Variables[arg.Variable].Type == "" || arg.Variable == "" && platform.PageLiteralType(arg.Literal) == "" {
+					if !platform.PageNodeID.MatchString(parameter) || (arg.Variable != "") == (len(arg.Literal) != 0) || arg.Variable != "" && d.Variables[arg.Variable].Type == "" || arg.Variable == "" && literalType(arg.Literal) == "" {
 						return fmt.Errorf("page action effect %s input %s is invalid", event.Source, parameter)
 					}
 				}
@@ -168,7 +168,7 @@ func checkNavigationEffect(d platform.PageInputSchema, effect platform.PageEffec
 		return fmt.Errorf("page navigation needs a page and bounded interface bindings")
 	}
 	for id, arg := range n.Inputs {
-		if !platform.PageNodeID.MatchString(id) || (arg.Variable != "") == (len(arg.Literal) != 0) || arg.Variable != "" && d.Variables[arg.Variable].Type == "" || arg.Variable == "" && platform.PageLiteralType(arg.Literal) == "" {
+		if !platform.PageNodeID.MatchString(id) || (arg.Variable != "") == (len(arg.Literal) != 0) || arg.Variable != "" && d.Variables[arg.Variable].Type == "" || arg.Variable == "" && literalType(arg.Literal) == "" {
 			return fmt.Errorf("page navigation input %s is invalid", id)
 		}
 	}

@@ -170,21 +170,3 @@ func (p Page) ScopeOwner(owner, kind string) string {
 	}
 	return ""
 }
-
-func PageBindingVariables(b PageDataBinding) []string {
-	out := []string{}
-	for key, id := range b.Ports {
-		if strings.HasSuffix(key, "Variable") {
-			out = append(out, id)
-		}
-	}
-	for _, r := range b.Resources {
-		for _, v := range r.Inputs {
-			out = append(out, v.Variable)
-		}
-		for _, id := range r.Outputs {
-			out = append(out, id)
-		}
-	}
-	return out
-}

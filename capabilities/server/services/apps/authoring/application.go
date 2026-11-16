@@ -270,7 +270,7 @@ func ProjectApplication(registered platform.Definition, projection ApplicationPr
 		changed = false
 		for id, q := range application.Queries {
 			missing := pageowner.MissingQuerySetInput(q, application.Queries)
-			for _, param := range q.Variables() {
+			for _, param := range pageowner.QueryVariables(q) {
 				if _, ok := application.Variables[param]; !ok {
 					missing = true
 				}

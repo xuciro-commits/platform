@@ -26,7 +26,7 @@ func CheckPageNavigation(source platform.Page, target platform.Page, nav platfor
 	}
 	for id, value := range nav.Inputs {
 		port, ok := inputs[id]
-		typ := platform.PageLiteralType(value.Literal)
+		typ := literalType(value.Literal)
 		if value.Variable != "" {
 			typ = sourceSchema.Variables[value.Variable].Type
 		}

@@ -1,7 +1,5 @@
 package platform
 
-import "encoding/json"
-
 type pageRuntimeContract struct {
 	Composite struct {
 		RequiredUIProfile string `json:"requiredUIProfile"`
@@ -133,41 +131,6 @@ type pageOperator struct {
 	Output  string `json:"output"`
 	MinArgs int    `json:"minArgs"`
 	MaxArgs int    `json:"maxArgs"`
-}
-
-func PageLiteralType(raw json.RawMessage) string {
-	if _, ok := NumberLiteral(raw); ok {
-		return "number"
-	}
-	if _, ok := DecimalLiteral(raw); ok {
-		return "decimal"
-	}
-	var value any
-	if json.Unmarshal(raw, &value) != nil {
-		return ""
-	}
-	if m, ok := value.(map[string]any); ok && len(m) == 2 && m["kind"] == "string-set" {
-		if values, ok := m["values"].([]any); ok && len(values) <= 64 {
-			seen := map[string]bool{}
-			for _, item := range values {
-				v, ok := item.(string)
-				if !ok || len(v) > 4096 || seen[v] {
-					return ""
-				}
-				seen[v] = true
-			}
-			return "string-set"
-		}
-	}
-	switch v := value.(type) {
-	case bool:
-		return "boolean"
-	case string:
-		if len(v) <= PageWidgets.Runtime.MaxStringBytes {
-			return "string"
-		}
-	}
-	return ""
 }
 
 func (d PageInputSchema) ProfileVersion() string {

@@ -24,7 +24,7 @@ func CheckQuerySchema(p platform.Page, q platform.PageQuery, object platform.Ent
 		if v.Variable != "" {
 			return p.InputSchema.Variables[v.Variable].Type
 		}
-		if typ := platform.PageLiteralType(v.Literal); typ != "" {
+		if typ := literalType(v.Literal); typ != "" {
 			return typ
 		}
 		return "number"
@@ -146,7 +146,7 @@ func checkInterfaceQuery(p platform.Page, q platform.PageQuery, named *platform.
 		return fmt.Errorf("interface page window exceeds its published query limit")
 	}
 	if q.Search != nil {
-		typ := platform.PageLiteralType(q.Search.Literal)
+		typ := literalType(q.Search.Literal)
 		if q.Search.Variable != "" {
 			typ = p.InputSchema.Variables[q.Search.Variable].Type
 		}

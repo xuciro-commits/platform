@@ -122,7 +122,7 @@ func CheckVariables(d platform.PageInputSchema, engines ...platform.RuleEngine) 
 			if v.Type == "object-set" && !platform.PageUIProfileSupports(d.ProfileVersion(), "platform.page.v2.85") {
 				return fail("collection input needs v2.85")
 			}
-			if v.Scope != "page" || v.Source != nil || !slices.Contains(contract.Interface.ValueTypes, v.Type) || (v.Type == "record" || v.Type == "object-set") && len(v.Initial) != 0 || len(v.Initial) != 0 && platform.PageLiteralType(v.Initial) != v.Type {
+			if v.Scope != "page" || v.Source != nil || !slices.Contains(contract.Interface.ValueTypes, v.Type) || (v.Type == "record" || v.Type == "object-set") && len(v.Initial) != 0 || len(v.Initial) != 0 && literalType(v.Initial) != v.Type {
 				return fail("input needs a typed page value without a source")
 			}
 		case "resource":
@@ -187,7 +187,7 @@ func CheckVariables(d platform.PageInputSchema, engines ...platform.RuleEngine) 
 			if v.Type == "string-set" && (!platform.PageUIProfileSupports(d.ProfileVersion(), "platform.page.v2.30") || !slices.Contains([]string{"page", "overlay"}, v.Scope)) {
 				return fail("string-set state requires v2.30 page or overlay scope")
 			}
-			if platform.PageLiteralType(v.Initial) != v.Type {
+			if literalType(v.Initial) != v.Type {
 				return fail("initial value type mismatch")
 			}
 		case "derived":
@@ -386,7 +386,7 @@ func CheckApplicationVariables(a platform.Application) error {
 		}
 	}
 	d := a.QueryPage().InputSchema
-	if err := d.CheckApplicationQueries(); err != nil {
+	if err := checkQueries(platform.Page{Format: 4, InputSchema: d}, "application"); err != nil {
 		return err
 	}
 	return CheckVariables(d)

@@ -67,7 +67,7 @@ func CheckSafety(p platform.Page) error {
 		if owner == "" {
 			owner = binding.Owner
 		}
-		for _, id := range platform.PageBindingVariables(binding) {
+		for _, id := range bindingVariables(binding) {
 			if id == "" {
 				continue
 			}
@@ -99,7 +99,7 @@ func CheckSafety(p platform.Page) error {
 	if err := CheckVariables(safe.InputSchema); err != nil {
 		return err
 	}
-	if err := safe.CheckQueries("page"); err != nil {
+	if err := checkQueries(safe, "page"); err != nil {
 		return err
 	}
 	if err := checkPageInterface(safe.InputSchema); err != nil {

@@ -61,7 +61,7 @@ func CheckPageEmbeddingGraph(root platform.AssetRef, lookup map[platform.AssetRe
 			return fmt.Errorf("embedded page instance budget exceeded")
 		}
 		if len(safe.InputSchema.Queries) > 0 {
-			plans := safe.ActiveQueryPlans()
+			plans := activeQueryPlans(safe)
 			queries += len(plans)
 			for id, q := range safe.InputSchema.Queries {
 				if !plans[id] {
@@ -70,7 +70,7 @@ func CheckPageEmbeddingGraph(root platform.AssetRef, lookup map[platform.AssetRe
 				factor := 1
 				if q.ItemOwner != "" {
 					var err error
-					factor, err = safe.LoopFactor(q.ItemOwner)
+					factor, err = loopFactor(safe, q.ItemOwner)
 					if err != nil {
 						return err
 					}

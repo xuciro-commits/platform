@@ -139,7 +139,7 @@ func CheckFrozenQueries(original platform.Page, assets map[platform.AssetRef]pla
 	if err := CheckVariables(page.InputSchema); err != nil {
 		return err
 	}
-	if err := page.InputSchema.CheckQuerySets(); err != nil {
+	if err := checkQuerySets(page.InputSchema); err != nil {
 		return err
 	}
 	for id, compute := range page.ComputeResources() {
