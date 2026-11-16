@@ -60,6 +60,9 @@ read-when: 每批开始（选当前批次）与结束（删除已完成条目、
   - [x] U3.17 应用资源与扩展归位。诊断：SDK 内只有 `Application.CheckResources` 调用 `CheckExtension` 和 `CheckConcepts`，`Application.Dependencies` 无 SDK 内部调用；四项应一组迁入 `services/apps/pages`。SDK 保留应用声明、`AssetRef`、`ApplicationProfile` 的反序列化与格式检查，以及目前仍被 SDK 页面检查使用的 `Application.QueryPage`。发布服务经现有纯解析值调用应用资源、扩展和依赖函数；运行图构造也使用该解析值，不导入页面服务或保留旧转发。
     - 源：`platform/definition.go`、`definition_checks.go`，`services/resources/publication/asset_graph.go`、`candidate.go`、`dependencies_describe.go`、`page_asset.go`、`application_artifact.go`、`resolver.go`；调用方：`services/apps/pages/application_checks.go`、`page_safety.go`，`services/apps/authoring/application.go`，`services/apps/application_runtime_views.go`、`application_runtime_runs.go`，`services/devops/releases/definition_plan.go`、`release_registry.go`。应用资源检查内部原顺序、重复资源与扩展拒绝、依赖排序和闭包不变。
     - 完成：`make contract` 无差异；应用候选、扩展拒绝和运行图前后对照，产品包字节与闭包不变；V1、V3。其余页面函数仍按 U3.6 诊断。
+  - [ ] U3.18 属性值类型与页面属性检查归位。诊断：`platform.PropertyValueType` 仅由对象的属性读取和 `Page.CheckPropertySchema` 共用；后者没有其他 SDK 内部调用，且冻结查询已归页面服务。将值类型判断归 `services/objects`，页面属性检查归 `services/apps/pages` 并复用同一判断，不增加接口或复制实现。
+    - 源：`platform/page_composite.go`；调用方：`services/objects/property_values.go`、`services/apps/pages/page_bound_queries.go`、`page_frozen_queries.go` 和 `services/apps/authoring/application.go`。删除 SDK 原实现；对象字段读取、页面检查和错误顺序不变。
+    - 完成：`make contract` 无差异；逐类对照属性值类型和页面属性接受与拒绝，产品包候选字节与闭包不变；V1、V3。其余页面函数仍按 U3.6 诊断。
 - [ ] U4 发布路径一张表。已完成（U4.1）：五项发布钩子由宿主登记，action-type 的发布步骤归本体服务；Build 的 apps、automation、functions、本体类型转接已删除。
   - [ ] U4.2 其余家族钩子与状态边界定型（诊断与切分，不写代码）。前置已完成：U4.1。
     - 读：`services/resources/publication/api.go`、`services/resources/authoring/build_release_drafts.go`、`build_artifacts.go`、`build_owner.go`、`build_agents.go`、`build_evaluations.go`、`build_tests.go`、`build_compute.go`、`build_tables.go`、`host/composition/tenant.go`。
