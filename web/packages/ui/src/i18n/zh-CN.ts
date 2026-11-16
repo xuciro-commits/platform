@@ -683,8 +683,8 @@ export default {
  "Review the affected records before continuing.": "请在继续前检查受影响的记录。",
 
  "Offset datetime input": "带偏移的日期时间输入",
- "Edit caller-owned timestamp text without browser timezone conversion or precision truncation.": "编辑调用方拥有的时刻文本，不应用浏览器时区转换或精度截断。",
- "The caller owns original text and query conditions. UTC offset is explicit; seconds and up to nine fractional digits are retained, and invalid drafts remain repairable.": "调用方拥有原文本和查询条件。UTC 偏移须明确，保留秒及最多九位分数秒，无效草稿可修正。",
+ "Edit caller-owned timestamp text through the official date and time fields, retaining an explicit UTC offset and up to nine fractional digits.": "通过 Astryx 官方日期与时间字段编辑调用方拥有的时刻文本，保留显式 UTC 偏移和最多九位小数秒。",
+ "The caller owns original text and query conditions. UTC offset is explicit and seconds plus up to nine fractional digits are retained. Invalid text shows an error; the original value is never silently rewritten and no browser timezone conversion is applied.": "调用方拥有原文本和查询条件。UTC 偏移须明确，保留秒及最多九位分数秒；无效文本会显示错误，原值不会被静默改写，也不应用浏览器时区转换。",
 
  "UTC offset": "UTC 偏移",
  "{label} UTC offset": "{label} UTC 偏移",
@@ -698,8 +698,8 @@ export default {
 
  "Date input": "日期输入",
  "Civil date input": "业务日期输入",
- "Edit original business date text with a native picker and explicit invalid draft repair.": "通过原生日期选择器及显式无效草稿修正编辑原业务日期文本。",
- "The caller owns the original date text and query conditions. Invalid drafts remain visible; no local timezone or timestamp conversion is applied.": "调用方拥有原日期文本及查询条件。无效草稿保持可见，不应用本地时区或时间点转换。",
+ "Edit caller-owned civil date and date-range text through the official Astryx date and range pickers.": "通过 Astryx 官方日期与日期范围选择器编辑调用方拥有的民事日期与日期范围文本。",
+ "The caller owns the original date text and query conditions. Values are real ISO civil dates; invalid text shows an error and is never silently rewritten. No local timezone or timestamp conversion is applied.": "调用方拥有原日期文本及查询条件。值为真实的 ISO 民事日期；无效文本会显示错误，不会被静默改写，也不应用本地时区或时间戳转换。",
  "Invalid date draft": "无效日期草稿",
  "{label} date draft": "{label} 日期草稿",
  "Invalid date value. Use a real YYYY-MM-DD date; the original draft is retained.": "日期无效。请使用真实的 YYYY-MM-DD 日期；原草稿已保留。",
