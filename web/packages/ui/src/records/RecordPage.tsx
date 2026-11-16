@@ -238,18 +238,11 @@ export function RecordPage({ source, type, id, actions, menu, onOpen, reload = 0
 
 function ActivityNotes({ notes }: { notes: Api.Note[] }) {
   return (
-    <section>
-      <h2 className="mb-1 text-sm font-semibold">{t("Activity")}</h2>
-      <ol className="grid gap-1 text-sm">
-        {notes.map((n, i) => (
-          <li key={i} className="flex flex-wrap items-baseline gap-2">
-            <span className="text-xs text-muted">{new Date(n.at).toLocaleString()}</span>
-            <Tag label={n.by} tone="info" />
-            {n.title && <span className="font-medium">{n.title}</span>}
-            <span className="text-xs text-muted">{n.text}</span>
-          </li>
-        ))}
-      </ol>
+    <section className="grid gap-2">
+      <Text type="label" weight="semibold">{t("Activity")}</Text>
+      <List aria-label={t("Activity")} density="compact" hasDividers>
+        {notes.map((n, i) => <ListItem key={i} itemKey={String(i)} label={n.title ?? n.text} endContent={<Tag label={n.by} tone="info" />} description={<><time dateTime={n.at}>{new Date(n.at).toLocaleString()}</time>{n.title && <span className="block">{n.text}</span>}</>} />)}
+      </List>
     </section>
   );
 }
