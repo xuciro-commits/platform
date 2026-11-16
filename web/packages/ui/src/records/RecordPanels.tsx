@@ -125,25 +125,14 @@ export type InboxTask = Api.InboxTask;
 export function Inbox({ tasks, onOpen, actions, empty = t("Nothing for you") }: {
   tasks: InboxTask[]; onOpen?: (task: InboxTask) => void; actions?: (task: InboxTask) => ReactNode; empty?: string;
 }) {
-  if (tasks.length === 0) return <p className="text-sm text-muted">{empty}</p>;
+  if (tasks.length === 0) return <Text type="supporting">{empty}</Text>;
   const now = Date.now();
   return (
-    <ul className="grid max-w-3xl gap-2">
+    <List aria-label={t("Tasks")} density="compact" hasDividers>
       {tasks.map((task) => {
         const late = !!task.due && Date.parse(task.due) < now;
-        return (
-          <li key={task.id} className="rounded-md border border-border bg-surface p-3 text-sm">
-            <div className="flex flex-wrap items-center gap-2">
-              <button type="button" className="text-left font-medium hover:underline" onClick={() => onOpen?.(task)}>{task.title}</button>
-              {late && <Tag label={t("overdue")} tone="danger" />}
-              {task.due && !late && <span className="text-xs text-muted">{t("due {when}", { when: new Date(task.due).toLocaleString() })}</span>}
-              {task.assignee && <span className="text-xs text-muted">{t("taken by")} {task.assignee}</span>}
-              <span className="ml-auto flex gap-1">{actions?.(task)}</span>
-            </div>
-            {task.body && <p className="mt-1 whitespace-pre-wrap text-xs text-muted">{task.body}</p>}
-          </li>
-        );
+        return <ListItem key={task.id} itemKey={task.id} label={<div className="flex flex-wrap items-center gap-2 text-sm"><button type="button" className="text-left font-medium hover:underline" onClick={() => onOpen?.(task)}>{task.title}</button>{late && <Tag label={t("overdue")} tone="danger" />}{task.due && !late && <span className="text-xs text-muted">{t("due {when}", { when: new Date(task.due).toLocaleString() })}</span>}{task.assignee && <span className="text-xs text-muted">{t("taken by")} {task.assignee}</span>}</div>} endContent={actions?.(task)} description={task.body?<span className="whitespace-pre-wrap">{task.body}</span>:undefined} />;
       })}
-    </ul>
+    </List>
   );
 }
