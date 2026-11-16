@@ -2,25 +2,39 @@ import { Badge } from "@astryxdesign/core/Badge";
 import { Banner } from "@astryxdesign/core/Banner";
 import { Button } from "@astryxdesign/core/Button";
 import { EmptyState } from "@astryxdesign/core/EmptyState";
+import { Icon } from "@astryxdesign/core/Icon";
+import { IconButton } from "@astryxdesign/core/IconButton";
 import { HStack, Layout, LayoutContent, LayoutHeader, StackItem, VStack } from "@astryxdesign/core/Layout";
 import { Link } from "@astryxdesign/core/Link";
 import { Popover } from "@astryxdesign/core/Popover";
+import { type FieldDefinition, PowerSearch, type PowerSearchFilter, usePowerSearchConfig } from "@astryxdesign/core/PowerSearch";
 import { RadioList, RadioListItem } from "@astryxdesign/core/RadioList";
+import { Section } from "@astryxdesign/core/Section";
+import { SegmentedControl, SegmentedControlItem } from "@astryxdesign/core/SegmentedControl";
 import { Skeleton } from "@astryxdesign/core/Skeleton";
-import { Table, pixel, proportional, useTableGroupedRows } from "@astryxdesign/core/Table";
+import { Table, pixel, proportional, useTableGroupedRows, useTableSelection, useTableSelectionState, useTableSortable } from "@astryxdesign/core/Table";
 import type { TableColumn } from "@astryxdesign/core/Table";
 import { Heading, Text } from "@astryxdesign/core/Text";
-import { TextInput } from "@astryxdesign/core/TextInput";
-import { MagnifyingGlassIcon } from "@heroicons/react/24/outline";
+import { Timestamp } from "@astryxdesign/core/Timestamp";
+import { ArrowPathIcon, TableCellsIcon, ViewColumnsIcon } from "@heroicons/react/24/outline";
 import { type ReactNode, useEffect, useMemo, useState } from "react";
-import { type Read, useRead } from "../host";
+import { type Read, reread, useRead } from "../host";
 import { BackLink } from "./BackLink";
 import { BoardView } from "./BoardView";
 import { t } from "../i18n";
 
-export type ListColumn<Row> = { key: string; header: string; width?: number; text: (row: Row) => string };
-export type ListGroup<Row> = { key: string; label: string; of: (row: Row) => string; order?: string[] };
+export type ListColumn<Row> = {
+  key: string;
+  header: string;
+  width?: number;
+  text: (row: Row) => string;
+  kind?: "string" | "enum" | "number" | "time";
+  choices?: string[];
+  value?: (row: Row) => unknown;
+};
 type Done = Promise<unknown>;
+export type BulkAction = { label: string; run: (ids: string[]) => Done };
+export type ListGroup<Row> = { key: string; label: string; of: (row: Row) => string; order?: string[] };
 export type Move = (id: string, group: string, to: string) => Done;
 export type ListShape<Answer, Row> = {
   title: string;
@@ -31,10 +45,15 @@ export type ListShape<Answer, Row> = {
   columns: ListColumn<Row>[];
   groups?: ListGroup<Row>[];
   move?: Move;
+  bulk?: BulkAction[];
 };
 export type ListDefinition<Answer, Row> = ListShape<Answer, Row> & { read: string };
 
 type Cells = Record<string, string>;
+type Raw = Record<string, unknown>;
+type Sort = { sortKey: string; direction: "ascending" | "descending" }[];
+const compare = (left: unknown, right: unknown) =>
+  typeof left === "number" && typeof right === "number" ? left - right : String(left ?? "").localeCompare(String(right ?? ""));
 const idKey = "__id";
 const ungrouped = "none";
 const layouts = ["table", "board"];
@@ -53,32 +72,63 @@ type ListViewProps<Answer, Row> = {
 };
 
 export function ListView<Answer, Row>({ definition, read, primary, back }: ListViewProps<Answer, Row>) {
-  const [filter, setFilter] = useState("");
+  const [filters, setFilters] = useState<PowerSearchFilter[]>([]);
+  const [sort, setSort] = useState<Sort>([]);
+  const [selected, setSelected] = useState<Set<string>>(() => new Set());
   const [groupKey, setGroupKey] = useState(ungrouped);
   const [collapsed, setCollapsed] = useState<Set<string>>(() => new Set());
   const [layout, setLayout] = useState(layouts[0]);
   const [moved, setMoved] = useState<Record<string, string>>({});
   const [failure, setFailure] = useState("");
+  const [busy, setBusy] = useState(false);
   const group = definition.groups?.find((candidate) => candidate.key === groupKey);
   const lanes = group?.order ? group : definition.groups?.find((candidate) => candidate.order);
   const board = layout === "board" && lanes?.order ? lanes : undefined;
   useEffect(() => setMoved({}), [read]);
 
+  const fields = useMemo(
+    () =>
+      definition.columns
+        .filter((column) => column.kind !== "time")
+        .map((column) => ({
+          key: column.key,
+          label: t(column.header),
+          type: column.kind ?? "string",
+          enumValues: column.choices?.map((choice) => ({ value: choice, label: choice })),
+        })),
+    [definition],
+  );
+  const { config, applyFilters } = usePowerSearchConfig(fields as ReadonlyArray<FieldDefinition>);
+
   const all = useMemo(() => {
     if (read.status !== "ready") return [];
     return definition.rows(read.data).map((row) => {
       const cells: Cells = { [idKey]: definition.id(row), __group: group ? group.of(row) : "", __lane: lanes ? lanes.of(row) : "", __href: definition.link ? definition.link(row) : "" };
-      for (const column of definition.columns) cells[column.key] = column.text(row);
-      return cells;
+      const raw: Raw = { [idKey]: cells[idKey] };
+      for (const column of definition.columns) {
+        cells[column.key] = column.text(row);
+        raw[column.key] = column.value ? column.value(row) : cells[column.key];
+      }
+      return { cells, raw };
     });
   }, [read, definition, group, lanes]);
 
   const shown = useMemo(() => {
-    const wanted = filter.trim().toLowerCase();
-    const kept = wanted ? all.filter((cells) => definition.columns.some((column) => cells[column.key].toLowerCase().includes(wanted))) : all;
+    const passing = new Set((applyFilters(filters, all.map((entry) => entry.raw) as never) as Raw[]).map((raw) => raw[idKey]));
+    const kept = all.filter((entry) => passing.has(entry.cells[idKey]));
     const order = group?.order;
-    return order ? [...kept].sort((a, b) => order.indexOf(a.__group) - order.indexOf(b.__group)) : kept;
-  }, [all, filter, definition, group]);
+    if (!order && sort.length === 0) return kept.map((entry) => entry.cells);
+    return [...kept]
+      .sort((a, b) => {
+        if (order && a.cells.__group !== b.cells.__group) return order.indexOf(a.cells.__group) - order.indexOf(b.cells.__group);
+        for (const { sortKey, direction } of sort) {
+          const difference = compare(a.raw[sortKey], b.raw[sortKey]);
+          if (difference !== 0) return direction === "ascending" ? difference : -difference;
+        }
+        return 0;
+      })
+      .map((entry) => entry.cells);
+  }, [all, filters, sort, group, applyFilters]);
 
   const grouped = useTableGroupedRows<Cells>({
     data: shown,
@@ -101,13 +151,24 @@ export function ListView<Answer, Row>({ definition, read, primary, back }: ListV
     ),
   });
 
+  const { selectionConfig } = useTableSelectionState<Cells>({ data: shown, idKey, selectedKeys: selected, setSelectedKeys: setSelected });
+  const selection = useTableSelection<Cells>({ ...selectionConfig, getRowLabel: (cells) => cells[definition.columns[0]?.key] || cells[idKey] });
+  const sortable = useTableSortable<Cells>({ sort, onSortChange: setSort, allowUnsortedState: true });
+  const bulk = definition.bulk ?? [];
+  const chosen = shown.filter((cells) => selected.has(cells[idKey])).map((cells) => cells[idKey]);
+
   const columns: TableColumn<Cells>[] = definition.columns.map((column, position) => ({
     key: column.key,
     header: t(column.header),
     width: column.width ? pixel(column.width) : proportional(1),
+    sortable: true,
     renderCell: (cells) =>
       position === 0 && cells.__href ? (
         <Link href={cells.__href}>{cells[column.key] || cells[idKey]}</Link>
+      ) : column.kind === "time" && cells[column.key] ? (
+        <Text type="body" color="secondary">
+          <Timestamp value={cells[column.key]} format="relative" />
+        </Text>
       ) : (
         <Text type="body" maxLines={1}>
           {cells[column.key] ?? ""}
@@ -115,45 +176,74 @@ export function ListView<Answer, Row>({ definition, read, primary, back }: ListV
       ),
   }));
 
+  const run = (action: BulkAction) => {
+    setBusy(true);
+    setFailure("");
+    action
+      .run(chosen)
+      .then(() => setSelected(new Set()))
+      .catch((refused: Error) => setFailure(refused.message))
+      .finally(() => setBusy(false));
+  };
+
   return (
     <Layout
       height="fill"
       header={
         <LayoutHeader hasDivider padding={4}>
           <VStack gap={4}>
-            <HStack gap={4} vAlign="center">
+            <HStack gap={2} vAlign="center">
               <StackItem size="fill">
                 <VStack gap={2}>
                   {back && <BackLink href={back.href} label={t(back.label)} />}
                   <Heading level={1}>{t(definition.title)}</Heading>
                 </VStack>
               </StackItem>
+              {lanes && (
+                <SegmentedControl label={t("Layout")} value={layout} onChange={setLayout}>
+                  <SegmentedControlItem value={layouts[0]} label={t("Table")} icon={<Icon icon={TableCellsIcon} size="sm" />} />
+                  <SegmentedControlItem value={layouts[1]} label={t("Board")} icon={<Icon icon={ViewColumnsIcon} size="sm" />} />
+                </SegmentedControl>
+              )}
+              <IconButton label={t("Refresh")} tooltip={t("Refresh")} icon={<Icon icon={ArrowPathIcon} size="sm" />} onClick={reread} />
               {primary}
             </HStack>
-            {all.length > 0 && (
+            {all.length > 0 && chosen.length > 0 && (
+              <Section variant="muted" padding={2}>
+                <HStack gap={3} vAlign="center" wrap="wrap">
+                  <StackItem size="fill">
+                    <HStack gap={1} vAlign="center">
+                      {bulk.map((action) => (
+                        <Button key={action.label} label={t(action.label)} variant="ghost" size="sm" isLoading={busy} onClick={() => run(action)} />
+                      ))}
+                    </HStack>
+                  </StackItem>
+                  <Text type="body" hasTabularNumbers>
+                    {String(chosen.length)} {t("selected")}
+                  </Text>
+                  <Button label={t("Clear selection")} variant="ghost" size="sm" onClick={() => setSelected(new Set())} />
+                </HStack>
+              </Section>
+            )}
+            {all.length > 0 && chosen.length === 0 && (
             <HStack gap={2} vAlign="center">
               <StackItem size="fill">
-                <TextInput
+                <PowerSearch
+                  config={config}
+                  filters={filters}
+                  onChange={(next) => setFilters([...next])}
                   label={t("Filter")}
-                  isLabelHidden
-                  placeholder={t("Filter")}
-                  startIcon={MagnifyingGlassIcon}
-                  hasClear
-                  value={filter}
-                  onChange={setFilter}
+                  placeholder={t("Filter by any column")}
+                  resultCount={`${shown.length} / ${all.length}`}
                 />
               </StackItem>
-              <Text type="supporting" color="secondary" hasTabularNumbers>
-                {String(shown.length)}
-              </Text>
               {definition.groups && definition.groups.length > 0 && (
                 <Popover
                   placement="below"
                   alignment="end"
                   width={320}
-                  label={t("View options")}
+                  label={t("Group by")}
                   content={
-                    <VStack gap={4}>
                     <RadioList
                       label={t("Group by")}
                       value={groupKey}
@@ -166,15 +256,8 @@ export function ListView<Answer, Row>({ definition, read, primary, back }: ListV
                         <RadioListItem key={candidate.key} value={candidate.key} label={t(candidate.label)} />
                       ))}
                     </RadioList>
-                    {lanes && (
-                      <RadioList label={t("Layout")} value={layout} onChange={(value) => setLayout(String(value))}>
-                        <RadioListItem value={layouts[0]} label={t("Table")} />
-                        <RadioListItem value={layouts[1]} label={t("Board")} />
-                      </RadioList>
-                    )}
-                    </VStack>
                   }>
-                  <Button label={t("View options")} variant="secondary" size="md" />
+                  <Button label={group ? `${t("Group by")}: ${t(group.label)}` : t("Group by")} variant="secondary" size="md" />
                 </Popover>
               )}
             </HStack>
@@ -205,7 +288,7 @@ export function ListView<Answer, Row>({ definition, read, primary, back }: ListV
           )}
           {failure && (
             <VStack padding={4}>
-              <Banner status="error" title={t("This card could not be moved")} description={failure} />
+              <Banner status="error" title={t("Not saved")} description={failure} />
             </VStack>
           )}
           {read.status === "ready" && shown.length > 0 && board && (
@@ -216,7 +299,7 @@ export function ListView<Answer, Row>({ definition, read, primary, back }: ListV
                 column: moved[cells[idKey]] ?? cells.__lane,
                 title: cells[definition.columns[0].key],
                 href: cells.__href,
-                lines: definition.columns.slice(1, 5).filter((column) => column.key !== board.key && cells[column.key]).map((column) => cells[column.key]),
+                lines: definition.columns.slice(1, 5).filter((column) => column.key !== board.key && column.kind !== "time" && cells[column.key]).map((column) => cells[column.key]),
               }))}
               onMove={
                 definition.move &&
@@ -240,7 +323,7 @@ export function ListView<Answer, Row>({ definition, read, primary, back }: ListV
               dividers="rows"
               textOverflow="truncate"
               hasHover
-              plugins={group ? { grouped: grouped.plugin } : {}}
+              plugins={{ ...(group ? { grouped: grouped.plugin } : {}), ...(bulk.length > 0 ? { selection } : {}), sortable }}
             />
           )}
         </LayoutContent>

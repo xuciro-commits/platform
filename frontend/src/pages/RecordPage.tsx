@@ -1,14 +1,14 @@
 import { Banner } from "@astryxdesign/core/Banner";
-import { Button } from "@astryxdesign/core/Button";
 import { EmptyState } from "@astryxdesign/core/EmptyState";
 import { HStack, Layout, LayoutContent, LayoutHeader, LayoutPanel, VStack } from "@astryxdesign/core/Layout";
 import { MetadataList, MetadataListItem } from "@astryxdesign/core/MetadataList";
 import { Skeleton } from "@astryxdesign/core/Skeleton";
 import { Heading, Text } from "@astryxdesign/core/Text";
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import { type Api, useRead } from "../host";
 import { t } from "../i18n";
-import { ActionDialog } from "./ActionDialog";
+import { enterable } from "./ParameterInput";
+import { RecordFields } from "./RecordFields";
 import { BackLink } from "./BackLink";
 import { plain, shown } from "./values";
 
@@ -20,7 +20,7 @@ const when = (stamp: Stamp) => (stamp.at ? new Date(stamp.at).toLocaleString() :
 
 export function RecordPage({ described, id, listPath, listTitle, edit }: RecordPageProps) {
   const read = useRead<Api.RecordView>(`/v1/records/${described.type}/${encodeURIComponent(id)}`);
-  const [editing, setEditing] = useState(false);
+  const editable = new Set(edit && read.status === "ready" ? edit.payload.filter(enterable).map((parameter) => parameter.name) : []);
   const values = useMemo(
     () => (read.status === "ready" ? Object.fromEntries(Object.entries(read.data.values ?? {}).map(([name, value]) => [name, plain(value)])) : {}),
     [read],
@@ -46,7 +46,6 @@ export function RecordPage({ described, id, listPath, listTitle, edit }: RecordP
                   {shown(values[described.display]) || id}
                 </Heading>
               </VStack>
-              {edit && kept && <Button label={t("Edit")} variant="primary" onClick={() => setEditing(true)} />}
             </HStack>
           </LayoutHeader>
         }
@@ -72,9 +71,10 @@ export function RecordPage({ described, id, listPath, listTitle, edit }: RecordP
             {read.status === "ready" && (
               <VStack gap={4}>
                 <Heading level={3}>{t("Details")}</Heading>
+                {edit && kept && <RecordFields described={described} edit={edit} id={id} values={values} revision={kept.revision} />}
                 <MetadataList columns="multi">
                   {described.fields
-                    .filter((field) => values[field.name] != null && shown(values[field.name]) !== "" && typeof values[field.name] !== "object")
+                    .filter((field) => !editable.has(field.name) && values[field.name] != null && shown(values[field.name]) !== "" && typeof values[field.name] !== "object")
                     .map((field) => (
                       <MetadataListItem key={field.name} label={t(field.title)}>
                         <Text type="body">{shown(values[field.name])}</Text>
@@ -112,19 +112,6 @@ export function RecordPage({ described, id, listPath, listTitle, edit }: RecordP
           ) : undefined
         }
       />
-      {editing && edit && kept && (
-        <ActionDialog
-          action={edit}
-          described={described}
-          heading={t(edit.title)}
-          confirm={t("Save")}
-          id={id}
-          revision={kept.revision}
-          initial={values}
-          onClose={() => setEditing(false)}
-          onDone={() => setEditing(false)}
-        />
-      )}
     </>
   );
 }

@@ -152,8 +152,6 @@ export const zhCN: Record<string, string> = {
   "Recently updated modules": "最近更新的模块",
   "All modules": "全部模块",
   New: "新建",
-  Edit: "编辑",
-  Save: "保存",
   Cancel: "取消",
   Create: "创建",
   Details: "详情",
@@ -174,7 +172,11 @@ export const zhCN: Record<string, string> = {
   Layout: "布局",
   Table: "表格",
   Board: "看板",
-  "This card could not be moved": "这张卡片没能移动",
+  Refresh: "刷新",
+  selected: "项已选",
+  "Clear selection": "取消选择",
+  "Filter by any column": "按任意列筛选",
+  Archive: "归档",
 };
 
 const locale = navigator.language.startsWith("zh") ? "zh-CN" : "en";

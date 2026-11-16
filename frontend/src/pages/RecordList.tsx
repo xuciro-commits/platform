@@ -4,7 +4,7 @@ import { type Api, type Read, submit, useRead } from "../host";
 import { t } from "../i18n";
 import { navigate, usePath } from "../router";
 import { ActionDialog } from "./ActionDialog";
-import { type ListShape, ListView, type Move } from "./ListPage";
+import { type BulkAction, type ListShape, ListView, type Move } from "./ListPage";
 import { RecordPage } from "./RecordPage";
 import { shown } from "./values";
 
@@ -12,9 +12,11 @@ type Row = Record<string, unknown>;
 type Declared = { type: string; title?: string; about: string; fields?: string[]; project?: boolean };
 type Back = { href: string; label: string };
 const tabular = new Set(["text", "integer", "decimal", "money", "date", "datetime", "boolean", "choice", "reference", "tags"]);
+const numeric = new Set(["integer", "decimal", "money"]);
+type Stamp = { at?: string };
 const columnLimit = 6;
 
-function shape(described: Api.EntityInfo, declared: Declared, listPath: string, move?: Move): ListShape<Api.RecordPage, Row> {
+function shape(described: Api.EntityInfo, declared: Declared, listPath: string, move?: Move, bulk?: BulkAction[]): ListShape<Api.RecordPage, Row> {
   const candidates = described.fields.filter((field) => tabular.has(field.type));
   const lead = candidates.filter((field) => field.name === described.display);
   const rest = candidates.filter((field) => field.name !== described.display);
@@ -25,10 +27,21 @@ function shape(described: Api.EntityInfo, declared: Declared, listPath: string, 
     title: declared.title ?? described.plural,
     about: declared.about,
     move,
+    bulk,
     rows: (answer) => answer.records as Row[],
     id: (row) => String(row.id),
     link: (row) => `${listPath}/${encodeURIComponent(String(row.id))}`,
-    columns: chosen.map((field) => ({ key: field.name, header: field.title, text: (row) => shown(row[field.name]) })),
+    columns: [
+      ...chosen.map((field) => ({
+        key: field.name,
+        header: field.title,
+        text: (row: Row) => shown(row[field.name]),
+        kind: field.type === "choice" ? ("enum" as const) : numeric.has(field.type) ? ("number" as const) : ("string" as const),
+        choices: field.choices,
+        value: numeric.has(field.type) ? (row: Row) => row[field.name] : undefined,
+      })),
+      { key: "changed", header: "Updated", width: 140, kind: "time" as const, text: (row: Row) => (row.changed as Stamp | undefined)?.at ?? "" },
+    ],
     groups: described.fields
       .filter((field) => field.type === "choice")
       .map((field) => ({ key: field.name, label: field.title, of: (row) => shown(row[field.name]), order: field.choices })),
@@ -59,7 +72,22 @@ export function Records({ declared, listPath, id, back }: { declared: Declared; 
         : undefined,
     [edit, kept],
   );
-  const definition = useMemo(() => (described ? shape(described, declared, listPath, move) : pending), [described, declared, listPath, pending, move]);
+  const archive = act("archive");
+  const bulk = useMemo(
+    () =>
+      archive && kept
+        ? [
+            {
+              label: "Archive",
+              run: async (ids: string[]) => {
+                for (const each of ids) await submit(archive, each, {}, Number(kept.find((row) => row.id === each)?.revision));
+              },
+            },
+          ]
+        : undefined,
+    [archive, kept],
+  );
+  const definition = useMemo(() => (described ? shape(described, declared, listPath, move, bulk) : pending), [described, declared, listPath, pending, move, bulk]);
   const create = act("create");
   if (described && id) {
     return <RecordPage described={described} id={decodeURIComponent(id)} listPath={listPath} listTitle={declared.title ?? described.plural} edit={edit} />;
