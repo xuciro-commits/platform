@@ -26,7 +26,7 @@ export function ActionMenu({ label, commands, icon, size, variant = "ghost", cla
   }
   return <DropdownMenu
     button={{
-      label,
+      label: !iconOnly && typeof children === "string" ? children : label,
       variant: variant === "default" ? "secondary" : variant,
       size: resolvedSize,
       icon: icon ?? undefined,

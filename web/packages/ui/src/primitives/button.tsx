@@ -5,6 +5,7 @@ export type ButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {
   variant?: "default" | "primary" | "ghost" | "danger" | "link" | "row";
   size?: "sm" | "md" | "lg" | "icon";
   loading?: boolean;
+  width?: number | string;
 };
 
 export const DefaultButtonSize = createContext<ButtonProps["size"]>(undefined);
@@ -42,8 +43,8 @@ export function Button({
   const content = leadingIcon ? parts.slice(1) : children;
   const label =
     (typeof props["aria-label"] === "string" && props["aria-label"]) ||
-    title ||
     textOf(children) ||
+    title ||
     "Button";
   const astryxVariant =
     variant === "primary"

@@ -1,6 +1,9 @@
 import { HostContext, type AppUI, type Host, type Me } from "@platform/app";
 import type { EdgeClient } from "@platform/api";
 import { Button, Workspace, language, notify, t } from "@platform/ui";
+import { Center } from "@astryxdesign/core/Center";
+import { HStack, VStack } from "@astryxdesign/core/Stack";
+import { Text } from "@astryxdesign/core/Text";
 import { useEffect, useMemo, useState } from "react";
 
 export type HostAdmin = { subject: string; tenants: string[] };
@@ -38,13 +41,19 @@ export function HostOnly({ client, token, admin, email, onSignOut }: { client: E
     return () => { live = false; };
   }, [attempt]);
   const host = useMemo(() => hostOnly(client, admin), [client, admin.subject]);
-  if (failed) return <main className="grid h-dvh place-content-center gap-3 p-6 text-center text-sm"><p role="alert">{failed.message}</p>{failed.detail && <p className="max-w-md break-words text-xs text-muted">{failed.detail}</p>}<div className="flex justify-center gap-2"><Button onClick={() => setAttempt(value => value + 1)}>{t("Retry")}</Button>{onSignOut && <Button variant="ghost" onClick={onSignOut}>{t("Sign out")}</Button>}</div></main>;
-  if (!app) return <main className="grid h-dvh place-items-center text-sm text-muted">{t("Opening the workspace…")}</main>;
+  if (failed) return <Center height="100dvh" padding={6}>
+    <VStack gap={3} hAlign="center" maxWidth={480}>
+      <Text as="p" role="alert">{failed.message}</Text>
+      {failed.detail && <Text type="supporting" wordBreak="break-word">{failed.detail}</Text>}
+      <HStack gap={2}><Button onClick={() => setAttempt(value => value + 1)}>{t("Retry")}</Button>{onSignOut && <Button variant="ghost" onClick={onSignOut}>{t("Sign out")}</Button>}</HStack>
+    </VStack>
+  </Center>;
+  if (!app) return <Center height="100dvh"><Text type="supporting">{t("Opening the workspace…")}</Text></Center>;
   return (
     <HostContext.Provider value={host}>
       <Workspace key={token} product={app.title} productIcon={app.icon} storageKey={`workspace.layout:host:${admin.subject}`}
         views={app.views} home={typeof app.home === "function" ? app.home(host) : app.home} nav={app.nav(host)}
-        status={<span className="text-xs text-muted">{t("{n} tenants", { n: admin.tenants.length })}</span>}
+        status={<Text type="supporting">{t("{n} tenants", { n: admin.tenants.length })}</Text>}
         session={{ tenant: t("Host"), principal: admin.subject, detail: email, current: "",
           options: [], onSwitch: () => {}, onSignOut }} />
     </HostContext.Provider>

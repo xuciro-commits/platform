@@ -2,6 +2,7 @@ import type {Definition as WorkspaceDefinition} from "@platform/app";
 import type { AppUI } from "@platform/app";
 import { t, type NavSection, type Route } from "@platform/ui";
 import { BarChart3, LayoutDashboard } from "lucide-react";
+import { Icon } from "@astryxdesign/core/Icon";
 import { IconGlyph } from "@platform/ui";
 
 type Definition = WorkspaceDefinition;
@@ -29,8 +30,8 @@ export function tenantApps(definitions: Definition[], context?: { application?: 
     const nav = (): NavSection[] => [
       ...(menu.length ? [{ label: application.title, items: menu }] : []),
       { label: t("Run and diagnose"), items: [
-        ...(!held.length ? [{ label: t("Application overview"), icon: <LayoutDashboard />, route: overview }] : []),
-        { label: t("Application runs"), icon: <BarChart3 />, route: { view: "application-runs", params: operations } },
+        ...(!held.length ? [{ label: t("Application overview"), icon: <Icon icon={LayoutDashboard} />, route: overview }] : []),
+        { label: t("Application runs"), icon: <Icon icon={BarChart3} />, route: { view: "application-runs", params: operations } },
       ] },
     ];
     return [{

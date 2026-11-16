@@ -3,11 +3,12 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Component, StrictMode, type ReactNode } from "react";
 import { createRoot } from "react-dom/client";
 import { App } from "./App";
-import "./styles.css";
-import "@platform/ui/astryx.css";
-import {preparedSignIn} from "./offline/signin";
-import {SignIn} from "./session/SignIn";
-import {AstryxTheme,t} from "@platform/ui";
+import { preparedSignIn } from "./offline/signin";
+import { SignIn } from "./session/SignIn";
+import { AstryxTheme, Button, t } from "@platform/ui";
+import { Center } from "@astryxdesign/core/Center";
+import { VStack } from "@astryxdesign/core/Stack";
+import { Text } from "@astryxdesign/core/Text";
 
 const root = createRoot(document.getElementById("root")!);
 class Boundary extends Component<{ children: ReactNode }, { error?: Error }> {
@@ -15,13 +16,13 @@ class Boundary extends Component<{ children: ReactNode }, { error?: Error }> {
   static getDerivedStateFromError(error: Error) { return { error }; }
   render() {
     if (!this.state.error) return this.props.children;
-    return <main role="alert" className="grid h-dvh place-items-center p-6 text-sm">
-      <div className="max-w-xl">
-        <p>{t("This view could not be displayed.")}</p>
-        <pre className="mt-2 whitespace-pre-wrap text-muted">{this.state.error.message}</pre>
-        <button className="mt-4 underline" onClick={() => location.reload()}>{t("Reload")}</button>
-      </div>
-    </main>;
+    return <Center height="100dvh" padding={6}>
+      <VStack gap={2} maxWidth={576} role="alert">
+        <Text as="p">{t("This view could not be displayed.")}</Text>
+        <Text type="code" wordBreak="break-word">{this.state.error.message}</Text>
+        <Button variant="link" onClick={() => location.reload()}>{t("Reload")}</Button>
+      </VStack>
+    </Center>;
   }
 }
 const mount = (view: ReactNode) => root.render(<AstryxTheme><Boundary>{view}</Boundary></AstryxTheme>);
@@ -39,7 +40,7 @@ if (previewWorkspace) {
   const queries = new QueryClient({ defaultOptions: { queries: { refetchInterval: false, retry: 1, networkMode:"always" } } });
 
   if(oidc&&!session)mount(offline
-    ?<main role="alert" className="grid h-dvh place-items-center p-6 text-sm">{t("Connect to sign in. A new or expired identity cannot use prepared content.")}</main>
+    ?<Center height="100dvh" padding={6}><VStack role="alert"><Text as="p">{t("Connect to sign in. A new or expired identity cannot use prepared content.")}</Text></VStack></Center>
     :<StrictMode><SignIn config={oidc}/></StrictMode>);
   else mount(
     <StrictMode>
@@ -50,4 +51,4 @@ if (previewWorkspace) {
   );
 }
 }
-void start().catch(problem=>mount(<main role="alert" className="grid h-dvh place-items-center p-6 text-sm"><div><p>{t("This workspace task could not be reopened. Connect and reload; saved inputs were retained.")}</p><p className="mt-2 text-muted">{t(problem instanceof Error?problem.message:String(problem))}</p></div></main>));
+void start().catch(problem=>mount(<Center height="100dvh" padding={6}><VStack gap={2} role="alert"><Text as="p">{t("This workspace task could not be reopened. Connect and reload; saved inputs were retained.")}</Text><Text as="p" type="supporting">{t(problem instanceof Error?problem.message:String(problem))}</Text></VStack></Center>));

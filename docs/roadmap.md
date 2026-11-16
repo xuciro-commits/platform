@@ -36,7 +36,7 @@ read-when: 每批开始（选当前批次）与结束（删除已完成条目、
 
 ### 三、领域模型收敛
 
-目标规范：[6-domain R8](6-domain/README.md)、[7-system §7.2、§7.5.1、§7.7](7-system/README.md)。完成标准（整段）：`platform` 不超过 8 千行且只含 SDK 契约；7-system 的十条依赖差距清零；包名与目录名不一致为 0。
+目标规范：[6-domain R8](6-domain/README.md)、[7-system §7.2、§7.5.1、§7.7](7-system/README.md)。完成标准（整段）：`platform` 不超过 8 千行且只含 SDK 契约；7-system 的依赖差距清零；包名与目录名不一致为 0。
 
 主代理按前置条件选择条目并独立完成。条目的验证组合见 [7-system/verification §7.12](7-system/verification.md#712-命令分层)；方向与实际不符时，根据代码和规范调整。
 
@@ -47,7 +47,7 @@ read-when: 每批开始（选当前批次）与结束（删除已完成条目、
 - [ ] U4 发布路径一张表。
   - [ ] U4.2 其余家族钩子与状态边界定型（诊断与切分，不写代码）。
     - 读：`services/resources/publication/api.go`、`services/resources/authoring/build_release_drafts.go`、`build_artifacts.go`、`build_owner.go`、`build_agents.go`、`build_evaluations.go`、`build_tests.go`、`build_compute.go`、`build_tables.go`、`host/composition/tenant.go`。
-    - 必须定下：① agent、evaluation-set、test-plan、compute、sample-set 的 `singleDraftAssets` 在候选冻结前生成新 `ReleaseAsset` 并使用来源版本；其中 agent 与 evaluation-set 还读取当前联合声明。现有 `Closure` 只返回草稿依赖与引用，不能直接搬移。② code 与 decision-table 都是 `AssetCompute`，但分别用 `build.code.publish` 与 `build.table.publish`；定下唯一分派与两个 schema 的登记方式。③ object、agent、compute 依赖 `Build` 的 `jointEntities`、`installed`、`agents`、`codes`、`tables` 等状态；定下服务实例的装配、`Fork` 与 `NewSimulationApp` 的重绑，不能捕获源租户。④ evaluation-set 与 test-plan 共用 `build.testplan` 记录、发布 schema 与版本族，靠显式 variant 区分；`functions/authoring` 已导入 `ai/evaluation`，将完整记录搬入后者会成环。共享记录和版本族只保留一个拥有者与一套实现，AI 只接收评估专有 descriptor，不引入重复模型或兼容层。
+    - 必须定下：① agent、evaluation-set、test-plan、compute、sample-set 的 `singleDraftAssets` 在候选冻结前生成新 `ReleaseAsset` 并使用来源版本；其中 agent 与 evaluation-set 还读取当前联合声明。现有 `Closure` 只返回草稿依赖与引用，不能直接搬移。② code 与 decision-table 都是 `AssetCompute`，但分别用 `build.code.publish` 与 `build.table.publish`；定下唯一分派与两个 schema 的登记方式。③ object、agent、compute 依赖 `Build` 的 `jointEntities`、`installed`、`agents`、`codes`、`tables` 等状态；定下服务实例的装配、`Fork` 与 `NewSimulationApp` 的重绑，不能捕获源租户。④ evaluation-set 与 test-plan 共用 `build.testplan` 记录、发布 schema 与版本族，靠显式 variant 区分。共享记录和版本族只保留一个拥有者与一套实现，AI 只接收评估专有 descriptor，不引入重复模型或兼容层。
     - 已核对的分派：`publication.Kind` 与 `Schema` 都取首个匹配；code 与 table 的草稿先按记录类型区分，候选按 `Operation.Binding.Kind` 区分并生成各自 schema。evaluation-set 与 test-plan 以 `variant` 共享一条 `build.testplan.publish` 和同一版本族；sample-set 直接生成安装计划，不经过 `ReleasePublication` 列表。
     - 已核对的候选次序：`DraftReleaseAssetsMulti` 将草稿按普通资源、agent、evaluation-set、action-type 排序；先处理非记录草稿，把生成的资产加入 `jointDeclarations` 后再处理记录草稿；agent 检查使用联合对象、资产和声明，evaluation-set 可读取同批函数版本。迁移须保留次序、来源版本及候选替换规则。
     - 发布准备的错误次序：先按依赖排序，再逐资产处理对象、页面、应用与对象触发钩子；随后依次准备自动化、各定义类型、函数、agent、共享测试记录、code、table。各版本族在循环前读取自己的全部记录，即使候选没有该族资产也可能先报读取错误。所有发布映像准备完成后才准备 sample-set，再解码普通安装计划与发布映像，最后准备集成并按依赖排序；直接把每个族改成逐资产冻结或在各钩子中提前解码会改变拒绝顺序。
@@ -76,6 +76,7 @@ read-when: 每批开始（选当前批次）与结束（删除已完成条目、
   - [ ] U4.8 sample-set 发布归 DevOps。前置 U4.2。
     - 已知源：`services/resources/authoring/build_tests.go`、`build_artifacts_installation.go`、`build_release_prepare.go`、`build_release_drafts.go`；目标 `services/devops`。保留直接生成 `AssetInstallation` 的行为；细节由 U4.2 补齐。
     - 完成：样本集五钩子由 DevOps 实现并由宿主登记，原发布分支删除；历史字节不变。验证：V1、V3。
+  - [ ] U4.9 智能体评估器归 AI 后的验收。评估器已迁入 `services/ai/evaluation`，消除函数服务对 AI 评估包的反向依赖；50 项不变量、后端测试、SQL 恢复和评估前后对照通过。`make check` 被并行前端的文案检查阻断，全量浏览器验收尚未通过。
 - [ ] U5 拆散 `build`。
   - [ ] U5.1 样板。
     - 方向：定下“一类资源的编辑如何离开 `Build`”的模式（状态、注册、HTTP 路由、`host` 导入点怎么改），以代码函数与决策表（`build_compute.go`、`build_tables.go` → `services/functions/authoring`）迁完为样板；发布钩子仍以前置 U4.2 的诊断为准。归属：objects、kinds、action types、blueprints、transactions → `services/ontology`；agents → `services/ai`；integrations（1632 行）→ `services/data`；branches → `services/resources/merge`；release、publications、artifacts（约 3000 行）→ 按 U4 的表归 `services/devops` 与 `services/resources/publication`；`resources` 只留 RID、项目、文件夹、工作状态、分支、提案。每迁一类同时收走它在 `host.Tenant` 的字段与可选接口探测（N6），下调 `tenantFields`、`capabilityProbes` 与对应依赖差距。
@@ -84,6 +85,7 @@ read-when: 每批开始（选当前批次）与结束（删除已完成条目、
     - 验证：V1、V3。
   - [ ] U5.2 代码函数编译创作验收。编译接受、重放、附件暂存及产品包对照、V1 和 SQL 恢复已通过；仍需 `make e2e` 补齐 V3。发布、安装状态与历史版本归位见 U4.7。
   - [ ] U5.3 决策表模型与规则创作验收。创建与拒绝、规则、发布计算、历史版本及重放对照、V1 和 SQL 恢复已通过；仍需 `make e2e` 补齐 V3。记录实体、发布、安装状态与历史版本归位见 U4.7 和 U5.1。
+  - [ ] U5.4 共用资源定义名称规则归位后的验收。名称规则已归 `services/resources/publication`，函数和自动化服务不再依赖本体实现；约 229 万组名称对照、50 项不变量、后端测试和 SQL 恢复通过。`make check` 被并行前端的文案检查阻断，全量浏览器验收尚未通过。
 - [ ] U7 `platform` 只留 SDK 契约（整段完成标准：不超过 8 千行）。前置 U2、U3。
   - [ ] U7.1 诊断与切分（不写代码）。范围含原 U2.3：`BusinessTxn`、`TxnStep` 等事务类型与冻结定义解码离开 `platform` 的无环切分（定义校验归 ontology、执行归 actions），不改已存字节，不推进纪元。
     - 页面与其他领域共用的实现一并诊断：`PageNodeID` 供对象、值类型和记录检查使用；`ModelObject` 供样本集与测试计划使用；`RuleEngineOf`、`MergeRuleTypes` 和 `TransactionDestination` 由非页面路径共用。`definition_binding.go` 的条件规则、`definition_blocks.go` 的应用绑定检查和 `definition.go` 的资产与图标检查也需随对应拥有者归位。`Application.QueryPage` 使用原始 profile 构造声明；`page_compat.go` 暂供页面服务与通用小数规则共读，通用规则归位后再收敛。
@@ -123,7 +125,7 @@ read-when: 每批开始（选当前批次）与结束（删除已完成条目、
 - [ ] W6 Workshop 页面运行时。页面组件在 `frontend/` 用 Astryx 重建，使 Workshop 搭建的业务应用与自举二级（S2）直接得到新语言。验证：F1、F4、F5。
 - [ ] W7 入口声明。记录类入口只写 `recordList({ type, title, about })`；宿主已有对应类型的二十七个入口已接上，本体的“对象”经 `objectBrowser` 列出已发布的对象类型并生成它们的列表、记录页与录入。其余入口等对应的原型或宿主读取：主页的待办、提案与最近，数据的血缘，逻辑的自动化，应用的对象视图与模板，AI 的检索源与评估集，交付的目录与安装，运行与宿主的全部，管理里成员之外的各项。每个入口一张卡：入口 `<应用>/<入口>`；原型与范例文件；数据（宿主类型或读取路径）；可改文件 `frontend/src/apps/<应用>/<入口>.ts` 与 `frontend/src/i18n.ts`；验收。
 - [ ] W8 切换与删除。两条轨道都走完 W1–W10 后择优：宿主改为提供保留者的产物，删除另一条，改写 5-experience 的步骤描述与其余规范里的旧产品名。
-- [ ] W10 `web/` 整体替换为 Astryx。根基已完成（样式、七套官方主题与明暗切换、StyleX 编译、`web/AGENTS.md`，见 7-system/web R10）；界面组件已完成大部分归并（清单见 7-system/web「现存差距」），剩余 `DataTable`（TanStack 数据网格）的专用实现，以及裸元素与 Tailwind 类的清理；`Gauge` 已由官方 `ProgressBar` 组合，`Rejection` 已由 Banner 与 Collapsible 组合。每轮同时删掉不再使用的 Tailwind 类与 `styles.css` 里的对应规则，`astryx doctor --built web/apps/workspace` 的 548 条随进度下降。完成标准：`web/` 的依赖里不再有自有样式与组件库，`astryx doctor --built` 只剩专用画布库的必要裸元素；F 系列在 `web/` 上通过；负责人走查通过。验证：`make build`、`make check-web`、走查。
+- [ ] W10 `web/` 整体替换为 Astryx。根基已完成（样式、七套官方主题与明暗切换、StyleX 编译、`web/AGENTS.md`，见 7-system/web R10）；界面组件已完成大部分归并（清单见 7-system/web「现存差距」）；`Gauge` 已由官方 `ProgressBar` 组合，`Rejection` 已由 Banner 与 Collapsible 组合。`apps/workspace` 已清完：`astryx doctor --built web/apps/workspace` 从 548 条降到 0（启动外壳、登录与问题页、离线对话框、Files/Explorer/Home/Search/Applications/chrome 全部改用 `Stack`/`Grid`/`Center`/`Text`/`Heading`/`Item`/`List`/`ClickableCard`/`Icon`，样式入口改为 `index.html` 的样式表链接）。余下：`@platform/ui` 的 116 个文件、927 处 Tailwind 类与 `cn()` 按组件替换进度删除；`DataTable` 定性为唯一被命名的“可编辑数据网格”保留，理由与验收口径见 7-system/web「收口：可编辑数据网格与样式面」。F 系列目前在 `web/` 上 11/24 通过，剩余失败是此前组件归并留下的控件契约回归（重复的可访问名、命令面板不呈现禁用结果、若干工具的按钮名），按门面逐个修，不改任务断言。完成标准：`web/` 的依赖里不再有自有样式与组件库，`astryx doctor --built` 只剩专用画布库的必要裸元素；F 系列在 `web/` 上通过；负责人走查通过。验证：`make build`、`make check-web`、走查。
 - [ ] W9 视图的归属（等产品矩阵解冻）。在 2-product 确定命名视图、公开视图与置顶的资源归属后实现；此前视图只保存成员默认值。
 - [ ] W12 对照核对（不写代码）。逐项核对 2-product §2.8 在宿主一侧的现状（明细行、状态与流程、评论与指派、附件、导入导出、词汇翻译），缺的写成本段或第三段的条目；给打印与对外页面定归属。
 

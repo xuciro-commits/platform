@@ -1,6 +1,11 @@
 import { newId, objectSetResultType, SetBuilder, useHost, useOpenRecord, useRead, OpenIn, type SavedView } from "@platform/app";
-import { Button, Dialog, EmptyState, Form, Input, PageHeader, Panel, RecordList, Select, cn, useWorkspace, t, type EntityRecord, type ListState } from "@platform/ui";
+import { Button, Dialog, EmptyState, Form, Input, PageHeader, Panel, RecordList, useWorkspace, t, type EntityRecord, type ListState } from "@platform/ui";
 import type { Api } from "@platform/api";
+import { Grid } from "@astryxdesign/core/Grid";
+import { Icon } from "@astryxdesign/core/Icon";
+import { List, ListItem } from "@astryxdesign/core/List";
+import { HStack, VStack } from "@astryxdesign/core/Stack";
+import { Text } from "@astryxdesign/core/Text";
 import { Compass } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
@@ -25,12 +30,14 @@ function SaveExplorationDialog({ entity, current, recordId, selectedType, set, o
     } finally { setBusy(false); }
   };
   return <Dialog open onOpenChange={(o) => { if (!o && !busy) onClose(); }} title={t("Save exploration")}>
-    <Form className="grid gap-3" onSubmit={() => { if (title.trim() && !busy) return save(); }}>
-      <Input aria-label={t("Name")} placeholder={t("Name of the exploration")} value={title} onChange={(e) => setTitle(e.target.value)} disabled={busy} autoFocus />
-      <div className="flex justify-end gap-2">
-        <Button type="button" onClick={onClose} disabled={busy}>{t("Cancel")}</Button>
-        <Button type="submit" variant="primary" loading={busy} disabled={!title.trim()}>{t("Save")}</Button>
-      </div>
+    <Form onSubmit={() => { if (title.trim() && !busy) return save(); }}>
+      <VStack gap={3}>
+        <Input aria-label={t("Name")} placeholder={t("Name of the exploration")} value={title} onChange={(e) => setTitle(e.target.value)} disabled={busy} autoFocus />
+        <HStack gap={2} hAlign="end">
+          <Button type="button" onClick={onClose} disabled={busy}>{t("Cancel")}</Button>
+          <Button type="submit" variant="primary" loading={busy} disabled={!title.trim()}>{t("Save")}</Button>
+        </HStack>
+      </VStack>
     </Form>
   </Dialog>;
 }
@@ -52,12 +59,14 @@ function SaveListDialog({ entity, state, onClose }: { entity: string; state: Lis
     } finally { setBusy(false); }
   };
   return <Dialog open onOpenChange={(o) => { if (!o && !busy) onClose(); }} title={t("Save object list")}>
-    <Form className="grid gap-3" onSubmit={() => { if (title.trim() && !busy) return save(); }}>
-      <Input aria-label={t("Name")} placeholder={t("Name of the list")} value={title} onChange={(e) => setTitle(e.target.value)} disabled={busy} autoFocus />
-      <div className="flex justify-end gap-2">
-        <Button type="button" onClick={onClose} disabled={busy}>{t("Cancel")}</Button>
-        <Button type="submit" variant="primary" loading={busy} disabled={!title.trim()}>{t("Save")}</Button>
-      </div>
+    <Form onSubmit={() => { if (title.trim() && !busy) return save(); }}>
+      <VStack gap={3}>
+        <Input aria-label={t("Name")} placeholder={t("Name of the list")} value={title} onChange={(e) => setTitle(e.target.value)} disabled={busy} autoFocus />
+        <HStack gap={2} hAlign="end">
+          <Button type="button" onClick={onClose} disabled={busy}>{t("Cancel")}</Button>
+          <Button type="submit" variant="primary" loading={busy} disabled={!title.trim()}>{t("Save")}</Button>
+        </HStack>
+      </VStack>
     </Form>
   </Dialog>;
 }
@@ -85,39 +94,37 @@ function ExploreView({ type: requested, savedState }: { type?: string; savedStat
     void source.get(savedState?.selectedType ?? resultType, restoreSelected).then((view) => { if (active) setSelected(view.record); }).catch(() => undefined);
     return () => { active = false; };
   }, [resultType, restoreSelected, savedState?.selectedType, source]);
-  if (entities.length === 0) return <>
+  if (entities.length === 0) return <VStack gap={2}>
     <PageHeader title={t("Object Explorer")} />
-    <p className="text-sm text-muted">{t("No entity types in apps you hold a role in.")}</p>
-  </>;
-  return <div className="grid h-[calc(100dvh-120px)] grid-cols-1 gap-4 md:grid-cols-[220px_minmax(0,1fr)]">
-    <aside aria-label={t("Object types")} className="hidden content-start gap-2 overflow-hidden border-r border-border pr-3 md:grid">
-      <div className="flex items-center gap-2 text-sm font-semibold"><Compass className="size-4" />{t("Object types")}<span className="ml-auto text-xs font-normal text-muted">{entities.length}</span></div>
+    <Text as="p" type="supporting">{t("No entity types in apps you hold a role in.")}</Text>
+  </VStack>;
+  return <Grid columns={{ minWidth: 220, max: 2 }} gap={4} height="calc(100dvh - 120px)">
+    <VStack gap={2} isScrollable>
+      <HStack gap={2} hAlign="between">
+        <HStack gap={2}><Icon icon={Compass} /><Text weight="semibold">{t("Object types")}</Text></HStack>
+        <Text type="supporting">{entities.length}</Text>
+      </HStack>
       <Input type="search" aria-label={t("Filter object types")} placeholder={t("Filter…")} value={filter} onChange={(e) => setFilter(e.target.value)} />
-      <nav aria-label={t("Object types")} className="grid gap-2 overflow-auto">
-        {[...groups.entries()].map(([app, list]) => <div key={app} className="grid gap-0.5">
-          <div className="px-2 pt-1 text-xs font-medium uppercase tracking-wide text-muted">{app}</div>
-          {list.map((e) => <Button key={e.type} variant="row" aria-current={e.type === resultType ? "true" : undefined}
-            className={cn("grid", e.type === resultType && "bg-row-selected font-medium")} onClick={() => { setPicked(e.type); setSelected(undefined); setSet({ object: e.type }); }}>
-            <span className="truncate">{e.title}</span><span className="truncate font-mono text-xs text-muted">{e.type}</span>
-          </Button>)}
-        </div>)}
-      </nav>
-    </aside>
-    <div className="min-w-0">
-      <label className="mb-3 grid gap-1 text-xs md:hidden">{t("Object type")}
-        <Select value={chosen} onChange={(event) => { setPicked(event.target.value); setSelected(undefined); setSet({ object: event.target.value }); }}>
-          {[...groups.entries()].map(([app, list]) => <optgroup key={app} label={app}>{list.map((entity) => <option key={entity.type} value={entity.type}>{entity.title}</option>)}</optgroup>)}
-        </Select>
-      </label>
+      <VStack gap={2}>
+        {[...groups.entries()].map(([app, list]) => <VStack key={app} gap={0.5}>
+          <Text as="p" type="supporting" weight="medium">{app}</Text>
+          <List density="compact">
+            {list.map((e) => <ListItem key={e.type} label={e.title} description={<Text type="code">{e.type}</Text>} isSelected={e.type === resultType}
+              onClick={() => { setPicked(e.type); setSelected(undefined); setSet({ object: e.type }); }} />)}
+          </List>
+        </VStack>)}
+      </VStack>
+    </VStack>
+    <VStack gap={3} minHeight={0}>
       <PageHeader title={entity?.title ?? resultType} help={entity?.description} description={resultType}
         actions={<><Button size="sm" onClick={() => setSaving(true)}>{t("Save exploration")}</Button><OpenIn type={chosen} exclude={["explorer"]} /></>} />
-      <Panel title={t("Object set")} className="grid min-w-0 gap-2">
+      <Panel title={t("Object set")}>
         <SetBuilder value={set} onChange={setSet} selectedId={selected?.id} previewRows={20} aggregate
           onRowOpen={(record) => { if (!resultType) return; setSelected(record); openRecord({ type: resultType, id: record.id }); }} />
       </Panel>
-    </div>
+    </VStack>
     {saving && <SaveExplorationDialog entity={chosen} current={chosen} recordId={selected?.id} selectedType={selected ? resultType : undefined} set={set} onClose={() => setSaving(false)} />}
-  </div>;
+  </Grid>;
 }
 
 function ListsView({ view }: { view: SavedView }) {
@@ -137,7 +144,7 @@ function ListsView({ view }: { view: SavedView }) {
 export function ObjectExplorer({ type, saved }: { type?: string; saved?: string }) {
   const views = useRead<SavedView[]>("/v1/views");
   const view = saved ? views?.find((v) => v.id === saved) : undefined;
-  if (saved && !views) return <p className="text-sm text-muted">{t("Loading…")}</p>;
+  if (saved && !views) return <Text as="p" type="supporting">{t("Loading…")}</Text>;
   if (saved && !view) return <EmptyState title={t("This saved view is unavailable.")} hint={t("It may have been removed.")} />;
   if (view) {
     let parsed: (ExplorationState | ListViewState) | undefined;

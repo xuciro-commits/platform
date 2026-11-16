@@ -119,8 +119,32 @@ Search 页与 Command Palette 消费同一个 workspace Search provider。Provid
 - `pnpm build` 构建全部；每个包 `tsc -p .` 类型检查。
 - `make contract` 生成宿主类型与页面契约（来源与生成关系见 §7.6）；`scripts/rule-browser.mjs` 生成 Expr 的 WASM；`scripts/generate-catalog.mjs` 生成开发目录。
 
+## 收口：可编辑数据网格与样式面
+
+`web/` 的替换还剩两处要定性，其余界面已收进 Astryx。
+
+### 可编辑数据网格
+
+`DataTable`（`packages/ui/src/components/DataTable.tsx`，380 行，83 处调用）保留为唯一被命名的自有界面组件，定性是“可编辑数据网格”，不按“专用画布库”算，也不重写为官方 `Table` 的组合。理由是官方 `Table` 覆盖呈现、不覆盖编辑：0.7.16 的插件已覆盖排序、筛选、选择、列宽拖拽、列的显隐与次序、行与列的虚拟滚动、固定列、右键菜单与行展开，所以此前用来论证例外的“虚拟滚动、列宽、选择”已不成立；官方没有对应物的是网格自身的行为——按字段类型生成的就地编辑器（`field.editor`）、逐格授权（`cellAccess` 给出不可编辑的理由）、以 Tab/Enter/Escape/失焦收口的草稿会话、`aria-rowindex`/`aria-colindex` 坐标系上的整格键盘导航（方向键、Home/End/PageUp/PageDown、复制、直接键入进入编辑），以及每张表按 `storageKey` 记住的列宽与显隐。把这层搬到官方 `Table` 上仍要在同一层重写这些行为，只换来换掉 TanStack 的表格与虚拟滚动引擎。
+
+保留期间的验收口径：
+
+- 对外 API 不变（`DataTableProps` 不增不减），83 处调用不改。
+- 只读表格一律用官方 `Table` 或 `List`；新的表格面不新增 `DataTable`。
+- `DataTable` 不新增功能；它内部的视觉（状态标签、徽章、按钮、输入、空态、菜单）只经 Astryx 组件或令牌表达。
+- `astryx doctor --built web/apps/workspace` 无告警；`make check-web` 与覆盖表格路径的 F 系列（F4、F5、F11、F17、F20）通过。
+- 重估条件：官方 `Table` 提供就地编辑与网格键盘模型，或产品的表格需求退化为只读呈现时，删除 `DataTable`，并把 `@tanstack/react-table`、`@tanstack/react-virtual` 移出依赖。
+
+所以 W10 的“依赖里不再有自有组件库”按组件计成立：`@platform/ui` 不再是第二套通用组件库，只有这一处被命名的可编辑网格，以及 `RecordLookup`、`StaticImage`、`ExternalFrame`、图表与画布这类专用媒体/画布组件。
+
+### 样式面
+
+`apps/workspace` 已无自有样式写法：25 个源文件没有 `className`、没有 `stylex.create`、没有裸元素与直接渲染的图标库图标；样式入口改为 `index.html` 的样式表链接指向 `src/styles.css`（两行，分别导入 `@platform/ui/astryx.css` 与 `@platform/ui/styles.css`），`main.tsx` 不再导入样式表。
+
+剩余 Tailwind 全在 `@platform/ui`：116 个文件、927 处 `className`；`cn()` 仍用 clsx 与 tailwind-merge；`styles.css` 仍导入 `tailwindcss`、`@xyflow/react/dist/style.css` 与画布规则；`apps/workspace`、`apps/catalog` 的 Vite 配置仍挂 `@tailwindcss/vite`。W10 的“依赖只剩 Astryx、图标与专用画布库”因此尚未达成。收尾按组件替换进度推进：一个组件换成 Astryx 的同时删掉它自己的 Tailwind 类与 `styles.css` 里的对应规则；全部组件的类删净后，再删 `cn()` 与 `tailwindcss`、`@tailwindcss/vite`、`clsx`、`tailwind-merge`，画布规则只保留画布库自身需要的那部分。
+
 ## 现存差距
 
-- `web/` 的 Astryx 替换（R9、R10）：根基已接上（样式、七套官方主题与明暗切换、StyleX 编译、`web/AGENTS.md`），大部分界面组件已归并到 Astryx：Button、Card/Panel、Progress、Separator、Tooltip、EmptyState、StatusTag、Notice、SegmentedChoice、PageHeader、BreadcrumbTrail、Markdown、Checkbox/Switch/Disclosure/ActionMenu、Dialog/Sheet、Toast、CommandPalette、ContextHelp/FieldProvenance、CommandMenu、Input/Textarea/Select、Tree、fields/types、RecordComments、MarkdownEditor、IconPicker、FlowPalette、RangeInput、NotificationList、AssetDirectory、CollectionTitle、GroupedList、AIResult、DerivedMean、EntityForm、ValueSchemaForm、RecordUploader、RecordImport、RecordComparison、RecordAvatarStack、RecordResourceList、RecordHistory、ApprovalInbox。`DataTable` 仍是专用实现；`RecordLookup` 保留为带外部窗口、分页与 watch 的异步记录选择器；`StaticImage`、`ExternalFrame` 与图表组件按专用媒体/图表保留。日期控件已改用官方 `DateInput`/`DateRangeInput`/`DateTimeInput`，Gauge 以官方 `ProgressBar` 组合呈现；NumericInput/JSONTextarea 保留原生输入以承载 draft 校验；依赖已删除 radix-ui、cmdk、sonner、class-variance-authority，保留 clsx/tailwind-merge 供 `cn()` 与现有 Tailwind 组件使用。`astryx doctor --built web/apps/workspace` 仍报 548 条（Icons 43、Astryx components 235、Styling 270，多数来自 `apps/workspace` 的裸元素与 `className`），是替换进度的度量，完成标准见路线图 W10。顺序见[路线图](../roadmap.md)“五、前端重建”。
+- `web/` 的 Astryx 替换（R9、R10）：根基已接上（样式、七套官方主题与明暗切换、StyleX 编译、`web/AGENTS.md`），大部分界面组件已归并到 Astryx：Button、Card/Panel、Progress、Separator、Tooltip、EmptyState、StatusTag、Notice、SegmentedChoice、PageHeader、BreadcrumbTrail、Markdown、Checkbox/Switch/Disclosure/ActionMenu、Dialog/Sheet、Toast、CommandPalette、ContextHelp/FieldProvenance、CommandMenu、Input/Textarea（Astryx 输入与文本域，可访问名优先取自包裹它的 `<label>`）、Tree、fields/types、RecordComments、MarkdownEditor、IconPicker、FlowPalette、RangeInput、NotificationList、AssetDirectory、CollectionTitle、GroupedList、AIResult、DerivedMean、EntityForm、ValueSchemaForm、RecordUploader、RecordImport、RecordComparison、RecordAvatarStack、RecordResourceList、RecordHistory、ApprovalInbox。`Select` 保留原生 `<select>`：Astryx 的 `Selector` 是自定义下拉、不是表单控件，表单语义、移动端选择器与验收要的 `selectOption`/`toHaveValue` 都要求原生元素，外观仍由令牌控制。`DataTable` 仍是专用实现（见上节）；`RecordLookup` 保留为带外部窗口、分页与 watch 的异步记录选择器；`StaticImage`、`ExternalFrame` 与图表组件按专用媒体/图表保留。日期控件已改用官方 `DateInput`/`DateRangeInput`/`DateTimeInput`，Gauge 以官方 `ProgressBar` 组合呈现；NumericInput/JSONTextarea 保留原生输入以承载 draft 校验；按钮的可访问名取可见文字，`title` 只做后备（此前用 `title` 当名字，验收按可见文字找不到控件）；依赖已删除 radix-ui、cmdk、sonner、class-variance-authority，保留 clsx/tailwind-merge 供 `cn()` 与仍有 Tailwind 类的组件使用。`astryx doctor --built web/apps/workspace` 从 548 条降到 0：`apps/workspace` 的裸元素、直接渲染的图标库图标与 `className` 已按“清 App shell”一轮清完，`DataTable` 的例外、替换定性与剩余样式面见上节；F 系列目前在 `web/` 上 11/24 通过，剩余失败是这批归并留下的控件契约回归（同名控件重复匹配、命令面板不呈现禁用结果、若干工具的按钮名），按门面逐个修，不改任务断言。顺序见[路线图](../roadmap.md)“五、前端重建”。
 - 新前端（R4、R9）：`frontend/` 有外壳、开发身份登录、读取与列表原型的第一段（标题、筛选、分组、四态），接上了五十七个入口中的二十八个（主页的概览与项目，数据、本体、逻辑、AI、交付里宿主已有对应类型的列表，本体的对象，应用的模块，管理的成员）；“对象”入口（`objectBrowser`）列出已发布的对象类型，打开一个就是它的列表、记录页、新建与编辑，全部来自类型描述，地址是 `/ontology/objects/<类型>/<标识>`；业务类型的创建动作没有标识前缀，新记录的标识是一串 UUID，等类型的命名规则（路线图 X5）；选项值显示的是取值本身而不是标题与颜色，金额没有币种，侧栏给其余入口标“未重建”；仪表盘原型只有第一段（`dashboardPage`：一行统计块与紧凑表格，取自官方 `dashboard` 模板的框架），没有全局筛选与图表；类型与字段的标题直接用宿主给的英文，尚未经词汇翻译，列的取舍只是“显示字段在前、取前六个表格型字段”，没有类型自己的列表视图定义；尚无 OIDC 登录、查询缓存与实时事件（一次被接受的写入让所有读取重读）、画布原型；记录原型只有第一段：记录类列表的行能打开记录页（官方 `work-item-detail` 的框架：页头、字段、右侧记录栏），新建与编辑是按动作参数生成的对话框（`ActionDialog`），不是就地编辑，没有页签、Activity、主动作与窄屏下的记录栏；json、明细行、字符串列表、对象这几种动作参数还填不了，必填时对话框说明并禁用提交；资源目录类列表的行还打不开；宿主的动作目录没有把 `project` 列为资源创建动作的参数，哪些类型归项目所有只能由入口声明；列表一次读完整个结果，没有服务端分页、排序、保存的视图与 URL 状态；`src/apps.ts` 是按 3-information §3.3 手写的应用清单，尚未由宿主的应用注册生成；`src/templates/` 的两个官方模板仍带示例数据与版权注释，单文件最长 4623 行，改造时按职责拆分。`web/` 仍是产品实际使用的前端，保留 Tailwind 工具类和专用画布依赖。顺序见[路线图](../roadmap.md)“五、前端重建”。
 - Workspace 的业务工具分块与布局引擎仍有大于 500 kB 的产物；布局引擎已经按需加载并在浏览器使用 Worker。保留构建器默认大小告警，不以拆成任意小文件或放宽阈值作为性能完成标准；后续按真实任务的加载链、传输与交互时间验证。

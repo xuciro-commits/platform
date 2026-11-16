@@ -1,6 +1,11 @@
 import { useHost, useReadQuery } from "@platform/app";
 import type { Api } from "@platform/api";
 import { Button, EmptyState, Input, PageHeader, useWorkspace, t, type PlatformApplication } from "@platform/ui";
+import { ClickableCard } from "@astryxdesign/core/ClickableCard";
+import { Grid } from "@astryxdesign/core/Grid";
+import { Icon } from "@astryxdesign/core/Icon";
+import { HStack, StackItem, VStack } from "@astryxdesign/core/Stack";
+import { Text } from "@astryxdesign/core/Text";
 import { Star } from "lucide-react";
 import { useMemo, useState } from "react";
 import { applicationGroup, categories, projections, type Projection } from "./registry";
@@ -8,17 +13,21 @@ import { applicationGroup, categories, projections, type Projection } from "./re
 function ApplicationTile({ app, role }: { app: PlatformApplication; role?: string }) {
   const { applications, favorites, toggleFavorite } = useWorkspace();
   const pinned = favorites.includes(app.id);
-  return <div className="group relative">
-    <button type="button" onClick={() => applications?.onSelect(app.id)} className="flex h-full w-full min-w-0 items-start gap-3 rounded-md border border-border bg-surface p-3 pr-9 text-left hover:border-border-strong hover:bg-row-hover">
-      <span className="grid size-8 shrink-0 place-items-center rounded-md bg-row-selected text-primary [&_svg]:size-4">{app.icon}</span>
-      <span className="grid min-w-0 gap-0.5"><span className="truncate text-sm font-medium">{app.title}</span>
-        {(app.description || role) && <span className="line-clamp-2 text-xs text-muted">{app.description ?? role}</span>}</span>
-    </button>
-    <Button variant="ghost" size="icon" aria-label={pinned ? t("Remove from favorites") : t("Add to favorites")} aria-pressed={pinned} title={pinned ? t("Remove from favorites") : t("Add to favorites")} onClick={() => toggleFavorite(app.id)}
-      className={`absolute right-1 top-1 ${pinned ? "text-[var(--tone-warning)]" : "text-muted opacity-0 group-hover:opacity-100 focus-visible:opacity-100"}`}>
-      <Star fill={pinned ? "currentColor" : "none"} />
+  return <HStack gap={1} vAlign="start">
+    <StackItem size="fill"><ClickableCard label={app.title} onClick={() => applications?.onSelect(app.id)} padding={3} width="100%">
+      <HStack gap={3} vAlign="start">
+        <Text color="accent">{app.icon}</Text>
+        <StackItem size="fill"><VStack gap={0.5}>
+          <Text weight="medium" maxLines={1}>{app.title}</Text>
+          {(app.description || role) && <Text type="supporting" maxLines={2}>{app.description ?? role}</Text>}
+        </VStack></StackItem>
+      </HStack>
+    </ClickableCard></StackItem>
+    <Button variant="ghost" size="icon" aria-label={pinned ? t("Remove from favorites") : t("Add to favorites")} aria-pressed={pinned}
+      title={pinned ? t("Remove from favorites") : t("Add to favorites")} onClick={() => toggleFavorite(app.id)}>
+      <Icon icon={Star} color={pinned ? "warning" : "inherit"} />
     </Button>
-  </div>;
+  </HStack>;
 }
 
 export function ApplicationsPortal({ projection }: { projection?: Projection }) {
@@ -33,10 +42,10 @@ export function ApplicationsPortal({ projection }: { projection?: Projection }) 
   }, [applications?.apps, query]);
   const ordered = [...categories].sort((a, b) => Number(!!lead && !lead.includes(a.id)) - Number(!!lead && !lead.includes(b.id)));
   const role = (id: string) => me.apps.find((e) => e.id === id)?.role;
-  return <div className="mx-auto grid w-full max-w-6xl gap-4 py-2">
+  return <VStack gap={4} maxWidth={1152}>
     <PageHeader title={t("Applications")} meta={t("{count} applications", { count: applications?.apps.length ?? 0 })}
       help={t("Every application you may open in {tenant}: the ones your organisation runs, and the platform's own tools your role allows.", { tenant: me.tenantId })}
-      actions={<Input type="search" value={query} onChange={(e) => setQuery(e.target.value)} placeholder={t("Find an application…")} aria-label={t("Find an application…")} className="w-full sm:w-72" />} />
+      actions={<HStack width={288}><Input type="search" value={query} onChange={(e) => setQuery(e.target.value)} placeholder={t("Find an application…")} aria-label={t("Find an application…")} /></HStack>} />
     {ordered.map((category) => {
       const inCategory = apps.filter((a) => a.category === category.id);
       if (!inCategory.length) return null;
@@ -49,15 +58,15 @@ export function ApplicationsPortal({ projection }: { projection?: Projection }) 
           groups.set(group.id, held);
         }
       }
-      return <section key={category.id} aria-label={category.label()} className="grid gap-2">
-        <h2 className="text-2xs font-semibold uppercase tracking-wider text-muted">{category.label()}</h2>
-        {category.id === "business" ? <div className="grid gap-3">{[...groups.entries()].sort(([, a], [, b]) => a.label.localeCompare(b.label)).map(([id, group]) => <section key={id} aria-label={group.label} className="grid gap-2">
-          <h3 className="text-xs font-medium">{group.label}</h3>
-          <div className="grid grid-cols-[repeat(auto-fill,minmax(240px,1fr))] gap-2">{group.apps.map((a) => <ApplicationTile key={a.id} app={a} role={role(a.id)} />)}</div>
-        </section>)}</div>
-          : <div className="grid grid-cols-[repeat(auto-fill,minmax(240px,1fr))] gap-2">{inCategory.map((a) => <ApplicationTile key={a.id} app={a} role={role(a.id)} />)}</div>}
-      </section>;
+      return <VStack key={category.id} gap={2} role="group" aria-label={category.label()}>
+        <Text as="p" role="heading" aria-level={2} weight="semibold" color="secondary">{category.label()}</Text>
+        {category.id === "business" ? <VStack gap={3}>{[...groups.entries()].sort(([, a], [, b]) => a.label.localeCompare(b.label)).map(([id, group]) => <VStack key={id} gap={2} role="group" aria-label={group.label}>
+          <Text as="p" role="heading" aria-level={3} weight="medium">{group.label}</Text>
+          <Grid columns={{ minWidth: 240, max: 6 }} gap={2}>{group.apps.map((a) => <ApplicationTile key={a.id} app={a} role={role(a.id)} />)}</Grid>
+        </VStack>)}</VStack>
+          : <Grid columns={{ minWidth: 240, max: 6 }} gap={2}>{inCategory.map((a) => <ApplicationTile key={a.id} app={a} role={role(a.id)} />)}</Grid>}
+      </VStack>;
     })}
     {!apps.length && <EmptyState title={t("No application matches.")} action={query.trim() ? <Button onClick={() => setQuery("")}>{t("Clear search")}</Button> : undefined} />}
-  </div>;
+  </VStack>;
 }

@@ -1,23 +1,31 @@
 import { credentialSignIn, signIn, type OidcConfig } from "@platform/api";
-import { Button, Card, ContentTabs, Input, language, languages, Notice, setLanguage, t, useLanguage } from "@platform/ui";
+import { Button, ContentTabs, Input, Notice, languages, setLanguage, t, useLanguage } from "@platform/ui";
+import { Card } from "@astryxdesign/core/Card";
+import { Divider } from "@astryxdesign/core/Divider";
+import { Grid } from "@astryxdesign/core/Grid";
+import { Heading } from "@astryxdesign/core/Heading";
+import { Icon } from "@astryxdesign/core/Icon";
+import { HStack, VStack } from "@astryxdesign/core/Stack";
+import { Text } from "@astryxdesign/core/Text";
 import { Boxes, Building2, History, KeyRound, Languages, LayoutGrid, Lock, Rocket, ScrollText, ShieldCheck, Workflow } from "lucide-react";
 import { useState, type FormEvent, type ReactNode } from "react";
 
 export function SignIn({ config }: { config: OidcConfig }) {
-  useLanguage();
+  const spoken = useLanguage();
   const [tab, setTab] = useState("signin");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [problem, setProblem] = useState("");
   const [pending, setPending] = useState<"" | "sso" | "form">("");
-  const next = languages[(languages.findIndex((entry) => entry.id === language()) + 1) % languages.length] ?? { id: "en", name: "English" };
+  const next = languages[(languages.findIndex((entry) => entry.id === spoken) + 1) % languages.length]!;
+  const unavailable = t("The identity service is unavailable. Retry, or continue with SSO.");
   const features: [ReactNode, string, string][] = [
-    [<Boxes />, t("Objects & Relations"), t("Model your business with flexible objects, relationships, and reusable schemas.")],
-    [<Workflow />, t("Workflows & Policies"), t("Orchestrate processes, automate tasks, and enforce business policies.")],
-    [<LayoutGrid />, t("Runtime Views"), t("Turn models into real applications with tailored views, actions, and data.")],
-    [<Building2 />, t("Multi-tenant Governance"), t("Isolate workspaces with strong boundaries, RBAC, and centralized oversight.")],
+    [<Icon icon={Boxes} />, t("Objects & Relations"), t("Model every business entity once and reuse it across applications.")],
+    [<Icon icon={Workflow} />, t("Workflows & Policies"), t("Turn work into guarded transitions with clear ownership and audit.")],
+    [<Icon icon={LayoutGrid} />, t("Runtime Views"), t("Build the shared views your teams use every day.")],
+    [<Icon icon={Building2} />, t("Multi-tenant Governance"), t("Keep every tenant, project and permission boundary explicit.")],
   ];
-  const assurance: [ReactNode, string][] = [[<KeyRound />, t("SSO")], [<ScrollText />, t("Audit")], [<ShieldCheck />, t("RBAC")], [<History />, t("History")], [<Rocket />, t("Activation")]];
+  const assurance: [ReactNode, string][] = [[<Icon icon={KeyRound} />, t("SSO")], [<Icon icon={ScrollText} />, t("Audit")], [<Icon icon={ShieldCheck} />, t("RBAC")], [<Icon icon={History} />, t("History")], [<Icon icon={Rocket} />, t("Activation")]];
   const continueWithSso = async () => {
     setPending("sso");
     setProblem("");
@@ -28,7 +36,6 @@ export function SignIn({ config }: { config: OidcConfig }) {
       setPending("");
     }
   };
-  const unavailable = t("The identity service is unavailable. Retry, or continue with SSO.");
   const submit = async (event: FormEvent) => {
     event.preventDefault();
     setPending("form");
@@ -44,103 +51,79 @@ export function SignIn({ config }: { config: OidcConfig }) {
     }
     setPending("");
   };
-  return <div data-density="comfortable" className="flex min-h-dvh flex-col overflow-x-hidden bg-background text-foreground">
-    <header className="mx-auto flex w-full max-w-[1200px] items-center gap-3 px-5 py-4 max-md:px-4">
-      <img src="/favicon.svg" alt="" className="size-6" />
-      <span className="font-semibold">{t("Platform")}</span>
-      <span aria-hidden className="h-4 w-px bg-border" />
-      <span className="truncate text-xs text-muted">{t("Build adaptive enterprise systems.")}</span>
-      <Button variant="ghost" size="sm" className="ml-auto shrink-0" aria-label={t("Language")} onClick={() => setLanguage(next.id)}><Languages />{next.name}</Button>
-    </header>
-    <main className="mx-auto flex w-full max-w-[1200px] flex-1 flex-col justify-center gap-8 px-5 py-8 max-md:px-4 lg:grid lg:grid-cols-[minmax(0,1fr)_minmax(380px,420px)] lg:items-center lg:gap-14">
-      <section className="order-2 grid min-w-0 content-start gap-6 lg:order-1">
-        <h1 className="max-w-2xl text-2xl font-semibold tracking-tight lg:text-[28px] lg:leading-9">{t("One platform for applications, workflows, and operations.")}</h1>
-        <p className="max-w-xl text-sm text-muted">{t("Model your enterprise, orchestrate workflows, enforce permissions, and deliver secure, adaptable applications across your organization.")}</p>
-        <div className="grid gap-3 sm:grid-cols-2">{features.map(([icon, title, description]) =>
-          <Card key={title} className="grid content-start gap-2 p-4">
-            <span className="grid size-8 place-items-center rounded-lg bg-primary/10 text-primary [&_svg]:size-4">{icon}</span>
-            <span className="font-medium">{title}</span>
-            <span className="text-xs text-muted">{description}</span>
-          </Card>)}
-        </div>
-        <ProductFrame />
-      </section>
-      <Card className="order-1 grid content-start gap-4 p-5 shadow-lg lg:order-2">
-        <div className="flex items-center gap-2">
-          <img src="/favicon.svg" alt="" className="size-6" />
-          <span className="font-semibold">{t("Platform")}</span>
-        </div>
-        <div className="grid gap-1">
-          <p className="text-sm font-medium">{t("Build adaptive enterprise systems.")}</p>
-          <p className="text-xs text-muted">{t("Sign-in runs in the identity service and supports MFA and passkeys.")}</p>
-        </div>
-        {problem && <Notice tone="danger" message={problem} />}
-        <ContentTabs label={t("Sign in")} value={tab} onChange={setTab} items={[
-          { id: "signin", title: t("Sign in"), content: <form className="grid gap-3 pt-2" onSubmit={submit}>
-            <Button type="button" variant="primary" size="lg" className="w-full" loading={pending === "sso"} disabled={pending === "form"} onClick={() => void continueWithSso()}><Lock />{t("Continue with SSO")}</Button>
-            <p className="flex items-center gap-3 text-2xs text-muted"><span className="h-px flex-1 bg-border" />{t("or")}<span className="h-px flex-1 bg-border" /></p>
-            <label className="grid gap-1 text-xs font-medium">{t("Email")}
-              <Input type="email" required autoComplete="username" className="h-[var(--ctrl-h-lg)]" value={email} onChange={(event) => setEmail(event.target.value)} placeholder={t("you@company.com")} />
-            </label>
-            <label className="grid gap-1 text-xs font-medium">{t("Password")}
-              <Input type="password" required autoComplete="current-password" className="h-[var(--ctrl-h-lg)]" value={password} onChange={(event) => setPassword(event.target.value)} placeholder={t("Enter your password")} />
-            </label>
-            <Button type="submit" variant="primary" size="lg" className="w-full" loading={pending === "form"} disabled={pending === "sso"}>{t("Sign in")}</Button>
-            <p className="text-2xs text-muted">{t("Accounts with MFA or a passkey continue with SSO.")}</p>
-          </form> },
-          { id: "access", title: t("Request access"), content: <p className="pt-2 text-sm text-muted">{t("Access is granted by workspace administrators as seats. Sign in with your organization email; if you have no seat yet, the workspace shows the administrators you can contact.")}</p> },
-        ]} />
-      </Card>
-    </main>
-    <footer className="border-t border-border bg-surface">
-      <div className="mx-auto flex w-full max-w-[1200px] flex-wrap items-center gap-x-6 gap-y-2 px-5 py-4 text-xs text-muted max-md:px-4">
-        <span className="font-medium text-foreground">{t("Trusted in enterprise environments")}</span>
-        {assurance.map(([icon, label]) => <span key={label} className="flex items-center gap-1.5 [&_svg]:size-3.5">{icon}{label}</span>)}
-      </div>
-    </footer>
-  </div>;
+  return <VStack gap={0} height="100dvh">
+    <HStack gap={3} padding={4} hAlign="center">
+      <HStack gap={2} hAlign="between" maxWidth={1200} width="100%">
+        <HStack gap={2}>
+          <img src="/favicon.svg" alt="" width={24} height={24} />
+          <Text weight="semibold">{t("Platform")}</Text>
+          <Divider orientation="vertical" />
+          <Text type="supporting" maxLines={1}>{t("Build adaptive enterprise systems.")}</Text>
+        </HStack>
+        <Button variant="ghost" size="sm" aria-label={t("Language")} onClick={() => setLanguage(next.id)}><Icon icon={Languages} />{next.name}</Button>
+      </HStack>
+    </HStack>
+    <VStack isScrollable gap={0}>
+      <HStack hAlign="center" paddingBlock={6} paddingInline={6}>
+        <Grid columns={{ minWidth: 360, max: 2 }} gap={8} width="100%" maxWidth={1200} align="center">
+          <VStack gap={6} justify="center">
+            <VStack gap={3}>
+              <Heading level={1} type="display-3">{t("One platform for applications, workflows, and operations.")}</Heading>
+              <Text type="body">{t("Model your enterprise, orchestrate workflows, enforce permissions, and deliver secure, adaptable applications across your organization.")}</Text>
+            </VStack>
+            <Grid columns={{ minWidth: 220, max: 2 }} gap={3}>
+              {features.map(([icon, title, description]) => <Card key={title} padding={4}>
+                <VStack gap={2}><Text color="accent">{icon}</Text><Text weight="medium">{title}</Text><Text type="supporting">{description}</Text></VStack>
+              </Card>)}
+            </Grid>
+            <ProductFrame />
+          </VStack>
+          <Card padding={5}>
+            <VStack gap={4}>
+              <HStack gap={2}><img src="/favicon.svg" alt="" width={24} height={24} /><Text weight="semibold">{t("Platform")}</Text></HStack>
+              <VStack gap={1}><Text weight="medium">{t("Build adaptive enterprise systems.")}</Text><Text type="supporting">{t("Sign-in runs in the identity service and supports MFA and passkeys.")}</Text></VStack>
+              {problem && <Notice tone="danger" message={problem} />}
+              <ContentTabs label={t("Sign in")} value={tab} onChange={setTab} items={[
+                { id: "signin", title: t("Sign in"), content: <form onSubmit={submit}>
+                  <VStack gap={3}>
+                    <Button variant="primary" width="100%" loading={pending === "sso"} disabled={pending !== ""} onClick={() => void continueWithSso()}><Icon icon={Lock} />{t("Continue with SSO")}</Button>
+                    <HStack gap={2} vAlign="center"><Divider /><Text type="supporting">{t("or")}</Text><Divider /></HStack>
+                    <label><VStack gap={1}>
+                      <Text type="label" weight="medium">{t("Email")}</Text>
+                      <Input type="email" required autoComplete="username" value={email} placeholder={t("you@company.com")} onChange={(event) => setEmail(event.target.value)} />
+                    </VStack></label>
+                    <label><VStack gap={1}>
+                      <Text type="label" weight="medium">{t("Password")}</Text>
+                      <Input type="password" required autoComplete="current-password" value={password} placeholder={t("Enter your password")} onChange={(event) => setPassword(event.target.value)} />
+                    </VStack></label>
+                    <Button type="submit" variant="primary" width="100%" loading={pending === "form"} disabled={pending !== ""}>{t("Sign in")}</Button>
+                    <Text type="supporting">{t("Accounts with MFA or a passkey continue with SSO.")}</Text>
+                  </VStack>
+                </form> },
+                { id: "access", title: t("Request access"), content: <VStack gap={2}>
+                  <Text type="body">{t("Access is granted by workspace administrators as seats. Sign in with your organization email; if you have no seat yet, the workspace shows the administrators you can contact.")}</Text>
+                </VStack> },
+              ]} />
+            </VStack>
+          </Card>
+        </Grid>
+      </HStack>
+      <HStack gap={3} padding={4} wrap="wrap" hAlign="center">
+        {assurance.map(([icon, label]) => <HStack key={label} gap={1}>{icon}<Text type="supporting">{label}</Text></HStack>)}
+      </HStack>
+    </VStack>
+  </VStack>;
 }
 
 function ProductFrame() {
-  return <div aria-hidden className="relative hidden lg:block">
-    <div className="absolute -top-10 right-6 size-56 rounded-full bg-primary/10" />
-    <div className="absolute -left-10 top-32 size-40 rotate-12 rounded-3xl bg-primary/10" />
-    <Card className="relative grid w-full max-w-[560px] grid-cols-[124px_minmax(0,1fr)] gap-3 p-3 shadow-lg">
-      <div className="grid content-start gap-1 rounded-md bg-canvas p-2 text-2xs">
-        <span className="rounded-sm bg-primary/10 px-2 py-1 font-medium text-primary">{t("Workspace")}</span>
-        {[t("Models"), t("Workflows"), t("Policies"), t("Applications")].map((label) =>
-          <span key={label} className="px-2 py-1">{label}</span>)}
-      </div>
-      <div className="grid min-w-0 content-start gap-2">
-        <Card className="grid gap-2 p-3">
-          <span className="text-xs font-medium">{t("Enterprise model")}</span>
-          <span className="flex flex-wrap items-center gap-1 text-2xs">
-            <span className="rounded-sm border border-border px-1.5 py-0.5">Customer</span>
-            <span className="h-px w-3 bg-border" />
-            <span className="rounded-sm border border-border px-1.5 py-0.5">Account</span>
-            <span className="h-px w-3 bg-border" />
-            <span className="rounded-sm bg-primary/10 px-1.5 py-0.5 text-primary">Order</span>
-          </span>
-        </Card>
-        <Card className="grid gap-2 p-3">
-          <span className="text-xs font-medium">{t("Workflows")}</span>
-          <span className="flex flex-wrap items-center gap-1 text-2xs text-muted">
-            <span className="rounded-sm bg-primary/10 px-1.5 py-0.5">Submit</span>
-            <span>→</span>
-            <span className="rounded-sm bg-primary/10 px-1.5 py-0.5">Review</span>
-            <span>→</span>
-            <span className="rounded-sm bg-[var(--tone-success)]/15 px-1.5 py-0.5 text-[var(--tone-success)]">Approve</span>
-          </span>
-        </Card>
-        <Card className="grid gap-1.5 p-3">
-          <span className="text-xs font-medium">{t("Runtime views")}</span>
-          {[0, 1, 2].map((row) =>
-            <span key={row} className="flex items-center gap-2">
-              <span className="h-2 flex-1 rounded-sm bg-row-hover" />
-              <span className="h-2 w-10 rounded-sm bg-[var(--tone-success)]/40" />
-            </span>)}
-        </Card>
-      </div>
-    </Card>
-  </div>;
+  return <Card variant="muted" padding={3}>
+    <VStack gap={2}>
+      <Text type="label" weight="semibold">{t("Workspace")}</Text>
+      <Grid columns={{ minWidth: 150, max: 3 }} gap={2}>
+        <Card padding={2}><VStack gap={1}><Text type="label">{t("Enterprise model")}</Text><Text type="supporting">Customer → Account → Order</Text></VStack></Card>
+        <Card padding={2}><VStack gap={1}><Text type="label">{t("Workflows")}</Text><Text type="supporting">Submit → Review → Approve</Text></VStack></Card>
+        <Card padding={2}><VStack gap={1}><Text type="label">{t("Runtime views")}</Text><Text type="supporting">{t("Applications")}</Text></VStack></Card>
+      </Grid>
+    </VStack>
+  </Card>;
 }

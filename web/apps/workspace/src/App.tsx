@@ -1,7 +1,7 @@
 import "./i18n";
 import { ApplicationSessionsProvider, HostContext, recordEntryRoute, resourceEntryRoute, withApp, type AppUI, type AppView, type Host, type Me, type SavedView } from "@platform/app";
 import { EdgeClient, OfflineReadError, accounts, forgetAccount, keepFresh, signIn, signOut, switchAccount, type Api, type OidcConfig, type OidcSession } from "@platform/api";
-import { Button, Workspace, notify, routeToHash, useTheme, type NavSection, type Route, type SearchResult, type SearchScope, t, language, setLanguage, setCurrency, useLanguage } from "@platform/ui";
+import { Button, Notice, Tag, Workspace, notify, routeToHash, useTheme, type NavSection, type Route, type SearchResult, type SearchScope, t, language, setLanguage, setCurrency, useLanguage } from "@platform/ui";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Bookmark, Layers } from "lucide-react";
 import { VStack } from "@astryxdesign/core/Stack";
@@ -357,7 +357,7 @@ export function App({ signedIn, identities }: { signedIn?: { config: OidcConfig;
     <VStack gap={2} hAlign="center" maxWidth={480}>
       <Text as="p" role={alert ? "alert" : "status"}>{message}</Text>
       {detail && <Text type="supporting">{detail}</Text>}
-      {maintenanceRequested && hostAdminQuery.isError && <Text as="p" role="alert" className="text-danger">{t("Host maintenance is unavailable. Check your administrator access and connection.")}</Text>}
+      {maintenanceRequested && hostAdminQuery.isError && <Notice tone="danger" message={t("Host maintenance is unavailable. Check your administrator access and connection.")} />}
       <VStack gap={2}><Button size="sm" onClick={retry}>{t("Retry")}</Button><Button size="sm" variant="default" onClick={() => { setMaintenanceRequested(true); if (maintenanceRequested) void hostAdminQuery.refetch(); }}>{t("Open host maintenance")}</Button><Button size="sm" variant="ghost" onClick={() => void leaveSession()}>{t("Sign out")}</Button></VStack>
     </VStack>
   </BootScreen>;
@@ -439,14 +439,14 @@ export function App({ signedIn, identities }: { signedIn?: { config: OidcConfig;
           ] : []), ...(app?.commands?.(host) ?? [])]}
         searchBackend={searchBackend}
         searchKnowledge={searchKnowledge}
-        status={<div className="grid gap-0.5 text-2xs text-muted">
-          {connectionUnavailable && <span role="status" className="px-2 text-[var(--tone-warning)]">{t("Live updates unavailable")}</span>}
-          <button type="button" aria-label={t("Last activated release")} title={!releaseUnavailable ? release.data?.id : undefined} onClick={() => setReleaseOpen(true)} className="truncate rounded-sm px-2 py-0.5 text-left hover:bg-row-hover hover:text-foreground">
+        status={<VStack gap={0.5}>
+          {connectionUnavailable && <Tag tone="warning" label={t("Live updates unavailable")} />}
+          <Button variant="row" size="sm" aria-label={t("Last activated release")} title={!releaseUnavailable ? release.data?.id : undefined} onClick={() => setReleaseOpen(true)}>
             {releaseUnavailable ? t("Release unavailable") : release.isPending ? t("Checking release…") :
-              release.data?.id ? <>{t("Release")} <code>{release.data.id.split(":").at(-1)?.slice(0, 10)}</code></> : t("No activated release")}
-          </button>
-          {(!online || client.usingPrepared) && <button type="button" onClick={() => setOfflineOpen(true)} className="truncate rounded-sm px-2 py-0.5 text-left text-[var(--tone-warning)] hover:bg-row-hover">{preparedAt ? t("Saved {time}", { time: new Date(preparedAt).toLocaleString() }) : t("Offline work")}</button>}
-        </div>}
+              release.data?.id ? `${t("Release")} ${release.data.id.split(":").at(-1)?.slice(0, 10) ?? ""}` : t("No activated release")}
+          </Button>
+          {(!online || client.usingPrepared) && <Button variant="row" size="sm" onClick={() => setOfflineOpen(true)}>{preparedAt ? t("Saved {time}", { time: new Date(preparedAt).toLocaleString() }) : t("Offline work")}</Button>}
+        </VStack>}
         session={{ tenant: tenantLabel({ id: me!.tenantId, name: me!.tenant?.name }), principal: me!.principalId, name: me!.account?.displayName, detail: signedIn?.session.email, options: sessionOptions, switchTitle,
           current: signedIn ? `tenant:${me!.tenantId}` : `as:${token}`, onSwitch,
           accounts: signedIn ? accounts(signedIn.config).map((entry) => ({ id: entry.subject, label: entry.email || entry.subject })) : undefined,

@@ -1,6 +1,14 @@
 import { useHost, useRead, useReadQuery } from "@platform/app";
 import type { Api } from "@platform/api";
 import { Button, EmptyState, Panel, Tag, routeKey, t, useWorkspace, type InboxTask, type PlatformApplication } from "@platform/ui";
+import { ClickableCard } from "@astryxdesign/core/ClickableCard";
+import { Grid } from "@astryxdesign/core/Grid";
+import { Heading } from "@astryxdesign/core/Heading";
+import { Icon } from "@astryxdesign/core/Icon";
+import { Kbd } from "@astryxdesign/core/Kbd";
+import { List, ListItem } from "@astryxdesign/core/List";
+import { HStack, StackItem, VStack } from "@astryxdesign/core/Stack";
+import { Text } from "@astryxdesign/core/Text";
 import { ArrowRight, Bell, ClipboardList, FolderKanban, GitBranch, Inbox, Search } from "lucide-react";
 import type { ReactNode } from "react";
 import { applicationGroup } from "./registry";
@@ -17,26 +25,33 @@ const when = (at?: string | number) => {
 };
 
 function Stat({ icon, label, value, onClick }: { icon: ReactNode; label: string; value?: number; onClick: () => void }) {
-  return <button type="button" onClick={onClick} className="group flex min-w-0 items-center gap-3 rounded-md border border-border bg-surface px-3 py-2.5 text-left hover:border-border-strong hover:bg-row-hover">
-    <span className="grid size-8 shrink-0 place-items-center rounded-md bg-row-selected text-primary [&_svg]:size-4">{icon}</span>
-    <span className="grid min-w-0"><span className="text-xl font-semibold tabular-nums leading-tight">{value ?? "–"}</span><span className="truncate text-xs text-muted">{label}</span></span>
-  </button>;
+  return <ClickableCard label={label} onClick={onClick} padding={3}>
+    <HStack gap={3} vAlign="center">
+      <Text color="accent">{icon}</Text>
+      <VStack gap={0}>
+        <Text size="xl" weight="semibold" hasTabularNumbers maxLines={1}>{value ?? "–"}</Text>
+        <Text type="supporting" maxLines={1}>{label}</Text>
+      </VStack>
+    </HStack>
+  </ClickableCard>;
 }
 
 function Row({ icon, title, detail, meta, onClick }: { icon?: ReactNode; title: string; detail?: string; meta?: ReactNode; onClick: () => void }) {
-  return <button type="button" onClick={onClick} className="flex w-full min-w-0 items-center gap-3 rounded-sm px-2 py-1.5 text-left hover:bg-row-hover">
-    {icon && <span className="grid size-6 shrink-0 place-items-center text-muted [&_svg]:size-4">{icon}</span>}
-    <span className="grid min-w-0 flex-1"><span className="truncate text-sm">{title}</span>{detail && <span className="truncate text-xs text-muted">{detail}</span>}</span>
-    {meta && <span className="shrink-0 text-xs text-muted">{meta}</span>}
-  </button>;
+  return <ListItem label={title} description={detail} startContent={icon}
+    endContent={meta ? <Text type="supporting" maxLines={1}>{meta}</Text> : undefined} onClick={onClick} />;
 }
 
 function AppTile({ app }: { app: PlatformApplication }) {
   const { applications } = useWorkspace();
-  return <button type="button" onClick={() => applications?.onSelect(app.id)} className="flex min-w-0 items-center gap-2.5 rounded-md border border-border bg-surface px-3 py-2 text-left hover:border-border-strong hover:bg-row-hover">
-    <span className="grid size-7 shrink-0 place-items-center rounded-md bg-row-selected text-primary [&_svg]:size-4">{app.icon}</span>
-    <span className="grid min-w-0"><span className="truncate text-sm font-medium">{app.title}</span>{app.description && <span className="truncate text-xs text-muted">{app.description}</span>}</span>
-  </button>;
+  return <ClickableCard label={app.title} onClick={() => applications?.onSelect(app.id)} padding={2}>
+    <HStack gap={3} vAlign="center">
+      <Text color="accent">{app.icon}</Text>
+      <StackItem size="fill"><VStack gap={0}>
+        <Text weight="medium" maxLines={1}>{app.title}</Text>
+        {app.description && <Text type="supporting" maxLines={1}>{app.description}</Text>}
+      </VStack></StackItem>
+    </HStack>
+  </ClickableCard>;
 }
 
 function BusinessAppTiles({ apps, resources }: { apps: PlatformApplication[]; resources: readonly Api.ResourceEntry[] }) {
@@ -47,10 +62,10 @@ function BusinessAppTiles({ apps, resources }: { apps: PlatformApplication[]; re
     held.apps.push(app);
     groups.set(group.id, held);
   }
-  return <div className="grid gap-3">{[...groups.entries()].sort(([, a], [, b]) => a.label.localeCompare(b.label)).map(([id, group]) => <section key={id} aria-label={group.label} className="grid gap-1">
-    <h3 className="text-2xs font-medium uppercase tracking-wider text-muted">{group.label}</h3>
-    <div className="grid gap-2 sm:grid-cols-2">{group.apps.map(app => <AppTile key={app.id} app={app} />)}</div>
-  </section>)}</div>;
+  return <VStack gap={3}>{[...groups.entries()].sort(([, a], [, b]) => a.label.localeCompare(b.label)).map(([id, group]) => <VStack key={id} gap={1} role="group" aria-label={group.label}>
+    <Text as="p" role="heading" aria-level={3} weight="medium" color="secondary">{group.label}</Text>
+    <Grid columns={{ minWidth: 240, max: 2 }} gap={2}>{group.apps.map(app => <AppTile key={app.id} app={app} />)}</Grid>
+  </VStack>)}</VStack>;
 }
 
 export function Home() {
@@ -74,54 +89,55 @@ export function Home() {
   const proposals = (branches.data ?? []).filter(branch => branch.state === "proposed" || branch.state === "open" && branch.changes > 0)
     .sort((a, b) => (b.changed?.at ?? "").localeCompare(a.changed?.at ?? "")).slice(0, 6);
 
-  return <div className="mx-auto grid w-full max-w-6xl gap-5 py-2">
-    <header className="flex flex-wrap items-end justify-between gap-3">
-      <div className="min-w-0">
-        <h1 className="text-xl font-semibold tracking-tight">{greeting}</h1>
-        <p className="mt-1 text-sm text-muted">{me.tenant?.name || me.tenantId}</p>
-      </div>
-      <button type="button" onClick={palette} className="flex h-8 w-full items-center gap-2 rounded-md border border-border bg-surface px-3 text-sm text-muted hover:border-border-strong sm:w-80">
-        <Search className="size-3.5" /><span className="flex-1 truncate text-left">{t("Search records, apps and commands")}</span><kbd className="text-xs">⌘K</kbd>
-      </button>
-    </header>
+  return <VStack gap={5} maxWidth={1152}>
+    <HStack gap={3} wrap="wrap" vAlign="end" hAlign="between">
+      <VStack gap={1}>
+        <Heading level={1}>{greeting}</Heading>
+        <Text type="supporting">{me.tenant?.name || me.tenantId}</Text>
+      </VStack>
+      <HStack gap={2}>
+        <Button width={320} onClick={palette}><Icon icon={Search} />{t("Search records, apps and commands")}</Button>
+        <Kbd keys="mod+k" />
+      </HStack>
+    </HStack>
 
-    <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
-      <Stat icon={<Inbox />} label={t("Tasks waiting for you")} value={inbox?.length} onClick={() => open({ view: "inbox" })} />
-      <Stat icon={<ClipboardList />} label={t("Requests in progress")} value={requests?.filter(request => request.state === "pending").length} onClick={() => open({ view: "requests" })} />
-      <Stat icon={<Bell />} label={t("Unread notifications")} value={notifications?.filter(notification => !notification.read).length} onClick={() => open({ view: "notifications" })} />
-      {builder || branches.data?.some(branch => branch.state === "proposed") ? <Stat icon={<GitBranch />} label={t("Open proposals")} value={branches.data?.filter(branch => branch.state === "proposed").length} onClick={() => open({ view: "changes" })} />
-        : <Stat icon={<FolderKanban />} label={t("Applications")} value={apps.length} onClick={() => open({ view: "portal" })} />}
-    </div>
+    <Grid columns={{ minWidth: 180, max: 4 }} gap={2}>
+      <Stat icon={<Icon icon={Inbox} />} label={t("Tasks waiting for you")} value={inbox?.length} onClick={() => open({ view: "inbox" })} />
+      <Stat icon={<Icon icon={ClipboardList} />} label={t("Requests in progress")} value={requests?.filter(request => request.state === "pending").length} onClick={() => open({ view: "requests" })} />
+      <Stat icon={<Icon icon={Bell} />} label={t("Unread notifications")} value={notifications?.filter(notification => !notification.read).length} onClick={() => open({ view: "notifications" })} />
+      {builder || branches.data?.some(branch => branch.state === "proposed") ? <Stat icon={<Icon icon={GitBranch} />} label={t("Open proposals")} value={branches.data?.filter(branch => branch.state === "proposed").length} onClick={() => open({ view: "changes" })} />
+        : <Stat icon={<Icon icon={FolderKanban} />} label={t("Applications")} value={apps.length} onClick={() => open({ view: "portal" })} />}
+    </Grid>
 
-    <div className="grid gap-5 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
-      <div className="grid content-start gap-5">
-        {builder && <Panel title={t("Projects")} actions={<Button size="sm" variant="ghost" onClick={() => open({ view: "files" })}>{t("All projects")}<ArrowRight /></Button>}>
-          {projects.isError && <p role="alert" className="text-xs text-danger">{t("Projects could not be loaded.")}</p>}
+    <Grid columns={{ minWidth: 400, max: 2 }} gap={5}>
+      <VStack gap={5}>
+        {builder && <Panel title={t("Projects")} actions={<Button size="sm" variant="ghost" onClick={() => open({ view: "files" })}>{t("All projects")}<Icon icon={ArrowRight} /></Button>}>
+          {projects.isError && <Text as="p" type="supporting" role="alert">{t("Projects could not be loaded.")}</Text>}
           {!projects.isLoading && !liveProjects.length && <EmptyState title={t("No projects yet")} hint={t("A project holds the object types, logic, pages and releases of one application.")}
             action={<Button variant="primary" onClick={() => open({ view: "files" })}>{t("Create a project")}</Button>} />}
-          <div className="-mx-2 grid">{liveProjects.map(project => <Row key={project.id} icon={<FolderKanban />} title={project.title || project.ref.name}
-            meta={<span className="flex items-center gap-2">{project.state && project.state !== "published" && <Tag label={t("Draft")} />}{when(project.changed?.at)}</span>}
-            onClick={() => open({ view: "project", params: { id: project.id } })} />)}</div>
+          <List density="compact">{liveProjects.map(project => <Row key={project.id} icon={<Icon icon={FolderKanban} />} title={project.title || project.ref.name}
+            meta={<HStack gap={2}>{project.state && project.state !== "published" && <Tag label={t("Draft")} />}{when(project.changed?.at)}</HStack>}
+            onClick={() => open({ view: "project", params: { id: project.id } })} />)}</List>
         </Panel>}
-        {!builder && business.length > 0 && <Panel title={t("Business applications")} actions={<Button size="sm" variant="ghost" onClick={() => open({ view: "portal" })}>{t("All applications")}<ArrowRight /></Button>}>
+        {!builder && business.length > 0 && <Panel title={t("Business applications")} actions={<Button size="sm" variant="ghost" onClick={() => open({ view: "portal" })}>{t("All applications")}<Icon icon={ArrowRight} /></Button>}>
           <BusinessAppTiles apps={business} resources={projects.data?.resources ?? []} />
         </Panel>}
         <Panel title={t("Recent")}>
-          {!recent.length && <p className="text-xs text-muted">{t("Nothing opened yet.")}</p>}
-          <div className="-mx-2 grid">{recent.slice(0, 8).map(item => <Row key={routeKey(item.route)} title={item.title} detail={apps.find(app => app.id === item.app)?.title} meta={when(item.at)} onClick={() => open(item.route)} />)}</div>
+          {!recent.length && <Text as="p" type="supporting">{t("Nothing opened yet.")}</Text>}
+          <List density="compact">{recent.slice(0, 8).map(item => <Row key={routeKey(item.route)} title={item.title} detail={apps.find(app => app.id === item.app)?.title} meta={when(item.at)} onClick={() => open(item.route)} />)}</List>
         </Panel>
-      </div>
-      <div className="grid content-start gap-5">
-        {(builder || proposals.length > 0) && <Panel title={t("Branches and proposals")} actions={<Button size="sm" variant="ghost" onClick={() => open({ view: "changes" })}>{t("All")}<ArrowRight /></Button>}>
-          {!branches.isLoading && !proposals.length && <p className="text-xs text-muted">{t("No open changes. Start a branch from any builder tool.")}</p>}
-          <div className="-mx-2 grid">{proposals.map(branch => <Row key={branch.id} icon={<GitBranch />} title={branch.title} detail={t("{n} changes", { n: branch.changes })}
+      </VStack>
+      <VStack gap={5}>
+        {(builder || proposals.length > 0) && <Panel title={t("Branches and proposals")} actions={<Button size="sm" variant="ghost" onClick={() => open({ view: "changes" })}>{t("All")}<Icon icon={ArrowRight} /></Button>}>
+          {!branches.isLoading && !proposals.length && <Text as="p" type="supporting">{t("No open changes. Start a branch from any builder tool.")}</Text>}
+          <List density="compact">{proposals.map(branch => <Row key={branch.id} icon={<Icon icon={GitBranch} />} title={branch.title} detail={t("{n} changes", { n: branch.changes })}
             meta={<Tag label={t(branch.state === "proposed" ? "Proposed" : "Editing")} tone={branch.state === "proposed" ? "purple" : "info"} />}
-            onClick={() => open(branch.state === "proposed" ? { view: "proposal", params: { id: branch.id } } : { view: "changes" })} />)}</div>
+            onClick={() => open(branch.state === "proposed" ? { view: "proposal", params: { id: branch.id } } : { view: "changes" })} />)}</List>
         </Panel>}
-        {pinned.length > 0 && <Panel title={t("Pinned")}><div className="grid gap-2">{pinned.map(app => <AppTile key={app.id} app={app} />)}</div></Panel>}
-        {builder && tools.length > 0 && <Panel title={t("Build tools")}><div className="grid gap-2">{tools.filter(app => !favorites.includes(app.id)).map(app => <AppTile key={app.id} app={app} />)}</div></Panel>}
+        {pinned.length > 0 && <Panel title={t("Pinned")}><VStack gap={2}>{pinned.map(app => <AppTile key={app.id} app={app} />)}</VStack></Panel>}
+        {builder && tools.length > 0 && <Panel title={t("Build tools")}><VStack gap={2}>{tools.filter(app => !favorites.includes(app.id)).map(app => <AppTile key={app.id} app={app} />)}</VStack></Panel>}
         {builder && business.length > 0 && <Panel title={t("Business applications")}><BusinessAppTiles apps={business.slice(0, 6)} resources={projects.data?.resources ?? []} /></Panel>}
-      </div>
-    </div>
-  </div>;
+      </VStack>
+    </Grid>
+  </VStack>;
 }
