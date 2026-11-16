@@ -1,4 +1,5 @@
 import type { Api } from "@platform/api";
+import { FormLayout } from "@astryxdesign/core/FormLayout";
 import { StructuredValueInput } from "../fields/StructuredValueInput";
 import { t } from "../i18n";
 import { Button } from "../primitives/button";
@@ -91,7 +92,7 @@ function SchemaBody({ schema, value, onChange, label, depth }: { schema: Api.Val
   if (schema.type === "object") {
     const record = isRecord(value) ? value : {}, required = new Set(schema.required ?? []);
     return (
-      <div className="grid min-w-0 gap-3 border-l border-border pl-3">
+      <FormLayout direction="vertical" className="border-l border-border pl-3">
         {Object.entries(schema.properties ?? {}).map(([name, property]) => {
           const present = record[name] !== undefined, shown = required.has(name) || present, path = `${label}.${name}`;
           const set = (next: unknown) => onChange({ ...record, [name]: next });
@@ -105,7 +106,7 @@ function SchemaBody({ schema, value, onChange, label, depth }: { schema: Api.Val
             </div>
           );
         })}
-      </div>
+      </FormLayout>
     );
   }
   if (schema.type === "variant") {
