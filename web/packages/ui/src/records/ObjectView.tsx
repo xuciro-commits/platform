@@ -10,6 +10,8 @@ import { cn } from "../lib/cn";
 import { Button } from "../primitives/button";
 import { Reasoned } from "./ActionAvailability";
 import { Tooltip } from "../primitives/tooltip";
+import { HStack, VStack } from "@astryxdesign/core/Stack";
+import { Text } from "@astryxdesign/core/Text";
 
 export type HeaderPill = { key: string; label: string; tone: Tone; icon?: string; title?: string };
 
@@ -43,15 +45,15 @@ export function ObjectHeader({ icon, color, title, subtitle, pills, tags, status
 }) {
   return <header className={cn("flex min-w-0 flex-wrap items-start gap-x-3 gap-y-2 rounded-md border border-border bg-surface px-3 py-2", sticky && "sticky top-0 z-10")}>
     <ObjectIcon icon={icon} color={color} />
-    <div className="grid min-w-0 flex-1 gap-1">
-      <div className="flex min-w-0 flex-wrap items-center gap-2">
-        <h1 className="min-w-0 break-words text-lg font-semibold">{title}</h1>
+    <VStack gap={1} className="min-w-0 flex-1">
+      <HStack gap={2} wrap="wrap" align="center">
+        <Text as="h1" type="large" weight="semibold">{title}</Text>
         {pills.map(pill => <Tooltip key={pill.key} content={pill.title}><span className="inline-flex"><Tag label={pill.label} tone={pill.tone} icon={pill.icon} /></span></Tooltip>)}
         {tags}
         {status}
-      </div>
-      <p className="min-w-0 break-words font-mono text-xs text-muted">{subtitle}</p>
-    </div>
-    {actions && <div className="ml-auto flex min-w-0 flex-wrap items-center gap-1">{actions}</div>}
+      </HStack>
+      <Text type="code">{subtitle}</Text>
+    </VStack>
+    {actions && <HStack gap={1} wrap="wrap" className="ml-auto">{actions}</HStack>}
   </header>;
 }
