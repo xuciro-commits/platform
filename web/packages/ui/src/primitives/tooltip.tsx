@@ -1,4 +1,5 @@
 import { Tooltip as AstryxTooltip } from "@astryxdesign/core/Tooltip";
+import { HStack } from "@astryxdesign/core/Stack";
 import type { ReactNode } from "react";
 
 export function Tooltip({
@@ -18,9 +19,9 @@ export function Tooltip({
   return (
     <AstryxTooltip content={content} placement={placement}>
       {wrap ? (
-        <span tabIndex={0} className="inline-flex">
+        <HStack gap={0} tabIndex={0}>
           {children}
-        </span>
+        </HStack>
       ) : (
         children
       )}

@@ -6,7 +6,7 @@ import { Collapsible } from "@astryxdesign/core/Collapsible";
 import { Switch as AstryxSwitch } from "@astryxdesign/core/Switch";
 import { ToggleButton } from "@astryxdesign/core/ToggleButton";
 import { TreeList, type TreeListItemData } from "@astryxdesign/core/TreeList";
-import { HStack } from "@astryxdesign/core/Stack";
+import { HStack, Stack } from "@astryxdesign/core/Stack";
 import { Text } from "@astryxdesign/core/Text";
 import { cn } from "../lib/cn";
 import { Button, type ButtonProps } from "./button";
@@ -82,7 +82,7 @@ function FormBody({onSubmit,children,...props}:Omit<FormHTMLAttributes<HTMLFormE
 export function Disclosure({ summary, children, open, defaultOpen = false, onToggle, className }:
   { summary: ReactNode; children: ReactNode; open?: boolean; defaultOpen?: boolean; onToggle?: (open: boolean) => void; className?: string }) {
   return <Collapsible className={className} trigger={summary} defaultIsOpen={defaultOpen} isOpen={open} onOpenChange={onToggle} chevronPosition="start">
-    <div className="pl-5">{children}</div>
+    <Stack gap={0} paddingInlineStart={5}>{children}</Stack>
   </Collapsible>;
 }
 
@@ -91,7 +91,7 @@ export function FilePicker({ accept, onFile, children, ...button }:
   const input = useRef<HTMLInputElement>(null);
   return (
     <>
-      <input ref={input} type="file" accept={accept} disabled={button.disabled} className="hidden" onChange={(e) => {
+      <input ref={input} type="file" accept={accept} disabled={button.disabled} hidden onChange={(e) => {
         const file = e.target.files?.[0];
         e.target.value = "";
         if (file) onFile(file);
