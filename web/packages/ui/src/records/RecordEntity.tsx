@@ -8,6 +8,7 @@ import { Input } from "../primitives/input";
 import { EnterpriseReference, RecordLookup } from "./RecordLookup";
 import { RecordChip } from "./RecordChip";
 import { t } from "../i18n";
+import { Step, Stepper } from "@astryxdesign/core/Stepper";
 import type {EntityInfo, EntityRecord, FieldInfo, Lifecycle, Money, RecordSource} from "./Records";
 
 const categoryTones = ["info", "success", "warning", "purple", "teal", "pink", "orange", "neutral"] as const;
@@ -134,13 +135,12 @@ export function StatusBar({ lifecycle, state, can, onTransition, tracker=false }
   tracker?:boolean; lifecycle: Lifecycle; state: string; can?: (schema: string) => boolean; onTransition?: (schema: string, title: string) => void;
 }) {
   const open = lifecycle.transitions.filter((t) => t.from.includes(state) && (!can || can(t.schema)));
+  const active = lifecycle.states.findIndex((step) => step.name === state);
   return (
     <div className="flex flex-wrap items-center gap-2">
-      <ol aria-label={tracker?t("Lifecycle stages"):undefined} className={tracker?"flex min-w-0 flex-wrap items-center gap-2 text-xs":"flex overflow-hidden rounded-md border border-border text-xs"}>
-        {lifecycle.states.map((s) => (
-          <li key={s.name} aria-current={s.name===state?"step":undefined} className={tracker?"flex min-w-0 items-center gap-1 rounded-md border border-border px-2 py-1 "+(s.name===state?"bg-primary font-medium text-primary-foreground":"text-muted"):(s.name === state ? "bg-primary px-2 py-1 font-medium text-primary-foreground" : "px-2 py-1 text-muted")}>{tracker&&<span aria-hidden className={"h-3 w-3 shrink-0 rounded-full border "+(s.name===state?"bg-primary-foreground":"border-border")}/>}<span className="break-words">{s.title}</span></li>
-        ))}
-      </ol>
+      <Stepper label={tracker?t("Lifecycle stages"):t("Lifecycle")} activeStep={active} orientation="horizontal" density={tracker?"compact":"balanced"}>
+        {lifecycle.states.map((step, index) => <Step key={step.name} step={index} label={step.title} />)}
+      </Stepper>
       {onTransition && open.map((t) => <Button key={t.schema} size="sm" onClick={() => onTransition(t.schema, t.title)}>{t.title}</Button>)}
     </div>
   );
