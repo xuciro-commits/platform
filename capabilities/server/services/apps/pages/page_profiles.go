@@ -17,7 +17,7 @@ func checkProfile(d platform.PageInputSchema) error {
 
 func checkVariableProfile(d platform.PageInputSchema, id string, v platform.PageVariable) error {
 	supports := func(feature string) bool {
-		return platform.PageUIProfileSupports(d.ProfileVersion(), platform.PageWidgets.Features[feature])
+		return pageUIProfileSupports(profileVersion(d), platform.PageWidgets.Features[feature])
 	}
 	switch {
 	case v.Mode == "property" && !supports("propertyVariables"):

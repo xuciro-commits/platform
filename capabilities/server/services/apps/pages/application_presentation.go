@@ -35,7 +35,7 @@ func CheckApplicationHeader(a platform.Application) error {
 	if h == nil {
 		return nil
 	}
-	if !platform.PageUIProfileSupports(a.UIProfile, "platform.page.v2.105") || len(h.Title) > 1024 || len(h.Items) == 0 || len(h.Items) > 24 {
+	if !pageUIProfileSupports(a.UIProfile, "platform.page.v2.105") || len(h.Title) > 1024 || len(h.Items) == 0 || len(h.Items) > 24 {
 		return fmt.Errorf("application header exceeds its retained profile or content bound")
 	}
 	if h.Logo != "" && !validPageImageURL(h.Logo) {

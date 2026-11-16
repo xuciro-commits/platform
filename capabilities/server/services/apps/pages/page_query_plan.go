@@ -18,10 +18,10 @@ func checkQueries(p platform.Page, inputScope string) error {
 	c := platform.PageWidgets.Runtime.Query
 	activePlans := activeQueryPlans(p)
 	declaredMax := c.MaxPlans
-	if platform.PageUIProfileSupports(d.ProfileVersion(), c.InventoryUIProfile) && p.ScopeVisibility.Root != "" {
+	if pageUIProfileSupports(profileVersion(d), c.InventoryUIProfile) && p.ScopeVisibility.Root != "" {
 		declaredMax = c.MaxDeclaredPlans
 	}
-	if len(activePlans) > c.MaxPlans || len(d.Queries) > declaredMax || len(d.Queries) > 0 && !platform.PageUIProfileSupports(d.ProfileVersion(), "platform.page.v2.9") {
+	if len(activePlans) > c.MaxPlans || len(d.Queries) > declaredMax || len(d.Queries) > 0 && !pageUIProfileSupports(profileVersion(d), "platform.page.v2.9") {
 		return fmt.Errorf("page query plans need v2.9 and a bounded plan count")
 	}
 	var dependsOnPlan func(string, map[string]bool) bool
@@ -80,13 +80,13 @@ func checkQueries(p platform.Page, inputScope string) error {
 			if inputScope == "application" {
 				return fmt.Errorf("application query %s cannot belong to an overlay", id)
 			}
-			if _, ok := scopes[q.Owner]; !ok || !platform.PageUIProfileSupports(d.ProfileVersion(), "platform.page.v2.11") {
+			if _, ok := scopes[q.Owner]; !ok || !pageUIProfileSupports(profileVersion(d), "platform.page.v2.11") {
 				return fmt.Errorf("page query %s needs a v2.11 overlay owner", id)
 			}
 		}
 		validSource := q.Object.Check() == nil && q.Object.Kind == platform.AssetObject && q.Interface == ""
 		if q.Interface != "" {
-			validSource = platform.PageUIProfileSupports(d.ProfileVersion(), c.InterfaceUIProfile) && platform.PageNodeID.MatchString(q.Interface) && q.Object == (platform.AssetRef{}) && q.Query != nil && q.Query.Ref.Kind == platform.AssetQuery && q.Input == "" && q.For == nil && q.Set == nil && q.Direction == "" && q.ItemOwner == "" && q.Filter == nil && inputScope != "application"
+			validSource = pageUIProfileSupports(profileVersion(d), c.InterfaceUIProfile) && platform.PageNodeID.MatchString(q.Interface) && q.Object == (platform.AssetRef{}) && q.Query != nil && q.Query.Ref.Kind == platform.AssetQuery && q.Input == "" && q.For == nil && q.Set == nil && q.Direction == "" && q.ItemOwner == "" && q.Filter == nil && inputScope != "application"
 		}
 		if !platform.PageNodeID.MatchString(id) || len(q.Title) > 1024 || !validSource || q.Limit < 1 || q.Limit > c.MaxLimit || q.Offset < 0 || q.Offset > c.MaxOffset || len(q.Sort) > c.MaxSort {
 			return fmt.Errorf("page query %s has an invalid identity, object or budget", id)
@@ -104,13 +104,13 @@ func checkQueries(p platform.Page, inputScope string) error {
 					}
 				}
 			}
-			if !platform.PageUIProfileSupports(d.ProfileVersion(), "platform.page.v2.85") || inputScope == "application" || !ok || (v.Mode != "input" || object != q.Object) && !collectionBuilderInput(p, q.Input, q.Owner, q.Object) || v.Type != "object-set" || q.Query != nil || q.For != nil || q.Direction != "" || q.ItemOwner != "" || q.Set != nil {
+			if !pageUIProfileSupports(profileVersion(d), "platform.page.v2.85") || inputScope == "application" || !ok || (v.Mode != "input" || object != q.Object) && !collectionBuilderInput(p, q.Input, q.Owner, q.Object) || v.Type != "object-set" || q.Query != nil || q.For != nil || q.Direction != "" || q.ItemOwner != "" || q.Set != nil {
 				return fmt.Errorf("query %s needs its exact original collection input", id)
 			}
 		}
 		factor := 1
 		if q.ItemOwner != "" {
-			if inputScope == "application" || !platform.PageUIProfileSupports(d.ProfileVersion(), "platform.page.v2.20") || scopes[q.ItemOwner].Kind != "loop" || p.ScopeOwner(q.ItemOwner, "overlay") != q.Owner {
+			if inputScope == "application" || !pageUIProfileSupports(profileVersion(d), "platform.page.v2.20") || scopes[q.ItemOwner].Kind != "loop" || p.ScopeOwner(q.ItemOwner, "overlay") != q.Owner {
 				return fmt.Errorf("item query %s needs a matching parent loop scope", id)
 			}
 			var err error
@@ -133,7 +133,7 @@ func checkQueries(p platform.Page, inputScope string) error {
 			return fmt.Errorf("direction requires a link binding")
 		}
 		if q.Query != nil && q.Query.Ref.Kind == platform.AssetLinkType {
-			if !platform.PageUIProfileSupports(d.ProfileVersion(), "platform.page.v2.22") || q.For == nil || q.For.Variable == "" || d.Variables[q.For.Variable].Type != "record" || (q.Direction != "forward" && q.Direction != "reverse") || q.Set != nil {
+			if !pageUIProfileSupports(profileVersion(d), "platform.page.v2.22") || q.For == nil || q.For.Variable == "" || d.Variables[q.For.Variable].Type != "record" || (q.Direction != "forward" && q.Direction != "reverse") || q.Set != nil {
 				return fmt.Errorf("link plan needs v2.22, a direction and typed start record")
 			}
 		}
@@ -161,7 +161,7 @@ func checkQueries(p platform.Page, inputScope string) error {
 			} else {
 				var literal any
 				if _, exact := platform.DecimalLiteral(value.Literal); exact {
-					if !platform.PageUIProfileSupports(d.ProfileVersion(), "platform.page.v2.16") {
+					if !pageUIProfileSupports(profileVersion(d), "platform.page.v2.16") {
 						return fmt.Errorf("decimal query literal requires v2.16")
 					}
 					continue
@@ -195,7 +195,7 @@ func checkQueries(p platform.Page, inputScope string) error {
 			}
 		}
 	}
-	if platform.PageUIProfileSupports(d.ProfileVersion(), c.InventoryUIProfile) && p.ScopeVisibility.Root != "" && declaredTotal > c.MaxDeclaredTotalLimit {
+	if pageUIProfileSupports(profileVersion(d), c.InventoryUIProfile) && p.ScopeVisibility.Root != "" && declaredTotal > c.MaxDeclaredTotalLimit {
 		return fmt.Errorf("declared inventory query budget exceeded")
 	}
 	if total > c.MaxTotalLimit {
@@ -205,7 +205,7 @@ func checkQueries(p platform.Page, inputScope string) error {
 	seenAggregates := map[string]bool{}
 	for id, v := range d.Variables {
 		if v.Mode == "aggregate" {
-			if !platform.PageUIProfileSupports(d.ProfileVersion(), "platform.page.v2.21") {
+			if !pageUIProfileSupports(profileVersion(d), "platform.page.v2.21") {
 				return fmt.Errorf("count variable requires v2.21")
 			}
 			aggregates++
@@ -220,7 +220,7 @@ func checkQueries(p platform.Page, inputScope string) error {
 		}
 		if v.Source != nil && (v.Source.Kind == "plan" || v.Mode == "aggregate") {
 			q, ok := d.Queries[v.Source.Query]
-			if !ok || !platform.PageUIProfileSupports(d.ProfileVersion(), "platform.page.v2.9") || !(q.ItemOwner != "" && v.Scope == "loop-item" && v.Owner == q.ItemOwner || q.ItemOwner == "" && (q.Owner == "" && v.Scope == inputScope || q.Owner != "" && v.Scope == "overlay" && v.Owner == q.Owner)) {
+			if !ok || !pageUIProfileSupports(profileVersion(d), "platform.page.v2.9") || !(q.ItemOwner != "" && v.Scope == "loop-item" && v.Owner == q.ItemOwner || q.ItemOwner == "" && (q.Owner == "" && v.Scope == inputScope || q.Owner != "" && v.Scope == "overlay" && v.Owner == q.Owner)) {
 				return fmt.Errorf("page variable %s needs an existing query plan", id)
 			}
 		}
@@ -236,7 +236,7 @@ func checkQuerySets(d platform.PageInputSchema) error {
 		if plan.Set == nil {
 			continue
 		}
-		if !platform.PageUIProfileSupports(d.ProfileVersion(), "platform.page.v2.18") {
+		if !pageUIProfileSupports(profileVersion(d), "platform.page.v2.18") {
 			return fmt.Errorf("query set %s requires v2.18", root)
 		}
 		nodes := 0
@@ -305,7 +305,7 @@ func loopFactor(p platform.Page, owner string) (int, error) {
 func collectionBuilderInput(p platform.Page, id, owner string, object platform.AssetRef) bool {
 	d := p.InputSchema
 	sections := p.DataBindings
-	if !platform.PageUIProfileSupports(d.ProfileVersion(), "platform.page.v2.88") {
+	if !pageUIProfileSupports(profileVersion(d), "platform.page.v2.88") {
 		return false
 	}
 	v := d.Variables[id]

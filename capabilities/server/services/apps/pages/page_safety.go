@@ -79,7 +79,7 @@ func CheckSafety(p platform.Page) error {
 				return fmt.Errorf("page binding variable escapes its original owner")
 			}
 		}
-		if err := safe.CheckWidgetPorts(binding, owner); err != nil {
+		if err := checkWidgetPorts(safe, binding, owner); err != nil {
 			return err
 		}
 	}

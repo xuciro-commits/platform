@@ -30,7 +30,7 @@ func checkEvents(p platform.Page) error {
 	if len(overlays) > 16 || len(events) > 256 {
 		return fmt.Errorf("page overlay or event limit exceeded")
 	}
-	if (len(overlays) > 0 || len(events) > 0) && !platform.PageUIProfileSupports(d.ProfileVersion(), "platform.page.v2.4") {
+	if (len(overlays) > 0 || len(events) > 0) && !pageUIProfileSupports(profileVersion(d), "platform.page.v2.4") {
 		return fmt.Errorf("page overlays and events require UI profile v2.4")
 	}
 	open := map[string]bool{}
@@ -53,7 +53,7 @@ func checkEvents(p platform.Page) error {
 		bound[key] = true
 		if (len(event.Effects) > 1 || slices.ContainsFunc(event.Effects, func(e platform.PageEffect) bool {
 			return e.Kind == "action"
-		})) && !platform.PageUIProfileSupports(d.ProfileVersion(), "platform.page.v2.106") {
+		})) && !pageUIProfileSupports(profileVersion(d), "platform.page.v2.106") {
 			return fmt.Errorf("page effect chains require UI profile v2.106")
 		}
 		for at, effect := range event.Effects {
@@ -64,12 +64,12 @@ func checkEvents(p platform.Page) error {
 					return fmt.Errorf("page effect %s is not one effect", event.Source)
 				}
 				variable := d.Variables[effect.Target]
-				if event.Event == "select" && (!(variable.Mode == "state" && slices.Contains([]string{"page", "overlay"}, variable.Scope) || platform.PageUIProfileSupports(d.ProfileVersion(), "platform.page.v2.89") && variable.Mode == "shared" && variable.Scope == "application" && variable.Writable && rootPresentationSource(p, event.Source)) || !slices.Contains([]string{"string", "boolean"}, variable.Type) || open[effect.Target]) {
+				if event.Event == "select" && (!(variable.Mode == "state" && slices.Contains([]string{"page", "overlay"}, variable.Scope) || pageUIProfileSupports(profileVersion(d), "platform.page.v2.89") && variable.Mode == "shared" && variable.Scope == "application" && variable.Writable && rootPresentationSource(p, event.Source)) || !slices.Contains([]string{"string", "boolean"}, variable.Type) || open[effect.Target]) {
 					return fmt.Errorf("selection event needs writable presentation scalar state without navigation or overlay control")
 				}
 				if effect.From != "" {
 					source := d.Variables[effect.From]
-					if !platform.PageUIProfileSupports(d.ProfileVersion(), "platform.page.v2.108") || len(effect.Value) != 0 || effect.From == effect.Target || source.Type == "" || source.Type != variable.Type || !variable.IsWritable() {
+					if !pageUIProfileSupports(profileVersion(d), "platform.page.v2.108") || len(effect.Value) != 0 || effect.From == effect.Target || source.Type == "" || source.Type != variable.Type || !variable.IsWritable() {
 						return fmt.Errorf("page event %s needs a readable source variable of the target's type", event.Source)
 					}
 				} else if !variable.IsWritable() || literalType(effect.Value) != variable.Type {
@@ -84,7 +84,7 @@ func checkEvents(p platform.Page) error {
 				if v := d.Variables[a.RecordVariable]; a.RecordVariable != "" && v.Type != "record" {
 					return fmt.Errorf("page action effect %s needs a record variable", event.Source)
 				}
-				if len(a.Inputs) > 0 && !platform.PageUIProfileSupports(d.ProfileVersion(), "platform.page.v2.108") || len(a.Inputs) > platform.PageWidgets.Runtime.Interface.MaxPorts {
+				if len(a.Inputs) > 0 && !pageUIProfileSupports(profileVersion(d), "platform.page.v2.108") || len(a.Inputs) > platform.PageWidgets.Runtime.Interface.MaxPorts {
 					return fmt.Errorf("page action effect %s inputs need UI profile v2.108 and a bounded count", event.Source)
 				}
 				for parameter, arg := range a.Inputs {
@@ -118,7 +118,7 @@ func checkPageInterface(d platform.PageInputSchema) error {
 		return nil
 	}
 	i, c := d.Interface, platform.PageWidgets.Runtime.Interface
-	if !platform.PageUIProfileSupports(d.ProfileVersion(), "platform.page.v2.6") || i.Version < 1 || i.Version > c.MaxVersion || len(i.Inputs) > c.MaxPorts || len(i.Outputs) > c.MaxPorts {
+	if !pageUIProfileSupports(profileVersion(d), "platform.page.v2.6") || i.Version < 1 || i.Version > c.MaxVersion || len(i.Inputs) > c.MaxPorts || len(i.Outputs) > c.MaxPorts {
 		return fmt.Errorf("page interface needs v2.6, a version and bounded ports")
 	}
 	inputs := map[string]bool{}
@@ -136,7 +136,7 @@ func checkPageInterface(d platform.PageInputSchema) error {
 		}
 	}
 	for id, p := range i.Inputs {
-		if p.Type == "object-set" && !platform.PageUIProfileSupports(d.ProfileVersion(), "platform.page.v2.85") {
+		if p.Type == "object-set" && !pageUIProfileSupports(profileVersion(d), "platform.page.v2.85") {
 			return fmt.Errorf("collection input needs v2.85")
 		}
 		if d.Variables[p.Variable].Mode != "input" || inputs[p.Variable] {

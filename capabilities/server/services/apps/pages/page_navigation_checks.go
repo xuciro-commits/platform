@@ -30,7 +30,7 @@ func CheckPageNavigation(source platform.Page, target platform.Page, nav platfor
 		if value.Variable != "" {
 			typ = sourceSchema.Variables[value.Variable].Type
 		}
-		if !ok || typ != port.Type || port.Type == "object-set" && (port.Object == nil || source.CollectionInputObject(value.Variable) != *port.Object || !platform.PageUIProfileSupports(sourceSchema.ProfileVersion(), "platform.page.v2.85")) || port.Type == "record" && (port.Object == nil || source.RecordVariableObject(value.Variable) != port.Object.Name) {
+		if !ok || typ != port.Type || port.Type == "object-set" && (port.Object == nil || source.CollectionInputObject(value.Variable) != *port.Object || !pageUIProfileSupports(profileVersion(sourceSchema), "platform.page.v2.85")) || port.Type == "record" && (port.Object == nil || source.RecordVariableObject(value.Variable) != port.Object.Name) {
 			return fmt.Errorf("page navigation input %s type or object differs", id)
 		}
 	}

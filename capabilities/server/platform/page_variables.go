@@ -133,9 +133,4 @@ type pageOperator struct {
 	MaxArgs int    `json:"maxArgs"`
 }
 
-func (d PageInputSchema) ProfileVersion() string {
-	if d.profile != "" {
-		return d.profile
-	}
-	return "platform.page.v3"
-}
+func (d PageInputSchema) RawProfile() string { return d.profile }
