@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Button } from "../primitives/button";
 import { Dialog } from "../primitives/dialog";
-import { FilePicker } from "../primitives/controls";
+import { FileInput } from "@astryxdesign/core/FileInput";
 import { humanizeKernelError } from "../lib/errors";
 import { t } from "../i18n";
 import type { Api } from "@platform/api";
@@ -12,6 +12,7 @@ export function RecordImportDialog({ source, type, open, onOpenChange, onImporte
   onImported?: (applied: number, refused: number) => void;
 }) {
   const [csv, setCsv] = useState<string>();
+  const [csvFile, setCsvFile] = useState<File|null>(null);
   const [preview, setPreview] = useState<Api.ImportRow[]>();
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<string>();
@@ -34,7 +35,7 @@ export function RecordImportDialog({ source, type, open, onOpenChange, onImporte
   return <Dialog open={open} onOpenChange={onOpenChange} title={t("Import CSV")}>
     <div className="grid gap-3 p-1 text-sm">
       <p className="text-muted">{t("A CSV whose header names this type's fields, with an id column. Every row is checked first, then created or edited as you.")}</p>
-      <FilePicker accept=".csv,text/csv" onFile={(file) => void file.text().then((text) => { setCsv(text); setPreview(undefined); setNotice(undefined); })} />
+      <FileInput label={t("CSV file")} accept=".csv,text/csv" value={csvFile} onChange={(file) => { const next = Array.isArray(file) ? file[0] ?? null : file; setCsvFile(next); if (next) void next.text().then((text) => { setCsv(text); setPreview(undefined); setNotice(undefined); }); }} placeholder={t("Choose a CSV file")} />
       {notice && <p role="alert" className="text-xs text-danger">{notice}</p>}
       {preview && (() => {
         const refused = preview.filter((row) => row.error);
