@@ -1,6 +1,6 @@
 ---
 level: 6 领域架构
-covers: [capabilities/server/services/devops/packages/**, capabilities/server/host/package*.go, web/packages/govern/src/package*.tsx, web/packages/govern/src/apps.tsx, deploy/packages/**]
+covers: [capabilities/server/services/devops/packages/**, capabilities/server/host/package*.go, web/packages/govern/src/package*.tsx, web/packages/govern/src/apps.tsx, deploy/packages/**, scripts/frappe-read.mjs]
 read-when: 改动产品包、Marketplace 安装、升级、卸载、重装、产品来源或包数据保留
 ---
 
@@ -122,27 +122,28 @@ Marketplace 的精确产品版本提供“Transfer existing resources…”：�
 
 把别的框架的应用定义转成作者态包源，是仓库里的构建工具（`scripts/`），不是租户里的能力；产出物照常经打包、安装与升级。第一个来源是 Frappe 应用（决定与许可见 [1-enterprise §1.11](../1-enterprise.md)）。
 
-- 转换分两步，都可重复运行：读入并出报告（每个类型的字段覆盖、映射不了的字段与条件、控制器是否有内容）；按报告生成包源。行为不自动生成。
+- 转换分两步，都可重复运行：读入并出报告；按报告生成包源。行为不自动生成。
+- 读入器是 `node scripts/frappe-read.mjs <应用检出目录> [引用可能指向的其他检出目录] [--types]`：只读、不执行来源里的任何代码；输出汇总，`--types` 再逐个类型列出数据字段数、映射不了的字段类型、要靠代码的条件数、控制器与客户端脚本的行数和结论。报告只打印，不入库。
 - 由转换得到的包，清单必须带 `origin`（来源仓库、提交、转换器版本）与 `license`（SPDX 标识）；安装记录与 Marketplace 目录显示它们。
 - 转换产物不放进本仓库：它沿用来源的许可，与平台分开存放、分开交付。
 - 转换后改过的包再次转换时不覆盖人工修改：转换器只生成它上次生成过且之后没被改动的文件。
 
 | DocType 里的 | 包源里的 | 说明 |
 |---|---|---|
-| Data、Small Text、Read Only、Time | `text` | Time 没有专门类型 |
+| Data、Small Text、Read Only、Barcode、Color、Phone、Autocomplete、Icon | `text` | |
 | Text、Long Text、Text Editor、Code、Markdown Editor | `longtext` | |
-| Int；Float、Percent；Currency | `integer`；`decimal`；`money` | |
+| Int；Float、Percent、Rating；Currency | `integer`；`decimal`；`money` | |
 | Check；Date；Datetime | `boolean`；`date`；`datetime` | |
 | Select | `choice` | 选项按行拆开；命名序列的 Select 不是字段 |
 | Link | `reference` | `ref` 指向 options 所写的类型 |
 | Table | `lines` | 子表 DocType（`istable`）成为行的字段 |
 | Table MultiSelect | `references` | |
-| Attach、Attach Image；JSON | `attachment`；`json` | |
-| Dynamic Link | 无 | 报告列出 |
+| Attach、Attach Image、Signature；JSON、Geolocation | `attachment`；`json` | |
+| Dynamic Link、Time、Duration、Password | 无 | 报告列出；密码按凭据引用处理，不转成字段 |
 | Section、Column、Tab Break | 不是字段 | 成为记录页的页签与分节 |
 | HTML、Button、Heading | 丢弃 | 纯界面 |
 | `reqd`、`unique`、`default`、`read_only`、`fetch_from` | 必填、唯一约束、默认值、只读、派生 | |
-| `depends_on` 等 `eval:` 条件 | Expr | 只转能逐字对应的比较与逻辑式，其余报告列出 |
+| `depends_on` 等条件 | 字段的 `when`，或 Expr | 三类：“某字段取值在列表中”直接成为 `when`；只含字段比较与逻辑的要 Expr；调用函数的要靠代码，报告列出 |
 | `in_list_view`、`in_standard_filter`、`title_field`、`search_fields` | 列表视图定义、显示字段、搜索字段 | |
 | `permissions` | `access` 的角色访问 | `permlevel` 报告列出 |
 | `is_submittable` | 状态（草稿、已提交、已取消）加提交后不可改的约束 | |
@@ -150,11 +151,24 @@ Marketplace 的精确产品版本提供“Transfer existing resources…”：�
 | `autoname`、命名序列 | 命名规则 | |
 | 控制器、客户端脚本、报表、打印格式 | 不转 | 报告列出体量；用动作、函数、页面重建 |
 
-十二个 ERPNext 核心 DocType 的抽样（1245 个字段）：三分之一是版式分隔（414），纯界面 30，其余约 800 个数据字段里只有 Time（3 个）没有对应类型；272 个字段带 `eval:` 条件。
+读入器全量运行的结果（引用对照 Framework 的检出解析）：
+
+| | ERPNext（version-16） | HRMS（develop） |
+|---|---|---|
+| 类型 | 534：明细行 254、普通 159、可提交 76、单例设置 31、树 14 | 157：可提交 53、明细行 53、普通 44、单例设置 6、树 1 |
+| 字段 | 10587 = 数据 7407 + 版式 2989 + 纯界面 191 | 2167 = 数据 1568 + 版式 569 + 纯界面 30 |
+| 没有对应类型的数据字段 | 136：Dynamic Link 78、Time 46、Duration 10、Password 2 | 17：Dynamic Link 9、Time 7、Duration 1 |
+| 引用 | 应用内 2091、指向 Framework 426、解析不了 1 | 应用内 288、指向 ERPNext 与 Framework 336、解析不了 3 |
+| 条件 | `when` 970、要 Expr 525、要靠代码 168 | `when` 225、要 Expr 72、要靠代码 8 |
+| 要包格式提供 | 默认值 1415、唯一 104、取自引用的值 369、字段权限级别 30 | 默认值 241、唯一 27、取自引用的值 246、字段权限级别 4 |
+| 控制器没有内容（不超过 3 行） | 251，其中独立的普通类型 34 | 73 |
+| 结构能转、行为要重建 | 189 | 71 |
+| 含没有对应类型的字段 | 94 | 13 |
+| 有内容的客户端脚本 | 267 | 99 |
 
 ## 6.29 现存差距
 
-- 外部定义的转换（6.28，第 6、7 层）：转换器尚未实现；包清单没有 `origin` 与 `license`；映射表右列的唯一约束、默认值、派生、命名规则与列表视图定义在包格式里是否齐备尚未核对。排期见[路线图](../roadmap.md)“六、Frappe 应用转换”。
+- 外部定义的转换（6.28，第 6、7 层）：只有读入器，生成包源的一步尚未实现；包清单没有 `origin` 与 `license`。对象类型的格式还表达不了：字段默认值、取自引用的值、命名规则（命名序列、按字段、表达式）、时间与时长类型、动态引用、超出“字段取值在列表中”的字段条件、类型自己的列表视图定义；唯一约束与按角色的字段读写已有。排期见[路线图](../roadmap.md)“六、Frappe 应用转换”。
 
 - `draining` 只设置状态，静态代码没有阻止新使用；界面明确标为“标记卸载”，不宣称运行排空已完成。
 - `Uninstall` 实际是 archive；永久删除、输出 detach、制品 GC 未实现。
