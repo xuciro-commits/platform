@@ -133,7 +133,8 @@ read-when: 每批开始（选当前批次）与结束（删除已完成条目、
     - 完成：样本集五钩子由 DevOps 实现并由宿主登记，原发布分支删除；历史字节不变。验证：V1、V3。
 - [ ] U5 拆散 `build`。前置已完成：U4.1。
   - [ ] U5.1 样板。
-    - 方向：定下“一类资源的编辑如何离开 `Build`”的模式（状态、注册、HTTP 路由、`host` 导入点怎么改），以 compute（`build_compute*.go` 634 行 → `services/functions/authoring`）迁完为样板。归属：objects、tables、kinds、action types、blueprints、transactions → `services/ontology`；agents → `services/ai`；integrations（1632 行）→ `services/data`；branches → `services/resources/merge`；release、publications、artifacts（约 3000 行）→ 按 U4 的表归 `services/devops` 与 `services/resources/publication`；`resources` 只留 RID、项目、文件夹、工作状态、分支、提案。每迁一类同时收走它在 `host.Tenant` 的字段与可选接口探测（N6），下调 `tenantFields`、`capabilityProbes` 与对应依赖差距。
+    - 方向：定下“一类资源的编辑如何离开 `Build`”的模式（状态、注册、HTTP 路由、`host` 导入点怎么改），以代码函数与决策表（`build_compute.go`、`build_tables.go` → `services/functions/authoring`）迁完为样板；发布钩子仍以前置 U4.2 的诊断为准。归属：objects、kinds、action types、blueprints、transactions → `services/ontology`；agents → `services/ai`；integrations（1632 行）→ `services/data`；branches → `services/resources/merge`；release、publications、artifacts（约 3000 行）→ 按 U4 的表归 `services/devops` 与 `services/resources/publication`；`resources` 只留 RID、项目、文件夹、工作状态、分支、提案。每迁一类同时收走它在 `host.Tenant` 的字段与可选接口探测（N6），下调 `tenantFields`、`capabilityProbes` 与对应依赖差距。
+    - 已核对：`build.code` 与 `build.table` 都生成 `AssetCompute`，共享 `OperationDefinition`；当前版本读 `codes` / `tables`，历史版本读保留家族，`Fork` 克隆状态，`Reinstall` 从接受记录重建。运行时对 `OperationDefinitions` 做可选探测并回退 Manifest；迁移时须保留历史版本与原有 authority，不能只移动文件或把版本化读取降成 Manifest。`host.Tenant` 没有单独的 code/table 状态字段，应按实际消除的字段和探测下调基线。
     - 产出：模式写入 7-system §7.2；其余每类拆成一行，写明文件清单与目标包。
     - 验证：V1、V3。
 - [ ] U7 `platform` 只留 SDK 契约（整段完成标准：不超过 8 千行）。前置 U2、U3。
