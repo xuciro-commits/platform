@@ -42,7 +42,7 @@ read-when: 每批开始（选当前批次）与结束（删除已完成条目、
 
 主代理按前置条件选择条目并独立完成。条目的验证组合见 [7-system/verification §7.12](7-system/verification.md#712-命令分层)；方向与实际不符时，根据代码和规范调整。
 
-- [ ] U3 页面模型归位。已完成（U3.1、U3.3、U3.4、U3.7、U3.8、U3.9、U3.10、U3.11、U3.12、U3.13、U3.14、U3.15、U3.16、U3.17、U3.18、U3.19、U3.20 及资产生命周期注册表）：33 个页面声明类型集中在 SDK，页面安全投影、依赖、嵌入和内容版本计算，冻结查询、绑定、组合组件、事件、接口、profile、过滤、属性与计算资源等检查，模型字段解析、绑定归一化、规则类型绑定、查询筛选入口、可见性投影及应用分组、页眉、资源、扩展与概念检查及依赖计算归 `services/apps/pages`，属性值类型判断归 `services/objects`，列表详情和对象页面模板生成归 `services/apps/authoring`；候选读取、资产描述与安装映像解码经宿主注入内核和记录投影；依赖图与资产描述、候选构建与历史读取、应用制品、历史查询与关系版本、来源分派、候选差异、页面与应用资产构造及生命周期注册表归 `services/resources/publication`，产品描述与蓝图校验归 `services/devops/descriptor`。其余页面求值、校验与语义注入仍待迁移。
+- [ ] U3 页面模型归位。已完成（U3.1、U3.3、U3.4、U3.7、U3.8、U3.9、U3.10、U3.11、U3.12、U3.13、U3.14、U3.15、U3.16、U3.17、U3.18、U3.19、U3.20、U3.21 及资产生命周期注册表）：33 个页面声明类型集中在 SDK，页面安全投影、依赖、嵌入和内容版本计算，冻结查询、绑定、组合组件、事件、接口、导航、动作参数、profile、过滤、属性与计算资源等检查，模型字段解析、绑定归一化、规则类型绑定、查询筛选入口、可见性投影及应用分组、页眉、资源、扩展与概念检查及依赖计算归 `services/apps/pages`，属性值类型判断归 `services/objects`，列表详情和对象页面模板生成归 `services/apps/authoring`；候选读取、资产描述与安装映像解码经宿主注入内核和记录投影；依赖图与资产描述、候选构建与历史读取、应用制品、历史查询与关系版本、来源分派、候选差异、页面与应用资产构造及生命周期注册表归 `services/resources/publication`，产品描述与蓝图校验归 `services/devops/descriptor`。其余页面求值、校验与语义注入仍待迁移。
   - 边界裁定：页面声明是 SDK 契约，`Manifest.Pages`、`Definition.Page`、`Application.Variables/Queries` 与宿主接口继续使用同一组有类型声明；SDK 唯一保留确有格式语义的 `MarshalJSON`、`UnmarshalJSON`、`IsZero` 及原始 `profile`、`RetainedVersion` / `contentVersion` 信息。页面生成、求值、校验、依赖解析与版本计算属于实现。无租户状态的候选与资产语义读取由宿主单独装配，不放进有状态的五项发布钩子，也不依赖租户已创建；未来 `publication` 通过宿主注入的纯页面语义函数调用 `pages`，不得直接导入 `apps/pages` 或扩张 `pages` 已有的反向依赖。函数集合从实际调用提取，不预设框架；不引入重复类型、转发兼容层或 SDK 对实现的反向调用。
   - [ ] U3.2 切分实现依赖（不写代码）。前置已完成：U3.1、U4.1。（部分完成：页面校验、资源发布闭包、历史字节读取三链已诊断；通用发布与页面实现的切分由 U3.4–U3.6 确认）
     - 已确认：发布服务的 `describeAsset` 经纯解析值调用页面安全检查与页面依赖计算；`Candidate` / `ReadCandidate` 使用同一页面安全与冻结查询检查，其余页面语义仍调用 SDK，并同时校验资产描述、依赖图、冻结页面与规范字节；`DecodeRelease`、`RestoreCommitted` 经宿主注入读取候选，`OwnedDefinitions` 描述资产并经注册表解码历史安装映像。页面实现迁移仍须避免 SDK 反向调用服务和改变恢复校验。
@@ -69,7 +69,7 @@ read-when: 每批开始（选当前批次）与结束（删除已完成条目、
   - [x] U3.20 页面事件、接口与 profile 检查归位。诊断：`CheckEvents`、`CheckInterface`、`CheckProfile` 只由页面安全检查调用，其导航效果、展示来源与变量 profile 辅助逻辑一并迁入 `services/apps/pages`。SDK 中其余查询、变量和导航检查仍共用字面值类型与 profile 版本选择：暂时导出原函数与方法，保留同一实现和 `PageInputSchema.profile` 的非序列化原始值，不新增默认或复制判断。
     - 源：`platform/page_events.go`、`page_variables.go`、`page_model.go`，共享调用的 `page_queries.go`、`page_collections.go`、`page_model_widgets.go`、`page_queries_sets.go`；调用方：`services/apps/pages/page_safety.go`。删除 SDK 中原事件、接口和 profile 检查，不留转发；保持校验顺序、profile 选择和错误不变。
     - 完成：`make contract` 无差异；事件、接口、profile 与历史页面的接受和拒绝前后对照，产品包候选字节与闭包不变；V1、V3。其余页面函数仍按 U3.6 诊断。
-  - [ ] U3.21 页面导航与动作参数检查归位。诊断：`CheckPageNavigation` 和 `ActionParameterCompatible` 没有 SDK 内部调用；导航检查由页面嵌入、页面发布检查及候选检查共用，参数兼容检查只由页面检查使用。将两项实现归 `services/apps/pages`，发布候选经现有纯解析值调用同一导航检查，不增加兼容转发或复制检查。
+  - [x] U3.21 页面导航与动作参数检查归位。诊断：`CheckPageNavigation` 和 `ActionParameterCompatible` 没有 SDK 内部调用；导航检查由页面嵌入、页面发布检查及候选检查共用，参数兼容检查只由页面检查使用。将两项实现归 `services/apps/pages`，发布候选经现有纯解析值调用同一导航检查，不增加兼容转发或复制检查。
     - 源：`platform/page_events.go`、`page_model.go`；调用方：`services/apps/pages/page_asset_navigation.go`、`page_embedding.go`、`page_frozen_queries.go`、`page_install_checks.go`、`page_safety.go`，`services/resources/publication/candidate.go`、`resolver.go`。保留页面接口版本、输入输出类型、动作参数兼容规则及错误次序。
     - 完成：`make contract` 无差异；导航输入输出、动作参数及冻结候选的接受和拒绝前后对照，产品包候选字节与闭包不变；V1、V3。其余页面函数仍按 U3.6 诊断。
 - [ ] U4 发布路径一张表。已完成（U4.1）：五项发布钩子由宿主登记，action-type 的发布步骤归本体服务；Build 的 apps、automation、functions、本体类型转接已删除。

@@ -116,7 +116,7 @@ func CheckFrozenQueries(original platform.Page, assets map[platform.AssetRef]pla
 			for _, mapping := range trigger.Defaults {
 				field, ok := info.Field(mapping.Field)
 				index := slices.IndexFunc(action.Payload, func(f platform.Field) bool { return f.Name == mapping.Parameter })
-				if !ok || index < 0 || !platform.ActionParameterCompatible(field, action.Payload[index]) {
+				if !ok || index < 0 || !actionParameterCompatible(field, action.Payload[index]) {
 					return fmt.Errorf("page action parameter differs from original readable field")
 				}
 			}

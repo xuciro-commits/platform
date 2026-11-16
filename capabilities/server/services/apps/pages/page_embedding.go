@@ -28,7 +28,7 @@ func checkPageEmbedding(parent platform.Page, child platform.Page, e platform.Pa
 	if err != nil || digest != e.ContentVersion || child.Name != e.Page.Ref.Name {
 		return fmt.Errorf("embedded content identity differs")
 	}
-	return platform.CheckPageNavigation(parent, child, platform.PageNavigation{Page: e.Page.Ref, InterfaceVersion: e.InterfaceVersion, Inputs: e.Inputs, Results: e.Results})
+	return CheckPageNavigation(parent, child, platform.PageNavigation{Page: e.Page.Ref, InterfaceVersion: e.InterfaceVersion, Inputs: e.Inputs, Results: e.Results})
 }
 
 func CheckPageEmbeddingGraph(root platform.AssetRef, lookup map[platform.AssetRef]platform.ReleaseAsset) error {

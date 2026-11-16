@@ -12,6 +12,7 @@ type Resolver struct {
 	CheckPageVariables        func(platform.Application, platform.Page) error
 	PageContentVersion        func(platform.Page) (string, error)
 	CheckPageContentVersion   func(string) error
+	CheckPageNavigation       func(platform.Page, platform.Page, platform.PageNavigation) error
 	CheckApplicationResources func(platform.Application) error
 	CheckApplicationExtension func(platform.Application) error
 	ApplicationDependencies   func(platform.Application, string) []platform.AssetRef

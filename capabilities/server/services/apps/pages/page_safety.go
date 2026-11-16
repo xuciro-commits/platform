@@ -119,6 +119,7 @@ func PublicationResolver() publication.Resolver {
 		Safety: Safety, PageDependencies: PageDependencies, PageNavigationEdge: PageNavigationEdge,
 		CheckPageEmbeddingGraph: CheckPageEmbeddingGraph, CheckPageVariables: CheckPageVariables,
 		PageContentVersion: PageContentVersion, CheckPageContentVersion: CheckPageContentVersion,
+		CheckPageNavigation:       CheckPageNavigation,
 		CheckApplicationResources: CheckApplicationResources, CheckApplicationExtension: CheckApplicationExtension,
 		ApplicationDependencies: ApplicationDependencies,
 	}

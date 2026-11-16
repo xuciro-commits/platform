@@ -261,7 +261,7 @@ func (resolver Resolver) candidate(roots []platform.AssetRef, available []platfo
 							if !ok || json.Unmarshal(target.Body, &targetPage) != nil {
 								return empty, fmt.Errorf("page navigation target %s is unavailable", n.Page)
 							}
-							if err := platform.CheckPageNavigation(page, targetPage, *n); err != nil {
+							if err := resolver.CheckPageNavigation(page, targetPage, *n); err != nil {
 								return empty, err
 							}
 						}

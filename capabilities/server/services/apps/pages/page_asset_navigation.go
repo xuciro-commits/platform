@@ -109,7 +109,7 @@ func CheckNavigation(p platform.Page, owner string, definitions []platform.Defin
 			if target == nil {
 				return fmt.Errorf("page %s navigation target %s is unavailable", p.Name, nav.Page)
 			}
-			if err := platform.CheckPageNavigation(p, *target, *nav); err != nil {
+			if err := CheckPageNavigation(p, *target, *nav); err != nil {
 				return err
 			}
 		}

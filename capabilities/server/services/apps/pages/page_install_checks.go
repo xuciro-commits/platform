@@ -168,7 +168,7 @@ func (b Bindings) CheckSections(p platform.Page, page platform.EntityInfo) error
 			for _, mapping := range trigger.Defaults {
 				field, found := info.Field(mapping.Field)
 				parameter := slices.IndexFunc(action.Payload, func(value platform.Field) bool { return value.Name == mapping.Parameter })
-				if !found || parameter < 0 || !platform.ActionParameterCompatible(field, action.Payload[parameter]) {
+				if !found || parameter < 0 || !actionParameterCompatible(field, action.Payload[parameter]) {
 					return fmt.Errorf("action parameter field type does not match its original signature")
 				}
 			}

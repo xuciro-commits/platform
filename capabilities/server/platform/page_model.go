@@ -130,26 +130,6 @@ func (p Page) WindowVariableInterface(variable string) string {
 	return ""
 }
 
-func ActionParameterCompatible(f FieldInfo, p Field) bool {
-	if p.From != "" {
-		return false
-	}
-	switch p.Type {
-	case "string":
-		if p.Ref != "" {
-			return f.Type == "reference" && f.Ref == p.Ref
-		}
-		return slices.Contains([]string{"text", "longtext", "choice"}, f.Type)
-	case "number":
-		return f.Type == "decimal" || f.Type == "integer"
-	case "integer":
-		return f.Type == "integer"
-	case "boolean", "date", "datetime":
-		return f.Type == p.Type
-	}
-	return false
-}
-
 func (p Page) CheckEnvelope() error {
 	if len(p.DataBindings) > 128 || len(p.ActionTriggers) > 256 || len(p.ScopeVisibility.Scopes) > 512 || len(p.WidgetSpec.Body) > 2<<20 || !json.Valid(p.WidgetSpec.Body) {
 		return fmt.Errorf("page safety declaration exceeds its bounded format")
