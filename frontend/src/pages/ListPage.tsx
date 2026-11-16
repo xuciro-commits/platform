@@ -14,10 +14,11 @@ import { TextInput } from "@astryxdesign/core/TextInput";
 import { MagnifyingGlassIcon } from "@heroicons/react/24/outline";
 import { type ReactNode, useMemo, useState } from "react";
 import { type Read, useRead } from "../host";
+import { BackLink } from "./BackLink";
 import { t } from "../i18n";
 
 export type ListColumn<Row> = { key: string; header: string; width?: number; text: (row: Row) => string };
-export type ListGroup<Row> = { key: string; label: string; of: (row: Row) => string };
+export type ListGroup<Row> = { key: string; label: string; of: (row: Row) => string; order?: string[] };
 export type ListShape<Answer, Row> = {
   title: string;
   about: string;
@@ -43,9 +44,10 @@ type ListViewProps<Answer, Row> = {
   definition: ListShape<Answer, Row>;
   read: Read<Answer>;
   primary?: ReactNode;
+  back?: { href: string; label: string };
 };
 
-export function ListView<Answer, Row>({ definition, read, primary }: ListViewProps<Answer, Row>) {
+export function ListView<Answer, Row>({ definition, read, primary, back }: ListViewProps<Answer, Row>) {
   const [filter, setFilter] = useState("");
   const [groupKey, setGroupKey] = useState(ungrouped);
   const [collapsed, setCollapsed] = useState<Set<string>>(() => new Set());
@@ -62,9 +64,10 @@ export function ListView<Answer, Row>({ definition, read, primary }: ListViewPro
 
   const shown = useMemo(() => {
     const wanted = filter.trim().toLowerCase();
-    if (!wanted) return all;
-    return all.filter((cells) => definition.columns.some((column) => cells[column.key].toLowerCase().includes(wanted)));
-  }, [all, filter, definition]);
+    const kept = wanted ? all.filter((cells) => definition.columns.some((column) => cells[column.key].toLowerCase().includes(wanted))) : all;
+    const order = group?.order;
+    return order ? [...kept].sort((a, b) => order.indexOf(a.__group) - order.indexOf(b.__group)) : kept;
+  }, [all, filter, definition, group]);
 
   const grouped = useTableGroupedRows<Cells>({
     data: shown,
@@ -109,7 +112,10 @@ export function ListView<Answer, Row>({ definition, read, primary }: ListViewPro
           <VStack gap={4}>
             <HStack gap={4} vAlign="center">
               <StackItem size="fill">
-                <Heading level={1}>{t(definition.title)}</Heading>
+                <VStack gap={2}>
+                  {back && <BackLink href={back.href} label={t(back.label)} />}
+                  <Heading level={1}>{t(definition.title)}</Heading>
+                </VStack>
               </StackItem>
               {primary}
             </HStack>

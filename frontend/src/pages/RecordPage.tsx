@@ -1,19 +1,16 @@
 import { Banner } from "@astryxdesign/core/Banner";
 import { Button } from "@astryxdesign/core/Button";
 import { EmptyState } from "@astryxdesign/core/EmptyState";
-import { Icon } from "@astryxdesign/core/Icon";
 import { HStack, Layout, LayoutContent, LayoutHeader, LayoutPanel, VStack } from "@astryxdesign/core/Layout";
-import { Link } from "@astryxdesign/core/Link";
 import { MetadataList, MetadataListItem } from "@astryxdesign/core/MetadataList";
 import { Skeleton } from "@astryxdesign/core/Skeleton";
 import { Heading, Text } from "@astryxdesign/core/Text";
-import { rtlStyles } from "@astryxdesign/core/utils";
-import { ArrowLeftIcon } from "@heroicons/react/24/outline";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { type Api, useRead } from "../host";
 import { t } from "../i18n";
 import { ActionDialog } from "./ActionDialog";
-import { shown } from "./values";
+import { BackLink } from "./BackLink";
+import { plain, shown } from "./values";
 
 type Stamp = { by?: string; at?: string };
 type Kept = { id: string; revision: number; created: Stamp; changed: Stamp };
@@ -24,7 +21,10 @@ const when = (stamp: Stamp) => (stamp.at ? new Date(stamp.at).toLocaleString() :
 export function RecordPage({ described, id, listPath, listTitle, edit }: RecordPageProps) {
   const read = useRead<Api.RecordView>(`/v1/records/${described.type}/${encodeURIComponent(id)}`);
   const [editing, setEditing] = useState(false);
-  const values = read.status === "ready" ? (read.data.values ?? {}) : {};
+  const values = useMemo(
+    () => (read.status === "ready" ? Object.fromEntries(Object.entries(read.data.values ?? {}).map(([name, value]) => [name, plain(value)])) : {}),
+    [read],
+  );
   const kept = read.status === "ready" ? (read.data.record as Kept) : undefined;
 
   return (
@@ -37,12 +37,7 @@ export function RecordPage({ described, id, listPath, listTitle, edit }: RecordP
             <HStack gap={4} vAlign="start" hAlign="between">
               <VStack gap={2}>
                 <HStack gap={4} vAlign="center" wrap="wrap">
-                  <Link href={listPath} type="supporting" color="secondary">
-                    <HStack as="span" gap={1} vAlign="center">
-                      <Icon icon={ArrowLeftIcon} size="sm" xstyle={rtlStyles.mirror} />
-                      {t(listTitle)}
-                    </HStack>
-                  </Link>
+                  <BackLink href={listPath} label={t(listTitle)} />
                   <Text type="supporting" color="secondary">
                     {id}
                   </Text>

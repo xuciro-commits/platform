@@ -56,7 +56,7 @@
 | 本地运行 | `make local`（入口 http://localhost:8495，热更新；宿主日志 `.build/dev/platform-api.log`） |
 | Go 检查 | `cd capabilities/server && GOPROXY=https://goproxy.cn,direct go build ./... && go vet ./...`；`gofmt -l .` |
 | 宿主类型与页面契约 | `make contract`（生成 `api/src/gen/*.ts`、`pageui/safety.ts`、`platform/page_compat.json`） |
-| 新前端 | `pnpm --dir frontend dev`（http://localhost:8496，代理到 `PLATFORM_HOST`）；夹具宿主 `make frontend-host`；检查 `make check-frontend` |
+| 新前端 | `pnpm --dir frontend dev`（http://localhost:8496，代理到 `PLATFORM_HOST`）；夹具宿主 `make frontend-host`（自带示例销售项目）；检查 `make check-frontend` |
 | Web 检查 | 改动的包内 `pnpm exec tsc -p .`；`cd web && pnpm build` |
 | 空白 | `git diff --check` |
 | 快速检查 | `make check`（约 5 秒：Go 构建与 vet、包边界与形状、契约、文案、空白）；改了 `web/` 加 `make check-web`，改了 `frontend/` 加 `make check-frontend`；提交钩子自动运行两者 |

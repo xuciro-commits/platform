@@ -13,6 +13,6 @@ paths:
 - 属性先查再用：`astryx component <Name>`；不凭记忆写属性。只用 Astryx 组件与主题令牌；不写裸 `div`，不硬编码颜色与尺寸，不引入第二套组件库或样式方案。
 - 读取与写入只经 `src/host/`；别处不直接 `fetch`。
 - 每个可见字符串经 `t()`，同时在 `src/i18n.ts` 加 `zh-CN`；术语取自 docs/glossary.md。
-- 对照真实数据：`make frontend-host` 起夹具宿主，`frontend/.env` 写 `PLATFORM_HOST=http://127.0.0.1:18511`，登录页选夹具身份。
+- 对照真实数据：`make frontend-host` 起夹具宿主（自带一个示例销售项目：客户与商机），`frontend/.env` 写 `PLATFORM_HOST=http://127.0.0.1:18511`，登录页选夹具身份。
 - 改动后运行 `make check-frontend`，逐条按报错改到通过，不改检查脚本；再在浏览器里看一眼。报告改了哪些界面，留给负责人走查。
 - 按任务卡做一个入口或补一种表现，用技能 `frontend-migrate`：只动卡片列出的文件，做不下去就停下报告。

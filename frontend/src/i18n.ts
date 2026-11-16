@@ -168,6 +168,10 @@ export const zhCN: Record<string, string> = {
   "Some required inputs cannot be entered here yet": "有些必填项还不能在这里填写",
   "This record could not be loaded": "记录加载失败",
   "You cannot see this record": "你无权查看这条记录",
+  Type: "类型",
+  Properties: "属性",
+  "This type is not published in this workspace.": "这个类型没有在本工作区发布。",
+  "Objects are the business records of this workspace. An object type appears here once it is published; open it to see, create and edit its objects.": "对象是本工作区的业务记录。对象类型发布后出现在这里；打开它就能查看、新建和编辑它的对象。",
 };
 
 const locale = navigator.language.startsWith("zh") ? "zh-CN" : "en";

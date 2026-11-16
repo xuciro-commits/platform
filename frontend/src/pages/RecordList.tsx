@@ -9,7 +9,8 @@ import { RecordPage } from "./RecordPage";
 import { shown } from "./values";
 
 type Row = Record<string, unknown>;
-type Declared = { type: string; title: string; about: string; fields?: string[]; project?: boolean };
+type Declared = { type: string; title?: string; about: string; fields?: string[]; project?: boolean };
+type Back = { href: string; label: string };
 const tabular = new Set(["text", "integer", "decimal", "money", "date", "datetime", "boolean", "choice", "reference", "tags"]);
 const columnLimit = 6;
 
@@ -21,7 +22,7 @@ function shape(described: Api.EntityInfo, declared: Declared, listPath: string):
     ? declared.fields.flatMap((name) => described.fields.filter((field) => field.name === name))
     : [...lead, ...rest].slice(0, columnLimit);
   return {
-    title: declared.title,
+    title: declared.title ?? described.plural,
     about: declared.about,
     rows: (answer) => answer.records as Row[],
     id: (row) => String(row.id),
@@ -29,47 +30,52 @@ function shape(described: Api.EntityInfo, declared: Declared, listPath: string):
     columns: chosen.map((field) => ({ key: field.name, header: field.title, text: (row) => shown(row[field.name]) })),
     groups: described.fields
       .filter((field) => field.type === "choice")
-      .map((field) => ({ key: field.name, label: field.title, of: (row) => shown(row[field.name]) })),
+      .map((field) => ({ key: field.name, label: field.title, of: (row) => shown(row[field.name]), order: field.choices })),
   };
 }
 
 export function recordList(declared: Declared) {
-  const pending: ListShape<Api.RecordPage, Row> = { title: declared.title, about: declared.about, rows: () => [], id: () => "", columns: [] };
   return function RecordListEntry() {
     const [, app, entry, id] = usePath().split("/");
-    const listPath = `/${app}/${entry}`;
-    const types = useRead<Api.EntityInfo[]>("/v1/entities");
-    const actions = useRead<Api.Action[]>("/v1/actions");
-    const [creating, setCreating] = useState(false);
-    const described = types.status === "ready" ? types.data.find((candidate) => candidate.type === declared.type) : undefined;
-    const records = useRead<Api.RecordPage>(described && !id ? `/v1/records/${declared.type}?limit=200` : null);
-    const definition = useMemo(() => (described ? shape(described, declared, listPath) : pending), [described, listPath]);
-    const act = (name: string) => (actions.status === "ready" ? actions.data.find((action) => action.schema === `${declared.type}.${name}`) : undefined);
-    const create = act("create");
-    if (described && id) {
-      return <RecordPage described={described} id={decodeURIComponent(id)} listPath={listPath} listTitle={declared.title} edit={act("edit")} />;
-    }
-    const read: Read<Api.RecordPage> = types.status === "ready" ? records : types;
-    return (
-      <>
-        <ListView
-          definition={definition}
-          read={read}
-          primary={create ? <Button label={t("New")} variant="primary" onClick={() => setCreating(true)} /> : undefined}
-        />
-        {creating && create && described && (
-          <ActionDialog
-            action={create}
-            described={described}
-            heading={t(create.title)}
-            confirm={t("Create")}
-            revision={0}
-            owned={declared.project}
-            onClose={() => setCreating(false)}
-            onDone={(created) => navigate(`${listPath}/${encodeURIComponent(created)}`)}
-          />
-        )}
-      </>
-    );
+    return <Records declared={declared} listPath={`/${app}/${entry}`} id={id} />;
   };
+}
+
+export function Records({ declared, listPath, id, back }: { declared: Declared; listPath: string; id?: string; back?: Back }) {
+  const pending = useMemo<ListShape<Api.RecordPage, Row>>(() => ({ title: declared.title ?? "", about: declared.about, rows: () => [], id: () => "", columns: [] }), [declared]);
+  const types = useRead<Api.EntityInfo[]>("/v1/entities");
+  const actions = useRead<Api.Action[]>("/v1/actions");
+  const [creating, setCreating] = useState(false);
+  const described = types.status === "ready" ? types.data.find((candidate) => candidate.type === declared.type) : undefined;
+  const records = useRead<Api.RecordPage>(described && !id ? `/v1/records/${declared.type}?limit=200` : null);
+  const definition = useMemo(() => (described ? shape(described, declared, listPath) : pending), [described, declared, listPath, pending]);
+  const act = (name: string) => (actions.status === "ready" ? actions.data.find((action) => action.schema === `${declared.type}.${name}`) : undefined);
+  const create = act("create");
+  if (described && id) {
+    return <RecordPage described={described} id={decodeURIComponent(id)} listPath={listPath} listTitle={declared.title ?? described.plural} edit={act("edit")} />;
+  }
+  const missing: Read<Api.RecordPage> = { status: "error", reason: t("This type is not published in this workspace.") };
+  const read: Read<Api.RecordPage> = types.status !== "ready" ? types : described ? records : missing;
+  return (
+    <>
+      <ListView
+        definition={definition}
+        read={read}
+        back={back}
+        primary={create ? <Button label={t("New")} variant="primary" onClick={() => setCreating(true)} /> : undefined}
+      />
+      {creating && create && described && (
+        <ActionDialog
+          action={create}
+          described={described}
+          heading={t(create.title)}
+          confirm={t("Create")}
+          revision={0}
+          owned={declared.project}
+          onClose={() => setCreating(false)}
+          onDone={(created) => navigate(`${listPath}/${encodeURIComponent(created)}`)}
+        />
+      )}
+    </>
+  );
 }
