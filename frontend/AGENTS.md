@@ -4,8 +4,10 @@ The platform's frontend, rebuilt from zero on Astryx. The repository's root `AGE
 
 - Every screen holds the thirteen invariants in `docs/4-interaction/README.md` §4.1 and is one of four archetypes (§4.3). Use the `platform-design` skill before building.
 - `web/` is the previous frontend. Do not read it for structure, naming or components.
-- Run `pnpm dev` (http://localhost:8496), `pnpm build` to check, `pnpm astryx <cmd>` for the CLI below.
+- Run `pnpm dev` (http://localhost:8496) and `pnpm astryx <cmd>` for the CLI below.
 - Every visible string goes through `t()` with a `zh-CN` entry in `src/i18n.ts`. No code comments.
+- Check with `make check-frontend` from the repository root. Fix what it reports; never edit the check.
+- Building one menu entry from a task card? Follow `.claude/skills/frontend-migrate/SKILL.md` to the letter: you may only add files under `src/apps/<app>/` and lines to `src/i18n.ts`. The shell, router, `src/pages/`, `src/host/`, dependencies and specs are not yours to change; when the task needs them, stop and report.
 - The block below is generated; refresh it with `pnpm astryx init --agent-docs-path AGENTS.md`, never by hand.
 
 <!-- ASTRYX:START -->

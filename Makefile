@@ -99,6 +99,7 @@ check-web:
 	cd web && $(PNPM) typecheck && $(PNPM) build
 
 check-frontend:
+	node scripts/check-frontend.mjs
 	cd frontend && $(PNPM) build
 
 test:

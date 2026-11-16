@@ -13,7 +13,7 @@
 | 命名、翻译 | [glossary](docs/glossary.md) |
 | 意图与下注、承重决定、判断是否属于平台、质量目标、外部依赖 | [1-enterprise](docs/1-enterprise.md) |
 | 新能力或资源类型放哪个应用、平台还是产品包 | [2-product](docs/2-product.md) |
-| 导航、门户、资源分类、URL、Search、Files | [3-information](docs/3-information.md) |
+| 应用轨、应用菜单、资源分类、URL、搜索、项目 | [3-information](docs/3-information.md) |
 | 页面原型、保存模型、选择、窗口、快捷键 | [4-interaction](docs/4-interaction/README.md) |
 | 某个界面组件或交互模式 | [4-interaction/patterns](docs/4-interaction/patterns.md) |
 | 某个工具应用的布局 | [4-interaction/workbenches](docs/4-interaction/workbenches.md) |
@@ -42,7 +42,7 @@
 - 应用只导入 `platformserver/platform`；客户端复用现有共享包；规则求值、约束、授权、依赖解析各一个实现。
 - 平台不含行业代码；行业概念只在产品包中以本体与应用表达。
 - 租户扩展只经受控编译、隔离执行和版本化制品。
-- 界面保留英文与简体中文；业务数据不翻译；工具应用名用 Palantir 产品名，不翻译。
+- 界面保留英文与简体中文；业务数据不翻译；应用按承担的工作命名，中英文各一个名字（2-product R3）。
 - 保留现有数据卷、密钥、租户配置与当前格式纪元内的历史字节（7-system §7.6）；恢复只应用已接受映像。
 - 不提交凭据；应用只保存凭据引用。不读取、不打印 `.build/local/` 中的账号与密码。
 - 保留工作区里他人的改动；没运行的检查不能报为通过。

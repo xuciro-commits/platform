@@ -77,7 +77,7 @@ Go 命令设置 `GOPROXY=https://goproxy.cn,direct`，所有长命令加超时�
 |---|---|---|---|
 | `make check` | 7.8 的 Go、包边界与形状、契约逐字节一致、文案、空白 | 5 秒 | 写、测、改循环中随时运行；提交钩子自动运行 |
 | `make check-web` | Web 类型检查与构建 | 10 秒 | 改动 `web/` 时；提交钩子自动运行 |
-| `make check-frontend` | 新前端类型检查与构建 | 3 秒 | 改动 `frontend/` 时；提交钩子自动运行 |
+| `make check-frontend` | 新前端的来源规则（`scripts/check-frontend.mjs`：依赖白名单、导入不出 `frontend/src`、裸元素、内联样式与硬编码值、直接网络调用、注释、源码中的中文、未翻译文案、文件行数），再做类型检查与构建；每条报错写明改法 | 3 秒 | 改动 `frontend/` 时；提交钩子自动运行 |
 | `make test RUN=K13` | 名称匹配的内核不变量（`scripts/check-invariants.mjs` 每个用例一个进程并行，最慢的先跑）；不给 `RUN` 时运行全部 | 按用例，定点数秒 | 改动内核语义时跑相关编号 |
 | `make e2e SPEC=F17` | 指定的黄金路径用例 | 按用例 | 改动某条任务路径时跑该路径 |
 | `make verify` | `check`、`check-web`、全部不变量与全部验收 | 数分钟 | 里程碑与段落完成时 |

@@ -69,12 +69,14 @@ Search 页与 Command Palette 消费同一个 workspace Search provider。Provid
 | `src/shell/` | 外壳：应用轨、应用侧栏 |
 | `src/pages/` | 四种页面原型，每种一个文件，由官方模板改造而来 |
 | `src/templates/` | 原样落地的 Astryx 官方模板；改造完成即移入 `src/pages/` 或 `src/apps/`，不在这里长期保留 |
+| `src/host/` | 宿主读写：登录与会话、读取、`decide`；唯一允许网络调用的目录 |
 | `src/apps/<应用>/` | 各应用自己的入口与画布；只组合页面原型 |
 | `src/i18n.ts` | 英文原文为键的字典与 `t()` |
 
 - 页面从 Astryx 官方模板起步（`pnpm --dir frontend astryx template <id> <路径>`），保留模板的框架、间距与交互，替换内容与数据（4-interaction R13）。
 - 官方模板自带的样式用 StyleX 书写，由 `@stylexjs/unplugin` 在构建时编译；TypeScript 的严格程度与官方模板一致（`strict`，不开 `noUncheckedIndexedAccess`），模板落地后不为过类型检查而改写。
 - 图标用官方模板所用的 `@heroicons/react`；看板模板另用 `lucide-react`，改造时并到前者。
+- 分工：外壳、路由、页面原型与宿主读写（`src/shell/`、`src/router.tsx`、`src/pages/`、`src/host/`）由主代理写一次；每个入口只在 `src/apps/<应用>/` 里填原型，按路线图的任务卡由执行模型用技能 `frontend-migrate` 完成，它不得改动前四处、依赖与规范。原型表达不了的需求退回主代理改原型，不在入口里绕过（入口各自绕过一次，界面就各自变形一次）。
 - `frontend/AGENTS.md` 由 `astryx init --agent-docs-path AGENTS.md` 生成并随升级刷新，是代理在该目录工作时的组件用法入口；仓库根的 `AGENTS.md` 不由它改写。
 - 读取与写入沿用本文 R3 的同一套宿主合同；API 类型与宿主客户端在 `web/` 删除前从 `web/packages/api` 复用，删除时迁入 `frontend/`。
 
@@ -100,5 +102,5 @@ Search 页与 Command Palette 消费同一个 workspace Search provider。Provid
 
 ## 现存差距
 
-- 新前端（R4、R9）：`frontend/` 只有外壳与一个未接数据的列表页占位；尚未接宿主登录、应用注册、读取钩子与 `decide`，`src/apps.ts` 是手写的应用清单提案；`src/apps/` 尚不存在；`src/templates/` 的两个官方模板仍带示例数据与版权注释，单文件最长 4623 行，改造时按职责拆分。`web/` 仍是产品实际使用的前端，自有组件库依赖 Radix、Tailwind、class-variance-authority、cmdk、sonner、tailwind-merge 与 lucide-react。顺序见[路线图](../roadmap.md)“五、前端重建”。
+- 新前端（R4、R9）：`frontend/` 只有外壳与一个未接数据的列表页占位；尚未接宿主登录、应用注册、读取钩子与 `decide`，`src/apps.ts` 是按 3-information §3.3 手写的应用清单，尚未由宿主的应用注册生成；`src/apps/` 与 `src/host/` 尚不存在，因此还不能派发入口任务；`src/templates/` 的两个官方模板仍带示例数据与版权注释，单文件最长 4623 行，改造时按职责拆分。`web/` 仍是产品实际使用的前端，自有组件库依赖 Radix、Tailwind、class-variance-authority、cmdk、sonner、tailwind-merge 与 lucide-react。顺序见[路线图](../roadmap.md)“五、前端重建”。
 - Workspace 的业务工具分块与布局引擎仍有大于 500 kB 的产物；布局引擎已经按需加载并在浏览器使用 Worker。保留构建器默认大小告警，不以拆成任意小文件或放宽阈值作为性能完成标准；后续按真实任务的加载链、传输与交互时间验证。

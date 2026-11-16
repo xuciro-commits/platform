@@ -1,9 +1,15 @@
 import type { IconType } from "@astryxdesign/core/Icon";
 import {
   AdjustmentsHorizontalIcon,
+  ArrowUpCircleIcon,
+  ArrowUpTrayIcon,
   ArrowsRightLeftIcon,
+  BeakerIcon,
+  BellAlertIcon,
   BoltIcon,
   BookOpenIcon,
+  BuildingOffice2Icon,
+  BuildingOfficeIcon,
   BuildingStorefrontIcon,
   CalendarDaysIcon,
   ChartBarIcon,
@@ -13,25 +19,38 @@ import {
   CodeBracketIcon,
   Cog6ToothIcon,
   CommandLineIcon,
+  CpuChipIcon,
   CubeIcon,
   CubeTransparentIcon,
+  DocumentCheckIcon,
   DocumentDuplicateIcon,
   DocumentTextIcon,
+  EyeIcon,
   FolderIcon,
   HeartIcon,
   HomeIcon,
   InboxIcon,
   KeyIcon,
+  LanguageIcon,
+  LifebuoyIcon,
   LinkIcon,
+  LockClosedIcon,
+  MapIcon,
   PhotoIcon,
   PlayIcon,
+  PresentationChartLineIcon,
   PuzzlePieceIcon,
+  QueueListIcon,
   RectangleGroupIcon,
   RectangleStackIcon,
+  ScaleIcon,
+  ServerIcon,
   ServerStackIcon,
   ShareIcon,
   ShieldCheckIcon,
+  SignalIcon,
   SparklesIcon,
+  Square3Stack3DIcon,
   Squares2X2Icon,
   SwatchIcon,
   TableCellsIcon,
@@ -40,6 +59,7 @@ import {
   UserGroupIcon,
   UsersIcon,
   ViewColumnsIcon,
+  WindowIcon,
   WrenchScrewdriverIcon,
 } from "@heroicons/react/24/outline";
 
@@ -58,6 +78,7 @@ export const apps: App[] = [
         items: [
           { id: "overview", label: "Overview", icon: Squares2X2Icon },
           { id: "work", label: "My work", icon: InboxIcon },
+          { id: "proposals", label: "Proposals", icon: DocumentCheckIcon },
           { id: "recent", label: "Recent", icon: ClockIcon },
           { id: "projects", label: "Projects", icon: FolderIcon },
         ],
@@ -81,6 +102,9 @@ export const apps: App[] = [
         items: [
           { id: "connections", label: "Connections", icon: LinkIcon },
           { id: "sources", label: "Sources", icon: ServerStackIcon },
+          { id: "listeners", label: "Listeners", icon: SignalIcon },
+          { id: "writebacks", label: "Writebacks", icon: ArrowUpTrayIcon },
+          { id: "observation-sources", label: "Observation sources", icon: EyeIcon },
         ],
       },
       {
@@ -89,10 +113,16 @@ export const apps: App[] = [
           { id: "datasets", label: "Datasets", icon: RectangleStackIcon },
           { id: "pipelines", label: "Pipelines", icon: ArrowsRightLeftIcon },
           { id: "schedules", label: "Schedules", icon: CalendarDaysIcon },
-          { id: "media", label: "Media sets", icon: PhotoIcon },
+          { id: "matching-rules", label: "Matching rules", icon: ScaleIcon },
+          { id: "media-sets", label: "Media sets", icon: PhotoIcon },
         ],
       },
-      { title: "Trace", items: [{ id: "lineage", label: "Lineage", icon: ShareIcon }] },
+      {
+        title: "Trace",
+        items: [
+          { id: "lineage", label: "Lineage", icon: ShareIcon },
+        ],
+      },
     ],
   },
   {
@@ -109,9 +139,15 @@ export const apps: App[] = [
           { id: "interfaces", label: "Interfaces", icon: PuzzlePieceIcon },
           { id: "shared-properties", label: "Shared properties", icon: SwatchIcon },
           { id: "value-types", label: "Value types", icon: AdjustmentsHorizontalIcon },
+          { id: "object-type-groups", label: "Object type groups", icon: Square3Stack3DIcon },
         ],
       },
-      { title: "Explore", items: [{ id: "objects", label: "Objects", icon: CubeTransparentIcon }] },
+      {
+        title: "Explore",
+        items: [
+          { id: "objects", label: "Objects", icon: CubeTransparentIcon },
+        ],
+      },
     ],
   },
   {
@@ -137,6 +173,7 @@ export const apps: App[] = [
         title: "Build",
         items: [
           { id: "modules", label: "Modules", icon: RectangleGroupIcon },
+          { id: "object-views", label: "Object views", icon: WindowIcon },
           { id: "templates", label: "Templates", icon: DocumentDuplicateIcon },
         ],
       },
@@ -167,6 +204,8 @@ export const apps: App[] = [
         items: [
           { id: "products", label: "Products", icon: CubeIcon },
           { id: "versions", label: "Versions", icon: TagIcon },
+          { id: "test-plans", label: "Test plans", icon: BeakerIcon },
+          { id: "sample-sets", label: "Sample sets", icon: QueueListIcon },
         ],
       },
       {
@@ -188,8 +227,11 @@ export const apps: App[] = [
         items: [
           { id: "runs", label: "Runs", icon: PlayIcon },
           { id: "logs", label: "Logs", icon: DocumentTextIcon },
-          { id: "audit", label: "Audit", icon: ShieldCheckIcon },
+          { id: "traces", label: "Traces", icon: MapIcon },
+          { id: "metrics", label: "Metrics", icon: PresentationChartLineIcon },
+          { id: "alerts", label: "Alerts", icon: BellAlertIcon },
           { id: "health", label: "Health", icon: HeartIcon },
+          { id: "audit", label: "Audit", icon: ShieldCheckIcon },
         ],
       },
     ],
@@ -202,6 +244,7 @@ export const apps: App[] = [
       {
         title: "People",
         items: [
+          { id: "organization", label: "Organization", icon: BuildingOffice2Icon },
           { id: "members", label: "Members", icon: UsersIcon },
           { id: "teams", label: "Teams", icon: UserGroupIcon },
         ],
@@ -209,11 +252,34 @@ export const apps: App[] = [
       {
         title: "Access",
         items: [
-          { id: "roles", label: "Roles", icon: KeyIcon },
+          { id: "roles", label: "Business roles", icon: KeyIcon },
           { id: "markings", label: "Markings", icon: TagIcon },
+          { id: "support-grants", label: "Support grants", icon: LifebuoyIcon },
         ],
       },
-      { title: "Workspace", items: [{ id: "settings", label: "Settings", icon: Cog6ToothIcon }] },
+      {
+        title: "Workspace",
+        items: [
+          { id: "models", label: "Models", icon: CpuChipIcon },
+          { id: "vocabulary", label: "Language and vocabulary", icon: LanguageIcon },
+          { id: "credentials", label: "Credentials", icon: LockClosedIcon },
+          { id: "settings", label: "Settings", icon: Cog6ToothIcon },
+        ],
+      },
+    ],
+  },
+  {
+    id: "host",
+    label: "Host",
+    icon: ServerIcon,
+    sections: [
+      {
+        title: "Operate",
+        items: [
+          { id: "tenants", label: "Tenants", icon: BuildingOfficeIcon },
+          { id: "upgrades", label: "Upgrades", icon: ArrowUpCircleIcon },
+        ],
+      },
     ],
   },
 ];
