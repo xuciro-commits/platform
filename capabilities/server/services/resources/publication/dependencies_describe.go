@@ -98,7 +98,7 @@ func (resolver Resolver) describeAsset(asset platform.ReleaseAsset, historical b
 		if err := decoder.Decode(&app); err != nil {
 			return out, err
 		}
-		if err := app.CheckVariables(); err != nil {
+		if err := resolver.CheckApplicationVariables(app); err != nil {
 			return out, err
 		}
 		if err := resolver.CheckApplicationResources(app); err != nil {

@@ -101,24 +101,3 @@ func NumberLiteral(raw json.RawMessage) (NumberValue, bool) {
 	}
 	return v, true
 }
-
-func (d PageInputSchema) CheckAggregateScalar(v PageVariable, info EntityInfo) error {
-	if v.Mode != "aggregate" || v.Source == nil || v.Source.Kind != "aggregate" && v.Source.Kind != "statistics" {
-		return nil
-	}
-	_, field, ok := stringsCutMeasure(v.Source.Measure)
-	if v.Source.Kind == "statistics" {
-		field = v.Source.Measure
-		ok = PageNodeID.MatchString(field)
-	}
-	f, found := info.Field(field)
-	if !ok || !found || (f.Type != "integer" && f.Type != "decimal") {
-		return fmt.Errorf("aggregate scalar needs an original visible numeric field")
-	}
-	return nil
-}
-
-func stringsCutMeasure(measure string) (string, string, bool) {
-	op, field, ok := strings.Cut(measure, ":")
-	return op, field, ok && (op == "sum" || op == "avg" || op == "min" || op == "max") && PageNodeID.MatchString(field)
-}

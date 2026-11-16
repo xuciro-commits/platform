@@ -75,9 +75,9 @@ read-when: 每批开始（选当前批次）与结束（删除已完成条目、
   - [x] U3.22 页面查询模式检查归位。诊断：`CheckQuerySchema` 只由页面服务与应用创作调用，`CheckInterfaceQuery` 和 `CheckQueryFilter` 仅供该检查及页面服务复用；三项一起迁入 `services/apps/pages`，保留一套实现和既有规则引擎选择。
     - 源：`platform/page_queries.go`、`page_query_filter.go`；调用方：`services/apps/pages/page_frozen_queries.go`、`page_rule_bindings.go`、`page_bound_queries.go`，`services/apps/authoring/application.go`。删除 SDK 原实现，不加转发；保持查询、接口和筛选检查的调用与错误顺序。
     - 完成：`make contract` 无差异；逐项对照查询、接口、筛选及自定义规则引擎的接受和拒绝，产品包候选字节与闭包不变；V1、V3。其余页面函数仍按 U3.6 诊断。
-  - [ ] U3.23 页面与应用变量检查归位。诊断：页面变量检查被应用变量检查及页面服务共用，计算输入、聚合度量与规则类型辅助只服务该组；应用变量检查还由发布资产、候选与描述路径调用。将这组实现归页面服务，发布经现有纯解析值调用，SDK 的 `Application.QueryPage`、原始 `profile`、`ProfileVersion` 与仍被 SDK 查询检查使用的 `PageLiteralType` 暂留，不复制规则。
+  - [x] U3.23 页面与应用变量检查归位。诊断：页面变量检查被应用变量检查及页面服务共用，计算输入、聚合度量与规则类型辅助只服务该组；应用变量检查还由发布资产、候选与描述路径调用。将这组实现归页面服务，发布经现有纯解析值调用，SDK 的 `Application.QueryPage`、原始 `profile`、`ProfileVersion` 与仍被 SDK 查询检查使用的 `PageLiteralType` 暂留，不复制规则。
     - 源：`platform/page_variables.go`、`page_rules.go`、`page_collections.go`、`page_events.go`、`rules_decimal.go`、`definition_checks.go`；调用方：`services/apps/pages/page_safety.go`、`page_frozen_queries.go`、`page_rule_bindings.go`、`page_bound_queries.go`、`application_checks.go`，`services/apps/authoring/page.go`、`application.go`，`services/resources/publication/candidate.go`、`page_asset.go`、`dependencies_describe.go`、`resolver.go`。删除 SDK 旧实现，保留现有检查顺序、自定义规则引擎与页面格式语义。
-    - 完成判据：`make contract` 无差异；对照变量和计算输入、聚合、不同 profile、自定义规则引擎及应用检查的接受和拒绝，产品包候选字节与闭包不变；V1、V3。其余页面函数仍按 U3.6 诊断。
+    - 完成：`make contract` 无差异；对照变量和计算输入、聚合、不同 profile、自定义规则引擎及应用检查的接受和拒绝，产品包候选字节与闭包不变；V1、V3。其余页面函数仍按 U3.6 诊断。
 - [ ] U4 发布路径一张表。已完成（U4.1）：五项发布钩子由宿主登记，action-type 的发布步骤归本体服务；Build 的 apps、automation、functions、本体类型转接已删除。
   - [ ] U4.2 其余家族钩子与状态边界定型（诊断与切分，不写代码）。前置已完成：U4.1。
     - 读：`services/resources/publication/api.go`、`services/resources/authoring/build_release_drafts.go`、`build_artifacts.go`、`build_owner.go`、`build_agents.go`、`build_evaluations.go`、`build_tests.go`、`build_compute.go`、`build_tables.go`、`host/composition/tenant.go`。

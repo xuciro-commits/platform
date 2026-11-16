@@ -29,7 +29,7 @@ func (b Bindings) CheckApplication(id string, a platform.Application, published 
 			return fmt.Errorf("application %s: no page %s", a.Name, page)
 		}
 	}
-	if err := a.CheckVariables(); err != nil {
+	if err := CheckApplicationVariables(a); err != nil {
 		return err
 	}
 	if err := b.CheckQueries(a.QueryPage()); err != nil {

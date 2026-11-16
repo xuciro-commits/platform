@@ -61,8 +61,3 @@ func (b PageEventBinding) Reads() []string {
 func (p Page) RecordVariableObject(variable string) string {
 	return p.RecordResourceObject(variable).Name
 }
-
-func (d PageInputSchema) sharedContextRecord(id string) bool {
-	v := d.Variables[id]
-	return v.Type == "record" && v.Scope == "application" && v.Mode == "shared" && v.Source != nil && v.Source.Kind == "application" && v.Source.Object != nil && v.Source.Object.Kind == AssetObject && v.Source.Object.Check() == nil
-}

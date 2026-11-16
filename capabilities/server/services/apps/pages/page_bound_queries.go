@@ -38,7 +38,7 @@ func (b Bindings) CheckQueries(p platform.Page) error {
 	if err := BindRuleTypes(p, b.Entity); err != nil {
 		return err
 	}
-	if err := p.InputSchema.CheckVariables(); err != nil {
+	if err := CheckVariables(p.InputSchema); err != nil {
 		return err
 	}
 	for id, c := range p.ComputeResources() {
@@ -71,7 +71,7 @@ func (b Bindings) CheckQueries(p platform.Page) error {
 		if v.Mode == "aggregate" && v.Source != nil {
 			q := p.InputSchema.Queries[v.Source.Query]
 			object, ok := b.Entity(q.Object.Name)
-			if !ok || p.InputSchema.CheckAggregateScalar(v, object) != nil {
+			if !ok || checkAggregateScalar(v, object) != nil {
 				return fmt.Errorf("page aggregate field is unavailable")
 			}
 		}

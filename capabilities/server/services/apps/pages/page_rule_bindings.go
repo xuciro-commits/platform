@@ -42,7 +42,7 @@ func BindRuleTypes(p platform.Page, lookup func(string) (platform.EntityInfo, bo
 	walk = func(e platform.Expr, set string) error {
 		if e.Agg != nil {
 			set = e.Agg.Source
-			if _, ok := d.PageRuleSchema().Sets[set]; !ok {
+			if _, ok := pageRuleSchema(d).Sets[set]; !ok {
 				return fmt.Errorf("rule collection %s is not a declared query window", set)
 			}
 		}

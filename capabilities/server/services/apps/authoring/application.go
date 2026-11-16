@@ -102,7 +102,7 @@ func (o *Owner) ValidateApplication(c platform.Caller, a *Application) *platform
 	if err := pageowner.CheckApplicationConcepts(ApplicationDescriptor(*a)); err != nil {
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
 	}
-	if err := (platform.PageInputSchema{Variables: a.Variables}).CheckVariables(c.Rules()); err != nil {
+	if err := pageowner.CheckVariables(platform.PageInputSchema{Variables: a.Variables}, c.Rules()); err != nil {
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
 	}
 	lookup := o.env.Entity
@@ -189,7 +189,7 @@ func (o *Owner) checkApplication(a Application) error {
 	if err := pageowner.CheckApplicationResources(ApplicationDescriptor(a)); err != nil {
 		return err
 	}
-	if err := ApplicationDescriptor(a).CheckVariables(); err != nil {
+	if err := pageowner.CheckApplicationVariables(ApplicationDescriptor(a)); err != nil {
 		return err
 	}
 	if err := pageowner.CheckApplicationHeader(ApplicationDescriptor(a)); err != nil {

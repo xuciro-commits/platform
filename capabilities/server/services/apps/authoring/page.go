@@ -140,7 +140,7 @@ func (o *Owner) validatePageDocument(page *Page, lookup func(string) (platform.E
 	if err := pageowner.BindRuleTypes(d, lookup); err != nil {
 		return err
 	}
-	if err := d.InputSchema.CheckVariables(engines...); err != nil {
+	if err := pageowner.CheckVariables(d.InputSchema, engines...); err != nil {
 		return err
 	}
 	return pageowner.CheckSafety(Descriptor(*page, o.env.AppID(), o.env.Version()))

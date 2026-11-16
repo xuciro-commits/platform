@@ -184,7 +184,7 @@ func (resolver Resolver) candidate(roots []platform.AssetRef, available []platfo
 			if err := json.Unmarshal(body, &application); err != nil {
 				return empty, err
 			}
-			if err := application.CheckVariables(); err != nil {
+			if err := resolver.CheckApplicationVariables(application); err != nil {
 				return empty, err
 			}
 			if err := resolver.CheckApplicationExtension(application); err != nil {

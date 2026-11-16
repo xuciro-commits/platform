@@ -136,7 +136,7 @@ func CheckFrozenQueries(original platform.Page, assets map[platform.AssetRef]pla
 			}
 		}
 	}
-	if err := page.InputSchema.CheckVariables(); err != nil {
+	if err := CheckVariables(page.InputSchema); err != nil {
 		return err
 	}
 	if err := page.InputSchema.CheckQuerySets(); err != nil {
@@ -216,7 +216,7 @@ func CheckFrozenQueries(original platform.Page, assets map[platform.AssetRef]pla
 		}
 		for _, v := range page.InputSchema.Variables {
 			if v.Source != nil && v.Source.Query == id {
-				if err := page.InputSchema.CheckAggregateScalar(v, object); err != nil {
+				if err := checkAggregateScalar(v, object); err != nil {
 					return err
 				}
 			}

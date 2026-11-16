@@ -96,7 +96,7 @@ func CheckSafety(p platform.Page) error {
 	if err := checkProfile(safe.InputSchema); err != nil {
 		return err
 	}
-	if err := safe.InputSchema.CheckVariables(); err != nil {
+	if err := CheckVariables(safe.InputSchema); err != nil {
 		return err
 	}
 	if err := safe.CheckQueries("page"); err != nil {
@@ -120,6 +120,7 @@ func PublicationResolver() publication.Resolver {
 		CheckPageEmbeddingGraph: CheckPageEmbeddingGraph, CheckPageVariables: CheckPageVariables,
 		PageContentVersion: PageContentVersion, CheckPageContentVersion: CheckPageContentVersion,
 		CheckPageNavigation:       CheckPageNavigation,
+		CheckApplicationVariables: CheckApplicationVariables,
 		CheckApplicationResources: CheckApplicationResources, CheckApplicationExtension: CheckApplicationExtension,
 		ApplicationDependencies: ApplicationDependencies,
 	}

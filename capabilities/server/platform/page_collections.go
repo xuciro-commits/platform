@@ -1,9 +1,6 @@
 package platform
 
-import (
-	"fmt"
-	"slices"
-)
+import "fmt"
 
 func (p Page) LoopFactor(owner string) (int, error) {
 	factor := 1
@@ -158,34 +155,6 @@ func (p Page) collectionInputObject(variable string, seen map[string]bool) Asset
 		}
 	}
 	return AssetRef{}
-}
-
-func (d PageInputSchema) checkComputeResource(v PageVariable) error {
-	c := v.Source.Compute
-	if !PageUIProfileSupports(d.ProfileVersion(), PageWidgets.Runtime.ComputeResource.RequiredUIProfile) || !slices.Contains([]string{"number", "decimal"}, v.Type) || v.Mode != "resource" || v.Writable || !slices.Contains([]string{"page", "overlay"}, v.Scope) || c == nil || !PageNodeID.MatchString(c.RecordVariable) || c.Operation.Ref.Kind != AssetCompute || c.Operation.Ref.Check() != nil || c.Operation.SourceVersion == "" || len(c.Inputs) == 0 || len(c.Inputs) > 64 || c.OutputField != "" && !PageNodeID.MatchString(c.OutputField) {
-		return fmt.Errorf("compute resource needs its finite typed operation and original record")
-	}
-	parent := d.Variables[c.RecordVariable]
-	if parent.Type != "record" || !(d.sharedContextRecord(c.RecordVariable) || parent.Mode == "resource" && parent.Source != nil && parent.Source.Kind == "record" && parent.Scope == v.Scope && parent.Owner == v.Owner) {
-		return fmt.Errorf("compute input needs its confirmed record in the original owner")
-	}
-	subject := false
-	for name, b := range c.Inputs {
-		if !PageNodeID.MatchString(name) || b.Check() != nil || b.Source != "literal" && b.Source != "subject" || b.Source == "subject" && (len(b.Path) < 1 || len(b.Path) > 16 || slices.ContainsFunc(b.Path, func(part string) bool {
-			return !PageNodeID.MatchString(part)
-		})) {
-			return fmt.Errorf("compute input needs a scalar source field or typed literal")
-		}
-		subject = subject || b.Source == "subject"
-	}
-	if !subject {
-		return fmt.Errorf("record computation needs an original protected source field")
-	}
-	s := v.Source
-	if s.Section != "" || s.Node != "" || s.Query != "" || s.Variable != "" || s.Object != nil || s.Field != "" || len(s.Fields) > 0 || s.Measure != "" || s.Port != "" {
-		return fmt.Errorf("compute resource cannot carry another source")
-	}
-	return nil
 }
 
 func (p Page) ComputeResources() map[string]PageComputeResource {
