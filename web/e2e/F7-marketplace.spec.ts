@@ -54,9 +54,10 @@ test("F7 an administrator reviews a dependency closure, installs managed product
   await expect(install.getByRole("list",{name:"Installation order"}).getByRole("listitem")).toHaveCount(2);
   await install.getByRole("button",{name:"Install",exact:true}).click();
   await expect(install).toBeHidden();
-  const installed=await customer.read<PackageView[]>("/v1/packages");
-  expect(installed.find(item=>item.descriptor.id===provider)?.installed?.version).toBe("1.10.0");
-  expect(installed.find(item=>item.descriptor.id===consumer)?.installed?.version).toBe("1.0.0");
+  await expect.poll(async () => {
+    const now = await customer.read<PackageView[]>("/v1/packages");
+    return [now.find(item=>item.descriptor.id===provider)?.installed?.version, now.find(item=>item.descriptor.id===consumer)?.installed?.version].join("/");
+  }, { timeout: 30_000 }).toBe("1.10.0/1.0.0");
   const directory=await customer.read<ResourceDirectory>("/v1/resources");
   const base=directory.resources.find(resource=>resource.ref.name===baseType && resource.ref.kind==="object")!;
   expect(base.managedBy).toBe(provider);expect(base.project).toBe(`package:${provider}`);expect(base.canEdit).toBe(false);
@@ -88,7 +89,7 @@ test("F7 an administrator reviews a dependency closure, installs managed product
   const downgrade=page.getByRole("dialog",{name:"Review downgrade",exact:true});
   await downgrade.getByRole("button",{name:"Downgrade",exact:true}).click();
   await expect(downgrade).toBeHidden();
-  expect((await customer.read<PackageView[]>("/v1/packages")).find(view=>view.descriptor.id===provider)?.installed?.version).toBe("1.2.0");
+  await expect.poll(async () => (await customer.read<PackageView[]>("/v1/packages")).find(view=>view.descriptor.id===provider)?.installed?.version, { timeout: 30_000 }).toBe("1.2.0");
   await page.goto("/#/apps?tab=catalog");
   await selectPackage(providerTitle);
   await downgradePanel.getByRole("combobox",{name:"Exact package version"}).selectOption("1.11.0");
@@ -96,7 +97,7 @@ test("F7 an administrator reviews a dependency closure, installs managed product
   const restore=page.getByRole("dialog",{name:"Review rollback",exact:true});
   await restore.getByRole("button",{name:"Roll back",exact:true}).click();
   await expect(restore).toBeHidden();
-  expect((await customer.read<PackageView[]>("/v1/packages")).find(view=>view.descriptor.id===provider)?.installed?.version).toBe("1.11.0");
+  await expect.poll(async () => (await customer.read<PackageView[]>("/v1/packages")).find(view=>view.descriptor.id===provider)?.installed?.version, { timeout: 30_000 }).toBe("1.11.0");
   await page.goto("/#/apps?tab=installed");
   await selectPackage(consumerTitle);
   await panel.getByRole("button",{name:"Mark for uninstall",exact:true}).click();
@@ -106,8 +107,11 @@ test("F7 an administrator reviews a dependency closure, installs managed product
   await uninstall.getByRole("button",{name:"Retire",exact:true}).click();
   await expect(uninstall).toBeHidden();
   expect((await customer.read<{record:{note:string}}>(`/v1/records/${customerType}/${extensionRecord}`)).record.note).toBe("Keep my extension");
-  const retired=await customer.read<ResourceDirectory>("/v1/resources");
-  expect(retired.resources.filter(resource=>resource.managedBy===consumer).every(resource=>resource.state==="archived")).toBeTruthy();
+  await expect.poll(async () => {
+    const directory = await customer.read<ResourceDirectory>("/v1/resources");
+    const mine = directory.resources.filter(resource=>resource.managedBy===consumer);
+    return mine.length > 0 && mine.every(resource=>resource.state==="archived");
+  }, { timeout: 30_000 }).toBe(true);
   const consumerSource=(await customer.read<PackageView[]>("/v1/packages")).find(view=>view.descriptor.id===consumer);
   expect(consumerSource?.sourceDigest).toBeTruthy();
   await customer.submit("platform.package",consumer,"remove-source",{id:consumer,digest:consumerSource!.sourceDigest},null);
@@ -119,7 +123,7 @@ test("F7 an administrator reviews a dependency closure, installs managed product
   const reinstall=page.getByRole("dialog",{name:"Review installation",exact:true});
   await reinstall.getByRole("button",{name:"Install",exact:true}).click();
   await expect(reinstall).toBeHidden();
-  expect((await customer.read<PackageView[]>("/v1/packages")).find(view=>view.descriptor.id===consumer)?.installed?.state).toBe("active");
+  await expect.poll(async () => (await customer.read<PackageView[]>("/v1/packages")).find(view=>view.descriptor.id===consumer)?.installed?.state, { timeout: 30_000 }).toBe("active");
   expect((await customer.read<{record:{note:string}}>(`/v1/records/${customerType}/${extensionRecord}`)).record.note).toBe("Keep my extension");
   await page.goto("/#/apps?tab=installed");
   await selectPackage(consumerTitle);
@@ -143,7 +147,7 @@ test("F7 an administrator reviews a dependency closure, installs managed product
   const refusal=await rejected.json();
   expect(refusal.error).toBeDefined();
   expect(JSON.stringify(refusal)).toContain("references");
-  expect((await customer.read<PackageView[]>("/v1/packages")).find(view=>view.descriptor.id===provider)?.installed?.version).toBe("1.11.0");
+  await expect.poll(async () => (await customer.read<PackageView[]>("/v1/packages")).find(view=>view.descriptor.id===provider)?.installed?.version, { timeout: 30_000 }).toBe("1.11.0");
   await removal.getByRole("button",{name:"Cancel",exact:true}).click();
   await page.goto("/#/apps?tab=installed");
   await selectPackage(providerTitle);

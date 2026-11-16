@@ -69,7 +69,8 @@ Go 命令设置 `GOPROXY=https://goproxy.cn,direct`，所有长命令加超时�
 - 登录：`kit.ts` 的 `signIn(page, 主体)` 以开发令牌进入；席位为 admin、builder、user、publisher。
 - 每个用例对应 5-experience 的一条任务路径，步骤与成功标准逐条断言。F20–F24 的内核行为由 K12 断言，界面由负责人走查，不另写用例。
 - 用例在空项目中创建自己的资源，结束时归档；不依赖其他用例的数据。
-- 选择器使用可访问名称（角色 + 名称），不用 CSS 类。
+- 选择器使用可访问名称（角色 + 名称），不用 CSS 类；定位器可收窄到具名的 `main`、region 或控件（如 `combobox "Command palette"`），收窄不改断言。
+- 写入后读后台状态用 `expect.poll` 等待接受结果可见（7-system/web R5 的同一条规则）：对话框关闭不代表投影已可读，直接 GET 会读到写入前的值。
 
 ## 7.12 命令分层
 

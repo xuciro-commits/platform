@@ -13,8 +13,9 @@ export const DefaultButtonSize = createContext<ButtonProps["size"]>(undefined);
 function textOf(node: ReactNode): string {
   return Children.toArray(node)
     .map(child => typeof child === "string" || typeof child === "number" ? String(child)
-      : isValidElement<{ children?: ReactNode; label?: unknown }>(child)
-        ? typeof child.props.label === "string" && child.props.label ? child.props.label : textOf(child.props.children)
+      : isValidElement<{ children?: ReactNode; label?: unknown; "aria-hidden"?: unknown }>(child)
+        ? child.props["aria-hidden"] === true || child.props["aria-hidden"] === "true" ? ""
+          : typeof child.props.label === "string" && child.props.label ? child.props.label : textOf(child.props.children)
         : "")
     .join(" ")
     .replace(/\s+/g, " ")
