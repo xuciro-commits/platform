@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { RecordComments } from "./RecordComments";
 import { RecordUploader } from "./RecordUploader";
+import { List, ListItem } from "@astryxdesign/core/List";
+import { Text } from "@astryxdesign/core/Text";
 import { Tag } from "../components/StatusTag";
 import { Button } from "../primitives/button";
 import { FlowSteps, type FlowStepEdge, type FlowStepNode } from "../graph/flow/FlowSteps";
@@ -14,18 +16,13 @@ export function Files({ attached, files }: { attached: AttachedFile[]; files?: {
   const [file,setFile]=useState<File>(),[busy,setBusy]=useState(false),[error,setError]=useState<string>();const epoch=useRef(0),picked=useRef(file);picked.current=file;useEffect(()=>()=>{epoch.current++;},[]);
   const upload=async()=>{const submitted=picked.current,started=epoch.current;if(!submitted||!files||busy)return;setBusy(true);setError(undefined);try{await files.upload(submitted);if(epoch.current===started&&picked.current===submitted){picked.current=undefined;setFile(undefined);}}catch{if(epoch.current===started)setError(t("The attachment could not be confirmed. Your selected file is retained."));}finally{if(epoch.current===started)setBusy(false);}};
   return (
-    <section>
-      <h2 className="mb-1 text-sm font-semibold">{t("Files")}</h2>
+    <section className="grid gap-2">
+      <Text type="label" weight="semibold">{t("Files")}</Text>
       {files&&<RecordUploader label={t("Add file")} file={file} busy={busy} error={error} onFile={next=>{picked.current=next;setFile(next);setError(undefined);}} onUpload={upload} onClear={()=>{picked.current=undefined;setFile(undefined);setError(undefined);}}/>}
-      {attached.length === 0 ? <p className="text-xs text-muted">{t("No files")}</p> :
-        <ul className="grid gap-1">
-          {attached.map((f) => (
-            <li key={f.id} className="flex items-center gap-2 rounded-md border border-border bg-surface px-3 py-1.5 text-sm">
-              <button type="button" className="font-medium hover:underline" disabled={!files} onClick={() => files?.download(f)}>{f.name}</button>
-              <span className="text-xs text-muted">{f.contentType} · {size(f.size)} · {f.by}</span>
-            </li>
-          ))}
-        </ul>}
+      {attached.length === 0 ? <Text type="supporting">{t("No files")}</Text> :
+        <List aria-label={t("Files")} density="compact" hasDividers>
+          {attached.map((f) => <ListItem key={f.id} itemKey={f.id} label={f.name} description={`${f.contentType} · ${size(f.size)} · ${f.by}`} isDisabled={!files} onClick={files?()=>files.download(f):undefined} />)}
+        </List>}
     </section>
   );
 }
