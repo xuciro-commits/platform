@@ -12,6 +12,8 @@ import type { ContextCommand } from "../components/CommandMenu";
 import { PropertyList } from "../components/EntityCard";
 import { FieldProvenance } from "./FieldProvenance";
 import { Tag } from "../components/StatusTag";
+import { List, ListItem } from "@astryxdesign/core/List";
+import { Text } from "@astryxdesign/core/Text";
 import { columnsFor, valueOf, type Entity } from "../fields/entity";
 import { Button } from "../primitives/button";
 import { RecordReadContext } from "./RecordChip";
@@ -254,7 +256,7 @@ function ActivityNotes({ notes }: { notes: Api.Note[] }) {
 
 export function RecordDeliveries({deliveries,onOpen}:{deliveries?:Api.RecordDelivery[];onOpen?:(type:string,r:EntityRecord)=>void}){
  if(!deliveries?.length)return null;
- return <section className="grid gap-2" aria-label={t("Delivery results")}><h2 className="text-sm font-semibold">{t("Delivery results")}</h2><p className="text-xs text-muted">{t("Business acceptance and delivery are separate results.")}</p><ul className="grid gap-2">{deliveries.map(delivery=><li key={delivery.id} className="flex flex-wrap items-baseline gap-2 rounded-md border border-border p-2 text-sm"><span>{delivery.event}</span><Tag label={t(delivery.state)} tone={delivery.state==="delivered"?"success":["rejected","failed"].includes(delivery.state)?"danger":"info"}/><time className="text-xs text-muted" dateTime={delivery.at}>{new Date(delivery.at).toLocaleString()}</time>{delivery.message&&<p className="w-full">{t(delivery.message)}</p>}{delivery.receipt&&onOpen&&<Button size="sm" onClick={()=>{const [type,...id]=delivery.receipt!.split("/");onOpen(type!,{id:id.join("/")} as EntityRecord);}}>{t("Open receipt")}</Button>}</li>)}</ul></section>;
+ return <section className="grid gap-2" aria-label={t("Delivery results")}><Text type="label" weight="semibold">{t("Delivery results")}</Text><Text type="supporting">{t("Business acceptance and delivery are separate results.")}</Text><List aria-label={t("Delivery results")} density="compact" hasDividers>{deliveries.map(delivery=><ListItem key={delivery.id} itemKey={delivery.id} label={<span>{delivery.event}</span>} endContent={<Tag label={t(delivery.state)} tone={delivery.state==="delivered"?"success":["rejected","failed"].includes(delivery.state)?"danger":"info"}/>} description={<><time dateTime={delivery.at}>{new Date(delivery.at).toLocaleString()}</time>{delivery.message&&<span className="block">{t(delivery.message)}</span>}{delivery.receipt&&onOpen&&<Button size="sm" onClick={()=>{const [type,...id]=delivery.receipt!.split("/");onOpen(type!,{id:id.join("/")} as EntityRecord);}}>{t("Open receipt")}</Button>}</>} />)}</List></section>;
 }
 
 export function RecordLinks({source,type,id,groups,onOpen}:{source:RecordSource;type:string;id:string;groups:readonly RecordLinkOptions[];onOpen?:(type:string,r:EntityRecord)=>void}){
