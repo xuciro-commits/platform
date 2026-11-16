@@ -38,7 +38,7 @@ func CheckApplicationHeader(a platform.Application) error {
 	if !platform.PageUIProfileSupports(a.UIProfile, "platform.page.v2.105") || len(h.Title) > 1024 || len(h.Items) == 0 || len(h.Items) > 24 {
 		return fmt.Errorf("application header exceeds its retained profile or content bound")
 	}
-	if h.Logo != "" && !platform.ValidPageImageURL(h.Logo) {
+	if h.Logo != "" && !validPageImageURL(h.Logo) {
 		return fmt.Errorf("application header logo needs a safe static image URL")
 	}
 	seen := map[string]bool{}

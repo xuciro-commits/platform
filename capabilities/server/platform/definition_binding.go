@@ -161,7 +161,7 @@ func compileCondition(e Expr, engines ...RuleEngine) (PredicateProgram, error) {
 		}
 		schema.Refs[ref] = ruleexpr.Type{Kind: "json"}
 	}
-	return ruleEngineOf(engines).CompilePredicate(e, schema)
+	return RuleEngineOf(engines).CompilePredicate(e, schema)
 }
 
 func CheckCondition(e Expr, engines ...RuleEngine) error {

@@ -1,17 +1,13 @@
-package platform
+package pages
 
 import (
 	"fmt"
-	"net"
-	"net/url"
 	"slices"
-	"strconv"
-	"strings"
-	"unicode"
-	"unicode/utf8"
+
+	"platformserver/platform"
 )
 
-func compositeRole(view ModelViewBinding, role string, info EntityInfo) *FieldRef {
+func compositeRole(view platform.ModelViewBinding, role string, info platform.EntityInfo) *platform.FieldRef {
 	if field, ok := view.Roles[role]; ok {
 		return &field
 	}
@@ -23,23 +19,30 @@ func compositeRole(view ModelViewBinding, role string, info EntityInfo) *FieldRe
 			return nil
 		}
 		if name := info.Display; name != "" && name != "id" {
-			return &FieldRef{Name: name}
+			return &platform.FieldRef{Name: name}
 		}
 		return nil
 	}
 	if role == "state" && info.Lifecycle != nil {
-		return &FieldRef{Name: info.Lifecycle.Field}
+		return &platform.FieldRef{Name: info.Lifecycle.Field}
 	}
 	return nil
 }
 
-func (p Page) checkComposite(b PageDataBinding, lookup func(string) (EntityInfo, bool), engines ...RuleEngine) error {
+func checkComposite(b platform.PageDataBinding, lookup func(string) (platform.EntityInfo, bool), engines ...platform.RuleEngine) error {
 	widget := b.Ports["widget"]
 	if widget == "" {
-		for _, candidate := range PageWidgets.Widgets {
+		for _, candidate := range platform.PageWidgets.Widgets {
 			fits := len(candidate.ModelPorts) > 0 && len(b.Models) > 0
 			for key := range b.Models {
-				fits = fits && slices.ContainsFunc(candidate.ModelPorts, func(port pageModelPort) bool { return port.ID == key })
+				found := false
+				for _, port := range candidate.ModelPorts {
+					if port.ID == key {
+						found = true
+						break
+					}
+				}
+				fits = fits && found
 			}
 			for _, port := range candidate.ModelPorts {
 				_, present := b.Models[port.ID]
@@ -51,11 +54,14 @@ func (p Page) checkComposite(b PageDataBinding, lookup func(string) (EntityInfo,
 			}
 		}
 	}
-	contract := pageWidget(widget)
+	contract := platform.PageWidget(widget)
 	if contract == nil || len(contract.ModelPorts) == 0 || b.Model != nil || len(b.Models) > len(contract.ModelPorts) {
 		return fmt.Errorf("binding %s: invalid composite contract", b.ID)
 	}
-	entity := func(typ string) (EntityInfo, bool) { v, ok := lookup(typ); return ConstraintEntity(v), ok }
+	entity := func(typ string) (platform.EntityInfo, bool) {
+		v, ok := lookup(typ)
+		return platform.ConstraintEntity(v), ok
+	}
 	for _, port := range contract.ModelPorts {
 		view, exists := b.Models[port.ID]
 		if !exists {
@@ -85,23 +91,23 @@ func (p Page) checkComposite(b PageDataBinding, lookup func(string) (EntityInfo,
 				if field.Name != "" && len(field.Path) > 0 || field.Slot != "" || field.Transform != "" {
 					return fmt.Errorf("binding %s: invalid field reference", b.ID)
 				}
-				f, err := RecordPathField(view.Model.Type, field.Segments(), entity)
+				f, err := platform.RecordPathField(view.Model.Type, field.Segments(), entity)
 				if err != nil {
 					return fmt.Errorf("binding %s port %s role %s: %w", b.ID, port.ID, role, err)
 				}
-				kind = RuleFieldKind(f.Type)
+				kind = platform.RuleFieldKind(f.Type)
 				if target := declaration.Target; target != "" && f.Type == "reference" && f.Ref != b.Models[target].Model.Type {
 					return fmt.Errorf("binding %s role %s: reference target differs from %s", b.ID, role, target)
 				}
-			} else if err := CheckRuleExpression(expression, RuleReadSpec{Object: view.Model.Type}, lookup, engines...); err != nil {
+			} else if err := checkRuleExpression(expression, platform.RuleReadSpec{Object: view.Model.Type}, lookup, engines...); err != nil {
 				return fmt.Errorf("binding %s role %s: %w", b.ID, role, err)
 			} else if target := declaration.Target; target != "" {
-				schema, err := RuleSchema(expression, RuleReadSpec{Object: view.Model.Type}, lookup, engines...)
+				schema, err := platform.RuleSchema(expression, platform.RuleReadSpec{Object: view.Model.Type}, lookup, engines...)
 				if err != nil {
 					return err
 				}
-				schema.Refs["$visualTarget"] = ExprType{Kind: "reference", Object: b.Models[target].Model.Type}
-				if _, err = ruleEngineOf(engines).CompileExpr(Expr{Op: "=", Kind: "boolean", Args: []Expr{expression, ExprReference("reference", "$visualTarget")}}, schema); err != nil {
+				schema.Refs["$visualTarget"] = platform.ExprType{Kind: "reference", Object: b.Models[target].Model.Type}
+				if _, err = platform.RuleEngineOf(engines).CompileExpr(platform.Expr{Op: "=", Kind: "boolean", Args: []platform.Expr{expression, platform.ExprReference("reference", "$visualTarget")}}, schema); err != nil {
 					return fmt.Errorf("binding %s role %s: reference target differs from %s: %w", b.ID, role, target, err)
 				}
 			}
@@ -121,7 +127,14 @@ func (p Page) checkComposite(b PageDataBinding, lookup func(string) (EntityInfo,
 		}
 	}
 	for key := range b.Models {
-		if !slices.ContainsFunc(contract.ModelPorts, func(port pageModelPort) bool { return port.ID == key }) {
+		found := false
+		for _, port := range contract.ModelPorts {
+			if port.ID == key {
+				found = true
+				break
+			}
+		}
+		if !found {
 			return fmt.Errorf("binding %s: undeclared model port %s", b.ID, key)
 		}
 	}
@@ -129,7 +142,7 @@ func (p Page) checkComposite(b PageDataBinding, lookup func(string) (EntityInfo,
 		if b.Value == nil || !slices.Contains([]string{"text", "boolean", "integer", "number", "decimal"}, b.Value.Kind) {
 			return fmt.Errorf("binding %s: matrix needs a scalar cell expression", b.ID)
 		}
-		if err := CheckRuleExpression(*b.Value, MatrixRuleReads(b), lookup, engines...); err != nil {
+		if err := checkRuleExpression(*b.Value, matrixRuleReads(b), lookup, engines...); err != nil {
 			return fmt.Errorf("binding %s cell: %w", b.ID, err)
 		}
 	} else if b.Value != nil {
@@ -138,46 +151,11 @@ func (p Page) checkComposite(b PageDataBinding, lookup func(string) (EntityInfo,
 	return nil
 }
 
-func ValidPageImageURL(raw string) bool {
-	if raw == "" {
-		return true
-	}
-	if len(raw) > PageWidgets.Runtime.ContextViews.MaxURLBytes || !utf8.ValidString(raw) {
-		return false
-	}
-	decoded, err := url.PathUnescape(raw)
-	if err != nil || !utf8.ValidString(decoded) {
-		return false
-	}
-	for _, text := range []string{raw, decoded} {
-		for _, r := range text {
-			if r == '\\' || unicode.IsSpace(r) || unicode.IsControl(r) {
-				return false
-			}
-		}
-	}
-	if strings.HasPrefix(raw, "/") {
-		return !strings.HasPrefix(raw, "//") && !strings.HasPrefix(decoded, "//")
-	}
-	lower := strings.ToLower(raw)
-	if !strings.HasPrefix(lower, "https://") && !strings.HasPrefix(lower, "http://") {
-		return false
-	}
-	u, err := url.Parse(raw)
-	if err != nil || u.User != nil || u.Host == "" || u.Hostname() == "" {
-		return false
-	}
-	if strings.Contains(u.Host, "[") && net.ParseIP(u.Hostname()) == nil {
-		return false
-	}
-	if strings.HasSuffix(u.Host, ":") {
-		return false
-	}
-	if port := u.Port(); port != "" {
-		n, err := strconv.Atoi(port)
-		if err != nil || n < 0 || n > 65535 {
-			return false
-		}
-	}
-	return true
+func compositeLimits() (records, cells, bytes int) {
+	limits := platform.PageWidgets.Runtime.Composite
+	return limits.MaxRecords, limits.MaxCells, limits.MaxBytes
+}
+
+func matrixRuleReads(c platform.PageDataBinding) platform.RuleReadSpec {
+	return platform.RuleReadSpec{Inputs: map[string]platform.ExprType{"row": {Kind: "reference", Object: c.Models["rows"].Model.Type}, "column": {Kind: "reference", Object: c.Models["columns"].Model.Type}}}
 }

@@ -163,7 +163,7 @@ func (info EntityInfo) CompileEnterpriseUse(engines ...RuleEngine) (ExprProgram,
 	for _, field := range info.Fields {
 		refs[field.Name] = ExprType{Kind: RuleFieldKind(field.Type), Object: field.Ref}
 	}
-	return ruleEngineOf(engines).CompileExpr(*info.EnterpriseUse, ExprSchema{Refs: refs})
+	return RuleEngineOf(engines).CompileExpr(*info.EnterpriseUse, ExprSchema{Refs: refs})
 }
 
 func ApplyFieldAliases(info EntityInfo, value reflect.Value) {

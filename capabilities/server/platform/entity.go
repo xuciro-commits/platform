@@ -337,7 +337,7 @@ func (c *FieldCondition) Holds(value string, engines ...RuleEngine) bool {
 	key := c.Field + "=" + strings.Join(c.In, "\x00")
 	cached, ok := conditionPrograms.Load(key)
 	if !ok {
-		program, err := ruleEngineOf(engines).CompileRow(c.Expr(), ruleexpr.Schema{Refs: map[string]ruleexpr.Type{c.Field: {Kind: "text"}}})
+		program, err := RuleEngineOf(engines).CompileRow(c.Expr(), ruleexpr.Schema{Refs: map[string]ruleexpr.Type{c.Field: {Kind: "text"}}})
 		if err != nil {
 			return false
 		}

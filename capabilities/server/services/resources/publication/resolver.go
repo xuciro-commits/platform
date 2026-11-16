@@ -11,6 +11,7 @@ type Resolver struct {
 	CheckPageEmbeddingGraph   func(platform.AssetRef, map[platform.AssetRef]platform.ReleaseAsset) error
 	CheckPageVariables        func(platform.Application, platform.Page) error
 	PageContentVersion        func(platform.Page) (string, error)
+	CheckPageContentVersion   func(string) error
 	CheckApplicationResources func(platform.Application) error
 	CheckApplicationExtension func(platform.Application) error
 	ApplicationDependencies   func(platform.Application, string) []platform.AssetRef

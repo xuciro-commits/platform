@@ -134,7 +134,7 @@ func (projection DefinitionProjection) Page(def platform.Definition) (platform.D
 			}
 			return false
 		})
-		if page.CheckDataBinding(binding, lookup, projection.Criteria) != nil {
+		if checkDataBinding(page, binding, lookup, projection.Criteria) != nil {
 			continue
 		}
 		visible.DataBindings = append(visible.DataBindings, binding)

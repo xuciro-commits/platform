@@ -66,7 +66,7 @@ func lowerPropertyPolicy(kind string, f FieldInfo, engines ...RuleEngine) *prope
 		ruleexpr.RefOf("set", "roles"),
 		{Kind: "set", Lit: &ruleexpr.Literal{Value: ruleexpr.Raw(items), Element: "text"}},
 	}}
-	program, err := ruleEngineOf(engines).CompileRow(expr, ruleexpr.Schema{Refs: map[string]ruleexpr.Type{"roles": {Kind: "set", Element: &text}}})
+	program, err := RuleEngineOf(engines).CompileRow(expr, ruleexpr.Schema{Refs: map[string]ruleexpr.Type{"roles": {Kind: "set", Element: &text}}})
 	if err != nil {
 		return &propertyPolicy{never: true}
 	}

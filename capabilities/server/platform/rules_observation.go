@@ -207,11 +207,11 @@ func CheckObservationDefinition(def ObservationDefinition, lookup func(string) (
 	if def.Decision == nil {
 		return nil
 	}
-	if _, err := ruleEngineOf(engines).CompileExpr(def.Decision.When, schema); err != nil {
+	if _, err := RuleEngineOf(engines).CompileExpr(def.Decision.When, schema); err != nil {
 		return fmt.Errorf("observation decision condition: %w", err)
 	}
 	for name, expr := range def.Decision.Inputs {
-		if _, err := ruleEngineOf(engines).CompileExpr(expr, schema); err != nil {
+		if _, err := RuleEngineOf(engines).CompileExpr(expr, schema); err != nil {
 			return fmt.Errorf("observation decision input %s: %w", name, err)
 		}
 	}
@@ -287,14 +287,14 @@ func ObservationRuleContext(def ObservationDefinition, record json.RawMessage, w
 }
 
 func EvaluateObservation(def ObservationDefinition, entity EntityInfo, record json.RawMessage, window ObservationWindow, at time.Time, engines ...RuleEngine) (bool, map[string]json.RawMessage, error) {
-	return evaluateObservationResult(ruleEngineOf(engines), def, entity, record, window, nil, at)
+	return evaluateObservationResult(RuleEngineOf(engines), def, entity, record, window, nil, at)
 }
 
 func EvaluateObservationIntervals(def ObservationDefinition, entity EntityInfo, record json.RawMessage, result ObservationIntervalResult, at time.Time, engines ...RuleEngine) (bool, map[string]json.RawMessage, error) {
 	if err := result.Check(); err != nil {
 		return false, nil, err
 	}
-	return evaluateObservationResult(ruleEngineOf(engines), def, entity, record, ObservationWindow{Since: result.Since, Until: result.Until, Unit: def.Unit}, &result, at)
+	return evaluateObservationResult(RuleEngineOf(engines), def, entity, record, ObservationWindow{Since: result.Since, Until: result.Until, Unit: def.Unit}, &result, at)
 }
 
 func evaluateObservationResult(engine RuleEngine, def ObservationDefinition, entity EntityInfo, record json.RawMessage, window ObservationWindow, intervals *ObservationIntervalResult, at time.Time) (bool, map[string]json.RawMessage, error) {

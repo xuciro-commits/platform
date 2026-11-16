@@ -25,7 +25,7 @@ func CheckModelBindings(p platform.Page, lookup func(string) (platform.EntityInf
 		return err
 	}
 	for _, binding := range safe.DataBindings {
-		if err := safe.CheckDataBinding(binding, lookup, criteria, engines...); err != nil {
+		if err := checkDataBinding(safe, binding, lookup, criteria, engines...); err != nil {
 			return err
 		}
 	}

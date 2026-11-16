@@ -21,7 +21,7 @@ func (h ContentHost) Definition(m platform.Member, ref platform.AssetRef, versio
 	if refusal := h.Admits(m); refusal != nil {
 		return platform.Definition{}, refusal
 	}
-	if ref.Check() != nil || ref.Kind != platform.AssetPage || platform.CheckPageContentVersion(version) != nil {
+	if ref.Check() != nil || ref.Kind != platform.AssetPage || CheckPageContentVersion(version) != nil {
 		return platform.Definition{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Invalid page content identity")
 	}
 	denied := func() (platform.Definition, *platform.Error) {

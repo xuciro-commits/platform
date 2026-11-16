@@ -72,7 +72,7 @@ func (d ObservationIntervals) Check(windowSeconds int, engines ...RuleEngine) er
 	if !slices.Contains([]string{"decimal", "choice", "boolean"}, d.ValueKind) || d.When.Kind != "boolean" || d.MaxGapSeconds < 1 || d.MaxGapSeconds > windowSeconds || !slices.Contains([]string{"reject", "correct"}, d.LatePolicy) || d.LatenessSeconds < 0 || d.LatenessSeconds > windowSeconds || d.LatePolicy == "reject" && d.LatenessSeconds != 0 || d.MaxIntervals < 1 || d.MaxIntervals > ObservationMaxIntervals {
 		return fmt.Errorf("state intervals need a typed condition, bounded gap/results and explicit late-data policy")
 	}
-	_, err := ruleEngineOf(engines).CompileExpr(d.When, intervalRuleSchema(d.ValueKind))
+	_, err := RuleEngineOf(engines).CompileExpr(d.When, intervalRuleSchema(d.ValueKind))
 	return err
 }
 
@@ -92,7 +92,7 @@ func intervalPointValue(kind, value string, engines ...RuleEngine) (ExprValue, e
 	if len(value) > 256 || kind == "choice" && value == "" {
 		return ExprValue{}, fmt.Errorf("state observation value exceeds its declared scalar shape")
 	}
-	program, err := ruleEngineOf(engines).CompileExpr(ExprLiteralValue(kind, literal), ExprSchema{})
+	program, err := RuleEngineOf(engines).CompileExpr(ExprLiteralValue(kind, literal), ExprSchema{})
 	if err != nil {
 		return ExprValue{}, err
 	}
@@ -108,7 +108,7 @@ func AnalyzeObservationIntervals(policy ObservationIntervals, input ObservationI
 	if err := policy.Check(ObservationMaxWindowSeconds, engines...); err != nil {
 		return out, err
 	}
-	condition, err := ruleEngineOf(engines).CompileExpr(policy.When, intervalRuleSchema(policy.ValueKind))
+	condition, err := RuleEngineOf(engines).CompileExpr(policy.When, intervalRuleSchema(policy.ValueKind))
 	if err != nil {
 		return out, err
 	}

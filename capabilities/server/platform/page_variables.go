@@ -395,7 +395,7 @@ func (d PageInputSchema) CheckVariables(engines ...RuleEngine) error {
 			if !PageRuleFits(v.Type, v.Rule.Kind) {
 				return fail("rule output type differs")
 			}
-			if _, err := ruleEngineOf(engines).CompileExpr(*v.Rule, schema); err != nil {
+			if _, err := RuleEngineOf(engines).CompileExpr(*v.Rule, schema); err != nil {
 				return fail(err.Error())
 			}
 		default:

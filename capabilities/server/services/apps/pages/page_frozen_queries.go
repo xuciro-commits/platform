@@ -53,7 +53,7 @@ func CheckFrozenQueries(original platform.Page, assets map[platform.AssetRef]pla
 		return &platform.RuleCriteria{Reads: reads}, true
 	}
 	for _, binding := range page.DataBindings {
-		if err := page.CheckDataBinding(binding, lookup, criteria); err != nil {
+		if err := checkDataBinding(page, binding, lookup, criteria); err != nil {
 			return err
 		}
 		for _, model := range binding.ModelBindings() {

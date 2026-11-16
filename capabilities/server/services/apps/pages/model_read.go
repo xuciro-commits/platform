@@ -185,7 +185,7 @@ func (r ModelReader) Read(member platform.Member, request PageModelRead, at time
 	}
 	page = projectedPage
 	for _, binding := range page.DataBindings {
-		if err := page.CheckDataBinding(binding, r.host.Entity, r.host.ModelCriteria, r.host.Rules()); err != nil {
+		if err := checkDataBinding(page, binding, r.host.Entity, r.host.ModelCriteria, r.host.Rules()); err != nil {
 			return result, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
 		}
 	}
@@ -595,7 +595,7 @@ type PageCompositeResult struct {
 func (r ModelReader) composite(member platform.Member, page platform.Page, section platform.PageDataBinding, request PageModelRead, at time.Time) (PageModelResult, *platform.Error) {
 	result := PageModelResult{Object: section.PrimaryModel().Type, Records: []map[string]any{}, Fields: []platform.FieldInfo{}, Access: map[string]map[string]platform.AuthzDecision{}, Composite: &PageCompositeResult{Sources: map[string]PageCompositeSource{}}}
 	c := section
-	recordLimit, cellLimit, byteLimit := platform.CompositeLimits()
+	recordLimit, cellLimit, byteLimit := compositeLimits()
 	keys := make([]string, 0, len(c.Models))
 	for key := range c.Models {
 		keys = append(keys, key)
@@ -692,7 +692,7 @@ func (r ModelReader) composite(member platform.Member, page platform.Page, secti
 		caller := r.host.ModelCaller(member, info.App)
 		for _, row := range rows.Records {
 			for _, column := range columns.Records {
-				answer, err := platform.EvaluateRule(*c.Value, platform.MatrixRuleReads(c), caller, nil, map[string]any{"row": row["id"], "column": column["id"]}, at, r.host.Entity)
+				answer, err := platform.EvaluateRule(*c.Value, matrixRuleReads(c), caller, nil, map[string]any{"row": row["id"], "column": column["id"]}, at, r.host.Entity)
 				if err != nil {
 					if err.Code != pb.ErrorCode_ERROR_CODE_POLICY_DENIED {
 						return result, err

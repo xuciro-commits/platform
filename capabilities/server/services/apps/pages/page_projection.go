@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"slices"
+	"strings"
 
 	"platformserver/platform"
 )
@@ -151,3 +152,12 @@ func checkRecordPorts(p platform.Page) error {
 }
 
 var recordProducerWidgets = []string{"record-card", "breadcrumb", "graph-explorer", "vertex-graph", "record-comments", "record-uploader", "media-preview", "pdf-viewer", "image-annotation", "scene-3d"}
+
+func CheckPageContentVersion(version string) error {
+	text, ok := strings.CutPrefix(version, "page.sha256.")
+	raw, err := hex.DecodeString(text)
+	if !ok || err != nil || len(raw) != sha256.Size || hex.EncodeToString(raw) != text {
+		return fmt.Errorf("invalid page content version")
+	}
+	return nil
+}

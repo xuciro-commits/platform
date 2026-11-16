@@ -157,7 +157,7 @@ func (r *AssetRegistry) ResolvePinned(ref platform.AssetRef, version string, con
 		return platform.ReleaseAsset{}, fmt.Errorf("asset %s requires one nonempty page content pin", ref)
 	}
 	if len(contentVersion) == 1 {
-		if err := platform.CheckPageContentVersion(contentVersion[0]); err != nil {
+		if err := r.resolver.CheckPageContentVersion(contentVersion[0]); err != nil {
 			return platform.ReleaseAsset{}, err
 		}
 	}

@@ -133,7 +133,7 @@ func SupportsPageUIProfile(profile string) bool {
 	return slices.Contains(PageWidgets.SupportedProfiles, profile)
 }
 
-func pageWidget(id string) *pageWidgetContract {
+func PageWidget(id string) *pageWidgetContract {
 	for i := range PageWidgets.Widgets {
 		if PageWidgets.Widgets[i].ComponentID == id {
 			return &PageWidgets.Widgets[i]
@@ -144,7 +144,7 @@ func pageWidget(id string) *pageWidgetContract {
 
 func (p Page) CheckWidgetPorts(binding PageDataBinding, owner string) error {
 	widget := binding.Ports["widget"]
-	if pageWidget(widget) == nil {
+	if PageWidget(widget) == nil {
 		return nil
 	}
 	loop, overlay := p.ScopeOwner(owner, "loop"), p.ScopeOwner(owner, "overlay")
@@ -228,7 +228,7 @@ var pageVariablePortFields = func() map[string]bool {
 }()
 
 func widgetPort(id, field string) *pageWidgetPort {
-	w := pageWidget(id)
+	w := PageWidget(id)
 	if w == nil {
 		return nil
 	}

@@ -98,7 +98,7 @@ func (b Bindings) CheckSections(p platform.Page, page platform.EntityInfo) error
 		return err
 	}
 	for _, binding := range safe.DataBindings {
-		if err := safe.CheckDataBinding(binding, b.Entity, b.Criteria, b.Rules); err != nil {
+		if err := checkDataBinding(safe, binding, b.Entity, b.Criteria, b.Rules); err != nil {
 			return fmt.Errorf("page %s binding %s: %w", p.Name, binding.ID, err)
 		}
 		if binding.Query != nil {

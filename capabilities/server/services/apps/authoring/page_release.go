@@ -74,7 +74,7 @@ func (o *Owner) RetainPagePublication(p *Page) error {
 }
 
 func (o *Owner) PageContent(name, version string) (platform.Page, bool) {
-	if platform.CheckPageContentVersion(version) != nil || o.env.Host() == nil {
+	if pageowner.CheckPageContentVersion(version) != nil || o.env.Host() == nil {
 		return platform.Page{}, false
 	}
 	rows, err := o.Pages()

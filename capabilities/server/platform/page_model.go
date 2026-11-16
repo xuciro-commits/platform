@@ -1,8 +1,6 @@
 package platform
 
 import (
-	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"slices"
@@ -23,19 +21,6 @@ func (f FieldRef) Key() string {
 func ModelObject(typ string) AssetRef {
 	app, _, _ := strings.Cut(typ, ".")
 	return AssetRef{App: app, Kind: AssetObject, Name: typ}
-}
-
-func CheckRuleExpression(expr Expr, reads RuleReadSpec, lookup func(string) (EntityInfo, bool), engines ...RuleEngine) error {
-	schema, err := RuleSchema(expr, reads, lookup, engines...)
-	if err != nil {
-		return err
-	}
-	_, err = ruleEngineOf(engines).CompileExpr(expr, schema)
-	return err
-}
-
-func PageRuleInputFits(variable, kind string) bool {
-	return variable == kind || variable == "string" && (kind == "text" || kind == "choice" || kind == "date" || kind == "datetime") || variable == "number" && (kind == "number" || kind == "integer")
 }
 
 func (b PageWidgetSpec) IsZero() bool { return b.Format == "" && len(b.Body) == 0 }
@@ -143,24 +128,6 @@ func (p Page) WindowVariableInterface(variable string) string {
 		return schema.Queries[v.Source.Query].Interface
 	}
 	return ""
-}
-
-func CompositeLimits() (records, cells, bytes int) {
-	limits := PageWidgets.Runtime.Composite
-	return limits.MaxRecords, limits.MaxCells, limits.MaxBytes
-}
-
-func MatrixRuleReads(c PageDataBinding) RuleReadSpec {
-	return RuleReadSpec{Inputs: map[string]ExprType{"row": {Kind: "reference", Object: c.Models["rows"].Model.Type}, "column": {Kind: "reference", Object: c.Models["columns"].Model.Type}}}
-}
-
-func CheckPageContentVersion(version string) error {
-	text, ok := strings.CutPrefix(version, "page.sha256.")
-	raw, err := hex.DecodeString(text)
-	if !ok || err != nil || len(raw) != sha256.Size || hex.EncodeToString(raw) != text {
-		return fmt.Errorf("invalid page content version")
-	}
-	return nil
 }
 
 func ActionParameterCompatible(f FieldInfo, p Field) bool {

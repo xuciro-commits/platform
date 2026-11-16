@@ -179,7 +179,7 @@ func RuleSchema(expr Expr, spec RuleReadSpec, lookup func(string) (EntityInfo, b
 	if err := visit(expr, ""); err != nil {
 		return schema, err
 	}
-	if _, err := ruleEngineOf(engines).CompileExpr(expr, schema); err != nil {
+	if _, err := RuleEngineOf(engines).CompileExpr(expr, schema); err != nil {
 		return schema, err
 	}
 	return schema, nil

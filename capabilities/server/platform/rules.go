@@ -283,7 +283,7 @@ func ExprPresent(kind string, value any) ExprValue { return ruleexpr.Present(kin
 
 func CheckObservationDecimal(value string) error { return ruleexpr.CheckWindowDecimal(value) }
 
-func ruleEngineOf(engines []RuleEngine) RuleEngine {
+func RuleEngineOf(engines []RuleEngine) RuleEngine {
 	if len(engines) > 0 {
 		return engines[0]
 	}

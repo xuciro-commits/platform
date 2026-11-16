@@ -145,6 +145,6 @@ func (p Page) CheckQueryFilter(filter Expr, object EntityInfo, engines ...RuleEn
 	if err := visit(filter); err != nil {
 		return err
 	}
-	_, err := ruleEngineOf(engines).CompileExpr(filter, schema)
+	_, err := RuleEngineOf(engines).CompileExpr(filter, schema)
 	return err
 }

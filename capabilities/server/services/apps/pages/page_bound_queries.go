@@ -31,7 +31,7 @@ func (b Bindings) CheckQueries(p platform.Page) error {
 	}
 	p = projected
 	for _, binding := range p.DataBindings {
-		if err := p.CheckDataBinding(binding, b.Entity, b.Criteria, b.Rules); err != nil {
+		if err := checkDataBinding(p, binding, b.Entity, b.Criteria, b.Rules); err != nil {
 			return err
 		}
 	}
