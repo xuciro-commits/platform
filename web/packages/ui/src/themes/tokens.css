@@ -92,12 +92,12 @@
   --letterbox: #000000;
   --stack-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", "Inter", "PingFang SC", "Hiragino Sans GB", "Noto Sans CJK SC", "Microsoft YaHei", sans-serif;
   --stack-mono: "SF Mono", "JetBrains Mono", ui-monospace, Menlo, Consolas, monospace;
-  --type-2xs: 10px;
-  --type-xs: 11px;
-  --type-sm: 12px;
-  --type-base: 13px;
-  --type-lg: 15px;
-  --type-xl: 18px;
+  --type-2xs: var(--font-size-2xs);
+  --type-xs: var(--font-size-xs);
+  --type-sm: var(--font-size-sm);
+  --type-base: var(--font-size-base);
+  --type-lg: var(--font-size-lg);
+  --type-xl: var(--font-size-xl);
 
   --r-sm: 2px;
   --r-md: 3px;

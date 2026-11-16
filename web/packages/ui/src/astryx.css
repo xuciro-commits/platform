@@ -22,7 +22,8 @@
  */
 :root[data-astryx-theme] {
   --background: var(--color-background-body);
-  --surface: var(--color-background-surface);
+  --surface: light-dark(color-mix(in srgb, var(--color-background-surface) 10%, var(--color-background-muted)), color-mix(in srgb, var(--color-background-surface) 72%, var(--color-background-muted)));
+  --field-surface: var(--color-background-surface);
   --foreground: var(--color-text-primary);
   --muted: var(--color-text-secondary);
   --border: var(--color-border);
@@ -41,7 +42,7 @@
   --rail-hover: var(--color-overlay-hover);
   --rail-selected: var(--color-accent-muted);
   --rail-border: var(--color-border);
-  --sidebar: var(--color-background-surface);
+  --sidebar: var(--surface);
   --canvas: var(--color-background-body);
 
   --tone-neutral: var(--color-text-secondary);

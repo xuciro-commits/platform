@@ -8,15 +8,16 @@ read-when: 新建前端包或目录、改动路由、数据获取、写入、i18
 
 ## 目标
 
-一个工作区外壳装配所有应用；每个应用一个目录；所有读取与写入经同一套客户端；组件只有一个来源：Astryx。前端在 `frontend/` 重建，`web/` 是待删除的上一套实现；下文“规则”至“构建与生成”描述 `web/` 的现状与两者共同的机制，新项目的结构见“新前端项目”。
+一个工作区外壳装配所有应用；每个应用一个目录；所有读取与写入经同一套客户端；组件只有一个来源：Astryx。两条前端轨道并行，最终择一留下：`web/` 是产品正在使用的实现，按“整体替换”推进——从样式根基与工作方法到每一个组件全部换成 Astryx，直到成为纯 Astryx 项目；`frontend/` 是按“从零重建”推进的候选。两条轨道各自演进，走查与验收口径一致，最后以实际好用者留下、另一条删除。下文“规则”至“构建与生成”描述 `web/` 的现状与两者共同的机制，新项目的结构见“新前端项目”。
 
 ## 规则
 
 - R1 包的职责固定（下表）；新代码先找到所属包与目录。
 - R2 一个工具应用一个目录，一个 `defineApp`；资源类型只在一个应用的 `opens` 中声明。
 - R3 读取只经 `useReadQuery`、ObjectSet 客户端与宿主客户端；写入只经 `decide(schema, target, payload)`。组件里不直接 `fetch`。
-- R4 新前端的组件只来自 Astryx（`@astryxdesign/core`），样式只用组件属性与主题令牌；平台自有的界面组件只有外壳与四种页面原型（4-interaction §4.3）及其组成部分。不复制或包装出第二个同类组件，不引入第二套组件库或样式方案。Astryx 的各包固定在同一个版本，一起升级。
-- R9 `frontend/` 是独立项目：自己的 `package.json` 与锁文件，不属于 `web/` 的 pnpm 工作区，不导入 `web/` 的任何界面代码（旧界面的结构、命名与组件不是新前端的输入）。`web/` 只修缺陷；新前端通过全部 F 系列验收后整体删除 `web/`。
+- R4 两条轨道的组件都只来自 Astryx（`@astryxdesign/core`），样式只用组件属性与主题令牌；平台自有的界面组件只有外壳与四种页面原型（4-interaction §4.3）及其组成部分。不复制或包装出第二个同类组件，不引入第二套组件库或样式方案。Astryx 的各包固定在同一个版本，一起升级。`web/` 现有自有组件的内部实现换成 Astryx 时保留其对外 API，调用方不改（替换不改签名，只换骨）。
+- R9 `frontend/` 是独立项目：自己的 `package.json` 与锁文件，不属于 `web/` 的 pnpm 工作区，不导入 `web/` 的任何界面代码（旧界面的结构、命名与组件不是新前端的输入）。`web/` 不再新增功能，但在替换期间照常演进：界面组件逐个换成 Astryx，直到 `web/` 成为纯 Astryx 项目（依赖只有 Astryx 组件、图标与专用画布库；标签、Tailwind、Radix 等自有样式方案随对应组件最后一次替换一起删除）。两条轨道并行到验收与走查都完成，留下更好用的一条，另一条整体删除。
+- R10 `web/` 的 Astryx 接入是全局的，不是逐页的：样式根基由 `@platform/ui/astryx.css`（`reset.css`、`astryx.css`、七个官方主题 `@astryxdesign/theme-<slug>` 的 `theme.css` 与 `fonts.css`）提供，`apps/workspace` 与 `apps/catalog` 在入口挂 `AstryxTheme`（`@platform/ui`），两个 Vite 配置都装 `@stylexjs/unplugin` 以编译 Astryx 自带的 StyleX，`web/AGENTS.md` 由 `astryx init --agent-docs-path AGENTS.md` 生成并随升级刷新。官方主题为 neutral、stone、matcha、butter、chocolate、gothic、y2k；账号菜单与命令面板可切换，选择记在 `platform.appearance` 的 `{scheme,theme}`。`AstryxTheme` 必须把 `useTheme()` 解析出的 `light`/`dark` 传给 `<Theme mode>`（不能留默认 `system`，否则主题根会移除 `<html data-theme>` 与应用自己的明暗状态打架），并把产品语义令牌在 `:root[data-astryx-theme]` 上桥接到当前主题的 `--color-*`，页面才随主题与明暗一起变。不建第二套主题或第二份基础样式。
 - R5 生成的类型（`packages/api/src/gen`）不手改；改宿主类型后重新生成。
 - R6 每个包一个 i18n 字典；英文原文是键；动态键的所有取值都在字典中。模块加载时不调用 `t()`：模块级文案写英文原文，由 `defineApp`、`defineStatuses` 或 getter 在读取时翻译；复制应用对象用 `withApp` 保留读取时翻译。切换语言不刷新页面，工作区按语言重新挂载。
 - R7 手写文件 ≤ 600 行；超出按职责拆分。只含字面量的数据文件（翻译字典、`pageui/manifest.ts`）与生成文件（`pageui/safety.ts`、`api/src/gen/*.ts`）不计。
@@ -59,21 +60,22 @@ Search 页与 Command Palette 消费同一个 workspace Search provider。Provid
 
 ## 新前端项目
 
-`frontend/` 是 Vite + React + TypeScript 的单页应用，开发入口 `pnpm --dir frontend dev`（http://localhost:8496，`/auth`、`/v1`、`/healthz` 代理到宿主）。
+`frontend/` 是 Vite + React + TypeScript 的单页应用，开发入口 `pnpm --dir frontend dev`（http://localhost:8496，`/auth`、`/v1`、`/healthz` 代理到宿主）。宿主地址取环境变量或 `frontend/.env`（不入库）里的 `PLATFORM_HOST`，缺省是 `make local` 的 `http://127.0.0.1:18495`；`make frontend-host` 不经 Docker 起一个装着验收夹具的内存宿主（`http://127.0.0.1:18511`），登录页列出夹具里的身份。
 
 | 目录 | 职责 |
 |---|---|
 | `src/main.tsx` | 挂载：样式、主题、链接适配、外壳 |
 | `src/router.tsx` | 地址即状态：路径 `/<应用>/<入口>`，读取、跳转与 Astryx 的链接适配；视图状态与页签进入查询串（4-interaction R12） |
 | `src/apps.ts` | 应用清单：每个应用的图标、分节菜单与入口；宿主的应用注册接入后由生成契约取代 |
-| `src/shell/` | 外壳：应用轨、应用侧栏 |
-| `src/pages/` | 四种页面原型，每种一个文件，由官方模板改造而来 |
+| `src/shell/` | 外壳：应用轨、应用侧栏、登录页、未重建入口的占位 |
+| `src/pages/` | 四种页面原型，每种一个文件，由官方模板改造而来；以及建在原型上的共用入口形状（`ResourceList.ts`：某一类资源的目录列表） |
 | `src/templates/` | 原样落地的 Astryx 官方模板；改造完成即移入 `src/pages/` 或 `src/apps/`，不在这里长期保留 |
-| `src/host/` | 宿主读写：登录与会话、读取、`decide`；唯一允许网络调用的目录 |
-| `src/apps/<应用>/` | 各应用自己的入口与画布；只组合页面原型 |
+| `src/host/` | 宿主读写：会话（`useSession`、`startSession`、`endSession`）、读取（`useRead(路径)`，结果是加载、就绪、拒绝、出错四态之一）、合同类型 `Api`；唯一允许网络调用的目录 |
+| `src/apps/<应用>/<入口>.ts` | 一个入口一个文件，默认导出入口组件；文件路径就是地址 `/<应用>/<入口>`，由 `src/apps/entries.ts` 自动收集，不在别处登记 |
 | `src/i18n.ts` | 英文原文为键的字典与 `t()` |
 
-- 页面从 Astryx 官方模板起步（`pnpm --dir frontend astryx template <id> <路径>`），保留模板的框架、间距与交互，替换内容与数据（4-interaction R13）。
+- 页面从 Astryx 官方模板起步（`pnpm --dir frontend astryx template <id> <路径>`），保留模板的框架、间距与交互，替换内容与数据（4-interaction R13）。官方模板不整套入库：与所装版本一致的全部页面模板随 `@astryxdesign/cli` 在 `node_modules` 里，用到哪个落地哪个，改造成原型后删掉落地的原件；各原型取用哪些模板见 4-interaction §4.3。
+- 入口是声明：列表入口调用 `listPage({ title, about, read, rows, id, columns, groups })`，只说读哪条路径、每列取什么、可按什么分组；加载、空、拒绝、出错四态与筛选、分组的交互都在原型里，入口不重写。资源目录类入口用 `resourceList({ kind, title, about })` 一行完成。
 - 官方模板自带的样式用 StyleX 书写，由 `@stylexjs/unplugin` 在构建时编译；TypeScript 的严格程度与官方模板一致（`strict`，不开 `noUncheckedIndexedAccess`），模板落地后不为过类型检查而改写。
 - 图标用官方模板所用的 `@heroicons/react`；看板模板另用 `lucide-react`，改造时并到前者。
 - 分工：外壳、路由、页面原型与宿主读写（`src/shell/`、`src/router.tsx`、`src/pages/`、`src/host/`）由主代理写一次；每个入口只在 `src/apps/<应用>/` 里填原型，按路线图的任务卡由执行模型用技能 `frontend-migrate` 完成，它不得改动前四处、依赖与规范。原型表达不了的需求退回主代理改原型，不在入口里绕过（入口各自绕过一次，界面就各自变形一次）。
@@ -102,5 +104,6 @@ Search 页与 Command Palette 消费同一个 workspace Search provider。Provid
 
 ## 现存差距
 
-- 新前端（R4、R9）：`frontend/` 只有外壳与一个未接数据的列表页占位；尚未接宿主登录、应用注册、读取钩子与 `decide`，`src/apps.ts` 是按 3-information §3.3 手写的应用清单，尚未由宿主的应用注册生成；`src/apps/` 与 `src/host/` 尚不存在，因此还不能派发入口任务；`src/templates/` 的两个官方模板仍带示例数据与版权注释，单文件最长 4623 行，改造时按职责拆分。`web/` 仍是产品实际使用的前端，自有组件库依赖 Radix、Tailwind、class-variance-authority、cmdk、sonner、tailwind-merge 与 lucide-react。顺序见[路线图](../roadmap.md)“五、前端重建”。
+- `web/` 的 Astryx 替换（R9、R10）：根基已接上（样式、七套官方主题与明暗切换、StyleX 编译、`web/AGENTS.md`），组件尚未换；`@astryxdesign/core`、七个 `@astryxdesign/theme-*`、`@stylexjs/stylex` 只作为依赖装上，界面仍由 Tailwind、Radix、class-variance-authority 等的自有组件渲染。`astryx doctor --built web/apps/workspace` 现报 548 条（Icons 43、Astryx components 235、Styling 270，多数来自 `apps/workspace/src/App.tsx` 的裸元素与 `className`），是替换进度的度量：每替换一个组件，数字下降、自有依赖随之删除。首个试点是把 `@platform/ui/components/Progress.tsx` 的内部换成 Astryx `ProgressBar`，对外 `Progress` 的 `{value,total,label}` 与 `progressRatio` 不变。其余自有组件按调用点从少到多依次替换：`Progress`(4)、`Gauge`(6)、`Rejection`(7)、`SegmentedChoice`(12)、`Sheet`(15)、`EmptyState`(22)、`Tooltip`(24)、`StatusTag`(33)、`Card`(35)、`Dialog`(35)、`DataTable`(45)、`Textarea`(48)、`Notice`(49)、`PageHeader`(66)、`Panel`(129)、`Input`(156)、`Select`(188)、`Button`(234)。顺序见[路线图](../roadmap.md)“五、前端重建”。
+- 新前端（R4、R9）：`frontend/` 有外壳、开发身份登录、读取与列表原型的第一段（标题、筛选、分组、四态），接上了五个入口（本体的对象类型与动作类型、应用的模块、管理的成员、数据的连接）；尚无 OIDC 登录、写入（`decide`）、查询缓存与实时失效、记录、画布与仪表盘原型，列表一次读完整个结果，没有服务端分页、排序、行打开、保存的视图与 URL 状态；`src/apps.ts` 是按 3-information §3.3 手写的应用清单，尚未由宿主的应用注册生成；`src/templates/` 的两个官方模板仍带示例数据与版权注释，单文件最长 4623 行，改造时按职责拆分。`web/` 仍是产品实际使用的前端，自有组件库依赖 Radix、Tailwind、class-variance-authority、cmdk、sonner、tailwind-merge 与 lucide-react。顺序见[路线图](../roadmap.md)“五、前端重建”。
 - Workspace 的业务工具分块与布局引擎仍有大于 500 kB 的产物；布局引擎已经按需加载并在浏览器使用 Worker。保留构建器默认大小告警，不以拆成任意小文件或放宽阈值作为性能完成标准；后续按真实任务的加载链、传输与交互时间验证。

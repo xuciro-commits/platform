@@ -163,6 +163,8 @@ body {
   color: var(--foreground);
   font-family: var(--stack-sans);
   font-size: var(--type-base);
+  font-weight: var(--text-body-weight);
+  line-height: var(--text-body-leading);
   -webkit-font-smoothing: antialiased;
 }
 
