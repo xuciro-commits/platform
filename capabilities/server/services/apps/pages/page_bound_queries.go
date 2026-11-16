@@ -18,7 +18,7 @@ func VisibleInterfaceQuery(p platform.Page, q platform.PageQuery, entities map[s
 	}
 	selected := *named
 	selected.Query = &visible
-	if p.CheckInterfaceQuery(q, &selected) != nil {
+	if checkInterfaceQuery(p, q, &selected) != nil {
 		return nil
 	}
 	return &selected
@@ -79,7 +79,7 @@ func (b Bindings) CheckQueries(p platform.Page) error {
 	for id, q := range p.InputSchema.Queries {
 		named := objects.QuerySourceDefinition(b.Definitions, q.Query, PublicationResolver())
 		if q.Interface != "" {
-			if err := p.CheckInterfaceQuery(q, named); err != nil {
+			if err := checkInterfaceQuery(p, q, named); err != nil {
 				return fmt.Errorf("page query %s: %w", id, err)
 			}
 			if _, err := b.Interface(*named.Query); err != nil {
@@ -102,7 +102,7 @@ func (b Bindings) CheckQueries(p platform.Page) error {
 		if err := CheckBoundQuery(p, id, named); err != nil {
 			return err
 		}
-		if err := p.CheckQuerySchema(q, object, named, b.Rules); err != nil {
+		if err := CheckQuerySchema(p, q, object, named, b.Rules); err != nil {
 			return fmt.Errorf("page query %s: %w", id, err)
 		}
 		if q.Query != nil && named != nil && named.Query != nil {

@@ -174,7 +174,7 @@ func CheckFrozenQueries(original platform.Page, assets map[platform.AssetRef]pla
 			if err != nil {
 				return err
 			}
-			if err := page.CheckInterfaceQuery(plan, named); err != nil {
+			if err := checkInterfaceQuery(page, plan, named); err != nil {
 				return err
 			}
 			continue
@@ -224,7 +224,7 @@ func CheckFrozenQueries(original platform.Page, assets map[platform.AssetRef]pla
 		if err := CheckBoundQuery(page, id, named); err != nil {
 			return err
 		}
-		if err := page.CheckQuerySchema(plan, object, named); err != nil {
+		if err := CheckQuerySchema(page, plan, object, named); err != nil {
 			return err
 		}
 	}

@@ -262,7 +262,7 @@ func ProjectApplication(registered platform.Definition, projection ApplicationPr
 				named = nil
 			}
 		}
-		if !ok || application.QueryPage().CheckQuerySchema(q, info, named) != nil {
+		if !ok || pageowner.CheckQuerySchema(application.QueryPage(), q, info, named) != nil {
 			delete(application.Queries, id)
 		}
 	}

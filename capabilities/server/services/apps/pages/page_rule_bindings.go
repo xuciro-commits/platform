@@ -122,7 +122,7 @@ func CheckQueryFilters(p platform.Page, lookup func(string) (platform.EntityInfo
 		if !ok || object.App != query.Object.App {
 			return fmt.Errorf("page query %s object is unavailable", id)
 		}
-		if err := p.CheckQueryFilter(*query.Filter, object); err != nil {
+		if err := checkQueryFilter(p, *query.Filter, object); err != nil {
 			return fmt.Errorf("page query %s: %w", id, err)
 		}
 	}
