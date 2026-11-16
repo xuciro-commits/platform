@@ -259,26 +259,6 @@ func ActionParameterCompatible(f FieldInfo, p Field) bool {
 	return false
 }
 
-func (edit *PageInlineEdit) CheckTableEdit(info EntityInfo, action Action) error {
-	if edit == nil {
-		return nil
-	}
-	if edit.Action.App != info.App || edit.Action.Name != info.Type+".edit" || action.Schema != edit.Action.Name || action.Target != info.Type || action.New || action.NeedsApproval || action.Approval != nil || !slices.Contains(info.Standard, action.Schema) || slices.ContainsFunc(action.Payload, func(f Field) bool {
-		return f.Required
-	}) {
-		return fmt.Errorf("table editing requires its original standard field patch action without extra required inputs or approval")
-	}
-	for _, name := range edit.Fields {
-		f, ok := info.Field(name)
-		if !ok || f.ReadOnly || f.Aside || info.Lifecycle != nil && info.Lifecycle.Field == name || !slices.Contains(PageWidgets.Runtime.TableEditing.FieldTypes, f.Type) || !slices.ContainsFunc(action.Payload, func(p Field) bool {
-			return p.Name == name
-		}) {
-			return fmt.Errorf("table edit field is unavailable or not accepted by its original action")
-		}
-	}
-	return nil
-}
-
 func (p Page) CheckEnvelope() error {
 	if len(p.DataBindings) > 128 || len(p.ActionTriggers) > 256 || len(p.ScopeVisibility.Scopes) > 512 || len(p.WidgetSpec.Body) > 2<<20 || !json.Valid(p.WidgetSpec.Body) {
 		return fmt.Errorf("page safety declaration exceeds its bounded format")

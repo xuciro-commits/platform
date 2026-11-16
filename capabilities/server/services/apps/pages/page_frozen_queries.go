@@ -1,15 +1,15 @@
-package publication
+package pages
 
 import (
 	"encoding/json"
 	"fmt"
 	"slices"
-	"strings"
 
 	"platformserver/platform"
+	"platformserver/services/resources/publication"
 )
 
-func checkFrozenQueries(original platform.Page, assets map[platform.AssetRef]platform.ReleaseAsset) error {
+func CheckFrozenQueries(original platform.Page, assets map[platform.AssetRef]platform.ReleaseAsset) error {
 	page, err := original.Safety()
 	if err != nil {
 		return err
@@ -25,12 +25,12 @@ func checkFrozenQueries(original platform.Page, assets map[platform.AssetRef]pla
 				}
 			}
 		}
-		info, err := queryObjectDescriptor(asset.Body)
+		info, err := publication.QueryObjectDescriptor(asset.Body)
 		return platform.ConstraintEntity(info), ok && err == nil
 	}
 	criteria := func(ref platform.AssetRef) (*platform.RuleCriteria, bool) {
 		asset, ok := assets[ref]
-		action, err := releaseActionDescriptor(asset.Body)
+		action, err := publication.ReleaseActionDescriptor(asset.Body)
 		if !ok || err != nil {
 			return nil, false
 		}
@@ -91,16 +91,16 @@ func checkFrozenQueries(original platform.Page, assets map[platform.AssetRef]pla
 		}
 		for _, ref := range trigger.Actions {
 			asset, ok := assets[ref]
-			action, err := releaseActionDescriptor(asset.Body)
+			action, err := publication.ReleaseActionDescriptor(asset.Body)
 			if !ok || err != nil || platform.StaticControlAction(action) || action.Target != object {
 				return fmt.Errorf("page action owner or target is unavailable")
 			}
 		}
 		if trigger.InlineEdit != nil {
 			asset, ok := assets[trigger.InlineEdit.Action]
-			action, err := releaseActionDescriptor(asset.Body)
+			action, err := publication.ReleaseActionDescriptor(asset.Body)
 			info, found := lookup(object)
-			if !ok || !found || err != nil || trigger.InlineEdit.CheckTableEdit(info, action) != nil {
+			if !ok || !found || err != nil || CheckTableEdit(trigger.InlineEdit, info, action) != nil {
 				return fmt.Errorf("page edit fields differ from original action")
 			}
 		}
@@ -108,7 +108,7 @@ func checkFrozenQueries(original platform.Page, assets map[platform.AssetRef]pla
 			if len(trigger.Actions) != 1 {
 				return fmt.Errorf("page parameters need one original action")
 			}
-			action, err := releaseActionDescriptor(assets[trigger.Actions[0]].Body)
+			action, err := publication.ReleaseActionDescriptor(assets[trigger.Actions[0]].Body)
 			if err != nil {
 				return err
 			}
@@ -146,7 +146,7 @@ func checkFrozenQueries(original platform.Page, assets map[platform.AssetRef]pla
 		asset, ok := assets[compute.Operation.Ref]
 		var op platform.Operation
 		object, found := lookup(page.RecordResourceObject(compute.RecordVariable).Name)
-		if !ok || !found || asset.SourceVersion != compute.Operation.SourceVersion || json.Unmarshal(asset.Body, &op) != nil || page.CheckComputeResource(compute, object, op, page.InputSchema.Variables[id].Type, lookup) != nil {
+		if !ok || !found || asset.SourceVersion != compute.Operation.SourceVersion || json.Unmarshal(asset.Body, &op) != nil || CheckComputeResource(page, compute, object, op, page.InputSchema.Variables[id].Type, lookup) != nil {
 			return fmt.Errorf("frozen compute resource contract is unavailable")
 		}
 	}
@@ -162,7 +162,7 @@ func checkFrozenQueries(original platform.Page, assets map[platform.AssetRef]pla
 		}
 		if v.Scope == "application" && v.Mode == "resource" && v.Type == "filter" && v.Source.Object != nil {
 			info, ok := lookup(v.Source.Object.Name)
-			if !ok || platform.CheckFilterSchema(*v.Source, info) != nil {
+			if !ok || CheckFilterSchema(*v.Source, info) != nil {
 				return fmt.Errorf("frozen application filter schema is unavailable")
 			}
 		}
@@ -180,7 +180,7 @@ func checkFrozenQueries(original platform.Page, assets map[platform.AssetRef]pla
 			continue
 		}
 		asset, ok := assets[plan.Object]
-		object, err := queryObjectDescriptor(asset.Body)
+		object, err := publication.QueryObjectDescriptor(asset.Body)
 		if !ok || err != nil {
 			return fmt.Errorf("page query %s object is unavailable", id)
 		}
@@ -197,8 +197,8 @@ func checkFrozenQueries(original platform.Page, assets map[platform.AssetRef]pla
 				}
 				parentAsset, pok := assets[link.Parent]
 				childAsset, cok := assets[link.Child]
-				parent, pe := queryObjectDescriptor(parentAsset.Body)
-				child, ce := queryObjectDescriptor(childAsset.Body)
+				parent, pe := publication.QueryObjectDescriptor(parentAsset.Body)
+				child, ce := publication.QueryObjectDescriptor(childAsset.Body)
 				parent.App = link.Parent.App
 				child.App = link.Child.App
 				if !pok || !cok || pe != nil || ce != nil || link.CheckSchema(parent, child) != nil {
@@ -221,140 +221,31 @@ func checkFrozenQueries(original platform.Page, assets map[platform.AssetRef]pla
 				}
 			}
 		}
-		if err := page.CheckBoundQuery(id, named); err != nil {
+		if err := CheckBoundQuery(page, id, named); err != nil {
 			return err
 		}
 		if err := page.CheckQuerySchema(plan, object, named); err != nil {
 			return err
 		}
 	}
-	return page.CheckQuerySetConditions(namedSources)
+	return CheckQuerySetConditions(page, namedSources)
 }
 
-func queryObjectDescriptor(body []byte) (platform.EntityInfo, error) {
-	var shape struct {
-		Type            string                       `json:"type"`
-		Implements      []string                     `json:"implements"`
-		Extends         string                       `json:"extends"`
-		ExtensionSource *platform.ExtensionSource    `json:"extensionSource"`
-		Entity          *platform.EntityInfo         `json:"entity"`
-		ObjectView      *platform.ObjectView         `json:"objectView,omitempty"`
-		Fields          []map[string]json.RawMessage `json:"fields"`
-		Lifecycle       *platform.LifecycleInfo      `json:"lifecycle"`
-		States          []platform.State             `json:"states"`
-		Actions         []struct {
-			Transaction *platform.BusinessTxn `json:"transaction"`
-			Name        string                `json:"name"`
-			Title       string                `json:"title"`
-			From        []string              `json:"from"`
-			Inputs      []struct {
-				Name     string `json:"name"`
-				Type     string `json:"type"`
-				Required bool   `json:"required"`
-				Choices  string `json:"choices"`
-			} `json:"inputs"`
-		} `json:"actions"`
+func frozenPageInterfaceQuery(q platform.PageQuery, lookup map[platform.AssetRef]platform.ReleaseAsset) (*platform.Definition, error) {
+	if q.Query == nil {
+		return nil, fmt.Errorf("interface page query needs a published binding")
 	}
-	if err := json.Unmarshal(body, &shape); err != nil {
-		return platform.EntityInfo{}, err
+	asset, ok := lookup[q.Query.Ref]
+	var named platform.NamedQuery
+	if !ok || asset.SourceVersion != q.Query.SourceVersion || json.Unmarshal(asset.Body, &named) != nil || named.InterfaceShape == nil || named.Check() != nil {
+		return nil, fmt.Errorf("frozen interface query version or shape is unavailable")
 	}
-	if shape.Entity != nil {
-		if shape.Entity.Type != shape.Type {
-			return platform.EntityInfo{}, fmt.Errorf("frozen native object identity differs")
+	for _, ref := range named.Dependencies() {
+		implementation, exists := lookup[ref]
+		info, err := publication.QueryObjectDescriptor(implementation.Body)
+		if !exists || err != nil || info.Type != ref.Name || info.App != ref.App || !slices.Contains(info.Implements, named.Interface) || named.InterfaceShape.Implements(info) != nil {
+			return nil, fmt.Errorf("frozen interface query implementation %s is unavailable", ref.Name)
 		}
-		return *shape.Entity, nil
 	}
-	var fields []platform.FieldInfo
-	for _, raw := range shape.Fields {
-		if choicesRaw, ok := raw["choices"]; ok {
-			var source string
-			if json.Unmarshal(choicesRaw, &source) == nil {
-				options := []string{}
-				for _, part := range strings.Split(source, ",") {
-					if value := strings.TrimSpace(part); value != "" {
-						options = append(options, value)
-					}
-				}
-				raw["choices"], _ = json.Marshal(options)
-			}
-		}
-		if whenRaw, ok := raw["when"]; ok {
-			var source string
-			if json.Unmarshal(whenRaw, &source) == nil {
-				condition, err := platform.ParseWhen(source)
-				if err != nil {
-					return platform.EntityInfo{}, err
-				}
-				if condition == nil {
-					delete(raw, "when")
-				} else {
-					raw["when"], _ = json.Marshal(condition)
-				}
-			}
-		}
-		encoded, err := json.Marshal(raw)
-		if err != nil {
-			return platform.EntityInfo{}, err
-		}
-		var field platform.FieldInfo
-		if err := json.Unmarshal(encoded, &field); err != nil {
-			return platform.EntityInfo{}, err
-		}
-		fields = append(fields, field)
-	}
-	owner, _, _ := strings.Cut(shape.Type, ".")
-	if shape.Lifecycle == nil && len(shape.States) > 0 {
-		l := platform.LifecycleInfo{Field: "state", Initial: shape.States[0].Name, States: shape.States}
-		choices := []string{}
-		for _, s := range shape.States {
-			choices = append(choices, s.Name)
-		}
-		fields = append(fields, platform.FieldInfo{Name: "state", Title: "State", Type: "choice", ReadOnly: true, Choices: choices})
-		for _, a := range shape.Actions {
-			inputs := make([]platform.Field, 0, len(a.Inputs))
-			for _, input := range a.Inputs {
-				kind := input.Type
-				if kind == "choice" {
-					kind = "string"
-				}
-				var options []string
-				for _, option := range strings.Split(input.Choices, ",") {
-					if value := strings.TrimSpace(option); value != "" {
-						options = append(options, value)
-					}
-				}
-				inputs = append(inputs, platform.Field{Name: input.Name, Type: kind, Required: input.Required, Choices: options})
-			}
-			if to, input := platform.TransactionDestination(shape.Type, "state", a.Transaction, inputs); len(to) > 0 {
-				if slices.ContainsFunc(to, func(state string) bool { return !slices.Contains(choices, state) }) {
-					return platform.EntityInfo{}, fmt.Errorf("frozen object transaction destination differs")
-				}
-				l.Transitions = append(l.Transitions, platform.TransitionInfo{Name: a.Name, Schema: shape.Type + "." + a.Name, Title: a.Title, From: a.From, To: to, ToInput: input})
-				continue
-			}
-			l.Transitions = append(l.Transitions, platform.TransitionInfo{Name: a.Name, Schema: shape.Type + "." + a.Name, Title: a.Title, From: a.From, To: slices.Clone(a.From)})
-		}
-		shape.Lifecycle = &l
-	}
-	return platform.EntityInfo{App: owner, Type: shape.Type, ObjectView: shape.ObjectView, Standard: []string{shape.Type + ".create", shape.Type + ".edit", shape.Type + ".archive"}, Fields: fields, Lifecycle: shape.Lifecycle, Implements: shape.Implements, Extends: shape.Extends, ExtensionSource: shape.ExtensionSource}, nil
-}
-
-func releaseActionDescriptor(body json.RawMessage) (platform.Action, error) {
-	var flat platform.Action
-	if err := json.Unmarshal(body, &flat); err != nil {
-		return platform.Action{}, err
-	}
-	var envelope struct {
-		Action *platform.Action `json:"action"`
-	}
-	if err := json.Unmarshal(body, &envelope); err != nil {
-		return platform.Action{}, err
-	}
-	if envelope.Action != nil {
-		if envelope.Action.Schema != flat.Schema || envelope.Action.Target != flat.Target {
-			return platform.Action{}, fmt.Errorf("frozen action declaration identity differs")
-		}
-		return *envelope.Action, nil
-	}
-	return flat, nil
+	return &platform.Definition{Ref: asset.Ref, Version: asset.SourceVersion, Query: &named}, nil
 }

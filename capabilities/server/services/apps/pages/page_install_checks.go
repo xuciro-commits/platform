@@ -152,7 +152,7 @@ func (b Bindings) CheckSections(p platform.Page, page platform.EntityInfo) error
 			}
 			_, action, _ := b.Action(trigger.InlineEdit.Action.Name)
 			info, _ := b.Entity(object)
-			if err := trigger.InlineEdit.CheckTableEdit(info, action); err != nil {
+			if err := CheckTableEdit(trigger.InlineEdit, info, action); err != nil {
 				return err
 			}
 		}

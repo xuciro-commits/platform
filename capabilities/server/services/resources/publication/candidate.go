@@ -65,7 +65,7 @@ func (resolver Resolver) candidate(roots []platform.AssetRef, available []platfo
 		if ref.Kind != platform.AssetObject {
 			continue
 		}
-		info, err := queryObjectDescriptor(lookup[ref].Body)
+		info, err := QueryObjectDescriptor(lookup[ref].Body)
 		if err != nil {
 			return empty, err
 		}
@@ -102,14 +102,14 @@ func (resolver Resolver) candidate(roots []platform.AssetRef, available []platfo
 				if typ != observation.Object.Name || !exists {
 					return platform.EntityInfo{}, false
 				}
-				info, err := queryObjectDescriptor(target.Body)
+				info, err := QueryObjectDescriptor(target.Body)
 				return info, err == nil
 			}); err != nil {
 				return empty, fmt.Errorf("observation %s: %w", ref, err)
 			}
 			if observation.Decision != nil {
 				actionAsset, exists := lookup[observation.Decision.Action]
-				action, err := releaseActionDescriptor(actionAsset.Body)
+				action, err := ReleaseActionDescriptor(actionAsset.Body)
 				if !exists || err != nil {
 					return empty, fmt.Errorf("observation %s action is unavailable", ref)
 				}
@@ -125,13 +125,13 @@ func (resolver Resolver) candidate(roots []platform.AssetRef, available []platfo
 			}
 		}
 		if ref.Kind == platform.AssetObject {
-			info, err := queryObjectDescriptor(body)
+			info, err := QueryObjectDescriptor(body)
 			if err != nil {
 				return empty, err
 			}
 			if source := info.ExtensionSource; source != nil {
 				base, exists := lookup[source.Base.Ref]
-				shape, err := queryObjectDescriptor(base.Body)
+				shape, err := QueryObjectDescriptor(base.Body)
 				if !exists || err != nil || !slices.Contains(asset.Requires, source.Base.Ref) {
 					return empty, fmt.Errorf("extension %s needs its base object in the frozen closure", ref)
 				}
@@ -210,7 +210,7 @@ func (resolver Resolver) candidate(roots []platform.AssetRef, available []platfo
 			if err := checkApplicationProfileClosure(ref, contracts); err != nil {
 				return empty, err
 			}
-			if err := checkFrozenQueries(application.QueryPage(), lookup); err != nil {
+			if err := resolver.CheckFrozenQueries(application.QueryPage(), lookup); err != nil {
 				return empty, err
 			}
 			for _, name := range application.Pages {
@@ -244,7 +244,7 @@ func (resolver Resolver) candidate(roots []platform.AssetRef, available []platfo
 						for _, effect := range event.Effects {
 							if effect.Kind == "action" && effect.Action != nil {
 								asset, ok := lookup[effect.Action.Ref]
-								action, err := releaseActionDescriptor(asset.Body)
+								action, err := ReleaseActionDescriptor(asset.Body)
 								if !ok || err != nil || action.New == (effect.Action.RecordVariable != "") {
 									return empty, fmt.Errorf("page action effect %s is unavailable", effect.Action.Ref)
 								}
@@ -270,7 +270,7 @@ func (resolver Resolver) candidate(roots []platform.AssetRef, available []platfo
 				if err := platform.CheckPageEmbeddingGraph(ref, lookup); err != nil {
 					return empty, err
 				}
-				if err := checkFrozenQueries(page, lookup); err != nil {
+				if err := resolver.CheckFrozenQueries(page, lookup); err != nil {
 					return empty, err
 				}
 

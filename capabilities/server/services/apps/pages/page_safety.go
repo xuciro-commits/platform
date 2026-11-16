@@ -114,5 +114,5 @@ func CheckSafety(p platform.Page) error {
 }
 
 func PublicationResolver() publication.Resolver {
-	return publication.Resolver{CheckPage: CheckSafety}
+	return publication.Resolver{CheckPage: CheckSafety, CheckFrozenQueries: CheckFrozenQueries}
 }

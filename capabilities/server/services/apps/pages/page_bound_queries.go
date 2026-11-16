@@ -45,7 +45,7 @@ func (b Bindings) CheckQueries(p platform.Page) error {
 		ref := p.RecordResourceObject(c.RecordVariable)
 		object, ok := b.Entity(ref.Name)
 		op, _, err := b.Operation(&c.Operation)
-		if !ok || err != nil || p.CheckComputeResource(c, object, op, p.InputSchema.Variables[id].Type, b.Entity) != nil {
+		if !ok || err != nil || CheckComputeResource(p, c, object, op, p.InputSchema.Variables[id].Type, b.Entity) != nil {
 			return fmt.Errorf("compute resource contract is unavailable")
 		}
 	}
@@ -58,7 +58,7 @@ func (b Bindings) CheckQueries(p platform.Page) error {
 		}
 		if (v.Mode == "shared" || v.Scope == "application" && (v.Type == "record" || v.Type == "filter" || v.Type == "record-set") && v.Mode == "resource") && v.Source != nil && v.Source.Object != nil {
 			info, ok := b.Entity(v.Source.Object.Name)
-			if v.Type == "filter" && v.Mode == "resource" && platform.CheckFilterSchema(*v.Source, info) != nil {
+			if v.Type == "filter" && v.Mode == "resource" && CheckFilterSchema(*v.Source, info) != nil {
 				return fmt.Errorf("application filter fields are unavailable")
 			}
 			if !ok || info.App != v.Source.Object.App {
@@ -99,7 +99,7 @@ func (b Bindings) CheckQueries(p platform.Page) error {
 				return fmt.Errorf("link source schema is unavailable")
 			}
 		}
-		if err := p.CheckBoundQuery(id, named); err != nil {
+		if err := CheckBoundQuery(p, id, named); err != nil {
 			return err
 		}
 		if err := p.CheckQuerySchema(q, object, named, b.Rules); err != nil {
@@ -109,7 +109,7 @@ func (b Bindings) CheckQueries(p platform.Page) error {
 			namedSources[*q.Query] = *named.Query
 		}
 	}
-	return p.CheckQuerySetConditions(namedSources)
+	return CheckQuerySetConditions(p, namedSources)
 }
 
 type Bindings struct {

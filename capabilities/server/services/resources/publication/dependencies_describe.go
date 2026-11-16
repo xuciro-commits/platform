@@ -106,7 +106,7 @@ func (resolver Resolver) describeAsset(asset platform.ReleaseAsset, historical b
 		}
 		out.Requires = append(out.Requires, app.Dependencies(asset.Ref.App)...)
 	case platform.AssetObject:
-		info, err := queryObjectDescriptor(asset.Body)
+		info, err := QueryObjectDescriptor(asset.Body)
 		if err != nil {
 			return out, err
 		}
@@ -258,7 +258,7 @@ func (resolver Resolver) describeAsset(asset platform.ReleaseAsset, historical b
 			}
 		}
 	case platform.AssetAction:
-		action, err := releaseActionDescriptor(asset.Body)
+		action, err := ReleaseActionDescriptor(asset.Body)
 		if err != nil {
 			return out, err
 		}

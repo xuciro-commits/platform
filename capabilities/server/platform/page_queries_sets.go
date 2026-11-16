@@ -1,53 +1,9 @@
 package platform
 
 import (
-	"encoding/json"
 	"fmt"
 	"slices"
 )
-
-func (p Page) CheckQuerySetConditions(named map[AssetBinding]NamedQuery) error {
-	schema := p.InputSchema
-	seen := map[string]bool{}
-	var visit func(string) error
-	visit = func(id string) error {
-		if seen[id] {
-			return nil
-		}
-		seen[id] = true
-		q := schema.Queries[id]
-		count := 0
-		if q.Query != nil {
-			decl := named[*q.Query]
-			var terms []json.RawMessage
-			if json.Unmarshal(decl.Domain, &terms) == nil {
-				count += len(terms)
-			}
-			if decl.By != "" {
-				count++
-			}
-		}
-		if count > QuerySetMaxConditions {
-			return fmt.Errorf("query set source %s exceeds its condition budget", id)
-		}
-		if q.Set != nil {
-			for _, input := range q.Set.Inputs {
-				if err := visit(input); err != nil {
-					return err
-				}
-			}
-		}
-		return nil
-	}
-	for id, q := range schema.Queries {
-		if q.Set != nil {
-			if err := visit(id); err != nil {
-				return err
-			}
-		}
-	}
-	return nil
-}
 
 func (d PageInputSchema) CheckQuerySets() error {
 	for root, plan := range d.Queries {

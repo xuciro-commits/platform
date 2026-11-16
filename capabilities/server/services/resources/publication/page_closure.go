@@ -51,22 +51,3 @@ func pageNavigationEdge(asset platform.ReleaseAsset, target platform.AssetRef) b
 	}
 	return false
 }
-
-func frozenPageInterfaceQuery(q platform.PageQuery, lookup map[platform.AssetRef]platform.ReleaseAsset) (*platform.Definition, error) {
-	if q.Query == nil {
-		return nil, fmt.Errorf("interface page query needs a published binding")
-	}
-	asset, ok := lookup[q.Query.Ref]
-	var named platform.NamedQuery
-	if !ok || asset.SourceVersion != q.Query.SourceVersion || json.Unmarshal(asset.Body, &named) != nil || named.InterfaceShape == nil || named.Check() != nil {
-		return nil, fmt.Errorf("frozen interface query version or shape is unavailable")
-	}
-	for _, ref := range named.Dependencies() {
-		implementation, exists := lookup[ref]
-		info, err := queryObjectDescriptor(implementation.Body)
-		if !exists || err != nil || info.Type != ref.Name || info.App != ref.App || !slices.Contains(info.Implements, named.Interface) || named.InterfaceShape.Implements(info) != nil {
-			return nil, fmt.Errorf("frozen interface query implementation %s is unavailable", ref.Name)
-		}
-	}
-	return &platform.Definition{Ref: asset.Ref, Version: asset.SourceVersion, Query: &named}, nil
-}

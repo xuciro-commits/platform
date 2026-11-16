@@ -476,20 +476,6 @@ func (p Page) variableDependsOnQuery(variable, target string) bool {
 	return variableDepends(variable)
 }
 
-func (p Page) CheckBoundQuery(id string, named *Definition) error {
-	if named == nil || named.Query == nil {
-		return nil
-	}
-	q, exists := p.InputSchema.Queries[id]
-	if !exists {
-		return fmt.Errorf("page query %s is unavailable", id)
-	}
-	if len(named.Query.Sort) > 0 && len(q.Sort) > 0 && !slices.Equal(named.Query.Sort, q.Sort) || named.Query.Limit > 0 && named.Query.Limit < q.Limit {
-		return fmt.Errorf("page query %s source ordering or capacity differs from its declaration", id)
-	}
-	return nil
-}
-
 func (d PageInputSchema) CheckApplicationQueries() error {
 	return (Page{Format: 4, InputSchema: d}).CheckQueries("application")
 }
