@@ -34,7 +34,7 @@ func FilterNavigation(definitions []platform.Definition) []platform.Definition {
 		page.ActionTriggers = slices.Clone(page.ActionTriggers)
 		for j, trigger := range page.ActionTriggers {
 			trigger.Events = slices.DeleteFunc(slices.Clone(trigger.Events), func(e platform.PageEventBinding) bool {
-				if n := e.Navigation(); n != nil && !visible[n.Page] {
+				if n := eventNavigation(e); n != nil && !visible[n.Page] {
 					directory := slices.ContainsFunc(page.DataBindings, func(binding platform.PageDataBinding) bool {
 						return binding.ID == e.Source && slices.ContainsFunc(binding.Resources, func(resource platform.PageResourceBinding) bool {
 							return resource.Kind == "asset" && resource.ID == e.Control
@@ -92,7 +92,7 @@ func CheckNavigation(p platform.Page, owner string, definitions []platform.Defin
 	}
 	for _, trigger := range page.ActionTriggers {
 		for _, event := range trigger.Events {
-			nav := event.Navigation()
+			nav := eventNavigation(event)
 			if nav == nil {
 				continue
 			}

@@ -40,7 +40,7 @@ func CheckApplicationResources(a platform.Application) error {
 }
 
 func ApplicationDependencies(a platform.Application, owner string) []platform.AssetRef {
-	refs := append(slices.Clone(a.Resources), a.QueryPage().QueryReferences()...)
+	refs := append(slices.Clone(a.Resources), QueryReferences(a.QueryPage())...)
 	if a.Extends != nil {
 		refs = append(refs, *a.Extends)
 	}

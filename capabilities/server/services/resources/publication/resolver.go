@@ -8,6 +8,9 @@ type Resolver struct {
 	Safety                    func(platform.Page) (platform.Page, error)
 	PageDependencies          func(platform.Page) []platform.AssetRef
 	PageNavigationEdge        func(platform.ReleaseAsset, platform.AssetRef) bool
+	PageQueryReferences       func(platform.Page) []platform.AssetRef
+	PageComputeResources      func(platform.Page) map[string]platform.PageComputeResource
+	PageEventNavigation       func(platform.PageEventBinding) *platform.PageNavigation
 	CheckPageEmbeddingGraph   func(platform.AssetRef, map[platform.AssetRef]platform.ReleaseAsset) error
 	CheckPageVariables        func(platform.Application, platform.Page) error
 	PageContentVersion        func(platform.Page) (string, error)

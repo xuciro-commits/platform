@@ -142,7 +142,7 @@ func CheckFrozenQueries(original platform.Page, assets map[platform.AssetRef]pla
 	if err := checkQuerySets(page.InputSchema); err != nil {
 		return err
 	}
-	for id, compute := range page.ComputeResources() {
+	for id, compute := range computeResources(page) {
 		asset, ok := assets[compute.Operation.Ref]
 		var op platform.Operation
 		object, found := lookup(page.RecordResourceObject(compute.RecordVariable).Name)

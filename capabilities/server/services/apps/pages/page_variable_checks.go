@@ -18,7 +18,7 @@ func CheckVariables(d platform.PageInputSchema, engines ...platform.RuleEngine) 
 		ids = append(ids, id)
 	}
 	sort.Strings(ids)
-	if len((platform.Page{Format: 4, InputSchema: d}).ComputeResources()) > platform.PageWidgets.Runtime.ComputeResource.MaxResources {
+	if len(computeResources(platform.Page{Format: 4, InputSchema: d})) > platform.PageWidgets.Runtime.ComputeResource.MaxResources {
 		return fmt.Errorf("page compute resources exceed their bound")
 	}
 	visiting, visited := map[string]bool{}, map[string]bool{}

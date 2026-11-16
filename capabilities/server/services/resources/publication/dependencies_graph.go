@@ -314,7 +314,7 @@ func (g *DependencyGraph) Impact(changed []platform.AssetRef) ([]platform.AssetR
 	return out, nil
 }
 
-func (g *DependencyGraph) CheckReadBindings(asset platform.ReleaseAsset) error {
+func (resolver Resolver) checkReadBindings(g *DependencyGraph, asset platform.ReleaseAsset) error {
 	if asset.Ref.Kind != platform.AssetPage {
 		return nil
 	}
@@ -326,8 +326,8 @@ func (g *DependencyGraph) CheckReadBindings(asset platform.ReleaseAsset) error {
 	if page.Object.Name != "" {
 		reads = append(reads, page.Object)
 	}
-	reads = append(reads, page.QueryReferences()...)
-	for _, compute := range page.ComputeResources() {
+	reads = append(reads, resolver.PageQueryReferences(page)...)
+	for _, compute := range resolver.PageComputeResources(page) {
 		reads = append(reads, compute.Operation.Ref)
 	}
 	for _, ref := range reads {

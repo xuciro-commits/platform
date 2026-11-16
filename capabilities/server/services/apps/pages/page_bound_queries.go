@@ -41,7 +41,7 @@ func (b Bindings) CheckQueries(p platform.Page) error {
 	if err := CheckVariables(p.InputSchema); err != nil {
 		return err
 	}
-	for id, c := range p.ComputeResources() {
+	for id, c := range computeResources(p) {
 		ref := p.RecordResourceObject(c.RecordVariable)
 		object, ok := b.Entity(ref.Name)
 		op, _, err := b.Operation(&c.Operation)

@@ -255,7 +255,7 @@ func (resolver Resolver) candidate(roots []platform.AssetRef, available []platfo
 								}
 							}
 						}
-						if n := event.Navigation(); n != nil {
+						if n := resolver.PageEventNavigation(event); n != nil {
 							target, ok := lookup[n.Page]
 							var targetPage platform.Page
 							if !ok || json.Unmarshal(target.Body, &targetPage) != nil {
@@ -274,7 +274,7 @@ func (resolver Resolver) candidate(roots []platform.AssetRef, available []platfo
 					return empty, err
 				}
 
-				for _, c := range page.ComputeResources() {
+				for _, c := range resolver.PageComputeResources(page) {
 					bindings = append(bindings, c.Operation)
 				}
 				safe, err := resolver.Safety(page)
@@ -304,7 +304,7 @@ func (resolver Resolver) candidate(roots []platform.AssetRef, available []platfo
 			if err := graph.CheckExecutionBindings(asset, lookup); err != nil {
 				return empty, err
 			}
-			if err := graph.CheckReadBindings(asset); err != nil {
+			if err := resolver.checkReadBindings(graph, asset); err != nil {
 				return empty, err
 			}
 		}

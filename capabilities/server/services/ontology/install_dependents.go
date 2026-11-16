@@ -24,16 +24,17 @@ type InstallDraft struct {
 }
 
 type InstallDependents struct {
-	App           string
-	Entity        platform.Entity
-	Actions       []platform.Action
-	GeneratedPage string
-	Engine        platform.RuleEngine
-	Definitions   []platform.Definition
-	Bindings      map[string]string
-	Provisions    func(provider string) []platform.Provision
-	ProjectPage   func(platform.Page) (platform.Page, error)
-	Begin         func() InstallDraft
+	App             string
+	Entity          platform.Entity
+	Actions         []platform.Action
+	GeneratedPage   string
+	Engine          platform.RuleEngine
+	Definitions     []platform.Definition
+	Bindings        map[string]string
+	Provisions      func(provider string) []platform.Provision
+	ProjectPage     func(platform.Page) (platform.Page, error)
+	QueryReferences func(platform.Page) []platform.AssetRef
+	Begin           func() InstallDraft
 }
 
 func (c InstallDependents) Validate() error {
@@ -120,7 +121,7 @@ func (c InstallDependents) Validate() error {
 		if err != nil {
 			return err
 		}
-		if p.Object.Name != e.Type && !slices.ContainsFunc(p.QueryReferences(), func(ref platform.AssetRef) bool { return ref.Kind == platform.AssetObject && ref.Name == e.Type }) && !slices.ContainsFunc(p.DataBindings, func(s platform.PageDataBinding) bool {
+		if p.Object.Name != e.Type && !slices.ContainsFunc(c.QueryReferences(p), func(ref platform.AssetRef) bool { return ref.Kind == platform.AssetObject && ref.Name == e.Type }) && !slices.ContainsFunc(p.DataBindings, func(s platform.PageDataBinding) bool {
 			return s.Object.Name == e.Type
 		}) {
 			continue

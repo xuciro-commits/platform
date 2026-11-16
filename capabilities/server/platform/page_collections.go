@@ -42,13 +42,3 @@ func (p Page) collectionInputObject(variable string, seen map[string]bool) Asset
 	}
 	return AssetRef{}
 }
-
-func (p Page) ComputeResources() map[string]PageComputeResource {
-	out := map[string]PageComputeResource{}
-	for id, v := range p.InputSchema.Variables {
-		if v.Source != nil && v.Source.Kind == "compute" && v.Source.Compute != nil {
-			out[id] = *v.Source.Compute
-		}
-	}
-	return out
-}

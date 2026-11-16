@@ -57,7 +57,7 @@ func navigationTargets(p platform.Page) []platform.AssetRef {
 	}
 	for _, trigger := range safe.ActionTriggers {
 		for _, event := range trigger.Events {
-			if nav := event.Navigation(); nav != nil {
+			if nav := eventNavigation(event); nav != nil {
 				refs = append(refs, nav.Page)
 			}
 		}
@@ -84,9 +84,9 @@ func PageDependencies(original platform.Page) []platform.AssetRef {
 		refs = append(refs, page.Object)
 	}
 	refs = append(refs, modelDependencies(page)...)
-	refs = append(refs, page.QueryReferences()...)
+	refs = append(refs, QueryReferences(page)...)
 	refs = append(refs, navigationTargets(page)...)
-	for _, compute := range page.ComputeResources() {
+	for _, compute := range computeResources(page) {
 		refs = append(refs, compute.Operation.Ref)
 	}
 	for _, selection := range page.InputSchema.Selections {
