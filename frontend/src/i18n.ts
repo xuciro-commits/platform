@@ -31,7 +31,6 @@ export const zhCN: Record<string, string> = {
   Recent: "最近",
   Projects: "项目",
   "Filterable table": "筛选表格",
-  "Kanban board": "看板",
   Connections: "连接",
   Sources: "数据源",
   Listeners: "监听器",
@@ -172,6 +171,10 @@ export const zhCN: Record<string, string> = {
   Properties: "属性",
   "This type is not published in this workspace.": "这个类型没有在本工作区发布。",
   "Objects are the business records of this workspace. An object type appears here once it is published; open it to see, create and edit its objects.": "对象是本工作区的业务记录。对象类型发布后出现在这里；打开它就能查看、新建和编辑它的对象。",
+  Layout: "布局",
+  Table: "表格",
+  Board: "看板",
+  "This card could not be moved": "这张卡片没能移动",
 };
 
 const locale = navigator.language.startsWith("zh") ? "zh-CN" : "en";

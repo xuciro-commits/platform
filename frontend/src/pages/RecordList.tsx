@@ -1,10 +1,10 @@
 import { Button } from "@astryxdesign/core/Button";
 import { useMemo, useState } from "react";
-import { type Api, type Read, useRead } from "../host";
+import { type Api, type Read, submit, useRead } from "../host";
 import { t } from "../i18n";
 import { navigate, usePath } from "../router";
 import { ActionDialog } from "./ActionDialog";
-import { type ListShape, ListView } from "./ListPage";
+import { type ListShape, ListView, type Move } from "./ListPage";
 import { RecordPage } from "./RecordPage";
 import { shown } from "./values";
 
@@ -14,7 +14,7 @@ type Back = { href: string; label: string };
 const tabular = new Set(["text", "integer", "decimal", "money", "date", "datetime", "boolean", "choice", "reference", "tags"]);
 const columnLimit = 6;
 
-function shape(described: Api.EntityInfo, declared: Declared, listPath: string): ListShape<Api.RecordPage, Row> {
+function shape(described: Api.EntityInfo, declared: Declared, listPath: string, move?: Move): ListShape<Api.RecordPage, Row> {
   const candidates = described.fields.filter((field) => tabular.has(field.type));
   const lead = candidates.filter((field) => field.name === described.display);
   const rest = candidates.filter((field) => field.name !== described.display);
@@ -24,6 +24,7 @@ function shape(described: Api.EntityInfo, declared: Declared, listPath: string):
   return {
     title: declared.title ?? described.plural,
     about: declared.about,
+    move,
     rows: (answer) => answer.records as Row[],
     id: (row) => String(row.id),
     link: (row) => `${listPath}/${encodeURIComponent(String(row.id))}`,
@@ -48,11 +49,20 @@ export function Records({ declared, listPath, id, back }: { declared: Declared; 
   const [creating, setCreating] = useState(false);
   const described = types.status === "ready" ? types.data.find((candidate) => candidate.type === declared.type) : undefined;
   const records = useRead<Api.RecordPage>(described && !id ? `/v1/records/${declared.type}?limit=200` : null);
-  const definition = useMemo(() => (described ? shape(described, declared, listPath) : pending), [described, declared, listPath, pending]);
   const act = (name: string) => (actions.status === "ready" ? actions.data.find((action) => action.schema === `${declared.type}.${name}`) : undefined);
+  const edit = act("edit");
+  const kept = records.status === "ready" ? (records.data.records as Row[]) : undefined;
+  const move = useMemo(
+    () =>
+      edit && kept
+        ? (moving: string, field: string, to: string) => submit(edit, moving, { [field]: to }, Number(kept.find((row) => row.id === moving)?.revision))
+        : undefined,
+    [edit, kept],
+  );
+  const definition = useMemo(() => (described ? shape(described, declared, listPath, move) : pending), [described, declared, listPath, pending, move]);
   const create = act("create");
   if (described && id) {
-    return <RecordPage described={described} id={decodeURIComponent(id)} listPath={listPath} listTitle={declared.title ?? described.plural} edit={act("edit")} />;
+    return <RecordPage described={described} id={decodeURIComponent(id)} listPath={listPath} listTitle={declared.title ?? described.plural} edit={edit} />;
   }
   const missing: Read<Api.RecordPage> = { status: "error", reason: t("This type is not published in this workspace.") };
   const read: Read<Api.RecordPage> = types.status !== "ready" ? types : described ? records : missing;

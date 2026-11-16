@@ -12,13 +12,16 @@ import type { TableColumn } from "@astryxdesign/core/Table";
 import { Heading, Text } from "@astryxdesign/core/Text";
 import { TextInput } from "@astryxdesign/core/TextInput";
 import { MagnifyingGlassIcon } from "@heroicons/react/24/outline";
-import { type ReactNode, useMemo, useState } from "react";
+import { type ReactNode, useEffect, useMemo, useState } from "react";
 import { type Read, useRead } from "../host";
 import { BackLink } from "./BackLink";
+import { BoardView } from "./BoardView";
 import { t } from "../i18n";
 
 export type ListColumn<Row> = { key: string; header: string; width?: number; text: (row: Row) => string };
 export type ListGroup<Row> = { key: string; label: string; of: (row: Row) => string; order?: string[] };
+type Done = Promise<unknown>;
+export type Move = (id: string, group: string, to: string) => Done;
 export type ListShape<Answer, Row> = {
   title: string;
   about: string;
@@ -27,12 +30,14 @@ export type ListShape<Answer, Row> = {
   link?: (row: Row) => string;
   columns: ListColumn<Row>[];
   groups?: ListGroup<Row>[];
+  move?: Move;
 };
 export type ListDefinition<Answer, Row> = ListShape<Answer, Row> & { read: string };
 
 type Cells = Record<string, string>;
 const idKey = "__id";
 const ungrouped = "none";
+const layouts = ["table", "board"];
 
 export function listPage<Answer, Row>(definition: ListDefinition<Answer, Row>) {
   return function ListEntry() {
@@ -51,16 +56,22 @@ export function ListView<Answer, Row>({ definition, read, primary, back }: ListV
   const [filter, setFilter] = useState("");
   const [groupKey, setGroupKey] = useState(ungrouped);
   const [collapsed, setCollapsed] = useState<Set<string>>(() => new Set());
+  const [layout, setLayout] = useState(layouts[0]);
+  const [moved, setMoved] = useState<Record<string, string>>({});
+  const [failure, setFailure] = useState("");
   const group = definition.groups?.find((candidate) => candidate.key === groupKey);
+  const lanes = group?.order ? group : definition.groups?.find((candidate) => candidate.order);
+  const board = layout === "board" && lanes?.order ? lanes : undefined;
+  useEffect(() => setMoved({}), [read]);
 
   const all = useMemo(() => {
     if (read.status !== "ready") return [];
     return definition.rows(read.data).map((row) => {
-      const cells: Cells = { [idKey]: definition.id(row), __group: group ? group.of(row) : "", __href: definition.link ? definition.link(row) : "" };
+      const cells: Cells = { [idKey]: definition.id(row), __group: group ? group.of(row) : "", __lane: lanes ? lanes.of(row) : "", __href: definition.link ? definition.link(row) : "" };
       for (const column of definition.columns) cells[column.key] = column.text(row);
       return cells;
     });
-  }, [read, definition, group]);
+  }, [read, definition, group, lanes]);
 
   const shown = useMemo(() => {
     const wanted = filter.trim().toLowerCase();
@@ -142,6 +153,7 @@ export function ListView<Answer, Row>({ definition, read, primary, back }: ListV
                   width={320}
                   label={t("View options")}
                   content={
+                    <VStack gap={4}>
                     <RadioList
                       label={t("Group by")}
                       value={groupKey}
@@ -154,6 +166,13 @@ export function ListView<Answer, Row>({ definition, read, primary, back }: ListV
                         <RadioListItem key={candidate.key} value={candidate.key} label={t(candidate.label)} />
                       ))}
                     </RadioList>
+                    {lanes && (
+                      <RadioList label={t("Layout")} value={layout} onChange={(value) => setLayout(String(value))}>
+                        <RadioListItem value={layouts[0]} label={t("Table")} />
+                        <RadioListItem value={layouts[1]} label={t("Board")} />
+                      </RadioList>
+                    )}
+                    </VStack>
                   }>
                   <Button label={t("View options")} variant="secondary" size="md" />
                 </Popover>
@@ -184,7 +203,35 @@ export function ListView<Answer, Row>({ definition, read, primary, back }: ListV
           {read.status === "ready" && all.length > 0 && shown.length === 0 && (
             <EmptyState headingLevel={2} title={t("No matches")} description={t("Try a different filter.")} />
           )}
-          {read.status === "ready" && shown.length > 0 && (
+          {failure && (
+            <VStack padding={4}>
+              <Banner status="error" title={t("This card could not be moved")} description={failure} />
+            </VStack>
+          )}
+          {read.status === "ready" && shown.length > 0 && board && (
+            <BoardView
+              columns={board.order ?? []}
+              cards={shown.map((cells) => ({
+                id: cells[idKey],
+                column: moved[cells[idKey]] ?? cells.__lane,
+                title: cells[definition.columns[0].key],
+                href: cells.__href,
+                lines: definition.columns.slice(1, 5).filter((column) => column.key !== board.key && cells[column.key]).map((column) => cells[column.key]),
+              }))}
+              onMove={
+                definition.move &&
+                ((id, to) => {
+                  setFailure("");
+                  setMoved((previous) => ({ ...previous, [id]: to }));
+                  definition.move?.(id, board.key, to).catch((refused: Error) => {
+                    setMoved(({ [id]: _, ...rest }) => rest);
+                    setFailure(refused.message);
+                  });
+                })
+              }
+            />
+          )}
+          {read.status === "ready" && shown.length > 0 && !board && (
             <Table
               data={group ? grouped.data : shown}
               columns={columns}

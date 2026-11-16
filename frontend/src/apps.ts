@@ -58,7 +58,6 @@ import {
   TruckIcon,
   UserGroupIcon,
   UsersIcon,
-  ViewColumnsIcon,
   WindowIcon,
   WrenchScrewdriverIcon,
 } from "@heroicons/react/24/outline";
@@ -87,7 +86,6 @@ export const apps: App[] = [
         title: "Official templates",
         items: [
           { id: "sample-table", label: "Filterable table", icon: TableCellsIcon },
-          { id: "sample-board", label: "Kanban board", icon: ViewColumnsIcon },
         ],
       },
     ],

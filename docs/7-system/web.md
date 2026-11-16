@@ -81,7 +81,7 @@ Search 页与 Command Palette 消费同一个 workspace Search provider。Provid
 | 层 | 是什么 | 位置 |
 |---|---|---|
 | 契约 | 宿主给出的形状：类型描述（`/v1/entities`：字段、字段类型、选项、显示字段）、记录集合（`/v1/records/<类型>`）、资源目录（`/v1/resources`）；单条记录（`/v1/records/<类型>/<标识>`）与动作目录（`/v1/actions`：每个动作的参数）；写入只有 `submit(动作, 标识, 载荷, 期望修订)`，经 `/v1/submissions` 走接受路径，被接受后所有读取重读 | `src/host/` |
-| 表现 | 由一个官方模板改造一次得到的组件，只认契约，不认具体类型：表格与分组现在是 `ListView`；看板、收件箱、树、记录页、录入对话框、仪表盘各一个 | `src/pages/` |
+| 表现 | 由一个官方模板改造一次得到的组件，只认契约，不认具体类型：表格与分组现在是 `ListView`，看板是它的一种布局（`BoardView`）；收件箱、树、记录页、录入对话框、仪表盘各一个 | `src/pages/` |
 | 入口 | 声明：哪个类型、用哪种表现。`recordList({ type, title, about })` 的列与可分组字段取自类型描述；要固定列时给 `fields` | `src/apps/<应用>/<入口>.ts` |
 
 - 改造一个官方模板只做三件事：落地；把示例数据换成契约；补上模板缺的表现。模板的框架、间距与交互不动。同一个模板只改造一次，之后所有类型共用。
@@ -94,7 +94,7 @@ Search 页与 Command Palette 消费同一个 workspace Search provider。Provid
 - 页面从 Astryx 官方模板起步（`pnpm --dir frontend astryx template <id> <路径>`），保留模板的框架、间距与交互，替换内容与数据（4-interaction R13）。官方模板不整套入库：与所装版本一致的全部页面模板随 `@astryxdesign/cli` 在 `node_modules` 里，用到哪个落地哪个，改造成原型后删掉落地的原件；各原型取用哪些模板见 4-interaction §4.3。
 - 入口是声明：列表入口调用 `listPage({ title, about, read, rows, id, columns, groups })`，只说读哪条路径、每列取什么、可按什么分组；加载、空、拒绝、出错四态与筛选、分组的交互都在原型里，入口不重写。资源目录类入口用 `resourceList({ kind, title, about })`、记录类入口用 `recordList({ type, title, about })` 一行完成；`objectBrowser({ title, about })` 不指定类型，对每个已发布的对象类型给出同一套列表、记录页与录入。
 - 官方模板自带的样式用 StyleX 书写，由 `@stylexjs/unplugin` 在构建时编译；TypeScript 的严格程度与官方模板一致（`strict`，不开 `noUncheckedIndexedAccess`），模板落地后不为过类型检查而改写。
-- 图标用官方模板所用的 `@heroicons/react`；看板模板另用 `lucide-react`，改造时并到前者。
+- 图标用官方模板所用的 `@heroicons/react`。
 - 分工：外壳、路由、页面原型与宿主读写（`src/shell/`、`src/router.tsx`、`src/pages/`、`src/host/`）由主代理写一次；每个入口只在 `src/apps/<应用>/` 里填原型，按路线图的任务卡由执行模型用技能 `frontend-migrate` 完成，它不得改动前四处、依赖与规范。原型表达不了的需求退回主代理改原型，不在入口里绕过（入口各自绕过一次，界面就各自变形一次）。
 - `frontend/AGENTS.md` 由 `astryx init --agent-docs-path AGENTS.md` 生成并随升级刷新，是代理在该目录工作时的组件用法入口；仓库根的 `AGENTS.md` 不由它改写。
 - 读取与写入沿用本文 R3 的同一套宿主合同；API 类型与宿主客户端在 `web/` 删除前从 `web/packages/api` 复用，删除时迁入 `frontend/`。
