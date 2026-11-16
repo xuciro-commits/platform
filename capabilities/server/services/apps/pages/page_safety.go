@@ -93,7 +93,7 @@ func CheckSafety(p platform.Page) error {
 	if err := safe.CheckEnvelope(); err != nil {
 		return err
 	}
-	if err := safe.InputSchema.CheckProfile(); err != nil {
+	if err := checkProfile(safe.InputSchema); err != nil {
 		return err
 	}
 	if err := safe.InputSchema.CheckVariables(); err != nil {
@@ -102,7 +102,7 @@ func CheckSafety(p platform.Page) error {
 	if err := safe.CheckQueries("page"); err != nil {
 		return err
 	}
-	if err := safe.InputSchema.CheckInterface(); err != nil {
+	if err := checkPageInterface(safe.InputSchema); err != nil {
 		return err
 	}
 	if safe.Object.Name != "" {
@@ -110,7 +110,7 @@ func CheckSafety(p platform.Page) error {
 			return err
 		}
 	}
-	return safe.CheckEvents()
+	return checkEvents(safe)
 }
 
 func PublicationResolver() publication.Resolver {

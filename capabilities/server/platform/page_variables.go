@@ -141,7 +141,7 @@ type pageOperator struct {
 	MaxArgs int    `json:"maxArgs"`
 }
 
-func pageLiteralType(raw json.RawMessage) string {
+func PageLiteralType(raw json.RawMessage) string {
 	if _, ok := NumberLiteral(raw); ok {
 		return "number"
 	}
@@ -208,7 +208,7 @@ func (d PageInputSchema) CheckVariables(engines ...RuleEngine) error {
 		if !PageNodeID.MatchString(id) || (v.Scope != contract.Scope && v.Scope != contract.Loop.Scope && v.Scope != contract.Overlay.Scope && v.Scope != contract.Application.Scope) || ((v.Scope == contract.Scope || v.Scope == contract.Application.Scope) && v.Owner != "") || ((v.Scope == contract.Loop.Scope || v.Scope == contract.Overlay.Scope) && !PageNodeID.MatchString(v.Owner)) || !slices.Contains(contract.ValueTypes, v.Type) || len(v.Title) > 1024 {
 			return fail("unsupported identity, scope or type")
 		}
-		if v.Type == "record-set" && !((PageUIProfileSupports(d.profileVersion(), "platform.page.v2.32") && v.Mode == "resource" && v.Source != nil && v.Source.Kind == "records" && slices.Contains([]string{"page", "overlay"}, v.Scope)) || (PageUIProfileSupports(d.profileVersion(), PageWidgets.Runtime.RecordSelection.SharedUIProfile) && v.Scope == "application" && (v.Mode == "shared" || v.Mode == "resource"))) {
+		if v.Type == "record-set" && !((PageUIProfileSupports(d.ProfileVersion(), "platform.page.v2.32") && v.Mode == "resource" && v.Source != nil && v.Source.Kind == "records" && slices.Contains([]string{"page", "overlay"}, v.Scope)) || (PageUIProfileSupports(d.ProfileVersion(), PageWidgets.Runtime.RecordSelection.SharedUIProfile) && v.Scope == "application" && (v.Mode == "shared" || v.Mode == "resource"))) {
 			return fail("record-set needs a v2.32 local table resource")
 		}
 		if v.Scope == contract.Overlay.Scope && (!slices.Contains(contract.Overlay.ValueTypes, v.Type) || !slices.Contains(contract.Overlay.Modes, v.Mode)) {
@@ -221,16 +221,16 @@ func (d PageInputSchema) CheckVariables(engines ...RuleEngine) error {
 		if v.Writable && v.Mode != contract.Application.BindingMode {
 			return fail("only shared bindings declare writable")
 		}
-		if v.Type == "statistics" && (!PageUIProfileSupports(d.profileVersion(), "platform.page.v2.50") || v.Mode != "aggregate" || !slices.Contains([]string{"page", "overlay"}, v.Scope)) {
+		if v.Type == "statistics" && (!PageUIProfileSupports(d.ProfileVersion(), "platform.page.v2.50") || v.Mode != "aggregate" || !slices.Contains([]string{"page", "overlay"}, v.Scope)) {
 			return fail("statistics needs its read-only scoped profile")
 		}
 		if v.Source != nil && v.Source.Compute != nil && (v.Mode != "resource" || v.Source.Kind != "compute") {
 			return fail("compute needs its original source kind")
 		}
-		if v.Type == "number" && (!PageUIProfileSupports(d.profileVersion(), "platform.page.v2.49") || !(slices.Contains([]string{"aggregate", "constant", "derived"}, v.Mode) || v.Mode == "resource" && v.Source != nil && v.Source.Kind == "compute" && PageUIProfileSupports(d.profileVersion(), PageWidgets.Runtime.ComputeResource.RequiredUIProfile)) || v.Scope == "application") {
+		if v.Type == "number" && (!PageUIProfileSupports(d.ProfileVersion(), "platform.page.v2.49") || !(slices.Contains([]string{"aggregate", "constant", "derived"}, v.Mode) || v.Mode == "resource" && v.Source != nil && v.Source.Kind == "compute" && PageUIProfileSupports(d.ProfileVersion(), PageWidgets.Runtime.ComputeResource.RequiredUIProfile)) || v.Scope == "application") {
 			return fail("number needs its read-only scoped profile")
 		}
-		if v.Source != nil && v.Source.Port != "" && (!PageUIProfileSupports(d.profileVersion(), PageWidgets.Runtime.Exploration.RequiredUIProfile) || !PageNodeID.MatchString(v.Source.Port) || v.Type != "record" || v.Mode != "resource" || v.Source.Kind != "record" || !slices.Contains([]string{"page", "overlay"}, v.Scope)) {
+		if v.Source != nil && v.Source.Port != "" && (!PageUIProfileSupports(d.ProfileVersion(), PageWidgets.Runtime.Exploration.RequiredUIProfile) || !PageNodeID.MatchString(v.Source.Port) || v.Type != "record" || v.Mode != "resource" || v.Source.Kind != "record" || !slices.Contains([]string{"page", "overlay"}, v.Scope)) {
 			return fail("record output port needs its scoped finite graph profile")
 		}
 		if v.Source != nil && v.Source.Measure != "" && (v.Mode != "aggregate" || v.Source.Kind != "aggregate" && v.Source.Kind != "statistics") {
@@ -287,10 +287,10 @@ func (d PageInputSchema) CheckVariables(engines ...RuleEngine) error {
 				return fail("shared binding needs only an application variable source")
 			}
 		case "input":
-			if v.Type == "object-set" && !PageUIProfileSupports(d.profileVersion(), "platform.page.v2.85") {
+			if v.Type == "object-set" && !PageUIProfileSupports(d.ProfileVersion(), "platform.page.v2.85") {
 				return fail("collection input needs v2.85")
 			}
-			if v.Scope != "page" || v.Source != nil || !slices.Contains(contract.Interface.ValueTypes, v.Type) || (v.Type == "record" || v.Type == "object-set") && len(v.Initial) != 0 || len(v.Initial) != 0 && pageLiteralType(v.Initial) != v.Type {
+			if v.Scope != "page" || v.Source != nil || !slices.Contains(contract.Interface.ValueTypes, v.Type) || (v.Type == "record" || v.Type == "object-set") && len(v.Initial) != 0 || len(v.Initial) != 0 && PageLiteralType(v.Initial) != v.Type {
 				return fail("input needs a typed page value without a source")
 			}
 		case "resource":
@@ -352,10 +352,10 @@ func (d PageInputSchema) CheckVariables(engines ...RuleEngine) error {
 				return fail("resource source type mismatch")
 			}
 		case "constant", "state":
-			if v.Type == "string-set" && (!PageUIProfileSupports(d.profileVersion(), "platform.page.v2.30") || !slices.Contains([]string{"page", "overlay"}, v.Scope)) {
+			if v.Type == "string-set" && (!PageUIProfileSupports(d.ProfileVersion(), "platform.page.v2.30") || !slices.Contains([]string{"page", "overlay"}, v.Scope)) {
 				return fail("string-set state requires v2.30 page or overlay scope")
 			}
-			if pageLiteralType(v.Initial) != v.Type {
+			if PageLiteralType(v.Initial) != v.Type {
 				return fail("initial value type mismatch")
 			}
 		case "derived":
@@ -413,47 +413,7 @@ func (d PageInputSchema) CheckVariables(engines ...RuleEngine) error {
 	return nil
 }
 
-func (d PageInputSchema) CheckProfile() error {
-	for id, v := range d.Variables {
-		if err := d.checkVariableProfile(id, v); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-func (d PageInputSchema) checkVariableProfile(id string, v PageVariable) error {
-	supports := func(feature string) bool {
-		return PageUIProfileSupports(d.profileVersion(), PageWidgets.Features[feature])
-	}
-	switch {
-	case v.Mode == "property" && !supports("propertyVariables"):
-		return fmt.Errorf("property variable %s requires v2.17", id)
-	case v.Type == "decimal" && !supports("decimalVariables"):
-		return fmt.Errorf("decimal variable %s requires v2.16", id)
-	case v.Scope == "application" && v.Type == "filter" && !supports("applicationFilters"):
-		return fmt.Errorf("shared filter %s requires v2.15", id)
-	case v.Scope == "application" && v.Type == "record" && !supports("applicationRecords"):
-		return fmt.Errorf("shared record %s requires v2.14", id)
-	case v.Scope == "application" && v.Type == "object-set" && !supports("applicationCollections"):
-		return fmt.Errorf("shared window %s requires v2.12", id)
-	case v.Scope == "application" && (!supports("applicationBindings") || v.Mode != "shared"):
-		return fmt.Errorf("page variable %s needs v2.8 and a shared application binding", id)
-	case v.Scope == "overlay" && v.Type == "filter" && !supports("overlayFilters"):
-		return fmt.Errorf("overlay filter %s requires v2.13", id)
-	case v.Scope == "overlay" && v.Mode == "resource" && !supports("overlayResources"):
-		return fmt.Errorf("overlay resource %s requires UI profile v2.11", id)
-	case v.Scope == "overlay" && !supports("overlayVariables"):
-		return fmt.Errorf("page variable %s requires UI profile v2.7", id)
-	case v.Scope == PageWidgets.Runtime.Loop.Scope && !supports("loopVariables"):
-		return fmt.Errorf("page variable %s requires UI profile v2.5", id)
-	case v.Mode == "resource" && !supports("resourceVariables"):
-		return fmt.Errorf("page variable %s requires UI profile v2.3", id)
-	}
-	return nil
-}
-
-func (d PageInputSchema) profileVersion() string {
+func (d PageInputSchema) ProfileVersion() string {
 	if d.profile != "" {
 		return d.profile
 	}

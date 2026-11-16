@@ -38,7 +38,7 @@ func (p Page) LoopFactor(owner string) (int, error) {
 func (p Page) collectionBuilderInput(id, owner string, object AssetRef) bool {
 	d := p.InputSchema
 	sections := p.DataBindings
-	if !PageUIProfileSupports(d.profileVersion(), "platform.page.v2.88") {
+	if !PageUIProfileSupports(d.ProfileVersion(), "platform.page.v2.88") {
 		return false
 	}
 	v := d.Variables[id]
@@ -162,7 +162,7 @@ func (p Page) collectionInputObject(variable string, seen map[string]bool) Asset
 
 func (d PageInputSchema) checkComputeResource(v PageVariable) error {
 	c := v.Source.Compute
-	if !PageUIProfileSupports(d.profileVersion(), PageWidgets.Runtime.ComputeResource.RequiredUIProfile) || !slices.Contains([]string{"number", "decimal"}, v.Type) || v.Mode != "resource" || v.Writable || !slices.Contains([]string{"page", "overlay"}, v.Scope) || c == nil || !PageNodeID.MatchString(c.RecordVariable) || c.Operation.Ref.Kind != AssetCompute || c.Operation.Ref.Check() != nil || c.Operation.SourceVersion == "" || len(c.Inputs) == 0 || len(c.Inputs) > 64 || c.OutputField != "" && !PageNodeID.MatchString(c.OutputField) {
+	if !PageUIProfileSupports(d.ProfileVersion(), PageWidgets.Runtime.ComputeResource.RequiredUIProfile) || !slices.Contains([]string{"number", "decimal"}, v.Type) || v.Mode != "resource" || v.Writable || !slices.Contains([]string{"page", "overlay"}, v.Scope) || c == nil || !PageNodeID.MatchString(c.RecordVariable) || c.Operation.Ref.Kind != AssetCompute || c.Operation.Ref.Check() != nil || c.Operation.SourceVersion == "" || len(c.Inputs) == 0 || len(c.Inputs) > 64 || c.OutputField != "" && !PageNodeID.MatchString(c.OutputField) {
 		return fmt.Errorf("compute resource needs its finite typed operation and original record")
 	}
 	parent := d.Variables[c.RecordVariable]

@@ -164,7 +164,7 @@ func (p Page) CheckWidgetPorts(binding PageDataBinding, owner string) error {
 			continue
 		}
 		v, ok := p.InputSchema.Variables[id]
-		if ok && v.Scope == "application" && v.Type == "record" && !PageUIProfileSupports(p.InputSchema.profileVersion(), sharedRecordProfile(widget)) {
+		if ok && v.Scope == "application" && v.Type == "record" && !PageUIProfileSupports(p.InputSchema.ProfileVersion(), sharedRecordProfile(widget)) {
 			return fmt.Errorf("widget %s shares an application record only from its profile", widget)
 		}
 		readonlyChoice := field == "choiceVariable" && v.Mode == "constant"

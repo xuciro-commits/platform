@@ -10,7 +10,7 @@ func (d PageInputSchema) CheckQuerySets() error {
 		if plan.Set == nil {
 			continue
 		}
-		if !PageUIProfileSupports(d.profileVersion(), "platform.page.v2.18") {
+		if !PageUIProfileSupports(d.ProfileVersion(), "platform.page.v2.18") {
 			return fmt.Errorf("query set %s requires v2.18", root)
 		}
 		nodes := 0

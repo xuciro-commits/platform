@@ -191,14 +191,6 @@ func (p Page) ScopeOwner(owner, kind string) string {
 	return ""
 }
 
-func (p Page) rootPresentationSource(source string) bool {
-	owner := p.ScopeVisibility.Owners[source]
-	if owner == "" {
-		owner = source
-	}
-	return p.ScopeOwner(owner, "overlay") == "" && p.ScopeOwner(owner, "loop") == ""
-}
-
 func PageBindingVariables(b PageDataBinding) []string {
 	out := []string{}
 	for key, id := range b.Ports {
