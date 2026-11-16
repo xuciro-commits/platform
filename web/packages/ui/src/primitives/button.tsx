@@ -1,38 +1,70 @@
-import { cva, type VariantProps } from "class-variance-authority";
-import { Loader2 } from "lucide-react";
-import { createContext, useContext, type ButtonHTMLAttributes } from "react";
-import { cn } from "../lib/cn";
-import { Tooltip } from "./tooltip";
+import { Button as AstryxButton } from "@astryxdesign/core/Button";
+import { createContext, type ButtonHTMLAttributes } from "react";
 
-const button = cva(
-  "inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-md border text-sm font-medium transition-colors focus-visible:outline-2 focus-visible:outline-ring disabled:pointer-events-none disabled:opacity-50 [&_svg]:size-3.5",
-  {
-    variants: {
-      variant: {
-        default: "border-border bg-surface hover:bg-row-hover",
-        primary: "border-primary bg-primary text-primary-foreground hover:opacity-90",
-        ghost: "border-transparent hover:bg-row-hover",
-        danger: "border-border bg-surface text-[var(--tone-danger)] hover:bg-row-hover",
-        link: "border-transparent font-normal underline hover:opacity-80",
-        row: "w-full justify-start border-transparent font-normal hover:bg-row-hover",
-      },
-      size: { sm: "h-[var(--ctrl-h-xs)] px-[var(--ctrl-px-xs)]", md: "h-[var(--ctrl-h-sm)] px-[var(--ctrl-px-sm)]", lg: "h-[var(--ctrl-h-md)] px-[var(--ctrl-px-md)]", icon: "size-[var(--ctrl-h-sm)]" },
-    },
-    compoundVariants: [{ variant: "link", class: "h-auto px-0" }, { variant: "row", class: "h-auto px-2 py-1 text-left" }],
-    defaultVariants: { variant: "default", size: "md" },
-  },
-);
-
-export type ButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & VariantProps<typeof button> & { loading?: boolean };
+export type ButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {
+  variant?: "default" | "primary" | "ghost" | "danger" | "link" | "row";
+  size?: "sm" | "md" | "lg" | "icon";
+  loading?: boolean;
+};
 
 export const DefaultButtonSize = createContext<ButtonProps["size"]>(undefined);
 
-export function Button({ className, variant, size, type = "button", title, loading = false, disabled, children, ...props }: ButtonProps) {
-  const inherited = useContext(DefaultButtonSize);
+/**
+ * Platform button facade over Astryx Button.
+ *
+ * The public API stays unchanged for the hundreds of existing call sites:
+ * `variant` accepts the legacy default/primary/ghost/danger/link/row set,
+ * `size` accepts sm/md/lg/icon, `loading` maps to Astryx `isLoading`.
+ */
+export function Button({
+  className,
+  variant = "default",
+  size,
+  type = "button",
+  title,
+  loading = false,
+  disabled,
+  children,
+  ...props
+}: ButtonProps) {
   const blocked = disabled || loading;
-  const element = <button type={type} data-ui="button" data-variant={variant ?? "default"} disabled={blocked} aria-busy={loading || undefined}
-    className={cn(button({ variant, size: size ?? inherited }), loading && "relative", className)} {...props}>
-    {loading ? <><span className="inline-flex items-center justify-center gap-1.5 opacity-0">{children}</span><Loader2 aria-hidden className="absolute animate-spin motion-reduce:animate-none" /></> : children}
-  </button>;
-  return title ? <Tooltip content={title} wrap={blocked}>{element}</Tooltip> : element;
+  const label =
+    (typeof props["aria-label"] === "string" && props["aria-label"]) ||
+    title ||
+    (typeof children === "string" || typeof children === "number" ? String(children) : "Button");
+  const isIconOnly = size === "icon";
+  const astryxVariant =
+    variant === "primary"
+      ? "primary"
+      : variant === "danger"
+        ? "destructive"
+        : variant === "ghost" || variant === "link" || variant === "row"
+          ? "ghost"
+          : "secondary";
+  const linkClass =
+    variant === "link"
+      ? "!h-auto !min-h-0 !border-0 !bg-transparent !px-0 !py-0 !shadow-none font-normal underline hover:!bg-transparent"
+      : variant === "row"
+        ? "!h-auto !min-h-0 !w-full !justify-start !border-0 !bg-transparent !px-0 !py-0 !shadow-none font-normal hover:!bg-transparent"
+        : "";
+
+  return (
+    <AstryxButton
+      {...props}
+      data-ui="button"
+      data-variant={variant}
+      label={label}
+      variant={astryxVariant}
+      size={isIconOnly ? "sm" : (size ?? undefined)}
+      isDisabled={blocked}
+      isLoading={loading}
+      isIconOnly={isIconOnly}
+      icon={isIconOnly ? children : undefined}
+      tooltip={title}
+      type={type}
+      className={[linkClass, className].filter(Boolean).join(" ") || undefined}
+    >
+      {isIconOnly ? undefined : children}
+    </AstryxButton>
+  );
 }

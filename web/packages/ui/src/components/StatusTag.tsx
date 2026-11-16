@@ -1,3 +1,4 @@
+import { Badge } from "@astryxdesign/core/Badge";
 import { cn } from "../lib/cn";
 import { t } from "../i18n";
 import { IconGlyph, iconGlyphs } from "./IconPicker";
@@ -21,22 +22,28 @@ export const submissionStatuses = defineStatuses({
   SUBMISSION_STATE_UNKNOWN: { label: "Unknown", tone: "warning" },
 });
 
+const badgeVariants = {
+  neutral: "neutral",
+  info: "blue",
+  success: "green",
+  warning: "yellow",
+  danger: "red",
+  purple: "purple",
+  pink: "pink",
+  teal: "teal",
+  orange: "orange",
+} as const;
+
 export function Tag({ label, tone = "neutral", icon, className }: { label: string; tone?: Tone; icon?: string; className?: string }) {
   return (
-    <span
+    <Badge
       data-tone={tone}
       data-ui="tag"
-      className={cn("inline-flex h-[18px] items-center gap-1 rounded-sm border px-1.5 text-xs font-medium leading-none whitespace-nowrap", className)}
-      style={{
-        ["--tone" as string]: `var(--tone-${tone})`,
-        color: `var(--tone-${tone})`,
-        borderColor: `color-mix(in oklch, var(--tone-${tone}) 35%, transparent)`,
-        background: `color-mix(in oklch, var(--tone-${tone}) 10%, transparent)`,
-      }}
-    >
-      {icon && iconGlyphs[icon] ? <IconGlyph name={icon} className="[&_svg]:size-3" /> : <span className="size-1.5 rounded-full" style={{ background: `var(--tone-${tone})` }} aria-hidden />}
-      {label}
-    </span>
+      variant={badgeVariants[tone]}
+      label={label}
+      icon={icon && iconGlyphs[icon] ? <IconGlyph name={icon} /> : undefined}
+      className={cn("whitespace-nowrap", className)}
+    />
   );
 }
 

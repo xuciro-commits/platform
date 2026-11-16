@@ -1,5 +1,5 @@
-import { ChevronRight } from "lucide-react";
-import { Fragment, type ReactNode } from "react";
+import { BreadcrumbItem, Breadcrumbs } from "@astryxdesign/core/Breadcrumbs";
+import type { ReactNode } from "react";
 import {ContextHelp} from './ContextHelp';
 import {DefaultButtonSize} from '../primitives/button';
 
@@ -12,12 +12,9 @@ export function PageHeader({ title, description, help, actions, level, compact=f
   const Heading=level===2?"h2":level===3?"h3":"h1";
   return (
     <header className={(compact?"":"mb-3 ")+"grid min-w-0 gap-1"}>
-      {crumbs && crumbs.length > 0 && <nav aria-label="Breadcrumb" className="flex min-w-0 flex-wrap items-center gap-1 text-xs text-muted">
-        {crumbs.map((crumb, index) => <Fragment key={`${crumb.label}:${index}`}>
-          {crumb.onClick ? <button type="button" onClick={crumb.onClick} className="rounded-sm hover:text-foreground hover:underline">{crumb.label}</button> : <span>{crumb.label}</span>}
-          <ChevronRight aria-hidden className="size-3" />
-        </Fragment>)}
-      </nav>}
+      {crumbs && crumbs.length > 0 && <Breadcrumbs label="Breadcrumb" variant="supporting">
+        {crumbs.map((crumb, index) => <BreadcrumbItem key={`${crumb.label}:${index}`} onClick={crumb.onClick} isCurrent={index === crumbs.length - 1}>{crumb.label}</BreadcrumbItem>)}
+      </Breadcrumbs>}
       <div className="flex min-w-0 flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex min-w-0 items-center gap-3">
           {icon && <span className="shrink-0 [&>svg]:size-5 [&>svg]:text-primary">{icon}</span>}
