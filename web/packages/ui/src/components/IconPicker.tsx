@@ -7,6 +7,7 @@ import {
 } from "lucide-react";
 import { cn } from "../lib/cn";
 import { Button } from "../primitives/button";
+import { Button as AstryxButton } from "@astryxdesign/core/Button";
 import { t } from "../i18n";
 import { Popover } from "@astryxdesign/core/Popover";
 import { HStack, VStack } from "@astryxdesign/core/Stack";
@@ -69,8 +70,6 @@ export function IconPicker({ value, onChange, disabled, label, id }: {
       </div>
       <HStack gap={1} justify="between"><Button type="button" size="sm" variant="ghost" onClick={() => { onChange(""); setOpen(false); }}>{t("No icon")}</Button><Button type="button" size="sm" variant="ghost" onClick={() => setOpen(false)}>{t("Close")}</Button></HStack>
     </VStack>}>
-    <Button type="button" id={id} disabled={disabled} aria-label={label ?? t("Choose an icon")} className="h-8 w-full justify-start gap-2 px-2 text-sm">
-      {value ? <><IconGlyph name={value} /><span className="truncate">{t(value)}</span><span className="ml-auto font-mono text-2xs text-muted">{value}</span></> : <span className="text-muted">{t("No icon")}</span>}
-    </Button>
+    <AstryxButton type="button" id={id} isDisabled={disabled} aria-label={label ?? t("Choose an icon")} label={value ? `${t(value)} · ${value}` : t("No icon")} icon={value ? <IconGlyph name={value} /> : undefined} variant="secondary" width="100%" />
   </Popover>;
 }
