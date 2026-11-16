@@ -105,17 +105,13 @@ export function ApprovalGraph({ approval: a }: { approval: Api.ApprovalRequest }
 export function Processes({ source, processes, onOpen }: { source: RecordSource; processes: RecordView["processes"]; onOpen?: (type: string, r: EntityRecord) => void }) {
   const state = source.entity("flow.instance")?.fields.find((f) => f.name === "state");
   return (
-    <section aria-label={t("Processes")}>
-      <h2 className="mb-1 text-sm font-semibold">{t("Processes")}</h2>
-      <ul className="grid gap-1">
+    <section aria-label={t("Processes")} className="grid gap-2">
+      <Text type="label" weight="semibold">{t("Processes")}</Text>
+      <List aria-label={t("Processes")} density="compact" hasDividers>
         {processes.map((p) => (
-          <li key={p.id} className="flex flex-wrap items-center gap-2 rounded-md border border-border bg-surface px-3 py-2 text-sm">
-            <button type="button" className="font-medium hover:underline" onClick={() => onOpen?.("flow.instance", p)}>{p.title}</button>
-            <Tag label={state?.choiceTitles?.[state.choices?.indexOf(p.state) ?? -1] ?? p.state} tone={processTone(p.state)} />
-            {!!p.tokens?.length && <span className="text-xs text-muted">{t("at {steps}", { steps: p.tokens.map((x) => x.step).join(", ") })}</span>}
-          </li>
+          <ListItem key={p.id} itemKey={p.id} label={<button type="button" className="font-medium hover:underline" onClick={() => onOpen?.("flow.instance", p)}>{p.title}</button>} endContent={<Tag label={state?.choiceTitles?.[state.choices?.indexOf(p.state) ?? -1] ?? p.state} tone={processTone(p.state)} />} description={p.tokens?.length ? t("at {steps}", { steps: p.tokens.map((x) => x.step).join(", ") }) : undefined} />
         ))}
-      </ul>
+      </List>
     </section>
   );
 }
