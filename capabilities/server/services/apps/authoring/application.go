@@ -285,7 +285,7 @@ func ProjectApplication(registered platform.Definition, projection ApplicationPr
 			if v.Mode == "property" && v.Source != nil && v.Source.Object != nil {
 				info, ok := entities[v.Source.Object.Name]
 				_, parent := application.Variables[v.Source.Variable]
-				missing = !ok || !parent || application.QueryPage().CheckPropertySchema(v, info) != nil
+				missing = !ok || !parent || pageowner.CheckPropertySchema(application.QueryPage(), v, info) != nil
 			}
 			if v.Mode == "aggregate" && v.Source != nil {
 				_, ok := application.Queries[v.Source.Query]

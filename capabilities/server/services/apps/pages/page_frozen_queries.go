@@ -156,7 +156,7 @@ func CheckFrozenQueries(original platform.Page, assets map[platform.AssetRef]pla
 		}
 		if v.Mode == "property" && v.Source.Object != nil {
 			info, ok := lookup(v.Source.Object.Name)
-			if !ok || page.CheckPropertySchema(v, info) != nil {
+			if !ok || CheckPropertySchema(page, v, info) != nil {
 				return fmt.Errorf("frozen property schema is unavailable")
 			}
 		}

@@ -52,7 +52,7 @@ func (b Bindings) CheckQueries(p platform.Page) error {
 	for _, v := range p.InputSchema.Variables {
 		if v.Mode == "property" && v.Source != nil && v.Source.Object != nil {
 			object, ok := b.Entity(v.Source.Object.Name)
-			if !ok || p.CheckPropertySchema(v, object) != nil {
+			if !ok || CheckPropertySchema(p, v, object) != nil {
 				return fmt.Errorf("property source schema is unavailable")
 			}
 		}

@@ -8,11 +8,23 @@ import (
 	"strings"
 )
 
+func PropertyValueType(field platform.FieldInfo) string {
+	switch field.Type {
+	case "text", "longtext", "choice":
+		return "string"
+	case "boolean":
+		return "boolean"
+	case "integer", "decimal":
+		return "decimal"
+	}
+	return ""
+}
+
 func propertyValues(info platform.EntityInfo, record any) (map[string]any, map[string]string) {
 	values, errors := map[string]any{}, map[string]string{}
 	row := reflect.ValueOf(record)
 	for _, field := range info.Fields {
-		typ := platform.PropertyValueType(field)
+		typ := PropertyValueType(field)
 		if typ == "" && field.Type != "reference" && field.Type != "date" && field.Type != "datetime" && field.Type != "money" {
 			continue
 		}
