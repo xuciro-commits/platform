@@ -130,17 +130,16 @@ read-when: 每批开始（选当前批次）与结束（删除已完成条目、
 
 ### 五、前端重建
 
-目标规范：[4-interaction](4-interaction/README.md)（十三条不变式）、[7-system/web R4、R9 与“新前端项目”](7-system/web.md)、技能 `platform-design`。与前四段并行：只在 `frontend/` 新建，`web/` 只修缺陷，不作为新前端的参考。每个页面先落地 Astryx 官方模板再改造（4-interaction R13）。完成标准（整段）：F 系列不改任务断言在 `frontend/` 上通过；负责人走查通过；`web/` 整体删除，API 类型与宿主客户端迁入 `frontend/`。
+目标规范：[4-interaction](4-interaction/README.md)（十三条不变式）、[7-system/web R4、R9 与“新前端项目”](7-system/web.md)、技能 `platform-design`。与前四段并行：只在 `frontend/` 新建，`web/` 只修缺陷，不作为新前端的参考。每个页面先落地 Astryx 官方模板再改造（4-interaction R13）。W1–W6 由主代理完成；W7 的每一行是一张任务卡，由执行模型按技能 `frontend-migrate` 完成，卡片字段见该技能，原型与 `src/host/` 就绪前不派发。完成标准（整段）：F 系列不改任务断言在 `frontend/` 上通过；负责人走查通过；`web/` 整体删除，API 类型与宿主客户端迁入 `frontend/`。
 
-- [ ] W0 功能块与命名（先行，等负责人确认）。按 `frontend/src/apps.ts` 的提案确定应用清单、每个应用的菜单与名称；确认后改写 2-product §2.2、3-information §3.2–3.3 与 AGENTS.md 的应用命名规则。
-- [ ] W1 外壳补全。已有应用轨、应用侧栏、切换器与地址路由。余下：宿主登录与会话、应用清单接宿主注册、⌘K（`CommandPalette`）、通知、成员菜单、语言切换、窄屏抽屉。验证：`make check-frontend`、走查。
+- [ ] W1 外壳补全。已有应用轨、应用侧栏、切换器与地址路由。余下：宿主登录与会话（`src/host/`）、宿主的应用注册按 3-information §3.3 换名并生成 `src/apps.ts`、⌘K（`CommandPalette`）、通知、成员菜单、语言切换、窄屏抽屉。验证：`make check-frontend`、走查。
 - [ ] W2 列表原型。把 `src/templates/table-filter` 与 `kanban-board` 改造成列表页（视图切换器、视图栏、表格、分组、看板、批量条、快速录入），接读取合同，视图状态进 URL；先做对象列表与一个资源列表。验证：F4、走查。
 - [ ] W3 记录原型。从 `work-item-detail` 模板改造：页头、页签、字段栏、Activity 时间线；资源与对象共用；就地编辑接 `decide` 与工作状态。验证：F1、F18、走查。
 - [ ] W4 画布原型。从 `ide`、`canvas-editor` 模板改造工作台壳；图、图表、代码编辑与三维用专用库。验证：F19、走查。
 - [ ] W5 仪表盘原型与设置对话框。从 `dashboard`、`settings-dialog` 模板改造。验证：走查。
 - [ ] W6 Workshop 页面运行时。页面组件在 `frontend/` 用 Astryx 重建，使 Workshop 搭建的业务应用与自举二级（S2）直接得到新语言。验证：F1、F4、F5。
-- [ ] W7 逐应用重建。按 W0 确定的清单，每个应用一行：入口、画布、对应规范小节与验收定位。
-- [ ] W8 切换与删除。F 系列在 `frontend/` 通过后宿主改为提供它的产物；删除 `web/`；R13 的检查脚本进入 `make check-frontend`；改写 5-experience 的步骤描述。
+- [ ] W7 逐入口重建。按 3-information §3.3 的清单，每个入口一张任务卡（入口、原型、数据、可改文件、验收）；先由主代理做完一个应用作为范例，再把其余入口写成卡片。
+- [ ] W8 切换与删除。F 系列在 `frontend/` 通过后宿主改为提供它的产物；删除 `web/`；改写 5-experience 的步骤描述与其余规范里的旧产品名。
 - [ ] W9 视图的归属（等产品矩阵解冻）。在 2-product 确定命名视图、公开视图与置顶的资源归属后实现；此前视图只保存成员默认值。
 
 ## 条件触发
