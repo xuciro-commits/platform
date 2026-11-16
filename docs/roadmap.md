@@ -143,7 +143,7 @@ read-when: 每批开始（选当前批次）与结束（删除已完成条目、
 - [ ] W6 Workshop 页面运行时。页面组件在 `frontend/` 用 Astryx 重建，使 Workshop 搭建的业务应用与自举二级（S2）直接得到新语言。验证：F1、F4、F5。
 - [ ] W7 逐入口重建。按 3-information §3.3 的清单，每个入口一张任务卡（入口、原型、数据、可改文件、验收）；先由主代理做完一个应用作为范例，再把其余入口写成卡片。
 - [ ] W8 切换与删除。两条轨道都走完 W1–W10 后择优：宿主改为提供保留者的产物，删除另一条，改写 5-experience 的步骤描述与其余规范里的旧产品名。
-- [ ] W10 `web/` 整体替换为 Astryx。根基已完成（样式、七套官方主题与明暗切换、StyleX 编译、`web/AGENTS.md`，见 7-system/web R10）；界面组件已完成大部分归并（清单见 7-system/web「现存差距」），剩余 `Gauge`（官方无同类组件）与 `DataTable`（TanStack 数据网格）的专用实现，以及裸元素与 Tailwind 类的清理；`Rejection` 已由 Banner 与 Collapsible 组合。每轮同时删掉不再使用的 Tailwind 类与 `styles.css` 里的对应规则，`astryx doctor --built web/apps/workspace` 的 548 条随进度下降。完成标准：`web/` 的依赖里不再有自有样式与组件库，`astryx doctor --built` 只剩专用画布库的必要裸元素；F 系列在 `web/` 上通过；负责人走查通过。验证：`make build`、`make check-web`、走查。
+- [ ] W10 `web/` 整体替换为 Astryx。根基已完成（样式、七套官方主题与明暗切换、StyleX 编译、`web/AGENTS.md`，见 7-system/web R10）；界面组件已完成大部分归并（清单见 7-system/web「现存差距」），剩余 `DataTable`（TanStack 数据网格）的专用实现，以及裸元素与 Tailwind 类的清理；`Gauge` 已由官方 `ProgressBar` 组合，`Rejection` 已由 Banner 与 Collapsible 组合。每轮同时删掉不再使用的 Tailwind 类与 `styles.css` 里的对应规则，`astryx doctor --built web/apps/workspace` 的 548 条随进度下降。完成标准：`web/` 的依赖里不再有自有样式与组件库，`astryx doctor --built` 只剩专用画布库的必要裸元素；F 系列在 `web/` 上通过；负责人走查通过。验证：`make build`、`make check-web`、走查。
 - [ ] W9 视图的归属（等产品矩阵解冻）。在 2-product 确定命名视图、公开视图与置顶的资源归属后实现；此前视图只保存成员默认值。
 
 ## 条件触发

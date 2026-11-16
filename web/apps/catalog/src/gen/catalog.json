@@ -1,5 +1,5 @@
 {
-  "revision": "sha256:ba6f3e79ea5baff1",
+  "revision": "sha256:0f5f2014dc8c4003",
   "entries": [
     {
       "id": "app/agent-assistant",
@@ -5778,7 +5778,7 @@
       "id": "ui/gauge",
       "owner": "@platform/ui",
       "name": "Authorized numeric gauge",
-      "summary": "Display the original finite numeric aggregate with a bounded arc and warning threshold.",
+      "summary": "Display the original finite numeric aggregate through the official Astryx progress bar with a warning threshold.",
       "layer": 3,
       "source": "web/packages/ui/src/components/Gauge.tsx",
       "exports": [
@@ -12528,7 +12528,7 @@
       "Display a bounded record window as time points or intervals, grouped by an original resource field.": "将有界记录窗口显示为时间点或区间，按原资源字段分组。",
       "Display a fixed HTTPS document at its exact reviewed origin.": "在精确已审查来源呈现固定 HTTPS 文档。",
       "Display declared record states and caller-allowed transitions.": "展示已声明的记录状态与调用方允许的跃迁。",
-      "Display the original finite numeric aggregate with a bounded arc and warning threshold.": "以有界弧线和警告阈值显示原有限数值聚合。",
+      "Display the original finite numeric aggregate through the official Astryx progress bar with a warning threshold.": "通过 Astryx 官方进度条和警告阈值显示原有限数值聚合。",
       "Display the original public image URL, caption and cover height through the browser image element.": "通过浏览器图片元素展示原公开图片地址、说明及覆盖高度。",
       "Draw an ordered path a person or a run took, in BPMN shapes, without a catalog to author against.": "以 BPMN 形状画出人或运行走过的有序路径，无需一份可编写的节点目录。",
       "Each control has a stable identity; the caller owns its binding, permissions and execution.": "每个控件具有稳定身份，其绑定、权限及执行由调用方拥有。",

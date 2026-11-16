@@ -1300,7 +1300,7 @@ export default {
   "Gauge value is outside its display range.": "仪表数值超出显示范围。",
   "of {max}": "最大值 {max}",
   "Authorized numeric gauge": "授权数值仪表",
-  "Display the original finite numeric aggregate with a bounded arc and warning threshold.": "以有界弧线和警告阈值显示原有限数值聚合。",
+  "Display the original finite numeric aggregate through the official Astryx progress bar with a warning threshold.": "通过 Astryx 官方进度条和警告阈值显示原有限数值聚合。",
   "The caller owns the original numeric result and complete set. The gauge does not substitute zero for empty or denied values.": "调用方拥有原数值结果与完整集合，仪表不将空值或拒绝值替换为零。",
   "Min": "最小值",
   "Mean": "平均值",
