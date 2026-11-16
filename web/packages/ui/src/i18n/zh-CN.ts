@@ -1,4 +1,9 @@
 export default {
+  "Application options": "应用选项",
+  "Collapse navigation": "收起导航",
+  "Markdown": "Markdown",
+  "Menu": "菜单",
+  "Type to search": "输入内容以搜索",
   "Continuous Flow inventory is incomplete": "连续 Flow 清单不完整。",
   "The read scope could not be prepared: {reason}": "无法准备读取范围：{reason}",
  "Media set could not be loaded.": "无法加载媒体集。", "File could not be downloaded.": "无法下载文件。", "Media set": "媒体集", "Media item": "媒体项", "Choose a file": "选择文件",
