@@ -199,7 +199,15 @@ Frappe 是同类问题上最成功的开源答案：用 DocType 把企业应用�
 
 - 不运行 Python Framework，不设 hooks 式的代码覆盖扩展点（那是第二条写入路径）。
 - 不沿用 frappe-ui 的组件与样式；界面只来自 Astryx（决定 8）。
-- 读入 DocType 元数据、转成对象类型草稿，是构建工具，不是兼容承诺：控制器里的业务行为转不过来，要用动作与函数重新表达。把某个 Frappe 应用的实际定义转成产品包之前，先由负责人确认它的许可。
+- 不把“兼容 Frappe 应用”当承诺。转换是构建工具：结构能转，行为要重建（见下）。
+
+转换 Frappe 应用（负责人 2026-11-16 决定做）：把 Frappe 应用的定义读入，转成产品包的作者态源，作为行业产品包的起点。映射与流程见 [6-domain/packages §6.28](6-domain/packages.md)。
+
+- 能转的是结构，转不了的是行为。ERPNext 实测：536 个 DocType 的元数据约 2.5 MB，全部可读；控制器与共用逻辑的 Python 约 6.7 MB、客户端脚本 1.2 MB、报表 197 个、打印格式 72 个，都要用动作、函数与页面重新表达。123 个控制器基本是空的，这些类型转完即可用。
+- 许可随来源走（2026-11-16 按 GitHub 的声明核对）：Framework、frappe-ui、Studio、Builder、release_tests 是 MIT；ERPNext、HRMS、Lending、Webshop、Education 是 GPLv3；CRM、Helpdesk、LMS、Insights、Drive、Gameplan 是 AGPLv3。
+- 转换得到的包是原应用的衍生作品，沿用原许可，在包清单里记下来源与许可；它们放在本仓库之外，平台与宿主的代码不从中复制，也不用原产品的名字与商标。
+- 先转 GPLv3 的 ERPNext 与 HRMS。AGPLv3 的应用只作交互参考，不转（经网络提供服务也要向使用者提供源）。
+- 向客户交付含转换内容的包之前，负责人先取得法律意见：GPL 的包与宿主一同交付时边界在哪里，本文不作判断。
 
 ## 现存差距
 

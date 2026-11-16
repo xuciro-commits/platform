@@ -73,6 +73,7 @@ read-when: 新增能力或应用、判断能力归属、新增资源类型、处
 | 追踪与指标 | OpenTelemetry 与受限 rollup | Monitoring 查询；告警复用 Automate |
 | 权限 | 授权引擎（唯一实现） | 所有读写都过同一决定路径 |
 | 打包与安装 | DevOps 与 Marketplace | 资源声明可打包性，不自建导入导出 |
+| 外部应用定义的转换 | 仓库的构建工具（[6-domain/packages §6.28](6-domain/packages.md)） | 产出作者态包源，之后与其他产品包同路；租户里没有这项能力 |
 
 日志不是审计，审计也不是日志。运行状态仍由原 owner 拥有，Monitoring 只投影与关联；任何产品不得建立第二套运行扫描或日志网关。
 

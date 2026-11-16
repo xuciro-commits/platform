@@ -118,7 +118,43 @@ Marketplace 的精确产品版本提供“Transfer existing resources…”：�
 - `pack` 只改变作者态和打包路径，不改变 `PackageDescriptor`、安装、升级和运行语义。
 - 当前七个产品包都已采用该布局；顶层 `deploy/packages/*.json` 仍是运行层生成制品，不手改。
 
-## 6.28 现存差距
+## 6.28 外部定义的转换
+
+把别的框架的应用定义转成作者态包源，是仓库里的构建工具（`scripts/`），不是租户里的能力；产出物照常经打包、安装与升级。第一个来源是 Frappe 应用（决定与许可见 [1-enterprise §1.11](../1-enterprise.md)）。
+
+- 转换分两步，都可重复运行：读入并出报告（每个类型的字段覆盖、映射不了的字段与条件、控制器是否有内容）；按报告生成包源。行为不自动生成。
+- 由转换得到的包，清单必须带 `origin`（来源仓库、提交、转换器版本）与 `license`（SPDX 标识）；安装记录与 Marketplace 目录显示它们。
+- 转换产物不放进本仓库：它沿用来源的许可，与平台分开存放、分开交付。
+- 转换后改过的包再次转换时不覆盖人工修改：转换器只生成它上次生成过且之后没被改动的文件。
+
+| DocType 里的 | 包源里的 | 说明 |
+|---|---|---|
+| Data、Small Text、Read Only、Time | `text` | Time 没有专门类型 |
+| Text、Long Text、Text Editor、Code、Markdown Editor | `longtext` | |
+| Int；Float、Percent；Currency | `integer`；`decimal`；`money` | |
+| Check；Date；Datetime | `boolean`；`date`；`datetime` | |
+| Select | `choice` | 选项按行拆开；命名序列的 Select 不是字段 |
+| Link | `reference` | `ref` 指向 options 所写的类型 |
+| Table | `lines` | 子表 DocType（`istable`）成为行的字段 |
+| Table MultiSelect | `references` | |
+| Attach、Attach Image；JSON | `attachment`；`json` | |
+| Dynamic Link | 无 | 报告列出 |
+| Section、Column、Tab Break | 不是字段 | 成为记录页的页签与分节 |
+| HTML、Button、Heading | 丢弃 | 纯界面 |
+| `reqd`、`unique`、`default`、`read_only`、`fetch_from` | 必填、唯一约束、默认值、只读、派生 | |
+| `depends_on` 等 `eval:` 条件 | Expr | 只转能逐字对应的比较与逻辑式，其余报告列出 |
+| `in_list_view`、`in_standard_filter`、`title_field`、`search_fields` | 列表视图定义、显示字段、搜索字段 | |
+| `permissions` | `access` 的角色访问 | `permlevel` 报告列出 |
+| `is_submittable` | 状态（草稿、已提交、已取消）加提交后不可改的约束 | |
+| `is_tree` | 父引用 | 用树表现 |
+| `autoname`、命名序列 | 命名规则 | |
+| 控制器、客户端脚本、报表、打印格式 | 不转 | 报告列出体量；用动作、函数、页面重建 |
+
+十二个 ERPNext 核心 DocType 的抽样（1245 个字段）：三分之一是版式分隔（414），纯界面 30，其余约 800 个数据字段里只有 Time（3 个）没有对应类型；272 个字段带 `eval:` 条件。
+
+## 6.29 现存差距
+
+- 外部定义的转换（6.28，第 6、7 层）：转换器尚未实现；包清单没有 `origin` 与 `license`；映射表右列的唯一约束、默认值、派生、命名规则与列表视图定义在包格式里是否齐备尚未核对。排期见[路线图](../roadmap.md)“六、Frappe 应用转换”。
 
 - `draining` 只设置状态，静态代码没有阻止新使用；界面明确标为“标记卸载”，不宣称运行排空已完成。
 - `Uninstall` 实际是 archive；永久删除、输出 detach、制品 GC 未实现。
