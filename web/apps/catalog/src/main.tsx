@@ -1,9 +1,10 @@
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
-import { Workspace, routeToHash, t } from "@platform/ui";
+import { AstryxTheme, Workspace, routeToHash, t } from "@platform/ui";
 import catalogApp, { catalogNavigation } from "./app";
 import { CatalogPreview } from "./Preview";
 import "./styles.css";
+import "@platform/ui/astryx.css";
 
 const previewWorkspace = new URLSearchParams(location.search).get("preview") === "pattern/workspace";
 function OfflineCatalog() {
@@ -14,6 +15,6 @@ function OfflineCatalog() {
     applications={{ apps: [{ id: catalogApp.id, title: catalogApp.title, icon: catalogApp.icon, category: "developer", home }], categories: [{ id: "developer", label: t("Developer") }], current: catalogApp.id, onSelect: () => { location.hash = routeToHash(home); } }}
     status={<span className="text-xs text-muted">{t("Public code assets")}</span>} />;
 }
-createRoot(document.getElementById("root")!).render(<StrictMode>{previewWorkspace ? <CatalogPreview id="pattern/workspace" standalone /> :
+createRoot(document.getElementById("root")!).render(<AstryxTheme><StrictMode>{previewWorkspace ? <CatalogPreview id="pattern/workspace" standalone /> :
   <OfflineCatalog />}
-</StrictMode>);
+</StrictMode></AstryxTheme>);

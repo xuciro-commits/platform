@@ -1,3 +1,5 @@
+import { ProgressBar } from "@astryxdesign/core/ProgressBar";
+import { Text } from "@astryxdesign/core/Text";
 import {t} from "../i18n";
 
 export function progressRatio(value:string,total:string) {
@@ -9,7 +11,8 @@ export function progressRatio(value:string,total:string) {
 }
 export function Progress({value,total,label}:{value:string;total:string;label:string}) {
  const result=progressRatio(value,total);
- if(!result)return <p role="alert" className="text-sm text-danger">{t("Progress needs a valid nonnegative value and a positive total.")}</p>;
- const text=`${value} / ${total} · ${result.percentage}%`,color=result.tone==="success"?"bg-[var(--tone-success)]":result.tone==="info"?"bg-[var(--tone-info)]":"bg-[var(--tone-warning)]";
- return <div className="grid min-w-0 gap-2"><div className="flex min-w-0 flex-wrap justify-between gap-2 text-xs"><span className="font-medium">{label}</span><span className="break-all tabular-nums text-muted">{text}</span></div><div role="progressbar" aria-label={label} aria-valuemin={0} aria-valuemax={100} aria-valuenow={result.width} aria-valuetext={text} className="h-2 overflow-hidden rounded bg-row-hover"><div className={`h-full ${color}`} style={{width:`${result.width}%`}}/></div>{result.over&&<p role="status" className="text-xs text-warning">{t("Value exceeds total; the bar is capped at 100%.")}</p>}</div>;
+ if(!result)return <Text as="p" color="primary">{t("Progress needs a valid nonnegative value and a positive total.")}</Text>;
+ const text=`${value} / ${total} · ${result.percentage}%`;
+ return <><ProgressBar label={label} value={result.width} max={100} hasValueLabel formatValueLabel={()=>text} variant={result.tone==="success"?"success":result.tone==="info"?"accent":"warning"} />
+ {result.over&&<Text as="p" type="supporting">{t("Value exceeds total; the bar is capped at 100%.")}</Text>}</>;
 }

@@ -4,9 +4,10 @@ import { Component, StrictMode, type ReactNode } from "react";
 import { createRoot } from "react-dom/client";
 import { App } from "./App";
 import "./styles.css";
+import "@platform/ui/astryx.css";
 import {preparedSignIn} from "./offline/signin";
 import {SignIn} from "./session/SignIn";
-import {t} from "@platform/ui";
+import {AstryxTheme,t} from "@platform/ui";
 
 const root = createRoot(document.getElementById("root")!);
 class Boundary extends Component<{ children: ReactNode }, { error?: Error }> {
@@ -23,7 +24,7 @@ class Boundary extends Component<{ children: ReactNode }, { error?: Error }> {
     </main>;
   }
 }
-const mount = (view: ReactNode) => root.render(<Boundary>{view}</Boundary>);
+const mount = (view: ReactNode) => root.render(<AstryxTheme><Boundary>{view}</Boundary></AstryxTheme>);
 async function start(){
 const previewWorkspace = new URLSearchParams(location.search).get("preview") === "pattern/workspace";
 if (previewWorkspace) {

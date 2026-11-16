@@ -4,6 +4,8 @@ packages:
   - e2e
 
 allowBuilds:
+  '@astryxdesign/cli': true
+  '@astryxdesign/core': true
   '@bufbuild/buf': true
 
 overrides:

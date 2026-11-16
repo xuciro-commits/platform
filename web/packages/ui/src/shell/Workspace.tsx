@@ -1,6 +1,6 @@
-import { useTheme } from "../themes/theme";
+import { useTheme, themeLabels, themeNames } from "../themes/theme";
 import { Command, defaultFilter } from "cmdk";
-import { Bell, CircleHelp, Clock, FolderTree, Grid2x2, Home as HomeIcon, Maximize2, Menu as MenuIcon, Search, Sparkles, Star, X } from "lucide-react";
+import { Bell, FolderTree, Grid2x2, Home as HomeIcon, Maximize2, Menu as MenuIcon, Search, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { Toaster, toast } from "sonner";
 import { cn } from "../lib/cn";
@@ -11,7 +11,8 @@ import { Button } from "../primitives/button";
 import { ViewVisibilityContext } from "./ViewVisibility";
 import { ViewTransfers } from "./ViewTransfers";
 import type { NavSection } from "./Navigation";
-import {RailButton, RailList, SessionMenu, Sidebar, ViewBoundary, paletteGroup, paletteItem, shortcutList} from "./WorkspaceChrome";
+import {RailButton, SessionMenu, Sidebar, ViewBoundary, paletteGroup, paletteItem, shortcutList} from "./WorkspaceChrome";
+import {AppRail} from "./AppRail";
 import {PanelContext, ViewCallContext, WorkspaceContext, entryId} from "./WorkspaceContext";
 import type {Applications, Entry, Memory, OpenOptions, Pending, Rail, Session, ShellCommand, Unsaved, View, WorkspaceApi} from "./WorkspaceContext";
 import {SearchContext, searchScopes, useSearchController, type SearchAnswer, type SearchSource, type SearchWindow} from "./search";
@@ -314,6 +315,7 @@ export function Workspace({ product, productIcon, storageKey, layoutScope, scope
   const builtInCommands: ShellCommand[] = [
     ...(hasNavigation ? [{ id: "shell:navigation", label: sidebarCollapsed ? t("Show navigation") : t("Hide navigation"), group: t("View"), shortcut: "⌘\\", run: toggleSidebar }] : []),
     ...([["light", t("Light")], ["dark", t("Dark")], ["system", t("Follow system")]] as const).map(([scheme, label]) => ({ id: `shell:appearance:${scheme}`, label: `${t("Appearance")}: ${label}`, group: t("View"), run: () => appearance.setScheme(scheme) })),
+    ...themeNames.map((name) => ({ id: `shell:theme:${name}`, label: `${t("Theme")}: ${t(themeLabels[name])}`, group: t("View"), run: () => appearance.setThemeName(name) })),
   ];
   const search = useSearchController({
     commands: [...commands, ...builtInCommands],
@@ -358,7 +360,6 @@ export function Workspace({ product, productIcon, storageKey, layoutScope, scope
 
   const leave = useCallback((run: () => void) => guard(allPanels(), run), [guard, allPanels]);
   const activeKey = top ? routeKey(top.route) : undefined;
-  const pinnedApps = (applications?.apps ?? []).filter((a) => memory.favorites.includes(a.id));
   const onRailRoute = (route?: Route) => !!route && !!top && routeKey(route) === routeKey(top.route);
   type RailItem = { id: string; label: string; icon: ReactNode; badge?: number; active?: boolean; run: () => void };
   const railItems: RailItem[] = rail ? [
@@ -369,7 +370,7 @@ export function Workspace({ product, productIcon, storageKey, layoutScope, scope
   ] : [];
   const notificationsItem = rail?.notifications && { id: "notifications", label: t("Notifications"), icon: <Bell />, badge: rail.notifications.unread, active: onRailRoute(rail.notifications.route), run: () => open(rail.notifications!.route) };
   accountShortcut.current = session?.onAccount ? () => leave(() => session.onAccount?.()) : undefined;
-  const sessionMenu = session && <SessionMenu rail={!compact} scheme={appearance.scheme} onScheme={appearance.setScheme} session={{ ...session, onAccount: accountShortcut.current, onSignOut: session.onSignOut ? () => leave(() => session.onSignOut?.()) : undefined, onSwitch: (id) => leave(() => session.onSwitch(id)) }}
+  const sessionMenu = session && <SessionMenu rail={false} scheme={appearance.scheme} onScheme={appearance.setScheme} themeName={appearance.themeName} onTheme={appearance.setThemeName} session={{ ...session, onAccount: accountShortcut.current, onSignOut: session.onSignOut ? () => leave(() => session.onSignOut?.()) : undefined, onSwitch: (id) => leave(() => session.onSwitch(id)) }}
     onLanguageSelect={(id) => leave(() => {
       void Promise.resolve(onLanguage?.(id)).catch(() => undefined).finally(() => setLanguage(id));
     })} />;
@@ -390,21 +391,12 @@ export function Workspace({ product, productIcon, storageKey, layoutScope, scope
     <WorkspaceContext.Provider value={workspace}>
       <SearchContext.Provider value={search}>
       <div className={cn("grid h-dvh w-full min-w-0 max-w-full overflow-hidden bg-background text-foreground",
-        compact ? rail ? "grid-rows-[40px_minmax(0,1fr)_48px]" : "grid-rows-[40px_minmax(0,1fr)]" : rail ? "grid-cols-[var(--rail-width)_auto_minmax(0,1fr)]" : "grid-cols-[auto_minmax(0,1fr)]")}>
+        compact ? rail ? "grid-rows-[40px_minmax(0,1fr)_48px]" : "grid-rows-[40px_minmax(0,1fr)]" : rail ? "grid-cols-[auto_auto_minmax(0,1fr)]" : "grid-cols-[auto_minmax(0,1fr)]")}>
         {!compact && rail && (
-          <aside aria-label={t("Platform")} data-ui="rail" className="flex min-h-0 flex-col items-center gap-1 overflow-y-auto border-r border-rail-border bg-rail py-2">
-            {railItems.map(item => <RailButton key={item.id} {...item} />)}
-            <RailList label={t("Recent")} icon={<Clock />} empty={t("Nothing opened yet.")}
-              items={memory.recent.slice(0, 12).map((r) => ({ id: routeKey(r.route), label: r.title, detail: r.app ? applications?.apps.find((a) => a.id === r.app)?.title : undefined, run: () => open(r.route) }))} />
-            <RailList label={t("Favorites")} icon={<Star />} empty={t("Pin an application from its sidebar or from Applications.")}
-              items={pinnedApps.map(app => ({ id: app.id, label: app.title, icon: app.icon, run: () => applications!.onSelect(app.id) }))} />
-            <div className="mt-auto flex flex-col items-center gap-1 pt-2">
-              {notificationsItem && <RailButton {...notificationsItem} />}
-              {rail.assist && <RailButton id="assist" label={t("AIP Assist")} icon={<Sparkles />} active={side?.route.view === "assistant"} run={() => open(rail.assist!, { window: "beside" })} />}
-              {rail.help && <RailButton id="help" label={t("Help")} icon={<CircleHelp />} active={onRailRoute(rail.help)} run={() => open(rail.help!)} />}
-              {sessionMenu}
-            </div>
-          </aside>
+          <AppRail rail={rail} product={product} productIcon={productIcon} applications={applications} memory={memory} activeKey={activeKey}
+            onOpen={route => { open(route); setMobileNavOpen(false); }} onSearch={() => setPaletteOpen(true)}
+            onAssist={rail.assist ? () => open(rail.assist!, { window: "beside" }) : undefined}
+            onToggleFavorite={toggleFavorite} sessionMenu={sessionMenu} />
         )}
         {compact && (
           <header data-ui="chrome" className="flex min-w-0 items-center gap-2 border-b border-border bg-surface px-2">

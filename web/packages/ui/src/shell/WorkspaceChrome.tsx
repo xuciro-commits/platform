@@ -1,9 +1,10 @@
-import { Check, ChevronRight, ChevronsLeft, Languages, LogOut, Repeat2, Star, SunMoon, UserPlus, UserRound, Users } from "lucide-react";
+import { Check, ChevronRight, ChevronsLeft, Languages, LogOut, Palette, Repeat2, Star, SunMoon, UserPlus, UserRound, Users } from "lucide-react";
 import { DropdownMenu } from "radix-ui";
 import { Component, type ReactNode } from "react";
 import { cn } from "../lib/cn";
 import { routeKey, type Route } from "./route";
 import { language, languages, t } from "../i18n";
+import { themeLabels, themeNames, type ThemeName } from "../themes/theme";
 import { Button } from "../primitives/button";
 import { NavigationItems, navigationLinks, routeCovers, type NavSection } from "./Navigation";
 import { Tooltip } from "../primitives/tooltip";
@@ -101,7 +102,7 @@ export function RailList({ label, icon, items, empty }: { label: string; icon: R
   );
 }
 
-export function SessionMenu({ session, onLanguageSelect, rail, scheme, onScheme }: { session: Session; onLanguageSelect: (id: string) => void; rail: boolean; scheme: string; onScheme: (scheme: "light" | "dark" | "system") => void }) {
+export function SessionMenu({ session, onLanguageSelect, rail, scheme, onScheme, themeName, onTheme }: { session: Session; onLanguageSelect: (id: string) => void; rail: boolean; scheme: string; onScheme: (scheme: "light" | "dark" | "system") => void; themeName: ThemeName; onTheme: (theme: ThemeName) => void }) {
   const shown = session.name || session.principal;
   const initial = shown.slice(0, 1).toUpperCase();
   const secondary = [session.name ? session.principal : undefined, session.tenant, session.detail].filter(Boolean).join(" · ");
@@ -144,6 +145,10 @@ export function SessionMenu({ session, onLanguageSelect, rail, scheme, onScheme 
           {section(<SunMoon className={menuIcon} />, t("Appearance"), appearance,
             <DropdownMenu.RadioGroup value={scheme} onValueChange={value => onScheme(value as "light" | "dark" | "system")}>
               {appearances.map(([id, label]) => choice(id, label))}
+            </DropdownMenu.RadioGroup>)}
+          {section(<Palette className={menuIcon} />, t("Theme"), t(themeLabels[themeName]),
+            <DropdownMenu.RadioGroup value={themeName} onValueChange={value => onTheme(value as ThemeName)}>
+              {themeNames.map((name) => choice(name, t(themeLabels[name])))}
             </DropdownMenu.RadioGroup>)}
           {section(<Languages className={menuIcon} />, t("Language"), languages.find((entry) => entry.id === language())?.name,
             <DropdownMenu.RadioGroup value={language()} onValueChange={onLanguageSelect}>

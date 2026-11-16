@@ -1,9 +1,9 @@
 {
   "dependencies": {
+    "@platform/api": "workspace:*",
     "@platform/app": "workspace:*",
     "@platform/build": "workspace:*",
     "@platform/catalog-app": "workspace:*",
-    "@platform/api": "workspace:*",
     "@platform/govern": "workspace:*",
     "@platform/ui": "workspace:*",
     "@tanstack/react-query": "^5.103.2",
@@ -12,6 +12,7 @@
     "react-dom": "^19.3.0"
   },
   "devDependencies": {
+    "@stylexjs/unplugin": "^0.19.2",
     "@tailwindcss/vite": "^4.3.3",
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
