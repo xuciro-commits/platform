@@ -8,14 +8,14 @@ read-when: 新建前端包或目录、改动路由、数据获取、写入、i18
 
 ## 目标
 
-一个工作区外壳装配所有应用；每个工具应用一个目录；所有读取与写入经同一套客户端；共享组件只有一个来源。
+一个工作区外壳装配所有应用；每个工具应用一个目录；所有读取与写入经同一套客户端；组件只有一个来源：Astryx。
 
 ## 规则
 
 - R1 包的职责固定（下表）；新代码先找到所属包与目录。
 - R2 一个工具应用一个目录，一个 `defineApp`；资源类型只在一个应用的 `opens` 中声明。
 - R3 读取只经 `useReadQuery`、ObjectSet 客户端与宿主客户端；写入只经 `decide(schema, target, payload)`。组件里不直接 `fetch`。
-- R4 共享组件只来自 `@platform/ui`；应用不复制或包装出第二个同类组件（新需要先进 ui 并在 4-interaction/patterns 登记）。
+- R4 组件只来自 Astryx（`@astryxdesign/core`），样式只用主题令牌与 StyleX；`@platform/ui` 只放外壳与四种页面原型（4-interaction §4.3）及其组成部分。应用不复制或包装出第二个同类组件，不引入第二套组件库或样式方案。Astryx 的各包固定在同一个版本，一起升级。
 - R5 生成的类型（`packages/api/src/gen`）不手改；改宿主类型后重新生成。
 - R6 每个包一个 i18n 字典；英文原文是键；动态键的所有取值都在字典中。模块加载时不调用 `t()`：模块级文案写英文原文，由 `defineApp`、`defineStatuses` 或 getter 在读取时翻译；复制应用对象用 `withApp` 保留读取时翻译。切换语言不刷新页面，工作区按语言重新挂载。
 - R7 手写文件 ≤ 600 行；超出按职责拆分。只含字面量的数据文件（翻译字典、`pageui/manifest.ts`）与生成文件（`pageui/safety.ts`、`api/src/gen/*.ts`）不计。
@@ -25,7 +25,7 @@ read-when: 新建前端包或目录、改动路由、数据获取、写入、i18
 
 | 包 | 职责 | 不放 |
 |---|---|---|
-| `@platform/ui` | 外壳（导航轨、视图栈、侧栏、侧窗）、组件、令牌、i18n 机制 | 业务概念、宿主调用 |
+| `@platform/ui` | 主题装配、外壳（侧栏、命令面板）、四种页面原型、画布的专用库封装、i18n 机制 | 业务概念、宿主调用、Astryx 已有的组件 |
 | `@platform/api` | 生成的 API 类型与宿主客户端 | 界面 |
 | `@platform/app` | 运行时：宿主上下文、读取钩子、ObjectSet 与 Expr 客户端（WASM）、对象视图、动作表单、Workshop 组件 | 构建工具 |
 | `@platform/build` | 构建类工具应用，每个应用一个目录 | 治理应用 |
@@ -41,7 +41,7 @@ read-when: 新建前端包或目录、改动路由、数据获取、写入、i18
 - 一个前端应用可服务多个后端 Manifest：`manifest` 是主要产品归属，`serves` 是它可解析的资源所有者；同一资源类型只能由一个应用 `opens`。
 - 每个应用 ID 只有一个定义。跨包页面由 workspace 按成员显式装配到拥有者，禁止按重复 ID 隐式合并；应用可供路由使用而不进入门户，个人账户与开发目录沿此边界开放。
 - `category` 决定门户分组与密度（4-interaction §4.10）。
-- `nav` 返回带标题段落的导航项，≤ 8 项；资源页用 `ResourceNavigation` 接管侧栏。
+- `nav` 返回带标题段落的导航项，≤ 8 项；记录页不接管侧栏。
 - `opens` 把资源类型映射到视图；任何地方打开一个资源都经 `opens` 解析。
 - workspace 启动时校验已加载应用的首页与 `opens` 视图存在、资源类型没有第二个打开者、前端 Manifest 归属与生成契约一致；不一致即报错，不以未注册路由继续运行。
 
@@ -50,7 +50,7 @@ read-when: 新建前端包或目录、改动路由、数据获取、写入、i18
 - 资源地址为 `#/<拥有者视图>/<RID>[/<分区>]`（3-information §3.6）；`opens` 决定拥有者视图。路由对象为 `{ view, params? }`，由外壳的 `routeToHash` / `routeFromHash` 统一序列化。
 - 旧原生 ID 地址由同一个 `useCanonicalRoute` 收敛到可解析的 RID；仅当前主视图替换地址，不新增浏览记录，不让隐藏页面或侧窗改写主地址。
 - 成员等原生身份保留原主键，文件夹只是 Files 的位置参数；不为统一地址另造资源或 Object Type。成员、标记和构建资源都从唯一 `opens` 注册解析编辑入口；对象 Inspector 保留对象视图语义。
-- 侧窗与 transfer 的状态不进入可分享的 URL。
+- 视图状态（筛选、排序、列、分组、呈现方式）与当前页签进入 URL（4-interaction R12）；选取对话框的状态不进入。
 
 资源入口共享资源目录的 RID、位置和原生记录身份；Search、Files 与依赖图复用拥有者注册的打开路由。依赖图不再逐种读取所有草稿来猜编辑器。业务门户与扩展页面使用已授权发布定义的 RID。
 
@@ -78,4 +78,5 @@ Search 页与 Command Palette 消费同一个 workspace Search provider。Provid
 
 ## 现存差距
 
+- 组件来源（R4）：`@platform/ui` 仍是自有组件库，依赖 Radix、Tailwind、class-variance-authority、cmdk、sonner、tailwind-merge 与 lucide-react，`apps/workspace` 以 Tailwind 构建；Astryx 0.7.16、StyleX 与中性主题已装入 `packages/ui`，`astryx init` 不运行（它改写仓库根的 AGENTS.md），其安装脚本在 `pnpm-workspace.yaml` 中禁用。外壳仍是导航轨、视图栈与侧窗，资源页仍用 `ResourceNavigation` 接管侧栏，视图状态仍在 localStorage。重写顺序见[路线图](../roadmap.md)“五、前端重写”。
 - Workspace 的业务工具分块与布局引擎仍有大于 500 kB 的产物；布局引擎已经按需加载并在浏览器使用 Worker。保留构建器默认大小告警，不以拆成任意小文件或放宽阈值作为性能完成标准；后续按真实任务的加载链、传输与交互时间验证。
