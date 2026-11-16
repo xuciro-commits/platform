@@ -38,7 +38,7 @@ Go 命令设置 `GOPROXY=https://goproxy.cn,direct`，所有长命令加超时�
 | 钩子 | 时机 | 作用 |
 |---|---|---|
 | `format.py` | 编辑或写入 `.go` 文件后 | `gofmt -w` 该文件 |
-| `commit-gate.py` | 执行 `git commit` 前 | 对相对 HEAD 的全部改动（含未跟踪文件）：代码或 7-system §7.2 有改动时运行 `make check`（改动含 `web/` 时再运行 `make check-web`），工作区内容与上次通过时相同则不重跑；不运行内核不变量与验收。暂存的代码命中某规范 `covers` 而该规范未暂存时，首次拦下并列出规范；暂存内容不变再次提交则放行（带 `-a` 提交时按全部改动计） |
+| `commit-gate.py` | 执行 `git commit` 前 | 对相对 HEAD 的全部改动（含未跟踪文件）：代码或 7-system §7.2 有改动时运行 `make check`（改动含 `web/` 时再运行 `make check-web`，含 `frontend/` 时再运行 `make check-frontend`），工作区内容与上次通过时相同则不重跑；不运行内核不变量与验收。暂存的代码命中某规范 `covers` 而该规范未暂存时，首次拦下并列出规范；暂存内容不变再次提交则放行（带 `-a` 提交时按全部改动计） |
 
 
 钩子失败时以退出码 2 把原因交回代理；代理修正后重试，不绕过钩子。
@@ -77,6 +77,7 @@ Go 命令设置 `GOPROXY=https://goproxy.cn,direct`，所有长命令加超时�
 |---|---|---|---|
 | `make check` | 7.8 的 Go、包边界与形状、契约逐字节一致、文案、空白 | 5 秒 | 写、测、改循环中随时运行；提交钩子自动运行 |
 | `make check-web` | Web 类型检查与构建 | 10 秒 | 改动 `web/` 时；提交钩子自动运行 |
+| `make check-frontend` | 新前端类型检查与构建 | 3 秒 | 改动 `frontend/` 时；提交钩子自动运行 |
 | `make test RUN=K13` | 名称匹配的内核不变量（`scripts/check-invariants.mjs` 每个用例一个进程并行，最慢的先跑）；不给 `RUN` 时运行全部 | 按用例，定点数秒 | 改动内核语义时跑相关编号 |
 | `make e2e SPEC=F17` | 指定的黄金路径用例 | 按用例 | 改动某条任务路径时跑该路径 |
 | `make verify` | `check`、`check-web`、全部不变量与全部验收 | 数分钟 | 里程碑与段落完成时 |

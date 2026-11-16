@@ -66,7 +66,7 @@ def main():
     passed = os.path.join(root, ".git", "claude-check-pass")
     if gated and not (os.path.isfile(passed) and open(passed).read() == digest):
         env = dict(os.environ, GOPROXY="https://goproxy.cn,direct")
-        for target in ["check"] + (["check-web"] if any(f.startswith("web/") for f in gated) else []):
+        for target in ["check"] + (["check-web"] if any(f.startswith("web/") for f in gated) else []) + (["check-frontend"] if any(f.startswith("frontend/") for f in gated) else []):
             code, out = run(["make", target], root, timeout=300, env=env)
             if code:
                 print(f"make {target} failed:\n" + out[-6000:], file=sys.stderr)

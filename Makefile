@@ -98,6 +98,9 @@ check:
 check-web:
 	cd web && $(PNPM) typecheck && $(PNPM) build
 
+check-frontend:
+	cd frontend && $(PNPM) build
+
 test:
 	node scripts/check-invariants.mjs '$(RUN)'
 

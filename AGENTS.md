@@ -55,9 +55,10 @@
 | 本地运行 | `make local`（入口 http://localhost:8495，热更新；宿主日志 `.build/dev/platform-api.log`） |
 | Go 检查 | `cd capabilities/server && GOPROXY=https://goproxy.cn,direct go build ./... && go vet ./...`；`gofmt -l .` |
 | 宿主类型与页面契约 | `make contract`（生成 `api/src/gen/*.ts`、`pageui/safety.ts`、`platform/page_compat.json`） |
+| 新前端 | `pnpm --dir frontend dev`（http://localhost:8496，代理到宿主）；检查 `make check-frontend` |
 | Web 检查 | 改动的包内 `pnpm exec tsc -p .`；`cd web && pnpm build` |
 | 空白 | `git diff --check` |
-| 快速检查 | `make check`（约 5 秒：Go 构建与 vet、包边界与形状、契约、文案、空白）；改了 `web/` 加 `make check-web`；提交钩子自动运行两者 |
+| 快速检查 | `make check`（约 5 秒：Go 构建与 vet、包边界与形状、契约、文案、空白）；改了 `web/` 加 `make check-web`，改了 `frontend/` 加 `make check-frontend`；提交钩子自动运行两者 |
 | 不变量 | `make test RUN=K13` 定点跑相关编号；不给 `RUN` 跑全部（不在提交关口） |
 | 验收 | `make e2e SPEC=F17` 只跑改动路径的用例；`make verify` 跑全部，只在里程碑与段落完成时 |
 | SQL 模式 | `make verify-sql`（隔离临时 PostgreSQL 库：写入、重启、读取） |
