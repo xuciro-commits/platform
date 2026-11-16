@@ -42,25 +42,16 @@ const approvalTone = (state: string) => state === "approved" ? "success" : state
 export function Approvals({ source, approvals, onOpen }: { source: RecordSource; approvals: Api.ApprovalRequest[]; onOpen?: (type: string, r: EntityRecord) => void }) {
   const state = source.entity("work.approval")?.fields.find((f) => f.name === "state");
   return (
-    <section aria-label={t("Approvals")}>
-      <h2 className="mb-1 text-sm font-semibold">{t("Approvals")}</h2>
-      {approvals[0] && <div className="mb-1.5"><ApprovalGraph approval={approvals[0]} /></div>}
-      <ul className="grid gap-1">
+    <section aria-label={t("Approvals")} className="grid gap-2">
+      <Text type="label" weight="semibold">{t("Approvals")}</Text>
+      {approvals[0] && <div><ApprovalGraph approval={approvals[0]} /></div>}
+      <List aria-label={t("Approvals")} density="compact" hasDividers>
         {approvals.map((a) => {
           const level = a.levels[a.level];
           const by = a.levels.flatMap((l) => l.approved.map((m) => l.decidedBy?.[m] ? t("{delegate} for {approver}", { delegate: l.decidedBy[m]!, approver: m }) : m));
-          return (
-            <li key={a.id} className="flex flex-wrap items-center gap-2 rounded-md border border-border bg-surface px-3 py-2 text-sm">
-              {onOpen ? <Button size="sm" variant="ghost" onClick={() => onOpen("work.approval", a)}>{a.title}</Button> : <span className="font-medium">{a.title}</span>}
-              <Tag label={state?.choiceTitles?.[state.choices?.indexOf(a.state) ?? -1] ?? a.state} tone={approvalTone(a.state)} />
-              {a.state === "pending" && level && <span className="text-xs text-muted">{t("waiting for {level}: {approvers}", { level: level.title, approvers: level.approvers.join(", ") })}</span>}
-              {by.length > 0 && <span className="text-xs text-muted">{t("approved by {members}", { members: by.join(", ") })}</span>}
-              {a.rejectedBy && <span className="text-xs">{t("rejected by {member}", { member: a.rejectedBy })}{a.outcome ? `: ${a.outcome}` : ""}</span>}
-              {a.state === "refused" && a.outcome && <span className="text-xs">{a.outcome}</span>}
-            </li>
-          );
+          return <ListItem key={a.id} itemKey={a.id} label={<div className="flex flex-wrap items-center gap-2 text-sm">{onOpen ? <Button size="sm" variant="ghost" onClick={() => onOpen("work.approval", a)}>{a.title}</Button> : <span className="font-medium">{a.title}</span>}<Tag label={state?.choiceTitles?.[state.choices?.indexOf(a.state) ?? -1] ?? a.state} tone={approvalTone(a.state)} />{a.state === "pending" && level && <span className="text-xs text-muted">{t("waiting for {level}: {approvers}", { level: level.title, approvers: level.approvers.join(", ") })}</span>}{by.length > 0 && <span className="text-xs text-muted">{t("approved by {members}", { members: by.join(", ") })}</span>}{a.rejectedBy && <span className="text-xs">{t("rejected by {member}", { member: a.rejectedBy })}{a.outcome ? `: ${a.outcome}` : ""}</span>}{a.state === "refused" && a.outcome && <span className="text-xs">{a.outcome}</span>}</div>} />;
         })}
-      </ul>
+      </List>
     </section>
   );
 }
