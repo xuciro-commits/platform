@@ -4,6 +4,9 @@ import { EdgeClient, OfflineReadError, accounts, forgetAccount, keepFresh, signI
 import { Button, Workspace, notify, routeToHash, useTheme, type NavSection, type Route, type SearchResult, type SearchScope, t, language, setLanguage, setCurrency, useLanguage } from "@platform/ui";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Bookmark, Layers } from "lucide-react";
+import { VStack } from "@astryxdesign/core/Stack";
+import { Icon } from "@astryxdesign/core/Icon";
+import { Text } from "@astryxdesign/core/Text";
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { chromeViews, explorerApplication, personalWork } from "./chrome";
 import { availablePackages, loadPackages, packages } from "./host/packages";
@@ -18,13 +21,17 @@ import { routeApplication, sharedViewApplication } from "./shell/navigation";
 import { assertApplicationRegistry, extendApplications, resolveApplicationRoute } from "./host/applications";
 import { OfflinePreparation } from "./offline/Preparation";
 
+function BootScreen({ children }: { children: ReactNode }) {
+  return <VStack gap={2} hAlign="center" vAlign="center" height="100dvh" padding={6} role="main">{children}</VStack>;
+}
+
 function explorerSavedSections(saved: SavedView[]): NavSection[] {
   if (!saved.length) return [];
   const kindOf = (view: SavedView) => { try { return (JSON.parse(view.state) as { kind?: string }).kind === "exploration" ? "exploration" : "list"; } catch { return "list"; } };
   const explorations = saved.filter((v) => kindOf(v) === "exploration"), lists = saved.filter((v) => kindOf(v) === "list");
   const section = (label: string, views: SavedView[], icon: ReactNode): NavSection[] => views.length
     ? [{ label, items: views.map((v) => ({ label: v.title, icon, route: { view: "explorer", params: { saved: v.id } } })) }] : [];
-  return [...section(t("Saved explorations"), explorations, <Bookmark />), ...section(t("Lists"), lists, <Layers />)];
+  return [...section(t("Saved explorations"), explorations, <Icon icon={Bookmark} />), ...section(t("Lists"), lists, <Icon icon={Layers} />)];
 }
 
 export type { Identity } from "./session/identity";
@@ -335,10 +342,10 @@ export function App({ signedIn, identities }: { signedIn?: { config: OidcConfig;
   }, [activeContributions]);
   const permittedViews = useMemo(() => views.filter(view => !view.for || !!host && view.for(host)), [views, host]);
 
-  if (maintenanceRequested && hostAdminQuery.isPending) return <main className="grid h-dvh place-items-center text-sm text-muted">{t("Opening the workspace…")}</main>;
+  if (maintenanceRequested && hostAdminQuery.isPending) return <BootScreen><Text type="supporting">{t("Opening the workspace…")}</Text></BootScreen>;
   if (maintenanceRequested && hostAdminQuery.data) return <HostOnly client={client} token={token} admin={hostAdminQuery.data} email={signedIn?.session.email} onSignOut={signedIn ? () => void leaveSession() : undefined} />;
   if (meQuery.error && !(connectionUnavailable && me)) {
-    if (needsHostConsole && hostAdminQuery.isPending) return <main className="grid h-dvh place-items-center text-sm text-muted">{t("Opening the workspace…")}</main>;
+    if (needsHostConsole && hostAdminQuery.isPending) return <BootScreen><Text type="supporting">{t("Opening the workspace…")}</Text></BootScreen>;
     if (needsHostConsole && hostAdminQuery.data) return <HostOnly client={client} token={token} admin={hostAdminQuery.data} email={signedIn?.session.email} onSignOut={signedIn ? () => void leaveSession() : undefined} />;
     if (/HTTP 503/.test(String(meQuery.error))) return <Recovery client={client} token={token} tenant={tenant} />;
     const problem = /HTTP 401/.test(String(meQuery.error))
@@ -346,19 +353,19 @@ export function App({ signedIn, identities }: { signedIn?: { config: OidcConfig;
       : meQuery.error instanceof OfflineReadError ? t(meQuery.error.message) : t("The host is unreachable.");
     return <SignInProblem problem={problem} email={signedIn?.session.email} signingOut={signingOut} error={signOutError} onSignOut={() => void leaveSession()} />;
   }
-  const bootstrap = (message: string, detail: string | undefined, retry: () => void, alert = true) => <main className="grid h-dvh place-items-center p-6 text-sm">
-    <div className="grid max-w-md gap-2 text-center">
-      <p role={alert ? "alert" : "status"} className={alert ? "text-danger" : "text-muted"}>{message}</p>
-      {detail && <p className="break-words text-xs text-muted">{detail}</p>}
-      {maintenanceRequested && hostAdminQuery.isError && <p role="alert" className="text-danger">{t("Host maintenance is unavailable. Check your administrator access and connection.")}</p>}
-      <div className="flex flex-wrap justify-center gap-2"><Button size="sm" onClick={retry}>{t("Retry")}</Button><Button size="sm" variant="default" onClick={() => { setMaintenanceRequested(true); if (maintenanceRequested) void hostAdminQuery.refetch(); }}>{t("Open host maintenance")}</Button><Button size="sm" variant="ghost" onClick={() => void leaveSession()}>{t("Sign out")}</Button></div>
-    </div>
-  </main>;
+  const bootstrap = (message: string, detail: string | undefined, retry: () => void, alert = true) => <BootScreen>
+    <VStack gap={2} hAlign="center" maxWidth={480}>
+      <Text as="p" role={alert ? "alert" : "status"}>{message}</Text>
+      {detail && <Text type="supporting">{detail}</Text>}
+      {maintenanceRequested && hostAdminQuery.isError && <Text as="p" role="alert" className="text-danger">{t("Host maintenance is unavailable. Check your administrator access and connection.")}</Text>}
+      <VStack gap={2}><Button size="sm" onClick={retry}>{t("Retry")}</Button><Button size="sm" variant="default" onClick={() => { setMaintenanceRequested(true); if (maintenanceRequested) void hostAdminQuery.refetch(); }}>{t("Open host maintenance")}</Button><Button size="sm" variant="ghost" onClick={() => void leaveSession()}>{t("Sign out")}</Button></VStack>
+    </VStack>
+  </BootScreen>;
   if (declared.phase === "error") return bootstrap(t("The host's declarations could not load, so the workspace cannot tell what you may see and do."), undefined, () => setDeclareAttempt((n) => n + 1));
   if (packageFailure) return bootstrap(packageFailure.message, packageFailure.detail, () => setPackageAttempt((n) => n + 1));
   if (discovery.phase === "error") return bootstrap(t("The workspace could not read what this member may see and do."), discovery.message, discovery.retry);
   if (discovery.phase === "offline") return bootstrap(t("The live connection is unavailable."), discovery.message, discovery.retry, false);
-  if (!host || !apps || !ready || discovery.phase !== "ready") return <main className="grid h-dvh place-items-center text-sm text-muted">{t("Opening the workspace…")}</main>;
+  if (!host || !apps || !ready || discovery.phase !== "ready") return <BootScreen><Text type="supporting">{t("Opening the workspace…")}</Text></BootScreen>;
 
   const portal = all.filter(entry => typeof entry.portal === "function" ? entry.portal(host) : entry.portal !== false).map((entry) => portalEntry(entry, host));
   const openApplication = (id: string) => {
