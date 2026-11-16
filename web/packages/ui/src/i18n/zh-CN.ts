@@ -971,6 +971,7 @@ export default {
   "Language": "语言",
   "Line": "折线图",
   "Loading…": "加载中…",
+  "Searching…": "正在搜索…",
   "Main": "主导航",
   "Mark read": "标为已读",
   "Measure": "度量",
