@@ -1,6 +1,6 @@
 import { useInputDrafts } from "../fields/draft";
 import { createContext, useContext, useEffect, useLayoutEffect, useRef, type ReactNode } from "react";
-import { toast } from "sonner";
+import { useToast, type ToastOptions } from "@astryxdesign/core/Toast";
 import { routeToHash, type Route } from "./route";
 
 export type View = {
@@ -36,7 +36,13 @@ export type Unsaved = {
   flush: (panel: string, owner: symbol, run?: () => Promise<unknown>) => void;
   ask: (panels: string[], run: () => void, owner?: symbol) => void;
 };
-export type WorkspaceApi = { open: (route: Route, options?: OpenOptions) => void; close: (route: Route, from?: string) => void; closeAll: (from?: string) => void; notify: typeof toast; unsaved?: Unsaved;
+export type Notify = ((message: ReactNode) => void) & {
+  success: (message: ReactNode) => void;
+  error: (message: ReactNode) => void;
+  info: (message: ReactNode) => void;
+  warning: (message: ReactNode) => void;
+};
+export type WorkspaceApi = { open: (route: Route, options?: OpenOptions) => void; close: (route: Route, from?: string) => void; closeAll: (from?: string) => void; notify: Notify; unsaved?: Unsaved;
   confirmLeave: (run: () => void, exceptPanel?: string) => void;
   retitle?: (panel: string, title: string) => void;
   transfer?: (from: string, route: Route, input: unknown, result: (value: unknown) => void) => void;
@@ -116,4 +122,24 @@ export function useLeaveFlush(run: () => Promise<unknown>) {
   }, [panel, unsaved]);
 }
 
-export const notify = toast;
+let publishToast: ((options: ToastOptions) => unknown) | undefined;
+
+export function ToastHost() {
+  const toast = useToast();
+  useEffect(() => { publishToast = toast; return () => { if (publishToast === toast) publishToast = undefined; }; }, [toast]);
+  return null;
+}
+
+function show(tone: "info" | "error", message: ReactNode) {
+  publishToast?.({ body: message, type: tone });
+}
+
+export const notify: Notify = Object.assign(
+  (message: ReactNode) => show("info", message),
+  {
+    success: (message: ReactNode) => show("info", message),
+    error: (message: ReactNode) => show("error", message),
+    info: (message: ReactNode) => show("info", message),
+    warning: (message: ReactNode) => show("info", message),
+  },
+);

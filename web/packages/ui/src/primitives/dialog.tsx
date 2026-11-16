@@ -1,57 +1,68 @@
 import { useViewVisible } from "../shell/ViewVisibility";
-import {InputDraftProvider,useInputDrafts} from "../fields/draft";
-import {overlayPolicy,type OverlayPolicy} from "./overlay-policy";
-import { Dialog as D } from "radix-ui";
+import { InputDraftProvider, useInputDrafts } from "../fields/draft";
+import { Dialog as AstryxDialog } from "@astryxdesign/core/Dialog";
+import { Drawer as AstryxDrawer } from "@astryxdesign/core/Drawer";
 import { X } from "lucide-react";
-import { createContext, useContext, type ReactNode } from "react";
-import { useOverlayBody } from "./overlay-body";
-import { useOverlayFocus } from "./overlay-focus";
+import { createContext, useContext, useEffect, useRef, type ReactNode } from "react";
 import { t } from "../i18n";
-import { DefaultButtonSize } from "./button";
+import { Button, DefaultButtonSize } from "./button";
 
 const OverlayDepth = createContext(0);
+type OverlayPolicy = { backdrop?: boolean; closeOnBackdrop?: boolean; closeOnEsc?: boolean };
 
 type OverlayProps = {
   open: boolean; onOpenChange: (open: boolean) => void; title: string; children: ReactNode;
   wide?: boolean;
   suspended?: boolean;
   returnFocus?: HTMLElement | null; fallbackFocus?: HTMLElement | null;
-} & OverlayPolicy & {width?:number;side?:"left"|"right";isolated?:boolean};
+} & OverlayPolicy & { width?: number; side?: "left" | "right"; isolated?: boolean };
 
 export function Dialog(props: OverlayProps) {
   return <OverlayFrame {...props} />;
 }
 
-export function OverlayFrame({ open, onOpenChange, title, children, wide, returnFocus, fallbackFocus, suspended = false,backdrop=true,closeOnBackdrop=true,closeOnEsc=true,width,side="right",sheet=false,isolated=false }: OverlayProps & {sheet?:boolean}) {
+export function OverlayFrame({ open, onOpenChange, title, children, wide, returnFocus, fallbackFocus, suspended = false, backdrop = true, closeOnBackdrop = true, closeOnEsc = true, width, side = "right", sheet = false, isolated = false }: OverlayProps & { sheet?: boolean }) {
   const visible = useViewVisible();
   suspended = suspended || !visible;
-  const nested = useContext(OverlayDepth) > 0;
+  const depth = useContext(OverlayDepth);
+  const nested = depth > 0;
   const own = !nested && (isolated || !sheet);
   sheet = sheet || nested;
-  const inputs=useInputDrafts();
-  const busy=own&&inputs?.busy;
-  const change=(next:boolean)=>{if(!busy&&!suspended)onOpenChange(next);};
-  const focus = useOverlayFocus(returnFocus, fallbackFocus);
-  const policy=overlayPolicy({backdrop,closeOnBackdrop,closeOnEsc});
-  const body = useOverlayBody(open, <OverlayDepth.Provider value={useContext(OverlayDepth) + 1}><DefaultButtonSize.Provider value={undefined}>{own ? <InputDraftProvider isolated scope="dialog">{children}</InputDraftProvider> : children}</DefaultButtonSize.Provider></OverlayDepth.Provider>);
-  return (
-    <D.Root modal={backdrop} open={open && !suspended} onOpenChange={(next) => { change(next); }}>
-      <D.Portal>
-        {backdrop&&<D.Overlay onClick={(event) => { if (event.target === event.currentTarget && event.button === 0 && !event.ctrlKey && closeOnBackdrop) change(false); }} className={sheet ? "fixed inset-0 z-40 bg-overlay" : "fixed inset-0 z-50 bg-overlay"} />}
-        {
-}
-        <D.Content data-frame={sheet ? "sheet" : "modal"} {...focus} {...policy} onEscapeKeyDown={event=>{focus.onEscapeKeyDown(event);policy.onEscapeKeyDown(event);}} onCloseAutoFocus={(event) => { if (suspended) event.preventDefault(); else focus.onCloseAutoFocus(event); }}
-          style={sheet ? {width:`min(${width??420}px, 100vw)`,[side]:0} : undefined}
-          className={sheet ? `fixed inset-y-0 z-50 flex flex-col ${side==="left"?"border-r":"border-l"} border-border bg-surface shadow-2xl outline-none` : `fixed z-50 left-1/2 top-1/2 flex max-h-[calc(100dvh-32px)] flex-col ${wide ? "w-[min(880px,calc(100vw-32px))]" : "w-[min(480px,calc(100vw-32px))]"} -translate-x-1/2 -translate-y-1/2 rounded-md border border-border bg-surface p-4 shadow-xl`}>
-          <div className={sheet ? "flex h-10 items-center justify-between border-b border-border px-3" : "mb-3 flex items-center justify-between"}>
-            <D.Title className="text-base font-semibold">{title}</D.Title>
-            <D.Close disabled={busy} className="rounded-sm p-1 hover:bg-row-hover" aria-label={t("Close")}><X className="size-3.5" /></D.Close>
-          </div>
-          <D.Description className="sr-only">{title}</D.Description>
-          <div ref={body.mount} className={sheet ? "min-h-0 flex-1 overflow-auto p-3" : "min-h-0 flex-1 overflow-y-auto"} />
-        </D.Content>
-      </D.Portal>
-      {body.portal}
-    </D.Root>
-  );
+  const inputs = useInputDrafts();
+  const busy = own && inputs?.busy;
+  const change = (next: boolean) => { if (!busy && !suspended) onOpenChange(next); };
+  const wasOpen = useRef(false);
+  const dialog = useRef<HTMLDialogElement>(null);
+  useEffect(() => {
+    if (wasOpen.current && !open) {
+      const target = [returnFocus, fallbackFocus].find((element) => element?.isConnected && element !== document.body && !element.matches(":disabled") && !element.closest("[hidden],[inert]"));
+      if (target) requestAnimationFrame(() => target.focus());
+    }
+    wasOpen.current = open;
+  }, [open, returnFocus, fallbackFocus]);
+  useEffect(() => {
+    const node = dialog.current;
+    if (!node || !open) return;
+    const cancel = (event: Event) => { if (!closeOnEsc || busy || suspended) event.preventDefault(); };
+    node.addEventListener("cancel", cancel);
+    return () => node.removeEventListener("cancel", cancel);
+  }, [open, closeOnEsc, busy, suspended]);
+  const purpose = busy || suspended || (!closeOnBackdrop && !closeOnEsc) ? "required" : !closeOnBackdrop ? "form" : "info";
+  const content = <OverlayDepth.Provider value={depth + 1}><DefaultButtonSize.Provider value={undefined}>{own ? <InputDraftProvider isolated scope="dialog">{children}</InputDraftProvider> : children}</DefaultButtonSize.Provider></OverlayDepth.Provider>;
+  const header = <div className={sheet ? "flex h-10 shrink-0 items-center justify-between border-b border-border px-3" : "mb-3 flex shrink-0 items-center justify-between"}>
+    <h2 className="text-base font-semibold">{title}</h2>
+    <Button size="icon" variant="ghost" disabled={busy} aria-label={t("Close")} onClick={() => change(false)}><X /></Button>
+  </div>;
+  if (sheet) return <AstryxDrawer ref={dialog} isOpen={open && !suspended} onOpenChange={change} side={side === "left" ? "start" : "end"} width={width ?? 420} label={title} hasScrim={backdrop} purpose={purpose} padding={0}>
+    <div className="flex h-full min-h-0 flex-col">
+      {header}
+      <div className="min-h-0 flex-1 overflow-auto p-3">{content}</div>
+    </div>
+  </AstryxDrawer>;
+  return <AstryxDialog ref={dialog} isOpen={open && !suspended} onOpenChange={change} width={wide ? 880 : 480} maxHeight="calc(100dvh - 32px)" purpose={purpose} padding={0} aria-label={title}>
+    <div className="flex max-h-[calc(100dvh-32px)] flex-col p-4">
+      {header}
+      <div className="min-h-0 flex-1 overflow-y-auto">{content}</div>
+    </div>
+  </AstryxDialog>;
 }

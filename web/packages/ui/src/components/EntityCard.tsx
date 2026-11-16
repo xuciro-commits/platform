@@ -1,35 +1,31 @@
 import type { ReactNode } from "react";
-import { Card } from "../primitives/card";
+import { Card } from "@astryxdesign/core/Card";
+import { Divider } from "@astryxdesign/core/Divider";
+import { MetadataList, MetadataListItem } from "@astryxdesign/core/MetadataList";
+import { HStack, VStack } from "@astryxdesign/core/Stack";
+import { Text } from "@astryxdesign/core/Text";
 
-export function PropertyList({ items,columns=1,itemKeys }: {itemKeys?:string[]; items: [label: string, value: ReactNode][];columns?:1|2|3|4 }) {
-  const layout={1:"grid-cols-1",2:"grid-cols-1 @sm/properties:grid-cols-2",3:"grid-cols-1 @sm/properties:grid-cols-2 @lg/properties:grid-cols-3",4:"grid-cols-1 @sm/properties:grid-cols-2 @lg/properties:grid-cols-3 @xl/properties:grid-cols-4"}[columns]??"grid-cols-1";
-  return (
-    <div className="@container/properties"><dl className={`@container grid gap-3 text-sm ${layout}`}>
-      {items.map(([label, value],index) => (
-        <div key={itemKeys?.[index]??label} className={`grid min-w-0 grid-cols-1 gap-x-4 gap-y-1 ${columns===1?"@sm:grid-cols-[minmax(8rem,14rem)_minmax(0,1fr)]":""}`}>
-          <dt className="break-words text-muted">{label}</dt>
-          <dd className="min-w-0 break-words">{value}</dd>
-        </div>
-      ))}
-    </dl></div>
-  );
+export function PropertyList({ items, columns = 1, itemKeys }: { itemKeys?: string[]; items: [label: string, value: ReactNode][]; columns?: 1 | 2 | 3 | 4 }) {
+  return <MetadataList columns={columns} label={{ position: columns === 1 ? "start" : "top" }}>
+    {items.map(([label, value], index) => <MetadataListItem key={itemKeys?.[index] ?? label} label={label}>{value}</MetadataListItem>)}
+  </MetadataList>;
 }
 
-export function EntityCard({ title, subtitle, status, properties, actions,tone,propertyKeys }: {
-  tone?:"neutral"|"info"|"success"|"warning"|"danger";propertyKeys?:string[];
+export function EntityCard({ title, subtitle, status, properties, actions, tone, propertyKeys }: {
+  tone?: "neutral" | "info" | "success" | "warning" | "danger"; propertyKeys?: string[];
   title: ReactNode; subtitle?: ReactNode; status?: ReactNode; properties: [string, ReactNode][]; actions?: ReactNode;
 }) {
-  return (
-    <Card className="flex flex-col gap-3 p-3" style={tone?{borderLeftWidth:3,borderLeftColor:`var(--tone-${tone})`}:undefined}>
-      <div className="flex items-start justify-between gap-2">
-        <div className="min-w-0">
-          <div className="truncate text-base font-semibold">{title}</div>
-          {subtitle && <div className="truncate font-mono text-xs text-muted">{subtitle}</div>}
-        </div>
+  return <Card padding={3} style={tone ? { borderLeftWidth: 3, borderLeftColor: `var(--tone-${tone})` } : undefined}>
+    <VStack gap={3}>
+      <HStack gap={2} hAlign="between" vAlign="start">
+        <VStack gap={0.5}>
+          <Text type="large" weight="semibold" maxLines={1}>{title}</Text>
+          {subtitle && <Text type="code" color="secondary" maxLines={1}>{subtitle}</Text>}
+        </VStack>
         {status}
-      </div>
-      <PropertyList items={properties} itemKeys={propertyKeys}/>
-      {actions && <div className="flex flex-wrap gap-2 border-t border-border pt-3">{actions}</div>}
-    </Card>
-  );
+      </HStack>
+      <PropertyList items={properties} itemKeys={propertyKeys} />
+      {actions && <><Divider /><HStack gap={2} wrap="wrap">{actions}</HStack></>}
+    </VStack>
+  </Card>;
 }

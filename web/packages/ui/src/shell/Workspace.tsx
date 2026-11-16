@@ -1,8 +1,6 @@
 import { useTheme, themeLabels, themeNames } from "../themes/theme";
-import { Command, defaultFilter } from "cmdk";
 import { Bell, FolderTree, Grid2x2, Home as HomeIcon, Maximize2, Menu as MenuIcon, Search, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
-import { Toaster, toast } from "sonner";
 import { cn } from "../lib/cn";
 import { routeFromHash, routeKey, routeToHash, type Route } from "./route";
 import { setLanguage, t } from "../i18n";
@@ -11,11 +9,12 @@ import { Button } from "../primitives/button";
 import { ViewVisibilityContext } from "./ViewVisibility";
 import { ViewTransfers } from "./ViewTransfers";
 import type { NavSection } from "./Navigation";
-import {RailButton, SessionMenu, Sidebar, ViewBoundary, paletteGroup, paletteItem, shortcutList} from "./WorkspaceChrome";
+import {RailButton, SessionMenu, Sidebar, ViewBoundary, shortcutList} from "./WorkspaceChrome";
 import {AppRail} from "./AppRail";
-import {PanelContext, ViewCallContext, WorkspaceContext, entryId} from "./WorkspaceContext";
+import {PanelContext, ToastHost, ViewCallContext, WorkspaceContext, entryId, notify} from "./WorkspaceContext";
 import type {Applications, Entry, Memory, OpenOptions, Pending, Rail, Session, ShellCommand, Unsaved, View, WorkspaceApi} from "./WorkspaceContext";
-import {SearchContext, searchScopes, useSearchController, type SearchAnswer, type SearchSource, type SearchWindow} from "./search";
+import {SearchContext, useSearchController, type SearchSource} from "./search";
+import {CommandPalette} from "./CommandPalette";
 
 export type { NavSection } from "./Navigation";
 
@@ -143,7 +142,7 @@ export function Workspace({ product, productIcon, storageKey, layoutScope, scope
 
   const openResolved = useCallback((route: Route, options: OpenOptions & { link?: boolean } = {}) => {
     if (!registry.current.has(route.view)) {
-      toast.error(t("This address points to a task your current access does not include."));
+      notify.error(t("This address points to a task your current access does not include."));
       if (options.link) { if (stackRef.current.length) restoreHash(); else showMain(home, { replace: true }); }
       return;
     }
@@ -159,7 +158,7 @@ export function Workspace({ product, productIcon, storageKey, layoutScope, scope
     const resolve = routeReader.current;
     const ticket = ++revision.current;
     const take = (resolved: Route) => { if (ticket === revision.current || options.window === "inspect" || options.window === "beside") openResolved(resolved, options); };
-    const failed = () => { if (ticket === revision.current) { toast.error(t("Could not open this view.")); if (options.link) restoreHash(); } };
+    const failed = () => { if (ticket === revision.current) { notify.error(t("Could not open this view.")); if (options.link) restoreHash(); } };
     try {
       const resolved = resolve ? resolve(route, currentScope.current) : route;
       if (resolved instanceof Promise) void resolved.then(take).catch(failed);
@@ -253,7 +252,7 @@ export function Workspace({ product, productIcon, storageKey, layoutScope, scope
     return () => setClaims(current => current.filter(id => id !== panel));
   }, []);
   const workspace = useMemo<WorkspaceApi>(() => ({
-    open, notify: toast, close,
+    open, notify, close,
     closeAll: () => guard(allPanels(), () => { if (sideRef.current) { forget([sideRef.current.id]); setSide(undefined); } goHome(); }),
     unsaved,
     confirmLeave: (run, exceptPanel) => guard(allPanels().filter(id => id !== exceptPanel), run),
@@ -268,9 +267,9 @@ export function Workspace({ product, productIcon, storageKey, layoutScope, scope
       };
       try {
         const resolved = resolve ? resolve(route, currentScope.current) : route;
-        if (resolved instanceof Promise) void resolved.then(start).catch(() => toast.error(t("Could not open this view.")));
+        if (resolved instanceof Promise) void resolved.then(start).catch(() => notify.error(t("Could not open this view.")));
         else start(resolved);
-      } catch { toast.error(t("Could not open this view.")); }
+      } catch { notify.error(t("Could not open this view.")); }
     },
     palette: () => setPaletteOpen(true),
     retitle: (id, name) => {
@@ -327,24 +326,6 @@ export function Workspace({ product, productIcon, storageKey, layoutScope, scope
     knowledge: searchKnowledge,
     open,
   });
-
-  const [typed, setTyped] = useState("");
-  const paletteWindow = useRef<SearchWindow | undefined>(undefined);
-  const [searchAttempt, setSearchAttempt] = useState(0);
-  const [searchResult, setSearchResult] = useState<{ text: string; attempt: number; answer?: SearchAnswer }>();
-  const searching = paletteOpen && (typed.trim() === "" || search.ready(typed));
-  const answer = searching && searchResult?.text === typed && searchResult.attempt === searchAttempt ? searchResult.answer : undefined;
-  const searchPending = searching && answer === undefined;
-  useEffect(() => {
-    if (!searching) { setSearchResult(undefined); return; }
-    let live = true;
-    setSearchResult(undefined);
-    const wait = setTimeout(() => {
-      void search.search(typed).then((next) => { if (live) setSearchResult({ text: typed, attempt: searchAttempt, answer: next }); })
-        .catch((error) => { if (live) setSearchResult({ text: typed, attempt: searchAttempt, answer: { groups: [], errors: [error instanceof Error ? error.message : String(error)] } }); });
-    }, typed.trim() ? 200 : 0);
-    return () => { live = false; clearTimeout(wait); };
-  }, [search, typed, searching, searchAttempt]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -461,30 +442,7 @@ export function Workspace({ product, productIcon, storageKey, layoutScope, scope
           </nav>
         )}
       </div>
-      <Command.Dialog open={paletteOpen} onOpenChange={setPaletteOpen} label={t("Command palette")} filter={(value, search, keywords) => defaultFilter(value, searchScopes.some(scope => search.startsWith(scope)) ? search.slice(1).trim() : search, keywords)}
-        overlayClassName="fixed inset-0 z-40 bg-overlay"
-        contentClassName="fixed left-1/2 top-[14%] z-50 w-[min(600px,calc(100vw-32px))] -translate-x-1/2 overflow-hidden rounded-lg border border-border bg-surface text-foreground shadow-lg">
-        <div className="flex items-center gap-2 border-b border-border px-3"><Search className="size-4 shrink-0 text-muted" />
-          <Command.Input value={typed} onValueChange={setTyped} onKeyDown={event => { if (event.key === "Enter") paletteWindow.current = event.metaKey || event.ctrlKey ? "beside" : undefined; }} placeholder={t("Search, or type > commands, @ members, # projects, : object types")} className="h-11 w-full bg-transparent text-base outline-none" /></div>
-        {searchPending && <p role="status" className="px-3 py-2 text-sm text-muted">{t("Searching records…")}</p>}
-        {!!answer?.errors.length && <div role="alert" className="grid gap-1 border-b border-border px-3 py-2 text-sm">
-          <p className="text-danger">{t("Search failed.")} {answer.errors.join(" ")}</p>
-          <Button size="sm" variant="ghost" className="justify-self-start" onClick={() => setSearchAttempt(attempt => attempt + 1)}>{t("Retry")}</Button>
-        </div>}
-        <Command.List className="max-h-[min(420px,60dvh)] overflow-auto p-1">
-          {!searchPending && answer && answer.groups.length === 0 && <Command.Empty className="p-3 text-sm text-muted">{t("No results")}</Command.Empty>}
-          {answer?.groups.map(group => (
-            <Command.Group key={group.kind} heading={group.label} className={paletteGroup}>
-              {group.items.map(result => (
-                <Command.Item key={result.id} value={`${group.kind} ${typed} ${result.label} ${result.detail ?? ""} ${result.id}`} className={paletteItem} disabled={!!result.disabled} title={result.disabled}
-                  onSelect={() => { const window = paletteWindow.current; paletteWindow.current = undefined; setPaletteOpen(false); search.open(result, window); }}>
-                  {result.icon}{result.label}{result.detail && <span className="ml-auto truncate pl-3 text-xs text-muted">{result.detail}</span>}
-                </Command.Item>
-              ))}
-            </Command.Group>
-          ))}
-        </Command.List>
-      </Command.Dialog>
+      <CommandPalette open={paletteOpen} onOpenChange={setPaletteOpen} search={search} />
       <Dialog open={shortcutsOpen} title={t("Keyboard shortcuts")} onOpenChange={setShortcutsOpen}>
         <table className="w-full text-sm"><tbody>
           {shortcutList.map(([keys, action]) => <tr key={keys} className="border-b border-border last:border-0"><td className="w-32 py-1.5 pr-3 font-mono text-xs">{keys}</td><td className="py-1.5">{t(action)}</td></tr>)}
@@ -504,7 +462,7 @@ export function Workspace({ product, productIcon, storageKey, layoutScope, scope
           </div>
         </div>
       </Dialog>
-      <Toaster position="bottom-right" toastOptions={{ className: "!rounded-md !border-border !bg-surface !text-foreground !text-sm !shadow-md" }} />
+      <ToastHost />
       </SearchContext.Provider>
     </WorkspaceContext.Provider>
   );

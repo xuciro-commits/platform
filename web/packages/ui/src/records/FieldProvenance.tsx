@@ -1,6 +1,6 @@
 import { History, X } from "lucide-react";
 import { useEffect, useState } from "react";
-import { Popover } from "radix-ui";
+import { Popover } from "@astryxdesign/core/Popover";
 import type { Api } from "@platform/api";
 import { Notice } from "../components/Notice";
 import { Tag } from "../components/StatusTag";
@@ -51,10 +51,17 @@ export function FieldProvenance({ source, type, id, revision, field, label }: { 
   }, [open, source, type, id, revision]);
   if (!source.provenance) return null;
   const entry = state && "fields" in state ? state.fields[field] : undefined;
-  return <Popover.Root open={open} onOpenChange={setOpen}>
-    <Popover.Trigger asChild><Button size="icon" variant="ghost" className="size-5 shrink-0 text-muted" aria-label={t("Where did the value of {field} come from?", { field: label })} title={t("Where did this value come from?")}><History aria-hidden="true" /></Button></Popover.Trigger>
-    <Popover.Portal><Popover.Content side="bottom" align="start" sideOffset={6} collisionPadding={12} aria-label={t("Value origin of {field}", { field: label })} className="z-50 grid w-72 max-w-[calc(100vw-1.5rem)] gap-2 rounded-md border border-border bg-surface p-3 text-sm shadow-lg">
-      <div className="flex items-center justify-between gap-2"><h2 className="min-w-0 truncate text-xs font-semibold">{label}</h2><Popover.Close asChild><Button size="icon" variant="ghost" aria-label={t("Close")}><X aria-hidden="true" /></Button></Popover.Close></div>
+  return <Popover
+    isOpen={open}
+    onOpenChange={setOpen}
+    label={t("Value origin of {field}", { field: label })}
+    placement="below"
+    alignment="start"
+    width={288}
+    padding={3}
+    className="text-sm"
+    content={<div className="grid gap-2">
+      <div className="flex items-center justify-between gap-2"><h2 className="min-w-0 truncate text-xs font-semibold">{label}</h2><Button size="icon" variant="ghost" aria-label={t("Close")} onClick={() => setOpen(false)}><X aria-hidden="true" /></Button></div>
       {!state || state.loading ? <p role="status" className="text-xs text-muted">{t("Loading…")}</p>
         : "error" in state ? <Notice tone="danger" message={state.error} />
         : !entry ? <p className="text-xs text-muted">{t("No source is recorded for this value.")}</p>
@@ -65,6 +72,8 @@ export function FieldProvenance({ source, type, id, revision, field, label }: { 
           {entry.sourceTime && <p>{t("Source time {time}", { time: formatStamp(entry.sourceTime) })}</p>}
           {entry.at && <p className="text-muted">{t("Recorded at {time}", { time: formatStamp(entry.at) })}</p>}
         </div>}
-    </Popover.Content></Popover.Portal>
-  </Popover.Root>;
+    </div>}
+  >
+    <Button size="icon" variant="ghost" className="size-5 shrink-0 text-muted" aria-label={t("Where did the value of {field} come from?", { field: label })} title={t("Where did this value come from?")}><History aria-hidden="true" /></Button>
+  </Popover>;
 }

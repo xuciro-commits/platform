@@ -4,6 +4,9 @@ import { useRef, useState, type FormHTMLAttributes, type ReactNode } from "react
 import { CheckboxInput } from "@astryxdesign/core/CheckboxInput";
 import { Collapsible } from "@astryxdesign/core/Collapsible";
 import { Switch as AstryxSwitch } from "@astryxdesign/core/Switch";
+import { ToggleButton } from "@astryxdesign/core/ToggleButton";
+import { HStack } from "@astryxdesign/core/Stack";
+import { Text } from "@astryxdesign/core/Text";
 import { cn } from "../lib/cn";
 import { Button, type ButtonProps } from "./button";
 
@@ -16,20 +19,16 @@ export function Toggles({ options, value = [], onChange, empty, className, disab
   disabled?:boolean;
   isDisabled?:(value:string)=>boolean;
 }) {
-  if (options.length === 0 && empty) return <span className={cn("text-xs text-muted", className)}>{empty}</span>;
+  if (options.length === 0 && empty) return <Text type="supporting" className={className}>{empty}</Text>;
   return (
-    <span className={cn("flex flex-wrap gap-1", className)}>
+    <HStack gap={1} wrap="wrap" className={className}>
       {options.map((option) => {
         const on = value.includes(option.value);
-        return (
-          <button key={option.value} type="button" aria-pressed={on} disabled={disabled||isDisabled?.(option.value)}
-            onClick={() => onChange(on ? value.filter((x) => x !== option.value) : [...value, option.value])}
-            className={cn("min-w-0 break-words rounded-sm border px-1.5 py-0.5 text-xs disabled:opacity-50", on ? "border-primary bg-row-selected" : "border-border text-muted hover:bg-row-hover")}>
-            {option.label}
-          </button>
-        );
+        return <ToggleButton key={option.value} label={option.label} size="sm" isPressed={on}
+          isDisabled={disabled || isDisabled?.(option.value)}
+          onPressedChange={(pressed) => onChange(pressed ? [...value, option.value] : value.filter((x) => x !== option.value))} />;
       })}
-    </span>
+    </HStack>
   );
 }
 

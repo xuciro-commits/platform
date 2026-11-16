@@ -1,5 +1,5 @@
-import { Check, ChevronRight, ChevronsLeft, Languages, LogOut, Palette, Repeat2, Star, SunMoon, UserPlus, UserRound, Users } from "lucide-react";
-import { DropdownMenu } from "radix-ui";
+import { ChevronsLeft, Languages, LogOut, Palette, Repeat2, Star, SunMoon, UserPlus, UserRound, Users } from "lucide-react";
+import { DropdownMenu, DropdownMenuDivider, DropdownMenuItem, DropdownMenuRadioGroup, DropdownMenuRadioItem, DropdownMenuSubMenu } from "@astryxdesign/core/DropdownMenu";
 import { Component, type ReactNode } from "react";
 import { cn } from "../lib/cn";
 import { routeKey, type Route } from "./route";
@@ -80,28 +80,6 @@ export function RailButton({ label, icon, badge, active, run }: { id: string; la
   </button></Tooltip>;
 }
 
-export function RailList({ label, icon, items, empty }: { label: string; icon: ReactNode; empty: string; items: { id: string; label: string; detail?: string; icon?: ReactNode; run: () => void }[] }) {
-  return (
-    <DropdownMenu.Root>
-      <Tooltip content={label} side="right"><DropdownMenu.Trigger aria-label={label}
-        className="grid size-9 shrink-0 place-items-center rounded-md text-rail-foreground hover:bg-rail-hover hover:text-rail-active data-[state=open]:bg-rail-selected data-[state=open]:text-rail-active [&_svg]:size-[18px]">
-        {icon}
-      </DropdownMenu.Trigger></Tooltip>
-      <DropdownMenu.Portal>
-        <DropdownMenu.Content side="right" align="start" sideOffset={8} className={cn(menuPanel, "max-h-[70vh] min-w-64 max-w-80 overflow-auto")}>
-          <DropdownMenu.Label className={menuLabel}>{label}</DropdownMenu.Label>
-          {items.length === 0 && <p className="px-2 py-1.5 text-xs text-muted">{empty}</p>}
-          {items.map((item) => (
-            <DropdownMenu.Item key={item.id} onSelect={item.run} className={cn(menuRow, "[&_svg]:size-3.5")}>
-              {item.icon}<span className="truncate">{item.label}</span>{item.detail && <span className="ml-auto truncate pl-3 text-xs text-muted">{item.detail}</span>}
-            </DropdownMenu.Item>
-          ))}
-        </DropdownMenu.Content>
-      </DropdownMenu.Portal>
-    </DropdownMenu.Root>
-  );
-}
-
 export function SessionMenu({ session, onLanguageSelect, rail, scheme, onScheme, themeName, onTheme }: { session: Session; onLanguageSelect: (id: string) => void; rail: boolean; scheme: string; onScheme: (scheme: "light" | "dark" | "system") => void; themeName: ThemeName; onTheme: (theme: ThemeName) => void }) {
   const shown = session.name || session.principal;
   const initial = shown.slice(0, 1).toUpperCase();
@@ -109,86 +87,46 @@ export function SessionMenu({ session, onLanguageSelect, rail, scheme, onScheme,
   const appearances = [["light", t("Light")], ["dark", t("Dark")], ["system", t("Follow system")]] as const;
   const appearance = appearances.find(([id]) => id === scheme)?.[1];
   const current = session.options.find((option) => option.id === session.current)?.label;
-  const choice = (value: string, label: string) => (
-    <DropdownMenu.RadioItem key={value} value={value} className={menuRadio}>
-      <DropdownMenu.ItemIndicator className={menuIndicator}><Check /></DropdownMenu.ItemIndicator>
-      <span className="min-w-0 flex-1 truncate">{label}</span>
-    </DropdownMenu.RadioItem>
-  );
-  const section = (icon: ReactNode, label: string, value: string | undefined, body: ReactNode) => (
-    <DropdownMenu.Sub>
-      <DropdownMenu.SubTrigger className={cn(menuRow, "data-[state=open]:bg-row-hover")}>
-        {icon}<span className="min-w-0 flex-1 truncate">{label}</span>{value && <span className={menuValue}>{value}</span>}<ChevronRight className={menuChevron} />
-      </DropdownMenu.SubTrigger>
-      <DropdownMenu.Portal><DropdownMenu.SubContent sideOffset={6} alignOffset={-4} className={cn(menuPanel, "min-w-52")}>{body}</DropdownMenu.SubContent></DropdownMenu.Portal>
-    </DropdownMenu.Sub>
-  );
-  return (
-    <DropdownMenu.Root>
-      <Tooltip content={`${shown} · ${session.tenant}`} side={rail ? "right" : "bottom"}><DropdownMenu.Trigger aria-label={`${session.principal} · ${session.tenant}`}
-        className={cn("grid size-9 shrink-0 place-items-center rounded-md", rail ? "hover:bg-rail-hover data-[state=open]:bg-rail-selected" : "hover:bg-row-hover")}>
-        <span className="grid size-6 place-items-center rounded-full bg-primary text-xs font-semibold text-primary-foreground">{initial}</span>
-      </DropdownMenu.Trigger></Tooltip>
-      <DropdownMenu.Portal>
-        <DropdownMenu.Content side={rail ? "right" : "bottom"} align="end" sideOffset={8} className={cn(menuPanel, "w-72")}>
-          <div className="flex min-w-0 items-center gap-2.5 px-2 pb-2 pt-1.5">
-            <span className="grid size-8 shrink-0 place-items-center rounded-full bg-primary text-xs font-semibold text-primary-foreground">{initial}</span>
-            <span className="min-w-0 flex-1">
-              <span className="block truncate font-medium">{shown}</span>
-              <span className="block truncate text-xs text-muted">{secondary}</span>
-            </span>
-          </div>
-          <DropdownMenu.Separator className={menuSeparator} />
-          {session.onAccount && <DropdownMenu.Item className={menuRow} onSelect={() => session.onAccount?.()}>
-            <UserRound className={menuIcon} /><span className="min-w-0 flex-1 truncate">{t("My account")}</span><span className={menuValue}>⌘,</span>
-          </DropdownMenu.Item>}
-          {section(<SunMoon className={menuIcon} />, t("Appearance"), appearance,
-            <DropdownMenu.RadioGroup value={scheme} onValueChange={value => onScheme(value as "light" | "dark" | "system")}>
-              {appearances.map(([id, label]) => choice(id, label))}
-            </DropdownMenu.RadioGroup>)}
-          {section(<Palette className={menuIcon} />, t("Theme"), t(themeLabels[themeName]),
-            <DropdownMenu.RadioGroup value={themeName} onValueChange={value => onTheme(value as ThemeName)}>
-              {themeNames.map((name) => choice(name, t(themeLabels[name])))}
-            </DropdownMenu.RadioGroup>)}
-          {section(<Languages className={menuIcon} />, t("Language"), languages.find((entry) => entry.id === language())?.name,
-            <DropdownMenu.RadioGroup value={language()} onValueChange={onLanguageSelect}>
-              {languages.map((entry) => choice(entry.id, entry.name))}
-            </DropdownMenu.RadioGroup>)}
-          {session.accounts && section(<Users className={menuIcon} />, t("Switch account"), session.accounts.find((entry) => entry.id === session.currentAccount)?.label,
-            <>
-              <DropdownMenu.RadioGroup value={session.currentAccount} onValueChange={(id) => session.onAccountSwitch?.(id)}>
-                {session.accounts.map((entry) => choice(entry.id, entry.label))}
-              </DropdownMenu.RadioGroup>
-              <DropdownMenu.Separator className={menuSeparator} />
-              <DropdownMenu.Item className={menuRow} onSelect={() => session.onAddAccount?.()}>
-                <UserPlus className={menuIcon} /><span className="min-w-0 flex-1 truncate">{t("Add account")}</span>
-              </DropdownMenu.Item>
-            </>)}
-          {session.options.length > 0 && section(<Repeat2 className={menuIcon} />, session.switchTitle ?? t("Switch tenant or identity"), current,
-            <DropdownMenu.RadioGroup value={session.current} onValueChange={session.onSwitch}>
-              {session.options.map((option) => choice(option.id, option.label))}
-            </DropdownMenu.RadioGroup>)}
-          {session.onSignOut && <>
-            <DropdownMenu.Separator className={menuSeparator} />
-            <DropdownMenu.Item className={menuRow} onSelect={() => session.onSignOut?.()}>
-              <LogOut className={menuIcon} /><span className="min-w-0 flex-1 truncate">{t("Sign out")}</span>
-            </DropdownMenu.Item>
-          </>}
-        </DropdownMenu.Content>
-      </DropdownMenu.Portal>
-    </DropdownMenu.Root>
-  );
+  return <DropdownMenu
+    menuWidth={288}
+    placement={rail ? "end" : "below"}
+    alignment="end"
+    renderTrigger={(props) => <Tooltip content={`${shown} · ${session.tenant}`} side={rail ? "right" : "bottom"}><Button {...props} variant="ghost" size="icon" aria-label={`${session.principal} · ${session.tenant}`} className={cn("grid size-9 shrink-0 place-items-center rounded-md", rail ? "hover:bg-rail-hover" : "hover:bg-row-hover")}><span className="grid size-6 place-items-center rounded-full bg-primary text-xs font-semibold text-primary-foreground">{initial}</span></Button></Tooltip>}
+    header={<div className="flex min-w-0 items-center gap-2.5 px-2 pb-2 pt-1.5">
+      <span className="grid size-8 shrink-0 place-items-center rounded-full bg-primary text-xs font-semibold text-primary-foreground">{initial}</span>
+      <span className="min-w-0 flex-1"><span className="block truncate font-medium">{shown}</span><span className="block truncate text-xs text-muted">{secondary}</span></span>
+    </div>}
+  >
+    {session.onAccount && <DropdownMenuItem label={t("My account")} icon={<UserRound />} endContent={<span className="text-xs text-muted">⌘,</span>} onClick={() => session.onAccount?.()} />}
+    <DropdownMenuDivider />
+    <DropdownMenuSubMenu label={t("Appearance")} description={appearance} icon={<SunMoon />}>
+      <DropdownMenuRadioGroup value={scheme} onChange={(value) => onScheme(value as "light" | "dark" | "system")} label={t("Appearance")}>
+        {appearances.map(([id, label]) => <DropdownMenuRadioItem key={id} value={id} label={label} />)}
+      </DropdownMenuRadioGroup>
+    </DropdownMenuSubMenu>
+    <DropdownMenuSubMenu label={t("Theme")} description={t(themeLabels[themeName])} icon={<Palette />}>
+      <DropdownMenuRadioGroup value={themeName} onChange={(value) => onTheme(value as ThemeName)} label={t("Theme")}>
+        {themeNames.map((name) => <DropdownMenuRadioItem key={name} value={name} label={t(themeLabels[name])} />)}
+      </DropdownMenuRadioGroup>
+    </DropdownMenuSubMenu>
+    <DropdownMenuSubMenu label={t("Language")} description={languages.find((entry) => entry.id === language())?.name} icon={<Languages />}>
+      <DropdownMenuRadioGroup value={language()} onChange={onLanguageSelect} label={t("Language")}>
+        {languages.map((entry) => <DropdownMenuRadioItem key={entry.id} value={entry.id} label={entry.name} />)}
+      </DropdownMenuRadioGroup>
+    </DropdownMenuSubMenu>
+    {session.accounts && <DropdownMenuSubMenu label={t("Switch account")} description={session.accounts.find((entry) => entry.id === session.currentAccount)?.label} icon={<Users />}>
+      <DropdownMenuRadioGroup value={session.currentAccount} onChange={(id) => session.onAccountSwitch?.(id)} label={t("Switch account")}>
+        {session.accounts.map((entry) => <DropdownMenuRadioItem key={entry.id} value={entry.id} label={entry.label} />)}
+      </DropdownMenuRadioGroup>
+      <DropdownMenuDivider />
+      <DropdownMenuItem label={t("Add account")} icon={<UserPlus />} onClick={() => session.onAddAccount?.()} />
+    </DropdownMenuSubMenu>}
+    {session.options.length > 0 && <DropdownMenuSubMenu label={session.switchTitle ?? t("Switch tenant or identity")} description={current} icon={<Repeat2 />}>
+      <DropdownMenuRadioGroup value={session.current} onChange={session.onSwitch} label={session.switchTitle ?? t("Switch tenant or identity")}>
+        {session.options.map((option) => <DropdownMenuRadioItem key={option.id} value={option.id} label={option.label} />)}
+      </DropdownMenuRadioGroup>
+    </DropdownMenuSubMenu>}
+    {session.onSignOut && <><DropdownMenuDivider /><DropdownMenuItem label={t("Sign out")} icon={<LogOut />} onClick={() => session.onSignOut?.()} /></>}
+  </DropdownMenu>;
 }
 
-const menuPanel = "z-50 min-w-48 rounded-xl border border-border bg-surface p-1 text-sm text-foreground shadow-lg";
-const menuLabel = "px-2 pb-1 pt-1.5 text-2xs font-semibold uppercase tracking-wider text-muted";
-const menuItem = "relative flex h-8 cursor-default select-none items-center gap-2 rounded-lg outline-none data-[disabled]:opacity-40 data-[highlighted]:bg-row-hover";
-const menuRow = cn(menuItem, "px-2");
-const menuRadio = cn(menuItem, "pl-8 pr-2");
-const menuSeparator = "my-1 h-px bg-border";
-const menuIcon = "size-4 shrink-0 text-muted";
-const menuValue = "ml-auto shrink-0 pl-4 text-xs text-muted";
-const menuChevron = "size-3.5 shrink-0 text-muted";
-const menuIndicator = "absolute left-2 inline-flex [&_svg]:size-4 [&_svg]:text-primary";
-export const paletteGroup = "[&_[cmdk-group-heading]]:px-2 [&_[cmdk-group-heading]]:pb-1 [&_[cmdk-group-heading]]:pt-2 [&_[cmdk-group-heading]]:text-2xs [&_[cmdk-group-heading]]:font-semibold [&_[cmdk-group-heading]]:uppercase [&_[cmdk-group-heading]]:tracking-wider [&_[cmdk-group-heading]]:text-muted";
-export const paletteItem = "flex h-8 cursor-default items-center gap-2 rounded-sm px-2 text-sm data-[selected=true]:bg-row-selected [&_svg]:size-3.5 [&_svg]:shrink-0 [&_svg]:text-muted";
