@@ -40,10 +40,6 @@ read-when: 每批开始（选当前批次）与结束（删除已完成条目、
 
 主代理按前置条件选择条目并独立完成。条目的验证组合见 [7-system/verification §7.12](7-system/verification.md#712-命令分层)；方向与实际不符时，根据代码和规范调整。
 
-- [ ] U3 页面模型归位。页面查询、组件与应用语义的迁移已实现；非页面共用的 SDK 规则与标识随 U7 处理。
-  - 边界：SDK 保留页面与应用声明、格式语义的 `MarshalJSON` / `UnmarshalJSON` / `IsZero`、原始 `profile` 与 `RetainedVersion` / `contentVersion`；`ApplicationProfile` 的格式检查继续保留。页面服务和通用小数解析共用生成的 `platform/page_compat.json`，不复制限制。`publication` 保持只依赖 SDK，经宿主装配页面纯函数，不捕获租户。
-  - [ ] U3.24–U3.28 补全页面迁移的全量验收：覆盖查询计划与变量依赖、组件端口与 profile、查询引用与导航、模型与变量来源、组件契约。契约、行为与产品包对照、V1 和 SQL 恢复已通过，仍需 `make e2e` 才能完成 V3。
-    - 上次全量浏览器验收 8 项通过、16 项失败；F1 两项和 F10 在迁移前后端对照中同样失败。未重跑前不能将本项标为完成。
 - [ ] U4 发布路径一张表。
   - [ ] U4.2 其余家族钩子与状态边界定型（诊断与切分，不写代码）。
     - 读：`services/resources/publication/api.go`、`services/resources/authoring/build_release_drafts.go`、`build_artifacts.go`、`build_owner.go`、`build_agents.go`、`build_evaluations.go`、`build_tests.go`、`build_compute.go`、`build_tables.go`、`host/composition/tenant.go`。
@@ -53,7 +49,7 @@ read-when: 每批开始（选当前批次）与结束（删除已完成条目、
     - 发布准备的错误次序：先按依赖排序，再逐资产处理对象、页面、应用与对象触发钩子；随后依次准备自动化、各定义类型、函数、agent、共享测试记录、code、table。各版本族在循环前读取自己的全部记录，即使候选没有该族资产也可能先报读取错误。所有发布映像准备完成后才准备 sample-set，再解码普通安装计划与发布映像，最后准备集成并按依赖排序；直接把每个族改成逐资产冻结或在各钩子中提前解码会改变拒绝顺序。
     - 草稿候选的读取次序：`DraftReleaseAssetsMulti` 在建立联合对象与声明前读取一次 `ReleaseAssets`；每个 agent、test-plan、sample-set、code、table 草稿还会在联合上下文中再读取一次 `ReleaseAssets`，然后读取自身草稿并构造新资产。切成只返回新资产的钩子时，须先证明这些读取与错误次序等价，不能直接复用最初的全局快照。
     - 已核对的状态边界：`Build.Fork` 克隆已安装对象、联合状态及 agent/code/table 映像，并重绑现有子拥有者；`NewSimulationApp` 新建状态但复用当前钩子表，现有 action-type 钩子无状态。未来带状态的钩子须在分叉和模拟时重绑，不能复用捕获源实例的闭包。`devops/releases` 与 `devops/trials` 已导入 Build，不能把共享测试记录直接移入它们；共享记录的候选归属已验证导入图，具体钩子签名与全部文件清单仍待定；未满足产出前不执行后续条目。
-    - 共享测试记录候选归属：`build.testplan` 声明放已有的 SDK 叶层 `services/devops/descriptor`，版本族与发布实现归 `services/devops/testplans`，经宿主注入 Build；后者不得直接导入 DevOps 实现，以免新增 `resources → devops` 逆向边。三条对象、流程和函数引用使用已有 `ref` 字符串标签后，定点对照的记录 JSON 与字段描述一致，叶层仍只依赖 `platform`；完整迁移仍须验证重放、契约与验收。AI 只处理传入的评估 descriptor，检查经宿主装配以免新增 DevOps → AI 导入。非集成资产可复用 `publication.EqualAsset`；严格解码可复用 `platform.DecodeJSON` 并保留错误文案，已对五类资产和错误输入做定点对照。
+    - 共享测试记录候选归属：`build.testplan` 声明放已有的 SDK 叶层 `services/devops/descriptor`，版本族与发布实现归 `services/devops/testplans`，经宿主注入 Build；后者不得直接导入 DevOps 实现，以免新增 `resources → devops` 逆向边。隔离试迁中，三条对象、流程和函数引用改用 `ref` 字符串标签后，不存在的函数引用由 `INVALID_REFERENCE` 变成 `NOT_FOUND`：事务写入的 `Describe` 将泛型引用解析为空，而字符串标签直接启用可读性检查。保留 `platform.Ref[T]`、让叶层记录以泛型接收三个目标类型的试迁，草稿创建、两次发布、重放与缺失引用拒绝的字节对照一致；正式迁移仍须核对实际装配、契约与验收。AI 只处理传入的评估 descriptor，检查经宿主装配以免新增 DevOps → AI 导入。非集成资产可复用 `publication.EqualAsset`；严格解码可复用 `platform.DecodeJSON` 并保留错误文案，已对五类资产和错误输入做定点对照。
     - 对象冻结的次序不能省略：`prepareReleasePublications` 先将对象内动作事务的集成引用映射为目标身份，再把处理后的对象交给 action-type 钩子；无 `ActionTypes` 绑定的现存冻结分支会读取其中动作定义。保留代码对象还会提前跳过后续对象钩子；迁移须让同一触发资产在钩子间传递处理结果并保留跳过和错误顺序，不能直接复用原始资产。
     - 对象候选也不是单资产替换：`releaseAssets` 从选定对象同时生成对象、动作和对象页资产，显式页面可覆盖生成页，再按引用排序；迁移 `applyRecordDraft` 时须保持这些产物和覆盖次序。版本化草稿另由 `singleDraftAssets` 产生新资产，单纯返回当前 `DraftClosure` 的引用不足以替代两条路径。
     - 恢复与调用方：`Build.Snapshot` / `Restore` 保存和恢复账本，`Reinstall` 再按类型重建已安装映像，顺序是属性、值类型、接口、对象、对象组与关系及查询、函数、agent、code、页面、自动化、table、应用；迁出状态时保持这一顺序，不能把派生映像当成新的权威状态。除各家族源文件外，`build_publications_drafts.go` 的差异读取、`build_publications_release.go` 的联合试运行选择、`build_resource_metadata.go` 的类型与 schema 登记，以及 `host/release_evaluation.go` 和 `services/devops/releases/release_evaluation.go` 的共享测试记录调用也须随对应条目处理。
@@ -76,16 +72,12 @@ read-when: 每批开始（选当前批次）与结束（删除已完成条目、
   - [ ] U4.8 sample-set 发布归 DevOps。前置 U4.2。
     - 已知源：`services/resources/authoring/build_tests.go`、`build_artifacts_installation.go`、`build_release_prepare.go`、`build_release_drafts.go`；目标 `services/devops`。保留直接生成 `AssetInstallation` 的行为；细节由 U4.2 补齐。
     - 完成：样本集五钩子由 DevOps 实现并由宿主登记，原发布分支删除；历史字节不变。验证：V1、V3。
-  - [ ] U4.9 智能体评估器归 AI 后的验收。评估器已迁入 `services/ai/evaluation`，消除函数服务对 AI 评估包的反向依赖；50 项不变量、后端测试、SQL 恢复和评估前后对照通过。`make check` 被并行前端的文案检查阻断，全量浏览器验收尚未通过。
 - [ ] U5 拆散 `build`。
   - [ ] U5.1 样板。
     - 方向：定下“一类资源的编辑如何离开 `Build`”的模式（状态、注册、HTTP 路由、`host` 导入点怎么改），以代码函数与决策表（`build_compute.go`、`build_tables.go` → `services/functions/authoring`）迁完为样板；发布钩子仍以前置 U4.2 的诊断为准。归属：objects、kinds、action types、blueprints、transactions → `services/ontology`；agents → `services/ai`；integrations（1632 行）→ `services/data`；branches → `services/resources/merge`；release、publications、artifacts（约 3000 行）→ 按 U4 的表归 `services/devops` 与 `services/resources/publication`；`resources` 只留 RID、项目、文件夹、工作状态、分支、提案。每迁一类同时收走它在 `host.Tenant` 的字段与可选接口探测（N6），下调 `tenantFields`、`capabilityProbes` 与对应依赖差距。
     - 已核对：`build.code` 与 `build.table` 都生成 `AssetCompute`，共享 `OperationDefinition`；当前版本读 `codes` / `tables`，历史版本读保留家族，`Fork` 克隆状态，`Reinstall` 从接受记录重建。运行时对 `OperationDefinitions` 做可选探测并回退 Manifest；迁移时须保留历史版本与原有 authority，不能只移动文件或把版本化读取降成 Manifest。`host.Tenant` 没有单独的 code/table 状态字段，应按实际消除的字段和探测下调基线。
     - 产出：模式写入 7-system §7.2；其余每类拆成一行，写明文件清单与目标包。
     - 验证：V1、V3。
-  - [ ] U5.2 代码函数编译创作验收。编译接受、重放、附件暂存及产品包对照、V1 和 SQL 恢复已通过；仍需 `make e2e` 补齐 V3。发布、安装状态与历史版本归位见 U4.7。
-  - [ ] U5.3 决策表模型与规则创作验收。创建与拒绝、规则、发布计算、历史版本及重放对照、V1 和 SQL 恢复已通过；仍需 `make e2e` 补齐 V3。记录实体、发布、安装状态与历史版本归位见 U4.7 和 U5.1。
-  - [ ] U5.4 共用资源定义名称规则归位后的验收。名称规则已归 `services/resources/publication`，函数和自动化服务不再依赖本体实现；约 229 万组名称对照、50 项不变量、后端测试和 SQL 恢复通过。`make check` 被并行前端的文案检查阻断，全量浏览器验收尚未通过。
 - [ ] U7 `platform` 只留 SDK 契约（整段完成标准：不超过 8 千行）。前置 U2、U3。
   - [ ] U7.1 诊断与切分（不写代码）。范围含原 U2.3：`BusinessTxn`、`TxnStep` 等事务类型与冻结定义解码离开 `platform` 的无环切分（定义校验归 ontology、执行归 actions），不改已存字节，不推进纪元。
     - 页面与其他领域共用的实现一并诊断：`PageNodeID` 供对象、值类型和记录检查使用；`ModelObject` 供样本集与测试计划使用；`RuleEngineOf`、`MergeRuleTypes` 和 `TransactionDestination` 由非页面路径共用。`definition_binding.go` 的条件规则、`definition_blocks.go` 的应用绑定检查和 `definition.go` 的资产与图标检查也需随对应拥有者归位。`Application.QueryPage` 使用原始 profile 构造声明；`page_compat.go` 暂供页面服务与通用小数规则共读，通用规则归位后再收敛。

@@ -10,7 +10,7 @@ import (
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformserver/platform"
-	ontology "platformserver/services/ontology"
+	"platformserver/services/resources/publication"
 )
 
 const ListenerType = "build.listener"
@@ -39,7 +39,7 @@ func (o *Owner) listenerEntity() platform.Entity {
 		Standard:    platform.Standard{Create: true, Edit: true, Archive: true, Roles: roles, Capability: "integrations"},
 		Validate: func(c platform.Caller, value any) *platform.Error {
 			next := value.(*Listener)
-			if !ontology.Named(next.Name) || !listenerSegment.MatchString(next.Path) || !listenerSegment.MatchString(next.Secret) || strings.TrimSpace(next.Connector) == "" {
+			if !publication.ValidName(next.Name) || !listenerSegment.MatchString(next.Path) || !listenerSegment.MatchString(next.Secret) || strings.TrimSpace(next.Connector) == "" {
 				return &platform.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 			}
 			filter := platform.Expr{Op: "or", Kind: "boolean", Args: []platform.Expr{

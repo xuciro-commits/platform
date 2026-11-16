@@ -1,4 +1,4 @@
-package authoring
+package agents
 
 import (
 	"cmp"
@@ -7,7 +7,6 @@ import (
 	"maps"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformserver/platform"
-	"platformserver/services/ai/evaluation"
 	"slices"
 	"strings"
 	"sync"
@@ -438,7 +437,7 @@ func (a *AgentEvaluator) dryRun(evaluation string, d *platform.CompiledAgent, ru
 			dry.Result, dry.State = answer.Content, "done"
 			break
 		}
-		calls, err := agents.CompleteToolCalls(answer.ToolCalls, run.ID+":evaluation", dry.StepsUsed)
+		calls, err := CompleteToolCalls(answer.ToolCalls, run.ID+":evaluation", dry.StepsUsed)
 		if err != nil {
 			return dry, err.Error()
 		}
@@ -461,7 +460,7 @@ func (a *AgentEvaluator) dryRun(evaluation string, d *platform.CompiledAgent, ru
 			case tool.Kind == "ask":
 				dry.State, dry.Result, step.Outcome = "asked", "asks: "+fmt.Sprint(args["question"]), "asked"
 			default:
-				step.Outcome = agents.Observation(a.dryUse(d, run, dry, tool, args, call.Arguments, now), outcomeLimit)
+				step.Outcome = Observation(a.dryUse(d, run, dry, tool, args, call.Arguments, now), outcomeLimit)
 			}
 			dry.Steps = append(dry.Steps, step)
 		}

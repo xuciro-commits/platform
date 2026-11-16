@@ -11,7 +11,7 @@ import (
 	"strings"
 
 	"platformserver/platform"
-	ontology "platformserver/services/ontology"
+	"platformserver/services/resources/publication"
 	"time"
 )
 
@@ -556,7 +556,7 @@ func (o *Owner) validateIntegrationDescriptor(asset platform.ReleaseAsset) error
 			return fmt.Errorf("unknown connection kind")
 		}
 	case *ListenerDefinition:
-		if !ontology.Named(d.Name) || !listenerSegment.MatchString(d.Path) || !listenerSegment.MatchString(d.Secret) || strings.TrimSpace(d.Connector) == "" {
+		if !publication.ValidName(d.Name) || !listenerSegment.MatchString(d.Path) || !listenerSegment.MatchString(d.Secret) || strings.TrimSpace(d.Connector) == "" {
 			return fmt.Errorf("invalid portable listener")
 		}
 	case *SourceDefinition:

@@ -9,6 +9,7 @@ import (
 	"platformserver/platform"
 	pageowner "platformserver/services/apps/pages"
 	ontology "platformserver/services/ontology"
+	"platformserver/services/resources/publication"
 )
 
 const (
@@ -147,7 +148,7 @@ func (o *Owner) validatePageDocument(page *Page, lookup func(string) (platform.E
 }
 
 func (o *Owner) checkPage(p Page) error {
-	if !ontology.Named(p.Name) {
+	if !publication.ValidName(p.Name) {
 		return fmt.Errorf("the name %q is not lower-case letters and digits", p.Name)
 	}
 	if err := pageowner.CheckSafety(Descriptor(p, o.env.AppID(), o.env.Version())); err != nil {

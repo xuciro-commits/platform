@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"platformserver/platform"
+	"platformserver/services/resources/publication"
 )
 
 type TransactionContext struct {
@@ -210,7 +211,7 @@ func CheckTransactions(object Object, ctx TransactionContext, engines ...platfor
 				if total > platform.TxnMaxSteps {
 					return fmt.Errorf("%s has %d steps; limit is %d", where, total, platform.TxnMaxSteps)
 				}
-				if !Named(step.Name) || names[step.Name] {
+				if !publication.ValidName(step.Name) || names[step.Name] {
 					return fmt.Errorf("%s needs a unique name", where)
 				}
 				names[step.Name] = true

@@ -6,8 +6,8 @@ import (
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformserver/platform"
-	ontology "platformserver/services/ontology"
 	build "platformserver/services/resources/authoring"
+	"platformserver/services/resources/publication"
 )
 
 type CheckRequest[S any] struct {
@@ -47,7 +47,7 @@ type MergeResult[R any] struct {
 }
 
 func Create(f Flow, m platform.Member, request BranchCreateRequest, now time.Time) (BranchDetail, *platform.Error) {
-	if !ontology.Named(request.Name) {
+	if !publication.ValidName(request.Name) {
 		return BranchDetail{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "A branch name is lower-case letters and digits")
 	}
 	if refusal := f.Submit(m, Submission(f.Tenant, m, "branch:"+request.Name+":create", build.BranchType+".create", request.Name,

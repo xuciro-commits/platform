@@ -8,7 +8,6 @@ import (
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformserver/platform"
 	actioncatalog "platformserver/services/actions/catalog"
-	"platformserver/services/ontology"
 	"platformserver/services/resources/publication"
 )
 
@@ -78,7 +77,7 @@ func cloneDraftIDs(ids map[platform.AssetRef]string) map[platform.AssetRef]strin
 }
 
 func (o *Owner) checkName(name, id string) *platform.Error {
-	if !ontology.Named(name) {
+	if !publication.ValidName(name) {
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "the name %q is not lower-case letters and digits", name)
 	}
 	other, taken, err := o.host.NameTaken(name, id)

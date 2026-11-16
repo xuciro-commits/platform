@@ -10,6 +10,7 @@ import (
 	"platformserver/platform"
 	actioncatalog "platformserver/services/actions/catalog"
 	ontology "platformserver/services/ontology"
+	"platformserver/services/resources/publication"
 )
 
 func protocolReadName(typ, name string) string { return "protocol:" + typ + ":" + name }
@@ -91,14 +92,14 @@ func (b *Build) checkObjectProtocols(object ontology.Object) error {
 		for _, bindings := range []map[string]string{declaration.Actions, declaration.Events} {
 			for verb, action := range bindings {
 				_, exists := catalog.Action(entity.Type + "." + action)
-				if !ontology.Named(verb) || !exists {
+				if !publication.ValidName(verb) || !exists {
 					return fmt.Errorf("Protocol %s maps %s to an undeclared object action", id, verb)
 				}
 			}
 		}
 		reads := map[string]bool{}
 		for _, read := range declaration.Reads {
-			if !ontology.Named(read) || reads[read] {
+			if !publication.ValidName(read) || reads[read] {
 				return fmt.Errorf("Protocol reads must be unique named record projections")
 			}
 			reads[read] = true

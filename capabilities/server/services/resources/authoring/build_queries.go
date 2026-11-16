@@ -6,6 +6,7 @@ import (
 
 	"platformserver/platform"
 	ontology "platformserver/services/ontology"
+	"platformserver/services/resources/publication"
 	"reflect"
 )
 
@@ -51,7 +52,7 @@ func validateQuery(b *Build, f Query) (Query, error) {
 		}
 		f.InterfaceShape, f.Implementations = bound.InterfaceShape, bound.Implementations
 	}
-	if !ontology.Named(f.Name) {
+	if !publication.ValidName(f.Name) {
 		return f, fmt.Errorf("The query name %s must be lower-case letters and digits", f.Name)
 	}
 	shape, selected := b.jointEntities[f.Object]

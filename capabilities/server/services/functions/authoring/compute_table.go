@@ -7,7 +7,6 @@ import (
 	"strings"
 
 	"platformserver/platform"
-	"platformserver/services/ontology"
 )
 
 const (
@@ -129,7 +128,7 @@ func (tb Table) Definition() platform.Operation {
 	if tb.Proposal {
 		output = platform.EditProposalSchema()
 	}
-	return platform.Operation{Rules: plan, Name: tb.Name, Title: tb.Title, Description: tb.Description, Input: valueColumnSchema(tb.Inputs), Output: output, Roles: []string{ontology.BuilderRole, ontology.UserRole},
+	return platform.Operation{Rules: plan, Name: tb.Name, Title: tb.Title, Description: tb.Description, Input: valueColumnSchema(tb.Inputs), Output: output, Roles: []string{"builder", "user"},
 		Binding: platform.OperationBinding{Kind: "native"}, Limits: platform.OperationLimits{TimeoutMillis: 1000, MemoryPages: 1, MaxInputBytes: 64 << 10, MaxOutputBytes: 16 << 10}}
 }
 

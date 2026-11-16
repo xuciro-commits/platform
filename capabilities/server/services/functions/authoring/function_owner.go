@@ -11,7 +11,6 @@ import (
 	"maps"
 	"platformserver/platform"
 	actioncatalog "platformserver/services/actions/catalog"
-	"platformserver/services/ontology"
 	"platformserver/services/resources/publication"
 	"slices"
 	"strings"
@@ -228,7 +227,7 @@ func functionCallActions(roles []string) []platform.Action {
 }
 
 func (o *Owner) validate(f Function) (Function, error) {
-	if !ontology.Named(f.Name) {
+	if !publication.ValidName(f.Name) {
 		return f, fmt.Errorf("The function name %s must be lower-case letters and digits", f.Name)
 	}
 	_, installed := o.env.InstalledObject(f.Object)

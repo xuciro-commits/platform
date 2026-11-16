@@ -11,6 +11,7 @@ import (
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformserver/platform"
 	ontology "platformserver/services/ontology"
+	"platformserver/services/resources/publication"
 )
 
 func (b *Build) captureExtensionSource(object *ontology.Object) error {
@@ -218,7 +219,7 @@ func (b *Build) checkShape(o ontology.Object) error {
 }
 
 func (b *Build) checkName(name, id string) error {
-	if !ontology.Named(name) {
+	if !publication.ValidName(name) {
 		return fmt.Errorf("the name %q is not lower-case letters and digits", name)
 	}
 	other, taken, err := b.taken(name, id)

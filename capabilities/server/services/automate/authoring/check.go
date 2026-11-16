@@ -13,7 +13,7 @@ import (
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformserver/platform"
 	actioncatalog "platformserver/services/actions/catalog"
-	ontology "platformserver/services/ontology"
+	"platformserver/services/resources/publication"
 )
 
 func CheckProcess(p Process, entity platform.Entity, lookup ProcessLookup, objects []platform.Entity, engines ...platform.RuleEngine) *platform.Error {
@@ -26,7 +26,7 @@ func CheckProcess(p Process, entity platform.Entity, lookup ProcessLookup, objec
 			actionModels[model.Type] = model
 		}
 	}
-	if !ontology.Named(p.Name) {
+	if !publication.ValidName(p.Name) {
 		return refuse("The process name {name} must be lower-case letters and digits", p.Name)
 	}
 	if old, ok := readPublished[Process](p.Published); ok && (old.Name != p.Name || old.Object != p.Object) {
@@ -94,7 +94,7 @@ func CheckProcess(p Process, entity platform.Entity, lookup ProcessLookup, objec
 	}
 	lanes := map[string]bool{}
 	for _, lane := range p.Lanes {
-		if !ontology.Named(lane.Name) || lanes[lane.Name] {
+		if !publication.ValidName(lane.Name) || lanes[lane.Name] {
 			return refuse("The lane {lane} needs a unique lower-case name", lane.Name)
 		}
 		lanes[lane.Name] = true
@@ -104,7 +104,7 @@ func CheckProcess(p Process, entity platform.Entity, lookup ProcessLookup, objec
 	}
 	nodes := map[string]ProcessStep{}
 	for _, step := range p.Steps {
-		if !ontology.Named(step.Name) || nodes[step.Name].Name != "" {
+		if !publication.ValidName(step.Name) || nodes[step.Name].Name != "" {
 			return refuse("The process step {step} needs a unique lower-case name", step.Name)
 		}
 		nodes[step.Name] = step

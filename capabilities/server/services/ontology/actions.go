@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"platformserver/platform"
+	"platformserver/services/resources/publication"
 )
 
 var ValueInputTypes = map[string]string{"text": "string", "longtext": "string", "integer": "integer", "decimal": "number", "date": "date", "datetime": "datetime", "boolean": "boolean", "choice": "string", "reference": "string", "attachment": "attachment"}
@@ -17,7 +18,7 @@ func CheckProcess(o Object, app, objectType, builderRole, userRole, functionCall
 	states := map[string]bool{}
 	for _, s := range o.States {
 		switch {
-		case !Named(s.Name):
+		case !publication.ValidName(s.Name):
 			return fmt.Errorf("the state name %q is not lower-case letters and digits", s.Name)
 		case states[s.Name]:
 			return fmt.Errorf("the state %q is declared twice", s.Name)
@@ -40,7 +41,7 @@ func CheckProcess(o Object, app, objectType, builderRole, userRole, functionCall
 		}
 		where := fmt.Sprintf("the action %q", a.Name)
 		switch {
-		case !Named(a.Name):
+		case !publication.ValidName(a.Name):
 			return fmt.Errorf("the action name %q is not lower-case letters and digits", a.Name)
 		case seen[a.Name]:
 			return fmt.Errorf("%s is declared twice", where)
@@ -82,7 +83,7 @@ func CheckProcess(o Object, app, objectType, builderRole, userRole, functionCall
 		inputs := map[string]Input{}
 		for _, in := range a.Inputs {
 			switch {
-			case !Named(in.Name):
+			case !publication.ValidName(in.Name):
 				return fmt.Errorf("%s: the input name %q is not lower-case letters and digits", where, in.Name)
 			case inputs[in.Name].Name != "":
 				return fmt.Errorf("%s: the input %q is declared twice", where, in.Name)

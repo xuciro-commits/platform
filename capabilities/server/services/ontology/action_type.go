@@ -6,6 +6,7 @@ import (
 	"strconv"
 
 	"platformserver/platform"
+	"platformserver/services/resources/publication"
 )
 
 type ActionTypeVersion struct {
@@ -48,7 +49,7 @@ func (a *ActionType) Revise(previous *ActionType) error {
 }
 
 func (a ActionType) CheckIdentity() error {
-	if !Named(a.Definition.Name) || a.Name != a.Object+"."+a.Definition.Name {
+	if !publication.ValidName(a.Definition.Name) || a.Name != a.Object+"."+a.Definition.Name {
 		return fmt.Errorf("An action type keeps its target object and action API name")
 	}
 	return nil

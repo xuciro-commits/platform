@@ -6,6 +6,7 @@ import (
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 
 	"platformserver/platform"
+	"platformserver/services/resources/publication"
 
 	ontology "platformserver/services/ontology"
 	"slices"
@@ -139,7 +140,7 @@ func (b *Build) checkAgent(a Agent) error {
 }
 
 func (b *Build) checkAgentWithDrafts(a Agent, tools map[string]bool, roles []string) error {
-	if !ontology.Named(a.Name) {
+	if !publication.ValidName(a.Name) {
 		return fmt.Errorf("The agent name %s must be lower-case letters and digits", a.Name)
 	}
 	if strings.TrimSpace(a.Instructions) == "" || strings.TrimSpace(a.Description) == "" {

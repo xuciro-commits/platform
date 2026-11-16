@@ -5,9 +5,9 @@ import (
 	"reflect"
 	"slices"
 	"strings"
-	"unicode"
 
 	"platformserver/platform"
+	"platformserver/services/resources/publication"
 )
 
 const BaseField = "base"
@@ -37,7 +37,7 @@ func CheckFields(fields []Field, known func(string) bool) error {
 	seen := map[string]bool{}
 	for _, f := range fields {
 		switch {
-		case !Named(f.Name):
+		case !publication.ValidName(f.Name):
 			return fmt.Errorf("the field name %q is not lower-case letters and digits", f.Name)
 		case seen[f.Name]:
 			return fmt.Errorf("the field %q is declared twice", f.Name)
@@ -57,9 +57,9 @@ func CheckFields(fields []Field, known func(string) bool) error {
 			return fmt.Errorf("enterprise references do not declare inverse record relations")
 		case f.Inverse != "" && f.Type != "reference":
 			return fmt.Errorf("the field %q names how it is seen from elsewhere but refers to nothing", f.Name)
-		case f.Inverse != "" && !Named(f.Inverse):
+		case f.Inverse != "" && !publication.ValidName(f.Inverse):
 			return fmt.Errorf("the relation name %q of field %q is not lower-case letters and digits", f.Inverse, f.Name)
-		case f.AliasOf != "" && (!Named(f.AliasOf) || f.AliasOf == f.Name || f.Formula != "" || f.FormulaExpr != nil):
+		case f.AliasOf != "" && (!publication.ValidName(f.AliasOf) || f.AliasOf == f.Name || f.Formula != "" || f.FormulaExpr != nil):
 			return fmt.Errorf("the field %q needs a direct read alias without a formula", f.Name)
 		}
 		seen[f.Name] = true
@@ -125,18 +125,6 @@ func CheckConditions(fields []Field) error {
 	return nil
 }
 
-func Named(s string) bool {
-	if s == "" || !unicode.IsLetter(rune(s[0])) {
-		return false
-	}
-	for _, r := range s {
-		if !unicode.IsLower(r) && !unicode.IsDigit(r) {
-			return false
-		}
-	}
-	return true
-}
-
 func ValueChoices(s string) []string {
 	var out []string
 	for _, c := range strings.Split(s, ",") {
@@ -189,28 +177,28 @@ func CheckObjectShape(o Object, app, objectType string, model platform.Entity, d
 }
 
 func CheckPropertyType(f PropertyType) error {
-	if !Named(f.Name) {
+	if !publication.ValidName(f.Name) {
 		return fmt.Errorf("Property name must use lower-case letters and digits")
 	}
 	return f.Definition().Check()
 }
 
 func CheckValueType(f ValueType) error {
-	if !Named(f.Name) {
+	if !publication.ValidName(f.Name) {
 		return fmt.Errorf("Value type name must use lower-case letters and digits")
 	}
 	return f.Definition().Check()
 }
 
 func CheckObjectTypeGroup(g ObjectTypeGroup) error {
-	if !Named(g.Name) {
+	if !publication.ValidName(g.Name) {
 		return fmt.Errorf("Object type group name must use lower-case letters and digits")
 	}
 	return g.Definition().Check()
 }
 
 func CheckLinkType(name, forward, reverse string, definition platform.LinkType, parent, child platform.EntityInfo) error {
-	if !Named(name) || !Named(forward) || !Named(reverse) {
+	if !publication.ValidName(name) || !publication.ValidName(forward) || !publication.ValidName(reverse) {
 		return fmt.Errorf("Link names must use lower-case letters and digits")
 	}
 	return definition.CheckSchema(parent, child)
@@ -249,7 +237,7 @@ func CheckAccess(o Object, builderRole, userRole string) error {
 	roles := map[string]bool{builderRole: true}
 	for _, a := range o.Access {
 		switch {
-		case !Named(a.Role):
+		case !publication.ValidName(a.Role):
 			return fmt.Errorf("the role %q is not lower-case letters and digits", a.Role)
 		case a.Role == builderRole:
 			return fmt.Errorf("the role %q always does everything with what it builds", builderRole)

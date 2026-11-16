@@ -11,7 +11,7 @@ import (
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 
 	"platformserver/platform"
-	ontology "platformserver/services/ontology"
+	"platformserver/services/resources/publication"
 )
 
 const BranchType = "build.branch"
@@ -140,7 +140,7 @@ func (b *Build) branchEntity() platform.Entity {
 		Standard:    platform.Standard{Create: true, Edit: true, Archive: true, Roles: builder, Capability: "branches"},
 		Validate: func(c platform.Caller, record any) *platform.Error {
 			branch := record.(*Branch)
-			if !ontology.Named(branch.Name) || len(branch.Name) > 64 || len(branch.Title) > 200 || len(branch.Description) > 4096 {
+			if !publication.ValidName(branch.Name) || len(branch.Name) > 64 || len(branch.Title) > 200 || len(branch.Description) > 4096 {
 				return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "A branch name is lower-case letters and digits, 64 at most")
 			}
 			return nil

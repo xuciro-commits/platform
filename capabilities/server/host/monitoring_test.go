@@ -20,6 +20,7 @@ import (
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformserver/platform"
 	"platformserver/services/actions"
+	agentevaluation "platformserver/services/ai/evaluation"
 	"platformserver/services/ai/runtime"
 	"platformserver/services/automate/runtime"
 	"platformserver/services/devops/packages"
@@ -110,7 +111,7 @@ func newMonitoringTenant(tb testing.TB) *invariantTenant {
 	id := "monitoring-invariant"
 	services := platform.DefaultRuntimeCapabilities(security.Standard{})
 	services.BindOwner = invariantBindOwner
-	services.NewAgentEvaluator = authoring.NewAgentEvaluator
+	services.NewAgentEvaluator = agentevaluation.NewAgentEvaluator
 	services.NewTransactionExecutor = actions.NewRuntime
 	console := controlowner.NewConsole(id, actions.NewAuthority, func(id string) controlowner.Owners {
 		actions := append(platform.AccessActions(), platform.ProjectActions()...)

@@ -5,11 +5,11 @@ import (
 	"platformserver/platform"
 	"platformserver/services/actions"
 	"platformserver/services/ai"
+	agentevaluation "platformserver/services/ai/evaluation"
 	agentowner "platformserver/services/ai/runtime"
 	"platformserver/services/ai/sources"
 	automation "platformserver/services/automate/runtime"
 	"platformserver/services/devops/packages"
-	"platformserver/services/functions/authoring"
 	"platformserver/services/ontology"
 	"platformserver/services/resources/authoring"
 	"platformserver/services/resources/files"
@@ -24,7 +24,7 @@ import (
 
 func NewTenantWithCapabilities(id string, services platform.RuntimeCapabilities, seats ...platform.Seat) (*platformserver.Tenant, error) {
 	services.BindOwner = bindOwner
-	services.NewAgentEvaluator = authoring.NewAgentEvaluator
+	services.NewAgentEvaluator = agentevaluation.NewAgentEvaluator
 	services.NewTransactionExecutor = actions.NewRuntime
 	return platformserver.NewTenantWithCapabilities(id, services, BuiltinApps(id, seats...)...)
 }

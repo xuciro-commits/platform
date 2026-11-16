@@ -7,6 +7,7 @@ import (
 	"unicode"
 
 	"platformserver/platform"
+	"platformserver/services/resources/publication"
 )
 
 func checkRefusalDeclarations(ctx TransactionContext, object Object, action Action, declarations []platform.Refusal, scope platform.RuleReadSpec, row string, lookup func(string) (platform.EntityInfo, bool), engines ...platform.RuleEngine) error {
@@ -44,7 +45,7 @@ func checkRefusalDeclarations(ctx TransactionContext, object Object, action Acti
 				return fmt.Errorf("routed refusals must declare their target transaction")
 			}
 			target := *declaration.Route
-			if target.Type != scope.Object || target.ID != "$subject" || target.Via != "" || !Named(target.Action) || target.Action == action.Name {
+			if target.Type != scope.Object || target.ID != "$subject" || target.Via != "" || !publication.ValidName(target.Action) || target.Action == action.Name {
 				return fmt.Errorf("refusal route needs another declared transaction on its subject")
 			}
 			index := slices.IndexFunc(object.Actions, func(candidate Action) bool { return candidate.Name == target.Action })
@@ -88,7 +89,7 @@ func checkRefusalDeclarations(ctx TransactionContext, object Object, action Acti
 			return fmt.Errorf("refusal level must be block, flag or route")
 		}
 		if record := declaration.Record; record != nil {
-			if record.Kind != "create" || !Named(record.Name) || record.Target.ID != "" || record.Target.Via != "" || record.Target.Action != "" || record.Target.Type == scope.Object || record.When != nil || record.Link != nil || record.ForEach != nil || record.Sequence != nil || len(record.Refusals) != 0 || len(record.Changes) == 0 {
+			if record.Kind != "create" || !publication.ValidName(record.Name) || record.Target.ID != "" || record.Target.Via != "" || record.Target.Action != "" || record.Target.Type == scope.Object || record.When != nil || record.Link != nil || record.ForEach != nil || record.Sequence != nil || len(record.Refusals) != 0 || len(record.Changes) == 0 {
 				return fmt.Errorf("refusal records must be an unconditional create on a distinct object")
 			}
 			info, ok := lookup(record.Target.Type)
@@ -205,7 +206,7 @@ func checkRefusalCycles(object Object) error {
 
 func checkTxnIntervals(ctx TransactionContext, step platform.TxnStep, scope platform.RuleReadSpec, lookup func(string) (platform.EntityInfo, bool)) error {
 	p := step.Intervals
-	if p == nil || (platform.AssetRef{App: ctx.App, Kind: platform.AssetObservation, Name: p.Source}).Check() != nil || !Named(p.Set) || step.Target != (platform.TxnRef{}) {
+	if p == nil || (platform.AssetRef{App: ctx.App, Kind: platform.AssetObservation, Name: p.Source}).Check() != nil || !publication.ValidName(p.Set) || step.Target != (platform.TxnRef{}) {
 		return fmt.Errorf("Interval projection needs its logical source and original collection")
 	}
 	subject, found := lookup(scope.Object)
@@ -260,7 +261,7 @@ func checkTypedTxnStep(ctx TransactionContext, step platform.TxnStep, scope plat
 	parameters := func(sets []platform.TxnSet) error {
 		seen := map[string]bool{}
 		for _, set := range sets {
-			if !Named(set.Field) || seen[set.Field] {
+			if !publication.ValidName(set.Field) || seen[set.Field] {
 				return fmt.Errorf("Transaction parameters need distinct names")
 			}
 			seen[set.Field] = true

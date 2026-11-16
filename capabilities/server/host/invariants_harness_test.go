@@ -14,8 +14,8 @@ import (
 	acceptedformat "platformserver/kernel/acceptedformat"
 	"platformserver/platform"
 	"platformserver/services/actions"
+	agentevaluation "platformserver/services/ai/evaluation"
 	"platformserver/services/devops/packages"
-	"platformserver/services/functions/authoring"
 	"platformserver/services/ontology"
 	"platformserver/services/resources/authoring"
 	"platformserver/services/resources/publication"
@@ -91,7 +91,7 @@ func newInvariantTenantSetup(tb testing.TB, id string, apps []platform.App, seat
 	tb.Helper()
 	services := platform.DefaultRuntimeCapabilities(security.Standard{})
 	services.BindOwner = invariantBindOwner
-	services.NewAgentEvaluator = authoring.NewAgentEvaluator
+	services.NewAgentEvaluator = agentevaluation.NewAgentEvaluator
 	services.NewTransactionExecutor = actions.NewRuntime
 	seat := platform.Seat{Subjects: []string{"builder"}, Member: platform.Member{ID: "builder", Roles: map[string]string{build.ID: build.Builder}}}
 	console := controlowner.NewConsole(id, actions.NewAuthority, func(id string) controlowner.Owners {
