@@ -152,6 +152,22 @@ export const zhCN: Record<string, string> = {
   "All object types": "全部对象类型",
   "Recently updated modules": "最近更新的模块",
   "All modules": "全部模块",
+  New: "新建",
+  Edit: "编辑",
+  Save: "保存",
+  Cancel: "取消",
+  Create: "创建",
+  Details: "详情",
+  Record: "记录",
+  Created: "创建时间",
+  "Created by": "创建人",
+  "Updated by": "更新人",
+  Revision: "修订",
+  "Not saved": "没有保存",
+  "The platform did not accept this change.": "平台没有接受这次修改。",
+  "Some required inputs cannot be entered here yet": "有些必填项还不能在这里填写",
+  "This record could not be loaded": "记录加载失败",
+  "You cannot see this record": "你无权查看这条记录",
 };
 
 const locale = navigator.language.startsWith("zh") ? "zh-CN" : "en";

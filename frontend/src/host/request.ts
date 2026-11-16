@@ -10,12 +10,23 @@ export class HostRefusal extends Error {
   }
 }
 
-export async function request<Answer>(path: string, signal?: AbortSignal): Promise<Answer> {
+type Options = { signal?: AbortSignal; body?: unknown; headers?: Record<string, string> };
+type Failure = { error?: { code?: string; message?: string; reason?: string } };
+
+export function refusal(status: number, body: Failure | null) {
+  const code = body?.error?.code ?? "";
+  const said = body?.error?.message ?? body?.error?.reason ?? "";
+  return new HostRefusal(status, code, said === code ? "" : said);
+}
+
+export async function request<Answer>(path: string, options: Options = {}): Promise<Answer> {
   const session = currentSession();
-  const headers: Record<string, string> = session ? { authorization: `Bearer ${session.token}`, "Platform-Tenant": session.tenant } : {};
-  const response = await fetch(path, { signal, headers });
+  const headers: Record<string, string> = { ...options.headers };
+  if (session) Object.assign(headers, { authorization: `Bearer ${session.token}`, "Platform-Tenant": session.tenant });
+  const sending = options.body === undefined ? {} : { method: "POST", body: JSON.stringify(options.body) };
+  if (options.body !== undefined) headers["Content-Type"] = "application/json";
+  const response = await fetch(path, { signal: options.signal, headers, ...sending });
   if (response.ok) return response.json();
   if (response.status === 401) endSession();
-  const body = await response.json().catch(() => null);
-  throw new HostRefusal(response.status, body?.error?.code ?? "", body?.error?.reason ?? "");
+  throw refusal(response.status, await response.json().catch(() => null));
 }

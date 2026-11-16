@@ -80,13 +80,14 @@ Search 页与 Command Palette 消费同一个 workspace Search provider。Provid
 
 | 层 | 是什么 | 位置 |
 |---|---|---|
-| 契约 | 宿主给出的形状：类型描述（`/v1/entities`：字段、字段类型、选项、显示字段）、记录集合（`/v1/records/<类型>`）、资源目录（`/v1/resources`）；单条记录与动作在记录原型接入时加入 | `src/host/` |
+| 契约 | 宿主给出的形状：类型描述（`/v1/entities`：字段、字段类型、选项、显示字段）、记录集合（`/v1/records/<类型>`）、资源目录（`/v1/resources`）；单条记录（`/v1/records/<类型>/<标识>`）与动作目录（`/v1/actions`：每个动作的参数）；写入只有 `submit(动作, 标识, 载荷, 期望修订)`，经 `/v1/submissions` 走接受路径，被接受后所有读取重读 | `src/host/` |
 | 表现 | 由一个官方模板改造一次得到的组件，只认契约，不认具体类型：表格与分组现在是 `ListView`；看板、收件箱、树、记录页、录入对话框、仪表盘各一个 | `src/pages/` |
 | 入口 | 声明：哪个类型、用哪种表现。`recordList({ type, title, about })` 的列与可分组字段取自类型描述；要固定列时给 `fields` | `src/apps/<应用>/<入口>.ts` |
 
 - 改造一个官方模板只做三件事：落地；把示例数据换成契约；补上模板缺的表现。模板的框架、间距与交互不动。同一个模板只改造一次，之后所有类型共用。
 - 需要一种还没有的表现，先找官方的（`astryx build "<想法>"`、`astryx search`），找到就改造，找不到才组合官方的块（`astryx template <Block>`）；不从空白写。
 - 入口里不写界面代码。一个入口需要原型给不出的东西，改原型或给契约加字段，让所有类型同时得到。
+- 归项目所有的资源类型，入口声明写 `project: true`，新建对话框就多一个必填的项目选择。这是在替契约补缺：宿主的动作目录没有把 `project` 列为这类创建动作的参数（见现存差距）。
 
 ### 约定
 
@@ -121,5 +122,5 @@ Search 页与 Command Palette 消费同一个 workspace Search provider。Provid
 ## 现存差距
 
 - `web/` 的 Astryx 替换（R9、R10）：根基已接上（样式、七套官方主题与明暗切换、StyleX 编译、`web/AGENTS.md`），大部分界面组件已归并到 Astryx：Button、Card/Panel、Progress、Separator、Tooltip、EmptyState、StatusTag、Notice、SegmentedChoice、PageHeader、BreadcrumbTrail、Markdown、Checkbox/Switch/Disclosure/ActionMenu、Dialog/Sheet、Toast、CommandPalette、ContextHelp/FieldProvenance、CommandMenu、Input/Textarea/Select、Tree、fields/types、RecordComments、MarkdownEditor、IconPicker、FlowPalette、RangeInput、NotificationList、AssetDirectory、CollectionTitle、GroupedList、AIResult、DerivedMean、EntityForm、ValueSchemaForm、RecordUploader、RecordImport、RecordComparison、RecordAvatarStack、RecordResourceList、RecordHistory、ApprovalInbox。`DataTable` 仍是专用实现；`RecordLookup` 保留为带外部窗口、分页与 watch 的异步记录选择器；`StaticImage`、`ExternalFrame` 与图表组件按专用媒体/图表保留。日期控件已改用官方 `DateInput`/`DateRangeInput`/`DateTimeInput`，Gauge 以官方 `ProgressBar` 组合呈现；NumericInput/JSONTextarea 保留原生输入以承载 draft 校验；依赖已删除 radix-ui、cmdk、sonner、class-variance-authority，保留 clsx/tailwind-merge 供 `cn()` 与现有 Tailwind 组件使用。`astryx doctor --built web/apps/workspace` 仍报 548 条（Icons 43、Astryx components 235、Styling 270，多数来自 `apps/workspace` 的裸元素与 `className`），是替换进度的度量，完成标准见路线图 W10。顺序见[路线图](../roadmap.md)“五、前端重建”。
-- 新前端（R4、R9）：`frontend/` 有外壳、开发身份登录、读取与列表原型的第一段（标题、筛选、分组、四态），接上了五十七个入口中的二十七个（主页的概览与项目，数据、本体、逻辑、AI、交付里宿主已有对应类型的列表，应用的模块，管理的成员），侧栏给其余入口标“未重建”；仪表盘原型只有第一段（`dashboardPage`：一行统计块与紧凑表格，取自官方 `dashboard` 模板的框架），没有全局筛选与图表；类型与字段的标题直接用宿主给的英文，尚未经词汇翻译，列的取舍只是“显示字段在前、取前六个表格型字段”，没有类型自己的列表视图定义；尚无 OIDC 登录、写入（`decide`）、查询缓存与实时失效、记录、画布与仪表盘原型，列表一次读完整个结果，没有服务端分页、排序、行打开、保存的视图与 URL 状态；`src/apps.ts` 是按 3-information §3.3 手写的应用清单，尚未由宿主的应用注册生成；`src/templates/` 的两个官方模板仍带示例数据与版权注释，单文件最长 4623 行，改造时按职责拆分。`web/` 仍是产品实际使用的前端，保留 Tailwind 工具类和专用画布依赖。顺序见[路线图](../roadmap.md)“五、前端重建”。
+- 新前端（R4、R9）：`frontend/` 有外壳、开发身份登录、读取与列表原型的第一段（标题、筛选、分组、四态），接上了五十七个入口中的二十七个（主页的概览与项目，数据、本体、逻辑、AI、交付里宿主已有对应类型的列表，应用的模块，管理的成员），侧栏给其余入口标“未重建”；仪表盘原型只有第一段（`dashboardPage`：一行统计块与紧凑表格，取自官方 `dashboard` 模板的框架），没有全局筛选与图表；类型与字段的标题直接用宿主给的英文，尚未经词汇翻译，列的取舍只是“显示字段在前、取前六个表格型字段”，没有类型自己的列表视图定义；尚无 OIDC 登录、查询缓存与实时事件（一次被接受的写入让所有读取重读）、画布原型；记录原型只有第一段：记录类列表的行能打开记录页（官方 `work-item-detail` 的框架：页头、字段、右侧记录栏），新建与编辑是按动作参数生成的对话框（`ActionDialog`），不是就地编辑，没有页签、Activity、主动作与窄屏下的记录栏；json、明细行、字符串列表、对象这几种动作参数还填不了，必填时对话框说明并禁用提交；资源目录类列表的行还打不开；宿主的动作目录没有把 `project` 列为资源创建动作的参数，哪些类型归项目所有只能由入口声明；列表一次读完整个结果，没有服务端分页、排序、保存的视图与 URL 状态；`src/apps.ts` 是按 3-information §3.3 手写的应用清单，尚未由宿主的应用注册生成；`src/templates/` 的两个官方模板仍带示例数据与版权注释，单文件最长 4623 行，改造时按职责拆分。`web/` 仍是产品实际使用的前端，保留 Tailwind 工具类和专用画布依赖。顺序见[路线图](../roadmap.md)“五、前端重建”。
 - Workspace 的业务工具分块与布局引擎仍有大于 500 kB 的产物；布局引擎已经按需加载并在浏览器使用 Worker。保留构建器默认大小告警，不以拆成任意小文件或放宽阈值作为性能完成标准；后续按真实任务的加载链、传输与交互时间验证。

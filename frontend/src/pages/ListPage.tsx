@@ -3,6 +3,7 @@ import { Banner } from "@astryxdesign/core/Banner";
 import { Button } from "@astryxdesign/core/Button";
 import { EmptyState } from "@astryxdesign/core/EmptyState";
 import { HStack, Layout, LayoutContent, LayoutHeader, StackItem, VStack } from "@astryxdesign/core/Layout";
+import { Link } from "@astryxdesign/core/Link";
 import { Popover } from "@astryxdesign/core/Popover";
 import { RadioList, RadioListItem } from "@astryxdesign/core/RadioList";
 import { Skeleton } from "@astryxdesign/core/Skeleton";
@@ -11,7 +12,7 @@ import type { TableColumn } from "@astryxdesign/core/Table";
 import { Heading, Text } from "@astryxdesign/core/Text";
 import { TextInput } from "@astryxdesign/core/TextInput";
 import { MagnifyingGlassIcon } from "@heroicons/react/24/outline";
-import { useMemo, useState } from "react";
+import { type ReactNode, useMemo, useState } from "react";
 import { type Read, useRead } from "../host";
 import { t } from "../i18n";
 
@@ -22,6 +23,7 @@ export type ListShape<Answer, Row> = {
   about: string;
   rows: (answer: Answer) => Row[];
   id: (row: Row) => string;
+  link?: (row: Row) => string;
   columns: ListColumn<Row>[];
   groups?: ListGroup<Row>[];
 };
@@ -40,9 +42,10 @@ export function listPage<Answer, Row>(definition: ListDefinition<Answer, Row>) {
 type ListViewProps<Answer, Row> = {
   definition: ListShape<Answer, Row>;
   read: Read<Answer>;
+  primary?: ReactNode;
 };
 
-export function ListView<Answer, Row>({ definition, read }: ListViewProps<Answer, Row>) {
+export function ListView<Answer, Row>({ definition, read, primary }: ListViewProps<Answer, Row>) {
   const [filter, setFilter] = useState("");
   const [groupKey, setGroupKey] = useState(ungrouped);
   const [collapsed, setCollapsed] = useState<Set<string>>(() => new Set());
@@ -51,7 +54,7 @@ export function ListView<Answer, Row>({ definition, read }: ListViewProps<Answer
   const all = useMemo(() => {
     if (read.status !== "ready") return [];
     return definition.rows(read.data).map((row) => {
-      const cells: Cells = { [idKey]: definition.id(row), __group: group ? group.of(row) : "" };
+      const cells: Cells = { [idKey]: definition.id(row), __group: group ? group.of(row) : "", __href: definition.link ? definition.link(row) : "" };
       for (const column of definition.columns) cells[column.key] = column.text(row);
       return cells;
     });
@@ -84,15 +87,18 @@ export function ListView<Answer, Row>({ definition, read }: ListViewProps<Answer
     ),
   });
 
-  const columns: TableColumn<Cells>[] = definition.columns.map((column) => ({
+  const columns: TableColumn<Cells>[] = definition.columns.map((column, position) => ({
     key: column.key,
     header: t(column.header),
     width: column.width ? pixel(column.width) : proportional(1),
-    renderCell: (cells) => (
-      <Text type="body" maxLines={1}>
-        {cells[column.key] ?? ""}
-      </Text>
-    ),
+    renderCell: (cells) =>
+      position === 0 && cells.__href ? (
+        <Link href={cells.__href}>{cells[column.key] || cells[idKey]}</Link>
+      ) : (
+        <Text type="body" maxLines={1}>
+          {cells[column.key] ?? ""}
+        </Text>
+      ),
   }));
 
   return (
@@ -101,7 +107,12 @@ export function ListView<Answer, Row>({ definition, read }: ListViewProps<Answer
       header={
         <LayoutHeader hasDivider padding={4}>
           <VStack gap={4}>
-            <Heading level={1}>{t(definition.title)}</Heading>
+            <HStack gap={4} vAlign="center">
+              <StackItem size="fill">
+                <Heading level={1}>{t(definition.title)}</Heading>
+              </StackItem>
+              {primary}
+            </HStack>
             {all.length > 0 && (
             <HStack gap={2} vAlign="center">
               <StackItem size="fill">

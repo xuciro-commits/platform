@@ -48,6 +48,7 @@ export default recordList({
 - `type` is the host type on the card. Columns and groupings come from the host; do not list them unless the card gives `fields`.
 - `title` is the entry's label in `frontend/src/apps.ts`, unchanged.
 - `about` is one English sentence saying what this kind of record is. It is shown when the list is empty.
+- Add `project: true` when the card says the type is owned by a project (see `src/apps/data/connections.ts`). The "New" dialog then asks for the project.
 - Add `about` to `zhCN` in `frontend/src/i18n.ts`, with terms from `docs/glossary.md`.
 
 Other declarations exist for other data: `resourceList({ kind, title, about })` (see `src/apps/ontology/object-types.ts`) and `listPage({...})` (see `src/apps/admin/members.ts`). Use the one the card names.
