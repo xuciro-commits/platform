@@ -133,18 +133,20 @@ read-when: 每批开始（选当前批次）与结束（删除已完成条目、
 
 ### 五、前端重建
 
-目标规范：[4-interaction](4-interaction/README.md)（十三条不变式）、[7-system/web R4、R9、R10 与“新前端项目”](7-system/web.md)、技能 `platform-design`。两条轨道并行到择优：`web/` 按整体替换推进，把组件库与样式根基逐个换成 Astryx，直到成为纯 Astryx 项目（W10）；`frontend/` 按从零重建推进（W1–W9），不作为对方的参考代码。验收与走查都完成后留下更好用的一条，另一条整体删除，API 类型与宿主客户端随之迁入保留者。每个页面先落地 Astryx 官方模板再改造（4-interaction R13）。W1–W6 由主代理完成；W7 的每一行是一张任务卡，由执行模型按技能 `frontend-migrate` 完成，卡片字段见该技能，原型与 `src/host/` 就绪前不派发。完成标准（整段）：F 系列不改任务断言在择优留下的那条轨道上通过；负责人走查通过；另一条整体删除，API 类型与宿主客户端迁入保留者。
+目标规范：[1-enterprise §1.11 与决定 8](1-enterprise.md)、[2-product §2.8](2-product.md)、[4-interaction](4-interaction/README.md)（十三条不变式）、[7-system/web R4、R9、R10、“新前端项目”与“界面运行时”](7-system/web.md)、技能 `platform-design`。两条轨道并行到择优：`web/` 按整体替换推进，把组件库与样式根基逐个换成 Astryx，直到成为纯 Astryx 项目（W10，由另一会话负责）；`frontend/` 按从零重建推进（其余各行），不作为对方的参考代码。验收与走查都完成后留下更好用的一条，另一条整体删除，API 类型与宿主客户端随之迁入保留者。`frontend/` 的目标是在应用框架的体验上胜出 Frappe：声明一个类型就得到现代界面。做法固定：先找官方模板，改造一次成为只认契约的表现，入口只写声明。主代理做外壳、契约与每种表现的第一次改造；表现的补全与入口声明写成任务卡，由执行模型按技能 `frontend-migrate` 完成，卡片字段见该技能。完成标准（整段）：F 系列不改任务断言在择优留下的那条轨道上通过；负责人走查通过；另一条整体删除，API 类型与宿主客户端迁入保留者；`frontend/` 另须给出 2-product §2.8 “新前端”一列的全部能力。
 
-- [ ] W1 外壳补全。已有应用轨、应用侧栏、切换器与地址路由。余下：宿主登录与会话（`src/host/`）、宿主的应用注册按 3-information §3.3 换名并生成 `src/apps.ts`、⌘K（`CommandPalette`）、通知、成员菜单、语言切换、窄屏抽屉。验证：`make check-frontend`、走查。
-- [ ] W2 列表原型。把 `src/templates/table-filter` 与 `kanban-board` 改造成列表页（视图切换器、视图栏、表格、分组、看板、批量条、快速录入），接读取合同，视图状态进 URL；先做对象列表与一个资源列表。验证：F4、走查。
-- [ ] W3 记录原型。从 `work-item-detail` 模板改造：页头、页签、字段栏、Activity 时间线；资源与对象共用；就地编辑接 `decide` 与工作状态。验证：F1、F18、走查。
+- [ ] W1 外壳补全。已有应用轨、应用侧栏、切换器、地址路由、开发身份登录与会话。余下：OIDC 登录（`login-split` 已落地在 `src/templates/`）、宿主的应用注册按 3-information §3.3 换名并生成 `src/apps.ts`、已安装产品包的模块成为菜单、⌘K（`CommandPalette`）、通知、成员菜单、语言切换、窄屏抽屉。验证：`make check-frontend`、走查。
+- [ ] W2 列表原型。已有 `ListView`（`table-grouped` 改造：筛选、分组、四态）与三种入口声明 `listPage`、`resourceList`、`recordList`（列与分组取自类型描述）。余下，按此顺序：服务端分页与排序；行打开记录；类型自己的列表视图定义（列、默认排序、快速筛选字段）进入类型描述；条件筛选、保存的视图与批量条（`table-filter`）；视图状态进 URL；类型与字段标题经词汇翻译；读取缓存与实时失效。验证：F4、走查。
+- [ ] W3 记录原型与录入。从 `work-item-detail` 改造：页头、页签、字段栏、Activity 时间线；字段由类型描述生成；就地编辑与新建（`form-wizard-dialog`）经动作写入，`src/host/` 加 `decide`。资源与对象共用。验证：F1、F18、走查。
+- [ ] W11 表现方式。看板（`kanban-board`）、收件箱（`table-inbox`，先用于待办与通知）、树（`table-tree`）；每种改造一次，认 W2 定下的同一份记录集合契约，改造完成后写成补全用的任务卡。验证：走查。
 - [ ] W4 画布原型。从 `ide`、`canvas-editor` 模板改造工作台壳；图、图表、代码编辑与三维用专用库。验证：F19、走查。
 - [ ] W5 仪表盘原型与设置对话框。从 `dashboard`、`settings-dialog` 模板改造。验证：走查。
 - [ ] W6 Workshop 页面运行时。页面组件在 `frontend/` 用 Astryx 重建，使 Workshop 搭建的业务应用与自举二级（S2）直接得到新语言。验证：F1、F4、F5。
-- [ ] W7 逐入口重建。按 3-information §3.3 的清单，每个入口一张任务卡（入口、原型、数据、可改文件、验收）；先由主代理做完一个应用作为范例，再把其余入口写成卡片。
+- [ ] W7 入口声明。记录类入口只写 `recordList({ type, title, about })`。宿主已有对应类型、现在就能派发的入口：数据的 sources（`build.source`）、listeners（`build.listener`）、writebacks（`build.writeback`）、observation-sources（`build.observation`）、pipelines（`build.pipeline`）、schedules（`build.schedule`）、matching-rules（`build.match`）、media-sets（`build.mediaset`）；本体的 interfaces（`build.interface`）、shared-properties（`build.propertytype`）、value-types（`build.valuetype`）、object-type-groups（`build.objecttypegroup`）；逻辑的 functions（`build.function`）；AI 的 agents（`build.agent`）；交付的 products（`build.product`）、versions（`build.productversion`）、test-plans（`build.testplan`）、sample-sets（`build.sample-set`）。每个入口一张卡：入口 `<应用>/<入口>`；原型 列表，范例 `frontend/src/apps/data/connections.ts`；数据 括号里的类型；可改文件 `frontend/src/apps/<应用>/<入口>.ts` 与 `frontend/src/i18n.ts`；验收 用夹具身份登录后列表显示该类型的列，没有记录时显示这类记录的说明，`make check-frontend` 通过。其余入口等对应的原型。
 - [ ] W8 切换与删除。两条轨道都走完 W1–W10 后择优：宿主改为提供保留者的产物，删除另一条，改写 5-experience 的步骤描述与其余规范里的旧产品名。
 - [ ] W10 `web/` 整体替换为 Astryx。根基已完成（样式、七套官方主题与明暗切换、StyleX 编译、`web/AGENTS.md`，见 7-system/web R10）；界面组件已完成大部分归并（清单见 7-system/web「现存差距」），剩余 `DataTable`（TanStack 数据网格）的专用实现，以及裸元素与 Tailwind 类的清理；`Gauge` 已由官方 `ProgressBar` 组合，`Rejection` 已由 Banner 与 Collapsible 组合。每轮同时删掉不再使用的 Tailwind 类与 `styles.css` 里的对应规则，`astryx doctor --built web/apps/workspace` 的 548 条随进度下降。完成标准：`web/` 的依赖里不再有自有样式与组件库，`astryx doctor --built` 只剩专用画布库的必要裸元素；F 系列在 `web/` 上通过；负责人走查通过。验证：`make build`、`make check-web`、走查。
 - [ ] W9 视图的归属（等产品矩阵解冻）。在 2-product 确定命名视图、公开视图与置顶的资源归属后实现；此前视图只保存成员默认值。
+- [ ] W12 对照核对（不写代码）。逐项核对 2-product §2.8 在宿主一侧的现状（明细行、状态与流程、评论与指派、附件、导入导出、词汇翻译），缺的写成本段或第三段的条目；给打印与对外页面定归属。
 
 ## 条件触发
 
