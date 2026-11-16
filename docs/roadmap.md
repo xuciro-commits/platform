@@ -69,6 +69,9 @@ read-when: 每批开始（选当前批次）与结束（删除已完成条目、
   - [x] U3.20 页面事件、接口与 profile 检查归位。诊断：`CheckEvents`、`CheckInterface`、`CheckProfile` 只由页面安全检查调用，其导航效果、展示来源与变量 profile 辅助逻辑一并迁入 `services/apps/pages`。SDK 中其余查询、变量和导航检查仍共用字面值类型与 profile 版本选择：暂时导出原函数与方法，保留同一实现和 `PageInputSchema.profile` 的非序列化原始值，不新增默认或复制判断。
     - 源：`platform/page_events.go`、`page_variables.go`、`page_model.go`，共享调用的 `page_queries.go`、`page_collections.go`、`page_model_widgets.go`、`page_queries_sets.go`；调用方：`services/apps/pages/page_safety.go`。删除 SDK 中原事件、接口和 profile 检查，不留转发；保持校验顺序、profile 选择和错误不变。
     - 完成：`make contract` 无差异；事件、接口、profile 与历史页面的接受和拒绝前后对照，产品包候选字节与闭包不变；V1、V3。其余页面函数仍按 U3.6 诊断。
+  - [ ] U3.21 页面导航与动作参数检查归位。诊断：`CheckPageNavigation` 和 `ActionParameterCompatible` 没有 SDK 内部调用；导航检查由页面嵌入、页面发布检查及候选检查共用，参数兼容检查只由页面检查使用。将两项实现归 `services/apps/pages`，发布候选经现有纯解析值调用同一导航检查，不增加兼容转发或复制检查。
+    - 源：`platform/page_events.go`、`page_model.go`；调用方：`services/apps/pages/page_asset_navigation.go`、`page_embedding.go`、`page_frozen_queries.go`、`page_install_checks.go`、`page_safety.go`，`services/resources/publication/candidate.go`、`resolver.go`。保留页面接口版本、输入输出类型、动作参数兼容规则及错误次序。
+    - 完成：`make contract` 无差异；导航输入输出、动作参数及冻结候选的接受和拒绝前后对照，产品包候选字节与闭包不变；V1、V3。其余页面函数仍按 U3.6 诊断。
 - [ ] U4 发布路径一张表。已完成（U4.1）：五项发布钩子由宿主登记，action-type 的发布步骤归本体服务；Build 的 apps、automation、functions、本体类型转接已删除。
   - [ ] U4.2 其余家族钩子与状态边界定型（诊断与切分，不写代码）。前置已完成：U4.1。
     - 读：`services/resources/publication/api.go`、`services/resources/authoring/build_release_drafts.go`、`build_artifacts.go`、`build_owner.go`、`build_agents.go`、`build_evaluations.go`、`build_tests.go`、`build_compute.go`、`build_tables.go`、`host/composition/tenant.go`。
