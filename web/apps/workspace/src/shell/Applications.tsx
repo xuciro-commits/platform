@@ -1,7 +1,6 @@
 import { useHost, useReadQuery } from "@platform/app";
 import type { Api } from "@platform/api";
 import { Button, EmptyState, Input, PageHeader, useWorkspace, t, type PlatformApplication } from "@platform/ui";
-import { ClickableCard } from "@astryxdesign/core/ClickableCard";
 import { Grid } from "@astryxdesign/core/Grid";
 import { Icon } from "@astryxdesign/core/Icon";
 import { HStack, StackItem, VStack } from "@astryxdesign/core/Stack";
@@ -14,15 +13,15 @@ function ApplicationTile({ app, role }: { app: PlatformApplication; role?: strin
   const { applications, favorites, toggleFavorite } = useWorkspace();
   const pinned = favorites.includes(app.id);
   return <HStack gap={1} vAlign="start">
-    <StackItem size="fill"><ClickableCard label={app.title} onClick={() => applications?.onSelect(app.id)} padding={3} width="100%">
-      <HStack gap={3} vAlign="start">
+    <StackItem size="fill"><Button variant="row" onClick={() => applications?.onSelect(app.id)}>
+      <HStack gap={3} vAlign="start" width="100%">
         <Text color="accent">{app.icon}</Text>
         <StackItem size="fill"><VStack gap={0.5}>
           <Text weight="medium" maxLines={1}>{app.title}</Text>
           {(app.description || role) && <Text type="supporting" maxLines={2}>{app.description ?? role}</Text>}
         </VStack></StackItem>
       </HStack>
-    </ClickableCard></StackItem>
+    </Button></StackItem>
     <Button variant="ghost" size="icon" aria-label={pinned ? t("Remove from favorites") : t("Add to favorites")} aria-pressed={pinned}
       title={pinned ? t("Remove from favorites") : t("Add to favorites")} onClick={() => toggleFavorite(app.id)}>
       <Icon icon={Star} color={pinned ? "warning" : "inherit"} />

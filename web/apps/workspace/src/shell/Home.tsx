@@ -6,7 +6,6 @@ import { Grid } from "@astryxdesign/core/Grid";
 import { Heading } from "@astryxdesign/core/Heading";
 import { Icon } from "@astryxdesign/core/Icon";
 import { Kbd } from "@astryxdesign/core/Kbd";
-import { List, ListItem } from "@astryxdesign/core/List";
 import { HStack, StackItem, VStack } from "@astryxdesign/core/Stack";
 import { Text } from "@astryxdesign/core/Text";
 import { ArrowRight, Bell, ClipboardList, FolderKanban, GitBranch, Inbox, Search } from "lucide-react";
@@ -37,8 +36,16 @@ function Stat({ icon, label, value, onClick }: { icon: ReactNode; label: string;
 }
 
 function Row({ icon, title, detail, meta, onClick }: { icon?: ReactNode; title: string; detail?: string; meta?: ReactNode; onClick: () => void }) {
-  return <ListItem label={title} description={detail} startContent={icon}
-    endContent={meta ? <Text type="supporting" maxLines={1}>{meta}</Text> : undefined} onClick={onClick} />;
+  return <Button variant="row" onClick={onClick}>
+    <HStack gap={2} vAlign="center" width="100%">
+      {icon}
+      <StackItem size="fill"><VStack gap={0}>
+        <Text maxLines={1}>{title}</Text>
+        {detail && <Text type="supporting" maxLines={1}>{detail}</Text>}
+      </VStack></StackItem>
+      {meta && <Text type="supporting" maxLines={1}>{meta}</Text>}
+    </HStack>
+  </Button>;
 }
 
 function AppTile({ app }: { app: PlatformApplication }) {
@@ -115,24 +122,24 @@ export function Home() {
           {projects.isError && <Text as="p" type="supporting" role="alert">{t("Projects could not be loaded.")}</Text>}
           {!projects.isLoading && !liveProjects.length && <EmptyState title={t("No projects yet")} hint={t("A project holds the object types, logic, pages and releases of one application.")}
             action={<Button variant="primary" onClick={() => open({ view: "files" })}>{t("Create a project")}</Button>} />}
-          <List density="compact">{liveProjects.map(project => <Row key={project.id} icon={<Icon icon={FolderKanban} />} title={project.title || project.ref.name}
+          <VStack gap={0.5}>{liveProjects.map(project => <Row key={project.id} icon={<Icon icon={FolderKanban} />} title={project.title || project.ref.name}
             meta={<HStack gap={2}>{project.state && project.state !== "published" && <Tag label={t("Draft")} />}{when(project.changed?.at)}</HStack>}
-            onClick={() => open({ view: "project", params: { id: project.id } })} />)}</List>
+            onClick={() => open({ view: "project", params: { id: project.id } })} />)}</VStack>
         </Panel>}
         {!builder && business.length > 0 && <Panel title={t("Business applications")} actions={<Button size="sm" variant="ghost" onClick={() => open({ view: "portal" })}>{t("All applications")}<Icon icon={ArrowRight} /></Button>}>
           <BusinessAppTiles apps={business} resources={projects.data?.resources ?? []} />
         </Panel>}
         <Panel title={t("Recent")}>
           {!recent.length && <Text as="p" type="supporting">{t("Nothing opened yet.")}</Text>}
-          <List density="compact">{recent.slice(0, 8).map(item => <Row key={routeKey(item.route)} title={item.title} detail={apps.find(app => app.id === item.app)?.title} meta={when(item.at)} onClick={() => open(item.route)} />)}</List>
+          <VStack gap={0.5}>{recent.slice(0, 8).map(item => <Row key={routeKey(item.route)} title={item.title} detail={apps.find(app => app.id === item.app)?.title} meta={when(item.at)} onClick={() => open(item.route)} />)}</VStack>
         </Panel>
       </VStack>
       <VStack gap={5}>
         {(builder || proposals.length > 0) && <Panel title={t("Branches and proposals")} actions={<Button size="sm" variant="ghost" onClick={() => open({ view: "changes" })}>{t("All")}<Icon icon={ArrowRight} /></Button>}>
           {!branches.isLoading && !proposals.length && <Text as="p" type="supporting">{t("No open changes. Start a branch from any builder tool.")}</Text>}
-          <List density="compact">{proposals.map(branch => <Row key={branch.id} icon={<Icon icon={GitBranch} />} title={branch.title} detail={t("{n} changes", { n: branch.changes })}
+          <VStack gap={0.5}>{proposals.map(branch => <Row key={branch.id} icon={<Icon icon={GitBranch} />} title={branch.title} detail={t("{n} changes", { n: branch.changes })}
             meta={<Tag label={t(branch.state === "proposed" ? "Proposed" : "Editing")} tone={branch.state === "proposed" ? "purple" : "info"} />}
-            onClick={() => open(branch.state === "proposed" ? { view: "proposal", params: { id: branch.id } } : { view: "changes" })} />)}</List>
+            onClick={() => open(branch.state === "proposed" ? { view: "proposal", params: { id: branch.id } } : { view: "changes" })} />)}</VStack>
         </Panel>}
         {pinned.length > 0 && <Panel title={t("Pinned")}><VStack gap={2}>{pinned.map(app => <AppTile key={app.id} app={app} />)}</VStack></Panel>}
         {builder && tools.length > 0 && <Panel title={t("Build tools")}><VStack gap={2}>{tools.filter(app => !favorites.includes(app.id)).map(app => <AppTile key={app.id} app={app} />)}</VStack></Panel>}

@@ -40,7 +40,8 @@ function Lookup<T>({ id, scope, target, revision, read, value, valueLabel, initi
       return (await read(initialSearch ?? value ?? "", 0)).records.map(itemOf);
     },
   }), [scope, target, revision, window, read, initialSearch, value, keyOf, label]);
-  return <Typeahead key={window ? `${window.query.search ?? ""}:${window.page?.records?.map(keyOf).join("|") ?? ""}` : undefined} id={id} label={ariaLabel ?? t("Search records")} isLabelHidden placeholder={t("Search records")} searchSource={source} value={current} onChange={(item) => onChange(item?.auxiliaryData?.record)} isDisabled={disabled} hasEntriesOnFocus width="100%" size="sm" />;
+  const caption = ariaLabel ?? t("Search records");
+  return <Typeahead key={window ? `${window.query.search ?? ""}:${window.page?.records?.map(keyOf).join("|") ?? ""}` : undefined} id={id} label={caption} aria-label={caption} isLabelHidden placeholder={t("Search records")} searchSource={source} value={current} onChange={(item) => onChange(item?.auxiliaryData?.record)} isDisabled={disabled} hasEntriesOnFocus width="100%" size="sm" />;
 }
 export function RecordLookup({ id, source, type, value, onChange, window, labelField, selectedRecord, ariaLabel, disabled, stereotypes = [] }: {
   id?: string; source: RecordSource; type: string; value?: string; onChange: (id?: string) => void; stereotypes?: string[];

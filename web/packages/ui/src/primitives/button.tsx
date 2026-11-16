@@ -12,7 +12,10 @@ export const DefaultButtonSize = createContext<ButtonProps["size"]>(undefined);
 
 function textOf(node: ReactNode): string {
   return Children.toArray(node)
-    .map(child => typeof child === "string" || typeof child === "number" ? String(child) : isValidElement<{ children?: ReactNode }>(child) ? textOf(child.props.children) : "")
+    .map(child => typeof child === "string" || typeof child === "number" ? String(child)
+      : isValidElement<{ children?: ReactNode; label?: unknown }>(child)
+        ? typeof child.props.label === "string" && child.props.label ? child.props.label : textOf(child.props.children)
+        : "")
     .join(" ")
     .replace(/\s+/g, " ")
     .trim();

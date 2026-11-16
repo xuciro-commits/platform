@@ -47,7 +47,7 @@ export function AppRail({ rail, product, productIcon, applications, memory, acti
     header={<SideNavHeading heading={product} icon={<NavIcon icon={brand} />} headingHref="#/" />}
     footer={
       <SideNavSection title={t("Account")} isHeaderHidden>
-        {rail.notifications && <SideNavItem label={t("Notifications")} icon={Bell} isSelected={at(rail.notifications.route)} onClick={() => onOpen(rail.notifications!.route)}
+        {rail.notifications && <SideNavItem label={t("Notifications")} aria-label={t("Notifications")} icon={Bell} isSelected={at(rail.notifications.route)} onClick={() => onOpen(rail.notifications!.route)}
           endContent={unread ? <span className="rounded-full bg-primary px-1.5 text-2xs font-semibold leading-4 text-primary-foreground">{unread > 99 ? "99+" : unread}</span> : undefined} />}
         {rail.assist && <SideNavItem label={t("AIP Assist")} icon={Sparkles} onClick={() => onAssist ? onAssist() : onOpen(rail.assist!)} />}
         {rail.help && <SideNavItem label={t("Help")} icon={CircleHelp} isSelected={at(rail.help)} onClick={() => onOpen(rail.help!)} />}

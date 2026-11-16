@@ -84,7 +84,7 @@ test("F1 builder goes from an empty project to an application a business user ac
     await sheet.getByRole("button", { name: "Create", exact: true }).click();
     await expect(page.getByText(`build.${objectName}`, { exact: true })).toBeVisible();
     await page.keyboard.press("ControlOrMeta+K");
-    await page.getByRole("combobox").fill(`:${objectName}`);
+    await page.getByRole("combobox", { name: "Command palette" }).fill(`:${objectName}`);
     await expect(page.getByRole("group", { name: "Objects" }).getByRole("option").first()).toBeVisible();
     await page.keyboard.press("Escape");
   });

@@ -74,9 +74,11 @@ export function Panel({
   if (resolved === "card") {
     return (
       <CardDepth.Provider value>
-        <AstryxCard {...props} data-ui="card" className={cn("text-sm", className)} padding={3}>
-          {body}
-        </AstryxCard>
+        <section {...props} data-ui="card-region">
+          <AstryxCard data-ui="card" className={cn("text-sm", className)} padding={3}>
+            {body}
+          </AstryxCard>
+        </section>
       </CardDepth.Provider>
     );
   }

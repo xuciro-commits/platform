@@ -49,6 +49,7 @@ test("F14 a builder creates and publishes a tenant interface, then an object typ
   await client.submit("build.object", objectID, "publish", {}, null);
 
   await page.goto(`/#/interfaces?application=${project}`);
-  await expect(page.getByText(interfaceTitle, { exact: true })).toBeVisible();
-  await expect(page.getByRole("button", { name: "UI object", exact: true })).toBeVisible();
+  const list = page.getByRole("main");
+  await expect(list.getByText(interfaceTitle, { exact: true })).toBeVisible();
+  await expect(list.getByRole("button", { name: "UI object", exact: true })).toBeVisible();
 });

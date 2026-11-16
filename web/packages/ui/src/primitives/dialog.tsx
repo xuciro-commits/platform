@@ -48,6 +48,7 @@ export function OverlayFrame({ open, onOpenChange, title, children, wide, return
     return () => node.removeEventListener("cancel", cancel);
   }, [open, closeOnEsc, busy, suspended]);
   const purpose = busy || suspended || (!closeOnBackdrop && !closeOnEsc) ? "required" : !closeOnBackdrop ? "form" : "info";
+  if (!open) return null;
   const content = <OverlayDepth.Provider value={depth + 1}><DefaultButtonSize.Provider value={undefined}>{own ? <InputDraftProvider isolated scope="dialog">{children}</InputDraftProvider> : children}</DefaultButtonSize.Provider></OverlayDepth.Provider>;
   const header = <div className={sheet ? "flex h-10 shrink-0 items-center justify-between border-b border-border px-3" : "mb-3 flex shrink-0 items-center justify-between"}>
     <h2 className="text-base font-semibold">{title}</h2>

@@ -1,5 +1,6 @@
-import { SegmentedControl, SegmentedControlItem } from "@astryxdesign/core/SegmentedControl";
+import { ButtonGroup as AstryxButtonGroup } from "@astryxdesign/core/ButtonGroup";
 import type { ReactNode } from "react";
+import { Button } from "../primitives/button";
 
 export function SegmentedChoice({
   label,
@@ -18,23 +19,19 @@ export function SegmentedChoice({
 }) {
   const active = options.find((option) => option.value === value && !option.disabled) ?? options.find((option) => !option.disabled);
   return (
-    <SegmentedControl
-      label={label}
-      value={active?.value ?? value}
-      onChange={(next) => onChange?.(next)}
-      size={compact ? "sm" : "md"}
-      layout="hug"
-      isDisabled={disabled || !onChange}
-    >
+    <AstryxButtonGroup label={label} size={compact ? "sm" : "md"}>
       {options.map((option) => (
-        <SegmentedControlItem
+        <Button
           key={option.value}
-          value={option.value}
-          label={option.label}
-          icon={option.icon}
-          isDisabled={option.disabled}
-        />
+          size={compact ? "sm" : "md"}
+          variant={active?.value === option.value ? "primary" : "default"}
+          aria-pressed={active?.value === option.value}
+          disabled={disabled || !onChange || option.disabled}
+          onClick={() => onChange?.(option.value)}
+        >
+          {option.icon ?? undefined}{option.label}
+        </Button>
       ))}
-    </SegmentedControl>
+    </AstryxButtonGroup>
   );
 }
