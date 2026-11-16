@@ -3,7 +3,9 @@
 The platform's frontend, rebuilt from zero on Astryx. The repository's root `AGENTS.md` still applies; this file adds what is specific to this folder.
 
 - Every screen holds the thirteen invariants in `docs/4-interaction/README.md` §4.1 and is one of four archetypes (§4.3). Use the `platform-design` skill before building.
-- `web/` is the previous frontend. Do not read it for structure, naming or components.
+- `web/` is a parallel track owned by another session. Do not read or change it.
+- Screens are generated from types (`docs/7-system/web.md`, "界面运行时"): contracts in `src/host/`, presentations in `src/pages/` (each adapted once from an official template), entries as one declaration in `src/apps/<app>/<entry>.ts`. Find the official template or block first (`pnpm astryx build`, `pnpm astryx search`); change only the data shape and the presentation it lacks.
+- Real data: `make frontend-host` from the repository root, `PLATFORM_HOST=http://127.0.0.1:18511` in `.env`, then pick a fixture identity on the sign-in page.
 - Run `pnpm dev` (http://localhost:8496) and `pnpm astryx <cmd>` for the CLI below.
 - Every visible string goes through `t()` with a `zh-CN` entry in `src/i18n.ts`. No code comments.
 - Check with `make check-frontend` from the repository root. Fix what it reports; never edit the check.

@@ -1,73 +1,96 @@
 ---
 name: frontend-migrate
-description: Fixed procedure for an executor model to build exactly one menu entry of the new frontend (frontend/) from a task card in docs/roadmap.md. Use when asked to do a W7 row, "migrate an entry", "build the X list / record page", or any frontend task that names one app and one entry. Not for changing the shell, the page archetypes, the router, dependencies, or specs: those belong to the main session.
+description: Fixed procedure for an executor model to do exactly one task card of the new frontend (frontend/) from docs/roadmap.md section five. Two kinds of card: declare one menu entry (W7), or finish one presentation that was adapted from an official Astryx template (W11). Use when asked to do a W7 or W11 row, "add the X entry", "declare the X list", or any frontend task that names one app and one entry. Not for changing the shell, the router, the host layer, dependencies, or specs: those belong to the main session.
 ---
 
-# Frontend migration: one entry, one card
+# Frontend task cards: one card, one change
 
-You are an executor. You build **one entry** from **one task card**, by filling in an existing page archetype. You do not design. You do not improve things you were not asked to touch. When something does not fit, you stop and report; you never work around it.
+You are an executor. You do **one card**. You do not design, and you do not improve things you were not asked to touch. When something does not fit, you stop and report; you never work around it.
 
-Read these first, in this order, and nothing else under `web/`:
+How this frontend is built (read `docs/7-system/web.md`, section "界面运行时", once):
 
-1. The task card (below).
+- **Contract**: the shapes the host gives, in `frontend/src/host/`.
+- **Presentation**: a component adapted once from an official Astryx template, in `frontend/src/pages/`. It knows the contract, not any one type.
+- **Entry**: one declaration in `frontend/src/apps/<app>/<entry>.ts`. The file path is the address `/<app>/<entry>`. Nothing else registers it.
+
+Read these first, in this order, and nothing under `web/`:
+
+1. The task card.
 2. `frontend/AGENTS.md`.
-3. The archetype file the card names, and one finished entry of the same archetype in `frontend/src/apps/` if there is one. Copy its shape.
+3. The example file the card names. Copy its shape.
 
 ## The task card
-
-Every W7 row in `docs/roadmap.md` is a card with these fields. If a field is missing or you do not understand it, stop (see "Stop and report").
 
 | Field | Meaning |
 |---|---|
 | 入口 | `<app>/<entry>`, exactly as in `frontend/src/apps.ts` |
-| 原型 | list, record, canvas or dashboard, and the archetype file to use |
-| 数据 | the functions in `frontend/src/host/` to read and write with, and the fields to show |
+| 原型 | the presentation to use, and the example file to copy |
+| 数据 | the host type or read path |
 | 可改文件 | the only files you may create or change |
 | 验收 | what must be true when you finish |
 
-## What you may touch
+If a field is missing or you do not understand it, stop (see "Stop and report").
 
-Only the files in the card's 可改文件. In practice that is:
+## Card kind 1: declare an entry (W7)
 
-- new files under `frontend/src/apps/<app>/`
-- `frontend/src/i18n.ts`: add lines to `zhCN`, never change or remove one
+The whole entry is one call. For a list of records of one host type:
 
-## What you must never touch
+```ts
+import { recordList } from "../../pages/RecordList";
 
-`frontend/src/shell/`, `frontend/src/pages/`, `frontend/src/host/`, `frontend/src/router.tsx`, `frontend/src/main.tsx`, `frontend/src/apps.ts`, `frontend/src/templates/`, `frontend/package.json`, any lockfile, `frontend/vite.config.ts`, `frontend/tsconfig.json`, `scripts/`, `docs/`, `.claude/`, any `AGENTS.md`, and everything under `web/` and `capabilities/`.
+export default recordList({
+  type: "build.connection",
+  title: "Connections",
+  about: "A connection is an external system this workspace reads from: a kind, an address and a credential reference.",
+});
+```
 
-If the task seems to need a change in one of these, that is a stop condition, not a reason to change it.
+- `type` is the host type on the card. Columns and groupings come from the host; do not list them unless the card gives `fields`.
+- `title` is the entry's label in `frontend/src/apps.ts`, unchanged.
+- `about` is one English sentence saying what this kind of record is. It is shown when the list is empty.
+- Add `about` to `zhCN` in `frontend/src/i18n.ts`, with terms from `docs/glossary.md`.
+
+Other declarations exist for other data: `resourceList({ kind, title, about })` (see `src/apps/ontology/object-types.ts`) and `listPage({...})` (see `src/apps/admin/members.ts`). Use the one the card names.
+
+You may touch only: the one new file under `frontend/src/apps/<app>/`, and new lines in `zhCN`.
+
+## Card kind 2: finish a presentation (W11)
+
+The main session has already scaffolded the official template and connected it to the contract. The card lists what is still missing. You may touch only the files the card lists under `frontend/src/pages/` and new lines in `zhCN`.
+
+- Look for an official part before writing anything: `pnpm --dir frontend astryx search "<what you need>"`, then `pnpm --dir frontend astryx template <Block>` or `astryx component <Name>`.
+- Keep the template's frame, spacing and interaction. Change only what the card lists.
+- Read `astryx component <Name>` before using a prop. Use only props printed there.
 
 ## Steps
 
 1. Run `make check-frontend`. If it fails before you changed anything, stop and report.
-2. Open the archetype file and the finished example. List what the archetype asks an entry to provide.
-3. Create the entry file under `frontend/src/apps/<app>/` by copying the example's shape and replacing its content with what the card says: fields, filters, actions, read and write functions.
-4. For every component prop you use, read `pnpm --dir frontend astryx component <Name>` first. Use only props that are printed there.
-5. Every visible string is English in the source and passes through `t("...")`. Add each one to `zhCN` in `frontend/src/i18n.ts` with terms from `docs/glossary.md`.
-6. Cover the four states the archetype exposes: empty, loading, error, refusal. Do not skip one because the sample data never triggers it.
-7. Run `make check-frontend`. Fix every message exactly as it says. Repeat until it prints no problems.
-8. Open `http://localhost:8496/<app>/<entry>` (start it with `pnpm --dir frontend dev` if needed) and check each line of the card's 验收 by looking, in light and dark, at desktop and at phone width.
-9. Report (format below). Do not commit or push unless the card says to.
+2. Make the change the card describes, in the files the card allows.
+3. Every visible string is English in the source. Add each new one to `zhCN`.
+4. Run `make check-frontend`. Fix every message exactly as it says. Repeat until it prints no problems.
+5. Look at it with real data: run `make frontend-host` in one terminal, put `PLATFORM_HOST=http://127.0.0.1:18511` in `frontend/.env`, run `pnpm --dir frontend dev`, open `http://localhost:8496/<app>/<entry>`, pick the `admin-1` identity on the sign-in page. Check each line of 验收, in light and dark.
+6. Report (format below). Do not commit or push unless the card says to.
 
 ## Never
 
 - Never write a raw HTML element (`div`, `span`, `button`, `input`, `table`), a `className`, an inline `style`, a colour, or a pixel size.
-- Never invent a component prop, a host function, a field name, or a menu entry.
+- Never write a page from blank, and never write interface code inside an entry file.
+- Never invent a component prop, a host path, a type name, a field name, or a menu entry.
 - Never add a dependency or import anything outside Astryx, heroicons and `frontend/src`.
 - Never call `fetch` yourself.
-- Never copy code, names, layout or components from `web/`.
+- Never read or copy anything from `web/`.
 - Never write a code comment.
 - Never edit `scripts/check-frontend.mjs`, skip the check, or weaken a rule to get past it.
-- Never change two entries in one task, and never "tidy up" a file the card did not name.
+- Never touch `frontend/src/shell/`, `frontend/src/host/`, `frontend/src/router.tsx`, `frontend/src/main.tsx`, `frontend/src/apps.ts`, `frontend/src/apps/entries.ts`, `frontend/src/templates/`, `frontend/package.json`, any lockfile, any config file, `scripts/`, `docs/`, `.claude/`, any `AGENTS.md`, or anything under `web/` and `capabilities/`.
+- Never do two cards in one task, and never tidy a file the card did not name.
 
 ## Stop and report
 
 Stop at once, change nothing further, and report `BLOCKED` with the exact reason when:
 
-- the archetype file or the host function the card names does not exist;
-- the archetype cannot express something the card asks for (a column type, a filter, an action, a layout);
-- a component has no prop for what you need;
+- the example file, the presentation or the host type the card names does not exist;
+- the list shows the wrong columns, or the entry needs something the presentation cannot show;
+- a component has no prop for what you need, and `astryx search` finds no official part;
 - `make check-frontend` fails in a file you were not allowed to touch;
 - finishing would need a file on the never-touch list, or a new dependency;
 - the card contradicts `docs/4-interaction/README.md` §4.1, or is unclear.
@@ -77,7 +100,7 @@ A blocked task that is reported is a good result. A finished task that bent a ru
 ## Report
 
 ```
-ENTRY: <app>/<entry>
+CARD: <app>/<entry> or <presentation>
 STATUS: DONE | BLOCKED
 FILES: <each file created or changed>
 CHECK: make check-frontend -> <last line it printed>

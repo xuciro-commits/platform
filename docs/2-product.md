@@ -114,8 +114,36 @@ read-when: 新增能力或应用、判断能力归属、新增资源类型、处
 - 行业应用：产品版本（声明式，内容寻址），可发布到 Marketplace 目录，安装到任意租户。
 - 客户资源：留在客户租户，可用 DevOps 打包为客户自己的产品。
 
+## 2.8 类型开箱能力
+
+声明一个对象类型就应得到的能力；这是对 Frappe 追平的清单（[1-enterprise §1.11](1-enterprise.md)）。每项由一个提供者给出，界面由界面运行时按类型生成（[7-system/web](7-system/web.md)），不为某个类型另写。“新前端”一列只记 `frontend/` 是否已经给出。
+
+| 能力 | Frappe 里的名字 | 提供者 | 新前端 |
+|---|---|---|---|
+| 列表：筛选、排序、分组、保存的视图 | List View、Report View | 列表原型 | 文本筛选与分组 |
+| 记录页与就地编辑 | Form View | 记录原型 + 动作 | 无 |
+| 新建 | Quick Entry | 创建动作的表单 | 无 |
+| 看板、收件箱、树、日历 | Kanban、Tree、Calendar、Gantt | 列表原型的表现方式 | 无 |
+| 明细行 | Child Table | 字段类型“明细行” | 无 |
+| 状态与流程 | Workflow、可提交单据 | 生命周期状态 + 动作（R7） | 无 |
+| 评论、指派、关注、时间线 | Comments、Assign、Follow、Timeline | 评论动作、工作项、记录页 Activity | 无 |
+| 附件 | Attach | 媒体集 + 附件属性 | 无 |
+| 接口 | `/api/resource` | 记录读取、ObjectSet 与动作 | 读取 |
+| 权限 | Role Permission、User Permission | 授权引擎：项目角色、标记、行列策略 | 拒绝态 |
+| 搜索 | Awesomebar | 搜索（⌘K） | 无 |
+| 通知 | Notification、Email | 通知 | 无 |
+| 统计与图表 | Dashboard、Number Card | 仪表盘原型、Workshop 图表 | 无 |
+| 应用首页与菜单 | Workspace | 应用菜单（产品包的模块声明） | 手写清单 |
+| 导入导出 | Data Import、Export | 数据应用与交付（2.6） | 无 |
+| 外发与定时 | Webhook、Scheduler | 回写、监听器、自动化、调度 | 无 |
+| 翻译 | Translation | 管理的语言与词汇 | 界面文案 |
+| 定制 | Custom Field、Customize Form、Client 与 Server Script | 客户项目里的扩展：追加属性、动作、模块与受控函数（2.5） | 无 |
+| 打印 | Print Format | 未定归属 | 无 |
+| 对外页面 | Website、Portal、Web Form | 未定归属 | 无 |
+
 ## 现存差距
 
+- 类型开箱能力（2.8，第 6、7 层）：宿主一侧每项能力的现状尚未逐项核对；打印与对外页面没有归属。排期见[路线图](roadmap.md)“五、前端重建”。
 - 产品矩阵（2.2、R3；第 7 层与其余规范）：宿主的应用注册（`capabilities/server/platform/app_registry.json`）、`web/` 以及本文 2.3 起和其余规范仍用上一套产品名。对照：Home、Files → 主页；Data Connection、Pipeline Builder、Dataset Preview、Data Lineage → 数据；Ontology Manager、Object Explorer → 本体；Logic、Automate → 逻辑；Workshop → 应用；Agent Studio → AI；DevOps、Marketplace → 交付；Monitoring 与 Control Panel 的审计查询 → 运行；Control Panel → 管理；Host Console → 宿主；Search、Notifications、AIP Assist → 外壳的搜索、通知、助手；Applications 门户由应用轨取代。各处随所在小节改写时换名；注册表在新前端接入宿主时换名（路线图“五、前端重建”W1）。
 - 验证范围与尚未覆盖的运行模式统一见 [7-system/verification §7.13](7-system/verification.md#713-sql-模式)。
 - 内置应用（R8，第 7 层）：工作项、审批、通知收件箱与监控视图是 Go 与手写前端（`capabilities/server/services/work`、`web/packages/*`），没有系统产品包。

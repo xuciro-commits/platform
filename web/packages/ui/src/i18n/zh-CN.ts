@@ -1698,4 +1698,8 @@ export default {
   "Nothing to show.": "没有可显示的内容。",
   "Some records in this section are restricted.": "此分区中的部分记录受限。",
   "{section} could not be loaded: {reason}": "{section} 无法加载：{reason}",
+  "Choose a CSV file": "选择 CSV 文件",
+  "CSV file": "CSV 文件",
+  "The record avatars are unavailable or incompatible.": "记录头像不可用或不兼容。",
+  "Avatar labels or details are incompatible with their original fields.": "头像的标签或详情与原字段不兼容。",
 } as Record<string, string>;

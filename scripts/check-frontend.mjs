@@ -10,6 +10,7 @@ const allowedPackages = [
   "@astryxdesign/core",
   "@astryxdesign/theme-neutral",
   "@heroicons/react",
+  "@platform/api",
   "@stylexjs/stylex",
   "lucide-react",
   "react",
@@ -49,16 +50,33 @@ const needsTranslation = (file, line, text) => {
   if (!translated.has(text)) report(file, line, `"${text}" has no zh-CN entry. Add it to zhCN in src/i18n.ts.`);
 };
 
+const menu = new Set();
+let menuApp = "";
+for (const text of readFileSync(join(src, "apps.ts"), "utf8").split("\n")) {
+  const app = text.match(/^ {4}id: "([^"]+)"/);
+  if (app) menuApp = app[1];
+  const item = text.match(/\{ id: "([^"]+)", label:/);
+  if (item) menu.add(`${menuApp}/${item[1]}`);
+}
+
 for (const path of walk(src)) {
   const file = relative(src, path);
   if (vendored(file) || !/\.(ts|tsx)$/.test(file) || file.endsWith(".d.ts")) continue;
   const lines = readFileSync(path, "utf8").split("\n");
+  const entry = file.match(/^apps\/([^/]+\/[^/]+)\.tsx?$/);
+  if (entry && !menu.has(entry[1])) {
+    report(file, 1, `"${entry[1]}" is not an entry in src/apps.ts. Name the file after the entry on your task card (apps/<app>/<entry>.ts); put helper files in a subfolder.`);
+  }
+  if (entry && !lines.some((text) => text.startsWith("export default "))) {
+    report(file, 1, "an entry file must default-export its page, for example: export default listPage({ ... }).");
+  }
   if (lines.length > 600) report(file, 1, `${lines.length} lines. Keep a file under 600 lines: split it by responsibility.`);
   lines.forEach((text, index) => {
     const line = index + 1;
     const trimmed = text.trim();
     for (const match of text.matchAll(/(?:from|import)\s*\(?\s*"([^"]+)"/g)) {
       const target = match[1];
+      if (target === "@platform/api/host-contract" && file.startsWith("host/")) continue;
       if (!allowedImports.some((pattern) => pattern.test(target))) {
         report(file, line, `import "${target}" is not allowed. Use Astryx, heroicons or a file under frontend/src; never import from web/ or a new package.`);
       } else if (target.startsWith(".") && relative(src, resolve(dirname(path), target)).startsWith("..")) {
@@ -93,8 +111,8 @@ for (const path of walk(src)) {
       if (between && between[1].trim()) report(file, line, `visible text "${between[1].trim()}" is not translated. Write it as {t("${between[1].trim()}")}.`);
     }
     for (const match of text.matchAll(/\bt\("([^"]+)"\)/g)) needsTranslation(file, line, match[1]);
-    if (file === "apps.ts" || file.startsWith("apps/")) {
-      for (const match of text.matchAll(/\b(?:label|title): "([^"]+)"/g)) needsTranslation(file, line, match[1]);
+    if (file === "apps.ts" || file.startsWith("apps/") || file.startsWith("pages/")) {
+      for (const match of text.matchAll(/\b(?:label|title|header|about): "([^"]+)"/g)) needsTranslation(file, line, match[1]);
     }
   });
 }

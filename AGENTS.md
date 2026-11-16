@@ -1,6 +1,6 @@
 # AGENTS.md
 
-业务应用构建平台，以 Palantir Foundry 为基准。终局：先把平台做成，再用平台自己的工具构建行业应用，经 Marketplace 交付到客户租户（[1-enterprise](docs/1-enterprise.md)）。
+业务应用构建平台：内核的模型以 Palantir Foundry 为基准，应用框架的体验以胜出 Frappe 为目标（[1-enterprise §1.11](docs/1-enterprise.md)）。终局：先把平台做成，再用平台自己的工具构建行业应用，经 Marketplace 交付到客户租户（[1-enterprise](docs/1-enterprise.md)）。
 
 规范领导代码：`docs/` 写目标设计，代码与规范冲突时改代码。本文件每次加载；其余文档按下表在需要时读，只读相关小节。文档体系本身见 [docs/README](docs/README.md)。
 
@@ -40,6 +40,7 @@
 - 测试只写两类：内核不变量与黄金路径验收（7-system/verification）；不为单个函数写单元测试。
 - 权威状态的新写入只经接受结果；跨应用走版本化协议，不做跨权威原子性。
 - 应用只导入 `platformserver/platform`；客户端复用现有共享包；规则求值、约束、授权、依赖解析各一个实现。
+- 界面由类型生成（1-enterprise 决定 8）：新界面先找 Astryx 官方模板与块，改造一次成为只认契约的表现，入口只写声明；不从空白写页面，不为单个类型写界面。
 - 平台不含行业代码；行业概念只在产品包中以本体与应用表达。
 - 租户扩展只经受控编译、隔离执行和版本化制品。
 - 界面保留英文与简体中文；业务数据不翻译；应用按承担的工作命名，中英文各一个名字（2-product R3）。
@@ -55,7 +56,7 @@
 | 本地运行 | `make local`（入口 http://localhost:8495，热更新；宿主日志 `.build/dev/platform-api.log`） |
 | Go 检查 | `cd capabilities/server && GOPROXY=https://goproxy.cn,direct go build ./... && go vet ./...`；`gofmt -l .` |
 | 宿主类型与页面契约 | `make contract`（生成 `api/src/gen/*.ts`、`pageui/safety.ts`、`platform/page_compat.json`） |
-| 新前端 | `pnpm --dir frontend dev`（http://localhost:8496，代理到宿主）；检查 `make check-frontend` |
+| 新前端 | `pnpm --dir frontend dev`（http://localhost:8496，代理到 `PLATFORM_HOST`）；夹具宿主 `make frontend-host`；检查 `make check-frontend` |
 | Web 检查 | 改动的包内 `pnpm exec tsc -p .`；`cd web && pnpm build` |
 | 空白 | `git diff --check` |
 | 快速检查 | `make check`（约 5 秒：Go 构建与 vet、包边界与形状、契约、文案、空白）；改了 `web/` 加 `make check-web`，改了 `frontend/` 加 `make check-frontend`；提交钩子自动运行两者 |

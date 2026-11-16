@@ -5,7 +5,7 @@ description: Procedure and visual system for any frontend work in the platform f
 
 # Platform frontend design
 
-The interaction invariants live in `docs/4-interaction/README.md` §4.1 and the task paths in `docs/5-experience.md`; this skill owns the working procedure and the visual system. The frontend is being rebuilt from zero in `frontend/`; `web/` is the previous implementation and is not a reference. Components come from Astryx (`@astryxdesign/core`) and pages start from its official templates. The shell is benchmarked on ERPNext (an app rail, then the current app's menu); lists, records and entry on Frappe CRM: lists that are views, one record shape, input that saves itself.
+The interaction invariants live in `docs/4-interaction/README.md` §4.1 and the task paths in `docs/5-experience.md`; this skill owns the working procedure and the visual system. The frontend is being rebuilt from zero in `frontend/`; `web/` is a parallel track owned by another session (roadmap W10) and is not a reference. The aim is an application framework that beats Frappe: declaring a type yields a modern interface, so screens are generated from type metadata by presentations adapted from official templates (`docs/7-system/web.md`, "界面运行时"; `docs/1-enterprise.md` §1.11). Components come from Astryx (`@astryxdesign/core`) and pages start from its official templates. The shell is benchmarked on ERPNext (an app rail, then the current app's menu); lists, records and entry on Frappe CRM: lists that are views, one record shape, input that saves itself.
 
 The Astryx CLI is the reference, and `frontend/AGENTS.md` is its generated cheat sheet:
 
@@ -20,13 +20,13 @@ Refresh the cheat sheet only with `astryx init --agent-docs-path AGENTS.md` run 
 
 ## Procedure
 
-1. **Place it.** Name the owning app (docs/2-product §2.2) and the page archetype: List, Record, Canvas or Dashboard (docs/4-interaction §4.3). If the screen fits none, stop and change the spec first.
-2. **Start from the template.** Scaffold the Astryx template named for that archetype in §4.3, keep its frame and spacing, replace its content, and read the docs of every component you use before using it. Never invent a prop.
+1. **Place it.** Name the owning app (docs/2-product §2.2) and the page archetype: List, Record, Canvas or Dashboard (docs/4-interaction §4.3). If the screen fits none, stop and change the spec first. Then name the layer you are changing: a contract (`src/host/`), a presentation (`src/pages/`) or an entry declaration (`src/apps/`). A need that shows up in one entry is met in the presentation or the contract, so every type gets it.
+2. **Find the official part first.** `astryx build "<idea>"` and `astryx search "<need>"` before writing anything. Scaffold the template into `src/templates/<id>/`, then do three things only: replace its sample data with the contract, add the presentation it lacks, delete the scaffold when the adaptation is done. Keep its frame, spacing and interaction. One template is adapted once and serves every type. Only when nothing official fits, compose official blocks (`astryx template <Block>`); never write a page from blank. Read the docs of every component before using it; never invent a prop.
 3. **Hold the invariants.** Walk R1–R13 in docs/4-interaction §4.1 against the screen. A screen that needs to break one is a spec change, not a screen.
-4. **Wire data.** Reads through `useReadQuery` / ObjectSet hooks, writes through `decide(schema, target, payload)`. Object fields submit on blur or Enter; resource definitions autosave into the working state (docs/4-interaction §4.5).
+4. **Wire data.** Reads and writes only through `src/host/` (`useRead` today; writes go through actions when the record archetype lands). A presentation takes the contract's shape and the four read states; it never fetches. Object fields submit on blur or Enter; resource definitions autosave into the working state (docs/4-interaction §4.5).
 5. **Write the words.** Every string through `t()`, with a `zh-CN` entry in the package's `i18n.ts`. Terms come from docs/glossary.md; tool app names stay untranslated; copy follows docs/5-experience §5.5.
 6. **Cover the states.** Empty, loading, error and refusal for every region that reads data (R10).
-7. **Verify.** `pnpm --dir frontend build`, look at the screen in the browser, `git diff --check`.
+7. **Verify.** `make check-frontend`; look at the screen with real data (`make frontend-host`, `PLATFORM_HOST=http://127.0.0.1:18511` in `frontend/.env`, pick a fixture identity on the sign-in page), in light and dark; `git diff --check`.
 8. **Report.** List the screens that changed and what the owner should look at; the owner walks the UI and judges look and feel.
 
 ## Visual system
@@ -56,7 +56,7 @@ Graph canvases, charts, code editing and 3D keep their dedicated libraries; thei
 
 ## Legacy
 
-`web/` still serves the product until `frontend/` passes the acceptance specs. Fix defects there with its own components; add nothing, and carry none of its structure, names or components into `frontend/`.
+`web/` still serves the product and is being replaced with Astryx in place by another session (roadmap W10). When working in `frontend/`, do not read or change it, and carry none of its structure, names or components over.
 
 ## Done means
 
