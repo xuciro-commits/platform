@@ -1,5 +1,6 @@
-import { ChevronDown, ChevronRight } from "lucide-react";
 import { useMemo, useState, type ReactNode } from "react";
+import { TreeList, type TreeListItemData } from "@astryxdesign/core/TreeList";
+import { Text } from "@astryxdesign/core/Text";
 import { cn } from "../lib/cn";
 import { Input, Select } from "../primitives/input";
 import { t } from "../i18n";
@@ -19,7 +20,6 @@ export function GroupedList<T>({ items, groupings, grouping, onGrouping, id, row
   const [ownGrouping, setOwnGrouping] = useState(groupings[0]?.id ?? "");
   const current = groupings.find((g) => g.id === (grouping ?? ownGrouping)) ?? groupings[0];
   const [q, setQ] = useState("");
-  const [folded, setFolded] = useState<Record<string, boolean>>({});
   const needle = q.trim().toLocaleLowerCase();
   const groups = useMemo(() => {
     const out = new Map<string, { id: string; label: string; hint?: string; order: number; items: T[] }>();
@@ -32,7 +32,18 @@ export function GroupedList<T>({ items, groupings, grouping, onGrouping, id, row
     }
     return Array.from(out.values()).sort((a, b) => a.order - b.order || a.label.localeCompare(b.label));
   }, [items, needle, current, text]);
-  const pad = dense ? "py-0.5" : "py-1";
+  const tree: TreeListItemData[] = groups.map((group) => ({
+    id: group.id || group.label || "_",
+    label: group.label || group.hint || "",
+    isExpanded: true,
+    endContent: <Text type="supporting" hasTabularNumbers>{group.items.length}</Text>,
+    children: group.items.map((item) => ({
+      id: id(item),
+      label: row(item),
+      isSelected: selected === id(item),
+      onClick: onSelect ? () => onSelect(item) : undefined,
+    })),
+  }));
   return <div className={cn("grid min-w-0 content-start gap-2", className)}>
     <div className="flex flex-wrap items-center gap-2">
       <Input aria-label={t("Search")} placeholder={t("Search")} value={q} onChange={(e) => setQ(e.target.value)} className="h-8 min-w-0 flex-1 text-xs" />
@@ -42,29 +53,6 @@ export function GroupedList<T>({ items, groupings, grouping, onGrouping, id, row
         </Select></label>}
       {toolbar}
     </div>
-    {!groups.length && <p className="py-2 text-xs text-muted">{needle ? t("Nothing matches.") : empty ?? t("Nothing here yet.")}</p>}
-    <div role="tree" className="grid min-w-0 content-start">
-      {groups.map((g) => {
-        const shut = !needle && !!folded[g.id];
-        return <div key={g.id || "_"} role="treeitem" aria-expanded={!shut} className="min-w-0">
-          {(g.id || g.label) && <button type="button" onClick={() => setFolded((f) => ({ ...f, [g.id]: !f[g.id] }))}
-            className="flex w-full items-center gap-1.5 rounded-sm px-1 py-1 text-left text-xs font-semibold hover:bg-row-hover">
-            {shut ? <ChevronRight className="size-3 shrink-0" /> : <ChevronDown className="size-3 shrink-0" />}
-            <span className="min-w-0 truncate">{g.label}</span>
-            {g.hint && <span className="min-w-0 truncate font-normal text-muted">{g.hint}</span>}
-            <span className="ml-auto shrink-0 font-normal tabular-nums text-muted">{g.items.length}</span>
-          </button>}
-          {!shut && <div role="group" className={cn("grid min-w-0", (g.id || g.label) && "ml-2 border-l border-border pl-1")}>
-            {g.items.map((item) => {
-              const key = id(item), active = selected === key;
-              return <button type="button" key={key} role="treeitem" aria-selected={active} onClick={() => onSelect?.(item)}
-                className={cn("flex w-full min-w-0 items-center gap-2 rounded-sm px-2 text-left text-xs hover:bg-row-hover", pad, active && "bg-row-selected")}>
-                {row(item)}
-              </button>;
-            })}
-          </div>}
-        </div>;
-      })}
-    </div>
+    {!groups.length ? <Text type="supporting">{needle ? t("Nothing matches.") : empty ?? t("Nothing here yet.")}</Text> : <TreeList aria-label={t("Grouped records")} items={tree} density={dense ? "compact" : "balanced"} variant="lineGuides" />}
   </div>;
 }

@@ -1410,6 +1410,7 @@ export default {
   "Open my account": "打开我的账户",
   "Nothing matches.": "没有匹配项。",
   "Nothing here yet.": "这里还没有内容。",
+  "Grouped records": "分组记录",
   "Structure and places": "结构与场所",
   "People and posts": "人员与岗位",
   "Work and time": "工作与时间",
