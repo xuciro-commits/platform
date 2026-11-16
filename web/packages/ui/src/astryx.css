@@ -22,7 +22,9 @@
  */
 :root[data-astryx-theme] {
   --background: var(--color-background-body);
-  --surface: light-dark(color-mix(in srgb, var(--color-background-surface) 10%, var(--color-background-muted)), color-mix(in srgb, var(--color-background-surface) 72%, var(--color-background-muted)));
+  --surface: var(--color-background-surface);
+  --panel: var(--color-background-muted);
+  --popover: var(--color-background-popover);
   --field-surface: var(--color-background-surface);
   --foreground: var(--color-text-primary);
   --muted: var(--color-text-secondary);
@@ -42,14 +44,14 @@
   --rail-hover: var(--color-overlay-hover);
   --rail-selected: var(--color-accent-muted);
   --rail-border: var(--color-border);
-  --sidebar: var(--surface);
+  --sidebar: var(--color-background-muted);
   --canvas: var(--color-background-body);
 
   --tone-neutral: var(--color-text-secondary);
-  --tone-info: var(--color-info);
-  --tone-success: var(--color-success);
-  --tone-warning: var(--color-warning);
-  --tone-danger: var(--color-error);
+  --tone-info: var(--color-text-info);
+  --tone-success: var(--color-text-success);
+  --tone-warning: var(--color-text-warning);
+  --tone-danger: var(--color-text-error);
   --tone-purple: var(--color-text-purple);
   --tone-pink: var(--color-text-pink);
   --tone-teal: var(--color-text-teal);

@@ -208,8 +208,8 @@ export function DataTable<T>({
         </div>
       )}
       <div ref={scroller} role="table" aria-rowcount={(totalRows ?? rows.length) + headerRows} aria-colcount={leaf.length} aria-busy={loading || undefined}
-        className="overflow-auto rounded-md border border-border bg-surface" style={{ height, scrollbarGutter: "stable" }}>
-        <div role="rowgroup" className={cn("sticky top-0 z-10 border-b border-border bg-surface", rows.length === 0 && "overflow-hidden")} style={{ minWidth }}>
+        className="overflow-auto rounded-md border border-border bg-panel" style={{ height, scrollbarGutter: "stable" }}>
+        <div role="rowgroup" className={cn("sticky top-0 z-10 border-b border-border bg-panel", rows.length === 0 && "overflow-hidden")} style={{ minWidth }}>
           {table.getHeaderGroups().map((group, index) => { let columnIndex = 0; return (
             <div role="row" aria-rowindex={index + 1} key={group.id} className="grid" style={{ gridTemplateColumns: template }}>
               {group.headers.map((header) => {
@@ -224,7 +224,7 @@ export function DataTable<T>({
                     aria-colspan={header.colSpan > 1 ? header.colSpan : undefined}
                     aria-sort={sorted === "asc" ? "ascending" : sorted === "desc" ? "descending" : "none"}
                     className={cn("relative flex min-h-7 min-w-0 items-center gap-1 px-2 py-1 text-xs font-medium uppercase tracking-wide text-muted",
-                      (meta?.align ?? meta?.field?.align) === "right" && "justify-end text-right", pin != null && "z-[2] bg-surface")}
+                      (meta?.align ?? meta?.field?.align) === "right" && "justify-end text-right", pin != null && "z-[2] bg-panel")}
                     style={{gridColumn:`${ci+1} / span ${header.colSpan}`,...(pin != null ? { position: "sticky", left: pin } : {})}}>
                     {!header.isPlaceholder && (!querySorting && header.column.getCanSort() || meta?.querySort ? (
                       <button type="button" className="flex min-w-0 items-center gap-1 hover:text-foreground"

@@ -52,7 +52,7 @@ export function Files({ project: initialProject = "", folder: initialFolder = ""
     <RequestAccessDialog project={requesting?.project} open={!!requesting} onOpenChange={open => { if (!open) setRequesting(undefined); }} onRequested={() => setError("")} />
     {query.isError && <><Notice tone="danger" message={t("Resource directory could not be loaded.")} /><Button onClick={() => void query.refetch()}>{t("Retry")}</Button></>}
     <div className="grid min-h-0 flex-1 grid-cols-[14rem_minmax(0,1fr)] border border-border">
-      <nav aria-label={t("Folders")} className="min-h-0 overflow-auto border-r border-border bg-surface">
+      <nav aria-label={t("Folders")} className="min-h-0 overflow-auto border-r border-border bg-panel">
         <button className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-row-hover" onClick={() => select()}><FolderTree className="size-4" />{t("All projects")}</button>
         {projects.map(item => <div key={item.id}>
           <button className={`flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm hover:bg-row-hover ${project === item.draft && !initialFolder ? "bg-row-hover font-medium" : ""}`} onClick={() => select(item)}><ChevronDown className={`size-3 ${project === item.draft ? "" : "-rotate-90"}`} /><Folder className="size-4" /><span className="truncate">{item.title}</span></button>

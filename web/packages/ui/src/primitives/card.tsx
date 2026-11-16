@@ -25,7 +25,7 @@ export function PanelGroup({ className, children, ...props }: HTMLAttributes<HTM
     <div
       data-ui="panel-group"
       className={cn(
-        "grid min-w-0 gap-px overflow-hidden rounded-md border border-border bg-border text-sm [&>[data-ui=section]]:min-w-0 [&>[data-ui=section]]:bg-surface [&>[data-ui=section]]:p-3",
+        "grid min-w-0 gap-px overflow-hidden rounded-md border border-border bg-border text-sm [&>[data-ui=section]]:min-w-0 [&>[data-ui=section]]:bg-panel [&>[data-ui=section]]:p-3",
         className,
       )}
       {...props}
