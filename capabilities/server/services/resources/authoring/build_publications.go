@@ -145,7 +145,7 @@ func (b *Build) ApplyAcceptedPublication(schema string, image []byte) error {
 		if err != nil {
 			return err
 		}
-		var record Table
+		var record functionauthoring.Table
 		if err := json.Unmarshal(image, &record); err != nil {
 			return err
 		}

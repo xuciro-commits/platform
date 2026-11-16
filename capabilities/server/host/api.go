@@ -8,8 +8,8 @@ import (
 	"platformserver/services/actions"
 	automation "platformserver/services/automate/runtime"
 	dataowner "platformserver/services/data"
+	functionauthoring "platformserver/services/functions/authoring"
 	"platformserver/services/objects"
-	"platformserver/services/resources/authoring"
 	"platformserver/services/security"
 	controlowner "platformserver/services/security/control"
 	enterprisemodel "platformserver/services/security/organization"
@@ -68,7 +68,7 @@ func (h *Host) OpenAPI(t *Tenant, m *platform.Member) map[string]any {
 	}
 	return transport.OpenAPI(h.routes, []reflect.Type{
 		reflect.TypeFor[platform.PageCollectionInput](), reflect.TypeFor[platform.InputOptions](),
-		reflect.TypeFor[platform.ImageRegionsRequest](), reflect.TypeFor[build.Table](),
+		reflect.TypeFor[platform.ImageRegionsRequest](), reflect.TypeFor[functionauthoring.Table](),
 		reflect.TypeFor[platform.Schedule](), reflect.TypeFor[platform.MediaSet](), reflect.TypeFor[platform.MediaSetVersion](), reflect.TypeFor[platform.Attachment](),
 		reflect.TypeFor[dataowner.Source](), reflect.TypeFor[dataowner.Connection](), reflect.TypeFor[dataowner.Listener](),
 		reflect.TypeFor[platform.BusinessTxn](), reflect.TypeFor[platform.ConfirmationRun](),

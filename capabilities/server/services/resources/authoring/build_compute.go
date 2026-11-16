@@ -68,7 +68,7 @@ func (b *Build) OperationDefinition(name string, version int) (platform.Operatio
 	}
 	for _, tb := range b.tables {
 		for _, raw := range tb.Versions {
-			prior, ok := ReadPublication[Table](raw)
+			prior, ok := ReadPublication[functionauthoring.Table](raw)
 			if ok && prior.Name == name && prior.Version == version {
 				return prior.Definition(), version, true
 			}
@@ -271,27 +271,27 @@ func (b *Build) PrepareCodeReleasePublications(assets []platform.ReleaseAsset) (
 	return out, nil
 }
 
-func (b *Build) tableReleaseAsset(table Table, manifest string) (platform.ReleaseAsset, error) {
+func (b *Build) tableReleaseAsset(table functionauthoring.Table, manifest string) (platform.ReleaseAsset, error) {
 	return b.resolver.WithDependencies(platform.ReleaseAsset{Ref: platform.AssetRef{App: ID, Kind: platform.AssetCompute, Name: table.Name}, ContractVersion: 1, SourceVersion: manifest + ".compute-" + strconv.Itoa(table.Version), Body: platform.Raw(table.Definition())})
 }
 
-func (b *Build) tableFromAsset(asset platform.ReleaseAsset) (Table, error) {
+func (b *Build) tableFromAsset(asset platform.ReleaseAsset) (functionauthoring.Table, error) {
 	var op platform.Operation
 	text, found := strings.CutPrefix(asset.SourceVersion, ValueDefinitionVersion+".compute-")
 	version, err := strconv.Atoi(text)
 	if !found || err != nil || strconv.Itoa(version) != text || version < 1 || version > 64 || asset.Ref.App != ID || asset.Ref.Kind != platform.AssetCompute || asset.ContractVersion != 1 || json.Unmarshal(asset.Body, &op) != nil || op.Name != asset.Ref.Name || op.Binding.Kind != "native" || op.Rules == nil || op.Check() != nil || b.resolver.CheckAssetDependencies(asset) != nil {
-		return Table{}, fmt.Errorf("invalid decision table asset %s", asset.Ref)
+		return functionauthoring.Table{}, fmt.Errorf("invalid decision table asset %s", asset.Ref)
 	}
-	tb := Table{Name: op.Name, Title: op.Title, Description: op.Description, Reads: &op.Rules.Reads, State: "published", Version: version}
-	columns := func(schema platform.ValueSchema) ([]TableColumn, error) {
-		var columns []TableColumn
+	tb := functionauthoring.Table{Name: op.Name, Title: op.Title, Description: op.Description, Reads: &op.Rules.Reads, State: "published", Version: version}
+	columns := func(schema platform.ValueSchema) ([]functionauthoring.TableColumn, error) {
+		var columns []functionauthoring.TableColumn
 		for _, name := range schema.Required {
 			field := schema.Properties[name]
 			kind := map[string]string{"string": "text", "number": "number", "boolean": "boolean"}[field.Type]
 			if kind == "" {
 				return nil, fmt.Errorf("table column %s has an unsupported schema", name)
 			}
-			columns = append(columns, TableColumn{Name: name, Title: field.Description, Type: kind})
+			columns = append(columns, functionauthoring.TableColumn{Name: name, Title: field.Description, Type: kind})
 		}
 		if len(columns) == 0 || len(columns) != len(schema.Properties) {
 			return nil, fmt.Errorf("table columns need ordered, required schema fields")
@@ -299,10 +299,10 @@ func (b *Build) tableFromAsset(asset platform.ReleaseAsset) (Table, error) {
 		return columns, nil
 	}
 	if tb.Inputs, err = columns(op.Input); err != nil {
-		return Table{}, err
+		return functionauthoring.Table{}, err
 	}
 	if tb.Outputs, err = columns(op.Output); err != nil {
-		return Table{}, err
+		return functionauthoring.Table{}, err
 	}
 	results := func(raw json.RawMessage) ([]string, error) {
 		var values map[string]any
@@ -325,23 +325,23 @@ func (b *Build) tableFromAsset(asset platform.ReleaseAsset) (Table, error) {
 		expressions := []platform.Expr{row.Condition}
 		if len(tb.Inputs) > 1 {
 			if row.Condition.Op != "and" || len(row.Condition.Args) != len(tb.Inputs) {
-				return Table{}, fmt.Errorf("table row does not match its columns")
+				return functionauthoring.Table{}, fmt.Errorf("table row does not match its columns")
 			}
 			expressions = row.Condition.Args
 		}
 		then, err := results(row.Result)
 		if err != nil {
-			return Table{}, err
+			return functionauthoring.Table{}, err
 		}
-		tb.Rows = append(tb.Rows, TableRow{Expressions: expressions, Then: then})
+		tb.Rows = append(tb.Rows, functionauthoring.TableRow{Expressions: expressions, Then: then})
 	}
 	if len(op.Rules.Default) > 0 {
 		if tb.Default, err = results(op.Rules.Default); err != nil {
-			return Table{}, err
+			return functionauthoring.Table{}, err
 		}
 	}
 	if !bytes.Equal(platform.Raw(tb.Definition()), platform.Raw(op)) {
-		return Table{}, fmt.Errorf("table operation cannot be represented by its original editor")
+		return functionauthoring.Table{}, fmt.Errorf("table operation cannot be represented by its original editor")
 	}
 	return tb, nil
 }
@@ -351,12 +351,12 @@ func (b *Build) tableDraftAssets(id string) (before, after []platform.ReleaseAss
 	if err != nil {
 		return
 	}
-	tb, ok := platform.Get[Table](b.host.Automation(platform.Caller{}, ID), id)
+	tb, ok := platform.Get[functionauthoring.Table](b.host.Automation(platform.Caller{}, ID), id)
 	if !ok || tb.Archived {
 		err = fmt.Errorf("decision table draft %s was not found", id)
 		return
 	}
-	if old, ok := ReadPublication[Table](tb.Published); ok {
+	if old, ok := ReadPublication[functionauthoring.Table](tb.Published); ok {
 		prior, hadPrior = platform.AssetRef{App: ID, Kind: platform.AssetCompute, Name: old.Name}, true
 	}
 	if err = tb.NormalizeRules(); err == nil {
@@ -382,7 +382,7 @@ func (b *Build) tableDraftAssets(id string) (before, after []platform.ReleaseAss
 }
 
 func (b *Build) prepareTablePublications(assets []platform.ReleaseAsset) ([]platform.ReleasePublication, error) {
-	rows, err := readDefinitionInventory[Table](b.host.Automation(platform.Caller{}, ID))
+	rows, err := readDefinitionInventory[functionauthoring.Table](b.host.Automation(platform.Caller{}, ID))
 	if err != nil {
 		return nil, err
 	}
@@ -399,7 +399,7 @@ func (b *Build) prepareTablePublications(assets []platform.ReleaseAsset) ([]plat
 		if err != nil {
 			return nil, err
 		}
-		i := slices.IndexFunc(rows, func(tb Table) bool { return !tb.Archived && tb.Name == frozen.Name })
+		i := slices.IndexFunc(rows, func(tb functionauthoring.Table) bool { return !tb.Archived && tb.Name == frozen.Name })
 		if i < 0 {
 			return nil, fmt.Errorf("table %s has no target draft", asset.Ref)
 		}
@@ -415,7 +415,7 @@ func (b *Build) prepareTablePublications(assets []platform.ReleaseAsset) ([]plat
 		frozen.Record = record.Record
 		raw := published(frozen)
 		for _, retained := range record.Versions {
-			if prior, ok := ReadPublication[Table](retained); ok && prior.Version == frozen.Version {
+			if prior, ok := ReadPublication[functionauthoring.Table](retained); ok && prior.Version == frozen.Version {
 				raw = retained
 				break
 			}

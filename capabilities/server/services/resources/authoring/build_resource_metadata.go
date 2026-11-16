@@ -121,7 +121,7 @@ var resourceDescriptors = []resourceDescriptor{
 		presentations: []resourcePresentation{presented("compute", "code", "Code function", "Code functions", 17)},
 	},
 	{
-		app: ID, typ: TableType, kind: platform.AssetCompute, family: versionedResources, released: true, defaultDraft: true, directInstall: true, acceptedPublication: true,
+		app: ID, typ: functionauthoring.TableType, kind: platform.AssetCompute, family: versionedResources, released: true, defaultDraft: true, directInstall: true, acceptedPublication: true,
 		presentations: []resourcePresentation{withReleaseKind(presented("table", "decision-table", "Decision table", "Decision tables", 18), "table")},
 	},
 	{

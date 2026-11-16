@@ -141,6 +141,10 @@ read-when: 每批开始（选当前批次）与结束（删除已完成条目、
     - 源：`services/resources/authoring/build_compute.go`、`build_owner.go`、`build_publications.go`、`build_artifacts_installation.go`、`build_resource_metadata.go`、`published_definitions.go`、`monitoring_runs.go`、`monitoring_owner_runs.go`；目标：`services/functions/authoring/compute_code.go`、`function_owner.go`；调用方：`services/resources/merge/branch_api.go`、`branch_flows.go`、`branch_workspace.go`、`stage_graph.go`、`host/monitoring_test.go`。删除旧声明与实现，不保留兼容转发；保持 `build.code` schema、JSON、编译摘要、动作权限、接受结果与错误顺序。
     - 完成判据：`make contract` 无差异；对照代码实体、编译摘要与构建请求，验证编译请求、结果接受及监控，产品包和历史结果不变；V1、V3。全量浏览器验收待 U3.24 所列问题恢复后执行。
     - 现状：编译成功的接受结果和重放、分支附件暂存及拒绝与迁移前逐字节一致；七个产品包的候选和闭包对照一致。V1 与 SQL 重启恢复通过；全量浏览器验收未重跑。
+  - [ ] U5.3 决策表模型与规则创作归函数服务。诊断：表记录、列与行、条件转换、规则计划和结构校验属于函数创作；记录实体、发布、安装及历史版本仍由 Build 处理，待 U4.2 定型后迁移。
+    - 源：`services/resources/authoring/build_tables.go`、`build_formulas.go`、`build_compute.go`、`build_owner.go`、`build_publications.go`、`build_artifacts_installation.go`、`build_release_drafts.go`、`build_resource_metadata.go`、`published_definitions.go`；目标：`services/functions/authoring/compute_table.go`；调用方：`host/api.go`。删除旧声明和实现，不保留兼容转发；共享集合校验显式接收原有对象查找，保持查找顺序与错误。
+    - 完成判据：`make contract` 无差异；对照表规则、接受与拒绝、发布计算、历史版本和重放；产品包候选与闭包不变；V1、V3。全量浏览器验收待 U3.24 所列问题恢复后执行。
+    - 现状：12 组创建接受与拒绝、规则与动作契约、发布计算、两个历史版本和重放均与迁移前逐字节一致；七个产品包的候选和闭包对照一致，V1 与 SQL 重启恢复通过；全量浏览器验收未重跑。
 - [ ] U7 `platform` 只留 SDK 契约（整段完成标准：不超过 8 千行）。前置 U2、U3。
   - [ ] U7.1 诊断与切分（不写代码）。范围含原 U2.3：`BusinessTxn`、`TxnStep` 等事务类型与冻结定义解码离开 `platform` 的无环切分（定义校验归 ontology、执行归 actions），不改已存字节，不推进纪元。
     - 现状（行数按文件名前缀）：rules 1775、asset 1622、entity 1414、dependencies 1411、definition 1381、app 1305、actions 1103、ai 1075、revision 938、protocol 674、workflow 638、operations 580。

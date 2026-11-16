@@ -10,6 +10,7 @@ import (
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	appsauthoring "platformserver/services/apps/authoring"
 	automationauthoring "platformserver/services/automate/authoring"
+	functionauthoring "platformserver/services/functions/authoring"
 	"platformserver/services/ontology"
 	"reflect"
 	"slices"
@@ -330,7 +331,7 @@ func (b *Build) singleDraftAssets(kind platform.AssetKind, id string) (before, a
 		return k.draftAssets(b, id)
 	}
 	if kind == platform.AssetCompute {
-		if _, ok := platform.Get[Table](b.host.Automation(platform.Caller{}, ID), id); ok {
+		if _, ok := platform.Get[functionauthoring.Table](b.host.Automation(platform.Caller{}, ID), id); ok {
 			return b.tableDraftAssets(id)
 		}
 		return b.CodeDraftAssets(id)

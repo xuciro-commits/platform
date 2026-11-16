@@ -178,7 +178,7 @@ func (b *Build) declarationReleaseDraft(asset platform.ReleaseAsset) (string, an
 		if json.Unmarshal(asset.Body, &operation) == nil && operation.Binding.Kind == "native" {
 			table, err := b.tableFromAsset(asset)
 			table.State, table.Version = "draft", 0
-			return TableType, table, err
+			return functionauthoring.TableType, table, err
 		}
 		rows, err := b.codeInventory()
 		if err != nil {

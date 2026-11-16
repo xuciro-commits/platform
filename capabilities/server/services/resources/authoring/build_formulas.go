@@ -189,11 +189,7 @@ func (b *Build) checkObjectRules(o ontology.Object, engines ...platform.RuleEngi
 	return nil
 }
 
-func (b *Build) checkRuleCollections(s platform.RuleReadSpec, where string, lookups ...func(string) (platform.EntityInfo, bool)) error {
-	lookup := b.conditionLookup
-	if len(lookups) > 0 {
-		lookup = lookups[0]
-	}
+func (b *Build) checkRuleCollections(s platform.RuleReadSpec, where string, lookup func(string) (platform.EntityInfo, bool)) error {
 	for name, set := range s.Collections {
 		if set.Set != "" {
 			info, ok := lookup(s.Object)

@@ -60,14 +60,14 @@ type Build struct {
 	apps                *appsauthoring.Owner
 	agents              map[string]Agent
 	codes               map[string]functionauthoring.Code
-	tables              map[string]Table
+	tables              map[string]functionauthoring.Table
 }
 
 func (b *Build) AttachBuild(h platform.BuildHost) { b.host = h }
 func (b *Build) AttachFiles(h platform.FileHost)  { b.data.AttachFiles(h) }
 
 func New(tenant string, authorities platform.Authorities, publications []publication.Hooks, resolver publication.Resolver) *Build {
-	b := &Build{resolver: resolver, publications: publications, installed: map[string]platform.Entity{}, linkTypes: map[string]ontology.LinkType{}, propertyTypes: map[string]ontology.PropertyType{}, valueTypes: map[string]ontology.ValueType{}, objectTypeGroups: map[string]ontology.ObjectTypeGroup{}, queries: map[string]Query{}, interfaces: map[string]ontology.InterfaceRecord{}, agents: map[string]Agent{}, codes: map[string]functionauthoring.Code{}, tables: map[string]Table{}}
+	b := &Build{resolver: resolver, publications: publications, installed: map[string]platform.Entity{}, linkTypes: map[string]ontology.LinkType{}, propertyTypes: map[string]ontology.PropertyType{}, valueTypes: map[string]ontology.ValueType{}, objectTypeGroups: map[string]ontology.ObjectTypeGroup{}, queries: map[string]Query{}, interfaces: map[string]ontology.InterfaceRecord{}, agents: map[string]Agent{}, codes: map[string]functionauthoring.Code{}, tables: map[string]functionauthoring.Table{}}
 	b.data = dataowner.New(buildDataHost{b}, resolver)
 	b.automation = automationauthoring.New(automationEnvironment{b}, resolver)
 	b.functions = functionauthoring.NewOwner(functionEnvironment{b}, resolver)
@@ -103,7 +103,7 @@ func New(tenant string, authorities platform.Authorities, publications []publica
 	actions = append(actions, productVersionActions()...)
 	actions = append(actions, platform.Action{Schema: SchemaEvaluationSetPublish, Target: TestPlanType, Title: "Publish test plan", Description: "Freeze a portable business scenario or the evaluation cases for one function version.", Capability: "objects", Roles: []string{Builder}, Payload: []platform.Field{}})
 	actions = resourceActions(actions)
-	classes := []string{ObjectType, ActionTypeType, PageType, AppType, TestPlanType, automationauthoring.ProcessType, FunctionType, PropertyTypeType, ValueTypeType, ObjectTypeGroupType, LinkTypeType, QueryType, InterfaceType, FunctionCallType, EvaluationType, functionauthoring.CodeType, TableType, AgentType, SampleSetType, BranchType, ResourceType, FolderType, WorkingStateType, ProductType, ProductVersionType, platform.OwnedRelationType(ID), confirmationType, platform.DispatchType}
+	classes := []string{ObjectType, ActionTypeType, PageType, AppType, TestPlanType, automationauthoring.ProcessType, FunctionType, PropertyTypeType, ValueTypeType, ObjectTypeGroupType, LinkTypeType, QueryType, InterfaceType, FunctionCallType, EvaluationType, functionauthoring.CodeType, functionauthoring.TableType, AgentType, SampleSetType, BranchType, ResourceType, FolderType, WorkingStateType, ProductType, ProductVersionType, platform.OwnedRelationType(ID), confirmationType, platform.DispatchType}
 	classes = append(classes, b.data.Types()...)
 	b.authorities = authorities
 	b.ledger = authorities(tenant, ID, platform.NewCatalog(actions...), classes...)
@@ -259,8 +259,8 @@ func (b *Build) checkDefinitionArchive(c platform.Caller, typ, id string) *platf
 	case FunctionType:
 		record, _ := platform.Get[functionauthoring.Function](c, id)
 		published = record.Published != ""
-	case TableType:
-		record, _ := platform.Get[Table](c, id)
+	case functionauthoring.TableType:
+		record, _ := platform.Get[functionauthoring.Table](c, id)
 		published = record.Published != ""
 	case AgentType:
 		record, _ := platform.Get[Agent](c, id)
@@ -362,7 +362,7 @@ func (b *Build) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb.
 	if name := s.GetSchema().GetName(); name == SchemaEvaluationStart || name == SchemaEvaluationAnswer {
 		return b.submitEvaluation(c, s, now)
 	}
-	if typ, archive := strings.CutSuffix(s.GetSchema().GetName(), ".archive"); archive && !c.Replaying && slices.Contains([]string{ObjectType, PageType, AppType, PropertyTypeType, ValueTypeType, ObjectTypeGroupType, LinkTypeType, QueryType, InterfaceType, FunctionType, functionauthoring.CodeType, TableType, AgentType, TestPlanType, SampleSetType, dataowner.ObservationType, ProductType}, typ) {
+	if typ, archive := strings.CutSuffix(s.GetSchema().GetName(), ".archive"); archive && !c.Replaying && slices.Contains([]string{ObjectType, PageType, AppType, PropertyTypeType, ValueTypeType, ObjectTypeGroupType, LinkTypeType, QueryType, InterfaceType, FunctionType, functionauthoring.CodeType, functionauthoring.TableType, AgentType, TestPlanType, SampleSetType, dataowner.ObservationType, ProductType}, typ) {
 		if err := b.checkDefinitionArchive(c, typ, s.GetTarget().GetId()); err != nil {
 			return nil, err
 		}
