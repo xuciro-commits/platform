@@ -28,7 +28,7 @@ func CheckComputeResource(p platform.Page, c platform.PageComputeResource, objec
 	if len(lookups) > 0 {
 		lookup = lookups[0]
 	}
-	ref := p.RecordResourceObject(c.RecordVariable)
+	ref := recordResourceObject(p, c.RecordVariable)
 	if ref.App != object.App || ref.Name != object.Type || ref.Kind != platform.AssetObject || op.Check() != nil || op.Name != c.Operation.Ref.Name || op.Input.Type != "object" || op.Input.Nullable {
 		return fmt.Errorf("compute resource original object or operation differs")
 	}

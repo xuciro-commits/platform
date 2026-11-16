@@ -9,7 +9,7 @@ import (
 
 func CheckPropertySchema(p platform.Page, variable platform.PageVariable, object platform.EntityInfo) error {
 	source := variable.Source
-	if source == nil || source.Object == nil || source.Object.Name != object.Type || source.Object.App != object.App || p.RecordVariableObject(source.Variable) != object.Type {
+	if source == nil || source.Object == nil || source.Object.Name != object.Type || source.Object.App != object.App || recordVariableObject(p, source.Variable) != object.Type {
 		return fmt.Errorf("property record object is unavailable or incompatible")
 	}
 	field, ok := object.Field(source.Field)

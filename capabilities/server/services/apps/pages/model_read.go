@@ -157,7 +157,7 @@ func (r ModelReader) Read(member platform.Member, request PageModelRead, at time
 		}
 		page = projected
 		for _, section := range page.DataBindings {
-			for _, model := range section.ModelBindings() {
+			for _, model := range ModelBindings(section) {
 				if model.Set != nil && model.Set.Query != nil && model.Set.Query.SourceVersion == "" {
 					if binding, ok := r.host.ModelQueryBinding(model.Set.Query.Ref); ok {
 						*model.Set.Query = binding
@@ -194,7 +194,7 @@ func (r ModelReader) Read(member platform.Member, request PageModelRead, at time
 		return result, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
 	}
 	index := slices.IndexFunc(page.DataBindings, func(section platform.PageDataBinding) bool { return section.ID == request.Section })
-	if index < 0 || page.DataBindings[index].PrimaryModel() == nil {
+	if index < 0 || primaryModel(page.DataBindings[index]) == nil {
 		return result, platform.Refuse(pb.ErrorCode_ERROR_CODE_NOT_FOUND, "Model section is unavailable")
 	}
 	section := page.DataBindings[index]
@@ -219,7 +219,7 @@ func (r ModelReader) source(member platform.Member, page platform.Page, section 
 		return result, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "Model object is outside the caller's permissions")
 	}
 	for name, reference := range request.Records {
-		typ := page.RecordVariableObject(name)
+		typ := recordVariableObject(page, name)
 		if name == "$record" {
 			typ = model.Type
 		}
@@ -241,20 +241,20 @@ func (r ModelReader) source(member platform.Member, page platform.Page, section 
 	}
 	fieldRefs := slices.Clone(model.Fields)
 	for _, field := range section.Fields {
-		if !slices.ContainsFunc(fieldRefs, func(f platform.FieldRef) bool { return f.Key() == field.Key() }) {
+		if !slices.ContainsFunc(fieldRefs, func(f platform.FieldRef) bool { return fieldKey(f) == fieldKey(field) }) {
 			fieldRefs = append(fieldRefs, field)
 		}
 	}
 	for _, fields := range section.FieldSlots {
 		for _, field := range fields {
-			if !slices.ContainsFunc(fieldRefs, func(f platform.FieldRef) bool { return f.Key() == field.Key() }) {
+			if !slices.ContainsFunc(fieldRefs, func(f platform.FieldRef) bool { return fieldKey(f) == fieldKey(field) }) {
 				fieldRefs = append(fieldRefs, field)
 			}
 		}
 	}
 	projected := ModelFields(visibleInfo, model, visibleLookup)
 	for _, field := range projected.Fields {
-		if slices.ContainsFunc(fieldRefs, func(ref platform.FieldRef) bool { return ref.Key() == field.Name }) {
+		if slices.ContainsFunc(fieldRefs, func(ref platform.FieldRef) bool { return fieldKey(ref) == field.Name }) {
 			result.Fields = append(result.Fields, field)
 		}
 	}
@@ -293,7 +293,7 @@ func (r ModelReader) source(member platform.Member, page platform.Page, section 
 	}
 	projection := []string{}
 	for _, field := range projected.Fields {
-		if len(fieldRefs) > 0 && !slices.ContainsFunc(fieldRefs, func(ref platform.FieldRef) bool { return ref.Key() == field.Name }) {
+		if len(fieldRefs) > 0 && !slices.ContainsFunc(fieldRefs, func(ref platform.FieldRef) bool { return fieldKey(ref) == field.Name }) {
 			continue
 		}
 		if !strings.Contains(field.Name, ".") {
@@ -316,39 +316,39 @@ func (r ModelReader) source(member platform.Member, page platform.Page, section 
 		ruleRecord := r.host.RuleRecord(model.Type, id, row)
 		access := map[string]platform.AuthzDecision{}
 		for _, field := range fieldRefs {
-			if field.Key() == "id" {
+			if fieldKey(field) == "id" {
 				continue
 			}
-			if _, err := platform.RecordPathField(model.Type, field.Segments(), visibleLookup); err != nil {
+			if _, err := platform.RecordPathField(model.Type, fieldSegments(field), visibleLookup); err != nil {
 				result.Partial = true
-				delete(row, field.Key())
+				delete(row, fieldKey(field))
 				continue
 			}
-			if len(field.Segments()) > 1 {
-				access[field.Key()] = platform.AuthzDecision{Allow: false, Rule: "none", Reason: "Relationship fields are read-only projections", Layers: []platform.AuthzLayer{{Name: "fields", Reason: "Relationship fields are read-only projections"}}}
-				value, _, refusal := caller.ReadRecordPath(model.Type, id, field.Segments(), at)
+			if len(fieldSegments(field)) > 1 {
+				access[fieldKey(field)] = platform.AuthzDecision{Allow: false, Rule: "none", Reason: "Relationship fields are read-only projections", Layers: []platform.AuthzLayer{{Name: "fields", Reason: "Relationship fields are read-only projections"}}}
+				value, _, refusal := caller.ReadRecordPath(model.Type, id, fieldSegments(field), at)
 				if refusal != nil {
 					result.Partial = true
-					delete(row, field.Key())
+					delete(row, fieldKey(field))
 					continue
 				}
 				decoded, decodeErr := platform.DecodeValue(value, 64<<10)
 				if decodeErr != nil {
 					return result, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, decodeErr.Error())
 				}
-				row[field.Key()] = decoded
+				row[fieldKey(field)] = decoded
 			} else {
 				read := caller.Authorize(platform.AuthzRequest{Principal: member.ID, Tenant: caller.Tenant, Kind: "read", Type: model.Type, Record: id, Fields: []string{field.Name}}, at)
 				if !read.Allow || len(read.Withheld) > 0 {
 					result.Partial = true
-					delete(row, field.Key())
+					delete(row, fieldKey(field))
 				}
 				decision := caller.Authorize(platform.AuthzRequest{Principal: member.ID, Tenant: caller.Tenant, Kind: "write", Type: model.Type, Record: id, Fields: []string{field.Name}}, at)
 				if f, ok := visibleInfo.Field(field.Name); ok && f.ReadOnly {
 					decision.Allow = false
 					decision.Reason = "The original model declares this field read-only"
 				}
-				access[field.Key()] = decision
+				access[fieldKey(field)] = decision
 			}
 		}
 		if model.Label != nil {
@@ -424,7 +424,7 @@ func (r ModelReader) rows(c platform.Caller, page platform.Page, section platfor
 			ids = append(ids, identity.ID)
 		}
 		set = platform.ObjectSet{Object: model.Type, IDs: ids}
-		if root, ok := r.host.Entity(page.RecordResourceObject(collection.RecordVariable).Name); ok {
+		if root, ok := r.host.Entity(recordResourceObject(page, collection.RecordVariable).Name); ok {
 			for _, declared := range root.Sets {
 				if declared.Name != collection.Name {
 					continue
@@ -593,7 +593,7 @@ type PageCompositeResult struct {
 }
 
 func (r ModelReader) composite(member platform.Member, page platform.Page, section platform.PageDataBinding, request PageModelRead, at time.Time) (PageModelResult, *platform.Error) {
-	result := PageModelResult{Object: section.PrimaryModel().Type, Records: []map[string]any{}, Fields: []platform.FieldInfo{}, Access: map[string]map[string]platform.AuthzDecision{}, Composite: &PageCompositeResult{Sources: map[string]PageCompositeSource{}}}
+	result := PageModelResult{Object: primaryModel(section).Type, Records: []map[string]any{}, Fields: []platform.FieldInfo{}, Access: map[string]map[string]platform.AuthzDecision{}, Composite: &PageCompositeResult{Sources: map[string]PageCompositeSource{}}}
 	c := section
 	recordLimit, cellLimit, byteLimit := compositeLimits()
 	keys := make([]string, 0, len(c.Models))
@@ -639,7 +639,7 @@ func (r ModelReader) composite(member platform.Member, page platform.Page, secti
 			ruleRecord := r.host.RuleRecord(model.Type, id, row)
 			for _, role := range roles {
 				field := binding.Roles[role]
-				if v, ok := row[field.Key()]; ok {
+				if v, ok := row[fieldKey(field)]; ok {
 					row["$view."+role] = v
 				}
 			}

@@ -69,10 +69,10 @@ func checkEvents(p platform.Page) error {
 				}
 				if effect.From != "" {
 					source := d.Variables[effect.From]
-					if !pageUIProfileSupports(profileVersion(d), "platform.page.v2.108") || len(effect.Value) != 0 || effect.From == effect.Target || source.Type == "" || source.Type != variable.Type || !variable.IsWritable() {
+					if !pageUIProfileSupports(profileVersion(d), "platform.page.v2.108") || len(effect.Value) != 0 || effect.From == effect.Target || source.Type == "" || source.Type != variable.Type || !variableIsWritable(variable) {
 						return fmt.Errorf("page event %s needs a readable source variable of the target's type", event.Source)
 					}
-				} else if !variable.IsWritable() || literalType(effect.Value) != variable.Type {
+				} else if !variableIsWritable(variable) || literalType(effect.Value) != variable.Type {
 					return fmt.Errorf("page event %s needs a matching state value", event.Source)
 				}
 
@@ -180,5 +180,5 @@ func rootPresentationSource(p platform.Page, source string) bool {
 	if owner == "" {
 		owner = source
 	}
-	return p.ScopeOwner(owner, "overlay") == "" && p.ScopeOwner(owner, "loop") == ""
+	return scopeOwner(p, owner, "overlay") == "" && scopeOwner(p, owner, "loop") == ""
 }

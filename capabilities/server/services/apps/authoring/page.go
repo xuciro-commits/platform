@@ -177,7 +177,7 @@ func (o *Owner) normalizePageModel(p *Page, lookup func(string) (platform.Entity
 				}
 			}
 		}
-		for _, model := range binding.ModelBindings() {
+		for _, model := range pageowner.ModelBindings(binding) {
 			if model.Set != nil && model.Set.Query != nil && model.Set.Query.SourceVersion == "" {
 				if owner, ok := o.env.Host().(platform.ModelPageHost); ok {
 					if source, known := owner.ModelQueryBinding(model.Set.Query.Ref); known {

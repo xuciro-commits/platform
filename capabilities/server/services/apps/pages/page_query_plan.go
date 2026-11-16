@@ -110,7 +110,7 @@ func checkQueries(p platform.Page, inputScope string) error {
 		}
 		factor := 1
 		if q.ItemOwner != "" {
-			if inputScope == "application" || !pageUIProfileSupports(profileVersion(d), "platform.page.v2.20") || scopes[q.ItemOwner].Kind != "loop" || p.ScopeOwner(q.ItemOwner, "overlay") != q.Owner {
+			if inputScope == "application" || !pageUIProfileSupports(profileVersion(d), "platform.page.v2.20") || scopes[q.ItemOwner].Kind != "loop" || scopeOwner(p, q.ItemOwner, "overlay") != q.Owner {
 				return fmt.Errorf("item query %s needs a matching parent loop scope", id)
 			}
 			var err error
@@ -413,10 +413,10 @@ func recordContextQueryInput(p platform.Page, query, variable string) bool {
 		if s.ID != v.Source.Section {
 			continue
 		}
-		if v.Source.Port != "" && !s.HasRecordOutput(v.Source.Port, variable) {
+		if v.Source.Port != "" && !hasRecordOutput(s, v.Source.Port, variable) {
 			return false
 		}
-		return s.Ports["selectionVariable"] == variable || s.Ports["recordVariable"] == variable || v.Source.Port != "" || s.Object.Name != "" || s.PrimaryModel() != nil
+		return s.Ports["selectionVariable"] == variable || s.Ports["recordVariable"] == variable || v.Source.Port != "" || s.Object.Name != "" || primaryModel(s) != nil
 
 	}
 	return false

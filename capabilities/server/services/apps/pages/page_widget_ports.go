@@ -13,7 +13,7 @@ func checkWidgetPorts(p platform.Page, binding platform.PageDataBinding, owner s
 		return nil
 	}
 	ports := append(slices.Clone(contract.InputPorts), contract.OutputPorts...)
-	loop, overlay := p.ScopeOwner(owner, "loop"), p.ScopeOwner(owner, "overlay")
+	loop, overlay := scopeOwner(p, owner, "loop"), scopeOwner(p, owner, "overlay")
 	for field, id := range binding.Ports {
 		index := -1
 		for i := range ports {
@@ -45,19 +45,19 @@ func checkWidgetPorts(p platform.Page, binding platform.PageDataBinding, owner s
 			return fmt.Errorf("widget %s has an invalid %s port", widget, field)
 		}
 	}
-	object, known := binding.ObjectRef(p).Name, binding.ObjectRef(p).Name != ""
+	object, known := bindingObjectRef(binding, p).Name, bindingObjectRef(binding, p).Name != ""
 	if id := binding.Ports["selectionSetVariable"]; id != "" && known {
 		if v := p.InputSchema.Variables[id]; v.Mode == "shared" && (v.Source == nil || v.Source.Object == nil || v.Source.Object.Name != object) {
 			return fmt.Errorf("shared record-set object does not match its table")
 		}
 	}
-	if id := binding.Ports["collectionVariable"]; id != "" && known && p.WindowVariableObject(id) != object {
+	if id := binding.Ports["collectionVariable"]; id != "" && known && windowVariableObject(p, id) != object {
 		return fmt.Errorf("table window object does not match its plan")
 	}
-	local := p.ScopeOwner(owner, "loop") != "" || p.ScopeOwner(owner, "overlay") != ""
+	local := scopeOwner(p, owner, "loop") != "" || scopeOwner(p, owner, "overlay") != ""
 	if id := binding.Ports["filterVariable"]; id != "" {
 		v := p.InputSchema.Variables[id]
-		if p.ScopeOwner(owner, "loop") != "" || binding.Ports["collectionVariable"] != "" || v.Type != "filter" || v.Mode != "shared" || widget == "filter" && (!v.Writable || p.ScopeOwner(owner, "overlay") != "") {
+		if scopeOwner(p, owner, "loop") != "" || binding.Ports["collectionVariable"] != "" || v.Type != "filter" || v.Mode != "shared" || widget == "filter" && (!v.Writable || scopeOwner(p, owner, "overlay") != "") {
 			return fmt.Errorf("page section %s has an invalid shared filter port", binding.ID)
 		}
 		if known && (v.Source == nil || v.Source.Object == nil || v.Source.Object.Name != object) {
@@ -69,7 +69,7 @@ func checkWidgetPorts(p platform.Page, binding platform.PageDataBinding, owner s
 		if local || binding.Ports["selection"] != "" || v.Type != "record" || v.Mode != "shared" || !v.Writable {
 			return fmt.Errorf("page section %s needs a writable shared record output on a root table", binding.ID)
 		}
-		if known && object != p.RecordVariableObject(id) {
+		if known && object != recordVariableObject(p, id) {
 			return fmt.Errorf("shared selection object does not match its table")
 		}
 	}

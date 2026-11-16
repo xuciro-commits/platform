@@ -30,14 +30,14 @@ func CheckPageNavigation(source platform.Page, target platform.Page, nav platfor
 		if value.Variable != "" {
 			typ = sourceSchema.Variables[value.Variable].Type
 		}
-		if !ok || typ != port.Type || port.Type == "object-set" && (port.Object == nil || source.CollectionInputObject(value.Variable) != *port.Object || !pageUIProfileSupports(profileVersion(sourceSchema), "platform.page.v2.85")) || port.Type == "record" && (port.Object == nil || source.RecordVariableObject(value.Variable) != port.Object.Name) {
+		if !ok || typ != port.Type || port.Type == "object-set" && (port.Object == nil || collectionInputObject(source, value.Variable) != *port.Object || !pageUIProfileSupports(profileVersion(sourceSchema), "platform.page.v2.85")) || port.Type == "record" && (port.Object == nil || recordVariableObject(source, value.Variable) != port.Object.Name) {
 			return fmt.Errorf("page navigation input %s type or object differs", id)
 		}
 	}
 	for id, variable := range nav.Results {
 		port, ok := outputs[id]
 		v := sourceSchema.Variables[variable]
-		if !ok || !v.IsWritable() || v.Type != port.Type || v.Type == "record" {
+		if !ok || !variableIsWritable(v) || v.Type != port.Type || v.Type == "record" {
 			return fmt.Errorf("page navigation output %s type differs", id)
 		}
 	}

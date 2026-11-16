@@ -70,7 +70,7 @@ func CheckPageVariables(a platform.Application, p platform.Page) error {
 				continue
 			}
 			for _, field := range binding.Fields {
-				if source.Source == nil || !slices.Contains(source.Source.Fields, field.Key()) {
+				if source.Source == nil || !slices.Contains(source.Source.Fields, fieldKey(field)) {
 					return fmt.Errorf("page filter field is not allowed by application")
 				}
 			}
@@ -89,7 +89,7 @@ func recordVariableInterface(p platform.Page, variable string) string {
 	if v.Source != nil {
 		for _, binding := range safe.DataBindings {
 			if binding.ID == v.Source.Section {
-				return safe.WindowVariableInterface(binding.Ports["collectionVariable"])
+				return windowVariableInterface(safe, binding.Ports["collectionVariable"])
 			}
 		}
 	}
@@ -110,8 +110,8 @@ func checkRecordPorts(p platform.Page) error {
 	}
 	for _, binding := range safe.DataBindings {
 		if selected := binding.Ports["selection"]; selected != "" {
-			if selections[selected] != binding.ObjectRef(safe) {
-				return fmt.Errorf("selection %s does not hold %s", selected, binding.ObjectRef(safe).Name)
+			if selections[selected] != bindingObjectRef(binding, safe) {
+				return fmt.Errorf("selection %s does not hold %s", selected, bindingObjectRef(binding, safe).Name)
 			}
 		}
 		if parent := binding.Ports["parentSelection"]; parent != "" {
@@ -124,8 +124,8 @@ func checkRecordPorts(p platform.Page) error {
 		variable := binding.Ports["recordVariable"]
 		producerBound := slices.Contains(recordProducerWidgets, binding.Ports["widget"]) || safe.InputSchema.Variables[variable].Source != nil && safe.InputSchema.Variables[variable].Source.Port != "" && binding.Ports["widget"] != "observation"
 		if variable != "" && producerBound && recordVariableInterface(safe, variable) == "" {
-			object := safe.RecordResourceObject(variable)
-			if object.Name == "" || object != binding.ObjectRef(safe) {
+			object := recordResourceObject(safe, variable)
+			if object.Name == "" || object != bindingObjectRef(binding, safe) {
 				return fmt.Errorf("page record binding differs from its original producer")
 			}
 		}
@@ -136,14 +136,14 @@ func checkRecordPorts(p platform.Page) error {
 			continue
 		}
 		for _, resource := range binding.Resources {
-			if resource.Kind == "observation" && resource.Source == "statistics" && (resource.Object == nil || safe.RecordResourceObject(variable) != *resource.Object) {
+			if resource.Kind == "observation" && resource.Source == "statistics" && (resource.Object == nil || recordResourceObject(safe, variable) != *resource.Object) {
 				return fmt.Errorf("statistics context differs from its original full asset identity")
 			}
 		}
 	}
 	if safe.InputSchema.Interface != nil {
 		for _, port := range safe.InputSchema.Interface.Outputs {
-			if port.Type == "record" && (port.Object == nil || safe.RecordVariableObject(port.Variable) != port.Object.Name) {
+			if port.Type == "record" && (port.Object == nil || recordVariableObject(safe, port.Variable) != port.Object.Name) {
 				return fmt.Errorf("page output differs from original record object")
 			}
 		}

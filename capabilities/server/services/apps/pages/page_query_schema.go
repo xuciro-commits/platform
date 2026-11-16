@@ -51,7 +51,7 @@ func CheckQuerySchema(p platform.Page, q platform.PageQuery, object platform.Ent
 		case "integer", "decimal":
 			return typ == "number" || typ == "decimal"
 		case "reference":
-			return typ == "string" || typ == "record" && p.RecordVariableObject(value.Variable) == field.Ref
+			return typ == "string" || typ == "record" && recordVariableObject(p, value.Variable) == field.Ref
 		case "text", "choice", "date", "datetime":
 			return typ == "string"
 		}
@@ -69,7 +69,7 @@ func CheckQuerySchema(p platform.Page, q platform.PageQuery, object platform.Ent
 		if q.Direction == "reverse" {
 			start, target = l.Child, l.Parent
 		}
-		if q.Object != target || p.RecordVariableObject(q.For.Variable) != start.Name {
+		if q.Object != target || recordVariableObject(p, q.For.Variable) != start.Name {
 			return fmt.Errorf("link plan record or target object is incompatible")
 		}
 		return nil

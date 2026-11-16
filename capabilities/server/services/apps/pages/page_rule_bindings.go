@@ -13,9 +13,9 @@ func BindRuleTypes(p platform.Page, lookup func(string) (platform.EntityInfo, bo
 		v.RuleType = nil
 		object := ""
 		if v.Type == "record" {
-			object = p.RecordVariableObject(name)
+			object = recordVariableObject(p, name)
 		} else if v.Type == "object-set" {
-			object = p.WindowVariableObject(name)
+			object = windowVariableObject(p, name)
 		}
 		if object != "" {
 			info, ok := lookup(object)
@@ -54,9 +54,9 @@ func BindRuleTypes(p platform.Page, lookup func(string) (platform.EntityInfo, bo
 				name = set
 				parts = append([]string{strings.TrimPrefix(base, "item.")}, path...)
 			}
-			object := p.RecordVariableObject(name)
+			object := recordVariableObject(p, name)
 			if item {
-				object = p.WindowVariableObject(name)
+				object = windowVariableObject(p, name)
 			}
 			if object == "" {
 				return fmt.Errorf("rule path %s needs a declared resource", base)

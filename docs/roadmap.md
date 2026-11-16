@@ -42,7 +42,7 @@ read-when: 每批开始（选当前批次）与结束（删除已完成条目、
 
 主代理按前置条件选择条目并独立完成。条目的验证组合见 [7-system/verification §7.12](7-system/verification.md#712-命令分层)；方向与实际不符时，根据代码和规范调整。
 
-- [ ] U3 页面模型归位。已完成（U3.1、U3.3、U3.4、U3.7、U3.8、U3.9、U3.10、U3.11、U3.12、U3.13、U3.14、U3.15、U3.16、U3.17、U3.18、U3.19、U3.20、U3.21、U3.22、U3.23 及资产生命周期注册表）：33 个页面声明类型集中在 SDK，页面安全投影、查询引用、计算资源、事件导航、依赖、嵌入和内容版本计算，冻结查询、查询计划与筛选、页面和应用变量、绑定、组合组件与端口、事件、接口、导航、动作参数、profile、过滤、属性与计算资源等检查，模型字段解析、绑定归一化、规则类型绑定、查询筛选入口、可见性投影及应用分组、页眉、资源、扩展与概念检查及依赖计算归 `services/apps/pages`，属性值类型判断归 `services/objects`，列表详情和对象页面模板生成归 `services/apps/authoring`；候选读取、资产描述与安装映像解码经宿主注入内核和记录投影；依赖图与资产描述、候选构建与历史读取、应用制品、历史查询与关系版本、来源分派、候选差异、页面与应用资产构造及生命周期注册表归 `services/resources/publication`，产品描述与蓝图校验归 `services/devops/descriptor`。其余页面求值、校验与语义注入仍待迁移。
+- [ ] U3 页面模型归位。已完成（U3.1、U3.3、U3.4、U3.7、U3.8、U3.9、U3.10、U3.11、U3.12、U3.13、U3.14、U3.15、U3.16、U3.17、U3.18、U3.19、U3.20、U3.21、U3.22、U3.23 及资产生命周期注册表）：33 个页面声明类型集中在 SDK，页面安全投影、模型与变量来源、字段路径、作用域、查询引用、计算资源、事件导航、依赖、嵌入和内容版本计算，冻结查询、查询计划与筛选、页面和应用变量、绑定、组合组件与端口、事件、接口、导航、动作参数、profile、过滤、属性与计算资源等检查，模型字段解析、绑定归一化、规则类型绑定、查询筛选入口、可见性投影及应用分组、页眉、资源、扩展与概念检查及依赖计算归 `services/apps/pages`，属性值类型判断归 `services/objects`，列表详情和对象页面模板生成归 `services/apps/authoring`；候选读取、资产描述与安装映像解码经宿主注入内核和记录投影；依赖图与资产描述、候选构建与历史读取、应用制品、历史查询与关系版本、来源分派、候选差异、页面与应用资产构造及生命周期注册表归 `services/resources/publication`，产品描述与蓝图校验归 `services/devops/descriptor`。页面组件契约与共享规则的归属仍待收敛。
   - 边界裁定：页面声明是 SDK 契约，`Manifest.Pages`、`Definition.Page`、`Application.Variables/Queries` 与宿主接口继续使用同一组有类型声明；SDK 唯一保留确有格式语义的 `MarshalJSON`、`UnmarshalJSON`、`IsZero` 及原始 `profile`、`RetainedVersion` / `contentVersion` 信息。页面生成、求值、校验、依赖解析与版本计算属于实现。无租户状态的候选与资产语义读取由宿主单独装配，不放进有状态的五项发布钩子，也不依赖租户已创建；未来 `publication` 通过宿主注入的纯页面语义函数调用 `pages`，不得直接导入 `apps/pages` 或扩张 `pages` 已有的反向依赖。函数集合从实际调用提取，不预设框架；不引入重复类型、转发兼容层或 SDK 对实现的反向调用。
   - [ ] U3.2 切分实现依赖（不写代码）。前置已完成：U3.1、U4.1。（部分完成：页面校验、资源发布闭包、历史字节读取三链已诊断；通用发布与页面实现的切分由 U3.4–U3.6 确认）
     - 已确认：发布服务的 `describeAsset` 经纯解析值调用页面安全检查与页面依赖计算；`Candidate` / `ReadCandidate` 使用同一页面安全与冻结查询检查，其余页面语义仍调用 SDK，并同时校验资产描述、依赖图、冻结页面与规范字节；`DecodeRelease`、`RestoreCommitted` 经宿主注入读取候选，`OwnedDefinitions` 描述资产并经注册表解码历史安装映像。页面实现迁移仍须避免 SDK 反向调用服务和改变恢复校验。
@@ -90,6 +90,10 @@ read-when: 每批开始（选当前批次）与结束（删除已完成条目、
     - 源：`platform/page_queries.go`、`page_collections.go`、`page_events.go`；调用方：`services/apps/pages/page_frozen_queries.go`、`page_variable_checks.go`、`page_bound_queries.go`、`page_asset_navigation.go`、`application_resources.go`、`page_release_dependencies.go`、`page_safety.go`，`services/resources/publication/candidate.go`、`dependencies_graph.go`、`resolver.go`，`services/ontology/install_dependents.go`、`host/hostview.go`。删除原实现，不留兼容转发；保留引用、计算绑定、导航效果、读取检查和错误顺序。
     - 完成判据：`make contract` 无差异；对照引用与计算资源、导航、读取绑定接受和拒绝，产品包候选字节、闭包及历史结果不变；V1、V3。全量浏览器验收待 U3.24 所列问题恢复后执行。
     - 现状：实现已迁移，引用、计算资源、导航与读取绑定对照一致，产品包候选与闭包、V1、SQL 恢复和 F18 通过；未重复已知失败的全量浏览器验收，V3 尚未通过。
+  - [ ] U3.27 页面模型与变量来源归位。诊断：页面绑定的模型选择、对象来源，记录与集合变量来源、作用域归属和可写性只由页面服务及其创作、发布调用方使用；相互调用的来源解析与页面字段路径助手须一组迁入 `services/apps/pages`，不保留 SDK 转发；被非页面实现共用的 `ModelObject` 暂留 SDK。
+    - 源：`platform/page_model.go`、`page_collections.go`、`page_events.go`、`page_queries.go`、`definition_checks.go`；调用方：`services/apps/pages/`、`services/apps/authoring/page.go` 和 `services/devops/releases/release_candidates.go`。保留模型的首选次序、集合循环处理、来源与作用域解析及返回值。
+    - 完成判据：`make contract` 无差异；对照模型、集合、记录、作用域和可写性，产品包候选字节及闭包不变；V1、V3。全量浏览器验收待 U3.24 所列问题恢复后执行。
+    - 现状：实现已迁移，模型与变量来源、字段路径、作用域和组件对照一致，产品包候选与闭包、V1、SQL 恢复和 F18 通过；未重复已知失败的全量浏览器验收，V3 尚未通过。
 - [ ] U4 发布路径一张表。已完成（U4.1）：五项发布钩子由宿主登记，action-type 的发布步骤归本体服务；Build 的 apps、automation、functions、本体类型转接已删除。
   - [ ] U4.2 其余家族钩子与状态边界定型（诊断与切分，不写代码）。前置已完成：U4.1。
     - 读：`services/resources/publication/api.go`、`services/resources/authoring/build_release_drafts.go`、`build_artifacts.go`、`build_owner.go`、`build_agents.go`、`build_evaluations.go`、`build_tests.go`、`build_compute.go`、`build_tables.go`、`host/composition/tenant.go`。

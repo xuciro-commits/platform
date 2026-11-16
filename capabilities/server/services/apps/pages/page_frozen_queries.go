@@ -37,7 +37,7 @@ func CheckFrozenQueries(original platform.Page, assets map[platform.AssetRef]pla
 		reads := platform.RuleReadSpec{Object: action.Target, Inputs: map[string]platform.ExprType{}}
 		mapped := map[string]bool{}
 		for _, binding := range page.DataBindings {
-			for _, model := range binding.ModelBindings() {
+			for _, model := range ModelBindings(binding) {
 				if model.Options != nil && model.Options.Rule != nil && model.Options.Rule.Action == ref {
 					for name := range model.Options.Rule.Inputs {
 						mapped[name] = true
@@ -56,7 +56,7 @@ func CheckFrozenQueries(original platform.Page, assets map[platform.AssetRef]pla
 		if err := checkDataBinding(page, binding, lookup, criteria); err != nil {
 			return err
 		}
-		for _, model := range binding.ModelBindings() {
+		for _, model := range ModelBindings(binding) {
 			sets := []*platform.ModelRecordSet{model.Set}
 			if model.Options != nil {
 				sets = append(sets, model.Options.Set)
@@ -86,7 +86,7 @@ func CheckFrozenQueries(original platform.Page, assets map[platform.AssetRef]pla
 		object := page.Object.Name
 		for _, binding := range page.DataBindings {
 			if binding.ID == trigger.Binding {
-				object = binding.ObjectRef(page).Name
+				object = bindingObjectRef(binding, page).Name
 			}
 		}
 		for _, ref := range trigger.Actions {
@@ -145,7 +145,7 @@ func CheckFrozenQueries(original platform.Page, assets map[platform.AssetRef]pla
 	for id, compute := range computeResources(page) {
 		asset, ok := assets[compute.Operation.Ref]
 		var op platform.Operation
-		object, found := lookup(page.RecordResourceObject(compute.RecordVariable).Name)
+		object, found := lookup(recordResourceObject(page, compute.RecordVariable).Name)
 		if !ok || !found || asset.SourceVersion != compute.Operation.SourceVersion || json.Unmarshal(asset.Body, &op) != nil || CheckComputeResource(page, compute, object, op, page.InputSchema.Variables[id].Type, lookup) != nil {
 			return fmt.Errorf("frozen compute resource contract is unavailable")
 		}

@@ -317,7 +317,7 @@ func CandidateWithBindings(roots []platform.AssetRef, available []platform.Relea
 				if binding.Query != nil {
 					bindings = append(bindings, *binding.Query)
 				}
-				for _, model := range binding.ModelBindings() {
+				for _, model := range pageowner.ModelBindings(binding) {
 					if model.Set != nil && model.Set.Query != nil {
 						bindings = append(bindings, *model.Set.Query)
 					}

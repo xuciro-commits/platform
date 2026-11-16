@@ -42,7 +42,7 @@ func (projection DefinitionProjection) Page(def platform.Definition) (platform.D
 		return ok && !platform.StaticControlAction(action)
 	}
 	fieldVisible := func(info platform.EntityInfo, ref platform.FieldRef) bool {
-		_, err := platform.RecordPathField(info.Type, ref.Segments(), lookup)
+		_, err := platform.RecordPathField(info.Type, fieldSegments(ref), lookup)
 		return err == nil
 	}
 	visible.DataBindings = make([]platform.PageDataBinding, 0, len(page.DataBindings))
@@ -317,7 +317,7 @@ func CheckSelections(p platform.Page, entity func(string) (platform.EntityInfo, 
 	}
 	supplies := func(selection, object string) bool {
 		return slices.ContainsFunc(safe.DataBindings, func(b platform.PageDataBinding) bool {
-			return b.Ports["selectionMode"] == "write" && b.Ports["selection"] == selection && b.ObjectRef(safe).Name == object
+			return b.Ports["selectionMode"] == "write" && b.Ports["selection"] == selection && bindingObjectRef(b, safe).Name == object
 		})
 	}
 	references := func(info platform.EntityInfo, parent string) bool {
@@ -325,12 +325,12 @@ func CheckSelections(p platform.Page, entity func(string) (platform.EntityInfo, 
 	}
 	parentBindings := map[string]string{}
 	for _, b := range safe.DataBindings {
-		ref := b.ObjectRef(safe)
+		ref := bindingObjectRef(b, safe)
 		info, ok := entity(ref.Name)
 		if !ok {
 			continue
 		}
-		info = ModelFields(info, b.PrimaryModel(), entity)
+		info = ModelFields(info, primaryModel(b), entity)
 		where := fmt.Sprintf("page %s, binding %s", p.Name, b.ID)
 		selection, parentSelection, relation := b.Ports["selection"], b.Ports["parentSelection"], b.Ports["relation"]
 		parentType := safe.Object.Name

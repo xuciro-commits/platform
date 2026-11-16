@@ -91,7 +91,7 @@ func checkComposite(b platform.PageDataBinding, lookup func(string) (platform.En
 				if field.Name != "" && len(field.Path) > 0 || field.Slot != "" || field.Transform != "" {
 					return fmt.Errorf("binding %s: invalid field reference", b.ID)
 				}
-				f, err := platform.RecordPathField(view.Model.Type, field.Segments(), entity)
+				f, err := platform.RecordPathField(view.Model.Type, fieldSegments(*field), entity)
 				if err != nil {
 					return fmt.Errorf("binding %s port %s role %s: %w", b.ID, port.ID, role, err)
 				}

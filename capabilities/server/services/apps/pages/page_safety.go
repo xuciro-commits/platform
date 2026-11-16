@@ -75,7 +75,7 @@ func CheckSafety(p platform.Page) error {
 			if !ok {
 				return fmt.Errorf("page binding variable %s is unavailable", id)
 			}
-			if variable.Scope == "overlay" && safe.ScopeOwner(owner, "overlay") != variable.Owner || variable.Scope == "loop-item" && safe.ScopeOwner(owner, "loop") != variable.Owner {
+			if variable.Scope == "overlay" && scopeOwner(safe, owner, "overlay") != variable.Owner || variable.Scope == "loop-item" && scopeOwner(safe, owner, "loop") != variable.Owner {
 				return fmt.Errorf("page binding variable escapes its original owner")
 			}
 		}

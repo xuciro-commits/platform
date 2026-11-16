@@ -26,14 +26,14 @@ func ModelFields(info platform.EntityInfo, model *platform.ModelBinding, lookup 
 	}
 	info.Fields = slices.Clone(info.Fields)
 	for _, ref := range model.Fields {
-		if len(ref.Segments()) < 2 {
+		if len(fieldSegments(ref)) < 2 {
 			continue
 		}
-		field, err := platform.RecordPathField(model.Type, ref.Segments(), lookup)
+		field, err := platform.RecordPathField(model.Type, fieldSegments(ref), lookup)
 		if err != nil {
 			continue
 		}
-		field.Name, field.Title, field.ReadOnly = ref.Key(), strings.Join(ref.Segments(), " → "), true
+		field.Name, field.Title, field.ReadOnly = fieldKey(ref), strings.Join(fieldSegments(ref), " → "), true
 		info.Fields = append(info.Fields, field)
 	}
 	return info

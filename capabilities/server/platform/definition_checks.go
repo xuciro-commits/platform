@@ -22,8 +22,6 @@ type ApplicationHeaderItem struct {
 	Action string   `json:"action,omitempty"`
 }
 
-func (v PageVariable) IsWritable() bool { return v.Mode == "state" || v.Mode == "shared" && v.Writable }
-
 func (a Application) QueryPage() Page {
 	return Page{Format: 4, InputSchema: PageInputSchema{profile: a.UIProfile, Variables: a.Variables, Queries: a.Queries}}
 }

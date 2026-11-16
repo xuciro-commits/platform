@@ -13,8 +13,8 @@ func modelDependencies(p platform.Page) []platform.AssetRef {
 		return refs
 	}
 	for _, binding := range safe.DataBindings {
-		for _, model := range binding.ModelBindings() {
-			if safe.WindowVariableInterface(binding.Ports["collectionVariable"]) == "" {
+		for _, model := range ModelBindings(binding) {
+			if windowVariableInterface(safe, binding.Ports["collectionVariable"]) == "" {
 				ref := platform.ModelObject(model.Type)
 				if binding.Object.Name == model.Type {
 					ref = binding.Object
@@ -41,7 +41,7 @@ func modelDependencies(p platform.Page) []platform.AssetRef {
 					refs = append(refs, set.Query.Ref)
 				}
 				if set.Name != "" {
-					refs = append(refs, safe.RecordResourceObject(set.RecordVariable))
+					refs = append(refs, recordResourceObject(safe, set.RecordVariable))
 				}
 			}
 		}

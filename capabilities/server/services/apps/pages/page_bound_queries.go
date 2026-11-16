@@ -42,7 +42,7 @@ func (b Bindings) CheckQueries(p platform.Page) error {
 		return err
 	}
 	for id, c := range computeResources(p) {
-		ref := p.RecordResourceObject(c.RecordVariable)
+		ref := recordResourceObject(p, c.RecordVariable)
 		object, ok := b.Entity(ref.Name)
 		op, _, err := b.Operation(&c.Operation)
 		if !ok || err != nil || CheckComputeResource(p, c, object, op, p.InputSchema.Variables[id].Type, b.Entity) != nil {
@@ -137,7 +137,7 @@ func VisibleQuery(q platform.NamedQuery, entities map[string]platform.EntityInfo
 
 func CheckModelQueries(page platform.Page, definitions []platform.Definition, entity func(string) (platform.EntityInfo, bool)) error {
 	for _, section := range page.DataBindings {
-		for _, m := range section.ModelBindings() {
+		for _, m := range ModelBindings(section) {
 			sets := []*platform.ModelRecordSet{m.Set}
 			if m.Options != nil {
 				sets = append(sets, m.Options.Set)
@@ -152,7 +152,7 @@ func CheckModelQueries(page platform.Page, definitions []platform.Definition, en
 				}
 
 				if named.Query.By != "" {
-					root := page.RecordResourceObject(set.RecordVariable)
+					root := recordResourceObject(page, set.RecordVariable)
 					info, ok := entity(m.Type)
 					f, found := info.Field(named.Query.By)
 					if !ok || !found || f.Type != "reference" || root.Name != f.Ref {

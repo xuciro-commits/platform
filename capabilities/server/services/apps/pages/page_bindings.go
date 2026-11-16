@@ -31,8 +31,8 @@ func checkDataBinding(p platform.Page, binding platform.PageDataBinding, lookup 
 		}
 		seen, slots := map[string]bool{}, map[string]bool{}
 		for _, field := range model.Fields {
-			key := field.Slot + "/" + field.Key()
-			if field.Name != "" && len(field.Path) > 0 || len(field.Path) > 16 || field.Key() == "" || seen[key] || field.Slot != "" && field.Slot != "fields" && slots[field.Slot] || field.Transform != "" && !slices.Contains([]string{"month", "sum", "avg", "min", "max"}, field.Transform) {
+			key := field.Slot + "/" + fieldKey(field)
+			if field.Name != "" && len(field.Path) > 0 || len(field.Path) > 16 || fieldKey(field) == "" || seen[key] || field.Slot != "" && field.Slot != "fields" && slots[field.Slot] || field.Transform != "" && !slices.Contains([]string{"month", "sum", "avg", "min", "max"}, field.Transform) {
 				return fmt.Errorf("model field declaration is invalid")
 			}
 			seen[key] = true
@@ -56,7 +56,7 @@ func checkDataBinding(p platform.Page, binding platform.PageDataBinding, lookup 
 			return platform.ConstraintEntity(value), found
 		}
 		for _, field := range model.Fields {
-			if _, err := platform.RecordPathField(info.Type, field.Segments(), metadata); err != nil {
+			if _, err := platform.RecordPathField(info.Type, fieldSegments(field), metadata); err != nil {
 				return err
 			}
 		}
@@ -85,7 +85,7 @@ func checkDataBinding(p platform.Page, binding platform.PageDataBinding, lookup 
 			for name, typ := range declared.Reads.Inputs {
 				id := rule.Inputs[name]
 				variable, ok := p.InputSchema.Variables[id]
-				if !ok || (typ.Kind == "reference" || typ.Object != "") && p.RecordVariableObject(id) != typ.Object || typ.Kind != "reference" && typ.Object == "" && !pageRuleInputFits(variable.Type, typ.Kind) {
+				if !ok || (typ.Kind == "reference" || typ.Object != "") && recordVariableObject(p, id) != typ.Object || typ.Kind != "reference" && typ.Object == "" && !pageRuleInputFits(variable.Type, typ.Kind) {
 					return fmt.Errorf("model rule input does not match its declared type")
 				}
 			}
@@ -101,7 +101,7 @@ func checkDataBinding(p platform.Page, binding platform.PageDataBinding, lookup 
 		object = binding.Model.Type
 	}
 	for _, field := range binding.Fields {
-		if _, err := platform.RecordPathField(object, field.Segments(), lookup); err != nil {
+		if _, err := platform.RecordPathField(object, fieldSegments(field), lookup); err != nil {
 			return err
 		}
 	}
@@ -111,20 +111,20 @@ func checkDataBinding(p platform.Page, binding platform.PageDataBinding, lookup 
 		}
 		source := object
 		if strings.HasPrefix(slot, "scene.sample") {
-			source = p.CollectionInputObject(binding.Ports["sceneSampleCollectionVariable"]).Name
+			source = collectionInputObject(p, binding.Ports["sceneSampleCollectionVariable"]).Name
 			if source == "" {
-				source = p.RecordResourceObject(binding.Ports["sceneSampleVariable"]).Name
+				source = recordResourceObject(p, binding.Ports["sceneSampleVariable"]).Name
 			}
 		}
 		for _, field := range fields {
-			if _, err := platform.RecordPathField(source, field.Segments(), lookup); err != nil {
+			if _, err := platform.RecordPathField(source, fieldSegments(field), lookup); err != nil {
 				return err
 			}
 		}
 	}
 	for _, view := range binding.Models {
 		for _, field := range view.Roles {
-			if _, err := platform.RecordPathField(view.Model.Type, field.Segments(), lookup); err != nil {
+			if _, err := platform.RecordPathField(view.Model.Type, fieldSegments(field), lookup); err != nil {
 				return err
 			}
 		}
@@ -148,7 +148,7 @@ func checkDataBinding(p platform.Page, binding platform.PageDataBinding, lookup 
 				if resource.Source == "availability" {
 					variable = binding.Ports["observationHistoryVariable"]
 				}
-				source = p.CollectionInputObject(variable).Name
+				source = collectionInputObject(p, variable).Name
 				if field.Slot == "averageField" {
 					source = object
 				}
@@ -157,15 +157,15 @@ func checkDataBinding(p platform.Page, binding platform.PageDataBinding, lookup 
 				continue
 			}
 			if resource.Kind == "record-mapping" && resource.Source == "sample" {
-				source = p.CollectionInputObject(binding.Ports["sceneSampleCollectionVariable"]).Name
+				source = collectionInputObject(p, binding.Ports["sceneSampleCollectionVariable"]).Name
 				if source == "" {
-					source = p.RecordResourceObject(binding.Ports["sceneSampleVariable"]).Name
+					source = recordResourceObject(p, binding.Ports["sceneSampleVariable"]).Name
 				}
 			}
 			if field.Name == "" && len(field.Path) == 0 {
 				continue
 			}
-			if _, err := platform.RecordPathField(source, field.Segments(), lookup); err != nil {
+			if _, err := platform.RecordPathField(source, fieldSegments(field), lookup); err != nil {
 				return err
 			}
 		}
