@@ -84,7 +84,7 @@ func checkEvents(p platform.Page) error {
 				if v := d.Variables[a.RecordVariable]; a.RecordVariable != "" && v.Type != "record" {
 					return fmt.Errorf("page action effect %s needs a record variable", event.Source)
 				}
-				if len(a.Inputs) > 0 && !pageUIProfileSupports(profileVersion(d), "platform.page.v2.108") || len(a.Inputs) > platform.PageWidgets.Runtime.Interface.MaxPorts {
+				if len(a.Inputs) > 0 && !pageUIProfileSupports(profileVersion(d), "platform.page.v2.108") || len(a.Inputs) > pageWidgets.Runtime.Interface.MaxPorts {
 					return fmt.Errorf("page action effect %s inputs need UI profile v2.108 and a bounded count", event.Source)
 				}
 				for parameter, arg := range a.Inputs {
@@ -117,7 +117,7 @@ func checkPageInterface(d platform.PageInputSchema) error {
 		}
 		return nil
 	}
-	i, c := d.Interface, platform.PageWidgets.Runtime.Interface
+	i, c := d.Interface, pageWidgets.Runtime.Interface
 	if !pageUIProfileSupports(profileVersion(d), "platform.page.v2.6") || i.Version < 1 || i.Version > c.MaxVersion || len(i.Inputs) > c.MaxPorts || len(i.Outputs) > c.MaxPorts {
 		return fmt.Errorf("page interface needs v2.6, a version and bounded ports")
 	}
@@ -163,7 +163,7 @@ func checkNavigationEffect(d platform.PageInputSchema, effect platform.PageEffec
 		return nil
 	}
 	n := effect.Navigate
-	c := platform.PageWidgets.Runtime.Interface
+	c := pageWidgets.Runtime.Interface
 	if n == nil || n.Page.Check() != nil || n.Page.Kind != platform.AssetPage || n.InterfaceVersion < 0 || n.InterfaceVersion > c.MaxVersion || len(n.Inputs) > c.MaxPorts || len(n.Results) > c.MaxPorts {
 		return fmt.Errorf("page navigation needs a page and bounded interface bindings")
 	}

@@ -304,7 +304,7 @@ func literalType(raw json.RawMessage) string {
 	case bool:
 		return "boolean"
 	case string:
-		if len(v) <= platform.PageWidgets.Runtime.MaxStringBytes {
+		if len(v) <= pageWidgets.Runtime.MaxStringBytes {
 			return "string"
 		}
 	}

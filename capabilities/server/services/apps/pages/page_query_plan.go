@@ -15,7 +15,7 @@ func checkQueries(p platform.Page, inputScope string) error {
 	for _, scope := range p.ScopeVisibility.Scopes {
 		scopes[scope.ID] = scope
 	}
-	c := platform.PageWidgets.Runtime.Query
+	c := pageWidgets.Runtime.Query
 	activePlans := activeQueryPlans(p)
 	declaredMax := c.MaxPlans
 	if pageUIProfileSupports(profileVersion(d), c.InventoryUIProfile) && p.ScopeVisibility.Root != "" {
@@ -225,7 +225,7 @@ func checkQueries(p platform.Page, inputScope string) error {
 			}
 		}
 	}
-	if aggregates > platform.PageWidgets.Runtime.Aggregate.MaxVariables || expanded > platform.PageWidgets.Runtime.Aggregate.MaxExpandedReads {
+	if aggregates > pageWidgets.Runtime.Aggregate.MaxVariables || expanded > pageWidgets.Runtime.Aggregate.MaxExpandedReads {
 		return fmt.Errorf("count variable read budget exceeded")
 	}
 	return nil
@@ -253,7 +253,7 @@ func checkQuerySets(d platform.PageInputSchema) error {
 			if q.Set == nil {
 				return nil
 			}
-			if !slices.Contains(platform.PageWidgets.Runtime.Query.Set.Operations, q.Set.Op) || len(q.Set.Inputs) != 2 {
+			if !slices.Contains(pageWidgets.Runtime.Query.Set.Operations, q.Set.Op) || len(q.Set.Inputs) != 2 {
 				return fmt.Errorf("query set %s needs a binary supported operation", id)
 			}
 			path[id] = true
@@ -287,7 +287,7 @@ func loopFactor(p platform.Page, owner string) (int, error) {
 			}
 			found = true
 			if scope.Kind == "loop" {
-				if scope.MaxIterations < 1 || scope.MaxIterations > platform.PageWidgets.Runtime.Loop.MaxItems || factor > platform.PageWidgets.Runtime.Query.MaxTotalLimit/scope.MaxIterations {
+				if scope.MaxIterations < 1 || scope.MaxIterations > pageWidgets.Runtime.Loop.MaxItems || factor > pageWidgets.Runtime.Query.MaxTotalLimit/scope.MaxIterations {
 					return 0, fmt.Errorf("page loop read budget exceeded")
 				}
 				factor *= scope.MaxIterations
@@ -333,7 +333,7 @@ func collectionBuilderInput(p platform.Page, id, owner string, object platform.A
 func checkCollectionBuilderGraph(p platform.Page) error {
 	d := p.InputSchema
 	sections := p.DataBindings
-	c := platform.PageWidgets.Runtime.Query
+	c := pageWidgets.Runtime.Query
 	for root := range d.Queries {
 		nodes := 0
 		var visit func(string, int, map[string]bool) error

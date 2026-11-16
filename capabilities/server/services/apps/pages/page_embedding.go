@@ -36,7 +36,7 @@ func CheckPageEmbeddingGraph(root platform.AssetRef, lookup map[platform.AssetRe
 	instances, queries, records, sections := 0, 0, 0, 0
 	var visit func(platform.AssetRef, int) error
 	visit = func(ref platform.AssetRef, depth int) error {
-		if depth > platform.PageWidgets.Runtime.Embedding.MaxDepth || active[ref] {
+		if depth > pageWidgets.Runtime.Embedding.MaxDepth || active[ref] {
 			return fmt.Errorf("embedded page cycle or depth budget exceeded")
 		}
 		asset, ok := lookup[ref]
@@ -57,7 +57,7 @@ func CheckPageEmbeddingGraph(root platform.AssetRef, lookup map[platform.AssetRe
 			}
 		}
 		sections += len(safe.DataBindings)
-		if instances > platform.PageWidgets.Runtime.Embedding.MaxInstances || sections > platform.PageWidgets.Runtime.Embedding.MaxSections {
+		if instances > pageWidgets.Runtime.Embedding.MaxInstances || sections > pageWidgets.Runtime.Embedding.MaxSections {
 			return fmt.Errorf("embedded page instance budget exceeded")
 		}
 		if len(safe.InputSchema.Queries) > 0 {
@@ -78,7 +78,7 @@ func CheckPageEmbeddingGraph(root platform.AssetRef, lookup map[platform.AssetRe
 				records += q.Limit * factor
 			}
 		}
-		if queries > platform.PageWidgets.Runtime.Embedding.MaxQueries || records > platform.PageWidgets.Runtime.Embedding.MaxRecords {
+		if queries > pageWidgets.Runtime.Embedding.MaxQueries || records > pageWidgets.Runtime.Embedding.MaxRecords {
 			return fmt.Errorf("embedded page read budget exceeded")
 		}
 		active[ref] = true

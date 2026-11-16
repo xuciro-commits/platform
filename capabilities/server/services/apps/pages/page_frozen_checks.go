@@ -141,7 +141,7 @@ func CheckTableEdit(edit *platform.PageInlineEdit, info platform.EntityInfo, act
 	}
 	for _, name := range edit.Fields {
 		f, ok := info.Field(name)
-		if !ok || f.ReadOnly || f.Aside || info.Lifecycle != nil && info.Lifecycle.Field == name || !slices.Contains(platform.PageWidgets.Runtime.TableEditing.FieldTypes, f.Type) || !slices.ContainsFunc(action.Payload, func(p platform.Field) bool {
+		if !ok || f.ReadOnly || f.Aside || info.Lifecycle != nil && info.Lifecycle.Field == name || !slices.Contains(pageWidgets.Runtime.TableEditing.FieldTypes, f.Type) || !slices.ContainsFunc(action.Payload, func(p platform.Field) bool {
 			return p.Name == name
 		}) {
 			return fmt.Errorf("table edit field is unavailable or not accepted by its original action")

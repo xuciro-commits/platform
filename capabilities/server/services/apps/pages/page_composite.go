@@ -32,7 +32,7 @@ func compositeRole(view platform.ModelViewBinding, role string, info platform.En
 func checkComposite(b platform.PageDataBinding, lookup func(string) (platform.EntityInfo, bool), engines ...platform.RuleEngine) error {
 	widget := b.Ports["widget"]
 	if widget == "" {
-		for _, candidate := range platform.PageWidgets.Widgets {
+		for _, candidate := range pageWidgets.Widgets {
 			fits := len(candidate.ModelPorts) > 0 && len(b.Models) > 0
 			for key := range b.Models {
 				found := false
@@ -54,7 +54,7 @@ func checkComposite(b platform.PageDataBinding, lookup func(string) (platform.En
 			}
 		}
 	}
-	contract := platform.PageWidget(widget)
+	contract := pageWidget(widget)
 	if contract == nil || len(contract.ModelPorts) == 0 || b.Model != nil || len(b.Models) > len(contract.ModelPorts) {
 		return fmt.Errorf("binding %s: invalid composite contract", b.ID)
 	}
@@ -152,7 +152,7 @@ func checkComposite(b platform.PageDataBinding, lookup func(string) (platform.En
 }
 
 func compositeLimits() (records, cells, bytes int) {
-	limits := platform.PageWidgets.Runtime.Composite
+	limits := pageWidgets.Runtime.Composite
 	return limits.MaxRecords, limits.MaxCells, limits.MaxBytes
 }
 

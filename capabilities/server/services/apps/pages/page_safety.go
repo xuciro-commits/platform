@@ -58,7 +58,7 @@ func CheckSafety(p platform.Page) error {
 			}
 			owner = next
 		}
-		if scope.Kind == "loop" && (scope.MaxIterations < 1 || scope.MaxIterations > platform.PageWidgets.Runtime.Loop.MaxItems || safe.InputSchema.Variables[scope.Bindings["collection"]].Type != "object-set" || safe.InputSchema.Variables[scope.Bindings["itemVariable"]].Type != "record") {
+		if scope.Kind == "loop" && (scope.MaxIterations < 1 || scope.MaxIterations > pageWidgets.Runtime.Loop.MaxItems || safe.InputSchema.Variables[scope.Bindings["collection"]].Type != "object-set" || safe.InputSchema.Variables[scope.Bindings["itemVariable"]].Type != "record") {
 			return fmt.Errorf("page loop needs its bounded typed collection and item")
 		}
 	}

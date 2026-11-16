@@ -8,7 +8,7 @@ import (
 
 func checkWidgetPorts(p platform.Page, binding platform.PageDataBinding, owner string) error {
 	widget := binding.Ports["widget"]
-	contract := platform.PageWidget(widget)
+	contract := pageWidget(widget)
 	if contract == nil {
 		return nil
 	}
@@ -79,18 +79,18 @@ func checkWidgetPorts(p platform.Page, binding platform.PageDataBinding, owner s
 func sharedRecordProfile(widget string) string {
 	switch widget {
 	case "scene-3d", "observation":
-		return platform.PageWidgets.Runtime.Telemetry.SharedUIProfile
+		return pageWidgets.Runtime.Telemetry.SharedUIProfile
 	case "vertex-graph":
-		return platform.PageWidgets.Runtime.Exploration.SharedVertexUIProfile
+		return pageWidgets.Runtime.Exploration.SharedVertexUIProfile
 	case "graph-explorer", "breadcrumb", "avatar-stack":
-		return platform.PageWidgets.Runtime.ContextViews.SharedUIProfile
+		return pageWidgets.Runtime.ContextViews.SharedUIProfile
 	}
 	return "platform.page.v2.14"
 }
 
 var pageVariablePortFields = func() map[string]bool {
 	fields := map[string]bool{}
-	for _, widget := range platform.PageWidgets.Widgets {
+	for _, widget := range pageWidgets.Widgets {
 		for _, port := range append(slices.Clone(widget.InputPorts), widget.OutputPorts...) {
 			if port.BindingField != "enabledWhen" {
 				fields[port.BindingField] = true
@@ -104,7 +104,7 @@ func pageUIProfileSupports(profile, required string) bool {
 	if profile == "platform.page.v3" {
 		return true
 	}
-	current, minimum := slices.Index(platform.PageWidgets.SupportedProfiles, profile), slices.Index(platform.PageWidgets.SupportedProfiles, required)
+	current, minimum := slices.Index(pageWidgets.SupportedProfiles, profile), slices.Index(pageWidgets.SupportedProfiles, required)
 	return current >= 0 && minimum >= 0 && current >= minimum
 }
 

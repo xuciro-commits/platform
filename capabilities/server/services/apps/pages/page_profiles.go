@@ -17,7 +17,7 @@ func checkProfile(d platform.PageInputSchema) error {
 
 func checkVariableProfile(d platform.PageInputSchema, id string, v platform.PageVariable) error {
 	supports := func(feature string) bool {
-		return pageUIProfileSupports(profileVersion(d), platform.PageWidgets.Features[feature])
+		return pageUIProfileSupports(profileVersion(d), pageWidgets.Features[feature])
 	}
 	switch {
 	case v.Mode == "property" && !supports("propertyVariables"):
@@ -38,7 +38,7 @@ func checkVariableProfile(d platform.PageInputSchema, id string, v platform.Page
 		return fmt.Errorf("overlay resource %s requires UI profile v2.11", id)
 	case v.Scope == "overlay" && !supports("overlayVariables"):
 		return fmt.Errorf("page variable %s requires UI profile v2.7", id)
-	case v.Scope == platform.PageWidgets.Runtime.Loop.Scope && !supports("loopVariables"):
+	case v.Scope == pageWidgets.Runtime.Loop.Scope && !supports("loopVariables"):
 		return fmt.Errorf("page variable %s requires UI profile v2.5", id)
 	case v.Mode == "resource" && !supports("resourceVariables"):
 		return fmt.Errorf("page variable %s requires UI profile v2.3", id)

@@ -20,7 +20,7 @@ func validPageImageURL(raw string) bool {
 	if raw == "" {
 		return true
 	}
-	if len(raw) > platform.PageWidgets.Runtime.ContextViews.MaxURLBytes || !utf8.ValidString(raw) {
+	if len(raw) > pageWidgets.Runtime.ContextViews.MaxURLBytes || !utf8.ValidString(raw) {
 		return false
 	}
 	decoded, err := url.PathUnescape(raw)
