@@ -187,7 +187,7 @@ func (resolver Resolver) candidate(roots []platform.AssetRef, available []platfo
 			if err := application.CheckVariables(); err != nil {
 				return empty, err
 			}
-			if err := application.CheckExtension(); err != nil {
+			if err := resolver.CheckApplicationExtension(application); err != nil {
 				return empty, err
 			}
 			if application.Extends != nil {

@@ -6,7 +6,6 @@ import (
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformserver/platform"
 	pageowner "platformserver/services/apps/pages"
-	"platformserver/services/resources/publication"
 	"slices"
 	"strings"
 	"time"
@@ -62,7 +61,7 @@ func (ctx Context) Runs(m platform.Member, ref platform.AssetRef, offset, limit 
 	shares := func(resource platform.AssetRef) []string {
 		names := []string{}
 		for _, d := range visible {
-			if d.Ref != ref && d.Application != nil && publication.RunGraph(d.Ref, current)[resource] {
+			if d.Ref != ref && d.Application != nil && pageowner.PublicationResolver().RunGraph(d.Ref, current)[resource] {
 				names = append(names, d.Application.Title)
 			}
 		}
@@ -381,7 +380,7 @@ func (ctx Context) Graphs(root platform.AssetRef) (map[platform.AssetRef]platfor
 	for _, a := range available {
 		current[a.Ref] = a
 	}
-	graphs := map[string]map[platform.AssetRef]bool{"": publication.RunGraph(root, current)}
+	graphs := map[string]map[platform.AssetRef]bool{"": pageowner.PublicationResolver().RunGraph(root, current)}
 	for id, raw := range ctx.Candidates() {
 		candidate, err := pageowner.PublicationResolver().ReadCandidate(id, raw)
 		if err != nil {
@@ -392,7 +391,7 @@ func (ctx Context) Graphs(root platform.AssetRef) (map[platform.AssetRef]platfor
 			assets[a.Ref] = a
 		}
 		if _, ok := assets[root]; ok {
-			graphs[id] = publication.RunGraph(root, assets)
+			graphs[id] = pageowner.PublicationResolver().RunGraph(root, assets)
 		}
 	}
 	return current, graphs, nil

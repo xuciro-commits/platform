@@ -6,7 +6,7 @@ import (
 	"platformserver/kernel/acceptedformat"
 	"platformserver/kernel/records"
 	"platformserver/platform"
-	"platformserver/services/resources/publication"
+	pageowner "platformserver/services/apps/pages"
 	"slices"
 	"strings"
 	"time"
@@ -218,7 +218,7 @@ func (ctx Context) Bind(resource platform.AssetRef, release, dependencies string
 		if root.Ref.Kind != platform.AssetApp {
 			continue
 		}
-		graph := publication.RunGraph(root.Ref, lookup)
+		graph := pageowner.PublicationResolver().RunGraph(root.Ref, lookup)
 		uses := graph[resource]
 		if len(jobOwner) > 0 {
 			for ref := range graph {

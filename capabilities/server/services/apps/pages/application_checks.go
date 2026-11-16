@@ -35,7 +35,7 @@ func (b Bindings) CheckApplication(id string, a platform.Application, published 
 	if err := b.CheckQueries(a.QueryPage()); err != nil {
 		return err
 	}
-	if err := a.CheckResources(); err != nil {
+	if err := CheckApplicationResources(a); err != nil {
 		return fmt.Errorf("application %s: %w", a.Name, err)
 	}
 	for _, ref := range a.Resources {

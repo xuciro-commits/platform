@@ -118,6 +118,8 @@ func PublicationResolver() publication.Resolver {
 		CheckPage: CheckSafety, CheckFrozenQueries: CheckFrozenQueries,
 		Safety: Safety, PageDependencies: PageDependencies, PageNavigationEdge: PageNavigationEdge,
 		CheckPageEmbeddingGraph: CheckPageEmbeddingGraph, CheckPageVariables: CheckPageVariables,
-		PageContentVersion: PageContentVersion,
+		PageContentVersion:        PageContentVersion,
+		CheckApplicationResources: CheckApplicationResources, CheckApplicationExtension: CheckApplicationExtension,
+		ApplicationDependencies: ApplicationDependencies,
 	}
 }

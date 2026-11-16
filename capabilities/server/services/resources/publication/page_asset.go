@@ -22,7 +22,7 @@ func (resolver Resolver) ApplicationReleaseAsset(app, sourceVersion string, appl
 	if err := application.CheckVariables(); err != nil {
 		return platform.ReleaseAsset{}, err
 	}
-	if err := application.CheckResources(); err != nil {
+	if err := resolver.CheckApplicationResources(application); err != nil {
 		return platform.ReleaseAsset{}, err
 	}
 	body, err := json.Marshal(application)

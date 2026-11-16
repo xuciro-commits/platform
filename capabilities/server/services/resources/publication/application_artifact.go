@@ -25,7 +25,7 @@ func (resolver Resolver) ArtifactOfApplication(root platform.AssetRef, available
 			if err := json.Unmarshal(asset.Body, &declaration); err != nil {
 				return artifact, err
 			}
-			if err := declaration.CheckResources(); err != nil {
+			if err := resolver.CheckApplicationResources(declaration); err != nil {
 				return artifact, err
 			}
 			artifact.Title, artifact.Profile = declaration.Title, declaration.Profile

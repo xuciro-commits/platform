@@ -101,10 +101,10 @@ func (resolver Resolver) describeAsset(asset platform.ReleaseAsset, historical b
 		if err := app.CheckVariables(); err != nil {
 			return out, err
 		}
-		if err := app.CheckResources(); err != nil {
+		if err := resolver.CheckApplicationResources(app); err != nil {
 			return out, err
 		}
-		out.Requires = append(out.Requires, app.Dependencies(asset.Ref.App)...)
+		out.Requires = append(out.Requires, resolver.ApplicationDependencies(app, asset.Ref.App)...)
 	case platform.AssetObject:
 		info, err := QueryObjectDescriptor(asset.Body)
 		if err != nil {

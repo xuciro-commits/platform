@@ -98,81 +98,9 @@ type Application struct {
 	Concepts     []AppConcept                 `json:"concepts,omitempty"`
 }
 
-func (a Application) CheckResources() error {
-	if err := a.CheckLanguages(); err != nil {
-		return err
-	}
-	if err := a.CheckExtension(); err != nil {
-		return err
-	}
-	if a.Profile != nil {
-		if err := a.Profile.Check(); err != nil {
-			return err
-		}
-	}
-	if len(a.Resources) > 1000 {
-		return fmt.Errorf("application resources exceed 1000 assets")
-	}
-	seen := map[AssetRef]bool{}
-	for _, ref := range a.Resources {
-		if err := ref.Check(); err != nil {
-			return err
-		}
-		if ref.Kind == AssetPage || ref.Kind == AssetApp {
-			return fmt.Errorf("application resources use non-navigation assets; pages belong in Pages")
-		}
-		if seen[ref] {
-			return fmt.Errorf("application resource %s is declared twice", ref)
-		}
-		seen[ref] = true
-	}
-	return a.CheckConcepts()
-}
-
-func (a Application) Dependencies(owner string) []AssetRef {
-	refs := append(slices.Clone(a.Resources), a.QueryPage().QueryReferences()...)
-	if a.Extends != nil {
-		refs = append(refs, *a.Extends)
-	}
-	for _, name := range a.Pages {
-		refs = append(refs, AssetRef{App: owner, Kind: AssetPage, Name: name})
-	}
-	slices.SortFunc(refs, CompareAssetRef)
-	return slices.Compact(refs)
-}
-
 type ApplicationPageReplacement struct {
 	View string `json:"view"`
 	Page string `json:"page"`
-}
-
-func (a Application) CheckExtension() error {
-	if a.Extends == nil {
-		if a.Entry != "" || len(a.Replacements) != 0 {
-			return fmt.Errorf("an application entry or page replacement needs an extended application")
-		}
-		return nil
-	}
-	if err := a.Extends.Check(); err != nil {
-		return err
-	}
-	if a.Extends.Kind != AssetApp {
-		return fmt.Errorf("an application can only extend an application")
-	}
-	if len(a.Replacements) != 0 && strings.TrimSpace(a.Entry) == "" {
-		return fmt.Errorf("application page replacements need an explicit entry")
-	}
-	views := map[string]bool{}
-	for _, replacement := range a.Replacements {
-		if strings.TrimSpace(replacement.View) == "" || !slices.Contains(a.Pages, replacement.Page) {
-			return fmt.Errorf("application replacement %q needs a view and one of its own pages", replacement.View)
-		}
-		if views[replacement.View] {
-			return fmt.Errorf("application view %q is replaced twice", replacement.View)
-		}
-		views[replacement.View] = true
-	}
-	return nil
 }
 
 type AppGroup struct {

@@ -88,7 +88,7 @@ func UniqueRefs(refs []platform.AssetRef) []platform.AssetRef {
 }
 
 func CheckApplicationExtension(ref platform.AssetRef, a platform.Application, definitions []platform.Definition) error {
-	if err := a.CheckExtension(); err != nil {
+	if err := pageowner.CheckApplicationExtension(a); err != nil {
 		return err
 	}
 	if a.Extends == nil {

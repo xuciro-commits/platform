@@ -96,10 +96,10 @@ func (o *Owner) ValidateApplication(c platform.Caller, a *Application) *platform
 	if err := ApplicationDescriptor(*a).CheckLanguages(); err != nil {
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
 	}
-	if err := ApplicationDescriptor(*a).CheckExtension(); err != nil {
+	if err := pageowner.CheckApplicationExtension(ApplicationDescriptor(*a)); err != nil {
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
 	}
-	if err := ApplicationDescriptor(*a).CheckConcepts(); err != nil {
+	if err := pageowner.CheckApplicationConcepts(ApplicationDescriptor(*a)); err != nil {
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
 	}
 	if err := (platform.PageInputSchema{Variables: a.Variables}).CheckVariables(c.Rules()); err != nil {
@@ -186,7 +186,7 @@ func (o *Owner) checkApplication(a Application) error {
 		}
 		seen[name] = true
 	}
-	if err := ApplicationDescriptor(a).CheckResources(); err != nil {
+	if err := pageowner.CheckApplicationResources(ApplicationDescriptor(a)); err != nil {
 		return err
 	}
 	if err := ApplicationDescriptor(a).CheckVariables(); err != nil {

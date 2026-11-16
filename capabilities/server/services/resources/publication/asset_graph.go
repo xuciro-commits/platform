@@ -48,7 +48,7 @@ func (resolver Resolver) QueryVersion(d platform.Definition, version string) *pl
 	return &d
 }
 
-func RunGraph(root platform.AssetRef, assets map[platform.AssetRef]platform.ReleaseAsset) map[platform.AssetRef]bool {
+func (resolver Resolver) RunGraph(root platform.AssetRef, assets map[platform.AssetRef]platform.ReleaseAsset) map[platform.AssetRef]bool {
 	graph := map[platform.AssetRef]bool{}
 	var visit func(platform.AssetRef)
 	visit = func(ref platform.AssetRef) {
@@ -66,7 +66,7 @@ func RunGraph(root platform.AssetRef, assets map[platform.AssetRef]platform.Rele
 		if ref.Kind == platform.AssetApp {
 			var app platform.Application
 			if json.Unmarshal(asset.Body, &app) == nil {
-				for _, dependency := range app.Dependencies(ref.App) {
+				for _, dependency := range resolver.ApplicationDependencies(app, ref.App) {
 					visit(dependency)
 				}
 			}

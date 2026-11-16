@@ -2,6 +2,7 @@ package releases
 
 import (
 	"platformserver/platform"
+	pageowner "platformserver/services/apps/pages"
 	"platformserver/services/resources/publication"
 	"slices"
 	"sync"
@@ -91,7 +92,7 @@ func DecisionDefinition(app, appVersion string, action platform.Action, release 
 		if asset.Ref.Kind != platform.AssetApp {
 			continue
 		}
-		graph := publication.RunGraph(asset.Ref, lookup)
+		graph := pageowner.PublicationResolver().RunGraph(asset.Ref, lookup)
 		if !graph[root] && !graph[target] {
 			continue
 		}
