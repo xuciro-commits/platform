@@ -142,6 +142,8 @@ test("F1 builder goes from an empty project to an application a business user ac
     await dialog.getByRole("textbox", { name: "Page title", exact: true }).fill("Order object view");
     await dialog.getByRole("button", { name: "Create object view", exact: true }).click();
     await expect(dialog).toBeHidden();
+    await expect.poll(async () => (await read<{ records: { name: string }[] }>("/v1/records/build.page?limit=500")).records.some(record => record.name === viewName), { timeout: 30_000 }).toBe(true);
+    await expect.poll(async () => ((await read<{ records: { name: string; pages: string[] }[] }>("/v1/records/build.app?limit=500")).records.find(record => record.name === name)?.pages ?? []).includes(viewName), { timeout: 30_000 }).toBe(true);
     const objects = await read<{ records: { id: string; name: string; published?: string }[] }>("/v1/records/build.object?limit=500");
     const object = objects.records.find(record => record.name === objectName)!;
     expect(object.published ?? "").toBe("");

@@ -57,14 +57,16 @@ export function ApplicationsPortal({ projection }: { projection?: Projection }) 
           groups.set(group.id, held);
         }
       }
-      return <VStack key={category.id} gap={2} role="group" aria-label={category.label()}>
+      return <section key={category.id} aria-label={category.label()}>
+        <VStack gap={2}>
         <Text as="p" role="heading" aria-level={2} weight="semibold" color="secondary">{category.label()}</Text>
         {category.id === "business" ? <VStack gap={3}>{[...groups.entries()].sort(([, a], [, b]) => a.label.localeCompare(b.label)).map(([id, group]) => <VStack key={id} gap={2} role="group" aria-label={group.label}>
           <Text as="p" role="heading" aria-level={3} weight="medium">{group.label}</Text>
           <Grid columns={{ minWidth: 240, max: 6 }} gap={2}>{group.apps.map((a) => <ApplicationTile key={a.id} app={a} role={role(a.id)} />)}</Grid>
         </VStack>)}</VStack>
           : <Grid columns={{ minWidth: 240, max: 6 }} gap={2}>{inCategory.map((a) => <ApplicationTile key={a.id} app={a} role={role(a.id)} />)}</Grid>}
-      </VStack>;
+        </VStack>
+      </section>;
     })}
     {!apps.length && <EmptyState title={t("No application matches.")} action={query.trim() ? <Button onClick={() => setQuery("")}>{t("Clear search")}</Button> : undefined} />}
   </VStack>;
