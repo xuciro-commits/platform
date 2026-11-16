@@ -25,11 +25,11 @@ func (projection DefinitionProjection) Page(def platform.Definition) (platform.D
 	if m.Roles[def.Ref.App] == "" || def.Page == nil {
 		return def, false
 	}
-	page, err := def.Page.Safety()
+	page, err := Safety(*def.Page)
 	if err != nil {
 		return def, false
 	}
-	digest, err := platform.PageContentVersion(page)
+	digest, err := PageContentVersion(page)
 	if err != nil {
 		return def, false
 	}
@@ -300,7 +300,7 @@ func (b Bindings) CheckOperation(s platform.PageActionTrigger, page platform.Ent
 var selectionName = regexp.MustCompile(`^[a-z][a-z0-9_-]{0,63}$`)
 
 func CheckSelections(p platform.Page, entity func(string) (platform.EntityInfo, bool), action func(string) (platform.Action, bool)) error {
-	safe, err := p.Safety()
+	safe, err := Safety(p)
 	if err != nil {
 		return err
 	}

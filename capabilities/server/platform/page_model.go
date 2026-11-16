@@ -38,49 +38,6 @@ func PageRuleInputFits(variable, kind string) bool {
 	return variable == kind || variable == "string" && (kind == "text" || kind == "choice" || kind == "date" || kind == "datetime") || variable == "number" && (kind == "number" || kind == "integer")
 }
 
-func (p Page) ModelDependencies() []AssetRef {
-	refs := []AssetRef{}
-	safe, err := p.Safety()
-	if err != nil {
-		return refs
-	}
-	for _, binding := range safe.DataBindings {
-		for _, model := range binding.ModelBindings() {
-			if safe.WindowVariableInterface(binding.Ports["collectionVariable"]) == "" {
-				ref := ModelObject(model.Type)
-				if binding.Object.Name == model.Type {
-					ref = binding.Object
-				} else if safe.Object.Name == model.Type {
-					ref = safe.Object
-				}
-				refs = append(refs, ref)
-			}
-			if model.Relation != nil {
-				refs = append(refs, ModelObject(model.Relation.ParentType))
-			}
-			sets := []*ModelRecordSet{model.Set}
-			if model.Options != nil {
-				sets = append(sets, model.Options.Set)
-				if model.Options.Rule != nil {
-					refs = append(refs, model.Options.Rule.Action)
-				}
-			}
-			for _, set := range sets {
-				if set == nil {
-					continue
-				}
-				if set.Query != nil {
-					refs = append(refs, set.Query.Ref)
-				}
-				if set.Name != "" {
-					refs = append(refs, safe.RecordResourceObject(set.RecordVariable))
-				}
-			}
-		}
-	}
-	return refs
-}
-
 func (b PageWidgetSpec) IsZero() bool { return b.Format == "" && len(b.Body) == 0 }
 
 func (b PageDataBinding) PrimaryModel() *ModelBinding {
@@ -188,22 +145,6 @@ func (p Page) WindowVariableInterface(variable string) string {
 	return ""
 }
 
-func (p Page) RecordVariableInterface(variable string) string {
-	safe, err := p.Safety()
-	if err != nil {
-		return ""
-	}
-	v := safe.InputSchema.Variables[variable]
-	if v.Source != nil {
-		for _, binding := range safe.DataBindings {
-			if binding.ID == v.Source.Section {
-				return safe.WindowVariableInterface(binding.Ports["collectionVariable"])
-			}
-		}
-	}
-	return ""
-}
-
 func CompositeLimits() (records, cells, bytes int) {
 	limits := PageWidgets.Runtime.Composite
 	return limits.MaxRecords, limits.MaxCells, limits.MaxBytes
@@ -211,23 +152,6 @@ func CompositeLimits() (records, cells, bytes int) {
 
 func MatrixRuleReads(c PageDataBinding) RuleReadSpec {
 	return RuleReadSpec{Inputs: map[string]ExprType{"row": {Kind: "reference", Object: c.Models["rows"].Model.Type}, "column": {Kind: "reference", Object: c.Models["columns"].Model.Type}}}
-}
-
-func PageContentVersion(page Page) (string, error) {
-	if page.RetainedVersion != "" {
-		return page.RetainedVersion, nil
-	}
-	page.PresentationWords = nil
-	body, err := json.Marshal(page)
-	if err != nil {
-		return "", err
-	}
-	body, err = CanonicalAssetBody(body)
-	if err != nil {
-		return "", err
-	}
-	sum := sha256.Sum256(body)
-	return "page.sha256." + hex.EncodeToString(sum[:]), nil
 }
 
 func CheckPageContentVersion(version string) error {

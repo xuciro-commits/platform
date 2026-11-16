@@ -9,7 +9,7 @@ import (
 )
 
 func (b *Build) ReleaseDrafts(assets []platform.ReleaseAsset, ctx platform.AssetReleaseContext) ([]platform.AssetDraft, error) {
-	ordered, err := orderOwnerAssets(assets)
+	ordered, err := b.orderOwnerAssets(assets)
 	if err != nil {
 		return nil, err
 	}
@@ -71,7 +71,7 @@ func (b *Build) ReleaseDrafts(assets []platform.ReleaseAsset, ctx platform.Asset
 }
 
 func (b *Build) PrepareReleaseAssets(assets []platform.ReleaseAsset, ctx platform.AssetReleaseContext) ([]platform.AssetInstallation, error) {
-	ordered, err := orderOwnerAssets(assets)
+	ordered, err := b.orderOwnerAssets(assets)
 	if err != nil {
 		return nil, err
 	}
@@ -105,7 +105,7 @@ func (b *Build) PrepareReleaseAssets(assets []platform.ReleaseAsset, ctx platfor
 		return nil, err
 	}
 	out = append(out, integrations...)
-	return orderOwnerInstallations(assets, out)
+	return b.orderOwnerInstallations(assets, out)
 }
 
 func (b *Build) AssetEnvironmentRequirements(asset platform.ReleaseAsset) ([]platform.AssetEnvironmentRequirement, error) {

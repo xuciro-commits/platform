@@ -21,7 +21,7 @@ func (b Bindings) CheckApplication(id string, a platform.Application, published 
 		ref := platform.AssetRef{App: id, Kind: platform.AssetPage, Name: page}
 		pageDefinition := slices.IndexFunc(b.Definitions, func(d platform.Definition) bool { return d.Ref == ref && d.Page != nil })
 		if pageDefinition >= 0 {
-			if err := a.CheckPageVariables(*b.Definitions[pageDefinition].Page); err != nil {
+			if err := CheckPageVariables(a, *b.Definitions[pageDefinition].Page); err != nil {
 				return err
 			}
 		}

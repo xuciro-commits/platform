@@ -151,7 +151,7 @@ func (r ModelReader) Read(member platform.Member, request PageModelRead, at time
 		if err := NormalizeModelBindings(&page, r.host.Entity); err != nil {
 			return result, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
 		}
-		projected, err := page.Safety()
+		projected, err := Safety(page)
 		if err != nil {
 			return result, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
 		}
@@ -179,7 +179,7 @@ func (r ModelReader) Read(member platform.Member, request PageModelRead, at time
 			return result, platform.Refuse(pb.ErrorCode_ERROR_CODE_NOT_FOUND, "Model page is unavailable")
 		}
 	}
-	projectedPage, projectionError := page.Safety()
+	projectedPage, projectionError := Safety(page)
 	if projectionError != nil {
 		return result, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, projectionError.Error())
 	}

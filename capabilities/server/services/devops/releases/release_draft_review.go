@@ -3,8 +3,8 @@ package releases
 import (
 	"encoding/json"
 	"platformserver/platform"
+	pageowner "platformserver/services/apps/pages"
 	"platformserver/services/resources/authoring"
-	releasepub "platformserver/services/resources/publication"
 	"slices"
 )
 
@@ -43,7 +43,7 @@ func (p Planner) reviewDrafts(reply *ReleasePreview) error {
 	if err != nil {
 		return err
 	}
-	graph, err := releasepub.NewReleaseDependencyGraph(available)
+	graph, err := pageowner.PublicationResolver().NewReleaseDependencyGraph(available)
 	if err != nil {
 		return err
 	}

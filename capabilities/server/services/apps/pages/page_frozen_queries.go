@@ -10,7 +10,7 @@ import (
 )
 
 func CheckFrozenQueries(original platform.Page, assets map[platform.AssetRef]platform.ReleaseAsset) error {
-	page, err := original.Safety()
+	page, err := Safety(original)
 	if err != nil {
 		return err
 	}

@@ -17,7 +17,7 @@ func FilterNavigation(definitions []platform.Definition) []platform.Definition {
 		if d.Page == nil {
 			continue
 		}
-		page, err := d.Page.Safety()
+		page, err := Safety(*d.Page)
 		if err != nil {
 			continue
 		}
@@ -86,7 +86,7 @@ func FilterNavigation(definitions []platform.Definition) []platform.Definition {
 }
 
 func CheckNavigation(p platform.Page, owner string, definitions []platform.Definition) error {
-	page, err := p.Safety()
+	page, err := Safety(p)
 	if err != nil {
 		return err
 	}
@@ -146,7 +146,7 @@ func FilterExplorationAssets(definitions []platform.Definition) []platform.Defin
 		if d.Page == nil {
 			continue
 		}
-		page, err := d.Page.Safety()
+		page, err := Safety(*d.Page)
 		if err != nil {
 			continue
 		}

@@ -11,7 +11,7 @@ import (
 
 func (b Bindings) CheckInstall(p platform.Page, id string, targets bool, engines ...platform.RuleEngine) (platform.Page, platform.EntityInfo, error) {
 	canonical := p
-	safe, err := p.Safety()
+	safe, err := Safety(p)
 	if err != nil {
 		return p, platform.EntityInfo{}, err
 	}
@@ -68,7 +68,7 @@ func (b Bindings) CheckInstall(p platform.Page, id string, targets bool, engines
 	if targets {
 		for _, d := range b.Definitions {
 			if d.Application != nil && d.Ref.App == id && slices.Contains(d.Application.Pages, p.Name) {
-				if err := d.Application.CheckPageVariables(p); err != nil {
+				if err := CheckPageVariables(*d.Application, p); err != nil {
 					return p, platform.EntityInfo{}, err
 				}
 			}
@@ -81,7 +81,7 @@ func (b Bindings) CheckInstall(p platform.Page, id string, targets bool, engines
 }
 
 func (b Bindings) CheckSections(p platform.Page, page platform.EntityInfo) error {
-	safe, err := p.Safety()
+	safe, err := Safety(p)
 	if err != nil {
 		return err
 	}
@@ -94,7 +94,7 @@ func (b Bindings) CheckSections(p platform.Page, page platform.EntityInfo) error
 	if err := CheckSafety(safe); err != nil {
 		return err
 	}
-	if err := safe.CheckRecordPorts(); err != nil {
+	if err := checkRecordPorts(safe); err != nil {
 		return err
 	}
 	for _, binding := range safe.DataBindings {

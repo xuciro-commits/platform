@@ -309,7 +309,7 @@ func CandidateWithBindings(roots []platform.AssetRef, available []platform.Relea
 			if err := json.Unmarshal(asset.Body, &page); err != nil {
 				return err
 			}
-			projected, err := page.Safety()
+			projected, err := pageowner.Safety(page)
 			if err != nil {
 				return err
 			}
@@ -343,7 +343,7 @@ func CandidateWithBindings(roots []platform.AssetRef, available []platform.Relea
 						if json.Unmarshal(assets[index].Body, &current) != nil {
 							return fmt.Errorf("embedded page descriptor is invalid")
 						}
-						digest, err := platform.PageContentVersion(current)
+						digest, err := pageowner.PageContentVersion(current)
 						if err != nil {
 							return err
 						}

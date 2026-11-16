@@ -9,6 +9,7 @@ import (
 
 	"platformserver/kernel/records"
 	"platformserver/platform"
+	pageowner "platformserver/services/apps/pages"
 	"platformserver/services/resources/authoring"
 	"platformserver/services/resources/publication"
 	"slices"
@@ -452,7 +453,7 @@ func ValidateSet(context ValidationContext, engines ...platform.RuleEngine) erro
 				if !ok {
 					return fmt.Errorf("application page %s is unavailable", ref)
 				}
-				if err := definition.Application.CheckPageVariables(page); err != nil {
+				if err := pageowner.CheckPageVariables(*definition.Application, page); err != nil {
 					return err
 				}
 			}

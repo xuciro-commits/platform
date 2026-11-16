@@ -53,7 +53,7 @@ func (resolver Resolver) candidate(roots []platform.AssetRef, available []platfo
 		}
 		lookup[asset.Ref] = asset
 	}
-	graph, err := NewReleaseDependencyGraph(available)
+	graph, err := resolver.NewReleaseDependencyGraph(available)
 	if err != nil {
 		return empty, err
 	}
@@ -220,7 +220,7 @@ func (resolver Resolver) candidate(roots []platform.AssetRef, available []platfo
 				if !ok || json.Unmarshal(target.Body, &page) != nil {
 					return empty, fmt.Errorf("application page %s is unavailable", pageRef)
 				}
-				if err := application.CheckPageVariables(page); err != nil {
+				if err := resolver.CheckPageVariables(application, page); err != nil {
 					return empty, err
 				}
 			}
@@ -267,7 +267,7 @@ func (resolver Resolver) candidate(roots []platform.AssetRef, available []platfo
 						}
 					}
 				}
-				if err := platform.CheckPageEmbeddingGraph(ref, lookup); err != nil {
+				if err := resolver.CheckPageEmbeddingGraph(ref, lookup); err != nil {
 					return empty, err
 				}
 				if err := resolver.CheckFrozenQueries(page, lookup); err != nil {
@@ -277,7 +277,7 @@ func (resolver Resolver) candidate(roots []platform.AssetRef, available []platfo
 				for _, c := range page.ComputeResources() {
 					bindings = append(bindings, c.Operation)
 				}
-				safe, err := page.Safety()
+				safe, err := resolver.Safety(page)
 				if err != nil {
 					return empty, err
 				}

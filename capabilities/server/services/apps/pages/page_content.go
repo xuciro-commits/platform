@@ -36,7 +36,7 @@ func (h ContentHost) Definition(m platform.Member, ref platform.AssetRef, versio
 		return denied()
 	}
 	original := definitions[current]
-	digest, err := platform.PageContentVersion(*original.Page)
+	digest, err := PageContentVersion(*original.Page)
 	if err != nil {
 		return denied()
 	}

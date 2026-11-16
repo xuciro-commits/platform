@@ -9,7 +9,7 @@ import (
 )
 
 func NormalizeModelBindings(p *platform.Page, lookup func(string) (platform.EntityInfo, bool)) error {
-	safe, err := p.Safety()
+	safe, err := Safety(*p)
 	if err != nil {
 		return err
 	}
@@ -20,7 +20,7 @@ func NormalizeModelBindings(p *platform.Page, lookup func(string) (platform.Enti
 }
 
 func CheckModelBindings(p platform.Page, lookup func(string) (platform.EntityInfo, bool), criteria func(platform.AssetRef) (*platform.RuleCriteria, bool), engines ...platform.RuleEngine) error {
-	safe, err := p.Safety()
+	safe, err := Safety(p)
 	if err != nil {
 		return err
 	}

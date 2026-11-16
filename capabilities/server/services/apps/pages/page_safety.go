@@ -9,7 +9,7 @@ import (
 )
 
 func CheckSafety(p platform.Page) error {
-	safe, err := p.Safety()
+	safe, err := Safety(p)
 	if err != nil {
 		return err
 	}
@@ -106,7 +106,7 @@ func CheckSafety(p platform.Page) error {
 		return err
 	}
 	if safe.Object.Name != "" {
-		if err := safe.CheckRecordPorts(); err != nil {
+		if err := checkRecordPorts(safe); err != nil {
 			return err
 		}
 	}
@@ -114,5 +114,10 @@ func CheckSafety(p platform.Page) error {
 }
 
 func PublicationResolver() publication.Resolver {
-	return publication.Resolver{CheckPage: CheckSafety, CheckFrozenQueries: CheckFrozenQueries}
+	return publication.Resolver{
+		CheckPage: CheckSafety, CheckFrozenQueries: CheckFrozenQueries,
+		Safety: Safety, PageDependencies: PageDependencies, PageNavigationEdge: PageNavigationEdge,
+		CheckPageEmbeddingGraph: CheckPageEmbeddingGraph, CheckPageVariables: CheckPageVariables,
+		PageContentVersion: PageContentVersion,
+	}
 }

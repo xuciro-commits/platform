@@ -32,6 +32,7 @@ type InstallDependents struct {
 	Definitions   []platform.Definition
 	Bindings      map[string]string
 	Provisions    func(provider string) []platform.Provision
+	ProjectPage   func(platform.Page) (platform.Page, error)
 	Begin         func() InstallDraft
 }
 
@@ -115,7 +116,7 @@ func (c InstallDependents) Validate() error {
 			def.Ref.App == c.App && def.Ref.Name == c.GeneratedPage {
 			continue
 		}
-		p, err := def.Page.Safety()
+		p, err := c.ProjectPage(*def.Page)
 		if err != nil {
 			return err
 		}

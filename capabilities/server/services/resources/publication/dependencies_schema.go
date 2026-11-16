@@ -9,62 +9,6 @@ import (
 	"platformserver/platform"
 )
 
-func pageDependencies(original platform.Page) []platform.AssetRef {
-	page, err := original.Safety()
-	if err != nil {
-		return nil
-	}
-	refs := []platform.AssetRef{}
-	if page.Object.Name != "" {
-		refs = append(refs, page.Object)
-	}
-	refs = append(refs, page.ModelDependencies()...)
-	refs = append(refs, page.QueryReferences()...)
-	refs = append(refs, page.NavigationTargets()...)
-	for _, compute := range page.ComputeResources() {
-		refs = append(refs, compute.Operation.Ref)
-	}
-	for _, selection := range page.InputSchema.Selections {
-		refs = append(refs, selection.Object)
-	}
-	for _, binding := range page.DataBindings {
-		if binding.Object.Name != "" {
-			refs = append(refs, binding.Object)
-		}
-		if binding.Query != nil {
-			refs = append(refs, binding.Query.Ref)
-		}
-		for _, resource := range binding.Resources {
-			if resource.Asset != nil {
-				refs = append(refs, resource.Asset.Ref)
-			}
-			if resource.Object != nil {
-				refs = append(refs, *resource.Object)
-			}
-		}
-	}
-	for _, trigger := range page.ActionTriggers {
-		refs = append(refs, trigger.Actions...)
-		if trigger.InlineEdit != nil {
-			refs = append(refs, trigger.InlineEdit.Action)
-		}
-		if trigger.Function != nil {
-			refs = append(refs, trigger.Function.Ref)
-		}
-		if trigger.Operation != nil {
-			refs = append(refs, trigger.Operation.Ref)
-		}
-		for _, event := range trigger.Events {
-			for _, effect := range event.Effects {
-				if effect.Action != nil {
-					refs = append(refs, effect.Action.Ref)
-				}
-			}
-		}
-	}
-	return refs
-}
-
 func (resolver Resolver) checkReleaseBindings(ref platform.AssetRef, body []byte, declared []platform.AssetRef) error {
 	description, err := resolver.describeAsset(platform.ReleaseAsset{Ref: ref, Body: body}, true)
 	if err != nil {

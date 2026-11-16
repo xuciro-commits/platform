@@ -25,7 +25,7 @@ func VisibleInterfaceQuery(p platform.Page, q platform.PageQuery, entities map[s
 }
 
 func (b Bindings) CheckQueries(p platform.Page) error {
-	projected, err := p.Safety()
+	projected, err := Safety(p)
 	if err != nil {
 		return err
 	}

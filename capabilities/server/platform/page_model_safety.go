@@ -8,20 +8,6 @@ import (
 	"strings"
 )
 
-func (p Page) Safety() (Page, error) {
-	if p.Format != 4 {
-		return Page{}, fmt.Errorf("unsupported page format %d", p.Format)
-	}
-	if p.RetainedVersion == "" {
-		version, err := PageContentVersion(p)
-		if err != nil {
-			return Page{}, err
-		}
-		p.RetainedVersion = version
-	}
-	return p, nil
-}
-
 func (p *Page) UnmarshalJSON(raw []byte) error {
 	type value Page
 	var decoded value

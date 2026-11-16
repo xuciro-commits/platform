@@ -177,7 +177,7 @@ func (r *AssetRegistry) ResolvePinned(ref platform.AssetRef, version string, con
 		if err := json.Unmarshal(frozen.Body, &page); err != nil {
 			return platform.ReleaseAsset{}, err
 		}
-		actual, err := platform.PageContentVersion(page)
+		actual, err := r.resolver.PageContentVersion(page)
 		if err != nil || actual != contentVersion[0] {
 			return platform.ReleaseAsset{}, fmt.Errorf("asset %s returned different retained page content", ref)
 		}

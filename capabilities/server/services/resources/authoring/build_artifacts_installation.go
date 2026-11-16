@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"maps"
 	"platformserver/services/ontology"
-	releasepub "platformserver/services/resources/publication"
 	"reflect"
 	"slices"
 	"strings"
@@ -96,8 +95,8 @@ func (b *Build) ApplyAssetInstallation(plan platform.AssetInstallation, ctx plat
 
 var _ platform.AssetLifecycleOwner = (*Build)(nil)
 
-func orderOwnerAssets(assets []platform.ReleaseAsset) ([]platform.ReleaseAsset, error) {
-	graph, err := releasepub.NewReleaseDependencyGraph(assets)
+func (b *Build) orderOwnerAssets(assets []platform.ReleaseAsset) ([]platform.ReleaseAsset, error) {
+	graph, err := b.resolver.NewReleaseDependencyGraph(assets)
 	if err != nil {
 		return nil, err
 	}
@@ -116,8 +115,8 @@ func orderOwnerAssets(assets []platform.ReleaseAsset) ([]platform.ReleaseAsset, 
 	return out, nil
 }
 
-func orderOwnerInstallations(assets []platform.ReleaseAsset, plans []platform.AssetInstallation) ([]platform.AssetInstallation, error) {
-	ordered, err := orderOwnerAssets(assets)
+func (b *Build) orderOwnerInstallations(assets []platform.ReleaseAsset, plans []platform.AssetInstallation) ([]platform.AssetInstallation, error) {
+	ordered, err := b.orderOwnerAssets(assets)
 	if err != nil {
 		return nil, err
 	}

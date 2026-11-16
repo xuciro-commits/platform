@@ -101,44 +101,6 @@ func (a Application) CheckVariables() error {
 	return d.CheckVariables()
 }
 
-func (a Application) CheckPageVariables(p Page) error {
-	safe, err := p.Safety()
-	if err != nil {
-		return err
-	}
-	for id, v := range safe.InputSchema.Variables {
-		if v.Scope != "application" {
-			continue
-		}
-		if v.Source == nil {
-			return fmt.Errorf("page %s shared binding %s has no source", p.Name, id)
-		}
-		source, ok := a.Variables[v.Source.Variable]
-		matches := true
-		if v.Type == "object-set" {
-			matches = source.Mode == "resource" && source.Source != nil && source.Source.Kind == "plan" && v.Source.Object != nil && a.Queries[source.Source.Query].Object == *v.Source.Object
-		}
-		if v.Type == "record" || v.Type == "filter" || v.Type == "record-set" {
-			matches = source.Mode == "resource" && source.Source != nil && source.Source.Kind == v.Type && source.Source.Object != nil && v.Source.Object != nil && *source.Source.Object == *v.Source.Object
-		}
-		if !ok || !matches || source.Type != v.Type || v.Writable && source.Mode != "state" && v.Type != "record" && v.Type != "filter" && v.Type != "record-set" {
-			return fmt.Errorf("application %s does not satisfy page %s shared binding %s", a.Name, p.Name, id)
-		}
-		for _, binding := range safe.DataBindings {
-			if binding.Ports["filterVariable"] != id {
-				continue
-			}
-			for _, field := range binding.Fields {
-				if source.Source == nil || !slices.Contains(source.Source.Fields, field.Key()) {
-					return fmt.Errorf("page filter field is not allowed by application")
-				}
-			}
-		}
-
-	}
-	return nil
-}
-
 func (a Application) QueryPage() Page {
 	return Page{Format: 4, InputSchema: PageInputSchema{profile: a.UIProfile, Variables: a.Variables, Queries: a.Queries}}
 }

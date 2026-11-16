@@ -35,19 +35,3 @@ func checkObjectView(object platform.AssetRef, view platform.ObjectView, assets 
 	}
 	return nil
 }
-
-func pageNavigationEdge(asset platform.ReleaseAsset, target platform.AssetRef) bool {
-	if asset.Ref.Kind != platform.AssetPage || target.Kind != platform.AssetPage {
-		return false
-	}
-	var p platform.Page
-	if json.Unmarshal(asset.Body, &p) != nil {
-		return false
-	}
-	for _, ref := range p.NavigationTargets() {
-		if ref == target {
-			return true
-		}
-	}
-	return false
-}

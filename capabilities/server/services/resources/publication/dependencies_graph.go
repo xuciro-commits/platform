@@ -65,7 +65,7 @@ func NewDependencyGraph(descriptors []platform.Dependencies) (*DependencyGraph, 
 	return graph, nil
 }
 
-func NewReleaseDependencyGraph(assets []platform.ReleaseAsset) (*DependencyGraph, error) {
+func (resolver Resolver) NewReleaseDependencyGraph(assets []platform.ReleaseAsset) (*DependencyGraph, error) {
 	descriptions := make([]platform.Dependencies, 0, len(assets))
 	for _, asset := range assets {
 		descriptions = append(descriptions, platform.Dependencies{Ref: asset.Ref, Requires: asset.Requires, Provides: asset.Provides, Version: asset.SourceVersion})
@@ -122,7 +122,7 @@ func NewReleaseDependencyGraph(assets []platform.ReleaseAsset) (*DependencyGraph
 		}
 		if asset.Ref.Kind == platform.AssetPage {
 			for _, ref := range asset.Requires {
-				if pageNavigationEdge(asset, ref) {
+				if resolver.PageNavigationEdge(asset, ref) {
 					graph.navigation[[2]platform.AssetRef{asset.Ref, ref}] = true
 				}
 			}

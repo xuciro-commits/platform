@@ -90,7 +90,7 @@ func (resolver Resolver) describeAsset(asset platform.ReleaseAsset, historical b
 		if err := resolver.CheckPage(p); err != nil {
 			return out, err
 		}
-		out.Requires = append(out.Requires, pageDependencies(p)...)
+		out.Requires = append(out.Requires, resolver.PageDependencies(p)...)
 	case platform.AssetApp:
 		var app platform.Application
 		decoder := json.NewDecoder(bytes.NewReader(asset.Body))

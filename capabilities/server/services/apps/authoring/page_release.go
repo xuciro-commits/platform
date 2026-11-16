@@ -56,7 +56,7 @@ func (o *Owner) RetainPagePublication(p *Page) error {
 		if _, err := pageowner.PublicationResolver().PageReleaseAsset(o.env.AppID(), "", view); err != nil {
 			return err
 		}
-		version, err := platform.PageContentVersion(view)
+		version, err := pageowner.PageContentVersion(view)
 		if err != nil {
 			return err
 		}
@@ -94,7 +94,7 @@ func (o *Owner) PageContent(name, version string) (platform.Page, bool) {
 				continue
 			}
 			view := Descriptor(saved, o.env.AppID(), o.env.Version())
-			digest, err := platform.PageContentVersion(view)
+			digest, err := pageowner.PageContentVersion(view)
 			if err == nil && digest == version {
 				return view, true
 			}
@@ -227,7 +227,7 @@ func (o *Owner) IsGeneratedReleasePage(page platform.ReleaseAsset, assets []plat
 
 func pageFunctionBindings(p platform.Page) map[string]string {
 	bindings := map[string]string{}
-	safe, err := p.Safety()
+	safe, err := pageowner.Safety(p)
 	if err != nil {
 		return bindings
 	}
