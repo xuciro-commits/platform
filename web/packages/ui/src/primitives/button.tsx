@@ -1,5 +1,5 @@
 import { Button as AstryxButton } from "@astryxdesign/core/Button";
-import { createContext, type ButtonHTMLAttributes } from "react";
+import { Children, createContext, isValidElement, type ButtonHTMLAttributes, type ReactNode } from "react";
 
 export type ButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {
   variant?: "default" | "primary" | "ghost" | "danger" | "link" | "row";
@@ -8,6 +8,14 @@ export type ButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {
 };
 
 export const DefaultButtonSize = createContext<ButtonProps["size"]>(undefined);
+
+function textOf(node: ReactNode): string {
+  return Children.toArray(node)
+    .map(child => typeof child === "string" || typeof child === "number" ? String(child) : isValidElement<{ children?: ReactNode }>(child) ? textOf(child.props.children) : "")
+    .join(" ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
 
 /**
  * Platform button facade over Astryx Button.
@@ -28,11 +36,15 @@ export function Button({
   ...props
 }: ButtonProps) {
   const blocked = disabled || loading;
+  const isIconOnly = size === "icon";
+  const parts = Children.toArray(children);
+  const leadingIcon = !isIconOnly && parts.length > 1 && isValidElement(parts[0]) && typeof parts[0].type !== "string" ? parts[0] : undefined;
+  const content = leadingIcon ? parts.slice(1) : children;
   const label =
     (typeof props["aria-label"] === "string" && props["aria-label"]) ||
     title ||
-    (typeof children === "string" || typeof children === "number" ? String(children) : "Button");
-  const isIconOnly = size === "icon";
+    textOf(children) ||
+    "Button";
   const astryxVariant =
     variant === "primary"
       ? "primary"
@@ -59,12 +71,12 @@ export function Button({
       isDisabled={blocked}
       isLoading={loading}
       isIconOnly={isIconOnly}
-      icon={isIconOnly ? children : undefined}
+      icon={isIconOnly ? children : leadingIcon}
       tooltip={title}
       type={type}
       className={[linkClass, className].filter(Boolean).join(" ") || undefined}
     >
-      {isIconOnly ? undefined : children}
+      {isIconOnly ? undefined : content}
     </AstryxButton>
   );
 }

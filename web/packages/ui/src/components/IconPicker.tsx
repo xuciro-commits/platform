@@ -8,6 +8,7 @@ import {
 import { cn } from "../lib/cn";
 import { t } from "../i18n";
 import { Tooltip } from "../primitives/tooltip";
+import { TextInput } from "@astryxdesign/core/TextInput";
 
 export type IconName = string;
 
@@ -67,8 +68,8 @@ export function IconPicker({ value, onChange, disabled, label, id }: {
         : <span className="text-muted">{t("No icon")}</span>}
     </button>
     {open && <div role="dialog" aria-label={t("Choose an icon")} className="absolute left-0 top-full z-30 mt-1 w-80 rounded-md border border-border bg-surface p-2 shadow-lg">
-      <input autoFocus value={query} onChange={(e) => setQuery(e.target.value)} placeholder={t("Find an icon…")} aria-label={t("Find an icon…")}
-        className="mb-2 h-8 w-full rounded-md border border-border bg-background px-2 text-sm" />
+      <TextInput label={t("Find an icon…")} isLabelHidden size="sm" startIcon={Search} value={query} onChange={(value) => setQuery(value)}
+        placeholder={t("Find an icon…")} hasAutoFocus containerClassName="mb-2" />
       <div className="max-h-64 overflow-auto">
         {groups.map((g) => <div key={g.id} className="mb-2">
           <p className="px-1 pb-1 text-2xs font-semibold uppercase tracking-wide text-muted">{t(g.title)}</p>

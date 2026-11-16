@@ -3,8 +3,8 @@ import { Check, Copy, ExternalLink, Paperclip, Star, X } from "lucide-react";
 import { useContext, type ReactNode } from "react";
 import { z } from "zod";
 import { cn } from "../lib/cn";
-import { Input, Select } from "../primitives/input";
-import { Toggles } from "../primitives/controls";
+import { Input, Select, Textarea } from "../primitives/input";
+import { Checkbox, Toggles } from "../primitives/controls";
 import { Tag, type Tone } from "../components/StatusTag";
 import { Markdown, MarkdownEditor } from "../components/Markdown";
 import { WorkspaceContext } from "../shell/Workspace";
@@ -13,6 +13,7 @@ import { t } from "../i18n";
 import { formatDate, formatDateTimeSmart } from "../lib/datetime-format";
 import {StructuredValueInput} from './StructuredValueInput';
 import { Tooltip } from "../primitives/tooltip";
+import { FileInput } from "@astryxdesign/core/FileInput";
 
 export type EditorProps<V> = { id?: string; value: V | undefined; onChange: (value: V | undefined) => void; invalid?: boolean; autoFocus?: boolean; describedBy?: string };
 export type Operator<V> = { id: string; label: string; needsArg: boolean; test: (value: V | undefined, arg: V | undefined) => boolean };
@@ -85,10 +86,9 @@ export const longText = (o: Common & { rows?: number; placeholder?: string }): F
   ...text(o), type: "longText",
   display: (v) => (empty(v) ? muted : <span className="line-clamp-2 whitespace-pre-wrap">{v}</span>),
   editor: ({ id, value, onChange, invalid, autoFocus, describedBy }) => (
-    <textarea id={id} aria-invalid={invalid} aria-describedby={describedBy} autoFocus={autoFocus} rows={o.rows ?? 4} value={value ?? ""}
+    <Textarea id={id} aria-label={o.label} aria-invalid={invalid} aria-describedby={describedBy} autoFocus={autoFocus} rows={o.rows ?? 4} value={value ?? ""}
       placeholder={o.placeholder}
-      onChange={(e) => onChange(e.target.value || undefined)}
-      className="w-full min-h-[88px] rounded-md border border-border bg-surface px-2.5 py-1.5 text-sm outline-none focus-visible:border-ring" />
+      onChange={(e) => onChange(e.target.value || undefined)} />
   ),
 });
 
@@ -131,7 +131,7 @@ export const checkbox = (o: Common): FieldType<boolean> => ({
   operators: [{ id: "checked", get label() { return t("is checked"); }, needsArg: false, test: (v) => v === true }, { id: "unchecked", get label() { return t("is not checked"); }, needsArg: false, test: (v) => v === false }, isEmpty, notEmpty],
   display: (v) => v === undefined || v === null ? muted : v ? <Check className="size-3.5 text-[var(--tone-success)]" aria-label="yes" /> : <span className="text-muted">{t("No")}</span>,
   editor: ({ id, value, onChange }) => <span className="inline-flex items-center gap-2">
-    <input id={id} type="checkbox" checked={!!value} onChange={(e) => onChange(e.target.checked)} className="size-4 accent-[var(--primary)]" />
+    <Checkbox id={id} checked={!!value} onChange={onChange} ariaLabel={o.label} />
     {!o.required && value !== undefined && <Tooltip content={t("Clear value")}><button type="button" className="rounded p-0.5 text-muted hover:bg-row-hover" aria-label={t("Clear value")} onClick={() => onChange(undefined)}><X className="size-3.5" /></button></Tooltip>}
   </span>,
 });
@@ -273,9 +273,9 @@ export const attachment = (o: Common & { accept?: string; upload?: (file: File) 
         <span key={a.url} className="flex items-center gap-1 text-xs"><Paperclip className="size-3" />{a.name}
           <button type="button" aria-label={`Remove ${a.name}`} onClick={() => onChange(value.filter((x) => x !== a))}><X className="size-3" /></button>
         </span>))}
-      <input id={id} type="file" multiple accept={o.accept} className="text-xs"
-        onChange={async (e) => {
-          const files = Array.from(e.target.files ?? []);
+      <FileInput id={id} label={o.label} isLabelHidden isMultiple accept={o.accept} value={null}
+        onChange={async (selection) => {
+          const files = selection === null ? [] : Array.isArray(selection) ? selection : [selection];
           const added = await Promise.all(files.map((f) => o.upload?.(f) ?? Promise.resolve({ name: f.name, url: URL.createObjectURL(f), size: f.size })));
           onChange([...value, ...added]);
         }} />

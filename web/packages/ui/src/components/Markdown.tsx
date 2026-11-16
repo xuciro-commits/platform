@@ -3,6 +3,7 @@ import { useState, type ReactNode } from "react";
 import { t } from "../i18n";
 import type { EditorProps } from "../fields/types";
 import { ContentTabs } from "../layout/ContentTabs";
+import { Textarea } from "../primitives/input";
 
 export function Markdown({ content = "", className }: { content?: string; className?: string }) {
   if (!content) return null;
@@ -57,8 +58,9 @@ export function MarkdownEditor({
         className="flex-none [&>div:first-child]:bg-muted/10"
         actions={<span className="pr-2 text-xs text-muted">{(value ?? "").length} {t("characters")}</span>}
         items={[{ id: "write", title: t("Write"), content: tab === "write" ? (
-        <textarea
+        <Textarea
           id={id}
+          aria-label={t("Markdown")}
           value={value ?? ""}
           onChange={(e) => onChange(e.target.value || undefined)}
           aria-invalid={invalid}
@@ -66,7 +68,7 @@ export function MarkdownEditor({
           autoFocus={autoFocus}
           placeholder={placeholder ?? t("Write markdown here…")}
           rows={rows}
-          className="w-full resize-y rounded-b-md bg-transparent p-2.5 font-mono text-xs leading-relaxed outline-none focus-visible:ring-1 focus-visible:ring-ring"
+          className="w-full font-mono text-xs"
         />
       ) : null }, { id: "preview", title: t("Preview"), content: tab === "preview" ? (
         <div className="min-h-[140px] max-h-[360px] overflow-y-auto p-3">

@@ -13,6 +13,7 @@ import { columnsFor, valueOf } from "../fields/entity";
 import { RecordKanban, type KanbanLane, type KanbanMove } from "./RecordKanban";
 import { Button } from "../primitives/button";
 import { Input, Select } from "../primitives/input";
+import { Checkbox } from "../primitives/controls";
 import { Chart } from "../charts/Chart";
 import { Pivot } from "../charts/Pivot";
 import type { AggregateData, AggregateQuery, ChartSpec, Mark } from "../charts/spec";
@@ -356,7 +357,7 @@ export function RecordList({ source, type, onOpen, onOpenReference, toolbar, hei
           )}
         </>}
         {!filtersLocked && facetFields.length > 0 && <Button size="sm" aria-expanded={facetPanel} aria-pressed={facetPanel} onClick={() => setFacetPanel(!facetPanel)}>{t("Filters")}{Object.values(facetSelection).some((values) => values.length) ? <span className="tabular-nums">·</span> : null}</Button>}
-        {!window && <label className="flex items-center gap-1 text-xs"><input type="checkbox" checked={archived} onChange={(e) => { setArchived(e.target.checked); setOffset(0); }} />{t("Archived")}</label>}
+        {!window && <Checkbox checked={archived} onChange={(checked) => { setArchived(checked); setOffset(0); }}>{t("Archived")}</Checkbox>}
         {drilled && <Button size="sm" variant="ghost" onClick={() => { setDrilled(undefined); setOffset(0); }}>{t("Clear drill-down ×")}</Button>}
         {cards&&<span role="group" aria-label={t("Record layout")} className="flex gap-1">{(["list","grid"] as const).map(layout=><Button key={layout} size="sm" variant="ghost" aria-pressed={cardLayout===layout} onClick={()=>setCardChoice({identity:cardIdentity,layout})}>{t(layout==="grid"?"Grid":"List")}</Button>)}</span>}
         {source.exportCSV && <Button size="sm" disabled={exporting||staleFilters.length>0} onClick={() => void exportCSV()}>{t("Export CSV")}</Button>}

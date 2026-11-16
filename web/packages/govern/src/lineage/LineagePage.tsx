@@ -1,6 +1,6 @@
 import { newId, useHost, useReadQuery } from "@platform/app";
 import type { Api } from "@platform/api";
-import { ActionMenu, Button, DataTable, Dialog, EmptyState, Form, Input, Notice, Panel, PropertyList, RelationCanvas, SegmentedChoice, Select, Tag, ViewVisibilityContext, Workbench, t, useWorkspace, type ColumnDef, type RelationEdge, type RelationNode, type Tone } from "@platform/ui";
+import { ActionMenu, Button, Checkbox, DataTable, Dialog, EmptyState, Form, Input, Notice, Panel, PropertyList, RelationCanvas, SegmentedChoice, Select, Tag, ViewVisibilityContext, Workbench, t, useWorkspace, type ColumnDef, type RelationEdge, type RelationNode, type Tone } from "@platform/ui";
 import { ArrowLeftRight, ChevronLeft, Copy, Crosshair, Download, Expand, RefreshCw, Search } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type ReactNode, type RefObject } from "react";
 import { lineageExportFileName, lineageImpactCSV, lineageImpactDocument, lineageSubgraphCSV, lineageSubgraphDocument, type LineageExportFormat, type LineageExportTarget } from "./export";
@@ -440,7 +440,7 @@ export function LineagePage({ params }: { params: Params }) {
       {lineageViews.length > 0 && <label className="grid gap-1 text-xs font-medium">{t("Saved views")}<Select aria-label={t("Saved views")} value="" onChange={event => { const view = lineageViews.find(item => item.id === event.target.value); if (view) loadView(view); }}><option value="">{t("Choose a saved view")}</option>{lineageViews.map(view => <option key={view.id} value={view.id}>{view.title}</option>)}</Select></label>}
       <label className="grid gap-1 text-xs font-medium">{t("Kind")}<Select value={kind} onChange={event => setKind(event.target.value)}><option value="">{t("All kinds")}</option>{kindOrder.map(value => <option key={value} value={value}>{t(kindTitle[value] ?? value)}</option>)}</Select></label>
       <label className="grid gap-1 text-xs font-medium">{t("Status")}<Select value={status} onChange={event => setStatus(event.target.value)}><option value="">{t("All states")}</option>{Object.entries(statusText).map(([value, label]) => <option key={value} value={value}>{t(label)}</option>)}</Select></label>
-      <label className="flex items-center gap-2 text-xs"><input type="checkbox" checked={hideUnconnected} onChange={event => setHideUnconnected(event.target.checked)} />{t("Hide unconnected")}</label>
+      <Checkbox checked={hideUnconnected} onChange={setHideUnconnected} className="text-xs">{t("Hide unconnected")}</Checkbox>
       <div className="grid gap-1 text-xs"><span className="font-medium">{t("Coverage")}</span><span role="status" aria-live="polite" aria-atomic="true" className="text-muted">{t("{visible} of {total} resources", { visible: visible.length, total: graph.total.nodes })}</span>{hidden > 0 && <span className="text-warning">{t("{n} hidden by filters", { n: hidden })}</span>}</div>
     </section>
     {!fieldMode && <ViewVisibilityContext.Consumer>{shown => shown ? <section aria-label={t("Graph resources")} className="grid gap-1">

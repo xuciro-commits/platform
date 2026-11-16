@@ -1,9 +1,10 @@
-import { Search, X } from "lucide-react";
-import { useEffect, useId, useRef, useState } from "react";
+import { X } from "lucide-react";
+import { useId, useState } from "react";
 import { t } from "../../i18n";
 import { FLOW_NODE_DROP, flowPortFits, type FlowAddContext, type FlowCatalog, type FlowNode, type FlowNodeKind } from "./model";
 import { flowNodeIcon, flowNodeGroup, flowShape, notationGlyph, notationOf, notationTitle } from "./notation";
 import { Tooltip } from "../../primitives/tooltip";
+import { TextInput } from "@astryxdesign/core/TextInput";
 
 function fits(kind: FlowNodeKind, context: FlowAddContext, nodes: FlowNode[], catalog: FlowCatalog) {
   const source = context.source ?? (context.edge ? { node: context.edge.source, port: context.edge.sourcePort } : undefined);
@@ -19,8 +20,6 @@ export function FlowPalette({ catalog, nodes, context, onChoose, onClose }: {
   const [query, setQuery] = useState("");
   const [active, setActive] = useState(0);
   const listId = useId();
-  const field = useRef<HTMLInputElement>(null);
-  useEffect(() => { field.current?.focus(); }, []);
   const kinds = catalog.filter((kind) => kind.addable !== false && fits(kind, context, nodes, catalog)
     && [kind.title, flowNodeGroup(kind), kind.class ?? "", kind.description ?? "", kind.id].some((text) => text.toLocaleLowerCase().includes(query.toLocaleLowerCase())));
   const groups = [...new Set(kinds.map((kind) => flowNodeGroup(kind)))];
@@ -33,11 +32,10 @@ export function FlowPalette({ catalog, nodes, context, onChoose, onClose }: {
     <div className="flex items-center justify-between px-3 py-2 font-medium"><span>{t(context.edge ? "Insert block" : "Add block")}</span>
       <button type="button" onClick={onClose} aria-label={t("Close block library")} className="rounded p-1 text-muted hover:bg-row-hover"><X className="size-4" /></button>
     </div>
-    <div className="relative mx-2 mb-2"><Search className="pointer-events-none absolute left-2 top-2 size-3.5 text-muted" />
-      <input ref={field} className="w-full rounded border border-border bg-background py-1.5 pl-7 pr-2 text-xs outline-none focus:border-primary"
-        aria-label={t("Search blocks")} placeholder={t("Search blocks")}
-        role="combobox" aria-expanded aria-controls={listId} aria-activedescendant={kinds[active] ? `${listId}-${active}` : undefined}
-        value={query} onChange={(event) => { setQuery(event.target.value); setActive(0); }} onKeyDown={(event) => {
+    <div className="mx-2 mb-2">
+      <TextInput label={t("Search blocks")} isLabelHidden size="sm" value={query} onChange={(value) => { setQuery(value); setActive(0); }}
+        placeholder={t("Search blocks")} hasAutoFocus
+        onKeyDown={(event) => {
           if (event.key === "Escape") { event.stopPropagation(); onClose(); }
           if (event.key === "Enter" && kinds[active]) { event.preventDefault(); onChoose(kinds[active]!.id); }
         }} />

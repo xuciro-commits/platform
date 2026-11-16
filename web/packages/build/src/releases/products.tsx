@@ -1,6 +1,6 @@
 import { useHost, useRecordInventory, useReadQuery } from "@platform/app";
 import { apiErrorMessage, type Api } from "@platform/api";
-import { Button, Checkbox, Dialog, Input, Notice, PageHeader, Panel, PropertyList, Tag, t, useWorkspace } from "@platform/ui";
+import { Button, Checkbox, Dialog, Input, Notice, PageHeader, Panel, PropertyList, Select, Tag, t, useWorkspace } from "@platform/ui";
 import { useState } from "react";
 import { kindOfType } from "../projects/resources";
 import { applicationDraftSelection, ownerDraft, releaseDraftsValue, type JointChoice, type ReleaseKind } from "./selection";
@@ -73,9 +73,9 @@ function ProductEditor({ product, projects, resources, defaultProject, onClose, 
       </div>
       <label className="grid gap-1 text-sm">{t("Description")}<Input value={form.description} disabled={busy} onChange={event => set("description", event.target.value)} /></label>
       <div className="grid gap-3 sm:grid-cols-2">
-        <label className="grid gap-1 text-sm">{t("Project")}<select className="rounded-md border border-border bg-input px-3 py-2" disabled={!!product || busy} value={form.project} onChange={event => { set("project", event.target.value); set("roots", []); }}>
+        <label className="grid gap-1 text-sm">{t("Project")}<Select disabled={!!product || busy} value={form.project} onChange={event => { set("project", event.target.value); set("roots", []); }}>
           <option value="">{t("Choose a project")}</option>{projects.filter(project => !project.archived).map(project => <option key={project.id} value={project.id}>{project.title || project.name}</option>)}
-        </select></label>
+        </Select></label>
         <label className="grid gap-1 text-sm">{t("Namespace")}<Input value={form.namespace} disabled={busy} placeholder={t("Defaults to the product name")} onChange={event => set("namespace", event.target.value)} /></label>
       </div>
       <fieldset className="grid gap-2"><legend className="mb-1 text-sm font-medium">{t("Contents")}</legend>
@@ -111,9 +111,9 @@ function VersionPublisher({ product, onPublished }: { product: ProductRecord; on
     <p className="text-sm text-muted">{t("A version freezes the candidate closure of this product's contents. Candidate IDs come from DevOps Releases after Save immutable candidate.")}</p>
     <div className="grid gap-3 sm:grid-cols-2">
       <label className="grid gap-1 text-sm">{t("Semantic version")}<Input value={version} disabled={busy} placeholder="1.0.0" onChange={event => setVersion(event.target.value)} /></label>
-      <label className="grid gap-1 text-sm">{t("Saved candidate")}<select aria-label={t("Saved candidate")} className="rounded-md border border-border bg-input px-3 py-2" value={candidate} disabled={busy} onChange={event => setCandidate(event.target.value)}>
+      <label className="grid gap-1 text-sm">{t("Saved candidate")}<Select aria-label={t("Saved candidate")} value={candidate} disabled={busy} onChange={event => setCandidate(event.target.value)}>
         <option value="">{t("Choose a saved candidate")}</option>{(releases.data?.candidates ?? []).map(item => <option key={item.id} value={item.id}>{item.title} · {item.assets} {t("assets")} · {item.id.slice(0, 20)}…</option>)}
-      </select></label>
+      </Select></label>
     </div>
     {releases.isError && <Notice tone="danger" message={t("Saved candidates could not be read.")} />}
     {error && <Notice tone="danger" role="alert" message={error} />}

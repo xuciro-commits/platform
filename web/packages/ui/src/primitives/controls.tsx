@@ -5,6 +5,7 @@ import { CheckboxInput } from "@astryxdesign/core/CheckboxInput";
 import { Collapsible } from "@astryxdesign/core/Collapsible";
 import { Switch as AstryxSwitch } from "@astryxdesign/core/Switch";
 import { ToggleButton } from "@astryxdesign/core/ToggleButton";
+import { TreeList, type TreeListItemData } from "@astryxdesign/core/TreeList";
 import { HStack } from "@astryxdesign/core/Stack";
 import { Text } from "@astryxdesign/core/Text";
 import { cn } from "../lib/cn";
@@ -48,11 +49,12 @@ function isScreenReaderOnly(node: ReactNode): boolean {
   return false;
 }
 
-export function Checkbox({ checked, onChange, children, className, disabled, ariaLabel }:
-  { checked: boolean; onChange: (checked: boolean) => void; children?: ReactNode; className?: string; disabled?: boolean; ariaLabel?:string }) {
+export function Checkbox({ id, checked, onChange, children, className, disabled, ariaLabel }:
+  { id?: string; checked: boolean; onChange: (checked: boolean) => void; children?: ReactNode; className?: string; disabled?: boolean; ariaLabel?:string }) {
   const text = nodeText(children).trim();
   const hideLabel = !text || isScreenReaderOnly(children);
   return <CheckboxInput
+    id={id}
     label={text || ariaLabel || "Checkbox"}
     isLabelHidden={hideLabel}
     value={checked}
@@ -103,14 +105,9 @@ export function Tree<T>({ roots, children, row, selected, onSelect, id }: {
   roots: T[]; children: (node: T) => T[]; row: (node: T) => ReactNode; id: (node: T) => string;
   selected?: string; onSelect: (node: T) => void;
 }) {
-  const Node = ({ node, depth }: { node: T; depth: number }) => (
-    <>
-      <button type="button" onClick={() => onSelect(node)} style={{ paddingLeft: 8 + depth * 18 }} aria-selected={selected === id(node)}
-        className={cn("flex w-full items-center gap-2 rounded-sm py-1 pr-2 text-left text-sm hover:bg-row-hover", selected === id(node) && "bg-row-selected")}>
-        {row(node)}
-      </button>
-      {children(node).map((c) => <Node key={id(c)} node={c} depth={depth + 1} />)}
-    </>
-  );
-  return <div role="tree">{roots.map((r) => <Node key={id(r)} node={r} depth={0} />)}</div>;
+  const item = (node: T): TreeListItemData => ({
+    id: id(node), label: row(node), isSelected: selected === id(node), isExpanded: true,
+    onClick: () => onSelect(node), children: children(node).map(item),
+  });
+  return <TreeList items={roots.map(item)} density="compact" variant="lineGuides" />;
 }
