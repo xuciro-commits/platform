@@ -1,6 +1,7 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Controller, useForm, useWatch, type DefaultValues, type FieldValues, type Path } from "react-hook-form";
 import type {Api} from "@platform/api";
+import { FormLayout } from "@astryxdesign/core/FormLayout";
 import type { z } from "zod";
 import { useEffect, useId, useRef, useState } from "react";
 import {InputDraftProvider,useInputDrafts,InputProblems} from "../fields/draft";
@@ -166,12 +167,14 @@ function FieldForm({ schema, fields, defaultValues, onSubmit, submitLabel = t("S
       finally { lock.current = false;inputs?.pending(-1); onBusy?.(false); }
     })} className="grid gap-3" noValidate>
       <InputProblems/>{failure && <p role="alert" className="text-sm text-danger">{failure}</p>}
-      <fieldset disabled={isSubmitting || locked} className="grid gap-3">
+      <fieldset disabled={isSubmitting || locked}>
+      <FormLayout direction="vertical">
       {fields.filter(field=>!advanced.has(field.name)).map(renderField)}
       {!!advanced.size&&<details className="min-w-0 rounded-md border border-border p-3" open={fields.some(field=>advanced.has(field.name)&&(field.type.required||current[field.name]!==undefined))||undefined}>
         <summary className="cursor-pointer text-sm font-medium">{t("Advanced configuration")}</summary>
-        <div className="mt-3 grid min-w-0 gap-3">{fields.filter(field=>advanced.has(field.name)).map(renderField)}</div>
+        <FormLayout direction="vertical" className="mt-3">{fields.filter(field=>advanced.has(field.name)).map(renderField)}</FormLayout>
       </details>}
+      </FormLayout>
       </fieldset>
       <div className="mt-1 flex justify-end gap-2">
         {onCancel && <Button onClick={() => confirmOwnDiscard(onCancel)} disabled={isSubmitting}>{t("Cancel")}</Button>}
