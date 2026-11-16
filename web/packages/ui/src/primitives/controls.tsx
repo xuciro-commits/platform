@@ -1,7 +1,9 @@
 import {InputDraftProvider,InputProblems,useInputDrafts} from "../fields/draft";
 import {t} from "../i18n";
 import { useRef, useState, type FormHTMLAttributes, type ReactNode } from "react";
-import { ChevronDown, ChevronRight } from "lucide-react";
+import { CheckboxInput } from "@astryxdesign/core/CheckboxInput";
+import { Collapsible } from "@astryxdesign/core/Collapsible";
+import { Switch as AstryxSwitch } from "@astryxdesign/core/Switch";
 import { cn } from "../lib/cn";
 import { Button, type ButtonProps } from "./button";
 
@@ -31,27 +33,41 @@ export function Toggles({ options, value = [], onChange, empty, className, disab
   );
 }
 
+function nodeText(node: ReactNode): string {
+  if (node === null || node === undefined || typeof node === "boolean") return "";
+  if (typeof node === "string" || typeof node === "number") return String(node);
+  if (Array.isArray(node)) return node.map(nodeText).join("");
+  if (typeof node === "object" && "props" in node) return nodeText((node as { props?: { children?: ReactNode } }).props?.children);
+  return "";
+}
+function isScreenReaderOnly(node: ReactNode): boolean {
+  if (Array.isArray(node)) return node.every(isScreenReaderOnly);
+  if (node && typeof node === "object" && "props" in node) {
+    const props = (node as { props?: { className?: unknown; children?: ReactNode } }).props;
+    return typeof props?.className === "string" && props.className.split(/\s+/).includes("sr-only");
+  }
+  return false;
+}
+
 export function Checkbox({ checked, onChange, children, className, disabled, ariaLabel }:
   { checked: boolean; onChange: (checked: boolean) => void; children?: ReactNode; className?: string; disabled?: boolean; ariaLabel?:string }) {
-  return (
-    <label className={cn("flex items-center gap-2", disabled && "opacity-50", className)}>
-      <input type="checkbox" aria-label={ariaLabel} className="accent-[var(--primary)]" checked={checked} disabled={disabled} onChange={(e) => onChange(e.target.checked)} />
-      {children}
-    </label>
-  );
+  const text = nodeText(children).trim();
+  const hideLabel = !text || isScreenReaderOnly(children);
+  return <CheckboxInput
+    label={text || ariaLabel || "Checkbox"}
+    isLabelHidden={hideLabel}
+    value={checked}
+    onChange={onChange}
+    isDisabled={disabled}
+    aria-label={ariaLabel}
+    className={cn("text-xs", className)}
+  />;
 }
 
 export function Switch({checked,onChange,label,ariaLabel,disabled,className}:{
   checked:boolean;onChange:(checked:boolean)=>void;label:string;ariaLabel?:string;disabled?:boolean;className?:string;
 }) {
-  return <button type="button" role="switch" aria-checked={checked} aria-label={ariaLabel} disabled={disabled}
-    onClick={()=>onChange(!checked)}
-    className={cn("flex min-w-0 items-center gap-2 rounded-sm text-left text-xs focus-visible:outline-2 focus-visible:outline-ring disabled:opacity-50",className)}>
-    <span aria-hidden="true" className={cn("relative h-4 w-8 shrink-0 rounded-full transition-colors",checked?"bg-primary":"bg-border")}>
-      <span className={cn("absolute left-0.5 top-0.5 size-3 rounded-full bg-white transition-transform",checked&&"translate-x-4")}/>
-    </span>
-    <span className="min-w-0 break-words">{label}</span>
-  </button>;
+  return <AstryxSwitch label={label || ariaLabel || "Switch"} isLabelHidden={!label} value={checked} onChange={onChange} isDisabled={disabled} aria-label={ariaLabel} size="sm" className={cn("text-xs",className)} />;
 }
 
 export function Form({ onSubmit, ...props }: Omit<FormHTMLAttributes<HTMLFormElement>, "onSubmit"> & { onSubmit: () => void }) {
@@ -64,18 +80,9 @@ function FormBody({onSubmit,children,...props}:Omit<FormHTMLAttributes<HTMLFormE
 
 export function Disclosure({ summary, children, open, defaultOpen = false, onToggle, className }:
   { summary: ReactNode; children: ReactNode; open?: boolean; defaultOpen?: boolean; onToggle?: (open: boolean) => void; className?: string }) {
-  const [own, setOwn] = useState(defaultOpen);
-  const shown = open ?? own;
-  return (
-    <div className={className}>
-      <button type="button" aria-expanded={shown} className="flex w-full items-baseline gap-2 rounded-md px-1 py-0.5 text-left hover:bg-row-hover"
-        onClick={() => { onToggle ? onToggle(!shown) : setOwn(!shown); }}>
-        {shown ? <ChevronDown className="size-3 shrink-0 self-center" /> : <ChevronRight className="size-3 shrink-0 self-center" />}
-        {summary}
-      </button>
-      {shown && <div className="pl-5">{children}</div>}
-    </div>
-  );
+  return <Collapsible className={className} trigger={summary} defaultIsOpen={defaultOpen} isOpen={open} onOpenChange={onToggle} chevronPosition="start">
+    <div className="pl-5">{children}</div>
+  </Collapsible>;
 }
 
 export function FilePicker({ accept, onFile, children, ...button }:
