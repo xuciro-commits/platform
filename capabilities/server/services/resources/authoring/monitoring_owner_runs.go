@@ -116,7 +116,7 @@ func (x OwnerRuns) Page() (monitoring.MonitoringRunPage, *platform.Error) {
 	runs.Cover(coverage)
 	for _, collect := range []func() *platform.Error{
 		func() *platform.Error {
-			return collectOwnerRuns(x, runs, "code", "latest", "latest-only", CodeType, func(rows []Code) { CodeRuns(runs, rows, compilations) })
+			return collectOwnerRuns(x, runs, "code", "latest", "latest-only", functionauthoring.CodeType, func(rows []functionauthoring.Code) { CodeRuns(runs, rows, compilations) })
 		},
 		func() *platform.Error {
 			return collectOwnerRuns(x, runs, "projection", "latest", "latest-only", dataowner.DatasetType, func(rows []dataowner.Dataset) { dataowner.DatasetRuns(runs, rows) })

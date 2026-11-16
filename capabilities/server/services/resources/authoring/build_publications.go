@@ -97,7 +97,7 @@ func (b *Build) ValidateAcceptedPublication(schema string, image []byte) error {
 	if k := definitionKindOfSchema(schema); k != nil {
 		return k.validateImage(b, image)
 	}
-	if schema == SchemaCodePublish {
+	if schema == functionauthoring.SchemaCodePublish {
 		code, err := codeImage(image)
 		if err != nil {
 			return err
@@ -168,7 +168,7 @@ func (b *Build) ApplyAcceptedPublication(schema string, image []byte) error {
 	if k := definitionKindOfSchema(schema); k != nil {
 		return k.applyImage(b, image)
 	}
-	if schema == SchemaCodePublish {
+	if schema == functionauthoring.SchemaCodePublish {
 		code, err := codeImage(image)
 		if err != nil {
 			return err
@@ -234,7 +234,7 @@ func published[T any](definition T) string {
 		value.Published = ""
 		value.Versions = nil
 		definition = any(value).(T)
-	case Code:
+	case functionauthoring.Code:
 		value.Published = ""
 		value.Versions = nil
 		definition = any(value).(T)

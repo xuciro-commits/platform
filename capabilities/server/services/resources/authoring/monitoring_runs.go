@@ -9,12 +9,12 @@ import (
 	"platformserver/services/resources/monitoring"
 )
 
-func CodeRuns(r *monitoring.Runs, codes []Code, compilations map[string]time.Time) {
+func CodeRuns(r *monitoring.Runs, codes []functionauthoring.Code, compilations map[string]time.Time) {
 	for _, code := range codes {
 		if code.Call == "" {
 			continue
 		}
-		run := monitoring.MonitoringRun{Type: "build", Source: "code", ID: "code:" + code.ID, Title: code.Title, ResourceRef: &platform.AssetRef{App: ID, Kind: platform.AssetCompute, Name: code.Name}, RecordRef: CodeType + "/" + code.ID, When: code.Changed.At, Status: "unknown", OwnerStatus: code.State}
+		run := monitoring.MonitoringRun{Type: "build", Source: "code", ID: "code:" + code.ID, Title: code.Title, ResourceRef: &platform.AssetRef{App: ID, Kind: platform.AssetCompute, Name: code.Name}, RecordRef: functionauthoring.CodeType + "/" + code.ID, When: code.Changed.At, Status: "unknown", OwnerStatus: code.State}
 		if at, known := compilations[code.Call]; known {
 			run.When = at
 		}
@@ -26,7 +26,7 @@ func CodeRuns(r *monitoring.Runs, codes []Code, compilations map[string]time.Tim
 		case "failed":
 			run.Status = "failed"
 			if !code.Archived {
-				r.Retry(&run, SchemaCodeCompile, CodeType, code.ID, "rerun")
+				r.Retry(&run, functionauthoring.SchemaCodeCompile, functionauthoring.CodeType, code.ID, "rerun")
 			}
 		}
 		r.Add(run)

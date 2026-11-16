@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"maps"
+	functionauthoring "platformserver/services/functions/authoring"
 	"platformserver/services/ontology"
 	"reflect"
 	"slices"
@@ -185,7 +186,7 @@ func (b *Build) declarationReleaseDraft(asset platform.ReleaseAsset) (string, an
 		}
 		for _, record := range rows {
 			if record.Name == asset.Ref.Name && !record.Archived {
-				return CodeType, record, nil
+				return functionauthoring.CodeType, record, nil
 			}
 		}
 		return "", nil, fmt.Errorf("compute %s needs its original compiled target owner; a module descriptor does not carry source or compilation evidence", asset.Ref)

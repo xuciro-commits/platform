@@ -2,6 +2,7 @@ package build
 
 import (
 	"fmt"
+	functionauthoring "platformserver/services/functions/authoring"
 	"slices"
 
 	"platformserver/platform"
@@ -116,7 +117,7 @@ var resourceDescriptors = []resourceDescriptor{
 		},
 	},
 	{
-		app: ID, typ: CodeType, kind: platform.AssetCompute, family: versionedResources, released: true, defaultDraft: true, directInstall: true, acceptedPublication: true,
+		app: ID, typ: functionauthoring.CodeType, kind: platform.AssetCompute, family: versionedResources, released: true, defaultDraft: true, directInstall: true, acceptedPublication: true,
 		presentations: []resourcePresentation{presented("compute", "code", "Code function", "Code functions", 17)},
 	},
 	{

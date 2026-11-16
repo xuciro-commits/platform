@@ -137,6 +137,10 @@ read-when: 每批开始（选当前批次）与结束（删除已完成条目、
     - 已核对：`build.code` 与 `build.table` 都生成 `AssetCompute`，共享 `OperationDefinition`；当前版本读 `codes` / `tables`，历史版本读保留家族，`Fork` 克隆状态，`Reinstall` 从接受记录重建。运行时对 `OperationDefinitions` 做可选探测并回退 Manifest；迁移时须保留历史版本与原有 authority，不能只移动文件或把版本化读取降成 Manifest。`host.Tenant` 没有单独的 code/table 状态字段，应按实际消除的字段和探测下调基线。
     - 产出：模式写入 7-system §7.2；其余每类拆成一行，写明文件清单与目标包。
     - 验证：V1、V3。
+  - [ ] U5.2 代码函数编译创作归函数服务。诊断：`Code` 声明、源与构建摘要、构建夹具、实体及编译请求、结果和附件处理由 Build 实现；将这组可独立运行的创作逻辑移入已有 `services/functions/authoring.Owner`，Build 只把原有 schema 与效果路由给它。发布、已安装状态与历史版本仍按 U4.2 处理，不提前迁移发布钩子。
+    - 源：`services/resources/authoring/build_compute.go`、`build_owner.go`、`build_publications.go`、`build_artifacts_installation.go`、`build_resource_metadata.go`、`published_definitions.go`、`monitoring_runs.go`、`monitoring_owner_runs.go`；目标：`services/functions/authoring/compute_code.go`、`function_owner.go`；调用方：`services/resources/merge/branch_api.go`、`branch_flows.go`、`branch_workspace.go`、`stage_graph.go`、`host/monitoring_test.go`。删除旧声明与实现，不保留兼容转发；保持 `build.code` schema、JSON、编译摘要、动作权限、接受结果与错误顺序。
+    - 完成判据：`make contract` 无差异；对照代码实体、编译摘要与构建请求，验证编译请求、结果接受及监控，产品包和历史结果不变；V1、V3。全量浏览器验收待 U3.24 所列问题恢复后执行。
+    - 现状：编译成功的接受结果和重放、分支附件暂存及拒绝与迁移前逐字节一致；七个产品包的候选和闭包对照一致。V1 与 SQL 重启恢复通过；全量浏览器验收未重跑。
 - [ ] U7 `platform` 只留 SDK 契约（整段完成标准：不超过 8 千行）。前置 U2、U3。
   - [ ] U7.1 诊断与切分（不写代码）。范围含原 U2.3：`BusinessTxn`、`TxnStep` 等事务类型与冻结定义解码离开 `platform` 的无环切分（定义校验归 ontology、执行归 actions），不改已存字节，不推进纪元。
     - 现状（行数按文件名前缀）：rules 1775、asset 1622、entity 1414、dependencies 1411、definition 1381、app 1305、actions 1103、ai 1075、revision 938、protocol 674、workflow 638、operations 580。

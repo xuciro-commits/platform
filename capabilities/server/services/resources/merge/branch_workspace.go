@@ -3,6 +3,7 @@ package branches
 import (
 	"encoding/json"
 	appsauthoring "platformserver/services/apps/authoring"
+	functionauthoring "platformserver/services/functions/authoring"
 	"slices"
 	"strconv"
 	"strings"
@@ -291,11 +292,11 @@ func (w Workspace) PrepareSave(m platform.Member, id, typ, draft string, request
 			return SavePlan{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "A saved spec is one JSON object")
 		}
 		for name := range spec {
-			if !fields[name] && !(typ == build.CodeType && name == CodeBuildKey) {
+			if !fields[name] && !(typ == functionauthoring.CodeType && name == CodeBuildKey) {
 				return SavePlan{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "{field} is not an authored field of {type}", name, typ)
 			}
 		}
-		if typ == build.CodeType {
+		if typ == functionauthoring.CodeType {
 			delete(spec, CodeBuildKey)
 			if kept := KeptCodeBuild(previous, touched, spec); kept != nil {
 				spec[CodeBuildKey] = kept
@@ -477,7 +478,7 @@ func (w Workspace) splitCodeBuild(plan ResourcePlan) (json.RawMessage, json.RawM
 	raw := spec[CodeBuildKey]
 	delete(spec, CodeBuildKey)
 	authored, _ := json.Marshal(spec)
-	var artifact build.CodeArtifact
+	var artifact functionauthoring.CodeArtifact
 	if json.Unmarshal(raw, &artifact) != nil || !artifact.Matches(authored) || !w.Stored(artifact.Module) || artifact.Module == plan.Main.Module && artifact.BuildHash == plan.Main.BuildHash {
 		return authored, nil
 	}
@@ -489,7 +490,7 @@ func (w Workspace) Actions(plans []ResourcePlan) ([]Action, *platform.Error) {
 	for _, plan := range plans {
 		item := Action{Plan: plan, Action: "none"}
 		merged := plan.Merged
-		if plan.Type == build.CodeType && merged != nil {
+		if plan.Type == functionauthoring.CodeType && merged != nil {
 			merged, item.Artifact = w.splitCodeBuild(plan)
 		}
 		switch {
