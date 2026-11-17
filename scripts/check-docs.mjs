@@ -3,7 +3,7 @@ import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 
 const root = new URL("..", import.meta.url).pathname;
-const documents = ["README", "intent", "plan", "architecture", "domain", "backend", "frontend", "ux", "design", "glossary"];
+const documents = ["README", "intent", "plan", "roadmap", "architecture", "domain", "backend", "frontend", "ux", "design", "glossary"];
 const lineBudget = (file) => {
   if (file === "docs/plan.md") return 150;
   if (file === "AGENTS.md") return 120;
@@ -17,11 +17,11 @@ const problems = [];
 
 for (const name of readdirSync(root + "docs")) {
   if (!documents.some((document) => name === `${document}.md`)) {
-    problems.push(`docs/${name}: docs/ holds exactly the ten documents listed in docs/README.md. Put what is still true into the one that owns the question (progress is a row in docs/plan.md) and delete this. Adding a document is the owner's decision.`);
+    problems.push(`docs/${name}: docs/ holds only the documents listed in docs/README.md. Put content into the document that owns it; adding a document is the owner's decision.`);
   }
 }
 for (const document of documents) {
-  if (!existsSync(`${root}docs/${document}.md`)) problems.push(`docs/${document}.md: missing. It is one of the ten documents listed in docs/README.md.`);
+  if (!existsSync(`${root}docs/${document}.md`)) problems.push(`docs/${document}.md: missing. It is listed in docs/README.md.`);
 }
 
 const inside = (dir, pick) => (existsSync(root + dir) ? readdirSync(root + dir).map((name) => pick(`${dir}/${name}`)).filter((file) => existsSync(root + file)) : []);
@@ -52,7 +52,7 @@ for (const file of files) {
       problems.push(`${at}: ${[...text].length} characters on one line, the limit is ${widest}. One line says one thing: split it into short lines or cut it.`);
     }
     if (document && /^#+ .*(差距|变更记录|更新日志|进度日志|已完成)/.test(text)) {
-      problems.push(`${at}: a document states the target. Unfinished work is a row in docs/plan.md and finished rows are deleted; history is in git. Remove this section.`);
+      problems.push(`${at}: unfinished work belongs in docs/plan.md or docs/roadmap.md; finished rows are deleted and history is in git. Remove this section.`);
     }
     for (const match of text.matchAll(/\]\(([^)\s#]+)(?:#[^)]*)?\)/g)) {
       const target = match[1];
