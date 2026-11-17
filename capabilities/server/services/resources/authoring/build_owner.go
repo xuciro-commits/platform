@@ -319,9 +319,6 @@ func (b *Build) checkDefinitionArchive(c platform.Caller, typ, id string) *platf
 	case FunctionType:
 		record, _ := platform.Get[functionauthoring.Function](c, id)
 		published = record.Published != ""
-	case functionauthoring.TableType:
-		record, _ := platform.Get[functionauthoring.Table](c, id)
-		published = record.Published != ""
 	case AgentType:
 		published = b.agent.Published(c, id)
 	case dataowner.ObservationType:
@@ -333,12 +330,6 @@ func (b *Build) checkDefinitionArchive(c platform.Caller, typ, id string) *platf
 	case TestPlanType:
 		record, _ := platform.Get[TestPlan](c, id)
 		published = record.Published != ""
-	case functionauthoring.CodeType:
-		record, _ := platform.Get[functionauthoring.Code](c, id)
-		published = record.Published != ""
-		if record.State == "compiling" {
-			return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "A compiling code function cannot be archived; wait for its build result")
-		}
 	case ProductType:
 		versions, err := readDefinitionInventory[ProductVersion](c)
 		if err != nil {
@@ -421,10 +412,13 @@ func (b *Build) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb.
 	if name := s.GetSchema().GetName(); name == SchemaEvaluationStart || name == SchemaEvaluationAnswer {
 		return b.submitEvaluation(c, s, now)
 	}
-	if typ, archive := strings.CutSuffix(s.GetSchema().GetName(), ".archive"); archive && !c.Replaying && slices.Contains([]string{ObjectType, PageType, AppType, PropertyTypeType, ValueTypeType, ObjectTypeGroupType, LinkTypeType, QueryType, InterfaceType, FunctionType, functionauthoring.CodeType, functionauthoring.TableType, AgentType, TestPlanType, SampleSetType, dataowner.ObservationType, ProductType}, typ) {
+	if typ, archive := strings.CutSuffix(s.GetSchema().GetName(), ".archive"); archive && !c.Replaying && slices.Contains([]string{ObjectType, PageType, AppType, PropertyTypeType, ValueTypeType, ObjectTypeGroupType, LinkTypeType, QueryType, InterfaceType, FunctionType, AgentType, TestPlanType, SampleSetType, dataowner.ObservationType, ProductType}, typ) {
 		if err := b.checkDefinitionArchive(c, typ, s.GetTarget().GetId()); err != nil {
 			return nil, err
 		}
+	}
+	if record, err, handled := b.functions.DecideCompute(c, s, now); handled {
+		return record, err
 	}
 	if name := s.GetSchema().GetName(); (name == TestPlanType+".create" || name == TestPlanType+".edit") && !c.Replaying {
 		if err := b.checkTestPlan(c, s); err != nil {
@@ -478,7 +472,7 @@ func (b *Build) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb.
 	if name := s.GetSchema().GetName(); name == AgentType+".create" || name == AgentType+".edit" {
 		agentEntity = b.agent.DraftEntity()
 	}
-	entities := []platform.Entity{b.objectEntity(), b.actionTypeEntity(), pageEntity, b.apps.ApplicationEntity(), b.testPlanEntity(), propertyKind.entity(b), valueKind.entity(b), b.objectTypeGroupEntity(), linkKind.entity(b), queryKind.entity(b), interfaceKind.entity(b), b.functions.Entity(), b.functions.CallEntity(), b.evaluationEntity(), agentEntity, functionauthoring.CodeEntity(), b.functions.TableEntity(), b.sampleSets.Entity(), b.branchEntity(), b.confirmationEntity(), b.dispatchEntity(), b.productEntity(), b.productVersionEntity()}
+	entities := []platform.Entity{b.objectEntity(), b.actionTypeEntity(), pageEntity, b.apps.ApplicationEntity(), b.testPlanEntity(), propertyKind.entity(b), valueKind.entity(b), b.objectTypeGroupEntity(), linkKind.entity(b), queryKind.entity(b), interfaceKind.entity(b), b.functions.Entity(), b.functions.CallEntity(), b.evaluationEntity(), agentEntity, b.sampleSets.Entity(), b.branchEntity(), b.confirmationEntity(), b.dispatchEntity(), b.productEntity(), b.productVersionEntity()}
 	entities = append(entities, b.data.Entities()...)
 	entities = append(entities, b.resourceEntities()...)
 	entities = append(entities, workingStateEntity())

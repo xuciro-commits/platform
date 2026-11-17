@@ -17,6 +17,39 @@ import (
 
 const SchemaTablePublish = TableType + ".publish"
 
+func (o *Owner) DecideCompute(c platform.Caller, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *platform.Error, bool) {
+	name := s.GetSchema().GetName()
+	if !strings.HasPrefix(name, CodeType+".") && !strings.HasPrefix(name, TableType+".") {
+		return nil, nil, false
+	}
+	code, table := CodeEntity(), o.TableEntity()
+	code.Scope.Levels[platform.ProjectViewerRole] = platform.ScopeTenant
+	table.Scope.Levels[platform.ProjectViewerRole] = platform.ScopeTenant
+	if name == CodeType+".archive" || name == TableType+".archive" {
+		if !c.Replaying {
+			if !c.Holds(c.App, "builder") {
+				return nil, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_POLICY_DENIED}, true
+			}
+			published := false
+			if name == CodeType+".archive" {
+				record, _ := platform.Get[Code](c, s.GetTarget().GetId())
+				if record.State == "compiling" {
+					return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "A compiling code function cannot be archived; wait for its build result"), true
+				}
+				published = record.Published != ""
+			} else {
+				record, _ := platform.Get[Table](c, s.GetTarget().GetId())
+				published = record.Published != ""
+			}
+			if published {
+				return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "A published definition cannot be archived; its installed version must be retained"), true
+			}
+		}
+		table.Validate = nil
+	}
+	return o.env.Ledger().Generated(c, s, now, nil, code, table)
+}
+
 func (o *Owner) checkCode(code Code) error {
 	if code.Module == "" || code.SourceHash != code.SourceDigest() || code.BuildHash != code.BuildDigest() || code.Language != "go" && code.Language != "tinygo" || code.Toolchain == "" {
 		return fmt.Errorf("code %s needs an unchanged isolated build", code.Name)

@@ -32,6 +32,7 @@
   - 定下资源编辑离开 `Build` 的模式，明确状态、注册、HTTP 路由和宿主导入点。
   - 代码函数和决策表的编写、发布与状态已在 `services/functions/authoring`；
     核对 `compute_code.go`、`compute_table.go`、`compute_authoring.go`、`compute_publications.go` 和 `compute_state.go`。
+    创建、编辑、归档与编译由函数拥有者处理；Build 保留公共资源、权限和装配入口。
   - 核对 `services/resources/authoring/build_compute.go`、`build_functions.go`、`build_function_adapter.go`、
     `build_owner.go` 及 `host/composition/tenant.go` 的剩余装配与调用边界，删除失去意义的旧路径。
   - 两者都生成 `AssetCompute`，共享 `OperationDefinition`；当前版本来自已安装状态，历史版本来自保留的版本族。
