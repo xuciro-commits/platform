@@ -57,15 +57,16 @@ type tenantPorts struct {
 }
 
 type ownerSet struct {
-	apps      []platform.App
-	ids       []string
-	appIndex  map[string]int
-	owner     map[string]string
-	states    map[string]platform.AcceptedStateApp
-	inputs    map[string]platform.AcceptedInputApp
-	assets    map[string]platform.AssetLifecycleOwner
-	answerers map[string]platform.Answerer
-	builders  map[string]build.ConstructionDrafts
+	apps       []platform.App
+	ids        []string
+	appIndex   map[string]int
+	owner      map[string]string
+	states     map[string]platform.AcceptedStateApp
+	inputs     map[string]platform.AcceptedInputApp
+	assets     map[string]platform.AssetLifecycleOwner
+	answerers  map[string]platform.Answerer
+	builders   map[string]build.ConstructionDrafts
+	operations map[string]platform.OperationDefinitions
 }
 
 func newOwnerSet(apps []platform.App) (ownerSet, error) {
@@ -89,6 +90,7 @@ func (s *ownerSet) place(apps []platform.App) {
 	s.assets = runtimekernel.OwnersOf[platform.AssetLifecycleOwner](s.ids, apps)
 	s.answerers = runtimekernel.OwnersOf[platform.Answerer](s.ids, apps)
 	s.builders = runtimekernel.OwnersOf[build.ConstructionDrafts](s.ids, apps)
+	s.operations = runtimekernel.OwnersOf[platform.OperationDefinitions](s.ids, apps)
 }
 
 func (s ownerSet) with(apps []platform.App) ownerSet {

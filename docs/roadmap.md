@@ -36,8 +36,8 @@
     `build_owner.go` 及 `host/composition/tenant.go` 的剩余装配与调用边界，删除失去意义的旧路径。
   - 两者都生成 `AssetCompute`，共享 `OperationDefinition`；当前版本来自已安装状态，历史版本来自保留的版本族。
     `Fork` 必须复制状态，`Reinstall` 必须从接受记录重建；不得把历史读取降为 Manifest 当前值。
-  - `services/functions/runtime/compute_operations.go` 仍探测 `OperationDefinitions` 并回退 Manifest。
-    消除相关探测时，先保证其他应用的声明操作、历史版本和原有 authority 行为不变。
+  - `OperationDefinitions` 在宿主装配时登记；其他应用的声明操作仍从 Manifest 读取，
+    分叉时重新绑定，历史版本和原有 authority 行为不变。
   - `host.Tenant` 没有单独的代码函数或决策表状态字段；只按实际消除的字段与探测下调基线。
   - 将最终模式写入 [backend](backend.md)；把其余家族拆成可执行条目，写明源文件、归属与验证。
 

@@ -28,7 +28,7 @@ func (t *Tenant) retainedCapability(m platform.Member, ref platform.AssetRef, ve
 	return authoring.RetainedCapability(t.App(ref.App), ref, version, authoring.RetainedHooks{
 		Query:    func() (platform.NamedQuery, string, bool) { return t.memberQueryVersion(m, ref, version) },
 		Entities: func() []platform.EntityInfo { return t.Entities(m) },
-		Function: agentowner.FunctionDefinition,
+		Function: agentowner.FunctionDefinition, Operation: t.operationDefinition,
 		Allowed: func(name string, roles []string) bool {
 			return t.authorizeCapability(platform.NewCaller(runtime{t: t}, m, ref.App, false, false), ref.App, name, roles, true, authorizationDetails{}).Allow
 		}})

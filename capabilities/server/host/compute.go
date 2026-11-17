@@ -47,7 +47,7 @@ func (t *Tenant) planOperation(c platform.Caller, r *pb.ChangeRecord, q platform
 	if len(sealed) == 1 {
 		input = sealed[0]
 	}
-	return compute.OperationPlan{Tenant: t.ID, Member: t.Member, App: t.App, Recording: t.Recording(), Queued: t.queuedOperations(), Entity: t.Entity, Rules: t.services.Rules,
+	return compute.OperationPlan{Tenant: t.ID, Member: t.Member, App: t.App, Definition: t.operationDefinition, Recording: t.Recording(), Queued: t.queuedOperations(), Entity: t.Entity, Rules: t.services.Rules,
 		Authorize: func(applicant platform.Caller, owner string, op platform.Operation, at time.Time, sources []string, definition string) *platform.Error {
 			return authorizationRefusal(t.authorizeCapability(applicant, owner, op.Name, op.Roles, op.Check() == nil, authorizationDetails{Store: store, At: at, Sources: sources, Definition: definition}))
 		},

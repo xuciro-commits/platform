@@ -81,9 +81,9 @@ func (d *stagedDecision) CancelOperation(c platform.Caller, r *pb.ChangeRecord, 
 }
 
 func (h hostView) Operation(app, name string, version int) (platform.Operation, int, bool) {
-	owner := h.t.App(app)
-	if owner == nil {
-		return platform.Operation{}, 0, false
-	}
-	return compute.OperationDefinition(owner, name, version)
+	return h.t.operationDefinition(app, name, version)
+}
+
+func (t *Tenant) operationDefinition(app, name string, version int) (platform.Operation, int, bool) {
+	return compute.OperationDefinition(t.App(app), t.operations[app], name, version)
 }

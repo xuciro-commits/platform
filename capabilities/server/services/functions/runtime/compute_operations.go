@@ -209,8 +209,11 @@ func Execute(ctx context.Context, host ExecutionHost, tenant string, x platform.
 	return out
 }
 
-func OperationDefinition(app platform.App, name string, version int) (platform.Operation, int, bool) {
-	if owner, ok := app.(platform.OperationDefinitions); ok {
+func OperationDefinition(app platform.App, owner platform.OperationDefinitions, name string, version int) (platform.Operation, int, bool) {
+	if app == nil {
+		return platform.Operation{}, 0, false
+	}
+	if owner != nil {
 		return owner.OperationDefinition(name, version)
 	}
 	if version == 0 {
@@ -254,6 +257,7 @@ type CallSetup struct {
 	Tenant      string
 	Member      func(id string) (platform.Member, bool)
 	App         func(id string) platform.App
+	Definition  func(app, name string, version int) (platform.Operation, int, bool)
 	Prior       func(callID string) (string, bool)
 	Quarantined func() bool
 	Authorize   func(current platform.Member, op platform.Operation) *platform.Error
@@ -274,7 +278,7 @@ func (h CallSetup) Prepare(member platform.Member, q platform.OperationRequest) 
 	var version int
 	var declared bool
 	if app != nil {
-		op, version, declared = OperationDefinition(app, q.Name, q.Version)
+		op, version, declared = h.Definition(q.App, q.Name, q.Version)
 	}
 	callID := fmt.Sprintf("%s:%s:operation:%s:%s", h.Tenant, q.App, q.Key, operationEndpoint)
 	if body, ok := h.Prior(callID); ok {

@@ -10,7 +10,6 @@ import (
 	"google.golang.org/protobuf/encoding/protojson"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformserver/platform"
-	"platformserver/services/functions/runtime"
 	"platformserver/services/resources/publication"
 )
 
@@ -195,10 +194,11 @@ func DescribeCapability(ref platform.AssetRef, version int, retained func() (pla
 }
 
 type RetainedHooks struct {
-	Query    func() (platform.NamedQuery, string, bool)
-	Entities func() []platform.EntityInfo
-	Function func(app platform.App, name string, version int) (platform.AIFunction, int, bool)
-	Allowed  func(name string, roles []string) bool
+	Query     func() (platform.NamedQuery, string, bool)
+	Entities  func() []platform.EntityInfo
+	Function  func(app platform.App, name string, version int) (platform.AIFunction, int, bool)
+	Operation func(app, name string, version int) (platform.Operation, int, bool)
+	Allowed   func(name string, roles []string) bool
 }
 
 func RetainedCapability(app platform.App, ref platform.AssetRef, version int, h RetainedHooks) (platform.CapabilityDescriptor, bool) {
@@ -215,7 +215,7 @@ func RetainedCapability(app platform.App, ref platform.AssetRef, version int, h 
 		selected.Query, selected.QueryVersion = &query, source
 		selected.Entity = QueryEntity(h.Entities(), query.Object)
 	case platform.AssetCompute:
-		operation, ordinal, ok := compute.OperationDefinition(app, ref.Name, version)
+		operation, ordinal, ok := h.Operation(ref.App, ref.Name, version)
 		if !ok || ordinal != version || !h.Allowed(operation.Name, operation.Roles) {
 			return platform.CapabilityDescriptor{}, false
 		}

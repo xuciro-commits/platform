@@ -18,7 +18,7 @@ func (t *Tenant) InvokeOperation(member platform.Member, q platform.OperationReq
 	q.Sources = slices.Clone(q.Sources)
 	var prepared *preparedOperationInput
 	initial, refusal := recordRead(t, context.Background(), func(t *Tenant) (compute.CallPlan, *platform.Error) {
-		return compute.CallSetup{Tenant: t.ID, Member: t.Member, App: t.App, Quarantined: t.quarantined,
+		return compute.CallSetup{Tenant: t.ID, Member: t.Member, App: t.App, Definition: t.operationDefinition, Quarantined: t.quarantined,
 			Prior: func(callID string) (string, bool) {
 				x, ok := t.outbound.Get(callID)
 				return x.Body, ok

@@ -26,7 +26,7 @@ func RetainedFunction(app platform.App, binding platform.AssetBinding) (platform
 
 type PinnedOperation struct {
 	App        func(string) platform.App
-	Definition func(app platform.App, name string, version int) (platform.Operation, int, bool)
+	Definition func(app, name string, version int) (platform.Operation, int, bool)
 	Registry   func() (*publication.AssetRegistry, error)
 }
 
@@ -36,7 +36,7 @@ func (p PinnedOperation) Resolve(binding *platform.AssetBinding) (platform.Opera
 	}
 	app := p.App(binding.Ref.App)
 	if app != nil && binding.SourceVersion == app.Manifest().Version {
-		if op, version, exists := p.Definition(app, binding.Ref.Name, 0); exists && version == 0 && op.Binding.Kind == "native" {
+		if op, version, exists := p.Definition(binding.Ref.App, binding.Ref.Name, 0); exists && version == 0 && op.Binding.Kind == "native" {
 			return op, 0, nil
 		}
 	}

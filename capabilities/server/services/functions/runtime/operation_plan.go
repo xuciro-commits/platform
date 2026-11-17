@@ -14,19 +14,20 @@ import (
 const operationEndpoint = "operation"
 
 type OperationPlan struct {
-	Tenant    string
-	Member    func(string) (platform.Member, bool)
-	App       func(string) platform.App
-	Authorize func(applicant platform.Caller, owner string, op platform.Operation, at time.Time, sources []string, definition string) *platform.Error
-	Closure   func(owner string, op platform.Operation, version int, release *string) (string, string, error)
-	InputKey  func(platform.OperationInputArtifact) error
-	Recording bool
-	Exists    func(id string) bool
-	Queued    int
-	Retained  func(module string) bool
-	Bind      func(ref platform.AssetRef, release, dependencies string) ([]platform.AssetBinding, error)
-	Entity    func(string) (platform.EntityInfo, bool)
-	Rules     platform.RuleEngine
+	Tenant     string
+	Member     func(string) (platform.Member, bool)
+	App        func(string) platform.App
+	Definition func(app, name string, version int) (platform.Operation, int, bool)
+	Authorize  func(applicant platform.Caller, owner string, op platform.Operation, at time.Time, sources []string, definition string) *platform.Error
+	Closure    func(owner string, op platform.Operation, version int, release *string) (string, string, error)
+	InputKey   func(platform.OperationInputArtifact) error
+	Recording  bool
+	Exists     func(id string) bool
+	Queued     int
+	Retained   func(module string) bool
+	Bind       func(ref platform.AssetRef, release, dependencies string) ([]platform.AssetBinding, error)
+	Entity     func(string) (platform.EntityInfo, bool)
+	Rules      platform.RuleEngine
 }
 
 func (p OperationPlan) Plan(c platform.Caller, r *pb.ChangeRecord, q platform.OperationRequest, pending []platform.Effect, input *platform.OperationInputArtifact) (platform.OperationCall, platform.Effect, *platform.Error) {
@@ -52,7 +53,7 @@ func (p OperationPlan) Plan(c platform.Caller, r *pb.ChangeRecord, q platform.Op
 	if app == nil {
 		return refuse(pb.ErrorCode_ERROR_CODE_NOT_FOUND, "Operation owner is not installed")
 	}
-	op, version, ok := OperationDefinition(app, q.Name, q.Version)
+	op, version, ok := p.Definition(owner, q.Name, q.Version)
 	if !ok {
 		return refuse(pb.ErrorCode_ERROR_CODE_NOT_FOUND, "Operation is not declared")
 	}
