@@ -1,6 +1,9 @@
 package build
 
 import (
+	"context"
+	"encoding/json"
+
 	"platformserver/platform"
 	functionauthoring "platformserver/services/functions/authoring"
 	"platformserver/services/resources/publication"
@@ -30,6 +33,10 @@ func (e functionEnvironment) JointEntity(typ string) (platform.EntityInfo, bool)
 	entity, ok := e.b.jointEntities[typ]
 	return entity, ok
 }
+func (e functionEnvironment) JointDeclaration(ref platform.AssetRef) (platform.ReleaseAsset, bool) {
+	asset, ok := e.b.jointDeclarations[ref]
+	return asset, ok
+}
 func (e functionEnvironment) DeclaresRole(role string) bool   { return e.b.declaresRole(role) }
 func (e functionEnvironment) CheckName(name, id string) error { return e.b.checkName(name, id) }
 func (e functionEnvironment) ConditionLookup(typ string) (platform.EntityInfo, bool) {
@@ -40,3 +47,19 @@ func (e functionEnvironment) CheckRuleCollections(spec platform.RuleReadSpec, wh
 }
 
 var _ functionauthoring.Environment = functionEnvironment{}
+
+func (b *Build) FunctionDefinition(name string, version int) (platform.AIFunction, int, bool) {
+	return b.functions.Definition(name, version)
+}
+
+func (b *Build) FunctionReleaseAsset(name string, sourceVersion string) (platform.ReleaseAsset, error) {
+	return b.functions.Resolve(name, sourceVersion)
+}
+
+func (b *Build) TrainingCandidates(c platform.Caller, event platform.Event, images map[string]json.RawMessage) []platform.AITrainingCandidate {
+	return b.functions.TrainingCandidates(c, event, images)
+}
+
+func (b *Build) Compute(ctx context.Context, name string, input json.RawMessage) (json.RawMessage, error) {
+	return b.functions.Compute(ctx, name, input)
+}

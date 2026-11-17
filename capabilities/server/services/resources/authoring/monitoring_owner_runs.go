@@ -122,7 +122,7 @@ func (x OwnerRuns) Page() (monitoring.MonitoringRunPage, *platform.Error) {
 			return collectOwnerRuns(x, runs, "projection", "latest", "latest-only", dataowner.DatasetType, func(rows []dataowner.Dataset) { dataowner.DatasetRuns(runs, rows) })
 		},
 		func() *platform.Error {
-			return collectOwnerRuns(x, runs, "function", "retained", "", FunctionCallType, func(rows []functionauthoring.FunctionRun) { FunctionRuns(runs, rows) })
+			return collectOwnerRuns(x, runs, "function", "retained", "", functionauthoring.FunctionCallType, func(rows []functionauthoring.FunctionRun) { FunctionRuns(runs, rows) })
 		},
 		func() *platform.Error {
 			return collectOwnerRuns(x, runs, "flow", "retained", "permission-filtered", platform.FlowInstanceType, func(rows []platform.FlowInstance) { runs.Flows(rows, x.Schemas.FlowRetry) })

@@ -21,7 +21,7 @@ func (e automationEnvironment) Version() string            { return e.b.Manifest
 func (e automationEnvironment) Roles() []string            { return e.b.Manifest().AllRoles() }
 func (e automationEnvironment) JointMode() bool            { return e.b.jointMode }
 func (e automationEnvironment) FunctionCallAction() string {
-	return SchemaFunctionCall
+	return functionauthoring.SchemaFunctionCall
 }
 func (e automationEnvironment) FunctionResult(c platform.Caller, id string) (automationauthoring.FunctionOutcome, bool) {
 	call, ok := platform.Get[functionauthoring.FunctionRun](c, id)

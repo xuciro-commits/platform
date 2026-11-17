@@ -44,6 +44,6 @@ func FunctionRuns(r *monitoring.Runs, functions []functionauthoring.FunctionRun)
 		case "rejected":
 			status = "failed"
 		}
-		r.Add(monitoring.MonitoringRun{Type: "function", Source: "function", ID: "function:" + function.ID, Title: function.Function, ResourceRef: &platform.AssetRef{App: cmp.Or(function.App, ID), Kind: platform.AssetFunction, Name: function.Function}, RecordRef: FunctionCallType + "/" + function.ID, When: function.Created.At, Status: status, OwnerStatus: function.State})
+		r.Add(monitoring.MonitoringRun{Type: "function", Source: "function", ID: "function:" + function.ID, Title: function.Function, ResourceRef: &platform.AssetRef{App: cmp.Or(function.App, ID), Kind: platform.AssetFunction, Name: function.Function}, RecordRef: functionauthoring.FunctionCallType + "/" + function.ID, When: function.Created.At, Status: status, OwnerStatus: function.State})
 	}
 }

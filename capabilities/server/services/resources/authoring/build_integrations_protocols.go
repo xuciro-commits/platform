@@ -9,6 +9,7 @@ import (
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformserver/platform"
 	actioncatalog "platformserver/services/actions/catalog"
+	functionauthoring "platformserver/services/functions/authoring"
 	ontology "platformserver/services/ontology"
 	"platformserver/services/resources/publication"
 )
@@ -65,7 +66,7 @@ func (b *Build) checkObjectProtocols(object ontology.Object) error {
 	if len(object.Protocols) > 16 {
 		return fmt.Errorf("An object supports at most 16 protocol bindings")
 	}
-	if err := ontology.CheckProcess(object, ID, TypeOf(object.Name), Builder, User, FunctionCallType, b.conditionLookup); err != nil {
+	if err := ontology.CheckProcess(object, ID, TypeOf(object.Name), Builder, User, functionauthoring.FunctionCallType, b.conditionLookup); err != nil {
 		return err
 	}
 	draft := object

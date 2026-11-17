@@ -143,6 +143,7 @@ type Environment interface {
 	AddActions(...platform.Action)
 	InstalledObject(string) (platform.Entity, bool)
 	JointEntity(string) (platform.EntityInfo, bool)
+	JointDeclaration(platform.AssetRef) (platform.ReleaseAsset, bool)
 	DeclaresRole(string) bool
 	CheckName(string, string) error
 	ConditionLookup(string) (platform.EntityInfo, bool)
@@ -459,7 +460,14 @@ func (o *Owner) DraftAssets(id string, releaseAssets func() ([]platform.ReleaseA
 	return
 }
 
-func (o *Owner) Definition(name string, version int, asset platform.ReleaseAsset) (platform.AIFunction, int, bool) {
+func (o *Owner) Definition(name string, version int) (platform.AIFunction, int, bool) {
+	if asset, ok := o.env.JointDeclaration(platform.AssetRef{App: o.env.App(), Kind: platform.AssetFunction, Name: name}); ok {
+		return o.definitionFromAsset(name, version, asset)
+	}
+	return o.Function(name, version)
+}
+
+func (o *Owner) definitionFromAsset(name string, version int, asset platform.ReleaseAsset) (platform.AIFunction, int, bool) {
 	ordinal := o.assetVersion(asset)
 	if ordinal == version && version > 0 {
 		var d platform.AIFunction

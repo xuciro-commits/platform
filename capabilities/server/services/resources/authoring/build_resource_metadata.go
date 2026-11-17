@@ -201,7 +201,7 @@ var resourceDescriptors = []resourceDescriptor{
 		presentations: []resourcePresentation{presented("interface", "interfaces", "Interface", "Interfaces", 8)},
 	},
 	{
-		app: ID, typ: FunctionType, kind: platform.AssetFunction, family: definitionResources, released: true, defaultDraft: true, directInstall: true, acceptedPublication: true,
+		app: ID, typ: functionauthoring.FunctionType, kind: platform.AssetFunction, family: definitionResources, released: true, defaultDraft: true, directInstall: true, acceptedPublication: true,
 		presentations: []resourcePresentation{presented("function", "function", "AI function", "AI functions", 13)},
 	},
 	{

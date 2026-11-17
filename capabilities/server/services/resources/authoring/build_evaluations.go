@@ -44,7 +44,7 @@ func (b *Build) submitEvaluation(c platform.Caller, s *pb.Submission, now time.T
 				len(start.Policy.Cases) < 1 || len(start.Policy.Cases) > 5 {
 				return nil, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 			}
-			installed, _, ok := b.FunctionDefinition(start.Function, start.Version)
+			installed, _, ok := b.functions.Definition(start.Function, start.Version)
 			if start.Set == nil && (!ok || !evalEqual(platform.Raw(installed), platform.Raw(start.Definition))) {
 				return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The evaluated function version changed")
 			}

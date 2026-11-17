@@ -7,7 +7,7 @@ import (
 
 	acceptedformat "platformserver/kernel/acceptedformat"
 	"platformserver/platform"
-	"platformserver/services/resources/authoring"
+	functionauthoring "platformserver/services/functions/authoring"
 )
 
 type FunctionCall struct {
@@ -41,7 +41,7 @@ func (h FunctionFixtureHooks) Apply(actor platform.Member, fixture platform.Func
 		return false, err
 	}
 	kind, id, ok := strings.Cut(pending[0].Record, "/")
-	if !ok || kind != build.FunctionCallType {
+	if !ok || kind != functionauthoring.FunctionCallType {
 		return false, fmt.Errorf("fixture reply is not a builder function call")
 	}
 	state, output, found := h.Run(actor, kind, id)

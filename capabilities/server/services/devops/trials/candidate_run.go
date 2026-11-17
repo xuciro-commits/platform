@@ -136,9 +136,9 @@ func (r *CandidateRun) Step(i int, step SimulationStep) (Simulation, *platform.E
 		business := slices.ContainsFunc(r.Candidate.Assets, func(asset platform.ReleaseAsset) bool {
 			return asset.Ref.App == build.ID && asset.Ref.Kind == platform.AssetObject && asset.Ref.Name == step.Type
 		})
-		function := step.Type == build.FunctionCallType && slices.ContainsFunc(r.Candidate.Assets, func(asset platform.ReleaseAsset) bool { return asset.Ref.Kind == platform.AssetFunction })
+		function := step.Type == functionauthoring.FunctionCallType && slices.ContainsFunc(r.Candidate.Assets, func(asset platform.ReleaseAsset) bool { return asset.Ref.Kind == platform.AssetFunction })
 		if (!business && !function) || owner != build.ID || step.ID == "" || !strings.HasPrefix(step.Type, build.ID+".") ||
-			step.Type == build.ObjectType || step.Type == build.PageType || step.Type == build.AppType || step.Type == build.TestPlanType || step.Type == build.ProcessType || step.Type == build.FunctionType {
+			step.Type == build.ObjectType || step.Type == build.PageType || step.Type == build.AppType || step.Type == build.TestPlanType || step.Type == build.ProcessType || step.Type == functionauthoring.FunctionType {
 			return Simulation{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Test step {step} must name an action and record of the candidate objects", fmt.Sprint(i+1))
 		}
 		payload := step.Payload
@@ -172,7 +172,7 @@ func (r *CandidateRun) Step(i int, step SimulationStep) (Simulation, *platform.E
 		result.FunctionMatched = &matched
 	}
 	if r.Sandbox.AI {
-		records, _, problem := r.Sandbox.Records(actor, build.FunctionCallType, platform.Query{Limit: 100}, r.Now)
+		records, _, problem := r.Sandbox.Records(actor, functionauthoring.FunctionCallType, platform.Query{Limit: 100}, r.Now)
 		if problem == nil {
 			for _, record := range records {
 				result.Functions = append(result.Functions, record.(functionauthoring.FunctionRun))

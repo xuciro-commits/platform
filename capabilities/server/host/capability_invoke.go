@@ -55,7 +55,7 @@ func (t *Tenant) InvokeCapability(ctx context.Context, m platform.Member, q plat
 			return answer, refusal
 		}
 		s := &pb.Submission{TenantId: t.ID, PrincipalId: m.ID, Authority: build.ID, IdempotencyKey: q.Key,
-			Target: &pb.EntityRef{Type: build.FunctionCallType, Id: q.Key}, Schema: &pb.SchemaRef{Name: build.SchemaFunctionCall, Version: 1}, Payload: payload}
+			Target: &pb.EntityRef{Type: functions.FunctionCallType, Id: q.Key}, Schema: &pb.SchemaRef{Name: functions.SchemaFunctionCall, Version: 1}, Payload: payload}
 		_, err := t.Submit(m, s, now)
 		answer.State, answer.Call = "pending", q.Key
 		return answer, err

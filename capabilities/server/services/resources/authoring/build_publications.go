@@ -21,7 +21,7 @@ func (b *Build) ValidateAcceptedPublication(schema string, image []byte) error {
 	if b.apps.HandlesPublication(schema) {
 		return b.apps.ValidateImage(schema, image)
 	}
-	if schema == SchemaFunction {
+	if schema == functionauthoring.SchemaFunction {
 		return b.functions.ValidateImage(image)
 	}
 	if b.automation.HandlesPublication(schema) {
@@ -41,7 +41,7 @@ func (b *Build) ApplyAcceptedPublication(schema string, image []byte) error {
 	if b.apps.HandlesPublication(schema) {
 		return b.apps.ApplyImage(schema, image)
 	}
-	if schema == SchemaFunction {
+	if schema == functionauthoring.SchemaFunction {
 		return b.functions.ApplyImage(image)
 	}
 	if b.automation.HandlesPublication(schema) {

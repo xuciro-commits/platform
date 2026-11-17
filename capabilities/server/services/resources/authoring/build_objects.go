@@ -10,6 +10,7 @@ import (
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformserver/platform"
+	functionauthoring "platformserver/services/functions/authoring"
 	ontology "platformserver/services/ontology"
 	"platformserver/services/resources/publication"
 )
@@ -120,7 +121,7 @@ func (b *Build) Check(o ontology.Object, id string, engine platform.RuleEngine) 
 	if err := ontology.CheckEnterpriseUse(o, engine); err != nil {
 		return err
 	}
-	if err := ontology.CheckProcess(o, ID, TypeOf(o.Name), Builder, User, FunctionCallType, b.conditionLookup); err != nil {
+	if err := ontology.CheckProcess(o, ID, TypeOf(o.Name), Builder, User, functionauthoring.FunctionCallType, b.conditionLookup); err != nil {
 		return err
 	}
 	if err := b.checkObjectRules(o, engine); err != nil {

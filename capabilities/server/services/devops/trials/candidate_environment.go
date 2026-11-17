@@ -194,7 +194,7 @@ func (e Environment) InstallCandidate(candidate platform.ReleaseCandidate, b bui
 		kinds func(platform.AssetKind) bool
 		apply func(platform.ReleaseAsset) error
 	}{
-		{kind(platform.AssetFunction), b.InstallFunctionAsset},
+		{kind(platform.AssetFunction), b.InstallDefinitionAsset},
 		{kind(platform.AssetCompute), b.InstallOperationAsset},
 		{kind(platform.AssetLinkType), b.InstallDefinitionAsset},
 		{kind(platform.AssetQuery, platform.AssetObjectTypeGroup), b.InstallDefinitionAsset},

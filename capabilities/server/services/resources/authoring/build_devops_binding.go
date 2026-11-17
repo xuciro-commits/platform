@@ -17,7 +17,7 @@ func (b *Build) bindTestPlans() {
 		EqualAsset:         b.data.EqualAsset,
 		Decode:             dataowner.DecodeDescriptor,
 		JointDeclarations:  func() map[platform.AssetRef]platform.ReleaseAsset { return b.jointDeclarations },
-		FunctionDefinition: b.FunctionDefinition,
+		FunctionDefinition: b.functions.Definition,
 		Functions:          b.functions.Inventory,
 		DraftID:            b.data.DraftID,
 	}

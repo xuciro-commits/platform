@@ -32,9 +32,6 @@
 每批同步处理宿主状态、能力登记、装配、HTTP 调用方和依赖例外，运行该类的创建、编辑、发布、安装、拒绝、
 历史版本、分叉和重放检查。跨类型的 RID、项目、文件夹、工作状态、分支、提案和编排留在资源服务。
 
-- [ ] U5.9 AI 函数：清理 `build_functions.go`、`build_function_adapter.go`、`build_automation_adapter.go` 与
-  `build_owner.go` 中的专有创作和运行调用，归 `services/functions/authoring`；保留共享测试记录的类型引用。
-  验证草稿、版本化调用、评估引用、提案审阅和重放。
 - [ ] U5.10 智能体与评估：从 `build_agent_binding.go`、`build_evaluations.go` 的剩余专有部分迁到 `services/ai`。
   评估集与测试计划继续使用 DevOps 的同一记录和版本族；分叉、模拟、联合候选和安装不得捕获源租户。
 - [ ] U5.11 数据接入与集成：从 `build_data_owner.go`、`build_writeback_answers.go` 和 `build_integrations_*.go`

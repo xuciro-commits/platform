@@ -175,7 +175,7 @@ func New(tenant string, authorities platform.Authorities, publications []publica
 	actions = append(actions, productVersionActions()...)
 	actions = append(actions, platform.Action{Schema: SchemaEvaluationSetPublish, Target: TestPlanType, Title: "Publish test plan", Description: "Freeze a portable business scenario or the evaluation cases for one function version.", Capability: "objects", Roles: []string{Builder}, Payload: []platform.Field{}})
 	actions = resourceActions(actions)
-	classes := []string{ObjectType, ActionTypeType, PageType, AppType, TestPlanType, automationauthoring.ProcessType, FunctionType, PropertyTypeType, ValueTypeType, ObjectTypeGroupType, LinkTypeType, b.queries.Entity().Type, InterfaceType, FunctionCallType, EvaluationType, functionauthoring.CodeType, functionauthoring.TableType, AgentType, SampleSetType, BranchType, ResourceType, FolderType, WorkingStateType, ProductType, ProductVersionType, platform.OwnedRelationType(ID), confirmationType, platform.DispatchType}
+	classes := []string{ObjectType, ActionTypeType, PageType, AppType, TestPlanType, automationauthoring.ProcessType, functionauthoring.FunctionType, PropertyTypeType, ValueTypeType, ObjectTypeGroupType, LinkTypeType, b.queries.Entity().Type, InterfaceType, functionauthoring.FunctionCallType, EvaluationType, functionauthoring.CodeType, functionauthoring.TableType, AgentType, SampleSetType, BranchType, ResourceType, FolderType, WorkingStateType, ProductType, ProductVersionType, platform.OwnedRelationType(ID), confirmationType, platform.DispatchType}
 	classes = append(classes, b.data.Types()...)
 	b.authorities = authorities
 	b.ledger = authorities(tenant, ID, platform.NewCatalog(actions...), classes...)
@@ -327,7 +327,7 @@ func (b *Build) checkDefinitionArchive(c platform.Caller, typ, id string) *platf
 	case InterfaceType:
 		record, _ := platform.Get[ontology.InterfaceRecord](c, id)
 		published = record.Published != ""
-	case FunctionType:
+	case functionauthoring.FunctionType:
 		record, _ := platform.Get[functionauthoring.Function](c, id)
 		published = record.Published != ""
 	case AgentType:
@@ -411,7 +411,7 @@ func (b *Build) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb.
 	if slices.Contains([]string{platform.DispatchAnswerSchema, platform.DispatchReviewSchema, platform.DispatchTickSchema}, s.GetSchema().GetName()) {
 		return b.updateDispatch(c, s, now)
 	}
-	if name := s.GetSchema().GetName(); name == SchemaProposalReview || name == SchemaFunctionCall || name == SchemaFunctionAnswer {
+	if name := s.GetSchema().GetName(); name == functionauthoring.SchemaProposalReview || name == functionauthoring.SchemaFunctionCall || name == functionauthoring.SchemaFunctionAnswer {
 		return b.functions.Submit(c, s, now)
 	}
 	if s.GetSchema().GetName() == SchemaEvaluationSetPublish {
@@ -423,7 +423,7 @@ func (b *Build) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb.
 	if name := s.GetSchema().GetName(); name == SchemaEvaluationStart || name == SchemaEvaluationAnswer {
 		return b.submitEvaluation(c, s, now)
 	}
-	if typ, archive := strings.CutSuffix(s.GetSchema().GetName(), ".archive"); archive && !c.Replaying && slices.Contains([]string{ObjectType, PageType, AppType, PropertyTypeType, ValueTypeType, ObjectTypeGroupType, LinkTypeType, QueryType, InterfaceType, FunctionType, AgentType, TestPlanType, SampleSetType, dataowner.ObservationType, ProductType}, typ) {
+	if typ, archive := strings.CutSuffix(s.GetSchema().GetName(), ".archive"); archive && !c.Replaying && slices.Contains([]string{ObjectType, PageType, AppType, PropertyTypeType, ValueTypeType, ObjectTypeGroupType, LinkTypeType, QueryType, InterfaceType, functionauthoring.FunctionType, AgentType, TestPlanType, SampleSetType, dataowner.ObservationType, ProductType}, typ) {
 		if err := b.checkDefinitionArchive(c, typ, s.GetTarget().GetId()); err != nil {
 			return nil, err
 		}
@@ -613,7 +613,6 @@ type ConstructionSandbox interface {
 	BeginAssetBootstrap([]platform.ReleaseAsset) (func(), error)
 	ProcessFromAsset(platform.ReleaseAsset) (automationauthoring.Process, error)
 	InstallDefinitionAsset(platform.ReleaseAsset) error
-	InstallFunctionAsset(platform.ReleaseAsset) error
 	InstallAgentAsset(platform.ReleaseAsset) error
 	InstallOperationAsset(platform.ReleaseAsset) error
 }

@@ -8,7 +8,6 @@ import (
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformserver/platform"
 	functionauthoring "platformserver/services/functions/authoring"
-	"platformserver/services/resources/authoring"
 	"slices"
 	"time"
 )
@@ -321,7 +320,7 @@ func RunCandidate(request CandidateSimulationRequest, candidate platform.Release
 	}
 	passed, asserted, functionAttempted := true, 0, false
 	for i, step := range request.Steps {
-		if request.FunctionID != "" && step.Action == build.SchemaFunctionCall {
+		if request.FunctionID != "" && step.Action == functionauthoring.SchemaFunctionCall {
 			var call platform.FunctionRequest
 			if json.Unmarshal(step.Payload, &call) == nil {
 				functionAttempted = functionAttempted || call.Name == functionName

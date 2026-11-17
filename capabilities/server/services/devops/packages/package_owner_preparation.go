@@ -19,6 +19,7 @@ import (
 	"platformserver/platform"
 	dataowner "platformserver/services/data"
 	packagedesc "platformserver/services/devops/descriptor"
+	functionauthoring "platformserver/services/functions/authoring"
 	"platformserver/services/resources/authoring"
 )
 
@@ -133,7 +134,7 @@ func Preparation(id, version string, blueprint platform.PackageBlueprint, instal
 			}
 			out.Connections = append(out.Connections, PackageConnection{Ref: asset.Ref, Title: def.Title, DraftID: state.ID, Kind: def.Kind, Credential: def.Credential, Configured: state.Address != "" && (!def.Credential || state.Secret != ""), Ready: state.State == "ready" && (!def.Credential || state.Secret != "")})
 		case platform.AssetAgent, platform.AssetFunction, platform.AssetEvaluation:
-			typ := build.FunctionType
+			typ := functionauthoring.FunctionType
 			if asset.Ref.Kind == platform.AssetAgent {
 				typ = "build.agent"
 			} else if asset.Ref.Kind == platform.AssetEvaluation {
