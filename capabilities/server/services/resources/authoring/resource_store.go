@@ -216,8 +216,14 @@ func ProjectHidden(store *records.Store, tenant string, m platform.Member, et *r
 }
 
 func MaskDraftObject(record any, m platform.Member, reader ConstructionDraftReader, mask func(canonical any) any) (any, *platform.Error) {
-	object, ok := record.(ontology.Object)
-	if !ok || !m.Holds(ID, Builder) || reader == nil {
+	var object ontology.Object
+	switch value := record.(type) {
+	case ontology.Object:
+		object = value
+	default:
+		return record, nil
+	}
+	if !m.Holds(ID, Builder) || reader == nil {
 		return record, nil
 	}
 	canonical, err := reader.CanonicalObject(object)

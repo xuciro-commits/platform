@@ -199,8 +199,11 @@ func (o *Owner) checkFlowOn(p Process, entity platform.Entity, objects []platfor
 }
 
 func (o *Owner) publishProcess(c platform.Caller, record any, _ json.RawMessage, _ time.Time) *platform.Error {
-	p, ok := record.(*Process)
-	if !ok {
+	var p *Process
+	switch value := record.(type) {
+	case *Process:
+		p = value
+	default:
 		return &platform.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 	}
 	procs := o.env.Host().BuildProcesses()
@@ -239,8 +242,11 @@ func (o *Owner) publishProcess(c platform.Caller, record any, _ json.RawMessage,
 }
 
 func (o *Owner) runProcess(c platform.Caller, record any, raw json.RawMessage, now time.Time) *platform.Error {
-	p, ok := record.(*Process)
-	if !ok {
+	var p *Process
+	switch value := record.(type) {
+	case *Process:
+		p = value
+	default:
 		return &platform.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 	}
 	if p.Paused {

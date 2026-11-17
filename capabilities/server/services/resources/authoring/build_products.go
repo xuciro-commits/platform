@@ -27,8 +27,11 @@ func (b *Build) productEntity() platform.Entity {
 		Scope:       platform.Scope{Default: platform.ScopeTenant, Levels: map[string]string{Builder: platform.ScopeTenant, Publisher: platform.ScopeTenant}},
 		Standard:    platform.Standard{Create: true, Edit: true, Archive: true, Roles: []string{Builder, Publisher}, Capability: "releases"},
 		Validate: func(c platform.Caller, value any) *platform.Error {
-			product, ok := value.(*Product)
-			if !ok {
+			var product *Product
+			switch value := value.(type) {
+			case *Product:
+				product = value
+			default:
 				return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "The product definition is unreadable")
 			}
 			if product.Namespace == "" {

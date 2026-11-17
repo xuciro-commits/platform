@@ -84,8 +84,11 @@ func CodeEntity() platform.Entity {
 	}}}}
 }
 func compileCode(c platform.Caller, record any, _ json.RawMessage, _ time.Time) *platform.Error {
-	code, ok := record.(*Code)
-	if !ok {
+	var code *Code
+	switch value := record.(type) {
+	case *Code:
+		code = value
+	default:
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Code requires Go/TinyGo source and bounded input/output schemas")
 	}
 	return checkCodeBuildable(code)

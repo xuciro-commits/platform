@@ -374,8 +374,11 @@ func (o *Owner) TableEntity() platform.Entity {
 }
 
 func (o *Owner) publishTable(c platform.Caller, record any, _ json.RawMessage, _ time.Time) *platform.Error {
-	tb, ok := record.(*Table)
-	if !ok {
+	var tb *Table
+	switch value := record.(type) {
+	case *Table:
+		tb = value
+	default:
 		return &platform.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 	}
 	if !c.Replaying {

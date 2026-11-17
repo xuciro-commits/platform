@@ -127,8 +127,11 @@ func (o *Owner) ValidateApplication(c platform.Caller, a *Application) *platform
 }
 
 func (o *Owner) publishApplication(c platform.Caller, record any, _ json.RawMessage, _ time.Time) *platform.Error {
-	application, ok := record.(*Application)
-	if !ok {
+	var application *Application
+	switch value := record.(type) {
+	case *Application:
+		application = value
+	default:
 		return &platform.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 	}
 	if c.Staging() {

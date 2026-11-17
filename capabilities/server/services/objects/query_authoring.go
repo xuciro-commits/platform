@@ -150,8 +150,11 @@ func (o *queryOwner) check(query Query) (Query, error) {
 }
 
 func (o *queryOwner) publish(c platform.Caller, record any) *platform.Error {
-	query, ok := record.(*Query)
-	if !ok {
+	var query *Query
+	switch value := record.(type) {
+	case *Query:
+		query = value
+	default:
 		return &platform.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 	}
 	bound, err := o.check(*query)

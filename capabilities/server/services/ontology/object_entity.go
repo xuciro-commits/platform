@@ -156,8 +156,11 @@ func ObjectEntity(env ObjectEntityEnvironment) platform.Entity {
 				Description: "Install the object as it stands. Published again, it takes its new fields, and records keep the values of the fields that remain.",
 				Criteria:    platform.ActionCriteria{State: &platform.FieldCondition{Field: "state", In: []string{"draft", "published"}}},
 				Rules: []platform.ActionRule{{Function: func(c platform.Caller, record any, _ json.RawMessage, now time.Time) *platform.Error {
-					object, ok := record.(*Object)
-					if !ok {
+					var object *Object
+					switch value := record.(type) {
+					case *Object:
+						object = value
+					default:
 						return &platform.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 					}
 					compiled := *object

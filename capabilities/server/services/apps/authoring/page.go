@@ -94,8 +94,11 @@ func (o *Owner) CheckPageObject(c platform.Caller, object string) (bool, error) 
 }
 
 func (o *Owner) publishPage(c platform.Caller, record any, _ json.RawMessage, _ time.Time) *platform.Error {
-	page, ok := record.(*Page)
-	if !ok {
+	var page *Page
+	switch value := record.(type) {
+	case *Page:
+		page = value
+	default:
 		return &platform.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 	}
 	if !c.Replaying {

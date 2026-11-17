@@ -270,8 +270,11 @@ func (o *Owner) check(f Function) (Function, error) {
 }
 
 func (o *Owner) publish(c platform.Caller, record any, _ json.RawMessage, _ time.Time) *platform.Error {
-	f, ok := record.(*Function)
-	if !ok {
+	var f *Function
+	switch value := record.(type) {
+	case *Function:
+		f = value
+	default:
 		return &platform.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 	}
 	bound, err := o.check(*f)
