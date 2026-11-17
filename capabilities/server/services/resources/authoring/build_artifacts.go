@@ -41,23 +41,11 @@ func (b *Build) prepareReleasePublications(assets []platform.ReleaseAsset) ([]pl
 			if code {
 				continue
 			}
-			var frozen ontology.Object
-			if err := json.Unmarshal(asset.Body, &frozen); err != nil || TypeOf(frozen.Name) != asset.Ref.Name {
-				return nil, nil, fmt.Errorf("invalid saved object %s", asset.Ref)
-			}
-			if err := mapDispatchIntegrations(&frozen, b.data.IntegrationID); err != nil {
+			frozen, record, err := ontology.PrepareObjectPublication(asset, objects, b.data.IntegrationID)
+			if err != nil {
 				return nil, nil, err
 			}
-			i := slices.IndexFunc(objects, func(o ontology.Object) bool { return !o.Archived && o.Name == frozen.Name })
-			if i < 0 {
-				return nil, nil, fmt.Errorf("saved object %s has no matching draft; renamed or archived definitions need an upgrade plan", asset.Ref)
-			}
-			frozen.Record = objects[i].Record
-			objects[i].State, objects[i].Installed = "published", TypeOf(frozen.Name)
-			objects[i].Published = published(frozen)
-			objects[i].ExtensionSource = frozen.ExtensionSource
-			objects[i].SchemaVersions = frozen.SchemaVersions
-			if err := add(SchemaPublish, objects[i]); err != nil {
+			if err := add(SchemaPublish, record); err != nil {
 				return nil, nil, err
 			}
 			preparedAsset.Body = platform.Raw(frozen)
@@ -167,7 +155,7 @@ func (b *Build) releaseDraftsOf(candidate platform.ReleaseCandidate) ([]Draft, e
 			if err := json.Unmarshal(asset.Body, &o); err != nil || o.Name == "" {
 				continue
 			}
-			if err := mapDispatchIntegrations(&o, b.data.IntegrationID); err != nil {
+			if err := ontology.MapObjectIntegrations(&o, b.data.IntegrationID); err != nil {
 				return nil, err
 			}
 			if len(o.ActionTypes) == 0 {

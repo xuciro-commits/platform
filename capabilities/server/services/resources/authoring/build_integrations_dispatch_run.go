@@ -40,7 +40,7 @@ func (b *Build) openDispatch(c platform.Caller, receipt *pb.ChangeRecord, txn *p
 			break
 		}
 	}
-	if err := mapDispatchIntegrations(&object, b.data.IntegrationID); err != nil {
+	if err := ontology.MapObjectIntegrations(&object, b.data.IntegrationID); err != nil {
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "{why}", err.Error())
 	}
 	command, known := dispatchCommand(object, spec.Command)

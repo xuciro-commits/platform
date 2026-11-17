@@ -291,7 +291,7 @@ func (b *Build) bindDispatchAssets(assets []platform.ReleaseAsset) ([]platform.R
 			}
 		}
 		if objectHasIntegrations(object) {
-			if err := mapDispatchIntegrations(&object, b.data.IntegrationName); err != nil {
+			if err := ontology.MapObjectIntegrations(&object, b.data.IntegrationName); err != nil {
 				return nil, err
 			}
 			var err error
@@ -329,53 +329,6 @@ func (b *Build) bindDispatchAssets(assets []platform.ReleaseAsset) ([]platform.R
 		}
 	}
 	return assets, nil
-}
-
-func mapDispatchIntegrations(object *ontology.Object, resolve func(platform.AssetKind, string) (string, error)) error {
-	var failure error
-	mapTxn := func(txn *platform.BusinessTxn) {
-		if txn == nil {
-			return
-		}
-		platform.WalkBusinessTxn(txn, func(step platform.TxnStep) {
-			if failure == nil && step.Effect != nil {
-				step.Effect.Writeback, failure = resolve(platform.AssetWriteback, step.Effect.Writeback)
-			}
-		})
-	}
-	mapTxn(object.CreateTransaction)
-	for i := range object.DispatchCommands {
-		name, err := resolve(platform.AssetWriteback, object.DispatchCommands[i].Writeback)
-		if err != nil {
-			return err
-		}
-		object.DispatchCommands[i].Writeback = name
-	}
-	for _, action := range object.Actions {
-		mapTxn(action.Transaction)
-		if action.Transaction == nil || action.Transaction.Dispatch == nil {
-			continue
-		}
-		dispatch := action.Transaction.Dispatch
-		for _, item := range []struct {
-			kind  platform.AssetKind
-			value *string
-		}{
-			{platform.AssetConnection, &dispatch.Target},
-			{platform.AssetSource, &dispatch.Readback.Source},
-			{platform.AssetObservation, &dispatch.Readback.Observation},
-		} {
-			if *item.value == "" {
-				continue
-			}
-			value, err := resolve(item.kind, *item.value)
-			if err != nil {
-				return err
-			}
-			*item.value = value
-		}
-	}
-	return failure
 }
 
 func objectHasIntegrations(object ontology.Object) bool {
@@ -417,7 +370,7 @@ func (b *Build) dispatchSchemaObject(object ontology.Object) (ontology.Object, e
 	if err := json.Unmarshal(platform.Raw(object), &portable); err != nil {
 		return object, err
 	}
-	if err := mapDispatchIntegrations(&portable, b.data.IntegrationName); err != nil {
+	if err := ontology.MapObjectIntegrations(&portable, b.data.IntegrationName); err != nil {
 		return object, err
 	}
 	return portable, nil

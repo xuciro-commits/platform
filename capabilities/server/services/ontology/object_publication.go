@@ -183,3 +183,72 @@ func CompatibleObjectExpansion(previous, next Object) bool {
 	}
 	return true
 }
+
+func MapObjectIntegrations(object *Object, resolve func(platform.AssetKind, string) (string, error)) error {
+	var failure error
+	mapTxn := func(txn *platform.BusinessTxn) {
+		if txn == nil {
+			return
+		}
+		platform.WalkBusinessTxn(txn, func(step platform.TxnStep) {
+			if failure == nil && step.Effect != nil {
+				step.Effect.Writeback, failure = resolve(platform.AssetWriteback, step.Effect.Writeback)
+			}
+		})
+	}
+	mapTxn(object.CreateTransaction)
+	for i := range object.DispatchCommands {
+		name, err := resolve(platform.AssetWriteback, object.DispatchCommands[i].Writeback)
+		if err != nil {
+			return err
+		}
+		object.DispatchCommands[i].Writeback = name
+	}
+	for _, action := range object.Actions {
+		mapTxn(action.Transaction)
+		if action.Transaction == nil || action.Transaction.Dispatch == nil {
+			continue
+		}
+		dispatch := action.Transaction.Dispatch
+		for _, item := range []struct {
+			kind  platform.AssetKind
+			value *string
+		}{
+			{platform.AssetConnection, &dispatch.Target},
+			{platform.AssetSource, &dispatch.Readback.Source},
+			{platform.AssetObservation, &dispatch.Readback.Observation},
+		} {
+			if *item.value == "" {
+				continue
+			}
+			value, err := resolve(item.kind, *item.value)
+			if err != nil {
+				return err
+			}
+			*item.value = value
+		}
+	}
+	return failure
+}
+
+func PrepareObjectPublication(asset platform.ReleaseAsset, objects []Object, resolve func(platform.AssetKind, string) (string, error)) (Object, Object, error) {
+	var frozen Object
+	if err := json.Unmarshal(asset.Body, &frozen); err != nil || AppID+"."+frozen.Name != asset.Ref.Name {
+		return frozen, Object{}, fmt.Errorf("invalid saved object %s", asset.Ref)
+	}
+	if err := MapObjectIntegrations(&frozen, resolve); err != nil {
+		return frozen, Object{}, err
+	}
+	i := slices.IndexFunc(objects, func(object Object) bool { return !object.Archived && object.Name == frozen.Name })
+	if i < 0 {
+		return frozen, Object{}, fmt.Errorf("saved object %s has no matching draft; renamed or archived definitions need an upgrade plan", asset.Ref)
+	}
+	frozen.Record = objects[i].Record
+	objects[i].State, objects[i].Installed = "published", AppID+"."+frozen.Name
+	retained := frozen
+	retained.Published = ""
+	objects[i].Published = string(platform.Raw(retained))
+	objects[i].ExtensionSource = frozen.ExtensionSource
+	objects[i].SchemaVersions = frozen.SchemaVersions
+	return frozen, objects[i], nil
+}
