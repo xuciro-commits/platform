@@ -62,6 +62,8 @@
   资源服务提供保留版本、集成绑定和跨类型草稿上下文。
 - 连接、数据源、数据集、管道、回写、确认和设备派发及其外部调用结算与补偿归 `services/data`；
   协议声明与校验归 `services/ontology`。资源服务只保留跨类型事务注册、发布资产绑定与路由适配。
+- 分支记录、检查、提案、审批和合并归 `services/resources/merge`；资源服务只保留跨资源 RID 映射、
+  草稿存储与分支入口适配。main 隔离、审批顺序和单条合并接受结果由分支服务本身保持。
 - 发布声明、agent/protocol 描述归 `services/resources/publication`，AI 提案消费归
   `services/functions/authoring`；蓝图补全与测试根草稿仍由资源服务编排。
 - 属性、值类型、接口、对象组与关系的声明、转换和字段绑定校验归 `services/ontology`；

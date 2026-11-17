@@ -107,7 +107,7 @@ type Evaluator[S, R any] struct {
 	Summarize func(R) *BranchSimulationCheck
 }
 
-func Evaluate[S, R any](w Workspace, e Evaluator[S, R], m platform.Member, branch build.Branch, resolutions []BranchResolution, simulate bool, now time.Time) (Evaluation[R], *platform.Error) {
+func Evaluate[S, R any](w Workspace, e Evaluator[S, R], m platform.Member, branch Branch, resolutions []BranchResolution, simulate bool, now time.Time) (Evaluation[R], *platform.Error) {
 	var out Evaluation[R]
 	plans, refusal := w.Plan(m, branch, resolutions, now)
 	if refusal != nil {
@@ -154,11 +154,11 @@ func Evaluate[S, R any](w Workspace, e Evaluator[S, R], m platform.Member, branc
 
 type Flow struct {
 	Tenant   string
-	Read     func(m platform.Member, id string, now time.Time) (build.Branch, *platform.Error)
+	Read     func(m platform.Member, id string, now time.Time) (Branch, *platform.Error)
 	Submit   func(m platform.Member, submission *pb.Submission, now time.Time) *platform.Error
 	Detail   func(m platform.Member, id string, now time.Time) (BranchDetail, *platform.Error)
-	Plan     func(m platform.Member, branch build.Branch, resolutions []BranchResolution, now time.Time) ([]ResourcePlan, *platform.Error)
-	Evaluate func(m platform.Member, branch build.Branch, now time.Time) (BranchCheck, *platform.Error)
+	Plan     func(m platform.Member, branch Branch, resolutions []BranchResolution, now time.Time) ([]ResourcePlan, *platform.Error)
+	Evaluate func(m platform.Member, branch Branch, now time.Time) (BranchCheck, *platform.Error)
 	Reviewer func(id string) bool
 }
 
@@ -167,7 +167,7 @@ func (f Flow) Rebase(m platform.Member, id string, request BranchResolveRequest,
 	if refusal != nil {
 		return BranchDetail{}, nil, refusal
 	}
-	if branch.State != build.BranchOpen {
+	if branch.State != BranchOpen {
 		return BranchDetail{}, nil, Refuse("The branch is {state}; only an open branch rebases", branch.State)
 	}
 	plans, refusal := f.Plan(m, branch, request.Resolutions, now)
@@ -196,7 +196,7 @@ func (f Flow) Rebase(m platform.Member, id string, request BranchResolveRequest,
 		default:
 			payload["op"], payload["spec"] = "update", plan.Merged
 		}
-		if refusal := f.Submit(m, Submission(f.Tenant, m, "branch:"+id+":save:"+strconv.Itoa(seq), build.BranchType+".save", id, payload), now); refusal != nil {
+		if refusal := f.Submit(m, Submission(f.Tenant, m, "branch:"+id+":save:"+strconv.Itoa(seq), BranchType+".save", id, payload), now); refusal != nil {
 			return BranchDetail{}, nil, refusal
 		}
 	}
@@ -209,10 +209,10 @@ func (f Flow) Rebase(m platform.Member, id string, request BranchResolveRequest,
 	return detail, nil, refusal
 }
 
-func (f Flow) RecordCheck(m platform.Member, branch build.Branch, check BranchCheck, now time.Time) *platform.Error {
-	schema := build.BranchType + ".check"
-	if branch.State == build.BranchProposed {
-		schema = build.BranchType + ".recheck"
+func (f Flow) RecordCheck(m platform.Member, branch Branch, check BranchCheck, now time.Time) *platform.Error {
+	schema := BranchType + ".check"
+	if branch.State == BranchProposed {
+		schema = BranchType + ".recheck"
 	}
 	return f.Submit(m, Submission(f.Tenant, m, "branch:"+branch.ID+":check:"+strconv.Itoa(int(branch.Record.Revision)), schema, branch.ID,
 		map[string]any{"check": check}), now)
@@ -227,12 +227,12 @@ func (f Flow) Save(m platform.Member, plan SavePlan, typ, draft string, now time
 	return f.Detail(m, plan.Branch.ID, now)
 }
 
-func (f Flow) Propose(m platform.Member, id string, reviewers []string, note string, evaluate func(build.Branch) (BranchCheck, []BranchResourceDiff, *platform.Error), now time.Time) (BranchDetail, *platform.Error) {
+func (f Flow) Propose(m platform.Member, id string, reviewers []string, note string, evaluate func(Branch) (BranchCheck, []BranchResourceDiff, *platform.Error), now time.Time) (BranchDetail, *platform.Error) {
 	branch, refusal := f.Read(m, id, now)
 	if refusal != nil {
 		return BranchDetail{}, refusal
 	}
-	if branch.State != build.BranchOpen || len(branch.Changes) == 0 {
+	if branch.State != BranchOpen || len(branch.Changes) == 0 {
 		return BranchDetail{}, Refuse("Only an open branch with changes can be proposed")
 	}
 	for _, reviewer := range reviewers {
@@ -253,15 +253,15 @@ func (f Flow) Propose(m platform.Member, id string, reviewers []string, note str
 	if reviewers == nil {
 		reviewers = []string{}
 	}
-	if refusal := f.Submit(m, Submission(f.Tenant, m, "branch:"+id+":propose:"+strconv.Itoa(len(branch.Changes)), build.BranchType+".propose", id,
+	if refusal := f.Submit(m, Submission(f.Tenant, m, "branch:"+id+":propose:"+strconv.Itoa(len(branch.Changes)), BranchType+".propose", id,
 		map[string]any{"reviewers": reviewers, "note": note, "checks": check}), now); refusal != nil {
 		return BranchDetail{}, refusal
 	}
 	return f.Detail(m, id, now)
 }
 
-func (w Workspace) ReadyToMerge(m platform.Member, branch build.Branch, resolutions []BranchResolution, simulate bool, now time.Time) (*BranchCheck, []ResourcePlan, *platform.Error) {
-	if branch.State != build.BranchProposed {
+func (w Workspace) ReadyToMerge(m platform.Member, branch Branch, resolutions []BranchResolution, simulate bool, now time.Time) (*BranchCheck, []ResourcePlan, *platform.Error) {
+	if branch.State != BranchProposed {
 		return nil, nil, Refuse("The branch is {state}; only a proposed branch merges", branch.State)
 	}
 	if err := branch.Approved(); err != nil {
@@ -293,7 +293,7 @@ func (w Workspace) ReadyToMerge(m platform.Member, branch build.Branch, resoluti
 	return check, plans, nil
 }
 
-func (w Workspace) MergeSubmission(m platform.Member, id string, branch build.Branch, check *BranchCheck, plans []ResourcePlan) (*pb.Submission, []Action, []BranchResourceCheck, *platform.Error) {
+func (w Workspace) MergeSubmission(m platform.Member, id string, branch Branch, check *BranchCheck, plans []ResourcePlan) (*pb.Submission, []Action, []BranchResourceCheck, *platform.Error) {
 	actions, refusal := w.Actions(plans)
 	if refusal != nil {
 		return nil, nil, nil, refusal
@@ -305,13 +305,13 @@ func (w Workspace) MergeSubmission(m platform.Member, id string, branch build.Br
 	revision := branch.Record.Revision
 	payload := platform.Raw(map[string]any{"candidate": check.Graph.Candidate, "applied": applied, "base": check.Base})
 	s := &pb.Submission{TenantId: w.Tenant, PrincipalId: m.ID, Authority: build.ID, ExpectedRevision: &revision,
-		Target: &pb.EntityRef{Type: build.BranchType, Id: id}, Schema: &pb.SchemaRef{Name: build.BranchType + ".merge", Version: 1}, Payload: payload}
+		Target: &pb.EntityRef{Type: BranchType, Id: id}, Schema: &pb.SchemaRef{Name: BranchType + ".merge", Version: 1}, Payload: payload}
 	s.IdempotencyKey = Key("branch:"+id+":merge", m.ID, s.Schema.Name, payload, &revision)
 	return s, actions, applied, nil
 }
 
 type CompileHooks struct {
-	Read    func(m platform.Member, id string, now time.Time) (build.Branch, *platform.Error)
+	Read    func(m platform.Member, id string, now time.Time) (Branch, *platform.Error)
 	Main    func(m platform.Member, typ, draft string, now time.Time) (MainDraft, *platform.Error)
 	Project func(m platform.Member, typ, draft string, now time.Time) (MainDraft, string, *platform.Error)
 	Build   func(ctx context.Context, request platform.CodeBuildRequest) (platform.CodeBuildResult, error)
@@ -365,18 +365,18 @@ func (h CompileHooks) Compile(m platform.Member, id, typ, draft string, now time
 	return h.Append(m, SavePlan{Branch: branch, Current: current, Op: "update", Project: project, Spec: raw}, typ, draft, now)
 }
 
-func (h CompileHooks) openBranch(m platform.Member, id string, now time.Time) (build.Branch, *platform.Error) {
+func (h CompileHooks) openBranch(m platform.Member, id string, now time.Time) (Branch, *platform.Error) {
 	branch, refusal := h.Read(m, id, now)
 	if refusal != nil {
 		return branch, refusal
 	}
-	if branch.State != build.BranchOpen {
+	if branch.State != BranchOpen {
 		return branch, Refuse("The branch is {state}; only an open branch takes a compile", branch.State)
 	}
 	return branch, nil
 }
 
-func (h CompileHooks) codeSource(m platform.Member, branch build.Branch, draft string, now time.Time) (platform.CodeBuildRequest, functionauthoring.CodeArtifact, json.RawMessage, *platform.Error) {
+func (h CompileHooks) codeSource(m platform.Member, branch Branch, draft string, now time.Time) (platform.CodeBuildRequest, functionauthoring.CodeArtifact, json.RawMessage, *platform.Error) {
 	none := platform.CodeBuildRequest{}
 	current, refusal := h.Main(m, functionauthoring.CodeType, draft, now)
 	if refusal != nil {
@@ -411,7 +411,7 @@ func (f Flow) Review(m platform.Member, id string, request BranchReviewRequest, 
 	if branch.Proposal != nil {
 		reviews = len(branch.Proposal.Reviews)
 	}
-	if refusal := f.Submit(m, Submission(f.Tenant, m, "branch:"+id+":review:"+strconv.Itoa(len(branch.Changes))+":"+strconv.Itoa(reviews+1), build.BranchType+".review", id,
+	if refusal := f.Submit(m, Submission(f.Tenant, m, "branch:"+id+":review:"+strconv.Itoa(len(branch.Changes))+":"+strconv.Itoa(reviews+1), BranchType+".review", id,
 		map[string]any{"decision": request.Decision, "note": request.Note}), now); refusal != nil {
 		return BranchDetail{}, refusal
 	}
@@ -423,7 +423,7 @@ func (f Flow) Finish(m platform.Member, id, verb string, now time.Time) (BranchD
 	if refusal != nil {
 		return BranchDetail{}, refusal
 	}
-	if refusal := f.Submit(m, Submission(f.Tenant, m, "branch:"+id+":"+verb+":"+strconv.Itoa(int(branch.Record.Revision)), build.BranchType+"."+verb, id, map[string]any{}), now); refusal != nil {
+	if refusal := f.Submit(m, Submission(f.Tenant, m, "branch:"+id+":"+verb+":"+strconv.Itoa(int(branch.Record.Revision)), BranchType+"."+verb, id, map[string]any{}), now); refusal != nil {
 		return BranchDetail{}, refusal
 	}
 	return f.Detail(m, id, now)

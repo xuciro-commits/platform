@@ -14,6 +14,7 @@ import (
 	devopsmodel "platformserver/services/devops/descriptor"
 	functionauthoring "platformserver/services/functions/authoring"
 	ontology "platformserver/services/ontology"
+	branchowner "platformserver/services/resources/merge/owner"
 	"platformserver/services/resources/publication"
 	"slices"
 	"strings"
@@ -58,6 +59,7 @@ type Build struct {
 	host                      platform.BuildHost
 	data                      *dataowner.Owner
 	automation                *automationauthoring.Owner
+	branches                  *branchowner.Owner
 	ledger                    platform.Authority
 	authorities               platform.Authorities
 	installed                 map[string]platform.Entity
@@ -144,6 +146,7 @@ func New(tenant string, authorities platform.Authorities, publications []publica
 	b.functions = b.functionFactory(functionEnvironment{b})
 	b.evaluations = b.functionEvaluationFactory(b.functionEvaluationEnvironment())
 	b.apps = appsauthoring.NewOwner(appEnvironment{b})
+	b.branches = branchowner.New(branchEnvironment{b})
 	b.agent = b.agentFactory(b.agentEnvironment())
 	b.bindTestPlans()
 	b.bindSampleSets()
@@ -164,7 +167,7 @@ func New(tenant string, authorities platform.Authorities, publications []publica
 	actions = append(actions, b.evaluations.Actions()...)
 	actions = append(actions, actioncatalog.EntityActions(functionauthoring.CodeEntity())...)
 	actions = append(actions, b.data.Actions()...)
-	actions = append(actions, actioncatalog.EntityActions(b.branchEntity())...)
+	actions = append(actions, b.branches.Actions()...)
 	for _, entity := range b.resourceEntities() {
 		actions = append(actions, actioncatalog.EntityActions(entity)...)
 	}
@@ -545,6 +548,7 @@ func (b *Build) Fork(ledger platform.Authority) (platform.App, error) {
 	fork.functions = b.functions.Fork(functionEnvironment{&fork})
 	fork.evaluations = b.functionEvaluationFactory(fork.functionEvaluationEnvironment())
 	fork.apps = b.apps.Fork(appEnvironment{&fork})
+	fork.branches = b.branches.Fork(branchEnvironment{&fork})
 	fork.data = b.data.Fork(buildDataHost{&fork})
 	fork.data.AttachIntegrationRuntime(fork.integrationRuntime())
 	fork.automation = b.automation.Fork(automationEnvironment{&fork})

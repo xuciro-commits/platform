@@ -6,7 +6,6 @@ import (
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformserver/platform"
-	build "platformserver/services/resources/authoring"
 	"platformserver/services/resources/publication"
 )
 
@@ -50,7 +49,7 @@ func Create(f Flow, m platform.Member, request BranchCreateRequest, now time.Tim
 	if !publication.ValidName(request.Name) {
 		return BranchDetail{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "A branch name is lower-case letters and digits")
 	}
-	if refusal := f.Submit(m, Submission(f.Tenant, m, "branch:"+request.Name+":create", build.BranchType+".create", request.Name,
+	if refusal := f.Submit(m, Submission(f.Tenant, m, "branch:"+request.Name+":create", BranchType+".create", request.Name,
 		map[string]any{"name": request.Name, "title": request.Title, "description": request.Description}), now); refusal != nil {
 		return BranchDetail{}, refusal
 	}
@@ -75,8 +74,8 @@ func StagedWorld[D, T any](w Workspace, m platform.Member, id string, now time.T
 	return value, nil
 }
 
-func ReadChecks[S, R any](read func(platform.Member, string, time.Time) (build.Branch, *platform.Error),
-	evaluate func(platform.Member, build.Branch, []BranchResolution, *S, time.Time) (Evaluation[R], *platform.Error),
+func ReadChecks[S, R any](read func(platform.Member, string, time.Time) (Branch, *platform.Error),
+	evaluate func(platform.Member, Branch, []BranchResolution, *S, time.Time) (Evaluation[R], *platform.Error),
 	m platform.Member, id string, request CheckRequest[S], now time.Time) (Checks[R], *platform.Error) {
 	branch, refusal := read(m, id, now)
 	if refusal != nil {
@@ -96,13 +95,13 @@ func ReadChecks[S, R any](read func(platform.Member, string, time.Time) (build.B
 	return out, nil
 }
 
-func Recheck[S, R any](flow Flow, evaluate func(platform.Member, build.Branch, []BranchResolution, *S, time.Time) (Evaluation[R], *platform.Error),
+func Recheck[S, R any](flow Flow, evaluate func(platform.Member, Branch, []BranchResolution, *S, time.Time) (Evaluation[R], *platform.Error),
 	m platform.Member, id string, request CheckRequest[S], now time.Time) (BranchDetail, *platform.Error) {
 	branch, refusal := flow.Read(m, id, now)
 	if refusal != nil {
 		return BranchDetail{}, refusal
 	}
-	if branch.State != build.BranchOpen && branch.State != build.BranchProposed || len(branch.Changes) == 0 {
+	if branch.State != BranchOpen && branch.State != BranchProposed || len(branch.Changes) == 0 {
 		return BranchDetail{}, Refuse("Only an open or proposed branch with changes can be re-checked")
 	}
 	evaluation, refusal := evaluate(m, branch, request.Resolutions, request.Simulation, now)
@@ -115,9 +114,9 @@ func Recheck[S, R any](flow Flow, evaluate func(platform.Member, build.Branch, [
 	return flow.Detail(m, id, now)
 }
 
-func Propose[S, R any](flow Flow, evaluate func(platform.Member, build.Branch, []BranchResolution, *S, time.Time) (Evaluation[R], *platform.Error),
+func Propose[S, R any](flow Flow, evaluate func(platform.Member, Branch, []BranchResolution, *S, time.Time) (Evaluation[R], *platform.Error),
 	m platform.Member, id string, request ProposeRequest[S], now time.Time) (BranchDetail, *platform.Error) {
-	return flow.Propose(m, id, request.Reviewers, request.Note, func(branch build.Branch) (BranchCheck, []BranchResourceDiff, *platform.Error) {
+	return flow.Propose(m, id, request.Reviewers, request.Note, func(branch Branch) (BranchCheck, []BranchResourceDiff, *platform.Error) {
 		evaluation, refusal := evaluate(m, branch, request.Resolutions, request.Simulation, now)
 		return evaluation.Check, evaluation.Conflicts, refusal
 	}, now)

@@ -464,6 +464,21 @@ func TestInvariantK6BranchSavesIsolateMainAndMergeAsOneResult(t *testing.T) {
 			t.Fatalf("main object %s after merge: %+v; want the branch title at revision 2", object.id, view.Record)
 		}
 	}
+	replayed := live.restore(t, live.entries)
+	replayedBranch, refusal := replayed.BranchDetail(replayed.member(t), branch.ID, invariantClock)
+	if refusal != nil || replayedBranch.State != build.BranchMerged || replayedBranch.Merge == nil || replayedBranch.Merge.Candidate != merged.Candidate {
+		t.Fatalf("branch replay: detail=%+v refusal=%v", replayedBranch, refusal)
+	}
+	for _, object := range objects {
+		view, refusal := replayed.RecordOf(t.Context(), replayed.member(t), build.ObjectType, object.id, invariantClock)
+		if refusal != nil {
+			t.Fatalf("read replayed merged object %s: %v", object.id, refusal)
+		}
+		current, ok := view.Record.(ontology.Object)
+		if !ok || current.Title != object.title+", branched" || current.Revision != 2 {
+			t.Fatalf("replayed main object %s after merge: %+v", object.id, view.Record)
+		}
+	}
 }
 
 func TestInvariantBranchSaveRejectsSpoofedProject(t *testing.T) {

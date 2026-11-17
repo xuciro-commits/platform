@@ -37,10 +37,10 @@ type BranchDetail struct {
 	Changed     platform.Stamp         `json:"changed"`
 	Changes     int                    `json:"changes"`
 	Resources   []BranchResourceStatus `json:"resources"`
-	Proposal    *build.BranchProposal  `json:"proposal,omitempty"`
+	Proposal    *BranchProposal        `json:"proposal,omitempty"`
 	Check       *BranchCheck           `json:"check,omitempty"`
 	CheckStale  bool                   `json:"checkStale,omitempty"`
-	Merge       *build.BranchMerge     `json:"merge,omitempty"`
+	Merge       *BranchMerge           `json:"merge,omitempty"`
 }
 
 type BranchChangeEntry struct {
@@ -177,7 +177,7 @@ func Key(prefix, member, schema string, payload []byte, revision *uint32) string
 
 const CodeBuildKey = "build"
 
-func KeptCodeBuild(previous build.BranchChange, touched bool, spec map[string]json.RawMessage) json.RawMessage {
+func KeptCodeBuild(previous BranchChange, touched bool, spec map[string]json.RawMessage) json.RawMessage {
 	if !touched || previous.Op == "delete" {
 		return nil
 	}
@@ -193,7 +193,7 @@ func KeptCodeBuild(previous build.BranchChange, touched bool, spec map[string]js
 	return earlier[CodeBuildKey]
 }
 
-func EffectiveSpec(branch build.Branch, typ, id string) (spec json.RawMessage, deleted bool) {
+func EffectiveSpec(branch Branch, typ, id string) (spec json.RawMessage, deleted bool) {
 	latest, ok := branch.Latest(typ, id)
 	if !ok || latest.Op == "delete" {
 		return nil, ok
@@ -269,7 +269,7 @@ func SameJSON(a, b json.RawMessage) bool {
 	return string(left) == string(right)
 }
 
-func DecodeCheck(branch build.Branch) *BranchCheck {
+func DecodeCheck(branch Branch) *BranchCheck {
 	if len(branch.Check) == 0 {
 		return nil
 	}

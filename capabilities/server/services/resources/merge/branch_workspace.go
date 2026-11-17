@@ -27,7 +27,7 @@ type Workspace struct {
 }
 
 type SavePlan struct {
-	Branch      build.Branch
+	Branch      Branch
 	Current     MainDraft
 	Op, Project string
 	Spec        json.RawMessage
@@ -41,7 +41,7 @@ type MergePlan struct {
 }
 
 type WorldPlan struct {
-	Branch  build.Branch
+	Branch  Branch
 	Actions []Action
 }
 
@@ -52,12 +52,12 @@ func Refuse(message string, args ...any) *platform.Error {
 func Submission(tenant string, m platform.Member, key, schema, id string, payload any) *pb.Submission {
 	raw := platform.Raw(payload)
 	return &pb.Submission{TenantId: tenant, PrincipalId: m.ID, Authority: build.ID, IdempotencyKey: Key(key, m.ID, schema, raw, nil),
-		Target: &pb.EntityRef{Type: build.BranchType, Id: id}, Schema: &pb.SchemaRef{Name: schema, Version: 1}, Payload: raw}
+		Target: &pb.EntityRef{Type: BranchType, Id: id}, Schema: &pb.SchemaRef{Name: schema, Version: 1}, Payload: raw}
 }
 
-func (w Workspace) Branch(m platform.Member, id string, now time.Time) (build.Branch, *platform.Error) {
-	var branch build.Branch
-	raw, refusal := w.Read(m, build.BranchType, id, now)
+func (w Workspace) Branch(m platform.Member, id string, now time.Time) (Branch, *platform.Error) {
+	var branch Branch
+	raw, refusal := w.Read(m, BranchType, id, now)
 	if refusal != nil {
 		return branch, refusal
 	}
@@ -65,7 +65,7 @@ func (w Workspace) Branch(m platform.Member, id string, now time.Time) (build.Br
 		if err != nil {
 			return branch, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The branch is unavailable")
 		}
-		branch.Changes = []build.BranchChange{}
+		branch.Changes = []BranchChange{}
 	}
 	return branch, nil
 }
@@ -156,14 +156,14 @@ func (w Workspace) RID(typ, id string, spec map[string]json.RawMessage) string {
 	return platform.ResourceID(w.Tenant, ref)
 }
 
-func summary(branch build.Branch) BranchDetail {
+func summary(branch Branch) BranchDetail {
 	return BranchDetail{ID: branch.ID, Name: branch.Name, Title: branch.Title, Description: branch.Description, State: branch.State, Revision: branch.Revision,
 		Created: branch.Created, Changed: branch.Changed, Changes: len(branch.Changes), Resources: []BranchResourceStatus{}, Proposal: branch.Proposal, Check: DecodeCheck(branch), Merge: branch.Merge}
 }
 
-func (w Workspace) Detail(m platform.Member, branch build.Branch, now time.Time) (BranchDetail, *platform.Error) {
+func (w Workspace) Detail(m platform.Member, branch Branch, now time.Time) (BranchDetail, *platform.Error) {
 	detail := summary(branch)
-	if detail.Check != nil && (branch.State == build.BranchOpen || branch.State == build.BranchProposed) {
+	if detail.Check != nil && (branch.State == BranchOpen || branch.State == BranchProposed) {
 		detail.CheckStale = detail.Check.Base != w.Base()
 	}
 	for _, key := range branch.Resources() {
@@ -176,7 +176,7 @@ func (w Workspace) Detail(m platform.Member, branch build.Branch, now time.Time)
 			}
 		}
 		status := BranchResourceStatus{Type: typ, ID: id, Op: latest.Op, Changes: count, LastSeq: latest.Seq, LastAt: latest.At, LastBy: latest.By}
-		if branch.State == build.BranchOpen || branch.State == build.BranchProposed {
+		if branch.State == BranchOpen || branch.State == BranchProposed {
 			current, refusal := w.Main(m, typ, id, now)
 			if refusal != nil {
 				return detail, refusal
@@ -202,7 +202,7 @@ func (w Workspace) DetailOf(m platform.Member, id string, now time.Time) (Branch
 }
 
 func (w Workspace) Branches(m platform.Member, now time.Time) ([]BranchDetail, *platform.Error) {
-	records, refusal := w.List(m, build.BranchType, platform.Query{Limit: 500, Sort: []string{"id"}}, now)
+	records, refusal := w.List(m, BranchType, platform.Query{Limit: 500, Sort: []string{"id"}}, now)
 	if refusal != nil {
 		return nil, refusal
 	}
@@ -251,7 +251,7 @@ func (w Workspace) PrepareSave(m platform.Member, id, typ, draft string, request
 	if refusal != nil {
 		return SavePlan{}, refusal
 	}
-	if branch.State != build.BranchOpen {
+	if branch.State != BranchOpen {
 		return SavePlan{}, Refuse("The branch is {state}; only an open branch takes saves", branch.State)
 	}
 	current, refusal := w.Main(m, typ, draft, now)
@@ -354,7 +354,7 @@ func (p SavePlan) Save(tenant string, m platform.Member, typ, draft string) *pb.
 			payload["base"] = nil
 		}
 	}
-	return Submission(tenant, m, "branch:"+p.Branch.ID+":save:"+strconv.Itoa(len(p.Branch.Changes)+1), build.BranchType+".save", p.Branch.ID, payload)
+	return Submission(tenant, m, "branch:"+p.Branch.ID+":save:"+strconv.Itoa(len(p.Branch.Changes)+1), BranchType+".save", p.Branch.ID, payload)
 }
 
 func (w Workspace) Resource(m platform.Member, id, typ, draft string, now time.Time) (BranchResourceView, *platform.Error) {
@@ -379,7 +379,7 @@ func (w Workspace) Resource(m platform.Member, id, typ, draft string, now time.T
 	return BranchResourceView{Type: typ, ID: draft, Project: project, RID: current.RID, Op: latest.Op, Base: base, Main: current.Spec, Branch: spec}, nil
 }
 
-func (w Workspace) Plan(m platform.Member, branch build.Branch, resolutions []BranchResolution, now time.Time) ([]ResourcePlan, *platform.Error) {
+func (w Workspace) Plan(m platform.Member, branch Branch, resolutions []BranchResolution, now time.Time) ([]ResourcePlan, *platform.Error) {
 	var plans []ResourcePlan
 	for _, key := range branch.Resources() {
 		typ, id, _ := strings.Cut(key, "/")
@@ -453,7 +453,7 @@ func (w Workspace) WorldPlan(m platform.Member, id string, now time.Time) (World
 	if refusal != nil {
 		return WorldPlan{}, refusal
 	}
-	if branch.State != build.BranchOpen && branch.State != build.BranchProposed {
+	if branch.State != BranchOpen && branch.State != BranchProposed {
 		return WorldPlan{}, Refuse("The branch is {state}; only an open or proposed branch has a staged world", branch.State)
 	}
 	plans, refusal := w.Plan(m, branch, nil, now)
