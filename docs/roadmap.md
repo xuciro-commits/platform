@@ -32,9 +32,6 @@
 每批同步处理宿主状态、能力登记、装配、HTTP 调用方和依赖例外，运行该类的创建、编辑、发布、安装、拒绝、
 历史版本、分叉和重放检查。跨类型的 RID、项目、文件夹、工作状态、分支、提案和编排留在资源服务。
 
-- [ ] U5.12 自动化与应用：`build_automation*.go` 的专有创作归 `services/automate/authoring`，
-  `build_app_authoring*.go` 的应用创作归 `services/apps/authoring`；`application_ai.go` 按应用与 AI 的职责切分。
-  保留已发布流程、页面及应用的运行、覆盖顺序、版本绑定与重装行为。
 - [ ] U5.13 分支：将 `build_branches.go` 的记录、编辑、检查、提案和合并归 `services/resources/merge`，
   复用现有分支暂存及合并路径；保留 main 隔离、审批和单条接受结果。
 - [ ] U5.14 产品版本与发布：按职责处理 `build_products.go`、`build_versions.go`、`build_release*.go`、

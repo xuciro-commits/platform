@@ -360,7 +360,7 @@ func PrepareInstallation(runtime InstallationRuntime, candidate platform.Release
 }
 
 func PrepareLifecycle(runtime InstallationRuntime, candidate platform.ReleaseCandidate, member platform.Member, at time.Time, upgrade bool) ([]platform.ReleaseInstallation, json.RawMessage, error) {
-	if err := build.CheckProposalFunctions(candidate); err != nil {
+	if err := CheckProposalFunctions(candidate); err != nil {
 		return nil, nil, err
 	}
 	return PrepareInstallation(runtime, candidate, member, at, upgrade, true)

@@ -1,21 +1,22 @@
-package build
+package applications
 
 import (
 	"encoding/json"
 	"fmt"
-	"platformserver/services/ontology"
 	"slices"
-	"strconv"
 	"strings"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformserver/platform"
+	"platformserver/services/ontology"
 )
 
 type ApplicationAI struct {
 	Model               func(kind, name string, options platform.ModelOptions) (string, string, bool)
-	Agents              *platform.Caller
+	AgentEvaluations    func(string, string, string) ([]platform.ApplicationAIEvaluation, *platform.Error)
+	FunctionDefinition  func(platform.ReleaseAsset) (platform.AIFunction, int, error)
 	FunctionEvaluations func(string, int, string) ([]platform.ApplicationAIEvaluation, *platform.Error)
+	Roles               []string
 }
 
 func conflict(err error) *platform.Error {
@@ -28,6 +29,7 @@ func (a ApplicationAI) List(m platform.Member, assets []platform.ReleaseAsset, v
 		if !visible[asset.Ref] {
 			continue
 		}
+		authorized := slices.ContainsFunc(a.Roles, func(role string) bool { return m.Holds(asset.Ref.App, role) })
 		if asset.Ref.Kind == platform.AssetAgent {
 			var definition platform.AgentReleaseDescriptor
 			if json.Unmarshal(asset.Body, &definition) != nil || definition.Check() != nil {
@@ -49,28 +51,13 @@ func (a ApplicationAI) List(m platform.Member, assets []platform.ReleaseAsset, v
 					item.Placement = "autonomous"
 				}
 			}
-			if a.Agents != nil && (m.Holds(ID, Builder) || m.Holds(ID, Publisher)) {
+			if authorized && a.AgentEvaluations != nil {
 				digest, _ := platform.CanonicalDigest(asset)
-				reports, _, problem := platform.Find[platform.Evaluation](*a.Agents, platform.Query{Domain: platform.Raw([]any{[]any{"agent", "=", asset.Ref.App + "." + asset.Ref.Name}, []any{"definitionDigest", "=", digest}})})
+				reports, problem := a.AgentEvaluations(asset.Ref.App+"."+asset.Ref.Name, digest, currentConfig)
 				if problem != nil {
 					return nil, problem
 				}
-				for _, report := range reports {
-					if report.Archived {
-						continue
-					}
-					state := report.State
-					if state == "done" {
-						state = "failed"
-						if report.Score == 1 && report.Fails == 0 && report.Differs == 0 {
-							state = "passed"
-						}
-					}
-					if report.State == "done" && (currentConfig == "" || report.ModelConfig != currentConfig) {
-						state = "Configuration changed; evaluate again"
-					}
-					item.Evaluations = append(item.Evaluations, platform.ApplicationAIEvaluation{ID: report.ID, Candidate: report.Candidate, State: state, Model: report.Model, Quality: report.Score, CostUSD: report.Cost})
-				}
+				item.Evaluations = reports
 			}
 			out = append(out, item)
 			continue
@@ -78,7 +65,10 @@ func (a ApplicationAI) List(m platform.Member, assets []platform.ReleaseAsset, v
 		if asset.Ref.Kind != platform.AssetFunction {
 			continue
 		}
-		definition, version, err := FunctionAssetDefinition(asset)
+		if a.FunctionDefinition == nil {
+			return nil, conflict(fmt.Errorf("function definition owner is unavailable"))
+		}
+		definition, version, err := a.FunctionDefinition(asset)
 		if err != nil {
 			return nil, conflict(err)
 		}
@@ -115,14 +105,12 @@ func (a ApplicationAI) List(m platform.Member, assets []platform.ReleaseAsset, v
 				}
 			}
 		}
-		if m.Holds(ID, Builder) || m.Holds(ID, Publisher) {
-			if a.FunctionEvaluations != nil {
-				reports, problem := a.FunctionEvaluations(asset.Ref.Name, version, currentConfig)
-				if problem != nil {
-					return nil, problem
-				}
-				item.Evaluations = reports
+		if authorized && a.FunctionEvaluations != nil {
+			reports, problem := a.FunctionEvaluations(asset.Ref.Name, version, currentConfig)
+			if problem != nil {
+				return nil, problem
 			}
+			item.Evaluations = reports
 		}
 		out = append(out, item)
 	}
@@ -153,60 +141,9 @@ func ApplicationAIUsage(report platform.AIUsageReport, application platform.Asse
 	return items
 }
 
-func FunctionAssetDefinition(asset platform.ReleaseAsset) (platform.AIFunction, int, error) {
-	var definition platform.AIFunction
-	if err := json.Unmarshal(asset.Body, &definition); err != nil {
-		return definition, 0, err
+func ApplicationAIUsageOf(value any, application platform.AssetRef, items []platform.ApplicationAI) []platform.ApplicationAI {
+	if report, ok := value.(platform.AIUsageReport); ok {
+		return ApplicationAIUsage(report, application, items)
 	}
-	version := 1
-	if _, ordinal, found := strings.Cut(asset.SourceVersion, ".function-"); found {
-		parsed, err := strconv.Atoi(ordinal)
-		if err != nil || parsed < 1 {
-			return definition, 0, fmt.Errorf("Invalid function asset version")
-		}
-		version = parsed
-	}
-	return definition, version, definition.Check()
-}
-
-func CheckProposalFunctions(candidate platform.ReleaseCandidate) error {
-	functions := map[string]platform.ReleaseAsset{}
-	for _, asset := range candidate.Assets {
-		if asset.Ref.App == ID && asset.Ref.Kind == platform.AssetFunction {
-			functions[asset.Ref.Name] = asset
-		}
-	}
-	for _, asset := range candidate.Assets {
-		if asset.Ref.App != ID || asset.Ref.Kind != platform.AssetObject {
-			continue
-		}
-		var object ontology.Object
-		if json.Unmarshal(asset.Body, &object) != nil {
-			return fmt.Errorf("Proposal object declaration is invalid")
-		}
-		for _, action := range object.Actions {
-			if action.Adoption == nil {
-				continue
-			}
-			functionAsset, ok := functions[action.Adoption.Function.Name]
-			if !ok {
-				return fmt.Errorf("Application adoption needs its declared function in the candidate")
-			}
-			definition, version, err := FunctionAssetDefinition(functionAsset)
-			if err != nil {
-				return err
-			}
-			if action.Adoption.Function.Version != 0 && action.Adoption.Function.Version != version {
-				return fmt.Errorf("Application adoption function version differs from the candidate")
-			}
-			inputs := []platform.Field{}
-			for _, input := range action.Inputs {
-				inputs = append(inputs, input.Field())
-			}
-			if err := action.Adoption.CheckMapping(definition, inputs); err != nil {
-				return err
-			}
-		}
-	}
-	return nil
+	return items
 }

@@ -2,6 +2,7 @@ package host
 
 import (
 	"encoding/json"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -13,6 +14,7 @@ import (
 	"platformserver/services/devops/descriptor"
 	releaseowner "platformserver/services/devops/releases"
 	functionauthoring "platformserver/services/functions/authoring"
+	"platformserver/services/ontology"
 	build "platformserver/services/resources/authoring"
 )
 
@@ -229,6 +231,43 @@ func TestInvariantK1FunctionAuthoringPublishesEvaluatesReviewsAndReplays(t *test
 	if !found || releaseEvaluation.State != "passed" {
 		t.Fatalf("release evaluation did not pass: %+v", releaseEvaluation)
 	}
+	aiAssets := []platform.ReleaseAsset{retained, agentCandidate}
+	visible := map[platform.AssetRef]bool{}
+	for _, asset := range aiAssets {
+		visible[asset.Ref] = true
+	}
+	ai, refusal := live.applicationAILocked(live.member(t), aiAssets, visible)
+	if refusal != nil {
+		t.Fatalf("application AI view: %v", refusal)
+	}
+	var applicationFunction, applicationAgent *platform.ApplicationAI
+	for i := range ai {
+		switch ai[i].Resource.Ref {
+		case ref:
+			applicationFunction = &ai[i]
+		case agentRef:
+			applicationAgent = &ai[i]
+		}
+	}
+	if applicationFunction == nil || len(applicationFunction.Evaluations) != 3 || applicationAgent == nil {
+		t.Fatalf("application AI view differs: %+v", ai)
+	}
+	evaluations := map[string]bool{}
+	for _, evaluation := range applicationFunction.Evaluations {
+		evaluations[evaluation.ID] = true
+	}
+	if !evaluations["EVALUATION"] || !evaluations["EVALUATION-FAILED"] {
+		t.Fatalf("application AI evaluations differ: %+v", applicationFunction.Evaluations)
+	}
+	bad := platform.ReleaseCandidate{Assets: []platform.ReleaseAsset{{
+		Ref: platform.AssetRef{App: build.ID, Kind: platform.AssetObject, Name: "build.alpha"},
+		Body: platform.Raw(map[string]any{"name": "alpha", "actions": []ontology.Action{{
+			Name: "adopt", Adoption: &platform.ProposalAdoption{Function: platform.FunctionRef{Name: "missing"}},
+		}}}),
+	}}}
+	if err := releaseowner.CheckProposalFunctions(bad); err == nil {
+		t.Fatal("a candidate accepted an adoption of an absent function")
+	}
 	live.accept(t, "build.testplan.edit", build.TestPlanType, "PLAN", map[string]any{"title": "Answer quality, revised"})
 	live.accept(t, "build.testplan.publish", build.TestPlanType, "PLAN", map[string]any{})
 
@@ -252,6 +291,14 @@ func TestInvariantK1FunctionAuthoringPublishesEvaluatesReviewsAndReplays(t *test
 	replayedEvaluation, found := platform.Get[agentevaluation.Evaluation](replayed.automation(build.ID, false), "EVALUATION")
 	if !found || replayedEvaluation.State != "passed" || len(replayedEvaluation.Attempts) != agentevaluation.EvaluationRepeats {
 		t.Fatalf("evaluation replay differs: %+v", replayedEvaluation)
+	}
+	replayedAI, refusal := replayed.applicationAILocked(replayed.member(t), aiAssets, visible)
+	if refusal != nil {
+		t.Fatalf("replayed application AI view: %v", refusal)
+	}
+	replayedFunction := slices.IndexFunc(replayedAI, func(item platform.ApplicationAI) bool { return item.Resource.Ref == ref })
+	if len(replayedAI) != 2 || replayedFunction < 0 || len(replayedAI[replayedFunction].Evaluations) != 3 {
+		t.Fatalf("application AI replay differs: %+v", replayedAI)
 	}
 	replayedPlan, found := platform.Get[build.TestPlan](replayed.automation(build.ID, false), "PLAN")
 	if !found || replayedPlan.DefinitionVersion != 2 || len(replayedPlan.Versions) != 2 || replayedPlan.Title != "Answer quality, revised" {

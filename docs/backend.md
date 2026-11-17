@@ -53,6 +53,9 @@
 - 智能体编写、版本与运行归 `services/ai`；函数评估的记录、模型请求、答案结算与阈值判定也归 `services/ai/evaluation`，
   启动提交只由宿主把 DevOps 的候选、共享测试计划与函数版本装配成 AI 请求。
   测试计划和评估集继续共用 DevOps 的记录与版本族，DevOps 不反向依赖 AI。
+- 自动化流程的编写、校验、发布、安装与运行归 `services/automate/authoring`；页面和应用的编写、发布、
+  安装及运行时视图归 `services/apps`。应用 AI 视图只合并资源与评估结果，函数定义继续由
+  `services/functions/authoring` 读取，智能体与函数评估报告由 AI 服务提供，资源服务保留装配适配。
 - 对象、动作类型、对象执行形状、生命周期与约束编译归 `services/ontology`。资源服务只编排跨类型草稿、
   联合发布、页面覆盖、资源身份与安装；动作执行仍归 `services/actions`。
 - 事务声明、规范化、编号与步骤校验归 `services/ontology`，事务执行与拒绝改路归 `services/actions`；
