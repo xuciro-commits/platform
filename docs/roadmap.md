@@ -34,23 +34,28 @@
 
 ## U7：platform 只留 SDK 契约
 
-- [ ] U7.1 诊断与切分，先不写实现代码。
-  - 诊断 `BusinessTxn`、`TxnStep` 等事务定义和冻结定义解码的无环切分：
-    定义校验归 ontology，执行归 actions；不改已存字节，不推进格式纪元。
-  - 同时诊断页面与其他领域共用的 `PageNodeID`、`ModelObject`、`RuleEngineOf`、
-    `MergeRuleTypes`、`TransactionDestination`，确认每项的唯一拥有者与调用方。
-  - 诊断 `definition_binding.go` 的条件规则、`definition_blocks.go` 的应用绑定检查、
-    `definition.go` 的资产与图标检查，以及 `Application.QueryPage` 使用原始 profile 构造声明的边界。
-  - `page_compat.go` 暂供页面服务和通用小数规则共读；通用规则归位后再收敛，不能复制限制。
-  - 按 rules、asset、entity、dependencies、definition、app、actions、ai、revision、protocol、workflow、
-    operations 等前缀列出：现有调用方、目标拥有者、SDK 留下什么、依赖方向与验证方法。
-  - 输出无环切分顺序与后续条目；所有结论以当前代码和规范核对，不凭旧行数推断完成。
+- [ ] U7.2 事务定义边界：保留 `BusinessTxn`、`TxnStep`、嵌套步骤、严格 JSON 解码和
+  `Entity`/`Action` 内嵌字段在 `platform`，因为 kernel、冻结制品和各服务的公共契约都直接消费这份线格式。
+  定义规范化、步骤校验与 `TransactionDestination`/遍历归 `services/ontology`，执行、提案和副作用结算归
+  `services/actions`；允许 actions 导入 ontology。对象与动作的冻结解码改由 ontology 提供描述器，publication
+  只接收回调，不反向理解事务。运行事务、发布、安装、拒绝和重放检查，历史字节与格式纪元不变。
 
-- [ ] U7 后续：按诊断结果迁移实现并收窄运行接口。
-  - `platform` 只留类型、接口和声明助手；规则求值归 `expr` 或 actions，依赖解析与修订归 resources，
-    AI 归 AI 服务，workflow 归自动化服务；每项保持唯一实现。
-  - 按服务拆分宽 `Runtime` 接口，消除调用点的可选能力探测；不改变权限、写入或读取作用域。
-  - 每批检查生成契约、接受结果、历史映像及相关黄金路径；最终核对 8000 行与全部依赖例外。
+- [ ] U7.3 共享规则与条件：`AssetKind`、`AssetRef.Check`、`PageNodeID`、`IconName` 和
+  `RuleEngineOf` 作为跨 kernel 与服务的 SDK 词法/注入契约留在 `platform`；`MergeRuleTypes` 迁到 `expr`。
+  `Binding`、`Run` 的线格式留在 SDK，`ConditionRefs` 归 `expr`，条件到 binding、条件校验与测试归
+  `services/automate/authoring`；页面使用表达式遍历或页面拥有者提供的检查，不再复用 workflow 条件实现。
+  运行页面、自动化、查询、数据血缘与表达式黄金路径。
+
+- [ ] U7.4 应用与页面声明：`ModelObject` 归 `services/ontology`；`CheckApplicationBindings` 归
+  `kernel/acceptedformat`，避免 kernel 反向依赖 apps。`ApplicationProfile` 的校验、`Application.QueryPage`
+  和由原始 `UIProfile` 构造页面声明归 `services/apps/pages`；ontology、publication 和 DevOps 经装配回调或
+  已生成页面检查，不直接构造声明。资产与图标只保留 SDK 词法检查，领域呈现校验归 ontology 或 apps。
+  运行应用、页面、发布、安装、快照与重放检查；生成契约不变。
+
+- [ ] U7.5 收窄运行接口并收口：按服务拆分宽 `Runtime` 接口，消除调用点的可选能力探测；依赖解析与修订归
+  resources，AI 归 AI 服务，workflow 归自动化服务，每项只留一个实现。`page_compat.go` 在通用小数规则归位后
+  收敛，不能复制限制。每批检查接受结果、历史映像和黄金路径；最终核对 `platform` 不超过 8000 行、
+  `capabilityProbes` 与依赖例外均为 0。
 
 ## U6：改名
 
