@@ -12,7 +12,7 @@ import (
 	"platformserver/kernel/acceptedformat"
 	"platformserver/platform"
 	"platformserver/services/actions"
-	"platformserver/services/ai/evaluation"
+	agents "platformserver/services/ai/evaluation"
 	"platformserver/services/ai/gateway"
 	agentowner "platformserver/services/ai/runtime"
 	releaseowner "platformserver/services/devops/releases"

@@ -38,38 +38,40 @@ func (b *Build) SavedObjectActions(c platform.Caller) ([]platform.Action, error)
 }
 
 type Build struct {
-	resolver            publication.Resolver
-	publications        []publication.Hooks
-	publicationBase     []publication.Hooks
-	objectPublication   func(ontology.ObjectPublicationEnvironment) publication.Hooks
-	queryFactory        func(publication.QueryAuthoringEnvironment) publication.QueryAuthoringBinding
-	queries             publication.QueryAuthoringBinding
-	functionFactory     func(functionauthoring.Environment) *functionauthoring.Owner
-	agentFactory        func(platform.AgentAuthoringEnvironment) platform.AgentAuthoringBinding
-	agent               platform.AgentAuthoringBinding
-	testPlanFactory     func(testPlanEnvironment, evaluationPublication) testPlanPublication
-	evaluationFactory   func(testPlanEnvironment) evaluationPublication
-	testPlans           testPlanPublication
-	sampleSetFactory    func(devopsmodel.SampleSetEnvironment) devopsmodel.SampleSetPublication
-	sampleSets          devopsmodel.SampleSetPublication
-	installationCatalog *platform.Catalog
-	host                platform.BuildHost
-	data                *dataowner.Owner
-	automation          *automationauthoring.Owner
-	ledger              platform.Authority
-	authorities         platform.Authorities
-	installed           map[string]platform.Entity
-	jointEntities       map[string]platform.EntityInfo
-	jointAssets         map[platform.AssetRef]bool
-	jointDeclarations   map[platform.AssetRef]platform.ReleaseAsset
-	jointMode           bool
-	linkTypes           map[string]ontology.LinkType
-	propertyTypes       map[string]ontology.PropertyType
-	valueTypes          map[string]ontology.ValueType
-	objectTypeGroups    map[string]ontology.ObjectTypeGroup
-	interfaces          map[string]ontology.InterfaceRecord
-	functions           *functionauthoring.Owner
-	apps                *appsauthoring.Owner
+	resolver                  publication.Resolver
+	publications              []publication.Hooks
+	publicationBase           []publication.Hooks
+	objectPublication         func(ontology.ObjectPublicationEnvironment) publication.Hooks
+	queryFactory              func(publication.QueryAuthoringEnvironment) publication.QueryAuthoringBinding
+	queries                   publication.QueryAuthoringBinding
+	functionFactory           func(functionauthoring.Environment) *functionauthoring.Owner
+	agentFactory              func(platform.AgentAuthoringEnvironment) platform.AgentAuthoringBinding
+	agent                     platform.AgentAuthoringBinding
+	testPlanFactory           func(testPlanEnvironment, evaluationPublication) testPlanPublication
+	evaluationSetFactory      func(testPlanEnvironment) evaluationPublication
+	functionEvaluationFactory func(publication.FunctionEvaluationEnvironment) publication.FunctionEvaluationBinding
+	evaluations               publication.FunctionEvaluationBinding
+	testPlans                 testPlanPublication
+	sampleSetFactory          func(devopsmodel.SampleSetEnvironment) devopsmodel.SampleSetPublication
+	sampleSets                devopsmodel.SampleSetPublication
+	installationCatalog       *platform.Catalog
+	host                      platform.BuildHost
+	data                      *dataowner.Owner
+	automation                *automationauthoring.Owner
+	ledger                    platform.Authority
+	authorities               platform.Authorities
+	installed                 map[string]platform.Entity
+	jointEntities             map[string]platform.EntityInfo
+	jointAssets               map[platform.AssetRef]bool
+	jointDeclarations         map[platform.AssetRef]platform.ReleaseAsset
+	jointMode                 bool
+	linkTypes                 map[string]ontology.LinkType
+	propertyTypes             map[string]ontology.PropertyType
+	valueTypes                map[string]ontology.ValueType
+	objectTypeGroups          map[string]ontology.ObjectTypeGroup
+	interfaces                map[string]ontology.InterfaceRecord
+	functions                 *functionauthoring.Owner
+	apps                      *appsauthoring.Owner
 }
 
 type testPlanEnvironment = devopsmodel.TestPlanEnvironment[functionauthoring.Function]
@@ -133,12 +135,13 @@ func (b *Build) bindPublications() {
 func (b *Build) AttachBuild(h platform.BuildHost) { b.host = h }
 func (b *Build) AttachFiles(h platform.FileHost)  { b.data.AttachFiles(h) }
 
-func New(tenant string, authorities platform.Authorities, publications []publication.Hooks, resolver publication.Resolver, objectPublication func(ontology.ObjectPublicationEnvironment) publication.Hooks, queryFactory func(publication.QueryAuthoringEnvironment) publication.QueryAuthoringBinding, functionFactory func(functionauthoring.Environment) *functionauthoring.Owner, agentFactory func(platform.AgentAuthoringEnvironment) platform.AgentAuthoringBinding, testPlanFactory func(testPlanEnvironment, evaluationPublication) testPlanPublication, evaluationFactory func(testPlanEnvironment) evaluationPublication, sampleSetFactory func(devopsmodel.SampleSetEnvironment) devopsmodel.SampleSetPublication) *Build {
-	b := &Build{resolver: resolver, publicationBase: slices.Clone(publications), objectPublication: objectPublication, queryFactory: queryFactory, functionFactory: functionFactory, agentFactory: agentFactory, testPlanFactory: testPlanFactory, evaluationFactory: evaluationFactory, sampleSetFactory: sampleSetFactory, installed: map[string]platform.Entity{}, linkTypes: map[string]ontology.LinkType{}, propertyTypes: map[string]ontology.PropertyType{}, valueTypes: map[string]ontology.ValueType{}, objectTypeGroups: map[string]ontology.ObjectTypeGroup{}, interfaces: map[string]ontology.InterfaceRecord{}}
+func New(tenant string, authorities platform.Authorities, publications []publication.Hooks, resolver publication.Resolver, objectPublication func(ontology.ObjectPublicationEnvironment) publication.Hooks, queryFactory func(publication.QueryAuthoringEnvironment) publication.QueryAuthoringBinding, functionFactory func(functionauthoring.Environment) *functionauthoring.Owner, agentFactory func(platform.AgentAuthoringEnvironment) platform.AgentAuthoringBinding, functionEvaluationFactory func(publication.FunctionEvaluationEnvironment) publication.FunctionEvaluationBinding, testPlanFactory func(testPlanEnvironment, evaluationPublication) testPlanPublication, evaluationSetFactory func(testPlanEnvironment) evaluationPublication, sampleSetFactory func(devopsmodel.SampleSetEnvironment) devopsmodel.SampleSetPublication) *Build {
+	b := &Build{resolver: resolver, publicationBase: slices.Clone(publications), objectPublication: objectPublication, queryFactory: queryFactory, functionFactory: functionFactory, agentFactory: agentFactory, functionEvaluationFactory: functionEvaluationFactory, testPlanFactory: testPlanFactory, evaluationSetFactory: evaluationSetFactory, sampleSetFactory: sampleSetFactory, installed: map[string]platform.Entity{}, linkTypes: map[string]ontology.LinkType{}, propertyTypes: map[string]ontology.PropertyType{}, valueTypes: map[string]ontology.ValueType{}, objectTypeGroups: map[string]ontology.ObjectTypeGroup{}, interfaces: map[string]ontology.InterfaceRecord{}}
 	b.queries = b.queryFactory(b.queryEnvironment())
 	b.data = dataowner.New(buildDataHost{b}, resolver)
 	b.automation = automationauthoring.New(automationEnvironment{b}, resolver)
 	b.functions = b.functionFactory(functionEnvironment{b})
+	b.evaluations = b.functionEvaluationFactory(b.functionEvaluationEnvironment())
 	b.apps = appsauthoring.NewOwner(appEnvironment{b})
 	b.agent = b.agentFactory(b.agentEnvironment())
 	b.bindTestPlans()
@@ -157,7 +160,7 @@ func New(tenant string, authorities platform.Authorities, publications []publica
 	actions = append(actions, actioncatalog.EntityActions(b.objectTypeGroupEntity())...)
 	actions = append(actions, actioncatalog.EntityActions(b.queries.Entity())...)
 	actions = append(actions, actioncatalog.EntityActions(interfaceKind.entity(b))...)
-	actions = append(actions, evaluationActions()...)
+	actions = append(actions, b.evaluations.Actions()...)
 	actions = append(actions, actioncatalog.EntityActions(functionauthoring.CodeEntity())...)
 	actions = append(actions, b.data.Actions()...)
 	actions = append(actions, actioncatalog.EntityActions(b.branchEntity())...)
@@ -175,7 +178,7 @@ func New(tenant string, authorities platform.Authorities, publications []publica
 	actions = append(actions, productVersionActions()...)
 	actions = append(actions, platform.Action{Schema: SchemaEvaluationSetPublish, Target: TestPlanType, Title: "Publish test plan", Description: "Freeze a portable business scenario or the evaluation cases for one function version.", Capability: "objects", Roles: []string{Builder}, Payload: []platform.Field{}})
 	actions = resourceActions(actions)
-	classes := []string{ObjectType, ActionTypeType, PageType, AppType, TestPlanType, automationauthoring.ProcessType, functionauthoring.FunctionType, PropertyTypeType, ValueTypeType, ObjectTypeGroupType, LinkTypeType, b.queries.Entity().Type, InterfaceType, functionauthoring.FunctionCallType, EvaluationType, functionauthoring.CodeType, functionauthoring.TableType, AgentType, SampleSetType, BranchType, ResourceType, FolderType, WorkingStateType, ProductType, ProductVersionType, platform.OwnedRelationType(ID), confirmationType, platform.DispatchType}
+	classes := []string{ObjectType, ActionTypeType, PageType, AppType, TestPlanType, automationauthoring.ProcessType, functionauthoring.FunctionType, PropertyTypeType, ValueTypeType, ObjectTypeGroupType, LinkTypeType, b.queries.Entity().Type, InterfaceType, functionauthoring.FunctionCallType, b.evaluations.Entity().Type, functionauthoring.CodeType, functionauthoring.TableType, AgentType, SampleSetType, BranchType, ResourceType, FolderType, WorkingStateType, ProductType, ProductVersionType, platform.OwnedRelationType(ID), confirmationType, platform.DispatchType}
 	classes = append(classes, b.data.Types()...)
 	b.authorities = authorities
 	b.ledger = authorities(tenant, ID, platform.NewCatalog(actions...), classes...)
@@ -206,7 +209,7 @@ func (b *Build) Manifest() platform.Manifest {
 	if b.installationCatalog != nil {
 		catalog = b.installationCatalog
 	}
-	entities := []platform.Entity{platform.RelationEntity(ID), b.objectEntity(), b.actionTypeEntity(), b.apps.PageEntity(), b.apps.ApplicationEntity(), b.testPlanEntity(), b.automation.ProcessEntity(), propertyKind.entity(b), valueKind.entity(b), b.objectTypeGroupEntity(), linkKind.entity(b), b.queries.Entity(), interfaceKind.entity(b), b.functions.Entity(), b.functions.CallEntity(), b.evaluationEntity(), b.agent.Entity(), functionauthoring.CodeEntity(), b.functions.TableEntity(), b.sampleSets.Entity(), b.branchEntity(), b.confirmationEntity(), b.dispatchEntity(), b.productEntity(), b.productVersionEntity()}
+	entities := []platform.Entity{platform.RelationEntity(ID), b.objectEntity(), b.actionTypeEntity(), b.apps.PageEntity(), b.apps.ApplicationEntity(), b.testPlanEntity(), b.automation.ProcessEntity(), propertyKind.entity(b), valueKind.entity(b), b.objectTypeGroupEntity(), linkKind.entity(b), b.queries.Entity(), interfaceKind.entity(b), b.functions.Entity(), b.functions.CallEntity(), b.evaluations.Entity(), b.agent.Entity(), functionauthoring.CodeEntity(), b.functions.TableEntity(), b.sampleSets.Entity(), b.branchEntity(), b.confirmationEntity(), b.dispatchEntity(), b.productEntity(), b.productVersionEntity()}
 	entities = append(entities, b.data.Entities()...)
 	entities = append(entities, b.resourceEntities()...)
 	entities = append(entities, workingStateEntity())
@@ -420,8 +423,8 @@ func (b *Build) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb.
 	if s.GetSchema().GetName() == SchemaProductVersion {
 		return b.submitProductVersion(c, s, now)
 	}
-	if name := s.GetSchema().GetName(); name == SchemaEvaluationStart || name == SchemaEvaluationAnswer {
-		return b.submitEvaluation(c, s, now)
+	if name := s.GetSchema().GetName(); b.evaluations.Handles(name) {
+		return b.evaluations.Submit(c, s, now)
 	}
 	if typ, archive := strings.CutSuffix(s.GetSchema().GetName(), ".archive"); archive && !c.Replaying && slices.Contains([]string{ObjectType, PageType, AppType, PropertyTypeType, ValueTypeType, ObjectTypeGroupType, LinkTypeType, QueryType, InterfaceType, functionauthoring.FunctionType, AgentType, TestPlanType, SampleSetType, dataowner.ObservationType, ProductType}, typ) {
 		if err := b.checkDefinitionArchive(c, typ, s.GetTarget().GetId()); err != nil {
@@ -483,7 +486,7 @@ func (b *Build) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb.
 	if name := s.GetSchema().GetName(); name == AgentType+".create" || name == AgentType+".edit" {
 		agentEntity = b.agent.DraftEntity()
 	}
-	entities := []platform.Entity{b.objectEntity(), b.actionTypeEntity(), pageEntity, b.apps.ApplicationEntity(), b.testPlanEntity(), propertyKind.entity(b), valueKind.entity(b), b.objectTypeGroupEntity(), linkKind.entity(b), b.queries.Entity(), interfaceKind.entity(b), b.functions.Entity(), b.functions.CallEntity(), b.evaluationEntity(), agentEntity, b.sampleSets.Entity(), b.branchEntity(), b.confirmationEntity(), b.dispatchEntity(), b.productEntity(), b.productVersionEntity()}
+	entities := []platform.Entity{b.objectEntity(), b.actionTypeEntity(), pageEntity, b.apps.ApplicationEntity(), b.testPlanEntity(), propertyKind.entity(b), valueKind.entity(b), b.objectTypeGroupEntity(), linkKind.entity(b), b.queries.Entity(), interfaceKind.entity(b), b.functions.Entity(), b.functions.CallEntity(), b.evaluations.Entity(), agentEntity, b.sampleSets.Entity(), b.branchEntity(), b.confirmationEntity(), b.dispatchEntity(), b.productEntity(), b.productVersionEntity()}
 	entities = append(entities, b.data.Entities()...)
 	entities = append(entities, b.resourceEntities()...)
 	entities = append(entities, workingStateEntity())
@@ -539,6 +542,7 @@ func (b *Build) Fork(ledger platform.Authority) (platform.App, error) {
 	fork.queries = b.queries.Fork(fork.queryEnvironment())
 	fork.interfaces = maps.Clone(b.interfaces)
 	fork.functions = b.functions.Fork(functionEnvironment{&fork})
+	fork.evaluations = b.functionEvaluationFactory(fork.functionEvaluationEnvironment())
 	fork.apps = b.apps.Fork(appEnvironment{&fork})
 	fork.data = b.data.Fork(buildDataHost{&fork})
 	fork.automation = b.automation.Fork(automationEnvironment{&fork})
@@ -550,7 +554,7 @@ func (b *Build) Fork(ledger platform.Authority) (platform.App, error) {
 }
 
 func (b *Build) NewSimulationApp(tenant string) platform.App {
-	return New(tenant, b.authorities, b.publicationBase, b.resolver, b.objectPublication, b.queryFactory, b.functionFactory, b.agentFactory, b.testPlanFactory, b.evaluationFactory, b.sampleSetFactory)
+	return New(tenant, b.authorities, b.publicationBase, b.resolver, b.objectPublication, b.queryFactory, b.functionFactory, b.agentFactory, b.functionEvaluationFactory, b.testPlanFactory, b.evaluationSetFactory, b.sampleSetFactory)
 }
 func (b *Build) CandidateActions(asset platform.ReleaseAsset) ([]platform.Action, error) {
 	code, err := b.retainedCodeObject(asset)

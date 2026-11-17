@@ -9,7 +9,7 @@ import (
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformserver/platform"
 	actioncatalog "platformserver/services/actions/catalog"
-	"platformserver/services/ai/evaluation"
+	agents "platformserver/services/ai/evaluation"
 	"slices"
 	"strings"
 	"sync"

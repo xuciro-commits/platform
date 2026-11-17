@@ -2,11 +2,16 @@ package host
 
 import (
 	"encoding/json"
+	"strings"
 	"testing"
 	"time"
 
+	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformserver/kernel/records"
 	"platformserver/platform"
+	agentevaluation "platformserver/services/ai/evaluation"
+	"platformserver/services/devops/descriptor"
+	releaseowner "platformserver/services/devops/releases"
 	functionauthoring "platformserver/services/functions/authoring"
 	build "platformserver/services/resources/authoring"
 )
@@ -26,6 +31,11 @@ func TestInvariantK1FunctionAuthoringPublishesEvaluatesReviewsAndReplays(t *test
 	}
 	live.accept(t, "build.function.create", functionauthoring.FunctionType, "FUNCTION", declaration("Return the original answer."))
 	live.accept(t, "build.function.publish", functionauthoring.FunctionType, "FUNCTION", map[string]any{})
+	live.accept(t, "build.agent.create", build.AgentType, "AGENT", map[string]any{
+		"name": "helper", "title": "Builder helper", "description": "Builds a small business application",
+		"instructions": "Inspect the goal, propose the next step and finish with the result.",
+	})
+	live.accept(t, "build.agent.publish", build.AgentType, "AGENT", map[string]any{})
 
 	owner := live.App(build.ID).(*build.Build)
 	ledger, err := owner.Authority().ForkRead()
@@ -37,23 +47,36 @@ func TestInvariantK1FunctionAuthoringPublishesEvaluatesReviewsAndReplays(t *test
 		t.Fatal(err)
 	}
 	live.accept(t, "build.function.edit", functionauthoring.FunctionType, "FUNCTION", map[string]any{"instructions": "Return the revised answer."})
+	live.accept(t, "build.agent.edit", build.AgentType, "AGENT", map[string]any{"instructions": "Ask before the final step, then finish with the result."})
 
-	preview, err := owner.DraftReleaseAssetsMulti([]build.JointDraftRef{{Kind: platform.AssetFunction, ID: "FUNCTION"}}, live.member(t), false)
+	preview, err := owner.DraftReleaseAssetsMulti([]build.JointDraftRef{
+		{Kind: platform.AssetFunction, ID: "FUNCTION"}, {Kind: platform.AssetAgent, ID: "AGENT"},
+	}, live.member(t), false)
 	if err != nil {
 		t.Fatal(err)
 	}
 	ref := platform.AssetRef{App: build.ID, Kind: platform.AssetFunction, Name: "answer"}
+	agentRef := platform.AssetRef{App: build.ID, Kind: platform.AssetAgent, Name: "helper"}
 	var candidate platform.ReleaseAsset
+	var agentCandidate platform.ReleaseAsset
 	for _, asset := range preview.After {
 		if asset.Ref == ref {
 			candidate = asset
+		}
+		if asset.Ref == agentRef {
+			agentCandidate = asset
 		}
 	}
 	var next platform.AIFunction
 	if candidate.SourceVersion != "1.function-2" || json.Unmarshal(candidate.Body, &next) != nil || next.Instructions != "Return the revised answer." {
 		t.Fatalf("function draft lost the edited version: %+v", candidate)
 	}
+	var nextAgent platform.AgentReleaseDescriptor
+	if agentCandidate.SourceVersion != "1.agent-2" || json.Unmarshal(agentCandidate.Body, &nextAgent) != nil || nextAgent.Instructions != "Ask before the final step, then finish with the result." {
+		t.Fatalf("agent draft lost the edited version: %+v", agentCandidate)
+	}
 	live.accept(t, "build.function.publish", functionauthoring.FunctionType, "FUNCTION", map[string]any{})
+	live.accept(t, "build.agent.publish", build.AgentType, "AGENT", map[string]any{})
 
 	functionVersion := func(app platform.App, version, expected int, instructions string) {
 		t.Helper()
@@ -65,6 +88,19 @@ func TestInvariantK1FunctionAuthoringPublishesEvaluatesReviewsAndReplays(t *test
 	functionVersion(owner, 1, 1, "Return the original answer.")
 	functionVersion(owner, 0, 2, "Return the revised answer.")
 	functionVersion(fork, 0, 1, "Return the original answer.")
+	agentVersion := func(app platform.App, expected int, instructions string) {
+		t.Helper()
+		agents := app.Manifest().Agents
+		if len(agents) != 1 || agents[0].Name != "helper" || !strings.Contains(agents[0].Instructions, instructions) {
+			t.Fatalf("agent version differs: %+v", agents)
+		}
+		dynamic := app.(platform.DynamicAgentDefinitions)
+		if actual := dynamic.AgentVersion("helper"); actual != expected {
+			t.Fatalf("agent version: got %d, want %d", actual, expected)
+		}
+	}
+	agentVersion(owner, 2, "Ask before the final step")
+	agentVersion(fork, 1, "Inspect the goal")
 	retained, err := owner.FunctionReleaseAsset("answer", "1.function-1")
 	if err != nil {
 		t.Fatalf("retained function asset: %v", err)
@@ -74,12 +110,128 @@ func TestInvariantK1FunctionAuthoringPublishesEvaluatesReviewsAndReplays(t *test
 		t.Fatalf("retained function asset: %+v", retained)
 	}
 
+	policy := platform.EvaluationPolicy{MinQuality: 1, MaxCostUSD: 1, MaxLatencyMillis: 1000, Cases: []platform.EvaluationCase{{Name: "case", Input: json.RawMessage(`{"note":"ready"}`), Expected: json.RawMessage(`{"answer":"ok"}`)}}}
 	live.accept(t, "build.testplan.create", build.TestPlanType, "PLAN", map[string]any{
 		"variant": "evaluation-set", "name": "answerquality", "title": "Answer quality", "function": "FUNCTION", "functionVersion": 1, "at": "2000-01-01T00:00:00Z",
 		"steps":      []platform.TestStep{{Type: functionauthoring.FunctionCallType, ID: "evaluation", Action: functionauthoring.SchemaFunctionCall, Payload: "{}", Expect: "accepted"}},
-		"evaluation": []platform.EvaluationPolicy{{MinQuality: 1, MaxCostUSD: 1, MaxLatencyMillis: 1000, Cases: []platform.EvaluationCase{{Name: "case", Input: json.RawMessage(`{"note":"ready"}`), Expected: json.RawMessage(`{"answer":"ok"}`)}}}},
+		"evaluation": []platform.EvaluationPolicy{policy},
 	})
 	live.accept(t, "build.testplan.publish", build.TestPlanType, "PLAN", map[string]any{})
+
+	evaluationCaller := live.automation(build.ID, false)
+	submitEvaluation := func(schema, id string, payload any) (*pb.ChangeRecord, *platform.Error) {
+		sub := live.submission(schema, agentevaluation.EvaluationType, id, payload)
+		sub.PrincipalId = evaluationCaller.ID
+		return live.Tenant.accept(live.App(build.ID), evaluationCaller.Member, sub, invariantClock, acceptOptions{automation: true})
+	}
+	definition, ordinal, ok := owner.FunctionDefinition("answer", 1)
+	if !ok || ordinal != 1 {
+		t.Fatalf("function evaluation definition: ordinal=%d found=%t", ordinal, ok)
+	}
+	plan, ok := platform.Get[build.TestPlan](evaluationCaller, "PLAN")
+	if !ok {
+		t.Fatal("saved evaluation plan is unavailable")
+	}
+	definitionDigest, err := platform.CanonicalDigest(definition)
+	if err != nil {
+		t.Fatal(err)
+	}
+	planDigest, err := platform.CanonicalDigest(plan)
+	if err != nil {
+		t.Fatal(err)
+	}
+	start := agentevaluation.EvaluationStart{Candidate: "CANDIDATE", Function: "answer", Version: 1,
+		Definition: definition, DefinitionDigest: definitionDigest, Plan: "PLAN", PlanRevision: plan.Revision,
+		PlanDigest: planDigest, Model: "test-model", ModelConfig: "test-config", Policy: policy}
+	changed := start
+	changed.Definition.Instructions = "A definition that was not saved"
+	if _, refusal := submitEvaluation(agentevaluation.SchemaEvaluationStart, "EVALUATION-CHANGED", changed); refusal == nil || refusal.Code != pb.ErrorCode_ERROR_CODE_CONFLICT {
+		t.Fatalf("changed evaluation definition: %+v", refusal)
+	}
+	for _, evaluation := range []struct {
+		id, answer, state string
+	}{
+		{id: "EVALUATION", answer: `{"answer":"ok"}`, state: "passed"},
+		{id: "EVALUATION-FAILED", answer: `{"answer":"wrong"}`, state: "failed"},
+	} {
+		start.Candidate = evaluation.id
+		if _, refusal := submitEvaluation(agentevaluation.SchemaEvaluationStart, evaluation.id, start); refusal != nil {
+			t.Fatalf("start evaluation %s: %v", evaluation.id, refusal)
+		}
+		run, found := platform.Get[agentevaluation.Evaluation](evaluationCaller, evaluation.id)
+		if !found || len(run.Attempts) != agentevaluation.EvaluationRepeats || run.State != "pending" {
+			t.Fatalf("started evaluation %s differs: %+v", evaluation.id, run)
+		}
+		for _, attempt := range run.Attempts {
+			answer := platform.Answer{Call: attempt.Call, Outcome: "accepted", Text: evaluation.answer, Metered: true, TokensReported: true,
+				InputTokens: 10, OutputTokens: 5, CostReported: true, CostUSD: 0.01, LatencyMillis: 10, ServedModel: "test-model"}
+			if _, refusal := submitEvaluation(agentevaluation.SchemaEvaluationAnswer, evaluation.id, answer); refusal != nil {
+				t.Fatalf("answer evaluation %s: %v", evaluation.id, refusal)
+			}
+		}
+		run, found = platform.Get[agentevaluation.Evaluation](evaluationCaller, evaluation.id)
+		if !found || run.State != evaluation.state || run.Quality != 1 && evaluation.state == "passed" || run.CostUSD != 0.03 || run.PeakLatency != 10 {
+			t.Fatalf("finished evaluation %s differs: %+v", evaluation.id, run)
+		}
+	}
+	duplicate := platform.Answer{Call: "EVALUATION:1:1", Outcome: "accepted", Metered: true, CostReported: true, CostUSD: 0.01, LatencyMillis: 10}
+	if _, refusal := submitEvaluation(agentevaluation.SchemaEvaluationAnswer, "EVALUATION", duplicate); refusal == nil || refusal.Code != pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT {
+		t.Fatalf("completed evaluation accepted another answer: %+v", refusal)
+	}
+
+	var evaluationSet platform.ReleaseAsset
+	if json.Unmarshal([]byte(plan.Published), &evaluationSet) != nil || evaluationSet.Ref.Kind != platform.AssetEvaluation {
+		t.Fatalf("published evaluation set is invalid: %+v", evaluationSet)
+	}
+	releaseID, err := releaseowner.PrepareReleaseEvaluation(live.ID, live.member(t), releaseowner.ReleaseEvaluationRequest{
+		CandidateID: "CANDIDATE", PlanID: "PLAN", Key: "release-evaluation",
+	}, invariantClock, releaseowner.EvaluationHooks{
+		Candidate: func(string) (platform.ReleaseCandidate, error) {
+			return platform.ReleaseCandidate{ID: "CANDIDATE", Assets: []platform.ReleaseAsset{retained, evaluationSet}}, nil
+		},
+		Plan: func(string) (descriptor.FunctionEvaluationPlan, bool) {
+			return descriptor.FunctionEvaluationPlan{Revision: plan.Revision, Name: plan.Name, Function: string(plan.Function),
+				Model: plan.Model, Evaluation: plan.Evaluation, Digest: func(model string, evaluation []platform.EvaluationPolicy) (string, error) {
+					plan.Model, plan.Evaluation = model, evaluation
+					return platform.CanonicalDigest(plan)
+				}}, true
+		},
+		Function:       func(string) (functionauthoring.Function, bool) { return functionauthoring.Function{}, false },
+		BuilderVersion: func() string { return "1" },
+		AppModel:       func() string { return "test-model" },
+		HasProvider:    func() bool { return true },
+		ModelConfig:    func(string, platform.AIFunction) (string, error) { return "test-config", nil },
+		Admits:         func(platform.Member) *platform.Error { return nil },
+		Quarantined:    func() bool { return false },
+		FunctionStart: func(start descriptor.FunctionEvaluationStart) (*pb.Submission, string, error) {
+			return agentevaluation.Prepare(live.ID, build.ID, "release-evaluation", start)
+		},
+		Accept: func(sub *pb.Submission, at time.Time) *platform.Error {
+			_, refusal := live.Tenant.accept(live.App(build.ID), platform.Member{ID: sub.PrincipalId, Tenant: live.ID}, sub, at, acceptOptions{automation: true})
+			return refusal
+		},
+	})
+	if err != nil {
+		t.Fatalf("release evaluation: %v", err)
+	}
+	releaseEvaluation, found := platform.Get[agentevaluation.Evaluation](evaluationCaller, releaseID)
+	if !found || releaseEvaluation.Set == nil || releaseEvaluation.Candidate != "CANDIDATE" || releaseEvaluation.State != "pending" {
+		t.Fatalf("release evaluation start differs: %+v", releaseEvaluation)
+	}
+	for _, attempt := range releaseEvaluation.Attempts {
+		answer := platform.Answer{Call: attempt.Call, Outcome: "accepted", Text: `{"answer":"ok"}`, Metered: true, TokensReported: true,
+			InputTokens: 10, OutputTokens: 5, CostReported: true, CostUSD: 0.01, LatencyMillis: 10, ServedModel: "test-model"}
+		if _, refusal := submitEvaluation(agentevaluation.SchemaEvaluationAnswer, releaseID, answer); refusal != nil {
+			t.Fatalf("answer release evaluation: %v", refusal)
+		}
+	}
+	releaseEvaluation, found = platform.Get[agentevaluation.Evaluation](evaluationCaller, releaseID)
+	if !found || releaseEvaluation.State != "passed" {
+		t.Fatalf("release evaluation did not pass: %+v", releaseEvaluation)
+	}
+	live.accept(t, "build.testplan.edit", build.TestPlanType, "PLAN", map[string]any{"title": "Answer quality, revised"})
+	live.accept(t, "build.testplan.publish", build.TestPlanType, "PLAN", map[string]any{})
+
 	replayed := live.restore(t, live.entries)
 	restored := replayed.App(build.ID).(*build.Build)
 	for _, requested := range []struct {
@@ -96,6 +248,14 @@ func TestInvariantK1FunctionAuthoringPublishesEvaluatesReviewsAndReplays(t *test
 		if definition.Instructions != requested.instructions {
 			t.Fatalf("replayed function version %d changed: %+v", requested.version, definition)
 		}
+	}
+	replayedEvaluation, found := platform.Get[agentevaluation.Evaluation](replayed.automation(build.ID, false), "EVALUATION")
+	if !found || replayedEvaluation.State != "passed" || len(replayedEvaluation.Attempts) != agentevaluation.EvaluationRepeats {
+		t.Fatalf("evaluation replay differs: %+v", replayedEvaluation)
+	}
+	replayedPlan, found := platform.Get[build.TestPlan](replayed.automation(build.ID, false), "PLAN")
+	if !found || replayedPlan.DefinitionVersion != 2 || len(replayedPlan.Versions) != 2 || replayedPlan.Title != "Answer quality, revised" {
+		t.Fatalf("evaluation set replay differs: %+v", replayedPlan)
 	}
 
 	member := replayed.member(t)

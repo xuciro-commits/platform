@@ -50,6 +50,9 @@
 - 函数拥有者由宿主装配。`Build` 提供资源身份、权威、当前安装与联合草稿上下文，并保留路由和提交入口；
   AI 函数、代码函数、决策表的编写、发布、历史与编译结果归 `services/functions/authoring`。
   函数 schema、记录类型和联合声明解析只在该拥有者定义，资源层仅保留宿主需要的能力接口转发。
+- 智能体编写、版本与运行归 `services/ai`；函数评估的记录、模型请求、答案结算与阈值判定也归 `services/ai/evaluation`，
+  启动提交只由宿主把 DevOps 的候选、共享测试计划与函数版本装配成 AI 请求。
+  测试计划和评估集继续共用 DevOps 的记录与版本族，DevOps 不反向依赖 AI。
 - 对象、动作类型、对象执行形状、生命周期与约束编译归 `services/ontology`。资源服务只编排跨类型草稿、
   联合发布、页面覆盖、资源身份与安装；动作执行仍归 `services/actions`。
 - 事务声明、规范化、编号与步骤校验归 `services/ontology`，事务执行与拒绝改路归 `services/actions`；

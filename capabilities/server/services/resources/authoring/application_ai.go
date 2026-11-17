@@ -13,9 +13,9 @@ import (
 )
 
 type ApplicationAI struct {
-	Model       func(kind, name string, options platform.ModelOptions) (string, string, bool)
-	Agents      *platform.Caller
-	Evaluations platform.Caller
+	Model               func(kind, name string, options platform.ModelOptions) (string, string, bool)
+	Agents              *platform.Caller
+	FunctionEvaluations func(string, int, string) ([]platform.ApplicationAIEvaluation, *platform.Error)
 }
 
 func conflict(err error) *platform.Error {
@@ -116,25 +116,12 @@ func (a ApplicationAI) List(m platform.Member, assets []platform.ReleaseAsset, v
 			}
 		}
 		if m.Holds(ID, Builder) || m.Holds(ID, Publisher) {
-			offset := 0
-			for {
-				rows, total, problem := platform.Find[Evaluation](a.Evaluations, platform.Query{Limit: 500, Offset: offset, Sort: []string{"id"}})
+			if a.FunctionEvaluations != nil {
+				reports, problem := a.FunctionEvaluations(asset.Ref.Name, version, currentConfig)
 				if problem != nil {
 					return nil, problem
 				}
-				for _, report := range rows {
-					if report.Function == asset.Ref.Name && report.Version == version && !report.Archived {
-						state := report.State
-						if (state == "passed" || state == "failed") && (currentConfig == "" || report.ModelConfig != currentConfig) {
-							state = "Configuration changed; evaluate again"
-						}
-						item.Evaluations = append(item.Evaluations, platform.ApplicationAIEvaluation{ID: report.ID, Candidate: report.Candidate, State: state, Model: report.Model, Quality: report.Quality, CostUSD: report.CostUSD})
-					}
-				}
-				offset += len(rows)
-				if offset >= total || len(rows) == 0 {
-					break
-				}
+				item.Evaluations = reports
 			}
 		}
 		out = append(out, item)

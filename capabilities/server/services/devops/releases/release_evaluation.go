@@ -5,6 +5,7 @@ import (
 	"fmt"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformserver/platform"
+	"platformserver/services/devops/descriptor"
 	functionauthoring "platformserver/services/functions/authoring"
 	"platformserver/services/resources/authoring"
 	"strconv"
@@ -25,7 +26,7 @@ type ReleaseEvaluationStarted struct {
 
 type EvaluationHooks struct {
 	Candidate      func(id string) (platform.ReleaseCandidate, error)
-	Plan           func(id string) (build.TestPlan, bool)
+	Plan           func(id string) (descriptor.FunctionEvaluationPlan, bool)
 	Function       func(id string) (functionauthoring.Function, bool)
 	BuilderVersion func() string
 	AppModel       func() string
@@ -34,7 +35,29 @@ type EvaluationHooks struct {
 	Admits         func(platform.Member) *platform.Error
 	Quarantined    func() bool
 	Agent          func(platform.Member, ReleaseEvaluationRequest, time.Time) (string, error)
+	FunctionStart  func(descriptor.FunctionEvaluationStart) (*pb.Submission, string, error)
 	Accept         func(*pb.Submission, time.Time) *platform.Error
+}
+
+func EvaluationPlan(c platform.Caller) func(string) (descriptor.FunctionEvaluationPlan, bool) {
+	return func(id string) (descriptor.FunctionEvaluationPlan, bool) {
+		plan, ok := platform.Get[build.TestPlan](c, id)
+		if !ok {
+			plan = build.TestPlan{Record: platform.Record{ID: id, Revision: 1}, Name: id}
+		}
+		return descriptor.FunctionEvaluationPlan{Revision: plan.Revision, Archived: plan.Archived, Name: plan.Name,
+			Function: string(plan.Function), Model: plan.Model, Evaluation: plan.Evaluation,
+			Digest: func(model string, evaluation []platform.EvaluationPolicy) (string, error) {
+				plan.Model, plan.Evaluation = model, evaluation
+				return platform.CanonicalDigest(plan)
+			}}, ok
+	}
+}
+
+func EvaluationFunction(c platform.Caller) func(string) (functionauthoring.Function, bool) {
+	return func(id string) (functionauthoring.Function, bool) {
+		return platform.Get[functionauthoring.Function](c, id)
+	}
 }
 
 func PrepareReleaseEvaluation(tenant string, member platform.Member, request ReleaseEvaluationRequest, now time.Time, hooks EvaluationHooks) (string, error) {
@@ -51,7 +74,11 @@ func PrepareReleaseEvaluation(tenant string, member platform.Member, request Rel
 	if request.Agent != "" {
 		return hooks.Agent(member, request, now)
 	}
-	sub, id, err := PrepareEvaluation(tenant, request.CandidateID, request.PlanID, request.Key, hooks)
+	start, err := PrepareEvaluation(request.CandidateID, request.PlanID, hooks)
+	if err != nil {
+		return "", err
+	}
+	sub, id, err := hooks.FunctionStart(start)
 	if err != nil {
 		return "", err
 	}
@@ -61,17 +88,17 @@ func PrepareReleaseEvaluation(tenant string, member platform.Member, request Rel
 	return id, nil
 }
 
-func PrepareEvaluation(tenant, candidateID, planID, key string, hooks EvaluationHooks) (*pb.Submission, string, error) {
+func PrepareEvaluation(candidateID, planID string, hooks EvaluationHooks) (descriptor.FunctionEvaluationStart, error) {
 	candidate, err := hooks.Candidate(candidateID)
 	if err != nil {
-		return nil, "", fmt.Errorf("release candidate is not saved: %w", err)
+		return descriptor.FunctionEvaluationStart{}, fmt.Errorf("release candidate is not saved: %w", err)
 	}
 	plan, ok := hooks.Plan(planID)
 	if ok && plan.Archived {
-		return nil, "", fmt.Errorf("a saved function plan is required")
+		return descriptor.FunctionEvaluationStart{}, fmt.Errorf("a saved function plan is required")
 	}
 	if !ok {
-		plan = build.TestPlan{Record: platform.Record{ID: planID, Revision: 1}, Name: planID}
+		plan.Revision, plan.Name = 1, planID
 	}
 	var evaluationSet *platform.AssetBinding
 	functionName := ""
@@ -79,22 +106,22 @@ func PrepareEvaluation(tenant, candidateID, planID, key string, hooks Evaluation
 		if selected.Ref.Kind != platform.AssetEvaluation || selected.Ref.App != build.ID || selected.Ref.Name != plan.Name {
 			continue
 		}
-		descriptor, err := platform.ReadEvaluationSet(selected.Body)
+		set, err := platform.ReadEvaluationSet(selected.Body)
 		if err != nil {
-			return nil, "", err
+			return descriptor.FunctionEvaluationStart{}, err
 		}
-		plan.Evaluation = []platform.EvaluationPolicy{descriptor.Policy}
-		plan.Model = descriptor.Model
-		functionName = descriptor.Function.Ref.Name
+		plan.Evaluation = []platform.EvaluationPolicy{set.Policy}
+		plan.Model = set.Model
+		functionName = set.Function.Ref.Name
 		evaluationSet = &platform.AssetBinding{Ref: selected.Ref, SourceVersion: selected.SourceVersion}
 	}
 	if evaluationSet == nil {
 		if !ok {
-			return nil, "", fmt.Errorf("a saved function plan or candidate evaluation set is required")
+			return descriptor.FunctionEvaluationStart{}, fmt.Errorf("a saved function plan or candidate evaluation set is required")
 		}
 		function, ok := hooks.Function(string(plan.Function))
 		if !ok || function.Archived || len(plan.Evaluation) != 1 {
-			return nil, "", fmt.Errorf("a saved function plan with one evaluation policy is required")
+			return descriptor.FunctionEvaluationStart{}, fmt.Errorf("a saved function plan with one evaluation policy is required")
 		}
 		functionName = function.Name
 	}
@@ -106,14 +133,14 @@ func PrepareEvaluation(tenant, candidateID, planID, key string, hooks Evaluation
 		}
 	}
 	if asset.Ref.Name == "" {
-		return nil, "", fmt.Errorf("the saved candidate does not contain the plan's function")
+		return descriptor.FunctionEvaluationStart{}, fmt.Errorf("the saved candidate does not contain the plan's function")
 	}
 	versionText, found := strings.CutPrefix(asset.SourceVersion, hooks.BuilderVersion()+".function-")
 	version, parseErr := strconv.Atoi(versionText)
 	var definition platform.AIFunction
 	if !found || parseErr != nil || version < 1 || json.Unmarshal(asset.Body, &definition) != nil ||
 		definition.Name != functionName || definition.Check() != nil {
-		return nil, "", fmt.Errorf("the saved function version is invalid")
+		return descriptor.FunctionEvaluationStart{}, fmt.Errorf("the saved function version is invalid")
 	}
 	if plan.Model == "" {
 		plan.Model = definition.Model
@@ -122,43 +149,35 @@ func PrepareEvaluation(tenant, candidateID, planID, key string, hooks Evaluation
 		}
 	}
 	if definition.Model != "" && definition.Model != plan.Model {
-		return nil, "", fmt.Errorf("the plan model differs from the function's bound model")
+		return descriptor.FunctionEvaluationStart{}, fmt.Errorf("the plan model differs from the function's bound model")
 	}
 	if definition.Model == "" && plan.Model != hooks.AppModel() {
-		return nil, "", fmt.Errorf("the plan model differs from the current app model")
+		return descriptor.FunctionEvaluationStart{}, fmt.Errorf("the plan model differs from the current app model")
 	}
 	if !hooks.HasProvider() {
-		return nil, "", fmt.Errorf("the tenant has no model provider")
+		return descriptor.FunctionEvaluationStart{}, fmt.Errorf("the tenant has no model provider")
 	}
 	if err := definition.CheckEvaluationPolicy(plan.Evaluation[0]); err != nil {
-		return nil, "", err
+		return descriptor.FunctionEvaluationStart{}, err
 	}
 	config, err := hooks.ModelConfig(plan.Model, definition)
 	if err != nil {
-		return nil, "", err
+		return descriptor.FunctionEvaluationStart{}, err
 	}
 	for _, test := range plan.Evaluation[0].Cases {
 		if !definition.EvaluationInput(test.Input) || definition.ValidateOutput(test.Expected) != nil {
-			return nil, "", fmt.Errorf("the plan's synthetic cases do not fit the saved function")
+			return descriptor.FunctionEvaluationStart{}, fmt.Errorf("the plan's synthetic cases do not fit the saved function")
 		}
 	}
 	definitionDigest, err := platform.CanonicalDigest(json.RawMessage(asset.Body))
 	if err != nil {
-		return nil, "", err
+		return descriptor.FunctionEvaluationStart{}, err
 	}
-	planDigest, err := platform.CanonicalDigest(plan)
+	planDigest, err := plan.Digest(plan.Model, plan.Evaluation)
 	if err != nil {
-		return nil, "", err
+		return descriptor.FunctionEvaluationStart{}, err
 	}
-	identity, err := platform.CanonicalDigest([]string{tenant, candidateID, planID, key})
-	if err != nil {
-		return nil, "", err
-	}
-	id := "eval-" + identity[:32]
-	start := build.EvaluationStart{Set: evaluationSet, Candidate: candidateID, Function: definition.Name, Version: version,
+	return descriptor.FunctionEvaluationStart{Set: evaluationSet, Candidate: candidateID, Function: definition.Name, Version: version,
 		Definition: definition, DefinitionDigest: definitionDigest, Plan: planID, PlanRevision: plan.Revision,
-		PlanDigest: planDigest, Model: plan.Model, ModelConfig: config, Policy: plan.Evaluation[0]}
-	return &pb.Submission{TenantId: tenant, PrincipalId: "app:" + build.ID, Authority: build.ID,
-		IdempotencyKey: "evaluation:" + identity, Target: &pb.EntityRef{Type: build.EvaluationType, Id: id},
-		Schema: &pb.SchemaRef{Name: build.SchemaEvaluationStart, Version: 1}, Payload: platform.Raw(start)}, id, nil
+		PlanDigest: planDigest, Model: plan.Model, ModelConfig: config, Policy: plan.Evaluation[0]}, nil
 }

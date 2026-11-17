@@ -21,7 +21,7 @@ func (b *Build) bindTestPlans() {
 		Functions:          b.functions.Inventory,
 		DraftID:            b.data.DraftID,
 	}
-	b.testPlans = b.testPlanFactory(env, b.evaluationFactory(env))
+	b.testPlans = b.testPlanFactory(env, b.evaluationSetFactory(env))
 }
 
 func (b *Build) bindSampleSets() {

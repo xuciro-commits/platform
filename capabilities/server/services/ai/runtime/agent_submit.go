@@ -8,7 +8,7 @@ import (
 	"google.golang.org/protobuf/proto"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformserver/platform"
-	"platformserver/services/ai/evaluation"
+	agents "platformserver/services/ai/evaluation"
 	"slices"
 	"strings"
 	"time"

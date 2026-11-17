@@ -2,6 +2,7 @@ package host
 
 import (
 	"platformserver/platform"
+	agentevaluation "platformserver/services/ai/evaluation"
 	"platformserver/services/resources/authoring"
 )
 
@@ -11,9 +12,8 @@ func (t *Tenant) applicationAILocked(m platform.Member, assets []platform.Releas
 		caller := t.automation(platform.AgentApp, false)
 		agents = &caller
 	}
-	return build.ApplicationAI{Agents: agents, Evaluations: t.automation(build.ID, false), Model: func(kind, name string, options platform.ModelOptions) (string, string, bool) {
-		return t.modelResolver().Describe(kind, name, options)
-	}}.List(m, assets, visible)
+	return build.ApplicationAI{Agents: agents, FunctionEvaluations: agentevaluation.ApplicationReports(t.automation(build.ID, false)),
+		Model: t.modelResolver().Describe}.List(m, assets, visible)
 }
 
 func (t *Tenant) applicationAIUsage(m platform.Member, application platform.AssetRef, items []platform.ApplicationAI) []platform.ApplicationAI {
