@@ -12,6 +12,7 @@ import { RadioList, RadioListItem } from "@astryxdesign/core/RadioList";
 import { Section } from "@astryxdesign/core/Section";
 import { SegmentedControl, SegmentedControlItem } from "@astryxdesign/core/SegmentedControl";
 import { Skeleton } from "@astryxdesign/core/Skeleton";
+import { StatusDot } from "@astryxdesign/core/StatusDot";
 import { Table, pixel, proportional, useTableGroupedRows, useTableSelection, useTableSelectionState, useTableSortable } from "@astryxdesign/core/Table";
 import type { TableColumn } from "@astryxdesign/core/Table";
 import { Heading, Text } from "@astryxdesign/core/Text";
@@ -22,6 +23,7 @@ import { type Read, reread, useRead } from "../host";
 import { BackLink } from "./BackLink";
 import { BoardView } from "./BoardView";
 import { t } from "../i18n";
+import type { Dot } from "./Transitions";
 
 export type ListColumn<Row> = {
   key: string;
@@ -30,6 +32,7 @@ export type ListColumn<Row> = {
   text: (row: Row) => string;
   kind?: "string" | "enum" | "number" | "time";
   choices?: string[];
+  dots?: Record<string, Dot>;
   value?: (row: Row) => unknown;
 };
 type Done = Promise<unknown>;
@@ -169,6 +172,13 @@ export function ListView<Answer, Row>({ definition, read, primary, back }: ListV
         <Text type="body" color="secondary">
           <Timestamp value={cells[column.key]} format="relative" />
         </Text>
+      ) : column.dots?.[cells[column.key]] ? (
+        <HStack gap={2} vAlign="center">
+          <StatusDot variant={column.dots[cells[column.key]]} label={cells[column.key]} />
+          <Text type="body" maxLines={1}>
+            {cells[column.key]}
+          </Text>
+        </HStack>
       ) : (
         <Text type="body" maxLines={1}>
           {cells[column.key] ?? ""}

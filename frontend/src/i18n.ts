@@ -177,6 +177,14 @@ export const zhCN: Record<string, string> = {
   "Clear selection": "取消选择",
   "Filter by any column": "按任意列筛选",
   Archive: "归档",
+  Publish: "发布",
+  Draft: "草稿",
+  Published: "已发布",
+  "Open records": "打开记录",
+  "Not done": "没有完成",
+  "This cannot be undone here.": "这一步在这里不能撤销。",
+  "Being defined; nothing is installed yet.": "还在定义，尚未安装。",
+  "Installed in this tenant: people work with its records.": "已安装到这个租户：大家在用它的记录。",
 };
 
 const locale = navigator.language.startsWith("zh") ? "zh-CN" : "en";

@@ -4,21 +4,24 @@ import { HStack, Layout, LayoutContent, LayoutHeader, LayoutPanel, VStack } from
 import { MetadataList, MetadataListItem } from "@astryxdesign/core/MetadataList";
 import { Skeleton } from "@astryxdesign/core/Skeleton";
 import { Heading, Text } from "@astryxdesign/core/Text";
-import { useMemo } from "react";
+import { StatusDot } from "@astryxdesign/core/StatusDot";
+import { useMemo, useState } from "react";
 import { type Api, useRead } from "../host";
 import { t } from "../i18n";
 import { enterable } from "./ParameterInput";
 import { RecordFields } from "./RecordFields";
 import { BackLink } from "./BackLink";
+import { dots, type Instances, Transitions } from "./Transitions";
 import { plain, shown } from "./values";
 
 type Stamp = { by?: string; at?: string };
 type Kept = { id: string; revision: number; created: Stamp; changed: Stamp };
-export type RecordPageProps = { described: Api.EntityInfo; id: string; listPath: string; listTitle: string; edit?: Api.Action };
+export type RecordPageProps = { described: Api.EntityInfo; id: string; listPath: string; listTitle: string; edit?: Api.Action; actions: Api.Action[]; instances?: Instances };
 
 const when = (stamp: Stamp) => (stamp.at ? new Date(stamp.at).toLocaleString() : "");
 
-export function RecordPage({ described, id, listPath, listTitle, edit }: RecordPageProps) {
+export function RecordPage({ described, id, listPath, listTitle, edit, actions, instances }: RecordPageProps) {
+  const [refusal, setRefusal] = useState("");
   const read = useRead<Api.RecordView>(`/v1/records/${described.type}/${encodeURIComponent(id)}`);
   const editable = new Set(edit && read.status === "ready" ? edit.payload.filter(enterable).map((parameter) => parameter.name) : []);
   const values = useMemo(
@@ -26,6 +29,7 @@ export function RecordPage({ described, id, listPath, listTitle, edit }: RecordP
     [read],
   );
   const kept = read.status === "ready" ? (read.data.record as Kept) : undefined;
+  const state = described.lifecycle?.states.find((candidate) => candidate.name === values[described.lifecycle!.field]);
 
   return (
     <>
@@ -41,11 +45,29 @@ export function RecordPage({ described, id, listPath, listTitle, edit }: RecordP
                   <Text type="supporting" color="secondary">
                     {id}
                   </Text>
+                  {state && (
+                    <HStack gap={2} vAlign="center">
+                      <StatusDot variant={dots[state.tone ?? "neutral"]} label={t(state.title)} />
+                      <Text type="supporting">{t(state.title)}</Text>
+                    </HStack>
+                  )}
                 </HStack>
                 <Heading level={1} maxLines={2}>
                   {shown(values[described.display]) || id}
                 </Heading>
               </VStack>
+              {kept && (
+                <Transitions
+                  described={described}
+                  actions={actions}
+                  id={id}
+                  values={values}
+                  revision={kept.revision}
+                  title={shown(values[described.display]) || id}
+                  instances={instances}
+                  onFailure={setRefusal}
+                />
+              )}
             </HStack>
           </LayoutHeader>
         }
@@ -70,11 +92,12 @@ export function RecordPage({ described, id, listPath, listTitle, edit }: RecordP
             )}
             {read.status === "ready" && (
               <VStack gap={4}>
+                {refusal && <Banner status="error" title={t("Not done")} description={refusal} />}
                 <Heading level={3}>{t("Details")}</Heading>
                 {edit && kept && <RecordFields described={described} edit={edit} id={id} values={values} revision={kept.revision} />}
                 <MetadataList columns="multi">
                   {described.fields
-                    .filter((field) => !editable.has(field.name) && values[field.name] != null && shown(values[field.name]) !== "" && typeof values[field.name] !== "object")
+                    .filter((field) => !editable.has(field.name) && field.name !== described.lifecycle?.field && values[field.name] != null && shown(values[field.name]) !== "" && typeof values[field.name] !== "object")
                     .map((field) => (
                       <MetadataListItem key={field.name} label={t(field.title)}>
                         <Text type="body">{shown(values[field.name])}</Text>

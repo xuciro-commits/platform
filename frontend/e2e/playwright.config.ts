@@ -17,7 +17,7 @@ export default defineConfig({
   expect: { timeout: 10_000 },
   workers: 1,
   reporter: [["list"]],
-  use: { baseURL: page, locale: "en-US", channel: "chrome", trace: "retain-on-failure" },
+  use: { baseURL: page, locale: "en-US", channel: "chrome", trace: "retain-on-failure", actionTimeout: 10_000 },
   webServer: [
     {
       command: `go run ./cmd/platform-server -addr 127.0.0.1:18521 -tenants ${work}/tenants.json`,

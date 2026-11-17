@@ -62,6 +62,25 @@
         { "subject": "Label printing line", "customer": "Cobalt Packaging", "stage": "qualifying", "amount": 76000, "owner": "Dana Whitfield", "closing": "2027-02-27", "next": "Collect line specifications" },
         { "subject": "Seasonal stock planning", "customer": "Fjord Outdoor", "stage": "negotiation", "amount": 19800, "owner": "Omar Haddad", "closing": "2026-12-05", "next": "Final pricing" }
       ]
+    },
+    {
+      "name": "contact",
+      "prefix": "CON",
+      "draft": true,
+      "definition": {
+        "title": "Contact",
+        "plural": "Contacts",
+        "display": "fullname",
+        "fields": [
+          { "name": "fullname", "title": "Full name", "type": "text", "required": true, "search": true },
+          { "name": "customer", "title": "Customer", "type": "text", "search": true },
+          { "name": "role", "title": "Role", "type": "choice", "choices": "sponsor,buyer,user" },
+          { "name": "email", "title": "Email", "type": "text" },
+          { "name": "phone", "title": "Phone", "type": "text" }
+        ],
+        "states": [{ "name": "active", "title": "Active" }]
+      },
+      "records": []
     }
   ]
 }

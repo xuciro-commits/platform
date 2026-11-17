@@ -27,7 +27,7 @@ async function ready() {
 const identity = await ready();
 let catalogue = await call("/v1/actions");
 
-async function submit(type, id, action, payload, authority = "build") {
+async function submit(type, id, action, payload, authority = "build", expectedRevision = 0) {
   const schema = `${type}.${action}`;
   const version = catalogue.find((entry) => entry.schema === schema)?.schemaVersion;
   const response = await fetch(host + "/v1/submissions", {
@@ -41,20 +41,12 @@ async function submit(type, id, action, payload, authority = "build") {
       target: { type, id },
       schema: { name: schema, version: version?.family ?? 1 },
       idempotencyKey: randomUUID(),
-      expectedRevision: 0,
+      expectedRevision,
       payload: Buffer.from(JSON.stringify(payload)).toString("base64"),
     }),
   });
   const answer = await response.json();
   if (!response.ok || answer.error) throw new Error(`${schema} ${id}: ${JSON.stringify(answer.error ?? answer)}`);
-}
-
-async function publish(id) {
-  const drafts = [{ kind: "object", id }];
-  const preview = await call("/v1/releases/preview", { drafts });
-  if (preview.diagnostic) throw new Error(`preview ${id}: ${JSON.stringify(preview.diagnostic)}`);
-  await call("/v1/releases/candidates", { drafts, candidateId: preview.candidateId, key: randomUUID() });
-  await call("/v1/releases/active", { candidateId: preview.candidateId, key: randomUUID() });
 }
 
 const projects = await call("/v1/records/build.app?limit=500");
@@ -67,13 +59,13 @@ await submit("build.app", sample.project.name, "create", sample.project);
 for (const type of sample.types) {
   const id = `OBJ-${type.name}`;
   await submit("build.object", id, "create", { ...type.definition, name: type.name, project: sample.project.name });
-  await publish(id);
+  if (!type.draft) await submit("build.object", id, "publish", {}, "build", 1);
 }
 
 catalogue = await call("/v1/actions");
 const declarations = await call("/v1/declarations");
 let written = 0;
-for (const type of sample.types) {
+for (const type of sample.types.filter((each) => !each.draft)) {
   const full = `build.${type.name}`;
   const authority = declarations.find((entry) => entry.tenantId === identity.tenantId && entry.dataClass === full)?.authorityId;
   if (!authority) throw new Error(`${full}: no write authority after publishing`);
@@ -82,4 +74,4 @@ for (const type of sample.types) {
     written += 1;
   }
 }
-console.log(`frontend-seed: ${sample.types.length} object types and ${written} records in project ${sample.project.name} on ${host}`);
+console.log(`frontend-seed: ${sample.types.length} object types (${sample.types.filter((each) => each.draft).length} left as drafts) and ${written} records in project ${sample.project.name} on ${host}`);
