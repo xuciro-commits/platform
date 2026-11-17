@@ -56,28 +56,29 @@ type Entity struct {
 	ComputeAt         func(c Caller, record any, now time.Time) *Error
 	Validate          func(c Caller, record any) *Error
 
-	Type            string
-	Title           string
-	Plural          string
-	Description     string
-	Synonyms        string
-	Model           any
-	RecordFormat    string
-	RecordImages    []RecordImageFormat
-	Display         string
-	ObjectView      *ObjectView `json:"objectView,omitempty"`
-	Icon            string
-	Color           string
-	Scope           Scope
-	KnowledgeFiles  bool
-	Standard        Standard
-	Implements      []string
-	Extends         string
-	ExtensionSource *ExtensionSource
-	Lifecycle       *Lifecycle
-	Seed            []any
-	Derived         []Derivation
-	Withheld        string
+	Type                   string
+	Title                  string
+	Plural                 string
+	Description            string
+	Synonyms               string
+	Model                  any
+	RecordFormat           string
+	RecordImages           []RecordImageFormat
+	Display                string
+	ObjectView             *ObjectView `json:"objectView,omitempty"`
+	Icon                   string
+	Color                  string
+	Scope                  Scope
+	KnowledgeFiles         bool
+	Standard               Standard
+	Implements             []string
+	Extends                string
+	ExtensionSource        *ExtensionSource
+	Lifecycle              *Lifecycle
+	TransactionDestination func(subject, field string, txn *BusinessTxn, inputs []Field) ([]string, string)
+	Seed                   []any
+	Derived                []Derivation
+	Withheld               string
 }
 
 type DataSourceBinding struct {
@@ -176,47 +177,6 @@ type TransitionInfo struct {
 	Title   string   `json:"title"`
 	From    []string `json:"from"`
 	To      []string `json:"to"`
-}
-
-func TransactionDestination(subject, field string, txn *BusinessTxn, inputs []Field) ([]string, string) {
-	if txn == nil || txn.Subject != subject {
-		return nil, ""
-	}
-	var assignment *Expr
-	writes, direct := 0, false
-	var visit func([]TxnStep, bool)
-	visit = func(steps []TxnStep, nested bool) {
-		for _, step := range steps {
-			if step.Kind == "update" && step.Target.Type == subject {
-				for _, change := range step.Changes {
-					if change.Field == field {
-						writes++
-						assignment = change.Expr
-						direct = !nested && step.When == nil && step.Target.ID == "$subject" && step.Target.Via == ""
-					}
-				}
-			}
-			if step.ForEach != nil {
-				visit(step.ForEach.Steps, true)
-			}
-		}
-	}
-	visit(txn.Steps, false)
-	if writes != 1 || !direct || assignment == nil || assignment.Op != "" {
-		return nil, ""
-	}
-	if assignment.Lit != nil {
-		var state string
-		if json.Unmarshal(assignment.Lit.Value, &state) == nil {
-			return []string{state}, ""
-		}
-	}
-	for _, input := range inputs {
-		if assignment.Ref == "input."+input.Name && input.Type == "string" && input.Required && len(input.Choices) > 0 {
-			return slices.Clone(input.Choices), input.Name
-		}
-	}
-	return nil, ""
 }
 
 type Standard struct {

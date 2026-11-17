@@ -181,7 +181,7 @@ func CheckAdoptionSources(o Object, objectType string, a Action, lookup func(str
 		return e.In != nil && consumes(*e.In)
 	}
 	var problem error
-	platform.WalkBusinessTxn(a.Transaction, func(step platform.TxnStep) {
+	WalkBusinessTxn(a.Transaction, func(step platform.TxnStep) {
 		for _, change := range step.Changes {
 			if !consumesRef(change.From) && (change.Expr == nil || !consumes(*change.Expr)) {
 				continue

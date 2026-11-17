@@ -193,7 +193,7 @@ func MapObjectIntegrations(object *Object, resolve func(platform.AssetKind, stri
 		if txn == nil {
 			return
 		}
-		platform.WalkBusinessTxn(txn, func(step platform.TxnStep) {
+		WalkBusinessTxn(txn, func(step platform.TxnStep) {
 			if failure == nil && step.Effect != nil {
 				step.Effect.Writeback, failure = resolve(platform.AssetWriteback, step.Effect.Writeback)
 			}

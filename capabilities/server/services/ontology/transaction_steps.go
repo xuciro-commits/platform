@@ -54,7 +54,7 @@ func checkRefusalDeclarations(ctx TransactionContext, object Object, action Acti
 			}
 			alternative := object.Actions[index]
 			created, related := false, false
-			platform.WalkTxnSteps(alternative.Transaction.Steps, func(step platform.TxnStep) {
+			WalkTxnSteps(alternative.Transaction.Steps, func(step platform.TxnStep) {
 				if step.Kind != "create" {
 					return
 				}
@@ -115,7 +115,7 @@ func checkRefusalDeclarations(ctx TransactionContext, object Object, action Acti
 					return fmt.Errorf("refusal record needs distinct writable fields")
 				}
 				seen[field.Name] = true
-				expr, err := platform.AssignmentExpr(field.Type, assignment, recordScope)
+				expr, err := AssignmentExpr(field.Type, assignment, recordScope)
 				if err != nil {
 					return err
 				}
@@ -227,7 +227,7 @@ func checkTxnIntervals(ctx TransactionContext, step platform.TxnStep, scope plat
 	if !found || output.App != ctx.App {
 		return fmt.Errorf("Interval projection output must belong to its authority")
 	}
-	fields := platform.IntervalFields(p.Fields)
+	fields := IntervalFields(p.Fields)
 	if len(fields) != 11 {
 		return fmt.Errorf("Interval projection fields must be distinct")
 	}
@@ -265,7 +265,7 @@ func checkTypedTxnStep(ctx TransactionContext, step platform.TxnStep, scope plat
 				return fmt.Errorf("Transaction parameters need distinct names")
 			}
 			seen[set.Field] = true
-			expr, err := platform.DispatchParameter(set, scope)
+			expr, err := DispatchParameter(set, scope)
 			if err != nil {
 				return err
 			}
@@ -303,7 +303,7 @@ func checkTypedTxnStep(ctx TransactionContext, step platform.TxnStep, scope plat
 				return fmt.Errorf("Post match fields must be distinct writable balance identifiers")
 			}
 			seen[f.Name] = true
-			expr, err := platform.AssignmentExpr(f.Type, match, scope)
+			expr, err := AssignmentExpr(f.Type, match, scope)
 			if err != nil {
 				return err
 			}

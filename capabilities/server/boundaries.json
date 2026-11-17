@@ -8,7 +8,7 @@
     "services/resources/publication": ["platform"],
     "services/ontology": ["platform", "services/resources", "kernel/records", "kernel/acceptedformat", "kernel/protocol"],
     "services/objects": ["expr", "platform", "services/ontology", "services/resources/publication", "kernel/records", "kernel/acceptedformat", "kernel/protocol"],
-    "services/actions": ["platform", "services/objects", "services/functions", "services/resources/publication", "kernel/records", "kernel/acceptedformat", "kernel/protocol"],
+    "services/actions": ["platform", "services/objects", "services/functions", "services/ontology", "services/resources/publication", "kernel/records", "kernel/acceptedformat", "kernel/protocol"],
     "services/actions/catalog": ["platform"],
     "services/functions": ["platform", "services/actions/catalog", "services/resources/publication", "kernel/records", "kernel/acceptedformat", "kernel/protocol"],
     "services/data": ["platform", "services/resources", "services/actions/catalog", "kernel/records", "kernel/acceptedformat", "kernel/protocol"],

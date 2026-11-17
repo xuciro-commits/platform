@@ -32,7 +32,7 @@ func (resolver Resolver) ArtifactOfApplication(root platform.AssetRef, available
 			continue
 		}
 		binding := platform.AssetBinding{Ref: asset.Ref, SourceVersion: asset.SourceVersion}
-		roles, err := applicationAssetRoles(asset)
+		roles, err := resolver.applicationAssetRoles(asset)
 		if err != nil {
 			return artifact, err
 		}
@@ -84,7 +84,7 @@ func (resolver Resolver) ArtifactOfApplication(root platform.AssetRef, available
 	return artifact, nil
 }
 
-func applicationAssetRoles(asset platform.ReleaseAsset) ([]platform.ApplicationRole, error) {
+func (resolver Resolver) applicationAssetRoles(asset platform.ReleaseAsset) ([]platform.ApplicationRole, error) {
 	var descriptor struct {
 		Entity platform.EntityInfo `json:"entity"`
 		Access []struct {
@@ -142,7 +142,7 @@ func applicationAssetRoles(asset platform.ReleaseAsset) ([]platform.ApplicationR
 	}
 	var fields []platform.FieldInfo
 	if asset.Ref.Kind == platform.AssetObject {
-		info, err := QueryObjectDescriptor(asset.Body)
+		info, err := resolver.ObjectDescriptor(asset.Body)
 		if err != nil {
 			return nil, err
 		}

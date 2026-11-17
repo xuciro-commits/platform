@@ -5,6 +5,7 @@ import (
 	"slices"
 
 	"platformserver/platform"
+	"platformserver/services/ontology"
 	"platformserver/services/resources/publication"
 )
 
@@ -124,5 +125,9 @@ func PublicationResolver() publication.Resolver {
 		CheckApplicationVariables: CheckApplicationVariables,
 		CheckApplicationResources: CheckApplicationResources, CheckApplicationExtension: CheckApplicationExtension,
 		ApplicationDependencies: ApplicationDependencies,
+		ObjectDescriptor:        ontology.ObjectDescriptor,
+		ActionDescriptor:        ontology.ActionDescriptor,
+		ObjectDependencies:      ontology.ObjectDependencies,
+		ActionDependencies:      ontology.ActionDependencies,
 	}
 }

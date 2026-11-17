@@ -11,7 +11,7 @@ func TransactionSequences(installed map[string]platform.Entity) []platform.Seque
 	byName := map[string]platform.Sequence{}
 	for _, typ := range slices.Sorted(maps.Keys(installed)) {
 		if txn := installed[typ].CreateTxn; txn != nil {
-			platform.WalkBusinessTxn(txn, func(step platform.TxnStep) {
+			WalkBusinessTxn(txn, func(step platform.TxnStep) {
 				if step.Sequence != nil {
 					byName[step.Sequence.Name] = *step.Sequence
 				}
@@ -23,7 +23,7 @@ func TransactionSequences(installed map[string]platform.Entity) []platform.Seque
 					if rule.Transaction == nil || rule.Transaction.Spec == nil {
 						continue
 					}
-					platform.WalkBusinessTxn(rule.Transaction.Spec, func(step platform.TxnStep) {
+					WalkBusinessTxn(rule.Transaction.Spec, func(step platform.TxnStep) {
 						if step.Sequence != nil {
 							byName[step.Sequence.Name] = *step.Sequence
 						}

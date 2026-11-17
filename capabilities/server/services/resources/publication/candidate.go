@@ -65,7 +65,7 @@ func (resolver Resolver) candidate(roots []platform.AssetRef, available []platfo
 		if ref.Kind != platform.AssetObject {
 			continue
 		}
-		info, err := QueryObjectDescriptor(lookup[ref].Body)
+		info, err := resolver.ObjectDescriptor(lookup[ref].Body)
 		if err != nil {
 			return empty, err
 		}
@@ -102,14 +102,14 @@ func (resolver Resolver) candidate(roots []platform.AssetRef, available []platfo
 				if typ != observation.Object.Name || !exists {
 					return platform.EntityInfo{}, false
 				}
-				info, err := QueryObjectDescriptor(target.Body)
+				info, err := resolver.ObjectDescriptor(target.Body)
 				return info, err == nil
 			}); err != nil {
 				return empty, fmt.Errorf("observation %s: %w", ref, err)
 			}
 			if observation.Decision != nil {
 				actionAsset, exists := lookup[observation.Decision.Action]
-				action, err := ReleaseActionDescriptor(actionAsset.Body)
+				action, err := resolver.ActionDescriptor(actionAsset.Body)
 				if !exists || err != nil {
 					return empty, fmt.Errorf("observation %s action is unavailable", ref)
 				}
@@ -125,13 +125,13 @@ func (resolver Resolver) candidate(roots []platform.AssetRef, available []platfo
 			}
 		}
 		if ref.Kind == platform.AssetObject {
-			info, err := QueryObjectDescriptor(body)
+			info, err := resolver.ObjectDescriptor(body)
 			if err != nil {
 				return empty, err
 			}
 			if source := info.ExtensionSource; source != nil {
 				base, exists := lookup[source.Base.Ref]
-				shape, err := QueryObjectDescriptor(base.Body)
+				shape, err := resolver.ObjectDescriptor(base.Body)
 				if !exists || err != nil || !slices.Contains(asset.Requires, source.Base.Ref) {
 					return empty, fmt.Errorf("extension %s needs its base object in the frozen closure", ref)
 				}
@@ -244,7 +244,7 @@ func (resolver Resolver) candidate(roots []platform.AssetRef, available []platfo
 						for _, effect := range event.Effects {
 							if effect.Kind == "action" && effect.Action != nil {
 								asset, ok := lookup[effect.Action.Ref]
-								action, err := ReleaseActionDescriptor(asset.Body)
+								action, err := resolver.ActionDescriptor(asset.Body)
 								if !ok || err != nil || action.New == (effect.Action.RecordVariable != "") {
 									return empty, fmt.Errorf("page action effect %s is unavailable", effect.Action.Ref)
 								}

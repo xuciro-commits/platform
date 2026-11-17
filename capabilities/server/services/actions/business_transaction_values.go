@@ -11,6 +11,7 @@ import (
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformserver/platform"
+	"platformserver/services/ontology"
 )
 
 func (b *Runtime) txnPost(c platform.Caller, r *pb.ChangeRecord, step platform.TxnStep, scope platform.RuleReadSpec, subject any, inputs map[string]any, now time.Time, reserve func(string) *platform.Error) (string, *platform.Error) {
@@ -24,7 +25,7 @@ func (b *Runtime) txnPost(c platform.Caller, r *pb.ChangeRecord, step platform.T
 	keys := []string{}
 	for _, match := range p.Match {
 		field, _ := info.Field(match.Field)
-		expr, err := platform.AssignmentExpr(field.Type, match, scope)
+		expr, err := ontology.AssignmentExpr(field.Type, match, scope)
 		if err != nil {
 			return "", platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "{why}", err.Error())
 		}
@@ -139,7 +140,7 @@ func txnCallValue(call platform.TxnCall, raw json.RawMessage) (platform.ExprValu
 func (b *Runtime) txnParameters(c platform.Caller, sets []platform.TxnSet, scope platform.RuleReadSpec, subject any, inputs map[string]any, now time.Time) (json.RawMessage, *platform.Error) {
 	values := map[string]any{}
 	for _, set := range sets {
-		expr, err := platform.DispatchParameter(set, scope)
+		expr, err := ontology.DispatchParameter(set, scope)
 		if err != nil {
 			return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "{why}", err.Error())
 		}

@@ -131,7 +131,7 @@ func CheckTransactions(object Object, ctx TransactionContext, engines ...platfor
 		}
 		spec := RuleSpec(object, ctx.App, action, txn.Reads)
 		var stateError error
-		platform.WalkBusinessTxn(txn, func(step platform.TxnStep) {
+		WalkBusinessTxn(txn, func(step platform.TxnStep) {
 			if stateError != nil || step.Target.Type != subject {
 				return
 			}
@@ -139,7 +139,7 @@ func CheckTransactions(object Object, ctx TransactionContext, engines ...platfor
 				if assignment.Field != "state" {
 					continue
 				}
-				expr, err := platform.AssignmentExpr("choice", assignment, spec)
+				expr, err := AssignmentExpr("choice", assignment, spec)
 				if err != nil {
 					stateError = err
 					return
@@ -237,12 +237,12 @@ func CheckTransactions(object Object, ctx TransactionContext, engines ...platfor
 						if err := checkTxnRange(*step.ForEach.Range, scope, lookup, engines...); err != nil {
 							return fmt.Errorf("%s: %w", where, err)
 						}
-						if err := check(step.ForEach.Steps, platform.WithTxnRange(scope, step.ForEach.Range.From.Kind), "", step.Name); err != nil {
+						if err := check(step.ForEach.Steps, WithTxnRange(scope, step.ForEach.Range.From.Kind), "", step.Name); err != nil {
 							return err
 						}
 						continue
 					}
-					source, err := platform.TxnIterationSource(ctx.App, subject, step.ForEach.Of, lookup)
+					source, err := TxnIterationSource(ctx.App, subject, step.ForEach.Of, lookup)
 					if err != nil {
 						return fmt.Errorf("%s: %w", where, err)
 					}
@@ -258,7 +258,7 @@ func CheckTransactions(object Object, ctx TransactionContext, engines ...platfor
 					if !ok || item.App != ctx.App {
 						return fmt.Errorf("%s cannot iterate writes in another authority", where)
 					}
-					if err := check(step.ForEach.Steps, platform.WithTxnRow(scope, item), set.Object, step.Name); err != nil {
+					if err := check(step.ForEach.Steps, WithTxnRow(scope, item), set.Object, step.Name); err != nil {
 						return err
 					}
 					continue
@@ -295,7 +295,7 @@ func CheckTransactions(object Object, ctx TransactionContext, engines ...platfor
 							return err
 						}
 					}
-					platform.TxnResult(&scope, step)
+					TxnResult(&scope, step)
 					continue
 				}
 				if step.Kind == "sequence" {
@@ -315,7 +315,7 @@ func CheckTransactions(object Object, ctx TransactionContext, engines ...platfor
 						return fmt.Errorf("%s has conflicting sequence declarations", where)
 					}
 					sequences[step.Sequence.Name] = *step.Sequence
-					platform.TxnResult(&scope, step)
+					TxnResult(&scope, step)
 					continue
 				}
 				if step.Sequence != nil {
@@ -382,18 +382,18 @@ func CheckTransactions(object Object, ctx TransactionContext, engines ...platfor
 						return fmt.Errorf("%s needs distinct writable Expr assignments", where)
 					}
 					used[field.Name] = true
-					expr, err := platform.AssignmentExpr(field.Type, assignment, scope)
+					expr, err := AssignmentExpr(field.Type, assignment, scope)
 					if err != nil {
 						return fmt.Errorf("%s: %w", where, err)
 					}
-					if !platform.RuleAssignmentFits(field.Type, expr.Kind) {
+					if !RuleAssignmentFits(field.Type, expr.Kind) {
 						return fmt.Errorf("%s assignment type differs", where)
 					}
 					if _, err := platform.RuleSchema(expr, scope, lookup, engines...); err != nil {
 						return fmt.Errorf("%s field %s: %w", where, field.Name, err)
 					}
 				}
-				platform.TxnResult(&scope, step)
+				TxnResult(&scope, step)
 			}
 			return nil
 		}

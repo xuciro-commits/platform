@@ -34,12 +34,6 @@
 
 ## U7：platform 只留 SDK 契约
 
-- [ ] U7.2 事务定义边界：保留 `BusinessTxn`、`TxnStep`、嵌套步骤、严格 JSON 解码和
-  `Entity`/`Action` 内嵌字段在 `platform`，因为 kernel、冻结制品和各服务的公共契约都直接消费这份线格式。
-  定义规范化、步骤校验与 `TransactionDestination`/遍历归 `services/ontology`，执行、提案和副作用结算归
-  `services/actions`；允许 actions 导入 ontology。对象与动作的冻结解码改由 ontology 提供描述器，publication
-  只接收回调，不反向理解事务。运行事务、发布、安装、拒绝和重放检查，历史字节与格式纪元不变。
-
 - [ ] U7.3 共享规则与条件：`AssetKind`、`AssetRef.Check`、`PageNodeID`、`IconName` 和
   `RuleEngineOf` 作为跨 kernel 与服务的 SDK 词法/注入契约留在 `platform`；`MergeRuleTypes` 迁到 `expr`。
   `Binding`、`Run` 的线格式留在 SDK，`ConditionRefs` 归 `expr`，条件到 binding、条件校验与测试归

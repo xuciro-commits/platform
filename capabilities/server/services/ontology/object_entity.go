@@ -20,6 +20,7 @@ func CompileObjectEntity(o Object, env ObjectRuntimeEnvironment) platform.Entity
 	std, scope, roles := CompileAccess(o, BuilderRole, UserRole)
 	entity.Standard, entity.Scope = std, scope
 	entity.Lifecycle = compileLifecycle(o, roles, env)
+	entity.TransactionDestination = TransactionDestination
 	entity.Validate = validateObject(o, entity.Model, env.Lookup)
 	entity.CreateTxn = o.CreateTransaction
 	entity.EnterpriseUse = o.EnterpriseUse

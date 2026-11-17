@@ -5,6 +5,7 @@ import (
 	"maps"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformserver/platform"
+	"platformserver/services/ontology"
 	"strconv"
 	"time"
 )
@@ -22,7 +23,7 @@ func (b *Runtime) txnIntervals(c platform.Caller, receipt *pb.ChangeRecord, subj
 	if !installed {
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Interval output object is unavailable")
 	}
-	for name := range platform.IntervalFields(p.Fields) {
+	for name := range ontology.IntervalFields(p.Fields) {
 		field, found := info.Field(name)
 		if !found || !field.ReadsAny(c.RolesIn(info.App), c.Rules()) {
 			return platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "Interval projection contains withheld fields / 区间集合含不可见字段")

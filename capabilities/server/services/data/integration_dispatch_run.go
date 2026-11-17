@@ -63,7 +63,7 @@ func (o *Owner) OpenDispatch(c platform.Caller, receipt *pb.ChangeRecord, txn *p
 	}
 	payload := map[string]any{}
 	for _, set := range spec.Payload {
-		expr, err := platform.DispatchParameter(set, scope)
+		expr, err := ontology.DispatchParameter(set, scope)
 		if err != nil {
 			return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "{why}", err.Error())
 		}

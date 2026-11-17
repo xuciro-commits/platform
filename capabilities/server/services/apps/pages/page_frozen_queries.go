@@ -6,7 +6,6 @@ import (
 	"slices"
 
 	"platformserver/platform"
-	"platformserver/services/resources/publication"
 )
 
 func CheckFrozenQueries(original platform.Page, assets map[platform.AssetRef]platform.ReleaseAsset) error {
@@ -25,12 +24,12 @@ func CheckFrozenQueries(original platform.Page, assets map[platform.AssetRef]pla
 				}
 			}
 		}
-		info, err := publication.QueryObjectDescriptor(asset.Body)
+		info, err := PublicationResolver().ObjectDescriptor(asset.Body)
 		return platform.ConstraintEntity(info), ok && err == nil
 	}
 	criteria := func(ref platform.AssetRef) (*platform.RuleCriteria, bool) {
 		asset, ok := assets[ref]
-		action, err := publication.ReleaseActionDescriptor(asset.Body)
+		action, err := PublicationResolver().ActionDescriptor(asset.Body)
 		if !ok || err != nil {
 			return nil, false
 		}
@@ -91,14 +90,14 @@ func CheckFrozenQueries(original platform.Page, assets map[platform.AssetRef]pla
 		}
 		for _, ref := range trigger.Actions {
 			asset, ok := assets[ref]
-			action, err := publication.ReleaseActionDescriptor(asset.Body)
+			action, err := PublicationResolver().ActionDescriptor(asset.Body)
 			if !ok || err != nil || platform.StaticControlAction(action) || action.Target != object {
 				return fmt.Errorf("page action owner or target is unavailable")
 			}
 		}
 		if trigger.InlineEdit != nil {
 			asset, ok := assets[trigger.InlineEdit.Action]
-			action, err := publication.ReleaseActionDescriptor(asset.Body)
+			action, err := PublicationResolver().ActionDescriptor(asset.Body)
 			info, found := lookup(object)
 			if !ok || !found || err != nil || CheckTableEdit(trigger.InlineEdit, info, action) != nil {
 				return fmt.Errorf("page edit fields differ from original action")
@@ -108,7 +107,7 @@ func CheckFrozenQueries(original platform.Page, assets map[platform.AssetRef]pla
 			if len(trigger.Actions) != 1 {
 				return fmt.Errorf("page parameters need one original action")
 			}
-			action, err := publication.ReleaseActionDescriptor(assets[trigger.Actions[0]].Body)
+			action, err := PublicationResolver().ActionDescriptor(assets[trigger.Actions[0]].Body)
 			if err != nil {
 				return err
 			}
@@ -180,7 +179,7 @@ func CheckFrozenQueries(original platform.Page, assets map[platform.AssetRef]pla
 			continue
 		}
 		asset, ok := assets[plan.Object]
-		object, err := publication.QueryObjectDescriptor(asset.Body)
+		object, err := PublicationResolver().ObjectDescriptor(asset.Body)
 		if !ok || err != nil {
 			return fmt.Errorf("page query %s object is unavailable", id)
 		}
@@ -197,8 +196,8 @@ func CheckFrozenQueries(original platform.Page, assets map[platform.AssetRef]pla
 				}
 				parentAsset, pok := assets[link.Parent]
 				childAsset, cok := assets[link.Child]
-				parent, pe := publication.QueryObjectDescriptor(parentAsset.Body)
-				child, ce := publication.QueryObjectDescriptor(childAsset.Body)
+				parent, pe := PublicationResolver().ObjectDescriptor(parentAsset.Body)
+				child, ce := PublicationResolver().ObjectDescriptor(childAsset.Body)
 				parent.App = link.Parent.App
 				child.App = link.Child.App
 				if !pok || !cok || pe != nil || ce != nil || link.CheckSchema(parent, child) != nil {
@@ -242,7 +241,7 @@ func frozenPageInterfaceQuery(q platform.PageQuery, lookup map[platform.AssetRef
 	}
 	for _, ref := range named.Dependencies() {
 		implementation, exists := lookup[ref]
-		info, err := publication.QueryObjectDescriptor(implementation.Body)
+		info, err := PublicationResolver().ObjectDescriptor(implementation.Body)
 		if !exists || err != nil || info.Type != ref.Name || info.App != ref.App || !slices.Contains(info.Implements, named.Interface) || named.InterfaceShape.Implements(info) != nil {
 			return nil, fmt.Errorf("frozen interface query implementation %s is unavailable", ref.Name)
 		}

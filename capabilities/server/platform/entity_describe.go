@@ -102,8 +102,10 @@ func Describe(app string, e Entity, typeOf func(reflect.Type) string) (EntityInf
 				if rule.Transaction != nil {
 					hasTransaction = rule.Transaction.Spec != nil && rule.Transaction.Run != nil
 					to = slices.Clone(from)
-					if dest, input := TransactionDestination(e.Type, l.Field, rule.Transaction.Spec, t.Parameters); len(dest) > 0 {
-						to, inputName = dest, input
+					if e.TransactionDestination != nil {
+						if dest, input := e.TransactionDestination(e.Type, l.Field, rule.Transaction.Spec, t.Parameters); len(dest) > 0 {
+							to, inputName = dest, input
+						}
 					}
 				}
 			}

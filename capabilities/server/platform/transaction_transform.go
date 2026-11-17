@@ -2,12 +2,7 @@ package platform
 
 import (
 	"encoding/json"
-	"fmt"
-	"maps"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"slices"
-	"strconv"
-	"strings"
 	"time"
 )
 
@@ -48,67 +43,6 @@ type QuarantinedRow struct {
 	Row    map[string]any `json:"row"`
 }
 
-func Literal(kind, s string) (any, error) {
-	switch kind {
-	case "integer":
-		return strconv.Atoi(s)
-	case "decimal":
-		return strconv.ParseFloat(s, 64)
-	case "boolean":
-		return strconv.ParseBool(s)
-	case "date":
-		_, err := time.Parse(time.DateOnly, s)
-		return s, err
-	case "datetime":
-		return time.Parse(time.RFC3339, s)
-	case "money":
-		return nil, fmt.Errorf("an amount is not set to a fixed value")
-	}
-	return s, nil
-}
-
-func AssignmentExpr(kind string, set TxnSet, spec RuleReadSpec) (Expr, error) {
-	kind = RuleFieldKind(kind)
-	targetKind := kind
-	if set.Expr != nil {
-		if set.From != "" {
-			return Expr{}, fmt.Errorf("use one assignment expression")
-		}
-		if !RuleAssignmentFits(kind, set.Expr.Kind) {
-			return Expr{}, fmt.Errorf("assignment result type differs from field")
-		}
-		return *set.Expr, nil
-	}
-	switch {
-	case set.From == "$me":
-		return ExprReference("text", "caller.id"), nil
-	case set.From == "$subject":
-		return ExprReference("reference", "input.$subject"), nil
-	case set.From == "$now":
-		op := "$now"
-		if kind == "date" {
-			op = "$today"
-		}
-		return Expr{Op: op, Kind: kind}, nil
-	case strings.HasPrefix(set.From, "="):
-		v, err := Literal(kind, strings.TrimPrefix(set.From, "="))
-		return ExprLiteralValue(kind, v), err
-	default:
-		name := set.From
-		if !strings.HasPrefix(name, "step.") && !strings.HasPrefix(name, "row.") {
-			name = "input." + name
-		}
-		input := strings.TrimPrefix(name, "input.")
-		if typ, ok := spec.Inputs[input]; ok {
-			kind = typ.Kind
-		}
-		if !RuleAssignmentFits(targetKind, kind) {
-			return Expr{}, fmt.Errorf("assignment source differs")
-		}
-		return ExprReference(kind, name), nil
-	}
-}
-
 func RuleAssignment(e Expr, s RuleReadSpec, c Caller, record any, inputs map[string]any, now time.Time, lookup func(string) (EntityInfo, bool), provenance ...*[]string) (any, *Error) {
 	r, err := EvaluateRule(e, s, c, record, inputs, now, lookup)
 	for _, refs := range provenance {
@@ -122,28 +56,6 @@ func RuleAssignment(e Expr, s RuleReadSpec, c Caller, record any, inputs map[str
 		return nil, Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, failure.Error())
 	}
 	return v, nil
-}
-
-func RuleAssignmentFits(dst, src string) bool {
-	dst = RuleFieldKind(dst)
-	src = RuleFieldKind(src)
-	return dst == src || dst == "text" && src == "choice" || (dst == "decimal" || dst == "number") && (src == "integer" || src == "decimal" || src == "number")
-}
-
-func DispatchParameter(set TxnSet, scope RuleReadSpec) (Expr, error) {
-	kind := "text"
-	if set.Expr != nil {
-		kind = set.Expr.Kind
-	} else if input, found := scope.Inputs[strings.TrimPrefix(set.From, "input.")]; found {
-		kind = input.Kind
-	}
-	if set.Expr == nil && strings.HasPrefix(set.From, "input.") {
-		set.From = strings.TrimPrefix(set.From, "input.")
-	}
-	if slices.Contains([]string{"set", "object", "json", ""}, kind) {
-		return Expr{}, fmt.Errorf("Dispatch parameters require scalar expressions")
-	}
-	return AssignmentExpr(kind, set, scope)
 }
 
 type BusinessRuntimeContext struct {
@@ -165,78 +77,6 @@ type TransactionProposal struct {
 
 type TransactionEffectDefinition struct {
 	Request func(string, json.RawMessage) (json.RawMessage, *Error)
-}
-
-func WalkTxnSteps(steps []TxnStep, visit func(TxnStep)) {
-	for _, step := range steps {
-		visit(step)
-		if step.ForEach != nil {
-			WalkTxnSteps(step.ForEach.Steps, visit)
-		}
-		for _, refusal := range step.Refusals {
-			if refusal.Record != nil {
-				WalkTxnSteps([]TxnStep{*refusal.Record}, visit)
-			}
-		}
-	}
-}
-
-func WalkBusinessTxn(txn *BusinessTxn, visit func(TxnStep)) {
-	WalkTxnSteps(txn.Steps, visit)
-	for _, refusal := range txn.Refusals {
-		if refusal.Record != nil {
-			WalkTxnSteps([]TxnStep{*refusal.Record}, visit)
-		}
-	}
-}
-
-func WithTxnRow(spec RuleReadSpec, info EntityInfo) RuleReadSpec {
-	spec.Inputs = maps.Clone(spec.Inputs)
-	for _, field := range ConstraintEntity(info).Fields {
-		spec.Inputs["row."+field.Name] = ExprType{Kind: RuleFieldKind(field.Type), Object: field.Ref}
-	}
-	spec.Inputs["row.$subject"] = ExprType{Kind: "reference", Object: info.Type}
-	return spec
-}
-
-func TxnResult(spec *RuleReadSpec, step TxnStep) {
-	if step.Call != nil {
-		spec.Inputs["step."+step.Name] = step.Call.ResultType
-	}
-	if step.Kind == "sequence" {
-		spec.Inputs["step."+step.Name] = ExprType{Kind: "text"}
-	}
-	if step.Kind == "create" || step.Kind == "post" {
-		spec.Inputs["step."+step.Name] = ExprType{Kind: "reference", Object: step.Target.Type}
-	}
-}
-
-func IntervalFields(f TxnIntervalFields) map[string]string {
-	return map[string]string{f.Subject: "reference", f.Source: "text", f.SourceVersion: "text", f.SourceRevision: "text", f.ProcessingVersion: "text", f.Since: "datetime", f.Until: "datetime", f.OpenStart: "boolean", f.OpenEnd: "boolean", f.Retired: "boolean", f.Review: "boolean"}
-}
-
-func WithTxnRange(scope RuleReadSpec, kind string) RuleReadSpec {
-	scope.Inputs = maps.Clone(scope.Inputs)
-	scope.Inputs["row.start"] = ExprType{Kind: kind}
-	scope.Inputs["row.end"] = ExprType{Kind: kind}
-	scope.Inputs["row.index"] = ExprType{Kind: "integer"}
-	return scope
-}
-
-func TxnIterationSource(owner, subject, of string, lookup func(string) (EntityInfo, bool)) (EntityInfo, error) {
-	typ := subject
-	if of != "" {
-		field, err := RecordPathField(subject, strings.Split(of, "."), lookup)
-		if err != nil || field.Type != "reference" || field.Ref == "" {
-			return EntityInfo{}, fmt.Errorf("Iteration source must be a declared record reference")
-		}
-		typ = field.Ref
-	}
-	info, ok := lookup(typ)
-	if !ok || info.App != owner {
-		return EntityInfo{}, fmt.Errorf("Iteration source must belong to its transaction owner")
-	}
-	return info, nil
 }
 
 type TransactionExecutor interface {

@@ -58,8 +58,9 @@
   `services/functions/authoring` 读取，智能体与函数评估报告由 AI 服务提供，资源服务保留装配适配。
 - 对象、动作类型、对象执行形状、生命周期与约束编译归 `services/ontology`。资源服务只编排跨类型草稿、
   联合发布、页面覆盖、资源身份与安装；动作执行仍归 `services/actions`。
-- 事务声明、规范化、编号与步骤校验归 `services/ontology`，事务执行与拒绝改路归 `services/actions`；
-  资源服务提供保留版本、集成绑定和跨类型草稿上下文。
+- `BusinessTxn`、`TxnStep` 及其嵌套类型、严格 JSON 解码和 `Entity`/`Action` 内嵌字段是 SDK 线格式；
+  事务规范化、编号、步骤校验、遍历、生命周期目的地与对象/动作冻结描述归 `services/ontology`。
+  事务执行与拒绝改路归 `services/actions`，资源服务提供保留版本、集成绑定和跨类型草稿上下文。
 - 连接、数据源、数据集、管道、回写、确认和设备派发及其外部调用结算与补偿归 `services/data`；
   协议声明与校验归 `services/ontology`。资源服务只保留跨类型事务注册、发布资产绑定与路由适配。
 - 分支记录、检查、提案、审批和合并归 `services/resources/merge`；资源服务只保留跨资源 RID 映射、
@@ -69,7 +70,8 @@
 - 产品与 ProductVersion 的记录类型、动作声明和版本视图归 `services/devops/descriptor`，候选冻结与产品包描述归
   `services/devops/packages`；资源服务只保留项目、资源范围校验和接受结果写入适配。
 - 通用发布的草稿引用与差异、保留版本族读取、依赖展开和安装次序归 `services/resources/publication`；
-  资源服务按类型收集候选、复用发布钩子并编排联合草稿、执行分叉和重装。
+  资源服务按类型收集候选、复用发布钩子并编排联合草稿、执行分叉和重装。publication 通过 ontology
+  提供的对象/动作描述器读取冻结定义，不直接理解事务。
 - 属性、值类型、接口、对象组与关系的声明、转换和字段绑定校验归 `services/ontology`，关系数据迁移由对象服务执行。
 - 查询记录、接口查询绑定、记录集校验、保留版本与重装归 `services/objects`；资源服务保留查询资源身份、
   联合草稿上下文和跨类型发布编排，查询读取继续使用唯一的对象集执行器。

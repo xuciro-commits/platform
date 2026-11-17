@@ -75,7 +75,7 @@ func (o *Owner) CheckDispatch(spec *platform.Dispatch, object ontology.Object, a
 			return fmt.Errorf("Dispatch parameters must have distinct declared names")
 		}
 		used[set.Field] = true
-		expr, err := platform.DispatchParameter(set, scope)
+		expr, err := ontology.DispatchParameter(set, scope)
 		if err != nil {
 			return err
 		}
@@ -334,7 +334,7 @@ func objectHasIntegrations(object ontology.Object) bool {
 	found := len(object.DispatchCommands) > 0
 	visit := func(txn *platform.BusinessTxn) {
 		if txn != nil {
-			platform.WalkBusinessTxn(txn, func(step platform.TxnStep) { found = found || step.Effect != nil })
+			ontology.WalkBusinessTxn(txn, func(step platform.TxnStep) { found = found || step.Effect != nil })
 		}
 	}
 	visit(object.CreateTransaction)
@@ -351,7 +351,7 @@ func (o *Owner) PortableObject(object ontology.Object) (ontology.Object, error) 
 func (o *Owner) txnEffectBindings(txn *platform.BusinessTxn) (map[string]platform.AssetRef, error) {
 	refs := map[string]platform.AssetRef{}
 	var failure error
-	platform.WalkBusinessTxn(txn, func(step platform.TxnStep) {
+	ontology.WalkBusinessTxn(txn, func(step platform.TxnStep) {
 		if failure != nil || step.Effect == nil {
 			return
 		}

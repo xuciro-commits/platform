@@ -100,7 +100,7 @@ func (resolver Resolver) NewReleaseDependencyGraph(assets []platform.ReleaseAsse
 				}
 				if ref.App == asset.Ref.App && ref.Kind == platform.AssetAction {
 					if target, ok := lookup[ref]; ok {
-						action, err := ReleaseActionDescriptor(target.Body)
+						action, err := resolver.ActionDescriptor(target.Body)
 						if err == nil && action.Target == asset.Ref.Name {
 							graph.containment[[2]platform.AssetRef{asset.Ref, ref}] = true
 							graph.containment[[2]platform.AssetRef{ref, asset.Ref}] = true
@@ -109,7 +109,7 @@ func (resolver Resolver) NewReleaseDependencyGraph(assets []platform.ReleaseAsse
 				}
 			}
 
-			info, err := QueryObjectDescriptor(asset.Body)
+			info, err := resolver.ObjectDescriptor(asset.Body)
 			if err == nil {
 				if view := info.ObjectView; view != nil && checkObjectView(asset.Ref, *view, lookup) == nil {
 					graph.objectViews[[2]platform.AssetRef{asset.Ref, view.Application}] = true

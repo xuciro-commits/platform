@@ -31,7 +31,7 @@ func NormalizeTransaction(object Object, action *Action, lookup func(string) (pl
 					if !ok {
 						return fmt.Errorf("Post match field is unavailable")
 					}
-					expr, err := platform.AssignmentExpr(field.Type, match, scope)
+					expr, err := AssignmentExpr(field.Type, match, scope)
 					if err != nil {
 						return err
 					}
@@ -51,7 +51,7 @@ func NormalizeTransaction(object Object, action *Action, lookup func(string) (pl
 			}()} {
 				if parameters != nil {
 					for j, parameter := range *parameters {
-						expr, err := platform.DispatchParameter(parameter, scope)
+						expr, err := DispatchParameter(parameter, scope)
 						if err != nil {
 							return err
 						}
@@ -68,7 +68,7 @@ func NormalizeTransaction(object Object, action *Action, lookup func(string) (pl
 			}
 			if step.ForEach != nil {
 				if step.ForEach.Range != nil {
-					if err := lower(step.ForEach.Steps, platform.WithTxnRange(scope, step.ForEach.Range.From.Kind)); err != nil {
+					if err := lower(step.ForEach.Steps, WithTxnRange(scope, step.ForEach.Range.From.Kind)); err != nil {
 						return err
 					}
 					continue
@@ -79,7 +79,7 @@ func NormalizeTransaction(object Object, action *Action, lookup func(string) (pl
 					}
 					continue
 				}
-				source, err := platform.TxnIterationSource(AppID, AppID+"."+object.Name, step.ForEach.Of, lookup)
+				source, err := TxnIterationSource(AppID, AppID+"."+object.Name, step.ForEach.Of, lookup)
 				if err != nil {
 					return err
 				}
@@ -91,7 +91,7 @@ func NormalizeTransaction(object Object, action *Action, lookup func(string) (pl
 				if !ok {
 					return fmt.Errorf("iteration object is unavailable")
 				}
-				if err := lower(step.ForEach.Steps, platform.WithTxnRow(scope, info)); err != nil {
+				if err := lower(step.ForEach.Steps, WithTxnRow(scope, info)); err != nil {
 					return err
 				}
 				continue
@@ -113,14 +113,14 @@ func NormalizeTransaction(object Object, action *Action, lookup func(string) (pl
 					if !ok {
 						return fmt.Errorf("transaction field is unavailable")
 					}
-					expr, err := platform.AssignmentExpr(field.Type, *assignment, scope)
+					expr, err := AssignmentExpr(field.Type, *assignment, scope)
 					if err != nil {
 						return err
 					}
 					*assignment = platform.TxnSet{Field: assignment.Field, Expr: &expr}
 				}
 			}
-			platform.TxnResult(&scope, *step)
+			TxnResult(&scope, *step)
 		}
 		return nil
 	}
@@ -134,7 +134,7 @@ func NormalizeTransaction(object Object, action *Action, lookup func(string) (pl
 	}
 	if dispatch := action.Transaction.Dispatch; dispatch != nil {
 		for i, parameter := range dispatch.Payload {
-			expr, err := platform.DispatchParameter(parameter, scope)
+			expr, err := DispatchParameter(parameter, scope)
 			if err != nil {
 				return err
 			}
@@ -146,7 +146,7 @@ func NormalizeTransaction(object Object, action *Action, lookup func(string) (pl
 
 func txnUsesLegacyRows(steps []platform.TxnStep) bool {
 	needed := false
-	platform.WalkTxnSteps(steps, func(step platform.TxnStep) {
+	WalkTxnSteps(steps, func(step platform.TxnStep) {
 		sets := step.Changes
 		if step.Post != nil {
 			sets = append(slices.Clone(sets), step.Post.Match...)

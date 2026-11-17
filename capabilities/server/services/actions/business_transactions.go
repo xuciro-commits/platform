@@ -8,6 +8,7 @@ import (
 	"maps"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformserver/platform"
+	"platformserver/services/ontology"
 	"platformserver/services/resources/publication"
 	"reflect"
 	"slices"
@@ -39,7 +40,7 @@ func (b *Runtime) refusalRecord(c platform.Caller, receipt *pb.ChangeRecord, ste
 	patch := map[string]any{}
 	for _, assignment := range step.Changes {
 		field, _ := info.Field(assignment.Field)
-		expr, err := platform.AssignmentExpr(field.Type, assignment, scope)
+		expr, err := ontology.AssignmentExpr(field.Type, assignment, scope)
 		if err != nil {
 			return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
 		}
@@ -148,7 +149,7 @@ func (b *Runtime) transactAttempt(c platform.Caller, receipt *pb.ChangeRecord, t
 	original := platform.Raw(subject)
 	var calls platform.TxnCalls
 	usesCalls := false
-	platform.WalkBusinessTxn(txn, func(step platform.TxnStep) { usesCalls = usesCalls || step.Call != nil })
+	ontology.WalkBusinessTxn(txn, func(step platform.TxnStep) { usesCalls = usesCalls || step.Call != nil })
 	if usesCalls {
 		transport := c.TxnTransport()
 		if transport == nil {
@@ -345,13 +346,13 @@ func (b *Runtime) transactAttempt(c platform.Caller, receipt *pb.ChangeRecord, t
 					for i, row := range rows {
 						rowFacts := maps.Clone(facts)
 						maps.Copy(rowFacts, row)
-						if err := run(step.ForEach.Steps, platform.WithTxnRange(scope, span.From.Kind), rowFacts, "", strings.TrimPrefix(frame+"/"+step.Name, "/")+"-"+strconv.Itoa(i)); err != nil {
+						if err := run(step.ForEach.Steps, ontology.WithTxnRange(scope, span.From.Kind), rowFacts, "", strings.TrimPrefix(frame+"/"+step.Name, "/")+"-"+strconv.Itoa(i)); err != nil {
 							return err
 						}
 					}
 					continue
 				}
-				source, sourceErr := platform.TxnIterationSource(b.App, txn.Subject, step.ForEach.Of, b.Lookup)
+				source, sourceErr := ontology.TxnIterationSource(b.App, txn.Subject, step.ForEach.Of, b.Lookup)
 				if sourceErr != nil {
 					return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "{why}", sourceErr.Error())
 				}
@@ -369,7 +370,7 @@ func (b *Runtime) transactAttempt(c platform.Caller, receipt *pb.ChangeRecord, t
 				if err != nil {
 					return err
 				}
-				rowScope := platform.WithTxnRow(scope, info)
+				rowScope := ontology.WithTxnRow(scope, info)
 				for i, raw := range set.Records {
 					rowFacts, failure := txnRowInputs(c, info, raw, facts)
 					if failure != nil {
@@ -387,7 +388,7 @@ func (b *Runtime) transactAttempt(c platform.Caller, receipt *pb.ChangeRecord, t
 					return err
 				}
 				facts["step."+step.Name] = number
-				platform.TxnResult(&scope, step)
+				ontology.TxnResult(&scope, step)
 				continue
 			}
 			if step.Link != nil {
@@ -450,7 +451,7 @@ func (b *Runtime) transactAttempt(c platform.Caller, receipt *pb.ChangeRecord, t
 					return err
 				}
 				facts["step."+step.Name] = id
-				platform.TxnResult(&scope, step)
+				ontology.TxnResult(&scope, step)
 				continue
 			}
 			if step.Call != nil {
@@ -471,7 +472,7 @@ func (b *Runtime) transactAttempt(c platform.Caller, receipt *pb.ChangeRecord, t
 					return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "{why}", conversionErr.Error())
 				}
 				facts["step."+step.Name] = captured
-				platform.TxnResult(&scope, step)
+				ontology.TxnResult(&scope, step)
 				continue
 			}
 			if step.Effect != nil {
@@ -589,7 +590,7 @@ func (b *Runtime) transactAttempt(c platform.Caller, receipt *pb.ChangeRecord, t
 			sources := []string{}
 			for _, assignment := range step.Changes {
 				field, _ := info.Field(assignment.Field)
-				expr, err := platform.AssignmentExpr(field.Type, assignment, scope)
+				expr, err := ontology.AssignmentExpr(field.Type, assignment, scope)
 				if err != nil {
 					return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
 				}
@@ -605,7 +606,7 @@ func (b *Runtime) transactAttempt(c platform.Caller, receipt *pb.ChangeRecord, t
 			}
 			if step.Kind == "create" {
 				facts["step."+step.Name] = id
-				platform.TxnResult(&scope, step)
+				ontology.TxnResult(&scope, step)
 			}
 			if entity.Type == txn.Subject && id == subjectID {
 				var err *platform.Error
