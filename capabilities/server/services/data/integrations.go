@@ -105,18 +105,19 @@ func (o *Owner) ConfigureConnection(ledger platform.Authority, c platform.Caller
 }
 
 func (o *Owner) checkConnection(_ platform.Caller, record any, _ json.RawMessage, _ time.Time) *platform.Error {
-	c, ok := record.(*Connection)
-	if !ok {
+	switch connection := record.(type) {
+	case *Connection:
+		if err := o.validConnection(*connection); err != nil {
+			return err
+		}
+		if connection.Address == "" {
+			return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Configure the connection address before checking it")
+		}
+		connection.Requested = true
+		return nil
+	default:
 		return &platform.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 	}
-	if err := o.validConnection(*c); err != nil {
-		return err
-	}
-	if c.Address == "" {
-		return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Configure the connection address before checking it")
-	}
-	c.Requested = true
-	return nil
 }
 
 func (o *Owner) validConnection(c Connection) *platform.Error {

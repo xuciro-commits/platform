@@ -21,12 +21,13 @@ func (r StreamRecords) source(id string) (Source, bool, error) {
 	if err != nil {
 		return Source{}, false, err
 	}
-	source, ok := record.(Source)
-	if ok {
+	switch source := record.(type) {
+	case Source:
 		source, err = r.Source(source)
-		ok = err == nil
+		return source, err == nil, nil
+	default:
+		return Source{}, false, nil
 	}
-	return source, ok, nil
 }
 
 func (r StreamRecords) connection(id string) (Connection, bool, error) {
@@ -34,12 +35,13 @@ func (r StreamRecords) connection(id string) (Connection, bool, error) {
 	if err != nil {
 		return Connection{}, false, err
 	}
-	connection, ok := record.(Connection)
-	if ok {
+	switch connection := record.(type) {
+	case Connection:
 		connection, err = r.Connection(connection)
-		ok = err == nil
+		return connection, err == nil, nil
+	default:
+		return Connection{}, false, nil
 	}
-	return connection, ok, nil
 }
 
 func (r StreamRecords) Resolve(m platform.Member, name string, intake *platform.StreamIntake) (Source, Connection, string, *platform.Error) {

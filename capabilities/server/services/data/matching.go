@@ -54,22 +54,23 @@ func (o *Owner) matchEntity() platform.Entity {
 }
 
 func (o *Owner) publishMatch(c platform.Caller, record any, _ json.RawMessage, _ time.Time) *platform.Error {
-	m, ok := record.(*Match)
-	if !ok {
+	switch m := record.(type) {
+	case *Match:
+		if err := o.checkMatch(c, *m); err != nil {
+			return err
+		}
+		m.Publisher = c.ID
+		if !c.Replaying {
+			fixed, err := o.freezeDirectIntegration(platform.AssetMatching, *m)
+			if err != nil {
+				return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
+			}
+			*m = fixed.(Match)
+		}
+		return nil
+	default:
 		return &platform.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 	}
-	if err := o.checkMatch(c, *m); err != nil {
-		return err
-	}
-	m.Publisher = c.ID
-	if !c.Replaying {
-		fixed, err := o.freezeDirectIntegration(platform.AssetMatching, *m)
-		if err != nil {
-			return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
-		}
-		*m = fixed.(Match)
-	}
-	return nil
 }
 
 func (o *Owner) checkMatch(c platform.Caller, m Match) *platform.Error {

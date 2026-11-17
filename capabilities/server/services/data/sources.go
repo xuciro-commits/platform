@@ -82,46 +82,48 @@ func sourceActions() []platform.Action {
 }
 
 func (o *Owner) requestPull(c platform.Caller, record any, _ json.RawMessage, _ time.Time) *platform.Error {
-	s, ok := record.(*Source)
-	if !ok {
+	switch s := record.(type) {
+	case *Source:
+		if s.Stream && s.Dataset == "" {
+			return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "A continuous source is consumed through its Flow instance")
+		}
+		if problem := o.prepareSourcePull(c, s); problem != nil {
+			return problem
+		}
+		if !c.Replaying {
+			s.Puller, s.PullerScopes = c.ID, string(platform.Raw(c.Member.Scopes))
+		}
+		s.Requested = true
+		return nil
+	default:
 		return &platform.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 	}
-	if s.Stream && s.Dataset == "" {
-		return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "A continuous source is consumed through its Flow instance")
-	}
-	if problem := o.prepareSourcePull(c, s); problem != nil {
-		return problem
-	}
-	if !c.Replaying {
-		s.Puller, s.PullerScopes = c.ID, string(platform.Raw(c.Member.Scopes))
-	}
-	s.Requested = true
-	return nil
 }
 
 func (o *Owner) resetCursor(c platform.Caller, record any, _ json.RawMessage, _ time.Time) *platform.Error {
-	s, ok := record.(*Source)
-	if !ok {
+	switch s := record.(type) {
+	case *Source:
+		if s.Stream && s.Dataset == "" {
+			return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "A continuous source cursor belongs to its Flow instance")
+		}
+		if problem := o.prepareSourcePull(c, s); problem != nil {
+			return problem
+		}
+		if s.Last != nil && s.Last.Execution != nil && s.Last.Execution.Pending {
+			last, execution := *s.Last, *s.Last.Execution
+			execution.Pending = false
+			last.Execution = &execution
+			last.Error = "The previous pull was stopped by resetting its cursor"
+			s.Last = &last
+		}
+		if !c.Replaying {
+			s.Puller, s.PullerScopes = c.ID, string(platform.Raw(c.Member.Scopes))
+		}
+		s.Cursor, s.Requested = "", true
+		return nil
+	default:
 		return &platform.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 	}
-	if s.Stream && s.Dataset == "" {
-		return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "A continuous source cursor belongs to its Flow instance")
-	}
-	if problem := o.prepareSourcePull(c, s); problem != nil {
-		return problem
-	}
-	if s.Last != nil && s.Last.Execution != nil && s.Last.Execution.Pending {
-		last, execution := *s.Last, *s.Last.Execution
-		execution.Pending = false
-		last.Execution = &execution
-		last.Error = "The previous pull was stopped by resetting its cursor"
-		s.Last = &last
-	}
-	if !c.Replaying {
-		s.Puller, s.PullerScopes = c.ID, string(platform.Raw(c.Member.Scopes))
-	}
-	s.Cursor, s.Requested = "", true
-	return nil
 }
 
 func (o *Owner) prepareSourcePull(c platform.Caller, source *Source) *platform.Error {
@@ -148,28 +150,29 @@ func (o *Owner) prepareSourcePull(c platform.Caller, source *Source) *platform.E
 }
 
 func (o *Owner) publishSource(c platform.Caller, record any, _ json.RawMessage, _ time.Time) *platform.Error {
-	s, ok := record.(*Source)
-	if !ok {
+	switch s := record.(type) {
+	case *Source:
+		if err := o.checkSource(c, *s); err != nil {
+			return err
+		}
+		if c.Replaying {
+			s.Puller, s.Requested = c.ID, !s.Stream
+		}
+		if !c.Replaying {
+			s.Publisher, s.PublisherScopes = c.ID, string(platform.Raw(c.Member.Scopes))
+			fixed, err := o.freezeDirectIntegration(platform.AssetSource, *s)
+			if err != nil {
+				return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
+			}
+			*s = fixed.(Source)
+		}
+		if s.Stream && s.Dataset != "" && !c.Replaying {
+			s.Puller, s.PullerScopes = c.ID, string(platform.Raw(c.Member.Scopes))
+		}
+		return nil
+	default:
 		return &platform.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 	}
-	if err := o.checkSource(c, *s); err != nil {
-		return err
-	}
-	if c.Replaying {
-		s.Puller, s.Requested = c.ID, !s.Stream
-	}
-	if !c.Replaying {
-		s.Publisher, s.PublisherScopes = c.ID, string(platform.Raw(c.Member.Scopes))
-		fixed, err := o.freezeDirectIntegration(platform.AssetSource, *s)
-		if err != nil {
-			return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
-		}
-		*s = fixed.(Source)
-	}
-	if s.Stream && s.Dataset != "" && !c.Replaying {
-		s.Puller, s.PullerScopes = c.ID, string(platform.Raw(c.Member.Scopes))
-	}
-	return nil
 }
 
 func (o *Owner) checkSource(c platform.Caller, s Source) *platform.Error {

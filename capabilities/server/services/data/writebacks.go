@@ -83,22 +83,23 @@ func writebackActions() []platform.Action {
 }
 
 func (o *Owner) publishWriteback(c platform.Caller, record any, _ json.RawMessage, _ time.Time) *platform.Error {
-	w, ok := record.(*Writeback)
-	if !ok {
+	switch w := record.(type) {
+	case *Writeback:
+		if err := o.checkWriteback(c, *w); err != nil {
+			return err
+		}
+		w.Publisher = c.ID
+		if !c.Replaying {
+			fixed, err := o.freezeDirectIntegration(platform.AssetWriteback, *w)
+			if err != nil {
+				return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
+			}
+			*w = fixed.(Writeback)
+		}
+		return nil
+	default:
 		return &platform.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 	}
-	if err := o.checkWriteback(c, *w); err != nil {
-		return err
-	}
-	w.Publisher = c.ID
-	if !c.Replaying {
-		fixed, err := o.freezeDirectIntegration(platform.AssetWriteback, *w)
-		if err != nil {
-			return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
-		}
-		*w = fixed.(Writeback)
-	}
-	return nil
 }
 
 func (o *Owner) checkWriteback(c platform.Caller, w Writeback) *platform.Error {

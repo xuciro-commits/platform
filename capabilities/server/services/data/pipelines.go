@@ -76,47 +76,49 @@ func pipelineActions() []platform.Action {
 }
 
 func requestRun(c platform.Caller, record any, _ json.RawMessage, _ time.Time) *platform.Error {
-	p, ok := record.(*Pipeline)
-	if !ok {
+	switch p := record.(type) {
+	case *Pipeline:
+		if !c.Replaying {
+			if !c.Member.CanDeclassify(p.PublishedDeclassifications()) {
+				return platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "Declassification requires clearance and permission for every selected marking")
+			}
+			p.Runner, p.RunnerScopes = c.ID, string(platform.Raw(c.Member.Scopes))
+		}
+		p.Requested = true
+		return nil
+	default:
 		return &platform.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 	}
-	if !c.Replaying {
-		if !c.Member.CanDeclassify(p.PublishedDeclassifications()) {
-			return platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "Declassification requires clearance and permission for every selected marking")
-		}
-		p.Runner, p.RunnerScopes = c.ID, string(platform.Raw(c.Member.Scopes))
-	}
-	p.Requested = true
-	return nil
 }
 
 func (o *Owner) publishPipeline(c platform.Caller, record any, _ json.RawMessage, _ time.Time) *platform.Error {
-	p, ok := record.(*Pipeline)
-	if !ok {
+	switch p := record.(type) {
+	case *Pipeline:
+		if !c.Replaying {
+			if !c.Automation && !c.Member.CanDeclassify(p.Declassifications()) {
+				return platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "Declassification requires clearance and permission for every selected marking")
+			}
+			if err := p.NormalizeFormulaRules(); err != nil {
+				return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
+			}
+		}
+		if err := o.checkPipeline(c, *p); err != nil {
+			return err
+		}
+		if c.Replaying {
+			p.Runner, p.Requested = c.ID, true
+		}
+		if !c.Replaying {
+			fixed, err := o.freezeDirectIntegration(platform.AssetPipeline, *p)
+			if err != nil {
+				return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
+			}
+			*p = fixed.(Pipeline)
+		}
+		return nil
+	default:
 		return &platform.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 	}
-	if !c.Replaying {
-		if !c.Automation && !c.Member.CanDeclassify(p.Declassifications()) {
-			return platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "Declassification requires clearance and permission for every selected marking")
-		}
-		if err := p.NormalizeFormulaRules(); err != nil {
-			return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
-		}
-	}
-	if err := o.checkPipeline(c, *p); err != nil {
-		return err
-	}
-	if c.Replaying {
-		p.Runner, p.Requested = c.ID, true
-	}
-	if !c.Replaying {
-		fixed, err := o.freezeDirectIntegration(platform.AssetPipeline, *p)
-		if err != nil {
-			return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
-		}
-		*p = fixed.(Pipeline)
-	}
-	return nil
 }
 
 func (o *Owner) CheckPipeline(c platform.Caller, p Pipeline) *platform.Error {
