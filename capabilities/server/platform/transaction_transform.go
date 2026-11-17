@@ -1,12 +1,9 @@
 package platform
 
 import (
-	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"maps"
-	"math"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"slices"
 	"strconv"
@@ -147,67 +144,6 @@ func DispatchParameter(set TxnSet, scope RuleReadSpec) (Expr, error) {
 		return Expr{}, fmt.Errorf("Dispatch parameters require scalar expressions")
 	}
 	return AssignmentExpr(kind, set, scope)
-}
-
-func BalanceID(object string, values []string) string {
-	sum := sha256.Sum256([]byte(object + "\x00" + strings.Join(values, "\x00")))
-	return "bal-" + hex.EncodeToString(sum[:12])
-}
-
-func CastCell(cell, typ string) (any, error) {
-	text := strings.TrimSpace(cell)
-	switch typ {
-	case "number":
-		n, err := strconv.ParseFloat(text, 64)
-		if err != nil || math.IsNaN(n) || math.IsInf(n, 0) {
-			return nil, fmt.Errorf("%q is not a number", text)
-		}
-		return n, nil
-	case "boolean":
-		switch strings.ToLower(text) {
-		case "true", "yes":
-			return true, nil
-		case "false", "no":
-			return false, nil
-		}
-		return nil, fmt.Errorf("%q is not true or false", text)
-	}
-	return text, nil
-}
-
-func CastValue(value any, typ string) (any, error) {
-	switch x := value.(type) {
-	case string:
-		return CastCell(x, typ)
-	case float64:
-		if typ == "number" {
-			return x, nil
-		}
-		return CastCell(strconv.FormatFloat(x, 'f', -1, 64), typ)
-	case bool:
-		if typ == "boolean" {
-			return x, nil
-		}
-		return CastCell(strconv.FormatBool(x), typ)
-	case json.Number:
-		return CastCell(x.String(), typ)
-	}
-	return nil, fmt.Errorf("no value")
-}
-
-func TableInput(reads RuleReadSpec, legacy bool, values map[string]any) ExprContext {
-	facts := ExprContext{Refs: map[string]ExprValue{}}
-	for name, col := range reads.Inputs {
-		v, ok := values[name]
-		if legacy {
-			v, _ = CastValue(v, col.Kind)
-		}
-		if ok {
-			facts.Refs["input."+name] = ExprPresent(col.Kind, v)
-			facts.Refs[name] = facts.Refs["input."+name]
-		}
-	}
-	return facts
 }
 
 type BusinessRuntimeContext struct {

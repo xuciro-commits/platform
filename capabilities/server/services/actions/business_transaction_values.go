@@ -1,6 +1,8 @@
 package actions
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"reflect"
 	"strconv"
@@ -33,7 +35,8 @@ func (b *Runtime) txnPost(c platform.Caller, r *pb.ChangeRecord, step platform.T
 		patch[match.Field] = value
 		keys = append(keys, constructionText(value))
 	}
-	id := platform.BalanceID(entity.Type, keys)
+	sum := sha256.Sum256([]byte(entity.Type + "\x00" + strings.Join(keys, "\x00")))
+	id := "bal-" + hex.EncodeToString(sum[:12])
 	if err := reserve(entity.Type + "/" + id); err != nil {
 		return "", err
 	}

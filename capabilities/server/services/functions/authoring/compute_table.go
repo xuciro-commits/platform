@@ -3,7 +3,9 @@ package authoring
 import (
 	"encoding/json"
 	"fmt"
+	"math"
 	"regexp"
+	"strconv"
 	"strings"
 
 	"platformserver/platform"
@@ -59,7 +61,7 @@ func CheckTableShape(tb Table, lookup func(string) (platform.EntityInfo, bool), 
 				if err := platform.EditProposalSchema().Validate(json.RawMessage(cell), 16<<10); err != nil {
 					return fmt.Errorf("row %d, proposal: %w", i+1, err)
 				}
-			} else if _, err := platform.CastCell(cell, tb.Outputs[j].Type); err != nil {
+			} else if _, err := castCell(cell, tb.Outputs[j].Type); err != nil {
 				return fmt.Errorf("row %d, %s: %w", i+1, tb.Outputs[j].Name, err)
 			}
 		}
@@ -73,7 +75,7 @@ func CheckTableShape(tb Table, lookup func(string) (platform.EntityInfo, bool), 
 				if err := platform.EditProposalSchema().Validate(json.RawMessage(cell), 16<<10); err != nil {
 					return fmt.Errorf("default, proposal: %w", err)
 				}
-			} else if _, err := platform.CastCell(cell, tb.Outputs[j].Type); err != nil {
+			} else if _, err := castCell(cell, tb.Outputs[j].Type); err != nil {
 				return fmt.Errorf("default, %s: %w", tb.Outputs[j].Name, err)
 			}
 		}
@@ -227,7 +229,7 @@ func (tb Table) RulePlan() (*platform.RuleTablePlan, error) {
 		}
 		out := map[string]any{}
 		for i, col := range tb.Outputs {
-			v, err := platform.CastCell(cells[i], col.Type)
+			v, err := castCell(cells[i], col.Type)
 			if err != nil {
 				return nil, err
 			}
@@ -298,11 +300,67 @@ func (tb *Table) NormalizeRules() error {
 
 func ruleCellLiteral(raw, kind string) (any, error) {
 	if kind != "number" {
-		return platform.CastCell(raw, kind)
+		return castCell(raw, kind)
 	}
 	text := strings.TrimSpace(raw)
 	if _, err := platform.ParseDecimal(text); err != nil {
 		return nil, err
 	}
 	return text, nil
+}
+
+func castCell(cell, typ string) (any, error) {
+	text := strings.TrimSpace(cell)
+	switch typ {
+	case "number":
+		n, err := strconv.ParseFloat(text, 64)
+		if err != nil || math.IsNaN(n) || math.IsInf(n, 0) {
+			return nil, fmt.Errorf("%q is not a number", text)
+		}
+		return n, nil
+	case "boolean":
+		switch strings.ToLower(text) {
+		case "true", "yes":
+			return true, nil
+		case "false", "no":
+			return false, nil
+		}
+		return nil, fmt.Errorf("%q is not true or false", text)
+	}
+	return text, nil
+}
+
+func castValue(value any, typ string) (any, error) {
+	switch x := value.(type) {
+	case string:
+		return castCell(x, typ)
+	case float64:
+		if typ == "number" {
+			return x, nil
+		}
+		return castCell(strconv.FormatFloat(x, 'f', -1, 64), typ)
+	case bool:
+		if typ == "boolean" {
+			return x, nil
+		}
+		return castCell(strconv.FormatBool(x), typ)
+	case json.Number:
+		return castCell(x.String(), typ)
+	}
+	return nil, fmt.Errorf("no value")
+}
+
+func TableInput(reads platform.RuleReadSpec, legacy bool, values map[string]any) platform.ExprContext {
+	facts := platform.ExprContext{Refs: map[string]platform.ExprValue{}}
+	for name, col := range reads.Inputs {
+		v, ok := values[name]
+		if legacy {
+			v, _ = castValue(v, col.Kind)
+		}
+		if ok {
+			facts.Refs["input."+name] = platform.ExprPresent(col.Kind, v)
+			facts.Refs[name] = facts.Refs["input."+name]
+		}
+	}
+	return facts
 }

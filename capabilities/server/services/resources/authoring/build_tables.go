@@ -130,7 +130,7 @@ func (b *Build) Compute(_ context.Context, name string, input json.RawMessage) (
 		return nil, err
 	}
 	legacy := len(tb.Rows) > 0 && len(tb.Rows[0].Expressions) == 0
-	return plan.Decide(platform.TableInput(plan.Reads, legacy, values), func(string) (platform.EntityInfo, bool) { return platform.EntityInfo{}, false })
+	return plan.Decide(functionauthoring.TableInput(plan.Reads, legacy, values), func(string) (platform.EntityInfo, bool) { return platform.EntityInfo{}, false })
 }
 
 func tableImage(image []byte) (functionauthoring.Table, error) {
