@@ -164,7 +164,8 @@ func ReferenceValue(v reflect.Value) (string, bool) {
 	if v.Kind() == reflect.String {
 		return v.String(), true
 	}
-	if r, ok := v.Interface().(interface{ String() string }); ok {
+	switch r := v.Interface().(type) {
+	case interface{ String() string }:
 		return r.String(), true
 	}
 	return "", false
@@ -317,14 +318,20 @@ func CheckFields(info platform.EntityInfo, entity any, v reflect.Value, replayin
 				return nil, invalid
 			}
 		case "attachment":
-			attachment, ok := fv.Interface().(platform.Attachment)
-			if !ok {
+			var attachment platform.Attachment
+			switch value := fv.Interface().(type) {
+			case platform.Attachment:
+				attachment = value
+			default:
 				return nil, invalid
 			}
-			media, ok := lookup.(interface{ HasMediaItem(string, string) bool })
-			if !ok || !media.HasMediaItem(attachment.MediaSet, attachment.Item) {
-				return nil, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_REFERENCE}
+			switch media := lookup.(type) {
+			case interface{ HasMediaItem(string, string) bool }:
+				if media.HasMediaItem(attachment.MediaSet, attachment.Item) {
+					continue
+				}
 			}
+			return nil, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_REFERENCE}
 		case "money":
 			if m := fv.Interface().(platform.Money); m.Amount != 0 && len(m.Currency) != 3 {
 				return nil, invalid

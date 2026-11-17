@@ -14,8 +14,11 @@ func (s *Store) HasMediaItem(id, hash string) bool {
 	if row == nil {
 		return false
 	}
-	set, ok := row.Value.Interface().(platform.MediaSet)
-	if !ok {
+	var set platform.MediaSet
+	switch value := row.Value.Interface().(type) {
+	case platform.MediaSet:
+		set = value
+	default:
 		return false
 	}
 	if slices.ContainsFunc(set.Items, func(item platform.MediaItem) bool { return item.Hash == hash }) {

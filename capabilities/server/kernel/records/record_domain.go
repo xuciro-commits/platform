@@ -224,11 +224,15 @@ func (d domainField) reader(view string) (ruleexpr.Type, func(reflect.Value) rul
 			return ruleexpr.Type{Kind: "decimal"}, decimal, nil
 		case classTime:
 			return ruleexpr.Type{Kind: "datetime"}, func(v reflect.Value) ruleexpr.Value {
-				x, ok := Comparable(d.read(v)).(time.Time)
-				if !ok || x.Year() < 1 || x.Year() > 9999 {
+				switch x := Comparable(d.read(v)).(type) {
+				case time.Time:
+					if x.Year() < 1 || x.Year() > 9999 {
+						return ruleexpr.Null("datetime")
+					}
+					return ruleexpr.TimeValue(x)
+				default:
 					return ruleexpr.Null("datetime")
 				}
-				return ruleexpr.TimeValue(x)
 			}, nil
 		case classText:
 			return text, func(v reflect.Value) ruleexpr.Value { return comparableText(Comparable(d.read(v))) }, nil

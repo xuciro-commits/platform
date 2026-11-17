@@ -336,7 +336,8 @@ func (s *Store) Aggregate(et *Type, q AggregateQuery, rows []reflect.Value, comp
 			if measure.op != "count" {
 				operand := aggregateGroupValue(value.FieldByIndex(measure.field.Index))
 				if measure.field.Type == "money" {
-					if money, ok := operand.(platform.Money); ok {
+					switch money := operand.(type) {
+					case platform.Money:
 						operand = money.Amount
 					}
 				}
@@ -381,15 +382,16 @@ func (s *Store) Aggregate(et *Type, q AggregateQuery, rows []reflect.Value, comp
 				return Aggregate{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
 			}
 			if measure.op == "count" {
-				number, ok := value.(json.Number)
-				if !ok {
+				switch number := value.(type) {
+				case json.Number:
+					count, err := strconv.Atoi(number.String())
+					if err != nil {
+						return Aggregate{}, invalid
+					}
+					value = count
+				default:
 					return Aggregate{}, invalid
 				}
-				count, err := strconv.Atoi(number.String())
-				if err != nil {
-					return Aggregate{}, invalid
-				}
-				value = count
 			}
 			row[measure.column.Name] = value
 		}
@@ -597,11 +599,12 @@ func windowTime(value reflect.Value) (time.Time, bool, bool) {
 		}
 		value = value.Elem()
 	}
-	instant, ok := value.Interface().(time.Time)
-	if !ok {
+	switch instant := value.Interface().(type) {
+	case time.Time:
+		return instant, true, true
+	default:
 		return time.Time{}, false, false
 	}
-	return instant, true, true
 }
 
 func (s *Store) AggregateWindow(et *Type, q AggregateQuery, rows []reflect.Value) (Aggregate, *platform.Error) {
