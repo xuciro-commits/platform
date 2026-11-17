@@ -135,6 +135,7 @@ type FunctionRun struct {
 type Environment interface {
 	Host() platform.BuildHost
 	Ledger() platform.Authority
+	Resolver() publication.Resolver
 	App() string
 	Version() string
 	CallRoles() []string
@@ -156,8 +157,8 @@ type Owner struct {
 	tables   map[string]Table
 }
 
-func NewOwner(env Environment, resolver publication.Resolver) *Owner {
-	return &Owner{env: env, resolver: resolver, records: map[string]Function{}, codes: map[string]Code{}, tables: map[string]Table{}}
+func NewOwner(env Environment) *Owner {
+	return &Owner{env: env, resolver: env.Resolver(), records: map[string]Function{}, codes: map[string]Code{}, tables: map[string]Table{}}
 }
 
 func (o *Owner) Fork(env Environment) *Owner {

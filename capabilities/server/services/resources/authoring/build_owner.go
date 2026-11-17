@@ -42,6 +42,7 @@ type Build struct {
 	publications        []publication.Hooks
 	publicationBase     []publication.Hooks
 	objectPublication   func(ontology.ObjectPublicationEnvironment) publication.Hooks
+	functionFactory     func(functionauthoring.Environment) *functionauthoring.Owner
 	agentFactory        func(platform.AgentAuthoringEnvironment) platform.AgentAuthoringBinding
 	agent               platform.AgentAuthoringBinding
 	testPlanFactory     func(testPlanEnvironment, evaluationPublication) testPlanPublication
@@ -122,11 +123,11 @@ func (b *Build) bindPublications() {
 func (b *Build) AttachBuild(h platform.BuildHost) { b.host = h }
 func (b *Build) AttachFiles(h platform.FileHost)  { b.data.AttachFiles(h) }
 
-func New(tenant string, authorities platform.Authorities, publications []publication.Hooks, resolver publication.Resolver, objectPublication func(ontology.ObjectPublicationEnvironment) publication.Hooks, agentFactory func(platform.AgentAuthoringEnvironment) platform.AgentAuthoringBinding, testPlanFactory func(testPlanEnvironment, evaluationPublication) testPlanPublication, evaluationFactory func(testPlanEnvironment) evaluationPublication, sampleSetFactory func(devopsmodel.SampleSetEnvironment) devopsmodel.SampleSetPublication) *Build {
-	b := &Build{resolver: resolver, publicationBase: slices.Clone(publications), objectPublication: objectPublication, agentFactory: agentFactory, testPlanFactory: testPlanFactory, evaluationFactory: evaluationFactory, sampleSetFactory: sampleSetFactory, installed: map[string]platform.Entity{}, linkTypes: map[string]ontology.LinkType{}, propertyTypes: map[string]ontology.PropertyType{}, valueTypes: map[string]ontology.ValueType{}, objectTypeGroups: map[string]ontology.ObjectTypeGroup{}, queries: map[string]Query{}, interfaces: map[string]ontology.InterfaceRecord{}}
+func New(tenant string, authorities platform.Authorities, publications []publication.Hooks, resolver publication.Resolver, objectPublication func(ontology.ObjectPublicationEnvironment) publication.Hooks, functionFactory func(functionauthoring.Environment) *functionauthoring.Owner, agentFactory func(platform.AgentAuthoringEnvironment) platform.AgentAuthoringBinding, testPlanFactory func(testPlanEnvironment, evaluationPublication) testPlanPublication, evaluationFactory func(testPlanEnvironment) evaluationPublication, sampleSetFactory func(devopsmodel.SampleSetEnvironment) devopsmodel.SampleSetPublication) *Build {
+	b := &Build{resolver: resolver, publicationBase: slices.Clone(publications), objectPublication: objectPublication, functionFactory: functionFactory, agentFactory: agentFactory, testPlanFactory: testPlanFactory, evaluationFactory: evaluationFactory, sampleSetFactory: sampleSetFactory, installed: map[string]platform.Entity{}, linkTypes: map[string]ontology.LinkType{}, propertyTypes: map[string]ontology.PropertyType{}, valueTypes: map[string]ontology.ValueType{}, objectTypeGroups: map[string]ontology.ObjectTypeGroup{}, queries: map[string]Query{}, interfaces: map[string]ontology.InterfaceRecord{}}
 	b.data = dataowner.New(buildDataHost{b}, resolver)
 	b.automation = automationauthoring.New(automationEnvironment{b}, resolver)
-	b.functions = functionauthoring.NewOwner(functionEnvironment{b}, resolver)
+	b.functions = b.functionFactory(functionEnvironment{b})
 	b.apps = appsauthoring.NewOwner(appEnvironment{b})
 	b.agent = b.agentFactory(b.agentEnvironment())
 	b.bindTestPlans()
@@ -539,7 +540,7 @@ func (b *Build) Fork(ledger platform.Authority) (platform.App, error) {
 }
 
 func (b *Build) NewSimulationApp(tenant string) platform.App {
-	return New(tenant, b.authorities, b.publicationBase, b.resolver, b.objectPublication, b.agentFactory, b.testPlanFactory, b.evaluationFactory, b.sampleSetFactory)
+	return New(tenant, b.authorities, b.publicationBase, b.resolver, b.objectPublication, b.functionFactory, b.agentFactory, b.testPlanFactory, b.evaluationFactory, b.sampleSetFactory)
 }
 func (b *Build) CandidateActions(asset platform.ReleaseAsset) ([]platform.Action, error) {
 	code, err := b.retainedCodeObject(asset)

@@ -18,6 +18,7 @@ import (
 	agentowner "platformserver/services/ai/runtime"
 	devopsauthoring "platformserver/services/devops/authoring"
 	"platformserver/services/devops/packages"
+	functionauthoring "platformserver/services/functions/authoring"
 	"platformserver/services/ontology"
 	"platformserver/services/resources/authoring"
 	"platformserver/services/resources/publication"
@@ -101,7 +102,7 @@ func newInvariantTenantSetup(tb testing.TB, id string, apps []platform.App, seat
 		actions = append(actions, packages.Actions()...)
 		return controlowner.Owners{Policies: security.NewPolicies(), Packages: packages.New(id), Actions: actions}
 	}, append([]platform.Seat{seat}, seats...)...)
-	tenant, err := NewTenantWithCapabilities(id, services, append([]platform.App{console, build.New(id, actions.NewAuthority, []publication.Hooks{ontology.ActionTypePublication()}, PublicationResolver(), ontology.ObjectPublication, agentowner.BuilderPublication, devopsauthoring.TestPlanPublication, agentevaluation.EvaluationPublication, devopsauthoring.SampleSetPublication)}, apps...)...)
+	tenant, err := NewTenantWithCapabilities(id, services, append([]platform.App{console, build.New(id, actions.NewAuthority, []publication.Hooks{ontology.ActionTypePublication()}, PublicationResolver(), ontology.ObjectPublication, functionauthoring.NewOwner, agentowner.BuilderPublication, devopsauthoring.TestPlanPublication, agentevaluation.EvaluationPublication, devopsauthoring.SampleSetPublication)}, apps...)...)
 	if err != nil {
 		tb.Fatal(err)
 	}

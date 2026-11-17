@@ -3,6 +3,7 @@ package build
 import (
 	"platformserver/platform"
 	functionauthoring "platformserver/services/functions/authoring"
+	"platformserver/services/resources/publication"
 )
 
 type functionEnvironment struct {
@@ -11,10 +12,13 @@ type functionEnvironment struct {
 
 func (e functionEnvironment) Host() platform.BuildHost   { return e.b.host }
 func (e functionEnvironment) Ledger() platform.Authority { return e.b.ledger }
-func (e functionEnvironment) App() string                { return ID }
-func (e functionEnvironment) Version() string            { return ValueDefinitionVersion }
-func (e functionEnvironment) CallRoles() []string        { return []string{Builder, User} }
-func (e functionEnvironment) AllRoles() []string         { return e.b.manifestRoles() }
+func (e functionEnvironment) Resolver() publication.Resolver {
+	return e.b.resolver
+}
+func (e functionEnvironment) App() string         { return ID }
+func (e functionEnvironment) Version() string     { return ValueDefinitionVersion }
+func (e functionEnvironment) CallRoles() []string { return []string{Builder, User} }
+func (e functionEnvironment) AllRoles() []string  { return e.b.manifestRoles() }
 func (e functionEnvironment) AddActions(actions ...platform.Action) {
 	e.b.ledger.Catalog().Add(actions...)
 }

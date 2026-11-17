@@ -28,28 +28,7 @@
 
 ## U5：拆散 Build
 
-- [ ] U5.1 以代码函数和决策表完成拆分样板。
-  - 定下资源编辑离开 `Build` 的模式，明确状态、注册、HTTP 路由和宿主导入点。
-  - 代码函数和决策表的编写、发布与状态已在 `services/functions/authoring`；
-    核对 `compute_code.go`、`compute_table.go`、`compute_authoring.go`、`compute_publications.go` 和 `compute_state.go`。
-    创建、编辑、归档及编译请求和结果由函数拥有者分派；Build 保留公共资源、权限和装配入口。
-    版本化资产的身份、序号与依赖校验复用发布服务；函数拥有者不再通过 Build 回调读取资产版本。
-    联合草稿在调用时接收跨类型资产读取函数，保留故障次序，不在资源拥有者的长期环境中持有该回调。
-    计算草稿在读取跨类型资产后读取自身，决策表不再重复读取记录。
-    AI 函数的联合声明由调用时的编排上下文提供，版本回退仍读取已安装状态或保留版本族。
-  - 核对 `services/resources/authoring/build_compute.go`、`build_functions.go`、`build_function_adapter.go`、
-    `build_owner.go` 及 `host/composition/tenant.go` 的剩余装配与调用边界，删除失去意义的旧路径。
-    `Build.New` 仍直接创建函数拥有者；它同时持有 AI 函数、代码函数和决策表，尚未完成宿主装配。
-    测试计划对 AI 函数的 `platform.Ref` 决定引用校验和拒绝码，拆分时须保持类型及历史记录。
-    保持 `build` 资源标识、路由和提交权威；不要为函数另建应用或第二套权威。
-  - 两者都生成 `AssetCompute`，共享 `OperationDefinition`；当前版本来自已安装状态，历史版本来自保留的版本族。
-    `Fork` 必须复制状态，`Reinstall` 必须从接受记录重建；不得把历史读取降为 Manifest 当前值。
-  - `OperationDefinitions` 在宿主装配时登记；其他应用的声明操作仍从 Manifest 读取，
-    分叉时重新绑定，历史版本和原有 authority 行为不变。
-  - `host.Tenant` 没有单独的代码函数或决策表状态字段；只按实际消除的字段与探测下调基线。
-  - 将最终模式写入 [backend](backend.md)。
-
-U5.1 之后按以下资源家族推进。文件路径相对 `capabilities/server/services/resources/authoring/`；
+按以下资源家族推进。文件路径相对 `capabilities/server/services/resources/authoring/`；
 每批同步处理宿主状态、能力登记、装配、HTTP 调用方和依赖例外，运行该类的创建、编辑、发布、安装、拒绝、
 历史版本、分叉和重放检查。跨类型的 RID、项目、文件夹、工作状态、分支、提案和编排留在资源服务。
 
