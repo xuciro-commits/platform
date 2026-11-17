@@ -61,7 +61,7 @@ func (h hostView) ValidateInstallDependents(c platform.Caller, e platform.Entity
 	}
 	return ontology.InstallDependents{
 		App: h.app.Manifest().ID, Entity: e, Actions: actions, GeneratedPage: generatedPage, Engine: engine,
-		Definitions: h.t.definitions, Bindings: h.t.bindings.All(), ProjectPage: pageowner.Safety, QueryReferences: pageowner.QueryReferences,
+		Definitions: h.t.definitions, Bindings: h.t.bindings.All(), ProjectPage: pageowner.Safety, ApplicationPage: pageowner.ApplicationPage, QueryReferences: pageowner.QueryReferences,
 		Provisions: func(provider string) []platform.Provision { return h.t.App(provider).Manifest().Provides },
 		Begin: func() ontology.InstallDraft {
 			draft := h.installationDraft()

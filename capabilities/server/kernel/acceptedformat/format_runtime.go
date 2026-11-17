@@ -179,7 +179,7 @@ func DecodeWork(raw []byte) (Work, error) {
 		int(finished.GetGeneration()) != result.After.Attempts || result.Outcome == "" {
 		return result, fmt.Errorf("work result has inconsistent identity, outcome or digest")
 	}
-	if err := platform.CheckApplicationBindings(result.After.Applications); err != nil {
+	if err := CheckApplicationBindings(result.After.Applications); err != nil {
 		return result, err
 	}
 	if result.Input.Since < 0 || result.Input.Since > result.Input.Attempts {

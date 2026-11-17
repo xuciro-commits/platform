@@ -2,6 +2,7 @@ package build
 
 import (
 	"fmt"
+	"platformserver/kernel/acceptedformat"
 	functionauthoring "platformserver/services/functions/authoring"
 	"reflect"
 	"slices"
@@ -44,7 +45,7 @@ func CheckRunApplicationBindings(record any) error {
 	case functionauthoring.FunctionRun:
 		bindings = run.Applications
 	}
-	return platform.CheckApplicationBindings(bindings)
+	return acceptedformat.CheckApplicationBindings(bindings)
 }
 
 type ObjectInstall struct {

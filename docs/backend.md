@@ -56,6 +56,8 @@
 - 自动化流程的编写、校验、发布、安装与运行归 `services/automate/authoring`；页面和应用的编写、发布、
   安装及运行时视图归 `services/apps`。应用 AI 视图只合并资源与评估结果，函数定义继续由
   `services/functions/authoring` 读取，智能体与函数评估报告由 AI 服务提供，资源服务保留装配适配。
+- 应用 profile 的校验和由原始 `UIProfile`、变量与查询构造的页面声明归 `services/apps/pages`；
+  ontology、publication 与 DevOps 只经宿主装配的回调使用该声明，不复制构造或校验。
 - 对象、动作类型、对象执行形状、生命周期与约束编译归 `services/ontology`。资源服务只编排跨类型草稿、
   联合发布、页面覆盖、资源身份与安装；动作执行仍归 `services/actions`。
 - 表达式引用遍历与类型合并归 `expr`；`Binding`、`Run` 的线格式留在 SDK，workflow 条件到 binding、

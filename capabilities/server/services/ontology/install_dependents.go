@@ -33,6 +33,7 @@ type InstallDependents struct {
 	Bindings        map[string]string
 	Provisions      func(provider string) []platform.Provision
 	ProjectPage     func(platform.Page) (platform.Page, error)
+	ApplicationPage func(platform.Application) platform.Page
 	QueryReferences func(platform.Page) []platform.AssetRef
 	Begin           func() InstallDraft
 }
@@ -83,7 +84,7 @@ func (c InstallDependents) Validate() error {
 		if def.Application != nil {
 			for _, q := range def.Application.Queries {
 				if q.Object.Name == e.Type {
-					if err := draft.CheckQueries(def.Application.QueryPage()); err != nil {
+					if err := draft.CheckQueries(c.ApplicationPage(*def.Application)); err != nil {
 						return err
 					}
 					break

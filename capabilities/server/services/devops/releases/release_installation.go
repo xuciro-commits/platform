@@ -441,10 +441,13 @@ func ValidateSet(context ValidationContext, engines ...platform.RuleEngine) erro
 	}
 	for _, definition := range context.Definitions {
 		if definition.Application != nil {
+			if err := context.CheckApplicationProfile(definition.Application.Profile); err != nil {
+				return err
+			}
 			if err := context.Application(definition.Ref, *definition.Application); err != nil {
 				return err
 			}
-			if err := context.PageQueries(definition.Application.QueryPage()); err != nil {
+			if err := context.PageQueries(context.ApplicationPage(*definition.Application)); err != nil {
 				return err
 			}
 			for _, name := range definition.Application.Pages {
@@ -468,15 +471,17 @@ func ValidateSet(context ValidationContext, engines ...platform.RuleEngine) erro
 }
 
 type ValidationContext struct {
-	Entities    []platform.EntityInfo
-	Definitions []platform.Definition
-	Lookup      func(string) (platform.EntityInfo, bool)
-	Properties  func(platform.EntityInfo) error
-	RecordSets  func(platform.EntityInfo, ...platform.RuleEngine) error
-	Link        func(string, platform.LinkType) error
-	Application func(platform.AssetRef, platform.Application) error
-	PageQueries func(platform.Page) error
-	Navigation  func(platform.Page, string) error
+	Entities                []platform.EntityInfo
+	Definitions             []platform.Definition
+	Lookup                  func(string) (platform.EntityInfo, bool)
+	Properties              func(platform.EntityInfo) error
+	RecordSets              func(platform.EntityInfo, ...platform.RuleEngine) error
+	Link                    func(string, platform.LinkType) error
+	Application             func(platform.AssetRef, platform.Application) error
+	ApplicationPage         func(platform.Application) platform.Page
+	CheckApplicationProfile func(*platform.ApplicationProfile) error
+	PageQueries             func(platform.Page) error
+	Navigation              func(platform.Page, string) error
 }
 
 func StageInstallations(registry *publication.AssetRegistry, installations []platform.ReleaseInstallation, apply platform.AssetApplyContext, check func(platform.AssetInstallation, platform.ReleaseInstallation) error, record func(platform.AssetInstallation) error) error {

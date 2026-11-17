@@ -6,7 +6,7 @@ import (
 	"strings"
 )
 
-func ModelObject(typ string) AssetRef {
+func modelRef(typ string) AssetRef {
 	app, _, _ := strings.Cut(typ, ".")
 	return AssetRef{App: app, Kind: AssetObject, Name: typ}
 }

@@ -385,7 +385,7 @@ func CheckApplicationVariables(a platform.Application) error {
 			return fmt.Errorf("application variable %s needs its own pure scalar declaration", id)
 		}
 	}
-	d := a.QueryPage().InputSchema
+	d := ApplicationPage(a).InputSchema
 	if err := checkQueries(platform.Page{Format: 4, InputSchema: d}, "application"); err != nil {
 		return err
 	}

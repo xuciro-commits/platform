@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 
 	"platformserver/platform"
+	"platformserver/services/ontology"
 )
 
 func modelDependencies(p platform.Page) []platform.AssetRef {
@@ -15,7 +16,7 @@ func modelDependencies(p platform.Page) []platform.AssetRef {
 	for _, binding := range safe.DataBindings {
 		for _, model := range ModelBindings(binding) {
 			if windowVariableInterface(safe, binding.Ports["collectionVariable"]) == "" {
-				ref := platform.ModelObject(model.Type)
+				ref := ontology.ModelObject(model.Type)
 				if binding.Object.Name == model.Type {
 					ref = binding.Object
 				} else if safe.Object.Name == model.Type {
@@ -24,7 +25,7 @@ func modelDependencies(p platform.Page) []platform.AssetRef {
 				refs = append(refs, ref)
 			}
 			if model.Relation != nil {
-				refs = append(refs, platform.ModelObject(model.Relation.ParentType))
+				refs = append(refs, ontology.ModelObject(model.Relation.ParentType))
 			}
 			sets := []*platform.ModelRecordSet{model.Set}
 			if model.Options != nil {

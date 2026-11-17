@@ -11,7 +11,7 @@ import (
 func CheckIntents(tenant string, intents []platform.Effect, known func(app string) bool, queued func(id string) bool) error {
 	ids := map[string]bool{}
 	for _, x := range intents {
-		if err := platform.CheckApplicationBindings(x.Applications); err != nil {
+		if err := acceptedformat.CheckApplicationBindings(x.Applications); err != nil {
 			return err
 		}
 		kind, ok := strings.CutPrefix(x.Event, x.App+"/")

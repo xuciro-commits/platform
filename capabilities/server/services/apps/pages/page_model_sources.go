@@ -2,6 +2,7 @@ package pages
 
 import (
 	"platformserver/platform"
+	"platformserver/services/ontology"
 	"slices"
 	"strings"
 )
@@ -40,7 +41,7 @@ func bindingObjectRef(b platform.PageDataBinding, p platform.Page) platform.Asse
 		if b.Object.Name == model.Type {
 			return b.Object
 		}
-		return platform.ModelObject(model.Type)
+		return ontology.ModelObject(model.Type)
 	}
 	if b.Object.Name != "" {
 		return b.Object

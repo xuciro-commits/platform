@@ -77,7 +77,7 @@ func (t *Tenant) validateAssetSet(engines ...platform.RuleEngine) error {
 		Link: func(app string, link platform.LinkType) error {
 			return (hostView{t: t, app: t.App(app)}).ValidateInstallLinkType(link)
 		},
-		Application: t.checkApplicationExtension, PageQueries: t.checkPageQueries,
+		Application: t.checkApplicationExtension, ApplicationPage: pageowner.ApplicationPage, CheckApplicationProfile: pageowner.CheckApplicationProfile, PageQueries: t.checkPageQueries,
 		Navigation: func(page platform.Page, app string) error { return pageowner.CheckNavigation(page, app, t.definitions) },
 	}, engines...)
 }

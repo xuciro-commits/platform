@@ -164,12 +164,12 @@ func (t *Tenant) restoreOperations(s *runtimekernel.TenantImage[automation.Task,
 		}
 	}
 	for _, job := range s.Jobs {
-		if err := platform.CheckApplicationBindings(job.Applications); err != nil {
+		if err := acceptedformat.CheckApplicationBindings(job.Applications); err != nil {
 			return err
 		}
 	}
 	for _, effect := range s.Outbound {
-		if err := platform.CheckApplicationBindings(effect.Effect.Applications); err != nil {
+		if err := acceptedformat.CheckApplicationBindings(effect.Effect.Applications); err != nil {
 			return err
 		}
 	}

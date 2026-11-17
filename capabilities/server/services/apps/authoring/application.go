@@ -93,6 +93,9 @@ func (o *Owner) ValidateApplication(c platform.Caller, a *Application) *platform
 	if c.Replaying {
 		return nil
 	}
+	if err := pageowner.CheckApplicationProfile(a.Profile); err != nil {
+		return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
+	}
 	if err := ApplicationDescriptor(*a).CheckLanguages(); err != nil {
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
 	}
@@ -116,13 +119,8 @@ func (o *Owner) ValidateApplication(c platform.Caller, a *Application) *platform
 			break
 		}
 	}
-	if err := pageowner.CheckQueryFilters(ApplicationDescriptor(*a).QueryPage(), lookup); err != nil {
+	if err := pageowner.CheckQueryFilters(pageowner.ApplicationPage(ApplicationDescriptor(*a)), lookup); err != nil {
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
-	}
-	if a.Profile != nil {
-		if err := a.Profile.Check(); err != nil {
-			return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
-		}
 	}
 	return nil
 }
@@ -262,7 +260,7 @@ func ProjectApplication(registered platform.Definition, projection ApplicationPr
 				named = nil
 			}
 		}
-		if !ok || pageowner.CheckQuerySchema(application.QueryPage(), q, info, named) != nil {
+		if !ok || pageowner.CheckQuerySchema(pageowner.ApplicationPage(application), q, info, named) != nil {
 			delete(application.Queries, id)
 		}
 	}
@@ -285,7 +283,7 @@ func ProjectApplication(registered platform.Definition, projection ApplicationPr
 			if v.Mode == "property" && v.Source != nil && v.Source.Object != nil {
 				info, ok := entities[v.Source.Object.Name]
 				_, parent := application.Variables[v.Source.Variable]
-				missing = !ok || !parent || pageowner.CheckPropertySchema(application.QueryPage(), v, info) != nil
+				missing = !ok || !parent || pageowner.CheckPropertySchema(pageowner.ApplicationPage(application), v, info) != nil
 			}
 			if v.Mode == "aggregate" && v.Source != nil {
 				_, ok := application.Queries[v.Source.Query]

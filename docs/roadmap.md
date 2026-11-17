@@ -34,12 +34,6 @@
 
 ## U7：platform 只留 SDK 契约
 
-- [ ] U7.4 应用与页面声明：`ModelObject` 归 `services/ontology`；`CheckApplicationBindings` 归
-  `kernel/acceptedformat`，避免 kernel 反向依赖 apps。`ApplicationProfile` 的校验、`Application.QueryPage`
-  和由原始 `UIProfile` 构造页面声明归 `services/apps/pages`；ontology、publication 和 DevOps 经装配回调或
-  已生成页面检查，不直接构造声明。资产与图标只保留 SDK 词法检查，领域呈现校验归 ontology 或 apps。
-  运行应用、页面、发布、安装、快照与重放检查；生成契约不变。
-
 - [ ] U7.5 收窄运行接口并收口：按服务拆分宽 `Runtime` 接口，消除调用点的可选能力探测；依赖解析与修订归
   resources，AI 归 AI 服务，workflow 归自动化服务，每项只留一个实现。`page_compat.go` 在通用小数规则归位后
   收敛，不能复制限制。每批检查接受结果、历史映像和黄金路径；最终核对 `platform` 不超过 8000 行、

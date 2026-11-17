@@ -184,6 +184,9 @@ func (resolver Resolver) candidate(roots []platform.AssetRef, available []platfo
 			if err := json.Unmarshal(body, &application); err != nil {
 				return empty, err
 			}
+			if err := resolver.CheckApplicationProfile(application.Profile); err != nil {
+				return empty, err
+			}
 			if err := resolver.CheckApplicationVariables(application); err != nil {
 				return empty, err
 			}
@@ -210,7 +213,7 @@ func (resolver Resolver) candidate(roots []platform.AssetRef, available []platfo
 			if err := checkApplicationProfileClosure(ref, contracts); err != nil {
 				return empty, err
 			}
-			if err := resolver.CheckFrozenQueries(application.QueryPage(), lookup); err != nil {
+			if err := resolver.CheckFrozenQueries(resolver.ApplicationPage(application), lookup); err != nil {
 				return empty, err
 			}
 			for _, name := range application.Pages {

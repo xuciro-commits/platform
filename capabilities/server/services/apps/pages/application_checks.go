@@ -32,7 +32,7 @@ func (b Bindings) CheckApplication(id string, a platform.Application, published 
 	if err := CheckApplicationVariables(a); err != nil {
 		return err
 	}
-	if err := b.CheckQueries(a.QueryPage()); err != nil {
+	if err := b.CheckQueries(ApplicationPage(a)); err != nil {
 		return err
 	}
 	if err := CheckApplicationResources(a); err != nil {

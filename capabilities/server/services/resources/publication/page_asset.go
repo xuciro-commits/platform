@@ -19,6 +19,9 @@ func (resolver Resolver) PageReleaseAsset(app, sourceVersion string, page platfo
 }
 
 func (resolver Resolver) ApplicationReleaseAsset(app, sourceVersion string, application platform.Application) (platform.ReleaseAsset, error) {
+	if err := resolver.CheckApplicationProfile(application.Profile); err != nil {
+		return platform.ReleaseAsset{}, err
+	}
 	if err := resolver.CheckApplicationVariables(application); err != nil {
 		return platform.ReleaseAsset{}, err
 	}

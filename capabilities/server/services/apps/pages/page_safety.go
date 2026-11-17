@@ -122,6 +122,8 @@ func PublicationResolver() publication.Resolver {
 		CheckPageEmbeddingGraph: CheckPageEmbeddingGraph, CheckPageVariables: CheckPageVariables,
 		PageContentVersion: PageContentVersion, CheckPageContentVersion: CheckPageContentVersion,
 		CheckPageNavigation:       CheckPageNavigation,
+		ApplicationPage:           ApplicationPage,
+		CheckApplicationProfile:   CheckApplicationProfile,
 		CheckApplicationVariables: CheckApplicationVariables,
 		CheckApplicationResources: CheckApplicationResources, CheckApplicationExtension: CheckApplicationExtension,
 		ApplicationDependencies: ApplicationDependencies,

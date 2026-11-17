@@ -82,7 +82,7 @@ func ReadTestPlan(raw []byte) (TestPlanDescriptor, error) {
 func (p TestPlanDescriptor) Dependencies() []AssetRef {
 	refs := append([]AssetRef{}, p.Roots...)
 	for _, sample := range p.Samples {
-		refs = append(refs, ModelObject(sample.Type))
+		refs = append(refs, modelRef(sample.Type))
 	}
 	for _, step := range p.Steps {
 		if step.Action != "" && step.Type != "build.process" {

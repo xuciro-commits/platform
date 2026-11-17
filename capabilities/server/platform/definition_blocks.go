@@ -140,17 +140,3 @@ func (p ProposalAdoption) CheckMapping(f AIFunction, inputs []Field) error {
 	}
 	return nil
 }
-
-func CheckApplicationBindings(bindings []AssetBinding) error {
-	if len(bindings) > 1000 {
-		return fmt.Errorf("application bindings exceed the owner budget")
-	}
-	seen := map[AssetRef]bool{}
-	for _, binding := range bindings {
-		if binding.Ref.Check() != nil || binding.Ref.Kind != AssetApp || binding.SourceVersion == "" || seen[binding.Ref] {
-			return fmt.Errorf("application binding is invalid or repeated")
-		}
-		seen[binding.Ref] = true
-	}
-	return nil
-}

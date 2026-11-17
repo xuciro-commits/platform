@@ -181,7 +181,7 @@ func (s SampleSet) Check() error {
 	seen := map[string]bool{}
 	size := 0
 	for _, group := range s.Samples {
-		if ModelObject(group.Type).Check() != nil || seen[group.Type] || len(group.Records) > 100 {
+		if modelRef(group.Type).Check() != nil || seen[group.Type] || len(group.Records) > 100 {
 			return fmt.Errorf("Sample model types must be unique, with at most 100 records each")
 		}
 		seen[group.Type] = true
@@ -203,7 +203,7 @@ func (s SampleSet) Check() error {
 func (s SampleSet) Dependencies() []AssetRef {
 	refs := []AssetRef{}
 	for _, group := range s.Samples {
-		refs = append(refs, ModelObject(group.Type))
+		refs = append(refs, modelRef(group.Type))
 	}
 	slices.SortFunc(refs, CompareAssetRef)
 	return refs

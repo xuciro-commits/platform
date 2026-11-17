@@ -6,6 +6,7 @@ import (
 	"slices"
 
 	"platformserver/platform"
+	"platformserver/services/ontology"
 )
 
 func CheckFrozenQueries(original platform.Page, assets map[platform.AssetRef]platform.ReleaseAsset) error {
@@ -14,7 +15,7 @@ func CheckFrozenQueries(original platform.Page, assets map[platform.AssetRef]pla
 		return err
 	}
 	lookup := func(typ string) (platform.EntityInfo, bool) {
-		asset, ok := assets[platform.ModelObject(typ)]
+		asset, ok := assets[ontology.ModelObject(typ)]
 		if !ok {
 			for ref, value := range assets {
 				if ref.Kind == platform.AssetObject && ref.Name == typ {

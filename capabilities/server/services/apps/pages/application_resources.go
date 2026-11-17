@@ -15,10 +15,8 @@ func CheckApplicationResources(a platform.Application) error {
 	if err := CheckApplicationExtension(a); err != nil {
 		return err
 	}
-	if a.Profile != nil {
-		if err := a.Profile.Check(); err != nil {
-			return err
-		}
+	if err := CheckApplicationProfile(a.Profile); err != nil {
+		return err
 	}
 	if len(a.Resources) > 1000 {
 		return fmt.Errorf("application resources exceed 1000 assets")
@@ -40,7 +38,7 @@ func CheckApplicationResources(a platform.Application) error {
 }
 
 func ApplicationDependencies(a platform.Application, owner string) []platform.AssetRef {
-	refs := append(slices.Clone(a.Resources), QueryReferences(a.QueryPage())...)
+	refs := append(slices.Clone(a.Resources), QueryReferences(ApplicationPage(a))...)
 	if a.Extends != nil {
 		refs = append(refs, *a.Extends)
 	}

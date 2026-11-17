@@ -21,7 +21,3 @@ type ApplicationHeaderItem struct {
 	Text   string   `json:"text,omitempty"`
 	Action string   `json:"action,omitempty"`
 }
-
-func (a Application) QueryPage() Page {
-	return Page{Format: 4, InputSchema: PageInputSchema{profile: a.UIProfile, Variables: a.Variables, Queries: a.Queries}}
-}
