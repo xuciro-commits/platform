@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"platformserver/platform"
 	"platformserver/services/ai/gateway/providers"
+	"platformserver/services/ai/modelconfig"
 	"time"
 )
 
@@ -40,10 +41,10 @@ func (g Calls) Call(pv platform.AIProvider, model platform.AIModel, m platform.M
 	if req.Binding != nil {
 		binding = *req.Binding
 		frozen := platform.AIModel{Provider: model.Provider, Model: model.Model, Capabilities: binding.Capabilities, Defaults: binding.Options, Revision: binding.Revision}
-		_, configErr = frozen.Resolve(purpose, platform.ModelOptions{}, g.MostTokens())
+		_, configErr = modelconfig.Resolve(frozen, purpose, platform.ModelOptions{}, g.MostTokens())
 		if configErr == nil {
 			model.Defaults = platform.ModelOptions{}
-			_, configErr = model.Resolve(purpose, binding.Options, g.MostTokens())
+			_, configErr = modelconfig.Resolve(model, purpose, binding.Options, g.MostTokens())
 		}
 	} else {
 		options := req.Options
@@ -53,7 +54,7 @@ func (g Calls) Call(pv platform.AIProvider, model platform.AIModel, m platform.M
 		if ceiling := g.MostTokens(); ceiling > 0 && options.MaxTokens > ceiling && req.Options.MaxTokens == 0 {
 			options.MaxTokens = ceiling
 		}
-		binding, configErr = model.Resolve(purpose, options, g.MostTokens())
+		binding, configErr = modelconfig.Resolve(model, purpose, options, g.MostTokens())
 	}
 	if configErr == nil {
 		configErr = Check(g.Inference, pv, binding)

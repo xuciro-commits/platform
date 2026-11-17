@@ -5,6 +5,7 @@ import (
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformserver/platform"
+	"platformserver/services/ai/modelconfig"
 )
 
 type Embedder struct {
@@ -18,7 +19,7 @@ func (e Embedder) Vectors(name string, input []string) ([][]float32, error) {
 	if err != nil {
 		return nil, fmt.Errorf("the model %s is not enabled", name)
 	}
-	binding, problem := model.Resolve("embedding", platform.ModelOptions{}, 0)
+	binding, problem := modelconfig.Resolve(model, "embedding", platform.ModelOptions{}, 0)
 	if problem != nil {
 		return nil, problem
 	}

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"platformserver/platform"
+	"platformserver/services/ai/modelconfig"
 	"strings"
 	"time"
 )
@@ -55,7 +56,7 @@ func (s State) Validate() error {
 		if model.Revision < 0 {
 			return fmt.Errorf("accepted AI state has an invalid revision")
 		}
-		if _, err := model.Resolve("", platform.ModelOptions{}, 0); err != nil {
+		if _, err := modelconfig.Resolve(model, "", platform.ModelOptions{}, 0); err != nil {
 			return fmt.Errorf("accepted AI model: %w", err)
 		}
 		models[model.Name()] = true

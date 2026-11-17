@@ -11,6 +11,7 @@ import (
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformserver/platform"
+	"platformserver/services/ai/modelconfig"
 )
 
 type Models interface {
@@ -79,7 +80,7 @@ func (r Resolver) Resolve(purpose, name string, override platform.ModelOptions) 
 			return platform.AIModelBinding{}, pv, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "The purpose model options are invalid")
 		}
 	}
-	b, problem := model.Resolve(purpose, defaults.Override(override), r.MostTokens())
+	b, problem := modelconfig.Resolve(model, purpose, defaults.Override(override), r.MostTokens())
 	b.Provider = &pv
 	if problem != nil {
 		return b, pv, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, problem.Error())
@@ -121,7 +122,7 @@ func (r Resolver) CheckSetting(id, value string) *platform.Error {
 			if err != nil {
 				return err
 			}
-			if _, problem := model.Resolve(purpose, options, r.MostTokens()); problem != nil {
+			if _, problem := modelconfig.Resolve(model, purpose, options, r.MostTokens()); problem != nil {
 				return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, problem.Error())
 			}
 			return nil

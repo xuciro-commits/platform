@@ -314,8 +314,9 @@ func (b *Build) singleDraftAssets(kind platform.AssetKind, id string) (before, a
 	if kind == platform.AssetFunction {
 		return b.functions.DraftAssets(id)
 	}
-	if kind == platform.AssetAgent {
-		return b.agentDraftAssets(id)
+	if hooks, found := publication.Kind(b.publications, kind); found && hooks.VersionedDraft != nil {
+		closure, err := hooks.VersionedDraft(id)
+		return closure.Before, closure.After, closure.Prior, closure.Next, closure.HasPrior, err
 	}
 	if !recordKind(kind) {
 		return nil, nil, prior, next, false, fmt.Errorf("draft kind %q cannot be previewed", kind)

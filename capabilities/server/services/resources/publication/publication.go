@@ -23,12 +23,14 @@ type Family struct {
 	Archived  bool
 }
 
+func ReadInto(raw string, out any) bool {
+	return raw != "" && json.Unmarshal([]byte(raw), out) == nil
+}
+
 func Read[T any](raw string) (T, bool) {
 	var out T
-	if raw == "" || json.Unmarshal([]byte(raw), &out) != nil {
-		return out, false
-	}
-	return out, true
+	ok := ReadInto(raw, &out)
+	return out, ok
 }
 
 func Inventory[T any](c platform.Caller) ([]T, error) {

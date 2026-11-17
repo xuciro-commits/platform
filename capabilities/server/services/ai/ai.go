@@ -14,6 +14,7 @@ import (
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformserver/platform"
+	"platformserver/services/ai/modelconfig"
 	"platformserver/services/ai/state"
 )
 
@@ -276,7 +277,7 @@ func (a *AI) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb.Cha
 			if !c.Replaying {
 				ceiling, _ = strconv.Atoi(c.Setting(SettingMaxTokens))
 			}
-			if _, err := next.Resolve("", platform.ModelOptions{}, ceiling); err != nil {
+			if _, err := modelconfig.Resolve(next, "", platform.ModelOptions{}, ceiling); err != nil {
 				return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
 			}
 			if c := next.Capabilities; c != nil {

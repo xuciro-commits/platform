@@ -167,11 +167,10 @@ func (b *Build) declarationReleaseDraft(asset platform.ReleaseAsset) (string, an
 		d, err := b.testPlanDraft(asset)
 		return TestPlanType, d, err
 	case platform.AssetAgent:
-		d, err := b.decodeAgentAsset(asset)
+		d, err := b.agent.DraftFromAsset(asset)
 		if err != nil {
 			return "", nil, err
 		}
-		d.Version, d.State = 0, "draft"
 		return AgentType, d, nil
 	case platform.AssetCompute:
 		var operation platform.Operation

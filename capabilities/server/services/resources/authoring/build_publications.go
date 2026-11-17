@@ -38,17 +38,6 @@ func (b *Build) ValidateAcceptedPublication(schema string, image []byte) error {
 		}
 		return b.host.ValidateInstallOperation(platform.Caller{Replaying: true}, tb.Definition())
 	}
-	if schema == SchemaAgentPublish {
-		var record Agent
-		if err := json.Unmarshal(image, &record); err != nil {
-			return err
-		}
-		agent, ok := publication.Read[Agent](record.Published)
-		if !ok {
-			return fmt.Errorf("accepted agent has no published definition")
-		}
-		return b.checkAgent(agent)
-	}
 
 	if k := definitionKindOfSchema(schema); k != nil {
 		return k.validateImage(b, image)
@@ -91,18 +80,6 @@ func (b *Build) ApplyAcceptedPublication(schema string, image []byte) error {
 		}
 		tb.Versions = record.Versions
 		return b.installTable(platform.Caller{Replaying: true}, tb)
-	}
-	if schema == SchemaAgentPublish {
-		var record Agent
-		if err := json.Unmarshal(image, &record); err != nil {
-			return err
-		}
-		agent, ok := publication.Read[Agent](record.Published)
-		if !ok {
-			return fmt.Errorf("accepted agent has no published definition")
-		}
-		b.agents[agent.Name] = agent
-		return nil
 	}
 
 	if k := definitionKindOfSchema(schema); k != nil {
@@ -197,14 +174,8 @@ func (b *Build) Reinstall() error {
 		return err
 	}
 
-	agents, err := b.agentInventory()
-	if err != nil {
+	if err := b.agent.Restore(); err != nil {
 		return err
-	}
-	for _, record := range agents {
-		if a, ok := publication.Read[Agent](record.Published); ok && !record.Archived {
-			b.agents[a.Name] = a
-		}
 	}
 	codes, err := b.codeInventory()
 	if err != nil {

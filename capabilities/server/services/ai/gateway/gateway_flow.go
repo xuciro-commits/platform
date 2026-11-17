@@ -11,6 +11,7 @@ import (
 	"platformserver/platform"
 	"platformserver/services/actions"
 	"platformserver/services/ai/gateway/providers"
+	"platformserver/services/ai/modelconfig"
 )
 
 func ReservationFailure(refusal *platform.Error) *platform.AIError {
@@ -79,7 +80,7 @@ func (s ChatSetup) Prepare(m platform.Member, req platform.ChatRequest, stage st
 	if ceiling := s.Resolver.MostTokens(); ceiling > 0 && options.MaxTokens > ceiling && req.Options.MaxTokens == 0 {
 		options.MaxTokens = ceiling
 	}
-	binding, problem := model.Resolve("generation", options, s.Resolver.MostTokens())
+	binding, problem := modelconfig.Resolve(model, "generation", options, s.Resolver.MostTokens())
 	if problem != nil {
 		return model, pv, req, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, problem.Error())
 	}

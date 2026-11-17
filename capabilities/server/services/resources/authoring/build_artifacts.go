@@ -5,6 +5,7 @@ import (
 	"fmt"
 	appsauthoring "platformserver/services/apps/authoring"
 	"platformserver/services/ontology"
+	"platformserver/services/resources/publication"
 	"slices"
 
 	"platformserver/platform"
@@ -103,7 +104,8 @@ func (b *Build) prepareReleasePublications(assets []platform.ReleaseAsset) ([]pl
 		return nil, nil, err
 	}
 	publications = append(publications, images...)
-	for _, prepare := range []func([]platform.ReleaseAsset) ([]platform.ReleasePublication, error){b.prepareAgentReleasePublications, b.prepareTestPlanPublications, b.PrepareCodeReleasePublications, b.prepareTablePublications} {
+	agent, _ := publication.Kind(b.publications, platform.AssetAgent)
+	for _, prepare := range []func([]platform.ReleaseAsset) ([]platform.ReleasePublication, error){agent.FreezeBatch, b.prepareTestPlanPublications, b.PrepareCodeReleasePublications, b.prepareTablePublications} {
 		images, err := prepare(assets)
 		if err != nil {
 			return nil, nil, err
@@ -255,16 +257,7 @@ func (b *Build) ResolvePinned(ref platform.AssetRef, version string, contentVers
 		return b.testPlanPinned(ref, version)
 	}
 	if ref.Kind == platform.AssetAgent {
-		for _, record := range b.agents {
-			asset, err := b.agentReleaseAsset(record, b.Manifest().Version)
-			if err != nil {
-				return platform.ReleaseAsset{}, err
-			}
-			if asset.Ref == ref && asset.SourceVersion == version {
-				return asset, nil
-			}
-		}
-		return b.retainedAgentAsset(ref, version)
+		return b.agent.Resolve(ref, version)
 	}
 	if ref.Kind == platform.AssetCompute {
 		return b.OperationReleaseAsset(ref.Name, version)

@@ -450,7 +450,7 @@ func (b *Build) saveResource(c platform.Caller, s *pb.Submission, now time.Time)
 			entity = b.apps.PageDraftEntity()
 		}
 		if typ == AgentType {
-			entity = b.agentDraftEntity()
+			entity = b.agent.DraftEntity()
 		}
 		verb := "create"
 		if exists {

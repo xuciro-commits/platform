@@ -7,6 +7,7 @@ import (
 	appsauthoring "platformserver/services/apps/authoring"
 	automationauthoring "platformserver/services/automate/authoring"
 	"platformserver/services/ontology"
+	"platformserver/services/resources/publication"
 	"reflect"
 	"slices"
 
@@ -73,12 +74,12 @@ func (b *Build) ForkReleaseExecution(assets []platform.ReleaseAsset) (platform.A
 			}
 			bound.interfaces[shape.Name] = shape
 		}
-		if asset.Ref.App == ID && asset.Ref.Kind == platform.AssetAgent {
-			agent, err := b.decodeAgentAsset(asset)
-			if err != nil {
-				return nil, err
+		if asset.Ref.App == ID {
+			if hooks, found := publication.Kind(bound.publications, asset.Ref.Kind); found && hooks.LoadExecution != nil {
+				if err := hooks.LoadExecution(asset); err != nil {
+					return nil, err
+				}
 			}
-			bound.agents[agent.Name] = agent
 		}
 		if asset.Ref.App != ID || asset.Ref.Kind != platform.AssetObject {
 			continue
@@ -325,12 +326,7 @@ func (b *Build) applicationDrafts(id string, selectDrafts map[JointDraftRef]bool
 				asset, problem := b.automation.DraftAsset(p, b.Manifest().Version)
 				assets, err = []platform.ReleaseAsset{asset}, problem
 			case platform.AssetAgent:
-				agent, found := platform.Get[Agent](caller, draft.ID)
-				if !found || agent.Archived {
-					return nil, fmt.Errorf("saved agent draft is unavailable")
-				}
-				agent.Version++
-				asset, problem := b.agentReleaseAsset(agent, b.Manifest().Version)
+				asset, problem := b.agent.DraftAsset(caller, draft.ID)
 				assets, err = []platform.ReleaseAsset{asset}, problem
 			default:
 				if record, ok := integrations[draft]; ok {
