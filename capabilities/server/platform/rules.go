@@ -2,6 +2,7 @@ package platform
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	ruleexpr "platformserver/expr"
@@ -82,7 +83,8 @@ func EvaluateRule(expr Expr, reads RuleReadSpec, caller Caller, record any, inpu
 	value.Sources = slices.Clone(context.Sources)
 	if err != nil {
 		code := pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT
-		if issue, ok := err.(*ExprIssue); ok && issue.Code == "withheld" {
+		var issue *ExprIssue
+		if errors.As(err, &issue) && issue.Code == "withheld" {
 			code = pb.ErrorCode_ERROR_CODE_POLICY_DENIED
 		}
 		return value, Refuse(code, "Rule: {reason} / 规则：{reason}", err.Error(), err.Error())

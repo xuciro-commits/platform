@@ -162,55 +162,56 @@ func decodeValue(d *json.Decoder, depth, maxDepth int) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	delim, ok := t.(json.Delim)
-	if !ok {
+	switch delim := t.(type) {
+	case json.Delim:
+		switch delim {
+		case '{':
+			m := map[string]any{}
+			for d.More() {
+				key, err := d.Token()
+				if err != nil {
+					return nil, err
+				}
+				name, ok := key.(string)
+				if !ok {
+					return nil, fmt.Errorf("invalid JSON key")
+				}
+				if _, found := m[name]; found {
+					return nil, fmt.Errorf("duplicate JSON field %s", name)
+				}
+				m[name], err = decodeValue(d, depth+1, maxDepth)
+				if err != nil {
+					return nil, err
+				}
+				if len(m) > 10000 {
+					return nil, fmt.Errorf("JSON object is too large")
+				}
+			}
+			if t, err := d.Token(); err != nil || t != json.Delim('}') {
+				return nil, fmt.Errorf("incomplete JSON object")
+			}
+			return m, nil
+		case '[':
+			a := []any{}
+			for d.More() {
+				v, err := decodeValue(d, depth+1, maxDepth)
+				if err != nil {
+					return nil, err
+				}
+				a = append(a, v)
+				if len(a) > 10000 {
+					return nil, fmt.Errorf("JSON array is too large")
+				}
+			}
+			if t, err := d.Token(); err != nil || t != json.Delim(']') {
+				return nil, fmt.Errorf("incomplete JSON array")
+			}
+			return a, nil
+		}
+		return nil, fmt.Errorf("invalid JSON delimiter")
+	default:
 		return t, nil
 	}
-	switch delim {
-	case '{':
-		m := map[string]any{}
-		for d.More() {
-			key, err := d.Token()
-			if err != nil {
-				return nil, err
-			}
-			name, ok := key.(string)
-			if !ok {
-				return nil, fmt.Errorf("invalid JSON key")
-			}
-			if _, found := m[name]; found {
-				return nil, fmt.Errorf("duplicate JSON field %s", name)
-			}
-			m[name], err = decodeValue(d, depth+1, maxDepth)
-			if err != nil {
-				return nil, err
-			}
-			if len(m) > 10000 {
-				return nil, fmt.Errorf("JSON object is too large")
-			}
-		}
-		if t, err := d.Token(); err != nil || t != json.Delim('}') {
-			return nil, fmt.Errorf("incomplete JSON object")
-		}
-		return m, nil
-	case '[':
-		a := []any{}
-		for d.More() {
-			v, err := decodeValue(d, depth+1, maxDepth)
-			if err != nil {
-				return nil, err
-			}
-			a = append(a, v)
-			if len(a) > 10000 {
-				return nil, fmt.Errorf("JSON array is too large")
-			}
-		}
-		if t, err := d.Token(); err != nil || t != json.Delim(']') {
-			return nil, fmt.Errorf("incomplete JSON array")
-		}
-		return a, nil
-	}
-	return nil, fmt.Errorf("invalid JSON delimiter")
 }
 func (s ValueSchema) Validate(raw []byte, limit int) error {
 	if err := s.Check(); err != nil {
@@ -278,8 +279,8 @@ func (s ValueSchema) validate(v any, path string) error {
 			return bad()
 		}
 	case "number", "integer":
-		n, ok := v.(json.Number)
-		if !ok {
+		n, valid := jsonNumber(v)
+		if !valid {
 			return bad()
 		}
 		if len(n) > 128 {
@@ -302,6 +303,15 @@ func (s ValueSchema) validate(v any, path string) error {
 		}
 	}
 	return nil
+}
+
+func jsonNumber(v any) (json.Number, bool) {
+	switch n := v.(type) {
+	case json.Number:
+		return n, true
+	default:
+		return "", false
+	}
 }
 
 type OperationBinding struct {

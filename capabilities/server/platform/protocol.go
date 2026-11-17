@@ -577,10 +577,10 @@ func (c Caller) Request(r *pb.ChangeRecord, q Request) {
 }
 
 func Raw(v any) []byte {
-	if b, ok := v.([]byte); ok {
+	switch b := v.(type) {
+	case []byte:
 		return b
-	}
-	if b, ok := v.(json.RawMessage); ok {
+	case json.RawMessage:
 		return b
 	}
 	out, _ := json.Marshal(v)

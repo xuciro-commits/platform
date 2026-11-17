@@ -325,10 +325,6 @@ type Reader interface {
 	Read(c Caller, name string) (any, *Error)
 }
 
-type ParameterizedReader interface {
-	ReadInput(c Caller, name string, inputs json.RawMessage) (any, *Error)
-}
-
 type InputReceiver interface {
 	Input(c Caller, name string, body []byte, now time.Time) (any, *Error)
 }
