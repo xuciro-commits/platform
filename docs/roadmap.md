@@ -34,7 +34,8 @@
     核对 `compute_code.go`、`compute_table.go`、`compute_authoring.go`、`compute_publications.go` 和 `compute_state.go`。
     创建、编辑、归档及编译请求和结果由函数拥有者分派；Build 保留公共资源、权限和装配入口。
     版本化资产的身份、序号与依赖校验复用发布服务；函数拥有者不再通过 Build 回调读取资产版本。
-    联合草稿按原时机接收跨类型资产读取函数，不在资源拥有者的长期环境中持有该回调。
+    联合草稿在调用时接收跨类型资产读取函数，保留故障次序，不在资源拥有者的长期环境中持有该回调。
+    计算草稿在读取跨类型资产后读取自身，决策表不再重复读取记录。
     AI 函数的联合声明由调用时的编排上下文提供，版本回退仍读取已安装状态或保留版本族。
   - 核对 `services/resources/authoring/build_compute.go`、`build_functions.go`、`build_function_adapter.go`、
     `build_owner.go` 及 `host/composition/tenant.go` 的剩余装配与调用边界，删除失去意义的旧路径。

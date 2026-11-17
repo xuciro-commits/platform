@@ -90,11 +90,7 @@ func (o *Owner) InstallOperationAsset(asset platform.ReleaseAsset) error {
 	code := Code{Name: op.Name, Title: op.Title, Description: op.Description, Input: op.Input, Output: op.Output, Roles: op.Roles, Limits: op.Limits, Module: op.Binding.Module, State: "published", Version: ordinal}
 	return o.installCode(platform.Caller{Replaying: true}, code)
 }
-func (o *Owner) codeDraftAssets(id string, releaseAssets func() ([]platform.ReleaseAsset, error)) (before, after []platform.ReleaseAsset, prior, next platform.AssetRef, hadPrior bool, err error) {
-	before, err = releaseAssets()
-	if err != nil {
-		return
-	}
+func (o *Owner) codeDraftAssets(id string, before []platform.ReleaseAsset) (after []platform.ReleaseAsset, prior, next platform.AssetRef, hadPrior bool, err error) {
 	list, problem := o.codeInventory()
 	if problem != nil {
 		err = problem
@@ -268,13 +264,8 @@ func (o *Owner) tableFromAsset(asset platform.ReleaseAsset) (Table, error) {
 	return tb, nil
 }
 
-func (o *Owner) tableDraftAssets(id string, releaseAssets func() ([]platform.ReleaseAsset, error)) (before, after []platform.ReleaseAsset, prior, next platform.AssetRef, hadPrior bool, err error) {
-	before, err = releaseAssets()
-	if err != nil {
-		return
-	}
-	tb, ok := platform.Get[Table](o.env.Host().Automation(platform.Caller{}, o.env.App()), id)
-	if !ok || tb.Archived {
+func (o *Owner) tableDraftAssets(id string, tb Table, before []platform.ReleaseAsset) (after []platform.ReleaseAsset, prior, next platform.AssetRef, hadPrior bool, err error) {
+	if tb.Archived {
 		err = fmt.Errorf("decision table draft %s was not found", id)
 		return
 	}

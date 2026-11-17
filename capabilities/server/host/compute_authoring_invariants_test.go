@@ -2,6 +2,7 @@ package host
 
 import (
 	"bytes"
+	"encoding/json"
 	"slices"
 	"testing"
 
@@ -32,6 +33,21 @@ func TestInvariantK1ComputeAuthoringRetainsVersions(t *testing.T) {
 	apps[live.appIndex[build.ID]] = fork
 	forkView := &Tenant{ownerSet: live.with(apps)}
 	live.accept(t, "build.table.edit", functionauthoring.TableType, "TABLE", map[string]any{"title": "Sizing v2"})
+	preview, err := owner.DraftReleaseAssetsMulti([]build.JointDraftRef{{Kind: platform.AssetCompute, ID: "TABLE"}}, live.member(t), false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ref := platform.AssetRef{App: build.ID, Kind: platform.AssetCompute, Name: "sizing"}
+	var candidate platform.ReleaseAsset
+	for _, asset := range preview.After {
+		if asset.Ref == ref {
+			candidate = asset
+		}
+	}
+	var candidateOperation platform.Operation
+	if candidate.SourceVersion != "1.compute-2" || json.Unmarshal(candidate.Body, &candidateOperation) != nil || candidateOperation.Title != "Sizing v2" {
+		t.Fatalf("candidate lost the edited table: %+v", candidate)
+	}
 	live.accept(t, "build.table.publish", functionauthoring.TableType, "TABLE", map[string]any{})
 
 	operation := func(view *Tenant, requested, expected int, title string) platform.Operation {

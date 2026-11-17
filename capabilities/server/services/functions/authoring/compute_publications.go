@@ -18,10 +18,14 @@ func (o *Owner) ComputePublication() publication.Hooks {
 		},
 		FreezeBatch: o.prepareComputePublications,
 		VersionedDraft: func(id string, releaseAssets func() ([]platform.ReleaseAsset, error)) (closure publication.DraftClosure, err error) {
-			if _, ok := platform.Get[Table](o.env.Host().Automation(platform.Caller{}, o.env.App()), id); ok {
-				closure.Before, closure.After, closure.Prior, closure.Next, closure.HasPrior, err = o.tableDraftAssets(id, releaseAssets)
+			closure.Before, err = releaseAssets()
+			if err != nil {
+				return closure, err
+			}
+			if table, ok := platform.Get[Table](o.env.Host().Automation(platform.Caller{}, o.env.App()), id); ok {
+				closure.After, closure.Prior, closure.Next, closure.HasPrior, err = o.tableDraftAssets(id, table, closure.Before)
 			} else {
-				closure.Before, closure.After, closure.Prior, closure.Next, closure.HasPrior, err = o.codeDraftAssets(id, releaseAssets)
+				closure.After, closure.Prior, closure.Next, closure.HasPrior, err = o.codeDraftAssets(id, closure.Before)
 			}
 			return closure, err
 		},
