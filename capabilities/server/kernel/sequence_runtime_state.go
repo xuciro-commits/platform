@@ -18,12 +18,20 @@ type RuntimeOwners struct {
 }
 
 func (s *Sequence) MigrateRuntimeState(ctx context.Context, j persistence.Journals, prefix *persistence.StateCheckpoint, o RuntimeOwners) error {
-	store, ok := j.(persistence.RuntimeState)
-	if !ok {
+	var store persistence.RuntimeState
+	switch value := j.(type) {
+	case persistence.RuntimeState:
+		store = value
+	default:
 		return nil
 	}
+	var recovery persistence.RuntimeStateRecovery
+	switch value := j.(type) {
+	case persistence.RuntimeStateRecovery:
+		recovery = value
+	}
 	var view persistence.StateReadView
-	if recovery, ok := j.(persistence.RuntimeStateRecovery); ok {
+	if recovery != nil {
 		position, active, err := recovery.StatePosition(ctx, s.ID)
 		if err != nil {
 			return err
@@ -39,7 +47,8 @@ func (s *Sequence) MigrateRuntimeState(ctx context.Context, j persistence.Journa
 			s.Projection.Current().Configure(store, s.ID, position, func() int64 { return j.Position(s.ID) })
 			s.Projection.UseCurrentRows()
 			s.Projection.Unlock()
-			if views, ok := store.(persistence.StateReadViews); ok {
+			switch views := store.(type) {
+			case persistence.StateReadViews:
 				view, err = views.BeginStateRead(ctx, s.ID, position)
 				if err != nil {
 					return err
@@ -59,8 +68,7 @@ func (s *Sequence) MigrateRuntimeState(ctx context.Context, j persistence.Journa
 		return err
 	}
 	if prefix != nil {
-		recovery, ok := j.(persistence.RuntimeStateRecovery)
-		if !ok {
+		if recovery == nil {
 			return fmt.Errorf("tenant %s state store cannot recover a retained suffix", s.ID)
 		}
 		if err := recovery.RestoreState(ctx, s.ID, j.Position(s.ID), *prefix, d); err != nil {

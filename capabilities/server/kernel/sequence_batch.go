@@ -44,8 +44,8 @@ func (s *Sequence) PrepareBatch(l platform.Authority, raw []byte, h BatchApply) 
 	if err != nil {
 		return nil, err
 	}
-	owner, ok := h.App(result.App).(platform.App)
-	if result.Tenant != s.ID || !ok || owner.Authority() != l {
+	owner := h.App(result.App)
+	if result.Tenant != s.ID || owner == nil || owner.Authority() != l {
 		return nil, fmt.Errorf("record batch belongs to another tenant or ledger")
 	}
 	sub, _ := acceptedformat.BatchSubmission(result, receipt)
@@ -60,8 +60,8 @@ func (s *Sequence) PrepareBatch(l platform.Authority, raw []byte, h BatchApply) 
 		}
 		return nil, nil
 	}
-	answerOwner, ok := h.App(receipt.GetSubmission().GetAuthority()).(platform.App)
-	if !ok {
+	answerOwner := h.App(receipt.GetSubmission().GetAuthority())
+	if answerOwner == nil {
 		return nil, fmt.Errorf("record batch answer has no authority")
 	}
 	if prior := answerOwner.Authority().AcceptedFor(s.ID, receipt.GetSubmission().GetIdempotencyKey()); prior != nil {
@@ -73,8 +73,8 @@ func (s *Sequence) PrepareBatch(l platform.Authority, raw []byte, h BatchApply) 
 	ledgers := map[string]platform.Authority{}
 	changes := map[string]*pb.ChangeRecord{}
 	for _, decision := range result.Decisions {
-		ra, ok := h.App(decision.Event.App).(platform.App)
-		if !ok {
+		ra := h.App(decision.Event.App)
+		if ra == nil {
 			return nil, fmt.Errorf("record batch needs missing authority %s", decision.Event.App)
 		}
 		ledgers[decision.Event.App] = ra.Authority()
@@ -100,8 +100,12 @@ func (s *Sequence) PrepareBatch(l platform.Authority, raw []byte, h BatchApply) 
 		if decision.Publication == nil {
 			continue
 		}
-		publisher, ok := h.App(decision.Event.App).(platform.AcceptedPublisher)
-		if !ok || !slices.Contains(publisher.AcceptedPublicationSchemas(), decision.Publication.Schema) ||
+		var publisher platform.AcceptedPublisher
+		switch value := h.App(decision.Event.App).(type) {
+		case platform.AcceptedPublisher:
+			publisher = value
+		}
+		if publisher == nil || !slices.Contains(publisher.AcceptedPublicationSchemas(), decision.Publication.Schema) ||
 			decision.Publication.Schema != decision.Event.Names[0] {
 			return nil, fmt.Errorf("record batch has an invalid publication")
 		}

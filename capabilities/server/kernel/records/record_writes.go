@@ -405,8 +405,11 @@ func (s *Store) UniqueConstraint(info platform.EntityInfo, rule platform.Constra
 	}
 	et := s.types[info.Type]
 	if s.current.Backend() != nil {
-		storage, ok := s.current.Reader().(persistence.UniqueState)
-		if !ok {
+		var storage persistence.UniqueState
+		switch value := s.current.Reader().(type) {
+		case persistence.UniqueState:
+			storage = value
+		default:
 			panic("record storage does not provide derived unique keys")
 		}
 		changes := s.UniqueChanges()

@@ -49,9 +49,11 @@ func (s *Sequence) ApplyRecordResult(l platform.Authority, raw []byte, h RecordA
 	var publisher platform.AcceptedPublisher
 	if result.Kind == "publication" {
 		schema := receipt.GetSubmission().GetSchema().GetName()
-		var ok bool
-		publisher, ok = h.App(result.App).(platform.AcceptedPublisher)
-		if !ok || !slices.Contains(publisher.AcceptedPublicationSchemas(), schema) {
+		switch value := h.App(result.App).(type) {
+		case platform.AcceptedPublisher:
+			publisher = value
+		}
+		if publisher == nil || !slices.Contains(publisher.AcceptedPublicationSchemas(), schema) {
 			draft.Unlock()
 			return false, fmt.Errorf("accepted publication has no installer")
 		}

@@ -101,8 +101,11 @@ func SaveCheckpoint(ctx context.Context, j persistence.Journals, tenant string, 
 		return err
 	}
 	if runtime != nil {
-		snapshots, ok := j.(persistence.StateSnapshotStorage)
-		if !ok {
+		var snapshots persistence.StateSnapshotStorage
+		switch value := j.(type) {
+		case persistence.StateSnapshotStorage:
+			snapshots = value
+		default:
 			return fmt.Errorf("tenant %s: SQL checkpoint archive unavailable", tenant)
 		}
 		return snapshots.SaveStateSnapshot(ctx, tenant, seq, key, state, runtime.Records)

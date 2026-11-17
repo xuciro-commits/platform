@@ -35,7 +35,8 @@ type OwnerAttacher interface {
 }
 
 func BindOwner(app platform.App, bindings OwnerBindings) {
-	if owner, ok := app.(OwnerAttacher); ok {
+	switch owner := app.(type) {
+	case OwnerAttacher:
 		owner.AttachOwner(bindings)
 	}
 }

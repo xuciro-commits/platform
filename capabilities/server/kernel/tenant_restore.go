@@ -44,7 +44,8 @@ func (r TenantRestore) Run(ctx context.Context) error {
 	}
 	var statePosition int64
 	var stateActive bool
-	if recovery, ok := j.(persistence.RuntimeStateRecovery); ok {
+	switch recovery := j.(type) {
+	case persistence.RuntimeStateRecovery:
 		var err error
 		statePosition, stateActive, err = recovery.StatePosition(ctx, r.ID)
 		if err != nil {
@@ -170,7 +171,12 @@ func (r TenantRestore) Run(ctx context.Context) error {
 		return nil
 	}
 	r.AttachJournal()
-	if _, ok := j.(persistence.StateSnapshotStorage); ok && r.SnapshotEvery > 0 {
+	var snapshots bool
+	switch j.(type) {
+	case persistence.StateSnapshotStorage:
+		snapshots = true
+	}
+	if snapshots && r.SnapshotEvery > 0 {
 		seq, err := r.CheckpointRuntime()
 		if err != nil {
 			quarantine(fmt.Errorf("SQL checkpoint save: %w", err))

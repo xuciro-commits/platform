@@ -135,8 +135,11 @@ func (s *Store) OwnedDefinitions(base []platform.Definition, o DefinitionOwners)
 				}
 				continue
 			}
-			reader, ok := provider.(platform.AssetDefinitionReader)
-			if !ok {
+			var reader platform.AssetDefinitionReader
+			switch value := provider.(type) {
+			case platform.AssetDefinitionReader:
+				reader = value
+			default:
 				return nil, fmt.Errorf("agent owner has no definition descriptor")
 			}
 			definition, err := reader.DefinitionDescriptor(asset)

@@ -178,7 +178,12 @@ func storedValues[T any](c *Committed, owner string, memory map[string]T, field 
 	}
 	var values map[string]json.RawMessage
 	var err error
-	if selection, ok := c.storage.(persistence.StateValueSelection); ok && len(field) > 0 {
+	var selection persistence.StateValueSelection
+	switch value := c.storage.(type) {
+	case persistence.StateValueSelection:
+		selection = value
+	}
+	if selection != nil && len(field) > 0 {
 		values, err = selection.StateValuesWithField(c.ctx, c.tenant, owner, field[0], c.appliedPosition)
 	} else if c.storage != nil {
 		values, err = c.storage.StateValues(c.ctx, c.tenant, owner, c.appliedPosition)

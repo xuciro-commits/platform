@@ -75,11 +75,12 @@ type Journals interface {
 }
 
 func Pool(j Journals) (*pgxpool.Pool, bool) {
-	pg, ok := j.(interface{ Pool() *pgxpool.Pool })
-	if !ok {
+	switch pg := j.(type) {
+	case interface{ Pool() *pgxpool.Pool }:
+		return pg.Pool(), true
+	default:
 		return nil, false
 	}
-	return pg.Pool(), true
 }
 
 func (j *Postgres) Pool() *pgxpool.Pool { return j.pool }

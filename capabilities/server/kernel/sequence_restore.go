@@ -58,8 +58,11 @@ func (s *Sequence) RestoreRecords(saved map[string][]records.StoredState, check 
 }
 
 func (s *Sequence) VerifyRuntimeTail(ctx context.Context, j persistence.Journals, snapshot, current int64, entries []persistence.Entry, decode func([]byte) (persistence.StateDelta, error), states func(string) platform.AcceptedStateApp) error {
-	verifier, ok := j.(persistence.StateSnapshotVerifier)
-	if !ok {
+	var verifier persistence.StateSnapshotVerifier
+	switch value := j.(type) {
+	case persistence.StateSnapshotVerifier:
+		verifier = value
+	default:
 		return fmt.Errorf("tenant %s: SQL checkpoint comparison unavailable", s.ID)
 	}
 	deltas := make([]persistence.StateDelta, 0, len(entries))

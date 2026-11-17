@@ -32,8 +32,11 @@ func (s *Sequence) StorageReady(ctx context.Context) error {
 	if s.Store == nil {
 		return nil
 	}
-	journal, ok := s.Store.(persistence.Journals)
-	if !ok {
+	var journal persistence.Journals
+	switch value := s.Store.(type) {
+	case persistence.Journals:
+		journal = value
+	default:
 		return errors.New("tenant journal is unavailable")
 	}
 	if _, err := journal.Entries(ctx, s.ID, journal.Position(s.ID)); err != nil {

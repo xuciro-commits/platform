@@ -174,8 +174,11 @@ func (h TenantSnapshots[Job, Endpoint]) Snapshot(q *Sequence, position func() in
 			}
 			return nil, nil
 		}
-		views, ok := q.Projection.Current().Backend().(persistence.StateReadViews)
-		if !ok {
+		var views persistence.StateReadViews
+		switch value := q.Projection.Current().Backend().(type) {
+		case persistence.StateReadViews:
+			views = value
+		default:
 			return nil, nil
 		}
 		var err error
@@ -214,8 +217,12 @@ func (h TenantSnapshots[Job, Endpoint]) Snapshot(q *Sequence, position func() in
 }
 
 func (h TenantSnapshots[Job, Endpoint]) SnapshotRuntime(q *Sequence, ctx context.Context, j persistence.Journals) (json.RawMessage, int64, error) {
-	views, ok := j.(persistence.StateReadViews)
-	if !ok || q.Projection.Current().Backend() == nil {
+	var views persistence.StateReadViews
+	switch value := j.(type) {
+	case persistence.StateReadViews:
+		views = value
+	}
+	if views == nil || q.Projection.Current().Backend() == nil {
 		return h.Snapshot(q, func() int64 { return j.Position(q.ID) })
 	}
 	compatibility, err := h.Compatibility()

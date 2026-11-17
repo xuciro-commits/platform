@@ -26,12 +26,18 @@ func (s *Sequence) RestoreRuntimeSnapshot(ctx context.Context, j persistence.Jou
 	if saved == nil || saved.Format != SQLCheckpointFormat || saved.Position != seq || seq > current {
 		return fmt.Errorf("tenant %s: SQL checkpoint format or position differs", s.ID)
 	}
-	snapshots, ok := j.(persistence.StateSnapshotStorage)
-	if !ok {
+	var snapshots persistence.StateSnapshotStorage
+	switch value := j.(type) {
+	case persistence.StateSnapshotStorage:
+		snapshots = value
+	default:
 		return fmt.Errorf("tenant %s: SQL checkpoint archive unavailable", s.ID)
 	}
-	store, ok := j.(persistence.RuntimeState)
-	if !ok {
+	var store persistence.RuntimeState
+	switch value := j.(type) {
+	case persistence.RuntimeState:
+		store = value
+	default:
 		return fmt.Errorf("tenant %s: SQL state unavailable", s.ID)
 	}
 	view, err := snapshots.BeginSnapshotStateRead(ctx, s.ID, seq, current)
