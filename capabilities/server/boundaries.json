@@ -21,7 +21,8 @@
     "services/security": ["platform", "kernel/records", "kernel/acceptedformat", "kernel/protocol"],
     "services/ai": ["platform", "services/functions", "services/actions", "services/devops/descriptor", "services/resources/publication", "kernel/records", "kernel/acceptedformat", "kernel/protocol"],
     "apps": ["platform"],
-    "host": ["kernel", "platform", "apps", "services"],
+    "hostroles": ["kernel", "platform", "services/ai", "services/automate", "services/devops", "services/resources", "services/security"],
+    "host": ["kernel", "platform", "apps", "services", "hostroles"],
     "cmd": ["*"]
   },
   "exceptions": {

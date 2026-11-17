@@ -1,11 +1,11 @@
 package host
 
 import (
-	"errors"
 	"fmt"
 	"maps"
 	"net/http"
 
+	"platformserver/hostroles"
 	runtimekernel "platformserver/kernel"
 	"platformserver/platform"
 	"platformserver/services/ai/gateway"
@@ -33,29 +33,11 @@ type ownerRoles struct {
 }
 
 func ownerRolesOf(owners ownerSet, active func(string) bool) (ownerRoles, error) {
-	var r ownerRoles
-	observers := runtimekernel.OwnersOf[platform.Observer](owners.ids, owners.apps)
-	listeners := runtimekernel.OwnersOf[platform.Listener](owners.ids, owners.apps)
-	for i, a := range owners.apps {
-		id := owners.ids[i]
-		if !active(id) {
-			continue
-		}
-		if x := observers[id]; x != nil {
-			r.observers = append(r.observers, x)
-		}
-		if listeners[id] != nil {
-			r.listeners = append(r.listeners, id)
-		}
-		if err := errors.Join(runtimekernel.ClaimRole(&r.identity, a, "identity"), runtimekernel.ClaimRole(&r.identityOwner, a, "identity owner"), runtimekernel.ClaimRole(&r.directory, a, "directory"),
-			runtimekernel.ClaimRole(&r.linker, a, "link"), runtimekernel.ClaimRole(&r.ai, a, "model"), runtimekernel.ClaimRole(&r.tasks, a, "task"),
-			runtimekernel.ClaimRole(&r.procs, a, "process"), runtimekernel.ClaimRole(&r.agents, a, "agent"),
-			runtimekernel.ClaimRole(&r.knowledge, a, "glossary"), runtimekernel.ClaimRole(&r.aiTraining, a, "AI training"),
-			runtimekernel.ClaimRole(&r.packagesOwner, a, "package preparation")); err != nil {
-			return ownerRoles{}, err
-		}
+	roles, err := hostroles.Resolve(owners.capabilities, owners.ids, active)
+	if err != nil {
+		return ownerRoles{}, err
 	}
-	return r, nil
+	return ownerRoles{identity: roles.Identity, identityOwner: roles.IdentityOwner, directory: roles.Directory, linker: roles.Linker, ai: roles.Models, aiTraining: roles.Training, tasks: roles.Tasks, procs: roles.Processes, packagesOwner: roles.PackageOwner, agents: roles.Agents, knowledge: roles.Knowledge, observers: roles.Observers, listeners: roles.Listeners}, nil
 }
 
 type tenantPorts struct {
@@ -77,6 +59,7 @@ type ownerSet struct {
 	operations    map[string]runtimekernel.OperationOwner
 	dynamicAgents map[string]platform.DynamicAgentDefinitions
 	simulations   trialowner.SimulationOwners
+	capabilities  hostroles.Capabilities
 }
 
 func newOwnerSet(apps []platform.App) (ownerSet, error) {
@@ -94,14 +77,10 @@ func newOwnerSet(apps []platform.App) (ownerSet, error) {
 }
 func (s *ownerSet) place(apps []platform.App) {
 	s.apps = apps
-	s.states = runtimekernel.OwnersOf[platform.AcceptedStateApp](s.ids, apps)
-	s.inputs = runtimekernel.OwnersOf[platform.AcceptedInputApp](s.ids, apps)
-	s.assets = runtimekernel.OwnersOf[platform.AssetLifecycleOwner](s.ids, apps)
-	s.answerers = runtimekernel.OwnersOf[platform.Answerer](s.ids, apps)
-	s.builders = runtimekernel.OwnersOf[build.ConstructionDrafts](s.ids, apps)
-	s.operations = runtimekernel.OwnersOf[runtimekernel.OperationOwner](s.ids, apps)
-	s.dynamicAgents = runtimekernel.OwnersOf[platform.DynamicAgentDefinitions](s.ids, apps)
-	s.simulations = trialowner.SimulationOwners{Factories: runtimekernel.OwnersOf[platform.SimulationFactory](s.ids, apps), Builder: s.builders[build.ID], Identities: runtimekernel.OwnersOf[platform.SimulationIdentityFactory](s.ids, apps), Organizations: runtimekernel.OwnersOf[platform.SimulationOrganizationFactory](s.ids, apps)}
+	s.capabilities = hostroles.CapabilitiesOf(apps)
+	s.states, s.inputs, s.assets, s.answerers = s.capabilities.States, s.capabilities.Inputs, s.capabilities.Assets, s.capabilities.Answerers
+	s.builders, s.operations, s.dynamicAgents = s.capabilities.Builders, s.capabilities.Operations, s.capabilities.DynamicAgents
+	s.simulations = trialowner.SimulationOwners{Factories: s.capabilities.SimulationFactories, Builder: s.builders[build.ID], Identities: s.capabilities.SimulationIdentities, Organizations: s.capabilities.SimulationOrganizations}
 }
 
 func (s ownerSet) with(apps []platform.App) ownerSet {

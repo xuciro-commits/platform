@@ -13,7 +13,15 @@ type JournalProvider struct {
 	Durable            bool
 	AtomicCurrentState bool
 	FixedReadViews     bool
-	Open               func(context.Context) (Journals, error)
+	Open               func(context.Context) (StorageBundle, error)
+}
+
+type StorageBundle struct {
+	Journals
+	RuntimeState
+	RuntimeStateRecovery
+	UniqueState
+	StateReadViews
 }
 
 func (p JournalProvider) OpenChecked(ctx context.Context, lightweight bool) (Journals, error) {
@@ -29,27 +37,36 @@ func (p JournalProvider) OpenChecked(ctx context.Context, lightweight bool) (Jou
 	if !lightweight && (!p.AtomicCurrentState || !p.FixedReadViews) {
 		return nil, fmt.Errorf("delivery storage needs atomic current state and fixed-position read views")
 	}
-	journals, err := p.Open(ctx)
+	storage, err := p.Open(ctx)
 	if err != nil {
 		return nil, err
 	}
-	if journals == nil {
+	if storage.Journals == nil {
 		return nil, fmt.Errorf("selected storage returned no journal")
 	}
-	if p.AtomicCurrentState {
-		_, state := journals.(RuntimeState)
-		_, recovery := journals.(RuntimeStateRecovery)
-		_, unique := journals.(UniqueState)
-		if !state || !recovery || !unique {
-			journals.Close()
-			return nil, fmt.Errorf("selected storage lacks its declared accepted state, recovery or unique-key contract")
-		}
+	if p.AtomicCurrentState && (storage.RuntimeState == nil || storage.RuntimeStateRecovery == nil || storage.UniqueState == nil) {
+		storage.Journals.Close()
+		return nil, fmt.Errorf("selected storage lacks its declared accepted state, recovery or unique-key contract")
 	}
-	if p.FixedReadViews {
-		if _, ok := journals.(StateReadViews); !ok {
-			journals.Close()
-			return nil, fmt.Errorf("selected storage lacks its declared fixed read views")
-		}
+	if p.FixedReadViews && storage.StateReadViews == nil {
+		storage.Journals.Close()
+		return nil, fmt.Errorf("selected storage lacks its declared fixed read views")
 	}
-	return journals, nil
+	return storage.Journals, nil
+}
+
+func FileBundle(j *File) StorageBundle {
+	return StorageBundle{Journals: j}
+}
+
+func OpenFileBundle(dir string, identify Identify) (StorageBundle, error) {
+	j, err := OpenFile(dir, identify)
+	if err != nil {
+		return StorageBundle{}, err
+	}
+	return FileBundle(j), nil
+}
+
+func PostgresBundle(j *Postgres) StorageBundle {
+	return StorageBundle{Journals: j, RuntimeState: j, RuntimeStateRecovery: j, UniqueState: j, StateReadViews: j}
 }

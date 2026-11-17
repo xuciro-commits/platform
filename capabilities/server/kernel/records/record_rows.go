@@ -9,32 +9,22 @@ func RowsOf[T any](store *Store, typ string) []T {
 	}
 	var out []T
 	for _, row := range et.Rows().All() {
-		if item, ok := RowAs[T](row); ok {
+		if row == nil {
+			continue
+		}
+		value := row.Value
+		if value.Kind() == reflect.Pointer {
+			if value.IsNil() {
+				continue
+			}
+			value = value.Elem()
+		}
+		var item T
+		target := reflect.ValueOf(&item).Elem()
+		if value.IsValid() && value.Type().AssignableTo(target.Type()) {
+			target.Set(value)
 			out = append(out, item)
 		}
 	}
 	return out
-}
-
-func RowAs[T any](row *Row) (T, bool) {
-	if row == nil {
-		var zero T
-		return zero, false
-	}
-	return ValueAs[T](row.Value)
-}
-
-func ValueAs[T any](value reflect.Value) (T, bool) {
-	var zero T
-	if value.Kind() == reflect.Pointer {
-		if value.IsNil() {
-			return zero, false
-		}
-		value = value.Elem()
-	}
-	if !value.IsValid() {
-		return zero, false
-	}
-	item, ok := value.Interface().(T)
-	return item, ok
 }

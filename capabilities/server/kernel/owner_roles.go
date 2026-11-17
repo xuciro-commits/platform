@@ -10,31 +10,9 @@ import (
 	"platformserver/platform"
 )
 
-func OwnersOf[T any](ids []string, apps []platform.App) map[string]T {
-	out := map[string]T{}
-	for i, a := range apps {
-		if x, ok := a.(T); ok {
-			out[ids[i]] = x
-		}
-	}
-	return out
-}
-
 type OperationOwner interface {
 	platform.OperationDefinitions
 	platform.OperationExecutor
-}
-
-func ClaimRole[T any](slot *T, a platform.App, role string) error {
-	x, ok := a.(T)
-	if !ok {
-		return nil
-	}
-	if any(*slot) != nil {
-		return fmt.Errorf("two %s owners", role)
-	}
-	*slot = x
-	return nil
 }
 
 type OptionalRoles struct {
