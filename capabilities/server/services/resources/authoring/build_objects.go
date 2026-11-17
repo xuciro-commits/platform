@@ -81,74 +81,17 @@ func (b *Build) checkExtensionDependents(object ontology.Object) error {
 }
 
 func (b *Build) objectEntity() platform.Entity {
-	return platform.Entity{Type: ObjectType, Title: "Object type", Plural: "Object types", Model: ontology.Object{}, Display: "title",
-		Description: "An object this organisation defines itself: its name, what people call it and its fields. Publishing it installs it, and records of it are kept like any other app's.",
-		Validate: func(c platform.Caller, record any) *platform.Error {
-			if c.Replaying {
-				return nil
-			}
-			if err := b.normalizeObjectRules(record.(*ontology.Object)); err != nil {
-				return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
-			}
-			return nil
+	return ontology.ObjectEntity(ontology.ObjectEntityEnvironment{
+		NormalizeRules:   b.normalizeObjectRules,
+		BindActions:      b.bindObjectActions,
+		CaptureExtension: b.captureExtensionSource,
+		CaptureSchema:    b.captureObjectSchema,
+		Check:            b.Check,
+		ValidateInstallation: func(c platform.Caller, object ontology.Object) error {
+			return b.validateObjectInstallation(c, object)
 		},
-		Standard: platform.Standard{Create: true, Edit: true, Archive: true, Roles: []string{Builder}, Capability: "objects"},
-		Lifecycle: &platform.Lifecycle{Field: "state", Initial: "draft",
-			States: []platform.State{{Name: "draft", Title: "Draft", Tone: "warning", Description: "Being defined; nothing is installed yet."},
-				{Name: "published", Title: "Published", Tone: "success", Description: "Installed in this tenant: people work with its records."}},
-			Actions: []platform.ActionType{{
-				Name:        "publish",
-				Title:       "Publish",
-				Roles:       []string{Builder},
-				Capability:  "objects",
-				Parameters:  []platform.Field{},
-				Description: "Install the object as it stands. Published again, it takes its new fields, and records keep the values of the fields that remain.",
-				Criteria:    platform.ActionCriteria{State: &platform.FieldCondition{Field: "state", In: []string{"draft", "published"}}},
-				Rules: []platform.ActionRule{{Function: func(c platform.Caller, record any, _ json.RawMessage, now time.Time) *platform.Error {
-					object, ok := record.(*ontology.Object)
-					if !ok {
-						return &platform.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
-					}
-					compiled := *object
-					if !c.Replaying {
-						if err := b.bindObjectActions(c, &compiled); err != nil {
-							return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
-						}
-					}
-					object = &compiled
-					if !c.Replaying {
-						if err := b.captureExtensionSource(object); err != nil {
-							return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
-						}
-						if err := b.normalizeObjectRules(object); err != nil {
-							return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
-						}
-						if err := b.captureObjectSchema(object); err != nil {
-							return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
-						}
-					}
-					if c.Staging() {
-						if err := b.Check(*object, object.ID, c.Rules()); err != nil {
-							return &platform.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, Message: err.Error()}
-						}
-						if err := b.validateObjectInstallation(c, *object); err != nil {
-							return &platform.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, Message: err.Error()}
-						}
-					} else if err := b.install(c, *object); err != nil {
-						return err
-					}
-					object.Installed = TypeOf(object.Name)
-					object.Published = published(*object)
-					if len(object.ActionTypes) > 0 {
-						object.Actions = nil
-						for i := range object.ActionTypes {
-							object.ActionTypes[i].SourceVersion = ""
-						}
-					}
-					*record.(*ontology.Object) = *object
-					return nil
-				}}, {Edit: &platform.PropertyRule{Field: "state", Allowed: []string{"published"}}}},
-			}}}}
+		Install: b.install,
+	})
 }
 
 func (b *Build) conditionLookup(typ string) (platform.EntityInfo, bool) {
@@ -183,7 +126,7 @@ func (b *Build) Check(o ontology.Object, id string, engine platform.RuleEngine) 
 	if err := b.checkObjectRules(o, engine); err != nil {
 		return err
 	}
-	if err := b.checkConstraints(o, engine); err != nil {
+	if err := ontology.CheckObjectConstraints(o, Entity(o), b.conditionLookup, b.checkRuleCollections, engine); err != nil {
 		return err
 	}
 	if err := b.checkRecordSets(o, engine); err != nil {
@@ -304,71 +247,19 @@ func (b *Build) install(c platform.Caller, o ontology.Object) *platform.Error {
 	return nil
 }
 
-func Entity(o ontology.Object) platform.Entity { return entityWith(o, nil, nil) }
+func Entity(o ontology.Object) platform.Entity {
+	return ontology.CompileObjectEntity(o, ontology.ObjectRuntimeEnvironment{})
+}
 
 func (b *Build) entity(o ontology.Object) platform.Entity {
-	return entityWith(o, b, b.conditionLookup)
-}
-
-func entityWith(o ontology.Object, creates creator, lookup func(string) (platform.EntityInfo, bool)) platform.Entity {
-	creation := o.CreateTransaction
-	entity := ontology.CompileObjectShape(o, ID, Builder)
+	entity := ontology.CompileObjectEntity(o, ontology.ObjectRuntimeEnvironment{
+		Lookup: b.conditionLookup,
+		Transaction: func(c platform.Caller, r *pb.ChangeRecord, transaction *platform.BusinessTxn, now time.Time) *platform.Error {
+			return b.businessRuntime().Transact(c, r, transaction, now)
+		},
+	})
 	entity.DataSources = slices.Clone(o.DataSources)
-	model := entity.Model
-	std, scope, roles := ontology.CompileAccess(o, Builder, User)
-	entity.Standard, entity.Scope = std, scope
-	entity.Lifecycle = lifecycle(o, roles, creates, lookup)
-	entity.ComputeAt = computeRulesOf(o, lookup)
-	entity.Validate = validateOf(o, model, lookup)
-	entity.CreateTxn = creation
-	entity.EnterpriseUse = o.EnterpriseUse
+	entity.ComputeAt = computeRulesOf(o, b.conditionLookup)
 	entity.Protocols = objectProvisions(o, entity)
-	if creation != nil {
-		entity.ApplyCreateTxn = func(c platform.Caller, r *pb.ChangeRecord, now time.Time) *platform.Error {
-			if creates == nil {
-				return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Creation transactions need their original owner")
-			}
-			return creates.businessRuntime().Transact(c, r, creation, now)
-		}
-	}
 	return entity
-}
-
-func validateOf(o ontology.Object, model any, lookup func(string) (platform.EntityInfo, bool)) func(c platform.Caller, record any) *platform.Error {
-	if o.Extends == "" {
-		return nil
-	}
-	typ := reflect.TypeOf(model)
-	return func(c platform.Caller, record any) *platform.Error {
-		if !c.Replaying && lookup != nil {
-			base, exists := lookup(o.Extends)
-			if !exists {
-				return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Extension base {type} is unavailable", o.Extends)
-			}
-			shape := platform.EntityInfo{Type: TypeOf(o.Name), Extends: o.Extends, ExtensionSource: o.ExtensionSource}
-			for _, field := range o.Fields {
-				shape.Fields = append(shape.Fields, platform.FieldInfo{Name: field.Name, Type: field.Type, Ref: field.Ref, Required: field.Required, ReadOnly: field.ReadOnly, AliasOf: field.AliasOf})
-			}
-			if err := platform.CheckExtension(shape, base); err != nil {
-				return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, err.Error())
-			}
-		}
-		v := reflect.ValueOf(record).Elem()
-		base := v.FieldByName(ontology.GoName(BaseField))
-		if !base.IsValid() || base.String() == "" {
-			return nil
-		}
-		id := v.Field(0).Interface().(platform.Record).ID
-		domain, _ := json.Marshal([][]any{{BaseField, "=", base.String()}})
-		found, _, err := c.FindOf(typ, platform.Query{Domain: domain})
-		if err != nil {
-			return nil
-		}
-		for _, f := range found {
-			if other := reflect.ValueOf(f).Field(0).Interface().(platform.Record); other.ID != id && !other.Archived {
-				return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "{base} already has its {object} record", base.String(), o.Title)
-			}
-		}
-		return nil
-	}
 }

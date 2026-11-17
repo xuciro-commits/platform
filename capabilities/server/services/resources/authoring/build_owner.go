@@ -570,6 +570,7 @@ const (
 	ID                     = ontology.AppID
 	ValueDefinitionVersion = "1"
 	Builder                = ontology.BuilderRole
+	Integrator             = "integrator"
 	Publisher              = "publisher"
 	User                   = ontology.UserRole
 )

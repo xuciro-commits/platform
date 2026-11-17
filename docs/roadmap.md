@@ -32,9 +32,6 @@
 每批同步处理宿主状态、能力登记、装配、HTTP 调用方和依赖例外，运行该类的创建、编辑、发布、安装、拒绝、
 历史版本、分叉和重放检查。跨类型的 RID、项目、文件夹、工作状态、分支、提案和编排留在资源服务。
 
-- [ ] U5.5 对象与动作类型：从 `build_objects.go`、`build_ontology.go`、`build_action_types.go`、
-  `build_actions.go` 及 `build_constraints.go` 切到 `services/ontology`；动作执行留在 `services/actions`。
-  保留对象、动作和生成页面的联合发布、显式页面覆盖、引用解析及归档拒绝。
 - [ ] U5.6 事务与蓝图：拆解 `build_transactions.go`、`build_blueprints.go` 的领域定义与调用方；
   声明和校验归 `services/ontology`，事务执行归 `services/actions`，跨类型草稿闭包留在资源编排。
   文件内的 AI 提案、协议及其他描述分别按拥有者迁移，保持事务输入、拒绝顺序和接受结果。

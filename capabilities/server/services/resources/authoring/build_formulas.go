@@ -114,6 +114,22 @@ func actionCriteria(o ontology.Object, a ontology.Action, lookup func(string) (p
 	return ontology.ActionCriteria(o, ID, Builder, a, lookup)
 }
 
+func assign(f reflect.Value, x any) error {
+	if !f.IsValid() {
+		return fmt.Errorf("no such field")
+	}
+	raw, err := json.Marshal(x)
+	if err != nil {
+		return err
+	}
+	target := reflect.New(f.Type())
+	if err := json.Unmarshal(raw, target.Interface()); err != nil {
+		return fmt.Errorf("%v does not fit a %s", x, f.Type())
+	}
+	f.Set(target.Elem())
+	return nil
+}
+
 func (b *Build) normalizeObjectRules(o *ontology.Object) error {
 	lookup := ruleLookup(*o, b.conditionLookup)
 	for i := range o.Fields {

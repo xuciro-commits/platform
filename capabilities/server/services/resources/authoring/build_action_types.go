@@ -11,50 +11,12 @@ import (
 )
 
 func (b *Build) actionTypeEntity() platform.Entity {
-	return platform.Entity{Type: ActionTypeType, Title: "Action type", Plural: "Action types", Model: ontology.ActionType{}, Display: "title",
-		Scope:    platform.Scope{Default: platform.ScopeNone, Levels: map[string]string{Builder: platform.ScopeTenant}},
-		Standard: platform.Standard{Create: true, Edit: true, Archive: true, Roles: []string{Builder}, Capability: "objects"},
-		Lifecycle: &platform.Lifecycle{Field: "state", Initial: "draft", States: []platform.State{{Name: "draft", Title: "Draft"}, {Name: "published", Title: "Published"}},
-			Actions: []platform.ActionType{{
-				Name:        "publish",
-				Title:       "Publish",
-				Description: "Retain this action definition for an object publication.",
-				Roles:       []string{Builder},
-				Capability:  "objects",
-				Parameters:  []platform.Field{},
-				Criteria:    platform.ActionCriteria{State: &platform.FieldCondition{Field: "state", In: []string{"draft", "published"}}},
-				Rules: []platform.ActionRule{{Function: func(c platform.Caller, record any, _ json.RawMessage, _ time.Time) *platform.Error {
-					return ontology.PublishActionType(c, record.(*ontology.ActionType), b.bindObjectActions, func(object ontology.Object) error {
-						return b.Check(object, object.ID, c.Rules())
-					})
-				}}, {Edit: &platform.PropertyRule{Field: "state", Allowed: []string{"published"}}}},
-			}}},
-		Validate: func(c platform.Caller, value any) *platform.Error {
-			if c.Replaying {
-				return nil
-			}
-			action := value.(*ontology.ActionType)
-			if err := action.CheckIdentity(); err != nil {
-				return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
-			}
-			all, err := readDefinitionInventory[ontology.ActionType](c)
-			if err != nil {
-				return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, err.Error())
-			}
-			for _, other := range all {
-				if other.ID != action.ID && other.Name == action.Name {
-					return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "This action API name is already declared")
-				}
-			}
-			var previous *ontology.ActionType
-			if stored, found := platform.Get[ontology.ActionType](c, action.ID); found {
-				previous = &stored
-			}
-			if err := action.Revise(previous); err != nil {
-				return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
-			}
-			return nil
-		}}
+	return ontology.ActionTypeEntity(ontology.ActionTypeEntityEnvironment{
+		BindActions: b.bindObjectActions,
+		CheckObject: func(c platform.Caller, object ontology.Object) error {
+			return b.Check(object, object.ID, c.Rules())
+		},
+	})
 }
 
 func (b *Build) writeObject(c platform.Caller, r *pb.ChangeRecord, verb, id string, payload json.RawMessage, now time.Time) *platform.Error {
