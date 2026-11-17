@@ -22,7 +22,8 @@ func (d *Decision) SavedUniqueChanges() []persistence.StateUnique {
 }
 
 func (d *Decision) FlowVersions() map[string]int {
-	if private, ok := d.PrivateApps[platform.FlowApp].(platform.Processes); ok {
+	switch private := d.PrivateApps[platform.FlowApp].(type) {
+	case platform.Processes:
 		return private.Versions()
 	}
 	return nil

@@ -156,12 +156,16 @@ func (d *Decision) ChangePlan(control func() (*acceptedformat.Control, error)) (
 
 func CheckObservations(app func(string) platform.App, saved []acceptedformat.Observation) error {
 	for _, item := range saved {
-		owner, ok := app(item.App).(platform.AcceptedObserver)
-		if !ok || len(item.Body) == 0 {
+		if len(item.Body) == 0 {
 			return fmt.Errorf("accepted observation needs missing projection %s", item.App)
 		}
-		if err := owner.ValidateObserved(item.Body); err != nil {
-			return err
+		switch owner := app(item.App).(type) {
+		case platform.AcceptedObserver:
+			if err := owner.ValidateObserved(item.Body); err != nil {
+				return err
+			}
+		default:
+			return fmt.Errorf("accepted observation needs missing projection %s", item.App)
 		}
 	}
 	return nil
@@ -169,8 +173,13 @@ func CheckObservations(app func(string) platform.App, saved []acceptedformat.Obs
 
 func ApplyObservations(app func(string) platform.App, saved []acceptedformat.Observation) error {
 	for _, item := range saved {
-		if err := app(item.App).(platform.AcceptedObserver).ApplyObserved(item.Body); err != nil {
-			return err
+		switch owner := app(item.App).(type) {
+		case platform.AcceptedObserver:
+			if err := owner.ApplyObserved(item.Body); err != nil {
+				return err
+			}
+		default:
+			return fmt.Errorf("accepted observation needs missing projection %s", item.App)
 		}
 	}
 	return nil
@@ -220,8 +229,12 @@ func (d *Decision) recordResult(src ResultSources, app string, receipt *pb.Chang
 		return nil, fmt.Errorf("decision has other record or event effects")
 	}
 	kind := "record"
-	if publisher, ok := src.App(app).(platform.AcceptedPublisher); ok &&
-		slices.Contains(publisher.AcceptedPublicationSchemas(), receipt.GetSubmission().GetSchema().GetName()) {
+	var publicationSchemas []string
+	switch publisher := src.App(app).(type) {
+	case platform.AcceptedPublisher:
+		publicationSchemas = publisher.AcceptedPublicationSchemas()
+	}
+	if slices.Contains(publicationSchemas, receipt.GetSubmission().GetSchema().GetName()) {
 		kind = "publication"
 	} else if src.Pure(src.App(app).Manifest(), receipt.GetSubmission().GetSchema().GetName()) {
 		kind = "pure-transition"
@@ -244,25 +257,30 @@ func (d *Decision) InputDecision(src ResultSources, app, name string, m platform
 		return nil, err
 	}
 	result.Notices, result.Authorizations = d.Notices.Saved(), slices.Clone(d.Authorizations)
-	if message, ok := answer.(proto.Message); ok {
+	switch message := answer.(type) {
+	case proto.Message:
 		result.Answer, err = protojson.Marshal(message)
-	} else {
+	default:
 		result.Answer, err = json.Marshal(answer)
 	}
 	if err != nil {
 		return nil, err
 	}
 	if len(d.Events) > 0 {
-		receipt, ok := answer.(*pb.ChangeRecord)
-		if !ok || receipt.GetSubmission().GetAuthority() != app {
+		switch receipt := answer.(type) {
+		case *pb.ChangeRecord:
+			if receipt.GetSubmission().GetAuthority() != app {
+				return nil, fmt.Errorf("connector input has decisions without a matching answer")
+			}
+			result.Changes, err = d.BatchResult(src, app, receipt.GetSubmission(), receipt, at)
+			if err != nil {
+				return nil, err
+			}
+			result.Notices = nil
+			return SealInput(result)
+		default:
 			return nil, fmt.Errorf("connector input has decisions without a matching answer")
 		}
-		result.Changes, err = d.BatchResult(src, app, receipt.GetSubmission(), receipt, at)
-		if err != nil {
-			return nil, err
-		}
-		result.Notices = nil
-		return SealInput(result)
 	}
 	if src.Controlled || len(d.Intents) > 0 || len(d.Observations) > 0 || len(d.Allocated) > 0 || len(d.OperationCancels) > 0 {
 		return nil, fmt.Errorf("connector input contains effects without a decision")

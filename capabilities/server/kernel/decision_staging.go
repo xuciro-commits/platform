@@ -114,8 +114,11 @@ func (d *Decision) PrivateApp(app platform.App, bind func(platform.App)) (platfo
 	d.PrivateApps[id] = fork
 	bind(fork)
 	if ownsState {
-		copy, ok := fork.(platform.AcceptedStateApp)
-		if !ok {
+		var copy platform.AcceptedStateApp
+		switch value := fork.(type) {
+		case platform.AcceptedStateApp:
+			copy = value
+		default:
 			return nil, false
 		}
 		if d.States == nil {
@@ -145,8 +148,11 @@ func (d *Decision) StageObservers(h ObserverHooks) (*platform.Error, bool) {
 			if !observer {
 				continue
 			}
-			owner, ok := h.Private(app).(platform.AcceptedObserver)
-			if !ok {
+			var owner platform.AcceptedObserver
+			switch value := h.Private(app).(type) {
+			case platform.AcceptedObserver:
+				owner = value
+			default:
 				return nil, false
 			}
 			id := app.Manifest().ID
@@ -211,8 +217,13 @@ func (d *Decision) PublishRecord(app platform.App, c platform.Caller, record *pb
 	changed := slices.Clone(d.Changed[c.App+"/"+record.GetChangeId()])
 	d.Events = append(d.Events, platform.Event{App: c.App, Record: record, Changed: changed})
 	schema := record.GetSubmission().GetSchema().GetName()
-	if publisher, ok := app.(platform.AcceptedPublisher); ok &&
-		slices.Contains(publisher.AcceptedPublicationSchemas(), schema) {
+	var publisher platform.AcceptedPublisher
+	var publicationSchemas []string
+	switch value := app.(type) {
+	case platform.AcceptedPublisher:
+		publisher, publicationSchemas = value, value.AcceptedPublicationSchemas()
+	}
+	if slices.Contains(publicationSchemas, schema) {
 		ref := record.GetSubmission().GetTarget()
 		var raw []byte
 		var err error

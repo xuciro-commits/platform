@@ -94,8 +94,14 @@ func (d Decision) Fork(owner func(string) platform.App) (Decision, bool) {
 			continue
 		}
 		app, err := state.Fork(state.Authority())
-		copy, ok := app.(platform.AcceptedStateApp)
-		if err != nil || !ok {
+		if err != nil {
+			return Decision{}, false
+		}
+		var copy platform.AcceptedStateApp
+		switch value := app.(type) {
+		case platform.AcceptedStateApp:
+			copy = value
+		default:
 			return Decision{}, false
 		}
 		fork.States[id], fork.PrivateApps[id] = copy, app
