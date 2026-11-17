@@ -1,46 +1,46 @@
 # AGENTS
 
-The platform frontend: the only one. Screens are generated from types. The repository root `AGENTS.md` still applies; this file adds what is specific to this folder.
+平台前端：只有一个。界面由类型生成。仓库根的 `AGENTS.md` 依然适用；本文件补这个目录特有的部分。
 
-- Read `docs/frontend.md` before changing anything here, and use the `platform-design` skill. Structure and behaviour are in `docs/ux.md`, the look in `docs/design.md`.
-- Three layers: contracts in `src/host/`, presentations in `src/pages/` (each adapted once from an official template), entries as one declaration in `src/apps/<app>/<entry>.ts`. Never write a screen for one type; change the presentation or the contract so every type gets it.
-- Find the official template or block first (`pnpm astryx build`, `pnpm astryx search`); change only the data shape and the presentation it lacks.
-- `web/` is the old frontend, frozen. Do not read or change it.
-- Real data: `make frontend-host` from the repository root, `PLATFORM_HOST=http://127.0.0.1:18511` in `.env`, then pick a fixture identity on the sign-in page.
-- Run `pnpm dev` (http://localhost:8496) and `pnpm astryx <cmd>` for the CLI below.
-- Every visible string goes through `t()` with a `zh-CN` entry in `src/i18n.ts`. No code comments.
-- Check with `make check-frontend` from the repository root. Fix what it reports; never edit the check.
-- Doing one work order? Follow `.claude/skills/work-order/SKILL.md` to the letter: you may only change the files the order lists. The shell, router, `src/host/`, dependencies, checks and documents are not yours to change; when the task needs them, stop and report.
-- The block below is generated; refresh it with `pnpm astryx init --agent-docs-path AGENTS.md`, never by hand.
+- 动这里之前先读 `docs/frontend.md`，并用技能 `platform-design`。结构与行为见 `docs/ux.md`，观感见 `docs/design.md`。
+- 三层：契约在 `src/host/`；表现在 `src/pages/`（每个由一份官方模板改造一次）；入口是 `src/apps/<应用>/<入口>.ts` 里的一句声明。永不为单个类型写页面；改表现或契约，让每个类型都得到。
+- 先找官方模板或块（`pnpm astryx build`、`pnpm astryx search`）；只改数据形状和它缺的表现。
+- `web/` 是旧前端，冻结。不读，也不改。
+- 真实数据：仓库根跑 `make frontend-host`，`.env` 里写 `PLATFORM_HOST=http://127.0.0.1:18511`，然后在登录页选一个夹具身份。
+- 跑 `pnpm dev`（http://localhost:8496）；下面的命令行写作 `pnpm astryx <命令>`。
+- 每个可见字符串都经 `t()`，并在 `src/i18n.ts` 有简体中文条目。不写代码注释。
+- 在仓库根用 `make check-frontend` 核对。它报什么就修什么；永不改检查。
+- 在做一张工单？照 `.claude/skills/work-order/SKILL.md` 逐条做：只能改工单列出的文件。外壳、路由、`src/host/`、依赖、检查与文档都不归你改；任务需要它们时，停下上报。
+- 下面的块由 Astryx 生成，只用 `pnpm astryx init --agent-docs-path AGENTS.md` 刷新，永不手改。这里的中文是手译，刷新时会整块换回英文。
 
 <!-- ASTRYX:START -->
-Astryx v0.7.16 · 174 components
-CLI: run every command as `pnpm exec astryx <cmd>` (shown below as `astryx ...`).
+Astryx v0.7.16 · 174 个组件
+命令行：每条命令都写作 `pnpm exec astryx <cmd>`（下文简写为 `astryx ...`）。
 
-SETUP (once, in app entry e.g. main.tsx) — without these, components render unstyled:
+初始化（一次，写在应用入口，例如 main.tsx）：缺了这两行，组件没有样式：
   import "@astryxdesign/core/reset.css";
   import "@astryxdesign/core/astryx.css";
 
-WORKFLOW — start every page from a template, never from scratch:
-1. `astryx build "<idea>"` — names the template to scaffold from and the parts it lacks.
-2. `astryx template <name> <path>` — scaffold it; keep its frame, gap and padding; replace the content.
-3. `astryx template <Block>` for parts it lacks; `astryx component <Name>` to read props before using one.
-Changing an existing page? Keep it: skip step 2 and add blocks/components inside its sections.
-Before you deliver a build, run `astryx doctor --built <dir>`; don't deliver it if it fails.
+流程：每个页面都从模板起步，永不从空白写起：
+1. `astryx build "<想法>"`：点出该用哪个模板起步、还缺哪些块。
+2. `astryx template <name> <path>`：落地模板；保留它的框架、间距与内边距，只换内容。
+3. 缺的块用 `astryx template <Block>`；用一个组件之前先 `astryx component <Name>` 读它的属性。
+改已有页面？保留它：跳过第 2 步，在它的各个分节里加块或组件。
+交付之前跑 `astryx doctor --built <dir>`；不通过就不交付。
 
-RULES:
-- No <div> — components handle all layout and spacing.
-- Read `astryx docs layout` before changing a template's frame.
-- Dense data = rows (Table, List/Item), not Card-wrapped lists. Badge = counts only.
-- Style with component props first, then the xstyle prop / StyleX tokens. No raw hex/px.
-- THEMES: palettes and custom colors go through the theme, never :root overrides. To make or change a theme (colors, fonts, corners, spacing, a look from a picture), prefer the experimental theme editor over hand-written theme files: `astryx experimental theme editor new <name> --like neutral`, then `editor set <name> <thing> <value>` or `editor how "<what you want>"`; wire it with `astryx theme add <name>`; after each change look at it with `astryx experimental theme editor show <name> --png` and open the PNGs it writes (changes nothing in the app); a theme change is not done until you have looked at the pictures. In code, extend an imported theme to customize it; `theme eject <slug>` only forks source. See `astryx docs theme`.
-- SELF-CHECK: re-read the file; replace any className=, style={{…}}, raw <div>/<span>, imported .css/@apply, or hardcoded #hex/px with the component or the xstyle prop + a token.
+规矩：
+- 不写 <div>：布局与间距都由组件负责。
+- 改模板的框架之前先读 `astryx docs layout`。
+- 密数据用行（Table、List/Item），不用卡片包列表。Badge 只放计数。
+- 样式先用组件属性，再用 xstyle 属性 / StyleX 令牌。不写裸十六进制与像素值。
+- 主题：调色板与自定义颜色都走主题，永不覆盖 :root。要做或改一个主题（颜色、字体、圆角、间距、照一张图做出那个观感），优先用实验性主题编辑器，而不是手写主题文件：`astryx experimental theme editor new <name> --like neutral`，然后 `editor set <name> <thing> <value>` 或 `editor how "<你想要什么>"`；用 `astryx theme add <name>` 接上；每次改动后都用 `astryx experimental theme editor show <name> --png` 看一眼，打开它写出的 PNG（不改动应用里的东西）；没有看过图，主题改动就不算完。在代码里，扩展一个导入的主题来定制它；`theme eject <slug>` 只是分叉源码。见 `astryx docs theme`。
+- 自查：重读文件；把任何 className=、style={{…}}、裸 <div>/<span>、导入的 .css/@apply、或写死的 #hex/px，换成组件或 xstyle 属性加令牌。
 
-`astryx help` lists every command. Key ones beyond the workflow:
-  search "<query>"   find any component / hook / doc / template
-  discover <words>   integrations you could add
-  docs <topic>       getting-started, principles, tokens, theme … (`astryx docs` lists all)
-  docs cli           commands and API reference
-  docs authoring     build an integration package, and every field it holds
-  upgrade --from <old version> --apply   run after a dependency bump
+`astryx help` 列出全部命令。流程之外常用的：
+  search "<查什么>"   找任何组件 / 钩子 / 文档 / 模板
+  discover <词>   可以接入的集成
+  docs <主题>   入门、原则、令牌、主题……（`astryx docs` 列出全部）
+  docs cli   命令与 API 参考
+  docs authoring   做一个集成包，以及它拥有的每个字段
+  upgrade --from <旧版本> --apply   依赖升级之后运行
 <!-- ASTRYX:END -->

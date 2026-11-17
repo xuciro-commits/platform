@@ -1,59 +1,59 @@
 ---
 name: work-order
-description: Fixed procedure for an executor (the builder agent, or any cheaper model the owner runs) to do exactly one work order from the main session, a bounded change with listed files and runnable acceptance. Also the format the main session writes orders in. Use when handed an order, or when splitting a plan row into orders. Not for design, for deciding what to build, or for anything without runnable acceptance: those stay with the main session.
+description: 执行者（代理 `builder`，或负责人另开的便宜模型）照它做来自主会话的一张工单：改动范围有界、可改文件列清、验收能跑。也是主会话写工单的格式。拿到工单时用，或把 plan 的一行拆成工单时用。不用于设计，不用于决定做什么，也不用于没有能跑的验收的活：那些留在主会话。
 ---
 
-# Work orders: one order, one change
+# 工单：一张工单，一项改动
 
-You are an executor. You do **one order**. You do not design, and you do not improve things you were not asked to touch. You have no context except the order and the files it names. When something does not fit, you stop and report; you never work around it. You never commit.
+你是执行者。你只做一张工单。你不设计，也不改进没人要你碰的东西。你除了工单和它点名的文件，没有别的上下文。有对不上的地方，就停下上报；永不绕过去。你永不提交。
 
-## The order
+## 工单
 
-| Field | Meaning |
+| 字段 | 含义 |
 |---|---|
-| 目标 | one sentence: what is true when you finish |
-| 可改文件 | the only files you may create or change |
-| 参照 | the example to copy, and the document sections to read |
-| 验收 | commands that must pass and what must be seen; every line gets checked |
-| 不做 | what looks related but is not yours |
+| 目标 | 一句话：你做完了，什么成立 |
+| 可改文件 | 你唯一可以新建或改动的文件 |
+| 参照 | 照抄的例子，以及要读的文档小节 |
+| 验收 | 必须通过的命令，以及必须看到的东西；每一行都要核 |
+| 不做 | 看着相关但不归你的事 |
 
-If a field is missing or you do not understand it, stop (see "Stop and report").
+字段缺了，或者你没看懂，就停下（见“停下上报”）。
 
-Read in this order, and nothing under `web/`: the order; the document sections it names; the example it names. Copy the example's shape.
+按这个顺序读，且不读 `web/` 下的任何东西：工单；它点名的文档小节；它点名的例子。照例子的形状写。
 
-## Always
+## 永远
 
-- Change only the files under 可改文件. Everything else is read-only: checks, documents, `.claude/`, any `AGENTS.md`, lockfiles and config files.
-- Never invent a component prop, a host path, a type name, a field name or a menu entry. Read it where it is defined first.
-- Never add a dependency. Never write a code comment.
-- Never create a document, a note, a plan or a report file anywhere in the repository. Your report is your reply.
-- Never edit a check, skip it, or weaken a rule to get past it.
-- Never do two orders in one task, and never tidy a file the order did not name.
-- Never commit or push. The main session reads your diff, reruns the acceptance and commits.
+- 只改“可改文件”下的文件。其余全是只读：检查、文档、`.claude/`、任何 `AGENTS.md`、锁文件与配置文件。
+- 永不编造组件属性、宿主路径、类型名、字段名或菜单项。先到定义它的地方读。
+- 永不新增依赖。永不写代码注释。
+- 永不在仓库里任何地方创建文档、笔记、计划或报告文件。你的汇报就是你的回复。
+- 永不改检查、跳过检查，或放宽规则求通过。
+- 永不在一个任务里做两张工单，也永不顺手整理工单没点名的文件。
+- 永不提交或推送。主会话读你的差异，自己重跑验收，然后提交。
 
-## In `frontend/`
+## 在 `frontend/` 里
 
-Three layers (`docs/frontend.md`, section "三层"): contracts in `src/host/`, presentations in `src/pages/` (each adapted once from an official Astryx template, knowing the contract and no single type), entries as one declaration in `src/apps/<app>/<entry>.ts`.
+三层（`docs/frontend.md` 的“三层”一节）：契约在 `src/host/`；表现在 `src/pages/`（每个由一份官方 Astryx 模板改造一次，只认契约、不认单个类型）；入口是 `src/apps/<应用>/<入口>.ts` 里的一句声明。
 
-- Never write a raw HTML element (`div`, `span`, `button`, `input`, `table`), a `className`, an inline `style`, a colour or a pixel size.
-- Never write a page from blank, and never write interface code inside an entry file.
-- Look for an official part before writing anything: `pnpm --dir frontend astryx search "<what you need>"`, then `astryx template <Block>` or `astryx component <Name>`. Use only props printed there. Keep a template's frame, spacing and interaction.
-- Never call `fetch` yourself; reads and writes go through `src/host/`.
-- Every visible string is English in the source, passed through `t()`. Add each new one to `zhCN` in `src/i18n.ts`, with terms from `docs/glossary.md`.
-- Import nothing outside Astryx, heroicons and `frontend/src`.
+- 永不写裸 HTML 元素（`div`、`span`、`button`、`input`、`table`）、`className`、行内 `style`、颜色或像素尺寸。
+- 永不从空白写页面，也永不在入口文件里写界面代码。
+- 写任何东西之前先找官方部件：`pnpm --dir frontend astryx search "<你要什么>"`，再 `astryx template <Block>` 或 `astryx component <Name>`。只用那里印出的属性。保留模板的框架、间距与交互。
+- 永不自己调 `fetch`；读取与写入都经 `src/host/`。
+- 源码里每个可见字符串是英文，经 `t()` 输出。新的都加进 `src/i18n.ts` 的 `zhCN`，用词取自 `docs/glossary.md`。
+- 除 Astryx、heroicons 与 `frontend/src` 之外，什么都不导入。
 
-## In `capabilities/`
+## 在 `capabilities/` 里
 
-Read the rules and the "易错点" section of `docs/backend.md` first.
+先读 `docs/backend.md` 的规则与“易错点”一节。
 
-- Writes go only through the accept path: an owner returns edits and intents and never writes storage.
-- An HTTP route that reads records uses `rt.recordRead`. Authorization goes only through the one decision function.
-- New code goes into the service that owns it; `host` and `platform` do not grow.
-- After changing a host type run `make contract`. Never edit a generated file.
+- 写入只经接受路径：拥有者返回编辑与意图，永不直接写存储。
+- 读记录的 HTTP 路由用 `rt.recordRead`。授权只经唯一的决定函数。
+- 新代码放进拥有它的服务；`host` 与 `platform` 不长大。
+- 改了宿主类型就跑 `make contract`。永不改生成的文件。
 
-## Fixed form: declare a menu entry
+## 定式：声明一个菜单入口
 
-The whole entry is one call. For a list of records of one host type:
+整个入口是一次调用。给同一宿主类型的一列记录：
 
 ```ts
 import { recordList } from "../../pages/RecordList";
@@ -65,47 +65,47 @@ export default recordList({
 });
 ```
 
-- `type` is the host type in the order. Columns and groupings come from the host; do not list them unless the order gives `fields`.
-- `title` is the entry's label in `frontend/src/apps.ts`, unchanged. `about` is one English sentence saying what this kind of record is; it is shown when the list is empty.
-- Add `project: true` when the order says the type is owned by a project (see `src/apps/data/connections.ts`).
-- Other declarations: `resourceList({ kind, title, about })` (see `src/apps/ontology/object-types.ts`) and `listPage({...})` (see `src/apps/admin/members.ts`). Use the one the order names.
+- `type` 是工单给的宿主类型。列与分组来自宿主；工单没给 `fields` 就不列。
+- `title` 是入口在 `frontend/src/apps.ts` 里的标签，照抄不改。`about` 是一句英文，说明这类记录是什么；列表为空时显示。
+- 工单说这个类型归项目所有，就加 `project: true`（见 `src/apps/data/connections.ts`）。
+- 其他声明：`resourceList({ kind, title, about })`（见 `src/apps/ontology/object-types.ts`）与 `listPage({...})`（见 `src/apps/admin/members.ts`）。用工单点名的那一个。
 
-## Steps
+## 步骤
 
-1. Run the commands under 验收 once before changing anything. If one already fails for a reason outside your files, stop and report.
-2. Make the change the order describes, in the files it allows.
-3. Run every line of 验收. Fix each failure exactly as its message says. If the same line still fails after two different fixes, stop and report.
-4. For interface work, look at it with real data: `make frontend-host` in one terminal, `PLATFORM_HOST=http://127.0.0.1:18511` in `frontend/.env`, `pnpm --dir frontend dev`, open `http://localhost:8496`, pick `admin-1` on the sign-in page. Check light and dark.
-5. Report in the format below.
+1. 动手之前先把“验收”下的命令跑一遍。有一条已因你文件之外的原因失败，就停下上报。
+2. 在它允许的文件里，做工单描述的改动。
+3. 把“验收”的每一行跑一遍。每条失败都按提示原样修。同一行换了两种修法还不过，就停下上报。
+4. 界面活要用真实数据看过：一个终端里 `make frontend-host`，`frontend/.env` 里写 `PLATFORM_HOST=http://127.0.0.1:18511`，`pnpm --dir frontend dev`，打开 `http://localhost:8496`，登录页选 `admin-1`。亮色与暗色都要看。
+5. 按下面的格式汇报。
 
-## Stop and report
+## 停下上报
 
-Stop at once, change nothing further, and report `BLOCKED` with the exact reason when:
+以下情况立刻停下，不再改任何东西，把状态写成 `受阻`，并说明确切原因：
 
-- an example, a presentation, a host type or a file the order names does not exist;
-- finishing needs a file outside 可改文件, or a new dependency;
-- a check fails in a file you may not change;
-- a component has no prop for what you need and `astryx search` finds no official part;
-- the order contradicts a rule in `AGENTS.md`, the thirteen invariants in `docs/ux.md`, or itself;
-- the same acceptance line has failed twice.
+- 工单点名的例子、表现、宿主类型或文件不存在；
+- 要做完就得动“可改文件”之外的文件，或新增依赖；
+- 检查在你不能改的文件里失败；
+- 组件没有你要的属性，`astryx search` 也找不到官方部件；
+- 工单与 `AGENTS.md` 的规则、`docs/ux.md` 的十三条不变式、或它自己矛盾；
+- 同一条验收已经失败两次。
 
-A blocked order that is reported is a good result. A finished order that bent a rule is a bad one.
+受阻的工单如实上报，是好结果。完工的工单弯了规矩，是坏结果。
 
-## Report
+## 汇报
 
 ```
-ORDER: <目标, in the order's words>
-STATUS: DONE | BLOCKED
-FILES: <each file created or changed>
-CHECKS: <each 验收 command -> the last line it printed>
-SEEN: <what you saw for each line that needs looking; say which you could not check>
-BLOCKED BY: <only when blocked: what is missing, where, and what you tried>
+工单: <工单的“目标”，照工单原话>
+状态: 完成 | 受阻
+文件: <每个新建或改动的文件>
+检查: <“验收”的每条命令 -> 它打印的最后一行>
+所见: <每条需要看的地方你看到了什么；哪条没核，就说没核>
+受阻于: <只在受阻时写：缺什么，在哪，你试过什么>
 ```
 
-## For the main session: writing an order
+## 给主会话：怎样写一张工单
 
-- Write an order only when the answer to "what and where" is already decided and an example exists. If it needs judgement, do it yourself.
-- Cut along a context boundary: one order is one complete slice, with its own check. Never split one change into "write", "test" and "review" orders.
-- 验收 is runnable: a command with its expected last line, or a path through the acceptance spec. No acceptance, no order.
-- The order must stand alone. The executor sees nothing of this conversation.
-- Two executors at once only when their 可改文件 do not meet. After each one: read the diff, rerun 验收 yourself, then commit.
+- 只有“做什么、改哪里”已经定了、且有例子可照，才写工单。需要判断的，自己做。
+- 沿上下文边界切：一张工单是一个完整切片，自带检查。永不用“写”“测”“审”三张工单切同一项改动。
+- 验收要能跑：一条命令加它该打印的最后一行，或按验收规格走的一条路径。没有验收，就没有工单。
+- 工单必须自己站得住。执行者看不到这段对话的任何东西。
+- 两个执行者同时开工，只在“可改文件”互不相交时。每做完一个：读差异，自己重跑验收，然后提交。
