@@ -189,25 +189,34 @@ func numericValue(kind string, n *big.Rat, currency, at string) (Value, error) {
 	return Present(kind, text), nil
 }
 func numericParts(x any) (*big.Rat, string) {
-	if m, ok := x.(money); ok {
+	switch m := x.(type) {
+	case money:
 		return m.amount, m.currency
+	case *big.Rat:
+		return m, ""
+	default:
+		panic("numeric expression value has an unexpected type")
 	}
-	return x.(*big.Rat), ""
 }
 func compare(a, b any, at string) (int, error) {
 	switch x := a.(type) {
 	case *big.Rat:
-		y, ok := b.(*big.Rat)
-		if !ok {
+		switch y := b.(type) {
+		case *big.Rat:
+			return x.Cmp(y), nil
+		default:
 			return 0, fail("type", at, "comparison types differ")
 		}
-		return x.Cmp(y), nil
 	case money:
-		y, ok := b.(money)
-		if !ok || x.currency != y.currency {
+		switch y := b.(type) {
+		case money:
+			if x.currency != y.currency {
+				return 0, fail("currency", at, "comparison currencies differ")
+			}
+			return x.amount.Cmp(y.amount), nil
+		default:
 			return 0, fail("currency", at, "comparison currencies differ")
 		}
-		return x.amount.Cmp(y.amount), nil
 	case string:
 		y, ok := b.(string)
 		if !ok {
@@ -227,11 +236,12 @@ func compare(a, b any, at string) (int, error) {
 		}
 		return -1, nil
 	case time.Time:
-		y, ok := b.(time.Time)
-		if !ok {
+		switch y := b.(type) {
+		case time.Time:
+			return x.Compare(y), nil
+		default:
 			return 0, fail("type", at, "comparison types differ")
 		}
-		return x.Compare(y), nil
 	}
 	return 0, fail("type", at, "value is not comparable")
 }
@@ -273,8 +283,14 @@ func absInt(n int) int {
 	return n
 }
 func integerArg(v any, at string) (int, error) {
-	n, ok := v.(*big.Rat)
-	if !ok || !n.IsInt() || !n.Num().IsInt64() {
+	var n *big.Rat
+	switch value := v.(type) {
+	case *big.Rat:
+		n = value
+	default:
+		return 0, fail("integer", at, "integer operand required")
+	}
+	if !n.IsInt() || !n.Num().IsInt64() {
 		return 0, fail("integer", at, "integer operand required")
 	}
 	value := n.Num().Int64()

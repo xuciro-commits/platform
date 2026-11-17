@@ -136,7 +136,8 @@ func check(e Expr, s Schema, at string, depth int, nodes *int, mode int) (Type, 
 					}
 				}
 			}
-			if m, ok := value.(money); ok {
+			switch m := value.(type) {
+			case money:
 				t.Currency = m.currency
 			}
 			return t, nil

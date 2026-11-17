@@ -242,16 +242,17 @@ func (p *Program) eval(e Expr, c Context, at string, reasons *[]Issue) (Value, e
 		comparison := 0
 		switch x := left.(type) {
 		case json.Number:
-			y, ok := right.(json.Number)
-			if !ok {
+			switch y := right.(type) {
+			case json.Number:
+				a, aok := new(big.Rat).SetString(string(x))
+				b, bok := new(big.Rat).SetString(string(y))
+				if !aok || !bok {
+					return Value{}, fail("predicate", at, "invalid decimal comparison")
+				}
+				comparison = a.Cmp(b)
+			default:
 				return Value{}, fail("predicate", at, "numeric comparison needs two numbers")
 			}
-			a, aok := new(big.Rat).SetString(string(x))
-			b, bok := new(big.Rat).SetString(string(y))
-			if !aok || !bok {
-				return Value{}, fail("predicate", at, "invalid decimal comparison")
-			}
-			comparison = a.Cmp(b)
 		case string:
 			y, ok := right.(string)
 			if !ok {
@@ -301,13 +302,16 @@ func (p *Program) eval(e Expr, c Context, at string, reasons *[]Issue) (Value, e
 		return out(empty)
 	case "=", "!=", "<", "<=", ">", ">=", "before", "after":
 		left, right := values[0], values[1]
-		if m, ok := left.(money); ok {
-			if n, ok := right.(*big.Rat); ok {
-				right = money{n, m.currency}
+		switch l := left.(type) {
+		case money:
+			switch r := right.(type) {
+			case *big.Rat:
+				right = money{r, l.currency}
 			}
-		} else if m, ok := right.(money); ok {
-			if n, ok := left.(*big.Rat); ok {
-				left = money{n, m.currency}
+		case *big.Rat:
+			switch r := right.(type) {
+			case money:
+				left = money{l, r.currency}
 			}
 		}
 		cmp, err := compare(left, right, at)
@@ -356,8 +360,11 @@ func (p *Program) eval(e Expr, c Context, at string, reasons *[]Issue) (Value, e
 		n, currency := numericParts(values[0])
 		if e.Kind == "money" && currency == "" {
 			for _, x := range values {
-				if m, ok := x.(money); ok {
+				switch m := x.(type) {
+				case money:
 					currency = m.currency
+				}
+				if currency != "" {
 					break
 				}
 			}
@@ -548,14 +555,16 @@ func (p *Program) eval(e Expr, c Context, at string, reasons *[]Issue) (Value, e
 }
 
 func jsonEqual(a, b any) bool {
-	if x, ok := a.(json.Number); ok {
-		y, ok := b.(json.Number)
-		if !ok {
+	switch x := a.(type) {
+	case json.Number:
+		switch y := b.(type) {
+		case json.Number:
+			an, ao := new(big.Rat).SetString(string(x))
+			bn, bo := new(big.Rat).SetString(string(y))
+			return ao && bo && an.Cmp(bn) == 0
+		default:
 			return false
 		}
-		an, ao := new(big.Rat).SetString(string(x))
-		bn, bo := new(big.Rat).SetString(string(y))
-		return ao && bo && an.Cmp(bn) == 0
 	}
 	x, _ := json.Marshal(a)
 	y, _ := json.Marshal(b)
@@ -606,8 +615,9 @@ func (p *Program) aggregate(e Expr, c Context, at string, reasons *[]Issue) (Val
 		currency = typ.Currency
 		if e.In != nil && e.In.Lit != nil {
 			if value, err := validateValue(PresentRaw(e.In.Kind, e.In.Lit.Value), at); err == nil {
-				if money, ok := value.(money); ok {
-					currency = money.currency
+				switch amount := value.(type) {
+				case money:
+					currency = amount.currency
 				}
 			}
 		}

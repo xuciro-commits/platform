@@ -119,8 +119,14 @@ func compileRowMatch(e Expr) func(RefSource) (bool, bool) {
 				return -1, true
 			}
 		case "decimal", "integer":
-			constant, ok := lit.(*big.Rat)
-			if !ok || !constant.IsInt() || !constant.Num().IsInt64() || constant.Num().BitLen() > 52 {
+			var constant *big.Rat
+			switch value := lit.(type) {
+			case *big.Rat:
+				constant = value
+			default:
+				return nil
+			}
+			if !constant.IsInt() || !constant.Num().IsInt64() || constant.Num().BitLen() > 52 {
 				return nil
 			}
 			limit := float64(constant.Num().Int64())
@@ -138,13 +144,20 @@ func compileRowMatch(e Expr) func(RefSource) (bool, bool) {
 				return 0, true
 			}
 		case "datetime":
-			constant, ok := lit.(time.Time)
-			if !ok {
+			var constant time.Time
+			switch value := lit.(type) {
+			case time.Time:
+				constant = value
+			default:
 				return nil
 			}
 			compareValue = func(v Value) (int, bool) {
-				value, ok := v.native.(time.Time)
-				return value.Compare(constant), ok
+				switch value := v.native.(type) {
+				case time.Time:
+					return value.Compare(constant), true
+				default:
+					return 0, false
+				}
 			}
 		default:
 			return nil
