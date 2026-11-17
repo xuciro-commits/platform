@@ -136,30 +136,6 @@ type PackageIndex struct {
 	Directory string
 }
 
-func (i *PackageIndex) Latest(id string) (PackageDescriptor, bool) {
-	var out PackageDescriptor
-	found := false
-	for _, p := range i.Packages {
-		version, _ := ParsePackageVersion(p.Version)
-		if p.ID == id && version.Prerelease == "" && (!found || ComparePackageVersions(p.Version, out.Version) > 0) {
-			out, found = p, true
-		}
-	}
-	return out, found
-}
-
-func (i *PackageIndex) Find(id, version string) (PackageDescriptor, bool) {
-	if version == "" {
-		return i.Latest(id)
-	}
-	for _, p := range i.Packages {
-		if p.ID == id && (version == "" || p.Version == version) {
-			return p, true
-		}
-	}
-	return PackageDescriptor{}, false
-}
-
 type PackageSource struct {
 	ID      string `json:"id"`
 	Version string `json:"version"`

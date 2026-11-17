@@ -17,18 +17,18 @@ func Validate(p platform.PackageDescriptor, withDependencies func(platform.Relea
 			return fmt.Errorf("package ID, namespace and version must be safe path segments")
 		}
 	}
-	if _, err := platform.ParsePackageVersion(p.Version); err != nil {
+	if _, err := ParsePackageVersion(p.Version); err != nil {
 		return err
 	}
 	for _, need := range p.Requires {
-		id, constraint := platform.PackageDependency(need)
+		id, constraint := PackageDependency(need)
 		if id == "" || id == p.ID {
 			return fmt.Errorf("a product dependency names another product")
 		}
 		if constraint != "" && constraint != "*" {
 			for _, alternative := range strings.Split(constraint, "||") {
 				for _, term := range strings.Fields(alternative) {
-					if _, err := platform.ParsePackageVersion(strings.TrimLeft(term, "<>=^~")); err != nil {
+					if _, err := ParsePackageVersion(strings.TrimLeft(term, "<>=^~")); err != nil {
 						return err
 					}
 				}

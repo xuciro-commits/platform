@@ -2,6 +2,7 @@ package knowledge
 
 import (
 	"encoding/json"
+	knowledgesources "platformserver/services/ai/sources"
 	"reflect"
 	"slices"
 	"strings"
@@ -21,7 +22,7 @@ type Corpus struct {
 
 func (c Corpus) All() []Source {
 	var out []Source
-	docs, _, _ := platform.Find[platform.KnowledgeDocument](c.Documents, platform.Query{Limit: 100000})
+	docs, _, _ := platform.Find[knowledgesources.Document](c.Documents, platform.Query{Limit: 100000})
 	for _, d := range docs {
 		out = append(out, DocumentSource(d))
 	}
@@ -59,7 +60,7 @@ func (c Corpus) Changed(changed map[string]bool) []Source {
 		typ, id, _ := strings.Cut(ref, "/")
 		switch typ {
 		case platform.KnowledgeDocumentType:
-			if d, known := platform.Get[platform.KnowledgeDocument](c.Documents, id); known && !d.Archived {
+			if d, known := platform.Get[knowledgesources.Document](c.Documents, id); known && !d.Archived {
 				out = append(out, DocumentSource(d))
 			}
 			if c.Files == nil {
@@ -99,7 +100,7 @@ func (c Corpus) file(f platform.File) (Source, bool) {
 	typ, id, _ := strings.Cut(f.Target, "/")
 	var apps []string
 	if typ == platform.KnowledgeDocumentType {
-		d, known := platform.Get[platform.KnowledgeDocument](c.Documents, id)
+		d, known := platform.Get[knowledgesources.Document](c.Documents, id)
 		if !known || d.Archived {
 			return Source{}, false
 		}
@@ -147,6 +148,6 @@ func DocumentReadable(row func(typ, id string) (platform.EntityInfo, reflect.Val
 	if !ok {
 		return false
 	}
-	d := v.Interface().(platform.KnowledgeDocument)
+	d := v.Interface().(knowledgesources.Document)
 	return !d.Archived && AppsReadable(d.Apps, reader, app)
 }

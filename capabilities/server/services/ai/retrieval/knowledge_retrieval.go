@@ -3,6 +3,8 @@ package knowledge
 import (
 	"crypto/sha256"
 	"encoding/hex"
+	ailanguage "platformserver/services/ai/language"
+	knowledgesources "platformserver/services/ai/sources"
 
 	"fmt"
 
@@ -130,7 +132,7 @@ func fingerprint(title, text string) string {
 	return hex.EncodeToString(sum[:12])
 }
 
-func DocumentSource(d platform.KnowledgeDocument) Source {
+func DocumentSource(d knowledgesources.Document) Source {
 	return Source{Key: platform.KnowledgeDocumentType + "/" + d.ID, Title: d.Title, Text: d.Text, Revision: fingerprint(d.Title, d.Text) + "/" + strings.Join(d.Apps, ","), Apps: d.Apps}
 }
 
@@ -139,7 +141,7 @@ func cut(s Source) []*chunk {
 	for i, text := range passages(s.Text) {
 		sum := sha256.Sum256([]byte(s.Title + "\n" + text))
 		c := &chunk{doc: s.Key, title: s.Title, text: text, hash: hex.EncodeToString(sum[:12]), scope: s.Scope, n: i, apps: s.Apps, terms: map[string]int{}}
-		for _, w := range platform.TokenizeWords(s.Title + " " + text) {
+		for _, w := range ailanguage.TokenizeWords(s.Title + " " + text) {
 			c.terms[w]++
 			c.length++
 		}
@@ -240,7 +242,7 @@ func (k *Index) Search(ctx Context, reader *platform.Member, app, q string, limi
 		return out
 	}
 	ctx.Sync()
-	asked := slices.Compact(slices.Sorted(slices.Values(platform.TokenizeWords(q))))
+	asked := slices.Compact(slices.Sorted(slices.Values(ailanguage.TokenizeWords(q))))
 	model := ctx.Active()
 	if ctx.NeedsRebuild(model) {
 		model = ""

@@ -140,7 +140,7 @@ func LoadPackageIndex(dir string) (*platform.PackageIndex, error) {
 		if a.ID != b.ID {
 			return strings.Compare(a.ID, b.ID)
 		}
-		return platform.ComparePackageVersions(a.Version, b.Version)
+		return packagedesc.ComparePackageVersions(a.Version, b.Version)
 	})
 	return index, nil
 }
@@ -269,15 +269,15 @@ func (d *Owner) precheck(p platform.PackageDescriptor, index *platform.PackageIn
 		}
 	}
 	for _, requirement := range p.Requires {
-		need, constraint := platform.PackageDependency(requirement)
+		need, constraint := packagedesc.PackageDependency(requirement)
 		held, ok := installed[need]
 		if !ok || held.State == "retired" {
-			if _, offered := index.Latest(need); offered {
+			if _, offered := packagedesc.Latest(index, need); offered {
 				out.Missing = append(out.Missing, need)
 			} else {
 				out.Problems = append(out.Problems, fmt.Sprintf("requires %s, which is not installed and not in the index", need))
 			}
-		} else if !platform.PackageVersionMatches(held.Version, constraint) {
+		} else if !packagedesc.PackageVersionMatches(held.Version, constraint) {
 			out.Missing = append(out.Missing, requirement)
 			out.Problems = append(out.Problems, fmt.Sprintf("requires %s; installed version is %s", requirement, held.Version))
 		} else if held.State != "active" {
@@ -476,7 +476,7 @@ func (d *Owner) decide(c platform.Caller, s *pb.Submission) (func(*pb.ChangeReco
 		index = &platform.PackageIndex{Directory: index.Directory, Packages: slices.Clone(index.Packages)}
 		index.Packages = append(index.Packages, descriptor)
 	} else {
-		descriptor, ok = index.Find(p.ID, p.Version)
+		descriptor, ok = packagedesc.Find(index, p.ID, p.Version)
 	}
 	if !ok && p.Version != "" {
 		if prior != nil {
@@ -518,12 +518,12 @@ func (d *Owner) decide(c platform.Caller, s *pb.Submission) (func(*pb.ChangeReco
 		if prior == nil || prior.State == "retired" {
 			return nil, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
 		}
-		direction := platform.ComparePackageVersions(descriptor.Version, prior.Version)
+		direction := packagedesc.ComparePackageVersions(descriptor.Version, prior.Version)
 		if upgrade && direction <= 0 || downgrade && direction >= 0 {
 			return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "The requested version is not an {direction} from the installed version", map[bool]string{true: "upgrade", false: "downgrade"}[upgrade])
 		}
 	} else if rollback {
-		direction := platform.ComparePackageVersions(descriptor.Version, prior.Version)
+		direction := packagedesc.ComparePackageVersions(descriptor.Version, prior.Version)
 		if direction == 0 {
 			return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "The retained version is already installed")
 		}
@@ -612,7 +612,7 @@ func (d *Owner) PackageViews() []platform.PackageView {
 		if held := installed[descriptor.ID]; held != nil {
 			copy := *held
 			view.Installed = &copy
-			direction := platform.ComparePackageVersions(descriptor.Version, held.Version)
+			direction := packagedesc.ComparePackageVersions(descriptor.Version, held.Version)
 			view.Update = held.State == "active" && direction > 0
 			view.Downgrade = held.State == "active" && direction < 0
 			previous, found := latestRetained(held.Retained)
@@ -652,9 +652,9 @@ func (d *Owner) PackageViews() []platform.PackageView {
 			descriptor, err := d.sealedPackageDescriptor(held.ID, retained.Version, retained.Digest)
 			copy := *held
 			view := platform.PackageView{Source: "retained", Installed: &copy, Descriptor: descriptor}
-			view.Downgrade = err == nil && platform.ComparePackageVersions(retained.Version, held.Version) < 0
+			view.Downgrade = err == nil && packagedesc.ComparePackageVersions(retained.Version, held.Version) < 0
 			previous, found := latestRetained(held.Retained)
-			view.Rollback = err == nil && platform.ComparePackageVersions(retained.Version, held.Version) != 0 && found && previous.Version == retained.Version
+			view.Rollback = err == nil && packagedesc.ComparePackageVersions(retained.Version, held.Version) != 0 && found && previous.Version == retained.Version
 			if err != nil {
 				descriptor = platform.PackageDescriptor{ID: held.ID, Version: retained.Version, Namespace: held.Namespace, Title: held.Title}
 				view.Descriptor = descriptor
@@ -672,7 +672,7 @@ func (d *Owner) PackageViews() []platform.PackageView {
 		if a.Descriptor.ID != b.Descriptor.ID {
 			return strings.Compare(a.Descriptor.ID, b.Descriptor.ID)
 		}
-		return platform.ComparePackageVersions(a.Descriptor.Version, b.Descriptor.Version)
+		return packagedesc.ComparePackageVersions(a.Descriptor.Version, b.Descriptor.Version)
 	})
 	return out
 }

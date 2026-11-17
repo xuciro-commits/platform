@@ -4,6 +4,7 @@ import (
 	"cmp"
 	"encoding/json"
 	"fmt"
+	ailanguage "platformserver/services/ai/language"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 
@@ -180,12 +181,12 @@ func (a *Agents) memories(c platform.Caller, run platform.AgentRunRecord, now ti
 	domain, _ := json.Marshal([]any{[]any{"agent", "=", run.Agent}, []any{"state", "=", "active"}})
 	all, _, _ := platform.Find[platform.Memory](c, platform.Query{Domain: domain, Sort: []string{"-created"}, Limit: 500})
 	goal := map[string]bool{}
-	for _, w := range platform.TokenizeWords(run.Goal) {
+	for _, w := range ailanguage.TokenizeWords(run.Goal) {
 		goal[w] = true
 	}
 	overlap := func(m platform.Memory) int {
 		n := 0
-		for _, w := range platform.TokenizeWords(m.Fact) {
+		for _, w := range ailanguage.TokenizeWords(m.Fact) {
 			if goal[w] {
 				n++
 			}

@@ -2,8 +2,6 @@ package platform
 
 import (
 	"encoding/json"
-	"strings"
-	"unicode"
 )
 
 const (
@@ -12,14 +10,6 @@ const (
 	SettingKnowledgeEmbeddingModel = "embedding-model"
 	SettingKnowledgeEmbeddingNext  = "embedding-next-model"
 )
-
-type KnowledgeDocument struct {
-	Record
-	Title  string   `json:"title" field:"required,search"`
-	Text   string   `json:"text" field:"required" type:"longtext"`
-	Source string   `json:"source,omitempty" title:"Where it comes from"`
-	Apps   []string `json:"apps,omitempty" title:"Read by members of"`
-}
 
 type KnowledgeTerm struct {
 	Record
@@ -48,30 +38,6 @@ type Passage struct {
 	Chunk    int     `json:"chunk"`
 	Text     string  `json:"text"`
 	Score    float64 `json:"score"`
-}
-
-func TokenizeWords(s string) []string {
-	var out []string
-	var cur []rune
-	flush := func() {
-		if len(cur) > 1 || len(cur) == 1 && unicode.IsDigit(cur[0]) {
-			out = append(out, string(cur))
-		}
-		cur = cur[:0]
-	}
-	for _, r := range strings.ToLower(s) {
-		switch {
-		case unicode.In(r, unicode.Han, unicode.Hiragana, unicode.Katakana, unicode.Hangul):
-			flush()
-			out = append(out, string(r))
-		case unicode.IsLetter(r) || unicode.IsDigit(r):
-			cur = append(cur, r)
-		default:
-			flush()
-		}
-	}
-	flush()
-	return out
 }
 
 type KnowledgeIndexStatus struct {

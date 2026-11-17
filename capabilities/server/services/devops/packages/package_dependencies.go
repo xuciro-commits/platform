@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"maps"
 	pageowner "platformserver/services/apps/pages"
+	packagedesc "platformserver/services/devops/descriptor"
 
 	"slices"
 	"strings"
@@ -25,7 +26,7 @@ func (d *Owner) installedDescriptors(index *platform.PackageIndex) (map[string]p
 			descriptor, err = d.sealedPackageDescriptor(id, held.Version, held.Artifact)
 		} else {
 			var found bool
-			descriptor, found = index.Find(id, held.Version)
+			descriptor, found = packagedesc.Find(index, id, held.Version)
 			if !found {
 				err = fmt.Errorf("installed product %s has no retained declaration", id)
 			}
@@ -45,13 +46,13 @@ func ResolveDependencies(root platform.PackageDescriptor, index *platform.Packag
 		requirements := map[string][]string{}
 		for _, descriptor := range chosen {
 			for _, requirement := range descriptor.Requires {
-				id, constraint := platform.PackageDependency(requirement)
+				id, constraint := packagedesc.PackageDependency(requirement)
 				requirements[id] = append(requirements[id], constraint)
 			}
 		}
 		matches := func(version string, constraints []string) bool {
 			for _, constraint := range constraints {
-				if !platform.PackageVersionMatches(version, constraint) {
+				if !packagedesc.PackageVersionMatches(version, constraint) {
 					return false
 				}
 			}
@@ -74,7 +75,7 @@ func ResolveDependencies(root platform.PackageDescriptor, index *platform.Packag
 				}
 			}
 			slices.SortFunc(options, func(a, b platform.PackageDescriptor) int {
-				return -platform.ComparePackageVersions(a.Version, b.Version)
+				return -packagedesc.ComparePackageVersions(a.Version, b.Version)
 			})
 			if held, found := installed[id]; found && matches(held.Version, requirements[id]) {
 				options = append([]platform.PackageDescriptor{held}, slices.DeleteFunc(options, func(p platform.PackageDescriptor) bool { return p.Version == held.Version })...)
@@ -96,12 +97,12 @@ func ResolveDependencies(root platform.PackageDescriptor, index *platform.Packag
 				continue
 			}
 			for _, requirement := range held.Requires {
-				need, constraint := platform.PackageDependency(requirement)
+				need, constraint := packagedesc.PackageDependency(requirement)
 				version := installed[need].Version
 				if replacement, exists := chosen[need]; exists {
 					version = replacement.Version
 				}
-				if version == "" || !platform.PackageVersionMatches(version, constraint) {
+				if version == "" || !packagedesc.PackageVersionMatches(version, constraint) {
 					failure = fmt.Errorf("installed product %s requires %s; update it before switching %s to %s", id, requirement, need, version)
 					return nil, false
 				}
@@ -120,7 +121,7 @@ func ResolveDependencies(root platform.PackageDescriptor, index *platform.Packag
 			}
 			state[id] = 1
 			for _, requirement := range chosen[id].Requires {
-				need, _ := platform.PackageDependency(requirement)
+				need, _ := packagedesc.PackageDependency(requirement)
 				if !visit(need) {
 					return false
 				}
@@ -155,7 +156,7 @@ func (d *Owner) prerequisiteAssets(root platform.PackageDescriptor, index *platf
 	for len(pending) > 0 {
 		requirement := pending[0]
 		pending = pending[1:]
-		id, _ := platform.PackageDependency(requirement)
+		id, _ := packagedesc.PackageDependency(requirement)
 		if seen[id] {
 			continue
 		}
@@ -204,7 +205,7 @@ func (d *Owner) PackagePrerequisites(id, version string) ([]platform.ReleaseAsse
 	if err != nil {
 		return nil, err
 	}
-	descriptor, found := index.Find(id, version)
+	descriptor, found := packagedesc.Find(index, id, version)
 	if !found {
 		installed, err := d.installedDescriptors(index)
 		if err != nil {
@@ -240,7 +241,7 @@ func (d *Owner) installationPlan(root platform.PackageDescriptor, index *platfor
 		}
 		action := SchemaPackageInstall
 		if exists {
-			if platform.ComparePackageVersions(descriptor.Version, held.Version) < 0 {
+			if packagedesc.ComparePackageVersions(descriptor.Version, held.Version) < 0 {
 				action = SchemaPackageDowngrade
 			} else {
 				action = SchemaPackageUpgrade

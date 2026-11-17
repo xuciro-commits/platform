@@ -3,6 +3,7 @@ package knowledge
 import (
 	"context"
 	"io"
+	knowledgesources "platformserver/services/ai/sources"
 	"reflect"
 	"time"
 
@@ -86,7 +87,7 @@ func (r Runtime) SourceReadable(store *records.Store, m platform.Member, id, fie
 	if et == nil || et.Rows().Get(id) == nil {
 		return false
 	}
-	d, ok := et.Rows().Get(id).Value.Interface().(platform.KnowledgeDocument)
+	d, ok := et.Rows().Get(id).Value.Interface().(knowledgesources.Document)
 	return ok && !d.Archived && AppsReadable(d.Apps, &m, "")
 }
 

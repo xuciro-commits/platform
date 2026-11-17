@@ -87,7 +87,7 @@ func ProductVersionViews(rows []build.ProductVersion) []platform.ProductVersionV
 		if a.Product != b.Product {
 			return strings.Compare(a.Product, b.Product)
 		}
-		return platform.ComparePackageVersions(a.Version, b.Version)
+		return packagedesc.ComparePackageVersions(a.Version, b.Version)
 	})
 	return out
 }

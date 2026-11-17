@@ -67,7 +67,7 @@ func (d *Owner) decidePackageSource(_ platform.Caller, s *pb.Submission) (func(*
 	if err != nil {
 		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The package catalogue cannot be read")
 	}
-	if prior, found := index.Find(offer.Descriptor.ID, offer.Descriptor.Version); found {
+	if prior, found := packagedesc.Find(index, offer.Descriptor.ID, offer.Descriptor.Version); found {
 		before, _ := json.Marshal(prior)
 		after, _ := json.Marshal(offer.Descriptor)
 		if !bytes.Equal(before, after) {
@@ -88,7 +88,7 @@ func (d *Owner) decidePackageSource(_ platform.Caller, s *pb.Submission) (func(*
 func (d *Owner) sourceIndex(index *platform.PackageIndex) (*platform.PackageIndex, error) {
 	out := &platform.PackageIndex{Directory: index.Directory, Packages: slices.Clone(index.Packages)}
 	appendDescriptor := func(descriptor platform.PackageDescriptor) error {
-		if prior, found := out.Find(descriptor.ID, descriptor.Version); found {
+		if prior, found := packagedesc.Find(out, descriptor.ID, descriptor.Version); found {
 			a, _ := json.Marshal(prior)
 			b, _ := json.Marshal(descriptor)
 			if !bytes.Equal(a, b) {
@@ -126,7 +126,7 @@ func (d *Owner) sourceIndex(index *platform.PackageIndex) (*platform.PackageInde
 		if a.ID != b.ID {
 			return strings.Compare(a.ID, b.ID)
 		}
-		return platform.ComparePackageVersions(a.Version, b.Version)
+		return packagedesc.ComparePackageVersions(a.Version, b.Version)
 	})
 	return out, nil
 }
@@ -195,7 +195,7 @@ func (d *Owner) packageDependents(id string) []string {
 			index, err = d.packageIndex()
 			if err == nil {
 				var found bool
-				descriptor, found = index.Find(other, held.Version)
+				descriptor, found = packagedesc.Find(index, other, held.Version)
 				if !found {
 					err = fmt.Errorf("installed declaration %s@%s is unavailable", other, held.Version)
 				}
@@ -205,7 +205,7 @@ func (d *Owner) packageDependents(id string) []string {
 			blockers = append(blockers, fmt.Sprintf("Package retirement cannot check %s: %s", other, err))
 			continue
 		}
-		if slices.ContainsFunc(descriptor.Requires, func(need string) bool { required, _ := platform.PackageDependency(need); return required == id }) {
+		if slices.ContainsFunc(descriptor.Requires, func(need string) bool { required, _ := packagedesc.PackageDependency(need); return required == id }) {
 			blockers = append(blockers, fmt.Sprintf("The package %s is still required by %s", id, other))
 		}
 	}
@@ -227,7 +227,7 @@ func Contract(id string) platform.CapabilityContract {
 func Module(p platform.PackageDescriptor) platform.CapabilityModule {
 	module := platform.CapabilityModule{ID: "package." + p.ID, Version: p.Version, Title: p.Title, Scope: "tenant", Replacement: "drain", Provides: []platform.CapabilityContract{Contract(p.ID)}, Requires: slices.Clone(p.Capabilities)}
 	for _, need := range p.Requires {
-		id, _ := platform.PackageDependency(need)
+		id, _ := packagedesc.PackageDependency(need)
 		module.Requires = append(module.Requires, Contract(id))
 	}
 	return module
@@ -256,7 +256,7 @@ func (d *Owner) Precheck(p platform.PackageDescriptor) platform.Precheck {
 	if err != nil {
 		return platform.Precheck{ID: p.ID, Version: p.Version, Problems: []string{err.Error()}}
 	}
-	if current, found := index.Find(p.ID, p.Version); found {
+	if current, found := packagedesc.Find(index, p.ID, p.Version); found {
 		p = current
 	}
 	return d.precheck(p, index)
