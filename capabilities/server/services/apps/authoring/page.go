@@ -99,8 +99,8 @@ func (o *Owner) publishPage(c platform.Caller, record any, _ json.RawMessage, _ 
 		return &platform.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 	}
 	if !c.Replaying {
-		if owner, ok := o.env.Host().(platform.ModelPageHost); ok {
-			if err := owner.CheckPageModel(c, Descriptor(*page, o.env.AppID(), o.env.Version())); err != nil {
+		if host := o.env.Host(); host != nil {
+			if err := host.CheckPageModel(c, Descriptor(*page, o.env.AppID(), o.env.Version())); err != nil {
 				return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
 			}
 		}
@@ -172,16 +172,16 @@ func (o *Owner) normalizePageModel(p *Page, lookup func(string) (platform.Entity
 	}
 	for i, binding := range d.DataBindings {
 		if binding.Query != nil && binding.Query.SourceVersion == "" {
-			if owner, ok := o.env.Host().(platform.ModelPageHost); ok {
-				if source, known := owner.ModelQueryBinding(binding.Query.Ref); known {
+			if host := o.env.Host(); host != nil {
+				if source, known := host.ModelQueryBinding(binding.Query.Ref); known {
 					binding.Query = &source
 				}
 			}
 		}
 		for _, model := range pageowner.ModelBindings(binding) {
 			if model.Set != nil && model.Set.Query != nil && model.Set.Query.SourceVersion == "" {
-				if owner, ok := o.env.Host().(platform.ModelPageHost); ok {
-					if source, known := owner.ModelQueryBinding(model.Set.Query.Ref); known {
+				if host := o.env.Host(); host != nil {
+					if source, known := host.ModelQueryBinding(model.Set.Query.Ref); known {
 						*model.Set.Query = source
 					}
 				}

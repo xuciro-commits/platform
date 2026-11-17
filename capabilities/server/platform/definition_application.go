@@ -9,6 +9,7 @@ import (
 )
 
 type BuildHost interface {
+	ModelPageHost
 	CompartmentExists(string) bool
 	ProjectApprovals(string) int
 	CheckResourceSchema(string, *SchemaVersion) *Error
