@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"platformserver/platform"
+	releasepub "platformserver/services/resources/publication"
 )
 
 type CodeDefinitions struct {
@@ -26,7 +27,7 @@ type CodeDefinitions struct {
 func (h CodeDefinitions) Register() error {
 	classes := map[string]bool{}
 	versions := map[string]string{}
-	declarations := CodeDeclarations{DataClasses: classes, NarrowedFields: map[string][]string{}, NativeExecutors: map[string]bool{}}
+	declarations := releasepub.CodeDeclarations{DataClasses: classes, NarrowedFields: map[string][]string{}, NativeExecutors: map[string]bool{}}
 	for _, app := range h.Apps {
 		manifest := app.Manifest()
 		versions[manifest.ID] = manifest.Version
@@ -159,7 +160,7 @@ func (h CodeDefinitions) Register() error {
 			}
 		}
 		for _, agent := range manifest.Agents {
-			descriptor, err := AgentDescriptor(agent)
+			descriptor, err := releasepub.AgentDescriptor(agent)
 			if err != nil {
 				return err
 			}
@@ -184,7 +185,7 @@ func (h CodeDefinitions) Register() error {
 			}
 		}
 		for _, provision := range manifest.Provides {
-			protocol, err := ProtocolDescriptor(manifest, provision)
+			protocol, err := releasepub.ProtocolDescriptor(manifest, provision)
 			if err != nil {
 				return err
 			}

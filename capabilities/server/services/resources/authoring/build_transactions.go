@@ -3,9 +3,7 @@ package build
 import (
 	"encoding/json"
 	"fmt"
-	"maps"
 	"reflect"
-	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -15,194 +13,6 @@ import (
 	dataowner "platformserver/services/data"
 	ontology "platformserver/services/ontology"
 )
-
-func (b *Build) transactionSequences() []platform.Sequence {
-	byName := map[string]platform.Sequence{}
-	for _, typ := range sortedTypes(b.installed) {
-		if txn := b.installed[typ].CreateTxn; txn != nil {
-			platform.WalkBusinessTxn(txn, func(step platform.TxnStep) {
-				if step.Sequence != nil {
-					byName[step.Sequence.Name] = *step.Sequence
-				}
-			})
-		}
-		if life := b.installed[typ].Lifecycle; life != nil {
-			for _, action := range life.Actions {
-				for _, rule := range action.Rules {
-					if rule.Transaction == nil || rule.Transaction.Spec == nil {
-						continue
-					}
-					platform.WalkBusinessTxn(rule.Transaction.Spec, func(step platform.TxnStep) {
-						if step.Sequence != nil {
-							byName[step.Sequence.Name] = *step.Sequence
-						}
-					})
-				}
-			}
-		}
-	}
-	names := slices.Sorted(maps.Keys(byName))
-	out := make([]platform.Sequence, 0, len(names))
-	for _, name := range names {
-		out = append(out, byName[name])
-	}
-	return out
-}
-
-func txnUsesLegacyRows(steps []platform.TxnStep) bool {
-	needed := false
-	platform.WalkTxnSteps(steps, func(step platform.TxnStep) {
-		sets := step.Changes
-		if step.Post != nil {
-			sets = append(slices.Clone(sets), step.Post.Match...)
-		}
-		if step.Effect != nil {
-			sets = append(slices.Clone(sets), step.Effect.Payload...)
-		}
-		if step.Call != nil {
-			sets = append(slices.Clone(sets), step.Call.Inputs...)
-		}
-		for _, set := range sets {
-			needed = needed || strings.HasPrefix(set.From, "row.")
-		}
-	})
-	return needed
-}
-
-func (b *Build) normalizeTransaction(object ontology.Object, action *ontology.Action, lookup func(string) (platform.EntityInfo, bool)) error {
-	var lower func([]platform.TxnStep, platform.RuleReadSpec) error
-	lower = func(steps []platform.TxnStep, scope platform.RuleReadSpec) error {
-		scope.Inputs = maps.Clone(scope.Inputs)
-		for i := range steps {
-			step := &steps[i]
-			if step.Call != nil && step.Call.View == "" {
-				step.Call.View = "snapshot"
-			}
-			if step.Post != nil {
-				for j, match := range step.Post.Match {
-					if match.Expr != nil && match.From == "" {
-						continue
-					}
-					info, ok := lookup(step.Target.Type)
-					if !ok {
-						return fmt.Errorf("Transaction balance object is unavailable")
-					}
-					field, ok := info.Field(match.Field)
-					if !ok {
-						return fmt.Errorf("Post match field is unavailable")
-					}
-					expr, err := platform.AssignmentExpr(field.Type, match, scope)
-					if err != nil {
-						return err
-					}
-					step.Post.Match[j] = platform.TxnSet{Field: match.Field, Expr: &expr}
-				}
-			}
-			for _, parameters := range []*[]platform.TxnSet{func() *[]platform.TxnSet {
-				if step.Effect != nil {
-					return &step.Effect.Payload
-				}
-				return nil
-			}(), func() *[]platform.TxnSet {
-				if step.Call != nil {
-					return &step.Call.Inputs
-				}
-				return nil
-			}()} {
-				if parameters != nil {
-					for j, parameter := range *parameters {
-						expr, err := platform.DispatchParameter(parameter, scope)
-						if err != nil {
-							return err
-						}
-						(*parameters)[j] = platform.TxnSet{Field: parameter.Field, Expr: &expr}
-					}
-				}
-			}
-			for j := range step.Refusals {
-				if record := step.Refusals[j].Record; record != nil {
-					if err := lower([]platform.TxnStep{*record}, scope); err != nil {
-						return err
-					}
-				}
-			}
-			if step.ForEach != nil {
-				if step.ForEach.Range != nil {
-					if err := lower(step.ForEach.Steps, platform.WithTxnRange(scope, step.ForEach.Range.From.Kind)); err != nil {
-						return err
-					}
-					continue
-				}
-				if !txnUsesLegacyRows(step.ForEach.Steps) {
-					if err := lower(step.ForEach.Steps, scope); err != nil {
-						return err
-					}
-					continue
-				}
-				source, err := platform.TxnIterationSource(ID, TypeOf(object.Name), step.ForEach.Of, lookup)
-				if err != nil {
-					return err
-				}
-				index := slices.IndexFunc(source.Sets, func(set platform.RecordSet) bool { return set.Name == step.ForEach.Set })
-				if index < 0 {
-					return fmt.Errorf("iteration set %s is undeclared", step.ForEach.Set)
-				}
-				info, ok := lookup(source.Sets[index].Object)
-				if !ok {
-					return fmt.Errorf("iteration object is unavailable")
-				}
-				if err := lower(step.ForEach.Steps, platform.WithTxnRow(scope, info)); err != nil {
-					return err
-				}
-				continue
-			}
-			if len(step.Changes) > 0 {
-				if !strings.HasPrefix(step.Target.Type, ID+".") {
-					return fmt.Errorf("transaction cannot change another application")
-				}
-				for i := range step.Changes {
-					assignment := &step.Changes[i]
-					if assignment.Expr != nil && assignment.From == "" {
-						continue
-					}
-					info, ok := lookup(step.Target.Type)
-					if !ok {
-						return fmt.Errorf("transaction object is unavailable")
-					}
-					field, ok := info.Field(assignment.Field)
-					if !ok {
-						return fmt.Errorf("transaction field is unavailable")
-					}
-					expr, err := platform.AssignmentExpr(field.Type, *assignment, scope)
-					if err != nil {
-						return err
-					}
-					*assignment = platform.TxnSet{Field: assignment.Field, Expr: &expr}
-				}
-			}
-			platform.TxnResult(&scope, *step)
-		}
-		return nil
-	}
-	scope := ruleSpec(object, *action, action.Transaction.Reads)
-	for i := range action.Transaction.Refusals {
-		if record := action.Transaction.Refusals[i].Record; record != nil {
-			if err := lower([]platform.TxnStep{*record}, scope); err != nil {
-				return err
-			}
-		}
-	}
-	if dispatch := action.Transaction.Dispatch; dispatch != nil {
-		for i, parameter := range dispatch.Payload {
-			expr, err := platform.DispatchParameter(parameter, scope)
-			if err != nil {
-				return err
-			}
-			dispatch.Payload[i] = platform.TxnSet{Field: parameter.Field, Expr: &expr}
-		}
-	}
-	return lower(action.Transaction.Steps, scope)
-}
 
 func (b *Build) transactionLink(binding platform.AssetBinding) (platform.LinkType, error) {
 	ordinal, ok := strings.CutPrefix(binding.SourceVersion, b.Manifest().Version+".link-")
@@ -236,10 +46,12 @@ func (b *Build) checkTransactions(object ontology.Object, engines ...platform.Ru
 			_, joint := b.jointEntities[typ]
 			return installed || joint
 		},
-		Sequences: b.transactionSequences,
-		Link:      b.transactionLink,
-		Confirm:   b.checkConfirmation,
-		Dispatch:  b.checkDispatch,
+		Sequences: func() []platform.Sequence {
+			return ontology.TransactionSequences(b.installed)
+		},
+		Link:     b.transactionLink,
+		Confirm:  b.checkConfirmation,
+		Dispatch: b.checkDispatch,
 		Writeback: func(step platform.TxnStep, object string) error {
 			if b.host == nil {
 				return nil
@@ -295,14 +107,14 @@ func (b *Build) CanonicalObject(object ontology.Object) (ontology.Object, error)
 func (b *Build) businessRuntime() platform.TransactionExecutor {
 	return b.host.TransactionRuntime(platform.BusinessRuntimeContext{App: ID, Entities: b.installed, Ledger: b.ledger, Lookup: b.conditionLookup, Link: b.transactionLink, Dispatch: b.openDispatch, Confirm: b.openConfirmation,
 		Prepare: func(c platform.Caller, r *pb.ChangeRecord, txn *platform.BusinessTxn, now time.Time) (platform.TransactionProposal, *platform.Error) {
-			p, err := b.prepareProposal(c, r, txn, now)
+			p, err := b.functions.PrepareProposal(c, r, txn, b.installed[txn.Subject], now)
 			if err != nil {
 				return platform.TransactionProposal{}, err
 			}
 			return platform.TransactionProposal{Apply: func(entity platform.Entity, info platform.EntityInfo, patch map[string]any, sources []string) (platform.Entity, map[string]any) {
-				return proposalEntity(entity, info, patch, p, sources)
+				return p.Apply(entity, info, patch, sources)
 			}, Finish: func(c platform.Caller, r *pb.ChangeRecord, now time.Time) *platform.Error {
-				return b.finishProposal(c, r, p, now)
+				return p.Finish(c, r, now)
 			}}, nil
 		}, Effect: func(c platform.Caller, id string) (platform.TransactionEffectDefinition, *platform.Error) {
 			w, found := platform.Get[dataowner.Writeback](c, id)

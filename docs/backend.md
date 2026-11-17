@@ -51,6 +51,10 @@
   AI 函数、代码函数、决策表的编写、发布、历史与编译结果归 `services/functions/authoring`。
 - 对象、动作类型、对象执行形状、生命周期与约束编译归 `services/ontology`。资源服务只编排跨类型草稿、
   联合发布、页面覆盖、资源身份与安装；动作执行仍归 `services/actions`。
+- 事务声明、规范化、编号与步骤校验归 `services/ontology`，事务执行与拒绝改路归 `services/actions`；
+  资源服务提供保留版本、集成绑定和跨类型草稿上下文。
+- 发布声明、agent/protocol 描述归 `services/resources/publication`，AI 提案消费归
+  `services/functions/authoring`；蓝图补全与测试根草稿仍由资源服务编排。
 - 产品包里的行业逻辑不进任何 Go 包。
 
 ## 并发

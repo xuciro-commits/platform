@@ -153,7 +153,7 @@ func (b *Build) normalizeObjectRules(o *ontology.Object) error {
 		}
 	}
 	for i := range o.Actions {
-		if err := b.normalizeTransaction(*o, &o.Actions[i], lookup); err != nil {
+		if err := ontology.NormalizeTransaction(*o, &o.Actions[i], lookup); err != nil {
 			return err
 		}
 	}
@@ -162,7 +162,7 @@ func (b *Build) normalizeObjectRules(o *ontology.Object) error {
 		for _, field := range o.Fields {
 			action.Inputs = append(action.Inputs, ontology.Input{Name: field.Name, Title: field.Title, Type: field.Type, Ref: field.Ref, Choices: field.Choices})
 		}
-		if err := b.normalizeTransaction(*o, &action, lookup); err != nil {
+		if err := ontology.NormalizeTransaction(*o, &action, lookup); err != nil {
 			return err
 		}
 	}
