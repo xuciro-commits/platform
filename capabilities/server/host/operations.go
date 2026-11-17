@@ -118,13 +118,11 @@ func (t *Tenant) step(now time.Time) (more bool) {
 
 func (t *Tenant) replay(now time.Time, replaying bool) automation.Replay {
 	return automation.Replay{Board: &t.work, App: t.App, Delivered: t.delivered, Enqueue: func() { t.enqueue(now) },
-		Caller: func(app string) platform.Caller { return t.automation(app, replaying) },
-		Names:  func(e platform.Event) []string { return t.router().Events(e) },
-		Retry:  t.retryOf,
-		Start: func(id string) uint32 {
-			generation, _, _ := t.Works.Start(id, "host")
-			return generation
-		},
+		Caller:  func(app string) platform.Caller { return t.automation(app, replaying) },
+		Names:   func(e platform.Event) []string { return t.router().Events(e) },
+		Listens: func(app string) bool { return slices.Contains(t.listeners, app) },
+		Retry:   t.retryOf,
+		Start:   func(id string) uint32 { generation, _, _ := t.Works.Start(id, "host"); return generation },
 		Finish:  func(id string, generation uint32, failed bool) { t.Works.Finish(id, generation, failed) },
 		SetHops: func(n int) { t.hops = n },
 		Failed: func(title, why, id string) {

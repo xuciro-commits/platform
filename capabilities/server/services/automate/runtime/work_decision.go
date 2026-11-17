@@ -38,12 +38,12 @@ func (w WorkDecision) Decide(c platform.Caller, task *Task, now time.Time) *plat
 		refusal = w.State().(platform.Runner).Run(c, task.Job.Name, now)
 	} else {
 		w.Hops(task.Event.Hops + 1)
-		if listener, ok := w.State().(platform.Listener); ok {
+		if w.Listens(task.App) {
 			names := append([]string{task.Event.Record.GetSubmission().GetSchema().GetName()}, w.Routed(task.Event.Event)...)
 			if task.Event.Plan != nil {
 				names = task.Event.Plan.Names
 			}
-			refusal = listener.Listen(c, task.Event.Event, names, now)
+			refusal = w.State().(platform.Listener).Listen(c, task.Event.Event, names, now)
 		} else {
 			refusal = w.State().(platform.Subscriber).Handle(c, task.Event.Event)
 		}

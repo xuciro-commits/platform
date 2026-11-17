@@ -80,6 +80,7 @@ type Replay struct {
 	App       func(string) platform.App
 	Caller    func(app string) platform.Caller
 	Names     func(event platform.Event) []string
+	Listens   func(app string) bool
 	Retry     func(app string) platform.Retry
 	Start     func(id string) uint32
 	Finish    func(id string, generation uint32, failed bool)
@@ -102,14 +103,15 @@ func (r Replay) Attempt(task *Task, now time.Time) string {
 	r.SetHops(task.Event.Hops + 1)
 	outcome := "ok"
 	var err *platform.Error
-	if x, ok := r.App(task.App).(platform.Listener); ok {
+	owner := r.App(task.App)
+	if r.Listens(task.App) {
 		names := append([]string{task.Event.Record.GetSubmission().GetSchema().GetName()}, r.Names(task.Event.Event)...)
 		if task.Event.Plan != nil {
 			names = task.Event.Plan.Names
 		}
-		err = x.Listen(r.Caller(task.App), task.Event.Event, names, now)
+		err = owner.(platform.Listener).Listen(r.Caller(task.App), task.Event.Event, names, now)
 	} else {
-		err = r.App(task.App).(platform.Subscriber).Handle(r.Caller(task.App), task.Event.Event)
+		err = owner.(platform.Subscriber).Handle(r.Caller(task.App), task.Event.Event)
 	}
 	if err != nil {
 		outcome = err.Error()
