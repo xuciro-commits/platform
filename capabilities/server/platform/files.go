@@ -61,9 +61,6 @@ type FileStore interface {
 	Get(ctx context.Context, key string) (io.ReadCloser, int64, error)
 	Exists(ctx context.Context, key string) bool
 	Delete(ctx context.Context, key string) error
-}
-
-type FileInventory interface {
 	Inventory(context.Context, string, string, int) (FileInventoryPage, error)
 }
 

@@ -222,10 +222,6 @@ func (c *FrameCollector) Collect(ctx context.Context, s FrameStore, now time.Tim
 	if started.IsZero() || now.IsZero() || quarantined() {
 		return nil
 	}
-	inventory, ok := s.Files.(platform.FileInventory)
-	if !ok {
-		return fmt.Errorf("Flow artifact file inventory is unavailable")
-	}
 	cutoff := now.Add(-orphanRetention)
 	if recoveryCutoff := started.Add(-time.Second); recoveryCutoff.Before(cutoff) {
 		cutoff = recoveryCutoff
@@ -235,7 +231,7 @@ func (c *FrameCollector) Collect(ctx context.Context, s FrameStore, now time.Tim
 	cursor := ""
 	seen := 0
 	for {
-		page, err := inventory.Inventory(ctx, prefix, cursor, platform.MaxFileInventoryPage)
+		page, err := s.Files.Inventory(ctx, prefix, cursor, platform.MaxFileInventoryPage)
 		if err != nil {
 			return err
 		}

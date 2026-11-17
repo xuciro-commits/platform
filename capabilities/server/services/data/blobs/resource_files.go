@@ -387,14 +387,10 @@ func (s *s3Files) Inventory(ctx context.Context, prefix, after string, limit int
 }
 
 func FileStoreManifest(ctx context.Context, store platform.FileStore) (map[string]string, error) {
-	inventory, ok := store.(platform.FileInventory)
-	if !ok {
-		return nil, fmt.Errorf("file store does not support a complete inventory")
-	}
 	result := map[string]string{}
 	after := ""
 	for {
-		page, err := inventory.Inventory(ctx, "", after, 1024)
+		page, err := store.Inventory(ctx, "", after, 1024)
 		if err != nil {
 			return nil, err
 		}
