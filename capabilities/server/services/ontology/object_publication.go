@@ -252,3 +252,20 @@ func PrepareObjectPublication(asset platform.ReleaseAsset, objects []Object, res
 	objects[i].SchemaVersions = frozen.SchemaVersions
 	return frozen, objects[i], nil
 }
+
+func ReadObjectPublication(image []byte) (Object, error) {
+	var record Object
+	if err := json.Unmarshal(image, &record); err != nil {
+		return Object{}, err
+	}
+	published, ok := publication.Read[Object](record.Published)
+	if !ok || record.State != "published" || record.ID != published.ID || record.Name != published.Name || record.Installed != AppID+"."+published.Name {
+		return Object{}, fmt.Errorf("accepted object has no matching published definition")
+	}
+	if published.ExtensionSource != nil {
+		if err := published.ExtensionSource.Check(published.Extends); err != nil {
+			return Object{}, err
+		}
+	}
+	return published, nil
+}

@@ -15,47 +15,24 @@ func (b *Build) AcceptedPublicationSchemas() []string {
 	return acceptedPublicationSchemas()
 }
 
-func (b *Build) publicationImage(schema string, image []byte) (platform.Entity, []platform.Action, []platform.Page, error) {
-	switch schema {
-	case SchemaEvaluationSetPublish:
-		_, _, err := b.testPlanImage(image)
-		return b.testPlanEntity(), nil, nil, err
-	case SchemaAgentPublish:
-		var record Agent
-		if err := json.Unmarshal(image, &record); err != nil {
-			return platform.Entity{}, nil, nil, err
-		}
-		if _, ok := publication.Read[Agent](record.Published); !ok {
-			return platform.Entity{}, nil, nil, fmt.Errorf("accepted agent has no published definition")
-		}
-		return b.agentEntity(), nil, nil, nil
-	case SchemaPublish:
-		var record ontology.Object
-		if err := json.Unmarshal(image, &record); err != nil {
-			return platform.Entity{}, nil, nil, err
-		}
-		published, ok := publication.Read[ontology.Object](record.Published)
-		if !ok || record.State != "published" || record.ID != published.ID ||
-			record.Name != published.Name || record.Installed != TypeOf(published.Name) {
-			return platform.Entity{}, nil, nil, fmt.Errorf("accepted object has no matching published definition")
-		}
-		if published.ExtensionSource != nil {
-			if err := published.ExtensionSource.Check(published.Extends); err != nil {
-				return platform.Entity{}, nil, nil, err
-			}
-		}
-		entity := b.entity(published)
-		portable, err := b.dispatchSchemaObject(published)
-		if err != nil {
-			return platform.Entity{}, nil, nil, err
-		}
-		if err := ontology.CheckObjectSchemas(portable); err != nil {
-			return platform.Entity{}, nil, nil, err
-		}
-		actions := objectActions(published, entity)
-		return entity, actions, []platform.Page{appsauthoring.CompileObjectPage(published, ID)}, nil
+func (b *Build) objectPublicationImage(schema string, image []byte) (ontology.Object, platform.Entity, []platform.Action, []platform.Page, error) {
+	if schema != SchemaPublish {
+		return ontology.Object{}, platform.Entity{}, nil, nil, fmt.Errorf("not an accepted builder publication: %s", schema)
 	}
-	return platform.Entity{}, nil, nil, fmt.Errorf("not an accepted builder publication: %s", schema)
+	published, err := ontology.ReadObjectPublication(image)
+	if err != nil {
+		return ontology.Object{}, platform.Entity{}, nil, nil, err
+	}
+	entity := b.entity(published)
+	portable, err := b.dispatchSchemaObject(published)
+	if err != nil {
+		return ontology.Object{}, platform.Entity{}, nil, nil, err
+	}
+	if err := ontology.CheckObjectSchemas(portable); err != nil {
+		return ontology.Object{}, platform.Entity{}, nil, nil, err
+	}
+	actions := objectActions(published, entity)
+	return published, entity, actions, []platform.Page{appsauthoring.CompileObjectPage(published, ID)}, nil
 }
 
 func (b *Build) ValidateAcceptedPublication(schema string, image []byte) error {
@@ -104,20 +81,12 @@ func (b *Build) ValidateAcceptedPublication(schema string, image []byte) error {
 		}
 		return b.host.ValidateInstallOperation(platform.Caller{Replaying: true}, code.Definition())
 	}
-	_, _, _, err := b.publicationImage(schema, image)
+	published, _, _, _, err := b.objectPublicationImage(schema, image)
 	if err != nil {
 		return err
 	}
 	switch schema {
 	case SchemaPublish:
-		var record ontology.Object
-		if err := json.Unmarshal(image, &record); err != nil {
-			return err
-		}
-		published, ok := publication.Read[ontology.Object](record.Published)
-		if !ok {
-			return fmt.Errorf("accepted object has no published definition")
-		}
 		return b.validateObjectInstallation(platform.Caller{Replaying: true}, published)
 	}
 	return fmt.Errorf("unknown builder publication: %s", schema)
@@ -175,20 +144,12 @@ func (b *Build) ApplyAcceptedPublication(schema string, image []byte) error {
 		}
 		return b.installCode(platform.Caller{Replaying: true}, code)
 	}
-	entity, actions, pages, err := b.publicationImage(schema, image)
+	published, entity, actions, pages, err := b.objectPublicationImage(schema, image)
 	if err != nil {
 		return err
 	}
 	switch schema {
 	case SchemaPublish:
-		var record ontology.Object
-		if err := json.Unmarshal(image, &record); err != nil {
-			return err
-		}
-		published, ok := publication.Read[ontology.Object](record.Published)
-		if !ok {
-			return fmt.Errorf("accepted object has no published definition")
-		}
 		pages, _, err = b.objectInstallationPages(published)
 		if err != nil {
 			return err
