@@ -73,6 +73,7 @@
 | 整套本地运行 | `make local`（入口 http://localhost:8495；宿主日志 `.build/dev/platform-api.log`） |
 | 快速检查 | `make check`：Go 构建、vet 与格式，包边界与形状，产品包，契约，文案，文档，空白 |
 | 前端检查 | `make check-frontend`（改了 `frontend/` 时） |
+| 主干验收 | `make trunk`：自己起宿主、灌数据、起前端，浏览器走一遍演示路径；`HEADED=1` 看着它走 |
 | 旧前端检查 | `make check-web`（改了 `web/` 时） |
 | 宿主类型与契约 | `make contract`（改了宿主类型之后） |
 | 内核不变量 | `make test RUN=K13` 定点跑相关编号；不给 `RUN` 跑全部 |

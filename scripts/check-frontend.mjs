@@ -16,6 +16,7 @@ const allowedPackages = [
   "react",
   "react-dom",
   "@astryxdesign/cli",
+  "@playwright/test",
   "@stylexjs/unplugin",
   "@types/react",
   "@types/react-dom",
