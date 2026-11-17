@@ -144,7 +144,6 @@ type Environment interface {
 	JointEntity(string) (platform.EntityInfo, bool)
 	DeclaresRole(string) bool
 	JointDeclaration(platform.AssetRef) (platform.ReleaseAsset, bool)
-	AssetVersion(platform.ReleaseAsset) int
 	AllReleaseAssets() ([]platform.ReleaseAsset, error)
 	CheckName(string, string) error
 	ConditionLookup(string) (platform.EntityInfo, bool)
@@ -311,11 +310,15 @@ func (o *Owner) Draft(asset platform.ReleaseAsset) (string, any, error) {
 	return FunctionType, functionFromDeclaration(definition), nil
 }
 
+func (o *Owner) assetVersion(asset platform.ReleaseAsset) int {
+	return o.resolver.DefinitionAssetVersion(asset, o.env.App(), o.env.Version(), platform.AssetFunction, "function")
+}
+
 func (o *Owner) fromAsset(asset platform.ReleaseAsset) (Function, error) {
 	var zero Function
-	version := o.env.AssetVersion(asset)
+	version := o.assetVersion(asset)
 	var d platform.AIFunction
-	if version == 0 || strictDecode(asset.Body, &d) != nil || asset.ContractVersion != 1 || d.Check() != nil || d.Name != asset.Ref.Name || o.resolver.CheckAssetDependencies(asset) != nil {
+	if version == 0 || strictDecode(asset.Body, &d) != nil || asset.ContractVersion != 1 || d.Check() != nil || d.Name != asset.Ref.Name {
 		return zero, fmt.Errorf("invalid builder function asset %s", asset.Ref)
 	}
 	f := functionFromDeclaration(d)
@@ -459,7 +462,7 @@ func (o *Owner) DraftAssets(id string) (before, after []platform.ReleaseAsset, p
 
 func (o *Owner) Definition(name string, version int) (platform.AIFunction, int, bool) {
 	if asset, selected := o.env.JointDeclaration(platform.AssetRef{App: o.env.App(), Kind: platform.AssetFunction, Name: name}); selected {
-		ordinal := o.env.AssetVersion(asset)
+		ordinal := o.assetVersion(asset)
 		if ordinal == version && version > 0 {
 			var d platform.AIFunction
 			valid := json.Unmarshal(asset.Body, &d) == nil && asset.ContractVersion == 1 && functionFromDeclaration(d).Name == name && d.Check() == nil

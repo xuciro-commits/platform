@@ -23,6 +23,15 @@ type Family struct {
 	Archived  bool
 }
 
+func (resolver Resolver) DefinitionAssetVersion(asset platform.ReleaseAsset, app, sourceVersion string, kind platform.AssetKind, prefix string) int {
+	ordinal, ok := strings.CutPrefix(asset.SourceVersion, sourceVersion+"."+prefix+"-")
+	version, err := strconv.Atoi(ordinal)
+	if !ok || err != nil || version < 1 || version > 64 || strconv.Itoa(version) != ordinal || asset.Ref.App != app || asset.Ref.Kind != kind || resolver.CheckAssetDependencies(asset) != nil {
+		return 0
+	}
+	return version
+}
+
 func ReadInto(raw string, out any) bool {
 	return raw != "" && json.Unmarshal([]byte(raw), out) == nil
 }
