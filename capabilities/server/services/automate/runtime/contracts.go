@@ -28,6 +28,7 @@ type FlowProcesses interface {
 	platform.Processes
 	ContinuousFlowOwner
 	InstallationDraft() FlowProcesses
+	HasDefinition(string, string, int) bool
 }
 
 type FlowDeadLetterReplayPreparation interface {

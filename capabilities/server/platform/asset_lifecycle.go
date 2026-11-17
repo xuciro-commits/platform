@@ -85,10 +85,6 @@ type OperationDefinitions interface {
 	OperationDefinition(string, int) (Operation, int, bool)
 }
 
-type FlowDefinitionPresence interface {
-	HasDefinition(string, string, int) bool
-}
-
 type OperationCompletion interface {
 	OperationEnded(Caller, string, time.Time) *Error
 }

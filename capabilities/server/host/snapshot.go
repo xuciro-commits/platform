@@ -124,8 +124,7 @@ func (t *Tenant) restoreDefinitions(s *runtimekernel.TenantImage[automation.Task
 			return slices.ContainsFunc(t.definitions, func(d platform.Definition) bool { return d.Ref == ref && d.Source == "tenant" })
 		},
 		func(name string, version int) bool {
-			owner, ok := t.procs.(platform.FlowDefinitionPresence)
-			return ok && owner.HasDefinition(build.ID, name, version)
+			return t.procs != nil && t.procs.HasDefinition(build.ID, name, version)
 		}) {
 		if err := t.reinstall(); err != nil {
 			return err
