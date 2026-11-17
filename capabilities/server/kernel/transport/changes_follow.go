@@ -7,7 +7,7 @@ import (
 )
 
 func FollowChanges(w http.ResponseWriter, r *http.Request, state func() (int64, int64, <-chan struct{})) {
-	flusher, ok := w.(http.Flusher)
+	flusher, ok := flushWriter(w)
 	if !ok {
 		http.Error(w, "streaming unsupported", http.StatusInternalServerError)
 		return

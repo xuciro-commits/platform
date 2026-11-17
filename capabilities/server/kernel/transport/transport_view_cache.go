@@ -248,7 +248,8 @@ func (c *ViewCache) WriteView(gen uint64, key, kind, lang string, w http.Respons
 		w.WriteHeader(http.StatusNotModified)
 		return nil
 	}
-	if noCompression, ok := w.(interface{ NoCompression() }); ok {
+	switch noCompression := w.(type) {
+	case interface{ NoCompression() }:
 		noCompression.NoCompression()
 	}
 	if AcceptsGzip(r) {

@@ -97,7 +97,7 @@ func (f LiveFollow) Serve(w http.ResponseWriter, r *http.Request) {
 		}
 		requests[query] = request
 	}
-	flusher, ok := w.(http.Flusher)
+	flusher, ok := flushWriter(w)
 	if !ok {
 		http.Error(w, "streaming unsupported", http.StatusInternalServerError)
 		return

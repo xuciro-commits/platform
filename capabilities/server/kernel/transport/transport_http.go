@@ -187,7 +187,7 @@ func (w *edgeWriter) Flush() {
 	if w.gz != nil {
 		_ = w.gz.Flush()
 	}
-	if f, ok := w.ResponseWriter.(http.Flusher); ok {
+	if f, ok := flushWriter(w.ResponseWriter); ok {
 		f.Flush()
 	}
 }

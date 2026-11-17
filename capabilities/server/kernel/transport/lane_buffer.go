@@ -41,9 +41,10 @@ func (b *LaneBuffer) Release() {
 }
 
 func OutsideLane(w http.ResponseWriter, f func(http.ResponseWriter)) {
-	if b, ok := w.(*LaneBuffer); ok {
+	switch b := w.(type) {
+	case *LaneBuffer:
 		b.after = f
-		return
+	default:
+		f(w)
 	}
-	f(w)
 }

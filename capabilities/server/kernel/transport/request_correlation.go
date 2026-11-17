@@ -95,7 +95,7 @@ func (w *StatusWriter) Flush() {
 	if w.status == 0 {
 		w.status = http.StatusOK
 	}
-	if flusher, ok := w.ResponseWriter.(http.Flusher); ok {
+	if flusher, ok := flushWriter(w.ResponseWriter); ok {
 		flusher.Flush()
 	}
 }
