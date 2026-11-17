@@ -201,64 +201,12 @@ func (b *Build) releaseAssets(objects []ontology.Object, pages []appsauthoring.P
 		assets = append(assets, asset)
 		return nil
 	}
-	for _, record := range objects {
-		if record.Archived || record.Published == "" {
-			continue
-		}
-		var saved ontology.Object
-		if err := json.Unmarshal([]byte(record.Published), &saved); err != nil {
-			return nil, fmt.Errorf("invalid published object %s: %w", record.ID, err)
-		}
-		if saved.ID != record.ID {
-			return nil, fmt.Errorf("published object %s belongs to another record", record.ID)
-		}
-		ref := platform.AssetRef{App: ID, Kind: platform.AssetObject, Name: TypeOf(saved.Name)}
-		body, err := ontology.DefinitionBody(saved, ref.Name)
-		if err != nil {
-			return nil, err
-		}
-		asset, err := b.resolver.WithDependencies(platform.ReleaseAsset{Ref: ref, ContractVersion: 1, SourceVersion: sourceVersion, Body: body})
-		if err != nil {
-			return nil, err
-		}
-		if err := add(asset, false); err != nil {
-			return nil, err
-		}
-		for _, action := range objectActions(saved, Entity(saved)) {
-			actionBody, err := json.Marshal(struct {
-				Schema string          `json:"schema"`
-				Target string          `json:"target"`
-				Roles  []string        `json:"roles"`
-				Action platform.Action `json:"action"`
-			}{Schema: action.Schema, Target: action.Target, Roles: action.Roles, Action: action})
-			if err != nil {
-				return nil, fmt.Errorf("encode action %s: %w", action.Schema, err)
-			}
-			actionVersion := sourceVersion
-			for _, binding := range saved.ActionTypes {
-				if binding.Ref.Name == action.Schema {
-					actionVersion += ".action-" + binding.SourceVersion
-				}
-			}
-			asset, err := b.resolver.WithDependencies(platform.ReleaseAsset{
-				Ref:             platform.AssetRef{App: ID, Kind: platform.AssetAction, Name: action.Schema},
-				ContractVersion: 1, SourceVersion: actionVersion, Body: actionBody,
-			})
-			if err != nil {
-				return nil, err
-			}
-			if err := add(asset, false); err != nil {
-				return nil, err
-			}
-		}
-		pageAsset, err := b.apps.ObjectPageAsset(saved, sourceVersion)
-		if err != nil {
-			return nil, err
-		}
-		if err := add(pageAsset, false); err != nil {
-			return nil, err
-		}
+	if err := ontology.AppendObjectAssets(objects, sourceVersion, add, b.resolver.WithDependencies, func(object ontology.Object) []platform.Action {
+		return objectActions(object, Entity(object))
+	}, b.apps.ObjectPageAsset); err != nil {
+		return nil, err
 	}
+
 	for _, record := range pages {
 		if record.Archived || record.Published == "" {
 			continue

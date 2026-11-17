@@ -321,3 +321,65 @@ func ObjectDraftPublication(objects []Object, env ObjectDraftEnvironment) public
 		return closure, err
 	}}
 }
+
+func AppendObjectAssets(objects []Object, sourceVersion string, add func(platform.ReleaseAsset, bool) error, withDependencies func(platform.ReleaseAsset) (platform.ReleaseAsset, error), actions func(Object) []platform.Action, page func(Object, string) (platform.ReleaseAsset, error)) error {
+	for _, record := range objects {
+		if record.Archived || record.Published == "" {
+			continue
+		}
+		var saved Object
+		if err := json.Unmarshal([]byte(record.Published), &saved); err != nil {
+			return fmt.Errorf("invalid published object %s: %w", record.ID, err)
+		}
+		if saved.ID != record.ID {
+			return fmt.Errorf("published object %s belongs to another record", record.ID)
+		}
+		ref := platform.AssetRef{App: AppID, Kind: platform.AssetObject, Name: AppID + "." + saved.Name}
+		body, err := DefinitionBody(saved, ref.Name)
+		if err != nil {
+			return err
+		}
+		asset, err := withDependencies(platform.ReleaseAsset{Ref: ref, ContractVersion: 1, SourceVersion: sourceVersion, Body: body})
+		if err != nil {
+			return err
+		}
+		if err := add(asset, false); err != nil {
+			return err
+		}
+		for _, action := range actions(saved) {
+			actionBody, err := json.Marshal(struct {
+				Schema string          `json:"schema"`
+				Target string          `json:"target"`
+				Roles  []string        `json:"roles"`
+				Action platform.Action `json:"action"`
+			}{Schema: action.Schema, Target: action.Target, Roles: action.Roles, Action: action})
+			if err != nil {
+				return fmt.Errorf("encode action %s: %w", action.Schema, err)
+			}
+			actionVersion := sourceVersion
+			for _, binding := range saved.ActionTypes {
+				if binding.Ref.Name == action.Schema {
+					actionVersion += ".action-" + binding.SourceVersion
+				}
+			}
+			asset, err := withDependencies(platform.ReleaseAsset{
+				Ref:             platform.AssetRef{App: AppID, Kind: platform.AssetAction, Name: action.Schema},
+				ContractVersion: 1, SourceVersion: actionVersion, Body: actionBody,
+			})
+			if err != nil {
+				return err
+			}
+			if err := add(asset, false); err != nil {
+				return err
+			}
+		}
+		pageAsset, err := page(saved, sourceVersion)
+		if err != nil {
+			return err
+		}
+		if err := add(pageAsset, false); err != nil {
+			return err
+		}
+	}
+	return nil
+}
