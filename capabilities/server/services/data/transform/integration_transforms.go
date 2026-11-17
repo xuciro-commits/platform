@@ -58,7 +58,7 @@ func ApplyStep(engine platform.RuleEngine, s platform.TransformStep, rows []map[
 		return rows, nil
 	case "cast":
 		for _, r := range rows {
-			v, err := platform.IntegrationConvert(r[s.Column], s.Type)
+			v, err := IntegrationConvert(r[s.Column], s.Type)
 			if err != nil {
 				r[s.Column] = nil
 			} else {
@@ -69,7 +69,7 @@ func ApplyStep(engine platform.RuleEngine, s platform.TransformStep, rows []map[
 	case "filter":
 		out := rows[:0]
 		for _, r := range rows {
-			if platform.IntegrationMatches(r[s.Column], s.Op, s.Value) {
+			if IntegrationMatches(r[s.Column], s.Op, s.Value) {
 				out = append(out, r)
 			}
 		}
@@ -119,7 +119,7 @@ func ApplyStep(engine platform.RuleEngine, s platform.TransformStep, rows []map[
 			ctx := platform.ExprContext{Refs: map[string]platform.ExprValue{}}
 			for name, typ := range schema.Refs {
 				if s.FormulaExpr == nil {
-					ctx.Refs[name] = platform.ExprPresent(typ.Kind, platform.IntegrationNumeric(r[name]))
+					ctx.Refs[name] = platform.ExprPresent(typ.Kind, IntegrationNumeric(r[name]))
 				} else if v, ok := r[name]; ok && v != nil {
 					ctx.Refs[name] = platform.ExprPresent(typ.Kind, v)
 				}
@@ -148,7 +148,7 @@ func ApplyStep(engine platform.RuleEngine, s platform.TransformStep, rows []map[
 		}
 		index := map[string][]map[string]any{}
 		for _, o := range other {
-			k := platform.IntegrationScalar(o[s.Match])
+			k := IntegrationScalar(o[s.Match])
 			index[k] = append(index[k], o)
 		}
 		prefix := s.As
@@ -171,7 +171,7 @@ func ApplyStep(engine platform.RuleEngine, s platform.TransformStep, rows []map[
 		}
 		if s.Kind == "lookup" {
 			for _, r := range rows {
-				if hits := index[platform.IntegrationScalar(r[s.Column])]; len(hits) > 0 {
+				if hits := index[IntegrationScalar(r[s.Column])]; len(hits) > 0 {
 					take(r, hits[0])
 				}
 			}
@@ -179,7 +179,7 @@ func ApplyStep(engine platform.RuleEngine, s platform.TransformStep, rows []map[
 		}
 		var out []map[string]any
 		for _, r := range rows {
-			hits := index[platform.IntegrationScalar(r[s.Column])]
+			hits := index[IntegrationScalar(r[s.Column])]
 			if len(hits) == 0 {
 				if s.Outer {
 					out = append(out, r)
@@ -203,7 +203,7 @@ func ApplyStep(engine platform.RuleEngine, s platform.TransformStep, rows []map[
 		seen := map[string]bool{}
 		out := rows[:0]
 		for _, r := range rows {
-			k := platform.IntegrationKeyOf(r, s.Columns)
+			k := IntegrationKeyOf(r, s.Columns)
 			if !seen[k] {
 				seen[k] = true
 				out = append(out, r)
@@ -215,7 +215,7 @@ func ApplyStep(engine platform.RuleEngine, s platform.TransformStep, rows []map[
 		counts := map[string]map[string]float64{}
 		var order []string
 		for _, r := range rows {
-			k := platform.IntegrationKeyOf(r, s.Columns)
+			k := IntegrationKeyOf(r, s.Columns)
 			g, ok := groups[k]
 			if !ok {
 				g = map[string]any{}
@@ -226,7 +226,7 @@ func ApplyStep(engine platform.RuleEngine, s platform.TransformStep, rows []map[
 				order = append(order, k)
 			}
 			for _, m := range s.Measures {
-				v := platform.IntegrationNumeric(r[m.Column])
+				v := IntegrationNumeric(r[m.Column])
 				cur, has := g[m.To].(float64)
 				switch m.Fn {
 				case "count":
@@ -260,13 +260,13 @@ func ApplyStep(engine platform.RuleEngine, s platform.TransformStep, rows []map[
 		sort.SliceStable(rows, func(i, j int) bool {
 			a, b := rows[i][s.Column], rows[j][s.Column]
 			less := false
-			if fa, fb := platform.IntegrationNumeric(a), platform.IntegrationNumeric(b); platform.IntegrationTypeOf(a) == "number" && platform.IntegrationTypeOf(b) == "number" {
+			if fa, fb := IntegrationNumeric(a), IntegrationNumeric(b); IntegrationTypeOf(a) == "number" && IntegrationTypeOf(b) == "number" {
 				less = fa < fb
 			} else {
-				less = platform.IntegrationScalar(a) < platform.IntegrationScalar(b)
+				less = IntegrationScalar(a) < IntegrationScalar(b)
 			}
 			if s.Desc {
-				return !less && platform.IntegrationScalar(a) != platform.IntegrationScalar(b)
+				return !less && IntegrationScalar(a) != IntegrationScalar(b)
 			}
 			return less
 		})
@@ -286,7 +286,7 @@ func Expect(expectations []platform.TransformExpectation, rows []map[string]any)
 		reason := ""
 		for _, e := range expectations {
 			v := r[e.Column]
-			text := platform.IntegrationScalar(v)
+			text := IntegrationScalar(v)
 			switch e.Rule {
 			case "notnull":
 				if v == nil || text == "" {
@@ -310,7 +310,7 @@ func Expect(expectations []platform.TransformExpectation, rows []map[string]any)
 				}
 			case "range":
 				lo, hi, _ := strings.Cut(e.Value, "..")
-				n := platform.IntegrationNumeric(v)
+				n := IntegrationNumeric(v)
 				if l, err := strconv.ParseFloat(lo, 64); lo != "" && (err != nil || n < l) {
 					reason = e.Column + " is below " + lo
 				} else if h, err := strconv.ParseFloat(hi, 64); hi != "" && (err != nil || n > h) {

@@ -8,6 +8,7 @@ import (
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformserver/platform"
+	transform "platformserver/services/data/transform"
 )
 
 const MatchType = "build.match"
@@ -149,11 +150,11 @@ type Preference struct {
 func (k MatchKey) KeyOf(fields map[string]any) string {
 	parts := make([]string, 0, len(k.Fields))
 	for _, f := range k.Fields {
-		v := platform.IntegrationScalar(fields[f])
+		v := transform.IntegrationScalar(fields[f])
 		if v == "" {
 			return ""
 		}
-		parts = append(parts, platform.IntegrationNormalize(v, k.Normalize))
+		parts = append(parts, transform.IntegrationNormalize(v, k.Normalize))
 	}
 	return strings.Join(parts, "\x1f")
 }
@@ -169,7 +170,7 @@ type Resolver struct {
 func NewResolver(rule Match, producer string, records []map[string]any) *Resolver {
 	r := &Resolver{Rule: rule, Producer: producer, index: map[string]string{}, fields: map[string]map[string]any{}}
 	for _, rec := range records {
-		id := platform.IntegrationScalar(rec["id"])
+		id := transform.IntegrationScalar(rec["id"])
 		if id == "" {
 			continue
 		}
@@ -211,7 +212,7 @@ func (r *Resolver) Resolve(row *SourceRow) bool {
 	}
 	if existing := r.fields[row.ID]; existing != nil {
 		for _, p := range r.Rule.Prefer {
-			if p.Producer != r.Producer && platform.IntegrationScalar(existing[p.Field]) != "" {
+			if p.Producer != r.Producer && transform.IntegrationScalar(existing[p.Field]) != "" {
 				delete(fields, p.Field)
 			}
 		}

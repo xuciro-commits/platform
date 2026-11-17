@@ -10,6 +10,7 @@ import (
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformserver/platform"
+	transform "platformserver/services/data/transform"
 )
 
 var StepKinds = []string{"select", "rename", "cast", "filter", "compute", "lookup", "join", "dedupe", "aggregate", "sort", "declassify"}
@@ -411,7 +412,7 @@ func (p Pipeline) Due(now time.Time, inputVersion int) bool {
 func (p Pipeline) ObjectRows(rows []map[string]any) []SourceRow {
 	out := make([]SourceRow, 0, len(rows))
 	for _, r := range rows {
-		row := SourceRow{ID: platform.IntegrationScalar(r[p.Key])}
+		row := SourceRow{ID: transform.IntegrationScalar(r[p.Key])}
 		payload := map[string]any{}
 		for k, v := range r {
 			if k != p.Key && v != nil && !strings.Contains(k, ".") {

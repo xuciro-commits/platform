@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"platformserver/platform"
+	transform "platformserver/services/data/transform"
 )
 
 func DeclaredRows(binding platform.DataSourceBinding, input []map[string]any, now time.Time, resolve func(string) string) ([]SourceRow, error) {
@@ -14,7 +15,7 @@ func DeclaredRows(binding platform.DataSourceBinding, input []map[string]any, no
 	}
 	rows := make([]SourceRow, 0, len(input))
 	for _, values := range input {
-		id := platform.IntegrationScalar(values[binding.Key])
+		id := transform.IntegrationScalar(values[binding.Key])
 		at := now.UTC()
 		row := SourceRow{ID: id, Origin: id, At: &at}
 		if id != "" {
@@ -23,7 +24,7 @@ func DeclaredRows(binding platform.DataSourceBinding, input []map[string]any, no
 		if id == "" {
 			row.Error = "row has no id"
 		}
-		if raw := platform.IntegrationScalar(values[binding.SourceTime]); binding.SourceTime != "" && raw != "" {
+		if raw := transform.IntegrationScalar(values[binding.SourceTime]); binding.SourceTime != "" && raw != "" {
 			at, err := time.Parse(time.RFC3339Nano, raw)
 			if err != nil {
 				at, err = time.Parse(time.DateOnly, raw)

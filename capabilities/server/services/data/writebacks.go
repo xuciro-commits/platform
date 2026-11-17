@@ -10,6 +10,7 @@ import (
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformserver/platform"
+	transform "platformserver/services/data/transform"
 )
 
 var identifierRE = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
@@ -315,7 +316,7 @@ func (o *Owner) PrepareWritebackRequest(w Writeback, conn Connection, id string,
 	if len(w.Mapping) > 0 {
 		body = map[string]any{}
 		for _, m := range w.Mapping {
-			v, err := platform.IntegrationConvert(in[m.From], m.Convert)
+			v, err := transform.IntegrationConvert(in[m.From], m.Convert)
 			if err != nil {
 				return WritebackRequest{}, fmt.Errorf("%s: %v", m.From, err)
 			}
@@ -324,7 +325,7 @@ func (o *Owner) PrepareWritebackRequest(w Writeback, conn Connection, id string,
 	}
 	path := w.Path
 	for k, v := range in {
-		path = strings.ReplaceAll(path, "{"+k+"}", platform.IntegrationScalar(v))
+		path = strings.ReplaceAll(path, "{"+k+"}", transform.IntegrationScalar(v))
 	}
 	method := w.Method
 	if method == "" {
@@ -355,13 +356,13 @@ func (w Writeback) Fields(answer []byte) map[string]any {
 	}
 	out := map[string]any{}
 	for _, m := range w.Result {
-		v, ok := platform.IntegrationLookupPath(in, m.From)
+		v, ok := transform.IntegrationLookupPath(in, m.From)
 		if !ok {
-			if v, ok = platform.IntegrationLookupPath(unwrapped, m.From); !ok {
+			if v, ok = transform.IntegrationLookupPath(unwrapped, m.From); !ok {
 				continue
 			}
 		}
-		if c, err := platform.IntegrationConvert(v, m.Convert); err == nil {
+		if c, err := transform.IntegrationConvert(v, m.Convert); err == nil {
 			out[m.To] = c
 		}
 	}

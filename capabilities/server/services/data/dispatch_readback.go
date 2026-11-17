@@ -11,6 +11,7 @@ import (
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformserver/platform"
+	transform "platformserver/services/data/transform"
 )
 
 type DispatchReadback struct {
@@ -102,20 +103,20 @@ func (d DispatchReadback) Read(run platform.DispatchRun, at time.Time) platform.
 	if policy.Observation == "" && problem == nil {
 		matches := 0
 		for _, row := range rows {
-			key, found := platform.IntegrationLookupPath(row, policy.KeyField)
-			if !found || platform.IntegrationScalar(key) != commandKey {
+			key, found := transform.IntegrationLookupPath(row, policy.KeyField)
+			if !found || transform.IntegrationScalar(key) != commandKey {
 				continue
 			}
 			matches++
-			value, found := platform.IntegrationLookupPath(row, policy.ResultField)
+			value, found := transform.IntegrationLookupPath(row, policy.ResultField)
 			if !found {
 				problem = fmt.Errorf("The dispatch status field is absent")
 				continue
 			}
-			reading.Value, reading.Observed = platform.IntegrationScalar(value), platform.Raw(value)
+			reading.Value, reading.Observed = transform.IntegrationScalar(value), platform.Raw(value)
 			if policy.ReasonField != "" {
-				if reason, found := platform.IntegrationLookupPath(row, policy.ReasonField); found {
-					reading.Reason = platform.IntegrationScalar(reason)
+				if reason, found := transform.IntegrationLookupPath(row, policy.ReasonField); found {
+					reading.Reason = transform.IntegrationScalar(reason)
 				}
 			}
 		}

@@ -11,6 +11,7 @@ import (
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformserver/platform"
+	transform "platformserver/services/data/transform"
 )
 
 type ConfirmationReadPlan struct {
@@ -109,12 +110,12 @@ func (c ConfirmationReconcile) Run(at time.Time) {
 			}
 			matches := 0
 			for _, row := range rows {
-				key, exists := platform.IntegrationLookupPath(row, policy.KeyField)
+				key, exists := transform.IntegrationLookupPath(row, policy.KeyField)
 				if !exists || fmt.Sprint(key) != subject {
 					continue
 				}
 				matches++
-				value, exists := platform.IntegrationLookupPath(row, policy.ResultField)
+				value, exists := transform.IntegrationLookupPath(row, policy.ResultField)
 				if !exists {
 					continue
 				}

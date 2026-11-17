@@ -13,6 +13,7 @@ import (
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformserver/platform"
+	transform "platformserver/services/data/transform"
 )
 
 func integrationScope() platform.Scope {
@@ -241,7 +242,7 @@ func DatasetSchema(rows []map[string]any, order []string) []DatasetField {
 	types := map[string]string{}
 	for _, row := range rows {
 		for k, v := range row {
-			t := platform.IntegrationTypeOf(v)
+			t := transform.IntegrationTypeOf(v)
 			if prev, ok := types[k]; !ok || prev == "" {
 				types[k] = t
 			} else if prev != t && t != "" {
@@ -313,7 +314,7 @@ func (o *Owner) SubmitDatasetLoad(ledger platform.Authority, c platform.Caller, 
 			order = append(order, f.Name)
 		}
 		if payload.CSV != "" {
-			columns, rows, err := platform.IntegrationCSVRows([]byte(payload.CSV))
+			columns, rows, err := transform.IntegrationCSVRows([]byte(payload.CSV))
 			if err != nil || len(rows) == 0 {
 				return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "The file is not CSV with a header line and at least one row")
 			}

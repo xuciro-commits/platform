@@ -11,6 +11,7 @@ import (
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformserver/platform"
+	transform "platformserver/services/data/transform"
 )
 
 func (o *Owner) sourceEntity() platform.Entity {
@@ -444,10 +445,10 @@ type SourceRow struct {
 
 func (s Source) Decode(body []byte) ([]map[string]any, error) {
 	if s.Profile == "csv" {
-		_, rows, err := platform.IntegrationCSVRows(body)
+		_, rows, err := transform.IntegrationCSVRows(body)
 		return rows, err
 	}
-	return platform.IntegrationRowsAt(body, s.Path)
+	return transform.IntegrationRowsAt(body, s.Path)
 }
 
 func (s Source) MapRows(rows []map[string]any) ([]SourceRow, error) {
@@ -456,10 +457,10 @@ func (s Source) MapRows(rows []map[string]any) ([]SourceRow, error) {
 	}
 	out := make([]SourceRow, 0, len(rows))
 	for _, row := range rows {
-		r := SourceRow{ID: platform.IntegrationScalar(row[s.Key])}
+		r := SourceRow{ID: transform.IntegrationScalar(row[s.Key])}
 		payload := map[string]any{}
 		for _, m := range s.Mapping {
-			v, convErr := platform.IntegrationConvert(row[m.From], m.Convert)
+			v, convErr := transform.IntegrationConvert(row[m.From], m.Convert)
 			if convErr != nil {
 				r.Error = m.To + ": " + convErr.Error()
 				break
@@ -490,7 +491,7 @@ func (s Source) Advance(rows []map[string]any) string {
 	}
 	best := s.Cursor
 	for _, row := range rows {
-		if v := platform.IntegrationScalar(row[s.Since]); v != "" {
+		if v := transform.IntegrationScalar(row[s.Since]); v != "" {
 			a, anum := new(big.Rat).SetString(v)
 			b, bnum := new(big.Rat).SetString(best)
 			at, aerr := time.Parse(time.RFC3339Nano, v)
