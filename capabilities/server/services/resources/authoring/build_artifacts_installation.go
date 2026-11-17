@@ -52,7 +52,7 @@ func (b *Build) DecodeAssetInstallation(schema string, image json.RawMessage) (p
 	}
 	switch schema {
 	case SchemaTablePublish:
-		r, err := tableImage(image)
+		r, err := functionauthoring.DecodeTablePublication(image)
 		if err != nil {
 			return platform.AssetInstallation{}, err
 		}

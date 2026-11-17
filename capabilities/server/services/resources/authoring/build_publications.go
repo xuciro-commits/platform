@@ -28,7 +28,7 @@ func (b *Build) ValidateAcceptedPublication(schema string, image []byte) error {
 		return b.automation.ValidateImage(schema, image)
 	}
 	if schema == SchemaTablePublish {
-		tb, err := tableImage(image)
+		tb, err := functionauthoring.DecodeTablePublication(image)
 		if err != nil {
 			return err
 		}
@@ -39,7 +39,7 @@ func (b *Build) ValidateAcceptedPublication(schema string, image []byte) error {
 		return k.validateImage(b, image)
 	}
 	if schema == functionauthoring.SchemaCodePublish {
-		code, err := codeImage(image)
+		code, err := functionauthoring.DecodeCodePublication(image)
 		if err != nil {
 			return err
 		}
@@ -62,7 +62,7 @@ func (b *Build) ApplyAcceptedPublication(schema string, image []byte) error {
 		return b.automation.ApplyImage(schema, image)
 	}
 	if schema == SchemaTablePublish {
-		tb, err := tableImage(image)
+		tb, err := functionauthoring.DecodeTablePublication(image)
 		if err != nil {
 			return err
 		}
@@ -78,7 +78,7 @@ func (b *Build) ApplyAcceptedPublication(schema string, image []byte) error {
 		return k.applyImage(b, image)
 	}
 	if schema == functionauthoring.SchemaCodePublish {
-		code, err := codeImage(image)
+		code, err := functionauthoring.DecodeCodePublication(image)
 		if err != nil {
 			return err
 		}
@@ -178,7 +178,7 @@ func (b *Build) Reinstall() error {
 			continue
 		}
 		raw, _ := json.Marshal(record)
-		code, err := codeImage(raw)
+		code, err := functionauthoring.DecodeCodePublication(raw)
 		if err != nil {
 			return err
 		}

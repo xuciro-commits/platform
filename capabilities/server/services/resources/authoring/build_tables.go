@@ -133,15 +133,3 @@ func (b *Build) Compute(_ context.Context, name string, input json.RawMessage) (
 	legacy := len(tb.Rows) > 0 && len(tb.Rows[0].Expressions) == 0
 	return plan.Decide(functionauthoring.TableInput(plan.Reads, legacy, values), func(string) (platform.EntityInfo, bool) { return platform.EntityInfo{}, false })
 }
-
-func tableImage(image []byte) (functionauthoring.Table, error) {
-	var record functionauthoring.Table
-	if err := json.Unmarshal(image, &record); err != nil {
-		return record, err
-	}
-	frozen, ok := publication.Read[functionauthoring.Table](record.Published)
-	if !ok || record.State != "published" || frozen.ID != record.ID || frozen.Name != record.Name || frozen.Version < 1 || frozen.Version > record.Version || record.Version > 64 {
-		return frozen, fmt.Errorf("accepted table has no matching immutable publication")
-	}
-	return frozen, nil
-}

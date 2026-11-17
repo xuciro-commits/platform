@@ -30,7 +30,7 @@
 | `services/ontology` | 类型的元数据与类型检查 |
 | `services/objects` | 对象投影、编辑事实、索引、对象集执行 |
 | `services/actions` | 动作执行、提交条件、副作用调度；动作目录由类型声明生成 |
-| `services/functions` | 函数制品、受控编译、隔离执行 |
+| `services/functions` | 函数制品、受控编译、隔离执行；代码函数与决策表的发布映像解码 |
 | `services/automate` | 自动化与其运行 |
 | `services/apps` | 页面与应用的声明与运行 |
 | `services/work` | 工作项、通知与投递 |

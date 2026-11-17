@@ -93,24 +93,6 @@ func (b *Build) OperationDefinition(name string, version int) (platform.Operatio
 func (b *Build) operationDeclarations() []platform.Operation {
 	return append(definitionDeclarations(b.codes), definitionDeclarations(b.tables)...)
 }
-func codeImage(image []byte) (functionauthoring.Code, error) {
-	var code functionauthoring.Code
-	if json.Unmarshal(image, &code) != nil || !slices.Contains([]string{"draft", "published"}, code.State) || code.Version < 1 || code.Version > 64 || len(code.Versions) != code.Version || !slices.Contains(code.Versions, code.Published) {
-		return code, fmt.Errorf("invalid compute publication family")
-	}
-	var selected functionauthoring.Code
-	for i, raw := range code.Versions {
-		prior, ok := publication.Read[functionauthoring.Code](raw)
-		if !ok || prior.ID != code.ID || prior.Name != code.Name || prior.Version != i+1 || prior.Definition().Check() != nil || prior.SourceHash != prior.SourceDigest() || prior.Published != "" || len(prior.Versions) > 0 {
-			return code, fmt.Errorf("invalid retained compute version")
-		}
-		if raw == code.Published {
-			selected = prior
-		}
-	}
-	selected.Versions = code.Versions
-	return selected, nil
-}
 func (b *Build) codeReleaseAsset(code functionauthoring.Code, manifest string) (platform.ReleaseAsset, error) {
 	raw, err := json.Marshal(code.Definition())
 	if err != nil {
