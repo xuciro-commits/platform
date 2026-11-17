@@ -32,8 +32,6 @@
 每批同步处理宿主状态、能力登记、装配、HTTP 调用方和依赖例外，运行该类的创建、编辑、发布、安装、拒绝、
 历史版本、分叉和重放检查。跨类型的 RID、项目、文件夹、工作状态、分支、提案和编排留在资源服务。
 
-- [ ] U5.8 查询资源：从 `build_queries.go` 和 `build_kinds.go` 迁到 `services/objects`，复用对象集和本体检查。
-  保留接口查询绑定、依赖、源版本、授权及历史读取，不复制查询或表达式求值器。
 - [ ] U5.9 AI 函数：清理 `build_functions.go`、`build_function_adapter.go`、`build_automation_adapter.go` 与
   `build_owner.go` 中的专有创作和运行调用，归 `services/functions/authoring`；保留共享测试记录的类型引用。
   验证草稿、版本化调用、评估引用、提案审阅和重放。

@@ -26,6 +26,7 @@ import (
 	devopsauthoring "platformserver/services/devops/authoring"
 	"platformserver/services/devops/packages"
 	"platformserver/services/functions/authoring"
+	"platformserver/services/objects"
 	"platformserver/services/ontology"
 	"platformserver/services/resources/authoring"
 	"platformserver/services/resources/publication"
@@ -129,7 +130,7 @@ func newMonitoringTenant(tb testing.TB) *invariantTenant {
 	}
 	probe := &monitoringFixture{ledger: actions.NewAuthority(id, "probe", platform.NewCatalog(probeActions...), "probe.event"), undoBlocked: &atomic.Bool{}}
 	probe.undoBlocked.Store(true)
-	tenant, err := NewTenantWithCapabilities(id, services, console, build.New(id, actions.NewAuthority, []publication.Hooks{ontology.ActionTypePublication()}, PublicationResolver(), ontology.ObjectPublication, authoring.NewOwner, agents.BuilderPublication, devopsauthoring.TestPlanPublication, agentevaluation.EvaluationPublication, devopsauthoring.SampleSetPublication), work.New(id, actions.NewAuthority), automation.New(id, actions.NewAuthority, PublicationResolver()), agents.New(id, actions.NewAuthority), probe)
+	tenant, err := NewTenantWithCapabilities(id, services, console, build.New(id, actions.NewAuthority, []publication.Hooks{ontology.ActionTypePublication()}, PublicationResolver(), ontology.ObjectPublication, objects.QueryPublication, authoring.NewOwner, agents.BuilderPublication, devopsauthoring.TestPlanPublication, agentevaluation.EvaluationPublication, devopsauthoring.SampleSetPublication), work.New(id, actions.NewAuthority), automation.New(id, actions.NewAuthority, PublicationResolver()), agents.New(id, actions.NewAuthority), probe)
 	if err != nil {
 		tb.Fatal(err)
 	}

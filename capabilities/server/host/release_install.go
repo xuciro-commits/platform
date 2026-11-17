@@ -73,7 +73,7 @@ func (t *Tenant) validateAssetStorage(draft *Tenant, upgrade, allowContraction b
 }
 func (t *Tenant) validateAssetSet(engines ...platform.RuleEngine) error {
 	return releaseowner.ValidateSet(releaseowner.ValidationContext{
-		Entities: releaseowner.StoredEntities(t.Projection), Definitions: t.definitions, Lookup: t.Entity, Properties: t.checkObjectProperties, RecordSets: t.checkRecordSetDeclarations,
+		Entities: releaseowner.StoredEntities(t.Projection), Definitions: t.definitions, Lookup: t.Entity, Properties: t.checkObjectProperties, RecordSets: t.objectOwner(t.Projection).CheckRecordSetDeclarations,
 		Link: func(app string, link platform.LinkType) error {
 			return (hostView{t: t, app: t.App(app)}).ValidateInstallLinkType(link)
 		},

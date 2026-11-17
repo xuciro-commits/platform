@@ -79,10 +79,6 @@ func published[T any](definition T) string {
 		value.Published = ""
 		value.Versions = nil
 		definition = any(value).(T)
-	case Query:
-		value.Published = ""
-		value.Versions = nil
-		definition = any(value).(T)
 	case functionauthoring.Function:
 		value.Published = ""
 		value.Versions = nil
@@ -126,7 +122,7 @@ func (b *Build) Reinstall() error {
 	if err := linkKind.restore(b); err != nil {
 		return err
 	}
-	if err := queryKind.restore(b); err != nil {
+	if err := b.queries.Restore(); err != nil {
 		return err
 	}
 	if err := b.functions.Restore(); err != nil {

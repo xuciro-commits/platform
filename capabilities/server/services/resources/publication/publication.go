@@ -155,6 +155,10 @@ func (resolver Resolver) ReleaseAsset(ref platform.AssetRef, version string, def
 }
 
 func RetainedAsset[D any](resolver Resolver, app, source, prefix, label string, kind platform.AssetKind, name, versionText string, lookup func(string, int) (D, int, bool)) (platform.ReleaseAsset, error) {
+	return RetainedAssetWith(app, source, prefix, label, kind, name, versionText, lookup, resolver.ReleaseAsset)
+}
+
+func RetainedAssetWith[D any](app, source, prefix, label string, kind platform.AssetKind, name, versionText string, lookup func(string, int) (D, int, bool), release func(platform.AssetRef, string, any) (platform.ReleaseAsset, error)) (platform.ReleaseAsset, error) {
 	ordinalText, found := strings.CutPrefix(versionText, source+"."+prefix+"-")
 	version, err := strconv.Atoi(ordinalText)
 	if !found || err != nil || strconv.Itoa(version) != ordinalText {
@@ -164,7 +168,7 @@ func RetainedAsset[D any](resolver Resolver, app, source, prefix, label string, 
 	if !ok || ordinal != version || version < 1 {
 		return platform.ReleaseAsset{}, fmt.Errorf("%s %s version %d is not retained", kind, name, version)
 	}
-	return resolver.ReleaseAsset(platform.AssetRef{App: app, Kind: kind, Name: name}, versionText, definition)
+	return release(platform.AssetRef{App: app, Kind: kind, Name: name}, versionText, definition)
 }
 
 func Prepare[T any](app, sourceVersion string, assets []platform.ReleaseAsset, kind platform.AssetKind, prefix, schema string, inventory func() ([]T, error), get func(T) Family, set func(*T, Family), resolve func(string, string) (platform.ReleaseAsset, error), freeze func(T, platform.ReleaseAsset, int) (T, error)) ([]platform.ReleasePublication, error) {
@@ -245,4 +249,69 @@ func InstalledAssets[T any](installed map[string]T, get func(T) Family, release 
 		out = append(out, asset)
 	}
 	return out, nil
+}
+
+func DraftAssets[T any](app, id, label string, kind platform.AssetKind, releaseAssets func() ([]platform.ReleaseAsset, error), inventory func() ([]T, error), check func(T) (T, error), get func(T) Family, release func(T) (platform.ReleaseAsset, error)) (before, after []platform.ReleaseAsset, prior, next platform.AssetRef, hadPrior bool, err error) {
+	before, err = releaseAssets()
+	if err != nil {
+		return
+	}
+	records, err := inventory()
+	if err != nil {
+		return
+	}
+	index := slices.IndexFunc(records, func(record T) bool {
+		family := get(record)
+		return family.ID == id && !family.Archived
+	})
+	if index < 0 {
+		err = fmt.Errorf("draft %s %q not found", kind, id)
+		return
+	}
+	selected := records[index]
+	family := get(selected)
+	if old, ok := Read[T](family.Published); ok {
+		prior = platform.AssetRef{App: app, Kind: kind, Name: get(old).Name}
+		hadPrior = true
+	}
+	next = platform.AssetRef{App: app, Kind: kind, Name: family.Name}
+	selected, err = check(selected)
+	if err != nil {
+		return
+	}
+	if family.Version >= 64 {
+		err = fmt.Errorf("%s version family is full", label)
+		return
+	}
+	asset, err := release(selected)
+	if err != nil {
+		return
+	}
+	after = slices.Clone(before)
+	if hadPrior {
+		after = slices.DeleteFunc(after, func(a platform.ReleaseAsset) bool { return a.Ref == prior })
+	}
+	after = append(after, asset)
+	return
+}
+
+func ApplyHistory[T any](image []byte, decode func([]byte) (T, error), get func(T) Family, install func(platform.Caller, T) error) error {
+	selected, err := decode(image)
+	if err != nil {
+		return err
+	}
+	var record T
+	if err := json.Unmarshal(image, &record); err != nil {
+		return err
+	}
+	for _, raw := range get(record).Versions {
+		version, ok := Read[T](raw)
+		if !ok {
+			return fmt.Errorf("accepted definition has a malformed version")
+		}
+		if err := install(platform.Caller{Replaying: true}, version); err != nil {
+			return err
+		}
+	}
+	return install(platform.Caller{Replaying: true}, selected)
 }

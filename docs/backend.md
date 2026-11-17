@@ -57,6 +57,8 @@
   `services/functions/authoring`；蓝图补全与测试根草稿仍由资源服务编排。
 - 属性、值类型、接口、对象组与关系的声明、转换和字段绑定校验归 `services/ontology`；
   通用版本族归 `services/resources/publication`，关系数据迁移由对象服务执行。
+- 查询记录、接口查询绑定、记录集校验、保留版本与重装归 `services/objects`；资源服务保留查询资源身份、
+  联合草稿上下文和跨类型发布编排，查询读取继续使用唯一的对象集执行器。
 - 产品包里的行业逻辑不进任何 Go 包。
 
 ## 并发

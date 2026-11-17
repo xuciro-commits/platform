@@ -1,6 +1,7 @@
 package host
 
 import (
+	"slices"
 	"testing"
 
 	"platformserver/platform"
@@ -77,4 +78,67 @@ func TestInvariantK1OntologyDefinitionFamiliesInstallAndReplay(t *testing.T) {
 		"via": "parent", "forward": "children", "reverse": "parent",
 	})
 	replayed.accept(t, "build.linktype.publish", build.LinkTypeType, "REPLAYLINK", map[string]any{})
+}
+
+func TestInvariantK1QueriesPublishBindRejectAndReplay(t *testing.T) {
+	live := newInvariantTenant(t, "invariant-query-kinds")
+	for _, object := range []struct {
+		id      string
+		payload map[string]any
+	}{
+		{id: "ALPHA", payload: invariantObject("alpha", "Alpha")},
+		{id: "BETA", payload: invariantObject("beta", "Beta")},
+	} {
+		live.accept(t, "build.object.create", build.ObjectType, object.id, object.payload)
+		live.accept(t, "build.object.publish", build.ObjectType, object.id, map[string]any{})
+	}
+
+	live.accept(t, "build.interface.create", build.InterfaceType, "DESCRIBED", map[string]any{
+		"name": "build.described", "title": "Described", "description": "Something with a note",
+		"fields": []platform.InterfaceField{{Name: "note", Title: "Note", Type: "text"}},
+	})
+	live.accept(t, "build.interface.publish", build.InterfaceType, "DESCRIBED", map[string]any{})
+	gamma := invariantObject("gamma", "Gamma")
+	gamma["implements"] = []string{"build.described"}
+	live.accept(t, "build.object.create", build.ObjectType, "GAMMA", gamma)
+	live.accept(t, "build.object.publish", build.ObjectType, "GAMMA", map[string]any{})
+
+	live.accept(t, "build.query.create", build.QueryType, "ACTIVE", map[string]any{
+		"name": "active", "title": "Active", "description": "Active alpha records", "object": "build.alpha", "sort": []string{"id"}, "limit": 50,
+	})
+	live.accept(t, "build.query.publish", build.QueryType, "ACTIVE", map[string]any{})
+	live.accept(t, "build.query.edit", build.QueryType, "ACTIVE", map[string]any{"object": "build.beta"})
+	if _, refusal := live.Submit(live.member(t), live.submission("build.query.publish", build.QueryType, "ACTIVE", map[string]any{}), invariantClock); refusal == nil {
+		t.Fatal("a published query changed its source object")
+	}
+	live.accept(t, "build.query.edit", build.QueryType, "ACTIVE", map[string]any{"object": "build.alpha", "title": "Active v2"})
+	live.accept(t, "build.query.publish", build.QueryType, "ACTIVE", map[string]any{})
+
+	live.accept(t, "build.query.create", build.QueryType, "DESCRIBEDSET", map[string]any{
+		"name": "describedset", "title": "Described set", "description": "Described records", "interface": "build.described", "domain": [][]any{{"note", "=", "ready"}}, "limit": 25,
+	})
+	live.accept(t, "build.query.publish", build.QueryType, "DESCRIBEDSET", map[string]any{})
+
+	member := live.member(t)
+	for _, version := range []string{"", "1.query-1", "1.query-2"} {
+		page, refusal := live.queryWindowRead(member, build.ID, "active", "", version, platform.Query{}, invariantClock)
+		if refusal != nil || len(page.Records) != 0 {
+			t.Fatalf("query version %q: page=%+v refusal=%v", version, page, refusal)
+		}
+	}
+	interfaceQuery, ok := live.namedQuery(build.ID, "describedset")
+	if !ok || interfaceQuery.InterfaceShape == nil || !slices.Contains(interfaceQuery.Implementations, "build.gamma") {
+		t.Fatalf("interface query binding: %+v, found=%v", interfaceQuery, ok)
+	}
+
+	replayed := live.restore(t, live.entries)
+	member = replayed.member(t)
+	page, refusal := replayed.queryWindowRead(member, build.ID, "active", "", "1.query-1", platform.Query{}, invariantClock)
+	if refusal != nil || len(page.Records) != 0 {
+		t.Fatalf("replayed historical query: page=%+v refusal=%v", page, refusal)
+	}
+	interfaceQuery, ok = replayed.namedQuery(build.ID, "describedset")
+	if !ok || interfaceQuery.InterfaceShape == nil || !slices.Contains(interfaceQuery.Implementations, "build.gamma") {
+		t.Fatalf("replayed interface query binding: %+v, found=%v", interfaceQuery, ok)
+	}
 }

@@ -56,18 +56,11 @@ func (b *Build) ForkReleaseExecution(assets []platform.ReleaseAsset) (platform.A
 	}
 	bound := app.(*Build)
 	bound.installed = map[string]platform.Entity{}
-	bound.queries = map[string]Query{}
+	bound.queries = bound.queryFactory(bound.queryEnvironment())
 	bound.interfaces = map[string]ontology.InterfaceRecord{}
 	bound.jointEntities = map[string]platform.EntityInfo{}
 	bound.jointMode = true
 	for _, asset := range assets {
-		if asset.Ref.App == ID && asset.Ref.Kind == platform.AssetQuery {
-			query, err := queryKind.fromAsset(bound, asset)
-			if err != nil {
-				return nil, err
-			}
-			bound.queries[query.Name] = query
-		}
 		if asset.Ref.App == ID && asset.Ref.Kind == platform.AssetInterface {
 			shape, err := interfaceKind.fromAsset(bound, asset)
 			if err != nil {

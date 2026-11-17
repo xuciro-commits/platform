@@ -158,7 +158,7 @@ func NewTenantWithCapabilities(id string, services platform.RuntimeCapabilities,
 		}
 	}
 	for _, et := range t.Projection.SortedTypes() {
-		if err := t.checkRecordSetDeclarations(et.Info()); err != nil {
+		if err := t.objectOwner(t.Projection).CheckRecordSetDeclarations(et.Info()); err != nil {
 			return nil, fmt.Errorf("tenant %s object %s: %w", id, et.Info().Type, err)
 		}
 		if err := platform.CheckConstraints(et.Info(), t.Entity, true); err != nil {

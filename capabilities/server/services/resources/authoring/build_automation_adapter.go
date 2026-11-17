@@ -54,7 +54,7 @@ func (e automationEnvironment) Entity(typ string) (platform.EntityInfo, bool) {
 }
 
 func (e automationEnvironment) Query(name string, version int) (platform.NamedQuery, int, bool) {
-	return e.b.QueryDefinition(name, version)
+	return e.b.queries.Definition(name, version)
 }
 
 func (e automationEnvironment) ValidateQuery(query platform.NamedQuery) error {

@@ -54,10 +54,9 @@ type resourceKind[T interface{ Definition() D }, D interface{ Check() error }] s
 	install         func(platform.BuildHost, platform.Caller, D, int) error
 	validateInstall func(platform.BuildHost, D) error
 	beforeInstall   func(*Build)
-	candidate       func(platform.ReleaseAsset) error
 }
 
-var definitionKinds = []definitionKind{&queryKind, &propertyKind, &valueKind, &linkKind, &interfaceKind, &objectTypeGroupKind}
+var definitionKinds = []definitionKind{&propertyKind, &valueKind, &linkKind, &interfaceKind, &objectTypeGroupKind}
 
 func definitionKindOf(kind platform.AssetKind) definitionKind {
 	for _, k := range definitionKinds {
@@ -266,26 +265,21 @@ func (k *resourceKind[T, D]) installAsset(b *Build, asset platform.ReleaseAsset)
 }
 
 func (k *resourceKind[T, D]) draftAssets(b *Build, id string) (before, after []platform.ReleaseAsset, prior, next platform.AssetRef, hadPrior bool, err error) {
-	return draftDefinitionAssets(b, id, k.assetKind(), k.label(), func() ([]T, error) { return k.inventory(b) }, func(record T) (T, error) {
-		return k.check(b, record)
-	}, func(record T) (platform.ReleaseAsset, error) {
-		family := definitionFamilyOf(record)
-		family.Version++
-		setDefinitionFamily(&record, family)
-		return k.releaseAsset(b, record)
-	})
+	return publication.DraftAssets(ID, id, k.label(), k.assetKind(), b.ReleaseAssets, func() ([]T, error) { return k.inventory(b) },
+		func(record T) (T, error) { return k.check(b, record) }, k.family,
+		func(record T) (platform.ReleaseAsset, error) {
+			family := definitionFamilyOf(record)
+			family.Version++
+			setDefinitionFamily(&record, family)
+			return k.releaseAsset(b, record)
+		})
 }
 
 func (k *resourceKind[T, D]) prepare(b *Build, assets []platform.ReleaseAsset) ([]platform.ReleasePublication, error) {
-	return prepareDefinitionPublications(b, assets, func() ([]T, error) { return k.inventory(b) }, k.assetKind(), k.prefix, k.schema(), k.label(), func(name, version string) (platform.ReleaseAsset, error) { return k.resolve(b, name, version) }, func(record T, asset platform.ReleaseAsset, version int) (T, error) {
+	return publication.Prepare(ID, b.Manifest().Version, assets, k.assetKind(), k.prefix, k.schema(), func() ([]T, error) { return k.inventory(b) }, k.family, k.setFamily, func(name, version string) (platform.ReleaseAsset, error) { return k.resolve(b, name, version) }, func(record T, asset platform.ReleaseAsset, version int) (T, error) {
 		family := definitionFamilyOf(record)
 		prior, retained := publication.Read[T](family.Published)
 		var d D
-		if k.candidate != nil {
-			if err := k.candidate(asset); err != nil {
-				return record, err
-			}
-		}
 		if version != family.Version+1 || json.Unmarshal(asset.Body, &d) != nil || d.Check() != nil {
 			return record, fmt.Errorf("invalid next %s version", k.label())
 		}
@@ -323,7 +317,7 @@ func (k *resourceKind[T, D]) validateImage(b *Build, raw []byte) error {
 }
 
 func (k *resourceKind[T, D]) applyImage(b *Build, raw []byte) error {
-	return applyDefinitionHistory(raw, k.image, func(c platform.Caller, f T) error { return k.installRecord(b, c, f) })
+	return publication.ApplyHistory(raw, k.image, k.family, func(c platform.Caller, f T) error { return k.installRecord(b, c, f) })
 }
 
 func (k *resourceKind[T, D]) restore(b *Build) error {

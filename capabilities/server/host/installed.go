@@ -15,7 +15,9 @@ import (
 func (t *Tenant) Install(app platform.App, e platform.Entity, actions []platform.Action, pages ...platform.Page) error {
 	return build.ObjectInstall{
 		Owners: t.owner, Owner: t.App, Installing: func() bool { return t.installingSet },
-		Properties: t.checkObjectProperties, RecordSets: func(info platform.EntityInfo) error { return t.checkRecordSetDeclarations(info) }, Entity: t.Entity,
+		Properties: t.checkObjectProperties, RecordSets: func(info platform.EntityInfo) error {
+			return t.objectOwner(t.Projection).CheckRecordSetDeclarations(info)
+		}, Entity: t.Entity,
 		Install:     t.Projection.Install,
 		Definitions: func() []platform.Definition { return t.definitions }, SetDefinitions: t.setDefinitions,
 		Define: t.installDefinitions,

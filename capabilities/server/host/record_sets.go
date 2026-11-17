@@ -15,12 +15,8 @@ func (t *Tenant) recordSetBinding(binding platform.AssetBinding) (*platform.Defi
 	return selected, selected != nil
 }
 
-func (t *Tenant) ValidateRecordSet(info platform.EntityInfo, set platform.RecordSet) error {
-	return t.objectOwner(t.Projection).ValidateRecordSet(info, set)
-}
-
-func (t *Tenant) checkRecordSetDeclarations(info platform.EntityInfo, engines ...platform.RuleEngine) error {
-	return t.objectOwner(t.Projection).CheckRecordSetDeclarations(info, engines...)
+func (h hostView) ValidateRecordSet(info platform.EntityInfo, set platform.RecordSet) error {
+	return h.t.objectOwner(h.t.Projection).ValidateRecordSet(info, set)
 }
 
 func (r runtime) ReadRecordSet(c platform.Caller, object, id, name string, at time.Time) (platform.RecordSetResult, *platform.Error) {

@@ -1,7 +1,6 @@
 package build
 
 import (
-	"fmt"
 	"reflect"
 	"slices"
 	"strings"
@@ -21,7 +20,7 @@ func (b *Build) agentEnvironment() platform.AgentAuthoringEnvironment {
 		JointEntities:     func() map[string]platform.EntityInfo { return b.jointEntities },
 		JointAssets:       func() map[platform.AssetRef]bool { return b.jointAssets },
 		JointDeclarations: func() map[platform.AssetRef]platform.ReleaseAsset { return b.jointDeclarations },
-		QueryExists:       func(name string) bool { _, ok := b.queries[name]; return ok },
+		QueryExists:       b.queries.Exists,
 		InstalledAction:   b.installedActionOf,
 		DeclaresRole:      b.declaresRole,
 		DraftTools:        b.agentDraftTools,
@@ -40,7 +39,7 @@ func (b *Build) agentDraftTools(c platform.Caller) (map[string]bool, []string, e
 	if err != nil {
 		return nil, nil, err
 	}
-	queries, err := readDefinitionInventory[Query](c)
+	queryNames, err := b.queries.ToolNames(c)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -58,10 +57,8 @@ func (b *Build) agentDraftTools(c platform.Caller) (map[string]bool, []string, e
 			roles = append(roles, role)
 		}
 	}
-	for _, query := range queries {
-		if !query.Archived {
-			tools["query:"+query.Name] = true
-		}
+	for _, name := range queryNames {
+		tools["query:"+name] = true
 	}
 	return tools, roles, nil
 }
@@ -76,10 +73,7 @@ func (b *Build) installedActionOf(schema string) string {
 }
 
 func (b *Build) AgentStamp() string {
-	names := b.agent.Stamps()
-	for name, query := range b.queries {
-		names = append(names, fmt.Sprintf("query:%s@%d", name, query.Version))
-	}
+	names := append(b.agent.Stamps(), b.queries.Stamps()...)
 	slices.Sort(names)
 	return strings.Join(names, ",")
 }

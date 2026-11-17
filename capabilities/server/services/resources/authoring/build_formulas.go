@@ -231,7 +231,7 @@ func (b *Build) checkRuleCollections(s platform.RuleReadSpec, where string, look
 		q, version, ok := b.host.RuleQuery(set.App, set.Query, set.Version)
 		if set.App == ID {
 			if _, selected := b.jointDeclarations[platform.AssetRef{App: set.App, Kind: platform.AssetQuery, Name: set.Query}]; selected {
-				q, version, ok = b.QueryDefinition(set.Query, set.Version)
+				q, version, ok = b.queries.Definition(set.Query, set.Version)
 			}
 		}
 		if !ok || version != set.Version || q.Object != set.Object || (q.By == "") != (set.Of == "") {

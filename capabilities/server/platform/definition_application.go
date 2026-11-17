@@ -58,12 +58,9 @@ type BuildHost interface {
 	ValidateInstallValueType(v ValueType) error
 	ValidateObjectPresentation(info EntityInfo) error
 	ValidateInstallQuery(q NamedQuery) error
+	ValidateRecordSet(EntityInfo, RecordSet) error
 	ValidateCodeAsset(ReleaseAsset) error
 	ProductVersion(ProductVersionRequest) (FrozenProductVersion, error)
-}
-
-type RecordSetHost interface {
-	ValidateRecordSet(EntityInfo, RecordSet) error
 }
 
 type ModelPageHost interface {

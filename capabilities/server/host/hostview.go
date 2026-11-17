@@ -70,7 +70,7 @@ func (h hostView) ValidateInstallDependents(c platform.Caller, e platform.Entity
 				Records: draft.Projection,
 				Install: func() error { return draft.Install(h.app, e, actions, pages...) },
 				CheckSets: func(info platform.EntityInfo, engine platform.RuleEngine) error {
-					return draft.checkRecordSetDeclarations(info, engine)
+					return draft.objectOwner(draft.Projection).CheckRecordSetDeclarations(info, engine)
 				},
 				Entity: draft.Entity, CheckQueries: draft.checkPageQueries,
 				App:         func(id string) platform.App { return draft.App(id) },
