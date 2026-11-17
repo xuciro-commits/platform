@@ -17,6 +17,7 @@ type CodeDefinitions struct {
 	BindInterface func(q platform.NamedQuery) (platform.NamedQuery, error)
 	InstallLink   func(l platform.LinkType) error
 	NativeFlow    func(owner platform.App, name string, version int) (platform.ReleaseAsset, error)
+	Resolver      releasepub.Resolver
 	CheckObject   func(info platform.EntityInfo) error
 	Describe      func(def platform.Definition) (platform.Definition, error)
 	Store         func(def platform.Definition)
@@ -160,7 +161,7 @@ func (h CodeDefinitions) Register() error {
 			}
 		}
 		for _, agent := range manifest.Agents {
-			descriptor, err := releasepub.AgentDescriptor(agent)
+			descriptor, err := h.Resolver.AgentDescriptor(agent)
 			if err != nil {
 				return err
 			}

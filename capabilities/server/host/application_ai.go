@@ -15,6 +15,7 @@ func (t *Tenant) applicationAILocked(m platform.Member, assets []platform.Releas
 		agentEvaluations = agentevaluation.AgentApplicationReports(caller)
 	}
 	return applicationowner.ApplicationAI{
+		Resolver:         PublicationResolver(),
 		AgentEvaluations: agentEvaluations, FunctionEvaluations: agentevaluation.ApplicationReports(t.automation(build.ID, false)),
 		FunctionDefinition: functionauthoring.AssetDefinition, Model: t.modelResolver().Describe,
 		Roles: []string{build.Builder, build.Publisher},

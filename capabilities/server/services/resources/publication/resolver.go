@@ -30,4 +30,7 @@ type Resolver struct {
 	ActionDescriptor          func(json.RawMessage) (platform.Action, error)
 	ObjectDependencies        func(platform.ReleaseAsset, bool) ([]platform.AssetRef, []platform.Capability, error)
 	ActionDependencies        func(platform.ReleaseAsset, bool) ([]platform.AssetRef, []platform.Capability, error)
+	CheckAgent                func(platform.AgentReleaseDescriptor) error
+	AgentDependencies         func(platform.AgentReleaseDescriptor, string) []platform.AssetRef
+	AgentDescriptor           func(platform.Agent) (platform.AgentReleaseDescriptor, error)
 }

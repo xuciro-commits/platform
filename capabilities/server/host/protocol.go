@@ -55,4 +55,6 @@ func (t *Tenant) AuthorityOf(dataClass string) string {
 	return ""
 }
 
-func (t *Tenant) describer() releaseowner.Describer { return releaseowner.NewDescriber(t) }
+func (t *Tenant) describer() releaseowner.Describer {
+	return releaseowner.NewDescriber(t, PublicationResolver())
+}

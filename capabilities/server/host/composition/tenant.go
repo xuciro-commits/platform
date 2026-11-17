@@ -43,6 +43,6 @@ func NewConsole(tenant string, seats ...platform.Seat) *controlowner.Console {
 	return controlowner.NewConsole(tenant, actions.NewAuthority, func(id string) controlowner.Owners {
 		actions := append(platform.AccessActions(), platform.ProjectActions()...)
 		actions = append(actions, packages.Actions()...)
-		return controlowner.Owners{Policies: security.NewPolicies(), Packages: packages.New(id), Actions: actions}
+		return controlowner.Owners{Policies: security.NewPolicies(), Packages: packages.New(id, platformserver.PublicationResolver()), Actions: actions}
 	}, seats...)
 }

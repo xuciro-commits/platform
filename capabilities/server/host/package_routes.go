@@ -49,6 +49,7 @@ func (t *Tenant) PackagePreparation(ctx context.Context, m platform.Member, id, 
 				_, refusal := t.read(m, "packages")
 				return refusal
 			},
+			Resolver: PublicationResolver(),
 			Source: func() (packages.PreparationOwner, bool) {
 				source, ok := t.App(controlowner.PlatformApp).(packages.PreparationOwner)
 				return source, ok
@@ -73,7 +74,7 @@ func (t *Tenant) PackagePreparation(ctx context.Context, m platform.Member, id, 
 
 func (t *Tenant) inspectPackage(ctx context.Context, request platform.PackageInspectRequest) (platform.PackagePreview, error) {
 	send := t.sender()
-	return packages.Inspect(ctx, t.ID, request, send, t.files(), func(ctx context.Context, descriptor platform.PackageDescriptor) (platform.Precheck, error) {
+	return packages.Inspect(ctx, PublicationResolver(), t.ID, request, send, t.files(), func(ctx context.Context, descriptor platform.PackageDescriptor) (platform.Precheck, error) {
 		precheck, refusal := recordRead(t, ctx, func(t *Tenant) (platform.Precheck, *platform.Error) {
 			owner, ok := t.App(controlowner.PlatformApp).(interface {
 				Precheck(platform.PackageDescriptor) platform.Precheck

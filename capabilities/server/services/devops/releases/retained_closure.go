@@ -2,11 +2,11 @@ package releases
 
 import (
 	"fmt"
-	pageowner "platformserver/services/apps/pages"
 
 	"slices"
 
 	"platformserver/platform"
+	"platformserver/services/resources/publication"
 )
 
 func (r *Store) RetainedClosure(candidate platform.ReleaseCandidate, ref platform.AssetRef, sourceVersion string, retained *string) (platform.ReleaseCandidate, string, error) {
@@ -27,8 +27,8 @@ func (r *Store) RetainedClosure(candidate platform.ReleaseCandidate, ref platfor
 		}
 		return candidate, "", nil
 	}
-	active, err := pageowner.PublicationResolver().Closure(saved, []platform.AssetRef{ref})
-	if err != nil || !SameRetainedCapability(candidate, active) {
+	active, err := r.resolver.Closure(saved, []platform.AssetRef{ref})
+	if err != nil || !SameRetainedCapability(r.resolver, candidate, active) {
 		if retained == nil && sourceVersion != "" {
 			ids := r.Ids()
 			for _, id := range ids {
@@ -36,8 +36,8 @@ func (r *Store) RetainedClosure(candidate platform.ReleaseCandidate, ref platfor
 				if err != nil {
 					continue
 				}
-				closed, err := pageowner.PublicationResolver().Closure(prior, []platform.AssetRef{ref})
-				if err == nil && SameRetainedCapability(candidate, closed) {
+				closed, err := r.resolver.Closure(prior, []platform.AssetRef{ref})
+				if err == nil && SameRetainedCapability(r.resolver, candidate, closed) {
 					return closed, id, nil
 				}
 			}
@@ -47,7 +47,7 @@ func (r *Store) RetainedClosure(candidate platform.ReleaseCandidate, ref platfor
 	return active, release, nil
 }
 
-func SameRetainedCapability(current, retained platform.ReleaseCandidate) bool {
+func SameRetainedCapability(resolver publication.Resolver, current, retained platform.ReleaseCandidate) bool {
 	if current.ID == retained.ID {
 		return true
 	}
@@ -56,7 +56,7 @@ func SameRetainedCapability(current, retained platform.ReleaseCandidate) bool {
 		if index < 0 {
 			return false
 		}
-		same, err := ImmutableCodeAssetMatches(current.Assets[index], original)
+		same, err := ImmutableCodeAssetMatches(resolver, current.Assets[index], original)
 		if err != nil || !same {
 			return false
 		}

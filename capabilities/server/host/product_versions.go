@@ -9,7 +9,7 @@ import (
 )
 
 func (h hostView) ProductVersion(request platform.ProductVersionRequest) (platform.FrozenProductVersion, error) {
-	return packages.FreezeVersion(slices.Clone(h.t.releases.Raw(request.Candidate)), request, func() []platform.PackageView {
+	return packages.FreezeVersion(PublicationResolver(), slices.Clone(h.t.releases.Raw(request.Candidate)), request, func() []platform.PackageView {
 		return h.t.App("platform").(interface{ PackageViews() []platform.PackageView }).PackageViews()
 	})
 }

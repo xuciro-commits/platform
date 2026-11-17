@@ -6,7 +6,7 @@ import (
 	"platformserver/kernel/acceptedformat"
 	"platformserver/kernel/records"
 	"platformserver/platform"
-	pageowner "platformserver/services/apps/pages"
+	"platformserver/services/resources/publication"
 	"slices"
 	"strings"
 	"time"
@@ -14,6 +14,7 @@ import (
 
 type Context struct {
 	Tenant              string
+	Resolver            publication.Resolver
 	Admit               func(platform.Member) *platform.Error
 	Definitions         func(platform.Member) []platform.Definition
 	Entity              func(string) (platform.EntityInfo, bool)
@@ -218,7 +219,7 @@ func (ctx Context) Bind(resource platform.AssetRef, release, dependencies string
 		if root.Ref.Kind != platform.AssetApp {
 			continue
 		}
-		graph := pageowner.PublicationResolver().RunGraph(root.Ref, lookup)
+		graph := ctx.Resolver.RunGraph(root.Ref, lookup)
 		uses := graph[resource]
 		if len(jobOwner) > 0 {
 			for ref := range graph {

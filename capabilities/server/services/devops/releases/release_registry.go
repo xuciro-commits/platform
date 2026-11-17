@@ -3,15 +3,16 @@ package releases
 import (
 	"encoding/json"
 	"fmt"
-	pageowner "platformserver/services/apps/pages"
 
 	"platformserver/platform"
+	pageowner "platformserver/services/apps/pages"
+	"platformserver/services/resources/publication"
 
 	"slices"
 	"strings"
 )
 
-func ImmutableCodeAssetMatches(current, retained platform.ReleaseAsset) (bool, error) {
+func ImmutableCodeAssetMatches(resolver publication.Resolver, current, retained platform.ReleaseAsset) (bool, error) {
 	if retained.Ref != current.Ref || retained.SourceVersion != current.SourceVersion || retained.ContractVersion != current.ContractVersion {
 		return false, nil
 	}
@@ -23,10 +24,10 @@ func ImmutableCodeAssetMatches(current, retained platform.ReleaseAsset) (bool, e
 		after, err := platform.CanonicalDigest(retained)
 		return err == nil && before == after, err
 	}
-	if err := pageowner.PublicationResolver().CheckAssetDependencies(retained); err != nil {
+	if err := resolver.CheckAssetDependencies(retained); err != nil {
 		return false, nil
 	}
-	if err := pageowner.PublicationResolver().CheckAssetDependencies(current); err != nil {
+	if err := resolver.CheckAssetDependencies(current); err != nil {
 		return false, err
 	}
 	for _, dependency := range retained.Requires {

@@ -7,7 +7,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"maps"
-	pageowner "platformserver/services/apps/pages"
 
 	"slices"
 	"strings"
@@ -278,7 +277,7 @@ func (d *Owner) Offer(digest string) (platform.Offer, error) {
 	if err = platform.DecodeJSON(raw, &offer, "reviewed package"); err != nil {
 		return offer, err
 	}
-	if err := packagedesc.Validate(offer.Descriptor, pageowner.PublicationResolver().WithDependencies); err != nil {
+	if err := packagedesc.Validate(offer.Descriptor, d.resolver.WithDependencies); err != nil {
 		return offer, err
 	}
 	return offer, nil

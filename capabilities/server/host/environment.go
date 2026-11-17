@@ -16,8 +16,9 @@ import (
 
 func (t *Tenant) sealer() releaseowner.Sealer {
 	return releaseowner.Sealer{
-		Tenant: t.ID,
-		Files:  t.files(),
+		Tenant:   t.ID,
+		Resolver: PublicationResolver(),
+		Files:    t.files(),
 		Raw: func(id string) ([]byte, error) {
 			raw, refusal := recordRead(t, context.Background(), func(t *Tenant) ([]byte, *platform.Error) { return slices.Clone(t.releases.Raw(id)), nil })
 			if refusal != nil {
@@ -56,7 +57,7 @@ func PromoteCandidate(from, to *Tenant, candidateID, key string, activate bool, 
 	if from == nil || to == nil || from.ID == to.ID {
 		return releaseowner.PromotionResult{}, fmt.Errorf("promotion needs two different environments")
 	}
-	plan, err := releaseowner.PlanPromotion(from.ID, to.ID, candidateID, key, activate, member, now, from.sealer().SealedOrSeal)
+	plan, err := releaseowner.PlanPromotion(PublicationResolver(), from.ID, to.ID, candidateID, key, activate, member, now, from.sealer().SealedOrSeal)
 	if err != nil {
 		return releaseowner.PromotionResult{}, err
 	}

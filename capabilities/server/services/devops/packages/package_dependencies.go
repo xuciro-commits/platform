@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"fmt"
 	"maps"
-	pageowner "platformserver/services/apps/pages"
 	packagedesc "platformserver/services/devops/descriptor"
 
 	"slices"
@@ -181,7 +180,7 @@ func (d *Owner) prerequisiteAssets(root platform.PackageDescriptor, index *platf
 				return nil, err
 			}
 			for _, asset := range assets {
-				complete, err := pageowner.PublicationResolver().WithDependencies(asset)
+				complete, err := d.resolver.WithDependencies(asset)
 				if err != nil {
 					return nil, err
 				}

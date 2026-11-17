@@ -305,8 +305,9 @@ func (o *builderAgentOwner) releaseAsset(a Agent, source string) (platform.Relea
 	if string(cases) == "null" {
 		cases = []byte("[]")
 	}
-	descriptor := platform.AgentReleaseDescriptor{Model: a.Model, ModelOptions: a.ModelOptions, Name: a.Name, Title: a.Title, Description: a.Description, Instructions: a.Instructions, Tools: slices.Clone(a.Tools), Budget: o.definition(a).Budget, Checkpoints: slices.Clone(a.Checkpoints), HandoffRole: a.HandoffRole, Cases: cases}
-	if err := descriptor.Check(); err != nil {
+	descriptor := releaseDescriptor(o.definition(a), cases, false, false)
+	descriptor.HandoffRole = a.HandoffRole
+	if err := CheckAgentReleaseDescriptor(descriptor); err != nil {
 		return platform.ReleaseAsset{}, err
 	}
 	body, err := json.Marshal(descriptor)
@@ -320,7 +321,7 @@ func (o *builderAgentOwner) decodeAsset(asset platform.ReleaseAsset) (Agent, err
 	var descriptor platform.AgentReleaseDescriptor
 	versionText, found := strings.CutPrefix(asset.SourceVersion, "1.agent-")
 	version, err := strconv.Atoi(versionText)
-	if !found || err != nil || version < 1 || version > 64 || strconv.Itoa(version) != versionText || asset.Ref.App != o.env.App || asset.Ref.Kind != platform.AssetAgent || asset.ContractVersion != 1 || json.Unmarshal(asset.Body, &descriptor) != nil || descriptor.Native || descriptor.Name != asset.Ref.Name || descriptor.Check() != nil || o.env.CheckDependencies(asset) != nil {
+	if !found || err != nil || version < 1 || version > 64 || strconv.Itoa(version) != versionText || asset.Ref.App != o.env.App || asset.Ref.Kind != platform.AssetAgent || asset.ContractVersion != 1 || json.Unmarshal(asset.Body, &descriptor) != nil || descriptor.Native || descriptor.Name != asset.Ref.Name || CheckAgentReleaseDescriptor(descriptor) != nil || o.env.CheckDependencies(asset) != nil {
 		return Agent{}, fmt.Errorf("invalid builder agent asset")
 	}
 	record := Agent{Model: descriptor.Model, ModelOptions: descriptor.ModelOptions, Name: descriptor.Name, Title: descriptor.Title, Description: descriptor.Description, Instructions: descriptor.Instructions, Tools: slices.Clone(descriptor.Tools), Steps: descriptor.Budget.Steps, Tokens: descriptor.Budget.Tokens, Actions: descriptor.Budget.Actions, Cost: descriptor.Budget.Cost, Checkpoints: slices.Clone(descriptor.Checkpoints), HandoffRole: descriptor.HandoffRole, Version: version, State: "published"}

@@ -10,10 +10,12 @@ import (
 	dataowner "platformserver/services/data"
 	functionauthoring "platformserver/services/functions/authoring"
 	ontology "platformserver/services/ontology"
+	"platformserver/services/resources/publication"
 )
 
 type DefinitionVisibility struct {
 	Tenant                    string
+	Resolver                  publication.Resolver
 	Member                    platform.Member
 	Entities                  map[string]platform.EntityInfo
 	Actions                   map[string]platform.Action
@@ -240,7 +242,7 @@ func (v DefinitionVisibility) Project() []platform.Definition {
 			}
 		}
 	}
-	applications := appsauthoring.ApplicationProjection{Member: m, Definitions: out, Entities: entities, Pages: opens, Resources: visibleResources, PublishedFlows: publishedFlows}
+	applications := appsauthoring.ApplicationProjection{Member: m, Resolver: v.Resolver, Definitions: out, Entities: entities, Pages: opens, Resources: visibleResources, PublishedFlows: publishedFlows}
 	for _, registered := range v.Registered {
 		if !v.OwnerActive(registered.Ref.App) || v.ApplicationEntryWithdrawn(registered.Ref) {
 			continue

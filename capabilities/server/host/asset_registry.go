@@ -5,18 +5,21 @@ import (
 	"fmt"
 	"platformserver/kernel/records"
 	"platformserver/platform"
+	agentowner "platformserver/services/ai/runtime"
 	pageowner "platformserver/services/apps/pages"
 	releaseowner "platformserver/services/devops/releases"
 	"platformserver/services/resources/publication"
 )
 
-func PublicationResolver() publication.Resolver { return pageowner.PublicationResolver() }
+func PublicationResolver() publication.Resolver {
+	return agentowner.WithPublicationResolver(pageowner.PublicationResolver())
+}
 
 func (h hostView) ValidateCodeAsset(asset platform.ReleaseAsset) error {
 	return releaseowner.ValidateCodeAsset(asset, h.t.App, h.t.codeReleaseAssetsLocked)
 }
 func (t *Tenant) assetRegistryLocked() (*publication.AssetRegistry, error) {
-	return releaseowner.NewRegistry(t.LiveApps(), t.codeReleaseAssetsLocked, func(app platform.App, ref platform.AssetRef, source string) (platform.ReleaseAsset, error) {
+	return releaseowner.NewRegistry(PublicationResolver(), t.LiveApps(), t.codeReleaseAssetsLocked, func(app platform.App, ref platform.AssetRef, source string) (platform.ReleaseAsset, error) {
 		for _, flow := range app.Manifest().Flows {
 			asset, err := t.nativeFlowAsset(app, flow.Name, flow.Version)
 			if err != nil {

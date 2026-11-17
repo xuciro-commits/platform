@@ -5,8 +5,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"platformserver/platform"
-	pageowner "platformserver/services/apps/pages"
 	"platformserver/services/resources/authoring"
+	"platformserver/services/resources/publication"
 
 	"slices"
 	"time"
@@ -71,11 +71,11 @@ func AcceptedInstallationRelease(saved platform.ReleaseCandidate, assets Accepte
 	return assets.WithBindings(roots, available)
 }
 
-func PendingWorkFits(candidateID string, raw []byte, caller *platform.Caller, saved func(string) json.RawMessage) error {
+func PendingWorkFits(resolver publication.Resolver, candidateID string, raw []byte, caller *platform.Caller, saved func(string) json.RawMessage) error {
 	if caller == nil {
 		return nil
 	}
-	candidate, err := pageowner.PublicationResolver().ReadCandidate(candidateID, raw)
+	candidate, err := resolver.ReadCandidate(candidateID, raw)
 	if err != nil {
 		return err
 	}
@@ -96,7 +96,7 @@ func PendingWorkFits(candidateID string, raw []byte, caller *platform.Caller, sa
 			continue
 		}
 		if raw := saved(request.Release); raw != nil {
-			started, err := pageowner.PublicationResolver().ReadCandidate(request.Release, raw)
+			started, err := resolver.ReadCandidate(request.Release, raw)
 			if err == nil && bytes.Equal(actionIn(started, request.Action), next) {
 				continue
 			}
@@ -152,8 +152,8 @@ type Activation struct {
 	Lifecycle   func(candidate platform.ReleaseCandidate) ([]platform.ReleaseInstallation, json.RawMessage, error)
 }
 
-func PlanActivation(candidateID string, raw []byte, upgradeID string, activation Activation) ([]platform.ReleaseInstallation, json.RawMessage, error) {
-	candidate, err := pageowner.PublicationResolver().ReadCandidate(candidateID, raw)
+func PlanActivation(resolver publication.Resolver, candidateID string, raw []byte, upgradeID string, activation Activation) ([]platform.ReleaseInstallation, json.RawMessage, error) {
+	candidate, err := resolver.ReadCandidate(candidateID, raw)
 	if err != nil {
 		return nil, nil, err
 	}

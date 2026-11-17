@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"maps"
-	pageowner "platformserver/services/apps/pages"
 	"slices"
 
 	"platformserver/platform"
@@ -22,12 +21,33 @@ type State struct {
 }
 
 type Store struct {
+	resolver   publication.Resolver
 	candidates map[string]json.RawMessage
 	applied    map[string]string
 	active     string
 	sealed     map[string]platform.SealedArtifact
 	origins    map[string]platform.ReleaseOrigin
 	requests   map[string]string
+}
+
+func NewStore(resolver publication.Resolver) Store {
+	return Store{resolver: resolver}
+}
+
+type RetentionChecks struct {
+	SameRetained func(platform.ReleaseCandidate, platform.ReleaseCandidate) bool
+	CodeMatches  func(platform.ReleaseAsset, platform.ReleaseAsset) (bool, error)
+}
+
+func NewRetentionChecks(resolver publication.Resolver) RetentionChecks {
+	return RetentionChecks{
+		SameRetained: func(current, retained platform.ReleaseCandidate) bool {
+			return SameRetainedCapability(resolver, current, retained)
+		},
+		CodeMatches: func(current, retained platform.ReleaseAsset) (bool, error) {
+			return ImmutableCodeAssetMatches(resolver, current, retained)
+		},
+	}
 }
 
 func (r *Store) Request(key string) (string, bool) {
@@ -45,7 +65,7 @@ func (r *Store) RememberRequest(key, hash string) {
 func (r *Store) Raw(id string) json.RawMessage { return r.candidates[id] }
 
 func (r *Store) Candidate(id string) (platform.ReleaseCandidate, error) {
-	return pageowner.PublicationResolver().ReadCandidate(id, r.candidates[id])
+	return r.resolver.ReadCandidate(id, r.candidates[id])
 }
 
 func (r *Store) Ids() []string {
@@ -134,6 +154,7 @@ func (r *Store) SelectPreview(id string) { r.active = id }
 
 type runtimeAssetOwner struct {
 	platform.App
+	resolver   publication.Resolver
 	lifecycle  platform.AssetLifecycleOwner
 	code       []platform.ReleaseAsset
 	nativeFlow func(platform.AssetRef, string) (platform.ReleaseAsset, error)
@@ -196,7 +217,7 @@ func (o runtimeAssetOwner) controlled(assets []platform.ReleaseAsset) ([]platfor
 			}
 			selected = retained
 		}
-		matches, err := ImmutableCodeAssetMatches(selected, asset)
+		matches, err := ImmutableCodeAssetMatches(o.resolver, selected, asset)
 		if err != nil {
 			return nil, err
 		}
@@ -291,8 +312,8 @@ func ValidateCodeAsset(asset platform.ReleaseAsset, app func(string) platform.Ap
 	return nil
 }
 
-func NewRegistry(apps []platform.App, codeAssets func(platform.App) ([]platform.ReleaseAsset, error), nativeFlow func(platform.App, platform.AssetRef, string) (platform.ReleaseAsset, error)) (*publication.AssetRegistry, error) {
-	registry, err := pageowner.PublicationResolver().NewAssetRegistry()
+func NewRegistry(resolver publication.Resolver, apps []platform.App, codeAssets func(platform.App) ([]platform.ReleaseAsset, error), nativeFlow func(platform.App, platform.AssetRef, string) (platform.ReleaseAsset, error)) (*publication.AssetRegistry, error) {
+	registry, err := resolver.NewAssetRegistry()
 	if err != nil {
 		return nil, err
 	}
@@ -302,7 +323,7 @@ func NewRegistry(apps []platform.App, codeAssets func(platform.App) ([]platform.
 			return nil, err
 		}
 		lifecycle, _ := app.(platform.AssetLifecycleOwner)
-		owner := runtimeAssetOwner{App: app, lifecycle: lifecycle, code: code, nativeFlow: func(ref platform.AssetRef, source string) (platform.ReleaseAsset, error) {
+		owner := runtimeAssetOwner{App: app, resolver: resolver, lifecycle: lifecycle, code: code, nativeFlow: func(ref platform.AssetRef, source string) (platform.ReleaseAsset, error) {
 			return nativeFlow(app, ref, source)
 		}}
 		if len(owner.AssetKinds()) == 0 {

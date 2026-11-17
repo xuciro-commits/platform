@@ -8,8 +8,8 @@ import (
 	"io"
 	"platformserver/kernel/acceptedformat"
 	"platformserver/platform"
-	pageowner "platformserver/services/apps/pages"
 	"platformserver/services/resources/authoring"
+	"platformserver/services/resources/publication"
 
 	"slices"
 	"time"
@@ -100,7 +100,7 @@ func (t PromotionDestination) Preflight(candidate platform.ReleaseCandidate, raw
 	return false, nil
 }
 
-func ReadSealed(id string, artifact platform.SealedArtifact, open func() (io.ReadCloser, error)) ([]byte, error) {
+func ReadSealed(resolver publication.Resolver, id string, artifact platform.SealedArtifact, open func() (io.ReadCloser, error)) ([]byte, error) {
 	reader, err := open()
 	if err != nil {
 		return nil, fmt.Errorf("sealed candidate %s: %w", id, err)
@@ -110,7 +110,7 @@ func ReadSealed(id string, artifact platform.SealedArtifact, open func() (io.Rea
 	if _, err := buf.ReadFrom(reader); err != nil {
 		return nil, fmt.Errorf("sealed candidate %s: %w", id, err)
 	}
-	if err := VerifySealed(id, artifact, buf.Bytes()); err != nil {
+	if err := VerifySealed(resolver, id, artifact, buf.Bytes()); err != nil {
 		return nil, err
 	}
 	return buf.Bytes(), nil
@@ -127,7 +127,7 @@ type PromotionPlan struct {
 	At        time.Time
 }
 
-func PlanPromotion(from, to, candidateID, key string, activate bool, member platform.Member, now time.Time, sealed func(id string, now time.Time) ([]byte, platform.SealedArtifact, error)) (PromotionPlan, error) {
+func PlanPromotion(resolver publication.Resolver, from, to, candidateID, key string, activate bool, member platform.Member, now time.Time, sealed func(id string, now time.Time) ([]byte, platform.SealedArtifact, error)) (PromotionPlan, error) {
 	if !build.HoldsIndependentRole(member, build.Builder, build.Publisher) {
 		return PromotionPlan{}, fmt.Errorf("promotion needs the builder or publisher role in %s", to)
 	}
@@ -135,7 +135,7 @@ func PlanPromotion(from, to, candidateID, key string, activate bool, member plat
 	if err != nil {
 		return PromotionPlan{}, err
 	}
-	candidate, err := pageowner.PublicationResolver().ReadCandidate(candidateID, raw)
+	candidate, err := resolver.ReadCandidate(candidateID, raw)
 	if err != nil {
 		return PromotionPlan{}, err
 	}
@@ -171,11 +171,12 @@ func (p PromotionPlan) Prepare(destination PromotionDestination, lifecycle func(
 }
 
 type Sealer struct {
-	Tenant string
-	Files  platform.FileStore
-	Raw    func(id string) ([]byte, error)
-	Commit func(artifact platform.SealedArtifact) error
-	Find   func(id string) (platform.SealedArtifact, bool)
+	Tenant   string
+	Resolver publication.Resolver
+	Files    platform.FileStore
+	Raw      func(id string) ([]byte, error)
+	Commit   func(artifact platform.SealedArtifact) error
+	Find     func(id string) (platform.SealedArtifact, bool)
 }
 
 func (s Sealer) Seal(id string, now time.Time) (platform.SealedArtifact, error) {
@@ -183,7 +184,7 @@ func (s Sealer) Seal(id string, now time.Time) (platform.SealedArtifact, error) 
 	if err != nil {
 		return platform.SealedArtifact{}, err
 	}
-	artifact, err := SealArtifact(s.Tenant, id, raw, now)
+	artifact, err := SealArtifact(s.Resolver, s.Tenant, id, raw, now)
 	if err != nil {
 		return platform.SealedArtifact{}, err
 	}
@@ -206,7 +207,7 @@ func (s Sealer) SealedOrSeal(id string, now time.Time) ([]byte, platform.SealedA
 	if !ok {
 		return nil, platform.SealedArtifact{}, fmt.Errorf("release candidate %s is not sealed", id)
 	}
-	raw, err := ReadSealed(id, artifact, func() (io.ReadCloser, error) {
+	raw, err := ReadSealed(s.Resolver, id, artifact, func() (io.ReadCloser, error) {
 		reader, _, err := s.Files.Get(context.Background(), artifact.Key)
 		return reader, err
 	})

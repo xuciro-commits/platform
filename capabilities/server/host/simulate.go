@@ -55,7 +55,7 @@ func (t *Tenant) Simulate(member platform.Member, as, branch string, s *pb.Submi
 			return out, nil
 		}
 		out.Accepted = true
-		view := &Tenant{services: t.services, disabledOwners: t.disabledOwners, ID: t.ID, identity: t.identity, ownerSet: t.ownerSet, Projection: draft.Records, directory: t.directory}
+		view := &Tenant{services: t.services, disabledOwners: t.disabledOwners, ID: t.ID, identity: t.identity, ownerSet: t.ownerSet, Projection: draft.Records, directory: t.directory, releases: t.releases}
 		out.Changes = trialowner.SimulatedChanges(slices.Sorted(draft.Records.Writes()), func(typ string, q platform.Query) ([]any, *platform.Error) {
 			page, refusal := view.objectOwner(view.Projection).Records(member, typ, q, now)
 			return page.Records, refusal

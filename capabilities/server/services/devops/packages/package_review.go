@@ -2,7 +2,6 @@ package packages
 
 import (
 	"encoding/json"
-	pageowner "platformserver/services/apps/pages"
 
 	"reflect"
 	"slices"
@@ -10,6 +9,7 @@ import (
 
 	"platformserver/platform"
 	build "platformserver/services/resources/authoring"
+	"platformserver/services/resources/publication"
 )
 
 type PackageReview struct {
@@ -61,6 +61,7 @@ func RemovalImpacts(resources []build.Resource, definitions []platform.Definitio
 type Review struct {
 	Blueprint func([]platform.ReleaseAsset) ([]platform.ReleaseAsset, error)
 	Impact    func(id string, after []platform.ReleaseAsset) (platform.PackageLifecycleImpact, error)
+	Resolver  publication.Resolver
 }
 
 func (rv Review) Of(views []platform.PackageView, chosen *platform.PackageView, uninstall bool) (PackageReview, error) {
@@ -85,7 +86,7 @@ func (rv Review) Of(views []platform.PackageView, chosen *platform.PackageView, 
 			return answer, err
 		}
 		for _, asset := range assets {
-			complete, err := pageowner.PublicationResolver().WithDependencies(asset)
+			complete, err := rv.Resolver.WithDependencies(asset)
 			if err != nil {
 				return answer, err
 			}

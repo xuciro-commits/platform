@@ -11,6 +11,7 @@ import (
 	"platformserver/platform"
 	pageowner "platformserver/services/apps/pages"
 	ontology "platformserver/services/ontology"
+	"platformserver/services/resources/publication"
 )
 
 const (
@@ -198,6 +199,7 @@ func (o *Owner) checkApplication(a Application) error {
 
 type ApplicationProjection struct {
 	Member         platform.Member
+	Resolver       publication.Resolver
 	Definitions    []platform.Definition
 	Entities       map[string]platform.EntityInfo
 	Pages          map[platform.AssetRef]bool
@@ -247,7 +249,7 @@ func ProjectApplication(registered platform.Definition, projection ApplicationPr
 		if q.Query != nil {
 			for _, d := range visible {
 				if d.Ref == q.Query.Ref {
-					named = pageowner.PublicationResolver().QuerySourceVersion(d, q.Query.SourceVersion)
+					named = projection.Resolver.QuerySourceVersion(d, q.Query.SourceVersion)
 					break
 				}
 			}

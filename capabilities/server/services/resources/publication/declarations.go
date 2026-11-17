@@ -190,19 +190,6 @@ func (c CodeDeclarations) Check(checkPage func(platform.Page) error) error {
 	return nil
 }
 
-func AgentDescriptor(agent platform.Agent) (platform.AgentReleaseDescriptor, error) {
-	cases := []map[string]any{}
-	for _, test := range agent.Cases {
-		cases = append(cases, map[string]any{"name": test.Name, "goal": test.Goal, "ref": test.Ref, "check": test.Check != nil})
-	}
-	raw, err := json.Marshal(cases)
-	if err != nil {
-		return platform.AgentReleaseDescriptor{}, err
-	}
-	descriptor := platform.AgentReleaseDescriptor{Model: agent.Model, ModelOptions: agent.ModelOptions, Name: agent.Name, Title: agent.Title, Description: agent.Description, Instructions: agent.Instructions, Tools: slices.Clone(agent.Tools), Budget: agent.Budget, Checkpoints: slices.Clone(agent.Checkpoints), Native: true, Guard: agent.Guard != nil, Handoff: agent.To != nil, Cases: raw}
-	return descriptor, descriptor.Check()
-}
-
 func ProtocolDescriptor(manifest platform.Manifest, provision platform.Provision) (platform.ProtocolReleaseDescriptor, error) {
 	protocol := platform.ProtocolReleaseDescriptor{Name: provision.Protocol.Name, Version: provision.Protocol.Version, Actions: slices.Clone(provision.Protocol.Actions), Reads: slices.Clone(provision.Protocol.Reads), ActionBindings: map[string]platform.AssetRef{}, ActionRoles: map[string][]string{}}
 	for i, action := range protocol.Actions {

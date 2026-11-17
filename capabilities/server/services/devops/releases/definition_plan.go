@@ -2,7 +2,6 @@ package releases
 
 import (
 	"platformserver/platform"
-	pageowner "platformserver/services/apps/pages"
 	"platformserver/services/resources/publication"
 	"slices"
 	"sync"
@@ -64,7 +63,7 @@ func DecisionDefinition(app, appVersion string, action platform.Action, release 
 	}
 	if i := slices.IndexFunc(available, func(asset platform.ReleaseAsset) bool { return asset.Ref == root }); i >= 0 {
 		out.Definition.SourceVersion = available[i].SourceVersion
-		closed, candidateErr := CandidateWithBindings([]platform.AssetRef{root}, available, []platform.AssetRef{root}, registry.ResolvePinned)
+		closed, candidateErr := CandidateWithBindings(registry.Resolver(), []platform.AssetRef{root}, available, []platform.AssetRef{root}, registry.ResolvePinned)
 		if candidateErr == nil {
 			out.Closure = closed.ID
 			out.DependenciesState = "closed"
@@ -92,15 +91,15 @@ func DecisionDefinition(app, appVersion string, action platform.Action, release 
 		if asset.Ref.Kind != platform.AssetApp {
 			continue
 		}
-		graph := pageowner.PublicationResolver().RunGraph(asset.Ref, lookup)
+		graph := registry.Resolver().RunGraph(asset.Ref, lookup)
 		if !graph[root] && !graph[target] {
 			continue
 		}
-		candidate, candidateErr := CandidateWithBindings([]platform.AssetRef{asset.Ref}, membershipAssets, []platform.AssetRef{asset.Ref}, registry.ResolvePinned)
+		candidate, candidateErr := CandidateWithBindings(registry.Resolver(), []platform.AssetRef{asset.Ref}, membershipAssets, []platform.AssetRef{asset.Ref}, registry.ResolvePinned)
 		if candidateErr != nil {
 			continue
 		}
-		execution, executionErr := CandidateWithBindings([]platform.AssetRef{root}, candidate.Assets, []platform.AssetRef{root}, registry.ResolvePinned)
+		execution, executionErr := CandidateWithBindings(registry.Resolver(), []platform.AssetRef{root}, candidate.Assets, []platform.AssetRef{root}, registry.ResolvePinned)
 		if executionErr == nil && execution.ID == out.Closure {
 			out.Applications = append(out.Applications, platform.AssetBinding{Ref: asset.Ref, SourceVersion: candidate.ID})
 		}

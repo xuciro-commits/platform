@@ -9,10 +9,12 @@ import (
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformserver/platform"
 	"platformserver/services/ontology"
+	"platformserver/services/resources/publication"
 )
 
 type ApplicationAI struct {
 	Model               func(kind, name string, options platform.ModelOptions) (string, string, bool)
+	Resolver            publication.Resolver
 	AgentEvaluations    func(string, string, string) ([]platform.ApplicationAIEvaluation, *platform.Error)
 	FunctionDefinition  func(platform.ReleaseAsset) (platform.AIFunction, int, error)
 	FunctionEvaluations func(string, int, string) ([]platform.ApplicationAIEvaluation, *platform.Error)
@@ -32,7 +34,7 @@ func (a ApplicationAI) List(m platform.Member, assets []platform.ReleaseAsset, v
 		authorized := slices.ContainsFunc(a.Roles, func(role string) bool { return m.Holds(asset.Ref.App, role) })
 		if asset.Ref.Kind == platform.AssetAgent {
 			var definition platform.AgentReleaseDescriptor
-			if json.Unmarshal(asset.Body, &definition) != nil || definition.Check() != nil {
+			if json.Unmarshal(asset.Body, &definition) != nil || a.Resolver.CheckAgent(definition) != nil {
 				return nil, conflict(fmt.Errorf("invalid agent declaration"))
 			}
 			item := platform.ApplicationAI{Resource: platform.AssetBinding{Ref: asset.Ref, SourceVersion: asset.SourceVersion}, Placement: "assist", Model: definition.Model, HandoffRole: definition.HandoffRole, Adoptions: []string{}, Checkpoints: slices.Clone(definition.Checkpoints), Evaluations: []platform.ApplicationAIEvaluation{}}

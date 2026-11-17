@@ -42,6 +42,7 @@ type ManagedPreparation struct {
 	Upgrade    bool
 	Downgrade  bool
 	Owner      build.ConstructionDrafts
+	Resolver   publication.Resolver
 	Code       func() ([]platform.ReleaseAsset, error)
 	Impact     func(string, []platform.ReleaseAsset) (platform.PackageLifecycleImpact, error)
 	Bootstrap  func(platform.ReleaseCandidate, platform.AssetReleaseContext) error
@@ -113,7 +114,7 @@ func (p ManagedPreparation) Prepare() (func(*pb.ChangeRecord), *platform.Error) 
 	if err != nil {
 		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "{reason}", err.Error())
 	}
-	candidate, err := BlueprintCandidate(*p.Descriptor.Blueprint, p.Owner, p.Available)
+	candidate, err := BlueprintCandidate(p.Resolver, *p.Descriptor.Blueprint, p.Owner, p.Available)
 	if err != nil {
 		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "{reason}", err.Error())
 	}

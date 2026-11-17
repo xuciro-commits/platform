@@ -23,6 +23,10 @@ type AssetRegistry struct {
 	kinds    map[assetOwnerKey]platform.AssetLifecycleOwner
 }
 
+func (r *AssetRegistry) Resolver() Resolver {
+	return r.resolver
+}
+
 func (resolver Resolver) NewAssetRegistry(owners ...platform.AssetLifecycleOwner) (*AssetRegistry, error) {
 	registry := &AssetRegistry{resolver: resolver, owners: map[string]platform.AssetLifecycleOwner{}, kinds: map[assetOwnerKey]platform.AssetLifecycleOwner{}}
 	for _, owner := range owners {

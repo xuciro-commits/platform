@@ -74,7 +74,7 @@ func newInvariantTenantSetup(tb testing.TB, id string, apps []platform.App, seat
 	console := controlowner.NewConsole(id, actions.NewAuthority, func(id string) controlowner.Owners {
 		actions := append(platform.AccessActions(), platform.ProjectActions()...)
 		actions = append(actions, packages.Actions()...)
-		return controlowner.Owners{Policies: security.NewPolicies(), Packages: packages.New(id), Actions: actions}
+		return controlowner.Owners{Policies: security.NewPolicies(), Packages: packages.New(id, PublicationResolver()), Actions: actions}
 	}, append([]platform.Seat{seat}, seats...)...)
 	tenant, err := NewTenantWithCapabilities(id, services, append([]platform.App{console, build.New(id, actions.NewAuthority, []publication.Hooks{ontology.ActionTypePublication()}, PublicationResolver(), ontology.ObjectPublication, objects.QueryPublication, functionauthoring.NewOwner, agentowner.BuilderPublication, agentevaluation.NewOwner, devopsauthoring.TestPlanPublication, agentevaluation.EvaluationPublication, devopsauthoring.SampleSetPublication)}, apps...)...)
 	if err != nil {

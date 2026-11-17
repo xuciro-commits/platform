@@ -83,6 +83,10 @@ var functionName = regexp.MustCompile(`^[a-z][a-z0-9_-]{0,63}$`)
 
 var functionFieldName = regexp.MustCompile(`^[a-zA-Z][a-zA-Z0-9_]{0,63}$`)
 
+func ValidFunctionName(name string) bool {
+	return functionName.MatchString(name)
+}
+
 func (f AIFunction) Check() error {
 	if !functionName.MatchString(f.Name) || f.Title == "" || len(f.Title) > 256 || f.Description == "" || len(f.Description) > 1024 || f.Object == "" ||
 		len(f.Instructions) == 0 || len(f.Instructions) > 8192 || len(f.Fields) == 0 || len(f.Fields) > 32 ||

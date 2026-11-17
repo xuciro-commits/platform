@@ -4,23 +4,23 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
-	pageowner "platformserver/services/apps/pages"
 
 	"slices"
 
 	"platformserver/platform"
 	packagedesc "platformserver/services/devops/descriptor"
+	"platformserver/services/resources/publication"
 )
 
-func FreezeVersion(raw []byte, request platform.ProductVersionRequest, views func() []platform.PackageView) (platform.FrozenProductVersion, error) {
+func FreezeVersion(resolver publication.Resolver, raw []byte, request platform.ProductVersionRequest, views func() []platform.PackageView) (platform.FrozenProductVersion, error) {
 	if len(raw) == 0 {
 		return platform.FrozenProductVersion{}, fmt.Errorf("release candidate %s is not saved", request.Candidate)
 	}
-	candidate, err := pageowner.PublicationResolver().ReadCandidate(request.Candidate, raw)
+	candidate, err := resolver.ReadCandidate(request.Candidate, raw)
 	if err != nil {
 		return platform.FrozenProductVersion{}, err
 	}
-	descriptor, err := productDescriptor(candidate, request, views)
+	descriptor, err := productDescriptor(resolver, candidate, request, views)
 	if err != nil {
 		return platform.FrozenProductVersion{}, err
 	}
@@ -36,8 +36,8 @@ func FreezeVersion(raw []byte, request platform.ProductVersionRequest, views fun
 	}, nil
 }
 
-func productDescriptor(candidate platform.ReleaseCandidate, request platform.ProductVersionRequest, packageViews func() []platform.PackageView) (platform.PackageDescriptor, error) {
-	closed, err := pageowner.PublicationResolver().Closure(candidate, request.Roots)
+func productDescriptor(resolver publication.Resolver, candidate platform.ReleaseCandidate, request platform.ProductVersionRequest, packageViews func() []platform.PackageView) (platform.PackageDescriptor, error) {
+	closed, err := resolver.Closure(candidate, request.Roots)
 	if err != nil {
 		return platform.PackageDescriptor{}, err
 	}
@@ -70,7 +70,7 @@ func productDescriptor(candidate platform.ReleaseCandidate, request platform.Pro
 	}
 	assets := slices.DeleteFunc(slices.Clone(closed.Assets), func(asset platform.ReleaseAsset) bool { return external[asset.Ref] })
 	product.Blueprint = &platform.PackageBlueprint{Roots: slices.Clone(request.Roots), Assets: assets}
-	if err := packagedesc.Validate(product, pageowner.PublicationResolver().WithDependencies); err != nil {
+	if err := packagedesc.Validate(product, resolver.WithDependencies); err != nil {
 		return platform.PackageDescriptor{}, err
 	}
 	return product, nil

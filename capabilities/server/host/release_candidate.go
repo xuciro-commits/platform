@@ -98,7 +98,7 @@ func (t *Tenant) PreviewReleaseDrafts(m platform.Member, drafts []build.JointDra
 }
 
 func (t *Tenant) releasePlannerLocked() releaseowner.Planner {
-	return releaseowner.Planner{Definitions: t.definitions, Registry: t.assetRegistryLocked, Drafts: t.builders[build.ID],
+	return releaseowner.Planner{Definitions: t.definitions, Registry: t.assetRegistryLocked, Resolver: PublicationResolver(), Drafts: t.builders[build.ID],
 		Validate: func(candidate platform.ReleaseCandidate, member platform.Member, at time.Time) error {
 			_, _, err := releaseowner.PrepareInstallation(releaseInstallationRuntime{t}, candidate, member, at, true, false)
 			return err
@@ -108,7 +108,7 @@ func (t *Tenant) releaseAssetsLocked(assets []platform.ReleaseAsset, replace boo
 	return t.releasePlannerLocked().Assets(assets, replace)
 }
 func (t *Tenant) codeReleaseAssetsLocked(app platform.App) ([]platform.ReleaseAsset, error) {
-	return releaseowner.CodeAssets(app, t.definitions, t.describer().DefinitionAsset, t.nativeFlowAsset, t.describer().DescribeOwnedAsset)
+	return releaseowner.CodeAssets(app, t.definitions, t.describer().DefinitionAsset, t.nativeFlowAsset, t.describer().DescribeOwnedAsset, PublicationResolver())
 }
 func (t *Tenant) candidateWithBindings(roots []platform.AssetRef, available []platform.ReleaseAsset, fixed []platform.AssetRef) (platform.ReleaseCandidate, error) {
 	return t.releasePlannerLocked().WithBindings(roots, available, fixed)
@@ -209,7 +209,7 @@ func (t *Tenant) pendingWorkFitsLocked(candidateID string, raw []byte) error {
 		c := t.automation(platform.WorkApp, false)
 		caller = &c
 	}
-	return releaseowner.PendingWorkFits(candidateID, raw, caller, t.releases.Raw)
+	return releaseowner.PendingWorkFits(PublicationResolver(), candidateID, raw, caller, t.releases.Raw)
 }
 
 func (t *Tenant) acceptedAssets() releaseowner.AcceptedAssets {

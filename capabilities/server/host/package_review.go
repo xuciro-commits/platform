@@ -27,6 +27,7 @@ func (h *Host) routesPackageReview(rt *routes) {
 			return
 		}
 		answer, err := packages.Review{
+			Resolver:  PublicationResolver(),
 			Blueprint: t.builders[build.ID].CompleteBlueprintAssets,
 			Impact: func(id string, after []platform.ReleaseAsset) (platform.PackageLifecycleImpact, error) {
 				return catalog.LifecycleImpact(c, id, after)

@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"platformserver/platform"
-	pageowner "platformserver/services/apps/pages"
 	"platformserver/services/resources/authoring"
 
 	"time"
@@ -121,7 +120,7 @@ func (s *Store) Review(id string, context ReviewContext) (SavedReleaseReview, er
 	if !exists {
 		return SavedReleaseReview{}, fmt.Errorf("saved release candidate not found")
 	}
-	saved, err := pageowner.PublicationResolver().ReadCandidate(id, raw)
+	saved, err := s.resolver.ReadCandidate(id, raw)
 	if err != nil {
 		return SavedReleaseReview{}, err
 	}
@@ -154,7 +153,7 @@ func (s *Store) Review(id string, context ReviewContext) (SavedReleaseReview, er
 	} else {
 		reply.Preview.CurrentID = running.ID
 		reply.RunningMatches = running.ID == id
-		reply.Preview.Added, reply.Preview.Removed, reply.Preview.Changed, err = pageowner.PublicationResolver().CandidateDiff(running, saved)
+		reply.Preview.Added, reply.Preview.Removed, reply.Preview.Changed, err = s.resolver.CandidateDiff(running, saved)
 		if err != nil {
 			return reply, err
 		}

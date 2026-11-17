@@ -75,8 +75,11 @@
   协议声明与校验归 `services/ontology`。资源服务只保留跨类型事务注册、发布资产绑定与路由适配。
 - 分支记录、检查、提案、审批和合并归 `services/resources/merge`；资源服务只保留跨资源 RID 映射、
   草稿存储与分支入口适配。main 隔离、审批顺序和单条合并接受结果由分支服务本身保持。
-- 发布声明、agent/protocol 描述归 `services/resources/publication`，AI 提案消费归
+- 发布声明与 protocol 描述归 `services/resources/publication`；`AgentReleaseDescriptor` 只保留 SDK 线格式，
+  agent 校验、工具依赖与声明生成归 AI 服务，publication 经宿主装配的 resolver 回调使用。AI 提案消费归
   `services/functions/authoring`；蓝图补全与测试根草稿仍由资源服务编排。
+- releases、apps 与 packages 使用装配时传入的 publication resolver，不在调用路径重新构造缺少能力回调的 resolver；
+  租户分叉、控制映像和模拟视图保留同一 resolver。
 - 产品与 ProductVersion 的记录类型、动作声明和版本视图归 `services/devops/descriptor`，候选冻结与产品包描述归
   `services/devops/packages`；资源服务只保留项目、资源范围校验和接受结果写入适配。
 - 通用发布的草稿引用与差异、保留版本族读取、依赖展开和安装次序归 `services/resources/publication`；

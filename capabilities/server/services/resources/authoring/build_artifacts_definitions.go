@@ -40,7 +40,7 @@ func (b *Build) DefinitionDescriptor(asset platform.ReleaseAsset) (platform.Defi
 		definition.TestPlan = &descriptor
 	case platform.AssetAgent:
 		var descriptor platform.AgentReleaseDescriptor
-		if json.Unmarshal(asset.Body, &descriptor) != nil || descriptor.Check() != nil {
+		if json.Unmarshal(asset.Body, &descriptor) != nil || b.resolver.CheckAgent(descriptor) != nil {
 			return definition, fmt.Errorf("agent descriptor is unavailable")
 		}
 		definition.Agent = &descriptor

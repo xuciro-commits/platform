@@ -94,7 +94,7 @@ func NewTenantWithCapabilities(id string, services platform.RuntimeCapabilities,
 	if err != nil {
 		return nil, fmt.Errorf("tenant %s: %w", id, err)
 	}
-	t := &Tenant{ID: id, ownerSet: owners, bindings: actions.NewBindings(nil), Works: protocol.NewWorks(), work: automation.NewWorkBoard(), index: &knowledgeindex.Index{},
+	t := &Tenant{ID: id, ownerSet: owners, bindings: actions.NewBindings(nil), Works: protocol.NewWorks(), work: automation.NewWorkBoard(), index: &knowledgeindex.Index{}, releases: releases.NewStore(PublicationResolver()),
 		ConnectorRoster: runtimekernel.NewConnectorRoster(id), Projection: records.NewStore()}
 	t.bindAuditStore()
 	t.Lane.BindReadScope(t.beginRecordRead, t.endLane)

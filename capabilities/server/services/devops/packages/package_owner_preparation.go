@@ -9,7 +9,6 @@ import (
 	"io"
 	"net/http"
 	"net/url"
-	pageowner "platformserver/services/apps/pages"
 
 	"slices"
 	"strings"
@@ -21,6 +20,7 @@ import (
 	packagedesc "platformserver/services/devops/descriptor"
 	functionauthoring "platformserver/services/functions/authoring"
 	"platformserver/services/resources/authoring"
+	"platformserver/services/resources/publication"
 )
 
 type PackagePreparation struct {
@@ -95,7 +95,7 @@ func Preparation(id, version string, blueprint platform.PackageBlueprint, instal
 		if root.Kind != platform.AssetApp {
 			continue
 		}
-		artifact, err := pageowner.PublicationResolver().ArtifactOfApplication(root, candidate.Assets)
+		artifact, err := source.Resolver.ArtifactOfApplication(root, candidate.Assets)
 		if err != nil {
 			return PackagePreparation{}, err
 		}
@@ -182,12 +182,13 @@ func Preparation(id, version string, blueprint platform.PackageBlueprint, instal
 }
 
 type PreparationSource struct {
-	Find  func(string, string) (DraftState, error)
-	App   func(string) platform.App
-	Model func(string, string, platform.ModelOptions) (string, string)
+	Find     func(string, string) (DraftState, error)
+	App      func(string) platform.App
+	Model    func(string, string, platform.ModelOptions) (string, string)
+	Resolver publication.Resolver
 }
 
-func Inspect(ctx context.Context, tenant string, request platform.PackageInspectRequest, send func(*http.Request, bool) (*http.Response, error), files platform.FileStore, check func(context.Context, platform.PackageDescriptor) (platform.Precheck, error)) (platform.PackagePreview, error) {
+func Inspect(ctx context.Context, resolver publication.Resolver, tenant string, request platform.PackageInspectRequest, send func(*http.Request, bool) (*http.Response, error), files platform.FileStore, check func(context.Context, platform.PackageDescriptor) (platform.Precheck, error)) (platform.PackagePreview, error) {
 	var preview platform.PackagePreview
 	content, origin := []byte(request.Content), "local-file"
 	if (request.URL == "") == (len(content) == 0) {
@@ -227,7 +228,7 @@ func Inspect(ctx context.Context, tenant string, request platform.PackageInspect
 	if err != nil {
 		return preview, err
 	}
-	if err := packagedesc.Validate(descriptor, pageowner.PublicationResolver().WithDependencies); err != nil {
+	if err := packagedesc.Validate(descriptor, resolver.WithDependencies); err != nil {
 		return preview, err
 	}
 	precheck, err := check(ctx, descriptor)
@@ -254,6 +255,7 @@ type PreparationOwner interface {
 
 type PreparationHooks struct {
 	Authorize func() *platform.Error
+	Resolver  publication.Resolver
 	Source    func() (PreparationOwner, bool)
 	Drafts    func() (build.ConstructionDrafts, bool)
 	Records   func(typ string, q platform.Query) (int, []any, *platform.Error)
@@ -300,7 +302,7 @@ func Prepare(id, version string, m platform.Member, hooks PreparationHooks) (Pac
 	if err != nil {
 		return fail(err)
 	}
-	candidate, err := BlueprintCandidate(blueprint, owner, code)
+	candidate, err := BlueprintCandidate(hooks.Resolver, blueprint, owner, code)
 	if err != nil {
 		return fail(err)
 	}
@@ -320,7 +322,7 @@ func Prepare(id, version string, m platform.Member, hooks PreparationHooks) (Pac
 		}
 		return state, nil
 	}
-	answer, err := Preparation(id, version, blueprint, installed, candidate, m, PreparationSource{Find: find, App: hooks.App, Model: hooks.modelProblem})
+	answer, err := Preparation(id, version, blueprint, installed, candidate, m, PreparationSource{Find: find, App: hooks.App, Model: hooks.modelProblem, Resolver: hooks.Resolver})
 	if err != nil {
 		return fail(err)
 	}

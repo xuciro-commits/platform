@@ -5,17 +5,17 @@ import (
 	"encoding/hex"
 	"fmt"
 	"platformserver/platform"
-	pageowner "platformserver/services/apps/pages"
+	"platformserver/services/resources/publication"
 
 	"strings"
 	"time"
 )
 
-func SealArtifact(tenant, id string, raw []byte, now time.Time) (platform.SealedArtifact, error) {
+func SealArtifact(resolver publication.Resolver, tenant, id string, raw []byte, now time.Time) (platform.SealedArtifact, error) {
 	if raw == nil {
 		return platform.SealedArtifact{}, fmt.Errorf("release candidate %s is not saved", id)
 	}
-	candidate, err := pageowner.PublicationResolver().ReadCandidate(id, raw)
+	candidate, err := resolver.ReadCandidate(id, raw)
 	if err != nil {
 		return platform.SealedArtifact{}, fmt.Errorf("release candidate %s: %w", id, err)
 	}
@@ -24,12 +24,12 @@ func SealArtifact(tenant, id string, raw []byte, now time.Time) (platform.Sealed
 		Digest: "sha256:" + hex.EncodeToString(sum[:]), Size: len(raw), Assets: len(candidate.Assets), SealedAt: now.UTC()}, nil
 }
 
-func VerifySealed(id string, artifact platform.SealedArtifact, data []byte) error {
+func VerifySealed(resolver publication.Resolver, id string, artifact platform.SealedArtifact, data []byte) error {
 	sum := sha256.Sum256(data)
 	if "sha256:"+hex.EncodeToString(sum[:]) != artifact.Digest {
 		return fmt.Errorf("sealed candidate %s: bytes differ from the sealed digest", id)
 	}
-	if _, err := pageowner.PublicationResolver().ReadCandidate(id, data); err != nil {
+	if _, err := resolver.ReadCandidate(id, data); err != nil {
 		return fmt.Errorf("sealed candidate %s: %w", id, err)
 	}
 	return nil

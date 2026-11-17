@@ -9,6 +9,7 @@ type Environment interface {
 	Host() platform.BuildHost
 	AppID() string
 	Version() string
+	Resolver() publication.Resolver
 	Entity(string) (platform.EntityInfo, bool)
 	DraftObjectLookup(platform.Caller) (func(string) (platform.EntityInfo, bool), error)
 	CheckName(string, string) error

@@ -24,6 +24,7 @@ func (t *Tenant) registerDefinitions() error {
 		BindInterface: func(q platform.NamedQuery) (platform.NamedQuery, error) { return t.bindInterfaceQuery(q) },
 		InstallLink:   t.Projection.InstallLinkConstraint,
 		NativeFlow:    t.nativeFlowAsset,
+		Resolver:      PublicationResolver(),
 		CheckObject:   t.checkObjectProperties,
 		Describe:      t.describer().DescribeDefinition,
 		Store:         func(def platform.Definition) { t.setDefinitions(append(t.definitions, def)) },

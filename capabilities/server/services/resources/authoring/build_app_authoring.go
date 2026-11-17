@@ -7,6 +7,7 @@ import (
 	"platformserver/kernel/records"
 	"platformserver/platform"
 	appsauthoring "platformserver/services/apps/authoring"
+	"platformserver/services/resources/publication"
 )
 
 type appEnvironment struct {
@@ -16,6 +17,9 @@ type appEnvironment struct {
 func (e appEnvironment) Host() platform.BuildHost { return e.b.host }
 func (e appEnvironment) AppID() string            { return ID }
 func (e appEnvironment) Version() string          { return ValueDefinitionVersion }
+func (e appEnvironment) Resolver() publication.Resolver {
+	return e.b.resolver
+}
 func (e appEnvironment) Entity(typ string) (platform.EntityInfo, bool) {
 	return e.b.lookupEntity(typ)
 }

@@ -53,7 +53,7 @@ func (t *Tenant) ApplicationRecordDiagnostic(m platform.Member, ref platform.Ass
 }
 
 func (t *Tenant) applicationContext() appowner.Context {
-	return appowner.Context{Tenant: t.ID, Admit: t.Admits, Definitions: t.Definitions, Entity: t.Entity, App: t.App,
+	return appowner.Context{Tenant: t.ID, Resolver: PublicationResolver(), Admit: t.Admits, Definitions: t.Definitions, Entity: t.Entity, App: t.App,
 		Assets: func() ([]platform.ReleaseAsset, error) { return t.releaseAssetsLocked(nil, false) }, Candidate: t.releases.Candidate,
 		Candidates: func() map[string]json.RawMessage { return t.releases.Candidates() }, CloseCandidate: t.candidateWithBindings,
 		Rows: func(m platform.Member, typ string, q platform.Query, at time.Time) ([]any, *platform.Error) {

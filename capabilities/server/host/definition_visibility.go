@@ -32,7 +32,7 @@ func (t *Tenant) definitionsFrom(m platform.Member, registeredDefinitions []plat
 	caller := func(app string) platform.Caller {
 		return platform.NewCaller(runtime{t: t, scoped: true}, m, app, false, false)
 	}
-	return build.DefinitionVisibility{Tenant: t.ID, Member: m, Entities: entities, Actions: actionsByName, Registered: registeredDefinitions,
+	return build.DefinitionVisibility{Tenant: t.ID, Resolver: PublicationResolver(), Member: m, Entities: entities, Actions: actionsByName, Registered: registeredDefinitions,
 		OwnerActive:  t.OwnerActive,
 		Denied:       func() bool { return t.Admits(m) != nil },
 		ResourceRole: func(project string) string { return t.ResourceRole(m, project) },

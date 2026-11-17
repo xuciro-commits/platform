@@ -12,7 +12,7 @@ import (
 
 func (h hostView) ApprovalRelease(app, action, typ string) (string, *platform.Error) {
 	release, err := releaseowner.ApprovedRelease(
-		releaseowner.ActivatedReleases(h.t.Committed.AllAnswers("active"), h.ActiveRelease()),
+		releaseowner.ActivatedReleases(PublicationResolver(), h.t.Committed.AllAnswers("active"), h.ActiveRelease()),
 		app, action, typ, &h.t.releases, h.t.releaseAcceptance().Running)
 	return release, runtimekernel.ConflictRefusal(err)
 }

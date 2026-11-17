@@ -92,7 +92,7 @@ func (d *Deployment) Serve(tenants ...*Tenant) (serveErr error) {
 	for _, tenant := range tenants {
 		tenant.services.StorageModule = d.storageModule()
 	}
-	index, err := packages.LoadPackageIndex(d.Packages)
+	index, err := packages.LoadPackageIndex(PublicationResolver(), d.Packages)
 	if err != nil {
 		return err
 	}

@@ -216,7 +216,7 @@ func codeApprovalDescriptor(approval *platform.Approval) any {
 	}{Pending: approval.Pending, Rejected: approval.Rejected, Levels: levels}
 }
 
-func CandidateWithBindings(roots []platform.AssetRef, available []platform.ReleaseAsset, fixed []platform.AssetRef, resolve func(platform.AssetRef, string, ...string) (platform.ReleaseAsset, error)) (platform.ReleaseCandidate, error) {
+func CandidateWithBindings(resolver publication.Resolver, roots []platform.AssetRef, available []platform.ReleaseAsset, fixed []platform.AssetRef, resolve func(platform.AssetRef, string, ...string) (platform.ReleaseAsset, error)) (platform.ReleaseCandidate, error) {
 	assets := slices.Clone(available)
 	indices := map[platform.AssetRef]int{}
 	for i, asset := range assets {
@@ -438,10 +438,10 @@ func CandidateWithBindings(roots []platform.AssetRef, available []platform.Relea
 		}
 		assets[i] = asset
 	}
-	return pageowner.PublicationResolver().Candidate(roots, assets)
+	return resolver.Candidate(roots, assets)
 }
 
-func CodeReleaseAssets(manifest platform.Manifest, definitions []platform.Definition, special map[platform.AssetRef]platform.ReleaseAsset) ([]platform.ReleaseAsset, error) {
+func CodeReleaseAssets(resolver publication.Resolver, manifest platform.Manifest, definitions []platform.Definition, special map[platform.AssetRef]platform.ReleaseAsset) ([]platform.ReleaseAsset, error) {
 	var available []platform.ReleaseAsset
 	for _, def := range definitions {
 		if def.Ref.App != manifest.ID || def.Source != "code" {
@@ -546,7 +546,7 @@ func CodeReleaseAssets(manifest platform.Manifest, definitions []platform.Defini
 			if def.Page == nil {
 				return nil, fmt.Errorf("code page %s has no owner declaration", def.Ref)
 			}
-			asset, err := pageowner.PublicationResolver().PageReleaseAsset(manifest.ID, manifest.Version, *def.Page)
+			asset, err := resolver.PageReleaseAsset(manifest.ID, manifest.Version, *def.Page)
 			if err != nil {
 				return nil, err
 			}
@@ -563,7 +563,7 @@ func CodeReleaseAssets(manifest platform.Manifest, definitions []platform.Defini
 			resources = append(resources, asset.Ref)
 		}
 	}
-	asset, err := pageowner.PublicationResolver().ApplicationReleaseAsset(manifest.ID, manifest.Version,
+	asset, err := resolver.ApplicationReleaseAsset(manifest.ID, manifest.Version,
 		platform.Application{Name: manifest.ID, Title: manifest.Title, Pages: pages, Resources: UniqueRefs(resources)})
 	if err != nil {
 		return nil, err
@@ -594,7 +594,7 @@ func (p Planner) Assets(builderAssets []platform.ReleaseAsset, replaceBuilder bo
 	return append(out, builderAssets...), nil
 }
 
-func CodeAssets(app platform.App, allDefinitions []platform.Definition, definitionAsset func(platform.Definition) (platform.ReleaseAsset, error), nativeFlow func(platform.App, string, int) (platform.ReleaseAsset, error), describe func(platform.ReleaseAsset) (platform.ReleaseAsset, error)) ([]platform.ReleaseAsset, error) {
+func CodeAssets(app platform.App, allDefinitions []platform.Definition, definitionAsset func(platform.Definition) (platform.ReleaseAsset, error), nativeFlow func(platform.App, string, int) (platform.ReleaseAsset, error), describe func(platform.ReleaseAsset) (platform.ReleaseAsset, error), resolver publication.Resolver) ([]platform.ReleaseAsset, error) {
 	manifest := app.Manifest()
 	definitions := []platform.Definition{}
 	special := map[platform.AssetRef]platform.ReleaseAsset{}
@@ -621,7 +621,7 @@ func CodeAssets(app platform.App, allDefinitions []platform.Definition, definiti
 		}
 		special[definition.Ref] = asset
 	}
-	assets, err := CodeReleaseAssets(manifest, definitions, special)
+	assets, err := CodeReleaseAssets(resolver, manifest, definitions, special)
 	if err != nil {
 		return nil, err
 	}
@@ -736,13 +736,14 @@ func (p Planner) Preview(drafts []build.JointDraftRef, member platform.Member) (
 		}
 		return reply, candidate, nil
 	}
-	reply.Added, reply.Removed, reply.Changed, err = pageowner.PublicationResolver().CandidateDiff(current, candidate)
+	reply.Added, reply.Removed, reply.Changed, err = p.Resolver.CandidateDiff(current, candidate)
 	return reply, candidate, err
 }
 
 type Planner struct {
 	Definitions []platform.Definition
 	Registry    func() (*publication.AssetRegistry, error)
+	Resolver    publication.Resolver
 	Drafts      build.ConstructionDrafts
 	Validate    func(platform.ReleaseCandidate, platform.Member, time.Time) error
 	withReview  bool
@@ -753,7 +754,7 @@ func (p Planner) WithBindings(roots []platform.AssetRef, available []platform.Re
 	if err != nil {
 		return platform.ReleaseCandidate{}, err
 	}
-	return CandidateWithBindings(roots, available, fixed, registry.ResolvePinned)
+	return CandidateWithBindings(p.Resolver, roots, available, fixed, registry.ResolvePinned)
 }
 
 func (p Planner) PreviewWithActions(drafts []build.JointDraftRef, member platform.Member) (ReleasePreview, error) {

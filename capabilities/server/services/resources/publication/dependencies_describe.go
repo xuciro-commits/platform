@@ -260,11 +260,11 @@ func (resolver Resolver) describeAsset(asset platform.ReleaseAsset, historical b
 		if err := json.Unmarshal(asset.Body, &agent); err != nil {
 			return out, err
 		}
-		if err := agent.Check(); err != nil {
+		if err := resolver.CheckAgent(agent); err != nil {
 			return out, err
 		}
 		if historical {
-			for _, ref := range agent.Dependencies(asset.Ref.App) {
+			for _, ref := range resolver.AgentDependencies(agent, asset.Ref.App) {
 				add(ref)
 			}
 		} else {

@@ -7,7 +7,6 @@ import (
 	"platformserver/kernel/acceptedformat"
 	"platformserver/kernel/records"
 	"platformserver/platform"
-	pageowner "platformserver/services/apps/pages"
 	"platformserver/services/resources/authoring"
 
 	"slices"
@@ -58,7 +57,7 @@ type ReleaseAcceptance struct {
 }
 
 func (a ReleaseAcceptance) Apply(raw []byte) (acceptedformat.Release, error) {
-	saved, err := acceptedformat.DecodeRelease(raw, pageowner.PublicationResolver().ReadCandidate)
+	saved, err := acceptedformat.DecodeRelease(raw, a.Store.resolver.ReadCandidate)
 	if err != nil {
 		return saved, err
 	}
@@ -92,7 +91,7 @@ func (a ReleaseAcceptance) Apply(raw []byte) (acceptedformat.Release, error) {
 			return saved, err
 		}
 		if saved.Version >= 4 {
-			candidate, err := pageowner.PublicationResolver().ReadCandidate(saved.CandidateID, saved.Bytes)
+			candidate, err := a.Store.resolver.ReadCandidate(saved.CandidateID, saved.Bytes)
 			if err != nil {
 				return saved, err
 			}
@@ -161,7 +160,7 @@ func (a ReleaseAcceptance) Activate(m platform.Member, candidateID, key, upgrade
 		return "", err
 	}
 	if prior := a.Answer("release:activate:" + key); prior != nil {
-		saved, err := acceptedformat.DecodeRelease(prior, pageowner.PublicationResolver().ReadCandidate)
+		saved, err := acceptedformat.DecodeRelease(prior, a.Store.resolver.ReadCandidate)
 		hash, hashErr := acceptedformat.ReleaseRequestHash(a.Tenant, m.ID, "activate:"+key, candidateID, true, upgradeID)
 		if err != nil || hashErr != nil || hash != saved.RequestHash {
 			return "", fmt.Errorf("activation key belongs to another request")
@@ -172,7 +171,7 @@ func (a ReleaseAcceptance) Activate(m platform.Member, candidateID, key, upgrade
 	if raw == nil {
 		return "", fmt.Errorf("release candidate %s is not saved", candidateID)
 	}
-	installations, bootstrap, err := PlanActivation(candidateID, raw, upgradeID, Activation{
+	installations, bootstrap, err := PlanActivation(a.Store.resolver, candidateID, raw, upgradeID, Activation{
 		UpgradePlan: func(candidate platform.ReleaseCandidate) (*ReleaseUpgradePlan, error) {
 			return a.upgradePlan(candidate, m, now)
 		},
@@ -253,7 +252,7 @@ func (a ReleaseAcceptance) Commit(m platform.Member, saved acceptedformat.Releas
 			saved.MediaVersions = snapshots
 		}
 	}
-	raw, err := acceptedformat.EncodeRelease(saved, pageowner.PublicationResolver().ReadCandidate)
+	raw, err := acceptedformat.EncodeRelease(saved, a.Store.resolver.ReadCandidate)
 	if err != nil {
 		return "", err
 	}
@@ -282,7 +281,7 @@ func (a ReleaseAcceptance) Commit(m platform.Member, saved acceptedformat.Releas
 }
 
 func (a ReleaseAcceptance) ApplyPrepared(m platform.Member, entry ReleaseEntry) (string, error) {
-	saved, err := acceptedformat.DecodeRelease(entry.Body, pageowner.PublicationResolver().ReadCandidate)
+	saved, err := acceptedformat.DecodeRelease(entry.Body, a.Store.resolver.ReadCandidate)
 	if err != nil {
 		return "", err
 	}

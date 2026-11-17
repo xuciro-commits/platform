@@ -8,7 +8,7 @@ import (
 	"maps"
 	"os"
 	"path/filepath"
-	pageowner "platformserver/services/apps/pages"
+	"platformserver/services/resources/publication"
 
 	"slices"
 	"strings"
@@ -24,14 +24,15 @@ import (
 type Owner struct {
 	mu             sync.Mutex
 	tenant         string
+	resolver       publication.Resolver
 	packages       map[string]*platform.InstalledPackage
 	packageSources map[string]platform.PackageSource
 	index          *platform.PackageIndex
 	host           platform.PackageHost
 }
 
-func New(tenant string) *Owner {
-	return &Owner{tenant: tenant, packages: map[string]*platform.InstalledPackage{}, index: &platform.PackageIndex{}}
+func New(tenant string, resolver publication.Resolver) *Owner {
+	return &Owner{tenant: tenant, resolver: resolver, packages: map[string]*platform.InstalledPackage{}, index: &platform.PackageIndex{}}
 }
 
 func (d *Owner) Attach(host platform.PackageHost) { d.host = host }
@@ -104,7 +105,7 @@ func Actions() []platform.Action {
 	}
 }
 
-func LoadPackageIndex(dir string) (*platform.PackageIndex, error) {
+func LoadPackageIndex(resolver publication.Resolver, dir string) (*platform.PackageIndex, error) {
 	index := &platform.PackageIndex{Directory: dir}
 	if dir == "" {
 		return index, nil
@@ -130,7 +131,7 @@ func LoadPackageIndex(dir string) (*platform.PackageIndex, error) {
 			list = []platform.PackageDescriptor{one}
 		}
 		for _, p := range list {
-			if err := packagedesc.Validate(p, pageowner.PublicationResolver().WithDependencies); err != nil {
+			if err := packagedesc.Validate(p, resolver.WithDependencies); err != nil {
 				return nil, fmt.Errorf("package index %s: %w", entry.Name(), err)
 			}
 			index.Packages = append(index.Packages, p)
@@ -145,7 +146,7 @@ func LoadPackageIndex(dir string) (*platform.PackageIndex, error) {
 	return index, nil
 }
 
-func BlueprintCandidate(b platform.PackageBlueprint, owner build.ConstructionDrafts, code []platform.ReleaseAsset) (platform.ReleaseCandidate, error) {
+func BlueprintCandidate(resolver publication.Resolver, b platform.PackageBlueprint, owner build.ConstructionDrafts, code []platform.ReleaseAsset) (platform.ReleaseCandidate, error) {
 	assets, err := owner.CompleteBlueprintAssets(b.Assets)
 	if err != nil {
 		return platform.ReleaseCandidate{}, err
@@ -155,12 +156,12 @@ func BlueprintCandidate(b platform.PackageBlueprint, owner build.ConstructionDra
 			return platform.ReleaseCandidate{}, fmt.Errorf("a package blueprint contains only Build-owned definitions")
 		}
 		var err error
-		assets[i], err = pageowner.PublicationResolver().WithDependencies(asset)
+		assets[i], err = resolver.WithDependencies(asset)
 		if err != nil {
 			return platform.ReleaseCandidate{}, err
 		}
 	}
-	return pageowner.PublicationResolver().Candidate(b.Roots, append(assets, code...))
+	return resolver.Candidate(b.Roots, append(assets, code...))
 }
 
 func (d *Owner) sealedPackageDescriptor(id, version, artifact string) (platform.PackageDescriptor, error) {
@@ -214,7 +215,7 @@ func (d *Owner) packageIndex() (*platform.PackageIndex, error) {
 	if bound.Directory == "" {
 		return d.sourceIndex(bound)
 	}
-	current, err := LoadPackageIndex(bound.Directory)
+	current, err := LoadPackageIndex(d.resolver, bound.Directory)
 	if err != nil {
 		return bound, err
 	}
@@ -227,7 +228,7 @@ func (d *Owner) precheck(p platform.PackageDescriptor, index *platform.PackageIn
 	if len(planned) > 0 {
 		proposed = planned[0]
 	}
-	if err := packagedesc.Validate(p, pageowner.PublicationResolver().WithDependencies); err != nil {
+	if err := packagedesc.Validate(p, d.resolver.WithDependencies); err != nil {
 		out.OK, out.Problems = false, []string{err.Error()}
 		return out
 	}
@@ -249,7 +250,7 @@ func (d *Owner) precheck(p platform.PackageDescriptor, index *platform.PackageIn
 		} else {
 			code, err := d.prerequisiteAssets(p, index, proposed)
 			if err == nil {
-				_, err = BlueprintCandidate(*p.Blueprint, owner, code)
+				_, err = BlueprintCandidate(d.resolver, *p.Blueprint, owner, code)
 			}
 			if err != nil {
 				out.Problems = append(out.Problems, err.Error())

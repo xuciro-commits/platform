@@ -118,7 +118,7 @@ func newMonitoringTenant(tb testing.TB) *invariantTenant {
 	console := controlowner.NewConsole(id, actions.NewAuthority, func(id string) controlowner.Owners {
 		actions := append(platform.AccessActions(), platform.ProjectActions()...)
 		actions = append(actions, packages.Actions()...)
-		return controlowner.Owners{Policies: security.NewPolicies(), Packages: packages.New(id), Actions: actions}
+		return controlowner.Owners{Policies: security.NewPolicies(), Packages: packages.New(id, PublicationResolver()), Actions: actions}
 	}, platform.Seat{Subjects: []string{"admin"}, Member: platform.Member{ID: "admin", Roles: map[string]string{controlowner.PlatformApp: controlowner.Admin, build.ID: build.Builder, "probe": "runner", platform.FlowApp: automation.Admin, platform.AgentApp: platform.AgentAdmin}}},
 		platform.Seat{Subjects: []string{"builder"}, Member: platform.Member{ID: "builder", Roles: map[string]string{build.ID: build.Builder, "probe": "runner"}}},
 		platform.Seat{Subjects: []string{"other"}, Member: platform.Member{ID: "other", Roles: map[string]string{build.ID: build.Builder, "probe": "runner"}}},
