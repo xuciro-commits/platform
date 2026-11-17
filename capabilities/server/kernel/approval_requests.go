@@ -16,8 +16,8 @@ type ApprovalRequests struct {
 }
 
 func (h ApprovalRequests) Request(probeOnly bool, c platform.Caller, app string, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *platform.Error) {
-	a, ok := h.App(app).(platform.App)
-	if !ok || c.Automation || c.Tenant != h.Tenant || s.GetAuthority() != app || s.GetPrincipalId() != c.ID {
+	a := h.App(app)
+	if a == nil || c.Automation || c.Tenant != h.Tenant || s.GetAuthority() != app || s.GetPrincipalId() != c.ID {
 		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "The approval needs its original authorised member")
 	}
 	if probeOnly {
@@ -34,9 +34,9 @@ func (h ApprovalRequests) Submit(a platform.App, m platform.Member, s *pb.Submis
 	}); err != nil {
 		return nil, err
 	}
-	owner, ok := h.App(platform.WorkApp).(platform.ApprovalOwner)
-	if !ok {
+	owner := h.App(platform.WorkApp)
+	if owner == nil {
 		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The approval owner is unavailable")
 	}
-	return owner.RequestApproval(c, s, now)
+	return owner.(platform.ApprovalOwner).RequestApproval(c, s, now)
 }

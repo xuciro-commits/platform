@@ -65,10 +65,7 @@ func (r *flowExecutionRuntime) RequestApproval(c platform.Caller, app string, s 
 	}); refusal != nil {
 		return nil, refusal
 	}
-	work, ok := r.stateApp(r.tenant.App(platform.WorkApp)).(platform.ApprovalOwner)
-	if !ok {
-		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The approval owner is unavailable")
-	}
+	work := r.stateApp(r.tenant.App(platform.WorkApp)).(platform.ApprovalOwner)
 	context := hostView{t: r.tenant, app: work, decision: r.stagedDecision}
 	bindings := context.ownerBindings()
 	bindings.Work = flowExecution{hostView: context, rt: r}
