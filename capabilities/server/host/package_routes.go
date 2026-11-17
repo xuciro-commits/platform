@@ -50,11 +50,8 @@ func (t *Tenant) PackagePreparation(ctx context.Context, m platform.Member, id, 
 				return refusal
 			},
 			Resolver: PublicationResolver(),
-			Source: func() (packages.PreparationOwner, bool) {
-				source, ok := t.App(controlowner.PlatformApp).(packages.PreparationOwner)
-				return source, ok
-			},
-			Drafts: func() (build.ConstructionDrafts, bool) { owner := t.builders[build.ID]; return owner, owner != nil },
+			Source:   func() (packages.PreparationOwner, bool) { return t.packagesOwner, t.packagesOwner != nil },
+			Drafts:   func() (build.ConstructionDrafts, bool) { owner := t.builders[build.ID]; return owner, owner != nil },
 			Records: func(typ string, q platform.Query) (int, []any, *platform.Error) {
 				page, refusal := t.objectOwner(t.Projection).Records(m, typ, q, at)
 				return page.Total, page.Records, refusal
