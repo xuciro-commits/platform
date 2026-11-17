@@ -106,7 +106,8 @@ func (b *Build) prepareReleasePublications(assets []platform.ReleaseAsset) ([]pl
 	publications = append(publications, images...)
 	agent, _ := publication.Kind(b.publications, platform.AssetAgent)
 	plan, _ := publication.Kind(b.publications, platform.AssetTestPlan)
-	for _, prepare := range []func([]platform.ReleaseAsset) ([]platform.ReleasePublication, error){agent.FreezeBatch, plan.FreezeBatch, b.PrepareCodeReleasePublications, b.prepareTablePublications} {
+	compute, _ := publication.Kind(b.publications, platform.AssetCompute)
+	for _, prepare := range []func([]platform.ReleaseAsset) ([]platform.ReleasePublication, error){agent.FreezeBatch, plan.FreezeBatch, compute.FreezeBatch} {
 		images, err := prepare(assets)
 		if err != nil {
 			return nil, nil, err

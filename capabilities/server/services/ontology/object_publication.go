@@ -475,34 +475,36 @@ func ObjectPublication(env ObjectPublicationEnvironment) publication.Hooks {
 		return published, entity, actions, []platform.Page{env.Page(published)}, nil
 	}
 	return publication.Hooks{
-		Kinds:   []platform.AssetKind{platform.AssetObject},
-		Schemas: []string{SchemaPublish},
-		Validate: func(raw json.RawMessage) error {
-			published, _, _, _, err := image(raw)
-			if err != nil {
-				return err
-			}
-			return env.Validate(platform.Caller{Replaying: true}, published)
-		},
-		Install: func(raw json.RawMessage) error {
-			published, entity, actions, pages, err := image(raw)
-			if err != nil {
-				return err
-			}
-			pages, _, err = env.Pages(published)
-			if err != nil {
-				return err
-			}
-			if err := env.Authority().Extend([]string{entity.Type}, actions); err != nil {
-				return fmt.Errorf("extend accepted object: %w", err)
-			}
-			env.Authority().Catalog().ReplaceTarget(entity.Type, actions)
-			if err := env.Host().Install(platform.Caller{Replaying: true}, entity, actions, pages...); err != nil {
-				return fmt.Errorf("install accepted object: %w", err)
-			}
-			env.Installed(entity)
-			return nil
-		},
+		Kinds: []platform.AssetKind{platform.AssetObject},
+		Schemas: []publication.SchemaHooks{{
+			Name: SchemaPublish,
+			Validate: func(raw json.RawMessage) error {
+				published, _, _, _, err := image(raw)
+				if err != nil {
+					return err
+				}
+				return env.Validate(platform.Caller{Replaying: true}, published)
+			},
+			Install: func(raw json.RawMessage) error {
+				published, entity, actions, pages, err := image(raw)
+				if err != nil {
+					return err
+				}
+				pages, _, err = env.Pages(published)
+				if err != nil {
+					return err
+				}
+				if err := env.Authority().Extend([]string{entity.Type}, actions); err != nil {
+					return fmt.Errorf("extend accepted object: %w", err)
+				}
+				env.Authority().Catalog().ReplaceTarget(entity.Type, actions)
+				if err := env.Host().Install(platform.Caller{Replaying: true}, entity, actions, pages...); err != nil {
+					return fmt.Errorf("install accepted object: %w", err)
+				}
+				env.Installed(entity)
+				return nil
+			},
+		}},
 		ReadFrozen: func(raw json.RawMessage) (json.RawMessage, error) {
 			var record struct {
 				Published string `json:"published"`

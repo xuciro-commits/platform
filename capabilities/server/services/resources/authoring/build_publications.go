@@ -27,23 +27,9 @@ func (b *Build) ValidateAcceptedPublication(schema string, image []byte) error {
 	if b.automation.HandlesPublication(schema) {
 		return b.automation.ValidateImage(schema, image)
 	}
-	if schema == SchemaTablePublish {
-		tb, err := functionauthoring.DecodeTablePublication(image)
-		if err != nil {
-			return err
-		}
-		return b.host.ValidateInstallOperation(platform.Caller{Replaying: true}, tb.Definition())
-	}
 
 	if k := definitionKindOfSchema(schema); k != nil {
 		return k.validateImage(b, image)
-	}
-	if schema == functionauthoring.SchemaCodePublish {
-		code, err := functionauthoring.DecodeCodePublication(image)
-		if err != nil {
-			return err
-		}
-		return b.host.ValidateInstallOperation(platform.Caller{Replaying: true}, code.Definition())
 	}
 	return fmt.Errorf("not an accepted builder publication: %s", schema)
 }
@@ -61,28 +47,9 @@ func (b *Build) ApplyAcceptedPublication(schema string, image []byte) error {
 	if b.automation.HandlesPublication(schema) {
 		return b.automation.ApplyImage(schema, image)
 	}
-	if schema == SchemaTablePublish {
-		tb, err := functionauthoring.DecodeTablePublication(image)
-		if err != nil {
-			return err
-		}
-		var record functionauthoring.Table
-		if err := json.Unmarshal(image, &record); err != nil {
-			return err
-		}
-		tb.Versions = record.Versions
-		return b.functions.InstallTable(platform.Caller{Replaying: true}, tb)
-	}
 
 	if k := definitionKindOfSchema(schema); k != nil {
 		return k.applyImage(b, image)
-	}
-	if schema == functionauthoring.SchemaCodePublish {
-		code, err := functionauthoring.DecodeCodePublication(image)
-		if err != nil {
-			return err
-		}
-		return b.functions.InstallCode(platform.Caller{Replaying: true}, code)
 	}
 	return fmt.Errorf("not an accepted builder publication: %s", schema)
 }
@@ -113,10 +80,6 @@ func published[T any](definition T) string {
 		value.Versions = nil
 		definition = any(value).(T)
 	case functionauthoring.Function:
-		value.Published = ""
-		value.Versions = nil
-		definition = any(value).(T)
-	case functionauthoring.Code:
 		value.Published = ""
 		value.Versions = nil
 		definition = any(value).(T)
@@ -169,22 +132,8 @@ func (b *Build) Reinstall() error {
 	if err := b.agent.Restore(); err != nil {
 		return err
 	}
-	codes, err := b.functions.CodeInventory()
-	if err != nil {
+	if err := b.functions.RestoreCodes(); err != nil {
 		return err
-	}
-	for _, record := range codes {
-		if record.Published == "" {
-			continue
-		}
-		raw, _ := json.Marshal(record)
-		code, err := functionauthoring.DecodeCodePublication(raw)
-		if err != nil {
-			return err
-		}
-		if err := b.functions.InstallCode(platform.Caller{Replaying: true}, code); err != nil {
-			return err
-		}
 	}
 	if err := b.apps.RestorePages(); err != nil {
 		return err
@@ -192,7 +141,7 @@ func (b *Build) Reinstall() error {
 	if err := b.automation.Restore(); err != nil {
 		return err
 	}
-	if err := b.installTables(); err != nil {
+	if err := b.functions.RestoreTables(); err != nil {
 		return err
 	}
 	if err := b.apps.RestoreApplications(); err != nil {

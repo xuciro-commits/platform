@@ -28,15 +28,19 @@ type Frozen struct {
 	Installations []platform.AssetInstallation
 }
 
+type SchemaHooks struct {
+	Name     string
+	Decode   func(json.RawMessage) (platform.AssetRef, error)
+	Validate func(json.RawMessage) error
+	Install  func(json.RawMessage) error
+}
+
 type Hooks struct {
 	Kinds          []platform.AssetKind
-	Schemas        []string
+	Schemas        []SchemaHooks
 	FreezeOn       platform.AssetKind
-	Decode         func(json.RawMessage) (platform.AssetRef, error)
-	Validate       func(json.RawMessage) error
 	Freeze         func(platform.Caller, string, platform.ReleaseAsset, []platform.ReleaseAsset) (Frozen, error)
 	Closure        func(platform.Caller, string, platform.Member) (DraftClosure, error)
-	Install        func(json.RawMessage) error
 	ReadFrozen     func(json.RawMessage) (json.RawMessage, error)
 	FreezeBatch    func([]platform.ReleaseAsset) ([]platform.ReleasePublication, error)
 	VersionedDraft func(string) (DraftClosure, error)
@@ -52,11 +56,13 @@ func Kind(table []Hooks, kind platform.AssetKind) (Hooks, bool) {
 	return Hooks{}, false
 }
 
-func Schema(table []Hooks, schema string) (Hooks, bool) {
+func Schema(table []Hooks, schema string) (SchemaHooks, bool) {
 	for _, hooks := range table {
-		if slices.Contains(hooks.Schemas, schema) {
-			return hooks, true
+		for _, candidate := range hooks.Schemas {
+			if candidate.Name == schema {
+				return candidate, true
+			}
 		}
 	}
-	return Hooks{}, false
+	return SchemaHooks{}, false
 }

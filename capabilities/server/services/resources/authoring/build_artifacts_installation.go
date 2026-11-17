@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"maps"
-	functionauthoring "platformserver/services/functions/authoring"
 	"platformserver/services/ontology"
 	"reflect"
 	"slices"
@@ -49,14 +48,6 @@ func (b *Build) DecodeAssetInstallation(schema string, image json.RawMessage) (p
 		if err != nil {
 			return platform.AssetInstallation{}, err
 		}
-	}
-	switch schema {
-	case SchemaTablePublish:
-		r, err := functionauthoring.DecodeTablePublication(image)
-		if err != nil {
-			return platform.AssetInstallation{}, err
-		}
-		ref = platform.AssetRef{App: ID, Kind: platform.AssetCompute, Name: r.Name}
 	}
 	return platform.AssetInstallation{Ref: ref, Schema: schema, Record: descriptor.record(record.ID), Image: slices.Clone(image)}, nil
 }
@@ -174,22 +165,7 @@ func (b *Build) declarationReleaseDraft(asset platform.ReleaseAsset) (string, an
 		}
 		return AgentType, d, nil
 	case platform.AssetCompute:
-		var operation platform.Operation
-		if json.Unmarshal(asset.Body, &operation) == nil && operation.Binding.Kind == "native" {
-			table, err := b.tableFromAsset(asset)
-			table.State, table.Version = "draft", 0
-			return functionauthoring.TableType, table, err
-		}
-		rows, err := b.functions.CodeInventory()
-		if err != nil {
-			return "", nil, err
-		}
-		for _, record := range rows {
-			if record.Name == asset.Ref.Name && !record.Archived {
-				return functionauthoring.CodeType, record, nil
-			}
-		}
-		return "", nil, fmt.Errorf("compute %s needs its original compiled target owner; a module descriptor does not carry source or compilation evidence", asset.Ref)
+		return b.functions.OperationDraft(asset)
 	}
 	return "", nil, nil
 }

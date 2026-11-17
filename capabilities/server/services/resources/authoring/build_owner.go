@@ -87,8 +87,8 @@ func (b *Build) bindPublications() {
 	b.publications = append([]publication.Hooks{object}, b.publicationBase...)
 	agent := b.agent
 	b.publications = append(b.publications, publication.Hooks{
-		Kinds: []platform.AssetKind{platform.AssetAgent}, Schemas: []string{SchemaAgentPublish},
-		Validate: agent.ValidateImage, Install: agent.InstallImage, ReadFrozen: agent.ReadFrozen,
+		Kinds: []platform.AssetKind{platform.AssetAgent}, Schemas: []publication.SchemaHooks{{Name: SchemaAgentPublish, Validate: agent.ValidateImage, Install: agent.InstallImage}},
+		ReadFrozen:  agent.ReadFrozen,
 		FreezeBatch: agent.FreezeBatch, LoadExecution: agent.LoadExecution,
 		VersionedDraft: func(id string) (publication.DraftClosure, error) {
 			before, after, prior, next, had, err := agent.VersionedDraft(id)
@@ -97,14 +97,15 @@ func (b *Build) bindPublications() {
 	})
 	plan := b.testPlans
 	b.publications = append(b.publications, publication.Hooks{
-		Kinds: []platform.AssetKind{platform.AssetEvaluation, platform.AssetTestPlan}, Schemas: []string{SchemaEvaluationSetPublish},
-		Decode: plan.Decode, Validate: plan.Validate, Install: plan.Validate, ReadFrozen: plan.ReadFrozen,
+		Kinds: []platform.AssetKind{platform.AssetEvaluation, platform.AssetTestPlan}, Schemas: []publication.SchemaHooks{{Name: SchemaEvaluationSetPublish, Decode: plan.Decode, Validate: plan.Validate, Install: plan.Validate}},
+		ReadFrozen:  plan.ReadFrozen,
 		FreezeBatch: plan.FreezeBatch,
 		VersionedDraft: func(id string) (publication.DraftClosure, error) {
 			before, after, prior, next, had, err := plan.VersionedDraft(id)
 			return publication.DraftClosure{Before: before, After: after, Prior: prior, Next: next, HasPrior: had}, err
 		},
 	})
+	b.publications = append(b.publications, b.functions.ComputePublication())
 }
 
 func (b *Build) AttachBuild(h platform.BuildHost) { b.host = h }
@@ -142,7 +143,7 @@ func New(tenant string, authorities platform.Authorities, publications []publica
 	actions = append(actions, workingStateActions()...)
 	actions = append(actions, confirmationActions()...)
 	actions = append(actions, dispatchActions()...)
-	actions = append(actions, actioncatalog.EntityActions(b.tableEntity())...)
+	actions = append(actions, actioncatalog.EntityActions(b.functions.TableEntity())...)
 	actions = append(actions, actioncatalog.EntityActions(b.agent.Entity())...)
 	actions = append(actions, actioncatalog.EntityActions(b.sampleSetEntity())...)
 	actions = append(actions, functionauthoring.CodeActions()...)
@@ -181,7 +182,7 @@ func (b *Build) Manifest() platform.Manifest {
 	if b.installationCatalog != nil {
 		catalog = b.installationCatalog
 	}
-	entities := []platform.Entity{platform.RelationEntity(ID), b.objectEntity(), b.actionTypeEntity(), b.apps.PageEntity(), b.apps.ApplicationEntity(), b.testPlanEntity(), b.automation.ProcessEntity(), propertyKind.entity(b), valueKind.entity(b), b.objectTypeGroupEntity(), linkKind.entity(b), queryKind.entity(b), interfaceKind.entity(b), b.functions.Entity(), b.functions.CallEntity(), b.evaluationEntity(), b.agent.Entity(), functionauthoring.CodeEntity(), b.tableEntity(), b.sampleSetEntity(), b.branchEntity(), b.confirmationEntity(), b.dispatchEntity(), b.productEntity(), b.productVersionEntity()}
+	entities := []platform.Entity{platform.RelationEntity(ID), b.objectEntity(), b.actionTypeEntity(), b.apps.PageEntity(), b.apps.ApplicationEntity(), b.testPlanEntity(), b.automation.ProcessEntity(), propertyKind.entity(b), valueKind.entity(b), b.objectTypeGroupEntity(), linkKind.entity(b), queryKind.entity(b), interfaceKind.entity(b), b.functions.Entity(), b.functions.CallEntity(), b.evaluationEntity(), b.agent.Entity(), functionauthoring.CodeEntity(), b.functions.TableEntity(), b.sampleSetEntity(), b.branchEntity(), b.confirmationEntity(), b.dispatchEntity(), b.productEntity(), b.productVersionEntity()}
 	entities = append(entities, b.data.Entities()...)
 	entities = append(entities, b.resourceEntities()...)
 	entities = append(entities, workingStateEntity())
@@ -465,7 +466,7 @@ func (b *Build) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb.
 	if name := s.GetSchema().GetName(); name == AgentType+".create" || name == AgentType+".edit" {
 		agentEntity = b.agent.DraftEntity()
 	}
-	entities := []platform.Entity{b.objectEntity(), b.actionTypeEntity(), pageEntity, b.apps.ApplicationEntity(), b.testPlanEntity(), propertyKind.entity(b), valueKind.entity(b), b.objectTypeGroupEntity(), linkKind.entity(b), queryKind.entity(b), interfaceKind.entity(b), b.functions.Entity(), b.functions.CallEntity(), b.evaluationEntity(), agentEntity, functionauthoring.CodeEntity(), b.tableEntity(), b.sampleSetEntity(), b.branchEntity(), b.confirmationEntity(), b.dispatchEntity(), b.productEntity(), b.productVersionEntity()}
+	entities := []platform.Entity{b.objectEntity(), b.actionTypeEntity(), pageEntity, b.apps.ApplicationEntity(), b.testPlanEntity(), propertyKind.entity(b), valueKind.entity(b), b.objectTypeGroupEntity(), linkKind.entity(b), queryKind.entity(b), interfaceKind.entity(b), b.functions.Entity(), b.functions.CallEntity(), b.evaluationEntity(), agentEntity, functionauthoring.CodeEntity(), b.functions.TableEntity(), b.sampleSetEntity(), b.branchEntity(), b.confirmationEntity(), b.dispatchEntity(), b.productEntity(), b.productVersionEntity()}
 	entities = append(entities, b.data.Entities()...)
 	entities = append(entities, b.resourceEntities()...)
 	entities = append(entities, workingStateEntity())

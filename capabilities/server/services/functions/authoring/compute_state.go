@@ -13,10 +13,10 @@ import (
 	"platformserver/services/resources/publication"
 )
 
-func (o *Owner) CodeInventory() ([]Code, error) {
+func (o *Owner) codeInventory() ([]Code, error) {
 	return publication.Inventory[Code](o.env.Host().Automation(platform.Caller{}, o.env.App()))
 }
-func (o *Owner) InstallCode(c platform.Caller, code Code) error {
+func (o *Owner) installCode(c platform.Caller, code Code) error {
 	if code.Published != "" {
 		published, ok := publication.Read[Code](code.Published)
 		if !ok {
@@ -45,7 +45,7 @@ func (o *Owner) OperationDefinition(name string, version int) (platform.Operatio
 			}
 		}
 	}
-	list, err := o.CodeInventory()
+	list, err := o.codeInventory()
 	if err != nil {
 		return platform.Operation{}, 0, false
 	}
@@ -71,7 +71,7 @@ func (o *Owner) OperationDeclarations() []platform.Operation {
 	return out
 }
 
-func (o *Owner) CodeReleaseAsset(code Code, manifest string) (platform.ReleaseAsset, error) {
+func (o *Owner) codeReleaseAsset(code Code, manifest string) (platform.ReleaseAsset, error) {
 	raw, err := json.Marshal(code.Definition())
 	if err != nil {
 		return platform.ReleaseAsset{}, err
@@ -82,14 +82,14 @@ func (o *Owner) CodeReleaseAssets() ([]platform.ReleaseAsset, error) {
 	out := []platform.ReleaseAsset{}
 	for _, op := range o.OperationDeclarations() {
 		if op.Binding.Kind == "native" {
-			asset, err := o.TableReleaseAsset(o.tables[op.Name], o.env.Version())
+			asset, err := o.tableReleaseAsset(o.tables[op.Name], o.env.Version())
 			if err != nil {
 				return nil, err
 			}
 			out = append(out, asset)
 			continue
 		}
-		asset, err := o.CodeReleaseAsset(o.codes[op.Name], o.env.Version())
+		asset, err := o.codeReleaseAsset(o.codes[op.Name], o.env.Version())
 		if err != nil {
 			return nil, err
 		}
@@ -110,11 +110,11 @@ func (o *Owner) OperationReleaseAsset(name, version string) (platform.ReleaseAss
 	}
 	return o.resolver.WithDependencies(platform.ReleaseAsset{Ref: platform.AssetRef{App: o.env.App(), Kind: platform.AssetCompute, Name: name}, ContractVersion: 1, SourceVersion: version, Body: raw})
 }
-func (o *Owner) TableReleaseAsset(table Table, manifest string) (platform.ReleaseAsset, error) {
+func (o *Owner) tableReleaseAsset(table Table, manifest string) (platform.ReleaseAsset, error) {
 	return o.resolver.WithDependencies(platform.ReleaseAsset{Ref: platform.AssetRef{App: o.env.App(), Kind: platform.AssetCompute, Name: table.Name}, ContractVersion: 1, SourceVersion: manifest + ".compute-" + strconv.Itoa(table.Version), Body: platform.Raw(table.Definition())})
 }
 
-func (o *Owner) InstallTable(c platform.Caller, tb Table) error {
+func (o *Owner) installTable(c platform.Caller, tb Table) error {
 	if err := o.env.Host().InstallOperation(c, tb.Definition(), tb.Version); err != nil {
 		return err
 	}

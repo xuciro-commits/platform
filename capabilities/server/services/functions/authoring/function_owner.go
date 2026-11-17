@@ -146,6 +146,9 @@ type Environment interface {
 	JointDeclaration(platform.AssetRef) (platform.ReleaseAsset, bool)
 	AssetVersion(platform.ReleaseAsset) int
 	AllReleaseAssets() ([]platform.ReleaseAsset, error)
+	CheckName(string, string) error
+	ConditionLookup(string) (platform.EntityInfo, bool)
+	CheckRuleCollections(platform.RuleReadSpec, string, func(string) (platform.EntityInfo, bool)) error
 }
 
 type Owner struct {

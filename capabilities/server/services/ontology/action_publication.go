@@ -13,9 +13,8 @@ import (
 
 func ActionTypePublication() publication.Hooks {
 	return publication.Hooks{
-		Kinds: []platform.AssetKind{platform.AssetAction}, Schemas: []string{SchemaActionType}, FreezeOn: platform.AssetObject,
-		Validate: ValidateActionTypePublication, Freeze: FreezeActionTypes,
-		Closure: ActionTypeClosure, Install: ValidateActionTypePublication,
+		Kinds: []platform.AssetKind{platform.AssetAction}, Schemas: []publication.SchemaHooks{{Name: SchemaActionType, Validate: ValidateActionTypePublication, Install: ValidateActionTypePublication}}, FreezeOn: platform.AssetObject,
+		Freeze: FreezeActionTypes, Closure: ActionTypeClosure,
 		ReadFrozen: ReadActionTypeFrozen,
 	}
 }

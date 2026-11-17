@@ -37,5 +37,12 @@ func (e functionEnvironment) AssetVersion(asset platform.ReleaseAsset) int {
 func (e functionEnvironment) AllReleaseAssets() ([]platform.ReleaseAsset, error) {
 	return e.b.ReleaseAssets()
 }
+func (e functionEnvironment) CheckName(name, id string) error { return e.b.checkName(name, id) }
+func (e functionEnvironment) ConditionLookup(typ string) (platform.EntityInfo, bool) {
+	return e.b.conditionLookup(typ)
+}
+func (e functionEnvironment) CheckRuleCollections(spec platform.RuleReadSpec, where string, lookup func(string) (platform.EntityInfo, bool)) error {
+	return e.b.checkRuleCollections(spec, where, lookup)
+}
 
 var _ functionauthoring.Environment = functionEnvironment{}

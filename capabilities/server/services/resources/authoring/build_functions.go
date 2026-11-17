@@ -9,6 +9,7 @@ import (
 )
 
 const (
+	SchemaTablePublish   = functionauthoring.SchemaTablePublish
 	FunctionType         = functionauthoring.FunctionType
 	SchemaFunction       = functionauthoring.SchemaFunction
 	FunctionCallType     = functionauthoring.FunctionCallType
