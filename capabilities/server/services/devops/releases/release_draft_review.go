@@ -4,17 +4,17 @@ import (
 	"encoding/json"
 	"platformserver/platform"
 	pageowner "platformserver/services/apps/pages"
-	"platformserver/services/resources/authoring"
+	"platformserver/services/resources/publication"
 	"slices"
 )
 
 type ReleaseDraftReview struct {
-	Kind       platform.AssetKind     `json:"kind"`
-	ID         string                 `json:"id"`
-	Checked    bool                   `json:"checked"`
-	Issues     []string               `json:"issues"`
-	Change     *build.DraftChange     `json:"change,omitempty"`
-	Downstream []ReleaseDraftResource `json:"downstream"`
+	Kind       platform.AssetKind       `json:"kind"`
+	ID         string                   `json:"id"`
+	Checked    bool                     `json:"checked"`
+	Issues     []string                 `json:"issues"`
+	Change     *publication.DraftChange `json:"change,omitempty"`
+	Downstream []ReleaseDraftResource   `json:"downstream"`
 }
 
 type ReleaseDraftResource struct {
@@ -30,7 +30,7 @@ func (p Planner) reviewDrafts(reply *ReleasePreview) error {
 		if change == nil {
 			continue
 		}
-		if change.Published && slices.ContainsFunc(change.Fields, func(field build.DraftChangeField) bool {
+		if change.Published && slices.ContainsFunc(change.Fields, func(field publication.DraftChangeField) bool {
 			return len(field.Removed)+len(field.Retyped) > 0
 		}) {
 			breaking = append(breaking, i)

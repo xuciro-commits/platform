@@ -6,10 +6,11 @@ import (
 	"testing"
 
 	"platformserver/platform"
+	devopsmodel "platformserver/services/devops/descriptor"
 	build "platformserver/services/resources/authoring"
 )
 
-func TestInvariantProductVersionFreezesSavedCandidate(t *testing.T) {
+func TestInvariantK7ProductVersionFreezesSavedCandidate(t *testing.T) {
 	live := newInvariantTenant(t, "invariant-product-chain")
 	object := invariantObject("alpha", "Alpha")
 	live.accept(t, build.ObjectType+".create", build.ObjectType, "OBJ1", object)
@@ -40,7 +41,7 @@ func TestInvariantProductVersionFreezesSavedCandidate(t *testing.T) {
 	if refusal != nil {
 		t.Fatalf("read product version: %v", refusal)
 	}
-	version, ok := view.Record.(build.ProductVersion)
+	version, ok := view.Record.(devopsmodel.ProductVersion)
 	if !ok || version.Product != "alpha" || version.Version != "1.0.0" || version.Candidate != candidate {
 		t.Fatalf("product version: %#v", view.Record)
 	}

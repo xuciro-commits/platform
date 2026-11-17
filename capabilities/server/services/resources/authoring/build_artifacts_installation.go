@@ -7,7 +7,6 @@ import (
 	"platformserver/services/ontology"
 	"reflect"
 	"slices"
-	"strings"
 
 	"platformserver/platform"
 	automationauthoring "platformserver/services/automate/authoring"
@@ -87,51 +86,6 @@ func (b *Build) ApplyAssetInstallation(plan platform.AssetInstallation, ctx plat
 }
 
 var _ platform.AssetLifecycleOwner = (*Build)(nil)
-
-func (b *Build) orderOwnerAssets(assets []platform.ReleaseAsset) ([]platform.ReleaseAsset, error) {
-	graph, err := b.resolver.NewReleaseDependencyGraph(assets)
-	if err != nil {
-		return nil, err
-	}
-	refs, err := graph.InstallationOrder()
-	if err != nil {
-		return nil, err
-	}
-	byRef := make(map[platform.AssetRef]platform.ReleaseAsset, len(assets))
-	for _, asset := range assets {
-		byRef[asset.Ref] = asset
-	}
-	out := make([]platform.ReleaseAsset, 0, len(assets))
-	for _, ref := range refs {
-		out = append(out, byRef[ref])
-	}
-	return out, nil
-}
-
-func (b *Build) orderOwnerInstallations(assets []platform.ReleaseAsset, plans []platform.AssetInstallation) ([]platform.AssetInstallation, error) {
-	ordered, err := b.orderOwnerAssets(assets)
-	if err != nil {
-		return nil, err
-	}
-	byRef := map[platform.AssetRef]platform.AssetInstallation{}
-	for _, plan := range plans {
-		if _, ok := byRef[plan.Ref]; ok {
-			return nil, fmt.Errorf("duplicate installation %s", plan.Ref)
-		}
-		byRef[plan.Ref] = plan
-	}
-	var out []platform.AssetInstallation
-	for _, asset := range ordered {
-		if plan, ok := byRef[asset.Ref]; ok {
-			out = append(out, plan)
-			delete(byRef, asset.Ref)
-		}
-	}
-	if len(byRef) != 0 {
-		return nil, fmt.Errorf("installation lacks its candidate descriptor: %v", slices.SortedFunc(maps.Keys(byRef), func(a, b platform.AssetRef) int { return strings.Compare(a.String(), b.String()) }))
-	}
-	return out, nil
-}
 
 func draftAssetRef(typ, name string) (platform.AssetRef, error) {
 	descriptor, ok := resourceDescriptorOfType(typ)

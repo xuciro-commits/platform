@@ -4,8 +4,8 @@ import (
 	"slices"
 
 	"platformserver/platform"
+	devopsmodel "platformserver/services/devops/descriptor"
 	"platformserver/services/devops/packages"
-	"platformserver/services/resources/authoring"
 )
 
 func (h hostView) ProductVersion(request platform.ProductVersionRequest) (platform.FrozenProductVersion, error) {
@@ -16,11 +16,11 @@ func (h hostView) ProductVersion(request platform.ProductVersionRequest) (platfo
 
 func (h hostView) ProductVersions() []platform.ProductVersionView {
 	t := h.t
-	var rows []build.ProductVersion
-	if versions := t.Projection.Type(build.ProductVersionType); versions != nil {
+	var rows []devopsmodel.ProductVersion
+	if versions := t.Projection.Type(devopsmodel.ProductVersionType); versions != nil {
 		for _, row := range versions.Rows().All() {
-			rows = append(rows, row.Value.Interface().(build.ProductVersion))
+			rows = append(rows, row.Value.Interface().(devopsmodel.ProductVersion))
 		}
 	}
-	return packages.ProductVersionViews(rows)
+	return devopsmodel.ProductVersionViews(rows)
 }

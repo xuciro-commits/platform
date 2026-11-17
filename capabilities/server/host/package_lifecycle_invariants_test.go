@@ -13,7 +13,7 @@ import (
 	build "platformserver/services/resources/authoring"
 )
 
-func TestInvariantPackageRetireAndReinstallPreserveData(t *testing.T) {
+func TestInvariantK9PackageRetireAndReinstallPreserveData(t *testing.T) {
 	source := newInvariantTenant(t, "package-lifecycle-source")
 	source.accept(t, "build.object.create", build.ObjectType, "OBJ1", invariantObject("alpha", "Alpha"))
 	source.accept(t, "build.app.create", build.AppType, "APP1", map[string]any{

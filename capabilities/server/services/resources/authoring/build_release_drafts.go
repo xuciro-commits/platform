@@ -1,7 +1,6 @@
 package build
 
 import (
-	"bytes"
 	"cmp"
 	"encoding/json"
 	"errors"
@@ -463,70 +462,14 @@ func (b *Build) ReferencedDrafts(kind platform.AssetKind, id, owner string) ([]J
 	return result, nil
 }
 
-type JointDraftAssets struct {
-	Before []platform.ReleaseAsset `json:"-"`
-	After  []platform.ReleaseAsset `json:"-"`
-	Priors []platform.AssetRef     `json:"-"`
-	Nexts  []platform.AssetRef     `json:"-"`
-	Checks []JointDraftCheck       `json:"-"`
-}
+type JointDraftAssets = publication.JointDraftAssets
+type JointDraftCheck = publication.JointDraftCheck
+type DraftChange = publication.DraftChange
+type DraftChangeField = publication.DraftChangeField
 
-type JointDraftCheck struct {
-	Kind    platform.AssetKind `json:"kind"`
-	ID      string             `json:"id"`
-	Checked bool               `json:"checked"`
-	Issues  []string           `json:"issues"`
-	Change  *DraftChange       `json:"change,omitempty"`
-}
-
-const JointDraftLimit = 128
+const JointDraftLimit = publication.DraftLimit
 
 type JointDraftRef struct {
 	Kind platform.AssetKind `json:"kind"`
 	ID   string             `json:"id"`
-}
-
-type DraftChange struct {
-	Ref        platform.AssetRef  `json:"ref"`
-	Prior      platform.AssetRef  `json:"prior,omitzero"`
-	Type       string             `json:"type"`
-	ID         string             `json:"id"`
-	Title      string             `json:"title"`
-	Variant    string             `json:"variant,omitempty"`
-	Published  bool               `json:"published"`
-	Changed    platform.Stamp     `json:"changed"`
-	Owner      string             `json:"owner"`
-	Fields     []DraftChangeField `json:"fields"`
-	Diagnostic string             `json:"diagnostic,omitempty"`
-}
-
-type DraftChangeField struct {
-	Name    string          `json:"name"`
-	Before  json.RawMessage `json:"before,omitempty"`
-	After   json.RawMessage `json:"after,omitempty"`
-	Removed []string        `json:"removed,omitempty"`
-	Retyped []string        `json:"retyped,omitempty"`
-}
-
-func breakingMembers(before, after json.RawMessage) (removed, retyped []string) {
-	type member struct {
-		Name string          `json:"name"`
-		Type json.RawMessage `json:"type"`
-	}
-	var old, next []member
-	if json.Unmarshal(before, &old) != nil || json.Unmarshal(after, &next) != nil {
-		return nil, nil
-	}
-	for _, item := range old {
-		if item.Name == "" {
-			continue
-		}
-		index := slices.IndexFunc(next, func(other member) bool { return other.Name == item.Name })
-		if index < 0 {
-			removed = append(removed, item.Name)
-		} else if len(item.Type) > 0 && !bytes.Equal(item.Type, next[index].Type) {
-			retyped = append(retyped, item.Name)
-		}
-	}
-	return removed, retyped
 }

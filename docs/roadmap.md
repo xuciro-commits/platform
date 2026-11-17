@@ -32,10 +32,6 @@
 每批同步处理宿主状态、能力登记、装配、HTTP 调用方和依赖例外，运行该类的创建、编辑、发布、安装、拒绝、
 历史版本、分叉和重放检查。跨类型的 RID、项目、文件夹、工作状态、分支、提案和编排留在资源服务。
 
-- [ ] U5.14 产品版本与发布：按职责处理 `build_products.go`、`build_versions.go`、`build_release*.go`、
-  `build_artifacts*.go`、`build_publications*.go`，产品与版本归 `services/devops`，通用发布归 `services/resources/publication`。
-  资源服务保留跨类型编排；复用 U4 的发布钩子，保持错误次序、安装计划及历史映像。
-
 ## U7：platform 只留 SDK 契约
 
 - [ ] U7.1 诊断与切分，先不写实现代码。

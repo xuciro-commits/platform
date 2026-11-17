@@ -179,7 +179,7 @@ func New(tenant string, authorities platform.Authorities, publications []publica
 	actions = append(actions, actioncatalog.EntityActions(b.sampleSets.Entity())...)
 	actions = append(actions, functionauthoring.CodeActions()...)
 	actions = append(actions, actioncatalog.EntityActions(b.productEntity())...)
-	actions = append(actions, productVersionActions()...)
+	actions = append(actions, devopsmodel.ProductVersionActions()...)
 	actions = append(actions, platform.Action{Schema: SchemaEvaluationSetPublish, Target: TestPlanType, Title: "Publish test plan", Description: "Freeze a portable business scenario or the evaluation cases for one function version.", Capability: "objects", Roles: []string{Builder}, Payload: []platform.Field{}})
 	actions = resourceActions(actions)
 	classes := []string{ObjectType, ActionTypeType, PageType, AppType, TestPlanType, automationauthoring.ProcessType, functionauthoring.FunctionType, PropertyTypeType, ValueTypeType, ObjectTypeGroupType, LinkTypeType, b.queries.Entity().Type, InterfaceType, functionauthoring.FunctionCallType, b.evaluations.Entity().Type, functionauthoring.CodeType, functionauthoring.TableType, AgentType, SampleSetType, BranchType, ResourceType, FolderType, WorkingStateType, ProductType, ProductVersionType, platform.OwnedRelationType(ID), platform.ConfirmationType, platform.DispatchType}

@@ -8,8 +8,8 @@ import (
 )
 
 type DraftRef struct {
-	Kind platform.AssetKind
-	ID   string
+	Kind platform.AssetKind `json:"kind"`
+	ID   string             `json:"id"`
 }
 
 type DraftClosure struct {

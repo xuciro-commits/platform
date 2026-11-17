@@ -66,8 +66,11 @@
   草稿存储与分支入口适配。main 隔离、审批顺序和单条合并接受结果由分支服务本身保持。
 - 发布声明、agent/protocol 描述归 `services/resources/publication`，AI 提案消费归
   `services/functions/authoring`；蓝图补全与测试根草稿仍由资源服务编排。
-- 属性、值类型、接口、对象组与关系的声明、转换和字段绑定校验归 `services/ontology`；
-  通用版本族归 `services/resources/publication`，关系数据迁移由对象服务执行。
+- 产品与 ProductVersion 的记录类型、动作声明和版本视图归 `services/devops/descriptor`，候选冻结与产品包描述归
+  `services/devops/packages`；资源服务只保留项目、资源范围校验和接受结果写入适配。
+- 通用发布的草稿引用与差异、保留版本族读取、依赖展开和安装次序归 `services/resources/publication`；
+  资源服务按类型收集候选、复用发布钩子并编排联合草稿、执行分叉和重装。
+- 属性、值类型、接口、对象组与关系的声明、转换和字段绑定校验归 `services/ontology`，关系数据迁移由对象服务执行。
 - 查询记录、接口查询绑定、记录集校验、保留版本与重装归 `services/objects`；资源服务保留查询资源身份、
   联合草稿上下文和跨类型发布编排，查询读取继续使用唯一的对象集执行器。
 - 产品包里的行业逻辑不进任何 Go 包。
