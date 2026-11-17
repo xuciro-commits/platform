@@ -475,12 +475,6 @@ func (o *Owner) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb.
 		return o.submitCall(c, s, now)
 	case SchemaProposalReview:
 		return o.submitProposalReview(c, s, now)
-	case SchemaCodeCompile:
-		return o.submitCodeCompile(c, s, now)
-	case SchemaCodeCompiled:
-		return o.submitCodeCompiled(c, s, now)
-	case SchemaCodeAttach:
-		return o.submitCodeAttach(c, s, now)
 	}
 	return nil, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_UNKNOWN_SCHEMA}
 }

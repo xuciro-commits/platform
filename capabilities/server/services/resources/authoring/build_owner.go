@@ -388,8 +388,8 @@ func (b *Build) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb.
 	if record, err, handled := b.automation.Decide(b.ledger, c, s, now); handled {
 		return record, err
 	}
-	if name := s.GetSchema().GetName(); name == functionauthoring.SchemaCodeCompile || name == functionauthoring.SchemaCodeCompiled || name == functionauthoring.SchemaCodeAttach {
-		return b.functions.Submit(c, s, now)
+	if record, err, handled := b.functions.DecideCodeBuild(c, s, now); handled {
+		return record, err
 	}
 	if record, err, handled := b.data.Decide(b.ledger, c, s, now); handled {
 		return record, err

@@ -126,6 +126,21 @@ func CodeBuildOf(spec json.RawMessage) (platform.CodeBuildRequest, CodeArtifact,
 	return platform.CodeBuildRequest{ABI: code.ABI, Language: code.Language, Source: code.Source, Input: code.Input, Output: code.Output}, CodeArtifact{SourceHash: code.SourceDigest(), BuildHash: code.BuildDigest()}, nil
 }
 
+func (o *Owner) DecideCodeBuild(c platform.Caller, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *platform.Error, bool) {
+	switch s.GetSchema().GetName() {
+	case SchemaCodeCompile:
+		record, err := o.submitCodeCompile(c, s, now)
+		return record, err, true
+	case SchemaCodeCompiled:
+		record, err := o.submitCodeCompiled(c, s, now)
+		return record, err, true
+	case SchemaCodeAttach:
+		record, err := o.submitCodeAttach(c, s, now)
+		return record, err, true
+	}
+	return nil, nil, false
+}
+
 func (o *Owner) submitCodeAttach(c platform.Caller, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *platform.Error) {
 	return o.env.Ledger().Receive(c, s, now, nil, func() (func(*pb.ChangeRecord), *platform.Error) {
 		var artifact CodeArtifact
