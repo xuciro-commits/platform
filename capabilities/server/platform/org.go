@@ -101,6 +101,13 @@ func (c Caller) Units(structure string, now time.Time) []string {
 	return c.rt.Units(c, structure, now)
 }
 
+func (c Caller) Element(id string, now time.Time) (ElementInfo, bool) {
+	if c.rt == nil {
+		return ElementInfo{}, false
+	}
+	return c.rt.Element(c, id, now)
+}
+
 type ElementInfo struct {
 	ID         string `json:"id"`
 	Stereotype string `json:"stereotype"`

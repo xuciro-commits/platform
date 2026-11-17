@@ -44,10 +44,16 @@ type Authority interface {
 
 type Authorities func(tenant, id string, catalog *Catalog, classes ...string) Authority
 
-func (c Caller) Runtime() Runtime       { return c.rt }
 func (c Caller) SourceProjection() bool { return c.sourceProjection }
 func (c Caller) RestoreSource() bool    { return c.restoreSource }
 func (c Caller) CreationDepth() int     { return c.creationDepth }
+func (c Caller) HasRuntime() bool       { return c.rt != nil }
+
+func (c Caller) Publish(record *pb.ChangeRecord) {
+	if c.rt != nil {
+		c.rt.Publish(c, record)
+	}
+}
 
 func (c Caller) Deeper() Caller {
 	c.creationDepth++

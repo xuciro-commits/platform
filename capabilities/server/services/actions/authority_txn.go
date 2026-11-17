@@ -72,7 +72,7 @@ func (l *authority) ApplyTxnRecord(c platform.Caller, r *pb.ChangeRecord, e plat
 			if json.Unmarshal(raw, &ref) != nil {
 				return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Invalid transaction reference / 事务引用无效")
 			}
-			if ref != "" && !c.Runtime().Readable(c, f.Ref+"/"+ref) {
+			if ref != "" && !c.Readable(f.Ref+"/"+ref) {
 				return notFound()
 			}
 		}

@@ -211,8 +211,8 @@ func (l *authority) Receive(c platform.Caller, s *pb.Submission, now time.Time,
 		if apply != nil {
 			apply(record)
 		}
-		if c.Runtime() != nil && (apply != nil || c.Staging() || !c.Replaying) {
-			c.Runtime().Publish(c, record)
+		if c.HasRuntime() && (apply != nil || c.Staging() || !c.Replaying) {
+			c.Publish(record)
 		}
 	}
 	return record, err
@@ -258,11 +258,11 @@ func (l *authority) checked(c platform.Caller, s *pb.Submission, now time.Time, 
 				if f.Ref == "enterprise.element" && previous[f.Name] == v {
 					continue
 				}
-				if len(f.Choices) > 0 && !slices.Contains(f.Choices, v) || f.Ref != "" && c.Runtime() != nil && !c.Runtime().Readable(c, f.Ref+"/"+v) {
+				if len(f.Choices) > 0 && !slices.Contains(f.Choices, v) || f.Ref != "" && c.HasRuntime() && !c.Readable(f.Ref+"/"+v) {
 					return nil, c.RefuseFields([]platform.FieldIssue{{Code: "reference", Path: []string{f.Name}, Message: "Choose a readable listed value."}})
 				}
-				if f.Ref == "enterprise.element" && (f.Stereotype != "" || len(f.Stereotypes) > 0) && c.Runtime() != nil {
-					if el, ok := c.Runtime().Element(c, v, now); !ok || !(f.Stereotype != "" && el.Stereotype == f.Stereotype || slices.Contains(f.Stereotypes, el.Stereotype)) {
+				if f.Ref == "enterprise.element" && (f.Stereotype != "" || len(f.Stereotypes) > 0) && c.HasRuntime() {
+					if el, ok := c.Element(v, now); !ok || !(f.Stereotype != "" && el.Stereotype == f.Stereotype || slices.Contains(f.Stereotypes, el.Stereotype)) {
 						return nil, c.RefuseFields([]platform.FieldIssue{{Code: "reference", Path: []string{f.Name}, Message: "Choose a readable listed value."}})
 					}
 				}
@@ -360,12 +360,12 @@ func approvalMove(t platform.ActionType, suffix string) platform.ActionType {
 }
 
 func executeAction(c platform.Caller, e platform.Entity, t platform.ActionType, s *pb.Submission, now time.Time) (func(*pb.ChangeRecord), *platform.Error) {
-	if c.Runtime() == nil {
+	if !c.HasRuntime() {
 		return nil, notFound()
 	}
 	typ := reflect.TypeOf(e.Model)
 	id := s.GetTarget().GetId()
-	existing, known := c.Runtime().Get(c, typ, id)
+	existing, known := c.RecordValue(typ, id)
 	v := reflect.New(typ)
 	if t.Name == "create" {
 		if known {
@@ -420,7 +420,7 @@ func executeAction(c platform.Caller, e platform.Entity, t platform.ActionType, 
 		if v.Elem().Field(0).Interface().(platform.Record).Archived {
 			return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "{record} is archived", id)
 		}
-		if !t.Criteria.State.Holds(from, c.Runtime().Rules()) && !pending {
+		if !t.Criteria.State.Holds(from, c.Rules()) && !pending {
 			return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "{record} is {state}; {transition} takes it only from {states}", id, from, t.Name, strings.Join(t.Criteria.State.In, ", "))
 		}
 		for _, rule := range t.Rules {
@@ -460,7 +460,7 @@ func executeAction(c platform.Caller, e platform.Entity, t platform.ActionType, 
 	}
 	value := v.Elem().Interface()
 	if t.Name != "create" || e.CreateTxn == nil || c.Replaying || c.SourceProjection() {
-		if err := c.Runtime().Check(c, value); err != nil {
+		if err := c.Check(value); err != nil {
 			return nil, err
 		}
 	}
@@ -471,7 +471,7 @@ func executeAction(c platform.Caller, e platform.Entity, t platform.ActionType, 
 				return
 			}
 		}
-		c.Runtime().Put(c, r, value)
+		c.Put(r, value)
 		if t.Name == "create" && e.CreateTxn != nil && e.ApplyCreateTxn != nil && !c.Replaying && !c.SourceProjection() {
 			if c.CreationDepth() >= 16 {
 				c.FailDecision(platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Creation transactions exceed their depth limit"))
@@ -483,8 +483,8 @@ func executeAction(c platform.Caller, e platform.Entity, t platform.ActionType, 
 				c.FailDecision(err)
 				return
 			}
-			if final, exists := c.Runtime().Get(c, typ, id); exists {
-				if err := c.Runtime().Check(c, final); err != nil {
+			if final, exists := c.RecordValue(typ, id); exists {
+				if err := c.Check(final); err != nil {
 					c.FailDecision(err)
 				}
 			}
@@ -505,7 +505,7 @@ func executeAction(c platform.Caller, e platform.Entity, t platform.ActionType, 
 }
 
 func inScope(c platform.Caller, typ, id string) bool {
-	return c.Replaying || c.Automation || c.Probing() || c.Runtime().Readable(c, typ+"/"+id)
+	return c.Replaying || c.Automation || c.Probing() || c.Readable(typ+"/"+id)
 }
 
 func (l *authority) ID() string                 { return l.authority }

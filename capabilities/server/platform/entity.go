@@ -417,6 +417,15 @@ func (c Caller) Put(r *pb.ChangeRecord, entity any) *Error {
 	return c.rt.Put(c, r, entity)
 }
 
+func (c Caller) RecordValue(t reflect.Type, id string) (any, bool) {
+	if c.rt == nil {
+		return nil, false
+	}
+	return c.rt.Get(c, t, id)
+}
+
+func (c Caller) Readable(ref string) bool { return c.rt != nil && c.rt.Readable(c, ref) }
+
 func Get[T any](c Caller, id string) (T, bool) {
 	var zero T
 	if c.rt == nil {

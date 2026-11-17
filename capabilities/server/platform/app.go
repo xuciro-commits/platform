@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"google.golang.org/protobuf/proto"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"reflect"
 	"regexp"
 	"slices"
 	"strings"
@@ -258,99 +257,11 @@ func Decide(c Caller, app App, s *pb.Submission, at time.Time) (*pb.ChangeRecord
 	return c.rt.Decide(c, app, s, at)
 }
 
-type DecisionRuntime interface {
-	Decide(Caller, App, *pb.Submission, time.Time) (*pb.ChangeRecord, *Error)
-	Attempt(func() (*pb.ChangeRecord, *Error)) (*pb.ChangeRecord, *Error)
-	ProbeDecision(Caller, func(Caller) *Error) *Error
-}
-
-type ReadRuntime interface {
-	ReadQuery(Caller, string, string, json.RawMessage, time.Time) (json.RawMessage, *Error)
-	ReadQueryVersion(Caller, string, string, int, json.RawMessage, time.Time) (json.RawMessage, *Error)
-	ReadRecord(Caller, string, string, time.Time) (json.RawMessage, *Error)
-	ReadRecordPath(Caller, string, string, []string, time.Time) (json.RawMessage, []string, *Error)
-}
-
-type OperationRuntime interface {
-	RequestOperation(Caller, *pb.ChangeRecord, OperationRequest) (OperationCall, *Error)
-	OperationResult(Caller, string) (OperationResult, *Error)
-	CancelOperation(Caller, *pb.ChangeRecord, string) *Error
-	RequestCompilation(Caller, *pb.ChangeRecord, string, string, CodeBuildRequest) (OperationCall, *Error)
-}
-
-type FunctionRuntime interface {
-	RequestFunction(Caller, *pb.ChangeRecord, FunctionRequest) (FunctionCall, *Error)
-}
-
-type ApprovalRuntime interface {
-	RequestApproval(Caller, string, *pb.Submission, time.Time) (*pb.ChangeRecord, *Error)
-}
-
-type NotificationRuntime interface {
-	Notify(Caller, Notification, time.Time, []Recipient) []string
-	Seen(Caller, ...string)
-}
-
-type InputDiagnosticRuntime interface {
-	InputRefused(*Error, []FieldIssue)
-}
-
-type ControlRuntime interface {
-	ControlDecision(Caller, *pb.Submission, time.Time) (func(*pb.ChangeRecord), *Error)
-}
-
 func ControlDecision(c Caller, s *pb.Submission, at time.Time) (func(*pb.ChangeRecord), *Error) {
 	if c.rt == nil {
 		return nil, Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Host controls require a private decision")
 	}
 	return c.rt.ControlDecision(c, s, at)
-}
-
-type Runtime interface {
-	DecisionRuntime
-	ReadRuntime
-	OperationRuntime
-	FunctionRuntime
-	ApprovalRuntime
-	NotificationRuntime
-	InputDiagnosticRuntime
-	ControlRuntime
-	Publish(c Caller, record *pb.ChangeRecord)
-	Probe(c Caller, protocol, action, id string, payload []byte, now time.Time) *Error
-	Request(c Caller, r *pb.ChangeRecord, q Request)
-	Query(c Caller, protocol, read string, provider ...string) ([]ProviderResult, *Error)
-	BoundProvider(c Caller, protocol string) (string, *Error)
-	Setting(c Caller, name string) string
-	Emit(c Caller, kind, key, entity string, data any, now time.Time) (int, *Error)
-	Units(c Caller, structure string, now time.Time) []string
-	Element(c Caller, id string, now time.Time) (ElementInfo, bool)
-	Related(c Caller, element, stereotype string, outgoing bool, now time.Time) []string
-	Links(c Caller, entity string) []string
-	Link(c Caller, from, to *pb.EntityRef, key string, now time.Time) *Error
-	Put(c Caller, r *pb.ChangeRecord, entity any) *Error
-	Get(c Caller, t reflect.Type, id string) (any, bool)
-	Find(c Caller, t reflect.Type, q Query) ([]any, int, *Error)
-	Check(c Caller, entity any) *Error
-	Assign(c Caller, r *pb.ChangeRecord, a Assignment) *Error
-	Readable(c Caller, ref string) bool
-	Next(c Caller, r *pb.ChangeRecord, sequence string, date time.Time) (string, *Error)
-	Authorize(Caller, AuthzRequest, time.Time) AuthzDecision
-	AuthorizationEngine() AuthorizationEngine
-	Rules() RuleEngine
-	ReadRuleQuery(Caller, RuleCollection, json.RawMessage, time.Time) (json.RawMessage, *Error)
-	ReadRecordSet(Caller, string, string, string, time.Time) (RecordSetResult, *Error)
-	ResolveValueType(AssetBinding) (ValueType, bool)
-	Simulating() bool
-	OwnedRelations(Caller, string) []RelationLink
-	LegacyRelationActive(Caller, RelationLink) bool
-	LegacyRelationWritable(Caller, string, string) bool
-	CheckEnterpriseUsage(Caller, string, string, bool, time.Time) *Error
-	CheckEnterpriseTenantConnection(Caller, string, time.Time) *Error
-	VisibleApplications(Caller) []AssetRef
-	TraceEnabled() bool
-	RecordDecisionTrace(DecisionTrace)
-	StagedDecision() StagedDecision
-	ReadScoped() bool
 }
 
 type Manifest struct {

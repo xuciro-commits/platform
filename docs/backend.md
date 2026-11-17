@@ -64,6 +64,8 @@
   校验和测试归 `services/automate/authoring`。页面只复用表达式遍历或页面拥有者的检查。
 - 页面兼容生成物由 `services/apps/pages` 持有；通用小数文本格式与长度上限归 `expr`，
   `platform` 不读取页面契约，也不复制页面限制。
+- 服务运行接口按决策、读取、操作、效果、记录、授权、组织、关系与 enterprise 使用拆分；
+  服务运行调用只经 `Caller` 门面，不取得聚合运行时；需要校验的能力继续由装配时的接口收回。
 - `BusinessTxn`、`TxnStep` 及其嵌套类型、严格 JSON 解码和 `Entity`/`Action` 内嵌字段是 SDK 线格式；
   事务规范化、编号、步骤校验、遍历、生命周期目的地与对象/动作冻结描述归 `services/ontology`。
   事务执行与拒绝改路归 `services/actions`，资源服务提供保留版本、集成绑定和跨类型草稿上下文。
