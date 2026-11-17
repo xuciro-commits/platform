@@ -383,3 +383,42 @@ func AppendObjectAssets(objects []Object, sourceVersion string, add func(platfor
 	}
 	return nil
 }
+
+type ObjectInstallationEnvironment struct {
+	Host           platform.BuildHost
+	Entity         func(Object) platform.Entity
+	CheckProcesses func(platform.Caller, platform.Entity, platform.Entity, bool, bool) error
+	Pages          func(Object) ([]platform.Page, string, error)
+	Actions        func(Object, platform.Entity) []platform.Action
+	JointMode      func() bool
+}
+
+func ValidateObjectInstallation(c platform.Caller, record Object, env ObjectInstallationEnvironment) error {
+	entity := env.Entity(record)
+	current, _ := platform.Get[Object](env.Host.Automation(platform.Caller{}, AppID), record.ID)
+	previous, _ := publication.Read[Object](current.Published)
+	changed, compatible := false, false
+	if previous.Name != "" {
+		oldBody, err := DefinitionBody(previous, AppID+"."+previous.Name)
+		if err != nil {
+			return err
+		}
+		newBody, err := DefinitionBody(record, AppID+"."+record.Name)
+		if err != nil {
+			return err
+		}
+		changed = string(oldBody) != string(newBody)
+		compatible = CompatibleObjectExpansion(previous, record)
+	}
+	if err := env.CheckProcesses(c, entity, env.Entity(previous), changed, compatible); err != nil {
+		return err
+	}
+	pages, generated, err := env.Pages(record)
+	if err != nil {
+		return err
+	}
+	if env.JointMode() {
+		return nil
+	}
+	return env.Host.ValidateInstallDependents(c, entity, env.Actions(record, entity), generated, pages...)
+}

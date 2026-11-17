@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	appsauthoring "platformserver/services/apps/authoring"
-	"platformserver/services/resources/publication"
 
 	"reflect"
 	"slices"
@@ -146,33 +145,10 @@ func readDefinitionInventoryOf(c platform.Caller, typ reflect.Type) ([]any, erro
 }
 
 func (b *Build) validateObjectInstallation(c platform.Caller, record ontology.Object) error {
-	entity := Entity(record)
-	current, _ := platform.Get[ontology.Object](b.host.Automation(platform.Caller{}, ID), record.ID)
-	previous, _ := publication.Read[ontology.Object](current.Published)
-	changed, compatible := false, false
-	if previous.Name != "" {
-		oldBody, err := ontology.DefinitionBody(previous, TypeOf(previous.Name))
-		if err != nil {
-			return err
-		}
-		newBody, err := ontology.DefinitionBody(record, TypeOf(record.Name))
-		if err != nil {
-			return err
-		}
-		changed = string(oldBody) != string(newBody)
-		compatible = ontology.CompatibleObjectExpansion(previous, record)
-	}
-	if err := b.automation.CheckObjectDefinition(c, entity, Entity(previous), changed, compatible); err != nil {
-		return err
-	}
-	pages, generated, err := b.objectInstallationPages(record)
-	if err != nil {
-		return err
-	}
-	if b.jointMode {
-		return nil
-	}
-	return b.host.ValidateInstallDependents(c, entity, objectActions(record, entity), generated, pages...)
+	return ontology.ValidateObjectInstallation(c, record, ontology.ObjectInstallationEnvironment{
+		Host: b.host, Entity: Entity, CheckProcesses: b.automation.CheckObjectDefinition,
+		Pages: b.objectInstallationPages, Actions: objectActions, JointMode: func() bool { return b.jointMode },
+	})
 }
 
 func (b *Build) objectInstallationPages(record ontology.Object) ([]platform.Page, string, error) {
