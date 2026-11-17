@@ -24,7 +24,7 @@ type Hooks struct {
 	FreezeOn   platform.AssetKind
 	Validate   func(json.RawMessage) error
 	Freeze     func(platform.Caller, string, platform.ReleaseAsset, []platform.ReleaseAsset) ([]platform.AssetInstallation, error)
-	Closure    func(platform.Caller, string) (DraftClosure, error)
+	Closure    func(platform.Caller, string, platform.Member) (DraftClosure, error)
 	Install    func(json.RawMessage) error
 	ReadFrozen func(json.RawMessage) (json.RawMessage, error)
 }

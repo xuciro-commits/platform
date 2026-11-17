@@ -62,7 +62,7 @@ func ValidateActionTypePublication(image json.RawMessage) error {
 	return ValidateActionTypeImage(action, frozen)
 }
 
-func ActionTypeClosure(c platform.Caller, id string) (publication.DraftClosure, error) {
+func ActionTypeClosure(c platform.Caller, id string, _ platform.Member) (publication.DraftClosure, error) {
 	var closure publication.DraftClosure
 	action, found := platform.Get[ActionType](c, id)
 	if !found || action.Archived {

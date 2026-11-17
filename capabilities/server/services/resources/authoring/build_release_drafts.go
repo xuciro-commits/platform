@@ -7,13 +7,11 @@ import (
 	"errors"
 	"fmt"
 	"maps"
-	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	appsauthoring "platformserver/services/apps/authoring"
 	automationauthoring "platformserver/services/automate/authoring"
 	functionauthoring "platformserver/services/functions/authoring"
 	"platformserver/services/ontology"
 	"slices"
-	"time"
 
 	"platformserver/platform"
 	dataowner "platformserver/services/data"
@@ -82,6 +80,12 @@ func (b *Build) DraftReleaseAssetsMulti(drafts []JointDraftRef, member platform.
 		b.jointEntities, b.jointMode, b.jointDeclarations = restore, restoreMode, restoreDeclarations
 	}()
 
+	objectDrafts := ontology.ObjectDraftPublication(objects, ontology.ObjectDraftEnvironment{
+		Host: b.host, Authority: b.ledger, BindActions: b.bindObjectActions,
+		CaptureExtension: b.captureExtensionSource, CaptureSchema: b.captureObjectSchema,
+		Check: b.Check, Validate: b.validateObjectInstallation,
+	})
+	draftHooks := append(slices.Clone(b.publications), objectDrafts)
 	inv := draftInventories{objects: objects, pages: pages, apps: apps, processes: processes}
 	overrides := map[platform.AssetRef]platform.ReleaseAsset{}
 	removed := map[platform.AssetRef]bool{}
@@ -134,7 +138,7 @@ func (b *Build) DraftReleaseAssetsMulti(drafts []JointDraftRef, member platform.
 		if !recordKind(draft.Kind) {
 			continue
 		}
-		prior, next, hadPrior, err := b.applyRecordDraft(&inv, draft.Kind, draft.ID, member)
+		prior, next, hadPrior, err := b.applyRecordDraft(&inv, draftHooks, draft.Kind, draft.ID, member)
 		check := &result.Checks[checkIndexes[draft]]
 		check.Checked = true
 		if hadPrior {
@@ -213,14 +217,14 @@ type draftInventories struct {
 	processes []automationauthoring.Process
 }
 
-func (b *Build) applyRecordDraft(inv *draftInventories, kind platform.AssetKind, id string, member platform.Member) (prior, next platform.AssetRef, hadPrior bool, err error) {
-	if hooks, found := publication.Kind(b.publications, kind); found {
-		closure, err := hooks.Closure(b.host.Automation(platform.Caller{}, ID), id)
+func (b *Build) applyRecordDraft(inv *draftInventories, table []publication.Hooks, kind platform.AssetKind, id string, member platform.Member) (prior, next platform.AssetRef, hadPrior bool, err error) {
+	if hooks, found := publication.Kind(table, kind); found {
+		closure, err := hooks.Closure(b.host.Automation(platform.Caller{}, ID), id, member)
 		if err != nil {
-			return prior, next, false, err
+			return closure.Prior, closure.Next, closure.HasPrior, err
 		}
 		for _, dependency := range closure.Requires {
-			_, _, _, err = b.applyRecordDraft(inv, dependency.Kind, dependency.ID, member)
+			_, _, _, err = b.applyRecordDraft(inv, table, dependency.Kind, dependency.ID, member)
 			if err != nil {
 				break
 			}
@@ -251,39 +255,6 @@ func (b *Build) applyRecordDraft(inv *draftInventories, kind platform.AssetKind,
 		prepared, prior, next, hadPrior, err = b.automation.CheckDraft(platform.Caller{}, record, source, models, member, !joint)
 		if err == nil {
 			inv.processes[i] = prepared
-		}
-	case platform.AssetObject:
-		i := slices.IndexFunc(inv.objects, func(o ontology.Object) bool { return o.ID == id && !o.Archived })
-		if i < 0 {
-			return prior, next, false, fmt.Errorf("draft object %q not found", id)
-		}
-		record := inv.objects[i]
-		if member.ID != "" {
-			caller := b.host.Caller(platform.Caller{}, member, ID)
-			submission := &pb.Submission{TenantId: caller.Tenant, PrincipalId: member.ID, Authority: ID, Schema: &pb.SchemaRef{Name: SchemaPublish, Version: 1}, Target: &pb.EntityRef{Type: ObjectType, Id: record.ID}, Payload: platform.Raw(map[string]any{})}
-			if decision := b.ledger.Catalog().DecideSubmission(caller, submission, time.Now()); !decision.Allow {
-				return prior, next, false, fmt.Errorf("Publishing the target object: %s", decision.Reason)
-			}
-		}
-		if was, ok := publication.Read[ontology.Object](record.Published); ok {
-			prior = platform.AssetRef{App: ID, Kind: kind, Name: TypeOf(was.Name)}
-			hadPrior = true
-		}
-		next = platform.AssetRef{App: ID, Kind: kind, Name: TypeOf(record.Name)}
-		if err = b.bindObjectActions(b.host.Automation(platform.Caller{}, ID), &record); err != nil {
-			return prior, next, hadPrior, err
-		}
-		if err = b.captureExtensionSource(&record); err != nil {
-			return prior, next, hadPrior, err
-		}
-		if err = b.captureObjectSchema(&record); err != nil {
-			return prior, next, hadPrior, err
-		}
-		if err = b.Check(record, record.ID, b.host.Caller(platform.Caller{}, member, ID).Rules()); err == nil {
-			err = b.validateObjectInstallation(b.host.Caller(platform.Caller{}, member, ID), record)
-		}
-		if err == nil {
-			inv.objects[i].Published = published(record)
 		}
 	case platform.AssetPage:
 		i := slices.IndexFunc(inv.pages, func(p appsauthoring.Page) bool { return p.ID == id && !p.Archived })

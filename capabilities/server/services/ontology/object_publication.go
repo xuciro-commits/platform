@@ -5,6 +5,9 @@ import (
 	"fmt"
 	"reflect"
 	"slices"
+	"time"
+
+	pb "platformkernel/gen/platform/kernel/v1alpha1"
 
 	"platformserver/platform"
 	"platformserver/services/resources/publication"
@@ -268,4 +271,53 @@ func ReadObjectPublication(image []byte) (Object, error) {
 		}
 	}
 	return published, nil
+}
+
+type ObjectDraftEnvironment struct {
+	Host             platform.BuildHost
+	Authority        platform.Authority
+	BindActions      func(platform.Caller, *Object) error
+	CaptureExtension func(*Object) error
+	CaptureSchema    func(*Object) error
+	Check            func(Object, string, platform.RuleEngine) error
+	Validate         func(platform.Caller, Object) error
+}
+
+func ObjectDraftPublication(objects []Object, env ObjectDraftEnvironment) publication.Hooks {
+	return publication.Hooks{Kind: platform.AssetObject, Closure: func(_ platform.Caller, id string, member platform.Member) (closure publication.DraftClosure, err error) {
+		i := slices.IndexFunc(objects, func(object Object) bool { return object.ID == id && !object.Archived })
+		if i < 0 {
+			return closure, fmt.Errorf("draft object %q not found", id)
+		}
+		record := objects[i]
+		if member.ID != "" {
+			caller := env.Host.Caller(platform.Caller{}, member, AppID)
+			submission := &pb.Submission{TenantId: caller.Tenant, PrincipalId: member.ID, Authority: AppID, Schema: &pb.SchemaRef{Name: SchemaPublish, Version: 1}, Target: &pb.EntityRef{Type: ObjectType, Id: record.ID}, Payload: platform.Raw(map[string]any{})}
+			if decision := env.Authority.Catalog().DecideSubmission(caller, submission, time.Now()); !decision.Allow {
+				return closure, fmt.Errorf("Publishing the target object: %s", decision.Reason)
+			}
+		}
+		if was, ok := publication.Read[Object](record.Published); ok {
+			closure.Prior = platform.AssetRef{App: AppID, Kind: platform.AssetObject, Name: AppID + "." + was.Name}
+			closure.HasPrior = true
+		}
+		closure.Next = platform.AssetRef{App: AppID, Kind: platform.AssetObject, Name: AppID + "." + record.Name}
+		if err = env.BindActions(env.Host.Automation(platform.Caller{}, AppID), &record); err != nil {
+			return closure, err
+		}
+		if err = env.CaptureExtension(&record); err != nil {
+			return closure, err
+		}
+		if err = env.CaptureSchema(&record); err != nil {
+			return closure, err
+		}
+		if err = env.Check(record, record.ID, env.Host.Caller(platform.Caller{}, member, AppID).Rules()); err == nil {
+			err = env.Validate(env.Host.Caller(platform.Caller{}, member, AppID), record)
+		}
+		if err == nil {
+			record.Published = ""
+			objects[i].Published = string(platform.Raw(record))
+		}
+		return closure, err
+	}}
 }
