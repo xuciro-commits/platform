@@ -2,6 +2,7 @@ package kernel
 
 import (
 	"encoding/json"
+	"errors"
 	"reflect"
 	"slices"
 	"strings"
@@ -111,7 +112,8 @@ func (k ConstraintCheck) check(c platform.Caller, info platform.EntityInfo, rule
 		}
 		result, err := program.Eval(context)
 		if err != nil {
-			if issue, ok := err.(*platform.ExprIssue); ok {
+			var issue *platform.ExprIssue
+			if errors.As(err, &issue) {
 				return false, fail(issue.Code)
 			}
 			return false, fail("input_unavailable")

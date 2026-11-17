@@ -62,7 +62,8 @@ func ConflictRefusal(err error) *platform.Error {
 	if err == nil {
 		return nil
 	}
-	if refusal, ok := err.(*platform.Error); ok {
+	var refusal *platform.Error
+	if errors.As(err, &refusal) {
 		return refusal
 	}
 	return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, err.Error())

@@ -4,6 +4,7 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	ruleexpr "platformserver/expr"
 	"syscall/js"
 )
@@ -16,8 +17,8 @@ func main() {
 			}
 			result, err := run([]byte(args[0].String()))
 			if err != nil {
-				issue, ok := err.(*ruleexpr.Issue)
-				if !ok {
+				var issue *ruleexpr.Issue
+				if !errors.As(err, &issue) {
 					issue = &ruleexpr.Issue{Code: "request", At: "$", Message: err.Error()}
 				}
 				raw, _ := json.Marshal(map[string]any{"error": issue})

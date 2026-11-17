@@ -2,6 +2,7 @@ package authoring
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 
@@ -101,7 +102,8 @@ func testCondition(expression platform.Expr, run *platform.Run, subject json.Raw
 		return false, err
 	}
 	answer, err := program.EvalSource(conditionValues{run: run, subject: subject})
-	if issue, ok := err.(*ruleexpr.Issue); ok {
+	var issue *ruleexpr.Issue
+	if errors.As(err, &issue) {
 		if issue.Message == "malformed typed value" {
 			return false, fmt.Errorf("condition operands are invalid JSON")
 		}

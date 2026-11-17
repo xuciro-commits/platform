@@ -2,6 +2,7 @@ package automation
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"maps"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
@@ -390,7 +391,8 @@ func (p RetainedPut) Run(c platform.Caller, old *records.Type, entity any) *plat
 }
 
 func conflictOf(err error) *platform.Error {
-	if refusal, ok := err.(*platform.Error); ok {
+	var refusal *platform.Error
+	if errors.As(err, &refusal) {
 		return refusal
 	}
 	return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, err.Error())
