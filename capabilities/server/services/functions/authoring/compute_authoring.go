@@ -90,8 +90,8 @@ func (o *Owner) InstallOperationAsset(asset platform.ReleaseAsset) error {
 	code := Code{Name: op.Name, Title: op.Title, Description: op.Description, Input: op.Input, Output: op.Output, Roles: op.Roles, Limits: op.Limits, Module: op.Binding.Module, State: "published", Version: ordinal}
 	return o.installCode(platform.Caller{Replaying: true}, code)
 }
-func (o *Owner) codeDraftAssets(id string) (before, after []platform.ReleaseAsset, prior, next platform.AssetRef, hadPrior bool, err error) {
-	before, err = o.env.AllReleaseAssets()
+func (o *Owner) codeDraftAssets(id string, releaseAssets func() ([]platform.ReleaseAsset, error)) (before, after []platform.ReleaseAsset, prior, next platform.AssetRef, hadPrior bool, err error) {
+	before, err = releaseAssets()
 	if err != nil {
 		return
 	}
@@ -268,8 +268,8 @@ func (o *Owner) tableFromAsset(asset platform.ReleaseAsset) (Table, error) {
 	return tb, nil
 }
 
-func (o *Owner) tableDraftAssets(id string) (before, after []platform.ReleaseAsset, prior, next platform.AssetRef, hadPrior bool, err error) {
-	before, err = o.env.AllReleaseAssets()
+func (o *Owner) tableDraftAssets(id string, releaseAssets func() ([]platform.ReleaseAsset, error)) (before, after []platform.ReleaseAsset, prior, next platform.AssetRef, hadPrior bool, err error) {
+	before, err = releaseAssets()
 	if err != nil {
 		return
 	}

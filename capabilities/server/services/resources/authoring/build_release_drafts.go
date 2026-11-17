@@ -299,10 +299,10 @@ func (b *Build) singleDraftAssets(kind platform.AssetKind, id string) (before, a
 		return k.draftAssets(b, id)
 	}
 	if kind == platform.AssetFunction {
-		return b.functions.DraftAssets(id)
+		return b.functions.DraftAssets(id, b.ReleaseAssets)
 	}
 	if hooks, found := publication.Kind(b.publications, kind); found && hooks.VersionedDraft != nil {
-		closure, err := hooks.VersionedDraft(id)
+		closure, err := hooks.VersionedDraft(id, b.ReleaseAssets)
 		return closure.Before, closure.After, closure.Prior, closure.Next, closure.HasPrior, err
 	}
 	if !recordKind(kind) {

@@ -179,8 +179,8 @@ func (o *testPlanOwner[O, P, F]) testPlanPinned(ref platform.AssetRef, source st
 	return platform.ReleaseAsset{}, fmt.Errorf("evaluation set version is not retained")
 }
 
-func (o *testPlanOwner[O, P, F]) testPlanDraftAssets(id string) (before, after []platform.ReleaseAsset, prior, next platform.AssetRef, hadPrior bool, err error) {
-	before, err = o.env.ReleaseAssets()
+func (o *testPlanOwner[O, P, F]) testPlanDraftAssets(id string, releaseAssets func() ([]platform.ReleaseAsset, error)) (before, after []platform.ReleaseAsset, prior, next platform.AssetRef, hadPrior bool, err error) {
+	before, err = releaseAssets()
 	if err != nil {
 		return
 	}

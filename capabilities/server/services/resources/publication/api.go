@@ -45,7 +45,7 @@ type Hooks struct {
 	FreezeBatch         func([]platform.ReleaseAsset) ([]platform.ReleasePublication, error)
 	FreezeInstallations func([]platform.ReleaseAsset) ([]platform.AssetInstallation, error)
 	DirectInstallation  func(json.RawMessage) (platform.AssetInstallation, error)
-	VersionedDraft      func(string) (DraftClosure, error)
+	VersionedDraft      func(string, func() ([]platform.ReleaseAsset, error)) (DraftClosure, error)
 	LoadExecution       func(platform.ReleaseAsset) error
 }
 

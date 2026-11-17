@@ -17,11 +17,11 @@ func (o *Owner) ComputePublication() publication.Hooks {
 			{Name: SchemaTablePublish, Decode: o.decodeTableInstallation, Validate: o.validateTablePublication, Install: o.installTablePublication},
 		},
 		FreezeBatch: o.prepareComputePublications,
-		VersionedDraft: func(id string) (closure publication.DraftClosure, err error) {
+		VersionedDraft: func(id string, releaseAssets func() ([]platform.ReleaseAsset, error)) (closure publication.DraftClosure, err error) {
 			if _, ok := platform.Get[Table](o.env.Host().Automation(platform.Caller{}, o.env.App()), id); ok {
-				closure.Before, closure.After, closure.Prior, closure.Next, closure.HasPrior, err = o.tableDraftAssets(id)
+				closure.Before, closure.After, closure.Prior, closure.Next, closure.HasPrior, err = o.tableDraftAssets(id, releaseAssets)
 			} else {
-				closure.Before, closure.After, closure.Prior, closure.Next, closure.HasPrior, err = o.codeDraftAssets(id)
+				closure.Before, closure.After, closure.Prior, closure.Next, closure.HasPrior, err = o.codeDraftAssets(id, releaseAssets)
 			}
 			return closure, err
 		},

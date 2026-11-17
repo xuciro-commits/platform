@@ -13,7 +13,6 @@ type TestPlanEnvironment[F any] struct {
 	Caller             func() platform.Caller
 	Authority          func() platform.Authority
 	SourceVersion      func() string
-	ReleaseAssets      func() ([]platform.ReleaseAsset, error)
 	WithDependencies   func(platform.ReleaseAsset) (platform.ReleaseAsset, error)
 	CheckDependencies  func(platform.ReleaseAsset) error
 	EqualAsset         func(platform.ReleaseAsset, platform.ReleaseAsset) bool
@@ -38,6 +37,6 @@ type TestPlanPublication[O, P, F any] struct {
 	Assets         func() ([]platform.ReleaseAsset, error)
 	Resolve        func(platform.AssetRef, string) (platform.ReleaseAsset, error)
 	FreezeBatch    func([]platform.ReleaseAsset) ([]platform.ReleasePublication, error)
-	VersionedDraft func(string) ([]platform.ReleaseAsset, []platform.ReleaseAsset, platform.AssetRef, platform.AssetRef, bool, error)
+	VersionedDraft func(string, func() ([]platform.ReleaseAsset, error)) ([]platform.ReleaseAsset, []platform.ReleaseAsset, platform.AssetRef, platform.AssetRef, bool, error)
 	Submit         func(platform.Caller, *pb.Submission, time.Time) (*pb.ChangeRecord, *platform.Error)
 }

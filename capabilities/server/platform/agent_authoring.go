@@ -15,7 +15,6 @@ type AgentAuthoringEnvironment struct {
 	InstalledAction    func(string) string
 	DeclaresRole       func(string) bool
 	DraftTools         func(Caller) (map[string]bool, []string, error)
-	ReleaseAssets      func() ([]ReleaseAsset, error)
 	SourceVersion      func() string
 	WithDependencies   func(ReleaseAsset) (ReleaseAsset, error)
 	CheckDependencies  func(ReleaseAsset) error
@@ -43,6 +42,6 @@ type AgentAuthoringBinding struct {
 	InstallImage   func(json.RawMessage) error
 	ReadFrozen     func(json.RawMessage) (json.RawMessage, error)
 	FreezeBatch    func([]ReleaseAsset) ([]ReleasePublication, error)
-	VersionedDraft func(string) ([]ReleaseAsset, []ReleaseAsset, AssetRef, AssetRef, bool, error)
+	VersionedDraft func(string, func() ([]ReleaseAsset, error)) ([]ReleaseAsset, []ReleaseAsset, AssetRef, AssetRef, bool, error)
 	LoadExecution  func(ReleaseAsset) error
 }

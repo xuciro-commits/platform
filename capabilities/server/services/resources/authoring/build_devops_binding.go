@@ -12,7 +12,6 @@ func (b *Build) bindTestPlans() {
 		Caller:             func() platform.Caller { return b.host.Automation(platform.Caller{}, ID) },
 		Authority:          func() platform.Authority { return b.ledger },
 		SourceVersion:      func() string { return b.Manifest().Version },
-		ReleaseAssets:      b.ReleaseAssets,
 		WithDependencies:   b.resolver.WithDependencies,
 		CheckDependencies:  b.resolver.CheckAssetDependencies,
 		EqualAsset:         b.data.EqualAsset,
@@ -29,7 +28,6 @@ func (b *Build) bindSampleSets() {
 	b.sampleSets = b.sampleSetFactory(devopsmodel.SampleSetEnvironment{
 		App: ID, Type: SampleSetType, Builder: Builder, Version: ValueDefinitionVersion,
 		Caller:            func() platform.Caller { return b.host.Automation(platform.Caller{}, ID) },
-		ReleaseAssets:     b.ReleaseAssets,
 		WithDependencies:  b.resolver.WithDependencies,
 		CheckDependencies: b.resolver.CheckAssetDependencies,
 	})

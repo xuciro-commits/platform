@@ -24,7 +24,6 @@ func (m SampleSetRecord) Descriptor() platform.SampleSet {
 type SampleSetEnvironment struct {
 	App, Type, Builder, Version string
 	Caller                      func() platform.Caller
-	ReleaseAssets               func() ([]platform.ReleaseAsset, error)
 	WithDependencies            func(platform.ReleaseAsset) (platform.ReleaseAsset, error)
 	CheckDependencies           func(platform.ReleaseAsset) error
 }
@@ -38,5 +37,5 @@ type SampleSetPublication struct {
 	PrepareInstallations func([]platform.ReleaseAsset) ([]platform.AssetInstallation, error)
 	DecodeInstallation   func(json.RawMessage) (platform.AssetInstallation, error)
 	ReadFrozen           func(json.RawMessage) (json.RawMessage, error)
-	VersionedDraft       func(string) ([]platform.ReleaseAsset, []platform.ReleaseAsset, platform.AssetRef, platform.AssetRef, bool, error)
+	VersionedDraft       func(string, func() ([]platform.ReleaseAsset, error)) ([]platform.ReleaseAsset, []platform.ReleaseAsset, platform.AssetRef, platform.AssetRef, bool, error)
 }

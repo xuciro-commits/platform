@@ -144,7 +144,6 @@ type Environment interface {
 	JointEntity(string) (platform.EntityInfo, bool)
 	DeclaresRole(string) bool
 	JointDeclaration(platform.AssetRef) (platform.ReleaseAsset, bool)
-	AllReleaseAssets() ([]platform.ReleaseAsset, error)
 	CheckName(string, string) error
 	ConditionLookup(string) (platform.EntityInfo, bool)
 	CheckRuleCollections(platform.RuleReadSpec, string, func(string) (platform.EntityInfo, bool)) error
@@ -417,8 +416,8 @@ func (o *Owner) Prepare(assets []platform.ReleaseAsset) ([]platform.ReleasePubli
 		})
 }
 
-func (o *Owner) DraftAssets(id string) (before, after []platform.ReleaseAsset, prior, next platform.AssetRef, hadPrior bool, err error) {
-	before, err = o.env.AllReleaseAssets()
+func (o *Owner) DraftAssets(id string, releaseAssets func() ([]platform.ReleaseAsset, error)) (before, after []platform.ReleaseAsset, prior, next platform.AssetRef, hadPrior bool, err error) {
+	before, err = releaseAssets()
 	if err != nil {
 		return
 	}

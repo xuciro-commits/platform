@@ -342,7 +342,7 @@ func (b *Build) applicationDrafts(id string, selectDrafts map[JointDraftRef]bool
 					if !found || plan.Archived {
 						return nil, fmt.Errorf("saved evaluation plan is unavailable")
 					}
-					_, functions, _, functionRef, _, problem := b.functions.DraftAssets(string(plan.Function))
+					_, functions, _, functionRef, _, problem := b.functions.DraftAssets(string(plan.Function), b.ReleaseAssets)
 					if problem != nil {
 						return nil, problem
 					}

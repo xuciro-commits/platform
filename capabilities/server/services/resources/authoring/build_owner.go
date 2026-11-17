@@ -92,8 +92,8 @@ func (b *Build) bindPublications() {
 		Kinds: []platform.AssetKind{platform.AssetAgent}, Schemas: []publication.SchemaHooks{{Name: SchemaAgentPublish, Validate: agent.ValidateImage, Install: agent.InstallImage}},
 		ReadFrozen:  agent.ReadFrozen,
 		FreezeBatch: agent.FreezeBatch, LoadExecution: agent.LoadExecution,
-		VersionedDraft: func(id string) (publication.DraftClosure, error) {
-			before, after, prior, next, had, err := agent.VersionedDraft(id)
+		VersionedDraft: func(id string, releaseAssets func() ([]platform.ReleaseAsset, error)) (publication.DraftClosure, error) {
+			before, after, prior, next, had, err := agent.VersionedDraft(id, releaseAssets)
 			return publication.DraftClosure{Before: before, After: after, Prior: prior, Next: next, HasPrior: had}, err
 		},
 	})
@@ -102,8 +102,8 @@ func (b *Build) bindPublications() {
 		Kinds: []platform.AssetKind{platform.AssetEvaluation, platform.AssetTestPlan}, Schemas: []publication.SchemaHooks{{Name: SchemaEvaluationSetPublish, Decode: plan.Decode, Validate: plan.Validate, Install: plan.Validate}},
 		ReadFrozen:  plan.ReadFrozen,
 		FreezeBatch: plan.FreezeBatch,
-		VersionedDraft: func(id string) (publication.DraftClosure, error) {
-			before, after, prior, next, had, err := plan.VersionedDraft(id)
+		VersionedDraft: func(id string, releaseAssets func() ([]platform.ReleaseAsset, error)) (publication.DraftClosure, error) {
+			before, after, prior, next, had, err := plan.VersionedDraft(id, releaseAssets)
 			return publication.DraftClosure{Before: before, After: after, Prior: prior, Next: next, HasPrior: had}, err
 		},
 	})
@@ -112,8 +112,8 @@ func (b *Build) bindPublications() {
 	b.publications = append(b.publications, publication.Hooks{
 		Kinds:              []platform.AssetKind{platform.AssetSampleSet},
 		DirectInstallation: samples.DecodeInstallation, FreezeInstallations: samples.PrepareInstallations, ReadFrozen: samples.ReadFrozen,
-		VersionedDraft: func(id string) (publication.DraftClosure, error) {
-			before, after, prior, next, had, err := samples.VersionedDraft(id)
+		VersionedDraft: func(id string, releaseAssets func() ([]platform.ReleaseAsset, error)) (publication.DraftClosure, error) {
+			before, after, prior, next, had, err := samples.VersionedDraft(id, releaseAssets)
 			return publication.DraftClosure{Before: before, After: after, Prior: prior, Next: next, HasPrior: had}, err
 		},
 	})

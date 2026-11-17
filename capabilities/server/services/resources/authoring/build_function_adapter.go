@@ -31,9 +31,6 @@ func (e functionEnvironment) JointDeclaration(ref platform.AssetRef) (platform.R
 	asset, ok := e.b.jointDeclarations[ref]
 	return asset, ok
 }
-func (e functionEnvironment) AllReleaseAssets() ([]platform.ReleaseAsset, error) {
-	return e.b.ReleaseAssets()
-}
 func (e functionEnvironment) CheckName(name, id string) error { return e.b.checkName(name, id) }
 func (e functionEnvironment) ConditionLookup(typ string) (platform.EntityInfo, bool) {
 	return e.b.conditionLookup(typ)

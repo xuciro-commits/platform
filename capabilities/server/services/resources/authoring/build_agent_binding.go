@@ -25,7 +25,6 @@ func (b *Build) agentEnvironment() platform.AgentAuthoringEnvironment {
 		InstalledAction:   b.installedActionOf,
 		DeclaresRole:      b.declaresRole,
 		DraftTools:        b.agentDraftTools,
-		ReleaseAssets:     b.ReleaseAssets,
 		SourceVersion:     func() string { return b.Manifest().Version },
 		WithDependencies:  b.resolver.WithDependencies,
 		CheckDependencies: b.resolver.CheckAssetDependencies,

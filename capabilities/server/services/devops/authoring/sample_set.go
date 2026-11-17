@@ -201,8 +201,8 @@ func (o *sampleSetOwner) retain(m descriptor.SampleSetRecord) (descriptor.Sample
 	return m, nil
 }
 
-func (o *sampleSetOwner) draftAssets(id string) (before, after []platform.ReleaseAsset, prior, next platform.AssetRef, hadPrior bool, err error) {
-	before, err = o.env.ReleaseAssets()
+func (o *sampleSetOwner) draftAssets(id string, releaseAssets func() ([]platform.ReleaseAsset, error)) (before, after []platform.ReleaseAsset, prior, next platform.AssetRef, hadPrior bool, err error) {
+	before, err = releaseAssets()
 	if err != nil {
 		return
 	}
