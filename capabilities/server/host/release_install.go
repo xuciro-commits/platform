@@ -46,9 +46,7 @@ func (t *Tenant) assetInstallationView(recordView *records.Store, includeArchive
 	apps := slices.Clone(t.apps)
 	if t.procs != nil {
 		draft.procs = t.procs.InstallationDraft()
-		if app, ok := draft.procs.(platform.App); ok {
-			(hostView{t: draft, app: app}).bindOwner(app)
-		}
+		(hostView{t: draft, app: draft.procs}).bindOwner(draft.procs)
 	}
 	for i, app := range apps {
 		if t.assets[app.Manifest().ID] == nil {

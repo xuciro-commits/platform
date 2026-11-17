@@ -31,15 +31,17 @@ type ownerRoles struct {
 
 func ownerRolesOf(owners ownerSet, active func(string) bool) (ownerRoles, error) {
 	var r ownerRoles
+	observers := runtimekernel.OwnersOf[platform.Observer](owners.ids, owners.apps)
+	listeners := runtimekernel.OwnersOf[platform.Listener](owners.ids, owners.apps)
 	for i, a := range owners.apps {
 		id := owners.ids[i]
 		if !active(id) {
 			continue
 		}
-		if x, ok := a.(platform.Observer); ok {
+		if x := observers[id]; x != nil {
 			r.observers = append(r.observers, x)
 		}
-		if _, ok := a.(platform.Listener); ok {
+		if listeners[id] != nil {
 			r.listeners = append(r.listeners, id)
 		}
 		if err := errors.Join(runtimekernel.ClaimRole(&r.identity, a, "identity"), runtimekernel.ClaimRole(&r.identityOwner, a, "identity owner"), runtimekernel.ClaimRole(&r.directory, a, "directory"),
