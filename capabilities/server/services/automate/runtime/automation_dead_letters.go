@@ -238,12 +238,13 @@ func (ss *session) retainDeadLetters() *platform.Error {
 	pending := map[string][]platform.FlowDeadLetterAsset{}
 	var other []any
 	for _, value := range ss.assets {
-		if asset, ok := value.(platform.FlowDeadLetterAsset); ok {
+		switch asset := value.(type) {
+		case platform.FlowDeadLetterAsset:
 			pending[asset.Instance] = append(pending[asset.Instance], asset)
 			if groups[asset.Instance] == nil {
 				groups[asset.Instance] = ss.load(asset.Instance)
 			}
-		} else {
+		default:
 			other = append(other, value)
 		}
 	}

@@ -46,8 +46,12 @@ func (c ChainReader) Read(ref string) (Chain, *platform.Error) {
 		if err != nil {
 			return platform.FlowInstance{}, false
 		}
-		x, ok := v.(platform.FlowInstance)
-		return x, ok
+		switch x := v.(type) {
+		case platform.FlowInstance:
+			return x, true
+		default:
+			return platform.FlowInstance{}, false
+		}
 	}
 	find := func(typ, field, value string) []any {
 		domain, _ := json.Marshal([]any{[]any{field, "=", value}})

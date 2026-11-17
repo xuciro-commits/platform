@@ -235,8 +235,14 @@ func (s FlowSnapshot) Take(m platform.Member, id string) (ContinuousFlowOwner, p
 	if refusal != nil {
 		return nil, platform.FlowInstance{}, current, refusal
 	}
-	x, ok := record.(platform.FlowInstance)
-	if !ok || x.Withheld || x.OnBehalf != current.ID {
+	var x platform.FlowInstance
+	switch value := record.(type) {
+	case platform.FlowInstance:
+		x = value
+	default:
+		return nil, platform.FlowInstance{}, current, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "A source batch acts only for its original Flow member")
+	}
+	if x.Withheld || x.OnBehalf != current.ID {
 		return nil, platform.FlowInstance{}, current, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "A source batch acts only for its original Flow member")
 	}
 	return f, x, current, nil
@@ -258,8 +264,14 @@ func (l DeadLetterLoad) Load(id string) (ReplayContext, *platform.Error) {
 	if refusal != nil {
 		return ReplayContext{}, refusal
 	}
-	asset, ok := record.(platform.FlowDeadLetterAsset)
-	if !ok || asset.Withheld {
+	var asset platform.FlowDeadLetterAsset
+	switch value := record.(type) {
+	case platform.FlowDeadLetterAsset:
+		asset = value
+	default:
+		return ReplayContext{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "The dead letter's protected source is unavailable")
+	}
+	if asset.Withheld {
 		return ReplayContext{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "The dead letter's protected source is unavailable")
 	}
 	if asset.Action != "" {
