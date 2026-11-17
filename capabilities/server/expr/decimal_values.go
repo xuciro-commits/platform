@@ -1,14 +1,9 @@
-package platform
+package expr
 
 import (
 	"encoding/json"
 	"fmt"
 	"math"
-	"math/big"
-	"reflect"
-	"regexp"
-
-	ruleexpr "platformserver/expr"
 )
 
 type DecimalValue struct {
@@ -16,10 +11,8 @@ type DecimalValue struct {
 	Value string `json:"value"`
 }
 
-var decimalText = regexp.MustCompile(`^-?(0|[1-9][0-9]*)(\.[0-9]+)?$`)
-
 func ParseDecimal(text string) (DecimalValue, error) {
-	canonical, err := ruleexpr.ParseDecimalText(text)
+	canonical, err := ParseDecimalText(text)
 	if err != nil {
 		return DecimalValue{}, fmt.Errorf("invalid bounded decimal")
 	}
@@ -44,44 +37,6 @@ func DecimalLiteral(raw json.RawMessage) (DecimalValue, bool) {
 		return DecimalValue{}, false
 	}
 	return value, true
-}
-
-func (v DecimalValue) Rat() *big.Rat { value, _ := new(big.Rat).SetString(v.Value); return value }
-
-func (value DecimalValue) Condition(field FieldInfo, op string, read func(reflect.Value) any) (func(reflect.Value) bool, error) {
-	if field.Type != "integer" && field.Type != "decimal" {
-		return nil, fmt.Errorf("decimal condition needs a numeric field")
-	}
-	if op != "=" && op != "!=" && op != "<" && op != "<=" && op != ">" && op != ">=" {
-		return nil, fmt.Errorf("unsupported decimal condition")
-	}
-	right := value.Rat()
-	return func(record reflect.Value) bool {
-		raw, err := json.Marshal(read(record))
-		if err != nil {
-			return false
-		}
-		left, ok := new(big.Rat).SetString(string(raw))
-		if !ok {
-			return false
-		}
-		cmp := left.Cmp(right)
-		switch op {
-		case "=":
-			return cmp == 0
-		case "!=":
-			return cmp != 0
-		case "<":
-			return cmp < 0
-		case "<=":
-			return cmp <= 0
-		case ">":
-			return cmp > 0
-		case ">=":
-			return cmp >= 0
-		}
-		return false
-	}, nil
 }
 
 type NumberValue struct {

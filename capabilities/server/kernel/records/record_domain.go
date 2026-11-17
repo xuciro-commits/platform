@@ -314,7 +314,7 @@ func lowerCondition(info platform.EntityInfo, raw json.RawMessage) (ruleexpr.Exp
 	if err != nil {
 		return ruleexpr.Expr{}, err
 	}
-	if number, ok := platform.DecimalLiteral(term[2]); ok {
+	if number, ok := ruleexpr.DecimalLiteral(term[2]); ok {
 		if d.typ != "integer" && d.typ != "decimal" {
 			return ruleexpr.Expr{}, fmt.Errorf("decimal condition needs a numeric field")
 		}

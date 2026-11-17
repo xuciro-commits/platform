@@ -161,7 +161,7 @@ func checkQueries(p platform.Page, inputScope string) error {
 				}
 			} else {
 				var literal any
-				if _, exact := platform.DecimalLiteral(value.Literal); exact {
+				if _, exact := ruleexpr.DecimalLiteral(value.Literal); exact {
 					if !pageUIProfileSupports(profileVersion(d), "platform.page.v2.16") {
 						return fmt.Errorf("decimal query literal requires v2.16")
 					}

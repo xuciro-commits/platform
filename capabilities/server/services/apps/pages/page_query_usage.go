@@ -278,10 +278,10 @@ func bindingVariables(b platform.PageDataBinding) []string {
 }
 
 func literalType(raw json.RawMessage) string {
-	if _, ok := platform.NumberLiteral(raw); ok {
+	if _, ok := ruleexpr.NumberLiteral(raw); ok {
 		return "number"
 	}
-	if _, ok := platform.DecimalLiteral(raw); ok {
+	if _, ok := ruleexpr.DecimalLiteral(raw); ok {
 		return "decimal"
 	}
 	var value any

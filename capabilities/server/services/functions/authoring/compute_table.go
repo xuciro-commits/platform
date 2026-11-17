@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"strings"
 
+	ruleexpr "platformserver/expr"
 	"platformserver/platform"
 )
 
@@ -303,7 +304,7 @@ func ruleCellLiteral(raw, kind string) (any, error) {
 		return castCell(raw, kind)
 	}
 	text := strings.TrimSpace(raw)
-	if _, err := platform.ParseDecimal(text); err != nil {
+	if _, err := ruleexpr.ParseDecimal(text); err != nil {
 		return nil, err
 	}
 	return text, nil

@@ -2,6 +2,7 @@ package objects
 
 import (
 	"encoding/json"
+	ruleexpr "platformserver/expr"
 	"platformserver/platform"
 	"reflect"
 	"strconv"
@@ -88,7 +89,7 @@ func propertyValues(info platform.EntityInfo, record any) (map[string]any, map[s
 					text = sign + digits[:point] + "." + digits[point:]
 				}
 			}
-			parsed, err := platform.ParseDecimal(text)
+			parsed, err := ruleexpr.ParseDecimal(text)
 			if err != nil {
 				errors[field.Name] = "Property value exceeds its budget."
 			} else {
