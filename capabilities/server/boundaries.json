@@ -1,0 +1,33 @@
+{
+  "imports": {
+    "expr": [],
+    "kernel": ["expr", "platform", "kernel/protocol"],
+    "kernel/protocol": ["platform"],
+    "platform": ["expr"],
+    "services/resources": ["platform", "services/actions/catalog", "services/devops/descriptor", "services/resources/publication", "kernel/records", "kernel/acceptedformat", "kernel/protocol"],
+    "services/resources/publication": ["platform"],
+    "services/ontology": ["platform", "services/resources", "kernel/records", "kernel/acceptedformat", "kernel/protocol"],
+    "services/objects": ["expr", "platform", "services/ontology", "services/resources/publication", "kernel/records", "kernel/acceptedformat", "kernel/protocol"],
+    "services/actions": ["platform", "services/objects", "services/functions", "services/resources/publication", "kernel/records", "kernel/acceptedformat", "kernel/protocol"],
+    "services/actions/catalog": ["platform"],
+    "services/functions": ["platform", "services/actions/catalog", "services/resources/publication", "kernel/records", "kernel/acceptedformat", "kernel/protocol"],
+    "services/data": ["platform", "services/resources", "services/actions/catalog", "kernel/records", "kernel/acceptedformat", "kernel/protocol"],
+    "services/automate": ["platform", "services/actions", "services/resources/publication", "kernel/records", "kernel/acceptedformat", "kernel/protocol"],
+    "services/apps": ["platform", "services/objects", "services/actions", "services/ontology", "services/resources/publication", "kernel/records", "kernel/acceptedformat", "kernel/protocol"],
+    "services/work": ["platform", "services/actions", "kernel/records", "kernel/acceptedformat", "kernel/protocol"],
+    "services/devops": ["platform", "services/devops/descriptor", "services/resources", "services/apps", "services/functions", "services/ontology", "kernel/records", "kernel/acceptedformat", "kernel/protocol"],
+    "services/devops/descriptor": ["platform"],
+    "services/security": ["platform", "kernel/records", "kernel/acceptedformat", "kernel/protocol"],
+    "services/ai": ["platform", "services/functions", "services/actions", "kernel/records", "kernel/acceptedformat", "kernel/protocol"],
+    "apps": ["platform"],
+    "host": ["kernel", "platform", "apps", "services"],
+    "cmd": ["*"]
+  },
+  "exceptions": {
+    "services/ai": ["kernel/store"],
+    "services/data": ["services/ontology", "kernel/store"],
+    "services/devops": ["services/data"],
+    "services/objects": ["services/security"],
+    "services/resources": ["services/apps/authoring", "services/automate/authoring", "services/data", "services/functions/authoring", "services/ontology"]
+  }
+}

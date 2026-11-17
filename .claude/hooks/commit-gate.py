@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-import glob
 import hashlib
 import json
 import os
@@ -16,28 +15,8 @@ def run(cmd, cwd, timeout=600, env=None):
     return p.returncode, (p.stdout + p.stderr).strip()
 
 
-def pattern(text):
-    out, i = "", 0
-    while i < len(text):
-        if text.startswith("**", i):
-            out, i = out + ".*", i + 2
-        elif text[i] == "*":
-            out, i = out + "[^/]*", i + 1
-        else:
-            out, i = out + re.escape(text[i]), i + 1
-    return re.compile(out + "$")
-
-
-def covers(path):
-    with open(path, encoding="utf-8") as f:
-        head = re.match(r"---\n(.*?)\n---\n", f.read(), re.S)
-    if not head:
-        return []
-    for line in head.group(1).splitlines():
-        if line.startswith("covers:"):
-            body = line.split(":", 1)[1].strip().strip("[]")
-            return [item.strip() for item in body.split(",") if item.strip()]
-    return []
+def names(root, *args):
+    return {f for f in run(["git", *args], root)[1].splitlines() if f}
 
 
 def fingerprint(root, changed):
@@ -53,53 +32,32 @@ def fingerprint(root, changed):
 
 def main():
     command = json.load(sys.stdin).get("tool_input", {}).get("command", "")
-    if not re.search(r"\bgit\s+commit\b", command):
+    commit = re.search(r"\bgit\s+commit\b([^\n|;&<]*)", command)
+    if not commit:
         return 0
     code, root = run(["git", "rev-parse", "--show-toplevel"], os.getcwd())
     if code:
         return 0
-    tracked = run(["git", "diff", "--name-only", "HEAD"], root)[1].splitlines()
-    untracked = run(["git", "ls-files", "--others", "--exclude-standard"], root)[1].splitlines()
-    changed = {f for f in tracked + untracked if f}
-    digest = fingerprint(root, changed)
-    gated = [f for f in changed if not f.startswith("docs/") or f == "docs/7-system/README.md"]
+    tree = names(root, "diff", "--name-only", "HEAD") | names(root, "ls-files", "--others", "--exclude-standard")
+    staged = names(root, "diff", "--cached", "--name-only")
+    whole = re.search(r"\s(--all|-(?!-)[A-Za-z]*a[A-Za-z]*)(\s|$)", commit.group(1))
+    scope = staged if staged and not whole else tree
+    if not scope:
+        return 0
+    targets = ["check"] + [f"check-{side}" for side in ("web", "frontend") if any(f.startswith(side + "/") for f in scope)]
+    state = fingerprint(root, tree) + " " + " ".join(targets)
     passed = os.path.join(root, ".git", "claude-check-pass")
-    if gated and not (os.path.isfile(passed) and open(passed).read() == digest):
-        env = dict(os.environ, GOPROXY="https://goproxy.cn,direct")
-        for target in ["check"] + (["check-web"] if any(f.startswith("web/") for f in gated) else []) + (["check-frontend"] if any(f.startswith("frontend/") for f in gated) else []):
-            code, out = run(["make", target], root, timeout=300, env=env)
-            if code:
-                print(f"make {target} failed:\n" + out[-6000:], file=sys.stderr)
-                return 2
-        with open(passed, "w") as f:
-            f.write(digest)
-
-    staged = {f for f in run(["git", "diff", "--cached", "--name-only"], root)[1].splitlines() if f}
-    args = re.search(r"\bgit\s+commit\b([^\n|;&<]*)", command).group(1)
-    whole = re.search(r"\s(--all|-(?!-)[A-Za-z]*a[A-Za-z]*)(\s|$)", args)
-    if staged and not whole:
-        changed, digest = staged, run(["git", "write-tree"], root)[1]
-    code_changed = [f for f in changed if not f.startswith("docs/")]
-    stale = []
-    for doc in sorted(glob.glob(os.path.join(root, "docs", "**", "*.md"), recursive=True)):
-        name = os.path.relpath(doc, root)
-        if name in changed:
-            continue
-        rules = [pattern(c) for c in covers(doc)]
-        hits = sorted(f for f in code_changed if any(r.match(f) for r in rules))
-        if hits:
-            stale.append(f"{name}: " + ", ".join(hits[:6]) + (" …" if len(hits) > 6 else ""))
-    if not stale:
+    if os.path.isfile(passed) and open(passed).read() == state:
         return 0
-    mark = os.path.join(root, ".git", "claude-doc-gate")
-    if os.path.isfile(mark) and open(mark).read() == digest:
-        return 0
-    with open(mark, "w") as f:
-        f.write(digest)
-    print("These specs cover the changed code but are not part of this change:\n" + "\n".join(stale) +
-          "\nIf the change alters what a spec states (rules, specs or its gap list), update it in this commit."
-          " If not, run the same commit again unchanged to proceed.", file=sys.stderr)
-    return 2
+    env = dict(os.environ, GOPROXY="https://goproxy.cn,direct")
+    for target in targets:
+        code, out = run(["make", target], root, timeout=300, env=env)
+        if code:
+            print(f"make {target} failed:\n" + out[-6000:], file=sys.stderr)
+            return 2
+    with open(passed, "w") as f:
+        f.write(state)
+    return 0
 
 
 sys.exit(main())

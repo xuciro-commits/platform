@@ -1,85 +1,100 @@
 # AGENTS.md
 
-业务应用构建平台：内核的模型以 Palantir Foundry 为基准，应用框架的体验以胜出 Frappe 为目标（[1-enterprise §1.11](docs/1-enterprise.md)）。终局：先把平台做成，再用平台自己的工具构建行业应用，经 Marketplace 交付到客户租户（[1-enterprise](docs/1-enterprise.md)）。
+一个业务应用平台：声明业务对象，就得到能用的应用；行业知识做成能安装、能升级的产品包。
+内核的模型向 Palantir Foundry 看齐，应用框架的体验要胜出 Frappe（[intent](docs/intent.md)）。
 
-规范领导代码：`docs/` 写目标设计，代码与规范冲突时改代码。本文件每次加载；其余文档按下表在需要时读，只读相关小节。文档体系本身见 [docs/README](docs/README.md)。
+本文件每次会话都加载；其余文档按下表在需要时读，只读相关的一节。文档写的是目标：代码与文档冲突时改代码。
+
+## 开工前
+
+1. 看 `git status`。有不是你留下的未提交改动，停下来告诉负责人：不接着写，不替别人提交，不整理。
+2. 读 [plan](docs/plan.md)。只做当前阶段最上面的一行，一次一行；冻结表里的东西不碰。
+3. 读这一行涉及的文档小节、实现与调用方，再动手。
 
 ## 何时读什么
 
-| 任务涉及 | 先读 |
+| 任务涉及 | 读 |
 |---|---|
-| 选当前批次、看里程碑、记录新差距 | [roadmap](docs/roadmap.md) |
-| 工作方式、架构诊断、判断该不该问负责人 | [method](docs/method.md) |
-| 命名、翻译 | [glossary](docs/glossary.md) |
-| 意图与下注、承重决定、判断是否属于平台、质量目标、外部依赖 | [1-enterprise](docs/1-enterprise.md) |
-| 新能力或资源类型放哪个应用、平台还是产品包 | [2-product](docs/2-product.md) |
-| 应用轨、应用菜单、资源分类、URL、搜索、项目 | [3-information](docs/3-information.md) |
-| 页面原型、保存模型、选择、窗口、快捷键 | [4-interaction](docs/4-interaction/README.md) |
-| 某个界面组件或交互模式 | [4-interaction/patterns](docs/4-interaction/patterns.md) |
-| 某个工具应用的布局 | [4-interaction/workbenches](docs/4-interaction/workbenches.md) |
-| 任务路径、文案、启发式检查 | [5-experience](docs/5-experience.md) |
-| 资源内核、本体、对象、数据、动作、函数、自动化 | [6-domain](docs/6-domain/README.md) |
-| 授权、项目角色、标记、行列策略 | [6-domain/security](docs/6-domain/security.md) |
-| 血缘、保护标记基线、影响分析、列级血缘 | [6-domain/lineage](docs/6-domain/lineage.md) |
-| 分支、提案、产品、版本、安装、升级 | [6-domain/change](docs/6-domain/change.md) |
-| Go 包、写入与读取路径、运行机制、协议 | [7-system](docs/7-system/README.md) |
-| 租户车道、协调读取持锁、决定与提交、后台工作持锁 | [7-system/concurrency](docs/7-system/concurrency.md) |
-| 前端包、路由、数据获取、i18n | [7-system/web](docs/7-system/web.md) |
-| 检查、钩子、验收用例 | [7-system/verification](docs/7-system/verification.md) |
+| 做什么、先后、什么先不碰 | [plan](docs/plan.md) |
+| 该不该做、属不属于平台、八个承重决定 | [intent](docs/intent.md) |
+| 写入、读取、发布各走哪条路；并发；版本与纪元；怎样算对 | [architecture](docs/architecture.md) |
+| 资源、类型、对象、动作、权限、产品包 | [domain](docs/domain.md) |
+| Go 包、代码规范、内核不变量、后端易错点 | [backend](docs/backend.md) |
+| 界面代码：三层、表现、Astryx 的用法、核对、前端易错点 | [frontend](docs/frontend.md) |
+| 导航、四种页面、保存模型、文字 | [ux](docs/ux.md) |
+| 观感、数据怎样显示、什么不许出现 | [design](docs/design.md) |
+| 命名与翻译 | [glossary](docs/glossary.md) |
+| 文档的规矩、谁决定什么、一行怎样算做完 | [docs/README](docs/README.md) |
 
-前端改动另用技能 `platform-design`。
+改界面之前用技能 `platform-design`。
 
 ## 硬规则
 
+方向：
+
+- 八个承重决定不动：一条写入路径、一套模型、一个进程、一种交付物、一个授权决定点、AI 是调用者、一个格式纪元、一个界面运行时。
+- 只做 plan 当前阶段的行。不做没有功能在等它的重构、搬迁与改名。
+- 只有一个前端：`frontend/`。`web/` 冻结，只修让它起不来或让检查过不去的缺陷。
+- 界面由类型生成：不为单个类型写界面，不从空白写页面；先找 Astryx 官方模板与块，改造一次，所有类型共用。
+- 平台不含行业代码；行业概念只在产品包里用对象与动作表达。
+- 一项能力只有一个实现；规则求值、约束、授权、依赖解析各只有一个。
+
+代码：
+
 - 先读实现与调用方，从根因解决；删除被替换的路径；不扩展无关功能。
-- 最小完整改动：能不写就不写，能复用就复用，删除优先于新增；不为只有一个实现的东西写接口，不留兼容分支（method R5）。
-- 校验只在信任边界；边界之内信任类型与不变量，不为不会出现的状态写分支，不吞错误换默认值（method R6）。
-- 新能力先在 2-product 找到唯一归属；找不到就先改规范。一项能力只有一个实现，一类资源只由一个工具应用编辑。
-- 代码改变了某份规范描述的行为，同一提交更新该规范（规则、规格或现存差距）。
-- 不写代码注释；编译指令、生成文件头、shebang 保留。
-- 测试只写两类：内核不变量与黄金路径验收（7-system/verification）；不为单个函数写单元测试。
+- 最小完整改动：能不写就不写，能复用就复用，删除优先于新增；不为只有一个实现的东西写接口，不留兼容分支。
+- 校验只在信任边界；边界之内信任类型与不变量，不为不会出现的状态写分支，不吞错误换默认值。
 - 权威状态的新写入只经接受结果；跨应用走版本化协议，不做跨权威原子性。
-- 应用只导入 `platformserver/platform`；客户端复用现有共享包；规则求值、约束、授权、依赖解析各一个实现。
-- 界面由类型生成（1-enterprise 决定 8）：新界面先找 Astryx 官方模板与块，改造一次成为只认契约的表现，入口只写声明；不从空白写页面，不为单个类型写界面。
-- 平台不含行业代码；行业概念只在产品包中以本体与应用表达。
 - 租户扩展只经受控编译、隔离执行和版本化制品。
-- 界面保留英文与简体中文；业务数据不翻译；应用按承担的工作命名，中英文各一个名字（2-product R3）。
-- 保留现有数据卷、密钥、租户配置与当前格式纪元内的历史字节（7-system §7.6）；恢复只应用已接受映像。
+- 不写代码注释；编译指令、生成文件头、shebang 保留。
+- 测试只写两类：内核不变量与主干验收；不为单个函数写单元测试。
+- 界面保留英文与简体中文；业务数据不翻译。
+
+安全与数据：
+
 - 不提交凭据；应用只保存凭据引用。不读取、不打印 `.build/local/` 中的账号与密码。
+- 保留现有数据卷、密钥、租户配置与当前格式纪元内的历史字节（architecture“版本与纪元”）；恢复只应用已接受映像。
 - 保留工作区里他人的改动；没运行的检查不能报为通过。
 - 新依赖须负责人批准。
+
+不留垃圾：
+
+- 不新建文档。`docs/` 只有十份；进度只写在 plan，做完的行删掉；不写差距清单、历史、总结、方案与任务分解文件。
+- 代码改变了文档写着的行为，同一提交改文档。
+- 仓库里不留临时文件、调试输出、备份副本、空壳和“以后再用”的代码；草稿放系统临时目录。
+- 不改检查脚本来让检查通过；被提交关口拦下时修正后重试，不绕过。
 
 ## 命令
 
 | 用途 | 命令 |
 |---|---|
-| 本地运行 | `make local`（入口 http://localhost:8495，热更新；宿主日志 `.build/dev/platform-api.log`） |
-| Go 检查 | `cd capabilities/server && GOPROXY=https://goproxy.cn,direct go build ./... && go vet ./...`；`gofmt -l .` |
-| 宿主类型与页面契约 | `make contract`（生成 `api/src/gen/*.ts`、`pageui/safety.ts`、`platform/page_compat.json`） |
-| 新前端 | `pnpm --dir frontend dev`（http://localhost:8496，代理到 `PLATFORM_HOST`）；夹具宿主 `make frontend-host`（自带示例销售项目）；检查 `make check-frontend` |
-| Web 检查 | 改动的包内 `pnpm exec tsc -p .`；`cd web && pnpm build` |
-| 空白 | `git diff --check` |
-| 快速检查 | `make check`（约 5 秒：Go 构建与 vet、包边界与形状、契约、文案、空白）；改了 `web/` 加 `make check-web`，改了 `frontend/` 加 `make check-frontend`；提交钩子自动运行两者 |
-| 不变量 | `make test RUN=K13` 定点跑相关编号；不给 `RUN` 跑全部（不在提交关口） |
-| 验收 | `make e2e SPEC=F17` 只跑改动路径的用例；`make verify` 跑全部，只在里程碑与段落完成时 |
-| SQL 模式 | `make verify-sql`（隔离临时 PostgreSQL 库：写入、重启、读取） |
+| 前端 | `pnpm --dir frontend dev`（http://localhost:8496，代理到 `PLATFORM_HOST`） |
+| 夹具宿主 | `make frontend-host`（内存宿主 http://127.0.0.1:18511，自带示例销售项目） |
+| 整套本地运行 | `make local`（入口 http://localhost:8495；宿主日志 `.build/dev/platform-api.log`） |
+| 快速检查 | `make check`：Go 构建、vet 与格式，包边界与形状，产品包，契约，文案，文档，空白 |
+| 前端检查 | `make check-frontend`（改了 `frontend/` 时） |
+| 旧前端检查 | `make check-web`（改了 `web/` 时） |
+| 宿主类型与契约 | `make contract`（改了宿主类型之后） |
+| 内核不变量 | `make test RUN=K13` 定点跑相关编号；不给 `RUN` 跑全部 |
+| SQL 模式 | `make verify-sql`（隔离的临时 PostgreSQL：写入、重启、读取） |
+| 产品包 | `make packages`（由作者态源生成制品） |
 
-长命令一律加超时（如 `perl -e 'alarm 400; exec @ARGV' go build ./...`）。
+提交钩子自动跑 `make check`，暂存里有 `frontend/` 或 `web/` 时加跑对应的检查。
 
 ## 工作方式
 
-- 负责人掌舵，代理执行：负责人决定意图、承重决定与持久代价的取舍，并在浏览器走查观感；顺序、设计、实现、验证由代理决定（[method](docs/method.md)）。
-- 主代理在主工作区的 main 分支独立完成调查、设计、实现、验证和交付，不分派子代理。
-- 按路线图推进，每批更新相关规范和实际差距，完成检查后提交并推送 main。
-- 提交信息用详细中文：标题写 `类型: 范围——行为变化`；正文按范围与行为变化、替代/删除/重构/新增、实际运行的检查命令与结果分组。未运行的检查不得写成通过，不写空泛总结。
-- 钩子在 Go 编辑后格式化，并在 `git commit` 前检查构建、类型、空白与规范同步；被拦下时修正后重试，不绕过。
-- 项目知识只写进仓库；外部评审不入库（docs/README §6）。
+- 负责人掌舵，主会话执行。负责人看两样东西：plan 里的那一行，和浏览器里的界面（[docs/README](docs/README.md)）。
+- 主会话在主工作区的 main 分支独立完成调查、设计、实现、验证和交付，不分派子代理。
+  便宜的模型只做任务卡（技能 `frontend-card`），不提交。
+- 每行做完：检查，提交，推送 main，汇报。提交只暂存自己改的路径，不用 `git add -A` 与 `git commit -a`。
+- 提交信息用详细中文：标题写 `类型: 范围——行为变化`；正文按范围与行为变化、替代/删除/重构/新增、实际运行的检查命令与结果分组。
+  未运行的检查不得写成通过，不写空泛总结。
+- 汇报只说三件事：现在能做什么（附能点开的地址）、什么没做或没核对、要负责人决定什么。
 
 ## 易错点
 
-- HTTP 读取记录的路由必须用 `rt.recordRead`；`rt.handle` 读记录会因“no consistent view”崩溃。
-- 读取闭包使用参数中的 Tenant 与调用者上下文；不要捕获活动 Tenant、拥有者或 SQL 视图。`runtime.scoped` 只用于已持有车道或独立读取范围的内部调用，不能用“租户有打开的视图”判断当前调用者持有范围。
-- 授权的集合读取与单条读取都经 `authorizeDepth`；`held=true` 时调用者已持有存储锁，不得再加锁。
-- 模块加载时不调用 `t()`（切换语言不会更新）：模块级文案写英文原文，读取时翻译；动态键要在字典里列全取值。
-- zsh 中 `ls` 被别名为 eza，用 `command ls`；通配符加引号。
-- 本地数据可随时清空重建；不要为修启动问题删除配置或数据卷。
+- zsh 里 `ls` 被别名为 eza，用 `command ls`；通配符加引号，没有匹配的通配符会让整条命令不执行。
+- 长命令一律加超时，例如 `perl -e 'alarm 400; exec @ARGV' go build ./...`。Go 模块经 `GOPROXY=https://goproxy.cn,direct`。
+- 在 `frontend/` 里不带参数跑 `astryx init` 会改写本文件；只用 `pnpm astryx init --agent-docs-path AGENTS.md`。
+- 本地与夹具数据可随时清空重建；不要为修启动问题删除配置或数据卷。
+- 后端的易错点在 [backend](docs/backend.md)，前端的在 [frontend](docs/frontend.md)；动那一侧之前先读。

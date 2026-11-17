@@ -1,15 +1,16 @@
 # AGENTS
 
-The platform's frontend, rebuilt from zero on Astryx. The repository's root `AGENTS.md` still applies; this file adds what is specific to this folder.
+The platform frontend: the only one. Screens are generated from types. The repository root `AGENTS.md` still applies; this file adds what is specific to this folder.
 
-- Every screen holds the thirteen invariants in `docs/4-interaction/README.md` §4.1 and is one of four archetypes (§4.3). Use the `platform-design` skill before building.
-- `web/` is a parallel track owned by another session. Do not read or change it.
-- Screens are generated from types (`docs/7-system/web.md`, "界面运行时"): contracts in `src/host/`, presentations in `src/pages/` (each adapted once from an official template), entries as one declaration in `src/apps/<app>/<entry>.ts`. Find the official template or block first (`pnpm astryx build`, `pnpm astryx search`); change only the data shape and the presentation it lacks.
+- Read `docs/frontend.md` before changing anything here, and use the `platform-design` skill. Structure and behaviour are in `docs/ux.md`, the look in `docs/design.md`.
+- Three layers: contracts in `src/host/`, presentations in `src/pages/` (each adapted once from an official template), entries as one declaration in `src/apps/<app>/<entry>.ts`. Never write a screen for one type; change the presentation or the contract so every type gets it.
+- Find the official template or block first (`pnpm astryx build`, `pnpm astryx search`); change only the data shape and the presentation it lacks.
+- `web/` is the old frontend, frozen. Do not read or change it.
 - Real data: `make frontend-host` from the repository root, `PLATFORM_HOST=http://127.0.0.1:18511` in `.env`, then pick a fixture identity on the sign-in page.
 - Run `pnpm dev` (http://localhost:8496) and `pnpm astryx <cmd>` for the CLI below.
 - Every visible string goes through `t()` with a `zh-CN` entry in `src/i18n.ts`. No code comments.
 - Check with `make check-frontend` from the repository root. Fix what it reports; never edit the check.
-- Building one menu entry from a task card? Follow `.claude/skills/frontend-migrate/SKILL.md` to the letter: you may only add files under `src/apps/<app>/` and lines to `src/i18n.ts`. The shell, router, `src/pages/`, `src/host/`, dependencies and specs are not yours to change; when the task needs them, stop and report.
+- Doing one task card? Follow `.claude/skills/frontend-card/SKILL.md` to the letter: you may only change the files the card lists. The shell, router, `src/host/`, dependencies, checks and documents are not yours to change; when the task needs them, stop and report.
 - The block below is generated; refresh it with `pnpm astryx init --agent-docs-path AGENTS.md`, never by hand.
 
 <!-- ASTRYX:START -->

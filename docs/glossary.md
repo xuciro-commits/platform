@@ -1,16 +1,10 @@
----
-level: 术语
-covers: []
-read-when: 给资源、界面元素、代码标识命名，或翻译界面文案
----
-
 # 术语表
 
 一词一行。界面文案、文档与代码标识只用这里的词；新词先加到这里。
 
 ## 应用
 
-应用按承担的工作命名，名字随界面语言显示（2-product R3）。
+应用按它承担的工作命名，中英文各一个名字，随界面语言显示。
 
 | English | 中文 | 承担的工作 |
 |---|---|---|
@@ -30,11 +24,13 @@ read-when: 给资源、界面元素、代码标识命名，或翻译界面文案
 
 ## 资源与概念
 
+“归属”一栏是拥有它的应用，或讲它的那份文档。
+
 | English | 中文 | 定义 | 归属 |
 |---|---|---|---|
-| Resource | 资源 | 有 RID、属于一个项目的定义 | 6-domain §6.3 |
-| RID | RID | 资源的不可变标识 `ri.<service>.<tenant>.<kind>.<id>` | 3-information §3.5 |
-| API name | API 名 | 可被引用的稳定名 | 3-information §3.5 |
+| Resource | 资源 | 有 RID、属于一个项目的定义 | domain |
+| RID | RID | 资源的不可变标识 `ri.<service>.<tenant>.<kind>.<id>` | domain |
+| API name | API 名 | 可被引用的稳定名 | domain |
 | Project | 项目 | 资源的容器与访问边界 | 主页 |
 | Folder | 文件夹 | 项目内的组织层级 | 主页 |
 | Managed project | 受管项目 | 安装产品后放置其资源的只读项目 | 交付 |
@@ -56,7 +52,7 @@ read-when: 给资源、界面元素、代码标识命名，或翻译界面文案
 | Schedule | 调度 | 构建的时间计划 | 数据 |
 | Ontology | 本体 | 对象类型及其关系与动作的总和 | 本体 |
 | Object type | 对象类型 | 一类业务对象的定义 | 本体 |
-| Object | 对象 | 对象类型的实例 | 6-domain §6.5 |
+| Object | 对象 | 对象类型的实例 | domain |
 | Property | 属性 | 对象类型的字段 | 本体 |
 | Shared property | 共享属性 | 跨类型复用的属性 | 本体 |
 | Link type | 关系类型 | 两类对象之间的关系定义 | 本体 |
@@ -64,42 +60,42 @@ read-when: 给资源、界面元素、代码标识命名，或翻译界面文案
 | Value type | 值类型 | 带约束的属性类型 | 本体 |
 | Object type group | 对象类型组 | 浏览用的分组 | 本体 |
 | Action type | 动作类型 | 一种受治理的对象变更的定义 | 本体 |
-| Action | 动作 | 动作类型的一次执行 | 6-domain §6.7 |
+| Action | 动作 | 动作类型的一次执行 | domain |
 | Parameter | 参数 | 动作或函数的输入 | 本体、逻辑 |
 | Rule | 规则 | 动作产生编辑的步骤 | 本体 |
 | Submission criteria | 提交条件 | 动作执行前必须满足的条件 | 本体 |
 | Side effect | 副作用 | 动作接受后的通知或 webhook | 本体 |
-| Edit | 编辑 | 动作产生的按属性的修改事实 | 6-domain §6.5 |
+| Edit | 编辑 | 动作产生的按属性的修改事实 | domain |
 | Datasource | 数据源 | 支撑对象类型的数据集或管道输出 | 本体 |
 | Function | 函数 | 无副作用的计算 | 逻辑 |
 | Decision table | 决策表 | 表格形式的函数 | 逻辑 |
 | Logic flow | 逻辑流 | 节点图形式的函数 | 逻辑 |
 | Automation | 自动化 | 条件 → 效果 | 逻辑 |
 | Module | 模块 | Workshop 中的多页面应用 | 应用 |
-| Object view | 对象视图 | 对象的唯一落点页面 | 应用 |
+| Object view | 对象视图 | 为某个对象类型专门搭建的页面，替代默认的记录页 | 应用 |
 | Widget | 组件 | 模块页面上的元素 | 应用 |
 | Variable | 变量 | 模块中的值或对象集 | 应用 |
 | Exploration | 探索 | 保存的对象查询 | 本体 |
-| Object set | 对象集 | ObjectSet 读取代数的结果 | 6-domain §6.12 |
-| Expression | 表达式 | Expr 语言的谓词或计算 | 6-domain §6.12 |
+| Object set | 对象集 | ObjectSet 读取代数的结果 | domain |
+| Expression | 表达式 | Expr 语言的谓词或计算 | domain |
 | Agent | 智能体 | 可调用工具的模型配置 | AI |
 | Retrieval source | 检索源 | 智能体可检索的文档与对象 | AI |
 | Evaluation set | 评估集 | 智能体或函数的评测样例 | AI |
 | Work item | 工作项 | 指派给成员或团队的任务或审批 | 通知 |
 | Approval | 审批 | 带批准与驳回动作的工作项 | 通知 |
 | Notification | 通知 | 投递给成员的消息 | 通知 |
-| Branch | 分支 | main 之外的定义空间 | 6-domain §6.20 |
-| Proposal | 提案 | 请求把分支合并到 main | 6-domain §6.20 |
-| Working state | 工作状态 | 个人未保存到分支的编辑 | 4-interaction §4.5 |
+| Branch | 分支 | main 之外的定义空间 | domain |
+| Proposal | 提案 | 请求把分支合并到 main | domain |
+| Working state | 工作状态 | 构建者个人尚未保存的编辑，别人看不到 | domain |
 | Product | 产品 | 可交付的资源集合 | 交付 |
 | Candidate | 候选 | 产品的待审阅快照；不指内核中未提交的决定 | 交付 |
 | Product version | 产品版本 | 不可变的已发布候选 | 交付 |
 | Test plan | 测试计划 | 发布前运行的业务测试 | 交付 |
 | Installation | 安装 | 产品版本在租户中的实例 | 交付 |
-| Extension | 扩展 | 客户在受管资源之上的资源 | 6-domain §6.22 |
+| Extension | 扩展 | 客户在受管资源之上的资源 | domain |
 | Lineage | 血缘 | 资源之间的数据来源关系 | 数据 |
-| Preview marking | 预览标记 | 按当前保存的定义推导的生效标记，只用于展示 | 6-domain/lineage |
-| Protection | 保护标记 | 按执行使用的已接受定义与写出证据推导的标记，用于授权；内部称 Guard | 6-domain/lineage |
+| Preview marking | 预览标记 | 按当前保存的定义推导的生效标记，只用于展示 | domain |
+| Protection | 保护标记 | 按执行使用的已接受定义与写出证据推导的标记，用于授权；内部称 Guard | domain |
 | Impact | 影响 | 从一个资源出发可达的上游或下游资源与字段 | 数据 |
 | Boundary | 边界 | 因深度、其他项目或无权而未展开的邻居计数 | 数据 |
 | Run | 运行 | 同步、构建、自动化、函数、投递的一次执行记录 | 运行 |
@@ -119,17 +115,36 @@ read-when: 给资源、界面元素、代码标识命名，或翻译界面文案
 | Connector | 连接器 | 连接的访问类型（数据库、REST、文件、消息） | 数据 |
 | Activate | 激活 | 在产品所在租户中把某版本设为生效 | 交付 |
 | Capability matrix | 能力矩阵 | 角色到动作与字段的授权总览 | 管理 |
-| Independent builder | 独立构建者 | 直接被授予构建者角色、而非经项目角色获得的成员 | 6-domain/security |
+| Independent builder | 独立构建者 | 直接被授予构建者角色、而非经项目角色获得的成员 | domain |
 | Support access | 支持授权 | 成员开启的限时支持访问 | 管理 |
-| Service | 服务 | 拥有一组资源类型或记录、对其写入作出决定的 Go 包 | 7-system §7.2 |
-| Submission | 提交 | 请求一次权威写入的协议消息 | 7-system §7.3 |
-| Decision | 决定 | 服务对一次提交算出的待提交结果（编辑、意图或拒绝），带基准位置 | 7-system/concurrency |
-| Accepted result | 接受结果 | 权威写入的唯一形式 | 7-system §7.3 |
-| Format epoch | 格式纪元 | 宿主保证逐字节可读的存储格式代际；纪元之前的格式不读取 | 7-system §7.6 |
-| Self-hosting | 自举 | 行业应用与内置应用都用平台工具构建并经 Marketplace 安装 | 1-enterprise §1.1 |
-| System product | 系统产品包 | 随宿主预装、交付内置应用的产品 | 2-product R8 |
-| Lane | 车道 | 每个租户唯一的提交序列锁，可取消、按到达排队 | 7-system/concurrency |
-| Read image | 读取映像 | 某个已应用位置上读取所需租户状态的不可变快照 | 7-system/concurrency |
+| Service | 服务 | 拥有一组资源类型或记录、对其写入作出决定的 Go 包 | backend |
+| Submission | 提交 | 请求一次权威写入的协议消息 | architecture |
+| Decision | 决定 | 服务对一次提交算出的待提交结果（编辑、意图或拒绝），带基准位置 | architecture |
+| Accepted result | 接受结果 | 权威写入的唯一形式 | architecture |
+| Format epoch | 格式纪元 | 宿主保证逐字节可读的存储格式代际；纪元之前的格式不读取 | architecture |
+| Self-hosting | 自举 | 行业应用与内置应用都只用平台自己的工具构建，并经市场安装 | intent |
+| System product | 系统产品包 | 随宿主预装、交付内置应用的产品 | plan |
+| Lane | 车道 | 每个租户唯一的提交序列锁，可取消、按到达排队 | architecture |
+| Read image | 读取映像 | 某个已应用位置上读取所需租户状态的不可变快照 | architecture |
+| Type description | 类型描述 | 宿主给出的一个类型的形状：字段、字段类型、选项、显示字段、标准动作、状态 | frontend |
+| View definition | 视图定义 | 一个类型的列表怎样呈现：列、筛选、排序、分组与布局 | frontend |
+| View | 视图 | 命名并保存的一组列表设置 | ux |
+| Contract | 契约 | 界面运行时的底层：宿主给出的形状与唯一的写入 | frontend |
+| Presentation | 表现 | 由官方模板改造一次、只认契约的界面组件 | frontend |
+| Entry | 入口 | 应用菜单里的一项；代码里是一句声明 | frontend |
+| Page archetype | 页面原型 | 列表、记录、画布、仪表盘四种之一 | ux |
+| List | 列表 | 一类记录的集合页 | ux |
+| Record | 记录 | 一个资源或一个对象；也指它的页面 | ux |
+| Board | 看板 | 列表的一种布局：按选项或状态字段分列 | ux |
+| Lines | 明细行 | 记录里的表中表；行有自己的字段 | domain |
+| Reference | 引用 | 指向另一类对象的字段 | domain |
+| Attachment | 附件 | 挂在记录上的文件 | domain |
+| Activity | 活动 | 记录页上的时间线：评论、字段变更与状态流转 | ux |
+| State | 状态 | 类型声明的流程位置；转换只由动作执行 | domain |
+| Draft | 草稿 | 已保存、尚未发布的定义 | domain |
+| Publish | 发布 | 把已保存的定义冻结并激活，业务用户此后才用到 | domain |
+| Product pack | 产品包 | 产品在仓库里的作者态源与生成的制品；口语里也指产品 | domain |
+| Flagship pack | 旗舰包 | 第一个只用平台工具搭成、交给第一个客户的行业产品包 | plan |
 
 ## 角色名
 

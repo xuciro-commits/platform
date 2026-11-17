@@ -3,42 +3,12 @@ import { execFileSync } from "node:child_process";
 import { readdirSync, readFileSync } from "node:fs";
 
 const root = new URL("..", import.meta.url).pathname;
-const specPath = "docs/7-system/README.md";
-const spec = readFileSync(root + specPath, "utf8");
+const tablePath = "capabilities/server/boundaries.json";
+const table = JSON.parse(readFileSync(root + tablePath, "utf8"));
 const module = "platformserver/";
 
-const section = (title) => {
-  const start = spec.indexOf(`\n## ${title}`);
-  if (start < 0) throw new Error(`${specPath}: missing section "${title}"`);
-  const end = spec.indexOf("\n## ", start + 4);
-  return spec.slice(start, end < 0 ? undefined : end);
-};
-
-const resolve = (name) => {
-  if (name === "全部") return "*";
-  if (name === "全部 services") return "services";
-  if (/^(expr|kernel|platform|host|apps|cmd|services)(\/|$)/.test(name)) return name.replace(/\/\*$/, "");
-  return `services/${name}`;
-};
-
-const names = (cell) =>
-  cell
-    .split(/[、，,]/)
-    .map((part) => part.trim().replace(/`/g, ""))
-    .filter((part) => part && part !== "无")
-    .map(resolve);
-
-const allowed = new Map();
-for (const line of section("7.2 包结构").split("\n")) {
-  const row = line.match(/^\| `([^`]+)` \|[^|]*\|([^|]*)\|$/);
-  if (row) allowed.set(row[1].replace(/\/\*$/, ""), names(row[2]));
-}
-
-const gaps = new Map();
-for (const line of section("现存差距").split("\n")) {
-  const row = line.match(/^- 依赖差距：`([^`]+)` → (.+?)。/);
-  if (row) gaps.set(row[1], new Set(names(row[2])));
-}
+const allowed = new Map(Object.entries(table.imports));
+const gaps = new Map(Object.entries(table.exceptions).map(([unit, targets]) => [unit, new Set(targets)]));
 
 const unitOf = (pkg) => {
   if (pkg === "services/actions/catalog" || pkg === "services/devops/descriptor" || pkg === "services/resources/publication") return pkg;
@@ -65,7 +35,7 @@ for (const line of output.trim().split("\n")) {
   const unit = unitOf(pkg);
   const deps = allowed.get(unit);
   if (!deps) {
-    problems.push(`${pkg}: unit "${unit}" has no row in ${specPath} §7.2`);
+    problems.push(`${pkg}: unit "${unit}" has no entry under imports in ${tablePath}; add it there and describe the package in docs/backend.md`);
     continue;
   }
   for (const imported of imports) {
@@ -77,13 +47,13 @@ for (const line of output.trim().split("\n")) {
       usedGaps.add(`${unit} → ${gap}`);
       continue;
     }
-    problems.push(`${pkg} → ${target}: not allowed by ${specPath} §7.2 (${unit} may import ${deps.join(", ") || "nothing"})`);
+    problems.push(`${pkg} → ${target}: not allowed by ${tablePath} (${unit} may import ${deps.join(", ") || "nothing"}); call the other service through its api.go interface, see docs/backend.md`);
   }
 }
 
 for (const [unit, entries] of gaps) {
   for (const entry of entries) {
-    if (!usedGaps.has(`${unit} → ${entry}`)) problems.push(`${unit} → ${entry}: gap is closed; remove it from ${specPath} 现存差距`);
+    if (!usedGaps.has(`${unit} → ${entry}`)) problems.push(`${unit} → ${entry}: this exception is no longer used; remove it from exceptions in ${tablePath}`);
   }
 }
 
@@ -92,7 +62,7 @@ const done = new Set();
 const visit = (unit, path) => {
   if (done.has(unit)) return;
   if (visiting.has(unit)) {
-    problems.push(`${specPath} §7.2 dependency cycle: ${[...path, unit].join(" → ")}`);
+    problems.push(`${tablePath} dependency cycle: ${[...path, unit].join(" → ")}`);
     return;
   }
   visiting.add(unit);
@@ -128,11 +98,11 @@ const capabilityProbes = goFiles(["."])
   .filter((line) => probe.test(line)).length;
 
 const shape = {
-  hostLines: [lines("host"), 300, "host may not grow; delete or move code out of host to the owning service, see docs/7-system/README.md §7.2"],
-  platformLines: [lines("platform"), 300, "platform may not grow; delete or move code to the owning service, see docs/7-system/README.md §7.2"],
+  hostLines: [lines("host"), 300, "host may not grow; put new code in the owning service, see docs/backend.md"],
+  platformLines: [lines("platform"), 300, "platform may not grow; put new code in the owning service, see docs/backend.md"],
   tenantFields: [tenantFields, 0, "new state belongs to the owning service, not the Tenant type"],
-  capabilityProbes: [capabilityProbes, 0, "use the owner interface or an options struct instead of probing with a type assertion, see docs/7-system/README.md §7.7"],
-  misnamedPackages: [misnamed, 0, "package name must equal its directory name, see docs/7-system/README.md §7.7"],
+  capabilityProbes: [capabilityProbes, 0, "use the owner interface or an options struct instead of probing with a type assertion, see docs/backend.md"],
+  misnamedPackages: [misnamed, 0, "package name must equal its directory name, see docs/backend.md"],
 };
 const baselinePath = "scripts/shape-baseline.json";
 const baseline = JSON.parse(readFileSync(root + baselinePath, "utf8"));
@@ -147,5 +117,5 @@ if (problems.length) {
   console.error(problems.join("\n"));
   process.exit(1);
 }
-console.log(`boundaries: ${allowed.size} units match ${specPath} §7.2 (${usedGaps.size} recorded gaps)`);
+console.log(`boundaries: ${allowed.size} units match ${tablePath} (${usedGaps.size} exceptions in use)`);
 console.log(`shape: host ${shape.hostLines[0]}, platform ${shape.platformLines[0]}, tenant fields ${tenantFields}, probes ${capabilityProbes}, misnamed ${misnamed}`);

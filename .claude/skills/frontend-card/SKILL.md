@@ -1,13 +1,13 @@
 ---
-name: frontend-migrate
-description: Fixed procedure for an executor model to do exactly one task card of the new frontend (frontend/) from docs/roadmap.md section five. Two kinds of card: declare one menu entry (W7), or finish one presentation that was adapted from an official Astryx template (W11). Use when asked to do a W7 or W11 row, "add the X entry", "declare the X list", or any frontend task that names one app and one entry. Not for changing the shell, the router, the host layer, dependencies, or specs: those belong to the main session.
+name: frontend-card
+description: Fixed procedure for an executor model to do exactly one task card in the frontend (frontend/). Two kinds of card: declare one menu entry, or finish one presentation the main session has already scaffolded from an official Astryx template. Use when handed a card that names one entry or one presentation and the files that may change. Not for changing the shell, the router, the host layer, dependencies, checks or documents: those belong to the main session.
 ---
 
 # Frontend task cards: one card, one change
 
-You are an executor. You do **one card**. You do not design, and you do not improve things you were not asked to touch. When something does not fit, you stop and report; you never work around it.
+You are an executor. You do **one card**. You do not design, and you do not improve things you were not asked to touch. When something does not fit, you stop and report; you never work around it. You never commit.
 
-How this frontend is built (read `docs/7-system/web.md`, section "界面运行时", once):
+How this frontend is built (read the section "三层" of `docs/frontend.md` once):
 
 - **Contract**: the shapes the host gives, in `frontend/src/host/`.
 - **Presentation**: a component adapted once from an official Astryx template, in `frontend/src/pages/`. It knows the contract, not any one type.
@@ -31,7 +31,7 @@ Read these first, in this order, and nothing under `web/`:
 
 If a field is missing or you do not understand it, stop (see "Stop and report").
 
-## Card kind 1: declare an entry (W7)
+## Card kind 1: declare an entry
 
 The whole entry is one call. For a list of records of one host type:
 
@@ -55,7 +55,7 @@ Other declarations exist for other data: `resourceList({ kind, title, about })` 
 
 You may touch only: the one new file under `frontend/src/apps/<app>/`, and new lines in `zhCN`.
 
-## Card kind 2: finish a presentation (W11)
+## Card kind 2: finish a presentation
 
 The main session has already scaffolded the official template and connected it to the contract. The card lists what is still missing. You may touch only the files the card lists under `frontend/src/pages/` and new lines in `zhCN`.
 
@@ -70,7 +70,7 @@ The main session has already scaffolded the official template and connected it t
 3. Every visible string is English in the source. Add each new one to `zhCN`.
 4. Run `make check-frontend`. Fix every message exactly as it says. Repeat until it prints no problems.
 5. Look at it with real data: run `make frontend-host` in one terminal, put `PLATFORM_HOST=http://127.0.0.1:18511` in `frontend/.env`, run `pnpm --dir frontend dev`, open `http://localhost:8496/<app>/<entry>`, pick the `admin-1` identity on the sign-in page. Check each line of 验收, in light and dark.
-6. Report (format below). Do not commit or push unless the card says to.
+6. Report (format below). Do not commit or push: the main session reads your diff, reruns the check and commits.
 
 ## Never
 
@@ -81,6 +81,7 @@ The main session has already scaffolded the official template and connected it t
 - Never call `fetch` yourself.
 - Never read or copy anything from `web/`.
 - Never write a code comment.
+- Never create a document, a note, a plan or a report file anywhere in the repository. Your report goes in your reply.
 - Never edit `scripts/check-frontend.mjs`, skip the check, or weaken a rule to get past it.
 - Never touch `frontend/src/shell/`, `frontend/src/host/`, `frontend/src/router.tsx`, `frontend/src/main.tsx`, `frontend/src/apps.ts`, `frontend/src/apps/entries.ts`, `frontend/src/templates/`, `frontend/package.json`, any lockfile, any config file, `scripts/`, `docs/`, `.claude/`, any `AGENTS.md`, or anything under `web/` and `capabilities/`.
 - Never do two cards in one task, and never tidy a file the card did not name.
@@ -94,7 +95,7 @@ Stop at once, change nothing further, and report `BLOCKED` with the exact reason
 - a component has no prop for what you need, and `astryx search` finds no official part;
 - `make check-frontend` fails in a file you were not allowed to touch;
 - finishing would need a file on the never-touch list, or a new dependency;
-- the card contradicts `docs/4-interaction/README.md` §4.1, or is unclear.
+- the card contradicts the thirteen invariants in `docs/ux.md`, or is unclear.
 
 A blocked task that is reported is a good result. A finished task that bent a rule is a bad one.
 
