@@ -1,9 +1,14 @@
 package pages
 
 import (
+	_ "embed"
 	"encoding/json"
+
 	"platformserver/platform"
 )
+
+//go:embed page_compat.json
+var pageCompatibilityJSON []byte
 
 type pageModelRole struct {
 	Kinds    []string `json:"kinds"`
@@ -115,7 +120,7 @@ var pageWidgets = func() pageUIContract {
 	var frozen struct {
 		RetainedContract pageUIContract `json:"retainedContract"`
 	}
-	if err := json.Unmarshal(platform.PageCompatibilityJSON, &frozen); err != nil {
+	if err := json.Unmarshal(pageCompatibilityJSON, &frozen); err != nil {
 		panic(err)
 	}
 	return frozen.RetainedContract

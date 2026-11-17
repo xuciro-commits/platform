@@ -283,8 +283,11 @@ func integerArg(v any, at string) (int, error) {
 	}
 	return int(value), nil
 }
+
+const MaxDecimalBytes = 128
+
 func ParseDecimalText(s string) (string, error) {
-	if len(s) > 128 || !decimalText.MatchString(s) {
+	if len(s) > MaxDecimalBytes || !decimalText.MatchString(s) {
 		return "", fail("number", "$", "invalid explicit numeric text")
 	}
 	n, err := rat(s)

@@ -152,7 +152,7 @@ type resourceContract struct {
 func main() {
 	manifestPath := flag.String("manifest", "../../web/packages/app/src/pageui/manifest.ts", "the page UI manifest")
 	rulesPath := flag.String("rules", "platform/page_compat_rules.json", "the server-only page contract rules")
-	compatPath := flag.String("compat", "platform/page_compat.json", "the generated server page contract")
+	compatPath := flag.String("compat", "services/apps/pages/page_compat.json", "the generated server page contract")
 	safetyPath := flag.String("safety", "../../web/packages/app/src/pageui/safety.ts", "the generated page safety contract")
 	appRegistryPath := flag.String("app-registry", "platform/app_registry.json", "the application registry")
 	appContractPath := flag.String("app-contract", "../../web/packages/app/src/gen/apps.ts", "the generated frontend application registry")

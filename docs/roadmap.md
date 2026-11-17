@@ -35,8 +35,8 @@
 ## U7：platform 只留 SDK 契约
 
 - [ ] U7.5 收窄运行接口并收口：按服务拆分宽 `Runtime` 接口，消除调用点的可选能力探测；依赖解析与修订归
-  resources，AI 归 AI 服务，workflow 归自动化服务，每项只留一个实现。`page_compat.go` 在通用小数规则归位后
-  收敛，不能复制限制。每批检查接受结果、历史映像和黄金路径；最终核对 `platform` 不超过 8000 行、
+  resources，AI 归 AI 服务，workflow 归自动化服务，每项只留一个实现。每批检查接受结果、历史映像和黄金路径；
+  最终核对 `platform` 不超过 8000 行、
   `capabilityProbes` 与依赖例外均为 0。
 
 ## U6：改名

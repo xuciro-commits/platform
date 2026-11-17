@@ -91,14 +91,14 @@ check:
 	@cp web/packages/app/src/pageui/safety.ts .build/contract/safety.ts
 	@cp web/packages/app/src/gen/apps.ts .build/contract/apps.ts
 	@cp web/packages/build/src/gen/resources.ts .build/contract/resources.ts
-	@cp capabilities/server/platform/page_compat.json .build/contract/page_compat.json
+	@cp capabilities/server/services/apps/pages/page_compat.json .build/contract/page_compat.json
 	$(MAKE) contract
 	@cmp .build/contract/host.ts web/packages/api/src/gen/host.ts
 	@cmp .build/contract/enterprise-sdk.ts web/packages/api/src/gen/enterprise-sdk.ts
 	@cmp .build/contract/safety.ts web/packages/app/src/pageui/safety.ts
 	@cmp .build/contract/apps.ts web/packages/app/src/gen/apps.ts
 	@cmp .build/contract/resources.ts web/packages/build/src/gen/resources.ts
-	@cmp .build/contract/page_compat.json capabilities/server/platform/page_compat.json
+	@cmp .build/contract/page_compat.json capabilities/server/services/apps/pages/page_compat.json
 	node scripts/check-i18n.mjs
 	node scripts/check-docs.mjs
 	git diff HEAD --check

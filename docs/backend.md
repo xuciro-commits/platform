@@ -62,6 +62,8 @@
   联合发布、页面覆盖、资源身份与安装；动作执行仍归 `services/actions`。
 - 表达式引用遍历与类型合并归 `expr`；`Binding`、`Run` 的线格式留在 SDK，workflow 条件到 binding、
   校验和测试归 `services/automate/authoring`。页面只复用表达式遍历或页面拥有者的检查。
+- 页面兼容生成物由 `services/apps/pages` 持有；通用小数文本格式与长度上限归 `expr`，
+  `platform` 不读取页面契约，也不复制页面限制。
 - `BusinessTxn`、`TxnStep` 及其嵌套类型、严格 JSON 解码和 `Entity`/`Action` 内嵌字段是 SDK 线格式；
   事务规范化、编号、步骤校验、遍历、生命周期目的地与对象/动作冻结描述归 `services/ontology`。
   事务执行与拒绝改路归 `services/actions`，资源服务提供保留版本、集成绑定和跨类型草稿上下文。

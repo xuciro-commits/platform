@@ -7,7 +7,8 @@ import (
 	"math/big"
 	"reflect"
 	"regexp"
-	"strings"
+
+	ruleexpr "platformserver/expr"
 )
 
 type DecimalValue struct {
@@ -17,33 +18,12 @@ type DecimalValue struct {
 
 var decimalText = regexp.MustCompile(`^-?(0|[1-9][0-9]*)(\.[0-9]+)?$`)
 
-var pageDecimalMaxBytes = func() int {
-	var contract struct {
-		RetainedContract struct {
-			Runtime struct {
-				Decimal struct {
-					MaxBytes int `json:"maxBytes"`
-				} `json:"decimal"`
-			} `json:"runtime"`
-		} `json:"retainedContract"`
-	}
-	if err := json.Unmarshal(PageCompatibilityJSON, &contract); err != nil {
-		panic(err)
-	}
-	return contract.RetainedContract.Runtime.Decimal.MaxBytes
-}()
-
 func ParseDecimal(text string) (DecimalValue, error) {
-	if len(text) > pageDecimalMaxBytes || !decimalText.MatchString(text) {
+	canonical, err := ruleexpr.ParseDecimalText(text)
+	if err != nil {
 		return DecimalValue{}, fmt.Errorf("invalid bounded decimal")
 	}
-	if strings.Contains(text, ".") {
-		text = strings.TrimRight(strings.TrimRight(text, "0"), ".")
-	}
-	if text == "-0" {
-		text = "0"
-	}
-	return DecimalValue{Kind: "decimal", Value: text}, nil
+	return DecimalValue{Kind: "decimal", Value: canonical}, nil
 }
 
 func (v DecimalValue) Check() error {
