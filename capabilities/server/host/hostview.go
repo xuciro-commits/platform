@@ -313,7 +313,7 @@ func (h hostView) ownerBindings() platform.OwnerBindings {
 func (h hostView) bindOwner(app platform.App) { h.t.services.BindOwner(app, h.ownerBindings()) }
 
 func (h hostView) BuildProcessConsumptions() []platform.Consumption {
-	processes := h.t.procs
+	var processes platform.Processes = h.t.procs
 	if h.decision != nil {
 		if app := h.decision.PrivateApps[platform.FlowApp]; app != nil {
 			processes = app.(platform.Processes)

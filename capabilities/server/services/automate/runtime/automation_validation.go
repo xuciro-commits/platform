@@ -15,7 +15,7 @@ func (f *Flows) Validate(a platform.App, fl platform.Flow) error {
 	return err
 }
 
-func (f *Flows) InstallationDraft() platform.Processes {
+func (f *Flows) InstallationDraft() FlowProcesses {
 	draft := &Flows{defs: maps.Clone(f.defs)}
 	for id, versions := range draft.defs {
 		draft.defs[id] = slices.Clone(versions)

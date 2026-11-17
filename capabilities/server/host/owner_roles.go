@@ -9,6 +9,7 @@ import (
 	runtimekernel "platformserver/kernel"
 	"platformserver/platform"
 	"platformserver/services/ai/gateway"
+	automation "platformserver/services/automate/runtime"
 	"platformserver/services/resources/authoring"
 	controlowner "platformserver/services/security/control"
 )
@@ -20,7 +21,7 @@ type ownerRoles struct {
 	linker        platform.Linker
 	ai            aigateway.Models
 	tasks         platform.Tasks
-	procs         platform.Processes
+	procs         automation.FlowProcesses
 	agents        platform.AgentRuntime
 	knowledge     platform.Glossary
 	observers     []platform.Observer
@@ -42,7 +43,8 @@ func ownerRolesOf(owners ownerSet, active func(string) bool) (ownerRoles, error)
 		}
 		if err := errors.Join(runtimekernel.ClaimRole(&r.identity, a, "identity"), runtimekernel.ClaimRole(&r.identityOwner, a, "identity owner"), runtimekernel.ClaimRole(&r.directory, a, "directory"),
 			runtimekernel.ClaimRole(&r.linker, a, "link"), runtimekernel.ClaimRole(&r.ai, a, "model"), runtimekernel.ClaimRole(&r.tasks, a, "task"),
-			runtimekernel.ClaimRole(&r.procs, a, "process"), runtimekernel.ClaimRole(&r.agents, a, "agent"), runtimekernel.ClaimRole(&r.knowledge, a, "glossary")); err != nil {
+			runtimekernel.ClaimRole(&r.procs, a, "process"), runtimekernel.ClaimRole(&r.agents, a, "agent"),
+			runtimekernel.ClaimRole(&r.knowledge, a, "glossary")); err != nil {
 			return ownerRoles{}, err
 		}
 	}

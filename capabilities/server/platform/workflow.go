@@ -271,7 +271,6 @@ type Processes interface {
 	Declare(a App) error
 	Install(a App, fl Flow) error
 	HasPublishedFlow(id string) bool
-	InstallationDraft() Processes
 	Validate(a App, fl Flow) error
 	HasRunningDependency(typ string) (bool, error)
 	HasUnboundRunningDependency(typ string) (bool, error)

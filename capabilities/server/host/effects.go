@@ -265,11 +265,10 @@ func (t *Tenant) stageEffectAnswer(draft *stagedDecision, x platform.Effect, out
 			draft.OperationAnswers = map[string]platform.OperationResult{x.ID: compute.ResultOf(x)}
 		},
 		Completion: func() platform.OperationCompletion {
-			owner := t.procs
-			if app, ok := t.procs.(platform.App); ok {
-				owner = draft.stateApp(app).(platform.Processes)
+			var completion platform.OperationCompletion
+			if t.procs != nil {
+				completion, _ = draft.stateApp(t.procs).(platform.OperationCompletion)
 			}
-			completion, _ := owner.(platform.OperationCompletion)
 			return completion
 		},
 		Answerer: func(app string) platform.Answerer {

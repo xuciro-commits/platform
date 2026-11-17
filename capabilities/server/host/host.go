@@ -142,7 +142,7 @@ func NewTenantWithCapabilities(id string, services platform.RuntimeCapabilities,
 	if err := runtimekernel.DeclareOwned(id, apps, func(m platform.Manifest) bool { return len(m.Agents) > 0 }, t.agents, "agent", func(r platform.AgentRuntime, a platform.App) error { return r.DeclareAgentApp(a) }); err != nil {
 		return nil, err
 	}
-	if err := runtimekernel.DeclareOwned(id, apps, func(m platform.Manifest) bool { return len(m.Flows) > 0 }, t.procs, "flow", func(r platform.Processes, a platform.App) error { return r.Declare(a) }); err != nil {
+	if err := runtimekernel.DeclareOwned(id, apps, func(m platform.Manifest) bool { return len(m.Flows) > 0 }, t.procs, "flow", func(r automation.FlowProcesses, a platform.App) error { return r.Declare(a) }); err != nil {
 		return nil, err
 	}
 	if err := t.registerDefinitions(); err != nil {

@@ -24,6 +24,12 @@ type ContinuousFlowOwner interface {
 	ExpandFrame(platform.FlowInstance, FlowFrameStore) (*platform.FlowBatchFrame, error)
 }
 
+type FlowProcesses interface {
+	platform.Processes
+	ContinuousFlowOwner
+	InstallationDraft() FlowProcesses
+}
+
 type FlowDeadLetterReplayPreparation interface {
 	Prepare(*pb.Submission, time.Time, FlowFrameStore) (FlowPreparedBatch, *platform.Error)
 }
