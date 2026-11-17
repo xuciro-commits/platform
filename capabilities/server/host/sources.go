@@ -78,7 +78,7 @@ func (t *Tenant) integration() dataowner.Integration {
 		Automation: func() platform.Member { return caller().Member },
 		Sources: func() ([]dataowner.Source, *platform.Error) {
 			return coordinatedRecordRead(t, context.Background(), func(t *Tenant) ([]dataowner.Source, *platform.Error) {
-				return t.DataOwner().ExecutionSources(caller())
+				return t.DataOwner().ExecutionSources(t.automation(build.ID, false))
 			})
 		},
 		Quarantined: t.quarantined, Pending: t.integrationPending,
@@ -101,18 +101,18 @@ func (t *Tenant) integration() dataowner.Integration {
 		PipelinePlan: func() (dataowner.PipelinePlan, *platform.Error) {
 			filter := platform.Expr{Op: "=", Kind: "boolean", Args: []platform.Expr{platform.ExprReference("text", "state"), platform.ExprLiteralValue("text", "published")}}
 			return readOnly(t, func(t *Tenant) dataowner.PipelinePlan {
-				return t.DataOwner().PlanPipelines(caller(), platform.Query{Filter: &filter, Sort: []string{"id"}, Limit: 200})
+				return t.DataOwner().PlanPipelines(t.automation(build.ID, false), platform.Query{Filter: &filter, Sort: []string{"id"}, Limit: 200})
 			}), nil
 		},
 		CurrentPipeline: func(id string) (dataowner.Pipeline, *platform.Error) {
 			return coordinatedRecordRead(t, context.Background(), func(t *Tenant) (dataowner.Pipeline, *platform.Error) {
-				pipeline, _ := platform.Get[dataowner.Pipeline](caller(), id)
+				pipeline, _ := platform.Get[dataowner.Pipeline](t.automation(build.ID, false), id)
 				return pipeline, nil
 			})
 		},
 		ScheduleExists: func(id string) bool {
 			exists, _ := coordinatedRecordRead(t, context.Background(), func(t *Tenant) (bool, *platform.Error) {
-				_, ok := platform.Get[platform.Schedule](caller(), id)
+				_, ok := platform.Get[platform.Schedule](t.automation(build.ID, false), id)
 				return ok, nil
 			})
 			return exists
@@ -122,7 +122,7 @@ func (t *Tenant) integration() dataowner.Integration {
 		},
 		ExecutionSchedules: func() ([]platform.Schedule, *platform.Error) {
 			return coordinatedRecordRead(t, context.Background(), func(t *Tenant) ([]platform.Schedule, *platform.Error) {
-				return t.DataOwner().ExecutionSchedules(caller())
+				return t.DataOwner().ExecutionSchedules(t.automation(build.ID, false))
 			})
 		},
 		Composite: func(member platform.Member, key string, edits []platform.CompositeEdit, now time.Time) error {
