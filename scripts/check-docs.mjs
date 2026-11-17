@@ -9,6 +9,7 @@ const lineBudget = (file) => {
   if (file === "AGENTS.md") return 120;
   if (file.startsWith(".claude/rules/")) return 40;
   if (file.startsWith(".claude/skills/")) return 150;
+  if (file.startsWith(".claude/agents/")) return 60;
   return file.startsWith("docs/") ? 250 : Infinity;
 };
 const widest = 200;
@@ -29,6 +30,7 @@ const guides = [
   "README.md",
   "frontend/AGENTS.md",
   ...inside(".claude/rules", (file) => file),
+  ...inside(".claude/agents", (file) => file),
   ...inside(".claude/skills", (file) => `${file}/SKILL.md`),
 ];
 const files = [...documents.map((document) => `docs/${document}.md`).filter((file) => existsSync(root + file)), ...guides.filter((file) => existsSync(root + file))];

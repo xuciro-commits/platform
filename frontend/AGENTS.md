@@ -10,7 +10,7 @@ The platform frontend: the only one. Screens are generated from types. The repos
 - Run `pnpm dev` (http://localhost:8496) and `pnpm astryx <cmd>` for the CLI below.
 - Every visible string goes through `t()` with a `zh-CN` entry in `src/i18n.ts`. No code comments.
 - Check with `make check-frontend` from the repository root. Fix what it reports; never edit the check.
-- Doing one task card? Follow `.claude/skills/frontend-card/SKILL.md` to the letter: you may only change the files the card lists. The shell, router, `src/host/`, dependencies, checks and documents are not yours to change; when the task needs them, stop and report.
+- Doing one work order? Follow `.claude/skills/work-order/SKILL.md` to the letter: you may only change the files the order lists. The shell, router, `src/host/`, dependencies, checks and documents are not yours to change; when the task needs them, stop and report.
 - The block below is generated; refresh it with `pnpm astryx init --agent-docs-path AGENTS.md`, never by hand.
 
 <!-- ASTRYX:START -->

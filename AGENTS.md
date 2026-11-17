@@ -24,7 +24,7 @@
 | 导航、四种页面、保存模型、文字 | [ux](docs/ux.md) |
 | 观感、数据怎样显示、什么不许出现 | [design](docs/design.md) |
 | 命名与翻译 | [glossary](docs/glossary.md) |
-| 文档的规矩、谁决定什么、一行怎样算做完 | [docs/README](docs/README.md) |
+| 文档的规矩、谁决定什么、分级执行、一行怎样算做完 | [docs/README](docs/README.md) |
 
 改界面之前用技能 `platform-design`。
 
@@ -84,8 +84,9 @@
 ## 工作方式
 
 - 负责人掌舵，主会话执行。负责人看两样东西：plan 里的那一行，和浏览器里的界面（[docs/README](docs/README.md)）。
-- 主会话在主工作区的 main 分支独立完成调查、设计、实现、验证和交付，不分派子代理。
-  便宜的模型只做任务卡（技能 `frontend-card`），不提交。
+- 分级执行（[docs/README](docs/README.md)）：要判断的事主会话自己做；已定的切片写成工单交给代理 `builder`；
+  只读的查找交给 `Explore`；高风险的改动提交前过 `critic`。先有能跑的验收再派工，默认不拆。
+- 只有主会话提交 main。执行者照技能 `work-order` 做一张工单，不提交。
 - 每行做完：检查，提交，推送 main，汇报。提交只暂存自己改的路径，不用 `git add -A` 与 `git commit -a`。
 - 提交信息用详细中文：标题写 `类型: 范围——行为变化`；正文按范围与行为变化、替代/删除/重构/新增、实际运行的检查命令与结果分组。
   未运行的检查不得写成通过，不写空泛总结。
