@@ -2,6 +2,7 @@ package composition
 
 import (
 	platformserver "platformserver/host"
+	runtimeprotocol "platformserver/kernel/protocol"
 	"platformserver/platform"
 	"platformserver/services/actions"
 	"platformserver/services/ai"
@@ -25,8 +26,8 @@ import (
 	"platformserver/services/work/activity"
 )
 
-func NewTenantWithCapabilities(id string, services platform.RuntimeCapabilities, seats ...platform.Seat) (*platformserver.Tenant, error) {
-	services.BindOwner = platform.BindOwner
+func NewTenantWithCapabilities(id string, services runtimeprotocol.RuntimeCapabilities, seats ...platform.Seat) (*platformserver.Tenant, error) {
+	services.BindOwner = runtimeprotocol.BindOwner
 	services.NewAgentEvaluator = agentevaluation.NewAgentEvaluator
 	services.NewTransactionExecutor = actions.NewRuntime
 	return platformserver.NewTenantWithCapabilities(id, services, BuiltinApps(id, seats...)...)

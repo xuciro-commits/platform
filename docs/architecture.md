@@ -14,7 +14,7 @@
 │ services  资源 本体 对象 动作 函数 数据 自动化 应用 工作 交付        │
 │           安全 AI —— 每个服务拥有自己的状态与自己的接受结果          │
 │ kernel    车道、接受结果日志、读取映像、重放与快照                   │
-│ platform  应用 SDK 的契约          expr  规则语言                    │
+│ platform  应用 SDK 的契约   capability 能力图   expr  规则语言       │
 └────────────────────────────────────────────────────────────────────┘
     │ 日志与投影            │ 文件、数据集、制品        │ 租户函数
     ▼                       ▼                          ▼
@@ -27,7 +27,7 @@
 
 | 目录 | 是什么 | 状态 |
 |---|---|---|
-| `capabilities/server` | 宿主的 Go 代码：`kernel`、`platform`、`expr`、`services/*`、`host`、`cmd/*` | 在用 |
+| `capabilities/server` | 宿主的 Go 代码：`kernel`、`platform`、`capability`、`expr`、`services/*`、`host`、`cmd/*` | 在用 |
 | `contract/` | 内核协议（protobuf）与生成代码 | 在用 |
 | `frontend/` | 前端：界面运行时 | 在用，唯一的前端 |
 | `web/` | 旧前端与它的验收用例 | 冻结（[plan](plan.md)） |

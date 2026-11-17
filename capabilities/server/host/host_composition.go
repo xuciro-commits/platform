@@ -11,6 +11,7 @@ import (
 	controlowner "platformserver/services/security/control"
 	"slices"
 
+	runtimeprotocol "platformserver/kernel/protocol"
 	"platformserver/platform"
 )
 
@@ -22,7 +23,7 @@ func (t *Tenant) desiredRuntime() map[string]string {
 	return selection
 }
 
-func (t *Tenant) compositionView(providers platform.RuntimeProviders) packages.HostComposition {
+func (t *Tenant) compositionView(providers runtimeprotocol.RuntimeProviders) packages.HostComposition {
 	return packages.CompositionState{Current: t.services.Selection(), Desired: t.desiredRuntime(), Available: providers.Modules(), Base: t.baseModules(),
 		Storage: t.services.StorageModule, DisabledOwners: t.currentDisabledOwners(), DesiredDisabledOwners: t.desiredDisabledOwners(),
 		Suspended: t.console.Suspended(), PlatformApp: controlowner.PlatformApp}.View()

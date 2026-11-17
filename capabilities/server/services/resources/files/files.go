@@ -9,6 +9,7 @@ import (
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 
+	runtimeprotocol "platformserver/kernel/protocol"
 	"platformserver/platform"
 )
 
@@ -33,7 +34,7 @@ type Files struct {
 
 func (f *Files) AttachFiles(h platform.FileHost) { f.host = h }
 
-func (f *Files) AttachOwner(bindings platform.OwnerBindings) { f.AttachFiles(bindings.Files) }
+func (f *Files) AttachOwner(bindings runtimeprotocol.OwnerBindings) { f.AttachFiles(bindings.Files) }
 
 func New(tenant string, authorities platform.Authorities) *Files {
 	any := []string{platform.AnyMember}

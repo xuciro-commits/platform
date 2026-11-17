@@ -5,22 +5,23 @@ import (
 	"slices"
 	"strings"
 
+	runtimeprotocol "platformserver/kernel/protocol"
 	"platformserver/platform"
 )
 
 type Composition struct {
-	Base        []platform.CapabilityModule
+	Base        []runtimeprotocol.CapabilityModule
 	Apps        []platform.App
 	Bindings    func() map[string]string
 	Entity      func(string) (platform.EntityInfo, bool)
 	PlatformApp string
 }
 
-func (c Composition) Modules() []platform.CapabilityModule {
+func (c Composition) Modules() []runtimeprotocol.CapabilityModule {
 	modules := slices.Clone(c.Base)
 	for _, app := range c.Apps {
 		m := app.Manifest()
-		module := platform.CapabilityModule{ID: "platform.owner." + m.ID, Title: m.Title, Version: m.Version, Scope: "tenant", Replacement: "restart", Provides: []platform.CapabilityContract{{ID: "platform.owner." + m.ID, Version: "1", Semantics: "1"}}}
+		module := runtimeprotocol.CapabilityModule{ID: "platform.owner." + m.ID, Title: m.Title, Version: m.Version, Scope: "tenant", Replacement: "restart", Provides: []runtimeprotocol.CapabilityContract{{ID: "platform.owner." + m.ID, Version: "1", Semantics: "1"}}}
 		module.StateFormat = app.SnapshotFormat()
 		for _, provider := range c.Base {
 			module.Requires = append(module.Requires, provider.Provides...)
@@ -49,25 +50,25 @@ func (c Composition) Modules() []platform.CapabilityModule {
 		}
 		for id := range needs {
 			if id != m.ID {
-				module.Requires = append(module.Requires, platform.CapabilityContract{ID: "platform.owner." + id, Version: "1", Semantics: "1"})
+				module.Requires = append(module.Requires, runtimeprotocol.CapabilityContract{ID: "platform.owner." + id, Version: "1", Semantics: "1"})
 			}
 		}
-		slices.SortFunc(module.Requires, func(a, b platform.CapabilityContract) int { return strings.Compare(a.ID, b.ID) })
+		slices.SortFunc(module.Requires, func(a, b runtimeprotocol.CapabilityContract) int { return strings.Compare(a.ID, b.ID) })
 		modules = append(modules, module)
 	}
-	slices.SortFunc(modules, func(a, b platform.CapabilityModule) int { return strings.Compare(a.ID, b.ID) })
+	slices.SortFunc(modules, func(a, b runtimeprotocol.CapabilityModule) int { return strings.Compare(a.ID, b.ID) })
 	return modules
 }
 
-func ActiveComposition(modules []platform.CapabilityModule, active func(string) bool) (platform.CompositionPlan, error) {
-	modules = slices.DeleteFunc(modules, func(module platform.CapabilityModule) bool {
+func ActiveComposition(modules []runtimeprotocol.CapabilityModule, active func(string) bool) (runtimeprotocol.CompositionPlan, error) {
+	modules = slices.DeleteFunc(modules, func(module runtimeprotocol.CapabilityModule) bool {
 		id, owner := strings.CutPrefix(module.ID, "platform.owner.")
 		return owner && !active(id)
 	})
-	return platform.ResolveComposition(modules, nil)
+	return runtimeprotocol.ResolveComposition(modules, nil)
 }
 
-func CheckOwnerRemoval(disabled []string, known func(string) bool, modules []platform.CapabilityModule, open func(removed map[string]bool) error) error {
+func CheckOwnerRemoval(disabled []string, known func(string) bool, modules []runtimeprotocol.CapabilityModule, open func(removed map[string]bool) error) error {
 	removed := map[string]bool{}
 	for _, id := range disabled {
 		if removed[id] || !known(id) {
@@ -75,14 +76,14 @@ func CheckOwnerRemoval(disabled []string, known func(string) bool, modules []pla
 		}
 		removed[id] = true
 	}
-	var kept []platform.CapabilityModule
+	var kept []runtimeprotocol.CapabilityModule
 	for _, module := range modules {
 		if id, owner := strings.CutPrefix(module.ID, "platform.owner."); owner && removed[id] {
 			continue
 		}
 		kept = append(kept, module)
 	}
-	if _, err := platform.ResolveComposition(kept, nil); err != nil {
+	if _, err := runtimeprotocol.ResolveComposition(kept, nil); err != nil {
 		return err
 	}
 	return open(removed)

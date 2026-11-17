@@ -11,6 +11,7 @@ import (
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 
+	runtimeprotocol "platformserver/kernel/protocol"
 	"platformserver/platform"
 )
 
@@ -157,7 +158,7 @@ func (r *Relations) sees(c platform.Caller, entity string) bool {
 
 func (r *Relations) AttachRelations(h platform.RelationsHost) { r.host = h }
 
-func (r *Relations) AttachOwner(bindings platform.OwnerBindings) {
+func (r *Relations) AttachOwner(bindings runtimeprotocol.OwnerBindings) {
 	r.AttachRelations(bindings.Relations)
 }
 

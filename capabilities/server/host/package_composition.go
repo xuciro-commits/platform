@@ -2,15 +2,16 @@ package host
 
 import (
 	"net/http"
+	runtimeprotocol "platformserver/kernel/protocol"
 	"platformserver/kernel/transport"
 	"platformserver/platform"
 	"platformserver/services/devops/packages"
 	controlowner "platformserver/services/security/control"
 )
 
-func (t *Tenant) baseModules() []platform.CapabilityModule {
+func (t *Tenant) baseModules() []runtimeprotocol.CapabilityModule {
 	return packages.Composition{
-		Base:     []platform.CapabilityModule{t.services.RuleModule, t.services.AuthModule, t.services.KernelModule, t.services.StorageModule},
+		Base:     []runtimeprotocol.CapabilityModule{t.services.RuleModule, t.services.AuthModule, t.services.KernelModule, t.services.StorageModule},
 		Apps:     t.apps,
 		Bindings: func() map[string]string { return t.bindings.All() },
 		Entity: func(typ string) (platform.EntityInfo, bool) {
@@ -24,7 +25,7 @@ func (t *Tenant) baseModules() []platform.CapabilityModule {
 }
 
 func (h *Host) routesComposition(rt *routes) {
-	rt.authorized(transport.Route{Pattern: "GET /v1/composition", Summary: "Selected runtime contracts, implementations and immutable dependency order", Answer: platform.CompositionPlan{}}, controlowner.PlatformApp, []string{controlowner.Admin}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
+	rt.authorized(transport.Route{Pattern: "GET /v1/composition", Summary: "Selected runtime contracts, implementations and immutable dependency order", Answer: runtimeprotocol.CompositionPlan{}}, controlowner.PlatformApp, []string{controlowner.Admin}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
 		plan, err := packages.ActiveComposition(t.baseModules(), t.OwnerActive)
 		if err != nil {
 			WriteJSON(w, http.StatusConflict, map[string]string{"error": err.Error()})

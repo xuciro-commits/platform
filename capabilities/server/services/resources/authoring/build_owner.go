@@ -6,6 +6,7 @@ import (
 	"maps"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 
+	runtimeprotocol "platformserver/kernel/protocol"
 	"platformserver/platform"
 	actioncatalog "platformserver/services/actions/catalog"
 	appsauthoring "platformserver/services/apps/authoring"
@@ -137,7 +138,7 @@ func (b *Build) bindPublications() {
 func (b *Build) AttachBuild(h platform.BuildHost) { b.host = h }
 func (b *Build) AttachFiles(h platform.FileHost)  { b.data.AttachFiles(h) }
 
-func (b *Build) AttachOwner(bindings platform.OwnerBindings) {
+func (b *Build) AttachOwner(bindings runtimeprotocol.OwnerBindings) {
 	b.AttachBuild(bindings.Build)
 	b.AttachFiles(bindings.Files)
 }

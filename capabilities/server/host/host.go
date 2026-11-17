@@ -7,7 +7,7 @@ import (
 	"time"
 
 	runtimekernel "platformserver/kernel"
-	"platformserver/kernel/protocol"
+	runtimeprotocol "platformserver/kernel/protocol"
 	records "platformserver/kernel/records"
 	"platformserver/kernel/transport"
 	"platformserver/platform"
@@ -30,7 +30,7 @@ import (
 type Tenant struct {
 	runtimekernel.Sequence
 	agentEvaluator    platform.AgentEvaluator
-	services          platform.RuntimeCapabilities
+	services          runtimeprotocol.RuntimeCapabilities
 	disabledOwners    map[string]bool
 	installingSet     bool
 	currentReadScopes bool
@@ -80,7 +80,7 @@ type Tenant struct {
 
 func (t *Tenant) Audit() []platform.AuditEntry { return t.AuditLog.All() }
 
-func NewTenantWithCapabilities(id string, services platform.RuntimeCapabilities, apps ...platform.App) (*Tenant, error) {
+func NewTenantWithCapabilities(id string, services runtimeprotocol.RuntimeCapabilities, apps ...platform.App) (*Tenant, error) {
 	if services.BindOwner == nil {
 		return nil, fmt.Errorf("tenant composition requires owner bindings")
 	}
@@ -94,7 +94,7 @@ func NewTenantWithCapabilities(id string, services platform.RuntimeCapabilities,
 	if err != nil {
 		return nil, fmt.Errorf("tenant %s: %w", id, err)
 	}
-	t := &Tenant{ID: id, ownerSet: owners, bindings: actions.NewBindings(nil), Works: protocol.NewWorks(), work: automation.NewWorkBoard(), index: &knowledgeindex.Index{}, releases: releases.NewStore(PublicationResolver()),
+	t := &Tenant{ID: id, ownerSet: owners, bindings: actions.NewBindings(nil), Works: runtimeprotocol.NewWorks(), work: automation.NewWorkBoard(), index: &knowledgeindex.Index{}, releases: releases.NewStore(PublicationResolver()),
 		ConnectorRoster: runtimekernel.NewConnectorRoster(id), Projection: records.NewStore()}
 	t.bindAuditStore()
 	t.Lane.BindReadScope(t.beginRecordRead, t.endLane)

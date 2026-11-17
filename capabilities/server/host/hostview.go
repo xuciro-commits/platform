@@ -12,6 +12,7 @@ import (
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 
 	runtimekernel "platformserver/kernel"
+	runtimeprotocol "platformserver/kernel/protocol"
 	"platformserver/kernel/records"
 	"platformserver/platform"
 )
@@ -305,8 +306,8 @@ func (h hostView) CheckPageModel(c platform.Caller, p platform.Page) error {
 	return pageowner.CheckModelQueries(p, h.t.definitions, h.t.Entity)
 }
 
-func (h hostView) ownerBindings() platform.OwnerBindings {
-	return platform.OwnerBindings{Training: h, Agent: h, Console: h, Build: h, Files: h, Knowledge: h, Relations: h, Flow: h, Work: h}
+func (h hostView) ownerBindings() runtimeprotocol.OwnerBindings {
+	return runtimeprotocol.OwnerBindings{Training: h, Agent: h, Console: h, Build: h, Files: h, Knowledge: h, Relations: h, Flow: h, Work: h}
 }
 func (h hostView) bindOwner(app platform.App) { h.t.services.BindOwner(app, h.ownerBindings()) }
 

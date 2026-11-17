@@ -18,9 +18,7 @@ import (
 	controlowner "platformserver/services/security/control"
 )
 
-func (t *Tenant) limits() platform.AIDefaults {
-	return t.gatewayRuntime().Limits()
-}
+func (t *Tenant) limits() platform.AIDefaults { return t.gatewayRuntime().Limits() }
 
 func (t *Tenant) gatewayRuntime() aigateway.Runtime {
 	policy := platform.AIInferencePolicy{}

@@ -8,6 +8,7 @@ import (
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 
+	runtimeprotocol "platformserver/kernel/protocol"
 	"platformserver/platform"
 	actioncatalog "platformserver/services/actions/catalog"
 )
@@ -37,7 +38,7 @@ type Knowledge struct {
 
 func (k *Knowledge) AttachKnowledge(h platform.KnowledgeHost) { k.host = h }
 
-func (k *Knowledge) AttachOwner(bindings platform.OwnerBindings) {
+func (k *Knowledge) AttachOwner(bindings runtimeprotocol.OwnerBindings) {
 	k.AttachKnowledge(bindings.Knowledge)
 }
 

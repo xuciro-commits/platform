@@ -2,8 +2,9 @@
   "imports": {
     "expr": [],
     "kernel": ["expr", "platform", "kernel/protocol"],
-    "kernel/protocol": ["platform"],
-    "platform": ["expr"],
+    "kernel/protocol": ["capability", "platform"],
+    "capability": [],
+    "platform": ["capability", "expr"],
     "services/resources": ["platform", "services/actions/catalog", "services/devops/descriptor", "services/resources/publication", "kernel/records", "kernel/acceptedformat", "kernel/protocol"],
     "services/resources/publication": ["platform"],
     "services/ontology": ["platform", "services/resources", "kernel/records", "kernel/acceptedformat", "kernel/protocol"],

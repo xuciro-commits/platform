@@ -3,6 +3,7 @@ package platform
 import (
 	"encoding/json"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
+	"platformserver/capability"
 	"time"
 )
 
@@ -15,17 +16,17 @@ type PackageContribution struct {
 }
 
 type PackageDescriptor struct {
-	Blueprint      *PackageBlueprint     `json:"blueprint,omitempty"`
-	ID             string                `json:"id"`
-	Version        string                `json:"version"`
-	Title          string                `json:"title,omitempty"`
-	Namespace      string                `json:"namespace"`
-	Requires       []string              `json:"requires,omitempty"`
-	Capabilities   []CapabilityContract  `json:"capabilities,omitempty"`
-	Compatibility  string                `json:"compatibility,omitempty"`
-	Contributions  []PackageContribution `json:"contributions,omitempty"`
-	ArtifactDigest string                `json:"artifactDigest,omitempty"`
-	Description    string                `json:"description,omitempty"`
+	Blueprint      *PackageBlueprint               `json:"blueprint,omitempty"`
+	ID             string                          `json:"id"`
+	Version        string                          `json:"version"`
+	Title          string                          `json:"title,omitempty"`
+	Namespace      string                          `json:"namespace"`
+	Requires       []string                        `json:"requires,omitempty"`
+	Capabilities   []capability.CapabilityContract `json:"capabilities,omitempty"`
+	Compatibility  string                          `json:"compatibility,omitempty"`
+	Contributions  []PackageContribution           `json:"contributions,omitempty"`
+	ArtifactDigest string                          `json:"artifactDigest,omitempty"`
+	Description    string                          `json:"description,omitempty"`
 }
 
 type PackageBlueprint struct {
@@ -74,12 +75,12 @@ type RetainedArtifact struct {
 }
 
 type Precheck struct {
-	ID       string              `json:"id"`
-	Version  string              `json:"version"`
-	OK       bool                `json:"ok"`
-	Problems []string            `json:"problems,omitempty"`
-	Missing  []string            `json:"missing,omitempty"`
-	Bindings []CapabilityBinding `json:"bindings,omitempty"`
+	ID       string                         `json:"id"`
+	Version  string                         `json:"version"`
+	OK       bool                           `json:"ok"`
+	Problems []string                       `json:"problems,omitempty"`
+	Missing  []string                       `json:"missing,omitempty"`
+	Bindings []capability.CapabilityBinding `json:"bindings,omitempty"`
 }
 
 type PackageView struct {
@@ -212,7 +213,7 @@ type PackageHost interface {
 	CodeReleaseAssets() ([]ReleaseAsset, error)
 	PutPackageArtifact(string, []byte) error
 	GetPackageArtifact(string) ([]byte, error)
-	BaseModules() []CapabilityModule
+	BaseModules() []capability.CapabilityModule
 	ProductVersions() []ProductVersionView
 }
 

@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"maps"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
+	runtimeprotocol "platformserver/kernel/protocol"
 	"platformserver/platform"
 	"slices"
 	"strings"
@@ -25,7 +26,9 @@ const (
 
 func (a *AI) AttachAITraining(h platform.AITrainingHost) { a.trainingHost = h }
 
-func (a *AI) AttachOwner(bindings platform.OwnerBindings) { a.AttachAITraining(bindings.Training) }
+func (a *AI) AttachOwner(bindings runtimeprotocol.OwnerBindings) {
+	a.AttachAITraining(bindings.Training)
+}
 
 func trainingActions() []platform.Action {
 	admin := []string{Admin}

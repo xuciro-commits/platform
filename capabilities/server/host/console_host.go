@@ -8,6 +8,7 @@ import (
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 
+	runtimeprotocol "platformserver/kernel/protocol"
 	"platformserver/platform"
 )
 
@@ -18,9 +19,9 @@ func (h hostView) App(id string) platform.App {
 	}
 	return h.t.App(id)
 }
-func (h hostView) BaseModules() []platform.CapabilityModule { return h.t.baseModules() }
-func (h hostView) AppIDs() []string                         { return h.t.AppIDs() }
-func (h hostView) Manifest(app string) platform.Manifest    { return h.t.manifestById(app) }
+func (h hostView) BaseModules() []runtimeprotocol.CapabilityModule { return h.t.baseModules() }
+func (h hostView) AppIDs() []string                                { return h.t.AppIDs() }
+func (h hostView) Manifest(app string) platform.Manifest           { return h.t.manifestById(app) }
 func (h hostView) CodeReleaseAssets() ([]platform.ReleaseAsset, error) {
 	var assets []platform.ReleaseAsset
 	for _, app := range h.t.LiveApps() {

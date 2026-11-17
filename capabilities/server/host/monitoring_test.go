@@ -18,6 +18,7 @@ import (
 	"go.opentelemetry.io/otel/trace"
 	"google.golang.org/protobuf/encoding/protojson"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
+	runtimeprotocol "platformserver/kernel/protocol"
 	"platformserver/platform"
 	"platformserver/services/actions"
 	agentevaluation "platformserver/services/ai/evaluation"
@@ -111,8 +112,8 @@ func (a *monitoringFixture) Compute(_ context.Context, _ string, input json.RawM
 func newMonitoringTenant(tb testing.TB) *invariantTenant {
 	tb.Helper()
 	id := "monitoring-invariant"
-	services := platform.DefaultRuntimeCapabilities(security.Standard{})
-	services.BindOwner = platform.BindOwner
+	services := runtimeprotocol.DefaultRuntimeCapabilities(security.Standard{})
+	services.BindOwner = runtimeprotocol.BindOwner
 	services.NewAgentEvaluator = agentevaluation.NewAgentEvaluator
 	services.NewTransactionExecutor = actions.NewRuntime
 	console := controlowner.NewConsole(id, actions.NewAuthority, func(id string) controlowner.Owners {

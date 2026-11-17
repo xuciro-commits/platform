@@ -4,6 +4,7 @@ import (
 	"context"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	runtimekernel "platformserver/kernel"
+	runtimeprotocol "platformserver/kernel/protocol"
 	"platformserver/platform"
 	"platformserver/services/actions"
 	trialowner "platformserver/services/devops/trials"
@@ -82,5 +83,5 @@ func (d *stagedDecision) Simulating() bool { return d.Simulation || d.tenant.sim
 
 type simulationEnvironment struct {
 	trialowner.Environment
-	Services platform.RuntimeCapabilities
+	Services runtimeprotocol.RuntimeCapabilities
 }

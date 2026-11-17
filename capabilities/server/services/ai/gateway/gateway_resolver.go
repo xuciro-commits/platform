@@ -10,6 +10,7 @@ import (
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
+	runtimeprotocol "platformserver/kernel/protocol"
 	"platformserver/platform"
 	"platformserver/services/ai/modelconfig"
 )
@@ -141,7 +142,7 @@ func (r Resolver) Stage(binding platform.AIModelBinding, provider platform.AIPro
 	return pinned, nil
 }
 
-func BindPolicy(services *platform.RuntimeCapabilities) error {
+func BindPolicy(services *runtimeprotocol.RuntimeCapabilities) error {
 	if services.AIInference == nil {
 		policy := platform.AIInferencePolicy{}
 		if raw := strings.TrimSpace(os.Getenv("PLATFORM_AI_INFERENCE_POLICY")); raw != "" {

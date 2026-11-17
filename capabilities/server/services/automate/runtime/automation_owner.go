@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"maps"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
+	runtimeprotocol "platformserver/kernel/protocol"
 	"platformserver/platform"
 	actioncatalog "platformserver/services/actions/catalog"
 	"platformserver/services/resources/publication"
@@ -61,7 +62,7 @@ type Flows struct {
 
 var _ ContinuousFlowOwner = (*Flows)(nil)
 
-var _ platform.OwnerAttacher = (*Flows)(nil)
+var _ runtimeprotocol.OwnerAttacher = (*Flows)(nil)
 
 func (f *Flows) version(c platform.Caller, flow string) (*flowDef, *platform.Error) {
 	if c.Replaying {
@@ -85,7 +86,7 @@ func (f *Flows) version(c platform.Caller, flow string) (*flowDef, *platform.Err
 
 func (f *Flows) AttachFlow(h platform.FlowHost) { f.host = h }
 
-func (f *Flows) AttachOwner(bindings platform.OwnerBindings) { f.AttachFlow(bindings.Flow) }
+func (f *Flows) AttachOwner(bindings runtimeprotocol.OwnerBindings) { f.AttachFlow(bindings.Flow) }
 
 func New(tenant string, authorities platform.Authorities, resolver publication.Resolver) *Flows {
 	admin := []string{Admin}

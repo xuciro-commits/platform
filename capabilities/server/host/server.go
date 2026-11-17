@@ -13,6 +13,7 @@ import (
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
+	runtimeprotocol "platformserver/kernel/protocol"
 	"platformserver/platform"
 )
 
@@ -40,7 +41,7 @@ type Host struct {
 	Development         bool
 	Mint                func(subject string) string
 	HostAdmins          map[string]bool
-	RuntimeProviders    platform.RuntimeProviders
+	RuntimeProviders    runtimeprotocol.RuntimeProviders
 	AuthorizationEngine platform.AuthorizationEngine
 	stats               *transport.Stats
 	limiter             *transport.Limiter
@@ -64,7 +65,7 @@ func (h *Host) SignWith(signer *idp.Local, ttl time.Duration) {
 }
 
 func NewHost(authenticate Authenticate, tenants ...*Tenant) *Host {
-	h := &Host{tenants: tenants, authenticate: authenticate, Now: Now, RuntimeProviders: platform.DefaultRuntimeProviders(security.Standard{}), AuthorizationEngine: security.Standard{}}
+	h := &Host{tenants: tenants, authenticate: authenticate, Now: Now, RuntimeProviders: runtimeprotocol.DefaultRuntimeProviders(security.Standard{}), AuthorizationEngine: security.Standard{}}
 	return h
 }
 

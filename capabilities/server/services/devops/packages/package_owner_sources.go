@@ -12,6 +12,7 @@ import (
 	"strings"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
+	runtimeprotocol "platformserver/kernel/protocol"
 	"platformserver/platform"
 	packagedesc "platformserver/services/devops/descriptor"
 )
@@ -219,12 +220,12 @@ func (d *Owner) packageRemoval(id string) *platform.PackageRemoval {
 	return &platform.PackageRemoval{ID: id, OK: len(blockers) == 0, Blockers: blockers}
 }
 
-func Contract(id string) platform.CapabilityContract {
-	return platform.CapabilityContract{ID: "package." + id, Version: "1", Semantics: "1"}
+func Contract(id string) runtimeprotocol.CapabilityContract {
+	return runtimeprotocol.CapabilityContract{ID: "package." + id, Version: "1", Semantics: "1"}
 }
 
-func Module(p platform.PackageDescriptor) platform.CapabilityModule {
-	module := platform.CapabilityModule{ID: "package." + p.ID, Version: p.Version, Title: p.Title, Scope: "tenant", Replacement: "drain", Provides: []platform.CapabilityContract{Contract(p.ID)}, Requires: slices.Clone(p.Capabilities)}
+func Module(p platform.PackageDescriptor) runtimeprotocol.CapabilityModule {
+	module := runtimeprotocol.CapabilityModule{ID: "package." + p.ID, Version: p.Version, Title: p.Title, Scope: "tenant", Replacement: "drain", Provides: []runtimeprotocol.CapabilityContract{Contract(p.ID)}, Requires: slices.Clone(p.Capabilities)}
 	for _, need := range p.Requires {
 		id, _ := packagedesc.PackageDependency(need)
 		module.Requires = append(module.Requires, Contract(id))
@@ -232,11 +233,11 @@ func Module(p platform.PackageDescriptor) platform.CapabilityModule {
 	return module
 }
 
-func (d *Owner) packageComposition(candidate platform.PackageDescriptor, index *platform.PackageIndex, proposed ...platform.PackageDescriptor) (platform.CompositionPlan, error) {
+func (d *Owner) packageComposition(candidate platform.PackageDescriptor, index *platform.PackageIndex, proposed ...platform.PackageDescriptor) (runtimeprotocol.CompositionPlan, error) {
 	modules := d.host.BaseModules()
 	installed, err := d.installedDescriptors(index)
 	if err != nil {
-		return platform.CompositionPlan{}, err
+		return runtimeprotocol.CompositionPlan{}, err
 	}
 	for _, descriptor := range proposed {
 		installed[descriptor.ID] = descriptor
@@ -245,7 +246,7 @@ func (d *Owner) packageComposition(candidate platform.PackageDescriptor, index *
 	for _, id := range slices.Sorted(maps.Keys(installed)) {
 		modules = append(modules, Module(installed[id]))
 	}
-	return platform.ResolveComposition(modules, nil)
+	return runtimeprotocol.ResolveComposition(modules, nil)
 }
 
 type Catalog interface{ BindPackageIndex(*platform.PackageIndex) }

@@ -9,6 +9,7 @@ import (
 
 	platformserver "platformserver/host"
 	"platformserver/host/composition"
+	runtimeprotocol "platformserver/kernel/protocol"
 	"platformserver/platform"
 	"platformserver/services/ai"
 	"platformserver/services/resources/authoring"
@@ -20,11 +21,11 @@ func main() {
 	tenant := flag.String("tenant", "workspace", "default tenant when -tenants is not configured")
 	admin := flag.String("admin", "", "explicit administrator subject for the default tenant")
 	flag.Parse()
-	deployment.RebuildWithCapabilities = func(id string, services platform.RuntimeCapabilities) (*platformserver.Tenant, error) {
+	deployment.RebuildWithCapabilities = func(id string, services runtimeprotocol.RuntimeCapabilities) (*platformserver.Tenant, error) {
 		return composition.NewTenantWithCapabilities(id, services, deployment.SeatsFor(id)...)
 	}
 	deployment.Rebuild = func(id string) (*platformserver.Tenant, error) {
-		return deployment.RebuildWithCapabilities(id, platform.DefaultRuntimeCapabilities(security.Standard{}))
+		return deployment.RebuildWithCapabilities(id, runtimeprotocol.DefaultRuntimeCapabilities(security.Standard{}))
 	}
 	development := platform.TenantSpec{ID: *tenant}
 	if *admin != "" {

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"google.golang.org/protobuf/proto"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
+	"platformserver/capability"
 	"regexp"
 	"slices"
 	"strings"
@@ -422,7 +423,7 @@ type ConsoleHost interface {
 	ConnectorHeartbeat(Caller, time.Time) *Error
 	PutPackageArtifact(key string, raw []byte) error
 	GetPackageArtifact(key string) ([]byte, error)
-	BaseModules() []CapabilityModule
+	BaseModules() []capability.CapabilityModule
 	ProductVersions() []ProductVersionView
 }
 

@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"maps"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
+	runtimeprotocol "platformserver/kernel/protocol"
 	"platformserver/platform"
 	actioncatalog "platformserver/services/actions/catalog"
 	agents "platformserver/services/ai/evaluation"
@@ -39,7 +40,7 @@ type Agents struct {
 
 func (a *Agents) AttachAgent(h platform.AgentHost) { a.host = h }
 
-func (a *Agents) AttachOwner(bindings platform.OwnerBindings) { a.AttachAgent(bindings.Agent) }
+func (a *Agents) AttachOwner(bindings runtimeprotocol.OwnerBindings) { a.AttachAgent(bindings.Agent) }
 
 func New(tenant string, authorities platform.Authorities) *Agents {
 	var actions []platform.Action

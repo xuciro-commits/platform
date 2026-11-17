@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	runtimekernel "platformserver/kernel"
+	runtimeprotocol "platformserver/kernel/protocol"
 	"platformserver/kernel/records"
 	persistence "platformserver/kernel/store"
 	"platformserver/kernel/transport"
@@ -26,8 +27,8 @@ type Deployment struct {
 	specs                   *controlowner.Specs
 	packageIndex            *platform.PackageIndex
 	Rebuild                 func(id string) (*Tenant, error)
-	RebuildWithCapabilities func(id string, services platform.RuntimeCapabilities) (*Tenant, error)
-	RuntimeProviders        *platform.RuntimeProviders
+	RebuildWithCapabilities func(id string, services runtimeprotocol.RuntimeCapabilities) (*Tenant, error)
+	RuntimeProviders        *runtimeprotocol.RuntimeProviders
 	HostAuthorization       platform.AuthorizationEngine
 	Storage                 *persistence.JournalProvider
 	runtimeContext          context.Context
@@ -310,5 +311,5 @@ func (d *Deployment) bindPackageIndex(tenant *Tenant) {
 }
 
 func (d *Deployment) rebuildTenant(id string) (*Tenant, error) {
-	return d.composeRuntime(id, platform.DefaultRuntimeCapabilities(security.Standard{}).Selection())
+	return d.composeRuntime(id, runtimeprotocol.DefaultRuntimeCapabilities(security.Standard{}).Selection())
 }

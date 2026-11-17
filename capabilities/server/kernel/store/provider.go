@@ -5,11 +5,11 @@ import (
 	"fmt"
 	"slices"
 
-	"platformserver/platform"
+	runtimeprotocol "platformserver/kernel/protocol"
 )
 
 type JournalProvider struct {
-	Module             platform.CapabilityModule
+	Module             runtimeprotocol.CapabilityModule
 	Durable            bool
 	AtomicCurrentState bool
 	FixedReadViews     bool
@@ -20,7 +20,7 @@ func (p JournalProvider) OpenChecked(ctx context.Context, lightweight bool) (Jou
 	if err := p.Module.Check(); err != nil {
 		return nil, err
 	}
-	if !slices.Contains(p.Module.Provides, platform.CapabilityContract{ID: "platform.storage", Version: "1", Semantics: "1"}) {
+	if !slices.Contains(p.Module.Provides, runtimeprotocol.CapabilityContract{ID: "platform.storage", Version: "1", Semantics: "1"}) {
 		return nil, fmt.Errorf("selected storage does not implement platform.storage/1 semantics 1")
 	}
 	if !p.Durable || p.Open == nil || p.Module.Scope != "deployment" || p.Module.StateFormat == "" {

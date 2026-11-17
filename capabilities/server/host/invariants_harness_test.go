@@ -12,6 +12,7 @@ import (
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	acceptedformat "platformserver/kernel/acceptedformat"
+	runtimeprotocol "platformserver/kernel/protocol"
 	"platformserver/platform"
 	"platformserver/services/actions"
 	agentevaluation "platformserver/services/ai/evaluation"
@@ -66,8 +67,8 @@ func seedInvariantProject(tb testing.TB, live *invariantTenant) {
 
 func newInvariantTenantSetup(tb testing.TB, id string, apps []platform.App, seats ...platform.Seat) *invariantTenant {
 	tb.Helper()
-	services := platform.DefaultRuntimeCapabilities(security.Standard{})
-	services.BindOwner = platform.BindOwner
+	services := runtimeprotocol.DefaultRuntimeCapabilities(security.Standard{})
+	services.BindOwner = runtimeprotocol.BindOwner
 	services.NewAgentEvaluator = agentevaluation.NewAgentEvaluator
 	services.NewTransactionExecutor = actions.NewRuntime
 	seat := platform.Seat{Subjects: []string{"builder"}, Member: platform.Member{ID: "builder", Roles: map[string]string{build.ID: build.Builder}}}
