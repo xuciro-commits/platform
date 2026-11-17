@@ -1,7 +1,7 @@
 {
-  "hostLines": 14594,
+  "hostLines": 14588,
   "platformLines": 13265,
   "tenantFields": 47,
-  "capabilityProbes": 152,
+  "capabilityProbes": 150,
   "misnamedPackages": 13
 }

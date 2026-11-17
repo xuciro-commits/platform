@@ -168,11 +168,9 @@ func NewTenantWithCapabilities(id string, services platform.RuntimeCapabilities,
 	if _, err := PublicationResolver().NewAssetRegistry(t.assetOwners(t.OwnerActive)...); err != nil {
 		return nil, fmt.Errorf("tenant %s: %v", id, err)
 	}
-	for _, app := range apps {
-		if ready, ok := app.(platform.CompositionReady); ok {
-			if err := ready.Ready(); err != nil {
-				return nil, fmt.Errorf("tenant %s owner %s readiness: %w", id, app.Manifest().ID, err)
-			}
+	if t.identityOwner != nil {
+		if err := t.identityOwner.(platform.CompositionReady).Ready(); err != nil {
+			return nil, fmt.Errorf("tenant %s owner %s readiness: %w", id, controlowner.PlatformApp, err)
 		}
 	}
 

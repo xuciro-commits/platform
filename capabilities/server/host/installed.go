@@ -60,13 +60,9 @@ func (t *Tenant) reinstall() error {
 	if err := t.registerOwnedAssetMetadata(); err != nil {
 		return err
 	}
-	for _, a := range t.apps {
-		x, ok := a.(interface{ Reinstall() error })
-		if !ok {
-			continue
-		}
-		if err := x.Reinstall(); err != nil {
-			return fmt.Errorf("tenant %s: %s: %v", t.ID, a.Manifest().ID, err)
+	if owner := t.App(build.ID); owner != nil {
+		if err := owner.(interface{ Reinstall() error }).Reinstall(); err != nil {
+			return fmt.Errorf("tenant %s: %s: %v", t.ID, build.ID, err)
 		}
 	}
 	if err := t.registerOwnedAssetMetadata(); err != nil {
