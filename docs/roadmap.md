@@ -39,6 +39,9 @@
     AI 函数的联合声明由调用时的编排上下文提供，版本回退仍读取已安装状态或保留版本族。
   - 核对 `services/resources/authoring/build_compute.go`、`build_functions.go`、`build_function_adapter.go`、
     `build_owner.go` 及 `host/composition/tenant.go` 的剩余装配与调用边界，删除失去意义的旧路径。
+    `Build.New` 仍直接创建函数拥有者；它同时持有 AI 函数、代码函数和决策表，尚未完成宿主装配。
+    测试计划对 AI 函数的 `platform.Ref` 决定引用校验和拒绝码，拆分时须保持类型及历史记录。
+    保持 `build` 资源标识、路由和提交权威；不要为函数另建应用或第二套权威。
   - 两者都生成 `AssetCompute`，共享 `OperationDefinition`；当前版本来自已安装状态，历史版本来自保留的版本族。
     `Fork` 必须复制状态，`Reinstall` 必须从接受记录重建；不得把历史读取降为 Manifest 当前值。
   - `OperationDefinitions` 在宿主装配时登记；其他应用的声明操作仍从 Manifest 读取，
