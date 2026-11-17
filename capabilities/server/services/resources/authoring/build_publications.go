@@ -49,7 +49,7 @@ func (b *Build) publicationImage(schema string, image []byte) (platform.Entity, 
 		if err != nil {
 			return platform.Entity{}, nil, nil, err
 		}
-		if err := checkObjectSchemas(portable); err != nil {
+		if err := ontology.CheckObjectSchemas(portable); err != nil {
 			return platform.Entity{}, nil, nil, err
 		}
 		actions := objectActions(published, entity)
@@ -258,7 +258,7 @@ func (b *Build) Reinstall() error {
 	if err != nil {
 		return err
 	}
-	ordered, err := businessVersionInstallOrder(objects)
+	ordered, err := ontology.BusinessVersionInstallOrder(objects)
 	if err != nil {
 		return err
 	}

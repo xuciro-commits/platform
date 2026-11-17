@@ -151,16 +151,16 @@ func (b *Build) validateObjectInstallation(c platform.Caller, record ontology.Ob
 	previous, _ := publication.Read[ontology.Object](current.Published)
 	changed, compatible := false, false
 	if previous.Name != "" {
-		oldBody, err := definitionBody(previous, TypeOf(previous.Name))
+		oldBody, err := ontology.DefinitionBody(previous, TypeOf(previous.Name))
 		if err != nil {
 			return err
 		}
-		newBody, err := definitionBody(record, TypeOf(record.Name))
+		newBody, err := ontology.DefinitionBody(record, TypeOf(record.Name))
 		if err != nil {
 			return err
 		}
 		changed = string(oldBody) != string(newBody)
-		compatible = CompatibleObjectExpansion(previous, record)
+		compatible = ontology.CompatibleObjectExpansion(previous, record)
 	}
 	if err := b.automation.CheckObjectDefinition(c, entity, Entity(previous), changed, compatible); err != nil {
 		return err
@@ -213,7 +213,7 @@ func (b *Build) releaseAssets(objects []ontology.Object, pages []appsauthoring.P
 			return nil, fmt.Errorf("published object %s belongs to another record", record.ID)
 		}
 		ref := platform.AssetRef{App: ID, Kind: platform.AssetObject, Name: TypeOf(saved.Name)}
-		body, err := definitionBody(saved, ref.Name)
+		body, err := ontology.DefinitionBody(saved, ref.Name)
 		if err != nil {
 			return nil, err
 		}
@@ -308,23 +308,4 @@ func (b *Build) releaseAssets(objects []ontology.Object, pages []appsauthoring.P
 	}
 	slices.SortFunc(assets, func(a, b platform.ReleaseAsset) int { return strings.Compare(a.Ref.String(), b.Ref.String()) })
 	return assets, nil
-}
-
-func definitionBody(value ontology.Object, typ string) (json.RawMessage, error) {
-	raw, err := json.Marshal(value)
-	if err != nil {
-		return nil, err
-	}
-	var body map[string]json.RawMessage
-	if err := json.Unmarshal(raw, &body); err != nil {
-		return nil, err
-	}
-	for _, key := range []string{"id", "revision", "created", "changed", "archived", "state", "installed", "published"} {
-		delete(body, key)
-	}
-	body["type"], err = json.Marshal(typ)
-	if err != nil {
-		return nil, err
-	}
-	return json.Marshal(body)
 }

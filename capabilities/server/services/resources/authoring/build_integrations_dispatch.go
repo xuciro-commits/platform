@@ -295,7 +295,7 @@ func (b *Build) bindDispatchAssets(assets []platform.ReleaseAsset) ([]platform.R
 				return nil, err
 			}
 			var err error
-			asset.Body, err = definitionBody(object, asset.Ref.Name)
+			asset.Body, err = ontology.DefinitionBody(object, asset.Ref.Name)
 			if err != nil {
 				return nil, err
 			}

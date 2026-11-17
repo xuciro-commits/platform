@@ -95,7 +95,7 @@ func (b *Build) ForkReleaseExecution(assets []platform.ReleaseAsset) (platform.A
 			return nil, fmt.Errorf("unsupported retained object descriptor %s", asset.Ref)
 		}
 		info, err := platform.Describe(ID, Entity(object), func(reflect.Type) string { return "" })
-		if problem := checkObjectSchemas(object); problem != nil {
+		if problem := ontology.CheckObjectSchemas(object); problem != nil {
 			return nil, problem
 		}
 		if err != nil {
