@@ -146,10 +146,11 @@ func (resolver Resolver) ReleaseAsset(ref platform.AssetRef, version string, def
 		return platform.ReleaseAsset{}, err
 	}
 	contract := 1
-	if link, ok := definition.(platform.LinkType); ok {
-		contract = link.Contract()
-	} else if query, ok := definition.(platform.NamedQuery); ok {
-		contract = query.ContractVersion()
+	switch definition := definition.(type) {
+	case platform.LinkType:
+		contract = definition.Contract()
+	case platform.NamedQuery:
+		contract = definition.ContractVersion()
 	}
 	return resolver.WithDependencies(platform.ReleaseAsset{Ref: ref, ContractVersion: contract, SourceVersion: version, Body: body})
 }

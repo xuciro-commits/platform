@@ -191,7 +191,8 @@ func (w *narrower) project(v reflect.Value, declared bool, depth int) (reflect.V
 		}
 		return out, true
 	case reflect.Struct:
-		if _, ok := v.Interface().(time.Time); ok {
+		switch v.Interface().(type) {
+		case time.Time:
 			return v, false
 		}
 		if et := w.entity(v.Type()); et != nil {
@@ -566,7 +567,8 @@ func (t *Owner) refsIn(v any) []string {
 				walk(v.MapIndex(k))
 			}
 		case reflect.Struct:
-			if _, ok := v.Interface().(time.Time); ok {
+			switch v.Interface().(type) {
+			case time.Time:
 				return
 			}
 			t.Store.Lock()

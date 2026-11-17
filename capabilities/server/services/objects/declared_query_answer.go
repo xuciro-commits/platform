@@ -34,7 +34,8 @@ func DeclaredQueryFor(inputs json.RawMessage) (string, *platform.Error) {
 func DeclaredQueryAnswer(c platform.Caller, q platform.NamedQuery, info platform.EntityInfo, found bool, records []any, total int) (json.RawMessage, *platform.Error) {
 	sources := []string{}
 	for _, value := range records {
-		if row, ok := value.(InterfaceRecord); ok {
+		switch row := value.(type) {
+		case InterfaceRecord:
 			ref := row.Type + "/" + row.ID
 			sources = append(sources, ref)
 			for _, field := range q.InterfaceShape.Fields {

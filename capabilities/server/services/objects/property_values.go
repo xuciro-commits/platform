@@ -50,9 +50,11 @@ func propertyValues(info platform.EntityInfo, record any) (map[string]any, map[s
 				continue
 			}
 			if field.Type == "money" {
-				if m, ok := decoded.(map[string]any); ok {
-					if amount, ok := m["amount"].(json.Number); ok {
-						m["amount"] = amount.String()
+				switch object := decoded.(type) {
+				case map[string]any:
+					switch amount := object["amount"].(type) {
+					case json.Number:
+						object["amount"] = amount.String()
 					}
 				}
 			}

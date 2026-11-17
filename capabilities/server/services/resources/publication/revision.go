@@ -69,7 +69,8 @@ func readJSONValue(d *json.Decoder) (any, error) {
 		_, err := d.Token()
 		return array, err
 	default:
-		if number, ok := token.(json.Number); ok {
+		switch number := token.(type) {
+		case json.Number:
 			return canonicalNumber(number)
 		}
 		return token, nil
