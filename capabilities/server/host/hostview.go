@@ -109,9 +109,7 @@ func (h hostView) Automation(parent platform.Caller, app string) platform.Caller
 func (h hostView) identity() platform.IdentityDirectory {
 	owner := h.t.identity
 	if owner != nil && h.decision != nil {
-		if private, ok := h.decision.stateApp(owner).(platform.IdentityDirectory); ok {
-			return private
-		}
+		return h.decision.stateApp(owner).(platform.IdentityDirectory)
 	}
 	return owner
 }

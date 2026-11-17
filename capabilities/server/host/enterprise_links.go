@@ -16,11 +16,11 @@ import (
 type enterpriseLinkModel interface{ Model() enterprisemodel.Model }
 
 func (t *Tenant) tenantLinkModel() (enterprisemodel.Model, *platform.Error) {
-	owner, ok := t.App(enterprisemodel.ID).(enterpriseLinkModel)
-	if !ok {
+	owner := t.App(enterprisemodel.ID)
+	if owner == nil {
 		return enterprisemodel.Model{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_NOT_FOUND, "The enterprise model is unavailable")
 	}
-	return owner.Model(), nil
+	return owner.(enterpriseLinkModel).Model(), nil
 }
 
 func (t *Tenant) tenantConnection(c platform.Caller, id string, now time.Time) (dataowner.Connection, *platform.Error) {

@@ -46,8 +46,10 @@ func (t *Tenant) definitionOwners(includeArchived bool) records.DefinitionOwners
 		},
 		Publishes: func(app string) bool { return t.assets[app] != nil },
 		Reader: func(app string) (platform.AssetDefinitionReader, bool) {
-			owner, ok := t.App(app).(platform.AssetDefinitionReader)
-			return owner, ok
+			if app != "build" {
+				return nil, false
+			}
+			return t.App(app).(platform.AssetDefinitionReader), true
 		}}
 }
 
