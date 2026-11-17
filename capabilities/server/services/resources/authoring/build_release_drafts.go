@@ -266,7 +266,7 @@ func (b *Build) applyRecordDraft(inv *draftInventories, kind platform.AssetKind,
 				return prior, next, false, fmt.Errorf("Publishing the target object: %s", decision.Reason)
 			}
 		}
-		if was, ok := ReadPublication[ontology.Object](record.Published); ok {
+		if was, ok := publication.Read[ontology.Object](record.Published); ok {
 			prior = platform.AssetRef{App: ID, Kind: kind, Name: TypeOf(was.Name)}
 			hadPrior = true
 		}

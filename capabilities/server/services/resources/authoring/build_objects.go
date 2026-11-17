@@ -55,7 +55,7 @@ func (b *Build) checkExtensionDependents(object ontology.Object) error {
 	}
 	var base platform.EntityInfo
 	for _, record := range objects {
-		published, exists := ReadPublication[ontology.Object](record.Published)
+		published, exists := publication.Read[ontology.Object](record.Published)
 		if !exists || published.Extends != ID+"."+object.Name {
 			continue
 		}

@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"platformserver/services/ontology"
+	"platformserver/services/resources/publication"
 
 	"platformserver/platform"
 	actioncatalog "platformserver/services/actions/catalog"
@@ -14,7 +15,7 @@ import (
 func businessVersionInstallOrder(objects []ontology.Object) ([]ontology.Object, error) {
 	byType := map[string]ontology.Object{}
 	for _, record := range objects {
-		if object, ok := ReadPublication[ontology.Object](record.Published); ok && !record.Archived {
+		if object, ok := publication.Read[ontology.Object](record.Published); ok && !record.Archived {
 			byType["build."+object.Name] = object
 		}
 	}
@@ -71,7 +72,7 @@ func (b *Build) checkVersioning(o ontology.Object) error {
 	if err := platform.CheckVersioning(info, lookup); err != nil {
 		return err
 	}
-	if old, ok := ReadPublication[ontology.Object](o.Published); ok && (old.Versioning != nil && !reflect.DeepEqual(old.Versioning, o.Versioning) || len(old.VersionPins) > 0 && !reflect.DeepEqual(old.VersionPins, o.VersionPins)) {
+	if old, ok := publication.Read[ontology.Object](o.Published); ok && (old.Versioning != nil && !reflect.DeepEqual(old.Versioning, o.Versioning) || len(old.VersionPins) > 0 && !reflect.DeepEqual(old.VersionPins, o.VersionPins)) {
 		return fmt.Errorf("published business versioning and pin bindings are retained")
 	}
 	return nil
@@ -92,7 +93,7 @@ func (b *Build) captureObjectSchema(object *ontology.Object) error {
 	}
 	var versions []platform.SchemaVersion
 	family := uint32(1)
-	if previous, exists := ReadPublication[ontology.Object](object.Published); exists {
+	if previous, exists := publication.Read[ontology.Object](object.Published); exists {
 		versions = slices.Clone(previous.SchemaVersions)
 		if len(versions) == 0 {
 			portable, err := b.dispatchSchemaObject(previous)

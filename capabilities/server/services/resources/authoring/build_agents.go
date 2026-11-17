@@ -195,7 +195,7 @@ func (b *Build) checkAgentWithDrafts(a Agent, tools map[string]bool, roles []str
 			return fmt.Errorf("Agent %s is already declared", a.Name)
 		}
 	}
-	if old, ok := ReadPublication[Agent](a.Published); ok && old.Name != a.Name {
+	if old, ok := publication.Read[Agent](a.Published); ok && old.Name != a.Name {
 		return fmt.Errorf("A published agent keeps its name")
 	}
 	return nil
@@ -358,7 +358,7 @@ func (b *Build) retainedAgentAsset(ref platform.AssetRef, sourceVersion string) 
 			continue
 		}
 		for _, raw := range append(slices.Clone(record.Versions), record.Published) {
-			retained, ok := ReadPublication[Agent](raw)
+			retained, ok := publication.Read[Agent](raw)
 			if !ok {
 				continue
 			}
@@ -393,7 +393,7 @@ func (b *Build) agentDraftAssets(id string) (before, after []platform.ReleaseAss
 		return
 	}
 	record := rows[index]
-	if previous, ok := ReadPublication[Agent](record.Published); ok {
+	if previous, ok := publication.Read[Agent](record.Published); ok {
 		prior = platform.AssetRef{App: ID, Kind: platform.AssetAgent, Name: previous.Name}
 		hadPrior = true
 	}
@@ -449,7 +449,7 @@ func (b *Build) prepareAgentReleasePublications(assets []platform.ReleaseAsset) 
 		frozen.Record = record.Record
 		selected := published(frozen)
 		for _, raw := range record.Versions {
-			if old, ok := ReadPublication[Agent](raw); ok && old.Version == frozen.Version {
+			if old, ok := publication.Read[Agent](raw); ok && old.Version == frozen.Version {
 				selected = raw
 				break
 			}

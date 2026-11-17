@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	appsauthoring "platformserver/services/apps/authoring"
+	"platformserver/services/resources/publication"
 
 	"reflect"
 	"slices"
@@ -147,7 +148,7 @@ func readDefinitionInventoryOf(c platform.Caller, typ reflect.Type) ([]any, erro
 func (b *Build) validateObjectInstallation(c platform.Caller, record ontology.Object) error {
 	entity := Entity(record)
 	current, _ := platform.Get[ontology.Object](b.host.Automation(platform.Caller{}, ID), record.ID)
-	previous, _ := ReadPublication[ontology.Object](current.Published)
+	previous, _ := publication.Read[ontology.Object](current.Published)
 	changed, compatible := false, false
 	if previous.Name != "" {
 		oldBody, err := definitionBody(previous, TypeOf(previous.Name))

@@ -11,6 +11,7 @@ import (
 	"platformserver/platform"
 	dataowner "platformserver/services/data"
 	build "platformserver/services/resources/authoring"
+	"platformserver/services/resources/publication"
 )
 
 type LineageNode Node
@@ -299,7 +300,7 @@ func (r Reader) Guard(input Input) Input {
 		}
 	}
 	for i, item := range input.Objects {
-		if fixed, ok := build.ReadPublication[ontology.Object](item.Published); ok {
+		if fixed, ok := publication.Read[ontology.Object](item.Published); ok {
 			fixed.Record = item.Record
 			fixed.Archived = item.Archived
 			input.Objects[i] = fixed

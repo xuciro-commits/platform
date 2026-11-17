@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
+	"platformserver/services/resources/publication"
 	"slices"
 	"strconv"
 	"strings"
@@ -154,12 +155,12 @@ func (k *resourceKind[T, D]) check(b *Build, f T) (T, error) {
 	}
 	for _, other := range list {
 		known := definitionFamilyOf(other)
-		installed, _ := ReadPublication[T](known.Published)
+		installed, _ := publication.Read[T](known.Published)
 		if known.ID != family.ID && (known.Name == family.Name || definitionFamilyOf(installed).Name == family.Name) {
 			return f, fmt.Errorf("%s %s is already declared", k.title, family.Name)
 		}
 	}
-	if old, ok := ReadPublication[T](family.Published); ok && !k.compatible(old, f) {
+	if old, ok := publication.Read[T](family.Published); ok && !k.compatible(old, f) {
 		return f, errors.New(k.immutable)
 	}
 	return f, nil
@@ -262,7 +263,7 @@ func (k *resourceKind[T, D]) draftAssets(b *Build, id string) (before, after []p
 func (k *resourceKind[T, D]) prepare(b *Build, assets []platform.ReleaseAsset) ([]platform.ReleasePublication, error) {
 	return prepareDefinitionPublications(b, assets, func() ([]T, error) { return k.inventory(b) }, k.assetKind(), k.prefix, k.schema(), k.label(), func(name, version string) (platform.ReleaseAsset, error) { return k.resolve(b, name, version) }, func(record T, asset platform.ReleaseAsset, version int) (T, error) {
 		family := definitionFamilyOf(record)
-		prior, retained := ReadPublication[T](family.Published)
+		prior, retained := publication.Read[T](family.Published)
 		var d D
 		if k.candidate != nil {
 			if err := k.candidate(asset); err != nil {

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	functionauthoring "platformserver/services/functions/authoring"
+	"platformserver/services/resources/publication"
 	"slices"
 	"time"
 
@@ -97,7 +98,7 @@ func (b *Build) installTables() error {
 		if record.Published == "" || record.Archived {
 			continue
 		}
-		tb, ok := ReadPublication[functionauthoring.Table](record.Published)
+		tb, ok := publication.Read[functionauthoring.Table](record.Published)
 		if !ok || tb.Name != record.Name {
 			return fmt.Errorf("decision table %s has a malformed publication", record.Name)
 		}
@@ -138,7 +139,7 @@ func tableImage(image []byte) (functionauthoring.Table, error) {
 	if err := json.Unmarshal(image, &record); err != nil {
 		return record, err
 	}
-	frozen, ok := ReadPublication[functionauthoring.Table](record.Published)
+	frozen, ok := publication.Read[functionauthoring.Table](record.Published)
 	if !ok || record.State != "published" || frozen.ID != record.ID || frozen.Name != record.Name || frozen.Version < 1 || frozen.Version > record.Version || record.Version > 64 {
 		return frozen, fmt.Errorf("accepted table has no matching immutable publication")
 	}

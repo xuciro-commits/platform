@@ -25,7 +25,7 @@ func (b *Build) publicationImage(schema string, image []byte) (platform.Entity, 
 		if err := json.Unmarshal(image, &record); err != nil {
 			return platform.Entity{}, nil, nil, err
 		}
-		if _, ok := ReadPublication[Agent](record.Published); !ok {
+		if _, ok := publication.Read[Agent](record.Published); !ok {
 			return platform.Entity{}, nil, nil, fmt.Errorf("accepted agent has no published definition")
 		}
 		return b.agentEntity(), nil, nil, nil
@@ -34,7 +34,7 @@ func (b *Build) publicationImage(schema string, image []byte) (platform.Entity, 
 		if err := json.Unmarshal(image, &record); err != nil {
 			return platform.Entity{}, nil, nil, err
 		}
-		published, ok := ReadPublication[ontology.Object](record.Published)
+		published, ok := publication.Read[ontology.Object](record.Published)
 		if !ok || record.State != "published" || record.ID != published.ID ||
 			record.Name != published.Name || record.Installed != TypeOf(published.Name) {
 			return platform.Entity{}, nil, nil, fmt.Errorf("accepted object has no matching published definition")
@@ -87,7 +87,7 @@ func (b *Build) ValidateAcceptedPublication(schema string, image []byte) error {
 		if err := json.Unmarshal(image, &record); err != nil {
 			return err
 		}
-		agent, ok := ReadPublication[Agent](record.Published)
+		agent, ok := publication.Read[Agent](record.Published)
 		if !ok {
 			return fmt.Errorf("accepted agent has no published definition")
 		}
@@ -114,7 +114,7 @@ func (b *Build) ValidateAcceptedPublication(schema string, image []byte) error {
 		if err := json.Unmarshal(image, &record); err != nil {
 			return err
 		}
-		published, ok := ReadPublication[ontology.Object](record.Published)
+		published, ok := publication.Read[ontology.Object](record.Published)
 		if !ok {
 			return fmt.Errorf("accepted object has no published definition")
 		}
@@ -157,7 +157,7 @@ func (b *Build) ApplyAcceptedPublication(schema string, image []byte) error {
 		if err := json.Unmarshal(image, &record); err != nil {
 			return err
 		}
-		agent, ok := ReadPublication[Agent](record.Published)
+		agent, ok := publication.Read[Agent](record.Published)
 		if !ok {
 			return fmt.Errorf("accepted agent has no published definition")
 		}
@@ -185,7 +185,7 @@ func (b *Build) ApplyAcceptedPublication(schema string, image []byte) error {
 		if err := json.Unmarshal(image, &record); err != nil {
 			return err
 		}
-		published, ok := ReadPublication[ontology.Object](record.Published)
+		published, ok := publication.Read[ontology.Object](record.Published)
 		if !ok {
 			return fmt.Errorf("accepted object has no published definition")
 		}
@@ -289,7 +289,7 @@ func (b *Build) Reinstall() error {
 		return err
 	}
 	for _, record := range agents {
-		if a, ok := ReadPublication[Agent](record.Published); ok && !record.Archived {
+		if a, ok := publication.Read[Agent](record.Published); ok && !record.Archived {
 			b.agents[a.Name] = a
 		}
 	}

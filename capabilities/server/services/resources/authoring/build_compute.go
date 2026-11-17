@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	functionauthoring "platformserver/services/functions/authoring"
+	"platformserver/services/resources/publication"
 
 	"platformserver/platform"
 	dataowner "platformserver/services/data"
@@ -35,19 +36,19 @@ func (b *Build) checkCode(code functionauthoring.Code) error {
 		return err
 	}
 	for _, other := range list {
-		previous, _ := ReadPublication[functionauthoring.Code](other.Published)
+		previous, _ := publication.Read[functionauthoring.Code](other.Published)
 		if other.ID != code.ID && (other.Name == code.Name || previous.Name == code.Name) {
 			return fmt.Errorf("compute %s is already declared", code.Name)
 		}
 	}
-	if old, ok := ReadPublication[functionauthoring.Code](code.Published); ok && old.Name != code.Name {
+	if old, ok := publication.Read[functionauthoring.Code](code.Published); ok && old.Name != code.Name {
 		return fmt.Errorf("a published compute keeps its name")
 	}
 	return nil
 }
 func (b *Build) installCode(c platform.Caller, code functionauthoring.Code) error {
 	if code.Published != "" {
-		published, ok := ReadPublication[functionauthoring.Code](code.Published)
+		published, ok := publication.Read[functionauthoring.Code](code.Published)
 		if !ok {
 			return fmt.Errorf("compute has no valid publication")
 		}
@@ -68,7 +69,7 @@ func (b *Build) OperationDefinition(name string, version int) (platform.Operatio
 	}
 	for _, tb := range b.tables {
 		for _, raw := range tb.Versions {
-			prior, ok := ReadPublication[functionauthoring.Table](raw)
+			prior, ok := publication.Read[functionauthoring.Table](raw)
 			if ok && prior.Name == name && prior.Version == version {
 				return prior.Definition(), version, true
 			}
@@ -82,7 +83,7 @@ func (b *Build) OperationDefinition(name string, version int) (platform.Operatio
 		if version < 1 || version > len(record.Versions) {
 			continue
 		}
-		prior, ok := ReadPublication[functionauthoring.Code](record.Versions[version-1])
+		prior, ok := publication.Read[functionauthoring.Code](record.Versions[version-1])
 		if ok && prior.Name == name && prior.Version == version {
 			return prior.Definition(), version, true
 		}
@@ -99,7 +100,7 @@ func codeImage(image []byte) (functionauthoring.Code, error) {
 	}
 	var selected functionauthoring.Code
 	for i, raw := range code.Versions {
-		prior, ok := ReadPublication[functionauthoring.Code](raw)
+		prior, ok := publication.Read[functionauthoring.Code](raw)
 		if !ok || prior.ID != code.ID || prior.Name != code.Name || prior.Version != i+1 || prior.Definition().Check() != nil || prior.SourceHash != prior.SourceDigest() || prior.Published != "" || len(prior.Versions) > 0 {
 			return code, fmt.Errorf("invalid retained compute version")
 		}
@@ -182,7 +183,7 @@ func (b *Build) CodeDraftAssets(id string) (before, after []platform.ReleaseAsse
 		return
 	}
 	code := list[i]
-	if old, ok := ReadPublication[functionauthoring.Code](code.Published); ok {
+	if old, ok := publication.Read[functionauthoring.Code](code.Published); ok {
 		prior = platform.AssetRef{App: ID, Kind: platform.AssetCompute, Name: old.Name}
 		hadPrior = true
 	}
@@ -356,7 +357,7 @@ func (b *Build) tableDraftAssets(id string) (before, after []platform.ReleaseAss
 		err = fmt.Errorf("decision table draft %s was not found", id)
 		return
 	}
-	if old, ok := ReadPublication[functionauthoring.Table](tb.Published); ok {
+	if old, ok := publication.Read[functionauthoring.Table](tb.Published); ok {
 		prior, hadPrior = platform.AssetRef{App: ID, Kind: platform.AssetCompute, Name: old.Name}, true
 	}
 	if err = tb.NormalizeRules(); err == nil {
@@ -415,7 +416,7 @@ func (b *Build) prepareTablePublications(assets []platform.ReleaseAsset) ([]plat
 		frozen.Record = record.Record
 		raw := published(frozen)
 		for _, retained := range record.Versions {
-			if prior, ok := ReadPublication[functionauthoring.Table](retained); ok && prior.Version == frozen.Version {
+			if prior, ok := publication.Read[functionauthoring.Table](retained); ok && prior.Version == frozen.Version {
 				raw = retained
 				break
 			}
