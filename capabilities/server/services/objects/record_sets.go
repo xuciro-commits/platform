@@ -55,7 +55,7 @@ func (t *Owner) checkRecordSetDeclarations(info platform.EntityInfo, engines ...
 	if err := platform.CheckVersioning(info, lookup); err != nil {
 		return err
 	}
-	if err := platform.CheckRecordSets(info, lookup, engines...); err != nil {
+	if err := records.CheckRecordSets(info, lookup, engines...); err != nil {
 		return err
 	}
 	for _, set := range info.Sets {
@@ -230,7 +230,7 @@ func (t *Owner) ReadRecordSetFrom(store *records.Store, c platform.Caller, objec
 	programs := map[string]platform.ExprProgram{}
 	predicates := make([]platform.Expr, len(set.Where))
 	for i, where := range set.Where {
-		lowered, err := platform.LowerRecordSetPredicate(set, where, lookup, c.Rules())
+		lowered, err := records.LowerRecordSetPredicate(set, where, lookup, c.Rules())
 		if err != nil {
 			return result, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
 		}

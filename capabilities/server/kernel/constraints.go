@@ -447,7 +447,7 @@ func (k ConstraintCheck) readPlan(info platform.EntityInfo, rule platform.Constr
 				}
 			}
 			for _, predicate := range set.Where {
-				lowered, err := platform.LowerRecordSetPredicate(set, predicate, k.lookup)
+				lowered, err := records.LowerRecordSetPredicate(set, predicate, k.lookup)
 				if err != nil {
 					plan.unknown = true
 					return plan

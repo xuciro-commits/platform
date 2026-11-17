@@ -7,6 +7,7 @@ import (
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
+	"platformserver/kernel/records"
 	"platformserver/platform"
 	"platformserver/services/resources/publication"
 )
@@ -338,7 +339,7 @@ func (o *queryOwner) published(c platform.Caller, id string) bool {
 }
 
 func (o *queryOwner) checkRecordSets(info platform.EntityInfo, lookup func(string) (platform.EntityInfo, bool), engines ...platform.RuleEngine) error {
-	if err := platform.CheckRecordSets(info, lookup, engines...); err != nil {
+	if err := records.CheckRecordSets(info, lookup, engines...); err != nil {
 		return err
 	}
 	for _, set := range info.Sets {

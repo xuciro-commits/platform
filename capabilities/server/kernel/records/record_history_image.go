@@ -398,7 +398,7 @@ func DecodeFormattedImage(info platform.EntityInfo, value json.RawMessage, proje
 			format = selected.Format
 		}
 	}
-	return platform.DecodeRecordImage(info, format, decoded)
+	return DecodeRecordImage(info, format, decoded)
 }
 
 func PruneImage(info platform.EntityInfo, raw json.RawMessage) (json.RawMessage, error) {
