@@ -13,6 +13,7 @@ import (
 	"platformserver/platform"
 	automationauthoring "platformserver/services/automate/authoring"
 	dataowner "platformserver/services/data"
+	"platformserver/services/resources/publication"
 )
 
 func (b *Build) DecodeAssetInstallation(schema string, image json.RawMessage) (platform.AssetInstallation, error) {
@@ -43,13 +44,13 @@ func (b *Build) DecodeAssetInstallation(schema string, image json.RawMessage) (p
 	if err != nil {
 		return platform.AssetInstallation{}, err
 	}
-	switch schema {
-	case SchemaEvaluationSetPublish:
-		_, asset, err := b.testPlanImage(image)
+	if hooks, found := publication.Schema(b.publications, schema); found && hooks.Decode != nil {
+		ref, err = hooks.Decode(image)
 		if err != nil {
 			return platform.AssetInstallation{}, err
 		}
-		ref = asset.Ref
+	}
+	switch schema {
 	case SchemaTablePublish:
 		r, err := tableImage(image)
 		if err != nil {
@@ -164,7 +165,7 @@ func (b *Build) declarationReleaseDraft(asset platform.ReleaseAsset) (string, an
 		d, _, err := b.decodeSampleAsset(asset)
 		return SampleSetType, SampleSetRecord{Name: d.Name, Title: d.Title, Samples: d.Samples}, err
 	case platform.AssetEvaluation, platform.AssetTestPlan:
-		d, err := b.testPlanDraft(asset)
+		d, err := b.testPlans.Draft(asset)
 		return TestPlanType, d, err
 	case platform.AssetAgent:
 		d, err := b.agent.DraftFromAsset(asset)

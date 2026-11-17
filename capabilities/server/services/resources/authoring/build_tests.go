@@ -289,7 +289,7 @@ func (b *Build) checkTestPlan(c platform.Caller, s *pb.Submission) *platform.Err
 	if previous.Published != "" && plan.Name != previous.Name {
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "A published definition cannot be renamed; create another definition")
 	}
-	if previous.Published != "" && testPlanKind(previous) != testPlanKind(plan) {
+	if previous.Published != "" && devopsmodel.TestPlanKind(previous.Variant) != devopsmodel.TestPlanKind(plan.Variant) {
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "A published test plan keeps its kind; create another plan")
 	}
 	switch plan.Variant {

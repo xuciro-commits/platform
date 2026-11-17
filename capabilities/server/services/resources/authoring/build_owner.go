@@ -11,6 +11,7 @@ import (
 	appsauthoring "platformserver/services/apps/authoring"
 	automationauthoring "platformserver/services/automate/authoring"
 	dataowner "platformserver/services/data"
+	devopsmodel "platformserver/services/devops/descriptor"
 	functionauthoring "platformserver/services/functions/authoring"
 	ontology "platformserver/services/ontology"
 	"platformserver/services/resources/publication"
@@ -43,6 +44,9 @@ type Build struct {
 	objectPublication   func(ontology.ObjectPublicationEnvironment) publication.Hooks
 	agentFactory        func(platform.AgentAuthoringEnvironment) platform.AgentAuthoringBinding
 	agent               platform.AgentAuthoringBinding
+	testPlanFactory     func(testPlanEnvironment, evaluationPublication) testPlanPublication
+	evaluationFactory   func(testPlanEnvironment) evaluationPublication
+	testPlans           testPlanPublication
 	installationCatalog *platform.Catalog
 	host                platform.BuildHost
 	data                *dataowner.Owner
@@ -66,6 +70,10 @@ type Build struct {
 	tables              map[string]functionauthoring.Table
 }
 
+type testPlanEnvironment = devopsmodel.TestPlanEnvironment[functionauthoring.Function]
+type evaluationPublication = devopsmodel.EvaluationPublication[ontology.Object, automationauthoring.Process, functionauthoring.Function]
+type testPlanPublication = devopsmodel.TestPlanPublication[ontology.Object, automationauthoring.Process, functionauthoring.Function]
+
 func (b *Build) bindPublications() {
 	object := b.objectPublication(ontology.ObjectPublicationEnvironment{
 		Host:      func() platform.BuildHost { return b.host },
@@ -81,11 +89,21 @@ func (b *Build) bindPublications() {
 	b.publications = append([]publication.Hooks{object}, b.publicationBase...)
 	agent := b.agent
 	b.publications = append(b.publications, publication.Hooks{
-		Kind: platform.AssetAgent, Schema: SchemaAgentPublish,
+		Kinds: []platform.AssetKind{platform.AssetAgent}, Schemas: []string{SchemaAgentPublish},
 		Validate: agent.ValidateImage, Install: agent.InstallImage, ReadFrozen: agent.ReadFrozen,
 		FreezeBatch: agent.FreezeBatch, LoadExecution: agent.LoadExecution,
 		VersionedDraft: func(id string) (publication.DraftClosure, error) {
 			before, after, prior, next, had, err := agent.VersionedDraft(id)
+			return publication.DraftClosure{Before: before, After: after, Prior: prior, Next: next, HasPrior: had}, err
+		},
+	})
+	plan := b.testPlans
+	b.publications = append(b.publications, publication.Hooks{
+		Kinds: []platform.AssetKind{platform.AssetEvaluation, platform.AssetTestPlan}, Schemas: []string{SchemaEvaluationSetPublish},
+		Decode: plan.Decode, Validate: plan.Validate, Install: plan.Validate, ReadFrozen: plan.ReadFrozen,
+		FreezeBatch: plan.FreezeBatch,
+		VersionedDraft: func(id string) (publication.DraftClosure, error) {
+			before, after, prior, next, had, err := plan.VersionedDraft(id)
 			return publication.DraftClosure{Before: before, After: after, Prior: prior, Next: next, HasPrior: had}, err
 		},
 	})
@@ -94,13 +112,14 @@ func (b *Build) bindPublications() {
 func (b *Build) AttachBuild(h platform.BuildHost) { b.host = h }
 func (b *Build) AttachFiles(h platform.FileHost)  { b.data.AttachFiles(h) }
 
-func New(tenant string, authorities platform.Authorities, publications []publication.Hooks, resolver publication.Resolver, objectPublication func(ontology.ObjectPublicationEnvironment) publication.Hooks, agentFactory func(platform.AgentAuthoringEnvironment) platform.AgentAuthoringBinding) *Build {
-	b := &Build{resolver: resolver, publicationBase: slices.Clone(publications), objectPublication: objectPublication, agentFactory: agentFactory, installed: map[string]platform.Entity{}, linkTypes: map[string]ontology.LinkType{}, propertyTypes: map[string]ontology.PropertyType{}, valueTypes: map[string]ontology.ValueType{}, objectTypeGroups: map[string]ontology.ObjectTypeGroup{}, queries: map[string]Query{}, interfaces: map[string]ontology.InterfaceRecord{}, codes: map[string]functionauthoring.Code{}, tables: map[string]functionauthoring.Table{}}
+func New(tenant string, authorities platform.Authorities, publications []publication.Hooks, resolver publication.Resolver, objectPublication func(ontology.ObjectPublicationEnvironment) publication.Hooks, agentFactory func(platform.AgentAuthoringEnvironment) platform.AgentAuthoringBinding, testPlanFactory func(testPlanEnvironment, evaluationPublication) testPlanPublication, evaluationFactory func(testPlanEnvironment) evaluationPublication) *Build {
+	b := &Build{resolver: resolver, publicationBase: slices.Clone(publications), objectPublication: objectPublication, agentFactory: agentFactory, testPlanFactory: testPlanFactory, evaluationFactory: evaluationFactory, installed: map[string]platform.Entity{}, linkTypes: map[string]ontology.LinkType{}, propertyTypes: map[string]ontology.PropertyType{}, valueTypes: map[string]ontology.ValueType{}, objectTypeGroups: map[string]ontology.ObjectTypeGroup{}, queries: map[string]Query{}, interfaces: map[string]ontology.InterfaceRecord{}, codes: map[string]functionauthoring.Code{}, tables: map[string]functionauthoring.Table{}}
 	b.data = dataowner.New(buildDataHost{b}, resolver)
 	b.automation = automationauthoring.New(automationEnvironment{b}, resolver)
 	b.functions = functionauthoring.NewOwner(functionEnvironment{b}, resolver)
 	b.apps = appsauthoring.NewOwner(appEnvironment{b})
 	b.agent = b.agentFactory(b.agentEnvironment())
+	b.bindTestPlans()
 	b.bindPublications()
 	actions := append(actioncatalog.EntityActions(b.objectEntity()), actioncatalog.EntityActions(b.apps.PageEntity())...)
 	actions = append(actions, actioncatalog.EntityActions(b.actionTypeEntity())...)
@@ -383,7 +402,7 @@ func (b *Build) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb.
 		return b.functions.Submit(c, s, now)
 	}
 	if s.GetSchema().GetName() == SchemaEvaluationSetPublish {
-		return b.submitTestPlan(c, s, now)
+		return b.testPlans.Submit(c, s, now)
 	}
 	if s.GetSchema().GetName() == SchemaProductVersion {
 		return b.submitProductVersion(c, s, now)
@@ -510,12 +529,13 @@ func (b *Build) Fork(ledger platform.Authority) (platform.App, error) {
 	fork.data = b.data.Fork(buildDataHost{&fork})
 	fork.automation = b.automation.Fork(automationEnvironment{&fork})
 	fork.agent = b.agent.Fork(fork.agentEnvironment())
+	fork.bindTestPlans()
 	fork.bindPublications()
 	return &fork, nil
 }
 
 func (b *Build) NewSimulationApp(tenant string) platform.App {
-	return New(tenant, b.authorities, b.publicationBase, b.resolver, b.objectPublication, b.agentFactory)
+	return New(tenant, b.authorities, b.publicationBase, b.resolver, b.objectPublication, b.agentFactory, b.testPlanFactory, b.evaluationFactory)
 }
 func (b *Build) CandidateActions(asset platform.ReleaseAsset) ([]platform.Action, error) {
 	code, err := b.retainedCodeObject(asset)

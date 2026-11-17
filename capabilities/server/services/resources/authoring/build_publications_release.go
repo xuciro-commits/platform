@@ -14,6 +14,7 @@ import (
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformserver/platform"
 	dataowner "platformserver/services/data"
+	devopsmodel "platformserver/services/devops/descriptor"
 )
 
 type releaseExecution struct {
@@ -257,7 +258,7 @@ func (b *Build) applicationDrafts(id string, selectDrafts map[JointDraftRef]bool
 			if !head.Archived && head.Name != "" {
 				rowKind := ref.Kind
 				if entity.Type == TestPlanType {
-					rowKind = testPlanKind(row.(TestPlan))
+					rowKind = devopsmodel.TestPlanKind(row.(TestPlan).Variant)
 				}
 				add(rowKind, head.ID, head.Name)
 				if dataowner.IsIntegration(rowKind) {

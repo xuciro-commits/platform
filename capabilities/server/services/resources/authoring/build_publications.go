@@ -27,10 +27,6 @@ func (b *Build) ValidateAcceptedPublication(schema string, image []byte) error {
 	if b.automation.HandlesPublication(schema) {
 		return b.automation.ValidateImage(schema, image)
 	}
-	if schema == SchemaEvaluationSetPublish {
-		_, _, err := b.testPlanImage(image)
-		return err
-	}
 	if schema == SchemaTablePublish {
 		tb, err := tableImage(image)
 		if err != nil {
@@ -64,10 +60,6 @@ func (b *Build) ApplyAcceptedPublication(schema string, image []byte) error {
 	}
 	if b.automation.HandlesPublication(schema) {
 		return b.automation.ApplyImage(schema, image)
-	}
-	if schema == SchemaEvaluationSetPublish {
-		_, _, err := b.testPlanImage(image)
-		return err
 	}
 	if schema == SchemaTablePublish {
 		tb, err := tableImage(image)

@@ -9,6 +9,7 @@ import (
 	agentowner "platformserver/services/ai/runtime"
 	"platformserver/services/ai/sources"
 	automation "platformserver/services/automate/runtime"
+	devopsauthoring "platformserver/services/devops/authoring"
 	"platformserver/services/devops/packages"
 	"platformserver/services/ontology"
 	"platformserver/services/resources/authoring"
@@ -33,7 +34,7 @@ func BuiltinApps(id string, seats ...platform.Seat) []platform.App {
 	apps := []platform.App{
 		NewConsole(id, seats...),
 		enterprise.New(id, actions.NewAuthority, platform.OrgSeed{Memberships: controlowner.Memberships(seats)}), relations.New(id, actions.NewAuthority), ai.New(id, actions.NewAuthority), work.New(id, actions.NewAuthority), monitoring.New(id, actions.NewAuthority), automation.New(id, actions.NewAuthority, platformserver.PublicationResolver()), knowledge.New(id, actions.NewAuthority),
-		agentowner.New(id, actions.NewAuthority), files.New(id, actions.NewAuthority), build.New(id, actions.NewAuthority, []publication.Hooks{ontology.ActionTypePublication()}, platformserver.PublicationResolver(), ontology.ObjectPublication, agentowner.BuilderPublication),
+		agentowner.New(id, actions.NewAuthority), files.New(id, actions.NewAuthority), build.New(id, actions.NewAuthority, []publication.Hooks{ontology.ActionTypePublication()}, platformserver.PublicationResolver(), ontology.ObjectPublication, agentowner.BuilderPublication, devopsauthoring.TestPlanPublication, agentevaluation.EvaluationPublication),
 	}
 	return apps
 }

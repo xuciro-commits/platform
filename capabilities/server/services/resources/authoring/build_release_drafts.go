@@ -87,7 +87,7 @@ func (b *Build) DraftReleaseAssetsMulti(drafts []JointDraftRef, member platform.
 	})
 	draftHooks := slices.Clone(b.publications)
 	for i := range draftHooks {
-		if draftHooks[i].Kind == platform.AssetObject {
+		if slices.Contains(draftHooks[i].Kinds, platform.AssetObject) {
 			draftHooks[i].Closure = objectDrafts.Closure
 		}
 	}
@@ -295,9 +295,6 @@ func (b *Build) singleDraftAssets(kind platform.AssetKind, id string) (before, a
 		}
 		after, prior, next, hadPrior, err = b.data.DraftAssets(before, kind, id)
 		return
-	}
-	if kind == platform.AssetEvaluation || kind == platform.AssetTestPlan {
-		return b.testPlanDraftAssets(id)
 	}
 	if kind == platform.AssetSampleSet {
 		return b.sampleSetDraftAssets(id)

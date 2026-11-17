@@ -212,7 +212,7 @@ func (b *Build) draftComparison(record any, published string, info platform.Enti
 				case SampleSetRecord:
 					asset, err = sampleSetAsset(b.resolver, r, max(1, r.DefinitionVersion))
 				case TestPlan:
-					asset, err = b.testPlanAsset(r, max(1, r.DefinitionVersion))
+					asset, err = b.testPlans.Asset(r, max(1, r.DefinitionVersion))
 				default:
 					_, ordinal, _, _ := dataowner.IntegrationMetadata(record)
 					asset, err = b.data.Asset(frozen.Ref.Kind, record, max(1, ordinal))

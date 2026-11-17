@@ -22,7 +22,7 @@ func (b *Build) prepareReleasePublications(assets []platform.ReleaseAsset) ([]pl
 	var installations []platform.AssetInstallation
 	hooks := slices.Clone(b.publications)
 	for i := range hooks {
-		if hooks[i].Kind == platform.AssetObject {
+		if slices.Contains(hooks[i].Kinds, platform.AssetObject) {
 			object := ontology.ObjectFreezePublication(objects, b.retainedCodeObject, b.data.IntegrationID)
 			hooks[i].FreezeOn, hooks[i].Freeze = object.FreezeOn, object.Freeze
 		}
@@ -105,7 +105,8 @@ func (b *Build) prepareReleasePublications(assets []platform.ReleaseAsset) ([]pl
 	}
 	publications = append(publications, images...)
 	agent, _ := publication.Kind(b.publications, platform.AssetAgent)
-	for _, prepare := range []func([]platform.ReleaseAsset) ([]platform.ReleasePublication, error){agent.FreezeBatch, b.prepareTestPlanPublications, b.PrepareCodeReleasePublications, b.prepareTablePublications} {
+	plan, _ := publication.Kind(b.publications, platform.AssetTestPlan)
+	for _, prepare := range []func([]platform.ReleaseAsset) ([]platform.ReleasePublication, error){agent.FreezeBatch, plan.FreezeBatch, b.PrepareCodeReleasePublications, b.prepareTablePublications} {
 		images, err := prepare(assets)
 		if err != nil {
 			return nil, nil, err
@@ -254,7 +255,7 @@ func (b *Build) ResolvePinned(ref platform.AssetRef, version string, contentVers
 		return b.functions.Resolve(ref.Name, version)
 	}
 	if ref.Kind == platform.AssetEvaluation || ref.Kind == platform.AssetTestPlan {
-		return b.testPlanPinned(ref, version)
+		return b.testPlans.Resolve(ref, version)
 	}
 	if ref.Kind == platform.AssetAgent {
 		return b.agent.Resolve(ref, version)

@@ -18,7 +18,7 @@
     "services/devops": ["platform", "services/devops/descriptor", "services/resources", "services/apps", "services/functions", "services/ontology", "kernel/records", "kernel/acceptedformat", "kernel/protocol"],
     "services/devops/descriptor": ["platform"],
     "services/security": ["platform", "kernel/records", "kernel/acceptedformat", "kernel/protocol"],
-    "services/ai": ["platform", "services/functions", "services/actions", "kernel/records", "kernel/acceptedformat", "kernel/protocol"],
+    "services/ai": ["platform", "services/functions", "services/actions", "services/devops/descriptor", "kernel/records", "kernel/acceptedformat", "kernel/protocol"],
     "apps": ["platform"],
     "host": ["kernel", "platform", "apps", "services"],
     "cmd": ["*"]

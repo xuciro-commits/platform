@@ -2,6 +2,7 @@ package publication
 
 import (
 	"encoding/json"
+	"slices"
 
 	"platformserver/platform"
 )
@@ -28,9 +29,10 @@ type Frozen struct {
 }
 
 type Hooks struct {
-	Kind           platform.AssetKind
-	Schema         string
+	Kinds          []platform.AssetKind
+	Schemas        []string
 	FreezeOn       platform.AssetKind
+	Decode         func(json.RawMessage) (platform.AssetRef, error)
 	Validate       func(json.RawMessage) error
 	Freeze         func(platform.Caller, string, platform.ReleaseAsset, []platform.ReleaseAsset) (Frozen, error)
 	Closure        func(platform.Caller, string, platform.Member) (DraftClosure, error)
@@ -43,7 +45,7 @@ type Hooks struct {
 
 func Kind(table []Hooks, kind platform.AssetKind) (Hooks, bool) {
 	for _, hooks := range table {
-		if hooks.Kind == kind {
+		if slices.Contains(hooks.Kinds, kind) {
 			return hooks, true
 		}
 	}
@@ -52,7 +54,7 @@ func Kind(table []Hooks, kind platform.AssetKind) (Hooks, bool) {
 
 func Schema(table []Hooks, schema string) (Hooks, bool) {
 	for _, hooks := range table {
-		if hooks.Schema == schema {
+		if slices.Contains(hooks.Schemas, schema) {
 			return hooks, true
 		}
 	}

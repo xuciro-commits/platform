@@ -284,7 +284,7 @@ type ObjectDraftEnvironment struct {
 }
 
 func ObjectDraftPublication(objects []Object, env ObjectDraftEnvironment) publication.Hooks {
-	return publication.Hooks{Kind: platform.AssetObject, Closure: func(_ platform.Caller, id string, member platform.Member) (closure publication.DraftClosure, err error) {
+	return publication.Hooks{Kinds: []platform.AssetKind{platform.AssetObject}, Closure: func(_ platform.Caller, id string, member platform.Member) (closure publication.DraftClosure, err error) {
 		i := slices.IndexFunc(objects, func(object Object) bool { return object.ID == id && !object.Archived })
 		if i < 0 {
 			return closure, fmt.Errorf("draft object %q not found", id)
@@ -424,7 +424,7 @@ func ValidateObjectInstallation(c platform.Caller, record Object, env ObjectInst
 }
 
 func ObjectFreezePublication(objects []Object, retained func(platform.ReleaseAsset) (bool, error), resolve func(platform.AssetKind, string) (string, error)) publication.Hooks {
-	return publication.Hooks{Kind: platform.AssetObject, FreezeOn: platform.AssetObject, Freeze: func(_ platform.Caller, _ string, asset platform.ReleaseAsset, _ []platform.ReleaseAsset) (publication.Frozen, error) {
+	return publication.Hooks{Kinds: []platform.AssetKind{platform.AssetObject}, FreezeOn: platform.AssetObject, Freeze: func(_ platform.Caller, _ string, asset platform.ReleaseAsset, _ []platform.ReleaseAsset) (publication.Frozen, error) {
 		code, err := retained(asset)
 		if err != nil {
 			return publication.Frozen{}, err
@@ -475,8 +475,8 @@ func ObjectPublication(env ObjectPublicationEnvironment) publication.Hooks {
 		return published, entity, actions, []platform.Page{env.Page(published)}, nil
 	}
 	return publication.Hooks{
-		Kind:   platform.AssetObject,
-		Schema: SchemaPublish,
+		Kinds:   []platform.AssetKind{platform.AssetObject},
+		Schemas: []string{SchemaPublish},
 		Validate: func(raw json.RawMessage) error {
 			published, _, _, _, err := image(raw)
 			if err != nil {

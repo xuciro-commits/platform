@@ -31,3 +31,10 @@ type TestPlan[O, P, F any] struct {
 	Samples           []platform.SampleRecords    `json:"samples,omitempty" field:"aside" type:"json"`
 	Evaluation        []platform.EvaluationPolicy `json:"evaluation,omitempty" field:"aside" title:"Release evaluation thresholds"`
 }
+
+func TestPlanKind(variant string) platform.AssetKind {
+	if variant == "evaluation-set" {
+		return platform.AssetEvaluation
+	}
+	return platform.AssetTestPlan
+}
