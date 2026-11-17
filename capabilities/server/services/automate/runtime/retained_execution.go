@@ -243,16 +243,23 @@ func RetainedShapes(app string, entities []platform.Entity, selected []platform.
 
 type retainedReadRefusal struct{ refusal *platform.Error }
 
+func (r retainedReadRefusal) Error() string {
+	return r.refusal.Message
+}
+
 func RecoverRetained(fail func(*platform.Error), refusal **platform.Error) {
 	if failure := recover(); failure != nil {
-		saved, ok := failure.(retainedReadRefusal)
-		if !ok {
-			panic(failure)
+		if err, ok := failure.(error); ok {
+			var saved retainedReadRefusal
+			if errors.As(err, &saved) {
+				fail(saved.refusal)
+				if refusal != nil {
+					*refusal = saved.refusal
+				}
+				return
+			}
 		}
-		fail(saved.refusal)
-		if refusal != nil {
-			*refusal = saved.refusal
-		}
+		panic(failure)
 	}
 }
 

@@ -87,11 +87,11 @@ func (o *Owner) listenerEntity() platform.Entity {
 func (o *Owner) publishListener(c platform.Caller, value any, _ json.RawMessage, _ time.Time) *platform.Error {
 	listener := value.(*Listener)
 	if !c.Replaying {
-		fixed, err := o.freezeDirectIntegration(platform.AssetListener, *listener)
+		fixed, err := freezeDirectIntegration(o, platform.AssetListener, *listener)
 		if err != nil {
 			return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "{why}", err.Error())
 		}
-		*listener = fixed.(Listener)
+		*listener = fixed
 	}
 	listener.Enabled = true
 	return nil
@@ -101,11 +101,11 @@ func (o *Owner) ExecutionListener(live Listener) (Listener, error) {
 	if live.Published == "" {
 		return Listener{}, fmt.Errorf("accepted listener definition is missing")
 	}
-	fixed, err := o.acceptedIntegration(live, platform.AssetListener)
+	fixed, err := acceptedIntegration(o, live, platform.AssetListener)
 	if err != nil {
 		return Listener{}, err
 	}
-	listener := fixed.(Listener)
+	listener := fixed
 	listener.Record, listener.State, listener.Enabled = live.Record, live.State, live.Enabled
 	listener.DefinitionVersion, listener.Published, listener.Versions = live.DefinitionVersion, live.Published, live.Versions
 	return listener, nil

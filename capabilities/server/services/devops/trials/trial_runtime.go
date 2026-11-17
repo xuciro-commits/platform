@@ -8,6 +8,7 @@ import (
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformserver/platform"
 	functionauthoring "platformserver/services/functions/authoring"
+	build "platformserver/services/resources/authoring"
 	"slices"
 	"time"
 )
@@ -112,6 +113,7 @@ type Environment struct {
 	Organization        *platform.OrgSeed
 	OrganizationFactory platform.SimulationOrganizationFactory
 	Factories           map[string]platform.SimulationFactory
+	Builder             build.ConstructionDrafts
 	Identity            platform.SimulationIdentityFactory
 	Modules             map[string][]byte
 	Manifests           []platform.Manifest
@@ -121,6 +123,7 @@ type Environment struct {
 
 type SimulationOwners struct {
 	Factories     map[string]platform.SimulationFactory
+	Builder       build.ConstructionDrafts
 	Identities    map[string]platform.SimulationIdentityFactory
 	Organizations map[string]platform.SimulationOrganizationFactory
 }
@@ -150,7 +153,7 @@ func (a *sampleOwner) Submit(platform.Caller, *pb.Submission, time.Time) (*pb.Ch
 	return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Native business actions require an isolated owner test fixture")
 }
 func PrepareEnvironment(apps []platform.App, simulationOwners SimulationOwners, authorities platform.Authorities, candidate platform.ReleaseCandidate, samples []SimulationSample) (Environment, error) {
-	environment := Environment{Authorities: authorities, Modules: map[string][]byte{}, Samples: samples, Factories: simulationOwners.Factories}
+	environment := Environment{Authorities: authorities, Modules: map[string][]byte{}, Samples: samples, Factories: simulationOwners.Factories, Builder: simulationOwners.Builder}
 	ownersByID := map[string]platform.App{}
 	for _, app := range apps {
 		ownersByID[app.Manifest().ID] = app

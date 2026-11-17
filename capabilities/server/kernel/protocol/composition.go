@@ -19,15 +19,21 @@ func ResolveComposition(modules []CapabilityModule, selected map[string]string) 
 }
 
 type OwnerBindings struct {
-	Training  platform.AITrainingHost
-	Agent     platform.AgentHost
-	Console   platform.ConsoleHost
-	Build     platform.BuildHost
-	Files     platform.FileHost
-	Knowledge platform.KnowledgeHost
-	Relations platform.RelationsHost
-	Flow      platform.FlowHost
-	Work      platform.WorkHost
+	Training    platform.AITrainingHost
+	Agent       platform.AgentHost
+	Console     platform.ConsoleHost
+	Build       platform.BuildHost
+	Transaction platform.TransactionHost
+	Files       MediaFileHost
+	Knowledge   platform.KnowledgeHost
+	Relations   platform.RelationsHost
+	Flow        platform.FlowHost
+	Work        platform.WorkHost
+}
+
+type MediaFileHost interface {
+	platform.FileHost
+	platform.MediaFiles
 }
 
 type OwnerAttacher interface {

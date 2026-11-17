@@ -43,7 +43,7 @@ type ExecutionHost struct {
 	BuildCode    func(ctx context.Context, q platform.CodeBuildRequest) (platform.CodeBuildResult, error)
 	ReadInput    func(ctx context.Context, ref platform.OperationInputArtifact) ([]byte, error)
 	StageOutput  func(op platform.Operation, call string, output []byte) (json.RawMessage, *platform.StagedResult, error)
-	App          func(id string) platform.App
+	Executor     func(id string) platform.OperationExecutor
 	ReadArtifact func(ctx context.Context, digest string) ([]byte, error)
 	Rules        func() platform.RuleEngine
 }
@@ -167,8 +167,8 @@ func Execute(ctx context.Context, host ExecutionHost, tenant string, x platform.
 				output, err = op.Rules.DecideSchemas(*b.RuleFacts, b.RuleSchemas, host.Rules())
 			}
 		} else if op.Binding.Kind == "native" {
-			executor, ok := host.App(x.App).(platform.OperationExecutor)
-			if !ok {
+			executor := host.Executor(x.App)
+			if executor == nil {
 				err = fmt.Errorf("Native operation executor is not available")
 			} else {
 				output, err = executor.Compute(ctx, op.Name, inputs)

@@ -9,7 +9,7 @@ import (
 	build "platformserver/services/resources/authoring"
 )
 
-func DraftRestore(owner build.ConstructionDrafts, entities []platform.EntityInfo, m platform.Member, kind platform.AssetKind, id string, now time.Time) (ReleaseDraftRestore, error) {
+func DraftRestore(owner build.ConstructionDrafts, lifecycle platform.AssetLifecycleOwner, entities []platform.EntityInfo, m platform.Member, kind platform.AssetKind, id string, now time.Time) (ReleaseDraftRestore, error) {
 	typ, published, found, err := owner.DraftPublished(kind, id)
 	if err != nil || !found {
 		return ReleaseDraftRestore{}, fmt.Errorf("The draft is unavailable")
@@ -23,8 +23,7 @@ func DraftRestore(owner build.ConstructionDrafts, entities []platform.EntityInfo
 	}
 	image := json.RawMessage(published)
 	if asset.Ref.Kind != "" {
-		lifecycle, ok := owner.(platform.AssetLifecycleOwner)
-		if !ok {
+		if lifecycle == nil {
 			return ReleaseDraftRestore{}, fmt.Errorf("tenant has no builder")
 		}
 		drafts, err := lifecycle.ReleaseDrafts([]platform.ReleaseAsset{asset}, platform.AssetReleaseContext{DraftsOnly: true, Member: m, At: now})

@@ -8,7 +8,7 @@ import (
 )
 
 func (h hostView) operationInstall() compute.OperationInstall {
-	return compute.OperationInstall{App: h.app, Rules: h.t.services.Rules, RuleQuery: h.RuleQuery, Entity: h.t.Entity,
+	return compute.OperationInstall{App: h.app, Executor: h.t.operations[h.app.Manifest().ID], Rules: h.t.services.Rules, RuleQuery: h.RuleQuery, Entity: h.t.Entity,
 		Retained: func(module string) bool { return h.t.artifacts().Exists(context.Background(), module) },
 		Describe: func(def platform.Definition) (platform.Definition, error) {
 			return h.t.describer().DescribeDefinition(def)

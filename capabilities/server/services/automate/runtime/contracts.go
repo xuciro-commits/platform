@@ -26,6 +26,7 @@ type ContinuousFlowOwner interface {
 
 type FlowProcesses interface {
 	platform.Processes
+	platform.NativeFlowAssets
 	ContinuousFlowOwner
 	InstallationDraft() FlowProcesses
 	HasDefinition(string, string, int) bool

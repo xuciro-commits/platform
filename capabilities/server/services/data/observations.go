@@ -51,11 +51,11 @@ func (o *Owner) observationEntity() platform.Entity {
 						}
 						record.Publisher = c.ID
 						record.PublisherScopes = string(platform.Raw(c.Member.Scopes))
-						fixed, err := o.freezeDirectIntegration(platform.AssetObservation, *record)
+						fixed, err := freezeDirectIntegration(o, platform.AssetObservation, *record)
 						if err != nil {
 							return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "{why}", err.Error())
 						}
-						*record = fixed.(Observation)
+						*record = fixed
 						return nil
 					}}, {Edit: &platform.PropertyRule{Field: "state", Allowed: []string{"published"}}}},
 				},

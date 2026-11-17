@@ -93,7 +93,8 @@ func (o *Owner) integrationTargets(assets []platform.ReleaseAsset, ctx platform.
 				return nil, fmt.Errorf("integration name %s is ambiguous", name)
 			}
 			found, id = true, integrationRecord(row).ID
-			if connection, ok := row.(Connection); ok {
+			switch connection := row.(type) {
+			case Connection:
 				var definition ConnectionDefinition
 				if err := ValueDecodeIntegration(asset.Body, &definition); err != nil {
 					restore()
@@ -261,7 +262,7 @@ func (o *Owner) ValidateInstallation(plan platform.AssetInstallation) error {
 	case Connection:
 		_, err = o.ConnectionConfiguration(r)
 	case platform.MediaSet:
-		_, err = o.acceptedIntegration(r, platform.AssetMediaSet)
+		_, err = acceptedIntegration(o, r, platform.AssetMediaSet)
 	case platform.Schedule:
 		fixed, e := o.ExecutionSchedule(r)
 		if e != nil {
@@ -302,11 +303,10 @@ func (o *Owner) ValidateInstallation(plan platform.AssetInstallation) error {
 		if _, e := o.ExecutionObservation(r); e != nil {
 			return e
 		}
-		configuration, e := o.acceptedIntegration(r, platform.AssetObservation)
+		fixed, e := acceptedIntegration(o, r, platform.AssetObservation)
 		if e != nil {
 			return e
 		}
-		fixed := configuration.(Observation)
 		fixed.Record, fixed.State, fixed.Publisher = r.Record, r.State, r.Publisher
 		fixed.PublisherScopes = r.PublisherScopes
 		fixed.DefinitionVersion, fixed.Published, fixed.Versions = r.DefinitionVersion, r.Published, r.Versions
@@ -342,12 +342,8 @@ func (o *Owner) ApplyInstallation(plan platform.AssetInstallation, ctx platform.
 		if err := ValueDecodeIntegration(asset.Body, &definition); err != nil {
 			return err
 		}
-		files, ok := o.files.(platform.MediaFiles)
-		if !ok {
-			return fmt.Errorf("Media content storage is unavailable")
-		}
 		for hash, raw := range definition.Blobs {
-			if err := files.StoreMedia(hash, "application/octet-stream", raw); err != nil {
+			if err := o.files.StoreMedia(hash, "application/octet-stream", raw); err != nil {
 				return err
 			}
 		}
@@ -380,7 +376,11 @@ func (o *Owner) validateIntegrationUpgrade(plan platform.AssetInstallation) erro
 	}
 	switch old := current.(type) {
 	case Source:
-		next, e := o.ExecutionSource(proposed.(Source))
+		nextRecord, e := integrationAs[Source](proposed)
+		if e != nil {
+			return e
+		}
+		next, e := o.ExecutionSource(nextRecord)
 		if e != nil {
 			return e
 		}
@@ -392,7 +392,11 @@ func (o *Owner) validateIntegrationUpgrade(plan platform.AssetInstallation) erro
 			return fmt.Errorf("source with accepted data or cursor needs an explicit migration before changing its target or identity mapping")
 		}
 	case Pipeline:
-		next, e := o.ExecutionPipeline(proposed.(Pipeline))
+		nextRecord, e := integrationAs[Pipeline](proposed)
+		if e != nil {
+			return e
+		}
+		next, e := o.ExecutionPipeline(nextRecord)
 		if e != nil {
 			return e
 		}

@@ -8,7 +8,7 @@ import (
 	"platformserver/platform"
 )
 
-func ValidateOperation(o platform.Operation, app platform.App, engine platform.RuleEngine, ruleQuery func(app, name string, version int) (platform.NamedQuery, int, bool), entity func(string) (platform.EntityInfo, bool), retained func(module string) bool) error {
+func ValidateOperation(o platform.Operation, app platform.App, executor platform.OperationExecutor, engine platform.RuleEngine, ruleQuery func(app, name string, version int) (platform.NamedQuery, int, bool), entity func(string) (platform.EntityInfo, bool), retained func(module string) bool) error {
 	if err := o.Check(); err != nil {
 		return err
 	}
@@ -48,7 +48,7 @@ func ValidateOperation(o platform.Operation, app platform.App, engine platform.R
 		return fmt.Errorf("operation %s has no retained module", o.Name)
 	}
 	if o.Binding.Kind == "native" {
-		if _, ok := app.(platform.OperationExecutor); !ok {
+		if executor == nil {
 			return fmt.Errorf("operation %s has no native executor", o.Name)
 		}
 	}
@@ -57,6 +57,7 @@ func ValidateOperation(o platform.Operation, app platform.App, engine platform.R
 
 type OperationInstall struct {
 	App         platform.App
+	Executor    platform.OperationExecutor
 	Rules       platform.RuleEngine
 	RuleQuery   func(app, name string, version int) (platform.NamedQuery, int, bool)
 	Entity      func(string) (platform.EntityInfo, bool)
@@ -71,7 +72,7 @@ func (i OperationInstall) Validate(c platform.Caller, o platform.Operation) erro
 	if c.Replaying {
 		engine = platform.NativeRules{}
 	}
-	return ValidateOperation(o, i.App, engine, i.RuleQuery, i.Entity, i.Retained)
+	return ValidateOperation(o, i.App, i.Executor, engine, i.RuleQuery, i.Entity, i.Retained)
 }
 
 func (i OperationInstall) Install(c platform.Caller, o platform.Operation, version int) error {

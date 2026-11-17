@@ -592,20 +592,37 @@ func (o *Owner) integrationConfiguration(asset platform.ReleaseAsset) (any, erro
 	return record, nil
 }
 
-func (o *Owner) acceptedIntegration(record any, kind platform.AssetKind) (any, error) {
+func integrationAs[T any](record any) (T, error) {
+	var out T
+	raw, err := json.Marshal(record)
+	if err != nil {
+		return out, err
+	}
+	if err := json.Unmarshal(raw, &out); err != nil {
+		return out, err
+	}
+	return out, nil
+}
+
+func acceptedIntegration[T any](o *Owner, record T, kind platform.AssetKind) (T, error) {
+	var zero T
 	_, version, raw, _ := integrationMetadata(record)
 	if raw == "" {
 		if version == 0 {
 			return record, nil
 		}
-		return nil, fmt.Errorf("accepted integration definition is missing")
+		return zero, fmt.Errorf("accepted integration definition is missing")
 	}
 	var asset platform.ReleaseAsset
 	if err := ValueDecodeIntegration([]byte(raw), &asset); err != nil {
-		return nil, err
+		return zero, err
 	}
 	if asset.Ref.Kind != kind {
-		return nil, fmt.Errorf("accepted integration kind differs")
+		return zero, fmt.Errorf("accepted integration kind differs")
 	}
-	return o.integrationConfiguration(asset)
+	configuration, err := o.integrationConfiguration(asset)
+	if err != nil {
+		return zero, err
+	}
+	return integrationAs[T](configuration)
 }

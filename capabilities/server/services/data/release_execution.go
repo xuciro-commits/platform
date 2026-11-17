@@ -16,11 +16,10 @@ import (
 )
 
 func (o *Owner) ExecutionSource(live Source) (Source, error) {
-	fixed, err := o.acceptedIntegration(live, platform.AssetSource)
+	r, err := acceptedIntegration(o, live, platform.AssetSource)
 	if err != nil {
 		return Source{}, err
 	}
-	r := fixed.(Source)
 	r.Publisher, r.PublisherScopes = live.Publisher, live.PublisherScopes
 	r.Record, r.State, r.Puller, r.PullerScopes, r.Cursor, r.Requested, r.Last = live.Record, live.State, live.Puller, live.PullerScopes, live.Cursor, live.Requested, live.Last
 	r.DefinitionVersion, r.Published, r.Versions = live.DefinitionVersion, live.Published, live.Versions
@@ -38,11 +37,10 @@ func (o *Owner) StreamPublished(c platform.Caller, record string) bool {
 }
 
 func (o *Owner) ConnectionConfiguration(live Connection) (Connection, error) {
-	fixed, err := o.acceptedIntegration(live, platform.AssetConnection)
+	r, err := acceptedIntegration(o, live, platform.AssetConnection)
 	if err != nil {
 		return Connection{}, err
 	}
-	r := fixed.(Connection)
 	if r.Kind != live.Kind {
 		return Connection{}, fmt.Errorf("connection binding kind differs from its accepted definition")
 	}
@@ -79,11 +77,10 @@ func (o *Owner) ExecutionConnection(live Connection) (Connection, error) {
 }
 
 func (o *Owner) ExecutionDataset(live Dataset) (Dataset, error) {
-	fixed, err := o.acceptedIntegration(live, platform.AssetDataset)
+	r, err := acceptedIntegration(o, live, platform.AssetDataset)
 	if err != nil {
 		return Dataset{}, err
 	}
-	r := fixed.(Dataset)
 	r.Record, r.Producer, r.Schema, r.Version, r.Last = live.Record, live.Producer, live.Schema, live.Version, live.Last
 	r.Marking = platform.HigherMarking(r.Marking, live.Marking)
 	r.Compartments = platform.JoinCompartments(r.Compartments, live.Compartments)
@@ -92,33 +89,30 @@ func (o *Owner) ExecutionDataset(live Dataset) (Dataset, error) {
 }
 
 func (o *Owner) ExecutionPipeline(live Pipeline) (Pipeline, error) {
-	fixed, err := o.acceptedIntegration(live, platform.AssetPipeline)
+	r, err := acceptedIntegration(o, live, platform.AssetPipeline)
 	if err != nil {
 		return Pipeline{}, err
 	}
-	r := fixed.(Pipeline)
 	r.Record, r.State, r.Runner, r.RunnerScopes, r.Requested, r.Last, r.Marking, r.Compartments = live.Record, live.State, live.Runner, live.RunnerScopes, live.Requested, live.Last, live.Marking, live.Compartments
 	r.DefinitionVersion, r.Published, r.Versions = live.DefinitionVersion, live.Published, live.Versions
 	return r, nil
 }
 
 func (o *Owner) ExecutionWriteback(live Writeback) (Writeback, error) {
-	fixed, err := o.acceptedIntegration(live, platform.AssetWriteback)
+	r, err := acceptedIntegration(o, live, platform.AssetWriteback)
 	if err != nil {
 		return Writeback{}, err
 	}
-	r := fixed.(Writeback)
 	r.Record, r.State, r.Publisher, r.Sent, r.Failed, r.Rejected, r.Answers = live.Record, live.State, live.Publisher, live.Sent, live.Failed, live.Rejected, live.Answers
 	r.DefinitionVersion, r.Published, r.Versions = live.DefinitionVersion, live.Published, live.Versions
 	return r, nil
 }
 
 func (o *Owner) ExecutionMatching(live Match) (Match, error) {
-	fixed, err := o.acceptedIntegration(live, platform.AssetMatching)
+	r, err := acceptedIntegration(o, live, platform.AssetMatching)
 	if err != nil {
 		return Match{}, err
 	}
-	r := fixed.(Match)
 	r.Record, r.State, r.Publisher = live.Record, live.State, live.Publisher
 	r.DefinitionVersion, r.Published, r.Versions = live.DefinitionVersion, live.Published, live.Versions
 	return r, nil
@@ -182,19 +176,20 @@ func (o *Owner) validateIntegrationFamily(record any, current platform.ReleaseAs
 	return nil
 }
 
-func (o *Owner) freezeDirectIntegration(kind platform.AssetKind, record any) (any, error) {
+func freezeDirectIntegration[T any](o *Owner, kind platform.AssetKind, record T) (T, error) {
+	var zero T
 	_, ordinal, raw, _ := integrationMetadata(record)
 	asset, err := o.integrationAsset(kind, record, ordinal+1)
 	if err != nil {
 		if ordinal == 0 && raw == "" && kind != platform.AssetObservation {
 			return record, nil
 		}
-		return nil, err
+		return zero, err
 	}
 	if raw != "" {
 		var prior platform.ReleaseAsset
 		if err := ValueDecodeIntegration([]byte(raw), &prior); err != nil {
-			return nil, err
+			return zero, err
 		}
 		prior.SourceVersion = asset.SourceVersion
 		if o.EqualAsset(prior, asset) {
@@ -203,16 +198,16 @@ func (o *Owner) freezeDirectIntegration(kind platform.AssetKind, record any) (an
 	}
 	fixed, err := o.retainIntegration(record, asset)
 	if err != nil {
-		return nil, err
+		return zero, err
 	}
 	image, err := json.Marshal(fixed)
 	if err != nil {
-		return nil, err
+		return zero, err
 	}
 	if err := o.validateIntegrationUpgrade(platform.AssetInstallation{Ref: asset.Ref, Schema: integrationDescriptor(kind).publication(), Record: integrationDescriptor(kind).record(integrationRecord(fixed).ID), Image: image}); err != nil {
-		return nil, err
+		return zero, err
 	}
-	return fixed, nil
+	return integrationAs[T](fixed)
 }
 
 func (o *Owner) EqualAsset(a, z platform.ReleaseAsset) bool {

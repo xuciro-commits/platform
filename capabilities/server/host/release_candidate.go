@@ -73,7 +73,7 @@ func (t *Tenant) DraftChange(m platform.Member, kind platform.AssetKind, id stri
 
 func (t *Tenant) DraftRestore(m platform.Member, kind platform.AssetKind, id string, now time.Time) (releaseowner.ReleaseDraftRestore, error) {
 	return builderRead(t, m, "GET /v1/releases/drafts/restore", func(t *Tenant, owner build.ConstructionDrafts) (releaseowner.ReleaseDraftRestore, error) {
-		return releaseowner.DraftRestore(owner, t.Entities(m), m, kind, id, now)
+		return releaseowner.DraftRestore(owner, t.assets[build.ID], t.Entities(m), m, kind, id, now)
 	})
 }
 

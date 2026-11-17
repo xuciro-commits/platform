@@ -20,7 +20,7 @@ func (t *Tenant) baseModules() []runtimeprotocol.CapabilityModule {
 			}
 			return platform.EntityInfo{}, false
 		},
-		PlatformApp: controlowner.PlatformApp,
+		PlatformApp: controlowner.PlatformApp, Directory: "enterprise",
 	}.Modules()
 }
 

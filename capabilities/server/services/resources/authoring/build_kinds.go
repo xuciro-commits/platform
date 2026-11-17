@@ -92,10 +92,7 @@ func (b *Build) InstallDefinitionAsset(asset platform.ReleaseAsset) error {
 }
 
 func (k *resourceKind[T, D]) descriptor() resourceDescriptor {
-	descriptor, ok := resourceDescriptorOfType(k.typ)
-	if !ok {
-		panic("unknown resource type " + k.typ)
-	}
+	descriptor, _ := resourceDescriptorOfType(k.typ)
 	return descriptor
 }
 
@@ -126,22 +123,34 @@ func (k *resourceKind[T, D]) entity(b *Build) platform.Entity {
 }
 
 func (k *resourceKind[T, D]) publish(b *Build, c platform.Caller, record any) *platform.Error {
-	f, ok := record.(*T)
-	if !ok {
+	raw, err := json.Marshal(record)
+	if err != nil {
 		return &platform.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 	}
-	bound, err := k.check(b, *f)
+	var f T
+	if json.Unmarshal(raw, &f) != nil {
+		return &platform.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
+	}
+	bound, err := k.check(b, f)
 	if err != nil {
 		return &platform.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, Message: err.Error()}
 	}
-	*f = bound
+	f = bound
 	message := k.limitMessage
 	if message == "" {
 		message = "A " + k.label() + " may retain at most 64 published versions"
 	}
-	return publication.PublishRetained(c, f, func(record *T) publication.Family { return k.family(*record) }, k.setFamily, message, func(record *T) string { return published(*record) }, func(c platform.Caller, record T) error {
+	refusal := publication.PublishRetained(c, &f, func(record *T) publication.Family { return k.family(*record) }, k.setFamily, message, func(record *T) string { return published(*record) }, func(c platform.Caller, record T) error {
 		return k.installRecord(b, c, record)
 	})
+	if refusal != nil {
+		return refusal
+	}
+	raw, err = json.Marshal(f)
+	if err != nil || json.Unmarshal(raw, record) != nil {
+		return &platform.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
+	}
+	return nil
 }
 
 func (k *resourceKind[T, D]) check(b *Build, f T) (T, error) {

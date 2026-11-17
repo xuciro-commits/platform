@@ -109,11 +109,11 @@ func (o *Owner) publishPipeline(c platform.Caller, record any, _ json.RawMessage
 			p.Runner, p.Requested = c.ID, true
 		}
 		if !c.Replaying {
-			fixed, err := o.freezeDirectIntegration(platform.AssetPipeline, *p)
+			fixed, err := freezeDirectIntegration(o, platform.AssetPipeline, *p)
 			if err != nil {
 				return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
 			}
-			*p = fixed.(Pipeline)
+			*p = fixed
 		}
 		return nil
 	default:

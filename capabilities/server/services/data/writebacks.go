@@ -90,11 +90,11 @@ func (o *Owner) publishWriteback(c platform.Caller, record any, _ json.RawMessag
 		}
 		w.Publisher = c.ID
 		if !c.Replaying {
-			fixed, err := o.freezeDirectIntegration(platform.AssetWriteback, *w)
+			fixed, err := freezeDirectIntegration(o, platform.AssetWriteback, *w)
 			if err != nil {
 				return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
 			}
-			*w = fixed.(Writeback)
+			*w = fixed
 		}
 		return nil
 	default:

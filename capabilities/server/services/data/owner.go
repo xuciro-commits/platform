@@ -6,6 +6,7 @@ import (
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
+	runtimeprotocol "platformserver/kernel/protocol"
 	"platformserver/platform"
 	actioncatalog "platformserver/services/actions/catalog"
 	"platformserver/services/resources/publication"
@@ -32,7 +33,7 @@ type Host interface {
 type Owner struct {
 	resolver        publication.Resolver
 	host            Host
-	files           platform.FileHost
+	files           runtimeprotocol.MediaFileHost
 	integration     IntegrationRuntime
 	releaseDraftIDs map[platform.AssetRef]string
 	inventory       IntegrationInventory
@@ -44,7 +45,7 @@ func New(host Host, resolver publication.Resolver) *Owner {
 	return &Owner{host: host, resolver: resolver}
 }
 
-func (o *Owner) AttachFiles(files platform.FileHost) {
+func (o *Owner) AttachFiles(files runtimeprotocol.MediaFileHost) {
 	o.files = files
 }
 

@@ -140,7 +140,7 @@ func (t *Tenant) executeOperation(x platform.Effect, now time.Time) platform.Out
 		StageOutput: func(op platform.Operation, call string, output []byte) (json.RawMessage, *platform.StagedResult, error) {
 			return t.staged.Output(op, call, output)
 		},
-		App: t.App,
+		Executor: func(id string) platform.OperationExecutor { return t.operations[id] },
 		ReadArtifact: func(ctx context.Context, digest string) ([]byte, error) {
 			return t.artifacts().Read(ctx, digest)
 		},

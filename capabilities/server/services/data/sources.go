@@ -160,11 +160,11 @@ func (o *Owner) publishSource(c platform.Caller, record any, _ json.RawMessage, 
 		}
 		if !c.Replaying {
 			s.Publisher, s.PublisherScopes = c.ID, string(platform.Raw(c.Member.Scopes))
-			fixed, err := o.freezeDirectIntegration(platform.AssetSource, *s)
+			fixed, err := freezeDirectIntegration(o, platform.AssetSource, *s)
 			if err != nil {
 				return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
 			}
-			*s = fixed.(Source)
+			*s = fixed
 		}
 		if s.Stream && s.Dataset != "" && !c.Replaying {
 			s.Puller, s.PullerScopes = c.ID, string(platform.Raw(c.Member.Scopes))

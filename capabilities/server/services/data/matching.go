@@ -61,11 +61,11 @@ func (o *Owner) publishMatch(c platform.Caller, record any, _ json.RawMessage, _
 		}
 		m.Publisher = c.ID
 		if !c.Replaying {
-			fixed, err := o.freezeDirectIntegration(platform.AssetMatching, *m)
+			fixed, err := freezeDirectIntegration(o, platform.AssetMatching, *m)
 			if err != nil {
 				return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
 			}
-			*m = fixed.(Match)
+			*m = fixed
 		}
 		return nil
 	default:

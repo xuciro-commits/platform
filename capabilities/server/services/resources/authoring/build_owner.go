@@ -58,6 +58,7 @@ type Build struct {
 	sampleSets                devopsmodel.SampleSetPublication
 	installationCatalog       *platform.Catalog
 	host                      platform.BuildHost
+	transaction               platform.TransactionHost
 	data                      *dataowner.Owner
 	automation                *automationauthoring.Owner
 	branches                  *branchowner.Owner
@@ -135,11 +136,13 @@ func (b *Build) bindPublications() {
 	})
 }
 
-func (b *Build) AttachBuild(h platform.BuildHost) { b.host = h }
-func (b *Build) AttachFiles(h platform.FileHost)  { b.data.AttachFiles(h) }
+func (b *Build) AttachBuild(h platform.BuildHost)             { b.host = h }
+func (b *Build) AttachTransaction(h platform.TransactionHost) { b.transaction = h }
+func (b *Build) AttachFiles(h runtimeprotocol.MediaFileHost)  { b.data.AttachFiles(h) }
 
 func (b *Build) AttachOwner(bindings runtimeprotocol.OwnerBindings) {
 	b.AttachBuild(bindings.Build)
+	b.AttachTransaction(bindings.Transaction)
 	b.AttachFiles(bindings.Files)
 }
 
@@ -565,8 +568,12 @@ func (b *Build) Fork(ledger platform.Authority) (platform.App, error) {
 	return &fork, nil
 }
 
-func (b *Build) NewSimulationApp(tenant string) platform.App {
+func (b *Build) newSimulation(tenant string) *Build {
 	return New(tenant, b.authorities, b.publicationBase, b.resolver, b.objectPublication, b.queryFactory, b.functionFactory, b.agentFactory, b.functionEvaluationFactory, b.testPlanFactory, b.evaluationSetFactory, b.sampleSetFactory)
+}
+func (b *Build) NewSimulationApp(tenant string) platform.App { return b.newSimulation(tenant) }
+func (b *Build) NewSimulationSandbox(tenant string) ConstructionSandbox {
+	return b.newSimulation(tenant)
 }
 func (b *Build) CandidateActions(asset platform.ReleaseAsset) ([]platform.Action, error) {
 	code, err := b.retainedCodeObject(asset)
@@ -605,6 +612,7 @@ func TypeOf(name string) string { return ID + "." + name }
 
 type ConstructionDrafts interface {
 	platform.App
+	platform.FlowReleaseOwner
 	CompleteBlueprintAssets([]platform.ReleaseAsset) ([]platform.ReleaseAsset, error)
 	RootDrafts([]platform.AssetRef) ([]JointDraftRef, error)
 	ApplicationDrafts(string) ([]JointDraftRef, error)
@@ -616,6 +624,7 @@ type ConstructionDrafts interface {
 	DraftReleaseAssetsMulti([]JointDraftRef, platform.Member, bool) (JointDraftAssets, error)
 	CandidateActions(platform.ReleaseAsset) ([]platform.Action, error)
 	CheckProcess(platform.Caller, automationauthoring.Process) *platform.Error
+	NewSimulationSandbox(string) ConstructionSandbox
 }
 
 type ConstructionDraftReader interface {

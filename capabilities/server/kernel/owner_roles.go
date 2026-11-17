@@ -20,6 +20,11 @@ func OwnersOf[T any](ids []string, apps []platform.App) map[string]T {
 	return out
 }
 
+type OperationOwner interface {
+	platform.OperationDefinitions
+	platform.OperationExecutor
+}
+
 func ClaimRole[T any](slot *T, a platform.App, role string) error {
 	x, ok := a.(T)
 	if !ok {

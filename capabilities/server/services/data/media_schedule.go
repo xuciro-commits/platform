@@ -1,7 +1,6 @@
 package data
 
 import (
-	"fmt"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformserver/platform"
 	"slices"
@@ -21,11 +20,10 @@ func (o *Owner) scheduleEntity() platform.Entity {
 }
 
 func (o *Owner) ExecutionSchedule(live platform.Schedule) (platform.Schedule, error) {
-	fixed, err := o.acceptedIntegration(live, platform.AssetSchedule)
+	r, err := acceptedIntegration(o, live, platform.AssetSchedule)
 	if err != nil {
 		return platform.Schedule{}, err
 	}
-	r := fixed.(platform.Schedule)
 	r.Record, r.LastRun, r.Runner, r.RunnerScopes = live.Record, live.LastRun, live.Runner, live.RunnerScopes
 	r.Enabled = live.Enabled
 	r.DefinitionVersion, r.Published, r.Versions = live.DefinitionVersion, live.Published, live.Versions
@@ -50,10 +48,6 @@ func (o *Owner) mediaSetDefinition(set platform.MediaSet) (MediaSetDefinition, e
 		definition.History = append(definition.History, version)
 	}
 	slices.SortFunc(definition.History, func(a, b platform.MediaSetVersion) int { return a.Version - b.Version })
-	files, ok := o.files.(platform.MediaFiles)
-	if !ok {
-		return definition, fmt.Errorf("Media content storage is unavailable")
-	}
 	items := append([]platform.MediaItem{}, set.Items...)
 	for _, version := range definition.History {
 		items = append(items, version.Items...)
@@ -62,7 +56,7 @@ func (o *Owner) mediaSetDefinition(set platform.MediaSet) (MediaSetDefinition, e
 		if _, ok := definition.Blobs[item.Hash]; ok {
 			continue
 		}
-		raw, err := files.MediaBytes(item.Hash)
+		raw, err := o.files.MediaBytes(item.Hash)
 		if err != nil {
 			return definition, err
 		}

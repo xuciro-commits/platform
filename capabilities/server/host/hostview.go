@@ -307,7 +307,7 @@ func (h hostView) CheckPageModel(c platform.Caller, p platform.Page) error {
 }
 
 func (h hostView) ownerBindings() runtimeprotocol.OwnerBindings {
-	return runtimeprotocol.OwnerBindings{Training: h, Agent: h, Console: h, Build: h, Files: h, Knowledge: h, Relations: h, Flow: h, Work: h}
+	return runtimeprotocol.OwnerBindings{Training: h, Agent: h, Console: h, Build: h, Transaction: h, Files: h, Knowledge: h, Relations: h, Flow: h, Work: h}
 }
 func (h hostView) bindOwner(app platform.App) { h.t.services.BindOwner(app, h.ownerBindings()) }
 

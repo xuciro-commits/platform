@@ -74,7 +74,7 @@ type ownerSet struct {
 	assets        map[string]platform.AssetLifecycleOwner
 	answerers     map[string]platform.Answerer
 	builders      map[string]build.ConstructionDrafts
-	operations    map[string]platform.OperationDefinitions
+	operations    map[string]runtimekernel.OperationOwner
 	dynamicAgents map[string]platform.DynamicAgentDefinitions
 	simulations   trialowner.SimulationOwners
 }
@@ -99,9 +99,9 @@ func (s *ownerSet) place(apps []platform.App) {
 	s.assets = runtimekernel.OwnersOf[platform.AssetLifecycleOwner](s.ids, apps)
 	s.answerers = runtimekernel.OwnersOf[platform.Answerer](s.ids, apps)
 	s.builders = runtimekernel.OwnersOf[build.ConstructionDrafts](s.ids, apps)
-	s.operations = runtimekernel.OwnersOf[platform.OperationDefinitions](s.ids, apps)
+	s.operations = runtimekernel.OwnersOf[runtimekernel.OperationOwner](s.ids, apps)
 	s.dynamicAgents = runtimekernel.OwnersOf[platform.DynamicAgentDefinitions](s.ids, apps)
-	s.simulations = trialowner.SimulationOwners{Factories: runtimekernel.OwnersOf[platform.SimulationFactory](s.ids, apps), Identities: runtimekernel.OwnersOf[platform.SimulationIdentityFactory](s.ids, apps), Organizations: runtimekernel.OwnersOf[platform.SimulationOrganizationFactory](s.ids, apps)}
+	s.simulations = trialowner.SimulationOwners{Factories: runtimekernel.OwnersOf[platform.SimulationFactory](s.ids, apps), Builder: s.builders[build.ID], Identities: runtimekernel.OwnersOf[platform.SimulationIdentityFactory](s.ids, apps), Organizations: runtimekernel.OwnersOf[platform.SimulationOrganizationFactory](s.ids, apps)}
 }
 
 func (s ownerSet) with(apps []platform.App) ownerSet {

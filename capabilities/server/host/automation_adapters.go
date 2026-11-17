@@ -20,5 +20,5 @@ func (t *Tenant) nativeFlowAsset(owner platform.App, name string, version int) (
 	return releaseowner.NativeFlowAsset(t.procs, t.definitions, owner, name, version)
 }
 func (t *Tenant) flowReleaseAsset(app, name string, version int) (platform.ReleaseAsset, error) {
-	return releaseowner.FlowReleaseAsset(t.App(app), name, version, t.nativeFlowAsset)
+	return releaseowner.FlowReleaseAsset(t.builders[app], name, version, func() (platform.ReleaseAsset, error) { return t.nativeFlowAsset(t.App(app), name, version) })
 }

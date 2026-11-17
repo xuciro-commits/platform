@@ -43,14 +43,10 @@ func (e Environment) CandidateApps(candidate platform.ReleaseCandidate, member p
 		}
 		return app, nil
 	}
-	builderOwner, err := fresh(build.ID)
-	if err != nil {
-		return nil, nil, err
+	if e.Builder == nil {
+		return nil, nil, fmt.Errorf("construction owner is unavailable")
 	}
-	b, ok := builderOwner.(build.ConstructionSandbox)
-	if !ok {
-		return nil, nil, fmt.Errorf("construction owner has no isolated asset installer")
-	}
+	b := e.Builder.NewSimulationSandbox(member.Tenant)
 	member.Roles = maps.Clone(member.Roles)
 	if e.Identity == nil {
 		return nil, nil, fmt.Errorf("candidate identity factory is unavailable")

@@ -61,12 +61,8 @@ func (b *Build) checkTransactions(object ontology.Object, engines ...platform.Ru
 					}
 				}
 			}
-			if b.host != nil {
-				owner, ok := b.host.(platform.TransactionHost)
-				if !ok {
-					return fmt.Errorf("The transaction query owner is unavailable")
-				}
-				return owner.CheckTxnCall(call)
+			if b.transaction != nil {
+				return b.transaction.CheckTxnCall(call)
 			}
 			return nil
 		},

@@ -316,9 +316,7 @@ func PrepareInstallation(runtime InstallationRuntime, candidate platform.Release
 		return nil, nil, err
 	}
 	context := platform.AssetReleaseContext{Member: member, At: at, Upgrade: upgrade}
-	if provider, ok := runtime.(ProjectAwareInstallationRuntime); ok {
-		context.Project = provider.ReleaseProject(candidate)
-	}
+	context.Project = runtime.ReleaseProject(candidate)
 	view, bootstrap, err := runtime.Bootstrap(candidate, context, !activating)
 	if err != nil {
 		return nil, nil, err
@@ -371,13 +369,10 @@ type InstallationRuntime interface {
 	Bootstrap(platform.ReleaseCandidate, platform.AssetReleaseContext, bool) (InstallationRuntime, json.RawMessage, error)
 	Predecessor(string) (string, error)
 	Stage([]platform.ReleaseInstallation, bool) (InstallationRuntime, error)
+	ReleaseProject(platform.ReleaseCandidate) string
 	CheckExtensions() error
 	CheckStorage(InstallationRuntime, bool) error
 	Pending(string, []byte) error
-}
-
-type ProjectAwareInstallationRuntime interface {
-	ReleaseProject(platform.ReleaseCandidate) string
 }
 
 func CheckStorage(shapes []StoredShape, before, after []platform.Definition, upgrade, allowContraction bool) error {
