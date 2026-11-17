@@ -10,6 +10,7 @@ import (
 	"platformserver/platform"
 	"platformserver/services/ai/gateway"
 	automation "platformserver/services/automate/runtime"
+	trialowner "platformserver/services/devops/trials"
 	"platformserver/services/resources/authoring"
 	controlowner "platformserver/services/security/control"
 )
@@ -57,7 +58,6 @@ type tenantPorts struct {
 	AIClient func(req *http.Request) (*http.Response, error)
 	Files    platform.FileStore
 }
-
 type ownerSet struct {
 	apps          []platform.App
 	ids           []string
@@ -70,6 +70,7 @@ type ownerSet struct {
 	builders      map[string]build.ConstructionDrafts
 	operations    map[string]platform.OperationDefinitions
 	dynamicAgents map[string]platform.DynamicAgentDefinitions
+	simulations   trialowner.SimulationOwners
 }
 
 func newOwnerSet(apps []platform.App) (ownerSet, error) {
@@ -85,7 +86,6 @@ func newOwnerSet(apps []platform.App) (ownerSet, error) {
 	s.place(apps)
 	return s, nil
 }
-
 func (s *ownerSet) place(apps []platform.App) {
 	s.apps = apps
 	s.states = runtimekernel.OwnersOf[platform.AcceptedStateApp](s.ids, apps)
@@ -95,6 +95,7 @@ func (s *ownerSet) place(apps []platform.App) {
 	s.builders = runtimekernel.OwnersOf[build.ConstructionDrafts](s.ids, apps)
 	s.operations = runtimekernel.OwnersOf[platform.OperationDefinitions](s.ids, apps)
 	s.dynamicAgents = runtimekernel.OwnersOf[platform.DynamicAgentDefinitions](s.ids, apps)
+	s.simulations = trialowner.SimulationOwners{Factories: runtimekernel.OwnersOf[platform.SimulationFactory](s.ids, apps), Identities: runtimekernel.OwnersOf[platform.SimulationIdentityFactory](s.ids, apps), Organizations: runtimekernel.OwnersOf[platform.SimulationOrganizationFactory](s.ids, apps)}
 }
 
 func (s ownerSet) with(apps []platform.App) ownerSet {

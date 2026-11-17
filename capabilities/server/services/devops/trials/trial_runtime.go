@@ -119,6 +119,12 @@ type Environment struct {
 	Samples             []SimulationSample
 }
 
+type SimulationOwners struct {
+	Factories     map[string]platform.SimulationFactory
+	Identities    map[string]platform.SimulationIdentityFactory
+	Organizations map[string]platform.SimulationOrganizationFactory
+}
+
 type sampleOwner struct {
 	manifest platform.Manifest
 	ledger   platform.Authority
@@ -143,20 +149,27 @@ func (a *sampleOwner) Fork(ledger platform.Authority) (platform.App, error) {
 func (a *sampleOwner) Submit(platform.Caller, *pb.Submission, time.Time) (*pb.ChangeRecord, *platform.Error) {
 	return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Native business actions require an isolated owner test fixture")
 }
-func PrepareEnvironment(apps []platform.App, authorities platform.Authorities, candidate platform.ReleaseCandidate, samples []SimulationSample) (Environment, error) {
-	environment := Environment{Authorities: authorities, Modules: map[string][]byte{}, Samples: samples, Factories: map[string]platform.SimulationFactory{}}
+func PrepareEnvironment(apps []platform.App, simulationOwners SimulationOwners, authorities platform.Authorities, candidate platform.ReleaseCandidate, samples []SimulationSample) (Environment, error) {
+	environment := Environment{Authorities: authorities, Modules: map[string][]byte{}, Samples: samples, Factories: simulationOwners.Factories}
 	ownersByID := map[string]platform.App{}
 	for _, app := range apps {
 		ownersByID[app.Manifest().ID] = app
-		if factory, ok := app.(platform.SimulationOrganizationFactory); ok {
-			environment.OrganizationFactory = factory
+	}
+	organization := ""
+	for id, factory := range simulationOwners.Organizations {
+		if environment.OrganizationFactory != nil {
+			return environment, fmt.Errorf("simulation organization factories %s and %s are both registered", organization, id)
 		}
-		if factory, ok := app.(platform.SimulationIdentityFactory); ok {
-			environment.Identity = factory
+		environment.OrganizationFactory = factory
+		organization = id
+	}
+	identity := ""
+	for id, factory := range simulationOwners.Identities {
+		if environment.Identity != nil {
+			return environment, fmt.Errorf("simulation identity factories %s and %s are both registered", identity, id)
 		}
-		if factory, ok := app.(platform.SimulationFactory); ok {
-			environment.Factories[app.Manifest().ID] = factory
-		}
+		environment.Identity = factory
+		identity = id
 	}
 	selected := map[platform.AssetRef]bool{}
 	owners := map[string]bool{}

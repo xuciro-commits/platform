@@ -48,7 +48,7 @@ func (t *Tenant) simulateCandidate(builder platform.Member, request trialowner.C
 				},
 			},
 			Environment: func(candidate platform.ReleaseCandidate) (simulationEnvironment, error) {
-				prepared, err := trialowner.PrepareEnvironment(t.apps, actions.NewAuthority, candidate, request.Samples)
+				prepared, err := trialowner.PrepareEnvironment(t.apps, t.simulations, actions.NewAuthority, candidate, request.Samples)
 				environment := simulationEnvironment{Environment: prepared, Services: t.services}
 				if err == nil {
 					err = platform.CheckSimulationOrganization(request.Organization)
