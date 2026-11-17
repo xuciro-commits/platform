@@ -234,7 +234,7 @@ func MapObjectIntegrations(object *Object, resolve func(platform.AssetKind, stri
 	return failure
 }
 
-func PrepareObjectPublication(asset platform.ReleaseAsset, objects []Object, resolve func(platform.AssetKind, string) (string, error)) (Object, Object, error) {
+func prepareObjectPublication(asset platform.ReleaseAsset, objects []Object, resolve func(platform.AssetKind, string) (string, error)) (Object, Object, error) {
 	var frozen Object
 	if err := json.Unmarshal(asset.Body, &frozen); err != nil || AppID+"."+frozen.Name != asset.Ref.Name {
 		return frozen, Object{}, fmt.Errorf("invalid saved object %s", asset.Ref)
@@ -421,4 +421,26 @@ func ValidateObjectInstallation(c platform.Caller, record Object, env ObjectInst
 		return nil
 	}
 	return env.Host.ValidateInstallDependents(c, entity, env.Actions(record, entity), generated, pages...)
+}
+
+func ObjectFreezePublication(objects []Object, retained func(platform.ReleaseAsset) (bool, error), resolve func(platform.AssetKind, string) (string, error)) publication.Hooks {
+	return publication.Hooks{Kind: platform.AssetObject, FreezeOn: platform.AssetObject, Freeze: func(_ platform.Caller, _ string, asset platform.ReleaseAsset, _ []platform.ReleaseAsset) (publication.Frozen, error) {
+		code, err := retained(asset)
+		if err != nil {
+			return publication.Frozen{}, err
+		}
+		if code {
+			return publication.Frozen{Skip: true}, nil
+		}
+		frozen, record, err := prepareObjectPublication(asset, objects, resolve)
+		if err != nil {
+			return publication.Frozen{}, err
+		}
+		raw, err := json.Marshal(record)
+		if err != nil {
+			return publication.Frozen{}, fmt.Errorf("%s: %w", SchemaPublish, err)
+		}
+		asset.Body = platform.Raw(frozen)
+		return publication.Frozen{Asset: asset, Publications: []platform.ReleasePublication{{Schema: SchemaPublish, Image: raw}}}, nil
+	}}
 }

@@ -18,12 +18,19 @@ type DraftClosure struct {
 	HasPrior bool
 }
 
+type Frozen struct {
+	Asset         platform.ReleaseAsset
+	Skip          bool
+	Publications  []platform.ReleasePublication
+	Installations []platform.AssetInstallation
+}
+
 type Hooks struct {
 	Kind       platform.AssetKind
 	Schema     string
 	FreezeOn   platform.AssetKind
 	Validate   func(json.RawMessage) error
-	Freeze     func(platform.Caller, string, platform.ReleaseAsset, []platform.ReleaseAsset) ([]platform.AssetInstallation, error)
+	Freeze     func(platform.Caller, string, platform.ReleaseAsset, []platform.ReleaseAsset) (Frozen, error)
 	Closure    func(platform.Caller, string, platform.Member) (DraftClosure, error)
 	Install    func(json.RawMessage) error
 	ReadFrozen func(json.RawMessage) (json.RawMessage, error)

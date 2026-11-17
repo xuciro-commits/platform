@@ -85,14 +85,14 @@ func ActionTypeClosure(c platform.Caller, id string, _ platform.Member) (publica
 	return closure, nil
 }
 
-func FreezeActionTypes(c platform.Caller, _ string, asset platform.ReleaseAsset, assets []platform.ReleaseAsset) ([]platform.AssetInstallation, error) {
+func FreezeActionTypes(c platform.Caller, _ string, asset platform.ReleaseAsset, assets []platform.ReleaseAsset) (publication.Frozen, error) {
 	var frozen Object
 	if err := json.Unmarshal(asset.Body, &frozen); err != nil {
-		return nil, err
+		return publication.Frozen{}, err
 	}
 	all, err := publication.Inventory[ActionType](c)
 	if err != nil {
-		return nil, err
+		return publication.Frozen{}, err
 	}
 	var plans []platform.AssetInstallation
 	add := func(action ActionType) error {
@@ -120,26 +120,26 @@ func FreezeActionTypes(c platform.Caller, _ string, asset platform.ReleaseAsset,
 		}
 		index := slices.IndexFunc(all, func(action ActionType) bool { return action.Name == binding.Ref.Name })
 		if index < 0 {
-			return nil, fmt.Errorf("action type %s is unavailable", binding.Ref.Name)
+			return publication.Frozen{}, fmt.Errorf("action type %s is unavailable", binding.Ref.Name)
 		}
 		version, err := strconv.Atoi(binding.SourceVersion)
 		if err != nil || version < 1 {
-			return nil, fmt.Errorf("action type %s has no retained version %s", binding.Ref.Name, binding.SourceVersion)
+			return publication.Frozen{}, fmt.Errorf("action type %s has no retained version %s", binding.Ref.Name, binding.SourceVersion)
 		}
 		definition := slices.IndexFunc(frozen.Actions, func(definition Action) bool { return AppID+"."+frozen.Name+"."+definition.Name == binding.Ref.Name })
 		if definition < 0 {
-			return nil, fmt.Errorf("action type %s has no frozen definition", binding.Ref.Name)
+			return publication.Frozen{}, fmt.Errorf("action type %s has no frozen definition", binding.Ref.Name)
 		}
 		action := all[index]
 		if !legacyBindings {
 			if version > len(action.Versions) {
-				return nil, fmt.Errorf("action type %s has no retained version %d", binding.Ref.Name, version)
+				return publication.Frozen{}, fmt.Errorf("action type %s has no retained version %d", binding.Ref.Name, version)
 			}
 			retained := action.Versions[version-1]
 			selected := ActionType{Record: platform.Record{ID: action.ID}, Name: action.Name, Object: action.Object, Title: retained.Definition.Title, Definition: retained.Definition, Commands: retained.Commands, State: "published", Version: version, Versions: slices.Clone(action.Versions[:version])}
 			selected.Published = selected.Snapshot(version)
 			if err := add(selected); err != nil {
-				return nil, err
+				return publication.Frozen{}, err
 			}
 			continue
 		}
@@ -149,8 +149,8 @@ func FreezeActionTypes(c platform.Caller, _ string, asset platform.ReleaseAsset,
 		}
 		action.State, action.Published = "published", string(platform.Raw(selected))
 		if err := add(action); err != nil {
-			return nil, err
+			return publication.Frozen{}, err
 		}
 	}
-	return plans, nil
+	return publication.Frozen{Asset: asset, Installations: plans}, nil
 }

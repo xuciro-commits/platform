@@ -5,6 +5,7 @@ import (
 	"fmt"
 	appsauthoring "platformserver/services/apps/authoring"
 	"platformserver/services/ontology"
+	"platformserver/services/resources/publication"
 	"slices"
 
 	"platformserver/platform"
@@ -19,6 +20,7 @@ func (b *Build) prepareReleasePublications(assets []platform.ReleaseAsset) ([]pl
 	}
 	var publications []platform.ReleasePublication
 	var installations []platform.AssetInstallation
+	hooks := append([]publication.Hooks{ontology.ObjectFreezePublication(objects, b.retainedCodeObject, b.data.IntegrationID)}, b.publications...)
 	add := func(schema string, record any) error {
 		raw, err := json.Marshal(record)
 		if err != nil {
@@ -33,22 +35,6 @@ func (b *Build) prepareReleasePublications(assets []platform.ReleaseAsset) ([]pl
 		}
 		preparedAsset := asset
 		switch asset.Ref.Kind {
-		case platform.AssetObject:
-			code, err := b.retainedCodeObject(asset)
-			if err != nil {
-				return nil, nil, err
-			}
-			if code {
-				continue
-			}
-			frozen, record, err := ontology.PrepareObjectPublication(asset, objects, b.data.IntegrationID)
-			if err != nil {
-				return nil, nil, err
-			}
-			if err := add(SchemaPublish, record); err != nil {
-				return nil, nil, err
-			}
-			preparedAsset.Body = platform.Raw(frozen)
 		case platform.AssetPage:
 			i := slices.IndexFunc(pages, func(p appsauthoring.Page) bool { return !p.Archived && p.Name == asset.Ref.Name })
 			current := appsauthoring.Page{Record: platform.Record{ID: asset.Ref.Name}, Name: asset.Ref.Name}
@@ -78,15 +64,20 @@ func (b *Build) prepareReleasePublications(assets []platform.ReleaseAsset) ([]pl
 				return nil, nil, err
 			}
 		}
-		for _, hooks := range b.publications {
-			if hooks.FreezeOn != asset.Ref.Kind {
+		for _, hook := range hooks {
+			if hook.FreezeOn != asset.Ref.Kind {
 				continue
 			}
-			plans, err := hooks.Freeze(b.host.Automation(platform.Caller{}, ID), b.Manifest().Version, preparedAsset, assets)
+			frozen, err := hook.Freeze(b.host.Automation(platform.Caller{}, ID), ValueDefinitionVersion, preparedAsset, assets)
 			if err != nil {
 				return nil, nil, err
 			}
-			installations = append(installations, plans...)
+			if frozen.Skip {
+				break
+			}
+			preparedAsset = frozen.Asset
+			publications = append(publications, frozen.Publications...)
+			installations = append(installations, frozen.Installations...)
 		}
 	}
 	automationPublications, err := b.automation.PrepareReleasePublications(assets)
