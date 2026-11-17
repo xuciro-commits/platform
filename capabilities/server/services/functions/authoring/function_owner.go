@@ -143,7 +143,6 @@ type Environment interface {
 	InstalledObject(string) (platform.Entity, bool)
 	JointEntity(string) (platform.EntityInfo, bool)
 	DeclaresRole(string) bool
-	JointDeclaration(platform.AssetRef) (platform.ReleaseAsset, bool)
 	CheckName(string, string) error
 	ConditionLookup(string) (platform.EntityInfo, bool)
 	CheckRuleCollections(platform.RuleReadSpec, string, func(string) (platform.EntityInfo, bool)) error
@@ -459,14 +458,12 @@ func (o *Owner) DraftAssets(id string, releaseAssets func() ([]platform.ReleaseA
 	return
 }
 
-func (o *Owner) Definition(name string, version int) (platform.AIFunction, int, bool) {
-	if asset, selected := o.env.JointDeclaration(platform.AssetRef{App: o.env.App(), Kind: platform.AssetFunction, Name: name}); selected {
-		ordinal := o.assetVersion(asset)
-		if ordinal == version && version > 0 {
-			var d platform.AIFunction
-			valid := json.Unmarshal(asset.Body, &d) == nil && asset.ContractVersion == 1 && functionFromDeclaration(d).Name == name && d.Check() == nil
-			return d, ordinal, valid
-		}
+func (o *Owner) Definition(name string, version int, asset platform.ReleaseAsset) (platform.AIFunction, int, bool) {
+	ordinal := o.assetVersion(asset)
+	if ordinal == version && version > 0 {
+		var d platform.AIFunction
+		valid := json.Unmarshal(asset.Body, &d) == nil && asset.ContractVersion == 1 && functionFromDeclaration(d).Name == name && d.Check() == nil
+		return d, ordinal, valid
 	}
 	return o.Function(name, version)
 }

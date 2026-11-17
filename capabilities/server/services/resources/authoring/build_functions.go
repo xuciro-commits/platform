@@ -19,7 +19,10 @@ const (
 )
 
 func (b *Build) FunctionDefinition(name string, version int) (platform.AIFunction, int, bool) {
-	return b.functions.Definition(name, version)
+	if asset, ok := b.jointDeclarations[platform.AssetRef{App: ID, Kind: platform.AssetFunction, Name: name}]; ok {
+		return b.functions.Definition(name, version, asset)
+	}
+	return b.functions.Function(name, version)
 }
 
 func (b *Build) FunctionReleaseAsset(name string, sourceVersion string) (platform.ReleaseAsset, error) {
