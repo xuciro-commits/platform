@@ -66,8 +66,6 @@ type Build struct {
 	interfaces          map[string]ontology.InterfaceRecord
 	functions           *functionauthoring.Owner
 	apps                *appsauthoring.Owner
-	codes               map[string]functionauthoring.Code
-	tables              map[string]functionauthoring.Table
 }
 
 type testPlanEnvironment = devopsmodel.TestPlanEnvironment[functionauthoring.Function]
@@ -113,7 +111,7 @@ func (b *Build) AttachBuild(h platform.BuildHost) { b.host = h }
 func (b *Build) AttachFiles(h platform.FileHost)  { b.data.AttachFiles(h) }
 
 func New(tenant string, authorities platform.Authorities, publications []publication.Hooks, resolver publication.Resolver, objectPublication func(ontology.ObjectPublicationEnvironment) publication.Hooks, agentFactory func(platform.AgentAuthoringEnvironment) platform.AgentAuthoringBinding, testPlanFactory func(testPlanEnvironment, evaluationPublication) testPlanPublication, evaluationFactory func(testPlanEnvironment) evaluationPublication) *Build {
-	b := &Build{resolver: resolver, publicationBase: slices.Clone(publications), objectPublication: objectPublication, agentFactory: agentFactory, testPlanFactory: testPlanFactory, evaluationFactory: evaluationFactory, installed: map[string]platform.Entity{}, linkTypes: map[string]ontology.LinkType{}, propertyTypes: map[string]ontology.PropertyType{}, valueTypes: map[string]ontology.ValueType{}, objectTypeGroups: map[string]ontology.ObjectTypeGroup{}, queries: map[string]Query{}, interfaces: map[string]ontology.InterfaceRecord{}, codes: map[string]functionauthoring.Code{}, tables: map[string]functionauthoring.Table{}}
+	b := &Build{resolver: resolver, publicationBase: slices.Clone(publications), objectPublication: objectPublication, agentFactory: agentFactory, testPlanFactory: testPlanFactory, evaluationFactory: evaluationFactory, installed: map[string]platform.Entity{}, linkTypes: map[string]ontology.LinkType{}, propertyTypes: map[string]ontology.PropertyType{}, valueTypes: map[string]ontology.ValueType{}, objectTypeGroups: map[string]ontology.ObjectTypeGroup{}, queries: map[string]Query{}, interfaces: map[string]ontology.InterfaceRecord{}}
 	b.data = dataowner.New(buildDataHost{b}, resolver)
 	b.automation = automationauthoring.New(automationEnvironment{b}, resolver)
 	b.functions = functionauthoring.NewOwner(functionEnvironment{b}, resolver)
@@ -199,7 +197,7 @@ func (b *Build) Manifest() platform.Manifest {
 		entities = append(entities, b.installed[typ])
 	}
 	provisions, reads := b.objectProtocols()
-	return platform.Manifest{ID: ID, Title: platform.BuiltinManifestTitle(ID), Version: ValueDefinitionVersion, Sequences: b.transactionSequences(), Actions: catalog, Entities: entities, Roles: b.manifestRoles(), Settings: b.settings(), Jobs: []platform.Job{{Name: "confirmations", Title: "Advance business confirmations", Every: time.Second}, {Name: "dispatches", Title: "Advance device dispatches", Every: time.Second}}, Provides: provisions, Consumes: b.consumedProtocols(), Reads: append([]string{ReadReleaseProfile}, reads...), ReadSources: protocolReadSources(reads), Queries: definitionDeclarations(b.queries), Functions: b.functions.Declarations(), Agents: b.agent.Declarations(), Operations: b.operationDeclarations(),
+	return platform.Manifest{ID: ID, Title: platform.BuiltinManifestTitle(ID), Version: ValueDefinitionVersion, Sequences: b.transactionSequences(), Actions: catalog, Entities: entities, Roles: b.manifestRoles(), Settings: b.settings(), Jobs: []platform.Job{{Name: "confirmations", Title: "Advance business confirmations", Every: time.Second}, {Name: "dispatches", Title: "Advance device dispatches", Every: time.Second}}, Provides: provisions, Consumes: b.consumedProtocols(), Reads: append([]string{ReadReleaseProfile}, reads...), ReadSources: protocolReadSources(reads), Queries: definitionDeclarations(b.queries), Functions: b.functions.Declarations(), Agents: b.agent.Declarations(), Operations: b.functions.OperationDeclarations(),
 		Pages: []platform.Page{
 			appsauthoring.ListDetailPage("objects", "Objects", "The objects this organisation defines. Publish one to install it.",
 				platform.AssetRef{App: ID, Kind: platform.AssetObject, Name: ObjectType},
@@ -522,8 +520,6 @@ func (b *Build) Fork(ledger platform.Authority) (platform.App, error) {
 	fork.objectTypeGroups = maps.Clone(b.objectTypeGroups)
 	fork.queries = maps.Clone(b.queries)
 	fork.interfaces = maps.Clone(b.interfaces)
-	fork.codes = maps.Clone(b.codes)
-	fork.tables = maps.Clone(b.tables)
 	fork.functions = b.functions.Fork(functionEnvironment{&fork})
 	fork.apps = b.apps.Fork(appEnvironment{&fork})
 	fork.data = b.data.Fork(buildDataHost{&fork})

@@ -152,14 +152,16 @@ type Owner struct {
 	resolver publication.Resolver
 	env      Environment
 	records  map[string]Function
+	codes    map[string]Code
+	tables   map[string]Table
 }
 
 func NewOwner(env Environment, resolver publication.Resolver) *Owner {
-	return &Owner{env: env, resolver: resolver, records: map[string]Function{}}
+	return &Owner{env: env, resolver: resolver, records: map[string]Function{}, codes: map[string]Code{}, tables: map[string]Table{}}
 }
 
 func (o *Owner) Fork(env Environment) *Owner {
-	return &Owner{env: env, resolver: o.resolver, records: maps.Clone(o.records)}
+	return &Owner{env: env, resolver: o.resolver, records: maps.Clone(o.records), codes: maps.Clone(o.codes), tables: maps.Clone(o.tables)}
 }
 
 func (o *Owner) Function(name string, version int) (platform.AIFunction, int, bool) {

@@ -71,7 +71,7 @@ func (b *Build) ApplyAcceptedPublication(schema string, image []byte) error {
 			return err
 		}
 		tb.Versions = record.Versions
-		return b.installTable(platform.Caller{Replaying: true}, tb)
+		return b.functions.InstallTable(platform.Caller{Replaying: true}, tb)
 	}
 
 	if k := definitionKindOfSchema(schema); k != nil {
@@ -82,7 +82,7 @@ func (b *Build) ApplyAcceptedPublication(schema string, image []byte) error {
 		if err != nil {
 			return err
 		}
-		return b.installCode(platform.Caller{Replaying: true}, code)
+		return b.functions.InstallCode(platform.Caller{Replaying: true}, code)
 	}
 	return fmt.Errorf("not an accepted builder publication: %s", schema)
 }
@@ -169,7 +169,7 @@ func (b *Build) Reinstall() error {
 	if err := b.agent.Restore(); err != nil {
 		return err
 	}
-	codes, err := b.codeInventory()
+	codes, err := b.functions.CodeInventory()
 	if err != nil {
 		return err
 	}
@@ -182,7 +182,7 @@ func (b *Build) Reinstall() error {
 		if err != nil {
 			return err
 		}
-		if err := b.installCode(platform.Caller{Replaying: true}, code); err != nil {
+		if err := b.functions.InstallCode(platform.Caller{Replaying: true}, code); err != nil {
 			return err
 		}
 	}

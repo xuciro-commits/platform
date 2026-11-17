@@ -21,9 +21,15 @@ func (b *Build) Answer(c platform.Caller, effect platform.Effect, out platform.O
 	}
 	return b.functions.AnswerCompilation(c, b, effect, out, now)
 }
-func (b *Build) codeInventory() ([]functionauthoring.Code, error) {
-	return readDefinitionInventory[functionauthoring.Code](b.host.Automation(platform.Caller{}, ID))
+
+func (b *Build) OperationDefinition(name string, version int) (platform.Operation, int, bool) {
+	return b.functions.OperationDefinition(name, version)
 }
+
+func (b *Build) CodeReleaseAssets() ([]platform.ReleaseAsset, error) {
+	return b.functions.CodeReleaseAssets()
+}
+
 func (b *Build) checkCode(code functionauthoring.Code) error {
 	if code.Module == "" || code.SourceHash != code.SourceDigest() || code.BuildHash != code.BuildDigest() || code.Language != "go" && code.Language != "tinygo" || code.Toolchain == "" {
 		return fmt.Errorf("code %s needs an unchanged isolated build", code.Name)
@@ -31,7 +37,7 @@ func (b *Build) checkCode(code functionauthoring.Code) error {
 	if err := b.host.ValidateInstallOperation(platform.Caller{}, code.Definition()); err != nil {
 		return err
 	}
-	list, err := b.codeInventory()
+	list, err := b.functions.CodeInventory()
 	if err != nil {
 		return err
 	}
@@ -46,92 +52,7 @@ func (b *Build) checkCode(code functionauthoring.Code) error {
 	}
 	return nil
 }
-func (b *Build) installCode(c platform.Caller, code functionauthoring.Code) error {
-	if code.Published != "" {
-		published, ok := publication.Read[functionauthoring.Code](code.Published)
-		if !ok {
-			return fmt.Errorf("compute has no valid publication")
-		}
-		code = published
-	}
-	if err := b.host.InstallOperation(c, code.Definition(), code.Version); err != nil {
-		return err
-	}
-	b.codes[code.Name] = code
-	return nil
-}
-func (b *Build) OperationDefinition(name string, version int) (platform.Operation, int, bool) {
-	if current, ok := b.codes[name]; ok && (version == 0 || version == current.Version) {
-		return current.Definition(), current.Version, true
-	}
-	if tb, ok := b.tables[name]; ok && (version == 0 || version == tb.Version) {
-		return tb.Definition(), tb.Version, true
-	}
-	for _, tb := range b.tables {
-		for _, raw := range tb.Versions {
-			prior, ok := publication.Read[functionauthoring.Table](raw)
-			if ok && prior.Name == name && prior.Version == version {
-				return prior.Definition(), version, true
-			}
-		}
-	}
-	list, err := b.codeInventory()
-	if err != nil {
-		return platform.Operation{}, 0, false
-	}
-	for _, record := range list {
-		if version < 1 || version > len(record.Versions) {
-			continue
-		}
-		prior, ok := publication.Read[functionauthoring.Code](record.Versions[version-1])
-		if ok && prior.Name == name && prior.Version == version {
-			return prior.Definition(), version, true
-		}
-	}
-	return platform.Operation{}, 0, false
-}
-func (b *Build) operationDeclarations() []platform.Operation {
-	return append(definitionDeclarations(b.codes), definitionDeclarations(b.tables)...)
-}
-func (b *Build) codeReleaseAsset(code functionauthoring.Code, manifest string) (platform.ReleaseAsset, error) {
-	raw, err := json.Marshal(code.Definition())
-	if err != nil {
-		return platform.ReleaseAsset{}, err
-	}
-	return b.resolver.WithDependencies(platform.ReleaseAsset{Ref: platform.AssetRef{App: ID, Kind: platform.AssetCompute, Name: code.Name}, ContractVersion: 1, SourceVersion: manifest + ".compute-" + strconv.Itoa(code.Version), Body: raw})
-}
-func (b *Build) CodeReleaseAssets() ([]platform.ReleaseAsset, error) {
-	out := []platform.ReleaseAsset{}
-	for _, op := range b.operationDeclarations() {
-		if op.Binding.Kind == "native" {
-			asset, err := b.tableReleaseAsset(b.tables[op.Name], b.Manifest().Version)
-			if err != nil {
-				return nil, err
-			}
-			out = append(out, asset)
-			continue
-		}
-		asset, err := b.codeReleaseAsset(b.codes[op.Name], b.Manifest().Version)
-		if err != nil {
-			return nil, err
-		}
-		out = append(out, asset)
-	}
-	return out, nil
-}
-func (b *Build) OperationReleaseAsset(name, version string) (platform.ReleaseAsset, error) {
-	text, ok := strings.CutPrefix(version, b.Manifest().Version+".compute-")
-	ordinal, err := strconv.Atoi(text)
-	op, actual, found := b.OperationDefinition(name, ordinal)
-	if !ok || err != nil || strconv.Itoa(ordinal) != text || !found || actual != ordinal || ordinal < 1 {
-		return platform.ReleaseAsset{}, fmt.Errorf("compute version is not retained")
-	}
-	raw, err := json.Marshal(op)
-	if err != nil {
-		return platform.ReleaseAsset{}, err
-	}
-	return b.resolver.WithDependencies(platform.ReleaseAsset{Ref: platform.AssetRef{App: ID, Kind: platform.AssetCompute, Name: name}, ContractVersion: 1, SourceVersion: version, Body: raw})
-}
+
 func (b *Build) InstallOperationAsset(asset platform.ReleaseAsset) error {
 	var op platform.Operation
 	text, ok := strings.CutPrefix(asset.SourceVersion, b.Manifest().Version+".compute-")
@@ -144,17 +65,17 @@ func (b *Build) InstallOperationAsset(asset platform.ReleaseAsset) error {
 		if err != nil {
 			return err
 		}
-		return b.installTable(platform.Caller{Replaying: true}, table)
+		return b.functions.InstallTable(platform.Caller{Replaying: true}, table)
 	}
 	code := functionauthoring.Code{Name: op.Name, Title: op.Title, Description: op.Description, Input: op.Input, Output: op.Output, Roles: op.Roles, Limits: op.Limits, Module: op.Binding.Module, State: "published", Version: ordinal}
-	return b.installCode(platform.Caller{Replaying: true}, code)
+	return b.functions.InstallCode(platform.Caller{Replaying: true}, code)
 }
 func (b *Build) CodeDraftAssets(id string) (before, after []platform.ReleaseAsset, prior, next platform.AssetRef, hadPrior bool, err error) {
 	before, err = b.ReleaseAssets()
 	if err != nil {
 		return
 	}
-	list, problem := b.codeInventory()
+	list, problem := b.functions.CodeInventory()
 	if problem != nil {
 		err = problem
 		return
@@ -178,7 +99,7 @@ func (b *Build) CodeDraftAssets(id string) (before, after []platform.ReleaseAsse
 		return
 	}
 	code.Version++
-	asset, problem := b.codeReleaseAsset(code, b.Manifest().Version)
+	asset, problem := b.functions.CodeReleaseAsset(code, b.Manifest().Version)
 	if problem != nil {
 		err = problem
 		return
@@ -190,7 +111,7 @@ func (b *Build) CodeDraftAssets(id string) (before, after []platform.ReleaseAsse
 }
 
 func (b *Build) PrepareCodeReleasePublications(assets []platform.ReleaseAsset) ([]platform.ReleasePublication, error) {
-	list, err := b.codeInventory()
+	list, err := b.functions.CodeInventory()
 	if err != nil {
 		return nil, err
 	}
@@ -218,7 +139,7 @@ func (b *Build) PrepareCodeReleasePublications(assets []platform.ReleaseAsset) (
 			return nil, fmt.Errorf("compute version is invalid")
 		}
 		if ordinal <= record.Version {
-			retained, err := b.OperationReleaseAsset(asset.Ref.Name, asset.SourceVersion)
+			retained, err := b.functions.OperationReleaseAsset(asset.Ref.Name, asset.SourceVersion)
 			if err != nil || !b.data.EqualAsset(retained, asset) {
 				return nil, fmt.Errorf("retained compute bytes differ")
 			}
@@ -252,10 +173,6 @@ func (b *Build) PrepareCodeReleasePublications(assets []platform.ReleaseAsset) (
 		out = append(out, platform.ReleasePublication{Schema: functionauthoring.SchemaCodePublish, Image: raw})
 	}
 	return out, nil
-}
-
-func (b *Build) tableReleaseAsset(table functionauthoring.Table, manifest string) (platform.ReleaseAsset, error) {
-	return b.resolver.WithDependencies(platform.ReleaseAsset{Ref: platform.AssetRef{App: ID, Kind: platform.AssetCompute, Name: table.Name}, ContractVersion: 1, SourceVersion: manifest + ".compute-" + strconv.Itoa(table.Version), Body: platform.Raw(table.Definition())})
 }
 
 func (b *Build) tableFromAsset(asset platform.ReleaseAsset) (functionauthoring.Table, error) {
@@ -354,7 +271,7 @@ func (b *Build) tableDraftAssets(id string) (before, after []platform.ReleaseAss
 	}
 	tb.Version++
 	next = platform.AssetRef{App: ID, Kind: platform.AssetCompute, Name: tb.Name}
-	asset, problem := b.tableReleaseAsset(tb, b.Manifest().Version)
+	asset, problem := b.functions.TableReleaseAsset(tb, b.Manifest().Version)
 	if problem != nil {
 		err = problem
 		return
@@ -388,7 +305,7 @@ func (b *Build) prepareTablePublications(assets []platform.ReleaseAsset) ([]plat
 		}
 		record := rows[i]
 		if frozen.Version <= record.Version {
-			retained, err := b.OperationReleaseAsset(asset.Ref.Name, asset.SourceVersion)
+			retained, err := b.functions.OperationReleaseAsset(asset.Ref.Name, asset.SourceVersion)
 			if err != nil || !sameRuleAsset(retained, asset) {
 				return nil, fmt.Errorf("retained table bytes differ")
 			}

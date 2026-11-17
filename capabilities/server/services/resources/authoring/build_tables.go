@@ -1,7 +1,6 @@
 package build
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	functionauthoring "platformserver/services/functions/authoring"
@@ -69,7 +68,7 @@ func (b *Build) publishTable(c platform.Caller, record any, _ json.RawMessage, _
 		if err := b.host.ValidateInstallOperation(c, frozen.Definition()); err != nil {
 			return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
 		}
-	} else if err := b.installTable(c, frozen); err != nil {
+	} else if err := b.functions.InstallTable(c, frozen); err != nil {
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
 	}
 	raw, _ := json.Marshal(frozen)
@@ -78,14 +77,6 @@ func (b *Build) publishTable(c platform.Caller, record any, _ json.RawMessage, _
 	}
 	tb.Published = string(raw)
 	tb.Versions = append(tb.Versions, tb.Published)
-	return nil
-}
-
-func (b *Build) installTable(c platform.Caller, tb functionauthoring.Table) error {
-	if err := b.host.InstallOperation(c, tb.Definition(), tb.Version); err != nil {
-		return err
-	}
-	b.tables[tb.Name] = tb
 	return nil
 }
 
@@ -103,7 +94,7 @@ func (b *Build) installTables() error {
 			return fmt.Errorf("decision table %s has a malformed publication", record.Name)
 		}
 		tb.Versions = record.Versions
-		if err := b.installTable(platform.Caller{Replaying: true}, tb); err != nil {
+		if err := b.functions.InstallTable(platform.Caller{Replaying: true}, tb); err != nil {
 			return err
 		}
 	}
@@ -115,21 +106,4 @@ func (b *Build) checkTable(tb functionauthoring.Table, engines ...platform.RuleE
 		return err
 	}
 	return functionauthoring.CheckTableShape(tb, b.conditionLookup, b.checkRuleCollections, engines...)
-}
-
-func (b *Build) Compute(_ context.Context, name string, input json.RawMessage) (json.RawMessage, error) {
-	tb, ok := b.tables[name]
-	if !ok {
-		return nil, fmt.Errorf("the builder has no native operation %s", name)
-	}
-	var values map[string]any
-	if err := json.Unmarshal(input, &values); err != nil {
-		return nil, fmt.Errorf("the input is not an object")
-	}
-	plan, err := tb.RulePlan()
-	if err != nil {
-		return nil, err
-	}
-	legacy := len(tb.Rows) > 0 && len(tb.Rows[0].Expressions) == 0
-	return plan.Decide(functionauthoring.TableInput(plan.Reads, legacy, values), func(string) (platform.EntityInfo, bool) { return platform.EntityInfo{}, false })
 }

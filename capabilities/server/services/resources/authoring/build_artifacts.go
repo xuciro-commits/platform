@@ -261,7 +261,7 @@ func (b *Build) ResolvePinned(ref platform.AssetRef, version string, contentVers
 		return b.agent.Resolve(ref, version)
 	}
 	if ref.Kind == platform.AssetCompute {
-		return b.OperationReleaseAsset(ref.Name, version)
+		return b.functions.OperationReleaseAsset(ref.Name, version)
 	}
 	assets, err := b.ReleaseAssets()
 	if err != nil {

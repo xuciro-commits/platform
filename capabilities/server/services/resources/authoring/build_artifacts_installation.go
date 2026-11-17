@@ -180,7 +180,7 @@ func (b *Build) declarationReleaseDraft(asset platform.ReleaseAsset) (string, an
 			table.State, table.Version = "draft", 0
 			return functionauthoring.TableType, table, err
 		}
-		rows, err := b.codeInventory()
+		rows, err := b.functions.CodeInventory()
 		if err != nil {
 			return "", nil, err
 		}

@@ -1,6 +1,7 @@
 package build
 
 import (
+	"context"
 	"encoding/json"
 
 	"platformserver/platform"
@@ -30,4 +31,8 @@ func (b *Build) InstallFunctionAsset(asset platform.ReleaseAsset) error {
 
 func (b *Build) TrainingCandidates(c platform.Caller, event platform.Event, images map[string]json.RawMessage) []platform.AITrainingCandidate {
 	return b.functions.TrainingCandidates(c, event, images)
+}
+
+func (b *Build) Compute(ctx context.Context, name string, input json.RawMessage) (json.RawMessage, error) {
+	return b.functions.Compute(ctx, name, input)
 }
