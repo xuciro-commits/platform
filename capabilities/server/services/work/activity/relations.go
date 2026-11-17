@@ -157,6 +157,10 @@ func (r *Relations) sees(c platform.Caller, entity string) bool {
 
 func (r *Relations) AttachRelations(h platform.RelationsHost) { r.host = h }
 
+func (r *Relations) AttachOwner(bindings platform.OwnerBindings) {
+	r.AttachRelations(bindings.Relations)
+}
+
 func (r *Relations) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *platform.Error) {
 	switch s.GetSchema().GetName() {
 	case SchemaComment, SchemaFollow, SchemaUnfollow:

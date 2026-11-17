@@ -123,6 +123,8 @@ func (d *Console) AttachConsole(h platform.ConsoleHost) {
 	d.ConsolePolicies.Attach(h)
 }
 
+func (d *Console) AttachOwner(bindings platform.OwnerBindings) { d.AttachConsole(bindings.Console) }
+
 func (d *Console) MemberCount() int { d.mu.Lock(); defer d.mu.Unlock(); return len(d.members) }
 
 func (d *Console) NewSimulationIdentity(tenant string, members []platform.Member) platform.App {

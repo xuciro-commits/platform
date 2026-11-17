@@ -37,6 +37,10 @@ type Knowledge struct {
 
 func (k *Knowledge) AttachKnowledge(h platform.KnowledgeHost) { k.host = h }
 
+func (k *Knowledge) AttachOwner(bindings platform.OwnerBindings) {
+	k.AttachKnowledge(bindings.Knowledge)
+}
+
 func New(tenant string, authorities platform.Authorities) *Knowledge {
 	k := &Knowledge{}
 	es := knowledgeEntities()

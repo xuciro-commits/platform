@@ -39,6 +39,8 @@ type Agents struct {
 
 func (a *Agents) AttachAgent(h platform.AgentHost) { a.host = h }
 
+func (a *Agents) AttachOwner(bindings platform.OwnerBindings) { a.AttachAgent(bindings.Agent) }
+
 func New(tenant string, authorities platform.Authorities) *Agents {
 	var actions []platform.Action
 	for _, e := range agentEntities() {

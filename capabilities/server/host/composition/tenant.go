@@ -26,7 +26,7 @@ import (
 )
 
 func NewTenantWithCapabilities(id string, services platform.RuntimeCapabilities, seats ...platform.Seat) (*platformserver.Tenant, error) {
-	services.BindOwner = bindOwner
+	services.BindOwner = platform.BindOwner
 	services.NewAgentEvaluator = agentevaluation.NewAgentEvaluator
 	services.NewTransactionExecutor = actions.NewRuntime
 	return platformserver.NewTenantWithCapabilities(id, services, BuiltinApps(id, seats...)...)

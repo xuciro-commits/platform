@@ -61,7 +61,7 @@ type Flows struct {
 
 var _ platform.ContinuousFlowOwner = (*Flows)(nil)
 
-var _ platform.AttachedFlow = (*Flows)(nil)
+var _ platform.OwnerAttacher = (*Flows)(nil)
 
 func (f *Flows) version(c platform.Caller, flow string) (*flowDef, *platform.Error) {
 	if c.Replaying {
@@ -84,6 +84,8 @@ func (f *Flows) version(c platform.Caller, flow string) (*flowDef, *platform.Err
 }
 
 func (f *Flows) AttachFlow(h platform.FlowHost) { f.host = h }
+
+func (f *Flows) AttachOwner(bindings platform.OwnerBindings) { f.AttachFlow(bindings.Flow) }
 
 func New(tenant string, authorities platform.Authorities, resolver publication.Resolver) *Flows {
 	admin := []string{Admin}

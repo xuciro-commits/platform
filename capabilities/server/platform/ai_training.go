@@ -58,8 +58,6 @@ type AITrainingHost interface {
 	TrainingReadable(Member, AITrainingCandidate, time.Time) string
 }
 
-type AttachedAITraining interface{ AttachAITraining(AITrainingHost) }
-
 type AITrainingReport struct {
 	Policies   []AITrainingPolicy    `json:"policies"`
 	Candidates []AITrainingCandidate `json:"candidates"`

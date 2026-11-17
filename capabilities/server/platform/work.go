@@ -43,8 +43,6 @@ type WorkHost interface {
 	Seen(Caller, ...string)
 }
 
-type AttachedWork interface{ AttachWork(WorkHost) }
-
 type Tasks interface {
 	Assign(c Caller, r *pb.ChangeRecord, a Assignment) *Error
 	Close(c Caller, r *pb.ChangeRecord, id string)

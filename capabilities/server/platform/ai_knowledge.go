@@ -30,8 +30,6 @@ type Glossary interface {
 	TermsFor(declaration string) []string
 }
 
-type AttachedKnowledge interface{ AttachKnowledge(KnowledgeHost) }
-
 type Passage struct {
 	Document string  `json:"document"`
 	Title    string  `json:"title"`

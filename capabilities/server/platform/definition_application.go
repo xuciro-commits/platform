@@ -66,8 +66,6 @@ type ModelPageHost interface {
 	ModelQueryBinding(AssetRef) (AssetBinding, bool)
 }
 
-type AttachedBuild interface{ AttachBuild(BuildHost) }
-
 type ApplicationAIEvaluation struct {
 	ID        string  `json:"id"`
 	Candidate string  `json:"candidate"`

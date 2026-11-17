@@ -25,6 +25,8 @@ const (
 
 func (a *AI) AttachAITraining(h platform.AITrainingHost) { a.trainingHost = h }
 
+func (a *AI) AttachOwner(bindings platform.OwnerBindings) { a.AttachAITraining(bindings.Training) }
+
 func trainingActions() []platform.Action {
 	admin := []string{Admin}
 	return []platform.Action{

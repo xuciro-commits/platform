@@ -56,8 +56,6 @@ type FileHost interface {
 	Stored(tenant, hash string) bool
 }
 
-type AttachedFiles interface{ AttachFiles(FileHost) }
-
 type FileStore interface {
 	Put(ctx context.Context, key string, data []byte, contentType string) error
 	Get(ctx context.Context, key string) (io.ReadCloser, int64, error)

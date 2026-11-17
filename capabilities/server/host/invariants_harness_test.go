@@ -39,33 +39,6 @@ type invariantTenant struct {
 	entries []Entry
 }
 
-func invariantBindOwner(app platform.App, roles platform.OwnerBindings) {
-	if owner, ok := app.(platform.AttachedAgent); ok {
-		owner.AttachAgent(roles.Agent)
-	}
-	if owner, ok := app.(platform.ConsoleAttached); ok {
-		owner.AttachConsole(roles.Console)
-	}
-	if owner, ok := app.(platform.AttachedBuild); ok {
-		owner.AttachBuild(roles.Build)
-	}
-	if owner, ok := app.(platform.AttachedFiles); ok {
-		owner.AttachFiles(roles.Files)
-	}
-	if owner, ok := app.(platform.AttachedKnowledge); ok {
-		owner.AttachKnowledge(roles.Knowledge)
-	}
-	if owner, ok := app.(platform.AttachedRelations); ok {
-		owner.AttachRelations(roles.Relations)
-	}
-	if owner, ok := app.(platform.AttachedFlow); ok {
-		owner.AttachFlow(roles.Flow)
-	}
-	if owner, ok := app.(platform.AttachedWork); ok {
-		owner.AttachWork(roles.Work)
-	}
-}
-
 func newInvariantTenant(tb testing.TB, id string, seats ...platform.Seat) *invariantTenant {
 	tb.Helper()
 	return newInvariantTenantWithApps(tb, id, nil, seats...)
@@ -94,7 +67,7 @@ func seedInvariantProject(tb testing.TB, live *invariantTenant) {
 func newInvariantTenantSetup(tb testing.TB, id string, apps []platform.App, seats ...platform.Seat) *invariantTenant {
 	tb.Helper()
 	services := platform.DefaultRuntimeCapabilities(security.Standard{})
-	services.BindOwner = invariantBindOwner
+	services.BindOwner = platform.BindOwner
 	services.NewAgentEvaluator = agentevaluation.NewAgentEvaluator
 	services.NewTransactionExecutor = actions.NewRuntime
 	seat := platform.Seat{Subjects: []string{"builder"}, Member: platform.Member{ID: "builder", Roles: map[string]string{build.ID: build.Builder}}}

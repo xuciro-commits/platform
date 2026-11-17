@@ -426,8 +426,6 @@ type ConsoleHost interface {
 	ProductVersions() []ProductVersionView
 }
 
-type ConsoleAttached interface{ AttachConsole(ConsoleHost) }
-
 type Listener interface {
 	Interested(names []string, e Event) bool
 	Listen(c Caller, e Event, names []string, now time.Time) *Error

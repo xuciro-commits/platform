@@ -58,9 +58,11 @@ type Work struct {
 }
 
 var _ platform.ApprovalOwner = (*Work)(nil)
-var _ platform.AttachedWork = (*Work)(nil)
+var _ platform.OwnerAttacher = (*Work)(nil)
 
 func (w *Work) AttachWork(h platform.WorkHost) { w.host = h }
+
+func (w *Work) AttachOwner(bindings platform.OwnerBindings) { w.AttachWork(bindings.Work) }
 
 func (w *Work) RequestApproval(c platform.Caller, held *pb.Submission, now time.Time) (*pb.ChangeRecord, *platform.Error) {
 	if c.Automation || c.Tenant == "" || held.GetTenantId() != c.Tenant || held.GetPrincipalId() != c.ID || held.GetAuthority() != c.App {

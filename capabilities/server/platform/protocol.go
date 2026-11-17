@@ -610,8 +610,6 @@ type RelationsHost interface {
 	Readable(m Member, ref string, now time.Time) bool
 }
 
-type AttachedRelations interface{ AttachRelations(RelationsHost) }
-
 const (
 	RelationsApp = "relations"
 	CommentType  = "platform.comment"

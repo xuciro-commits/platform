@@ -260,8 +260,6 @@ type FlowHost interface {
 	Submit(Caller, *pb.Submission, time.Time) (*pb.ChangeRecord, *Error)
 }
 
-type AttachedFlow interface{ AttachFlow(FlowHost) }
-
 type FlowBinding struct {
 	Existing     bool
 	Applications []AssetBinding

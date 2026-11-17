@@ -112,7 +112,7 @@ func newMonitoringTenant(tb testing.TB) *invariantTenant {
 	tb.Helper()
 	id := "monitoring-invariant"
 	services := platform.DefaultRuntimeCapabilities(security.Standard{})
-	services.BindOwner = invariantBindOwner
+	services.BindOwner = platform.BindOwner
 	services.NewAgentEvaluator = agentevaluation.NewAgentEvaluator
 	services.NewTransactionExecutor = actions.NewRuntime
 	console := controlowner.NewConsole(id, actions.NewAuthority, func(id string) controlowner.Owners {

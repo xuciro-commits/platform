@@ -117,8 +117,6 @@ type AgentHost interface {
 	ReplayAgentUsage(AIUsage)
 }
 
-type AttachedAgent interface{ AttachAgent(AgentHost) }
-
 type AgentEvaluationDefinitions interface {
 	AgentEvaluationApp(candidate, agent string) (App, string, error)
 }

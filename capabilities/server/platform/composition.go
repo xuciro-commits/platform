@@ -176,6 +176,16 @@ type OwnerBindings struct {
 	Work      WorkHost
 }
 
+type OwnerAttacher interface {
+	AttachOwner(OwnerBindings)
+}
+
+func BindOwner(app App, bindings OwnerBindings) {
+	if owner, ok := app.(OwnerAttacher); ok {
+		owner.AttachOwner(bindings)
+	}
+}
+
 type RuntimeCapabilities struct {
 	NewTransactionExecutor func(BusinessRuntimeContext) TransactionExecutor
 	NewAgentEvaluator      func() AgentEvaluator

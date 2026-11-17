@@ -33,6 +33,8 @@ type Files struct {
 
 func (f *Files) AttachFiles(h platform.FileHost) { f.host = h }
 
+func (f *Files) AttachOwner(bindings platform.OwnerBindings) { f.AttachFiles(bindings.Files) }
+
 func New(tenant string, authorities platform.Authorities) *Files {
 	any := []string{platform.AnyMember}
 	return &Files{ledger: authorities(tenant, ID, platform.NewCatalog(
