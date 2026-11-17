@@ -206,7 +206,12 @@ func (k *Index) Embed(ctx Context, now time.Time) {
 	k.mu.Unlock()
 	slices.Sort(hashes)
 	var missing []string
-	if search, ok := ctx.Store.(persistence.VectorIndex); ok {
+	var search persistence.VectorIndex
+	switch value := ctx.Store.(type) {
+	case persistence.VectorIndex:
+		search = value
+	}
+	if search != nil {
 		if err := k.syncVectorSources(ctx, search, space); err != nil {
 			return
 		}

@@ -29,7 +29,8 @@ func (w TrainingWorld) Evidence(event platform.Event) platform.AITrainingEvidenc
 		}
 	}
 	for _, app := range w.Live() {
-		if owner, ok := app.(platform.TrainingEvidenceOwner); ok {
+		switch owner := app.(type) {
+		case platform.TrainingEvidenceOwner:
 			out.Candidates = append(out.Candidates, owner.TrainingCandidates(w.Caller(app.Manifest().ID), event, images)...)
 		}
 	}

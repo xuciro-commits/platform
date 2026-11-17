@@ -7,8 +7,11 @@ import (
 )
 
 func (a *Agents) evaluationDefinition(candidate, agent string) (*platform.CompiledAgent, string, error) {
-	owner, ok := a.host.(platform.AgentEvaluationDefinitions)
-	if !ok {
+	var owner platform.AgentEvaluationDefinitions
+	switch value := a.host.(type) {
+	case platform.AgentEvaluationDefinitions:
+		owner = value
+	default:
 		return nil, "", fmt.Errorf("candidate agent declarations are unavailable")
 	}
 	app, digest, err := owner.AgentEvaluationApp(candidate, agent)

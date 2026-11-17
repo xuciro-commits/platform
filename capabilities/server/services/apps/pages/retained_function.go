@@ -11,8 +11,11 @@ import (
 )
 
 func RetainedFunction(app platform.App, binding platform.AssetBinding) (platform.AIFunction, bool) {
-	owner, ok := app.(platform.FunctionDefinitions)
-	if !ok {
+	var owner platform.FunctionDefinitions
+	switch value := app.(type) {
+	case platform.FunctionDefinitions:
+		owner = value
+	default:
 		return platform.AIFunction{}, false
 	}
 	text, ok := strings.CutPrefix(binding.SourceVersion, app.Manifest().Version+".function-")

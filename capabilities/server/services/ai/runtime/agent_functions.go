@@ -148,7 +148,8 @@ func FunctionDefinition(app platform.App, name string, version int) (platform.AI
 	if app == nil {
 		return platform.AIFunction{}, 0, false
 	}
-	if owner, ok := app.(platform.FunctionDefinitions); ok {
+	switch owner := app.(type) {
+	case platform.FunctionDefinitions:
 		return owner.FunctionDefinition(name, version)
 	}
 	if version != 0 {
