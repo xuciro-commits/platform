@@ -106,6 +106,8 @@ type AgentHost interface {
 	ExternalAgentMembers() []Member
 	AgentDecisionMembers() []string
 	AgentUsage() []AIUsage
+	DynamicAgents() []DynamicAgentDefinitions
+	DynamicAgent(string) (DynamicAgentDefinitions, bool)
 	WithAgentRead(func(AgentEvaluationRuntime) *Error) *Error
 	ResolveAgentModel(string, ModelOptions, string) (AIModelBinding, AIProvider, *Error)
 	AgentModel(string) (AIModel, AIProvider, *Error)

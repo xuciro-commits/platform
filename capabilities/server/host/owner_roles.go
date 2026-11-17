@@ -57,16 +57,17 @@ type tenantPorts struct {
 }
 
 type ownerSet struct {
-	apps       []platform.App
-	ids        []string
-	appIndex   map[string]int
-	owner      map[string]string
-	states     map[string]platform.AcceptedStateApp
-	inputs     map[string]platform.AcceptedInputApp
-	assets     map[string]platform.AssetLifecycleOwner
-	answerers  map[string]platform.Answerer
-	builders   map[string]build.ConstructionDrafts
-	operations map[string]platform.OperationDefinitions
+	apps          []platform.App
+	ids           []string
+	appIndex      map[string]int
+	owner         map[string]string
+	states        map[string]platform.AcceptedStateApp
+	inputs        map[string]platform.AcceptedInputApp
+	assets        map[string]platform.AssetLifecycleOwner
+	answerers     map[string]platform.Answerer
+	builders      map[string]build.ConstructionDrafts
+	operations    map[string]platform.OperationDefinitions
+	dynamicAgents map[string]platform.DynamicAgentDefinitions
 }
 
 func newOwnerSet(apps []platform.App) (ownerSet, error) {
@@ -91,6 +92,7 @@ func (s *ownerSet) place(apps []platform.App) {
 	s.answerers = runtimekernel.OwnersOf[platform.Answerer](s.ids, apps)
 	s.builders = runtimekernel.OwnersOf[build.ConstructionDrafts](s.ids, apps)
 	s.operations = runtimekernel.OwnersOf[platform.OperationDefinitions](s.ids, apps)
+	s.dynamicAgents = runtimekernel.OwnersOf[platform.DynamicAgentDefinitions](s.ids, apps)
 }
 
 func (s ownerSet) with(apps []platform.App) ownerSet {
@@ -105,6 +107,16 @@ func (s ownerSet) App(id string) platform.App {
 		return nil
 	}
 	return s.apps[i]
+}
+
+func (s ownerSet) dynamicAgentList() []platform.DynamicAgentDefinitions {
+	var out []platform.DynamicAgentDefinitions
+	for _, id := range s.ids {
+		if owner := s.dynamicAgents[id]; owner != nil {
+			out = append(out, owner)
+		}
+	}
+	return out
 }
 
 func (s ownerSet) assetOwners(active func(string) bool) []platform.AssetLifecycleOwner {

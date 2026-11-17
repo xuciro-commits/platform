@@ -153,10 +153,9 @@ func (a *Agents) each(fn func(id string, d *platform.CompiledAgent)) {
 
 func (a *Agents) refresh() {
 	var stamps []string
-	for _, app := range a.host.Apps() {
-		if owner, ok := app.(platform.DynamicAgentDefinitions); ok {
-			stamps = append(stamps, app.Manifest().ID+":"+owner.AgentStamp())
-		}
+	dynamic := a.host.DynamicAgents()
+	for _, owner := range dynamic {
+		stamps = append(stamps, owner.Manifest().ID+":"+owner.AgentStamp())
 	}
 	slices.Sort(stamps)
 	stamp := strings.Join(stamps, "\n")
@@ -164,15 +163,13 @@ func (a *Agents) refresh() {
 		return
 	}
 	for id, d := range a.defs {
-		if _, ok := a.host.App(d.App).(platform.DynamicAgentDefinitions); ok {
+		if _, ok := a.host.DynamicAgent(d.App); ok {
 			delete(a.defs, id)
 		}
 	}
 	a.buildStamp = stamp
-	for _, app := range a.host.Apps() {
-		if _, ok := app.(platform.DynamicAgentDefinitions); ok {
-			_ = a.DeclareAgentApp(app)
-		}
+	for _, owner := range dynamic {
+		_ = a.DeclareAgentApp(owner)
 	}
 }
 
@@ -247,7 +244,7 @@ func (a *Agents) definitionVersion(d *platform.CompiledAgent) string {
 	if d.Model != "" || d.ModelOptions != (platform.ModelOptions{}) {
 		parts = append(parts, d.Model, d.ModelOptions)
 	}
-	if b, ok := a.host.App(d.App).(platform.DynamicAgentDefinitions); ok {
+	if b, ok := a.host.DynamicAgent(d.App); ok {
 		parts = append(parts, b.AgentVersion(d.Name))
 	}
 	if len(d.Checkpoints) > 0 {
@@ -266,7 +263,7 @@ func (a *Agents) changedDefinition(run platform.AgentRunRecord, d *platform.Comp
 	if d == nil {
 		return false
 	}
-	_, dynamic := a.host.App(d.App).(platform.DynamicAgentDefinitions)
+	_, dynamic := a.host.DynamicAgent(d.App)
 	return dynamic && run.DefinitionVersion != "" && run.DefinitionVersion != a.definitionVersion(d)
 }
 
