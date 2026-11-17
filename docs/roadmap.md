@@ -40,21 +40,39 @@
   - `OperationDefinitions` 在宿主装配时登记；其他应用的声明操作仍从 Manifest 读取，
     分叉时重新绑定，历史版本和原有 authority 行为不变。
   - `host.Tenant` 没有单独的代码函数或决策表状态字段；只按实际消除的字段与探测下调基线。
-  - 将最终模式写入 [backend](backend.md)；把其余家族拆成可执行条目，写明源文件、归属与验证。
+  - 将最终模式写入 [backend](backend.md)。
 
-- [ ] U5 后续：按样板迁移其余资源家族，消除 Build 与宿主中对应的状态、探测和依赖例外。
-  - 对象、类型、动作类型、蓝图与事务归本体：从 `build_objects.go`、`build_ontology.go`、
-    `build_action_types.go`、`build_actions.go`、`build_blueprints.go`、`build_transactions.go` 及相关校验切分。
-  - 属性、值类型、关系、对象组和接口从 `build_kinds.go` 及各自的 `build_*.go` 移到对应本体拥有者；
-    查询与共享规则先核对唯一归属，不按文件名整文件盲搬。
-  - 智能体和评估的专有实现归 `services/ai`；核对 `build_agent_binding.go`、`build_evaluations.go` 等剩余调用。
-  - 数据接入与集成归 `services/data`；核对 `build_data_owner.go`、`build_writeback_answers.go` 和集成文件，
-    其中确认、调度、协议或动作执行按实际职责分给唯一拥有者。
-  - 自动化与应用的创作分别归 `services/automate`、`services/apps`；分支归 `services/resources/merge`。
-  - `build_release*`、`build_artifacts*`、`build_publications*` 和产品版本按职责归 DevOps 与发布编排；
-    资源服务保留 RID、项目、文件夹、工作状态、分支、提案和跨类型编排。
-  - 每迁一类同步处理关联的宿主状态、可选接口探测、装配、HTTP 调用方与依赖例外；
-    运行该类的创建、编辑、发布、安装、拒绝、历史版本、分叉和重放检查。
+U5.1 之后按以下资源家族推进。文件路径相对 `capabilities/server/services/resources/authoring/`；
+每批同步处理宿主状态、能力登记、装配、HTTP 调用方和依赖例外，运行该类的创建、编辑、发布、安装、拒绝、
+历史版本、分叉和重放检查。跨类型的 RID、项目、文件夹、工作状态、分支、提案和编排留在资源服务。
+
+- [ ] U5.5 对象与动作类型：从 `build_objects.go`、`build_ontology.go`、`build_action_types.go`、
+  `build_actions.go` 及 `build_constraints.go` 切到 `services/ontology`；动作执行留在 `services/actions`。
+  保留对象、动作和生成页面的联合发布、显式页面覆盖、引用解析及归档拒绝。
+- [ ] U5.6 事务与蓝图：拆解 `build_transactions.go`、`build_blueprints.go` 的领域定义与调用方；
+  声明和校验归 `services/ontology`，事务执行归 `services/actions`，跨类型草稿闭包留在资源编排。
+  文件内的 AI 提案、协议及其他描述分别按拥有者迁移，保持事务输入、拒绝顺序和接受结果。
+- [ ] U5.7 属性、值类型、接口、对象组与关系：从 `build_properties.go`、`build_values.go`、
+  `build_interface.go`、`build_object_type_groups.go`、`build_links.go` 及 `build_kinds.go` 归 `services/ontology`。
+  `build_kinds.go` 还被查询使用；先拆出唯一的共享版本族实现，关系数据迁移由对象服务执行。
+- [ ] U5.8 查询资源：从 `build_queries.go` 和 `build_kinds.go` 迁到 `services/objects`，复用对象集和本体检查。
+  保留接口查询绑定、依赖、源版本、授权及历史读取，不复制查询或表达式求值器。
+- [ ] U5.9 AI 函数：清理 `build_functions.go`、`build_function_adapter.go`、`build_automation_adapter.go` 与
+  `build_owner.go` 中的专有创作和运行调用，归 `services/functions/authoring`；保留共享测试记录的类型引用。
+  验证草稿、版本化调用、评估引用、提案审阅和重放。
+- [ ] U5.10 智能体与评估：从 `build_agent_binding.go`、`build_evaluations.go` 的剩余专有部分迁到 `services/ai`。
+  评估集与测试计划继续使用 DevOps 的同一记录和版本族；分叉、模拟、联合候选和安装不得捕获源租户。
+- [ ] U5.11 数据接入与集成：从 `build_data_owner.go`、`build_writeback_answers.go` 和 `build_integrations_*.go`
+  切出数据实现到 `services/data`；确认、设备派发、协议和动作执行先按职责确定唯一拥有者。
+  保留外部调用的接受、结算和补偿顺序，以及连接、同步、回写的授权与血缘。
+- [ ] U5.12 自动化与应用：`build_automation*.go` 的专有创作归 `services/automate/authoring`，
+  `build_app_authoring*.go` 的应用创作归 `services/apps/authoring`；`application_ai.go` 按应用与 AI 的职责切分。
+  保留已发布流程、页面及应用的运行、覆盖顺序、版本绑定与重装行为。
+- [ ] U5.13 分支：将 `build_branches.go` 的记录、编辑、检查、提案和合并归 `services/resources/merge`，
+  复用现有分支暂存及合并路径；保留 main 隔离、审批和单条接受结果。
+- [ ] U5.14 产品版本与发布：按职责处理 `build_products.go`、`build_versions.go`、`build_release*.go`、
+  `build_artifacts*.go`、`build_publications*.go`，产品与版本归 `services/devops`，通用发布归 `services/resources/publication`。
+  资源服务保留跨类型编排；复用 U4 的发布钩子，保持错误次序、安装计划及历史映像。
 
 ## U7：platform 只留 SDK 契约
 
