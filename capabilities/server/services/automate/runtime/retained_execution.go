@@ -399,6 +399,7 @@ func conflictOf(err error) *platform.Error {
 type RetainedOwners struct {
 	Apps    []platform.App
 	Assets  []platform.ReleaseAsset
+	Builder string
 	Current func() ([]platform.ReleaseAsset, error)
 	Native  func(owner platform.App, name string, version int) (platform.ReleaseAsset, error)
 	Claim   func(i int, key string)
@@ -412,8 +413,7 @@ func (r RetainedOwners) Select() ([]platform.App, map[string]platform.EntityInfo
 		if len(selected) == 0 {
 			continue
 		}
-		compiler, ok := owner.(platform.ReleaseExecutionOwner)
-		if !ok {
+		if owner.Manifest().ID != r.Builder {
 			current, err := r.Current()
 			if err != nil {
 				return nil, nil, err
@@ -428,6 +428,7 @@ func (r RetainedOwners) Select() ([]platform.App, map[string]platform.EntityInfo
 			}
 			continue
 		}
+		compiler := owner.(platform.ReleaseExecutionOwner)
 		bound, err := compiler.ForkReleaseExecution(selected)
 		if err != nil || bound == nil || bound.Authority() != owner.Authority() {
 			return nil, nil, fmt.Errorf("retained owner %s cannot select its original execution: %v", owner.Manifest().ID, err)

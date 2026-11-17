@@ -14,6 +14,7 @@ import (
 	runtimekernel "platformserver/kernel"
 	"platformserver/kernel/records"
 	"platformserver/platform"
+	"platformserver/services/resources/authoring"
 )
 
 type flowExecution struct {
@@ -51,6 +52,7 @@ func (h hostView) retainedExecution(c platform.Caller, release string, assets []
 	}
 	view := h.installationDraft()
 	apps, shapes, err := automation.RetainedOwners{Apps: h.t.apps, Assets: assets,
+		Builder: build.ID,
 		Current: func() ([]platform.ReleaseAsset, error) { return h.t.releaseAssetsLocked(nil, false) },
 		Native:  h.t.nativeFlowAsset,
 		Claim:   func(i int, key string) { view.owner[key] = view.ids[i] },

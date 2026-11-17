@@ -32,7 +32,7 @@ func (a evaluationApp) Manifest() platform.Manifest {
 type CandidateEvaluation struct {
 	Builder   string
 	Candidate func(id string) (platform.ReleaseCandidate, error)
-	Owner     func(app string) (platform.ReleaseExecutionOwner, bool)
+	Owner     platform.ReleaseExecutionOwner
 }
 
 func (c CandidateEvaluation) App(candidate, agent string) (platform.App, string, error) {
@@ -49,11 +49,10 @@ func (c CandidateEvaluation) App(candidate, agent string) (platform.App, string,
 	if i < 0 {
 		return nil, "", fmt.Errorf("the saved candidate does not contain this agent")
 	}
-	compiler, ok := c.Owner(owner)
-	if !ok {
+	if c.Owner == nil {
 		return nil, "", fmt.Errorf("the agent's original execution owner is unavailable")
 	}
-	bound, err := compiler.ForkReleaseExecution(saved.Assets)
+	bound, err := c.Owner.ForkReleaseExecution(saved.Assets)
 	if err != nil {
 		return nil, "", err
 	}

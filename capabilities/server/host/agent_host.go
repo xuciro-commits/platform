@@ -205,10 +205,7 @@ func (h hostView) AgentEvaluationApp(candidate, agent string) (platform.App, str
 
 func (t *Tenant) candidateEvaluation() agentowner.CandidateEvaluation {
 	return agentowner.CandidateEvaluation{Builder: build.ID, Candidate: t.releases.Candidate,
-		Owner: func(app string) (platform.ReleaseExecutionOwner, bool) {
-			owner, ok := t.App(app).(platform.ReleaseExecutionOwner)
-			return owner, ok
-		}}
+		Owner: t.App(build.ID).(platform.ReleaseExecutionOwner)}
 }
 
 func (t *Tenant) evaluateReleaseAgentLocked(m platform.Member, request releaseowner.ReleaseEvaluationRequest, now time.Time) (string, error) {

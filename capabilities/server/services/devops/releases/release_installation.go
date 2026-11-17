@@ -272,36 +272,35 @@ func ReviewExtensions(candidate platform.ReleaseCandidate, apps []platform.App, 
 
 func AssetShapes(apps []platform.App, available []platform.ReleaseAsset) (map[string]platform.EntityInfo, error) {
 	shapes := map[string]platform.EntityInfo{}
-	for _, owner := range apps {
-		compiler, ok := owner.(platform.ReleaseExecutionOwner)
-		if !ok {
+	i := slices.IndexFunc(apps, func(app platform.App) bool { return app.Manifest().ID == build.ID })
+	if i < 0 {
+		return shapes, nil
+	}
+	owner := apps[i]
+	assets := []platform.ReleaseAsset{}
+	for _, asset := range available {
+		if asset.Ref.App == build.ID && asset.Ref.Kind == platform.AssetObject {
+			assets = append(assets, asset)
+		}
+	}
+	if len(assets) == 0 {
+		return shapes, nil
+	}
+	bound, err := owner.(platform.ReleaseExecutionOwner).ForkReleaseExecution(assets)
+	if err != nil {
+		return nil, err
+	}
+	for _, entity := range bound.Manifest().Entities {
+		if !slices.ContainsFunc(assets, func(a platform.ReleaseAsset) bool {
+			return a.Ref.Kind == platform.AssetObject && a.Ref.Name == entity.Type
+		}) {
 			continue
 		}
-		assets := []platform.ReleaseAsset{}
-		for _, asset := range available {
-			if asset.Ref.App == owner.Manifest().ID && asset.Ref.Kind == platform.AssetObject {
-				assets = append(assets, asset)
-			}
-		}
-		if len(assets) == 0 {
-			continue
-		}
-		bound, err := compiler.ForkReleaseExecution(assets)
+		info, err := records.Describe(build.ID, entity, func(reflect.Type) string { return "" })
 		if err != nil {
 			return nil, err
 		}
-		for _, entity := range bound.Manifest().Entities {
-			if !slices.ContainsFunc(assets, func(a platform.ReleaseAsset) bool {
-				return a.Ref.Kind == platform.AssetObject && a.Ref.Name == entity.Type
-			}) {
-				continue
-			}
-			info, err := records.Describe(owner.Manifest().ID, entity, func(reflect.Type) string { return "" })
-			if err != nil {
-				return nil, err
-			}
-			shapes[info.Type] = info
-		}
+		shapes[info.Type] = info
 	}
 	return shapes, nil
 }
