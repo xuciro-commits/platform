@@ -46,12 +46,10 @@ var interfaceKind = resourceKind[ontology.InterfaceRecord, ontology.InterfaceDef
 	validate: func(_ *Build, i ontology.InterfaceRecord) (ontology.InterfaceRecord, error) {
 		return i, i.Definition().Check()
 	},
-	identity:   func(a, b ontology.InterfaceRecord) bool { return a.Name == b.Name },
-	stable:     func(a, b ontology.InterfaceRecord) bool { return a.KeepsPublishedFields(b) },
-	guarantees: func(a, b ontology.InterfaceRecord) bool { return a.KeepsPublishedFields(b) },
-	fromDeclaration: func(i ontology.InterfaceDefinition) ontology.InterfaceRecord {
-		return ontology.InterfaceRecord{Name: i.Name, Title: i.Title, Description: i.Description, Fields: slices.Clone(i.Fields)}
-	},
+	identity:        func(a, b ontology.InterfaceRecord) bool { return a.Name == b.Name },
+	stable:          func(a, b ontology.InterfaceRecord) bool { return a.KeepsPublishedFields(b) },
+	guarantees:      func(a, b ontology.InterfaceRecord) bool { return a.KeepsPublishedFields(b) },
+	fromDeclaration: ontology.InterfaceRecordFromDeclaration,
 	install: func(h platform.BuildHost, c platform.Caller, i ontology.InterfaceDefinition, version int) error {
 		return h.InstallInterface(c, platform.Interface(i), version)
 	},

@@ -67,6 +67,10 @@ func published[T any](definition T) string {
 		value.Published = ""
 		value.Versions = nil
 		definition = any(value).(T)
+	case ontology.InterfaceRecord:
+		value.Published = ""
+		value.Versions = nil
+		definition = any(value).(T)
 	case ontology.ObjectTypeGroup:
 		value.Published = ""
 		value.Versions = nil

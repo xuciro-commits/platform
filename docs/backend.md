@@ -55,6 +55,8 @@
   资源服务提供保留版本、集成绑定和跨类型草稿上下文。
 - 发布声明、agent/protocol 描述归 `services/resources/publication`，AI 提案消费归
   `services/functions/authoring`；蓝图补全与测试根草稿仍由资源服务编排。
+- 属性、值类型、接口、对象组与关系的声明、转换和字段绑定校验归 `services/ontology`；
+  通用版本族归 `services/resources/publication`，关系数据迁移由对象服务执行。
 - 产品包里的行业逻辑不进任何 Go 包。
 
 ## 并发

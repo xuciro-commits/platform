@@ -7,7 +7,6 @@ import (
 
 	"platformserver/platform"
 	ontology "platformserver/services/ontology"
-	"slices"
 	"strconv"
 	"time"
 )
@@ -57,9 +56,9 @@ var linkKind = resourceKind[ontology.LinkType, platform.LinkType]{
 	stable: func(old, next ontology.LinkType) bool {
 		return old.Definition().Storage != "reference" || old.Required == next.Required
 	},
-	guarantees:      linkKeepsGuarantees,
+	guarantees:      ontology.LinkTypeKeepsGuarantees,
 	adopt:           func(record *ontology.LinkType, frozen ontology.LinkType) { record.Required = frozen.Required },
-	fromDeclaration: linkTypeFromDeclaration,
+	fromDeclaration: ontology.LinkTypeFromDeclaration,
 	contract:        func(d platform.LinkType) int { return d.Contract() },
 	admit:           func(d platform.LinkType) bool { return d.Parent.App == ID && d.Child.App == ID },
 	install: func(h platform.BuildHost, c platform.Caller, d platform.LinkType, version int) error {
@@ -91,13 +90,4 @@ func (b *Build) LinkPublication(image []byte) (platform.LinkType, error) {
 		return platform.LinkType{}, err
 	}
 	return saved.Definition(), nil
-}
-
-func linkKeepsGuarantees(old, next ontology.LinkType) bool {
-	before, after := old.Definition(), next.Definition()
-	return before.Storage == after.Storage && !(before.Required && !after.Required || before.Cardinality != "many-to-many" && after.Cardinality == "many-to-many" || before.Cardinality == "one-to-one" && after.Cardinality != "one-to-one" || before.DeletePolicy == "restrict-active" && after.DeletePolicy != "restrict-active")
-}
-
-func linkTypeFromDeclaration(l platform.LinkType) ontology.LinkType {
-	return ontology.LinkType{Name: l.Name, Title: l.Title, Description: l.Description, Parent: l.Parent.Name, Child: l.Child.Name, Via: l.Via, Forward: l.Forward, Reverse: l.Reverse, Required: l.Required, Storage: l.Storage, Roles: slices.Clone(l.Roles), Cardinality: l.Cardinality, DeletePolicy: l.DeletePolicy}
 }

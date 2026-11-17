@@ -7,6 +7,44 @@ import (
 	"platformserver/platform"
 )
 
+func CheckPropertyFields(fields []Field, app string, host platform.BuildHost) error {
+	for _, field := range fields {
+		if field.Property == nil {
+			continue
+		}
+		if host == nil || field.Property.Ref.App != app {
+			return fmt.Errorf("shared property needs its canonical tenant owner")
+		}
+		property, ok := host.ResolvePropertyType(*field.Property)
+		if !ok {
+			return fmt.Errorf("shared property version is unavailable")
+		}
+		if err := CheckPropertyField(field, property); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func CheckValueTypeFields(fields []Field, app string, host platform.BuildHost) error {
+	for _, field := range fields {
+		if field.ValueType == nil {
+			continue
+		}
+		if host == nil || field.ValueType.Ref.App != app {
+			return fmt.Errorf("value type needs its canonical tenant owner")
+		}
+		valueType, ok := host.ResolveValueType(*field.ValueType)
+		if !ok {
+			return fmt.Errorf("value type version is unavailable")
+		}
+		if err := CheckValueTypeField(field, valueType); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func CheckDataSources(o Object) error {
 	seen := map[string]bool{}
 	fields := map[string]bool{}

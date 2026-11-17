@@ -46,3 +46,12 @@ func (f LinkType) Definition() platform.LinkType {
 	}
 	return platform.LinkType{Name: f.Name, Title: f.Title, Description: f.Description, Parent: platform.AssetRef{App: AppID, Kind: platform.AssetObject, Name: f.Parent}, Child: platform.AssetRef{App: AppID, Kind: platform.AssetObject, Name: f.Child}, Via: f.Via, Forward: f.Forward, Reverse: f.Reverse, Required: f.Required, Storage: storage, Cardinality: cardinality, DeletePolicy: policy, Roles: slices.Clone(roles)}
 }
+
+func LinkTypeFromDeclaration(link platform.LinkType) LinkType {
+	return LinkType{Name: link.Name, Title: link.Title, Description: link.Description, Parent: link.Parent.Name, Child: link.Child.Name, Via: link.Via, Forward: link.Forward, Reverse: link.Reverse, Required: link.Required, Storage: link.Storage, Roles: slices.Clone(link.Roles), Cardinality: link.Cardinality, DeletePolicy: link.DeletePolicy}
+}
+
+func LinkTypeKeepsGuarantees(old, next LinkType) bool {
+	before, after := old.Definition(), next.Definition()
+	return before.Storage == after.Storage && !(before.Required && !after.Required || before.Cardinality != "many-to-many" && after.Cardinality == "many-to-many" || before.Cardinality == "one-to-one" && after.Cardinality != "one-to-one" || before.DeletePolicy == "restrict-active" && after.DeletePolicy != "restrict-active")
+}

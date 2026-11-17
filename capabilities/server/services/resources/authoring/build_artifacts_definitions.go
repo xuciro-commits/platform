@@ -10,7 +10,6 @@ import (
 	"strconv"
 	"strings"
 
-	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformserver/platform"
 	dataowner "platformserver/services/data"
 )
@@ -117,82 +116,6 @@ func definitionVersionField(value reflect.Value) (reflect.Value, bool) {
 	return reflect.Value{}, false
 }
 
-func publishRetainedDefinition[T any](c platform.Caller, record *T, limitMessage string, install func(platform.Caller, T) error) *platform.Error {
-	family := definitionFamilyOf(*record)
-	if family.Version >= 64 {
-		return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, limitMessage)
-	}
-	family.Version++
-	family.State = "published"
-	setDefinitionFamily(record, family)
-	family.Published = published(*record)
-	family.Versions = append(family.Versions, family.Published)
-	setDefinitionFamily(record, family)
-	if !c.Staging() {
-		if err := install(c, *record); err != nil {
-			return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
-		}
-	}
-	return nil
-}
-
-func definitionImage[T interface{ Definition() D }, D interface{ Check() error }](image []byte, label string, keeps func(T, T) bool) (selected T, err error) {
-	var record T
-	if err := json.Unmarshal(image, &record); err != nil {
-		return selected, err
-	}
-	family := definitionFamilyOf(record)
-	if !slices.Contains([]string{"draft", "published"}, family.State) || family.Version < 1 || family.Version > 64 || len(family.Versions) != family.Version || !slices.Contains(family.Versions, family.Published) {
-		return selected, fmt.Errorf("accepted %s has an invalid version family", label)
-	}
-	var latest T
-	for i, raw := range family.Versions {
-		f, ok := releasepub.Read[T](raw)
-		entry := definitionFamilyOf(f)
-		if !ok || entry.State != "published" || entry.ID != family.ID || entry.Version != i+1 || entry.Published != "" || len(entry.Versions) != 0 || f.Definition().Check() != nil || i > 0 && !keeps(latest, f) {
-			var zero T
-			return zero, fmt.Errorf("accepted %s has a malformed version %d", label, i+1)
-		}
-		if raw == family.Published {
-			selected = f
-		}
-		latest = f
-	}
-	return selected, nil
-}
-
-func retainedDefinition[T interface{ Definition() D }, D any](installed map[string]T, inventory func() ([]T, error), decode func([]byte) (T, error), name string, version int) (out D, ordinal int, ok bool) {
-	if record, found := installed[name]; found {
-		family := definitionFamilyOf(record)
-		if version == 0 || version == family.Version {
-			return record.Definition(), family.Version, true
-		}
-	}
-	if version == 0 {
-		return out, 0, false
-	}
-	records, err := inventory()
-	if err != nil {
-		return out, 0, false
-	}
-	for _, record := range records {
-		family := definitionFamilyOf(record)
-		if version < 1 || version > len(family.Versions) {
-			continue
-		}
-		raw, _ := json.Marshal(record)
-		latest, err := decode(raw)
-		if err != nil || definitionFamilyOf(latest).Name != name {
-			continue
-		}
-		f, found := releasepub.Read[T](family.Versions[version-1])
-		if found && definitionFamilyOf(f).Version == version {
-			return f.Definition(), version, true
-		}
-	}
-	return out, 0, false
-}
-
 func definitionDeclarations[T interface{ Definition() D }, D any](installed map[string]T) []D {
 	names := slices.Sorted(maps.Keys(installed))
 	out := make([]D, 0, len(names))
@@ -200,33 +123,6 @@ func definitionDeclarations[T interface{ Definition() D }, D any](installed map[
 		out = append(out, installed[name].Definition())
 	}
 	return out
-}
-
-func retainedDefinitionAsset[D any](resolver releasepub.Resolver, source, prefix, label string, kind platform.AssetKind, name, versionText string, lookup func(string, int) (D, int, bool)) (platform.ReleaseAsset, error) {
-	ordinalText, found := strings.CutPrefix(versionText, source+"."+prefix+"-")
-	version, err := strconv.Atoi(ordinalText)
-	if !found || err != nil || strconv.Itoa(version) != ordinalText {
-		return platform.ReleaseAsset{}, fmt.Errorf("invalid retained %s version %s", label, versionText)
-	}
-	definition, ordinal, ok := lookup(name, version)
-	if !ok || ordinal != version || version < 1 {
-		return platform.ReleaseAsset{}, fmt.Errorf("%s %s version %d is not retained", kind, name, version)
-	}
-	return definitionReleaseAsset(resolver, platform.AssetRef{App: ID, Kind: kind, Name: name}, versionText, definition)
-}
-
-func definitionReleaseAsset(resolver releasepub.Resolver, ref platform.AssetRef, version string, definition any) (platform.ReleaseAsset, error) {
-	body, err := json.Marshal(definition)
-	if err != nil {
-		return platform.ReleaseAsset{}, err
-	}
-	contract := 1
-	if link, ok := any(definition).(platform.LinkType); ok {
-		contract = link.Contract()
-	} else if query, ok := any(definition).(platform.NamedQuery); ok {
-		contract = query.ContractVersion()
-	}
-	return resolver.WithDependencies(platform.ReleaseAsset{Ref: ref, ContractVersion: contract, SourceVersion: version, Body: body})
 }
 
 func (b *Build) definitionAssetVersion(asset platform.ReleaseAsset, kind platform.AssetKind, prefix string) int {
@@ -377,16 +273,4 @@ func restoreDefinitionPublications[T any](b *Build, inventory func() ([]T, error
 		}
 	}
 	return nil
-}
-
-func installedDefinitionAssets[T any](installed map[string]T, release func(T) (platform.ReleaseAsset, error)) ([]platform.ReleaseAsset, error) {
-	var out []platform.ReleaseAsset
-	for _, name := range slices.Sorted(maps.Keys(installed)) {
-		asset, err := release(installed[name])
-		if err != nil {
-			return nil, err
-		}
-		out = append(out, asset)
-	}
-	return out, nil
 }

@@ -156,6 +156,10 @@ func (f PropertyType) Definition() platform.PropertyType {
 	return platform.PropertyType{Name: f.Name, Title: f.Title, Description: f.Description, Type: f.Type}
 }
 
+func PropertyTypeFromDeclaration(property platform.PropertyType) PropertyType {
+	return PropertyType{Name: property.Name, Title: property.Title, Description: property.Description, Type: property.Type}
+}
+
 type ValueType struct {
 	platform.Record
 	Name        string                    `json:"name" field:"required,search"`
@@ -175,6 +179,10 @@ func (f ValueType) Definition() platform.ValueType {
 	return platform.ValueType{Name: f.Name, Title: f.Title, Description: f.Description, Base: f.Base, Constraints: f.Constraints, Pattern: f.Pattern, Choices: slices.Clone(f.Choices)}
 }
 
+func ValueTypeFromDeclaration(value platform.ValueType) ValueType {
+	return ValueType{Name: value.Name, Title: value.Title, Description: value.Description, Base: value.Base, Constraints: value.Constraints, Pattern: value.Pattern, Choices: slices.Clone(value.Choices)}
+}
+
 type ObjectTypeGroup struct {
 	platform.Record
 	Name        string              `json:"name" field:"required,search"`
@@ -189,4 +197,8 @@ type ObjectTypeGroup struct {
 
 func (g ObjectTypeGroup) Definition() platform.ObjectTypeGroup {
 	return platform.ObjectTypeGroup{Name: g.Name, Title: g.Title, Description: g.Description, Members: append([]platform.AssetRef{}, g.Members...)}
+}
+
+func ObjectTypeGroupFromDeclaration(group platform.ObjectTypeGroup) ObjectTypeGroup {
+	return ObjectTypeGroup{Name: group.Name, Title: group.Title, Description: group.Description, Members: slices.Clone(group.Members)}
 }

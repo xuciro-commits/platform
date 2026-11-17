@@ -140,7 +140,9 @@ func (k *resourceKind[T, D]) publish(b *Build, c platform.Caller, record any) *p
 	if message == "" {
 		message = "A " + k.label() + " may retain at most 64 published versions"
 	}
-	return publishRetainedDefinition(c, f, message, func(c platform.Caller, f T) error { return k.installRecord(b, c, f) })
+	return publication.PublishRetained(c, f, func(record *T) publication.Family { return k.family(*record) }, k.setFamily, message, func(record *T) string { return published(*record) }, func(c platform.Caller, record T) error {
+		return k.installRecord(b, c, record)
+	})
 }
 
 func (k *resourceKind[T, D]) check(b *Build, f T) (T, error) {
@@ -170,8 +172,20 @@ func (k *resourceKind[T, D]) compatible(old, next T) bool {
 	return k.identity(old, next) && (k.stable == nil || k.stable(old, next)) && (k.guarantees == nil || k.guarantees(old, next))
 }
 
+func (k *resourceKind[T, D]) family(record T) publication.Family {
+	family := definitionFamilyOf(record)
+	return publication.Family{ID: family.ID, Name: family.Name, State: family.State, Version: family.Version, Published: family.Published, Versions: slices.Clone(family.Versions), Archived: family.Archived}
+}
+
+func (k *resourceKind[T, D]) setFamily(record *T, next publication.Family) {
+	family := definitionFamilyOf(*record)
+	family.ID, family.Name, family.State = next.ID, next.Name, next.State
+	family.Version, family.Published, family.Versions, family.Archived = next.Version, next.Published, slices.Clone(next.Versions), next.Archived
+	setDefinitionFamily(record, family)
+}
+
 func (k *resourceKind[T, D]) image(raw []byte) (T, error) {
-	return definitionImage[T, D](raw, k.label(), k.compatible)
+	return publication.Decode[T](raw, k.label(), k.family, func(record T) error { return record.Definition().Check() }, k.compatible)
 }
 
 func (k *resourceKind[T, D]) inventory(b *Build) ([]T, error) {
@@ -208,20 +222,22 @@ func (k *resourceKind[T, D]) definition(b *Build, name string, version int) (D, 
 			}
 		}
 	}
-	return retainedDefinition(k.records(b), func() ([]T, error) { return k.inventory(b) }, k.image, name, version)
+	return publication.Retained(k.records(b), func() ([]T, error) { return k.inventory(b) }, k.image, name, version, k.family, func(record T) D { return record.Definition() })
 }
 
 func (k *resourceKind[T, D]) releaseAsset(b *Build, f T) (platform.ReleaseAsset, error) {
-	family := definitionFamilyOf(f)
-	return definitionReleaseAsset(b.resolver, platform.AssetRef{App: ID, Kind: k.assetKind(), Name: family.Name}, b.Manifest().Version+"."+k.prefix+"-"+strconv.Itoa(family.Version), f.Definition())
+	family := k.family(f)
+	return b.resolver.ReleaseAsset(platform.AssetRef{App: ID, Kind: k.assetKind(), Name: family.Name}, b.Manifest().Version+"."+k.prefix+"-"+strconv.Itoa(family.Version), f.Definition())
 }
 
 func (k *resourceKind[T, D]) resolve(b *Build, name, sourceVersion string) (platform.ReleaseAsset, error) {
-	return retainedDefinitionAsset(b.resolver, b.Manifest().Version, k.prefix, k.label(), k.assetKind(), name, sourceVersion, func(name string, version int) (D, int, bool) { return k.definition(b, name, version) })
+	return publication.RetainedAsset(b.resolver, ID, b.Manifest().Version, k.prefix, k.label(), k.assetKind(), name, sourceVersion, func(name string, version int) (D, int, bool) {
+		return k.definition(b, name, version)
+	})
 }
 
 func (k *resourceKind[T, D]) assets(b *Build) ([]platform.ReleaseAsset, error) {
-	return installedDefinitionAssets(k.records(b), func(f T) (platform.ReleaseAsset, error) { return k.releaseAsset(b, f) })
+	return publication.InstalledAssets(k.records(b), k.family, func(f T) (platform.ReleaseAsset, error) { return k.releaseAsset(b, f) })
 }
 
 func (k *resourceKind[T, D]) fromAsset(b *Build, asset platform.ReleaseAsset) (T, error) {

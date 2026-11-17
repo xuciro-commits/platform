@@ -437,9 +437,9 @@ func (b *Build) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb.
 				err = b.checkName(*p.Name, s.GetTarget().GetId())
 			}
 			if err == nil && p.Fields != nil {
-				err = b.checkPropertyFields(*p.Fields)
+				err = ontology.CheckPropertyFields(*p.Fields, ID, b.host)
 				if err == nil {
-					err = b.checkValueTypeFields(*p.Fields)
+					err = ontology.CheckValueTypeFields(*p.Fields, ID, b.host)
 				}
 				if err == nil {
 					err = ontology.CheckFields(*p.Fields, b.fieldKnown)

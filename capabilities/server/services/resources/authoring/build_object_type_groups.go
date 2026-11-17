@@ -56,10 +56,8 @@ var objectTypeGroupKind = resourceKind[ontology.ObjectTypeGroup, platform.Object
 	validate: func(b *Build, g ontology.ObjectTypeGroup) (ontology.ObjectTypeGroup, error) {
 		return g, b.checkObjectTypeGroup(g, true)
 	},
-	identity: func(a, b ontology.ObjectTypeGroup) bool { return a.Name == b.Name },
-	fromDeclaration: func(g platform.ObjectTypeGroup) ontology.ObjectTypeGroup {
-		return ontology.ObjectTypeGroup{Name: g.Name, Title: g.Title, Description: g.Description, Members: slices.Clone(g.Members)}
-	},
+	identity:        func(a, b ontology.ObjectTypeGroup) bool { return a.Name == b.Name },
+	fromDeclaration: ontology.ObjectTypeGroupFromDeclaration,
 	install: func(h platform.BuildHost, c platform.Caller, g platform.ObjectTypeGroup, version int) error {
 		return h.InstallObjectTypeGroup(c, g, version)
 	},

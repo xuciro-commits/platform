@@ -1,30 +1,9 @@
 package build
 
 import (
-	"fmt"
-
 	"platformserver/platform"
 	ontology "platformserver/services/ontology"
 )
-
-func (b *Build) checkPropertyFields(fields []ontology.Field) error {
-	for _, f := range fields {
-		if f.Property == nil {
-			continue
-		}
-		if b.host == nil || f.Property.Ref.App != ID {
-			return fmt.Errorf("shared property needs its canonical tenant owner")
-		}
-		p, ok := b.host.ResolvePropertyType(*f.Property)
-		if !ok {
-			return fmt.Errorf("shared property version is unavailable")
-		}
-		if err := ontology.CheckPropertyField(f, p); err != nil {
-			return err
-		}
-	}
-	return nil
-}
 
 var propertyKind = resourceKind[ontology.PropertyType, platform.PropertyType]{
 	typ: PropertyTypeType, prefix: "property", noun: "propertyType", title: "Property type", plural: "Property types", capability: "propertytypes",
@@ -35,10 +14,8 @@ var propertyKind = resourceKind[ontology.PropertyType, platform.PropertyType]{
 	validate: func(_ *Build, f ontology.PropertyType) (ontology.PropertyType, error) {
 		return f, ontology.CheckPropertyType(f)
 	},
-	identity: func(a, b ontology.PropertyType) bool { return a.Name == b.Name && a.Type == b.Type },
-	fromDeclaration: func(p platform.PropertyType) ontology.PropertyType {
-		return ontology.PropertyType{Name: p.Name, Title: p.Title, Description: p.Description, Type: p.Type}
-	},
+	identity:        func(a, b ontology.PropertyType) bool { return a.Name == b.Name && a.Type == b.Type },
+	fromDeclaration: ontology.PropertyTypeFromDeclaration,
 	install: func(h platform.BuildHost, c platform.Caller, d platform.PropertyType, version int) error {
 		return h.InstallPropertyType(c, d, version)
 	},

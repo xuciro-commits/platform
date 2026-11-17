@@ -32,9 +32,6 @@
 每批同步处理宿主状态、能力登记、装配、HTTP 调用方和依赖例外，运行该类的创建、编辑、发布、安装、拒绝、
 历史版本、分叉和重放检查。跨类型的 RID、项目、文件夹、工作状态、分支、提案和编排留在资源服务。
 
-- [ ] U5.7 属性、值类型、接口、对象组与关系：从 `build_properties.go`、`build_values.go`、
-  `build_interface.go`、`build_object_type_groups.go`、`build_links.go` 及 `build_kinds.go` 归 `services/ontology`。
-  `build_kinds.go` 还被查询使用；先拆出唯一的共享版本族实现，关系数据迁移由对象服务执行。
 - [ ] U5.8 查询资源：从 `build_queries.go` 和 `build_kinds.go` 迁到 `services/objects`，复用对象集和本体检查。
   保留接口查询绑定、依赖、源版本、授权及历史读取，不复制查询或表达式求值器。
 - [ ] U5.9 AI 函数：清理 `build_functions.go`、`build_function_adapter.go`、`build_automation_adapter.go` 与

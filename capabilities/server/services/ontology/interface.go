@@ -30,6 +30,10 @@ func (r InterfaceRecord) Definition() InterfaceDefinition {
 	return InterfaceDefinition{Name: r.Name, Title: r.Title, Description: r.Description, Fields: slices.Clone(r.Fields)}
 }
 
+func InterfaceRecordFromDeclaration(definition InterfaceDefinition) InterfaceRecord {
+	return InterfaceRecord{Name: definition.Name, Title: definition.Title, Description: definition.Description, Fields: slices.Clone(definition.Fields)}
+}
+
 func (r InterfaceRecord) KeepsPublishedFields(next InterfaceRecord) bool {
 	for _, field := range r.Fields {
 		if !slices.ContainsFunc(next.Fields, func(candidate platform.InterfaceField) bool {

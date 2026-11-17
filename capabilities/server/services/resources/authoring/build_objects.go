@@ -105,10 +105,10 @@ func (b *Build) Check(o ontology.Object, id string, engine platform.RuleEngine) 
 	if err := b.checkName(o.Name, id); err != nil {
 		return err
 	}
-	if err := b.checkPropertyFields(o.Fields); err != nil {
+	if err := ontology.CheckPropertyFields(o.Fields, ID, b.host); err != nil {
 		return err
 	}
-	if err := b.checkValueTypeFields(o.Fields); err != nil {
+	if err := ontology.CheckValueTypeFields(o.Fields, ID, b.host); err != nil {
 		return err
 	}
 	if err := ontology.CheckFields(o.Fields, b.fieldKnown); err != nil {
