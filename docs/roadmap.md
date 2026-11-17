@@ -32,9 +32,6 @@
 每批同步处理宿主状态、能力登记、装配、HTTP 调用方和依赖例外，运行该类的创建、编辑、发布、安装、拒绝、
 历史版本、分叉和重放检查。跨类型的 RID、项目、文件夹、工作状态、分支、提案和编排留在资源服务。
 
-- [ ] U5.11 数据接入与集成：从 `build_data_owner.go`、`build_writeback_answers.go` 和 `build_integrations_*.go`
-  切出数据实现到 `services/data`；确认、设备派发、协议和动作执行先按职责确定唯一拥有者。
-  保留外部调用的接受、结算和补偿顺序，以及连接、同步、回写的授权与血缘。
 - [ ] U5.12 自动化与应用：`build_automation*.go` 的专有创作归 `services/automate/authoring`，
   `build_app_authoring*.go` 的应用创作归 `services/apps/authoring`；`application_ai.go` 按应用与 AI 的职责切分。
   保留已发布流程、页面及应用的运行、覆盖顺序、版本绑定与重装行为。

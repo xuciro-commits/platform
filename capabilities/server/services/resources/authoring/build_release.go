@@ -85,11 +85,7 @@ func (b *Build) ReleaseAssets() ([]platform.ReleaseAsset, error) {
 		}
 		assets = append(assets, owned...)
 	}
-	assets, err = b.bindConfirmationAssets(assets)
-	if err != nil {
-		return nil, err
-	}
-	return b.bindDispatchAssets(assets)
+	return b.data.BindReleaseAssets(assets)
 }
 
 func (b *Build) releaseInventory() ([]ontology.Object, []appsauthoring.Page, []appsauthoring.Application, error) {

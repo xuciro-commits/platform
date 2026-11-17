@@ -83,7 +83,7 @@ func (b *Build) bindPublications() {
 		Host:      func() platform.BuildHost { return b.host },
 		Authority: func() platform.Authority { return b.ledger },
 		Entity:    b.entity,
-		Portable:  b.dispatchSchemaObject,
+		Portable:  b.data.PortableObject,
 		Actions:   objectActions,
 		Page:      func(object ontology.Object) platform.Page { return appsauthoring.CompileObjectPage(object, ID) },
 		Pages:     b.objectInstallationPages,
@@ -139,6 +139,7 @@ func New(tenant string, authorities platform.Authorities, publications []publica
 	b := &Build{resolver: resolver, publicationBase: slices.Clone(publications), objectPublication: objectPublication, queryFactory: queryFactory, functionFactory: functionFactory, agentFactory: agentFactory, functionEvaluationFactory: functionEvaluationFactory, testPlanFactory: testPlanFactory, evaluationSetFactory: evaluationSetFactory, sampleSetFactory: sampleSetFactory, installed: map[string]platform.Entity{}, linkTypes: map[string]ontology.LinkType{}, propertyTypes: map[string]ontology.PropertyType{}, valueTypes: map[string]ontology.ValueType{}, objectTypeGroups: map[string]ontology.ObjectTypeGroup{}, interfaces: map[string]ontology.InterfaceRecord{}}
 	b.queries = b.queryFactory(b.queryEnvironment())
 	b.data = dataowner.New(buildDataHost{b}, resolver)
+	b.data.AttachIntegrationRuntime(b.integrationRuntime())
 	b.automation = automationauthoring.New(automationEnvironment{b}, resolver)
 	b.functions = b.functionFactory(functionEnvironment{b})
 	b.evaluations = b.functionEvaluationFactory(b.functionEvaluationEnvironment())
@@ -168,8 +169,8 @@ func New(tenant string, authorities platform.Authorities, publications []publica
 		actions = append(actions, actioncatalog.EntityActions(entity)...)
 	}
 	actions = append(actions, workingStateActions()...)
-	actions = append(actions, confirmationActions()...)
-	actions = append(actions, dispatchActions()...)
+	actions = append(actions, dataowner.ConfirmationActions()...)
+	actions = append(actions, dataowner.DispatchActions()...)
 	actions = append(actions, actioncatalog.EntityActions(b.functions.TableEntity())...)
 	actions = append(actions, actioncatalog.EntityActions(b.agent.Entity())...)
 	actions = append(actions, actioncatalog.EntityActions(b.sampleSets.Entity())...)
@@ -178,7 +179,7 @@ func New(tenant string, authorities platform.Authorities, publications []publica
 	actions = append(actions, productVersionActions()...)
 	actions = append(actions, platform.Action{Schema: SchemaEvaluationSetPublish, Target: TestPlanType, Title: "Publish test plan", Description: "Freeze a portable business scenario or the evaluation cases for one function version.", Capability: "objects", Roles: []string{Builder}, Payload: []platform.Field{}})
 	actions = resourceActions(actions)
-	classes := []string{ObjectType, ActionTypeType, PageType, AppType, TestPlanType, automationauthoring.ProcessType, functionauthoring.FunctionType, PropertyTypeType, ValueTypeType, ObjectTypeGroupType, LinkTypeType, b.queries.Entity().Type, InterfaceType, functionauthoring.FunctionCallType, b.evaluations.Entity().Type, functionauthoring.CodeType, functionauthoring.TableType, AgentType, SampleSetType, BranchType, ResourceType, FolderType, WorkingStateType, ProductType, ProductVersionType, platform.OwnedRelationType(ID), confirmationType, platform.DispatchType}
+	classes := []string{ObjectType, ActionTypeType, PageType, AppType, TestPlanType, automationauthoring.ProcessType, functionauthoring.FunctionType, PropertyTypeType, ValueTypeType, ObjectTypeGroupType, LinkTypeType, b.queries.Entity().Type, InterfaceType, functionauthoring.FunctionCallType, b.evaluations.Entity().Type, functionauthoring.CodeType, functionauthoring.TableType, AgentType, SampleSetType, BranchType, ResourceType, FolderType, WorkingStateType, ProductType, ProductVersionType, platform.OwnedRelationType(ID), platform.ConfirmationType, platform.DispatchType}
 	classes = append(classes, b.data.Types()...)
 	b.authorities = authorities
 	b.ledger = authorities(tenant, ID, platform.NewCatalog(actions...), classes...)
@@ -209,7 +210,7 @@ func (b *Build) Manifest() platform.Manifest {
 	if b.installationCatalog != nil {
 		catalog = b.installationCatalog
 	}
-	entities := []platform.Entity{platform.RelationEntity(ID), b.objectEntity(), b.actionTypeEntity(), b.apps.PageEntity(), b.apps.ApplicationEntity(), b.testPlanEntity(), b.automation.ProcessEntity(), propertyKind.entity(b), valueKind.entity(b), b.objectTypeGroupEntity(), linkKind.entity(b), b.queries.Entity(), interfaceKind.entity(b), b.functions.Entity(), b.functions.CallEntity(), b.evaluations.Entity(), b.agent.Entity(), functionauthoring.CodeEntity(), b.functions.TableEntity(), b.sampleSets.Entity(), b.branchEntity(), b.confirmationEntity(), b.dispatchEntity(), b.productEntity(), b.productVersionEntity()}
+	entities := []platform.Entity{platform.RelationEntity(ID), b.objectEntity(), b.actionTypeEntity(), b.apps.PageEntity(), b.apps.ApplicationEntity(), b.testPlanEntity(), b.automation.ProcessEntity(), propertyKind.entity(b), valueKind.entity(b), b.objectTypeGroupEntity(), linkKind.entity(b), b.queries.Entity(), interfaceKind.entity(b), b.functions.Entity(), b.functions.CallEntity(), b.evaluations.Entity(), b.agent.Entity(), functionauthoring.CodeEntity(), b.functions.TableEntity(), b.sampleSets.Entity(), b.branchEntity(), b.data.ConfirmationEntity(), b.data.DispatchEntity(), b.productEntity(), b.productVersionEntity()}
 	entities = append(entities, b.data.Entities()...)
 	entities = append(entities, b.resourceEntities()...)
 	entities = append(entities, workingStateEntity())
@@ -408,11 +409,11 @@ func (b *Build) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb.
 	if record, err, handled := b.data.Decide(b.ledger, c, s, now); handled {
 		return record, err
 	}
-	if slices.Contains([]string{confirmationAnswer, confirmationReview, confirmationTick}, s.GetSchema().GetName()) {
-		return b.updateConfirmation(c, s, now)
+	if slices.Contains([]string{platform.ConfirmationAnswerSchema, platform.ConfirmationType + ".review", platform.ConfirmationType + ".tick"}, s.GetSchema().GetName()) {
+		return b.data.UpdateConfirmation(c, s, now)
 	}
 	if slices.Contains([]string{platform.DispatchAnswerSchema, platform.DispatchReviewSchema, platform.DispatchTickSchema}, s.GetSchema().GetName()) {
-		return b.updateDispatch(c, s, now)
+		return b.data.UpdateDispatch(c, s, now)
 	}
 	if name := s.GetSchema().GetName(); name == functionauthoring.SchemaProposalReview || name == functionauthoring.SchemaFunctionCall || name == functionauthoring.SchemaFunctionAnswer {
 		return b.functions.Submit(c, s, now)
@@ -486,7 +487,7 @@ func (b *Build) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb.
 	if name := s.GetSchema().GetName(); name == AgentType+".create" || name == AgentType+".edit" {
 		agentEntity = b.agent.DraftEntity()
 	}
-	entities := []platform.Entity{b.objectEntity(), b.actionTypeEntity(), pageEntity, b.apps.ApplicationEntity(), b.testPlanEntity(), propertyKind.entity(b), valueKind.entity(b), b.objectTypeGroupEntity(), linkKind.entity(b), b.queries.Entity(), interfaceKind.entity(b), b.functions.Entity(), b.functions.CallEntity(), b.evaluations.Entity(), agentEntity, b.sampleSets.Entity(), b.branchEntity(), b.confirmationEntity(), b.dispatchEntity(), b.productEntity(), b.productVersionEntity()}
+	entities := []platform.Entity{b.objectEntity(), b.actionTypeEntity(), pageEntity, b.apps.ApplicationEntity(), b.testPlanEntity(), propertyKind.entity(b), valueKind.entity(b), b.objectTypeGroupEntity(), linkKind.entity(b), b.queries.Entity(), interfaceKind.entity(b), b.functions.Entity(), b.functions.CallEntity(), b.evaluations.Entity(), agentEntity, b.sampleSets.Entity(), b.branchEntity(), b.data.ConfirmationEntity(), b.data.DispatchEntity(), b.productEntity(), b.productVersionEntity()}
 	entities = append(entities, b.data.Entities()...)
 	entities = append(entities, b.resourceEntities()...)
 	entities = append(entities, workingStateEntity())
@@ -545,6 +546,7 @@ func (b *Build) Fork(ledger platform.Authority) (platform.App, error) {
 	fork.evaluations = b.functionEvaluationFactory(fork.functionEvaluationEnvironment())
 	fork.apps = b.apps.Fork(appEnvironment{&fork})
 	fork.data = b.data.Fork(buildDataHost{&fork})
+	fork.data.AttachIntegrationRuntime(fork.integrationRuntime())
 	fork.automation = b.automation.Fork(automationEnvironment{&fork})
 	fork.agent = b.agent.Fork(fork.agentEnvironment())
 	fork.bindTestPlans()

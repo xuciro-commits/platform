@@ -35,7 +35,7 @@ func (b *Build) checkVersioning(o ontology.Object) error {
 }
 
 func (b *Build) captureObjectSchema(object *ontology.Object) error {
-	portable, err := b.dispatchSchemaObject(*object)
+	portable, err := b.data.PortableObject(*object)
 	if err != nil {
 		return err
 	}
@@ -52,7 +52,7 @@ func (b *Build) captureObjectSchema(object *ontology.Object) error {
 	if previous, exists := publication.Read[ontology.Object](object.Published); exists {
 		versions = slices.Clone(previous.SchemaVersions)
 		if len(versions) == 0 {
-			portable, err := b.dispatchSchemaObject(previous)
+			portable, err := b.data.PortableObject(previous)
 			if err != nil {
 				return err
 			}

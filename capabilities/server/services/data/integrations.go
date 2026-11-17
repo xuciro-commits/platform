@@ -128,7 +128,7 @@ func (o *Owner) validConnection(c Connection) *platform.Error {
 	if err := o.checkName(c.Name, c.ID); err != nil {
 		return refuse(err.Error())
 	}
-	if !slices.Contains(ConnectionKinds, c.Kind) {
+	if !slices.Contains(connectionKinds, c.Kind) {
 		return refuse("A connection is one of http, odata, postgres")
 	}
 	if c.Address == "" && c.State != "ready" && !c.Requested {
@@ -414,7 +414,7 @@ const (
 	SchemaConnectionChecked = "build.connection.checked"
 )
 
-var ConnectionKinds = []string{"http", "odata", "postgres"}
+var connectionKinds = []string{"http", "odata", "postgres"}
 
 type Connection struct {
 	platform.Record

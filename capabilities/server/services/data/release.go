@@ -473,7 +473,7 @@ func (o *Owner) integrationConfiguration(asset platform.ReleaseAsset) (any, erro
 		if err := ValueDecodeIntegration(asset.Body, &d); err != nil {
 			return nil, err
 		}
-		if d.Name != asset.Ref.Name || !slices.Contains(ConnectionKinds, d.Kind) {
+		if d.Name != asset.Ref.Name || !slices.Contains(connectionKinds, d.Kind) {
 			return nil, fmt.Errorf("invalid connection definition")
 		}
 		record = Connection{Name: d.Name, Title: d.Title, Kind: d.Kind, Marking: d.Marking, Compartments: d.Compartments}

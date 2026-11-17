@@ -164,10 +164,7 @@ func (b *Build) DraftReleaseAssetsMulti(drafts []JointDraftRef, member platform.
 	}
 	recordAssets, err := b.releaseAssets(inv.objects, inv.pages, inv.apps, inv.processes, b.Manifest().Version)
 	if err == nil {
-		recordAssets, err = b.bindConfirmationAssets(recordAssets)
-	}
-	if err == nil {
-		recordAssets, err = b.bindDispatchAssets(recordAssets)
+		recordAssets, err = b.data.BindReleaseAssets(recordAssets)
 	}
 	if err != nil {
 		return result, err

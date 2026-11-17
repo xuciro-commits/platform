@@ -10,7 +10,6 @@ import (
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformserver/platform"
-	dataowner "platformserver/services/data"
 	ontology "platformserver/services/ontology"
 )
 
@@ -49,27 +48,10 @@ func (b *Build) checkTransactions(object ontology.Object, engines ...platform.Ru
 		Sequences: func() []platform.Sequence {
 			return ontology.TransactionSequences(b.installed)
 		},
-		Link:     b.transactionLink,
-		Confirm:  b.checkConfirmation,
-		Dispatch: b.checkDispatch,
-		Writeback: func(step platform.TxnStep, object string) error {
-			if b.host == nil {
-				return nil
-			}
-			record, found := b.host.Record(dataowner.WritebackType + "/" + step.Effect.Writeback)
-			w, valid := record.(dataowner.Writeback)
-			if !found || !valid {
-				return fmt.Errorf("Transaction writeback is unavailable")
-			}
-			w, err := b.data.ExecutionWriteback(w)
-			if err != nil {
-				return err
-			}
-			if w.State != "published" || w.On != "transaction" || w.Object != object || len(w.Result) > 0 {
-				return fmt.Errorf("Effect steps require a published transaction-only writeback without answer mutations")
-			}
-			return nil
-		},
+		Link:      b.transactionLink,
+		Confirm:   b.data.CheckConfirmation,
+		Dispatch:  b.data.CheckDispatch,
+		Writeback: b.data.CheckTransactionWriteback,
 		Call: func(call platform.TxnCall) error {
 			if call.Ref.App == ID && call.Version > 0 {
 				if _, selected := b.jointDeclarations[call.Ref]; selected {
@@ -105,7 +87,7 @@ func (b *Build) CanonicalObject(object ontology.Object) (ontology.Object, error)
 }
 
 func (b *Build) businessRuntime() platform.TransactionExecutor {
-	return b.host.TransactionRuntime(platform.BusinessRuntimeContext{App: ID, Entities: b.installed, Ledger: b.ledger, Lookup: b.conditionLookup, Link: b.transactionLink, Dispatch: b.openDispatch, Confirm: b.openConfirmation,
+	return b.host.TransactionRuntime(platform.BusinessRuntimeContext{App: ID, Entities: b.installed, Ledger: b.ledger, Lookup: b.conditionLookup, Link: b.transactionLink, Dispatch: b.data.OpenDispatch, Confirm: b.data.OpenConfirmation,
 		Prepare: func(c platform.Caller, r *pb.ChangeRecord, txn *platform.BusinessTxn, now time.Time) (platform.TransactionProposal, *platform.Error) {
 			p, err := b.functions.PrepareProposal(c, r, txn, b.installed[txn.Subject], now)
 			if err != nil {
@@ -116,29 +98,5 @@ func (b *Build) businessRuntime() platform.TransactionExecutor {
 			}, Finish: func(c platform.Caller, r *pb.ChangeRecord, now time.Time) *platform.Error {
 				return p.Finish(c, r, now)
 			}}, nil
-		}, Effect: func(c platform.Caller, id string) (platform.TransactionEffectDefinition, *platform.Error) {
-			w, found := platform.Get[dataowner.Writeback](c, id)
-			if !found {
-				return platform.TransactionEffectDefinition{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Transaction writeback is unavailable")
-			}
-			w, err := b.data.ExecutionWriteback(w)
-			if err != nil {
-				return platform.TransactionEffectDefinition{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "{why}", err.Error())
-			}
-			conn, found := platform.Get[dataowner.Connection](c, w.Connection)
-			if !found {
-				return platform.TransactionEffectDefinition{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Transaction effect connection is unavailable")
-			}
-			conn, err = b.data.ExecutionConnection(conn)
-			if err != nil {
-				return platform.TransactionEffectDefinition{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "{why}", err.Error())
-			}
-			return platform.TransactionEffectDefinition{Request: func(id string, payload json.RawMessage) (json.RawMessage, *platform.Error) {
-				request, err := b.data.PrepareWritebackRequest(w, conn, id, payload)
-				if err != nil {
-					return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "{why}", err.Error())
-				}
-				return platform.Raw(request), nil
-			}}, nil
-		}})
+		}, Effect: b.data.TransactionEffect})
 }

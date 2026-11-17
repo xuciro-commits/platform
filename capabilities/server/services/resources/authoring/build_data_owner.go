@@ -1,16 +1,43 @@
 package build
 
 import (
-	"platformserver/services/ontology"
+	"fmt"
 	"reflect"
 
 	"platformserver/platform"
 	dataowner "platformserver/services/data"
+	"platformserver/services/ontology"
 )
 
 type buildDataHost struct{ b *Build }
 
 func (b *Build) DataOwner() *dataowner.Owner { return b.data }
+
+func (b *Build) integrationRuntime() dataowner.IntegrationRuntime {
+	return dataowner.IntegrationRuntime{
+		App: b, Ledger: func() platform.Authority { return b.ledger },
+		JointDeclarations: func() map[platform.AssetRef]platform.ReleaseAsset { return b.jointDeclarations },
+		Lookup:            b.conditionLookup,
+		Record: func(ref string) (any, bool) {
+			if b.host == nil {
+				return nil, false
+			}
+			return b.host.Record(ref)
+		},
+		FreezeProtocol: func(p platform.ConfirmationParty) (*platform.ConfirmationProtocol, error) {
+			if b.host == nil {
+				return nil, fmt.Errorf("confirmation protocol host is unavailable")
+			}
+			return b.host.FreezeConfirmationProtocol(p)
+		},
+		Holding: func(app, role string) []string {
+			if b.host == nil {
+				return nil
+			}
+			return b.host.Holding(app, role)
+		},
+	}
+}
 
 func (h buildDataHost) NameTaken(name, id string) (string, bool, error) {
 	return h.b.taken(name, id)

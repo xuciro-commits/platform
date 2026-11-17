@@ -261,6 +261,6 @@ func (b *Build) entity(o ontology.Object) platform.Entity {
 	})
 	entity.DataSources = slices.Clone(o.DataSources)
 	entity.ComputeAt = computeRulesOf(o, b.conditionLookup)
-	entity.Protocols = objectProvisions(o, entity)
+	entity.Protocols = b.objectProvisions(o, entity)
 	return entity
 }

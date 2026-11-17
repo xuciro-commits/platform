@@ -552,7 +552,7 @@ func (o *Owner) validateIntegrationDescriptor(asset platform.ReleaseAsset) error
 	}
 	switch d := record.(type) {
 	case *ConnectionDefinition:
-		if !slices.Contains(ConnectionKinds, d.Kind) || !slices.Contains([]string{"", "internal", "confidential", "restricted"}, d.Marking) {
+		if !slices.Contains(connectionKinds, d.Kind) || !slices.Contains([]string{"", "internal", "confidential", "restricted"}, d.Marking) {
 			return fmt.Errorf("unknown connection kind")
 		}
 	case *ListenerDefinition:

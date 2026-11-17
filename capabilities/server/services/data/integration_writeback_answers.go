@@ -1,4 +1,4 @@
-package build
+package data
 
 import (
 	"encoding/json"
@@ -9,11 +9,10 @@ import (
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformserver/platform"
-	dataowner "platformserver/services/data"
 )
 
-func (b *Build) answered(c platform.Caller, effect platform.Effect, out platform.Outcome, now time.Time) *platform.Error {
-	var req dataowner.WritebackRequest
+func (o *Owner) Answer(c platform.Caller, effect platform.Effect, out platform.Outcome, now time.Time) *platform.Error {
+	var req WritebackRequest
 	if json.Unmarshal([]byte(effect.Body), &req) != nil || req.Writeback == "" {
 		return nil
 	}
@@ -26,7 +25,7 @@ func (b *Build) answered(c platform.Caller, effect platform.Effect, out platform
 			return nil
 		}
 		key := fmt.Sprintf("%s:%d:%s", effect.ID, effect.Attempts, out.Result)
-		_, err := platform.Decide(c, b, dispatchSubmission(c, req.Dispatch, platform.DispatchAnswerSchema, key, map[string]any{"intent": effect.ID, "outcome": outcome, "reason": out.Detail, "answer": out.Answer}, now), now)
+		_, err := platform.Decide(c, o.integration.App, o.dispatchSubmission(c, req.Dispatch, platform.DispatchAnswerSchema, key, map[string]any{"intent": effect.ID, "outcome": outcome, "reason": out.Detail, "answer": out.Answer}, now), now)
 		return err
 	}
 	if req.Confirmation != "" {
@@ -39,10 +38,10 @@ func (b *Build) answered(c platform.Caller, effect platform.Effect, out platform
 			tag += ":compensate"
 		}
 		key := fmt.Sprintf("%s:%d:%s", effect.ID, effect.Attempts, out.Result)
-		_, err := platform.Decide(c, b, confirmationSubmission(c, req.Confirmation, confirmationAnswer, key, map[string]any{"tag": tag, "outcome": outcome, "reason": out.Detail, "answer": out.Answer}, now), now)
+		_, err := platform.Decide(c, o.integration.App, o.confirmationSubmission(c, req.Confirmation, confirmationAnswer, key, map[string]any{"tag": tag, "outcome": outcome, "reason": out.Detail, "answer": out.Answer}, now), now)
 		return err
 	}
-	w, ok := platform.Get[dataowner.Writeback](c, req.Writeback)
+	w, ok := platform.Get[Writeback](c, req.Writeback)
 	if !ok {
 		return nil
 	}
@@ -54,13 +53,13 @@ func (b *Build) answered(c platform.Caller, effect platform.Effect, out platform
 	} else if req.Version != 0 || w.DefinitionVersion != 0 {
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Historical writeback request requires its original unversioned definition")
 	}
-	ans := dataowner.WritebackAns{Effect: effect.ID, Target: effect.Target, Result: out.Result, Detail: out.Detail, Answer: dataowner.ClipAnswer(out.Answer)}
+	ans := WritebackAns{Effect: effect.ID, Target: effect.Target, Result: out.Result, Detail: out.Detail, Answer: ClipAnswer(out.Answer)}
 	if out.Result != "delivered" && out.Result != "rejected" && out.Result != "unknown" {
 		ans.Result = "failed"
 	}
 	payload, _ := json.Marshal(map[string]any{"answer": ans})
-	if _, err := platform.Decide(c, b, &pb.Submission{TenantId: c.Tenant, PrincipalId: c.ID, Authority: ID, IdempotencyKey: "answered:" + effect.ID + map[bool]string{true: ":unknown"}[out.Result == "unknown"],
-		Target: &pb.EntityRef{Type: dataowner.WritebackType, Id: w.ID}, Schema: &pb.SchemaRef{Name: dataowner.SchemaWritebackAnswered, Version: 1}, Payload: payload}, now); err != nil {
+	if _, err := platform.Decide(c, o.integration.App, &pb.Submission{TenantId: c.Tenant, PrincipalId: c.ID, Authority: App, IdempotencyKey: "answered:" + effect.ID + map[bool]string{true: ":unknown"}[out.Result == "unknown"],
+		Target: &pb.EntityRef{Type: WritebackType, Id: w.ID}, Schema: &pb.SchemaRef{Name: SchemaWritebackAnswered, Version: 1}, Payload: payload}, now); err != nil {
 		return err
 	}
 	typ, id, ok := strings.Cut(effect.Target, "/")
@@ -72,7 +71,7 @@ func (b *Build) answered(c platform.Caller, effect platform.Effect, out platform
 		return nil
 	}
 	edit, _ := json.Marshal(fields)
-	_, err := platform.Decide(c, b, &pb.Submission{TenantId: c.Tenant, PrincipalId: c.ID, Authority: ID, IdempotencyKey: "answer-fields:" + effect.ID,
+	_, err := platform.Decide(c, o.integration.App, &pb.Submission{TenantId: c.Tenant, PrincipalId: c.ID, Authority: App, IdempotencyKey: "answer-fields:" + effect.ID,
 		Target: &pb.EntityRef{Type: typ, Id: id}, Schema: &pb.SchemaRef{Name: typ + ".edit", Version: 1}, Payload: edit}, now)
 	return err
 }

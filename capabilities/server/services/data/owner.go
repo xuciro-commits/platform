@@ -33,6 +33,7 @@ type Owner struct {
 	resolver        publication.Resolver
 	host            Host
 	files           platform.FileHost
+	integration     IntegrationRuntime
 	releaseDraftIDs map[platform.AssetRef]string
 	inventory       IntegrationInventory
 }
@@ -48,7 +49,7 @@ func (o *Owner) AttachFiles(files platform.FileHost) {
 }
 
 func (o *Owner) Fork(host Host) *Owner {
-	return &Owner{host: host, resolver: o.resolver, files: o.files, releaseDraftIDs: cloneDraftIDs(o.releaseDraftIDs)}
+	return &Owner{host: host, resolver: o.resolver, files: o.files, integration: o.integration, releaseDraftIDs: cloneDraftIDs(o.releaseDraftIDs)}
 }
 
 func (o *Owner) WithInventory(inventory IntegrationInventory) *Owner {

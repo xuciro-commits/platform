@@ -10,6 +10,7 @@ import (
 	transport "platformserver/kernel/transport"
 	"platformserver/platform"
 	"platformserver/services/actions"
+	dataowner "platformserver/services/data"
 	releaseowner "platformserver/services/devops/releases"
 	"platformserver/services/resources/authoring"
 	controlowner "platformserver/services/security/control"
@@ -54,7 +55,7 @@ func (h *Host) routesDiscovery(rt *routes) {
 		return protocols, nil
 	}))
 	rt.metadata(transport.Route{Pattern: "GET /v1/entities", Summary: "The entity types of the apps the caller holds a role in, with their meaning, in their language", Answer: []platform.EntityInfo{}}, viewRoute("entities", "Entity declarations are unavailable"))
-	rt.handle(transport.Route{Pattern: "GET /v1/dispatches/{id}/targets", Summary: "Ready external target identities available to the dispatch's current human reviewer; no environment addresses or credentials", Answer: []build.DispatchTarget{}}, saying(func(r *http.Request, m platform.Member, t *Tenant) ([]build.DispatchTarget, *platform.Error) {
+	rt.handle(transport.Route{Pattern: "GET /v1/dispatches/{id}/targets", Summary: "Ready external target identities available to the dispatch's current human reviewer; no environment addresses or credentials", Answer: []dataowner.DispatchTarget{}}, saying(func(r *http.Request, m platform.Member, t *Tenant) ([]dataowner.DispatchTarget, *platform.Error) {
 		return t.DispatchTargets(m, r.PathValue("id"), h.Now())
 	}))
 	rt.handle(transport.Route{Pattern: "GET /v1/applications/{app}/{name}/runs", Summary: "Authorized runs related to current or retained application resources; shared use does not imply exclusive application origin", Answer: platform.ApplicationRunPage{}, Query: []transport.Param{{Name: "offset", Description: "Nonnegative run offset"}, {Name: "limit", Description: "1–100, default 50"}, {Name: "kind", Description: "Run kind"}, {Name: "state", Description: "Original owner state"}, {Name: "subject", Description: "Exact type/id"}, {Name: "since", Description: "Inclusive RFC3339 startup time"}, {Name: "until", Description: "Inclusive RFC3339 startup time"}}}, transport.Answering(func(r *http.Request, m platform.Member, t *Tenant) (platform.ApplicationRunPage, *platform.Error) {
@@ -137,16 +138,12 @@ func saying[R any](f func(*http.Request, platform.Member, *Tenant) (R, *platform
 	}
 }
 
-func (t *Tenant) DispatchTargets(member platform.Member, id string, at time.Time) ([]build.DispatchTarget, *platform.Error) {
-	return recordRead(t, context.Background(), func(t *Tenant) ([]build.DispatchTarget, *platform.Error) {
-		return build.DispatchTargets(build.DispatchTargetHooks{
-			Admits:     t.Admits,
-			Caller:     func() platform.Caller { return platform.NewCaller(runtime{t: t}, member, build.ID, false, false) },
-			Automation: func() platform.Caller { return t.automation(build.ID, false) },
-			Readable: func(member platform.Member, subject string, at time.Time) bool {
-				return (hostView{t: t}).Readable(member, subject, at)
-			},
-		}, member, id, at)
+func (t *Tenant) DispatchTargets(member platform.Member, id string, at time.Time) ([]dataowner.DispatchTarget, *platform.Error) {
+	return recordRead(t, context.Background(), func(t *Tenant) ([]dataowner.DispatchTarget, *platform.Error) {
+		return t.DataOwner().DispatchTargets(
+			platform.NewCaller(runtime{t: t}, member, build.ID, false, false),
+			member, id, at, t.Admits, hostView{t: t}.Readable,
+		)
 	})
 }
 

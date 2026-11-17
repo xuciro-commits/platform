@@ -1,4 +1,4 @@
-package build
+package data
 
 import (
 	"crypto/sha256"
@@ -12,10 +12,9 @@ import (
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformserver/platform"
-	dataowner "platformserver/services/data"
 )
 
-func (b *Build) openDispatch(c platform.Caller, receipt *pb.ChangeRecord, txn *platform.BusinessTxn, scope platform.RuleReadSpec, subject map[string]any, values map[string]any, at time.Time) *platform.Error {
+func (o *Owner) OpenDispatch(c platform.Caller, receipt *pb.ChangeRecord, txn *platform.BusinessTxn, scope platform.RuleReadSpec, subject map[string]any, values map[string]any, at time.Time) *platform.Error {
 	if txn.Dispatch == nil {
 		return nil
 	}
@@ -33,14 +32,14 @@ func (b *Build) openDispatch(c platform.Caller, receipt *pb.ChangeRecord, txn *p
 	}
 	var object ontology.Object
 	for _, asset := range assets {
-		if asset.Ref.App == ID && asset.Ref.Kind == platform.AssetObject && asset.Ref.Name == txn.Subject {
+		if asset.Ref.App == App && asset.Ref.Kind == platform.AssetObject && asset.Ref.Name == txn.Subject {
 			if err := json.Unmarshal(asset.Body, &object); err != nil {
 				return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Dispatch subject publication is invalid")
 			}
 			break
 		}
 	}
-	if err := ontology.MapObjectIntegrations(&object, b.data.IntegrationID); err != nil {
+	if err := ontology.MapObjectIntegrations(&object, o.IntegrationID); err != nil {
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "{why}", err.Error())
 	}
 	command, known := dispatchCommand(object, spec.Command)
@@ -68,7 +67,7 @@ func (b *Build) openDispatch(c platform.Caller, receipt *pb.ChangeRecord, txn *p
 		if err != nil {
 			return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "{why}", err.Error())
 		}
-		value, problem := platform.RuleAssignment(expr, scope, c, subject, values, at, b.conditionLookup)
+		value, problem := platform.RuleAssignment(expr, scope, c, subject, values, at, o.integration.Lookup)
 		if problem != nil {
 			return problem
 		}
@@ -76,20 +75,20 @@ func (b *Build) openDispatch(c platform.Caller, receipt *pb.ChangeRecord, txn *p
 	}
 	payload["key"] = key
 	run := platform.DispatchRun{Record: platform.Record{ID: id}, Subject: txn.Subject + "/" + receipt.GetSubmission().GetTarget().GetId(), Action: receipt.GetSubmission().GetSchema().GetName(), Member: c.ID, Command: command, Definition: spec, Target: spec.Target, Key: key, State: "pending", StartedAt: at, StateAt: at, Deadline: at.Add(time.Duration(spec.DeadlineSeconds) * time.Second), ReadDue: at, Release: release, Assets: assets, Input: platform.Raw(payload), Readback: []platform.DispatchReading{}, Attempts: []platform.DispatchAttempt{}, Reviewers: []string{}}
-	run.Reviewers = append(run.Reviewers, b.host.Holding(ID, spec.ReviewerRole)...)
-	connection := func(id string) (dataowner.Connection, error) {
-		conn, found := platform.Get[dataowner.Connection](c, id)
+	run.Reviewers = append(run.Reviewers, o.integration.Holding(App, spec.ReviewerRole)...)
+	connection := func(id string) (Connection, error) {
+		conn, found := platform.Get[Connection](c, id)
 		if !found {
-			return dataowner.Connection{}, fmt.Errorf("Dispatch connection is unavailable")
+			return Connection{}, fmt.Errorf("Dispatch connection is unavailable")
 		}
-		return b.data.ExecutionConnection(conn)
+		return o.ExecutionConnection(conn)
 	}
 	prepare := func(command platform.DispatchCommand) (json.RawMessage, error) {
-		w, found := platform.Get[dataowner.Writeback](c, command.Writeback)
+		w, found := platform.Get[Writeback](c, command.Writeback)
 		if !found {
 			return nil, fmt.Errorf("Dispatch writeback is unavailable")
 		}
-		w, err = b.data.ExecutionWriteback(w)
+		w, err = o.ExecutionWriteback(w)
 		if err != nil {
 			return nil, err
 		}
@@ -106,7 +105,7 @@ func (b *Build) openDispatch(c platform.Caller, receipt *pb.ChangeRecord, txn *p
 			reverseInput["key"] = run.Key + ":compensate"
 			requestInput = platform.Raw(reverseInput)
 		}
-		req, err := b.data.PrepareWritebackRequest(w, conn, receipt.GetSubmission().GetTarget().GetId(), requestInput)
+		req, err := o.PrepareWritebackRequest(w, conn, receipt.GetSubmission().GetTarget().GetId(), requestInput)
 		if err != nil {
 			return nil, err
 		}
@@ -126,11 +125,11 @@ func (b *Build) openDispatch(c platform.Caller, receipt *pb.ChangeRecord, txn *p
 		}
 	}
 	if spec.Readback.Source != "" {
-		source, found := platform.Get[dataowner.Source](c, spec.Readback.Source)
+		source, found := platform.Get[Source](c, spec.Readback.Source)
 		if !found {
 			return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Dispatch status source is unavailable")
 		}
-		source, err = b.data.ExecutionSource(source)
+		source, err = o.ExecutionSource(source)
 		if err != nil {
 			return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "{why}", err.Error())
 		}
@@ -142,11 +141,11 @@ func (b *Build) openDispatch(c platform.Caller, receipt *pb.ChangeRecord, txn *p
 		run.Source, run.Connection = platform.Raw(source), platform.Raw(conn)
 	}
 	if spec.Readback.Observation != "" {
-		observation, found := platform.Get[dataowner.Observation](c, spec.Readback.Observation)
+		observation, found := platform.Get[Observation](c, spec.Readback.Observation)
 		if !found {
 			return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Dispatch observation is unavailable")
 		}
-		definition, err := b.data.ExecutionObservation(observation)
+		definition, err := o.ExecutionObservation(observation)
 		if err != nil {
 			return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "{why}", err.Error())
 		}
@@ -163,15 +162,15 @@ func (b *Build) openDispatch(c platform.Caller, receipt *pb.ChangeRecord, txn *p
 		}
 		run.Observation, run.Connection = platform.Raw(definition), platform.Raw(conn)
 	}
-	if err := b.queueDispatch(c, receipt, &run, at); err != nil {
+	if err := o.queueDispatch(c, receipt, &run, at); err != nil {
 		return err
 	}
 	return c.Put(receipt, run)
 }
 
-func (b *Build) queueDispatch(c platform.Caller, receipt *pb.ChangeRecord, run *platform.DispatchRun, at time.Time) *platform.Error {
+func (o *Owner) queueDispatch(c platform.Caller, receipt *pb.ChangeRecord, run *platform.DispatchRun, at time.Time) *platform.Error {
 	run.Attempt++
-	run.Intent = fmt.Sprintf("%s:%s:dispatch:%s:%d:%s%s", c.Tenant, ID, run.ID, run.Attempt, dataowner.WritebackEndpoint, run.Target)
+	run.Intent = fmt.Sprintf("%s:%s:dispatch:%s:%d:%s%s", c.Tenant, App, run.ID, run.Attempt, WritebackEndpoint, run.Target)
 	run.Attempts = append(run.Attempts, platform.DispatchAttempt{Number: run.Attempt, Intent: run.Intent, Target: run.Target, State: "pending", At: at, Compensation: run.Compensating})
 	if len(run.Attempts) > 20 {
 		run.Attempts = run.Attempts[len(run.Attempts)-20:]
@@ -187,8 +186,8 @@ func dispatchTerminal(state string) bool {
 	return slices.Contains([]string{"completed", "cancelled", "compensated"}, state)
 }
 
-func (b *Build) updateDispatch(c platform.Caller, submission *pb.Submission, at time.Time) (*pb.ChangeRecord, *platform.Error) {
-	return b.ledger.Receive(c, submission, at, nil, func() (func(*pb.ChangeRecord), *platform.Error) {
+func (o *Owner) UpdateDispatch(c platform.Caller, submission *pb.Submission, at time.Time) (*pb.ChangeRecord, *platform.Error) {
+	return o.integration.Ledger().Receive(c, submission, at, nil, func() (func(*pb.ChangeRecord), *platform.Error) {
 		run, found := platform.Get[platform.DispatchRun](c, submission.GetTarget().GetId())
 		if !found {
 			return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_NOT_FOUND, "The dispatch does not exist")
@@ -208,7 +207,7 @@ func (b *Build) updateDispatch(c platform.Caller, submission *pb.Submission, at 
 			return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Dispatch transport is unavailable")
 		}
 		if manual {
-			if c.Agent || !c.Holds(ID, run.Definition.ReviewerRole) || strings.TrimSpace(in.Reason) == "" {
+			if c.Agent || !c.Holds(App, run.Definition.ReviewerRole) || strings.TrimSpace(in.Reason) == "" {
 				return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "The dispatch needs its current reviewer and evidence")
 			}
 			typ, id, _ := strings.Cut(run.Subject, "/")
@@ -289,7 +288,7 @@ func (b *Build) updateDispatch(c platform.Caller, submission *pb.Submission, at 
 					}
 					run.Deadline = at.Add(time.Duration(run.Definition.DeadlineSeconds) * time.Second)
 					run.PolicyApplied, run.Escalated = false, false
-					if fail(b.queueDispatch(c, receipt, &run, at)) {
+					if fail(o.queueDispatch(c, receipt, &run, at)) {
 						return
 					}
 				}
@@ -300,7 +299,7 @@ func (b *Build) updateDispatch(c platform.Caller, submission *pb.Submission, at 
 					if i >= 0 {
 						answer := in.Answer
 						if len(answer) > 4096 {
-							answer = platform.Raw(dataowner.ClipAnswer(answer))
+							answer = platform.Raw(ClipAnswer(answer))
 						}
 						run.Attempts[i].State, run.Attempts[i].Reason, run.Attempts[i].Answer = in.Outcome, in.Reason, answer
 					}
@@ -339,7 +338,7 @@ func (b *Build) updateDispatch(c platform.Caller, submission *pb.Submission, at 
 					run.State, run.Reason = "stuck", "The dispatch reached its business deadline"
 				}
 			}
-			if fail(b.dispatchState(c, receipt, &run, at)) {
+			if fail(o.dispatchState(c, receipt, &run, at)) {
 				return
 			}
 			if fail(c.Put(receipt, run)) {
@@ -349,7 +348,7 @@ func (b *Build) updateDispatch(c platform.Caller, submission *pb.Submission, at 
 	})
 }
 
-func (b *Build) dispatchState(c platform.Caller, receipt *pb.ChangeRecord, run *platform.DispatchRun, at time.Time) *platform.Error {
+func (o *Owner) dispatchState(c platform.Caller, receipt *pb.ChangeRecord, run *platform.DispatchRun, at time.Time) *platform.Error {
 	if dispatchTerminal(run.State) {
 		if err := c.DispatchTransport().ResolveDispatchDelivery(c, *run, at); err != nil {
 			return err
@@ -378,7 +377,7 @@ func (b *Build) dispatchState(c platform.Caller, receipt *pb.ChangeRecord, run *
 				if err := c.DispatchTransport().ResolveDispatchDelivery(c, *run, at); err != nil {
 					return err
 				}
-				return b.queueDispatch(c, receipt, run, at)
+				return o.queueDispatch(c, receipt, run, at)
 			}
 		case "compensate":
 			if run.CompensationCommand != nil && len(run.CompensationRequest) > 0 {
@@ -387,7 +386,7 @@ func (b *Build) dispatchState(c platform.Caller, receipt *pb.ChangeRecord, run *
 				}
 				run.Compensating, run.Request = true, run.CompensationRequest
 				run.Deadline = at.Add(time.Duration(run.Definition.DeadlineSeconds) * time.Second)
-				return b.queueDispatch(c, receipt, run, at)
+				return o.queueDispatch(c, receipt, run, at)
 			}
 		case "escalate":
 			if !run.Escalated {
@@ -400,20 +399,20 @@ func (b *Build) dispatchState(c platform.Caller, receipt *pb.ChangeRecord, run *
 	return nil
 }
 
-func (b *Build) runDispatches(c platform.Caller, at time.Time) *platform.Error {
+func (o *Owner) RunDispatches(c platform.Caller, at time.Time) *platform.Error {
 	runs, err := platform.PendingDispatches(c)
 	if err != nil {
 		return err
 	}
 	for _, run := range runs {
 		if !at.Before(run.Deadline) && !slices.Contains([]string{"stuck", "failed", "unknown"}, run.State) {
-			_, err := platform.Decide(c, b, dispatchSubmission(c, run.ID, platform.DispatchTickSchema, fmt.Sprintf("deadline:%d", run.Revision), map[string]any{}, at), at)
+			_, err := platform.Decide(c, o.integration.App, o.dispatchSubmission(c, run.ID, platform.DispatchTickSchema, fmt.Sprintf("deadline:%d", run.Revision), map[string]any{}, at), at)
 			return err
 		}
 	}
 	return nil
 }
 
-func dispatchSubmission(c platform.Caller, id, schema, key string, payload any, at time.Time) *pb.Submission {
-	return &pb.Submission{TenantId: c.Tenant, PrincipalId: c.ID, Authority: ID, IdempotencyKey: "dispatch:" + id + ":" + key, Target: &pb.EntityRef{Type: platform.DispatchType, Id: id}, Schema: &pb.SchemaRef{Name: schema, Version: 1}, Payload: platform.Raw(payload)}
+func (o *Owner) dispatchSubmission(c platform.Caller, id, schema, key string, payload any, at time.Time) *pb.Submission {
+	return &pb.Submission{TenantId: c.Tenant, PrincipalId: c.ID, Authority: App, IdempotencyKey: "dispatch:" + id + ":" + key, Target: &pb.EntityRef{Type: platform.DispatchType, Id: id}, Schema: &pb.SchemaRef{Name: schema, Version: 1}, Payload: platform.Raw(payload)}
 }

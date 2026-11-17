@@ -22,7 +22,7 @@ func (o *Owner) EnvironmentRequirements(asset platform.ReleaseAsset) ([]platform
 		if err := ValueDecodeIntegration(asset.Body, &definition); err != nil {
 			return nil, err
 		}
-		if definition.Name != asset.Ref.Name || !slices.Contains(ConnectionKinds, definition.Kind) {
+		if definition.Name != asset.Ref.Name || !slices.Contains(connectionKinds, definition.Kind) {
 			return nil, fmt.Errorf("invalid connection binding descriptor")
 		}
 		requirement = platform.AssetEnvironmentRequirement{Ref: asset.Ref, Profile: definition.Kind, Credential: definition.Credential}

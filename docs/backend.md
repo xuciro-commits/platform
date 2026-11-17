@@ -57,6 +57,8 @@
   联合发布、页面覆盖、资源身份与安装；动作执行仍归 `services/actions`。
 - 事务声明、规范化、编号与步骤校验归 `services/ontology`，事务执行与拒绝改路归 `services/actions`；
   资源服务提供保留版本、集成绑定和跨类型草稿上下文。
+- 连接、数据源、数据集、管道、回写、确认和设备派发及其外部调用结算与补偿归 `services/data`；
+  协议声明与校验归 `services/ontology`。资源服务只保留跨类型事务注册、发布资产绑定与路由适配。
 - 发布声明、agent/protocol 描述归 `services/resources/publication`，AI 提案消费归
   `services/functions/authoring`；蓝图补全与测试根草稿仍由资源服务编排。
 - 属性、值类型、接口、对象组与关系的声明、转换和字段绑定校验归 `services/ontology`；

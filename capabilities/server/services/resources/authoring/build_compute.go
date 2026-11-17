@@ -9,7 +9,7 @@ import (
 
 func (b *Build) Answer(c platform.Caller, effect platform.Effect, out platform.Outcome, now time.Time) *platform.Error {
 	if strings.HasPrefix(effect.Endpoint, dataowner.WritebackEndpoint) {
-		return b.answered(c, effect, out, now)
+		return b.data.Answer(c, effect, out, now)
 	}
 	return b.functions.AnswerCompilation(c, b, effect, out, now)
 }

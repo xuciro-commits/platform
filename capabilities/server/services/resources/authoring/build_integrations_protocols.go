@@ -1,8 +1,6 @@
 package build
 
 import (
-	"fmt"
-	"reflect"
 	"slices"
 	"strings"
 
@@ -10,130 +8,65 @@ import (
 	"platformserver/platform"
 	actioncatalog "platformserver/services/actions/catalog"
 	functionauthoring "platformserver/services/functions/authoring"
-	ontology "platformserver/services/ontology"
-	"platformserver/services/resources/publication"
+	"platformserver/services/ontology"
 )
 
-func protocolReadName(typ, name string) string { return "protocol:" + typ + ":" + name }
-
-func objectProvisions(object ontology.Object, entity platform.Entity) []platform.Provision {
-	if len(object.Protocols) == 0 {
-		return nil
-	}
-	catalog := platform.NewCatalog(actioncatalog.EntityActions(entity)...)
-	var out []platform.Provision
-	for _, declaration := range object.Protocols {
-		p := platform.Provision{Protocol: platform.Protocol{Name: declaration.Name, Version: declaration.Version, Reads: slices.Clone(declaration.Reads)}, Actions: map[string]string{}, Reads: map[string]string{}, Events: map[string]string{}}
-		verbs := make([]string, 0, len(declaration.Actions))
-		for verb := range declaration.Actions {
-			verbs = append(verbs, verb)
-		}
-		slices.Sort(verbs)
-		for _, verb := range verbs {
-			schema := entity.Type + "." + declaration.Actions[verb]
-			action, ok := catalog.Action(schema)
-			if !ok {
-				continue
-			}
-			action.Schema, action.Roles, action.Automation = verb, nil, false
-			p.Protocol.Actions = append(p.Protocol.Actions, action)
-			p.Actions[verb] = schema
-		}
-		for _, read := range declaration.Reads {
-			p.Reads[read] = protocolReadName(entity.Type, read)
-		}
-		verbs = verbs[:0]
-		for event := range declaration.Events {
-			verbs = append(verbs, event)
-		}
-		slices.Sort(verbs)
-		for _, event := range verbs {
-			p.Events[event] = entity.Type + "." + declaration.Events[event]
-			p.Protocol.Events = append(p.Protocol.Events, platform.ProtocolEvent{Name: event, Title: event})
-		}
-		if declaration.Contract != nil {
-			p.Protocol = *declaration.Contract
-		}
-		out = append(out, p)
-	}
-	return out
+func (b *Build) objectProvisions(object ontology.Object, entity platform.Entity) []platform.Provision {
+	return ontology.ObjectProvisions(object, entity, actioncatalog.EntityActions(entity))
 }
 
 func (b *Build) checkObjectProtocols(object ontology.Object) error {
-	if len(object.Protocols) == 0 {
-		return nil
-	}
-	if len(object.Protocols) > 16 {
-		return fmt.Errorf("An object supports at most 16 protocol bindings")
-	}
-	if err := ontology.CheckProcess(object, ID, TypeOf(object.Name), Builder, User, functionauthoring.FunctionCallType, b.conditionLookup); err != nil {
-		return err
-	}
-	draft := object
-	draft.Protocols = slices.Clone(object.Protocols)
-	for i := range draft.Protocols {
-		draft.Protocols[i].Contract = nil
-	}
-	declaration := draft
-	declaration.Protocols = nil
-	entity := Entity(declaration)
-	if _, err := platform.Describe(ID, entity, func(reflect.Type) string { return "?" }); err != nil {
-		return err
-	}
-	catalog := platform.NewCatalog(actioncatalog.EntityActions(entity)...)
-	generated := objectProvisions(draft, entity)
-	seen := map[string]bool{}
-	for i, declaration := range object.Protocols {
-		actual := generated[i].Protocol
-		id := actual.ID()
-		if declaration.Name == "" || strings.ContainsAny(declaration.Name, "/# :\t\n") || declaration.Version < 1 || seen[id] || len(declaration.Actions) == 0 {
-			return fmt.Errorf("A protocol binding needs a unique name, positive version and declared actions")
-		}
-		seen[id] = true
-		for _, bindings := range []map[string]string{declaration.Actions, declaration.Events} {
-			for verb, action := range bindings {
-				_, exists := catalog.Action(entity.Type + "." + action)
-				if !publication.ValidName(verb) || !exists {
-					return fmt.Errorf("Protocol %s maps %s to an undeclared object action", id, verb)
-				}
+	return ontology.CheckObjectProtocols(object, ontology.ProtocolEnvironment{
+		Actions: actioncatalog.EntityActions,
+		Installed: func() []platform.Entity {
+			out := make([]platform.Entity, 0, len(b.installed))
+			for _, typ := range sortedTypes(b.installed) {
+				out = append(out, b.installed[typ])
 			}
-		}
-		reads := map[string]bool{}
-		for _, read := range declaration.Reads {
-			if !publication.ValidName(read) || reads[read] {
-				return fmt.Errorf("Protocol reads must be unique named record projections")
+			return out
+		},
+		Contract: func(id string) (platform.Protocol, bool) {
+			if b.host == nil {
+				return platform.Protocol{}, false
 			}
-			reads[read] = true
-		}
-		if declaration.Contract != nil {
-			if err := platform.CheckProtocol(*declaration.Contract, actual); err != nil {
-				return err
+			if host, ok := b.host.(interface {
+				ProtocolContract(string) (platform.Protocol, bool)
+			}); ok {
+				return host.ProtocolContract(id)
 			}
+			return platform.Protocol{}, false
+		},
+		CheckProcess: func(value ontology.Object) error {
+			return ontology.CheckProcess(value, ID, TypeOf(value.Name), Builder, User, functionauthoring.FunctionCallType, b.conditionLookup)
+		},
+	})
+}
+
+func (b *Build) consumedProtocols() []platform.Consumption {
+	out := []platform.Consumption{}
+	if b.host != nil {
+		out = b.host.BuildProcessConsumptions()
+	}
+
+	for _, entity := range b.installed {
+		if entity.Lifecycle == nil {
+			continue
 		}
-		for typ, installed := range b.installed {
-			for _, provision := range installed.Protocols {
-				if provision.Protocol.ID() != id {
+		for _, action := range entity.Lifecycle.Actions {
+			for _, rule := range action.Rules {
+				if rule.Transaction == nil || rule.Transaction.Spec == nil || rule.Transaction.Spec.Confirmation == nil {
 					continue
 				}
-				if typ != entity.Type {
-					return fmt.Errorf("Protocol %s is already provided by %s", id, typ)
-				}
-				if err := platform.CheckProtocol(provision.Protocol, actual); err != nil {
-					return err
-				}
-			}
-		}
-		if host, ok := b.host.(interface {
-			ProtocolContract(string) (platform.Protocol, bool)
-		}); ok {
-			if contract, exists := host.ProtocolContract(id); exists {
-				if err := platform.CheckProtocol(contract, actual); err != nil {
-					return err
+				for _, party := range rule.Transaction.Spec.Confirmation.Parties {
+					if party.Protocol != "" && !slices.ContainsFunc(out, func(c platform.Consumption) bool { return c.Protocol == party.Protocol }) {
+						out = append(out, platform.Consumption{Protocol: party.Protocol, Optional: true})
+					}
 				}
 			}
 		}
 	}
-	return nil
+	slices.SortFunc(out, func(a, b platform.Consumption) int { return strings.Compare(a.Protocol, b.Protocol) })
+	return out
 }
 
 func (b *Build) objectProtocols() ([]platform.Provision, []string) {
@@ -176,23 +109,4 @@ func (b *Build) readProtocol(c platform.Caller, name string) (any, *platform.Err
 		}
 	}
 	return nil, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
-}
-
-type ConnectionKind struct {
-	ID                 string `json:"id"`
-	Title              string `json:"title"`
-	Kind               string `json:"kind"`
-	AddressPlaceholder string `json:"addressPlaceholder,omitempty"`
-}
-
-type ConnectionKindPage struct {
-	Items []ConnectionKind `json:"items"`
-}
-
-func ConnectionKinds() ConnectionKindPage {
-	return ConnectionKindPage{Items: []ConnectionKind{
-		{ID: "http", Kind: "http", Title: "HTTP / REST / files", AddressPlaceholder: "https://api.example.com/v1/"},
-		{ID: "odata", Kind: "odata", Title: "OData (SAP Gateway)", AddressPlaceholder: "https://sap.example.com/sap/opu/odata/sap/API_PRODUCT_SRV/"},
-		{ID: "postgres", Kind: "postgres", Title: "PostgreSQL (read-only)", AddressPlaceholder: "postgres://reader@db.example.com:5432/app?sslmode=require"},
-	}}
 }

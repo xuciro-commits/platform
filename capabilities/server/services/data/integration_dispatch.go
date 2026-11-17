@@ -1,4 +1,4 @@
-package build
+package data
 
 import (
 	"encoding/json"
@@ -10,21 +10,20 @@ import (
 	"strings"
 
 	"platformserver/platform"
-	dataowner "platformserver/services/data"
 	ontology "platformserver/services/ontology"
 	"platformserver/services/resources/publication"
 )
 
-func (b *Build) dispatchEntity() platform.Entity {
+func (o *Owner) DispatchEntity() platform.Entity {
 	return platform.Entity{Type: platform.DispatchType, Title: "Device dispatch", Plural: "Device dispatches", Model: platform.DispatchRun{}, Display: "subject",
 		Description: "Declared commands, durable delivery attempts, status reads and authorized human intervention. Control loops and safety interlocks remain local to the equipment.",
-		Scope: dataowner.ScopeWithParticipants(func(value any) []string {
+		Scope: ScopeWithParticipants(func(value any) []string {
 			run := value.(platform.DispatchRun)
-			return append([]string{run.Member}, b.host.Holding(ID, run.Definition.ReviewerRole)...)
+			return append([]string{run.Member}, o.integration.Holding(App, run.Definition.ReviewerRole)...)
 		}), Withheld: "withheld", Derived: []platform.Derivation{{From: "subject", Fields: []string{"reason", "input", "request", "source", "connection", "observation", "device", "attempts", "readback", "definition", "assets", "compensationCommand", "compensationRequest"}}}}
 }
 
-func dispatchActions() []platform.Action {
+func DispatchActions() []platform.Action {
 	return []platform.Action{
 		{Schema: platform.DispatchAnswerSchema, Target: platform.DispatchType, Title: "Record dispatch status", Description: "Retain transport evidence and the declared status read.", Capability: "dispatches", Automation: true, Payload: []platform.Field{}},
 		{Schema: platform.DispatchTickSchema, Target: platform.DispatchType, Title: "Advance dispatch work", Description: "Apply the business deadline and explicit intervention policy.", Capability: "dispatches", Automation: true, Payload: []platform.Field{}},
@@ -44,7 +43,7 @@ func dispatchCommand(object ontology.Object, name string) (platform.DispatchComm
 	return object.DispatchCommands[i], true
 }
 
-func (b *Build) checkDispatch(spec *platform.Dispatch, object ontology.Object, action ontology.Action, engines ...platform.RuleEngine) error {
+func (o *Owner) CheckDispatch(spec *platform.Dispatch, object ontology.Object, action ontology.Action, engines ...platform.RuleEngine) error {
 	if spec == nil {
 		return nil
 	}
@@ -61,8 +60,8 @@ func (b *Build) checkDispatch(spec *platform.Dispatch, object ontology.Object, a
 	if spec.ReviewerRole != Builder && !slices.ContainsFunc(object.Access, func(access ontology.Access) bool { return access.Role == spec.ReviewerRole }) {
 		return fmt.Errorf("The dispatch reviewer role is not declared")
 	}
-	info, _ := platform.Describe(ID, Entity(object), func(reflect.Type) string { return "" })
-	lookup := ruleLookup(object, b.conditionLookup)
+	info, _ := platform.Describe(App, ontology.CompileObjectEntity(object, ontology.ObjectRuntimeEnvironment{}), func(reflect.Type) string { return "" })
+	lookup := ontology.RuleLookup(object, App, Builder, o.integration.Lookup)
 	if spec.Key != "$subject" {
 		field, found := info.Field(strings.TrimPrefix(spec.Key, "record."))
 		if !found || !slices.Contains([]string{"text", "reference"}, field.Type) || !field.ReadOnly {
@@ -70,7 +69,7 @@ func (b *Build) checkDispatch(spec *platform.Dispatch, object ontology.Object, a
 		}
 	}
 	used := map[string]bool{}
-	scope := ruleSpec(object, action, action.Transaction.Reads)
+	scope := ontology.RuleSpec(object, App, action, action.Transaction.Reads)
 	for _, set := range spec.Payload {
 		if !publication.ValidName(set.Field) || used[set.Field] || set.Field == "id" || set.Field == "key" {
 			return fmt.Errorf("Dispatch parameters must have distinct declared names")
@@ -104,8 +103,8 @@ func (b *Build) checkDispatch(spec *platform.Dispatch, object ontology.Object, a
 			}
 		}
 	}
-	if b.host != nil {
-		_, err := b.bindDispatch(*spec, object)
+	if o.integration.App != nil {
+		_, err := o.bindDispatch(*spec, object)
 		return err
 	}
 	return nil
@@ -121,27 +120,27 @@ type dispatchBindings struct {
 	Record              *platform.AssetRef           `json:"record,omitempty"`
 }
 
-func (b *Build) bindDispatch(spec platform.Dispatch, object ontology.Object) (dispatchBindings, error) {
+func (o *Owner) bindDispatch(spec platform.Dispatch, object ontology.Object) (dispatchBindings, error) {
 	out := dispatchBindings{Commands: map[string]platform.AssetRef{}}
 	command, found := dispatchCommand(object, spec.Command)
 	if !found {
 		return out, fmt.Errorf("Dispatch command is not declared")
 	}
 	writeback := func(id string) (platform.AssetRef, error) {
-		prospective, selected, err := b.data.Prospective(platform.AssetWriteback, id, b.jointDeclarations)
+		prospective, selected, err := o.Prospective(platform.AssetWriteback, id, o.integration.JointDeclarations())
 		if err != nil {
 			return platform.AssetRef{}, err
 		}
-		var fixed dataowner.Writeback
+		var fixed Writeback
 		if selected {
-			fixed = prospective.(dataowner.Writeback)
+			fixed = prospective.(Writeback)
 		} else {
-			record, known := b.host.Record(dataowner.WritebackType + "/" + id)
-			w, valid := record.(dataowner.Writeback)
+			record, known := o.integration.Record(WritebackType + "/" + id)
+			w, valid := record.(Writeback)
 			if !known || !valid {
 				return platform.AssetRef{}, fmt.Errorf("Dispatch writeback is unavailable")
 			}
-			fixed, err = b.data.ExecutionWriteback(w)
+			fixed, err = o.ExecutionWriteback(w)
 			if err != nil {
 				return platform.AssetRef{}, err
 			}
@@ -153,7 +152,7 @@ func (b *Build) bindDispatch(spec platform.Dispatch, object ontology.Object) (di
 		if err != nil || path.IsAbs() || path.Host != "" || path.User != nil || strings.HasPrefix(fixed.Path, "//") {
 			return platform.AssetRef{}, fmt.Errorf("Dispatch command paths must be relative to the external connection")
 		}
-		return platform.AssetRef{App: ID, Kind: platform.AssetWriteback, Name: fixed.Name}, nil
+		return platform.AssetRef{App: App, Kind: platform.AssetWriteback, Name: fixed.Name}, nil
 	}
 	var err error
 	for _, declared := range object.DispatchCommands {
@@ -178,35 +177,35 @@ func (b *Build) bindDispatch(spec platform.Dispatch, object ontology.Object) (di
 		}
 		out.CompensateWriteback = &ref
 	}
-	record, known := b.host.Record(dataowner.ConnectionType + "/" + spec.Target)
-	connection, valid := record.(dataowner.Connection)
+	record, known := o.integration.Record(ConnectionType + "/" + spec.Target)
+	connection, valid := record.(Connection)
 	if !known || !valid {
 		return out, fmt.Errorf("Dispatch target connection is unavailable")
 	}
-	connection, err = b.data.ConnectionConfiguration(connection)
+	connection, err = o.ConnectionConfiguration(connection)
 	if err != nil {
 		return out, err
 	}
 	if !slices.Contains([]string{"http", "odata"}, connection.Kind) {
 		return out, fmt.Errorf("Dispatch target must be an HTTP or OData connection")
 	}
-	out.Target = platform.AssetRef{App: ID, Kind: platform.AssetConnection, Name: connection.Name}
+	out.Target = platform.AssetRef{App: App, Kind: platform.AssetConnection, Name: connection.Name}
 	if spec.Readback.Source != "" {
-		prospective, selected, err := b.data.Prospective(platform.AssetSource, spec.Readback.Source, b.jointDeclarations)
+		prospective, selected, err := o.Prospective(platform.AssetSource, spec.Readback.Source, o.integration.JointDeclarations())
 		if err != nil {
 			return out, err
 		}
-		var source dataowner.Source
+		var source Source
 		if selected {
-			source = prospective.(dataowner.Source)
+			source = prospective.(Source)
 		} else {
-			record, known := b.host.Record(dataowner.SourceType + "/" + spec.Readback.Source)
+			record, known := o.integration.Record(SourceType + "/" + spec.Readback.Source)
 			var valid bool
-			source, valid = record.(dataowner.Source)
+			source, valid = record.(Source)
 			if !known || !valid {
 				return out, fmt.Errorf("Dispatch status source is unavailable")
 			}
-			source, err = b.data.ExecutionSource(source)
+			source, err = o.ExecutionSource(source)
 			if err != nil {
 				return out, err
 			}
@@ -218,23 +217,23 @@ func (b *Build) bindDispatch(spec platform.Dispatch, object ontology.Object) (di
 		if err != nil || path.IsAbs() || path.Host != "" || path.User != nil || strings.HasPrefix(source.URL, "//") {
 			return out, fmt.Errorf("Dispatch status paths must be relative to the source connection")
 		}
-		out.Source = &platform.AssetRef{App: ID, Kind: platform.AssetSource, Name: source.Name}
+		out.Source = &platform.AssetRef{App: App, Kind: platform.AssetSource, Name: source.Name}
 	}
 	if spec.Readback.Observation != "" {
-		prospective, selected, err := b.data.Prospective(platform.AssetObservation, spec.Readback.Observation, b.jointDeclarations)
+		prospective, selected, err := o.Prospective(platform.AssetObservation, spec.Readback.Observation, o.integration.JointDeclarations())
 		if err != nil {
 			return out, err
 		}
 		var definition platform.ObservationDefinition
 		if selected {
-			definition, err = b.data.ObservationDefinition(prospective.(dataowner.Observation))
+			definition, err = o.ObservationDefinition(prospective.(Observation))
 		} else {
-			record, known := b.host.Record(dataowner.ObservationType + "/" + spec.Readback.Observation)
-			observation, valid := record.(dataowner.Observation)
+			record, known := o.integration.Record(ObservationType + "/" + spec.Readback.Observation)
+			observation, valid := record.(Observation)
 			if !known || !valid {
 				return out, fmt.Errorf("Dispatch observation is unavailable")
 			}
-			definition, err = b.data.ExecutionObservation(observation)
+			definition, err = o.ExecutionObservation(observation)
 		}
 		if err != nil {
 			return out, err
@@ -242,7 +241,7 @@ func (b *Build) bindDispatch(spec platform.Dispatch, object ontology.Object) (di
 		if definition.Object.Name != "build."+object.Name {
 			return out, fmt.Errorf("Dispatch observation must read its business subject")
 		}
-		out.Observation = &platform.AssetRef{App: ID, Kind: platform.AssetObservation, Name: definition.Name}
+		out.Observation = &platform.AssetRef{App: App, Kind: platform.AssetObservation, Name: definition.Name}
 	}
 	if spec.Readback.Record != "" {
 		owner, _, _ := strings.Cut(spec.Readback.Record, ".")
@@ -251,11 +250,11 @@ func (b *Build) bindDispatch(spec platform.Dispatch, object ontology.Object) (di
 	return out, nil
 }
 
-func (b *Build) bindDispatchAssets(assets []platform.ReleaseAsset) ([]platform.ReleaseAsset, error) {
+func (o *Owner) BindDispatchAssets(assets []platform.ReleaseAsset) ([]platform.ReleaseAsset, error) {
 	bindings := map[string]dispatchBindings{}
 	effects := map[string]map[string]platform.AssetRef{}
 	for i, asset := range assets {
-		if asset.Ref.App != ID || asset.Ref.Kind != platform.AssetObject {
+		if asset.Ref.App != App || asset.Ref.Kind != platform.AssetObject {
 			continue
 		}
 		var object ontology.Object
@@ -264,7 +263,7 @@ func (b *Build) bindDispatchAssets(assets []platform.ReleaseAsset) ([]platform.R
 		}
 		for _, action := range object.Actions {
 			if action.Transaction != nil {
-				refs, err := b.txnEffectBindings(action.Transaction)
+				refs, err := o.txnEffectBindings(action.Transaction)
 				if err != nil {
 					return nil, err
 				}
@@ -275,14 +274,14 @@ func (b *Build) bindDispatchAssets(assets []platform.ReleaseAsset) ([]platform.R
 			if action.Transaction == nil || action.Transaction.Dispatch == nil {
 				continue
 			}
-			binding, err := b.bindDispatch(*action.Transaction.Dispatch, object)
+			binding, err := o.bindDispatch(*action.Transaction.Dispatch, object)
 			if err != nil {
 				return nil, err
 			}
 			bindings[asset.Ref.Name+"."+action.Name] = binding
 		}
 		if object.CreateTransaction != nil {
-			refs, err := b.txnEffectBindings(object.CreateTransaction)
+			refs, err := o.txnEffectBindings(object.CreateTransaction)
 			if err != nil {
 				return nil, err
 			}
@@ -291,7 +290,7 @@ func (b *Build) bindDispatchAssets(assets []platform.ReleaseAsset) ([]platform.R
 			}
 		}
 		if objectHasIntegrations(object) {
-			if err := ontology.MapObjectIntegrations(&object, b.data.IntegrationName); err != nil {
+			if err := ontology.MapObjectIntegrations(&object, o.IntegrationName); err != nil {
 				return nil, err
 			}
 			var err error
@@ -299,7 +298,7 @@ func (b *Build) bindDispatchAssets(assets []platform.ReleaseAsset) ([]platform.R
 			if err != nil {
 				return nil, err
 			}
-			assets[i], err = b.resolver.WithDependencies(asset)
+			assets[i], err = o.resolver.WithDependencies(asset)
 			if err != nil {
 				return nil, err
 			}
@@ -323,7 +322,7 @@ func (b *Build) bindDispatchAssets(assets []platform.ReleaseAsset) ([]platform.R
 		}
 		asset.Body = platform.Raw(body)
 		var err error
-		assets[i], err = b.resolver.WithDependencies(asset)
+		assets[i], err = o.resolver.WithDependencies(asset)
 		if err != nil {
 			return nil, err
 		}
@@ -345,24 +344,28 @@ func objectHasIntegrations(object ontology.Object) bool {
 	return found
 }
 
-func (b *Build) txnEffectBindings(txn *platform.BusinessTxn) (map[string]platform.AssetRef, error) {
+func (o *Owner) PortableObject(object ontology.Object) (ontology.Object, error) {
+	return o.dispatchSchemaObject(object)
+}
+
+func (o *Owner) txnEffectBindings(txn *platform.BusinessTxn) (map[string]platform.AssetRef, error) {
 	refs := map[string]platform.AssetRef{}
 	var failure error
 	platform.WalkBusinessTxn(txn, func(step platform.TxnStep) {
 		if failure != nil || step.Effect == nil {
 			return
 		}
-		name, err := b.data.IntegrationName(platform.AssetWriteback, step.Effect.Writeback)
+		name, err := o.IntegrationName(platform.AssetWriteback, step.Effect.Writeback)
 		if err != nil {
 			failure = err
 			return
 		}
-		refs[step.Name] = platform.AssetRef{App: ID, Kind: platform.AssetWriteback, Name: name}
+		refs[step.Name] = platform.AssetRef{App: App, Kind: platform.AssetWriteback, Name: name}
 	})
 	return refs, failure
 }
 
-func (b *Build) dispatchSchemaObject(object ontology.Object) (ontology.Object, error) {
+func (o *Owner) dispatchSchemaObject(object ontology.Object) (ontology.Object, error) {
 	if !objectHasIntegrations(object) {
 		return object, nil
 	}
@@ -370,7 +373,7 @@ func (b *Build) dispatchSchemaObject(object ontology.Object) (ontology.Object, e
 	if err := json.Unmarshal(platform.Raw(object), &portable); err != nil {
 		return object, err
 	}
-	if err := ontology.MapObjectIntegrations(&portable, b.data.IntegrationName); err != nil {
+	if err := ontology.MapObjectIntegrations(&portable, o.IntegrationName); err != nil {
 		return object, err
 	}
 	return portable, nil
