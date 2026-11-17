@@ -26,7 +26,7 @@ func (s *Store) Declare(a platform.App) error {
 		classes[d.GetDataClass()] = true
 	}
 	for _, e := range m.Entities {
-		info, err := platform.Describe(m.ID, e, func(t reflect.Type) string { return own[t] })
+		info, err := Describe(m.ID, e, func(t reflect.Type) string { return own[t] })
 		if err != nil {
 			return err
 		}

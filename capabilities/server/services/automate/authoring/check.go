@@ -11,6 +11,7 @@ import (
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
+	"platformserver/kernel/records"
 	"platformserver/platform"
 	actioncatalog "platformserver/services/actions/catalog"
 	"platformserver/services/resources/publication"
@@ -346,7 +347,7 @@ func CheckProcess(p Process, entity platform.Entity, lookup ProcessLookup, objec
 				if step.WaitUntil.Source == "subject" {
 					field, err := platform.RecordPathField(p.Object, step.WaitUntil.Path, func(typ string) (platform.EntityInfo, bool) {
 						if model, ok := actionModels[typ]; ok {
-							info, err := platform.Describe(lookup.App, model, func(reflect.Type) string { return "" })
+							info, err := records.Describe(lookup.App, model, func(reflect.Type) string { return "" })
 							return info, err == nil
 						}
 						return lookup.Entity(typ)

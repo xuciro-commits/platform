@@ -7,6 +7,7 @@ import (
 	"slices"
 	"strings"
 
+	"platformserver/kernel/records"
 	persistence "platformserver/kernel/store"
 	"platformserver/platform"
 )
@@ -50,7 +51,7 @@ func Compatibility(apps []platform.App) (SnapshotCompatibility, error) {
 			own[reflect.TypeOf(entity.Model)] = entity.Type
 		}
 		for _, entity := range manifest.Entities {
-			info, err := platform.Describe(manifest.ID, entity, func(goType reflect.Type) string { return own[goType] })
+			info, err := records.Describe(manifest.ID, entity, func(goType reflect.Type) string { return own[goType] })
 			if err != nil {
 				return SnapshotCompatibility{}, err
 			}

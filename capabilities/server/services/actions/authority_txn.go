@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"google.golang.org/protobuf/proto"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
+	"platformserver/kernel/records"
 	"platformserver/platform"
 	"reflect"
 	"slices"
@@ -61,7 +62,7 @@ func (l *authority) ApplyTxnRecord(c platform.Caller, r *pb.ChangeRecord, e plat
 		}
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "Authorization denied at {layer}: {reason}", layer, decision.Reason)
 	}
-	info, _ := platform.Describe(c.App, e, func(_ reflect.Type) string { return "" })
+	info, _ := records.Describe(c.App, e, func(_ reflect.Type) string { return "" })
 	var given map[string]json.RawMessage
 	if json.Unmarshal(payload, &given) != nil {
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Invalid transaction fields / 事务字段无效")

@@ -9,6 +9,7 @@ import (
 	"slices"
 	"strings"
 
+	"platformserver/kernel/records"
 	"platformserver/platform"
 	automationauthoring "platformserver/services/automate/authoring"
 	ontology "platformserver/services/ontology"
@@ -53,7 +54,7 @@ func (b *Build) jointObjectEntities(objects []ontology.Object, drafts []JointDra
 			continue
 		}
 		record := objects[i]
-		info, err := platform.Describe(ID, Entity(record), func(reflect.Type) string { return "" })
+		info, err := records.Describe(ID, Entity(record), func(reflect.Type) string { return "" })
 		if err != nil {
 			continue
 		}

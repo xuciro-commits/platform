@@ -8,6 +8,7 @@ import (
 	"slices"
 	"strings"
 
+	"platformserver/kernel/records"
 	"platformserver/platform"
 )
 
@@ -66,7 +67,7 @@ func (h ObjectInstall) Run(app platform.App, e platform.Entity, actions []platfo
 	if other := h.Owner(h.Owners["action:"+actions[0].Schema]); other != nil && (other.Manifest().ID != id || other.Authority() != app.Authority()) {
 		return fmt.Errorf("%s: another app owns %s", e.Type, actions[0].Schema)
 	}
-	info, err := platform.Describe(id, e, func(reflect.Type) string { return "" })
+	info, err := records.Describe(id, e, func(reflect.Type) string { return "" })
 	if err != nil {
 		return err
 	}

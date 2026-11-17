@@ -12,6 +12,7 @@ import (
 	"slices"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
+	"platformserver/kernel/records"
 	"platformserver/platform"
 	dataowner "platformserver/services/data"
 	devopsmodel "platformserver/services/devops/descriptor"
@@ -89,7 +90,7 @@ func (b *Build) ForkReleaseExecution(assets []platform.ReleaseAsset) (platform.A
 		if asset.SourceVersion != ValueDefinitionVersion || json.Unmarshal(asset.Body, &object) != nil || TypeOf(object.Name) != asset.Ref.Name {
 			return nil, fmt.Errorf("unsupported retained object descriptor %s", asset.Ref)
 		}
-		info, err := platform.Describe(ID, Entity(object), func(reflect.Type) string { return "" })
+		info, err := records.Describe(ID, Entity(object), func(reflect.Type) string { return "" })
 		if problem := ontology.CheckObjectSchemas(object); problem != nil {
 			return nil, problem
 		}

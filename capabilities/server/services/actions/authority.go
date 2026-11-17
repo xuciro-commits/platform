@@ -5,6 +5,7 @@ import (
 	"fmt"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformserver/kernel/protocol"
+	"platformserver/kernel/records"
 	"platformserver/platform"
 	"reflect"
 	"slices"
@@ -387,7 +388,7 @@ func executeAction(c platform.Caller, e platform.Entity, t platform.ActionType, 
 			if json.Unmarshal(s.GetPayload(), &given) != nil {
 				return nil, invalid
 			}
-			info, _ := platform.Describe("", e, func(reflect.Type) string { return "?" })
+			info, _ := records.Describe("", e, func(reflect.Type) string { return "?" })
 			for name := range given {
 				if f, ok := info.Field(name); !ok || f.ReadOnly || !c.Replaying && !c.Automation && !f.WritesAny(c.RolesHere(), c.Rules()) {
 					return nil, invalid
@@ -412,7 +413,7 @@ func executeAction(c platform.Caller, e platform.Entity, t platform.ActionType, 
 			v.Elem().Field(0).Addr().Interface().(*platform.Record).Archived = false
 		}
 	default:
-		info, _ := platform.Describe("", e, func(reflect.Type) string { return "?" })
+		info, _ := records.Describe("", e, func(reflect.Type) string { return "?" })
 		f, _ := info.Field(e.Lifecycle.Field)
 		status := v.Elem().FieldByIndex(f.Index)
 		from := status.String()

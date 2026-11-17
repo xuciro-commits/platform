@@ -3,6 +3,7 @@ package build
 import (
 	"reflect"
 
+	"platformserver/kernel/records"
 	"platformserver/platform"
 	"platformserver/services/ontology"
 	"platformserver/services/resources/publication"
@@ -38,7 +39,7 @@ func (b *Build) checkRecordSets(object ontology.Object, engines ...platform.Rule
 	if len(object.Sets) == 0 {
 		return nil
 	}
-	info, err := platform.Describe(ID, Entity(object), func(reflect.Type) string { return "" })
+	info, err := records.Describe(ID, Entity(object), func(reflect.Type) string { return "" })
 	if err != nil {
 		return err
 	}

@@ -8,6 +8,7 @@ import (
 	"reflect"
 	"slices"
 
+	"platformserver/kernel/records"
 	"platformserver/platform"
 	automationauthoring "platformserver/services/automate/authoring"
 	dataowner "platformserver/services/data"
@@ -149,7 +150,7 @@ func (b *Build) BeginAssetBootstrap(assets []platform.ReleaseAsset) (func(), err
 		if err := json.Unmarshal(asset.Body, &object); err != nil || TypeOf(object.Name) != asset.Ref.Name {
 			return nil, fmt.Errorf("invalid bootstrap object shape %s", asset.Ref)
 		}
-		shape, err := platform.Describe(ID, Entity(object), func(reflect.Type) string { return "" })
+		shape, err := records.Describe(ID, Entity(object), func(reflect.Type) string { return "" })
 		if err != nil {
 			return nil, err
 		}

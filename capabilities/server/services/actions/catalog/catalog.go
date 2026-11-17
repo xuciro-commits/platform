@@ -6,6 +6,7 @@ import (
 	"slices"
 	"strings"
 
+	"platformserver/kernel/records"
 	"platformserver/platform"
 )
 
@@ -34,7 +35,7 @@ func payloadColumns(columns []platform.FieldInfo) []platform.Field {
 }
 
 func EntityActions(e platform.Entity) []platform.Action {
-	info, err := platform.Describe("", e, func(reflect.Type) string { return "?" })
+	info, err := records.Describe("", e, func(reflect.Type) string { return "?" })
 	if err != nil {
 		panic(err)
 	}

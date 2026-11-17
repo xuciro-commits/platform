@@ -9,6 +9,7 @@ import (
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
+	"platformserver/kernel/records"
 	"platformserver/platform"
 	functionauthoring "platformserver/services/functions/authoring"
 	ontology "platformserver/services/ontology"
@@ -42,7 +43,7 @@ func (b *Build) captureExtensionSource(object *ontology.Object) error {
 		return err
 	}
 	object.ExtensionSource = &source
-	info, err := platform.Describe(ID, Entity(*object), func(reflect.Type) string { return "" })
+	info, err := records.Describe(ID, Entity(*object), func(reflect.Type) string { return "" })
 	if err != nil {
 		return err
 	}
@@ -61,12 +62,12 @@ func (b *Build) checkExtensionDependents(object ontology.Object) error {
 			continue
 		}
 		if base.Type == "" {
-			base, err = platform.Describe(ID, Entity(object), func(reflect.Type) string { return "" })
+			base, err = records.Describe(ID, Entity(object), func(reflect.Type) string { return "" })
 			if err != nil {
 				return err
 			}
 		}
-		extension, err := platform.Describe(ID, Entity(published), func(reflect.Type) string { return "" })
+		extension, err := records.Describe(ID, Entity(published), func(reflect.Type) string { return "" })
 		if err != nil {
 			return err
 		}

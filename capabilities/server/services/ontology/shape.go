@@ -6,6 +6,7 @@ import (
 	"slices"
 	"strings"
 
+	"platformserver/kernel/records"
 	"platformserver/platform"
 	"platformserver/services/resources/publication"
 )
@@ -137,7 +138,7 @@ func ValueChoices(s string) []string {
 
 func CheckObjectShape(o Object, app, objectType string, model platform.Entity, declared []platform.Interface, known func(string) bool, lookup func(string) (platform.EntityInfo, bool)) error {
 	if len(o.Implements) > 0 {
-		info, err := platform.Describe(app, model, func(reflect.Type) string { return "" })
+		info, err := records.Describe(app, model, func(reflect.Type) string { return "" })
 		if err != nil {
 			return err
 		}
@@ -163,7 +164,7 @@ func CheckObjectShape(o Object, app, objectType string, model platform.Entity, d
 			return fmt.Errorf("an extension of %s needs a required reference field %q pointing at it", o.Extends, BaseField)
 		}
 		if base, exists := lookup(o.Extends); exists {
-			info, err := platform.Describe(app, model, func(reflect.Type) string { return "" })
+			info, err := records.Describe(app, model, func(reflect.Type) string { return "" })
 			if err != nil {
 				return err
 			}

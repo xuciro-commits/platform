@@ -7,6 +7,7 @@ import (
 	"google.golang.org/protobuf/proto"
 	"maps"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
+	"platformserver/kernel/records"
 	"platformserver/platform"
 	"platformserver/services/ontology"
 	"platformserver/services/resources/publication"
@@ -36,7 +37,7 @@ func (b *Runtime) refusalRecord(c platform.Caller, receipt *pb.ChangeRecord, ste
 	if !ok || id == "" {
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Refusal record identity is unavailable / 拒绝记录标识不可用")
 	}
-	info, _ := platform.Describe(b.App, entity, func(reflect.Type) string { return "" })
+	info, _ := records.Describe(b.App, entity, func(reflect.Type) string { return "" })
 	patch := map[string]any{}
 	for _, assignment := range step.Changes {
 		field, _ := info.Field(assignment.Field)
@@ -208,7 +209,7 @@ func (b *Runtime) transactAttempt(c platform.Caller, receipt *pb.ChangeRecord, t
 		}
 	}
 	if invocation.GetSchema().GetName() == txn.Subject+".create" {
-		info, _ := platform.Describe(b.App, b.Entities[txn.Subject], func(reflect.Type) string { return "" })
+		info, _ := records.Describe(b.App, b.Entities[txn.Subject], func(reflect.Type) string { return "" })
 		for _, field := range info.Fields {
 			spec.Inputs[field.Name] = platform.ExprType{Kind: platform.RuleFieldKind(field.Type), Object: field.Ref}
 		}
@@ -585,7 +586,7 @@ func (b *Runtime) transactAttempt(c platform.Caller, receipt *pb.ChangeRecord, t
 			if err := reserve(entity.Type + "/" + id); err != nil {
 				return err
 			}
-			info, _ := platform.Describe(b.App, entity, func(reflect.Type) string { return "" })
+			info, _ := records.Describe(b.App, entity, func(reflect.Type) string { return "" })
 			patch := map[string]any{}
 			sources := []string{}
 			for _, assignment := range step.Changes {

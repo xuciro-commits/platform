@@ -4,6 +4,7 @@ import (
 	"platformserver/services/ontology"
 	"reflect"
 
+	"platformserver/kernel/records"
 	"platformserver/platform"
 	appsauthoring "platformserver/services/apps/authoring"
 )
@@ -29,7 +30,7 @@ func (e appEnvironment) DraftObjectLookup(c platform.Caller) (func(string) (plat
 		if object.Archived {
 			continue
 		}
-		info, err := platform.Describe(ID, Entity(object), func(reflect.Type) string { return "" })
+		info, err := records.Describe(ID, Entity(object), func(reflect.Type) string { return "" })
 		if err != nil {
 			return nil, err
 		}

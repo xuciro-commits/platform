@@ -296,7 +296,7 @@ func AssetShapes(apps []platform.App, available []platform.ReleaseAsset) (map[st
 			}) {
 				continue
 			}
-			info, err := platform.Describe(owner.Manifest().ID, entity, func(reflect.Type) string { return "" })
+			info, err := records.Describe(owner.Manifest().ID, entity, func(reflect.Type) string { return "" })
 			if err != nil {
 				return nil, err
 			}

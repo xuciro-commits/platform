@@ -52,19 +52,6 @@ type RecordImageFormat struct {
 	Convert func(json.RawMessage) (json.RawMessage, error)
 }
 
-func checkRecordImageFormats(info EntityInfo) error {
-	seen := map[string]bool{info.RecordFormat: true}
-	for _, image := range info.RecordImages {
-		t := reflect.TypeOf(image.Model)
-		if seen[image.Format] || t == nil || t.Kind() != reflect.Struct || t.NumField() == 0 ||
-			t.Field(0).Type != reflect.TypeFor[Record]() || !t.Field(0).Anonymous || image.Convert == nil {
-			return fmt.Errorf("entity %s: invalid or duplicate historical record format %q", info.Type, image.Format)
-		}
-		seen[image.Format] = true
-	}
-	return nil
-}
-
 func decodeRecordImage(raw json.RawMessage, model reflect.Type) (Record, error) {
 	value := reflect.New(model)
 	decoder := json.NewDecoder(bytes.NewReader(raw))

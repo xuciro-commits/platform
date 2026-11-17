@@ -9,6 +9,7 @@ import (
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
+	"platformserver/kernel/records"
 	"platformserver/platform"
 	ontology "platformserver/services/ontology"
 )
@@ -38,7 +39,7 @@ func (b *Build) checkTransactions(object ontology.Object, engines ...platform.Ru
 		BuilderRole: Builder,
 		Lookup:      b.conditionLookup,
 		ObjectInfo: func() (platform.EntityInfo, error) {
-			return platform.Describe(ID, Entity(object), func(reflect.Type) string { return "" })
+			return records.Describe(ID, Entity(object), func(reflect.Type) string { return "" })
 		},
 		Saved: func(typ string) bool {
 			_, installed := b.installed[typ]

@@ -231,7 +231,7 @@ func RetainedShapes(app string, entities []platform.Entity, selected []platform.
 		}) {
 			continue
 		}
-		info, err := platform.Describe(app, entity, func(reflect.Type) string { return "" })
+		info, err := records.Describe(app, entity, func(reflect.Type) string { return "" })
 		if err != nil {
 			return nil, err
 		}

@@ -3,6 +3,7 @@ package build
 import (
 	"reflect"
 
+	"platformserver/kernel/records"
 	"platformserver/platform"
 	ontology "platformserver/services/ontology"
 )
@@ -14,7 +15,7 @@ func (b *Build) checkPresentation(o ontology.Object) error {
 	if o.Icon == "" && o.Color == "" && ontology.FieldFormats(o.Fields) == nil {
 		return nil
 	}
-	info, err := platform.Describe(ID, Entity(o), func(reflect.Type) string { return "" })
+	info, err := records.Describe(ID, Entity(o), func(reflect.Type) string { return "" })
 	if err != nil {
 		return err
 	}

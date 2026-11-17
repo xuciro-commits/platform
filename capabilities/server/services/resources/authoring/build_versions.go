@@ -5,6 +5,7 @@ import (
 	"platformserver/services/ontology"
 	"platformserver/services/resources/publication"
 
+	"platformserver/kernel/records"
 	"platformserver/platform"
 	actioncatalog "platformserver/services/actions/catalog"
 	"reflect"
@@ -15,7 +16,7 @@ func (b *Build) checkVersioning(o ontology.Object) error {
 	if o.Versioning == nil && len(o.VersionPins) == 0 {
 		return nil
 	}
-	info, err := platform.Describe(ID, b.entity(o), func(reflect.Type) string { return "" })
+	info, err := records.Describe(ID, b.entity(o), func(reflect.Type) string { return "" })
 	if err != nil {
 		return err
 	}

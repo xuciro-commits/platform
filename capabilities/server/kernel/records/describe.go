@@ -1,4 +1,4 @@
-package platform
+package records
 
 import (
 	"encoding/json"
@@ -6,6 +6,32 @@ import (
 	"reflect"
 	"slices"
 	"strings"
+	"time"
+
+	"platformserver/platform"
+)
+
+type (
+	ActionType        = platform.ActionType
+	Attachment        = platform.Attachment
+	DerivationInfo    = platform.DerivationInfo
+	Entity            = platform.Entity
+	EntityInfo        = platform.EntityInfo
+	Field             = platform.Field
+	FieldInfo         = platform.FieldInfo
+	LifecycleInfo     = platform.LifecycleInfo
+	Money             = platform.Money
+	Record            = platform.Record
+	RecordImageFormat = platform.RecordImageFormat
+	TransitionInfo    = platform.TransitionInfo
+)
+
+type reference interface{ refType() reflect.Type }
+
+var (
+	timeType  = reflect.TypeFor[time.Time]()
+	moneyType = reflect.TypeFor[Money]()
+	refIface  = reflect.TypeFor[reference]()
 )
 
 func Describe(app string, e Entity, typeOf func(reflect.Type) string) (EntityInfo, error) {
@@ -13,7 +39,7 @@ func Describe(app string, e Entity, typeOf func(reflect.Type) string) (EntityInf
 	if t == nil || t.Kind() != reflect.Struct || t.NumField() == 0 || t.Field(0).Type != reflect.TypeFor[Record]() || !t.Field(0).Anonymous {
 		return EntityInfo{}, fmt.Errorf("entity %s: the model must be a struct embedding platform.Record first", e.Type)
 	}
-	info := EntityInfo{DataSources: slices.Clone(e.DataSources), LocalRules: e.LocalRules, EnterpriseUse: e.EnterpriseUse, Type: e.Type, Title: e.Title, Description: e.Description, Synonyms: e.Synonyms, KnowledgeFiles: e.KnowledgeFiles, App: app, Display: e.Display, ObjectView: e.ObjectView, Go: t, Scope: e.Scope, Fields: []FieldInfo{}, Standard: []string{}, Implements: e.Implements, Extends: e.Extends, ExtensionSource: e.ExtensionSource, Constraints: append(slices.Clone(e.Constraints), VersioningConstraints(e.Versioning)...), Sets: e.Sets, Versioning: e.Versioning, VersionPins: slices.Clone(e.VersionPins)}
+	info := EntityInfo{DataSources: slices.Clone(e.DataSources), LocalRules: e.LocalRules, EnterpriseUse: e.EnterpriseUse, Type: e.Type, Title: e.Title, Description: e.Description, Synonyms: e.Synonyms, KnowledgeFiles: e.KnowledgeFiles, App: app, Display: e.Display, ObjectView: e.ObjectView, Go: t, Scope: e.Scope, Fields: []FieldInfo{}, Standard: []string{}, Implements: e.Implements, Extends: e.Extends, ExtensionSource: e.ExtensionSource, Constraints: append(slices.Clone(e.Constraints), platform.VersioningConstraints(e.Versioning)...), Sets: e.Sets, Versioning: e.Versioning, VersionPins: slices.Clone(e.VersionPins)}
 	info.RecordFormat, info.RecordImages = e.RecordFormat, slices.Clone(e.RecordImages)
 	if err := checkRecordImageFormats(info); err != nil {
 		return EntityInfo{}, err
@@ -38,7 +64,7 @@ func Describe(app string, e Entity, typeOf func(reflect.Type) string) (EntityInf
 	info.Fields = fields
 	for name, binding := range e.PropertyBindings {
 		i := slices.IndexFunc(info.Fields, func(f FieldInfo) bool { return f.Name == name })
-		if i < 0 || binding.Ref.Kind != AssetPropertyType || binding.Ref.Check() != nil || binding.SourceVersion == "" {
+		if i < 0 || binding.Ref.Kind != platform.AssetPropertyType || binding.Ref.Check() != nil || binding.SourceVersion == "" {
 			return EntityInfo{}, fmt.Errorf("invalid property field binding")
 		}
 		selected := binding
@@ -54,7 +80,7 @@ func Describe(app string, e Entity, typeOf func(reflect.Type) string) (EntityInf
 		}
 	}
 	for _, x := range [][2]string{{"owner", e.Scope.Owner}, {"unit", e.Scope.Unit}} {
-		if x[1] != "" && !(x[0] == "owner" && x[1] == OwnerCreated) {
+		if x[1] != "" && !(x[0] == "owner" && x[1] == platform.OwnerCreated) {
 			f, ok := info.Field(x[1])
 			unitReference := x[0] == "unit" && f.Type == "reference" && f.Ref == "enterprise.element"
 			if !ok || f.Type != "text" && !unitReference {
@@ -69,8 +95,8 @@ func Describe(app string, e Entity, typeOf func(reflect.Type) string) (EntityInf
 		}
 		return out
 	}(), e.Scope.Default) {
-		if l != "" && l != ScopeTenant && l != ScopeBelow && l != ScopeUnit && l != ScopeOwn && l != ScopeNone ||
-			(l == ScopeOwn && e.Scope.Owner == "") || ((l == ScopeUnit || l == ScopeBelow) && (e.Scope.Unit == "" || e.Scope.Structure == "")) {
+		if l != "" && l != platform.ScopeTenant && l != platform.ScopeBelow && l != platform.ScopeUnit && l != platform.ScopeOwn && l != platform.ScopeNone ||
+			(l == platform.ScopeOwn && e.Scope.Owner == "") || ((l == platform.ScopeUnit || l == platform.ScopeBelow) && (e.Scope.Unit == "" || e.Scope.Structure == "")) {
 			return EntityInfo{}, fmt.Errorf("entity %s: scope level %q without the field it needs", e.Type, l)
 		}
 	}
@@ -152,33 +178,6 @@ func Describe(app string, e Entity, typeOf func(reflect.Type) string) (EntityInf
 		return EntityInfo{}, fmt.Errorf("entity %s: %w", e.Type, err)
 	}
 	return info, nil
-}
-
-func (info EntityInfo) CompileEnterpriseUse(engines ...RuleEngine) (ExprProgram, error) {
-	if info.EnterpriseUse == nil {
-		return nil, nil
-	}
-	if info.EnterpriseUse.Kind != "boolean" {
-		return nil, fmt.Errorf("current enterprise use must return boolean")
-	}
-	refs := map[string]ExprType{"archived": {Kind: "boolean"}}
-	for _, field := range info.Fields {
-		refs[field.Name] = ExprType{Kind: RuleFieldKind(field.Type), Object: field.Ref}
-	}
-	return RuleEngineOf(engines).CompileExpr(*info.EnterpriseUse, ExprSchema{Refs: refs})
-}
-
-func ApplyFieldAliases(info EntityInfo, value reflect.Value) {
-	for _, field := range info.Fields {
-		if field.AliasOf != "" {
-			target, _ := info.Field(field.AliasOf)
-			value.FieldByIndex(field.Index).Set(value.FieldByIndex(target.Index))
-		}
-	}
-}
-
-func (info EntityInfo) HasReadSources() bool {
-	return len(info.Derived) > 0 || slices.ContainsFunc(info.Fields, func(field FieldInfo) bool { return field.AliasOf != "" })
 }
 
 func describeFields(e Entity, t reflect.Type, from int, typeOf func(reflect.Type) string) ([]FieldInfo, error) {
@@ -291,7 +290,7 @@ func describeFields(e Entity, t reflect.Type, from int, typeOf func(reflect.Type
 		if f.Inverse = sf.Tag.Get("inverse"); f.Inverse != "" && f.Type != "reference" {
 			return nil, fmt.Errorf("entity %s: field %s names an inverse but is not a reference", e.Type, name)
 		}
-		when, err := ParseWhen(sf.Tag.Get("when"))
+		when, err := platform.ParseWhen(sf.Tag.Get("when"))
 		if err != nil {
 			return nil, fmt.Errorf("entity %s: field %s: %w", e.Type, name, err)
 		}
@@ -302,21 +301,6 @@ func describeFields(e Entity, t reflect.Type, from int, typeOf func(reflect.Type
 		return nil, err
 	}
 	return out, nil
-}
-
-func (f FieldInfo) Reads(role string) bool { return f.ReadsAny([]string{role}) }
-
-func (f FieldInfo) Writes(role string) bool { return f.WritesAny([]string{role}) }
-
-func (f FieldInfo) ReadsAny(roles []string, engines ...RuleEngine) bool {
-	return propertyPolicyOf("read", f, engines...).allows(roles)
-}
-
-func (f FieldInfo) WritesAny(roles []string, engines ...RuleEngine) bool {
-	if len(roles) == 0 {
-		roles = []string{""}
-	}
-	return propertyPolicyOf("write", f, engines...).allows(roles)
 }
 
 func describeDerived(info *EntityInfo, e Entity) error {
@@ -408,4 +392,65 @@ func pathTo(t reflect.Type, name string) ([]int, error) {
 		}
 	}
 	return nil, fmt.Errorf("%s has no field %q", t, name)
+}
+
+func describePresentation(info *EntityInfo, e Entity) error {
+	info.Icon, info.Color = e.Icon, e.Color
+	for name, rules := range e.Format {
+		i := slices.IndexFunc(info.Fields, func(f FieldInfo) bool { return f.Name == name })
+		if i < 0 {
+			return fmt.Errorf("entity %s: format rules name an unknown field %s", e.Type, name)
+		}
+		info.Fields[i].Format = slices.Clone(rules)
+	}
+	for name, binding := range e.ValueTypeBindings {
+		i := slices.IndexFunc(info.Fields, func(f FieldInfo) bool { return f.Name == name })
+		if i < 0 || binding.Ref.Kind != platform.AssetValueType || binding.Ref.Check() != nil || binding.SourceVersion == "" || info.Fields[i].Property != nil || info.Fields[i].Constraints != nil {
+			return fmt.Errorf("entity %s: invalid value type field binding", e.Type)
+		}
+		selected := binding
+		info.Fields[i].ValueType = &selected
+	}
+	return platform.CheckPresentation(*info)
+}
+
+func checkRecordImageFormats(info EntityInfo) error {
+	seen := map[string]bool{info.RecordFormat: true}
+	for _, image := range info.RecordImages {
+		t := reflect.TypeOf(image.Model)
+		if seen[image.Format] || t == nil || t.Kind() != reflect.Struct || t.NumField() == 0 ||
+			t.Field(0).Type != reflect.TypeFor[Record]() || !t.Field(0).Anonymous || image.Convert == nil {
+			return fmt.Errorf("entity %s: invalid or duplicate historical record format %q", info.Type, image.Format)
+		}
+		seen[image.Format] = true
+	}
+	return nil
+}
+
+func checkConditions(entity string, fields []FieldInfo) error {
+	for _, f := range fields {
+		if f.When == nil {
+			continue
+		}
+		i := slices.IndexFunc(fields, func(x FieldInfo) bool { return x.Name == f.When.Field })
+		if i < 0 || i == slices.IndexFunc(fields, func(x FieldInfo) bool { return x.Name == f.Name }) {
+			return fmt.Errorf("entity %s: field %s depends on %s, which is not another field", entity, f.Name, f.When.Field)
+		}
+		on := fields[i]
+		if on.When != nil {
+			return fmt.Errorf("entity %s: field %s depends on %s, which is conditional itself", entity, f.Name, on.Name)
+		}
+		allowed := on.Choices
+		if on.Type == "boolean" {
+			allowed = []string{"true", "false"}
+		} else if on.Type != "choice" {
+			return fmt.Errorf("entity %s: field %s depends on %s, which is neither a choice nor a boolean", entity, f.Name, on.Name)
+		}
+		for _, v := range f.When.In {
+			if !slices.Contains(allowed, v) {
+				return fmt.Errorf("entity %s: field %s depends on %s being %q, which it never is", entity, f.Name, on.Name, v)
+			}
+		}
+	}
+	return nil
 }

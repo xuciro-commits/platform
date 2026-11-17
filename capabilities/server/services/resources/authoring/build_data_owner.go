@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"reflect"
 
+	"platformserver/kernel/records"
 	"platformserver/platform"
 	dataowner "platformserver/services/data"
 	"platformserver/services/ontology"
@@ -63,7 +64,7 @@ func (h buildDataHost) DraftEntity(typ string) (platform.EntityInfo, bool) {
 		if object.Archived || TypeOf(object.Name) != typ {
 			continue
 		}
-		info, err := platform.Describe(ID, Entity(object), func(reflect.Type) string { return "" })
+		info, err := records.Describe(ID, Entity(object), func(reflect.Type) string { return "" })
 		return info, err == nil
 	}
 	return platform.EntityInfo{}, false

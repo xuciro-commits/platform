@@ -317,34 +317,6 @@ func ParseWhen(tag string) (*FieldCondition, error) {
 	return &FieldCondition{Field: field, In: strings.Split(values, ",")}, nil
 }
 
-func checkConditions(entity string, fields []FieldInfo) error {
-	for _, f := range fields {
-		if f.When == nil {
-			continue
-		}
-		i := slices.IndexFunc(fields, func(x FieldInfo) bool { return x.Name == f.When.Field })
-		if i < 0 || i == slices.IndexFunc(fields, func(x FieldInfo) bool { return x.Name == f.Name }) {
-			return fmt.Errorf("entity %s: field %s depends on %s, which is not another field", entity, f.Name, f.When.Field)
-		}
-		on := fields[i]
-		if on.When != nil {
-			return fmt.Errorf("entity %s: field %s depends on %s, which is conditional itself", entity, f.Name, on.Name)
-		}
-		allowed := on.Choices
-		if on.Type == "boolean" {
-			allowed = []string{"true", "false"}
-		} else if on.Type != "choice" {
-			return fmt.Errorf("entity %s: field %s depends on %s, which is neither a choice nor a boolean", entity, f.Name, on.Name)
-		}
-		for _, v := range f.When.In {
-			if !slices.Contains(allowed, v) {
-				return fmt.Errorf("entity %s: field %s depends on %s being %q, which it never is", entity, f.Name, on.Name, v)
-			}
-		}
-	}
-	return nil
-}
-
 func (f FieldInfo) Active(valueOf func(field string) string, engines ...RuleEngine) bool {
 	return f.When == nil || f.When.Holds(valueOf(f.When.Field), engines...)
 }
@@ -389,12 +361,6 @@ func (e EntityInfo) Field(name string) (FieldInfo, bool) {
 	}
 	return e.Fields[i], true
 }
-
-var (
-	timeType  = reflect.TypeFor[time.Time]()
-	moneyType = reflect.TypeFor[Money]()
-	refIface  = reflect.TypeFor[reference]()
-)
 
 type Query struct {
 	BusinessTime *BusinessTime        `json:"businessTime,omitempty"`

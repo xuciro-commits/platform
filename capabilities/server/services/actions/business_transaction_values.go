@@ -10,6 +10,7 @@ import (
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
+	"platformserver/kernel/records"
 	"platformserver/platform"
 	"platformserver/services/ontology"
 )
@@ -20,7 +21,7 @@ func (b *Runtime) txnPost(c platform.Caller, r *pb.ChangeRecord, step platform.T
 	if !found {
 		return "", platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Transaction balance object is unavailable")
 	}
-	info, _ := platform.Describe(b.App, entity, func(reflect.Type) string { return "" })
+	info, _ := records.Describe(b.App, entity, func(reflect.Type) string { return "" })
 	patch := map[string]any{}
 	keys := []string{}
 	for _, match := range p.Match {

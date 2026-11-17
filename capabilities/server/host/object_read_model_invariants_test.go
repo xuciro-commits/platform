@@ -5,13 +5,14 @@ import (
 	"testing"
 	"time"
 
+	"platformserver/kernel/records"
 	"platformserver/platform"
 	"platformserver/services/resources/authoring"
 )
 
 func TestInvariantOwnedRelationsReadWithoutNestedRecordLock(t *testing.T) {
 	live := newInvariantTenant(t, "invariant-owned-relations", platform.Seat{Subjects: []string{"reader"}, Member: platform.Member{ID: "reader", Roles: map[string]string{build.ID: "user"}}})
-	info, err := platform.Describe(build.ID, platform.RelationEntity(build.ID), func(reflect.Type) string { return "" })
+	info, err := records.Describe(build.ID, platform.RelationEntity(build.ID), func(reflect.Type) string { return "" })
 	if err != nil {
 		t.Fatal(err)
 	}

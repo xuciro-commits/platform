@@ -9,6 +9,7 @@ import (
 	"slices"
 	"strings"
 
+	"platformserver/kernel/records"
 	"platformserver/platform"
 	ontology "platformserver/services/ontology"
 	"platformserver/services/resources/publication"
@@ -60,7 +61,7 @@ func (o *Owner) CheckDispatch(spec *platform.Dispatch, object ontology.Object, a
 	if spec.ReviewerRole != Builder && !slices.ContainsFunc(object.Access, func(access ontology.Access) bool { return access.Role == spec.ReviewerRole }) {
 		return fmt.Errorf("The dispatch reviewer role is not declared")
 	}
-	info, _ := platform.Describe(App, ontology.CompileObjectEntity(object, ontology.ObjectRuntimeEnvironment{}), func(reflect.Type) string { return "" })
+	info, _ := records.Describe(App, ontology.CompileObjectEntity(object, ontology.ObjectRuntimeEnvironment{}), func(reflect.Type) string { return "" })
 	lookup := ontology.RuleLookup(object, App, Builder, o.integration.Lookup)
 	if spec.Key != "$subject" {
 		field, found := info.Field(strings.TrimPrefix(spec.Key, "record."))

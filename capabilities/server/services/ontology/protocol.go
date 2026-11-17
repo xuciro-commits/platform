@@ -6,6 +6,7 @@ import (
 	"slices"
 	"strings"
 
+	"platformserver/kernel/records"
 	"platformserver/platform"
 	"platformserver/services/resources/publication"
 )
@@ -80,7 +81,7 @@ func CheckObjectProtocols(object Object, env ProtocolEnvironment) error {
 	declaration := draft
 	declaration.Protocols = nil
 	entity := CompileObjectEntity(declaration, ObjectRuntimeEnvironment{})
-	if _, err := platform.Describe(AppID, entity, func(reflect.Type) string { return "?" }); err != nil {
+	if _, err := records.Describe(AppID, entity, func(reflect.Type) string { return "?" }); err != nil {
 		return err
 	}
 	catalog := platform.NewCatalog(env.Actions(entity)...)

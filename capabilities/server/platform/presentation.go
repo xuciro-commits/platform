@@ -48,7 +48,7 @@ func (r FormatRule) Format() FieldFormat {
 	return FieldFormat{Tone: r.Tone, Icon: r.Icon, Label: r.Label}
 }
 
-func checkPresentation(info EntityInfo) error {
+func CheckPresentation(info EntityInfo) error {
 	if info.Icon != "" && !IconName(info.Icon) {
 		return fmt.Errorf("entity %s: icon %q is not an icon name", info.Type, info.Icon)
 	}
@@ -73,24 +73,4 @@ func checkPresentation(info EntityInfo) error {
 		}
 	}
 	return nil
-}
-
-func describePresentation(info *EntityInfo, e Entity) error {
-	info.Icon, info.Color = e.Icon, e.Color
-	for name, rules := range e.Format {
-		i := slices.IndexFunc(info.Fields, func(f FieldInfo) bool { return f.Name == name })
-		if i < 0 {
-			return fmt.Errorf("entity %s: format rules name an unknown field %s", e.Type, name)
-		}
-		info.Fields[i].Format = slices.Clone(rules)
-	}
-	for name, binding := range e.ValueTypeBindings {
-		i := slices.IndexFunc(info.Fields, func(f FieldInfo) bool { return f.Name == name })
-		if i < 0 || binding.Ref.Kind != AssetValueType || binding.Ref.Check() != nil || binding.SourceVersion == "" || info.Fields[i].Property != nil || info.Fields[i].Constraints != nil {
-			return fmt.Errorf("entity %s: invalid value type field binding", e.Type)
-		}
-		selected := binding
-		info.Fields[i].ValueType = &selected
-	}
-	return checkPresentation(*info)
 }
