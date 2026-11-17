@@ -36,15 +36,17 @@ type SchemaHooks struct {
 }
 
 type Hooks struct {
-	Kinds          []platform.AssetKind
-	Schemas        []SchemaHooks
-	FreezeOn       platform.AssetKind
-	Freeze         func(platform.Caller, string, platform.ReleaseAsset, []platform.ReleaseAsset) (Frozen, error)
-	Closure        func(platform.Caller, string, platform.Member) (DraftClosure, error)
-	ReadFrozen     func(json.RawMessage) (json.RawMessage, error)
-	FreezeBatch    func([]platform.ReleaseAsset) ([]platform.ReleasePublication, error)
-	VersionedDraft func(string) (DraftClosure, error)
-	LoadExecution  func(platform.ReleaseAsset) error
+	Kinds               []platform.AssetKind
+	Schemas             []SchemaHooks
+	FreezeOn            platform.AssetKind
+	Freeze              func(platform.Caller, string, platform.ReleaseAsset, []platform.ReleaseAsset) (Frozen, error)
+	Closure             func(platform.Caller, string, platform.Member) (DraftClosure, error)
+	ReadFrozen          func(json.RawMessage) (json.RawMessage, error)
+	FreezeBatch         func([]platform.ReleaseAsset) ([]platform.ReleasePublication, error)
+	FreezeInstallations func([]platform.ReleaseAsset) ([]platform.AssetInstallation, error)
+	DirectInstallation  func(json.RawMessage) (platform.AssetInstallation, error)
+	VersionedDraft      func(string) (DraftClosure, error)
+	LoadExecution       func(platform.ReleaseAsset) error
 }
 
 func Kind(table []Hooks, kind platform.AssetKind) (Hooks, bool) {

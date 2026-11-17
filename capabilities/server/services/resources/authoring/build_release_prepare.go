@@ -6,6 +6,7 @@ import (
 
 	"platformserver/platform"
 	dataowner "platformserver/services/data"
+	"platformserver/services/resources/publication"
 )
 
 func (b *Build) ReleaseDrafts(assets []platform.ReleaseAsset, ctx platform.AssetReleaseContext) ([]platform.AssetDraft, error) {
@@ -81,7 +82,8 @@ func (b *Build) PrepareReleaseAssets(assets []platform.ReleaseAsset, ctx platfor
 		return nil, err
 	}
 	out := []platform.AssetInstallation{}
-	samples, err := b.prepareSampleSetInstallations(assets)
+	sampleHooks, _ := publication.Kind(b.publications, platform.AssetSampleSet)
+	samples, err := sampleHooks.FreezeInstallations(assets)
 	if err != nil {
 		return nil, err
 	}

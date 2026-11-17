@@ -84,8 +84,3 @@ type simulationEnvironment struct {
 	trialowner.Environment
 	Services platform.RuntimeCapabilities
 }
-
-func (t *Tenant) simulationEnvironment(candidate platform.ReleaseCandidate, samples []trialowner.SimulationSample) (simulationEnvironment, error) {
-	environment, err := trialowner.PrepareEnvironment(t.apps, actions.NewAuthority, candidate, samples)
-	return simulationEnvironment{Environment: environment, Services: t.services}, err
-}

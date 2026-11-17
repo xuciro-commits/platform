@@ -23,8 +23,8 @@ func (b *Build) DecodeAssetInstallation(schema string, image json.RawMessage) (p
 	if descriptor.family == integrationResources {
 		return b.data.DecodeInstallation(schema, image)
 	}
-	if descriptor.kind == platform.AssetSampleSet {
-		return b.sampleSetInstallation(image)
+	if hooks, found := publication.Kind(b.publications, descriptor.kind); found && hooks.DirectInstallation != nil {
+		return hooks.DirectInstallation(image)
 	}
 	if descriptor.typ == automationauthoring.ProcessType {
 		return b.automation.DecodeInstallation(schema, image)
@@ -60,7 +60,7 @@ func (b *Build) ValidateAssetInstallation(plan platform.AssetInstallation) error
 	if decoded.Ref != plan.Ref || decoded.Record != plan.Record {
 		return fmt.Errorf("installation identity differs from its saved image")
 	}
-	if plan.Ref.Kind == platform.AssetSampleSet {
+	if hooks, found := publication.Kind(b.publications, plan.Ref.Kind); found && hooks.DirectInstallation != nil {
 		return nil
 	}
 	if !dataowner.ValueIntegrationKind(plan.Ref.Kind) {
@@ -73,7 +73,7 @@ func (b *Build) ApplyAssetInstallation(plan platform.AssetInstallation, ctx plat
 	if dataowner.ValueIntegrationKind(plan.Ref.Kind) {
 		return b.data.ApplyInstallation(plan, ctx)
 	}
-	if plan.Ref.Kind == platform.AssetSampleSet {
+	if hooks, found := publication.Kind(b.publications, plan.Ref.Kind); found && hooks.DirectInstallation != nil {
 		_, err := b.DecodeAssetInstallation(plan.Schema, plan.Image)
 		return err
 	}
@@ -153,8 +153,8 @@ func (b *Build) declarationReleaseDraft(asset platform.ReleaseAsset) (string, an
 	}
 	switch asset.Ref.Kind {
 	case platform.AssetSampleSet:
-		d, _, err := b.decodeSampleAsset(asset)
-		return SampleSetType, SampleSetRecord{Name: d.Name, Title: d.Title, Samples: d.Samples}, err
+		d, err := b.sampleSets.Draft(asset)
+		return SampleSetType, d, err
 	case platform.AssetEvaluation, platform.AssetTestPlan:
 		d, err := b.testPlans.Draft(asset)
 		return TestPlanType, d, err

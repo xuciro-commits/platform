@@ -295,9 +295,6 @@ func (b *Build) singleDraftAssets(kind platform.AssetKind, id string) (before, a
 		after, prior, next, hadPrior, err = b.data.DraftAssets(before, kind, id)
 		return
 	}
-	if kind == platform.AssetSampleSet {
-		return b.sampleSetDraftAssets(id)
-	}
 	if k := definitionKindOf(kind); k != nil {
 		return k.draftAssets(b, id)
 	}

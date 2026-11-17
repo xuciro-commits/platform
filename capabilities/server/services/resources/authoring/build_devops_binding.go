@@ -3,6 +3,7 @@ package build
 import (
 	"platformserver/platform"
 	dataowner "platformserver/services/data"
+	devopsmodel "platformserver/services/devops/descriptor"
 )
 
 func (b *Build) bindTestPlans() {
@@ -22,4 +23,14 @@ func (b *Build) bindTestPlans() {
 		DraftID:            b.data.DraftID,
 	}
 	b.testPlans = b.testPlanFactory(env, b.evaluationFactory(env))
+}
+
+func (b *Build) bindSampleSets() {
+	b.sampleSets = b.sampleSetFactory(devopsmodel.SampleSetEnvironment{
+		App: ID, Type: SampleSetType, Builder: Builder, Version: ValueDefinitionVersion,
+		Caller:            func() platform.Caller { return b.host.Automation(platform.Caller{}, ID) },
+		ReleaseAssets:     b.ReleaseAssets,
+		WithDependencies:  b.resolver.WithDependencies,
+		CheckDependencies: b.resolver.CheckAssetDependencies,
+	})
 }

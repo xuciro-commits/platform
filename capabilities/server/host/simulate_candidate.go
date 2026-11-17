@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformserver/platform"
+	"platformserver/services/actions"
 	trialowner "platformserver/services/devops/trials"
 	functionauthoring "platformserver/services/functions/authoring"
 	"platformserver/services/resources/authoring"
@@ -47,7 +48,8 @@ func (t *Tenant) simulateCandidate(builder platform.Member, request trialowner.C
 				},
 			},
 			Environment: func(candidate platform.ReleaseCandidate) (simulationEnvironment, error) {
-				environment, err := t.simulationEnvironment(candidate, request.Samples)
+				prepared, err := trialowner.PrepareEnvironment(t.apps, actions.NewAuthority, candidate, request.Samples)
+				environment := simulationEnvironment{Environment: prepared, Services: t.services}
 				if err == nil {
 					err = platform.CheckSimulationOrganization(request.Organization)
 					environment.Organization = request.Organization

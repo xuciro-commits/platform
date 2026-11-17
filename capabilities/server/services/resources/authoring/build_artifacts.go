@@ -247,7 +247,7 @@ func (b *Build) ResolvePinned(ref platform.AssetRef, version string, contentVers
 		return platform.ReleaseAsset{}, fmt.Errorf("page content %s@%s is not retained", ref, contentVersion[0])
 	}
 	if ref.Kind == platform.AssetSampleSet {
-		return b.sampleSetPinned(ref, version)
+		return b.sampleSets.Resolve(ref, version)
 	}
 	if k := definitionKindOf(ref.Kind); k != nil {
 		return k.resolve(b, ref.Name, version)
