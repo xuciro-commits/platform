@@ -255,8 +255,11 @@ func (o *builderAgentOwner) checkAgentWithDrafts(a Agent, tools map[string]bool,
 }
 
 func (o *builderAgentOwner) publish(c platform.Caller, record any, _ json.RawMessage, _ time.Time) *platform.Error {
-	a, ok := record.(*Agent)
-	if !ok {
+	var a *Agent
+	switch value := record.(type) {
+	case *Agent:
+		a = value
+	default:
 		return &platform.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 	}
 	if err := o.checkAgent(*a); err != nil {

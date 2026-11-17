@@ -144,7 +144,8 @@ func ApplicationAIUsage(report platform.AIUsageReport, application platform.Asse
 }
 
 func ApplicationAIUsageOf(value any, application platform.AssetRef, items []platform.ApplicationAI) []platform.ApplicationAI {
-	if report, ok := value.(platform.AIUsageReport); ok {
+	switch report := value.(type) {
+	case platform.AIUsageReport:
 		return ApplicationAIUsage(report, application, items)
 	}
 	return items
