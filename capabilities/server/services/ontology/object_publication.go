@@ -444,3 +444,73 @@ func ObjectFreezePublication(objects []Object, retained func(platform.ReleaseAss
 		return publication.Frozen{Asset: asset, Publications: []platform.ReleasePublication{{Schema: SchemaPublish, Image: raw}}}, nil
 	}}
 }
+
+type ObjectPublicationEnvironment struct {
+	Host      func() platform.BuildHost
+	Authority func() platform.Authority
+	Entity    func(Object) platform.Entity
+	Portable  func(Object) (Object, error)
+	Actions   func(Object, platform.Entity) []platform.Action
+	Page      func(Object) platform.Page
+	Pages     func(Object) ([]platform.Page, string, error)
+	Validate  func(platform.Caller, Object) error
+	Installed func(platform.Entity)
+}
+
+func ObjectPublication(env ObjectPublicationEnvironment) publication.Hooks {
+	image := func(raw json.RawMessage) (Object, platform.Entity, []platform.Action, []platform.Page, error) {
+		published, err := ReadObjectPublication(raw)
+		if err != nil {
+			return Object{}, platform.Entity{}, nil, nil, err
+		}
+		entity := env.Entity(published)
+		portable, err := env.Portable(published)
+		if err != nil {
+			return Object{}, platform.Entity{}, nil, nil, err
+		}
+		if err := CheckObjectSchemas(portable); err != nil {
+			return Object{}, platform.Entity{}, nil, nil, err
+		}
+		actions := env.Actions(published, entity)
+		return published, entity, actions, []platform.Page{env.Page(published)}, nil
+	}
+	return publication.Hooks{
+		Kind:   platform.AssetObject,
+		Schema: SchemaPublish,
+		Validate: func(raw json.RawMessage) error {
+			published, _, _, _, err := image(raw)
+			if err != nil {
+				return err
+			}
+			return env.Validate(platform.Caller{Replaying: true}, published)
+		},
+		Install: func(raw json.RawMessage) error {
+			published, entity, actions, pages, err := image(raw)
+			if err != nil {
+				return err
+			}
+			pages, _, err = env.Pages(published)
+			if err != nil {
+				return err
+			}
+			if err := env.Authority().Extend([]string{entity.Type}, actions); err != nil {
+				return fmt.Errorf("extend accepted object: %w", err)
+			}
+			env.Authority().Catalog().ReplaceTarget(entity.Type, actions)
+			if err := env.Host().Install(platform.Caller{Replaying: true}, entity, actions, pages...); err != nil {
+				return fmt.Errorf("install accepted object: %w", err)
+			}
+			env.Installed(entity)
+			return nil
+		},
+		ReadFrozen: func(raw json.RawMessage) (json.RawMessage, error) {
+			var record struct {
+				Published string `json:"published"`
+			}
+			if err := json.Unmarshal(raw, &record); err != nil {
+				return nil, err
+			}
+			return json.RawMessage(record.Published), nil
+		},
+	}
+}

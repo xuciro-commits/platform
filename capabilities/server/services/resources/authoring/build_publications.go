@@ -6,33 +6,12 @@ import (
 	functionauthoring "platformserver/services/functions/authoring"
 
 	"platformserver/platform"
-	appsauthoring "platformserver/services/apps/authoring"
 	ontology "platformserver/services/ontology"
 	"platformserver/services/resources/publication"
 )
 
 func (b *Build) AcceptedPublicationSchemas() []string {
 	return acceptedPublicationSchemas()
-}
-
-func (b *Build) objectPublicationImage(schema string, image []byte) (ontology.Object, platform.Entity, []platform.Action, []platform.Page, error) {
-	if schema != SchemaPublish {
-		return ontology.Object{}, platform.Entity{}, nil, nil, fmt.Errorf("not an accepted builder publication: %s", schema)
-	}
-	published, err := ontology.ReadObjectPublication(image)
-	if err != nil {
-		return ontology.Object{}, platform.Entity{}, nil, nil, err
-	}
-	entity := b.entity(published)
-	portable, err := b.dispatchSchemaObject(published)
-	if err != nil {
-		return ontology.Object{}, platform.Entity{}, nil, nil, err
-	}
-	if err := ontology.CheckObjectSchemas(portable); err != nil {
-		return ontology.Object{}, platform.Entity{}, nil, nil, err
-	}
-	actions := objectActions(published, entity)
-	return published, entity, actions, []platform.Page{appsauthoring.CompileObjectPage(published, ID)}, nil
 }
 
 func (b *Build) ValidateAcceptedPublication(schema string, image []byte) error {
@@ -81,15 +60,7 @@ func (b *Build) ValidateAcceptedPublication(schema string, image []byte) error {
 		}
 		return b.host.ValidateInstallOperation(platform.Caller{Replaying: true}, code.Definition())
 	}
-	published, _, _, _, err := b.objectPublicationImage(schema, image)
-	if err != nil {
-		return err
-	}
-	switch schema {
-	case SchemaPublish:
-		return b.validateObjectInstallation(platform.Caller{Replaying: true}, published)
-	}
-	return fmt.Errorf("unknown builder publication: %s", schema)
+	return fmt.Errorf("not an accepted builder publication: %s", schema)
 }
 
 func (b *Build) ApplyAcceptedPublication(schema string, image []byte) error {
@@ -144,26 +115,7 @@ func (b *Build) ApplyAcceptedPublication(schema string, image []byte) error {
 		}
 		return b.installCode(platform.Caller{Replaying: true}, code)
 	}
-	published, entity, actions, pages, err := b.objectPublicationImage(schema, image)
-	if err != nil {
-		return err
-	}
-	switch schema {
-	case SchemaPublish:
-		pages, _, err = b.objectInstallationPages(published)
-		if err != nil {
-			return err
-		}
-		if err := b.ledger.Extend([]string{entity.Type}, actions); err != nil {
-			return fmt.Errorf("extend accepted object: %w", err)
-		}
-		b.ledger.Catalog().ReplaceTarget(entity.Type, actions)
-		if err := b.host.Install(platform.Caller{Replaying: true}, entity, actions, pages...); err != nil {
-			return fmt.Errorf("install accepted object: %w", err)
-		}
-		b.installed[entity.Type] = entity
-	}
-	return nil
+	return fmt.Errorf("not an accepted builder publication: %s", schema)
 }
 
 func published[T any](definition T) string {

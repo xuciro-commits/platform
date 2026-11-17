@@ -39,6 +39,8 @@ func (b *Build) SavedObjectActions(c platform.Caller) ([]platform.Action, error)
 type Build struct {
 	resolver            publication.Resolver
 	publications        []publication.Hooks
+	publicationBase     []publication.Hooks
+	objectPublication   func(ontology.ObjectPublicationEnvironment) publication.Hooks
 	installationCatalog *platform.Catalog
 	host                platform.BuildHost
 	data                *dataowner.Owner
@@ -63,15 +65,31 @@ type Build struct {
 	tables              map[string]functionauthoring.Table
 }
 
+func (b *Build) bindPublications() {
+	object := b.objectPublication(ontology.ObjectPublicationEnvironment{
+		Host:      func() platform.BuildHost { return b.host },
+		Authority: func() platform.Authority { return b.ledger },
+		Entity:    b.entity,
+		Portable:  b.dispatchSchemaObject,
+		Actions:   objectActions,
+		Page:      func(object ontology.Object) platform.Page { return appsauthoring.CompileObjectPage(object, ID) },
+		Pages:     b.objectInstallationPages,
+		Validate:  b.validateObjectInstallation,
+		Installed: func(entity platform.Entity) { b.installed[entity.Type] = entity },
+	})
+	b.publications = append([]publication.Hooks{object}, b.publicationBase...)
+}
+
 func (b *Build) AttachBuild(h platform.BuildHost) { b.host = h }
 func (b *Build) AttachFiles(h platform.FileHost)  { b.data.AttachFiles(h) }
 
-func New(tenant string, authorities platform.Authorities, publications []publication.Hooks, resolver publication.Resolver) *Build {
-	b := &Build{resolver: resolver, publications: publications, installed: map[string]platform.Entity{}, linkTypes: map[string]ontology.LinkType{}, propertyTypes: map[string]ontology.PropertyType{}, valueTypes: map[string]ontology.ValueType{}, objectTypeGroups: map[string]ontology.ObjectTypeGroup{}, queries: map[string]Query{}, interfaces: map[string]ontology.InterfaceRecord{}, agents: map[string]Agent{}, codes: map[string]functionauthoring.Code{}, tables: map[string]functionauthoring.Table{}}
+func New(tenant string, authorities platform.Authorities, publications []publication.Hooks, resolver publication.Resolver, objectPublication func(ontology.ObjectPublicationEnvironment) publication.Hooks) *Build {
+	b := &Build{resolver: resolver, publicationBase: slices.Clone(publications), objectPublication: objectPublication, installed: map[string]platform.Entity{}, linkTypes: map[string]ontology.LinkType{}, propertyTypes: map[string]ontology.PropertyType{}, valueTypes: map[string]ontology.ValueType{}, objectTypeGroups: map[string]ontology.ObjectTypeGroup{}, queries: map[string]Query{}, interfaces: map[string]ontology.InterfaceRecord{}, agents: map[string]Agent{}, codes: map[string]functionauthoring.Code{}, tables: map[string]functionauthoring.Table{}}
 	b.data = dataowner.New(buildDataHost{b}, resolver)
 	b.automation = automationauthoring.New(automationEnvironment{b}, resolver)
 	b.functions = functionauthoring.NewOwner(functionEnvironment{b}, resolver)
 	b.apps = appsauthoring.NewOwner(appEnvironment{b})
+	b.bindPublications()
 	actions := append(actioncatalog.EntityActions(b.objectEntity()), actioncatalog.EntityActions(b.apps.PageEntity())...)
 	actions = append(actions, actioncatalog.EntityActions(b.actionTypeEntity())...)
 	actions = append(actions, actioncatalog.EntityActions(b.apps.ApplicationEntity())...)
@@ -481,11 +499,12 @@ func (b *Build) Fork(ledger platform.Authority) (platform.App, error) {
 	fork.apps = b.apps.Fork(appEnvironment{&fork})
 	fork.data = b.data.Fork(buildDataHost{&fork})
 	fork.automation = b.automation.Fork(automationEnvironment{&fork})
+	fork.bindPublications()
 	return &fork, nil
 }
 
 func (b *Build) NewSimulationApp(tenant string) platform.App {
-	return New(tenant, b.authorities, b.publications, b.resolver)
+	return New(tenant, b.authorities, b.publicationBase, b.resolver, b.objectPublication)
 }
 func (b *Build) CandidateActions(asset platform.ReleaseAsset) ([]platform.Action, error) {
 	code, err := b.retainedCodeObject(asset)

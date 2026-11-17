@@ -5,7 +5,6 @@ import (
 	"fmt"
 	appsauthoring "platformserver/services/apps/authoring"
 	"platformserver/services/ontology"
-	"platformserver/services/resources/publication"
 	"slices"
 
 	"platformserver/platform"
@@ -20,7 +19,13 @@ func (b *Build) prepareReleasePublications(assets []platform.ReleaseAsset) ([]pl
 	}
 	var publications []platform.ReleasePublication
 	var installations []platform.AssetInstallation
-	hooks := append([]publication.Hooks{ontology.ObjectFreezePublication(objects, b.retainedCodeObject, b.data.IntegrationID)}, b.publications...)
+	hooks := slices.Clone(b.publications)
+	for i := range hooks {
+		if hooks[i].Kind == platform.AssetObject {
+			object := ontology.ObjectFreezePublication(objects, b.retainedCodeObject, b.data.IntegrationID)
+			hooks[i].FreezeOn, hooks[i].Freeze = object.FreezeOn, object.Freeze
+		}
+	}
 	add := func(schema string, record any) error {
 		raw, err := json.Marshal(record)
 		if err != nil {

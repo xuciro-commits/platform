@@ -85,7 +85,12 @@ func (b *Build) DraftReleaseAssetsMulti(drafts []JointDraftRef, member platform.
 		CaptureExtension: b.captureExtensionSource, CaptureSchema: b.captureObjectSchema,
 		Check: b.Check, Validate: b.validateObjectInstallation,
 	})
-	draftHooks := append(slices.Clone(b.publications), objectDrafts)
+	draftHooks := slices.Clone(b.publications)
+	for i := range draftHooks {
+		if draftHooks[i].Kind == platform.AssetObject {
+			draftHooks[i].Closure = objectDrafts.Closure
+		}
+	}
 	inv := draftInventories{objects: objects, pages: pages, apps: apps, processes: processes}
 	overrides := map[platform.AssetRef]platform.ReleaseAsset{}
 	removed := map[platform.AssetRef]bool{}
