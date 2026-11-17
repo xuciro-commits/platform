@@ -36,8 +36,8 @@ func (resolver Resolver) CandidateDiff(before, after platform.ReleaseCandidate) 
 	for ref := range prior {
 		removed = append(removed, ref)
 	}
-	slices.SortFunc(added, platform.CompareAssetRef)
-	slices.SortFunc(removed, platform.CompareAssetRef)
-	slices.SortFunc(changed, platform.CompareAssetRef)
+	slices.SortFunc(added, CompareAssetRef)
+	slices.SortFunc(removed, CompareAssetRef)
+	slices.SortFunc(changed, CompareAssetRef)
 	return added, removed, changed, nil
 }

@@ -98,7 +98,7 @@ func CheckObjectSchemas(object Object) error {
 	if err != nil {
 		return err
 	}
-	version, err := platform.SchemaContentVersion(body)
+	version, err := publication.SchemaContentVersion(body)
 	if err != nil || version != object.SchemaVersions[len(object.SchemaVersions)-1].Version {
 		return fmt.Errorf("object schema version differs from its published definition")
 	}

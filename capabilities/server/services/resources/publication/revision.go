@@ -1,13 +1,17 @@
-package platform
+package publication
 
 import (
 	"bytes"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
 	"math/big"
 	"strconv"
 	"strings"
+
+	"platformserver/platform"
 )
 
 func CanonicalAssetBody(raw []byte) ([]byte, error) {
@@ -115,7 +119,7 @@ func canonicalNumber(number json.Number) (json.Number, error) {
 	return json.Number(strings.TrimSuffix(decimal, ".")), nil
 }
 
-func CompareAssetRef(a, b AssetRef) int {
+func CompareAssetRef(a, b platform.AssetRef) int {
 	if a.App != b.App {
 		return compareString(a.App, b.App)
 	}
@@ -134,4 +138,13 @@ func compareString(a, b string) int {
 	default:
 		return 0
 	}
+}
+
+func SchemaContentVersion(body json.RawMessage) (string, error) {
+	canonical, err := CanonicalAssetBody(body)
+	if err != nil {
+		return "", err
+	}
+	sum := sha256.Sum256(canonical)
+	return "schema.sha256." + hex.EncodeToString(sum[:]), nil
 }

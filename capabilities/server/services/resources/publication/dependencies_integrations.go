@@ -126,7 +126,7 @@ func describeIntegrationDependencies(asset platform.ReleaseAsset, historical boo
 }
 
 func completeAssetDependencies(asset platform.ReleaseAsset, out platform.Dependencies) (platform.Dependencies, error) {
-	slices.SortFunc(out.Requires, platform.CompareAssetRef)
+	slices.SortFunc(out.Requires, CompareAssetRef)
 	out.Requires = slices.Compact(out.Requires)
 	for _, ref := range out.Requires {
 		if err := ref.Check(); err != nil {

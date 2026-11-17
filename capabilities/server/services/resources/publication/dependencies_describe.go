@@ -15,7 +15,7 @@ func (resolver Resolver) describeAsset(asset platform.ReleaseAsset, historical b
 	if err := asset.Ref.Check(); err != nil {
 		return out, err
 	}
-	if _, err := platform.CanonicalAssetBody(asset.Body); err != nil {
+	if _, err := CanonicalAssetBody(asset.Body); err != nil {
 		return out, fmt.Errorf("%s: %w", asset.Ref, err)
 	}
 	var identity struct{ Name, Type, Schema string }

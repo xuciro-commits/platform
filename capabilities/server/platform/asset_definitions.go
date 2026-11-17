@@ -205,7 +205,7 @@ func (s SampleSet) Dependencies() []AssetRef {
 	for _, group := range s.Samples {
 		refs = append(refs, modelRef(group.Type))
 	}
-	slices.SortFunc(refs, CompareAssetRef)
+	slices.SortFunc(refs, func(a, b AssetRef) int { return strings.Compare(a.String(), b.String()) })
 	return refs
 }
 
@@ -226,13 +226,4 @@ func (v SchemaVersion) Check() error {
 		return fmt.Errorf("schema version needs its content identity and family")
 	}
 	return nil
-}
-
-func SchemaContentVersion(body json.RawMessage) (string, error) {
-	canonical, err := CanonicalAssetBody(body)
-	if err != nil {
-		return "", err
-	}
-	sum := sha256.Sum256(canonical)
-	return "schema.sha256." + hex.EncodeToString(sum[:]), nil
 }

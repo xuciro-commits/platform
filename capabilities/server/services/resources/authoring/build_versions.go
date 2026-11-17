@@ -43,7 +43,7 @@ func (b *Build) captureObjectSchema(object *ontology.Object) error {
 	if err != nil {
 		return err
 	}
-	version, err := platform.SchemaContentVersion(body)
+	version, err := publication.SchemaContentVersion(body)
 	if err != nil {
 		return err
 	}
@@ -60,7 +60,7 @@ func (b *Build) captureObjectSchema(object *ontology.Object) error {
 			if err != nil {
 				return err
 			}
-			identity, err := platform.SchemaContentVersion(old)
+			identity, err := publication.SchemaContentVersion(old)
 			if err != nil {
 				return err
 			}
@@ -96,7 +96,7 @@ func objectActions(object ontology.Object, entity platform.Entity) []platform.Ac
 	if len(object.SchemaVersions) > 0 {
 		binding = object.SchemaVersions[len(object.SchemaVersions)-1]
 	} else if body, err := ontology.ObjectSchemaBody(object); err == nil {
-		binding.Version, _ = platform.SchemaContentVersion(body)
+		binding.Version, _ = publication.SchemaContentVersion(body)
 		binding.Family = 1
 	}
 	if binding.Check() == nil {

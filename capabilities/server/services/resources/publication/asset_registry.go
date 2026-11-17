@@ -102,7 +102,7 @@ func (r *AssetRegistry) freezeAsset(asset platform.ReleaseAsset) (platform.Relea
 	if asset.ContractVersion < 1 || asset.SourceVersion == "" {
 		return platform.ReleaseAsset{}, fmt.Errorf("asset %s has no pinned source or contract", asset.Ref)
 	}
-	body, err := platform.CanonicalAssetBody(asset.Body)
+	body, err := CanonicalAssetBody(asset.Body)
 	if err != nil {
 		return platform.ReleaseAsset{}, fmt.Errorf("asset %s: %w", asset.Ref, err)
 	}
@@ -113,7 +113,7 @@ func (r *AssetRegistry) freezeAsset(asset platform.ReleaseAsset) (platform.Relea
 			return platform.ReleaseAsset{}, err
 		}
 	}
-	slices.SortFunc(asset.Requires, platform.CompareAssetRef)
+	slices.SortFunc(asset.Requires, CompareAssetRef)
 	asset.Requires = slices.Compact(asset.Requires)
 	if err := r.resolver.CheckAssetDependencies(asset); err != nil {
 		return platform.ReleaseAsset{}, err
@@ -141,7 +141,7 @@ func (r *AssetRegistry) ReleaseAssets() ([]platform.ReleaseAsset, error) {
 			assets = append(assets, asset)
 		}
 	}
-	slices.SortFunc(assets, func(a, b platform.ReleaseAsset) int { return platform.CompareAssetRef(a.Ref, b.Ref) })
+	slices.SortFunc(assets, func(a, b platform.ReleaseAsset) int { return CompareAssetRef(a.Ref, b.Ref) })
 	return assets, nil
 }
 
@@ -200,7 +200,7 @@ func (r *AssetRegistry) groupedAssets(assets []platform.ReleaseAsset) (map[strin
 		grouped[asset.Ref.App] = append(grouped[asset.Ref.App], frozen)
 	}
 	for app := range grouped {
-		slices.SortFunc(grouped[app], func(a, b platform.ReleaseAsset) int { return platform.CompareAssetRef(a.Ref, b.Ref) })
+		slices.SortFunc(grouped[app], func(a, b platform.ReleaseAsset) int { return CompareAssetRef(a.Ref, b.Ref) })
 	}
 	return grouped, nil
 }
@@ -238,7 +238,7 @@ func (r *AssetRegistry) EnvironmentRequirements(assets []platform.ReleaseAsset) 
 		}
 	}
 	var out []platform.AssetEnvironmentRequirement
-	for _, ref := range slices.SortedFunc(maps.Keys(requirements), platform.CompareAssetRef) {
+	for _, ref := range slices.SortedFunc(maps.Keys(requirements), CompareAssetRef) {
 		out = append(out, requirements[ref])
 	}
 	return out, nil

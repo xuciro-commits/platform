@@ -824,6 +824,6 @@ func ActionSchemaVersion(definitions []platform.Definition, app platform.App, ac
 	if err != nil {
 		return platform.SchemaVersion{}, err
 	}
-	version, err := platform.SchemaContentVersion(raw)
+	version, err := publication.SchemaContentVersion(raw)
 	return platform.SchemaVersion{Version: version, Family: 1}, err
 }

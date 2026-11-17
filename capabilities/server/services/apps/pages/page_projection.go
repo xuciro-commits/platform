@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"platformserver/platform"
+	"platformserver/services/resources/publication"
 )
 
 func Safety(p platform.Page) (platform.Page, error) {
@@ -34,7 +35,7 @@ func PageContentVersion(page platform.Page) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	body, err = platform.CanonicalAssetBody(body)
+	body, err = publication.CanonicalAssetBody(body)
 	if err != nil {
 		return "", err
 	}

@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"platformserver/platform"
+	"platformserver/services/resources/publication"
 )
 
 func CheckApplicationResources(a platform.Application) error {
@@ -45,7 +46,7 @@ func ApplicationDependencies(a platform.Application, owner string) []platform.As
 	for _, name := range a.Pages {
 		refs = append(refs, platform.AssetRef{App: owner, Kind: platform.AssetPage, Name: name})
 	}
-	slices.SortFunc(refs, platform.CompareAssetRef)
+	slices.SortFunc(refs, publication.CompareAssetRef)
 	return slices.Compact(refs)
 }
 

@@ -31,7 +31,7 @@ func (resolver Resolver) CheckAssetDependencies(asset platform.ReleaseAsset) err
 		return err
 	}
 	actual := slices.Clone(asset.Requires)
-	slices.SortFunc(actual, platform.CompareAssetRef)
+	slices.SortFunc(actual, CompareAssetRef)
 	for _, dependency := range description.Requires {
 		if !slices.Contains(actual, dependency) {
 			return fmt.Errorf("release asset %s omits bound dependency %s", asset.Ref, dependency)

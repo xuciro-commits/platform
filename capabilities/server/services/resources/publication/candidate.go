@@ -85,7 +85,7 @@ func (resolver Resolver) candidate(roots []platform.AssetRef, available []platfo
 		if asset.SourceVersion == "" || asset.ContractVersion <= 0 {
 			return empty, fmt.Errorf("release asset %s has no pinned source or contract", ref)
 		}
-		body, err := platform.CanonicalAssetBody(asset.Body)
+		body, err := CanonicalAssetBody(asset.Body)
 		if err != nil {
 			return empty, fmt.Errorf("release asset %s: %w", ref, err)
 		}
@@ -318,7 +318,7 @@ func (resolver Resolver) candidate(roots []platform.AssetRef, available []platfo
 		asset.Body = body
 		closed = append(closed, asset)
 	}
-	slices.SortFunc(closed, func(a, b platform.ReleaseAsset) int { return platform.CompareAssetRef(a.Ref, b.Ref) })
+	slices.SortFunc(closed, func(a, b platform.ReleaseAsset) int { return CompareAssetRef(a.Ref, b.Ref) })
 	raw, err := json.Marshal(releaseBytes{Format: 1, Assets: closed})
 	if err != nil {
 		return empty, fmt.Errorf("encode release candidate: %w", err)
