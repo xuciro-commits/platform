@@ -3,6 +3,7 @@ package pages
 import (
 	"encoding/json"
 	"fmt"
+	ruleexpr "platformserver/expr"
 	"platformserver/platform"
 	"slices"
 	"strings"
@@ -181,7 +182,7 @@ func checkQueries(p platform.Page, inputScope string) error {
 			}
 		}
 		if q.Filter != nil {
-			for _, ref := range platform.ConditionRefs(*q.Filter) {
+			for _, ref := range ruleexpr.Refs(*q.Filter) {
 				name, ok := strings.CutPrefix(ref, "root.")
 				if !ok {
 					continue

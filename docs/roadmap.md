@@ -34,12 +34,6 @@
 
 ## U7：platform 只留 SDK 契约
 
-- [ ] U7.3 共享规则与条件：`AssetKind`、`AssetRef.Check`、`PageNodeID`、`IconName` 和
-  `RuleEngineOf` 作为跨 kernel 与服务的 SDK 词法/注入契约留在 `platform`；`MergeRuleTypes` 迁到 `expr`。
-  `Binding`、`Run` 的线格式留在 SDK，`ConditionRefs` 归 `expr`，条件到 binding、条件校验与测试归
-  `services/automate/authoring`；页面使用表达式遍历或页面拥有者提供的检查，不再复用 workflow 条件实现。
-  运行页面、自动化、查询、数据血缘与表达式黄金路径。
-
 - [ ] U7.4 应用与页面声明：`ModelObject` 归 `services/ontology`；`CheckApplicationBindings` 归
   `kernel/acceptedformat`，避免 kernel 反向依赖 apps。`ApplicationProfile` 的校验、`Application.QueryPage`
   和由原始 `UIProfile` 构造页面声明归 `services/apps/pages`；ontology、publication 和 DevOps 经装配回调或

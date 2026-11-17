@@ -70,7 +70,7 @@ func CheckProcess(p Process, entity platform.Entity, lookup ProcessLookup, objec
 		if p.Kind != "automation" || p.Object == "" || p.Every != "" || p.Manual {
 			return refuse("A record condition belongs to an object automation")
 		}
-		if err := platform.CheckCondition(*p.Trigger, engines...); err != nil {
+		if err := checkCondition(*p.Trigger, engines...); err != nil {
 			return refuse(err.Error())
 		}
 	}
@@ -154,7 +154,7 @@ func CheckProcess(p Process, entity platform.Entity, lookup ProcessLookup, objec
 			}
 		}
 		if step.Condition != nil {
-			if err := platform.CheckCondition(*step.Condition, engines...); err != nil {
+			if err := checkCondition(*step.Condition, engines...); err != nil {
 				return problem(err.Error())
 			}
 		}
@@ -553,7 +553,7 @@ func CheckProcessScopes(p Process) error {
 			}
 		}
 		if node.Condition != nil {
-			refs, err := platform.ConditionBindings(*node.Condition)
+			refs, err := conditionBindings(*node.Condition)
 			if err != nil {
 				return fmt.Errorf("Node %s: %v", node.Name, err)
 			}

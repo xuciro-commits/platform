@@ -2,6 +2,7 @@ package pages
 
 import (
 	"encoding/json"
+	ruleexpr "platformserver/expr"
 	"platformserver/platform"
 	"slices"
 	"strings"
@@ -29,7 +30,7 @@ func QueryVariables(q platform.PageQuery) []string {
 		}
 	}
 	if q.Filter != nil {
-		for _, ref := range platform.ConditionRefs(*q.Filter) {
+		for _, ref := range ruleexpr.Refs(*q.Filter) {
 			if name, ok := strings.CutPrefix(ref, "root."); ok {
 				name, _, _ = strings.Cut(name, "#")
 				if name != "" && !slices.Contains(ids, name) {
@@ -77,7 +78,7 @@ func variableDependsOnQuery(p platform.Page, variable, target string) bool {
 		seenVariables[id] = true
 		v := d.Variables[id]
 		if v.Rule != nil {
-			for _, ref := range platform.ConditionRefs(*v.Rule) {
+			for _, ref := range ruleexpr.Refs(*v.Rule) {
 				if variableDepends(ref) {
 					return true
 				}

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 
+	ruleexpr "platformserver/expr"
 	"platformserver/platform"
 )
 
@@ -78,7 +79,7 @@ func BindRuleTypes(p platform.Page, lookup func(string) (platform.EntityInfo, bo
 			if v.RuleType == nil {
 				return fmt.Errorf("rule resource is unavailable")
 			}
-			t := platform.MergeRuleTypes(*v.RuleType, tree(object, parts))
+			t := ruleexpr.MergeTypes(*v.RuleType, tree(object, parts))
 			v.RuleType = &t
 			d.Variables[name] = v
 			return nil

@@ -10,6 +10,7 @@ import (
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
+	ruleexpr "platformserver/expr"
 	"platformserver/platform"
 )
 
@@ -30,7 +31,7 @@ func CompileProcess(p Process, execution ProcessExecution) platform.Flow {
 			var value map[string]json.RawMessage
 			json.Unmarshal(raw, &value)
 			if p.Trigger != nil {
-				holds, err := platform.TestCondition(*p.Trigger, &platform.Run{}, raw, c.Rules())
+				holds, err := testCondition(*p.Trigger, &platform.Run{}, raw, c.Rules())
 				return err == nil && holds
 			}
 			var state string
@@ -83,14 +84,14 @@ func CompileProcess(p Process, execution ProcessExecution) platform.Flow {
 		}
 		predicate := func(c platform.Caller, r *platform.Run) (bool, *platform.Error) {
 			raw := json.RawMessage("{}")
-			if slices.ContainsFunc(platform.ConditionRefs(*s.Condition), func(ref string) bool { return ref == "subject" || strings.HasPrefix(ref, "subject.") }) {
+			if slices.ContainsFunc(ruleexpr.Refs(*s.Condition), func(ref string) bool { return ref == "subject" || strings.HasPrefix(ref, "subject.") }) {
 				var err *platform.Error
 				raw, err = subject(c, r)
 				if err != nil {
 					return false, err
 				}
 			}
-			holds, problem := platform.TestCondition(*s.Condition, r, raw, c.Rules())
+			holds, problem := testCondition(*s.Condition, r, raw, c.Rules())
 			if problem != nil {
 				return false, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, problem.Error())
 			}

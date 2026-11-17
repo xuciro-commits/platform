@@ -2,6 +2,7 @@ package lineage
 
 import (
 	"fmt"
+	ruleexpr "platformserver/expr"
 	"platformserver/services/ontology"
 	"slices"
 	"strings"
@@ -151,7 +152,7 @@ func Fields(g Graph, in Input) ([]FieldNode, []FieldEdge) {
 				state := fieldState{certainty: "derived"}
 				used := map[string]bool{}
 				if step.FormulaExpr != nil {
-					for _, ref := range platform.ConditionRefs(*step.FormulaExpr) {
+					for _, ref := range ruleexpr.Refs(*step.FormulaExpr) {
 						used[fieldRef(ref)] = true
 					}
 				} else if fields, err := platform.FormulaFields(step.Formula); err == nil {

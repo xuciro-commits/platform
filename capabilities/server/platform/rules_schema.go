@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
+	ruleexpr "platformserver/expr"
 	"reflect"
 	"slices"
 	"strings"
@@ -102,7 +103,7 @@ func RuleSchema(expr Expr, spec RuleReadSpec, lookup func(string) (EntityInfo, b
 		schema.Sets[name] = ExprSetType{Element: ExprType{Kind: "reference", Object: set.Object, Fields: fields}, Policy: set.Policy}
 	}
 	var visit func(Expr, string) error
-	merge := func(dst, src ExprType) ExprType { return MergeRuleTypes(dst, src) }
+	merge := func(dst, src ExprType) ExprType { return ruleexpr.MergeTypes(dst, src) }
 	visit = func(e Expr, itemSet string) error {
 		child := itemSet
 		if e.Agg != nil {
@@ -183,19 +184,6 @@ func RuleSchema(expr Expr, spec RuleReadSpec, lookup func(string) (EntityInfo, b
 		return schema, err
 	}
 	return schema, nil
-}
-
-func MergeRuleTypes(dst, src ExprType) ExprType {
-	if dst.Kind == "" {
-		return src
-	}
-	if dst.Fields == nil {
-		dst.Fields = map[string]ExprType{}
-	}
-	for name, t := range src.Fields {
-		dst.Fields[name] = MergeRuleTypes(dst.Fields[name], t)
-	}
-	return dst
 }
 
 func (c Caller) RuleContext(expr Expr, spec RuleReadSpec, lookup func(string) (EntityInfo, bool), record any, inputs map[string]any, now time.Time) (ExprContext, error) {
