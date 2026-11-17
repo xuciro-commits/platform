@@ -7,6 +7,7 @@ import (
 	"maps"
 	"math"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
+	"platformserver/kernel/protocol"
 	"platformserver/platform"
 	"slices"
 	"time"
@@ -128,12 +129,12 @@ func streamOutputName(name string) bool {
 func checkOperators(declared platform.Continuous) error {
 	a, t := declared.Aggregate, declared.Threshold
 	if declared.Intake != nil {
-		if err := declared.Intake.Retry.Check(); err != nil {
+		if err := protocol.CheckStreamPreparationRetry(declared.Intake.Retry); err != nil {
 			return err
 		}
 	}
 	if declared.Window != nil {
-		if err := declared.Window.Retry.Check(); err != nil {
+		if err := protocol.CheckStreamPreparationRetry(declared.Window.Retry); err != nil {
 			return err
 		}
 	}

@@ -11,9 +11,9 @@ import (
 	"time"
 )
 
-func (t *Tenant) continuousSnapshot(m platform.Member, id string, now time.Time) (platform.ContinuousFlowOwner, platform.FlowInstance, platform.Member, *platform.Error) {
+func (t *Tenant) continuousSnapshot(m platform.Member, id string, now time.Time) (automation.ContinuousFlowOwner, platform.FlowInstance, platform.Member, *platform.Error) {
 	type snapshot struct {
-		owner    platform.ContinuousFlowOwner
+		owner    automation.ContinuousFlowOwner
 		instance platform.FlowInstance
 		member   platform.Member
 	}
@@ -24,10 +24,10 @@ func (t *Tenant) continuousSnapshot(m platform.Member, id string, now time.Time)
 	return v.owner, v.instance, v.member, refusal
 }
 
-func (t *Tenant) continuousSnapshotLocked(m platform.Member, id string, now time.Time) (platform.ContinuousFlowOwner, platform.FlowInstance, platform.Member, *platform.Error) {
+func (t *Tenant) continuousSnapshotLocked(m platform.Member, id string, now time.Time) (automation.ContinuousFlowOwner, platform.FlowInstance, platform.Member, *platform.Error) {
 	return automation.FlowSnapshot{Tenant: t.ID, Quarantined: t.quarantined, Member: t.Member, Admits: t.Admits,
-		Owner: func() (platform.ContinuousFlowOwner, bool) {
-			f, ok := t.procs.(platform.ContinuousFlowOwner)
+		Owner: func() (automation.ContinuousFlowOwner, bool) {
+			f, ok := t.procs.(automation.ContinuousFlowOwner)
 			return f, ok
 		},
 		Record: func(current platform.Member, id string) (any, *platform.Error) {
@@ -52,7 +52,7 @@ func (t *Tenant) prepareContinuousDeadLetterReplay(m platform.Member, sub *pb.Su
 	releasePreparation := t.beginFlowArtifactPreparation()
 	defer releasePreparation()
 	first, err := decideOnImage(t, context.Background(), "flow:replay-preflight", func(t *Tenant) (automation.ReplayPreflightResult, *platform.Error) {
-		owner, ok := t.procs.(platform.ContinuousFlowOwner)
+		owner, ok := t.procs.(automation.ContinuousFlowOwner)
 		if !ok {
 			return automation.ReplayPreflightResult{Sub: sub}, nil
 		}
@@ -103,7 +103,7 @@ func (t *Tenant) prepareContinuousDeadLetterReplay(m platform.Member, sub *pb.Su
 	}
 	store := t.frames()
 	var preparedContext automation.ReplayContext
-	prepared, err := recordRead(t, context.Background(), func(t *Tenant) (platform.FlowPreparedBatch, *platform.Error) {
+	prepared, err := recordRead(t, context.Background(), func(t *Tenant) (automation.FlowPreparedBatch, *platform.Error) {
 		var refusal *platform.Error
 		preparedContext, refusal = load(t)
 		if refusal != nil {
@@ -112,7 +112,7 @@ func (t *Tenant) prepareContinuousDeadLetterReplay(m platform.Member, sub *pb.Su
 		if preparedContext.Asset.Action != "" {
 			return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The original dead letter changed while its replay was prepared")
 		}
-		f := t.procs.(platform.ContinuousFlowOwner)
+		f := t.procs.(automation.ContinuousFlowOwner)
 		plan, refusal := f.PlanDeadLetterReplay(preparedContext.Instance, t.automation(platform.FlowApp, false), preparedContext.Asset)
 		if refusal != nil {
 			return nil, refusal
@@ -137,7 +137,7 @@ func (t *Tenant) prepareContinuousDeadLetterReplay(m platform.Member, sub *pb.Su
 		if refusal != nil {
 			return nil, refusal
 		}
-		if refusal := automation.GuardPrepared(prepared, f, t.automation(platform.FlowApp, false), latest, "The original Flow changed while dead-letter replay was prepared", latest.Batch.Source, func(plan platform.FlowBatchPreparation, checkpoint platform.FlowSourceCheckpoint) *platform.Error {
+		if refusal := automation.GuardPrepared(prepared, f, t.automation(platform.FlowApp, false), latest, "The original Flow changed while dead-letter replay was prepared", latest.Batch.Source, func(plan automation.FlowBatchPreparation, checkpoint platform.FlowSourceCheckpoint) *platform.Error {
 			return t.checkStreamSourceLocked(current, plan, latest, checkpoint, true, now)
 		}); refusal != nil {
 			return nil, refusal
@@ -163,7 +163,7 @@ func (t *Tenant) flowIntake() automation.BatchIntake {
 		Caller:    t.automation(platform.FlowApp, false),
 		Preparing: t.beginFlowArtifactPreparation,
 		Snapshot:  t.continuousSnapshot,
-		Read: func(member platform.Member, id string, now time.Time, use func(platform.ContinuousFlowOwner, platform.FlowInstance, platform.Caller) *platform.Error) *platform.Error {
+		Read: func(member platform.Member, id string, now time.Time, use func(automation.ContinuousFlowOwner, platform.FlowInstance, platform.Caller) *platform.Error) *platform.Error {
 			_, refusal := recordRead(t, context.Background(), func(t *Tenant) (struct{}, *platform.Error) {
 				f, latest, _, refusal := t.continuousSnapshotLocked(member, id, now)
 				if refusal != nil {
@@ -182,7 +182,7 @@ func (t *Tenant) flowIntake() automation.BatchIntake {
 	}
 }
 
-func (t *Tenant) commitFlowCleanup(plan platform.FlowArtifactCleanupPreparation, now time.Time) *platform.Error {
+func (t *Tenant) commitFlowCleanup(plan automation.FlowArtifactCleanupPreparation, now time.Time) *platform.Error {
 	member := platform.Member{ID: "app:" + platform.FlowApp, Tenant: t.ID}
 	_, refusal := t.decideAutomated("flow:cleanup", platform.FlowApp, func(t *Tenant) (*pb.ChangeRecord, *platform.Error) {
 		latest, ok := platform.Get[platform.FlowInstance](t.automation(platform.FlowApp, false), plan.Instance())

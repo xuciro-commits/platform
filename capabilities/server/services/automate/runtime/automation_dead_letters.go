@@ -18,7 +18,7 @@ type deadLetterReplayPreparation struct {
 	asset platform.FlowDeadLetterAsset
 }
 
-func (f *Flows) PlanDeadLetterReplay(x FlowInstance, c platform.Caller, asset platform.FlowDeadLetterAsset) (platform.FlowDeadLetterReplayPreparation, *platform.Error) {
+func (f *Flows) PlanDeadLetterReplay(x FlowInstance, c platform.Caller, asset platform.FlowDeadLetterAsset) (FlowDeadLetterReplayPreparation, *platform.Error) {
 	d := f.def(x.Flow, x.Version)
 	if asset.Instance != x.ID || asset.Flow != x.Flow || asset.Version != x.Version || asset.OnBehalf != x.OnBehalf || asset.Replayed || asset.Archived || asset.Withheld || asset.Action != "" || !json.Valid([]byte(asset.Letter.Value)) || d == nil || d.Continuous == nil || !d.Continuous.DeadLetterRetry || d.Continuous.Window == nil {
 		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The retained signal dead letter is unavailable for replay")
@@ -34,7 +34,7 @@ func (f *Flows) PlanDeadLetterReplay(x FlowInstance, c platform.Caller, asset pl
 	return &deadLetterReplayPreparation{batch: batch, asset: asset}, nil
 }
 
-func (p *deadLetterReplayPreparation) Prepare(sub *pb.Submission, at time.Time, store platform.FlowFrameStore) (platform.FlowPreparedBatch, *platform.Error) {
+func (p *deadLetterReplayPreparation) Prepare(sub *pb.Submission, at time.Time, store FlowFrameStore) (FlowPreparedBatch, *platform.Error) {
 	if !p.batch.owner.deadLetterReplayAllowed(p.batch.caller, p.asset, at) {
 		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The retained signal dead letter is unavailable for replay")
 	}

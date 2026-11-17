@@ -9,6 +9,7 @@ import (
 	"io"
 	"maps"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
+	"platformserver/kernel/protocol"
 	"platformserver/platform"
 	"slices"
 	"time"
@@ -32,7 +33,7 @@ type PreparedBatch struct {
 	replaySubmission *pb.Submission
 }
 
-func (f *Flows) ExpandFrame(x FlowInstance, store platform.FlowFrameStore) (*BatchFrame, error) {
+func (f *Flows) ExpandFrame(x FlowInstance, store FlowFrameStore) (*BatchFrame, error) {
 	if x.Batch == nil {
 		return &BatchFrame{State: map[string]json.RawMessage{}}, nil
 	}
@@ -94,7 +95,7 @@ type BatchPreparation struct {
 	caller    platform.Caller
 }
 
-func (f *Flows) PlanBatch(x FlowInstance, c platform.Caller) (platform.FlowBatchPreparation, *platform.Error) {
+func (f *Flows) PlanBatch(x FlowInstance, c platform.Caller) (FlowBatchPreparation, *platform.Error) {
 	d := f.def(x.Flow, x.Version)
 	if d == nil || d.Continuous == nil || ended(x.State) {
 		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The continuous instance is unavailable")
@@ -155,7 +156,7 @@ func (plan *BatchPreparation) Intake() (string, *platform.StreamIntake, int) {
 	return plan.rule.Source, &intake, plan.rule.Batch
 }
 
-func (plan *BatchPreparation) WindowTick(now time.Time, store platform.FlowFrameStore) (Batch, bool, *platform.Error) {
+func (plan *BatchPreparation) WindowTick(now time.Time, store FlowFrameStore) (Batch, bool, *platform.Error) {
 	if plan == nil || plan.rule.Intake == nil || plan.rule.Window == nil || plan.before.Batch == nil || plan.before.Batch.Source == nil || now.IsZero() {
 		return Batch{}, false, nil
 	}
@@ -193,17 +194,17 @@ func (plan *BatchPreparation) WindowTick(now time.Time, store platform.FlowFrame
 	return Batch{ID: id, Predecessor: frame.Cursor, Tick: true, Source: &checkpoint}, true, nil
 }
 
-func (plan *BatchPreparation) Prepare(batch Batch, now time.Time, store platform.FlowFrameStore) (platform.FlowPreparedBatch, *platform.Error) {
+func (plan *BatchPreparation) Prepare(batch Batch, now time.Time, store FlowFrameStore) (FlowPreparedBatch, *platform.Error) {
 	var retry *platform.StreamPreparationRetry
 	if plan.rule.Window != nil {
 		retry = plan.rule.Window.Retry
 	}
-	if err := retry.Check(); err != nil {
+	if err := protocol.CheckStreamPreparationRetry(retry); err != nil {
 		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
 	}
-	var prepared platform.FlowPreparedBatch
+	var prepared FlowPreparedBatch
 	var refusal *platform.Error
-	for attempt := 0; attempt < retry.Tries(); attempt++ {
+	for attempt := 0; attempt < protocol.StreamPreparationRetryTries(retry); attempt++ {
 		if attempt > 0 && retry.BackoffMS > 0 {
 			time.Sleep(time.Duration(retry.BackoffMS) * time.Millisecond)
 		}
@@ -217,7 +218,7 @@ func (plan *BatchPreparation) Prepare(batch Batch, now time.Time, store platform
 }
 
 type preparationFrameStore struct {
-	platform.FlowFrameStore
+	FlowFrameStore
 	failed bool
 }
 
@@ -239,7 +240,7 @@ func (s *preparationFrameStore) Seal(instance string, version int, raw []byte, b
 	return ref, err
 }
 
-func (plan *BatchPreparation) prepare(batch Batch, now time.Time, store platform.FlowFrameStore) (platform.FlowPreparedBatch, *platform.Error) {
+func (plan *BatchPreparation) prepare(batch Batch, now time.Time, store FlowFrameStore) (FlowPreparedBatch, *platform.Error) {
 	x := plan.before
 	if err := validateArtifactCleanup(x); err != nil {
 		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, err.Error())
@@ -432,7 +433,7 @@ func (p *PreparedBatch) Submission(tenant string) *pb.Submission {
 		return proto.Clone(p.replaySubmission).(*pb.Submission)
 	}
 	return &pb.Submission{TenantId: tenant, Authority: ID, PrincipalId: "app:" + ID,
-		IdempotencyKey: platform.FlowBatchKey(p.before.ID, p.before.Version, p.batch.ID),
+		IdempotencyKey: FlowBatchKey(p.before.ID, p.before.Version, p.batch.ID),
 		Target:         &pb.EntityRef{Type: InstanceType, Id: p.before.ID}, Schema: &pb.SchemaRef{Name: SchemaFlowBatch, Version: 1},
 		Payload: platform.Raw(map[string]string{"batch": p.batch.ID, "digest": p.frame.Fingerprint})}
 }

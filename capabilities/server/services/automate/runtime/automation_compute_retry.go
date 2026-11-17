@@ -22,7 +22,7 @@ type ComputeRetryPreparation struct {
 	caller    platform.Caller
 }
 
-func (f *Flows) PlanComputeRetry(x FlowInstance, c platform.Caller, now time.Time) (platform.FlowComputeRetryPreparation, *platform.Error) {
+func (f *Flows) PlanComputeRetry(x FlowInstance, c platform.Caller, now time.Time) (FlowComputeRetryPreparation, *platform.Error) {
 	d := f.def(x.Flow, x.Version)
 	if d == nil || d.Continuous == nil || d.Continuous.Entry == "" || d.Continuous.Window == nil || ended(x.State) {
 		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The continuous Compute retry is unavailable")
@@ -64,7 +64,7 @@ func (f *Flows) PlanComputeRetry(x FlowInstance, c platform.Caller, now time.Tim
 
 func (plan *ComputeRetryPreparation) Instance() string { return plan.before.ID }
 
-func (plan *ComputeRetryPreparation) Prepare(now time.Time, store platform.FlowFrameStore) (platform.FlowPreparedComputeRetry, *platform.Error) {
+func (plan *ComputeRetryPreparation) Prepare(now time.Time, store FlowFrameStore) (FlowPreparedComputeRetry, *platform.Error) {
 	x := plan.before
 	frame, err := plan.owner.ExpandFrame(x, store)
 	if err != nil {

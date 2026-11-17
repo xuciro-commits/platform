@@ -58,6 +58,8 @@
 - 自动化流程的编写、校验、发布、安装与运行归 `services/automate/authoring`；页面和应用的编写、发布、
   安装及运行时视图归 `services/apps`。应用 AI 视图只合并资源与评估结果，函数定义继续由
   `services/functions/authoring` 读取，智能体与函数评估报告由 AI 服务提供，资源服务保留装配适配。
+- `Flow`、`Step` 与运行记录结构是应用 SDK 的线格式；连续 Flow 的 owner、frame store、准备结果与批次键归
+  `services/automate/runtime`。数据流准备共用的重试校验与次数归 `kernel/protocol`，数据与自动化服务不各写一份。
 - 应用 profile 的校验和由原始 `UIProfile`、变量与查询构造的页面声明归 `services/apps/pages`；
   ontology、publication 与 DevOps 只经宿主装配的回调使用该声明，不复制构造或校验。
 - 对象、动作类型、对象执行形状、生命周期与约束编译归 `services/ontology`。资源服务只编排跨类型草稿、

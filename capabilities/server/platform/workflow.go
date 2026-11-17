@@ -1,9 +1,7 @@
 package platform
 
 import (
-	"crypto/sha256"
 	"encoding/json"
-	"fmt"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"strings"
 	"time"
@@ -316,22 +314,6 @@ type StreamPreparationRetry struct {
 	BackoffMS int `json:"backoffMs"`
 }
 
-func (r *StreamPreparationRetry) Check() error {
-	if r == nil {
-		return nil
-	}
-	if r.Attempts < 0 || r.Attempts > 20 || r.BackoffMS < 0 || r.BackoffMS > 5000 || (r.Attempts-1)*r.BackoffMS > 30000 {
-		return fmt.Errorf("stream preparation retries must fit 20 attempts and 30 seconds of bounded backoff")
-	}
-	return nil
-}
-func (r *StreamPreparationRetry) Tries() int {
-	if r == nil || r.Attempts == 0 {
-		return 1
-	}
-	return r.Attempts
-}
-
 const (
 	FlowApp          = "flow"
 	FlowInstanceType = "flow.instance"
@@ -535,56 +517,4 @@ func (x *FlowInstance) UnmarshalJSON(raw []byte) error {
 	}
 	*x = FlowInstance(saved)
 	return nil
-}
-
-type FlowFrameStore interface {
-	Read(FlowStateArtifact) ([]byte, error)
-	Seal(instance string, version int, raw []byte, budget int) (FlowStateArtifact, error)
-	Discard(FlowStateArtifact) error
-}
-
-type ContinuousFlowOwner interface {
-	App
-	PlanBatch(FlowInstance, Caller) (FlowBatchPreparation, *Error)
-	PlanComputeRetry(FlowInstance, Caller, time.Time) (FlowComputeRetryPreparation, *Error)
-	PlanArtifactCleanup(FlowInstance, time.Time) (FlowArtifactCleanupPreparation, *Error)
-	PlanDeadLetterReplay(FlowInstance, Caller, FlowDeadLetterAsset) (FlowDeadLetterReplayPreparation, *Error)
-	ExpandFrame(FlowInstance, FlowFrameStore) (*FlowBatchFrame, error)
-}
-type FlowDeadLetterReplayPreparation interface {
-	Prepare(*pb.Submission, time.Time, FlowFrameStore) (FlowPreparedBatch, *Error)
-}
-type FlowBatchPreparation interface {
-	Intake() (string, *StreamIntake, int)
-	WindowTick(time.Time, FlowFrameStore) (FlowBatch, bool, *Error)
-	Prepare(FlowBatch, time.Time, FlowFrameStore) (FlowPreparedBatch, *Error)
-}
-type FlowPreparedDecision interface {
-	Decision(App) App
-	Submission(tenant string) *pb.Submission
-	Matches(FlowInstance) bool
-}
-type FlowPreparedBatch interface {
-	FlowPreparedDecision
-	Artifact() FlowStateArtifact
-	Artifacts() []FlowStateArtifact
-	OperationRequest() (OperationRequest, bool)
-}
-type FlowComputeRetryPreparation interface {
-	Instance() string
-	Prepare(time.Time, FlowFrameStore) (FlowPreparedComputeRetry, *Error)
-}
-type FlowPreparedComputeRetry interface {
-	FlowPreparedDecision
-	Instance() string
-	OperationRequest() OperationRequest
-}
-type FlowArtifactCleanupPreparation interface {
-	FlowPreparedDecision
-	Instance() string
-	Artifacts() []FlowStateArtifact
-}
-
-func FlowBatchKey(instance string, version int, batch string) string {
-	return fmt.Sprintf("flow-batch:%x", sha256.Sum256(Raw([]any{instance, version, batch})))
 }

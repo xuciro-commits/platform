@@ -6,6 +6,7 @@ import (
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
+	"platformserver/kernel/protocol"
 	"platformserver/platform"
 )
 
@@ -74,12 +75,12 @@ type StreamReader struct {
 
 func (r StreamReader) Rows(intake *platform.StreamIntake, source Source, connection Connection, latestBootstrap bool, columns []string) ([]map[string]any, string, *platform.Error) {
 	retry := intake.Retry
-	if err := retry.Check(); err != nil {
+	if err := protocol.CheckStreamPreparationRetry(retry); err != nil {
 		return nil, "", platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
 	}
 	cursor, initialized := source.Cursor, !latestBootstrap
 	var readErr error
-	for attempt := 0; attempt < retry.Tries(); attempt++ {
+	for attempt := 0; attempt < protocol.StreamPreparationRetryTries(retry); attempt++ {
 		if attempt > 0 && retry.BackoffMS > 0 {
 			time.Sleep(time.Duration(retry.BackoffMS) * time.Millisecond)
 		}
@@ -205,7 +206,11 @@ type StreamStart struct {
 	Bootstrap  bool
 }
 
-func BeginStream(plan platform.FlowBatchPreparation, before platform.FlowInstance, resolve func(string, *platform.StreamIntake) (Source, Connection, string, *platform.Error)) (StreamStart, *platform.Error) {
+type StreamPreparation interface {
+	Intake() (string, *platform.StreamIntake, int)
+}
+
+func BeginStream(plan StreamPreparation, before platform.FlowInstance, resolve func(string, *platform.StreamIntake) (Source, Connection, string, *platform.Error)) (StreamStart, *platform.Error) {
 	var s StreamStart
 	var refusal *platform.Error
 	s.Name, s.Intake, s.Budget = plan.Intake()

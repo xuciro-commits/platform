@@ -33,7 +33,7 @@ func (t *Tenant) ConsumeFlowSource(m platform.Member, id string, now time.Time) 
 	}
 	var before platform.FlowInstance
 	var current platform.Member
-	var plan platform.FlowBatchPreparation
+	var plan automation.FlowBatchPreparation
 	var start dataowner.StreamStart
 	_, refusal := recordRead(t, context.Background(), func(t *Tenant) (struct{}, *platform.Error) {
 		f, instance, member, refusal := t.continuousSnapshotLocked(m, id, now)
@@ -89,7 +89,7 @@ func (t *Tenant) readContinuousSource(m platform.Member, before platform.FlowIns
 	return dataowner.StreamReader{Check: checkOriginal, Latest: client.LatestTableCursor, Read: client.ReadTable}.Rows(start.Intake, source, start.Connection, start.Bootstrap, columns)
 }
 
-func (t *Tenant) checkStreamSourceLocked(m platform.Member, plan platform.FlowBatchPreparation, x platform.FlowInstance, checkpoint platform.FlowSourceCheckpoint, tick bool, now time.Time) *platform.Error {
+func (t *Tenant) checkStreamSourceLocked(m platform.Member, plan automation.FlowBatchPreparation, x platform.FlowInstance, checkpoint platform.FlowSourceCheckpoint, tick bool, now time.Time) *platform.Error {
 	name, intake, _ := plan.Intake()
 	source, connection, hash, refusal := t.streamSourceLocked(m, name, intake, now)
 	if refusal != nil {
@@ -112,7 +112,7 @@ func (t *Tenant) pullContinuousSources(now time.Time) {
 	automation.SourcePull{Stopped: t.businessStopped,
 		Inventory: func(now time.Time) (automation.ContinuousWork, *platform.Error) {
 			return recordRead(t, context.Background(), func(t *Tenant) (automation.ContinuousWork, *platform.Error) {
-				owner, _ := t.procs.(platform.ContinuousFlowOwner)
+				owner, _ := t.procs.(automation.ContinuousFlowOwner)
 				return automation.ContinuousInventory{
 					Owner:  owner,
 					Caller: t.automation(platform.FlowApp, false),
@@ -123,10 +123,10 @@ func (t *Tenant) pullContinuousSources(now time.Time) {
 				}.Scan(now)
 			})
 		},
-		Retire: func(plan platform.FlowArtifactCleanupPreparation, now time.Time) *platform.Error {
+		Retire: func(plan automation.FlowArtifactCleanupPreparation, now time.Time) *platform.Error {
 			return t.flowIntake().Retire(plan, now)
 		},
-		Retry: func(member platform.Member, plan platform.FlowComputeRetryPreparation, now time.Time) {
+		Retry: func(member platform.Member, plan automation.FlowComputeRetryPreparation, now time.Time) {
 			t.flowIntake().RetryCompute(member, plan, now)
 		},
 		Member: func(id string) (platform.Member, *platform.Error) {

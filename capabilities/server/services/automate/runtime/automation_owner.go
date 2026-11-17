@@ -59,7 +59,7 @@ type Flows struct {
 	chosen, pins map[string]int
 }
 
-var _ platform.ContinuousFlowOwner = (*Flows)(nil)
+var _ ContinuousFlowOwner = (*Flows)(nil)
 
 var _ platform.OwnerAttacher = (*Flows)(nil)
 

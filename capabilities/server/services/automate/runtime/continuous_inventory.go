@@ -13,18 +13,18 @@ import (
 )
 
 type ContinuousRetry struct {
-	Plan   platform.FlowComputeRetryPreparation
+	Plan   FlowComputeRetryPreparation
 	Member platform.Member
 }
 
 type ContinuousCleanup struct {
-	Plan     platform.FlowArtifactCleanupPreparation
+	Plan     FlowArtifactCleanupPreparation
 	Instance string
 	Refusal  *platform.Error
 }
 
 type ContinuousInventory struct {
-	Owner           platform.ContinuousFlowOwner
+	Owner           ContinuousFlowOwner
 	Caller          platform.Caller
 	Member          func(id string) (platform.Member, bool)
 	StreamPublished func(record string) bool
@@ -78,13 +78,13 @@ func (i ContinuousInventory) Scan(now time.Time) (ContinuousWork, *platform.Erro
 	return work, nil
 }
 
-func ReplayBatch(f platform.ContinuousFlowOwner, tenant string, before FlowInstance, batch platform.FlowBatch) (platform.FlowBatchOutcome, bool, *platform.Error) {
+func ReplayBatch(f ContinuousFlowOwner, tenant string, before FlowInstance, batch platform.FlowBatch) (platform.FlowBatchOutcome, bool, *platform.Error) {
 	digest, err := json.Marshal(batch)
 	if err != nil {
 		return platform.FlowBatchOutcome{}, false, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "A batch needs valid JSON signal values")
 	}
 	batchDigest := fmt.Sprintf("sha256:%x", sha256.Sum256(digest))
-	key := platform.FlowBatchKey(before.ID, before.Version, batch.ID)
+	key := FlowBatchKey(before.ID, before.Version, batch.ID)
 	prior := f.Authority().AcceptedFor(tenant, key)
 	if prior == nil {
 		return platform.FlowBatchOutcome{}, false, nil
@@ -96,7 +96,7 @@ func ReplayBatch(f platform.ContinuousFlowOwner, tenant string, before FlowInsta
 	return platform.FlowBatchOutcome{Cursor: batch.ID}, true, nil
 }
 
-func RetireArtifacts(plan platform.FlowArtifactCleanupPreparation, tenant string, now time.Time, discard func(platform.FlowStateArtifact) error) *platform.Error {
+func RetireArtifacts(plan FlowArtifactCleanupPreparation, tenant string, now time.Time, discard func(platform.FlowStateArtifact) error) *platform.Error {
 	if plan == nil || plan.Instance() == "" || now.IsZero() {
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Flow artifact cleanup is unavailable")
 	}
@@ -131,8 +131,8 @@ func DrainSource(rounds int, consume func() (platform.FlowBatchOutcome, *platfor
 type SourcePull struct {
 	Stopped   func() bool
 	Inventory func(now time.Time) (ContinuousWork, *platform.Error)
-	Retire    func(plan platform.FlowArtifactCleanupPreparation, now time.Time) *platform.Error
-	Retry     func(member platform.Member, plan platform.FlowComputeRetryPreparation, now time.Time)
+	Retire    func(plan FlowArtifactCleanupPreparation, now time.Time) *platform.Error
+	Retry     func(member platform.Member, plan FlowComputeRetryPreparation, now time.Time)
 	Member    func(id string) (platform.Member, *platform.Error)
 	Consume   func(member platform.Member, id string, now time.Time) (platform.FlowBatchOutcome, *platform.Error)
 	Collect   func(now time.Time) error
@@ -214,11 +214,11 @@ type FlowSnapshot struct {
 	Quarantined func() bool
 	Member      func(id string) (platform.Member, bool)
 	Admits      func(platform.Member) *platform.Error
-	Owner       func() (platform.ContinuousFlowOwner, bool)
+	Owner       func() (ContinuousFlowOwner, bool)
 	Record      func(m platform.Member, id string) (any, *platform.Error)
 }
 
-func (s FlowSnapshot) Take(m platform.Member, id string) (platform.ContinuousFlowOwner, platform.FlowInstance, platform.Member, *platform.Error) {
+func (s FlowSnapshot) Take(m platform.Member, id string) (ContinuousFlowOwner, platform.FlowInstance, platform.Member, *platform.Error) {
 	if s.Quarantined() || m.Tenant != s.Tenant {
 		return nil, platform.FlowInstance{}, m, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "The Flow member is unavailable")
 	}

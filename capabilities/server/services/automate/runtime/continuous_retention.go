@@ -25,7 +25,7 @@ func (r *Retention) Release() {
 	}
 }
 
-func GuardPrepared(prepared platform.FlowPreparedDecision, f platform.ContinuousFlowOwner, caller platform.Caller, latest platform.FlowInstance, changed string, source *platform.FlowSourceCheckpoint, check func(platform.FlowBatchPreparation, platform.FlowSourceCheckpoint) *platform.Error) *platform.Error {
+func GuardPrepared(prepared FlowPreparedDecision, f ContinuousFlowOwner, caller platform.Caller, latest platform.FlowInstance, changed string, source *platform.FlowSourceCheckpoint, check func(FlowBatchPreparation, platform.FlowSourceCheckpoint) *platform.Error) *platform.Error {
 	if !prepared.Matches(latest) {
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, changed)
 	}
