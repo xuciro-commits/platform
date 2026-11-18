@@ -196,6 +196,7 @@ pnpm --dir frontend astryx docs tokens
 ## 易错点
 
 - 模块加载时不调用 `t()`，切换语言不会更新：模块级的文字写英文原文，显示时再翻译。动态的键要在字典里列全取值。
+- 语言与外观存在成员资料里（`platform.profile.update`），由 `/v1/me` 带回；不存本机。换语言时外壳整棵重挂，页面里的临时状态会丢。
 - 入口文件名必须是 `src/apps.ts` 里已有的入口；辅助文件放进子目录。
 - 同一行里夹在 `>` 与 `<` 之间的英文会被当成没翻译的文字，例如行内的 `Promise<unknown>`；给类型起个别名。
 - 单条记录读到的小数是 `{kind, value}`，用 `src/pages/values.ts` 的 `plain()` 取值、`shown()` 显示。

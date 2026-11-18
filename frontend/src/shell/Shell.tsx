@@ -8,9 +8,10 @@ import { type App, apps, locate, type NavItem } from "../apps";
 import { entries } from "../apps/entries";
 import { type Api, useRead, useSession } from "../host";
 import { Records } from "../pages/RecordList";
-import { t } from "../i18n";
+import { setLanguage, t } from "../i18n";
 import { navigate, usePath, useSearch } from "../router";
 import { AppRail } from "./AppRail";
+import { setAppearance } from "./appearance";
 import { AppSidebar } from "./AppSidebar";
 import { CommandSearch } from "./CommandSearch";
 import { SignIn } from "./SignIn";
@@ -38,6 +39,12 @@ export function Shell() {
   const path = usePath();
   const segments = path.split("/");
   const projected = useRead<Api.ApplicationView[]>(session ? "/v1/applications" : null);
+  const me = useRead<Api.MeView>(session ? "/v1/me" : null);
+  useEffect(() => {
+    if (me.status !== "ready") return;
+    setLanguage(me.data.language);
+    setAppearance(me.data.account.theme);
+  }, [me]);
   const available = useMemo(() => projected.status === "ready" ? [...apps, ...installedApps(projected.data).filter((app) => !apps.some((known) => known.id === app.id))] : apps, [projected]);
   const { app, item } = locate(path, available);
   const object = item.object ?? (app.id === "ontology" && item.id === "objects" ? decodeURIComponent(segments[3] ?? "") : "");

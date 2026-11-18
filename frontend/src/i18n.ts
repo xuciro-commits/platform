@@ -1,3 +1,5 @@
+import { useSyncExternalStore } from "react";
+
 export const zhCN: Record<string, string> = {
   Search: "搜索",
   Columns: "列",
@@ -168,6 +170,13 @@ export const zhCN: Record<string, string> = {
   "Object type groups": "对象类型组",
   Objects: "对象",
   Resources: "资源",
+  Account: "账户",
+  Language: "语言",
+  Appearance: "外观",
+  Automatic: "自动",
+  "Match system": "跟随系统",
+  Light: "浅色",
+  Dark: "深色",
   Functions: "函数",
   Automations: "自动化",
   Modules: "模块",
@@ -404,7 +413,24 @@ export const zhCN: Record<string, string> = {
   "Canceled": "已取消",
 };
 
-const locale = navigator.language.startsWith("zh") ? "zh-CN" : "en";
+const supported = (language: string) => (language.startsWith("zh") ? "zh-CN" : "en");
+let locale = supported(navigator.language);
+const listeners = new Set<() => void>();
+
+export function setLanguage(language: string) {
+  const next = supported(language);
+  if (next === locale) return;
+  locale = next;
+  document.documentElement.lang = next;
+  listeners.forEach((notify) => notify());
+}
+
+export function useLocale() {
+  return useSyncExternalStore((notify) => {
+    listeners.add(notify);
+    return () => listeners.delete(notify);
+  }, () => locale);
+}
 
 export function t(text: string) {
   return locale === "zh-CN" ? (zhCN[text] ?? text) : text;

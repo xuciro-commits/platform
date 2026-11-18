@@ -5,13 +5,13 @@ import { IconButton } from "@astryxdesign/core/IconButton";
 import { HStack, VStack } from "@astryxdesign/core/Layout";
 import { Badge } from "@astryxdesign/core/Badge";
 import { DropdownMenu } from "@astryxdesign/core/DropdownMenu";
-import { ArrowRightStartOnRectangleIcon, BellIcon, InboxIcon, MagnifyingGlassIcon } from "@heroicons/react/24/outline";
+import { BellIcon, InboxIcon, MagnifyingGlassIcon } from "@heroicons/react/24/outline";
 import { type App, pathOf } from "../apps";
-import { endSession } from "../host";
 import { t } from "../i18n";
 import { useInbox } from "../pages/inbox";
 import { navigate } from "../router";
 import { useCommandSearch } from "./CommandSearch";
+import { MemberMenu } from "./MemberMenu";
 
 export function AppRail({ current, compact, apps }: { current: App; compact?: boolean; apps: App[] }) {
   const searchScope = useCommandSearch();
@@ -38,10 +38,8 @@ export function AppRail({ current, compact, apps }: { current: App; compact?: bo
       )}
     />
   );
-  const signOut = (
-    <IconButton label={t("Sign out")} tooltip={t("Sign out")} variant="ghost" icon={<Icon icon={ArrowRightStartOnRectangleIcon} />} onClick={endSession} />
-  );
-  if (compact) return <HStack gap={1} vAlign="center">{search}{notifications}{signOut}</HStack>;
+  const member = <MemberMenu compact={compact} />;
+  if (compact) return <HStack gap={1} vAlign="center">{search}{notifications}{member}</HStack>;
   return (
     <VStack padding={2} hAlign="center" vAlign="between" height="100%">
       <VStack gap={1} hAlign="center">
@@ -59,7 +57,7 @@ export function AppRail({ current, compact, apps }: { current: App; compact?: bo
           />
         ))}
       </VStack>
-      {signOut}
+      {member}
     </VStack>
   );
 }

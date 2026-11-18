@@ -302,7 +302,8 @@ test("mobile: the navigation drawer contains the application controls", async ({
   const drawer = page.getByRole("dialog");
   await expect(drawer.getByRole("button", { name: "Search", exact: true })).toBeVisible();
   await expect(drawer.getByRole("button", { name: "Notifications", exact: true })).toBeVisible();
-  await drawer.getByRole("button", { name: "Sign out", exact: true }).click();
+  await drawer.getByRole("button", { name: "Account", exact: true }).click();
+  await page.getByRole("menuitem", { name: "Sign out", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Sign in", exact: true })).toBeVisible();
 });
 
@@ -942,7 +943,8 @@ test("applications: shared records respect roles and keep their history after re
     return (await response.json()).error as { code: string; message: string };
   }, { submission: sent.postDataJSON(), version: sent.headers()["platform-schema-version"] });
 
-  await member.getByRole("button", { name: "Sign out", exact: true }).click();
+  await member.getByRole("button", { name: "Account", exact: true }).click();
+  await member.getByRole("menuitem", { name: "Sign out", exact: true }).click();
   await member.getByRole("button", { name: "user-1 · acceptance" }).click();
   await member.goto(recordURL);
   await expect(member.getByRole("heading", { name: "PO-1042", exact: true })).toBeVisible();
@@ -1173,4 +1175,31 @@ test("command palette: open a record and the inbox with the keyboard", async ({ 
   await search.press("Enter");
   await expect(page).toHaveURL(/\/home\/inbox$/);
   await expect(page.getByRole("heading", { name: "Inbox", exact: true })).toBeVisible();
+});
+
+test("member menu: language and appearance live in the profile, sign out returns to sign-in", async ({ page }) => {
+  await signIn(page);
+  const choose = async (menu: string, item: string, option: string | RegExp) => {
+    await page.getByRole("button", { name: menu, exact: true }).click();
+    await page.getByRole("menuitem", { name: item, exact: true }).click();
+    await page.getByRole("menuitemradio", { name: option }).click();
+  };
+
+  await choose("Account", "Language", /中文/);
+  await expect(page.getByRole("button", { name: "搜索", exact: true }).first()).toBeVisible();
+  await page.reload();
+  await expect(page.getByRole("button", { name: "账户", exact: true })).toBeVisible();
+
+  await choose("账户", "外观", "深色");
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
+  await page.reload();
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
+
+  await choose("账户", "外观", "跟随系统");
+  await choose("账户", "语言", "自动");
+  await expect(page.getByRole("button", { name: "Account", exact: true })).toBeVisible();
+
+  await page.getByRole("button", { name: "Account", exact: true }).click();
+  await page.getByRole("menuitem", { name: "Sign out", exact: true }).click();
+  await expect(page.getByRole("button", { name: "admin-1 · acceptance" })).toBeVisible();
 });

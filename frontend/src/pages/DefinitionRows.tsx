@@ -140,7 +140,7 @@ function DefinitionTable({ slot, field, rows, states, entities, subject, bound, 
       <HStack gap={2} vAlign="center">
         <StackItem size="fill"><Heading level={3}>{title}</Heading></StackItem>
         {slot === "actions" && <Button label={t("Create transition")} variant="secondary" isDisabled={busy || states.length < 2} onClick={() => setCreatingTransition(true)} />}
-        {canWrite && slot !== "actions" && <Button label={t(schema.add)} variant="secondary" isDisabled={busy} onClick={() => { setFailure(""); setEditing({ index: rows.length, row: {} }); }} />}
+        {canWrite && slot !== "actions" && <Button label={t(schema.add)} variant="secondary" isDisabled={saving} onClick={() => { setFailure(""); setEditing({ index: -1, row: {} }); }} />}
       </HStack>
       {bound && <Text type="supporting">{t("Transitions use the linked action types.")}</Text>}
       {failure && !editing && removing === undefined && <Banner status="error" title={t("Not saved")} description={failure} />}
@@ -180,12 +180,10 @@ function DefinitionTable({ slot, field, rows, states, entities, subject, bound, 
       )}
       {editing && (
         <DefinitionForm slot={slot} row={editing.row} field={field} states={states} entities={entities} subject={subject}
-          title={editing.index === rows.length ? t(schema.add) : t("Edit row")} busy={busy} failure={failure} label={label}
+          title={editing.index < 0 ? t(schema.add) : t("Edit row")} busy={busy} failure={failure} label={label}
           close={() => !busy && setEditing(undefined)}
           save={(row) => {
-            const next = [...rows];
-            next[editing.index] = row;
-            void applying(next);
+            void applying(editing.index < 0 ? [...rows, row] : rows.map((current, index) => index === editing.index ? row : current));
           }} />
       )}
       {removing !== undefined && (
