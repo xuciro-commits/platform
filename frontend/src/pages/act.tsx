@@ -14,7 +14,7 @@ export function reasonOf(problem: unknown) {
   return (problem instanceof Error && problem.message) || t("The platform did not accept this change.");
 }
 
-export async function send(action: Api.Action, id: string, payload: Values, revision: number) {
+export async function send(action: Api.Action, id: string, payload: Values, revision?: number) {
   const key = crypto.randomUUID();
   for (let attempt = 1; ; attempt += 1) {
     try {

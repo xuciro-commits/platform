@@ -350,3 +350,26 @@ test("lines: add and edit a child row from its parent record", async ({ page }) 
   await table.getByRole("button", { name: "Archive row" }).click();
   await expect(table.getByRole("textbox", { name: "Product" })).toHaveCount(0);
 });
+
+test("activity: a comment and an inline change appear in one timeline", async ({ page }) => {
+  await signIn(page);
+  await open(page, "Ontology", "Objects");
+  await page.getByRole("link", { name: "Opportunities" }).click();
+  await page.getByRole("link", { name: "Warehouse scanners" }).click();
+  const next = page.getByRole("textbox", { name: "Next step" });
+  const before = await next.inputValue();
+  await next.fill("Confirm scanner quantities");
+  await next.press("Enter");
+  await page.getByRole("link", { name: "Activity", exact: true }).click();
+  await page.getByRole("textbox", { name: "Write a comment" }).fill("I asked the warehouse lead.");
+  await page.getByRole("button", { name: "Post comment" }).click();
+  const comment = page.getByText("I asked the warehouse lead.", { exact: true });
+  const change = page.getByText(`Next step: ${before} → Confirm scanner quantities`, { exact: true });
+  await expect(comment).toBeVisible();
+  await expect(change).toBeVisible();
+  expect((await comment.boundingBox())!.y).toBeLessThan((await change.boundingBox())!.y);
+  const following = page.getByRole("switch", { name: "Follow" });
+  await expect(following).toBeChecked();
+  await following.click();
+  await expect(following).not.toBeChecked();
+});

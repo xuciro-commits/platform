@@ -1,5 +1,13 @@
 export const zhCN: Record<string, string> = {
   Search: "搜索",
+  "Write a comment": "写评论",
+  "Post comment": "发表评论",
+  Commented: "发表了评论",
+  "Some activity is unavailable": "部分活动不可用",
+  "No activity yet": "还没有活动",
+  Follow: "关注",
+  "Assign work": "指派工作",
+  Assignee: "负责人",
   Actions: "动作",
   "Opportunity line": "商机明细行",
   "Add a row": "加一行",

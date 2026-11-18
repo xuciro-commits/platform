@@ -1,5 +1,4 @@
 import { AlertDialog } from "@astryxdesign/core/AlertDialog";
-import { Avatar } from "@astryxdesign/core/Avatar";
 import { Banner } from "@astryxdesign/core/Banner";
 import { EmptyState } from "@astryxdesign/core/EmptyState";
 import { useMediaQuery } from "@astryxdesign/core/hooks";
@@ -10,16 +9,17 @@ import { StatusDot } from "@astryxdesign/core/StatusDot";
 import { Tab, TabList } from "@astryxdesign/core/TabList";
 import { Heading, Text } from "@astryxdesign/core/Text";
 import { Timestamp } from "@astryxdesign/core/Timestamp";
-import { useMemo, useState } from "react";
+import { type ReactNode, useMemo, useState } from "react";
 import { type Api, useRead } from "../host";
 import { t } from "../i18n";
 import { usePath } from "../router";
 import { BackLink } from "./BackLink";
 import { describe, type Described } from "./describe";
 import { type Editor, FieldGroup, useEditor } from "./RecordFields";
+import { Collaboration, RecordActivity } from "./RecordActivity";
 import { RecordLines } from "./RecordLines";
 import { dots, type Instances, Transitions } from "./Transitions";
-import { plain, present } from "./values";
+import { plain } from "./values";
 
 type Stamp = { by?: string; at?: string };
 type Kept = { id: string; revision: number; created: Stamp; changed: Stamp; archived?: boolean };
@@ -43,10 +43,11 @@ function Loading() {
   );
 }
 
-function Rail({ described, editor, kept, refs }: { described: Described; editor: Editor; kept: Kept; refs?: Api.RecordView["refs"] }) {
+function Rail({ described, editor, kept, refs, collaboration }: { described: Described; editor: Editor; kept: Kept; refs?: Api.RecordView["refs"]; collaboration?: ReactNode }) {
   return (
     <VStack gap={6}>
       <FieldGroup described={described} editor={editor} sections={[{ title: "Properties", fields: described.aside }]} direction="vertical" refs={refs} />
+      {collaboration}
       <VStack gap={4}>
         <Heading level={3}>{t("Record")}</Heading>
         <MetadataList>
@@ -67,46 +68,6 @@ function Rail({ described, editor, kept, refs }: { described: Described; editor:
   );
 }
 
-function History({ described, id }: { described: Described; id: string }) {
-  const read = useRead<Api.RecordSectionView>(`/v1/records/${described.type}/${encodeURIComponent(id)}/sections/history`);
-  if (read.status === "loading") return <Loading />;
-  if (read.status !== "ready") return <Banner status="error" title={t("The history could not be loaded")} description={read.reason} />;
-  const say = (field: Api.FieldInfo, value: unknown) =>
-    field.name === described.lifecycle?.field ? t(described.state({ [field.name]: plain(value) })?.title ?? present(field, plain(value))) : present(field, plain(value));
-  return (
-    <VStack gap={5}>
-      {(read.data.history ?? []).map((change) => (
-        <HStack key={change.change} gap={3} vAlign="start">
-          <Avatar name={change.by} size="sm" />
-          <StackItem size="fill">
-            <VStack gap={1}>
-              <HStack gap={1} vAlign="center" wrap="wrap">
-                <Text type="body" weight="semibold">
-                  {change.by}
-                </Text>
-                <Text type="body">{t(described.action(change.schema)?.title ?? "Changed")}</Text>
-                <Bullet />
-                <Timestamp value={change.at} format="auto" />
-              </HStack>
-              {change.fields.flatMap((entry) => {
-                const field = described.field(entry.field);
-                if (!field) return [];
-                const after = say(field, entry.after);
-                const text = entry.before === undefined ? after : `${say(field, entry.before)} → ${after}`;
-                return [
-                  <Text key={entry.field} type="supporting" color="secondary">
-                    {`${t(field.title)}: ${text}`}
-                  </Text>,
-                ];
-              })}
-            </VStack>
-          </StackItem>
-        </HStack>
-      ))}
-    </VStack>
-  );
-}
-
 export function RecordPage({ described, id, listPath, listTitle, instances, entities, catalog }: RecordPageProps) {
   const [refusal, setRefusal] = useState("");
   const [fresh] = useState(() => (history.state as { fresh?: string } | null)?.fresh === id);
@@ -119,6 +80,8 @@ export function RecordPage({ described, id, listPath, listTitle, instances, enti
     [read],
   );
   const kept = read.status === "ready" ? (read.data.record as Kept) : undefined;
+  const comments = useRead<Api.RecordSectionView>(kept ? `/v1/records/${described.type}/${encodeURIComponent(id)}/sections/comments` : null);
+  const collaboration = <Collaboration target={`${described.type}/${id}`} comments={comments} catalog={catalog} entities={entities} />;
   const refs = read.status === "ready" ? read.data.refs : undefined;
   const editor = useEditor(described, id, values, kept?.revision ?? 0);
   const state = described.state(values);
@@ -235,14 +198,14 @@ export function RecordPage({ described, id, listPath, listTitle, instances, enti
               })}
             </VStack>
           )}
-          {kept && tab === "activity" && <History described={described} id={id} />}
-          {kept && tab === "properties" && <Rail described={described} editor={editor} kept={kept} refs={refs} />}
+          {kept && tab === "activity" && <RecordActivity described={described} id={id} comments={comments} catalog={catalog} />}
+          {kept && tab === "properties" && <Rail described={described} editor={editor} kept={kept} refs={refs} collaboration={collaboration} />}
         </LayoutContent>
       }
       end={
         kept && !narrow ? (
           <LayoutPanel width={340} padding={6} role="complementary" hasDivider>
-            <Rail described={described} editor={editor} kept={kept} refs={refs} />
+            <Rail described={described} editor={editor} kept={kept} refs={refs} collaboration={collaboration} />
           </LayoutPanel>
         ) : undefined
       }
