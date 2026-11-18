@@ -57,9 +57,7 @@ export function domainOf(filters: PowerSearchFilter[], choiceValue: (field: stri
     const value = filter.value;
     const scalar =
       value.type === "empty"
-        ? filter.operator === "is_false"
-          ? false
-          : true
+        ? true
         : value.type === "enum"
           ? choiceValue(field, value.value)
           : value.type === "string"

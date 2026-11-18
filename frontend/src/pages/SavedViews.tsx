@@ -63,12 +63,12 @@ export function useSavedViews({ entity, view, fallback, columnCount, filterLabel
   const [removing, setRemoving] = useState(false);
   const [failure, setFailure] = useState("");
   const [busy, setBusy] = useState(false);
-  const catalog = useRead<Api.Action[]>("/v1/actions");
-  const views = useRead<Api.SavedView[]>("/v1/views");
+  const catalog = useRead<Api.Action[]>(entity ? "/v1/actions" : null);
+  const views = useRead<Api.SavedView[]>(entity ? "/v1/views" : null);
   const me = useRead<Api.MeView>("/v1/me");
   const projects = useRead<Api.RecordPage>(editing?.scope === "project" ? "/v1/records/build.app?limit=200" : null);
   const principal = me.status === "ready" ? me.data.principalId : "";
-  const preference = useRead<Api.RecordView>(principal ? `/v1/records/work.viewpreference/${encodeURIComponent(`${principal}@${entity}`)}` : null);
+  const preference = useRead<Api.RecordView>(principal && entity ? `/v1/records/work.viewpreference/${encodeURIComponent(`${principal}@${entity}`)}` : null);
   const pref = preference.status === "ready" ? (preference.data.record as Preference) : undefined;
   const visible = views.status === "ready" ? views.data.filter((candidate) => candidate.entity === entity) : [];
   const ordered = [...visible].sort((left, right) => Number(pref?.pinned?.includes(right.id)) - Number(pref?.pinned?.includes(left.id)));

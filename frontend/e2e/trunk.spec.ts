@@ -1092,6 +1092,12 @@ test("list: chips filter on the host, a row opens its details, the selection ban
   await header.getByRole("button", { name: "Clear selection", exact: true }).click();
   await header.getByRole("button", { name: "Clear all", exact: true }).click();
   await expect.poll(() => rows.count()).toBeGreaterThan(5);
+
+  const unapproved = { version: 1, layout: "table", columns: ["subject", "budgetapproved"], sort: [], filters: [{ field: "budgetapproved", operator: "is_false", value: { type: "empty" } }], search: "", group: "none", lanes: "" };
+  await page.goto(`/ontology/objects/build.opportunity?view=${encodeURIComponent(JSON.stringify(unapproved))}`);
+  await expect.poll(() => requests.at(-1)?.get("domain")).toBe(JSON.stringify([["budgetapproved", "!=", true]]));
+  await expect.poll(() => rows.count()).toBeGreaterThan(5);
+  await expect(rows.filter({ hasText: "Press line retrofit" })).toHaveCount(0);
 });
 
 

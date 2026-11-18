@@ -183,6 +183,7 @@ function shape(described: Described, declared: Declared, listPath: string, move?
         choices: field.name === lifecycle?.field ? states.map((state) => t(state.title)) : titles(field),
         options: options[field.name],
         boolean: field.type === "boolean",
+        chip: field.type !== "money",
         hiddenByDefault: !declared.fields && !described.columns.includes(field),
         dot: dot(field),
         reference: field.type === "reference" && field.ref ? (row: Row) => (row[field.name] ? { type: String(field.ref), id: String(row[field.name]) } : undefined) : undefined,

@@ -51,6 +51,7 @@ export type ListColumn<Row> = {
   dot?: (row: Row) => Dot | undefined;
   value?: (row: Row) => unknown;
   hiddenByDefault?: boolean;
+  chip?: boolean;
   reference?: (row: Row) => { type: string; id: string } | undefined;
 };
 type Done = Promise<unknown>;
@@ -171,6 +172,7 @@ export function ListView<Answer, Row>({ definition, read, primary, back }: ListV
     () =>
       definition.columns.flatMap((column): Chip[] => {
         const base = { key: column.key, label: column.header };
+        if (column.chip === false) return [];
         if (column.options) return [{ ...base, kind: "many", options: column.options }];
         if (column.boolean) return [{ ...base, kind: "boolean", options: [] }];
         if (column.kind === "enum" && column.choices?.length) return [{ ...base, kind: "many", options: column.choices.map((choice) => ({ value: choice, label: t(choice) })) }];
@@ -225,7 +227,8 @@ export function ListView<Answer, Row>({ definition, read, primary, back }: ListV
         if (dot) cells[dotOf(column.key)] = dot;
         const reference = cells[column.key] ? column.reference?.(row) : undefined;
         if (reference) [cells[typeOf(column.key)], cells[targetOf(column.key)]] = [reference.type, reference.id];
-        raw[column.key] = column.value ? column.value(row) : column.boolean ? cells[column.key] === t("Yes") : column.kind === "time" && cells[column.key] ? new Date(cells[column.key]) : cells[column.key];
+        const value = column.value ? column.value(row) : column.boolean ? cells[column.key] === t("Yes") : cells[column.key];
+        raw[column.key] = column.kind === "time" ? (value ? new Date(String(value)) : undefined) : value;
       }
       return { cells, raw };
     });
@@ -234,7 +237,7 @@ export function ListView<Answer, Row>({ definition, read, primary, back }: ListV
   const shown = useMemo(() => {
     if (definition.page) return all.map((entry) => entry.cells);
     const query = view.search.trim().toLowerCase();
-    const searched = query ? all.filter((entry) => Object.values(entry.raw).some((value) => String(value ?? "").toLowerCase().includes(query))) : all;
+    const searched = query ? all.filter((entry) => definition.columns.some((column) => (entry.cells[column.key] ?? "").toLowerCase().includes(query))) : all;
     const passing = new Set((applyFilters(view.filters, searched.map((entry) => entry.raw) as never) as Raw[]).map((raw) => raw[idKey]));
     const kept = searched.filter((entry) => passing.has(entry.cells[idKey]));
     const order = group?.order;
@@ -249,7 +252,7 @@ export function ListView<Answer, Row>({ definition, read, primary, back }: ListV
         return 0;
       })
       .map((entry) => entry.cells);
-  }, [all, view.filters, view.search, view.sort, group, applyFilters]);
+  }, [all, view.filters, view.search, view.sort, group, applyFilters, definition.columns, definition.page]);
   const grouped = useTableGroupedRows<Cells>({
     data: shown,
     groupBy: (cells) => cells.__group,
@@ -384,6 +387,7 @@ export function ListView<Answer, Row>({ definition, read, primary, back }: ListV
   };
   const bulk = definition.bulk?.(chosen, () => setSelected(new Set()));
   const ready = read.status === "ready";
+  const toolbar = definition.columns.length > 0 && read.status !== "error" && read.status !== "refused";
 
   const activeCells = active ? shown.find((cells) => cells[idKey] === active) : undefined;
   useEffect(() => {
@@ -430,7 +434,7 @@ export function ListView<Answer, Row>({ definition, read, primary, back }: ListV
                     <IconButton label={t("Refresh")} tooltip={t("Refresh")} variant="ghost" size="sm" icon={<Icon icon={ArrowPathIcon} size="sm" />} onClick={reread} />
                     {primary}
                   </HStack>
-                  {ready && (
+                  {toolbar && (
                     <VStack gap={0} paddingInline={chosen.length ? 3 : 0} paddingBlock={chosen.length ? 1.5 : 0} xstyle={chosen.length ? [styles.band, styles.bandEnter] : undefined}>
                       <HStack gap={3} vAlign="center" wrap="wrap" minHeight={32}>
                         <StackItem size="fill" xstyle={styles.toolbarPrimary}>
