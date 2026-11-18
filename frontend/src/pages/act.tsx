@@ -1,11 +1,11 @@
 import { AlertDialog } from "@astryxdesign/core/AlertDialog";
 import { Button } from "@astryxdesign/core/Button";
 import { useToast } from "@astryxdesign/core/Toast";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { type Api, submit } from "../host";
 import { t } from "../i18n";
 import { ActionDialog } from "./ActionDialog";
-import type { Described, Values } from "./describe";
+import type { Described, Step, Values } from "./describe";
 import { enterable } from "./ParameterInput";
 
 const attempts = 3;
@@ -34,19 +34,48 @@ export type Intent = {
   consequence?: string;
   reversible: boolean;
   onRefused: (reason: string) => void;
+  onDone?: () => void;
+  onCancel?: () => void;
 };
 
-export function useAct(described: Described) {
+export function stepIntent(
+  described: Described,
+  { transition, action }: Step,
+  current: string,
+  record: { id: string; revision: number; name: string },
+  callbacks: Pick<Intent, "onRefused" | "onDone" | "onCancel">,
+): Intent {
+  const lifecycle = described.lifecycle;
+  const to = transition.to[0];
+  const state = lifecycle?.states.find((candidate) => candidate.name === to);
+  return {
+    action,
+    ...record,
+    label: t(transition.title),
+    consequence: state?.description ? t(state.description) : undefined,
+    reversible: to !== current && (lifecycle?.transitions ?? []).some((other) => other.from.includes(to) && other.to.includes(current)),
+    ...callbacks,
+  };
+}
+
+export function useAct(described: Described | undefined) {
   const [pending, setPending] = useState<Intent>();
   const [busy, setBusy] = useState(false);
   const toast = useToast();
+  const firing = useRef(false);
+
+  const cancel = () => {
+    pending?.onCancel?.();
+    setPending(undefined);
+  };
 
   const fire = async (intent: Intent) => {
     intent.onRefused("");
+    firing.current = true;
     setBusy(true);
     try {
       const kept = await send(intent.action, intent.id, {}, intent.revision);
-      const back = intent.action.reverse ? described.action(intent.action.reverse) : undefined;
+      const back = intent.action.reverse ? described?.action(intent.action.reverse) : undefined;
       if (back) {
         const dismiss = toast({
           body: `${t("Done")}: ${intent.label} “${intent.name}”`,
@@ -66,9 +95,11 @@ export function useAct(described: Described) {
           ),
         });
       }
+      intent.onDone?.();
     } catch (problem) {
       intent.onRefused(reasonOf(problem));
     }
+    firing.current = false;
     setBusy(false);
     setPending(undefined);
   };
@@ -79,7 +110,7 @@ export function useAct(described: Described) {
   };
 
   const asks = Boolean(pending?.action.payload.some(enterable));
-  const element = !pending ? null : asks ? (
+  const element = !pending || !described ? null : asks ? (
     <ActionDialog
       action={pending.action}
       described={described.entity}
@@ -87,13 +118,16 @@ export function useAct(described: Described) {
       confirm={pending.label}
       id={pending.id}
       revision={pending.revision}
-      onClose={() => setPending(undefined)}
-      onDone={() => setPending(undefined)}
+      onClose={cancel}
+      onDone={() => {
+        pending.onDone?.();
+        setPending(undefined);
+      }}
     />
   ) : (
     <AlertDialog
       isOpen
-      onOpenChange={(open) => !open && !busy && setPending(undefined)}
+      onOpenChange={(open) => !open && !firing.current && cancel()}
       title={`${pending.label} “${pending.name}”?`}
       description={pending.consequence || t("This cannot be undone here.")}
       actionLabel={pending.label}

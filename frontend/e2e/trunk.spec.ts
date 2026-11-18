@@ -166,3 +166,50 @@ test("publish: a draft type goes live from its record page and takes records", a
   await expect(page.getByRole("heading", { level: 1, name: "Ines Brandt" })).toBeVisible();
   await expect(page.getByRole("textbox", { name: "Customer" })).toBeFocused();
 });
+
+test("board: dragging a card to another state runs that transition", async ({ page }) => {
+  await signIn(page);
+  await open(page, "Ontology", "Object types");
+  await page.getByRole("radio", { name: "Board" }).click();
+  const draft = page.getByRole("region", { name: "Draft" });
+  const published = page.getByRole("region", { name: "Published" });
+  const card = draft.getByRole("heading", { level: 4, name: "Site visit" });
+  await expect(card).toBeVisible();
+
+  const from = (await card.boundingBox())!;
+  const to = (await published.boundingBox())!;
+  await page.mouse.move(from.x + 2, from.y - 4);
+  await page.mouse.down();
+  await page.mouse.move(from.x + 40, from.y + 20, { steps: 4 });
+  await page.mouse.move(to.x + to.width / 2, to.y + to.height / 2, { steps: 8 });
+  await page.mouse.up();
+
+  const confirm = page.getByRole("alertdialog");
+  await expect(confirm).toContainText("Site visit");
+  await confirm.getByRole("button", { name: "Publish" }).click();
+  await expect(published.getByRole("heading", { level: 4, name: "Site visit" })).toBeVisible();
+  await expect(draft.getByRole("heading", { level: 4, name: "Site visit" })).toHaveCount(0);
+
+  const back = (await published.getByRole("heading", { level: 4, name: "Site visit" }).boundingBox())!;
+  const there = (await draft.boundingBox())!;
+  await page.mouse.move(back.x + 2, back.y - 4);
+  await page.mouse.down();
+  await page.mouse.move(back.x + 40, back.y + 20, { steps: 4 });
+  await page.mouse.move(there.x + there.width / 2, there.y + there.height / 2, { steps: 8 });
+  await page.mouse.up();
+  await expect(page.getByRole("alertdialog")).toHaveCount(0);
+  await expect(published.getByRole("heading", { level: 4, name: "Site visit" })).toBeVisible();
+});
+
+test("leave: a typed value is kept when the user walks away without Enter", async ({ page }) => {
+  await signIn(page);
+  await open(page, "Ontology", "Objects");
+  await page.getByRole("link", { name: "Opportunities" }).click();
+  await page.getByRole("link", { name: "Furnace monitoring" }).click();
+  await page.getByRole("textbox", { name: "Next step" }).fill("Book the site walk");
+  await page.getByRole("link", { name: "Opportunities" }).click();
+  await expect(page.getByRole("heading", { level: 1, name: "Opportunities" })).toBeVisible();
+  await page.reload();
+  await page.getByRole("link", { name: "Furnace monitoring" }).click();
+  await expect(page.getByRole("textbox", { name: "Next step" })).toHaveValue("Book the site walk");
+});

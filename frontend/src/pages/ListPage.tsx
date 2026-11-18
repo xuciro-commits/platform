@@ -37,7 +37,7 @@ export type ListColumn<Row> = {
 };
 type Done = Promise<unknown>;
 export type BulkAction = { label: string; run: (ids: string[]) => Done };
-export type ListGroup<Row> = { key: string; label: string; of: (row: Row) => string; order?: string[] };
+export type ListGroup<Row> = { key: string; label: string; of: (row: Row) => string; order?: string[]; accepts?: (id: string, to: string) => boolean };
 export type Move = (id: string, group: string, to: string) => Done;
 export type ListShape<Answer, Row> = {
   title: string;
@@ -315,6 +315,7 @@ export function ListView<Answer, Row>({ definition, read, primary, back }: ListV
                 href: cells.__href,
                 lines: definition.columns.slice(1, 5).filter((column) => column.key !== board.key && column.kind !== "time" && cells[column.key]).map((column) => cells[column.key]),
               }))}
+              accepts={board.accepts}
               onMove={
                 definition.move &&
                 ((id, to) => {

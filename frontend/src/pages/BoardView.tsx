@@ -6,7 +6,7 @@ import * as stylex from "@stylexjs/stylex";
 import { type PointerEvent as ReactPointerEvent, type ReactNode, useEffect, useRef, useState } from "react";
 
 export type BoardCard = { id: string; column: string; title: string; href: string; lines: string[] };
-type BoardProps = { columns: string[]; cards: BoardCard[]; onMove?: (id: string, to: string) => void };
+type BoardProps = { columns: string[]; cards: BoardCard[]; onMove?: (id: string, to: string) => void; accepts?: (id: string, to: string) => boolean };
 type Drag = { id: string; width: number; height: number; offsetX: number; offsetY: number; pointerX: number; pointerY: number; target: string | null };
 
 const dragThreshold = 5;
@@ -37,7 +37,7 @@ function CardBody({ card }: { card: BoardCard }) {
   );
 }
 
-export function BoardView({ columns, cards, onMove }: BoardProps) {
+export function BoardView({ columns, cards, onMove, accepts }: BoardProps) {
   const [drag, setDrag] = useState<Drag | null>(null);
   const columnElements = useRef(new Map<string, HTMLElement>());
   const cardElements = useRef(new Map<string, HTMLElement>());
@@ -74,7 +74,8 @@ export function BoardView({ columns, cards, onMove }: BoardProps) {
     const move = (moved: PointerEvent) => {
       if (!started && Math.abs(moved.clientX - startX) + Math.abs(moved.clientY - startY) < dragThreshold) return;
       started = true;
-      target = columnAt(moved.clientX, moved.clientY);
+      const over = columnAt(moved.clientX, moved.clientY);
+      target = over && (over === card.column || !accepts || accepts(card.id, over)) ? over : null;
       setDrag({ id: card.id, width: box.width, height: box.height, offsetX: startX - box.left, offsetY: startY - box.top, pointerX: moved.clientX, pointerY: moved.clientY, target });
     };
     const release = () => {
@@ -112,6 +113,8 @@ export function BoardView({ columns, cards, onMove }: BoardProps) {
           }
           content={
             <LayoutContent
+              role="region"
+              label={name}
               padding={2}
               ref={(element: HTMLDivElement | null) => {
                 if (element) columnElements.current.set(name, element);

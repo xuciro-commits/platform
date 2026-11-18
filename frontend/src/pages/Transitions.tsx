@@ -5,7 +5,7 @@ import { MoreMenu } from "@astryxdesign/core/MoreMenu";
 import { Tooltip } from "@astryxdesign/core/Tooltip";
 import type { Api } from "../host";
 import { t } from "../i18n";
-import { useAct } from "./act";
+import { stepIntent, useAct } from "./act";
 import type { Described } from "./describe";
 
 export type Instances = { field: string; path: string };
@@ -27,24 +27,9 @@ export function Transitions({ described, id, values, revision, title, instances,
   const lifecycle = described.lifecycle;
   const current = lifecycle ? String(values[lifecycle.field] ?? "") : "";
   const offered = described.steps.filter((step) => step.transition.from.includes(current));
-  const target = (transition: Api.TransitionInfo) => transition.to[0];
-  const reversible = (transition: Api.TransitionInfo) =>
-    target(transition) !== current && (lifecycle?.transitions ?? []).some((other) => other.from.includes(target(transition)) && other.to.includes(current));
   const link = instances && typeof values[instances.field] === "string" && values[instances.field] ? `${instances.path}/${encodeURIComponent(String(values[instances.field]))}` : undefined;
 
-  const click = ({ transition, action }: (typeof offered)[number]) => {
-    const state = lifecycle?.states.find((candidate) => candidate.name === target(transition));
-    act.run({
-      action,
-      id,
-      revision,
-      label: t(transition.title),
-      name: title,
-      consequence: state?.description ? t(state.description) : undefined,
-      reversible: reversible(transition),
-      onRefused: onFailure,
-    });
-  };
+  const click = (step: (typeof offered)[number]) => act.run(stepIntent(described, step, current, { id, revision, name: title }, { onRefused: onFailure }));
 
   const offeredMore = described.other.flatMap((action) => {
     const verdict = allowed?.find((entry) => entry.schema === action.schema);

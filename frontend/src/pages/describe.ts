@@ -19,6 +19,7 @@ export type Described = {
   create?: Api.Action;
   edit?: Api.Action;
   steps: Step[];
+  step: (from: string, to: string) => Step | undefined;
   other: Api.Action[];
   action: (schema: string) => Api.Action | undefined;
   field: (name: string) => Api.FieldInfo | undefined;
@@ -76,6 +77,7 @@ export function describe(entity: Api.EntityInfo, actions: Api.Action[]): Describ
     create,
     edit,
     steps,
+    step: (from, to) => steps.find((candidate) => candidate.transition.from.includes(from) && candidate.transition.to[0] === to),
     other,
     action: (schema) => own.find((candidate) => candidate.schema === schema),
     field: (name) => entity.fields.find((field) => field.name === name),

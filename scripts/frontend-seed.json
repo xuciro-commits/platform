@@ -106,6 +106,19 @@
         "states": [{ "name": "active", "title": "Active" }]
       },
       "records": []
+    },
+    {
+      "name": "visit",
+      "prefix": "VIS",
+      "draft": true,
+      "definition": {
+        "title": "Site visit",
+        "plural": "Site visits",
+        "display": "place",
+        "fields": [{ "name": "place", "title": "Place", "type": "text", "required": true, "search": true }],
+        "states": [{ "name": "active", "title": "Active" }]
+      },
+      "records": []
     }
   ]
 }
