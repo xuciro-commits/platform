@@ -798,3 +798,35 @@ test("files: an attachment field stores a media set item on the record", async (
   await page.reload();
   await expect(page.getByText("brief.txt", { exact: true })).toBeVisible();
 });
+
+test("list: one bar searches and filters, identities are quiet and references open their record", async ({ page }) => {
+  await signIn(page);
+  await page.goto("/ontology/objects");
+  const identity = page.getByRole("cell", { name: "build.opportunity", exact: true });
+  await expect(identity.locator('[data-type="code"]')).toBeVisible();
+  await page.goto("/ontology/objects/build.opportunity");
+  await expect(page.getByRole("textbox", { name: "Search this list" })).toHaveCount(0);
+  const table = page.getByRole("table");
+  await expect(table.getByRole("link", { name: "Northwind Tools" }).first()).toBeVisible();
+  const bar = page.getByPlaceholder("Search or filter by any column");
+  await bar.fill("Press");
+  await bar.press("Enter");
+  await expect(page).toHaveURL(/%22search%22%3A%22Press%22/);
+  const found = table.locator("tbody tr").filter({ has: page.getByRole("link") });
+  await expect(found).toHaveCount(1);
+  const customer = found.getByRole("link").nth(1);
+  const name = (await customer.textContent()) ?? "";
+  await customer.click();
+  await expect(page.getByRole("heading", { level: 1, name, exact: true })).toBeVisible();
+});
+
+test("record fields: values read as values and become inputs when focused", async ({ page }) => {
+  await signIn(page);
+  await page.goto("/ontology/objects/build.opportunity/OPP-001");
+  const amount = page.getByRole("spinbutton", { name: "Amount", exact: true });
+  await expect(amount).toHaveValue("184,000");
+  await amount.focus();
+  await expect(amount).toHaveValue("184000");
+  await amount.blur();
+  await expect(amount).toHaveValue("184,000");
+});

@@ -151,6 +151,7 @@ function shape(described: Described, declared: Declared, listPath: string, move?
         boolean: field.type === "boolean",
         hiddenByDefault: !declared.fields && !described.columns.includes(field),
         dot: dot(field),
+        reference: field.type === "reference" && field.ref ? (row: Row) => (row[field.name] ? { type: String(field.ref), id: String(row[field.name]) } : undefined) : undefined,
         value: numeric.has(field.type) ? (row: Row) => field.type === "money" ? money(row[field.name])?.amount : plain(row[field.name]) : undefined,
       })),
       { key: "changed", header: "Updated", width: 140, kind: "time" as const, text: (row: Row) => (row.changed as Stamp | undefined)?.at ?? "" },

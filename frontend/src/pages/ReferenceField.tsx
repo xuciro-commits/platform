@@ -1,3 +1,4 @@
+import type { StyleXStyles } from "@stylexjs/stylex";
 import { HoverCard } from "@astryxdesign/core/HoverCard";
 import { Icon } from "@astryxdesign/core/Icon";
 import { InputGroup } from "@astryxdesign/core/InputGroup";
@@ -47,6 +48,7 @@ export function ReferenceLink({ type, id, name, compact }: { type: string; id: s
 }
 
 type ReferenceInputProps = {
+  control?: StyleXStyles;
   type: string;
   id: string;
   name?: string;
@@ -58,7 +60,7 @@ type ReferenceInputProps = {
   onChange: (value: string) => void;
 };
 
-export function ReferenceInput({ type, id, name, label, description, required, focused, status, onChange }: ReferenceInputProps) {
+export function ReferenceInput({ type, id, name, label, description, required, focused, status, onChange, control }: ReferenceInputProps) {
   const [picked, setPicked] = useState<Reference>();
   const [searchFailed, setSearchFailed] = useState(false);
   const types = useRead<Api.EntityInfo[]>("/v1/entities");
@@ -87,6 +89,7 @@ export function ReferenceInput({ type, id, name, label, description, required, f
       description={description}
       isRequired={required}
       status={status}
+      controlXstyle={control}
       hasAutoFocus={focused}
       placeholder={t("Find a record")}
       emptySearchText={searchFailed ? t("Records could not be searched") : t("No matching records")}

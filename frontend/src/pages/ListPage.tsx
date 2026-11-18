@@ -18,14 +18,14 @@ import { StatusDot } from "@astryxdesign/core/StatusDot";
 import { Table, pixel, proportional, useTableGroupedRows, useTableSelection, useTableSelectionState, useTableSortable } from "@astryxdesign/core/Table";
 import type { TableColumn } from "@astryxdesign/core/Table";
 import { Heading, Text } from "@astryxdesign/core/Text";
-import { TextInput } from "@astryxdesign/core/TextInput";
 import { Timestamp } from "@astryxdesign/core/Timestamp";
-import { ArrowDownIcon, ArrowPathIcon, ArrowUpIcon, TableCellsIcon, ViewColumnsIcon } from "@heroicons/react/24/outline";
+import { ArrowDownIcon, ArrowPathIcon, ArrowUpIcon, RectangleStackIcon, TableCellsIcon, ViewColumnsIcon } from "@heroicons/react/24/outline";
 import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { type Read, reread, useRead } from "../host";
 import { navigate, usePath, useSearch } from "../router";
 import { BackLink } from "./BackLink";
 import { BoardView } from "./BoardView";
+import { ReferenceLink } from "./ReferenceField";
 import { t } from "../i18n";
 import type { Dot } from "./Transitions";
 import { newView, readView, type ViewSort, type ViewState } from "./view";
@@ -36,12 +36,13 @@ export type ListColumn<Row> = {
   header: string;
   width?: number;
   text: (row: Row) => string;
-  kind?: "string" | "enum" | "number" | "time";
+  kind?: "string" | "enum" | "number" | "time" | "code";
   choices?: string[];
   boolean?: boolean;
   dot?: (row: Row) => Dot | undefined;
   value?: (row: Row) => unknown;
   hiddenByDefault?: boolean;
+  reference?: (row: Row) => { type: string; id: string } | undefined;
 };
 type Done = Promise<unknown>;
 export type ListGroup<Row> = { key: string; label: string; of: (row: Row) => string; order?: string[]; accepts?: (id: string, to: string) => boolean };
@@ -68,7 +69,10 @@ type Raw = Record<string, unknown>;
 const compare = (left: unknown, right: unknown) =>
   typeof left === "number" && typeof right === "number" ? left - right : String(left ?? "").localeCompare(String(right ?? ""));
 const idKey = "__id";
+const textKey = "__text";
 const dotOf = (key: string) => `__dot:${key}`;
+const typeOf = (key: string) => `__type:${key}`;
+const targetOf = (key: string) => `__target:${key}`;
 const ungrouped = "none";
 const rowHeight = 48;
 const overscan = 12;
@@ -125,12 +129,17 @@ export function ListView<Answer, Row>({ definition, read, primary, back }: ListV
         .map((column) => ({
           key: column.key,
           label: t(column.header),
-          type: column.kind ?? "string",
+          type: column.kind === "code" ? "string" : column.kind ?? "string",
           enumValues: column.choices?.map((choice) => ({ value: choice, label: choice })),
-        })),
+        }))
+        .concat({ key: textKey, label: t("Any text"), type: "string", enumValues: undefined }),
     [definition],
   );
-  const { config, applyFilters } = usePowerSearchConfig(fields as ReadonlyArray<FieldDefinition>);
+  const { config: fieldConfig, applyFilters } = usePowerSearchConfig(fields as ReadonlyArray<FieldDefinition>);
+  const config = useMemo(() => ({ ...fieldConfig, contentSearchFieldKey: textKey }), [fieldConfig]);
+  const textField = config.fields.find((field) => field.key === textKey);
+  const textOperator = textField?.defaultOperator ?? textField?.operators[0]?.key ?? "";
+  const tokens = view.search ? [...view.filters, { field: textKey, operator: textOperator, value: { type: "string" as const, value: view.search } }] : view.filters;
 
   const all = useMemo(() => {
     if (read.status !== "ready") return [];
@@ -144,6 +153,8 @@ export function ListView<Answer, Row>({ definition, read, primary, back }: ListV
         cells[column.key] = column.text(row);
         const dot = column.dot?.(row);
         if (dot) cells[dotOf(column.key)] = dot;
+        const reference = cells[column.key] ? column.reference?.(row) : undefined;
+        if (reference) [cells[typeOf(column.key)], cells[targetOf(column.key)]] = [reference.type, reference.id];
         raw[column.key] = column.value ? column.value(row) : cells[column.key];
       }
       return { cells, raw };
@@ -204,6 +215,12 @@ export function ListView<Answer, Row>({ definition, read, primary, back }: ListV
     renderCell: (cells) =>
       position === 0 && cells.__href ? (
         <Link href={cells.__href}>{cells[column.key] || cells[idKey]}</Link>
+      ) : cells[targetOf(column.key)] ? (
+        <ReferenceLink type={cells[typeOf(column.key)]} id={cells[targetOf(column.key)]} name={cells[column.key]} />
+      ) : column.kind === "code" ? (
+        <Text type="code" color="secondary" maxLines={1}>
+          {cells[column.key] ?? ""}
+        </Text>
       ) : column.boolean && cells[column.key] === t("Yes") ? (
         <Icon icon="check" size="sm" label={t("Yes")} />
       ) : column.kind === "time" && cells[column.key] ? (
@@ -265,7 +282,7 @@ export function ListView<Answer, Row>({ definition, read, primary, back }: ListV
       height="fill"
       header={
         <LayoutHeader hasDivider padding={4}>
-          <VStack gap={4}>
+          <VStack gap={3}>
             <HStack gap={2} vAlign="center">
               <StackItem size="fill">
                 <VStack gap={2}>
@@ -277,12 +294,12 @@ export function ListView<Answer, Row>({ definition, read, primary, back }: ListV
                 </VStack>
               </StackItem>
               {lanes && (
-                <SegmentedControl label={t("Layout")} value={view.layout} onChange={(layout) => update({ layout: layout as ViewState["layout"], lanes: lanes?.key ?? "" })}>
+                <SegmentedControl size="sm" label={t("Layout")} value={view.layout} onChange={(layout) => update({ layout: layout as ViewState["layout"], lanes: lanes?.key ?? "" })}>
                   <SegmentedControlItem value="table" label={t("Table")} icon={<Icon icon={TableCellsIcon} size="sm" />} />
                   <SegmentedControlItem value="board" label={t("Board")} icon={<Icon icon={ViewColumnsIcon} size="sm" />} />
                 </SegmentedControl>
               )}
-              <IconButton label={t("Refresh")} tooltip={t("Refresh")} icon={<Icon icon={ArrowPathIcon} size="sm" />} onClick={reread} />
+              <IconButton label={t("Refresh")} tooltip={t("Refresh")} variant="ghost" icon={<Icon icon={ArrowPathIcon} size="sm" />} onClick={reread} />
               {primary}
             </HStack>
             {all.length > 0 && chosen.length > 0 && (
@@ -297,17 +314,17 @@ export function ListView<Answer, Row>({ definition, read, primary, back }: ListV
             {all.length > 0 && chosen.length === 0 && (
             <HStack gap={2} vAlign="center">
               <StackItem size="fill">
-                <VStack gap={3}>
-                  <TextInput label={t("Search this list")} value={view.search} onChange={(search) => update({ search })} />
-                  <PowerSearch
-                    config={config}
-                    filters={view.filters}
-                    onChange={(next) => update({ filters: [...next] })}
-                    label={t("Filter")}
-                    placeholder={t("Filter by any column")}
-                    resultCount={String(definition.page ? all.length : shown.length) + " / " + String(definition.page?.total ?? all.length)}
-                  />
-                </VStack>
+                <PowerSearch
+                  config={config}
+                  filters={tokens}
+                  onChange={(next) => {
+                    const text = next.filter((filter) => filter.field === textKey).at(-1)?.value;
+                    update({ filters: next.filter((filter) => filter.field !== textKey), search: text?.type === "string" ? text.value : "" });
+                  }}
+                  label={t("Filter")}
+                  placeholder={t("Search or filter by any column")}
+                  resultCount={String(definition.page ? all.length : shown.length) + " / " + String(definition.page?.total ?? all.length)}
+                />
               </StackItem>
               {definition.groups && definition.groups.length > 0 && (
                 <Popover
@@ -329,7 +346,7 @@ export function ListView<Answer, Row>({ definition, read, primary, back }: ListV
                       ))}
                     </RadioList>
                   }>
-                  <Button label={group ? `${t("Group by")}: ${t(group.label)}` : t("Group by")} variant="secondary" size="md" />
+                  <Button label={group ? `${t("Group by")}: ${t(group.label)}` : t("Group by")} variant="ghost" size="sm" icon={<Icon icon={RectangleStackIcon} size="sm" />} />
                 </Popover>
               )}
               <Popover
@@ -365,7 +382,7 @@ export function ListView<Answer, Row>({ definition, read, primary, back }: ListV
                     })}
                   </VStack>
                 }>
-                <Button label={t("Columns")} variant="secondary" size="md" />
+                <Button label={t("Columns")} variant="ghost" size="sm" icon={<Icon icon={ViewColumnsIcon} size="sm" />} />
               </Popover>
             </HStack>
             )}

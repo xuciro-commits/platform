@@ -16,9 +16,9 @@ function TypeIndex({ declared, base }: { declared: Declared; base: string }) {
     link: (type) => `${base}/${encodeURIComponent(String(type.installed))}`,
     columns: [
       { key: "plural", header: "Name", text: (type) => type.plural || type.title || "" },
-      { key: "type", header: "Type", text: (type) => String(type.installed) },
-      { key: "properties", header: "Properties", width: 120, text: (type) => String(type.fields?.length ?? 0) },
-      { key: "changed", header: "Updated", width: 200, text: (type) => (type.changed?.at ? new Date(type.changed.at).toLocaleString() : "") },
+      { key: "type", header: "Type", kind: "code", text: (type) => String(type.installed) },
+      { key: "properties", header: "Properties", width: 120, kind: "number", text: (type) => String(type.fields?.length ?? 0), value: (type) => type.fields?.length ?? 0 },
+      { key: "changed", header: "Updated", width: 140, kind: "time", text: (type) => type.changed?.at ?? "" },
     ],
   };
   return <ListView key="object-types" definition={definition} read={useRead<Api.RecordPage>("/v1/records/build.object?limit=200")} />;

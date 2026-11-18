@@ -10,11 +10,11 @@ export function resourceList({ kind, title, about }: { kind: string; title: stri
     id: (resource) => resource.id,
     columns: [
       { key: "title", header: "Name", text: (resource) => resource.title },
-      { key: "owner", header: "Owner", width: 140, text: (resource) => resource.ref.app },
+      { key: "owner", header: "Owner", width: 140, kind: "code", text: (resource) => resource.ref.app },
       { key: "project", header: "Project", width: 160, text: (resource) => resource.project },
       { key: "state", header: "State", width: 110, text: (resource) => resource.state },
-      { key: "version", header: "Version", width: 90, text: (resource) => String(resource.version) },
-      { key: "changed", header: "Updated", width: 180, text: (resource) => (resource.changed.at ? new Date(resource.changed.at).toLocaleString() : "") },
+      { key: "version", header: "Version", width: 90, kind: "number", text: (resource) => String(resource.version), value: (resource) => resource.version },
+      { key: "changed", header: "Updated", width: 140, kind: "time", text: (resource) => resource.changed.at ?? "" },
     ],
     groups: [
       { key: "owner", label: "Owner", of: (resource) => resource.ref.app },

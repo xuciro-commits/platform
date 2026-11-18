@@ -1,6 +1,5 @@
 export const zhCN: Record<string, string> = {
   Search: "搜索",
-  "Search this list": "搜索此列表",
   Columns: "列",
   "Move column up": "列上移",
   "Move column down": "列下移",
@@ -356,7 +355,8 @@ export const zhCN: Record<string, string> = {
   Records: "记录",
   selected: "项已选",
   "Clear selection": "取消选择",
-  "Filter by any column": "按任意列筛选",
+  "Search or filter by any column": "搜索，或按任意列筛选",
+  "Any text": "任意文字",
   Archive: "归档",
   Done: "已完成",
   Undo: "撤销",

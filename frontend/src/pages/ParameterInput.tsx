@@ -1,5 +1,6 @@
 import { Banner } from "@astryxdesign/core/Banner";
 import { Button } from "@astryxdesign/core/Button";
+import { DateInput } from "@astryxdesign/core/DateInput";
 import { FileInput } from "@astryxdesign/core/FileInput";
 import { HStack, StackItem, VStack } from "@astryxdesign/core/Layout";
 import { NumberInput } from "@astryxdesign/core/NumberInput";
@@ -7,7 +8,9 @@ import { Selector } from "@astryxdesign/core/Selector";
 import { Switch } from "@astryxdesign/core/Switch";
 import { Text } from "@astryxdesign/core/Text";
 import { TextInput } from "@astryxdesign/core/TextInput";
-import { useEffect, useState } from "react";
+import { colorVars } from "@astryxdesign/core/theme/tokens.stylex";
+import * as stylex from "@stylexjs/stylex";
+import { type ComponentProps, useEffect, useState } from "react";
 import { type Api, request, requestBlob, useRead } from "../host";
 import { t } from "../i18n";
 import { reasonOf, send } from "./act";
@@ -24,6 +27,7 @@ type ParameterInputProps = {
   focused?: boolean;
   referenceName?: string;
   labelHidden?: boolean;
+  quiet?: boolean;
 };
 
 const typed = new Set(["string", "longtext", "date", "datetime", "entity", "reference", "choice"]);
@@ -124,14 +128,22 @@ function AttachmentInput({ parameter, value, onChange, label, description }: { p
   );
 }
 
-export function ParameterInput({ parameter, described, value, status, onChange, onEnter, focused, referenceName, labelHidden }: ParameterInputProps) {
+const styles = stylex.create({
+  quiet: {
+    borderColor: { default: "transparent", ":hover": colorVars["--color-border"], ":focus-within": colorVars["--color-border-emphasized"] },
+    backgroundColor: { default: "transparent", ":hover": colorVars["--color-overlay-hover"], ":focus-within": "transparent" },
+  },
+});
+
+export function ParameterInput({ parameter, described, value, status, onChange, onEnter, focused, referenceName, labelHidden, quiet }: ParameterInputProps) {
+  const control = quiet && !status ? styles.quiet : undefined;
   const field = described.fields.find((candidate) => candidate.name === parameter.name);
   const label = t(field?.title ?? parameter.name);
   const description = field?.help;
   const reference = parameter.ref ?? (field?.type === "reference" ? field.ref : undefined);
   if (reference) {
     return <ReferenceInput type={reference} id={String(value ?? "")} name={referenceName} label={label} description={description}
-      required={parameter.required} focused={focused} status={status} onChange={onChange} />;
+      required={parameter.required} focused={focused} status={status} onChange={onChange} control={control} />;
   }
   if (parameter.choices) {
     return (
@@ -141,6 +153,7 @@ export function ParameterInput({ parameter, described, value, status, onChange, 
         description={description}
         isRequired={parameter.required}
         status={status}
+        controlXstyle={control}
         value={String(value ?? "")}
         onChange={onChange}
         options={parameter.choices.map((choice) => ({ value: choice, label: t(field?.choiceTitles?.[field.choices?.indexOf(choice) ?? -1] ?? choice) }))}
@@ -153,6 +166,21 @@ export function ParameterInput({ parameter, described, value, status, onChange, 
   if (parameter.type === "boolean") {
     return <Switch label={label} isLabelHidden={labelHidden} description={description} value={value === true} onChange={onChange} />;
   }
+  if (parameter.type === "date") {
+    return (
+      <DateInput
+        label={label}
+        isLabelHidden={labelHidden}
+        description={description}
+        isRequired={parameter.required}
+        status={status}
+        controlXstyle={control}
+        format="date"
+        value={typeof value === "string" && value ? value as ComponentProps<typeof DateInput>["value"] : undefined}
+        onChange={(date) => onChange(date ?? "")}
+      />
+    );
+  }
   if (numeric.has(parameter.type)) {
     return (
       <NumberInput
@@ -163,6 +191,8 @@ export function ParameterInput({ parameter, described, value, status, onChange, 
         isRequired={parameter.required}
         status={status}
         value={typeof value === "number" ? value : null}
+        formatValue={(number) => number.toLocaleString()}
+        controlXstyle={control}
         onChange={onChange}
         hasAutoFocus={focused}
       />
@@ -176,6 +206,7 @@ export function ParameterInput({ parameter, described, value, status, onChange, 
       isRequired={parameter.required}
       status={status}
       value={String(value ?? "")}
+      controlXstyle={control}
       onChange={onChange}
       onEnter={onEnter}
       hasAutoFocus={focused}

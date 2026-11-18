@@ -224,6 +224,7 @@ export function FieldGroup({ described, editor, sections, direction, focusEmpty,
                   onChange={(value) => editor.change(parameter, value)}
                   onEnter={editor.settle}
                   focused={field.name === first}
+                  quiet
                 />
               ) : (
                 <Field key={field.name} label={t(field.title)} inputID={`shown-${field.name}`}>
