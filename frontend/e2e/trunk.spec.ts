@@ -373,3 +373,29 @@ test("activity: a comment and an inline change appear in one timeline", async ({
   await following.click();
   await expect(following).not.toBeChecked();
 });
+
+test("links and files: navigate to related records and attach a downloadable file", async ({ page }) => {
+  await signIn(page);
+  await open(page, "Ontology", "Objects");
+  await page.getByRole("link", { name: "Customers" }).click();
+  await page.getByRole("link", { name: "Northwind Tools" }).click();
+  await page.getByRole("link", { name: "Links", exact: true }).click();
+  await expect(page).toHaveURL(/\/links$/);
+  await expect(page.getByRole("link", { name: "Spare parts frame agreement" })).toBeVisible();
+  await page.getByRole("link", { name: "View all", exact: true }).click();
+  await expect(page).toHaveURL(/build.opportunity\?domain=/);
+  await expect(page.getByRole("link", { name: "Spare parts frame agreement" })).toBeVisible();
+  await expect(page.getByRole("link", { name: "Warehouse scanners" })).toHaveCount(0);
+  await page.getByRole("link", { name: "Spare parts frame agreement" }).click();
+  await page.getByRole("link", { name: "Files", exact: true }).click();
+  await expect(page).toHaveURL(/\/files$/);
+  await page.locator('input[type="file"]').setInputFiles({
+    name: "schedule.txt", mimeType: "text/plain", buffer: Buffer.from("Lead time: 6 weeks"),
+  });
+  await expect(page.getByText("schedule.txt", { exact: true })).toBeVisible();
+  const started = page.waitForEvent("download");
+  await page.getByRole("button", { name: "Download", exact: true }).click();
+  const download = await started;
+  expect(download.suggestedFilename()).toBe("schedule.txt");
+  expect(await download.failure()).toBeNull();
+});

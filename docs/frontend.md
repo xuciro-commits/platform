@@ -129,7 +129,7 @@ export default recordList({
 |---|---|---|
 | `ListView` | 列表：条件筛选、排序、分组、勾选批量、表格与看板切换 | 官方 `table-grouped`、`table-filter` |
 | `BoardView` | 看板：按可编辑的选项字段分列，拖卡即提交编辑动作 | 官方 `kanban-board` |
-| `RecordPage` | 记录页：页头、页签（字段、活动、关联、文件）、右栏。活动按时间合并历史、活动事件与评论 | 官方 `work-item-detail`、`detail-page` |
+| `RecordPage` | 记录页：页头、页签（字段、活动、关联、文件）、右栏。活动按时间合并历史、活动事件与评论；关联与附件分别读宿主小节，页签进地址 | 官方 `work-item-detail`、`detail-page` |
 | `Transitions` | 记录页头的状态流转：按类型的生命周期给出当前可做的转换；有参数开表单，无参数且回不去的先确认 | 官方 `AlertDialog` |
 | `RecordFields` | 记录页上的就地编辑：失焦或回车提交一个字段 | 官方表单组件的组合 |
 | `ActionDialog` | 按动作参数生成的表单对话框 | 官方对话框与表单组件的组合 |

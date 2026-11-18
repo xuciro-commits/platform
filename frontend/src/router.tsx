@@ -9,6 +9,10 @@ export function usePath() {
   return useSyncExternalStore(subscribe, () => location.pathname);
 }
 
+export function useSearch() {
+  return useSyncExternalStore(subscribe, () => location.search);
+}
+
 type PermissionToLeave = Promise<boolean>;
 type LeaveGuard = () => PermissionToLeave;
 const guards = new Set<LeaveGuard>();

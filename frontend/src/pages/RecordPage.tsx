@@ -16,6 +16,7 @@ import { usePath } from "../router";
 import { BackLink } from "./BackLink";
 import { describe, type Described } from "./describe";
 import { type Editor, FieldGroup, useEditor } from "./RecordFields";
+import { RecordFiles, RecordLinks, relatedGroups } from "./RecordAttachments";
 import { Collaboration, RecordActivity } from "./RecordActivity";
 import { RecordLines } from "./RecordLines";
 import { dots, type Instances, Transitions } from "./Transitions";
@@ -80,7 +81,11 @@ export function RecordPage({ described, id, listPath, listTitle, instances, enti
     [read],
   );
   const kept = read.status === "ready" ? (read.data.record as Kept) : undefined;
-  const comments = useRead<Api.RecordSectionView>(kept ? `/v1/records/${described.type}/${encodeURIComponent(id)}/sections/comments` : null);
+  const section = kept ? `/v1/records/${described.type}/${encodeURIComponent(id)}/sections` : null;
+  const comments = useRead<Api.RecordSectionView>(section ? `${section}/comments` : null);
+  const links = useRead<Api.RecordSectionView>(section ? `${section}/links` : null);
+  const files = useRead<Api.RecordSectionView>(section ? `${section}/files` : null);
+  const attach = catalog.find((action) => action.schema === "files.file.attach" && action.target !== described.type);
   const collaboration = <Collaboration target={`${described.type}/${id}`} comments={comments} catalog={catalog} entities={entities} />;
   const refs = read.status === "ready" ? read.data.refs : undefined;
   const editor = useEditor(described, id, values, kept?.revision ?? 0);
@@ -91,6 +96,8 @@ export function RecordPage({ described, id, listPath, listTitle, instances, enti
   const tabs = [
     { value: "details", label: "Details" },
     { value: "activity", label: "Activity" },
+    ...((links.status === "ready" ? relatedGroups(links.data).length > 0 : asked === "links") ? [{ value: "links", label: "Links" }] : []),
+    ...((attach || (files.status === "ready" ? files.data.files?.length : asked === "files")) ? [{ value: "files", label: "Files" }] : []),
     ...(narrow ? [{ value: "properties", label: "Properties" }] : []),
   ];
   const tab = tabs.find((candidate) => candidate.value === asked)?.value ?? "details";
@@ -198,6 +205,8 @@ export function RecordPage({ described, id, listPath, listTitle, instances, enti
               })}
             </VStack>
           )}
+          {kept && tab === "links" && <RecordLinks read={links} id={id} entities={entities} />}
+          {kept && tab === "files" && <RecordFiles read={files} attach={attach} target={`${described.type}/${id}`} />}
           {kept && tab === "activity" && <RecordActivity described={described} id={id} comments={comments} catalog={catalog} />}
           {kept && tab === "properties" && <Rail described={described} editor={editor} kept={kept} refs={refs} collaboration={collaboration} />}
         </LayoutContent>
