@@ -314,6 +314,8 @@ export const zhCN: Record<string, string> = {
   "Who can read this view": "谁能读取这个视图",
   "Only me": "仅自己",
   "Everyone in this workspace": "本工作区所有人",
+  "Replace file": "替换文件",
+  Required: "必填",
   "The saved definition is archived. Its records and permissions do not change.": "保存的定义会归档，记录与权限不变。",
   Table: "表格",
   Board: "看板",

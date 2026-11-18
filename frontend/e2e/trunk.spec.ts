@@ -680,3 +680,29 @@ test("views: a published type opens with its declared default view", async ({ pa
   await expect(page.getByText("europe", { exact: true }).first()).toBeVisible();
   await expect(page.getByText("northamerica", { exact: true }).first()).toBeVisible();
 });
+
+test("files: an attachment field stores a media set item on the record", async ({ page }) => {
+  await signIn(page);
+  await page.goto("/ontology/objects/build.opportunity/OPP-001");
+  await expect(page.getByText("Brief", { exact: true })).toBeVisible();
+  await page.locator('input[type="file"]').setInputFiles({
+    name: "brief.txt",
+    mimeType: "text/plain",
+    buffer: Buffer.from("Opportunity brief"),
+  });
+  await expect(page.getByText("brief.txt", { exact: true })).toBeVisible();
+  const readAttachment = () => page.evaluate(async () => {
+    const session = JSON.parse(sessionStorage.getItem("platform:session") ?? "{}") as { token: string; tenant: string };
+    const response = await fetch("/v1/records/build.opportunity/OPP-001", {
+      headers: { authorization: `Bearer ${session.token}`, "platform-tenant": session.tenant },
+    });
+    const answer = await response.json() as { values?: { brief?: { mediaSet?: string; item?: string } } };
+    return answer.values?.brief;
+  });
+  await expect.poll(async () => (await readAttachment())?.mediaSet).toMatch(/^MEDIA-/);
+  const attachment = await readAttachment();
+  expect(attachment?.mediaSet).toMatch(/^MEDIA-/);
+  expect(attachment?.item).toMatch(/^[0-9a-f]{64}$/);
+  await page.reload();
+  await expect(page.getByText("brief.txt", { exact: true })).toBeVisible();
+});

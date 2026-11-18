@@ -191,7 +191,7 @@ export function FieldGroup({ described, editor, sections, direction, focusEmpty,
     });
   const shownSections = sections.map((section) => ({ ...section, fields: visible(section.fields) })).filter((section) => section.fields.length > 0);
   if (shownSections.length === 0) return null;
-  const typed = (parameter?: Api.Field) => parameter && !parameter.choices && parameter.type !== "boolean";
+  const typed = (parameter?: Api.Field) => parameter && !parameter.choices && parameter.type !== "boolean" && parameter.type !== "attachment";
   const first = focusEmpty
     ? shownSections.flatMap((section) => section.fields).find((field) => !restricted?.has(field.name) && typed(parameters.get(field.name)) && shown(editor.values[field.name]) === "")?.name
     : undefined;

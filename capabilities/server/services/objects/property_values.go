@@ -26,7 +26,7 @@ func propertyValues(info platform.RecordTypeInfo, record any) (map[string]any, m
 	row := reflect.ValueOf(record)
 	for _, field := range info.Fields {
 		typ := PropertyValueType(field)
-		if typ == "" && field.Type != "reference" && field.Type != "date" && field.Type != "datetime" && field.Type != "money" {
+		if typ == "" && field.Type != "reference" && field.Type != "date" && field.Type != "datetime" && field.Type != "money" && field.Type != "attachment" {
 			continue
 		}
 		value := row.FieldByIndex(field.Index)
