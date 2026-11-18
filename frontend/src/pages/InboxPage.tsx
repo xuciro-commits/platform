@@ -129,8 +129,11 @@ function RelatedRecord({ reference }: { reference: string }) {
 }
 
 function ItemPane({ item, act, onClose, isFullWidth }: { item: InboxItem; act: Act; onClose: () => void; isFullWidth: boolean }) {
+  const marked = useRef(new Set<string>());
   useEffect(() => {
-    if (item.unread) act(item, "platform.notification.read");
+    if (!item.unread || marked.current.has(item.id)) return;
+    marked.current.add(item.id);
+    act(item, "platform.notification.read");
   }, [item, act]);
   const task = item.task;
   const close = <IconButton variant="ghost" label={t("Close")} tooltip={t("Close")} icon={<Icon icon={XMarkIcon} size="sm" />} onClick={onClose} />;

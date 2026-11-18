@@ -9,10 +9,11 @@ import { StatusDot } from "@astryxdesign/core/StatusDot";
 import { Tab, TabList } from "@astryxdesign/core/TabList";
 import { Heading, Text } from "@astryxdesign/core/Text";
 import { Timestamp } from "@astryxdesign/core/Timestamp";
-import { type ReactNode, useMemo, useState } from "react";
+import { type ReactNode, useEffect, useMemo, useState } from "react";
 import { type Api, useRead } from "../host";
 import { t } from "../i18n";
 import { usePath, useSearch } from "../router";
+import { useCommandSearch } from "../shell/CommandSearch";
 import { BackLink } from "./BackLink";
 import { DefinitionRows, stateProblem } from "./DefinitionRows";
 import { describe, type Described, type Values, withRestrictedFields } from "./describe";
@@ -102,6 +103,11 @@ export function RecordPage({ described, id, listPath, listTitle, instances, enti
   const state = described.state(values);
   const status = kept?.archived ? { tone: "neutral", title: "Archived" } : state;
   const name = described.name(values, id);
+  const search = useCommandSearch();
+  const loaded = read.status === "ready";
+  useEffect(() => {
+    if (loaded) search?.remember({ href: base, label: name, type: described.type, id });
+  }, [search, loaded, base, name, described.type, id]);
 
   const tabs = [
     { value: "details", label: "Details" },
@@ -118,7 +124,6 @@ export function RecordPage({ described, id, listPath, listTitle, instances, enti
     <Transitions
       described={described}
       id={id}
-      href={base}
       values={values}
       revision={kept.revision}
       title={name}

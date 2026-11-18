@@ -45,7 +45,7 @@ export function CommandSearch({ app, item, apps, tenant, children }: { app: App;
   const [failure, setFailure] = useState("");
   const me = useRead<Api.MeView>("/v1/me");
   const storageKey = me.status === "ready" ? `platform:recent:${tenant}:${me.data.principalId}` : "";
-  const getCommands = useRef<() => Command[]>(() => []);
+  const registry = useRef(new Set<() => Command[]>());
   const shown = useRef<SearchResults>({ query: "", items: [] });
   const remember = useCallback((target: Recent) => {
     if (!storageKey) return;
@@ -56,8 +56,8 @@ export function CommandSearch({ app, item, apps, tenant, children }: { app: App;
     openSearch: () => setOpen(true),
     remember,
     register: (commands: () => Command[]) => {
-      getCommands.current = commands;
-      return () => { getCommands.current = () => []; };
+      registry.current.add(commands);
+      return () => { registry.current.delete(commands); };
     },
   }), [remember]);
   useHotkeys(["meta+k", "ctrl+k"].map((keys) => ({ keys, onPress: scope.openSearch, allowInInputs: true, isDisabled: open })));
@@ -103,7 +103,7 @@ export function CommandSearch({ app, item, apps, tenant, children }: { app: App;
         const scoped = [">", "@", "#", ":"].includes(prefix);
         const needle = (scoped ? term.slice(1).trim() : term).toLocaleLowerCase();
         const matches = (text: string) => text.toLocaleLowerCase().includes(needle);
-        const commands = !scoped || prefix === ">" ? getCommands.current().filter((command) => matches(command.label))
+        const commands = !scoped || prefix === ">" ? [...registry.current].flatMap((get) => get()).filter((command) => matches(command.label))
           .map((command) => ({ ...command, auxiliaryData: { group: t("Commands") } })) : [];
         const matched = scoped ? [] : targets.filter((target) => matches(target.label) || matches(t(target.application.label)));
         const local = [

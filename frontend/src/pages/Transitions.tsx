@@ -3,10 +3,9 @@ import { Icon } from "@astryxdesign/core/Icon";
 import { HStack } from "@astryxdesign/core/Layout";
 import { MoreMenu } from "@astryxdesign/core/MoreMenu";
 import { Tooltip } from "@astryxdesign/core/Tooltip";
-import { useEffect } from "react";
 import type { Api } from "../host";
 import { t } from "../i18n";
-import { useCommandSearch, usePageCommands } from "../shell/CommandSearch";
+import { usePageCommands } from "../shell/CommandSearch";
 import { stepIntent, useAct } from "./act";
 import type { Described, Step } from "./describe";
 
@@ -16,7 +15,6 @@ export type Dot = (typeof dots)[keyof typeof dots];
 export type TransitionsProps = {
   described: Described;
   id: string;
-  href: string;
   values: Record<string, unknown>;
   revision: number;
   title: string;
@@ -26,7 +24,7 @@ export type TransitionsProps = {
   onFailure: (reason: string) => void;
 };
 
-export function Transitions({ described, id, href, values, revision, title, instances, allowed, publishProblem, onFailure }: TransitionsProps) {
+export function Transitions({ described, id, values, revision, title, instances, allowed, publishProblem, onFailure }: TransitionsProps) {
   const act = useAct(described);
   const lifecycle = described.lifecycle;
   const current = lifecycle ? String(values[lifecycle.field] ?? "") : "";
@@ -58,14 +56,12 @@ export function Transitions({ described, id, href, values, revision, title, inst
     };
   });
 
-  const scope = useCommandSearch();
   usePageCommands(act.busy ? [] : [
     ...offered.filter(({ verdict }) => verdict.allowed).map(({ step }) => ({
       id: `step:${step.transition.name}`, label: t(step.transition.title), run: () => click(step),
     })),
     ...items.filter((item) => !item.isDisabled).map((item) => ({ id: item.id, label: item.label, run: item.onClick })),
   ]);
-  useEffect(() => scope?.remember({ href, label: title, type: described.type, id }), [scope, href, title, described.type, id]);
 
   return (
     <>

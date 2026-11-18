@@ -1093,7 +1093,6 @@ test("list: chips filter on the host, a row opens its details, the selection ban
   await header.getByRole("button", { name: "Clear all", exact: true }).click();
   await expect.poll(() => rows.count()).toBeGreaterThan(5);
 });
-||||||| parent of f920cce76 (修复: 记录字段——日期与同分节字段共用标签列)
 
 
 test("record fields: the date label aligns with the other commercial fields", async ({ page }) => {
