@@ -134,7 +134,7 @@ func (t *Tenant) accept(a platform.Service, m platform.Member, s *pb.Submission,
 		s = t.CurrentSchema(a, s)
 	}
 	if t.businessStopped() {
-		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Business access is stopped for maintenance")
+		return nil, actions.StoppedForMaintenance()
 	}
 	if refusal := t.CheckSubmission(m, s); refusal != nil {
 		return nil, refusal
@@ -151,7 +151,7 @@ func (t *Tenant) accept(a platform.Service, m platform.Member, s *pb.Submission,
 		return nil, err
 	}
 	if m.Agent && t.suspended(m.ID) {
-		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "The agent {agent} is suspended", m.ID)
+		return nil, actions.AgentSuspended(m.ID)
 	}
 	draft := t.newStagedDecision()
 	draft.sourceProjection = opts.source

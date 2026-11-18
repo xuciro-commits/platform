@@ -7,6 +7,7 @@ import (
 	"slices"
 	"testing"
 
+	"platformserver/kernel/protocol"
 	"platformserver/platform"
 	"platformserver/services/actions"
 	"platformserver/services/objects"
@@ -74,7 +75,8 @@ func TestInvariantK22ObjectDraftShowsOnlyUnpublishedAuthoringChanges(t *testing.
 }
 
 func TestInvariantK23PublishCheckCountsDataAndMatchesTheOriginalDecision(t *testing.T) {
-	live := newInvariantTenant(t, "invariant-k23")
+	delegated := protocol.Seat{Subjects: []string{"other"}, Member: platform.Member{ID: "other", Grants: []platform.Grant{{App: build.ID, Role: build.Builder, By: "project:p1"}}}}
+	live := newInvariantTenant(t, "invariant-k23", delegated)
 	const id, typ = "CONTACT", "build.contact"
 	draft := invariantObject("contact", "Contact")
 	draft["display"] = "note"
@@ -100,6 +102,9 @@ func TestInvariantK23PublishCheckCountsDataAndMatchesTheOriginalDecision(t *test
 		return result
 	}
 	result := preview()
+	if outsider := postActionCheck(t, handler, live.ID, "other", "build.object.publish", build.ObjectType, id); outsider.Allowed || outsider.Impact != nil || outsider.Message == "" {
+		t.Fatalf("a builder delegated by another project saw the publish impact: %+v", outsider)
+	}
 	request := live.submission("build.object.publish", build.ObjectType, id, map[string]any{})
 	request.ExpectedRevision = &result.Impact.Revision
 	if _, refusal := live.Submit(live.member(t), request, invariantClock); result.Allowed || refusal == nil || result.Message != refusal.Message {

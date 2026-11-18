@@ -2679,5 +2679,7 @@
   "Log level": "日志级别",
   "Daily log quota (MiB)": "每日日志配额（MiB）",
   "Temporary debug until": "临时调试截止时间",
-  "Temporary debug reason": "临时调试原因"
+  "Temporary debug reason": "临时调试原因",
+  "Published object definition is unavailable": "已发布的对象定义不可用",
+  "Business access is stopped for maintenance": "维护期间暂停业务访问"
 }

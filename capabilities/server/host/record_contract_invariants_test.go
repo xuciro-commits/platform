@@ -114,19 +114,8 @@ func TestInvariantK15RecordActionAvailabilityUsesTheSubmissionDecision(t *testin
 
 func checkRecordAction(t *testing.T, handler http.Handler, tenant, role, schema, typ, id string) (objects.RecordAction, actions.ActionCheckResult) {
 	t.Helper()
-	req := httptest.NewRequest(http.MethodPost, "/v1/actions/"+schema+"/check", bytes.NewReader(platform.Raw(map[string]any{
-		"target": map[string]string{"object": typ, "id": id},
-		"inputs": map[string]any{},
-	})))
-	req.Header.Set("Authorization", "Bearer "+observationToken(tenant, role))
-	req.Header.Set(TenantHeader, tenant)
-	res := httptest.NewRecorder()
-	handler.ServeHTTP(res, req)
-	var checked actions.ActionCheckResult
-	if res.Code != http.StatusOK || json.Unmarshal(res.Body.Bytes(), &checked) != nil {
-		t.Fatalf("check %s: HTTP %d %s", schema, res.Code, res.Body)
-	}
-	res = observationRequest(t, handler, tenant, observationToken(tenant, role), "/v1/records/"+typ+"/"+id, nil)
+	checked := postActionCheck(t, handler, tenant, role, schema, typ, id)
+	res := observationRequest(t, handler, tenant, observationToken(tenant, role), "/v1/records/"+typ+"/"+id, nil)
 	var record objects.RecordView
 	if res.Code != http.StatusOK || json.Unmarshal(res.Body.Bytes(), &record) != nil {
 		t.Fatalf("read %s/%s: HTTP %d %s", typ, id, res.Code, res.Body)
@@ -544,4 +533,21 @@ func TestInvariantK20PublishedDefaultViewPreservesTheRecordContract(t *testing.T
 	if len(before) == 0 || !bytes.Equal(before, schemaHistory()) {
 		t.Fatal("publishing only a default view changed the action schema history")
 	}
+}
+
+func postActionCheck(t *testing.T, handler http.Handler, tenant, role, schema, typ, id string) actions.ActionCheckResult {
+	t.Helper()
+	req := httptest.NewRequest(http.MethodPost, "/v1/actions/"+schema+"/check", bytes.NewReader(platform.Raw(map[string]any{
+		"target": map[string]string{"object": typ, "id": id},
+		"inputs": map[string]any{},
+	})))
+	req.Header.Set("Authorization", "Bearer "+observationToken(tenant, role))
+	req.Header.Set(TenantHeader, tenant)
+	res := httptest.NewRecorder()
+	handler.ServeHTTP(res, req)
+	var checked actions.ActionCheckResult
+	if res.Code != http.StatusOK || json.Unmarshal(res.Body.Bytes(), &checked) != nil {
+		t.Fatalf("check %s: HTTP %d %s", schema, res.Code, res.Body)
+	}
+	return checked
 }
