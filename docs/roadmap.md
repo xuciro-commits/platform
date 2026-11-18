@@ -19,9 +19,6 @@
 
 ## 0 清场
 
-- **0.1 删掉落地的模板原件**〔定式〕
-  做：核对 trunk 所用入口；从应用菜单与入口注册移除 Filterable table 示例，再删除 `frontend/src/templates/table-filter/` 与 `frontend/src/templates/login-split/`。
-  验收：`make check-frontend` 通过；两个模板目录与示例入口均无引用。
 - **0.2 夹具补齐**〔定式〕
   做：商机加分节（Commercial、Delivery）、旁栏字段（owner、stage）、选项标题、明细行字段 items（product、quantity、price）、
   引用字段 customer、只在 stage 为 lost 时出现的 lossReason；客户与商机各补到 20 条。宿主不收某个属性就停下上报。

@@ -53,7 +53,6 @@ import {
   Square3Stack3DIcon,
   Squares2X2Icon,
   SwatchIcon,
-  TableCellsIcon,
   TagIcon,
   TruckIcon,
   UserGroupIcon,
@@ -80,12 +79,6 @@ export const apps: App[] = [
           { id: "proposals", label: "Proposals", icon: DocumentCheckIcon },
           { id: "recent", label: "Recent", icon: ClockIcon },
           { id: "projects", label: "Projects", icon: FolderIcon },
-        ],
-      },
-      {
-        title: "Official templates",
-        items: [
-          { id: "sample-table", label: "Filterable table", icon: TableCellsIcon },
         ],
       },
     ],
