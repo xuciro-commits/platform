@@ -14,11 +14,12 @@ export type InboxItem = {
   note?: Api.Notification;
 };
 
-export type InboxTab = "all" | "todo" | "notifications" | "closed";
+export type InboxTab = "all" | "todo" | "mentions" | "notifications" | "closed";
 
 export const inboxTabs: { value: InboxTab; label: string }[] = [
   { value: "all", label: "All" },
   { value: "todo", label: "To do" },
+  { value: "mentions", label: "Mentions" },
   { value: "notifications", label: "Notifications" },
   { value: "closed", label: "Closed" },
 ];
@@ -26,6 +27,7 @@ export const inboxTabs: { value: InboxTab; label: string }[] = [
 export function inTab(item: InboxItem, tab: InboxTab) {
   if (tab === "all") return item.open;
   if (tab === "todo") return item.kind === "task" && item.open;
+  if (tab === "mentions") return item.kind === "notification" && item.note?.category === "mention";
   if (tab === "notifications") return item.kind === "notification";
   return item.kind === "task" && !item.open;
 }

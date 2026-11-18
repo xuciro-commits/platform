@@ -482,3 +482,7 @@ Object.assign(zhCN, {
   "more filter": "个更多筛选",
   "more filters": "个更多筛选",
 });
+
+Object.assign(zhCN, {
+  Mentions: "提及与评论",
+});

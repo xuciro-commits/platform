@@ -1106,3 +1106,30 @@ test("record fields: the date label aligns with the other commercial fields", as
   const boxes = await Promise.all(labels.map((label) => label.boundingBox()));
   for (const box of boxes) expect(box?.x).toBe(boxes[0]!.x);
 });
+
+test("inbox: a comment mention opens the referenced record from the Mentions tab", async ({ page, browser, baseURL }) => {
+  const author = await browser.newPage({ baseURL });
+  await author.goto("/");
+  await author.getByRole("button", { name: "user-1 · acceptance" }).click();
+  const record = "/ontology/objects/build.opportunity/OPP-002";
+  await author.goto(`${record}/activity`);
+  const message = "@admin-1 Please review the spare parts agreement.";
+  await author.getByRole("textbox", { name: "Write a comment" }).fill(message);
+  await author.getByRole("button", { name: "Post comment" }).click();
+  await expect(author.getByText(message, { exact: true })).toBeVisible();
+  await author.close();
+
+  await page.setViewportSize({ width: 1024, height: 768 });
+  await signIn(page);
+  await page.goto("/home/inbox");
+  await page.getByRole("link", { name: /^Mentions \d+ unread$/ }).click();
+  const mention = page.getByRole("row", { name: /Please review the spare parts agreement/ });
+  await expect(mention).toBeVisible();
+  await mention.click();
+  await expect(page.getByText(message, { exact: true })).toBeVisible();
+  const link = page.getByRole("link", { name: "Spare parts frame agreement", exact: true });
+  await expect(link).toHaveAttribute("href", record);
+  await page.getByRole("button", { name: "Inbox", exact: true }).click();
+  await page.getByRole("link", { name: /^Notifications/ }).click();
+  await expect(mention).toBeVisible();
+});
