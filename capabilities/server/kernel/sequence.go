@@ -28,6 +28,7 @@ type Sequence struct {
 	StateEpoch        atomic.Uint64
 	WorkEpoch         atomic.Uint64
 	DefinitionEpoch   atomic.Uint64
+	StateReader       AcceptedStateReader
 	SnapshotPosition  int64
 	RuntimePosition   func() int64
 	Record            func(persistence.Entry)

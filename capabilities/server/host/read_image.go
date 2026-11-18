@@ -172,8 +172,8 @@ func (t *Tenant) forkReadState(ctx context.Context) (*Tenant, error) {
 	for _, app := range view.apps {
 		(hostView{t: view, app: app}).bindOwner(app)
 	}
-	if backend, ok := view.Projection.Current().Backend().(runtimekernel.AcceptedStateReader); ok {
-		view.installRuntimeHistory(backend, func() int64 { return view.Projection.Current().Applied() })
+	if view.StateReader != nil {
+		view.installRuntimeHistory(view.StateReader, func() int64 { return view.Projection.Current().Applied() })
 	}
 	return view, nil
 }

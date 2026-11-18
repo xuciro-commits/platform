@@ -74,8 +74,8 @@ func (t *Tenant) Restore(raw json.RawMessage) error {
 
 func (t *Tenant) detachSnapshotRead() {
 	t.Projection.Current().Bind(nil)
-	if store, ok := t.Projection.Current().Backend().(runtimekernel.AcceptedStateReader); ok && t.Projection.Current().Position() != nil {
-		t.installRuntimeHistory(store, t.Projection.Current().Position())
+	if t.StateReader != nil && t.Projection.Current().Position() != nil {
+		t.installRuntimeHistory(t.StateReader, t.Projection.Current().Position())
 	}
 }
 

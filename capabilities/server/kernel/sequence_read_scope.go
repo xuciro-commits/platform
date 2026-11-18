@@ -33,9 +33,8 @@ func (s *Sequence) CloseReadScope(apps []platform.App, original bool, quarantine
 	if view == nil {
 		return nil
 	}
-	switch store := current.Backend().(type) {
-	case AcceptedStateReader:
-		s.InstallRuntimeHistory(store, current.Position(), apps)
+	if s.StateReader != nil {
+		s.InstallRuntimeHistory(s.StateReader, current.Position(), apps)
 	}
 	return view.Close()
 }

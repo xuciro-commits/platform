@@ -98,6 +98,7 @@ func (s *Sequence) InstallRuntimeRecords(store persistence.RuntimeState, positio
 	s.Projection.Lock()
 	defer s.Projection.Unlock()
 	s.Projection.Current().Configure(store, s.ID, position(), position)
+	s.StateReader = store
 	s.Projection.UseCurrentRows()
 }
 
