@@ -1,12 +1,12 @@
 import { Badge } from "@astryxdesign/core/Badge";
 import { DropdownMenu } from "@astryxdesign/core/DropdownMenu";
 import { SideNav, SideNavItem, SideNavSection } from "@astryxdesign/core/SideNav";
-import { type App, type NavItem, apps, pathOf } from "../apps";
+import { type App, type NavItem, pathOf } from "../apps";
 import { entries } from "../apps/entries";
 import { t } from "../i18n";
 import { navigate } from "../router";
 
-export function AppSidebar({ app, item }: { app: App; item: NavItem }) {
+export function AppSidebar({ app, item, apps }: { app: App; item: NavItem; apps: App[] }) {
   return (
     <SideNav
       aria-label={t("Primary navigation")}
@@ -26,7 +26,7 @@ export function AppSidebar({ app, item }: { app: App; item: NavItem }) {
               icon={entry.icon}
               href={pathOf(app, entry)}
               isSelected={entry.id === item.id}
-              endContent={entries[`${app.id}/${entry.id}`] ? undefined : <Badge variant="neutral" label={t("Not built")} />}
+              endContent={app.installed || entries[`${app.id}/${entry.id}`] ? undefined : <Badge variant="neutral" label={t("Not built")} />}
             />
           ))}
         </SideNavSection>

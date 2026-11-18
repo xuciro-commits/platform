@@ -7,7 +7,7 @@ import { type App, apps, pathOf } from "../apps";
 import { endSession } from "../host";
 import { t } from "../i18n";
 
-export function AppRail({ current, compact }: { current: App; compact?: boolean }) {
+export function AppRail({ current, compact, apps }: { current: App; compact?: boolean; apps: App[] }) {
   const search = <IconButton label={t("Search")} tooltip={t("Search")} variant="ghost" icon={<Icon icon={MagnifyingGlassIcon} />} />;
   const notifications = <IconButton label={t("Notifications")} tooltip={t("Notifications")} variant="ghost" icon={<Icon icon={BellIcon} />} />;
   const signOut = (

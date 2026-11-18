@@ -61,9 +61,9 @@ import {
   WrenchScrewdriverIcon,
 } from "@heroicons/react/24/outline";
 
-export type NavItem = { id: string; label: string; icon: IconType };
+export type NavItem = { id: string; label: string; icon: IconType; object?: string; description?: string };
 export type NavSection = { title: string; items: NavItem[] };
-export type App = { id: string; label: string; icon: IconType; sections: NavSection[] };
+export type App = { id: string; label: string; icon: IconType; sections: NavSection[]; installed?: boolean };
 
 export const apps: App[] = [
   {
@@ -275,9 +275,9 @@ export const apps: App[] = [
   },
 ];
 
-export function locate(path: string) {
+export function locate(path: string, available: App[] = apps) {
   const [, appId, itemId] = path.split("/");
-  const app = apps.find((candidate) => candidate.id === appId) ?? apps[0];
+  const app = available.find((candidate) => candidate.id === appId) ?? available[0];
   const items = app.sections.flatMap((section) => section.items);
   const item = items.find((candidate) => candidate.id === itemId) ?? items[0];
   return { app, item };

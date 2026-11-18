@@ -387,7 +387,7 @@ test("links and files: navigate to related records and attach a downloadable fil
   await expect(page.getByRole("link", { name: "Spare parts frame agreement" })).toBeVisible();
   await expect(page.getByRole("link", { name: "Warehouse scanners" })).toHaveCount(0);
   await page.getByRole("link", { name: "Spare parts frame agreement" }).click();
-  await page.getByRole("link", { name: "Files", exact: true }).click();
+  await page.getByRole("navigation", { name: "Tabs" }).getByRole("link", { name: "Files", exact: true }).click();
   await expect(page).toHaveURL(/\/files$/);
   await page.locator('input[type="file"]').setInputFiles({
     name: "schedule.txt", mimeType: "text/plain", buffer: Buffer.from("Lead time: 6 weeks"),
@@ -497,3 +497,39 @@ test("object definition: add a field, publish it and review a removal", async ({
   await expect(publish.getByText(/cannot be reached/)).toBeVisible();
   await expect(publish.getByRole("button", { name: "Publish", exact: true })).toBeDisabled();
 });;
+
+test("applications: an installed package contributes a menu and an object list", async ({ page }) => {
+  await signIn(page);
+  const app = page.getByRole("link", { name: "Production order provider", exact: true });
+  await expect(app).toBeVisible();
+  await app.click();
+  const navigation = page.getByRole("navigation", { name: "Primary navigation" });
+  await navigation.getByRole("link", { name: "Production orders", exact: true }).click();
+  await expect(page.getByRole("heading", { level: 1, name: "Production orders", exact: true })).toBeVisible();
+  await expect(page).toHaveURL(/\/productionprovider\/batchproviderorder$/);
+
+  await page.evaluate(async () => {
+    const session = JSON.parse(sessionStorage.getItem("platform:session")!);
+    const headers = { Authorization: `Bearer ${session.token}`, "Platform-Tenant": session.tenant, "Content-Type": "application/json" };
+    const get = async (path: string) => (await fetch(path, { headers })).json();
+    const catalog = await get("/v1/actions");
+    const identity = await get("/v1/me");
+    for (const name of ["platform.package.drain", "platform.package.retire"]) {
+      const action = catalog.find((entry: { schema: string }) => entry.schema === name);
+      const payload = new TextEncoder().encode(JSON.stringify({ id: "application.production-provider" }));
+      const response = await fetch("/v1/submissions", { method: "POST", headers: { ...headers, "Platform-Schema-Version": action.schemaVersion.version }, body: JSON.stringify({
+        tenantId: identity.tenantId,
+        principalId: identity.principalId,
+        authority: "platform",
+        target: { type: "platform.package", id: "application.production-provider" },
+        schema: { name, version: action.schemaVersion.family },
+        idempotencyKey: crypto.randomUUID(),
+        payload: btoa(String.fromCharCode(...payload)),
+      }) });
+      const answer = await response.json();
+      if (!response.ok || answer.error) throw new Error(JSON.stringify(answer));
+    }
+  });
+  await page.reload();
+  await expect(page.getByRole("link", { name: "Production order provider", exact: true })).toHaveCount(0);
+});
