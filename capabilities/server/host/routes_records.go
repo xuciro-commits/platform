@@ -174,12 +174,13 @@ func (h *Host) routesRecords(rt *routes) {
 		return view, err
 	}))
 	rt.recordRead(transport.Route{Pattern: "GET /v1/records/{type}/{id}", Summary: "One authorized record; its object view sections are read independently", Answer: objects.RecordView{}}, transport.Answering(func(r *http.Request, m platform.Member, t *Tenant) (objects.RecordView, *platform.Error) {
-		view, err := t.recordOf(m, r.PathValue("type"), r.PathValue("id"), h.Now())
+		now := h.Now()
+		view, err := t.recordOf(m, r.PathValue("type"), r.PathValue("id"), now)
 		if err == nil && r.PathValue("type") == build.ObjectType {
 			objects.DraftView(&view, func(record any) (any, *platform.Error) { return t.objectDraftRecord(m, record) })
 		}
 		if info, ok := t.Entity(r.PathValue("type")); err == nil && ok {
-			view.Actions = actions.RecordActions(t.App(info.App), t.objectCaller(m, info.App), info, view.Record, h.Now(), t.Entity, func(reason string) string { return t.i18n.Say(t.Language(m, r), reason) })
+			view.Actions = actions.RecordActions(t.App(info.App), t.objectCaller(m, info.App), info.Type, r.PathValue("id"), now, t.Entity, func(reason string) string { return t.i18n.Say(t.Language(m, r), reason) })
 		}
 		return view, err
 	}))

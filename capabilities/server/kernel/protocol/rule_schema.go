@@ -344,6 +344,9 @@ func RuleContext(c platform.Caller, expr platform.Expr, spec platform.RuleReadSp
 					return ctx, err
 				}
 				value := ctx.Refs[field.Name]
+				if value.Status == "withheld" {
+					return ctx, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_POLICY_DENIED}
+				}
 				if value.Status != "value" || json.Unmarshal(value.Data, &of) != nil || of == "" {
 					return ctx, fmt.Errorf("collection %s subject key is unavailable", name)
 				}

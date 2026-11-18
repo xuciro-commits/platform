@@ -134,15 +134,7 @@ func (b *Runtime) transactAttempt(c platform.Caller, receipt *pb.ChangeRecord, t
 		framePrefix = fmt.Sprintf("create-%x", digest[:8])
 	}
 	readSubject := func() (map[string]any, *platform.Error) {
-		raw, refusal := c.ReadRecord(txn.Subject, subjectID, now)
-		if refusal != nil {
-			return nil, refusal
-		}
-		value, err := decodeTxnValues(raw)
-		if err != nil {
-			return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Invalid transaction subject")
-		}
-		return value, nil
+		return transactionSubject(c, txn.Subject, subjectID, now)
 	}
 	subject, refusal := readSubject()
 	if refusal != nil {
@@ -163,11 +155,8 @@ func (b *Runtime) transactAttempt(c platform.Caller, receipt *pb.ChangeRecord, t
 			return problem
 		}
 	}
-	spec := platform.RuleReadSpec{Object: txn.Subject, Inputs: map[string]platform.ExprType{"$subject": {Kind: "reference", Object: txn.Subject}}}
+	spec := transactionReadSpec(txn, nil)
 	values["$subject"] = subjectID
-	if txn.Reads != nil {
-		spec.Collections = txn.Reads.Collections
-	}
 	var transitions []platform.ActionType
 	if life := b.Entities[txn.Subject].Lifecycle; life != nil {
 		transitions = life.Actions
@@ -195,18 +184,7 @@ func (b *Runtime) transactAttempt(c platform.Caller, receipt *pb.ChangeRecord, t
 				}
 				return refusal
 			}
-			for _, in := range transition.Parameters {
-				kind := platform.RuleFieldKind(in.Type)
-				if in.Ref != "" {
-					kind = "reference"
-				} else if len(in.Choices) > 0 {
-					kind = "choice"
-				}
-				if kind == "string" {
-					kind = "text"
-				}
-				spec.Inputs[in.Name] = platform.ExprType{Kind: kind, Object: in.Ref}
-			}
+			spec = transactionReadSpec(txn, transition.Parameters)
 		}
 	}
 	if invocation.GetSchema().GetName() == txn.Subject+".create" {
@@ -215,14 +193,10 @@ func (b *Runtime) transactAttempt(c platform.Caller, receipt *pb.ChangeRecord, t
 			spec.Inputs[field.Name] = platform.ExprType{Kind: platform.RuleFieldKind(field.Type), Object: field.Ref}
 		}
 	}
-	if txn.Guard != nil {
-		allowed, err := ruleprotocol.GuardSatisfied(*txn.Guard, spec, c, subject, values, now, b.Lookup)
-		if err != nil {
-			return err
-		}
-		if !allowed {
-			return c.RefuseBusinessCondition("GUARD_NOT_SATISFIED", txn.Message, subject, values, now)
-		}
+	if reason, failure := transactionGuard(c, txn, spec, subject, values, now, b.Lookup); failure != nil {
+		return failure
+	} else if reason != "" {
+		return c.RefuseBusinessCondition("GUARD_NOT_SATISFIED", reason, subject, values, now)
 	}
 	originalSubject := maps.Clone(subject)
 	originalInputs := maps.Clone(values)

@@ -8,14 +8,18 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"google.golang.org/protobuf/encoding/protojson"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformserver/kernel/protocol"
 	"platformserver/platform"
+	"platformserver/services/actions"
+	actioncatalog "platformserver/services/actions/catalog"
 	"platformserver/services/objects"
 	"platformserver/services/ontology"
 	build "platformserver/services/resources/authoring"
+	"platformserver/services/work"
 )
 
 func TestInvariantK14PublishedFieldPlacementPreservesActions(t *testing.T) {
@@ -108,13 +112,180 @@ func TestInvariantK15RecordActionAvailabilityUsesTheSubmissionDecision(t *testin
 	check(change.GetRevision()+1, false, "takes it only from open")
 }
 
+func checkRecordAction(t *testing.T, handler http.Handler, tenant, role, schema, typ, id string) (objects.RecordAction, actions.ActionCheckResult) {
+	t.Helper()
+	req := httptest.NewRequest(http.MethodPost, "/v1/actions/"+schema+"/check", bytes.NewReader(platform.Raw(map[string]any{
+		"target": map[string]string{"object": typ, "id": id},
+		"inputs": map[string]any{},
+	})))
+	req.Header.Set("Authorization", "Bearer "+observationToken(tenant, role))
+	req.Header.Set(TenantHeader, tenant)
+	res := httptest.NewRecorder()
+	handler.ServeHTTP(res, req)
+	var checked actions.ActionCheckResult
+	if res.Code != http.StatusOK || json.Unmarshal(res.Body.Bytes(), &checked) != nil {
+		t.Fatalf("check %s: HTTP %d %s", schema, res.Code, res.Body)
+	}
+	res = observationRequest(t, handler, tenant, observationToken(tenant, role), "/v1/records/"+typ+"/"+id, nil)
+	var record objects.RecordView
+	if res.Code != http.StatusOK || json.Unmarshal(res.Body.Bytes(), &record) != nil {
+		t.Fatalf("read %s/%s: HTTP %d %s", typ, id, res.Code, res.Body)
+	}
+	for _, action := range record.Actions {
+		if action.Schema == schema {
+			return action, checked
+		}
+	}
+	return objects.RecordAction{}, checked
+}
+
+func TestInvariantK15EmptyGuardsAndPendingApprovalAgreeAcrossReads(t *testing.T) {
+	const tenant, typ, id = "invariant-action-availability", "build.reviewable", "ITEM"
+	live := newInvariantTenantWithApps(t, tenant, []platform.Service{work.New(tenant, actions.NewAuthority)},
+		protocol.Seat{Subjects: []string{"other"}, Member: platform.Member{ID: "other", Roles: map[string]string{build.ID: ontology.UserRole}}},
+		protocol.Seat{Subjects: []string{"reviewer"}, Member: platform.Member{ID: "reviewer", Roles: map[string]string{build.ID: ontology.BuilderRole}}},
+	)
+	obj := invariantObject("reviewable", "Reviewable")
+	obj["fields"] = []ontology.Field{{Name: "note", Type: "text", Title: "Note"}, {Name: "private", Type: "text", Title: "Private", Read: []string{ontology.BuilderRole}}}
+	obj["access"] = []ontology.Access{{Role: ontology.UserRole, Read: "all"}}
+	obj["states"] = []ontology.State{{Name: "open", Title: "Open"}, {Name: "pending", Title: "Pending"}, {Name: "done", Title: "Done"}}
+	live.accept(t, "build.object.create", build.ObjectType, "TYPE", obj)
+	done := platform.Expr{Kind: "choice", Lit: &platform.ExprLiteral{Value: platform.Raw("done")}}
+	note := platform.ExprReference("text", "note")
+	for _, tc := range []struct {
+		name     string
+		guard    *platform.Expr
+		approval *ontology.ActionApproval
+	}{
+		{"nonblocked", &platform.Expr{Op: "!=", Kind: "boolean", Args: []platform.Expr{note, {Kind: "text", Lit: &platform.ExprLiteral{Value: platform.Raw("blocked")}}}}, nil},
+		{"empty", &platform.Expr{Op: "empty", Kind: "boolean", Args: []platform.Expr{note}}, nil},
+		{"hidden", &platform.Expr{Op: "empty", Kind: "boolean", Args: []platform.Expr{platform.ExprReference("text", "private")}}, nil},
+		{"review", nil, &ontology.ActionApproval{Pending: "pending", Levels: []ontology.ApproverLevel{{Title: "Review", Role: ontology.BuilderRole}}}},
+	} {
+		action := ontology.Action{Name: tc.name, Title: tc.name, From: []string{"open"}, Approval: tc.approval,
+			Transaction: &platform.BusinessTxn{Subject: typ, Guard: tc.guard, Message: "The note is required",
+				Steps: []platform.TxnStep{{Name: "finish", Kind: "update", Target: platform.TxnRef{Type: typ, ID: "$subject"}, Changes: []platform.TxnSet{{Field: "state", Expr: &done}}}}},
+		}
+		live.accept(t, "build.actiontype.create", build.ActionTypeType, tc.name, map[string]any{"name": typ + "." + tc.name, "object": typ, "definition": action})
+		live.accept(t, "build.actiontype.publish", build.ActionTypeType, tc.name, map[string]any{})
+	}
+	live.accept(t, "build.object.publish", build.ObjectType, "TYPE", map[string]any{})
+	_, handler := observationHost(live.Tenant)
+	live.accept(t, typ+".create", typ, "HIDDEN", map[string]any{"private": "protected value"})
+	hidden, checked := checkRecordAction(t, handler, tenant, "other", typ+".hidden", typ, "HIDDEN")
+	user, _ := live.Member("other")
+	sub := live.submission(typ+".hidden", typ, "HIDDEN", map[string]any{})
+	sub.PrincipalId = user.ID
+	_, denial := live.Submit(user, sub, invariantClock)
+	if hidden.Schema != "" || checked.Allowed || checked.Authorization != nil || checked.Message != "" || denial == nil || denial.Code != pb.ErrorCode_ERROR_CODE_POLICY_DENIED {
+		t.Fatalf("hidden guard: read=%+v check=%+v submit=%+v", hidden, checked, denial)
+	}
+	for _, name := range []string{"nonblocked", "empty", "review"} {
+		row := id + "-" + name
+		live.accept(t, typ+".create", typ, row, map[string]any{})
+		schema := typ + "." + name
+		item, check := checkRecordAction(t, handler, tenant, "builder", schema, typ, row)
+		_, refusal := live.Submit(live.member(t), live.submission(schema, typ, row, map[string]any{}), invariantClock)
+		if item.Schema != schema || item.Allowed != (refusal == nil) || check.Allowed != item.Allowed || check.Message != item.Reason || refusal != nil && refusal.Message != item.Reason {
+			t.Fatalf("%s: read=%+v check=%+v submit=%+v", name, item, check, refusal)
+		}
+		if name != "review" {
+			continue
+		}
+		for _, schema := range []string{schema, schema + ".held", schema + ".rejected", schema + ".returned"} {
+			item, check := checkRecordAction(t, handler, tenant, "builder", schema, typ, row)
+			_, refusal := live.Submit(live.member(t), live.submission(schema, typ, row, map[string]any{}), invariantClock)
+			if item.Allowed || check.Allowed || refusal == nil || item.Schema == schema && (check.Message != item.Reason || refusal.Message != item.Reason) || item.Schema == "" && (check.Authorization != nil || check.Message != "") {
+				t.Fatalf("pending %s: read=%+v check=%+v submit=%+v", schema, item, check, refusal)
+			}
+		}
+	}
+}
+
+type stateVisibilityRecord struct {
+	platform.Record
+	Title string `json:"title,omitempty"`
+	State string `json:"state" field:"readonly" choices:"open,pending,done" read:"writer"`
+}
+
+type stateVisibilityOwner struct{ ledger platform.Authority }
+
+func (a stateVisibilityOwner) Authority() platform.Authority { return a.ledger }
+func (a stateVisibilityOwner) Fork(ledger platform.Authority) (platform.Service, error) {
+	return stateVisibilityOwner{ledger}, nil
+}
+func (a stateVisibilityOwner) Declarations() []*pb.AuthorityDeclaration {
+	return a.ledger.Declarations()
+}
+func (a stateVisibilityOwner) SnapshotFormat() string             { return "platform.ledger.v1" }
+func (a stateVisibilityOwner) Snapshot() (json.RawMessage, error) { return a.ledger.Snapshot() }
+func (a stateVisibilityOwner) Restore(raw json.RawMessage) error  { return a.ledger.Restore(raw) }
+func (a stateVisibilityOwner) Manifest() platform.Manifest {
+	return platform.Manifest{ID: "statevisibility", Title: "State visibility", Version: "1", Roles: []string{"reader", "writer"}, Actions: a.ledger.Catalog(), Entities: []platform.RecordType{stateVisibilityType()}}
+}
+func (a stateVisibilityOwner) Submit(c platform.Caller, s *pb.Submission, at time.Time) (*pb.ChangeRecord, *platform.Error) {
+	r, err, _ := a.ledger.Generated(c, s, at, nil, stateVisibilityType())
+	return r, err
+}
+
+func stateVisibilityType() platform.RecordType {
+	return platform.RecordType{Type: "statevisibility.item", Title: "Item", Model: stateVisibilityRecord{}, Standard: platform.Standard{Create: true, Roles: []string{"writer"}}, Lifecycle: &platform.Lifecycle{
+		Field: "state", Initial: "open", States: []platform.State{{Name: "open"}, {Name: "pending"}, {Name: "done"}},
+		Actions: []platform.ActionType{{Name: "finish", Title: "Finish", Roles: []string{"reader", "writer"}, Approval: &platform.Approval{Pending: "pending"},
+			Criteria: platform.ActionCriteria{State: &platform.FieldCondition{Field: "state", In: []string{"open"}}},
+			Rules:    []platform.ActionRule{{Edit: &platform.PropertyRule{Field: "state", Allowed: []string{"done"}}}}}},
+	}}
+}
+
+func TestInvariantK15HiddenStateAndApprovalMovesUseTheSameChecks(t *testing.T) {
+	const tenant, typ = "invariant-state-visibility", "statevisibility.item"
+	catalog := actioncatalog.EntityActions(stateVisibilityType())
+	for i := range catalog {
+		if catalog[i].Automation {
+			catalog[i].Roles = []string{"writer"}
+		}
+	}
+	live := newInvariantTenantWithApps(t, tenant, []platform.Service{stateVisibilityOwner{actions.NewAuthority(tenant, "statevisibility", platform.NewCatalog(catalog...), typ)}},
+		protocol.Seat{Subjects: []string{"admin"}, Member: platform.Member{ID: "admin", Roles: map[string]string{"statevisibility": "reader"}}},
+		protocol.Seat{Subjects: []string{"other"}, Member: platform.Member{ID: "other", Roles: map[string]string{"statevisibility": "writer"}}},
+	)
+	submit := func(who, verb string) *platform.Error {
+		t.Helper()
+		m, _ := live.Member(who)
+		sub := live.submission(typ+"."+verb, typ, "ITEM", map[string]any{})
+		sub.Authority, sub.PrincipalId = "statevisibility", who
+		_, err := live.Submit(m, sub, invariantClock)
+		return err
+	}
+	if refusal := submit("other", "create"); refusal != nil {
+		t.Fatal(refusal)
+	}
+	_, handler := observationHost(live.Tenant)
+	hidden, checked := checkRecordAction(t, handler, tenant, "admin", typ+".finish", typ, "ITEM")
+	refusal := submit("admin", "finish")
+	if hidden.Schema != "" || checked.Allowed || checked.Authorization != nil || checked.Message != "" || refusal == nil || refusal.Code != pb.ErrorCode_ERROR_CODE_POLICY_DENIED {
+		t.Fatalf("hidden state: read=%+v check=%+v submit=%+v", hidden, checked, refusal)
+	}
+	for _, step := range []struct {
+		verb    string
+		allowed bool
+	}{{"finish.rejected", false}, {"finish.returned", false}, {"finish.held", true}, {"finish.held", false}, {"finish.returned", true}, {"finish.held", true}, {"finish.rejected", true}} {
+		item, checked := checkRecordAction(t, handler, tenant, "other", typ+"."+step.verb, typ, "ITEM")
+		refusal := submit("other", step.verb)
+		if item.Schema == "" || item.Allowed != step.allowed || checked.Allowed != step.allowed || item.Reason != checked.Message || (refusal == nil) != step.allowed || refusal != nil && item.Reason != refusal.Message {
+			t.Fatalf("%s: read=%+v check=%+v submit=%+v", step.verb, item, checked, refusal)
+		}
+	}
+}
+
 func TestInvariantK16ReferencesRespectTargetReadPermissions(t *testing.T) {
 	live := newInvariantTenant(t, "invariant-k16", protocol.Seat{Subjects: []string{"other"}, Member: platform.Member{ID: "other", Roles: map[string]string{build.ID: ontology.UserRole}}})
 	for _, kind := range []struct {
 		name, read string
-	}{{"partner", "none"}, {"customer", "all"}} {
+		fieldRoles []string
+	}{{"partner", "none", nil}, {"customer", "all", nil}, {"private", "all", []string{ontology.BuilderRole}}, {"scoped", "own", nil}} {
 		live.accept(t, "build.object.create", build.ObjectType, kind.name, map[string]any{
-			"name": kind.name, "title": kind.name, "display": "note", "fields": []ontology.Field{{Name: "note", Type: "text", Title: "Name"}},
+			"name": kind.name, "title": kind.name, "display": "note", "fields": []ontology.Field{{Name: "note", Type: "text", Title: "Name", Read: kind.fieldRoles}},
 			"access": []ontology.Access{{Role: ontology.UserRole, Read: kind.read}},
 		})
 		live.accept(t, "build.object.publish", build.ObjectType, kind.name, map[string]any{})
@@ -122,10 +293,10 @@ func TestInvariantK16ReferencesRespectTargetReadPermissions(t *testing.T) {
 	}
 	live.accept(t, "build.object.create", build.ObjectType, "ORDER", map[string]any{
 		"name": "order", "title": "Order", "access": []ontology.Access{{Role: ontology.UserRole, Read: "all"}},
-		"fields": []ontology.Field{{Name: "partner", Type: "reference", Title: "Partner", Ref: "build.partner"}, {Name: "customer", Type: "reference", Title: "Customer", Ref: "build.customer"}},
+		"fields": []ontology.Field{{Name: "partner", Type: "reference", Title: "Partner", Ref: "build.partner"}, {Name: "customer", Type: "reference", Title: "Customer", Ref: "build.customer"}, {Name: "hidden", Type: "reference", Title: "Hidden", Ref: "build.customer", Read: []string{ontology.BuilderRole}}, {Name: "private", Type: "reference", Title: "Private display", Ref: "build.private"}, {Name: "scoped", Type: "reference", Title: "Scoped row", Ref: "build.scoped"}},
 	})
 	live.accept(t, "build.object.publish", build.ObjectType, "ORDER", map[string]any{})
-	live.accept(t, "build.order.create", "build.order", "ROW", map[string]any{"partner": "TARGET", "customer": "TARGET"})
+	live.accept(t, "build.order.create", "build.order", "ROW", map[string]any{"partner": "TARGET", "customer": "TARGET", "hidden": "TARGET", "private": "TARGET", "scoped": "TARGET"})
 	_, handler := observationHost(live.Tenant)
 	for _, path := range []string{"/v1/records/build.order", "/v1/records/build.order/ROW"} {
 		for _, role := range []string{"builder", "other"} {
@@ -134,7 +305,7 @@ func TestInvariantK16ReferencesRespectTargetReadPermissions(t *testing.T) {
 			if response.Code != http.StatusOK || json.Unmarshal(response.Body.Bytes(), &view) != nil {
 				t.Fatalf("%s %s: HTTP %d: %s", role, path, response.Code, response.Body)
 			}
-			if view.Refs["customer"]["TARGET"] != "customer label" || role == "builder" && view.Refs["partner"]["TARGET"] != "partner label" || role == "other" && bytes.Contains(response.Body.Bytes(), []byte("partner label")) {
+			if view.Refs["customer"]["TARGET"] != "customer label" || role == "builder" && view.Refs["partner"]["TARGET"] != "partner label" || role == "other" && (view.Refs["hidden"] != nil || view.Refs["private"] != nil || view.Refs["scoped"] != nil || bytes.Contains(response.Body.Bytes(), []byte("partner label")) || bytes.Contains(response.Body.Bytes(), []byte("private label")) || bytes.Contains(response.Body.Bytes(), []byte("scoped label"))) {
 				t.Fatalf("%s %s: unexpected labels: %s", role, path, response.Body)
 			}
 		}

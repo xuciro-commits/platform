@@ -195,8 +195,8 @@ func (l *authority) Receive(c platform.Caller, s *pb.Submission, now time.Time,
 		apply, err = rules()
 		return err
 	})
-	if err != nil && err.CurrentRevision != nil && *err.CurrentRevision != 0 && !c.Readable(s.GetTarget().GetType()+"/"+s.GetTarget().GetId()) {
-		err.CurrentRevision = nil
+	if err != nil && err.CurrentRevision != nil && !c.Readable(s.GetTarget().GetType()+"/"+s.GetTarget().GetId()) {
+		err = &platform.Error{Code: err.Code}
 	}
 	if err != nil && err.Code == pb.ErrorCode_ERROR_CODE_POLICY_DENIED && err.Message == "" && refused {
 		if !decision.Allow && len(decision.Layers) > 0 {
@@ -282,30 +282,7 @@ func (l *authority) checked(c platform.Caller, s *pb.Submission, now time.Time, 
 func (l *authority) Generated(c platform.Caller, s *pb.Submission, now time.Time, allowed func() bool, entities ...platform.RecordType) (*pb.ChangeRecord, *platform.Error, bool) {
 	schema := s.GetSchema().GetName()
 	for _, e := range entities {
-		verb, matches := strings.CutPrefix(schema, e.Type+".")
-		if !matches {
-			continue
-		}
-		action, found := builtinAction(e, verb)
-		if !found && e.Lifecycle != nil {
-			if i := slices.IndexFunc(e.Lifecycle.Actions, func(t platform.ActionType) bool { return t.Name == verb }); i >= 0 {
-				action, found = e.Lifecycle.Actions[i], true
-			} else {
-				for _, suffix := range []string{platform.ApprovalHeld, platform.ApprovalRejected, platform.ApprovalReturned} {
-					name, matches := strings.CutSuffix(verb, suffix)
-					if !matches {
-						continue
-					}
-					i := slices.IndexFunc(e.Lifecycle.Actions, func(t platform.ActionType) bool {
-						return t.Name == name && t.Approval != nil && t.Approval.Pending != ""
-					})
-					if i >= 0 {
-						action, found = approvalMove(e.Lifecycle.Actions[i], suffix), true
-						break
-					}
-				}
-			}
-		}
+		action, found := recordAction(e, schema)
 		if !found {
 			continue
 		}
@@ -335,6 +312,29 @@ func (l *authority) Generated(c platform.Caller, s *pb.Submission, now time.Time
 		return record, err, true
 	}
 	return nil, nil, false
+}
+
+func recordAction(e platform.RecordType, schema string) (platform.ActionType, bool) {
+	verb, matches := strings.CutPrefix(schema, e.Type+".")
+	if !matches {
+		return platform.ActionType{}, false
+	}
+	if action, found := builtinAction(e, verb); found || e.Lifecycle == nil {
+		return action, found
+	}
+	for _, transition := range e.Lifecycle.Actions {
+		if transition.Name == verb {
+			return transition, true
+		}
+		if transition.Approval != nil && transition.Approval.Pending != "" {
+			for _, suffix := range []string{platform.ApprovalHeld, platform.ApprovalRejected, platform.ApprovalReturned} {
+				if verb == transition.Name+suffix {
+					return approvalMove(transition, suffix), true
+				}
+			}
+		}
+	}
+	return platform.ActionType{}, false
 }
 
 func builtinAction(e platform.RecordType, verb string) (platform.ActionType, bool) {
@@ -418,8 +418,7 @@ func executeAction(c platform.Caller, e platform.RecordType, t platform.ActionTy
 	default:
 		info, _ := records.Describe("", e, func(reflect.Type) string { return "?" })
 		f, _ := info.Field(e.Lifecycle.Field)
-		status := v.Elem().FieldByIndex(f.Index)
-		if refusal := transitionRefusal(c, t, id, status.String(), v.Elem().Field(0).Interface().(platform.Record).Archived); refusal != nil {
+		if refusal := transitionRefusal(c, t, e.Type, id, v.Elem().FieldByIndex(f.Index).String(), v.Elem().Field(0).Interface().(platform.Record).Archived, now); refusal != nil {
 			return nil, refusal
 		}
 		for _, rule := range t.Rules {

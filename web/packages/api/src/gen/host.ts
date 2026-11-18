@@ -4594,6 +4594,7 @@ export type RecordVersionPin = {
 };
 
 export type RecordView = {
+  partial?: boolean;
   actions?: RecordAction[];
   refs?: Record<string, Record<string, string>>;
   effective?: boolean;

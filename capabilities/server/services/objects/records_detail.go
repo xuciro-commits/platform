@@ -13,6 +13,7 @@ import (
 )
 
 type RecordView struct {
+	Partial     bool                            `json:"partial,omitempty"`
 	Actions     []RecordAction                  `json:"actions,omitempty"`
 	Refs        map[string]map[string]string    `json:"refs,omitempty"`
 	Effective   *bool                           `json:"effective,omitempty"`
@@ -152,7 +153,7 @@ func (t *Owner) recordOf(m platform.Member, typ, id string, now time.Time) (Reco
 	if err != nil {
 		return RecordView{}, err
 	}
-	base.view.Refs = t.referenceNames(m, typ, []any{base.view.Record}, now)
+	base.view.Refs, base.view.Partial = t.referenceNames(m, typ, []any{base.view.Record}, now)
 	return base.view, nil
 }
 

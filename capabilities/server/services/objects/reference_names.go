@@ -2,6 +2,7 @@ package objects
 
 import (
 	"maps"
+	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformserver/kernel/records"
 	"platformserver/platform"
 	"reflect"
@@ -9,13 +10,13 @@ import (
 	"time"
 )
 
-func (t *Owner) referenceNames(m platform.Member, typ string, rows []any, now time.Time) map[string]map[string]string {
+func (t *Owner) referenceNames(m platform.Member, typ string, rows []any, now time.Time) (map[string]map[string]string, bool) {
 	if len(rows) == 0 {
-		return nil
+		return nil, false
 	}
 	source, ok := t.entity(typ)
 	if !ok {
-		return nil
+		return nil, false
 	}
 	byField := map[string]map[string]bool{}
 	byType := map[string]map[string]bool{}
@@ -46,6 +47,7 @@ func (t *Owner) referenceNames(m platform.Member, typ string, rows []any, now ti
 		}
 	}
 	labels := map[string]map[string]string{}
+	partial := false
 	for target, ids := range byType {
 		info, ok := t.entity(target)
 		if !ok || info.Display == "" || info.Display == "id" {
@@ -57,6 +59,7 @@ func (t *Owner) referenceNames(m platform.Member, typ string, rows []any, now ti
 			set := platform.ObjectSet{Object: target, IDs: batch, Archived: true, AsOf: &platform.BusinessTime{All: true}}
 			page, _, refusal := t.LoadObjectSet(t.Store, caller, set, Window{Limit: len(batch)}, now)
 			if refusal != nil {
+				partial = partial || (refusal.Code != pb.ErrorCode_ERROR_CODE_POLICY_DENIED && refusal.Code != pb.ErrorCode_ERROR_CODE_NOT_FOUND)
 				continue
 			}
 			for _, row := range page.Records {
@@ -82,5 +85,5 @@ func (t *Owner) referenceNames(m platform.Member, typ string, rows []any, now ti
 			}
 		}
 	}
-	return out
+	return out, partial
 }

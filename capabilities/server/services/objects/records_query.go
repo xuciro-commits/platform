@@ -50,7 +50,9 @@ func (t *Owner) recordSelectionForCallerFrom(s *records.Store, c platform.Caller
 func (t *Owner) Records(m platform.Member, typ string, q platform.Query, now time.Time) (RecordPage, *platform.Error) {
 	page, err := t.recordsRead(m, typ, q, now)
 	if err == nil {
-		page.Refs = t.referenceNames(m, typ, page.Records, now)
+		var partial bool
+		page.Refs, partial = t.referenceNames(m, typ, page.Records, now)
+		page.Partial = page.Partial || partial
 	}
 	return page, err
 }

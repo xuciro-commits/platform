@@ -59,7 +59,11 @@ func EvaluateRule(expr platform.Expr, reads platform.RuleReadSpec, caller platfo
 	}
 	context, err := RuleContext(caller, expr, reads, lookup, record, inputs, at)
 	if err != nil {
-		return platform.ExprResult{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "Rule input: {reason} / 规则输入：{reason}", err.Error(), err.Error())
+		var denied *platform.Error
+		if errors.As(err, &denied) {
+			return platform.ExprResult{}, denied
+		}
+		return platform.ExprResult{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Rule input: {reason} / 规则输入：{reason}", err.Error(), err.Error())
 	}
 	if caller.TraceEnabled() {
 		filtered := ruleTraceContext(expr, context)
