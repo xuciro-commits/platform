@@ -29,6 +29,7 @@ import { BoardView } from "./BoardView";
 import { t } from "../i18n";
 import type { Dot } from "./Transitions";
 import { newView, readView, type ViewSort, type ViewState } from "./view";
+import { SavedViews } from "./SavedViews";
 
 export type ListColumn<Row> = {
   key: string;
@@ -58,6 +59,7 @@ export type ListShape<Answer, Row> = {
   defaultView?: unknown;
   carryView?: boolean;
   page?: { total: number; loaded: number; hasMore: boolean; loading: boolean; loadMore: () => void };
+  savedViews?: string;
 };
 export type ListDefinition<Answer, Row> = ListShape<Answer, Row> & { read: string };
 
@@ -268,7 +270,10 @@ export function ListView<Answer, Row>({ definition, read, primary, back }: ListV
               <StackItem size="fill">
                 <VStack gap={2}>
                   {back && <BackLink href={back.href} label={t(back.label)} />}
-                  <Heading level={1}>{t(definition.title)}</Heading>
+                  <HStack gap={2} vAlign="center">
+                    <Heading level={1}>{t(definition.title)}</Heading>
+                    {definition.savedViews && <SavedViews entity={definition.savedViews} view={view} fallback={fallback} />}
+                  </HStack>
                 </VStack>
               </StackItem>
               {lanes && (

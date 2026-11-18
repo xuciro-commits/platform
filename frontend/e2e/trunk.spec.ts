@@ -626,3 +626,40 @@ test("views: ten thousand rows stay windowed and load at the scroll edge", async
   await more.click();
   await expect.poll(() => offsets.at(-1)).not.toBe(previousOffset);
 });
+
+test("views: save, pin and reopen a filtered view from the sidebar", async ({ page }) => {
+  const view = {
+    version: 1,
+    layout: "table",
+    columns: ["subject", "stage", "customer", "amount", "budgetapproved", "deposit", "next", "closing"],
+    sort: [],
+    filters: [{ field: "stage", operator: "is", value: { type: "enum", value: "Proposal" } }],
+    search: "",
+    group: "none",
+    lanes: "",
+  };
+  await signIn(page);
+  await page.goto(`/ontology/objects/build.opportunity?view=${encodeURIComponent(JSON.stringify(view))}`);
+  await expect(page.getByRole("link", { name: "Robot cell integration" })).toBeVisible();
+
+  await page.getByRole("button", { name: "Views", exact: true }).click();
+  await page.getByRole("button", { name: "Save current view", exact: true }).click();
+  await page.getByRole("dialog").getByRole("textbox", { name: "View name" }).fill("My proposals");
+  await page.getByRole("dialog").getByRole("button", { name: "Save", exact: true }).click();
+
+  const sidebar = page.getByRole("navigation", { name: "Primary navigation" });
+  await expect(sidebar.getByRole("link", { name: "My proposals" })).toBeVisible();
+  await page.getByRole("button", { name: "My proposals", exact: true }).click();
+  await page.getByRole("button", { name: "Pin", exact: true }).click();
+  await expect(page.getByRole("button", { name: "Unpin", exact: true })).toBeVisible();
+  await page.keyboard.press("Escape");
+  await page.getByRole("button", { name: "My proposals", exact: true }).click();
+  await page.getByRole("button", { name: "Default view", exact: true }).click();
+  await expect(page).not.toHaveURL(/saved=/);
+
+  await sidebar.getByRole("link", { name: "My proposals" }).click();
+  await expect(page).toHaveURL(/saved=/);
+  await expect(page.getByRole("link", { name: "Robot cell integration" })).toBeVisible();
+  await page.reload();
+  await expect(page.getByRole("link", { name: "Robot cell integration" })).toBeVisible();
+});

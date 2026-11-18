@@ -137,6 +137,7 @@ function shape(described: Described, declared: Declared, listPath: string, move?
     bulk,
     defaultView: described.entity.view,
     carryView: true,
+    savedViews: declared.type,
     rows: (answer) => (answer.records as Row[]).map((row) => ({ ...row, [formatted]: answer.formats?.[String(row.id)], [referenced]: answer.refs })),
     id: (row) => String(row.id),
     link: (row) => `${listPath}/${encodeURIComponent(String(row.id))}`,

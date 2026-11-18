@@ -32,9 +32,12 @@ function installedApps(views: Api.ApplicationView[]): App[] {
 
 export function Shell() {
   const session = useSession();
+  const segments = usePath().split("/");
   const projected = useRead<Api.ApplicationView[]>(session ? "/v1/applications" : null);
   const available = useMemo(() => projected.status === "ready" ? [...apps, ...installedApps(projected.data).filter((app) => !apps.some((known) => known.id === app.id))] : apps, [projected]);
   const { app, item } = locate(usePath(), available);
+  const object = item.object ?? (app.id === "ontology" && item.id === "objects" ? decodeURIComponent(segments[3] ?? "") : "");
+  const listPath = app.id === "ontology" && item.id === "objects" ? `/ontology/objects/${encodeURIComponent(object)}` : item.object ? `/${app.id}/${item.id}` : undefined;
   if (!session) return <SignIn />;
   const Entry = entries[`${app.id}/${item.id}`];
   const content = Entry ? <Entry key={`${app.id}/${item.id}`} />
@@ -43,10 +46,10 @@ export function Shell() {
   return (
     <AppShell
       contentPadding={0}
-      sideNav={<Navigation app={app} item={item} apps={available} />}
+      sideNav={<Navigation app={app} item={item} apps={available} object={object || undefined} listPath={listPath} />}
       mobileNav={{ content: (
         <MobileNav header={<AppRail current={app} apps={available} compact />}>
-          <AppSidebar app={app} item={item} apps={available} />
+          <AppSidebar app={app} item={item} apps={available} object={object || undefined} listPath={listPath} />
         </MobileNav>
       ) }}
     >
@@ -55,13 +58,13 @@ export function Shell() {
   );
 }
 
-function Navigation({ app, item, apps }: { app: App; item: NavItem; apps: App[] }) {
+function Navigation({ app, item, apps, object, listPath }: { app: App; item: NavItem; apps: App[]; object?: string; listPath?: string }) {
   const { isMobile } = useAppShellMobile();
-  if (isMobile) return <AppSidebar app={app} item={item} apps={apps} />;
+  if (isMobile) return <AppSidebar app={app} item={item} apps={apps} object={object} listPath={listPath} />;
   return (
     <HStack height="100%">
       <AppRail current={app} apps={apps} />
-      <AppSidebar app={app} item={item} apps={apps} />
+      <AppSidebar app={app} item={item} apps={apps} object={object} listPath={listPath} />
     </HStack>
   );
 }
