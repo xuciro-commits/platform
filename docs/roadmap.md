@@ -23,7 +23,7 @@
 5. **说明不进代码。** 我们不写注释：模板说明里讲的道理，留在这里或 [frontend](frontend.md)，代码里删掉注释。
 6. **一个表现服务所有入口。** 新表现做成 `src/pages/` 里的一个声明函数（像 `recordList`、`listPage`），入口只写一句声明。
 
-顺序：1.10.2a → b → c → d → e → 1.10.3。
+顺序：1.10.2b → c → d → e → 1.10.3。
 
 ## 1.10 切换
 
@@ -31,20 +31,14 @@
 
 ### 1.10.2 未建入口按数据形状落地
 
-侧栏标“未建”的入口是 26 个。负责人定了：最近（`home/recent`）、模板（`apps/templates`）、升级（`host/upgrades`）
-三个从 `src/apps.ts` 删掉，宿主有了对应的资源再加回来。其余 23 个按宿主给的数据形状分成五类；每类一个表现，入口只写声明。
+侧栏还有 20 个“未建”入口，按宿主给的数据形状分成四类；每类一个表现，入口只写声明。
 
 | 类 | 数据形状 | 表现 | 起点 | 入口 |
 |---|---|---|---|---|
-| a | 一类记录 | `recordList`（已有） | 已有 | 自动化、对象视图、评估 |
 | b | 一个读取给出一组平行行 | `listPage`（已有，补四处） | 已有（`table-filter`、`table-grouped`） | 见 b |
 | c | 父行由子行汇总出来的层级 | `treeList`（新） | 官方 `table-tree` | 组织、追踪 |
 | d | 按应用分组的设置项 | `settingsPage`（新） | 自己的设置行（来自官方 `settings-dialog`），框架同官方 `settings-sidebar` | 设置 |
 | e | 一份汇总数字加几张小表 | `dashboardPage`（已有） | 已有（官方 `dashboard`） | 指标、健康 |
-
-**1.10.2a 类型列表** 删掉上面三个导航项；再写三句声明，不动界面：
-`logic/automations.ts` → `build.process`；`apps/object-views.ts` → `build.page`；`ai/evaluations.ts` → `agent.evaluation`。
-函数评估 `build.evaluation` 只从函数的记录页进，不另开入口。验收 trunk：三个入口各显示列表标题与新建按钮（有权时）。
 
 **1.10.2b 读取列表** 先给 `listPage` 补四处，再写十四个入口。补的四处（只改 `src/pages/ListPage.tsx`，超 600 行就把工具栏拆出去）：
 

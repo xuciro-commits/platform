@@ -1321,3 +1321,17 @@ test("settings: the profile is edited in place and the member menu follows", asy
   await page.getByRole("button", { name: "Account", exact: true }).click();
   await expect(page.getByRole("menuitem", { name: new RegExp(before) })).toBeVisible();
 });
+
+test("entries: record types open as lists and dropped entries are gone from the menu", async ({ page }) => {
+  await signIn(page);
+  for (const [app, entry] of [["Logic", "Automations"], ["Apps", "Object views"], ["AI", "Evaluations"]]) {
+    await open(page, app, entry);
+    await expect(page.getByRole("heading", { level: 1, name: entry, exact: true })).toBeVisible();
+    await expect(page.getByText("Not built yet")).toHaveCount(0);
+  }
+  const menu = page.getByRole("navigation", { name: "Primary navigation" });
+  await page.getByRole("link", { name: "Home" }).click();
+  await expect(menu.getByRole("link", { name: "Recent", exact: true })).toHaveCount(0);
+  await page.getByRole("link", { name: "Apps" }).click();
+  await expect(menu.getByRole("link", { name: "Templates", exact: true })).toHaveCount(0);
+});

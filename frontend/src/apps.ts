@@ -1,7 +1,6 @@
 import type { IconType } from "@astryxdesign/core/Icon";
 import {
   AdjustmentsHorizontalIcon,
-  ArrowUpCircleIcon,
   ArrowUpTrayIcon,
   ArrowsRightLeftIcon,
   BeakerIcon,
@@ -15,7 +14,6 @@ import {
   ChartBarIcon,
   CircleStackIcon,
   ClipboardDocumentCheckIcon,
-  ClockIcon,
   CodeBracketIcon,
   Cog6ToothIcon,
   CommandLineIcon,
@@ -23,7 +21,6 @@ import {
   CubeIcon,
   CubeTransparentIcon,
   DocumentCheckIcon,
-  DocumentDuplicateIcon,
   DocumentTextIcon,
   EyeIcon,
   FolderIcon,
@@ -77,7 +74,6 @@ export const apps: App[] = [
           { id: "overview", label: "Overview", icon: Squares2X2Icon },
           { id: "inbox", label: "Inbox", icon: InboxIcon },
           { id: "proposals", label: "Proposals", icon: DocumentCheckIcon },
-          { id: "recent", label: "Recent", icon: ClockIcon },
           { id: "projects", label: "Projects", icon: FolderIcon },
         ],
       },
@@ -165,7 +161,6 @@ export const apps: App[] = [
         items: [
           { id: "modules", label: "Modules", icon: RectangleGroupIcon },
           { id: "object-views", label: "Object views", icon: WindowIcon },
-          { id: "templates", label: "Templates", icon: DocumentDuplicateIcon },
         ],
       },
     ],
@@ -268,7 +263,6 @@ export const apps: App[] = [
         title: "Operate",
         items: [
           { id: "tenants", label: "Tenants", icon: BuildingOfficeIcon },
-          { id: "upgrades", label: "Upgrades", icon: ArrowUpCircleIcon },
         ],
       },
     ],
