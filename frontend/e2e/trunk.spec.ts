@@ -976,3 +976,26 @@ test("applications: shared records respect roles and keep their history after re
   await expect(member.getByText(/First shop order: .*WO-1043/)).toBeVisible();
   await member.close();
 });
+
+test("inbox: work assigned on a record is finished from the inbox", async ({ page }) => {
+  await signIn(page);
+  await page.goto("/ontology/objects/build.opportunity/OPP-002");
+  await page.getByRole("button", { name: "Assign work", exact: true }).click();
+  const assign = page.getByRole("dialog");
+  await assign.getByRole("textbox", { name: /^Title/ }).fill("Call the plant manager");
+  await assign.getByRole("textbox", { name: "Assignee", exact: true }).fill("admin-1");
+  await assign.getByRole("button", { name: "Create", exact: true }).click();
+  await expect(assign).toHaveCount(0);
+
+  await page.getByRole("button", { name: "Notifications", exact: true }).click();
+  await page.getByRole("menuitem", { name: /Inbox/ }).click();
+  await expect(page).toHaveURL(/\/home\/inbox/);
+  await page.getByRole("link", { name: /To do/ }).click();
+  await page.getByRole("row", { name: /Call the plant manager/ }).click();
+  const pane = page.getByRole("complementary", { name: "Item" });
+  await expect(pane.getByRole("heading", { name: "Call the plant manager" })).toBeVisible();
+  await expect(pane.getByRole("link", { name: "Spare parts frame agreement" })).toBeVisible();
+  await pane.getByRole("button", { name: "Done", exact: true }).click();
+  await page.getByRole("link", { name: /Closed/ }).click();
+  await expect(page.getByRole("row", { name: /Call the plant manager/ })).toBeVisible();
+});

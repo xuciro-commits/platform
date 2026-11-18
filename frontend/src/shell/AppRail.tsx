@@ -2,14 +2,35 @@ import { Divider } from "@astryxdesign/core/Divider";
 import { Icon } from "@astryxdesign/core/Icon";
 import { IconButton } from "@astryxdesign/core/IconButton";
 import { HStack, VStack } from "@astryxdesign/core/Layout";
-import { ArrowRightStartOnRectangleIcon, BellIcon, MagnifyingGlassIcon } from "@heroicons/react/24/outline";
+import { Badge } from "@astryxdesign/core/Badge";
+import { DropdownMenu } from "@astryxdesign/core/DropdownMenu";
+import { ArrowRightStartOnRectangleIcon, BellIcon, InboxIcon, MagnifyingGlassIcon } from "@heroicons/react/24/outline";
 import { type App, apps, pathOf } from "../apps";
 import { endSession } from "../host";
 import { t } from "../i18n";
+import { useInbox } from "../pages/inbox";
+import { navigate } from "../router";
 
 export function AppRail({ current, compact, apps }: { current: App; compact?: boolean; apps: App[] }) {
   const search = <IconButton label={t("Search")} tooltip={t("Search")} variant="ghost" icon={<Icon icon={MagnifyingGlassIcon} />} />;
-  const notifications = <IconButton label={t("Notifications")} tooltip={t("Notifications")} variant="ghost" icon={<Icon icon={BellIcon} />} />;
+  const unread = useInbox().items.filter((item) => item.unread).length;
+  const notifications = (
+    <DropdownMenu
+      hasChevron={false}
+      placement={compact ? "below" : "end"}
+      items={[
+        {
+          label: t("Inbox"),
+          icon: <Icon icon={InboxIcon} size="sm" />,
+          endContent: unread ? <Badge variant="neutral" label={String(unread)} /> : undefined,
+          onClick: () => navigate("/home/inbox"),
+        },
+      ]}
+      renderTrigger={(props) => (
+        <IconButton {...props} label={t("Notifications")} tooltip={t("Notifications")} variant="ghost" icon={<Icon icon={BellIcon} />} />
+      )}
+    />
+  );
   const signOut = (
     <IconButton label={t("Sign out")} tooltip={t("Sign out")} variant="ghost" icon={<Icon icon={ArrowRightStartOnRectangleIcon} />} onClick={endSession} />
   );

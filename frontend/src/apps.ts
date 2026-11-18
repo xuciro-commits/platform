@@ -75,7 +75,7 @@ export const apps: App[] = [
         title: "Workspace",
         items: [
           { id: "overview", label: "Overview", icon: Squares2X2Icon },
-          { id: "work", label: "My work", icon: InboxIcon },
+          { id: "inbox", label: "Inbox", icon: InboxIcon },
           { id: "proposals", label: "Proposals", icon: DocumentCheckIcon },
           { id: "recent", label: "Recent", icon: ClockIcon },
           { id: "projects", label: "Projects", icon: FolderIcon },
