@@ -21,6 +21,7 @@ import { type Editor, FieldGroup, useEditor } from "./RecordFields";
 import { RecordFiles, RecordLinks, relatedGroups } from "./RecordAttachments";
 import { Collaboration, RecordActivity } from "./RecordActivity";
 import { RecordLines } from "./RecordLines";
+import { ObjectPreview } from "./ObjectPreview";
 import { dots, type Instances, Transitions } from "./Transitions";
 import { plain } from "./values";
 
@@ -104,6 +105,7 @@ export function RecordPage({ described, id, listPath, listTitle, instances, enti
 
   const tabs = [
     { value: "details", label: "Details" },
+    ...(definition ? [{ value: "preview", label: "Preview" }] : []),
     { value: "activity", label: "Activity" },
     ...(changes.length ? [{ value: "changes", label: "Changes" }] : []),
     ...((links.status === "ready" ? relatedGroups(links.data).length > 0 : asked === "links") ? [{ value: "links", label: "Links" }] : []),
@@ -238,11 +240,12 @@ export function RecordPage({ described, id, listPath, listTitle, instances, enti
           {kept && tab === "links" && <RecordLinks read={links} id={id} entities={entities} />}
           {kept && tab === "files" && <RecordFiles read={files} attach={attach} target={`${described.type}/${id}`} />}
           {kept && tab === "activity" && <RecordActivity described={described} id={id} comments={comments} catalog={catalog} />}
+          {kept && tab === "preview" && definition && <ObjectPreview definition={definition} source={detail} catalog={catalog} />}
           {kept && tab === "properties" && <Rail described={detail} editor={editor} kept={kept} refs={refs} restricted={restricted} collaboration={collaboration} />}
         </LayoutContent>
       }
       end={
-        kept && !narrow ? (
+        kept && !narrow && tab !== "preview" ? (
           <LayoutPanel width={340} padding={6} role="complementary" hasDivider>
             <Rail described={detail} editor={editor} kept={kept} refs={refs} restricted={restricted} collaboration={collaboration} />
           </LayoutPanel>

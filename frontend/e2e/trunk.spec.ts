@@ -465,6 +465,9 @@ test("object definition: add a field, publish it and review a removal", async ({
   await expect(page.getByText("Unpublished changes", { exact: true })).toBeVisible();
   await page.getByRole("link", { name: "Changes", exact: true }).click();
   await expect(page.getByText("fields.mobile", { exact: true })).toBeVisible();
+  await page.getByRole("link", { name: "Preview", exact: true }).click();
+  await expect(page.getByRole("columnheader", { name: "Mobile", exact: true })).toBeVisible();
+  await expect(page.getByText("Preview only", { exact: true })).toBeVisible();
   await page.getByRole("link", { name: "Details", exact: true }).click();
 
   await page.getByRole("button", { name: "Publish", exact: true }).click();
