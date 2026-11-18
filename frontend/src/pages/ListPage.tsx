@@ -10,6 +10,7 @@ import { Link } from "@astryxdesign/core/Link";
 import { Popover } from "@astryxdesign/core/Popover";
 import { type FieldDefinition, PowerSearch, usePowerSearchConfig } from "@astryxdesign/core/PowerSearch";
 import { RadioList, RadioListItem } from "@astryxdesign/core/RadioList";
+import { ScrollableArea } from "@astryxdesign/core/ScrollableArea";
 import { Section } from "@astryxdesign/core/Section";
 import { SegmentedControl, SegmentedControlItem } from "@astryxdesign/core/SegmentedControl";
 import { Skeleton } from "@astryxdesign/core/Skeleton";
@@ -20,7 +21,7 @@ import { Heading, Text } from "@astryxdesign/core/Text";
 import { TextInput } from "@astryxdesign/core/TextInput";
 import { Timestamp } from "@astryxdesign/core/Timestamp";
 import { ArrowDownIcon, ArrowPathIcon, ArrowUpIcon, TableCellsIcon, ViewColumnsIcon } from "@heroicons/react/24/outline";
-import { type ReactNode, useEffect, useMemo, useState } from "react";
+import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { type Read, reread, useRead } from "../host";
 import { navigate, usePath, useSearch } from "../router";
 import { BackLink } from "./BackLink";
@@ -67,6 +68,8 @@ const compare = (left: unknown, right: unknown) =>
 const idKey = "__id";
 const dotOf = (key: string) => `__dot:${key}`;
 const ungrouped = "none";
+const rowHeight = 48;
+const overscan = 12;
 
 export function listPage<Answer, Row>(definition: ListDefinition<Answer, Row>) {
   return function ListEntry() {
@@ -84,12 +87,16 @@ type ListViewProps<Answer, Row> = {
 export function ListView<Answer, Row>({ definition, read, primary, back }: ListViewProps<Answer, Row>) {
   const currentPath = usePath();
   const currentSearch = useSearch();
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const [scrollTop, setScrollTop] = useState(0);
+  const [viewportHeight, setViewportHeight] = useState(600);
   const fallback = useMemo(() => {
     const base = newView(definition.columns.filter((column) => !column.hiddenByDefault).map((column) => column.key));
     if (definition.defaultView == null) return base;
     return readView(typeof definition.defaultView === "string" ? definition.defaultView : JSON.stringify(definition.defaultView), base);
   }, [definition.columns, definition.defaultView]);
   const view = useMemo(() => readView(new URLSearchParams(currentSearch).get("view"), fallback), [currentSearch, fallback]);
+  const scrollKey = `list-scroll:${currentPath}:${JSON.stringify(view)}:${new URLSearchParams(currentSearch).get("domain") ?? ""}`;
   const update = (next: Partial<ViewState>) => {
     const changed: ViewState = { ...view, ...next, version: 1 };
     if (JSON.stringify(changed) === JSON.stringify(view)) return;
@@ -214,6 +221,42 @@ export function ListView<Answer, Row>({ definition, read, primary, back }: ListV
         </Text>
       ),
   }));
+  const windowed = Boolean(definition.page && !group);
+  const first = windowed ? Math.max(0, Math.min(shown.length, Math.floor(scrollTop / rowHeight) - overscan)) : 0;
+  const last = windowed ? Math.min(shown.length, first + Math.ceil(viewportHeight / rowHeight) + overscan * 2) : shown.length;
+  const tableRows = group ? grouped.data : shown.slice(first, last);
+  useEffect(() => {
+    const node = scrollRef.current;
+    if (!node) return;
+    let restoring = Number(sessionStorage.getItem(scrollKey)) || 0;
+    let frame = 0;
+    const onScroll = () => {
+      setScrollTop(node.scrollTop);
+      setViewportHeight(node.clientHeight);
+      const atEnd = node.scrollHeight - node.scrollTop - node.clientHeight < rowHeight;
+      if (restoring > node.scrollTop + rowHeight) {
+        if (atEnd && definition.page?.hasMore && !definition.page.loading) definition.page.loadMore();
+        return;
+      }
+      restoring = 0;
+      sessionStorage.setItem(scrollKey, String(node.scrollTop));
+      if (atEnd && definition.page?.hasMore && !definition.page.loading) definition.page.loadMore();
+    };
+    node.addEventListener("scroll", onScroll, { passive: true });
+    const restore = () => {
+      setViewportHeight(node.clientHeight);
+      const wanted = Math.min(restoring, node.scrollHeight - node.clientHeight);
+      node.scrollTop = wanted;
+      setScrollTop(wanted);
+      if (restoring > wanted + rowHeight && definition.page?.hasMore && !definition.page.loading) definition.page.loadMore();
+      else if (Math.abs(wanted - restoring) < rowHeight) restoring = 0;
+    };
+    frame = requestAnimationFrame(restore);
+    return () => {
+      cancelAnimationFrame(frame);
+      node.removeEventListener("scroll", onScroll);
+    };
+  }, [scrollKey, read.status, shown.length, definition.page?.hasMore, definition.page?.loading, definition.page?.loadMore]);
 
   return (
     <Layout
@@ -353,6 +396,7 @@ export function ListView<Answer, Row>({ definition, read, primary, back }: ListV
           {read.status === "ready" && shown.length > 0 && board && (
             <BoardView
               columns={board.order ?? []}
+              page={definition.page}
               cards={shown.map((cells) => ({
                 id: cells[idKey],
                 column: moved[cells[idKey]] ?? cells.__lane,
@@ -375,21 +419,27 @@ export function ListView<Answer, Row>({ definition, read, primary, back }: ListV
             />
           )}
           {read.status === "ready" && shown.length > 0 && !board && (
-            <Table
-              data={group ? grouped.data : shown}
-              columns={columns}
-              idKey={group ? grouped.idKey : idKey}
-              density="balanced"
-              dividers="rows"
-              textOverflow="truncate"
-              hasHover
-              plugins={{ ...(group ? { grouped: grouped.plugin } : {}), ...(definition.bulk ? { selection } : {}), sortable }}
-            />
-          )}
-          {read.status === "ready" && !board && definition.page?.hasMore && (
-            <VStack padding={4}>
-              <Button label={t("Load more")} variant="secondary" isLoading={definition.page.loading} onClick={definition.page.loadMore} />
-            </VStack>
+            <ScrollableArea
+              ref={scrollRef}
+              axis="block"
+              role="region"
+              label={t("Records")}
+              height="100%">
+              {windowed && first > 0 && <Section variant="transparent" height={first * rowHeight} padding={0} />}
+                <Table
+                  data={tableRows}
+                  columns={columns}
+                  idKey={group ? grouped.idKey : idKey}
+                  rowIndexStart={windowed ? first + 1 : undefined}
+                  rowCount={definition.page?.total}
+                  density="balanced"
+                  dividers="rows"
+                  textOverflow="truncate"
+                  hasHover
+                  plugins={{ ...(group ? { grouped: grouped.plugin } : {}), ...(definition.bulk ? { selection } : {}), sortable }}
+                />
+              {windowed && last < shown.length && <Section variant="transparent" height={(shown.length - last) * rowHeight} padding={0} />}
+            </ScrollableArea>
           )}
         </LayoutContent>
       }

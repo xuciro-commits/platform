@@ -573,3 +573,56 @@ test("views: filters, order and visible columns survive refresh and return", asy
   await expect(rows.first()).toContainText("Robot cell integration");
   await expect(page.getByRole("columnheader", { name: "Next step", exact: true })).toHaveCount(0);
 });
+
+test("views: ten thousand rows stay windowed and load at the scroll edge", async ({ page }) => {
+  const offsets: number[] = [];
+  await page.route("**/v1/records/build.opportunity?*", async (route) => {
+    const url = new URL(route.request().url());
+    const offset = Number(url.searchParams.get("offset") ?? 0);
+    const limit = Number(url.searchParams.get("limit") ?? 100);
+    offsets.push(offset);
+    const records = Array.from({ length: limit }, (_, index) => {
+      const ordinal = offset + index + 1;
+      return {
+        id: `GEN-${String(ordinal).padStart(4, "0")}`,
+        revision: 1,
+        subject: `Generated opportunity ${String(ordinal).padStart(4, "0")}`,
+        stage: "proposal",
+        customer: null,
+        amount: ordinal,
+        budgetapproved: false,
+        deposit: null,
+        next: "",
+        closing: "2027-01-01",
+        changed: { at: "2026-11-18T00:00:00Z" },
+      };
+    });
+    await route.fulfill({ json: { records, total: 10000, actions: {}, refs: {}, formats: {} } });
+  });
+  await signIn(page);
+  await page.goto("/ontology/objects/build.opportunity");
+  const resultCount = page.getByRole("group", { name: "Filter" });
+  await expect(resultCount.getByText("100 / 10000", { exact: true })).toBeVisible();
+  const table = page.getByRole("table");
+  const scroller = page.getByRole("region", { name: "Records" });
+  await expect(scroller).toBeVisible();
+  expect(await table.locator("tbody tr").count()).toBeLessThan(100);
+
+  await scroller.evaluate((element) => element.scrollTo({ top: element.scrollHeight }));
+  await expect.poll(() => offsets.includes(100)).toBe(true);
+  await expect(resultCount.getByText("200 / 10000", { exact: true })).toBeVisible();
+  await scroller.evaluate((element) => element.scrollTo({ top: element.scrollHeight }));
+  const secondPage = page.getByRole("link", { name: "Generated opportunity 0199" });
+  await expect(secondPage).toBeVisible();
+  await secondPage.click();
+  await expect(page).toHaveURL(/build\.opportunity\/GEN-0199/);
+  await page.goBack();
+  await expect(resultCount.getByText(/200 \/ 10000|300 \/ 10000/)).toBeVisible();
+  await expect(page.getByRole("link", { name: "Generated opportunity 0199" })).toBeVisible();
+  await page.getByRole("radio", { name: "Board" }).click();
+  const previousOffset = offsets.at(-1);
+  const more = page.getByRole("button", { name: "Load more" }).first();
+  await expect(more).toBeVisible();
+  await more.click();
+  await expect.poll(() => offsets.at(-1)).not.toBe(previousOffset);
+});

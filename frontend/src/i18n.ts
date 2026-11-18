@@ -298,6 +298,7 @@ export const zhCN: Record<string, string> = {
   Table: "表格",
   Board: "看板",
   Refresh: "刷新",
+  Records: "记录",
   selected: "项已选",
   "Clear selection": "取消选择",
   "Filter by any column": "按任意列筛选",

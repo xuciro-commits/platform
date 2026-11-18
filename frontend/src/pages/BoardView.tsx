@@ -1,12 +1,20 @@
 import { Card } from "@astryxdesign/core/Card";
+import { Button } from "@astryxdesign/core/Button";
 import { HStack, Layout, LayoutContent, LayoutHeader, VStack } from "@astryxdesign/core/Layout";
 import { Link } from "@astryxdesign/core/Link";
 import { Heading, Text } from "@astryxdesign/core/Text";
 import * as stylex from "@stylexjs/stylex";
 import { type PointerEvent as ReactPointerEvent, type ReactNode, useEffect, useRef, useState } from "react";
+import { t } from "../i18n";
 
 export type BoardCard = { id: string; column: string; title: string; href: string; lines: string[] };
-type BoardProps = { columns: string[]; cards: BoardCard[]; onMove?: (id: string, to: string) => void; accepts?: (id: string, to: string) => boolean };
+type BoardProps = {
+  columns: string[];
+  cards: BoardCard[];
+  onMove?: (id: string, to: string) => void;
+  accepts?: (id: string, to: string) => boolean;
+  page?: { hasMore: boolean; loading: boolean; loadMore: () => void };
+};
 type Drag = { id: string; width: number; height: number; offsetX: number; offsetY: number; pointerX: number; pointerY: number; target: string | null };
 
 const dragThreshold = 5;
@@ -37,7 +45,7 @@ function CardBody({ card }: { card: BoardCard }) {
   );
 }
 
-export function BoardView({ columns, cards, onMove, accepts }: BoardProps) {
+export function BoardView({ columns, cards, onMove, accepts, page }: BoardProps) {
   const [drag, setDrag] = useState<Drag | null>(null);
   const columnElements = useRef(new Map<string, HTMLElement>());
   const cardElements = useRef(new Map<string, HTMLElement>());
@@ -134,6 +142,7 @@ export function BoardView({ columns, cards, onMove, accepts }: BoardProps) {
                     <CardBody card={card} />
                   </Card>
                 ))}
+                {page?.hasMore && <Button label={t("Load more")} variant="secondary" size="sm" isLoading={page.loading} onClick={page.loadMore} />}
                 {drag && drag.target === name && <VStack xstyle={styles.ghost(drag.height)} />}
               </VStack>
             </LayoutContent>
