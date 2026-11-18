@@ -3,6 +3,7 @@ package actions
 import (
 	"encoding/json"
 	"log/slog"
+	"maps"
 	"reflect"
 	"strings"
 	"time"
@@ -68,10 +69,22 @@ func transactionGuard(c platform.Caller, txn *platform.BusinessTxn, spec platfor
 	if txn.Guard == nil {
 		return "", nil
 	}
+	if info, found := lookup(spec.Object); found {
+		subject = maps.Clone(subject)
+		for _, field := range info.Fields {
+			if _, present := subject[field.Name]; present {
+				continue
+			}
+			switch field.Type {
+			case "text", "longtext", "choice", "reference":
+				subject[field.Name] = ""
+			}
+		}
+	}
 	allowed, refusal := protocol.GuardSatisfied(*txn.Guard, spec, c, subject, values, now, lookup)
 	if refusal != nil && refusal.Code != pb.ErrorCode_ERROR_CODE_POLICY_DENIED {
 		slog.Warn(unavailableAction, "object", txn.Subject, "code", refusal.Code.String())
-		return "", platform.Refuse(refusal.Code, unavailableAction)
+		return "", refusal
 	}
 	if refusal != nil || allowed {
 		return "", refusal
@@ -252,7 +265,26 @@ func RecordActions(owner platform.Service, c platform.Caller, typ, id string, no
 	if owner == nil {
 		return nil
 	}
+	return recordActions(owner.Manifest(), c, typ, id, now, lookup, say)
+}
+
+func RecordPageActions(owner platform.Service, c platform.Caller, typ string, rows []any, now time.Time, lookup func(string) (platform.RecordTypeInfo, bool), say func(string) string) map[string][]objects.RecordAction {
+	if owner == nil {
+		return nil
+	}
 	manifest := owner.Manifest()
+	out := make(map[string][]objects.RecordAction, len(rows))
+	for _, row := range rows {
+		id := reflect.ValueOf(row).Field(0).Interface().(platform.Record).ID
+		out[id] = recordActions(manifest, c, typ, id, now, lookup, say)
+		if out[id] == nil {
+			out[id] = []objects.RecordAction{}
+		}
+	}
+	return out
+}
+
+func recordActions(manifest platform.Manifest, c platform.Caller, typ, id string, now time.Time, lookup func(string) (platform.RecordTypeInfo, bool), say func(string) string) []objects.RecordAction {
 	var read bool
 	var subject map[string]any
 	var refusal *platform.Error

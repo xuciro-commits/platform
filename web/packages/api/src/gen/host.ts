@@ -4548,6 +4548,7 @@ export type RecordFieldProvenance = {
 };
 
 export type RecordPage = {
+  actions?: Record<string, RecordAction[]>;
   refs?: Record<string, Record<string, string>>;
   records: unknown[];
   total: number;

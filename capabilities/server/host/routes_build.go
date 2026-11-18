@@ -10,6 +10,7 @@ import (
 	"platformserver/kernel/protocol"
 	transport "platformserver/kernel/transport"
 	"platformserver/platform"
+	"platformserver/services/actions"
 	pageowner "platformserver/services/apps/pages"
 	dataowner "platformserver/services/data"
 	releaseowner "platformserver/services/devops/releases"
@@ -44,9 +45,9 @@ func (h *Host) routesBuild(rt *routes) {
 	h.routesPackages(rt)
 	builder := []string{build.Builder}
 	builderPublisher := []string{build.Builder, build.Publisher}
-	rt.recordRead(transport.Route{Pattern: "POST /v1/actions/{schema}/check", Summary: "Check any known action's authorization, state and each submission condition for this member and target; conditions that read unsupplied inputs are marked needsInputs and not counted", Body: pageowner.ActionCheckRequest{}, Answer: pageowner.ActionCheckResult{}}, transport.Bounded(64<<10, actionCheckMessage, func(r *http.Request, m platform.Member, t *Tenant, request pageowner.ActionCheckRequest) (pageowner.ActionCheckResult, *platform.Error) {
+	rt.recordRead(transport.Route{Pattern: "POST /v1/actions/{schema}/check", Summary: "Check any known action's authorization, state and each submission condition for this member and target; conditions that read unsupplied inputs are marked needsInputs and not counted", Body: pageowner.ActionCheckRequest{}, Answer: actions.ActionCheckResult{}}, transport.Bounded(64<<10, actionCheckMessage, func(r *http.Request, m platform.Member, t *Tenant, request pageowner.ActionCheckRequest) (actions.ActionCheckResult, *platform.Error) {
 		if request.Target.Object == "" || request.Target.ID == "" {
-			return pageowner.ActionCheckResult{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, actionCheckMessage)
+			return actions.ActionCheckResult{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, actionCheckMessage)
 		}
 		return t.actionCheck(m, r.PathValue("schema"), request, h.Now(), t.Language(m, r))
 	}))

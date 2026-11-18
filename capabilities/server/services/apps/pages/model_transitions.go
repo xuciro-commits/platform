@@ -5,9 +5,9 @@ import (
 	"platformserver/platform"
 )
 
-func ModelTransition(owner platform.Service, ref platform.AssetRef) (platform.ActionType, string, bool) {
+func ModelCriteria(owner platform.Service, ref platform.AssetRef) (*platform.RuleCriteria, bool) {
 	if ref.Kind != platform.AssetAction || owner == nil || owner.Manifest().ID != ref.App {
-		return platform.ActionType{}, "", false
+		return nil, false
 	}
 	for _, entity := range owner.Manifest().Entities {
 		if entity.Lifecycle == nil {
@@ -15,19 +15,11 @@ func ModelTransition(owner platform.Service, ref platform.AssetRef) (platform.Ac
 		}
 		for _, transition := range entity.Lifecycle.Actions {
 			if entity.Type+"."+transition.Name == ref.Name {
-				return transition, entity.Lifecycle.Field, true
+				return transition.Criteria.Business, transition.Criteria.Business != nil
 			}
 		}
 	}
-	return platform.ActionType{}, "", false
-}
-
-func ModelCriteria(owner platform.Service, ref platform.AssetRef) (*platform.RuleCriteria, bool) {
-	transition, _, ok := ModelTransition(owner, ref)
-	if !ok || transition.Criteria.Business == nil {
-		return nil, false
-	}
-	return transition.Criteria.Business, true
+	return nil, false
 }
 
 func VisibleLookup(visible []platform.RecordTypeInfo) func(string) (platform.RecordTypeInfo, bool) {

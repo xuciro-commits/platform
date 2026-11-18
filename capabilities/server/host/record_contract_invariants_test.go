@@ -185,6 +185,11 @@ func TestInvariantK15EmptyGuardsAndPendingApprovalAgreeAcrossReads(t *testing.T)
 		live.accept(t, typ+".create", typ, row, map[string]any{})
 		schema := typ + "." + name
 		item, check := checkRecordAction(t, handler, tenant, "builder", schema, typ, row)
+		res := observationRequest(t, handler, tenant, observationToken(tenant, "builder"), "/v1/records/"+typ+"?actions=1", nil)
+		var list objects.RecordPage
+		if res.Code != http.StatusOK || json.Unmarshal(res.Body.Bytes(), &list) != nil || !slices.Contains(list.Actions[row], item) || !item.Allowed {
+			t.Fatalf("%s empty guard or list availability: %+v %s", name, item, res.Body)
+		}
 		_, refusal := live.Submit(live.member(t), live.submission(schema, typ, row, map[string]any{}), invariantClock)
 		if item.Schema != schema || item.Allowed != (refusal == nil) || check.Allowed != item.Allowed || check.Message != item.Reason || refusal != nil && refusal.Message != item.Reason {
 			t.Fatalf("%s: read=%+v check=%+v submit=%+v", name, item, check, refusal)
@@ -298,7 +303,7 @@ func TestInvariantK16ReferencesRespectTargetReadPermissions(t *testing.T) {
 	live.accept(t, "build.object.publish", build.ObjectType, "ORDER", map[string]any{})
 	live.accept(t, "build.order.create", "build.order", "ROW", map[string]any{"partner": "TARGET", "customer": "TARGET", "hidden": "TARGET", "private": "TARGET", "scoped": "TARGET"})
 	_, handler := observationHost(live.Tenant)
-	for _, path := range []string{"/v1/records/build.order", "/v1/records/build.order/ROW"} {
+	for _, path := range []string{"/v1/records/build.order", "/v1/records/build.order?actions=1", "/v1/records/build.order/ROW"} {
 		for _, role := range []string{"builder", "other"} {
 			response := observationRequest(t, handler, live.ID, observationToken(live.ID, role), path, nil)
 			var view struct{ Refs map[string]map[string]string }
@@ -316,8 +321,9 @@ func TestInvariantK3RevisionConflictIsLocalizedAndAuthorized(t *testing.T) {
 	live := newObservationTenant(t, "invariant-k3-wire")
 	change := live.accept(t, "build.object.create", build.ObjectType, "OBJECT", invariantObject("revisionprobe", "Object"))
 	_, handler := observationHost(live.Tenant)
-	for _, role := range []string{"builder", "other"} {
-		sub := live.submission("build.object.edit", build.ObjectType, "OBJECT", invariantObject("revisionprobe", "Updated"))
+	for _, sample := range []struct{ role, id string }{{"builder", "OBJECT"}, {"other", "OBJECT"}, {"builder", "MISSING"}} {
+		role := sample.role
+		sub := live.submission("build.object.edit", build.ObjectType, sample.id, invariantObject("revisionprobe", "Updated"))
 		sub.PrincipalId, sub.ExpectedRevision = role, new(uint32)
 		raw, err := protojson.Marshal(sub)
 		if err != nil {
@@ -334,10 +340,10 @@ func TestInvariantK3RevisionConflictIsLocalizedAndAuthorized(t *testing.T) {
 			t.Fatalf("%s: HTTP %d: %s", role, response.Code, response.Body)
 		}
 		e := answer.Error
-		if role == "builder" && (response.Code != http.StatusConflict || e.Code != pb.ErrorCode_ERROR_CODE_CONFLICT.String() || e.ReasonCode != "stale_revision" || e.CurrentRevision == nil || *e.CurrentRevision != change.GetRevision() || e.Message != "这条记录在你打开后已更改") {
+		if role == "builder" && sample.id == "OBJECT" && (response.Code != http.StatusConflict || e.Code != pb.ErrorCode_ERROR_CODE_CONFLICT.String() || e.ReasonCode != "stale_revision" || e.CurrentRevision == nil || *e.CurrentRevision != change.GetRevision() || e.Message != "这条记录在你打开后已更改") {
 			t.Fatalf("authorized revision conflict: %s", response.Body)
 		}
-		if role == "other" && (response.Code != http.StatusForbidden || e.ReasonCode != "" || e.CurrentRevision != nil) {
+		if (role == "other" || sample.id == "MISSING") && (e.ReasonCode != "" || e.CurrentRevision != nil) {
 			t.Fatalf("unauthorized revision disclosure: HTTP %d %s", response.Code, response.Body)
 		}
 	}

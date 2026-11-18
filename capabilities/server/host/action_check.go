@@ -9,10 +9,10 @@ import (
 	"platformserver/platform"
 )
 
-func (t *Tenant) actionCheck(m platform.Member, schema string, request pageowner.ActionCheckRequest, at time.Time, lang string) (pageowner.ActionCheckResult, *platform.Error) {
+func (t *Tenant) actionCheck(m platform.Member, schema string, request pageowner.ActionCheckRequest, at time.Time, lang string) (actions.ActionCheckResult, *platform.Error) {
 	appID, action, ok := hostView{t: t}.Action(schema)
 	if !ok || action.Target != request.Target.Object {
-		return pageowner.ActionCheckResult{}, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
+		return actions.ActionCheckResult{}, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
 	}
 	caller := t.objectCaller(m, appID)
 	owner, say := hostView{t: t}.actionOwner(schema), func(message string) string { return t.i18n.SayInApp(appID, lang, message) }

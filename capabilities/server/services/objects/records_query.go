@@ -12,6 +12,7 @@ import (
 )
 
 type RecordPage struct {
+	Actions map[string][]RecordAction                  `json:"actions,omitempty"`
 	Refs    map[string]map[string]string               `json:"refs,omitempty"`
 	Records []any                                      `json:"records"`
 	Total   int                                        `json:"total"`

@@ -19,11 +19,6 @@ import (
 	"strings"
 )
 
-func enterpriseModel(t *Tenant) platform.EnterpriseQueries {
-	app, _ := t.App(enterprisemodel.ID).(platform.EnterpriseQueries)
-	return app
-}
-
 func (h *Host) routesRecords(rt *routes) {
 	rt.recordRead(transport.Route{Pattern: "POST /v1/page-model/read", Summary: "Read a published model binding or builder preview through the original record and rule owners", Body: pageowner.PageModelRead{}, Answer: pageowner.PageModelResult{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
 		request, ok := transport.DecodeOne[pageowner.PageModelRead](w, r, 1<<20)
@@ -119,10 +114,13 @@ func (h *Host) routesRecords(rt *routes) {
 		}
 		exportCSV(w, r, m, t, *q)
 	})
-	rt.recordRead(transport.Route{Pattern: "GET /v1/records/{type}", Summary: "A page of an entity type's records within the caller's scope", Answer: RecordPage{}, Query: []transport.Param{{Name: "domain", Description: "Filters in the prefix form, JSON: [[\"stage\",\"=\",\"open\"]]"}, {Name: "search", Description: "Words to find"}, {Name: "sort", Description: "Fields, comma-separated; -field for descending"}, {Name: "offset", Description: "Records to skip"}, {Name: "limit", Description: "Records in the page"}, {Name: "archived", Description: "true: archived records too"}}}, transport.Answering(func(r *http.Request, m platform.Member, t *Tenant) (RecordPage, *platform.Error) {
+	rt.recordRead(transport.Route{Pattern: "GET /v1/records/{type}", Summary: "A page of an entity type's records within the caller's scope", Answer: RecordPage{}, Query: []transport.Param{{Name: "domain", Description: "Filters in the prefix form, JSON: [[\"stage\",\"=\",\"open\"]]"}, {Name: "search", Description: "Words to find"}, {Name: "sort", Description: "Fields, comma-separated; -field for descending"}, {Name: "offset", Description: "Records to skip"}, {Name: "limit", Description: "Records in the page"}, {Name: "archived", Description: "true: archived records too"}, {Name: "actions", Description: "1: include the caller’s record actions by ID"}}}, transport.Answering(func(r *http.Request, m platform.Member, t *Tenant) (RecordPage, *platform.Error) {
 		page, err := t.objectOwner(t.Projection).Records(m, r.PathValue("type"), objects.PagedQueryFromValues(r.URL.Query()), h.Now())
 		if err == nil && r.PathValue("type") == build.ObjectType {
 			page, err = objects.DraftPage(page, func(record any) (any, *platform.Error) { return t.objectDraftRecord(m, record) })
+		}
+		if info, ok := t.Entity(r.PathValue("type")); err == nil && ok && r.URL.Query().Get("actions") == "1" {
+			page.Actions = actions.RecordPageActions(t.App(info.App), t.objectCaller(m, info.App), info.Type, page.Records, h.Now(), t.Entity, func(reason string) string { return t.i18n.Say(t.Language(m, r), reason) })
 		}
 		return page, err
 	}))
@@ -140,13 +138,15 @@ func (h *Host) routesRecords(rt *routes) {
 		if err := t.Admits(m); err != nil {
 			return platform.EnterpriseQueryResult{}, err
 		}
-		return enterprisemodel.QueryRead(enterpriseModel(t), r.URL.Query(), h.Now())
+		model, _ := t.App(enterprisemodel.ID).(platform.EnterpriseQueries)
+		return enterprisemodel.QueryRead(model, r.URL.Query(), h.Now())
 	}))
 	rt.recordRead(transport.Route{Pattern: "GET /v1/enterprise-resolve", Summary: "Named elements by id: stored references read back, closed elements included and marked", Answer: platform.EnterpriseQueryResult{}, Query: []transport.Param{{Name: "ids", Description: "Element ids, comma-separated (at most 100)"}}}, transport.Answering(func(r *http.Request, m platform.Member, t *Tenant) (platform.EnterpriseQueryResult, *platform.Error) {
 		if err := t.Admits(m); err != nil {
 			return platform.EnterpriseQueryResult{}, err
 		}
-		return enterprisemodel.ResolveRead(enterpriseModel(t), r.URL.Query(), h.Now())
+		model, _ := t.App(enterprisemodel.ID).(platform.EnterpriseQueries)
+		return enterprisemodel.ResolveRead(model, r.URL.Query(), h.Now())
 	}))
 	rt.recordRead(transport.Route{Pattern: "GET /v1/context/{type}/{id}", Summary: "A record with its history, references, links, flows and tasks: the context graph", Answer: objects.ContextView{}}, transport.Answering(func(r *http.Request, m platform.Member, t *Tenant) (objects.ContextView, *platform.Error) {
 		return t.contextRead(&m, r.PathValue("type"), r.PathValue("id"), h.Now())
