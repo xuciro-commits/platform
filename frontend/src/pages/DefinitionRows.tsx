@@ -9,9 +9,10 @@ import { MultiSelector } from "@astryxdesign/core/MultiSelector";
 import { Selector } from "@astryxdesign/core/Selector";
 import { Table, TableBody, TableCell, TableHeader, TableHeaderCell, TableRow } from "@astryxdesign/core/Table";
 import { Heading, Text } from "@astryxdesign/core/Text";
+import { TextInput } from "@astryxdesign/core/TextInput";
 import { Typeahead } from "@astryxdesign/core/Typeahead";
 import { useRef, useState } from "react";
-import type { Api } from "../host";
+import { type Api, request, reread, useRead } from "../host";
 import { t } from "../i18n";
 import { reasonOf, send } from "./act";
 import type { Described, Values } from "./describe";
@@ -56,7 +57,7 @@ export function stateProblem(source: Values) {
   return missing.length ? `${t("These states cannot be reached from the initial state:")} ${missing.join(", ")}` : "";
 }
 
-export function DefinitionRows({ described, source, entities, id, revision }: { described: Described; source: Values; entities: Api.EntityInfo[]; id: string; revision: number }) {
+export function DefinitionRows({ described, source, entities, catalog, id, revision }: { described: Described; source: Values; entities: Api.EntityInfo[]; catalog: Api.Action[]; id: string; revision: number }) {
   const states = rowsOf(source, "states");
   const bound = Array.isArray(source.actionTypes) && source.actionTypes.length > 0;
   return slots.map((slot) => {
@@ -67,6 +68,9 @@ export function DefinitionRows({ described, source, entities, id, revision }: { 
       <DefinitionTable key={slot} slot={slot} field={field} rows={rowsOf(source, slot)} states={states} entities={entities}
         subject={`build.${source.name}`}
         bound={slot === "actions" && bound}
+        catalog={catalog}
+        objectId={id}
+        objectRevision={revision}
         save={action && described.edit ? (rows) => send(described.edit!, id, { [slot]: rows }, revision) : undefined} />
     );
   });
@@ -75,9 +79,9 @@ export function DefinitionRows({ described, source, entities, id, revision }: { 
 type SavedRows = Promise<unknown>;
 type SaveRows = (rows: DefinitionRow[]) => SavedRows;
 
-function DefinitionTable({ slot, field, rows, states, entities, subject, bound, save }: {
+function DefinitionTable({ slot, field, rows, states, entities, subject, bound, catalog, objectId, objectRevision, save }: {
   slot: Slot; field: Api.FieldInfo; rows: DefinitionRow[]; states: DefinitionRow[]; entities: Api.EntityInfo[];
-  subject: string; bound: boolean; save?: SaveRows;
+  subject: string; bound: boolean; catalog: Api.Action[]; objectId: string; objectRevision: number; save?: SaveRows;
 }) {
   const schema = metadata[slot];
   const title = t(schema.title);
@@ -85,6 +89,7 @@ function DefinitionTable({ slot, field, rows, states, entities, subject, bound, 
   const [removing, setRemoving] = useState<number>();
   const [failure, setFailure] = useState("");
   const [busy, setBusy] = useState(false);
+  const [creatingTransition, setCreatingTransition] = useState(false);
   const dragged = useRef<number | undefined>(undefined);
   const fields = field.fields?.length ? field.fields : slot === "actions" ? [
     { name: "name", title: "Name", type: "text", required: true },
@@ -126,7 +131,8 @@ function DefinitionTable({ slot, field, rows, states, entities, subject, bound, 
     <VStack gap={3}>
       <HStack gap={2} vAlign="center">
         <StackItem size="fill"><Heading level={3}>{title}</Heading></StackItem>
-        {canWrite && <Button label={t(schema.add)} variant="secondary" isDisabled={busy || slot === "actions" && !states.length} onClick={() => { setFailure(""); setEditing({ index: rows.length, row: {} }); }} />}
+        {slot === "actions" && <Button label={t("Create transition")} variant="secondary" isDisabled={busy || states.length < 2} onClick={() => setCreatingTransition(true)} />}
+        {canWrite && slot !== "actions" && <Button label={t(schema.add)} variant="secondary" isDisabled={busy} onClick={() => { setFailure(""); setEditing({ index: rows.length, row: {} }); }} />}
       </HStack>
       {bound && <Text type="supporting">{t("Transitions use the linked action types.")}</Text>}
       {failure && !editing && removing === undefined && <Banner status="error" title={t("Not saved")} description={failure} />}
@@ -181,7 +187,144 @@ function DefinitionTable({ slot, field, rows, states, entities, subject, bound, 
           onOpenChange={(open) => !open && !busy && setRemoving(undefined)}
           onAction={() => applying(rows.filter((_, index) => index !== removing))} />
       )}
+      {creatingTransition && (
+        <TransitionDialog
+          subject={subject}
+          objectId={objectId}
+          objectRevision={objectRevision}
+          states={states}
+          catalog={catalog}
+          close={() => setCreatingTransition(false)}
+          done={() => {
+            setCreatingTransition(false);
+            reread();
+          }}
+        />
+      )}
     </VStack>
+  );
+}
+
+type ActionTypeRow = {
+  id: string;
+  revision: number;
+  name: string;
+  title: string;
+  object: string;
+  state: string;
+  definition?: { name?: string; title?: string; from?: string[] };
+};
+
+function TransitionDialog({ subject, objectId, objectRevision, states, catalog, close, done }: {
+  subject: string;
+  objectId: string;
+  objectRevision: number;
+  states: DefinitionRow[];
+  catalog: Api.Action[];
+  close: () => void;
+  done: () => void;
+}) {
+  const domain = encodeURIComponent(JSON.stringify([["object", "=", subject]]));
+  const available = useRead<Api.RecordPage>(`/v1/records/build.actiontype?domain=${domain}&limit=200`);
+  const candidates = available.status === "ready" ? available.data.records as ActionTypeRow[] : [];
+  const [selected, setSelected] = useState("");
+  const [name, setName] = useState("activate");
+  const [title, setTitle] = useState("");
+  const [from, setFrom] = useState(String(states[0]?.name ?? ""));
+  const [to, setTo] = useState(String(states[1]?.name ?? ""));
+  const [failure, setFailure] = useState("");
+  const [busy, setBusy] = useState(false);
+  const createAction = catalog.find((action) => action.schema === "build.actiontype.create");
+  const publishAction = catalog.find((action) => action.schema === "build.actiontype.publish");
+  const objectEdit = catalog.find((action) => action.schema === "build.object.edit");
+  const stateOptions = states.flatMap((state) => state.name ? [{ value: state.name, label: t(state.title ?? state.name) }] : []);
+  const current = candidates.find((candidate) => candidate.id === selected);
+  const actionName = current?.name ?? `${subject}.${name}`;
+  const missing = !publishAction || (!current && (!createAction || !name || !title || from === to)) || (!current && !objectEdit);
+
+  const apply = async () => {
+    setBusy(true);
+    setFailure("");
+    try {
+      let action = current;
+      if (!action) {
+        if (!createAction || !publishAction) throw new Error(t("This action is no longer available."));
+        const actionId = `ACTION-${crypto.randomUUID()}`;
+        const transaction = {
+          subject,
+          steps: [{
+            name,
+            kind: "update",
+            target: { type: subject, id: "$subject" },
+            changes: [{ field: "state", expr: { op: "", kind: "choice", lit: { value: to } } }],
+          }],
+        };
+        const created = await send(createAction, actionId, {
+          name: actionName,
+          object: subject,
+          definition: { name, title, from: [from], transaction },
+        }, 0);
+        await send(publishAction, actionId, {}, created.revision);
+      } else if (action.state !== "published") {
+        if (!publishAction) throw new Error(t("This action is no longer available."));
+        await send(publishAction, action.id, {}, action.revision);
+      }
+      if (!current || !objectEdit) {
+        done();
+        return;
+      }
+      const object = await request<Api.RecordView>(`/v1/records/build.object/${encodeURIComponent(objectId)}`);
+      const record = object.record as { revision?: number; actionTypes?: Api.AssetBinding[] };
+      const bindings = record.actionTypes ?? [];
+      if (!bindings.some((binding) => binding.ref.name === actionName)) {
+        await send(objectEdit, objectId, {
+          actionTypes: [...bindings, { ref: { app: "build", kind: "action", name: actionName }, sourceVersion: "" }],
+        }, record.revision ?? objectRevision);
+      }
+      done();
+    } catch (problem) {
+      setFailure(reasonOf(problem));
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Dialog isOpen onOpenChange={close} purpose="form">
+      <Layout header={<DialogHeader title={t("Create transition")} onOpenChange={close} />} content={
+        <LayoutContent padding={4}>
+          <FormLayout defaultOptionality="optional">
+            {failure && <Banner status="error" title={t("Not saved")} description={failure} />}
+            {available.status === "loading" && <Text type="supporting">{t("Loading…")}</Text>}
+            <Selector
+              label={t("Action type")}
+              value={selected}
+              onChange={setSelected}
+              options={[
+                { value: "", label: t("Create a new action type") },
+                ...candidates.map((candidate) => ({ value: candidate.id, label: `${candidate.title || candidate.name} · ${t(candidate.state === "published" ? "Published" : "Draft")}` })),
+              ]}
+            />
+            {current ? (
+              <Text type="body">{current.title}</Text>
+            ) : (
+              <>
+                <TextInput label={t("Name")} value={name} onChange={(next) => setName(next.toLowerCase().replace(/[^a-z0-9]+/g, ""))} />
+                <TextInput label={t("What people call it")} value={title} onChange={setTitle} />
+                <Selector label={t("From state")} value={from} onChange={setFrom} options={stateOptions} />
+                <Selector label={t("To state")} value={to} onChange={setTo} options={stateOptions} />
+              </>
+            )}
+          </FormLayout>
+        </LayoutContent>
+      } footer={
+        <LayoutFooter padding={4}>
+          <HStack gap={2} hAlign="end">
+            <Button label={t("Cancel")} variant="secondary" onClick={close} />
+            <Button label={t("Save")} variant="primary" isDisabled={busy || missing} onClick={apply} />
+          </HStack>
+        </LayoutFooter>
+      } />
+    </Dialog>
   );
 }
 

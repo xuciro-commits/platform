@@ -498,6 +498,30 @@ test("object definition: add a field, publish it and review a removal", async ({
   await expect(publish.getByRole("button", { name: "Publish", exact: true })).toBeDisabled();
 });;
 
+test("object definition: create and bind an action type before publishing a transition", async ({ page }) => {
+  await signIn(page);
+  await page.goto("/ontology/objects/build.object/OBJ-workflow");
+  await page.getByRole("button", { name: "Create transition", exact: true }).click();
+  const transition = page.getByRole("dialog");
+  await transition.getByRole("textbox", { name: "What people call it", exact: true }).fill("Activate contact");
+  await transition.getByRole("button", { name: "Save", exact: true }).click();
+  await expect(page.getByText("Transitions use the linked action types.", { exact: true })).toBeVisible();
+
+  await page.getByRole("button", { name: "Publish", exact: true }).click();
+  const publish = page.getByRole("dialog", { name: /Publish/ });
+  await publish.getByRole("button", { name: "Publish", exact: true }).click();
+  await expect(publish).toBeHidden();
+  await page.goto("/ontology/objects/build.workflow");
+  await page.getByRole("button", { name: "New", exact: true }).click();
+  const create = page.getByRole("dialog");
+  await create.getByRole("textbox", { name: /^Name/ }).fill("Ada Lovelace");
+  await create.getByRole("button", { name: "Create", exact: true }).click();
+  await page.getByRole("button", { name: "Activate contact", exact: true }).click();
+  const confirm = page.getByRole("alertdialog");
+  await confirm.getByRole("button", { name: "Activate contact", exact: true }).click();
+  await expect(page.getByText("Active", { exact: true }).first()).toBeVisible();
+});
+
 test("applications: an installed package contributes a menu and an object list", async ({ page }) => {
   await signIn(page);
   const app = page.getByRole("link", { name: "Production order provider", exact: true });

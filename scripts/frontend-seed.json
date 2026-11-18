@@ -143,6 +143,19 @@
       "records": []
     },
     {
+      "name": "workflow",
+      "prefix": "WRK",
+      "draft": true,
+      "definition": {
+        "title": "Workflow item",
+        "plural": "Workflow items",
+        "display": "name",
+        "fields": [{ "name": "name", "title": "Name", "type": "text", "required": true, "search": true }],
+        "states": [{ "name": "draft", "title": "Draft" }, { "name": "active", "title": "Active" }]
+      },
+      "records": []
+    },
+    {
       "name": "visit",
       "prefix": "VIS",
       "draft": true,
