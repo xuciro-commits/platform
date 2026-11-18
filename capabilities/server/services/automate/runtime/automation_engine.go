@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"maps"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
+	"platformserver/kernel/protocol"
 	"platformserver/platform"
 	"slices"
 	"time"
@@ -28,7 +29,7 @@ type session struct {
 	cancelOperations   []string
 	withdrawals        []approvalWithdrawal
 	assets             []any
-	executions         map[string]platform.FlowHost
+	executions         map[string]protocol.FlowHost
 }
 
 type approvalWithdrawal struct{ app, id, member string }
@@ -177,7 +178,7 @@ func (ss *session) app(x *FlowInstance) platform.Caller {
 	return ss.execution(x).Automation(ss.c, ss.def(x).app)
 }
 
-func (ss *session) execution(x *FlowInstance) platform.FlowHost {
+func (ss *session) execution(x *FlowInstance) protocol.FlowHost {
 	if x.Release == "" {
 		return ss.f.host
 	}
@@ -185,13 +186,13 @@ func (ss *session) execution(x *FlowInstance) platform.FlowHost {
 		return h
 	}
 	d := ss.def(x)
-	h, err := ss.f.host.FlowExecution(ss.c, d.app, d.Name, d.Version, platform.FlowBinding{Dependencies: x.Dependencies, Release: x.Release})
+	h, err := ss.f.host.FlowExecution(ss.c, d.app, d.Name, d.Version, protocol.FlowBinding{Dependencies: x.Dependencies, Release: x.Release})
 	if err != nil {
 		ss.c.FailDecision(platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, err.Error()))
 		return ss.f.host
 	}
 	if ss.executions == nil {
-		ss.executions = map[string]platform.FlowHost{}
+		ss.executions = map[string]protocol.FlowHost{}
 	}
 	ss.executions[x.ID] = h
 	return h
@@ -272,7 +273,7 @@ func (f *Flows) start(c platform.Caller, d *flowDef, key string, data any, onBeh
 		}
 		id = fmt.Sprintf("%s:%s#%d", flow, key, n)
 	}
-	bound, bindingErr := f.host.BindFlow(d.app, d.Name, d.Version, platform.FlowBinding{})
+	bound, bindingErr := f.host.BindFlow(d.app, d.Name, d.Version, protocol.FlowBinding{})
 	if bindingErr != nil {
 		return &platform.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT, Message: bindingErr.Error()}
 	}
@@ -460,7 +461,7 @@ func (f *Flows) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb.
 			if !ended(x.State) || x.CleanupPending || x.Batch == nil || x.Batch.Sealed == nil {
 				return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Only a terminal continuous frame without pending cleanup can be retired")
 			}
-			refs := []platform.FlowStateArtifact{*x.Batch.Sealed}
+			refs := []protocol.FlowStateArtifact{*x.Batch.Sealed}
 			if x.Batch.CheckpointArtifact != nil {
 				refs = append(refs, *x.Batch.CheckpointArtifact)
 			}
@@ -490,7 +491,7 @@ func (f *Flows) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb.
 				t.Step = moved
 			}
 			ss.trace(x, "", "moved", fmt.Sprintf("version %d to %d", x.Version, to.Version), c.ID)
-			binding, err := f.host.BindFlow(to.app, to.Name, to.Version, platform.FlowBinding{})
+			binding, err := f.host.BindFlow(to.app, to.Name, to.Version, protocol.FlowBinding{})
 			if err != nil {
 				return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The target flow version cannot be bound")
 			}

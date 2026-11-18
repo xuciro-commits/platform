@@ -2,6 +2,7 @@ package host
 
 import (
 	"context"
+	"platformserver/kernel/protocol"
 	"platformserver/services/actions"
 	"strings"
 	"sync"
@@ -107,7 +108,7 @@ func TestInvariantK13AgentReadDoesNotAcquireTenantLane(t *testing.T) {
 	}
 	finished := make(chan *platform.Error, 1)
 	go func() {
-		finished <- (hostView{t: live.Tenant}).WithAgentRead(func(runtime platform.AgentEvaluationRuntime) *platform.Error {
+		finished <- (hostView{t: live.Tenant}).WithAgentRead(func(runtime protocol.AgentEvaluationRuntime) *platform.Error {
 			if _, found := runtime.Host.Record("build.alpha/A1"); !found {
 				return platform.Refuse(pb.ErrorCode_ERROR_CODE_NOT_FOUND, "missing snapshot record")
 			}

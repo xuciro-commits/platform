@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
+	runtimeprotocol "platformserver/kernel/protocol"
 	"platformserver/platform"
 	agents "platformserver/services/ai/evaluation"
 	"slices"
@@ -19,7 +20,7 @@ func (a *Agents) DeclareAgentApp(app platform.App) error {
 		if ag.Name == "" || ag.Title == "" || ag.Instructions == "" || a.defs[id] != nil {
 			return fmt.Errorf("agent %s: a unique name, a title and instructions are required", id)
 		}
-		d := &platform.CompiledAgent{App: m.ID, Agent: ag, Toolset: map[string]platform.CompiledAgentTool{}}
+		d := &runtimeprotocol.CompiledAgent{App: m.ID, Agent: ag, Toolset: map[string]runtimeprotocol.CompiledAgentTool{}}
 		if d.Budget.Steps == 0 {
 			d.Budget.Steps = 10
 		}
@@ -30,7 +31,7 @@ func (a *Agents) DeclareAgentApp(app platform.App) error {
 			d.Budget.Actions = 3
 		}
 		for _, name := range ag.Tools {
-			var tool platform.CompiledAgentTool
+			var tool runtimeprotocol.CompiledAgentTool
 			switch {
 			case strings.HasPrefix(name, "emit:"):
 				kind := strings.TrimPrefix(name, "emit:")
@@ -38,7 +39,7 @@ func (a *Agents) DeclareAgentApp(app platform.App) error {
 				if i < 0 {
 					return fmt.Errorf("agent %s emits %s, not an effect kind of %s", id, kind, m.ID)
 				}
-				tool = platform.CompiledAgentTool{Kind: "effect", Schema: kind, Tool: platform.Tool{Description: m.Emits[i].Title + ": " + m.Emits[i].Description + " Waits for the receiver's answer.",
+				tool = runtimeprotocol.CompiledAgentTool{Kind: "effect", Schema: kind, Tool: platform.Tool{Description: m.Emits[i].Title + ": " + m.Emits[i].Description + " Waits for the receiver's answer.",
 					Properties: map[string]any{"message": map[string]any{"type": "string", "description": "What to ask or tell the receiver"}, "rationale": rationale()},
 					Required:   []string{"message", "rationale"}}}
 			case strings.HasPrefix(name, "query:"):
@@ -53,7 +54,7 @@ func (a *Agents) DeclareAgentApp(app platform.App) error {
 					props["for"] = map[string]any{"type": "string", "description": "The ID of the record it is run for"}
 					required = append(required, "for")
 				}
-				tool = platform.CompiledAgentTool{Kind: "query", Schema: query, Query: q, Tool: platform.Tool{Description: q.Title + ": " + q.Description, Properties: props, Required: required}}
+				tool = runtimeprotocol.CompiledAgentTool{Kind: "query", Schema: query, Query: q, Tool: platform.Tool{Description: q.Title + ": " + q.Description, Properties: props, Required: required}}
 			case strings.HasPrefix(name, "read:"):
 				read := strings.TrimPrefix(name, "read:")
 				if !slices.Contains(m.Reads, read) {
@@ -61,7 +62,7 @@ func (a *Agents) DeclareAgentApp(app platform.App) error {
 				}
 				fields := m.ReadInputs[read]
 				schema := platform.ActionInputSchema(platform.Action{Payload: fields}, nil, nil)
-				tool = platform.CompiledAgentTool{Kind: "read", Schema: read, Inputs: fields, Tool: platform.Tool{Description: "Read " + read + " of " + m.ID + ".", Properties: map[string]any{"inputs": schema, "rationale": rationale()}, Required: []string{"inputs", "rationale"}}}
+				tool = runtimeprotocol.CompiledAgentTool{Kind: "read", Schema: read, Inputs: fields, Tool: platform.Tool{Description: "Read " + read + " of " + m.ID + ".", Properties: map[string]any{"inputs": schema, "rationale": rationale()}, Required: []string{"inputs", "rationale"}}}
 			default:
 				var action platform.Action
 				kind := "action"
@@ -90,12 +91,12 @@ func (a *Agents) DeclareAgentApp(app platform.App) error {
 				info, _ := a.host.Entity(action.Target)
 				schema := platform.ActionInputSchema(action, &info, nil)
 				props := map[string]any{"target": map[string]any{"type": "string", "description": "The ID of the " + cmp.Or(action.Target, "record") + " the action is about"}, "rationale": rationale(), "payload": schema}
-				tool = platform.CompiledAgentTool{Kind: kind, Schema: name, Target: action.Target, Tool: platform.Tool{Description: action.Title + ": " + action.Description, Properties: props, Required: []string{"target", "rationale", "payload"}}}
+				tool = runtimeprotocol.CompiledAgentTool{Kind: kind, Schema: name, Target: action.Target, Tool: platform.Tool{Description: action.Title + ": " + action.Description, Properties: props, Required: []string{"target", "rationale", "payload"}}}
 			}
 			tool.Tool.Name = agentToolName(name)
 			d.Toolset[tool.Tool.Name] = tool
 		}
-		for _, b := range []platform.CompiledAgentTool{
+		for _, b := range []runtimeprotocol.CompiledAgentTool{
 			{Kind: "context", Tool: platform.Tool{Name: "context", Description: "Read a record with its history, the records it references and that reference it, its links across apps, the flows and tasks about it.",
 				Properties: map[string]any{"type": map[string]any{"type": "string", "description": "The entity type, like build.erpitem"}, "id": map[string]any{"type": "string"}, "rationale": rationale()}, Required: []string{"type", "id", "rationale"}}},
 			{Kind: "search", Tool: platform.Tool{Name: "search", Description: "Search records of every type you may read by text; answers types, IDs and titles.",

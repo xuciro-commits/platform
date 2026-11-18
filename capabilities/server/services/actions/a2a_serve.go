@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"platformserver/kernel/protocol"
 	"platformserver/platform"
 	"strings"
 	"time"
@@ -20,7 +21,7 @@ type A2AHooks struct {
 	Decide    func(app, schema, typ, id, key string, payload any) error
 }
 
-func A2ACard(d platform.AgentCardDeclaration, agent, tenant, host string, https bool, issuer string) map[string]any {
+func A2ACard(d protocol.AgentCardDeclaration, agent, tenant, host string, https bool, issuer string) map[string]any {
 	scheme := "http"
 	if https {
 		scheme = "https"

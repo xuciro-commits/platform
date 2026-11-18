@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"maps"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
+	"platformserver/kernel/protocol"
 	"platformserver/platform"
 	agents "platformserver/services/ai/evaluation"
 	"slices"
@@ -13,15 +14,15 @@ import (
 	"time"
 )
 
-func (a *Agents) AgentOverview() []platform.AgentOverview {
+func (a *Agents) AgentOverview() []protocol.AgentOverview {
 	c := a.automation(platform.AgentApp, false)
-	rows := map[string]*platform.AgentOverview{}
-	a.each(func(id string, d *platform.CompiledAgent) {
-		rows["agent:"+id] = &platform.AgentOverview{Member: "agent:" + id, Title: d.Title, Judged: map[string]int{}}
+	rows := map[string]*protocol.AgentOverview{}
+	a.each(func(id string, d *protocol.CompiledAgent) {
+		rows["agent:"+id] = &protocol.AgentOverview{Member: "agent:" + id, Title: d.Title, Judged: map[string]int{}}
 	})
 	for _, m := range a.host.ExternalAgentMembers() {
 		if rows[m.ID] == nil {
-			rows[m.ID] = &platform.AgentOverview{Member: m.ID, Title: m.ID, Outside: true, Judged: map[string]int{}}
+			rows[m.ID] = &protocol.AgentOverview{Member: m.ID, Title: m.ID, Outside: true, Judged: map[string]int{}}
 		}
 	}
 
@@ -52,7 +53,7 @@ func (a *Agents) AgentOverview() []platform.AgentOverview {
 			}
 		}
 	}
-	out := []platform.AgentOverview{}
+	out := []protocol.AgentOverview{}
 	for _, id := range slices.Sorted(maps.Keys(rows)) {
 		row := rows[id]
 		row.Suspended = a.host.AgentSuspended(id)
@@ -61,12 +62,12 @@ func (a *Agents) AgentOverview() []platform.AgentOverview {
 	return out
 }
 
-func (a *Agents) DueAgentTurns(now time.Time) []platform.AgentTurn {
+func (a *Agents) DueAgentTurns(now time.Time) []protocol.AgentTurn {
 	h := a.host
 	c := a.automation(platform.AgentApp, false)
-	var out []platform.AgentTurn
+	var out []protocol.AgentTurn
 	for _, run := range a.runs(c, "running") {
-		x := platform.AgentTurn{Run: run}
+		x := protocol.AgentTurn{Run: run}
 		d := a.def(run.Agent)
 		reader := a.reader(run)
 		name := c.Setting(platform.SettingAgentModel)
@@ -118,11 +119,11 @@ func (a *Agents) DueAgentTurns(now time.Time) []platform.AgentTurn {
 	return out
 }
 
-func (a *Agents) ApplyAgentStep(b platform.AgentResultStep, now time.Time, replaying bool) *platform.Error {
+func (a *Agents) ApplyAgentStep(b protocol.AgentResultStep, now time.Time, replaying bool) *platform.Error {
 	return a.ApplyAgentStepCaller(a.automation(platform.AgentApp, replaying), b, now)
 }
 
-func (a *Agents) ApplyAgentStepCaller(c platform.Caller, b platform.AgentResultStep, now time.Time) *platform.Error {
+func (a *Agents) ApplyAgentStepCaller(c platform.Caller, b protocol.AgentResultStep, now time.Time) *platform.Error {
 	h := a.host
 	if ev := b.Evaluation; ev != nil {
 		key := ev.ID + ":report"
@@ -154,7 +155,7 @@ func (a *Agents) ApplyAgentStepCaller(c platform.Caller, b platform.AgentResultS
 	return err
 }
 
-func (a *Agents) take(c platform.Caller, run platform.AgentRunRecord, b platform.AgentResultStep, now time.Time) func(*pb.ChangeRecord) {
+func (a *Agents) take(c platform.Caller, run platform.AgentRunRecord, b protocol.AgentResultStep, now time.Time) func(*pb.ChangeRecord) {
 	continuing := b.CallID != ""
 	if len(b.Calls) > 0 {
 		call := b.Calls[0]
@@ -281,7 +282,7 @@ func finishPendingCalls(run *platform.AgentRunRecord, now time.Time) {
 	run.Pending = nil
 }
 
-func (a *Agents) use(c platform.Caller, d *platform.CompiledAgent, run *platform.AgentRunRecord, tool platform.CompiledAgentTool, args map[string]any, raw json.RawMessage, step *platform.RunStep, now time.Time) (string, func(*pb.ChangeRecord)) {
+func (a *Agents) use(c platform.Caller, d *protocol.CompiledAgent, run *platform.AgentRunRecord, tool protocol.CompiledAgentTool, args map[string]any, raw json.RawMessage, step *platform.RunStep, now time.Time) (string, func(*pb.ChangeRecord)) {
 	h := a.host
 	str := func(k string) string { s, _ := args[k].(string); return s }
 	switch tool.Kind {
@@ -422,7 +423,7 @@ func (a *Agents) reviewers(c platform.Caller, run platform.AgentRunRecord) platf
 	return c
 }
 
-func (a *Agents) recipients(c platform.Caller, d *platform.CompiledAgent, run platform.AgentRunRecord) []platform.Recipient {
+func (a *Agents) recipients(c platform.Caller, d *protocol.CompiledAgent, run platform.AgentRunRecord) []platform.Recipient {
 	if run.OnBehalf != "" {
 		return []platform.Recipient{{Member: run.OnBehalf}}
 	}

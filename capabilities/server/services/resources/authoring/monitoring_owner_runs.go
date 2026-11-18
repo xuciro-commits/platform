@@ -1,6 +1,7 @@
 package build
 
 import (
+	"platformserver/kernel/protocol"
 	functionauthoring "platformserver/services/functions/authoring"
 	"time"
 
@@ -125,7 +126,7 @@ func (x OwnerRuns) Page() (monitoring.MonitoringRunPage, *platform.Error) {
 			return collectOwnerRuns(x, runs, "function", "retained", "", functionauthoring.FunctionCallType, func(rows []functionauthoring.FunctionRun) { FunctionRuns(runs, rows) })
 		},
 		func() *platform.Error {
-			return collectOwnerRuns(x, runs, "flow", "retained", "permission-filtered", platform.FlowInstanceType, func(rows []platform.FlowInstance) { runs.Flows(rows, x.Schemas.FlowRetry) })
+			return collectOwnerRuns(x, runs, "flow", "retained", "permission-filtered", protocol.FlowInstanceType, func(rows []protocol.FlowInstance) { runs.Flows(rows, x.Schemas.FlowRetry) })
 		},
 		func() *platform.Error {
 			return collectOwnerRuns(x, runs, "agent", "retained", "permission-filtered", platform.RunType, runs.Agents)

@@ -29,7 +29,7 @@ import (
 
 type Tenant struct {
 	runtimekernel.Sequence
-	agentEvaluator    platform.AgentEvaluator
+	agentEvaluator    runtimeprotocol.AgentEvaluator
 	services          runtimeprotocol.RuntimeCapabilities
 	disabledOwners    map[string]bool
 	installingSet     bool
@@ -139,7 +139,7 @@ func NewTenantWithCapabilities(id string, services runtimeprotocol.RuntimeCapabi
 		return nil, fmt.Errorf("tenant %s has %w", id, err)
 	}
 	t.ownerRoles = roles
-	if err := runtimekernel.DeclareOwned(id, apps, func(m platform.Manifest) bool { return len(m.Agents) > 0 }, t.Agents, "agent", func(r platform.AgentRuntime, a platform.App) error { return r.DeclareAgentApp(a) }); err != nil {
+	if err := runtimekernel.DeclareOwned(id, apps, func(m platform.Manifest) bool { return len(m.Agents) > 0 }, t.Agents, "agent", func(r runtimeprotocol.AgentRuntime, a platform.App) error { return r.DeclareAgentApp(a) }); err != nil {
 		return nil, err
 	}
 	if err := runtimekernel.DeclareOwned(id, apps, func(m platform.Manifest) bool { return len(m.Flows) > 0 }, t.Processes, "flow", func(r automation.FlowProcesses, a platform.App) error { return r.Declare(a) }); err != nil {

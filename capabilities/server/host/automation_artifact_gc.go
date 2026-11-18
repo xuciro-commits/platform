@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"time"
 
-	"platformserver/platform"
+	"platformserver/kernel/protocol"
 	automation "platformserver/services/automate/runtime"
 )
 
@@ -27,7 +27,7 @@ func (t *Tenant) collectUnacceptedFlowArtifacts(ctx context.Context, now time.Ti
 	return t.flowArtifacts.Collect(ctx, t.frames(), now, t.quarantined, func() (map[string]bool, error) {
 		return readWithError(t, ctx, func(t *Tenant) (map[string]bool, error) {
 			return t.frames().References(func(visit func(json.RawMessage) error) error {
-				found, err := t.Projection.VisitImages(platform.FlowInstanceType, visit)
+				found, err := t.Projection.VisitImages(protocol.FlowInstanceType, visit)
 				if !found {
 					return fmt.Errorf("Flow artifact references have no installed record owner")
 				}

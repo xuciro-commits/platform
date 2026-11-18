@@ -2,7 +2,6 @@ package platform
 
 import (
 	"encoding/json"
-	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"slices"
 	"time"
 )
@@ -67,68 +66,6 @@ type AgentSurface struct {
 	Entities  []EntityInfo
 	Actions   []AgentAction
 	Functions []AgentFunction
-}
-
-type DynamicAgentDefinitions interface {
-	App
-	AgentStamp() string
-	AgentVersion(name string) int
-}
-
-type AgentHost interface {
-	ApplicationBindings(AssetRef, string, string) ([]AssetBinding, error)
-	AppCatalog
-	Automation(Caller, string) Caller
-	Caller(Caller, Member, string) Caller
-	Member(string) (Member, bool)
-	OwnerOf(string) (string, bool)
-	Record(string) (any, bool)
-	Entity(string) (EntityInfo, bool)
-	ActiveRelease() string
-	AgentTasks() TaskClosure
-	AgentFlows() AgentFlowCompletion
-	ProtocolActions(string) []Action
-	ProtocolProvider(string) (App, string, bool)
-	InvokeDecision(Caller, string, string, string, []byte, string, string, time.Time) (*pb.EntityRef, *pb.ChangeRecord, *Error)
-	AgentContext(*Member, string, string, time.Time) (AgentObservation, *Error)
-	AgentSearch(*Member, string, time.Time) AgentObservation
-	AgentQuery(Member, NamedQuery, string, time.Time) (AgentObservation, *Error)
-	AgentRead(Member, string, ...json.RawMessage) (AgentObservation, *Error)
-	AgentSurface(Member, string) AgentSurface
-	AgentObjects(Member, string, json.RawMessage, time.Time) (AgentObservation, *Error)
-	AgentSources(any) []string
-	AgentKnowledge(*Member, string, string, int, time.Time) json.RawMessage
-	AgentAppReader(string) *Member
-	AgentMeaning(string) string
-	AgentGlossary(string) string
-	AgentLanguage(string) string
-	AgentSuspended(string) bool
-	ExternalAgentMembers() []Member
-	AgentDecisionMembers() []string
-	AgentUsage() []AIUsage
-	DynamicAgents() []DynamicAgentDefinitions
-	DynamicAgent(string) (DynamicAgentDefinitions, bool)
-	WithAgentRead(func(AgentEvaluationRuntime) *Error) *Error
-	ResolveAgentModel(string, ModelOptions, string) (AIModelBinding, AIProvider, *Error)
-	AgentModel(string) (AIModel, AIProvider, *Error)
-	AgentModelConfigurationDigest(AIModel, AIProvider, *AIModelBinding) (string, error)
-	AgentProviderAvailable(string, time.Time) bool
-	AgentAnswerText(Outcome) string
-	CallAgentModel(AIProvider, AIModel, Member, ChatRequest, time.Time) (ChatAnswer, *AIError)
-	MeterAgentUsage(Member, AIUsage) *Error
-	ReplayAgentUsage(AIUsage)
-}
-
-type AgentEvaluationDefinitions interface {
-	AgentEvaluationApp(candidate, agent string) (App, string, error)
-}
-
-type TaskClosure interface {
-	Close(Caller, *pb.ChangeRecord, string)
-}
-
-type AgentFlowCompletion interface {
-	RunEnded(Caller, RunEnd, time.Time)
 }
 
 type TrainingEvidenceOwner interface {
@@ -261,43 +198,6 @@ type Switch struct {
 	Reason    string `json:"reason,omitempty" field:"readonly" type:"longtext"`
 }
 
-type AgentOverview struct {
-	Member    string         `json:"member"`
-	Title     string         `json:"title"`
-	Outside   bool           `json:"outside,omitempty"`
-	Suspended bool           `json:"suspended"`
-	Runs      int            `json:"runs"`
-	Live      int            `json:"live"`
-	Actions   int            `json:"actions"`
-	Calls     int            `json:"calls"`
-	Tokens    int            `json:"tokens"`
-	Cost      float64        `json:"cost"`
-	Judged    map[string]int `json:"judged"`
-}
-
-type AgentResultStep struct {
-	Protocol    json.RawMessage `json:"protocol,omitempty"`
-	Run         string          `json:"run"`
-	Calls       []ToolCall      `json:"calls,omitempty"`
-	CallID      string          `json:"callId,omitempty"`
-	Tool        string          `json:"tool,omitempty"`
-	Arguments   json.RawMessage `json:"arguments,omitempty"`
-	Content     string          `json:"content,omitempty"`
-	Usage       AIUsage         `json:"usage"`
-	Failure     string          `json:"failure,omitempty"`
-	Stop        string          `json:"stop,omitempty"`
-	Observation json.RawMessage `json:"observation,omitempty"`
-	Evaluation  *Evaluation     `json:"evaluation,omitempty"`
-}
-
-type AgentTurn struct {
-	Run      AgentRunRecord
-	Model    AIModel
-	Provider AIProvider
-	Request  ChatRequest
-	Stop     string
-}
-
 const (
 	EvaluationType  = "agent.evaluation"
 	SchemaEvalStart = "agent.evaluation.start"
@@ -361,27 +261,6 @@ type Memory struct {
 	Withheld bool      `json:"withheld,omitempty" field:"readonly" title:"Part of this is no longer readable to you"`
 }
 
-type AgentRuntime interface {
-	Runs
-	App
-	DeclareAgentApp(App) error
-	DueAgentTurns(time.Time) []AgentTurn
-	ClaimAgentTurn(string) bool
-	IdleAgentTurn(string)
-	AgentPrincipal(string) Member
-	AllowsAgentRun(AgentRunRecord) bool
-	ObserveAgentKnowledge(AgentRunRecord, json.RawMessage, time.Time) json.RawMessage
-	ApplyAgentStep(AgentResultStep, time.Time, bool) *Error
-	ApplyAgentStepCaller(Caller, AgentResultStep, time.Time) *Error
-	AgentEvaluationRuntime() AgentEvaluationRuntime
-	RecordAgentSignal(Caller, *pb.ChangeRecord, string, Signal, time.Time)
-	AgentEffectEnded(Caller, *pb.ChangeRecord, Effect, Outcome, time.Time)
-	AgentDeclaration(string) (AgentCardDeclaration, bool)
-	AgentOverview() []AgentOverview
-}
-
-type AgentCardDeclaration struct{ App, Title, Description string }
-
 const (
 	SettingPublished      = "published"
 	SettingTranscriptDays = "transcript-days"
@@ -400,42 +279,4 @@ func (run AgentRunRecord) SourceRefs() []string {
 	}
 	slices.Sort(out)
 	return slices.Compact(out)
-}
-
-type CompiledAgentTool struct {
-	Owner  string
-	Preset map[string]any
-	Inputs []Field
-	Query  NamedQuery
-	Kind   string
-	Schema string
-	Target string
-	Field
-	Tool Tool
-}
-
-type CompiledAgent struct {
-	App string
-	Agent
-	Toolset map[string]CompiledAgentTool
-}
-
-type AgentEvaluationRuntime struct {
-	Tenant           string
-	Host             AgentHost
-	Definition       func(string) *CompiledAgent
-	Compile          func(string, string) (*CompiledAgent, string, error)
-	Version          func(*CompiledAgent) string
-	Prompt           func(Caller, *CompiledAgent, AgentRunRecord, string, time.Time) ChatRequest
-	Principal        func(string) Member
-	Reader           func(AgentRunRecord) *Member
-	Automation       func(string, bool) Caller
-	View             func(AgentRunRecord) AgentRun
-	Use              func(Caller, *CompiledAgent, *AgentRunRecord, CompiledAgentTool, map[string]any, json.RawMessage, *RunStep, time.Time) (string, func(*pb.ChangeRecord))
-	ObserveKnowledge func(AgentRunRecord, json.RawMessage, time.Time) json.RawMessage
-	Compiled         func(AgentRunRecord, *CompiledAgent) *CompiledAgent
-}
-
-type AgentEvaluator interface {
-	Evaluate(AgentEvaluationRuntime, Evaluation, time.Time, func(*Evaluation) bool) Evaluation
 }

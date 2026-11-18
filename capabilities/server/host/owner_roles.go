@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"maps"
 	"net/http"
+	"platformserver/kernel/protocol"
 
 	"platformserver/hostroles"
 	runtimekernel "platformserver/kernel"
@@ -35,7 +36,7 @@ type ownerSet struct {
 	answerers     map[string]platform.Answerer
 	builders      map[string]build.ConstructionDrafts
 	operations    map[string]runtimekernel.OperationOwner
-	dynamicAgents map[string]platform.DynamicAgentDefinitions
+	dynamicAgents map[string]protocol.DynamicAgentDefinitions
 	simulations   trialowner.SimulationOwners
 	capabilities  hostroles.Capabilities
 }
@@ -75,8 +76,8 @@ func (s ownerSet) App(id string) platform.App {
 	return s.apps[i]
 }
 
-func (s ownerSet) dynamicAgentList() []platform.DynamicAgentDefinitions {
-	var out []platform.DynamicAgentDefinitions
+func (s ownerSet) dynamicAgentList() []protocol.DynamicAgentDefinitions {
+	var out []protocol.DynamicAgentDefinitions
 	for _, id := range s.ids {
 		if owner := s.dynamicAgents[id]; owner != nil {
 			out = append(out, owner)

@@ -1,6 +1,7 @@
 package data
 
 import (
+	"platformserver/kernel/protocol"
 	"slices"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
@@ -34,7 +35,7 @@ func BindStream(name string, intake *platform.StreamIntake, source Source, conne
 	return hash, nil
 }
 
-func (source Source) CheckCheckpoint(connection Connection, hash string, intake *platform.StreamIntake, x platform.FlowInstance, checkpoint platform.FlowSourceCheckpoint, tick bool) *platform.Error {
+func (source Source) CheckCheckpoint(connection Connection, hash string, intake *platform.StreamIntake, x protocol.FlowInstance, checkpoint protocol.FlowSourceCheckpoint, tick bool) *platform.Error {
 	refs := []string{SourceType + "/" + source.ID, ConnectionType + "/" + connection.ID}
 	if checkpoint.Record != source.ID || checkpoint.Config != hash || !slices.Equal(checkpoint.Sources, refs) || x.Batch != nil && x.Batch.Source != nil && (x.Batch.Source.Record != source.ID || x.Batch.Source.Config != hash) || intake.Offset == "latest" && (!checkpoint.Initialized || checkpoint.Offset != "latest") || checkpoint.Initialized && checkpoint.Offset != intake.Offset {
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The Flow source configuration or protected references changed")
@@ -43,7 +44,7 @@ func (source Source) CheckCheckpoint(connection Connection, hash string, intake 
 		source.Cursor = x.Batch.Source.Cursor
 	}
 	if tick {
-		var prior *platform.FlowSourceCheckpoint
+		var prior *protocol.FlowSourceCheckpoint
 		if x.Batch != nil {
 			prior = x.Batch.Source
 		}

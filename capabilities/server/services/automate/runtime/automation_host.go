@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
+	"platformserver/kernel/protocol"
 	"platformserver/platform"
 	releasepub "platformserver/services/resources/publication"
 	"slices"
@@ -23,16 +24,16 @@ type FlowBindingContext struct {
 	CodeMatches    func(platform.ReleaseAsset, platform.ReleaseAsset) (bool, error)
 }
 
-func (h FlowBindingContext) BindFlow(app, name string, version int, prior platform.FlowBinding) (platform.FlowBinding, error) {
+func (h FlowBindingContext) BindFlow(app, name string, version int, prior protocol.FlowBinding) (protocol.FlowBinding, error) {
 	if prior.Existing && prior.Dependencies == "" && prior.Release == "" {
 		if _, controlled := h.App(app).(platform.FlowReleaseOwner); !controlled {
-			return platform.FlowBinding{}, nil
+			return protocol.FlowBinding{}, nil
 		}
 	}
 	if prior.Release != "" {
 		closed, err := h.Retained(app, name, version, prior)
 		if err != nil {
-			return platform.FlowBinding{}, err
+			return protocol.FlowBinding{}, err
 		}
 		bound := prior
 		bound.Assets = nil
@@ -43,15 +44,15 @@ func (h FlowBindingContext) BindFlow(app, name string, version int, prior platfo
 	}
 	closure, root, err := h.Closure(app, name, version)
 	if err != nil {
-		return platform.FlowBinding{}, err
+		return protocol.FlowBinding{}, err
 	}
 	if closure.ID == "" {
 		if prior.Dependencies != "" {
-			return platform.FlowBinding{}, fmt.Errorf("flow %s.%s has no release descriptor owner", app, name)
+			return protocol.FlowBinding{}, fmt.Errorf("flow %s.%s has no release descriptor owner", app, name)
 		}
-		return platform.FlowBinding{}, nil
+		return protocol.FlowBinding{}, nil
 	}
-	binding := platform.FlowBinding{Dependencies: closure.ID}
+	binding := protocol.FlowBinding{Dependencies: closure.ID}
 	bindings, bindErr := h.Applications(root, h.Active(), closure.ID)
 	if bindErr != nil {
 		return binding, bindErr
@@ -86,7 +87,7 @@ func (h FlowBindingContext) BindFlow(app, name string, version int, prior platfo
 	return binding, nil
 }
 
-func (h FlowBindingContext) Retained(app, name string, version int, prior platform.FlowBinding) (platform.ReleaseCandidate, error) {
+func (h FlowBindingContext) Retained(app, name string, version int, prior protocol.FlowBinding) (platform.ReleaseCandidate, error) {
 	if prior.Dependencies == "" {
 		return platform.ReleaseCandidate{}, fmt.Errorf("flow has no retained starting dependency descriptor")
 	}

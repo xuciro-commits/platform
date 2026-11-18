@@ -18,8 +18,8 @@ import (
 type PreparedBatch struct {
 	before           FlowInstance
 	frame            *BatchFrame
-	artifacts        []platform.FlowStateArtifact
-	retired          []platform.FlowStateArtifact
+	artifacts        []protocol.FlowStateArtifact
+	retired          []protocol.FlowStateArtifact
 	outputs          map[string]json.RawMessage
 	sources          []string
 	batch            Batch
@@ -29,7 +29,7 @@ type PreparedBatch struct {
 	resumeInput      json.RawMessage
 	operation        *platform.OperationRequest
 	assets           []any
-	replayAsset      *platform.FlowDeadLetterAsset
+	replayAsset      *protocol.FlowDeadLetterAsset
 	replaySubmission *pb.Submission
 }
 
@@ -222,15 +222,15 @@ type preparationFrameStore struct {
 	failed bool
 }
 
-func (s *preparationFrameStore) Read(ref platform.FlowStateArtifact) ([]byte, error) {
+func (s *preparationFrameStore) Read(ref protocol.FlowStateArtifact) ([]byte, error) {
 	raw, err := s.FlowFrameStore.Read(ref)
 	s.failed = s.failed || err != nil
 	return raw, err
 }
 
-func (s *preparationFrameStore) Seal(instance string, version int, raw []byte, budget int) (platform.FlowStateArtifact, error) {
+func (s *preparationFrameStore) Seal(instance string, version int, raw []byte, budget int) (protocol.FlowStateArtifact, error) {
 	if budget > 0 && len(raw) > budget {
-		return platform.FlowStateArtifact{}, fmt.Errorf("the Flow frame exceeds its sealed JSON budget")
+		return protocol.FlowStateArtifact{}, fmt.Errorf("the Flow frame exceeds its sealed JSON budget")
 	}
 	ref, err := s.FlowFrameStore.Seal(instance, version, raw, budget)
 	if err != nil {
@@ -284,7 +284,7 @@ func (plan *BatchPreparation) prepare(batch Batch, now time.Time, store FlowFram
 			continue
 		}
 		assetID := fmt.Sprintf("flow-dead-letter:%x", sha256.Sum256(platform.Raw([]any{x.ID, x.Version, letter.Seq})))
-		assets = append(assets, platform.FlowDeadLetterAsset{Record: platform.Record{ID: assetID}, App: plan.caller.App, Instance: x.ID, Flow: x.Flow, Version: x.Version,
+		assets = append(assets, protocol.FlowDeadLetterAsset{Record: platform.Record{ID: assetID}, App: plan.caller.App, Instance: x.ID, Flow: x.Flow, Version: x.Version,
 			OnBehalf: x.OnBehalf, Sources: slices.Clone(x.Sources), Letter: letter})
 	}
 	if output := plan.rule.Output; output != nil && !batch.Bootstrap && state.Ready {
@@ -294,7 +294,7 @@ func (plan *BatchPreparation) prepare(batch Batch, now time.Time, store FlowFram
 		}
 		if len(value) > 0 {
 			assetID := fmt.Sprintf("flow-output:%x", sha256.Sum256(platform.Raw([]any{x.ID, output.Name})))
-			assets = append(assets, platform.FlowOutput{Record: platform.Record{ID: assetID}, App: plan.caller.App, Instance: x.ID, Flow: x.Flow, Version: x.Version,
+			assets = append(assets, protocol.FlowOutput{Record: platform.Record{ID: assetID}, App: plan.caller.App, Instance: x.ID, Flow: x.Flow, Version: x.Version,
 				Name: output.Name, Batch: frame.Cursor, OnBehalf: x.OnBehalf, Sources: slices.Clone(x.Sources), Value: slices.Clone(value)})
 		}
 	}
@@ -308,10 +308,10 @@ func (plan *BatchPreparation) prepare(batch Batch, now time.Time, store FlowFram
 	}
 	for i, asset := range assets {
 		switch value := asset.(type) {
-		case platform.FlowOutput:
+		case protocol.FlowOutput:
 			value.Sources = slices.Clone(sources)
 			assets[i] = value
-		case platform.FlowDeadLetterAsset:
+		case protocol.FlowDeadLetterAsset:
 			value.Sources = slices.Clone(sources)
 			assets[i] = value
 		}
@@ -375,7 +375,7 @@ func (plan *BatchPreparation) prepare(batch Batch, now time.Time, store FlowFram
 			resumeInput = slices.Clone(windowInput)
 		}
 	}
-	var artifacts, retired []platform.FlowStateArtifact
+	var artifacts, retired []protocol.FlowStateArtifact
 	if x.Batch != nil && x.Batch.Sealed != nil {
 		retired = append(retired, *x.Batch.Sealed)
 	}
@@ -443,9 +443,9 @@ func (p *PreparedBatch) Matches(x FlowInstance) bool {
 		bytes.Equal(platform.Raw(x.Batch), platform.Raw(p.before.Batch)) && x.CleanupPending == p.before.CleanupPending && bytes.Equal(platform.Raw(x.ArtifactCleanup), platform.Raw(p.before.ArtifactCleanup))
 }
 
-func (p *PreparedBatch) Artifact() platform.FlowStateArtifact { return *p.frame.Sealed }
+func (p *PreparedBatch) Artifact() protocol.FlowStateArtifact { return *p.frame.Sealed }
 
-func (p *PreparedBatch) Artifacts() []platform.FlowStateArtifact {
+func (p *PreparedBatch) Artifacts() []protocol.FlowStateArtifact {
 	return slices.Clone(p.artifacts)
 }
 
@@ -488,7 +488,7 @@ func (d preparedDecision) Submit(c platform.Caller, sub *pb.Submission, now time
 	return d.ledger.Receive(c, sub, now, nil, func() (func(*pb.ChangeRecord), *platform.Error) {
 		ss := d.session(d.host.Automation(c, ID), now)
 		if p.replayAsset != nil {
-			asset, ok := platform.Get[platform.FlowDeadLetterAsset](c, p.replayAsset.ID)
+			asset, ok := platform.Get[protocol.FlowDeadLetterAsset](c, p.replayAsset.ID)
 			if !ok || !bytes.Equal(platform.Raw(asset), platform.Raw(p.replayAsset)) || !d.deadLetterReplayAllowed(c, asset, now) {
 				return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The original dead letter changed while its replay was prepared")
 			}

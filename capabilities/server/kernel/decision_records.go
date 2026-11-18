@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
+	"platformserver/kernel/protocol"
 	"platformserver/kernel/records"
 	"reflect"
 	"slices"
@@ -22,8 +23,8 @@ func (d *Decision) SavedUniqueChanges() []persistence.StateUnique {
 }
 
 func (d *Decision) FlowVersions() map[string]int {
-	switch private := d.PrivateApps[platform.FlowApp].(type) {
-	case platform.Processes:
+	switch private := d.PrivateApps[protocol.FlowApp].(type) {
+	case protocol.Processes:
 		return private.Versions()
 	}
 	return nil

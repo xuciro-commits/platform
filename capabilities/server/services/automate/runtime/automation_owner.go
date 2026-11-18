@@ -16,8 +16,8 @@ import (
 )
 
 const (
-	ID                        = platform.FlowApp
-	InstanceType              = platform.FlowInstanceType
+	ID                        = runtimeprotocol.FlowApp
+	InstanceType              = runtimeprotocol.FlowInstanceType
 	Admin                     = "admin"
 	SchemaFlowStart           = "flow.instance.start"
 	SchemaFlowStep            = "flow.instance.step"
@@ -34,15 +34,15 @@ const (
 	Compensate                = platform.Compensate
 )
 
-type FlowInstance = platform.FlowInstance
+type FlowInstance = runtimeprotocol.FlowInstance
 
-type Token = platform.FlowToken
+type Token = runtimeprotocol.FlowToken
 
-type LoopFrame = platform.FlowLoopFrame
+type LoopFrame = runtimeprotocol.FlowLoopFrame
 
-type UndoEntry = platform.FlowUndoEntry
+type UndoEntry = runtimeprotocol.FlowUndoEntry
 
-type TraceLine = platform.FlowTraceLine
+type TraceLine = runtimeprotocol.FlowTraceLine
 
 type flowDef struct {
 	app string
@@ -53,7 +53,7 @@ type flowDef struct {
 type Flows struct {
 	resolver     publication.Resolver
 	mu           sync.Mutex
-	host         platform.FlowHost
+	host         runtimeprotocol.FlowHost
 	ledger       platform.Authority
 	authorities  platform.Authorities
 	defs         map[string][]*flowDef
@@ -84,7 +84,7 @@ func (f *Flows) version(c platform.Caller, flow string) (*flowDef, *platform.Err
 	return d, nil
 }
 
-func (f *Flows) AttachFlow(h platform.FlowHost) { f.host = h }
+func (f *Flows) AttachFlow(h runtimeprotocol.FlowHost) { f.host = h }
 
 func (f *Flows) AttachOwner(bindings runtimeprotocol.OwnerBindings) { f.AttachFlow(bindings.Flow) }
 
@@ -125,11 +125,11 @@ func flowEntities() []platform.Entity {
 	return []platform.Entity{{Type: InstanceType, Title: "Flow instance", Model: FlowInstance{}, Display: "title",
 		Scope:   platform.Scope{Participants: func(record any) []string { return []string{record.(FlowInstance).OnBehalf} }},
 		Derived: []platform.Derivation{{From: "sources", Fields: []string{"data", "outputs", "tokens", "trace", "answer", "batch"}}}, Withheld: "withheld"},
-		{Type: "flow.output", Title: "Flow output", Model: platform.FlowOutput{}, Display: "name",
-			Scope:   platform.Scope{Participants: func(record any) []string { return []string{record.(platform.FlowOutput).OnBehalf} }},
+		{Type: "flow.output", Title: "Flow output", Model: runtimeprotocol.FlowOutput{}, Display: "name",
+			Scope:   platform.Scope{Participants: func(record any) []string { return []string{record.(runtimeprotocol.FlowOutput).OnBehalf} }},
 			Derived: []platform.Derivation{{From: "sources", Fields: []string{"value"}}}, Withheld: "withheld"},
-		{Type: "flow.dead-letter", Title: "Flow dead letter", Model: platform.FlowDeadLetterAsset{}, Display: "instance",
-			Scope:   platform.Scope{Participants: func(record any) []string { return []string{record.(platform.FlowDeadLetterAsset).OnBehalf} }},
+		{Type: "flow.dead-letter", Title: "Flow dead letter", Model: runtimeprotocol.FlowDeadLetterAsset{}, Display: "instance",
+			Scope:   platform.Scope{Participants: func(record any) []string { return []string{record.(runtimeprotocol.FlowDeadLetterAsset).OnBehalf} }},
 			Derived: []platform.Derivation{{From: "sources", Fields: []string{"letter", "payload", "target"}}}, Withheld: "withheld"}}
 }
 

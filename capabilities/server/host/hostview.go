@@ -177,9 +177,9 @@ func (h hostView) Tasks() platform.Tasks {
 	return h.t.Tasks
 }
 
-func (h hostView) Processes() platform.Processes {
+func (h hostView) Processes() runtimeprotocol.Processes {
 	if h.decision != nil && h.t.Processes != nil {
-		return h.decision.stateApp(h.t.Processes.(platform.App)).(platform.Processes)
+		return h.decision.stateApp(h.t.Processes.(platform.App)).(runtimeprotocol.Processes)
 	}
 	return h.t.Processes
 }
@@ -238,9 +238,11 @@ func (h hostView) Interfaces() []platform.Interface {
 	return ontology.Interfaces(h.t.definitions, manifests)
 }
 
-func (h hostView) DynamicAgents() []platform.DynamicAgentDefinitions { return h.t.dynamicAgentList() }
+func (h hostView) DynamicAgents() []runtimeprotocol.DynamicAgentDefinitions {
+	return h.t.dynamicAgentList()
+}
 
-func (h hostView) DynamicAgent(id string) (platform.DynamicAgentDefinitions, bool) {
+func (h hostView) DynamicAgent(id string) (runtimeprotocol.DynamicAgentDefinitions, bool) {
 	owner, ok := h.t.dynamicAgents[id]
 	return owner, ok
 }
@@ -312,10 +314,10 @@ func (h hostView) ownerBindings() runtimeprotocol.OwnerBindings {
 func (h hostView) bindOwner(app platform.App) { h.t.services.BindOwner(app, h.ownerBindings()) }
 
 func (h hostView) BuildProcessConsumptions() []platform.Consumption {
-	var processes platform.Processes = h.t.Processes
+	var processes runtimeprotocol.Processes = h.t.Processes
 	if h.decision != nil {
-		if app := h.decision.PrivateApps[platform.FlowApp]; app != nil {
-			processes = app.(platform.Processes)
+		if app := h.decision.PrivateApps[runtimeprotocol.FlowApp]; app != nil {
+			processes = app.(runtimeprotocol.Processes)
 		}
 	}
 	if processes == nil {

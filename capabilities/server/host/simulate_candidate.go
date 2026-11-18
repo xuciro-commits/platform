@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
+	"platformserver/kernel/protocol"
 	"platformserver/platform"
 	"platformserver/services/actions"
 	trialowner "platformserver/services/devops/trials"
@@ -82,7 +83,7 @@ func runCandidateSimulation(request trialowner.CandidateSimulationRequest, candi
 }
 
 func (t *Tenant) trialSandbox() trialowner.Sandbox {
-	return trialowner.Sandbox{Tenant: t.ID, AI: t.Models != nil, Flows: t.App(platform.FlowApp) != nil, Member: t.Member, Work: t.Work,
+	return trialowner.Sandbox{Tenant: t.ID, AI: t.Models != nil, Flows: t.App(protocol.FlowApp) != nil, Member: t.Member, Work: t.Work,
 		Trace: func(record func(platform.DecisionTrace)) func(platform.DecisionTrace) {
 			previous := t.simulationTrace
 			t.simulationTrace = record
@@ -91,8 +92,8 @@ func (t *Tenant) trialSandbox() trialowner.Sandbox {
 		Read: func(actor platform.Member, typ, id string, now time.Time) (json.RawMessage, *platform.Error) {
 			return t.caller(actor, t.App(build.ID), false).ReadRecord(typ, id, now)
 		},
-		Flow: func(id string) (platform.FlowInstance, bool) {
-			return platform.Get[platform.FlowInstance](t.automation(platform.FlowApp, false), id)
+		Flow: func(id string) (protocol.FlowInstance, bool) {
+			return platform.Get[protocol.FlowInstance](t.automation(protocol.FlowApp, false), id)
 		},
 		Current: func(actor platform.Member, typ, id string, now time.Time) *platform.Error {
 			_, refusal := t.recordOf(actor, typ, id, now)

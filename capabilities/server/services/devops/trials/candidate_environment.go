@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"maps"
+	"platformserver/kernel/protocol"
 	"platformserver/kernel/records"
 	"platformserver/platform"
 	"platformserver/services/ontology"
@@ -94,7 +95,7 @@ func (e Environment) CandidateApps(candidate platform.ReleaseCandidate, member p
 		owners = append(owners, platform.AIApp)
 	}
 	if has(platform.AssetFlow) {
-		owners = append(owners, platform.WorkApp, platform.FlowApp)
+		owners = append(owners, platform.WorkApp, protocol.FlowApp)
 	}
 	if has(platform.AssetAgent) {
 		owners = append(owners, platform.AgentApp)

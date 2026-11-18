@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
+	"platformserver/kernel/protocol"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformserver/kernel/records"
@@ -24,14 +25,14 @@ func (t *Tenant) readEditProposal(ctx context.Context, member platform.Member, e
 	}
 	if engine == "flow" {
 		return recordRead(t, ctx, func(t *Tenant) (platform.EditProposal, *platform.Error) {
-			source.FlowRun = func() (platform.FlowInstance, *platform.Error) {
-				view, refusal := t.recordOf(member, platform.FlowInstanceType, id, Now())
+			source.FlowRun = func() (protocol.FlowInstance, *platform.Error) {
+				view, refusal := t.recordOf(member, protocol.FlowInstanceType, id, Now())
 				if refusal != nil {
-					return platform.FlowInstance{}, refusal
+					return protocol.FlowInstance{}, refusal
 				}
-				run, ok := records.As[platform.FlowInstance](view.Record)
+				run, ok := records.As[protocol.FlowInstance](view.Record)
 				if !ok {
-					return platform.FlowInstance{}, nil
+					return protocol.FlowInstance{}, nil
 				}
 				return run, nil
 			}

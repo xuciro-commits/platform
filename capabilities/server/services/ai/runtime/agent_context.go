@@ -4,6 +4,7 @@ import (
 	"cmp"
 	"encoding/json"
 	"fmt"
+	"platformserver/kernel/protocol"
 	ailanguage "platformserver/services/ai/language"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
@@ -16,7 +17,7 @@ import (
 	"time"
 )
 
-func visibleAgentInstructions(c platform.Caller, d *platform.CompiledAgent) string {
+func visibleAgentInstructions(c platform.Caller, d *protocol.CompiledAgent) string {
 	if d.App == "build" && !c.Holds(platform.AgentApp, platform.AgentAdmin) && !c.Holds("build", "builder") {
 		return ""
 	}
@@ -33,7 +34,7 @@ func (a *Agents) ObserveAgentKnowledge(run platform.AgentRunRecord, args json.Ra
 	return a.host.AgentKnowledge(a.reader(run), app, p.Query, 4, now)
 }
 
-func (a *Agents) prompt(c platform.Caller, d *platform.CompiledAgent, run platform.AgentRunRecord, model string, now time.Time) platform.ChatRequest {
+func (a *Agents) prompt(c platform.Caller, d *protocol.CompiledAgent, run platform.AgentRunRecord, model string, now time.Time) platform.ChatRequest {
 	input := agents.Prompt{Goal: run.Goal, OnBehalf: run.OnBehalf, Ref: run.Ref,
 		Instructions: d.Instructions, Meaning: a.host.AgentMeaning(d.App),
 		Glossary: a.host.AgentGlossary(d.App), Language: a.host.AgentLanguage(run.Language)}

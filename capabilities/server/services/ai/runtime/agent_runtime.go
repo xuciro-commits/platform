@@ -28,17 +28,17 @@ const (
 )
 
 type Agents struct {
-	host        platform.AgentHost
+	host        runtimeprotocol.AgentHost
 	mu          sync.Mutex
 	tenant      string
 	ledger      platform.Authority
 	authorities platform.Authorities
-	defs        map[string]*platform.CompiledAgent
+	defs        map[string]*runtimeprotocol.CompiledAgent
 	buildStamp  string
 	busy        map[string]bool
 }
 
-func (a *Agents) AttachAgent(h platform.AgentHost) { a.host = h }
+func (a *Agents) AttachAgent(h runtimeprotocol.AgentHost) { a.host = h }
 
 func (a *Agents) AttachOwner(bindings runtimeprotocol.OwnerBindings) { a.AttachAgent(bindings.Agent) }
 
@@ -73,7 +73,7 @@ func New(tenant string, authorities platform.Authorities) *Agents {
 	actions = append(actions, platform.Action{Schema: platform.SchemaToolPropose, Target: platform.RunType, Capability: "runs", Title: "Propose a tool action", Description: "Save a tool's write as a proposal for the person to confirm; nothing changes until they do.", Roles: []string{platform.AnyMember}, Payload: []platform.Field{
 		{Name: "owner", Type: "string", Required: true}, {Name: "action", Type: "string", Required: true}, {Name: "target", Type: "string", Required: true}, {Name: "payload", Type: "json", Required: true}, {Name: "rationale", Type: "string"}}})
 	actions = append(actions, switchActions()...)
-	return &Agents{tenant: tenant, authorities: authorities, ledger: authorities(tenant, platform.AgentApp, platform.NewCatalog(actions...), platform.RunType, platform.EvaluationType, platform.MemoryType, platform.SwitchType), defs: map[string]*platform.CompiledAgent{}, busy: map[string]bool{}}
+	return &Agents{tenant: tenant, authorities: authorities, ledger: authorities(tenant, platform.AgentApp, platform.NewCatalog(actions...), platform.RunType, platform.EvaluationType, platform.MemoryType, platform.SwitchType), defs: map[string]*runtimeprotocol.CompiledAgent{}, busy: map[string]bool{}}
 }
 
 func (a *Agents) NewSimulationApp(tenant string) platform.App { return New(tenant, a.authorities) }
@@ -126,7 +126,7 @@ func rationale() map[string]any {
 	return map[string]any{"type": "string", "description": "Why you take this step, in one sentence"}
 }
 
-func (a *Agents) def(id string) *platform.CompiledAgent {
+func (a *Agents) def(id string) *runtimeprotocol.CompiledAgent {
 	a.refresh()
 	return a.defs[id]
 }
@@ -146,7 +146,7 @@ func (a *Agents) IdleAgentTurn(run string) {
 	delete(a.busy, run)
 }
 
-func (a *Agents) each(fn func(id string, d *platform.CompiledAgent)) {
+func (a *Agents) each(fn func(id string, d *runtimeprotocol.CompiledAgent)) {
 	for id, d := range a.defs {
 		fn(id, d)
 	}
@@ -236,7 +236,7 @@ func (a *Agents) Read(c platform.Caller, name string) (any, *platform.Error) {
 	return out, nil
 }
 
-func (a *Agents) definitionVersion(d *platform.CompiledAgent) string {
+func (a *Agents) definitionVersion(d *runtimeprotocol.CompiledAgent) string {
 	version := ""
 	if owner := a.host.App(d.App); owner != nil {
 		version = owner.Manifest().Version
@@ -260,7 +260,7 @@ func (a *Agents) definitionVersion(d *platform.CompiledAgent) string {
 	return "agent.sha256." + digest
 }
 
-func (a *Agents) changedDefinition(run platform.AgentRunRecord, d *platform.CompiledAgent) bool {
+func (a *Agents) changedDefinition(run platform.AgentRunRecord, d *runtimeprotocol.CompiledAgent) bool {
 	if d == nil {
 		return false
 	}
@@ -287,12 +287,12 @@ func (a *Agents) AllowsAgentRun(run platform.AgentRunRecord) bool {
 	return reader != nil && reader.Tenant == a.tenant && reader.Roles[d.App] != ""
 }
 
-func (a *Agents) AgentDeclaration(id string) (platform.AgentCardDeclaration, bool) {
+func (a *Agents) AgentDeclaration(id string) (runtimeprotocol.AgentCardDeclaration, bool) {
 	d := a.def(id)
 	if d == nil {
-		return platform.AgentCardDeclaration{}, false
+		return runtimeprotocol.AgentCardDeclaration{}, false
 	}
-	return platform.AgentCardDeclaration{App: d.App, Title: d.Title, Description: d.Description}, true
+	return runtimeprotocol.AgentCardDeclaration{App: d.App, Title: d.Title, Description: d.Description}, true
 }
 
 func (a *Agents) Start(c platform.Caller, r *pb.ChangeRecord, s platform.RunStart, now time.Time) {

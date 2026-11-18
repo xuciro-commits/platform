@@ -2,13 +2,14 @@ package automation
 
 import (
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
+	"platformserver/kernel/protocol"
 	"platformserver/platform"
 )
 
 type Retention struct {
-	Artifacts     []platform.FlowStateArtifact
+	Artifacts     []protocol.FlowStateArtifact
 	Input         *platform.OperationInputArtifact
-	Discard       func(platform.FlowStateArtifact) error
+	Discard       func(protocol.FlowStateArtifact) error
 	DiscardInput  func(platform.OperationInputArtifact)
 	KeepArtifacts bool
 	KeepInput     bool
@@ -25,7 +26,7 @@ func (r *Retention) Release() {
 	}
 }
 
-func GuardPrepared(prepared FlowPreparedDecision, f ContinuousFlowOwner, caller platform.Caller, latest platform.FlowInstance, changed string, source *platform.FlowSourceCheckpoint, check func(FlowBatchPreparation, platform.FlowSourceCheckpoint) *platform.Error) *platform.Error {
+func GuardPrepared(prepared FlowPreparedDecision, f ContinuousFlowOwner, caller platform.Caller, latest protocol.FlowInstance, changed string, source *protocol.FlowSourceCheckpoint, check func(FlowBatchPreparation, protocol.FlowSourceCheckpoint) *platform.Error) *platform.Error {
 	if !prepared.Matches(latest) {
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, changed)
 	}

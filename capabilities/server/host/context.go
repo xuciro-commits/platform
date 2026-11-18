@@ -1,6 +1,7 @@
 package host
 
 import (
+	"platformserver/kernel/protocol"
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
@@ -48,7 +49,7 @@ func (t *Tenant) contextRead(reader *platform.Member, typ, id string, now time.T
 			return t.Linker.Links(t.caller(m, t.Linker.(platform.App), false), entity)
 		},
 		Readable: func(ref string) bool { return t.readable(m, ref, now) },
-		Flows:    records(t.Processes != nil, platform.FlowInstanceType),
+		Flows:    records(t.Processes != nil, protocol.FlowInstanceType),
 		Tasks:    records(t.Tasks != nil, platform.WorkTaskType),
 	}.Read(typ, id)
 }

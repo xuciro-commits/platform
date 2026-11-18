@@ -124,7 +124,7 @@ func TrimStreamRows(source Source, rows []map[string]any, budget int) ([]map[str
 	return rows, nil
 }
 
-func StreamBatch(before platform.FlowInstance, source Source, connection Connection, hash string, intake *platform.StreamIntake, rows []map[string]any) (platform.FlowBatch, *platform.Error) {
+func StreamBatch(before protocol.FlowInstance, source Source, connection Connection, hash string, intake *platform.StreamIntake, rows []map[string]any) (protocol.FlowBatch, *platform.Error) {
 	bootstrap := len(rows) == 0
 	cursor := source.Cursor
 	if !bootstrap {
@@ -132,13 +132,13 @@ func StreamBatch(before platform.FlowInstance, source Source, connection Connect
 		for _, row := range rows {
 			next := position.Advance([]map[string]any{row})
 			if next == position.Cursor {
-				return platform.FlowBatch{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Stream rows need unique increasing incremental positions")
+				return protocol.FlowBatch{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Stream rows need unique increasing incremental positions")
 			}
 			position.Cursor = next
 		}
 		cursor = source.Advance(rows)
 	}
-	batch := platform.FlowBatch{Bootstrap: bootstrap, Source: &platform.FlowSourceCheckpoint{Record: source.ID, Config: hash, Cursor: cursor, Sources: []string{SourceType + "/" + source.ID, ConnectionType + "/" + connection.ID}, Offset: intake.Offset, Initialized: true}}
+	batch := protocol.FlowBatch{Bootstrap: bootstrap, Source: &protocol.FlowSourceCheckpoint{Record: source.ID, Config: hash, Cursor: cursor, Sources: []string{SourceType + "/" + source.ID, ConnectionType + "/" + connection.ID}, Offset: intake.Offset, Initialized: true}}
 	if before.Batch != nil {
 		batch.Predecessor = before.Batch.Cursor
 	}
@@ -150,20 +150,20 @@ func StreamBatch(before platform.FlowInstance, source Source, connection Connect
 		for _, field := range intake.Partition {
 			value, ok := row[field].(string)
 			if !ok || value == "" {
-				return platform.FlowBatch{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "A source partition field needs a nonempty string")
+				return protocol.FlowBatch{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "A source partition field needs a nonempty string")
 			}
 			partition = append(partition, value)
 		}
 		input, exists := row[intake.Value]
 		if !exists {
-			return platform.FlowBatch{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "The source signal column is missing")
+			return protocol.FlowBatch{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "The source signal column is missing")
 		}
 		if len(intake.Fields) > 0 {
 			projected := map[string]any{intake.Value: input}
 			for _, field := range append(slices.Clone(intake.Partition), intake.Fields...) {
 				value, exists := row[field]
 				if !exists {
-					return platform.FlowBatch{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "A declared source metadata field is missing")
+					return protocol.FlowBatch{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "A declared source metadata field is missing")
 				}
 				projected[field] = value
 			}
@@ -171,22 +171,22 @@ func StreamBatch(before platform.FlowInstance, source Source, connection Connect
 		}
 		value, encodeErr := json.Marshal(input)
 		if encodeErr != nil {
-			return platform.FlowBatch{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "A source signal needs a JSON value")
+			return protocol.FlowBatch{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "A source signal needs a JSON value")
 		}
-		batch.Signals = append(batch.Signals, platform.FlowSignal{Key: key, Partition: string(platform.Raw(partition)), At: at, Value: value})
+		batch.Signals = append(batch.Signals, protocol.FlowSignal{Key: key, Partition: string(platform.Raw(partition)), At: at, Value: value})
 	}
 	fingerprint, err := platform.CanonicalDigest([]any{batch.Predecessor, batch.Source, batch.Bootstrap, batch.Signals})
 	if err != nil {
 		if bootstrap {
-			return platform.FlowBatch{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "The source bootstrap cannot be bound")
+			return protocol.FlowBatch{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "The source bootstrap cannot be bound")
 		}
-		return platform.FlowBatch{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "The source batch cannot be bound")
+		return protocol.FlowBatch{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "The source batch cannot be bound")
 	}
 	batch.ID = "source:" + fingerprint
 	return batch, nil
 }
 
-func (source Source) Resume(before platform.FlowInstance, hash string, intake *platform.StreamIntake) (Source, *platform.Error) {
+func (source Source) Resume(before protocol.FlowInstance, hash string, intake *platform.StreamIntake) (Source, *platform.Error) {
 	if before.Batch == nil || before.Batch.Source == nil {
 		return source, nil
 	}
@@ -212,7 +212,7 @@ type StreamPreparation interface {
 	Intake() (string, *platform.StreamIntake, int)
 }
 
-func BeginStream(plan StreamPreparation, before platform.FlowInstance, resolve func(string, *platform.StreamIntake) (Source, Connection, string, *platform.Error)) (StreamStart, *platform.Error) {
+func BeginStream(plan StreamPreparation, before protocol.FlowInstance, resolve func(string, *platform.StreamIntake) (Source, Connection, string, *platform.Error)) (StreamStart, *platform.Error) {
 	var s StreamStart
 	var refusal *platform.Error
 	s.Name, s.Intake, s.Budget = plan.Intake()
@@ -231,34 +231,34 @@ func (s StreamStart) Unchanged(source Source, connection Connection, hash string
 
 type StreamConsumption struct {
 	Read    func(source Source, columns []string) ([]map[string]any, string, *platform.Error)
-	Tick    func() (platform.FlowBatch, bool, *platform.Error)
-	Consume func(batch platform.FlowBatch) (platform.FlowBatchOutcome, *platform.Error)
+	Tick    func() (protocol.FlowBatch, bool, *platform.Error)
+	Consume func(batch protocol.FlowBatch) (protocol.FlowBatchOutcome, *platform.Error)
 }
 
-func (c StreamConsumption) Run(before platform.FlowInstance, start StreamStart) (platform.FlowBatchOutcome, *platform.Error) {
+func (c StreamConsumption) Run(before protocol.FlowInstance, start StreamStart) (protocol.FlowBatchOutcome, *platform.Error) {
 	source := start.Source
 	rows, cursor, refusal := c.Read(source, StreamColumns(source, start.Intake))
 	if refusal != nil {
-		return platform.FlowBatchOutcome{}, refusal
+		return protocol.FlowBatchOutcome{}, refusal
 	}
 	source.Cursor = cursor
 	rows, refusal = TrimStreamRows(source, rows, start.Budget)
 	if refusal != nil {
-		return platform.FlowBatchOutcome{}, refusal
+		return protocol.FlowBatchOutcome{}, refusal
 	}
 	if len(rows) == 0 && !start.Bootstrap {
 		tick, due, tickErr := c.Tick()
 		if tickErr != nil {
-			return platform.FlowBatchOutcome{}, tickErr
+			return protocol.FlowBatchOutcome{}, tickErr
 		}
 		if due {
 			return c.Consume(tick)
 		}
-		return platform.FlowBatchOutcome{}, nil
+		return protocol.FlowBatchOutcome{}, nil
 	}
 	batch, refusal := StreamBatch(before, source, start.Connection, start.Hash, start.Intake, rows)
 	if refusal != nil {
-		return platform.FlowBatchOutcome{}, refusal
+		return protocol.FlowBatchOutcome{}, refusal
 	}
 	return c.Consume(batch)
 }

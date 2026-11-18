@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"maps"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
+	"platformserver/kernel/protocol"
 	"platformserver/platform"
 	functionauthoring "platformserver/services/functions/authoring"
 	build "platformserver/services/resources/authoring"
@@ -40,8 +41,8 @@ type SimulatedFlow struct {
 	Dependencies string                     `json:"dependencies,omitempty"`
 	Release      string                     `json:"release,omitempty"`
 	State        string                     `json:"state"`
-	Tokens       []platform.FlowToken       `json:"tokens"`
-	Trace        []platform.FlowTraceLine   `json:"trace"`
+	Tokens       []protocol.FlowToken       `json:"tokens"`
+	Trace        []protocol.FlowTraceLine   `json:"trace"`
 	Outputs      map[string]json.RawMessage `json:"outputs,omitempty"`
 }
 

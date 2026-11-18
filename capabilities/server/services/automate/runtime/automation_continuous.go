@@ -6,24 +6,25 @@ import (
 	"fmt"
 	"maps"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
+	"platformserver/kernel/protocol"
 	"platformserver/platform"
 	"slices"
 	"time"
 )
 
-type BatchFrame = platform.FlowBatchFrame
+type BatchFrame = protocol.FlowBatchFrame
 
-type SourceCheckpoint = platform.FlowSourceCheckpoint
+type SourceCheckpoint = protocol.FlowSourceCheckpoint
 
-type DeadLetter = platform.FlowDeadLetter
+type DeadLetter = protocol.FlowDeadLetter
 
-type Batch = platform.FlowBatch
+type Batch = protocol.FlowBatch
 
-type Signal = platform.FlowSignal
+type Signal = protocol.FlowSignal
 
-type ContinuousWindowInput = platform.FlowWindowInput
+type ContinuousWindowInput = protocol.FlowWindowInput
 
-type BatchStateReference = platform.FlowBatchStateReference
+type BatchStateReference = protocol.FlowBatchStateReference
 
 func admitBatch(frame *BatchFrame, declared platform.Continuous, batch Batch) *platform.Error {
 	if declared.Intake != nil && batch.Source == nil || declared.Intake == nil && batch.Source != nil {

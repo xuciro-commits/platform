@@ -2,6 +2,7 @@ package host
 
 import (
 	"encoding/json"
+	"platformserver/kernel/protocol"
 	"slices"
 	"strings"
 	"testing"
@@ -96,7 +97,7 @@ func TestInvariantK1FunctionAuthoringPublishesEvaluatesReviewsAndReplays(t *test
 		if len(agents) != 1 || agents[0].Name != "helper" || !strings.Contains(agents[0].Instructions, instructions) {
 			t.Fatalf("agent version differs: %+v", agents)
 		}
-		dynamic := app.(platform.DynamicAgentDefinitions)
+		dynamic := app.(protocol.DynamicAgentDefinitions)
 		if actual := dynamic.AgentVersion("helper"); actual != expected {
 			t.Fatalf("agent version: got %d, want %d", actual, expected)
 		}

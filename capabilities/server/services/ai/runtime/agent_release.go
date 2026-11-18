@@ -2,6 +2,7 @@ package agents
 
 import (
 	"fmt"
+	"platformserver/kernel/protocol"
 	"slices"
 	"strings"
 	"time"
@@ -123,11 +124,11 @@ type StepPreparation struct {
 	Run         func(id string) (platform.AgentRunRecord, bool)
 	Evaluation  func(id string) (platform.Evaluation, bool)
 	Allows      func(platform.AgentRunRecord) bool
-	Accept      func(platform.AgentResultStep, time.Time) error
+	Accept      func(protocol.AgentResultStep, time.Time) error
 	Failed      func(now time.Time, run, detail string)
 }
 
-func (s StepPreparation) Prepare(b platform.AgentResultStep, now time.Time) bool {
+func (s StepPreparation) Prepare(b protocol.AgentResultStep, now time.Time) bool {
 	if s.Quarantined() {
 		return false
 	}
@@ -155,7 +156,7 @@ func (s StepPreparation) Prepare(b platform.AgentResultStep, now time.Time) bool
 	}
 	err := s.Accept(b, now)
 	if err != nil && b.Stop == "" && !s.Quarantined() {
-		err = s.Accept(platform.AgentResultStep{Run: b.Run, Evaluation: b.Evaluation, Usage: b.Usage, Stop: "The agent step could not be accepted: " + err.Error()}, now)
+		err = s.Accept(protocol.AgentResultStep{Run: b.Run, Evaluation: b.Evaluation, Usage: b.Usage, Stop: "The agent step could not be accepted: " + err.Error()}, now)
 	}
 	if err != nil {
 		s.Failed(now, b.Run, err.Error())
@@ -168,7 +169,7 @@ type EvaluationQueue struct {
 	Queued   func() ([]platform.Evaluation, *platform.Error)
 	Current  func(id string) (platform.Evaluation, bool)
 	Evaluate func(ev platform.Evaluation, now time.Time, step func(*platform.Evaluation) bool) platform.Evaluation
-	Apply    func(platform.AgentResultStep, time.Time) bool
+	Apply    func(protocol.AgentResultStep, time.Time) bool
 }
 
 func (q EvaluationQueue) Drain(now time.Time) {
@@ -182,7 +183,7 @@ func (q EvaluationQueue) Drain(now time.Time) {
 		}
 		report := q.Evaluate(evals[0], now, func(ev *platform.Evaluation) bool {
 			revision := ev.Revision
-			q.Apply(platform.AgentResultStep{Run: ev.ID, Evaluation: ev}, now)
+			q.Apply(protocol.AgentResultStep{Run: ev.ID, Evaluation: ev}, now)
 			current, known := q.Current(ev.ID)
 			if !known || current.Revision != revision+1 {
 				return false
@@ -193,7 +194,7 @@ func (q EvaluationQueue) Drain(now time.Time) {
 		if report.State != "done" {
 			return
 		}
-		q.Apply(platform.AgentResultStep{Run: report.ID, Evaluation: &report}, now)
+		q.Apply(protocol.AgentResultStep{Run: report.ID, Evaluation: &report}, now)
 		current, known := q.Current(report.ID)
 		if !known || current.State == "queued" {
 			return

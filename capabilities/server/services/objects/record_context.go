@@ -1,6 +1,7 @@
 package objects
 
 import (
+	"platformserver/kernel/protocol"
 	"reflect"
 
 	"platformserver/kernel/records"
@@ -22,7 +23,7 @@ type FlowSummary struct {
 	ID    string                   `json:"id"`
 	Flow  string                   `json:"flow"`
 	State string                   `json:"state"`
-	Trace []platform.FlowTraceLine `json:"trace"`
+	Trace []protocol.FlowTraceLine `json:"trace"`
 }
 
 type TaskSummary struct {
@@ -57,7 +58,7 @@ func RecordContext(typ string, record any, history []records.RecordChange, relat
 
 func (c *ContextView) AddFlows(records []any) {
 	for _, record := range records {
-		x := record.(platform.FlowInstance)
+		x := record.(protocol.FlowInstance)
 		trace := x.Trace
 		if len(trace) > 8 {
 			trace = trace[len(trace)-8:]

@@ -2,6 +2,7 @@ package automation
 
 import (
 	"log"
+	"platformserver/kernel/protocol"
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
@@ -24,7 +25,6 @@ type BatchIntake struct {
 	Frames        FlowFrameStore
 	Caller        platform.Caller
 	Preparing     func() func()
-	Snapshot      func(platform.Member, string, time.Time) (ContinuousFlowOwner, FlowInstance, platform.Member, *platform.Error)
 	Read          func(member platform.Member, id string, now time.Time, use func(ContinuousFlowOwner, FlowInstance, platform.Caller) *platform.Error) *platform.Error
 	PrepareInput  func(platform.Member, string, platform.OperationRequest) (*OperationInput, *platform.Error)
 	Commit        func(FlowCommit) (*pb.ChangeRecord, *platform.Error)
@@ -34,24 +34,31 @@ type BatchIntake struct {
 	DiscardInput  func(platform.OperationInputArtifact)
 }
 
-func (b BatchIntake) ConsumeBatch(m platform.Member, id string, batch Batch, now time.Time) (platform.FlowBatchOutcome, *platform.Error) {
+func (b BatchIntake) ConsumeBatch(m platform.Member, id string, batch Batch, now time.Time) (protocol.FlowBatchOutcome, *platform.Error) {
 	releasePreparation := b.Preparing()
 	defer releasePreparation()
-	f, before, _, refusal := b.Snapshot(m, id, now)
+	var outcome protocol.FlowBatchOutcome
+	var done, cleanup bool
+	refusal := b.Read(m, id, now, func(f ContinuousFlowOwner, before FlowInstance, _ platform.Caller) *platform.Error {
+		var err *platform.Error
+		outcome, done, err = ReplayBatch(f, b.Tenant, before, batch)
+		cleanup = before.CleanupPending
+		return err
+	})
 	if refusal != nil {
-		return platform.FlowBatchOutcome{}, refusal
-	}
-	if outcome, done, refusal := ReplayBatch(f, b.Tenant, before, batch); done || refusal != nil {
 		return outcome, refusal
 	}
-	if before.CleanupPending {
+	if done {
+		return outcome, nil
+	}
+	if cleanup {
 		if refusal := b.Cleanup(m, id, now); refusal != nil {
-			return platform.FlowBatchOutcome{}, refusal
+			return protocol.FlowBatchOutcome{}, refusal
 		}
 	}
 	prepared, refusal := b.prepare(m, id, batch, now)
 	if refusal != nil {
-		return platform.FlowBatchOutcome{}, refusal
+		return protocol.FlowBatchOutcome{}, refusal
 	}
 	keep := Retention{Artifacts: prepared.Artifacts(), Discard: b.Frames.Discard, DiscardInput: b.DiscardInput}
 	defer keep.Release()
@@ -59,11 +66,11 @@ func (b BatchIntake) ConsumeBatch(m platform.Member, id string, batch Batch, now
 	if request, ok := prepared.OperationRequest(); ok {
 		input, refusal = b.PrepareInput(m, id, request)
 		if refusal != nil {
-			return platform.FlowBatchOutcome{}, refusal
+			return protocol.FlowBatchOutcome{}, refusal
 		}
 		keep.Input = input.ArtifactPointer()
 	}
-	actor := platform.Member{ID: "app:" + platform.FlowApp, Tenant: b.Tenant}
+	actor := platform.Member{ID: "app:" + protocol.FlowApp, Tenant: b.Tenant}
 	_, refusal = b.Commit(FlowCommit{
 		Holder:   "flow:batch",
 		Member:   actor,
@@ -83,14 +90,14 @@ func (b BatchIntake) ConsumeBatch(m platform.Member, id string, batch Batch, now
 		},
 	})
 	if refusal != nil {
-		return platform.FlowBatchOutcome{}, refusal
+		return protocol.FlowBatchOutcome{}, refusal
 	}
 	x, refusal := b.Instance(id)
 	if refusal != nil {
-		return platform.FlowBatchOutcome{}, refusal
+		return protocol.FlowBatchOutcome{}, refusal
 	}
 	keep.KeepArtifacts, keep.KeepInput = x.Batch.Sealed != nil && x.Batch.Sealed.Ticket == prepared.Artifact().Ticket, true
-	return platform.FlowBatchOutcome{Cursor: x.Batch.Cursor, Watermark: x.Batch.Watermark, Consumed: x.Batch.Consumed, Rejected: x.Batch.Rejected, StateSize: x.Batch.StateBytes}, nil
+	return protocol.FlowBatchOutcome{Cursor: x.Batch.Cursor, Watermark: x.Batch.Watermark, Consumed: x.Batch.Consumed, Rejected: x.Batch.Rejected, StateSize: x.Batch.StateBytes}, nil
 }
 
 func (b BatchIntake) prepare(member platform.Member, id string, batch Batch, now time.Time) (prepared FlowPreparedBatch, refusal *platform.Error) {
@@ -118,11 +125,15 @@ func (b BatchIntake) prepareRetry(member platform.Member, id string, now time.Ti
 }
 
 func (b BatchIntake) Cleanup(m platform.Member, id string, now time.Time) *platform.Error {
-	f, before, _, refusal := b.Snapshot(m, id, now)
-	if refusal != nil || !before.CleanupPending {
-		return refusal
-	}
-	plan, refusal := f.PlanArtifactCleanup(before, now)
+	var plan FlowArtifactCleanupPreparation
+	refusal := b.Read(m, id, now, func(f ContinuousFlowOwner, before FlowInstance, _ platform.Caller) *platform.Error {
+		if !before.CleanupPending {
+			return nil
+		}
+		var err *platform.Error
+		plan, err = f.PlanArtifactCleanup(before, now)
+		return err
+	})
 	if refusal != nil || plan == nil {
 		return refusal
 	}
@@ -150,7 +161,7 @@ func (b BatchIntake) RetryCompute(member platform.Member, plan FlowComputeRetryP
 	}
 	keep := Retention{Input: input.ArtifactPointer(), DiscardInput: b.DiscardInput}
 	defer keep.Release()
-	actor := platform.Member{ID: "app:" + platform.FlowApp, Tenant: b.Tenant}
+	actor := platform.Member{ID: "app:" + protocol.FlowApp, Tenant: b.Tenant}
 	_, refusal = b.Commit(FlowCommit{
 		Holder:   "flow:retry",
 		Member:   actor,

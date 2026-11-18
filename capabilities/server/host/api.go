@@ -3,6 +3,7 @@ package host
 import (
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	runtimekernel "platformserver/kernel"
+	"platformserver/kernel/protocol"
 	"platformserver/kernel/transport"
 	"platformserver/platform"
 	"platformserver/services/actions"
@@ -38,7 +39,7 @@ var namedReads = []transport.Route{
 	{Pattern: "GET /v1/access-requests", Summary: "The caller's access requests and the requests they may approve", Answer: []controlowner.AccessRequest{}},
 	{Pattern: "GET /v1/views", Summary: "The caller's saved views", Answer: []platform.SavedView{}},
 	{Pattern: "GET /v1/agents", Summary: "The agents the apps declare", Answer: []platform.AgentInfo{}},
-	{Pattern: "GET /v1/agent-overview", Summary: "Every agent, declared and outside, with what it did, what it cost, what people made of it and whether it is suspended", Answer: []platform.AgentOverview{}},
+	{Pattern: "GET /v1/agent-overview", Summary: "Every agent, declared and outside, with what it did, what it cost, what people made of it and whether it is suspended", Answer: []protocol.AgentOverview{}},
 	{Pattern: "GET /v1/ai-limits", Summary: "Members', agents' and apps' own AI limits", Answer: []platform.AILimit{}},
 	{Pattern: "GET /v1/runs", Summary: "Agent runs on the caller's behalf", Answer: []platform.AgentRunRecord{}},
 	{Pattern: "GET /v1/memories", Summary: "What agents remember about the caller", Answer: []platform.Memory{}},

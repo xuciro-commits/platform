@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
+	"platformserver/kernel/protocol"
 	"platformserver/platform"
 	"slices"
 	"strings"
@@ -31,14 +32,14 @@ type ContinuousInventory struct {
 }
 
 type ContinuousWork struct {
-	Pending  []platform.FlowInstance
+	Pending  []protocol.FlowInstance
 	Retries  []ContinuousRetry
 	Cleanups []ContinuousCleanup
 }
 
 func (i ContinuousInventory) Scan(now time.Time) (ContinuousWork, *platform.Error) {
 	var work ContinuousWork
-	instances, total, queryErr := platform.Find[platform.FlowInstance](i.Caller, platform.Query{Sort: []string{"id"}})
+	instances, total, queryErr := platform.Find[protocol.FlowInstance](i.Caller, platform.Query{Sort: []string{"id"}})
 	if queryErr != nil {
 		return work, queryErr
 	}
@@ -78,25 +79,25 @@ func (i ContinuousInventory) Scan(now time.Time) (ContinuousWork, *platform.Erro
 	return work, nil
 }
 
-func ReplayBatch(f ContinuousFlowOwner, tenant string, before FlowInstance, batch platform.FlowBatch) (platform.FlowBatchOutcome, bool, *platform.Error) {
+func ReplayBatch(f ContinuousFlowOwner, tenant string, before FlowInstance, batch protocol.FlowBatch) (protocol.FlowBatchOutcome, bool, *platform.Error) {
 	digest, err := json.Marshal(batch)
 	if err != nil {
-		return platform.FlowBatchOutcome{}, false, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "A batch needs valid JSON signal values")
+		return protocol.FlowBatchOutcome{}, false, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "A batch needs valid JSON signal values")
 	}
 	batchDigest := fmt.Sprintf("sha256:%x", sha256.Sum256(digest))
 	key := FlowBatchKey(before.ID, before.Version, batch.ID)
 	prior := f.Authority().AcceptedFor(tenant, key)
 	if prior == nil {
-		return platform.FlowBatchOutcome{}, false, nil
+		return protocol.FlowBatchOutcome{}, false, nil
 	}
 	var saved struct{ Batch, Digest string }
 	if json.Unmarshal(prior.GetSubmission().GetPayload(), &saved) != nil || saved.Batch != batch.ID || saved.Digest != batchDigest {
-		return platform.FlowBatchOutcome{}, false, platform.Refuse(pb.ErrorCode_ERROR_CODE_IDEMPOTENCY_CONFLICT, "The batch identity was reused with different content")
+		return protocol.FlowBatchOutcome{}, false, platform.Refuse(pb.ErrorCode_ERROR_CODE_IDEMPOTENCY_CONFLICT, "The batch identity was reused with different content")
 	}
-	return platform.FlowBatchOutcome{Cursor: batch.ID}, true, nil
+	return protocol.FlowBatchOutcome{Cursor: batch.ID}, true, nil
 }
 
-func RetireArtifacts(plan FlowArtifactCleanupPreparation, tenant string, now time.Time, discard func(platform.FlowStateArtifact) error) *platform.Error {
+func RetireArtifacts(plan FlowArtifactCleanupPreparation, tenant string, now time.Time, discard func(protocol.FlowStateArtifact) error) *platform.Error {
 	if plan == nil || plan.Instance() == "" || now.IsZero() {
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Flow artifact cleanup is unavailable")
 	}
@@ -115,7 +116,7 @@ func RetireArtifacts(plan FlowArtifactCleanupPreparation, tenant string, now tim
 	return nil
 }
 
-func DrainSource(rounds int, consume func() (platform.FlowBatchOutcome, *platform.Error)) *platform.Error {
+func DrainSource(rounds int, consume func() (protocol.FlowBatchOutcome, *platform.Error)) *platform.Error {
 	for round := 0; round < rounds; round++ {
 		outcome, refusal := consume()
 		if refusal != nil {
@@ -134,7 +135,7 @@ type SourcePull struct {
 	Retire    func(plan FlowArtifactCleanupPreparation, now time.Time) *platform.Error
 	Retry     func(member platform.Member, plan FlowComputeRetryPreparation, now time.Time)
 	Member    func(id string) (platform.Member, *platform.Error)
-	Consume   func(member platform.Member, id string, now time.Time) (platform.FlowBatchOutcome, *platform.Error)
+	Consume   func(member platform.Member, id string, now time.Time) (protocol.FlowBatchOutcome, *platform.Error)
 	Collect   func(now time.Time) error
 }
 
@@ -164,7 +165,7 @@ func (p SourcePull) Run(now time.Time) {
 		if refusal != nil {
 			continue
 		}
-		if refusal := DrainSource(8, func() (platform.FlowBatchOutcome, *platform.Error) {
+		if refusal := DrainSource(8, func() (protocol.FlowBatchOutcome, *platform.Error) {
 			return p.Consume(member, instance.ID, now)
 		}); refusal != nil {
 			log.Printf("continuous source intake %s refused: %s", instance.ID, refusal.Code)
@@ -218,45 +219,45 @@ type FlowSnapshot struct {
 	Record      func(m platform.Member, id string) (any, *platform.Error)
 }
 
-func (s FlowSnapshot) Take(m platform.Member, id string) (ContinuousFlowOwner, platform.FlowInstance, platform.Member, *platform.Error) {
+func (s FlowSnapshot) Take(m platform.Member, id string) (ContinuousFlowOwner, protocol.FlowInstance, platform.Member, *platform.Error) {
 	if s.Quarantined() || m.Tenant != s.Tenant {
-		return nil, platform.FlowInstance{}, m, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "The Flow member is unavailable")
+		return nil, protocol.FlowInstance{}, m, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "The Flow member is unavailable")
 	}
 	current, ok := s.Member(m.ID)
 	current.Scopes = slices.Clone(m.Scopes)
 	if !ok || s.Admits(current) != nil {
-		return nil, platform.FlowInstance{}, m, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "The Flow member is unavailable")
+		return nil, protocol.FlowInstance{}, m, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "The Flow member is unavailable")
 	}
 	f, ok := s.Owner()
 	if !ok {
-		return nil, platform.FlowInstance{}, current, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_UNKNOWN_SCHEMA}
+		return nil, protocol.FlowInstance{}, current, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_UNKNOWN_SCHEMA}
 	}
 	record, refusal := s.Record(current, id)
 	if refusal != nil {
-		return nil, platform.FlowInstance{}, current, refusal
+		return nil, protocol.FlowInstance{}, current, refusal
 	}
-	var x platform.FlowInstance
+	var x protocol.FlowInstance
 	switch value := record.(type) {
-	case platform.FlowInstance:
+	case protocol.FlowInstance:
 		x = value
 	default:
-		return nil, platform.FlowInstance{}, current, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "A source batch acts only for its original Flow member")
+		return nil, protocol.FlowInstance{}, current, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "A source batch acts only for its original Flow member")
 	}
 	if x.Withheld || x.OnBehalf != current.ID {
-		return nil, platform.FlowInstance{}, current, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "A source batch acts only for its original Flow member")
+		return nil, protocol.FlowInstance{}, current, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "A source batch acts only for its original Flow member")
 	}
 	return f, x, current, nil
 }
 
 type ReplayContext struct {
-	Asset    platform.FlowDeadLetterAsset
+	Asset    protocol.FlowDeadLetterAsset
 	Member   platform.Member
-	Instance platform.FlowInstance
+	Instance protocol.FlowInstance
 }
 
 type DeadLetterLoad struct {
 	Record   func(id string) (any, *platform.Error)
-	Snapshot func(instance string) (platform.FlowInstance, platform.Member, *platform.Error)
+	Snapshot func(instance string) (protocol.FlowInstance, platform.Member, *platform.Error)
 }
 
 func (l DeadLetterLoad) Load(id string) (ReplayContext, *platform.Error) {
@@ -264,9 +265,9 @@ func (l DeadLetterLoad) Load(id string) (ReplayContext, *platform.Error) {
 	if refusal != nil {
 		return ReplayContext{}, refusal
 	}
-	var asset platform.FlowDeadLetterAsset
+	var asset protocol.FlowDeadLetterAsset
 	switch value := record.(type) {
-	case platform.FlowDeadLetterAsset:
+	case protocol.FlowDeadLetterAsset:
 		asset = value
 	default:
 		return ReplayContext{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "The dead letter's protected source is unavailable")

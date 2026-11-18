@@ -3,6 +3,7 @@ package host
 import releaseowner "platformserver/services/devops/releases"
 
 import (
+	"platformserver/kernel/protocol"
 	"platformserver/platform"
 	automation "platformserver/services/automate/runtime"
 )
@@ -13,7 +14,7 @@ func (h hostView) flowBindings() automation.FlowBindingContext {
 		return h.t.bindApplications(ref, release, dependencies)
 	}, CloseCandidate: h.t.candidateWithBindings, SameRetained: checks.SameRetained, CodeMatches: checks.CodeMatches}
 }
-func (h hostView) BindFlow(app, name string, version int, prior platform.FlowBinding) (platform.FlowBinding, error) {
+func (h hostView) BindFlow(app, name string, version int, prior protocol.FlowBinding) (protocol.FlowBinding, error) {
 	return h.flowBindings().BindFlow(app, name, version, prior)
 }
 func (t *Tenant) nativeFlowAsset(owner platform.App, name string, version int) (platform.ReleaseAsset, error) {

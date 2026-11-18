@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"platformserver/kernel/protocol"
 	functionauthoring "platformserver/services/functions/authoring"
 	"slices"
 	"strings"
@@ -20,7 +21,7 @@ type Sandbox struct {
 	Member    func(id string) (platform.Member, bool)
 	Trace     func(func(platform.DecisionTrace)) func(platform.DecisionTrace)
 	Read      func(actor platform.Member, typ, id string, now time.Time) (json.RawMessage, *platform.Error)
-	Flow      func(id string) (platform.FlowInstance, bool)
+	Flow      func(id string) (protocol.FlowInstance, bool)
 	Current   func(actor platform.Member, typ, id string, now time.Time) *platform.Error
 	Owner     func(schema string) string
 	Submit    func(actor platform.Member, s *pb.Submission, now time.Time) (*platform.Error, []platform.FieldIssue)
@@ -198,10 +199,10 @@ func (r *CandidateRun) Step(i int, step SimulationStep) (Simulation, *platform.E
 
 	}
 	if r.Sandbox.Flows {
-		records, _, _ := r.Sandbox.Records(actor, platform.FlowInstanceType, platform.Query{Limit: 100}, r.Now)
+		records, _, _ := r.Sandbox.Records(actor, protocol.FlowInstanceType, platform.Query{Limit: 100}, r.Now)
 		for _, record := range records {
 			raw, _ := json.Marshal(record)
-			var instance platform.FlowInstance
+			var instance protocol.FlowInstance
 			_ = json.Unmarshal(raw, &instance)
 			result.Flows = append(result.Flows, SimulatedFlow{ID: instance.ID, Flow: instance.Flow, Version: instance.Version, Dependencies: instance.Dependencies, Release: instance.Release, State: instance.State, Tokens: instance.Tokens, Trace: instance.Trace, Outputs: instance.Outputs})
 		}

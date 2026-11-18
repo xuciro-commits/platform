@@ -2,6 +2,7 @@ package agents
 
 import (
 	"encoding/json"
+	"platformserver/kernel/protocol"
 	evaluation "platformserver/services/ai/evaluation"
 	"strings"
 	"sync"
@@ -11,15 +12,15 @@ import (
 )
 
 type Turns struct {
-	Agents      platform.AgentRuntime
+	Agents      protocol.AgentRuntime
 	Stopped     func() bool
 	Quarantined func() bool
-	DueTurns    func(time.Time) []platform.AgentTurn
+	DueTurns    func(time.Time) []protocol.AgentTurn
 	Allowed     func(platform.AgentRunRecord) (bool, *platform.Error)
 	Running     func(run string) bool
 	Call        func(platform.AIProvider, platform.AIModel, platform.Member, platform.ChatRequest, time.Time) (platform.ChatAnswer, *platform.AIError)
 	Meter       func(platform.Member, platform.AIUsage) *platform.Error
-	Step        func(platform.AgentResultStep, time.Time) bool
+	Step        func(protocol.AgentResultStep, time.Time) bool
 	Wake        func()
 }
 
@@ -52,16 +53,16 @@ func (r Turns) Due(now time.Time) []func() {
 	return out
 }
 
-func (r Turns) take(x platform.AgentTurn, now time.Time) {
+func (r Turns) take(x protocol.AgentTurn, now time.Time) {
 	{
 		if x.Stop != "" {
-			r.Step(platform.AgentResultStep{Run: x.Run.ID, Stop: x.Stop}, now)
+			r.Step(protocol.AgentResultStep{Run: x.Run.ID, Stop: x.Stop}, now)
 			return
 		}
 		if x.Run.OnBehalf != "" {
 			allowed, refusal := r.Allowed(x.Run)
 			if refusal != nil || !allowed {
-				r.Step(platform.AgentResultStep{Run: x.Run.ID, Stop: "the person no longer has access to this agent's app"}, now)
+				r.Step(protocol.AgentResultStep{Run: x.Run.ID, Stop: "the person no longer has access to this agent's app"}, now)
 				return
 			}
 		}
@@ -80,7 +81,7 @@ func (r Turns) take(x platform.AgentTurn, now time.Time) {
 			}
 			return
 		}
-		body := platform.AgentResultStep{Run: x.Run.ID, Content: answer.Content, Protocol: answer.Protocol, Usage: answer.Usage}
+		body := protocol.AgentResultStep{Run: x.Run.ID, Content: answer.Content, Protocol: answer.Protocol, Usage: answer.Usage}
 		if failure != nil {
 			if failure.Quota {
 				body.Stop = failure.Detail
@@ -126,7 +127,7 @@ func (r Turns) continueCalls(run platform.AgentRunRecord, now time.Time) {
 		workers.Wait()
 	}
 	for i, call := range calls {
-		if !r.Step(platform.AgentResultStep{Run: run.ID, CallID: call.ID, Tool: call.Name, Arguments: call.Arguments,
+		if !r.Step(protocol.AgentResultStep{Run: run.ID, CallID: call.ID, Tool: call.Name, Arguments: call.Arguments,
 			Observation: observations[i]}, now) {
 			break
 		}

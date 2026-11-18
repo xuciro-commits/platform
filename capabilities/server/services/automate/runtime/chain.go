@@ -2,6 +2,7 @@ package automation
 
 import (
 	"encoding/json"
+	"platformserver/kernel/protocol"
 	"slices"
 	"strings"
 
@@ -35,22 +36,22 @@ type ChainReader struct {
 
 func (c ChainReader) Read(ref string) (Chain, *platform.Error) {
 	typ, id, _ := strings.Cut(ref, "/")
-	if typ != platform.RunType && typ != platform.FlowInstanceType {
+	if typ != platform.RunType && typ != protocol.FlowInstanceType {
 		return Chain{}, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 	}
 	if _, err := c.Record(typ, id); err != nil {
 		return Chain{}, err
 	}
-	instance := func(id string) (platform.FlowInstance, bool) {
-		v, err := c.Record(platform.FlowInstanceType, id)
+	instance := func(id string) (protocol.FlowInstance, bool) {
+		v, err := c.Record(protocol.FlowInstanceType, id)
 		if err != nil {
-			return platform.FlowInstance{}, false
+			return protocol.FlowInstance{}, false
 		}
 		switch x := v.(type) {
-		case platform.FlowInstance:
+		case protocol.FlowInstance:
 			return x, true
 		default:
-			return platform.FlowInstance{}, false
+			return protocol.FlowInstance{}, false
 		}
 	}
 	find := func(typ, field, value string) []any {
@@ -93,7 +94,7 @@ func (c ChainReader) Read(ref string) (Chain, *platform.Error) {
 		if !ok {
 			return
 		}
-		ref := platform.FlowInstanceType + "/" + id
+		ref := protocol.FlowInstanceType + "/" + id
 		add(ChainNode{Ref: ref, Kind: "flow", Title: x.Title, State: x.State, Detail: x.Flow})
 		if x.Subject != "" && x.Parent == "" {
 			add(ChainNode{Ref: x.Subject, Kind: "record", Title: x.Subject})
@@ -104,9 +105,9 @@ func (c ChainReader) Read(ref string) (Chain, *platform.Error) {
 			link(ref, platform.RunType+"/"+run.ID)
 			c.run(run, add, link)
 		}
-		for _, c := range find(platform.FlowInstanceType, "parent", id) {
-			child := c.(platform.FlowInstance)
-			link(ref, platform.FlowInstanceType+"/"+child.ID)
+		for _, c := range find(protocol.FlowInstanceType, "parent", id) {
+			child := c.(protocol.FlowInstance)
+			link(ref, protocol.FlowInstanceType+"/"+child.ID)
 			walk(child.ID)
 		}
 	}

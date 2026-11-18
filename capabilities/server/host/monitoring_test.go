@@ -120,10 +120,10 @@ func newMonitoringTenant(tb testing.TB) *invariantTenant {
 		actions := append(platform.AccessActions(), platform.ProjectActions()...)
 		actions = append(actions, packages.Actions()...)
 		return controlowner.Owners{Policies: security.NewPolicies(), Packages: packages.New(id, PublicationResolver()), Actions: actions}
-	}, platform.Seat{Subjects: []string{"admin"}, Member: platform.Member{ID: "admin", Roles: map[string]string{controlowner.PlatformApp: controlowner.Admin, build.ID: build.Builder, "probe": "runner", platform.FlowApp: automation.Admin, platform.AgentApp: platform.AgentAdmin}}},
+	}, platform.Seat{Subjects: []string{"admin"}, Member: platform.Member{ID: "admin", Roles: map[string]string{controlowner.PlatformApp: controlowner.Admin, build.ID: build.Builder, "probe": "runner", runtimeprotocol.FlowApp: automation.Admin, platform.AgentApp: platform.AgentAdmin}}},
 		platform.Seat{Subjects: []string{"builder"}, Member: platform.Member{ID: "builder", Roles: map[string]string{build.ID: build.Builder, "probe": "runner"}}},
 		platform.Seat{Subjects: []string{"other"}, Member: platform.Member{ID: "other", Roles: map[string]string{build.ID: build.Builder, "probe": "runner"}}},
-		platform.Seat{Subjects: []string{"scoped"}, Member: platform.Member{ID: "scoped", Roles: map[string]string{build.ID: build.Builder, controlowner.PlatformApp: controlowner.Admin, platform.FlowApp: automation.Admin, platform.AgentApp: platform.AgentAdmin}, Scopes: []string{dataowner.SchemaSourcePulled}}},
+		platform.Seat{Subjects: []string{"scoped"}, Member: platform.Member{ID: "scoped", Roles: map[string]string{build.ID: build.Builder, controlowner.PlatformApp: controlowner.Admin, runtimeprotocol.FlowApp: automation.Admin, platform.AgentApp: platform.AgentAdmin}, Scopes: []string{dataowner.SchemaSourcePulled}}},
 		platform.Seat{Subjects: []string{"user"}, Member: platform.Member{ID: "user", Roles: map[string]string{}}})
 	var probeActions []platform.Action
 	for _, schema := range []string{"probe.start", "probe.step", "probe.undo"} {
@@ -375,7 +375,7 @@ func TestInvariantK4MonitoringOwnerBoundaries(t *testing.T) {
 			submit(member, "probe", "probe.start", "probe.event", key, map[string]string{"flow": name})
 			live.Lane.Lock()
 			defer live.Lane.Unlock()
-			for _, task := range slices.Clone(live.work.Queued(platform.FlowApp)) {
+			for _, task := range slices.Clone(live.work.Queued(runtimeprotocol.FlowApp)) {
 				if outcome := live.acceptWork(task, now); outcome != "ok" {
 					t.Fatalf("Flow delivery: %s", outcome)
 				}
@@ -387,7 +387,7 @@ func TestInvariantK4MonitoringOwnerBoundaries(t *testing.T) {
 		compensated := startFlow("builder", "compensated", "compensated")
 		rollback := startFlow("builder", "rollback", "rollback")
 		cancelled := startFlow("builder", "waiting", "cancelled")
-		submit("admin", platform.FlowApp, automation.SchemaFlowStop, platform.FlowInstanceType, cancelled, map[string]any{})
+		submit("admin", runtimeprotocol.FlowApp, automation.SchemaFlowStop, runtimeprotocol.FlowInstanceType, cancelled, map[string]any{})
 		privateFlow := startFlow("other", "compensated", "private-flow")
 		for _, id := range []string{"running", "waiting", "done", "failed", "cancelled", "private-agent"} {
 			member := "builder"
@@ -396,7 +396,7 @@ func TestInvariantK4MonitoringOwnerBoundaries(t *testing.T) {
 			}
 			submit(member, platform.AgentApp, platform.SchemaRunStart, platform.RunType, id, map[string]string{"agent": "probe.helper", "goal": "Goal " + id})
 		}
-		for _, step := range []platform.AgentResultStep{
+		for _, step := range []runtimeprotocol.AgentResultStep{
 			{Run: "waiting", Tool: "ask", Arguments: platform.Raw(map[string]string{"question": "What next?"})},
 			{Run: "done", Content: "Completed the goal"},
 			{Run: "failed", Stop: "the model failed 3 times"},
@@ -415,13 +415,13 @@ func TestInvariantK4MonitoringOwnerBoundaries(t *testing.T) {
 		for _, page := range []monitoring.MonitoringRunPage{adminPage, builderPage} {
 			for id, want := range map[string]string{waiting: "pending", done: "ok", compensated: "failed", rollback: "running", cancelled: "cancelled"} {
 				run := find(page, "flow:"+id)
-				view, refusal := live.RecordOf(t.Context(), admin, platform.FlowInstanceType, id, now)
+				view, refusal := live.RecordOf(t.Context(), admin, runtimeprotocol.FlowInstanceType, id, now)
 				if refusal != nil {
 					t.Fatal(refusal)
 				}
-				x := view.Record.(platform.FlowInstance)
+				x := view.Record.(runtimeprotocol.FlowInstance)
 				ref := platform.AssetRef{App: "probe", Kind: platform.AssetFlow, Name: x.Flow}
-				if run.Type != "automation" || run.Source != "flow" || run.Status != want || run.OwnerStatus != x.State || run.RecordRef != platform.FlowInstanceType+"/"+id || run.ResourceRef == nil || *run.ResourceRef != ref || run.Title != x.Title || !run.When.Equal(x.Changed.At) || run.Retryable {
+				if run.Type != "automation" || run.Source != "flow" || run.Status != want || run.OwnerStatus != x.State || run.RecordRef != runtimeprotocol.FlowInstanceType+"/"+id || run.ResourceRef == nil || *run.ResourceRef != ref || run.Title != x.Title || !run.When.Equal(x.Changed.At) || run.Retryable {
 					t.Fatalf("Flow owner projection: %+v; owner=%+v", run, x)
 				}
 			}
@@ -478,7 +478,7 @@ func TestInvariantK4MonitoringOwnerBoundaries(t *testing.T) {
 		}
 		page := read("admin", "?limit=100")
 		run := find(page, "flow:"+rollback)
-		if run.Status != "failed" || run.OwnerStatus != "stuck" || !run.Retryable || run.RetrySchema != automation.SchemaFlowRetry || run.RetryTarget == nil || *run.RetryTarget != (monitoring.MonitoringRetryTarget{Type: platform.FlowInstanceType, ID: rollback}) || run.RetrySchemaVersion == nil || run.RetrySchemaVersion.Check() != nil || run.RetryKind != "retry" {
+		if run.Status != "failed" || run.OwnerStatus != "stuck" || !run.Retryable || run.RetrySchema != automation.SchemaFlowRetry || run.RetryTarget == nil || *run.RetryTarget != (monitoring.MonitoringRetryTarget{Type: runtimeprotocol.FlowInstanceType, ID: rollback}) || run.RetrySchemaVersion == nil || run.RetrySchemaVersion.Check() != nil || run.RetryKind != "retry" {
 			t.Fatalf("the stuck Flow has no original recovery action: %+v", run)
 		}
 		if page.Overview.FailedRuns != adminPage.Overview.FailedRuns+1 || find(read("builder", "?limit=100"), run.ID).Retryable || find(read("scoped", "?limit=100"), run.ID).Retryable {
@@ -488,7 +488,7 @@ func TestInvariantK4MonitoringOwnerBoundaries(t *testing.T) {
 			if member == "admin" {
 				live.App("probe").(*monitoringFixture).undoBlocked.Store(false)
 			}
-			s := &pb.Submission{TenantId: live.ID, PrincipalId: member, Authority: platform.FlowApp, IdempotencyKey: "monitoring-flow-retry:" + member,
+			s := &pb.Submission{TenantId: live.ID, PrincipalId: member, Authority: runtimeprotocol.FlowApp, IdempotencyKey: "monitoring-flow-retry:" + member,
 				Target: &pb.EntityRef{Type: run.RetryTarget.Type, Id: run.RetryTarget.ID}, Schema: &pb.SchemaRef{Name: run.RetrySchema, Version: run.RetrySchemaVersion.Family}, Payload: platform.Raw(map[string]any{})}
 			raw, err := protojson.Marshal(s)
 			if err != nil {
@@ -510,12 +510,12 @@ func TestInvariantK4MonitoringOwnerBoundaries(t *testing.T) {
 		}
 		after := read("admin", "?limit=100")
 		recovered := find(after, run.ID)
-		view, refusal := live.RecordOf(t.Context(), admin, platform.FlowInstanceType, rollback, now)
+		view, refusal := live.RecordOf(t.Context(), admin, runtimeprotocol.FlowInstanceType, rollback, now)
 		if refusal != nil {
 			t.Fatal(refusal)
 		}
-		x := view.Record.(platform.FlowInstance)
-		if recovered.Status != "failed" || recovered.OwnerStatus != "compensated" || recovered.Retryable || after.Overview != page.Overview || !slices.ContainsFunc(x.Trace, func(line platform.FlowTraceLine) bool { return line.What == "retried" && line.By == "admin" }) || !slices.ContainsFunc(x.Trace, func(line platform.FlowTraceLine) bool { return line.What == "undone" }) {
+		x := view.Record.(runtimeprotocol.FlowInstance)
+		if recovered.Status != "failed" || recovered.OwnerStatus != "compensated" || recovered.Retryable || after.Overview != page.Overview || !slices.ContainsFunc(x.Trace, func(line runtimeprotocol.FlowTraceLine) bool { return line.What == "retried" && line.By == "admin" }) || !slices.ContainsFunc(x.Trace, func(line runtimeprotocol.FlowTraceLine) bool { return line.What == "undone" }) {
 			t.Fatalf("the Flow owner did not complete its original recovery: %+v; owner=%+v", recovered, x)
 		}
 	})

@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"maps"
 	"net/http"
+	runtimeprotocol "platformserver/kernel/protocol"
 	"platformserver/platform"
 	"platformserver/services/ai/runtime"
 	"slices"
@@ -87,7 +88,7 @@ func toolName(schema string) string {
 	return strings.NewReplacer(".", "_", "/", "_", "#", "_").Replace(schema)
 }
 
-func (g Tools) derived(m platform.Member) map[string]platform.CompiledAgentTool {
+func (g Tools) derived(m platform.Member) map[string]runtimeprotocol.CompiledAgentTool {
 	return agents.DerivedTools(g.Host.ModelToolSurface(m), "")
 }
 

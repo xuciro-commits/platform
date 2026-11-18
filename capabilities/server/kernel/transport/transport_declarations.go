@@ -157,10 +157,13 @@ func (s *schemas) ref(t reflect.Type) map[string]any {
 			if public := map[string]string{
 				"AIVendor": "Vendor", "AIProvider": "Provider", "AIModel": "Model", "AILimit": "Limit",
 				"AIUsage": "Usage", "AITotal": "Total", "AIUsageReport": "AIUsage",
-				"FlowToken": "Token", "FlowLoopFrame": "LoopFrame", "FlowTraceLine": "TraceLine",
 				"RelationLink": "Link", "RelationNote": "Note",
 				"LoginIdentity": "Identity",
 			}[name]; public != "" {
+				name = public
+			}
+		case "platformserver/kernel/protocol":
+			if public := map[string]string{"FlowToken": "Token", "FlowLoopFrame": "LoopFrame", "FlowTraceLine": "TraceLine"}[name]; public != "" {
 				name = public
 			}
 		case "platformserver/services/security/organization":

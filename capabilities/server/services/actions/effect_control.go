@@ -2,6 +2,7 @@ package actions
 
 import (
 	"encoding/json"
+	"platformserver/kernel/protocol"
 	"slices"
 	"strings"
 	"time"
@@ -13,7 +14,7 @@ import (
 type EffectControl struct {
 	Outbox    *Outbox
 	Endpoints *Endpoints
-	Agents    platform.AgentRuntime
+	Agents    protocol.AgentRuntime
 	Told      func(platform.Effect, platform.Outcome, time.Time, bool)
 	Valid     func(Endpoint) bool
 	Reviewed  func(Queued) bool

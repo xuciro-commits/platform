@@ -3,6 +3,7 @@ package monitoring
 import (
 	"cmp"
 	"encoding/json"
+	"platformserver/kernel/protocol"
 	"slices"
 	"strings"
 	"time"
@@ -162,10 +163,10 @@ func EffectStatus(state string) string {
 	}
 }
 
-func (r *Runs) Flows(flows []platform.FlowInstance, retrySchema string) {
+func (r *Runs) Flows(flows []protocol.FlowInstance, retrySchema string) {
 	for _, flow := range flows {
 		app, _, _ := strings.Cut(flow.Flow, ".")
-		run := MonitoringRun{Type: "automation", Source: "flow", ID: "flow:" + flow.ID, Title: cmp.Or(flow.Title, flow.Flow), ResourceRef: &platform.AssetRef{App: app, Kind: platform.AssetFlow, Name: flow.Flow}, RecordRef: platform.FlowInstanceType + "/" + flow.ID, When: flow.Changed.At, Status: "unknown", OwnerStatus: flow.State}
+		run := MonitoringRun{Type: "automation", Source: "flow", ID: "flow:" + flow.ID, Title: cmp.Or(flow.Title, flow.Flow), ResourceRef: &platform.AssetRef{App: app, Kind: platform.AssetFlow, Name: flow.Flow}, RecordRef: protocol.FlowInstanceType + "/" + flow.ID, When: flow.Changed.At, Status: "unknown", OwnerStatus: flow.State}
 		if run.When.IsZero() {
 			run.When = flow.Created.At
 		}
@@ -182,7 +183,7 @@ func (r *Runs) Flows(flows []platform.FlowInstance, retrySchema string) {
 			run.Status = "cancelled"
 		}
 		if flow.State == "stuck" && !flow.Archived {
-			r.Retry(&run, retrySchema, platform.FlowInstanceType, flow.ID, "retry")
+			r.Retry(&run, retrySchema, protocol.FlowInstanceType, flow.ID, "retry")
 		}
 		r.Add(run)
 	}

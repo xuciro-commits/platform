@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"platformserver/kernel/protocol"
 	"strings"
 	"sync"
 	"time"
@@ -23,7 +24,7 @@ type FrameStore struct {
 	Files  platform.FileStore
 }
 
-func (s FrameStore) key(ref platform.FlowStateArtifact) (string, error) {
+func (s FrameStore) key(ref protocol.FlowStateArtifact) (string, error) {
 	ticket, te := hex.DecodeString(ref.Ticket)
 	digest, de := hex.DecodeString(ref.Digest)
 	if ref.Tenant != s.Tenant || ref.Instance == "" || ref.Version < 1 || te != nil || len(ticket) != 16 || de != nil || len(digest) != sha256.Size || ref.Size < 1 || ref.Size > MaxFrameBytes {
@@ -33,18 +34,18 @@ func (s FrameStore) key(ref platform.FlowStateArtifact) (string, error) {
 	return fmt.Sprintf("%s/artifacts/flow/%x/%s/%s.json", s.Tenant, owner, ref.Ticket, ref.Digest), nil
 }
 
-func (s FrameStore) Seal(instance string, version int, raw []byte, budget int) (platform.FlowStateArtifact, error) {
+func (s FrameStore) Seal(instance string, version int, raw []byte, budget int) (protocol.FlowStateArtifact, error) {
 	if budget <= 0 || budget > MaxFrameBytes {
 		budget = MaxFrameBytes
 	}
 	if len(raw) == 0 || len(raw) > budget || !json.Valid(raw) {
-		return platform.FlowStateArtifact{}, fmt.Errorf("the Flow frame exceeds its sealed JSON budget")
+		return protocol.FlowStateArtifact{}, fmt.Errorf("the Flow frame exceeds its sealed JSON budget")
 	}
 	var ticket [16]byte
 	if _, err := rand.Read(ticket[:]); err != nil {
-		return platform.FlowStateArtifact{}, err
+		return protocol.FlowStateArtifact{}, err
 	}
-	ref := platform.FlowStateArtifact{Tenant: s.Tenant, Instance: instance, Version: version, Ticket: hex.EncodeToString(ticket[:]), Digest: fmt.Sprintf("%x", sha256.Sum256(raw)), Size: len(raw)}
+	ref := protocol.FlowStateArtifact{Tenant: s.Tenant, Instance: instance, Version: version, Ticket: hex.EncodeToString(ticket[:]), Digest: fmt.Sprintf("%x", sha256.Sum256(raw)), Size: len(raw)}
 	key, err := s.key(ref)
 	if err != nil {
 		return ref, err
@@ -55,7 +56,7 @@ func (s FrameStore) Seal(instance string, version int, raw []byte, budget int) (
 	return ref, nil
 }
 
-func (s FrameStore) Read(ref platform.FlowStateArtifact) ([]byte, error) {
+func (s FrameStore) Read(ref protocol.FlowStateArtifact) ([]byte, error) {
 	key, err := s.key(ref)
 	if err != nil {
 		return nil, err
@@ -75,7 +76,7 @@ func (s FrameStore) Read(ref platform.FlowStateArtifact) ([]byte, error) {
 	return raw, nil
 }
 
-func (s FrameStore) Discard(ref platform.FlowStateArtifact) error {
+func (s FrameStore) Discard(ref protocol.FlowStateArtifact) error {
 	key, err := s.key(ref)
 	if err != nil {
 		return err
@@ -145,7 +146,7 @@ func (s FrameStore) References(images func(visit func(json.RawMessage) error) er
 					if err != nil {
 						return err
 					}
-					var ref platform.FlowStateArtifact
+					var ref protocol.FlowStateArtifact
 					if err := json.Unmarshal(encoded, &ref); err != nil {
 						return fmt.Errorf("Flow artifact reference is invalid: %w", err)
 					}
@@ -164,7 +165,7 @@ func (s FrameStore) References(images func(visit func(json.RawMessage) error) er
 						if err != nil {
 							return err
 						}
-						var ref platform.FlowStateArtifact
+						var ref protocol.FlowStateArtifact
 						if err := json.Unmarshal(encoded, &ref); err != nil {
 							return err
 						}

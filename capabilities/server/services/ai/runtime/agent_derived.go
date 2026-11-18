@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"maps"
+	"platformserver/kernel/protocol"
 	"slices"
 	"strings"
 	"time"
@@ -23,7 +24,7 @@ const (
 	toolNameLimit    = 64
 )
 
-func (a *Agents) Compiled(run platform.AgentRunRecord, d *platform.CompiledAgent) *platform.CompiledAgent {
+func (a *Agents) Compiled(run platform.AgentRunRecord, d *protocol.CompiledAgent) *protocol.CompiledAgent {
 	if d == nil {
 		return nil
 	}
@@ -41,7 +42,7 @@ func (a *Agents) Compiled(run platform.AgentRunRecord, d *platform.CompiledAgent
 	return &out
 }
 
-func (a *Agents) tool(run platform.AgentRunRecord, d *platform.CompiledAgent, name string) (platform.CompiledAgentTool, bool) {
+func (a *Agents) tool(run platform.AgentRunRecord, d *protocol.CompiledAgent, name string) (protocol.CompiledAgentTool, bool) {
 	if tool, ok := d.Toolset[name]; ok {
 		return tool, true
 	}
@@ -49,7 +50,7 @@ func (a *Agents) tool(run platform.AgentRunRecord, d *platform.CompiledAgent, na
 	return tool, ok
 }
 
-func (a *Agents) derived(run platform.AgentRunRecord, d *platform.CompiledAgent) map[string]platform.CompiledAgentTool {
+func (a *Agents) derived(run platform.AgentRunRecord, d *protocol.CompiledAgent) map[string]protocol.CompiledAgentTool {
 	reader := a.readsAs(run)
 	if reader == nil {
 		return nil
@@ -58,9 +59,9 @@ func (a *Agents) derived(run platform.AgentRunRecord, d *platform.CompiledAgent)
 	return DerivedTools(a.host.AgentSurface(*reader, d.App), focus)
 }
 
-func DerivedTools(surface platform.AgentSurface, focus string) map[string]platform.CompiledAgentTool {
-	out := map[string]platform.CompiledAgentTool{}
-	add := func(tool platform.CompiledAgentTool) {
+func DerivedTools(surface platform.AgentSurface, focus string) map[string]protocol.CompiledAgentTool {
+	out := map[string]protocol.CompiledAgentTool{}
+	add := func(tool protocol.CompiledAgentTool) {
 		tool.Tool.Name = toolName(tool.Tool.Name)
 		out[tool.Tool.Name] = tool
 	}
@@ -132,7 +133,7 @@ func fieldList(info platform.EntityInfo) string {
 	return strings.Join(parts, ", ")
 }
 
-func objectTool(info platform.EntityInfo, op string) platform.CompiledAgentTool {
+func objectTool(info platform.EntityInfo, op string) protocol.CompiledAgentTool {
 	properties := map[string]any{
 		"domain": map[string]any{"type": "array", "items": map[string]any{"type": "array"}, "description": "Filters in the prefix form, like [[\"field\",\"=\",\"value\"]]"},
 		"search": map[string]any{"type": "string", "description": "Words to find"},
@@ -149,13 +150,13 @@ func objectTool(info platform.EntityInfo, op string) platform.CompiledAgentTool 
 	}
 	properties["rationale"] = rationale()
 	plural := cmp.Or(info.Plural, info.Title, info.Type)
-	return platform.CompiledAgentTool{Kind: kind, Schema: info.Type, Tool: platform.Tool{
+	return protocol.CompiledAgentTool{Kind: kind, Schema: info.Type, Tool: platform.Tool{
 		Name:        op + "_" + info.Type,
 		Description: fmt.Sprintf("%s %s (%s) you may read. Fields: %s.", verb, plural, info.Type, fieldList(info)),
 		Properties:  properties, Required: []string{"rationale"}}}
 }
 
-func actionTool(x platform.AgentAction, entities map[string]platform.EntityInfo) platform.CompiledAgentTool {
+func actionTool(x platform.AgentAction, entities map[string]platform.EntityInfo) protocol.CompiledAgentTool {
 	action := x.Action
 	var info *platform.EntityInfo
 	if entity, ok := entities[action.Target]; ok {
@@ -173,7 +174,7 @@ func actionTool(x platform.AgentAction, entities map[string]platform.EntityInfo)
 	if action.New {
 		target = "The ID of the new " + cmp.Or(action.Target, "record") + ", short and unique"
 	}
-	return platform.CompiledAgentTool{Kind: "action", Schema: action.Schema, Target: action.Target, Owner: x.Owner, Tool: platform.Tool{
+	return protocol.CompiledAgentTool{Kind: "action", Schema: action.Schema, Target: action.Target, Owner: x.Owner, Tool: platform.Tool{
 		Name:        action.Schema,
 		Description: description,
 		Properties: map[string]any{"target": map[string]any{"type": "string", "description": target}, "rationale": rationale(),
@@ -181,7 +182,7 @@ func actionTool(x platform.AgentAction, entities map[string]platform.EntityInfo)
 		Required: []string{"target", "rationale", "payload"}}}
 }
 
-func functionTool(f platform.AgentFunction) platform.CompiledAgentTool {
+func functionTool(f platform.AgentFunction) protocol.CompiledAgentTool {
 	properties := map[string]any{
 		"source":    map[string]any{"type": "string", "description": "The ID of the " + f.Function.Object + " record it reads"},
 		"rationale": rationale(),
@@ -191,14 +192,14 @@ func functionTool(f platform.AgentFunction) platform.CompiledAgentTool {
 		properties["question"] = map[string]any{"type": "string", "description": "The question to answer"}
 		required = append(required, "question")
 	}
-	return platform.CompiledAgentTool{Kind: "function", Schema: f.Call.Action.Schema, Target: f.Call.Action.Target, Owner: f.Call.Owner,
+	return protocol.CompiledAgentTool{Kind: "function", Schema: f.Call.Action.Schema, Target: f.Call.Action.Target, Owner: f.Call.Owner,
 		Preset: map[string]any{"name": f.Function.Name, "app": f.Owner}, Tool: platform.Tool{
 			Name:        "call_" + f.Owner + "_" + f.Function.Name,
 			Description: fmt.Sprintf("%s: %s Asks the AI function over a %s record and keeps its suggestion for review. Drafted for a person to confirm.", f.Function.Title, f.Function.Description, f.Function.Object),
 			Properties:  properties, Required: required}}
 }
 
-func (a *Agents) objects(run platform.AgentRunRecord, tool platform.CompiledAgentTool, args map[string]any, now time.Time) (platform.AgentObservation, *platform.Error) {
+func (a *Agents) objects(run platform.AgentRunRecord, tool protocol.CompiledAgentTool, args map[string]any, now time.Time) (platform.AgentObservation, *platform.Error) {
 	reader := a.readsAs(run)
 	if reader == nil {
 		return platform.AgentObservation{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "A read needs a reader")
@@ -207,7 +208,7 @@ func (a *Agents) objects(run platform.AgentRunRecord, tool platform.CompiledAgen
 	return a.host.AgentObjects(*reader, op, raw, now)
 }
 
-func ObjectRequest(tool platform.CompiledAgentTool, args map[string]any) (string, json.RawMessage) {
+func ObjectRequest(tool protocol.CompiledAgentTool, args map[string]any) (string, json.RawMessage) {
 	set := map[string]any{"object": tool.Schema}
 	for _, key := range []string{"domain", "search"} {
 		if value, ok := args[key]; ok && value != nil {

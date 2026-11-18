@@ -3,6 +3,7 @@ package hostroles
 import (
 	"fmt"
 	"maps"
+	"platformserver/kernel/protocol"
 	"slices"
 
 	runtimekernel "platformserver/kernel"
@@ -21,7 +22,7 @@ type Capabilities struct {
 	Answerers               map[string]platform.Answerer
 	Builders                map[string]build.ConstructionDrafts
 	Operations              map[string]runtimekernel.OperationOwner
-	DynamicAgents           map[string]platform.DynamicAgentDefinitions
+	DynamicAgents           map[string]protocol.DynamicAgentDefinitions
 	SimulationFactories     map[string]platform.SimulationFactory
 	SimulationIdentities    map[string]platform.SimulationIdentityFactory
 	SimulationOrganizations map[string]platform.SimulationOrganizationFactory
@@ -41,7 +42,7 @@ type Capabilities struct {
 	InputReceivers          map[string]platform.InputReceiver
 	RelationSources         map[string]platform.LegacyRelationSource
 	FunctionAssets          map[string]platform.RetainedFunctionAssets
-	Agents                  map[string]platform.AgentRuntime
+	Agents                  map[string]protocol.AgentRuntime
 	Knowledge               map[string]platform.Glossary
 }
 
@@ -50,7 +51,7 @@ func CapabilitiesOf(apps []platform.App) Capabilities {
 		States: map[string]platform.AcceptedStateApp{}, Inputs: map[string]platform.AcceptedInputApp{},
 		Assets: map[string]platform.AssetLifecycleOwner{}, Answerers: map[string]platform.Answerer{},
 		Builders: map[string]build.ConstructionDrafts{}, Operations: map[string]runtimekernel.OperationOwner{},
-		DynamicAgents: map[string]platform.DynamicAgentDefinitions{}, SimulationFactories: map[string]platform.SimulationFactory{},
+		DynamicAgents: map[string]protocol.DynamicAgentDefinitions{}, SimulationFactories: map[string]platform.SimulationFactory{},
 		SimulationIdentities: map[string]platform.SimulationIdentityFactory{}, SimulationOrganizations: map[string]platform.SimulationOrganizationFactory{},
 		Observers: map[string]platform.Observer{}, Listeners: map[string]platform.Listener{}, Identity: map[string]platform.IdentityDirectory{},
 		IdentityOwners: map[string]controlowner.IdentityOwner{}, Directories: map[string]platform.Directory{}, Linkers: map[string]platform.Linker{},
@@ -59,7 +60,7 @@ func CapabilitiesOf(apps []platform.App) Capabilities {
 		PackageCatalogs: map[string]packages.Catalog{}, IdentityProfiles: map[string]platform.IdentityProfile{},
 		InputReceivers: map[string]platform.InputReceiver{}, RelationSources: map[string]platform.LegacyRelationSource{},
 		FunctionAssets: map[string]platform.RetainedFunctionAssets{},
-		Agents:         map[string]platform.AgentRuntime{}, Knowledge: map[string]platform.Glossary{},
+		Agents:         map[string]protocol.AgentRuntime{}, Knowledge: map[string]platform.Glossary{},
 	}
 	for _, app := range apps {
 		id := app.Manifest().ID
@@ -88,7 +89,7 @@ func CapabilitiesOf(apps []platform.App) Capabilities {
 			out.Operations[id] = owner
 		}
 		switch owner := app.(type) {
-		case platform.DynamicAgentDefinitions:
+		case protocol.DynamicAgentDefinitions:
 			out.DynamicAgents[id] = owner
 		}
 		switch owner := app.(type) {
@@ -168,7 +169,7 @@ func CapabilitiesOf(apps []platform.App) Capabilities {
 			out.FunctionAssets[id] = owner
 		}
 		switch owner := app.(type) {
-		case platform.AgentRuntime:
+		case protocol.AgentRuntime:
 			out.Agents[id] = owner
 		}
 		switch owner := app.(type) {
@@ -216,7 +217,7 @@ type Roles struct {
 	InputReceivers  map[string]platform.InputReceiver
 	RelationSource  platform.LegacyRelationSource
 	FunctionAssets  map[string]platform.RetainedFunctionAssets
-	Agents          platform.AgentRuntime
+	Agents          protocol.AgentRuntime
 	Glossary        platform.Glossary
 	Observers       []platform.Observer
 	Listeners       []string

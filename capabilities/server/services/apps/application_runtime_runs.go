@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
+	"platformserver/kernel/protocol"
 	"platformserver/platform"
 	"slices"
 	"strings"
@@ -127,17 +128,17 @@ func (ctx Context) Runs(m platform.Member, ref platform.AssetRef, offset, limit 
 	readableFlows := map[string]bool{}
 	operationNodes := map[string]string{}
 	{
-		rows, err := records(platform.FlowInstanceType, nil)
+		rows, err := records(protocol.FlowInstanceType, nil)
 		if err != nil {
 			return out, err
 		}
 		for _, row := range rows {
-			var x platform.FlowInstance
+			var x protocol.FlowInstance
 			raw, _ := json.Marshal(row)
 			if json.Unmarshal(raw, &x) != nil {
 				continue
 			}
-			readableFlows[platform.FlowInstanceType+"/"+x.ID] = true
+			readableFlows[protocol.FlowInstanceType+"/"+x.ID] = true
 			var resource platform.AssetRef
 			for r := range graphFor(x.Release) {
 				if r.Kind == platform.AssetFlow && r.Name == x.Flow {
@@ -236,14 +237,14 @@ func (ctx Context) Runs(m platform.Member, ref platform.AssetRef, offset, limit 
 		}
 		parentType, parentID, _ := strings.Cut(effect.Target, "/")
 		_, hasParent := relatedFlows[parentID]
-		if parentType == platform.FlowInstanceType && hasParent {
+		if parentType == protocol.FlowInstanceType && hasParent {
 			association = "flow"
 		}
 		if !belongs(effect.Applications) && !graphFor(binding.Call.Release)[resource] && association != "flow" {
 			association = ""
 			for _, source := range binding.Call.Sources {
 				typ, id, _ := strings.Cut(source, "/")
-				if typ == platform.FlowInstanceType {
+				if typ == protocol.FlowInstanceType {
 					if _, ok := relatedFlows[id]; ok {
 						association = "flow"
 						break

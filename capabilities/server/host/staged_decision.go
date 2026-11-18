@@ -7,6 +7,7 @@ import (
 	"platformserver/hostroles"
 	runtimekernel "platformserver/kernel"
 	acceptedformat "platformserver/kernel/acceptedformat"
+	runtimeprotocol "platformserver/kernel/protocol"
 	"platformserver/kernel/transport"
 	"platformserver/services/actions"
 	automation "platformserver/services/automate/runtime"
@@ -362,7 +363,7 @@ func (d *stagedDecision) newControlView(images map[string]json.RawMessage) *Tena
 		return d.Failure
 	}
 	if d.tenant.Agents != nil {
-		view.Agents = d.stateApp(d.tenant.Agents).(platform.AgentRuntime)
+		view.Agents = d.stateApp(d.tenant.Agents).(runtimeprotocol.AgentRuntime)
 	}
 	return view
 }

@@ -3,6 +3,7 @@ package automation
 import (
 	"encoding/json"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
+	"platformserver/kernel/protocol"
 	"platformserver/platform"
 )
 
@@ -28,7 +29,7 @@ func (s OperationInputSealer) Prepare(member platform.Member, instance string, r
 	refuse := func(code pb.ErrorCode, message string) (*OperationInput, *platform.Error) {
 		return nil, platform.Refuse(code, message)
 	}
-	if request.App == "" || request.Name == "" || request.Key == "" || request.OnBehalf != member.ID || request.Target != platform.FlowInstanceType+"/"+instance {
+	if request.App == "" || request.Name == "" || request.Key == "" || request.OnBehalf != member.ID || request.Target != protocol.FlowInstanceType+"/"+instance {
 		return refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "The prepared window names an invalid Compute operation")
 	}
 	op, version, refusal := s.Operation(request)

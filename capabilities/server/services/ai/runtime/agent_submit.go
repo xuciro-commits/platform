@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"google.golang.org/protobuf/proto"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
+	runtimeprotocol "platformserver/kernel/protocol"
 	"platformserver/platform"
 	agents "platformserver/services/ai/evaluation"
 	"slices"
@@ -313,7 +314,7 @@ func (a *Agents) ended(c platform.Caller, r *pb.ChangeRecord, run platform.Agent
 	}
 }
 
-func (a *Agents) replayLegacyAction(c platform.Caller, d *platform.CompiledAgent, run *platform.AgentRunRecord, tool platform.CompiledAgentTool, args map[string]any, raw json.RawMessage, step *platform.RunStep, now time.Time) (string, func(*pb.ChangeRecord)) {
+func (a *Agents) replayLegacyAction(c platform.Caller, d *runtimeprotocol.CompiledAgent, run *platform.AgentRunRecord, tool runtimeprotocol.CompiledAgentTool, args map[string]any, raw json.RawMessage, step *platform.RunStep, now time.Time) (string, func(*pb.ChangeRecord)) {
 	h := a.host
 	str := func(name string) string { value, _ := args[name].(string); return value }
 	if run.ActionsUsed >= d.Budget.Actions {

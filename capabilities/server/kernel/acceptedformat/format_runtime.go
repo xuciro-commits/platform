@@ -8,6 +8,7 @@ import (
 	"google.golang.org/protobuf/proto"
 	"io"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
+	"platformserver/kernel/protocol"
 	persistence "platformserver/kernel/store"
 	"platformserver/platform"
 	"slices"
@@ -28,7 +29,7 @@ type RuntimeAgent struct {
 	At          time.Time                `json:"at"`
 	RequestHash string                   `json:"requestHash"`
 	Digest      string                   `json:"digest"`
-	Step        platform.AgentResultStep `json:"step"`
+	Step        protocol.AgentResultStep `json:"step"`
 	UsageBefore string                   `json:"usageBefore,omitempty"`
 	Changes     json.RawMessage          `json:"changes"`
 }

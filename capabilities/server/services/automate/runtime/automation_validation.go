@@ -4,6 +4,7 @@ import (
 	"cmp"
 	"fmt"
 	"maps"
+	runtimeprotocol "platformserver/kernel/protocol"
 	"platformserver/platform"
 	"slices"
 	"strings"
@@ -180,12 +181,12 @@ func (f *Flows) checkBinding(x FlowInstance) error {
 	return err
 }
 
-func (f *Flows) binding(x FlowInstance) (platform.FlowBinding, error) {
+func (f *Flows) binding(x FlowInstance) (runtimeprotocol.FlowBinding, error) {
 	d := f.def(x.Flow, x.Version)
 	if d == nil {
-		return platform.FlowBinding{}, fmt.Errorf("flow instance %s runs %s version %d, which the code no longer declares", x.ID, x.Flow, x.Version)
+		return runtimeprotocol.FlowBinding{}, fmt.Errorf("flow instance %s runs %s version %d, which the code no longer declares", x.ID, x.Flow, x.Version)
 	}
-	bound, err := f.host.BindFlow(d.app, d.Name, d.Version, platform.FlowBinding{Dependencies: x.Dependencies, Release: x.Release, Applications: x.Applications, Existing: true})
+	bound, err := f.host.BindFlow(d.app, d.Name, d.Version, runtimeprotocol.FlowBinding{Dependencies: x.Dependencies, Release: x.Release, Applications: x.Applications, Existing: true})
 	if err != nil {
 		return bound, fmt.Errorf("flow instance %s: %w", x.ID, err)
 	}

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"maps"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
+	runtimeprotocol "platformserver/kernel/protocol"
 	"platformserver/platform"
 	"slices"
 	"strings"
@@ -16,17 +17,20 @@ import (
 type AgentEvaluator struct {
 	mu                sync.Mutex
 	pendingEvaluation *platform.Evaluation
-	context           platform.AgentEvaluationRuntime
+	context           runtimeprotocol.AgentEvaluationRuntime
 }
 
-func NewAgentEvaluator() platform.AgentEvaluator      { return &AgentEvaluator{} }
-func ownerOf(h platform.AgentHost, typ string) string { owner, _ := h.OwnerOf(typ); return owner }
+func NewAgentEvaluator() runtimeprotocol.AgentEvaluator { return &AgentEvaluator{} }
+func ownerOf(h runtimeprotocol.AgentHost, typ string) string {
+	owner, _ := h.OwnerOf(typ)
+	return owner
+}
 
 const evaluationRuns = 20
 const outcomeLimit = 4000
 const suiteRuns = 3
 
-func decision(d *platform.CompiledAgent, steps []platform.RunStep, result string, value func(i int) string) (actions []string, bad []string, out string) {
+func decision(d *runtimeprotocol.CompiledAgent, steps []platform.RunStep, result string, value func(i int) string) (actions []string, bad []string, out string) {
 	for i, s := range steps {
 		tool, ok := d.Toolset[s.Tool]
 		if !ok || tool.Kind != "action" && tool.Kind != "protocol" {
@@ -90,7 +94,7 @@ func minBudget(a, b platform.Budget) platform.Budget {
 	return out
 }
 
-func (a *AgentEvaluator) Evaluate(ctx platform.AgentEvaluationRuntime, ev platform.Evaluation, now time.Time, checkpoint func(*platform.Evaluation) bool) platform.Evaluation {
+func (a *AgentEvaluator) Evaluate(ctx runtimeprotocol.AgentEvaluationRuntime, ev platform.Evaluation, now time.Time, checkpoint func(*platform.Evaluation) bool) platform.Evaluation {
 	a.context = ctx
 	a.mu.Lock()
 	pending := a.pendingEvaluation
@@ -114,7 +118,7 @@ func (a *AgentEvaluator) Evaluate(ctx platform.AgentEvaluationRuntime, ev platfo
 		a.mu.Unlock()
 		return false
 	}
-	var d *platform.CompiledAgent
+	var d *runtimeprotocol.CompiledAgent
 	var definitionErr error
 	var model platform.AIModel
 	var pv platform.AIProvider
@@ -258,7 +262,7 @@ func evaluationScore(ev *platform.Evaluation) {
 	}
 }
 
-func (a *AgentEvaluator) rerun(evaluation string, d *platform.CompiledAgent, run platform.AgentRunRecord, model platform.AIModel, pv platform.AIProvider, who platform.Member, now time.Time) platform.EvalCase {
+func (a *AgentEvaluator) rerun(evaluation string, d *runtimeprotocol.CompiledAgent, run platform.AgentRunRecord, model platform.AIModel, pv platform.AIProvider, who platform.Member, now time.Time) platform.EvalCase {
 	if refusal := a.read(func() { d = a.context.Compiled(run, d) }); refusal != nil {
 		return platform.EvalCase{Run: run.ID, Verdict: "fails", Candidate: refusal.Error()}
 	}
@@ -316,7 +320,7 @@ func (a *AgentEvaluator) rerun(evaluation string, d *platform.CompiledAgent, run
 	return x
 }
 
-func (a *AgentEvaluator) suite(ev platform.Evaluation, d *platform.CompiledAgent, model platform.AIModel, pv platform.AIProvider, who platform.Member, now time.Time, checkpoint func(*platform.Evaluation) bool) platform.Evaluation {
+func (a *AgentEvaluator) suite(ev platform.Evaluation, d *runtimeprotocol.CompiledAgent, model platform.AIModel, pv platform.AIProvider, who platform.Member, now time.Time, checkpoint func(*platform.Evaluation) bool) platform.Evaluation {
 	if refusal := a.read(func() { d = a.context.Compiled(platform.AgentRunRecord{Agent: ev.Agent, OnBehalf: who.ID}, d) }); refusal != nil {
 		return ev
 	}
@@ -382,7 +386,7 @@ func (a *AgentEvaluator) suite(ev platform.Evaluation, d *platform.CompiledAgent
 	return ev
 }
 
-func (a *AgentEvaluator) dryRun(evaluation string, d *platform.CompiledAgent, run platform.AgentRunRecord, model platform.AIModel, pv platform.AIProvider, who platform.Member, now time.Time, room platform.Budget) (platform.AgentRunRecord, string) {
+func (a *AgentEvaluator) dryRun(evaluation string, d *runtimeprotocol.CompiledAgent, run platform.AgentRunRecord, model platform.AIModel, pv platform.AIProvider, who platform.Member, now time.Time, room platform.Budget) (platform.AgentRunRecord, string) {
 	h := a.context.Host
 	dry := platform.AgentRunRecord{Protocol: map[int]json.RawMessage{}, Record: run.Record, Agent: run.Agent, Goal: run.Goal, Ref: run.Ref, Seen: run.Seen, OnBehalf: run.OnBehalf, Steps: []platform.RunStep{}}
 	priorTokens := 0
@@ -471,7 +475,7 @@ func (a *AgentEvaluator) dryRun(evaluation string, d *platform.CompiledAgent, ru
 	return dry, ""
 }
 
-func (a *AgentEvaluator) dryUse(d *platform.CompiledAgent, run, dry platform.AgentRunRecord, tool platform.CompiledAgentTool, args map[string]any, raw json.RawMessage, now time.Time) string {
+func (a *AgentEvaluator) dryUse(d *runtimeprotocol.CompiledAgent, run, dry platform.AgentRunRecord, tool runtimeprotocol.CompiledAgentTool, args map[string]any, raw json.RawMessage, now time.Time) string {
 	strip := func(s string) string {
 		var m map[string]json.RawMessage
 		json.Unmarshal([]byte(s), &m)
@@ -497,7 +501,7 @@ func (a *AgentEvaluator) dryUse(d *platform.CompiledAgent, run, dry platform.Age
 	return answer
 }
 
-func (a *AgentEvaluator) dryUseScoped(d *platform.CompiledAgent, run, dry platform.AgentRunRecord, tool platform.CompiledAgentTool, args map[string]any, raw json.RawMessage, now time.Time, observes bool) string {
+func (a *AgentEvaluator) dryUseScoped(d *runtimeprotocol.CompiledAgent, run, dry platform.AgentRunRecord, tool runtimeprotocol.CompiledAgentTool, args map[string]any, raw json.RawMessage, now time.Time, observes bool) string {
 	h := a.context.Host
 	c := a.context.Automation(platform.AgentApp, true)
 	if observes && tool.Kind != "knowledge" {
@@ -548,7 +552,7 @@ func (a *AgentEvaluator) dryUseScoped(d *platform.CompiledAgent, run, dry platfo
 }
 
 func (a *AgentEvaluator) read(work func()) *platform.Error {
-	return a.context.Host.WithAgentRead(func(current platform.AgentEvaluationRuntime) *platform.Error {
+	return a.context.Host.WithAgentRead(func(current runtimeprotocol.AgentEvaluationRuntime) *platform.Error {
 		previous := a.context
 		a.context = current
 		defer func() { a.context = previous }()

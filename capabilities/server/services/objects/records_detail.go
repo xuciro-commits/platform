@@ -3,6 +3,7 @@ package objects
 import (
 	"encoding/json"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
+	"platformserver/kernel/protocol"
 	"platformserver/kernel/records"
 	"platformserver/platform"
 	"reflect"
@@ -268,7 +269,7 @@ func (t *Owner) recordWork(m platform.Member, typ, id string, now time.Time) ([]
 	partial := false
 	if t.HasProcesses() {
 		domain, _ := json.Marshal([]any{[]any{"subject", "=", typ + "/" + id}})
-		page, err := t.recordsRead(m, platform.FlowInstanceType, platform.Query{Domain: domain, Sort: []string{"-id"}, Limit: 20, Archived: true}, now)
+		page, err := t.recordsRead(m, protocol.FlowInstanceType, platform.Query{Domain: domain, Sort: []string{"-id"}, Limit: 20, Archived: true}, now)
 		if err != nil {
 			partial = true
 		} else {

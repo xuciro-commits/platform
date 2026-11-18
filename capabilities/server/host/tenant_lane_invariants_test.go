@@ -3,6 +3,7 @@ package host
 import (
 	"context"
 	"encoding/json"
+	"platformserver/kernel/protocol"
 	"platformserver/services/actions"
 	automationauthoring "platformserver/services/automate/authoring"
 	"platformserver/services/objects"
@@ -107,7 +108,7 @@ func TestInvariantK13BackgroundRoundReleasesLaneBetweenTasks(t *testing.T) {
 		mu.Unlock()
 	})
 	live.Work(invariantClock)
-	if got := live.Projection.Type(platform.FlowInstanceType).Rows().Len(); got != 1 {
+	if got := live.Projection.Type(protocol.FlowInstanceType).Rows().Len(); got != 1 {
 		t.Fatalf("scheduled instances: got %d; want 1", got)
 	}
 	mu.Lock()

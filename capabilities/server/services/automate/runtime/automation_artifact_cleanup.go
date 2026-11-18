@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"fmt"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
+	"platformserver/kernel/protocol"
 	"platformserver/platform"
 	"slices"
 	"time"
@@ -42,17 +43,17 @@ func validateArtifactCleanup(x FlowInstance) error {
 	return nil
 }
 
-func sameArtifact(a, b platform.FlowStateArtifact) bool {
+func sameArtifact(a, b protocol.FlowStateArtifact) bool {
 	return bytes.Equal(platform.Raw(a), platform.Raw(b))
 }
 
-func cloneArtifacts(refs []platform.FlowStateArtifact) []platform.FlowStateArtifact {
+func cloneArtifacts(refs []protocol.FlowStateArtifact) []protocol.FlowStateArtifact {
 	return slices.Clone(refs)
 }
 
 type ArtifactCleanupPreparation struct {
 	before FlowInstance
-	refs   []platform.FlowStateArtifact
+	refs   []protocol.FlowStateArtifact
 	digest string
 	at     time.Time
 	tenant string
@@ -78,7 +79,7 @@ func (p *ArtifactCleanupPreparation) Instance() string {
 	return p.before.ID
 }
 
-func (p *ArtifactCleanupPreparation) Artifacts() []platform.FlowStateArtifact {
+func (p *ArtifactCleanupPreparation) Artifacts() []protocol.FlowStateArtifact {
 	return cloneArtifacts(p.refs)
 }
 

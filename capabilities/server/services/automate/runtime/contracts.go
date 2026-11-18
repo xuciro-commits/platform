@@ -3,6 +3,7 @@ package automation
 import (
 	"crypto/sha256"
 	"fmt"
+	"platformserver/kernel/protocol"
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
@@ -10,22 +11,22 @@ import (
 )
 
 type FlowFrameStore interface {
-	Read(platform.FlowStateArtifact) ([]byte, error)
-	Seal(instance string, version int, raw []byte, budget int) (platform.FlowStateArtifact, error)
-	Discard(platform.FlowStateArtifact) error
+	Read(protocol.FlowStateArtifact) ([]byte, error)
+	Seal(instance string, version int, raw []byte, budget int) (protocol.FlowStateArtifact, error)
+	Discard(protocol.FlowStateArtifact) error
 }
 
 type ContinuousFlowOwner interface {
 	platform.App
-	PlanBatch(platform.FlowInstance, platform.Caller) (FlowBatchPreparation, *platform.Error)
-	PlanComputeRetry(platform.FlowInstance, platform.Caller, time.Time) (FlowComputeRetryPreparation, *platform.Error)
-	PlanArtifactCleanup(platform.FlowInstance, time.Time) (FlowArtifactCleanupPreparation, *platform.Error)
-	PlanDeadLetterReplay(platform.FlowInstance, platform.Caller, platform.FlowDeadLetterAsset) (FlowDeadLetterReplayPreparation, *platform.Error)
-	ExpandFrame(platform.FlowInstance, FlowFrameStore) (*platform.FlowBatchFrame, error)
+	PlanBatch(protocol.FlowInstance, platform.Caller) (FlowBatchPreparation, *platform.Error)
+	PlanComputeRetry(protocol.FlowInstance, platform.Caller, time.Time) (FlowComputeRetryPreparation, *platform.Error)
+	PlanArtifactCleanup(protocol.FlowInstance, time.Time) (FlowArtifactCleanupPreparation, *platform.Error)
+	PlanDeadLetterReplay(protocol.FlowInstance, platform.Caller, protocol.FlowDeadLetterAsset) (FlowDeadLetterReplayPreparation, *platform.Error)
+	ExpandFrame(protocol.FlowInstance, FlowFrameStore) (*protocol.FlowBatchFrame, error)
 }
 
 type FlowProcesses interface {
-	platform.Processes
+	protocol.Processes
 	platform.NativeFlowAssets
 	ContinuousFlowOwner
 	InstallationDraft() FlowProcesses
@@ -38,20 +39,20 @@ type FlowDeadLetterReplayPreparation interface {
 
 type FlowBatchPreparation interface {
 	Intake() (string, *platform.StreamIntake, int)
-	WindowTick(time.Time, FlowFrameStore) (platform.FlowBatch, bool, *platform.Error)
-	Prepare(platform.FlowBatch, time.Time, FlowFrameStore) (FlowPreparedBatch, *platform.Error)
+	WindowTick(time.Time, FlowFrameStore) (protocol.FlowBatch, bool, *platform.Error)
+	Prepare(protocol.FlowBatch, time.Time, FlowFrameStore) (FlowPreparedBatch, *platform.Error)
 }
 
 type FlowPreparedDecision interface {
 	Decision(platform.App) platform.App
 	Submission(tenant string) *pb.Submission
-	Matches(platform.FlowInstance) bool
+	Matches(protocol.FlowInstance) bool
 }
 
 type FlowPreparedBatch interface {
 	FlowPreparedDecision
-	Artifact() platform.FlowStateArtifact
-	Artifacts() []platform.FlowStateArtifact
+	Artifact() protocol.FlowStateArtifact
+	Artifacts() []protocol.FlowStateArtifact
 	OperationRequest() (platform.OperationRequest, bool)
 }
 
@@ -69,7 +70,7 @@ type FlowPreparedComputeRetry interface {
 type FlowArtifactCleanupPreparation interface {
 	FlowPreparedDecision
 	Instance() string
-	Artifacts() []platform.FlowStateArtifact
+	Artifacts() []protocol.FlowStateArtifact
 }
 
 func FlowBatchKey(instance string, version int, batch string) string {

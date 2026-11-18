@@ -8,6 +8,7 @@ import (
 	"google.golang.org/protobuf/proto"
 	"maps"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
+	"platformserver/kernel/protocol"
 	"platformserver/platform"
 	"slices"
 	"time"
@@ -15,10 +16,10 @@ import (
 
 type deadLetterReplayPreparation struct {
 	batch *BatchPreparation
-	asset platform.FlowDeadLetterAsset
+	asset protocol.FlowDeadLetterAsset
 }
 
-func (f *Flows) PlanDeadLetterReplay(x FlowInstance, c platform.Caller, asset platform.FlowDeadLetterAsset) (FlowDeadLetterReplayPreparation, *platform.Error) {
+func (f *Flows) PlanDeadLetterReplay(x FlowInstance, c platform.Caller, asset protocol.FlowDeadLetterAsset) (FlowDeadLetterReplayPreparation, *platform.Error) {
 	d := f.def(x.Flow, x.Version)
 	if asset.Instance != x.ID || asset.Flow != x.Flow || asset.Version != x.Version || asset.OnBehalf != x.OnBehalf || asset.Replayed || asset.Archived || asset.Withheld || asset.Action != "" || !json.Valid([]byte(asset.Letter.Value)) || d == nil || d.Continuous == nil || !d.Continuous.DeadLetterRetry || d.Continuous.Window == nil {
 		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The retained signal dead letter is unavailable for replay")
@@ -70,9 +71,9 @@ func (ss *session) deadLetterAct(x *FlowInstance, token *Token, step *platform.S
 	if x.Batch != nil {
 		batch = x.Batch.Cursor
 	}
-	asset := platform.FlowDeadLetterAsset{Record: platform.Record{ID: fmt.Sprintf("flow-dead-letter:%x", sha256.Sum256([]byte(key)))}, App: d.app,
+	asset := protocol.FlowDeadLetterAsset{Record: platform.Record{ID: fmt.Sprintf("flow-dead-letter:%x", sha256.Sum256([]byte(key)))}, App: d.app,
 		Instance: x.ID, Flow: x.Flow, Version: x.Version, OnBehalf: x.OnBehalf, Sources: slices.Clone(x.Sources),
-		Letter: platform.FlowDeadLetter{Batch: batch, Node: step.Name, Key: target, RecordedAt: ss.now, Reason: reason, Value: string(payload)},
+		Letter: protocol.FlowDeadLetter{Batch: batch, Node: step.Name, Key: target, RecordedAt: ss.now, Reason: reason, Value: string(payload)},
 		Action: step.Act.Action, Protocol: step.Act.Protocol, Target: target, Payload: slices.Clone(payload), Key: key, AsMember: step.Act.AsMember}
 	ss.assets = append(ss.assets, asset)
 	x.Seq++
@@ -80,7 +81,7 @@ func (ss *session) deadLetterAct(x *FlowInstance, token *Token, step *platform.S
 
 func (f *Flows) replayDeadLetter(c platform.Caller, sub *pb.Submission, now time.Time) (*pb.ChangeRecord, *platform.Error) {
 	return f.ledger.Receive(c, sub, now, nil, func() (func(*pb.ChangeRecord), *platform.Error) {
-		asset, ok := platform.Get[platform.FlowDeadLetterAsset](c, sub.GetTarget().GetId())
+		asset, ok := platform.Get[protocol.FlowDeadLetterAsset](c, sub.GetTarget().GetId())
 		if !ok {
 			return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_NOT_FOUND, "The Flow dead letter is unavailable")
 		}
@@ -130,14 +131,14 @@ func deadLetterDomain(x FlowInstance) []any {
 	return []any{[]any{"instance", "=", x.ID}, []any{"flow", "=", x.Flow}, []any{"version", "=", x.Version}}
 }
 
-func deadLetterBorn(asset platform.FlowDeadLetterAsset) time.Time {
+func deadLetterBorn(asset protocol.FlowDeadLetterAsset) time.Time {
 	if !asset.Created.At.IsZero() {
 		return asset.Created.At
 	}
 	return asset.Letter.RecordedAt
 }
 
-func (f *Flows) deadLetterReplayAllowed(c platform.Caller, asset platform.FlowDeadLetterAsset, now time.Time) bool {
+func (f *Flows) deadLetterReplayAllowed(c platform.Caller, asset protocol.FlowDeadLetterAsset, now time.Time) bool {
 	d := f.def(asset.Flow, asset.Version)
 	if d == nil || d.Continuous == nil || asset.Archived || asset.Replayed {
 		return false
@@ -151,7 +152,7 @@ func (f *Flows) deadLetterReplayAllowed(c platform.Caller, asset platform.FlowDe
 	}
 	if rule.DeadLetterMaxRecords > 0 {
 		x := FlowInstance{Record: platform.Record{ID: asset.Instance}, Flow: asset.Flow, Version: asset.Version}
-		rows, total, err := platform.Find[platform.FlowDeadLetterAsset](f.host.Automation(c, ID), platform.Query{Domain: platform.Raw(deadLetterDomain(x)), Sort: []string{"-created", "-id"}, Offset: rule.DeadLetterMaxRecords - 1, Limit: 1})
+		rows, total, err := platform.Find[protocol.FlowDeadLetterAsset](f.host.Automation(c, ID), platform.Query{Domain: platform.Raw(deadLetterDomain(x)), Sort: []string{"-created", "-id"}, Offset: rule.DeadLetterMaxRecords - 1, Limit: 1})
 		if err != nil || total >= rule.DeadLetterMaxRecords && len(rows) != 1 {
 			return false
 		}
@@ -165,7 +166,7 @@ func (f *Flows) deadLetterReplayAllowed(c platform.Caller, asset platform.FlowDe
 	return true
 }
 
-func (f *Flows) deadLetterArchives(c platform.Caller, x FlowInstance, now time.Time, pending []platform.FlowDeadLetterAsset) ([]platform.FlowDeadLetterAsset, []platform.FlowDeadLetterAsset, *platform.Error) {
+func (f *Flows) deadLetterArchives(c platform.Caller, x FlowInstance, now time.Time, pending []protocol.FlowDeadLetterAsset) ([]protocol.FlowDeadLetterAsset, []protocol.FlowDeadLetterAsset, *platform.Error) {
 	d := f.def(x.Flow, x.Version)
 	if d == nil || d.Continuous == nil {
 		return nil, pending, nil
@@ -175,10 +176,10 @@ func (f *Flows) deadLetterArchives(c platform.Caller, x FlowInstance, now time.T
 		return nil, pending, nil
 	}
 	c = f.host.Automation(c, ID)
-	var candidates []platform.FlowDeadLetterAsset
+	var candidates []protocol.FlowDeadLetterAsset
 	if rule.DeadLetterTTLMs > 0 {
 		expired := append(slices.Clone(domain), []any{"created", "<=", now.Add(-time.Duration(rule.DeadLetterTTLMs) * time.Millisecond).Format(time.RFC3339Nano)})
-		rows, _, err := platform.Find[platform.FlowDeadLetterAsset](c, platform.Query{Domain: platform.Raw(expired), Sort: []string{"created", "id"}, Limit: deadLetterArchivePage})
+		rows, _, err := platform.Find[protocol.FlowDeadLetterAsset](c, platform.Query{Domain: platform.Raw(expired), Sort: []string{"created", "id"}, Limit: deadLetterArchivePage})
 		if err != nil {
 			return nil, pending, err
 		}
@@ -189,31 +190,31 @@ func (f *Flows) deadLetterArchives(c platform.Caller, x FlowInstance, now time.T
 		if rule.DeadLetterTTLMs > 0 && !deadLetterBorn(pending[i]).Add(time.Duration(rule.DeadLetterTTLMs)*time.Millisecond).After(now) {
 			pending[i].Archived = true
 		}
-		if _, exists := platform.Get[platform.FlowDeadLetterAsset](c, pending[i].ID); !exists && !pending[i].Archived {
+		if _, exists := platform.Get[protocol.FlowDeadLetterAsset](c, pending[i].ID); !exists && !pending[i].Archived {
 			fresh++
 		}
 	}
 	if rule.DeadLetterMaxRecords > 0 {
-		rows, total, err := platform.Find[platform.FlowDeadLetterAsset](c, platform.Query{Domain: platform.Raw(domain), Sort: []string{"created", "id"}, Limit: deadLetterArchivePage})
+		rows, total, err := platform.Find[protocol.FlowDeadLetterAsset](c, platform.Query{Domain: platform.Raw(domain), Sort: []string{"created", "id"}, Limit: deadLetterArchivePage})
 		if err != nil {
 			return nil, pending, err
 		}
 		overflow := max(0, total+fresh-rule.DeadLetterMaxRecords)
 		candidates = append(candidates, rows[:min(overflow, len(rows))]...)
 		extra := max(0, fresh-rule.DeadLetterMaxRecords)
-		slices.SortFunc(pending, func(a, b platform.FlowDeadLetterAsset) int { return cmp.Compare(a.ID, b.ID) })
+		slices.SortFunc(pending, func(a, b protocol.FlowDeadLetterAsset) int { return cmp.Compare(a.ID, b.ID) })
 		for i := range pending {
 			if extra == 0 {
 				break
 			}
-			if _, exists := platform.Get[platform.FlowDeadLetterAsset](c, pending[i].ID); !exists && !pending[i].Archived {
+			if _, exists := platform.Get[protocol.FlowDeadLetterAsset](c, pending[i].ID); !exists && !pending[i].Archived {
 				pending[i].Archived = true
 				extra--
 			}
 		}
 	}
 	seen, used := map[string]bool{}, 0
-	var archived []platform.FlowDeadLetterAsset
+	var archived []protocol.FlowDeadLetterAsset
 	for _, asset := range candidates {
 		if seen[asset.ID] {
 			continue
@@ -235,11 +236,11 @@ func (ss *session) retainDeadLetters() *platform.Error {
 	for id, x := range ss.changed {
 		groups[id] = x
 	}
-	pending := map[string][]platform.FlowDeadLetterAsset{}
+	pending := map[string][]protocol.FlowDeadLetterAsset{}
 	var other []any
 	for _, value := range ss.assets {
 		switch asset := value.(type) {
-		case platform.FlowDeadLetterAsset:
+		case protocol.FlowDeadLetterAsset:
 			pending[asset.Instance] = append(pending[asset.Instance], asset)
 			if groups[asset.Instance] == nil {
 				groups[asset.Instance] = ss.load(asset.Instance)
@@ -258,7 +259,7 @@ func (ss *session) retainDeadLetters() *platform.Error {
 		if err != nil {
 			return err
 		}
-		byID := map[string]platform.FlowDeadLetterAsset{}
+		byID := map[string]protocol.FlowDeadLetterAsset{}
 		for _, asset := range next {
 			byID[asset.ID] = asset
 		}

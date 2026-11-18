@@ -3,6 +3,7 @@ package agents
 import (
 	"encoding/json"
 	"fmt"
+	"platformserver/kernel/protocol"
 	"time"
 
 	"platformserver/kernel/acceptedformat"
@@ -11,7 +12,7 @@ import (
 
 type AgentAcceptance struct {
 	Tenant      string
-	Agent       platform.AgentRuntime
+	Agent       protocol.AgentRuntime
 	Draft       platform.Runtime
 	RunAgent    func(run string) string
 	UsageBefore func() (string, error)
@@ -23,7 +24,7 @@ type AgentAcceptance struct {
 	Prepared    func(body, principal []byte, key, hash string)
 }
 
-func (a AgentAcceptance) Accept(b platform.AgentResultStep, at time.Time) (err error) {
+func (a AgentAcceptance) Accept(b protocol.AgentResultStep, at time.Time) (err error) {
 	var name string
 	if b.Evaluation != nil {
 		name = b.Evaluation.Agent

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"platformserver/kernel/protocol"
 	"slices"
 	"time"
 
@@ -281,7 +282,7 @@ func (t *Tenant) stageEffectAnswer(draft *stagedDecision, x platform.Effect, out
 		Origin: draft.AnswerWithOrigin,
 		Agents: func(c platform.Caller, x platform.Effect, out platform.Outcome, at time.Time) {
 			if t.Agents != nil {
-				draft.stateApp(t.Agents).(platform.AgentRuntime).AgentEffectEnded(t.automated(c, platform.AgentApp), nil, x, out, at)
+				draft.stateApp(t.Agents).(protocol.AgentRuntime).AgentEffectEnded(t.automated(c, platform.AgentApp), nil, x, out, at)
 			}
 		},
 		Finish: draft.finishStaged}.Stage(x, out, at)

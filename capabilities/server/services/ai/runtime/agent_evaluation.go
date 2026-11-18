@@ -3,13 +3,14 @@ package agents
 import (
 	"fmt"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
+	"platformserver/kernel/protocol"
 	"platformserver/platform"
 )
 
-func (a *Agents) evaluationDefinition(candidate, agent string) (*platform.CompiledAgent, string, error) {
-	var owner platform.AgentEvaluationDefinitions
+func (a *Agents) evaluationDefinition(candidate, agent string) (*protocol.CompiledAgent, string, error) {
+	var owner protocol.AgentEvaluationDefinitions
 	switch value := a.host.(type) {
-	case platform.AgentEvaluationDefinitions:
+	case protocol.AgentEvaluationDefinitions:
 		owner = value
 	default:
 		return nil, "", fmt.Errorf("candidate agent declarations are unavailable")
@@ -36,7 +37,7 @@ const (
 	memoriesUsed = 8
 )
 
-func (a *Agents) evaluationVersion(d *platform.CompiledAgent) string {
+func (a *Agents) evaluationVersion(d *protocol.CompiledAgent) string {
 	cases := make([][]string, len(d.Cases))
 	for i, c := range d.Cases {
 		cases[i] = []string{c.Name, c.Goal, c.Ref}
@@ -94,8 +95,8 @@ func (a *Agents) startEvaluation(c platform.Caller, id string, p struct {
 	return func(r *pb.ChangeRecord) { a.host.Automation(c, platform.AgentApp).Put(r, ev) }, nil
 }
 
-func (a *Agents) AgentEvaluationRuntime() platform.AgentEvaluationRuntime {
-	return platform.AgentEvaluationRuntime{Tenant: a.tenant, Host: a.host, Definition: a.def, Compile: a.evaluationDefinition, Version: a.evaluationVersion, Prompt: a.prompt, Principal: a.AgentPrincipal, Reader: a.reader, Automation: a.automation, View: a.run, Use: a.use, ObserveKnowledge: a.ObserveAgentKnowledge, Compiled: a.Compiled}
+func (a *Agents) AgentEvaluationRuntime() protocol.AgentEvaluationRuntime {
+	return protocol.AgentEvaluationRuntime{Tenant: a.tenant, Host: a.host, Definition: a.def, Compile: a.evaluationDefinition, Version: a.evaluationVersion, Prompt: a.prompt, Principal: a.AgentPrincipal, Reader: a.reader, Automation: a.automation, View: a.run, Use: a.use, ObserveKnowledge: a.ObserveAgentKnowledge, Compiled: a.Compiled}
 }
 
 func reason(err *platform.Error) string {

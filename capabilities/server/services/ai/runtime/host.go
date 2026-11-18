@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"platformserver/kernel/protocol"
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
@@ -107,33 +108,33 @@ func DecisionMembers(values []platform.AuditEntry) []string {
 }
 
 type ScheduleView struct {
-	Agents     platform.AgentRuntime
+	Agents     protocol.AgentRuntime
 	Run        func(string) (platform.AgentRunRecord, bool)
 	Evaluation func(string) (platform.Evaluation, bool)
 	Queued     func() ([]platform.Evaluation, *platform.Error)
 }
 
 type Schedule struct {
-	Agents      platform.AgentRuntime
+	Agents      protocol.AgentRuntime
 	Stopped     func() bool
 	Quarantined func() bool
 	Recording   func() bool
 	Read        func(func(ScheduleView) *platform.Error) *platform.Error
 	Call        func(platform.AIProvider, platform.AIModel, platform.Member, platform.ChatRequest, time.Time) (platform.ChatAnswer, *platform.AIError)
 	Meter       func(platform.Member, platform.AIUsage) *platform.Error
-	Step        func(platform.AgentResultStep, time.Time) bool
+	Step        func(protocol.AgentResultStep, time.Time) bool
 	Wake        func()
 	Run         func(string) (platform.AgentRunRecord, bool)
 	Evaluation  func(string) (platform.Evaluation, bool)
-	Accept      func(platform.AgentResultStep, time.Time) error
+	Accept      func(protocol.AgentResultStep, time.Time) error
 	Failed      func(time.Time, string, string)
-	Evaluator   platform.AgentEvaluator
+	Evaluator   protocol.AgentEvaluator
 }
 
 func (s Schedule) Turns() Turns {
 	return Turns{Agents: s.Agents, Stopped: s.Stopped, Quarantined: s.Quarantined, Call: s.Call, Meter: s.Meter, Step: s.Step, Wake: s.Wake,
-		DueTurns: func(now time.Time) []platform.AgentTurn {
-			var turns []platform.AgentTurn
+		DueTurns: func(now time.Time) []protocol.AgentTurn {
+			var turns []protocol.AgentTurn
 			s.Read(func(v ScheduleView) *platform.Error { turns = v.Agents.DueAgentTurns(now); return nil })
 			return turns
 		},
@@ -151,7 +152,7 @@ func (s Schedule) Turns() Turns {
 		}}
 }
 
-func (s Schedule) Prepare(b platform.AgentResultStep, now time.Time) bool {
+func (s Schedule) Prepare(b protocol.AgentResultStep, now time.Time) bool {
 	return StepPreparation{Quarantined: s.Quarantined, Recording: s.Recording, Run: s.Run, Evaluation: s.Evaluation,
 		Allows: func(run platform.AgentRunRecord) bool { return s.Agents.AllowsAgentRun(run) }, Accept: s.Accept, Failed: s.Failed}.Prepare(b, now)
 }

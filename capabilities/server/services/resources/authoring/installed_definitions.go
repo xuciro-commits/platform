@@ -40,7 +40,7 @@ func ReplaceProtocolReads(owners map[string]string, app, typ string, protocols [
 func CheckRunApplicationBindings(record any) error {
 	var bindings []platform.AssetBinding
 	switch run := record.(type) {
-	case platform.FlowInstance:
+	case ruleprotocol.FlowInstance:
 		bindings = run.Applications
 	case platform.AgentRunRecord:
 		bindings = run.Applications

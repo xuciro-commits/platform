@@ -2,6 +2,7 @@ package objects
 
 import (
 	"encoding/json"
+	"platformserver/kernel/protocol"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformserver/platform"
@@ -10,7 +11,7 @@ import (
 type EditProposalSource struct {
 	Operation func() (platform.OperationResult, *platform.Error)
 	AI        func() (platform.OperationResult, *platform.Error)
-	FlowRun   func() (platform.FlowInstance, *platform.Error)
+	FlowRun   func() (protocol.FlowInstance, *platform.Error)
 }
 
 func (s EditProposalSource) Read(engine, step string) (platform.EditProposal, *platform.Error) {

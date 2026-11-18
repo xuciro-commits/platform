@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
+	"platformserver/kernel/protocol"
 	"platformserver/platform"
 	automation "platformserver/services/automate/runtime"
 	dataowner "platformserver/services/data"
@@ -27,11 +28,11 @@ func (t *Tenant) streamSourceLocked(m platform.Member, name string, intake *plat
 	}.Resolve(m, name, intake)
 }
 
-func (t *Tenant) ConsumeFlowSource(m platform.Member, id string, now time.Time) (platform.FlowBatchOutcome, *platform.Error) {
+func (t *Tenant) ConsumeFlowSource(m platform.Member, id string, now time.Time) (protocol.FlowBatchOutcome, *platform.Error) {
 	if refusal := t.flowIntake().Cleanup(m, id, now); refusal != nil {
-		return platform.FlowBatchOutcome{}, refusal
+		return protocol.FlowBatchOutcome{}, refusal
 	}
-	var before platform.FlowInstance
+	var before protocol.FlowInstance
 	var current platform.Member
 	var plan automation.FlowBatchPreparation
 	var start dataowner.StreamStart
@@ -41,7 +42,7 @@ func (t *Tenant) ConsumeFlowSource(m platform.Member, id string, now time.Time) 
 			return struct{}{}, refusal
 		}
 		before, current = instance, member
-		plan, refusal = f.PlanBatch(before, t.automation(platform.FlowApp, false))
+		plan, refusal = f.PlanBatch(before, t.automation(protocol.FlowApp, false))
 		if refusal != nil {
 			return struct{}{}, refusal
 		}
@@ -51,20 +52,20 @@ func (t *Tenant) ConsumeFlowSource(m platform.Member, id string, now time.Time) 
 		return struct{}{}, refusal
 	})
 	if refusal != nil {
-		return platform.FlowBatchOutcome{}, refusal
+		return protocol.FlowBatchOutcome{}, refusal
 	}
 	return dataowner.StreamConsumption{
 		Read: func(source dataowner.Source, columns []string) ([]map[string]any, string, *platform.Error) {
 			return t.readContinuousSource(current, before, start, source, columns, now)
 		},
-		Tick: func() (platform.FlowBatch, bool, *platform.Error) { return plan.WindowTick(now, t.frames()) },
-		Consume: func(batch platform.FlowBatch) (platform.FlowBatchOutcome, *platform.Error) {
-			return t.ConsumeFlowBatch(current, id, batch, now)
+		Tick: func() (protocol.FlowBatch, bool, *platform.Error) { return plan.WindowTick(now, t.frames()) },
+		Consume: func(batch protocol.FlowBatch) (protocol.FlowBatchOutcome, *platform.Error) {
+			return t.flowIntake().ConsumeBatch(current, id, batch, now)
 		},
 	}.Run(before, start)
 }
 
-func (t *Tenant) readContinuousSource(m platform.Member, before platform.FlowInstance, start dataowner.StreamStart, source dataowner.Source, columns []string, now time.Time) ([]map[string]any, string, *platform.Error) {
+func (t *Tenant) readContinuousSource(m platform.Member, before protocol.FlowInstance, start dataowner.StreamStart, source dataowner.Source, columns []string, now time.Time) ([]map[string]any, string, *platform.Error) {
 	checkOriginal := func() *platform.Error {
 		_, refusal := recordRead(t, context.Background(), func(t *Tenant) (struct{}, *platform.Error) {
 			owner, latest, current, refusal := t.continuousSnapshotLocked(m, before.ID, now)
@@ -72,7 +73,7 @@ func (t *Tenant) readContinuousSource(m platform.Member, before platform.FlowIns
 				refusal = platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The Flow changed while its source batch was prepared")
 			}
 			if refusal == nil {
-				_, refusal = owner.PlanBatch(latest, t.automation(platform.FlowApp, false))
+				_, refusal = owner.PlanBatch(latest, t.automation(protocol.FlowApp, false))
 			}
 			if refusal == nil {
 				freshSource, freshConnection, freshHash, err := t.streamSourceLocked(current, start.Name, start.Intake, now)
@@ -89,7 +90,7 @@ func (t *Tenant) readContinuousSource(m platform.Member, before platform.FlowIns
 	return dataowner.StreamReader{Check: checkOriginal, Latest: client.LatestTableCursor, Read: client.ReadTable}.Rows(start.Intake, source, start.Connection, start.Bootstrap, columns)
 }
 
-func (t *Tenant) checkStreamSourceLocked(m platform.Member, plan automation.FlowBatchPreparation, x platform.FlowInstance, checkpoint platform.FlowSourceCheckpoint, tick bool, now time.Time) *platform.Error {
+func (t *Tenant) checkStreamSourceLocked(m platform.Member, plan automation.FlowBatchPreparation, x protocol.FlowInstance, checkpoint protocol.FlowSourceCheckpoint, tick bool, now time.Time) *platform.Error {
 	name, intake, _ := plan.Intake()
 	source, connection, hash, refusal := t.streamSourceLocked(m, name, intake, now)
 	if refusal != nil {
@@ -99,7 +100,7 @@ func (t *Tenant) checkStreamSourceLocked(m platform.Member, plan automation.Flow
 }
 
 func (t *Tenant) continuousSources(now time.Time) []func() {
-	if t.businessStopped() || !t.OwnerActive(platform.FlowApp) || !t.streamMu.TryLock() {
+	if t.businessStopped() || !t.OwnerActive(protocol.FlowApp) || !t.streamMu.TryLock() {
 		return nil
 	}
 	return []func(){func() {
@@ -115,7 +116,7 @@ func (t *Tenant) pullContinuousSources(now time.Time) {
 				owner := t.Processes
 				return automation.ContinuousInventory{
 					Owner:  owner,
-					Caller: t.automation(platform.FlowApp, false),
+					Caller: t.automation(protocol.FlowApp, false),
 					Member: t.Member,
 					StreamPublished: func(record string) bool {
 						return t.DataOwner().StreamPublished(t.automation(build.ID, false), record)

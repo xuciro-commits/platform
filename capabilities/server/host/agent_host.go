@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	runtimeprotocol "platformserver/kernel/protocol"
 	"slices"
 	"time"
 
@@ -119,7 +120,7 @@ func (h hostView) AgentUsage() (values []platform.AIUsage) {
 	return values
 }
 
-func (h hostView) WithAgentRead(read func(platform.AgentEvaluationRuntime) *platform.Error) *platform.Error {
+func (h hostView) WithAgentRead(read func(runtimeprotocol.AgentEvaluationRuntime) *platform.Error) *platform.Error {
 	_, refusal := recordRead(h.t.readOriginOrSelf(), context.Background(), func(t *Tenant) (struct{}, *platform.Error) {
 		if t.Agents == nil {
 			return struct{}{}, unknown()
@@ -185,10 +186,10 @@ func (h hostView) ReplayAgentUsage(usage platform.AIUsage) {
 	}
 }
 
-var _ platform.AgentHost = hostView{}
+var _ runtimeprotocol.AgentHost = hostView{}
 
-func (h hostView) AgentTasks() platform.TaskClosure         { return h.Tasks() }
-func (h hostView) AgentFlows() platform.AgentFlowCompletion { return h.Processes() }
+func (h hostView) AgentTasks() runtimeprotocol.TaskClosure         { return h.Tasks() }
+func (h hostView) AgentFlows() runtimeprotocol.AgentFlowCompletion { return h.Processes() }
 
 func aiContextReader(reader *platform.Member) *platform.Member {
 	if reader == nil {
@@ -253,7 +254,7 @@ func (t *Tenant) agentSchedule() agentowner.Schedule {
 	}
 }
 
-func (t *Tenant) applyAgentStep(b platform.AgentResultStep, now time.Time) bool {
+func (t *Tenant) applyAgentStep(b runtimeprotocol.AgentResultStep, now time.Time) bool {
 	applied, refusal := decideOnImage(t, context.Background(), "agent:settle", func(t *Tenant) (bool, *platform.Error) {
 		return t.agentSchedule().Prepare(b, now), nil
 	}, func(t *Tenant, candidate preparedAccepted, applied bool, refusal *platform.Error) (bool, *platform.Error) {
@@ -282,7 +283,7 @@ func (h hostView) AgentModelConfigurationDigest(model platform.AIModel, provider
 
 func (h hostView) AgentAnswerText(outcome platform.Outcome) string { return actions.AnswerOf(outcome) }
 
-func (t *Tenant) acceptAgentStep(b platform.AgentResultStep, at time.Time) (err error) {
+func (t *Tenant) acceptAgentStep(b runtimeprotocol.AgentResultStep, at time.Time) (err error) {
 	defer func() {
 		if p := recover(); p != nil {
 			err = fmt.Errorf("agent answer cannot stage: %v", p)
@@ -290,7 +291,7 @@ func (t *Tenant) acceptAgentStep(b platform.AgentResultStep, at time.Time) (err 
 	}()
 	draft := t.newStagedDecision()
 	draft.At = at
-	return agentowner.AgentAcceptance{Tenant: t.ID, Agent: draft.stateApp(t.Agents).(platform.AgentRuntime), Draft: draft,
+	return agentowner.AgentAcceptance{Tenant: t.ID, Agent: draft.stateApp(t.Agents).(runtimeprotocol.AgentRuntime), Draft: draft,
 		RunAgent: func(run string) string {
 			record, _ := t.agentRun(run)
 			return record.Agent

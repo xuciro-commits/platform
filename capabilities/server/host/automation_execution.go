@@ -3,6 +3,7 @@ package host
 import (
 	"encoding/json"
 	"fmt"
+	"platformserver/kernel/protocol"
 	automation "platformserver/services/automate/runtime"
 
 	"reflect"
@@ -31,7 +32,7 @@ type flowExecutionRuntime struct {
 	reads   records.ForkCache
 }
 
-func (h hostView) FlowExecution(c platform.Caller, app, name string, version int, binding platform.FlowBinding) (platform.FlowHost, error) {
+func (h hostView) FlowExecution(c platform.Caller, app, name string, version int, binding protocol.FlowBinding) (protocol.FlowHost, error) {
 	if binding.Release == "" {
 		return h, nil
 	}
@@ -46,7 +47,7 @@ func (h hostView) FlowExecution(c platform.Caller, app, name string, version int
 	return h.retainedExecution(c, binding.Release, closed.Assets)
 }
 
-func (h hostView) retainedExecution(c platform.Caller, release string, assets []platform.ReleaseAsset) (platform.FlowHost, error) {
+func (h hostView) retainedExecution(c platform.Caller, release string, assets []platform.ReleaseAsset) (protocol.FlowHost, error) {
 	if h.decision == nil || !c.Staging() {
 		return nil, fmt.Errorf("retained flow execution requires its private decision")
 	}

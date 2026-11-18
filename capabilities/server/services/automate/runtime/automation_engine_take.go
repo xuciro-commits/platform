@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"maps"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
+	runtimeprotocol "platformserver/kernel/protocol"
 	"platformserver/platform"
 	"slices"
 	"strings"
@@ -247,7 +248,7 @@ func (ss *session) take(x *FlowInstance, token int) {
 		}
 		ss.trace(x, tok.Step, "called", child.Title+" "+id, "")
 		in := ss.create(child, id, id, data, x.OnBehalf, x.ID)
-		bound, bindingErr := ss.f.host.BindFlow(child.app, child.Name, child.Version, platform.FlowBinding{})
+		bound, bindingErr := ss.f.host.BindFlow(child.app, child.Name, child.Version, runtimeprotocol.FlowBinding{})
 		if bindingErr != nil {
 			ss.failed(x, token, step, bindingErr.Error())
 			return
