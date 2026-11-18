@@ -171,6 +171,7 @@ export const zhCN: Record<string, string> = {
   Objects: "对象",
   Resources: "资源",
   Account: "账户",
+  Tenant: "租户",
   Language: "语言",
   Appearance: "外观",
   Automatic: "自动",

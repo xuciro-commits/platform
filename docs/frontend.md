@@ -190,13 +190,13 @@ pnpm --dir frontend astryx docs tokens
 
 - 在 `frontend/` 工作时不读它，不把它的结构、命名与组件带过来。它的界面不是新界面的输入；输入是 ux、design 与官方模板。
 - 只修让它起不来、或让 `make check` 过不去的缺陷。
-- 删除它之前要先搬走三样东西：生成的宿主类型（现在在 `web/packages/api`，`frontend/` 以链接取用）、
-  `make check` 里契约比对的路径、夹具宿主用的租户配置（`web/e2e/tenants.json`）。
+- 删除它之前要先搬走两样东西：生成的宿主类型（现在在 `web/packages/api`，`frontend/` 以链接取用）、
+  `make check` 里契约比对的路径。夹具宿主的租户配置已是 `scripts/frontend-tenants.json`。
 
 ## 易错点
 
 - 模块加载时不调用 `t()`，切换语言不会更新：模块级的文字写英文原文，显示时再翻译。动态的键要在字典里列全取值。
-- 语言与外观存在成员资料里（`platform.profile.update`），由 `/v1/me` 带回；不存本机。换语言时外壳整棵重挂，页面里的临时状态会丢。
+- 语言与外观存在成员资料里（`platform.profile.update`），由 `/v1/me` 带回；不存本机。换语言或切租户时外壳整棵重挂，页面里的临时状态会丢。
 - 入口文件名必须是 `src/apps.ts` 里已有的入口；辅助文件放进子目录。
 - 同一行里夹在 `>` 与 `<` 之间的英文会被当成没翻译的文字，例如行内的 `Promise<unknown>`；给类型起个别名。
 - 单条记录读到的小数是 `{kind, value}`，用 `src/pages/values.ts` 的 `plain()` 取值、`shown()` 显示。

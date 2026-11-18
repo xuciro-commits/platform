@@ -1203,3 +1203,22 @@ test("member menu: language and appearance live in the profile, sign out returns
   await page.getByRole("menuitem", { name: "Sign out", exact: true }).click();
   await expect(page.getByRole("button", { name: "admin-1 · acceptance" })).toBeVisible();
 });
+
+test("tenants: switching keeps the entry and replaces what the page shows", async ({ page }) => {
+  await signIn(page);
+  await open(page, "Ontology", "Object types");
+  const opportunity = page.getByRole("row").filter({ hasText: "opportunityline" });
+  await expect(opportunity).toBeVisible();
+  const tenant = async (name: string) => {
+    await page.getByRole("button", { name: "Account", exact: true }).click();
+    await page.getByRole("group", { name: "Tenant" }).getByRole("menuitemradio", { name, exact: true }).click();
+  };
+
+  await tenant("publisher");
+  await expect(page).toHaveURL(/\/ontology\/object-types$/);
+  await expect(page.getByText("Nothing here yet", { exact: true })).toBeVisible();
+  await expect(opportunity).toHaveCount(0);
+
+  await tenant("acceptance");
+  await expect(opportunity).toBeVisible();
+});

@@ -62,7 +62,7 @@ host:
 
 frontend-host:
 	mkdir -p .build/frontend-host
-	cp web/e2e/tenants.json .build/frontend-host/tenants.json
+	cp scripts/frontend-tenants.json .build/frontend-host/tenants.json
 	node scripts/frontend-seed.mjs &
 	cd capabilities/server && $(GO) run ./cmd/platform-server -addr 127.0.0.1:18511 -tenants ../../.build/frontend-host/tenants.json
 

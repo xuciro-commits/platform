@@ -8,7 +8,7 @@ const host = "http://127.0.0.1:18521";
 const page = "http://localhost:8497";
 
 mkdirSync(work, { recursive: true });
-copyFileSync(`${root}web/e2e/tenants.json`, `${work}/tenants.json`);
+copyFileSync(`${root}scripts/frontend-tenants.json`, `${work}/tenants.json`);
 
 export default defineConfig({
   testDir: ".",
