@@ -55,7 +55,7 @@ export function describe(entity: Api.EntityInfo, actions: Api.Action[]): Describ
     if (section) section.fields.push(field);
     else sections.push({ title, fields: [field] });
   }
-  const listed = entity.fields.filter((field) => tabular.has(field.type));
+  const listed = entity.fields.filter((field) => tabular.has(field.type) && (field.name !== lifecycle?.field || (lifecycle.states?.length ?? 0) > 1));
   const rank = (field: Api.FieldInfo) =>
     field.name === entity.display ? 0 : field.required || field.search || field.type === "choice" || field.name === lifecycle?.field ? 1 : 2;
   const picked = new Set([...listed].sort((a, b) => rank(a) - rank(b)).slice(0, columnLimit));

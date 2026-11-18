@@ -142,7 +142,7 @@ export function FieldGroup({ described, editor, sections, direction, focusEmpty 
       if (!described.shows(field, editor.values)) return false;
       if (parameters.has(field.name)) return true;
       const value = editor.values[field.name];
-      return typeof value !== "object" && shown(value) !== "";
+      return (field.type === "money" || typeof value !== "object") && present(field, value) !== "";
     });
   const shownSections = sections.map((section) => ({ ...section, fields: visible(section.fields) })).filter((section) => section.fields.length > 0);
   if (shownSections.length === 0) return null;

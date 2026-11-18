@@ -19,6 +19,8 @@ test("records: open a list, open a record, change a field in place", async ({ pa
   await expect(retrofit.getByText("Negotiation", { exact: true })).toBeVisible();
   await expect(retrofit.getByText("184,000", { exact: true })).toBeVisible();
   await expect(retrofit.getByLabel("Negotiation")).toBeVisible();
+  await expect(retrofit.getByRole("img", { name: "Yes" })).toBeVisible();
+  await expect(retrofit.getByText("1,250.00 USD", { exact: true })).toBeVisible();
 
   await page.getByRole("link", { name: "Press line retrofit" }).click();
   await expect(page.getByRole("combobox", { name: "Stage" })).toContainText("Negotiation");
@@ -27,6 +29,8 @@ test("records: open a list, open a record, change a field in place", async ({ pa
   await expect(page.getByRole("heading", { level: 3, name: "Commercial" })).toBeVisible();
   await expect(page.getByRole("heading", { level: 3, name: "Follow-up" })).toBeVisible();
   await expect(page.getByRole("textbox", { name: "Loss reason" })).toHaveCount(0);
+  await expect(page.getByRole("switch", { name: "Budget approved" })).toBeChecked();
+  await expect(page.getByText("1,250.00 USD", { exact: true })).toBeVisible();
   const owner = page.getByRole("complementary").getByRole("textbox", { name: "Owner" });
   await expect(owner).toHaveValue("Dana Whitfield");
 

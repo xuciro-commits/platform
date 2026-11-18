@@ -58,6 +58,8 @@
           { "name": "customer", "title": "Customer", "type": "text", "search": true, "group": "Commercial" },
           { "name": "stage", "title": "Stage", "type": "choice", "choices": "qualifying,proposal,negotiation,won,lost", "aside": true, "format": [{ "when": { "op": "=", "kind": "boolean", "args": [{ "kind": "text", "ref": "stage" }, { "kind": "text", "lit": { "value": "qualifying" } }] }, "tone": "neutral" }, { "when": { "op": "=", "kind": "boolean", "args": [{ "kind": "text", "ref": "stage" }, { "kind": "text", "lit": { "value": "proposal" } }] }, "tone": "info" }, { "when": { "op": "=", "kind": "boolean", "args": [{ "kind": "text", "ref": "stage" }, { "kind": "text", "lit": { "value": "negotiation" } }] }, "tone": "warning" }, { "when": { "op": "=", "kind": "boolean", "args": [{ "kind": "text", "ref": "stage" }, { "kind": "text", "lit": { "value": "won" } }] }, "tone": "success" }, { "when": { "op": "=", "kind": "boolean", "args": [{ "kind": "text", "ref": "stage" }, { "kind": "text", "lit": { "value": "lost" } }] }, "tone": "danger" }] },
           { "name": "amount", "title": "Amount", "type": "decimal", "group": "Commercial" },
+          { "name": "budgetapproved", "title": "Budget approved", "type": "boolean", "group": "Commercial" },
+          { "name": "deposit", "title": "Proposed deposit", "type": "money", "group": "Commercial" },
           { "name": "owner", "title": "Owner", "type": "text", "aside": true },
           { "name": "closing", "title": "Expected close", "type": "date", "group": "Commercial" },
           { "name": "next", "title": "Next step", "type": "text", "group": "Follow-up" },
@@ -66,7 +68,7 @@
         "states": [{ "name": "open", "title": "Open", "tone": "info", "description": "Being worked on by the sales team." }]
       },
       "records": [
-        { "subject": "Press line retrofit", "customer": "Northwind Tools", "stage": "negotiation", "amount": 184000, "owner": "Dana Whitfield", "closing": "2026-12-12", "next": "Send revised terms" },
+        { "subject": "Press line retrofit", "customer": "Northwind Tools", "stage": "negotiation", "amount": 184000, "budgetapproved": true, "deposit": { "amount": 125000, "currency": "USD" }, "owner": "Dana Whitfield", "closing": "2026-12-12", "next": "Send revised terms" },
         { "subject": "Spare parts frame agreement", "customer": "Northwind Tools", "stage": "won", "amount": 62000, "owner": "Dana Whitfield", "closing": "2026-10-30", "next": "Kick-off call" },
         { "subject": "Fleet tracking rollout", "customer": "Harbor Freight Lines", "stage": "proposal", "amount": 97500, "owner": "Omar Haddad", "closing": "2027-01-20", "next": "Present proposal to operations" },
         { "subject": "Warehouse scanners", "customer": "Harbor Freight Lines", "stage": "qualifying", "amount": 28000, "owner": "Omar Haddad", "closing": "2027-02-14", "next": "Confirm budget holder" },

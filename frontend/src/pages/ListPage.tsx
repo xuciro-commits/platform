@@ -32,6 +32,7 @@ export type ListColumn<Row> = {
   text: (row: Row) => string;
   kind?: "string" | "enum" | "number" | "time";
   choices?: string[];
+  boolean?: boolean;
   dot?: (row: Row) => Dot | undefined;
   value?: (row: Row) => unknown;
 };
@@ -169,6 +170,8 @@ export function ListView<Answer, Row>({ definition, read, primary, back }: ListV
     renderCell: (cells) =>
       position === 0 && cells.__href ? (
         <Link href={cells.__href}>{cells[column.key] || cells[idKey]}</Link>
+      ) : column.boolean && cells[column.key] === t("Yes") ? (
+        <Icon icon="check" size="sm" label={t("Yes")} />
       ) : column.kind === "time" && cells[column.key] ? (
         <Text type="body" color="secondary">
           <Timestamp value={cells[column.key]} format="relative" />

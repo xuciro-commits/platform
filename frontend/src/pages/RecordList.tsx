@@ -10,7 +10,7 @@ import { type Described, describe, numeric } from "./describe";
 import { BatchActions } from "./BatchActions";
 import { RecordPage } from "./RecordPage";
 import { type Dot, dots } from "./Transitions";
-import { present } from "./values";
+import { money, plain, present } from "./values";
 
 type Row = Record<string, unknown>;
 type Declared = { type: string; title?: string; about: string; fields?: string[]; project?: boolean; instances?: { field: string; path: string } };
@@ -51,8 +51,9 @@ function shape(described: Described, declared: Declared, listPath: string, move?
         text: say(field),
         kind: field.type === "choice" ? ("enum" as const) : numeric.has(field.type) ? ("number" as const) : field.type === "date" || field.type === "datetime" ? ("time" as const) : ("string" as const),
         choices: field.name === lifecycle?.field ? states.map((state) => t(state.title)) : titles(field),
+        boolean: field.type === "boolean",
         dot: dot(field),
-        value: numeric.has(field.type) ? (row: Row) => row[field.name] : undefined,
+        value: numeric.has(field.type) ? (row: Row) => field.type === "money" ? money(row[field.name])?.amount : plain(row[field.name]) : undefined,
       })),
       { key: "changed", header: "Updated", width: 140, kind: "time" as const, text: (row: Row) => (row.changed as Stamp | undefined)?.at ?? "" },
     ],

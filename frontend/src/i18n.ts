@@ -1,5 +1,9 @@
 export const zhCN: Record<string, string> = {
   Search: "搜索",
+  Yes: "是",
+  No: "否",
+  "Budget approved": "预算已批准",
+  "Proposed deposit": "拟定订金",
   "Discard unsaved changes?": "放弃未保存的改动？",
   "The record could not be saved. Stay to correct the input or discard it and leave.": "记录未能保存。你可以留下修改输入，也可以放弃改动后离开。",
   Stay: "留下",
