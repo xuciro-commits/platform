@@ -276,6 +276,7 @@
   "The record changed since you opened it": "这条记录在你打开后已更改",
   "The action could not be checked": "暂时无法检查这项操作",
   "Only archived records can be restored": "只能恢复已归档的记录",
+  "The default view needs a JSON object with a version": "默认视图须为带版本的 JSON 对象",
   "Case": "用例",
   "Passes": "通过次数",
   "Runs": "运行次数",

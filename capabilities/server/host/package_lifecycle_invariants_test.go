@@ -16,7 +16,10 @@ import (
 
 func TestInvariantK9PackageRetireAndReinstallPreserveData(t *testing.T) {
 	source := newInvariantTenant(t, "package-lifecycle-source")
-	source.accept(t, "build.object.create", build.ObjectType, "OBJ1", invariantObject("alpha", "Alpha"))
+	defaultView := json.RawMessage(`{"columns":["note"],"layout":"table","version":1}`)
+	object := invariantObject("alpha", "Alpha")
+	object["view"] = defaultView
+	source.accept(t, "build.object.create", build.ObjectType, "OBJ1", object)
 	source.accept(t, "build.app.create", protocol.AppType, "APP1", map[string]any{
 		"name": "alphaapp", "title": "Alpha application",
 		"resources": []platform.AssetRef{{App: build.ID, Kind: platform.AssetObject, Name: "build.alpha"}},
@@ -59,6 +62,9 @@ func TestInvariantK9PackageRetireAndReinstallPreserveData(t *testing.T) {
 	}
 	submit(packages.SchemaPackageImport, map[string]any{"id": descriptor.ID, "digest": inspected.Digest})
 	submit(packages.SchemaPackageInstall, map[string]any{"id": descriptor.ID, "version": descriptor.Version})
+	if info, ok := target.Entity("build.alpha"); !ok || !slices.Equal(info.View, defaultView) {
+		t.Fatalf("package installation lost the default view: %s", info.View)
+	}
 	views := target.App("platform").(interface{ PackageViews() []protocol.PackageView }).PackageViews()
 	var receipt *protocol.PackageView
 	for i := range views {

@@ -1,6 +1,7 @@
 package ontology
 
 import (
+	"encoding/json"
 	"platformserver/kernel/protocol"
 	"slices"
 
@@ -16,6 +17,7 @@ type Object struct {
 	Color             string                       `json:"color,omitempty" title:"Color" choices:"neutral,info,success,warning,danger,purple,pink,teal,orange"`
 	Display           string                       `json:"display,omitempty" title:"Title field" help:"The text field that names one record; empty: the first searchable field" example:"name"`
 	ObjectView        *platform.ObjectView         `json:"objectView,omitempty" type:"json" title:"Object view"`
+	View              json.RawMessage              `json:"view,omitempty" type:"json" title:"Default view"`
 	Description       string                       `json:"description,omitempty" type:"longtext" help:"What one record of it is, for people and agents"`
 	Fields            []Field                      `json:"fields" title:"Fields"`
 	DataSources       []platform.DataSourceBinding `json:"datasources,omitempty" type:"json" field:"aside" title:"Data sources"`

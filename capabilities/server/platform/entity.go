@@ -57,15 +57,15 @@ type RecordType struct {
 	Validate          func(c Caller, record any) *Error
 
 	Type                   string
-	Title                  string
-	Plural                 string
+	Title, Plural          string
 	Description            string
 	Synonyms               string
 	Model                  any
 	RecordFormat           string
 	RecordImages           []RecordImageFormat
 	Display                string
-	ObjectView             *ObjectView `json:"objectView,omitempty"`
+	ObjectView             *ObjectView     `json:"objectView,omitempty"`
+	View                   json.RawMessage `json:"view,omitempty"`
 	Icon                   string
 	Color                  string
 	Scope                  Scope
@@ -339,6 +339,7 @@ type RecordTypeInfo struct {
 	App             string              `json:"app"`
 	Display         string              `json:"display"`
 	ObjectView      *ObjectView         `json:"objectView,omitempty"`
+	View            json.RawMessage     `json:"view,omitempty"`
 	Icon            string              `json:"icon,omitempty"`
 	Color           string              `json:"color,omitempty"`
 	Fields          []FieldInfo         `json:"fields"`

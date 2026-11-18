@@ -164,7 +164,7 @@ func CompileObjectShape(o Object, app, builderRole string) platform.RecordType {
 			localRules[field.Name] = *field.FormulaExpr
 		}
 	}
-	return platform.RecordType{LocalRules: localRules, Type: app + "." + o.Name, Title: o.Title, Plural: o.Plural, Description: o.Description, Icon: o.Icon, Color: o.Color, Format: FieldFormats(o.Fields), ValueTypeBindings: ValueTypeBindings(o.Fields), PropertyBindings: PropertyBindings(o.Fields), Model: model, Display: display, ObjectView: o.ObjectView, Constraints: o.Constraints, Sets: o.Sets, Versioning: o.Versioning, VersionPins: o.VersionPins, Implements: slices.Clone(o.Implements), Extends: o.Extends, ExtensionSource: o.ExtensionSource, Derived: derived, Withheld: withheld, EnterpriseUse: o.EnterpriseUse}
+	return platform.RecordType{LocalRules: localRules, Type: app + "." + o.Name, Title: o.Title, Plural: o.Plural, Description: o.Description, Icon: o.Icon, Color: o.Color, Format: FieldFormats(o.Fields), ValueTypeBindings: ValueTypeBindings(o.Fields), PropertyBindings: PropertyBindings(o.Fields), Model: model, Display: display, ObjectView: o.ObjectView, View: slices.Clone(o.View), Constraints: o.Constraints, Sets: o.Sets, Versioning: o.Versioning, VersionPins: o.VersionPins, Implements: slices.Clone(o.Implements), Extends: o.Extends, ExtensionSource: o.ExtensionSource, Derived: derived, Withheld: withheld, EnterpriseUse: o.EnterpriseUse}
 }
 
 func goType(kind string) reflect.Type {

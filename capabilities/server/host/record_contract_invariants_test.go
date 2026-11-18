@@ -470,3 +470,58 @@ func TestInvariantK19InverseSetTotalsOnlyUseReadableRowsAndFields(t *testing.T) 
 		}
 	}
 }
+
+func TestInvariantK20PublishedDefaultViewPreservesTheRecordContract(t *testing.T) {
+	live := newInvariantTenant(t, "invariant-k20")
+	live.accept(t, "build.object.create", build.ObjectType, "LEGACY", invariantObject("legacyview", "Legacy"))
+	live.accept(t, "build.object.publish", build.ObjectType, "LEGACY", nil)
+	object := invariantObject("preferred", "Preferred")
+	live.accept(t, "build.object.create", build.ObjectType, "TYPE", object)
+	live.accept(t, "build.object.publish", build.ObjectType, "TYPE", nil)
+	_, handler := observationHost(live.Tenant)
+	read := func(path string) *httptest.ResponseRecorder {
+		request := httptest.NewRequest(http.MethodGet, path, nil)
+		request.Header.Set("Authorization", "Bearer "+observationToken(live.ID, "builder"))
+		request.Header.Set(TenantHeader, live.ID)
+		request.Header.Set("Accept-Language", "zh-CN")
+		response := httptest.NewRecorder()
+		handler.ServeHTTP(response, request)
+		if response.Code != http.StatusOK {
+			t.Fatalf("%s: HTTP %d %s", path, response.Code, response.Body)
+		}
+		return response
+	}
+	schemaHistory := func() json.RawMessage {
+		var reply struct {
+			Record struct{ SchemaVersions json.RawMessage } `json:"record"`
+		}
+		if json.Unmarshal(read("/v1/records/build.object/TYPE").Body.Bytes(), &reply) != nil {
+			t.Fatal("invalid object draft response")
+		}
+		return reply.Record.SchemaVersions
+	}
+	before := schemaHistory()
+	for _, invalid := range []string{`{}`, `[]`, `null`} {
+		sub := live.submission("build.object.edit", build.ObjectType, "TYPE", map[string]any{"view": json.RawMessage(invalid)})
+		if _, refusal := live.Submit(live.member(t), sub, invariantClock); refusal == nil || refusal.Code != pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT {
+			t.Fatalf("invalid view %s survived: %+v", invalid, refusal)
+		}
+	}
+	view := json.RawMessage(`{"columns":["note"],"group":"note","layout":"table","title":"Draft","version":1}`)
+	live.accept(t, "build.object.edit", build.ObjectType, "TYPE", map[string]any{"view": view})
+	live.accept(t, "build.object.publish", build.ObjectType, "TYPE", nil)
+	var catalog []platform.RecordTypeInfo
+	if json.Unmarshal(read("/v1/entities").Body.Bytes(), &catalog) != nil {
+		t.Fatal("invalid type catalog response")
+	}
+	views := map[string]json.RawMessage{}
+	for _, metadata := range catalog {
+		views[metadata.Type] = metadata.View
+	}
+	if len(views["build.legacyview"]) != 0 || !bytes.Equal(views["build.preferred"], view) {
+		t.Fatalf("published views: legacy=%s preferred=%s", views["build.legacyview"], views["build.preferred"])
+	}
+	if len(before) == 0 || !bytes.Equal(before, schemaHistory()) {
+		t.Fatal("publishing only a default view changed the action schema history")
+	}
+}

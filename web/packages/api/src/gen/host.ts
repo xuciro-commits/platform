@@ -2035,6 +2035,7 @@ export type EntityInfo = {
   app: string;
   display: string;
   objectView?: ObjectView;
+  view?: unknown;
   icon?: string;
   color?: string;
   fields: FieldInfo[];

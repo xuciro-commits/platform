@@ -221,7 +221,7 @@ func (x *Translator) TranslateInApp(v any, app, lang string) any {
 				}
 			}
 			for key, child := range node {
-				if key != "languages" && key != "widgetSpec" && key != "presentationWords" {
+				if !opaquePresentationValue(node, key) {
 					presentation(child, owner)
 				}
 			}
@@ -398,6 +398,11 @@ func WalkChoices(v any, f func(map[string]any, []any)) {
 	walkChoicesWithApp(v, "", func(_ string, m map[string]any, c []any) { f(m, c) })
 }
 
+func opaquePresentationValue(node map[string]any, key string) bool {
+	return key == "languages" || key == "widgetSpec" || key == "presentationWords" ||
+		key == "view" && node["standard"] != nil && node["fields"] != nil
+}
+
 func walkChoicesWithApp(v any, currentApp string, f func(string, map[string]any, []any)) {
 	switch x := v.(type) {
 	case map[string]any:
@@ -423,7 +428,7 @@ func walkChoicesWithApp(v any, currentApp string, f func(string, map[string]any,
 			f(app, x, choices)
 		}
 		for key, child := range x {
-			if key == "languages" || key == "widgetSpec" || key == "presentationWords" {
+			if opaquePresentationValue(x, key) {
 				continue
 			}
 			walkChoicesWithApp(child, app, f)
@@ -461,7 +466,7 @@ func walkTextsWithApp(v any, currentApp string, f func(string, string) string) {
 			app, _, _ = strings.Cut(schema, ".")
 		}
 		for k, child := range x {
-			if k == "languages" || k == "widgetSpec" || k == "presentationWords" {
+			if opaquePresentationValue(x, k) {
 				continue
 			}
 			if s, ok := child.(string); ok && translated[k] {

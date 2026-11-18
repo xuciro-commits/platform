@@ -77,11 +77,25 @@ func DefinitionBody(value Object, typ string) (json.RawMessage, error) {
 }
 
 func ObjectSchemaBody(object Object) (json.RawMessage, error) {
-	object.SchemaVersions = nil
+	object.SchemaVersions, object.View = nil, nil
 	return DefinitionBody(object, AppID+"."+object.Name)
 }
 
+func checkDefaultView(view json.RawMessage) error {
+	if len(view) == 0 {
+		return nil
+	}
+	var state map[string]json.RawMessage
+	if json.Unmarshal(view, &state) != nil || len(state["version"]) == 0 {
+		return fmt.Errorf("The default view needs a JSON object with a version")
+	}
+	return nil
+}
+
 func CheckObjectSchemas(object Object) error {
+	if err := checkDefaultView(object.View); err != nil {
+		return err
+	}
 	if len(object.SchemaVersions) == 0 {
 		return nil
 	}
@@ -111,7 +125,7 @@ func CompatibleObjectSchema(previous, next Object) bool {
 		object.Record = platform.Record{}
 		object.Title, object.Plural, object.Description = "", "", ""
 		object.Icon, object.Color, object.Display = "", "", ""
-		object.ObjectView = nil
+		object.ObjectView, object.View = nil, nil
 		object.State, object.Installed, object.Published = "", "", ""
 		object.ExtensionSource, object.SchemaVersions = nil, nil
 		object.ActionTypes, object.Actions = nil, nil
@@ -400,11 +414,13 @@ func ValidateObjectInstallation(c platform.Caller, record Object, env ObjectInst
 	previous, _ := publication.Read[Object](current.Published)
 	changed, compatible := false, false
 	if previous.Name != "" {
-		oldBody, err := DefinitionBody(previous, AppID+"."+previous.Name)
+		prior, next := previous, record
+		prior.View, next.View = nil, nil
+		oldBody, err := DefinitionBody(prior, AppID+"."+previous.Name)
 		if err != nil {
 			return err
 		}
-		newBody, err := DefinitionBody(record, AppID+"."+record.Name)
+		newBody, err := DefinitionBody(next, AppID+"."+record.Name)
 		if err != nil {
 			return err
 		}

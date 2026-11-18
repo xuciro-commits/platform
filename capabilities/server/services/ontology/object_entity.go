@@ -140,7 +140,11 @@ func ObjectEntity(env ObjectEntityEnvironment) platform.RecordType {
 			if c.Replaying {
 				return nil
 			}
-			if err := env.NormalizeRules(record.(*Object)); err != nil {
+			object := record.(*Object)
+			if err := checkDefaultView(object.View); err != nil {
+				return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
+			}
+			if err := env.NormalizeRules(object); err != nil {
 				return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
 			}
 			return nil
