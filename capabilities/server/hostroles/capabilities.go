@@ -179,7 +179,7 @@ func CapabilitiesOf(apps []platform.App) Capabilities {
 	return out
 }
 
-func Unique[T any](values map[string]T, active func(string) bool, role string) (T, error) {
+func UniqueOwner[T any](values map[string]T, active func(string) bool, role string) (string, T, error) {
 	var found string
 	var out T
 	for _, id := range slices.Sorted(maps.Keys(values)) {
@@ -188,17 +188,23 @@ func Unique[T any](values map[string]T, active func(string) bool, role string) (
 		}
 		if found != "" {
 			var zero T
-			return zero, fmt.Errorf("two %s owners: %s and %s", role, found, id)
+			return "", zero, fmt.Errorf("two %s owners: %s and %s", role, found, id)
 		}
 		found, out = id, values[id]
 	}
-	return out, nil
+	return found, out, nil
+}
+
+func Unique[T any](values map[string]T, active func(string) bool, role string) (T, error) {
+	_, value, err := UniqueOwner(values, active, role)
+	return value, err
 }
 
 type Roles struct {
 	Identity        platform.IdentityDirectory
 	IdentityOwner   controlowner.IdentityOwner
 	Directory       platform.Directory
+	DirectoryOwner  string
 	Linker          platform.Linker
 	Models          aigateway.Models
 	Training        platform.AITrainingOwner
@@ -236,7 +242,7 @@ func Resolve(c Capabilities, ids []string, active func(string) bool) (Roles, err
 	if roles.IdentityOwner, err = Unique(c.IdentityOwners, active, "identity owner"); err != nil {
 		return roles, err
 	}
-	if roles.Directory, err = Unique(c.Directories, active, "directory"); err != nil {
+	if roles.DirectoryOwner, roles.Directory, err = UniqueOwner(c.Directories, active, "directory"); err != nil {
 		return roles, err
 	}
 	if roles.Linker, err = Unique(c.Linkers, active, "link"); err != nil {
@@ -278,6 +284,7 @@ func Resolve(c Capabilities, ids []string, active func(string) bool) (Roles, err
 type PrivateRoles struct {
 	IdentityProfiles map[string]platform.IdentityProfile
 	InputReceivers   map[string]platform.InputReceiver
+	Directories      map[string]platform.Directory
 }
 
 func (p *PrivateRoles) Add(app platform.App) {
@@ -295,5 +302,12 @@ func (p *PrivateRoles) Add(app platform.App) {
 			p.InputReceivers = map[string]platform.InputReceiver{}
 		}
 		p.InputReceivers[id] = owner
+	}
+	switch owner := app.(type) {
+	case platform.Directory:
+		if p.Directories == nil {
+			p.Directories = map[string]platform.Directory{}
+		}
+		p.Directories[id] = owner
 	}
 }

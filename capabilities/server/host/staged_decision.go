@@ -189,10 +189,10 @@ func (d *stagedDecision) BoundProvider(c platform.Caller, protocol string) (stri
 }
 
 func (d *stagedDecision) directoryView() platform.Directory {
-	if owner, ok := d.tenant.Directory.(platform.App); ok {
-		return d.stateApp(owner).(platform.Directory)
+	if d.tenant.DirectoryOwner == "" {
+		return nil
 	}
-	return d.tenant.Directory
+	return d.privateRoles.Directories[d.stateApp(d.tenant.App(d.tenant.DirectoryOwner)).Manifest().ID]
 }
 
 func (d *stagedDecision) stateApp(app platform.App) platform.App {
