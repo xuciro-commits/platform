@@ -17,7 +17,7 @@
           { "name": "employees", "title": "Employees", "type": "integer" },
           { "name": "since", "title": "Customer since", "type": "date" }
         ],
-        "states": [{ "name": "active", "title": "Active" }]
+        "states": [{ "name": "active", "title": "Active", "tone": "success", "description": "A customer we serve today." }]
       },
       "records": [
         { "company": "Northwind Tools", "industry": "manufacturing", "tier": "strategic", "city": "Hamburg", "contact": "Ines Brandt", "employees": 1240, "since": "2019-03-11" },
@@ -27,7 +27,19 @@
         { "company": "Brightpath Software", "industry": "software", "tier": "standard", "city": "Dublin", "contact": "Aoife Byrne", "employees": 95, "since": "2023-02-20" },
         { "company": "Meridian Clinics", "industry": "healthcare", "tier": "strategic", "city": "Vienna", "contact": "Lukas Hofer", "employees": 2200, "since": "2018-11-05" },
         { "company": "Cobalt Packaging", "industry": "manufacturing", "tier": "key", "city": "Gdansk", "contact": "Marta Zielinska", "employees": 540, "since": "2021-10-12" },
-        { "company": "Fjord Outdoor", "industry": "retail", "tier": "standard", "city": "Bergen", "contact": "Sigrid Lunde", "employees": 180, "since": "2024-04-02" }
+        { "company": "Fjord Outdoor", "industry": "retail", "tier": "standard", "city": "Bergen", "contact": "Sigrid Lunde", "employees": 180, "since": "2024-04-02" },
+        { "company": "Kestrel Robotics", "industry": "manufacturing", "tier": "key", "city": "Turin", "contact": "Paolo Ricci", "employees": 420, "since": "2022-03-14" },
+        { "company": "Saffron Hotels", "industry": "retail", "tier": "standard", "city": "Porto", "contact": "Ana Sousa", "employees": 760, "since": "2023-07-03" },
+        { "company": "Granite Logistics", "industry": "logistics", "tier": "strategic", "city": "Antwerp", "contact": "Eva Peeters", "employees": 1900, "since": "2019-05-27" },
+        { "company": "Nimbus Analytics", "industry": "software", "tier": "standard", "city": "Tallinn", "contact": "Kadri Tamm", "employees": 64, "since": "2024-01-15" },
+        { "company": "Alder Medical Devices", "industry": "healthcare", "tier": "key", "city": "Basel", "contact": "Reto Keller", "employees": 880, "since": "2020-11-30" },
+        { "company": "Orbit Freight", "industry": "logistics", "tier": "standard", "city": "Malmo", "contact": "Johan Berg", "employees": 230, "since": "2023-03-21" },
+        { "company": "Copperleaf Foods", "industry": "manufacturing", "tier": "key", "city": "Cork", "contact": "Niamh Walsh", "employees": 1450, "since": "2021-06-09" },
+        { "company": "Vista Eyecare", "industry": "healthcare", "tier": "standard", "city": "Ghent", "contact": "Lotte Maes", "employees": 140, "since": "2024-08-19" },
+        { "company": "Pioneer Steelworks", "industry": "manufacturing", "tier": "strategic", "city": "Katowice", "contact": "Tomasz Nowak", "employees": 3600, "since": "2018-02-12" },
+        { "company": "Lattice Systems", "industry": "software", "tier": "key", "city": "Utrecht", "contact": "Sanne de Vries", "employees": 310, "since": "2022-10-04" },
+        { "company": "Riverside Market", "industry": "retail", "tier": "standard", "city": "Leeds", "contact": "Hannah Clarke", "employees": 520, "since": "2023-12-01" },
+        { "company": "Polar Cold Chain", "industry": "logistics", "tier": "key", "city": "Oulu", "contact": "Mikko Laine", "employees": 670, "since": "2021-04-26" }
       ]
     },
     {
@@ -44,9 +56,10 @@
           { "name": "amount", "title": "Amount", "type": "decimal" },
           { "name": "owner", "title": "Owner", "type": "text" },
           { "name": "closing", "title": "Expected close", "type": "date" },
-          { "name": "next", "title": "Next step", "type": "text" }
+          { "name": "next", "title": "Next step", "type": "text" },
+          { "name": "reason", "title": "Loss reason", "type": "text", "when": "stage=lost" }
         ],
-        "states": [{ "name": "open", "title": "Open" }]
+        "states": [{ "name": "open", "title": "Open", "tone": "info", "description": "Being worked on by the sales team." }]
       },
       "records": [
         { "subject": "Press line retrofit", "customer": "Northwind Tools", "stage": "negotiation", "amount": 184000, "owner": "Dana Whitfield", "closing": "2026-12-12", "next": "Send revised terms" },
@@ -54,13 +67,21 @@
         { "subject": "Fleet tracking rollout", "customer": "Harbor Freight Lines", "stage": "proposal", "amount": 97500, "owner": "Omar Haddad", "closing": "2027-01-20", "next": "Present proposal to operations" },
         { "subject": "Warehouse scanners", "customer": "Harbor Freight Lines", "stage": "qualifying", "amount": 28000, "owner": "Omar Haddad", "closing": "2027-02-14", "next": "Confirm budget holder" },
         { "subject": "Store replenishment pilot", "customer": "Lumen Retail Group", "stage": "proposal", "amount": 45000, "owner": "Yuki Tanaka", "closing": "2026-12-19", "next": "Agree pilot stores" },
-        { "subject": "Loyalty data integration", "customer": "Lumen Retail Group", "stage": "lost", "amount": 71000, "owner": "Yuki Tanaka", "closing": "2026-09-15", "next": "Review in six months" },
+        { "subject": "Loyalty data integration", "customer": "Lumen Retail Group", "stage": "lost", "amount": 71000, "owner": "Yuki Tanaka", "closing": "2026-09-15", "next": "Review in six months", "reason": "Chose their existing vendor" },
         { "subject": "Foundry quality tracking", "customer": "Atlas Castings", "stage": "qualifying", "amount": 33500, "owner": "Dana Whitfield", "closing": "2027-03-03", "next": "Site visit" },
         { "subject": "Support contract renewal", "customer": "Brightpath Software", "stage": "negotiation", "amount": 12400, "owner": "Omar Haddad", "closing": "2026-11-28", "next": "Legal review" },
         { "subject": "Clinic scheduling rollout", "customer": "Meridian Clinics", "stage": "won", "amount": 228000, "owner": "Yuki Tanaka", "closing": "2026-08-22", "next": "Phase two scoping" },
         { "subject": "Patient intake forms", "customer": "Meridian Clinics", "stage": "proposal", "amount": 54000, "owner": "Yuki Tanaka", "closing": "2027-01-09", "next": "Demo to head nurses" },
         { "subject": "Label printing line", "customer": "Cobalt Packaging", "stage": "qualifying", "amount": 76000, "owner": "Dana Whitfield", "closing": "2027-02-27", "next": "Collect line specifications" },
-        { "subject": "Seasonal stock planning", "customer": "Fjord Outdoor", "stage": "negotiation", "amount": 19800, "owner": "Omar Haddad", "closing": "2026-12-05", "next": "Final pricing" }
+        { "subject": "Seasonal stock planning", "customer": "Fjord Outdoor", "stage": "negotiation", "amount": 19800, "owner": "Omar Haddad", "closing": "2026-12-05", "next": "Final pricing" },
+        { "subject": "Robot cell integration", "customer": "Kestrel Robotics", "stage": "proposal", "amount": 138000, "owner": "Omar Haddad", "closing": "2027-01-30", "next": "Send layout drawings" },
+        { "subject": "Guest app refresh", "customer": "Saffron Hotels", "stage": "qualifying", "amount": 22000, "owner": "Yuki Tanaka", "closing": "2027-03-12", "next": "Find project sponsor" },
+        { "subject": "Cross-dock automation", "customer": "Granite Logistics", "stage": "negotiation", "amount": 312000, "owner": "Dana Whitfield", "closing": "2026-12-18", "next": "Align on service levels" },
+        { "subject": "Usage billing module", "customer": "Nimbus Analytics", "stage": "won", "amount": 18500, "owner": "Omar Haddad", "closing": "2026-10-02", "next": "Hand over to delivery" },
+        { "subject": "Device traceability", "customer": "Alder Medical Devices", "stage": "proposal", "amount": 87000, "owner": "Yuki Tanaka", "closing": "2027-02-05", "next": "Answer audit questions" },
+        { "subject": "Route planning trial", "customer": "Orbit Freight", "stage": "lost", "amount": 15000, "owner": "Omar Haddad", "closing": "2026-09-28", "next": "Revisit next budget year", "reason": "Budget moved to fleet renewal" },
+        { "subject": "Batch recall readiness", "customer": "Copperleaf Foods", "stage": "qualifying", "amount": 64000, "owner": "Dana Whitfield", "closing": "2027-03-20", "next": "Map current recall steps" },
+        { "subject": "Furnace monitoring", "customer": "Pioneer Steelworks", "stage": "negotiation", "amount": 205000, "owner": "Dana Whitfield", "closing": "2026-12-22", "next": "Confirm sensor count" }
       ]
     },
     {

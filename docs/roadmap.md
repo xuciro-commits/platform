@@ -20,9 +20,9 @@
 ## 0 清场
 
 - **0.2 夹具补齐**〔定式〕
-  做：用宿主现在收的属性：商机加只在 stage 为 lost 时出现的 lossReason（`when`），状态带语气与说明；客户与商机各补到 20 条。
+  做：用宿主现在收的属性：商机加只在 stage 为 lost 时出现的 reason（标题 Loss reason，`when`），状态带语气与说明；客户与商机各补到 20 条。
   customer 暂不改成引用：值会变成标识，1.4.3 之前界面只能显示标识。
-  验收：`make frontend-host` 灌入无错；`/v1/entities` 里商机的 lossReason 带 when。
+  验收：`make frontend-host` 灌入无错；`/v1/entities` 里商机的 reason 带 when。
 
 ## 1.2 界面描述〔灵魂〕
 
