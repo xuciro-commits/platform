@@ -31,8 +31,7 @@ test("records: open a list, open a record, change a field in place", async ({ pa
   await expect(page.getByRole("textbox", { name: "Loss reason" })).toHaveCount(0);
   await expect(page.getByRole("switch", { name: "Budget approved" })).toBeChecked();
   await expect(page.getByText("1,250.00 USD", { exact: true })).toBeVisible();
-  const owner = page.getByRole("complementary").getByRole("textbox", { name: "Owner" });
-  await expect(owner).toHaveValue("Dana Whitfield");
+  await expect(page.getByRole("complementary").getByRole("button", { name: /Owner.*Dana Whitfield/ })).toBeVisible();
 
   const next = page.getByRole("textbox", { name: "Next step" });
   await expect(next).toHaveValue("Send revised terms");
@@ -43,11 +42,12 @@ test("records: open a list, open a record, change a field in place", async ({ pa
   await page.reload();
   await expect(page.getByRole("textbox", { name: "Next step" })).toHaveValue("Call the plant manager");
 
-  await page.getByRole("complementary").getByRole("textbox", { name: "Owner" }).fill("Omar Haddad");
-  await page.getByRole("complementary").getByRole("textbox", { name: "Owner" }).press("Enter");
+  await page.getByRole("complementary").getByRole("button", { name: /Owner.*Dana Whitfield/ }).click();
+  await page.getByRole("complementary").getByRole("combobox", { name: "Owner", exact: true }).fill("Omar");
+  await page.getByRole("option", { name: /Omar Haddad/ }).click();
   await expect(page.getByRole("complementary").getByText("3", { exact: true })).toBeVisible();
   await page.reload();
-  await expect(page.getByRole("complementary").getByRole("textbox", { name: "Owner" })).toHaveValue("Omar Haddad");
+  await expect(page.getByRole("complementary").getByRole("button", { name: /Owner.*Omar Haddad/ })).toBeVisible();
 });
 
 test("sections: a field shows only when its condition holds", async ({ page }) => {
@@ -127,8 +127,9 @@ test("conflict: the second writer sees both values and chooses", async ({ browse
   await first.getByRole("textbox", { name: "Next step" }).press("Enter");
   await expect(first.getByRole("complementary").getByText("2", { exact: true })).toBeVisible();
 
-  await second.getByRole("complementary").getByRole("textbox", { name: "Owner" }).fill("Omar Haddad");
-  await second.getByRole("complementary").getByRole("textbox", { name: "Owner" }).press("Enter");
+  await second.getByRole("complementary").getByRole("button", { name: /^Owner/ }).click();
+  await second.getByRole("complementary").getByRole("combobox", { name: "Owner", exact: true }).fill("Omar");
+  await second.getByRole("option", { name: /Omar Haddad/ }).click();
   await expect(second.getByRole("complementary").getByText("3", { exact: true })).toBeVisible();
   await expect(second.getByRole("dialog")).toHaveCount(0);
 
