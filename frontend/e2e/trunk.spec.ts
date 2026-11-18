@@ -268,3 +268,24 @@ test("batch: retries a stale row without submitting a successful row again", asy
   expect(archived).toHaveLength(3);
   expect(archived[2]).toBe(failed);
 });
+
+test("leave: a refused inline edit asks whether to stay or discard", async ({ page }) => {
+  await signIn(page);
+  await open(page, "Ontology", "Objects");
+  await page.getByRole("link", { name: "Opportunities" }).click();
+  await page.getByRole("link", { name: "Fleet tracking rollout" }).click();
+  const subject = page.getByRole("textbox", { name: "Subject" });
+  await subject.fill("");
+  const refused = page.waitForResponse((response) => response.url().endsWith("/v1/submissions") && response.status() >= 400);
+  await page.getByRole("link", { name: "Opportunities" }).click();
+  await refused;
+  const confirm = page.getByRole("alertdialog");
+  await expect(confirm).toBeVisible();
+  await confirm.getByRole("button", { name: "Stay", exact: true }).click();
+  await expect(subject).toHaveValue("");
+  await page.getByRole("link", { name: "Opportunities" }).click();
+  await confirm.getByRole("button", { name: "Discard", exact: true }).click();
+  await expect(page.getByRole("heading", { level: 1, name: "Opportunities" })).toBeVisible();
+  await page.getByRole("link", { name: "Fleet tracking rollout" }).click();
+  await expect(subject).toHaveValue("Fleet tracking rollout");
+});

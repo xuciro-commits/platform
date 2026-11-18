@@ -9,6 +9,7 @@ import * as stylex from "@stylexjs/stylex";
 import { useEffect, useRef, useState } from "react";
 import { type Api, HostRefusal, request, reread } from "../host";
 import { t } from "../i18n";
+import { beforeLeave } from "../router";
 import { reasonOf, send } from "./act";
 import type { Described, Section, Values } from "./describe";
 import { type InputStatus, ParameterInput, enterable, settles } from "./ParameterInput";
@@ -22,6 +23,7 @@ export type Editor = {
   status: Record<string, InputStatus>;
   change: (parameter: Api.Field, value: unknown) => void;
   settle: () => void;
+  leave?: (discard: boolean) => void;
 };
 
 const blank = (value: unknown) => value == null || value === "";
@@ -31,6 +33,8 @@ export function useEditor(edit: Api.Action | undefined, id: string, values: Valu
   const [drafts, setDrafts] = useState<Values>({});
   const [status, setStatus] = useState<Record<string, InputStatus>>({});
   const [conflict, setConflict] = useState<Conflict>();
+  const [leave, setLeave] = useState<Editor["leave"]>();
+  const refused = useRef(new Set<string>());
   const latest = useRef(revision);
   const pending = useRef(drafts);
   const queue = useRef(Promise.resolve());
@@ -51,7 +55,10 @@ export function useEditor(edit: Api.Action | undefined, id: string, values: Valu
       setStatus((previous) => ({ ...previous, [name]: { type: "success" } }));
     } catch (problem) {
       if (!(problem instanceof HostRefusal && problem.reasonCode === "stale_revision")) {
-        setStatus((previous) => ({ ...previous, [name]: { type: "error", message: reasonOf(problem) } }));
+        if (same(pending.current[name], value)) {
+          refused.current.add(name);
+          setStatus((previous) => ({ ...previous, [name]: { type: "error", message: reasonOf(problem) } }));
+        }
         return;
       }
       const now = await request<Api.RecordView>(`/v1/records/${edit.target}/${encodeURIComponent(id)}`);
@@ -83,19 +90,42 @@ export function useEditor(edit: Api.Action | undefined, id: string, values: Valu
 
   const text = new Set((edit?.payload ?? []).filter((parameter) => !settles(parameter)).map((parameter) => parameter.name));
 
+  const settle = () => {
+    for (const [name, value] of Object.entries(pending.current)) if (text.has(name)) save(name, value);
+  };
+  const flush = useRef(settle);
+  flush.current = settle;
+  useEffect(() => beforeLeave(async () => {
+    flush.current();
+    await queue.current;
+    if (!refused.current.size) return true;
+    return new Promise<boolean>((done) => {
+      setLeave(() => (discard: boolean) => {
+        setLeave(undefined);
+        if (discard) {
+          for (const name of refused.current) delete sent.current[name];
+          refused.current.clear();
+          setDrafts({});
+          setStatus({});
+        }
+        done(discard);
+      });
+    });
+  }), []);
+
   return {
     values: { ...values, ...drafts },
+    leave,
     status,
     conflict,
     resolve,
     change: (parameter, value) => {
+      refused.current.delete(parameter.name);
       setDrafts((previous) => ({ ...previous, [parameter.name]: value }));
       setStatus(({ [parameter.name]: _, ...rest }) => rest);
       if (settles(parameter)) save(parameter.name, value);
     },
-    settle: () => {
-      for (const [name, value] of Object.entries(pending.current)) if (text.has(name)) save(name, value);
-    },
+    settle,
   };
 }
 

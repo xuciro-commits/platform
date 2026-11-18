@@ -9,9 +9,26 @@ export function usePath() {
   return useSyncExternalStore(subscribe, () => location.pathname);
 }
 
-export function navigate(path: string, state: unknown = null) {
-  history.pushState(state, "", path);
-  dispatchEvent(new PopStateEvent("popstate"));
+type PermissionToLeave = Promise<boolean>;
+type LeaveGuard = () => PermissionToLeave;
+const guards = new Set<LeaveGuard>();
+let leaving = false;
+
+export function beforeLeave(guard: LeaveGuard) {
+  guards.add(guard);
+  return () => { guards.delete(guard); };
+}
+
+export async function navigate(path: string, state: unknown = null) {
+  if (leaving) return;
+  leaving = true;
+  try {
+    for (const guard of guards) if (!await guard()) return;
+    history.pushState(state, "", path);
+    dispatchEvent(new PopStateEvent("popstate"));
+  } finally {
+    leaving = false;
+  }
 }
 
 export function RouterLink({ ref, onClick, ...rest }: AnchorHTMLAttributes<HTMLAnchorElement> & { ref?: Ref<HTMLAnchorElement> }) {

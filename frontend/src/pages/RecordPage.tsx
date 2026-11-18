@@ -1,3 +1,4 @@
+import { AlertDialog } from "@astryxdesign/core/AlertDialog";
 import { Avatar } from "@astryxdesign/core/Avatar";
 import { Banner } from "@astryxdesign/core/Banner";
 import { EmptyState } from "@astryxdesign/core/EmptyState";
@@ -199,6 +200,17 @@ export function RecordPage({ described, id, listPath, listTitle, instances }: Re
       }
       content={
         <LayoutContent padding={6} role="main">
+          {editor.leave && (
+            <AlertDialog
+              isOpen
+              title={t("Discard unsaved changes?")}
+              description={t("The record could not be saved. Stay to correct the input or discard it and leave.")}
+              cancelLabel={t("Stay")}
+              actionLabel={t("Discard")}
+              onOpenChange={(open) => !open && editor.leave?.(false)}
+              onAction={() => editor.leave?.(true)}
+            />
+          )}
           {read.status === "loading" && <Loading />}
           {read.status === "error" && (
             <Banner status="error" title={t("This record could not be loaded")} description={read.reason || t("Reload the page to try again.")} />
