@@ -8,6 +8,7 @@ import (
 	"slices"
 	"testing"
 
+	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformserver/kernel/protocol"
 	"platformserver/platform"
 	"platformserver/services/devops/packages"
@@ -27,7 +28,21 @@ func TestInvariantK24InstalledPackageContributesOnlyActiveAuthorizedNavigationAn
 	if err != nil {
 		t.Fatal(err)
 	}
-	preview, err := live.inspectPackage(t.Context(), protocol.PackageInspectRequest{Content: raw})
+	var offer platform.PackageDescriptor
+	if err := json.Unmarshal(raw, &offer); err != nil {
+		t.Fatal(err)
+	}
+	for i, asset := range offer.Blueprint.Assets {
+		if asset.Ref.Name == "build.stockreceipt" {
+			var object map[string]json.RawMessage
+			if err := json.Unmarshal(asset.Body, &object); err != nil {
+				t.Fatal(err)
+			}
+			object["access"] = platform.Raw([]ontology.Access{{Role: ontology.UserRole, Read: "none"}})
+			offer.Blueprint.Assets[i].Body = platform.Raw(object)
+		}
+	}
+	preview, err := live.inspectPackage(t.Context(), protocol.PackageInspectRequest{Content: platform.Raw(offer)})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -70,28 +85,32 @@ func TestInvariantK24InstalledPackageContributesOnlyActiveAuthorizedNavigationAn
 	submit(packages.SchemaPackageInstall, map[string]any{"id": descriptor.ID, "version": descriptor.Version})
 	for _, role := range []string{"builder", "other"} {
 		view, exists := app(role)
-		if !exists || len(view.Menu) == 0 || !slices.ContainsFunc(view.Menu[0].Entries, func(page protocol.ApplicationPage) bool {
+		if !exists || len(view.Menu) != 1 || !slices.ContainsFunc(view.Menu[0].Entries, func(page protocol.ApplicationPage) bool {
 			return page.Name == "batchproviderorder" && page.Object == typ
 		}) {
 			t.Fatalf("%s application navigation: %+v", role, view)
+		}
+		hasReceipt := slices.ContainsFunc(view.Menu[0].Entries, func(page protocol.ApplicationPage) bool { return page.Name == "stockreceipt" })
+		if hasReceipt != (role == "builder") {
+			t.Fatalf("%s stock receipt page visibility: %+v", role, view.Menu)
 		}
 	}
 	if _, exists := app("auditor"); exists {
 		t.Fatal("member without access saw the app")
 	}
 	live.accept(t, typ+".create", typ, "ORDER", map[string]any{"number": "ORDER", "product": "sample", "quantity": 1, "unitcost": 2})
-	actionsOf := func(role string) []objects.RecordAction {
+	recordOf := func(role string) objects.RecordView {
 		t.Helper()
 		var view objects.RecordView
 		raw := get(role, "/v1/records/"+typ+"/ORDER")
 		if json.Unmarshal(raw.Bytes(), &view) != nil {
 			t.Fatal(raw)
 		}
-		return view.Actions
+		return view
 	}
 	hasAction := func(action objects.RecordAction) bool { return action.Schema == schema && action.Allowed }
 	for _, role := range []string{"builder", "other"} {
-		if actions := actionsOf(role); !slices.ContainsFunc(actions, hasAction) {
+		if actions := recordOf(role).Actions; !slices.ContainsFunc(actions, hasAction) {
 			t.Fatalf("%s actions: %+v", role, actions)
 		}
 	}
@@ -102,13 +121,17 @@ func TestInvariantK24InstalledPackageContributesOnlyActiveAuthorizedNavigationAn
 	if _, exists := app("builder"); exists {
 		t.Fatal("retired application remained in the shell")
 	}
-	for _, action := range actionsOf("builder") {
-		if action.Schema == schema {
-			t.Fatal("retired package action remained on the retained record")
+	for _, role := range []string{"builder", "other"} {
+		view := recordOf(role)
+		if record, ok := view.Record.(map[string]any); !ok || record["number"] != "ORDER" || record["firstshop"] != "SHOP-1" {
+			t.Fatalf("%s retained record: %+v", role, view.Record)
+		}
+		if slices.ContainsFunc(view.Actions, func(action objects.RecordAction) bool { return action.Schema == schema }) {
+			t.Fatalf("%s saw the retired action on the retained record", role)
 		}
 	}
 	req := live.submission(schema, typ, "ORDER", inputs)
-	if _, refusal := live.Submit(live.member(t), req, invariantClock); refusal == nil {
-		t.Fatal("a retired package action still accepted direct submission")
+	if _, refusal := live.Submit(live.member(t), req, invariantClock); refusal == nil || refusal.Code != pb.ErrorCode_ERROR_CODE_POLICY_DENIED || refusal.Message != "Authorization denied at verb: The package contribution is retired" {
+		t.Fatalf("retired package action direct submission: %+v", refusal)
 	}
 }

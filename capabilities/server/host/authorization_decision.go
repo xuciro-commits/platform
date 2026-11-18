@@ -51,11 +51,11 @@ type authorizationDetails = security.NativeDetails
 
 func (t *Tenant) authorizeNative(c platform.Caller, permission, kind string, allowed []string, declared bool, details ...authorizationDetails) platform.AuthzDecision {
 	if c.ReadScoped() {
-		return t.authorizer().Native(c, permission, kind, allowed, declared && t.resourceActionActive(permission), details...)
+		return t.authorizer().Native(c, permission, kind, allowed, declared, details...)
 	}
 	decision, _ := recordRead(t, context.Background(), func(t *Tenant) (platform.AuthzDecision, *platform.Error) {
 		c := platform.NewCaller(runtime{t: t}, c.Member, c.App, c.Replaying, c.Automation)
-		return t.authorizer().Native(c, permission, kind, allowed, declared && t.resourceActionActive(permission), details...), nil
+		return t.authorizer().Native(c, permission, kind, allowed, declared, details...), nil
 	})
 	return decision
 }

@@ -222,15 +222,13 @@ type ApplicationMenuGroup struct {
 }
 
 type ApplicationView struct {
-	Menu        []ApplicationMenuGroup `json:"menu,omitempty"`
-	Entry       string                 `json:"entry,omitempty"`
+	Menu        []ApplicationMenuGroup `json:"menu"`
 	App         string                 `json:"app"`
 	Name        string                 `json:"name"`
 	Title       string                 `json:"title"`
 	Description string                 `json:"description,omitempty"`
 	Icon        string                 `json:"icon,omitempty"`
 	Source      string                 `json:"source"`
-	Pages       []ApplicationPage      `json:"pages"`
 }
 
 type PageView struct {

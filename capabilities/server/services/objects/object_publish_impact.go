@@ -1,10 +1,8 @@
 package objects
 
 import (
-	"encoding/json"
 	"reflect"
 	"slices"
-	"strings"
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
@@ -43,19 +41,15 @@ func (t *Owner) PublishImpact(c platform.Caller, draftID string, now time.Time) 
 		return out, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Published object definition is unavailable")
 	}
 	for _, item := range changes {
-		name, isField := strings.CutPrefix(item.Path, "fields.")
-		if !isField || name == "$order" || item.Change == "added" {
+		from, to := item.FromField, item.ToField
+		if from == nil {
 			continue
 		}
-		var from, to ontology.Field
-		if json.Unmarshal(item.From, &from) != nil || item.To != nil && json.Unmarshal(item.To, &to) != nil {
-			return out, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Published object definition is unavailable")
-		}
 		switch {
-		case item.Change == "removed":
-			out.Fields = append(out.Fields, ObjectPublishField{Field: name, Change: "removed", From: from.Type})
+		case to == nil:
+			out.Fields = append(out.Fields, ObjectPublishField{Field: from.Name, Change: "removed", From: from.Type})
 		case from.Type != to.Type:
-			out.Fields = append(out.Fields, ObjectPublishField{Field: name, Change: "typeChanged", From: from.Type, To: to.Type})
+			out.Fields = append(out.Fields, ObjectPublishField{Field: from.Name, Change: "typeChanged", From: from.Type, To: to.Type})
 		}
 	}
 	reader, refusal := t.newSetRead(t.Store, c, now)

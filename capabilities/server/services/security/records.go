@@ -82,8 +82,10 @@ func (a Authorizer) Authorize(store *records.Store, c platform.Caller, q platfor
 	var policies []platform.AuthorizationPolicy
 	if q.Action != "" {
 		context.Verb = &platform.AuthorizationGate{Reason: "The operation is unavailable in its owner declaration"}
-		owner := a.sources.ActionOwner(q.Action)
-		if owner != nil {
+		owner, retired := a.sources.ActionOwner(q.Action)
+		if retired {
+			context.Verb.Reason = retiredPackageContribution
+		} else if owner != nil {
 			facts, rules, ok := owner.Manifest().Actions.AuthorizationRequest(platform.RouteCaller(c, owner.Manifest().ID), q.Action, request.Resource)
 			if ok {
 				request.Subject, request.Allowed, request.Attributes, policies = facts.Subject, facts.Allowed, facts.Attributes, rules

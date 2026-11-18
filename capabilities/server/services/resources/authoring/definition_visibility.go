@@ -273,7 +273,7 @@ func (v DefinitionVisibility) visibleOwnerRef(ref platform.AssetRef) bool {
 		return true
 	}
 	resource, _ := v.ResourceOf(ref)
-	if ref.Kind == platform.AssetApp && resource.ManagedBy != "" && resource.Archived {
+	if ref.Kind == platform.AssetApp && managedResourceRetired(resource) {
 		return false
 	}
 	if delegated {

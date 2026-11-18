@@ -20,7 +20,7 @@ type Sources interface {
 	LookupMember(string) (platform.Member, bool)
 	DeclaredPrincipal(string) bool
 	App(string) platform.Service
-	ActionOwner(string) platform.Service
+	ActionOwner(string) (platform.Service, bool)
 	OwnerActive(string) bool
 	AgentSuspended(string) bool
 	NamedReadAllowed(platform.Member, string) bool

@@ -651,15 +651,13 @@ export type ApplicationVersion = {
 };
 
 export type ApplicationView = {
-  menu?: ApplicationMenuGroup[];
-  entry?: string;
+  menu: ApplicationMenuGroup[];
   app: string;
   name: string;
   title: string;
   description?: string;
   icon?: string;
   source: string;
-  pages: ApplicationPage[];
 };
 
 export type ApplicationWarning = {

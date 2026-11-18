@@ -1897,6 +1897,7 @@
   "Unknown authorization kind": "未知授权类别",
   "The original source is outside the caller's permissions": "原始来源不在调用者的权限内",
   "The operation is unavailable in its owner declaration": "归属方声明中没有可用的操作",
+  "The package contribution is retired": "该包贡献的能力已退役",
   "Restricted data does not leave as CSV": "受限数据不能以 CSV 导出",
   "the declared owner service boundary": "声明的归属方服务边界",
   "The owning record is outside the caller's row scope": "所属记录不在调用者的行范围内",

@@ -32,11 +32,8 @@ func (s authorizationSources) DeclaredPrincipal(id string) bool {
 
 func (s authorizationSources) App(id string) platform.Service { return s.t.App(id) }
 
-func (s authorizationSources) ActionOwner(action string) platform.Service {
-	if !s.t.resourceActionActive(action) {
-		return nil
-	}
-	return s.t.App(s.t.owner["action:"+action])
+func (s authorizationSources) ActionOwner(action string) (platform.Service, bool) {
+	return s.t.resourceActionOwner(action)
 }
 
 func (s authorizationSources) OwnerActive(id string) bool { return s.t.OwnerActive(id) }

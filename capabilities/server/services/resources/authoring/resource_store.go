@@ -38,16 +38,22 @@ func StoreResourceRows(store *records.Store, role func(project string) string) R
 	}
 }
 
+const archivedResourceState = "archived"
+
+func managedResourceRetired(resource protocol.Resource) bool {
+	return resource.ManagedBy != "" && resource.State == archivedResourceState
+}
+
 func ResourceActionRetired(store *records.Store, name, target string) bool {
 	names := []string{name}
 	if target != "" && target != name {
 		names = append(names, target)
 	}
 	_, retired := records.FindRow(store, ResourceType, []records.StateMatch{
-		{Path: []string{"value", "state"}, Values: []string{"archived"}},
+		{Path: []string{"value", "state"}, Values: []string{archivedResourceState}},
 		{Path: []string{"value", "ref", "name"}, Values: names},
 	}, func(resource protocol.Resource) bool {
-		return resource.ManagedBy != "" && resource.State == "archived" &&
+		return managedResourceRetired(resource) &&
 			(resource.Ref.Name == name || resource.Ref.Kind == platform.AssetObject && resource.Ref.Name == target)
 	})
 	return retired

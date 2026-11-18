@@ -12,10 +12,17 @@ import (
 )
 
 type ObjectChange struct {
-	Path   string          `json:"path"`
-	Change string          `json:"change" enum:"added,removed,changed"`
-	From   json.RawMessage `json:"from,omitempty"`
-	To     json.RawMessage `json:"to,omitempty"`
+	Path      string          `json:"path"`
+	Change    string          `json:"change" enum:"added,removed,changed"`
+	From      json.RawMessage `json:"from,omitempty"`
+	To        json.RawMessage `json:"to,omitempty"`
+	FromField *Field          `json:"-"`
+	ToField   *Field          `json:"-"`
+}
+
+type editableValue struct {
+	raw   json.RawMessage
+	field *Field
 }
 
 func DraftChanges(record any) ([]ObjectChange, error) {
@@ -51,7 +58,7 @@ func DraftChanges(record any) ([]ObjectChange, error) {
 		}
 		oldOrder, newOrder := names(published.Fields), names(draft.Fields)
 		if !slices.Equal(oldOrder, newOrder) && slices.Equal(slices.Sorted(slices.Values(oldOrder)), slices.Sorted(slices.Values(newOrder))) {
-			before["fields.$order"], after["fields.$order"] = platform.Raw(oldOrder), platform.Raw(newOrder)
+			before["fields.$order"], after["fields.$order"] = editableValue{raw: platform.Raw(oldOrder)}, editableValue{raw: platform.Raw(newOrder)}
 		}
 	}
 	keys := maps.Clone(before)
@@ -59,13 +66,13 @@ func DraftChanges(record any) ([]ObjectChange, error) {
 	var changes []ObjectChange
 	for _, key := range slices.Sorted(maps.Keys(keys)) {
 		from, to := before[key], after[key]
-		if bytes.Equal(from, to) {
+		if bytes.Equal(from.raw, to.raw) {
 			continue
 		}
-		item := ObjectChange{Path: key, Change: "changed", From: from, To: to}
-		if from == nil {
+		item := ObjectChange{Path: key, Change: "changed", From: from.raw, To: to.raw, FromField: from.field, ToField: to.field}
+		if from.raw == nil {
 			item.Change = "added"
-		} else if to == nil {
+		} else if to.raw == nil {
 			item.Change = "removed"
 		}
 		changes = append(changes, item)
@@ -73,7 +80,7 @@ func DraftChanges(record any) ([]ObjectChange, error) {
 	return changes, nil
 }
 
-func editableObject(value Object) (map[string]json.RawMessage, error) {
+func editableObject(value Object) (map[string]editableValue, error) {
 	value.ExtensionSource, value.SchemaVersions = nil, nil
 	if len(value.ActionTypes) != 0 {
 		value.ActionTypes = slices.Clone(value.ActionTypes)
@@ -88,14 +95,22 @@ func editableObject(value Object) (map[string]json.RawMessage, error) {
 	if err != nil {
 		return nil, err
 	}
-	var out map[string]json.RawMessage
-	if err := json.Unmarshal(raw, &out); err != nil {
+	var body map[string]json.RawMessage
+	if err := json.Unmarshal(raw, &body); err != nil {
 		return nil, err
 	}
-	delete(out, "fields")
-	delete(out, "type")
+	delete(body, "fields")
+	delete(body, "type")
+	out := make(map[string]editableValue, len(body)+len(fields))
+	for key, raw := range body {
+		out[key] = editableValue{raw: raw}
+	}
 	for _, field := range fields {
-		out["fields."+field.Name] = platform.Raw(field)
+		raw, err := json.Marshal(field)
+		if err != nil {
+			return nil, err
+		}
+		out["fields."+field.Name] = editableValue{raw: raw, field: &field}
 	}
 	return out, nil
 }

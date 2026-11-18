@@ -15,6 +15,8 @@ type NativeDetails struct {
 	Definition string
 }
 
+const retiredPackageContribution = "The package contribution is retired"
+
 func (a Authorizer) Native(c platform.Caller, permission, kind string, allowed []string, declared bool, details ...NativeDetails) platform.AuthzDecision {
 	c.Member = a.Member(c.Member)
 	pass := passGate("not restricted by this owner")
@@ -26,7 +28,9 @@ func (a Authorizer) Native(c platform.Caller, permission, kind string, allowed [
 		context.Principal.Allowed = false
 	}
 	owner := a.sources.App(c.App)
-	if owner == nil || !declared || !a.sources.OwnerActive(c.App) {
+	if _, retired := a.sources.ActionOwner(permission); retired {
+		context.Verb = &platform.AuthorizationGate{Reason: retiredPackageContribution}
+	} else if owner == nil || !declared || !a.sources.OwnerActive(c.App) {
 		context.Verb = &platform.AuthorizationGate{Reason: "The operation is unavailable in its owner declaration"}
 	}
 	var policies []platform.AuthorizationPolicy

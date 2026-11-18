@@ -82,42 +82,46 @@ type functionRun struct {
 }
 
 func Applications(definitions []platform.Definition) []protocol.ApplicationView {
-	pages := map[string]*platform.Page{}
-	for i := range definitions {
-		if definition := definitions[i]; definition.Ref.Kind == platform.AssetPage && definition.Page != nil {
-			pages[pageKey(definition.Ref.App, definition.Ref.Name)] = definition.Page
-		}
-	}
+	pages := visiblePages(definitions)
 	out := []protocol.ApplicationView{}
 	for _, definition := range definitions {
 		if definition.Ref.Kind != platform.AssetApp || definition.Application == nil {
 			continue
 		}
-		application := *definition.Application
-		view := protocol.ApplicationView{App: definition.Ref.App, Name: definition.Ref.Name, Title: application.Title,
-			Description: application.Description, Icon: application.Icon, Source: definition.Source, Pages: []protocol.ApplicationPage{}}
-		if view.Title == "" {
-			view.Title = view.Name
+		if view := applicationView(definition, pages); len(view.Menu) != 0 {
+			out = append(out, view)
 		}
-		for _, name := range application.Pages {
-			page := pages[pageKey(definition.Ref.App, name)]
-			if page == nil {
-				continue
-			}
-			view.Pages = append(view.Pages, protocol.ApplicationPage{Name: page.Name, Title: page.Title,
-				Description: page.Description, Object: page.Object.Name})
-		}
-		if len(view.Pages) == 0 {
-			continue
-		}
-		view.Menu = applicationMenu(application.Groups, view.Pages)
-		if slices.ContainsFunc(view.Pages, func(page protocol.ApplicationPage) bool { return page.Name == application.Entry }) {
-			view.Entry = application.Entry
-		}
-		out = append(out, view)
 	}
 	slices.SortFunc(out, func(a, b protocol.ApplicationView) int { return strings.Compare(a.Name, b.Name) })
 	return out
+}
+
+func visiblePages(definitions []platform.Definition) map[platform.AssetRef]*platform.Page {
+	pages := map[platform.AssetRef]*platform.Page{}
+	for _, definition := range definitions {
+		if definition.Ref.Kind == platform.AssetPage && definition.Page != nil {
+			pages[definition.Ref] = definition.Page
+		}
+	}
+	return pages
+}
+
+func applicationView(definition platform.Definition, visible map[platform.AssetRef]*platform.Page) protocol.ApplicationView {
+	application := definition.Application
+	view := protocol.ApplicationView{App: definition.Ref.App, Name: definition.Ref.Name, Title: application.Title,
+		Description: application.Description, Icon: application.Icon, Source: definition.Source}
+	if view.Title == "" {
+		view.Title = view.Name
+	}
+	var pages []protocol.ApplicationPage
+	for _, name := range application.Pages {
+		if page := visible[platform.AssetRef{App: definition.Ref.App, Kind: platform.AssetPage, Name: name}]; page != nil {
+			pages = append(pages, protocol.ApplicationPage{Name: page.Name, Title: page.Title,
+				Description: page.Description, Object: page.Object.Name})
+		}
+	}
+	view.Menu = applicationMenu(application.Groups, pages)
+	return view
 }
 
 func applicationMenu(groups []platform.AppGroup, pages []protocol.ApplicationPage) []protocol.ApplicationMenuGroup {
@@ -168,36 +172,12 @@ func PageView(definitions []platform.Definition, entities []platform.RecordTypeI
 	if application == nil {
 		return protocol.PageView{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_NOT_FOUND, "This workspace offers no such application")
 	}
-	wanted := false
-	for _, name := range application.Application.Pages {
-		wanted = wanted || name == page
-	}
-	var declared *platform.Page
-	if wanted {
-		for i := range definitions {
-			definition := &definitions[i]
-			if definition.Ref.Kind == platform.AssetPage && definition.Page != nil &&
-				definition.Ref.App == application.Ref.App && definition.Ref.Name == page {
-				declared = definition.Page
-				break
-			}
-		}
-	}
-	if declared == nil {
+	pages := visiblePages(definitions)
+	declared := pages[platform.AssetRef{App: application.Ref.App, Kind: platform.AssetPage, Name: page}]
+	if declared == nil || !slices.Contains(application.Application.Pages, page) {
 		return protocol.PageView{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_NOT_FOUND, "This application has no such page")
 	}
-	view := protocol.PageView{Page: *declared, Actions: []platform.Action{}, Application: protocol.ApplicationView{
-		App: application.Ref.App, Name: application.Ref.Name, Title: application.Application.Title,
-		Description: application.Application.Description, Icon: application.Application.Icon, Source: application.Source}}
-	for _, other := range definitions {
-		if other.Ref.Kind == platform.AssetPage && other.Ref.App == application.Ref.App && other.Page != nil {
-			view.Application.Pages = append(view.Application.Pages, protocol.ApplicationPage{Name: other.Page.Name, Title: other.Page.Title,
-				Description: other.Page.Description, Object: other.Page.Object.Name})
-		}
-	}
-	slices.SortFunc(view.Application.Pages, func(a, b protocol.ApplicationPage) int {
-		return indexIn(application.Application.Pages, a.Name) - indexIn(application.Application.Pages, b.Name)
-	})
+	view := protocol.PageView{Page: *declared, Actions: []platform.Action{}, Application: applicationView(*application, pages)}
 	if declared.Object.Name != "" {
 		for _, entity := range entities {
 			if entity.Type == declared.Object.Name {
@@ -221,15 +201,6 @@ func PageView(definitions []platform.Definition, entities []platform.RecordTypeI
 		}
 	}
 	return view, nil
-}
-
-func pageKey(app, name string) string { return app + "\x00" + name }
-
-func indexIn(names []string, name string) int {
-	if i := slices.Index(names, name); i >= 0 {
-		return i
-	}
-	return len(names)
 }
 
 func (ctx Context) Bind(resource platform.AssetRef, release, dependencies string, jobOwner ...string) ([]platform.AssetBinding, error) {

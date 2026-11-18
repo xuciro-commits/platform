@@ -13,13 +13,14 @@ import (
 	"time"
 )
 
-func (t *Tenant) resourceActionActive(name string) bool {
+func (t *Tenant) resourceActionOwner(name string) (platform.Service, bool) {
 	target := ""
-	if owner := t.App(t.owner["action:"+name]); owner != nil {
+	owner := t.App(t.owner["action:"+name])
+	if owner != nil {
 		action, _ := owner.Manifest().Actions.Action(name)
 		target = action.Target
 	}
-	return !build.ResourceActionRetired(t.Projection, name, target)
+	return owner, build.ResourceActionRetired(t.Projection, name, target)
 }
 
 func (t *Tenant) ResourceRole(m platform.Member, project string) string {

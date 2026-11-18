@@ -26,6 +26,12 @@ func (projection DefinitionProjection) Page(def platform.Definition) (platform.D
 	if m.Roles[def.Ref.App] == "" || def.Page == nil {
 		return def, false
 	}
+	if object := def.Page.Object; object.Name != "" {
+		info, ok := entities[object.Name]
+		if !ok || info.App != object.App {
+			return def, false
+		}
+	}
 	page, err := Safety(*def.Page)
 	if err != nil {
 		return def, false
