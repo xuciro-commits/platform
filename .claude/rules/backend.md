@@ -7,7 +7,7 @@ paths:
 # 宿主与协议
 
 - 动手前读 docs/backend.md；写入、读取与发布的路径在 docs/architecture.md。
-- 只做 docs/plan.md 当前阶段或已授权的 docs/roadmap.md U 系列；其余搬迁与改名保持冻结。
+- 只做 docs/plan.md 当前阶段的行，按 docs/roadmap.md 的细目做；其余搬迁与改名保持冻结。
 - 新代码放进拥有它的服务；`host` 与 `platform` 不再变大，`make check` 会拦。
 - 写入只经接受路径：拥有者返回编辑与意图，不直接写存储。
 - 读记录的 HTTP 路由用 `rt.recordRead`；授权只经唯一的决定路径，不另写判断。
