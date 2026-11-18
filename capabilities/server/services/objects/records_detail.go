@@ -126,8 +126,8 @@ func (t *Owner) readRecordBase(m platform.Member, typ, id string, now time.Time)
 		record = narrowed.Interface()
 	}
 	values, valueErrors := propertyValues(seen.Info(), record)
-	view := RecordView{Values: values, ValueErrors: valueErrors, Formats: et.Formats().Evaluate(record, hidden), Record: record}
 	caller := t.caller(m, et.Info().App)
+	view := RecordView{Values: values, ValueErrors: valueErrors, Formats: t.recordFormats(s, caller, et, id, record, now, false), Record: record}
 	for _, field := range et.Info().Fields {
 		if field.Supplemental {
 			continue

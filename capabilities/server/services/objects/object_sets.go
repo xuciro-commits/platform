@@ -551,7 +551,7 @@ func (r *setRead) loadObjects(node *setNode, w Window) (RecordPage, *platform.Er
 		out.Records[i] = record
 		ids = append(ids, records.Header(v).ID)
 		if w.Format {
-			if formats := read.entity.Formats().Evaluate(out.Records[i], read.hidden); len(formats) > 0 {
+			if formats := t.recordFormats(store, r.c, read.entity, records.Header(v).ID, out.Records[i], r.now, true); len(formats) > 0 {
 				if out.Formats == nil {
 					out.Formats = map[string]map[string]platform.FieldFormat{}
 				}

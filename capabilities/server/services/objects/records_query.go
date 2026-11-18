@@ -20,21 +20,21 @@ type RecordPage struct {
 }
 
 func (t *Owner) recordsRead(m platform.Member, typ string, q platform.Query, now time.Time) (RecordPage, *platform.Error) {
-	return t.recordsFrom(t.Store, m, typ, q, now)
+	return t.recordsFrom(t.Store, m, typ, q, now, false)
 }
 
-func (t *Owner) recordsFrom(s *records.Store, m platform.Member, typ string, q platform.Query, now time.Time) (RecordPage, *platform.Error) {
+func (t *Owner) recordsFrom(s *records.Store, m platform.Member, typ string, q platform.Query, now time.Time, format bool) (RecordPage, *platform.Error) {
 	if q.Limit < 1 || q.Limit > 500 {
 		q.Limit = 500
 	}
-	return t.recordSelectionFrom(s, m, typ, q, now)
+	return t.recordSelectionForCallerFrom(s, t.caller(m, ""), typ, q, now, format)
 }
 
 func (t *Owner) recordSelectionFrom(s *records.Store, m platform.Member, typ string, q platform.Query, now time.Time) (RecordPage, *platform.Error) {
-	return t.recordSelectionForCallerFrom(s, t.caller(m, ""), typ, q, now)
+	return t.recordSelectionForCallerFrom(s, t.caller(m, ""), typ, q, now, false)
 }
 
-func (t *Owner) recordSelectionForCallerFrom(s *records.Store, c platform.Caller, typ string, q platform.Query, now time.Time) (RecordPage, *platform.Error) {
+func (t *Owner) recordSelectionForCallerFrom(s *records.Store, c platform.Caller, typ string, q platform.Query, now time.Time, format bool) (RecordPage, *platform.Error) {
 	c.Member = t.authorizationMember(c.Member)
 	around, err := t.traversalAround(s, c.Member, typ, q)
 	if err != nil {
@@ -43,12 +43,12 @@ func (t *Owner) recordSelectionForCallerFrom(s *records.Store, c platform.Caller
 	if q.Set != nil && q.CheckSet() != nil {
 		return RecordPage{}, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 	}
-	page, _, err := t.LoadObjectSet(s, c, q.ObjectSet(typ, around), Window{Sort: q.Sort, Offset: q.Offset, Limit: q.Limit}, now)
+	page, _, err := t.LoadObjectSet(s, c, q.ObjectSet(typ, around), Window{Sort: q.Sort, Offset: q.Offset, Limit: q.Limit, Format: format}, now)
 	return page, err
 }
 
 func (t *Owner) Records(m platform.Member, typ string, q platform.Query, now time.Time) (RecordPage, *platform.Error) {
-	page, err := t.recordsRead(m, typ, q, now)
+	page, err := t.recordsFrom(t.Store, m, typ, q, now, true)
 	if err == nil {
 		var partial bool
 		page.Refs, partial = t.referenceNames(m, typ, page.Records, now)
@@ -58,7 +58,7 @@ func (t *Owner) Records(m platform.Member, typ string, q platform.Query, now tim
 }
 
 func (t *Owner) RecordsFrom(store *records.Store, m platform.Member, typ string, q platform.Query, now time.Time) (RecordPage, *platform.Error) {
-	return t.recordsFrom(store, m, typ, q, now)
+	return t.recordsFrom(store, m, typ, q, now, false)
 }
 
 func (t *Owner) SelectionFrom(store *records.Store, m platform.Member, typ string, q platform.Query, now time.Time) (RecordPage, *platform.Error) {
@@ -67,7 +67,7 @@ func (t *Owner) SelectionFrom(store *records.Store, m platform.Member, typ strin
 
 func (t *Owner) readRecordFrom(store *records.Store, c platform.Caller, typ, id string, now time.Time) (json.RawMessage, *platform.Error) {
 	domain, _ := json.Marshal([]any{[]any{"id", "=", id}})
-	page, refusal := t.recordSelectionForCallerFrom(store, c, typ, platform.Query{Domain: domain, Limit: 1, BusinessTime: &platform.BusinessTime{All: true}}, now)
+	page, refusal := t.recordSelectionForCallerFrom(store, c, typ, platform.Query{Domain: domain, Limit: 1, BusinessTime: &platform.BusinessTime{All: true}}, now, false)
 	if refusal != nil {
 		return nil, refusal
 	}

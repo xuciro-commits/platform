@@ -63,7 +63,7 @@ func formatReads(expr platform.Expr) []string {
 	return names
 }
 
-func (s *FormatSet) Evaluate(record any, hidden []platform.FieldInfo) map[string]platform.FieldFormat {
+func (s *FormatSet) Evaluate(record any, readable func(string) bool) map[string]platform.FieldFormat {
 	if s == nil {
 		return nil
 	}
@@ -74,18 +74,15 @@ func (s *FormatSet) Evaluate(record any, hidden []platform.FieldInfo) map[string
 	if !v.IsValid() || v.Kind() != reflect.Struct {
 		return nil
 	}
-	unreadable := func(name string) bool {
-		return slices.ContainsFunc(hidden, func(f platform.FieldInfo) bool { return f.Name == name })
-	}
 	var out map[string]platform.FieldFormat
 	for _, field := range s.fields {
-		if unreadable(field.name) {
+		if !readable(field.name) {
 			continue
 		}
 	rules:
 		for _, rule := range field.rules {
 			for _, name := range rule.reads {
-				if unreadable(name) {
+				if !readable(name) {
 					continue rules
 				}
 			}

@@ -342,3 +342,32 @@ func TestInvariantK3RevisionConflictIsLocalizedAndAuthorized(t *testing.T) {
 		}
 	}
 }
+
+func TestInvariantK17FormatsUseOnlyReadableFields(t *testing.T) {
+	live := newInvariantTenant(t, "invariant-k17", protocol.Seat{Subjects: []string{"other"}, Member: platform.Member{ID: "other", Roles: map[string]string{build.ID: ontology.UserRole}}})
+	equals := func(field, value string) platform.Expr {
+		return platform.Expr{Op: "=", Kind: "boolean", Args: []platform.Expr{platform.ExprReference("text", field), {Kind: "text", Lit: &platform.ExprLiteral{Value: platform.Raw(value)}}}}
+	}
+	live.accept(t, "build.object.create", build.ObjectType, "OPPORTUNITY", map[string]any{
+		"name": "opportunity", "title": "Opportunity", "access": []ontology.Access{{Role: ontology.UserRole, Read: "all"}},
+		"fields": []ontology.Field{
+			{Name: "stage", Title: "Stage", Type: "choice", Choices: "proposal,negotiation", Format: []platform.FormatRule{{When: equals("stage", "negotiation"), Tone: "warning"}}},
+			{Name: "note", Title: "Note", Type: "text", Format: []platform.FormatRule{{When: equals("private", "flagged"), Tone: "danger"}}},
+			{Name: "private", Title: "Private", Type: "text", Read: []string{ontology.BuilderRole}, Format: []platform.FormatRule{{When: equals("stage", "negotiation"), Tone: "warning"}}},
+		},
+	})
+	live.accept(t, "build.object.publish", build.ObjectType, "OPPORTUNITY", nil)
+	live.accept(t, "build.opportunity.create", "build.opportunity", "OPP-001", map[string]any{"stage": "negotiation", "private": "flagged"})
+	for _, role := range []string{"builder", "other"} {
+		member, _ := live.Member(role)
+		page, listErr := live.Records(t.Context(), member, "build.opportunity", platform.Query{}, invariantClock)
+		detail, singleErr := live.RecordOf(t.Context(), member, "build.opportunity", "OPP-001", invariantClock)
+		formats := page.Formats["OPP-001"]
+		if listErr != nil || singleErr != nil || string(platform.Raw(formats)) != string(platform.Raw(detail.Formats)) || formats["stage"].Tone != "warning" {
+			t.Fatalf("%s: list=%+v (%v), detail=%+v (%v)", role, formats, listErr, detail.Formats, singleErr)
+		}
+		if role == "other" && len(formats) != 1 || role == "builder" && len(formats) != 3 {
+			t.Fatalf("%s received formats outside its readable fields: %+v", role, formats)
+		}
+	}
+}
