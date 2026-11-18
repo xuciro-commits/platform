@@ -767,7 +767,12 @@ test("views: save, pin and reopen a filtered view from the sidebar", async ({ pa
     lanes: "",
   };
   await signIn(page);
+  const preference = page.waitForResponse((response) => {
+    const url = decodeURIComponent(response.url());
+    return url.includes("/v1/records/work.viewpreference") && url.includes("admin-1@build.opportunity");
+  });
   await page.goto(`/ontology/objects/build.opportunity?view=${encodeURIComponent(JSON.stringify(view))}`);
+  expect((await preference).status()).toBe(200);
   await expect(page.getByRole("link", { name: "Robot cell integration" })).toBeVisible();
 
   await page.getByRole("button", { name: "Create saved view", exact: true }).click();

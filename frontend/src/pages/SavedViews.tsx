@@ -68,8 +68,10 @@ export function useSavedViews({ entity, view, fallback, columnCount, filterLabel
   const me = useRead<Api.MeView>("/v1/me");
   const projects = useRead<Api.RecordPage>(editing?.scope === "project" ? "/v1/records/build.app?limit=200" : null);
   const principal = me.status === "ready" ? me.data.principalId : "";
-  const preference = useRead<Api.RecordView>(principal && entity ? `/v1/records/work.viewpreference/${encodeURIComponent(`${principal}@${entity}`)}` : null);
-  const pref = preference.status === "ready" ? (preference.data.record as Preference) : undefined;
+  const preferenceId = principal && entity ? `${principal}@${entity}` : "";
+  const preferenceQuery = new URLSearchParams({ domain: JSON.stringify([["id", "=", preferenceId]]), limit: "1" });
+  const preference = useRead<Api.RecordPage>(preferenceId ? `/v1/records/work.viewpreference?${preferenceQuery}` : null);
+  const pref = preference.status === "ready" ? preference.data.records[0] as Preference | undefined : undefined;
   const visible = views.status === "ready" ? views.data.filter((candidate) => candidate.entity === entity) : [];
   const ordered = [...visible].sort((left, right) => Number(pref?.pinned?.includes(right.id)) - Number(pref?.pinned?.includes(left.id)));
   const current = ordered.find((candidate) => candidate.id === selected);
@@ -136,11 +138,11 @@ export function useSavedViews({ entity, view, fallback, columnCount, filterLabel
       if (owned && shareAction && (draft.scope !== ((current.share as Scope | undefined) ?? "self") || draft.project !== (current.project ?? ""))) {
         await send(shareAction, current.id, { scope: draft.scope, project: draft.scope === "project" ? draft.project : "" }, current.revision + (draft.title.trim() !== current.title || state ? 1 : 0));
       }
-      if (preferenceAction && principal) {
+      if (preferenceAction && preferenceId) {
         const pinned = Boolean(pref?.pinned?.includes(current.id));
         const preferred = pref?.default === current.id;
         if (draft.pinned !== pinned || (draft.preferred && !preferred)) {
-          await send(preferenceAction, `${principal}@${entity}`, { view: current.id, ...(draft.pinned !== pinned ? { pinned: draft.pinned } : {}), ...(draft.preferred && !preferred ? { default: true } : {}) }, pref?.revision ?? 0);
+          await send(preferenceAction, preferenceId, { view: current.id, ...(draft.pinned !== pinned ? { pinned: draft.pinned } : {}), ...(draft.preferred && !preferred ? { default: true } : {}) }, pref?.revision ?? 0);
         }
       }
       setEditing(null);

@@ -27,19 +27,22 @@ export function useRead<Answer>(path: string | null): Read<Answer> {
   const [read, setRead] = useState<Read<Answer>>({ status: "loading" });
   const shown = useRef("");
   useEffect(() => {
-    const controller = new AbortController();
     const asked = `${session?.tenant} ${session?.token} ${path}`;
     if (shown.current !== asked) setRead({ status: "loading", path });
     shown.current = asked;
-    if (path === null) return () => controller.abort();
-    request<Answer>(path, { signal: controller.signal }).then(
-      (data) => setRead({ status: "ready", path, data }),
-      (failure: unknown) => {
-        if (controller.signal.aborted) return;
-        if (failure instanceof HostRefusal && failure.status < 500) setRead({ status: "refused", path, reason: failure.message });
-        else setRead({ status: "error", path, reason: failure instanceof Error ? failure.message : String(failure) });
-      },
-    );
+    if (path === null) return;
+    const controller = new AbortController();
+    queueMicrotask(() => {
+      if (controller.signal.aborted) return;
+      request<Answer>(path, { signal: controller.signal }).then(
+        (data) => setRead({ status: "ready", path, data }),
+        (failure: unknown) => {
+          if (controller.signal.aborted) return;
+          if (failure instanceof HostRefusal && failure.status < 500) setRead({ status: "refused", path, reason: failure.message });
+          else setRead({ status: "error", path, reason: failure instanceof Error ? failure.message : String(failure) });
+        },
+      );
+    });
     return () => controller.abort();
   }, [path, session, seen]);
   return read;
