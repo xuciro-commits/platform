@@ -431,8 +431,18 @@ func lowerCondition(info platform.RecordTypeInfo, raw json.RawMessage) (ruleexpr
 			return negate(has), nil
 		}
 		return has, nil
-	case "like":
-		return ruleexpr.Expr{Op: "icontains", Kind: "boolean", Args: []ruleexpr.Expr{ruleexpr.RefOf("text", name+"#search"), textLit(strings.ToLower(fmt.Sprint(value)))}}, nil
+	case "like", "not-like", "starts-with", "not-starts-with", "ends-with", "not-ends-with":
+		negated := strings.HasPrefix(op, "not-")
+		op := strings.TrimPrefix(op, "not-")
+		compared := op
+		if op == "like" {
+			compared = "icontains"
+		}
+		found := ruleexpr.Expr{Op: compared, Kind: "boolean", Args: []ruleexpr.Expr{ruleexpr.RefOf("text", name+"#search"), textLit(strings.ToLower(fmt.Sprint(value)))}}
+		if negated {
+			return negate(found), nil
+		}
+		return found, nil
 	}
 	return ruleexpr.Expr{}, fmt.Errorf("unknown operator %s", op)
 }

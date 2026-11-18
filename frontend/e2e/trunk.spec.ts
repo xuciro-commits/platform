@@ -535,9 +535,17 @@ test("applications: an installed package contributes a menu and an object list",
 });
 
 test("views: filters, order and visible columns survive refresh and return", async ({ page }) => {
+  const recordRequests: URLSearchParams[] = [];
+  page.on("request", (request) => {
+    const url = new URL(request.url());
+    if (url.pathname === "/v1/records/build.opportunity") recordRequests.push(url.searchParams);
+  });
   await signIn(page);
   await page.goto("/ontology/objects/build.opportunity");
   await expect(page.getByRole("heading", { level: 1, name: "Opportunities" })).toBeVisible();
+  await expect(page.getByText(/\d+ \/ \d+/, { exact: true })).toBeVisible();
+  expect(recordRequests.at(-1)?.get("limit")).toBe("100");
+  expect(recordRequests.at(-1)?.get("actions")).toBe("1");
 
   await page.getByRole("radio", { name: "Board" }).click();
   await expect(page).toHaveURL(/view=/);
@@ -555,6 +563,8 @@ test("views: filters, order and visible columns survive refresh and return", asy
   at.searchParams.set("view", JSON.stringify(view));
   await page.goto(at.toString());
   await page.reload();
+  await expect.poll(() => recordRequests.at(-1)?.get("domain")).toContain("proposal");
+  expect(recordRequests.at(-1)?.get("sort")).toBe("-amount");
   const rows = page.getByRole("table").locator("tbody tr").filter({ has: page.getByRole("link") });
   await expect(rows.first()).toContainText("Robot cell integration");
   await page.getByRole("link", { name: "Robot cell integration" }).click();

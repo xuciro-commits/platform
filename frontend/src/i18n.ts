@@ -294,6 +294,7 @@ export const zhCN: Record<string, string> = {
   "This type is not published in this workspace.": "这个类型没有在本工作区发布。",
   "Objects are the business records of this workspace. An object type appears here once it is published; open it to see, create and edit its objects.": "对象是本工作区的业务记录。对象类型发布后出现在这里；打开它就能查看、新建和编辑它的对象。",
   Layout: "布局",
+  "Load more": "加载更多",
   Table: "表格",
   Board: "看板",
   Refresh: "刷新",

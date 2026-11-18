@@ -56,6 +56,7 @@ export type ListShape<Answer, Row> = {
   bulk?: (ids: string[], clear: () => void) => ReactNode;
   defaultView?: unknown;
   carryView?: boolean;
+  page?: { total: number; loaded: number; hasMore: boolean; loading: boolean; loadMore: () => void };
 };
 export type ListDefinition<Answer, Row> = ListShape<Answer, Row> & { read: string };
 
@@ -141,6 +142,7 @@ export function ListView<Answer, Row>({ definition, read, primary, back }: ListV
   }, [read, definition, group, lanes, currentSearch, view]);
 
   const shown = useMemo(() => {
+    if (definition.page) return all.map((entry) => entry.cells);
     const query = view.search.trim().toLowerCase();
     const searched = query ? all.filter((entry) => Object.values(entry.raw).some((value) => String(value ?? "").toLowerCase().includes(query))) : all;
     const passing = new Set((applyFilters(view.filters, searched.map((entry) => entry.raw) as never) as Raw[]).map((raw) => raw[idKey]));
@@ -255,7 +257,7 @@ export function ListView<Answer, Row>({ definition, read, primary, back }: ListV
                     onChange={(next) => update({ filters: [...next] })}
                     label={t("Filter")}
                     placeholder={t("Filter by any column")}
-                    resultCount={String(shown.length) + " / " + String(all.length)}
+                    resultCount={String(definition.page ? all.length : shown.length) + " / " + String(definition.page?.total ?? all.length)}
                   />
                 </VStack>
               </StackItem>
@@ -383,6 +385,11 @@ export function ListView<Answer, Row>({ definition, read, primary, back }: ListV
               hasHover
               plugins={{ ...(group ? { grouped: grouped.plugin } : {}), ...(definition.bulk ? { selection } : {}), sortable }}
             />
+          )}
+          {read.status === "ready" && !board && definition.page?.hasMore && (
+            <VStack padding={4}>
+              <Button label={t("Load more")} variant="secondary" isLoading={definition.page.loading} onClick={definition.page.loadMore} />
+            </VStack>
           )}
         </LayoutContent>
       }

@@ -3,10 +3,10 @@ import { HostRefusal, request } from "./request";
 import { useSession } from "./session";
 
 export type Read<Answer> =
-  | { status: "loading" }
-  | { status: "ready"; data: Answer }
-  | { status: "refused"; reason: string }
-  | { status: "error"; reason: string };
+  | { status: "loading"; path?: string | null }
+  | { status: "ready"; path?: string | null; data: Answer }
+  | { status: "refused"; path?: string | null; reason: string }
+  | { status: "error"; path?: string | null; reason: string };
 
 const listeners = new Set<() => void>();
 let version = 0;
@@ -29,15 +29,15 @@ export function useRead<Answer>(path: string | null): Read<Answer> {
   useEffect(() => {
     const controller = new AbortController();
     const asked = `${session?.tenant} ${session?.token} ${path}`;
-    if (shown.current !== asked) setRead({ status: "loading" });
+    if (shown.current !== asked) setRead({ status: "loading", path });
     shown.current = asked;
     if (path === null) return () => controller.abort();
     request<Answer>(path, { signal: controller.signal }).then(
-      (data) => setRead({ status: "ready", data }),
+      (data) => setRead({ status: "ready", path, data }),
       (failure: unknown) => {
         if (controller.signal.aborted) return;
-        if (failure instanceof HostRefusal && failure.status < 500) setRead({ status: "refused", reason: failure.message });
-        else setRead({ status: "error", reason: failure instanceof Error ? failure.message : String(failure) });
+        if (failure instanceof HostRefusal && failure.status < 500) setRead({ status: "refused", path, reason: failure.message });
+        else setRead({ status: "error", path, reason: failure instanceof Error ? failure.message : String(failure) });
       },
     );
     return () => controller.abort();

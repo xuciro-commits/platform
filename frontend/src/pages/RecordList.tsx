@@ -1,5 +1,5 @@
 import { Button } from "@astryxdesign/core/Button";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { type Api, type Read, useRead } from "../host";
 import { t } from "../i18n";
 import { navigate, usePath, useSearch } from "../router";
@@ -11,6 +11,7 @@ import { BatchActions } from "./BatchActions";
 import { RecordPage } from "./RecordPage";
 import { type Dot, dots } from "./Transitions";
 import { money, plain, present } from "./values";
+import { domainOf, newView, readView, type ViewState } from "./view";
 
 type Row = Record<string, unknown>;
 type Declared = { type: string; title?: string; about: string; fields?: string[]; project?: boolean; instances?: { field: string; path: string } };
@@ -20,6 +21,95 @@ type Formats = Record<string, Api.FieldFormat>;
 const formatted = "__formats";
 const referenced = "__refs";
 const formats = (row: Row) => (row[formatted] as Formats | undefined) ?? {};
+const pageSize = 100;
+
+type LoadedPage = {
+  signature: string;
+  records: Record<string, unknown>[];
+  refs: NonNullable<Api.RecordPage["refs"]>;
+  formats: NonNullable<Api.RecordPage["formats"]>;
+  actions: NonNullable<Api.RecordPage["actions"]>;
+  total: number;
+  partial: boolean;
+};
+
+const noPage = (signature = ""): LoadedPage => ({ signature, records: [], refs: {}, formats: {}, actions: {}, total: 0, partial: false });
+
+function mergePage(loaded: LoadedPage, page: Api.RecordPage): LoadedPage {
+  const records = new Map(loaded.records.map((record) => [String(record.id), record]));
+  for (const value of page.records) {
+    const record = value as Row;
+    records.set(String(record.id), record);
+  }
+  const refs = { ...loaded.refs };
+  for (const [field, values] of Object.entries(page.refs ?? {})) refs[field] = { ...refs[field], ...values };
+  const actions = { ...loaded.actions };
+  for (const [id, available] of Object.entries(page.actions ?? {})) actions[id] = available;
+  return {
+    signature: loaded.signature,
+    records: [...records.values()],
+    refs,
+    formats: { ...loaded.formats, ...page.formats },
+    actions,
+    total: page.total,
+    partial: loaded.partial || Boolean(page.partial),
+  };
+}
+
+function useRecordPages(type: string, view: ViewState, enabled: boolean, choiceValue: (field: string, value: string) => string, externalDomain: string) {
+  const conditions = domainOf(view.filters, choiceValue);
+  try {
+    const external = externalDomain ? (JSON.parse(externalDomain) as unknown) : [];
+    if (Array.isArray(external)) conditions.push(...external.filter(Array.isArray));
+  } catch {
+    conditions.push(["id", "in", []]);
+  }
+  const domain = conditions.length ? JSON.stringify(conditions) : "";
+  const sort = view.sort.map((item) => (item.direction === "descending" ? "-" : "") + item.sortKey).join(",");
+  const signature = JSON.stringify([domain, sort, view.search]);
+  const [offset, setOffset] = useState(0);
+  const [loaded, setLoaded] = useState<LoadedPage>(() => noPage());
+  const currentOffset = loaded.signature === signature ? offset : 0;
+  const query = new URLSearchParams({ offset: String(currentOffset), limit: String(pageSize), actions: "1" });
+  if (domain) query.set("domain", domain);
+  if (sort) query.set("sort", sort);
+  if (view.search.trim()) query.set("search", view.search.trim());
+  const path = enabled ? `/v1/records/${type}?${query}` : null;
+  const page = useRead<Api.RecordPage>(path);
+  useEffect(() => {
+    if (loaded.signature !== signature) setOffset(0);
+  }, [loaded.signature, signature]);
+  useEffect(() => {
+    if (page.status !== "ready" || page.path !== path) return;
+    setLoaded((previous) => mergePage(previous.signature === signature ? previous : noPage(signature), page.data));
+  }, [page, path, signature]);
+  const answer: Api.RecordPage = {
+    records: loaded.records,
+    refs: loaded.refs,
+    formats: loaded.formats,
+    actions: loaded.actions,
+    total: loaded.total,
+    partial: loaded.partial,
+  };
+  const read: Read<Api.RecordPage> =
+    loaded.signature === signature
+      ? { status: "ready", data: answer }
+      : page.status === "refused" || page.status === "error" || page.status === "loading"
+        ? page
+        : { status: "loading" };
+  return {
+    read,
+    answer,
+    total: loaded.total,
+    loaded: loaded.records.length,
+    hasMore: loaded.signature === signature && loaded.records.length < loaded.total,
+    loading: loaded.signature === signature && page.status === "loading",
+    loadMore: () => {
+      if (page.status === "loading") return;
+      setOffset(loaded.records.length);
+    },
+  };
+}
 
 function keyOf(field: Api.FieldInfo | undefined, title: string) {
   const index = field?.choiceTitles?.indexOf(title) ?? -1;
@@ -90,12 +180,16 @@ export function Records({ declared, listPath, id, back }: { declared: Declared; 
   const [creating, setCreating] = useState(false);
   const entity = types.status === "ready" ? types.data.find((candidate) => candidate.type === declared.type) : undefined;
   const described = useMemo(() => (entity && actions.status === "ready" ? describe(entity, actions.data) : undefined), [entity, actions]);
-  const domain = new URLSearchParams(useSearch()).get("domain");
-  const query = new URLSearchParams({ limit: "200", actions: "1" });
-  if (domain) query.set("domain", domain);
-  const records = useRead<Api.RecordPage>(described && !id ? `/v1/records/${declared.type}?${query}` : null);
+  const currentSearch = useSearch();
+  const fallback = useMemo(() => {
+    const columns = described ? shape(described, declared, listPath).columns.filter((column) => !column.hiddenByDefault).map((column) => column.key) : [];
+    return described?.entity.view == null ? newView(columns) : readView(JSON.stringify(described.entity.view), newView(columns));
+  }, [declared, described, listPath]);
+  const view = useMemo(() => readView(new URLSearchParams(currentSearch).get("view"), fallback), [currentSearch, fallback]);
+  const externalDomain = new URLSearchParams(currentSearch).get("domain") ?? "";
+  const records = useRecordPages(declared.type, view, Boolean(described && !id), (field, value) => keyOf(described?.field(field), value) ?? value, externalDomain);
   const edit = described?.edit;
-  const kept = records.status === "ready" ? (records.data.records as Row[]) : undefined;
+  const kept = records.answer.records as Row[];
   const act = useAct(described);
   const lifecycle = described?.lifecycle;
   const stateOf = (title: string) => lifecycle?.states.find((state) => t(state.title) === title)?.name ?? "";
@@ -123,10 +217,16 @@ export function Records({ declared, listPath, id, back }: { declared: Declared; 
     const row = kept?.find((candidate) => candidate.id === moving);
     return Boolean(lifecycle && row && described?.step(String(row[lifecycle.field] ?? ""), stateOf(to)));
   };
-  const bulk: ListShape<Api.RecordPage, Row>["bulk"] = described && records.status === "ready" && ((ids, clear) => (
-    <BatchActions described={described} ids={ids} clear={clear} records={records.data} />
+  const bulk: ListShape<Api.RecordPage, Row>["bulk"] = described && ((ids, clear) => (
+    <BatchActions described={described} ids={ids} clear={clear} records={records.answer} />
   )) || undefined;
-  const definition = useMemo(() => (described ? shape(described, declared, listPath, move, bulk, accepts) : pending), [described, declared, listPath, pending, move, bulk, accepts]);
+  const definition = useMemo(() => {
+    if (!described) return pending;
+    return {
+      ...shape(described, declared, listPath, move, bulk, accepts),
+      page: { total: records.total, loaded: records.loaded, hasMore: records.hasMore, loading: records.loading, loadMore: records.loadMore },
+    };
+  }, [described, declared, listPath, pending, move, bulk, accepts, records.total, records.loaded, records.hasMore, records.loading, records.loadMore]);
   const create = described?.create;
   if (described && id) {
     return (
@@ -143,7 +243,7 @@ export function Records({ declared, listPath, id, back }: { declared: Declared; 
     );
   }
   const missing: Read<Api.RecordPage> = { status: "error", reason: t("This type is not published in this workspace.") };
-  const read: Read<Api.RecordPage> = types.status !== "ready" ? types : actions.status !== "ready" ? actions : described ? records : missing;
+  const read: Read<Api.RecordPage> = types.status !== "ready" ? types : actions.status !== "ready" ? actions : described ? records.read : missing;
   return (
     <>
       <ListView

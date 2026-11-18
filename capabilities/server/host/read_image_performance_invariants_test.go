@@ -264,6 +264,7 @@ func TestInvariantK13SQLRecordWindowsRespectVisibilityAndPrivateRows(t *testing.
 		{name: "past end", query: platform.Query{Sort: []string{"id"}, Offset: 20, Limit: 2}, windowIDs: []string{}, windowTotal: 4},
 		{name: "restricted visibility", query: platform.Query{Sort: []string{"id"}, Limit: 2}, visible: func(row reflect.Value) bool { return records.Header(row).ID != "B" }},
 		{name: "filtered rows", query: platform.Query{Sort: []string{"id"}, Limit: 2, Domain: json.RawMessage(`[["note","=","keep"]]`)}},
+		{name: "prefix filtered rows", query: platform.Query{Sort: []string{"id"}, Limit: 2, Domain: json.RawMessage(`[["note","starts-with","ke"]]`)}},
 		{name: "field ordering", query: platform.Query{Sort: []string{"-note"}, Limit: 2}},
 		{name: "unbounded", query: platform.Query{Sort: []string{"id"}}},
 		{name: "private overlay", query: platform.Query{Sort: []string{"id"}, Limit: 20}, private: true},
