@@ -10,7 +10,6 @@
 - 跑 `pnpm dev`（http://localhost:8496）；下面的命令行写作 `pnpm astryx <命令>`。
 - 每个可见字符串都经 `t()`，并在 `src/i18n.ts` 有简体中文条目。不写代码注释。
 - 在仓库根用 `make check-frontend` 核对。它报什么就修什么；永不改检查。
-- 在做一张工单？照 `.claude/skills/work-order/SKILL.md` 逐条做：只能改工单列出的文件。外壳、路由、`src/host/`、依赖、检查与文档都不归你改；任务需要它们时，停下上报。
 - 下面的块由 Astryx 生成，只用 `pnpm astryx init --agent-docs-path AGENTS.md` 刷新，永不手改。这里的中文是手译，刷新时会整块换回英文。
 
 <!-- ASTRYX:START -->
