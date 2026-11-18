@@ -120,7 +120,8 @@ function shape(described: Described, declared: Declared, listPath: string, move?
   const lifecycle = described.lifecycle;
   const states = lifecycle?.states ?? [];
   const say = (field: Api.FieldInfo) => (row: Row) => {
-    const label = field.type === "reference" ? (row[referenced] as Api.RecordPage["refs"])?.[field.name]?.[String(row[field.name])] : undefined;
+    const label = (row[referenced] as Api.RecordPage["refs"])?.[field.name]?.[String(row[field.name])];
+    if (field.type === "member") return row[field.name] ? label ?? t("Unnamed member") : "";
     if (label) return label;
     return field.name === lifecycle?.field ? t(described.state(row)?.title ?? present(field, row[field.name])) : present(field, row[field.name]);
   };
@@ -146,7 +147,7 @@ function shape(described: Described, declared: Declared, listPath: string, move?
         key: field.name,
         header: field.title,
         text: say(field),
-        kind: field.type === "choice" ? ("enum" as const) : numeric.has(field.type) ? ("number" as const) : field.type === "date" || field.type === "datetime" ? ("time" as const) : ("string" as const),
+        kind: field.type === "choice" ? ("enum" as const) : numeric.has(field.type) ? ("number" as const) : field.type === "date" || field.type === "datetime" ? ("time" as const) : field.type === "member" ? ("member" as const) : ("string" as const),
         choices: field.name === lifecycle?.field ? states.map((state) => t(state.title)) : titles(field),
         boolean: field.type === "boolean",
         hiddenByDefault: !declared.fields && !described.columns.includes(field),

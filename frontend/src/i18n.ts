@@ -408,3 +408,11 @@ const locale = navigator.language.startsWith("zh") ? "zh-CN" : "en";
 export function t(text: string) {
   return locale === "zh-CN" ? (zhCN[text] ?? text) : text;
 }
+
+Object.assign(zhCN, {
+  member: "成员",
+  "Unnamed member": "未命名成员",
+  "Find a member": "搜索成员",
+  "No matching members": "没有匹配的成员",
+  "Members could not be searched": "无法搜索成员",
+});

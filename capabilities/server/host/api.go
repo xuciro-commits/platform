@@ -23,6 +23,7 @@ var namedReads = []transport.Route{
 	{Pattern: "GET /v1/packages", Summary: "Administrators read the package index; application builders discover installed blueprints", Answer: []protocol.PackageView{}},
 	{Pattern: "GET /v1/notifications", Summary: "The caller's notifications, newest first, in their language", Answer: []platform.Notification{}},
 	{Pattern: "GET /v1/members", Summary: "The tenant's members with their roles and profiles (administrators, auditors)", Answer: []protocol.MemberView{}},
+	{Pattern: "GET /v1/member-directory", Summary: "IDs and display names of selectable members in this tenant", Answer: []protocol.MemberOption{}},
 	{Pattern: "GET /v1/permissions", Summary: "The permission catalog: every app's roles and what each may do, derived from the manifests (administrators, auditors)", Answer: []security.AppPermissions{}},
 	{Pattern: "GET /v1/access", Summary: "The tenant's own access configuration: custom roles, policies and teams (administrators, auditors)", Answer: platform.AccessConfig{}},
 	{Pattern: "GET /v1/tenant", Summary: "The tenant's record: its settings, apps and standing (every member)", Answer: protocol.TenantRecord{}},

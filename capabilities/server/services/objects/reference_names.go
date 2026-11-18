@@ -23,7 +23,7 @@ func (t *Owner) referenceNames(m platform.Member, typ string, rows []any, now ti
 	m = t.authorizationMember(m)
 	sourceCaller := t.caller(m, source.App)
 	for _, field := range source.Fields {
-		if field.Type != "reference" || field.Ref == "" {
+		if field.Type != "member" && (field.Type != "reference" || field.Ref == "") {
 			continue
 		}
 		for _, row := range rows {
@@ -39,10 +39,13 @@ func (t *Owner) referenceNames(m platform.Member, typ string, rows []any, now ti
 				if byField[field.Name] == nil {
 					byField[field.Name] = map[string]bool{}
 				}
-				if byType[field.Ref] == nil {
-					byType[field.Ref] = map[string]bool{}
+				byField[field.Name][id] = true
+				if field.Type == "reference" {
+					if byType[field.Ref] == nil {
+						byType[field.Ref] = map[string]bool{}
+					}
+					byType[field.Ref][id] = true
 				}
-				byField[field.Name][id], byType[field.Ref][id] = true, true
 			}
 		}
 	}
@@ -75,9 +78,17 @@ func (t *Owner) referenceNames(m platform.Member, typ string, rows []any, now ti
 		}
 	}
 	out := map[string]map[string]string{}
+	memberNames := map[string]string{}
 	for _, field := range source.Fields {
 		for id := range byField[field.Name] {
-			if name := labels[field.Ref][id]; name != "" {
+			name := labels[field.Ref][id]
+			if field.Type == "member" {
+				if _, found := memberNames[id]; !found {
+					memberNames[id] = t.MemberDisplayName(id)
+				}
+				name = memberNames[id]
+			}
+			if name != "" {
 				if out[field.Name] == nil {
 					out[field.Name] = map[string]string{}
 				}

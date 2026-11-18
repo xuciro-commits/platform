@@ -193,10 +193,16 @@ type IdentitySessions interface {
 type IdentityProfile interface {
 	platform.Service
 	Account(string) Account
+	MemberDisplayName(string) string
 	TenantRecord() TenantRecord
 	Location(string) *time.Location
 	Language(string) string
 	Reach(string) Reach
+}
+
+type MemberOption struct {
+	ID   string `json:"id"`
+	Name string `json:"name"`
 }
 
 type HostIdentities interface {

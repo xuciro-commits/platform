@@ -15,6 +15,7 @@ import type { Described, Section, Values } from "./describe";
 import { type InputStatus, ParameterInput, enterable, settles } from "./ParameterInput";
 import { plain, present, shown } from "./values";
 import { ReferenceLink } from "./ReferenceField";
+import { MemberLabel } from "./MemberField";
 
 type Conflict = { name: string; before: unknown; mine: unknown; saved: unknown; revision: number };
 export type Editor = {
@@ -207,7 +208,7 @@ export function FieldGroup({ described, editor, sections, direction, focusEmpty,
               const value = editor.values[field.name];
               const reference = field.type === "reference" && field.ref;
               const id = String(value ?? "");
-              const referenceName = reference ? refs?.[field.name]?.[id] : undefined;
+              const referenceName = refs?.[field.name]?.[id];
               if (restricted?.has(field.name)) {
                 return <Field key={field.name} label={t(field.title)} inputID={`restricted-${field.name}`}>
                   <Text type="supporting" color="secondary">{t("Cannot view")}</Text>
@@ -228,7 +229,9 @@ export function FieldGroup({ described, editor, sections, direction, focusEmpty,
                 />
               ) : (
                 <Field key={field.name} label={t(field.title)} inputID={`shown-${field.name}`}>
-                  {reference && referenceName
+                  {field.type === "member"
+                    ? <MemberLabel name={referenceName ?? t("Unnamed member")} />
+                    : reference && referenceName
                     ? <ReferenceLink type={reference} id={id} name={referenceName} />
                     : <Text type="body">{present(field, value)}</Text>}
                 </Field>

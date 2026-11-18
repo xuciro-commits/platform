@@ -15,6 +15,7 @@ import { type ComponentProps, useState } from "react";
 import { type Api, request, requestBlob, useRead } from "../host";
 import { t } from "../i18n";
 import { reasonOf, send } from "./act";
+import { MemberInput } from "./MemberField";
 import { ReferenceInput } from "./ReferenceField";
 
 export type InputStatus = { type: "error" | "success"; message?: string };
@@ -31,7 +32,7 @@ type ParameterInputProps = {
   quiet?: boolean;
 };
 
-const typed = new Set(["string", "longtext", "date", "datetime", "entity", "reference", "choice"]);
+const typed = new Set(["string", "longtext", "date", "datetime", "entity", "reference", "choice", "member"]);
 const numeric = new Set(["integer", "number"]);
 type Attachment = { mediaSet?: string; item?: string };
 
@@ -40,7 +41,7 @@ export function enterable(parameter: Api.Field) {
 }
 
 export function settles(parameter: Api.Field, field?: Api.FieldInfo) {
-  return Boolean(parameter.ref || parameter.choices) || field?.type === "reference" || parameter.type === "reference" || parameter.type === "boolean" || parameter.type === "attachment" || numeric.has(parameter.type);
+  return Boolean(parameter.ref || parameter.choices) || field?.type === "reference" || field?.type === "member" || parameter.type === "member" || parameter.type === "reference" || parameter.type === "boolean" || parameter.type === "attachment" || numeric.has(parameter.type);
 }
 
 function AttachmentInput({ parameter, value, onChange, label, description }: { parameter: Api.Field; value: unknown; onChange: (value: unknown) => void; label: string; description?: string }) {
@@ -149,6 +150,10 @@ export function ParameterInput({ parameter, described, value, status, onChange, 
   if (reference) {
     return <ReferenceInput type={reference} id={String(value ?? "")} name={referenceName} label={label} description={description}
       required={parameter.required} focused={focused} status={status} onChange={onChange} control={control} />;
+  }
+  if (field?.type === "member" || parameter.type === "member") {
+    return <MemberInput id={String(value ?? "")} name={referenceName} label={label} description={description}
+      isRequired={parameter.required} isLabelHidden={labelHidden} hasAutoFocus={focused} status={status} onChange={onChange} controlXstyle={control} />;
   }
   if (parameter.choices) {
     return (

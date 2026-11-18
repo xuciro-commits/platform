@@ -75,7 +75,7 @@ func CompileObjectShape(o Object, app, builderRole string) platform.RecordType {
 			tag += fmt.Sprintf(` source:"%s"`, f.SourceType)
 		}
 		switch f.Type {
-		case "longtext", "date", "datetime":
+		case "longtext", "date", "datetime", "member":
 			tag += fmt.Sprintf(` type:"%s"`, f.Type)
 		case "choice":
 			tag += fmt.Sprintf(` choices:"%s"`, strings.Join(ValueChoices(f.Choices), ","))

@@ -51,7 +51,9 @@
   事务通过更新业务记录的 `state` 执行转换。对象类型用 `actionTypes` 绑定动作类型的资源引用，发布时使用绑定的版本。
 - 对象类型单条读取的 `changes` 比较已发布定义。字段用 `fields.<字段名>` 标识，新增、删除、修改分别返回 `added`、`removed`、`changed`。
 - 字段类型：`text`、`longtext`、`integer`、`decimal`、`money`、`boolean`、`date`、`datetime`、`choice`、`tags`、
-  `reference`（引用另一类型）、`references`、`lines`（明细行，行有自己的字段）、`attachment`、`json`。
+  `reference`（引用另一类型）、`references`、`member`（租户成员）、`lines`（明细行，行有自己的字段）、`attachment`、`json`。
+- 成员字段保存成员标识，记录新建和编辑时核对标识属于当前租户。列表和记录读取在 `refs[字段][标识]` 中返回资料里的显示名，只为调用者可读的字段解析。
+  租户成员通过 `GET /v1/member-directory` 查找有显示名的在职人员；这个读取只返回标识和显示名。没有显示名时，界面显示“未命名成员”。
 - 字段可声明：必填、只读、可搜索、默认值、帮助文字、在另一字段取某些值时才出现。
 - 作者可为对象字段声明 `group`（分节）和 `aside`（右栏）。这两个可选属性随类型发布，只改变呈现位置，字段的读写权限照常生效。
 - 类型的可选 `view` 随发布与安装进入类型描述。它是带 `version` 的 JSON 对象，由前端解释；省略时使用界面默认值。

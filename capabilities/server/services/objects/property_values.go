@@ -11,7 +11,7 @@ import (
 
 func PropertyValueType(field platform.FieldInfo) string {
 	switch field.Type {
-	case "text", "longtext", "choice":
+	case "text", "longtext", "choice", "member":
 		return "string"
 	case "boolean":
 		return "boolean"

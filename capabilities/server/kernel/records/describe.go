@@ -265,7 +265,7 @@ func describeFields(e Entity, t reflect.Type, from int, typeOf func(reflect.Type
 			if values := sf.Tag.Get("stereos"); values != "" {
 				f.Stereotypes = strings.Split(values, ",")
 			}
-		case ft.Kind() == reflect.String && refined == "date", ft.Kind() == reflect.String && refined == "longtext":
+		case ft.Kind() == reflect.String && slices.Contains([]string{"date", "longtext", "member"}, refined):
 			f.Type = refined
 		case ft.Kind() == reflect.String && sf.Tag.Get("choices") != "":
 			f.Type, f.Choices = "choice", strings.Split(sf.Tag.Get("choices"), ",")

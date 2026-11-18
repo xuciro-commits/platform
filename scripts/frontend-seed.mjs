@@ -56,6 +56,9 @@ if (projects.records.some((record) => record.name === sample.project.name)) {
   process.exit(0);
 }
 
+for (const [id, displayName] of Object.entries(sample.members)) {
+  await submit("platform.profile", id, "update", { displayName }, "platform");
+}
 await submit("build.app", sample.project.name, "create", sample.project);
 for (const type of sample.types) {
   const id = `OBJ-${type.name}`;

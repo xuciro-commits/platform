@@ -30,6 +30,7 @@ export function money(value: unknown) {
 
 export function present(field: Api.FieldInfo, value: unknown) {
   const given = plain(value);
+  if (field.type === "member") return given ? t("Unnamed member") : "";
   if (field.type === "choice" && typeof given === "string") return field.choiceTitles?.[field.choices?.indexOf(given) ?? -1] ?? given;
   if (field.type === "boolean" && typeof given === "boolean") return given ? t("Yes") : t("No");
   if (field.type === "money") {

@@ -29,8 +29,9 @@ func (t *Tenant) objectOwner(store *records.Store) *objects.Owner {
 		VisibleLink:            t.visibleLink,
 		HasProcesses:           func() bool { return t.Processes != nil },
 		Follows:                t.objectFollows,
+		MemberDisplayName:      func(id string) string { return t.IdentityProfile.MemberDisplayName(id) },
 		Deliveries:             t.outbound.RecordDeliveries,
-		AuditPersonal:          t.objectPersonalRead,
+		AuditPersonal:          t.AuditLog.ReadPersonal,
 		RecordSetBinding:       t.recordSetBinding,
 		Claims:                 t.Claims.Facts,
 	}
@@ -43,8 +44,4 @@ func (t *Tenant) objectCaller(m platform.Member, app string) platform.Caller {
 func (t *Tenant) objectFollows(m platform.Member, target string) bool {
 	follow, ok := platform.Get[protocol.RecordFollow](t.automation(protocol.RelationsApp, false), protocol.FollowID(m.ID, target))
 	return ok && !follow.Archived
-}
-
-func (t *Tenant) objectPersonalRead(read protocol.PersonalRead) {
-	t.AuditLog.ReadPersonal(read)
 }

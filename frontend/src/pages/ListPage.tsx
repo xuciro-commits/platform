@@ -26,6 +26,7 @@ import { navigate, usePath, useSearch } from "../router";
 import { BackLink } from "./BackLink";
 import { BoardView } from "./BoardView";
 import { ReferenceLink } from "./ReferenceField";
+import { MemberLabel } from "./MemberField";
 import { t } from "../i18n";
 import type { Dot } from "./Transitions";
 import { newView, readView, type ViewSort, type ViewState } from "./view";
@@ -36,7 +37,7 @@ export type ListColumn<Row> = {
   header: string;
   width?: number;
   text: (row: Row) => string;
-  kind?: "string" | "enum" | "number" | "time" | "code";
+  kind?: "string" | "enum" | "number" | "time" | "code" | "member";
   choices?: string[];
   boolean?: boolean;
   dot?: (row: Row) => Dot | undefined;
@@ -125,7 +126,7 @@ export function ListView<Answer, Row>({ definition, read, primary, back }: ListV
   const fields = useMemo(
     () =>
       definition.columns
-        .filter((column) => column.kind !== "time")
+        .filter((column) => column.kind !== "time" && column.kind !== "member")
         .map((column) => ({
           key: column.key,
           label: t(column.header),
@@ -214,9 +215,11 @@ export function ListView<Answer, Row>({ definition, read, primary, back }: ListV
     align: column.kind === "number" ? ("end" as const) : undefined,
     renderCell: (cells) =>
       position === 0 && cells.__href ? (
-        <Link href={cells.__href}>{cells[column.key] || cells[idKey]}</Link>
+        <Link href={cells.__href}>{column.kind === "member" && cells[column.key] ? <MemberLabel name={cells[column.key]} /> : cells[column.key] || cells[idKey]}</Link>
       ) : cells[targetOf(column.key)] ? (
         <ReferenceLink type={cells[typeOf(column.key)]} id={cells[targetOf(column.key)]} name={cells[column.key]} />
+      ) : column.kind === "member" && cells[column.key] ? (
+        <MemberLabel name={cells[column.key]} />
       ) : column.kind === "code" ? (
         <Text type="code" color="secondary" maxLines={1}>
           {cells[column.key] ?? ""}

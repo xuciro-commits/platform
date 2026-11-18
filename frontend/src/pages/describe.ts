@@ -39,7 +39,7 @@ export function withRestrictedFields(entity: Api.EntityInfo, restricted: Api.Rec
   return { ...entity, fields };
 }
 
-const tabular = new Set(["text", "integer", "decimal", "money", "date", "datetime", "boolean", "choice", "reference", "tags"]);
+const tabular = new Set(["text", "integer", "decimal", "money", "date", "datetime", "boolean", "choice", "reference", "member", "tags"]);
 const columnLimit = 6;
 const ungrouped = "Details";
 

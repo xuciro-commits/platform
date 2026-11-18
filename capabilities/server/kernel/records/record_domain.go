@@ -146,7 +146,7 @@ func resolveDomainField(info platform.RecordTypeInfo, name string) (domainField,
 		class = classNumber
 	case "datetime":
 		class = classTime
-	case "text", "longtext", "choice", "reference", "date":
+	case "text", "longtext", "choice", "reference", "member", "date":
 		class = classText
 	case "references", "tags":
 		class = classList

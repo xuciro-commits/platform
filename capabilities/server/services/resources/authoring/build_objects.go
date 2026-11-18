@@ -256,6 +256,7 @@ func Entity(o ontology.Object) platform.RecordType {
 func (b *Build) entity(o ontology.Object) platform.RecordType {
 	entity := ontology.CompileObjectEntity(o, ontology.ObjectRuntimeEnvironment{
 		Lookup: b.conditionLookup,
+		Member: func(id string) (platform.Member, bool) { return b.host.Member(id) },
 		Transaction: func(c platform.Caller, r *pb.ChangeRecord, transaction *platform.BusinessTxn, now time.Time) *platform.Error {
 			return b.businessRuntime().Transact(c, r, transaction, now)
 		},

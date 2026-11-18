@@ -96,6 +96,33 @@ func (d *Console) MemberByID(id string) (platform.Member, bool) {
 	return d.currentMember(member), true
 }
 
+func (d *Console) MemberDisplayName(id string) string {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	if profile := d.profiles[id]; profile != nil {
+		return profile.DisplayName
+	}
+	return ""
+}
+
+func (d *Console) memberDirectory() []runtimeprotocol.MemberOption {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	options := []runtimeprotocol.MemberOption{}
+	for _, member := range d.members {
+		if profile := d.profiles[member.ID]; member.Active() && !member.Agent && profile != nil && profile.DisplayName != "" {
+			options = append(options, runtimeprotocol.MemberOption{ID: member.ID, Name: profile.DisplayName})
+		}
+	}
+	slices.SortFunc(options, func(a, b runtimeprotocol.MemberOption) int {
+		if byName := strings.Compare(a.Name, b.Name); byName != 0 {
+			return byName
+		}
+		return strings.Compare(a.ID, b.ID)
+	})
+	return options
+}
+
 func (d *Console) AgentMembers() []platform.Member {
 	d.mu.Lock()
 	defer d.mu.Unlock()

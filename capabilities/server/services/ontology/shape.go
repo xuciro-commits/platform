@@ -14,7 +14,7 @@ import (
 
 const BaseField = "base"
 
-var fieldTypes = []string{"text", "longtext", "integer", "decimal", "money", "date", "datetime", "boolean", "choice", "reference", "attachment"}
+var fieldTypes = []string{"text", "longtext", "integer", "decimal", "money", "date", "datetime", "boolean", "choice", "reference", "member", "attachment"}
 
 func CheckEnterpriseUse(o Object, engine platform.RuleEngine) error {
 	if o.EnterpriseUse == nil {

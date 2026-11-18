@@ -2155,7 +2155,7 @@ export type FieldInfo = {
   format?: FormatRule[];
   name: string;
   title: string;
-  type: "text" | "longtext" | "integer" | "decimal" | "money" | "date" | "datetime" | "boolean" | "choice" | "reference" | "references" | "tags" | "lines" | "json" | "attachment";
+  type: "text" | "longtext" | "integer" | "decimal" | "money" | "date" | "datetime" | "boolean" | "choice" | "reference" | "references" | "member" | "tags" | "lines" | "json" | "attachment";
   required?: boolean;
   search?: boolean;
   readOnly?: boolean;
@@ -2933,6 +2933,11 @@ export type Member = {
   agent?: boolean;
   language?: string;
   timezone?: string;
+};
+
+export type MemberOption = {
+  id: string;
+  name: string;
 };
 
 export type MemberView = {

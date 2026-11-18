@@ -27,7 +27,7 @@ func RuleFieldKind(kind string) string {
 	switch kind {
 	case "attachment":
 		return "json"
-	case "longtext", "text", "string":
+	case "longtext", "text", "string", "member":
 		return "text"
 	case "number":
 		return "number"

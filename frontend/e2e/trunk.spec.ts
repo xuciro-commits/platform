@@ -999,3 +999,26 @@ test("inbox: work assigned on a record is finished from the inbox", async ({ pag
   await page.getByRole("link", { name: /Closed/ }).click();
   await expect(page.getByRole("row", { name: /Call the plant manager/ })).toBeVisible();
 });
+
+test("members: an opportunity owner is shown by name and can be reassigned", async ({ page }) => {
+  await signIn(page);
+  await open(page, "Ontology", "Objects");
+  await page.getByRole("link", { name: "Opportunities" }).click();
+  const row = page.getByRole("row", { name: /Furnace monitoring/ });
+  const ownerCell = row.getByRole("cell", { name: /Dana Whitfield/ });
+  await expect(ownerCell.getByRole("img", { name: "Dana Whitfield" })).toBeVisible();
+  await expect(ownerCell.getByText("Dana Whitfield", { exact: true })).toBeVisible();
+
+  await row.getByRole("link", { name: "Furnace monitoring" }).click();
+  const properties = page.getByRole("complementary");
+  const selected = properties.getByRole("button", { name: /Owner.*Dana Whitfield/ });
+  await expect(selected).toBeVisible();
+  await expect(properties.getByRole("img", { name: "Dana Whitfield" })).toBeVisible();
+  await selected.click();
+  await properties.getByRole("combobox", { name: "Owner", exact: true }).fill("Omar");
+  await page.getByRole("option", { name: /Omar Haddad/ }).click();
+  await expect(properties.getByText("2", { exact: true })).toBeVisible();
+  await page.reload();
+  await expect(properties.getByRole("button", { name: /Owner.*Omar Haddad/ })).toBeVisible();
+  await expect(properties.getByRole("img", { name: "Omar Haddad" })).toBeVisible();
+});

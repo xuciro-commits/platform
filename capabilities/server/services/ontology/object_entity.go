@@ -13,6 +13,7 @@ import (
 
 type ObjectRuntimeEnvironment struct {
 	Lookup      func(string) (platform.RecordTypeInfo, bool)
+	Member      func(string) (platform.Member, bool)
 	Transaction func(platform.Caller, *pb.ChangeRecord, *platform.BusinessTxn, time.Time) *platform.Error
 }
 
@@ -23,7 +24,7 @@ func CompileObjectEntity(o Object, env ObjectRuntimeEnvironment) platform.Record
 	entity.Standard, entity.Scope = std, scope
 	entity.Lifecycle = compileLifecycle(o, roles, env)
 	entity.TransactionDestination = TransactionDestination
-	entity.Validate = validateObject(o, entity.Model, env.Lookup)
+	entity.Validate = validateObject(o, entity.Model, env)
 	entity.CreateTxn = o.CreateTransaction
 	entity.EnterpriseUse = o.EnterpriseUse
 	if o.CreateTransaction != nil {
@@ -79,14 +80,36 @@ func compileLifecycle(o Object, roles []string, env ObjectRuntimeEnvironment) *p
 	return life
 }
 
-func validateObject(o Object, model any, lookup func(string) (platform.RecordTypeInfo, bool)) func(platform.Caller, any) *platform.Error {
-	if o.Extends == "" {
+func validateObject(o Object, model any, env ObjectRuntimeEnvironment) func(platform.Caller, any) *platform.Error {
+	typ := reflect.TypeOf(model)
+	var members [][]int
+	if env.Member != nil {
+		for _, field := range o.Fields {
+			if field.Type == "member" {
+				column, _ := typ.FieldByName(GoName(field.Name))
+				members = append(members, column.Index)
+			}
+		}
+	}
+	if o.Extends == "" && len(members) == 0 {
 		return nil
 	}
-	typ := reflect.TypeOf(model)
 	return func(c platform.Caller, record any) *platform.Error {
-		if !c.Replaying && lookup != nil {
-			base, exists := lookup(o.Extends)
+		value := reflect.ValueOf(record).Elem()
+		if !c.Replaying {
+			for _, column := range members {
+				if id := value.FieldByIndex(column).String(); id != "" {
+					if _, found := env.Member(id); !found {
+						return &platform.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_REFERENCE}
+					}
+				}
+			}
+		}
+		if o.Extends == "" {
+			return nil
+		}
+		if !c.Replaying && env.Lookup != nil {
+			base, exists := env.Lookup(o.Extends)
 			if !exists {
 				return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Extension base {type} is unavailable", o.Extends)
 			}
@@ -98,7 +121,6 @@ func validateObject(o Object, model any, lookup func(string) (platform.RecordTyp
 				return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, err.Error())
 			}
 		}
-		value := reflect.ValueOf(record).Elem()
 		base := value.FieldByName(GoName(BaseField))
 		if !base.IsValid() || base.String() == "" {
 			return nil

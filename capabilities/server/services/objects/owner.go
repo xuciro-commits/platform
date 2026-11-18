@@ -29,6 +29,7 @@ type Owner struct {
 	VisibleLink            func(platform.Member, platform.AssetBinding) *platform.LinkType
 	HasProcesses           func() bool
 	Follows                func(platform.Member, string) bool
+	MemberDisplayName      func(string) string
 	Deliveries             func(string, time.Time) []RecordDelivery
 	AuditPersonal          func(protocol.PersonalRead)
 	RecordSetBinding       func(platform.AssetBinding) (*platform.Definition, bool)

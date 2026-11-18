@@ -320,6 +320,52 @@ func TestInvariantK16ReferencesRespectTargetReadPermissions(t *testing.T) {
 	}
 }
 
+func TestInvariantK16MembersUseAuthorizedLabels(t *testing.T) {
+	live := newInvariantTenant(t, "invariant-k16-members", protocol.Seat{Subjects: []string{"other"}, Member: platform.Member{ID: "other", Roles: map[string]string{build.ID: ontology.UserRole}}})
+	profile := live.submission("platform.profile.update", "platform.profile", "builder", map[string]string{"displayName": "Casey Rivera", "email": "casey@example.test"})
+	profile.Authority = "platform"
+	if _, refusal := live.Submit(live.member(t), profile, invariantClock); refusal != nil {
+		t.Fatal(refusal)
+	}
+	live.accept(t, "build.object.create", build.ObjectType, "ORDER", map[string]any{
+		"name": "order", "title": "Order", "access": []ontology.Access{{Role: ontology.UserRole, Read: "all"}},
+		"fields": []ontology.Field{
+			{Name: "owner", Type: "member", Title: "Owner"},
+			{Name: "reviewer", Type: "member", Title: "Reviewer", Read: []string{ontology.BuilderRole}},
+		},
+	})
+	live.accept(t, "build.object.publish", build.ObjectType, "ORDER", nil)
+	invalid := live.submission("build.order.create", "build.order", "INVALID", map[string]string{"owner": "missing"})
+	if _, refusal := live.Submit(live.member(t), invalid, invariantClock); refusal == nil || refusal.Code != pb.ErrorCode_ERROR_CODE_INVALID_REFERENCE {
+		t.Fatalf("a member ID outside the tenant was accepted: %+v", refusal)
+	}
+	live.accept(t, "build.order.create", "build.order", "ROW", map[string]string{"owner": "other", "reviewer": "builder"})
+	live.accept(t, "build.order.edit", "build.order", "ROW", map[string]string{"owner": "builder"})
+
+	_, handler := observationHost(live.Tenant)
+	other := observationToken(live.ID, "other")
+	directory := observationRequest(t, handler, live.ID, other, "/v1/member-directory", nil)
+	if directory.Code != http.StatusOK || strings.TrimSpace(directory.Body.String()) != `[{"id":"builder","name":"Casey Rivera"}]` {
+		t.Fatalf("member directory exposed more than the display name and ID: %d: %s", directory.Code, directory.Body)
+	}
+	for _, path := range []string{"/v1/records/build.order", "/v1/records/build.order?actions=1", "/v1/records/build.order/ROW"} {
+		for _, role := range []string{"builder", "other"} {
+			response := observationRequest(t, handler, live.ID, observationToken(live.ID, role), path, nil)
+			var view struct {
+				Refs   map[string]map[string]string
+				Values map[string]any
+			}
+			if response.Code != http.StatusOK || json.Unmarshal(response.Body.Bytes(), &view) != nil ||
+				view.Refs["owner"]["builder"] != "Casey Rivera" ||
+				(strings.HasSuffix(path, "/ROW") && view.Values["owner"] != "builder") ||
+				(role == "builder" && view.Refs["reviewer"]["builder"] != "Casey Rivera") ||
+				(role == "other" && view.Refs["reviewer"] != nil) {
+				t.Fatalf("%s %s: %d: %s", role, path, response.Code, response.Body)
+			}
+		}
+	}
+}
+
 func TestInvariantK3RevisionConflictIsLocalizedAndAuthorized(t *testing.T) {
 	live := newObservationTenant(t, "invariant-k3-wire")
 	change := live.accept(t, "build.object.create", build.ObjectType, "OBJECT", invariantObject("revisionprobe", "Object"))
