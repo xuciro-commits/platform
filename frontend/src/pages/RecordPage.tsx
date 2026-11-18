@@ -22,6 +22,7 @@ const when = (stamp: Stamp) => (stamp.at ? new Date(stamp.at).toLocaleString() :
 
 export function RecordPage({ described, id, listPath, listTitle, instances }: RecordPageProps) {
   const [refusal, setRefusal] = useState("");
+  const [fresh] = useState(() => (history.state as { fresh?: string } | null)?.fresh === id);
   const read = useRead<Api.RecordView>(`/v1/records/${described.type}/${encodeURIComponent(id)}`);
   const values = useMemo(
     () => (read.status === "ready" ? Object.fromEntries(Object.entries(read.data.values ?? {}).map(([name, value]) => [name, plain(value)])) : {}),
@@ -93,7 +94,7 @@ export function RecordPage({ described, id, listPath, listTitle, instances }: Re
             {read.status === "ready" && (
               <VStack gap={6}>
                 {refusal && <Banner status="error" title={t("Not done")} description={refusal} />}
-                <FieldGroup described={described} editor={editor} sections={described.sections} direction="horizontal-labels" />
+                <FieldGroup described={described} editor={editor} sections={described.sections} direction="horizontal-labels" focusEmpty={fresh} />
               </VStack>
             )}
           </LayoutContent>

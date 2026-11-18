@@ -9,8 +9,8 @@ export function usePath() {
   return useSyncExternalStore(subscribe, () => location.pathname);
 }
 
-export function navigate(path: string) {
-  history.pushState(null, "", path);
+export function navigate(path: string, state: unknown = null) {
+  history.pushState(state, "", path);
   dispatchEvent(new PopStateEvent("popstate"));
 }
 

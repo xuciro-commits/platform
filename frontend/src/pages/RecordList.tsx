@@ -1,9 +1,10 @@
 import { Button } from "@astryxdesign/core/Button";
 import { useMemo, useState } from "react";
-import { type Api, type Read, submit, useRead } from "../host";
+import { type Api, type Read, useRead } from "../host";
 import { t } from "../i18n";
 import { navigate, usePath } from "../router";
 import { ActionDialog } from "./ActionDialog";
+import { send } from "./act";
 import { type BulkAction, type ListShape, ListView, type Move } from "./ListPage";
 import { type Described, describe, numeric } from "./describe";
 import { RecordPage } from "./RecordPage";
@@ -83,7 +84,7 @@ export function Records({ declared, listPath, id, back }: { declared: Declared; 
   const move = useMemo(
     () =>
       edit && kept
-        ? (moving: string, field: string, to: string) => submit(edit, moving, { [field]: keyOf(described?.field(field), to) }, Number(kept.find((row) => row.id === moving)?.revision))
+        ? (moving: string, field: string, to: string) => send(edit, moving, { [field]: keyOf(described?.field(field), to) }, Number(kept.find((row) => row.id === moving)?.revision))
         : undefined,
     [edit, kept, described],
   );
@@ -95,7 +96,7 @@ export function Records({ declared, listPath, id, back }: { declared: Declared; 
             {
               label: "Archive",
               run: async (ids: string[]) => {
-                for (const each of ids) await submit(archive, each, {}, Number(kept.find((row) => row.id === each)?.revision));
+                for (const each of ids) await send(archive, each, {}, Number(kept.find((row) => row.id === each)?.revision));
               },
             },
           ]
@@ -134,7 +135,8 @@ export function Records({ declared, listPath, id, back }: { declared: Declared; 
           revision={0}
           owned={declared.project}
           onClose={() => setCreating(false)}
-          onDone={(created) => navigate(`${listPath}/${encodeURIComponent(created)}`)}
+          quick
+          onDone={(created) => navigate(`${listPath}/${encodeURIComponent(created)}`, { fresh: created })}
         />
       )}
     </>

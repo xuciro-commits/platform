@@ -5,18 +5,20 @@ export class HostRefusal extends Error {
     readonly status: number,
     readonly code: string,
     reason: string,
+    readonly reasonCode = "",
+    readonly currentRevision?: number,
   ) {
     super(reason);
   }
 }
 
 type Options = { signal?: AbortSignal; body?: unknown; headers?: Record<string, string> };
-type Failure = { error?: { code?: string; message?: string; reason?: string } };
+type Failure = { error?: { code?: string; message?: string; reason?: string; reasonCode?: string; currentRevision?: number } };
 
 export function refusal(status: number, body: Failure | null) {
   const code = body?.error?.code ?? "";
   const said = body?.error?.message ?? body?.error?.reason ?? "";
-  return new HostRefusal(status, code, said === code ? "" : said);
+  return new HostRefusal(status, code, said === code ? "" : said, body?.error?.reasonCode, body?.error?.currentRevision);
 }
 
 export async function request<Answer>(path: string, options: Options = {}): Promise<Answer> {

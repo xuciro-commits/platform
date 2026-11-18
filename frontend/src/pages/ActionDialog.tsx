@@ -5,8 +5,9 @@ import { FormLayout } from "@astryxdesign/core/FormLayout";
 import { HStack, Layout, LayoutContent, LayoutFooter, StackItem } from "@astryxdesign/core/Layout";
 import { Selector } from "@astryxdesign/core/Selector";
 import { useState } from "react";
-import { type Api, submit, useRead } from "../host";
+import { type Api, useRead } from "../host";
 import { t } from "../i18n";
+import { reasonOf, send } from "./act";
 import { ParameterInput, enterable } from "./ParameterInput";
 
 type Values = Record<string, unknown>;
@@ -20,23 +21,24 @@ export type ActionDialogProps = {
   revision: number;
   initial?: Values;
   owned?: boolean;
+  quick?: boolean;
   onClose: () => void;
   onDone: (id: string) => void;
 };
 
 
-export function ActionDialog({ action, described, heading, confirm, id, revision, initial = {}, owned, onClose, onDone }: ActionDialogProps) {
+export function ActionDialog({ action, described, heading, confirm, id, revision, initial = {}, owned, quick, onClose, onDone }: ActionDialogProps) {
   const [values, setValues] = useState<Values>(initial);
   const [project, setProject] = useState("");
   const [busy, setBusy] = useState(false);
   const [failure, setFailure] = useState("");
   const projects = useRead<Api.RecordPage>(owned ? "/v1/records/build.app?limit=200" : null);
   const set = (name: string, value: unknown) => setValues((previous) => ({ ...previous, [name]: value }));
-  const shownParameters = action.payload.filter(enterable);
+  const shownParameters = action.payload.filter((parameter) => enterable(parameter) && (!quick || parameter.required || parameter.name === described.display));
   const blocked = action.payload.filter((parameter) => parameter.required && !enterable(parameter)).map((parameter) => parameter.name);
   const missing = shownParameters.some((parameter) => parameter.required && (values[parameter.name] == null || values[parameter.name] === ""));
 
-  const send = async () => {
+  const apply = async () => {
     setBusy(true);
     setFailure("");
     const payload: Values = {};
@@ -47,10 +49,10 @@ export function ActionDialog({ action, described, heading, confirm, id, revision
     if (owned) payload.project = project;
     const target = id ?? (typeof values.name === "string" ? values.name : `${action.idPrefix ?? ""}${crypto.randomUUID()}`);
     try {
-      await submit(action, target, payload, revision);
+      await send(action, target, payload, revision);
       onDone(target);
     } catch (problem) {
-      setFailure((problem instanceof Error && problem.message) || t("The platform did not accept this change."));
+      setFailure(reasonOf(problem));
       setBusy(false);
     }
   };
@@ -94,7 +96,7 @@ export function ActionDialog({ action, described, heading, confirm, id, revision
             <HStack gap={2} vAlign="center">
               <StackItem size="fill" />
               <Button label={t("Cancel")} variant="secondary" onClick={onClose} />
-              <Button label={confirm} variant="primary" isDisabled={busy || missing || blocked.length > 0 || (owned && !project)} onClick={send} />
+              <Button label={confirm} variant="primary" isDisabled={busy || missing || blocked.length > 0 || (owned && !project)} onClick={apply} />
             </HStack>
           </LayoutFooter>
         }

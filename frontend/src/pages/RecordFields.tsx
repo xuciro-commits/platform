@@ -4,8 +4,9 @@ import { VStack } from "@astryxdesign/core/Layout";
 import { Heading, Text } from "@astryxdesign/core/Text";
 import * as stylex from "@stylexjs/stylex";
 import { useEffect, useRef, useState } from "react";
-import { type Api, submit } from "../host";
+import type { Api } from "../host";
 import { t } from "../i18n";
+import { reasonOf, send } from "./act";
 import type { Described, Section, Values } from "./describe";
 import { type InputStatus, ParameterInput, enterable, settles } from "./ParameterInput";
 import { present, shown } from "./values";
@@ -40,12 +41,11 @@ export function useEditor(edit: Api.Action | undefined, id: string, values: Valu
     sent.current[name] = value;
     queue.current = queue.current.then(async () => {
       try {
-        const accepted = await submit(edit, id, { [name]: value }, latest.current);
+        const accepted = await send(edit, id, { [name]: value }, latest.current);
         latest.current = accepted.revision;
         setStatus((previous) => ({ ...previous, [name]: { type: "success" } }));
       } catch (problem) {
-        const message = (problem instanceof Error && problem.message) || t("The platform did not accept this change.");
-        setStatus((previous) => ({ ...previous, [name]: { type: "error", message } }));
+        setStatus((previous) => ({ ...previous, [name]: { type: "error", message: reasonOf(problem) } }));
       }
     });
   };
@@ -66,13 +66,13 @@ export function useEditor(edit: Api.Action | undefined, id: string, values: Valu
   };
 }
 
-type FieldGroupProps = { described: Described; editor: Editor; sections: Section[]; direction: "horizontal-labels" | "vertical" };
+type FieldGroupProps = { described: Described; editor: Editor; sections: Section[]; direction: "horizontal-labels" | "vertical"; focusEmpty?: boolean };
 
 const styles = stylex.create({
   aligned: { gridTemplateColumns: { default: "minmax(0, 1fr) minmax(0, 3fr)", "@media (max-width: 480px)": "100%" } },
 });
 
-export function FieldGroup({ described, editor, sections, direction }: FieldGroupProps) {
+export function FieldGroup({ described, editor, sections, direction, focusEmpty }: FieldGroupProps) {
   const parameters = new Map((described.edit?.payload ?? []).filter(enterable).map((parameter) => [parameter.name, parameter]));
   const visible = (fields: Api.FieldInfo[]) =>
     fields.filter((field) => {
@@ -83,6 +83,10 @@ export function FieldGroup({ described, editor, sections, direction }: FieldGrou
     });
   const shownSections = sections.map((section) => ({ ...section, fields: visible(section.fields) })).filter((section) => section.fields.length > 0);
   if (shownSections.length === 0) return null;
+  const typed = (parameter?: Api.Field) => parameter && !parameter.choices && parameter.type !== "boolean";
+  const first = focusEmpty
+    ? shownSections.flatMap((section) => section.fields).find((field) => typed(parameters.get(field.name)) && shown(editor.values[field.name]) === "")?.name
+    : undefined;
   return (
     <VStack gap={6} onBlur={editor.settle}>
       {shownSections.map((section) => (
@@ -100,6 +104,7 @@ export function FieldGroup({ described, editor, sections, direction }: FieldGrou
                   status={editor.status[field.name]}
                   onChange={(value) => editor.change(parameter, value)}
                   onEnter={editor.settle}
+                  focused={field.name === first}
                 />
               ) : (
                 <Field key={field.name} label={t(field.title)} inputID={`shown-${field.name}`}>

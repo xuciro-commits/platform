@@ -6,7 +6,7 @@ type Identity = { tenantId: string; principalId: string };
 type Declaration = { dataClass: string; authorityId: string };
 type Accepted = { record?: { changeId: string; revision: number }; error?: { code?: string; message?: string } };
 
-export async function submit(action: Api.Action, id: string, payload: Record<string, unknown>, expectedRevision: number) {
+export async function submit(action: Api.Action, id: string, payload: Record<string, unknown>, expectedRevision: number, idempotencyKey: string) {
   const [identity, declarations] = await Promise.all([request<Identity>("/v1/me"), request<Declaration[]>("/v1/declarations")]);
   const bytes = new TextEncoder().encode(JSON.stringify(payload));
   const answer = await request<Accepted>("/v1/submissions", {
@@ -17,7 +17,7 @@ export async function submit(action: Api.Action, id: string, payload: Record<str
       authority: declarations.find((declaration) => declaration.dataClass === action.target)?.authorityId ?? "",
       target: { type: action.target, id },
       schema: { name: action.schema, version: action.schemaVersion?.family ?? 1 },
-      idempotencyKey: crypto.randomUUID(),
+      idempotencyKey,
       expectedRevision,
       payload: btoa(String.fromCharCode(...bytes)),
     },

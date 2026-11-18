@@ -62,6 +62,32 @@ test("sections: a field shows only when its condition holds", async ({ page }) =
   await expect(reason).toHaveCount(0);
 });
 
+test("submit: an answer lost on the way is retried and accepted once", async ({ page }) => {
+  await signIn(page);
+  await open(page, "Ontology", "Objects");
+  await page.getByRole("link", { name: "Opportunities" }).click();
+  await page.getByRole("link", { name: "Warehouse scanners" }).click();
+  await expect(page.getByRole("complementary").getByText("1", { exact: true })).toBeVisible();
+
+  let dropped = false;
+  await page.route("**/v1/submissions", async (route) => {
+    if (dropped) return route.continue();
+    dropped = true;
+    await route.fetch();
+    await route.abort("connectionreset");
+  });
+  const next = page.getByRole("textbox", { name: "Next step" });
+  await next.fill("Book the site visit");
+  await next.press("Enter");
+  await expect(page.getByRole("complementary").getByText("2", { exact: true })).toBeVisible();
+  expect(dropped).toBe(true);
+
+  await page.unroute("**/v1/submissions");
+  await page.reload();
+  await expect(page.getByRole("textbox", { name: "Next step" })).toHaveValue("Book the site visit");
+  await expect(page.getByRole("complementary").getByText("2", { exact: true })).toBeVisible();
+});
+
 test("publish: a draft type goes live from its record page and takes records", async ({ page }) => {
   await signIn(page);
   await open(page, "Ontology", "Object types");
@@ -80,7 +106,9 @@ test("publish: a draft type goes live from its record page and takes records", a
 
   await page.getByRole("button", { name: "New" }).click();
   const form = page.getByRole("dialog");
+  await expect(form.getByRole("textbox")).toHaveCount(1);
   await form.getByRole("textbox", { name: "Full name" }).fill("Ines Brandt");
   await form.getByRole("button", { name: "Create" }).click();
   await expect(page.getByRole("heading", { level: 1, name: "Ines Brandt" })).toBeVisible();
+  await expect(page.getByRole("textbox", { name: "Customer" })).toBeFocused();
 });

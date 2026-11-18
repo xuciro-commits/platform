@@ -13,6 +13,7 @@ type ParameterInputProps = {
   status?: InputStatus;
   onChange: (value: unknown) => void;
   onEnter?: () => void;
+  focused?: boolean;
 };
 
 const typed = new Set(["string", "longtext", "date", "datetime", "entity", "choice"]);
@@ -26,7 +27,7 @@ export function settles(parameter: Api.Field) {
   return Boolean(parameter.choices) || parameter.type === "boolean" || numeric.has(parameter.type);
 }
 
-export function ParameterInput({ parameter, described, value, status, onChange, onEnter }: ParameterInputProps) {
+export function ParameterInput({ parameter, described, value, status, onChange, onEnter, focused }: ParameterInputProps) {
   const field = described.fields.find((candidate) => candidate.name === parameter.name);
   const label = t(field?.title ?? parameter.name);
   const description = field?.help;
@@ -55,6 +56,7 @@ export function ParameterInput({ parameter, described, value, status, onChange, 
         status={status}
         value={typeof value === "number" ? value : null}
         onChange={onChange}
+        hasAutoFocus={focused}
       />
     );
   }
@@ -67,6 +69,7 @@ export function ParameterInput({ parameter, described, value, status, onChange, 
       value={String(value ?? "")}
       onChange={onChange}
       onEnter={onEnter}
+      hasAutoFocus={focused}
     />
   );
 }
