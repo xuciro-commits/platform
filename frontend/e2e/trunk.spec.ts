@@ -399,3 +399,54 @@ test("links and files: navigate to related records and attach a downloadable fil
   expect(download.suggestedFilename()).toBe("schedule.txt");
   expect(await download.failure()).toBeNull();
 });
+
+test("restricted fields: a reader sees the field label and no amount", async ({ page }) => {
+  await page.goto("/");
+  await page.getByRole("button", { name: "user-1 · acceptance" }).click();
+  await page.goto("/ontology/objects/build.opportunity/OPP-001");
+  await expect(page.getByRole("heading", { level: 1, name: "Press line retrofit" })).toBeVisible();
+  await expect(page.getByText("Amount", { exact: true })).toBeVisible();
+  await expect(page.getByText("Cannot view", { exact: true })).toBeVisible();
+  await expect(page.getByRole("spinbutton", { name: "Amount", exact: true })).toHaveCount(0);
+  await expect(page.getByText("184,000", { exact: true })).toHaveCount(0);
+});
+
+test("keyboard: create and edit an opportunity without using a pointer", async ({ page }) => {
+  await signIn(page);
+  await open(page, "Ontology", "Objects");
+  await page.getByRole("link", { name: "Opportunities" }).click();
+  const tabTo = async (target: ReturnType<Page["getByRole"]>) => {
+    await expect(target).toBeVisible();
+    for (let index = 0; index < 60 && !await target.evaluate((element) => document.activeElement === element); index++) {
+      await page.keyboard.press("Tab");
+    }
+    await expect(target).toBeFocused();
+  };
+  await tabTo(page.getByRole("button", { name: "New", exact: true }));
+  await page.keyboard.press("Enter");
+  const form = page.getByRole("dialog");
+  await tabTo(form.getByRole("textbox", { name: "Subject" }));
+  await page.keyboard.insertText("Keyboard renewal");
+  await tabTo(form.getByRole("button", { name: "Create", exact: true }));
+  await page.keyboard.press("Enter");
+  await expect(page.getByRole("heading", { level: 1, name: "Keyboard renewal" })).toBeVisible();
+  const customer = page.getByRole("combobox", { name: "Customer", exact: true });
+  await expect(customer).toBeFocused();
+  await page.keyboard.insertText("Northwind");
+  await expect(page.getByRole("option", { name: /Northwind Tools/ })).toBeVisible();
+  await page.keyboard.press("ArrowDown");
+  await page.keyboard.press("Enter");
+  await expect(page.getByRole("link", { name: "Northwind Tools", exact: true })).toBeVisible();
+  await tabTo(page.getByRole("textbox", { name: "Next step" }));
+  await page.keyboard.insertText("Confirm renewal scope");
+  await page.keyboard.press("Enter");
+  await expect(page.getByRole("complementary").getByText("3", { exact: true })).toBeVisible();
+  await tabTo(page.getByRole("link", { name: "Details", exact: true }));
+  await page.keyboard.press("?");
+  const keys = page.getByRole("dialog", { name: "Keyboard shortcuts" });
+  await expect(keys).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(keys).toBeHidden();
+  await page.reload();
+  await expect(page.getByRole("textbox", { name: "Next step" })).toHaveValue("Confirm renewal scope");
+});

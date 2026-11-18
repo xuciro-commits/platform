@@ -58,7 +58,7 @@
           { "name": "subject", "title": "Subject", "type": "text", "required": true, "search": true, "group": "Commercial" },
           { "name": "customer", "title": "Customer", "type": "reference", "ref": "build.customer", "search": true, "group": "Commercial" },
           { "name": "stage", "title": "Stage", "type": "choice", "choices": "qualifying,proposal,negotiation,won,lost", "aside": true, "format": [{ "when": { "op": "=", "kind": "boolean", "args": [{ "kind": "text", "ref": "stage" }, { "kind": "text", "lit": { "value": "qualifying" } }] }, "tone": "neutral" }, { "when": { "op": "=", "kind": "boolean", "args": [{ "kind": "text", "ref": "stage" }, { "kind": "text", "lit": { "value": "proposal" } }] }, "tone": "info" }, { "when": { "op": "=", "kind": "boolean", "args": [{ "kind": "text", "ref": "stage" }, { "kind": "text", "lit": { "value": "negotiation" } }] }, "tone": "warning" }, { "when": { "op": "=", "kind": "boolean", "args": [{ "kind": "text", "ref": "stage" }, { "kind": "text", "lit": { "value": "won" } }] }, "tone": "success" }, { "when": { "op": "=", "kind": "boolean", "args": [{ "kind": "text", "ref": "stage" }, { "kind": "text", "lit": { "value": "lost" } }] }, "tone": "danger" }] },
-          { "name": "amount", "title": "Amount", "type": "decimal", "group": "Commercial" },
+          { "name": "amount", "title": "Amount", "type": "decimal", "group": "Commercial", "read": ["builder"] },
           { "name": "budgetapproved", "title": "Budget approved", "type": "boolean", "group": "Commercial" },
           { "name": "deposit", "title": "Proposed deposit", "type": "money", "group": "Commercial" },
           { "name": "owner", "title": "Owner", "type": "text", "aside": true },

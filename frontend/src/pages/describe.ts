@@ -28,6 +28,16 @@ export type Described = {
   name: (values: Values, id: string) => string;
 };
 
+export function withRestrictedFields(entity: Api.EntityInfo, restricted: Api.RecordView["restrictedFields"]): Api.EntityInfo {
+  if (!restricted?.length) return entity;
+  const fields = [...entity.fields];
+  for (const field of restricted) {
+    if (!field.name || fields.some((candidate) => candidate.name === field.name)) continue;
+    fields.splice(field.position ?? 0, 0, { name: field.name, title: field.title ?? field.name, group: field.group, aside: field.aside, type: "text", readOnly: true });
+  }
+  return { ...entity, fields };
+}
+
 const tabular = new Set(["text", "integer", "decimal", "money", "date", "datetime", "boolean", "choice", "reference", "tags"]);
 const columnLimit = 6;
 const ungrouped = "Details";

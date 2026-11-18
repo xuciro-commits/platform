@@ -14,27 +14,36 @@ import (
 )
 
 type RecordView struct {
-	Changes     []ontology.ObjectChange         `json:"changes,omitempty"`
-	Partial     bool                            `json:"partial,omitempty"`
-	Actions     []RecordAction                  `json:"actions,omitempty"`
-	Refs        map[string]map[string]string    `json:"refs,omitempty"`
-	Effective   *bool                           `json:"effective,omitempty"`
-	Values      map[string]any                  `json:"values,omitempty"`
-	Formats     map[string]platform.FieldFormat `json:"formats,omitempty"`
-	ValueErrors map[string]string               `json:"valueErrors,omitempty"`
-	Restricted  []string                        `json:"restricted,omitempty"`
-	Record      any                             `json:"record"`
-	History     []records.RecordChange          `json:"history,omitempty"`
-	Related     []Related                       `json:"related,omitempty"`
-	Processes   []any                           `json:"processes,omitempty"`
-	Approvals   []any                           `json:"approvals,omitempty"`
-	Tasks       []any                           `json:"tasks,omitempty"`
-	Files       []any                           `json:"files,omitempty"`
-	Comments    []any                           `json:"comments,omitempty"`
-	Following   bool                            `json:"following,omitempty"`
-	Linked      []Related                       `json:"linked,omitempty"`
-	Activity    []any                           `json:"activity,omitempty"`
-	Deliveries  []RecordDelivery                `json:"deliveries,omitempty"`
+	Changes          []ontology.ObjectChange         `json:"changes,omitempty"`
+	Partial          bool                            `json:"partial,omitempty"`
+	Actions          []RecordAction                  `json:"actions,omitempty"`
+	Refs             map[string]map[string]string    `json:"refs,omitempty"`
+	Effective        *bool                           `json:"effective,omitempty"`
+	Values           map[string]any                  `json:"values,omitempty"`
+	Formats          map[string]platform.FieldFormat `json:"formats,omitempty"`
+	ValueErrors      map[string]string               `json:"valueErrors,omitempty"`
+	Restricted       []string                        `json:"restricted,omitempty"`
+	RestrictedFields []RestrictedField               `json:"restrictedFields,omitempty"`
+	Record           any                             `json:"record"`
+	History          []records.RecordChange          `json:"history,omitempty"`
+	Related          []Related                       `json:"related,omitempty"`
+	Processes        []any                           `json:"processes,omitempty"`
+	Approvals        []any                           `json:"approvals,omitempty"`
+	Tasks            []any                           `json:"tasks,omitempty"`
+	Files            []any                           `json:"files,omitempty"`
+	Comments         []any                           `json:"comments,omitempty"`
+	Following        bool                            `json:"following,omitempty"`
+	Linked           []Related                       `json:"linked,omitempty"`
+	Activity         []any                           `json:"activity,omitempty"`
+	Deliveries       []RecordDelivery                `json:"deliveries,omitempty"`
+}
+
+type RestrictedField struct {
+	Name     string `json:"name,omitempty"`
+	Title    string `json:"title,omitempty"`
+	Group    string `json:"group,omitempty"`
+	Aside    bool   `json:"aside,omitempty"`
+	Position int    `json:"position,omitempty"`
 }
 
 type RecordAction struct {
@@ -130,13 +139,14 @@ func (t *Owner) readRecordBase(m platform.Member, typ, id string, now time.Time)
 	values, valueErrors := propertyValues(seen.Info(), record)
 	caller := t.caller(m, et.Info().App)
 	view := RecordView{Values: values, ValueErrors: valueErrors, Formats: t.recordFormats(s, caller, et, id, record, now, false), Record: record}
-	for _, field := range et.Info().Fields {
+	for position, field := range et.Info().Fields {
 		if field.Supplemental {
 			continue
 		}
 		decision := caller.Authorize(platform.AuthzRequest{Principal: m.ID, Tenant: t.TenantID, Kind: "read", Type: typ, Record: id, Fields: []string{field.Name}}, now)
 		if !decision.Allow || len(decision.Withheld) > 0 {
 			view.Restricted = append(view.Restricted, field.Name)
+			view.RestrictedFields = append(view.RestrictedFields, RestrictedField{Name: field.Name, Title: field.Title, Group: field.Group, Aside: field.Aside, Position: position})
 		}
 	}
 	slices.Sort(view.Restricted)

@@ -4638,6 +4638,7 @@ export type RecordView = {
   formats?: Record<string, FieldFormat>;
   valueErrors?: Record<string, string>;
   restricted?: string[];
+  restrictedFields?: RestrictedField[];
   record: unknown;
   history?: RecordChange[];
   related?: Related[];
@@ -4871,6 +4872,14 @@ export type ResourceEntry = {
   path: string[];
   canOpen: boolean;
   canEdit: boolean;
+};
+
+export type RestrictedField = {
+  name?: string;
+  title?: string;
+  group?: string;
+  aside?: boolean;
+  position?: number;
 };
 
 export type Result = {

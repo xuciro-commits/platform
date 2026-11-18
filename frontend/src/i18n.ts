@@ -1,5 +1,10 @@
 export const zhCN: Record<string, string> = {
   Search: "搜索",
+  "Keyboard shortcuts": "键盘快捷键",
+  "Move to the next field or control": "移动到下一个字段或控件",
+  "Move to the previous field or control": "移动到上一个字段或控件",
+  "Save the field or activate the control": "保存字段或操作控件",
+  "Close the current overlay": "关闭当前浮层",
   Links: "关联",
   Files: "文件",
   Close: "关闭",

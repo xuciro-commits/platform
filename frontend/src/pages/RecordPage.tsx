@@ -14,7 +14,8 @@ import { type Api, useRead } from "../host";
 import { t } from "../i18n";
 import { usePath } from "../router";
 import { BackLink } from "./BackLink";
-import { describe, type Described } from "./describe";
+import { describe, type Described, withRestrictedFields } from "./describe";
+import { KeyboardHelp } from "./KeyboardHelp";
 import { type Editor, FieldGroup, useEditor } from "./RecordFields";
 import { RecordFiles, RecordLinks, relatedGroups } from "./RecordAttachments";
 import { Collaboration, RecordActivity } from "./RecordActivity";
@@ -44,10 +45,10 @@ function Loading() {
   );
 }
 
-function Rail({ described, editor, kept, refs, collaboration }: { described: Described; editor: Editor; kept: Kept; refs?: Api.RecordView["refs"]; collaboration?: ReactNode }) {
+function Rail({ described, editor, kept, refs, restricted, collaboration }: { described: Described; editor: Editor; kept: Kept; refs?: Api.RecordView["refs"]; restricted: ReadonlySet<string>; collaboration?: ReactNode }) {
   return (
     <VStack gap={6}>
-      <FieldGroup described={described} editor={editor} sections={[{ title: "Properties", fields: described.aside }]} direction="vertical" refs={refs} />
+      <FieldGroup described={described} editor={editor} sections={[{ title: "Properties", fields: described.aside }]} direction="vertical" refs={refs} restricted={restricted} />
       {collaboration}
       <VStack gap={4}>
         <Heading level={3}>{t("Record")}</Heading>
@@ -88,6 +89,9 @@ export function RecordPage({ described, id, listPath, listTitle, instances, enti
   const attach = catalog.find((action) => action.schema === "files.file.attach" && action.target !== described.type);
   const collaboration = <Collaboration target={`${described.type}/${id}`} comments={comments} catalog={catalog} entities={entities} />;
   const refs = read.status === "ready" ? read.data.refs : undefined;
+  const restrictedFields = read.status === "ready" ? read.data.restrictedFields : undefined;
+  const restricted = new Set(read.status === "ready" ? read.data.restricted : undefined);
+  const detail = useMemo(() => restrictedFields?.length ? describe(withRestrictedFields(described.entity, restrictedFields), catalog) : described, [catalog, described, restrictedFields]);
   const editor = useEditor(described, id, values, kept?.revision ?? 0);
   const state = described.state(values);
   const status = kept?.archived ? { tone: "neutral", title: "Archived" } : state;
@@ -172,6 +176,7 @@ export function RecordPage({ described, id, listPath, listTitle, instances, enti
       }
       content={
         <LayoutContent padding={6} role="main">
+          <KeyboardHelp />
           {editor.leave && (
             <AlertDialog
               isOpen
@@ -197,7 +202,7 @@ export function RecordPage({ described, id, listPath, listTitle, instances, enti
           {kept && tab === "details" && (
             <VStack gap={6}>
               {refusal && <Banner status="error" title={t("Not done")} description={refusal} />}
-              <FieldGroup described={described} editor={editor} sections={described.sections} direction="horizontal-labels" focusEmpty={fresh} refs={refs} />
+              <FieldGroup described={detail} editor={editor} sections={detail.sections} direction="horizontal-labels" focusEmpty={fresh} refs={refs} restricted={restricted} />
               {described.entity.sets?.flatMap((set) => {
                 if (set.direction !== "inverse") return [];
                 const type = entities.find((entry) => entry.type === set.object);
@@ -208,13 +213,13 @@ export function RecordPage({ described, id, listPath, listTitle, instances, enti
           {kept && tab === "links" && <RecordLinks read={links} id={id} entities={entities} />}
           {kept && tab === "files" && <RecordFiles read={files} attach={attach} target={`${described.type}/${id}`} />}
           {kept && tab === "activity" && <RecordActivity described={described} id={id} comments={comments} catalog={catalog} />}
-          {kept && tab === "properties" && <Rail described={described} editor={editor} kept={kept} refs={refs} collaboration={collaboration} />}
+          {kept && tab === "properties" && <Rail described={detail} editor={editor} kept={kept} refs={refs} restricted={restricted} collaboration={collaboration} />}
         </LayoutContent>
       }
       end={
         kept && !narrow ? (
           <LayoutPanel width={340} padding={6} role="complementary" hasDivider>
-            <Rail described={described} editor={editor} kept={kept} refs={refs} collaboration={collaboration} />
+            <Rail described={detail} editor={editor} kept={kept} refs={refs} restricted={restricted} collaboration={collaboration} />
           </LayoutPanel>
         ) : undefined
       }

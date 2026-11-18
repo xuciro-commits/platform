@@ -298,7 +298,7 @@ func TestInvariantK16ReferencesRespectTargetReadPermissions(t *testing.T) {
 	}
 	live.accept(t, "build.object.create", build.ObjectType, "ORDER", map[string]any{
 		"name": "order", "title": "Order", "access": []ontology.Access{{Role: ontology.UserRole, Read: "all"}},
-		"fields": []ontology.Field{{Name: "partner", Type: "reference", Title: "Partner", Ref: "build.partner"}, {Name: "customer", Type: "reference", Title: "Customer", Ref: "build.customer"}, {Name: "hidden", Type: "reference", Title: "Hidden", Ref: "build.customer", Read: []string{ontology.BuilderRole}}, {Name: "private", Type: "reference", Title: "Private display", Ref: "build.private"}, {Name: "scoped", Type: "reference", Title: "Scoped row", Ref: "build.scoped"}},
+		"fields": []ontology.Field{{Name: "partner", Type: "reference", Title: "Partner", Ref: "build.partner"}, {Name: "customer", Type: "reference", Title: "Customer", Ref: "build.customer"}, {Name: "hidden", Type: "reference", Title: "Hidden", Group: "Commercial", Aside: true, Ref: "build.customer", Read: []string{ontology.BuilderRole}}, {Name: "private", Type: "reference", Title: "Private display", Ref: "build.private"}, {Name: "scoped", Type: "reference", Title: "Scoped row", Ref: "build.scoped"}},
 	})
 	live.accept(t, "build.object.publish", build.ObjectType, "ORDER", map[string]any{})
 	live.accept(t, "build.order.create", "build.order", "ROW", map[string]any{"partner": "TARGET", "customer": "TARGET", "hidden": "TARGET", "private": "TARGET", "scoped": "TARGET"})
@@ -313,6 +313,20 @@ func TestInvariantK16ReferencesRespectTargetReadPermissions(t *testing.T) {
 			if view.Refs["customer"]["TARGET"] != "customer label" || role == "builder" && view.Refs["partner"]["TARGET"] != "partner label" || role == "other" && (view.Refs["hidden"] != nil || view.Refs["private"] != nil || view.Refs["scoped"] != nil || bytes.Contains(response.Body.Bytes(), []byte("partner label")) || bytes.Contains(response.Body.Bytes(), []byte("private label")) || bytes.Contains(response.Body.Bytes(), []byte("scoped label"))) {
 				t.Fatalf("%s %s: unexpected labels: %s", role, path, response.Body)
 			}
+		}
+	}
+	for _, role := range []string{"builder", "other"} {
+		response := observationRequest(t, handler, live.ID, observationToken(live.ID, role), "/v1/records/build.order/ROW", nil)
+		var view objects.RecordView
+		if response.Code != http.StatusOK || json.Unmarshal(response.Body.Bytes(), &view) != nil {
+			t.Fatalf("%s: HTTP %d: %s", role, response.Code, response.Body)
+		}
+		if role == "builder" && len(view.RestrictedFields) != 0 {
+			t.Fatalf("builder received field layout for a readable field: %+v", view.RestrictedFields)
+		}
+		if role == "other" && (!slices.Contains(view.RestrictedFields, objects.RestrictedField{Name: "hidden", Title: "Hidden", Group: "Commercial", Aside: true, Position: 2}) ||
+			view.Values["hidden"] != nil || view.Record.(map[string]any)["hidden"] != nil) {
+			t.Fatalf("reader did not receive layout only: %s", response.Body)
 		}
 	}
 }

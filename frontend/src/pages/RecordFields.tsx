@@ -173,16 +173,17 @@ export function EditorConflict({ editor, described }: { editor: Editor; describe
   );
 }
 
-type FieldGroupProps = { described: Described; editor: Editor; sections: Section[]; direction: "horizontal-labels" | "vertical"; focusEmpty?: boolean; refs?: Api.RecordView["refs"] };
+type FieldGroupProps = { described: Described; editor: Editor; sections: Section[]; direction: "horizontal-labels" | "vertical"; focusEmpty?: boolean; refs?: Api.RecordView["refs"]; restricted?: ReadonlySet<string> };
 
 const styles = stylex.create({
   aligned: { gridTemplateColumns: { default: "minmax(0, 1fr) minmax(0, 3fr)", "@media (max-width: 480px)": "100%" } },
 });
 
-export function FieldGroup({ described, editor, sections, direction, focusEmpty, refs }: FieldGroupProps) {
+export function FieldGroup({ described, editor, sections, direction, focusEmpty, refs, restricted }: FieldGroupProps) {
   const parameters = new Map((described.edit?.payload ?? []).filter(enterable).map((parameter) => [parameter.name, parameter]));
   const visible = (fields: Api.FieldInfo[]) =>
     fields.filter((field) => {
+      if (restricted?.has(field.name)) return true;
       if (!described.shows(field, editor.values)) return false;
       if (parameters.has(field.name)) return true;
       const value = editor.values[field.name];
@@ -192,7 +193,7 @@ export function FieldGroup({ described, editor, sections, direction, focusEmpty,
   if (shownSections.length === 0) return null;
   const typed = (parameter?: Api.Field) => parameter && !parameter.choices && parameter.type !== "boolean";
   const first = focusEmpty
-    ? shownSections.flatMap((section) => section.fields).find((field) => typed(parameters.get(field.name)) && shown(editor.values[field.name]) === "")?.name
+    ? shownSections.flatMap((section) => section.fields).find((field) => !restricted?.has(field.name) && typed(parameters.get(field.name)) && shown(editor.values[field.name]) === "")?.name
     : undefined;
   return (
     <VStack gap={6} onBlur={editor.settle}>
@@ -207,6 +208,11 @@ export function FieldGroup({ described, editor, sections, direction, focusEmpty,
               const reference = field.type === "reference" && field.ref;
               const id = String(value ?? "");
               const referenceName = reference ? refs?.[field.name]?.[id] : undefined;
+              if (restricted?.has(field.name)) {
+                return <Field key={field.name} label={t(field.title)} inputID={`restricted-${field.name}`}>
+                  <Text type="supporting" color="secondary">{t("Cannot view")}</Text>
+                </Field>;
+              }
               return parameter ? (
                 <ParameterInput
                   key={field.name}
