@@ -5,7 +5,6 @@ import (
 	"platformserver/kernel/protocol"
 	"platformserver/platform"
 	dataowner "platformserver/services/data"
-	functionauthoring "platformserver/services/functions/authoring"
 	"platformserver/services/ontology"
 	"platformserver/services/resources/publication"
 )
@@ -22,10 +21,10 @@ func (e automationEnvironment) Version() string            { return e.b.Manifest
 func (e automationEnvironment) Roles() []string            { return e.b.Manifest().AllRoles() }
 func (e automationEnvironment) JointMode() bool            { return e.b.jointMode }
 func (e automationEnvironment) FunctionCallAction() string {
-	return functionauthoring.SchemaFunctionCall
+	return protocol.SchemaFunctionCall
 }
 func (e automationEnvironment) FunctionResult(c platform.Caller, id string) (protocol.FunctionOutcome, bool) {
-	call, ok := platform.Get[functionauthoring.FunctionRun](c, id)
+	call, ok := platform.Get[protocol.FunctionRun](c, id)
 	if !ok {
 		return protocol.FunctionOutcome{}, false
 	}

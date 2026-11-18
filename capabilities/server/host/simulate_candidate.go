@@ -8,7 +8,6 @@ import (
 	"platformserver/platform"
 	"platformserver/services/actions"
 	trialowner "platformserver/services/devops/trials"
-	functionauthoring "platformserver/services/functions/authoring"
 	"platformserver/services/resources/authoring"
 	"slices"
 	"time"
@@ -44,7 +43,7 @@ func (t *Tenant) simulateCandidate(builder platform.Member, request trialowner.C
 					return review.Diagnostic, prepared, problem
 				},
 				Function: func(id string) string {
-					selected, _ := platform.Get[functionauthoring.Function](reader.automation(build.ID, false), id)
+					selected, _ := platform.Get[protocol.Function](reader.automation(build.ID, false), id)
 					return selected.Name
 				},
 			},

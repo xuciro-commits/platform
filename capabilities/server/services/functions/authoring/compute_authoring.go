@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"platformserver/kernel/protocol"
 	"reflect"
 	"slices"
 	"strconv"
@@ -15,24 +16,24 @@ import (
 	"platformserver/services/resources/publication"
 )
 
-const SchemaTablePublish = TableType + ".publish"
+const SchemaTablePublish = protocol.TableType + ".publish"
 
 func (o *Owner) DecideCompute(c platform.Caller, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *platform.Error, bool) {
 	name := s.GetSchema().GetName()
-	if !strings.HasPrefix(name, CodeType+".") && !strings.HasPrefix(name, TableType+".") {
+	if !strings.HasPrefix(name, protocol.CodeType+".") && !strings.HasPrefix(name, protocol.TableType+".") {
 		return nil, nil, false
 	}
-	code, table := CodeEntity(), o.TableEntity()
+	code, table := o.CodeEntity(), o.TableEntity()
 	code.Scope.Levels[platform.ProjectViewerRole] = platform.ScopeTenant
 	table.Scope.Levels[platform.ProjectViewerRole] = platform.ScopeTenant
-	if name == CodeType+".archive" || name == TableType+".archive" {
+	if name == protocol.CodeType+".archive" || name == protocol.TableType+".archive" {
 		if !c.Replaying {
 			if !c.Holds(c.App, "builder") {
 				return nil, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_POLICY_DENIED}, true
 			}
 			published := false
-			if name == CodeType+".archive" {
-				record, _ := platform.Get[Code](c, s.GetTarget().GetId())
+			if name == protocol.CodeType+".archive" {
+				record, _ := platform.Get[protocol.Code](c, s.GetTarget().GetId())
 				if record.State == "compiling" {
 					return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "A compiling code function cannot be archived; wait for its build result"), true
 				}
@@ -50,7 +51,7 @@ func (o *Owner) DecideCompute(c platform.Caller, s *pb.Submission, now time.Time
 	return o.env.Ledger().Generated(c, s, now, nil, code, table)
 }
 
-func (o *Owner) checkCode(code Code) error {
+func (o *Owner) checkCode(code protocol.Code) error {
 	if code.Module == "" || code.SourceHash != code.SourceDigest() || code.BuildHash != code.BuildDigest() || code.Language != "go" && code.Language != "tinygo" || code.Toolchain == "" {
 		return fmt.Errorf("code %s needs an unchanged isolated build", code.Name)
 	}
@@ -62,12 +63,12 @@ func (o *Owner) checkCode(code Code) error {
 		return err
 	}
 	for _, other := range list {
-		previous, _ := publication.Read[Code](other.Published)
+		previous, _ := publication.Read[protocol.Code](other.Published)
 		if other.ID != code.ID && (other.Name == code.Name || previous.Name == code.Name) {
 			return fmt.Errorf("compute %s is already declared", code.Name)
 		}
 	}
-	if old, ok := publication.Read[Code](code.Published); ok && old.Name != code.Name {
+	if old, ok := publication.Read[protocol.Code](code.Published); ok && old.Name != code.Name {
 		return fmt.Errorf("a published compute keeps its name")
 	}
 	return nil
@@ -87,7 +88,7 @@ func (o *Owner) InstallOperationAsset(asset platform.ReleaseAsset) error {
 		}
 		return o.installTable(platform.Caller{Replaying: true}, table)
 	}
-	code := Code{Name: op.Name, Title: op.Title, Description: op.Description, Input: op.Input, Output: op.Output, Roles: op.Roles, Limits: op.Limits, Module: op.Binding.Module, State: "published", Version: ordinal}
+	code := protocol.Code{Name: op.Name, Title: op.Title, Description: op.Description, Input: op.Input, Output: op.Output, Roles: op.Roles, Limits: op.Limits, Module: op.Binding.Module, State: "published", Version: ordinal}
 	return o.installCode(platform.Caller{Replaying: true}, code)
 }
 func (o *Owner) codeDraftAssets(id string, before []platform.ReleaseAsset) (after []platform.ReleaseAsset, prior, next platform.AssetRef, hadPrior bool, err error) {
@@ -96,13 +97,13 @@ func (o *Owner) codeDraftAssets(id string, before []platform.ReleaseAsset) (afte
 		err = problem
 		return
 	}
-	i := slices.IndexFunc(list, func(code Code) bool { return code.ID == id && !code.Archived })
+	i := slices.IndexFunc(list, func(code protocol.Code) bool { return code.ID == id && !code.Archived })
 	if i < 0 {
 		err = fmt.Errorf("compute draft was not found")
 		return
 	}
 	code := list[i]
-	if old, ok := publication.Read[Code](code.Published); ok {
+	if old, ok := publication.Read[protocol.Code](code.Published); ok {
 		prior = platform.AssetRef{App: o.env.App(), Kind: platform.AssetCompute, Name: old.Name}
 		hadPrior = true
 	}
@@ -140,7 +141,7 @@ func (o *Owner) prepareCodeReleasePublications(assets []platform.ReleaseAsset) (
 		if json.Unmarshal(asset.Body, &operation) == nil && operation.Binding.Kind == "native" {
 			continue
 		}
-		i := slices.IndexFunc(list, func(code Code) bool { return code.Name == asset.Ref.Name && !code.Archived })
+		i := slices.IndexFunc(list, func(code protocol.Code) bool { return code.Name == asset.Ref.Name && !code.Archived })
 		if i < 0 {
 			return nil, fmt.Errorf("compute has no source owner")
 		}
@@ -170,10 +171,10 @@ func (o *Owner) prepareCodeReleasePublications(assets []platform.ReleaseAsset) (
 			if ordinal < record.Version {
 				record.State = "draft"
 			}
-			out = append(out, platform.ReleasePublication{Schema: SchemaCodePublish, Image: platform.Raw(record)})
+			out = append(out, platform.ReleasePublication{Schema: protocol.SchemaCodePublish, Image: platform.Raw(record)})
 			continue
 		}
-		built := Code{ABI: record.BuiltABI, Language: record.BuiltLanguage, Source: record.BuiltSource, Input: record.BuiltInput, Output: record.BuiltOutput}
+		built := protocol.Code{ABI: record.BuiltABI, Language: record.BuiltLanguage, Source: record.BuiltSource, Input: record.BuiltInput, Output: record.BuiltOutput}
 		if ordinal != record.Version+1 || record.Module != op.Binding.Module || record.SourceHash != built.SourceDigest() || record.BuildHash != built.BuildDigest() {
 			return nil, fmt.Errorf("compute source changed after candidate construction")
 		}
@@ -188,7 +189,7 @@ func (o *Owner) prepareCodeReleasePublications(assets []platform.ReleaseAsset) (
 		record.Version, record.State, record.Published = ordinal, "published", frozen.Published
 		record.Versions = append(record.Versions, record.Published)
 		raw, _ := json.Marshal(record)
-		out = append(out, platform.ReleasePublication{Schema: SchemaCodePublish, Image: raw})
+		out = append(out, platform.ReleasePublication{Schema: protocol.SchemaCodePublish, Image: raw})
 	}
 	return out, nil
 }
@@ -344,7 +345,7 @@ func (o *Owner) prepareTablePublications(assets []platform.ReleaseAsset) ([]plat
 }
 
 func (o *Owner) TableEntity() platform.Entity {
-	return platform.Entity{Type: TableType, Title: "Decision table", Plural: "Decision tables", Model: Table{}, Display: "title", Description: "Condition columns to result columns; the first matching row decides. Published as a native operation.",
+	return platform.Entity{Type: protocol.TableType, Title: "Decision table", Plural: "Decision tables", Model: Table{}, Display: "title", Description: "Condition columns to result columns; the first matching row decides. Published as a native operation.",
 		Validate: func(c platform.Caller, record any) *platform.Error {
 			if c.Replaying {
 				return nil

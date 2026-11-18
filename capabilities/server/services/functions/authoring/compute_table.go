@@ -85,8 +85,6 @@ func CheckTableShape(tb Table, lookup func(string) (platform.EntityInfo, bool), 
 	return nil
 }
 
-const TableType = "build.table"
-
 type Table struct {
 	platform.Record
 	Name        string                 `json:"name" field:"required,search"`

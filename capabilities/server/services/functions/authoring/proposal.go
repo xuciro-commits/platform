@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"maps"
+	"platformserver/kernel/protocol"
 	"reflect"
 	"slices"
 	"strings"
@@ -15,12 +16,20 @@ import (
 )
 
 type Proposal struct {
-	run        FunctionRun
+	run        protocol.FunctionRun
 	binding    platform.ProposalAdoption
 	amendments json.RawMessage
 }
 
-func (o *Owner) PrepareProposal(c platform.Caller, r *pb.ChangeRecord, txn *platform.BusinessTxn, entity platform.Entity, now time.Time) (*Proposal, *platform.Error) {
+func (o *Owner) PrepareProposal(c platform.Caller, r *pb.ChangeRecord, txn *platform.BusinessTxn, entity platform.Entity, now time.Time) (platform.TransactionProposal, *platform.Error) {
+	p, err := o.prepareProposal(c, r, txn, entity, now)
+	if err != nil {
+		return platform.TransactionProposal{}, err
+	}
+	return platform.TransactionProposal{Apply: p.Apply, Finish: p.Finish}, nil
+}
+
+func (o *Owner) prepareProposal(c platform.Caller, r *pb.ChangeRecord, txn *platform.BusinessTxn, entity platform.Entity, now time.Time) (*Proposal, *platform.Error) {
 	if entity.Lifecycle == nil {
 		return nil, nil
 	}
@@ -53,12 +62,12 @@ func (o *Owner) PrepareProposal(c platform.Caller, r *pb.ChangeRecord, txn *plat
 	if json.Unmarshal(values[binding.Input], &id) != nil || id == "" {
 		return fail("Choose a retained proposal for this action")
 	}
-	visible, problem := c.ReadRecord(FunctionCallType, id, now)
-	var readable FunctionRun
+	visible, problem := c.ReadRecord(protocol.FunctionCallType, id, now)
+	var readable protocol.FunctionRun
 	if problem != nil || json.Unmarshal(visible, &readable) != nil || readable.Withheld || readable.Output == "" {
 		return fail("The proposal and its current sources must be readable")
 	}
-	run, ok := platform.Get[FunctionRun](c, id)
+	run, ok := platform.Get[protocol.FunctionRun](c, id)
 	if !ok || run.State != "ready" || run.Contract.Proposal == nil || run.Decision != "pending" || run.Source != txn.Subject+"/"+r.GetSubmission().GetTarget().GetId() || run.Function != binding.Function.Name || cmp.Or(run.App, o.env.App()) != cmp.Or(binding.Function.App, o.env.App()) || binding.Function.Version != 0 && run.Version != binding.Function.Version {
 		return fail("The proposal is not pending for this action and source")
 	}
@@ -167,7 +176,7 @@ func (p *Proposal) Apply(entity platform.Entity, info platform.EntityInfo, chang
 			}
 		}
 		sources := append(slices.Clone(p.run.Sources), extra...)
-		sources = append(sources, FunctionCallType+"/"+p.run.ID+"#output")
+		sources = append(sources, protocol.FunctionCallType+"/"+p.run.ID+"#output")
 		slices.Sort(sources)
 		sources = slices.Compact(sources)
 		for field := range changed {

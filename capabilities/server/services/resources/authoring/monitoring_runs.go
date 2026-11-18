@@ -2,19 +2,19 @@ package build
 
 import (
 	"cmp"
-	functionauthoring "platformserver/services/functions/authoring"
+	"platformserver/kernel/protocol"
 	"time"
 
 	"platformserver/platform"
 	"platformserver/services/resources/monitoring"
 )
 
-func CodeRuns(r *monitoring.Runs, codes []functionauthoring.Code, compilations map[string]time.Time) {
+func CodeRuns(r *monitoring.Runs, codes []protocol.Code, compilations map[string]time.Time) {
 	for _, code := range codes {
 		if code.Call == "" {
 			continue
 		}
-		run := monitoring.MonitoringRun{Type: "build", Source: "code", ID: "code:" + code.ID, Title: code.Title, ResourceRef: &platform.AssetRef{App: ID, Kind: platform.AssetCompute, Name: code.Name}, RecordRef: functionauthoring.CodeType + "/" + code.ID, When: code.Changed.At, Status: "unknown", OwnerStatus: code.State}
+		run := monitoring.MonitoringRun{Type: "build", Source: "code", ID: "code:" + code.ID, Title: code.Title, ResourceRef: &platform.AssetRef{App: ID, Kind: platform.AssetCompute, Name: code.Name}, RecordRef: protocol.CodeType + "/" + code.ID, When: code.Changed.At, Status: "unknown", OwnerStatus: code.State}
 		if at, known := compilations[code.Call]; known {
 			run.When = at
 		}
@@ -26,14 +26,14 @@ func CodeRuns(r *monitoring.Runs, codes []functionauthoring.Code, compilations m
 		case "failed":
 			run.Status = "failed"
 			if !code.Archived {
-				r.Retry(&run, functionauthoring.SchemaCodeCompile, functionauthoring.CodeType, code.ID, "rerun")
+				r.Retry(&run, protocol.SchemaCodeCompile, protocol.CodeType, code.ID, "rerun")
 			}
 		}
 		r.Add(run)
 	}
 }
 
-func FunctionRuns(r *monitoring.Runs, functions []functionauthoring.FunctionRun) {
+func FunctionRuns(r *monitoring.Runs, functions []protocol.FunctionRun) {
 	for _, function := range functions {
 		status := "unknown"
 		switch function.State {
@@ -44,6 +44,6 @@ func FunctionRuns(r *monitoring.Runs, functions []functionauthoring.FunctionRun)
 		case "rejected":
 			status = "failed"
 		}
-		r.Add(monitoring.MonitoringRun{Type: "function", Source: "function", ID: "function:" + function.ID, Title: function.Function, ResourceRef: &platform.AssetRef{App: cmp.Or(function.App, ID), Kind: platform.AssetFunction, Name: function.Function}, RecordRef: functionauthoring.FunctionCallType + "/" + function.ID, When: function.Created.At, Status: status, OwnerStatus: function.State})
+		r.Add(monitoring.MonitoringRun{Type: "function", Source: "function", ID: "function:" + function.ID, Title: function.Function, ResourceRef: &platform.AssetRef{App: cmp.Or(function.App, ID), Kind: platform.AssetFunction, Name: function.Function}, RecordRef: protocol.FunctionCallType + "/" + function.ID, When: function.Created.At, Status: status, OwnerStatus: function.State})
 	}
 }

@@ -11,7 +11,6 @@ import (
 	actioncatalog "platformserver/services/actions/catalog"
 	dataowner "platformserver/services/data"
 	devopsmodel "platformserver/services/devops/descriptor"
-	functionauthoring "platformserver/services/functions/authoring"
 	ontology "platformserver/services/ontology"
 	branchowner "platformserver/services/resources/merge/owner"
 	"platformserver/services/resources/publication"
@@ -44,7 +43,7 @@ type Build struct {
 	objectPublication         func(ontology.ObjectPublicationEnvironment) publication.Hooks
 	queryFactory              func(publication.QueryAuthoringEnvironment) publication.QueryAuthoringBinding
 	queries                   publication.QueryAuthoringBinding
-	functionFactory           func(functionauthoring.Environment) *functionauthoring.Owner
+	functionFactory           func(publication.FunctionEnvironment) publication.FunctionAuthoring
 	agentFactory              func(platform.AgentAuthoringEnvironment) platform.AgentAuthoringBinding
 	agent                     platform.AgentAuthoringBinding
 	testPlanFactory           func(testPlanEnvironment, evaluationPublication) testPlanPublication
@@ -73,14 +72,14 @@ type Build struct {
 	valueTypes                map[string]ontology.ValueType
 	objectTypeGroups          map[string]ontology.ObjectTypeGroup
 	interfaces                map[string]ontology.InterfaceRecord
-	functions                 *functionauthoring.Owner
+	functions                 publication.FunctionAuthoring
 	apps                      publication.ApplicationAuthoring
 	application               ApplicationOwners
 }
 
-type testPlanEnvironment = devopsmodel.TestPlanEnvironment[functionauthoring.Function]
-type evaluationPublication = devopsmodel.EvaluationPublication[ontology.Object, runtimeprotocol.Process, functionauthoring.Function]
-type testPlanPublication = devopsmodel.TestPlanPublication[ontology.Object, runtimeprotocol.Process, functionauthoring.Function]
+type testPlanEnvironment = devopsmodel.TestPlanEnvironment[runtimeprotocol.Function]
+type evaluationPublication = devopsmodel.EvaluationPublication[ontology.Object, runtimeprotocol.Process, runtimeprotocol.Function]
+type testPlanPublication = devopsmodel.TestPlanPublication[ontology.Object, runtimeprotocol.Process, runtimeprotocol.Function]
 
 func (b *Build) bindPublications() {
 	object := b.objectPublication(ontology.ObjectPublicationEnvironment{
@@ -146,7 +145,7 @@ func (b *Build) AttachOwner(bindings runtimeprotocol.OwnerBindings) {
 	b.AttachFiles(bindings.Files)
 }
 
-func New(tenant string, authorities platform.Authorities, publications []publication.Hooks, resolver publication.Resolver, objectPublication func(ontology.ObjectPublicationEnvironment) publication.Hooks, queryFactory func(publication.QueryAuthoringEnvironment) publication.QueryAuthoringBinding, functionFactory func(functionauthoring.Environment) *functionauthoring.Owner, agentFactory func(platform.AgentAuthoringEnvironment) platform.AgentAuthoringBinding, functionEvaluationFactory func(publication.FunctionEvaluationEnvironment) publication.FunctionEvaluationBinding, testPlanFactory func(testPlanEnvironment, evaluationPublication) testPlanPublication, evaluationSetFactory func(testPlanEnvironment) evaluationPublication, sampleSetFactory func(devopsmodel.SampleSetEnvironment) devopsmodel.SampleSetPublication, application ApplicationOwners, automationFactory func(publication.AutomationEnvironment, publication.Resolver) publication.AutomationAuthoring) *Build {
+func New(tenant string, authorities platform.Authorities, publications []publication.Hooks, resolver publication.Resolver, objectPublication func(ontology.ObjectPublicationEnvironment) publication.Hooks, queryFactory func(publication.QueryAuthoringEnvironment) publication.QueryAuthoringBinding, functionFactory func(publication.FunctionEnvironment) publication.FunctionAuthoring, agentFactory func(platform.AgentAuthoringEnvironment) platform.AgentAuthoringBinding, functionEvaluationFactory func(publication.FunctionEvaluationEnvironment) publication.FunctionEvaluationBinding, testPlanFactory func(testPlanEnvironment, evaluationPublication) testPlanPublication, evaluationSetFactory func(testPlanEnvironment) evaluationPublication, sampleSetFactory func(devopsmodel.SampleSetEnvironment) devopsmodel.SampleSetPublication, application ApplicationOwners, automationFactory func(publication.AutomationEnvironment, publication.Resolver) publication.AutomationAuthoring) *Build {
 	b := &Build{resolver: resolver, publicationBase: slices.Clone(publications), objectPublication: objectPublication, queryFactory: queryFactory, functionFactory: functionFactory, agentFactory: agentFactory, functionEvaluationFactory: functionEvaluationFactory, testPlanFactory: testPlanFactory, evaluationSetFactory: evaluationSetFactory, sampleSetFactory: sampleSetFactory, installed: map[string]platform.Entity{}, linkTypes: map[string]ontology.LinkType{}, propertyTypes: map[string]ontology.PropertyType{}, valueTypes: map[string]ontology.ValueType{}, objectTypeGroups: map[string]ontology.ObjectTypeGroup{}, interfaces: map[string]ontology.InterfaceRecord{}}
 	b.queries = b.queryFactory(b.queryEnvironment())
 	b.data = dataowner.New(buildDataHost{b}, resolver)
@@ -176,7 +175,7 @@ func New(tenant string, authorities platform.Authorities, publications []publica
 	actions = append(actions, actioncatalog.EntityActions(b.queries.Entity())...)
 	actions = append(actions, actioncatalog.EntityActions(interfaceKind.entity(b))...)
 	actions = append(actions, b.evaluations.Actions()...)
-	actions = append(actions, actioncatalog.EntityActions(functionauthoring.CodeEntity())...)
+	actions = append(actions, actioncatalog.EntityActions(b.functions.CodeEntity())...)
 	actions = append(actions, b.data.Actions()...)
 	actions = append(actions, b.branches.Actions()...)
 	for _, entity := range b.resourceEntities() {
@@ -188,12 +187,12 @@ func New(tenant string, authorities platform.Authorities, publications []publica
 	actions = append(actions, actioncatalog.EntityActions(b.functions.TableEntity())...)
 	actions = append(actions, actioncatalog.EntityActions(b.agent.Entity())...)
 	actions = append(actions, actioncatalog.EntityActions(b.sampleSets.Entity())...)
-	actions = append(actions, functionauthoring.CodeActions()...)
+	actions = append(actions, b.functions.CodeActions()...)
 	actions = append(actions, actioncatalog.EntityActions(b.productEntity())...)
 	actions = append(actions, devopsmodel.ProductVersionActions()...)
 	actions = append(actions, platform.Action{Schema: SchemaEvaluationSetPublish, Target: TestPlanType, Title: "Publish test plan", Description: "Freeze a portable business scenario or the evaluation cases for one function version.", Capability: "objects", Roles: []string{Builder}, Payload: []platform.Field{}})
 	actions = resourceActions(actions)
-	classes := []string{ObjectType, ActionTypeType, runtimeprotocol.PageType, runtimeprotocol.AppType, TestPlanType, runtimeprotocol.ProcessType, functionauthoring.FunctionType, PropertyTypeType, ValueTypeType, ObjectTypeGroupType, LinkTypeType, b.queries.Entity().Type, InterfaceType, functionauthoring.FunctionCallType, b.evaluations.Entity().Type, functionauthoring.CodeType, functionauthoring.TableType, AgentType, SampleSetType, BranchType, ResourceType, FolderType, WorkingStateType, ProductType, ProductVersionType, platform.OwnedRelationType(ID), platform.ConfirmationType, platform.DispatchType}
+	classes := []string{ObjectType, ActionTypeType, runtimeprotocol.PageType, runtimeprotocol.AppType, TestPlanType, runtimeprotocol.ProcessType, runtimeprotocol.FunctionType, PropertyTypeType, ValueTypeType, ObjectTypeGroupType, LinkTypeType, b.queries.Entity().Type, InterfaceType, runtimeprotocol.FunctionCallType, b.evaluations.Entity().Type, runtimeprotocol.CodeType, runtimeprotocol.TableType, AgentType, SampleSetType, BranchType, ResourceType, FolderType, WorkingStateType, ProductType, ProductVersionType, platform.OwnedRelationType(ID), platform.ConfirmationType, platform.DispatchType}
 	classes = append(classes, b.data.Types()...)
 	b.authorities = authorities
 	b.ledger = authorities(tenant, ID, platform.NewCatalog(actions...), classes...)
@@ -224,7 +223,7 @@ func (b *Build) Manifest() platform.Manifest {
 	if b.installationCatalog != nil {
 		catalog = b.installationCatalog
 	}
-	entities := []platform.Entity{platform.RelationEntity(ID), b.objectEntity(), b.actionTypeEntity(), b.apps.PageEntity(), b.apps.ApplicationEntity(), b.testPlanEntity(), b.automation.ProcessEntity(), propertyKind.entity(b), valueKind.entity(b), b.objectTypeGroupEntity(), linkKind.entity(b), b.queries.Entity(), interfaceKind.entity(b), b.functions.Entity(), b.functions.CallEntity(), b.evaluations.Entity(), b.agent.Entity(), functionauthoring.CodeEntity(), b.functions.TableEntity(), b.sampleSets.Entity(), b.branchEntity(), b.data.ConfirmationEntity(), b.data.DispatchEntity(), b.productEntity(), b.productVersionEntity()}
+	entities := []platform.Entity{platform.RelationEntity(ID), b.objectEntity(), b.actionTypeEntity(), b.apps.PageEntity(), b.apps.ApplicationEntity(), b.testPlanEntity(), b.automation.ProcessEntity(), propertyKind.entity(b), valueKind.entity(b), b.objectTypeGroupEntity(), linkKind.entity(b), b.queries.Entity(), interfaceKind.entity(b), b.functions.Entity(), b.functions.CallEntity(), b.evaluations.Entity(), b.agent.Entity(), b.functions.CodeEntity(), b.functions.TableEntity(), b.sampleSets.Entity(), b.branchEntity(), b.data.ConfirmationEntity(), b.data.DispatchEntity(), b.productEntity(), b.productVersionEntity()}
 	entities = append(entities, b.data.Entities()...)
 	entities = append(entities, b.resourceEntities()...)
 	entities = append(entities, workingStateEntity())
@@ -345,8 +344,8 @@ func (b *Build) checkDefinitionArchive(c platform.Caller, typ, id string) *platf
 	case InterfaceType:
 		record, _ := platform.Get[ontology.InterfaceRecord](c, id)
 		published = record.Published != ""
-	case functionauthoring.FunctionType:
-		record, _ := platform.Get[functionauthoring.Function](c, id)
+	case runtimeprotocol.FunctionType:
+		record, _ := platform.Get[runtimeprotocol.Function](c, id)
 		published = record.Published != ""
 	case AgentType:
 		published = b.agent.Published(c, id)
@@ -429,7 +428,7 @@ func (b *Build) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb.
 	if slices.Contains([]string{platform.DispatchAnswerSchema, platform.DispatchReviewSchema, platform.DispatchTickSchema}, s.GetSchema().GetName()) {
 		return b.data.UpdateDispatch(c, s, now)
 	}
-	if name := s.GetSchema().GetName(); name == functionauthoring.SchemaProposalReview || name == functionauthoring.SchemaFunctionCall || name == functionauthoring.SchemaFunctionAnswer {
+	if name := s.GetSchema().GetName(); name == runtimeprotocol.SchemaProposalReview || name == runtimeprotocol.SchemaFunctionCall || name == runtimeprotocol.SchemaFunctionAnswer {
 		return b.functions.Submit(c, s, now)
 	}
 	if s.GetSchema().GetName() == SchemaEvaluationSetPublish {
@@ -441,7 +440,7 @@ func (b *Build) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb.
 	if name := s.GetSchema().GetName(); b.evaluations.Handles(name) {
 		return b.evaluations.Submit(c, s, now)
 	}
-	if typ, archive := strings.CutSuffix(s.GetSchema().GetName(), ".archive"); archive && !c.Replaying && slices.Contains([]string{ObjectType, runtimeprotocol.PageType, runtimeprotocol.AppType, PropertyTypeType, ValueTypeType, ObjectTypeGroupType, LinkTypeType, QueryType, InterfaceType, functionauthoring.FunctionType, AgentType, TestPlanType, SampleSetType, dataowner.ObservationType, ProductType}, typ) {
+	if typ, archive := strings.CutSuffix(s.GetSchema().GetName(), ".archive"); archive && !c.Replaying && slices.Contains([]string{ObjectType, runtimeprotocol.PageType, runtimeprotocol.AppType, PropertyTypeType, ValueTypeType, ObjectTypeGroupType, LinkTypeType, QueryType, InterfaceType, runtimeprotocol.FunctionType, AgentType, TestPlanType, SampleSetType, dataowner.ObservationType, ProductType}, typ) {
 		if err := b.checkDefinitionArchive(c, typ, s.GetTarget().GetId()); err != nil {
 			return nil, err
 		}

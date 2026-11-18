@@ -7,7 +7,6 @@ import (
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformserver/kernel/protocol"
 	devopsmodel "platformserver/services/devops/descriptor"
-	functionauthoring "platformserver/services/functions/authoring"
 	releasepub "platformserver/services/resources/publication"
 
 	"platformserver/platform"
@@ -140,4 +139,4 @@ func (b *Build) checkTestPlan(c platform.Caller, s *pb.Submission) *platform.Err
 
 const TestPlanType = "build.testplan"
 
-type TestPlan = devopsmodel.TestPlan[ontology.Object, protocol.Process, functionauthoring.Function]
+type TestPlan = devopsmodel.TestPlan[ontology.Object, protocol.Process, protocol.Function]

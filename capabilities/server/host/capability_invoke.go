@@ -3,6 +3,7 @@ package host
 import (
 	"context"
 	"encoding/json"
+	"platformserver/kernel/protocol"
 	"platformserver/services/apps/pages"
 	"time"
 
@@ -45,8 +46,7 @@ func (t *Tenant) InvokeCapability(ctx context.Context, m platform.Member, q plat
 		}
 		return functions.ActionAnswer(answer, record), nil
 	case "compute":
-		inputs, sources := prepared.Inputs, prepared.Sources
-		call, err := t.InvokeOperation(m, platform.OperationRequest{App: q.Ref.App, Name: q.Ref.Name, Version: q.Version, Key: q.Key, Inputs: inputs, Sources: sources}, now)
+		call, err := t.InvokeOperation(m, platform.OperationRequest{App: q.Ref.App, Name: q.Ref.Name, Version: q.Version, Key: q.Key, Inputs: prepared.Inputs, Sources: prepared.Sources}, now)
 		answer.State, answer.Call = "pending", call.ID
 		return answer, err
 	case "ai":
@@ -55,7 +55,7 @@ func (t *Tenant) InvokeCapability(ctx context.Context, m platform.Member, q plat
 			return answer, refusal
 		}
 		s := &pb.Submission{TenantId: t.ID, PrincipalId: m.ID, Authority: build.ID, IdempotencyKey: q.Key,
-			Target: &pb.EntityRef{Type: functions.FunctionCallType, Id: q.Key}, Schema: &pb.SchemaRef{Name: functions.SchemaFunctionCall, Version: 1}, Payload: payload}
+			Target: &pb.EntityRef{Type: protocol.FunctionCallType, Id: q.Key}, Schema: &pb.SchemaRef{Name: protocol.SchemaFunctionCall, Version: 1}, Payload: payload}
 		_, err := t.Submit(m, s, now)
 		answer.State, answer.Call = "pending", q.Key
 		return answer, err

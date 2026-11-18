@@ -27,6 +27,6 @@
   },
   "exceptions": {
     "services/data": ["services/ontology"],
-    "services/resources": ["services/data", "services/functions/authoring", "services/ontology"]
+    "services/resources": ["services/data", "services/ontology"]
   }
 }

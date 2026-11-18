@@ -5,8 +5,8 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
+	"platformserver/kernel/protocol"
 	"platformserver/platform"
-	functionauthoring "platformserver/services/functions/authoring"
 	build "platformserver/services/resources/authoring"
 	"slices"
 	"strconv"
@@ -185,7 +185,7 @@ func KeptCodeBuild(previous BranchChange, touched bool, spec map[string]json.Raw
 	if json.Unmarshal(previous.Spec, &earlier) != nil || earlier[CodeBuildKey] == nil {
 		return nil
 	}
-	var artifact functionauthoring.CodeArtifact
+	var artifact protocol.CodeArtifact
 	authored, _ := json.Marshal(spec)
 	if json.Unmarshal(earlier[CodeBuildKey], &artifact) != nil || !artifact.Matches(authored) {
 		return nil
@@ -242,7 +242,7 @@ type Action struct {
 }
 
 func (a Action) Module() string {
-	var artifact functionauthoring.CodeArtifact
+	var artifact protocol.CodeArtifact
 	_ = json.Unmarshal(a.Artifact, &artifact)
 	return artifact.Module
 }

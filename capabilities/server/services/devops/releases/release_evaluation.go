@@ -4,9 +4,9 @@ import (
 	"encoding/json"
 	"fmt"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
+	"platformserver/kernel/protocol"
 	"platformserver/platform"
 	"platformserver/services/devops/descriptor"
-	functionauthoring "platformserver/services/functions/authoring"
 	"platformserver/services/resources/authoring"
 	"strconv"
 	"strings"
@@ -27,7 +27,7 @@ type ReleaseEvaluationStarted struct {
 type EvaluationHooks struct {
 	Candidate      func(id string) (platform.ReleaseCandidate, error)
 	Plan           func(id string) (descriptor.FunctionEvaluationPlan, bool)
-	Function       func(id string) (functionauthoring.Function, bool)
+	Function       func(id string) (protocol.Function, bool)
 	BuilderVersion func() string
 	AppModel       func() string
 	HasProvider    func() bool
@@ -54,9 +54,9 @@ func EvaluationPlan(c platform.Caller) func(string) (descriptor.FunctionEvaluati
 	}
 }
 
-func EvaluationFunction(c platform.Caller) func(string) (functionauthoring.Function, bool) {
-	return func(id string) (functionauthoring.Function, bool) {
-		return platform.Get[functionauthoring.Function](c, id)
+func EvaluationFunction(c platform.Caller) func(string) (protocol.Function, bool) {
+	return func(id string) (protocol.Function, bool) {
+		return platform.Get[protocol.Function](c, id)
 	}
 }
 

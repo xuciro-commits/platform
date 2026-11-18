@@ -4,7 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	functionauthoring "platformserver/services/functions/authoring"
+	"platformserver/kernel/protocol"
 	"slices"
 	"strconv"
 	"time"
@@ -319,7 +319,7 @@ type CompileHooks struct {
 }
 
 func (h CompileHooks) Compile(m platform.Member, id, typ, draft string, now time.Time) (BranchDetail, *platform.Error) {
-	if typ != functionauthoring.CodeType {
+	if typ != protocol.CodeType {
 		return BranchDetail{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Only a code function compiles")
 	}
 	branch, refusal := h.openBranch(m, id, now)
@@ -339,7 +339,7 @@ func (h CompileHooks) Compile(m platform.Member, id, typ, draft string, now time
 	if result.SourceHash != expected.SourceHash || result.BuildHash != expected.BuildHash {
 		return BranchDetail{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The compiler answered for different source or schemas")
 	}
-	artifact := functionauthoring.CodeArtifact{Module: result.Module, SourceHash: result.SourceHash, BuildHash: result.BuildHash, Toolchain: result.Toolchain}
+	artifact := protocol.CodeArtifact{Module: result.Module, SourceHash: result.SourceHash, BuildHash: result.BuildHash, Toolchain: result.Toolchain}
 	branch, refusal = h.openBranch(m, id, now)
 	if refusal != nil {
 		return BranchDetail{}, refusal
@@ -376,28 +376,28 @@ func (h CompileHooks) openBranch(m platform.Member, id string, now time.Time) (B
 	return branch, nil
 }
 
-func (h CompileHooks) codeSource(m platform.Member, branch Branch, draft string, now time.Time) (platform.CodeBuildRequest, functionauthoring.CodeArtifact, json.RawMessage, *platform.Error) {
+func (h CompileHooks) codeSource(m platform.Member, branch Branch, draft string, now time.Time) (platform.CodeBuildRequest, protocol.CodeArtifact, json.RawMessage, *platform.Error) {
 	none := platform.CodeBuildRequest{}
-	current, refusal := h.Main(m, functionauthoring.CodeType, draft, now)
+	current, refusal := h.Main(m, protocol.CodeType, draft, now)
 	if refusal != nil {
-		return none, functionauthoring.CodeArtifact{}, nil, refusal
+		return none, protocol.CodeArtifact{}, nil, refusal
 	}
-	spec, _ := EffectiveSpec(branch, functionauthoring.CodeType, draft)
-	if _, touched := branch.Latest(functionauthoring.CodeType, draft); !touched {
+	spec, _ := EffectiveSpec(branch, protocol.CodeType, draft)
+	if _, touched := branch.Latest(protocol.CodeType, draft); !touched {
 		spec = current.Spec
 	}
 	if spec == nil {
-		return none, functionauthoring.CodeArtifact{}, nil, Refuse("{resource} does not exist", functionauthoring.CodeType+"/"+draft)
+		return none, protocol.CodeArtifact{}, nil, Refuse("{resource} does not exist", protocol.CodeType+"/"+draft)
 	}
 	var fields map[string]json.RawMessage
 	if json.Unmarshal(spec, &fields) != nil {
-		return none, functionauthoring.CodeArtifact{}, nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The code spec is unreadable")
+		return none, protocol.CodeArtifact{}, nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The code spec is unreadable")
 	}
 	delete(fields, CodeBuildKey)
 	authored, _ := json.Marshal(fields)
-	request, expected, bad := functionauthoring.CodeBuildOf(authored)
+	request, expected, bad := protocol.CodeBuildOf(authored)
 	if bad != nil {
-		return none, functionauthoring.CodeArtifact{}, nil, bad
+		return none, protocol.CodeArtifact{}, nil, bad
 	}
 	return request, expected, authored, nil
 }

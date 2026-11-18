@@ -14,7 +14,6 @@ import (
 	agentevaluation "platformserver/services/ai/evaluation"
 	"platformserver/services/devops/descriptor"
 	releaseowner "platformserver/services/devops/releases"
-	functionauthoring "platformserver/services/functions/authoring"
 	"platformserver/services/ontology"
 	build "platformserver/services/resources/authoring"
 )
@@ -32,8 +31,8 @@ func TestInvariantK1FunctionAuthoringPublishesEvaluatesReviewsAndReplays(t *test
 			"maxInputBytes": 1024, "maxOutputBytes": 1024, "maxTokens": 100,
 		}
 	}
-	live.accept(t, "build.function.create", functionauthoring.FunctionType, "FUNCTION", declaration("Return the original answer."))
-	live.accept(t, "build.function.publish", functionauthoring.FunctionType, "FUNCTION", map[string]any{})
+	live.accept(t, "build.function.create", protocol.FunctionType, "FUNCTION", declaration("Return the original answer."))
+	live.accept(t, "build.function.publish", protocol.FunctionType, "FUNCTION", map[string]any{})
 	live.accept(t, "build.agent.create", build.AgentType, "AGENT", map[string]any{
 		"name": "helper", "title": "Builder helper", "description": "Builds a small business application",
 		"instructions": "Inspect the goal, propose the next step and finish with the result.",
@@ -49,7 +48,7 @@ func TestInvariantK1FunctionAuthoringPublishesEvaluatesReviewsAndReplays(t *test
 	if err != nil {
 		t.Fatal(err)
 	}
-	live.accept(t, "build.function.edit", functionauthoring.FunctionType, "FUNCTION", map[string]any{"instructions": "Return the revised answer."})
+	live.accept(t, "build.function.edit", protocol.FunctionType, "FUNCTION", map[string]any{"instructions": "Return the revised answer."})
 	live.accept(t, "build.agent.edit", build.AgentType, "AGENT", map[string]any{"instructions": "Ask before the final step, then finish with the result."})
 
 	preview, err := owner.DraftReleaseAssetsMulti([]build.JointDraftRef{
@@ -78,7 +77,7 @@ func TestInvariantK1FunctionAuthoringPublishesEvaluatesReviewsAndReplays(t *test
 	if agentCandidate.SourceVersion != "1.agent-2" || json.Unmarshal(agentCandidate.Body, &nextAgent) != nil || nextAgent.Instructions != "Ask before the final step, then finish with the result." {
 		t.Fatalf("agent draft lost the edited version: %+v", agentCandidate)
 	}
-	live.accept(t, "build.function.publish", functionauthoring.FunctionType, "FUNCTION", map[string]any{})
+	live.accept(t, "build.function.publish", protocol.FunctionType, "FUNCTION", map[string]any{})
 	live.accept(t, "build.agent.publish", build.AgentType, "AGENT", map[string]any{})
 
 	functionVersion := func(app platform.App, version, expected int, instructions string) {
@@ -116,7 +115,7 @@ func TestInvariantK1FunctionAuthoringPublishesEvaluatesReviewsAndReplays(t *test
 	policy := platform.EvaluationPolicy{MinQuality: 1, MaxCostUSD: 1, MaxLatencyMillis: 1000, Cases: []platform.EvaluationCase{{Name: "case", Input: json.RawMessage(`{"note":"ready"}`), Expected: json.RawMessage(`{"answer":"ok"}`)}}}
 	live.accept(t, "build.testplan.create", build.TestPlanType, "PLAN", map[string]any{
 		"variant": "evaluation-set", "name": "answerquality", "title": "Answer quality", "function": "FUNCTION", "functionVersion": 1, "at": "2000-01-01T00:00:00Z",
-		"steps":      []platform.TestStep{{Type: functionauthoring.FunctionCallType, ID: "evaluation", Action: functionauthoring.SchemaFunctionCall, Payload: "{}", Expect: "accepted"}},
+		"steps":      []platform.TestStep{{Type: protocol.FunctionCallType, ID: "evaluation", Action: protocol.SchemaFunctionCall, Payload: "{}", Expect: "accepted"}},
 		"evaluation": []platform.EvaluationPolicy{policy},
 	})
 	live.accept(t, "build.testplan.publish", build.TestPlanType, "PLAN", map[string]any{})
@@ -199,7 +198,7 @@ func TestInvariantK1FunctionAuthoringPublishesEvaluatesReviewsAndReplays(t *test
 					return platform.CanonicalDigest(plan)
 				}}, true
 		},
-		Function:       func(string) (functionauthoring.Function, bool) { return functionauthoring.Function{}, false },
+		Function:       func(string) (protocol.Function, bool) { return protocol.Function{}, false },
 		BuilderVersion: func() string { return "1" },
 		AppModel:       func() string { return "test-model" },
 		HasProvider:    func() bool { return true },
@@ -308,11 +307,11 @@ func TestInvariantK1FunctionAuthoringPublishesEvaluatesReviewsAndReplays(t *test
 
 	member := replayed.member(t)
 	store := replayed.Projection
-	entity := store.Type(functionauthoring.FunctionCallType)
+	entity := store.Type(protocol.FunctionCallType)
 	if entity == nil {
 		t.Fatal("function call entity is unavailable")
 	}
-	run := functionauthoring.FunctionRun{
+	run := protocol.FunctionRun{
 		Record: platform.Record{ID: "PROPOSAL"},
 		App:    build.ID, Function: "answer", Version: 2, Member: member.ID, State: "ready", Decision: "pending",
 		ExpiresAt: invariantClock.Add(time.Hour), Output: `{"answer":"ok"}`,
@@ -324,20 +323,20 @@ func TestInvariantK1FunctionAuthoringPublishesEvaluatesReviewsAndReplays(t *test
 	entity.SetRow(run.ID, &records.Row{Value: value})
 	store.Unlock()
 	replayed.invalidateReadImage()
-	seeded, refusal := replayed.RecordOf(t.Context(), member, functionauthoring.FunctionCallType, run.ID, invariantClock)
+	seeded, refusal := replayed.RecordOf(t.Context(), member, protocol.FunctionCallType, run.ID, invariantClock)
 	if refusal != nil {
 		t.Fatalf("seed proposal: %v", refusal)
 	}
-	seededRun, ok := seeded.Record.(functionauthoring.FunctionRun)
+	seededRun, ok := seeded.Record.(protocol.FunctionRun)
 	if !ok || seededRun.Contract.Proposal == nil || seededRun.State != "ready" || seededRun.Decision != "pending" || seededRun.Member != member.ID {
 		t.Fatalf("seeded proposal differs: %+v", seededRun)
 	}
-	replayed.accept(t, functionauthoring.SchemaProposalReview, functionauthoring.FunctionCallType, run.ID, map[string]any{"decision": "rejected"})
-	view, refusal := replayed.RecordOf(t.Context(), member, functionauthoring.FunctionCallType, run.ID, invariantClock)
+	replayed.accept(t, protocol.SchemaProposalReview, protocol.FunctionCallType, run.ID, map[string]any{"decision": "rejected"})
+	view, refusal := replayed.RecordOf(t.Context(), member, protocol.FunctionCallType, run.ID, invariantClock)
 	if refusal != nil {
 		t.Fatal(refusal)
 	}
-	reviewed, ok := view.Record.(functionauthoring.FunctionRun)
+	reviewed, ok := view.Record.(protocol.FunctionRun)
 	if !ok || reviewed.Decision != "rejected" || reviewed.DecidedBy != member.ID {
 		t.Fatalf("proposal review was not retained: %+v", reviewed)
 	}

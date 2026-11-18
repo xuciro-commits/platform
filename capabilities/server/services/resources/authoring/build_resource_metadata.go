@@ -3,7 +3,6 @@ package build
 import (
 	"fmt"
 	"platformserver/kernel/protocol"
-	functionauthoring "platformserver/services/functions/authoring"
 	"slices"
 
 	"platformserver/platform"
@@ -117,11 +116,11 @@ var resourceDescriptors = []resourceDescriptor{
 		},
 	},
 	{
-		app: ID, typ: functionauthoring.CodeType, kind: platform.AssetCompute, family: versionedResources, released: true, defaultDraft: true, directInstall: true, acceptedPublication: true,
+		app: ID, typ: protocol.CodeType, kind: platform.AssetCompute, family: versionedResources, released: true, defaultDraft: true, directInstall: true, acceptedPublication: true,
 		presentations: []resourcePresentation{presented("compute", "code", "Code function", "Code functions", 17)},
 	},
 	{
-		app: ID, typ: functionauthoring.TableType, kind: platform.AssetCompute, family: versionedResources, released: true, defaultDraft: true, directInstall: true, acceptedPublication: true,
+		app: ID, typ: protocol.TableType, kind: platform.AssetCompute, family: versionedResources, released: true, defaultDraft: true, directInstall: true, acceptedPublication: true,
 		presentations: []resourcePresentation{withReleaseKind(presented("table", "decision-table", "Decision table", "Decision tables", 18), "table")},
 	},
 	{
@@ -201,7 +200,7 @@ var resourceDescriptors = []resourceDescriptor{
 		presentations: []resourcePresentation{presented("interface", "interfaces", "Interface", "Interfaces", 8)},
 	},
 	{
-		app: ID, typ: functionauthoring.FunctionType, kind: platform.AssetFunction, family: definitionResources, released: true, defaultDraft: true, directInstall: true, acceptedPublication: true,
+		app: ID, typ: protocol.FunctionType, kind: platform.AssetFunction, family: definitionResources, released: true, defaultDraft: true, directInstall: true, acceptedPublication: true,
 		presentations: []resourcePresentation{presented("function", "function", "AI function", "AI functions", 13)},
 	},
 	{

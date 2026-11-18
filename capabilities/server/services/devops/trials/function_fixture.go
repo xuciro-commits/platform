@@ -3,11 +3,11 @@ package trials
 import (
 	"encoding/json"
 	"fmt"
+	"platformserver/kernel/protocol"
 	"strings"
 
 	acceptedformat "platformserver/kernel/acceptedformat"
 	"platformserver/platform"
-	functionauthoring "platformserver/services/functions/authoring"
 )
 
 type FunctionCall struct {
@@ -41,7 +41,7 @@ func (h FunctionFixtureHooks) Apply(actor platform.Member, fixture platform.Func
 		return false, err
 	}
 	kind, id, ok := strings.Cut(pending[0].Record, "/")
-	if !ok || kind != functionauthoring.FunctionCallType {
+	if !ok || kind != protocol.FunctionCallType {
 		return false, fmt.Errorf("fixture reply is not a builder function call")
 	}
 	state, output, found := h.Run(actor, kind, id)

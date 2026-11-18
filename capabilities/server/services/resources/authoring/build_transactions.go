@@ -86,14 +86,6 @@ func (b *Build) CanonicalObject(object ontology.Object) (ontology.Object, error)
 func (b *Build) businessRuntime() platform.TransactionExecutor {
 	return b.host.TransactionRuntime(platform.BusinessRuntimeContext{App: ID, Entities: b.installed, Ledger: b.ledger, Lookup: b.conditionLookup, Link: b.transactionLink, Dispatch: b.data.OpenDispatch, Confirm: b.data.OpenConfirmation,
 		Prepare: func(c platform.Caller, r *pb.ChangeRecord, txn *platform.BusinessTxn, now time.Time) (platform.TransactionProposal, *platform.Error) {
-			p, err := b.functions.PrepareProposal(c, r, txn, b.installed[txn.Subject], now)
-			if err != nil {
-				return platform.TransactionProposal{}, err
-			}
-			return platform.TransactionProposal{Apply: func(entity platform.Entity, info platform.EntityInfo, patch map[string]any, sources []string) (platform.Entity, map[string]any) {
-				return p.Apply(entity, info, patch, sources)
-			}, Finish: func(c platform.Caller, r *pb.ChangeRecord, now time.Time) *platform.Error {
-				return p.Finish(c, r, now)
-			}}, nil
+			return b.functions.PrepareProposal(c, r, txn, b.installed[txn.Subject], now)
 		}, Effect: b.data.TransactionEffect})
 }

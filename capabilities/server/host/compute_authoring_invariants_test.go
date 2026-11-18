@@ -3,6 +3,7 @@ package host
 import (
 	"bytes"
 	"encoding/json"
+	"platformserver/kernel/protocol"
 	"slices"
 	"testing"
 
@@ -14,12 +15,12 @@ import (
 
 func TestInvariantK1ComputeAuthoringRetainsVersions(t *testing.T) {
 	live := newInvariantTenant(t, "invariant-compute-authoring")
-	live.accept(t, "build.table.create", functionauthoring.TableType, "TABLE", map[string]any{
+	live.accept(t, "build.table.create", protocol.TableType, "TABLE", map[string]any{
 		"name": "sizing", "title": "Sizing", "inputs": []functionauthoring.TableColumn{{Name: "amount", Type: "number"}},
 		"outputs": []functionauthoring.TableColumn{{Name: "result", Type: "text"}},
 		"rows":    []functionauthoring.TableRow{{When: []string{">=10"}, Then: []string{"large"}}}, "default": []string{"small"},
 	})
-	live.accept(t, "build.table.publish", functionauthoring.TableType, "TABLE", map[string]any{})
+	live.accept(t, "build.table.publish", protocol.TableType, "TABLE", map[string]any{})
 	owner := live.App(build.ID).(*build.Build)
 	ledger, err := owner.Authority().ForkRead()
 	if err != nil {
@@ -32,7 +33,7 @@ func TestInvariantK1ComputeAuthoringRetainsVersions(t *testing.T) {
 	apps := slices.Clone(live.apps)
 	apps[live.appIndex[build.ID]] = fork
 	forkView := &Tenant{ownerSet: live.with(apps)}
-	live.accept(t, "build.table.edit", functionauthoring.TableType, "TABLE", map[string]any{"title": "Sizing v2"})
+	live.accept(t, "build.table.edit", protocol.TableType, "TABLE", map[string]any{"title": "Sizing v2"})
 	preview, err := owner.DraftReleaseAssetsMulti([]build.JointDraftRef{{Kind: platform.AssetCompute, ID: "TABLE"}}, live.member(t), false)
 	if err != nil {
 		t.Fatal(err)
@@ -48,7 +49,7 @@ func TestInvariantK1ComputeAuthoringRetainsVersions(t *testing.T) {
 	if candidate.SourceVersion != "1.compute-2" || json.Unmarshal(candidate.Body, &candidateOperation) != nil || candidateOperation.Title != "Sizing v2" {
 		t.Fatalf("candidate lost the edited table: %+v", candidate)
 	}
-	live.accept(t, "build.table.publish", functionauthoring.TableType, "TABLE", map[string]any{})
+	live.accept(t, "build.table.publish", protocol.TableType, "TABLE", map[string]any{})
 
 	operation := func(view *Tenant, requested, expected int, title string) platform.Operation {
 		t.Helper()
@@ -69,14 +70,14 @@ func TestInvariantK1ComputeAuthoringRetainsVersions(t *testing.T) {
 			t.Fatalf("archive %s/%s: %v", typ, id, refusal)
 		}
 	}
-	archive(functionauthoring.TableType, "TABLE")
-	live.accept(t, "build.code.create", functionauthoring.CodeType, "CODE", map[string]any{
+	archive(protocol.TableType, "TABLE")
+	live.accept(t, "build.code.create", protocol.CodeType, "CODE", map[string]any{
 		"name": "algorithm", "title": "Algorithm", "description": "A code function", "language": "go", "source": "package main\nfunc main() {}",
 		"input": platform.ValueSchema{Type: "string"}, "output": platform.ValueSchema{Type: "string"}, "roles": []string{build.Builder},
 		"limits": platform.OperationLimits{TimeoutMillis: 100, MemoryPages: 1, MaxInputBytes: 1024, MaxOutputBytes: 1024},
 	})
-	live.accept(t, "build.code.compile", functionauthoring.CodeType, "CODE", map[string]any{})
-	archive(functionauthoring.CodeType, "CODE")
+	live.accept(t, "build.code.compile", protocol.CodeType, "CODE", map[string]any{})
+	archive(protocol.CodeType, "CODE")
 
 	replay := live.restore(t, live.entries)
 	if restored := operation(replay.Tenant, 1, 1, "Sizing"); !bytes.Equal(platform.Raw(first), platform.Raw(restored)) {

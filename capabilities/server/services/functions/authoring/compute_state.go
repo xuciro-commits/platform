@@ -14,12 +14,12 @@ import (
 	"platformserver/services/resources/publication"
 )
 
-func (o *Owner) codeInventory() ([]Code, error) {
-	return publication.Inventory[Code](o.env.Host().Automation(platform.Caller{}, o.env.App()))
+func (o *Owner) codeInventory() ([]ruleprotocol.Code, error) {
+	return publication.Inventory[ruleprotocol.Code](o.env.Host().Automation(platform.Caller{}, o.env.App()))
 }
-func (o *Owner) installCode(c platform.Caller, code Code) error {
+func (o *Owner) installCode(c platform.Caller, code ruleprotocol.Code) error {
 	if code.Published != "" {
-		published, ok := publication.Read[Code](code.Published)
+		published, ok := publication.Read[ruleprotocol.Code](code.Published)
 		if !ok {
 			return fmt.Errorf("compute has no valid publication")
 		}
@@ -54,7 +54,7 @@ func (o *Owner) OperationDefinition(name string, version int) (platform.Operatio
 		if version < 1 || version > len(record.Versions) {
 			continue
 		}
-		prior, ok := publication.Read[Code](record.Versions[version-1])
+		prior, ok := publication.Read[ruleprotocol.Code](record.Versions[version-1])
 		if ok && prior.Name == name && prior.Version == version {
 			return prior.Definition(), version, true
 		}
@@ -72,7 +72,7 @@ func (o *Owner) OperationDeclarations() []platform.Operation {
 	return out
 }
 
-func (o *Owner) codeReleaseAsset(code Code, manifest string) (platform.ReleaseAsset, error) {
+func (o *Owner) codeReleaseAsset(code ruleprotocol.Code, manifest string) (platform.ReleaseAsset, error) {
 	raw, err := json.Marshal(code.Definition())
 	if err != nil {
 		return platform.ReleaseAsset{}, err

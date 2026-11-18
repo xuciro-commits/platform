@@ -2,12 +2,12 @@ package build
 
 import (
 	"maps"
+	"platformserver/kernel/protocol"
 	"slices"
 	"strings"
 
 	"platformserver/platform"
 	dataowner "platformserver/services/data"
-	functionauthoring "platformserver/services/functions/authoring"
 	ontology "platformserver/services/ontology"
 	"platformserver/services/resources/publication"
 )
@@ -299,7 +299,7 @@ func (v DefinitionVisibility) visibleProvides(def platform.Definition) []platfor
 			continue
 		}
 		if capability.Kind == "query" && def.Query != nil {
-			input, output := functionauthoring.QueryCapabilitySchemas(*def.Query, v.Entities[def.Query.Object])
+			input, output := protocol.QueryCapabilitySchemas(*def.Query, v.Entities[def.Query.Object])
 			if input != nil {
 				capability.Inputs = *input
 			}

@@ -175,13 +175,13 @@ func TestInvariantK4MonitoringOwnerBoundaries(t *testing.T) {
 		t.Fatal(refusal)
 	}
 	live.accept(t, dataowner.SchemaDatasetProjected, dataowner.DatasetType, "DS1", map[string]any{"projection": dataowner.DatasetProjection{Object: "build.alpha", Version: 1, At: invariantClock, Rows: 1, Refused: 1}})
-	live.accept(t, "build.code.create", authoring.CodeType, "CODE1", map[string]any{"name": "algorithm", "title": "Algorithm", "language": "go", "source": "package main\nfunc main() {}", "input": platform.ValueSchema{Type: "string"}, "output": platform.ValueSchema{Type: "string"}, "roles": []string{build.Builder}, "limits": platform.OperationLimits{TimeoutMillis: 100, MemoryPages: 1, MaxInputBytes: 1024, MaxOutputBytes: 1024}})
-	live.accept(t, authoring.SchemaCodeCompile, authoring.CodeType, "CODE1", map[string]any{})
-	codeView, refusal := live.RecordOf(t.Context(), live.member(t), authoring.CodeType, "CODE1", now)
+	live.accept(t, "build.code.create", runtimeprotocol.CodeType, "CODE1", map[string]any{"name": "algorithm", "title": "Algorithm", "language": "go", "source": "package main\nfunc main() {}", "input": platform.ValueSchema{Type: "string"}, "output": platform.ValueSchema{Type: "string"}, "roles": []string{build.Builder}, "limits": platform.OperationLimits{TimeoutMillis: 100, MemoryPages: 1, MaxInputBytes: 1024, MaxOutputBytes: 1024}})
+	live.accept(t, runtimeprotocol.SchemaCodeCompile, runtimeprotocol.CodeType, "CODE1", map[string]any{})
+	codeView, refusal := live.RecordOf(t.Context(), live.member(t), runtimeprotocol.CodeType, "CODE1", now)
 	if refusal != nil {
 		t.Fatal(refusal)
 	}
-	code := codeView.Record.(authoring.Code)
+	code := codeView.Record.(runtimeprotocol.Code)
 	claimed, ok := live.claimOperation(code.Call, invariantClock)
 	if !ok {
 		t.Fatal("the accepted compilation could not be claimed")
@@ -190,8 +190,8 @@ func TestInvariantK4MonitoringOwnerBoundaries(t *testing.T) {
 	if live.quarantined() {
 		t.Fatal("retaining the compilation failure quarantined the tenant")
 	}
-	codeView, refusal = live.RecordOf(t.Context(), live.member(t), authoring.CodeType, "CODE1", now)
-	if refusal != nil || codeView.Record.(authoring.Code).State != "failed" {
+	codeView, refusal = live.RecordOf(t.Context(), live.member(t), runtimeprotocol.CodeType, "CODE1", now)
+	if refusal != nil || codeView.Record.(runtimeprotocol.Code).State != "failed" {
 		for _, effect := range live.Effects(now) {
 			if effect.ID == code.Call {
 				t.Fatalf("compilation failure was not applied: state=%s callback=%s refusal=%v", effect.State, effect.CallbackError, refusal)
@@ -332,7 +332,7 @@ func TestInvariantK4MonitoringOwnerBoundaries(t *testing.T) {
 	})
 	t.Run("original target authorization and retry route", func(t *testing.T) {
 		page := read("admin", "?limit=100")
-		for id, schema := range map[string]string{"source:SRC1": "build.source.pull", "code:CODE1": authoring.SchemaCodeCompile, "work:job:probe/failed": controlowner.SchemaWorkRetry, "effect:ordinary-delivery": controlowner.SchemaEffectRetry} {
+		for id, schema := range map[string]string{"source:SRC1": "build.source.pull", "code:CODE1": runtimeprotocol.SchemaCodeCompile, "work:job:probe/failed": controlowner.SchemaWorkRetry, "effect:ordinary-delivery": controlowner.SchemaEffectRetry} {
 			run := find(page, id)
 			if !run.Retryable || run.RetrySchema != schema || run.RetryTarget == nil || run.RetrySchemaVersion == nil || run.RetrySchemaVersion.Check() != nil {
 				t.Fatalf("missing original recovery descriptor for %s: %+v", id, run)

@@ -1,13 +1,13 @@
 package build
 
 import (
+	"platformserver/kernel/protocol"
 	"slices"
 	"strings"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformserver/platform"
 	actioncatalog "platformserver/services/actions/catalog"
-	functionauthoring "platformserver/services/functions/authoring"
 	"platformserver/services/ontology"
 )
 
@@ -37,7 +37,7 @@ func (b *Build) checkObjectProtocols(object ontology.Object) error {
 			return platform.Protocol{}, false
 		},
 		CheckProcess: func(value ontology.Object) error {
-			return ontology.CheckProcess(value, ID, TypeOf(value.Name), Builder, User, functionauthoring.FunctionCallType, b.conditionLookup)
+			return ontology.CheckProcess(value, ID, TypeOf(value.Name), Builder, User, protocol.FunctionCallType, b.conditionLookup)
 		},
 	})
 }

@@ -3,7 +3,7 @@ package build
 import (
 	"encoding/json"
 	"fmt"
-	functionauthoring "platformserver/services/functions/authoring"
+	"platformserver/kernel/protocol"
 
 	"platformserver/platform"
 	ontology "platformserver/services/ontology"
@@ -21,7 +21,7 @@ func (b *Build) ValidateAcceptedPublication(schema string, image []byte) error {
 	if b.apps.HandlesPublication(schema) {
 		return b.apps.ValidateImage(schema, image)
 	}
-	if schema == functionauthoring.SchemaFunction {
+	if schema == protocol.SchemaFunction {
 		return b.functions.ValidateImage(image)
 	}
 	if b.automation.HandlesPublication(schema) {
@@ -41,7 +41,7 @@ func (b *Build) ApplyAcceptedPublication(schema string, image []byte) error {
 	if b.apps.HandlesPublication(schema) {
 		return b.apps.ApplyImage(schema, image)
 	}
-	if schema == functionauthoring.SchemaFunction {
+	if schema == protocol.SchemaFunction {
 		return b.functions.ApplyImage(image)
 	}
 	if b.automation.HandlesPublication(schema) {
@@ -79,7 +79,7 @@ func published[T any](definition T) string {
 		value.Published = ""
 		value.Versions = nil
 		definition = any(value).(T)
-	case functionauthoring.Function:
+	case protocol.Function:
 		value.Published = ""
 		value.Versions = nil
 		definition = any(value).(T)

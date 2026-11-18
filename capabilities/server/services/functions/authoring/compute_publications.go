@@ -3,6 +3,7 @@ package authoring
 import (
 	"encoding/json"
 	"fmt"
+	"platformserver/kernel/protocol"
 	"slices"
 
 	"platformserver/platform"
@@ -13,7 +14,7 @@ func (o *Owner) ComputePublication() publication.Hooks {
 	return publication.Hooks{
 		Kinds: []platform.AssetKind{platform.AssetCompute},
 		Schemas: []publication.SchemaHooks{
-			{Name: SchemaCodePublish, Validate: o.validateCodePublication, Install: o.installCodePublication},
+			{Name: protocol.SchemaCodePublish, Validate: o.validateCodePublication, Install: o.installCodePublication},
 			{Name: SchemaTablePublish, Decode: o.decodeTableInstallation, Validate: o.validateTablePublication, Install: o.installTablePublication},
 		},
 		FreezeBatch: o.prepareComputePublications,
@@ -119,7 +120,7 @@ func (o *Owner) OperationDraft(asset platform.ReleaseAsset) (string, any, error)
 	if json.Unmarshal(asset.Body, &operation) == nil && operation.Binding.Kind == "native" {
 		table, err := o.tableFromAsset(asset)
 		table.State, table.Version = "draft", 0
-		return TableType, table, err
+		return protocol.TableType, table, err
 	}
 	rows, err := o.codeInventory()
 	if err != nil {
@@ -127,20 +128,20 @@ func (o *Owner) OperationDraft(asset platform.ReleaseAsset) (string, any, error)
 	}
 	for _, record := range rows {
 		if record.Name == asset.Ref.Name && !record.Archived {
-			return CodeType, record, nil
+			return protocol.CodeType, record, nil
 		}
 	}
 	return "", nil, fmt.Errorf("compute %s needs its original compiled target owner; a module descriptor does not carry source or compilation evidence", asset.Ref)
 }
 
-func decodeCodePublication(image []byte) (Code, error) {
-	var code Code
+func decodeCodePublication(image []byte) (protocol.Code, error) {
+	var code protocol.Code
 	if json.Unmarshal(image, &code) != nil || !slices.Contains([]string{"draft", "published"}, code.State) || code.Version < 1 || code.Version > 64 || len(code.Versions) != code.Version || !slices.Contains(code.Versions, code.Published) {
 		return code, fmt.Errorf("invalid compute publication family")
 	}
-	var selected Code
+	var selected protocol.Code
 	for i, raw := range code.Versions {
-		prior, ok := publication.Read[Code](raw)
+		prior, ok := publication.Read[protocol.Code](raw)
 		if !ok || prior.ID != code.ID || prior.Name != code.Name || prior.Version != i+1 || prior.Definition().Check() != nil || prior.SourceHash != prior.SourceDigest() || prior.Published != "" || len(prior.Versions) > 0 {
 			return code, fmt.Errorf("invalid retained compute version")
 		}

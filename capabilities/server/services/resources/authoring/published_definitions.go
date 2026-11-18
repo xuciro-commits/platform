@@ -5,14 +5,13 @@ import (
 	"platformserver/kernel/protocol"
 	"platformserver/kernel/records"
 	"platformserver/platform"
-	functionauthoring "platformserver/services/functions/authoring"
 )
 
 var publishedKinds = map[string]platform.AssetKind{
 	PropertyTypeType: platform.AssetPropertyType, ValueTypeType: platform.AssetValueType, ObjectTypeGroupType: platform.AssetObjectTypeGroup,
 	LinkTypeType: platform.AssetLinkType, QueryType: platform.AssetQuery, InterfaceType: platform.AssetInterface, ObjectType: platform.AssetObject,
-	protocol.PageType: platform.AssetPage, protocol.AppType: platform.AssetApp, protocol.ProcessType: platform.AssetFlow, functionauthoring.FunctionType: platform.AssetFunction,
-	functionauthoring.CodeType: platform.AssetCompute, functionauthoring.TableType: platform.AssetCompute,
+	protocol.PageType: platform.AssetPage, protocol.AppType: platform.AssetApp, protocol.ProcessType: platform.AssetFlow, protocol.FunctionType: platform.AssetFunction,
+	protocol.CodeType: platform.AssetCompute, protocol.TableType: platform.AssetCompute,
 }
 
 func PublishedDefinitionsMissing(saved map[string][]records.StoredState, installed func(platform.AssetRef) bool, flow func(name string, version int) bool) bool {

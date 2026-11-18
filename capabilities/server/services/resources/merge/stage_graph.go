@@ -2,7 +2,7 @@ package branches
 
 import (
 	"fmt"
-	functionauthoring "platformserver/services/functions/authoring"
+	"platformserver/kernel/protocol"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformserver/platform"
@@ -34,9 +34,9 @@ func DecideChild[D any](draft D, tenant string, m platform.Member, item Action, 
 	}
 	if item.Artifact != nil {
 		attach := &pb.Submission{TenantId: tenant, PrincipalId: m.ID, Authority: build.ID, Target: &pb.EntityRef{Type: item.Plan.Type, Id: item.Plan.ID},
-			Schema: &pb.SchemaRef{Name: functionauthoring.SchemaCodeAttach, Version: 1}, Payload: item.Artifact}
-		attach.IdempotencyKey = Key(key+":build", m.ID, functionauthoring.SchemaCodeAttach, item.Artifact, nil)
-		out = step(draft, functionauthoring.SchemaCodeAttach, attach, true)
+			Schema: &pb.SchemaRef{Name: protocol.SchemaCodeAttach, Version: 1}, Payload: item.Artifact}
+		attach.IdempotencyKey = Key(key+":build", m.ID, protocol.SchemaCodeAttach, item.Artifact, nil)
+		out = step(draft, protocol.SchemaCodeAttach, attach, true)
 	}
 	return out
 }

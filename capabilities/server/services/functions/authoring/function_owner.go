@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"maps"
+	"platformserver/kernel/protocol"
 	"platformserver/kernel/records"
 	"platformserver/platform"
 	actioncatalog "platformserver/services/actions/catalog"
@@ -20,61 +21,22 @@ import (
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 )
 
-const (
-	FunctionType         = "build.function"
-	SchemaFunction       = FunctionType + ".publish"
-	FunctionCallType     = "build.function-call"
-	SchemaFunctionCall   = FunctionCallType + ".start"
-	SchemaFunctionAnswer = FunctionCallType + ".answer"
-	SchemaProposalReview = FunctionCallType + ".review"
-)
-
-type Function struct {
-	platform.Record
-	Proposal       *platform.ProposalPolicy `json:"proposal,omitempty" type:"json" field:"aside" title:"Business proposal review"`
-	Conversation   bool                     `json:"conversation,omitempty" field:"aside" title:"Conversation input"`
-	Name           string                   `json:"name" field:"required,search"`
-	Title          string                   `json:"title" field:"required,search"`
-	Description    string                   `json:"description" field:"required" type:"longtext"`
-	Object         string                   `json:"object" field:"required" title:"Source object"`
-	Fields         []string                 `json:"fields" field:"aside" title:"Input fields"`
-	Instructions   string                   `json:"instructions" field:"required" type:"longtext"`
-	Output         []platform.Field         `json:"output" field:"aside" title:"Output fields"`
-	OutputMode     string                   `json:"outputMode,omitempty" field:"aside" choices:"fields,edit-proposal" title:"Output mode"`
-	Model          string                   `json:"model,omitempty"`
-	ModelOptions   platform.ModelOptions    `json:"modelOptions,omitzero" type:"json"`
-	MaxInputBytes  int                      `json:"maxInputBytes" field:"required" title:"Maximum input bytes"`
-	MaxOutputBytes int                      `json:"maxOutputBytes" field:"required" title:"Maximum output bytes"`
-	MaxTokens      int                      `json:"maxTokens" field:"required" title:"Maximum tokens"`
-	Roles          []string                 `json:"roles" field:"aside" title:"Callable by"`
-	State          string                   `json:"state" field:"readonly" choices:"draft,published"`
-	Version        int                      `json:"version,omitempty" field:"readonly"`
-	Published      string                   `json:"published,omitempty" field:"readonly" type:"longtext" title:"What is installed"`
-	Versions       []string                 `json:"versions,omitempty" field:"readonly" title:"Published versions"`
-}
-
-func (f Function) Definition() platform.AIFunction {
-	return platform.AIFunction{Proposal: f.Proposal, Conversation: f.Conversation, Name: f.Name, Title: f.Title, Description: f.Description, Object: f.Object,
-		Fields: f.Fields, Instructions: f.Instructions, Output: f.Output, OutputMode: f.OutputMode, Model: f.Model,
-		MaxInputBytes: f.MaxInputBytes, MaxOutputBytes: f.MaxOutputBytes, MaxTokens: f.MaxTokens, ModelOptions: f.ModelOptions, Roles: f.Roles}
-}
-
-func (f Function) image() string {
+func functionImage(f protocol.Function) string {
 	f.Published = ""
 	f.Versions = nil
 	return string(platform.Raw(f))
 }
 
-func (f Function) family() publication.Family {
+func functionFamily(f protocol.Function) publication.Family {
 	return publication.Family{ID: f.ID, Name: f.Name, State: f.State, Version: f.Version, Published: f.Published, Versions: f.Versions, Archived: f.Archived}
 }
 
-func setFamily(f *Function, family publication.Family) {
+func setFamily(f *protocol.Function, family publication.Family) {
 	f.ID, f.Name, f.State, f.Version, f.Published, f.Versions, f.Archived = family.ID, family.Name, family.State, family.Version, family.Published, family.Versions, family.Archived
 }
 
-func functionFromDeclaration(d platform.AIFunction) Function {
-	return Function{Proposal: d.Proposal, Conversation: d.Conversation, Name: d.Name, Title: d.Title, Description: d.Description, Object: d.Object, Fields: d.Fields, Instructions: d.Instructions, Output: d.Output, OutputMode: d.OutputMode, Model: d.Model, ModelOptions: d.ModelOptions, MaxInputBytes: d.MaxInputBytes, MaxOutputBytes: d.MaxOutputBytes, MaxTokens: d.MaxTokens, Roles: d.Roles}
+func functionFromDeclaration(d platform.AIFunction) protocol.Function {
+	return protocol.Function{Proposal: d.Proposal, Conversation: d.Conversation, Name: d.Name, Title: d.Title, Description: d.Description, Object: d.Object, Fields: d.Fields, Instructions: d.Instructions, Output: d.Output, OutputMode: d.OutputMode, Model: d.Model, ModelOptions: d.ModelOptions, MaxInputBytes: d.MaxInputBytes, MaxOutputBytes: d.MaxOutputBytes, MaxTokens: d.MaxTokens, Roles: d.Roles}
 }
 
 func strictDecode(raw []byte, value any) error {
@@ -89,90 +51,28 @@ func strictDecode(raw []byte, value any) error {
 	return nil
 }
 
-type FunctionRun struct {
-	platform.Record
-	TrainingAuthorization string                     `json:"trainingAuthorization,omitempty" field:"readonly"`
-	TrainingSources       map[string]uint32          `json:"trainingSources,omitempty" field:"readonly" type:"json"`
-	SourceValues          map[string]json.RawMessage `json:"sourceValues,omitempty" field:"readonly" type:"json" title:"Accepted AI inputs"`
-	SourceRevision        uint32                     `json:"sourceRevision,omitempty" field:"readonly" title:"Source revision"`
-	Decision              string                     `json:"decision,omitempty" field:"readonly" choices:"pending,adopted,rejected,expired" title:"Proposal decision"`
-	ExpiresAt             time.Time                  `json:"expiresAt,omitzero" field:"readonly" title:"Proposal expires at"`
-	Reviewers             []string                   `json:"reviewers,omitempty" field:"readonly" title:"Proposal reviewers"`
-	DecidedBy             string                     `json:"decidedBy,omitempty" field:"readonly" title:"Decided by"`
-	DecidedAt             time.Time                  `json:"decidedAt,omitzero" field:"readonly" title:"Decided at"`
-	AdoptedAction         string                     `json:"adoptedAction,omitempty" field:"readonly" title:"Adopted action"`
-	AdoptedChange         string                     `json:"adoptedChange,omitempty" field:"readonly" title:"Adoption change"`
-	Amendments            json.RawMessage            `json:"amendments,omitempty" field:"readonly" type:"json" title:"Human amendments"`
-	Applications          []platform.AssetBinding    `json:"applications,omitempty" field:"readonly" type:"json"`
-	Question              string                     `json:"question,omitempty" field:"readonly" type:"longtext"`
-	History               []string                   `json:"history,omitempty" field:"readonly"`
-	Function              string                     `json:"function" field:"readonly"`
-	App                   string                     `json:"app,omitempty" field:"readonly"`
-	Contract              platform.AIFunction        `json:"contract" type:"json" field:"readonly"`
-	Version               int                        `json:"version" field:"readonly"`
-	Member                string                     `json:"member" field:"readonly"`
-	Source                string                     `json:"source" field:"readonly"`
-	State                 string                     `json:"state" field:"readonly" choices:"pending,ready,rejected"`
-	Output                string                     `json:"output,omitempty" field:"readonly" type:"longtext" title:"Typed answer"`
-	Code                  string                     `json:"code,omitempty" field:"readonly" title:"Refusal code"`
-	Reason                string                     `json:"reason,omitempty" field:"readonly" type:"longtext" title:"Refusal reason"`
-	Definition            string                     `json:"definition" field:"readonly"`
-	Dependencies          string                     `json:"dependencies" field:"readonly"`
-	Model                 string                     `json:"model" field:"readonly"`
-	InputHash             string                     `json:"inputHash" field:"readonly" title:"Input hash"`
-	Release               string                     `json:"release,omitempty" field:"readonly"`
-	Metered               bool                       `json:"metered,omitempty" field:"readonly" title:"Model call measured"`
-	TokensReported        bool                       `json:"tokensReported,omitempty" field:"readonly" title:"Token counts reported"`
-	InputTokens           int                        `json:"inputTokens,omitempty" field:"readonly" title:"Input tokens"`
-	OutputTokens          int                        `json:"outputTokens,omitempty" field:"readonly" title:"Output tokens"`
-	CostReported          bool                       `json:"costReported,omitempty" field:"readonly" title:"USD cost reported"`
-	CostUSD               float64                    `json:"costUsd,omitempty" field:"readonly" title:"Reported USD cost"`
-	LatencyMillis         int64                      `json:"latencyMillis,omitempty" field:"readonly" title:"Model latency in milliseconds"`
-	ServedModel           string                     `json:"servedModel,omitempty" field:"readonly" title:"Served model"`
-	Sources               []string                   `json:"sources" field:"readonly"`
-	Withheld              bool                       `json:"withheld,omitempty" field:"readonly" title:"Some sources cannot be read"`
-}
-
-func RunValue(value any) (FunctionRun, bool) {
-	return records.As[FunctionRun](value)
-}
-
-type Environment interface {
-	Host() platform.BuildHost
-	Ledger() platform.Authority
-	Resolver() publication.Resolver
-	App() string
-	Version() string
-	CallRoles() []string
-	AllRoles() []string
-	AddActions(...platform.Action)
-	InstalledObject(string) (platform.Entity, bool)
-	JointEntity(string) (platform.EntityInfo, bool)
-	JointDeclaration(platform.AssetRef) (platform.ReleaseAsset, bool)
-	DeclaresRole(string) bool
-	CheckName(string, string) error
-	ConditionLookup(string) (platform.EntityInfo, bool)
-	CheckRuleCollections(platform.RuleReadSpec, string, func(string) (platform.EntityInfo, bool)) error
+func RunValue(value any) (protocol.FunctionRun, bool) {
+	return records.As[protocol.FunctionRun](value)
 }
 
 type Owner struct {
 	resolver publication.Resolver
-	env      Environment
-	records  map[string]Function
-	codes    map[string]Code
+	env      publication.FunctionEnvironment
+	records  map[string]protocol.Function
+	codes    map[string]protocol.Code
 	tables   map[string]Table
 }
 
-func NewOwner(env Environment) *Owner {
-	return &Owner{env: env, resolver: env.Resolver(), records: map[string]Function{}, codes: map[string]Code{}, tables: map[string]Table{}}
+func NewOwner(env publication.FunctionEnvironment) publication.FunctionAuthoring {
+	return &Owner{env: env, resolver: env.Resolver(), records: map[string]protocol.Function{}, codes: map[string]protocol.Code{}, tables: map[string]Table{}}
 }
 
-func (o *Owner) Fork(env Environment) *Owner {
+func (o *Owner) Fork(env publication.FunctionEnvironment) publication.FunctionAuthoring {
 	return &Owner{env: env, resolver: o.resolver, records: maps.Clone(o.records), codes: maps.Clone(o.codes), tables: maps.Clone(o.tables)}
 }
 
 func (o *Owner) Function(name string, version int) (platform.AIFunction, int, bool) {
-	return publication.Retained(o.records, o.inventory, o.decode, name, version, Function.family, Function.Definition)
+	return publication.Retained(o.records, o.inventory, o.decode, name, version, functionFamily, protocol.Function.Definition)
 }
 
 func (o *Owner) Declarations() []platform.AIFunction {
@@ -183,12 +83,12 @@ func (o *Owner) Declarations() []platform.AIFunction {
 	return out
 }
 
-func (o *Owner) Inventory() ([]Function, error) {
+func (o *Owner) Inventory() ([]protocol.Function, error) {
 	return o.inventory()
 }
 
 func (o *Owner) Entity() platform.Entity {
-	return platform.Entity{Type: FunctionType, Title: "AI function", Plural: "AI functions", Model: Function{}, Display: "title",
+	return platform.Entity{Type: protocol.FunctionType, Title: "AI function", Plural: "AI functions", Model: protocol.Function{}, Display: "title",
 		Description: "A bounded typed inference over one published object; draft edits do not change installed calls.",
 		Scope:       platform.Scope{Default: platform.ScopeNone, Levels: map[string]string{"builder": platform.ScopeTenant}},
 		Standard:    platform.Standard{Create: true, Edit: true, Archive: true, Roles: []string{"builder"}, Capability: "functions"},
@@ -206,10 +106,10 @@ func (o *Owner) Entity() platform.Entity {
 }
 
 func (o *Owner) CallEntity() platform.Entity {
-	return platform.Entity{Type: FunctionCallType, Title: "AI function call", Plural: "AI function calls", Model: FunctionRun{}, Display: "function",
+	return platform.Entity{Type: protocol.FunctionCallType, Title: "AI function call", Plural: "AI function calls", Model: protocol.FunctionRun{}, Display: "function",
 		Description: "A retained typed suggestion or refusal; it never changes its source record.",
 		Scope: platform.Scope{Default: platform.ScopeOwn, Owner: "member", Levels: map[string]string{"builder": platform.ScopeTenant}, Participants: func(record any) []string {
-			run := record.(FunctionRun)
+			run := record.(protocol.FunctionRun)
 			return append([]string{run.Member}, run.Reviewers...)
 		}},
 		Derived: []platform.Derivation{{From: "sources", Fields: []string{"output", "reason", "question", "sourceValues", "amendments"}}}, Withheld: "withheld"}
@@ -223,7 +123,7 @@ func (o *Owner) Actions() []platform.Action {
 }
 
 func functionCallActions(roles []string) []platform.Action {
-	return append([]platform.Action{{Schema: SchemaFunctionCall, Target: FunctionCallType, New: true, Capability: "functions", Title: "Call AI function",
+	return append([]platform.Action{{Schema: protocol.SchemaFunctionCall, Target: protocol.FunctionCallType, New: true, Capability: "functions", Title: "Call AI function",
 		Description: "Request a published function over a readable source; retain the suggestion for human review.",
 		Roles:       slices.Clone(roles), Automation: true,
 		Payload: []platform.Field{{Name: "question", Type: "string", Description: "Bounded member question for a conversation function"}, {Name: "history", Type: "json", Description: "Up to eight prior completed calls in this conversation"}, {Name: "app", Type: "string", Description: "Registered function owner"}, {Name: "name", Type: "string", Required: true, Description: "Published function name"},
@@ -231,11 +131,11 @@ func functionCallActions(roles []string) []platform.Action {
 			{Name: "version", Type: "integer", Description: "Published version; zero selects the installed version"},
 			{Name: "release", Type: "string", Description: "Retained release for a native automation; empty keeps a development run"},
 			{Name: "onBehalf", Type: "string", Description: "Retained member for a native automation"}}},
-		{Schema: SchemaFunctionAnswer, Target: FunctionCallType, Capability: "functions", Title: "Record AI function answer",
-			Description: "Keep the validated suggestion or refusal on its call record.", Automation: true, Payload: platform.FunctionAnswerFields()}}, platform.Action{Schema: SchemaProposalReview, Target: FunctionCallType, Capability: "functions", Title: "Review AI proposal", Description: "Reject or expire a retained proposal without changing its business source.", Roles: []string{platform.AnyMember}, Payload: []platform.Field{{Name: "decision", Type: "string", Required: true, Choices: []string{"rejected", "expired"}, Description: "Proposal decision"}}})
+		{Schema: protocol.SchemaFunctionAnswer, Target: protocol.FunctionCallType, Capability: "functions", Title: "Record AI function answer",
+			Description: "Keep the validated suggestion or refusal on its call record.", Automation: true, Payload: platform.FunctionAnswerFields()}}, platform.Action{Schema: protocol.SchemaProposalReview, Target: protocol.FunctionCallType, Capability: "functions", Title: "Review AI proposal", Description: "Reject or expire a retained proposal without changing its business source.", Roles: []string{platform.AnyMember}, Payload: []platform.Field{{Name: "decision", Type: "string", Required: true, Choices: []string{"rejected", "expired"}, Description: "Proposal decision"}}})
 }
 
-func (o *Owner) validate(f Function) (Function, error) {
+func (o *Owner) validate(f protocol.Function) (protocol.Function, error) {
 	if !publication.ValidName(f.Name) {
 		return f, fmt.Errorf("The function name %s must be lower-case letters and digits", f.Name)
 	}
@@ -253,7 +153,7 @@ func (o *Owner) validate(f Function) (Function, error) {
 	return f, o.env.Host().ValidateInstallFunction(f.Definition())
 }
 
-func (o *Owner) check(f Function) (Function, error) {
+func (o *Owner) check(f protocol.Function) (protocol.Function, error) {
 	f, err := o.validate(f)
 	if err != nil {
 		return f, err
@@ -263,21 +163,21 @@ func (o *Owner) check(f Function) (Function, error) {
 		return f, err
 	}
 	for _, other := range list {
-		installed, _ := publication.Read[Function](other.Published)
+		installed, _ := publication.Read[protocol.Function](other.Published)
 		if other.ID != f.ID && (other.Name == f.Name || installed.Name == f.Name) {
 			return f, fmt.Errorf("AI function %s is already declared", f.Name)
 		}
 	}
-	if old, ok := publication.Read[Function](f.Published); ok && (old.Name != f.Name || old.Object != f.Object) {
+	if old, ok := publication.Read[protocol.Function](f.Published); ok && (old.Name != f.Name || old.Object != f.Object) {
 		return f, fmt.Errorf("a published function keeps its name and source object")
 	}
 	return f, nil
 }
 
 func (o *Owner) publish(c platform.Caller, record any, _ json.RawMessage, _ time.Time) *platform.Error {
-	var f *Function
+	var f *protocol.Function
 	switch value := record.(type) {
-	case *Function:
+	case *protocol.Function:
 		f = value
 	default:
 		return &platform.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
@@ -287,10 +187,10 @@ func (o *Owner) publish(c platform.Caller, record any, _ json.RawMessage, _ time
 		return &platform.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, Message: err.Error()}
 	}
 	*f = bound
-	return publication.PublishRetained(c, f, func(f *Function) publication.Family { return f.family() }, setFamily, "An AI function may retain at most 64 published versions", func(f *Function) string { return f.image() }, o.installRecord)
+	return publication.PublishRetained(c, f, func(f *protocol.Function) publication.Family { return functionFamily(*f) }, setFamily, "An AI function may retain at most 64 published versions", func(f *protocol.Function) string { return functionImage(*f) }, o.installRecord)
 }
 
-func (o *Owner) installRecord(c platform.Caller, f Function) error {
+func (o *Owner) installRecord(c platform.Caller, f protocol.Function) error {
 	o.env.AddActions(functionCallActions(o.env.AllRoles())...)
 	if err := o.env.Host().InstallFunction(c, f.Definition(), f.Version); err != nil {
 		return err
@@ -315,29 +215,29 @@ func (o *Owner) Draft(asset platform.ReleaseAsset) (string, any, error) {
 	if err := strictDecode(asset.Body, &definition); err != nil {
 		return "", nil, err
 	}
-	return FunctionType, functionFromDeclaration(definition), nil
+	return protocol.FunctionType, functionFromDeclaration(definition), nil
 }
 
 func (o *Owner) assetVersion(asset platform.ReleaseAsset) int {
 	return o.resolver.DefinitionAssetVersion(asset, o.env.App(), o.env.Version(), platform.AssetFunction, "function")
 }
 
-func (o *Owner) fromAsset(asset platform.ReleaseAsset) (Function, error) {
-	var zero Function
+func (o *Owner) fromAsset(asset platform.ReleaseAsset) (protocol.Function, error) {
+	var zero protocol.Function
 	version := o.assetVersion(asset)
 	var d platform.AIFunction
 	if version == 0 || strictDecode(asset.Body, &d) != nil || asset.ContractVersion != 1 || d.Check() != nil || d.Name != asset.Ref.Name {
 		return zero, fmt.Errorf("invalid builder function asset %s", asset.Ref)
 	}
 	f := functionFromDeclaration(d)
-	family := f.family()
+	family := functionFamily(f)
 	family.Version, family.State = version, "published"
 	setFamily(&f, family)
 	return f, nil
 }
 
-func (o *Owner) decode(raw []byte) (Function, error) {
-	return publication.Decode(raw, "function", Function.family, func(f Function) error { return f.Definition().Check() }, func(old, next Function) bool {
+func (o *Owner) decode(raw []byte) (protocol.Function, error) {
+	return publication.Decode(raw, "function", functionFamily, func(f protocol.Function) error { return f.Definition().Check() }, func(old, next protocol.Function) bool {
 		return old.Name == next.Name && old.Object == next.Object
 	})
 }
@@ -355,12 +255,12 @@ func (o *Owner) ApplyImage(raw []byte) error {
 	if err != nil {
 		return err
 	}
-	var record Function
+	var record protocol.Function
 	if err := json.Unmarshal(raw, &record); err != nil {
 		return err
 	}
 	for _, version := range record.Versions {
-		f, ok := publication.Read[Function](version)
+		f, ok := publication.Read[protocol.Function](version)
 		if !ok {
 			return fmt.Errorf("accepted function has a malformed version")
 		}
@@ -389,10 +289,10 @@ func (o *Owner) Restore() error {
 }
 
 func (o *Owner) Assets() ([]platform.ReleaseAsset, error) {
-	return publication.InstalledAssets(o.records, Function.family, o.releaseAsset)
+	return publication.InstalledAssets(o.records, functionFamily, o.releaseAsset)
 }
 
-func (o *Owner) releaseAsset(f Function) (platform.ReleaseAsset, error) {
+func (o *Owner) releaseAsset(f protocol.Function) (platform.ReleaseAsset, error) {
 	ref := platform.AssetRef{App: o.env.App(), Kind: platform.AssetFunction, Name: f.Name}
 	return o.resolver.ReleaseAsset(ref, o.env.Version()+".function-"+fmt.Sprint(f.Version), f.Definition())
 }
@@ -402,10 +302,10 @@ func (o *Owner) Resolve(name, sourceVersion string) (platform.ReleaseAsset, erro
 }
 
 func (o *Owner) Prepare(assets []platform.ReleaseAsset) ([]platform.ReleasePublication, error) {
-	return publication.Prepare(o.env.App(), o.env.Version(), assets, platform.AssetFunction, "function", SchemaFunction, o.inventory, Function.family, setFamily, o.Resolve,
-		func(record Function, asset platform.ReleaseAsset, version int) (Function, error) {
-			family := record.family()
-			prior, retained := publication.Read[Function](family.Published)
+	return publication.Prepare(o.env.App(), o.env.Version(), assets, platform.AssetFunction, "function", protocol.SchemaFunction, o.inventory, functionFamily, setFamily, o.Resolve,
+		func(record protocol.Function, asset platform.ReleaseAsset, version int) (protocol.Function, error) {
+			family := functionFamily(record)
+			prior, retained := publication.Read[protocol.Function](family.Published)
 			var d platform.AIFunction
 			if version != family.Version+1 || strictDecode(asset.Body, &d) != nil || asset.ContractVersion != 1 || d.Check() != nil || o.resolver.CheckAssetDependencies(asset) != nil {
 				return record, fmt.Errorf("invalid next function version")
@@ -415,10 +315,10 @@ func (o *Owner) Prepare(assets []platform.ReleaseAsset) ([]platform.ReleasePubli
 				return record, fmt.Errorf("invalid next function version")
 			}
 			frozen.Record = record.Record
-			kept := frozen.family()
+			kept := functionFamily(frozen)
 			kept.State, kept.Version = "published", version
 			setFamily(&frozen, kept)
-			family.State, family.Version, family.Published = "published", version, frozen.image()
+			family.State, family.Version, family.Published = "published", version, functionImage(frozen)
 			family.Versions = append(slices.Clone(family.Versions), family.Published)
 			setFamily(&record, family)
 			return record, nil
@@ -434,14 +334,14 @@ func (o *Owner) DraftAssets(id string, releaseAssets func() ([]platform.ReleaseA
 	if err != nil {
 		return
 	}
-	i := slices.IndexFunc(records, func(record Function) bool { return record.ID == id && !record.Archived })
+	i := slices.IndexFunc(records, func(record protocol.Function) bool { return record.ID == id && !record.Archived })
 	if i < 0 {
 		err = fmt.Errorf("draft function %q not found", id)
 		return
 	}
 	record := records[i]
-	family := record.family()
-	if old, ok := publication.Read[Function](family.Published); ok {
+	family := functionFamily(record)
+	if old, ok := publication.Read[protocol.Function](family.Published); ok {
 		prior = platform.AssetRef{App: o.env.App(), Kind: platform.AssetFunction, Name: old.Name}
 		hadPrior = true
 	}
@@ -487,9 +387,9 @@ func (o *Owner) definitionFromAsset(name string, version int, asset platform.Rel
 
 func (o *Owner) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *platform.Error) {
 	switch s.GetSchema().GetName() {
-	case SchemaFunctionCall, SchemaFunctionAnswer:
+	case protocol.SchemaFunctionCall, protocol.SchemaFunctionAnswer:
 		return o.submitCall(c, s, now)
-	case SchemaProposalReview:
+	case protocol.SchemaProposalReview:
 		return o.submitProposalReview(c, s, now)
 	}
 	return nil, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_UNKNOWN_SCHEMA}
@@ -501,8 +401,8 @@ func (o *Owner) submitCall(c platform.Caller, s *pb.Submission, now time.Time) (
 			return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, platform.FunctionNeedsDecision)
 		}
 		id := s.GetTarget().GetId()
-		run, exists := platform.Get[FunctionRun](c, id)
-		if s.GetSchema().GetName() == SchemaFunctionCall {
+		run, exists := platform.Get[protocol.FunctionRun](c, id)
+		if s.GetSchema().GetName() == protocol.SchemaFunctionCall {
 			if exists {
 				return nil, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
 			}
@@ -510,7 +410,7 @@ func (o *Owner) submitCall(c platform.Caller, s *pb.Submission, now time.Time) (
 			if json.Unmarshal(s.GetPayload(), &request) != nil {
 				return nil, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 			}
-			request.Reply = SchemaFunctionAnswer
+			request.Reply = protocol.SchemaFunctionAnswer
 			return func(r *pb.ChangeRecord) {
 				call, err := c.RequestFunction(r, request)
 				if err != nil {
@@ -528,7 +428,7 @@ func (o *Owner) submitCall(c platform.Caller, s *pb.Submission, now time.Time) (
 				if !c.Automation {
 					authorization, _ = platform.CanonicalDigest([]any{c.ID, c.Tenant, c.Roles, c.Grants, c.Scopes, c.Status})
 				}
-				c.Put(r, FunctionRun{TrainingAuthorization: authorization, Question: request.Question, History: slices.Clone(request.History), App: cmp.Or(request.App, o.env.App()), Contract: definition, Record: platform.Record{ID: id}, Function: request.Name, Version: call.Version, Member: member,
+				c.Put(r, protocol.FunctionRun{TrainingAuthorization: authorization, Question: request.Question, History: slices.Clone(request.History), App: cmp.Or(request.App, o.env.App()), Contract: definition, Record: platform.Record{ID: id}, Function: request.Name, Version: call.Version, Member: member,
 					SourceValues: call.SourceValues, SourceRevision: call.SourceRevision, Applications: call.Applications, Source: call.Source, State: "pending", Definition: call.Definition, Dependencies: call.Dependencies,
 					Model: call.Model, InputHash: call.InputHash, Release: call.Release, Sources: call.Sources})
 			}, nil
@@ -556,7 +456,7 @@ func (o *Owner) submitCall(c platform.Caller, s *pb.Submission, now time.Time) (
 				if NeedsHandover(run) {
 					recipient := platform.Recipient{AppRole: run.Contract.Proposal.HandoffRole}
 					key := "proposal:" + run.ID
-					if err := c.Assign(r, platform.Assignment{Title: "Review AI proposal", Ref: FunctionCallType + "/" + run.ID, To: []platform.Recipient{recipient}, Due: run.ExpiresAt, Key: key}); err != nil {
+					if err := c.Assign(r, platform.Assignment{Title: "Review AI proposal", Ref: protocol.FunctionCallType + "/" + run.ID, To: []platform.Recipient{recipient}, Due: run.ExpiresAt, Key: key}); err != nil {
 						return
 					}
 					if task, ok := platform.Get[platform.WorkTask](o.env.Host().Automation(c, platform.WorkApp), o.env.App()+":"+key); ok {
@@ -571,9 +471,9 @@ func (o *Owner) submitCall(c platform.Caller, s *pb.Submission, now time.Time) (
 
 func (o *Owner) submitProposalReview(c platform.Caller, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *platform.Error) {
 	return o.env.Ledger().Receive(c, s, now, nil, func() (func(*pb.ChangeRecord), *platform.Error) {
-		raw, err := c.ReadRecord(FunctionCallType, s.GetTarget().GetId(), now)
-		var visible FunctionRun
-		run, ok := platform.Get[FunctionRun](c, s.GetTarget().GetId())
+		raw, err := c.ReadRecord(protocol.FunctionCallType, s.GetTarget().GetId(), now)
+		var visible protocol.FunctionRun
+		run, ok := platform.Get[protocol.FunctionRun](c, s.GetTarget().GetId())
 		if err != nil || json.Unmarshal(raw, &visible) != nil || visible.Withheld || !ok || run.Contract.Proposal == nil || run.State != "ready" || run.Decision != "pending" || c.ID != run.Member && !c.Holds(o.env.App(), run.Contract.Proposal.HandoffRole) && !c.Holds(o.env.App(), "builder") {
 			return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "The pending proposal is not available for review")
 		}
@@ -585,7 +485,7 @@ func (o *Owner) submitProposalReview(c platform.Caller, s *pb.Submission, now ti
 		}
 		return func(r *pb.ChangeRecord) {
 			if input.Decision == "rejected" {
-				fact := platform.BusinessRefusalFact{Level: "rejected", Code: "AI_PROPOSAL_REJECTED", Message: "The reviewer rejected the AI proposal", Translations: map[string]string{"zh-CN": "审核人驳回了 AI 提议"}, Subject: FunctionCallType + "/" + run.ID, Action: s.GetSchema().GetName(), Member: c.ID, At: now.UTC(), Original: raw, Inputs: map[string]json.RawMessage{"decision": platform.Raw(input.Decision)}, Record: FunctionCallType + "/" + run.ID}
+				fact := platform.BusinessRefusalFact{Level: "rejected", Code: "AI_PROPOSAL_REJECTED", Message: "The reviewer rejected the AI proposal", Translations: map[string]string{"zh-CN": "审核人驳回了 AI 提议"}, Subject: protocol.FunctionCallType + "/" + run.ID, Action: s.GetSchema().GetName(), Member: c.ID, At: now.UTC(), Original: raw, Inputs: map[string]json.RawMessage{"decision": platform.Raw(input.Decision)}, Record: protocol.FunctionCallType + "/" + run.ID}
 				if err := c.CaptureBusinessRefusal(r, fact); err != nil {
 					c.FailDecision(err)
 					return
@@ -604,7 +504,7 @@ func (o *Owner) submitProposalReview(c platform.Caller, s *pb.Submission, now ti
 	})
 }
 
-func NeedsHandover(run FunctionRun) bool {
+func NeedsHandover(run protocol.FunctionRun) bool {
 	p := run.Contract.Proposal
 	if p == nil || p.HandoffRole == "" {
 		return false
@@ -621,11 +521,11 @@ func (o *Owner) TrainingCandidates(c platform.Caller, event platform.Event, imag
 	out := []platform.AITrainingCandidate{}
 	at := event.Record.GetRecordedTime().AsTime()
 	for _, ref := range event.Changed {
-		prefix := FunctionCallType + "/"
+		prefix := protocol.FunctionCallType + "/"
 		if !strings.HasPrefix(ref, prefix) {
 			continue
 		}
-		var run FunctionRun
+		var run protocol.FunctionRun
 		if json.Unmarshal(images[ref], &run) != nil || (run.Decision != "adopted" && run.Decision != "rejected") || run.State != "ready" {
 			continue
 		}
@@ -660,6 +560,6 @@ func (o *Owner) TrainingCandidates(c platform.Caller, event platform.Event, imag
 	return out
 }
 
-func (o *Owner) inventory() ([]Function, error) {
-	return publication.Inventory[Function](o.env.Host().Automation(platform.Caller{}, o.env.App()))
+func (o *Owner) inventory() ([]protocol.Function, error) {
+	return publication.Inventory[protocol.Function](o.env.Host().Automation(platform.Caller{}, o.env.App()))
 }

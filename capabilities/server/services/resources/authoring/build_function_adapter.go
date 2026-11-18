@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 
 	"platformserver/platform"
-	functionauthoring "platformserver/services/functions/authoring"
 	"platformserver/services/resources/publication"
 )
 
@@ -46,7 +45,7 @@ func (e functionEnvironment) CheckRuleCollections(spec platform.RuleReadSpec, wh
 	return e.b.checkRuleCollections(spec, where, lookup)
 }
 
-var _ functionauthoring.Environment = functionEnvironment{}
+var _ publication.FunctionEnvironment = functionEnvironment{}
 
 func (b *Build) FunctionDefinition(name string, version int) (platform.AIFunction, int, bool) {
 	return b.functions.Definition(name, version)

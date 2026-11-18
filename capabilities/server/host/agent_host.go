@@ -17,7 +17,6 @@ import (
 	"platformserver/services/ai/gateway"
 	agentowner "platformserver/services/ai/runtime"
 	releaseowner "platformserver/services/devops/releases"
-	functionauthoring "platformserver/services/functions/authoring"
 	"platformserver/services/objects"
 	"platformserver/services/resources/authoring"
 )
@@ -60,7 +59,7 @@ func (h hostView) AgentRead(reader platform.Member, name string, inputs ...json.
 func (h hostView) AgentSurface(reader platform.Member, app string) platform.AgentSurface {
 	reader.AIContext = true
 	var call *platform.AgentAction
-	owner, action, found := h.Action(functionauthoring.SchemaFunctionCall)
+	owner, action, found := h.Action(runtimeprotocol.SchemaFunctionCall)
 	if found && slices.ContainsFunc(h.t.Catalog(reader), func(a platform.Action) bool { return a.Schema == action.Schema }) {
 		call = &platform.AgentAction{Owner: owner, Action: action}
 	}

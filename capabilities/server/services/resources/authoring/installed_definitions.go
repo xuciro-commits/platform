@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"platformserver/kernel/acceptedformat"
 	ruleprotocol "platformserver/kernel/protocol"
-	functionauthoring "platformserver/services/functions/authoring"
 	"reflect"
 	"slices"
 	"strings"
@@ -44,7 +43,7 @@ func CheckRunApplicationBindings(record any) error {
 		bindings = run.Applications
 	case platform.AgentRunRecord:
 		bindings = run.Applications
-	case functionauthoring.FunctionRun:
+	case ruleprotocol.FunctionRun:
 		bindings = run.Applications
 	}
 	return acceptedformat.CheckApplicationBindings(bindings)

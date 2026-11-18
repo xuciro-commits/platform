@@ -4,8 +4,8 @@ import records "platformserver/kernel/records"
 
 import (
 	"encoding/json"
+	"platformserver/kernel/protocol"
 	automation "platformserver/services/automate/runtime"
-	"platformserver/services/functions/authoring"
 	"platformserver/services/objects"
 	"time"
 
@@ -13,7 +13,7 @@ import (
 )
 
 func (t *Tenant) queryReads(store *records.Store) objects.QueryReads {
-	return objects.QueryReads{Store: store, Named: t.namedQuery, Schema: authoring.QueryInputSchema, Entity: t.Entity, Authorization: t.services.Authorization,
+	return objects.QueryReads{Store: store, Named: t.namedQuery, Schema: protocol.QueryInputSchema, Entity: t.Entity, Authorization: t.services.Authorization,
 		Version: func(m platform.Member, ref platform.AssetRef, version int) (platform.NamedQuery, bool) {
 			q, _, ok := t.memberQueryVersion(m, ref, version)
 			return q, ok

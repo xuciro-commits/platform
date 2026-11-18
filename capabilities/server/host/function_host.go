@@ -2,6 +2,7 @@ package host
 
 import (
 	"fmt"
+	"platformserver/kernel/protocol"
 	"platformserver/kernel/records"
 	"platformserver/services/ai/gateway"
 	agentowner "platformserver/services/ai/runtime"
@@ -93,7 +94,7 @@ func (h hostView) Function(app, name string, version int) (platform.AIFunction, 
 }
 
 func (t *Tenant) functionHistory(store *records.Store, member platform.Member, id string) (agentowner.FunctionHistory, error) {
-	et := store.Type(functionauthoring.FunctionCallType)
+	et := store.Type(protocol.FunctionCallType)
 	if et == nil {
 		return agentowner.FunctionHistory{}, fmt.Errorf("conversation history is unavailable")
 	}

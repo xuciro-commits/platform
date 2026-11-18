@@ -2,7 +2,6 @@ package build
 
 import (
 	"platformserver/kernel/protocol"
-	functionauthoring "platformserver/services/functions/authoring"
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
@@ -117,13 +116,13 @@ func (x OwnerRuns) Page() (monitoring.MonitoringRunPage, *platform.Error) {
 	runs.Cover(coverage)
 	for _, collect := range []func() *platform.Error{
 		func() *platform.Error {
-			return collectOwnerRuns(x, runs, "code", "latest", "latest-only", functionauthoring.CodeType, func(rows []functionauthoring.Code) { CodeRuns(runs, rows, compilations) })
+			return collectOwnerRuns(x, runs, "code", "latest", "latest-only", protocol.CodeType, func(rows []protocol.Code) { CodeRuns(runs, rows, compilations) })
 		},
 		func() *platform.Error {
 			return collectOwnerRuns(x, runs, "projection", "latest", "latest-only", dataowner.DatasetType, func(rows []dataowner.Dataset) { dataowner.DatasetRuns(runs, rows) })
 		},
 		func() *platform.Error {
-			return collectOwnerRuns(x, runs, "function", "retained", "", functionauthoring.FunctionCallType, func(rows []functionauthoring.FunctionRun) { FunctionRuns(runs, rows) })
+			return collectOwnerRuns(x, runs, "function", "retained", "", protocol.FunctionCallType, func(rows []protocol.FunctionRun) { FunctionRuns(runs, rows) })
 		},
 		func() *platform.Error {
 			return collectOwnerRuns(x, runs, "flow", "retained", "permission-filtered", protocol.FlowInstanceType, func(rows []protocol.FlowInstance) { runs.Flows(rows, x.Schemas.FlowRetry) })
