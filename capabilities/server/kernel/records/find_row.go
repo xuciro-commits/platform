@@ -3,6 +3,7 @@ package records
 import (
 	"context"
 	"fmt"
+	"reflect"
 	"strings"
 
 	persistence "platformserver/kernel/store"
@@ -11,6 +12,17 @@ import (
 type StateMatch struct {
 	Path   []string
 	Values []string
+}
+
+func As[T any](value any) (T, bool) {
+	var out T
+	source := reflect.ValueOf(value)
+	target := reflect.ValueOf(&out).Elem()
+	if !source.IsValid() || !source.Type().AssignableTo(target.Type()) {
+		return out, false
+	}
+	target.Set(source)
+	return out, true
 }
 
 func FindRow[T any](store *Store, typ string, filters []StateMatch, match func(T) bool) (T, bool) {

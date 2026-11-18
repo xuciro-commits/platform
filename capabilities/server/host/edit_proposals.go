@@ -6,6 +6,7 @@ import (
 	"net/http"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
+	"platformserver/kernel/records"
 	"platformserver/kernel/transport"
 	"platformserver/platform"
 	"platformserver/services/objects"
@@ -28,7 +29,7 @@ func (t *Tenant) readEditProposal(ctx context.Context, member platform.Member, e
 				if refusal != nil {
 					return platform.FlowInstance{}, refusal
 				}
-				run, ok := view.Record.(platform.FlowInstance)
+				run, ok := records.As[platform.FlowInstance](view.Record)
 				if !ok {
 					return platform.FlowInstance{}, nil
 				}

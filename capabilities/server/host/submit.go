@@ -205,7 +205,7 @@ func (t *Tenant) finishCommittedResult(a platform.App, m platform.Member, hash s
 func decideAcceptedAs(a platform.App, draft *stagedDecision, m platform.Member, s *pb.Submission, now time.Time, automation bool) (record *pb.ChangeRecord, refusal *platform.Error) {
 	defer func() {
 		if p := recover(); p != nil {
-			if _, ok := p.(stagedEffectPanic); !ok {
+			if p != errStagedEffect {
 				panic(p)
 			}
 			record = nil
@@ -387,7 +387,7 @@ func (t *Tenant) stage(candidate preparedAccepted) bool {
 func decideAcceptedInput(a platform.AcceptedInputApp, draft *stagedDecision, m platform.Member, name string, body []byte, at time.Time) (answer any, refusal *platform.Error, unsupported bool) {
 	defer func() {
 		if p := recover(); p != nil {
-			if _, unsupported := p.(stagedEffectPanic); !unsupported {
+			if p != errStagedEffect {
 				panic(p)
 			}
 			answer = nil

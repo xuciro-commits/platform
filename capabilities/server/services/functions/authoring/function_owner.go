@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"maps"
+	"platformserver/kernel/records"
 	"platformserver/platform"
 	actioncatalog "platformserver/services/actions/catalog"
 	"platformserver/services/resources/publication"
@@ -130,6 +131,10 @@ type FunctionRun struct {
 	ServedModel           string                     `json:"servedModel,omitempty" field:"readonly" title:"Served model"`
 	Sources               []string                   `json:"sources" field:"readonly"`
 	Withheld              bool                       `json:"withheld,omitempty" field:"readonly" title:"Some sources cannot be read"`
+}
+
+func RunValue(value any) (FunctionRun, bool) {
+	return records.As[FunctionRun](value)
 }
 
 type Environment interface {

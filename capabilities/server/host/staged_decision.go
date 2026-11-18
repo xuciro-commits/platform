@@ -2,6 +2,7 @@ package host
 
 import (
 	"encoding/json"
+	"errors"
 	"maps"
 	runtimekernel "platformserver/kernel"
 	acceptedformat "platformserver/kernel/acceptedformat"
@@ -85,9 +86,9 @@ func (d *stagedDecision) Readable(c platform.Caller, ref string) bool {
 	return d.ReadableAt(func(store *records.Store, at time.Time) bool { return d.tenant.readableAs(store, c, ref, at) })
 }
 
-type stagedEffectPanic struct{}
+var errStagedEffect = errors.New("staged effect is unavailable")
 
-func unsupportedStagedEffect() { panic(stagedEffectPanic{}) }
+func unsupportedStagedEffect() { panic(errStagedEffect) }
 
 func (d *stagedDecision) Probe(c platform.Caller, protocol, action, id string, payload []byte, at time.Time) *platform.Error {
 	return d.routingTenant().router().Probe(c, protocol, action, id, payload, at)
@@ -241,10 +242,7 @@ func (d *stagedDecision) ProbeDecision(c platform.Caller, decide func(platform.C
 }
 
 func (d *stagedDecision) runProbe(c platform.Caller, decide func(platform.Caller) *platform.Error) *platform.Error {
-	return d.RunProbe(d, c, decide, func(failure any) bool {
-		_, ok := failure.(stagedEffectPanic)
-		return ok
-	})
+	return d.RunProbe(d, c, decide, func(failure any) bool { return failure == errStagedEffect })
 }
 
 func (d *stagedDecision) stageObservers() *platform.Error {
@@ -366,7 +364,8 @@ func (d *stagedDecision) savedControl() (*acceptedformat.Control, error) {
 
 func (d *stagedDecision) answerControlEffect(x platform.Effect, out platform.Outcome, at time.Time) {
 	if err := d.tenant.stageEffectAnswer(d, x, out, nil, at); err != nil {
-		if refusal, ok := err.(*platform.Error); ok {
+		var refusal *platform.Error
+		if errors.As(err, &refusal) {
 			d.Failure = refusal
 		} else {
 			unsupportedStagedEffect()

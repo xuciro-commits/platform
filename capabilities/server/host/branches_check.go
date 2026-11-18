@@ -33,7 +33,7 @@ func (t *Tenant) decideBranchStep(draft *stagedDecision, m platform.Member, sche
 
 func (t *Tenant) branchDecider(m platform.Member, now time.Time) func(*stagedDecision, branches.Action, string) branches.StageChild {
 	return func(draft *stagedDecision, item branches.Action, key string) branches.StageChild {
-		return branches.DecideChild(draft, t.ID, m, item, key, func(p any) bool { _, ok := p.(stagedEffectPanic); return ok },
+		return branches.DecideChild(draft, t.ID, m, item, key, func(p any) bool { return p == errStagedEffect },
 			func(draft *stagedDecision, schema string, s *pb.Submission, automation bool) branches.StageChild {
 				return t.decideBranchStep(draft, m, schema, s, automation, now)
 			})

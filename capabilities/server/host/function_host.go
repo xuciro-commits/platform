@@ -106,7 +106,7 @@ func (t *Tenant) functionHistory(store *records.Store, member platform.Member, i
 	if row == nil {
 		return agentowner.FunctionHistory{}, fmt.Errorf("conversation history is unavailable")
 	}
-	run, ok := row.Value.Interface().(functionauthoring.FunctionRun)
+	run, ok := functionauthoring.RunValue(row.Value.Interface())
 	if !ok || run.Member != member.ID {
 		return agentowner.FunctionHistory{}, fmt.Errorf("conversation history belongs to another context")
 	}

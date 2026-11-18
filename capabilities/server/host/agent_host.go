@@ -165,7 +165,7 @@ func (h hostView) CallAgentModel(provider platform.AIProvider, model platform.AI
 		Answer: func(request platform.ChatRequest, answer platform.ChatAnswer) platform.ChatAnswer {
 			_, _ = recordRead(h.t, context.Background(), func(t *Tenant) (struct{}, *platform.Error) {
 				if value, ok := t.held(platform.RunType + "/" + request.Run); ok {
-					if run, ok := value.(platform.AgentRunRecord); ok {
+					if run, ok := agentowner.RunValue(value); ok {
 						answer.Usage = agentowner.RunUsage(answer.Usage, run)
 					}
 				}

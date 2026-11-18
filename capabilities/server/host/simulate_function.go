@@ -65,7 +65,7 @@ func settleFunctionFixture(t *Tenant, actor platform.Member, fixture platform.Fu
 			if refusal != nil {
 				return "", nil, false
 			}
-			run, ok := view.Record.(functionauthoring.FunctionRun)
+			run, ok := functionauthoring.RunValue(view.Record)
 			return run.State, json.RawMessage(run.Output), ok
 		},
 	}.Apply(actor, fixture)

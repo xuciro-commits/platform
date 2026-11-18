@@ -272,7 +272,7 @@ func decideWork(t *Tenant, d *stagedDecision, c platform.Caller, task *automatio
 		t.hops = 0
 		if p := recover(); p != nil {
 			refusal = platform.RefuseOutsideAcceptedBoundary()
-			if _, unsupported := p.(stagedEffectPanic); !unsupported {
+			if p != errStagedEffect {
 				refusal = platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The owner failed while handling this work: {reason}", fmt.Sprint(p))
 			}
 		}

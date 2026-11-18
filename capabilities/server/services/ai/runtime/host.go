@@ -28,6 +28,10 @@ type ObjectQuery struct {
 	Format     bool
 }
 
+func RunValue(value any) (platform.AgentRunRecord, bool) {
+	return records.As[platform.AgentRunRecord](value)
+}
+
 type Objects struct {
 	Load      func(ObjectQuery, time.Time) (any, string, *platform.Error)
 	Aggregate func(ObjectQuery, time.Time) (any, *platform.Error)
