@@ -1093,3 +1093,16 @@ test("list: chips filter on the host, a row opens its details, the selection ban
   await header.getByRole("button", { name: "Clear all", exact: true }).click();
   await expect.poll(() => rows.count()).toBeGreaterThan(5);
 });
+||||||| parent of f920cce76 (修复: 记录字段——日期与同分节字段共用标签列)
+
+
+test("record fields: the date label aligns with the other commercial fields", async ({ page }) => {
+  await signIn(page);
+  await page.goto("/ontology/objects/build.opportunity/OPP-001");
+  const commercial = page.getByRole("heading", { name: "Commercial", exact: true }).locator("..");
+  const labels = ["Amount", "Budget approved", "Proposed deposit", "Expected close"]
+    .map((name) => commercial.getByText(name, { exact: true }));
+  for (const label of labels) await expect(label).toBeVisible();
+  const boxes = await Promise.all(labels.map((label) => label.boundingBox()));
+  for (const box of boxes) expect(box?.x).toBe(boxes[0]!.x);
+});

@@ -147,6 +147,7 @@ const styles = stylex.create({
 });
 
 export function ParameterInput({ parameter, described, value, status, onChange, onEnter, focused, referenceName, labelHidden, quiet }: ParameterInputProps) {
+  const [switchID, setSwitchID] = useState("");
   const control = quiet && !status ? styles.quiet : undefined;
   const field = described.fields.find((candidate) => candidate.name === parameter.name);
   const label = t(field?.title ?? parameter.label ?? parameter.name);
@@ -179,7 +180,11 @@ export function ParameterInput({ parameter, described, value, status, onChange, 
     return <AttachmentInput parameter={parameter} value={value} onChange={onChange} label={label} description={description} />;
   }
   if (parameter.type === "boolean") {
-    return <Switch label={label} isLabelHidden={labelHidden} description={description} value={value === true} onChange={onChange} />;
+    return (
+      <Field label={label} inputID={switchID} isLabelHidden={labelHidden} description={description}>
+        <Switch ref={(input) => { if (input) setSwitchID(input.id); }} label="" isLabelHidden value={value === true} onChange={onChange} />
+      </Field>
+    );
   }
   if (parameter.type === "date") {
     return (
