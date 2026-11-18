@@ -28,7 +28,7 @@ export default defineConfig({
       env: { GOPROXY: "https://goproxy.cn,direct" },
     },
     {
-      command: "node ../scripts/frontend-seed.mjs && pnpm exec vite --port 8497 --strictPort",
+      command: "node ../scripts/frontend-seed.mjs && pnpm exec vite --mode trunk --port 8497 --strictPort",
       cwd: `${root}frontend`,
       url: page,
       timeout: 180_000,

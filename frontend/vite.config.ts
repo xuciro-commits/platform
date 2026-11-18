@@ -7,6 +7,7 @@ export default defineConfig(({ mode }) => {
   return {
     plugins: [stylex.vite(), react()],
     clearScreen: false,
+    cacheDir: `node_modules/.vite/${mode}`,
     server: {
       port: 8496,
       strictPort: true,
