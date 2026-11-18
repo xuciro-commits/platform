@@ -3,6 +3,7 @@ package objects
 import (
 	"encoding/json"
 	"maps"
+	ruleprotocol "platformserver/kernel/protocol"
 	"reflect"
 	"slices"
 	"strings"
@@ -35,7 +36,7 @@ func ReadableFieldIssues(store *records.Store, member platform.Member, issues []
 			issues[i].Values = nil
 			continue
 		}
-		info := platform.ConstraintEntity(et.Info())
+		info := ruleprotocol.ConstraintEntity(et.Info())
 		if et.Rows().Get(id) != nil && !readableIn(issue.Record) {
 			issues[i].Values = nil
 			continue

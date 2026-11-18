@@ -3,6 +3,7 @@ package pages
 import (
 	"encoding/json"
 	"fmt"
+	ruleprotocol "platformserver/kernel/protocol"
 	"slices"
 
 	"platformserver/platform"
@@ -26,7 +27,7 @@ func CheckFrozenQueries(original platform.Page, assets map[platform.AssetRef]pla
 			}
 		}
 		info, err := PublicationResolver().ObjectDescriptor(asset.Body)
-		return platform.ConstraintEntity(info), ok && err == nil
+		return ruleprotocol.ConstraintEntity(info), ok && err == nil
 	}
 	criteria := func(ref platform.AssetRef) (*platform.RuleCriteria, bool) {
 		asset, ok := assets[ref]

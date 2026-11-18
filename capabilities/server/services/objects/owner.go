@@ -4,7 +4,6 @@ import (
 	"platformserver/kernel/protocol"
 	"platformserver/kernel/records"
 	"platformserver/platform"
-	"platformserver/services/security"
 	"reflect"
 	"time"
 )
@@ -17,7 +16,7 @@ type Owner struct {
 	AuthorizationMember    func(platform.Member) platform.Member
 	Caller                 func(platform.Member, string) platform.Caller
 	Authorize              func(*records.Store, platform.Caller, platform.AuthzRequest, time.Time, bool) platform.AuthzDecision
-	AuthorizeDepth         func(*records.Store, platform.Caller, platform.AuthzRequest, time.Time, bool, int, *security.Traversal) platform.AuthzDecision
+	AuthorizeRecordSet     func(*records.Store, platform.Caller, time.Time) func(platform.AuthzRequest) platform.AuthzDecision
 	Visible                func(*records.Store, platform.Member, *records.Type, time.Time) (func(reflect.Value) bool, *platform.Error)
 	VisibleForCaller       func(*records.Store, platform.Caller, *records.Type, time.Time) (func(reflect.Value) bool, *platform.Error)
 	MayRead                func(*records.Store, platform.Member, time.Time, bool) func(string) bool
@@ -50,10 +49,6 @@ func (o *Owner) admits(m platform.Member) *platform.Error {
 
 func (o *Owner) authorizeFrom(store *records.Store, c platform.Caller, q platform.AuthzRequest, at time.Time, held bool) platform.AuthzDecision {
 	return o.Authorize(store, c, q, at, held)
-}
-
-func (o *Owner) authorizeDepth(store *records.Store, c platform.Caller, q platform.AuthzRequest, at time.Time, held bool, depth int, walk *security.Traversal) platform.AuthzDecision {
-	return o.AuthorizeDepth(store, c, q, at, held, depth, walk)
 }
 
 func (o *Owner) visible(m platform.Member, et *records.Type, at time.Time) (func(reflect.Value) bool, *platform.Error) {

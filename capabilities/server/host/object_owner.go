@@ -15,7 +15,7 @@ func (t *Tenant) objectOwner(store *records.Store) *objects.Owner {
 		AuthorizationMember:    t.authorizationMember,
 		Caller:                 t.objectCaller,
 		Authorize:              t.authorizeFrom,
-		AuthorizeDepth:         t.authorizeDepth,
+		AuthorizeRecordSet:     t.authorizer().RecordSet,
 		Visible:                t.visibleIn,
 		VisibleForCaller:       t.visibleForCallerIn,
 		MayRead:                t.mayReadIn,

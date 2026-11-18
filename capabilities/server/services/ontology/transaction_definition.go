@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"maps"
+	ruleprotocol "platformserver/kernel/protocol"
 	"slices"
 	"strconv"
 	"strings"
@@ -120,7 +121,7 @@ func WalkBusinessTxn(txn *platform.BusinessTxn, visit func(platform.TxnStep)) {
 
 func WithTxnRow(spec platform.RuleReadSpec, info platform.EntityInfo) platform.RuleReadSpec {
 	spec.Inputs = maps.Clone(spec.Inputs)
-	for _, field := range platform.ConstraintEntity(info).Fields {
+	for _, field := range ruleprotocol.ConstraintEntity(info).Fields {
 		spec.Inputs["row."+field.Name] = platform.ExprType{Kind: platform.RuleFieldKind(field.Type), Object: field.Ref}
 	}
 	spec.Inputs["row.$subject"] = platform.ExprType{Kind: "reference", Object: info.Type}

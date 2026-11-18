@@ -1,6 +1,9 @@
 package pages
 
-import "platformserver/platform"
+import (
+	ruleprotocol "platformserver/kernel/protocol"
+	"platformserver/platform"
+)
 
 func ModelTransition(owner platform.App, ref platform.AssetRef) (platform.ActionType, string, bool) {
 	if ref.Kind != platform.AssetAction || owner == nil || owner.Manifest().ID != ref.App {
@@ -34,6 +37,6 @@ func VisibleLookup(visible []platform.EntityInfo) func(string) (platform.EntityI
 	}
 	return func(typ string) (platform.EntityInfo, bool) {
 		value, ok := entities[typ]
-		return platform.ConstraintEntity(value), ok
+		return ruleprotocol.ConstraintEntity(value), ok
 	}
 }

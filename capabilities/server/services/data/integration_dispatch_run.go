@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	ruleprotocol "platformserver/kernel/protocol"
 	"platformserver/services/ontology"
 	"slices"
 	"strings"
@@ -67,7 +68,7 @@ func (o *Owner) OpenDispatch(c platform.Caller, receipt *pb.ChangeRecord, txn *p
 		if err != nil {
 			return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "{why}", err.Error())
 		}
-		value, problem := platform.RuleAssignment(expr, scope, c, subject, values, at, o.integration.Lookup)
+		value, problem := ruleprotocol.RuleAssignment(expr, scope, c, subject, values, at, o.integration.Lookup)
 		if problem != nil {
 			return problem
 		}

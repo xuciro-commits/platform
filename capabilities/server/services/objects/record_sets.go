@@ -3,8 +3,8 @@ package objects
 import (
 	"encoding/json"
 	"fmt"
+	ruleprotocol "platformserver/kernel/protocol"
 	"platformserver/kernel/records"
-	"platformserver/services/security"
 
 	"reflect"
 	"slices"
@@ -190,11 +190,11 @@ func (t *Owner) ReadRecordSetFrom(store *records.Store, c platform.Caller, objec
 		store.VisitPlan(et, rawPlan.plans[0], nil, func(v reflect.Value) { raw = append(raw, v) })
 		store.VisitPlan(view, visiblePlan.plans[0], read.visible, func(v reflect.Value) { values = append(values, v) })
 		result.Partial = result.Partial || len(raw) != len(values)
-		walk := security.NewTraversal()
+		authorize := t.AuthorizeRecordSet(store, c, at)
 		question.Type = set.Object
 		for _, value := range raw {
 			question.Record = records.Header(value).ID
-			decision := t.authorizeDepth(store, c, question, at, true, 0, walk)
+			decision := authorize(question)
 			if !decision.Allow && result.Authorization.Filtered == nil {
 				result.Authorization.Filtered = &decision
 			}
@@ -218,7 +218,7 @@ func (t *Owner) ReadRecordSetFrom(store *records.Store, c platform.Caller, objec
 	}
 	ruleLookup := func(typ string) (platform.EntityInfo, bool) {
 		other, ok := lookup(typ)
-		return platform.ConstraintEntity(other), ok
+		return ruleprotocol.ConstraintEntity(other), ok
 	}
 	spec := platform.RuleReadSpec{Object: set.Object}
 	type selected struct {
@@ -240,7 +240,7 @@ func (t *Owner) ReadRecordSetFrom(store *records.Store, c platform.Caller, objec
 		key := string(platform.Raw(expr))
 		program := programs[key]
 		if program == nil {
-			schema, err := platform.RuleSchema(expr, spec, ruleLookup, c.Rules())
+			schema, err := ruleprotocol.RuleSchema(expr, spec, ruleLookup, c.Rules())
 			if err != nil {
 				return platform.ExprValue{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
 			}
@@ -250,7 +250,7 @@ func (t *Owner) ReadRecordSetFrom(store *records.Store, c platform.Caller, objec
 			}
 			programs[key] = program
 		}
-		context, captureErr := c.RuleContext(expr, spec, ruleLookup, row, nil, at)
+		context, captureErr := ruleprotocol.RuleContext(c, expr, spec, ruleLookup, row, nil, at)
 		if captureErr != nil {
 			return platform.ExprValue{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, captureErr.Error())
 		}

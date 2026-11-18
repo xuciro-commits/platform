@@ -3,6 +3,7 @@ package pages
 import (
 	"encoding/json"
 	"fmt"
+	ruleprotocol "platformserver/kernel/protocol"
 	"reflect"
 	"slices"
 	"strings"
@@ -101,7 +102,7 @@ func (f *pageModelFilter) match(value reflect.Value) bool {
 	}
 	record := value.Interface()
 	if f.criteria != nil {
-		matched, _, refusal := f.criteria.Evaluate(f.caller, record, f.inputs, f.at, f.lookup)
+		matched, _, refusal := ruleprotocol.EvaluateCriteria(*f.criteria, f.caller, record, f.inputs, f.at, f.lookup)
 		if refusal != nil {
 			if refusal.Code == pb.ErrorCode_ERROR_CODE_POLICY_DENIED {
 				f.partial = true
@@ -115,7 +116,7 @@ func (f *pageModelFilter) match(value reflect.Value) bool {
 		}
 	}
 	for _, predicate := range f.model.Where {
-		value, refusal := platform.EvaluateRule(predicate, platform.RuleReadSpec{Object: f.model.Type}, f.caller, record, nil, f.at, f.lookup)
+		value, refusal := ruleprotocol.EvaluateRule(predicate, platform.RuleReadSpec{Object: f.model.Type}, f.caller, record, nil, f.at, f.lookup)
 		if refusal != nil {
 			if refusal.Code == pb.ErrorCode_ERROR_CODE_POLICY_DENIED {
 				f.partial = true
@@ -352,7 +353,7 @@ func (r ModelReader) source(member platform.Member, page platform.Page, section 
 			}
 		}
 		if model.Label != nil {
-			value, refusal := platform.EvaluateRule(*model.Label, platform.RuleReadSpec{Object: model.Type}, caller, ruleRecord, nil, at, r.host.Entity)
+			value, refusal := ruleprotocol.EvaluateRule(*model.Label, platform.RuleReadSpec{Object: model.Type}, caller, ruleRecord, nil, at, r.host.Entity)
 			if refusal != nil {
 				if refusal.Code == pb.ErrorCode_ERROR_CODE_POLICY_DENIED {
 					result.Partial = true
@@ -493,7 +494,7 @@ func (r ModelReader) rows(c platform.Caller, page platform.Page, section platfor
 			model:  model, criteria: criteria, inputs: inputs, at: at,
 			lookup: func(typ string) (platform.EntityInfo, bool) {
 				info, ok := allEntities[typ]
-				return platform.ConstraintEntity(info), ok
+				return ruleprotocol.ConstraintEntity(info), ok
 			},
 		}
 	}
@@ -650,7 +651,7 @@ func (r ModelReader) composite(member platform.Member, page platform.Page, secti
 			}
 			denied := false
 			for role, expr := range binding.Expressions {
-				answer, refusal := platform.EvaluateRule(expr, platform.RuleReadSpec{Object: model.Type}, caller, ruleRecord, nil, at, r.host.Entity)
+				answer, refusal := ruleprotocol.EvaluateRule(expr, platform.RuleReadSpec{Object: model.Type}, caller, ruleRecord, nil, at, r.host.Entity)
 				if refusal != nil {
 					if refusal.Code != pb.ErrorCode_ERROR_CODE_POLICY_DENIED {
 						return result, refusal
@@ -692,7 +693,7 @@ func (r ModelReader) composite(member platform.Member, page platform.Page, secti
 		caller := r.host.ModelCaller(member, info.App)
 		for _, row := range rows.Records {
 			for _, column := range columns.Records {
-				answer, err := platform.EvaluateRule(*c.Value, matrixRuleReads(c), caller, nil, map[string]any{"row": row["id"], "column": column["id"]}, at, r.host.Entity)
+				answer, err := ruleprotocol.EvaluateRule(*c.Value, matrixRuleReads(c), caller, nil, map[string]any{"row": row["id"], "column": column["id"]}, at, r.host.Entity)
 				if err != nil {
 					if err.Code != pb.ErrorCode_ERROR_CODE_POLICY_DENIED {
 						return result, err

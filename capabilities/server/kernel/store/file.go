@@ -11,6 +11,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"platformserver/kernel/fileio"
 	"sort"
 	"strconv"
 	"strings"
@@ -313,7 +314,7 @@ func (j *File) SaveSnapshot(_ context.Context, tenant string, seq int64, code st
 		return err
 	}
 	name := snapshotName(tenant, seq, code)
-	if err := WriteFileAtomic(filepath.Join(j.dir, "snapshots", name), packed); err != nil {
+	if err := fileio.WriteAtomic(filepath.Join(j.dir, "snapshots", name), packed); err != nil {
 		return err
 	}
 	return j.keepTwoSnapshots(tenant)
@@ -329,7 +330,7 @@ func (j *File) RepairSnapshot(_ context.Context, tenant string, seq int64, code 
 			return fmt.Errorf("journal: %w", err)
 		}
 	}
-	return WriteFileAtomic(filepath.Join(j.dir, "snapshots", snapshotName(tenant, seq, code)), packed)
+	return fileio.WriteAtomic(filepath.Join(j.dir, "snapshots", snapshotName(tenant, seq, code)), packed)
 }
 
 func (j *File) Snapshot(_ context.Context, tenant, code string) (int64, []byte, bool, error) {
@@ -410,26 +411,6 @@ func parseSnapshotName(name string) (tenant string, seq int64, code string, ok b
 func snapshotOrder(name string) int64 {
 	_, seq, _, _ := parseSnapshotName(name)
 	return seq
-}
-
-func WriteFileAtomic(path string, data []byte) error {
-	tmp := path + ".tmp"
-	file, err := os.OpenFile(tmp, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0o600)
-	if err != nil {
-		return fmt.Errorf("journal: %w", err)
-	}
-	if _, err := file.Write(data); err != nil {
-		file.Close()
-		return fmt.Errorf("journal: %w", err)
-	}
-	if err := file.Sync(); err != nil {
-		file.Close()
-		return fmt.Errorf("journal: %w", err)
-	}
-	if err := file.Close(); err != nil {
-		return fmt.Errorf("journal: %w", err)
-	}
-	return os.Rename(tmp, path)
 }
 
 func unpackSnapshot(packed []byte) ([]byte, error) {
@@ -552,7 +533,7 @@ func (j *File) PurgeTranscripts(tenant string, before time.Time) {
 		}
 		return
 	}
-	if err := WriteFileAtomic(path, out); err != nil {
+	if err := fileio.WriteAtomic(path, out); err != nil {
 		log.Printf("purge transcripts: %v", err)
 	}
 }
@@ -717,7 +698,7 @@ func (j *File) PurgeObservations(tenant string, before time.Time) (int, error) {
 			raw.Write(line)
 			raw.WriteByte('\n')
 		}
-		if err := WriteFileAtomic(path, raw.Bytes()); err != nil {
+		if err := fileio.WriteAtomic(path, raw.Bytes()); err != nil {
 			return 0, err
 		}
 	}
@@ -1051,7 +1032,7 @@ func (j *File) ReplaceRunIndex(tenant, scope string, entries []platform.RunIndex
 		}
 		return nil
 	}
-	return WriteFileAtomic(j.runIndexPath(), raw.Bytes())
+	return fileio.WriteAtomic(j.runIndexPath(), raw.Bytes())
 }
 
 func (j *File) readRunIndex() ([]platform.RunIndexEntry, error) {

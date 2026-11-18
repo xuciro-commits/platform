@@ -2,21 +2,21 @@
   "imports": {
     "expr": [],
     "kernel": ["expr", "platform", "kernel/protocol"],
-    "kernel/protocol": ["capability", "platform"],
+    "kernel/protocol": ["capability", "expr", "platform"],
     "capability": [],
     "platform": ["capability", "expr", "kernel/values"],
     "services/resources": ["platform", "services/actions/catalog", "services/devops/descriptor", "services/resources/publication", "kernel/records", "kernel/acceptedformat", "kernel/protocol"],
-    "services/resources/publication": ["platform"],
+    "services/resources/publication": ["platform", "kernel/protocol"],
     "services/ontology": ["platform", "services/resources", "kernel/records", "kernel/acceptedformat", "kernel/protocol"],
     "services/objects": ["expr", "platform", "services/ontology", "services/resources/publication", "kernel/records", "kernel/acceptedformat", "kernel/protocol"],
     "services/actions": ["platform", "services/objects", "services/functions", "services/ontology", "services/resources/publication", "kernel/records", "kernel/acceptedformat", "kernel/protocol"],
     "services/actions/catalog": ["platform", "kernel/records"],
     "services/functions": ["expr", "platform", "services/actions/catalog", "services/resources/publication", "kernel/records", "kernel/acceptedformat", "kernel/protocol"],
-    "services/data": ["expr", "platform", "services/resources", "services/actions/catalog", "kernel/records", "kernel/acceptedformat", "kernel/protocol"],
+    "services/data": ["expr", "platform", "services/resources", "services/actions/catalog", "kernel/records", "kernel/acceptedformat", "kernel/protocol", "kernel/fileio"],
     "services/automate": ["expr", "platform", "services/actions", "services/resources/publication", "kernel/records", "kernel/acceptedformat", "kernel/protocol"],
     "services/apps": ["expr", "platform", "services/objects", "services/actions", "services/ontology", "services/resources/publication", "kernel/records", "kernel/acceptedformat", "kernel/protocol"],
     "services/work": ["platform", "services/actions", "kernel/records", "kernel/acceptedformat", "kernel/protocol"],
-    "services/devops": ["platform", "services/devops/descriptor", "services/resources", "services/apps", "services/functions", "services/ontology", "kernel/records", "kernel/acceptedformat", "kernel/protocol"],
+    "services/devops": ["platform", "services/devops/descriptor", "services/resources", "services/apps", "services/functions", "services/ontology", "services/data", "kernel/records", "kernel/acceptedformat", "kernel/protocol"],
     "services/devops/descriptor": ["platform"],
     "services/security": ["platform", "kernel/records", "kernel/acceptedformat", "kernel/protocol"],
     "services/ai": ["platform", "services/functions", "services/actions", "services/devops/descriptor", "services/resources/publication", "kernel/records", "kernel/acceptedformat", "kernel/protocol"],
@@ -26,9 +26,7 @@
     "cmd": ["*"]
   },
   "exceptions": {
-    "services/data": ["services/ontology", "kernel/store"],
-    "services/devops": ["services/data"],
-    "services/objects": ["services/security"],
+    "services/data": ["services/ontology"],
     "services/resources": ["services/apps/authoring", "services/automate/authoring", "services/data", "services/functions/authoring", "services/ontology"]
   }
 }

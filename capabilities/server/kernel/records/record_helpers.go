@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	ruleprotocol "platformserver/kernel/protocol"
 	"reflect"
 	"slices"
 
@@ -63,9 +64,9 @@ func LowerRecordSetPredicate(set platform.RecordSet, expr platform.Expr, lookup 
 	}
 	schemaLookup := func(typ string) (platform.EntityInfo, bool) {
 		info, ok := lookup(typ)
-		return platform.ConstraintEntity(info), ok
+		return ruleprotocol.ConstraintEntity(info), ok
 	}
-	if _, err := platform.RuleSchema(expr, platform.RuleReadSpec{Object: field.Ref}, schemaLookup, engines...); err != nil {
+	if _, err := ruleprotocol.RuleSchema(expr, platform.RuleReadSpec{Object: field.Ref}, schemaLookup, engines...); err != nil {
 		return platform.Expr{}, err
 	}
 	var lower func(platform.Expr) platform.Expr
@@ -90,7 +91,7 @@ func LowerRecordSetPredicate(set platform.RecordSet, expr platform.Expr, lookup 
 		return node
 	}
 	lowered := lower(expr)
-	_, err = platform.RuleSchema(lowered, platform.RuleReadSpec{Object: set.Object}, schemaLookup, engines...)
+	_, err = ruleprotocol.RuleSchema(lowered, platform.RuleReadSpec{Object: set.Object}, schemaLookup, engines...)
 	return lowered, err
 }
 
@@ -127,7 +128,7 @@ func CheckRecordSets(info platform.EntityInfo, lookup func(string) (platform.Ent
 		}
 		schemaLookup := func(typ string) (platform.EntityInfo, bool) {
 			other, ok := lookup(typ)
-			return platform.ConstraintEntity(other), ok
+			return ruleprotocol.ConstraintEntity(other), ok
 		}
 		check := func(expr platform.Expr) error {
 			var visit func(platform.Expr) error
@@ -148,7 +149,7 @@ func CheckRecordSets(info platform.EntityInfo, lookup func(string) (platform.Ent
 			if err := visit(expr); err != nil {
 				return err
 			}
-			_, err := platform.RuleSchema(expr, platform.RuleReadSpec{Object: target.Type}, schemaLookup, engines...)
+			_, err := ruleprotocol.RuleSchema(expr, platform.RuleReadSpec{Object: target.Type}, schemaLookup, engines...)
 			return err
 		}
 		for _, where := range set.Where {

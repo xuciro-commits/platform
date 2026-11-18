@@ -4,7 +4,6 @@ import (
 	"crypto/sha256"
 	"encoding/json"
 	"fmt"
-	"net/url"
 	appsauthoring "platformserver/services/apps/authoring"
 	"reflect"
 	"slices"
@@ -14,7 +13,6 @@ import (
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformserver/kernel/records"
 	"platformserver/platform"
-	dataowner "platformserver/services/data"
 	build "platformserver/services/resources/authoring"
 	"platformserver/services/resources/publication"
 )
@@ -259,18 +257,4 @@ func (m Managed) Install(r *pb.ChangeRecord, refs map[platform.AssetRef]bool, pl
 	for _, version := range media {
 		m.Caller.Put(r, version)
 	}
-}
-
-func TenantSourceRefusal(fixed dataowner.Connection, credential func() string) *platform.Error {
-	if fixed.Archived || fixed.State != "ready" || fixed.Kind != "http" {
-		return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "The tenant source needs a ready HTTP connection")
-	}
-	address, err := url.Parse(fixed.Address)
-	if err != nil || address.Host == "" || address.User != nil || address.RawQuery != "" || address.Fragment != "" || address.Scheme != "https" && !(address.Scheme == "http" && fixed.AllowPrivate) {
-		return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "The tenant source needs an HTTP service root")
-	}
-	if fixed.Secret == "" || credential() == "" {
-		return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "The tenant source needs an available connection credential")
-	}
-	return nil
 }

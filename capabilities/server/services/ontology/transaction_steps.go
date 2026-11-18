@@ -2,6 +2,7 @@ package ontology
 
 import (
 	"fmt"
+	ruleprotocol "platformserver/kernel/protocol"
 	"slices"
 	"strings"
 	"unicode"
@@ -28,7 +29,7 @@ func checkRefusalDeclarations(ctx TransactionContext, object Object, action Acti
 				return fmt.Errorf("Refusal escalation reviewer role must be declared on the original object")
 			}
 		}
-		if _, err := platform.RuleSchema(*declaration.When, scope, lookup, engines...); err != nil {
+		if _, err := ruleprotocol.RuleSchema(*declaration.When, scope, lookup, engines...); err != nil {
 			return err
 		}
 		switch declaration.Level {
@@ -119,7 +120,7 @@ func checkRefusalDeclarations(ctx TransactionContext, object Object, action Acti
 				if err != nil {
 					return err
 				}
-				if _, err := platform.RuleSchema(expr, recordScope, lookup, engines...); err != nil {
+				if _, err := ruleprotocol.RuleSchema(expr, recordScope, lookup, engines...); err != nil {
 					return err
 				}
 				linked = linked || field.Type == "reference" && field.Ref == scope.Object && expr.Kind == "reference" && expr.Ref == "input.$subject"
@@ -255,7 +256,7 @@ func checkTypedTxnStep(ctx TransactionContext, step platform.TxnStep, scope plat
 		if len(kinds) > 0 && !slices.Contains(kinds, expr.Kind) {
 			return fmt.Errorf("Transaction expression has an incompatible result type")
 		}
-		_, err := platform.RuleSchema(*expr, scope, lookup, engines...)
+		_, err := ruleprotocol.RuleSchema(*expr, scope, lookup, engines...)
 		return err
 	}
 	parameters := func(sets []platform.TxnSet) error {
@@ -292,7 +293,7 @@ func checkTypedTxnStep(ctx TransactionContext, step platform.TxnStep, scope plat
 			if field.Type != "decimal" || p.Amount.Kind != "integer" {
 				return err
 			}
-			if _, err = platform.RuleSchema(p.Amount, scope, lookup, engines...); err != nil {
+			if _, err = ruleprotocol.RuleSchema(p.Amount, scope, lookup, engines...); err != nil {
 				return err
 			}
 		}
@@ -368,7 +369,7 @@ func checkTxnRange(span platform.TxnRange, scope platform.RuleReadSpec, lookup f
 		return fmt.Errorf("Range iteration needs matching integers, dates or timestamps, a compatible step and a bounded limit")
 	}
 	for _, expr := range []platform.Expr{span.From, span.Until} {
-		if _, err := platform.RuleSchema(expr, scope, lookup, engines...); err != nil {
+		if _, err := ruleprotocol.RuleSchema(expr, scope, lookup, engines...); err != nil {
 			return err
 		}
 	}

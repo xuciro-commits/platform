@@ -6,6 +6,7 @@ import (
 	"math"
 	"math/big"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
+	ruleprotocol "platformserver/kernel/protocol"
 	persistence "platformserver/kernel/store"
 	"platformserver/platform"
 	"reflect"
@@ -377,7 +378,7 @@ func (s *Store) Aggregate(et *Type, q AggregateQuery, rows []reflect.Value, comp
 			if err != nil {
 				return Aggregate{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Aggregate {measure}: {reason}", measure.column.Name, err.Error())
 			}
-			value, err := platform.ExprGoValue(result)
+			value, err := ruleprotocol.ExprGoValue(result)
 			if err != nil {
 				return Aggregate{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
 			}

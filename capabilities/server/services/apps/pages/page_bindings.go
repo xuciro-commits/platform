@@ -2,6 +2,7 @@ package pages
 
 import (
 	"fmt"
+	ruleprotocol "platformserver/kernel/protocol"
 	"slices"
 	"strings"
 
@@ -53,7 +54,7 @@ func checkDataBinding(p platform.Page, binding platform.PageDataBinding, lookup 
 		}
 		metadata := func(typ string) (platform.EntityInfo, bool) {
 			value, found := lookup(typ)
-			return platform.ConstraintEntity(value), found
+			return ruleprotocol.ConstraintEntity(value), found
 		}
 		for _, field := range model.Fields {
 			if _, err := platform.RecordPathField(info.Type, fieldSegments(field), metadata); err != nil {
@@ -191,7 +192,7 @@ func checkDataBinding(p platform.Page, binding platform.PageDataBinding, lookup 
 }
 
 func checkRuleExpression(expr platform.Expr, reads platform.RuleReadSpec, lookup func(string) (platform.EntityInfo, bool), engines ...platform.RuleEngine) error {
-	schema, err := platform.RuleSchema(expr, reads, lookup, engines...)
+	schema, err := ruleprotocol.RuleSchema(expr, reads, lookup, engines...)
 	if err != nil {
 		return err
 	}

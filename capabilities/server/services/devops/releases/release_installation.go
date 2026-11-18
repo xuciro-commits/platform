@@ -3,6 +3,7 @@ package releases
 import (
 	"encoding/json"
 	"fmt"
+	ruleprotocol "platformserver/kernel/protocol"
 	"reflect"
 	"strings"
 	"time"
@@ -413,7 +414,7 @@ func ValidateSet(context ValidationContext, engines ...platform.RuleEngine) erro
 		if err := context.RecordSets(info, engines...); err != nil {
 			return err
 		}
-		if err := platform.CheckConstraints(info, context.Lookup, true, engines...); err != nil {
+		if err := ruleprotocol.CheckConstraints(info, context.Lookup, true, engines...); err != nil {
 			return err
 		}
 	}

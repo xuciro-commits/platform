@@ -3,6 +3,7 @@ package kernel
 import (
 	"encoding/json"
 	"errors"
+	ruleprotocol "platformserver/kernel/protocol"
 	"reflect"
 	"slices"
 	"strings"
@@ -60,7 +61,7 @@ func (k ConstraintCheck) lookup(typ string) (platform.EntityInfo, bool) {
 	if et == nil {
 		return platform.EntityInfo{}, false
 	}
-	return platform.ConstraintEntity(et.Info()), true
+	return ruleprotocol.ConstraintEntity(et.Info()), true
 }
 
 func (k ConstraintCheck) check(c platform.Caller, info platform.EntityInfo, rule platform.Constraint, after *records.Row, before *records.Row) (refusal *platform.Error) {
@@ -82,7 +83,7 @@ func (k ConstraintCheck) check(c platform.Caller, info platform.EntityInfo, rule
 			_ = json.Unmarshal(read, &readable)
 		}
 		for _, name := range rule.Fields {
-			field, ok := platform.ConstraintEntity(info).Field(name)
+			field, ok := ruleprotocol.ConstraintEntity(info).Field(name)
 			if ok && field.ReadsAny(c.RolesIn(info.App), c.Rules()) && readErr == nil {
 				raw := platform.Raw(values[name])
 				if len(raw) <= 4096 && string(raw) == string(readable[name]) {
@@ -93,16 +94,16 @@ func (k ConstraintCheck) check(c platform.Caller, info platform.EntityInfo, rule
 		return c.RefuseConstraint(rule, info.Type+"/"+records.Header(after.Value).ID, visible, reason)
 	}
 	evaluate := func(subject map[string]any) (bool, *platform.Error) {
-		spec := platform.ConstraintSpec(info, rule)
+		spec := ruleprotocol.ConstraintSpec(info, rule)
 		lookup := func(typ string) (platform.EntityInfo, bool) {
 			other, ok := k.lookup(typ)
 			return other, ok && other.App == info.App
 		}
-		schema, err := platform.RuleSchema(*rule.Expr, spec, lookup, c.Rules())
+		schema, err := ruleprotocol.RuleSchema(*rule.Expr, spec, lookup, c.Rules())
 		if err != nil {
 			return false, fail("definition_unavailable")
 		}
-		context, err := c.RuleContext(*rule.Expr, spec, lookup, subject, nil, k.At)
+		context, err := ruleprotocol.RuleContext(c, *rule.Expr, spec, lookup, subject, nil, k.At)
 		if err != nil {
 			return false, fail("input_unavailable")
 		}
@@ -132,7 +133,7 @@ func (k ConstraintCheck) check(c platform.Caller, info platform.EntityInfo, rule
 		}
 	case "unique":
 		if rule.Scope != "" && rule.Scope != "tenant" {
-			path, err := platform.ConstraintScopePath(info, rule.Scope)
+			path, err := ruleprotocol.ConstraintScopePath(info, rule.Scope)
 			if err != nil {
 				return fail("scope_unavailable")
 			}
@@ -396,7 +397,7 @@ func (k ConstraintCheck) readPlan(info platform.EntityInfo, rule platform.Constr
 	paths := plan.paths
 	if rule.Kind == "unique" && rule.Scope != "" && rule.Scope != "tenant" {
 		plan.local = false
-		path, _ := platform.ConstraintScopePath(info, rule.Scope)
+		path, _ := ruleprotocol.ConstraintScopePath(info, rule.Scope)
 		paths[""] = append(paths[""], path)
 	}
 	var visit func(platform.Expr, string)

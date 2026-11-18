@@ -3,6 +3,7 @@ package build
 import (
 	"encoding/json"
 	"fmt"
+	ruleprotocol "platformserver/kernel/protocol"
 	"reflect"
 	"slices"
 	"strings"
@@ -29,7 +30,7 @@ func computeRulesOf(o ontology.Object, lookup func(string) (platform.EntityInfo,
 				return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
 			}
 			s := ruleSpec(o, ontology.Action{}, o.Reads)
-			schema, err := platform.RuleSchema(e, s, lookup, c.Rules())
+			schema, err := ruleprotocol.RuleSchema(e, s, lookup, c.Rules())
 			if f.Formula != "" {
 				refs := map[string]platform.ExprType{}
 				for _, field := range o.Fields {
@@ -45,7 +46,7 @@ func computeRulesOf(o ontology.Object, lookup func(string) (platform.EntityInfo,
 			if err != nil {
 				return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
 			}
-			ctx, err := c.RuleContext(e, s, lookup, record, nil, now)
+			ctx, err := ruleprotocol.RuleContext(c, e, s, lookup, record, nil, now)
 			if err != nil {
 				return platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, err.Error())
 			}
@@ -90,7 +91,7 @@ func computeRulesOf(o ontology.Object, lookup func(string) (platform.EntityInfo,
 					holder.Set(reflect.ValueOf(ctx.Sources))
 				}
 			}
-			value, err := platform.ExprGoValue(result.Value)
+			value, err := ruleprotocol.ExprGoValue(result.Value)
 			if err == nil {
 				err = assign(reflect.ValueOf(record).Elem().FieldByName(ontology.GoName(f.Name)), value)
 			}
@@ -186,7 +187,7 @@ func (b *Build) checkObjectRules(o ontology.Object, engines ...platform.RuleEngi
 		if err := b.checkRuleCollections(s, where, lookup); err != nil {
 			return err
 		}
-		_, err := platform.RuleSchema(e, s, lookup, engines...)
+		_, err := ruleprotocol.RuleSchema(e, s, lookup, engines...)
 		if err != nil {
 			return fmt.Errorf("%s: %w", where, err)
 		}
@@ -220,7 +221,7 @@ func (b *Build) checkRuleCollections(s platform.RuleReadSpec, where string, look
 			return fmt.Errorf("%s collection %s is unavailable", where, name)
 		}
 		if set.Of != "" && set.Of != "$subject" {
-			_, selected, err := platform.RuleCollectionSubjectField(s.Object, set.Of, lookup)
+			_, selected, err := ruleprotocol.RuleCollectionSubjectField(s.Object, set.Of, lookup)
 			if err != nil {
 				return err
 			}

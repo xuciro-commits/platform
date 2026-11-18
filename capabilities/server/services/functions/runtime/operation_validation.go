@@ -2,6 +2,7 @@ package compute
 
 import (
 	"fmt"
+	ruleprotocol "platformserver/kernel/protocol"
 	"slices"
 	"strconv"
 
@@ -26,7 +27,7 @@ func ValidateOperation(o platform.Operation, app platform.App, executor platform
 			if row.Condition.Kind != "boolean" {
 				return fmt.Errorf("row %d requires boolean", i+1)
 			}
-			if _, err := platform.RuleSchema(row.Condition, o.Rules.Reads, entity, engine); err != nil {
+			if _, err := ruleprotocol.RuleSchema(row.Condition, o.Rules.Reads, entity, engine); err != nil {
 				return err
 			}
 			if err := o.Output.Validate(row.Result, o.Limits.MaxOutputBytes); err != nil {

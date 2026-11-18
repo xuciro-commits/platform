@@ -3,6 +3,7 @@ package build
 import (
 	"fmt"
 	"platformserver/kernel/acceptedformat"
+	ruleprotocol "platformserver/kernel/protocol"
 	functionauthoring "platformserver/services/functions/authoring"
 	"reflect"
 	"slices"
@@ -78,7 +79,7 @@ func (h ObjectInstall) Run(app platform.App, e platform.Entity, actions []platfo
 		if err := h.RecordSets(info); err != nil {
 			return err
 		}
-		if err := platform.CheckConstraints(info, h.Entity, true); err != nil {
+		if err := ruleprotocol.CheckConstraints(info, h.Entity, true); err != nil {
 			return err
 		}
 	}

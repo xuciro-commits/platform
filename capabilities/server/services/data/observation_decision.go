@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	observationprotocol "platformserver/kernel/protocol"
 	"strings"
 	"time"
 
@@ -85,7 +86,7 @@ func (d ObservationDecision) Prepare(m platform.Member, ref platform.AssetRef, q
 		return ObservationPrepared{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "Observation decision action is unavailable")
 	}
 	action, declared := owner.Manifest().Actions.Action(decision.Action.Name)
-	if err := platform.CheckObservationAction(plan.Info.Definition, action); err != nil {
+	if err := observationprotocol.CheckObservationAction(plan.Info.Definition, action); err != nil {
 		return ObservationPrepared{}, ObservationUnavailable(err)
 	}
 	if refusal := d.Authorize(m, decision.Action.App, action, declared && action.Target == plan.Entity.Type, now, plan.Sources); refusal != nil {
@@ -102,9 +103,9 @@ func (d ObservationDecision) Observe(ctx context.Context, p ObservationPrepared,
 	outcome := ObservationOutcome{Result: result}
 	definition, rules := p.Plan.Info.Definition, d.Sources.host.Rules()
 	if result.Intervals != nil {
-		outcome.Matched, outcome.Inputs, err = platform.EvaluateObservationIntervals(definition, p.Plan.Entity, p.Plan.Record, *result.Intervals, now, rules)
+		outcome.Matched, outcome.Inputs, err = observationprotocol.EvaluateObservationIntervals(definition, p.Plan.Entity, p.Plan.Record, *result.Intervals, now, rules)
 	} else {
-		outcome.Matched, outcome.Inputs, err = platform.EvaluateObservation(definition, p.Plan.Entity, p.Plan.Record, result.Window, now, rules)
+		outcome.Matched, outcome.Inputs, err = observationprotocol.EvaluateObservation(definition, p.Plan.Entity, p.Plan.Record, result.Window, now, rules)
 	}
 	if err != nil {
 		return ObservationOutcome{}, ObservationUnavailable(err)

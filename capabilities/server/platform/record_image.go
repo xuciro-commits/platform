@@ -105,13 +105,6 @@ type RecordSetRef struct {
 	Name   string `json:"name"`
 }
 
-func (c Caller) ruleRecordSet(object, id, name string, record any, at time.Time) (RecordSetResult, *Error) {
-	if runtime := c.StagedDecision(); runtime != nil {
-		return runtime.ReadRecordSetCandidate(c, object, id, name, Raw(record), at)
-	}
-	return c.ReadRecordSet(object, id, name, at)
-}
-
 func (c Caller) ReadRecordSet(object, id, name string, at time.Time) (RecordSetResult, *Error) {
 	if c.rt == nil {
 		return RecordSetResult{}, Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Declared record sets require the host")

@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	observationprotocol "platformserver/kernel/protocol"
 	"slices"
 	"strings"
 	"time"
@@ -293,14 +294,14 @@ func (o Observations) Fetch(ctx context.Context, plan ObservationPlan, q Observa
 	if answer.Intervals != nil {
 		return result, fmt.Errorf("state intervals cannot replace a numeric observation window")
 	}
-	if err := platform.CheckObservationWindowRange(answer.Window, q.Since, q.Until, plan.Info.Definition.Unit); err != nil {
+	if err := observationprotocol.CheckObservationWindowRange(answer.Window, q.Since, q.Until, plan.Info.Definition.Unit); err != nil {
 		return result, err
 	}
 	if plan.Info.Definition.RequireComplete {
 		if answer.Coverage == nil {
 			return result, fmt.Errorf("observation storage did not declare window coverage")
 		}
-		if err := platform.CheckObservationCoverage(*answer.Coverage, answer.Window); err != nil {
+		if err := observationprotocol.CheckObservationCoverage(*answer.Coverage, answer.Window); err != nil {
 			return result, err
 		}
 	}
@@ -308,7 +309,7 @@ func (o Observations) Fetch(ctx context.Context, plan ObservationPlan, q Observa
 		return result, fmt.Errorf("observation storage exceeded the requested point shape")
 	}
 	if q.Mode == "points" {
-		if err := platform.CheckObservationPoints(answer.Points, answer.Window, q.Limit); err != nil {
+		if err := observationprotocol.CheckObservationPoints(answer.Points, answer.Window, q.Limit); err != nil {
 			return result, err
 		}
 	}

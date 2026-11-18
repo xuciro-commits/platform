@@ -3,6 +3,7 @@ package data
 import (
 	"encoding/json"
 	"fmt"
+	observationprotocol "platformserver/kernel/protocol"
 	"slices"
 	"time"
 
@@ -116,7 +117,7 @@ func (o *Owner) checkObservationDefinition(c platform.Caller, record Observation
 	if err != nil {
 		return err
 	}
-	if err := platform.CheckObservationDefinition(definition, o.lookupEntity, c.Rules()); err != nil {
+	if err := observationprotocol.CheckObservationDefinition(definition, o.lookupEntity, c.Rules()); err != nil {
 		return err
 	}
 	rows, err := o.integrationInventory(platform.AssetObservation)
@@ -140,7 +141,7 @@ func (o *Owner) checkObservationDefinition(c platform.Caller, record Observation
 		if !ok || owner != definition.Decision.Action.App || action.Target != definition.Object.Name {
 			return fmt.Errorf("The observation decision must use an action on its declared object")
 		}
-		if err := platform.CheckObservationAction(definition, action); err != nil {
+		if err := observationprotocol.CheckObservationAction(definition, action); err != nil {
 			return err
 		}
 	}

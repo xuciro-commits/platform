@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"maps"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
+	ruleprotocol "platformserver/kernel/protocol"
 	"platformserver/platform"
 	"platformserver/services/ontology"
 	"strconv"
@@ -121,7 +122,7 @@ func (b *Runtime) txnRangeRows(c platform.Caller, span platform.TxnRange, scope 
 	if span.From.Kind == "integer" {
 		var bounds [2]int64
 		for i, expr := range []platform.Expr{span.From, span.Until} {
-			value, failure := platform.RuleAssignment(expr, scope, c, subject, inputs, now, b.Lookup)
+			value, failure := ruleprotocol.RuleAssignment(expr, scope, c, subject, inputs, now, b.Lookup)
 			if failure != nil {
 				return nil, failure
 			}
@@ -151,7 +152,7 @@ func (b *Runtime) txnRangeRows(c platform.Caller, span platform.TxnRange, scope 
 	}
 	var bounds [2]time.Time
 	for i, expr := range []platform.Expr{span.From, span.Until} {
-		value, failure := platform.RuleAssignment(expr, scope, c, subject, inputs, now, b.Lookup)
+		value, failure := ruleprotocol.RuleAssignment(expr, scope, c, subject, inputs, now, b.Lookup)
 		if failure != nil {
 			return nil, failure
 		}
@@ -218,7 +219,7 @@ func txnRowInputs(c platform.Caller, info platform.EntityInfo, raw json.RawMessa
 	}
 	values := maps.Clone(inputs)
 	values["row.object"] = info.Type
-	for _, field := range platform.ConstraintEntity(info).Fields {
+	for _, field := range ruleprotocol.ConstraintEntity(info).Fields {
 		fact := platform.ExprValue{Kind: platform.RuleFieldKind(field.Type), Status: "missing"}
 		if !field.ReadsAny(c.RolesIn(info.App), c.Rules()) {
 			fact.Status = "withheld"

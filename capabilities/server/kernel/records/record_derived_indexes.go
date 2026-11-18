@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"iter"
 	"maps"
+	ruleprotocol "platformserver/kernel/protocol"
 	persistence "platformserver/kernel/store"
 	"platformserver/platform"
 	"reflect"
@@ -233,7 +234,7 @@ func UniqueKey(lookup ImageLookup, info platform.EntityInfo, rule platform.Const
 		}
 	}
 	if rule.Scope != "" && rule.Scope != "tenant" {
-		path, err := platform.ConstraintScopePath(info, rule.Scope)
+		path, err := ruleprotocol.ConstraintScopePath(info, rule.Scope)
 		if err != nil {
 			return "", err
 		}
@@ -289,7 +290,7 @@ func prepareUniqueScopeReferences(lookup ImageLookup, info platform.EntityInfo, 
 	if rule.Scope == "" || rule.Scope == "tenant" {
 		return
 	}
-	path, err := platform.ConstraintScopePath(info, rule.Scope)
+	path, err := ruleprotocol.ConstraintScopePath(info, rule.Scope)
 	if err != nil {
 		return
 	}
@@ -312,7 +313,7 @@ func ScopeDependents(lookup ImageLookup, info platform.EntityInfo, rule platform
 	if rule.Scope == "" || rule.Scope == "tenant" {
 		return out
 	}
-	path, err := platform.ConstraintScopePath(info, rule.Scope)
+	path, err := ruleprotocol.ConstraintScopePath(info, rule.Scope)
 	if err != nil {
 		return out
 	}

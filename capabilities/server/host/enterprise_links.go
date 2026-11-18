@@ -3,7 +3,6 @@ package host
 import (
 	"encoding/json"
 	dataowner "platformserver/services/data"
-	"platformserver/services/devops/packages"
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
@@ -46,10 +45,10 @@ func (t *Tenant) tenantConnection(c platform.Caller, id string, now time.Time) (
 		return dataowner.Connection{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_NOT_FOUND, "The connection owner is unavailable")
 	}
 	fixed, err := owner.ExecutionConnection(connection)
-	if err != nil || fixed.Archived || fixed.State != "ready" || fixed.Kind != "http" {
+	if err != nil {
 		return dataowner.Connection{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "The tenant source needs a ready HTTP connection")
 	}
-	if refusal := packages.TenantSourceRefusal(fixed, func() string { return t.dataClient().Authorization(fixed) }); refusal != nil {
+	if refusal := dataowner.TenantSourceRefusal(fixed, func() string { return t.dataClient().Authorization(fixed) }); refusal != nil {
 		return dataowner.Connection{}, refusal
 	}
 	return fixed, nil

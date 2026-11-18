@@ -3,6 +3,7 @@ package publication
 import (
 	"encoding/json"
 	"fmt"
+	observationprotocol "platformserver/kernel/protocol"
 	"slices"
 
 	"platformserver/platform"
@@ -182,7 +183,7 @@ func (c CodeDeclarations) Check(checkPage func(platform.Page) error) error {
 	}
 	for _, manifest := range c.Manifests {
 		for _, observation := range manifest.Observations {
-			if err := platform.CheckObservationDefinition(observation, lookup); err != nil {
+			if err := observationprotocol.CheckObservationDefinition(observation, lookup); err != nil {
 				return err
 			}
 		}

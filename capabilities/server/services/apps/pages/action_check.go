@@ -2,6 +2,7 @@ package pages
 
 import (
 	"encoding/json"
+	ruleprotocol "platformserver/kernel/protocol"
 	"strings"
 	"time"
 
@@ -115,7 +116,7 @@ func (a ActionChecks) Check(action platform.Action, request ActionCheckRequest, 
 				result.Conditions = append(result.Conditions, check)
 				continue
 			}
-			outcome, refusal := platform.EvaluateRule(condition.Expr, transition.Criteria.Business.Reads, caller, record, inputs, at, entity)
+			outcome, refusal := ruleprotocol.EvaluateRule(condition.Expr, transition.Criteria.Business.Reads, caller, record, inputs, at, entity)
 			if refusal != nil {
 				check.Message = refusal.Message
 			} else {

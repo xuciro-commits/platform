@@ -7,6 +7,7 @@ import (
 	"google.golang.org/protobuf/proto"
 	"maps"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
+	ruleprotocol "platformserver/kernel/protocol"
 	"platformserver/kernel/records"
 	"platformserver/platform"
 	"platformserver/services/ontology"
@@ -45,7 +46,7 @@ func (b *Runtime) refusalRecord(c platform.Caller, receipt *pb.ChangeRecord, ste
 		if err != nil {
 			return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
 		}
-		value, failure := platform.RuleAssignment(expr, scope, c, subject, inputs, now, b.Lookup)
+		value, failure := ruleprotocol.RuleAssignment(expr, scope, c, subject, inputs, now, b.Lookup)
 		if failure != nil {
 			return failure
 		}
@@ -215,7 +216,7 @@ func (b *Runtime) transactAttempt(c platform.Caller, receipt *pb.ChangeRecord, t
 		}
 	}
 	if txn.Guard != nil {
-		result, err := platform.EvaluateRule(*txn.Guard, spec, c, subject, values, now, b.Lookup)
+		result, err := ruleprotocol.EvaluateRule(*txn.Guard, spec, c, subject, values, now, b.Lookup)
 		if err != nil {
 			return err
 		}
@@ -268,7 +269,7 @@ func (b *Runtime) transactAttempt(c platform.Caller, receipt *pb.ChangeRecord, t
 			if declaration.When == nil || declaration.Level != "block" && declaration.Level != "flag" && declaration.Level != "route" || declaration.Level == "route" && declaration.Route == nil {
 				return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Business refusal declaration is incomplete / 业务拒绝声明不完整")
 			}
-			result, err := platform.EvaluateRule(*declaration.When, scope, c, subject, facts, now, b.Lookup)
+			result, err := ruleprotocol.EvaluateRule(*declaration.When, scope, c, subject, facts, now, b.Lookup)
 			if err != nil {
 				return err
 			}
@@ -323,7 +324,7 @@ func (b *Runtime) transactAttempt(c platform.Caller, receipt *pb.ChangeRecord, t
 			}
 			c.Trace(platform.DecisionTrace{Kind: "transaction-step", Name: strings.TrimPrefix(frame+"/"+step.Name, "/"), Operation: step.Kind})
 			if step.When != nil {
-				result, err := platform.EvaluateRule(*step.When, scope, c, subject, facts, now, b.Lookup)
+				result, err := ruleprotocol.EvaluateRule(*step.When, scope, c, subject, facts, now, b.Lookup)
 				if err != nil {
 					return err
 				}
@@ -468,7 +469,7 @@ func (b *Runtime) transactAttempt(c platform.Caller, receipt *pb.ChangeRecord, t
 				if err != nil {
 					return err
 				}
-				captured, conversionErr := platform.ExprGoValue(value)
+				captured, conversionErr := ruleprotocol.ExprGoValue(value)
 				if conversionErr != nil {
 					return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "{why}", conversionErr.Error())
 				}
@@ -520,7 +521,7 @@ func (b *Runtime) transactAttempt(c platform.Caller, receipt *pb.ChangeRecord, t
 					assignment.To = []platform.Recipient{{AppRole: w.Role}}
 				}
 				if w.Unit != nil {
-					value, err := platform.RuleAssignment(*w.Unit, scope, c, subject, facts, now, b.Lookup)
+					value, err := ruleprotocol.RuleAssignment(*w.Unit, scope, c, subject, facts, now, b.Lookup)
 					if err != nil {
 						return err
 					}
@@ -535,7 +536,7 @@ func (b *Runtime) transactAttempt(c platform.Caller, receipt *pb.ChangeRecord, t
 					target *string
 				}{{w.Body, &assignment.Body}, {w.Key, &assignment.Key}} {
 					if item.expr != nil {
-						value, err := platform.RuleAssignment(*item.expr, scope, c, subject, facts, now, b.Lookup)
+						value, err := ruleprotocol.RuleAssignment(*item.expr, scope, c, subject, facts, now, b.Lookup)
 						if err != nil {
 							return err
 						}
@@ -543,14 +544,14 @@ func (b *Runtime) transactAttempt(c platform.Caller, receipt *pb.ChangeRecord, t
 					}
 				}
 				if w.Member != nil {
-					value, err := platform.RuleAssignment(*w.Member, scope, c, subject, facts, now, b.Lookup)
+					value, err := ruleprotocol.RuleAssignment(*w.Member, scope, c, subject, facts, now, b.Lookup)
 					if err != nil {
 						return err
 					}
 					assignment.To = []platform.Recipient{{Member: constructionText(value)}}
 				}
 				if w.Due != nil {
-					value, err := platform.RuleAssignment(*w.Due, scope, c, subject, facts, now, b.Lookup)
+					value, err := ruleprotocol.RuleAssignment(*w.Due, scope, c, subject, facts, now, b.Lookup)
 					if err != nil {
 						return err
 					}
@@ -595,7 +596,7 @@ func (b *Runtime) transactAttempt(c platform.Caller, receipt *pb.ChangeRecord, t
 				if err != nil {
 					return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
 				}
-				value, failure := platform.RuleAssignment(expr, scope, c, subject, facts, now, b.Lookup, &sources)
+				value, failure := ruleprotocol.RuleAssignment(expr, scope, c, subject, facts, now, b.Lookup, &sources)
 				if failure != nil {
 					return failure
 				}

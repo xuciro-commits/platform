@@ -124,8 +124,8 @@ func Preparation(id, version string, blueprint platform.PackageBlueprint, instal
 		}
 		switch asset.Ref.Kind {
 		case platform.AssetConnection:
-			var def dataowner.ConnectionDefinition
-			if err := dataowner.DecodeDescriptor(asset.Body, &def); err != nil {
+			def, err := dataowner.DescribeConnection(asset.Body)
+			if err != nil {
 				return PackagePreparation{}, err
 			}
 			state, err := source.Find(dataowner.ConnectionType, asset.Ref.Name)

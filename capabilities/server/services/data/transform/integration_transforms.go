@@ -2,6 +2,7 @@ package integrations
 
 import (
 	"fmt"
+	ruleprotocol "platformserver/kernel/protocol"
 	"platformserver/platform"
 	"regexp"
 	"slices"
@@ -133,7 +134,7 @@ func ApplyStep(engine platform.RuleEngine, s platform.TransformStep, rows []map[
 			if err != nil {
 				return nil, err
 			}
-			v, err := platform.ExprGoValue(result.Value)
+			v, err := ruleprotocol.ExprGoValue(result.Value)
 			if err != nil {
 				return nil, err
 			}

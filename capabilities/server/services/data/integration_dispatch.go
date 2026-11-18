@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/url"
+	ruleprotocol "platformserver/kernel/protocol"
 
 	"reflect"
 	"slices"
@@ -80,7 +81,7 @@ func (o *Owner) CheckDispatch(spec *platform.Dispatch, object ontology.Object, a
 		if err != nil {
 			return err
 		}
-		if _, err := platform.RuleSchema(expr, scope, lookup, engines...); err != nil {
+		if _, err := ruleprotocol.RuleSchema(expr, scope, lookup, engines...); err != nil {
 			return fmt.Errorf("Dispatch parameter %s: %w", set.Field, err)
 		}
 	}

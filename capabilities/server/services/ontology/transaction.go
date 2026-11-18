@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"maps"
+	ruleprotocol "platformserver/kernel/protocol"
 	"slices"
 	"strings"
 
@@ -181,7 +182,7 @@ func CheckTransactions(object Object, ctx TransactionContext, engines ...platfor
 			if txn.Guard.Kind != "boolean" || txn.Message == "" {
 				return fmt.Errorf("transaction guard needs a boolean and message")
 			}
-			if _, err := platform.RuleSchema(*txn.Guard, spec, lookup, engines...); err != nil {
+			if _, err := ruleprotocol.RuleSchema(*txn.Guard, spec, lookup, engines...); err != nil {
 				return err
 			}
 		}
@@ -219,7 +220,7 @@ func CheckTransactions(object Object, ctx TransactionContext, engines ...platfor
 					if step.When.Kind != "boolean" {
 						return fmt.Errorf("%s when must be boolean", where)
 					}
-					if _, err := platform.RuleSchema(*step.When, scope, lookup, engines...); err != nil {
+					if _, err := ruleprotocol.RuleSchema(*step.When, scope, lookup, engines...); err != nil {
 						return fmt.Errorf("%s: %w", where, err)
 					}
 				}
@@ -389,7 +390,7 @@ func CheckTransactions(object Object, ctx TransactionContext, engines ...platfor
 					if !RuleAssignmentFits(field.Type, expr.Kind) {
 						return fmt.Errorf("%s assignment type differs", where)
 					}
-					if _, err := platform.RuleSchema(expr, scope, lookup, engines...); err != nil {
+					if _, err := ruleprotocol.RuleSchema(expr, scope, lookup, engines...); err != nil {
 						return fmt.Errorf("%s field %s: %w", where, field.Name, err)
 					}
 				}

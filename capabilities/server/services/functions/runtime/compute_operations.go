@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	ruleprotocol "platformserver/kernel/protocol"
 	"slices"
 	"time"
 
@@ -164,7 +165,7 @@ func Execute(ctx context.Context, host ExecutionHost, tenant string, x platform.
 			if b.RuleFacts == nil {
 				err = fmt.Errorf("Rule facts are not bound")
 			} else {
-				output, err = op.Rules.DecideSchemas(*b.RuleFacts, b.RuleSchemas, host.Rules())
+				output, err = ruleprotocol.DecideTableSchemas(*op.Rules, *b.RuleFacts, b.RuleSchemas, host.Rules())
 			}
 		} else if op.Binding.Kind == "native" {
 			executor := host.Executor(x.App)

@@ -11,35 +11,6 @@ import (
 	"unicode/utf16"
 )
 
-func ruleTraceContext(expr Expr, context ExprContext) ExprContext {
-	out := ExprContext{Refs: map[string]ExprValue{}, Sets: map[string]ExprCollection{}, Sources: context.Sources, Me: context.Me, Now: context.Now, Today: context.Today}
-	var visit func(Expr)
-	visit = func(e Expr) {
-		if e.Ref != "" {
-			if v, ok := context.Refs[e.Ref]; ok {
-				out.Refs[e.Ref] = v
-			}
-		}
-		if e.Window != nil {
-			if out.Windows == nil {
-				out.Windows = map[string]ExprWindowSummary{}
-			}
-			out.Windows[e.Window.Source] = context.Windows[e.Window.Source]
-		}
-		if e.Agg != nil {
-			out.Sets[e.Agg.Source] = context.Sets[e.Agg.Source]
-		}
-		for _, arg := range e.Args {
-			visit(arg)
-		}
-		if e.In != nil {
-			visit(*e.In)
-		}
-	}
-	visit(expr)
-	return out
-}
-
 var inputInstant = regexp.MustCompile(`^\d{4}-\d{2}-\d{2}T([01]\d|2[0-3]):[0-5]\d:[0-5]\d(\.\d{1,9})?(Z|[+-]([01]\d|2[0-3]):[0-5]\d)$`)
 
 func absoluteDate(typ, text string) (time.Time, error) {

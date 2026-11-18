@@ -4,6 +4,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	ruleprotocol "platformserver/kernel/protocol"
 	"reflect"
 	"strconv"
 	"strings"
@@ -30,7 +31,7 @@ func (b *Runtime) txnPost(c platform.Caller, r *pb.ChangeRecord, step platform.T
 		if err != nil {
 			return "", platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "{why}", err.Error())
 		}
-		value, problem := platform.RuleAssignment(expr, scope, c, subject, inputs, now, b.Lookup)
+		value, problem := ruleprotocol.RuleAssignment(expr, scope, c, subject, inputs, now, b.Lookup)
 		if problem != nil {
 			return "", problem
 		}
@@ -61,7 +62,7 @@ func (b *Runtime) txnPost(c platform.Caller, r *pb.ChangeRecord, step platform.T
 			current = platform.ExprValue{Kind: kind, Status: "value", Data: value}
 		}
 	}
-	amount, problem := platform.EvaluateRule(p.Amount, scope, c, subject, inputs, now, b.Lookup)
+	amount, problem := ruleprotocol.EvaluateRule(p.Amount, scope, c, subject, inputs, now, b.Lookup)
 	if problem != nil {
 		return "", problem
 	}
@@ -90,7 +91,7 @@ func (b *Runtime) txnPost(c platform.Caller, r *pb.ChangeRecord, step platform.T
 			return "", platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The balance cannot fall below zero")
 		}
 	}
-	value, err := platform.ExprGoValue(next)
+	value, err := ruleprotocol.ExprGoValue(next)
 	if err != nil {
 		return "", platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "{why}", err.Error())
 	}
@@ -145,7 +146,7 @@ func (b *Runtime) txnParameters(c platform.Caller, sets []platform.TxnSet, scope
 		if err != nil {
 			return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "{why}", err.Error())
 		}
-		value, problem := platform.RuleAssignment(expr, scope, c, subject, inputs, now, b.Lookup)
+		value, problem := ruleprotocol.RuleAssignment(expr, scope, c, subject, inputs, now, b.Lookup)
 		if problem != nil {
 			return nil, problem
 		}

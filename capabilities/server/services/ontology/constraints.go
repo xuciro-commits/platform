@@ -1,6 +1,7 @@
 package ontology
 
 import (
+	ruleprotocol "platformserver/kernel/protocol"
 	"reflect"
 
 	"platformserver/kernel/records"
@@ -16,11 +17,11 @@ func CheckObjectConstraints(o Object, entity platform.Entity, lookup func(string
 		return err
 	}
 	lookup = RuleLookup(o, AppID, BuilderRole, lookup)
-	if err := platform.CheckConstraints(info, lookup, true, engines...); err != nil {
+	if err := ruleprotocol.CheckConstraints(info, lookup, true, engines...); err != nil {
 		return err
 	}
 	for _, constraint := range o.Constraints {
-		if err := checkCollections(platform.ConstraintSpec(info, constraint), "constraint "+constraint.Name, lookup); err != nil {
+		if err := checkCollections(ruleprotocol.ConstraintSpec(info, constraint), "constraint "+constraint.Name, lookup); err != nil {
 			return err
 		}
 	}

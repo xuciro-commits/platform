@@ -2,6 +2,7 @@ package ontology
 
 import (
 	"fmt"
+	ruleprotocol "platformserver/kernel/protocol"
 	"reflect"
 	"slices"
 	"strings"
@@ -66,7 +67,7 @@ func (c InstallDependents) Validate() error {
 		if err := draft.CheckSets(info, c.Engine); err != nil {
 			return err
 		}
-		if err := platform.CheckConstraints(info, draft.Entity, true, c.Engine); err != nil {
+		if err := ruleprotocol.CheckConstraints(info, draft.Entity, true, c.Engine); err != nil {
 			return err
 		}
 	}

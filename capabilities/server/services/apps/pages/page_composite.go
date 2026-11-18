@@ -2,6 +2,7 @@ package pages
 
 import (
 	"fmt"
+	ruleprotocol "platformserver/kernel/protocol"
 	"slices"
 
 	"platformserver/platform"
@@ -60,7 +61,7 @@ func checkComposite(b platform.PageDataBinding, lookup func(string) (platform.En
 	}
 	entity := func(typ string) (platform.EntityInfo, bool) {
 		v, ok := lookup(typ)
-		return platform.ConstraintEntity(v), ok
+		return ruleprotocol.ConstraintEntity(v), ok
 	}
 	for _, port := range contract.ModelPorts {
 		view, exists := b.Models[port.ID]
@@ -102,7 +103,7 @@ func checkComposite(b platform.PageDataBinding, lookup func(string) (platform.En
 			} else if err := checkRuleExpression(expression, platform.RuleReadSpec{Object: view.Model.Type}, lookup, engines...); err != nil {
 				return fmt.Errorf("binding %s role %s: %w", b.ID, role, err)
 			} else if target := declaration.Target; target != "" {
-				schema, err := platform.RuleSchema(expression, platform.RuleReadSpec{Object: view.Model.Type}, lookup, engines...)
+				schema, err := ruleprotocol.RuleSchema(expression, platform.RuleReadSpec{Object: view.Model.Type}, lookup, engines...)
 				if err != nil {
 					return err
 				}

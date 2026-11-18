@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	observationprotocol "platformserver/kernel/protocol"
 	"slices"
 
 	"platformserver/platform"
@@ -97,7 +98,7 @@ func (resolver Resolver) candidate(roots []platform.AssetRef, available []platfo
 			if err := json.Unmarshal(body, &observation); err != nil {
 				return empty, err
 			}
-			if err := platform.CheckObservationDefinition(observation, func(typ string) (platform.EntityInfo, bool) {
+			if err := observationprotocol.CheckObservationDefinition(observation, func(typ string) (platform.EntityInfo, bool) {
 				target, exists := lookup[observation.Object]
 				if typ != observation.Object.Name || !exists {
 					return platform.EntityInfo{}, false
@@ -113,7 +114,7 @@ func (resolver Resolver) candidate(roots []platform.AssetRef, available []platfo
 				if !exists || err != nil {
 					return empty, fmt.Errorf("observation %s action is unavailable", ref)
 				}
-				if err := platform.CheckObservationAction(observation, action); err != nil {
+				if err := observationprotocol.CheckObservationAction(observation, action); err != nil {
 					return empty, fmt.Errorf("observation %s: %w", ref, err)
 				}
 			}

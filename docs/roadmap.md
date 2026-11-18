@@ -1,15 +1,15 @@
 # U 系列路线图
 
 这份文档保留已授权的 U 系列后端收尾细节；产品阶段与冻结范围见 [plan](plan.md)。
-按顺序完成，做完并验收的条目从这里删除，编号不复用。
+按依赖顺序集成，做完并验收的条目从这里删除，编号不复用。
 
 整段完成标准：`platform` 不超过 8000 行且只留 SDK 契约；
-`capabilities/server/boundaries.json` 的依赖例外和包名与目录名不一致都清零。
+依赖例外、包名与目录名不一致、能力探测都清零。
 租户数据、凭据引用、授权、当前格式纪元内的历史字节和已接受结果均保留。
 
 ## 执行与验证
 
-- 主代理在主工作区独立完成调查、设计、实现、验证和交付，不分派子代理。
+- 主会话完成资源和 SDK 的归位。U6 在两条线收口后执行。
 - 按 [backend](backend.md) 的职责和 [architecture](architecture.md) 的写入、读取与发布规则迁移。
 - 每批运行 `make check`；迁移完成时运行相关黄金路径、不变量和 `make verify`。
 - 涉及并发或分叉时，在 `capabilities/server` 运行 `go test -race ./host -run '^TestInvariantK13' -count=1`。
@@ -28,14 +28,16 @@
 
 ## U5：拆散 Build
 
-按以下资源家族推进。文件路径相对 `capabilities/server/services/resources/authoring/`；
-每批同步处理宿主状态、能力登记、装配、HTTP 调用方和依赖例外，运行该类的创建、编辑、发布、安装、拒绝、
-历史版本、分叉和重放检查。跨类型的 RID、项目、文件夹、工作状态、分支、提案和编排留在资源服务。
+- [ ] U5.15 收口资源编排依赖。对照发布钩子和实际调用，把仍在资源包里的本体、页面、自动化、函数和数据执行归对应服务；
+  在宿主装配发布、分叉与安装所需的具体能力。跨类型的 RID、项目、文件夹、工作状态、分支、提案和编排留在资源服务。
+  同时核对宿主状态与 HTTP 适配归属，清除资源服务的五条依赖例外及数据到本体的例外。
+  验收创建、发布、安装、分叉、重放及拒绝顺序。
 
 ## U7：platform 只留 SDK 契约
 
-- [ ] U7.5 收窄运行接口并收口：消除调用点的可选能力探测；AI 归 AI 服务，workflow 归自动化服务，
-  每项只留一个实现。每批检查接受结果、历史映像和黄金路径；
+- [ ] U7.5 收窄运行接口并收口。规则执行与观测、自动化、AI 和协议校验按实际调用方归位；
+  已窄化的 Caller 按 SDK 调用需求保留，宿主私有能力走装配。每项只留一个实现。
+  检查接受结果、历史映像和黄金路径；
   最终核对 `platform` 不超过 8000 行、
   `capabilityProbes` 与依赖例外均为 0。
 
@@ -44,13 +46,8 @@
 U6 在 U5 和 U7 完成后执行；只改代码术语，不改协议包名、JSON 字段、URL 或已存字节。
 
 - [ ] U6.1 包名与目录名一致，`misnamedPackages` 降为 0。
-  - 当前目录及对应包名待核对，目标是将包名改为目录名：
-    `ai/evaluation` → `agents`，`ai/gateway` → `aigateway`，`ai/retrieval` → `knowledge`，
-    `ai/runtime` → `agents`，`ai/sources` → `knowledge`，`ai/state` → `aistate`。
-  - 另有 `apps` → `applications`，`automate/runtime` → `automation`，`data/blobs` → `resources`，
-    `data/transform` → `integrations`，`functions/runtime` → `compute`，`resources/authoring` → `build`，
-    `resources/merge` → `branches`，`work/activity` → `relations`；执行前按当前代码重新核对。
-  - 路径均相对 `capabilities/server/services/`；改名后运行构建、边界、契约与全量验收。
+  - 以 `go list` 的实际包名与路径为准。改包声明和调用方的导入选择器，保持导入路径和线格式，处理同名导入。
+  - 改名后运行构建、边界、契约与全量验收。
 
 - [ ] U6.2 统一记录类型、服务与权威状态的代码术语。
   - `platform.Entity` 改为 `RecordType`，`EntityInfo` 改为 `RecordTypeInfo`，`platform.App` 改为 `Service`。

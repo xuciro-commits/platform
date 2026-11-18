@@ -14,7 +14,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
-	persistence "platformserver/kernel/store"
+	"platformserver/kernel/fileio"
 	"platformserver/platform"
 	"sort"
 	"strings"
@@ -170,7 +170,7 @@ func (s *localFiles) Put(_ context.Context, key string, data []byte, _ string) e
 			return nil
 		}
 	}
-	return persistence.WriteFileAtomic(path, data)
+	return fileio.WriteAtomic(path, data)
 }
 
 func (s *localFiles) Get(_ context.Context, key string) (io.ReadCloser, int64, error) {

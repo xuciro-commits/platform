@@ -3,6 +3,7 @@ package data
 import (
 	"encoding/json"
 	"fmt"
+	observationprotocol "platformserver/kernel/protocol"
 	"reflect"
 	"slices"
 	"strconv"
@@ -166,7 +167,7 @@ func (o *Owner) integrationAsset(kind platform.AssetKind, record any, ordinal in
 			return asset, err
 		}
 		c := o.host.Automation(platform.Caller{}, App)
-		if err := platform.CheckObservationDefinition(d, o.lookupEntity); err != nil {
+		if err := observationprotocol.CheckObservationDefinition(d, o.lookupEntity); err != nil {
 			return asset, err
 		}
 		if d.Decision != nil {
@@ -175,7 +176,7 @@ func (o *Owner) integrationAsset(kind platform.AssetKind, record any, ordinal in
 				return asset, fmt.Errorf("The observation decision must use an action on its declared object")
 			}
 			if ok {
-				if err := platform.CheckObservationAction(d, action); err != nil {
+				if err := observationprotocol.CheckObservationAction(d, action); err != nil {
 					return asset, err
 				}
 			}

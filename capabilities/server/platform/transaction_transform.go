@@ -43,21 +43,6 @@ type QuarantinedRow struct {
 	Row    map[string]any `json:"row"`
 }
 
-func RuleAssignment(e Expr, s RuleReadSpec, c Caller, record any, inputs map[string]any, now time.Time, lookup func(string) (EntityInfo, bool), provenance ...*[]string) (any, *Error) {
-	r, err := EvaluateRule(e, s, c, record, inputs, now, lookup)
-	for _, refs := range provenance {
-		*refs = append(*refs, r.Sources...)
-	}
-	if err != nil {
-		return nil, err
-	}
-	v, failure := ExprGoValue(r.Value)
-	if failure != nil {
-		return nil, Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, failure.Error())
-	}
-	return v, nil
-}
-
 type BusinessRuntimeContext struct {
 	App      string
 	Entities map[string]Entity

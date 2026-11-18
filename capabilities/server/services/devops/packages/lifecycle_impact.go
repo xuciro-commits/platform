@@ -30,22 +30,7 @@ func StoredImpact(store *records.Store, definitions []platform.Definition, activ
 			return 0, false
 		},
 		Connection: func(id string) (platform.PackageImpactConnection, bool, error) {
-			record := store.Type(dataowner.ConnectionType).Rows().Get(id)
-			if record == nil {
-				return platform.PackageImpactConnection{}, false, nil
-			}
-			connection := record.Value.Interface().(dataowner.Connection)
-			var definition dataowner.ConnectionDefinition
-			if connection.Published != "" {
-				var accepted platform.ReleaseAsset
-				if err := dataowner.DecodeDescriptor([]byte(connection.Published), &accepted); err != nil {
-					return platform.PackageImpactConnection{}, false, err
-				}
-				if err := dataowner.DecodeDescriptor(accepted.Body, &definition); err != nil {
-					return platform.PackageImpactConnection{}, false, err
-				}
-			}
-			return platform.PackageImpactConnection{Configured: connection.Address != "" && (!definition.Credential || connection.Secret != ""), Credential: definition.Credential}, true, nil
+			return dataowner.ConnectionImpact(store, id)
 		},
 		Removals: func(removed, replaced map[platform.AssetRef]bool) []platform.PackageImpactReference {
 			return RemovalImpacts(resources, definitions, active, removed, replaced)

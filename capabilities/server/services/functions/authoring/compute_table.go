@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"math"
+	ruleprotocol "platformserver/kernel/protocol"
 	"regexp"
 	"strconv"
 	"strings"
@@ -44,7 +45,7 @@ func CheckTableShape(tb Table, lookup func(string) (platform.EntityInfo, bool), 
 		if row.Condition.Kind != "boolean" {
 			return fmt.Errorf("row %d needs boolean", i+1)
 		}
-		if _, err := platform.RuleSchema(row.Condition, plan.Reads, lookup, engines...); err != nil {
+		if _, err := ruleprotocol.RuleSchema(row.Condition, plan.Reads, lookup, engines...); err != nil {
 			return fmt.Errorf("row %d: %w", i+1, err)
 		}
 	}

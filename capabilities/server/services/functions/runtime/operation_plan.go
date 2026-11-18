@@ -3,6 +3,7 @@ package compute
 import (
 	"encoding/json"
 	"fmt"
+	ruleprotocol "platformserver/kernel/protocol"
 	"slices"
 	"strings"
 	"time"
@@ -129,14 +130,14 @@ func (p OperationPlan) Plan(c platform.Caller, r *pb.ChangeRecord, q platform.Op
 		}
 		aggregate := platform.Expr{}
 		for _, row := range op.Rules.Rows {
-			schema, err := platform.RuleSchema(row.Condition, op.Rules.Reads, p.Entity, p.Rules)
+			schema, err := ruleprotocol.RuleSchema(row.Condition, op.Rules.Reads, p.Entity, p.Rules)
 			if err != nil {
 				return refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
 			}
 			binding.RuleSchemas = append(binding.RuleSchemas, schema)
 			aggregate.Args = append(aggregate.Args, row.Condition)
 		}
-		facts, err := platform.ActingCaller(c, member, owner, false).RuleContext(aggregate, op.Rules.Reads, p.Entity, nil, values, at)
+		facts, err := ruleprotocol.RuleContext(platform.ActingCaller(c, member, owner, false), aggregate, op.Rules.Reads, p.Entity, nil, values, at)
 		if err != nil {
 			return refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, err.Error())
 		}
