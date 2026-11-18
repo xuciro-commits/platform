@@ -9,12 +9,13 @@ import {
   DropdownMenuSubMenu,
 } from "@astryxdesign/core/DropdownMenu";
 import { IconButton } from "@astryxdesign/core/IconButton";
-import { useToast } from "@astryxdesign/core/Toast";
 import { apps } from "../apps";
-import { type Api, endSession, startSession, useRead, useSession } from "../host";
+import { endSession, startSession, useSession } from "../host";
 import { t } from "../i18n";
-import { reasonOf, send } from "../pages/act";
+import { useState } from "react";
 import { navigate, usePath } from "../router";
+import { useAccount } from "./account";
+import { SettingsDialog } from "./settings/SettingsDialog";
 
 const appearances = [
   { value: "system", label: "Match system" },
@@ -27,25 +28,18 @@ function nameOf(language: string) {
 }
 
 export function MemberMenu({ compact }: { compact?: boolean }) {
-  const toast = useToast();
   const session = useSession();
   const [, app, entry] = usePath().split("/");
-  const me = useRead<Api.MeView>("/v1/me");
-  const catalog = useRead<Api.Action[]>("/v1/actions");
-  const data = me.status === "ready" ? me.data : undefined;
-  const update = catalog.status === "ready" ? catalog.data.find((action) => action.schema === "platform.profile.update") : undefined;
-  const name = data?.account.displayName || data?.principalId || "";
+  const [settings, setSettings] = useState(false);
+  const { me: data, name, canSave, save } = useAccount();
   const languages = data ? ["en", ...data.languages.filter((language) => language !== "en")] : [];
-  const save = (field: "language" | "theme", value: string) => {
-    if (!update || !data) return;
-    send(update, data.principalId, { [field]: value }).catch((problem: unknown) => toast({ body: reasonOf(problem), type: "error" }));
-  };
   const switchTo = (tenant: string) => {
     if (!session || tenant === session.tenant) return;
     startSession({ token: session.token, tenant });
     navigate(apps.some((known) => known.id === app) && entry ? `/${app}/${entry}` : "/");
   };
   return (
+    <>
     <DropdownMenu
       hasChevron={false}
       placement={compact ? "below" : "end"}
@@ -68,19 +62,22 @@ export function MemberMenu({ compact }: { compact?: boolean }) {
           <DropdownMenuDivider />
         </>
       )}
-      <DropdownMenuSubMenu label={t("Language")} isDisabled={!update}>
-        <DropdownMenuRadioGroup label={t("Language")} value={data?.account.language ?? ""} onChange={(value) => save("language", value)}>
+      <DropdownMenuSubMenu label={t("Language")} isDisabled={!canSave}>
+        <DropdownMenuRadioGroup label={t("Language")} value={data?.account.language ?? ""} onChange={(language) => save({ language })}>
           <DropdownMenuRadioItem value="" label={t("Automatic")} />
           {languages.map((language) => <DropdownMenuRadioItem key={language} value={language} label={nameOf(language)} />)}
         </DropdownMenuRadioGroup>
       </DropdownMenuSubMenu>
-      <DropdownMenuSubMenu label={t("Appearance")} isDisabled={!update}>
-        <DropdownMenuRadioGroup label={t("Appearance")} value={data?.account.theme || "system"} onChange={(value) => save("theme", value)}>
+      <DropdownMenuSubMenu label={t("Appearance")} isDisabled={!canSave}>
+        <DropdownMenuRadioGroup label={t("Appearance")} value={data?.account.theme || "system"} onChange={(theme) => save({ theme })}>
           {appearances.map((appearance) => <DropdownMenuRadioItem key={appearance.value} value={appearance.value} label={t(appearance.label)} />)}
         </DropdownMenuRadioGroup>
       </DropdownMenuSubMenu>
+      <DropdownMenuItem label={t("Settings")} onClick={() => setSettings(true)} />
       <DropdownMenuDivider />
       <DropdownMenuItem label={t("Sign out")} onClick={endSession} />
     </DropdownMenu>
+    {settings && <SettingsDialog onClose={() => setSettings(false)} />}
+    </>
   );
 }

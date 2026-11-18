@@ -1252,3 +1252,32 @@ test("sign-in: a work account signs in by password or single sign-on and lands w
   await expect(objectTypes).toBeVisible();
   await expect(page).toHaveURL(/\/ontology\/object-types$/);
 });
+
+test("settings: the profile is edited in place and the member menu follows", async ({ page }) => {
+  await signIn(page);
+  const openSettings = async () => {
+    await page.getByRole("button", { name: "Account", exact: true }).click();
+    await page.getByRole("menuitem", { name: "Settings", exact: true }).click();
+    return page.getByRole("dialog", { name: "Settings" });
+  };
+  let settings = await openSettings();
+  const name = settings.getByRole("textbox", { name: "Display name", exact: true });
+  const before = await name.inputValue();
+  await name.fill("Dana W.");
+  await name.press("Enter");
+  await settings.getByRole("navigation", { name: "Settings sections" }).getByText("Login & security", { exact: true }).click();
+  await expect(settings.getByText("This session", { exact: true })).toBeVisible();
+  await expect(settings.getByRole("button", { name: "Sign out others", exact: true })).toBeDisabled();
+  await settings.getByRole("button", { name: "Close", exact: true }).click();
+
+  await page.getByRole("button", { name: "Account", exact: true }).click();
+  await expect(page.getByRole("menuitem", { name: /Dana W\./ })).toBeVisible();
+  await page.keyboard.press("Escape");
+
+  settings = await openSettings();
+  await settings.getByRole("textbox", { name: "Display name", exact: true }).fill(before);
+  await settings.getByRole("textbox", { name: "Display name", exact: true }).press("Enter");
+  await settings.getByRole("button", { name: "Close", exact: true }).click();
+  await page.getByRole("button", { name: "Account", exact: true }).click();
+  await expect(page.getByRole("menuitem", { name: new RegExp(before) })).toBeVisible();
+});
