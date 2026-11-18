@@ -32,7 +32,7 @@ export type ListColumn<Row> = {
   text: (row: Row) => string;
   kind?: "string" | "enum" | "number" | "time";
   choices?: string[];
-  dots?: Record<string, Dot>;
+  dot?: (row: Row) => Dot | undefined;
   value?: (row: Row) => unknown;
 };
 type Done = Promise<unknown>;
@@ -58,6 +58,7 @@ type Sort = { sortKey: string; direction: "ascending" | "descending" }[];
 const compare = (left: unknown, right: unknown) =>
   typeof left === "number" && typeof right === "number" ? left - right : String(left ?? "").localeCompare(String(right ?? ""));
 const idKey = "__id";
+const dotOf = (key: string) => `__dot:${key}`;
 const ungrouped = "none";
 const layouts = ["table", "board"];
 
@@ -110,6 +111,8 @@ export function ListView<Answer, Row>({ definition, read, primary, back }: ListV
       const raw: Raw = { [idKey]: cells[idKey] };
       for (const column of definition.columns) {
         cells[column.key] = column.text(row);
+        const dot = column.dot?.(row);
+        if (dot) cells[dotOf(column.key)] = dot;
         raw[column.key] = column.value ? column.value(row) : cells[column.key];
       }
       return { cells, raw };
@@ -165,6 +168,7 @@ export function ListView<Answer, Row>({ definition, read, primary, back }: ListV
     header: t(column.header),
     width: column.width ? pixel(column.width) : proportional(1),
     sortable: true,
+    align: column.kind === "number" ? ("end" as const) : undefined,
     renderCell: (cells) =>
       position === 0 && cells.__href ? (
         <Link href={cells.__href}>{cells[column.key] || cells[idKey]}</Link>
@@ -172,15 +176,15 @@ export function ListView<Answer, Row>({ definition, read, primary, back }: ListV
         <Text type="body" color="secondary">
           <Timestamp value={cells[column.key]} format="relative" />
         </Text>
-      ) : column.dots?.[cells[column.key]] ? (
+      ) : cells[dotOf(column.key)] ? (
         <HStack gap={2} vAlign="center">
-          <StatusDot variant={column.dots[cells[column.key]]} label={cells[column.key]} />
+          <StatusDot variant={cells[dotOf(column.key)] as Dot} label={cells[column.key]} />
           <Text type="body" maxLines={1}>
             {cells[column.key]}
           </Text>
         </HStack>
       ) : (
-        <Text type="body" maxLines={1}>
+        <Text type="body" maxLines={1} hasTabularNumbers={column.kind === "number"}>
           {cells[column.key] ?? ""}
         </Text>
       ),

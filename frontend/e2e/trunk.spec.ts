@@ -15,8 +15,12 @@ test("records: open a list, open a record, change a field in place", async ({ pa
   await open(page, "Ontology", "Objects");
   await page.getByRole("link", { name: "Opportunities" }).click();
   await expect(page.getByRole("heading", { level: 1, name: "Opportunities" })).toBeVisible();
+  const retrofit = page.getByRole("row", { name: /Press line retrofit/ });
+  await expect(retrofit.getByText("Negotiation", { exact: true })).toBeVisible();
+  await expect(retrofit.getByText("184,000", { exact: true })).toBeVisible();
 
   await page.getByRole("link", { name: "Press line retrofit" }).click();
+  await expect(page.getByRole("combobox", { name: "Stage" })).toContainText("Negotiation");
   await expect(page.getByRole("heading", { level: 1, name: "Press line retrofit" })).toBeVisible();
 
   await expect(page.getByRole("heading", { level: 3, name: "Commercial" })).toBeVisible();
@@ -50,11 +54,11 @@ test("sections: a field shows only when its condition holds", async ({ page }) =
   await expect(reason).toHaveCount(0);
 
   await page.getByRole("combobox", { name: "Stage" }).click();
-  await page.getByRole("option", { name: "lost" }).click();
+  await page.getByRole("option", { name: "Lost", exact: true }).click();
   await expect(reason).toBeVisible();
 
   await page.getByRole("combobox", { name: "Stage" }).click();
-  await page.getByRole("option", { name: "proposal" }).click();
+  await page.getByRole("option", { name: "Proposal", exact: true }).click();
   await expect(reason).toHaveCount(0);
 });
 

@@ -8,7 +8,7 @@ import { type Api, submit } from "../host";
 import { t } from "../i18n";
 import type { Described, Section, Values } from "./describe";
 import { type InputStatus, ParameterInput, enterable, settles } from "./ParameterInput";
-import { shown } from "./values";
+import { present, shown } from "./values";
 
 export type Editor = {
   values: Values;
@@ -103,7 +103,7 @@ export function FieldGroup({ described, editor, sections, direction }: FieldGrou
                 />
               ) : (
                 <Field key={field.name} label={t(field.title)} inputID={`shown-${field.name}`}>
-                  <Text type="body">{shown(editor.values[field.name])}</Text>
+                  <Text type="body">{present(field, editor.values[field.name])}</Text>
                 </Field>
               );
             })}

@@ -1,5 +1,9 @@
 {
   "project": { "name": "sales", "title": "Sales" },
+  "words": {
+    "en": { "qualifying": "Qualifying", "proposal": "Proposal", "negotiation": "Negotiation", "won": "Won", "lost": "Lost" },
+    "zh-CN": { "qualifying": "资格确认", "proposal": "方案", "negotiation": "谈判", "won": "赢单", "lost": "丢单" }
+  },
   "types": [
     {
       "name": "customer",
@@ -52,7 +56,7 @@
         "fields": [
           { "name": "subject", "title": "Subject", "type": "text", "required": true, "search": true, "group": "Commercial" },
           { "name": "customer", "title": "Customer", "type": "text", "search": true, "group": "Commercial" },
-          { "name": "stage", "title": "Stage", "type": "choice", "choices": "qualifying,proposal,negotiation,won,lost", "aside": true },
+          { "name": "stage", "title": "Stage", "type": "choice", "choices": "qualifying,proposal,negotiation,won,lost", "aside": true, "format": [{ "when": { "op": "=", "kind": "boolean", "args": [{ "kind": "text", "ref": "stage" }, { "kind": "text", "lit": { "value": "qualifying" } }] }, "tone": "neutral" }, { "when": { "op": "=", "kind": "boolean", "args": [{ "kind": "text", "ref": "stage" }, { "kind": "text", "lit": { "value": "proposal" } }] }, "tone": "info" }, { "when": { "op": "=", "kind": "boolean", "args": [{ "kind": "text", "ref": "stage" }, { "kind": "text", "lit": { "value": "negotiation" } }] }, "tone": "warning" }, { "when": { "op": "=", "kind": "boolean", "args": [{ "kind": "text", "ref": "stage" }, { "kind": "text", "lit": { "value": "won" } }] }, "tone": "success" }, { "when": { "op": "=", "kind": "boolean", "args": [{ "kind": "text", "ref": "stage" }, { "kind": "text", "lit": { "value": "lost" } }] }, "tone": "danger" }] },
           { "name": "amount", "title": "Amount", "type": "decimal", "group": "Commercial" },
           { "name": "owner", "title": "Owner", "type": "text", "aside": true },
           { "name": "closing", "title": "Expected close", "type": "date", "group": "Commercial" },

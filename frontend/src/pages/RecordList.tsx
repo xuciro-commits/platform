@@ -7,27 +7,39 @@ import { ActionDialog } from "./ActionDialog";
 import { type BulkAction, type ListShape, ListView, type Move } from "./ListPage";
 import { type Described, describe, numeric } from "./describe";
 import { RecordPage } from "./RecordPage";
-import { dots } from "./Transitions";
-import { shown } from "./values";
+import { type Dot, dots } from "./Transitions";
+import { present } from "./values";
 
 type Row = Record<string, unknown>;
 type Declared = { type: string; title?: string; about: string; fields?: string[]; project?: boolean; instances?: { field: string; path: string } };
 type Back = { href: string; label: string };
 type Stamp = { at?: string };
+type Formats = Record<string, Api.FieldFormat>;
+const formatted = "__formats";
+const formats = (row: Row) => (row[formatted] as Formats | undefined) ?? {};
+
+function keyOf(field: Api.FieldInfo | undefined, title: string) {
+  const index = field?.choiceTitles?.indexOf(title) ?? -1;
+  return index >= 0 ? field?.choices?.[index] : title;
+}
 
 function shape(described: Described, declared: Declared, listPath: string, move?: Move, bulk?: BulkAction[]): ListShape<Api.RecordPage, Row> {
   const lifecycle = described.lifecycle;
   const states = lifecycle?.states ?? [];
   const say = (field: Api.FieldInfo) => (row: Row) =>
-    field.name === lifecycle?.field ? t(described.state(row)?.title ?? shown(row[field.name])) : shown(row[field.name]);
-  const marks = Object.fromEntries(states.map((state) => [t(state.title), dots[state.tone ?? "neutral"]]));
+    field.name === lifecycle?.field ? t(described.state(row)?.title ?? present(field, row[field.name])) : present(field, row[field.name]);
+  const dot = (field: Api.FieldInfo) => (row: Row) => {
+    const tone = field.name === lifecycle?.field ? described.state(row)?.tone : formats(row)[field.name]?.tone;
+    return tone ? (dots as Record<string, Dot | undefined>)[tone] ?? dots.neutral : undefined;
+  };
+  const titles = (field: Api.FieldInfo) => field.choiceTitles ?? field.choices;
   const chosen = declared.fields ? declared.fields.flatMap((name) => described.field(name) ?? []) : described.columns;
   return {
     title: declared.title ?? described.plural,
     about: declared.about,
     move,
     bulk,
-    rows: (answer) => answer.records as Row[],
+    rows: (answer) => (answer.records as Row[]).map((row) => ({ ...row, [formatted]: answer.formats?.[String(row.id)] })),
     id: (row) => String(row.id),
     link: (row) => `${listPath}/${encodeURIComponent(String(row.id))}`,
     columns: [
@@ -35,9 +47,9 @@ function shape(described: Described, declared: Declared, listPath: string, move?
         key: field.name,
         header: field.title,
         text: say(field),
-        kind: field.type === "choice" ? ("enum" as const) : numeric.has(field.type) ? ("number" as const) : ("string" as const),
-        choices: field.name === lifecycle?.field ? states.map((state) => t(state.title)) : field.choices,
-        dots: field.name === lifecycle?.field ? marks : undefined,
+        kind: field.type === "choice" ? ("enum" as const) : numeric.has(field.type) ? ("number" as const) : field.type === "date" || field.type === "datetime" ? ("time" as const) : ("string" as const),
+        choices: field.name === lifecycle?.field ? states.map((state) => t(state.title)) : titles(field),
+        dot: dot(field),
         value: numeric.has(field.type) ? (row: Row) => row[field.name] : undefined,
       })),
       { key: "changed", header: "Updated", width: 140, kind: "time" as const, text: (row: Row) => (row.changed as Stamp | undefined)?.at ?? "" },
@@ -46,7 +58,7 @@ function shape(described: Described, declared: Declared, listPath: string, move?
       key: field.name,
       label: field.title,
       of: say(field),
-      order: described.lanes.includes(field) ? field.choices : undefined,
+      order: described.lanes.includes(field) ? titles(field) : undefined,
     })),
   };
 }
@@ -71,9 +83,9 @@ export function Records({ declared, listPath, id, back }: { declared: Declared; 
   const move = useMemo(
     () =>
       edit && kept
-        ? (moving: string, field: string, to: string) => submit(edit, moving, { [field]: to }, Number(kept.find((row) => row.id === moving)?.revision))
+        ? (moving: string, field: string, to: string) => submit(edit, moving, { [field]: keyOf(described?.field(field), to) }, Number(kept.find((row) => row.id === moving)?.revision))
         : undefined,
-    [edit, kept],
+    [edit, kept, described],
   );
   const archive = described?.other.find((action) => action.schema === `${declared.type}.archive`);
   const bulk = useMemo(

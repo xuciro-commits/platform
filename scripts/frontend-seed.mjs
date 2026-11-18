@@ -74,4 +74,9 @@ for (const type of sample.types.filter((each) => !each.draft)) {
     written += 1;
   }
 }
+const words = declarations.find((entry) => entry.tenantId === identity.tenantId && entry.dataClass === "platform.translation")?.authorityId;
+if (!words) throw new Error("platform.translation: no write authority");
+for (const [language, entries] of Object.entries(sample.words)) {
+  for (const [revision, [text, translation]] of Object.entries(entries).entries()) await submit("platform.translation", language, "set", { text, translation }, words, revision);
+}
 console.log(`frontend-seed: ${sample.types.length} object types (${sample.types.filter((each) => each.draft).length} left as drafts) and ${written} records in project ${sample.project.name} on ${host}`);
