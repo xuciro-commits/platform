@@ -23,70 +23,11 @@
 5. **说明不进代码。** 我们不写注释：模板说明里讲的道理，留在这里或 [frontend](frontend.md)，代码里删掉注释。
 6. **一个表现服务所有入口。** 新表现做成 `src/pages/` 里的一个声明函数（像 `recordList`、`listPage`），入口只写一句声明。
 
-顺序：1.10.1 → 1.10.2a → b → c → d → e → 1.10.3。
+顺序：1.10.2a → b → c → d → e → 1.10.3。
 
 ## 1.10 切换
 
 目标：入口 8495 打开的是新前端；旧书签与旧链接到同一资源；侧栏没有空白入口；回退只切入口。
-
-### 1.10.1 旧地址改写
-
-核对旧前端的结果（`web/packages/ui/src/shell/route.ts` 与各应用的视图登记）：
-
-- 旧地址全在井号后面，共三种：`#/objects/<类型>/<标识>`、`#/<视图>/<ri.…>[/<小节>]`、`#/<视图>[?参数]`。
-- 第二种里视图名不可信：同一资源在不同视图下有不同前缀。认资源只认 rid：`GET /v1/resources/<rid>` 给出 `type` 与 `draft`（记录标识）。
-- 第三种的视图名与功能不一一对应：三个函数视图合成一个入口，`changes` 是分支与提案，`data-source` 是来源。
-  约 25 个视图是开发者目录、演示与试验页，新前端没有对应，不硬对。
-
-改哪里：
-
-- `src/apps/entries.ts` 加 `recordHref(type, id)`：`homes[type] ?? /ontology/objects/<type>` 加 `/<id>`。
-  `CommandSearch` 的同一段换成它；记录地址只有这一个实现。
-- 新文件 `src/shell/legacy.ts`：下表的映射数据，和 `legacyTarget(hash)`，返回新路径、待查的 rid 或“对不上”。
-- `Shell` 挂载时看 `location.hash`：新路径用 `navigate(path, null, true)` 替换；rid 经 `src/host/` 读一次再替换；
-  rid 查不到、或资源没有 `draft`、或视图对不上，进首页，用 Toast 说“这个旧地址在新前端没有对应页面”。
-- `src/host/signin.ts` 存回程地址时带上 `location.hash`，旧地址经过登录也不丢。
-- 旧参数只认 `id`；其余丢掉。小节名与新记录页页签同名（fields、activity、related、files）才带上。
-
-视图映射（左边是新地址，右边是落到它的旧视图）：
-
-| 新地址 | 旧视图 |
-|---|---|
-| `/home/overview` | `home` `overview` `discover` `catalog-home` |
-| `/home/inbox` | `inbox` `notifications` `requests` |
-| `/home/proposals` | `changes` `proposal` |
-| `/home/projects` | `project` |
-| `/data/connections` | `connection` `integrations` |
-| `/data/sources` | `data-source` |
-| `/data/listeners` `/data/writebacks` | `listener`；`writeback` |
-| `/data/observation-sources` | `observation-source` `observations` |
-| `/data/datasets` `/data/pipelines` | `dataset`；`pipeline` |
-| `/data/schedules` `/data/matching-rules` `/data/media-sets` | `schedule` `schedules`；`match`；`media-set` |
-| `/data/lineage` | `lineage` |
-| `/ontology/object-types` `/ontology/link-types` `/ontology/action-types` | `object-type`；`link-type`；`action-type` |
-| `/ontology/interfaces` `/ontology/shared-properties` | `interfaces`；`property-type` |
-| `/ontology/value-types` `/ontology/object-type-groups` | `value-type`；`object-type-group` |
-| `/ontology/objects` | `explorer` `records` `catalog-records` `object-set` `saved` |
-| `/logic/functions` | `functions` `code-functions` `code` `ai-functions` `function` |
-| `/logic/automations` | `automation` `logic-flows` `flow` |
-| `/apps/modules` `/apps/object-views` | `module` `portal` `catalog-portal`；`object-views` `page` `page-preview` |
-| `/ai/agents` `/ai/evaluations` | `agents` `agent`；`evaluations` `evaluation-set` |
-| `/delivery/products` `/delivery/versions` | `products`；`versions` `release-review` |
-| `/delivery/test-plans` `/delivery/sample-sets` | `test-plan`；`sample-set` |
-| `/delivery/marketplace` | `apps` `studio-templates` |
-| `/delivery/installations` | `host-promotions` |
-| `/operations/runs` | `runs` `monitoring-runs` `application-runs` `agent-runs` `automation-operations` |
-| `/operations/logs` `/operations/traces` `/operations/metrics` | `monitoring-logs`；`monitoring-traces`；`monitoring-metrics` |
-| `/operations/alerts` `/operations/audit` | `monitoring-alerts`；`audit` |
-| `/operations/health` | `system-health` `integration-health` `monitoring-overview` |
-| `/admin/organization` `/admin/members` | `organisation` `enterprise`；`member` `members` |
-| `/admin/roles` `/admin/markings` | `permissions` `matrix`；`marking` `markings` |
-| `/admin/models` `/admin/vocabulary` | `ai-configuration` `ai-providers`；`words` |
-| `/admin/credentials` `/admin/settings` | `credentials`；`app-settings` `control-panel` |
-| `/host/tenants` | `host-overview` `host-tenant` `host-migrations` |
-
-表外的旧视图都进首页并说明。验收 trunk：`#/objects/build.opportunity/OPP-001`、一个对象类型的 `#/object-type/<rid>`、
-`#/dataset`、`#/apps`、`#/demo` 各打开一次，前四个落到新地址，最后一个进首页并看到说明。
 
 ### 1.10.2 未建入口按数据形状落地
 

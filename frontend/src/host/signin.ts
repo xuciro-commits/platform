@@ -31,7 +31,7 @@ export function signInWithPassword(sign: Api.SignIn, username: string, password:
 export async function startSingleSignOn(sign: Api.SignIn) {
   const verifier = random();
   const state = random();
-  sessionStorage.setItem(pending, JSON.stringify({ verifier, state, back: location.pathname + location.search }));
+  sessionStorage.setItem(pending, JSON.stringify({ verifier, state, back: location.pathname + location.search + location.hash }));
   const challenge = encoded(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(verifier)));
   const query = new URLSearchParams({
     response_type: "code", client_id: sign.client ?? "", redirect_uri: returnTo(), scope, state,

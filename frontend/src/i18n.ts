@@ -276,6 +276,7 @@ export const zhCN: Record<string, string> = {
   Upgrades: "升级",
   "Nothing here yet": "这里还没有内容",
   "Primary navigation": "主导航",
+  "This legacy link has no corresponding page in the new frontend.": "这个旧地址在新前端没有对应页面。",
   Platform: "平台",
   "Sign in": "登录",
   "Choose how to continue": "选择继续的方式",

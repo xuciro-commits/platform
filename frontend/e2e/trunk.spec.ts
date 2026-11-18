@@ -1,4 +1,5 @@
 import { type Page, expect, test } from "@playwright/test";
+import type { Api } from "../src/host";
 
 async function signIn(page: Page) {
   await page.goto("/");
@@ -9,6 +10,39 @@ async function open(page: Page, app: string, entry: string) {
   await page.getByRole("link", { name: app }).click();
   await page.getByRole("navigation", { name: "Primary navigation" }).getByRole("link", { name: entry }).click();
 }
+
+test("legacy links: open records and mapped views, and explain unavailable views", async ({ page }) => {
+  await signIn(page);
+  const session = await page.evaluate(() => JSON.parse(sessionStorage.getItem("platform:session")!) as { token: string; tenant: string });
+  const response = await page.request.get("/v1/resources", {
+    headers: { authorization: `Bearer ${session.token}`, "platform-tenant": session.tenant },
+  });
+  expect(response.ok()).toBeTruthy();
+  const directory: Api.ResourceDirectory = await response.json();
+  const resource = directory.resources.find((entry) => entry.type === "build.object" && entry.draft === "OBJ-opportunity");
+  expect(resource?.id).toMatch(/^ri\./);
+
+  await page.goto("/#/objects/build.opportunity/OPP-001");
+  await expect(page).toHaveURL("/ontology/objects/build.opportunity/OPP-001");
+  await expect(page.getByRole("heading", { level: 1, name: "Press line retrofit" })).toBeVisible();
+
+  await page.goto(`/#/object-type/${resource!.id}`);
+  await expect(page).toHaveURL("/ontology/object-types/OBJ-opportunity");
+  await expect(page.getByRole("heading", { level: 1, name: "Opportunity", exact: true })).toBeVisible();
+
+  await page.goto("/#/dataset");
+  await expect(page).toHaveURL("/data/datasets");
+  await expect(page.getByRole("heading", { level: 1, name: "Datasets", exact: true })).toBeVisible();
+
+  await page.goto("/#/apps");
+  await expect(page).toHaveURL("/delivery/marketplace");
+  await expect(page.getByRole("heading", { level: 1, name: "Marketplace", exact: true })).toBeVisible();
+
+  await page.goto("/#/demo");
+  await expect(page).toHaveURL("/home/overview");
+  const notifications = page.getByRole("region", { name: "Notifications", exact: true });
+  await expect(notifications.getByText("This legacy link has no corresponding page in the new frontend.", { exact: true })).toBeVisible();
+});
 
 test("records: open a list, open a record, change a field in place", async ({ page }) => {
   await signIn(page);
@@ -1248,6 +1282,7 @@ test("sign-in: a work account signs in by password or single sign-on and lands w
 
   await page.getByRole("button", { name: "Account", exact: true }).click();
   await page.getByRole("menuitem", { name: "Sign out", exact: true }).click();
+  await page.goto("/#/object-type");
   await page.getByRole("button", { name: "Continue with single sign-on", exact: true }).click();
   await expect(objectTypes).toBeVisible();
   await expect(page).toHaveURL(/\/ontology\/object-types$/);

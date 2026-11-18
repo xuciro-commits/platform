@@ -3,17 +3,19 @@ import { EmptyState } from "@astryxdesign/core/EmptyState";
 import { HStack } from "@astryxdesign/core/HStack";
 import { RectangleGroupIcon } from "@heroicons/react/24/outline";
 import { MobileNav } from "@astryxdesign/core/MobileNav";
+import { useToast } from "@astryxdesign/core/Toast";
 import { Suspense, useEffect, useMemo } from "react";
 import { type App, apps, locate, type NavItem } from "../apps";
-import { entries } from "../apps/entries";
+import { entries, recordHref } from "../apps/entries";
 import { type Api, useRead, useSession } from "../host";
 import { Records } from "../pages/RecordList";
 import { setLanguage, t } from "../i18n";
-import { navigate, usePath, useSearch } from "../router";
+import { navigate, useHash, usePath, useSearch } from "../router";
 import { AppRail } from "./AppRail";
 import { setAppearance } from "./appearance";
 import { AppSidebar } from "./AppSidebar";
 import { CommandSearch } from "./CommandSearch";
+import { legacyTarget } from "./legacy";
 import { SignIn } from "./SignIn";
 import { Unbuilt } from "./Unbuilt";
 
@@ -37,6 +39,9 @@ function installedApps(views: Api.ApplicationView[]): App[] {
 export function Shell() {
   const session = useSession();
   const path = usePath();
+  const hash = useHash();
+  const legacy = useMemo(() => legacyTarget(hash), [hash]);
+  const toast = useToast();
   const segments = path.split("/");
   const projected = useRead<Api.ApplicationView[]>(session ? "/v1/applications" : null);
   const me = useRead<Api.MeView>(session ? "/v1/me" : null);
@@ -45,11 +50,33 @@ export function Shell() {
     setLanguage(me.data.language);
     setAppearance(me.data.account.theme);
   }, [me]);
+  const signedIn = session && me.status !== "loading";
+  const resourcePath = signedIn && legacy && legacy !== "unmatched" && "rid" in legacy
+    ? `/v1/resources/${encodeURIComponent(legacy.rid)}`
+    : null;
+  const resource = useRead<Api.ResourceEntry>(resourcePath);
+  useEffect(() => {
+    if (!signedIn || !legacy || location.hash !== hash) return;
+    let destination: string | undefined;
+    if (legacy !== "unmatched") {
+      if ("path" in legacy) {
+        destination = legacy.path;
+      } else {
+        if (resource.path !== resourcePath || resource.status === "loading") return;
+        if (resource.status === "ready" && resource.data.type && resource.data.draft) {
+          destination = recordHref(resource.data.type, resource.data.draft) + legacy.tab;
+        }
+      }
+    }
+    void navigate(destination ?? "/home/overview", null, true);
+    if (!destination) toast({ body: t("This legacy link has no corresponding page in the new frontend.") });
+  }, [signedIn, legacy, hash, resource, resourcePath, toast]);
   const available = useMemo(() => projected.status === "ready" ? [...apps, ...installedApps(projected.data).filter((app) => !apps.some((known) => known.id === app.id))] : apps, [projected]);
   const { app, item } = locate(path, available);
   const object = item.object ?? (app.id === "ontology" && item.id === "objects" ? decodeURIComponent(segments[3] ?? "") : "");
   const listPath = app.id === "ontology" && item.id === "objects" ? `/ontology/objects/${encodeURIComponent(object)}` : item.object ? `/${app.id}/${item.id}` : undefined;
   if (!session) return <SignIn />;
+  if (legacy) return null;
   const Entry = entries[`${app.id}/${item.id}`];
   const retiredLink = projected.status === "ready" && segments[3] && !available.some((application) => application.id === segments[1]);
   const content = retiredLink ? <RetainedRecord key={path} path={path} />

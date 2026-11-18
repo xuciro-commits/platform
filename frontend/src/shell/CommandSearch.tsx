@@ -6,7 +6,7 @@ import { Text } from "@astryxdesign/core/Text";
 import type { SearchSource } from "@astryxdesign/core/Typeahead";
 import { createContext, type ReactNode, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { type App, type NavItem, pathOf } from "../apps";
-import { entries, homes } from "../apps/entries";
+import { entries, recordHref } from "../apps/entries";
 import { type Api, request, useRead } from "../host";
 import { t } from "../i18n";
 import { navigate, usePath } from "../router";
@@ -121,7 +121,7 @@ export function CommandSearch({ app, item, apps, tenant, children }: { app: App;
         const found = (objects.status === "fulfilled" ? objects.value : [])
           .filter((hit) => hit.id && hit.group !== "member" && hit.resource?.canOpen !== false)
           .map((hit) => ({ resource: hit.group === "resource", item: {
-            href: `${homes[hit.type] ?? `/ontology/objects/${encodeURIComponent(hit.type)}`}/${encodeURIComponent(hit.id)}`,
+            href: recordHref(hit.type, hit.id),
             label: hit.title || t(hit.typeTitle ?? hit.type),
           } }));
         const unique = [...new Map(found.map((hit) => [hit.item.href, hit])).values()];

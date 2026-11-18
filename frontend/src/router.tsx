@@ -13,6 +13,10 @@ export function useSearch() {
   return useSyncExternalStore(subscribe, () => location.search);
 }
 
+export function useHash() {
+  return useSyncExternalStore(subscribe, () => location.hash);
+}
+
 type PermissionToLeave = Promise<boolean>;
 type LeaveGuard = () => PermissionToLeave;
 const guards = new Set<LeaveGuard>();

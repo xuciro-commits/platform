@@ -8,5 +8,9 @@ export const entries: Record<string, Entry> = {
   ...Object.fromEntries(Object.entries(modules).map(([path, module]) => [path.replace(/^\.\/|\.tsx?$/g, ""), module.default])),
 };
 
-export const homes: Record<string, string> = Object.fromEntries(Object.entries(entries)
+const homes = new Map(Object.entries(entries)
   .flatMap(([key, entry]) => entry.recordType ? [[entry.recordType, `/${key}`]] : []));
+
+export function recordHref(type: string, id: string) {
+  return `${homes.get(type) ?? `/ontology/objects/${encodeURIComponent(type)}`}/${encodeURIComponent(id)}`;
+}
