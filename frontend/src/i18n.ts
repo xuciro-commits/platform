@@ -486,3 +486,15 @@ Object.assign(zhCN, {
 Object.assign(zhCN, {
   Mentions: "提及与评论",
 });
+
+Object.assign(zhCN, {
+  Commands: "命令",
+  "Current app": "当前应用",
+  "Command palette": "命令面板",
+  "Search…": "搜索…",
+  "Type to search": "输入关键词开始搜索",
+  "No results": "没有匹配的结果",
+  "Objects could not be searched": "无法搜索对象",
+  Navigate: "移动",
+  Select: "选择",
+});

@@ -1133,3 +1133,32 @@ test("inbox: a comment mention opens the referenced record from the Mentions tab
   await page.getByRole("link", { name: /^Notifications/ }).click();
   await expect(mention).toBeVisible();
 });
+
+test("command palette: open a record and the inbox with the keyboard", async ({ page }) => {
+  await signIn(page);
+  const palette = page.getByRole("dialog", { name: "Command palette" });
+  const search = palette.getByRole("combobox", { name: "Search", exact: true });
+
+  await page.keyboard.press("ControlOrMeta+K");
+  await search.fill("Press line retrofit");
+  await expect(palette.getByRole("group", { name: "Objects" }).getByRole("option", { name: "Press line retrofit" })).toBeVisible();
+  await search.press("Enter");
+  await expect(page).toHaveURL(/\/ontology\/objects\/build\.opportunity\/OPP-001$/);
+  await expect(page.getByRole("heading", { name: "Press line retrofit", exact: true })).toBeVisible();
+
+  await page.keyboard.press("ControlOrMeta+K");
+  await expect(palette.getByRole("group", { name: "Recent" }).getByRole("option", { name: "Press line retrofit" })).toBeVisible();
+  await search.fill("> Archive");
+  await expect(palette.getByRole("group", { name: "Commands" }).getByRole("option", { name: "Archive opportunity", exact: true })).toBeVisible();
+  await search.press("Enter");
+  await expect(page.getByText("Archived", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Undo", exact: true }).click();
+  await expect(page.getByText("Archived", { exact: true })).toHaveCount(0);
+
+  await page.keyboard.press("ControlOrMeta+K");
+  await search.fill("Inbox");
+  await expect(palette.getByRole("option", { name: "Inbox", exact: true })).toBeVisible();
+  await search.press("Enter");
+  await expect(page).toHaveURL(/\/home\/inbox$/);
+  await expect(page.getByRole("heading", { name: "Inbox", exact: true })).toBeVisible();
+});

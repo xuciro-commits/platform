@@ -118,6 +118,7 @@ export function RecordPage({ described, id, listPath, listTitle, instances, enti
     <Transitions
       described={described}
       id={id}
+      href={base}
       values={values}
       revision={kept.revision}
       title={name}

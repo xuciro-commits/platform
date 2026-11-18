@@ -5,6 +5,7 @@ import { Text } from "@astryxdesign/core/Text";
 import { useRef, useState } from "react";
 import type { Api } from "../host";
 import { t } from "../i18n";
+import { usePageCommands } from "../shell/CommandSearch";
 import { ActionDialog } from "./ActionDialog";
 import { type BatchRow, sendBatch } from "./act";
 import type { Described, Values } from "./describe";
@@ -45,11 +46,13 @@ export function BatchActions({ described, records, ids, clear }: { described: De
   const label = pending ? t(pending.action.title) : "";
   const heading = pending ? `${label} · ${pending.rows.length} ${t("records")}` : "";
   const failed = result?.rows.filter((row) => row.reason) ?? [];
+  const commands = can.map((action) => ({ id: action.schema, label: t(action.title), run: () => start(action) }));
+  usePageCommands(busy ? [] : commands);
   return (
     <>
       {can.length > 0 && (
         <HStack gap={2} wrap="wrap">
-          {can.map((action) => <Button key={action.schema} label={t(action.title)} variant="secondary" size="sm" isDisabled={busy} onClick={() => start(action)} />)}
+          {commands.map(({ id, label, run }) => <Button key={id} label={label} variant="secondary" size="sm" isDisabled={busy} onClick={run} />)}
         </HStack>
       )}
       {result && (

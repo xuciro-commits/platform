@@ -12,6 +12,7 @@ import { t } from "../i18n";
 import { navigate, usePath, useSearch } from "../router";
 import { AppRail } from "./AppRail";
 import { AppSidebar } from "./AppSidebar";
+import { CommandSearch } from "./CommandSearch";
 import { SignIn } from "./SignIn";
 import { Unbuilt } from "./Unbuilt";
 
@@ -49,17 +50,19 @@ export function Shell() {
     : app.installed && item.object && listPath ? <Records key={`${app.id}/${item.id}`} declared={{ title: item.label, about: item.description ?? "", type: item.object }} listPath={listPath} id={segments[3]} />
     : <Unbuilt item={item} />;
   return (
-    <AppShell
-      contentPadding={0}
-      sideNav={<Navigation app={app} item={item} apps={available} object={object || undefined} listPath={listPath} />}
-      mobileNav={{ content: (
-        <MobileNav header={<AppRail current={app} apps={available} compact />}>
-          <AppSidebar app={app} item={item} apps={available} object={object || undefined} listPath={listPath} />
-        </MobileNav>
-      ) }}
-    >
-      <Suspense fallback={null}>{content}</Suspense>
-    </AppShell>
+    <CommandSearch app={app} item={item} apps={available} tenant={session.tenant}>
+      <AppShell
+        contentPadding={0}
+        sideNav={<Navigation app={app} item={item} apps={available} object={object || undefined} listPath={listPath} />}
+        mobileNav={{ content: (
+          <MobileNav header={<AppRail current={app} apps={available} compact />}>
+            <AppSidebar app={app} item={item} apps={available} object={object || undefined} listPath={listPath} />
+          </MobileNav>
+        ) }}
+      >
+        <Suspense fallback={null}>{content}</Suspense>
+      </AppShell>
+    </CommandSearch>
   );
 }
 

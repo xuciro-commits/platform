@@ -1,7 +1,10 @@
+import { createElement } from "react";
 import type { Api } from "../../host";
 import { listPage } from "../../pages/ListPage";
+import { MemberDirectoryEntry } from "../../pages/MemberDirectoryEntry";
+import { useSearch } from "../../router";
 
-export default listPage<Api.Member[], Api.Member>({
+const Members = listPage<Api.Member[], Api.Member>({
   title: "Members",
   about: "A member is a person or agent who can sign in to this workspace.",
   read: "/v1/members",
@@ -22,3 +25,8 @@ export default listPage<Api.Member[], Api.Member>({
   ],
   groups: [{ key: "status", label: "Status", of: (member) => member.status ?? "active" }],
 });
+
+export default function MemberEntry() {
+  const member = new URLSearchParams(useSearch()).get("member");
+  return member ? createElement(MemberDirectoryEntry, { id: member }) : createElement(Members);
+}
