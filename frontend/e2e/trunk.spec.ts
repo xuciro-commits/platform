@@ -575,6 +575,21 @@ test("object gate: create a type from zero, preview, publish and transition a re
   await expect(page.getByText("Active", { exact: true }).first()).toBeVisible();
 });
 
+test("applications: review and install a package from the marketplace", async ({ page }) => {
+  await signIn(page);
+  await open(page, "Delivery", "Marketplace");
+  const provider = page.getByRole("listitem").filter({ hasText: "application.production-provider · 0.1.4" });
+  await expect(provider).toBeVisible();
+  await provider.getByRole("button", { name: "Review and install", exact: true }).click();
+  const review = page.getByRole("dialog", { name: /Review and install/ });
+  await expect(review).toContainText("application.production-provider");
+  await review.getByRole("button", { name: "Install package", exact: true }).click();
+  await expect(page).toHaveURL(/\/delivery\/installations$/);
+  const installed = page.getByRole("listitem").filter({ hasText: "Production batch provider" });
+  await expect(installed).toContainText("0.1.4");
+  await expect(installed.getByRole("button", { name: "Manage installation", exact: true })).toBeVisible();
+});
+
 test("applications: an installed package contributes a menu and an object list", async ({ page }) => {
   await signIn(page);
   const app = page.getByRole("link", { name: "Production order provider", exact: true });
