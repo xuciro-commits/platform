@@ -258,6 +258,7 @@ type FieldInfo struct {
 	When         *FieldCondition   `json:"when,omitempty"`
 	Fields       []FieldInfo       `json:"fields,omitempty"`
 	Index        []int             `json:"-"`
+	Supplemental bool              `json:"-"`
 }
 
 func FieldName(typ reflect.Type, path []int) string {

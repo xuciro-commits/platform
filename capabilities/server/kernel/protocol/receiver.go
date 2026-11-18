@@ -13,7 +13,7 @@ type Policy func(caller Caller, s *pb.Submission) bool
 
 type Receiver struct {
 	Changes interface {
-		SubmitChecked(*pb.Submission, time.Time, func() *platform.Error) (*pb.ChangeRecord, *platform.Error)
+		SubmitChecked(*pb.Submission, time.Time, func() *platform.Error, func() *platform.Error) (*pb.ChangeRecord, *platform.Error)
 		Records(string) []*pb.ChangeRecord
 	}
 	Authorities interface {
@@ -33,11 +33,8 @@ func (r *Receiver) Receive(c Caller, s *pb.Submission, now time.Time, domain fun
 		if r.Policy == nil || !r.Policy(c, s) {
 			return errorf(pb.ErrorCode_ERROR_CODE_POLICY_DENIED)
 		}
-		if domain != nil {
-			return domain()
-		}
 		return nil
-	})
+	}, domain)
 }
 
 func errorf(code pb.ErrorCode) *platform.Error { return &platform.Error{Code: code} }

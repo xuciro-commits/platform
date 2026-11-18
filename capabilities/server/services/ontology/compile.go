@@ -58,6 +58,12 @@ func CompileObjectShape(o Object, app, builderRole string) platform.RecordType {
 		Tag: reflect.StructTag(fmt.Sprintf(`entity:"%s"`, app+"."+o.Name))}}
 	for _, f := range o.Fields {
 		tag := fmt.Sprintf(`json:"%s,omitempty" title:"%s"`, f.Name, f.Title)
+		if f.Group != "" {
+			tag += fmt.Sprintf(` group:%q`, f.Group)
+		}
+		if f.Aside {
+			tag += ` rail:"true"`
+		}
 		if f.AIInput != nil {
 			if *f.AIInput {
 				tag += ` ai:"allow"`

@@ -41,7 +41,7 @@ func EntityActions(e platform.RecordType) []platform.Action {
 	}
 	var fields, editable []platform.Field
 	for _, f := range info.Fields {
-		if f.ReadOnly || f.Aside {
+		if f.ReadOnly || f.Supplemental {
 			continue
 		}
 		typ := map[string]string{"integer": "integer", "decimal": "number", "boolean": "boolean", "date": "date", "datetime": "datetime",

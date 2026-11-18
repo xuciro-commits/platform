@@ -9,6 +9,7 @@ import (
 	"platformserver/kernel/records"
 	transport "platformserver/kernel/transport"
 	"platformserver/platform"
+	"platformserver/services/actions"
 	pageowner "platformserver/services/apps/pages"
 	automation "platformserver/services/automate/runtime"
 	"platformserver/services/objects"
@@ -121,7 +122,7 @@ func (h *Host) routesRecords(rt *routes) {
 	rt.recordRead(transport.Route{Pattern: "GET /v1/records/{type}", Summary: "A page of an entity type's records within the caller's scope", Answer: RecordPage{}, Query: []transport.Param{{Name: "domain", Description: "Filters in the prefix form, JSON: [[\"stage\",\"=\",\"open\"]]"}, {Name: "search", Description: "Words to find"}, {Name: "sort", Description: "Fields, comma-separated; -field for descending"}, {Name: "offset", Description: "Records to skip"}, {Name: "limit", Description: "Records in the page"}, {Name: "archived", Description: "true: archived records too"}}}, transport.Answering(func(r *http.Request, m platform.Member, t *Tenant) (RecordPage, *platform.Error) {
 		page, err := t.objectOwner(t.Projection).Records(m, r.PathValue("type"), objects.PagedQueryFromValues(r.URL.Query()), h.Now())
 		if err == nil && r.PathValue("type") == build.ObjectType {
-			page, err = t.objectDraftPage(m, page)
+			page, err = objects.DraftPage(page, func(record any) (any, *platform.Error) { return t.objectDraftRecord(m, record) })
 		}
 		return page, err
 	}))
@@ -177,6 +178,9 @@ func (h *Host) routesRecords(rt *routes) {
 		if err == nil && r.PathValue("type") == build.ObjectType {
 			objects.DraftView(&view, func(record any) (any, *platform.Error) { return t.objectDraftRecord(m, record) })
 		}
+		if info, ok := t.Entity(r.PathValue("type")); err == nil && ok {
+			view.Actions = actions.RecordActions(t.App(info.App), t.objectCaller(m, info.App), info, view.Record, h.Now(), t.Entity, func(reason string) string { return t.i18n.Say(t.Language(m, r), reason) })
+		}
 		return view, err
 	}))
 }
@@ -191,8 +195,4 @@ func (t *Tenant) objectDraftRecord(m platform.Member, record any) (any, *platfor
 		_, hidden := objects.ViewOf(m, et)
 		return records.Mask(et.Info(), reflect.ValueOf(canonical), hidden)
 	})
-}
-
-func (t *Tenant) objectDraftPage(m platform.Member, page RecordPage) (RecordPage, *platform.Error) {
-	return objects.DraftPage(page, func(record any) (any, *platform.Error) { return t.objectDraftRecord(m, record) })
 }

@@ -50,6 +50,8 @@ type Field struct {
 	Format      []platform.FormatRule  `json:"format,omitempty" type:"json" field:"aside"`
 	Name        string                 `json:"name" field:"required" help:"Lower-case letters and digits" example:"visited"`
 	Title       string                 `json:"title" field:"required" title:"Label" example:"Visited on"`
+	Group       string                 `json:"group,omitempty" title:"Section"`
+	Aside       bool                   `json:"aside,omitempty" title:"Side rail"`
 	Type        string                 `json:"type" field:"required" choices:"text,longtext,integer,decimal,money,date,datetime,boolean,choice,reference,attachment" example:"date"`
 	Choices     string                 `json:"choices,omitempty" help:"For a choice: the values, comma-separated" example:"open,done"`
 	Ref         string                 `json:"ref,omitempty" title:"Refers to" help:"For a reference: the object it points at" example:"core.partner"`

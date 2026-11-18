@@ -33,7 +33,10 @@ var statuses = map[pb.ErrorCode]int{
 func Reply(w http.ResponseWriter, record *pb.ChangeRecord, err *platform.Error, issues ...platform.FieldIssue) {
 	switch {
 	case err != nil:
-		body := protocol.ErrorBody{Code: err.Error(), Message: err.Message, Issues: issues}
+		body := protocol.ErrorBody{Code: err.Error(), Message: err.Message, Issues: issues, CurrentRevision: err.CurrentRevision}
+		if err.CurrentRevision != nil {
+			body.ReasonCode = "stale_revision"
+		}
 		if len(issues) > 0 && issues[0].Constraint != "" {
 			body.Code = "CONSTRAINT_VIOLATION"
 			body.Message = issues[0].Constraint + ": " + issues[0].Message

@@ -181,7 +181,7 @@ func (l *ChangeLog) ApplyAccepted(saved *pb.ChangeRecord) (bool, error) {
 	return true, nil
 }
 
-func (l *ChangeLog) SubmitChecked(s *pb.Submission, now time.Time, check func() *platform.Error) (*pb.ChangeRecord, *platform.Error) {
+func (l *ChangeLog) SubmitChecked(s *pb.Submission, now time.Time, authorize, check func() *platform.Error) (*pb.ChangeRecord, *platform.Error) {
 	required := []string{s.GetTenantId(), s.GetPrincipalId(), s.GetAuthority(), s.GetIdempotencyKey(),
 		s.GetTarget().GetType(), s.GetTarget().GetId(), s.GetSchema().GetName()}
 	if slices.Contains(required, "") {
@@ -206,8 +206,11 @@ func (l *ChangeLog) SubmitChecked(s *pb.Submission, now time.Time, check func() 
 		}
 	}
 	target := [3]string{s.GetTenantId(), s.GetTarget().GetType(), s.GetTarget().GetId()}
-	if s.ExpectedRevision != nil && s.GetExpectedRevision() != l.revs[target] {
-		return nil, errorf(pb.ErrorCode_ERROR_CODE_CONFLICT)
+	if err := authorize(); err != nil {
+		return nil, err
+	}
+	if revision := l.revs[target]; s.ExpectedRevision != nil && s.GetExpectedRevision() != revision {
+		return nil, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT, Message: "The record changed since you opened it", CurrentRevision: &revision}
 	}
 	if check != nil {
 		if err := check(); err != nil {

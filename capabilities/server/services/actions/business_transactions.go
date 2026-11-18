@@ -216,11 +216,11 @@ func (b *Runtime) transactAttempt(c platform.Caller, receipt *pb.ChangeRecord, t
 		}
 	}
 	if txn.Guard != nil {
-		result, err := ruleprotocol.EvaluateRule(*txn.Guard, spec, c, subject, values, now, b.Lookup)
+		allowed, err := ruleprotocol.GuardSatisfied(*txn.Guard, spec, c, subject, values, now, b.Lookup)
 		if err != nil {
 			return err
 		}
-		if string(result.Value.Data) != "true" {
+		if !allowed {
 			return c.RefuseBusinessCondition("GUARD_NOT_SATISFIED", txn.Message, subject, values, now)
 		}
 	}

@@ -273,6 +273,7 @@
   "The role {role} in {app} may not {action}": "{app} 里的角色 {role} 不能{action}",
   "{record} is archived": "{record} 已归档",
   "{record} is {state}; {transition} takes it only from {states}": "{record} 当前是 {state}；{transition} 只能从 {states} 开始",
+  "The record changed since you opened it": "这条记录在你打开后已更改",
   "Case": "用例",
   "Passes": "通过次数",
   "Runs": "运行次数",

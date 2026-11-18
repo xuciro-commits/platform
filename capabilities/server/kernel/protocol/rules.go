@@ -82,6 +82,11 @@ func EvaluateRule(expr platform.Expr, reads platform.RuleReadSpec, caller platfo
 	return value, nil
 }
 
+func GuardSatisfied(expr platform.Expr, reads platform.RuleReadSpec, c platform.Caller, record any, inputs map[string]any, at time.Time, lookup func(string) (platform.RecordTypeInfo, bool)) (bool, *platform.Error) {
+	value, err := EvaluateRule(expr, reads, c, record, inputs, at, lookup)
+	return string(value.Value.Data) == "true", err
+}
+
 func EvaluateCriteria(plan platform.RuleCriteria, c platform.Caller, record any, inputs map[string]any, at time.Time, lookup func(string) (platform.RecordTypeInfo, bool)) (bool, string, *platform.Error) {
 	for _, condition := range plan.Conditions {
 		value, err := EvaluateRule(condition.Expr, plan.Reads, c, record, inputs, at, lookup)

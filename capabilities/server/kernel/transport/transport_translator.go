@@ -309,7 +309,9 @@ func (x *Translator) Said(err *platform.Error, lang string) *platform.Error {
 	if err == nil || err.Message == "" {
 		return err
 	}
-	return &platform.Error{Code: err.Code, Message: x.Say(lang, err.Message)}
+	translated := *err
+	translated.Message = x.Say(lang, err.Message)
+	return &translated
 }
 
 func (x *Translator) Say(lang, s string) string { return x.say("", lang, s, 0) }

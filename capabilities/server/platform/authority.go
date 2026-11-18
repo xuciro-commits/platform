@@ -16,7 +16,7 @@ type ChangeLog interface {
 	Records(tenant string) []*pb.ChangeRecord
 	Last(tenant string) *pb.ChangeRecord
 	ApplyAccepted(*pb.ChangeRecord) (bool, error)
-	SubmitChecked(*pb.Submission, time.Time, func() *Error) (*pb.ChangeRecord, *Error)
+	SubmitChecked(*pb.Submission, time.Time, func() *Error, func() *Error) (*pb.ChangeRecord, *Error)
 	Fork() ChangeLog
 }
 
@@ -59,8 +59,6 @@ func (c Caller) Deeper() Caller {
 	c.creationDepth++
 	return c
 }
-
-func (a Action) EditsRecord() bool { return a.RecordEdit }
 
 type TransactionHost interface {
 	CheckTxnCall(TxnCall) error

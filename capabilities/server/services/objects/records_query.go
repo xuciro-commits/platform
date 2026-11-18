@@ -12,6 +12,7 @@ import (
 )
 
 type RecordPage struct {
+	Refs    map[string]map[string]string               `json:"refs,omitempty"`
 	Records []any                                      `json:"records"`
 	Total   int                                        `json:"total"`
 	Partial bool                                       `json:"partial,omitempty"`
@@ -47,7 +48,11 @@ func (t *Owner) recordSelectionForCallerFrom(s *records.Store, c platform.Caller
 }
 
 func (t *Owner) Records(m platform.Member, typ string, q platform.Query, now time.Time) (RecordPage, *platform.Error) {
-	return t.recordsRead(m, typ, q, now)
+	page, err := t.recordsRead(m, typ, q, now)
+	if err == nil {
+		page.Refs = t.referenceNames(m, typ, page.Records, now)
+	}
+	return page, err
 }
 
 func (t *Owner) RecordsFrom(store *records.Store, m platform.Member, typ string, q platform.Query, now time.Time) (RecordPage, *platform.Error) {
@@ -79,7 +84,7 @@ func (t *Owner) readRecordFrom(store *records.Store, c platform.Caller, typ, id 
 		var fields map[string]json.RawMessage
 		changed := false
 		for _, field := range et.Info().Fields {
-			if len(field.Index) == 0 || field.Index[0] == 0 || field.Aside {
+			if len(field.Index) == 0 || field.Index[0] == 0 || field.Supplemental {
 				continue
 			}
 			original := value.FieldByIndex(field.Index)

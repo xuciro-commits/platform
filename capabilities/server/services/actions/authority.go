@@ -195,6 +195,9 @@ func (l *authority) Receive(c platform.Caller, s *pb.Submission, now time.Time,
 		apply, err = rules()
 		return err
 	})
+	if err != nil && err.CurrentRevision != nil && *err.CurrentRevision != 0 && !c.Readable(s.GetTarget().GetType()+"/"+s.GetTarget().GetId()) {
+		err.CurrentRevision = nil
+	}
 	if err != nil && err.Code == pb.ErrorCode_ERROR_CODE_POLICY_DENIED && err.Message == "" && refused {
 		if !decision.Allow && len(decision.Layers) > 0 {
 			err = platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "Authorization denied at {layer}: {reason}", decision.Layers[len(decision.Layers)-1].Name, decision.Reason)
@@ -246,7 +249,7 @@ func (l *authority) checked(c platform.Caller, s *pb.Submission, now time.Time, 
 				return nil, c.RefuseFields(issues)
 			}
 			var previous map[string]any
-			if declared.EditsRecord() && slices.ContainsFunc(declared.Payload, func(f platform.Field) bool { return f.Ref == "enterprise.element" }) {
+			if declared.RecordEdit && slices.ContainsFunc(declared.Payload, func(f platform.Field) bool { return f.Ref == "enterprise.element" }) {
 				if raw, err := c.ReadRecord(declared.Target, s.GetTarget().GetId(), now); err == nil {
 					_ = json.Unmarshal(raw, &previous)
 				}
@@ -416,13 +419,8 @@ func executeAction(c platform.Caller, e platform.RecordType, t platform.ActionTy
 		info, _ := records.Describe("", e, func(reflect.Type) string { return "?" })
 		f, _ := info.Field(e.Lifecycle.Field)
 		status := v.Elem().FieldByIndex(f.Index)
-		from := status.String()
-		pending := t.Approval != nil && t.Approval.Pending != "" && from == t.Approval.Pending && !c.Automation && !c.Probing()
-		if v.Elem().Field(0).Interface().(platform.Record).Archived {
-			return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "{record} is archived", id)
-		}
-		if !t.Criteria.State.Holds(from, c.Rules()) && !pending {
-			return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "{record} is {state}; {transition} takes it only from {states}", id, from, t.Name, strings.Join(t.Criteria.State.In, ", "))
+		if refusal := transitionRefusal(c, t, id, status.String(), v.Elem().Field(0).Interface().(platform.Record).Archived); refusal != nil {
+			return nil, refusal
 		}
 		for _, rule := range t.Rules {
 			if rule.Function != nil {

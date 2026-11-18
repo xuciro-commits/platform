@@ -13,6 +13,8 @@ import (
 )
 
 type RecordView struct {
+	Actions     []RecordAction                  `json:"actions,omitempty"`
+	Refs        map[string]map[string]string    `json:"refs,omitempty"`
 	Effective   *bool                           `json:"effective,omitempty"`
 	Values      map[string]any                  `json:"values,omitempty"`
 	Formats     map[string]platform.FieldFormat `json:"formats,omitempty"`
@@ -30,6 +32,12 @@ type RecordView struct {
 	Linked      []Related                       `json:"linked,omitempty"`
 	Activity    []any                           `json:"activity,omitempty"`
 	Deliveries  []RecordDelivery                `json:"deliveries,omitempty"`
+}
+
+type RecordAction struct {
+	Schema  string `json:"schema"`
+	Allowed bool   `json:"allowed"`
+	Reason  string `json:"reason,omitempty"`
 }
 
 const (
@@ -120,7 +128,7 @@ func (t *Owner) readRecordBase(m platform.Member, typ, id string, now time.Time)
 	view := RecordView{Values: values, ValueErrors: valueErrors, Formats: et.Formats().Evaluate(record, hidden), Record: record}
 	caller := t.caller(m, et.Info().App)
 	for _, field := range et.Info().Fields {
-		if field.Aside {
+		if field.Supplemental {
 			continue
 		}
 		decision := caller.Authorize(platform.AuthzRequest{Principal: m.ID, Tenant: t.TenantID, Kind: "read", Type: typ, Record: id, Fields: []string{field.Name}}, now)
@@ -144,6 +152,7 @@ func (t *Owner) recordOf(m platform.Member, typ, id string, now time.Time) (Reco
 	if err != nil {
 		return RecordView{}, err
 	}
+	base.view.Refs = t.referenceNames(m, typ, []any{base.view.Record}, now)
 	return base.view, nil
 }
 

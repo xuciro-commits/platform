@@ -47,11 +47,13 @@ type ImportRow struct {
 }
 
 type ErrorBody struct {
-	Message string                `json:"message,omitempty"`
-	Issues  []platform.FieldIssue `json:"issues,omitempty"`
-	Code    string                `json:"code"`
-	Status  int                   `json:"status,omitempty"`
-	Detail  string                `json:"detail,omitempty"`
+	CurrentRevision *uint32               `json:"currentRevision,omitempty"`
+	ReasonCode      string                `json:"reasonCode,omitempty"`
+	Message         string                `json:"message,omitempty"`
+	Issues          []platform.FieldIssue `json:"issues,omitempty"`
+	Code            string                `json:"code"`
+	Status          int                   `json:"status,omitempty"`
+	Detail          string                `json:"detail,omitempty"`
 }
 
 type HostControlImage struct {

@@ -2046,6 +2046,8 @@ export type EntityInfo = {
 export type EntityRef = EntityRefJson;
 
 export type ErrorBody = {
+  currentRevision?: number;
+  reasonCode?: string;
   message?: string;
   issues?: FieldIssue[];
   code: string;
@@ -4483,6 +4485,12 @@ export type QueueHealth = {
   oldestSeconds: number;
 };
 
+export type RecordAction = {
+  schema: string;
+  allowed: boolean;
+  reason?: string;
+};
+
 export type RecordChange = {
   change: string;
   schema: string;
@@ -4509,6 +4517,7 @@ export type RecordFieldProvenance = {
 };
 
 export type RecordPage = {
+  refs?: Record<string, Record<string, string>>;
   records: unknown[];
   total: number;
   partial?: boolean;
@@ -4585,6 +4594,8 @@ export type RecordVersionPin = {
 };
 
 export type RecordView = {
+  actions?: RecordAction[];
+  refs?: Record<string, Record<string, string>>;
   effective?: boolean;
   values?: Record<string, unknown>;
   formats?: Record<string, FieldFormat>;
