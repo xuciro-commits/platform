@@ -525,6 +525,56 @@ test("object definition: create and bind an action type before publishing a tran
   await expect(page.getByText("Active", { exact: true }).first()).toBeVisible();
 });
 
+test("object gate: create a type from zero, preview, publish and transition a record", async ({ page }) => {
+  await signIn(page);
+  await open(page, "Ontology", "Object types");
+  await page.getByRole("button", { name: "New", exact: true }).click();
+  const createType = page.getByRole("dialog");
+  await createType.getByRole("combobox", { name: /^Project/ }).click();
+  await page.getByRole("option", { name: "Sales", exact: true }).click();
+  await createType.getByRole("textbox", { name: /^Name/ }).fill("gateitem");
+  await createType.getByRole("textbox", { name: /^What people call it/ }).fill("Gate item");
+  await createType.getByRole("button", { name: "Create", exact: true }).click();
+  await expect(page.getByRole("heading", { level: 1, name: "Gate item", exact: true })).toBeVisible();
+
+  for (const [name, label, type] of [["code", "Code", "text"], ["summary", "Summary", "text"], ["quantity", "Quantity", "integer"]] as const) {
+    await page.getByRole("button", { name: "Add field", exact: true }).click();
+    const field = page.getByRole("dialog");
+    await field.getByRole("textbox", { name: /^Name/ }).fill(name);
+    await field.getByRole("textbox", { name: /^Label/ }).fill(label);
+    await field.getByRole("combobox", { name: /^Type/ }).click();
+    await page.getByRole("option", { name: type, exact: true }).click();
+    await field.getByRole("button", { name: "Save", exact: true }).click();
+  }
+  for (const [name, title] of [["draft", "Draft"], ["active", "Active"]] as const) {
+    await page.getByRole("button", { name: "Add state", exact: true }).click();
+    const state = page.getByRole("dialog");
+    await state.getByRole("textbox", { name: /^Name/ }).fill(name);
+    await state.getByRole("textbox", { name: /^What people call it/ }).fill(title);
+    await state.getByRole("button", { name: "Save", exact: true }).click();
+  }
+  await page.getByRole("button", { name: "Create transition", exact: true }).click();
+  const transition = page.getByRole("dialog");
+  await transition.getByRole("textbox", { name: "What people call it", exact: true }).fill("Activate gate item");
+  await transition.getByRole("button", { name: "Save", exact: true }).click();
+  await page.getByRole("link", { name: "Preview", exact: true }).click();
+  for (const name of ["Code", "Summary", "Quantity"]) await expect(page.getByRole("columnheader", { name, exact: true })).toBeVisible();
+  await page.getByRole("link", { name: "Details", exact: true }).click();
+
+  await page.getByRole("button", { name: "Publish", exact: true }).click();
+  const publish = page.getByRole("dialog", { name: /Publish/ });
+  await publish.getByRole("button", { name: "Publish", exact: true }).click();
+  await expect(publish).toBeHidden();
+  await page.goto("/ontology/objects/build.gateitem");
+  await page.getByRole("button", { name: "New", exact: true }).click();
+  const createRecord = page.getByRole("dialog");
+  await createRecord.getByRole("button", { name: "Create", exact: true }).click();
+  await page.getByRole("button", { name: "Activate gate item", exact: true }).click();
+  const confirm = page.getByRole("alertdialog");
+  await confirm.getByRole("button", { name: "Activate gate item", exact: true }).click();
+  await expect(page.getByText("Active", { exact: true }).first()).toBeVisible();
+});
+
 test("applications: an installed package contributes a menu and an object list", async ({ page }) => {
   await signIn(page);
   const app = page.getByRole("link", { name: "Production order provider", exact: true });
