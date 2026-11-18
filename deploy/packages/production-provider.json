@@ -1,6 +1,6 @@
 {
   "id": "application.production-provider",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "namespace": "application.production-provider",
   "title": "Production batch provider",
   "description": "Independent declarative production batch example. Install and publish using platform capabilities; configure external cooperation after installation. Quantities are local facts, and cross-system receipts remain independent.",
@@ -20,7 +20,7 @@
           "name": "build.batchproviderorder"
         },
         "contractVersion": 1,
-        "sourceVersion": "2",
+        "sourceVersion": "3",
         "body": {
           "name": "batchproviderorder",
           "type": "build.batchproviderorder",
@@ -888,6 +888,48 @@
                   ]
                 },
                 "message": "The production quantities are invalid or exceed the remaining allowance."
+              }
+            },
+            {
+              "name": "setshoporder",
+              "title": "Set shop order",
+              "description": "Set the shop order on this production order.",
+              "roles": [
+                "builder"
+              ],
+              "from": [
+                "released",
+                "running"
+              ],
+              "inputs": [
+                {
+                  "name": "shoporder",
+                  "title": "Shop order",
+                  "type": "text",
+                  "required": true
+                }
+              ],
+              "transaction": {
+                "subject": "build.batchproviderorder",
+                "steps": [
+                  {
+                    "name": "update",
+                    "kind": "update",
+                    "target": {
+                      "type": "build.batchproviderorder",
+                      "id": "$subject"
+                    },
+                    "changes": [
+                      {
+                        "field": "firstshop",
+                        "expr": {
+                          "kind": "text",
+                          "ref": "input.shoporder"
+                        }
+                      }
+                    ]
+                  }
+                ]
               }
             }
           ],

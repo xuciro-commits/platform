@@ -51,6 +51,8 @@ export function describe(entity: Api.EntityInfo, actions: Api.Action[]): Describ
   const create = own.find((action) => action.schema === `${entity.type}.create`);
   const edit = own.find((action) => action.schema === `${entity.type}.edit`);
   const steps = (lifecycle?.transitions ?? []).flatMap((transition) => {
+    if (!transition.toInput && transition.to.length === transition.from.length &&
+      transition.to.every((state, index) => state === transition.from[index])) return [];
     const action = own.find((candidate) => candidate.schema === transition.schema);
     return action ? [{ transition, action }] : [];
   });

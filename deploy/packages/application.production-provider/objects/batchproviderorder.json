@@ -866,6 +866,48 @@
         },
         "message": "The production quantities are invalid or exceed the remaining allowance."
       }
+    },
+    {
+      "name": "setshoporder",
+      "title": "Set shop order",
+      "description": "Set the shop order on this production order.",
+      "roles": [
+        "builder"
+      ],
+      "from": [
+        "released",
+        "running"
+      ],
+      "inputs": [
+        {
+          "name": "shoporder",
+          "title": "Shop order",
+          "type": "text",
+          "required": true
+        }
+      ],
+      "transaction": {
+        "subject": "build.batchproviderorder",
+        "steps": [
+          {
+            "name": "update",
+            "kind": "update",
+            "target": {
+              "type": "build.batchproviderorder",
+              "id": "$subject"
+            },
+            "changes": [
+              {
+                "field": "firstshop",
+                "expr": {
+                  "kind": "text",
+                  "ref": "input.shoporder"
+                }
+              }
+            ]
+          }
+        ]
+      }
     }
   ],
   "protocols": [

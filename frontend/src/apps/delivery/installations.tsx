@@ -10,7 +10,7 @@ import { PackageReview } from "../../pages/PackageReview";
 export default function Installations() {
   const packages = useRead<Api.PackageView[]>("/v1/packages");
   const [selected, setSelected] = useState<Api.PackageView>();
-  const rows = packages.status === "ready" ? packages.data.filter((view) => view.installed) : [];
+  const rows = packages.status === "ready" ? packages.data.filter((view) => view.installed?.version === view.descriptor.version) : [];
   return (
     <>
       <Layout

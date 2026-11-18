@@ -41,7 +41,7 @@ export function Shell() {
   if (!session) return <SignIn />;
   const Entry = entries[`${app.id}/${item.id}`];
   const content = Entry ? <Entry key={`${app.id}/${item.id}`} />
-    : app.installed && item.object ? <Records key={`${app.id}/${item.id}`} declared={{ title: item.label, about: item.description ?? "", type: item.object }} listPath={`/${app.id}/${item.id}`} />
+    : app.installed && item.object && listPath ? <Records key={`${app.id}/${item.id}`} declared={{ title: item.label, about: item.description ?? "", type: item.object }} listPath={listPath} id={segments[3]} />
     : <Unbuilt item={item} />;
   return (
     <AppShell

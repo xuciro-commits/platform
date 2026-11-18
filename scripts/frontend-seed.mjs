@@ -5,7 +5,6 @@ import { readFileSync } from "node:fs";
 const host = process.env.PLATFORM_HOST ?? "http://127.0.0.1:18511";
 const headers = { authorization: "Bearer admin", "platform-tenant": "acceptance", "content-type": "application/json" };
 const sample = JSON.parse(readFileSync(new URL("./frontend-seed.json", import.meta.url), "utf8"));
-const providerPackage = JSON.parse(readFileSync(new URL("../deploy/packages/production-provider.json", import.meta.url), "utf8"));
 
 async function call(path, body) {
   const response = await fetch(host + path, { method: body ? "POST" : "GET", headers, body: body ? JSON.stringify(body) : undefined, signal: AbortSignal.timeout(20000) });
@@ -48,6 +47,7 @@ async function submit(type, id, action, payload, authority = "build", expectedRe
   });
   const answer = await response.json();
   if (!response.ok || answer.error) throw new Error(`${schema} ${id}: ${JSON.stringify(answer.error ?? answer)}`);
+  return answer.record;
 }
 
 const projects = await call("/v1/records/build.app?limit=500");
@@ -84,8 +84,13 @@ for (const type of sample.types.filter((each) => !each.draft)) {
     written += 1;
   }
 }
-const inspected = await call("/v1/packages/inspect", { content: providerPackage });
-await submit("platform.package", inspected.descriptor.id, "import", { id: inspected.descriptor.id, digest: inspected.digest }, "platform");
+let packageRevision = 0;
+for (const path of ["./frontend-fixtures/production-provider-0.1.4.json", "../deploy/packages/production-provider.json"]) {
+  const content = JSON.parse(readFileSync(new URL(path, import.meta.url), "utf8"));
+  const inspected = await call("/v1/packages/inspect", { content });
+  const accepted = await submit("platform.package", inspected.descriptor.id, "import", { id: inspected.descriptor.id, digest: inspected.digest }, "platform", packageRevision);
+  packageRevision = accepted.revision;
+}
 const words = declarations.find((entry) => entry.tenantId === identity.tenantId && entry.dataClass === "platform.translation")?.authorityId;
 if (!words) throw new Error("platform.translation: no write authority");
 for (const [language, entries] of Object.entries(sample.words)) {

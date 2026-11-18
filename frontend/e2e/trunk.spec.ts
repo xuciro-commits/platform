@@ -851,3 +851,38 @@ test("files: an attachment waits for its project before offering file selection"
   }
   await expect(input).toBeEnabled();
 });
+
+test("applications: install the sample version and run a contributed record action", async ({ page }) => {
+  await signIn(page);
+  await open(page, "Delivery", "Marketplace");
+  const provider = page.getByRole("listitem").filter({ hasText: "application.production-provider · 0.1.5" });
+  await provider.getByRole("button", { name: "Review and install", exact: true }).click();
+  const review = page.getByRole("dialog", { name: /Review and install/ });
+  await expect(review.getByText("Installation scope", { exact: true })).toBeVisible();
+  await review.getByRole("button", { name: "Install package", exact: true }).click();
+  await expect(page).toHaveURL(/\/delivery\/installations$/);
+  await expect(page.getByRole("listitem").filter({ hasText: "Production batch provider" })).toContainText("0.1.5");
+
+  await open(page, "Production order provider", "Production orders");
+  await page.getByRole("button", { name: "New", exact: true }).click();
+  const order = page.getByRole("dialog");
+  await order.getByRole("textbox", { name: /^Order number/ }).fill("PO-1042");
+  await order.getByRole("textbox", { name: /^Product/ }).fill("Precision gearbox");
+  await order.getByRole("spinbutton", { name: /^Ordered quantity/ }).fill("25");
+  await order.getByRole("spinbutton", { name: /^Unit production cost/ }).fill("180");
+  await page.keyboard.press("Tab");
+  await order.getByRole("button", { name: "Create", exact: true }).click();
+  await expect(page.getByRole("heading", { level: 1, name: "PO-1042", exact: true })).toBeVisible();
+  await expect(page).toHaveURL(/\/productionprovider\/batchproviderorder\/[^/?]+$/);
+
+  await page.getByRole("button", { name: "More actions" }).click();
+  await page.getByRole("menuitem", { name: "Set shop order", exact: true }).click();
+  const action = page.getByRole("dialog", { name: "Set shop order", exact: true });
+  await action.getByRole("textbox", { name: /^Shop order/ }).fill("WO-1042");
+  await action.getByRole("button", { name: "Set shop order", exact: true }).click();
+  await expect(action).toBeHidden();
+  const shopOrder = page.getByRole("textbox", { name: "First shop order", exact: true });
+  await expect(shopOrder).toHaveValue("WO-1042");
+  await page.reload();
+  await expect(shopOrder).toHaveValue("WO-1042");
+});

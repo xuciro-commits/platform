@@ -376,6 +376,9 @@ export const zhCN: Record<string, string> = {
   "This cannot be undone here.": "这一步在这里不能撤销。",
   "Being defined; nothing is installed yet.": "还在定义，尚未安装。",
   "Installed in this tenant: people work with its records.": "已安装到这个租户：大家在用它的记录。",
+  "Set shop order": "设置车间工单",
+  "Shop order": "车间工单",
+  "First shop order": "首张车间工单",
 };
 
 const locale = navigator.language.startsWith("zh") ? "zh-CN" : "en";

@@ -143,7 +143,7 @@ const styles = stylex.create({
 export function ParameterInput({ parameter, described, value, status, onChange, onEnter, focused, referenceName, labelHidden, quiet }: ParameterInputProps) {
   const control = quiet && !status ? styles.quiet : undefined;
   const field = described.fields.find((candidate) => candidate.name === parameter.name);
-  const label = t(field?.title ?? parameter.name);
+  const label = t(field?.title ?? parameter.label ?? parameter.name);
   const description = field?.help;
   const reference = parameter.ref ?? (field?.type === "reference" ? field.ref : undefined);
   if (reference) {
