@@ -220,6 +220,7 @@ export type ActionCheckRequest = {
 };
 
 export type ActionCheckResult = {
+  impact?: ObjectPublishImpact;
   allowed: boolean;
   message?: string;
   conditions: ActionConditionCheck[];
@@ -3226,6 +3227,20 @@ export type ObjectChange = {
   change: "added" | "removed" | "changed";
   from?: unknown;
   to?: unknown;
+};
+
+export type ObjectPublishField = {
+  field: string;
+  change: "removed" | "typeChanged";
+  from: string;
+  to?: string;
+  records: number;
+};
+
+export type ObjectPublishImpact = {
+  revision: number;
+  records: number;
+  fields: ObjectPublishField[];
 };
 
 export type ObjectSet = {

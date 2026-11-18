@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"platformserver/platform"
+	"platformserver/services/actions"
 	"platformserver/services/objects"
 	"platformserver/services/ontology"
 	build "platformserver/services/resources/authoring"
@@ -69,5 +70,47 @@ func TestInvariantK22ObjectDraftShowsOnlyUnpublishedAuthoringChanges(t *testing.
 	changes = read()
 	if len(changes) != 1 || changes[0].Path != "fields.mobile" || changes[0].Change != "added" {
 		t.Fatalf("added field: %+v", changes)
+	}
+}
+
+func TestInvariantK23PublishCheckCountsDataAndMatchesTheOriginalDecision(t *testing.T) {
+	live := newInvariantTenant(t, "invariant-k23")
+	const id, typ = "CONTACT", "build.contact"
+	draft := invariantObject("contact", "Contact")
+	draft["display"] = "note"
+	live.accept(t, "build.object.create", build.ObjectType, id, draft)
+	live.accept(t, "build.object.publish", build.ObjectType, id, nil)
+	live.accept(t, typ+".create", typ, "CONTACT-1", map[string]any{"note": "One"})
+	live.accept(t, typ+".create", typ, "CONTACT-2", map[string]any{})
+	live.accept(t, "build.object.edit", build.ObjectType, id, map[string]any{"fields": []ontology.Field{}})
+	_, handler := observationHost(live.Tenant)
+	preview := func() actions.ActionCheckResult {
+		t.Helper()
+		before, length := live.recordImage(t), len(live.entries)
+		_, result := checkRecordAction(t, handler, live.ID, "builder", "build.object.publish", build.ObjectType, id)
+		if len(live.entries) != length || len(differingTypes(before, live.recordImage(t))) != 0 {
+			t.Fatal("publish check changed accepted results or stored records")
+		}
+		if result.Impact == nil || result.Impact.Records != 2 || len(result.Impact.Fields) != 1 {
+			t.Fatalf("publish impact: %+v", result.Impact)
+		}
+		if field := result.Impact.Fields[0]; field.Field != "note" || field.Change != "removed" || field.Records != 1 {
+			t.Fatalf("affected field: %+v", field)
+		}
+		return result
+	}
+	result := preview()
+	request := live.submission("build.object.publish", build.ObjectType, id, map[string]any{})
+	request.ExpectedRevision = &result.Impact.Revision
+	if _, refusal := live.Submit(live.member(t), request, invariantClock); result.Allowed || refusal == nil || result.Message != refusal.Message {
+		t.Fatalf("preview=%+v publish=%+v", result, refusal)
+	}
+	live.accept(t, "build.object.edit", build.ObjectType, id, map[string]any{"display": ""})
+	result = preview()
+	request = live.submission("build.object.publish", build.ObjectType, id, map[string]any{})
+	request.ExpectedRevision = &result.Impact.Revision
+	_, refusal := live.Submit(live.member(t), request, invariantClock)
+	if result.Allowed != (refusal == nil) || refusal != nil && result.Message != refusal.Message {
+		t.Fatalf("preview=%+v publish=%+v", result, refusal)
 	}
 }

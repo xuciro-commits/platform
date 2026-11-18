@@ -8,10 +8,6 @@ import (
 	"time"
 )
 
-func (t *Tenant) modelTransition(ref platform.AssetRef) (platform.ActionType, string, bool) {
-	return pageowner.ModelTransition(t.App(t.owner["action:"+ref.Name]), ref)
-}
-
 func (t *Tenant) modelCriteria(ref platform.AssetRef) (*platform.RuleCriteria, bool) {
 	return pageowner.ModelCriteria(t.App(t.owner["action:"+ref.Name]), ref)
 }

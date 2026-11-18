@@ -44,13 +44,11 @@ func (h *Host) routesBuild(rt *routes) {
 	h.routesPackages(rt)
 	builder := []string{build.Builder}
 	builderPublisher := []string{build.Builder, build.Publisher}
-	rt.handle(transport.Route{Pattern: "POST /v1/actions/{schema}/check", Summary: "Check any known action's authorization, state and each submission condition for this member and target; conditions that read unsupplied inputs are marked needsInputs and not counted", Body: pageowner.ActionCheckRequest{}, Answer: pageowner.ActionCheckResult{}}, transport.Bounded(64<<10, actionCheckMessage, func(r *http.Request, m platform.Member, t *Tenant, request pageowner.ActionCheckRequest) (pageowner.ActionCheckResult, *platform.Error) {
+	rt.recordRead(transport.Route{Pattern: "POST /v1/actions/{schema}/check", Summary: "Check any known action's authorization, state and each submission condition for this member and target; conditions that read unsupplied inputs are marked needsInputs and not counted", Body: pageowner.ActionCheckRequest{}, Answer: pageowner.ActionCheckResult{}}, transport.Bounded(64<<10, actionCheckMessage, func(r *http.Request, m platform.Member, t *Tenant, request pageowner.ActionCheckRequest) (pageowner.ActionCheckResult, *platform.Error) {
 		if request.Target.Object == "" || request.Target.ID == "" {
 			return pageowner.ActionCheckResult{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, actionCheckMessage)
 		}
-		return recordRead(t, r.Context(), func(t *Tenant) (pageowner.ActionCheckResult, *platform.Error) {
-			return t.actionCheck(m, r.PathValue("schema"), request, h.Now(), t.Language(m, r))
-		})
+		return t.actionCheck(m, r.PathValue("schema"), request, h.Now(), t.Language(m, r))
 	}))
 	rt.authorized(transport.Route{Pattern: "GET /v1/build/drafts/actions", Summary: "Describe saved object actions for authoring without installing them or granting execution", Answer: []protocol.CapabilityDescriptor{}}, build.ID, builder, transport.AnsweringOr(http.StatusConflict, func(_ *http.Request, m platform.Member, t *Tenant) ([]protocol.CapabilityDescriptor, error) {
 		return t.DraftActionCapabilities(m)

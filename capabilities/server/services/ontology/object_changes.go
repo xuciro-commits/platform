@@ -51,7 +51,7 @@ func DraftChanges(record any) ([]ObjectChange, error) {
 		}
 		oldOrder, newOrder := names(published.Fields), names(draft.Fields)
 		if !slices.Equal(oldOrder, newOrder) && slices.Equal(slices.Sorted(slices.Values(oldOrder)), slices.Sorted(slices.Values(newOrder))) {
-			before["fields.order"], after["fields.order"] = platform.Raw(oldOrder), platform.Raw(newOrder)
+			before["fields.$order"], after["fields.$order"] = platform.Raw(oldOrder), platform.Raw(newOrder)
 		}
 	}
 	keys := maps.Clone(before)

@@ -86,11 +86,12 @@ type ActionConditionCheck struct {
 }
 
 type ActionCheckResult struct {
-	Allowed       bool                    `json:"allowed"`
-	Message       string                  `json:"message,omitempty"`
-	Conditions    []ActionConditionCheck  `json:"conditions"`
-	Issues        []platform.FieldIssue   `json:"issues,omitempty"`
-	Authorization *platform.AuthzDecision `json:"authorization,omitempty"`
+	Impact        *objects.ObjectPublishImpact `json:"impact,omitempty"`
+	Allowed       bool                         `json:"allowed"`
+	Message       string                       `json:"message,omitempty"`
+	Conditions    []ActionConditionCheck       `json:"conditions"`
+	Issues        []platform.FieldIssue        `json:"issues,omitempty"`
+	Authorization *platform.AuthzDecision      `json:"authorization,omitempty"`
 }
 
 func guardNeedsInputs(e platform.Expr, spec platform.RuleReadSpec, values map[string]any) bool {
