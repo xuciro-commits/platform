@@ -45,17 +45,8 @@ func (v DefinitionVisibility) Project() []platform.Definition {
 	m, entities, actionsByName := v.Member, v.Entities, v.Actions
 	out := []platform.Definition{}
 	for _, registered := range v.Registered {
-		if !v.OwnerActive(registered.Ref.App) {
+		if !v.visibleOwnerRef(registered.Ref) {
 			continue
-		}
-		if ProjectDelegated(m) {
-			project := ""
-			if resource, ok := v.ResourceOf(registered.Ref); ok {
-				project = resource.Project
-			}
-			if role := v.ResourceRole(project); role == "" || role == protocol.ProjectDiscovererRole {
-				continue
-			}
 		}
 		def := registered
 		switch def.Ref.Kind {
@@ -244,7 +235,7 @@ func (v DefinitionVisibility) Project() []platform.Definition {
 	}
 	applications := publication.ApplicationProjection{Member: m, Resolver: v.Resolver, Definitions: out, Entities: entities, Pages: opens, Resources: visibleResources, PublishedFlows: publishedFlows}
 	for _, registered := range v.Registered {
-		if !v.OwnerActive(registered.Ref.App) || v.ApplicationEntryWithdrawn(registered.Ref) {
+		if registered.Ref.Kind != platform.AssetApp || !v.visibleOwnerRef(registered.Ref) {
 			continue
 		}
 		if def, ok := v.ProjectApplication(registered, applications); ok {
@@ -271,6 +262,25 @@ func (v DefinitionVisibility) Project() []platform.Definition {
 		out[i].OwningProject, out[i].OwningProjectTitle, out[i].ManagedBy = v.owner(out[i])
 	}
 	return out
+}
+
+func (v DefinitionVisibility) visibleOwnerRef(ref platform.AssetRef) bool {
+	if !v.OwnerActive(ref.App) || ref.Kind == platform.AssetApp && v.ApplicationEntryWithdrawn(ref) {
+		return false
+	}
+	delegated := ProjectDelegated(v.Member)
+	if !delegated && ref.Kind != platform.AssetApp {
+		return true
+	}
+	resource, _ := v.ResourceOf(ref)
+	if ref.Kind == platform.AssetApp && resource.ManagedBy != "" && resource.Archived {
+		return false
+	}
+	if delegated {
+		role := v.ResourceRole(resource.Project)
+		return role != "" && role != protocol.ProjectDiscovererRole
+	}
+	return true
 }
 
 func (v DefinitionVisibility) owner(def platform.Definition) (string, string, string) {

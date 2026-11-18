@@ -110,10 +110,45 @@ func Applications(definitions []platform.Definition) []protocol.ApplicationView 
 		if len(view.Pages) == 0 {
 			continue
 		}
+		view.Menu = applicationMenu(application.Groups, view.Pages)
+		if slices.ContainsFunc(view.Pages, func(page protocol.ApplicationPage) bool { return page.Name == application.Entry }) {
+			view.Entry = application.Entry
+		}
 		out = append(out, view)
 	}
 	slices.SortFunc(out, func(a, b protocol.ApplicationView) int { return strings.Compare(a.Name, b.Name) })
 	return out
+}
+
+func applicationMenu(groups []platform.AppGroup, pages []protocol.ApplicationPage) []protocol.ApplicationMenuGroup {
+	visible := make(map[string]protocol.ApplicationPage, len(pages))
+	for _, page := range pages {
+		visible[page.Name] = page
+	}
+	var menu []protocol.ApplicationMenuGroup
+	used := make(map[string]bool, len(pages))
+	for _, group := range groups {
+		projected := protocol.ApplicationMenuGroup{Title: group.Title}
+		for _, name := range group.Pages {
+			if page, ok := visible[name]; ok {
+				projected.Entries = append(projected.Entries, page)
+				used[name] = true
+			}
+		}
+		if len(projected.Entries) != 0 {
+			menu = append(menu, projected)
+		}
+	}
+	unassigned := protocol.ApplicationMenuGroup{}
+	for _, page := range pages {
+		if !used[page.Name] {
+			unassigned.Entries = append(unassigned.Entries, page)
+		}
+	}
+	if len(unassigned.Entries) != 0 {
+		menu = append(menu, unassigned)
+	}
+	return menu
 }
 
 func PageView(definitions []platform.Definition, entities []platform.RecordTypeInfo, catalog []platform.Action, app, owner, page string) (protocol.PageView, *platform.Error) {

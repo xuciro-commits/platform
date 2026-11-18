@@ -86,7 +86,7 @@ func (b *Build) ForkReleaseExecution(assets []platform.ReleaseAsset) (platform.S
 			continue
 		}
 		var object ontology.Object
-		if asset.SourceVersion != ValueDefinitionVersion || json.Unmarshal(asset.Body, &object) != nil || TypeOf(object.Name) != asset.Ref.Name {
+		if asset.ContractVersion != 1 || json.Unmarshal(asset.Body, &object) != nil || TypeOf(object.Name) != asset.Ref.Name {
 			return nil, fmt.Errorf("unsupported retained object descriptor %s", asset.Ref)
 		}
 		info, err := records.Describe(ID, Entity(object), func(reflect.Type) string { return "" })

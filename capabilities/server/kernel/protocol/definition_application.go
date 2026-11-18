@@ -216,14 +216,21 @@ type ApplicationPage struct {
 	Object      string `json:"object,omitempty"`
 }
 
+type ApplicationMenuGroup struct {
+	Title   string            `json:"title,omitempty"`
+	Entries []ApplicationPage `json:"entries"`
+}
+
 type ApplicationView struct {
-	App         string            `json:"app"`
-	Name        string            `json:"name"`
-	Title       string            `json:"title"`
-	Description string            `json:"description,omitempty"`
-	Icon        string            `json:"icon,omitempty"`
-	Source      string            `json:"source"`
-	Pages       []ApplicationPage `json:"pages"`
+	Menu        []ApplicationMenuGroup `json:"menu,omitempty"`
+	Entry       string                 `json:"entry,omitempty"`
+	App         string                 `json:"app"`
+	Name        string                 `json:"name"`
+	Title       string                 `json:"title"`
+	Description string                 `json:"description,omitempty"`
+	Icon        string                 `json:"icon,omitempty"`
+	Source      string                 `json:"source"`
+	Pages       []ApplicationPage      `json:"pages"`
 }
 
 type PageView struct {

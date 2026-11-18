@@ -528,6 +528,11 @@ export type ApplicationMaintenance = {
   retention: ApplicationRetention[];
 };
 
+export type ApplicationMenuGroup = {
+  title?: string;
+  entries: ApplicationPage[];
+};
+
 export type ApplicationMonitoring = {
   businessRefusals: number;
   refusalCodes: RefusalCodeCount[];
@@ -646,6 +651,8 @@ export type ApplicationVersion = {
 };
 
 export type ApplicationView = {
+  menu?: ApplicationMenuGroup[];
+  entry?: string;
   app: string;
   name: string;
   title: string;
