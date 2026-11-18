@@ -2,15 +2,15 @@ package build
 
 import (
 	"encoding/json"
-	automationauthoring "platformserver/services/automate/authoring"
+	"platformserver/kernel/protocol"
 
 	"platformserver/services/resources/monitoring"
 )
 
-func MonitoringAlerts(processes []automationauthoring.Process) []monitoring.MonitoringAlert {
+func MonitoringAlerts(processes []protocol.Process) []monitoring.MonitoringAlert {
 	out := []monitoring.MonitoringAlert{}
 	for _, process := range processes {
-		var installed automationauthoring.Process
+		var installed protocol.Process
 		if process.Archived || process.Paused || json.Unmarshal([]byte(process.Published), &installed) != nil || installed.Kind != "automation" {
 			continue
 		}

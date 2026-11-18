@@ -2,11 +2,12 @@ package build
 
 import (
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
+	"platformserver/kernel/protocol"
 	"platformserver/platform"
-	automationauthoring "platformserver/services/automate/authoring"
 	dataowner "platformserver/services/data"
 	functionauthoring "platformserver/services/functions/authoring"
 	"platformserver/services/ontology"
+	"platformserver/services/resources/publication"
 )
 
 type automationEnvironment struct {
@@ -23,12 +24,12 @@ func (e automationEnvironment) JointMode() bool            { return e.b.jointMod
 func (e automationEnvironment) FunctionCallAction() string {
 	return functionauthoring.SchemaFunctionCall
 }
-func (e automationEnvironment) FunctionResult(c platform.Caller, id string) (automationauthoring.FunctionOutcome, bool) {
+func (e automationEnvironment) FunctionResult(c platform.Caller, id string) (protocol.FunctionOutcome, bool) {
 	call, ok := platform.Get[functionauthoring.FunctionRun](c, id)
 	if !ok {
-		return automationauthoring.FunctionOutcome{}, false
+		return protocol.FunctionOutcome{}, false
 	}
-	return automationauthoring.FunctionOutcome{State: call.State, Output: call.Output, Reason: call.Reason, Sources: call.Sources}, true
+	return protocol.FunctionOutcome{State: call.State, Output: call.Output, Reason: call.Reason, Sources: call.Sources}, true
 }
 func (e automationEnvironment) InstalledObject(typ string) (platform.Entity, bool) {
 	entity, ok := e.b.installed[typ]
@@ -66,7 +67,7 @@ func (e automationEnvironment) ValidateQuery(query platform.NamedQuery) error {
 	return e.b.host.ValidateInstallQuery(query)
 }
 
-func (e automationEnvironment) CheckIntake(c platform.Caller, process automationauthoring.Process) *platform.Error {
+func (e automationEnvironment) CheckIntake(c platform.Caller, process protocol.Process) *platform.Error {
 	if process.Continuous == nil || process.Continuous.Intake == nil {
 		return nil
 	}
@@ -77,4 +78,4 @@ func (e automationEnvironment) CheckIntake(c platform.Caller, process automation
 	return e.b.data.CheckSource(c, source)
 }
 
-var _ automationauthoring.Environment = automationEnvironment{}
+var _ publication.AutomationEnvironment = automationEnvironment{}

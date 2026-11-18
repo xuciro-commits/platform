@@ -4,13 +4,13 @@ import (
 	"encoding/json"
 	"fmt"
 	"maps"
+	"platformserver/kernel/protocol"
 	"platformserver/services/ontology"
 	"reflect"
 	"slices"
 
 	"platformserver/kernel/records"
 	"platformserver/platform"
-	automationauthoring "platformserver/services/automate/authoring"
 	dataowner "platformserver/services/data"
 	"platformserver/services/resources/publication"
 )
@@ -26,7 +26,7 @@ func (b *Build) DecodeAssetInstallation(schema string, image json.RawMessage) (p
 	if hooks, found := publication.Kind(b.publications, descriptor.kind); found && hooks.DirectInstallation != nil {
 		return hooks.DirectInstallation(image)
 	}
-	if descriptor.typ == automationauthoring.ProcessType {
+	if descriptor.typ == protocol.ProcessType {
 		return b.automation.DecodeInstallation(schema, image)
 	}
 	if b.apps.HandlesPublication(schema) {

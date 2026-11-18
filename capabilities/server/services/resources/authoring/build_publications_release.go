@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"maps"
 	"platformserver/kernel/protocol"
-	automationauthoring "platformserver/services/automate/authoring"
 	"platformserver/services/ontology"
 	"platformserver/services/resources/publication"
 	"reflect"
@@ -316,7 +315,7 @@ func (b *Build) applicationDrafts(id string, selectDrafts map[JointDraftRef]bool
 				a.Published = published(a)
 				assets, err = b.releaseAssets(nil, nil, []protocol.Application{a}, nil, b.Manifest().Version)
 			case platform.AssetFlow:
-				i := slices.IndexFunc(processes, func(p automationauthoring.Process) bool { return p.ID == draft.ID })
+				i := slices.IndexFunc(processes, func(p protocol.Process) bool { return p.ID == draft.ID })
 				p := processes[i]
 				asset, problem := b.automation.DraftAsset(p, b.Manifest().Version)
 				assets, err = []platform.ReleaseAsset{asset}, problem

@@ -4,9 +4,9 @@ import (
 	"net/http"
 	"net/url"
 	runtimekernel "platformserver/kernel"
+	"platformserver/kernel/protocol"
 	"platformserver/kernel/transport"
 	"platformserver/platform"
-	automationauthoring "platformserver/services/automate/authoring"
 	build "platformserver/services/resources/authoring"
 	"platformserver/services/resources/monitoring"
 	controlowner "platformserver/services/security/control"
@@ -34,7 +34,7 @@ func (h *Host) routesMonitoring(rt *routes) {
 	rt.handle(transport.Route{Pattern: "GET /v1/monitoring/metrics", Summary: "Fixed operational rollups for the selected time window", Answer: platform.ObservationSummary{}, Query: []transport.Param{{Name: "from", Description: "Inclusive RFC 3339 start"}, {Name: "to", Description: "Exclusive RFC 3339 end"}}}, observed(h, monitoring.ObservationReads.Metrics))
 	rt.recordRead(transport.Route{Pattern: "GET /v1/monitoring/alerts", Summary: "Active automations with a notification effect visible to the caller", Answer: []monitoring.MonitoringAlert{}}, transport.Answering(func(_ *http.Request, m platform.Member, t *Tenant) ([]monitoring.MonitoringAlert, *platform.Error) {
 		coverage := monitoring.MonitoringCoverage{Source: "alerts", Basis: "current"}
-		processes, refusal := monitoringRecords[automationauthoring.Process](t, m, build.ProcessType, &coverage, h.Now())
+		processes, refusal := monitoringRecords[protocol.Process](t, m, protocol.ProcessType, &coverage, h.Now())
 		return build.MonitoringAlerts(processes), refusal
 	}))
 	rt.public(transport.Route{Pattern: "GET /readyz", Summary: "Whether this process can serve tenant reads from its journals and operational store"}, func(w http.ResponseWriter, r *http.Request) {

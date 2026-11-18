@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"maps"
+	"platformserver/kernel/protocol"
 	"reflect"
 	"slices"
 	"strings"
@@ -17,7 +18,7 @@ import (
 	"platformserver/services/resources/publication"
 )
 
-func CheckProcess(p Process, entity platform.Entity, lookup ProcessLookup, objects []platform.Entity, engines ...platform.RuleEngine) *platform.Error {
+func CheckProcess(p protocol.Process, entity platform.Entity, lookup ProcessLookup, objects []platform.Entity, engines ...platform.RuleEngine) *platform.Error {
 	refuse := func(message string, args ...any) *platform.Error {
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, message, args...)
 	}
@@ -30,7 +31,7 @@ func CheckProcess(p Process, entity platform.Entity, lookup ProcessLookup, objec
 	if !publication.ValidName(p.Name) {
 		return refuse("The process name {name} must be lower-case letters and digits", p.Name)
 	}
-	if old, ok := readPublished[Process](p.Published); ok && (old.Name != p.Name || old.Object != p.Object) {
+	if old, ok := readPublished[protocol.Process](p.Published); ok && (old.Name != p.Name || old.Object != p.Object) {
 		return refuse("A published process keeps its name and object")
 	}
 	if p.Kind != "" && p.Kind != "flow" && p.Kind != "automation" {
@@ -103,7 +104,7 @@ func CheckProcess(p Process, entity platform.Entity, lookup ProcessLookup, objec
 	if len(p.Steps) < 1 || len(p.Steps) > 128 {
 		return refuse("A process needs 1–128 typed steps")
 	}
-	nodes := map[string]ProcessStep{}
+	nodes := map[string]protocol.ProcessStep{}
 	for _, step := range p.Steps {
 		if !publication.ValidName(step.Name) || nodes[step.Name].Name != "" {
 			return refuse("The process step {step} needs a unique lower-case name", step.Name)
@@ -406,7 +407,7 @@ func CheckProcess(p Process, entity platform.Entity, lookup ProcessLookup, objec
 	return nil
 }
 
-func CheckAutomation(p Process) *platform.Error {
+func CheckAutomation(p protocol.Process) *platform.Error {
 	refuse := func(message string, args ...any) *platform.Error {
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, message, args...)
 	}
@@ -422,7 +423,7 @@ func CheckAutomation(p Process) *platform.Error {
 			ends[s.Name] = true
 		}
 	}
-	chain := slices.DeleteFunc(slices.Clone(p.Steps), func(s ProcessStep) bool { return s.Kind == "end" })
+	chain := slices.DeleteFunc(slices.Clone(p.Steps), func(s protocol.ProcessStep) bool { return s.Kind == "end" })
 	for i, s := range chain {
 		last := i == len(chain)-1
 		next := ""
@@ -451,8 +452,8 @@ func CheckAutomation(p Process) *platform.Error {
 	return nil
 }
 
-func CheckProcessScopes(p Process) error {
-	nodes := map[string]ProcessStep{}
+func CheckProcessScopes(p protocol.Process) error {
+	nodes := map[string]protocol.ProcessStep{}
 	for _, node := range p.Steps {
 		nodes[node.Name] = node
 	}

@@ -7,10 +7,10 @@ import (
 	"io"
 	"net/http"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
+	"platformserver/kernel/protocol"
 	transport "platformserver/kernel/transport"
 	"platformserver/platform"
 	pageowner "platformserver/services/apps/pages"
-	automationauthoring "platformserver/services/automate/authoring"
 	dataowner "platformserver/services/data"
 	releaseowner "platformserver/services/devops/releases"
 	trialowner "platformserver/services/devops/trials"
@@ -85,8 +85,8 @@ func (h *Host) routesBuild(rt *routes) {
 		}
 		WriteJSON(w, http.StatusOK, platform.ComputeSDK{Source: string(source)})
 	})
-	rt.authorized(transport.Route{Pattern: "POST /v1/build/process/check", Summary: "Validate a workflow draft with its owner compiler without executing it", Query: []transport.Param{{Name: "branch", Description: "a branch id: the draft is validated against that branch's staged definitions, where objects that exist only on the branch resolve"}}, Body: automationauthoring.Process{}, Answer: build.ProcessDiagnostics{}}, build.ID, builder, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
-		var p automationauthoring.Process
+	rt.authorized(transport.Route{Pattern: "POST /v1/build/process/check", Summary: "Validate a workflow draft with its owner compiler without executing it", Query: []transport.Param{{Name: "branch", Description: "a branch id: the draft is validated against that branch's staged definitions, where objects that exist only on the branch resolve"}}, Body: protocol.Process{}, Answer: build.ProcessDiagnostics{}}, build.ID, builder, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
+		var p protocol.Process
 		if !transport.DecodeValueBody(w, r, &p, 128<<10) {
 			return
 		}
@@ -95,11 +95,10 @@ func (h *Host) routesBuild(rt *routes) {
 			if refusal != nil {
 				return build.ProcessDiagnostics{}, refusal
 			}
-			owner := world.builders[build.ID]
-			if owner == nil {
-				return build.ProcessDiagnostics{}, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
+			if owner := world.builders[build.ID]; owner != nil {
+				return build.DiagnoseProcess(owner, platform.NewCaller(runtime{t: world, scoped: true}, m, build.ID, false, false), p), nil
 			}
-			return build.DiagnoseProcess(owner, platform.NewCaller(runtime{t: world, scoped: true}, m, build.ID, false, false), p), nil
+			return build.ProcessDiagnostics{}, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
 		})
 		transport.Answer(w, answer, refusal)
 	})

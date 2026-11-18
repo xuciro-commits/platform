@@ -1,15 +1,15 @@
 package build
 
 import (
+	"platformserver/kernel/protocol"
 	"platformserver/platform"
-	automationauthoring "platformserver/services/automate/authoring"
 )
 
-func (b *Build) CheckProcess(c platform.Caller, process automationauthoring.Process) *platform.Error {
+func (b *Build) CheckProcess(c platform.Caller, process protocol.Process) *platform.Error {
 	return b.automation.Check(c, process)
 }
 
-func (b *Build) ProcessFromAsset(asset platform.ReleaseAsset) (automationauthoring.Process, error) {
+func (b *Build) ProcessFromAsset(asset platform.ReleaseAsset) (protocol.Process, error) {
 	return b.automation.ProcessFromAsset(asset)
 }
 

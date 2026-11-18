@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"maps"
+	"platformserver/kernel/protocol"
 	"slices"
 	"strings"
 	"time"
@@ -14,7 +15,7 @@ import (
 	"platformserver/platform"
 )
 
-func CompileProcess(p Process, execution ProcessExecution) platform.Flow {
+func CompileProcess(p protocol.Process, execution ProcessExecution) platform.Flow {
 	fl := platform.Flow{Name: p.Name, Title: p.Title, Version: p.Version, Subject: p.Object, Owners: []string{Builder}, Start: platform.Start{Manual: p.Manual, Repeat: p.Repeat, Refused: execution.Refused, Paused: execution.Paused}, Continuous: p.Continuous}
 	if p.Every != "" {
 		fl.Start.Every, _ = time.ParseDuration(p.Every)

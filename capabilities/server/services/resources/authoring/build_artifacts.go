@@ -9,7 +9,6 @@ import (
 	"slices"
 
 	"platformserver/platform"
-	automationauthoring "platformserver/services/automate/authoring"
 	dataowner "platformserver/services/data"
 )
 
@@ -206,7 +205,7 @@ func (b *Build) releaseDraftsOf(candidate platform.ReleaseCandidate) ([]Draft, e
 			if err != nil {
 				return nil, err
 			}
-			if err := add(automationauthoring.ProcessType, p.Name, p); err != nil {
+			if err := add(protocol.ProcessType, p.Name, p); err != nil {
 				return nil, err
 			}
 		}

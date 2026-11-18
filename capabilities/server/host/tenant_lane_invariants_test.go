@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"platformserver/kernel/protocol"
 	"platformserver/services/actions"
-	automationauthoring "platformserver/services/automate/authoring"
 	"platformserver/services/objects"
 	"sync"
 	"sync/atomic"
@@ -92,14 +91,14 @@ func TestInvariantK13BackgroundRoundReleasesLaneBetweenTasks(t *testing.T) {
 	live := newInvariantTenantWithApps(t, "invariant-lane-round", []platform.App{automation.New("invariant-lane-round", actions.NewAuthority, PublicationResolver())})
 	live.accept(t, "build.object.create", build.ObjectType, "OBJECT", invariantObject("alpha", "Alpha"))
 	live.accept(t, "build.object.publish", build.ObjectType, "OBJECT", map[string]any{})
-	live.accept(t, "build.process.create", build.ProcessType, "PROCESS", map[string]any{
+	live.accept(t, "build.process.create", protocol.ProcessType, "PROCESS", map[string]any{
 		"name": "scheduled", "title": "Scheduled", "kind": "automation", "every": "1m",
-		"steps": []automationauthoring.ProcessStep{{Name: "create", Kind: "action", Act: "build.alpha.create",
+		"steps": []protocol.ProcessStep{{Name: "create", Kind: "action", Act: "build.alpha.create",
 			Target: &platform.Binding{Source: "input", Path: []string{"period"}},
 			Inputs: map[string]platform.Binding{"note": {Source: "literal", Value: json.RawMessage(`"scheduled"`)}},
 		}},
 	})
-	live.accept(t, build.SchemaProcess, build.ProcessType, "PROCESS", map[string]any{})
+	live.accept(t, protocol.SchemaProcess, protocol.ProcessType, "PROCESS", map[string]any{})
 	var mu sync.Mutex
 	holds := map[string]int{}
 	live.Lane.Observe(func(holder string, _, _ time.Duration) {

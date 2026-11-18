@@ -11,7 +11,6 @@ import (
 
 	"platformserver/kernel/records"
 	"platformserver/platform"
-	automationauthoring "platformserver/services/automate/authoring"
 	ontology "platformserver/services/ontology"
 )
 
@@ -159,7 +158,7 @@ func (b *Build) objectInstallationPages(record ontology.Object) ([]platform.Page
 	return []platform.Page{b.application.ObjectPage(record, ID)}, record.Name, nil
 }
 
-func (b *Build) releaseAssets(objects []ontology.Object, pages []protocol.Page, apps []protocol.Application, processes []automationauthoring.Process, sourceVersion string) ([]platform.ReleaseAsset, error) {
+func (b *Build) releaseAssets(objects []ontology.Object, pages []protocol.Page, apps []protocol.Application, processes []protocol.Process, sourceVersion string) ([]platform.ReleaseAsset, error) {
 	var assets []platform.ReleaseAsset
 	index := map[platform.AssetRef]int{}
 	add := func(asset platform.ReleaseAsset, replacesGeneratedPage bool) error {

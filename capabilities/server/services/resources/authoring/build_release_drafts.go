@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"maps"
 	"platformserver/kernel/protocol"
-	automationauthoring "platformserver/services/automate/authoring"
 	"platformserver/services/ontology"
 	"slices"
 
@@ -214,7 +213,7 @@ type draftInventories struct {
 	objects   []ontology.Object
 	pages     []protocol.Page
 	apps      []protocol.Application
-	processes []automationauthoring.Process
+	processes []protocol.Process
 }
 
 func (b *Build) applyRecordDraft(inv *draftInventories, table []publication.Hooks, kind platform.AssetKind, id string, member platform.Member) (prior, next platform.AssetRef, hadPrior bool, err error) {
@@ -234,7 +233,7 @@ func (b *Build) applyRecordDraft(inv *draftInventories, table []publication.Hook
 	joint := b.jointMode
 	switch kind {
 	case platform.AssetFlow:
-		i := slices.IndexFunc(inv.processes, func(p automationauthoring.Process) bool { return p.ID == id })
+		i := slices.IndexFunc(inv.processes, func(p protocol.Process) bool { return p.ID == id })
 		if i < 0 {
 			return prior, next, false, fmt.Errorf("draft process %q not found", id)
 		}
@@ -251,7 +250,7 @@ func (b *Build) applyRecordDraft(inv *draftInventories, table []publication.Hook
 				source = model
 			}
 		}
-		var prepared automationauthoring.Process
+		var prepared protocol.Process
 		prepared, prior, next, hadPrior, err = b.automation.CheckDraft(platform.Caller{}, record, source, models, member, !joint)
 		if err == nil {
 			inv.processes[i] = prepared
@@ -433,7 +432,7 @@ func (b *Build) ReferencedDrafts(kind platform.AssetKind, id, owner string) ([]J
 				dependencies[resource.Kind] = append(dependencies[resource.Kind], resource.Name)
 			}
 		case platform.AssetFlow:
-			i := slices.IndexFunc(processes, func(p automationauthoring.Process) bool { return p.ID == next.ID })
+			i := slices.IndexFunc(processes, func(p protocol.Process) bool { return p.ID == next.ID })
 			if i < 0 {
 				return nil, fmt.Errorf("no saved workflow draft %s", next.ID)
 			}

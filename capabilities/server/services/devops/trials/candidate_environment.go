@@ -159,7 +159,7 @@ func (e Environment) InstallCandidate(candidate platform.ReleaseCandidate, b bui
 				return err
 			}
 			raw, _ := json.Marshal(process)
-			processes[build.ProcessType] = append(processes[build.ProcessType], raw)
+			processes[protocol.ProcessType] = append(processes[protocol.ProcessType], raw)
 			continue
 		}
 		if kind(platform.AssetAction, platform.AssetPage, platform.AssetApp)(asset.Ref.Kind) {

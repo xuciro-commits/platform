@@ -3,6 +3,7 @@ package authoring
 import (
 	"encoding/json"
 	"fmt"
+	runtimeprotocol "platformserver/kernel/protocol"
 	"reflect"
 	"slices"
 	"strconv"
@@ -25,7 +26,7 @@ func (o *Owner) PrepareProcessPublications(assets []platform.ReleaseAsset) ([]pl
 		if asset.Ref.App != o.env.AppID() || asset.Ref.Kind != platform.AssetFlow {
 			continue
 		}
-		i := slices.IndexFunc(records, func(process Process) bool {
+		i := slices.IndexFunc(records, func(process runtimeprotocol.Process) bool {
 			return !process.Archived && o.QualifiedName(process.Name) == asset.Ref.Name
 		})
 		if i < 0 {
@@ -35,7 +36,7 @@ func (o *Owner) PrepareProcessPublications(assets []platform.ReleaseAsset) ([]pl
 		if err != nil {
 			return nil, err
 		}
-		if prior, ok := readPublished[Process](records[i].Published); ok {
+		if prior, ok := readPublished[runtimeprotocol.Process](records[i].Published); ok {
 			priorAsset, err := o.processReleaseAsset(prior, asset.SourceVersion)
 			if err == nil {
 				var a, z any
@@ -56,12 +57,12 @@ func (o *Owner) PrepareProcessPublications(assets []platform.ReleaseAsset) ([]pl
 		if err != nil {
 			return nil, err
 		}
-		out = append(out, platform.ReleasePublication{Schema: SchemaProcess, Image: raw})
+		out = append(out, platform.ReleasePublication{Schema: runtimeprotocol.SchemaProcess, Image: raw})
 	}
 	return out, nil
 }
 
-func (o *Owner) ProcessAssets(processes []Process, sourceVersion string) ([]platform.ReleaseAsset, error) {
+func (o *Owner) ProcessAssets(processes []runtimeprotocol.Process, sourceVersion string) ([]platform.ReleaseAsset, error) {
 	var assets []platform.ReleaseAsset
 	for _, record := range processes {
 		if record.Published == "" {
@@ -81,7 +82,7 @@ func (o *Owner) ProcessAssets(processes []Process, sourceVersion string) ([]plat
 	return assets, nil
 }
 
-func (o *Owner) DraftAsset(record Process, sourceVersion string) (platform.ReleaseAsset, error) {
+func (o *Owner) DraftAsset(record runtimeprotocol.Process, sourceVersion string) (platform.ReleaseAsset, error) {
 	if record.Version >= 64 {
 		return platform.ReleaseAsset{}, fmt.Errorf("flow version family is full")
 	}
@@ -106,7 +107,7 @@ func (o *Owner) FlowReleaseAsset(name string, version int) (platform.ReleaseAsse
 			return platform.ReleaseAsset{}, err
 		}
 		for _, raw := range record.Versions {
-			p, ok := readPublished[Process](raw)
+			p, ok := readPublished[runtimeprotocol.Process](raw)
 			if ok && p.Name == name && p.Version == version {
 				return o.processReleaseAsset(p, o.env.Version())
 			}
@@ -115,9 +116,9 @@ func (o *Owner) FlowReleaseAsset(name string, version int) (platform.ReleaseAsse
 	return platform.ReleaseAsset{}, fmt.Errorf("process %s version %d is not retained", name, version)
 }
 
-func (o *Owner) ProcessFromAsset(asset platform.ReleaseAsset) (Process, error) {
+func (o *Owner) ProcessFromAsset(asset platform.ReleaseAsset) (runtimeprotocol.Process, error) {
 	var envelope platform.FlowReleaseDescriptor
-	var p Process
+	var p runtimeprotocol.Process
 	if asset.Ref.App != o.env.AppID() || asset.Ref.Kind != platform.AssetFlow || asset.ContractVersion != 1 || o.resolver.CheckAssetDependencies(asset) != nil {
 		return p, fmt.Errorf("unsupported process release asset %s", asset.Ref)
 	}
@@ -141,7 +142,7 @@ func (o *Owner) ProcessFromAsset(asset platform.ReleaseAsset) (Process, error) {
 	return p, nil
 }
 
-func (o *Owner) processReleaseAsset(saved Process, sourceVersion string) (platform.ReleaseAsset, error) {
+func (o *Owner) processReleaseAsset(saved runtimeprotocol.Process, sourceVersion string) (platform.ReleaseAsset, error) {
 	ref := platform.AssetRef{App: o.env.AppID(), Kind: platform.AssetFlow, Name: o.QualifiedName(saved.Name)}
 	var subject platform.AssetRef
 	if saved.Object != "" {
@@ -249,14 +250,14 @@ func (o *Owner) Draft(asset platform.ReleaseAsset) (string, any, bool, error) {
 		if err != nil {
 			return "", nil, true, err
 		}
-		return ProcessType, p, true, nil
+		return runtimeprotocol.ProcessType, p, true, nil
 	}
 	return "", nil, false, nil
 }
 
 func (o *Owner) DecodeInstallation(schema string, image json.RawMessage) (platform.AssetInstallation, error) {
 	switch schema {
-	case SchemaProcess:
+	case runtimeprotocol.SchemaProcess:
 		var record struct {
 			platform.Record
 			Name string `json:"name"`
@@ -266,7 +267,7 @@ func (o *Owner) DecodeInstallation(schema string, image json.RawMessage) (platfo
 		}
 		return platform.AssetInstallation{
 			Ref:    platform.AssetRef{App: o.env.AppID(), Kind: platform.AssetFlow, Name: o.QualifiedName(record.Name)},
-			Schema: schema, Record: ProcessType + "/" + record.ID, Image: slices.Clone(image),
+			Schema: schema, Record: runtimeprotocol.ProcessType + "/" + record.ID, Image: slices.Clone(image),
 		}, nil
 	}
 	return platform.AssetInstallation{}, fmt.Errorf("not an automation installation schema")
@@ -285,7 +286,7 @@ func (o *Owner) ValidateInstallation(plan platform.AssetInstallation) error {
 
 func (o *Owner) ValidateImage(schema string, image []byte) error {
 	switch schema {
-	case SchemaProcess:
+	case runtimeprotocol.SchemaProcess:
 		p, err := ReadProcessImage(image)
 		if err != nil {
 			return err
@@ -300,7 +301,7 @@ func (o *Owner) ValidateImage(schema string, image []byte) error {
 
 func (o *Owner) ApplyImage(schema string, image []byte) error {
 	switch schema {
-	case SchemaProcess:
+	case runtimeprotocol.SchemaProcess:
 		p, err := ReadProcessImage(image)
 		if err != nil {
 			return err
@@ -314,5 +315,5 @@ func (o *Owner) ApplyImage(schema string, image []byte) error {
 }
 
 func (o *Owner) HandlesPublication(schema string) bool {
-	return schema == SchemaProcess
+	return schema == runtimeprotocol.SchemaProcess
 }

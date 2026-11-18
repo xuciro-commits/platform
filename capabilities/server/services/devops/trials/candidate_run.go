@@ -100,7 +100,7 @@ func (r *CandidateRun) Step(i int, step SimulationStep) (Simulation, *platform.E
 			payload, _ := json.Marshal(map[string]string{"answer": step.Answer})
 			sub = &pb.Submission{Authority: platform.WorkApp, Target: &pb.EntityRef{Type: platform.WorkTaskType, Id: taskID}, Schema: &pb.SchemaRef{Name: "work.task.complete", Version: 1}, Payload: payload}
 		}
-	} else if step.Type == build.ProcessType && step.Action == build.SchemaProcessRun && step.ID == r.Request.ProcessID {
+	} else if step.Type == protocol.ProcessType && step.Action == protocol.SchemaProcessRun && step.ID == r.Request.ProcessID {
 		processID := ""
 		for _, asset := range r.Candidate.Assets {
 			if asset.Ref.Kind == platform.AssetFlow {
@@ -111,7 +111,7 @@ func (r *CandidateRun) Step(i int, step SimulationStep) (Simulation, *platform.E
 			}
 		}
 		sub = &pb.Submission{Authority: build.ID, Target: &pb.EntityRef{Type: step.Type, Id: processID}, Schema: &pb.SchemaRef{Name: step.Action, Version: 1}, Payload: step.Payload}
-	} else if step.Type == build.ProcessType && step.Action == "" && step.AdvanceSeconds > 0 && r.Request.ProcessID != "" {
+	} else if step.Type == protocol.ProcessType && step.Action == "" && step.AdvanceSeconds > 0 && r.Request.ProcessID != "" {
 		var instanceExists bool
 		for _, asset := range r.Candidate.Assets {
 			if asset.Ref.Kind == platform.AssetFlow {
@@ -139,7 +139,7 @@ func (r *CandidateRun) Step(i int, step SimulationStep) (Simulation, *platform.E
 		})
 		function := step.Type == functionauthoring.FunctionCallType && slices.ContainsFunc(r.Candidate.Assets, func(asset platform.ReleaseAsset) bool { return asset.Ref.Kind == platform.AssetFunction })
 		if (!business && !function) || owner != build.ID || step.ID == "" || !strings.HasPrefix(step.Type, build.ID+".") ||
-			step.Type == build.ObjectType || step.Type == protocol.PageType || step.Type == protocol.AppType || step.Type == build.TestPlanType || step.Type == build.ProcessType || step.Type == functionauthoring.FunctionType {
+			step.Type == build.ObjectType || step.Type == protocol.PageType || step.Type == protocol.AppType || step.Type == build.TestPlanType || step.Type == protocol.ProcessType || step.Type == functionauthoring.FunctionType {
 			return Simulation{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Test step {step} must name an action and record of the candidate objects", fmt.Sprint(i+1))
 		}
 		payload := step.Payload

@@ -2,27 +2,13 @@ package automate
 
 import (
 	"encoding/json"
-	"fmt"
-	"strings"
+	"platformserver/kernel/protocol"
 	"time"
 
 	"platformserver/platform"
 )
 
-type NotificationEffect struct {
-	Title string `json:"title"`
-	Body  string `json:"body"`
-	Role  string `json:"role"`
-}
-
-func (n NotificationEffect) Check() error {
-	if strings.TrimSpace(n.Title) == "" || strings.TrimSpace(n.Body) == "" || n.Role == "" {
-		return fmt.Errorf("A notification needs a title, message and recipient role")
-	}
-	return nil
-}
-
-func Notify(c platform.Caller, run *platform.Run, step string, n NotificationEffect, object, display string, subject json.RawMessage, now time.Time) json.RawMessage {
+func Notify(c platform.Caller, run *platform.Run, step string, n protocol.NotificationEffect, object, display string, subject json.RawMessage, now time.Time) json.RawMessage {
 	ref := ""
 	title := n.Title
 	key := "automation:" + run.ID + ":" + step

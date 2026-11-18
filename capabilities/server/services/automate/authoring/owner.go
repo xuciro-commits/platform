@@ -3,6 +3,7 @@ package authoring
 import (
 	"encoding/json"
 	"fmt"
+	"platformserver/kernel/protocol"
 	"slices"
 	"time"
 
@@ -13,39 +14,17 @@ import (
 	"platformserver/services/resources/publication"
 )
 
-type Environment interface {
-	Application() platform.App
-	Host() platform.BuildHost
-	Ledger() platform.Authority
-	AppID() string
-	Version() string
-	Roles() []string
-	Objects(platform.Caller) ([]platform.Entity, error)
-	InstalledObject(string) (platform.Entity, bool)
-	Entity(string) (platform.EntityInfo, bool)
-	Query(string, int) (platform.NamedQuery, int, bool)
-	ValidateQuery(platform.NamedQuery) error
-	CheckIntake(platform.Caller, Process) *platform.Error
-	FunctionCallAction() string
-	FunctionResult(platform.Caller, string) (FunctionOutcome, bool)
-	JointMode() bool
-}
-
 type Owner struct {
 	resolver publication.Resolver
-	env      Environment
+	env      publication.AutomationEnvironment
 }
 
-func New(env Environment, resolver publication.Resolver) *Owner {
+func New(env publication.AutomationEnvironment, resolver publication.Resolver) publication.AutomationAuthoring {
 	return &Owner{env: env, resolver: resolver}
 }
 
-func (o *Owner) Fork(env Environment) *Owner {
-	return &Owner{env: env, resolver: o.resolver}
-}
-
 func (o *Owner) ProcessEntity() platform.Entity {
-	return platform.Entity{Type: ProcessType, Title: "Process", Plural: "Processes", Model: Process{}, Display: "title", Description: "Typed capability blocks compiled to the platform's native flow.",
+	return platform.Entity{Type: protocol.ProcessType, Title: "Process", Plural: "Processes", Model: protocol.Process{}, Display: "title", Description: "Typed capability blocks compiled to the platform's native flow.",
 		Scope:    platform.Scope{Default: platform.ScopeNone, Levels: map[string]string{Builder: platform.ScopeTenant}},
 		Standard: platform.Standard{Create: true, Edit: true, Archive: true, Roles: []string{Builder}, Capability: "processes"},
 		Lifecycle: &platform.Lifecycle{Field: "state", Initial: "draft", States: []platform.State{{Name: "draft", Title: "Draft", Tone: "warning"}, {Name: "published", Title: "Published", Tone: "success"}},
@@ -79,8 +58,8 @@ func (o *Owner) ProcessEntity() platform.Entity {
 							Reason string `json:"reason"`
 						}
 						_ = json.Unmarshal(raw, &input)
-						record.(*Process).PauseReason = input.Reason
-						record.(*Process).Paused = true
+						record.(*protocol.Process).PauseReason = input.Reason
+						record.(*protocol.Process).Paused = true
 						return nil
 					}}, {Edit: &platform.PropertyRule{Field: "state", Allowed: []string{"published"}}}},
 				},
@@ -92,13 +71,13 @@ func (o *Owner) ProcessEntity() platform.Entity {
 					Parameters: []platform.Field{},
 					Criteria:   platform.ActionCriteria{State: &platform.FieldCondition{Field: "state", In: []string{"published"}}},
 					Rules: []platform.ActionRule{{Function: func(c platform.Caller, record any, _ json.RawMessage, now time.Time) *platform.Error {
-						current := record.(*Process)
-						installed, _ := readPublished[Process](current.Published)
+						current := record.(*protocol.Process)
+						installed, _ := readPublished[protocol.Process](current.Published)
 						if reason := o.automationOwnerRefusal(c, current.ID, installed, now); reason != nil {
 							return reason
 						}
-						record.(*Process).PauseReason = ""
-						record.(*Process).Paused = false
+						record.(*protocol.Process).PauseReason = ""
+						record.(*protocol.Process).Paused = false
 						return nil
 					}}, {Edit: &platform.PropertyRule{Field: "state", Allowed: []string{"published"}}}},
 				}}}}
@@ -116,12 +95,12 @@ func (o *Owner) QualifiedName(name string) string {
 	return o.env.AppID() + "." + name
 }
 
-func (o *Owner) Inventory() ([]Process, error) {
+func (o *Owner) Inventory() ([]protocol.Process, error) {
 	c := o.env.Host().Automation(platform.Caller{}, o.env.AppID())
-	return readInventory[Process](c, "process")
+	return readInventory[protocol.Process](c, "process")
 }
 
-func (o *Owner) Check(c platform.Caller, p Process) *platform.Error {
+func (o *Owner) Check(c platform.Caller, p protocol.Process) *platform.Error {
 	models, err := o.env.Objects(c)
 	if err != nil {
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "The object inventory cannot be checked")
@@ -138,18 +117,18 @@ func (o *Owner) Check(c platform.Caller, p Process) *platform.Error {
 	return o.checkFlow(p, source, models, c.Rules())
 }
 
-func (o *Owner) CheckDraft(c platform.Caller, record Process, source platform.Entity, models []platform.Entity, member platform.Member, validate bool) (Process, platform.AssetRef, platform.AssetRef, bool, error) {
-	prior, hadPrior := readPublished[Process](record.Published)
+func (o *Owner) CheckDraft(c platform.Caller, record protocol.Process, source platform.Entity, models []platform.Entity, member platform.Member, validate bool) (protocol.Process, platform.AssetRef, platform.AssetRef, bool, error) {
+	prior, hadPrior := readPublished[protocol.Process](record.Published)
 	priorRef := platform.AssetRef{}
 	if hadPrior {
 		priorRef = platform.AssetRef{App: o.env.AppID(), Kind: platform.AssetFlow, Name: o.QualifiedName(prior.Name)}
 	}
 	nextRef := platform.AssetRef{App: o.env.AppID(), Kind: platform.AssetFlow, Name: o.QualifiedName(record.Name)}
 	if err := o.checkFlow(record, source, models); err != nil {
-		return Process{}, priorRef, nextRef, hadPrior, fmt.Errorf("%s", err.Message)
+		return protocol.Process{}, priorRef, nextRef, hadPrior, fmt.Errorf("%s", err.Message)
 	}
 	if record.Version >= 64 {
-		return Process{}, priorRef, nextRef, hadPrior, fmt.Errorf("a process may retain at most 64 published versions")
+		return protocol.Process{}, priorRef, nextRef, hadPrior, fmt.Errorf("a process may retain at most 64 published versions")
 	}
 	record.Version++
 	if record.Manual {
@@ -159,10 +138,10 @@ func (o *Owner) CheckDraft(c platform.Caller, record Process, source platform.En
 	}
 	if validate {
 		if o.env.Host().BuildProcesses() == nil {
-			return Process{}, priorRef, nextRef, hadPrior, fmt.Errorf("this tenant runs no processes")
+			return protocol.Process{}, priorRef, nextRef, hadPrior, fmt.Errorf("this tenant runs no processes")
 		}
 		if err := o.validate(record); err != nil {
-			return Process{}, priorRef, nextRef, hadPrior, err
+			return protocol.Process{}, priorRef, nextRef, hadPrior, err
 		}
 	}
 	record.State = "published"
@@ -171,13 +150,13 @@ func (o *Owner) CheckDraft(c platform.Caller, record Process, source platform.En
 	return record, priorRef, nextRef, hadPrior, nil
 }
 
-func (o *Owner) checkFlow(p Process, entity platform.Entity, objects []platform.Entity, engines ...platform.RuleEngine) *platform.Error {
+func (o *Owner) checkFlow(p protocol.Process, entity platform.Entity, objects []platform.Entity, engines ...platform.RuleEngine) *platform.Error {
 	plans, err := o.Inventory()
 	if err != nil {
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "The process inventory cannot be checked")
 	}
 	for _, other := range plans {
-		installed, _ := readPublished[Process](other.Published)
+		installed, _ := readPublished[protocol.Process](other.Published)
 		if other.ID != p.ID && (other.Name == p.Name || installed.Name == p.Name) {
 			return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "The process name {name} is already used", p.Name)
 		}
@@ -185,7 +164,7 @@ func (o *Owner) checkFlow(p Process, entity platform.Entity, objects []platform.
 	return o.checkFlowOn(p, entity, objects, engines...)
 }
 
-func (o *Owner) checkFlowOn(p Process, entity platform.Entity, objects []platform.Entity, engines ...platform.RuleEngine) *platform.Error {
+func (o *Owner) checkFlowOn(p protocol.Process, entity platform.Entity, objects []platform.Entity, engines ...platform.RuleEngine) *platform.Error {
 	lookup := ProcessLookup{
 		App:           o.env.AppID(),
 		Entity:        o.env.Entity,
@@ -199,9 +178,9 @@ func (o *Owner) checkFlowOn(p Process, entity platform.Entity, objects []platfor
 }
 
 func (o *Owner) publishProcess(c platform.Caller, record any, _ json.RawMessage, _ time.Time) *platform.Error {
-	var p *Process
+	var p *protocol.Process
 	switch value := record.(type) {
-	case *Process:
+	case *protocol.Process:
 		p = value
 	default:
 		return &platform.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
@@ -242,9 +221,9 @@ func (o *Owner) publishProcess(c platform.Caller, record any, _ json.RawMessage,
 }
 
 func (o *Owner) runProcess(c platform.Caller, record any, raw json.RawMessage, now time.Time) *platform.Error {
-	var p *Process
+	var p *protocol.Process
 	switch value := record.(type) {
-	case *Process:
+	case *protocol.Process:
 		p = value
 	default:
 		return &platform.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
@@ -252,7 +231,7 @@ func (o *Owner) runProcess(c platform.Caller, record any, raw json.RawMessage, n
 	if p.Paused {
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The process is paused")
 	}
-	installed, ok := readPublished[Process](p.Published)
+	installed, ok := readPublished[protocol.Process](p.Published)
 	if !ok || !installed.Manual && installed.Kind != "automation" || installed.Continuous != nil {
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Publish an automation or manual workflow before running it")
 	}
@@ -309,7 +288,7 @@ func (o *Owner) runProcess(c platform.Caller, record any, raw json.RawMessage, n
 	return start.StartManual(c, o.env.AppID(), installed.Name, installed.Version, request.Key, request.Subject, input, now)
 }
 
-func (o *Owner) Flow(p Process) platform.Flow {
+func (o *Owner) Flow(p protocol.Process) platform.Flow {
 	execution := ProcessExecution{
 		App:            o.env.AppID(),
 		FunctionAction: o.env.FunctionCallAction(),
@@ -320,7 +299,7 @@ func (o *Owner) Flow(p Process) platform.Flow {
 				o.pauseAutomation(c, p.ID, "The automation owner is no longer authorized", now)
 			}
 		},
-		Notify: func(c platform.Caller, r *platform.Run, step string, n automateowner.NotificationEffect, subject json.RawMessage) (json.RawMessage, *platform.Error) {
+		Notify: func(c platform.Caller, r *platform.Run, step string, n protocol.NotificationEffect, subject json.RawMessage) (json.RawMessage, *platform.Error) {
 			member, ok := o.env.Host().Member(r.OnBehalf)
 			if !ok {
 				return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "The initiating member is no longer available")
@@ -329,14 +308,14 @@ func (o *Owner) Flow(p Process) platform.Flow {
 			return automateowner.Notify(o.env.Host().Caller(c, member, o.env.AppID()), r, step, n, p.Object, info.Display, subject, r.Now), nil
 		},
 		Paused: func(c platform.Caller) bool {
-			current, ok := platform.Get[Process](o.env.Host().Automation(c, o.env.AppID()), p.ID)
+			current, ok := platform.Get[protocol.Process](o.env.Host().Automation(c, o.env.AppID()), p.ID)
 			return ok && current.Paused
 		},
 		ContinuousEnabled: func(c platform.Caller) bool {
 			if p.ID == "" || p.Version < 1 {
 				return false
 			}
-			current, ok := platform.Get[Process](o.env.Host().Automation(c, o.env.AppID()), p.ID)
+			current, ok := platform.Get[protocol.Process](o.env.Host().Automation(c, o.env.AppID()), p.ID)
 			return ok && current.State == "published" && current.Version == p.Version && current.Name == p.Name
 		},
 		Subject: func(c platform.Caller, r *platform.Run) (json.RawMessage, *platform.Error) {
@@ -381,7 +360,7 @@ func (o *Owner) Flow(p Process) platform.Flow {
 	return CompileProcess(p, execution)
 }
 
-func (o *Owner) validate(p Process) error {
+func (o *Owner) validate(p protocol.Process) error {
 	procs := o.env.Host().BuildProcesses()
 	if procs == nil {
 		return fmt.Errorf("this tenant runs no processes")
@@ -389,7 +368,7 @@ func (o *Owner) validate(p Process) error {
 	return procs.Validate(o.env.Application(), o.Flow(p))
 }
 
-func (o *Owner) Install(c platform.Caller, p Process) error {
+func (o *Owner) Install(c platform.Caller, p protocol.Process) error {
 	procs := o.env.Host().BuildProcesses()
 	if procs == nil {
 		return fmt.Errorf("this tenant runs no processes")
@@ -418,7 +397,7 @@ func (o *Owner) Restore() error {
 			return err
 		}
 		for _, raw := range p.Versions {
-			was, ok := readPublished[Process](raw)
+			was, ok := readPublished[protocol.Process](raw)
 			if !ok {
 				return fmt.Errorf("process %s: unreadable version", p.Name)
 			}
@@ -467,7 +446,7 @@ func (o *Owner) CheckObjectDefinition(c platform.Caller, entity, previous platfo
 	return nil
 }
 
-func processImage(p Process) string {
+func processImage(p protocol.Process) string {
 	p.Paused = false
 	p.PauseReason = ""
 	p.Published = ""

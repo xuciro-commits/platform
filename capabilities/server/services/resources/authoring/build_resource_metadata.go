@@ -7,7 +7,6 @@ import (
 	"slices"
 
 	"platformserver/platform"
-	automationauthoring "platformserver/services/automate/authoring"
 	dataowner "platformserver/services/data"
 )
 
@@ -111,7 +110,7 @@ var resourceDescriptors = []resourceDescriptor{
 		presentations: []resourcePresentation{releaseOnly("app", "project", "Application", "Applications", 30)},
 	},
 	{
-		app: ID, typ: automationauthoring.ProcessType, kind: platform.AssetFlow, family: recordResources, released: true, qualifiedName: true, defaultDraft: true, directInstall: true, acceptedPublication: true,
+		app: ID, typ: protocol.ProcessType, kind: platform.AssetFlow, family: recordResources, released: true, qualifiedName: true, defaultDraft: true, directInstall: true, acceptedPublication: true,
 		presentations: []resourcePresentation{
 			presented("flow", "flow", "Logic flow", "Logic flows", 11),
 			unreleased("automation", "automation", "Automation", "Automations", 12),

@@ -11,7 +11,7 @@ import (
 var publishedKinds = map[string]platform.AssetKind{
 	PropertyTypeType: platform.AssetPropertyType, ValueTypeType: platform.AssetValueType, ObjectTypeGroupType: platform.AssetObjectTypeGroup,
 	LinkTypeType: platform.AssetLinkType, QueryType: platform.AssetQuery, InterfaceType: platform.AssetInterface, ObjectType: platform.AssetObject,
-	protocol.PageType: platform.AssetPage, protocol.AppType: platform.AssetApp, ProcessType: platform.AssetFlow, functionauthoring.FunctionType: platform.AssetFunction,
+	protocol.PageType: platform.AssetPage, protocol.AppType: platform.AssetApp, protocol.ProcessType: platform.AssetFlow, functionauthoring.FunctionType: platform.AssetFunction,
 	functionauthoring.CodeType: platform.AssetCompute, functionauthoring.TableType: platform.AssetCompute,
 }
 
