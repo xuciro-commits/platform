@@ -1041,3 +1041,11 @@ test("record fields: an attachment preserves the horizontal label alignment", as
   expect(customerBox?.x).toBe(amountBox?.x);
   expect(briefBox?.x).toBe(customerBox?.x);
 });
+
+test("record fields: a date uses its field name for assistive technology", async ({ page }) => {
+  await signIn(page);
+  await page.goto("/ontology/objects/build.opportunity/OPP-001");
+  const date = page.getByRole("combobox", { name: "Expected close", exact: true });
+  await expect(date).toBeVisible();
+  await expect(date).toHaveAttribute("aria-label", "Expected close");
+});

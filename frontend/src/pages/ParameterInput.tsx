@@ -185,6 +185,7 @@ export function ParameterInput({ parameter, described, value, status, onChange, 
     return (
       <DateInput
         label={label}
+        aria-label={label}
         isLabelHidden={labelHidden}
         description={description}
         isRequired={parameter.required}
