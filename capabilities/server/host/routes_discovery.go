@@ -168,8 +168,8 @@ func (h *Host) routesApplications(rt *routes) {
 		translating(func(_ *http.Request, m platform.Member, t *Tenant) ([]runtimeprotocol.ApplicationView, *platform.Error) {
 			return t.Applications(m), nil
 		}))
-	rt.metadata(transport.Route{Pattern: "POST /v1/page-view", Summary: "One page of an application resolved for the caller: its object, fields and the actions they may take", Body: PageRequest{}, Answer: runtimeprotocol.PageView{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
-		body, ok := transport.DecodeOne[PageRequest](w, r, 1<<16)
+	rt.metadata(transport.Route{Pattern: "POST /v1/page-view", Summary: "One page of an application resolved for the caller: its object, fields and the actions they may take", Body: runtimeprotocol.PageRequest{}, Answer: runtimeprotocol.PageView{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
+		body, ok := transport.DecodeOne[runtimeprotocol.PageRequest](w, r, 1<<16)
 		if !ok || body.App == "" || body.Page == "" {
 			Reply(w, nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "A page view names one application and one page"))
 			return
@@ -177,10 +177,8 @@ func (h *Host) routesApplications(rt *routes) {
 		view, refusal := t.PageView(m, body.App, body.Owner, body.Page)
 		t.answerIn(w, r, m, view, refusal)
 	})
-}
-
-type PageRequest struct {
-	App   string `json:"app"`
-	Owner string `json:"owner,omitempty"`
-	Page  string `json:"page"`
+	rt.metadata(transport.Route{Pattern: "GET /v1/applications/{app}/{page}/records/{id}", Summary: "Resolve an old record link from a retired application for a member who can read the record", Answer: runtimeprotocol.RetainedRecordLink{}},
+		translating(func(r *http.Request, m platform.Member, t *Tenant) (runtimeprotocol.RetainedRecordLink, *platform.Error) {
+			return build.StoreRetainedRecordLink(t.Projection, t.ID, r.PathValue("app"), r.PathValue("page"), r.PathValue("id"), func(ref string) bool { return t.readable(m, ref, h.Now()) })
+		}))
 }

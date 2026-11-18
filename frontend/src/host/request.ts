@@ -13,12 +13,14 @@ export class HostRefusal extends Error {
 }
 
 type Options = { signal?: AbortSignal; body?: unknown; headers?: Record<string, string> };
-type Failure = { error?: { code?: string; message?: string; reason?: string; reasonCode?: string; currentRevision?: number } };
+type Failure = { error?: string | { code?: string; message?: string; reason?: string; reasonCode?: string; currentRevision?: number } };
 
 export function refusal(status: number, body: Failure | null) {
-  const code = body?.error?.code ?? "";
-  const said = body?.error?.message ?? body?.error?.reason ?? "";
-  return new HostRefusal(status, code, said === code ? "" : said, body?.error?.reasonCode, body?.error?.currentRevision);
+  const error = body?.error;
+  if (typeof error === "string") return new HostRefusal(status, "", error);
+  const code = error?.code ?? "";
+  const said = error?.message ?? error?.reason ?? "";
+  return new HostRefusal(status, code, said === code ? "" : said, error?.reasonCode, error?.currentRevision);
 }
 
 async function respond(path: string, options: Options) {

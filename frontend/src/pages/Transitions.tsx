@@ -6,7 +6,7 @@ import { Tooltip } from "@astryxdesign/core/Tooltip";
 import type { Api } from "../host";
 import { t } from "../i18n";
 import { stepIntent, useAct } from "./act";
-import type { Described } from "./describe";
+import type { Described, Step } from "./describe";
 
 export type Instances = { field: string; path: string };
 export const dots = { info: "accent", success: "success", warning: "warning", danger: "error", neutral: "neutral" } as const;
@@ -27,13 +27,17 @@ export function Transitions({ described, id, values, revision, title, instances,
   const act = useAct(described);
   const lifecycle = described.lifecycle;
   const current = lifecycle ? String(values[lifecycle.field] ?? "") : "";
-  const offered = described.steps.filter((step) => step.transition.from.includes(current));
+  const verdicts = new Map(allowed?.map((entry) => [entry.schema, entry]));
+  const offered = described.steps.flatMap((step) => {
+    const verdict = verdicts.get(step.action.schema);
+    return verdict && step.transition.from.includes(current) ? [{ step, verdict }] : [];
+  });
   const link = instances && typeof values[instances.field] === "string" && values[instances.field] ? `${instances.path}/${encodeURIComponent(String(values[instances.field]))}` : undefined;
 
-  const click = (step: (typeof offered)[number]) => act.run({ ...stepIntent(described, step, current, { id, revision, name: title }, { onRefused: onFailure }), publishProblem });
+  const click = (step: Step) => act.run({ ...stepIntent(described, step, current, { id, revision, name: title }, { onRefused: onFailure }), publishProblem });
 
   const offeredMore = described.other.flatMap((action) => {
-    const verdict = allowed?.find((entry) => entry.schema === action.schema);
+    const verdict = verdicts.get(action.schema);
     return verdict ? [{ action, verdict }] : [];
   });
   const items = offeredMore.map(({ action, verdict }) => {
@@ -55,8 +59,9 @@ export function Transitions({ described, id, values, revision, title, instances,
     <>
       <HStack gap={2} vAlign="center">
         {link && <Button label={t("Open records")} variant="secondary" href={link} />}
-        {offered.map((step, index) => (
-          <Button key={step.transition.name} label={t(step.transition.title)} variant={index === 0 ? "primary" : "secondary"} isDisabled={act.busy} onClick={() => click(step)} />
+        {offered.map(({ step, verdict }, index) => (
+          <Button key={step.transition.name} label={t(step.transition.title)} variant={index === 0 ? "primary" : "secondary"}
+            isDisabled={!verdict.allowed || act.busy} tooltip={verdict.allowed ? undefined : verdict.reason} onClick={() => click(step)} />
         ))}
         {items.length > 0 && <MoreMenu label={t("More actions")} items={items} alignment="end" />}
       </HStack>

@@ -886,3 +886,93 @@ test("applications: install the sample version and run a contributed record acti
   await page.reload();
   await expect(shopOrder).toHaveValue("WO-1042");
 });
+
+test("applications: shared records respect roles and keep their history after retirement", async ({ page, browser }) => {
+  await signIn(page);
+  await open(page, "Production order provider", "Production orders");
+  const entry = page.getByRole("link", { name: "PO-1042", exact: true });
+  const appRecord = new URL((await entry.getAttribute("href"))!, page.url());
+  const recordURL = `/ontology/objects/build.batchproviderorder/${appRecord.pathname.split("/").at(-1)}`;
+  const schema = "build.batchproviderorder.setshoporder";
+  const member = await browser.newPage();
+  await member.goto("/");
+  await member.getByRole("button", { name: "builder-1 · acceptance" }).click();
+  await member.goto(appRecord.href);
+  await expect(member.getByRole("heading", { name: "PO-1042", exact: true })).toBeVisible();
+  await member.getByRole("button", { name: "More actions" }).click();
+  await member.getByRole("menuitem", { name: "Set shop order", exact: true }).click();
+  const action = member.getByRole("dialog", { name: "Set shop order", exact: true });
+  await action.getByRole("textbox", { name: /^Shop order/ }).fill("WO-1043");
+  const submitted = member.waitForRequest((request) => request.url().endsWith("/v1/submissions") && request.postDataJSON().schema.name === schema);
+  await action.getByRole("button", { name: "Set shop order", exact: true }).click();
+  const sent = await submitted;
+  await expect(action).toBeHidden();
+  await expect(member.getByRole("textbox", { name: "First shop order", exact: true })).toHaveValue("WO-1043");
+  const historyURL = await member.getByRole("link", { name: "Activity", exact: true }).getAttribute("href");
+  expect(new URL(historyURL!, member.url()).pathname).toBe(`${appRecord.pathname}/activity`);
+
+  const direct = (actor: Page) => actor.evaluate(async ({ submission, version }) => {
+    const session = JSON.parse(sessionStorage.getItem("platform:session")!);
+    const headers = { authorization: `Bearer ${session.token}`, "platform-tenant": session.tenant };
+    const identity = await (await fetch("/v1/me", { headers })).json();
+    const response = await fetch("/v1/submissions", {
+      method: "POST",
+      headers: { ...headers, "content-type": "application/json", "platform-schema-version": version },
+      body: JSON.stringify({
+        tenantId: identity.tenantId,
+        principalId: identity.principalId,
+        authority: submission.authority,
+        target: submission.target,
+        schema: submission.schema,
+        idempotencyKey: crypto.randomUUID(),
+        payload: btoa(JSON.stringify({ shoporder: "WO-DENIED" })),
+      }),
+    });
+    return (await response.json()).error as { code: string; message: string };
+  }, { submission: sent.postDataJSON(), version: sent.headers()["platform-schema-version"] });
+
+  await member.getByRole("button", { name: "Sign out", exact: true }).click();
+  await member.getByRole("button", { name: "user-1 · acceptance" }).click();
+  await member.goto(recordURL);
+  await expect(member.getByRole("heading", { name: "PO-1042", exact: true })).toBeVisible();
+  await expect(member.getByText("WO-1043", { exact: true })).toBeVisible();
+  const menu = member.getByRole("button", { name: "More actions" });
+  await menu.click();
+  await expect(member.getByRole("menuitem", { name: "Start upstream production", exact: true })).toBeVisible();
+  await expect(member.getByRole("menuitem", { name: "Set shop order", exact: true })).toHaveCount(0);
+  expect((await direct(member)).code).toBe("ERROR_CODE_POLICY_DENIED");
+
+  await open(page, "Delivery", "Installations");
+  const installation = page.getByRole("listitem").filter({ hasText: "Production batch provider" });
+  const manage = installation.getByRole("button", { name: "Manage installation", exact: true });
+  await manage.click();
+  const review = page.getByRole("dialog", { name: /Manage installation/ });
+  await expect(review.getByText("Business records retained: 1", { exact: true })).toBeVisible();
+  await review.getByRole("button", { name: "Mark for uninstall", exact: true }).click();
+  await expect(review).toBeHidden();
+  await expect(installation).toContainText("draining");
+  await manage.click();
+  await review.getByRole("button", { name: "Retire package", exact: true }).click();
+  await expect(review).toBeHidden();
+  await expect(installation).toContainText("retired");
+  await expect(page.getByRole("link", { name: "Production order provider", exact: true })).toHaveCount(0);
+  expect(await direct(page)).toMatchObject({ code: "ERROR_CODE_POLICY_DENIED", message: expect.stringContaining("The package contribution is retired") });
+  await manage.click();
+  await expect(review.getByText("Business records retained: 1", { exact: true })).toBeVisible();
+  await page.goto(appRecord.href);
+  await expect(page.getByRole("textbox", { name: "First shop order", exact: true })).toHaveValue("WO-1043");
+  const retiredMenu = page.getByRole("button", { name: "More actions" });
+  if (await retiredMenu.isVisible()) await retiredMenu.click();
+  await expect(page.getByRole("menuitem", { name: "Set shop order", exact: true })).toHaveCount(0);
+
+  await member.goto(appRecord.href);
+  await expect(member).toHaveURL((url) => url.pathname === recordURL);
+  await expect(member.getByText("WO-1043", { exact: true })).toBeVisible();
+  if (await menu.isVisible()) await menu.click();
+  await expect(member.getByRole("menuitem", { name: "Start upstream production", exact: true })).toHaveCount(0);
+  await expect(member.getByRole("link", { name: "Production order provider", exact: true })).toHaveCount(0);
+  await member.goto(historyURL!);
+  await expect(member).toHaveURL((url) => url.pathname === `${recordURL}/activity`);
+  await expect(member.getByText(/First shop order: .*WO-1043/)).toBeVisible();
+  await member.close();
+});

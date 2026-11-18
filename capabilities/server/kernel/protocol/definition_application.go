@@ -237,3 +237,13 @@ type PageView struct {
 	Entity      *platform.RecordTypeInfo `json:"entity,omitempty"`
 	Actions     []platform.Action        `json:"actions"`
 }
+
+type PageRequest struct {
+	App   string `json:"app"`
+	Owner string `json:"owner,omitempty"`
+	Page  string `json:"page"`
+}
+
+type RetainedRecordLink struct {
+	Object string `json:"object"`
+}

@@ -23,12 +23,13 @@ export function beforeLeave(guard: LeaveGuard) {
   return () => { guards.delete(guard); };
 }
 
-export async function navigate(path: string, state: unknown = null) {
+export async function navigate(path: string, state: unknown = null, replace = false) {
   if (leaving) return;
   leaving = true;
   try {
     for (const guard of guards) if (!await guard()) return;
-    history.pushState(state, "", path);
+    if (replace) history.replaceState(state, "", path);
+    else history.pushState(state, "", path);
     dispatchEvent(new PopStateEvent("popstate"));
   } finally {
     leaving = false;

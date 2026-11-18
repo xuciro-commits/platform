@@ -46,12 +46,14 @@ func (i Impact) Of(id string, after []platform.ReleaseAsset) (platform.PackageLi
 		replaced[asset.Ref] = true
 	}
 	for _, resource := range i.Resources {
-		if resource.ManagedBy != id || resource.Archived || resource.Draft == "package:"+id {
+		if resource.ManagedBy != id || resource.Draft == "package:"+id || resource.Archived && len(after) != 0 {
 			continue
 		}
-		owned[resource.Ref] = true
-		if !replaced[resource.Ref] {
-			removed[resource.Ref] = true
+		if !resource.Archived {
+			owned[resource.Ref] = true
+			if !replaced[resource.Ref] {
+				removed[resource.Ref] = true
+			}
 		}
 		switch resource.Ref.Kind {
 		case platform.AssetObject:
@@ -61,6 +63,9 @@ func (i Impact) Of(id string, after []platform.ReleaseAsset) (platform.PackageLi
 		case platform.AssetDataset, platform.AssetMediaSet:
 			out.Outputs = append(out.Outputs, platform.PackageImpactOutput{Resource: resource.Ref, Retained: true})
 		case platform.AssetConnection:
+			if resource.Archived {
+				continue
+			}
 			connection, found, err := i.Connection(resource.Draft)
 			if err != nil {
 				return out, err

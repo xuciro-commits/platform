@@ -4892,6 +4892,10 @@ export type RetainedArtifact = {
   at: string;
 };
 
+export type RetainedRecordLink = {
+  object: string;
+};
+
 export type RolePermissions = {
   role: string;
   holders: number;

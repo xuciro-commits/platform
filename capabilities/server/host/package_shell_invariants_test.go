@@ -121,7 +121,12 @@ func TestInvariantK24InstalledPackageContributesOnlyActiveAuthorizedNavigationAn
 	if _, exists := app("builder"); exists {
 		t.Fatal("retired application remained in the shell")
 	}
+	linkPath := "/v1/applications/" + name + "/batchproviderorder/records/ORDER"
 	for _, role := range []string{"builder", "other"} {
+		var link protocol.RetainedRecordLink
+		if raw := get(role, linkPath); json.Unmarshal(raw.Bytes(), &link) != nil || link.Object != typ {
+			t.Fatalf("%s retained record link: %s", role, raw)
+		}
 		view := recordOf(role)
 		if record, ok := view.Record.(map[string]any); !ok || record["number"] != "ORDER" || record["firstshop"] != "SHOP-1" {
 			t.Fatalf("%s retained record: %+v", role, view.Record)
@@ -129,6 +134,9 @@ func TestInvariantK24InstalledPackageContributesOnlyActiveAuthorizedNavigationAn
 		if slices.ContainsFunc(view.Actions, func(action objects.RecordAction) bool { return action.Schema == schema }) {
 			t.Fatalf("%s saw the retired action on the retained record", role)
 		}
+	}
+	if res := observationRequest(t, handler, live.ID, observationToken(live.ID, "auditor"), linkPath, nil); res.Code != http.StatusNotFound {
+		t.Fatalf("member without access resolved the retired link: %d %s", res.Code, res.Body)
 	}
 	req := live.submission(schema, typ, "ORDER", inputs)
 	if _, refusal := live.Submit(live.member(t), req, invariantClock); refusal == nil || refusal.Code != pb.ErrorCode_ERROR_CODE_POLICY_DENIED || refusal.Message != "Authorization denied at verb: The package contribution is retired" {

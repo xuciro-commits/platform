@@ -9,6 +9,7 @@ import (
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformserver/kernel/records"
 	"platformserver/platform"
+	"platformserver/services/resources/publication"
 )
 
 func StoreResourceRow(store *records.Store, tenant string, ref platform.AssetRef) (protocol.Resource, bool) {
@@ -42,6 +43,32 @@ func StoreApplicationEntryWithdrawn(store *records.Store, ref platform.AssetRef)
 		}
 	}
 	return false
+}
+
+func StoreRetainedRecordLink(store *records.Store, tenant, app, page, id string, readable func(string) bool) (protocol.RetainedRecordLink, *platform.Error) {
+	missing := platform.Refuse(pb.ErrorCode_ERROR_CODE_NOT_FOUND, "This record link is unavailable")
+	root, _ := StoreResourceRow(store, tenant, platform.AssetRef{App: ID, Kind: platform.AssetApp, Name: app})
+	if !managedResourceRetired(root) {
+		return protocol.RetainedRecordLink{}, missing
+	}
+	row, ok := records.LockedRow[protocol.Application](store, protocol.AppType, root.Draft)
+	if !ok {
+		return protocol.RetainedRecordLink{}, missing
+	}
+	application, ok := publication.Read[protocol.Application](row.Published)
+	if !ok || !slices.Contains(application.Pages, page) {
+		return protocol.RetainedRecordLink{}, missing
+	}
+	entry, _ := StoreResourceRow(store, tenant, platform.AssetRef{App: ID, Kind: platform.AssetPage, Name: page})
+	draft, ok := records.LockedRow[protocol.Page](store, protocol.PageType, entry.Draft)
+	if !ok {
+		return protocol.RetainedRecordLink{}, missing
+	}
+	published, ok := publication.Read[protocol.Page](draft.Published)
+	if !ok || !readable(published.Object+"/"+id) {
+		return protocol.RetainedRecordLink{}, missing
+	}
+	return protocol.RetainedRecordLink{Object: published.Object}, nil
 }
 
 var projectRefKinds = map[string][]string{

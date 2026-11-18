@@ -23,15 +23,14 @@ export function PackageReview({ view, mode, close, done }: { view: Api.PackageVi
   const drainAction = actions.find((action) => action.schema === "platform.package.drain");
   const retireAction = actions.find((action) => action.schema === "platform.package.retire");
   const problems = [
-    ...(view.plan.problems ?? []),
-    ...(view.precheck.problems ?? []),
-    ...(review.status === "ready" ? review.data.problems ?? [] : []),
+    ...(mode === "install" ? [...(view.plan.problems ?? []), ...(view.precheck.problems ?? [])] : []),
+    ...(review.status === "ready" ? review.data.problems ?? [] : review.status === "loading" ? [] : [review.reason]),
     ...(preparation.status === "ready" ? preparation.data.connections.filter((connection) => !connection.ready).map((connection) => `${connection.title}: ${t("Not configured")}`) : []),
     ...(preparation.status === "ready" ? preparation.data.ai.filter((requirement) => requirement.problem).map((requirement) => requirement.problem!) : []),
   ];
   const impact = review.status === "ready" ? review.data.impact : undefined;
   const installed = view.installed;
-  const loading = review.status === "loading" || preparation.status === "loading" || catalog.status === "loading";
+  const loading = review.status === "loading" || catalog.status === "loading" || (mode === "install" && preparation.status === "loading");
   const state = installed?.state ?? "";
 
   const run = async (action: Api.Action | undefined, payload: Record<string, unknown>) => {
@@ -96,9 +95,11 @@ export function PackageReview({ view, mode, close, done }: { view: Api.PackageVi
                 />
               )}
               {mode === "manage" && state !== "draining" && state !== "retired" && (
-                <Button label={t("Mark for uninstall")} variant="secondary" isDisabled={busy || loading || !drainAction || problems.length > 0} onClick={() => run(drainAction, { id })} />
+                <Button label={t("Mark for uninstall")} variant="secondary"
+                  isDisabled={busy || loading || !drainAction || review.status !== "ready" || (impact?.dependencies.length ?? 0) > 0}
+                  onClick={() => run(drainAction, { id })} />
               )}
-              {mode === "manage" && (
+              {mode === "manage" && state !== "retired" && (
                 <Button label={t("Retire package")} variant="destructive" isDisabled={busy || loading || !retireAction || problems.length > 0} onClick={() => run(retireAction, { id })} />
               )}
             </HStack>
