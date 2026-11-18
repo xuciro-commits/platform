@@ -12,6 +12,7 @@ export type Described = {
   sections: Section[];
   aside: Api.FieldInfo[];
   columns: Api.FieldInfo[];
+  table: Api.FieldInfo[];
   groups: Api.FieldInfo[];
   lanes: Api.FieldInfo[];
   editable: Set<string>;
@@ -80,6 +81,7 @@ export function describe(entity: Api.EntityInfo, actions: Api.Action[]): Describ
     sections,
     aside,
     columns,
+    table: listed,
     groups,
     lanes,
     editable,

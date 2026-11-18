@@ -69,6 +69,7 @@
         "sets": [
           { "name": "lines", "from": "lines", "direction": "inverse", "object": "build.opportunityline", "order": [{ "expr": { "op": "", "kind": "text", "ref": "id" } }], "limit": 200 }
         ],
+        "view": {"version":1,"layout":"table","columns":["subject","stage","customer","amount","budgetapproved","deposit","next","closing"],"sort":[],"filters":[],"search":"","group":"none","lanes":""},
         "states": [{ "name": "open", "title": "Open", "tone": "info", "description": "Being worked on by the sales team." }]
       },
       "records": [

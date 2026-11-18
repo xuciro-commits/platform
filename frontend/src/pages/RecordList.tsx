@@ -39,12 +39,14 @@ function shape(described: Described, declared: Declared, listPath: string, move?
     return tone ? (dots as Record<string, Dot | undefined>)[tone] ?? dots.neutral : undefined;
   };
   const titles = (field: Api.FieldInfo) => field.choiceTitles ?? field.choices;
-  const chosen = declared.fields ? declared.fields.flatMap((name) => described.field(name) ?? []) : described.columns;
+  const chosen = declared.fields ? declared.fields.flatMap((name) => described.field(name) ?? []) : described.table;
   return {
     title: declared.title ?? described.plural,
     about: declared.about,
     move,
     bulk,
+    defaultView: described.entity.view,
+    carryView: true,
     rows: (answer) => (answer.records as Row[]).map((row) => ({ ...row, [formatted]: answer.formats?.[String(row.id)], [referenced]: answer.refs })),
     id: (row) => String(row.id),
     link: (row) => `${listPath}/${encodeURIComponent(String(row.id))}`,
@@ -56,6 +58,7 @@ function shape(described: Described, declared: Declared, listPath: string, move?
         kind: field.type === "choice" ? ("enum" as const) : numeric.has(field.type) ? ("number" as const) : field.type === "date" || field.type === "datetime" ? ("time" as const) : ("string" as const),
         choices: field.name === lifecycle?.field ? states.map((state) => t(state.title)) : titles(field),
         boolean: field.type === "boolean",
+        hiddenByDefault: !declared.fields && !described.columns.includes(field),
         dot: dot(field),
         value: numeric.has(field.type) ? (row: Row) => field.type === "money" ? money(row[field.name])?.amount : plain(row[field.name]) : undefined,
       })),
@@ -144,6 +147,7 @@ export function Records({ declared, listPath, id, back }: { declared: Declared; 
   return (
     <>
       <ListView
+        key={(described?.type ?? declared.type) + "/" + JSON.stringify(described?.entity.view ?? {})}
         definition={definition}
         read={read}
         back={back}

@@ -233,7 +233,7 @@ test("shape: every record page has the same header, tabs and rail", async ({ pag
   };
   await visit("Ontology", "Objects", "Opportunities", "Press line retrofit");
   await page.getByRole("link", { name: "Activity" }).click();
-  await expect(page).toHaveURL(/\/activity$/);
+  await expect(page).toHaveURL(/\/activity(?:\?|$)/);
   await expect(page.getByText("Subject: Press line retrofit")).toBeVisible();
   await visit("Ontology", "Objects", "Customers", "Northwind Tools");
   await visit("Ontology", "Object types", null, "Opportunity");
@@ -265,7 +265,7 @@ test("batch: retries a stale row without submitting a successful row again", asy
   await expect(page.getByText("Support contract renewal: Done", { exact: true })).toBeVisible();
   await expect(page.getByText(/Seasonal stock planning:.*changed/)).toBeVisible();
   expect(archived).toHaveLength(2);
-  const failed = decodeURIComponent(href!.split("/").at(-1)!);
+  const failed = decodeURIComponent(new URL(href!, "http://local").pathname.split("/").at(-1)!);
   expect(archived).toContain(failed);
   await page.getByRole("button", { name: "Retry failed rows", exact: true }).click();
   await expect(page.getByText("Seasonal stock planning: Done", { exact: true })).toBeVisible();
@@ -380,7 +380,7 @@ test("links and files: navigate to related records and attach a downloadable fil
   await page.getByRole("link", { name: "Customers" }).click();
   await page.getByRole("link", { name: "Northwind Tools" }).click();
   await page.getByRole("link", { name: "Links", exact: true }).click();
-  await expect(page).toHaveURL(/\/links$/);
+  await expect(page).toHaveURL(/\/links(?:\?|$)/);
   await expect(page.getByRole("link", { name: "Spare parts frame agreement" })).toBeVisible();
   await page.getByRole("link", { name: "View all", exact: true }).click();
   await expect(page).toHaveURL(/build.opportunity\?domain=/);
@@ -388,7 +388,7 @@ test("links and files: navigate to related records and attach a downloadable fil
   await expect(page.getByRole("link", { name: "Warehouse scanners" })).toHaveCount(0);
   await page.getByRole("link", { name: "Spare parts frame agreement" }).click();
   await page.getByRole("navigation", { name: "Tabs" }).getByRole("link", { name: "Files", exact: true }).click();
-  await expect(page).toHaveURL(/\/files$/);
+  await expect(page).toHaveURL(/\/files(?:\?|$)/);
   await page.locator('input[type="file"]').setInputFiles({
     name: "schedule.txt", mimeType: "text/plain", buffer: Buffer.from("Lead time: 6 weeks"),
   });
@@ -532,4 +532,34 @@ test("applications: an installed package contributes a menu and an object list",
   });
   await page.reload();
   await expect(page.getByRole("link", { name: "Production order provider", exact: true })).toHaveCount(0);
+});
+
+test("views: filters, order and visible columns survive refresh and return", async ({ page }) => {
+  await signIn(page);
+  await page.goto("/ontology/objects/build.opportunity");
+  await expect(page.getByRole("heading", { level: 1, name: "Opportunities" })).toBeVisible();
+
+  await page.getByRole("radio", { name: "Board" }).click();
+  await expect(page).toHaveURL(/view=/);
+  await page.getByRole("radio", { name: "Table" }).click();
+  await page.getByRole("button", { name: "Columns", exact: true }).click();
+  await page.getByRole("checkbox", { name: "Next step", exact: true }).uncheck();
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("columnheader", { name: "Next step", exact: true })).toHaveCount(0);
+
+  const at = new URL(page.url());
+  const view = JSON.parse(at.searchParams.get("view")!);
+  view.filters = [{ field: "stage", operator: "is", value: { type: "enum", value: "Proposal" } }];
+  view.sort = [{ sortKey: "amount", direction: "descending" }];
+  view.search = "";
+  at.searchParams.set("view", JSON.stringify(view));
+  await page.goto(at.toString());
+  await page.reload();
+  const rows = page.getByRole("table").locator("tbody tr").filter({ has: page.getByRole("link") });
+  await expect(rows.first()).toContainText("Robot cell integration");
+  await page.getByRole("link", { name: "Robot cell integration" }).click();
+  await page.getByRole("link", { name: "Opportunities", exact: true }).click();
+  await expect(page).toHaveURL(/view=/);
+  await expect(rows.first()).toContainText("Robot cell integration");
+  await expect(page.getByRole("columnheader", { name: "Next step", exact: true })).toHaveCount(0);
 });

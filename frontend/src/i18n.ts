@@ -1,5 +1,9 @@
 export const zhCN: Record<string, string> = {
   Search: "搜索",
+  "Search this list": "搜索此列表",
+  Columns: "列",
+  "Move column up": "列上移",
+  "Move column down": "列下移",
   Description: "描述",
   Edit: "编辑",
   Remove: "移除",

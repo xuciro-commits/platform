@@ -108,7 +108,7 @@ export default recordList({
 视图状态：
 
 - 结构 `{ version: 1, layout, columns, sort, filters, search, group, lanes }`；`filters` 用宿主 `domain` 的前缀形式，原样交给 `/v1/records`。
-- 可分享的视图状态用地址查询串编码，含敏感值的条件只经有权限的保存视图读取；向宿主取数时转成 `domain`、`sort`、`search`、`offset`、`limit`。
+- 可分享的视图状态用地址的 `view` 查询值编码，筛选、排序、分组、布局与列顺序即时写回；含敏感值的条件只经有权限的保存视图读取。向宿主取数时转成 `domain`、`sort`、`search`、`offset`、`limit`。
 - 进入列表时按地址、成员设定的默认、类型默认依次取视图。日常调整只改当前视图。显式保存才更新 `SavedView.state`，旧版本经同一个迁移函数读入。
 
 ## 应用与插件

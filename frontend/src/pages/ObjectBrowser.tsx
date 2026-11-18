@@ -21,7 +21,7 @@ function TypeIndex({ declared, base }: { declared: Declared; base: string }) {
       { key: "changed", header: "Updated", width: 200, text: (type) => (type.changed?.at ? new Date(type.changed.at).toLocaleString() : "") },
     ],
   };
-  return <ListView definition={definition} read={useRead<Api.RecordPage>("/v1/records/build.object?limit=200")} />;
+  return <ListView key="object-types" definition={definition} read={useRead<Api.RecordPage>("/v1/records/build.object?limit=200")} />;
 }
 
 export function objectBrowser(declared: Declared) {

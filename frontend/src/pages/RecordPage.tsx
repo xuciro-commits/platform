@@ -12,7 +12,7 @@ import { Timestamp } from "@astryxdesign/core/Timestamp";
 import { type ReactNode, useMemo, useState } from "react";
 import { type Api, useRead } from "../host";
 import { t } from "../i18n";
-import { usePath } from "../router";
+import { usePath, useSearch } from "../router";
 import { BackLink } from "./BackLink";
 import { DefinitionRows, stateProblem } from "./DefinitionRows";
 import { describe, type Described, type Values, withRestrictedFields } from "./describe";
@@ -75,6 +75,8 @@ export function RecordPage({ described, id, listPath, listTitle, instances, enti
   const [refusal, setRefusal] = useState("");
   const [fresh] = useState(() => (history.state as { fresh?: string } | null)?.fresh === id);
   const base = `${listPath}/${encodeURIComponent(id)}`;
+  const query = useSearch();
+  const listHref = listPath + query;
   const asked = usePath().slice(base.length + 1);
   const narrow = useMediaQuery("(max-width: 1024px)");
   const read = useRead<Api.RecordView>(`/v1/records/${described.type}/${encodeURIComponent(id)}`);
@@ -134,7 +136,7 @@ export function RecordPage({ described, id, listPath, listTitle, instances, enti
             <HStack gap={4} vAlign="start">
               <StackItem size="fill">
                 <VStack gap={2}>
-                  <BackLink href={listPath} label={t(listTitle)} />
+                  <BackLink href={listHref} label={t(listTitle)} />
                   <Heading level={1} maxLines={2}>
                     {name}
                   </Heading>
@@ -175,7 +177,7 @@ export function RecordPage({ described, id, listPath, listTitle, instances, enti
                   key={candidate.value}
                   value={candidate.value}
                   label={t(candidate.label)}
-                  href={candidate.value === "details" ? base : `${base}/${candidate.value}`}
+                  href={(candidate.value === "details" ? base : `${base}/${candidate.value}`) + query}
                 />
               ))}
             </TabList>

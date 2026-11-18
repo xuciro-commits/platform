@@ -1,13 +1,14 @@
 import { Badge } from "@astryxdesign/core/Badge";
 import { Banner } from "@astryxdesign/core/Banner";
 import { Button } from "@astryxdesign/core/Button";
+import { CheckboxInput } from "@astryxdesign/core/CheckboxInput";
 import { EmptyState } from "@astryxdesign/core/EmptyState";
 import { Icon } from "@astryxdesign/core/Icon";
 import { IconButton } from "@astryxdesign/core/IconButton";
 import { HStack, Layout, LayoutContent, LayoutHeader, StackItem, VStack } from "@astryxdesign/core/Layout";
 import { Link } from "@astryxdesign/core/Link";
 import { Popover } from "@astryxdesign/core/Popover";
-import { type FieldDefinition, PowerSearch, type PowerSearchFilter, usePowerSearchConfig } from "@astryxdesign/core/PowerSearch";
+import { type FieldDefinition, PowerSearch, usePowerSearchConfig } from "@astryxdesign/core/PowerSearch";
 import { RadioList, RadioListItem } from "@astryxdesign/core/RadioList";
 import { Section } from "@astryxdesign/core/Section";
 import { SegmentedControl, SegmentedControlItem } from "@astryxdesign/core/SegmentedControl";
@@ -16,14 +17,17 @@ import { StatusDot } from "@astryxdesign/core/StatusDot";
 import { Table, pixel, proportional, useTableGroupedRows, useTableSelection, useTableSelectionState, useTableSortable } from "@astryxdesign/core/Table";
 import type { TableColumn } from "@astryxdesign/core/Table";
 import { Heading, Text } from "@astryxdesign/core/Text";
+import { TextInput } from "@astryxdesign/core/TextInput";
 import { Timestamp } from "@astryxdesign/core/Timestamp";
-import { ArrowPathIcon, TableCellsIcon, ViewColumnsIcon } from "@heroicons/react/24/outline";
+import { ArrowDownIcon, ArrowPathIcon, ArrowUpIcon, TableCellsIcon, ViewColumnsIcon } from "@heroicons/react/24/outline";
 import { type ReactNode, useEffect, useMemo, useState } from "react";
 import { type Read, reread, useRead } from "../host";
+import { navigate, usePath, useSearch } from "../router";
 import { BackLink } from "./BackLink";
 import { BoardView } from "./BoardView";
 import { t } from "../i18n";
 import type { Dot } from "./Transitions";
+import { newView, readView, type ViewSort, type ViewState } from "./view";
 
 export type ListColumn<Row> = {
   key: string;
@@ -35,6 +39,7 @@ export type ListColumn<Row> = {
   boolean?: boolean;
   dot?: (row: Row) => Dot | undefined;
   value?: (row: Row) => unknown;
+  hiddenByDefault?: boolean;
 };
 type Done = Promise<unknown>;
 export type ListGroup<Row> = { key: string; label: string; of: (row: Row) => string; order?: string[]; accepts?: (id: string, to: string) => boolean };
@@ -49,22 +54,22 @@ export type ListShape<Answer, Row> = {
   groups?: ListGroup<Row>[];
   move?: Move;
   bulk?: (ids: string[], clear: () => void) => ReactNode;
+  defaultView?: unknown;
+  carryView?: boolean;
 };
 export type ListDefinition<Answer, Row> = ListShape<Answer, Row> & { read: string };
 
 type Cells = Record<string, string>;
 type Raw = Record<string, unknown>;
-type Sort = { sortKey: string; direction: "ascending" | "descending" }[];
 const compare = (left: unknown, right: unknown) =>
   typeof left === "number" && typeof right === "number" ? left - right : String(left ?? "").localeCompare(String(right ?? ""));
 const idKey = "__id";
 const dotOf = (key: string) => `__dot:${key}`;
 const ungrouped = "none";
-const layouts = ["table", "board"];
 
 export function listPage<Answer, Row>(definition: ListDefinition<Answer, Row>) {
   return function ListEntry() {
-    return <ListView definition={definition} read={useRead<Answer>(definition.read)} />;
+    return <ListView key={definition.read} definition={{ ...definition, carryView: true }} read={useRead<Answer>(definition.read)} />;
   };
 }
 
@@ -76,19 +81,33 @@ type ListViewProps<Answer, Row> = {
 };
 
 export function ListView<Answer, Row>({ definition, read, primary, back }: ListViewProps<Answer, Row>) {
-  const [filters, setFilters] = useState<PowerSearchFilter[]>([]);
-  const [sort, setSort] = useState<Sort>([]);
+  const currentPath = usePath();
+  const currentSearch = useSearch();
+  const fallback = useMemo(() => {
+    const base = newView(definition.columns.filter((column) => !column.hiddenByDefault).map((column) => column.key));
+    if (definition.defaultView == null) return base;
+    return readView(typeof definition.defaultView === "string" ? definition.defaultView : JSON.stringify(definition.defaultView), base);
+  }, [definition.columns, definition.defaultView]);
+  const view = useMemo(() => readView(new URLSearchParams(currentSearch).get("view"), fallback), [currentSearch, fallback]);
+  const update = (next: Partial<ViewState>) => {
+    const changed: ViewState = { ...view, ...next, version: 1 };
+    if (JSON.stringify(changed) === JSON.stringify(view)) return;
+    const params = new URLSearchParams(currentSearch);
+    params.set("view", JSON.stringify(changed));
+    navigate(currentPath + "?" + params, history.state);
+  };
   const [selected, setSelected] = useState<Set<string>>(() => new Set());
-  const [groupKey, setGroupKey] = useState(ungrouped);
   const [collapsed, setCollapsed] = useState<Set<string>>(() => new Set());
-  const [layout, setLayout] = useState(layouts[0]);
   const [moved, setMoved] = useState<Record<string, string>>({});
   const [failure, setFailure] = useState("");
-  const group = definition.groups?.find((candidate) => candidate.key === groupKey);
-  const lanes = group?.order ? group : definition.groups?.find((candidate) => candidate.order);
-  const board = layout === "board" && lanes?.order ? lanes : undefined;
+  const group = definition.groups?.find((candidate) => candidate.key === view.group);
+  const lanes = definition.groups?.find((candidate) => candidate.key === view.lanes && candidate.order) ?? (group?.order ? group : definition.groups?.find((candidate) => candidate.order));
+  const board = view.layout === "board" && lanes?.order ? lanes : undefined;
+  const orderedColumns = useMemo(() => {
+    const ordered = view.columns.flatMap((key) => definition.columns.find((column) => column.key === key) ?? []);
+    return ordered.length ? ordered : definition.columns.slice(0, 1);
+  }, [definition.columns, view.columns]);
   useEffect(() => setMoved({}), [read]);
-
   const fields = useMemo(
     () =>
       definition.columns
@@ -106,7 +125,10 @@ export function ListView<Answer, Row>({ definition, read, primary, back }: ListV
   const all = useMemo(() => {
     if (read.status !== "ready") return [];
     return definition.rows(read.data).map((row) => {
-      const cells: Cells = { [idKey]: definition.id(row), __group: group ? group.of(row) : "", __lane: lanes ? lanes.of(row) : "", __href: definition.link ? definition.link(row) : "" };
+      const href = definition.link?.(row) ?? "";
+      const params = new URLSearchParams(currentSearch);
+      if (definition.carryView) params.set("view", JSON.stringify(view));
+      const cells: Cells = { [idKey]: definition.id(row), __group: group ? group.of(row) : "", __lane: lanes ? lanes.of(row) : "", __href: href && definition.carryView ? href + "?" + params : href };
       const raw: Raw = { [idKey]: cells[idKey] };
       for (const column of definition.columns) {
         cells[column.key] = column.text(row);
@@ -116,25 +138,26 @@ export function ListView<Answer, Row>({ definition, read, primary, back }: ListV
       }
       return { cells, raw };
     });
-  }, [read, definition, group, lanes]);
+  }, [read, definition, group, lanes, currentSearch, view]);
 
   const shown = useMemo(() => {
-    const passing = new Set((applyFilters(filters, all.map((entry) => entry.raw) as never) as Raw[]).map((raw) => raw[idKey]));
-    const kept = all.filter((entry) => passing.has(entry.cells[idKey]));
+    const query = view.search.trim().toLowerCase();
+    const searched = query ? all.filter((entry) => Object.values(entry.raw).some((value) => String(value ?? "").toLowerCase().includes(query))) : all;
+    const passing = new Set((applyFilters(view.filters, searched.map((entry) => entry.raw) as never) as Raw[]).map((raw) => raw[idKey]));
+    const kept = searched.filter((entry) => passing.has(entry.cells[idKey]));
     const order = group?.order;
-    if (!order && sort.length === 0) return kept.map((entry) => entry.cells);
+    if (!order && view.sort.length === 0) return kept.map((entry) => entry.cells);
     return [...kept]
       .sort((a, b) => {
         if (order && a.cells.__group !== b.cells.__group) return order.indexOf(a.cells.__group) - order.indexOf(b.cells.__group);
-        for (const { sortKey, direction } of sort) {
+        for (const { sortKey, direction } of view.sort) {
           const difference = compare(a.raw[sortKey], b.raw[sortKey]);
           if (difference !== 0) return direction === "ascending" ? difference : -difference;
         }
         return 0;
       })
       .map((entry) => entry.cells);
-  }, [all, filters, sort, group, applyFilters]);
-
+  }, [all, view.filters, view.search, view.sort, group, applyFilters]);
   const grouped = useTableGroupedRows<Cells>({
     data: shown,
     groupBy: (cells) => cells.__group,
@@ -157,11 +180,11 @@ export function ListView<Answer, Row>({ definition, read, primary, back }: ListV
   });
 
   const { selectionConfig } = useTableSelectionState<Cells>({ data: shown, idKey, selectedKeys: selected, setSelectedKeys: setSelected });
-  const selection = useTableSelection<Cells>({ ...selectionConfig, getRowLabel: (cells) => cells[definition.columns[0]?.key] || cells[idKey] });
-  const sortable = useTableSortable<Cells>({ sort, onSortChange: setSort, allowUnsortedState: true });
+  const selection = useTableSelection<Cells>({ ...selectionConfig, getRowLabel: (cells) => cells[orderedColumns[0]?.key] || cells[idKey] });
+  const sortable = useTableSortable<Cells>({ sort: view.sort, onSortChange: (sort: ViewSort[]) => update({ sort }), allowUnsortedState: true });
   const chosen = shown.filter((cells) => selected.has(cells[idKey])).map((cells) => cells[idKey]);
 
-  const columns: TableColumn<Cells>[] = definition.columns.map((column, position) => ({
+  const columns: TableColumn<Cells>[] = orderedColumns.map((column, position) => ({
     key: column.key,
     header: t(column.header),
     width: column.width ? pixel(column.width) : proportional(1),
@@ -204,9 +227,9 @@ export function ListView<Answer, Row>({ definition, read, primary, back }: ListV
                 </VStack>
               </StackItem>
               {lanes && (
-                <SegmentedControl label={t("Layout")} value={layout} onChange={setLayout}>
-                  <SegmentedControlItem value={layouts[0]} label={t("Table")} icon={<Icon icon={TableCellsIcon} size="sm" />} />
-                  <SegmentedControlItem value={layouts[1]} label={t("Board")} icon={<Icon icon={ViewColumnsIcon} size="sm" />} />
+                <SegmentedControl label={t("Layout")} value={view.layout} onChange={(layout) => update({ layout: layout as ViewState["layout"], lanes: lanes?.key ?? "" })}>
+                  <SegmentedControlItem value="table" label={t("Table")} icon={<Icon icon={TableCellsIcon} size="sm" />} />
+                  <SegmentedControlItem value="board" label={t("Board")} icon={<Icon icon={ViewColumnsIcon} size="sm" />} />
                 </SegmentedControl>
               )}
               <IconButton label={t("Refresh")} tooltip={t("Refresh")} icon={<Icon icon={ArrowPathIcon} size="sm" />} onClick={reread} />
@@ -224,14 +247,17 @@ export function ListView<Answer, Row>({ definition, read, primary, back }: ListV
             {all.length > 0 && chosen.length === 0 && (
             <HStack gap={2} vAlign="center">
               <StackItem size="fill">
-                <PowerSearch
-                  config={config}
-                  filters={filters}
-                  onChange={(next) => setFilters([...next])}
-                  label={t("Filter")}
-                  placeholder={t("Filter by any column")}
-                  resultCount={`${shown.length} / ${all.length}`}
-                />
+                <VStack gap={3}>
+                  <TextInput label={t("Search this list")} value={view.search} onChange={(search) => update({ search })} />
+                  <PowerSearch
+                    config={config}
+                    filters={view.filters}
+                    onChange={(next) => update({ filters: [...next] })}
+                    label={t("Filter")}
+                    placeholder={t("Filter by any column")}
+                    resultCount={String(shown.length) + " / " + String(all.length)}
+                  />
+                </VStack>
               </StackItem>
               {definition.groups && definition.groups.length > 0 && (
                 <Popover
@@ -242,9 +268,9 @@ export function ListView<Answer, Row>({ definition, read, primary, back }: ListV
                   content={
                     <RadioList
                       label={t("Group by")}
-                      value={groupKey}
+                      value={view.group}
                       onChange={(value) => {
-                        setGroupKey(String(value));
+                        update({ group: String(value), lanes: definition.groups?.find((candidate) => candidate.key === String(value) && candidate.order)?.key ?? "" });
                         setCollapsed(new Set());
                       }}>
                       <RadioListItem value={ungrouped} label={t("None")} />
@@ -256,6 +282,41 @@ export function ListView<Answer, Row>({ definition, read, primary, back }: ListV
                   <Button label={group ? `${t("Group by")}: ${t(group.label)}` : t("Group by")} variant="secondary" size="md" />
                 </Popover>
               )}
+              <Popover
+                placement="below"
+                alignment="end"
+                width={340}
+                label={t("Columns")}
+                content={
+                  <VStack gap={2}>
+                    {definition.columns.map((column) => {
+                      const at = view.columns.indexOf(column.key);
+                      const visible = at >= 0;
+                      return (
+                        <HStack key={column.key} gap={2} vAlign="center">
+                          <StackItem size="fill">
+                            <CheckboxInput label={t(column.header)} value={visible} isDisabled={column.key === orderedColumns[0].key}
+                              onChange={(checked) => update({ columns: checked ? [...view.columns, column.key] : view.columns.filter((key) => key !== column.key) })} />
+                          </StackItem>
+                          <IconButton label={t("Move column up")} tooltip={t("Move column up")} variant="ghost" isDisabled={!visible || at <= 1}
+                            icon={<Icon icon={ArrowUpIcon} size="sm" />} onClick={() => {
+                              const next = [...view.columns];
+                              [next[at - 1], next[at]] = [next[at], next[at - 1]];
+                              update({ columns: next });
+                            }} />
+                          <IconButton label={t("Move column down")} tooltip={t("Move column down")} variant="ghost" isDisabled={!visible || at >= view.columns.length - 1}
+                            icon={<Icon icon={ArrowDownIcon} size="sm" />} onClick={() => {
+                              const next = [...view.columns];
+                              [next[at], next[at + 1]] = [next[at + 1], next[at]];
+                              update({ columns: next });
+                            }} />
+                        </HStack>
+                      );
+                    })}
+                  </VStack>
+                }>
+                <Button label={t("Columns")} variant="secondary" size="md" />
+              </Popover>
             </HStack>
             )}
           </VStack>
@@ -293,9 +354,9 @@ export function ListView<Answer, Row>({ definition, read, primary, back }: ListV
               cards={shown.map((cells) => ({
                 id: cells[idKey],
                 column: moved[cells[idKey]] ?? cells.__lane,
-                title: cells[definition.columns[0].key],
+                title: cells[orderedColumns[0].key],
                 href: cells.__href,
-                lines: definition.columns.slice(1, 5).filter((column) => column.key !== board.key && column.kind !== "time" && cells[column.key]).map((column) => cells[column.key]),
+                lines: orderedColumns.slice(1, 5).filter((column) => column.key !== board.key && column.kind !== "time" && cells[column.key]).map((column) => cells[column.key]),
               }))}
               accepts={board.accepts}
               onMove={
