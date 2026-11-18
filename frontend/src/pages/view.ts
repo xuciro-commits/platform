@@ -1,6 +1,8 @@
 import type { PowerSearchFilter } from "@astryxdesign/core/PowerSearch";
 
 export type ViewSort = { sortKey: string; direction: "ascending" | "descending" };
+export type Density = "compact" | "balanced" | "spacious";
+export type StickyEdge = "none" | "one" | "two";
 export type ViewState = {
   version: 1;
   layout: "table" | "board";
@@ -10,10 +12,16 @@ export type ViewState = {
   search: string;
   group: string;
   lanes: string;
+  density: Density;
+  stickyStart: StickyEdge;
+  stickyEnd: StickyEdge;
 };
 
+const densities: Density[] = ["compact", "balanced", "spacious"];
+const edges: StickyEdge[] = ["none", "one", "two"];
+
 export function newView(columns: string[], group = "none", lanes = ""): ViewState {
-  return { version: 1, layout: "table", columns: [...columns], sort: [], filters: [], search: "", group, lanes };
+  return { version: 1, layout: "table", columns: [...columns], sort: [], filters: [], search: "", group, lanes, density: "balanced", stickyStart: "one", stickyEnd: "none" };
 }
 
 export function readView(raw: string | null, fallback: ViewState): ViewState {
@@ -30,6 +38,9 @@ export function readView(raw: string | null, fallback: ViewState): ViewState {
       search: typeof value.search === "string" ? value.search : "",
       group: typeof value.group === "string" ? value.group : fallback.group,
       lanes: typeof value.lanes === "string" ? value.lanes : fallback.lanes,
+      density: densities.find((density) => density === value.density) ?? fallback.density,
+      stickyStart: edges.find((edge) => edge === value.stickyStart) ?? fallback.stickyStart,
+      stickyEnd: edges.find((edge) => edge === value.stickyEnd) ?? fallback.stickyEnd,
     };
   } catch {
     return fallback;

@@ -1,6 +1,8 @@
+import { Banner } from "@astryxdesign/core/Banner";
 import { Button } from "@astryxdesign/core/Button";
+import { VStack } from "@astryxdesign/core/Layout";
 import { useEffect, useMemo, useState } from "react";
-import { type Api, type Read, useRead } from "../host";
+import { type Api, type Read, request, useRead } from "../host";
 import { t } from "../i18n";
 import { navigate, usePath, useSearch } from "../router";
 import { ActionDialog } from "./ActionDialog";
@@ -9,8 +11,8 @@ import { type ListShape, ListView, type Move } from "./ListPage";
 import { type Described, describe, numeric } from "./describe";
 import { BatchActions } from "./BatchActions";
 import { RecordPage } from "./RecordPage";
-import { type Dot, dots } from "./Transitions";
-import { money, plain, present } from "./values";
+import { type Dot, dots, Transitions } from "./Transitions";
+import { money, plain, present, shown } from "./values";
 import { domainOf, newView, readView, type ViewState } from "./view";
 
 type Row = Record<string, unknown>;
@@ -18,6 +20,7 @@ type Declared = { type: string; title?: string; about: string; fields?: string[]
 type Back = { href: string; label: string };
 type Stamp = { at?: string };
 type Formats = Record<string, Api.FieldFormat>;
+type Options = Record<string, { value: string; label: string }[]>;
 const formatted = "__formats";
 const referenced = "__refs";
 const formats = (row: Row) => (row[formatted] as Formats | undefined) ?? {};
@@ -116,7 +119,35 @@ function keyOf(field: Api.FieldInfo | undefined, title: string) {
   return index >= 0 ? field?.choices?.[index] : title;
 }
 
-function shape(described: Described, declared: Declared, listPath: string, move?: Move, bulk?: ListShape<Api.RecordPage, Row>["bulk"], accepts?: (id: string, to: string) => boolean): ListShape<Api.RecordPage, Row> {
+function useOptions(described: Described | undefined) {
+  const members = useRead<Api.MemberOption[]>(described?.entity.fields.some((field) => field.type === "member") ? "/v1/member-directory" : null);
+  const types = useRead<Api.EntityInfo[]>("/v1/entities");
+  const [references, setReferences] = useState<Options>({});
+  const targets = useMemo(() => (described ? described.entity.fields.filter((field) => field.type === "reference" && field.ref).map((field) => [field.name, String(field.ref)] as const) : []), [described]);
+  useEffect(() => {
+    if (types.status !== "ready" || targets.length === 0) return;
+    let live = true;
+    void Promise.all(
+      targets.map(async ([name, type]) => {
+        const display = types.data.find((entity) => entity.type === type)?.display;
+        const answer = await request<Api.RecordPage>(`/v1/records/${encodeURIComponent(type)}?limit=200`).catch(() => undefined);
+        const rows = (answer?.records ?? []) as Row[];
+        return [name, rows.map((row) => ({ value: String(row.id), label: shown(plain(display ? row[display] : row.id)) || String(row.id) }))] as const;
+      }),
+    ).then((entries) => live && setReferences(Object.fromEntries(entries)));
+    return () => {
+      live = false;
+    };
+  }, [targets, types]);
+  return useMemo<Options>(() => {
+    const people = members.status === "ready" ? members.data.map((member) => ({ value: member.id, label: member.name })) : undefined;
+    const options: Options = { ...references };
+    for (const field of described?.entity.fields ?? []) if (field.type === "member" && people) options[field.name] = people;
+    return options;
+  }, [members, references, described]);
+}
+
+function shape(described: Described, declared: Declared, listPath: string, move?: Move, bulk?: ListShape<Api.RecordPage, Row>["bulk"], accepts?: (id: string, to: string) => boolean, options: Options = {}, detail?: ListShape<Api.RecordPage, Row>["detail"]): ListShape<Api.RecordPage, Row> {
   const lifecycle = described.lifecycle;
   const states = lifecycle?.states ?? [];
   const say = (field: Api.FieldInfo) => (row: Row) => {
@@ -136,6 +167,7 @@ function shape(described: Described, declared: Declared, listPath: string, move?
     about: declared.about,
     move,
     bulk,
+    detail,
     defaultView: described.entity.view,
     carryView: true,
     savedViews: declared.type,
@@ -149,6 +181,7 @@ function shape(described: Described, declared: Declared, listPath: string, move?
         text: say(field),
         kind: field.type === "choice" ? ("enum" as const) : numeric.has(field.type) ? ("number" as const) : field.type === "date" || field.type === "datetime" ? ("time" as const) : field.type === "member" ? ("member" as const) : ("string" as const),
         choices: field.name === lifecycle?.field ? states.map((state) => t(state.title)) : titles(field),
+        options: options[field.name],
         boolean: field.type === "boolean",
         hiddenByDefault: !declared.fields && !described.columns.includes(field),
         dot: dot(field),
@@ -220,16 +253,36 @@ export function Records({ declared, listPath, id, back }: { declared: Declared; 
     const row = kept?.find((candidate) => candidate.id === moving);
     return Boolean(lifecycle && row && described?.step(String(row[lifecycle.field] ?? ""), stateOf(to)));
   };
+  const options = useOptions(described);
+  const [detailFailure, setDetailFailure] = useState("");
+  const detail: ListShape<Api.RecordPage, Row>["detail"] = described && ((chosen) => {
+    const row = kept.find((candidate) => String(candidate.id) === chosen);
+    if (!row) return null;
+    return (
+      <VStack gap={2}>
+        {detailFailure && <Banner status="error" title={t("Not saved")} description={detailFailure} />}
+        <Transitions
+          described={described}
+          id={chosen}
+          values={row}
+          revision={Number(row.revision)}
+          title={described.name(row, chosen)}
+          allowed={records.answer.actions?.[chosen]}
+          onFailure={setDetailFailure}
+        />
+      </VStack>
+    );
+  }) || undefined;
   const bulk: ListShape<Api.RecordPage, Row>["bulk"] = described && ((ids, clear) => (
     <BatchActions described={described} ids={ids} clear={clear} records={records.answer} />
   )) || undefined;
   const definition = useMemo(() => {
     if (!described) return pending;
     return {
-      ...shape(described, declared, listPath, move, bulk, accepts),
+      ...shape(described, declared, listPath, move, bulk, accepts, options, detail),
       page: { total: records.total, loaded: records.loaded, hasMore: records.hasMore, loading: records.loading, loadMore: records.loadMore },
     };
-  }, [described, declared, listPath, pending, move, bulk, accepts, records.total, records.loaded, records.hasMore, records.loading, records.loadMore]);
+  }, [described, declared, listPath, pending, move, bulk, accepts, options, detail, records.total, records.loaded, records.hasMore, records.loading, records.loadMore]);
   const create = described?.create;
   if (described && id) {
     return (

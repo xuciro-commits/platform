@@ -1,36 +1,43 @@
-import { Badge } from "@astryxdesign/core/Badge";
 import { Banner } from "@astryxdesign/core/Banner";
+import { BottomSheet } from "@astryxdesign/core/BottomSheet";
 import { Button } from "@astryxdesign/core/Button";
-import { CheckboxInput } from "@astryxdesign/core/CheckboxInput";
+import { Divider } from "@astryxdesign/core/Divider";
 import { EmptyState } from "@astryxdesign/core/EmptyState";
 import { Icon } from "@astryxdesign/core/Icon";
 import { IconButton } from "@astryxdesign/core/IconButton";
-import { HStack, Layout, LayoutContent, LayoutHeader, StackItem, VStack } from "@astryxdesign/core/Layout";
+import { HStack, Layout, LayoutContent, LayoutHeader, LayoutPanel, StackItem, VStack } from "@astryxdesign/core/Layout";
 import { Link } from "@astryxdesign/core/Link";
-import { Popover } from "@astryxdesign/core/Popover";
-import { type FieldDefinition, PowerSearch, usePowerSearchConfig } from "@astryxdesign/core/PowerSearch";
-import { RadioList, RadioListItem } from "@astryxdesign/core/RadioList";
+import { MetadataList, MetadataListItem } from "@astryxdesign/core/MetadataList";
+import { type FieldDefinition, PowerSearch, type PowerSearchFilter, usePowerSearchConfig } from "@astryxdesign/core/PowerSearch";
+import { ProgressBar } from "@astryxdesign/core/ProgressBar";
+import { ResizeHandle, useResizable } from "@astryxdesign/core/Resizable";
 import { ScrollableArea } from "@astryxdesign/core/ScrollableArea";
 import { Section } from "@astryxdesign/core/Section";
 import { SegmentedControl, SegmentedControlItem } from "@astryxdesign/core/SegmentedControl";
 import { Skeleton } from "@astryxdesign/core/Skeleton";
 import { StatusDot } from "@astryxdesign/core/StatusDot";
-import { Table, pixel, proportional, useTableGroupedRows, useTableSelection, useTableSelectionState, useTableSortable } from "@astryxdesign/core/Table";
-import type { TableColumn } from "@astryxdesign/core/Table";
+import { Table, pixel, proportional, useTableGroupedRows, useTableSelection, useTableSelectionState, useTableSortable, useTableStickyColumns } from "@astryxdesign/core/Table";
+import type { TableColumn, TablePlugin } from "@astryxdesign/core/Table";
 import { Heading, Text } from "@astryxdesign/core/Text";
 import { Timestamp } from "@astryxdesign/core/Timestamp";
-import { ArrowDownIcon, ArrowPathIcon, ArrowUpIcon, RectangleStackIcon, TableCellsIcon, ViewColumnsIcon } from "@heroicons/react/24/outline";
-import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
+import { ToggleButton } from "@astryxdesign/core/ToggleButton";
+import { useMediaQuery } from "@astryxdesign/core/hooks";
+import { colorVars, durationVars, easeVars, radiusVars, spacingVars } from "@astryxdesign/core/theme/tokens.stylex";
+import { AdjustmentsHorizontalIcon, ArrowPathIcon, MagnifyingGlassIcon, TableCellsIcon, ViewColumnsIcon, XMarkIcon } from "@heroicons/react/24/outline";
+import { AdjustmentsHorizontalIcon as AdjustmentsHorizontalSolidIcon } from "@heroicons/react/24/solid";
+import * as stylex from "@stylexjs/stylex";
+import { type ReactNode, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { type Read, reread, useRead } from "../host";
+import { t } from "../i18n";
 import { navigate, usePath, useSearch } from "../router";
 import { BackLink } from "./BackLink";
 import { BoardView } from "./BoardView";
-import { ReferenceLink } from "./ReferenceField";
-import { MemberLabel } from "./MemberField";
-import { t } from "../i18n";
+import { type Chip, FilterBar } from "./ListFilters";
+import { ListOptions } from "./ListOptions";
+import { type Cells, dotOf, idKey, ListCell, ListDetail, targetOf, typeOf } from "./ListDetail";
+import { useSavedViews } from "./SavedViews";
 import type { Dot } from "./Transitions";
-import { newView, readView, type ViewSort, type ViewState } from "./view";
-import { SavedViews } from "./SavedViews";
+import { type Density, newView, readView, type StickyEdge, type ViewSort, type ViewState } from "./view";
 
 export type ListColumn<Row> = {
   key: string;
@@ -39,6 +46,7 @@ export type ListColumn<Row> = {
   text: (row: Row) => string;
   kind?: "string" | "enum" | "number" | "time" | "code" | "member";
   choices?: string[];
+  options?: { value: string; label: string }[];
   boolean?: boolean;
   dot?: (row: Row) => Dot | undefined;
   value?: (row: Row) => unknown;
@@ -58,6 +66,7 @@ export type ListShape<Answer, Row> = {
   groups?: ListGroup<Row>[];
   move?: Move;
   bulk?: (ids: string[], clear: () => void) => ReactNode;
+  detail?: (id: string) => ReactNode;
   defaultView?: unknown;
   carryView?: boolean;
   page?: { total: number; loaded: number; hasMore: boolean; loading: boolean; loadMore: () => void };
@@ -65,18 +74,46 @@ export type ListShape<Answer, Row> = {
 };
 export type ListDefinition<Answer, Row> = ListShape<Answer, Row> & { read: string };
 
-type Cells = Record<string, string>;
 type Raw = Record<string, unknown>;
 const compare = (left: unknown, right: unknown) =>
-  typeof left === "number" && typeof right === "number" ? left - right : String(left ?? "").localeCompare(String(right ?? ""));
-const idKey = "__id";
+  left instanceof Date && right instanceof Date ? left.getTime() - right.getTime()
+  : typeof left === "number" && typeof right === "number" ? left - right
+  : String(left ?? "").localeCompare(String(right ?? ""));
 const textKey = "__text";
-const dotOf = (key: string) => `__dot:${key}`;
-const typeOf = (key: string) => `__type:${key}`;
-const targetOf = (key: string) => `__target:${key}`;
+const groupPrefix = "__group_";
 const ungrouped = "none";
-const rowHeight = 48;
 const overscan = 12;
+const heights: Record<Density, number> = { compact: 36, balanced: 48, spacious: 60 };
+const compactQuery = "(max-width: 768px), (max-width: 1024px) and (pointer: coarse) and (hover: none)";
+const operators: Record<string, string> = { is: "is", is_any_of: "is any of", greater_than_or_equal: "≥", less_than_or_equal: "≤", after: "after", before: "before", contains: "contains", is_true: "is yes", is_false: "is no" };
+const stuck = (edge: StickyEdge, keys: string[], fromEnd: boolean) => {
+  const count = edge === "one" ? 1 : edge === "two" ? 2 : 0;
+  return count === 0 ? [] : fromEnd ? keys.slice(-count) : keys.slice(0, count);
+};
+
+const styles = stylex.create({
+  headerWrap: { position: "relative" },
+  progress: { position: "absolute", insetBlockStart: 0, insetInline: 0 },
+  toolbarContainer: { containerName: "toolbar", containerType: "inline-size" },
+  toolbarPrimary: { flexBasis: { default: 0, "@container toolbar (max-width: 860px)": "100%" } },
+  toolbarEnd: { marginInlineStart: "auto" },
+  band: { borderRadius: radiusVars["--radius-element"], backgroundColor: colorVars["--color-background-muted"] },
+  bandEnter: {
+    opacity: 1,
+    transform: "translateY(0)",
+    transitionProperty: "opacity, transform",
+    transitionDuration: { default: durationVars["--duration-medium"], "@media (prefers-reduced-motion: reduce)": "0s" },
+    transitionTimingFunction: easeVars["--ease-standard"],
+    "@starting-style": { opacity: 0, transform: `translateY(${spacingVars["--spacing-3"]})` },
+  },
+  clickable: { cursor: "pointer" },
+  activeRow: {
+    backgroundColor: colorVars["--color-overlay-pressed"],
+    "--table-row-overlay": colorVars["--color-overlay-pressed"],
+    "--table-sticky-background": `color-mix(in srgb, ${colorVars["--color-background-surface"]} 90%, ${colorVars["--color-text-primary"]})`,
+  },
+  surface: { backgroundColor: colorVars["--color-background-surface"], "--table-sticky-background": colorVars["--color-background-surface"] },
+});
 
 export function listPage<Answer, Row>(definition: ListDefinition<Answer, Row>) {
   return function ListEntry() {
@@ -94,15 +131,21 @@ type ListViewProps<Answer, Row> = {
 export function ListView<Answer, Row>({ definition, read, primary, back }: ListViewProps<Answer, Row>) {
   const currentPath = usePath();
   const currentSearch = useSearch();
+  const compactSurface = useMediaQuery(compactQuery);
   const scrollRef = useRef<HTMLDivElement>(null);
   const [scrollTop, setScrollTop] = useState(0);
   const [viewportHeight, setViewportHeight] = useState(600);
+  const [power, setPower] = useState(false);
+  const [viewsOpen, setViewsOpen] = useState(false);
+  const [active, setActive] = useState<string | null>(null);
+  const detailWidth = useResizable({ defaultSize: 380, minSize: 320, maxSize: 560 });
   const fallback = useMemo(() => {
     const base = newView(definition.columns.filter((column) => !column.hiddenByDefault).map((column) => column.key));
     if (definition.defaultView == null) return base;
     return readView(typeof definition.defaultView === "string" ? definition.defaultView : JSON.stringify(definition.defaultView), base);
   }, [definition.columns, definition.defaultView]);
   const view = useMemo(() => readView(new URLSearchParams(currentSearch).get("view"), fallback), [currentSearch, fallback]);
+  const [rowHeight, setRowHeight] = useState(heights[view.density]);
   const scrollKey = `list-scroll:${currentPath}:${JSON.stringify(view)}:${new URLSearchParams(currentSearch).get("domain") ?? ""}`;
   const update = (next: Partial<ViewState>) => {
     const changed: ViewState = { ...view, ...next, version: 1 };
@@ -123,15 +166,29 @@ export function ListView<Answer, Row>({ definition, read, primary, back }: ListV
     return ordered.length ? ordered : definition.columns.slice(0, 1);
   }, [definition.columns, view.columns]);
   useEffect(() => setMoved({}), [read]);
+
+  const chips = useMemo<Chip[]>(
+    () =>
+      definition.columns.flatMap((column): Chip[] => {
+        const base = { key: column.key, label: column.header };
+        if (column.options) return [{ ...base, kind: "many", options: column.options }];
+        if (column.boolean) return [{ ...base, kind: "boolean", options: [] }];
+        if (column.kind === "enum" && column.choices?.length) return [{ ...base, kind: "many", options: column.choices.map((choice) => ({ value: choice, label: t(choice) })) }];
+        if (column.kind === "number") return [{ ...base, kind: "range", options: [] }];
+        if (column.kind === "time") return [{ ...base, kind: "date", options: [] }];
+        return [];
+      }),
+    [definition.columns],
+  );
   const fields = useMemo(
     () =>
       definition.columns
-        .filter((column) => column.kind !== "time" && column.kind !== "member")
+        .filter((column) => column.kind !== "member" || column.options)
         .map((column) => ({
           key: column.key,
           label: t(column.header),
-          type: column.kind === "code" ? "string" : column.kind ?? "string",
-          enumValues: column.choices?.map((choice) => ({ value: choice, label: choice })),
+          type: column.options ? "enum" : column.boolean ? "boolean" : column.kind === "time" ? "date" : column.kind === "code" || column.kind === "member" ? "string" : column.kind ?? "string",
+          enumValues: column.options ?? column.choices?.map((choice) => ({ value: choice, label: t(choice) })),
         }))
         .concat({ key: textKey, label: t("Any text"), type: "string", enumValues: undefined }),
     [definition],
@@ -141,6 +198,18 @@ export function ListView<Answer, Row>({ definition, read, primary, back }: ListV
   const textField = config.fields.find((field) => field.key === textKey);
   const textOperator = textField?.defaultOperator ?? textField?.operators[0]?.key ?? "";
   const tokens = view.search ? [...view.filters, { field: textKey, operator: textOperator, value: { type: "string" as const, value: view.search } }] : view.filters;
+  const filterLabel = (filter: PowerSearchFilter) => {
+    const column = definition.columns.find((candidate) => candidate.key === filter.field);
+    const raw = filter.value as { value?: unknown; unixSeconds?: number };
+    const name = (value: unknown) => column?.options?.find((option) => option.value === String(value))?.label ?? t(String(value ?? ""));
+    const value =
+      typeof raw.unixSeconds === "number" ? new Date(raw.unixSeconds * 1000).toLocaleDateString()
+      : Array.isArray(raw.value) ? raw.value.map(name).join(", ")
+      : raw.value == null ? ""
+      : typeof raw.value === "number" ? raw.value.toLocaleString()
+      : name(raw.value);
+    return `${t(column?.header ?? filter.field)} ${t(operators[filter.operator] ?? filter.operator)} ${value}`.trim();
+  };
 
   const all = useMemo(() => {
     if (read.status !== "ready") return [];
@@ -156,7 +225,7 @@ export function ListView<Answer, Row>({ definition, read, primary, back }: ListV
         if (dot) cells[dotOf(column.key)] = dot;
         const reference = cells[column.key] ? column.reference?.(row) : undefined;
         if (reference) [cells[typeOf(column.key)], cells[targetOf(column.key)]] = [reference.type, reference.id];
-        raw[column.key] = column.value ? column.value(row) : cells[column.key];
+        raw[column.key] = column.value ? column.value(row) : column.boolean ? cells[column.key] === t("Yes") : column.kind === "time" && cells[column.key] ? new Date(cells[column.key]) : cells[column.key];
       }
       return { cells, raw };
     });
@@ -192,61 +261,61 @@ export function ListView<Answer, Row>({ definition, read, primary, back }: ListV
         return next;
       }),
     getRowKey: (cells) => cells[idKey],
-    renderGroupHeader: (key, count) => (
-      <HStack gap={2} vAlign="center">
-        <Text type="body" weight="bold">
-          {key}
-        </Text>
-        <Badge variant="neutral" label={String(count)} />
-      </HStack>
-    ),
+    groupOrder: group?.order,
   });
+  const isHeader = (cells: Cells) => grouped.idKey(cells).startsWith(groupPrefix);
 
   const { selectionConfig } = useTableSelectionState<Cells>({ data: shown, idKey, selectedKeys: selected, setSelectedKeys: setSelected });
-  const selection = useTableSelection<Cells>({ ...selectionConfig, getRowLabel: (cells) => cells[orderedColumns[0]?.key] || cells[idKey] });
-  const sortable = useTableSortable<Cells>({ sort: view.sort, onSortChange: (sort: ViewSort[]) => update({ sort }), allowUnsortedState: true });
+  const selection = useTableSelection<Cells>({ ...selectionConfig, getRowLabel: (cells) => cells[orderedColumns[0]?.key] || cells[idKey], hasRowHighlight: false });
+  const sortable = useTableSortable<Cells>({ sort: view.sort, onSortChange: (sort: ViewSort[]) => update({ sort }), allowUnsortedState: true, isMultiSortEnabled: true });
+  const keys = orderedColumns.map((column) => column.key);
+  const sticky = useTableStickyColumns<Cells>({ startKeys: stuck(compactSurface ? "none" : view.stickyStart, keys, false), endKeys: stuck(compactSurface ? "none" : view.stickyEnd, keys, true) });
   const chosen = shown.filter((cells) => selected.has(cells[idKey])).map((cells) => cells[idKey]);
+  const activation: TablePlugin<Cells> = {
+    transformBodyRow: (props, cells) => {
+      if (group && isHeader(cells)) return props;
+      const id = cells[idKey];
+      const open = id === active;
+      return {
+        ...props,
+        htmlProps: {
+          ...props.htmlProps,
+          tabIndex: 0,
+          "aria-current": open ? true : undefined,
+          onClick: (event) => {
+            if ((event.target as HTMLElement).closest("input, button, a, select, textarea")) return;
+            setActive(id);
+          },
+          onKeyDown: (event) => {
+            if (event.target !== event.currentTarget) return;
+            if (event.key === "Enter" || event.key === " ") {
+              event.preventDefault();
+              setActive(id);
+            }
+          },
+        },
+        xstyle: open ? [...props.xstyle, styles.clickable, styles.activeRow] : [...props.xstyle, styles.clickable],
+      };
+    },
+  };
 
   const columns: TableColumn<Cells>[] = orderedColumns.map((column, position) => ({
     key: column.key,
     header: t(column.header),
-    width: column.width ? pixel(column.width) : proportional(1),
+    width: column.width ? pixel(column.width) : position === 0 ? proportional(2, { minWidth: 220 }) : proportional(1, { minWidth: 140 }),
     sortable: true,
     align: column.kind === "number" ? ("end" as const) : undefined,
-    renderCell: (cells) =>
-      position === 0 && cells.__href ? (
-        <Link href={cells.__href}>{column.kind === "member" && cells[column.key] ? <MemberLabel name={cells[column.key]} /> : cells[column.key] || cells[idKey]}</Link>
-      ) : cells[targetOf(column.key)] ? (
-        <ReferenceLink type={cells[typeOf(column.key)]} id={cells[targetOf(column.key)]} name={cells[column.key]} />
-      ) : column.kind === "member" && cells[column.key] ? (
-        <MemberLabel name={cells[column.key]} />
-      ) : column.kind === "code" ? (
-        <Text type="code" color="secondary" maxLines={1}>
-          {cells[column.key] ?? ""}
-        </Text>
-      ) : column.boolean && cells[column.key] === t("Yes") ? (
-        <Icon icon="check" size="sm" label={t("Yes")} />
-      ) : column.kind === "time" && cells[column.key] ? (
-        <Text type="body" color="secondary">
-          <Timestamp value={cells[column.key]} format="relative" />
-        </Text>
-      ) : cells[dotOf(column.key)] ? (
-        <HStack gap={2} vAlign="center">
-          <StatusDot variant={cells[dotOf(column.key)] as Dot} label={cells[column.key]} />
-          <Text type="body" maxLines={1}>
-            {cells[column.key]}
-          </Text>
-        </HStack>
-      ) : (
-        <Text type="body" maxLines={1} hasTabularNumbers={column.kind === "number"}>
-          {cells[column.key] ?? ""}
-        </Text>
-      ),
+    renderCell: (cells) => (group && isHeader(cells) ? null : <ListCell column={column} cells={cells} first={position === 0} />),
   }));
   const windowed = Boolean(definition.page && !group);
   const first = windowed ? Math.max(0, Math.min(shown.length, Math.floor(scrollTop / rowHeight) - overscan)) : 0;
   const last = windowed ? Math.min(shown.length, first + Math.ceil(viewportHeight / rowHeight) + overscan * 2) : shown.length;
   const tableRows = group ? grouped.data : shown.slice(first, last);
+  useLayoutEffect(() => {
+    const row = scrollRef.current?.querySelector<HTMLElement>("tbody tr[aria-rowindex], tbody tr");
+    const measured = row?.getBoundingClientRect().height;
+    if (measured && Math.abs(measured - rowHeight) > 0.5) setRowHeight(measured);
+  });
   useEffect(() => {
     const node = scrollRef.current;
     if (!node) return;
@@ -278,196 +347,248 @@ export function ListView<Answer, Row>({ definition, read, primary, back }: ListV
       cancelAnimationFrame(frame);
       node.removeEventListener("scroll", onScroll);
     };
-  }, [scrollKey, read.status, shown.length, definition.page?.hasMore, definition.page?.loading, definition.page?.loadMore]);
+  }, [scrollKey, read.status, shown.length, rowHeight, definition.page?.hasMore, definition.page?.loading, definition.page?.loadMore]);
+
+  const saved = useSavedViews({ entity: definition.savedViews ?? "", view, fallback, columnCount: definition.columns.length, filterLabel, compact: compactSurface });
+  const count = definition.page ? `${all.length} / ${definition.page.total}` : `${shown.length} / ${all.length}`;
+  const dirty = view.filters.length > 0 || view.search !== "";
+  const clearAll = () => update({ filters: [], search: "" });
+  const powerLabel = power ? t("Switch to filter chips") : t("Advanced search");
+  const powerToggle = (
+    <ToggleButton
+      label={powerLabel}
+      tooltip={powerLabel}
+      isIconOnly
+      size="sm"
+      isPressed={power}
+      icon={<Icon icon={AdjustmentsHorizontalIcon} size="sm" />}
+      pressedIcon={<Icon icon={AdjustmentsHorizontalSolidIcon} size="sm" />}
+      onPressedChange={setPower}
+    />
+  );
+  const filterBar = (
+    <FilterBar
+      chips={chips}
+      filters={view.filters}
+      onFilters={(filters) => update({ filters })}
+      search={view.search}
+      onSearch={(search) => update({ search })}
+      count={count}
+      toggle={powerToggle}
+      compact={compactSurface}
+    />
+  );
+  const onGroup = (key: string) => {
+    update({ group: key, lanes: definition.groups?.find((candidate) => candidate.key === key && candidate.order)?.key ?? view.lanes });
+    setCollapsed(new Set());
+  };
+  const bulk = definition.bulk?.(chosen, () => setSelected(new Set()));
+  const ready = read.status === "ready";
+
+  const activeCells = active ? shown.find((cells) => cells[idKey] === active) : undefined;
+  useEffect(() => {
+    if (active && ready && !activeCells) setActive(null);
+  }, [active, ready, activeCells]);
+  const detailBody = activeCells && orderedColumns[0] && (
+    <ListDetail columns={definition.columns} title={orderedColumns[0]} cells={activeCells} actions={definition.detail?.(activeCells[idKey])} compact={compactSurface} onClose={() => setActive(null)} />
+  );
+  const detailPanel = detailBody ? (
+    <>
+      <ResizeHandle resizable={detailWidth.props} isReversed isAlwaysVisible={false} label={t("Resize details")} />
+      <LayoutPanel resizable={detailWidth.props} hasDivider padding={0} role="complementary" label={t("Details")}>
+        {detailBody}
+      </LayoutPanel>
+    </>
+  ) : undefined;
 
   return (
-    <Layout
-      height="fill"
-      header={
-        <LayoutHeader hasDivider padding={4}>
-          <VStack gap={3}>
-            <HStack gap={2} vAlign="center">
-              <StackItem size="fill">
-                <VStack gap={2}>
-                  {back && <BackLink href={back.href} label={t(back.label)} />}
-                  <HStack gap={2} vAlign="center">
-                    <Heading level={1}>{t(definition.title)}</Heading>
-                    {definition.savedViews && <SavedViews entity={definition.savedViews} view={view} fallback={fallback} />}
+    <>
+      <Layout
+        height="fill"
+        padding={0}
+        xstyle={styles.surface}
+        end={compactSurface ? undefined : detailPanel}
+        header={
+          <LayoutHeader hasDivider label={t("List filters and actions")}>
+            <VStack gap={0} xstyle={styles.headerWrap}>
+              {definition.page?.loading && <ProgressBar label={t("Loading…")} isLabelHidden isIndeterminate xstyle={styles.progress} />}
+              <Section variant="transparent" padding={4} xstyle={styles.toolbarContainer}>
+                <VStack gap={4}>
+                  <HStack gap={3} vAlign="center" wrap="wrap">
+                    <StackItem size="fill">
+                      <VStack gap={2}>
+                        {back && <BackLink href={back.href} label={t(back.label)} />}
+                        <Heading level={1}>{t(definition.title)}</Heading>
+                      </VStack>
+                    </StackItem>
+                    {lanes && (
+                      <SegmentedControl size="sm" label={t("Layout")} value={view.layout} onChange={(layout) => update({ layout: layout as ViewState["layout"], lanes: lanes?.key ?? "" })}>
+                        <SegmentedControlItem value="table" label={t("Table")} icon={<Icon icon={TableCellsIcon} size="sm" />} />
+                        <SegmentedControlItem value="board" label={t("Board")} icon={<Icon icon={ViewColumnsIcon} size="sm" />} />
+                      </SegmentedControl>
+                    )}
+                    <IconButton label={t("Refresh")} tooltip={t("Refresh")} variant="ghost" size="sm" icon={<Icon icon={ArrowPathIcon} size="sm" />} onClick={reread} />
+                    {primary}
                   </HStack>
+                  {ready && (
+                    <VStack gap={0} paddingInline={chosen.length ? 3 : 0} paddingBlock={chosen.length ? 1.5 : 0} xstyle={chosen.length ? [styles.band, styles.bandEnter] : undefined}>
+                      <HStack gap={3} vAlign="center" wrap="wrap" minHeight={32}>
+                        <StackItem size="fill" xstyle={styles.toolbarPrimary}>
+                          <VStack gap={2}>
+                            {bulk}
+                            {chosen.length === 0 && (power ? (
+                              <PowerSearch
+                                config={config}
+                                filters={tokens}
+                                onChange={(next) => {
+                                  const text = next.filter((filter) => filter.field === textKey).at(-1)?.value;
+                                  update({ filters: next.filter((filter) => filter.field !== textKey), search: text?.type === "string" ? text.value : "" });
+                                }}
+                                label={t("Filter")}
+                                placeholder={t("Search or filter by any column")}
+                                resultCount={count}
+                              />
+                            ) : viewsOpen && definition.savedViews ? saved.bar : filterBar)}
+                          </VStack>
+                        </StackItem>
+                        {chosen.length > 0 ? (
+                          <HStack gap={3} vAlign="center">
+                            <Text type="body" hasTabularNumbers>
+                              {String(chosen.length)} {t("selected")}
+                            </Text>
+                            <Text type="supporting" color="secondary">
+                              •
+                            </Text>
+                            <Button label={t("Clear selection")} variant="ghost" size="sm" onClick={() => setSelected(new Set())} />
+                          </HStack>
+                        ) : (
+                          <HStack gap={3} vAlign="center" xstyle={styles.toolbarEnd}>
+                            {!viewsOpen && (
+                              <>
+                                {power && powerToggle}
+                                <ListOptions
+                                  view={view}
+                                  update={update}
+                                  columns={definition.columns}
+                                  locked={orderedColumns[0]?.key ?? ""}
+                                  defaults={fallback.columns}
+                                  groups={definition.groups ?? []}
+                                  onGroup={onGroup}
+                                  compact={compactSurface}
+                                />
+                                {definition.savedViews && saved.createButton}
+                              </>
+                            )}
+                            {definition.savedViews && (
+                              <ToggleButton
+                                label={t("Saved views")}
+                                tooltip={t("Saved views")}
+                                isIconOnly
+                                size="sm"
+                                isPressed={viewsOpen}
+                                icon={<Icon icon={saved.toggleIcons.off} size="sm" />}
+                                pressedIcon={<Icon icon={saved.toggleIcons.on} size="sm" />}
+                                onPressedChange={(next) => {
+                                  setViewsOpen(next);
+                                  if (next) setPower(false);
+                                }}
+                              />
+                            )}
+                          </HStack>
+                        )}
+                      </HStack>
+                    </VStack>
+                  )}
                 </VStack>
-              </StackItem>
-              {lanes && (
-                <SegmentedControl size="sm" label={t("Layout")} value={view.layout} onChange={(layout) => update({ layout: layout as ViewState["layout"], lanes: lanes?.key ?? "" })}>
-                  <SegmentedControlItem value="table" label={t("Table")} icon={<Icon icon={TableCellsIcon} size="sm" />} />
-                  <SegmentedControlItem value="board" label={t("Board")} icon={<Icon icon={ViewColumnsIcon} size="sm" />} />
-                </SegmentedControl>
-              )}
-              <IconButton label={t("Refresh")} tooltip={t("Refresh")} variant="ghost" icon={<Icon icon={ArrowPathIcon} size="sm" />} onClick={reread} />
-              {primary}
-            </HStack>
-            {all.length > 0 && chosen.length > 0 && (
-              <Section variant="muted" padding={2}>
-                <HStack gap={3} vAlign="center" wrap="wrap">
-                  <Text type="body" hasTabularNumbers>{String(chosen.length)} {t("selected")}</Text>
-                  <Button label={t("Clear selection")} variant="ghost" size="sm" onClick={() => setSelected(new Set())} />
-                </HStack>
               </Section>
+            </VStack>
+          </LayoutHeader>
+        }
+        content={
+          <LayoutContent role="main" padding={0} label={t(definition.title)}>
+            {read.status === "loading" && (
+              <VStack gap={2} padding={4}>
+                {[0, 1, 2, 3, 4, 5].map((index) => (
+                  <Skeleton key={index} height={36} index={index} />
+                ))}
+              </VStack>
             )}
-            {definition.bulk?.(chosen, () => setSelected(new Set()))}
-            {all.length > 0 && chosen.length === 0 && (
-            <HStack gap={2} vAlign="center">
-              <StackItem size="fill">
-                <PowerSearch
-                  config={config}
-                  filters={tokens}
-                  onChange={(next) => {
-                    const text = next.filter((filter) => filter.field === textKey).at(-1)?.value;
-                    update({ filters: next.filter((filter) => filter.field !== textKey), search: text?.type === "string" ? text.value : "" });
-                  }}
-                  label={t("Filter")}
-                  placeholder={t("Search or filter by any column")}
-                  resultCount={String(definition.page ? all.length : shown.length) + " / " + String(definition.page?.total ?? all.length)}
-                />
-              </StackItem>
-              {definition.groups && definition.groups.length > 0 && (
-                <Popover
-                  placement="below"
-                  alignment="end"
-                  width={320}
-                  label={t("Group by")}
-                  content={
-                    <RadioList
-                      label={t("Group by")}
-                      value={view.group}
-                      onChange={(value) => {
-                        update({ group: String(value), lanes: definition.groups?.find((candidate) => candidate.key === String(value) && candidate.order)?.key ?? "" });
-                        setCollapsed(new Set());
-                      }}>
-                      <RadioListItem value={ungrouped} label={t("None")} />
-                      {definition.groups.map((candidate) => (
-                        <RadioListItem key={candidate.key} value={candidate.key} label={t(candidate.label)} />
-                      ))}
-                    </RadioList>
-                  }>
-                  <Button label={group ? `${t("Group by")}: ${t(group.label)}` : t("Group by")} variant="ghost" size="sm" icon={<Icon icon={RectangleStackIcon} size="sm" />} />
-                </Popover>
-              )}
-              <Popover
-                placement="below"
-                alignment="end"
-                width={340}
-                label={t("Columns")}
-                content={
-                  <VStack gap={2}>
-                    {definition.columns.map((column) => {
-                      const at = view.columns.indexOf(column.key);
-                      const visible = at >= 0;
-                      return (
-                        <HStack key={column.key} gap={2} vAlign="center">
-                          <StackItem size="fill">
-                            <CheckboxInput label={t(column.header)} value={visible} isDisabled={column.key === orderedColumns[0].key}
-                              onChange={(checked) => update({ columns: checked ? [...view.columns, column.key] : view.columns.filter((key) => key !== column.key) })} />
-                          </StackItem>
-                          <IconButton label={t("Move column up")} tooltip={t("Move column up")} variant="ghost" isDisabled={!visible || at <= 1}
-                            icon={<Icon icon={ArrowUpIcon} size="sm" />} onClick={() => {
-                              const next = [...view.columns];
-                              [next[at - 1], next[at]] = [next[at], next[at - 1]];
-                              update({ columns: next });
-                            }} />
-                          <IconButton label={t("Move column down")} tooltip={t("Move column down")} variant="ghost" isDisabled={!visible || at >= view.columns.length - 1}
-                            icon={<Icon icon={ArrowDownIcon} size="sm" />} onClick={() => {
-                              const next = [...view.columns];
-                              [next[at], next[at + 1]] = [next[at + 1], next[at]];
-                              update({ columns: next });
-                            }} />
-                        </HStack>
-                      );
-                    })}
-                  </VStack>
-                }>
-                <Button label={t("Columns")} variant="ghost" size="sm" icon={<Icon icon={ViewColumnsIcon} size="sm" />} />
-              </Popover>
-            </HStack>
+            {read.status === "error" && (
+              <VStack padding={4}>
+                <Banner status="error" title={t("This list could not be loaded")} description={read.reason || t("Reload the page to try again.")} />
+              </VStack>
             )}
-          </VStack>
-        </LayoutHeader>
-      }
-      content={
-        <LayoutContent role="main" padding={0}>
-          {read.status === "loading" && (
-            <VStack gap={2} padding={4}>
-              {[0, 1, 2, 3, 4, 5].map((index) => (
-                <Skeleton key={index} height={36} index={index} />
-              ))}
-            </VStack>
-          )}
-          {read.status === "error" && (
-            <VStack padding={4}>
-              <Banner status="error" title={t("This list could not be loaded")} description={read.reason || t("Reload the page to try again.")} />
-            </VStack>
-          )}
-          {read.status === "refused" && <EmptyState headingLevel={2} title={t("You cannot see this list")} description={read.reason || t("Ask an administrator of this workspace for access.")} />}
-          {read.status === "ready" && all.length === 0 && (
-            <EmptyState headingLevel={2} title={t("Nothing here yet")} description={t(definition.about)} />
-          )}
-          {read.status === "ready" && all.length > 0 && shown.length === 0 && (
-            <EmptyState headingLevel={2} title={t("No matches")} description={t("Try a different filter.")} />
-          )}
-          {failure && (
-            <VStack padding={4}>
-              <Banner status="error" title={t("Not saved")} description={failure} />
-            </VStack>
-          )}
-          {read.status === "ready" && shown.length > 0 && board && (
-            <BoardView
-              columns={board.order ?? []}
-              page={definition.page}
-              cards={shown.map((cells) => ({
-                id: cells[idKey],
-                column: moved[cells[idKey]] ?? cells.__lane,
-                title: cells[orderedColumns[0].key],
-                href: cells.__href,
-                lines: orderedColumns.slice(1, 5).filter((column) => column.key !== board.key && column.kind !== "time" && cells[column.key]).map((column) => cells[column.key]),
-              }))}
-              accepts={board.accepts}
-              onMove={
-                definition.move &&
-                ((id, to) => {
-                  setFailure("");
-                  setMoved((previous) => ({ ...previous, [id]: to }));
-                  definition.move?.(id, board.key, to).catch((refused: Error) => {
-                    setMoved(({ [id]: _, ...rest }) => rest);
-                    setFailure(refused.message);
-                  });
-                })
-              }
-            />
-          )}
-          {read.status === "ready" && shown.length > 0 && !board && (
-            <ScrollableArea
-              ref={scrollRef}
-              axis="block"
-              role="region"
-              label={t("Records")}
-              height="100%">
-              {windowed && first > 0 && <Section variant="transparent" height={first * rowHeight} padding={0} />}
+            {read.status === "refused" && <EmptyState headingLevel={2} title={t("You cannot see this list")} description={read.reason || t("Ask an administrator of this workspace for access.")} />}
+            {ready && shown.length === 0 && !dirty && <EmptyState headingLevel={2} title={t("Nothing here yet")} description={t(definition.about)} />}
+            {ready && shown.length === 0 && dirty && (
+              <EmptyState
+                headingLevel={2}
+                icon={<Icon icon={MagnifyingGlassIcon} size="lg" />}
+                title={t("No matches")}
+                description={t("Try clearing a filter, or switch to advanced search to build a broader query.")}
+                actions={
+                  <>
+                    <Button label={t("Clear all")} onClick={clearAll} />
+                    <Button label={t("Advanced search")} variant="secondary" onClick={() => setPower(true)} />
+                  </>
+                }
+              />
+            )}
+            {failure && (
+              <VStack padding={4}>
+                <Banner status="error" title={t("Not saved")} description={failure} />
+              </VStack>
+            )}
+            {ready && shown.length > 0 && board && (
+              <BoardView
+                columns={board.order ?? []}
+                page={definition.page}
+                cards={shown.map((cells) => ({
+                  id: cells[idKey],
+                  column: moved[cells[idKey]] ?? cells.__lane,
+                  title: cells[orderedColumns[0].key],
+                  href: cells.__href,
+                  lines: orderedColumns.slice(1, 5).filter((column) => column.key !== board.key && column.kind !== "time" && cells[column.key]).map((column) => cells[column.key]),
+                }))}
+                accepts={board.accepts}
+                onMove={
+                  definition.move &&
+                  ((id, to) => {
+                    setFailure("");
+                    setMoved((previous) => ({ ...previous, [id]: to }));
+                    definition.move?.(id, board.key, to).catch((refused: Error) => {
+                      setMoved(({ [id]: _, ...rest }) => rest);
+                      setFailure(refused.message);
+                    });
+                  })
+                }
+              />
+            )}
+            {ready && shown.length > 0 && !board && (
+              <ScrollableArea ref={scrollRef} axis="block" role="region" label={t("Records")} height="100%">
+                {windowed && first > 0 && <Section variant="transparent" height={first * rowHeight} padding={0} />}
                 <Table
                   data={tableRows}
                   columns={columns}
                   idKey={group ? grouped.idKey : idKey}
                   rowIndexStart={windowed ? first + 1 : undefined}
                   rowCount={definition.page?.total}
-                  density="balanced"
+                  density={view.density}
                   dividers="rows"
                   textOverflow="truncate"
                   hasHover
-                  plugins={{ ...(group ? { grouped: grouped.plugin } : {}), ...(definition.bulk ? { selection } : {}), sortable }}
+                  plugins={{ ...(definition.bulk ? { selection } : {}), sortable, sticky, activation, ...(group ? { grouped: grouped.plugin } : {}) }}
                 />
-              {windowed && last < shown.length && <Section variant="transparent" height={(shown.length - last) * rowHeight} padding={0} />}
-            </ScrollableArea>
-          )}
-        </LayoutContent>
-      }
-    />
+                {windowed && last < shown.length && <Section variant="transparent" height={(shown.length - last) * rowHeight} padding={0} />}
+              </ScrollableArea>
+            )}
+          </LayoutContent>
+        }
+      />
+      <BottomSheet isOpen={compactSurface && Boolean(detailBody)} onOpenChange={(open) => !open && setActive(null)} label={t("Details")} height="tall" padding={0}>
+        {detailBody}
+      </BottomSheet>
+      {saved.dialogs}
+    </>
   );
 }

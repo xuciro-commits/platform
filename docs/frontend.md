@@ -107,12 +107,12 @@ export default recordList({
 
 视图状态：
 
-- 结构 `{ version: 1, layout, columns, sort, filters, search, group, lanes }`；`filters` 保存控件的选择，取数前转成宿主 `domain` 的前缀条件。
+- 结构 `{ version: 1, layout, columns, sort, filters, search, group, lanes, density, stickyStart, stickyEnd }`，缺的键按默认读入；`filters` 保存控件的选择，取数前转成宿主 `domain` 的前缀条件。
 - 可分享的视图状态用地址的 `view` 查询值编码，筛选、排序、分组、布局与列顺序即时写回；含敏感值的条件只经有权限的保存视图读取。列表按一页 100 条向宿主取数，带 `domain`、`sort`、`search`、`offset`、`limit` 与 `actions=1`，并显示已加载数与宿主总数。
-- Astryx Table 的行窗口只接纳纯文本或已登记的首方单元；记录表要放链接、状态点与布尔图标，因此 ListView 在 ScrollableArea 中按固定行高只渲染视口与前后各十二行。滚到末尾加载下一页，当前页保留；滚动位置按规范化视图存在会话中，从记录页返回时先恢复位置。
+- Astryx Table 的行窗口只接纳纯文本或已登记的首方单元；记录表要放链接、状态点与布尔图标，因此 ListView 在 ScrollableArea 中按实测行高（单行单元格，随密度变）只渲染视口与前后各十二行。滚到末尾加载下一页，当前页保留；滚动位置按规范化视图存在会话中，从记录页返回时先恢复位置。
 - 进入列表时按地址、成员设定的默认、类型默认依次取视图。日常调整只改当前视图。显式保存才更新 `SavedView.state`，旧版本经同一个迁移函数读入。
 - 对象类型的 `view` 随发布与产品包安装进入 `GET /v1/entities[].view`；没有该值或旧定义省略时，沿用 describe 的默认列。
-- 页头的视图切换器提供默认、我的与共享视图，经 `work.view.save`、`work.view.share`、`work.view.remove` 和 `work.viewpreference.set` 保存定义、共享、改名、删除、置顶与个人默认。侧栏按当前对象类型列出可见保存视图，并按当前成员的置顶顺序排列；打开视图仍由宿主逐字段、逐记录授权。
+- 视图栏提供“全部”与我的、共享的视图；“另存为视图”与“编辑视图”经 `work.view.save`、`work.view.share`、`work.view.remove` 和 `work.viewpreference.set` 保存定义、用当前表格覆盖、共享、改名、删除、置顶与个人默认。侧栏按当前对象类型列出可见保存视图，并按当前成员的置顶顺序排列；打开视图仍由宿主逐字段、逐记录授权。
 - 对象类型记录页的转换明细直接创建或选择 `build.actiontype`：新建时写动作名称、标题、起始状态和只改状态的事务并发布；绑定对象后，对象发布把版本编入记录页的转换按钮。
 - 对象类型记录页的“预览”页签用当前草稿字段、选项与状态构造临时类型描述，经同一个 describe 画出列表和记录页，并填两条示例行；预览只读，不提交记录。
 - trunk 的构建者门槛从零走完整条路：新建对象类型、添加三个字段、定义两个状态与转换、查看预览、发布、录入记录并执行转换。

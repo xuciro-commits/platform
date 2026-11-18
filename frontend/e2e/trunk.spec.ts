@@ -643,8 +643,8 @@ test("views: filters, order and visible columns survive refresh and return", asy
   await page.getByRole("radio", { name: "Board" }).click();
   await expect(page).toHaveURL(/view=/);
   await page.getByRole("radio", { name: "Table" }).click();
-  await page.getByRole("button", { name: "Columns", exact: true }).click();
-  await page.getByRole("checkbox", { name: "Next step", exact: true }).uncheck();
+  await page.getByRole("button", { name: "View options", exact: true }).click();
+  await page.getByRole("button", { name: "Remove Next step", exact: true }).click();
   await page.keyboard.press("Escape");
   await expect(page.getByRole("columnheader", { name: "Next step", exact: true })).toHaveCount(0);
 
@@ -694,7 +694,7 @@ test("views: ten thousand rows stay windowed and load at the scroll edge", async
   });
   await signIn(page);
   await page.goto("/ontology/objects/build.opportunity");
-  const resultCount = page.getByRole("group", { name: "Filter" });
+  const resultCount = page;
   await expect(resultCount.getByText("100 / 10000", { exact: true })).toBeVisible();
   const table = page.getByRole("table");
   const scroller = page.getByRole("region", { name: "Records" });
@@ -735,19 +735,26 @@ test("views: save, pin and reopen a filtered view from the sidebar", async ({ pa
   await page.goto(`/ontology/objects/build.opportunity?view=${encodeURIComponent(JSON.stringify(view))}`);
   await expect(page.getByRole("link", { name: "Robot cell integration" })).toBeVisible();
 
-  await page.getByRole("button", { name: "Views", exact: true }).click();
-  await page.getByRole("button", { name: "Save current view", exact: true }).click();
-  await page.getByRole("dialog").getByRole("textbox", { name: "View name" }).fill("My proposals");
-  await page.getByRole("dialog").getByRole("button", { name: "Save", exact: true }).click();
+  await page.getByRole("button", { name: "Create saved view", exact: true }).click();
+  const create = page.getByRole("dialog");
+  await expect(create).toContainText("Stage is Proposal");
+  await create.getByRole("textbox", { name: "View name" }).fill("My proposals");
+  await create.getByRole("button", { name: "Create", exact: true }).click();
+  await expect(page).toHaveURL(/saved=/);
 
   const sidebar = page.getByRole("navigation", { name: "Primary navigation" });
   await expect(sidebar.getByRole("link", { name: "My proposals" })).toBeVisible();
-  await page.getByRole("button", { name: "My proposals", exact: true }).click();
-  await page.getByRole("button", { name: "Pin", exact: true }).click();
-  await expect(page.getByRole("button", { name: "Unpin", exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Saved views", exact: true }).click();
+  await expect(page.getByRole("button", { name: "My proposals", exact: true })).toHaveAttribute("aria-pressed", "true");
+  await page.getByRole("button", { name: "Edit saved view", exact: true }).click();
+  const edit = page.getByRole("dialog");
+  await edit.getByRole("checkbox", { name: "Pin to the top", exact: true }).check();
+  await edit.getByRole("button", { name: "Save", exact: true }).click();
+  await expect(edit).toHaveCount(0);
+  await page.getByRole("button", { name: "Edit saved view", exact: true }).click();
+  await expect(page.getByRole("dialog").getByRole("checkbox", { name: "Pin to the top", exact: true })).toBeChecked();
   await page.keyboard.press("Escape");
-  await page.getByRole("button", { name: "My proposals", exact: true }).click();
-  await page.getByRole("button", { name: "Default view", exact: true }).click();
+  await page.getByRole("button", { name: "All", exact: true }).click();
   await expect(page).not.toHaveURL(/saved=/);
 
   await sidebar.getByRole("link", { name: "My proposals" }).click();
@@ -766,12 +773,16 @@ test("views: a published type opens with its declared default view", async ({ pa
   await signIn(page);
   await page.goto("/ontology/objects/build.customer");
   await expect(page.getByRole("columnheader", { name: "Region", exact: true })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Group by: Region", exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "View options", exact: true }).click();
+  await page.getByRole("button", { name: "Grouping", exact: true }).click();
+  await expect(page.getByRole("radio", { name: "Region", exact: true })).toBeChecked();
+  await page.keyboard.press("Escape");
   await expect.poll(() => requests.at(-1)?.get("sort")).toBe("company");
   const rows = page.getByRole("table").locator("tbody tr").filter({ has: page.getByRole("link") });
-  await expect(rows.first()).toContainText("Alder Medical Devices");
-  await expect(page.getByText("europe", { exact: true }).first()).toBeVisible();
-  await expect(page.getByText("northamerica", { exact: true }).first()).toBeVisible();
+  await expect(rows.first()).toContainText("Atlas Castings");
+  await expect(rows.filter({ hasText: "Alder Medical Devices" })).toHaveCount(1);
+  await expect(page.getByRole("table").getByText("europe", { exact: true }).first()).toBeVisible();
+  await expect(page.getByRole("table").getByText("northamerica", { exact: true }).first()).toBeVisible();
 });
 
 test("files: an attachment field stores a media set item on the record", async ({ page }) => {
@@ -806,10 +817,9 @@ test("list: one bar searches and filters, identities are quiet and references op
   const identity = page.getByRole("cell", { name: "build.opportunity", exact: true });
   await expect(identity.locator('[data-type="code"]')).toBeVisible();
   await page.goto("/ontology/objects/build.opportunity");
-  await expect(page.getByRole("textbox", { name: "Search this list" })).toHaveCount(0);
   const table = page.getByRole("table");
   await expect(table.getByRole("link", { name: "Northwind Tools" }).first()).toBeVisible();
-  const bar = page.getByPlaceholder("Search or filter by any column");
+  const bar = page.getByRole("textbox", { name: "Search this list" });
   await bar.fill("Press");
   await bar.press("Enter");
   await expect(page).toHaveURL(/%22search%22%3A%22Press%22/);
@@ -1049,4 +1059,37 @@ test("record fields: a date uses its field name for assistive technology", async
   const date = page.getByRole("combobox", { name: "Expected close", exact: true });
   await expect(date).toBeVisible();
   await expect(date).toHaveAttribute("aria-label", "Expected close");
+});
+
+test("list: chips filter on the host, a row opens its details, the selection band replaces the bar", async ({ page }) => {
+  const requests: URLSearchParams[] = [];
+  page.on("request", (request) => {
+    const url = new URL(request.url());
+    if (url.pathname === "/v1/records/build.opportunity") requests.push(url.searchParams);
+  });
+  await signIn(page);
+  await page.goto("/ontology/objects/build.opportunity");
+  const header = page;
+  await header.getByRole("combobox", { name: "Stage filter", exact: true }).click();
+  await page.getByRole("option", { name: "Proposal", exact: true }).click();
+  await page.keyboard.press("Escape");
+  await expect.poll(() => requests.at(-1)?.get("domain")).toContain("proposal");
+  const rows = page.getByRole("table").locator("tbody tr").filter({ has: page.getByRole("link") });
+  await expect(rows).toHaveCount(5);
+  await expect(header.getByText("5 / 5", { exact: true })).toBeVisible();
+
+  await rows.filter({ hasText: "Robot cell integration" }).getByRole("cell").nth(2).click();
+  const details = page.getByRole("complementary", { name: "Details" });
+  await expect(details.getByRole("heading", { level: 2, name: "Robot cell integration" })).toBeVisible();
+  await expect(details.getByText("Kestrel Robotics").first()).toBeVisible();
+  await expect(page).toHaveURL(/build\.opportunity\?/);
+  await details.getByRole("button", { name: "Close details", exact: true }).click();
+  await expect(details).toHaveCount(0);
+
+  await rows.first().getByRole("checkbox").check();
+  await expect(header.getByText("1 selected")).toBeVisible();
+  await expect(header.getByRole("textbox", { name: "Search this list" })).toHaveCount(0);
+  await header.getByRole("button", { name: "Clear selection", exact: true }).click();
+  await header.getByRole("button", { name: "Clear all", exact: true }).click();
+  await expect.poll(() => rows.count()).toBeGreaterThan(5);
 });
