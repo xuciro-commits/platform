@@ -21,6 +21,7 @@ export type ActionDialogProps = {
   id?: string;
   revision: number;
   initial?: Values;
+  fixed?: Values;
   owned?: boolean;
   quick?: boolean;
   onClose: () => void;
@@ -29,21 +30,21 @@ export type ActionDialogProps = {
 };
 
 
-export function ActionDialog({ action, described, heading, confirm, id, revision, initial = {}, owned, quick, onClose, onDone, perform }: ActionDialogProps) {
+export function ActionDialog({ action, described, heading, confirm, id, revision, initial = {}, fixed = {}, owned, quick, onClose, onDone, perform }: ActionDialogProps) {
   const [values, setValues] = useState<Values>(initial);
   const [project, setProject] = useState("");
   const [busy, setBusy] = useState(false);
   const [failure, setFailure] = useState("");
   const projects = useRead<Api.RecordPage>(owned ? "/v1/records/build.app?limit=200" : null);
   const set = (name: string, value: unknown) => setValues((previous) => ({ ...previous, [name]: value }));
-  const shownParameters = action.payload.filter((parameter) => enterable(parameter) && (!quick || parameter.required || parameter.name === described.display));
-  const blocked = action.payload.filter((parameter) => parameter.required && !enterable(parameter)).map((parameter) => parameter.name);
+  const shownParameters = action.payload.filter((parameter) => !(parameter.name in fixed) && enterable(parameter) && (!quick || parameter.required || parameter.name === described.display));
+  const blocked = action.payload.filter((parameter) => parameter.required && !(parameter.name in fixed) && !enterable(parameter)).map((parameter) => parameter.name);
   const missing = shownParameters.some((parameter) => parameter.required && (values[parameter.name] == null || values[parameter.name] === ""));
 
   const apply = async () => {
     setBusy(true);
     setFailure("");
-    const payload: Values = {};
+    const payload: Values = { ...fixed };
     for (const parameter of shownParameters) {
       const value = values[parameter.name];
       if (value != null && value !== "" && value !== initial[parameter.name]) payload[parameter.name] = value;

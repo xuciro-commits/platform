@@ -131,6 +131,8 @@ export function Records({ declared, listPath, id, back }: { declared: Declared; 
         listPath={listPath}
         listTitle={declared.title ?? described.plural}
         instances={declared.instances}
+        entities={types.status === "ready" ? types.data : []}
+        catalog={actions.status === "ready" ? actions.data : []}
       />
     );
   }

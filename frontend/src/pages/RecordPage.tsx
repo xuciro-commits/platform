@@ -15,14 +15,15 @@ import { type Api, useRead } from "../host";
 import { t } from "../i18n";
 import { usePath } from "../router";
 import { BackLink } from "./BackLink";
-import type { Described } from "./describe";
+import { describe, type Described } from "./describe";
 import { type Editor, FieldGroup, useEditor } from "./RecordFields";
+import { RecordLines } from "./RecordLines";
 import { dots, type Instances, Transitions } from "./Transitions";
 import { plain, present } from "./values";
 
 type Stamp = { by?: string; at?: string };
 type Kept = { id: string; revision: number; created: Stamp; changed: Stamp; archived?: boolean };
-export type RecordPageProps = { described: Described; id: string; listPath: string; listTitle: string; instances?: Instances };
+export type RecordPageProps = { described: Described; id: string; listPath: string; listTitle: string; instances?: Instances; entities: Api.EntityInfo[]; catalog: Api.Action[] };
 
 function Bullet() {
   return (
@@ -106,7 +107,7 @@ function History({ described, id }: { described: Described; id: string }) {
   );
 }
 
-export function RecordPage({ described, id, listPath, listTitle, instances }: RecordPageProps) {
+export function RecordPage({ described, id, listPath, listTitle, instances, entities, catalog }: RecordPageProps) {
   const [refusal, setRefusal] = useState("");
   const [fresh] = useState(() => (history.state as { fresh?: string } | null)?.fresh === id);
   const base = `${listPath}/${encodeURIComponent(id)}`;
@@ -227,6 +228,11 @@ export function RecordPage({ described, id, listPath, listTitle, instances }: Re
             <VStack gap={6}>
               {refusal && <Banner status="error" title={t("Not done")} description={refusal} />}
               <FieldGroup described={described} editor={editor} sections={described.sections} direction="horizontal-labels" focusEmpty={fresh} refs={refs} />
+              {described.entity.sets?.flatMap((set) => {
+                if (set.direction !== "inverse") return [];
+                const type = entities.find((entry) => entry.type === set.object);
+                return type ? <RecordLines key={set.name} parent={described.type} id={id} set={set} child={describe(type, catalog)} /> : [];
+              })}
             </VStack>
           )}
           {kept && tab === "activity" && <History described={described} id={id} />}

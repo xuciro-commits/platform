@@ -16,6 +16,7 @@ type ParameterInputProps = {
   onEnter?: () => void;
   focused?: boolean;
   referenceName?: string;
+  labelHidden?: boolean;
 };
 
 const typed = new Set(["string", "longtext", "date", "datetime", "entity", "reference", "choice"]);
@@ -29,7 +30,7 @@ export function settles(parameter: Api.Field, field?: Api.FieldInfo) {
   return Boolean(parameter.ref || parameter.choices) || field?.type === "reference" || parameter.type === "reference" || parameter.type === "boolean" || numeric.has(parameter.type);
 }
 
-export function ParameterInput({ parameter, described, value, status, onChange, onEnter, focused, referenceName }: ParameterInputProps) {
+export function ParameterInput({ parameter, described, value, status, onChange, onEnter, focused, referenceName, labelHidden }: ParameterInputProps) {
   const field = described.fields.find((candidate) => candidate.name === parameter.name);
   const label = t(field?.title ?? parameter.name);
   const description = field?.help;
@@ -42,6 +43,7 @@ export function ParameterInput({ parameter, described, value, status, onChange, 
     return (
       <Selector
         label={label}
+        isLabelHidden={labelHidden}
         description={description}
         isRequired={parameter.required}
         status={status}
@@ -52,12 +54,14 @@ export function ParameterInput({ parameter, described, value, status, onChange, 
     );
   }
   if (parameter.type === "boolean") {
-    return <Switch label={label} description={description} value={value === true} onChange={onChange} />;
+    return <Switch label={label} isLabelHidden={labelHidden} description={description} value={value === true} onChange={onChange} />;
   }
   if (numeric.has(parameter.type)) {
     return (
       <NumberInput
+        isIntegerOnly={parameter.type === "integer"}
         label={label}
+        isLabelHidden={labelHidden}
         description={description}
         isRequired={parameter.required}
         status={status}
@@ -70,6 +74,7 @@ export function ParameterInput({ parameter, described, value, status, onChange, 
   return (
     <TextInput
       label={label}
+      isLabelHidden={labelHidden}
       description={description}
       isRequired={parameter.required}
       status={status}

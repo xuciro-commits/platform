@@ -66,6 +66,9 @@
           { "name": "next", "title": "Next step", "type": "text", "group": "Follow-up" },
           { "name": "reason", "title": "Loss reason", "type": "text", "when": "stage=lost", "group": "Follow-up" }
         ],
+        "sets": [
+          { "name": "lines", "from": "lines", "direction": "inverse", "object": "build.opportunityline", "order": [{ "expr": { "op": "", "kind": "text", "ref": "id" } }], "limit": 200 }
+        ],
         "states": [{ "name": "open", "title": "Open", "tone": "info", "description": "Being worked on by the sales team." }]
       },
       "records": [
@@ -90,6 +93,22 @@
         { "subject": "Batch recall readiness", "customer": "CUS-015", "stage": "qualifying", "amount": 64000, "owner": "Dana Whitfield", "closing": "2027-03-20", "next": "Map current recall steps" },
         { "subject": "Furnace monitoring", "customer": "CUS-017", "stage": "negotiation", "amount": 205000, "owner": "Dana Whitfield", "closing": "2026-12-22", "next": "Confirm sensor count" }
       ]
+    },
+    {
+      "name": "opportunityline",
+      "prefix": "OPL",
+      "definition": {
+        "title": "Opportunity line",
+        "plural": "Opportunity lines",
+        "display": "product",
+        "fields": [
+          { "name": "product", "title": "Product", "type": "text", "required": true, "search": true },
+          { "name": "quantity", "title": "Quantity", "type": "integer", "required": true },
+          { "name": "unitprice", "title": "Unit price", "type": "decimal", "required": true },
+          { "name": "opportunity", "title": "Opportunity", "type": "reference", "ref": "build.opportunity", "inverse": "lines", "required": true }
+        ]
+      },
+      "records": []
     },
     {
       "name": "contact",

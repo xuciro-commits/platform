@@ -131,6 +131,48 @@ export function useEditor(described: Described, id: string, values: Values, revi
   };
 }
 
+export function EditorConflict({ editor, described }: { editor: Editor; described: Described }) {
+  const clash = editor.conflict;
+  const clashing = clash && described.field(clash.name);
+  if (!clash || !clashing) return null;
+  return (
+    <Dialog isOpen onOpenChange={() => editor.resolve("saved")} width={520} purpose="form">
+      <Layout
+        padding={4}
+        header={<DialogHeader title={t("Someone saved this first")} onOpenChange={() => editor.resolve("saved")} />}
+        content={
+          <LayoutContent>
+            <VStack gap={3}>
+              <Text type="body">{t("Choose the value to keep. Nothing is overwritten until you choose.")}</Text>
+              <Heading level={4}>{t(clashing.title)}</Heading>
+              <MetadataList>
+                <MetadataListItem label={t("Before")}>
+                  <Text type="body">{present(clashing, clash.before)}</Text>
+                </MetadataListItem>
+                <MetadataListItem label={t("Saved")}>
+                  <Text type="body">{present(clashing, clash.saved)}</Text>
+                </MetadataListItem>
+                <MetadataListItem label={t("Yours")}>
+                  <Text type="body">{present(clashing, clash.mine)}</Text>
+                </MetadataListItem>
+              </MetadataList>
+            </VStack>
+          </LayoutContent>
+        }
+        footer={
+          <LayoutFooter>
+            <HStack gap={2} vAlign="center">
+              <StackItem size="fill" />
+              <Button label={t("Keep saved")} variant="secondary" onClick={() => editor.resolve("saved")} />
+              <Button label={t("Use mine")} variant="primary" onClick={() => editor.resolve("mine")} />
+            </HStack>
+          </LayoutFooter>
+        }
+      />
+    </Dialog>
+  );
+}
+
 type FieldGroupProps = { described: Described; editor: Editor; sections: Section[]; direction: "horizontal-labels" | "vertical"; focusEmpty?: boolean; refs?: Api.RecordView["refs"] };
 
 const styles = stylex.create({
@@ -152,46 +194,9 @@ export function FieldGroup({ described, editor, sections, direction, focusEmpty,
   const first = focusEmpty
     ? shownSections.flatMap((section) => section.fields).find((field) => typed(parameters.get(field.name)) && shown(editor.values[field.name]) === "")?.name
     : undefined;
-  const clash = editor.conflict && sections.some((section) => section.fields.some((field) => field.name === editor.conflict?.name)) ? editor.conflict : undefined;
-  const clashing = clash ? described.field(clash.name) : undefined;
   return (
     <VStack gap={6} onBlur={editor.settle}>
-      {clash && clashing && (
-        <Dialog isOpen onOpenChange={() => editor.resolve("saved")} width={520} purpose="form">
-          <Layout
-            padding={4}
-            header={<DialogHeader title={t("Someone saved this first")} onOpenChange={() => editor.resolve("saved")} />}
-            content={
-              <LayoutContent>
-                <VStack gap={3}>
-                  <Text type="body">{t("Choose the value to keep. Nothing is overwritten until you choose.")}</Text>
-                  <Heading level={4}>{t(clashing.title)}</Heading>
-                  <MetadataList>
-                    <MetadataListItem label={t("Before")}>
-                      <Text type="body">{present(clashing, clash.before)}</Text>
-                    </MetadataListItem>
-                    <MetadataListItem label={t("Saved")}>
-                      <Text type="body">{present(clashing, clash.saved)}</Text>
-                    </MetadataListItem>
-                    <MetadataListItem label={t("Yours")}>
-                      <Text type="body">{present(clashing, clash.mine)}</Text>
-                    </MetadataListItem>
-                  </MetadataList>
-                </VStack>
-              </LayoutContent>
-            }
-            footer={
-              <LayoutFooter>
-                <HStack gap={2} vAlign="center">
-                  <StackItem size="fill" />
-                  <Button label={t("Keep saved")} variant="secondary" onClick={() => editor.resolve("saved")} />
-                  <Button label={t("Use mine")} variant="primary" onClick={() => editor.resolve("mine")} />
-                </HStack>
-              </LayoutFooter>
-            }
-          />
-        </Dialog>
-      )}
+      {editor.conflict && sections.some((section) => section.fields.some((field) => field.name === editor.conflict?.name)) && <EditorConflict editor={editor} described={described} />}
       {shownSections.map((section) => (
         <VStack key={section.title} gap={3}>
           <Heading level={3}>{t(section.title)}</Heading>

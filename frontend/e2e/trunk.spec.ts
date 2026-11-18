@@ -322,3 +322,31 @@ test("reference: search by name, save the selected record and follow its link", 
   await customer.click();
   await expect(page.getByRole("heading", { level: 1, name: "Hartmann Fabrication", exact: true })).toBeVisible();
 });
+
+test("lines: add and edit a child row from its parent record", async ({ page }) => {
+  await signIn(page);
+  await open(page, "Ontology", "Objects");
+  await page.getByRole("link", { name: "Opportunities" }).click();
+  await page.getByRole("link", { name: "Press line retrofit" }).click();
+  await page.getByRole("button", { name: "Add a row" }).click();
+  const form = page.getByRole("dialog");
+  await form.getByRole("textbox", { name: "Product" }).fill("Press 200t");
+  await form.getByRole("spinbutton", { name: "Quantity" }).fill("2");
+  await form.getByRole("spinbutton", { name: "Unit price" }).fill("1000");
+  await form.getByRole("spinbutton", { name: "Unit price" }).press("Tab");
+  await form.getByRole("button", { name: "Create" }).click();
+  await expect(form).toBeHidden();
+  const table = page.getByRole("table", { name: "Opportunity lines" });
+  await expect(table.getByRole("textbox", { name: "Product" })).toHaveValue("Press 200t");
+  await page.reload();
+  const quantity = table.getByRole("spinbutton", { name: "Quantity" });
+  await expect(quantity).toHaveValue("2");
+  await expect(table.getByRole("row", { name: /Totals/ })).toContainText("1,000");
+  await quantity.fill("3");
+  await quantity.press("Enter");
+  await expect(table.getByRole("row", { name: /Totals/ })).toContainText("3");
+  await page.reload();
+  await expect(quantity).toHaveValue("3");
+  await table.getByRole("button", { name: "Archive row" }).click();
+  await expect(table.getByRole("textbox", { name: "Product" })).toHaveCount(0);
+});

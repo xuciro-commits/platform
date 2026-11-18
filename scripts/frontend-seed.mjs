@@ -58,8 +58,17 @@ if (projects.records.some((record) => record.name === sample.project.name)) {
 await submit("build.app", sample.project.name, "create", sample.project);
 for (const type of sample.types) {
   const id = `OBJ-${type.name}`;
-  await submit("build.object", id, "create", { ...type.definition, name: type.name, project: sample.project.name });
+  const { sets, ...definition } = type.definition;
+  await submit("build.object", id, "create", { ...definition, name: type.name, project: sample.project.name });
   if (!type.draft) await submit("build.object", id, "publish", {}, "build", 1);
+}
+
+for (const type of sample.types) {
+  if (!type.definition.sets?.length) continue;
+  const id = `OBJ-${type.name}`;
+  const revision = type.draft ? 1 : 2;
+  await submit("build.object", id, "edit", { sets: type.definition.sets }, "build", revision);
+  if (!type.draft) await submit("build.object", id, "publish", {}, "build", revision + 1);
 }
 
 catalogue = await call("/v1/actions");
