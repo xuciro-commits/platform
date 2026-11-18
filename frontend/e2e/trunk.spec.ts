@@ -100,7 +100,9 @@ test("actions: archive from the record menu, then undo from the notice", async (
   await expect(page.getByRole("alertdialog")).toHaveCount(0);
   const undo = page.getByRole("button", { name: "Undo" });
   await expect(undo).toBeVisible();
+  await expect(page.getByText("Archived", { exact: true })).toBeVisible();
   await undo.click();
+  await expect(page.getByText("Archived", { exact: true })).toHaveCount(0);
 
   await page.getByRole("link", { name: "Opportunities" }).click();
   await expect(page.getByRole("link", { name: "Label printing line" })).toBeVisible();
@@ -212,4 +214,23 @@ test("leave: a typed value is kept when the user walks away without Enter", asyn
   await page.reload();
   await page.getByRole("link", { name: "Furnace monitoring" }).click();
   await expect(page.getByRole("textbox", { name: "Next step" })).toHaveValue("Book the site walk");
+});
+
+test("shape: every record page has the same header, tabs and rail", async ({ page }) => {
+  await signIn(page);
+  const visit = async (app: string, entry: string, list: string | null, record: string) => {
+    await open(page, app, entry);
+    if (list) await page.getByRole("link", { name: list }).click();
+    await page.getByRole("link", { name: record, exact: true }).click();
+    await expect(page.getByRole("heading", { level: 1, name: record })).toBeVisible();
+    await expect(page.getByRole("link", { name: "Details", exact: true })).toBeVisible();
+    await expect(page.getByRole("link", { name: "Activity", exact: true })).toBeVisible();
+    await expect(page.getByRole("complementary").getByRole("heading", { level: 3, name: "Record" })).toBeVisible();
+  };
+  await visit("Ontology", "Objects", "Opportunities", "Press line retrofit");
+  await page.getByRole("link", { name: "Activity" }).click();
+  await expect(page).toHaveURL(/\/activity$/);
+  await expect(page.getByText("Subject: Press line retrofit")).toBeVisible();
+  await visit("Ontology", "Objects", "Customers", "Northwind Tools");
+  await visit("Ontology", "Object types", null, "Opportunity");
 });
