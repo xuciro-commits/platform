@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Apply platform settings to the local identity service.
 
-The client theme and mark brand the sign-in page; the direct sign-in flow lets the platform's own form exchange credentials for tokens. The colors are the platform tokens from web/packages/ui/src/themes/tokens.css.
+The client theme and mark brand the sign-in page; the direct sign-in flow lets the platform's own form exchange credentials for tokens, and the new frontend's origin may sign in. The colors are the platform tokens from web/packages/ui/src/themes/tokens.css.
 """
 import importlib.util
 import json
@@ -16,6 +16,7 @@ ROOT = Path(__file__).resolve().parents[2]
 LOCAL = ROOT / '.build/local'
 MARK = ROOT / 'web/public/favicon.svg'
 KEY_NAME = 'platform-branding'
+FRONTEND = 'http://localhost:8496'
 DEADLINE_SECONDS = 30
 
 THEME = {
@@ -77,8 +78,12 @@ def apply(config, key):
             send(f'{base}/theme/{client}', authorization, 'application/json', theme, 'PUT')
             send(f'{base}/clients/{client}/logo', authorization, f'multipart/form-data; boundary={boundary}', logo, 'PUT')
             registration = fetch_client(base, client, authorization)
-            if 'password' not in registration['flows_enabled']:
-                registration['flows_enabled'] = registration['flows_enabled'] + ['password']
+            wanted = {'flows_enabled': 'password', 'redirect_uris': FRONTEND + '/',
+                      'post_logout_redirect_uris': FRONTEND + '/', 'allowed_origins': FRONTEND}
+            missing = {field: value for field, value in wanted.items() if value not in (registration.get(field) or [])}
+            for field, value in missing.items():
+                registration[field] = (registration.get(field) or []) + [value]
+            if missing:
                 send(f'{base}/clients/{client}', authorization, 'application/json', json.dumps(registration).encode(), 'PUT')
             return 'applied'
         except urllib.error.HTTPError as error:

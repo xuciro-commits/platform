@@ -1222,3 +1222,33 @@ test("tenants: switching keeps the entry and replaces what the page shows", asyn
   await tenant("acceptance");
   await expect(opportunity).toBeVisible();
 });
+
+test("sign-in: a work account signs in by password or single sign-on and lands where it was", async ({ page }) => {
+  await page.route("**/v1/sign-in", (route) => route.fulfill({ json: { issuer: "http://localhost:8497/auth/v1/", client: "platform-web" } }));
+  await page.route("**/auth/v1/oidc/token", (route) => {
+    const form = new URLSearchParams(route.request().postData() ?? "");
+    const refused = form.get("grant_type") === "password" ? form.get("password") !== "right" : !form.get("code_verifier") || form.get("code") !== "granted";
+    return route.fulfill(refused ? { status: 400, json: { error: "invalid_grant" } } : { json: { access_token: "admin", token_type: "Bearer" } });
+  });
+  await page.route("**/auth/v1/oidc/authorize?*", (route) => {
+    const asked = new URL(route.request().url()).searchParams;
+    return route.fulfill({ status: 302, headers: { location: `${asked.get("redirect_uri")}?code=granted&state=${asked.get("state")}` } });
+  });
+  const objectTypes = page.getByRole("heading", { name: "Object types", exact: true });
+
+  await page.goto("/ontology/object-types");
+  await page.getByRole("textbox", { name: "Email" }).fill("admin@platform.test");
+  await page.getByLabel("Password").fill("wrong");
+  await page.getByRole("button", { name: "Sign in", exact: true }).click();
+  await expect(page.getByText("The email or password is not right.").first()).toBeVisible();
+  await page.getByLabel("Password").fill("right");
+  await page.getByRole("button", { name: "Sign in", exact: true }).click();
+  await expect(objectTypes).toBeVisible();
+  await expect(page).toHaveURL(/\/ontology\/object-types$/);
+
+  await page.getByRole("button", { name: "Account", exact: true }).click();
+  await page.getByRole("menuitem", { name: "Sign out", exact: true }).click();
+  await page.getByRole("button", { name: "Continue with single sign-on", exact: true }).click();
+  await expect(objectTypes).toBeVisible();
+  await expect(page).toHaveURL(/\/ontology\/object-types$/);
+});
