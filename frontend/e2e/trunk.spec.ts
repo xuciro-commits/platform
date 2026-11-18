@@ -830,3 +830,24 @@ test("record fields: values read as values and become inputs when focused", asyn
   await amount.blur();
   await expect(amount).toHaveValue("184,000");
 });
+
+test("files: an attachment waits for its project before offering file selection", async ({ page }) => {
+  await signIn(page);
+  const requested = Promise.withResolvers<void>();
+  const ready = Promise.withResolvers<void>();
+  await page.route("**/v1/records/build.app?limit=200", async (route) => {
+    requested.resolve();
+    await ready.promise;
+    await route.continue();
+  });
+  await page.goto("/ontology/objects/build.opportunity/OPP-003");
+  await requested.promise;
+  const input = page.locator('input[type="file"]');
+  try {
+    await expect(page.getByText("Brief", { exact: true })).toBeVisible();
+    await expect(input).toHaveCount(0);
+  } finally {
+    ready.resolve();
+  }
+  await expect(input).toBeEnabled();
+});

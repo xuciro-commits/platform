@@ -5,12 +5,13 @@ import { FileInput } from "@astryxdesign/core/FileInput";
 import { HStack, StackItem, VStack } from "@astryxdesign/core/Layout";
 import { NumberInput } from "@astryxdesign/core/NumberInput";
 import { Selector } from "@astryxdesign/core/Selector";
+import { Skeleton } from "@astryxdesign/core/Skeleton";
 import { Switch } from "@astryxdesign/core/Switch";
 import { Text } from "@astryxdesign/core/Text";
 import { TextInput } from "@astryxdesign/core/TextInput";
 import { colorVars } from "@astryxdesign/core/theme/tokens.stylex";
 import * as stylex from "@stylexjs/stylex";
-import { type ComponentProps, useEffect, useState } from "react";
+import { type ComponentProps, useState } from "react";
 import { type Api, request, requestBlob, useRead } from "../host";
 import { t } from "../i18n";
 import { reasonOf, send } from "./act";
@@ -49,15 +50,17 @@ function AttachmentInput({ parameter, value, onChange, label, description }: { p
   const projects = useRead<Api.RecordPage>(attachment?.mediaSet ? null : "/v1/records/build.app?limit=200");
   const [busy, setBusy] = useState(false);
   const [failure, setFailure] = useState("");
-  const [project, setProject] = useState("");
+  const [selectedProject, setProject] = useState<string>();
+  const projectOptions = projects.status === "ready"
+    ? (projects.data.records as { id: string; title: string }[]).map((entry) => ({ value: entry.id, label: entry.title }))
+    : [];
+  const project = selectedProject ?? projectOptions[0]?.value ?? "";
+  const loading = catalog.status === "loading" || (attachment?.mediaSet ? media.status : projects.status) === "loading";
   const items = media.status === "ready" ? (media.data.record as { items?: { hash: string; name: string }[] }).items ?? [] : [];
   const current = items.find((item) => item.hash === attachment?.item);
   const actions = catalog.status === "ready" ? catalog.data : [];
   const create = actions.find((action) => action.schema === "build.mediaset.create");
   const add = actions.find((action) => action.schema === "build.mediaset.add");
-  useEffect(() => {
-    if (!project && projects.status === "ready") setProject(String((projects.data.records[0] as { id?: string } | undefined)?.id ?? ""));
-  }, [project, projects]);
 
   const upload = async (file: File) => {
     if (busy || !create || !add) return;
@@ -111,18 +114,20 @@ function AttachmentInput({ parameter, value, onChange, label, description }: { p
           label={t("Project")}
           value={project}
           onChange={setProject}
-          options={projects.status === "ready" ? (projects.data.records as { id: string; title: string }[]).map((entry) => ({ value: entry.id, label: entry.title })) : []}
+          options={projectOptions}
         />
       )}
-      <FileInput
-        label={attachment?.item ? t("Replace file") : t("Choose file")}
-        placeholder={t("Choose file")}
-        value={null}
-        mode="dropzone"
-        isLoading={busy}
-        isDisabled={busy || !create || !add || !attachment?.mediaSet && !project}
-        onChange={(file) => { if (file instanceof File) void upload(file); }}
-      />
+      {loading ? <Skeleton height={28} /> : (
+        <FileInput
+          label={attachment?.item ? t("Replace file") : t("Choose file")}
+          placeholder={t("Choose file")}
+          value={null}
+          mode="dropzone"
+          isLoading={busy}
+          isDisabled={busy || !create || !add || (attachment?.mediaSet ? media.status !== "ready" : !project)}
+          onChange={(file) => { if (file instanceof File) void upload(file); }}
+        />
+      )}
       {parameter.required && !attachment?.item && <Text type="supporting" color="secondary">{t("Required")}</Text>}
     </VStack>
   );

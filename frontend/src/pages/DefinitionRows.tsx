@@ -58,12 +58,14 @@ export function stateProblem(source: Values) {
 }
 
 export function DefinitionRows({ described, source, entities, catalog, id, revision }: { described: Described; source: Values; entities: Api.EntityInfo[]; catalog: Api.Action[]; id: string; revision: number }) {
+  const [acceptedRevision, setAcceptedRevision] = useState(revision);
   const states = rowsOf(source, "states");
   const bound = Array.isArray(source.actionTypes) && source.actionTypes.length > 0;
+  const edit = described.edit;
   return slots.map((slot) => {
     const field = described.field(slot);
     if (!field) return null;
-    const action = described.edit?.payload.find((parameter) => parameter.name === slot);
+    const action = edit?.payload.find((parameter) => parameter.name === slot);
     return (
       <DefinitionTable key={slot} slot={slot} field={field} rows={rowsOf(source, slot)} states={states} entities={entities}
         subject={`build.${source.name}`}
@@ -71,24 +73,30 @@ export function DefinitionRows({ described, source, entities, catalog, id, revis
         catalog={catalog}
         objectId={id}
         objectRevision={revision}
-        save={action && described.edit ? (rows) => send(described.edit!, id, { [slot]: rows }, revision) : undefined} />
+        refreshing={revision < acceptedRevision}
+        save={action && edit ? async (rows) => {
+          const accepted = await send(edit, id, { [slot]: rows }, revision);
+          setAcceptedRevision(accepted.revision);
+        } : undefined} />
     );
   });
 }
 
-type SavedRows = Promise<unknown>;
+type SavedRows = Promise<void>;
 type SaveRows = (rows: DefinitionRow[]) => SavedRows;
 
-function DefinitionTable({ slot, field, rows, states, entities, subject, bound, catalog, objectId, objectRevision, save }: {
+function DefinitionTable({ slot, field, rows, states, entities, subject, bound, catalog, objectId, objectRevision, refreshing, save }: {
   slot: Slot; field: Api.FieldInfo; rows: DefinitionRow[]; states: DefinitionRow[]; entities: Api.EntityInfo[];
-  subject: string; bound: boolean; catalog: Api.Action[]; objectId: string; objectRevision: number; save?: SaveRows;
+  subject: string; bound: boolean; catalog: Api.Action[]; objectId: string; objectRevision: number;
+  refreshing: boolean; save?: SaveRows;
 }) {
   const schema = metadata[slot];
   const title = t(schema.title);
   const [editing, setEditing] = useState<{ index: number; row: DefinitionRow }>();
   const [removing, setRemoving] = useState<number>();
   const [failure, setFailure] = useState("");
-  const [busy, setBusy] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const busy = saving || refreshing;
   const [creatingTransition, setCreatingTransition] = useState(false);
   const dragged = useRef<number | undefined>(undefined);
   const fields = field.fields?.length ? field.fields : slot === "actions" ? [
@@ -102,7 +110,7 @@ function DefinitionTable({ slot, field, rows, states, entities, subject, bound, 
   const canMove = slot === "fields" && canWrite && !busy;
   const applying = async (next: DefinitionRow[]) => {
     if (!save || busy) return;
-    setBusy(true);
+    setSaving(true);
     setFailure("");
     try {
       await save(next);
@@ -111,7 +119,7 @@ function DefinitionTable({ slot, field, rows, states, entities, subject, bound, 
     } catch (problem) {
       setFailure(reasonOf(problem));
     } finally {
-      setBusy(false);
+      setSaving(false);
     }
   };
   const move = (index: number, to: number) => {
