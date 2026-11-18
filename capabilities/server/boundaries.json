@@ -26,7 +26,6 @@
     "cmd": ["*"]
   },
   "exceptions": {
-    "services/ai": ["kernel/store"],
     "services/data": ["services/ontology", "kernel/store"],
     "services/devops": ["services/data"],
     "services/objects": ["services/security"],

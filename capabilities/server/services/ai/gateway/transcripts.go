@@ -5,7 +5,7 @@ import (
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	persistence "platformserver/kernel/store"
+	runtimeprotocol "platformserver/kernel/protocol"
 	"platformserver/platform"
 )
 
@@ -53,12 +53,18 @@ type Transcripts struct {
 	Tenant   string
 	Days     int
 	Enabled  bool
-	Store    persistence.Store
+	Store    TranscriptStore
 	Admits   func(platform.Member) *platform.Error
 	Withheld func(string) bool
 }
 
-func (t Transcripts) Save(x persistence.Transcript) {
+type TranscriptStore interface {
+	SaveTranscript(runtimeprotocol.Transcript)
+	Transcripts(string, string, int) []runtimeprotocol.Transcript
+	PurgeTranscripts(string, time.Time)
+}
+
+func (t Transcripts) Save(x runtimeprotocol.Transcript) {
 	if t.Days <= 0 {
 		return
 	}
@@ -66,7 +72,7 @@ func (t Transcripts) Save(x persistence.Transcript) {
 	t.Store.SaveTranscript(x)
 }
 
-func (t Transcripts) List(run string, limit int) []persistence.Transcript {
+func (t Transcripts) List(run string, limit int) []runtimeprotocol.Transcript {
 	return t.Store.Transcripts(t.Tenant, run, limit)
 }
 
@@ -81,7 +87,7 @@ func (t Transcripts) Purge(now time.Time) {
 	}
 }
 
-func (t Transcripts) For(m platform.Member, run string, limit int) ([]persistence.Transcript, *platform.Error) {
-	return TranscriptReader[persistence.Transcript]{Admits: t.Admits, Find: t.List,
-		Run: func(x persistence.Transcript) string { return x.Run }, Withheld: t.Withheld}.Read(m, run, limit)
+func (t Transcripts) For(m platform.Member, run string, limit int) ([]runtimeprotocol.Transcript, *platform.Error) {
+	return TranscriptReader[runtimeprotocol.Transcript]{Admits: t.Admits, Find: t.List,
+		Run: func(x runtimeprotocol.Transcript) string { return x.Run }, Withheld: t.Withheld}.Read(m, run, limit)
 }

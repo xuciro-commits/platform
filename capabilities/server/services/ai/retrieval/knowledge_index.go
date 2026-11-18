@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"log"
 
-	persistence "platformserver/kernel/store"
+	runtimeprotocol "platformserver/kernel/protocol"
 	"platformserver/platform"
 
 	"slices"
@@ -60,7 +60,7 @@ func (k *Index) Sync(load func(bool) ([]Source, map[string]bool, bool)) {
 	k.walked = true
 }
 
-func (k *Index) syncVectorSources(ctx Context, store persistence.VectorIndex, model string) error {
+func (k *Index) syncVectorSources(ctx Context, store runtimeprotocol.VectorIndex, model string) error {
 	k.vectorMu.Lock()
 	defer k.vectorMu.Unlock()
 	k.mu.Lock()
@@ -74,11 +74,11 @@ func (k *Index) syncVectorSources(ctx Context, store persistence.VectorIndex, mo
 			dirty[source] = true
 		}
 	}
-	sources := make([]persistence.VectorSource, 0, len(dirty))
+	sources := make([]runtimeprotocol.VectorSource, 0, len(dirty))
 	for source := range dirty {
-		item := persistence.VectorSource{Source: source}
+		item := runtimeprotocol.VectorSource{Source: source}
 		for _, c := range k.chunks[source] {
-			item.Passages = append(item.Passages, persistence.VectorPassage{Chunk: c.n, Hash: c.hash, Scope: c.scope, Apps: slices.Clone(c.apps)})
+			item.Passages = append(item.Passages, runtimeprotocol.VectorPassage{Chunk: c.n, Hash: c.hash, Scope: c.scope, Apps: slices.Clone(c.apps)})
 		}
 		sources = append(sources, item)
 	}
@@ -98,7 +98,7 @@ func (k *Index) syncVectorSources(ctx Context, store persistence.VectorIndex, mo
 }
 
 func (k *Index) Nearest(ctx Context, model string, query []float32, reader *platform.Member, app string, limit int, now time.Time) map[*chunk]float64 {
-	store := ctx.Store.(persistence.VectorIndex)
+	store := ctx.Store.(runtimeprotocol.VectorIndex)
 	out := map[*chunk]float64{}
 	if err := k.syncVectorSources(ctx, store, model); err != nil {
 		log.Printf("knowledge sources %s: %v", ctx.Tenant, err)
@@ -206,9 +206,9 @@ func (k *Index) Embed(ctx Context, now time.Time) {
 	k.mu.Unlock()
 	slices.Sort(hashes)
 	var missing []string
-	var search persistence.VectorIndex
+	var search runtimeprotocol.VectorIndex
 	switch value := ctx.Store.(type) {
-	case persistence.VectorIndex:
+	case runtimeprotocol.VectorIndex:
 		search = value
 	}
 	if search != nil {

@@ -3,8 +3,8 @@ package store
 import (
 	"context"
 	"encoding/binary"
-	"encoding/json"
 	"math"
+	runtimeprotocol "platformserver/kernel/protocol"
 	"platformserver/platform"
 	"time"
 
@@ -30,16 +30,7 @@ type Store interface {
 	QueryRunIndex(query platform.RunIndexQuery) (platform.RunIndexPage, error)
 }
 
-type Transcript struct {
-	Tenant  string          `json:"-"`
-	At      time.Time       `json:"at"`
-	Member  string          `json:"member"`
-	Model   string          `json:"model"`
-	Run     string          `json:"run,omitempty"`
-	Request json.RawMessage `json:"request"`
-	Answer  json.RawMessage `json:"answer"`
-	Outcome string          `json:"outcome"`
-}
+type Transcript = runtimeprotocol.Transcript
 
 type Identity struct {
 	Tenant, App, Scope, Key, Hash string

@@ -10,7 +10,7 @@ import (
 
 	"math"
 
-	persistence "platformserver/kernel/store"
+	runtimeprotocol "platformserver/kernel/protocol"
 	"platformserver/platform"
 	"reflect"
 	"slices"
@@ -261,7 +261,7 @@ func (k *Index) Search(ctx Context, reader *platform.Member, app, q string, limi
 		found[c] = true
 		candidates = append(candidates, c)
 	}
-	_, databaseSearch := ctx.Store.(persistence.VectorIndex)
+	_, databaseSearch := ctx.Store.(runtimeprotocol.VectorIndex)
 	if model == "" || databaseSearch {
 		for _, w := range asked {
 			for _, c := range k.postings[w] {

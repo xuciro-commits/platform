@@ -1,28 +1,8 @@
 package store
 
-import "context"
+import runtimeprotocol "platformserver/kernel/protocol"
 
-type VectorSource struct {
-	Source   string
-	Passages []VectorPassage
-}
-
-type VectorPassage struct {
-	Chunk int
-	Hash  string
-	Scope string
-	Apps  []string
-}
-
-type VectorHit struct {
-	Source string
-	Chunk  int
-	Hash   string
-	Score  float64
-}
-
-type VectorIndex interface {
-	SyncVectorSources(context.Context, string, string, []VectorSource, bool) error
-	MissingVectors(context.Context, string, string, []string) ([]string, error)
-	NearestVectors(context.Context, string, string, []float32, []string, int) ([]VectorHit, error)
-}
+type VectorSource = runtimeprotocol.VectorSource
+type VectorPassage = runtimeprotocol.VectorPassage
+type VectorHit = runtimeprotocol.VectorHit
+type VectorIndex = runtimeprotocol.VectorIndex
