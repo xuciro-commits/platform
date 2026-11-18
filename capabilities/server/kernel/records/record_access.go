@@ -88,7 +88,7 @@ func ScopePolicy(info platform.RecordTypeInfo, m platform.Member, directory Scop
 		}
 		return filter, nil
 	}
-	if scope.Through != nil {
+	if scope.Through != nil || scope.Share != nil {
 		return compiled(ruleexpr.RefOf("boolean", "$through"), RowAttribute{Ref: "$through", Type: ruleexpr.Type{Kind: "boolean"}, Read: func(v reflect.Value) ruleexpr.Value { return ruleexpr.BoolValue(through(v)) }})
 	}
 	var participant []RowAttribute

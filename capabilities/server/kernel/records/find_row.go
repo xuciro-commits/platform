@@ -81,5 +81,5 @@ func (s *Store) Held(ref string) (any, bool) {
 
 func (s *Store) ReadScoped(typ string) (exists, scoped bool) {
 	et := s.Type(typ)
-	return et != nil, et != nil && (et.Info().Scope.Through != nil || et.Info().HasReadSources())
+	return et != nil, et != nil && (et.Info().Scope.Through != nil || et.Info().Scope.Share != nil || et.Info().HasReadSources())
 }

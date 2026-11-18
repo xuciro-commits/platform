@@ -116,7 +116,7 @@ func (a Authorizer) Authorize(store *records.Store, c platform.Caller, q platfor
 			if owner := a.sources.App(et.Info().App); owner != nil {
 				policies = owner.Manifest().Actions.AuthorizationPolicies()
 			}
-			if et.Info().Scope.Participants != nil || et.Info().Scope.Through != nil {
+			if et.Info().Scope.Participants != nil || et.Info().Scope.Through != nil || et.Info().Scope.Share != nil {
 				request.Allowed = []string{platform.AnyMember}
 			}
 			if et.Info().Type == protocol.KnowledgeDocumentType && q.Kind == "derive" {
@@ -146,7 +146,11 @@ func (a Authorizer) Authorize(store *records.Store, c platform.Caller, q platfor
 			} else if et.Info().Scope.Through != nil && (current == nil || depth >= 16 || cycle) {
 				context.Row = platform.AuthorizationGate{Reason: "The owning record is unavailable or exceeds 16 segments"}
 			} else {
-				policy, err := a.ScopePolicy(store, c, et.Info(), at, depth, walk)
+				info := et.Info()
+				if !slices.Contains([]string{"read", "derive", "export"}, q.Kind) {
+					info.Scope.Share = nil
+				}
+				policy, err := a.ScopePolicy(store, c, info, at, depth, walk)
 				reason := "The record is outside the caller's row scope"
 				if et.Info().Scope.Through != nil {
 					reason = "The owning record is outside the caller's row scope"
@@ -249,7 +253,20 @@ func (a Authorizer) Authorize(store *records.Store, c platform.Caller, q platfor
 
 func (a Authorizer) ScopePolicy(store *records.Store, c platform.Caller, info platform.RecordTypeInfo, at time.Time, depth int, walk *Traversal) (*records.RowFilter, *platform.Error) {
 	through := func(v reflect.Value) bool {
-		typ, id, _ := strings.Cut(info.Scope.Through(v.Interface()), "/")
+		var ref string
+		if info.Scope.Share != nil {
+			visible, shared := info.Scope.Share(v.Interface(), c.ID)
+			if visible || shared == "" {
+				return visible
+			}
+			if a.sources.ProjectRole(c.Member, shared) == "" {
+				return false
+			}
+			ref = protocol.AppType + "/" + shared
+		} else {
+			ref = info.Scope.Through(v.Interface())
+		}
+		typ, id, _ := strings.Cut(ref, "/")
 		return a.Authorize(store, c, platform.AuthzRequest{Principal: c.ID, Tenant: c.Tenant, Kind: "read", Type: typ, Record: id}, at, true, depth+1, walk).Allow
 	}
 	return records.ScopePolicy(info, c.Member, a.sources.Directory(), at, through, c.Rules())

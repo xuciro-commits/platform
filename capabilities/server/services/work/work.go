@@ -18,17 +18,20 @@ import (
 )
 
 const (
-	ID               = runtimeprotocol.WorkApp
-	ApprovalType     = runtimeprotocol.WorkApprovalType
-	TaskType         = runtimeprotocol.WorkTaskType
-	Admin            = "admin"
-	SchemaRequest    = runtimeprotocol.WorkApprovalRequestSchema
-	DelegationType   = "work.delegation"
-	SchemaDelegate   = "work.delegation.add"
-	SchemaUndelegate = "work.delegation.end"
-	ViewType         = runtimeprotocol.WorkViewType
-	SchemaViewSave   = "work.view.save"
-	SchemaViewRemove = "work.view.remove"
+	ID                   = runtimeprotocol.WorkApp
+	ApprovalType         = runtimeprotocol.WorkApprovalType
+	TaskType             = runtimeprotocol.WorkTaskType
+	Admin                = "admin"
+	SchemaRequest        = runtimeprotocol.WorkApprovalRequestSchema
+	DelegationType       = "work.delegation"
+	SchemaDelegate       = "work.delegation.add"
+	SchemaUndelegate     = "work.delegation.end"
+	ViewType             = runtimeprotocol.WorkViewType
+	SchemaViewSave       = "work.view.save"
+	SchemaViewRemove     = "work.view.remove"
+	SchemaViewShare      = "work.view.share"
+	ViewPreferenceType   = "work.viewpreference"
+	SchemaViewPreference = "work.viewpreference.set"
 )
 
 type ApprovalRequest = runtimeprotocol.ApprovalRequest
@@ -108,9 +111,10 @@ func New(tenant string, authorities platform.Authorities) *Work {
 			Roles: []string{platform.AnyMember}},
 		platform.Action{Schema: SchemaUndelegate, Target: DelegationType, Capability: "delegation", Title: "End delegation",
 			Description: "End one of your delegations.", Payload: []platform.Field{}, Roles: []string{platform.AnyMember}})
+	actions = append(actions, viewActions()...)
 	actions = append(actions, w.policyActions()...)
 	w.authorities = authorities
-	w.authority = authorities(tenant, ID, platform.NewCatalog(actions...), ApprovalType, TaskType, ViewType, DelegationType, PolicyType)
+	w.authority = authorities(tenant, ID, platform.NewCatalog(actions...), ApprovalType, TaskType, ViewType, ViewPreferenceType, DelegationType, PolicyType)
 	return w
 }
 
@@ -172,9 +176,9 @@ func (w *Work) entities() []platform.RecordType {
 						}}},
 				}}},
 		policyEntity(),
-		{Type: ViewType, Title: "Saved view", Model: SavedView{},
-			Scope: platform.Scope{Default: platform.ScopeOwn, Owner: "owner",
-				Participants: func(record any) []string { return []string{record.(SavedView).Owner} }}},
+		savedViewEntity(),
+		{Type: ViewPreferenceType, Title: "Saved view preference", Model: runtimeprotocol.SavedViewPreference{},
+			Scope: platform.Scope{Default: platform.ScopeOwn, Owner: "member", Participants: func(record any) []string { return []string{record.(runtimeprotocol.SavedViewPreference).Member} }}},
 		{Type: DelegationType, Title: "Delegation", Model: Delegation{}, Description: "A member's approvals and tasks handed to another for some days; the delegate decides for them, and the request says so.",
 			Scope: platform.Scope{Participants: func(record any) []string { d := record.(Delegation); return []string{d.From, d.To} }}},
 	}
@@ -210,8 +214,10 @@ func (w *Work) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb.C
 			return w.escalateRefusal(c, s, now)
 		case SchemaDelegate, SchemaUndelegate:
 			return w.delegate(c, s)
-		case SchemaViewSave, SchemaViewRemove:
-			return w.view(c, s)
+		case SchemaViewSave, SchemaViewRemove, SchemaViewShare:
+			return w.view(c, s, now)
+		case SchemaViewPreference:
+			return w.viewPreference(c, s, now)
 		case SchemaPolicySave, SchemaPolicyRemove:
 			return w.policy(c, s)
 		}
@@ -494,11 +500,14 @@ func (w *Work) inbox(c platform.Caller, now time.Time) []WorkTask {
 	return out
 }
 
-func (w *Work) view(c platform.Caller, s *pb.Submission) (func(*pb.ChangeRecord), *platform.Error) {
+func (w *Work) view(c platform.Caller, s *pb.Submission, at time.Time) (func(*pb.ChangeRecord), *platform.Error) {
 	id := s.GetTarget().GetId()
 	v, exists := platform.Get[SavedView](c, id)
 	if exists && v.Owner != c.ID {
 		return nil, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_POLICY_DENIED}
+	}
+	if s.GetSchema().GetName() == SchemaViewShare {
+		return shareView(c, s, v, exists, at)
 	}
 	if s.GetSchema().GetName() == SchemaViewRemove {
 		if !exists || v.Archived {
@@ -526,8 +535,7 @@ func (w *Work) Read(c platform.Caller, name string) (any, *platform.Error) {
 		return w.inbox(c, time.Now()), nil
 	}
 	if name == "views" {
-		mine, _ := json.Marshal([]any{[]any{"owner", "=", c.ID}})
-		out, _, err := platform.Find[SavedView](c, platform.Query{Domain: mine, Sort: []string{"title"}})
+		out, _, err := platform.Find[SavedView](c, platform.Query{Sort: []string{"title"}})
 		if err != nil {
 			return nil, err
 		}

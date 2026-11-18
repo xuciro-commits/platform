@@ -28,6 +28,7 @@ type Sources interface {
 	KnowledgeReadable(*records.Store, platform.Member, string, string) bool
 	Directory() platform.Directory
 	DerivationSources(*records.Store, platform.Member, time.Time, bool) DerivationSource
+	ProjectRole(platform.Member, string) string
 	ProjectAccess(*records.Store, platform.Member, string, string, string, bool) (bool, bool)
 	Markings(*records.Store, bool) RecordMarkings
 }

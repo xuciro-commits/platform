@@ -31,7 +31,6 @@ const (
 	WorkTaskType              = "work.task"
 	WorkApprovalType          = "work.approval"
 	WorkViewType              = "work.view"
-	WorkViewStateVersion      = 1
 	MonitoringViewType        = "monitoring.view"
 	WorkApprovalRequestSchema = "work.approval.request"
 )
@@ -94,21 +93,26 @@ type WorkTask struct {
 
 type SavedView struct {
 	platform.Record
-	Title  string `json:"title" field:"required,search" source:"record"`
-	Entity string `json:"entity" field:"required,readonly" source:"record"`
-	State  string `json:"state" type:"longtext" source:"record"`
-	Owner  string `json:"owner" field:"readonly" source:"record"`
+	Share   string `json:"share,omitempty" field:"readonly" choices:"self,project,tenant"`
+	Project string `json:"project,omitempty" field:"readonly"`
+	Title   string `json:"title" field:"required,search" source:"record"`
+	Entity  string `json:"entity" field:"required,readonly" source:"record"`
+	State   string `json:"state" type:"longtext" source:"record"`
+	Owner   string `json:"owner" field:"readonly" source:"record"`
+}
+
+type SavedViewPreference struct {
+	platform.Record
+	Member  string   `json:"member" field:"readonly"`
+	Entity  string   `json:"entity" field:"readonly"`
+	Default string   `json:"default,omitempty" field:"readonly"`
+	Pinned  []string `json:"pinned,omitempty" field:"readonly"`
 }
 
 func CheckWorkViewState(raw string) error {
-	var state struct {
-		Version int `json:"version"`
-	}
-	if json.Unmarshal([]byte(raw), &state) != nil {
-		return fmt.Errorf("saved view state must be a JSON object")
-	}
-	if state.Version != WorkViewStateVersion {
-		return fmt.Errorf("saved view state version %d is not supported", state.Version)
+	var state map[string]json.RawMessage
+	if json.Unmarshal([]byte(raw), &state) != nil || len(state["version"]) == 0 {
+		return fmt.Errorf("saved view state must be a JSON object with a version")
 	}
 	return nil
 }

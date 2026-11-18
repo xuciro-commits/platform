@@ -56,6 +56,10 @@ func (s authorizationSources) Directory() platform.Directory { return s.t.Direct
 func (s authorizationSources) DerivationSources(store *records.Store, m platform.Member, at time.Time, held bool) security.DerivationSource {
 	return s.t.objectOwner(store).NarrowerIn(store, m, at, held)
 }
+func (s authorizationSources) ProjectRole(m platform.Member, project string) string {
+	return s.t.ResourceRole(m, project)
+}
+
 func (s authorizationSources) ProjectAccess(store *records.Store, m platform.Member, typ, id, kind string, held bool) (bool, bool) {
 	return s.t.ResourcePermission(store, m, typ, id, kind, held)
 }

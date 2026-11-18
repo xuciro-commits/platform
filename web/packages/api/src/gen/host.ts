@@ -4944,6 +4944,8 @@ export type SavedView = {
   changed: Stamp;
   archived?: boolean;
   versionPins?: RecordVersionPin[];
+  share?: "self" | "project" | "tenant";
+  project?: string;
   title: string;
   entity: string;
   state: string;
