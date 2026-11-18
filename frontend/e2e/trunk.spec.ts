@@ -1022,3 +1022,22 @@ test("members: an opportunity owner is shown by name and can be reassigned", asy
   await expect(properties.getByRole("button", { name: /Owner.*Omar Haddad/ })).toBeVisible();
   await expect(properties.getByRole("img", { name: "Omar Haddad" })).toBeVisible();
 });
+
+test("record fields: an attachment preserves the horizontal label alignment", async ({ page }) => {
+  await signIn(page);
+  await page.goto("/ontology/objects/build.opportunity/OPP-001");
+  const brief = page.getByText("Brief", { exact: true });
+  const customer = page.getByText("Customer", { exact: true });
+  const amount = page.getByText("Amount", { exact: true });
+  await expect(brief).toBeVisible();
+  await expect(customer).toBeVisible();
+  await expect(amount).toBeVisible();
+  const briefBox = await brief.boundingBox();
+  const customerBox = await customer.boundingBox();
+  const amountBox = await amount.boundingBox();
+  expect(briefBox).not.toBeNull();
+  expect(customerBox).not.toBeNull();
+  expect(amountBox).not.toBeNull();
+  expect(customerBox?.x).toBe(amountBox?.x);
+  expect(briefBox?.x).toBe(customerBox?.x);
+});

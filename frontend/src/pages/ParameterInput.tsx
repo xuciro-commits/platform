@@ -1,7 +1,9 @@
 import { Banner } from "@astryxdesign/core/Banner";
 import { Button } from "@astryxdesign/core/Button";
 import { DateInput } from "@astryxdesign/core/DateInput";
+import { Field } from "@astryxdesign/core/Field";
 import { FileInput } from "@astryxdesign/core/FileInput";
+import { FormLayout } from "@astryxdesign/core/FormLayout";
 import { HStack, StackItem, VStack } from "@astryxdesign/core/Layout";
 import { NumberInput } from "@astryxdesign/core/NumberInput";
 import { Selector } from "@astryxdesign/core/Selector";
@@ -11,7 +13,7 @@ import { Text } from "@astryxdesign/core/Text";
 import { TextInput } from "@astryxdesign/core/TextInput";
 import { colorVars } from "@astryxdesign/core/theme/tokens.stylex";
 import * as stylex from "@stylexjs/stylex";
-import { type ComponentProps, useState } from "react";
+import { type ComponentProps, useId, useState } from "react";
 import { type Api, request, requestBlob, useRead } from "../host";
 import { t } from "../i18n";
 import { reasonOf, send } from "./act";
@@ -45,6 +47,7 @@ export function settles(parameter: Api.Field, field?: Api.FieldInfo) {
 }
 
 function AttachmentInput({ parameter, value, onChange, label, description }: { parameter: Api.Field; value: unknown; onChange: (value: unknown) => void; label: string; description?: string }) {
+  const id = useId();
   const attachment = value as Attachment | undefined;
   const catalog = useRead<Api.Action[]>("/v1/actions");
   const media = useRead<Api.RecordView>(attachment?.mediaSet ? `/v1/records/build.mediaset/${encodeURIComponent(attachment.mediaSet)}` : null);
@@ -98,39 +101,41 @@ function AttachmentInput({ parameter, value, onChange, label, description }: { p
   };
 
   return (
-    <VStack gap={2}>
-      <Text type="body" weight="bold">{label}</Text>
-      {description && <Text type="supporting" color="secondary">{description}</Text>}
-      {failure && <Banner status="error" title={t("The file operation did not finish")} description={failure} />}
-      {attachment?.item && (
-        <HStack gap={2} vAlign="center">
-          <StackItem size="fill">
-            <Text type="body">{current?.name ?? attachment.item}</Text>
-          </StackItem>
-          <Button label={t("Download")} variant="secondary" onClick={download} />
-        </HStack>
-      )}
-      {!attachment?.mediaSet && (
-        <Selector
-          label={t("Project")}
-          value={project}
-          onChange={setProject}
-          options={projectOptions}
-        />
-      )}
-      {loading ? <Skeleton height={28} /> : (
-        <FileInput
-          label={attachment?.item ? t("Replace file") : t("Choose file")}
-          placeholder={t("Choose file")}
-          value={null}
-          mode="dropzone"
-          isLoading={busy}
-          isDisabled={busy || !create || !add || (attachment?.mediaSet ? media.status !== "ready" : !project)}
-          onChange={(file) => { if (file instanceof File) void upload(file); }}
-        />
-      )}
-      {parameter.required && !attachment?.item && <Text type="supporting" color="secondary">{t("Required")}</Text>}
-    </VStack>
+    <Field label={label} inputID={id} labelID={`${id}-label`} isGroupLabel description={description}
+      descriptionID={description ? `${id}-description` : undefined} isRequired={parameter.required}>
+      <FormLayout direction="vertical">
+        <VStack gap={2} id={id} role="group" aria-labelledby={`${id}-label`} aria-describedby={description ? `${id}-description` : undefined}>
+          {failure && <Banner status="error" title={t("The file operation did not finish")} description={failure} />}
+          {attachment?.item && (
+            <HStack gap={2} vAlign="center">
+              <StackItem size="fill">
+                <Text type="body">{current?.name ?? attachment.item}</Text>
+              </StackItem>
+              <Button label={t("Download")} variant="secondary" onClick={download} />
+            </HStack>
+          )}
+          {!attachment?.mediaSet && (
+            <Selector
+              label={t("Project")}
+              value={project}
+              onChange={setProject}
+              options={projectOptions}
+            />
+          )}
+          {loading ? <Skeleton height={28} /> : (
+            <FileInput
+              label={attachment?.item ? t("Replace file") : t("Choose file")}
+              placeholder={t("Choose file")}
+              value={null}
+              mode="dropzone"
+              isLoading={busy}
+              isDisabled={busy || !create || !add || (attachment?.mediaSet ? media.status !== "ready" : !project)}
+              onChange={(file) => { if (file instanceof File) void upload(file); }}
+            />
+          )}
+        </VStack>
+      </FormLayout>
+    </Field>
   );
 }
 
