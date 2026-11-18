@@ -8,7 +8,7 @@ import { StatusDot } from "@astryxdesign/core/StatusDot";
 import { useMemo, useState } from "react";
 import { type Api, useRead } from "../host";
 import { t } from "../i18n";
-import { RecordFields } from "./RecordFields";
+import { FieldGroup, useEditor } from "./RecordFields";
 import { BackLink } from "./BackLink";
 import type { Described } from "./describe";
 import { dots, type Instances, Transitions } from "./Transitions";
@@ -28,9 +28,9 @@ export function RecordPage({ described, id, listPath, listTitle, instances }: Re
     [read],
   );
   const kept = read.status === "ready" ? (read.data.record as Kept) : undefined;
+  const editor = useEditor(described.edit, id, values, kept?.revision ?? 0);
   const state = described.state(values);
   const name = described.name(values, id);
-  const edit = described.edit;
 
   return (
     <>
@@ -91,19 +91,9 @@ export function RecordPage({ described, id, listPath, listTitle, instances }: Re
               />
             )}
             {read.status === "ready" && (
-              <VStack gap={4}>
+              <VStack gap={6}>
                 {refusal && <Banner status="error" title={t("Not done")} description={refusal} />}
-                <Heading level={3}>{t("Details")}</Heading>
-                {edit && kept && <RecordFields described={described.entity} edit={edit} id={id} values={values} revision={kept.revision} />}
-                <MetadataList columns="multi">
-                  {[...described.sections.flatMap((section) => section.fields), ...described.aside]
-                    .filter((field) => !described.editable.has(field.name) && values[field.name] != null && shown(values[field.name]) !== "" && typeof values[field.name] !== "object")
-                    .map((field) => (
-                      <MetadataListItem key={field.name} label={t(field.title)}>
-                        <Text type="body">{shown(values[field.name])}</Text>
-                      </MetadataListItem>
-                    ))}
-                </MetadataList>
+                <FieldGroup described={described} editor={editor} sections={described.sections} direction="horizontal-labels" />
               </VStack>
             )}
           </LayoutContent>
@@ -111,25 +101,28 @@ export function RecordPage({ described, id, listPath, listTitle, instances }: Re
         end={
           kept ? (
             <LayoutPanel width={340} padding={6} role="complementary" hasDivider>
-              <VStack gap={4}>
-                <Heading level={3}>{t("Record")}</Heading>
-                <MetadataList>
-                  <MetadataListItem label={t("Created")}>
-                    <Text type="body">{when(kept.created)}</Text>
-                  </MetadataListItem>
-                  <MetadataListItem label={t("Created by")}>
-                    <Text type="body">{kept.created.by ?? ""}</Text>
-                  </MetadataListItem>
-                  <MetadataListItem label={t("Updated")}>
-                    <Text type="body">{when(kept.changed)}</Text>
-                  </MetadataListItem>
-                  <MetadataListItem label={t("Updated by")}>
-                    <Text type="body">{kept.changed.by ?? ""}</Text>
-                  </MetadataListItem>
-                  <MetadataListItem label={t("Revision")}>
-                    <Text type="body">{String(kept.revision)}</Text>
-                  </MetadataListItem>
-                </MetadataList>
+              <VStack gap={6}>
+                <FieldGroup described={described} editor={editor} sections={[{ title: "Properties", fields: described.aside }]} direction="vertical" />
+                <VStack gap={4}>
+                  <Heading level={3}>{t("Record")}</Heading>
+                  <MetadataList>
+                    <MetadataListItem label={t("Created")}>
+                      <Text type="body">{when(kept.created)}</Text>
+                    </MetadataListItem>
+                    <MetadataListItem label={t("Created by")}>
+                      <Text type="body">{kept.created.by ?? ""}</Text>
+                    </MetadataListItem>
+                    <MetadataListItem label={t("Updated")}>
+                      <Text type="body">{when(kept.changed)}</Text>
+                    </MetadataListItem>
+                    <MetadataListItem label={t("Updated by")}>
+                      <Text type="body">{kept.changed.by ?? ""}</Text>
+                    </MetadataListItem>
+                    <MetadataListItem label={t("Revision")}>
+                      <Text type="body">{String(kept.revision)}</Text>
+                    </MetadataListItem>
+                  </MetadataList>
+                </VStack>
               </VStack>
             </LayoutPanel>
           ) : undefined

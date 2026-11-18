@@ -50,14 +50,14 @@
         "plural": "Opportunities",
         "display": "subject",
         "fields": [
-          { "name": "subject", "title": "Subject", "type": "text", "required": true, "search": true },
-          { "name": "customer", "title": "Customer", "type": "text", "search": true },
-          { "name": "stage", "title": "Stage", "type": "choice", "choices": "qualifying,proposal,negotiation,won,lost" },
-          { "name": "amount", "title": "Amount", "type": "decimal" },
-          { "name": "owner", "title": "Owner", "type": "text" },
-          { "name": "closing", "title": "Expected close", "type": "date" },
-          { "name": "next", "title": "Next step", "type": "text" },
-          { "name": "reason", "title": "Loss reason", "type": "text", "when": "stage=lost" }
+          { "name": "subject", "title": "Subject", "type": "text", "required": true, "search": true, "group": "Commercial" },
+          { "name": "customer", "title": "Customer", "type": "text", "search": true, "group": "Commercial" },
+          { "name": "stage", "title": "Stage", "type": "choice", "choices": "qualifying,proposal,negotiation,won,lost", "aside": true },
+          { "name": "amount", "title": "Amount", "type": "decimal", "group": "Commercial" },
+          { "name": "owner", "title": "Owner", "type": "text", "aside": true },
+          { "name": "closing", "title": "Expected close", "type": "date", "group": "Commercial" },
+          { "name": "next", "title": "Next step", "type": "text", "group": "Follow-up" },
+          { "name": "reason", "title": "Loss reason", "type": "text", "when": "stage=lost", "group": "Follow-up" }
         ],
         "states": [{ "name": "open", "title": "Open", "tone": "info", "description": "Being worked on by the sales team." }]
       },

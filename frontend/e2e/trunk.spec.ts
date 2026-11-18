@@ -19,6 +19,12 @@ test("records: open a list, open a record, change a field in place", async ({ pa
   await page.getByRole("link", { name: "Press line retrofit" }).click();
   await expect(page.getByRole("heading", { level: 1, name: "Press line retrofit" })).toBeVisible();
 
+  await expect(page.getByRole("heading", { level: 3, name: "Commercial" })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 3, name: "Follow-up" })).toBeVisible();
+  await expect(page.getByRole("textbox", { name: "Loss reason" })).toHaveCount(0);
+  const owner = page.getByRole("complementary").getByRole("textbox", { name: "Owner" });
+  await expect(owner).toHaveValue("Dana Whitfield");
+
   const next = page.getByRole("textbox", { name: "Next step" });
   await expect(next).toHaveValue("Send revised terms");
   await next.fill("Call the plant manager");
@@ -27,6 +33,29 @@ test("records: open a list, open a record, change a field in place", async ({ pa
 
   await page.reload();
   await expect(page.getByRole("textbox", { name: "Next step" })).toHaveValue("Call the plant manager");
+
+  await page.getByRole("complementary").getByRole("textbox", { name: "Owner" }).fill("Omar Haddad");
+  await page.getByRole("complementary").getByRole("textbox", { name: "Owner" }).press("Enter");
+  await expect(page.getByRole("complementary").getByText("3", { exact: true })).toBeVisible();
+  await page.reload();
+  await expect(page.getByRole("complementary").getByRole("textbox", { name: "Owner" })).toHaveValue("Omar Haddad");
+});
+
+test("sections: a field shows only when its condition holds", async ({ page }) => {
+  await signIn(page);
+  await open(page, "Ontology", "Objects");
+  await page.getByRole("link", { name: "Opportunities" }).click();
+  await page.getByRole("link", { name: "Fleet tracking rollout" }).click();
+  const reason = page.getByRole("textbox", { name: "Loss reason" });
+  await expect(reason).toHaveCount(0);
+
+  await page.getByRole("combobox", { name: "Stage" }).click();
+  await page.getByRole("option", { name: "lost" }).click();
+  await expect(reason).toBeVisible();
+
+  await page.getByRole("combobox", { name: "Stage" }).click();
+  await page.getByRole("option", { name: "proposal" }).click();
+  await expect(reason).toHaveCount(0);
 });
 
 test("publish: a draft type goes live from its record page and takes records", async ({ page }) => {
