@@ -19,17 +19,18 @@ export type TransitionsProps = {
   title: string;
   instances?: Instances;
   allowed?: Api.RecordAction[];
+  publishProblem?: string;
   onFailure: (reason: string) => void;
 };
 
-export function Transitions({ described, id, values, revision, title, instances, allowed, onFailure }: TransitionsProps) {
+export function Transitions({ described, id, values, revision, title, instances, allowed, publishProblem, onFailure }: TransitionsProps) {
   const act = useAct(described);
   const lifecycle = described.lifecycle;
   const current = lifecycle ? String(values[lifecycle.field] ?? "") : "";
   const offered = described.steps.filter((step) => step.transition.from.includes(current));
   const link = instances && typeof values[instances.field] === "string" && values[instances.field] ? `${instances.path}/${encodeURIComponent(String(values[instances.field]))}` : undefined;
 
-  const click = (step: (typeof offered)[number]) => act.run(stepIntent(described, step, current, { id, revision, name: title }, { onRefused: onFailure }));
+  const click = (step: (typeof offered)[number]) => act.run({ ...stepIntent(described, step, current, { id, revision, name: title }, { onRefused: onFailure }), publishProblem });
 
   const offeredMore = described.other.flatMap((action) => {
     const verdict = allowed?.find((entry) => entry.schema === action.schema);

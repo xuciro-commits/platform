@@ -156,7 +156,7 @@ test("publish: a draft type goes live from its record page and takes records", a
   await expect(page.getByText("Draft", { exact: true })).toBeVisible();
 
   await page.getByRole("button", { name: "Publish" }).click();
-  const confirm = page.getByRole("alertdialog");
+  const confirm = page.getByRole("dialog", { name: /Publish/ });
   await expect(confirm).toContainText("Contact");
   await confirm.getByRole("button", { name: "Publish" }).click();
   await expect(page.getByText("Published", { exact: true })).toBeVisible();
@@ -190,7 +190,7 @@ test("board: dragging a card to another state runs that transition", async ({ pa
   await page.mouse.move(to.x + to.width / 2, to.y + to.height / 2, { steps: 8 });
   await page.mouse.up();
 
-  const confirm = page.getByRole("alertdialog");
+  const confirm = page.getByRole("dialog", { name: /Publish/ });
   await expect(confirm).toContainText("Site visit");
   await confirm.getByRole("button", { name: "Publish" }).click();
   await expect(published.getByRole("heading", { level: 4, name: "Site visit" })).toBeVisible();
@@ -203,7 +203,7 @@ test("board: dragging a card to another state runs that transition", async ({ pa
   await page.mouse.move(back.x + 40, back.y + 20, { steps: 4 });
   await page.mouse.move(there.x + there.width / 2, there.y + there.height / 2, { steps: 8 });
   await page.mouse.up();
-  await expect(page.getByRole("alertdialog")).toHaveCount(0);
+  await expect(page.getByRole("dialog", { name: /Publish/ })).toHaveCount(0);
   await expect(published.getByRole("heading", { level: 4, name: "Site visit" })).toBeVisible();
 });
 
@@ -450,3 +450,50 @@ test("keyboard: create and edit an opportunity without using a pointer", async (
   await page.reload();
   await expect(page.getByRole("textbox", { name: "Next step" })).toHaveValue("Confirm renewal scope");
 });
+
+test("object definition: add a field, publish it and review a removal", async ({ page }) => {
+  await signIn(page);
+  await open(page, "Ontology", "Object types");
+  await page.getByRole("link", { name: "Opportunity", exact: true }).click();
+  await page.getByRole("button", { name: "Add field", exact: true }).click();
+  const edit = page.getByRole("dialog");
+  await edit.getByRole("textbox", { name: /^Name/ }).fill("mobile");
+  await edit.getByRole("textbox", { name: /^Label/ }).fill("Mobile");
+  await edit.getByRole("combobox", { name: /^Type/ }).click();
+  await page.getByRole("option", { name: "text", exact: true }).click();
+  await edit.getByRole("button", { name: "Save", exact: true }).click();
+  await expect(page.getByText("Unpublished changes", { exact: true })).toBeVisible();
+  await page.getByRole("link", { name: "Changes", exact: true }).click();
+  await expect(page.getByText("fields.mobile", { exact: true })).toBeVisible();
+  await page.getByRole("link", { name: "Details", exact: true }).click();
+
+  await page.getByRole("button", { name: "Publish", exact: true }).click();
+  const publish = page.getByRole("dialog", { name: /Publish/ });
+  await expect(publish.getByText(/Records reviewed: \d+/)).toBeVisible();
+  await publish.getByRole("button", { name: "Publish", exact: true }).click();
+  await expect(publish).toBeHidden();
+  await expect(page.getByText("Unpublished changes", { exact: true })).toHaveCount(0);
+  await page.getByRole("link", { name: "Open records" }).click();
+  await page.getByRole("link", { name: "Press line retrofit" }).click();
+  await expect(page.getByRole("textbox", { name: "Mobile", exact: true })).toBeVisible();
+
+  await page.getByRole("link", { name: "Opportunities", exact: true }).click();
+  await page.getByRole("link", { name: "Object types", exact: true }).click();
+  await page.getByRole("link", { name: "Opportunity", exact: true }).click();
+  const row = page.getByRole("row", { name: /mobile/i });
+  await row.getByRole("button", { name: /Row actions/ }).click();
+  await page.getByRole("menuitem", { name: "Remove", exact: true }).click();
+  await page.getByRole("alertdialog").getByRole("button", { name: "Remove", exact: true }).click();
+  await page.getByRole("button", { name: "Publish", exact: true }).click();
+  await expect(publish.getByText(/mobile · Removed field · 0 records with data/)).toBeVisible();
+  await publish.getByRole("button", { name: "Cancel" }).click();
+
+  await page.getByRole("button", { name: "Add state", exact: true }).click();
+  await edit.getByRole("textbox", { name: /^Name/ }).fill("left");
+  await edit.getByRole("textbox", { name: /^What people call it/ }).fill("Left");
+  await edit.getByRole("button", { name: "Save", exact: true }).click();
+  await expect(edit).toBeHidden();
+  await page.getByRole("button", { name: "Publish", exact: true }).click();
+  await expect(publish.getByText(/cannot be reached/)).toBeVisible();
+  await expect(publish.getByRole("button", { name: "Publish", exact: true })).toBeDisabled();
+});;

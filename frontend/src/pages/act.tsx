@@ -7,6 +7,7 @@ import { t } from "../i18n";
 import { ActionDialog } from "./ActionDialog";
 import type { Described, Step, Values } from "./describe";
 import { enterable } from "./ParameterInput";
+import { PublishDialog } from "./PublishDialog";
 
 const attempts = 3;
 
@@ -54,6 +55,7 @@ export type Intent = {
   label: string;
   name: string;
   consequence?: string;
+  publishProblem?: string;
   reversible: boolean;
   onRefused: (reason: string) => void;
   onDone?: () => void;
@@ -146,6 +148,8 @@ export function useAct(described: Described | undefined) {
         setPending(undefined);
       }}
     />
+  ) : pending.action.schema === "build.object.publish" ? (
+    <PublishDialog intent={pending} cancel={cancel} confirm={() => fire(pending)} busy={busy} />
   ) : (
     <AlertDialog
       isOpen

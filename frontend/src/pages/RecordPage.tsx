@@ -14,7 +14,8 @@ import { type Api, useRead } from "../host";
 import { t } from "../i18n";
 import { usePath } from "../router";
 import { BackLink } from "./BackLink";
-import { describe, type Described, withRestrictedFields } from "./describe";
+import { DefinitionRows, stateProblem } from "./DefinitionRows";
+import { describe, type Described, type Values, withRestrictedFields } from "./describe";
 import { KeyboardHelp } from "./KeyboardHelp";
 import { type Editor, FieldGroup, useEditor } from "./RecordFields";
 import { RecordFiles, RecordLinks, relatedGroups } from "./RecordAttachments";
@@ -88,6 +89,8 @@ export function RecordPage({ described, id, listPath, listTitle, instances, enti
   const files = useRead<Api.RecordSectionView>(section ? `${section}/files` : null);
   const attach = catalog.find((action) => action.schema === "files.file.attach" && action.target !== described.type);
   const collaboration = <Collaboration target={`${described.type}/${id}`} comments={comments} catalog={catalog} entities={entities} />;
+  const changes = read.status === "ready" ? read.data.changes ?? [] : [];
+  const definition = described.type === "build.object" && kept ? kept as unknown as Values : undefined;
   const refs = read.status === "ready" ? read.data.refs : undefined;
   const restrictedFields = read.status === "ready" ? read.data.restrictedFields : undefined;
   const restricted = new Set(read.status === "ready" ? read.data.restricted : undefined);
@@ -100,6 +103,7 @@ export function RecordPage({ described, id, listPath, listTitle, instances, enti
   const tabs = [
     { value: "details", label: "Details" },
     { value: "activity", label: "Activity" },
+    ...(changes.length ? [{ value: "changes", label: "Changes" }] : []),
     ...((links.status === "ready" ? relatedGroups(links.data).length > 0 : asked === "links") ? [{ value: "links", label: "Links" }] : []),
     ...((attach || (files.status === "ready" ? files.data.files?.length : asked === "files")) ? [{ value: "files", label: "Files" }] : []),
     ...(narrow ? [{ value: "properties", label: "Properties" }] : []),
@@ -115,6 +119,7 @@ export function RecordPage({ described, id, listPath, listTitle, instances, enti
       title={name}
       instances={instances}
       allowed={read.status === "ready" ? read.data.actions : undefined}
+      publishProblem={definition && stateProblem(definition)}
       onFailure={setRefusal}
     />
   );
@@ -145,6 +150,9 @@ export function RecordPage({ described, id, listPath, listTitle, instances, enti
                           <Text type="supporting">{t(status.title)}</Text>
                         </HStack>
                       </>
+                    )}
+                    {changes.length > 0 && (
+                      <><Bullet /><Text type="supporting" color="secondary">{t("Unpublished changes")}</Text></>
                     )}
                     {kept?.changed.at && (
                       <>
@@ -203,11 +211,26 @@ export function RecordPage({ described, id, listPath, listTitle, instances, enti
             <VStack gap={6}>
               {refusal && <Banner status="error" title={t("Not done")} description={refusal} />}
               <FieldGroup described={detail} editor={editor} sections={detail.sections} direction="horizontal-labels" focusEmpty={fresh} refs={refs} restricted={restricted} />
+              {definition && <DefinitionRows described={detail} source={definition} entities={entities} id={id} revision={kept.revision} />}
               {described.entity.sets?.flatMap((set) => {
                 if (set.direction !== "inverse") return [];
                 const type = entities.find((entry) => entry.type === set.object);
                 return type ? <RecordLines key={set.name} parent={described.type} id={id} set={set} child={describe(type, catalog)} /> : [];
               })}
+            </VStack>
+          )}
+          {kept && tab === "changes" && (
+            <VStack gap={4}>
+              {changes.map((change) => (
+                <VStack key={change.path} gap={1}>
+                  <HStack gap={2} vAlign="center">
+                    <Text type="code">{change.path}</Text>
+                    <Text type="supporting">{t(change.change === "added" ? "Added" : change.change === "removed" ? "Removed" : "Changed")}</Text>
+                  </HStack>
+                  {change.from !== undefined && <Text type="body">{t("Before")} · {JSON.stringify(change.from)}</Text>}
+                  {change.to !== undefined && <Text type="body">{t("After")} · {JSON.stringify(change.to)}</Text>}
+                </VStack>
+              ))}
             </VStack>
           )}
           {kept && tab === "links" && <RecordLinks read={links} id={id} entities={entities} />}

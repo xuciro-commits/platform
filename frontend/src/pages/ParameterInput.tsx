@@ -49,7 +49,7 @@ export function ParameterInput({ parameter, described, value, status, onChange, 
         status={status}
         value={String(value ?? "")}
         onChange={onChange}
-        options={parameter.choices.map((choice) => ({ value: choice, label: field?.choiceTitles?.[field.choices?.indexOf(choice) ?? -1] ?? choice }))}
+        options={parameter.choices.map((choice) => ({ value: choice, label: t(field?.choiceTitles?.[field.choices?.indexOf(choice) ?? -1] ?? choice) }))}
       />
     );
   }
