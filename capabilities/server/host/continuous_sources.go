@@ -112,7 +112,7 @@ func (t *Tenant) pullContinuousSources(now time.Time) {
 	automation.SourcePull{Stopped: t.businessStopped,
 		Inventory: func(now time.Time) (automation.ContinuousWork, *platform.Error) {
 			return recordRead(t, context.Background(), func(t *Tenant) (automation.ContinuousWork, *platform.Error) {
-				owner := t.procs
+				owner := t.Processes
 				return automation.ContinuousInventory{
 					Owner:  owner,
 					Caller: t.automation(platform.FlowApp, false),

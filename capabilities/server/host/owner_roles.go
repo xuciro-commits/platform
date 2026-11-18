@@ -8,36 +8,14 @@ import (
 	"platformserver/hostroles"
 	runtimekernel "platformserver/kernel"
 	"platformserver/platform"
-	"platformserver/services/ai/gateway"
-	automation "platformserver/services/automate/runtime"
-	"platformserver/services/devops/packages"
 	trialowner "platformserver/services/devops/trials"
 	"platformserver/services/resources/authoring"
-	controlowner "platformserver/services/security/control"
 )
 
-type ownerRoles struct {
-	identity      platform.IdentityDirectory
-	identityOwner controlowner.IdentityOwner
-	directory     platform.Directory
-	linker        platform.Linker
-	ai            aigateway.Models
-	aiTraining    platform.AITrainingOwner
-	tasks         platform.Tasks
-	procs         automation.FlowProcesses
-	packagesOwner packages.PreparationOwner
-	agents        platform.AgentRuntime
-	knowledge     platform.Glossary
-	observers     []platform.Observer
-	listeners     []string
-}
+type ownerRoles = hostroles.Roles
 
 func ownerRolesOf(owners ownerSet, active func(string) bool) (ownerRoles, error) {
-	roles, err := hostroles.Resolve(owners.capabilities, owners.ids, active)
-	if err != nil {
-		return ownerRoles{}, err
-	}
-	return ownerRoles{identity: roles.Identity, identityOwner: roles.IdentityOwner, directory: roles.Directory, linker: roles.Linker, ai: roles.Models, aiTraining: roles.Training, tasks: roles.Tasks, procs: roles.Processes, packagesOwner: roles.PackageOwner, agents: roles.Agents, knowledge: roles.Knowledge, observers: roles.Observers, listeners: roles.Listeners}, nil
+	return hostroles.Resolve(owners.capabilities, owners.ids, active)
 }
 
 type tenantPorts struct {

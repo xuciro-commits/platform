@@ -14,10 +14,10 @@ import (
 func (h *Host) routesAI(rt *routes) {
 	rt.handle(transport.Route{Pattern: "GET /v1/ai/training/export", Summary: "Export a fixed currently qualified SFT or DPO dataset without external calls", Answer: platform.AITrainingExport{}, Query: []transport.Param{{Name: "format", Description: "sft or dpo"}}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
 		answer, refusal := recordRead(t, r.Context(), func(t *Tenant) (platform.AITrainingExport, *platform.Error) {
-			if t.aiTraining == nil {
+			if t.Training == nil {
 				return platform.AITrainingExport{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_NOT_FOUND, "Training data is unavailable")
 			}
-			return t.aiTraining.TrainingExport(platform.NewCaller(runtime{t: t}, m, platform.AIApp, false, false), r.URL.Query().Get("format"), h.Now())
+			return t.Training.TrainingExport(platform.NewCaller(runtime{t: t}, m, platform.AIApp, false, false), r.URL.Query().Get("format"), h.Now())
 		})
 		if refusal != nil {
 			Reply(w, nil, refusal)

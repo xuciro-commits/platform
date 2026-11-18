@@ -44,9 +44,9 @@ func (t *Tenant) assetInstallationView(recordView *records.Store, includeArchive
 	draft.console.Restore(t.console.SnapshotState())
 	draft.Secrets = t.Secrets
 	apps := slices.Clone(t.apps)
-	if t.procs != nil {
-		draft.procs = t.procs.InstallationDraft()
-		(hostView{t: draft, app: draft.procs}).bindOwner(draft.procs)
+	if t.Processes != nil {
+		draft.Processes = t.Processes.InstallationDraft()
+		(hostView{t: draft, app: draft.Processes}).bindOwner(draft.Processes)
 	}
 	for i, app := range apps {
 		if t.assets[app.Manifest().ID] == nil {

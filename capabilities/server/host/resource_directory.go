@@ -84,9 +84,9 @@ func (h *Host) routesResources(rt *routes) {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
-		WriteJSON(w, http.StatusOK, build.ReviewerHooks{Holding: t.identity.Holding(build.ID, build.Builder), Member: t.Member, Role: t.ResourceRole,
+		WriteJSON(w, http.StatusOK, build.ReviewerHooks{Holding: t.Identity.Holding(build.ID, build.Builder), Member: t.Member, Role: t.ResourceRole,
 			Name: func(id string) string {
-				profile, _ := t.App("platform").(platform.IdentityProfile)
+				profile := t.IdentityProfile
 				if profile == nil {
 					return id
 				}

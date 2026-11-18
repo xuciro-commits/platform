@@ -139,10 +139,10 @@ func NewTenantWithCapabilities(id string, services runtimeprotocol.RuntimeCapabi
 		return nil, fmt.Errorf("tenant %s has %w", id, err)
 	}
 	t.ownerRoles = roles
-	if err := runtimekernel.DeclareOwned(id, apps, func(m platform.Manifest) bool { return len(m.Agents) > 0 }, t.agents, "agent", func(r platform.AgentRuntime, a platform.App) error { return r.DeclareAgentApp(a) }); err != nil {
+	if err := runtimekernel.DeclareOwned(id, apps, func(m platform.Manifest) bool { return len(m.Agents) > 0 }, t.Agents, "agent", func(r platform.AgentRuntime, a platform.App) error { return r.DeclareAgentApp(a) }); err != nil {
 		return nil, err
 	}
-	if err := runtimekernel.DeclareOwned(id, apps, func(m platform.Manifest) bool { return len(m.Flows) > 0 }, t.procs, "flow", func(r automation.FlowProcesses, a platform.App) error { return r.Declare(a) }); err != nil {
+	if err := runtimekernel.DeclareOwned(id, apps, func(m platform.Manifest) bool { return len(m.Flows) > 0 }, t.Processes, "flow", func(r automation.FlowProcesses, a platform.App) error { return r.Declare(a) }); err != nil {
 		return nil, err
 	}
 	if err := t.registerDefinitions(); err != nil {
@@ -168,8 +168,8 @@ func NewTenantWithCapabilities(id string, services runtimeprotocol.RuntimeCapabi
 	if _, err := PublicationResolver().NewAssetRegistry(t.assetOwners(t.OwnerActive)...); err != nil {
 		return nil, fmt.Errorf("tenant %s: %v", id, err)
 	}
-	if t.identityOwner != nil {
-		if err := t.identityOwner.(platform.CompositionReady).Ready(); err != nil {
+	if t.IdentityOwner != nil {
+		if err := t.IdentityOwner.(platform.CompositionReady).Ready(); err != nil {
 			return nil, fmt.Errorf("tenant %s owner %s readiness: %w", id, controlowner.PlatformApp, err)
 		}
 	}

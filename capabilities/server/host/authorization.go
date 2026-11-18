@@ -14,7 +14,7 @@ func (t *Tenant) delegatedBound(m platform.Member, s *pb.Submission) *platform.E
 	if owner == nil || owner.Manifest().ID != build.ID {
 		return nil
 	}
-	access := t.identityOwner
+	access := t.IdentityOwner
 	return security.ProjectDelegation{
 		App:     build.ID,
 		Builder: build.Builder,
@@ -32,9 +32,9 @@ func (t *Tenant) delegatedBound(m platform.Member, s *pb.Submission) *platform.E
 }
 
 func (t *Tenant) member(id string) (platform.Member, bool) {
-	if t.identity == nil {
+	if t.Identity == nil {
 		return platform.Member{}, false
 	}
-	member, found := t.identity.MemberByID(id)
+	member, found := t.Identity.MemberByID(id)
 	return member.WithAuthorization(t.services.Authorization), found
 }

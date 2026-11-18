@@ -10,7 +10,7 @@ import (
 
 func (t *Tenant) applicationAILocked(m platform.Member, assets []platform.ReleaseAsset, visible map[platform.AssetRef]bool) ([]platform.ApplicationAI, *platform.Error) {
 	var agentEvaluations func(string, string, string) ([]platform.ApplicationAIEvaluation, *platform.Error)
-	if t.agents != nil {
+	if t.Agents != nil {
 		caller := t.automation(platform.AgentApp, false)
 		agentEvaluations = agentevaluation.AgentApplicationReports(caller)
 	}

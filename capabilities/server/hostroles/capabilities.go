@@ -36,6 +36,11 @@ type Capabilities struct {
 	Tasks                   map[string]platform.Tasks
 	Processes               map[string]automation.FlowProcesses
 	PackageOwners           map[string]packages.PreparationOwner
+	PackageCatalogs         map[string]packages.Catalog
+	IdentityProfiles        map[string]platform.IdentityProfile
+	InputReceivers          map[string]platform.InputReceiver
+	RelationSources         map[string]platform.LegacyRelationSource
+	FunctionAssets          map[string]platform.RetainedFunctionAssets
 	Agents                  map[string]platform.AgentRuntime
 	Knowledge               map[string]platform.Glossary
 }
@@ -51,7 +56,10 @@ func CapabilitiesOf(apps []platform.App) Capabilities {
 		IdentityOwners: map[string]controlowner.IdentityOwner{}, Directories: map[string]platform.Directory{}, Linkers: map[string]platform.Linker{},
 		Models: map[string]aigateway.Models{}, Training: map[string]platform.AITrainingOwner{}, Tasks: map[string]platform.Tasks{},
 		Processes: map[string]automation.FlowProcesses{}, PackageOwners: map[string]packages.PreparationOwner{},
-		Agents: map[string]platform.AgentRuntime{}, Knowledge: map[string]platform.Glossary{},
+		PackageCatalogs: map[string]packages.Catalog{}, IdentityProfiles: map[string]platform.IdentityProfile{},
+		InputReceivers: map[string]platform.InputReceiver{}, RelationSources: map[string]platform.LegacyRelationSource{},
+		FunctionAssets: map[string]platform.RetainedFunctionAssets{},
+		Agents:         map[string]platform.AgentRuntime{}, Knowledge: map[string]platform.Glossary{},
 	}
 	for _, app := range apps {
 		id := app.Manifest().ID
@@ -140,6 +148,26 @@ func CapabilitiesOf(apps []platform.App) Capabilities {
 			out.PackageOwners[id] = owner
 		}
 		switch owner := app.(type) {
+		case packages.Catalog:
+			out.PackageCatalogs[id] = owner
+		}
+		switch owner := app.(type) {
+		case platform.IdentityProfile:
+			out.IdentityProfiles[id] = owner
+		}
+		switch owner := app.(type) {
+		case platform.InputReceiver:
+			out.InputReceivers[id] = owner
+		}
+		switch owner := app.(type) {
+		case platform.LegacyRelationSource:
+			out.RelationSources[id] = owner
+		}
+		switch owner := app.(type) {
+		case platform.RetainedFunctionAssets:
+			out.FunctionAssets[id] = owner
+		}
+		switch owner := app.(type) {
 		case platform.AgentRuntime:
 			out.Agents[id] = owner
 		}
@@ -168,19 +196,24 @@ func Unique[T any](values map[string]T, active func(string) bool, role string) (
 }
 
 type Roles struct {
-	Identity      platform.IdentityDirectory
-	IdentityOwner controlowner.IdentityOwner
-	Directory     platform.Directory
-	Linker        platform.Linker
-	Models        aigateway.Models
-	Training      platform.AITrainingOwner
-	Tasks         platform.Tasks
-	Processes     automation.FlowProcesses
-	PackageOwner  packages.PreparationOwner
-	Agents        platform.AgentRuntime
-	Knowledge     platform.Glossary
-	Observers     []platform.Observer
-	Listeners     []string
+	Identity        platform.IdentityDirectory
+	IdentityOwner   controlowner.IdentityOwner
+	Directory       platform.Directory
+	Linker          platform.Linker
+	Models          aigateway.Models
+	Training        platform.AITrainingOwner
+	Tasks           platform.Tasks
+	Processes       automation.FlowProcesses
+	PackageOwner    packages.PreparationOwner
+	PackageCatalog  packages.Catalog
+	IdentityProfile platform.IdentityProfile
+	InputReceivers  map[string]platform.InputReceiver
+	RelationSource  platform.LegacyRelationSource
+	FunctionAssets  map[string]platform.RetainedFunctionAssets
+	Agents          platform.AgentRuntime
+	Glossary        platform.Glossary
+	Observers       []platform.Observer
+	Listeners       []string
 }
 
 func Resolve(c Capabilities, ids []string, active func(string) bool) (Roles, error) {
@@ -224,9 +257,43 @@ func Resolve(c Capabilities, ids []string, active func(string) bool) (Roles, err
 	if roles.PackageOwner, err = Unique(c.PackageOwners, active, "package preparation"); err != nil {
 		return roles, err
 	}
+	if roles.PackageCatalog, err = Unique(c.PackageCatalogs, active, "package catalog"); err != nil {
+		return roles, err
+	}
+	if roles.IdentityProfile, err = Unique(c.IdentityProfiles, active, "identity profile"); err != nil {
+		return roles, err
+	}
+	if roles.RelationSource, err = Unique(c.RelationSources, active, "relation source"); err != nil {
+		return roles, err
+	}
+	roles.InputReceivers = c.InputReceivers
+	roles.FunctionAssets = c.FunctionAssets
 	if roles.Agents, err = Unique(c.Agents, active, "agent"); err != nil {
 		return roles, err
 	}
-	roles.Knowledge, err = Unique(c.Knowledge, active, "glossary")
+	roles.Glossary, err = Unique(c.Knowledge, active, "glossary")
 	return roles, err
+}
+
+type PrivateRoles struct {
+	IdentityProfiles map[string]platform.IdentityProfile
+	InputReceivers   map[string]platform.InputReceiver
+}
+
+func (p *PrivateRoles) Add(app platform.App) {
+	id := app.Manifest().ID
+	switch owner := app.(type) {
+	case platform.IdentityProfile:
+		if p.IdentityProfiles == nil {
+			p.IdentityProfiles = map[string]platform.IdentityProfile{}
+		}
+		p.IdentityProfiles[id] = owner
+	}
+	switch owner := app.(type) {
+	case platform.InputReceiver:
+		if p.InputReceivers == nil {
+			p.InputReceivers = map[string]platform.InputReceiver{}
+		}
+		p.InputReceivers[id] = owner
+	}
 }

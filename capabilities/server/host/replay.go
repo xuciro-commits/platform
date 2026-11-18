@@ -58,8 +58,8 @@ func (t *Tenant) Replay(entries []Entry) error {
 		Record:     t.applyAcceptedResult,
 		Invalidate: t.invalidateReadImage,
 		Pin: func(versions map[string]int) {
-			if t.procs != nil {
-				t.procs.Pin(versions)
+			if t.Processes != nil {
+				t.Processes.Pin(versions)
 			}
 		},
 		App:           t.App,

@@ -100,8 +100,8 @@ func (t *Tenant) pageBindings() pageowner.Bindings {
 			return owner.Manifest().ID, action, ok
 		},
 		FunctionAsset: func(ref platform.AssetRef, version string) (platform.ReleaseAsset, error) {
-			owner, ok := t.App(ref.App).(platform.RetainedFunctionAssets)
-			if !ok {
+			owner := t.FunctionAssets[ref.App]
+			if owner == nil {
 				return platform.ReleaseAsset{}, fmt.Errorf("page function owner is unavailable")
 			}
 			return owner.FunctionReleaseAsset(ref.Name, version)
@@ -126,7 +126,7 @@ func (t *Tenant) InstallApplication(app platform.App, a platform.Application) er
 			known = slices.ContainsFunc(registered, func(d platform.Definition) bool { return d.Ref == ref })
 		}
 		if ref.Kind == platform.AssetFlow {
-			known = t.procs != nil && strings.HasPrefix(ref.Name, ref.App+".") && t.procs.HasPublishedFlow(ref.Name)
+			known = t.Processes != nil && strings.HasPrefix(ref.Name, ref.App+".") && t.Processes.HasPublishedFlow(ref.Name)
 		}
 		return known, nil
 	})

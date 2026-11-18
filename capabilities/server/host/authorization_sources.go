@@ -21,11 +21,11 @@ func (s authorizationSources) Engine() platform.AuthorizationEngine {
 func (s authorizationSources) LookupMember(id string) (platform.Member, bool) { return s.t.member(id) }
 
 func (s authorizationSources) DeclaredPrincipal(id string) bool {
-	return security.DeclaredPrincipal(id, s.t.identity == nil, func(app string) bool { return s.t.App(app) != nil }, func(agent string) (bool, bool) {
-		if s.t.agents == nil {
+	return security.DeclaredPrincipal(id, s.t.Identity == nil, func(app string) bool { return s.t.App(app) != nil }, func(agent string) (bool, bool) {
+		if s.t.Agents == nil {
 			return false, false
 		}
-		_, declared := s.t.agents.AgentDeclaration(agent)
+		_, declared := s.t.Agents.AgentDeclaration(agent)
 		return declared, true
 	})
 }
@@ -52,7 +52,7 @@ func (s authorizationSources) InputGranted(m platform.Member, app, name string) 
 func (s authorizationSources) KnowledgeReadable(store *records.Store, m platform.Member, id, field string) bool {
 	return s.t.knowledgeRuntime().SourceReadable(store, m, id, field)
 }
-func (s authorizationSources) Directory() platform.Directory { return s.t.directory }
+func (s authorizationSources) Directory() platform.Directory { return s.t.Directory }
 func (s authorizationSources) DerivationSources(store *records.Store, m platform.Member, at time.Time, held bool) security.DerivationSource {
 	return s.t.objectOwner(store).NarrowerIn(store, m, at, held)
 }

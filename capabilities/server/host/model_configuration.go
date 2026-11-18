@@ -19,5 +19,5 @@ func (t *Tenant) ModelSelection(ctx context.Context, m platform.Member, purpose 
 	})
 }
 func (t *Tenant) modelResolver() aigateway.Resolver {
-	return aigateway.ResolverFor(func(app, key string) string { return t.setting(t.automation(app, false), key) }, t.services.AIInference, t.ai)
+	return aigateway.ResolverFor(func(app, key string) string { return t.setting(t.automation(app, false), key) }, t.services.AIInference, t.Models)
 }

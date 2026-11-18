@@ -95,7 +95,7 @@ func (h *Host) routesIntegration(rt *routes) {
 			w.WriteHeader(http.StatusNotFound)
 			return
 		}
-		d, _ := tenant.agents.AgentDeclaration(r.PathValue("agent"))
+		d, _ := tenant.Agents.AgentDeclaration(r.PathValue("agent"))
 		WriteJSON(w, http.StatusOK, actions.A2ACard(d, r.PathValue("agent"), tenant.ID, r.Host, r.TLS != nil || r.Header.Get("X-Forwarded-Proto") == "https", h.Issuer))
 	})
 	rt.public(transport.Route{Pattern: "POST /a2a/{tenant}/{agent}", Summary: "A2A 1.0 JSON-RPC to a published agent; the caller signs in with the host's issuer", Body: json.RawMessage{}}, h.serveA2A)

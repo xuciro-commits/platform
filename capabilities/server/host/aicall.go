@@ -26,7 +26,7 @@ func (t *Tenant) gatewayRuntime() aigateway.Runtime {
 		policy = *t.services.AIInference
 	}
 	return aigateway.Runtime{
-		Tenant: t.ID, Models: t.ai, Inference: policy,
+		Tenant: t.ID, Models: t.Models, Inference: policy,
 		Settings: func(app, name string) string { return t.setting(t.automation(app, false), name) },
 		Resolver: t.modelResolver(), Suspended: t.suspended,
 		DesignAllowed: func(m platform.Member) *platform.Error {
@@ -50,7 +50,7 @@ func (t *Tenant) gatewayRuntime() aigateway.Runtime {
 			return len(t.outbound.Select(func(x actions.Queued) bool { return ours(x.Effect) }))
 		},
 		ProviderOf: func(model string) platform.AIProvider {
-			_, provider, _ := t.ai.Model(model)
+			_, provider, _ := t.Models.Model(model)
 			return provider
 		},
 		Simulation: t.simulation, App: t.App, Authority: t.AuthorityOf,
@@ -72,10 +72,10 @@ func (t *Tenant) reserveCall(m platform.Member, model platform.AIModel, req plat
 	failure, refusal := decideOnImage(t, context.Background(), "model:reserve", func(t *Tenant) (*platform.AIError, *platform.Error) {
 		return aigateway.Reservations{
 			Stopped: func() bool { return t.businessStopped() || t.recordReadRefusal() != nil },
-			Prior:   func(call string) (platform.AIReservation, bool) { return t.ai.Reservation(call) },
+			Prior:   func(call string) (platform.AIReservation, bool) { return t.Models.Reservation(call) },
 			Limits:  t.limits,
 			Accept: func(body []byte) *platform.Error {
-				_, refusal := t.inputAccepted(t.ai, platform.Member{ID: "app:" + platform.AIApp, Tenant: t.ID}, platform.AIReserveCall, body, now)
+				_, refusal := t.inputAccepted(t.Models, platform.Member{ID: "app:" + platform.AIApp, Tenant: t.ID}, platform.AIReserveCall, body, now)
 				return refusal
 			},
 		}.Prepare(m, model, req, input, output, now), nil
@@ -95,12 +95,12 @@ func (t *Tenant) reserveCall(m platform.Member, model platform.AIModel, req plat
 func (t *Tenant) releaseCall(call string, now time.Time) *platform.Error {
 	member := platform.Member{ID: "app:" + platform.AIApp, Tenant: t.ID}
 	_, refusal := decideOnImage(t, context.Background(), "model:release", func(t *Tenant) (any, *platform.Error) {
-		r, ok := t.ai.Reservation(call)
+		r, ok := t.Models.Reservation(call)
 		if !ok {
 			return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The model reservation is unavailable")
 		}
 		body, _ := json.Marshal(platform.AIReserveInput{Reservation: r, Cancel: true})
-		return t.inputAccepted(t.ai, member, platform.AIReserveCall, body, now)
+		return t.inputAccepted(t.Models, member, platform.AIReserveCall, body, now)
 	}, func(t *Tenant, candidate preparedAccepted, answer any, refusal *platform.Error) (any, *platform.Error) {
 		return t.finishPreparedInput(member, platform.AIReserveCall, candidate, answer, refusal)
 	})
@@ -150,17 +150,17 @@ func (t *Tenant) modelProvider(pv platform.AIProvider, dispatch ...func()) provi
 }
 
 func (t *Tenant) usage() runtimekernel.UsageApply {
-	if t.ai == nil {
+	if t.Models == nil {
 		return runtimekernel.UsageApply{}
 	}
-	return runtimekernel.UsageApply{Usage: t.ai.Snapshot, Meter: t.ai.Meter}
+	return runtimekernel.UsageApply{Usage: t.Models.Snapshot, Meter: t.Models.Meter}
 }
 
 func (t *Tenant) usagePredecessor() (string, error) { return t.usage().Predecessor() }
 
 func (t *Tenant) usageAcceptance() aigateway.UsageAcceptance {
 	return aigateway.UsageAcceptance{Tenant: t.ID,
-		Prior: func() []platform.AIUsage { return t.ai.Usage() },
+		Prior: func() []platform.AIUsage { return t.Models.Usage() },
 		Caller: func(m platform.Member) platform.Caller {
 			return platform.NewCaller(runtime{t: t, scoped: true}, m, platform.AIApp, false, true)
 		},

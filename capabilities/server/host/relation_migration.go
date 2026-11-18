@@ -10,8 +10,8 @@ import (
 )
 
 func (t *Tenant) legacyRelations() func() []platform.RelationLink {
-	if source, ok := t.linker.(platform.LegacyRelationSource); ok {
-		return source.LegacyRelations
+	if t.RelationSource != nil {
+		return t.RelationSource.LegacyRelations
 	}
 	return nil
 }

@@ -27,7 +27,7 @@ func (t *Tenant) continuousSnapshot(m platform.Member, id string, now time.Time)
 func (t *Tenant) continuousSnapshotLocked(m platform.Member, id string, now time.Time) (automation.ContinuousFlowOwner, platform.FlowInstance, platform.Member, *platform.Error) {
 	return automation.FlowSnapshot{Tenant: t.ID, Quarantined: t.quarantined, Member: t.Member, Admits: t.Admits,
 		Owner: func() (automation.ContinuousFlowOwner, bool) {
-			return t.procs, t.procs != nil
+			return t.Processes, t.Processes != nil
 		},
 		Record: func(current platform.Member, id string) (any, *platform.Error) {
 			view, refusal := t.recordOf(current, platform.FlowInstanceType, id, now)
@@ -51,7 +51,7 @@ func (t *Tenant) prepareContinuousDeadLetterReplay(m platform.Member, sub *pb.Su
 	releasePreparation := t.beginFlowArtifactPreparation()
 	defer releasePreparation()
 	first, err := decideOnImage(t, context.Background(), "flow:replay-preflight", func(t *Tenant) (automation.ReplayPreflightResult, *platform.Error) {
-		owner := t.procs
+		owner := t.Processes
 		if owner == nil {
 			return automation.ReplayPreflightResult{Sub: sub}, nil
 		}
@@ -111,7 +111,7 @@ func (t *Tenant) prepareContinuousDeadLetterReplay(m platform.Member, sub *pb.Su
 		if preparedContext.Asset.Action != "" {
 			return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The original dead letter changed while its replay was prepared")
 		}
-		f := t.procs
+		f := t.Processes
 		plan, refusal := f.PlanDeadLetterReplay(preparedContext.Instance, t.automation(platform.FlowApp, false), preparedContext.Asset)
 		if refusal != nil {
 			return nil, refusal

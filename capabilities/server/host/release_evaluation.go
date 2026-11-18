@@ -20,9 +20,9 @@ func (t *Tenant) EvaluateRelease(m platform.Member, request releaseowner.Release
 			Function:       releaseowner.EvaluationFunction(caller),
 			BuilderVersion: func() string { return t.App(build.ID).Manifest().Version },
 			AppModel:       func() string { return t.setting(t.automation(platform.AIApp, false), platform.AISettingAppModel) },
-			HasProvider:    func() bool { return t.ai != nil },
+			HasProvider:    func() bool { return t.Models != nil },
 			ModelConfig: func(name string, definition platform.AIFunction) (string, error) {
-				return aigateway.EvaluationModelConfig(name, definition, t.ai.Model, t.modelResolver())
+				return aigateway.EvaluationModelConfig(name, definition, t.Models.Model, t.modelResolver())
 			},
 			Admits:        t.Admits,
 			Quarantined:   t.quarantined,

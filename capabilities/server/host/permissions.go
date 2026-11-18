@@ -9,10 +9,10 @@ import (
 
 func (t *Tenant) Permissions() []security.AppPermissions {
 	return security.PermissionsReport{Apps: t.LiveApps, Holders: func(app, role string) int {
-		if t.identityOwner == nil {
+		if t.IdentityOwner == nil {
 			return 0
 		}
-		return len(t.identityOwner.Holding(app, role))
+		return len(t.IdentityOwner.Holding(app, role))
 	}}.Permissions()
 }
 

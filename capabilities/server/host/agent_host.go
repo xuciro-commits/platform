@@ -93,10 +93,10 @@ func (h hostView) AgentGlossary(app string) string      { return h.t.glossary(ap
 func (h hostView) AgentLanguage(language string) string { return agents.LanguageName(language) }
 func (h hostView) AgentSuspended(member string) bool    { return h.t.suspended(member) }
 func (h hostView) ExternalAgentMembers() []platform.Member {
-	if h.t.identityOwner == nil {
+	if h.t.IdentityOwner == nil {
 		return nil
 	}
-	return h.t.identityOwner.AgentMembers()
+	return h.t.IdentityOwner.AgentMembers()
 }
 func (h hostView) AgentDecisionMembers() []string {
 	return agentowner.DecisionMembers(h.t.Audit())
@@ -111,8 +111,8 @@ func (h hostView) readAgent(read func(*Tenant) *platform.Error) *platform.Error 
 
 func (h hostView) AgentUsage() (values []platform.AIUsage) {
 	h.readAgent(func(t *Tenant) *platform.Error {
-		if t.ai != nil {
-			values = t.ai.Usage()
+		if t.Models != nil {
+			values = t.Models.Usage()
 		}
 		return nil
 	})
@@ -121,10 +121,10 @@ func (h hostView) AgentUsage() (values []platform.AIUsage) {
 
 func (h hostView) WithAgentRead(read func(platform.AgentEvaluationRuntime) *platform.Error) *platform.Error {
 	_, refusal := recordRead(h.t.readOriginOrSelf(), context.Background(), func(t *Tenant) (struct{}, *platform.Error) {
-		if t.agents == nil {
+		if t.Agents == nil {
 			return struct{}{}, unknown()
 		}
-		return struct{}{}, read(t.agents.AgentEvaluationRuntime())
+		return struct{}{}, read(t.Agents.AgentEvaluationRuntime())
 	})
 	return refusal
 }
@@ -138,10 +138,10 @@ func (h hostView) ResolveAgentModel(name string, options platform.ModelOptions, 
 }
 func (h hostView) AgentModel(name string) (model platform.AIModel, provider platform.AIProvider, refusal *platform.Error) {
 	refusal = h.readAgent(func(t *Tenant) (failure *platform.Error) {
-		if t.ai == nil {
+		if t.Models == nil {
 			return platform.Refuse(pb.ErrorCode_ERROR_CODE_NOT_FOUND, "AI capability unavailable")
 		}
-		model, provider, failure = t.ai.Model(name)
+		model, provider, failure = t.Models.Model(name)
 		return failure
 	})
 	return model, provider, refusal
@@ -180,8 +180,8 @@ func (h hostView) MeterAgentUsage(member platform.Member, usage platform.AIUsage
 	return h.t.meter(member, usage)
 }
 func (h hostView) ReplayAgentUsage(usage platform.AIUsage) {
-	if h.t.ai != nil && usage.Model != "" {
-		h.t.ai.Meter(usage)
+	if h.t.Models != nil && usage.Model != "" {
+		h.t.Models.Meter(usage)
 	}
 }
 
@@ -208,7 +208,7 @@ func (t *Tenant) candidateEvaluation() agentowner.CandidateEvaluation {
 }
 
 func (t *Tenant) evaluateReleaseAgentLocked(m platform.Member, request releaseowner.ReleaseEvaluationRequest, now time.Time) (string, error) {
-	return agentowner.ReleaseRunner{Tenant: t.ID, Candidate: t.candidateEvaluation(), Agent: t.agents != nil,
+	return agentowner.ReleaseRunner{Tenant: t.ID, Candidate: t.candidateEvaluation(), Agent: t.Agents != nil,
 		Existing: func(id string) (platform.Evaluation, bool) {
 			return t.evaluation(id)
 		},
@@ -218,7 +218,7 @@ func (t *Tenant) evaluateReleaseAgentLocked(m platform.Member, request releaseow
 			return binding.Model, problem
 		},
 		Accept: func(sub *pb.Submission) *platform.Error {
-			_, refusal := t.accept(t.agents, m, sub, now, acceptOptions{automation: true})
+			_, refusal := t.accept(t.Agents, m, sub, now, acceptOptions{automation: true})
 			return refusal
 		},
 	}.Start(m, request.CandidateID, request.Agent, request.Key)
@@ -234,10 +234,10 @@ func (t *Tenant) agentRun(id string) (platform.AgentRunRecord, bool) {
 }
 
 func (t *Tenant) agentSchedule() agentowner.Schedule {
-	return agentowner.Schedule{Agents: t.agents, Stopped: t.businessStopped, Quarantined: t.quarantined, Recording: t.Recording,
+	return agentowner.Schedule{Agents: t.Agents, Stopped: t.businessStopped, Quarantined: t.quarantined, Recording: t.Recording,
 		Read: func(read func(agentowner.ScheduleView) *platform.Error) *platform.Error {
 			_, refusal := recordRead(t, context.Background(), func(t *Tenant) (struct{}, *platform.Error) {
-				return struct{}{}, read(agentowner.ScheduleView{Agents: t.agents, Run: t.agentRun, Evaluation: t.evaluation,
+				return struct{}{}, read(agentowner.ScheduleView{Agents: t.Agents, Run: t.agentRun, Evaluation: t.evaluation,
 					Queued: func() ([]platform.Evaluation, *platform.Error) {
 						evals, _, refusal := platform.Find[platform.Evaluation](t.automation(platform.AgentApp, false), platform.Query{Domain: json.RawMessage(`[["state","=","queued"]]`), Sort: []string{"id"}, Limit: 1})
 						return evals, refusal
@@ -270,7 +270,7 @@ func (t *Tenant) evaluation(id string) (platform.Evaluation, bool) {
 }
 
 func (t *Tenant) Evaluate(now time.Time) {
-	if t.agents == nil || t.ai == nil {
+	if t.Agents == nil || t.Models == nil {
 		return
 	}
 	t.agentSchedule().Drain(now)
@@ -290,7 +290,7 @@ func (t *Tenant) acceptAgentStep(b platform.AgentResultStep, at time.Time) (err 
 	}()
 	draft := t.newStagedDecision()
 	draft.At = at
-	return agentowner.AgentAcceptance{Tenant: t.ID, Agent: draft.stateApp(t.agents).(platform.AgentRuntime), Draft: draft,
+	return agentowner.AgentAcceptance{Tenant: t.ID, Agent: draft.stateApp(t.Agents).(platform.AgentRuntime), Draft: draft,
 		RunAgent: func(run string) string {
 			record, _ := t.agentRun(run)
 			return record.Agent
@@ -317,8 +317,8 @@ func (t *Tenant) finishAgentStep(candidate preparedAccepted) {
 
 func (t *Tenant) applyAcceptedAgent(raw []byte) (acceptedformat.RuntimeAgent, error) {
 	h := runtimekernel.AgentApply{Usage: t.usage(), Batch: t.batchApply(), Published: t.publishAcceptedBatch}
-	if t.agents != nil {
-		h.Ledger = t.agents.Authority()
+	if t.Agents != nil {
+		h.Ledger = t.Agents.Authority()
 	}
 	return t.ApplyAgentResult(raw, h)
 }

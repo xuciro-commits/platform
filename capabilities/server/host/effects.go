@@ -155,7 +155,7 @@ func (t *Tenant) told(x platform.Effect, o platform.Outcome, now time.Time, repl
 }
 
 func (t *Tenant) effectControl() actions.EffectControl {
-	return actions.EffectControl{Outbox: &t.outbound, Endpoints: &t.endpoints, Agents: t.agents, Told: t.told,
+	return actions.EffectControl{Outbox: &t.outbound, Endpoints: &t.endpoints, Agents: t.Agents, Told: t.told,
 		Valid: func(ep actions.Endpoint) bool {
 			return ep.Valid(t.App, func(event string) bool {
 				_, declared := t.router().Event(event)
@@ -181,8 +181,8 @@ func (t *Tenant) applyAcceptedEffect(raw []byte) (acceptedformat.Effect, bool, e
 				runtimekernel.InstallWork(t.Works, finished)
 			}
 		}}
-	if t.ai != nil {
-		h.Usage, h.Meter = t.ai.Snapshot, t.ai.Meter
+	if t.Models != nil {
+		h.Usage, h.Meter = t.Models.Snapshot, t.Models.Meter
 	}
 	return t.ApplyEffectResult(raw, h)
 }
@@ -192,7 +192,7 @@ func (t *Tenant) settleAccepted(id string, out platform.Outcome, usage *platform
 	reset := func() { draft = t.newStagedDecision(); draft.At = at }
 	settlement := actions.EffectSettlement{Tenant: t.ID, App: controlowner.PlatformApp, Queued: t.outbound.Get, Usage: aigateway.EffectUsage,
 		NoReviewer: func() bool {
-			return t.tasks == nil || len((hostView{t: t}).Holding(controlowner.PlatformApp, controlowner.Admin)) == 0
+			return t.Tasks == nil || len((hostView{t: t}).Holding(controlowner.PlatformApp, controlowner.Admin)) == 0
 		},
 		Finish: t.operationClaims().PrepareFinish,
 		Failed: func(before acceptedformat.EffectState, err error) {
@@ -208,7 +208,7 @@ func (t *Tenant) settleAccepted(id string, out platform.Outcome, usage *platform
 				Reset:          reset,
 				Handoff: func() {
 					recipients := (hostView{t: t, app: t.App(before.App)}).Holding(controlowner.PlatformApp, controlowner.Admin)
-					if len(recipients) == 0 || t.tasks == nil {
+					if len(recipients) == 0 || t.Tasks == nil {
 						return
 					}
 					if failure := aigateway.StopHandoff(draft.appCaller(before.App), t.App(before.App).Authority().RecordsFor(t.ID), before, out.Detail, recipients); failure != nil {
@@ -228,8 +228,8 @@ func (t *Tenant) settleAccepted(id string, out platform.Outcome, usage *platform
 		Prepared: func(body, principal []byte, key, hash string) {
 			t.stageCandidate(draft, controlowner.PlatformApp, body, principal, key, hash, at, func(candidate preparedAccepted) { t.finishEffect(id, candidate) })
 		}}
-	if t.ai != nil {
-		settlement.Snapshot = t.ai.Snapshot
+	if t.Models != nil {
+		settlement.Snapshot = t.Models.Snapshot
 	}
 	settlement.Settle(id, out, usage, at)
 }
@@ -266,8 +266,8 @@ func (t *Tenant) stageEffectAnswer(draft *stagedDecision, x platform.Effect, out
 		},
 		Completion: func() platform.OperationCompletion {
 			var completion platform.OperationCompletion
-			if t.procs != nil {
-				completion, _ = draft.stateApp(t.procs).(platform.OperationCompletion)
+			if t.Processes != nil {
+				completion, _ = draft.stateApp(t.Processes).(platform.OperationCompletion)
 			}
 			return completion
 		},
@@ -280,8 +280,8 @@ func (t *Tenant) stageEffectAnswer(draft *stagedDecision, x platform.Effect, out
 		Source: t.outbound.Get,
 		Origin: draft.AnswerWithOrigin,
 		Agents: func(c platform.Caller, x platform.Effect, out platform.Outcome, at time.Time) {
-			if t.agents != nil {
-				draft.stateApp(t.agents).(platform.AgentRuntime).AgentEffectEnded(t.automated(c, platform.AgentApp), nil, x, out, at)
+			if t.Agents != nil {
+				draft.stateApp(t.Agents).(platform.AgentRuntime).AgentEffectEnded(t.automated(c, platform.AgentApp), nil, x, out, at)
 			}
 		},
 		Finish: draft.finishStaged}.Stage(x, out, at)

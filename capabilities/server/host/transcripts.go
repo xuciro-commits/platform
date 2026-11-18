@@ -9,7 +9,7 @@ import (
 
 func (t *Tenant) transcripts() aigateway.Transcripts {
 	days := aigateway.TranscriptDays(func(name string) string { return t.setting(t.automation(platform.AgentApp, false), name) })
-	return aigateway.Transcripts{Tenant: t.ID, Days: days, Enabled: t.agents != nil, Store: t.Log()}
+	return aigateway.Transcripts{Tenant: t.ID, Days: days, Enabled: t.Agents != nil, Store: t.Log()}
 }
 
 func (t *Tenant) transcribe(x Transcript) {
@@ -31,7 +31,7 @@ func (t *Tenant) TranscriptsFor(m platform.Member, run string, limit int, now ti
 }
 
 func (t *Tenant) withheld(m platform.Member, run string, now time.Time) bool {
-	if t.agents == nil || run == "" {
+	if t.Agents == nil || run == "" {
 		return true
 	}
 	r, known := platform.Get[platform.AgentRunRecord](t.automation(platform.AgentApp, false), run)

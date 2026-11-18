@@ -78,7 +78,7 @@ func (h *Host) currentTenants() []*Tenant {
 }
 
 func consoleOf(t *Tenant) platform.IdentitySessions {
-	return t.identityOwner
+	return t.IdentityOwner
 }
 
 const TenantHeader = "Platform-Tenant"
@@ -97,18 +97,18 @@ func (h *Host) member(r *http.Request) (platform.Member, *Tenant, bool) {
 
 func (h *Host) join(t *Tenant, subject string, now time.Time) bool {
 	_, refusal := decideOnImage(t, context.Background(), "identity:join", func(t *Tenant) (*pb.ChangeRecord, *platform.Error) {
-		if t.identityOwner == nil {
+		if t.IdentityOwner == nil {
 			return nil, unknown()
 		}
 		var caller platform.Caller
-		sub, refusal := controlowner.JoinSubmission(t.identityOwner, t.ID, subject, func() string {
+		sub, refusal := controlowner.JoinSubmission(t.IdentityOwner, t.ID, subject, func() string {
 			caller = t.automation(controlowner.PlatformApp, false)
 			return caller.ID
 		})
 		if sub == nil {
 			return nil, refusal
 		}
-		return t.accept(t.identityOwner, caller.Member, sub, now, acceptOptions{automation: true})
+		return t.accept(t.IdentityOwner, caller.Member, sub, now, acceptOptions{automation: true})
 	}, func(t *Tenant, candidate preparedAccepted, record *pb.ChangeRecord, refusal *platform.Error) (*pb.ChangeRecord, *platform.Error) {
 		return t.finishPreparedSubmission(platform.Member{ID: "app:" + controlowner.PlatformApp, Tenant: t.ID}, candidate, record, refusal)
 	})
@@ -127,7 +127,7 @@ func (h *Host) tenantsOf(r *http.Request) []transport.MeTenant {
 				continue
 			}
 			name := ""
-			if p := t.identityOwner; p != nil {
+			if p := t.IdentityOwner; p != nil {
 				name = p.TenantRecord().Name
 			}
 			out = append(out, transport.MeTenant{ID: t.ID, Name: name})

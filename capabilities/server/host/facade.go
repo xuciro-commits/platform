@@ -41,10 +41,10 @@ func (t *Tenant) AppsOf(m platform.Member) []transport.AppEntry {
 }
 
 func (t *Tenant) Member(id string) (platform.Member, bool) {
-	if t.identity == nil {
+	if t.Identity == nil {
 		return platform.Member{}, false
 	}
-	member, found := t.identity.MemberByID(id)
+	member, found := t.Identity.MemberByID(id)
 	return member.WithAuthorization(t.services.Authorization), found
 }
 

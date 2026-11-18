@@ -362,7 +362,7 @@ func (t *Tenant) inputAccepted(a platform.AcceptedInputApp, m platform.Member, n
 			_, err := t.PrepareChanges(plan, t.changeApply())
 			return err
 		},
-		Flows:  t.procs != nil,
+		Flows:  t.Processes != nil,
 		Stage:  t.stageEntry,
 		Commit: t.acceptResult})
 }
@@ -395,7 +395,7 @@ func decideAcceptedInput(a platform.AcceptedInputApp, draft *stagedDecision, m p
 			unsupported = true
 		}
 	}()
-	answer, refusal = inputApp(draft.stateApp(a), platform.NewCaller(draft, m, a.Manifest().ID, false, false),
+	answer, refusal = draft.inputApp(a, platform.NewCaller(draft, m, a.Manifest().ID, false, false),
 		name, slices.Clone(body), at)
 	return answer, refusal, false
 }

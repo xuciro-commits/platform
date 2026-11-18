@@ -17,8 +17,8 @@ func (t *Tenant) enterpriseUsage(store *records.Store) enterprisemodel.ExternalU
 			return view.Record, err == nil
 		},
 		Root: func(c platform.Caller) string { return t.setting(c, "enterpriseRoot") }}
-	if t.identityOwner != nil {
-		usage.GrantUsage = t.identityOwner.UnitGrantUsage
+	if t.IdentityOwner != nil {
+		usage.GrantUsage = t.IdentityOwner.UnitGrantUsage
 	}
 	return usage
 }

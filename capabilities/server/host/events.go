@@ -19,7 +19,7 @@ func (t *Tenant) planAcceptedEvent(e platform.Event) (platform.AcceptedEventPlan
 			return t.eventEffects(e, names, true)
 		},
 		Apps:      t.LiveApps,
-		Listeners: t.listeners,
+		Listeners: t.Listeners,
 		Listener:  func(id string) platform.Listener { return t.App(id).(platform.Listener) },
 	}.Plan(e)
 }

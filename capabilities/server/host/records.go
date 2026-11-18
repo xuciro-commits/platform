@@ -36,8 +36,8 @@ func (t *Tenant) readableIn(store *records.Store, m platform.Member, ref string,
 
 func (t *Tenant) readableAs(store *records.Store, c platform.Caller, ref string, now time.Time) bool {
 	typ, id, _ := strings.Cut(ref, "/")
-	if typ == "enterprise.element" && t.directory != nil {
-		_, ok := t.directory.Element(id, now.UTC().Format(time.DateOnly))
+	if typ == "enterprise.element" && t.Directory != nil {
+		_, ok := t.Directory.Element(id, now.UTC().Format(time.DateOnly))
 		return ok
 	}
 	et := store.Type(typ)

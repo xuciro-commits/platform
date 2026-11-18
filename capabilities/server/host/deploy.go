@@ -305,8 +305,8 @@ func (d *Deployment) createTenant(req platform.CreateTenantRequest, by string, f
 }
 
 func (d *Deployment) bindPackageIndex(tenant *Tenant) {
-	if console, ok := tenant.App(controlowner.PlatformApp).(packages.Catalog); ok && d.packageIndex != nil {
-		console.BindPackageIndex(d.packageIndex)
+	if d.packageIndex != nil && tenant.PackageCatalog != nil {
+		tenant.PackageCatalog.BindPackageIndex(d.packageIndex)
 	}
 }
 

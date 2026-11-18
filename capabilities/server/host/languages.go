@@ -21,8 +21,8 @@ func (t *Tenant) Language(m platform.Member, r *http.Request) string {
 	if lang, asked := transport.NegotiateLanguage(r.Header.Get("Accept-Language"), t.i18n.Languages); asked {
 		return lang
 	}
-	if t.identityOwner != nil {
-		return t.identityOwner.Language("")
+	if t.IdentityOwner != nil {
+		return t.IdentityOwner.Language("")
 	}
 	return ""
 }
@@ -50,8 +50,8 @@ func (t *Tenant) typeInfos() []platform.EntityInfo {
 
 func (t *Tenant) names(info platform.EntityInfo, q string) (string, bool) {
 	var terms []string
-	if t.knowledge != nil {
-		terms = t.knowledge.TermsFor(info.Type)
+	if t.Glossary != nil {
+		terms = t.Glossary.TermsFor(info.Type)
 	}
 	return ontology.Mention(q, info, t.i18n.Languages(), t.i18n.Dictionary, terms)
 }
@@ -70,10 +70,10 @@ func (t *Tenant) declares(name string) bool {
 }
 
 func (t *Tenant) glossary(app string) string {
-	if t.knowledge == nil {
+	if t.Glossary == nil {
 		return ""
 	}
-	return ontology.Glossary(t.knowledge.Terms(app))
+	return ontology.Glossary(t.Glossary.Terms(app))
 }
 
 func (t *Tenant) Say(lang, s string) string { return t.i18n.Say(lang, s) }

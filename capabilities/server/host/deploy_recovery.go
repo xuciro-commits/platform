@@ -13,11 +13,11 @@ import (
 )
 
 func (t *Tenant) recoveryComplete(started time.Time) error {
-	if t.identityOwner != nil {
-		t.identityOwner.CloseTokenSecretWindows()
+	if t.IdentityOwner != nil {
+		t.IdentityOwner.CloseTokenSecretWindows()
 	}
-	if t.procs != nil {
-		if err := t.procs.Check(); err != nil {
+	if t.Processes != nil {
+		if err := t.Processes.Check(); err != nil {
 			return fmt.Errorf("process recovery: %w", err)
 		}
 	}
@@ -99,10 +99,10 @@ func (d *Deployment) retryTenant(ctx context.Context, journal Journals, registry
 		},
 		Recover: fresh.recoverEntries,
 		CheckProcesses: func() error {
-			if fresh.procs == nil {
+			if fresh.Processes == nil {
 				return nil
 			}
-			return fresh.procs.Check()
+			return fresh.Processes.Check()
 		},
 		Project:          func() (*records.SQLProjection, error) { return d.project(ctx, journal, fresh) },
 		Capture:          fresh.Snapshot,

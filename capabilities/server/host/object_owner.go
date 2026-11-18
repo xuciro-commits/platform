@@ -26,7 +26,7 @@ func (t *Tenant) objectOwner(store *records.Store) *objects.Owner {
 		BindInterface:          t.bindInterfaceQuery,
 		ValidateInterfaceQuery: t.checkInterfaceQueryFields,
 		VisibleLink:            t.visibleLink,
-		HasProcesses:           func() bool { return t.procs != nil },
+		HasProcesses:           func() bool { return t.Processes != nil },
 		Follows:                t.objectFollows,
 		Deliveries:             t.outbound.RecordDeliveries,
 		AuditPersonal:          t.objectPersonalRead,

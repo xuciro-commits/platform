@@ -65,7 +65,7 @@ func (t *Tenant) definitionsFrom(m platform.Member, registeredDefinitions []plat
 		FilterExplorationAssets:   pageowner.FilterExplorationAssets,
 		ProjectProtocol:           actions.ProjectProtocol,
 		ApplicationEntryWithdrawn: func(ref platform.AssetRef) bool { return build.StoreApplicationEntryWithdrawn(t.Projection, ref) },
-		HasPublishedFlow:          func(name string) bool { return t.procs != nil && t.procs.HasPublishedFlow(name) },
+		HasPublishedFlow:          func(name string) bool { return t.Processes != nil && t.Processes.HasPublishedFlow(name) },
 		Describe: func(def platform.Definition) (platform.Definition, error) {
 			return t.describer().DescribeDefinition(def)
 		},

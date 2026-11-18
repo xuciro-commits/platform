@@ -122,7 +122,7 @@ func (t *Tenant) prepareReleaseLifecycleLocked(candidate platform.ReleaseCandida
 
 type releaseInstallationRuntime struct{ t *Tenant }
 
-func (r releaseInstallationRuntime) HasAgentRuntime() bool { return r.t.agents != nil }
+func (r releaseInstallationRuntime) HasAgentRuntime() bool { return r.t.Agents != nil }
 
 func (r releaseInstallationRuntime) ReleaseProject(candidate platform.ReleaseCandidate) string {
 	return releaseowner.ResourceProject(candidate, records.LockedRows[build.Resource](r.t.Projection, build.ResourceType))

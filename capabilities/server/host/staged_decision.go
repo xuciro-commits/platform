@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"maps"
+	"platformserver/hostroles"
 	runtimekernel "platformserver/kernel"
 	acceptedformat "platformserver/kernel/acceptedformat"
 	"platformserver/kernel/transport"
@@ -32,6 +33,7 @@ type stagedDecision struct {
 	tenant                 *Tenant
 	requests               []actions.PendingRequest
 	operationInputs        map[string][]*preparedOperationInput
+	privateRoles           hostroles.PrivateRoles
 }
 
 func (d *stagedDecision) StagedDecision() platform.StagedDecision              { return d }
@@ -127,7 +129,8 @@ func (d *stagedDecision) CheckEnterpriseUsage(c platform.Caller, id, until strin
 	for i, app := range original.apps {
 		apps[i] = d.stateApp(app)
 	}
-	view := &Tenant{services: original.services, disabledOwners: original.disabledOwners, ID: original.ID, ownerSet: original.with(apps), Projection: d.Records, identity: original.identity, Secrets: original.Secrets, releases: original.releases}
+	view := &Tenant{services: original.services, disabledOwners: original.disabledOwners, ID: original.ID, ownerSet: original.with(apps), ownerRoles: original.ownerRoles,
+		Projection: d.Records, Secrets: original.Secrets, releases: original.releases}
 	view.settings.Restore(original.settings.Snapshot())
 	return view.checkEnterpriseUsage(c, d.Records, id, until, deleting, now)
 }
@@ -136,44 +139,44 @@ func (d *stagedDecision) CheckEnterpriseTenantConnection(c platform.Caller, id s
 }
 
 func (d *stagedDecision) Units(c platform.Caller, structure string, now time.Time) []string {
-	if d.tenant.directory == nil {
+	if d.tenant.Directory == nil {
 		return nil
 	}
 	return d.directoryView().Units("member:"+c.ID, structure, c.Today(now))
 }
 func (d *stagedDecision) Element(c platform.Caller, id string, now time.Time) (platform.ElementInfo, bool) {
-	if d.tenant.directory == nil {
+	if d.tenant.Directory == nil {
 		return platform.ElementInfo{}, false
 	}
 	return d.directoryView().Element(id, now.UTC().Format(time.DateOnly))
 }
 func (d *stagedDecision) Related(c platform.Caller, element, stereotype string, outgoing bool, now time.Time) []string {
-	if d.tenant.directory == nil {
+	if d.tenant.Directory == nil {
 		return nil
 	}
 	return d.directoryView().Related(element, stereotype, outgoing, now.UTC().Format(time.DateOnly))
 }
 func (d *stagedDecision) Links(c platform.Caller, entity string) []string {
 	var out []string
-	if d.tenant.linker != nil {
-		out = d.stateApp(d.tenant.linker.(platform.App)).(platform.Linker).Links(c, entity)
+	if d.tenant.Linker != nil {
+		out = d.stateApp(d.tenant.Linker.(platform.App)).(platform.Linker).Links(c, entity)
 	}
 	return records.AppendRelationNeighbors(out, c.OwnedRelations(entity), entity)
 }
 func (d *stagedDecision) Link(c platform.Caller, from, to *pb.EntityRef, key string, now time.Time) *platform.Error {
-	if d.tenant.linker == nil {
+	if d.tenant.Linker == nil {
 		return &platform.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
 	}
-	owner := d.stateApp(d.tenant.linker.(platform.App))
+	owner := d.stateApp(d.tenant.Linker.(platform.App))
 	err := owner.(platform.Linker).Link(c, from, to, key, now)
 	d.FailDecision(err)
 	return err
 }
 func (d *stagedDecision) Assign(c platform.Caller, r *pb.ChangeRecord, a platform.Assignment) *platform.Error {
-	if d.tenant.tasks == nil {
+	if d.tenant.Tasks == nil {
 		return &platform.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
 	}
-	err := d.tenant.tasks.Assign(c, r, a)
+	err := d.tenant.Tasks.Assign(c, r, a)
 	d.FailDecision(err)
 	return err
 }
@@ -186,23 +189,28 @@ func (d *stagedDecision) BoundProvider(c platform.Caller, protocol string) (stri
 }
 
 func (d *stagedDecision) directoryView() platform.Directory {
-	if owner, ok := d.tenant.directory.(platform.App); ok {
+	if owner, ok := d.tenant.Directory.(platform.App); ok {
 		return d.stateApp(owner).(platform.Directory)
 	}
-	return d.tenant.directory
+	return d.tenant.Directory
 }
 
 func (d *stagedDecision) stateApp(app platform.App) platform.App {
-	fork, ok := d.PrivateApp(app, func(fork platform.App) { (hostView{t: d.tenant, app: fork, decision: d}).bindOwner(fork) })
+	fork, ok := d.PrivateApp(app, d.bindPrivate)
 	if !ok {
 		unsupportedStagedEffect()
 	}
 	return fork
 }
 
+func (d *stagedDecision) bindPrivate(app platform.App) {
+	(hostView{t: d.tenant, app: app, decision: d}).bindOwner(app)
+	d.privateRoles.Add(app)
+}
+
 func (d *stagedDecision) attachPrivateHosts() {
 	for _, app := range d.PrivateApps {
-		(hostView{t: d.tenant, app: app, decision: d}).bindOwner(app)
+		d.bindPrivate(app)
 	}
 }
 
@@ -218,6 +226,7 @@ func (d *stagedDecision) privateFork() *stagedDecision {
 		unsupportedStagedEffect()
 	}
 	fork.Decision = forked
+	fork.privateRoles = hostroles.PrivateRoles{}
 	fork.operationInputs = maps.Clone(d.operationInputs)
 	for hash, pending := range fork.operationInputs {
 		fork.operationInputs[hash] = slices.Clone(pending)
@@ -225,7 +234,7 @@ func (d *stagedDecision) privateFork() *stagedDecision {
 	fork.requests = slices.Clone(d.requests)
 	for id, app := range fork.PrivateApps {
 		if !d.Shared(id, app) {
-			(hostView{t: d.tenant, app: app, decision: &fork}).bindOwner(app)
+			fork.bindPrivate(app)
 		}
 	}
 	fork.forkControlDecision(d.control)
@@ -257,7 +266,7 @@ func (d *stagedDecision) stageObservers() *platform.Error {
 
 func (d *stagedDecision) sources() runtimekernel.ResultSources {
 	return runtimekernel.ResultSources{Tenant: d.tenant.ID, App: d.tenant.App, Control: d.savedControl, Controlled: d.control != nil, Pending: len(d.requests) > 0,
-		Observers: len(d.tenant.observers) > 0, Operations: func() ([]acceptedformat.OperationCancellation, error) {
+		Observers: len(d.tenant.Observers) > 0, Operations: func() ([]acceptedformat.OperationCancellation, error) {
 			return d.tenant.operationCancellations().Saved(d.OperationCancels)
 		}, Plan: d.routingTenant().planAcceptedEvent,
 		Pure: build.CallbackFreeTransition}
@@ -289,7 +298,7 @@ func (t *Tenant) captureControl() (map[string]json.RawMessage, error) {
 }
 
 func (t *Tenant) newControlFork() *Tenant {
-	view := &Tenant{services: t.services, disabledOwners: t.disabledOwners, ID: t.ID, Store: t.Log(), identity: t.identity, ownerSet: t.ownerSet, definitions: t.definitions, Projection: t.Projection, procs: t.procs, tasks: t.tasks, linker: t.linker, directory: t.directory, agents: t.agents, ai: t.ai, releases: t.releases,
+	view := &Tenant{services: t.services, disabledOwners: t.disabledOwners, ID: t.ID, Store: t.Log(), ownerSet: t.ownerSet, ownerRoles: t.ownerRoles, definitions: t.definitions, Projection: t.Projection, releases: t.releases,
 		bindings: t.bindings.Clone(), ConnectorRoster: runtimekernel.NewConnectorRoster(t.ID), work: automation.NewWorkBoard(), Works: t.forkWorkState()}
 	t.work.CopyJobs(&view.work)
 	return view
@@ -352,8 +361,8 @@ func (d *stagedDecision) newControlView(images map[string]json.RawMessage) *Tena
 		d.answerControlEffect(x, out, at)
 		return d.Failure
 	}
-	if d.tenant.agents != nil {
-		view.agents = d.stateApp(d.tenant.agents).(platform.AgentRuntime)
+	if d.tenant.Agents != nil {
+		view.Agents = d.stateApp(d.tenant.Agents).(platform.AgentRuntime)
 	}
 	return view
 }

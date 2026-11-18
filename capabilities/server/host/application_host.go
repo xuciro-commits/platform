@@ -98,10 +98,10 @@ func (t *Tenant) applicationContext() appowner.Context {
 			return authorizationRefusal(t.authorizeNative(c, "application recovery", "read", []string{controlowner.Admin}, true))
 		},
 		Quota: func(m platform.Member, at time.Time) *platform.AIQuota {
-			if t.ai == nil {
+			if t.Models == nil {
 				return nil
 			}
-			quota := t.ai.Quota(m, t.limits(), at)
+			quota := t.Models.Quota(m, t.limits(), at)
 			return &quota
 		},
 		Refusals: t.Committed.AllRefusals, Answers: t.Committed.AllAnswers,

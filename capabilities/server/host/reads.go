@@ -57,7 +57,7 @@ func (t *Tenant) input(m platform.Member, name string, body []byte, now time.Tim
 		}
 		return t.inputAccepted(accepted, m, name, body, now)
 	}
-	out, err = inputApp(a, t.caller(m, a, false), name, body, now)
+	out, err = t.inputApp(a, t.caller(m, a, false), name, body, now)
 	if err != nil {
 		t.ConnectorRoster.Refused(m.ID, name, err, now)
 	}
@@ -113,8 +113,16 @@ func (t *Tenant) readFrom(m platform.Member, a platform.App, name string, inputs
 	return t.objectOwner(t.Projection).NarrowedSource(m, out, Now(), false, a.Manifest().ReadSources[name]), nil
 }
 
-func inputApp(app platform.App, c platform.Caller, name string, body []byte, at time.Time) (any, *platform.Error) {
-	if receiver, ok := app.(platform.InputReceiver); ok {
+func (t *Tenant) inputApp(app platform.App, c platform.Caller, name string, body []byte, at time.Time) (any, *platform.Error) {
+	if receiver := t.InputReceivers[app.Manifest().ID]; receiver != nil {
+		return receiver.Input(c, name, body, at)
+	}
+	return nil, unknown()
+}
+
+func (d *stagedDecision) inputApp(app platform.App, c platform.Caller, name string, body []byte, at time.Time) (any, *platform.Error) {
+	fork := d.stateApp(app)
+	if receiver := d.privateRoles.InputReceivers[fork.Manifest().ID]; receiver != nil {
 		return receiver.Input(c, name, body, at)
 	}
 	return nil, unknown()

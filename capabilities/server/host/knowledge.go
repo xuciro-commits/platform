@@ -19,7 +19,7 @@ type pair[A, B any] struct {
 func (t *Tenant) knowledgeRuntime() knowledgeindex.Runtime {
 	source := t.readOriginOrSelf()
 	return knowledgeindex.Runtime{
-		Tenant: t.ID, Available: t.knowledge != nil, AI: t.ai != nil, Index: t.index,
+		Tenant: t.ID, Available: t.Glossary != nil, AI: t.Models != nil, Index: t.index,
 		Documents: t.automation(platform.KnowledgeApp, false),
 		Files: func() (platform.Caller, bool) {
 			if t.App(platform.FileApp) == nil {
@@ -54,7 +54,7 @@ func (t *Tenant) knowledgeRuntime() knowledgeindex.Runtime {
 		},
 		Model: func(name string) (platform.AIModel, platform.AIProvider, *platform.Error) {
 			value, err := recordRead(t, context.Background(), func(t *Tenant) (pair[platform.AIModel, platform.AIProvider], *platform.Error) {
-				model, provider, refusal := t.ai.Model(name)
+				model, provider, refusal := t.Models.Model(name)
 				return pair[platform.AIModel, platform.AIProvider]{model, provider}, refusal
 			})
 			return value.first, value.second, err

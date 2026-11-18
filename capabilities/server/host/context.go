@@ -42,14 +42,14 @@ func (t *Tenant) contextRead(reader *platform.Member, typ, id string, now time.T
 			return et.Info()
 		},
 		Links: func(entity string) []string {
-			if t.linker == nil {
+			if t.Linker == nil {
 				return nil
 			}
-			return t.linker.Links(t.caller(m, t.linker.(platform.App), false), entity)
+			return t.Linker.Links(t.caller(m, t.Linker.(platform.App), false), entity)
 		},
 		Readable: func(ref string) bool { return t.readable(m, ref, now) },
-		Flows:    records(t.procs != nil, platform.FlowInstanceType),
-		Tasks:    records(t.tasks != nil, platform.WorkTaskType),
+		Flows:    records(t.Processes != nil, platform.FlowInstanceType),
+		Tasks:    records(t.Tasks != nil, platform.WorkTaskType),
 	}.Read(typ, id)
 }
 

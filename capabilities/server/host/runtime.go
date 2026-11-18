@@ -61,7 +61,7 @@ func (r runtime) Emit(c platform.Caller, kind, key, entity string, data any, now
 }
 
 func (r runtime) roles() runtimekernel.OptionalRoles {
-	return runtimekernel.OptionalRoles{Directory: r.t.directory, Linker: r.t.linker, Tasks: r.t.tasks}
+	return runtimekernel.OptionalRoles{Directory: r.t.Directory, Linker: r.t.Linker, Tasks: r.t.Tasks}
 }
 
 func (r runtime) Units(c platform.Caller, structure string, now time.Time) []string {

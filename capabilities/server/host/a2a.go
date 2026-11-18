@@ -12,10 +12,10 @@ import (
 )
 
 func (t *Tenant) published(agent string) bool {
-	if t.agents == nil {
+	if t.Agents == nil {
 		return false
 	}
-	if _, ok := t.agents.AgentDeclaration(agent); !ok {
+	if _, ok := t.Agents.AgentDeclaration(agent); !ok {
 		return false
 	}
 	list := strings.Split(t.setting(t.automation(platform.AgentApp, false), platform.SettingPublished), ",")

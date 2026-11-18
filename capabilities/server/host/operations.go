@@ -30,10 +30,10 @@ func (t *Tenant) enqueue(now time.Time) {
 	for len(t.events) > 0 {
 		e := t.events[0]
 		t.events = t.events[1:]
-		automation.EventRoute{MaxHops: acceptedformat.MaxHops, Apps: t.apps, Listeners: t.listeners, Delivered: t.delivered, Emit: t.emit,
+		automation.EventRoute{MaxHops: acceptedformat.MaxHops, Apps: t.apps, Listeners: t.Listeners, Delivered: t.delivered, Emit: t.emit,
 			Names: func(e platform.Event) []string { return t.router().Events(e) },
 			Observe: func(e platform.Event, names []string) {
-				for _, o := range t.observers {
+				for _, o := range t.Observers {
 					o.Observe(e, names)
 				}
 			},
@@ -120,7 +120,7 @@ func (t *Tenant) replay(now time.Time, replaying bool) automation.Replay {
 	return automation.Replay{Board: &t.work, App: t.App, Delivered: t.delivered, Enqueue: func() { t.enqueue(now) },
 		Caller:  func(app string) platform.Caller { return t.automation(app, replaying) },
 		Names:   func(e platform.Event) []string { return t.router().Events(e) },
-		Listens: func(app string) bool { return slices.Contains(t.listeners, app) },
+		Listens: func(app string) bool { return slices.Contains(t.Listeners, app) },
 		Retry:   t.retryOf,
 		Start:   func(id string) uint32 { generation, _, _ := t.Works.Start(id, "host"); return generation },
 		Finish:  func(id string, generation uint32, failed bool) { t.Works.Finish(id, generation, failed) },
@@ -159,7 +159,7 @@ func (t *Tenant) recipients(c platform.Caller, now time.Time, to []platform.Reci
 }
 
 func (t *Tenant) recipientBook() controlowner.RecipientBook {
-	return controlowner.RecipientBook{Identity: t.identityOwner, Directory: t.directory}
+	return controlowner.RecipientBook{Identity: t.IdentityOwner, Directory: t.Directory}
 }
 
 func (t *Tenant) setting(c platform.Caller, name string) string {
@@ -202,8 +202,8 @@ func (d *stagedDecision) recipients(c platform.Caller, now time.Time, to []platf
 }
 
 func (d *stagedDecision) Notify(c platform.Caller, n platform.Notification, now time.Time, to []platform.Recipient) []string {
-	console, _ := d.tenant.App(controlowner.PlatformApp).(platform.IdentityProfile)
-	if private, ok := d.States[controlowner.PlatformApp].(platform.IdentityProfile); ok {
+	console := d.tenant.IdentityProfile
+	if private := d.privateRoles.IdentityProfiles[controlowner.PlatformApp]; private != nil {
 		console = private
 	}
 	return d.Notices.Deliver(c.App, n, now, d.recipients(c, now, to), console, func(x platform.Notification, reach platform.Reach) []platform.Effect {
@@ -277,7 +277,7 @@ func decideWork(t *Tenant, d *stagedDecision, c platform.Caller, task *automatio
 			}
 		}
 	}()
-	return automation.WorkDecision{Owner: t.App, Listens: func(app string) bool { return slices.Contains(t.listeners, app) },
+	return automation.WorkDecision{Owner: t.App, Listens: func(app string) bool { return slices.Contains(t.Listeners, app) },
 		Authorize: func(permission string, roles []string, declared bool) *platform.Error {
 			return d.authorizeNative(c, permission, "action", roles, declared)
 		},

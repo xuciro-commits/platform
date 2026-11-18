@@ -71,7 +71,7 @@ func runCandidateSimulation(request trialowner.CandidateSimulationRequest, candi
 		if err != nil {
 			return nil, err
 		}
-		if sandbox.ai != nil {
+		if sandbox.Models != nil {
 			if err := configureFunctionFixtureModel(sandbox, request.Model, request.At); err != nil {
 				return nil, err
 			}
@@ -82,7 +82,7 @@ func runCandidateSimulation(request trialowner.CandidateSimulationRequest, candi
 }
 
 func (t *Tenant) trialSandbox() trialowner.Sandbox {
-	return trialowner.Sandbox{Tenant: t.ID, AI: t.ai != nil, Flows: t.App(platform.FlowApp) != nil, Member: t.Member, Work: t.Work,
+	return trialowner.Sandbox{Tenant: t.ID, AI: t.Models != nil, Flows: t.App(platform.FlowApp) != nil, Member: t.Member, Work: t.Work,
 		Trace: func(record func(platform.DecisionTrace)) func(platform.DecisionTrace) {
 			previous := t.simulationTrace
 			t.simulationTrace = record
@@ -141,8 +141,8 @@ func (t *Tenant) trialSandbox() trialowner.Sandbox {
 		},
 		Load: t.Restore,
 		Verify: func() error {
-			if t.procs != nil {
-				return t.procs.Check()
+			if t.Processes != nil {
+				return t.Processes.Check()
 			}
 			return nil
 		}}

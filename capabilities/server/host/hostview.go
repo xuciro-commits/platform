@@ -50,8 +50,8 @@ func (h hostView) installationDraft() *Tenant {
 }
 
 func (h hostView) installationView(recordView *records.Store) *Tenant {
-	draft := &Tenant{services: h.t.services, disabledOwners: h.t.disabledOwners, ID: h.t.ID, ownerSet: h.t.with(h.t.apps),
-		identity: h.t.identity, directory: h.Directory(), Projection: recordView, definitions: slices.Clone(h.t.definitions), includeArchivedDefinitions: h.t.includeArchivedDefinitions, Files: h.t.files(), procs: h.t.procs, releases: h.t.releases}
+	draft := &Tenant{services: h.t.services, disabledOwners: h.t.disabledOwners, ID: h.t.ID, ownerSet: h.t.with(h.t.apps), ownerRoles: h.t.ownerRoles,
+		Projection: recordView, definitions: slices.Clone(h.t.definitions), includeArchivedDefinitions: h.t.includeArchivedDefinitions, Files: h.t.files(), releases: h.t.releases}
 	return draft
 }
 
@@ -108,7 +108,7 @@ func (h hostView) Automation(parent platform.Caller, app string) platform.Caller
 }
 
 func (h hostView) identity() platform.IdentityDirectory {
-	owner := h.t.identity
+	owner := h.t.Identity
 	if owner != nil && h.decision != nil {
 		return h.decision.stateApp(owner).(platform.IdentityDirectory)
 	}
@@ -154,7 +154,7 @@ func (h hostView) Directory() platform.Directory {
 	if h.decision != nil {
 		return h.decision.directoryView()
 	}
-	return h.t.directory
+	return h.t.Directory
 }
 
 func (h hostView) Seen(c platform.Caller, keys ...string) {
@@ -171,29 +171,29 @@ func (h hostView) Invoke(c platform.Caller, protocol, action, id string, payload
 }
 
 func (h hostView) Tasks() platform.Tasks {
-	if h.decision != nil && h.t.tasks != nil {
-		return h.decision.stateApp(h.t.tasks.(platform.App)).(platform.Tasks)
+	if h.decision != nil && h.t.Tasks != nil {
+		return h.decision.stateApp(h.t.Tasks.(platform.App)).(platform.Tasks)
 	}
-	return h.t.tasks
+	return h.t.Tasks
 }
 
 func (h hostView) Processes() platform.Processes {
-	if h.decision != nil && h.t.procs != nil {
-		return h.decision.stateApp(h.t.procs.(platform.App)).(platform.Processes)
+	if h.decision != nil && h.t.Processes != nil {
+		return h.decision.stateApp(h.t.Processes.(platform.App)).(platform.Processes)
 	}
-	return h.t.procs
+	return h.t.Processes
 }
 
 func (h hostView) ActiveRelease() string { return h.t.releases.Active() }
 
 func (h hostView) Runs() platform.Runs {
-	if h.t.agents == nil {
+	if h.t.Agents == nil {
 		return nil
 	}
 	if h.decision != nil {
-		return h.decision.stateApp(h.t.agents).(platform.Runs)
+		return h.decision.stateApp(h.t.Agents).(platform.Runs)
 	}
-	return h.t.agents
+	return h.t.Agents
 }
 
 func (h hostView) InstallPage(c platform.Caller, p platform.Page) error {
@@ -312,7 +312,7 @@ func (h hostView) ownerBindings() runtimeprotocol.OwnerBindings {
 func (h hostView) bindOwner(app platform.App) { h.t.services.BindOwner(app, h.ownerBindings()) }
 
 func (h hostView) BuildProcessConsumptions() []platform.Consumption {
-	var processes platform.Processes = h.t.procs
+	var processes platform.Processes = h.t.Processes
 	if h.decision != nil {
 		if app := h.decision.PrivateApps[platform.FlowApp]; app != nil {
 			processes = app.(platform.Processes)
