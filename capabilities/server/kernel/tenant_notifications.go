@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"platformserver/kernel/acceptedformat"
+	"platformserver/kernel/protocol"
 	"platformserver/platform"
 )
 
@@ -52,8 +53,11 @@ func (b *NoticeBoard) ForMember(member string) []platform.Notification {
 	defer b.mu.Unlock()
 	out := []platform.Notification{}
 	for i := len(b.all) - 1; i >= 0; i-- {
-		if b.all[i].Member == member {
-			out = append(out, b.all[i])
+		if n := b.all[i]; n.Member == member {
+			if n.Category == "" {
+				n.Category = protocol.NotificationSystem
+			}
+			out = append(out, n)
 		}
 	}
 	return out

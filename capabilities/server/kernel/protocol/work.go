@@ -5,6 +5,12 @@ import (
 	"platformserver/platform"
 )
 
+const (
+	NotificationMention    = "mention"
+	NotificationAssignment = "assignment"
+	NotificationSystem     = "system"
+)
+
 type Works struct{ items map[string]*pb.Work }
 
 func NewWorks() *Works { return &Works{items: map[string]*pb.Work{}} }

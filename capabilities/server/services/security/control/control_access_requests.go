@@ -286,7 +286,7 @@ func (d *Console) accessRequestClosed(c platform.Caller, request AccessRequest, 
 			}
 		}
 		if len(to) > 0 {
-			c.Notify(platform.Notification{Title: "Access request " + request.State, Body: accessRequestTarget(request),
+			c.Notify(platform.Notification{Category: protocol.NotificationSystem, Title: "Access request " + request.State, Body: accessRequestTarget(request),
 				Ref: "read:access-requests", Key: "access-decision:" + request.ID}, now, to...)
 		}
 		return nil

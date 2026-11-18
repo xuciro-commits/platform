@@ -209,11 +209,11 @@ type Recipient struct {
 	Structure, Unit, Role string
 	AppRole               string
 }
-
 type Notification struct {
 	ID       string    `json:"id" source:"record"`
 	Member   string    `json:"member" source:"record"`
 	App      string    `json:"app" source:"record"`
+	Category string    `json:"category,omitempty" enum:"mention,assignment,system" source:"record"`
 	Title    string    `json:"title" source:"generated" from:"Ref"`
 	Body     string    `json:"body,omitempty" source:"generated" from:"Ref"`
 	Ref      string    `json:"ref,omitempty" source:"record"`

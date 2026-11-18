@@ -55,6 +55,6 @@ func (w *Work) escalateRefusal(c platform.Caller, s *pb.Submission, at time.Time
 		for _, member := range task.Candidates {
 			to = append(to, platform.Recipient{Member: member})
 		}
-		c.Notify(platform.Notification{Title: task.Title, Body: task.Body, Ref: task.Ref, Key: "task:" + task.ID}, at, to...)
+		c.Notify(platform.Notification{Category: protocol.NotificationAssignment, Title: task.Title, Body: task.Body, Ref: task.Ref, Key: "task:" + task.ID}, at, to...)
 	}, nil
 }

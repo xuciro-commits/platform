@@ -234,8 +234,9 @@ func (r *Relations) PlanObserved(c platform.Caller, e platform.Event, events []s
 	s := e.Record.GetSubmission()
 	entity := s.GetTarget().GetType() + "/" + s.GetTarget().GetId()
 	if t := s.GetTarget().GetType(); t != CommentType && t != FollowType && t != LinkType && !strings.HasPrefix(s.GetPrincipalId(), "app:") {
-		r.tell(c, entity, entity+" changed: "+s.GetSchema().GetName(), "by "+s.GetPrincipalId(),
-			"change:"+e.App+"/"+e.Record.GetChangeId(), []string{s.GetPrincipalId()}, e.Record.GetRecordedTime().AsTime())
+		r.tell(c, platform.Notification{Category: runtimeprotocol.NotificationSystem, Ref: entity,
+			Title: entity + " changed: " + s.GetSchema().GetName(), Body: "by " + s.GetPrincipalId(),
+			Key: "change:" + e.App + "/" + e.Record.GetChangeId()}, []string{s.GetPrincipalId()}, e.Record.GetRecordedTime().AsTime())
 	}
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -359,14 +360,14 @@ func (r *Relations) collaborate(c platform.Caller, s *pb.Submission, now time.Ti
 			for _, m := range comment.Mentions {
 				to = append(to, platform.Recipient{Member: m})
 			}
-			c.Notify(platform.Notification{Title: c.ID + " mentioned you on " + p.Target, Body: text, Ref: p.Target, Key: "mention:" + id}, now, to...)
-			r.tell(c, p.Target, "New comment on "+p.Target, text, "comment:"+id, append(comment.Mentions, c.ID), now)
+			c.Notify(platform.Notification{Category: runtimeprotocol.NotificationMention, Title: c.ID + " mentioned you on " + p.Target, Body: text, Ref: p.Target, Key: "mention:" + id}, now, to...)
+			r.tell(c, platform.Notification{Category: runtimeprotocol.NotificationMention, Title: "New comment on " + p.Target, Body: text, Ref: p.Target, Key: "comment:" + id}, append(comment.Mentions, c.ID), now)
 		}, nil
 	})
 }
 
-func (r *Relations) tell(c platform.Caller, target, title, body, key string, skip []string, now time.Time) {
-	domain, _ := json.Marshal([]any{[]any{"target", "=", target}})
+func (r *Relations) tell(c platform.Caller, notice platform.Notification, skip []string, now time.Time) {
+	domain, _ := json.Marshal([]any{[]any{"target", "=", notice.Ref}})
 	follows, _, _ := platform.Find[Follow](r.host.Automation(c, ID), platform.Query{Domain: domain, Limit: 1000})
 	var to []platform.Recipient
 	for _, f := range follows {
@@ -375,6 +376,6 @@ func (r *Relations) tell(c platform.Caller, target, title, body, key string, ski
 		}
 	}
 	if len(to) > 0 {
-		r.host.Automation(c, ID).Notify(platform.Notification{Title: title, Body: body, Ref: target, Key: key}, now, to...)
+		r.host.Automation(c, ID).Notify(notice, now, to...)
 	}
 }

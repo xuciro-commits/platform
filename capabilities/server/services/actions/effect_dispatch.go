@@ -132,7 +132,7 @@ func HeldNotices(app platform.Service, kind, entity, agent string, planned []pla
 	var out []platform.Notification
 	for _, x := range planned {
 		if x.State == "held" {
-			out = append(out, platform.Notification{Title: fmt.Sprintf("Approve %s for %s", title, entity),
+			out = append(out, platform.Notification{Category: protocol.NotificationAssignment, Title: fmt.Sprintf("Approve %s for %s", title, entity),
 				Body: fmt.Sprintf("The AI agent %s caused it, and it cannot be recalled once sent. Approve or discard it in Settings → Integrations.", agent),
 				Ref:  ref + "/" + x.ID, Key: "approve:" + x.ID})
 		}

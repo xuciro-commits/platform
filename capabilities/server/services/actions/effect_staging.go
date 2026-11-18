@@ -24,7 +24,7 @@ type EffectStaging struct {
 
 func (s EffectStaging) Stage(result *acceptedformat.Effect, before acceptedformat.EffectState, after platform.Effect) error {
 	if after.State == "failed" && s.Console {
-		s.Caller(s.App).Notify(platform.Notification{Title: "Effect to " + after.Endpoint + " failed: " + after.Event,
+		s.Caller(s.App).Notify(platform.Notification{Category: protocol.NotificationSystem, Title: "Effect to " + after.Endpoint + " failed: " + after.Event,
 			Body: after.Error + ". Retry it in Settings → Automation once the cause is fixed.",
 			Key:  "failed:" + after.ID}, s.At, platform.Recipient{AppRole: s.Admin})
 	}

@@ -290,7 +290,7 @@ func (a *Agents) stop(c platform.Caller, r *pb.ChangeRecord, run *runtimeprotoco
 	}
 	key := "agent:" + run.ID + ":stopped"
 	rc := a.reviewers(c, *run)
-	people := rc.Notify(platform.Notification{Title: "Take over from the agent: " + run.Title, Ref: runtimeprotocol.RunType + "/" + run.ID, Key: key}, now, recipients...)
+	people := rc.Notify(platform.Notification{Category: runtimeprotocol.NotificationAssignment, Title: "Take over from the agent: " + run.Title, Ref: runtimeprotocol.RunType + "/" + run.ID, Key: key}, now, recipients...)
 	people = slices.DeleteFunc(people, func(id string) bool {
 		member, ok := a.host.Member(id)
 		return !ok || member.Agent || member.Status == platform.MemberLeft || member.Status == platform.MemberSuspended
@@ -368,7 +368,7 @@ func (a *Agents) replayLegacyAction(c platform.Caller, d *runtimeprotocol.Compil
 		run.State = "waiting"
 		title, _, _ := strings.Cut(tool.Tool.Description, ":")
 		return "drafted for " + person.ID + " to confirm: " + tool.Schema + " " + target + " " + string(body), func(*pb.ChangeRecord) {
-			c.Notify(platform.Notification{Title: "Confirm the agent's draft: " + title + " " + target, Body: str("rationale"), Ref: runtimeprotocol.RunType + "/" + run.ID,
+			c.Notify(platform.Notification{Category: runtimeprotocol.NotificationAssignment, Title: "Confirm the agent's draft: " + title + " " + target, Body: str("rationale"), Ref: runtimeprotocol.RunType + "/" + run.ID,
 				Key: key + ":draft"}, now, platform.Recipient{Member: person.ID})
 		}
 	}

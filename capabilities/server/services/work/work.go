@@ -321,7 +321,7 @@ func (w *Work) offer(c platform.Caller, r *pb.ChangeRecord, a ApprovalRequest, n
 	for _, m := range task.Candidates {
 		to = append(to, platform.Recipient{Member: m})
 	}
-	c.Notify(platform.Notification{Title: task.Title, Body: task.Body, Ref: task.Ref, Key: "task:" + task.ID}, now, to...)
+	c.Notify(platform.Notification{Category: runtimeprotocol.NotificationAssignment, Title: task.Title, Body: task.Body, Ref: task.Ref, Key: "task:" + task.ID}, now, to...)
 }
 
 func (w *Work) close(c platform.Caller, r *pb.ChangeRecord, a ApprovalRequest, level int, state string) {
@@ -400,7 +400,7 @@ func (w *Work) run(c platform.Caller, r *pb.ChangeRecord, a ApprovalRequest, now
 		a.State = "approved"
 	}
 	c.Put(r, a)
-	c.Notify(platform.Notification{Title: fmt.Sprintf("%s %s: %s", a.Title, a.Target, a.State), Body: a.Outcome, Ref: ApprovalType + "/" + a.ID,
+	c.Notify(platform.Notification{Category: runtimeprotocol.NotificationSystem, Title: fmt.Sprintf("%s %s: %s", a.Title, a.Target, a.State), Body: a.Outcome, Ref: ApprovalType + "/" + a.ID,
 		Key: "request:" + a.ID}, now, platform.Recipient{Member: a.Requester})
 }
 
@@ -418,7 +418,7 @@ func (w *Work) ended(c platform.Caller, r *pb.ChangeRecord, record any, now time
 			to = append(to, platform.Recipient{Member: m})
 		}
 	}
-	c.Notify(platform.Notification{Title: fmt.Sprintf("%s %s: rejected by %s", a.Title, a.Target, a.RejectedBy), Body: a.Outcome, Ref: ApprovalType + "/" + a.ID,
+	c.Notify(platform.Notification{Category: runtimeprotocol.NotificationSystem, Title: fmt.Sprintf("%s %s: rejected by %s", a.Title, a.Target, a.RejectedBy), Body: a.Outcome, Ref: ApprovalType + "/" + a.ID,
 		Key: "request:" + a.ID}, now, to...)
 }
 
@@ -560,7 +560,7 @@ func (w *Work) Run(c platform.Caller, name string, now time.Time) *platform.Erro
 		for _, m := range t.Candidates {
 			to = append(to, platform.Recipient{Member: m})
 		}
-		c.Notify(platform.Notification{Title: "Overdue: " + t.Title, Body: t.Body, Ref: t.Ref, Key: "overdue:" + t.ID}, now, to...)
+		c.Notify(platform.Notification{Category: runtimeprotocol.NotificationSystem, Title: "Overdue: " + t.Title, Body: t.Body, Ref: t.Ref, Key: "overdue:" + t.ID}, now, to...)
 	}
 	return nil
 }
@@ -590,7 +590,7 @@ func (w *Work) Assign(c platform.Caller, r *pb.ChangeRecord, a platform.Assignme
 	for _, m := range candidates {
 		to = append(to, platform.Recipient{Member: m})
 	}
-	work.Notify(platform.Notification{Title: task.Title, Body: task.Body, Ref: task.Ref, Key: "task:" + task.ID}, r.GetRecordedTime().AsTime(), to...)
+	work.Notify(platform.Notification{Category: runtimeprotocol.NotificationAssignment, Title: task.Title, Body: task.Body, Ref: task.Ref, Key: "task:" + task.ID}, r.GetRecordedTime().AsTime(), to...)
 	return nil
 }
 
@@ -606,7 +606,7 @@ func (w *Work) Close(c platform.Caller, r *pb.ChangeRecord, id string) {
 func (w *Work) closed(c platform.Caller, id string) {
 	w.host.Seen(c, "task:"+id, "overdue:"+id)
 	if task, exists := platform.Get[WorkTask](c, id); exists && task.Created.By != "" && !strings.HasPrefix(task.Created.By, "app:") {
-		c.Notify(platform.Notification{Title: task.Title, Body: task.State, Ref: TaskType + "/" + task.ID, Key: "task-closed:" + task.ID}, task.Changed.At, platform.Recipient{Member: task.Created.By})
+		c.Notify(platform.Notification{Category: runtimeprotocol.NotificationSystem, Title: task.Title, Body: task.State, Ref: TaskType + "/" + task.ID, Key: "task-closed:" + task.ID}, task.Changed.At, platform.Recipient{Member: task.Created.By})
 	}
 }
 

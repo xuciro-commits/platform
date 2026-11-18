@@ -137,7 +137,7 @@ func (t *Tenant) failedWork(caller func() platform.Caller, title, why, id string
 	if t.App(controlowner.PlatformApp) == nil {
 		return
 	}
-	caller().Notify(platform.Notification{Title: title, Body: why + ". Retry it in Settings → Automation once the cause is fixed.",
+	caller().Notify(platform.Notification{Category: protocol.NotificationSystem, Title: title, Body: why + ". Retry it in Settings → Automation once the cause is fixed.",
 		Key: "failed:" + id}, now, platform.Recipient{AppRole: controlowner.Admin})
 }
 

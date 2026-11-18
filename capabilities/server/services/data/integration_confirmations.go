@@ -566,7 +566,7 @@ func (o *Owner) confirmationState(c platform.Caller, r *pb.ChangeRecord, run *pl
 	}
 	if run.State == "expired" && run.Definition.OnExpire == "escalate" && !run.Escalated {
 		run.Escalated = true
-		c.Notify(platform.Notification{Key: "confirmation-expired:" + run.ID, Title: "Business confirmation overdue", Body: "A declared party has not confirmed before the business deadline.", Ref: confirmationType + "/" + run.ID}, at, platform.Recipient{AppRole: run.Definition.ReviewerRole})
+		c.Notify(platform.Notification{Category: runtimeprotocol.NotificationSystem, Key: "confirmation-expired:" + run.ID, Title: "Business confirmation overdue", Body: "A declared party has not confirmed before the business deadline.", Ref: confirmationType + "/" + run.ID}, at, platform.Recipient{AppRole: run.Definition.ReviewerRole})
 	}
 }
 

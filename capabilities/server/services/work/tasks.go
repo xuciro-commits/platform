@@ -7,6 +7,7 @@ import (
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
+	"platformserver/kernel/protocol"
 	"platformserver/platform"
 )
 
@@ -59,7 +60,7 @@ func (w *Work) createTask(c platform.Caller, s *pb.Submission, now time.Time) (f
 		for _, id := range task.Candidates {
 			recipients = append(recipients, platform.Recipient{Member: id})
 		}
-		c.Notify(platform.Notification{Title: task.Title, Body: task.Body, Ref: TaskType + "/" + task.ID, Key: "task:" + task.ID}, now, recipients...)
+		c.Notify(platform.Notification{Category: protocol.NotificationAssignment, Title: task.Title, Body: task.Body, Ref: TaskType + "/" + task.ID, Key: "task:" + task.ID}, now, recipients...)
 	}, nil
 }
 

@@ -119,7 +119,7 @@ func (d *Console) decideLifecycle(c platform.Caller, s *pb.Submission) (func(*pb
 			d.subjects[p.Subject] = id
 			d.then = func() {
 				org := cmp.Or(d.tenantDefault(SettingName), d.tenant)
-				c.Notify(platform.Notification{Title: "You are invited to " + org, Key: "invite",
+				c.Notify(platform.Notification{Category: protocol.NotificationSystem, Title: "You are invited to " + org, Key: "invite",
 					Body: "Sign in with " + strings.TrimPrefix(p.Subject, "user:") + " to take your seat at " + org + "."},
 					r.GetRecordedTime().AsTime(), platform.Recipient{Member: id})
 			}
@@ -458,7 +458,7 @@ func (d *Console) handOver(c platform.Caller, left, successor, reason string, no
 	if successor == "" {
 		return
 	}
-	c.Notify(platform.Notification{Title: "You take over from " + left, Key: "handover:" + left, Ref: MemberType + "/" + left,
+	c.Notify(platform.Notification{Category: protocol.NotificationAssignment, Title: "You take over from " + left, Key: "handover:" + left, Ref: MemberType + "/" + left,
 		Body: strings.TrimSpace("Delegations " + left + " gave now stand in your name; reassign their open work and approvals to yourself from each app. " + reason)},
 		now, platform.Recipient{Member: successor})
 }

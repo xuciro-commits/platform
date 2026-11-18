@@ -270,7 +270,7 @@ func (a *Agents) assignDraft(c platform.Caller, receipt *pb.ChangeRecord, run *r
 	}
 	key := fmt.Sprintf("agent:%s:%d:draft", run.ID, len(run.Steps))
 	rc := a.reviewers(c, *run)
-	run.Reviewers = rc.Notify(platform.Notification{Title: "Confirm the agent's draft: " + title, Ref: runtimeprotocol.RunType + "/" + run.ID, Key: key}, now, recipients...)
+	run.Reviewers = rc.Notify(platform.Notification{Category: runtimeprotocol.NotificationAssignment, Title: "Confirm the agent's draft: " + title, Ref: runtimeprotocol.RunType + "/" + run.ID, Key: key}, now, recipients...)
 	run.Reviewers = slices.DeleteFunc(run.Reviewers, func(id string) bool {
 		member, ok := a.host.Member(id)
 		return !ok || member.Agent || member.Status == platform.MemberLeft || member.Status == platform.MemberSuspended

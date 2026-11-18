@@ -3217,6 +3217,7 @@ export type Notification = {
   id: string;
   member: string;
   app: string;
+  category?: "mention" | "assignment" | "system";
   title: string;
   body?: string;
   ref?: string;

@@ -24,6 +24,6 @@ func Notify(c platform.Caller, run *platform.Run, step string, n protocol.Notifi
 		}
 
 	}
-	to := c.Notify(platform.Notification{Title: title, Body: n.Body, Ref: ref, Key: key}, now, platform.Recipient{AppRole: n.Role})
+	to := c.Notify(platform.Notification{Category: protocol.NotificationSystem, Title: title, Body: n.Body, Ref: ref, Key: key}, now, platform.Recipient{AppRole: n.Role})
 	return platform.Raw(map[string]any{"recipients": to})
 }

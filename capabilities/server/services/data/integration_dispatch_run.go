@@ -392,7 +392,7 @@ func (o *Owner) dispatchState(c platform.Caller, receipt *pb.ChangeRecord, run *
 		case "escalate":
 			if !run.Escalated {
 				run.Escalated = true
-				c.Notify(platform.Notification{Key: "dispatch-attention:" + run.ID, Title: "Device dispatch needs attention", Body: run.Reason, Ref: ruleprotocol.DispatchType + "/" + run.ID}, at, platform.Recipient{AppRole: run.Definition.ReviewerRole})
+				c.Notify(platform.Notification{Category: ruleprotocol.NotificationSystem, Key: "dispatch-attention:" + run.ID, Title: "Device dispatch needs attention", Body: run.Reason, Ref: ruleprotocol.DispatchType + "/" + run.ID}, at, platform.Recipient{AppRole: run.Definition.ReviewerRole})
 			}
 		}
 	}
