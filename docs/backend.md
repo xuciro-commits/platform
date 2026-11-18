@@ -28,6 +28,7 @@
 | `expr` | Expr 的解析、类型检查、求值与下推编译；前端经 WASM 复用 |
 | `capability` | 运行能力契约、模块选择、绑定与依赖顺序；不依赖 SDK 或服务实现 |
 | `kernel` | 提交接收、幂等、修订、接受结果编码、车道、重放与快照；存储与记录投影在它的子包里 |
+| `kernel/values` | 值 schema、有界 JSON 解码与结构校验；不依赖 SDK 或服务实现 |
 | `platform` | 应用 SDK 的契约：清单、调用者、动作目录、页面与应用声明、授权接口。稳定的叶层，不依赖实现 |
 | `services/resources` | 资源标识、项目、文件夹、生命周期、工作状态、分支、提案；跨类型的发布编排 |
 | `services/ontology` | 类型的元数据与类型检查 |
@@ -46,7 +47,7 @@
 | `cmd/*` | 二进制入口、契约生成器、受控的辅助进程；只做装配 |
 
 - 租户的提交序列是 `kernel` 的类型。每个服务经同一个拥有者接口（决定、应用、分叉、读取）向它注册自己的状态。
-- 服务可以导入 `kernel` 下三个叶层数据包：`kernel/records`、`kernel/acceptedformat`、`kernel/protocol`。
+- 服务可以导入 `kernel` 下四个叶层数据包：`kernel/records`、`kernel/acceptedformat`、`kernel/protocol`、`kernel/values`。
   `kernel` 的其余部分与 `host` 不被服务导入；`kernel` 不导入任何服务。
 - 服务之间的调用面写在被调服务的 `api.go` 里，装配在 `host` 完成。
 - 操作定义在宿主装配时按应用登记；有版本的操作由拥有者读取保留版本，其余操作只从清单读取当前声明。

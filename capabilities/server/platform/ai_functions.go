@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"io"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"regexp"
+	"platformserver/kernel/values"
 	"slices"
 	"unicode/utf8"
 )
@@ -79,9 +79,9 @@ func AwaitsDecision(err *Error) bool {
 	return err != nil && err.Code == pb.ErrorCode_ERROR_CODE_CONFLICT && err.Message == FunctionNeedsDecision
 }
 
-var functionName = regexp.MustCompile(`^[a-z][a-z0-9_-]{0,63}$`)
+var functionName = values.Identifier
 
-var functionFieldName = regexp.MustCompile(`^[a-zA-Z][a-zA-Z0-9_]{0,63}$`)
+var functionFieldName = values.FieldName
 
 func ValidFunctionName(name string) bool {
 	return functionName.MatchString(name)
