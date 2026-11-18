@@ -5,8 +5,9 @@ import { t } from "../i18n";
 import { navigate, usePath } from "../router";
 import { ActionDialog } from "./ActionDialog";
 import { send, stepIntent, useAct } from "./act";
-import { type BulkAction, type ListShape, ListView, type Move } from "./ListPage";
+import { type ListShape, ListView, type Move } from "./ListPage";
 import { type Described, describe, numeric } from "./describe";
+import { BatchActions } from "./BatchActions";
 import { RecordPage } from "./RecordPage";
 import { type Dot, dots } from "./Transitions";
 import { present } from "./values";
@@ -24,7 +25,7 @@ function keyOf(field: Api.FieldInfo | undefined, title: string) {
   return index >= 0 ? field?.choices?.[index] : title;
 }
 
-function shape(described: Described, declared: Declared, listPath: string, move?: Move, bulk?: BulkAction[], accepts?: (id: string, to: string) => boolean): ListShape<Api.RecordPage, Row> {
+function shape(described: Described, declared: Declared, listPath: string, move?: Move, bulk?: ListShape<Api.RecordPage, Row>["bulk"], accepts?: (id: string, to: string) => boolean): ListShape<Api.RecordPage, Row> {
   const lifecycle = described.lifecycle;
   const states = lifecycle?.states ?? [];
   const say = (field: Api.FieldInfo) => (row: Row) =>
@@ -81,7 +82,7 @@ export function Records({ declared, listPath, id, back }: { declared: Declared; 
   const [creating, setCreating] = useState(false);
   const entity = types.status === "ready" ? types.data.find((candidate) => candidate.type === declared.type) : undefined;
   const described = useMemo(() => (entity && actions.status === "ready" ? describe(entity, actions.data) : undefined), [entity, actions]);
-  const records = useRead<Api.RecordPage>(described && !id ? `/v1/records/${declared.type}?limit=200` : null);
+  const records = useRead<Api.RecordPage>(described && !id ? `/v1/records/${declared.type}?limit=200&actions=1` : null);
   const edit = described?.edit;
   const kept = records.status === "ready" ? (records.data.records as Row[]) : undefined;
   const act = useAct(described);
@@ -111,21 +112,9 @@ export function Records({ declared, listPath, id, back }: { declared: Declared; 
     const row = kept?.find((candidate) => candidate.id === moving);
     return Boolean(lifecycle && row && described?.step(String(row[lifecycle.field] ?? ""), stateOf(to)));
   };
-  const archive = described?.other.find((action) => action.schema === `${declared.type}.archive`);
-  const bulk = useMemo(
-    () =>
-      archive && kept
-        ? [
-            {
-              label: "Archive",
-              run: async (ids: string[]) => {
-                for (const each of ids) await send(archive, each, {}, Number(kept.find((row) => row.id === each)?.revision));
-              },
-            },
-          ]
-        : undefined,
-    [archive, kept],
-  );
+  const bulk: ListShape<Api.RecordPage, Row>["bulk"] = described && records.status === "ready" && ((ids, clear) => (
+    <BatchActions described={described} ids={ids} clear={clear} records={records.data} />
+  )) || undefined;
   const definition = useMemo(() => (described ? shape(described, declared, listPath, move, bulk, accepts) : pending), [described, declared, listPath, pending, move, bulk, accepts]);
   const create = described?.create;
   if (described && id) {

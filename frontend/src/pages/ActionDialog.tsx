@@ -11,6 +11,7 @@ import { reasonOf, send } from "./act";
 import { ParameterInput, enterable } from "./ParameterInput";
 
 type Values = Record<string, unknown>;
+type Applied = Promise<void>;
 type Project = { id: string; title: string };
 export type ActionDialogProps = {
   action: Api.Action;
@@ -24,10 +25,11 @@ export type ActionDialogProps = {
   quick?: boolean;
   onClose: () => void;
   onDone: (id: string) => void;
+  perform?: (payload: Values) => Applied;
 };
 
 
-export function ActionDialog({ action, described, heading, confirm, id, revision, initial = {}, owned, quick, onClose, onDone }: ActionDialogProps) {
+export function ActionDialog({ action, described, heading, confirm, id, revision, initial = {}, owned, quick, onClose, onDone, perform }: ActionDialogProps) {
   const [values, setValues] = useState<Values>(initial);
   const [project, setProject] = useState("");
   const [busy, setBusy] = useState(false);
@@ -49,7 +51,8 @@ export function ActionDialog({ action, described, heading, confirm, id, revision
     if (owned) payload.project = project;
     const target = id ?? (typeof values.name === "string" ? values.name : `${action.idPrefix ?? ""}${crypto.randomUUID()}`);
     try {
-      await send(action, target, payload, revision);
+      if (perform) await perform(payload);
+      else await send(action, target, payload, revision);
       onDone(target);
     } catch (problem) {
       setFailure(reasonOf(problem));

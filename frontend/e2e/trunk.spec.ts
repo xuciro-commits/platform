@@ -234,3 +234,37 @@ test("shape: every record page has the same header, tabs and rail", async ({ pag
   await visit("Ontology", "Objects", "Customers", "Northwind Tools");
   await visit("Ontology", "Object types", null, "Opportunity");
 });
+
+test("batch: retries a stale row without submitting a successful row again", async ({ page, context }) => {
+  await signIn(page);
+  await open(page, "Ontology", "Objects");
+  await page.getByRole("link", { name: "Opportunities" }).click();
+  for (const name of ["Support contract renewal", "Seasonal stock planning"]) {
+    await page.getByRole("row", { name: new RegExp(name) }).getByRole("checkbox").check();
+  }
+  const editing = await context.newPage();
+  const href = await page.getByRole("link", { name: "Seasonal stock planning" }).getAttribute("href");
+  await signIn(editing);
+  await editing.goto(href!);
+  const next = editing.getByRole("textbox", { name: "Next step" });
+  await next.fill("Check seasonal targets");
+  await next.press("Enter");
+  await expect(editing.getByRole("complementary").getByText("2", { exact: true })).toBeVisible();
+  await editing.close();
+
+  const archived: string[] = [];
+  page.on("request", (request) => {
+    const body = request.url().endsWith("/v1/submissions") && request.postDataJSON();
+    if (body && body.schema.name === "build.opportunity.archive") archived.push(body.target.id);
+  });
+  await page.getByRole("button", { name: "Archive opportunity", exact: true }).click();
+  await expect(page.getByText("Support contract renewal: Done", { exact: true })).toBeVisible();
+  await expect(page.getByText(/Seasonal stock planning:.*changed/)).toBeVisible();
+  expect(archived).toHaveLength(2);
+  const failed = decodeURIComponent(href!.split("/").at(-1)!);
+  expect(archived).toContain(failed);
+  await page.getByRole("button", { name: "Retry failed rows", exact: true }).click();
+  await expect(page.getByText("Seasonal stock planning: Done", { exact: true })).toBeVisible();
+  expect(archived).toHaveLength(3);
+  expect(archived[2]).toBe(failed);
+});

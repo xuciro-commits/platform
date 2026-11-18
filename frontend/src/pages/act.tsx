@@ -2,7 +2,7 @@ import { AlertDialog } from "@astryxdesign/core/AlertDialog";
 import { Button } from "@astryxdesign/core/Button";
 import { useToast } from "@astryxdesign/core/Toast";
 import { useRef, useState } from "react";
-import { type Api, submit } from "../host";
+import { type Api, request, submit } from "../host";
 import { t } from "../i18n";
 import { ActionDialog } from "./ActionDialog";
 import type { Described, Step, Values } from "./describe";
@@ -23,6 +23,28 @@ export async function send(action: Api.Action, id: string, payload: Values, revi
       if (!(problem instanceof TypeError) || attempt === attempts) throw problem;
     }
   }
+}
+
+export type BatchRow = { id: string; name: string; revision: number; reason?: string };
+
+export async function sendBatch(action: Api.Action, rows: BatchRow[], payload: Values, retry: boolean) {
+  const results: BatchRow[] = [];
+  for (const row of rows) {
+    try {
+      let revision = row.revision;
+      if (retry) {
+        const current = await request<Api.RecordView>(`/v1/records/${action.target}/${encodeURIComponent(row.id)}`);
+        const choice = current.actions?.find((candidate) => candidate.schema === action.schema);
+        if (!choice?.allowed) throw new Error(choice?.reason || t("This action is no longer available."));
+        revision = (current.record as { revision: number }).revision;
+      }
+      await send(action, row.id, payload, revision);
+      results.push({ ...row, reason: undefined });
+    } catch (problem) {
+      results.push({ ...row, reason: reasonOf(problem) });
+    }
+  }
+  return results;
 }
 
 export type Intent = {

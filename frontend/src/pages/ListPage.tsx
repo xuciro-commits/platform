@@ -36,7 +36,6 @@ export type ListColumn<Row> = {
   value?: (row: Row) => unknown;
 };
 type Done = Promise<unknown>;
-export type BulkAction = { label: string; run: (ids: string[]) => Done };
 export type ListGroup<Row> = { key: string; label: string; of: (row: Row) => string; order?: string[]; accepts?: (id: string, to: string) => boolean };
 export type Move = (id: string, group: string, to: string) => Done;
 export type ListShape<Answer, Row> = {
@@ -48,7 +47,7 @@ export type ListShape<Answer, Row> = {
   columns: ListColumn<Row>[];
   groups?: ListGroup<Row>[];
   move?: Move;
-  bulk?: BulkAction[];
+  bulk?: (ids: string[], clear: () => void) => ReactNode;
 };
 export type ListDefinition<Answer, Row> = ListShape<Answer, Row> & { read: string };
 
@@ -84,7 +83,6 @@ export function ListView<Answer, Row>({ definition, read, primary, back }: ListV
   const [layout, setLayout] = useState(layouts[0]);
   const [moved, setMoved] = useState<Record<string, string>>({});
   const [failure, setFailure] = useState("");
-  const [busy, setBusy] = useState(false);
   const group = definition.groups?.find((candidate) => candidate.key === groupKey);
   const lanes = group?.order ? group : definition.groups?.find((candidate) => candidate.order);
   const board = layout === "board" && lanes?.order ? lanes : undefined;
@@ -160,7 +158,6 @@ export function ListView<Answer, Row>({ definition, read, primary, back }: ListV
   const { selectionConfig } = useTableSelectionState<Cells>({ data: shown, idKey, selectedKeys: selected, setSelectedKeys: setSelected });
   const selection = useTableSelection<Cells>({ ...selectionConfig, getRowLabel: (cells) => cells[definition.columns[0]?.key] || cells[idKey] });
   const sortable = useTableSortable<Cells>({ sort, onSortChange: setSort, allowUnsortedState: true });
-  const bulk = definition.bulk ?? [];
   const chosen = shown.filter((cells) => selected.has(cells[idKey])).map((cells) => cells[idKey]);
 
   const columns: TableColumn<Cells>[] = definition.columns.map((column, position) => ({
@@ -190,16 +187,6 @@ export function ListView<Answer, Row>({ definition, read, primary, back }: ListV
       ),
   }));
 
-  const run = (action: BulkAction) => {
-    setBusy(true);
-    setFailure("");
-    action
-      .run(chosen)
-      .then(() => setSelected(new Set()))
-      .catch((refused: Error) => setFailure(refused.message))
-      .finally(() => setBusy(false));
-  };
-
   return (
     <Layout
       height="fill"
@@ -225,20 +212,12 @@ export function ListView<Answer, Row>({ definition, read, primary, back }: ListV
             {all.length > 0 && chosen.length > 0 && (
               <Section variant="muted" padding={2}>
                 <HStack gap={3} vAlign="center" wrap="wrap">
-                  <StackItem size="fill">
-                    <HStack gap={1} vAlign="center">
-                      {bulk.map((action) => (
-                        <Button key={action.label} label={t(action.label)} variant="ghost" size="sm" isLoading={busy} onClick={() => run(action)} />
-                      ))}
-                    </HStack>
-                  </StackItem>
-                  <Text type="body" hasTabularNumbers>
-                    {String(chosen.length)} {t("selected")}
-                  </Text>
+                  <Text type="body" hasTabularNumbers>{String(chosen.length)} {t("selected")}</Text>
                   <Button label={t("Clear selection")} variant="ghost" size="sm" onClick={() => setSelected(new Set())} />
                 </HStack>
               </Section>
             )}
+            {definition.bulk?.(chosen, () => setSelected(new Set()))}
             {all.length > 0 && chosen.length === 0 && (
             <HStack gap={2} vAlign="center">
               <StackItem size="fill">
@@ -338,7 +317,7 @@ export function ListView<Answer, Row>({ definition, read, primary, back }: ListV
               dividers="rows"
               textOverflow="truncate"
               hasHover
-              plugins={{ ...(group ? { grouped: grouped.plugin } : {}), ...(bulk.length > 0 ? { selection } : {}), sortable }}
+              plugins={{ ...(group ? { grouped: grouped.plugin } : {}), ...(definition.bulk ? { selection } : {}), sortable }}
             />
           )}
         </LayoutContent>
