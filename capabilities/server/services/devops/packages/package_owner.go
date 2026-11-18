@@ -19,7 +19,7 @@ import (
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformserver/platform"
 	packagedesc "platformserver/services/devops/descriptor"
-	"platformserver/services/resources/authoring"
+	build "platformserver/services/resources/authoring"
 )
 
 type Owner struct {

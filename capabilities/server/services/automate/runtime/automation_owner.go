@@ -1,4 +1,4 @@
-package automation
+package runtime
 
 import (
 	"encoding/json"
@@ -54,7 +54,7 @@ type Flows struct {
 	resolver     publication.Resolver
 	mu           sync.Mutex
 	host         runtimeprotocol.FlowHost
-	ledger       platform.Authority
+	authority    platform.Authority
 	authorities  platform.Authorities
 	defs         map[string][]*flowDef
 	chosen, pins map[string]int
@@ -118,11 +118,11 @@ func New(tenant string, authorities platform.Authorities, resolver publication.R
 			Description: "Move a running instance to its flow's next version, as that version's mapping says."},
 		platform.Action{Schema: SchemaFlowArtifactCleanup, Target: InstanceType, Capability: "flows", Title: "Retire superseded Flow artifacts", Payload: []platform.Field{{Name: "digest", Type: "text", Required: true}}, Automation: true,
 			Description: "Acknowledge host deletion of already-superseded frame and checkpoint artifacts."})
-	return &Flows{resolver: resolver, authorities: authorities, ledger: authorities(tenant, ID, platform.NewCatalog(actions...), InstanceType, "flow.output", "flow.dead-letter"), defs: map[string][]*flowDef{}}
+	return &Flows{resolver: resolver, authorities: authorities, authority: authorities(tenant, ID, platform.NewCatalog(actions...), InstanceType, "flow.output", "flow.dead-letter"), defs: map[string][]*flowDef{}}
 }
 
-func flowEntities() []platform.Entity {
-	return []platform.Entity{{Type: InstanceType, Title: "Flow instance", Model: FlowInstance{}, Display: "title",
+func flowEntities() []platform.RecordType {
+	return []platform.RecordType{{Type: InstanceType, Title: "Flow instance", Model: FlowInstance{}, Display: "title",
 		Scope:   platform.Scope{Participants: func(record any) []string { return []string{record.(FlowInstance).OnBehalf} }},
 		Derived: []platform.Derivation{{From: "sources", Fields: []string{"data", "outputs", "tokens", "trace", "answer", "batch"}}}, Withheld: "withheld"},
 		{Type: "flow.output", Title: "Flow output", Model: runtimeprotocol.FlowOutput{}, Display: "name",
@@ -134,22 +134,22 @@ func flowEntities() []platform.Entity {
 }
 
 func (f *Flows) Manifest() platform.Manifest {
-	return platform.Manifest{ID: ID, Title: platform.BuiltinManifestTitle(ID), Version: "1", Actions: f.ledger.Catalog(), Entities: flowEntities(), Reads: []string{"flows"},
+	return platform.Manifest{ID: ID, Title: platform.BuiltinManifestTitle(ID), Version: "1", Actions: f.authority.Catalog(), Entities: flowEntities(), Reads: []string{"flows"},
 		ReadSources: map[string]string{"flows": "record"},
 		Jobs:        []platform.Job{{Name: "timers", Title: "Take flows' due steps: retries, timeouts, times and conditions", Every: time.Second}}}
 }
 
-func (f *Flows) Declarations() []*pb.AuthorityDeclaration { return f.ledger.Declarations() }
+func (f *Flows) Declarations() []*pb.AuthorityDeclaration { return f.authority.Declarations() }
 
-func (f *Flows) Authority() platform.Authority { return f.ledger }
+func (f *Flows) Authority() platform.Authority { return f.authority }
 
 func (f *Flows) SnapshotFormat() string { return "platform.ledger.v1" }
 
-func (f *Flows) Snapshot() (json.RawMessage, error) { return f.ledger.Snapshot() }
+func (f *Flows) Snapshot() (json.RawMessage, error) { return f.authority.Snapshot() }
 
-func (f *Flows) Restore(raw json.RawMessage) error { return f.ledger.Restore(raw) }
+func (f *Flows) Restore(raw json.RawMessage) error { return f.authority.Restore(raw) }
 
-func (f *Flows) Declare(a platform.App) error {
+func (f *Flows) Declare(a platform.Service) error {
 	m := a.Manifest()
 	for _, fl := range m.Flows {
 		d, err := f.check(m, fl)
@@ -161,7 +161,7 @@ func (f *Flows) Declare(a platform.App) error {
 	return nil
 }
 
-func (f *Flows) Install(a platform.App, fl platform.Flow) error {
+func (f *Flows) Install(a platform.Service, fl platform.Flow) error {
 	d, err := f.check(a.Manifest(), fl)
 	if err != nil {
 		return err
@@ -280,17 +280,17 @@ func (f *Flows) HasDefinition(app, name string, version int) bool {
 	return f.def(app+"."+name, version) != nil
 }
 
-func (f *Flows) Fork(ledger platform.Authority) (platform.App, error) {
+func (f *Flows) Fork(authority platform.Authority) (platform.Service, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	defs := maps.Clone(f.defs)
 	for id, versions := range defs {
 		defs[id] = slices.Clone(versions)
 	}
-	return &Flows{host: f.host, ledger: ledger, authorities: f.authorities, resolver: f.resolver, defs: defs,
+	return &Flows{host: f.host, authority: authority, authorities: f.authorities, resolver: f.resolver, defs: defs,
 		chosen: maps.Clone(f.chosen), pins: maps.Clone(f.pins)}, nil
 }
 
-func (a *Flows) NewSimulationApp(tenant string) platform.App {
+func (a *Flows) NewSimulationApp(tenant string) platform.Service {
 	return New(tenant, a.authorities, a.resolver)
 }

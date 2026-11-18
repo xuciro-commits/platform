@@ -1,4 +1,4 @@
-package applications
+package apps
 
 import "platformserver/platform"
 

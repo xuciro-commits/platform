@@ -32,8 +32,8 @@ func (t *Tenant) Input(m platform.Member, name string, body []byte, now time.Tim
 	if accepted {
 		return decideOnImage(t, context.Background(), "input", func(t *Tenant) (any, *platform.Error) {
 			return t.input(m, name, body, now)
-		}, func(t *Tenant, candidate preparedAccepted, answer any, refusal *platform.Error) (any, *platform.Error) {
-			return t.finishPreparedInput(m, name, candidate, answer, refusal)
+		}, func(t *Tenant, decision preparedAccepted, answer any, refusal *platform.Error) (any, *platform.Error) {
+			return t.finishPreparedInput(m, name, decision, answer, refusal)
 		})
 	}
 	return recordRead(t, context.Background(), func(t *Tenant) (any, *platform.Error) { return t.input(m, name, body, now) })
@@ -88,7 +88,7 @@ func (t *Tenant) readFromApp(m platform.Member, app, name string, inputs ...json
 	return t.readFrom(m, a, name, inputs...)
 }
 
-func (t *Tenant) readFrom(m platform.Member, a platform.App, name string, inputs ...json.RawMessage) (any, *platform.Error) {
+func (t *Tenant) readFrom(m platform.Member, a platform.Service, name string, inputs ...json.RawMessage) (any, *platform.Error) {
 	m = t.authorizationMember(m)
 	if err := t.Admits(m); err != nil {
 		return nil, err
@@ -114,14 +114,14 @@ func (t *Tenant) readFrom(m platform.Member, a platform.App, name string, inputs
 	return t.objectOwner(t.Projection).NarrowedSource(m, out, Now(), false, a.Manifest().ReadSources[name]), nil
 }
 
-func (t *Tenant) inputApp(app platform.App, c platform.Caller, name string, body []byte, at time.Time) (any, *platform.Error) {
+func (t *Tenant) inputApp(app platform.Service, c platform.Caller, name string, body []byte, at time.Time) (any, *platform.Error) {
 	if receiver := t.InputReceivers[app.Manifest().ID]; receiver != nil {
 		return receiver.Input(c, name, body, at)
 	}
 	return nil, unknown()
 }
 
-func (d *stagedDecision) inputApp(app platform.App, c platform.Caller, name string, body []byte, at time.Time) (any, *platform.Error) {
+func (d *stagedDecision) inputApp(app platform.Service, c platform.Caller, name string, body []byte, at time.Time) (any, *platform.Error) {
 	fork := d.stateApp(app)
 	if receiver := d.privateRoles.InputReceivers[fork.Manifest().ID]; receiver != nil {
 		return receiver.Input(c, name, body, at)

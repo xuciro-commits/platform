@@ -14,8 +14,8 @@ type EffectAnswer struct {
 	Tenant     string
 	Draft      platform.Runtime
 	Authorize  func(c platform.Caller, permission string) *platform.Error
-	Model      func() (platform.App, *pb.Submission)
-	Decide     func(c platform.Caller, a platform.App, s *pb.Submission, at time.Time) *platform.Error
+	Model      func() (platform.Service, *pb.Submission)
+	Decide     func(c platform.Caller, a platform.Service, s *pb.Submission, at time.Time) *platform.Error
 	Operation  func(platform.Effect)
 	Completion func() protocol.OperationCompletion
 	Answerer   func(app string) platform.Answerer

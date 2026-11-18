@@ -118,8 +118,8 @@ func (t *Tenant) submit(m platform.Member, s *pb.Submission, now time.Time, opts
 			out.issues = t.readableFieldIssues(m, prior, now)
 		}
 		return out, err
-	}, func(t *Tenant, candidate preparedAccepted, value answer, refusal *platform.Error) (answer, *platform.Error) {
-		value.record, refusal = t.finishPreparedSubmission(m, candidate, value.record, refusal)
+	}, func(t *Tenant, decision preparedAccepted, value answer, refusal *platform.Error) (answer, *platform.Error) {
+		value.record, refusal = t.finishPreparedSubmission(m, decision, value.record, refusal)
 		return value, refusal
 	})
 	if refusal != nil && opts.report != nil {
@@ -128,7 +128,7 @@ func (t *Tenant) submit(m platform.Member, s *pb.Submission, now time.Time, opts
 	return result.record, refusal
 }
 
-func (t *Tenant) accept(a platform.App, m platform.Member, s *pb.Submission, now time.Time, opts acceptOptions) (record *pb.ChangeRecord, refusal *platform.Error) {
+func (t *Tenant) accept(a platform.Service, m platform.Member, s *pb.Submission, now time.Time, opts acceptOptions) (record *pb.ChangeRecord, refusal *platform.Error) {
 	binding := opts.binding
 	if binding == nil {
 		s = t.CurrentSchema(a, s)
@@ -192,7 +192,7 @@ func (t *Tenant) accept(a platform.App, m platform.Member, s *pb.Submission, now
 	return t.finishCommittedResult(a, m, hash, committed)
 }
 
-func (t *Tenant) finishCommittedResult(a platform.App, m platform.Member, hash string, committed []byte) (record *pb.ChangeRecord, refusal *platform.Error) {
+func (t *Tenant) finishCommittedResult(a platform.Service, m platform.Member, hash string, committed []byte) (record *pb.ChangeRecord, refusal *platform.Error) {
 	defer func() {
 		if failure := recover(); failure != nil {
 			t.quarantine(fmt.Errorf("apply committed result: %v", failure))
@@ -203,7 +203,7 @@ func (t *Tenant) finishCommittedResult(a platform.App, m platform.Member, hash s
 	return t.FinishCommitted(a, m, hash, committed, runtimekernel.CommittedResult{Settlement: t.settlement(), App: t.App, ApplyBatch: t.applyAcceptedBatch, ApplyRecord: t.applyAcceptedResult, Publish: t.publishAccepted})
 }
 
-func decideAcceptedAs(a platform.App, draft *stagedDecision, m platform.Member, s *pb.Submission, now time.Time, automation bool) (record *pb.ChangeRecord, refusal *platform.Error) {
+func decideAcceptedAs(a platform.Service, draft *stagedDecision, m platform.Member, s *pb.Submission, now time.Time, automation bool) (record *pb.ChangeRecord, refusal *platform.Error) {
 	defer func() {
 		if p := recover(); p != nil {
 			if p != errStagedEffect {
@@ -235,15 +235,15 @@ func decideAcceptedAs(a platform.App, draft *stagedDecision, m platform.Member, 
 	return record, refusal
 }
 
-func (t *Tenant) finishPreparedSubmission(m platform.Member, candidate preparedAccepted, record *pb.ChangeRecord, refusal *platform.Error) (*pb.ChangeRecord, *platform.Error) {
-	if len(candidate.entry.Body) == 0 {
+func (t *Tenant) finishPreparedSubmission(m platform.Member, decision preparedAccepted, record *pb.ChangeRecord, refusal *platform.Error) (*pb.ChangeRecord, *platform.Error) {
+	if len(decision.entry.Body) == 0 {
 		return record, refusal
 	}
-	committed, err := t.acceptResult(candidate.entry, candidate.key, candidate.hash)
+	committed, err := t.acceptResult(decision.entry, decision.key, decision.hash)
 	if err != nil {
 		return nil, runtimekernel.CommitRefusal(err)
 	}
-	return t.finishCommittedResult(t.App(candidate.entry.App), m, candidate.hash, committed)
+	return t.finishCommittedResult(t.App(decision.entry.App), m, decision.hash, committed)
 }
 
 func (t *Tenant) submitBackground(m platform.Member, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *platform.Error) {
@@ -253,8 +253,8 @@ func (t *Tenant) submitBackground(m platform.Member, s *pb.Submission, now time.
 			return nil, unknown()
 		}
 		return t.accept(app, m, s, now, acceptOptions{automation: true})
-	}, func(t *Tenant, candidate preparedAccepted, record *pb.ChangeRecord, refusal *platform.Error) (*pb.ChangeRecord, *platform.Error) {
-		return t.finishPreparedSubmission(m, candidate, record, refusal)
+	}, func(t *Tenant, decision preparedAccepted, record *pb.ChangeRecord, refusal *platform.Error) (*pb.ChangeRecord, *platform.Error) {
+		return t.finishPreparedSubmission(m, decision, record, refusal)
 	})
 }
 
@@ -376,12 +376,12 @@ func (t *Tenant) stageEntry(entry Entry, key, hash string) bool {
 	return t.stage(preparedAccepted{entry: entry, key: key, hash: hash})
 }
 
-func (t *Tenant) stage(candidate preparedAccepted) bool {
+func (t *Tenant) stage(decision preparedAccepted) bool {
 	if t.preparedResult == nil {
 		return false
 	}
-	candidate.uploads = t.preparedResult.uploads
-	*t.preparedResult = candidate
+	decision.uploads = t.preparedResult.uploads
+	*t.preparedResult = decision
 	return true
 }
 
@@ -406,13 +406,13 @@ func (t *Tenant) applyAcceptedInput(raw []byte) (acceptedformat.Input, bool, err
 		Input: func(app string) platform.AcceptedInputApp { return t.inputs[app] }})
 }
 
-func (t *Tenant) finishPreparedInput(m platform.Member, name string, candidate preparedAccepted, answer any, refusal *platform.Error) (any, *platform.Error) {
-	if len(candidate.entry.Body) == 0 {
+func (t *Tenant) finishPreparedInput(m platform.Member, name string, decision preparedAccepted, answer any, refusal *platform.Error) (any, *platform.Error) {
+	if len(decision.entry.Body) == 0 {
 		return answer, refusal
 	}
-	committed, err := t.acceptResult(candidate.entry, candidate.key, candidate.hash)
+	committed, err := t.acceptResult(decision.entry, decision.key, decision.hash)
 	if err != nil {
 		return nil, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
 	}
-	return t.FinishInput(t.App(candidate.entry.App).(platform.AcceptedInputApp), m, name, candidate.key, candidate.hash, committed, t.committedInput())
+	return t.FinishInput(t.App(decision.entry.App).(platform.AcceptedInputApp), m, name, decision.key, decision.hash, committed, t.committedInput())
 }

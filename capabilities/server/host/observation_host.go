@@ -8,7 +8,7 @@ import (
 
 	"platformserver/platform"
 	dataowner "platformserver/services/data"
-	"platformserver/services/resources/authoring"
+	build "platformserver/services/resources/authoring"
 )
 
 func (t *Tenant) observationSources() dataowner.Observations {

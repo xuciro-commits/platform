@@ -8,7 +8,7 @@ import (
 	"strings"
 )
 
-func CheckQuerySchema(p platform.Page, q platform.PageQuery, object platform.EntityInfo, named *platform.Definition, engines ...platform.RuleEngine) error {
+func CheckQuerySchema(p platform.Page, q platform.PageQuery, object platform.RecordTypeInfo, named *platform.Definition, engines ...platform.RuleEngine) error {
 	if q.Interface != "" {
 		return checkInterfaceQuery(p, q, named)
 	}
@@ -157,7 +157,7 @@ func checkInterfaceQuery(p platform.Page, q platform.PageQuery, named *platform.
 	return nil
 }
 
-func checkQueryFilter(p platform.Page, filter platform.Expr, object platform.EntityInfo, engines ...platform.RuleEngine) error {
+func checkQueryFilter(p platform.Page, filter platform.Expr, object platform.RecordTypeInfo, engines ...platform.RuleEngine) error {
 	if filter.Kind != "boolean" {
 		return fmt.Errorf("page query filter must return boolean")
 	}

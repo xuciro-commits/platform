@@ -39,7 +39,7 @@ func EffectiveAt(kind, from, until, at string) (bool, error) {
 	return withinBusinessPeriod(start.Compare(point), point.Compare(end), until != ""), nil
 }
 
-func CheckVersioning(info platform.EntityInfo, lookup func(string) (platform.EntityInfo, bool)) error {
+func CheckVersioning(info platform.RecordTypeInfo, lookup func(string) (platform.RecordTypeInfo, bool)) error {
 	if v := info.Versioning; v != nil {
 		key, k := info.Field(v.Key)
 		version, n := info.Field(v.Version)

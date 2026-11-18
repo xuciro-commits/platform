@@ -11,7 +11,7 @@ import (
 
 type CodeDeclarations struct {
 	Manifests       []platform.Manifest
-	Entities        []platform.EntityInfo
+	Entities        []platform.RecordTypeInfo
 	DataClasses     map[string]bool
 	NarrowedFields  map[string][]string
 	NativeExecutors map[string]bool
@@ -19,12 +19,12 @@ type CodeDeclarations struct {
 
 func (c CodeDeclarations) Check(checkPage func(platform.Page) error) error {
 	objects := map[string]platform.AssetRef{}
-	infos := map[string]platform.EntityInfo{}
+	infos := map[string]platform.RecordTypeInfo{}
 	for _, info := range c.Entities {
 		objects[info.Type] = platform.AssetRef{App: info.App, Kind: platform.AssetObject, Name: info.Type}
 		infos[info.Type] = info
 	}
-	lookup := func(typ string) (platform.EntityInfo, bool) { info, ok := infos[typ]; return info, ok }
+	lookup := func(typ string) (platform.RecordTypeInfo, bool) { info, ok := infos[typ]; return info, ok }
 	for _, info := range c.Entities {
 		for _, field := range info.Fields {
 			if field.Ref == "" {

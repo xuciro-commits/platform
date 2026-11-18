@@ -6,7 +6,7 @@ import (
 	"slices"
 )
 
-func (info EntityInfo) CompileEnterpriseUse(engines ...RuleEngine) (ExprProgram, error) {
+func (info RecordTypeInfo) CompileEnterpriseUse(engines ...RuleEngine) (ExprProgram, error) {
 	if info.EnterpriseUse == nil {
 		return nil, nil
 	}
@@ -20,7 +20,7 @@ func (info EntityInfo) CompileEnterpriseUse(engines ...RuleEngine) (ExprProgram,
 	return RuleEngineOf(engines).CompileExpr(*info.EnterpriseUse, ExprSchema{Refs: refs})
 }
 
-func ApplyFieldAliases(info EntityInfo, value reflect.Value) {
+func ApplyFieldAliases(info RecordTypeInfo, value reflect.Value) {
 	for _, field := range info.Fields {
 		if field.AliasOf != "" {
 			target, _ := info.Field(field.AliasOf)
@@ -29,7 +29,7 @@ func ApplyFieldAliases(info EntityInfo, value reflect.Value) {
 	}
 }
 
-func (info EntityInfo) HasReadSources() bool {
+func (info RecordTypeInfo) HasReadSources() bool {
 	return len(info.Derived) > 0 || slices.ContainsFunc(info.Fields, func(field FieldInfo) bool { return field.AliasOf != "" })
 }
 

@@ -10,11 +10,11 @@ import (
 	"platformserver/platform"
 )
 
-func (s *Sequence) PriorOf(a platform.App, key string) Prior {
+func (s *Sequence) PriorOf(a platform.Service, key string) Prior {
 	return s.Committed.Prior(a.Manifest().ID, a.Authority(), s.ID, key)
 }
 
-func (s *Sequence) CurrentSchema(app platform.App, sub *pb.Submission) *pb.Submission {
+func (s *Sequence) CurrentSchema(app platform.Service, sub *pb.Submission) *pb.Submission {
 	if sub.GetSchema().GetVersion() != 1 {
 		return sub
 	}
@@ -45,7 +45,7 @@ func (s *Sequence) CurrentSchema(app platform.App, sub *pb.Submission) *pb.Submi
 	return copy
 }
 
-func (s *Sequence) SchemaBinding(app platform.App, sub *pb.Submission, content string, schemaOf func(platform.App, platform.Action) (platform.SchemaVersion, error)) (*platform.SchemaVersion, *platform.Error) {
+func (s *Sequence) SchemaBinding(app platform.Service, sub *pb.Submission, content string, schemaOf func(platform.Service, platform.Action) (platform.SchemaVersion, error)) (*platform.SchemaVersion, *platform.Error) {
 	var binding *platform.SchemaVersion
 	if content != "" {
 		binding = &platform.SchemaVersion{Version: content, Family: sub.GetSchema().GetVersion()}

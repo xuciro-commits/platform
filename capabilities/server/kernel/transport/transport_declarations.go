@@ -21,7 +21,7 @@ type Route struct {
 
 type Param struct{ Name, Description string }
 
-func OpenAPI(routes []Route, retained []reflect.Type, refusal reflect.Type, entities []platform.EntityInfo, actions []platform.Action) map[string]any {
+func OpenAPI(routes []Route, retained []reflect.Type, refusal reflect.Type, entities []platform.RecordTypeInfo, actions []platform.Action) map[string]any {
 	s := newSchemas()
 	for _, typ := range retained {
 		s.of(typ)
@@ -157,6 +157,7 @@ func (s *schemas) ref(t reflect.Type) map[string]any {
 			if public := map[string]string{
 				"AIProvider": "Provider", "AIModel": "Model", "AIUsage": "Usage",
 				"RelationLink": "Link", "RelationNote": "Note",
+				"RecordTypeInfo": "EntityInfo",
 			}[name]; public != "" {
 				name = public
 			}
@@ -238,7 +239,7 @@ func (s *schemas) object(t reflect.Type) map[string]any {
 	return out
 }
 
-func entitySchema(e platform.EntityInfo) map[string]any {
+func entitySchema(e platform.RecordTypeInfo) map[string]any {
 	props := map[string]any{"id": map[string]any{"type": "string"}, "revision": map[string]any{"type": "integer"}}
 	order := []string{"id", "revision"}
 	var required []string

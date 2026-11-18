@@ -247,7 +247,7 @@ func (a Authorizer) Authorize(store *records.Store, c platform.Caller, q platfor
 	return decision
 }
 
-func (a Authorizer) ScopePolicy(store *records.Store, c platform.Caller, info platform.EntityInfo, at time.Time, depth int, walk *Traversal) (*records.RowFilter, *platform.Error) {
+func (a Authorizer) ScopePolicy(store *records.Store, c platform.Caller, info platform.RecordTypeInfo, at time.Time, depth int, walk *Traversal) (*records.RowFilter, *platform.Error) {
 	through := func(v reflect.Value) bool {
 		typ, id, _ := strings.Cut(info.Scope.Through(v.Interface()), "/")
 		return a.Authorize(store, c, platform.AuthzRequest{Principal: c.ID, Tenant: c.Tenant, Kind: "read", Type: typ, Record: id}, at, true, depth+1, walk).Allow

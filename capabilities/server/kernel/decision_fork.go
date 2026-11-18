@@ -9,7 +9,7 @@ import (
 	"platformserver/platform"
 )
 
-func (d Decision) Fork(owner func(string) platform.App) (Decision, bool) {
+func (d Decision) Fork(owner func(string) platform.Service) (Decision, bool) {
 	fork := d
 	fork.BusinessFacts = slices.Clone(d.BusinessFacts)
 	for i := range fork.BusinessFacts {
@@ -83,7 +83,7 @@ func (d Decision) Fork(owner func(string) platform.App) (Decision, bool) {
 	fork.Receiving = maps.Clone(d.Receiving)
 	fork.RequestCounts = maps.Clone(d.RequestCounts)
 	fork.Connectors = CloneConnectors(d.Connectors)
-	fork.PrivateApps = map[string]platform.App{}
+	fork.PrivateApps = map[string]platform.Service{}
 	fork.States, fork.StateBases = map[string]platform.AcceptedStateApp{}, map[string]json.RawMessage{}
 	for id, base := range d.StateBases {
 		fork.StateBases[id] = slices.Clone(base)
@@ -123,7 +123,7 @@ func (d Decision) Fork(owner func(string) platform.App) (Decision, bool) {
 	return fork, true
 }
 
-func (d *Decision) Shared(id string, app platform.App) bool {
+func (d *Decision) Shared(id string, app platform.Service) bool {
 	return d.Active[id] || d.Receiving[app.Authority()]
 }
 

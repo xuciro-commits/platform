@@ -12,7 +12,7 @@ import (
 	runtimeprotocol "platformserver/kernel/protocol"
 	"platformserver/platform"
 	"platformserver/services/ai"
-	"platformserver/services/resources/authoring"
+	build "platformserver/services/resources/authoring"
 	"platformserver/services/work"
 )
 

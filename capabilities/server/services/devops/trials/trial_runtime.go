@@ -129,8 +129,8 @@ type SimulationOwners struct {
 }
 
 type sampleOwner struct {
-	manifest platform.Manifest
-	ledger   platform.Authority
+	manifest  platform.Manifest
+	authority platform.Authority
 }
 
 func NewSampleOwner(tenant string, authorities platform.Authorities, manifest platform.Manifest) *sampleOwner {
@@ -138,23 +138,23 @@ func NewSampleOwner(tenant string, authorities platform.Authorities, manifest pl
 	for _, entity := range manifest.Entities {
 		classes = append(classes, entity.Type)
 	}
-	return &sampleOwner{manifest: manifest, ledger: authorities(tenant, manifest.ID, manifest.Actions, classes...)}
+	return &sampleOwner{manifest: manifest, authority: authorities(tenant, manifest.ID, manifest.Actions, classes...)}
 }
-func (a *sampleOwner) Authority() platform.Authority            { return a.ledger }
+func (a *sampleOwner) Authority() platform.Authority            { return a.authority }
 func (a *sampleOwner) Manifest() platform.Manifest              { return a.manifest }
-func (a *sampleOwner) Declarations() []*pb.AuthorityDeclaration { return a.ledger.Declarations() }
-func (a *sampleOwner) Snapshot() (json.RawMessage, error)       { return a.ledger.Snapshot() }
-func (a *sampleOwner) Restore(raw json.RawMessage) error        { return a.ledger.Restore(raw) }
+func (a *sampleOwner) Declarations() []*pb.AuthorityDeclaration { return a.authority.Declarations() }
+func (a *sampleOwner) Snapshot() (json.RawMessage, error)       { return a.authority.Snapshot() }
+func (a *sampleOwner) Restore(raw json.RawMessage) error        { return a.authority.Restore(raw) }
 func (a *sampleOwner) SnapshotFormat() string                   { return "platform.ledger.v1" }
-func (a *sampleOwner) Fork(ledger platform.Authority) (platform.App, error) {
-	return &sampleOwner{manifest: a.manifest, ledger: ledger}, nil
+func (a *sampleOwner) Fork(authority platform.Authority) (platform.Service, error) {
+	return &sampleOwner{manifest: a.manifest, authority: authority}, nil
 }
 func (a *sampleOwner) Submit(platform.Caller, *pb.Submission, time.Time) (*pb.ChangeRecord, *platform.Error) {
 	return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Native business actions require an isolated owner test fixture")
 }
-func PrepareEnvironment(apps []platform.App, simulationOwners SimulationOwners, authorities platform.Authorities, candidate protocol.ReleaseCandidate, samples []SimulationSample) (Environment, error) {
+func PrepareEnvironment(apps []platform.Service, simulationOwners SimulationOwners, authorities platform.Authorities, candidate protocol.ReleaseCandidate, samples []SimulationSample) (Environment, error) {
 	environment := Environment{Authorities: authorities, Modules: map[string][]byte{}, Samples: samples, Factories: simulationOwners.Factories, Builder: simulationOwners.Builder}
-	ownersByID := map[string]platform.App{}
+	ownersByID := map[string]platform.Service{}
 	for _, app := range apps {
 		ownersByID[app.Manifest().ID] = app
 	}

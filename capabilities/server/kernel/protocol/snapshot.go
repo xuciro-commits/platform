@@ -7,15 +7,15 @@ import (
 )
 
 type SimulationFactory interface {
-	NewSimulationApp(tenant string) platform.App
+	NewSimulationApp(tenant string) platform.Service
 }
 
 type SimulationIdentityFactory interface {
-	NewSimulationIdentity(tenant string, members []platform.Member) platform.App
+	NewSimulationIdentity(tenant string, members []platform.Member) platform.Service
 }
 
 type SimulationOrganizationFactory interface {
-	NewSimulationOrganization(tenant string, seed platform.OrgSeed) platform.App
+	NewSimulationOrganization(tenant string, seed platform.OrgSeed) platform.Service
 }
 
 func Protos[T proto.Message](list []T) (json.RawMessage, error) {

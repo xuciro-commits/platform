@@ -11,8 +11,8 @@ import (
 	"platformserver/platform"
 )
 
-func (o *Owner) observationEntity() platform.Entity {
-	return platform.Entity{Type: ObservationType, Title: "Observation source", Plural: "Observation sources", Model: Observation{}, Display: "title",
+func (o *Owner) observationEntity() platform.RecordType {
+	return platform.RecordType{Type: ObservationType, Title: "Observation source", Plural: "Observation sources", Model: Observation{}, Display: "title",
 		Description: "Read external time-series summaries and apply declared business decisions without retaining raw points.",
 		Scope:       integrationScope(),
 		Standard:    integrationStandard(),

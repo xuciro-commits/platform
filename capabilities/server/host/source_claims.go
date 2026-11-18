@@ -9,7 +9,7 @@ import (
 	"platformserver/kernel/records"
 	"platformserver/platform"
 	dataowner "platformserver/services/data"
-	"platformserver/services/resources/authoring"
+	build "platformserver/services/resources/authoring"
 )
 
 func (t *Tenant) sourcePreparation() dataowner.SourcePreparation {
@@ -20,9 +20,9 @@ func (t *Tenant) sourcePreparation() dataowner.SourcePreparation {
 				return dataowner.SourceRecord{History: history, Fields: fields, Archived: archived, Change: change}, refusal
 			})
 		},
-		Objects: func(object string) (platform.EntityInfo, map[string]bool, *platform.Error) {
+		Objects: func(object string) (platform.RecordTypeInfo, map[string]bool, *platform.Error) {
 			type answer struct {
-				info platform.EntityInfo
+				info platform.RecordTypeInfo
 				rows map[string]bool
 			}
 			value, refusal := recordRead(t, context.Background(), func(t *Tenant) (answer, *platform.Error) {
@@ -49,7 +49,7 @@ func (t *Tenant) sourcePreparation() dataowner.SourcePreparation {
 		Deletes: func(typ, id, connector string) bool {
 			return t.objectOwner(t.Projection).SourceDeletionRemoves(typ, id, connector)
 		},
-		Claimed: func(object, id, connector string, info platform.EntityInfo) bool {
+		Claimed: func(object, id, connector string, info platform.RecordTypeInfo) bool {
 			return t.Claims.ClaimedBySource(t.ID, object, id, connector, info)
 		},
 	}

@@ -26,8 +26,8 @@ func SampleSetPublication(env descriptor.SampleSetEnvironment) descriptor.Sample
 		PrepareInstallations: o.prepare, DecodeInstallation: o.decodeInstallation, ReadFrozen: o.readFrozen, VersionedDraft: o.draftAssets}
 }
 
-func (o *sampleSetOwner) entity() platform.Entity {
-	return platform.Entity{Type: o.env.Type, Title: "Sample set", Plural: "Sample sets", Model: descriptor.SampleSetRecord{}, Display: "title",
+func (o *sampleSetOwner) entity() platform.RecordType {
+	return platform.RecordType{Type: o.env.Type, Title: "Sample set", Plural: "Sample sets", Model: descriptor.SampleSetRecord{}, Display: "title",
 		Scope:    platform.Scope{Default: platform.ScopeNone, Levels: map[string]string{o.env.Builder: platform.ScopeTenant}},
 		Standard: platform.Standard{Create: true, Edit: true, Archive: true, Roles: []string{o.env.Builder}, Capability: "objects"},
 		Validate: func(c platform.Caller, record any) *platform.Error {

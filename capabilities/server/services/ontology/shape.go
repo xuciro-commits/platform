@@ -137,7 +137,7 @@ func ValueChoices(s string) []string {
 	return out
 }
 
-func CheckObjectShape(o Object, app, objectType string, model platform.Entity, declared []platform.Interface, known func(string) bool, lookup func(string) (platform.EntityInfo, bool)) error {
+func CheckObjectShape(o Object, app, objectType string, model platform.RecordType, declared []platform.Interface, known func(string) bool, lookup func(string) (platform.RecordTypeInfo, bool)) error {
 	if len(o.Implements) > 0 {
 		info, err := records.Describe(app, model, func(reflect.Type) string { return "" })
 		if err != nil {
@@ -199,7 +199,7 @@ func CheckObjectTypeGroup(g ObjectTypeGroup) error {
 	return g.Definition().Check()
 }
 
-func CheckLinkType(name, forward, reverse string, definition platform.LinkType, parent, child platform.EntityInfo) error {
+func CheckLinkType(name, forward, reverse string, definition platform.LinkType, parent, child platform.RecordTypeInfo) error {
 	if !publication.ValidName(name) || !publication.ValidName(forward) || !publication.ValidName(reverse) {
 		return fmt.Errorf("Link names must use lower-case letters and digits")
 	}

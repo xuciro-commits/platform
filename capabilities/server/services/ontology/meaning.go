@@ -7,7 +7,7 @@ import (
 	"platformserver/platform"
 )
 
-func Meaning(app string, infos []platform.EntityInfo) string {
+func Meaning(app string, infos []platform.RecordTypeInfo) string {
 	var b strings.Builder
 	for _, info := range infos {
 		if info.App != app {
@@ -55,7 +55,7 @@ func Meaning(app string, infos []platform.EntityInfo) string {
 	return strings.TrimSpace(b.String())
 }
 
-func Declares(name string, infos []platform.EntityInfo, action func(string) bool) bool {
+func Declares(name string, infos []platform.RecordTypeInfo, action func(string) bool) bool {
 	for _, info := range infos {
 		if info.Type == name {
 			return true
@@ -69,7 +69,7 @@ func Declares(name string, infos []platform.EntityInfo, action func(string) bool
 	return action(name)
 }
 
-func Mention(q string, info platform.EntityInfo, languages []string, dictionary func(string) map[string]string, terms []string) (string, bool) {
+func Mention(q string, info platform.RecordTypeInfo, languages []string, dictionary func(string) map[string]string, terms []string) (string, bool) {
 	candidates := []string{info.Type, info.Title, info.Plural}
 	candidates = append(candidates, strings.Split(info.Synonyms, ",")...)
 	for _, lang := range languages {

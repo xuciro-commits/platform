@@ -16,8 +16,8 @@ type (
 	ActionType        = platform.ActionType
 	Attachment        = platform.Attachment
 	DerivationInfo    = platform.DerivationInfo
-	Entity            = platform.Entity
-	EntityInfo        = platform.EntityInfo
+	Entity            = platform.RecordType
+	EntityInfo        = platform.RecordTypeInfo
 	Field             = platform.Field
 	FieldInfo         = platform.FieldInfo
 	LifecycleInfo     = platform.LifecycleInfo

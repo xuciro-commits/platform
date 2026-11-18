@@ -1,4 +1,4 @@
-package automation
+package runtime
 
 import (
 	"fmt"
@@ -20,14 +20,14 @@ type WorkState struct {
 }
 type WorkLoop struct {
 	Board        *WorkBoard
-	Apps         []platform.App
+	Apps         []platform.Service
 	Active       func(string) bool
 	Attempt, Run func(*Task, time.Time, bool) string
 }
 
 type Worker struct {
 	Board  *WorkBoard
-	Apps   []platform.App
+	Apps   []platform.Service
 	Active func(string) bool
 	Accept func(*Task, time.Time) string
 	Replay func(time.Time) Replay
@@ -155,7 +155,7 @@ func (b *WorkBoard) Decide(_ platform.Caller, s *pb.Submission, now time.Time) (
 	return func(*pb.ChangeRecord) { b.Retried(id, now) }, nil
 }
 
-func (b *WorkBoard) All(apps []platform.App) []Task {
+func (b *WorkBoard) All(apps []platform.Service) []Task {
 	out := []Task{}
 	for _, j := range b.Jobs {
 		job := *j

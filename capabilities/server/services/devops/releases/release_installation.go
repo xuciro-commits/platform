@@ -11,7 +11,7 @@ import (
 	"platformserver/kernel/records"
 	"platformserver/platform"
 	pageowner "platformserver/services/apps/pages"
-	"platformserver/services/resources/authoring"
+	build "platformserver/services/resources/authoring"
 	"platformserver/services/resources/publication"
 	"slices"
 )
@@ -22,7 +22,7 @@ type OwnerDraftRequest struct {
 	Refs        map[platform.AssetRef]bool
 }
 
-func AssetDraftPayload(info platform.EntityInfo, image json.RawMessage) (json.RawMessage, error) {
+func AssetDraftPayload(info platform.RecordTypeInfo, image json.RawMessage) (json.RawMessage, error) {
 	var fields map[string]json.RawMessage
 	if err := json.Unmarshal(image, &fields); err != nil {
 		return nil, err
@@ -36,7 +36,7 @@ func AssetDraftPayload(info platform.EntityInfo, image json.RawMessage) (json.Ra
 	return json.Marshal(payload)
 }
 
-func SameStoredFields(a, b platform.EntityInfo) bool {
+func SameStoredFields(a, b platform.RecordTypeInfo) bool {
 	if len(a.Fields) != len(b.Fields) {
 		return false
 	}
@@ -64,7 +64,7 @@ type ReleaseUpgradePlan struct {
 	Additions   []ReleaseFieldAddition `json:"additions"`
 }
 
-func OptionalStoredAddition(old, next platform.EntityInfo) *platform.FieldInfo {
+func OptionalStoredAddition(old, next platform.RecordTypeInfo) *platform.FieldInfo {
 	if len(next.Fields) != len(old.Fields)+1 {
 		return nil
 	}
@@ -86,7 +86,7 @@ func OptionalStoredAddition(old, next platform.EntityInfo) *platform.FieldInfo {
 	return nil
 }
 
-func CompatibleStoredRemoval(old, next platform.EntityInfo) bool {
+func CompatibleStoredRemoval(old, next platform.RecordTypeInfo) bool {
 	if len(next.Fields) >= len(old.Fields) {
 		return false
 	}
@@ -143,7 +143,7 @@ func SelectOwnerDrafts(drafts []ruleprotocol.AssetDraft, context ruleprotocol.As
 }
 
 type StoredShape struct {
-	Before, After platform.EntityInfo
+	Before, After platform.RecordTypeInfo
 	Records       int
 }
 
@@ -157,8 +157,8 @@ func StoredShapes(before, after *records.Store) []StoredShape {
 	return shapes
 }
 
-func StoredEntities(store *records.Store) []platform.EntityInfo {
-	entities := []platform.EntityInfo{}
+func StoredEntities(store *records.Store) []platform.RecordTypeInfo {
+	entities := []platform.RecordTypeInfo{}
 	for _, et := range store.SortedTypes() {
 		entities = append(entities, et.Info())
 	}
@@ -199,7 +199,7 @@ func UpgradePlan(candidate, active string, shapes []StoredShape) (*ReleaseUpgrad
 	return plan, err
 }
 
-func CheckExtensions(entities []platform.EntityInfo, lookup func(string) (platform.EntityInfo, bool)) error {
+func CheckExtensions(entities []platform.RecordTypeInfo, lookup func(string) (platform.RecordTypeInfo, bool)) error {
 	for _, info := range entities {
 		if info.Extends == "" {
 			continue
@@ -215,7 +215,7 @@ func CheckExtensions(entities []platform.EntityInfo, lookup func(string) (platfo
 	return nil
 }
 
-func ExtensionReview(candidate ruleprotocol.ReleaseCandidate, entities []platform.EntityInfo, shapes map[string]platform.EntityInfo, lookup func(string) (platform.EntityInfo, bool), source func(string) (platform.AssetBinding, bool)) ([]ReleaseExtensionReview, error) {
+func ExtensionReview(candidate ruleprotocol.ReleaseCandidate, entities []platform.RecordTypeInfo, shapes map[string]platform.RecordTypeInfo, lookup func(string) (platform.RecordTypeInfo, bool), source func(string) (platform.AssetBinding, bool)) ([]ReleaseExtensionReview, error) {
 	versions := map[string]string{}
 	for _, asset := range candidate.Assets {
 		if asset.Ref.Kind == platform.AssetObject {
@@ -262,8 +262,8 @@ func ExtensionReview(candidate ruleprotocol.ReleaseCandidate, entities []platfor
 	return result, nil
 }
 
-func ReviewExtensions(candidate ruleprotocol.ReleaseCandidate, apps []platform.App, entities []platform.EntityInfo,
-	lookup func(string) (platform.EntityInfo, bool), source func(string) (platform.AssetBinding, bool)) ([]ReleaseExtensionReview, error) {
+func ReviewExtensions(candidate ruleprotocol.ReleaseCandidate, apps []platform.Service, entities []platform.RecordTypeInfo,
+	lookup func(string) (platform.RecordTypeInfo, bool), source func(string) (platform.AssetBinding, bool)) ([]ReleaseExtensionReview, error) {
 	shapes, err := AssetShapes(apps, candidate.Assets)
 	if err != nil {
 		return nil, err
@@ -271,9 +271,9 @@ func ReviewExtensions(candidate ruleprotocol.ReleaseCandidate, apps []platform.A
 	return ExtensionReview(candidate, entities, shapes, lookup, source)
 }
 
-func AssetShapes(apps []platform.App, available []platform.ReleaseAsset) (map[string]platform.EntityInfo, error) {
-	shapes := map[string]platform.EntityInfo{}
-	i := slices.IndexFunc(apps, func(app platform.App) bool { return app.Manifest().ID == build.ID })
+func AssetShapes(apps []platform.Service, available []platform.ReleaseAsset) (map[string]platform.RecordTypeInfo, error) {
+	shapes := map[string]platform.RecordTypeInfo{}
+	i := slices.IndexFunc(apps, func(app platform.Service) bool { return app.Manifest().ID == build.ID })
 	if i < 0 {
 		return shapes, nil
 	}
@@ -466,11 +466,11 @@ func ValidateSet(context ValidationContext, engines ...platform.RuleEngine) erro
 }
 
 type ValidationContext struct {
-	Entities                []platform.EntityInfo
+	Entities                []platform.RecordTypeInfo
 	Definitions             []platform.Definition
-	Lookup                  func(string) (platform.EntityInfo, bool)
-	Properties              func(platform.EntityInfo) error
-	RecordSets              func(platform.EntityInfo, ...platform.RuleEngine) error
+	Lookup                  func(string) (platform.RecordTypeInfo, bool)
+	Properties              func(platform.RecordTypeInfo) error
+	RecordSets              func(platform.RecordTypeInfo, ...platform.RuleEngine) error
 	Link                    func(string, platform.LinkType) error
 	Application             func(platform.AssetRef, platform.Application) error
 	ApplicationPage         func(platform.Application) platform.Page

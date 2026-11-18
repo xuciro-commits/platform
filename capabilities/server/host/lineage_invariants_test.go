@@ -274,13 +274,13 @@ func TestInvariantK12LineageGuardFailsClosedWhenAcceptedDefinitionIsUnreadable(t
 func TestInvariantK12LineageBranchReadsStagedDefinitionsWithoutChangingMain(t *testing.T) {
 	live := newInvariantTenant(t, "invariant-k12-branch")
 	live.accept(t, "build.object.create", build.ObjectType, "OBJ", invariantObject("alpha", "Alpha"))
-	branch, refusal := live.CreateBranch(live.member(t), branches.BranchCreateRequest{Name: "lineage", Title: "Lineage"}, invariantClock)
+	branch, refusal := live.CreateBranch(live.member(t), merge.BranchCreateRequest{Name: "lineage", Title: "Lineage"}, invariantClock)
 	if refusal != nil {
 		t.Fatalf("create branch: %+v", refusal)
 	}
 	changed := invariantObject("alpha", "Alpha branch")
 	changed["fields"] = append(changed["fields"].([]ontology.Field), ontology.Field{Name: "detail", Title: "Detail", Type: "text"})
-	if _, refusal = live.SaveBranchResource(live.member(t), branch.ID, build.ObjectType, "OBJ", branches.BranchSaveRequest{Spec: platform.Raw(changed)}, invariantClock); refusal != nil {
+	if _, refusal = live.SaveBranchResource(live.member(t), branch.ID, build.ObjectType, "OBJ", merge.BranchSaveRequest{Spec: platform.Raw(changed)}, invariantClock); refusal != nil {
 		t.Fatalf("save branch object: %+v", refusal)
 	}
 	main, refusal := live.lineage(t.Context(), live.member(t), lineage.LineageRequest{Mode: "focus", Focus: "object:build.alpha"})

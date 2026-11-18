@@ -8,7 +8,7 @@ import (
 	"platformserver/platform"
 )
 
-func compositeRole(view platform.ModelViewBinding, role string, info platform.EntityInfo) *platform.FieldRef {
+func compositeRole(view platform.ModelViewBinding, role string, info platform.RecordTypeInfo) *platform.FieldRef {
 	if field, ok := view.Roles[role]; ok {
 		return &field
 	}
@@ -30,7 +30,7 @@ func compositeRole(view platform.ModelViewBinding, role string, info platform.En
 	return nil
 }
 
-func checkComposite(b platform.PageDataBinding, lookup func(string) (platform.EntityInfo, bool), engines ...platform.RuleEngine) error {
+func checkComposite(b platform.PageDataBinding, lookup func(string) (platform.RecordTypeInfo, bool), engines ...platform.RuleEngine) error {
 	widget := b.Ports["widget"]
 	if widget == "" {
 		for _, candidate := range pageWidgets.Widgets {
@@ -59,7 +59,7 @@ func checkComposite(b platform.PageDataBinding, lookup func(string) (platform.En
 	if contract == nil || len(contract.ModelPorts) == 0 || b.Model != nil || len(b.Models) > len(contract.ModelPorts) {
 		return fmt.Errorf("binding %s: invalid composite contract", b.ID)
 	}
-	entity := func(typ string) (platform.EntityInfo, bool) {
+	entity := func(typ string) (platform.RecordTypeInfo, bool) {
 		v, ok := lookup(typ)
 		return ruleprotocol.ConstraintEntity(v), ok
 	}

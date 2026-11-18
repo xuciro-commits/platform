@@ -36,7 +36,7 @@ func (h *Host) routesAI(rt *routes) {
 		status.Problem = t.i18n.Say(t.Language(m, r), status.Problem)
 		return status, err
 	}))
-	rt.handle(transport.Route{Pattern: "GET /v1/ai/model-selection", Summary: "Purpose-compatible models and effective configuration from the original AI and settings owners", Answer: aigateway.ModelSelection{}, Query: []transport.Param{{Name: "purpose", Description: "generation, agent or embedding"}}}, transport.Answering(func(r *http.Request, m platform.Member, t *Tenant) (aigateway.ModelSelection, *platform.Error) {
+	rt.handle(transport.Route{Pattern: "GET /v1/ai/model-selection", Summary: "Purpose-compatible models and effective configuration from the original AI and settings owners", Answer: gateway.ModelSelection{}, Query: []transport.Param{{Name: "purpose", Description: "generation, agent or embedding"}}}, transport.Answering(func(r *http.Request, m platform.Member, t *Tenant) (gateway.ModelSelection, *platform.Error) {
 		selection, err := t.ModelSelection(r.Context(), m, r.URL.Query().Get("purpose"))
 		selection.Localize(func(s string) string { return t.i18n.Say(t.Language(m, r), s) })
 		return selection, err
@@ -50,7 +50,7 @@ func (h *Host) routesAI(rt *routes) {
 			if endpoint.design {
 				chat = t.DesignChat
 			}
-			aigateway.ChatEndpoint{MaxBytes: chatMaxBytes, Say: func(s string) string { return t.i18n.Say(t.Language(m, r), s) },
+			gateway.ChatEndpoint{MaxBytes: chatMaxBytes, Say: func(s string) string { return t.i18n.Say(t.Language(m, r), s) },
 				Chat: func(req platform.ChatRequest, delta ...func(string)) (platform.ChatAnswer, *platform.Error, *platform.AIError) {
 					return chat(m, req, h.Now(), delta...)
 				},

@@ -1,4 +1,4 @@
-package knowledge
+package retrieval
 
 import (
 	"encoding/json"
@@ -14,9 +14,9 @@ import (
 type Corpus struct {
 	Documents platform.Caller
 	Files     *platform.Caller
-	Types     func() []platform.EntityInfo
+	Types     func() []platform.RecordTypeInfo
 	Page      func(typ string, offset int) ([]any, int, *platform.Error)
-	Row       func(typ, id string) (platform.EntityInfo, reflect.Value, bool)
+	Row       func(typ, id string) (platform.RecordTypeInfo, reflect.Value, bool)
 	Blob      func(hash string) (string, bool)
 	Index     *Index
 }
@@ -108,7 +108,7 @@ func (c Corpus) file(f platform.File) (Source, bool) {
 		apps = d.Apps
 	} else {
 		types := c.Types()
-		i := slices.IndexFunc(types, func(info platform.EntityInfo) bool { return info.Type == typ })
+		i := slices.IndexFunc(types, func(info platform.RecordTypeInfo) bool { return info.Type == typ })
 		if i < 0 || !types[i].KnowledgeFiles {
 			return Source{}, false
 		}
@@ -126,7 +126,7 @@ func (c Corpus) file(f platform.File) (Source, bool) {
 		Revision: f.Hash + "/" + f.Target + "/" + strings.Join(apps, ","), Scope: scope, Apps: apps}, true
 }
 
-func DocumentReadable(row func(typ, id string) (platform.EntityInfo, reflect.Value, bool), document string, reader *platform.Member, app string) bool {
+func DocumentReadable(row func(typ, id string) (platform.RecordTypeInfo, reflect.Value, bool), document string, reader *platform.Member, app string) bool {
 	id, isDocument := strings.CutPrefix(document, protocol.KnowledgeDocumentType+"/")
 	if !isDocument {
 		fileID, fileSource := strings.CutPrefix(document, platform.FileType+"/")

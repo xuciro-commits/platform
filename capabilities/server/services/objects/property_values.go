@@ -21,7 +21,7 @@ func PropertyValueType(field platform.FieldInfo) string {
 	return ""
 }
 
-func propertyValues(info platform.EntityInfo, record any) (map[string]any, map[string]string) {
+func propertyValues(info platform.RecordTypeInfo, record any) (map[string]any, map[string]string) {
 	values, errors := map[string]any{}, map[string]string{}
 	row := reflect.ValueOf(record)
 	for _, field := range info.Fields {

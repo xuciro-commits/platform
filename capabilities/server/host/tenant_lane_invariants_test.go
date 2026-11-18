@@ -15,8 +15,8 @@ import (
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	persistence "platformserver/kernel/store"
 	"platformserver/platform"
-	"platformserver/services/automate/runtime"
-	"platformserver/services/resources/authoring"
+	automation "platformserver/services/automate/runtime"
+	build "platformserver/services/resources/authoring"
 )
 
 type readImageSQLState struct {
@@ -48,7 +48,7 @@ type readImageSQLView struct {
 func (v readImageSQLView) Position() int64 { return v.position }
 
 func TestInvariantK13LaneWaitersLeaveAndDiagnosticsDoNotWait(t *testing.T) {
-	live := newInvariantTenantWithApps(t, "invariant-lane-wait", []platform.App{automation.New("invariant-lane-wait", actions.NewAuthority, PublicationResolver())})
+	live := newInvariantTenantWithApps(t, "invariant-lane-wait", []platform.Service{automation.New("invariant-lane-wait", actions.NewAuthority, PublicationResolver())})
 	if err := live.Lane.Hold(context.Background(), "invariant-holder"); err != nil {
 		t.Fatal(err)
 	}
@@ -88,7 +88,7 @@ func TestInvariantK13LaneWaitersLeaveAndDiagnosticsDoNotWait(t *testing.T) {
 }
 
 func TestInvariantK13BackgroundRoundReleasesLaneBetweenTasks(t *testing.T) {
-	live := newInvariantTenantWithApps(t, "invariant-lane-round", []platform.App{automation.New("invariant-lane-round", actions.NewAuthority, PublicationResolver())})
+	live := newInvariantTenantWithApps(t, "invariant-lane-round", []platform.Service{automation.New("invariant-lane-round", actions.NewAuthority, PublicationResolver())})
 	live.accept(t, "build.object.create", build.ObjectType, "OBJECT", invariantObject("alpha", "Alpha"))
 	live.accept(t, "build.object.publish", build.ObjectType, "OBJECT", map[string]any{})
 	live.accept(t, "build.process.create", protocol.ProcessType, "PROCESS", map[string]any{

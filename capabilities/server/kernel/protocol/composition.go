@@ -40,7 +40,7 @@ type OwnerAttacher interface {
 	AttachOwner(OwnerBindings)
 }
 
-func BindOwner(app platform.App, bindings OwnerBindings) {
+func BindOwner(app platform.Service, bindings OwnerBindings) {
 	switch owner := app.(type) {
 	case OwnerAttacher:
 		owner.AttachOwner(bindings)
@@ -50,7 +50,7 @@ func BindOwner(app platform.App, bindings OwnerBindings) {
 type RuntimeCapabilities struct {
 	NewTransactionExecutor func(BusinessRuntimeContext) TransactionExecutor
 	NewAgentEvaluator      func() AgentEvaluator
-	BindOwner              func(platform.App, OwnerBindings)
+	BindOwner              func(platform.Service, OwnerBindings)
 	AIInference            *AIInferencePolicy
 	Rules                  platform.RuleEngine
 	Authorization          platform.AuthorizationEngine

@@ -29,11 +29,11 @@ type SnapshotCheckpoint struct {
 	Build    string `json:"build"`
 }
 
-func Compatibility(apps []platform.App) (SnapshotCompatibility, error) {
+func Compatibility(apps []platform.Service) (SnapshotCompatibility, error) {
 	compatibility := SnapshotCompatibility{Epoch: persistence.FormatEpoch, Host: TenantSnapshotFormat, Owners: map[string]string{}}
 	type compositionApp struct {
 		ID, Version string
-		Entities    []platform.EntityInfo
+		Entities    []platform.RecordTypeInfo
 		Provides    []platform.Provision
 		Consumes    []platform.Consumption
 	}
@@ -57,7 +57,7 @@ func Compatibility(apps []platform.App) (SnapshotCompatibility, error) {
 			}
 			item.Entities = append(item.Entities, info)
 		}
-		slices.SortFunc(item.Entities, func(a, b platform.EntityInfo) int { return strings.Compare(a.Type, b.Type) })
+		slices.SortFunc(item.Entities, func(a, b platform.RecordTypeInfo) int { return strings.Compare(a.Type, b.Type) })
 		composition = append(composition, item)
 	}
 	slices.SortFunc(composition, func(a, b compositionApp) int { return strings.Compare(a.ID, b.ID) })

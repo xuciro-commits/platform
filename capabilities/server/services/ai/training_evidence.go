@@ -13,10 +13,10 @@ import (
 type TrainingWorld struct {
 	Tenant   string
 	Models   []platform.Effect
-	App      func(string) platform.App
-	Entity   func(string) (platform.EntityInfo, bool)
-	Provider func(string) (platform.App, string, bool)
-	Live     func() []platform.App
+	App      func(string) platform.Service
+	Entity   func(string) (platform.RecordTypeInfo, bool)
+	Provider func(string) (platform.Service, string, bool)
+	Live     func() []platform.Service
 	Caller   func(app string) platform.Caller
 	Image    func(ref, change string) (json.RawMessage, bool)
 }

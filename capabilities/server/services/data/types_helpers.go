@@ -12,7 +12,7 @@ func Guarded(marking string) bool {
 	return platform.MarkingRank(marking) >= platform.MarkingRank("confidential")
 }
 
-func UnguardedFields(info platform.EntityInfo, columns []string) []string {
+func UnguardedFields(info platform.RecordTypeInfo, columns []string) []string {
 	var open []string
 	for _, field := range info.Fields {
 		if len(field.Read) == 0 && (columns == nil || slices.Contains(columns, field.Name)) {

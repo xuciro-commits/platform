@@ -1,4 +1,4 @@
-package automation
+package runtime
 
 import (
 	"fmt"
@@ -11,7 +11,7 @@ import (
 
 var deliveryRetry = platform.Retry{Initial: 2 * time.Second, Max: time.Minute, Attempts: 5}
 
-func RetryOf(a platform.App) platform.Retry {
+func RetryOf(a platform.Service) platform.Retry {
 	if a != nil && a.Manifest().Retry != nil {
 		return *a.Manifest().Retry
 	}
@@ -20,7 +20,7 @@ func RetryOf(a platform.App) platform.Retry {
 
 type EventRoute struct {
 	MaxHops    int
-	Apps       []platform.App
+	Apps       []platform.Service
 	Listeners  []string
 	Names      func(event platform.Event) []string
 	Delivered  func(protocol.Delivery)
@@ -78,7 +78,7 @@ func (r EventRoute) Route(e QueuedEvent, now time.Time) {
 
 type Replay struct {
 	Board     *WorkBoard
-	App       func(string) platform.App
+	App       func(string) platform.Service
 	Caller    func(app string) platform.Caller
 	Names     func(event platform.Event) []string
 	Listens   func(app string) bool
@@ -173,7 +173,7 @@ func (b *WorkBoard) Deliver(subscriber string, e QueuedEvent, now time.Time) {
 		Title: s.GetSchema().GetName() + " " + target(s), State: "queued", Due: now.UTC()}, Event: &e})
 }
 
-func (b *WorkBoard) Tasks(apps []platform.App) []Task {
+func (b *WorkBoard) Tasks(apps []platform.Service) []Task {
 	b.Lock()
 	defer b.Unlock()
 	return b.All(apps)

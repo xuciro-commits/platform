@@ -94,16 +94,16 @@ func (t *Tenant) step(now time.Time) (more bool) {
 			scope.WorkEpoch.Add(1)
 		}
 		return progress{more: more, took: took, scope: scope}, nil
-	}, func(t *Tenant, candidate preparedAccepted, value progress, refusal *platform.Error) (progress, *platform.Error) {
+	}, func(t *Tenant, decision preparedAccepted, value progress, refusal *platform.Error) (progress, *platform.Error) {
 		if value.took == 0 {
 			return value, refusal
 		}
-		if len(candidate.entry.Body) > 0 {
-			committed, err := t.acceptResult(candidate.entry, candidate.key, candidate.hash)
+		if len(decision.entry.Body) > 0 {
+			committed, err := t.acceptResult(decision.entry, decision.key, decision.hash)
 			if err != nil {
 				return progress{}, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
 			}
-			t.finishCommittedWork(candidate.entry.App, candidate.key, candidate.hash, committed)
+			t.finishCommittedWork(decision.entry.App, decision.key, decision.hash, committed)
 			if t.quarantined() {
 				return progress{}, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
 			}
@@ -281,7 +281,7 @@ func decideWork(t *Tenant, d *stagedDecision, c platform.Caller, task *automatio
 		Authorize: func(permission string, roles []string, declared bool) *platform.Error {
 			return d.authorizeNative(c, permission, "action", roles, declared)
 		},
-		State:  func() platform.App { return d.stateApp(t.App(task.App)) },
+		State:  func() platform.Service { return d.stateApp(t.App(task.App)) },
 		Routed: func(e platform.Event) []string { return t.router().Events(e) },
 		Hops:   func(n int) { t.hops = n },
 		Finish: func() *platform.Error { return d.finishStaged(now) }}.Decide(c, task, now)

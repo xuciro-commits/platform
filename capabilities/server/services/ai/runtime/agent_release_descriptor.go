@@ -1,4 +1,4 @@
-package agents
+package runtime
 
 import (
 	"encoding/json"
@@ -27,6 +27,7 @@ func AgentReleaseDescriptor(agent platform.Agent) (platform.AgentReleaseDescript
 		return platform.AgentReleaseDescriptor{}, err
 	}
 	descriptor := releaseDescriptor(agent, raw, agent.Guard != nil, agent.To != nil)
+	descriptor.Native = true
 	return descriptor, CheckAgentReleaseDescriptor(descriptor)
 }
 
@@ -77,7 +78,7 @@ func releaseDescriptor(agent platform.Agent, cases json.RawMessage, guard, hando
 	return platform.AgentReleaseDescriptor{
 		Model: agent.Model, ModelOptions: agent.ModelOptions, Name: agent.Name, Title: agent.Title,
 		Description: agent.Description, Instructions: agent.Instructions, Tools: slices.Clone(agent.Tools),
-		Budget: agent.Budget, Checkpoints: slices.Clone(agent.Checkpoints), Native: true,
+		Budget: agent.Budget, Checkpoints: slices.Clone(agent.Checkpoints),
 		Guard: guard, Handoff: handoff, Cases: cases,
 	}
 }

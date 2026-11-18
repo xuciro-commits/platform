@@ -7,7 +7,7 @@ import (
 	"slices"
 )
 
-func VisibleInterfaceQuery(p platform.Page, q platform.PageQuery, entities map[string]platform.EntityInfo, definitions []platform.Definition) *platform.Definition {
+func VisibleInterfaceQuery(p platform.Page, q platform.PageQuery, entities map[string]platform.RecordTypeInfo, definitions []platform.Definition) *platform.Definition {
 	named := objects.QuerySourceDefinition(definitions, q.Query, PublicationResolver())
 	if named == nil || named.Query == nil {
 		return nil
@@ -113,17 +113,17 @@ func (b Bindings) CheckQueries(p platform.Page) error {
 }
 
 type Bindings struct {
-	Entity        func(string) (platform.EntityInfo, bool)
+	Entity        func(string) (platform.RecordTypeInfo, bool)
 	Criteria      func(platform.AssetRef) (*platform.RuleCriteria, bool)
 	Rules         platform.RuleEngine
 	Operation     func(*platform.AssetBinding) (platform.Operation, int, error)
 	Definitions   []platform.Definition
-	Interface     func(platform.NamedQuery, ...platform.EntityInfo) (platform.NamedQuery, error)
+	Interface     func(platform.NamedQuery, ...platform.RecordTypeInfo) (platform.NamedQuery, error)
 	Action        func(name string) (owner string, action platform.Action, ok bool)
 	FunctionAsset func(ref platform.AssetRef, version string) (platform.ReleaseAsset, error)
 }
 
-func VisibleQuery(q platform.NamedQuery, entities map[string]platform.EntityInfo) (platform.NamedQuery, bool) {
+func VisibleQuery(q platform.NamedQuery, entities map[string]platform.RecordTypeInfo) (platform.NamedQuery, bool) {
 	if q.InterfaceShape == nil {
 		return q, false
 	}
@@ -135,7 +135,7 @@ func VisibleQuery(q platform.NamedQuery, entities map[string]platform.EntityInfo
 	return q, empty || len(q.Implementations) > 0
 }
 
-func CheckModelQueries(page platform.Page, definitions []platform.Definition, entity func(string) (platform.EntityInfo, bool)) error {
+func CheckModelQueries(page platform.Page, definitions []platform.Definition, entity func(string) (platform.RecordTypeInfo, bool)) error {
 	for _, section := range page.DataBindings {
 		for _, m := range ModelBindings(section) {
 			sets := []*platform.ModelRecordSet{m.Set}

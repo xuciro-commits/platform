@@ -15,8 +15,8 @@ import (
 type TransactionContext struct {
 	App         string
 	BuilderRole string
-	Lookup      func(string) (platform.EntityInfo, bool)
-	ObjectInfo  func() (platform.EntityInfo, error)
+	Lookup      func(string) (platform.RecordTypeInfo, bool)
+	ObjectInfo  func() (platform.RecordTypeInfo, error)
 	Saved       func(string) bool
 	Sequences   func() []platform.Sequence
 	Link        func(platform.AssetBinding) (platform.LinkType, error)
@@ -24,10 +24,10 @@ type TransactionContext struct {
 	Dispatch    func(*platform.Dispatch, Object, Action, ...platform.RuleEngine) error
 	Writeback   func(platform.TxnStep, string) error
 	Call        func(platform.TxnCall) error
-	Reads       func(platform.RuleReadSpec, string, func(string) (platform.EntityInfo, bool)) error
+	Reads       func(platform.RuleReadSpec, string, func(string) (platform.RecordTypeInfo, bool)) error
 }
 
-func checkTxnRef(ref platform.TxnRef, subject, row string, scope platform.RuleReadSpec, lookup func(string) (platform.EntityInfo, bool), app string) error {
+func checkTxnRef(ref platform.TxnRef, subject, row string, scope platform.RuleReadSpec, lookup func(string) (platform.RecordTypeInfo, bool), app string) error {
 	if ref.Action != "" {
 		return fmt.Errorf("record references cannot name a transaction action")
 	}
@@ -104,7 +104,7 @@ func CheckTransactions(object Object, ctx TransactionContext, engines ...platfor
 	}
 	subject := ctx.App + "." + object.Name
 	sequences := map[string]platform.Sequence{}
-	var ownInfo platform.EntityInfo
+	var ownInfo platform.RecordTypeInfo
 	var ownInfoErr error
 	haveOwnInfo := false
 	for _, action := range object.Actions {
@@ -164,7 +164,7 @@ func CheckTransactions(object Object, ctx TransactionContext, engines ...platfor
 		if ownInfoErr != nil {
 			return ownInfoErr
 		}
-		lookup := func(typ string) (platform.EntityInfo, bool) {
+		lookup := func(typ string) (platform.RecordTypeInfo, bool) {
 			if typ == subject {
 				return ownInfo, true
 			}

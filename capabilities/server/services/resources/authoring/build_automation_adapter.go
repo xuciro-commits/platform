@@ -1,4 +1,4 @@
-package build
+package authoring
 
 import (
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
@@ -13,13 +13,13 @@ type automationEnvironment struct {
 	b *Build
 }
 
-func (e automationEnvironment) Application() platform.App  { return e.b }
-func (e automationEnvironment) Host() protocol.BuildHost   { return e.b.host }
-func (e automationEnvironment) Ledger() platform.Authority { return e.b.ledger }
-func (e automationEnvironment) AppID() string              { return ID }
-func (e automationEnvironment) Version() string            { return e.b.Manifest().Version }
-func (e automationEnvironment) Roles() []string            { return e.b.Manifest().AllRoles() }
-func (e automationEnvironment) JointMode() bool            { return e.b.jointMode }
+func (e automationEnvironment) Application() platform.Service { return e.b }
+func (e automationEnvironment) Host() protocol.BuildHost      { return e.b.host }
+func (e automationEnvironment) Ledger() platform.Authority    { return e.b.authority }
+func (e automationEnvironment) AppID() string                 { return ID }
+func (e automationEnvironment) Version() string               { return e.b.Manifest().Version }
+func (e automationEnvironment) Roles() []string               { return e.b.Manifest().AllRoles() }
+func (e automationEnvironment) JointMode() bool               { return e.b.jointMode }
 func (e automationEnvironment) FunctionCallAction() string {
 	return protocol.SchemaFunctionCall
 }
@@ -30,17 +30,17 @@ func (e automationEnvironment) FunctionResult(c platform.Caller, id string) (pro
 	}
 	return protocol.FunctionOutcome{State: call.State, Output: call.Output, Reason: call.Reason, Sources: call.Sources}, true
 }
-func (e automationEnvironment) InstalledObject(typ string) (platform.Entity, bool) {
+func (e automationEnvironment) InstalledObject(typ string) (platform.RecordType, bool) {
 	entity, ok := e.b.installed[typ]
 	return entity, ok
 }
 
-func (e automationEnvironment) Objects(c platform.Caller) ([]platform.Entity, error) {
+func (e automationEnvironment) Objects(c platform.Caller) ([]platform.RecordType, error) {
 	objects, err := readDefinitionInventory[ontology.Object](c)
 	if err != nil {
 		return nil, err
 	}
-	models := make([]platform.Entity, 0, len(objects))
+	models := make([]platform.RecordType, 0, len(objects))
 	for _, object := range objects {
 		if !object.Archived {
 			models = append(models, Entity(object))
@@ -49,7 +49,7 @@ func (e automationEnvironment) Objects(c platform.Caller) ([]platform.Entity, er
 	return models, nil
 }
 
-func (e automationEnvironment) Entity(typ string) (platform.EntityInfo, bool) {
+func (e automationEnvironment) Entity(typ string) (platform.RecordTypeInfo, bool) {
 	return e.b.lookupEntity(typ)
 }
 

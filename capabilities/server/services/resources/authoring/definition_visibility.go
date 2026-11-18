@@ -1,4 +1,4 @@
-package build
+package authoring
 
 import (
 	"maps"
@@ -16,7 +16,7 @@ type DefinitionVisibility struct {
 	Tenant                    string
 	Resolver                  publication.Resolver
 	Member                    platform.Member
-	Entities                  map[string]platform.EntityInfo
+	Entities                  map[string]platform.RecordTypeInfo
 	Actions                   map[string]platform.Action
 	Registered                []platform.Definition
 	OwnerActive               func(app string) bool
@@ -29,10 +29,10 @@ type DefinitionVisibility struct {
 	ProtocolRead              func(def platform.Definition, name string) bool
 	Readable                  func(ref string) bool
 	ObservationSourceActive   func(id string) bool
-	CheckQuery                func(q platform.NamedQuery, info platform.EntityInfo) error
+	CheckQuery                func(q platform.NamedQuery, info platform.RecordTypeInfo) error
 	Page                      func(def platform.Definition) (platform.Definition, bool)
 	ProjectApplication        func(platform.Definition, publication.ApplicationProjection) (platform.Definition, bool)
-	VisibleQuery              func(q platform.NamedQuery, entities map[string]platform.EntityInfo) (platform.NamedQuery, bool)
+	VisibleQuery              func(q platform.NamedQuery, entities map[string]platform.RecordTypeInfo) (platform.NamedQuery, bool)
 	FilterNavigation          func([]platform.Definition) []platform.Definition
 	FilterExplorationAssets   func([]platform.Definition) []platform.Definition
 	ProjectProtocol           func(p platform.ProtocolReleaseDescriptor, actions map[string]platform.Action, readable func(name string) bool) (*platform.ProtocolReleaseDescriptor, bool)

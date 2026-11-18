@@ -66,7 +66,7 @@ func PublishBatch(result acceptedformat.Batch, publish func(platform.Event, prot
 }
 
 type BatchState struct {
-	App             func(string) platform.App
+	App             func(string) platform.Service
 	States          map[string]platform.AcceptedStateApp
 	Notices         *NoticeBoard
 	Sequences       *Sequences
@@ -153,7 +153,7 @@ func (b BatchState) Changes(batch BatchApply) ChangeApply {
 		}}
 }
 
-func LedgerOf(app func(string) platform.App) func(string) platform.Authority {
+func LedgerOf(app func(string) platform.Service) func(string) platform.Authority {
 	return func(name string) platform.Authority {
 		if owner := app(name); owner != nil {
 			return owner.Authority()

@@ -13,15 +13,15 @@ func (h hostView) definitionInstall() ontology.DefinitionInstall {
 		Describe:    func(d platform.Definition) (platform.Definition, error) { return h.t.describer().DescribeDefinition(d) },
 		Store:       h.t.storeDefinition,
 		Entity:      h.t.Entity,
-		Types: func() []platform.EntityInfo {
-			var types []platform.EntityInfo
+		Types: func() []platform.RecordTypeInfo {
+			var types []platform.RecordTypeInfo
 			for _, et := range h.t.Projection.SortedTypes() {
 				types = append(types, et.Info())
 			}
 			return types
 		},
 		Bind: func(q platform.NamedQuery) (platform.NamedQuery, error) { return h.t.bindInterfaceQuery(q) },
-		Query: func(q platform.NamedQuery, info platform.EntityInfo) error {
+		Query: func(q platform.NamedQuery, info platform.RecordTypeInfo) error {
 			return objects.CheckNamedQuery(q, info, h.t.services.Rules)
 		},
 		Staged:    unsupportedStagedEffect,
@@ -51,7 +51,7 @@ func (h hostView) InstallPropertyType(c platform.Caller, p platform.PropertyType
 	return h.definitionInstall().InstallPropertyType(c, p, version)
 }
 
-func (t *Tenant) checkObjectProperties(info platform.EntityInfo) error {
+func (t *Tenant) checkObjectProperties(info platform.RecordTypeInfo) error {
 	view := hostView{t: t}
 	return ontology.CheckObjectBindings(info, view.ResolvePropertyType, view.ResolveValueType)
 }

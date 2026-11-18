@@ -648,7 +648,7 @@ func NewRuntime(context ruleprotocol.BusinessRuntimeContext) ruleprotocol.Transa
 	return &Runtime{BusinessRuntimeContext: context}
 }
 
-func CheckTxnCall(call platform.TxnCall, definitions []platform.Definition, owner func(string) platform.App, resolver publication.Resolver) error {
+func CheckTxnCall(call platform.TxnCall, definitions []platform.Definition, owner func(string) platform.Service, resolver publication.Resolver) error {
 	if call.Ref.Check() != nil || call.Ref.Kind != platform.AssetQuery || call.Version < 0 || !slices.Contains([]string{"", "snapshot", "current"}, call.View) {
 		return fmt.Errorf("Transaction calls need a synchronous pure query with snapshot or current reads")
 	}

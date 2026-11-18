@@ -1,4 +1,4 @@
-package build
+package authoring
 
 import (
 	"encoding/json"
@@ -36,7 +36,7 @@ func CompositeAnswerOf(saved acceptedformat.Composite) (protocol.CompositeAnswer
 }
 
 type CompositeDraft struct {
-	Decide         func(m platform.Member, app platform.App, s *pb.Submission, at time.Time) (*pb.ChangeRecord, *platform.Error)
+	Decide         func(m platform.Member, app platform.Service, s *pb.Submission, at time.Time) (*pb.ChangeRecord, *platform.Error)
 	AnswerRequests func(at time.Time) *platform.Error
 	StageObservers func() *platform.Error
 	BatchResult    func(receipt *pb.ChangeRecord, at time.Time) ([]byte, error)
@@ -51,7 +51,7 @@ type CompositePlan struct {
 	PriorDigest func(key string) (string, bool)
 	Receipt     func(id string) *pb.ChangeRecord
 	Begin       func() CompositeDraft
-	ActionOwner func(schema string) platform.App
+	ActionOwner func(schema string) platform.Service
 	Bound       func(platform.Member, *pb.Submission) *platform.Error
 }
 

@@ -37,7 +37,7 @@ type ObservationDecision struct {
 	Sources   Observations
 	Admits    func(platform.Member) *platform.Error
 	Prior     func(m platform.Member, key, identity string) (*pb.ChangeRecord, *platform.Error, bool)
-	App       func(app string) platform.App
+	App       func(app string) platform.Service
 	Authorize func(m platform.Member, app string, action platform.Action, targets bool, at time.Time, sources []string) *platform.Error
 	Accept    func(m platform.Member, s *pb.Submission, evidence *platform.ObservationDecisionEvidence, at time.Time) (*pb.ChangeRecord, *platform.Error)
 }

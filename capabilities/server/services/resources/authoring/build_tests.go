@@ -1,4 +1,4 @@
-package build
+package authoring
 
 import (
 	"bytes"
@@ -18,8 +18,8 @@ const SampleSetType = "build.sample-set"
 
 type SampleSetRecord = devopsmodel.SampleSetRecord
 
-func (*Build) testPlanEntity() platform.Entity {
-	return platform.Entity{Type: TestPlanType, Title: "Test plan", Plural: "Test plans", Model: TestPlan{}, Display: "title",
+func (*Build) testPlanEntity() platform.RecordType {
+	return platform.RecordType{Type: TestPlanType, Title: "Test plan", Plural: "Test plans", Model: TestPlan{}, Display: "title",
 		Description: "Fixed sample inputs and expected outcomes for testing a saved object, workflow or function draft.",
 		Scope:       platform.Scope{Default: platform.ScopeNone, Levels: map[string]string{Builder: platform.ScopeTenant}},
 		Standard:    platform.Standard{Create: true, Edit: true, Archive: true, Roles: []string{Builder}, Capability: "objects"}}

@@ -154,7 +154,7 @@ func (r *Store) Sealed() map[string]platform.SealedArtifact { return maps.Clone(
 func (r *Store) SelectPreview(id string) { r.active = id }
 
 type runtimeAssetOwner struct {
-	platform.App
+	platform.Service
 	resolver   publication.Resolver
 	lifecycle  protocol.AssetLifecycleOwner
 	code       []platform.ReleaseAsset
@@ -291,7 +291,7 @@ func (o runtimeAssetOwner) ApplyAssetInstallation(plan protocol.AssetInstallatio
 	return o.lifecycle.ApplyAssetInstallation(plan, context)
 }
 
-func ValidateCodeAsset(asset platform.ReleaseAsset, app func(string) platform.App, codeAssets func(platform.App) ([]platform.ReleaseAsset, error)) error {
+func ValidateCodeAsset(asset platform.ReleaseAsset, app func(string) platform.Service, codeAssets func(platform.Service) ([]platform.ReleaseAsset, error)) error {
 	owner := app(asset.Ref.App)
 	if owner == nil {
 		return fmt.Errorf("code asset %s has no original owner", asset.Ref)
@@ -303,7 +303,7 @@ func ValidateCodeAsset(asset platform.ReleaseAsset, app func(string) platform.Ap
 	if !slices.ContainsFunc(code, func(current platform.ReleaseAsset) bool { return current.Ref == asset.Ref }) {
 		return fmt.Errorf("asset %s is not an original code declaration", asset.Ref)
 	}
-	remaining, err := (runtimeAssetOwner{App: owner, code: code}).controlled([]platform.ReleaseAsset{asset})
+	remaining, err := (runtimeAssetOwner{Service: owner, code: code}).controlled([]platform.ReleaseAsset{asset})
 	if err != nil {
 		return err
 	}
@@ -313,7 +313,7 @@ func ValidateCodeAsset(asset platform.ReleaseAsset, app func(string) platform.Ap
 	return nil
 }
 
-func NewRegistry(resolver publication.Resolver, apps []platform.App, codeAssets func(platform.App) ([]platform.ReleaseAsset, error), nativeFlow func(platform.App, platform.AssetRef, string) (platform.ReleaseAsset, error)) (*publication.AssetRegistry, error) {
+func NewRegistry(resolver publication.Resolver, apps []platform.Service, codeAssets func(platform.Service) ([]platform.ReleaseAsset, error), nativeFlow func(platform.Service, platform.AssetRef, string) (platform.ReleaseAsset, error)) (*publication.AssetRegistry, error) {
 	registry, err := resolver.NewAssetRegistry()
 	if err != nil {
 		return nil, err
@@ -324,7 +324,7 @@ func NewRegistry(resolver publication.Resolver, apps []platform.App, codeAssets 
 			return nil, err
 		}
 		lifecycle, _ := app.(protocol.AssetLifecycleOwner)
-		owner := runtimeAssetOwner{App: app, resolver: resolver, lifecycle: lifecycle, code: code, nativeFlow: func(ref platform.AssetRef, source string) (platform.ReleaseAsset, error) {
+		owner := runtimeAssetOwner{Service: app, resolver: resolver, lifecycle: lifecycle, code: code, nativeFlow: func(ref platform.AssetRef, source string) (platform.ReleaseAsset, error) {
 			return nativeFlow(app, ref, source)
 		}}
 		if len(owner.AssetKinds()) == 0 {

@@ -175,7 +175,7 @@ type MemberView struct {
 }
 
 type IdentitySessions interface {
-	platform.App
+	platform.Service
 	MemberBySubject(string) (platform.Member, bool)
 	MemberByToken(string, time.Time) (platform.Member, bool)
 	NoticeSession(string, string, string, string, time.Time) bool
@@ -191,7 +191,7 @@ type IdentitySessions interface {
 }
 
 type IdentityProfile interface {
-	platform.App
+	platform.Service
 	Account(string) Account
 	TenantRecord() TenantRecord
 	Location(string) *time.Location
@@ -200,7 +200,7 @@ type IdentityProfile interface {
 }
 
 type HostIdentities interface {
-	platform.App
+	platform.Service
 	Identities() []LoginIdentity
 }
 

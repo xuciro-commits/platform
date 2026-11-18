@@ -6,7 +6,7 @@ import (
 	"platformserver/kernel/protocol"
 	"platformserver/platform"
 	"platformserver/services/functions/authoring"
-	"platformserver/services/resources/authoring"
+	build "platformserver/services/resources/authoring"
 )
 
 func (t *Tenant) DraftActionCapabilities(m platform.Member) ([]protocol.CapabilityDescriptor, error) {

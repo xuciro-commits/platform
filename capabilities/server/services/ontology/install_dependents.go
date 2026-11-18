@@ -14,19 +14,19 @@ import (
 type InstallDraft struct {
 	Records      *records.Store
 	Install      func() error
-	CheckSets    func(info platform.EntityInfo, engine platform.RuleEngine) error
-	Entity       func(typ string) (platform.EntityInfo, bool)
-	App          func(id string) platform.App
+	CheckSets    func(info platform.RecordTypeInfo, engine platform.RuleEngine) error
+	Entity       func(typ string) (platform.RecordTypeInfo, bool)
+	App          func(id string) platform.Service
 	LinkType     func(owner string, l platform.LinkType) error
 	Query        func(owner string, q platform.NamedQuery) error
 	Function     func(owner string, f platform.AIFunction) error
 	CheckQueries func(p platform.Page) error
-	InstallPage  func(owner platform.App, p platform.Page) error
+	InstallPage  func(owner platform.Service, p platform.Page) error
 }
 
 type InstallDependents struct {
 	App             string
-	Entity          platform.Entity
+	Entity          platform.RecordType
 	Actions         []platform.Action
 	GeneratedPage   string
 	Engine          platform.RuleEngine

@@ -1,4 +1,4 @@
-package agents
+package runtime
 
 import (
 	"fmt"
@@ -12,20 +12,20 @@ import (
 )
 
 type evaluationApp struct {
-	platform.App
+	platform.Service
 	agent string
 }
 
-func (a evaluationApp) Fork(ledger platform.Authority) (platform.App, error) {
-	fork, err := a.App.Fork(ledger)
+func (a evaluationApp) Fork(authority platform.Authority) (platform.Service, error) {
+	fork, err := a.Service.Fork(authority)
 	if err != nil {
 		return nil, err
 	}
-	return evaluationApp{App: fork, agent: a.agent}, nil
+	return evaluationApp{Service: fork, agent: a.agent}, nil
 }
 
 func (a evaluationApp) Manifest() platform.Manifest {
-	m := a.App.Manifest()
+	m := a.Service.Manifest()
 	m.Agents = slices.DeleteFunc(slices.Clone(m.Agents), func(d platform.Agent) bool { return d.Name != a.agent })
 	return m
 }
@@ -36,7 +36,7 @@ type CandidateEvaluation struct {
 	Owner     protocol.ReleaseExecutionOwner
 }
 
-func (c CandidateEvaluation) App(candidate, agent string) (platform.App, string, error) {
+func (c CandidateEvaluation) App(candidate, agent string) (platform.Service, string, error) {
 	owner, name, valid := strings.Cut(agent, ".")
 	if !valid || owner != c.Builder {
 		return nil, "", fmt.Errorf("candidate evaluations require a controlled builder agent")
@@ -58,7 +58,7 @@ func (c CandidateEvaluation) App(candidate, agent string) (platform.App, string,
 		return nil, "", err
 	}
 	digest, err := platform.CanonicalDigest(saved.Assets[i])
-	return evaluationApp{App: bound, agent: name}, digest, err
+	return evaluationApp{Service: bound, agent: name}, digest, err
 }
 
 type ReleaseEvaluation struct {

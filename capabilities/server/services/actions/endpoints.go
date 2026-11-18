@@ -54,7 +54,7 @@ func (e *Endpoints) Remove(id string) {
 	e.all = slices.DeleteFunc(e.all, func(ep *Endpoint) bool { return ep.ID == id })
 }
 
-func (ep *Endpoint) Valid(app func(string) platform.App, declared func(event string) bool) bool {
+func (ep *Endpoint) Valid(app func(string) platform.Service, declared func(event string) bool) bool {
 	u, err := url.Parse(ep.URL)
 	if err != nil || u.Host == "" {
 		return false

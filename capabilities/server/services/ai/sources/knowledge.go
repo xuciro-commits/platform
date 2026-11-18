@@ -1,4 +1,4 @@
-package knowledge
+package sources
 
 import (
 	"encoding/json"
@@ -32,8 +32,8 @@ type Document struct {
 type Term = platform.KnowledgeTerm
 
 type Knowledge struct {
-	host   platform.KnowledgeHost
-	ledger platform.Authority
+	host      platform.KnowledgeHost
+	authority platform.Authority
 }
 
 func (k *Knowledge) AttachKnowledge(h platform.KnowledgeHost) { k.host = h }
@@ -45,12 +45,12 @@ func (k *Knowledge) AttachOwner(bindings runtimeprotocol.OwnerBindings) {
 func New(tenant string, authorities platform.Authorities) *Knowledge {
 	k := &Knowledge{}
 	es := knowledgeEntities()
-	k.ledger = authorities(tenant, ID, platform.NewCatalog(append(actioncatalog.EntityActions(es[0]), actioncatalog.EntityActions(es[1])...)...), DocumentType, TermType)
+	k.authority = authorities(tenant, ID, platform.NewCatalog(append(actioncatalog.EntityActions(es[0]), actioncatalog.EntityActions(es[1])...)...), DocumentType, TermType)
 	return k
 }
 
-func knowledgeEntities() []platform.Entity {
-	return []platform.Entity{{Type: DocumentType, Title: "Document", Model: Document{}, Display: "title",
+func knowledgeEntities() []platform.RecordType {
+	return []platform.RecordType{{Type: DocumentType, Title: "Document", Model: Document{}, Display: "title",
 		Description: "A text people upload for agents and members to find and cite: house rules, manuals, FAQs, contracts.",
 		Standard:    platform.Standard{Create: true, Edit: true, Archive: true, Roles: []string{Editor}, Capability: "documents"}},
 		{Type: TermType, Title: "Term", Model: Term{}, Display: "term", Synonyms: "glossary",
@@ -59,19 +59,19 @@ func knowledgeEntities() []platform.Entity {
 }
 
 func (k *Knowledge) Manifest() platform.Manifest {
-	return platform.Manifest{ID: ID, Title: platform.BuiltinManifestTitle(ID), Version: "1", Actions: k.ledger.Catalog(), Entities: knowledgeEntities(),
+	return platform.Manifest{ID: ID, Title: platform.BuiltinManifestTitle(ID), Version: "1", Actions: k.authority.Catalog(), Entities: knowledgeEntities(),
 		Settings: []platform.Setting{{Name: SettingEmbeddingModel, Title: "Embedding model", Type: "text", Default: "",
 			Description: "The enabled model that embeds passages, <provider>/<model>, on the OpenAI wire. Empty: knowledge is searched by words only."},
 			{Name: runtimeprotocol.SettingKnowledgeEmbeddingNext, Title: "Build vector index with", Type: "text", Default: "", Description: "Explicitly prepare an index with this model before activating it in AI configuration; indexing may incur provider charges."}}}
 }
 
-func (k *Knowledge) Authority() platform.Authority { return k.ledger }
+func (k *Knowledge) Authority() platform.Authority { return k.authority }
 
-func (k *Knowledge) Declarations() []*pb.AuthorityDeclaration { return k.ledger.Declarations() }
+func (k *Knowledge) Declarations() []*pb.AuthorityDeclaration { return k.authority.Declarations() }
 func (k *Knowledge) SnapshotFormat() string                   { return "platform.ledger.v1" }
 
-func (k *Knowledge) Snapshot() (json.RawMessage, error) { return k.ledger.Snapshot() }
-func (k *Knowledge) Restore(raw json.RawMessage) error  { return k.ledger.Restore(raw) }
+func (k *Knowledge) Snapshot() (json.RawMessage, error) { return k.authority.Snapshot() }
+func (k *Knowledge) Restore(raw json.RawMessage) error  { return k.authority.Restore(raw) }
 func (k *Knowledge) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *platform.Error) {
 	if name := s.GetSchema().GetName(); (name == TermType+".create" || name == TermType+".edit") && !c.Replaying {
 		var p struct{ RefersTo *string }
@@ -80,7 +80,7 @@ func (k *Knowledge) Submit(c platform.Caller, s *pb.Submission, now time.Time) (
 			return nil, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 		}
 	}
-	if record, err, ok := k.ledger.Generated(c, s, now, nil, knowledgeEntities()...); ok {
+	if record, err, ok := k.authority.Generated(c, s, now, nil, knowledgeEntities()...); ok {
 		return record, err
 	}
 	return nil, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_UNKNOWN_SCHEMA}
@@ -108,6 +108,6 @@ func (k *Knowledge) TermsFor(declaration string) []string {
 	return out
 }
 
-func (k *Knowledge) Fork(ledger platform.Authority) (platform.App, error) {
-	return &Knowledge{host: k.host, ledger: ledger}, nil
+func (k *Knowledge) Fork(authority platform.Authority) (platform.Service, error) {
+	return &Knowledge{host: k.host, authority: authority}, nil
 }

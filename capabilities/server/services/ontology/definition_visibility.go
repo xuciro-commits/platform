@@ -7,7 +7,7 @@ import (
 	"platformserver/platform"
 )
 
-func ProjectDefinition(def *platform.Definition, entities map[string]platform.EntityInfo, builder bool) bool {
+func ProjectDefinition(def *platform.Definition, entities map[string]platform.RecordTypeInfo, builder bool) bool {
 	switch def.Ref.Kind {
 	case platform.AssetPropertyType:
 		if def.PropertyType == nil {
@@ -55,12 +55,12 @@ func ProjectDefinition(def *platform.Definition, entities map[string]platform.En
 			return len(def.LinkVersions) > 0
 		}
 	case platform.AssetInterface:
-		return def.Interface != nil && (builder || slices.ContainsFunc(slices.Collect(maps.Values(entities)), func(info platform.EntityInfo) bool { return slices.Contains(info.Implements, def.Ref.Name) }))
+		return def.Interface != nil && (builder || slices.ContainsFunc(slices.Collect(maps.Values(entities)), func(info platform.RecordTypeInfo) bool { return slices.Contains(info.Implements, def.Ref.Name) }))
 	}
 	return true
 }
 
-func boundVersion(entities map[string]platform.EntityInfo, ref platform.AssetRef, version string, pick func(platform.FieldInfo) *platform.AssetBinding) bool {
+func boundVersion(entities map[string]platform.RecordTypeInfo, ref platform.AssetRef, version string, pick func(platform.FieldInfo) *platform.AssetBinding) bool {
 	for _, entity := range entities {
 		for _, field := range entity.Fields {
 			if binding := pick(field); binding != nil && binding.Ref == ref && binding.SourceVersion == version {

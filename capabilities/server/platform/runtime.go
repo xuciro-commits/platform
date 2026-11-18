@@ -9,7 +9,7 @@ import (
 )
 
 type DecisionRuntime interface {
-	Decide(Caller, App, *pb.Submission, time.Time) (*pb.ChangeRecord, *Error)
+	Decide(Caller, Service, *pb.Submission, time.Time) (*pb.ChangeRecord, *Error)
 	Attempt(func() (*pb.ChangeRecord, *Error)) (*pb.ChangeRecord, *Error)
 	ProbeDecision(Caller, func(Caller) *Error) *Error
 }

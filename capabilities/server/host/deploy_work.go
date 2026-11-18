@@ -36,7 +36,7 @@ func runWorkFrom(current func() []*Tenant) func(context.Context) error {
 			outside := append(t.dispatches(Now()), t.agentSchedule().Turns().Due(Now())...)
 			return append(outside, t.continuousSources(Now())...)
 		},
-		OnLane: integrations.OnLane,
+		OnLane: transform.OnLane,
 		Always: func(t *Tenant) {
 			t.FlushObservations()
 			t.PurgeObservations(Now())

@@ -1,4 +1,4 @@
-package build
+package authoring
 
 import (
 	"encoding/json"
@@ -55,7 +55,7 @@ func (b *Build) checkExtensionDependents(object ontology.Object) error {
 	if err != nil {
 		return err
 	}
-	var base platform.EntityInfo
+	var base platform.RecordTypeInfo
 	for _, record := range objects {
 		published, exists := publication.Read[ontology.Object](record.Published)
 		if !exists || published.Extends != ID+"."+object.Name {
@@ -82,7 +82,7 @@ func (b *Build) checkExtensionDependents(object ontology.Object) error {
 	return nil
 }
 
-func (b *Build) objectEntity() platform.Entity {
+func (b *Build) objectEntity() platform.RecordType {
 	return ontology.ObjectEntity(ontology.ObjectEntityEnvironment{
 		NormalizeRules:   b.normalizeObjectRules,
 		BindActions:      b.bindObjectActions,
@@ -96,9 +96,9 @@ func (b *Build) objectEntity() platform.Entity {
 	})
 }
 
-func (b *Build) conditionLookup(typ string) (platform.EntityInfo, bool) {
+func (b *Build) conditionLookup(typ string) (platform.RecordTypeInfo, bool) {
 	if b.host == nil {
-		return platform.EntityInfo{}, false
+		return platform.RecordTypeInfo{}, false
 	}
 	return b.lookupEntity(typ)
 }
@@ -238,10 +238,10 @@ func (b *Build) install(c platform.Caller, o ontology.Object) *platform.Error {
 	if err != nil {
 		return &platform.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, Message: err.Error()}
 	}
-	if err := b.ledger.Extend([]string{entity.Type}, actions); err != nil {
+	if err := b.authority.Extend([]string{entity.Type}, actions); err != nil {
 		return &platform.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, Message: err.Error()}
 	}
-	b.ledger.Catalog().ReplaceTarget(entity.Type, actions)
+	b.authority.Catalog().ReplaceTarget(entity.Type, actions)
 	if err := b.host.Install(c, entity, actions, pages...); err != nil {
 		return &platform.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, Message: err.Error()}
 	}
@@ -249,11 +249,11 @@ func (b *Build) install(c platform.Caller, o ontology.Object) *platform.Error {
 	return nil
 }
 
-func Entity(o ontology.Object) platform.Entity {
+func Entity(o ontology.Object) platform.RecordType {
 	return ontology.CompileObjectEntity(o, ontology.ObjectRuntimeEnvironment{})
 }
 
-func (b *Build) entity(o ontology.Object) platform.Entity {
+func (b *Build) entity(o ontology.Object) platform.RecordType {
 	entity := ontology.CompileObjectEntity(o, ontology.ObjectRuntimeEnvironment{
 		Lookup: b.conditionLookup,
 		Transaction: func(c platform.Caller, r *pb.ChangeRecord, transaction *platform.BusinessTxn, now time.Time) *platform.Error {

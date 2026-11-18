@@ -16,7 +16,7 @@ import (
 	"platformserver/services/actions"
 	automation "platformserver/services/automate/runtime"
 	"platformserver/services/devops/releases"
-	"platformserver/services/resources/authoring"
+	build "platformserver/services/resources/authoring"
 )
 
 var snapshotBuild = sync.OnceValue(func() string { return CodeOf() })

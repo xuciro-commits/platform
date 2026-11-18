@@ -130,7 +130,7 @@ func WordsOf(app string, apps, languages, texts []string, say func(lang, s strin
 	return view
 }
 
-func TextsOf(app string, manifest *platform.Manifest, definitions []platform.Definition, infos []platform.EntityInfo) []string {
+func TextsOf(app string, manifest *platform.Manifest, definitions []platform.Definition, infos []platform.RecordTypeInfo) []string {
 	var m platform.Manifest
 	var parts []any
 	if manifest != nil {

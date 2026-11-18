@@ -1,4 +1,4 @@
-package automation
+package runtime
 
 import (
 	"slices"
@@ -9,10 +9,10 @@ import (
 )
 
 type WorkDecision struct {
-	Owner     func(app string) platform.App
+	Owner     func(app string) platform.Service
 	Listens   func(app string) bool
 	Authorize func(permission string, roles []string, declared bool) *platform.Error
-	State     func() platform.App
+	State     func() platform.Service
 	Routed    func(platform.Event) []string
 	Hops      func(int)
 	Finish    func() *platform.Error

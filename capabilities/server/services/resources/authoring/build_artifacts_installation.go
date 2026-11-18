@@ -1,4 +1,4 @@
-package build
+package authoring
 
 import (
 	"encoding/json"
@@ -78,10 +78,10 @@ func (b *Build) ApplyAssetInstallation(plan protocol.AssetInstallation, ctx prot
 		return err
 	}
 	if ctx.Private {
-		saved := b.ledger
+		saved := b.authority
 		b.installationCatalog = platform.NewCatalog(b.Manifest().Actions.All()...)
-		b.ledger = b.authorities("private-release", ID, b.installationCatalog)
-		defer func() { b.ledger = saved }()
+		b.authority = b.authorities("private-release", ID, b.installationCatalog)
+		defer func() { b.authority = saved }()
 	}
 	return b.ApplyAcceptedPublication(plan.Schema, plan.Image)
 }
@@ -132,7 +132,7 @@ func (b *Build) BeginAssetBootstrap(assets []platform.ReleaseAsset) (func(), err
 	available := map[platform.AssetRef]bool{}
 	shapes := maps.Clone(saved)
 	if shapes == nil {
-		shapes = map[string]platform.EntityInfo{}
+		shapes = map[string]platform.RecordTypeInfo{}
 	}
 	for _, asset := range assets {
 		available[asset.Ref] = true

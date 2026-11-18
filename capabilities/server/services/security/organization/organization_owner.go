@@ -45,7 +45,7 @@ type Enterprise struct {
 	mu          sync.Mutex
 	tenant      string
 	model       Model
-	ledger      platform.Authority
+	authority   platform.Authority
 	authorities platform.Authorities
 }
 
@@ -116,10 +116,10 @@ func declarations() []platform.Action {
 
 func New(tenant string, authorities platform.Authorities, seed platform.OrgSeed) *Enterprise {
 	catalog := platform.NewCatalog(declarations()...)
-	return &Enterprise{tenant: tenant, model: FromOrgSeed(seed), authorities: authorities, ledger: authorities(tenant, ID, catalog, ElementType, RelationshipType, ViewType, ModelType, TenantLinkType)}
+	return &Enterprise{tenant: tenant, model: FromOrgSeed(seed), authorities: authorities, authority: authorities(tenant, ID, catalog, ElementType, RelationshipType, ViewType, ModelType, TenantLinkType)}
 }
 
-func (e *Enterprise) NewSimulationOrganization(tenant string, seed platform.OrgSeed) platform.App {
+func (e *Enterprise) NewSimulationOrganization(tenant string, seed platform.OrgSeed) platform.Service {
 	return New(tenant, e.authorities, seed)
 }
 
@@ -128,14 +128,14 @@ func (e *Enterprise) SnapshotFormat() string { return "enterprise.model.v1" }
 func (e *Enterprise) Snapshot() (json.RawMessage, error) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
-	return e.ledger.SnapshotWith(e.model)
+	return e.authority.SnapshotWith(e.model)
 }
 
 func (e *Enterprise) Restore(raw json.RawMessage) error {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	e.model = Model{}
-	return e.ledger.RestoreWith(raw, &e.model)
+	return e.authority.RestoreWith(raw, &e.model)
 }
 
 func (e *Enterprise) Manifest() platform.Manifest {
@@ -175,7 +175,7 @@ func (e *Enterprise) Listen(c platform.Caller, ev platform.Event, _ []string, _ 
 	return nil
 }
 
-func (e *Enterprise) Declarations() []*pb.AuthorityDeclaration { return e.ledger.Declarations() }
+func (e *Enterprise) Declarations() []*pb.AuthorityDeclaration { return e.authority.Declarations() }
 
 func (e *Enterprise) Model() Model {
 	e.mu.Lock()
@@ -231,7 +231,7 @@ func (e *Enterprise) Submit(c platform.Caller, s *pb.Submission, now time.Time) 
 	}
 	e.mu.Lock()
 	defer e.mu.Unlock()
-	return e.ledger.Receive(c, s, now, nil, func() (func(*pb.ChangeRecord), *platform.Error) {
+	return e.authority.Receive(c, s, now, nil, func() (func(*pb.ChangeRecord), *platform.Error) {
 		invalid := func(msg string, args ...any) *platform.Error {
 			return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, msg, args...)
 		}

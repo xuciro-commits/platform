@@ -52,7 +52,7 @@ func CapabilityFieldSchema(kind, description string, choices []string) platform.
 	return value
 }
 
-func CapabilityEntitySchema(info platform.EntityInfo) platform.ValueSchema {
+func CapabilityEntitySchema(info platform.RecordTypeInfo) platform.ValueSchema {
 	schema := platform.ValueSchema{Type: "object", Properties: map[string]platform.ValueSchema{"id": {Type: "string"}, "revision": {Type: "integer"}, "archived": {Type: "boolean"}}, Required: []string{"id", "revision"}}
 	for _, field := range info.Fields {
 		value := capabilityRecordFieldSchema(field)

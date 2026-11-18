@@ -1,4 +1,4 @@
-package agents
+package runtime
 
 import (
 	"bytes"
@@ -21,7 +21,7 @@ func (a *Agents) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb
 	if s.GetSchema().GetName() == runtimeprotocol.SchemaRunStep {
 		return nil, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_POLICY_DENIED}
 	}
-	if record, err, ok := a.ledger.Generated(c, s, now, nil, agentEntities()...); ok {
+	if record, err, ok := a.authority.Generated(c, s, now, nil, agentEntities()...); ok {
 		return record, err
 	}
 	var p struct {
@@ -47,7 +47,7 @@ func (a *Agents) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb
 		}
 		return known && !c.Agent && !c.Automation && (run.OnBehalf == c.ID || slices.Contains(run.Reviewers, c.ID))
 	}
-	return a.ledger.Receive(c, s, now, allowed, func() (func(*pb.ChangeRecord), *platform.Error) {
+	return a.authority.Receive(c, s, now, allowed, func() (func(*pb.ChangeRecord), *platform.Error) {
 		switch s.GetSchema().GetName() {
 		case runtimeprotocol.SchemaRunStart:
 			if known {

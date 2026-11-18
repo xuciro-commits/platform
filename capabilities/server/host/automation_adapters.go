@@ -17,7 +17,7 @@ func (h hostView) flowBindings() automation.FlowBindingContext {
 func (h hostView) BindFlow(app, name string, version int, prior protocol.FlowBinding) (protocol.FlowBinding, error) {
 	return h.flowBindings().BindFlow(app, name, version, prior)
 }
-func (t *Tenant) nativeFlowAsset(owner platform.App, name string, version int) (platform.ReleaseAsset, error) {
+func (t *Tenant) nativeFlowAsset(owner platform.Service, name string, version int) (platform.ReleaseAsset, error) {
 	return releaseowner.NativeFlowAsset(t.Processes, t.definitions, owner, name, version)
 }
 func (t *Tenant) flowReleaseAsset(app, name string, version int) (platform.ReleaseAsset, error) {

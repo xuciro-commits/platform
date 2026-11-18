@@ -5,7 +5,7 @@ import (
 	"platformserver/kernel/protocol"
 	"slices"
 
-	"platformserver/services/resources/authoring"
+	build "platformserver/services/resources/authoring"
 )
 
 type StagedCandidate struct {

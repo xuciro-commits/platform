@@ -7,7 +7,7 @@ import (
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformserver/platform"
 	"platformserver/services/objects"
-	"platformserver/services/resources/authoring"
+	build "platformserver/services/resources/authoring"
 )
 
 func (t *Tenant) host() platform.Member {
@@ -36,7 +36,7 @@ func (t *Tenant) contextRead(reader *platform.Member, typ, id string, now time.T
 		Detail: func(sections ...string) (objects.RecordView, *platform.Error) {
 			return t.objectOwner(t.Projection).RecordDetail(m, typ, id, now, sections...)
 		},
-		Info: func() platform.EntityInfo {
+		Info: func() platform.RecordTypeInfo {
 			t.Projection.Lock()
 			et := t.Projection.Type(typ)
 			t.Projection.Unlock()
@@ -46,7 +46,7 @@ func (t *Tenant) contextRead(reader *platform.Member, typ, id string, now time.T
 			if t.Linker == nil {
 				return nil
 			}
-			return t.Linker.Links(t.caller(m, t.Linker.(platform.App), false), entity)
+			return t.Linker.Links(t.caller(m, t.Linker.(platform.Service), false), entity)
 		},
 		Readable: func(ref string) bool { return t.readable(m, ref, now) },
 		Flows:    records(t.Processes != nil, protocol.FlowInstanceType),

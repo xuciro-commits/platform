@@ -43,7 +43,7 @@ func InstallWork(works *protocol.Works, finished *pb.Work) {
 type WorkApply struct {
 	Changes ChangeApply
 	Works   *protocol.Works
-	App     func(string) platform.App
+	App     func(string) platform.Service
 	Task    func(acceptedformat.Work) (protocol.ScheduledTaskState, string, func(*pb.Work), error)
 	Publish func(platform.Event, protocol.AcceptedEventPlan)
 }

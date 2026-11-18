@@ -12,8 +12,8 @@ import (
 )
 
 type DescribeHost interface {
-	App(id string) platform.App
-	Entity(typ string) (platform.EntityInfo, bool)
+	App(id string) platform.Service
+	Entity(typ string) (platform.RecordTypeInfo, bool)
 	AuthorityOf(dataClass string) string
 	ProtocolProvider(protocol string) (string, bool)
 	Admits(platform.Member) *platform.Error
@@ -46,8 +46,8 @@ func (ds Describer) DefinitionAsset(def platform.Definition) (platform.ReleaseAs
 	switch {
 	case def.Entity != nil:
 		body = struct {
-			Type   string              `json:"type"`
-			Entity platform.EntityInfo `json:"entity"`
+			Type   string                  `json:"type"`
+			Entity platform.RecordTypeInfo `json:"entity"`
 		}{def.Ref.Name, *def.Entity}
 		if def.Source == "code" {
 			if owner := ds.host.App(def.Ref.App); owner != nil {

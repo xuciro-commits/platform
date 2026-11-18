@@ -74,7 +74,7 @@ func (o *Owner) Handles(s *pb.Submission) bool {
 	return s.GetTarget().GetType() == protocol.ProcessType || strings.HasPrefix(s.GetSchema().GetName(), protocol.ProcessType+".")
 }
 
-func (o *Owner) Decide(ledger platform.Authority, c platform.Caller, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *platform.Error, bool) {
+func (o *Owner) Decide(authority platform.Authority, c platform.Caller, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *platform.Error, bool) {
 	if !o.Handles(s) {
 		return nil, nil, false
 	}
@@ -86,6 +86,6 @@ func (o *Owner) Decide(ledger platform.Authority, c platform.Caller, s *pb.Submi
 			return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "A published definition cannot be archived; its installed version must be retained"), true
 		}
 	}
-	record, err, ok := ledger.Generated(c, s, now, nil, o.Entities()...)
+	record, err, ok := authority.Generated(c, s, now, nil, o.Entities()...)
 	return record, err, ok || o.Handles(s)
 }

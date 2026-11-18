@@ -1,4 +1,4 @@
-package automation
+package runtime
 
 import (
 	"bytes"
@@ -424,7 +424,7 @@ func projectOperatorOutputs(outputs map[string]json.RawMessage, instance string,
 	}
 }
 
-func (p *PreparedBatch) Decision(owner platform.App) platform.App {
+func (p *PreparedBatch) Decision(owner platform.Service) platform.Service {
 	return preparedDecision{Flows: owner.(*Flows), prepared: p}
 }
 
@@ -468,8 +468,8 @@ type preparedDecision struct {
 	prepared *PreparedBatch
 }
 
-func (d preparedDecision) Fork(ledger platform.Authority) (platform.App, error) {
-	fork, err := d.Flows.Fork(ledger)
+func (d preparedDecision) Fork(authority platform.Authority) (platform.Service, error) {
+	fork, err := d.Flows.Fork(authority)
 	if err != nil {
 		return nil, err
 	}
@@ -485,7 +485,7 @@ func (d preparedDecision) Submit(c platform.Caller, sub *pb.Submission, now time
 	if !validPrincipal || c.Tenant != p.frame.Sealed.Tenant || !proto.Equal(sub, p.Submission(c.Tenant)) || !now.Equal(p.at) {
 		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "Only the host can accept a prepared Flow batch")
 	}
-	return d.ledger.Receive(c, sub, now, nil, func() (func(*pb.ChangeRecord), *platform.Error) {
+	return d.authority.Receive(c, sub, now, nil, func() (func(*pb.ChangeRecord), *platform.Error) {
 		ss := d.session(d.host.Automation(c, ID), now)
 		if p.replayAsset != nil {
 			asset, ok := platform.Get[protocol.FlowDeadLetterAsset](c, p.replayAsset.ID)

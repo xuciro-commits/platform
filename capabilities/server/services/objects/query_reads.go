@@ -14,7 +14,7 @@ type QueryReads struct {
 	Named         func(app, name string) (platform.NamedQuery, bool)
 	Version       func(m platform.Member, ref platform.AssetRef, version int) (platform.NamedQuery, bool)
 	Schema        func(q platform.NamedQuery) platform.ValueSchema
-	Entity        func(typ string) (platform.EntityInfo, bool)
+	Entity        func(typ string) (platform.RecordTypeInfo, bool)
 	Authorization platform.AuthorizationEngine
 	Run           func(m platform.Member, q platform.NamedQuery, of string, now time.Time) (RecordPage, *platform.Error)
 }
@@ -66,7 +66,7 @@ func (r QueryReads) declared(c platform.Caller, q platform.NamedQuery, inputs js
 	r.Store.Lock()
 	et := r.Store.Type(q.Object)
 	r.Store.Unlock()
-	var info platform.EntityInfo
+	var info platform.RecordTypeInfo
 	if et != nil {
 		info = et.Info()
 	}

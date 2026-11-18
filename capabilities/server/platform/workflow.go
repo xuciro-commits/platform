@@ -253,8 +253,8 @@ type RunEnd struct {
 }
 
 type ProcessDefinitions interface {
-	Install(App, Flow) error
-	Validate(App, Flow) error
+	Install(Service, Flow) error
+	Validate(Service, Flow) error
 	HasRunningDependency(string) (bool, error)
 	HasUnboundRunningDependency(string) (bool, error)
 }

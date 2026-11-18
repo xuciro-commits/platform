@@ -276,7 +276,7 @@ func (l *authority) checked(c platform.Caller, s *pb.Submission, now time.Time, 
 	}
 }
 
-func (l *authority) Generated(c platform.Caller, s *pb.Submission, now time.Time, allowed func() bool, entities ...platform.Entity) (*pb.ChangeRecord, *platform.Error, bool) {
+func (l *authority) Generated(c platform.Caller, s *pb.Submission, now time.Time, allowed func() bool, entities ...platform.RecordType) (*pb.ChangeRecord, *platform.Error, bool) {
 	schema := s.GetSchema().GetName()
 	for _, e := range entities {
 		verb, matches := strings.CutPrefix(schema, e.Type+".")
@@ -334,7 +334,7 @@ func (l *authority) Generated(c platform.Caller, s *pb.Submission, now time.Time
 	return nil, nil, false
 }
 
-func builtinAction(e platform.Entity, verb string) (platform.ActionType, bool) {
+func builtinAction(e platform.RecordType, verb string) (platform.ActionType, bool) {
 	if verb == "create" && e.Standard.Create || verb == "edit" && e.Standard.Edit || verb == "archive" && e.Standard.Archive {
 		return platform.ActionType{Name: verb}, true
 	}
@@ -360,7 +360,7 @@ func approvalMove(t platform.ActionType, suffix string) platform.ActionType {
 		Rules: []platform.ActionRule{{Edit: &platform.PropertyRule{Field: t.Criteria.State.Field, Allowed: []string{destination}}}}}
 }
 
-func executeAction(c platform.Caller, e platform.Entity, t platform.ActionType, s *pb.Submission, now time.Time) (func(*pb.ChangeRecord), *platform.Error) {
+func executeAction(c platform.Caller, e platform.RecordType, t platform.ActionType, s *pb.Submission, now time.Time) (func(*pb.ChangeRecord), *platform.Error) {
 	if !c.HasRuntime() {
 		return nil, notFound()
 	}

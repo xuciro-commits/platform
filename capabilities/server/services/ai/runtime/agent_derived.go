@@ -1,4 +1,4 @@
-package agents
+package runtime
 
 import (
 	"cmp"
@@ -65,15 +65,15 @@ func DerivedTools(surface platform.AgentSurface, focus string) map[string]protoc
 		tool.Tool.Name = toolName(tool.Tool.Name)
 		out[tool.Tool.Name] = tool
 	}
-	entities := map[string]platform.EntityInfo{}
-	var objects []platform.EntityInfo
+	entities := map[string]platform.RecordTypeInfo{}
+	var objects []platform.RecordTypeInfo
 	for _, info := range surface.Entities {
 		entities[info.Type] = info
 		if !platform.StaticControlAction(platform.Action{Target: info.Type}) {
 			objects = append(objects, info)
 		}
 	}
-	slices.SortFunc(objects, func(x, y platform.EntityInfo) int {
+	slices.SortFunc(objects, func(x, y platform.RecordTypeInfo) int {
 		if (x.Type == focus) != (y.Type == focus) {
 			if x.Type == focus {
 				return -1
@@ -118,7 +118,7 @@ func toolName(name string) string {
 	return name[:toolNameLimit-9] + "_" + hex.EncodeToString(sum[:4])
 }
 
-func fieldList(info platform.EntityInfo) string {
+func fieldList(info platform.RecordTypeInfo) string {
 	var parts []string
 	for _, f := range info.Fields[:min(len(info.Fields), derivedFields)] {
 		part := f.Name + " (" + f.Type
@@ -133,7 +133,7 @@ func fieldList(info platform.EntityInfo) string {
 	return strings.Join(parts, ", ")
 }
 
-func objectTool(info platform.EntityInfo, op string) protocol.CompiledAgentTool {
+func objectTool(info platform.RecordTypeInfo, op string) protocol.CompiledAgentTool {
 	properties := map[string]any{
 		"domain": map[string]any{"type": "array", "items": map[string]any{"type": "array"}, "description": "Filters in the prefix form, like [[\"field\",\"=\",\"value\"]]"},
 		"search": map[string]any{"type": "string", "description": "Words to find"},
@@ -156,9 +156,9 @@ func objectTool(info platform.EntityInfo, op string) protocol.CompiledAgentTool 
 		Properties:  properties, Required: []string{"rationale"}}}
 }
 
-func actionTool(x platform.AgentAction, entities map[string]platform.EntityInfo) protocol.CompiledAgentTool {
+func actionTool(x platform.AgentAction, entities map[string]platform.RecordTypeInfo) protocol.CompiledAgentTool {
 	action := x.Action
-	var info *platform.EntityInfo
+	var info *platform.RecordTypeInfo
 	if entity, ok := entities[action.Target]; ok {
 		info = &entity
 	}

@@ -87,7 +87,7 @@ func DatasetLoadSubmission(tenant, authority string, member platform.Member, dat
 		Target: &pb.EntityRef{Type: DatasetType, Id: dataset}, Schema: &pb.SchemaRef{Name: SchemaDatasetLoad, Version: 1}, Payload: payload}
 }
 
-func DeclaredSourceRows(info platform.EntityInfo, kind, source string, input []map[string]any, now time.Time, resolve func(string) string) ([]SourceRow, *platform.DataSourceBinding, error) {
+func DeclaredSourceRows(info platform.RecordTypeInfo, kind, source string, input []map[string]any, now time.Time, resolve func(string) string) ([]SourceRow, *platform.DataSourceBinding, error) {
 	i := slices.IndexFunc(info.DataSources, func(candidate platform.DataSourceBinding) bool {
 		return candidate.Kind == kind && candidate.Source == source
 	})

@@ -7,15 +7,15 @@ import (
 )
 
 type CatalogHooks struct {
-	Apps          func() []platform.App
-	Entities      func() []platform.EntityInfo
-	Provider      func(used string) (platform.App, string, bool)
-	SchemaVersion func(platform.App, platform.Action) (platform.SchemaVersion, error)
+	Apps          func() []platform.Service
+	Entities      func() []platform.RecordTypeInfo
+	Provider      func(used string) (platform.Service, string, bool)
+	SchemaVersion func(platform.Service, platform.Action) (platform.SchemaVersion, error)
 }
 
 func (h CatalogHooks) Of(m platform.Member) []platform.Action {
 	out := []platform.Action{}
-	entities := map[string]platform.EntityInfo{}
+	entities := map[string]platform.RecordTypeInfo{}
 	for _, info := range h.Entities() {
 		entities[info.Type] = info
 	}

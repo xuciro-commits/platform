@@ -1,4 +1,4 @@
-package aigateway
+package gateway
 
 import (
 	"cmp"
@@ -10,7 +10,7 @@ import (
 	"net/http"
 	runtimeprotocol "platformserver/kernel/protocol"
 	"platformserver/platform"
-	"platformserver/services/ai/runtime"
+	agents "platformserver/services/ai/runtime"
 	"slices"
 	"strings"
 	"time"

@@ -3,7 +3,7 @@ package host
 import (
 	"encoding/json"
 	trialowner "platformserver/services/devops/trials"
-	"platformserver/services/functions/runtime"
+	compute "platformserver/services/functions/runtime"
 	controlowner "platformserver/services/security/control"
 
 	"time"

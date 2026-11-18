@@ -47,7 +47,7 @@ type column struct {
 	value         func(reflect.Value) any
 }
 
-func columns(info platform.EntityInfo) []column {
+func columns(info platform.RecordTypeInfo) []column {
 	stamp := func(created bool) func(reflect.Value) platform.Stamp {
 		return func(v reflect.Value) platform.Stamp {
 			if created {
@@ -150,12 +150,12 @@ func ProjectSQL(ctx context.Context, pool *pgxpool.Pool, tenant string, live *St
 func (p *SQLProjection) refresh(ctx context.Context) error {
 	s := p.live
 	s.Lock()
-	infos := []platform.EntityInfo{}
+	infos := []platform.RecordTypeInfo{}
 	for _, et := range s.Types() {
 		infos = append(infos, et.Info())
 	}
 	s.Unlock()
-	slices.SortFunc(infos, func(a, b platform.EntityInfo) int { return strings.Compare(a.Type, b.Type) })
+	slices.SortFunc(infos, func(a, b platform.RecordTypeInfo) int { return strings.Compare(a.Type, b.Type) })
 	tx, err := p.pool.Begin(ctx)
 	if err != nil {
 		return err
@@ -426,7 +426,7 @@ func (p *SQLProjection) Flush(ctx context.Context) (err error) {
 	return nil
 }
 
-func (p *SQLProjection) writeSQL(info platform.EntityInfo) (string, string) {
+func (p *SQLProjection) writeSQL(info platform.RecordTypeInfo) (string, string) {
 	cols := columns(info)
 	names, params, updates := make([]string, len(cols)), make([]string, len(cols)), []string{}
 	for i, c := range cols {

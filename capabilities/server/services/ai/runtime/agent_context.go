@@ -1,4 +1,4 @@
-package agents
+package runtime
 
 import (
 	"cmp"
@@ -97,9 +97,9 @@ func (a *Agents) readsAs(run protocol.AgentRunRecord) *platform.Member {
 	return a.host.AgentAppReader(app)
 }
 
-func memoryEntity() platform.Entity {
+func memoryEntity() platform.RecordType {
 	people := []string{protocol.AgentAdmin, platform.AnyMember}
-	return platform.Entity{Type: protocol.MemoryType, Title: "Agent memory", Model: protocol.Memory{}, Display: "fact",
+	return platform.RecordType{Type: protocol.MemoryType, Title: "Agent memory", Model: protocol.Memory{}, Display: "fact",
 		Derived:  []platform.Derivation{{From: "sources", Fields: []string{"fact", "sources"}}},
 		Withheld: "withheld",
 		Scope:    platform.Scope{Participants: func(record any) []string { return []string{record.(protocol.Memory).For} }},

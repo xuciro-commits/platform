@@ -9,7 +9,7 @@ import (
 	"platformserver/platform"
 )
 
-func (s *Sequence) OpenReadScope(ctx context.Context, apps []platform.App, copied bool, quarantine func(error)) error {
+func (s *Sequence) OpenReadScope(ctx context.Context, apps []platform.Service, copied bool, quarantine func(error)) error {
 	view, err := s.Projection.Current().Open(ctx)
 	if err != nil {
 		var mismatch *persistence.StatePositionError
@@ -24,7 +24,7 @@ func (s *Sequence) OpenReadScope(ctx context.Context, apps []platform.App, copie
 	return nil
 }
 
-func (s *Sequence) CloseReadScope(apps []platform.App, original bool, quarantine func(error)) error {
+func (s *Sequence) CloseReadScope(apps []platform.Service, original bool, quarantine func(error)) error {
 	current := s.Projection.Current()
 	if original && current.Position() != nil && current.Position()() != current.Applied() {
 		quarantine(fmt.Errorf("SQL commit is at %d before in-memory application at %d", current.Position()(), current.Applied()))

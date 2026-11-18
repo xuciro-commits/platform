@@ -30,7 +30,7 @@ func (d *stagedDecision) ResolveValueType(binding platform.AssetBinding) (platfo
 
 func (h hostView) ValidateInstallValueType(v platform.ValueType) error { return v.Check() }
 
-func (h hostView) ValidateObjectPresentation(info platform.EntityInfo) error {
+func (h hostView) ValidateObjectPresentation(info platform.RecordTypeInfo) error {
 	_, err := records.CompileFormats(info)
 	return err
 }

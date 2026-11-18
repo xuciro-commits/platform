@@ -86,7 +86,7 @@ func RunnableIDs(queued []Queued, now time.Time, limit int) []string {
 
 type AppEffectPlan struct {
 	Tenant    string
-	App       platform.App
+	App       platform.Service
 	Endpoints []Endpoint
 	Run       string
 	Bind      func(platform.AssetRef) ([]platform.AssetBinding, error)
@@ -126,7 +126,7 @@ func (p AppEffectPlan) Plan(c platform.Caller, kind, key, entity string, data an
 		p.Tenant, kind, c.Agent && emits[i].Irreversible, c.Agent, exists), nil
 }
 
-func HeldNotices(app platform.App, kind, entity, agent string, planned []platform.Effect, ref string) []platform.Notification {
+func HeldNotices(app platform.Service, kind, entity, agent string, planned []platform.Effect, ref string) []platform.Notification {
 	emits := app.Manifest().Emits
 	title := emits[slices.IndexFunc(emits, func(e platform.EffectKind) bool { return e.Name == kind })].Title
 	var out []platform.Notification

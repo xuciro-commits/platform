@@ -20,7 +20,7 @@ func ModelRules(definitions []platform.Definition, criteria func(platform.AssetR
 	return values
 }
 
-func ModelFields(info platform.EntityInfo, model *platform.ModelBinding, lookup func(string) (platform.EntityInfo, bool)) platform.EntityInfo {
+func ModelFields(info platform.RecordTypeInfo, model *platform.ModelBinding, lookup func(string) (platform.RecordTypeInfo, bool)) platform.RecordTypeInfo {
 	if model == nil {
 		return info
 	}

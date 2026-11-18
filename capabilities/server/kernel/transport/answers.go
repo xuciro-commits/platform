@@ -105,7 +105,7 @@ func PageBounds(r *http.Request, offsetDefault, limitDefault int) (int, int) {
 	return offset, limit
 }
 
-func NamedReadInputs(app platform.App, name string, query url.Values) (json.RawMessage, *platform.Error) {
+func NamedReadInputs(app platform.Service, name string, query url.Values) (json.RawMessage, *platform.Error) {
 	if app == nil {
 		return nil, nil
 	}

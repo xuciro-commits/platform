@@ -23,7 +23,7 @@ const (
 type SavedView = protocol.MonitoringView
 
 type Monitoring struct {
-	ledger platform.Authority
+	authority platform.Authority
 }
 
 func New(tenant string, authorities platform.Authorities) *Monitoring {
@@ -44,28 +44,28 @@ func New(tenant string, authorities platform.Authorities) *Monitoring {
 			}},
 		{Schema: SchemaViewRemove, Target: ViewType, Capability: "views", Title: "Remove monitoring view", Description: "Remove one of your saved monitoring filters.", Roles: roles, Payload: []platform.Field{}},
 	}
-	return &Monitoring{ledger: authorities(tenant, ID, platform.NewCatalog(actions...), ViewType)}
+	return &Monitoring{authority: authorities(tenant, ID, platform.NewCatalog(actions...), ViewType)}
 }
 
 func (m *Monitoring) Manifest() platform.Manifest {
-	return platform.Manifest{ID: ID, Title: platform.BuiltinManifestTitle(ID), Version: "1", Actions: m.ledger.Catalog(),
-		Entities: []platform.Entity{{Type: ViewType, Title: "Monitoring view", Model: SavedView{}, Display: "title",
+	return platform.Manifest{ID: ID, Title: platform.BuiltinManifestTitle(ID), Version: "1", Actions: m.authority.Catalog(),
+		Entities: []platform.RecordType{{Type: ViewType, Title: "Monitoring view", Model: SavedView{}, Display: "title",
 			Scope: platform.Scope{Default: platform.ScopeOwn, Owner: "owner", Participants: func(value any) []string { return []string{value.(SavedView).Owner} }}}},
 		Reads: []string{ReadViews}, Everyone: []string{ReadViews}}
 }
 
-func (m *Monitoring) Authority() platform.Authority { return m.ledger }
+func (m *Monitoring) Authority() platform.Authority { return m.authority }
 
-func (m *Monitoring) Fork(ledger platform.Authority) (platform.App, error) {
-	return &Monitoring{ledger: ledger}, nil
+func (m *Monitoring) Fork(authority platform.Authority) (platform.Service, error) {
+	return &Monitoring{authority: authority}, nil
 }
-func (m *Monitoring) Declarations() []*pb.AuthorityDeclaration { return m.ledger.Declarations() }
+func (m *Monitoring) Declarations() []*pb.AuthorityDeclaration { return m.authority.Declarations() }
 func (m *Monitoring) SnapshotFormat() string                   { return "platform.ledger.v1" }
-func (m *Monitoring) Snapshot() (json.RawMessage, error)       { return m.ledger.Snapshot() }
-func (m *Monitoring) Restore(raw json.RawMessage) error        { return m.ledger.Restore(raw) }
+func (m *Monitoring) Snapshot() (json.RawMessage, error)       { return m.authority.Snapshot() }
+func (m *Monitoring) Restore(raw json.RawMessage) error        { return m.authority.Restore(raw) }
 
 func (m *Monitoring) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *platform.Error) {
-	return m.ledger.Receive(c, s, now, nil, func() (func(*pb.ChangeRecord), *platform.Error) {
+	return m.authority.Receive(c, s, now, nil, func() (func(*pb.ChangeRecord), *platform.Error) {
 		name := s.GetSchema().GetName()
 		if name != SchemaViewSave && name != SchemaViewRemove {
 			return nil, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_UNKNOWN_SCHEMA}

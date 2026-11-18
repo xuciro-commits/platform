@@ -1,4 +1,4 @@
-package build
+package authoring
 
 import (
 	"encoding/json"
@@ -9,7 +9,7 @@ import (
 	"time"
 )
 
-func PublicLiveKey(m platform.Member, query, version, language string, entity func(string) (platform.EntityInfo, bool)) (string, bool) {
+func PublicLiveKey(m platform.Member, query, version, language string, entity func(string) (platform.RecordTypeInfo, bool)) (string, bool) {
 	target, body, post := strings.Cut(query, "\n")
 	if post || body != "" {
 		return "", false

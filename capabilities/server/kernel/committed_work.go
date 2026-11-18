@@ -146,11 +146,11 @@ func (s *Sequence) AcceptInput(a platform.AcceptedInputApp, m platform.Member, n
 	if h.Flows {
 		versions = draft.Decision.FlowVersions()
 	}
-	candidate := AcceptedEntry(app, m, raw, now, versions)
-	if h.Stage(candidate, key, hash) {
+	decision := AcceptedEntry(app, m, raw, now, versions)
+	if h.Stage(decision, key, hash) {
 		return answer, refusal
 	}
-	committed, err := h.Commit(candidate, key, hash)
+	committed, err := h.Commit(decision, key, hash)
 	if err != nil {
 		return nil, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
 	}

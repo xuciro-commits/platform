@@ -9,16 +9,16 @@ import (
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformserver/kernel/acceptedformat"
 	"platformserver/platform"
-	"platformserver/services/resources/authoring"
+	build "platformserver/services/resources/authoring"
 )
 
 func (t *Tenant) Composite(m platform.Member, key string, edits []protocol.CompositeEdit, now time.Time) (protocol.CompositeAnswer, error) {
-	return decideWithError(t, "composite", func(t *Tenant) (protocol.CompositeAnswer, error) { return t.prepareComposite(m, key, edits, now) }, func(t *Tenant, candidate preparedAccepted) (protocol.CompositeAnswer, error) {
-		saved, err := acceptedformat.DecodeComposite(candidate.entry.Body)
+	return decideWithError(t, "composite", func(t *Tenant) (protocol.CompositeAnswer, error) { return t.prepareComposite(m, key, edits, now) }, func(t *Tenant, decision preparedAccepted) (protocol.CompositeAnswer, error) {
+		saved, err := acceptedformat.DecodeComposite(decision.entry.Body)
 		if err != nil {
 			return protocol.CompositeAnswer{}, err
 		}
-		committed, err := t.acceptResult(candidate.entry, candidate.key, candidate.hash)
+		committed, err := t.acceptResult(decision.entry, decision.key, decision.hash)
 		if err != nil {
 			return protocol.CompositeAnswer{}, err
 		}
@@ -33,11 +33,11 @@ func (t *Tenant) prepareComposite(m platform.Member, key string, edits []protoco
 		Hosted:      func() bool { return t.App(build.ID) != nil },
 		PriorAnswer: t.Committed.CompositeAnswer, PriorDigest: t.Committed.Composite,
 		Receipt:     func(id string) *pb.ChangeRecord { return t.App(build.ID).Authority().AcceptedFor(t.ID, id) },
-		ActionOwner: func(schema string) platform.App { return t.App(t.owner["action:"+schema]) },
+		ActionOwner: func(schema string) platform.Service { return t.App(t.owner["action:"+schema]) },
 		Begin: func() build.CompositeDraft {
 			draft = t.newStagedDecision()
 			return build.CompositeDraft{
-				Decide: func(m platform.Member, app platform.App, s *pb.Submission, at time.Time) (*pb.ChangeRecord, *platform.Error) {
+				Decide: func(m platform.Member, app platform.Service, s *pb.Submission, at time.Time) (*pb.ChangeRecord, *platform.Error) {
 					return platform.Decide(platform.NewCaller(draft, m, build.ID, false, false), app, s, at)
 				},
 				AnswerRequests: draft.answerRequests, StageObservers: draft.stageObservers,

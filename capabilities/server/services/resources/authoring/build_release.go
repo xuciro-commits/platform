@@ -1,4 +1,4 @@
-package build
+package authoring
 
 import (
 	"encoding/json"
@@ -19,12 +19,12 @@ func recordKind(kind platform.AssetKind) bool {
 	return ok && descriptor.family == recordResources
 }
 
-func (b *Build) lookupEntity(typ string) (platform.EntityInfo, bool) {
+func (b *Build) lookupEntity(typ string) (platform.RecordTypeInfo, bool) {
 	if info, ok := b.jointEntities[typ]; ok {
 		return info, true
 	}
 	if b.host == nil {
-		return platform.EntityInfo{}, false
+		return platform.RecordTypeInfo{}, false
 	}
 	return b.host.Entity(typ)
 }
@@ -35,15 +35,15 @@ func (b *Build) declaresRole(role string) bool {
 			return true
 		}
 	}
-	catalog := b.ledger.Catalog()
+	catalog := b.authority.Catalog()
 	if b.installationCatalog != nil {
 		catalog = b.installationCatalog
 	}
 	return slices.Contains((platform.Manifest{Actions: catalog, Roles: b.manifestRoles()}).AllRoles(), role)
 }
 
-func (b *Build) jointObjectEntities(objects []ontology.Object, drafts []JointDraftRef) map[string]platform.EntityInfo {
-	joint := map[string]platform.EntityInfo{}
+func (b *Build) jointObjectEntities(objects []ontology.Object, drafts []JointDraftRef) map[string]platform.RecordTypeInfo {
+	joint := map[string]platform.RecordTypeInfo{}
 	for _, draft := range drafts {
 		if draft.Kind != platform.AssetObject {
 			continue

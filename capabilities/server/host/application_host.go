@@ -6,7 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	"platformserver/kernel/protocol"
-	"platformserver/services/functions/runtime"
+	compute "platformserver/services/functions/runtime"
 	"platformserver/services/objects"
 	"platformserver/services/resources/monitoring"
 	controlowner "platformserver/services/security/control"

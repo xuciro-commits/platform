@@ -22,9 +22,9 @@ type preparedAccepted struct {
 }
 
 func decideOnImage[T any](t *Tenant, ctx context.Context, holder string, prepare func(*Tenant) (T, *platform.Error), finish func(*Tenant, preparedAccepted, T, *platform.Error) (T, *platform.Error)) (T, *platform.Error) {
-	attempt := func(state *Tenant) (value T, candidate preparedAccepted, refusal *platform.Error, err error) {
+	attempt := func(state *Tenant) (value T, decision preparedAccepted, refusal *platform.Error, err error) {
 		value, refusal, err = readImageState(t, state, ctx, func(scope *Tenant) (T, *platform.Error) {
-			scope.preparedResult = &candidate
+			scope.preparedResult = &decision
 			return prepare(scope)
 		})
 		return
@@ -41,16 +41,16 @@ func decideOnImage[T any](t *Tenant, ctx context.Context, holder string, prepare
 				return nil, nil
 			}
 			return func() (T, preparedAccepted, *platform.Error, error) { return attempt(image.state) },
-				func(candidate preparedAccepted) bool {
+				func(decision preparedAccepted) bool {
 					t.Projection.Lock()
 					generation := t.Projection.Generation()
 					t.Projection.Unlock()
-					return image.epoch == t.StateEpoch.Load() && image.definitions == t.DefinitionEpoch.Load() && image.records == generation && image.position == t.Projection.Current().Applied() && !slices.ContainsFunc(candidate.uploads, t.uploads.Unavailable) && (holder != "work" || image.work == t.WorkEpoch.Load())
+					return image.epoch == t.StateEpoch.Load() && image.definitions == t.DefinitionEpoch.Load() && image.records == generation && image.position == t.Projection.Current().Applied() && !slices.ContainsFunc(decision.uploads, t.uploads.Unavailable) && (holder != "work" || image.work == t.WorkEpoch.Load())
 				}
 		},
 		Direct: func() (T, preparedAccepted, *platform.Error, error) { return attempt(t) },
-		Finish: func(candidate preparedAccepted, value T, refusal *platform.Error) (T, *platform.Error) {
-			return finish(t, candidate, value, refusal)
+		Finish: func(decision preparedAccepted, value T, refusal *platform.Error) (T, *platform.Error) {
+			return finish(t, decision, value, refusal)
 		},
 		Count: func(outcome string) {
 			monitoring.Meters.Decisions.Add(ctx, 1, metric.WithAttributes(attribute.String("platform.tenant", t.ID), attribute.String("platform.outcome", outcome)))
@@ -62,9 +62,9 @@ func decideWithError[T any](t *Tenant, holder string, prepare func(*Tenant) (T, 
 	result, refusal := decideOnImage(t, context.Background(), holder, func(t *Tenant) (readAnswer[T], *platform.Error) {
 		value, err := prepare(t)
 		return readAnswer[T]{value: value, err: err}, nil
-	}, func(t *Tenant, candidate preparedAccepted, value readAnswer[T], refusal *platform.Error) (readAnswer[T], *platform.Error) {
-		if len(candidate.entry.Body) > 0 {
-			value.value, value.err = apply(t, candidate)
+	}, func(t *Tenant, decision preparedAccepted, value readAnswer[T], refusal *platform.Error) (readAnswer[T], *platform.Error) {
+		if len(decision.entry.Body) > 0 {
+			value.value, value.err = apply(t, decision)
 		}
 		return value, refusal
 	})
@@ -74,9 +74,9 @@ func decideWithError[T any](t *Tenant, holder string, prepare func(*Tenant) (T, 
 	return result.value, result.err
 }
 
-func (t *Tenant) stageCandidate(draft *stagedDecision, app string, body, principal []byte, key, hash string, at time.Time, finish func(preparedAccepted)) {
-	candidate := preparedAccepted{entry: Entry{App: app, Kind: "accepted-result", Principal: principal, Body: body, At: at, Versions: draft.FlowVersions()}, key: key, hash: hash}
-	if !t.stage(candidate) {
-		finish(candidate)
+func (t *Tenant) stageDecision(draft *stagedDecision, app string, body, principal []byte, key, hash string, at time.Time, finish func(preparedAccepted)) {
+	decision := preparedAccepted{entry: Entry{App: app, Kind: "accepted-result", Principal: principal, Body: body, At: at, Versions: draft.FlowVersions()}, key: key, hash: hash}
+	if !t.stage(decision) {
+		finish(decision)
 	}
 }

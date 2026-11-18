@@ -1,4 +1,4 @@
-package build
+package authoring
 
 import (
 	"fmt"
@@ -69,7 +69,7 @@ var linkKind = resourceKind[ontology.LinkType, platform.LinkType]{
 }
 
 func (b *Build) migrateLinkType(c platform.Caller, submission *pb.Submission, at time.Time) (*pb.ChangeRecord, *platform.Error) {
-	return b.ledger.Receive(c, submission, at, nil, func() (func(*pb.ChangeRecord), *platform.Error) {
+	return b.authority.Receive(c, submission, at, nil, func() (func(*pb.ChangeRecord), *platform.Error) {
 		record, ok := platform.Get[ontology.LinkType](c, submission.GetTarget().GetId())
 		installed, retained := publication.Read[ontology.LinkType](record.Published)
 		if !ok || record.Archived || !retained || installed.Definition().Storage != "edge" {

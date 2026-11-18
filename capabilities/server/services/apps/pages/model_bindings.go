@@ -8,7 +8,7 @@ import (
 	"platformserver/platform"
 )
 
-func NormalizeModelBindings(p *platform.Page, lookup func(string) (platform.EntityInfo, bool)) error {
+func NormalizeModelBindings(p *platform.Page, lookup func(string) (platform.RecordTypeInfo, bool)) error {
 	safe, err := Safety(*p)
 	if err != nil {
 		return err
@@ -19,7 +19,7 @@ func NormalizeModelBindings(p *platform.Page, lookup func(string) (platform.Enti
 	return nil
 }
 
-func CheckModelBindings(p platform.Page, lookup func(string) (platform.EntityInfo, bool), criteria func(platform.AssetRef) (*platform.RuleCriteria, bool), engines ...platform.RuleEngine) error {
+func CheckModelBindings(p platform.Page, lookup func(string) (platform.RecordTypeInfo, bool), criteria func(platform.AssetRef) (*platform.RuleCriteria, bool), engines ...platform.RuleEngine) error {
 	safe, err := Safety(p)
 	if err != nil {
 		return err
@@ -32,7 +32,7 @@ func CheckModelBindings(p platform.Page, lookup func(string) (platform.EntityInf
 	return nil
 }
 
-func effectiveFields(b platform.PageDataBinding, info platform.EntityInfo) []platform.FieldRef {
+func effectiveFields(b platform.PageDataBinding, info platform.RecordTypeInfo) []platform.FieldRef {
 	if len(b.Fields) > 0 {
 		return slices.Clone(b.Fields)
 	}
@@ -54,7 +54,7 @@ func effectiveFields(b platform.PageDataBinding, info platform.EntityInfo) []pla
 	return fields
 }
 
-func defaultModelFields(widget string, info platform.EntityInfo) []platform.FieldRef {
+func defaultModelFields(widget string, info platform.RecordTypeInfo) []platform.FieldRef {
 	fields := []platform.FieldRef{}
 	if !slices.Contains([]string{"table", "detail", "form", "filter"}, widget) {
 		return fields
@@ -68,7 +68,7 @@ func defaultModelFields(widget string, info platform.EntityInfo) []platform.Fiel
 	return fields
 }
 
-func resolveBindings(p platform.Page, lookup func(string) (platform.EntityInfo, bool)) platform.Page {
+func resolveBindings(p platform.Page, lookup func(string) (platform.RecordTypeInfo, bool)) platform.Page {
 	p.DataBindings = slices.Clone(p.DataBindings)
 	for i, binding := range p.DataBindings {
 		if binding.Model == nil && len(binding.Models) == 0 && binding.Object.Name != "" && (binding.Kind == "record" || binding.Kind == "records") {

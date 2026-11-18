@@ -39,7 +39,7 @@ type Explanation struct {
 }
 
 type PermissionsReport struct {
-	Apps    func() []platform.App
+	Apps    func() []platform.Service
 	Holders func(app, role string) int
 }
 
@@ -72,8 +72,8 @@ func (p PermissionsReport) Permissions() []AppPermissions {
 
 type PermissionExplainer struct {
 	Member func(string) (platform.Member, bool)
-	App    func(string) platform.App
-	Apps   func() []platform.App
+	App    func(string) platform.Service
+	Apps   func() []platform.Service
 	Entry  func(m platform.Member, app, name string) platform.AuthzDecision
 	Caller func(m platform.Member, app string) platform.Caller
 }

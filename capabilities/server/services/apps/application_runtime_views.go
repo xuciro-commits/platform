@@ -1,4 +1,4 @@
-package applications
+package apps
 
 import (
 	"encoding/json"
@@ -18,8 +18,8 @@ type Context struct {
 	Resolver            publication.Resolver
 	Admit               func(platform.Member) *platform.Error
 	Definitions         func(platform.Member) []platform.Definition
-	Entity              func(string) (platform.EntityInfo, bool)
-	App                 func(string) platform.App
+	Entity              func(string) (platform.RecordTypeInfo, bool)
+	App                 func(string) platform.Service
 	Assets              func() ([]platform.ReleaseAsset, error)
 	Candidate           func(string) (protocol.ReleaseCandidate, error)
 	Candidates          func() map[string]json.RawMessage
@@ -116,7 +116,7 @@ func Applications(definitions []platform.Definition) []protocol.ApplicationView 
 	return out
 }
 
-func PageView(definitions []platform.Definition, entities []platform.EntityInfo, catalog []platform.Action, app, owner, page string) (protocol.PageView, *platform.Error) {
+func PageView(definitions []platform.Definition, entities []platform.RecordTypeInfo, catalog []platform.Action, app, owner, page string) (protocol.PageView, *platform.Error) {
 	var application *platform.Definition
 	for i := range definitions {
 		definition := &definitions[i]

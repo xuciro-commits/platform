@@ -15,7 +15,7 @@ type Importer struct {
 	Verb           func(key, id string) string
 }
 
-func (i Importer) Rows(info platform.EntityInfo, file string, lines []ImportLine) []protocol.ImportRow {
+func (i Importer) Rows(info platform.RecordTypeInfo, file string, lines []ImportLine) []protocol.ImportRow {
 	out := []protocol.ImportRow{}
 	for _, line := range lines {
 		r := protocol.ImportRow{Row: line.Row, ID: line.ID, Outcome: line.Outcome}

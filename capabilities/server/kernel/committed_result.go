@@ -14,13 +14,13 @@ import (
 
 type CommittedResult struct {
 	Settlement
-	App         func(string) platform.App
+	App         func(string) platform.Service
 	ApplyBatch  func(platform.Authority, []byte) (bool, error)
 	ApplyRecord func(platform.Authority, []byte) (bool, error)
 	Publish     func(platform.Event, protocol.AcceptedEventPlan)
 }
 
-func (s *Sequence) FinishCommitted(a platform.App, m platform.Member, hash string, committed []byte, h CommittedResult) (*pb.ChangeRecord, *platform.Error) {
+func (s *Sequence) FinishCommitted(a platform.Service, m platform.Member, hash string, committed []byte, h CommittedResult) (*pb.ChangeRecord, *platform.Error) {
 	conflict := &platform.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
 	var envelope struct{ Kind string }
 	if err := json.Unmarshal(committed, &envelope); err != nil {
@@ -92,7 +92,7 @@ func (s *Sequence) FinishCommitted(a platform.App, m platform.Member, hash strin
 	return receipt, nil
 }
 
-func (s *Sequence) ReplayPrior(a platform.App, sub *pb.Submission, binding *platform.SchemaVersion) (record *pb.ChangeRecord, hash string, refusal *platform.Error, done bool) {
+func (s *Sequence) ReplayPrior(a platform.Service, sub *pb.Submission, binding *platform.SchemaVersion) (record *pb.ChangeRecord, hash string, refusal *platform.Error, done bool) {
 	prior := s.Committed.Prior(a.Manifest().ID, a.Authority(), s.ID, sub.GetIdempotencyKey())
 	if len(prior.Answer) > 0 {
 		result, receipt, err := acceptedformat.DecodeBatch(prior.Answer)
@@ -159,7 +159,7 @@ func (s *Sequence) CheckSubmission(m platform.Member, sub *pb.Submission) *platf
 	return nil
 }
 
-func Submitted(member string, a platform.App, s *pb.Submission, at time.Time) protocol.AuditEntry {
+func Submitted(member string, a platform.Service, s *pb.Submission, at time.Time) protocol.AuditEntry {
 	return protocol.AuditEntry{ID: "submit:" + a.Manifest().ID + ":" + s.GetIdempotencyKey(), At: at, Member: member, App: a.Manifest().ID, Action: s.GetSchema().GetName(),
 		Target: s.GetTarget().GetType() + "/" + s.GetTarget().GetId()}
 }

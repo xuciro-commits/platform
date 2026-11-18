@@ -9,8 +9,8 @@ import (
 	"time"
 )
 
-func (o *Owner) CodeEntity() platform.Entity {
-	return platform.Entity{Type: protocol.CodeType, Title: "Code function", Plural: "Code functions", Model: protocol.Code{}, Display: "title", Description: "A typed Go/TinyGo algorithm built in isolation and activated with its application.", Scope: platform.Scope{Default: platform.ScopeNone, Levels: map[string]string{"builder": platform.ScopeTenant}}, Standard: platform.Standard{Create: true, Edit: true, Archive: true, Roles: []string{"builder"}, Capability: "compute"}, Lifecycle: &platform.Lifecycle{Field: "state", Initial: "draft", States: []platform.State{{Name: "draft", Title: "Draft", Tone: "warning"}, {Name: "compiling", Title: "Compiling", Tone: "warning"}, {Name: "compiled", Title: "Compiled", Tone: "success"}, {Name: "failed", Title: "Build failed", Tone: "danger"}, {Name: "published", Title: "Published", Tone: "success"}}, Actions: []platform.ActionType{{
+func (o *Owner) CodeEntity() platform.RecordType {
+	return platform.RecordType{Type: protocol.CodeType, Title: "Code function", Plural: "Code functions", Model: protocol.Code{}, Display: "title", Description: "A typed Go/TinyGo algorithm built in isolation and activated with its application.", Scope: platform.Scope{Default: platform.ScopeNone, Levels: map[string]string{"builder": platform.ScopeTenant}}, Standard: platform.Standard{Create: true, Edit: true, Archive: true, Roles: []string{"builder"}, Capability: "compute"}, Lifecycle: &platform.Lifecycle{Field: "state", Initial: "draft", States: []platform.State{{Name: "draft", Title: "Draft", Tone: "warning"}, {Name: "compiling", Title: "Compiling", Tone: "warning"}, {Name: "compiled", Title: "Compiled", Tone: "success"}, {Name: "failed", Title: "Build failed", Tone: "danger"}, {Name: "published", Title: "Published", Tone: "success"}}, Actions: []platform.ActionType{{
 		Name:        "compile",
 		Title:       "Compile",
 		Description: "Build the current source with an isolated pinned Go/TinyGo toolchain.",
@@ -119,7 +119,7 @@ func (o *Owner) submitCodeCompiled(c platform.Caller, s *pb.Submission, now time
 	})
 }
 
-func (o *Owner) AnswerCompilation(c platform.Caller, app platform.App, effect platform.Effect, out platform.Outcome, now time.Time) *platform.Error {
+func (o *Owner) AnswerCompilation(c platform.Caller, app platform.Service, effect platform.Effect, out platform.Outcome, now time.Time) *platform.Error {
 	if effect.Endpoint != "operation" || !strings.HasPrefix(effect.Target, protocol.CodeType+"/") {
 		return nil
 	}

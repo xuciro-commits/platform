@@ -1,4 +1,4 @@
-package build
+package authoring
 
 import (
 	"cmp"
@@ -78,7 +78,7 @@ func (b *Build) DraftReleaseAssetsMulti(drafts []JointDraftRef, member platform.
 	}()
 
 	objectDrafts := ontology.ObjectDraftPublication(objects, ontology.ObjectDraftEnvironment{
-		Host: b.host, Authority: b.ledger, BindActions: b.bindObjectActions,
+		Host: b.host, Authority: b.authority, BindActions: b.bindObjectActions,
 		CaptureExtension: b.captureExtensionSource, CaptureSchema: b.captureObjectSchema,
 		Check: b.Check, Validate: b.validateObjectInstallation,
 	})
@@ -239,7 +239,7 @@ func (b *Build) applyRecordDraft(inv *draftInventories, table []publication.Hook
 		}
 		record := inv.processes[i]
 		source := b.installed[record.Object]
-		models := []platform.Entity{}
+		models := []platform.RecordType{}
 		for _, object := range inv.objects {
 			if _, selected := b.jointEntities[TypeOf(object.Name)]; !selected || object.Archived {
 				continue

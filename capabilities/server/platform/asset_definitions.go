@@ -65,7 +65,7 @@ func (l LinkType) Contract() int {
 	return 1
 }
 
-func (l LinkType) CheckSchema(parent, child EntityInfo) error {
+func (l LinkType) CheckSchema(parent, child RecordTypeInfo) error {
 	if err := l.Check(); err != nil {
 		return err
 	}

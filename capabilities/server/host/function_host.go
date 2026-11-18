@@ -41,28 +41,30 @@ func (t *Tenant) planFunction(c platform.Caller, r *pb.ChangeRecord, request pla
 			}
 			return t.modelResolver().FunctionDispatch(t.gatewayRuntime().Plan(c, r, q, pending), options, stage)
 		},
-		Bind: aigateway.BindFunction,
+		Bind: gateway.BindFunction,
 	}
 	return agentowner.PlanFunction(ctx, c, r, request, pending)
 }
 
-func (t *Tenant) functionAllowed(app string, ask aigateway.ModelAsk, at time.Time) bool {
+func (t *Tenant) functionAllowed(app string, ask gateway.ModelAsk, at time.Time) bool {
 	ctx := agentowner.FunctionAccess{Tenant: t.ID, Member: t.Member, AuthorityOf: t.AuthorityOf, Suspended: t.suspended,
 		Authorize: func(member platform.Member, owner string, f platform.AIFunction, sources []string, definition string, at time.Time) bool {
 			c := platform.NewCaller(runtime{t: t, scoped: true}, member, owner, false, false)
 			return t.authorizeCapability(c, owner, f.Name, f.Roles, true, authorizationDetails{At: at, Sources: sources, Definition: definition}).Allow
 		},
-		Source: func(typ, id string) (platform.EntityInfo, bool) { return records.LockedActive(t.Projection, typ, id) },
+		Source: func(typ, id string) (platform.RecordTypeInfo, bool) {
+			return records.LockedActive(t.Projection, typ, id)
+		},
 	}
 	return agentowner.FunctionAllowed(ctx, app, ask.Function, ask.Model, ask.Record, ask.Call, ask.Prompt, at)
 }
 
 func (h hostView) functionInstall() functionauthoring.FunctionInstall {
 	return functionauthoring.FunctionInstall{Manifest: h.app.Manifest(),
-		Source: func(object string) (platform.EntityInfo, bool) {
+		Source: func(object string) (platform.RecordTypeInfo, bool) {
 			et := h.t.Projection.Type(object)
 			if et == nil {
-				return platform.EntityInfo{}, false
+				return platform.RecordTypeInfo{}, false
 			}
 			return et.Info(), true
 		},

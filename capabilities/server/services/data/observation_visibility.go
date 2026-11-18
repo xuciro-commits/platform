@@ -2,7 +2,7 @@ package data
 
 import "platformserver/platform"
 
-func ProjectObservation(declaration *platform.ObservationDefinition, entities map[string]platform.EntityInfo, actions map[string]platform.Action) (*platform.ObservationDefinition, bool) {
+func ProjectObservation(declaration *platform.ObservationDefinition, entities map[string]platform.RecordTypeInfo, actions map[string]platform.Action) (*platform.ObservationDefinition, bool) {
 	info, found := entities[declaration.Object.Name]
 	if !found {
 		return nil, false

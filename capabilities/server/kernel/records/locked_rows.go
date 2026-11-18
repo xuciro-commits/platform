@@ -40,13 +40,13 @@ func LockedFields(s *Store, typ string) ([]platform.FieldInfo, bool) {
 	return nil, false
 }
 
-func LockedInfo(s *Store, typ string) (platform.EntityInfo, bool) {
+func LockedInfo(s *Store, typ string) (platform.RecordTypeInfo, bool) {
 	s.Lock()
 	defer s.Unlock()
 	if et := s.Type(typ); et != nil {
 		return et.Info(), true
 	}
-	return platform.EntityInfo{}, false
+	return platform.RecordTypeInfo{}, false
 }
 
 func LockedImage(s *Store, typ, id, change string) (json.RawMessage, bool) {
@@ -62,12 +62,12 @@ func LockedImage(s *Store, typ, id, change string) (json.RawMessage, bool) {
 	return row.ImageAt(change)
 }
 
-func LockedActive(s *Store, typ, id string) (platform.EntityInfo, bool) {
+func LockedActive(s *Store, typ, id string) (platform.RecordTypeInfo, bool) {
 	s.Lock()
 	defer s.Unlock()
 	et := s.Type(typ)
 	if et == nil {
-		return platform.EntityInfo{}, false
+		return platform.RecordTypeInfo{}, false
 	}
 	row := et.Rows().Get(id)
 	return et.Info(), row != nil && !Header(row.Value).Archived

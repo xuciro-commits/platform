@@ -22,8 +22,8 @@ const (
 type Host interface {
 	NameTaken(name, id string) (string, bool, error)
 	CompartmentExists(id string) bool
-	Entity(typ string) (platform.EntityInfo, bool)
-	DraftEntity(typ string) (platform.EntityInfo, bool)
+	Entity(typ string) (platform.RecordTypeInfo, bool)
+	DraftEntity(typ string) (platform.RecordTypeInfo, bool)
 	Action(platform.Caller, string) (string, platform.Action, bool)
 	ObjectActions(platform.Caller, string) ([]platform.Action, bool)
 	RoleDeclared(role string) bool
@@ -92,12 +92,12 @@ func (o *Owner) checkName(name, id string) *platform.Error {
 	return nil
 }
 
-func (o *Owner) lookupEntity(typ string) (platform.EntityInfo, bool) {
+func (o *Owner) lookupEntity(typ string) (platform.RecordTypeInfo, bool) {
 	return o.host.Entity(typ)
 }
 
-func (o *Owner) Entities() []platform.Entity {
-	return append([]platform.Entity{
+func (o *Owner) Entities() []platform.RecordType {
+	return append([]platform.RecordType{
 		o.connectionEntity(),
 		o.datasetEntity(),
 		o.datasetVersionEntity(),
@@ -150,38 +150,38 @@ func (o *Owner) Handles(submission *pb.Submission) bool {
 		strings.HasPrefix(schema, ObservationType+".")
 }
 
-func (o *Owner) Decide(ledger platform.Authority, c platform.Caller, submission *pb.Submission, now time.Time) (*pb.ChangeRecord, *platform.Error, bool) {
+func (o *Owner) Decide(authority platform.Authority, c platform.Caller, submission *pb.Submission, now time.Time) (*pb.ChangeRecord, *platform.Error, bool) {
 	if !o.Handles(submission) {
 		return nil, nil, false
 	}
 	name := submission.GetSchema().GetName()
 	switch name {
 	case SchemaSourcePulled:
-		record, err := o.SubmitSourcePulled(ledger, c, submission, now)
+		record, err := o.SubmitSourcePulled(authority, c, submission, now)
 		return record, err, true
 	case SchemaConnectionChecked:
-		record, err := o.SubmitConnectionChecked(ledger, c, submission, now)
+		record, err := o.SubmitConnectionChecked(authority, c, submission, now)
 		return record, err, true
 	case ConnectionType + ".configure":
-		record, err := o.ConfigureConnection(ledger, c, submission, now)
+		record, err := o.ConfigureConnection(authority, c, submission, now)
 		return record, err, true
 	case SchemaDatasetLoad:
-		record, err := o.SubmitDatasetLoad(ledger, c, submission, now)
+		record, err := o.SubmitDatasetLoad(authority, c, submission, now)
 		return record, err, true
 	case SchemaPipelineRan:
-		record, err := o.SubmitPipelineRan(ledger, c, submission, now)
+		record, err := o.SubmitPipelineRan(authority, c, submission, now)
 		return record, err, true
 	case SchemaDatasetProjected:
-		record, err := o.SubmitDatasetProjected(ledger, c, submission, now)
+		record, err := o.SubmitDatasetProjected(authority, c, submission, now)
 		return record, err, true
 	case SchemaWritebackAnswered:
-		record, err := o.SubmitWritebackAnswered(ledger, c, submission, now)
+		record, err := o.SubmitWritebackAnswered(authority, c, submission, now)
 		return record, err, true
 	case platform.SchemaMediaSetAdd, platform.SchemaMediaSetRemove:
-		record, err := SubmitMediaSet(ledger, o.files, c, submission, now)
+		record, err := SubmitMediaSet(authority, o.files, c, submission, now)
 		return record, err, true
 	case platform.SchemaScheduleRan:
-		record, err := SubmitScheduleRan(ledger, c, submission, now)
+		record, err := SubmitScheduleRan(authority, c, submission, now)
 		return record, err, true
 	}
 	if typ, archive := strings.CutSuffix(name, ".archive"); archive && typ == ObservationType && !c.Replaying {
@@ -192,6 +192,6 @@ func (o *Owner) Decide(ledger platform.Authority, c platform.Caller, submission 
 			return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "A published definition cannot be archived; its installed version must be retained"), true
 		}
 	}
-	record, err, ok := ledger.Generated(c, submission, now, nil, o.Entities()...)
+	record, err, ok := authority.Generated(c, submission, now, nil, o.Entities()...)
 	return record, err, ok || o.Handles(submission)
 }

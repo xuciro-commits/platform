@@ -344,8 +344,8 @@ func (o *Owner) prepareTablePublications(assets []platform.ReleaseAsset) ([]plat
 	return out, nil
 }
 
-func (o *Owner) TableEntity() platform.Entity {
-	return platform.Entity{Type: protocol.TableType, Title: "Decision table", Plural: "Decision tables", Model: Table{}, Display: "title", Description: "Condition columns to result columns; the first matching row decides. Published as a native operation.",
+func (o *Owner) TableEntity() platform.RecordType {
+	return platform.RecordType{Type: protocol.TableType, Title: "Decision table", Plural: "Decision tables", Model: Table{}, Display: "title", Description: "Condition columns to result columns; the first matching row decides. Published as a native operation.",
 		Validate: func(c platform.Caller, record any) *platform.Error {
 			if c.Replaying {
 				return nil

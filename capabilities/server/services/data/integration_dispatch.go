@@ -16,8 +16,8 @@ import (
 	"platformserver/services/resources/publication"
 )
 
-func (o *Owner) DispatchEntity() platform.Entity {
-	return platform.Entity{Type: ruleprotocol.DispatchType, Title: "Device dispatch", Plural: "Device dispatches", Model: platform.DispatchRun{}, Display: "subject",
+func (o *Owner) DispatchEntity() platform.RecordType {
+	return platform.RecordType{Type: ruleprotocol.DispatchType, Title: "Device dispatch", Plural: "Device dispatches", Model: platform.DispatchRun{}, Display: "subject",
 		Description: "Declared commands, durable delivery attempts, status reads and authorized human intervention. Control loops and safety interlocks remain local to the equipment.",
 		Scope: ScopeWithParticipants(func(value any) []string {
 			run := value.(platform.DispatchRun)

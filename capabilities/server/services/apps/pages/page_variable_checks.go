@@ -278,7 +278,7 @@ func sharedContextRecord(d platform.PageInputSchema, id string) bool {
 	return v.Type == "record" && v.Scope == "application" && v.Mode == "shared" && v.Source != nil && v.Source.Kind == "application" && v.Source.Object != nil && v.Source.Object.Kind == platform.AssetObject && v.Source.Object.Check() == nil
 }
 
-func checkAggregateScalar(v platform.PageVariable, info platform.EntityInfo) error {
+func checkAggregateScalar(v platform.PageVariable, info platform.RecordTypeInfo) error {
 	if v.Mode != "aggregate" || v.Source == nil || v.Source.Kind != "aggregate" && v.Source.Kind != "statistics" {
 		return nil
 	}

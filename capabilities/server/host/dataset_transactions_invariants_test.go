@@ -10,7 +10,7 @@ import (
 	"time"
 
 	"platformserver/platform"
-	"platformserver/services/resources/authoring"
+	build "platformserver/services/resources/authoring"
 )
 
 func TestInvariantK1K2SourceSnapshotMergeAndDeletion(t *testing.T) {

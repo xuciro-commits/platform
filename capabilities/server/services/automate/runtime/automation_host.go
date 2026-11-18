@@ -1,4 +1,4 @@
-package automation
+package runtime
 
 import (
 	"encoding/json"
@@ -13,7 +13,7 @@ import (
 
 type FlowBindingContext struct {
 	Resolver       releasepub.Resolver
-	App            func(string) platform.App
+	App            func(string) platform.Service
 	Asset          func(string, string, int) (platform.ReleaseAsset, error)
 	Assets         func() ([]platform.ReleaseAsset, error)
 	Active         func() string
@@ -138,7 +138,7 @@ func (h FlowBindingContext) Closure(app, name string, version int) (protocol.Rel
 	closure, err := h.CloseCandidate([]platform.AssetRef{asset.Ref}, available, nil)
 	return closure, asset.Ref, err
 }
-func ReadRecordPath(c platform.Caller, typ, id string, path []string, now time.Time, entity func(string) (platform.EntityInfo, bool), read func(string, string, time.Time) (json.RawMessage, *platform.Error)) (json.RawMessage, []string, *platform.Error) {
+func ReadRecordPath(c platform.Caller, typ, id string, path []string, now time.Time, entity func(string) (platform.RecordTypeInfo, bool), read func(string, string, time.Time) (json.RawMessage, *platform.Error)) (json.RawMessage, []string, *platform.Error) {
 	if len(path) == 0 || len(path) > 16 {
 		return nil, nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Record paths need 1–16 fields")
 	}

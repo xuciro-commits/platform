@@ -25,7 +25,7 @@ func decodeRecordImage(raw json.RawMessage, model reflect.Type) (platform.Record
 	return value.Elem().Field(0).Interface().(platform.Record), nil
 }
 
-func DecodeRecordImage(info platform.EntityInfo, format string, raw json.RawMessage) (json.RawMessage, error) {
+func DecodeRecordImage(info platform.RecordTypeInfo, format string, raw json.RawMessage) (json.RawMessage, error) {
 	if format == info.RecordFormat {
 		_, err := decodeRecordImage(raw, info.Go)
 		return raw, err
@@ -54,7 +54,7 @@ func DecodeRecordImage(info platform.EntityInfo, format string, raw json.RawMess
 	return nil, fmt.Errorf("entity %s: unknown record image format %q", info.Type, format)
 }
 
-func LowerRecordSetPredicate(set platform.RecordSet, expr platform.Expr, lookup func(string) (platform.EntityInfo, bool), engines ...platform.RuleEngine) (platform.Expr, error) {
+func LowerRecordSetPredicate(set platform.RecordSet, expr platform.Expr, lookup func(string) (platform.RecordTypeInfo, bool), engines ...platform.RuleEngine) (platform.Expr, error) {
 	if len(set.Path) == 0 {
 		return expr, nil
 	}
@@ -62,7 +62,7 @@ func LowerRecordSetPredicate(set platform.RecordSet, expr platform.Expr, lookup 
 	if err != nil || field.Type != "reference" || field.Ref == "" {
 		return platform.Expr{}, fmt.Errorf("set %s filter path must end at a declared record reference", set.Name)
 	}
-	schemaLookup := func(typ string) (platform.EntityInfo, bool) {
+	schemaLookup := func(typ string) (platform.RecordTypeInfo, bool) {
 		info, ok := lookup(typ)
 		return ruleprotocol.ConstraintEntity(info), ok
 	}
@@ -95,7 +95,7 @@ func LowerRecordSetPredicate(set platform.RecordSet, expr platform.Expr, lookup 
 	return lowered, err
 }
 
-func CheckRecordSets(info platform.EntityInfo, lookup func(string) (platform.EntityInfo, bool), engines ...platform.RuleEngine) error {
+func CheckRecordSets(info platform.RecordTypeInfo, lookup func(string) (platform.RecordTypeInfo, bool), engines ...platform.RuleEngine) error {
 	if len(info.Sets) > platform.RecordSetMaxDeclarations {
 		return fmt.Errorf("object has %d sets; limit is %d", len(info.Sets), platform.RecordSetMaxDeclarations)
 	}
@@ -126,7 +126,7 @@ func CheckRecordSets(info platform.EntityInfo, lookup func(string) (platform.Ent
 				return fmt.Errorf("set %s inverse is undeclared", set.Name)
 			}
 		}
-		schemaLookup := func(typ string) (platform.EntityInfo, bool) {
+		schemaLookup := func(typ string) (platform.RecordTypeInfo, bool) {
 			other, ok := lookup(typ)
 			return ruleprotocol.ConstraintEntity(other), ok
 		}

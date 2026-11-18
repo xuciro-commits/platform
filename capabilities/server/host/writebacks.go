@@ -8,7 +8,7 @@ import (
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformserver/platform"
-	"platformserver/services/resources/authoring"
+	build "platformserver/services/resources/authoring"
 )
 
 func (t *Tenant) integrationEffects(m platform.Member, now time.Time) ([]dataowner.IntegrationEffect, *platform.Error) {

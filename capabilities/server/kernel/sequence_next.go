@@ -9,7 +9,7 @@ import (
 	"platformserver/platform"
 )
 
-func (s *Sequences) Next(rec *pb.ChangeRecord, appID string, app platform.App, sequence string, date time.Time) (string, *platform.Error) {
+func (s *Sequences) Next(rec *pb.ChangeRecord, appID string, app platform.Service, sequence string, date time.Time) (string, *platform.Error) {
 	if rec.GetChangeId() == "" {
 		return "", &platform.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 	}

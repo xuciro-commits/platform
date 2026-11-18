@@ -9,7 +9,7 @@ import (
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformserver/platform"
 	functions "platformserver/services/functions/authoring"
-	"platformserver/services/resources/authoring"
+	build "platformserver/services/resources/authoring"
 )
 
 func (t *Tenant) ReadCapabilityAI(ctx context.Context, m platform.Member, id string, now time.Time) (platform.OperationResult, *platform.Error) {

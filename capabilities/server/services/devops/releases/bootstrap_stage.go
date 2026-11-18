@@ -23,7 +23,7 @@ type BootstrapStage struct {
 	Records         *records.Store
 	KeepChanges     func(receipt *pb.ChangeRecord)
 	Register        func(plan protocol.AssetInstallation) error
-	Decide          func(info platform.EntityInfo, draft protocol.AssetDraft, submission *pb.Submission) (*pb.ChangeRecord, error)
+	Decide          func(info platform.RecordTypeInfo, draft protocol.AssetDraft, submission *pb.Submission) (*pb.ChangeRecord, error)
 	Rebind          func(app string) (*publication.AssetRegistry, error)
 	AttachHosts     func()
 }

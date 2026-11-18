@@ -8,7 +8,7 @@ import (
 	agentevaluation "platformserver/services/ai/evaluation"
 	aigateway "platformserver/services/ai/gateway"
 	releaseowner "platformserver/services/devops/releases"
-	"platformserver/services/resources/authoring"
+	build "platformserver/services/resources/authoring"
 	"time"
 )
 
@@ -30,14 +30,14 @@ func (t *Tenant) EvaluateRelease(m platform.Member, request releaseowner.Release
 			Agent:         t.evaluateReleaseAgentLocked,
 			FunctionStart: agentevaluation.BindPrepare(t.ID, build.ID, request.Key),
 			Accept: func(sub *pb.Submission, at time.Time) *platform.Error {
-				_, refusal := t.accept(t.App(build.ID).(platform.App), platform.Member{ID: sub.PrincipalId, Tenant: t.ID}, sub, at, acceptOptions{automation: true})
+				_, refusal := t.accept(t.App(build.ID).(platform.Service), platform.Member{ID: sub.PrincipalId, Tenant: t.ID}, sub, at, acceptOptions{automation: true})
 				return refusal
 			},
 		})
 		return readAnswer[string]{value: id, err: err}, nil
-	}, func(t *Tenant, candidate preparedAccepted, result readAnswer[string], refusal *platform.Error) (readAnswer[string], *platform.Error) {
-		if len(candidate.entry.Body) != 0 {
-			_, refusal = t.finishPreparedSubmission(platform.Member{ID: "app:" + candidate.entry.App, Tenant: t.ID}, candidate, nil, refusal)
+	}, func(t *Tenant, decision preparedAccepted, result readAnswer[string], refusal *platform.Error) (readAnswer[string], *platform.Error) {
+		if len(decision.entry.Body) != 0 {
+			_, refusal = t.finishPreparedSubmission(platform.Member{ID: "app:" + decision.entry.App, Tenant: t.ID}, decision, nil, refusal)
 		}
 		return result, refusal
 	})

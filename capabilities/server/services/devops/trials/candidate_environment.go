@@ -32,8 +32,8 @@ func (s CandidateSandbox) Restore(rows map[string][]json.RawMessage) (bool, erro
 	return s.RestoreRecords(saved)
 }
 
-func (e Environment) CandidateApps(candidate protocol.ReleaseCandidate, member platform.Member, others ...platform.Member) ([]platform.App, build.ConstructionSandbox, error) {
-	fresh := func(id string) (platform.App, error) {
+func (e Environment) CandidateApps(candidate protocol.ReleaseCandidate, member platform.Member, others ...platform.Member) ([]platform.Service, build.ConstructionSandbox, error) {
+	fresh := func(id string) (platform.Service, error) {
 		factory := e.Factories[id]
 		if factory == nil {
 			return nil, fmt.Errorf("simulation owner %s is not available", id)
@@ -56,7 +56,7 @@ func (e Environment) CandidateApps(candidate protocol.ReleaseCandidate, member p
 	if identity == nil {
 		return nil, nil, fmt.Errorf("candidate identity factory changed its owner")
 	}
-	apps := []platform.App{identity}
+	apps := []platform.Service{identity}
 	if e.Organization != nil {
 		if e.OrganizationFactory == nil {
 			return nil, nil, fmt.Errorf("the synthetic organization owner is unavailable")
@@ -108,7 +108,7 @@ func (e Environment) CandidateApps(candidate protocol.ReleaseCandidate, member p
 		apps = append(apps, app)
 	}
 	for _, manifest := range e.Manifests {
-		if slices.ContainsFunc(apps, func(app platform.App) bool { return app.Manifest().ID == manifest.ID }) {
+		if slices.ContainsFunc(apps, func(app platform.Service) bool { return app.Manifest().ID == manifest.ID }) {
 			continue
 		}
 		apps = append(apps, NewSampleOwner(member.Tenant, e.Authorities, manifest))
@@ -144,7 +144,7 @@ func (e Environment) InstallCandidate(candidate protocol.ReleaseCandidate, b bui
 		if asset.Ref.App != build.ID {
 			continue
 		}
-		if asset.Ref.Kind == platform.AssetObject && slices.ContainsFunc(b.Manifest().Entities, func(e platform.Entity) bool { return e.Type == asset.Ref.Name }) {
+		if asset.Ref.Kind == platform.AssetObject && slices.ContainsFunc(b.Manifest().Entities, func(e platform.RecordType) bool { return e.Type == asset.Ref.Name }) {
 			continue
 		}
 		if kind(platform.AssetPropertyType, platform.AssetValueType, platform.AssetLinkType, platform.AssetQuery, platform.AssetObjectTypeGroup, platform.AssetFunction, platform.AssetCompute, platform.AssetAgent)(asset.Ref.Kind) || b.DefinitionMetadataKind(asset.Ref.Kind) {

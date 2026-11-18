@@ -8,7 +8,7 @@ import (
 	"platformserver/platform"
 )
 
-func CheckFilterSchema(source platform.PageResourceSource, object platform.EntityInfo) error {
+func CheckFilterSchema(source platform.PageResourceSource, object platform.RecordTypeInfo) error {
 	if source.Object == nil || source.Object.Name != object.Type || source.Object.App != object.App {
 		return fmt.Errorf("filter object is unavailable")
 	}
@@ -21,8 +21,8 @@ func CheckFilterSchema(source platform.PageResourceSource, object platform.Entit
 	return nil
 }
 
-func CheckComputeResource(p platform.Page, c platform.PageComputeResource, object platform.EntityInfo, op platform.Operation, valueType string, lookups ...func(string) (platform.EntityInfo, bool)) error {
-	lookup := func(typ string) (platform.EntityInfo, bool) {
+func CheckComputeResource(p platform.Page, c platform.PageComputeResource, object platform.RecordTypeInfo, op platform.Operation, valueType string, lookups ...func(string) (platform.RecordTypeInfo, bool)) error {
+	lookup := func(typ string) (platform.RecordTypeInfo, bool) {
 		return object, typ == object.Type
 	}
 	if len(lookups) > 0 {
@@ -130,7 +130,7 @@ func CheckQuerySetConditions(p platform.Page, named map[platform.AssetBinding]pl
 	return nil
 }
 
-func CheckTableEdit(edit *platform.PageInlineEdit, info platform.EntityInfo, action platform.Action) error {
+func CheckTableEdit(edit *platform.PageInlineEdit, info platform.RecordTypeInfo, action platform.Action) error {
 	if edit == nil {
 		return nil
 	}

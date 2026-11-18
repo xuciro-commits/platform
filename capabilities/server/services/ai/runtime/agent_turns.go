@@ -1,4 +1,4 @@
-package agents
+package runtime
 
 import (
 	"cmp"
@@ -132,7 +132,7 @@ func (a *Agents) ApplyAgentStepCaller(c platform.Caller, b protocol.AgentResultS
 		}
 		s := &pb.Submission{TenantId: c.Tenant, PrincipalId: c.ID, Authority: protocol.AgentApp, IdempotencyKey: key,
 			Target: &pb.EntityRef{Type: protocol.EvaluationType, Id: ev.ID}, Schema: &pb.SchemaRef{Name: protocol.SchemaRunStep, Version: 1}, Payload: []byte("{}")}
-		_, err := a.ledger.Receive(c, s, now, nil, func() (func(*pb.ChangeRecord), *platform.Error) {
+		_, err := a.authority.Receive(c, s, now, nil, func() (func(*pb.ChangeRecord), *platform.Error) {
 			if _, known := platform.Get[protocol.Evaluation](c, ev.ID); !known {
 				return nil, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
 			}
@@ -149,7 +149,7 @@ func (a *Agents) ApplyAgentStepCaller(c platform.Caller, b protocol.AgentResultS
 	}
 	s := &pb.Submission{TenantId: c.Tenant, PrincipalId: c.ID, Authority: protocol.AgentApp, IdempotencyKey: fmt.Sprintf("%s:%d", run.ID, run.Revision+1),
 		Target: &pb.EntityRef{Type: protocol.RunType, Id: run.ID}, Schema: &pb.SchemaRef{Name: protocol.SchemaRunStep, Version: 1}, Payload: []byte("{}")}
-	_, err := a.ledger.Receive(c, s, now, nil, func() (func(*pb.ChangeRecord), *platform.Error) {
+	_, err := a.authority.Receive(c, s, now, nil, func() (func(*pb.ChangeRecord), *platform.Error) {
 		return a.take(c, run, b, now), nil
 	})
 	return err

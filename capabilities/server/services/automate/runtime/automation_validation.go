@@ -1,4 +1,4 @@
-package automation
+package runtime
 
 import (
 	"cmp"
@@ -11,7 +11,7 @@ import (
 	"time"
 )
 
-func (f *Flows) Validate(a platform.App, fl platform.Flow) error {
+func (f *Flows) Validate(a platform.Service, fl platform.Flow) error {
 	_, err := f.check(a.Manifest(), fl)
 	return err
 }
@@ -40,7 +40,7 @@ func (f *Flows) check(m platform.Manifest, fl platform.Flow) (*flowDef, error) {
 	if byClock && fl.Start.Every < time.Minute {
 		return nil, fmt.Errorf("flow %s: a schedule repeats at least every minute", id)
 	}
-	if byState && !slices.ContainsFunc(m.Entities, func(e platform.Entity) bool { return e.Type == fl.Start.Type }) && (m.ID != "build" || f.host == nil || !f.host.Declares(fl.Start.Type)) {
+	if byState && !slices.ContainsFunc(m.Entities, func(e platform.RecordType) bool { return e.Type == fl.Start.Type }) && (m.ID != "build" || f.host == nil || !f.host.Declares(fl.Start.Type)) {
 		return nil, fmt.Errorf("flow %s starts on the state of %s, not an entity type of %s", id, fl.Start.Type, m.ID)
 	}
 	if fl.Continuous != nil {

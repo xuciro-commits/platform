@@ -1,4 +1,4 @@
-package automation
+package runtime
 
 import (
 	"platformserver/kernel/protocol"
@@ -9,7 +9,7 @@ import (
 type AcceptedEventPlanner struct {
 	Routed    func(platform.Event) []string
 	Effects   func(e platform.Event, names []string) ([]platform.Effect, *platform.Error)
-	Apps      func() []platform.App
+	Apps      func() []platform.Service
 	Listeners []string
 	Listener  func(id string) platform.Listener
 }

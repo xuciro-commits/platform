@@ -8,7 +8,7 @@ import (
 	"platformserver/services/resources/publication"
 )
 
-func CheckNamedQuery(q platform.NamedQuery, info platform.EntityInfo, engine platform.RuleEngine) error {
+func CheckNamedQuery(q platform.NamedQuery, info platform.RecordTypeInfo, engine platform.RuleEngine) error {
 	if err := q.Check(); err != nil {
 		return err
 	}
@@ -18,7 +18,7 @@ func CheckNamedQuery(q platform.NamedQuery, info platform.EntityInfo, engine pla
 	return CheckQueryFields(q, info, engine)
 }
 
-func CheckQueryFields(q platform.NamedQuery, info platform.EntityInfo, engine platform.RuleEngine) error {
+func CheckQueryFields(q platform.NamedQuery, info platform.RecordTypeInfo, engine platform.RuleEngine) error {
 	if _, err := records.CompileDomain(info, q.Domain, engine); err != nil {
 		return err
 	}

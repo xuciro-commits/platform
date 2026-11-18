@@ -10,7 +10,7 @@ import (
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformserver/services/resources/authoring"
+	build "platformserver/services/resources/authoring"
 
 	"platformserver/kernel/records"
 	"platformserver/platform"
@@ -72,7 +72,7 @@ func (t *Tenant) bootstrapOwnerDraftsLockedWithArchived(candidate protocol.Relea
 		Records:     decision.Records,
 		KeepChanges: decision.KeepChanges,
 		Register:    view.registerInstalledAsset,
-		Decide: func(info platform.EntityInfo, draft protocol.AssetDraft, submission *pb.Submission) (*pb.ChangeRecord, error) {
+		Decide: func(info platform.RecordTypeInfo, draft protocol.AssetDraft, submission *pb.Submission) (*pb.ChangeRecord, error) {
 			app := view.App(info.App)
 			if request != nil {
 				if refusal := t.delegatedBound(context.Member, submission); refusal != nil {

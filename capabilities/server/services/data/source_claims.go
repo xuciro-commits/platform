@@ -41,12 +41,12 @@ type SourcePrepared struct {
 
 type SourcePreparation struct {
 	Record    func(typ, id string, required bool) (SourceRecord, *platform.Error)
-	Objects   func(object string) (platform.EntityInfo, map[string]bool, *platform.Error)
+	Objects   func(object string) (platform.RecordTypeInfo, map[string]bool, *platform.Error)
 	Authorize func(m platform.Member, app, typ, id, action, kind string, fields []string, at time.Time) *platform.Error
 	Selected  func(typ, id, attribute string, history []records.RecordChange, incoming *acceptedformat.SourceClaim) SelectedSourceValue
 	Restores  func(typ, id, change string) bool
 	Deletes   func(typ, id, connector string) bool
-	Claimed   func(object, id, connector string, info platform.EntityInfo) bool
+	Claimed   func(object, id, connector string, info platform.RecordTypeInfo) bool
 }
 
 func (s SourcePreparation) Prepare(m platform.Member, submission *pb.Submission, source *SourceApplication, now time.Time) (*SourcePrepared, *platform.Error) {

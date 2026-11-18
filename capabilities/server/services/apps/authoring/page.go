@@ -13,8 +13,8 @@ import (
 	"platformserver/services/resources/publication"
 )
 
-func (o *Owner) PageEntity() platform.Entity {
-	return platform.Entity{Type: protocol.PageType, Title: "Page", Plural: "Pages", Model: protocol.Page{}, Display: "title",
+func (o *Owner) PageEntity() platform.RecordType {
+	return platform.RecordType{Type: protocol.PageType, Title: "Page", Plural: "Pages", Model: protocol.Page{}, Display: "title",
 		Description: "A list and detail page this organisation composed over an object it may read: the fields it shows and the actions it offers.",
 		Validate: func(c platform.Caller, record any) *platform.Error {
 			if c.Replaying {
@@ -41,7 +41,7 @@ func (o *Owner) PageEntity() platform.Entity {
 			}}}}
 }
 
-func (o *Owner) PageDraftEntity() platform.Entity {
+func (o *Owner) PageDraftEntity() platform.RecordType {
 	entity := o.PageEntity()
 	entity.Validate = func(c platform.Caller, record any) *platform.Error {
 		page := record.(*protocol.Page)
@@ -115,7 +115,7 @@ func (o *Owner) installPage(c platform.Caller, p protocol.Page) *platform.Error 
 	return nil
 }
 
-func (o *Owner) validatePageDocument(page *protocol.Page, lookup func(string) (platform.EntityInfo, bool), engines ...platform.RuleEngine) error {
+func (o *Owner) validatePageDocument(page *protocol.Page, lookup func(string) (platform.RecordTypeInfo, bool), engines ...platform.RuleEngine) error {
 	if err := o.normalizePageModel(page, lookup); err != nil {
 		return err
 	}
@@ -144,7 +144,7 @@ func (o *Owner) checkPage(p protocol.Page) error {
 	return nil
 }
 
-func (o *Owner) normalizePageModel(p *protocol.Page, lookup func(string) (platform.EntityInfo, bool)) error {
+func (o *Owner) normalizePageModel(p *protocol.Page, lookup func(string) (platform.RecordTypeInfo, bool)) error {
 	d := Descriptor(*p, o.env.AppID(), o.env.Version())
 	if err := pageowner.NormalizeModelBindings(&d, lookup); err != nil {
 		return err

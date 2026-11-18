@@ -7,7 +7,7 @@ import (
 	"strings"
 )
 
-func ConstraintSpec(info platform.EntityInfo, constraint platform.Constraint) platform.RuleReadSpec {
+func ConstraintSpec(info platform.RecordTypeInfo, constraint platform.Constraint) platform.RuleReadSpec {
 	spec := platform.RuleReadSpec{Object: info.Type}
 	if constraint.Reads != nil {
 		spec.Collections = constraint.Reads.Collections
@@ -15,18 +15,18 @@ func ConstraintSpec(info platform.EntityInfo, constraint platform.Constraint) pl
 	return spec
 }
 
-func ConstraintEntity(info platform.EntityInfo) platform.EntityInfo {
+func ConstraintEntity(info platform.RecordTypeInfo) platform.RecordTypeInfo {
 	info.Fields = slices.Clone(info.Fields)
 	info.Fields = append(info.Fields, platform.FieldInfo{Name: "id", Type: "text"}, platform.FieldInfo{Name: "archived", Type: "boolean"})
 	return info
 }
 
-func CheckConstraints(info platform.EntityInfo, lookup func(string) (platform.EntityInfo, bool), transactionBoundary bool, engines ...platform.RuleEngine) error {
+func CheckConstraints(info platform.RecordTypeInfo, lookup func(string) (platform.RecordTypeInfo, bool), transactionBoundary bool, engines ...platform.RuleEngine) error {
 	if len(info.Constraints) > 64 {
 		return fmt.Errorf("object supports at most 64 constraints")
 	}
 	seen := map[string]bool{}
-	ownerLookup := func(typ string) (platform.EntityInfo, bool) {
+	ownerLookup := func(typ string) (platform.RecordTypeInfo, bool) {
 		if typ == info.Type {
 			return ConstraintEntity(info), true
 		}
@@ -96,7 +96,7 @@ func CheckConstraints(info platform.EntityInfo, lookup func(string) (platform.En
 	return nil
 }
 
-func ConstraintScopePath(info platform.EntityInfo, scope string) ([]string, error) {
+func ConstraintScopePath(info platform.RecordTypeInfo, scope string) ([]string, error) {
 	if scope == "parent" {
 		var refs []string
 		for _, field := range info.Fields {

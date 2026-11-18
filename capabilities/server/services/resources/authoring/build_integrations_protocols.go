@@ -1,4 +1,4 @@
-package build
+package authoring
 
 import (
 	"platformserver/kernel/protocol"
@@ -11,15 +11,15 @@ import (
 	"platformserver/services/ontology"
 )
 
-func (b *Build) objectProvisions(object ontology.Object, entity platform.Entity) []platform.Provision {
+func (b *Build) objectProvisions(object ontology.Object, entity platform.RecordType) []platform.Provision {
 	return ontology.ObjectProvisions(object, entity, actioncatalog.EntityActions(entity))
 }
 
 func (b *Build) checkObjectProtocols(object ontology.Object) error {
 	return ontology.CheckObjectProtocols(object, ontology.ProtocolEnvironment{
 		Actions: actioncatalog.EntityActions,
-		Installed: func() []platform.Entity {
-			out := make([]platform.Entity, 0, len(b.installed))
+		Installed: func() []platform.RecordType {
+			out := make([]platform.RecordType, 0, len(b.installed))
 			for _, typ := range sortedTypes(b.installed) {
 				out = append(out, b.installed[typ])
 			}

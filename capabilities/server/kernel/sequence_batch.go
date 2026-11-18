@@ -15,7 +15,7 @@ import (
 )
 
 type BatchApply struct {
-	App            func(string) platform.App
+	App            func(string) platform.Service
 	OwnerLedger    func(string) platform.Authority
 	CheckBindings  func(any) error
 	DefinitionType string

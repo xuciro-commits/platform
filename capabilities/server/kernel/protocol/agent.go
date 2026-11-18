@@ -8,7 +8,7 @@ import (
 )
 
 type DynamicAgentDefinitions interface {
-	platform.App
+	platform.Service
 	AgentStamp() string
 	AgentVersion(name string) int
 }
@@ -21,12 +21,12 @@ type AgentHost interface {
 	Member(string) (platform.Member, bool)
 	OwnerOf(string) (string, bool)
 	Record(string) (any, bool)
-	Entity(string) (platform.EntityInfo, bool)
+	Entity(string) (platform.RecordTypeInfo, bool)
 	ActiveRelease() string
 	AgentTasks() TaskClosure
 	AgentFlows() AgentFlowCompletion
 	ProtocolActions(string) []platform.Action
-	ProtocolProvider(string) (platform.App, string, bool)
+	ProtocolProvider(string) (platform.Service, string, bool)
 	InvokeDecision(platform.Caller, string, string, string, []byte, string, string, time.Time) (*pb.EntityRef, *pb.ChangeRecord, *platform.Error)
 	AgentContext(*platform.Member, string, string, time.Time) (AgentObservation, *platform.Error)
 	AgentSearch(*platform.Member, string, time.Time) AgentObservation
@@ -58,7 +58,7 @@ type AgentHost interface {
 }
 
 type AgentEvaluationDefinitions interface {
-	AgentEvaluationApp(candidate, agent string) (platform.App, string, error)
+	AgentEvaluationApp(candidate, agent string) (platform.Service, string, error)
 }
 
 type TaskClosure interface {
@@ -108,8 +108,8 @@ type AgentTurn struct {
 
 type AgentRuntime interface {
 	platform.Runs
-	platform.App
-	DeclareAgentApp(platform.App) error
+	platform.Service
+	DeclareAgentApp(platform.Service) error
 	DueAgentTurns(time.Time) []AgentTurn
 	ClaimAgentTurn(string) bool
 	IdleAgentTurn(string)

@@ -22,7 +22,7 @@ type ObservationHost struct {
 	ObservationMember       func(platform.Member) (platform.Member, *platform.Error)
 	ObservationDefinitions  func(platform.Member) ([]platform.Definition, error)
 	ObservationSourceActive func(record string) bool
-	Entity                  func(typ string) (platform.EntityInfo, bool)
+	Entity                  func(typ string) (platform.RecordTypeInfo, bool)
 	AuthorizeObservation    func(m platform.Member, app, permission, kind string, roles []string, at time.Time) *platform.Error
 	AuthorizeRead           func(m platform.Member, app string, q platform.AuthzRequest, at time.Time) (withheld bool, refusal *platform.Error)
 	ReadRecord              func(m platform.Member, app, typ, id string, at time.Time) (json.RawMessage, *platform.Error)
@@ -60,7 +60,7 @@ type ObservationEvaluate struct {
 
 type ObservationPlan struct {
 	Info       ObservationInfo
-	Entity     platform.EntityInfo
+	Entity     platform.RecordTypeInfo
 	Record     json.RawMessage
 	Connection Connection
 	Header     string

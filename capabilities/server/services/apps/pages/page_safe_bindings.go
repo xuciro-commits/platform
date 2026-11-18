@@ -12,13 +12,13 @@ import (
 
 type DefinitionProjection struct {
 	Member      platform.Member
-	Entities    map[string]platform.EntityInfo
+	Entities    map[string]platform.RecordTypeInfo
 	Actions     map[string]platform.Action
 	Definitions []platform.Definition
 	Criteria    func(platform.AssetRef) (*platform.RuleCriteria, bool)
 	Function    func(platform.AssetBinding) (platform.AIFunction, bool)
 	Operation   func(*platform.AssetBinding) (platform.Operation, bool)
-	CheckQuery  func(platform.NamedQuery, platform.EntityInfo) error
+	CheckQuery  func(platform.NamedQuery, platform.RecordTypeInfo) error
 }
 
 func (projection DefinitionProjection) Page(def platform.Definition) (platform.Definition, bool) {
@@ -35,14 +35,14 @@ func (projection DefinitionProjection) Page(def platform.Definition) (platform.D
 		return def, false
 	}
 	def.ContentVersion = digest
-	lookup := func(typ string) (platform.EntityInfo, bool) { info, ok := entities[typ]; return info, ok }
+	lookup := func(typ string) (platform.RecordTypeInfo, bool) { info, ok := entities[typ]; return info, ok }
 	page = resolveBindings(page, lookup)
 	visible := page
 	actionVisible := func(ref platform.AssetRef) bool {
 		action, ok := actions[ref.Name]
 		return ok && !platform.StaticControlAction(action)
 	}
-	fieldVisible := func(info platform.EntityInfo, ref platform.FieldRef) bool {
+	fieldVisible := func(info platform.RecordTypeInfo, ref platform.FieldRef) bool {
 		_, err := platform.RecordPathField(info.Type, fieldSegments(ref), lookup)
 		return err == nil
 	}
@@ -147,7 +147,7 @@ func (projection DefinitionProjection) Page(def platform.Definition) (platform.D
 			continue
 		}
 		trigger.Actions = slices.DeleteFunc(slices.Clone(trigger.Actions), func(ref platform.AssetRef) bool { return !actionVisible(ref) })
-		info := platform.EntityInfo{}
+		info := platform.RecordTypeInfo{}
 		for _, binding := range visible.DataBindings {
 			if binding.ID == trigger.Binding {
 				info = entities[binding.Object.Name]
@@ -265,7 +265,7 @@ func (projection DefinitionProjection) Page(def platform.Definition) (platform.D
 	return def, true
 }
 
-func (b Bindings) CheckOperation(s platform.PageActionTrigger, page platform.EntityInfo) error {
+func (b Bindings) CheckOperation(s platform.PageActionTrigger, page platform.RecordTypeInfo) error {
 	op, _, err := b.Operation(s.Operation)
 	if err != nil {
 		return err
@@ -300,7 +300,7 @@ func (b Bindings) CheckOperation(s platform.PageActionTrigger, page platform.Ent
 
 var selectionName = regexp.MustCompile(`^[a-z][a-z0-9_-]{0,63}$`)
 
-func CheckSelections(p platform.Page, entity func(string) (platform.EntityInfo, bool), action func(string) (platform.Action, bool)) error {
+func CheckSelections(p platform.Page, entity func(string) (platform.RecordTypeInfo, bool), action func(string) (platform.Action, bool)) error {
 	safe, err := Safety(p)
 	if err != nil {
 		return err
@@ -321,7 +321,7 @@ func CheckSelections(p platform.Page, entity func(string) (platform.EntityInfo, 
 			return b.Ports["selectionMode"] == "write" && b.Ports["selection"] == selection && bindingObjectRef(b, safe).Name == object
 		})
 	}
-	references := func(info platform.EntityInfo, parent string) bool {
+	references := func(info platform.RecordTypeInfo, parent string) bool {
 		return slices.ContainsFunc(info.Fields, func(f platform.FieldInfo) bool { return f.Type == "reference" && f.Ref == parent })
 	}
 	parentBindings := map[string]string{}
@@ -402,7 +402,7 @@ func CheckSelections(p platform.Page, entity func(string) (platform.EntityInfo, 
 	return nil
 }
 
-func checkCreateForm(p platform.Page, b platform.PageDataBinding, info platform.EntityInfo, where, parentType, boundParent, relation string, entity func(string) (platform.EntityInfo, bool), action func(string) (platform.Action, bool)) error {
+func checkCreateForm(p platform.Page, b platform.PageDataBinding, info platform.RecordTypeInfo, where, parentType, boundParent, relation string, entity func(string) (platform.RecordTypeInfo, bool), action func(string) (platform.Action, bool)) error {
 	if create, ok := action(info.Type + ".create"); !ok || create.Target != info.Type {
 		return fmt.Errorf("%s: %s cannot be created here", where, info.Type)
 	}

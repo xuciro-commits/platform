@@ -103,7 +103,7 @@ func ClaimNames(owner map[string]string, tenant string, m platform.Manifest) err
 	return nil
 }
 
-func DeclareOwned[R any](tenant string, apps []platform.App, declared func(platform.Manifest) bool, role R, kind string, declare func(R, platform.App) error) error {
+func DeclareOwned[R any](tenant string, apps []platform.Service, declared func(platform.Manifest) bool, role R, kind string, declare func(R, platform.Service) error) error {
 	for _, a := range apps {
 		if !declared(a.Manifest()) {
 			continue
@@ -118,7 +118,7 @@ func DeclareOwned[R any](tenant string, apps []platform.App, declared func(platf
 	return nil
 }
 
-func OwnerOfClass(apps []platform.App, dataClass string) (string, bool) {
+func OwnerOfClass(apps []platform.Service, dataClass string) (string, bool) {
 	for _, a := range apps {
 		if slices.ContainsFunc(a.Declarations(), func(d *pb.AuthorityDeclaration) bool { return d.GetDataClass() == dataClass }) {
 			return a.Manifest().ID, true
@@ -127,7 +127,7 @@ func OwnerOfClass(apps []platform.App, dataClass string) (string, bool) {
 	return "", false
 }
 
-func DeclarationsOf(apps []platform.App) []*pb.AuthorityDeclaration {
+func DeclarationsOf(apps []platform.Service) []*pb.AuthorityDeclaration {
 	var out []*pb.AuthorityDeclaration
 	for _, a := range apps {
 		out = append(out, a.Declarations()...)

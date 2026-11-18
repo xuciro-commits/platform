@@ -13,15 +13,15 @@ import (
 )
 
 type ProtocolEnvironment struct {
-	Actions      func(platform.Entity) []platform.Action
-	Installed    func() []platform.Entity
+	Actions      func(platform.RecordType) []platform.Action
+	Installed    func() []platform.RecordType
 	Contract     func(string) (platform.Protocol, bool)
 	CheckProcess func(Object) error
 }
 
 func ProtocolReadName(typ, name string) string { return "protocol:" + typ + ":" + name }
 
-func ObjectProvisions(object Object, entity platform.Entity, actions []platform.Action) []platform.Provision {
+func ObjectProvisions(object Object, entity platform.RecordType, actions []platform.Action) []platform.Provision {
 	if len(object.Protocols) == 0 {
 		return nil
 	}

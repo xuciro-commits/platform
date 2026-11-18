@@ -53,7 +53,7 @@ func GoName(name string) string {
 	return strings.ToUpper(name[:1]) + name[1:]
 }
 
-func CompileObjectShape(o Object, app, builderRole string) platform.Entity {
+func CompileObjectShape(o Object, app, builderRole string) platform.RecordType {
 	fields := []reflect.StructField{{Name: "Record", Type: reflect.TypeFor[platform.Record](), Anonymous: true,
 		Tag: reflect.StructTag(fmt.Sprintf(`entity:"%s"`, app+"."+o.Name))}}
 	for _, f := range o.Fields {
@@ -158,7 +158,7 @@ func CompileObjectShape(o Object, app, builderRole string) platform.Entity {
 			localRules[field.Name] = *field.FormulaExpr
 		}
 	}
-	return platform.Entity{LocalRules: localRules, Type: app + "." + o.Name, Title: o.Title, Plural: o.Plural, Description: o.Description, Icon: o.Icon, Color: o.Color, Format: FieldFormats(o.Fields), ValueTypeBindings: ValueTypeBindings(o.Fields), PropertyBindings: PropertyBindings(o.Fields), Model: model, Display: display, ObjectView: o.ObjectView, Constraints: o.Constraints, Sets: o.Sets, Versioning: o.Versioning, VersionPins: o.VersionPins, Implements: slices.Clone(o.Implements), Extends: o.Extends, ExtensionSource: o.ExtensionSource, Derived: derived, Withheld: withheld, EnterpriseUse: o.EnterpriseUse}
+	return platform.RecordType{LocalRules: localRules, Type: app + "." + o.Name, Title: o.Title, Plural: o.Plural, Description: o.Description, Icon: o.Icon, Color: o.Color, Format: FieldFormats(o.Fields), ValueTypeBindings: ValueTypeBindings(o.Fields), PropertyBindings: PropertyBindings(o.Fields), Model: model, Display: display, ObjectView: o.ObjectView, Constraints: o.Constraints, Sets: o.Sets, Versioning: o.Versioning, VersionPins: o.VersionPins, Implements: slices.Clone(o.Implements), Extends: o.Extends, ExtensionSource: o.ExtensionSource, Derived: derived, Withheld: withheld, EnterpriseUse: o.EnterpriseUse}
 }
 
 func goType(kind string) reflect.Type {

@@ -26,8 +26,8 @@ func (t *Tenant) continuousSnapshotLocked(m platform.Member, id string, now time
 
 func (t *Tenant) decideAutomated(holder, app string, decide func(*Tenant) (*pb.ChangeRecord, *platform.Error)) (*pb.ChangeRecord, *platform.Error) {
 	member := platform.Member{ID: "app:" + app, Tenant: t.ID}
-	return decideOnImage(t, context.Background(), holder, decide, func(t *Tenant, candidate preparedAccepted, record *pb.ChangeRecord, refusal *platform.Error) (*pb.ChangeRecord, *platform.Error) {
-		return t.finishPreparedSubmission(member, candidate, record, refusal)
+	return decideOnImage(t, context.Background(), holder, decide, func(t *Tenant, decision preparedAccepted, record *pb.ChangeRecord, refusal *platform.Error) (*pb.ChangeRecord, *platform.Error) {
+		return t.finishPreparedSubmission(member, decision, record, refusal)
 	})
 }
 
@@ -52,8 +52,8 @@ func (t *Tenant) prepareContinuousDeadLetterReplay(m platform.Member, sub *pb.Su
 				return t.accept(owner, m, sub, now, acceptOptions{binding: binding, schemaRefusal: schemaRefusal})
 			},
 		}.Run(sub)
-	}, func(t *Tenant, candidate preparedAccepted, value automation.ReplayPreflightResult, refusal *platform.Error) (automation.ReplayPreflightResult, *platform.Error) {
-		value.Record, refusal = t.finishPreparedSubmission(m, candidate, value.Record, refusal)
+	}, func(t *Tenant, decision preparedAccepted, value automation.ReplayPreflightResult, refusal *platform.Error) (automation.ReplayPreflightResult, *platform.Error) {
+		value.Record, refusal = t.finishPreparedSubmission(m, decision, value.Record, refusal)
 		return value, refusal
 	})
 	if err != nil || first.Handled {
@@ -126,11 +126,11 @@ func (t *Tenant) prepareContinuousDeadLetterReplay(m platform.Member, sub *pb.Su
 			return nil, refusal
 		}
 		return t.accept(prepared.Decision(f), current, sub, now, acceptOptions{binding: first.Binding, inputs: []*preparedOperationInput{preparedInput}})
-	}, func(t *Tenant, candidate preparedAccepted, record *pb.ChangeRecord, refusal *platform.Error) (*pb.ChangeRecord, *platform.Error) {
-		if len(candidate.entry.Body) > 0 {
+	}, func(t *Tenant, decision preparedAccepted, record *pb.ChangeRecord, refusal *platform.Error) (*pb.ChangeRecord, *platform.Error) {
+		if len(decision.entry.Body) > 0 {
 			keep.KeepArtifacts, keep.KeepInput = true, true
 		}
-		record, refusal = t.finishPreparedSubmission(preparedContext.Member, candidate, record, refusal)
+		record, refusal = t.finishPreparedSubmission(preparedContext.Member, decision, record, refusal)
 		if _, rejected := t.Committed.Refusal(protocol.FlowApp + "/" + sub.GetIdempotencyKey()); rejected {
 			keep.KeepArtifacts, keep.KeepInput = false, false
 		}
@@ -190,11 +190,11 @@ func (t *Tenant) commitFlow(c automation.FlowCommit) (*pb.ChangeRecord, *platfor
 			return nil, refusal
 		}
 		return t.accept(c.Prepared.Decision(f), c.Member, c.Prepared.Submission(t.ID), c.At, acceptOptions{automation: true, inputs: []*preparedOperationInput{c.Input}})
-	}, func(t *Tenant, candidate preparedAccepted, record *pb.ChangeRecord, refusal *platform.Error) (*pb.ChangeRecord, *platform.Error) {
+	}, func(t *Tenant, decision preparedAccepted, record *pb.ChangeRecord, refusal *platform.Error) (*pb.ChangeRecord, *platform.Error) {
 		if c.Accepted != nil {
-			c.Accepted(len(candidate.entry.Body) != 0)
+			c.Accepted(len(decision.entry.Body) != 0)
 		}
-		return t.finishPreparedSubmission(c.Member, candidate, record, refusal)
+		return t.finishPreparedSubmission(c.Member, decision, record, refusal)
 	})
 }
 

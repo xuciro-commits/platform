@@ -1,4 +1,4 @@
-package automation
+package runtime
 
 import (
 	"bytes"
@@ -140,7 +140,7 @@ func (p *PreparedComputeRetry) OperationRequest() platform.OperationRequest {
 	return request
 }
 
-func (p *PreparedComputeRetry) Decision(owner platform.App) platform.App {
+func (p *PreparedComputeRetry) Decision(owner platform.Service) platform.Service {
 	return preparedComputeRetryDecision{Flows: owner.(*Flows), prepared: p}
 }
 
@@ -149,8 +149,8 @@ type preparedComputeRetryDecision struct {
 	prepared *PreparedComputeRetry
 }
 
-func (d preparedComputeRetryDecision) Fork(ledger platform.Authority) (platform.App, error) {
-	fork, err := d.Flows.Fork(ledger)
+func (d preparedComputeRetryDecision) Fork(authority platform.Authority) (platform.Service, error) {
+	fork, err := d.Flows.Fork(authority)
 	if err != nil {
 		return nil, err
 	}
@@ -162,7 +162,7 @@ func (d preparedComputeRetryDecision) Submit(c platform.Caller, sub *pb.Submissi
 	if p.before.Batch == nil || p.before.Batch.Sealed == nil || !c.Automation || c.ID != "app:"+ID || c.Tenant != p.before.Batch.Sealed.Tenant || sub.GetTenantId() != c.Tenant || sub.GetAuthority() != ID || sub.GetPrincipalId() != c.ID || sub.GetSchema().GetName() != SchemaFlowStep || sub.GetTarget().GetId() != p.before.ID || !bytes.Equal(sub.GetPayload(), []byte("{}")) || !bytes.Equal(sub.GetPayload(), p.Submission(c.Tenant).GetPayload()) || sub.GetIdempotencyKey() != p.Submission(c.Tenant).GetIdempotencyKey() || !now.Equal(p.at) {
 		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "Only the host can accept a prepared Flow Compute retry")
 	}
-	return d.ledger.Receive(c, sub, now, nil, func() (func(*pb.ChangeRecord), *platform.Error) {
+	return d.authority.Receive(c, sub, now, nil, func() (func(*pb.ChangeRecord), *platform.Error) {
 		ss := d.session(c, now)
 		x := ss.load(p.before.ID)
 		if x == nil || !p.Matches(*x) || ended(x.State) {

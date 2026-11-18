@@ -184,17 +184,17 @@ func (b *Runtime) txnRangeRows(c platform.Caller, span platform.TxnRange, scope 
 	return rows, nil
 }
 
-func (b *Runtime) txnRecordRows(c platform.Caller, receipt *pb.ChangeRecord, subject, id, name, step string, iterations *int, now time.Time) (platform.RecordSetResult, platform.EntityInfo, []string, *platform.Error) {
+func (b *Runtime) txnRecordRows(c platform.Caller, receipt *pb.ChangeRecord, subject, id, name, step string, iterations *int, now time.Time) (platform.RecordSetResult, platform.RecordTypeInfo, []string, *platform.Error) {
 	set, failure := c.ReadRecordSet(subject, id, name, now)
 	if failure != nil {
-		return set, platform.EntityInfo{}, nil, failure
+		return set, platform.RecordTypeInfo{}, nil, failure
 	}
 	if set.Partial {
-		return set, platform.EntityInfo{}, nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "Iteration {step} contains withheld records / 迭代 {step} 含不可见记录", step, step)
+		return set, platform.RecordTypeInfo{}, nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "Iteration {step} contains withheld records / 迭代 {step} 含不可见记录", step, step)
 	}
 	*iterations += len(set.Records)
 	if *iterations > platform.TxnMaxIterations {
-		return set, platform.EntityInfo{}, nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Transaction iteration exceeds its limit / 事务迭代超出上限")
+		return set, platform.RecordTypeInfo{}, nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Transaction iteration exceeds its limit / 事务迭代超出上限")
 	}
 	info, found := b.Lookup(set.Object)
 	if !found {
@@ -212,7 +212,7 @@ func (b *Runtime) txnRecordRows(c platform.Caller, receipt *pb.ChangeRecord, sub
 	return set, info, ids, failure
 }
 
-func txnRowInputs(c platform.Caller, info platform.EntityInfo, raw json.RawMessage, inputs map[string]any) (map[string]any, *platform.Error) {
+func txnRowInputs(c platform.Caller, info platform.RecordTypeInfo, raw json.RawMessage, inputs map[string]any) (map[string]any, *platform.Error) {
 	var fields map[string]json.RawMessage
 	if json.Unmarshal(raw, &fields) != nil {
 		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Iteration row is invalid")

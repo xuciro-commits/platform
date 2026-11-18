@@ -172,7 +172,7 @@ func ReferenceValue(v reflect.Value) (string, bool) {
 	return "", false
 }
 
-func RecordLabel(info platform.EntityInfo, value any, id string) string {
+func RecordLabel(info platform.RecordTypeInfo, value any, id string) string {
 	v := reflect.ValueOf(value)
 	for v.IsValid() && v.Kind() == reflect.Pointer {
 		if v.IsNil() {
@@ -195,7 +195,7 @@ func RecordLabel(info platform.EntityInfo, value any, id string) string {
 	return id
 }
 
-func KnowledgeBearing(info platform.EntityInfo) bool {
+func KnowledgeBearing(info platform.RecordTypeInfo) bool {
 	return info.Type == protocol.KnowledgeDocumentType || info.Type == platform.FileType || info.KnowledgeFiles ||
 		slices.ContainsFunc(info.Fields, func(f platform.FieldInfo) bool { return f.Knowledge })
 }
@@ -212,7 +212,7 @@ func requiredEmpty(value reflect.Value) bool {
 	}
 }
 
-func CheckFields(info platform.EntityInfo, entity any, v reflect.Value, replaying bool, lookup RecordLookup, resolve func(platform.AssetBinding) (platform.ValueType, bool), engines ...platform.RuleEngine) ([]platform.FieldIssue, *platform.Error) {
+func CheckFields(info platform.RecordTypeInfo, entity any, v reflect.Value, replaying bool, lookup RecordLookup, resolve func(platform.AssetBinding) (platform.ValueType, bool), engines ...platform.RuleEngine) ([]platform.FieldIssue, *platform.Error) {
 	invalid := &platform.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 	stringOf := func(name string) string {
 		i := slices.IndexFunc(info.Fields, func(x platform.FieldInfo) bool { return x.Name == name })
@@ -391,7 +391,7 @@ func EmptyLists(v reflect.Value) {
 	}
 }
 
-func Mask(info platform.EntityInfo, v reflect.Value, hidden []platform.FieldInfo) any {
+func Mask(info platform.RecordTypeInfo, v reflect.Value, hidden []platform.FieldInfo) any {
 	c := Copy(info.Go, v.Interface())
 	for _, f := range hidden {
 		c.FieldByIndex(f.Index).SetZero()
@@ -631,7 +631,7 @@ func enterpriseHistoryJSONNames(raw json.RawMessage, path []string, id string) b
 	return names(value, path)
 }
 
-func EnterpriseCurrent(info platform.EntityInfo, value reflect.Value, now time.Time, engines ...platform.RuleEngine) bool {
+func EnterpriseCurrent(info platform.RecordTypeInfo, value reflect.Value, now time.Time, engines ...platform.RuleEngine) bool {
 	if Header(value).Archived {
 		return false
 	}

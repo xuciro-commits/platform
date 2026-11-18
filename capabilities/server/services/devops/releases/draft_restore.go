@@ -10,7 +10,7 @@ import (
 	build "platformserver/services/resources/authoring"
 )
 
-func DraftRestore(owner build.ConstructionDrafts, lifecycle protocol.AssetLifecycleOwner, entities []platform.EntityInfo, m platform.Member, kind platform.AssetKind, id string, now time.Time) (ReleaseDraftRestore, error) {
+func DraftRestore(owner build.ConstructionDrafts, lifecycle protocol.AssetLifecycleOwner, entities []platform.RecordTypeInfo, m platform.Member, kind platform.AssetKind, id string, now time.Time) (ReleaseDraftRestore, error) {
 	typ, published, found, err := owner.DraftPublished(kind, id)
 	if err != nil || !found {
 		return ReleaseDraftRestore{}, fmt.Errorf("The draft is unavailable")
@@ -39,7 +39,7 @@ func DraftRestore(owner build.ConstructionDrafts, lifecycle protocol.AssetLifecy
 			}
 		}
 	}
-	var info *platform.EntityInfo
+	var info *platform.RecordTypeInfo
 	for _, entity := range entities {
 		if entity.Type == typ {
 			info = &entity

@@ -35,8 +35,8 @@ func integrationStandard() platform.Standard {
 	return platform.Standard{Create: true, Edit: true, Archive: true, Roles: []string{Builder, Integrator}, Capability: "integrations"}
 }
 
-func (o *Owner) connectionEntity() platform.Entity {
-	return platform.Entity{Type: ConnectionType, Title: "Connection", Plural: "Connections", Model: Connection{}, Display: "title",
+func (o *Owner) connectionEntity() platform.RecordType {
+	return platform.RecordType{Type: ConnectionType, Title: "Connection", Plural: "Connections", Model: Connection{}, Display: "title",
 		Validate: func(c platform.Caller, record any) *platform.Error {
 			next := record.(*Connection)
 			if current, ok := platform.Get[Connection](c, next.ID); ok && (platform.MarkingRank(next.Marking) < platform.MarkingRank(current.Marking) || slices.ContainsFunc(current.Compartments, func(id string) bool { return !slices.Contains(next.Compartments, id) })) {
@@ -83,8 +83,8 @@ func connectionActions() []platform.Action {
 			Payload: []platform.Field{{Name: "revision", Type: "integer", Required: true, Description: "The connection revision checked"}, {Name: "check", Type: "json", Required: true, Description: "When, whether it answered and what"}}}}
 }
 
-func (o *Owner) ConfigureConnection(ledger platform.Authority, c platform.Caller, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *platform.Error) {
-	return ledger.Receive(c, s, now, nil, func() (func(*pb.ChangeRecord), *platform.Error) {
+func (o *Owner) ConfigureConnection(authority platform.Authority, c platform.Caller, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *platform.Error) {
+	return authority.Receive(c, s, now, nil, func() (func(*pb.ChangeRecord), *platform.Error) {
 		connection, found := platform.Get[Connection](c, s.GetTarget().GetId())
 		if !found || connection.Archived {
 			return nil, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
@@ -157,8 +157,8 @@ func (o *Owner) validConnection(c Connection) *platform.Error {
 	return nil
 }
 
-func (o *Owner) SubmitConnectionChecked(ledger platform.Authority, c platform.Caller, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *platform.Error) {
-	return ledger.Receive(c, s, now, nil, func() (func(*pb.ChangeRecord), *platform.Error) {
+func (o *Owner) SubmitConnectionChecked(authority platform.Authority, c platform.Caller, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *platform.Error) {
+	return authority.Receive(c, s, now, nil, func() (func(*pb.ChangeRecord), *platform.Error) {
 		var payload struct {
 			Revision uint32          `json:"revision"`
 			Check    ConnectionCheck `json:"check"`
@@ -179,8 +179,8 @@ func (o *Owner) SubmitConnectionChecked(ledger platform.Authority, c platform.Ca
 	})
 }
 
-func (o *Owner) datasetEntity() platform.Entity {
-	return platform.Entity{Type: DatasetType, Title: "Dataset", Plural: "Datasets", Model: Dataset{}, Display: "title",
+func (o *Owner) datasetEntity() platform.RecordType {
+	return platform.RecordType{Type: DatasetType, Title: "Dataset", Plural: "Datasets", Model: Dataset{}, Display: "title",
 		Validate: func(c platform.Caller, value any) *platform.Error {
 			next := value.(*Dataset)
 			if err := o.checkCompartments(next.Compartments); err != nil {
@@ -205,8 +205,8 @@ func (o *Owner) datasetEntity() platform.Entity {
 		Standard:    integrationStandard()}
 }
 
-func (o *Owner) datasetVersionEntity() platform.Entity {
-	return platform.Entity{Type: DatasetVersionType, Title: "Dataset version", Plural: "Dataset versions", Model: DatasetVersion{}, Display: "version",
+func (o *Owner) datasetVersionEntity() platform.RecordType {
+	return platform.RecordType{Type: DatasetVersionType, Title: "Dataset version", Plural: "Dataset versions", Model: DatasetVersion{}, Display: "version",
 		Description: "One version of a dataset: its rows at one load.",
 		Scope:       integrationScope(),
 		Standard:    platform.Standard{Roles: []string{Builder, Integrator}, Capability: "integrations"}}
@@ -219,8 +219,8 @@ func datasetActions() []platform.Action {
 			Payload: []platform.Field{{Name: "projection", Type: "json", Required: true, Description: "The object type, version, counts and why the projection paused"}}}}
 }
 
-func (o *Owner) SubmitDatasetProjected(ledger platform.Authority, c platform.Caller, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *platform.Error) {
-	return ledger.Receive(c, s, now, nil, func() (func(*pb.ChangeRecord), *platform.Error) {
+func (o *Owner) SubmitDatasetProjected(authority platform.Authority, c platform.Caller, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *platform.Error) {
+	return authority.Receive(c, s, now, nil, func() (func(*pb.ChangeRecord), *platform.Error) {
 		var payload struct {
 			Projection DatasetProjection `json:"projection"`
 		}
@@ -279,8 +279,8 @@ func DatasetSchema(rows []map[string]any, order []string) []DatasetField {
 	return out
 }
 
-func (o *Owner) SubmitDatasetLoad(ledger platform.Authority, c platform.Caller, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *platform.Error) {
-	return ledger.Receive(c, s, now, nil, func() (func(*pb.ChangeRecord), *platform.Error) {
+func (o *Owner) SubmitDatasetLoad(authority platform.Authority, c platform.Caller, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *platform.Error) {
+	return authority.Receive(c, s, now, nil, func() (func(*pb.ChangeRecord), *platform.Error) {
 		var payload struct {
 			Type         DatasetTransactionType `json:"type"`
 			Rows         []map[string]any       `json:"rows"`

@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"platformserver/kernel/protocol"
 	"platformserver/platform"
-	"platformserver/services/resources/authoring"
+	build "platformserver/services/resources/authoring"
 	"platformserver/services/resources/publication"
 
 	"slices"
@@ -16,8 +16,8 @@ import (
 type AcceptedAssets struct {
 	Available    func() ([]platform.ReleaseAsset, error)
 	WithBindings func(roots []platform.AssetRef, available []platform.ReleaseAsset) (protocol.ReleaseCandidate, error)
-	Apps         func() []platform.App
-	CodeAssets   func(platform.App) ([]platform.ReleaseAsset, error)
+	Apps         func() []platform.Service
+	CodeAssets   func(platform.Service) ([]platform.ReleaseAsset, error)
 }
 
 func RunningRelease(saved protocol.ReleaseCandidate, assets AcceptedAssets) (protocol.ReleaseCandidate, error) {

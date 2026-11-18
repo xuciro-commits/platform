@@ -8,7 +8,7 @@ import (
 	"platformserver/platform"
 	automation "platformserver/services/automate/runtime"
 	dataowner "platformserver/services/data"
-	"platformserver/services/resources/authoring"
+	build "platformserver/services/resources/authoring"
 	"time"
 )
 

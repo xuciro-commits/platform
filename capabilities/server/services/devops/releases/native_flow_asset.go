@@ -5,7 +5,7 @@ import (
 	"platformserver/platform"
 )
 
-func NativeFlowAsset(provider platform.NativeFlowAssets, definitions []platform.Definition, owner platform.App, name string, version int) (platform.ReleaseAsset, error) {
+func NativeFlowAsset(provider platform.NativeFlowAssets, definitions []platform.Definition, owner platform.Service, name string, version int) (platform.ReleaseAsset, error) {
 	manifest := owner.Manifest()
 	return provider.NativeFlowAsset(manifest, name, version, NativeFlowRefs(definitions, manifest.ID))
 }

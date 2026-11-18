@@ -22,8 +22,8 @@ const confirmationReview = confirmationType + ".review"
 
 const confirmationTick = confirmationType + ".tick"
 
-func (o *Owner) ConfirmationEntity() platform.Entity {
-	return platform.Entity{Type: confirmationType, Title: "Business confirmation", Plural: "Business confirmations", Model: platform.ConfirmationRun{}, Display: "subject",
+func (o *Owner) ConfirmationEntity() platform.RecordType {
+	return platform.RecordType{Type: confirmationType, Title: "Business confirmation", Plural: "Business confirmations", Model: platform.ConfirmationRun{}, Display: "subject",
 		Description: "Independent party receipts, unknown outcomes, source reconciliation and declared compensation.",
 		Scope: ScopeWithParticipants(func(value any) []string {
 			r := value.(platform.ConfirmationRun)

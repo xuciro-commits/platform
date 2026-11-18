@@ -7,7 +7,7 @@ import (
 	"platformserver/platform"
 )
 
-func (s *Sequence) ActionOwner(owner, authority platform.App, key string) (platform.App, *platform.Error) {
+func (s *Sequence) ActionOwner(owner, authority platform.Service, key string) (platform.Service, *platform.Error) {
 	if owner != nil {
 		return owner, nil
 	}
@@ -20,7 +20,7 @@ func (s *Sequence) ActionOwner(owner, authority platform.App, key string) (platf
 	return authority, nil
 }
 
-func SubmitTo(c platform.Caller, owner platform.App, missing *platform.Error, s *pb.Submission, at time.Time) (*pb.ChangeRecord, *platform.Error) {
+func SubmitTo(c platform.Caller, owner platform.Service, missing *platform.Error, s *pb.Submission, at time.Time) (*pb.ChangeRecord, *platform.Error) {
 	if owner == nil {
 		return nil, missing
 	}
@@ -30,7 +30,7 @@ func SubmitTo(c platform.Caller, owner platform.App, missing *platform.Error, s 
 	return platform.Decide(c, owner, s, at)
 }
 
-func AttemptTo(c platform.Caller, owner func() platform.App, missing *platform.Error, s *pb.Submission, at time.Time) (*pb.ChangeRecord, *platform.Error) {
+func AttemptTo(c platform.Caller, owner func() platform.Service, missing *platform.Error, s *pb.Submission, at time.Time) (*pb.ChangeRecord, *platform.Error) {
 	return platform.Attempt(c, func() (*pb.ChangeRecord, *platform.Error) {
 		app := owner()
 		if app == nil {

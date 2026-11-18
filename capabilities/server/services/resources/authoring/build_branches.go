@@ -1,4 +1,4 @@
-package build
+package authoring
 
 import (
 	"platformserver/platform"
@@ -37,7 +37,7 @@ func BranchResource(typ, name string) (platform.AssetRef, error) {
 	return draftAssetRef(typ, name)
 }
 
-func (b *Build) branchEntity() platform.Entity {
+func (b *Build) branchEntity() platform.RecordType {
 	return b.branches.Entity()
 }
 

@@ -51,8 +51,8 @@ func (o *queryOwner) binding() publication.QueryAuthoringBinding {
 	}
 }
 
-func (o *queryOwner) entity() platform.Entity {
-	return platform.Entity{Type: o.env.Type, Title: "Object set", Plural: "Object sets", Model: Query{}, Display: "title",
+func (o *queryOwner) entity() platform.RecordType {
+	return platform.RecordType{Type: o.env.Type, Title: "Object set", Plural: "Object sets", Model: Query{}, Display: "title",
 		Description: "A saved object set over a published object or interface; reads use the shared ObjectSet executor and the caller’s permissions.",
 		Scope:       platform.Scope{Default: platform.ScopeNone, Levels: map[string]string{o.env.Builder: platform.ScopeTenant}},
 		Standard:    platform.Standard{Create: true, Edit: true, Archive: true, Roles: []string{o.env.Builder}, Capability: "queries"},
@@ -88,9 +88,9 @@ func (o *queryOwner) inventory() ([]Query, error) {
 	return publication.Inventory[Query](o.env.Host().Automation(platform.Caller{}, o.env.App))
 }
 
-func (o *queryOwner) draftObjects() []platform.EntityInfo {
+func (o *queryOwner) draftObjects() []platform.RecordTypeInfo {
 	joint := o.env.JointEntities()
-	out := make([]platform.EntityInfo, 0, len(joint))
+	out := make([]platform.RecordTypeInfo, 0, len(joint))
 	for _, info := range joint {
 		out = append(out, info)
 	}
@@ -341,7 +341,7 @@ func (o *queryOwner) published(c platform.Caller, id string) bool {
 	return ok && query.Published != ""
 }
 
-func (o *queryOwner) checkRecordSets(info platform.EntityInfo, lookup func(string) (platform.EntityInfo, bool), engines ...platform.RuleEngine) error {
+func (o *queryOwner) checkRecordSets(info platform.RecordTypeInfo, lookup func(string) (platform.RecordTypeInfo, bool), engines ...platform.RuleEngine) error {
 	if err := records.CheckRecordSets(info, lookup, engines...); err != nil {
 		return err
 	}

@@ -5,7 +5,7 @@ import (
 	"platformserver/services/actions"
 	pageowner "platformserver/services/apps/pages"
 	"platformserver/services/objects"
-	"platformserver/services/resources/authoring"
+	build "platformserver/services/resources/authoring"
 	"time"
 
 	"platformserver/platform"
@@ -13,7 +13,7 @@ import (
 
 func (t *Tenant) definitionsFrom(m platform.Member, registeredDefinitions []platform.Definition) []platform.Definition {
 	m = t.authorizationMember(m)
-	entities := map[string]platform.EntityInfo{}
+	entities := map[string]platform.RecordTypeInfo{}
 	for _, info := range t.Entities(m) {
 		entities[info.Type] = info
 	}
@@ -27,7 +27,7 @@ func (t *Tenant) definitionsFrom(m platform.Member, registeredDefinitions []plat
 		value, _, err := t.pageOperation(binding)
 		return value, err == nil
 	},
-		CheckQuery: func(q platform.NamedQuery, info platform.EntityInfo) error {
+		CheckQuery: func(q platform.NamedQuery, info platform.RecordTypeInfo) error {
 			return objects.CheckNamedQuery(q, info, t.services.Rules)
 		}}
 	caller := func(app string) platform.Caller {

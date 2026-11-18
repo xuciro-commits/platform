@@ -31,7 +31,7 @@ type ReplayHooks struct {
 	Record        func(l platform.Authority, body []byte) (bool, error)
 	Invalidate    func()
 	Pin           func(versions map[string]int)
-	App           func(id string) platform.App
+	App           func(id string) platform.Service
 	Enqueue       func(time.Time)
 	PublishRecord func(platform.Event, protocol.AcceptedEventPlan)
 }
@@ -60,7 +60,7 @@ func (s *Sequence) ReplayEntries(entries []persistence.Entry, h ReplayHooks) err
 	return nil
 }
 
-func (s *Sequence) replayResult(i int, e persistence.Entry, m platform.Member, a platform.App, h ReplayHooks) error {
+func (s *Sequence) replayResult(i int, e persistence.Entry, m platform.Member, a platform.Service, h ReplayHooks) error {
 	var envelope struct{ Kind string }
 	if err := json.Unmarshal(e.Body, &envelope); err != nil {
 		return fmt.Errorf("entry %d: unreadable result envelope: %w", i+1, err)

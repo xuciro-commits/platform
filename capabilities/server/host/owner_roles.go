@@ -10,7 +10,7 @@ import (
 	runtimekernel "platformserver/kernel"
 	"platformserver/platform"
 	trialowner "platformserver/services/devops/trials"
-	"platformserver/services/resources/authoring"
+	build "platformserver/services/resources/authoring"
 )
 
 type ownerRoles = hostroles.Roles
@@ -26,7 +26,7 @@ type tenantPorts struct {
 	Files    platform.FileStore
 }
 type ownerSet struct {
-	apps          []platform.App
+	apps          []platform.Service
 	ids           []string
 	appIndex      map[string]int
 	owner         map[string]string
@@ -41,7 +41,7 @@ type ownerSet struct {
 	capabilities  hostroles.Capabilities
 }
 
-func newOwnerSet(apps []platform.App) (ownerSet, error) {
+func newOwnerSet(apps []platform.Service) (ownerSet, error) {
 	s := ownerSet{ids: make([]string, len(apps)), appIndex: map[string]int{}, owner: map[string]string{}}
 	for i, app := range apps {
 		id := app.Manifest().ID
@@ -54,7 +54,7 @@ func newOwnerSet(apps []platform.App) (ownerSet, error) {
 	s.place(apps)
 	return s, nil
 }
-func (s *ownerSet) place(apps []platform.App) {
+func (s *ownerSet) place(apps []platform.Service) {
 	s.apps = apps
 	s.capabilities = hostroles.CapabilitiesOf(apps)
 	s.states, s.inputs, s.assets, s.answerers = s.capabilities.States, s.capabilities.Inputs, s.capabilities.Assets, s.capabilities.Answerers
@@ -62,13 +62,13 @@ func (s *ownerSet) place(apps []platform.App) {
 	s.simulations = trialowner.SimulationOwners{Factories: s.capabilities.SimulationFactories, Builder: s.builders[build.ID], Identities: s.capabilities.SimulationIdentities, Organizations: s.capabilities.SimulationOrganizations}
 }
 
-func (s ownerSet) with(apps []platform.App) ownerSet {
+func (s ownerSet) with(apps []platform.Service) ownerSet {
 	out := ownerSet{ids: s.ids, appIndex: s.appIndex, owner: maps.Clone(s.owner)}
 	out.place(apps)
 	return out
 }
 
-func (s ownerSet) App(id string) platform.App {
+func (s ownerSet) App(id string) platform.Service {
 	i, found := s.appIndex[id]
 	if !found {
 		return nil

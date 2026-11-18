@@ -12,7 +12,7 @@ import (
 
 type SortOrder struct{ keys []sortKey }
 
-func CompileOrder(info platform.EntityInfo, names []string) (SortOrder, error) {
+func CompileOrder(info platform.RecordTypeInfo, names []string) (SortOrder, error) {
 	var order SortOrder
 	for _, name := range names {
 		bare := strings.TrimPrefix(name, "-")
@@ -126,7 +126,7 @@ func (p *SortedPage) Result() ([]reflect.Value, int) {
 	return out, p.total
 }
 
-func CompileSet(info platform.EntityInfo, p platform.RecordSetPredicate, engines ...platform.RuleEngine) (Plan, error) {
+func CompileSet(info platform.RecordTypeInfo, p platform.RecordSetPredicate, engines ...platform.RuleEngine) (Plan, error) {
 	expr, err := DomainToExpr(info, p.Domain)
 	if err != nil {
 		return Plan{}, err

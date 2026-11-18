@@ -13,8 +13,8 @@ import (
 	ontology "platformserver/services/ontology"
 )
 
-func (o *Owner) ApplicationEntity() platform.Entity {
-	return platform.Entity{Type: protocol.AppType, Title: "Project", Plural: "Projects", Model: protocol.Application{}, Display: "title",
+func (o *Owner) ApplicationEntity() platform.RecordType {
+	return platform.RecordType{Type: protocol.AppType, Title: "Project", Plural: "Projects", Model: protocol.Application{}, Display: "title",
 		Description: "An application this organisation hands to its people: a name, an icon, its pages and shared resource references. It gives nobody new access; each page is offered to whoever may read what it shows.",
 		Validate: func(c platform.Caller, record any) *platform.Error {
 			a := record.(*protocol.Application)

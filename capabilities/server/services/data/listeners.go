@@ -31,9 +31,9 @@ type Listener struct {
 	Versions          []string `json:"definitionVersions,omitempty" field:"readonly" type:"json" title:"Published versions"`
 }
 
-func (o *Owner) listenerEntity() platform.Entity {
+func (o *Owner) listenerEntity() platform.RecordType {
 	roles := []string{Builder, Integrator}
-	return platform.Entity{Type: ListenerType, Title: "Listener", Plural: "Listeners", Model: Listener{}, Display: "title",
+	return platform.RecordType{Type: ListenerType, Title: "Listener", Plural: "Listeners", Model: Listener{}, Display: "title",
 		Description: "An inbound webhook that delivers payloads to an existing connector input.",
 		Scope:       integrationScope(),
 		Standard:    platform.Standard{Create: true, Edit: true, Archive: true, Roles: roles, Capability: "integrations"},

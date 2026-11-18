@@ -98,7 +98,7 @@ func (c SourceClaims) Apply(tenant, typ, id, change string, at time.Time, prepar
 	return nil
 }
 
-func (c SourceClaims) ClaimedBySource(tenant, object, id, connector string, info platform.EntityInfo) bool {
+func (c SourceClaims) ClaimedBySource(tenant, object, id, connector string, info platform.RecordTypeInfo) bool {
 	ref := &pb.EntityRef{Type: object, Id: id}
 	live, known := false, false
 	for _, claim := range c.Facts.CurrentClaims(tenant, ref, "$record") {

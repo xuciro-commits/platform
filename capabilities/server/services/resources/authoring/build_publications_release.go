@@ -1,4 +1,4 @@
-package build
+package authoring
 
 import (
 	"encoding/json"
@@ -33,7 +33,7 @@ func (b *Build) retainedCodeObject(asset platform.ReleaseAsset) (bool, error) {
 		return false, nil
 	}
 	manifest := b.Manifest()
-	native := slices.ContainsFunc(manifest.Entities, func(entity platform.Entity) bool {
+	native := slices.ContainsFunc(manifest.Entities, func(entity platform.RecordType) bool {
 		_, controlled := b.installed[entity.Type]
 		return !controlled && entity.Type == asset.Ref.Name
 	})
@@ -49,16 +49,16 @@ func (b *Build) retainedCodeObject(asset platform.ReleaseAsset) (bool, error) {
 	return true, nil
 }
 
-func (b *Build) ForkReleaseExecution(assets []platform.ReleaseAsset) (platform.App, error) {
-	app, err := b.Fork(b.ledger)
+func (b *Build) ForkReleaseExecution(assets []platform.ReleaseAsset) (platform.Service, error) {
+	app, err := b.Fork(b.authority)
 	if err != nil {
 		return nil, err
 	}
 	bound := app.(*Build)
-	bound.installed = map[string]platform.Entity{}
+	bound.installed = map[string]platform.RecordType{}
 	bound.queries = bound.queryFactory(bound.queryEnvironment())
 	bound.interfaces = map[string]ontology.InterfaceRecord{}
-	bound.jointEntities = map[string]platform.EntityInfo{}
+	bound.jointEntities = map[string]platform.RecordTypeInfo{}
 	bound.jointMode = true
 	for _, asset := range assets {
 		if asset.Ref.App == ID && asset.Ref.Kind == platform.AssetInterface {
@@ -123,7 +123,7 @@ func (b *Build) ForkReleaseExecution(assets []platform.ReleaseAsset) (platform.A
 			actions = append(actions, objectActions(object, entity)...)
 		}
 	}
-	return &releaseExecution{Build: bound, catalog: b.ledger.Catalog().WithActions(actions)}, nil
+	return &releaseExecution{Build: bound, catalog: b.authority.Catalog().WithActions(actions)}, nil
 }
 
 var _ protocol.ReleaseExecutionOwner = (*Build)(nil)

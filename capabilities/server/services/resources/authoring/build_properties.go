@@ -1,4 +1,4 @@
-package build
+package authoring
 
 import (
 	"platformserver/kernel/protocol"

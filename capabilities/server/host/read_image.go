@@ -13,8 +13,8 @@ import (
 	"platformserver/kernel/transport"
 	"platformserver/services/data/lineage"
 	releaseowner "platformserver/services/devops/releases"
-	"platformserver/services/functions/runtime"
-	"platformserver/services/resources/authoring"
+	compute "platformserver/services/functions/runtime"
+	build "platformserver/services/resources/authoring"
 )
 
 type tenantReadImage struct {

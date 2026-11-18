@@ -1,4 +1,4 @@
-package branches
+package merge
 
 import (
 	"crypto/sha256"

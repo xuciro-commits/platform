@@ -34,8 +34,8 @@ var simpleWhereRE = regexp.MustCompile(`^\s*[A-Za-z_][A-Za-z0-9_]*\s*(=|<>|!=|<|
 
 func simpleWhere(s string) bool { return s == "" || simpleWhereRE.MatchString(strings.ToLower(s)) }
 
-func (o *Owner) writebackEntity() platform.Entity {
-	return platform.Entity{Type: WritebackType, Title: "Writeback", Plural: "Writebacks", Model: Writeback{}, Display: "title",
+func (o *Owner) writebackEntity() platform.RecordType {
+	return platform.RecordType{Type: WritebackType, Title: "Writeback", Plural: "Writebacks", Model: Writeback{}, Display: "title",
 		Description: "An accepted action on an object sent to an external system through a connection: queued, in order, retried with the same key for receiver deduplication.",
 		Validate: func(c platform.Caller, record any) *platform.Error {
 			w := record.(*Writeback)
@@ -171,8 +171,8 @@ func (o *Owner) checkWritebackConnection(c platform.Caller, w Writeback) *platfo
 	return nil
 }
 
-func (o *Owner) SubmitWritebackAnswered(ledger platform.Authority, c platform.Caller, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *platform.Error) {
-	return ledger.Receive(c, s, now, nil, func() (func(*pb.ChangeRecord), *platform.Error) {
+func (o *Owner) SubmitWritebackAnswered(authority platform.Authority, c platform.Caller, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *platform.Error) {
+	return authority.Receive(c, s, now, nil, func() (func(*pb.ChangeRecord), *platform.Error) {
 		var payload struct {
 			Answer WritebackAns `json:"answer"`
 		}

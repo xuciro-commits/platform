@@ -12,7 +12,7 @@ import (
 )
 
 type RecordApply struct {
-	App            func(string) platform.App
+	App            func(string) platform.Service
 	CheckBindings  func(any) error
 	Claims         func(acceptedformat.Record, *pb.ChangeRecord) (func() error, error)
 	DefinitionType string

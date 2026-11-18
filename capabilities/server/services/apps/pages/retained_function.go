@@ -10,7 +10,7 @@ import (
 	"platformserver/services/resources/publication"
 )
 
-func RetainedFunction(app platform.App, binding platform.AssetBinding) (platform.AIFunction, bool) {
+func RetainedFunction(app platform.Service, binding platform.AssetBinding) (platform.AIFunction, bool) {
 	var owner platform.FunctionDefinitions
 	switch value := app.(type) {
 	case platform.FunctionDefinitions:
@@ -28,7 +28,7 @@ func RetainedFunction(app platform.App, binding platform.AssetBinding) (platform
 }
 
 type PinnedOperation struct {
-	App        func(string) platform.App
+	App        func(string) platform.Service
 	Definition func(app, name string, version int) (platform.Operation, int, bool)
 	Registry   func() (*publication.AssetRegistry, error)
 }

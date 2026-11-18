@@ -38,7 +38,7 @@ func (f *RowFilter) Match(v reflect.Value) bool {
 
 func (f *RowFilter) Pushdown() []persistence.StateFilter { return f.sql }
 
-func CompileDomain(info platform.EntityInfo, raw json.RawMessage, engines ...platform.RuleEngine) (*RowFilter, error) {
+func CompileDomain(info platform.RecordTypeInfo, raw json.RawMessage, engines ...platform.RuleEngine) (*RowFilter, error) {
 	expr, err := DomainToExpr(info, raw)
 	if err != nil {
 		return nil, err
@@ -52,15 +52,15 @@ type RowAttribute struct {
 	Read func(reflect.Value) ruleexpr.Value
 }
 
-func CompileRowFilter(info platform.EntityInfo, expr ruleexpr.Expr, engines ...platform.RuleEngine) (*RowFilter, error) {
+func CompileRowFilter(info platform.RecordTypeInfo, expr ruleexpr.Expr, engines ...platform.RuleEngine) (*RowFilter, error) {
 	return compileRowFilter(info, expr, pushdown(info, expr), nil, engines...)
 }
 
-func CompilePolicy(info platform.EntityInfo, expr ruleexpr.Expr, attributes []RowAttribute, engines ...platform.RuleEngine) (*RowFilter, error) {
+func CompilePolicy(info platform.RecordTypeInfo, expr ruleexpr.Expr, attributes []RowAttribute, engines ...platform.RuleEngine) (*RowFilter, error) {
 	return compileRowFilter(info, expr, nil, attributes, engines...)
 }
 
-func compileRowFilter(info platform.EntityInfo, expr ruleexpr.Expr, sql []persistence.StateFilter, attributes []RowAttribute, engines ...platform.RuleEngine) (*RowFilter, error) {
+func compileRowFilter(info platform.RecordTypeInfo, expr ruleexpr.Expr, sql []persistence.StateFilter, attributes []RowAttribute, engines ...platform.RuleEngine) (*RowFilter, error) {
 	filter := &RowFilter{readers: map[string]func(reflect.Value) ruleexpr.Value{}, sql: sql}
 	if expr.Lit != nil && string(expr.Lit.Value) == "true" {
 		return filter, nil
@@ -124,7 +124,7 @@ type domainField struct {
 	read  func(reflect.Value) any
 }
 
-func resolveDomainField(info platform.EntityInfo, name string) (domainField, error) {
+func resolveDomainField(info platform.RecordTypeInfo, name string) (domainField, error) {
 	f, ok := info.Field(name)
 	read := func(v reflect.Value) any { return v.FieldByIndex(f.Index).Interface() }
 	switch {
@@ -265,7 +265,7 @@ func comparableText(x any) ruleexpr.Value {
 	return ruleexpr.TextValue("text", fmt.Sprint(x))
 }
 
-func DomainToExpr(info platform.EntityInfo, raw json.RawMessage) (ruleexpr.Expr, error) {
+func DomainToExpr(info platform.RecordTypeInfo, raw json.RawMessage) (ruleexpr.Expr, error) {
 	if len(raw) == 0 || string(raw) == "null" {
 		return boolLit(true), nil
 	}
@@ -298,7 +298,7 @@ func DomainToExpr(info platform.EntityInfo, raw json.RawMessage) (ruleexpr.Expr,
 	return combine("and", stack...), nil
 }
 
-func ConditionExpr(info platform.EntityInfo, field, op string, value any) (ruleexpr.Expr, error) {
+func ConditionExpr(info platform.RecordTypeInfo, field, op string, value any) (ruleexpr.Expr, error) {
 	raw, err := json.Marshal([]any{field, op, value})
 	if err != nil {
 		return ruleexpr.Expr{}, err
@@ -308,7 +308,7 @@ func ConditionExpr(info platform.EntityInfo, field, op string, value any) (rulee
 
 func AllOf(parts ...ruleexpr.Expr) ruleexpr.Expr { return combine("and", parts...) }
 
-func lowerCondition(info platform.EntityInfo, raw json.RawMessage) (ruleexpr.Expr, error) {
+func lowerCondition(info platform.RecordTypeInfo, raw json.RawMessage) (ruleexpr.Expr, error) {
 	var term []json.RawMessage
 	var name, op string
 	if json.Unmarshal(raw, &term) != nil || len(term) != 3 || json.Unmarshal(term[0], &name) != nil || json.Unmarshal(term[1], &op) != nil {
@@ -510,7 +510,7 @@ func combine(op string, parts ...ruleexpr.Expr) ruleexpr.Expr {
 	return ruleexpr.Expr{Op: op, Kind: "boolean", Args: flat}
 }
 
-func pushdown(info platform.EntityInfo, expr ruleexpr.Expr) []persistence.StateFilter {
+func pushdown(info platform.RecordTypeInfo, expr ruleexpr.Expr) []persistence.StateFilter {
 	var out []persistence.StateFilter
 	var walk func(ruleexpr.Expr)
 	walk = func(e ruleexpr.Expr) {
@@ -528,7 +528,7 @@ func pushdown(info platform.EntityInfo, expr ruleexpr.Expr) []persistence.StateF
 	return out
 }
 
-func stateFilter(info platform.EntityInfo, e ruleexpr.Expr) (persistence.StateFilter, bool) {
+func stateFilter(info platform.RecordTypeInfo, e ruleexpr.Expr) (persistence.StateFilter, bool) {
 	if len(e.Args) != 2 {
 		return persistence.StateFilter{}, false
 	}

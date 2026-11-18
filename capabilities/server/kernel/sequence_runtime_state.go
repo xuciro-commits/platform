@@ -11,7 +11,7 @@ import (
 )
 
 type RuntimeOwners struct {
-	Apps      []platform.App
+	Apps      []platform.Service
 	States    func(string) platform.AcceptedStateApp
 	Sequences func() map[string]int
 	Ready     func()
@@ -83,7 +83,7 @@ func (s *Sequence) MigrateRuntimeState(ctx context.Context, j persistence.Journa
 	return nil
 }
 
-func (s *Sequence) InstallRuntimeHistory(store AcceptedStateReader, position func() int64, apps []platform.App) {
+func (s *Sequence) InstallRuntimeHistory(store AcceptedStateReader, position func() int64, apps []platform.Service) {
 	ctx := context.Background()
 	if s.Projection.Current().View() != nil {
 		ctx = s.Projection.Current().Context()

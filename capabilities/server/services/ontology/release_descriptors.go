@@ -10,13 +10,13 @@ import (
 	"platformserver/platform"
 )
 
-func ObjectDescriptor(body []byte) (platform.EntityInfo, error) {
+func ObjectDescriptor(body []byte) (platform.RecordTypeInfo, error) {
 	var shape struct {
 		Type            string                       `json:"type"`
 		Implements      []string                     `json:"implements"`
 		Extends         string                       `json:"extends"`
 		ExtensionSource *platform.ExtensionSource    `json:"extensionSource"`
-		Entity          *platform.EntityInfo         `json:"entity"`
+		Entity          *platform.RecordTypeInfo     `json:"entity"`
 		ObjectView      *platform.ObjectView         `json:"objectView,omitempty"`
 		Fields          []map[string]json.RawMessage `json:"fields"`
 		Lifecycle       *platform.LifecycleInfo      `json:"lifecycle"`
@@ -35,11 +35,11 @@ func ObjectDescriptor(body []byte) (platform.EntityInfo, error) {
 		} `json:"actions"`
 	}
 	if err := json.Unmarshal(body, &shape); err != nil {
-		return platform.EntityInfo{}, err
+		return platform.RecordTypeInfo{}, err
 	}
 	if shape.Entity != nil {
 		if shape.Entity.Type != shape.Type {
-			return platform.EntityInfo{}, fmt.Errorf("frozen native object identity differs")
+			return platform.RecordTypeInfo{}, fmt.Errorf("frozen native object identity differs")
 		}
 		return *shape.Entity, nil
 	}
@@ -62,7 +62,7 @@ func ObjectDescriptor(body []byte) (platform.EntityInfo, error) {
 			if json.Unmarshal(whenRaw, &source) == nil {
 				condition, err := platform.ParseWhen(source)
 				if err != nil {
-					return platform.EntityInfo{}, err
+					return platform.RecordTypeInfo{}, err
 				}
 				if condition == nil {
 					delete(raw, "when")
@@ -73,11 +73,11 @@ func ObjectDescriptor(body []byte) (platform.EntityInfo, error) {
 		}
 		encoded, err := json.Marshal(raw)
 		if err != nil {
-			return platform.EntityInfo{}, err
+			return platform.RecordTypeInfo{}, err
 		}
 		var field platform.FieldInfo
 		if err := json.Unmarshal(encoded, &field); err != nil {
-			return platform.EntityInfo{}, err
+			return platform.RecordTypeInfo{}, err
 		}
 		fields = append(fields, field)
 	}
@@ -106,7 +106,7 @@ func ObjectDescriptor(body []byte) (platform.EntityInfo, error) {
 			}
 			if to, input := TransactionDestination(shape.Type, "state", action.Transaction, inputs); len(to) > 0 {
 				if slices.ContainsFunc(to, func(state string) bool { return !slices.Contains(choices, state) }) {
-					return platform.EntityInfo{}, fmt.Errorf("frozen object transaction destination differs")
+					return platform.RecordTypeInfo{}, fmt.Errorf("frozen object transaction destination differs")
 				}
 				life.Transitions = append(life.Transitions, platform.TransitionInfo{Name: action.Name, Schema: shape.Type + "." + action.Name, Title: action.Title, From: action.From, To: to, ToInput: input})
 				continue
@@ -115,7 +115,7 @@ func ObjectDescriptor(body []byte) (platform.EntityInfo, error) {
 		}
 		shape.Lifecycle = &life
 	}
-	return platform.EntityInfo{App: owner, Type: shape.Type, ObjectView: shape.ObjectView, Standard: []string{shape.Type + ".create", shape.Type + ".edit", shape.Type + ".archive"}, Fields: fields, Lifecycle: shape.Lifecycle, Implements: shape.Implements, Extends: shape.Extends, ExtensionSource: shape.ExtensionSource}, nil
+	return platform.RecordTypeInfo{App: owner, Type: shape.Type, ObjectView: shape.ObjectView, Standard: []string{shape.Type + ".create", shape.Type + ".edit", shape.Type + ".archive"}, Fields: fields, Lifecycle: shape.Lifecycle, Implements: shape.Implements, Extends: shape.Extends, ExtensionSource: shape.ExtensionSource}, nil
 }
 
 func ActionDescriptor(body json.RawMessage) (platform.Action, error) {

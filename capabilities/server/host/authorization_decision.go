@@ -12,7 +12,7 @@ import (
 
 	"platformserver/platform"
 	"platformserver/services/objects"
-	"platformserver/services/resources/authoring"
+	build "platformserver/services/resources/authoring"
 	"platformserver/services/security"
 )
 

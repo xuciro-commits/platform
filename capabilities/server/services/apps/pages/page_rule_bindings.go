@@ -8,7 +8,7 @@ import (
 	"platformserver/platform"
 )
 
-func BindRuleTypes(p platform.Page, lookup func(string) (platform.EntityInfo, bool)) error {
+func BindRuleTypes(p platform.Page, lookup func(string) (platform.RecordTypeInfo, bool)) error {
 	d := p.InputSchema
 	for name, v := range d.Variables {
 		v.RuleType = nil
@@ -114,7 +114,7 @@ func BindRuleTypes(p platform.Page, lookup func(string) (platform.EntityInfo, bo
 	return nil
 }
 
-func CheckQueryFilters(p platform.Page, lookup func(string) (platform.EntityInfo, bool)) error {
+func CheckQueryFilters(p platform.Page, lookup func(string) (platform.RecordTypeInfo, bool)) error {
 	for id, query := range p.InputSchema.Queries {
 		if query.Filter == nil {
 			continue

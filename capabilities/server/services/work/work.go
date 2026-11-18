@@ -54,7 +54,7 @@ type SavedView = runtimeprotocol.SavedView
 type Work struct {
 	mu          sync.Mutex
 	host        runtimeprotocol.WorkHost
-	ledger      platform.Authority
+	authority   platform.Authority
 	authorities platform.Authorities
 }
 
@@ -110,13 +110,13 @@ func New(tenant string, authorities platform.Authorities) *Work {
 			Description: "End one of your delegations.", Payload: []platform.Field{}, Roles: []string{platform.AnyMember}})
 	actions = append(actions, w.policyActions()...)
 	w.authorities = authorities
-	w.ledger = authorities(tenant, ID, platform.NewCatalog(actions...), ApprovalType, TaskType, ViewType, DelegationType, PolicyType)
+	w.authority = authorities(tenant, ID, platform.NewCatalog(actions...), ApprovalType, TaskType, ViewType, DelegationType, PolicyType)
 	return w
 }
 
-func (w *Work) entities() []platform.Entity {
+func (w *Work) entities() []platform.RecordType {
 	everyone := []string{platform.AnyMember}
-	return []platform.Entity{
+	return []platform.RecordType{
 		{Type: ApprovalType, Title: "Approval request", Model: ApprovalRequest{},
 			Scope: platform.Scope{Participants: func(record any) []string {
 				a := record.(ApprovalRequest)
@@ -182,27 +182,27 @@ func (w *Work) entities() []platform.Entity {
 
 func (w *Work) SnapshotFormat() string { return "platform.ledger.v1" }
 
-func (w *Work) Snapshot() (json.RawMessage, error) { return w.ledger.Snapshot() }
+func (w *Work) Snapshot() (json.RawMessage, error) { return w.authority.Snapshot() }
 
-func (w *Work) Restore(raw json.RawMessage) error { return w.ledger.Restore(raw) }
+func (w *Work) Restore(raw json.RawMessage) error { return w.authority.Restore(raw) }
 
 func (w *Work) Manifest() platform.Manifest {
-	return platform.Manifest{ID: ID, Title: platform.BuiltinManifestTitle(ID), Version: "1", Actions: w.ledger.Catalog(), Entities: w.entities(),
+	return platform.Manifest{ID: ID, Title: platform.BuiltinManifestTitle(ID), Version: "1", Actions: w.authority.Catalog(), Entities: w.entities(),
 		Reads: []string{"inbox", "requests", "views"}, Everyone: []string{"inbox", "requests", "views"},
 		Jobs: []platform.Job{{Name: "overdue", Title: "Tell people about overdue tasks", Every: time.Minute}, {Name: "refusals", Title: "Escalate repeated business refusals", Every: time.Second}}}
 }
 
-func (w *Work) Declarations() []*pb.AuthorityDeclaration { return w.ledger.Declarations() }
+func (w *Work) Declarations() []*pb.AuthorityDeclaration { return w.authority.Declarations() }
 
-func (w *Work) Authority() platform.Authority { return w.ledger }
+func (w *Work) Authority() platform.Authority { return w.authority }
 
 func (w *Work) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *platform.Error) {
 	w.mu.Lock()
 	defer w.mu.Unlock()
-	if record, err, ok := w.ledger.Generated(c, s, now, nil, w.entities()...); ok {
+	if record, err, ok := w.authority.Generated(c, s, now, nil, w.entities()...); ok {
 		return record, err
 	}
-	return w.ledger.Receive(c, s, now, nil, func() (func(*pb.ChangeRecord), *platform.Error) {
+	return w.authority.Receive(c, s, now, nil, func() (func(*pb.ChangeRecord), *platform.Error) {
 		switch s.GetSchema().GetName() {
 		case SchemaTaskCreate:
 			return w.createTask(c, s, now)
@@ -662,8 +662,8 @@ func (w *Work) delegate(c platform.Caller, s *pb.Submission) (func(*pb.ChangeRec
 	return func(r *pb.ChangeRecord) { c.Put(r, d) }, nil
 }
 
-func (w *Work) Fork(ledger platform.Authority) (platform.App, error) {
-	return &Work{host: w.host, ledger: ledger, authorities: w.authorities}, nil
+func (w *Work) Fork(authority platform.Authority) (platform.Service, error) {
+	return &Work{host: w.host, authority: authority, authorities: w.authorities}, nil
 }
 
-func (a *Work) NewSimulationApp(tenant string) platform.App { return New(tenant, a.authorities) }
+func (a *Work) NewSimulationApp(tenant string) platform.Service { return New(tenant, a.authorities) }

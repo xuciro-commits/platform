@@ -53,7 +53,7 @@ type AssetDraft struct {
 }
 
 type AssetLifecycleOwner interface {
-	platform.App
+	platform.Service
 	AssetKinds() []platform.AssetKind
 	ReleaseAssets() ([]platform.ReleaseAsset, error)
 	ResolvePinned(ref platform.AssetRef, sourceVersion string, contentVersion ...string) (platform.ReleaseAsset, error)
@@ -79,7 +79,7 @@ type FlowReleaseOwner interface {
 }
 
 type ReleaseExecutionOwner interface {
-	ForkReleaseExecution([]platform.ReleaseAsset) (platform.App, error)
+	ForkReleaseExecution([]platform.ReleaseAsset) (platform.Service, error)
 }
 
 type OperationDefinitions interface {

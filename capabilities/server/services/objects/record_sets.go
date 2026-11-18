@@ -20,7 +20,7 @@ func RecordSetBinding(definitions []platform.Definition, binding *platform.Asset
 	return QuerySourceDefinition(definitions, binding, resolver)
 }
 
-func (t *Owner) ValidateRecordSet(info platform.EntityInfo, set platform.RecordSet) error {
+func (t *Owner) ValidateRecordSet(info platform.RecordTypeInfo, set platform.RecordSet) error {
 	if set.Binding == nil {
 		return nil
 	}
@@ -43,10 +43,10 @@ func (t *Owner) ValidateRecordSet(info platform.EntityInfo, set platform.RecordS
 	}
 	return nil
 }
-func mustEntity(t *Owner, typ string) platform.EntityInfo { info, _ := t.entity(typ); return info }
+func mustEntity(t *Owner, typ string) platform.RecordTypeInfo { info, _ := t.entity(typ); return info }
 
-func (t *Owner) checkRecordSetDeclarations(info platform.EntityInfo, engines ...platform.RuleEngine) error {
-	lookup := func(typ string) (platform.EntityInfo, bool) {
+func (t *Owner) checkRecordSetDeclarations(info platform.RecordTypeInfo, engines ...platform.RuleEngine) error {
+	lookup := func(typ string) (platform.RecordTypeInfo, bool) {
 		if typ == info.Type {
 			return info, true
 		}
@@ -68,12 +68,12 @@ func (t *Owner) checkRecordSetDeclarations(info platform.EntityInfo, engines ...
 
 func (t *Owner) ReadRecordSetFrom(store *records.Store, c platform.Caller, object, id, name string, at time.Time) (platform.RecordSetResult, *platform.Error) {
 	result := platform.RecordSetResult{Records: []json.RawMessage{}}
-	lookup := func(typ string) (platform.EntityInfo, bool) {
+	lookup := func(typ string) (platform.RecordTypeInfo, bool) {
 		store.Lock()
 		defer store.Unlock()
 		et := store.Type(typ)
 		if et == nil {
-			return platform.EntityInfo{}, false
+			return platform.RecordTypeInfo{}, false
 		}
 		return et.Info(), true
 	}
@@ -216,7 +216,7 @@ func (t *Owner) ReadRecordSetFrom(store *records.Store, c platform.Caller, objec
 	}(); refusal != nil {
 		return result, refusal
 	}
-	ruleLookup := func(typ string) (platform.EntityInfo, bool) {
+	ruleLookup := func(typ string) (platform.RecordTypeInfo, bool) {
 		other, ok := lookup(typ)
 		return ruleprotocol.ConstraintEntity(other), ok
 	}
@@ -323,7 +323,7 @@ func (t *Owner) ReadRecordSetFrom(store *records.Store, c platform.Caller, objec
 	return result, nil
 }
 
-func (t *Owner) CheckRecordSetDeclarations(info platform.EntityInfo, engines ...platform.RuleEngine) error {
+func (t *Owner) CheckRecordSetDeclarations(info platform.RecordTypeInfo, engines ...platform.RuleEngine) error {
 	return t.checkRecordSetDeclarations(info, engines...)
 }
 

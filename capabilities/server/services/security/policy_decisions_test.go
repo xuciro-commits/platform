@@ -11,8 +11,8 @@ import (
 
 type stubCatalog struct{}
 
-func (stubCatalog) Apps() []platform.App              { return nil }
-func (stubCatalog) App(string) platform.App           { return nil }
+func (stubCatalog) Apps() []platform.Service          { return nil }
+func (stubCatalog) App(string) platform.Service       { return nil }
 func (stubCatalog) AppIDs() []string                  { return nil }
 func (stubCatalog) Manifest(string) platform.Manifest { return platform.Manifest{} }
 

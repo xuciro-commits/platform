@@ -4,7 +4,7 @@ import (
 	"net/http"
 	"platformserver/kernel/transport"
 	"platformserver/platform"
-	"platformserver/services/resources/authoring"
+	build "platformserver/services/resources/authoring"
 )
 
 func (t *Tenant) liveFollow(m platform.Member, mux *http.ServeMux) transport.LiveFollow {

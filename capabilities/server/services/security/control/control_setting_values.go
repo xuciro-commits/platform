@@ -39,7 +39,7 @@ func (s *Settings) Apps(manifests []platform.Manifest) []AppSettings {
 	return out
 }
 
-func (s *Settings) AppsOf(apps []platform.App) []AppSettings {
+func (s *Settings) AppsOf(apps []platform.Service) []AppSettings {
 	manifests := make([]platform.Manifest, 0, len(apps))
 	for _, app := range apps {
 		manifests = append(manifests, app.Manifest())
@@ -65,7 +65,7 @@ func (s *Settings) Value(app, name string, declared func(app string) ([]platform
 	return settings[i].Default
 }
 
-func (s *Settings) ValueFor(app, name string, apps []platform.App) string {
+func (s *Settings) ValueFor(app, name string, apps []platform.Service) string {
 	return s.Value(app, name, func(id string) ([]platform.Setting, bool) {
 		for _, candidate := range apps {
 			if candidate.Manifest().ID == id {
@@ -105,7 +105,7 @@ func (d SettingDecision) Decide(c platform.Caller, s *pb.Submission, now time.Ti
 }
 
 type SettingChecks struct {
-	App     func(id string) platform.App
+	App     func(id string) platform.Service
 	Logging func(name, value string, at time.Time) *platform.Error
 	Values  []func(id, value string) *platform.Error
 }

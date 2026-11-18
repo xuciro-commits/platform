@@ -10,8 +10,8 @@ import (
 	"platformserver/platform"
 )
 
-func MediaSetEntities() []platform.Entity {
-	return []platform.Entity{
+func MediaSetEntities() []platform.RecordType {
+	return []platform.RecordType{
 		{Type: platform.MediaSetType, Title: "Media set", Plural: "Media sets", Model: platform.MediaSet{}, Display: "title",
 			Description: "A versioned collection of uploaded documents and images.",
 			Scope:       platform.Scope{Default: platform.ScopeNone, Levels: map[string]string{"builder": platform.ScopeTenant, "integrator": platform.ScopeTenant}},
@@ -34,8 +34,8 @@ func MediaSetActions() []platform.Action {
 	}
 }
 
-func SubmitMediaSet(ledger platform.Authority, files platform.FileHost, c platform.Caller, submission *pb.Submission, now time.Time) (*pb.ChangeRecord, *platform.Error) {
-	return ledger.Receive(c, submission, now, nil, func() (func(*pb.ChangeRecord), *platform.Error) {
+func SubmitMediaSet(authority platform.Authority, files platform.FileHost, c platform.Caller, submission *pb.Submission, now time.Time) (*pb.ChangeRecord, *platform.Error) {
+	return authority.Receive(c, submission, now, nil, func() (func(*pb.ChangeRecord), *platform.Error) {
 		invalid := &platform.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 		var input struct {
 			Hash        string `json:"hash"`

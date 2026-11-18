@@ -7,7 +7,7 @@ import (
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformserver/kernel/protocol"
 	"platformserver/platform"
-	"platformserver/services/ai/gateway"
+	aigateway "platformserver/services/ai/gateway"
 	"time"
 )
 

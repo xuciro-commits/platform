@@ -15,7 +15,7 @@ import (
 	runtimekernel "platformserver/kernel"
 	"platformserver/kernel/records"
 	"platformserver/platform"
-	"platformserver/services/resources/authoring"
+	build "platformserver/services/resources/authoring"
 )
 
 type flowExecution struct {
@@ -27,7 +27,7 @@ type flowExecutionRuntime struct {
 	*stagedDecision
 	view    *Tenant
 	release string
-	shapes  map[string]platform.EntityInfo
+	shapes  map[string]platform.RecordTypeInfo
 	assets  []platform.ReleaseAsset
 	reads   records.ForkCache
 }
@@ -57,7 +57,7 @@ func (h hostView) retainedExecution(c platform.Caller, release string, assets []
 		Current: func() ([]platform.ReleaseAsset, error) { return h.t.releaseAssetsLocked(nil, false) },
 		Native:  h.t.nativeFlowAsset,
 		Claim:   func(i int, key string) { view.owner[key] = view.ids[i] },
-		Bind:    func(bound platform.App) { (hostView{t: view, app: bound, decision: h.decision}).bindOwner(bound) },
+		Bind:    func(bound platform.Service) { (hostView{t: view, app: bound, decision: h.decision}).bindOwner(bound) },
 	}.Select()
 	if err != nil {
 		return nil, err
@@ -83,7 +83,7 @@ func (h flowExecution) Caller(parent platform.Caller, m platform.Member, app str
 func (h flowExecution) ActiveRelease() string { return h.rt.release }
 
 func (h flowExecution) Attempt(c platform.Caller, s *pb.Submission, at time.Time) (*pb.ChangeRecord, *platform.Error) {
-	return runtimekernel.AttemptTo(c, func() platform.App { return h.rt.actionOwner(s.GetSchema().GetName()) }, platform.Refuse(pb.ErrorCode_ERROR_CODE_UNKNOWN_SCHEMA, "The held action has no retained owner"), s, at)
+	return runtimekernel.AttemptTo(c, func() platform.Service { return h.rt.actionOwner(s.GetSchema().GetName()) }, platform.Refuse(pb.ErrorCode_ERROR_CODE_UNKNOWN_SCHEMA, "The held action has no retained owner"), s, at)
 }
 func (h flowExecution) Action(schema string) (string, platform.Action, bool) {
 	return automation.RetainedAction(h.rt.actionOwner(schema), schema)
@@ -92,7 +92,7 @@ func (h flowExecution) Submit(c platform.Caller, s *pb.Submission, at time.Time)
 	return runtimekernel.SubmitTo(c, h.rt.actionOwner(s.GetSchema().GetName()), &platform.Error{Code: pb.ErrorCode_ERROR_CODE_UNKNOWN_SCHEMA}, s, at)
 }
 
-func (r *flowExecutionRuntime) actionOwner(schema string) platform.App {
+func (r *flowExecutionRuntime) actionOwner(schema string) platform.Service {
 	return r.view.App(r.view.owner["action:"+schema])
 }
 
@@ -100,7 +100,7 @@ func (r *flowExecutionRuntime) StagedDecision() platform.StagedDecision { return
 func (r *flowExecutionRuntime) DecisionCatalog(ledger platform.Authority) *platform.Catalog {
 	return automation.RetainedCatalog(r.view.apps, ledger)
 }
-func (r *flowExecutionRuntime) Decide(c platform.Caller, app platform.App, s *pb.Submission, at time.Time) (*pb.ChangeRecord, *platform.Error) {
+func (r *flowExecutionRuntime) Decide(c platform.Caller, app platform.Service, s *pb.Submission, at time.Time) (*pb.ChangeRecord, *platform.Error) {
 	if app.Manifest().ID == protocol.WorkApp {
 		private := r.stateApp(r.tenant.App(protocol.WorkApp))
 		context := hostView{t: r.tenant, app: private, decision: r.stagedDecision}

@@ -7,7 +7,7 @@ import (
 	"platformserver/kernel/protocol"
 	"platformserver/platform"
 	"platformserver/services/devops/descriptor"
-	"platformserver/services/resources/authoring"
+	build "platformserver/services/resources/authoring"
 	"strconv"
 	"strings"
 	"time"

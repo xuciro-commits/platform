@@ -1,4 +1,4 @@
-package build
+package authoring
 
 import (
 	"encoding/json"
@@ -26,8 +26,8 @@ type Folder struct {
 	Parent  string `json:"parent,omitempty"`
 }
 
-func (b *Build) resourceEntities() []platform.Entity {
-	return []platform.Entity{
+func (b *Build) resourceEntities() []platform.RecordType {
+	return []platform.RecordType{
 		{Type: ResourceType, Title: "Resource", Plural: "Resources", Model: protocol.Resource{}, Display: "title", Scope: platform.Scope{Default: platform.ScopeTenant}},
 		{Type: FolderType, Title: "Folder", Plural: "Folders", Model: Folder{}, Display: "name", Scope: platform.Scope{Default: platform.ScopeTenant}, Standard: platform.Standard{Create: true, Edit: true, Archive: true, Roles: []string{Builder}, Capability: "resources"}, Validate: func(c platform.Caller, record any) *platform.Error {
 			folder := record.(*Folder)
@@ -91,7 +91,7 @@ func (b *Build) submitResource(c platform.Caller, s *pb.Submission, now time.Tim
 	if IsResourceSave(s) || IsResourceCreate(s) {
 		return b.saveResource(c, s, now)
 	}
-	return b.ledger.Receive(c, s, now, nil, func() (func(*pb.ChangeRecord), *platform.Error) {
+	return b.authority.Receive(c, s, now, nil, func() (func(*pb.ChangeRecord), *platform.Error) {
 		id := s.GetTarget().GetId()
 		resource, found := platform.Get[protocol.Resource](c, id)
 		if s.GetSchema().GetName() == SchemaResourceRegister {
@@ -310,7 +310,7 @@ func (b *Build) ResourceInventory(c platform.Caller) ([]protocol.Resource, error
 }
 
 func (b *Build) saveResource(c platform.Caller, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *platform.Error) {
-	return b.ledger.Receive(c, s, now, nil, func() (func(*pb.ChangeRecord), *platform.Error) {
+	return b.authority.Receive(c, s, now, nil, func() (func(*pb.ChangeRecord), *platform.Error) {
 		var input struct {
 			Spec       json.RawMessage         `json:"spec"`
 			Project    string                  `json:"project"`
@@ -425,7 +425,7 @@ func (b *Build) saveResource(c platform.Caller, s *pb.Submission, now time.Time)
 			spec["project"] = platform.Raw(input.Project)
 			input.Spec, _ = json.Marshal(spec)
 		}
-		entity := platform.Entity{}
+		entity := platform.RecordType{}
 		for _, candidate := range b.Manifest().Entities {
 			if candidate.Type == typ {
 				entity = candidate
@@ -455,7 +455,7 @@ func (b *Build) saveResource(c platform.Caller, s *pb.Submission, now time.Time)
 			} else if typ == ActionTypeType {
 				refusal = b.writeActionType(c, r, verb, id, input.Spec, now)
 			} else {
-				refusal = b.ledger.ApplyTxnRecord(c, r, entity, verb, id, input.Spec, now)
+				refusal = b.authority.ApplyTxnRecord(c, r, entity, verb, id, input.Spec, now)
 			}
 			if refusal != nil {
 				c.FailDecision(refusal)

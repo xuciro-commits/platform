@@ -29,7 +29,7 @@ type ConstraintCheck struct {
 	Trace       func(platform.DecisionTrace)
 }
 
-func constraintLocked(info platform.EntityInfo, before *records.Row) bool {
+func constraintLocked(info platform.RecordTypeInfo, before *records.Row) bool {
 	if before == nil || info.Lifecycle == nil {
 		return false
 	}
@@ -54,17 +54,17 @@ func constraintLocked(info platform.EntityInfo, before *records.Row) bool {
 	return false
 }
 
-func (k ConstraintCheck) lookup(typ string) (platform.EntityInfo, bool) {
+func (k ConstraintCheck) lookup(typ string) (platform.RecordTypeInfo, bool) {
 	k.Records.Lock()
 	defer k.Records.Unlock()
 	et := k.Records.Type(typ)
 	if et == nil {
-		return platform.EntityInfo{}, false
+		return platform.RecordTypeInfo{}, false
 	}
 	return ruleprotocol.ConstraintEntity(et.Info()), true
 }
 
-func (k ConstraintCheck) check(c platform.Caller, info platform.EntityInfo, rule platform.Constraint, after *records.Row, before *records.Row) (refusal *platform.Error) {
+func (k ConstraintCheck) check(c platform.Caller, info platform.RecordTypeInfo, rule platform.Constraint, after *records.Row, before *records.Row) (refusal *platform.Error) {
 	if k.Trace != nil {
 		defer func() {
 			event := platform.DecisionTrace{Kind: "constraint", Name: rule.Name, Type: info.Type, ID: records.Header(after.Value).ID, Operation: rule.Kind}
@@ -95,7 +95,7 @@ func (k ConstraintCheck) check(c platform.Caller, info platform.EntityInfo, rule
 	}
 	evaluate := func(subject map[string]any) (bool, *platform.Error) {
 		spec := ruleprotocol.ConstraintSpec(info, rule)
-		lookup := func(typ string) (platform.EntityInfo, bool) {
+		lookup := func(typ string) (platform.RecordTypeInfo, bool) {
 			other, ok := k.lookup(typ)
 			return other, ok && other.App == info.App
 		}
@@ -180,7 +180,7 @@ func (k ConstraintCheck) check(c platform.Caller, info platform.EntityInfo, rule
 	return nil
 }
 
-func (k ConstraintCheck) Record(c platform.Caller, info platform.EntityInfo, after, before *records.Row) *platform.Error {
+func (k ConstraintCheck) Record(c platform.Caller, info platform.RecordTypeInfo, after, before *records.Row) *platform.Error {
 	for _, rule := range info.Constraints {
 		if rule.Level == "txn" {
 			continue
@@ -266,7 +266,7 @@ func (k ConstraintCheck) Final() *platform.Error {
 	return nil
 }
 
-func (k ConstraintCheck) depends(info platform.EntityInfo, rule platform.Constraint, plan constraintReadPlan, root *records.Row, changed string, old *records.Row) bool {
+func (k ConstraintCheck) depends(info platform.RecordTypeInfo, rule platform.Constraint, plan constraintReadPlan, root *records.Row, changed string, old *records.Row) bool {
 	typ, id, _ := strings.Cut(changed, "/")
 	rootID := records.Header(root.Value).ID
 	if rule.Reads != nil {
@@ -311,7 +311,7 @@ func (k ConstraintCheck) depends(info platform.EntityInfo, rule platform.Constra
 		return true
 	}
 	paths := plan.paths
-	follows := func(root *records.Row, info platform.EntityInfo, path []string) bool {
+	follows := func(root *records.Row, info platform.RecordTypeInfo, path []string) bool {
 		current, currentInfo := root, info
 		for _, name := range path {
 			field, ok := currentInfo.Field(name)
@@ -392,7 +392,7 @@ type constraintReadPlan struct {
 	local, unknown bool
 }
 
-func (k ConstraintCheck) readPlan(info platform.EntityInfo, rule platform.Constraint) constraintReadPlan {
+func (k ConstraintCheck) readPlan(info platform.RecordTypeInfo, rule platform.Constraint) constraintReadPlan {
 	plan := constraintReadPlan{paths: map[string][][]string{}, local: rule.Reads == nil}
 	paths := plan.paths
 	if rule.Kind == "unique" && rule.Scope != "" && rule.Scope != "tenant" {
@@ -465,7 +465,7 @@ func (k ConstraintCheck) readPlan(info platform.EntityInfo, rule platform.Constr
 	return plan
 }
 
-func (k ConstraintCheck) setDepends(info platform.EntityInfo, root *records.Row, set platform.RecordSet, typ, id string, old *records.Row) bool {
+func (k ConstraintCheck) setDepends(info platform.RecordTypeInfo, root *records.Row, set platform.RecordSet, typ, id string, old *records.Row) bool {
 	if typ != set.Object && (set.Binding == nil || set.Binding.Ref.Kind != platform.AssetLinkType) {
 		return false
 	}

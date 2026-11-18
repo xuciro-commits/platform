@@ -6,7 +6,7 @@ import (
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformserver/services/resources/authoring"
+	build "platformserver/services/resources/authoring"
 	enterprisemodel "platformserver/services/security/organization"
 
 	"platformserver/platform"

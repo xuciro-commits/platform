@@ -23,8 +23,8 @@ func New(env publication.AutomationEnvironment, resolver publication.Resolver) p
 	return &Owner{env: env, resolver: resolver}
 }
 
-func (o *Owner) ProcessEntity() platform.Entity {
-	return platform.Entity{Type: protocol.ProcessType, Title: "Process", Plural: "Processes", Model: protocol.Process{}, Display: "title", Description: "Typed capability blocks compiled to the platform's native flow.",
+func (o *Owner) ProcessEntity() platform.RecordType {
+	return platform.RecordType{Type: protocol.ProcessType, Title: "Process", Plural: "Processes", Model: protocol.Process{}, Display: "title", Description: "Typed capability blocks compiled to the platform's native flow.",
 		Scope:    platform.Scope{Default: platform.ScopeNone, Levels: map[string]string{Builder: platform.ScopeTenant}},
 		Standard: platform.Standard{Create: true, Edit: true, Archive: true, Roles: []string{Builder}, Capability: "processes"},
 		Lifecycle: &platform.Lifecycle{Field: "state", Initial: "draft", States: []platform.State{{Name: "draft", Title: "Draft", Tone: "warning"}, {Name: "published", Title: "Published", Tone: "success"}},
@@ -87,8 +87,8 @@ func (o *Owner) ProcessActions() []platform.Action {
 	return actioncatalog.EntityActions(o.ProcessEntity())
 }
 
-func (o *Owner) Entities() []platform.Entity {
-	return []platform.Entity{o.ProcessEntity()}
+func (o *Owner) Entities() []platform.RecordType {
+	return []platform.RecordType{o.ProcessEntity()}
 }
 
 func (o *Owner) QualifiedName(name string) string {
@@ -105,7 +105,7 @@ func (o *Owner) Check(c platform.Caller, p protocol.Process) *platform.Error {
 	if err != nil {
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "The object inventory cannot be checked")
 	}
-	source := platform.Entity{}
+	source := platform.RecordType{}
 	if installed, ok := o.env.InstalledObject(p.Object); ok {
 		source = installed
 	}
@@ -117,7 +117,7 @@ func (o *Owner) Check(c platform.Caller, p protocol.Process) *platform.Error {
 	return o.checkFlow(p, source, models, c.Rules())
 }
 
-func (o *Owner) CheckDraft(c platform.Caller, record protocol.Process, source platform.Entity, models []platform.Entity, member platform.Member, validate bool) (protocol.Process, platform.AssetRef, platform.AssetRef, bool, error) {
+func (o *Owner) CheckDraft(c platform.Caller, record protocol.Process, source platform.RecordType, models []platform.RecordType, member platform.Member, validate bool) (protocol.Process, platform.AssetRef, platform.AssetRef, bool, error) {
 	prior, hadPrior := readPublished[protocol.Process](record.Published)
 	priorRef := platform.AssetRef{}
 	if hadPrior {
@@ -150,7 +150,7 @@ func (o *Owner) CheckDraft(c platform.Caller, record protocol.Process, source pl
 	return record, priorRef, nextRef, hadPrior, nil
 }
 
-func (o *Owner) checkFlow(p protocol.Process, entity platform.Entity, objects []platform.Entity, engines ...platform.RuleEngine) *platform.Error {
+func (o *Owner) checkFlow(p protocol.Process, entity platform.RecordType, objects []platform.RecordType, engines ...platform.RuleEngine) *platform.Error {
 	plans, err := o.Inventory()
 	if err != nil {
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "The process inventory cannot be checked")
@@ -164,7 +164,7 @@ func (o *Owner) checkFlow(p protocol.Process, entity platform.Entity, objects []
 	return o.checkFlowOn(p, entity, objects, engines...)
 }
 
-func (o *Owner) checkFlowOn(p protocol.Process, entity platform.Entity, objects []platform.Entity, engines ...platform.RuleEngine) *platform.Error {
+func (o *Owner) checkFlowOn(p protocol.Process, entity platform.RecordType, objects []platform.RecordType, engines ...platform.RuleEngine) *platform.Error {
 	lookup := ProcessLookup{
 		App:           o.env.AppID(),
 		Entity:        o.env.Entity,
@@ -409,7 +409,7 @@ func (o *Owner) Restore() error {
 	return nil
 }
 
-func (o *Owner) CheckObjectDefinition(c platform.Caller, entity, previous platform.Entity, changed, compatible bool) error {
+func (o *Owner) CheckObjectDefinition(c platform.Caller, entity, previous platform.RecordType, changed, compatible bool) error {
 	procs := o.env.Host().BuildProcesses()
 	if procs != nil && changed && previous.Type != "" {
 		running, err := procs.HasUnboundRunningDependency(previous.Type)

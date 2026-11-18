@@ -44,10 +44,10 @@ type FlowBinding struct {
 
 type Processes interface {
 	Consumptions(app string) []platform.Consumption
-	Declare(a platform.App) error
-	Install(a platform.App, fl platform.Flow) error
+	Declare(a platform.Service) error
+	Install(a platform.Service, fl platform.Flow) error
 	HasPublishedFlow(id string) bool
-	Validate(a platform.App, fl platform.Flow) error
+	Validate(a platform.Service, fl platform.Flow) error
 	HasRunningDependency(typ string) (bool, error)
 	HasUnboundRunningDependency(typ string) (bool, error)
 	Check() error

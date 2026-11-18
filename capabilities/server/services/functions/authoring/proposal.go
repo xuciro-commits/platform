@@ -21,7 +21,7 @@ type Proposal struct {
 	amendments json.RawMessage
 }
 
-func (o *Owner) PrepareProposal(c platform.Caller, r *pb.ChangeRecord, txn *platform.BusinessTxn, entity platform.Entity, now time.Time) (protocol.TransactionProposal, *platform.Error) {
+func (o *Owner) PrepareProposal(c platform.Caller, r *pb.ChangeRecord, txn *platform.BusinessTxn, entity platform.RecordType, now time.Time) (protocol.TransactionProposal, *platform.Error) {
 	p, err := o.prepareProposal(c, r, txn, entity, now)
 	if err != nil {
 		return protocol.TransactionProposal{}, err
@@ -29,7 +29,7 @@ func (o *Owner) PrepareProposal(c platform.Caller, r *pb.ChangeRecord, txn *plat
 	return protocol.TransactionProposal{Apply: p.Apply, Finish: p.Finish}, nil
 }
 
-func (o *Owner) prepareProposal(c platform.Caller, r *pb.ChangeRecord, txn *platform.BusinessTxn, entity platform.Entity, now time.Time) (*Proposal, *platform.Error) {
+func (o *Owner) prepareProposal(c platform.Caller, r *pb.ChangeRecord, txn *platform.BusinessTxn, entity platform.RecordType, now time.Time) (*Proposal, *platform.Error) {
 	if entity.Lifecycle == nil {
 		return nil, nil
 	}
@@ -149,7 +149,7 @@ func (p *Proposal) Finish(c platform.Caller, r *pb.ChangeRecord, now time.Time) 
 	return c.Put(r, run)
 }
 
-func (p *Proposal) Apply(entity platform.Entity, info platform.EntityInfo, changed map[string]any, extra []string) (platform.Entity, map[string]any) {
+func (p *Proposal) Apply(entity platform.RecordType, info platform.RecordTypeInfo, changed map[string]any, extra []string) (platform.RecordType, map[string]any) {
 	if p == nil {
 		return entity, changed
 	}

@@ -33,7 +33,7 @@ type TaskSummary struct {
 	Answer string `json:"answer,omitempty"`
 }
 
-func RecordContext(typ string, record any, history []records.RecordChange, related []Related, info platform.EntityInfo) ContextView {
+func RecordContext(typ string, record any, history []records.RecordChange, related []Related, info platform.RecordTypeInfo) ContextView {
 	out := ContextView{Type: typ, Record: record, History: history, Related: related, References: []string{}, Links: []string{}, Flows: []FlowSummary{}, Tasks: []TaskSummary{}}
 	if len(out.History) > 20 {
 		out.History = out.History[:20]

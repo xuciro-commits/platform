@@ -32,7 +32,7 @@ func (h pageModelHost) FilterCaller(c platform.Caller) platform.Caller {
 	return platform.NewCaller(pageModelRuntime{runtime{t: h.t, scoped: true}}, c.Member, c.App, c.Replaying, c.Automation)
 }
 
-func (h pageModelHost) Entity(typ string) (platform.EntityInfo, bool) { return h.t.Entity(typ) }
+func (h pageModelHost) Entity(typ string) (platform.RecordTypeInfo, bool) { return h.t.Entity(typ) }
 func (h pageModelHost) Definitions(m platform.Member) []platform.Definition {
 	return h.t.Definitions(m)
 }
@@ -44,10 +44,10 @@ func (h pageModelHost) ModelCriteria(ref platform.AssetRef) (*platform.RuleCrite
 	return h.t.modelCriteria(ref)
 }
 func (h pageModelHost) Rules() platform.RuleEngine { return h.t.services.Rules }
-func (h pageModelHost) VisibleLookup(m platform.Member) func(string) (platform.EntityInfo, bool) {
+func (h pageModelHost) VisibleLookup(m platform.Member) func(string) (platform.RecordTypeInfo, bool) {
 	return h.t.modelVisibleLookup(m)
 }
-func (h pageModelHost) RuleEntities() map[string]platform.EntityInfo {
+func (h pageModelHost) RuleEntities() map[string]platform.RecordTypeInfo {
 	return h.t.Projection.EntityInfos()
 }
 func (h pageModelHost) RuleRecord(typ, id string, fallback any) any {

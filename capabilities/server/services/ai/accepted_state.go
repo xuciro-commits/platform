@@ -12,15 +12,15 @@ import (
 	"time"
 
 	"platformserver/platform"
-	"platformserver/services/ai/state"
+	aistate "platformserver/services/ai/state"
 )
 
-func (a *AI) Authority() platform.Authority { return a.ledger }
+func (a *AI) Authority() platform.Authority { return a.authority }
 
-func (a *AI) Fork(ledger platform.Authority) (platform.App, error) {
+func (a *AI) Fork(authority platform.Authority) (platform.Service, error) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
-	fork := &AI{ledger: ledger, authorities: a.authorities, trainingHost: a.trainingHost, trainingPolicies: maps.Clone(a.trainingPolicies), trainingCandidates: maps.Clone(a.trainingCandidates),
+	fork := &AI{authority: authority, authorities: a.authorities, trainingHost: a.trainingHost, trainingPolicies: maps.Clone(a.trainingPolicies), trainingCandidates: maps.Clone(a.trainingCandidates),
 		providers: slices.Clone(a.providers), models: slices.Clone(a.models),
 		limits: maps.Clone(a.limits), usage: slices.Clone(a.usage), daily: maps.Clone(a.daily),
 		recent: cloneCalls(a.recent), reservations: maps.Clone(a.reservations)}

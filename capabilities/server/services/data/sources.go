@@ -14,8 +14,8 @@ import (
 	transform "platformserver/services/data/transform"
 )
 
-func (o *Owner) sourceEntity() platform.Entity {
-	return platform.Entity{Type: SourceType, Title: "Data source", Plural: "Data sources", Model: Source{}, Display: "title", Description: "An external JSON endpoint whose rows become records of one object, pulled on a period or on request.",
+func (o *Owner) sourceEntity() platform.RecordType {
+	return platform.RecordType{Type: SourceType, Title: "Data source", Plural: "Data sources", Model: Source{}, Display: "title", Description: "An external JSON endpoint whose rows become records of one object, pulled on a period or on request.",
 		Validate: func(c platform.Caller, record any) *platform.Error {
 			s := record.(*Source)
 			if s.State == "published" {
@@ -311,8 +311,8 @@ func checkEvery(every string) *platform.Error {
 	return nil
 }
 
-func (o *Owner) SubmitSourcePulled(ledger platform.Authority, c platform.Caller, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *platform.Error) {
-	return ledger.Receive(c, s, now, nil, func() (func(*pb.ChangeRecord), *platform.Error) {
+func (o *Owner) SubmitSourcePulled(authority platform.Authority, c platform.Caller, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *platform.Error) {
+	return authority.Receive(c, s, now, nil, func() (func(*pb.ChangeRecord), *platform.Error) {
 		var payload struct {
 			Pull SourcePull `json:"pull"`
 		}

@@ -43,8 +43,8 @@ func (r *AssetRegistry) Register(owner protocol.AssetLifecycleOwner) error {
 		return fmt.Errorf("asset lifecycle owner is nil")
 	}
 	app := owner.Manifest().ID
-	ledger := owner.Authority()
-	if app == "" || strings.Contains(app, "/") || ledger == nil || ledger.ID() != app {
+	authority := owner.Authority()
+	if app == "" || strings.Contains(app, "/") || authority == nil || authority.ID() != app {
 		return fmt.Errorf("asset lifecycle owner needs its app identity and ledger")
 	}
 	if r.owners == nil {

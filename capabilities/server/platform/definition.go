@@ -144,7 +144,7 @@ type Definition struct {
 	ContractVersion    int                        `json:"contractVersion"`
 	Requires           []AssetRef                 `json:"requires"`
 	Provides           []Capability               `json:"provides"`
-	Entity             *EntityInfo                `json:"entity,omitempty"`
+	Entity             *RecordTypeInfo            `json:"entity,omitempty"`
 	Action             *Action                    `json:"action,omitempty"`
 	Page               *Page                      `json:"page,omitempty"`
 	Application        *Application               `json:"application,omitempty"`

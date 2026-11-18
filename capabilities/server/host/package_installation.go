@@ -77,11 +77,11 @@ func (t *Tenant) baseModules() []runtimeprotocol.CapabilityModule {
 		Base:     []runtimeprotocol.CapabilityModule{t.services.RuleModule, t.services.AuthModule, t.services.KernelModule, t.services.StorageModule},
 		Apps:     t.apps,
 		Bindings: func() map[string]string { return t.bindings.All() },
-		Entity: func(typ string) (platform.EntityInfo, bool) {
+		Entity: func(typ string) (platform.RecordTypeInfo, bool) {
 			if et := t.Projection.Type(typ); et != nil {
 				return et.Info(), true
 			}
-			return platform.EntityInfo{}, false
+			return platform.RecordTypeInfo{}, false
 		},
 		PlatformApp: controlowner.PlatformApp, Directory: "enterprise",
 	}.Modules()

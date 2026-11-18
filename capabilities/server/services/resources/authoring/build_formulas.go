@@ -1,4 +1,4 @@
-package build
+package authoring
 
 import (
 	"encoding/json"
@@ -14,7 +14,7 @@ import (
 	ontology "platformserver/services/ontology"
 )
 
-func computeRulesOf(o ontology.Object, lookup func(string) (platform.EntityInfo, bool)) func(platform.Caller, any, time.Time) *platform.Error {
+func computeRulesOf(o ontology.Object, lookup func(string) (platform.RecordTypeInfo, bool)) func(platform.Caller, any, time.Time) *platform.Error {
 	list, orderErr := ontology.FormulaOrder(o.Fields)
 	if len(list) == 0 {
 		return nil
@@ -103,7 +103,7 @@ func computeRulesOf(o ontology.Object, lookup func(string) (platform.EntityInfo,
 	}
 }
 
-func ruleLookup(o ontology.Object, lookup func(string) (platform.EntityInfo, bool)) func(string) (platform.EntityInfo, bool) {
+func ruleLookup(o ontology.Object, lookup func(string) (platform.RecordTypeInfo, bool)) func(string) (platform.RecordTypeInfo, bool) {
 	return ontology.RuleLookup(o, ID, Builder, lookup)
 }
 
@@ -111,7 +111,7 @@ func ruleSpec(o ontology.Object, a ontology.Action, read *platform.RuleReadSpec)
 	return ontology.RuleSpec(o, ID, a, read)
 }
 
-func actionCriteria(o ontology.Object, a ontology.Action, lookup func(string) (platform.EntityInfo, bool)) (*platform.RuleCriteria, error) {
+func actionCriteria(o ontology.Object, a ontology.Action, lookup func(string) (platform.RecordTypeInfo, bool)) (*platform.RuleCriteria, error) {
 	return ontology.ActionCriteria(o, ID, Builder, a, lookup)
 }
 
@@ -206,7 +206,7 @@ func (b *Build) checkObjectRules(o ontology.Object, engines ...platform.RuleEngi
 	return nil
 }
 
-func (b *Build) checkRuleCollections(s platform.RuleReadSpec, where string, lookup func(string) (platform.EntityInfo, bool)) error {
+func (b *Build) checkRuleCollections(s platform.RuleReadSpec, where string, lookup func(string) (platform.RecordTypeInfo, bool)) error {
 	for name, set := range s.Collections {
 		if set.Set != "" {
 			info, ok := lookup(s.Object)

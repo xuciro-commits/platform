@@ -18,7 +18,7 @@ const (
 
 type ProcessLookup struct {
 	App           string
-	Entity        func(string) (platform.EntityInfo, bool)
+	Entity        func(string) (platform.RecordTypeInfo, bool)
 	Action        func(string) (string, platform.Action, bool)
 	Function      func(string, string, int) (platform.AIFunction, int, bool)
 	Operation     func(string, string, int) (platform.Operation, int, bool)

@@ -37,7 +37,7 @@ type Window struct {
 	Bounded       bool
 	Format        bool
 	Match         func(reflect.Value) bool
-	Project       func(platform.EntityInfo, reflect.Value, any) any
+	Project       func(platform.RecordTypeInfo, reflect.Value, any) any
 }
 
 const (
@@ -54,7 +54,7 @@ type typeRead struct {
 
 type interfaceRead struct {
 	query platform.NamedQuery
-	info  platform.EntityInfo
+	info  platform.RecordTypeInfo
 	reads []*typeRead
 }
 
@@ -178,8 +178,8 @@ func (r *setRead) interfaceRead(name string) (*interfaceRead, *platform.Error) {
 	return read, nil
 }
 
-func interfaceShapeInfo(q platform.NamedQuery) platform.EntityInfo {
-	info := platform.EntityInfo{}
+func interfaceShapeInfo(q platform.NamedQuery) platform.RecordTypeInfo {
+	info := platform.RecordTypeInfo{}
 	for _, f := range q.InterfaceShape.Fields {
 		info.Fields = append(info.Fields, platform.FieldInfo{Name: f.Name, Type: f.Type})
 	}

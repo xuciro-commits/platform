@@ -74,7 +74,7 @@ func (c *ViewCache) StoreCatalog(gen uint64, key string, value []platform.Action
 	c.store(gen, key, func(e *viewEntry) { e.catalog = value })
 }
 
-func (c *ViewCache) Entities(gen uint64, key string) ([]platform.EntityInfo, bool) {
+func (c *ViewCache) Entities(gen uint64, key string) ([]platform.RecordTypeInfo, bool) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if !c.settle(gen) {
@@ -86,7 +86,7 @@ func (c *ViewCache) Entities(gen uint64, key string) ([]platform.EntityInfo, boo
 	return nil, false
 }
 
-func (c *ViewCache) StoreEntities(gen uint64, key string, value []platform.EntityInfo) {
+func (c *ViewCache) StoreEntities(gen uint64, key string, value []platform.RecordTypeInfo) {
 	c.store(gen, key, func(e *viewEntry) { e.entities = value })
 }
 
@@ -138,7 +138,7 @@ type manifestEntry struct {
 
 var manifestCacheSize atomic.Int64
 
-func ManifestOf(a platform.App, gen uint64) platform.Manifest {
+func ManifestOf(a platform.Service, gen uint64) platform.Manifest {
 	if key := reflect.ValueOf(a); !key.IsValid() || !key.Type().Comparable() {
 		return a.Manifest()
 	}
@@ -208,7 +208,7 @@ func (b *viewBody) compressed() []byte {
 }
 
 type viewEntry struct {
-	entities    []platform.EntityInfo
+	entities    []platform.RecordTypeInfo
 	catalog     []platform.Action
 	definitions []platform.Definition
 	bodies      map[string]*viewBody

@@ -8,7 +8,7 @@ import (
 	"platformserver/kernel/records"
 	"platformserver/platform"
 	releaseowner "platformserver/services/devops/releases"
-	"platformserver/services/resources/authoring"
+	build "platformserver/services/resources/authoring"
 	controlowner "platformserver/services/security/control"
 	"time"
 )
@@ -108,7 +108,7 @@ func (t *Tenant) releasePlannerLocked() releaseowner.Planner {
 func (t *Tenant) releaseAssetsLocked(assets []platform.ReleaseAsset, replace bool) ([]platform.ReleaseAsset, error) {
 	return t.releasePlannerLocked().Assets(assets, replace)
 }
-func (t *Tenant) codeReleaseAssetsLocked(app platform.App) ([]platform.ReleaseAsset, error) {
+func (t *Tenant) codeReleaseAssetsLocked(app platform.Service) ([]platform.ReleaseAsset, error) {
 	return releaseowner.CodeAssets(app, t.definitions, t.describer().DefinitionAsset, t.nativeFlowAsset, t.describer().DescribeOwnedAsset, PublicationResolver())
 }
 func (t *Tenant) candidateWithBindings(roots []platform.AssetRef, available []platform.ReleaseAsset, fixed []platform.AssetRef) (protocol.ReleaseCandidate, error) {
@@ -219,7 +219,7 @@ func (t *Tenant) acceptedAssets() releaseowner.AcceptedAssets {
 		WithBindings: func(roots []platform.AssetRef, available []platform.ReleaseAsset) (protocol.ReleaseCandidate, error) {
 			return t.candidateWithBindings(roots, available, nil)
 		},
-		Apps:       func() []platform.App { return t.apps },
+		Apps:       func() []platform.Service { return t.apps },
 		CodeAssets: t.codeReleaseAssetsLocked,
 	}
 }

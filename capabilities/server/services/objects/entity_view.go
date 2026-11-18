@@ -10,10 +10,10 @@ import (
 	"platformserver/platform"
 )
 
-func EntityView(store *records.Store, m platform.Member, hidden func(*records.Type) bool, authorization platform.AuthorizationEngine) []platform.EntityInfo {
+func EntityView(store *records.Store, m platform.Member, hidden func(*records.Type) bool, authorization platform.AuthorizationEngine) []platform.RecordTypeInfo {
 	store.Lock()
 	defer store.Unlock()
-	out := []platform.EntityInfo{}
+	out := []platform.RecordTypeInfo{}
 	for _, et := range store.Types() {
 		if hidden(et) {
 			continue
@@ -27,7 +27,7 @@ func EntityView(store *records.Store, m platform.Member, hidden func(*records.Ty
 			out = append(out, view.Info())
 		}
 	}
-	slices.SortFunc(out, func(a, b platform.EntityInfo) int { return strings.Compare(a.Type, b.Type) })
+	slices.SortFunc(out, func(a, b platform.RecordTypeInfo) int { return strings.Compare(a.Type, b.Type) })
 	return out
 }
 

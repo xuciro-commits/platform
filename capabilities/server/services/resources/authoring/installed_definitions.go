@@ -1,4 +1,4 @@
-package build
+package authoring
 
 import (
 	"fmt"
@@ -12,7 +12,7 @@ import (
 	"platformserver/platform"
 )
 
-func PruneInstalledObject(definitions []platform.Definition, app string, info platform.EntityInfo, actions []platform.Action) []platform.Definition {
+func PruneInstalledObject(definitions []platform.Definition, app string, info platform.RecordTypeInfo, actions []platform.Action) []platform.Definition {
 	kept := slices.DeleteFunc(definitions, func(def platform.Definition) bool {
 		return def.Ref.App == app && def.Source == "tenant" && def.Action != nil && def.Action.Target == info.Type && !slices.ContainsFunc(actions, func(action platform.Action) bool { return action.Schema == def.Ref.Name })
 	})
@@ -51,18 +51,18 @@ func CheckRunApplicationBindings(record any) error {
 
 type ObjectInstall struct {
 	Owners         map[string]string
-	Owner          func(id string) platform.App
+	Owner          func(id string) platform.Service
 	Installing     func() bool
-	Properties     func(platform.EntityInfo) error
-	RecordSets     func(platform.EntityInfo) error
-	Entity         func(string) (platform.EntityInfo, bool)
-	Install        func(platform.EntityInfo) error
+	Properties     func(platform.RecordTypeInfo) error
+	RecordSets     func(platform.RecordTypeInfo) error
+	Entity         func(string) (platform.RecordTypeInfo, bool)
+	Install        func(platform.RecordTypeInfo) error
 	Definitions    func() []platform.Definition
 	SetDefinitions func([]platform.Definition)
-	Define         func(app string, info platform.EntityInfo, actions []platform.Action, pages []platform.Page, protocols ...platform.Provision) error
+	Define         func(app string, info platform.RecordTypeInfo, actions []platform.Action, pages []platform.Page, protocols ...platform.Provision) error
 }
 
-func (h ObjectInstall) Run(app platform.App, e platform.Entity, actions []platform.Action, pages []platform.Page) error {
+func (h ObjectInstall) Run(app platform.Service, e platform.RecordType, actions []platform.Action, pages []platform.Page) error {
 	id := app.Manifest().ID
 	if other := h.Owner(h.Owners["action:"+actions[0].Schema]); other != nil && (other.Manifest().ID != id || other.Authority() != app.Authority()) {
 		return fmt.Errorf("%s: another app owns %s", e.Type, actions[0].Schema)

@@ -16,7 +16,7 @@ func (t *Tenant) modelCriteria(ref platform.AssetRef) (*platform.RuleCriteria, b
 	return pageowner.ModelCriteria(t.App(t.owner["action:"+ref.Name]), ref)
 }
 
-func (t *Tenant) modelVisibleLookup(member platform.Member) func(string) (platform.EntityInfo, bool) {
+func (t *Tenant) modelVisibleLookup(member platform.Member) func(string) (platform.RecordTypeInfo, bool) {
 	return pageowner.VisibleLookup(t.Entities(member))
 }
 
@@ -28,10 +28,10 @@ func (r pageModelRuntime) Authorize(c platform.Caller, q platform.AuthzRequest, 
 
 func (r pageModelRuntime) ReadRecordPath(c platform.Caller, typ, id string, path []string, at time.Time) (json.RawMessage, []string, *platform.Error) {
 	t := r.t
-	return pageowner.RecordPath{Record: t.objectOwner(t.Projection).HeldRecordJSON, Entity: func(typ string) (platform.EntityInfo, bool) {
+	return pageowner.RecordPath{Record: t.objectOwner(t.Projection).HeldRecordJSON, Entity: func(typ string) (platform.RecordTypeInfo, bool) {
 		entity := t.Projection.Type(typ)
 		if entity == nil {
-			return platform.EntityInfo{}, false
+			return platform.RecordTypeInfo{}, false
 		}
 		return entity.Info(), true
 	}}.Read(c, typ, id, path, at)

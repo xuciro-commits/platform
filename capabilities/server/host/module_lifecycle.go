@@ -10,8 +10,8 @@ import (
 )
 
 func (t *Tenant) OwnerActive(id string) bool { return !t.disabledOwners[id] }
-func (t *Tenant) LiveApps() []platform.App {
-	apps := make([]platform.App, 0, len(t.apps))
+func (t *Tenant) LiveApps() []platform.Service {
+	apps := make([]platform.Service, 0, len(t.apps))
 	for _, app := range t.apps {
 		if t.OwnerActive(app.Manifest().ID) {
 			apps = append(apps, app)

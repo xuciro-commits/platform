@@ -699,7 +699,7 @@ func (s *Store) AggregateWindow(et *Type, q AggregateQuery, rows []reflect.Value
 	return Aggregate{Window: out, Columns: []Column{}, Rows: []map[string]any{}}, nil
 }
 
-func BusinessField(info platform.EntityInfo, value reflect.Value, name string) string {
+func BusinessField(info platform.RecordTypeInfo, value reflect.Value, name string) string {
 	field, ok := info.Field(name)
 	if !ok {
 		return ""

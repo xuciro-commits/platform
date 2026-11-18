@@ -5,8 +5,8 @@ import (
 	"platformserver/services/objects"
 )
 
-func (t *Tenant) bindInterfaceQuery(q platform.NamedQuery, drafts ...platform.EntityInfo) (platform.NamedQuery, error) {
-	var types []platform.EntityInfo
+func (t *Tenant) bindInterfaceQuery(q platform.NamedQuery, drafts ...platform.RecordTypeInfo) (platform.NamedQuery, error) {
+	var types []platform.RecordTypeInfo
 	if q.InterfaceShape == nil {
 		for _, et := range t.Projection.SortedTypes() {
 			types = append(types, et.Info())

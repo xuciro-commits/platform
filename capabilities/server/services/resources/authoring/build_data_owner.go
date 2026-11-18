@@ -1,4 +1,4 @@
-package build
+package authoring
 
 import (
 	"fmt"
@@ -16,7 +16,7 @@ func (b *Build) DataOwner() *dataowner.Owner { return b.data }
 
 func (b *Build) integrationRuntime() dataowner.IntegrationRuntime {
 	return dataowner.IntegrationRuntime{
-		App: b, Ledger: func() platform.Authority { return b.ledger },
+		App: b, Ledger: func() platform.Authority { return b.authority },
 		JointDeclarations: func() map[platform.AssetRef]platform.ReleaseAsset { return b.jointDeclarations },
 		Lookup:            b.conditionLookup,
 		Record: func(ref string) (any, bool) {
@@ -48,17 +48,17 @@ func (h buildDataHost) CompartmentExists(id string) bool {
 	return h.b.host != nil && h.b.host.CompartmentExists(id)
 }
 
-func (h buildDataHost) Entity(typ string) (platform.EntityInfo, bool) {
+func (h buildDataHost) Entity(typ string) (platform.RecordTypeInfo, bool) {
 	return h.b.lookupEntity(typ)
 }
 
-func (h buildDataHost) DraftEntity(typ string) (platform.EntityInfo, bool) {
+func (h buildDataHost) DraftEntity(typ string) (platform.RecordTypeInfo, bool) {
 	if h.b.host == nil {
-		return platform.EntityInfo{}, false
+		return platform.RecordTypeInfo{}, false
 	}
 	objects, err := readDefinitionInventory[ontology.Object](h.b.host.Automation(platform.Caller{}, ID))
 	if err != nil {
-		return platform.EntityInfo{}, false
+		return platform.RecordTypeInfo{}, false
 	}
 	for _, object := range objects {
 		if object.Archived || TypeOf(object.Name) != typ {
@@ -67,7 +67,7 @@ func (h buildDataHost) DraftEntity(typ string) (platform.EntityInfo, bool) {
 		info, err := records.Describe(ID, Entity(object), func(reflect.Type) string { return "" })
 		return info, err == nil
 	}
-	return platform.EntityInfo{}, false
+	return platform.RecordTypeInfo{}, false
 }
 
 func (h buildDataHost) Action(c platform.Caller, schema string) (string, platform.Action, bool) {

@@ -1,4 +1,4 @@
-package aigateway
+package gateway
 
 import (
 	"platformserver/kernel/protocol"
@@ -31,7 +31,7 @@ type Runtime struct {
 	Queued          func(func(platform.Effect) bool) int
 	ProviderOf      func(string) platform.AIProvider
 	Simulation      bool
-	App             func(string) platform.App
+	App             func(string) platform.Service
 	Authority       func(string) string
 	Read            func(func(Runtime) *platform.Error) *platform.Error
 }
@@ -109,7 +109,7 @@ func (r Runtime) Send(x platform.Effect, now time.Time) (platform.Outcome, *plat
 		}}.Send(r.Tenant, x, now)
 }
 
-func (r Runtime) Answer(x platform.Effect, o platform.Outcome, usage *platform.AIUsage) (platform.App, *pb.Submission) {
+func (r Runtime) Answer(x platform.Effect, o platform.Outcome, usage *platform.AIUsage) (platform.Service, *pb.Submission) {
 	return AnswerSubmission(r.Tenant, x, o, usage, r.App, r.Authority)
 }
 

@@ -29,7 +29,7 @@ func (r ImageDecision[T, C]) Run(ctx context.Context) (value T, refusal *platfor
 		if read == nil {
 			break
 		}
-		value, candidate, refusal, err := read()
+		value, decision, refusal, err := read()
 		if err != nil {
 			if ctx.Err() != nil || r.Quarantined() {
 				return value, refusal
@@ -43,10 +43,10 @@ func (r ImageDecision[T, C]) Run(ctx context.Context) (value T, refusal *platfor
 			r.Unlock()
 			return value, conflict()
 		}
-		if matches(candidate) {
+		if matches(decision) {
 			func() {
 				defer r.Unlock()
-				value, refusal = r.Finish(candidate, value, refusal)
+				value, refusal = r.Finish(decision, value, refusal)
 			}()
 			return value, refusal
 		}
@@ -63,9 +63,9 @@ func (r ImageDecision[T, C]) Run(ctx context.Context) (value T, refusal *platfor
 	if r.Unavailable() {
 		return value, conflict()
 	}
-	value, candidate, refusal, err := r.Direct()
+	value, decision, refusal, err := r.Direct()
 	if err != nil {
 		return value, refusal
 	}
-	return r.Finish(candidate, value, refusal)
+	return r.Finish(decision, value, refusal)
 }

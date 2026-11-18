@@ -1,4 +1,4 @@
-package build
+package authoring
 
 import (
 	"encoding/json"
@@ -60,10 +60,10 @@ type Build struct {
 	automation                publication.AutomationAuthoring
 	automationFactory         func(publication.AutomationEnvironment, publication.Resolver) publication.AutomationAuthoring
 	branches                  *branchowner.Owner
-	ledger                    platform.Authority
+	authority                 platform.Authority
 	authorities               platform.Authorities
-	installed                 map[string]platform.Entity
-	jointEntities             map[string]platform.EntityInfo
+	installed                 map[string]platform.RecordType
+	jointEntities             map[string]platform.RecordTypeInfo
 	jointAssets               map[platform.AssetRef]bool
 	jointDeclarations         map[platform.AssetRef]platform.ReleaseAsset
 	jointMode                 bool
@@ -84,14 +84,14 @@ type testPlanPublication = devopsmodel.TestPlanPublication[ontology.Object, runt
 func (b *Build) bindPublications() {
 	object := b.objectPublication(ontology.ObjectPublicationEnvironment{
 		Host:      func() runtimeprotocol.BuildHost { return b.host },
-		Authority: func() platform.Authority { return b.ledger },
+		Authority: func() platform.Authority { return b.authority },
 		Entity:    b.entity,
 		Portable:  b.data.PortableObject,
 		Actions:   objectActions,
 		Page:      func(object ontology.Object) platform.Page { return b.application.ObjectPage(object, ID) },
 		Pages:     b.objectInstallationPages,
 		Validate:  b.validateObjectInstallation,
-		Installed: func(entity platform.Entity) { b.installed[entity.Type] = entity },
+		Installed: func(entity platform.RecordType) { b.installed[entity.Type] = entity },
 	})
 	b.publications = append([]publication.Hooks{object}, b.publicationBase...)
 	queries := b.queries
@@ -146,7 +146,7 @@ func (b *Build) AttachOwner(bindings runtimeprotocol.OwnerBindings) {
 }
 
 func New(tenant string, authorities platform.Authorities, publications []publication.Hooks, resolver publication.Resolver, objectPublication func(ontology.ObjectPublicationEnvironment) publication.Hooks, queryFactory func(publication.QueryAuthoringEnvironment) publication.QueryAuthoringBinding, functionFactory func(publication.FunctionEnvironment) publication.FunctionAuthoring, agentFactory func(platform.AgentAuthoringEnvironment) platform.AgentAuthoringBinding, functionEvaluationFactory func(publication.FunctionEvaluationEnvironment) publication.FunctionEvaluationBinding, testPlanFactory func(testPlanEnvironment, evaluationPublication) testPlanPublication, evaluationSetFactory func(testPlanEnvironment) evaluationPublication, sampleSetFactory func(devopsmodel.SampleSetEnvironment) devopsmodel.SampleSetPublication, application ApplicationOwners, automationFactory func(publication.AutomationEnvironment, publication.Resolver) publication.AutomationAuthoring) *Build {
-	b := &Build{resolver: resolver, publicationBase: slices.Clone(publications), objectPublication: objectPublication, queryFactory: queryFactory, functionFactory: functionFactory, agentFactory: agentFactory, functionEvaluationFactory: functionEvaluationFactory, testPlanFactory: testPlanFactory, evaluationSetFactory: evaluationSetFactory, sampleSetFactory: sampleSetFactory, installed: map[string]platform.Entity{}, linkTypes: map[string]ontology.LinkType{}, propertyTypes: map[string]ontology.PropertyType{}, valueTypes: map[string]ontology.ValueType{}, objectTypeGroups: map[string]ontology.ObjectTypeGroup{}, interfaces: map[string]ontology.InterfaceRecord{}}
+	b := &Build{resolver: resolver, publicationBase: slices.Clone(publications), objectPublication: objectPublication, queryFactory: queryFactory, functionFactory: functionFactory, agentFactory: agentFactory, functionEvaluationFactory: functionEvaluationFactory, testPlanFactory: testPlanFactory, evaluationSetFactory: evaluationSetFactory, sampleSetFactory: sampleSetFactory, installed: map[string]platform.RecordType{}, linkTypes: map[string]ontology.LinkType{}, propertyTypes: map[string]ontology.PropertyType{}, valueTypes: map[string]ontology.ValueType{}, objectTypeGroups: map[string]ontology.ObjectTypeGroup{}, interfaces: map[string]ontology.InterfaceRecord{}}
 	b.queries = b.queryFactory(b.queryEnvironment())
 	b.data = dataowner.New(buildDataHost{b}, resolver)
 	b.data.AttachIntegrationRuntime(b.integrationRuntime())
@@ -195,7 +195,7 @@ func New(tenant string, authorities platform.Authorities, publications []publica
 	classes := []string{ObjectType, ActionTypeType, runtimeprotocol.PageType, runtimeprotocol.AppType, TestPlanType, runtimeprotocol.ProcessType, runtimeprotocol.FunctionType, PropertyTypeType, ValueTypeType, ObjectTypeGroupType, LinkTypeType, b.queries.Entity().Type, InterfaceType, runtimeprotocol.FunctionCallType, b.evaluations.Entity().Type, runtimeprotocol.CodeType, runtimeprotocol.TableType, AgentType, SampleSetType, BranchType, ResourceType, FolderType, WorkingStateType, ProductType, ProductVersionType, runtimeprotocol.OwnedRelationType(ID), runtimeprotocol.ConfirmationType, runtimeprotocol.DispatchType}
 	classes = append(classes, b.data.Types()...)
 	b.authorities = authorities
-	b.ledger = authorities(tenant, ID, platform.NewCatalog(actions...), classes...)
+	b.authority = authorities(tenant, ID, platform.NewCatalog(actions...), classes...)
 	return b
 }
 
@@ -219,11 +219,11 @@ func (b *Build) manifestRoles() []string {
 }
 
 func (b *Build) Manifest() platform.Manifest {
-	catalog := b.ledger.Catalog()
+	catalog := b.authority.Catalog()
 	if b.installationCatalog != nil {
 		catalog = b.installationCatalog
 	}
-	entities := []platform.Entity{runtimeprotocol.RelationEntity(ID), b.objectEntity(), b.actionTypeEntity(), b.apps.PageEntity(), b.apps.ApplicationEntity(), b.testPlanEntity(), b.automation.ProcessEntity(), propertyKind.entity(b), valueKind.entity(b), b.objectTypeGroupEntity(), linkKind.entity(b), b.queries.Entity(), interfaceKind.entity(b), b.functions.Entity(), b.functions.CallEntity(), b.evaluations.Entity(), b.agent.Entity(), b.functions.CodeEntity(), b.functions.TableEntity(), b.sampleSets.Entity(), b.branchEntity(), b.data.ConfirmationEntity(), b.data.DispatchEntity(), b.productEntity(), b.productVersionEntity()}
+	entities := []platform.RecordType{runtimeprotocol.RelationEntity(ID), b.objectEntity(), b.actionTypeEntity(), b.apps.PageEntity(), b.apps.ApplicationEntity(), b.testPlanEntity(), b.automation.ProcessEntity(), propertyKind.entity(b), valueKind.entity(b), b.objectTypeGroupEntity(), linkKind.entity(b), b.queries.Entity(), interfaceKind.entity(b), b.functions.Entity(), b.functions.CallEntity(), b.evaluations.Entity(), b.agent.Entity(), b.functions.CodeEntity(), b.functions.TableEntity(), b.sampleSets.Entity(), b.branchEntity(), b.data.ConfirmationEntity(), b.data.DispatchEntity(), b.productEntity(), b.productVersionEntity()}
 	entities = append(entities, b.data.Entities()...)
 	entities = append(entities, b.resourceEntities()...)
 	entities = append(entities, workingStateEntity())
@@ -261,7 +261,7 @@ func (b *Build) Manifest() platform.Manifest {
 					{App: ID, Kind: platform.AssetAction, Name: runtimeprotocol.PageType + ".edit"}, {App: ID, Kind: platform.AssetAction, Name: runtimeprotocol.PageType + ".archive"}, {App: ID, Kind: platform.AssetAction, Name: runtimeprotocol.SchemaRelease}})}}
 }
 
-func sortedTypes(installed map[string]platform.Entity) []string {
+func sortedTypes(installed map[string]platform.RecordType) []string {
 	out := make([]string, 0, len(installed))
 	for typ := range installed {
 		out = append(out, typ)
@@ -288,13 +288,13 @@ func (b *Build) checkReleaseProfile(c platform.Caller, schema string) *platform.
 		"%s installs a definition for operators at once, and this tenant delivers through a saved release candidate: review the draft and activate the candidate (POST /v1/releases/candidates). Direct install is limited to the development and import profiles.", schema)}
 }
 
-func (b *Build) Declarations() []*pb.AuthorityDeclaration { return b.ledger.Declarations() }
-func (b *Build) Authority() platform.Authority            { return b.ledger }
+func (b *Build) Declarations() []*pb.AuthorityDeclaration { return b.authority.Declarations() }
+func (b *Build) Authority() platform.Authority            { return b.authority }
 
 func (b *Build) SnapshotFormat() string { return "platform.ledger.v1" }
 
-func (b *Build) Snapshot() (json.RawMessage, error) { return b.ledger.Snapshot() }
-func (b *Build) Restore(raw json.RawMessage) error  { return b.ledger.Restore(raw) }
+func (b *Build) Snapshot() (json.RawMessage, error) { return b.authority.Snapshot() }
+func (b *Build) Restore(raw json.RawMessage) error  { return b.authority.Restore(raw) }
 
 func (b *Build) Read(c platform.Caller, name string) (any, *platform.Error) {
 	if name != ReadReleaseProfile {
@@ -413,13 +413,13 @@ func (b *Build) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb.
 			return nil, err
 		}
 	}
-	if record, err, handled := b.automation.Decide(b.ledger, c, s, now); handled {
+	if record, err, handled := b.automation.Decide(b.authority, c, s, now); handled {
 		return record, err
 	}
 	if record, err, handled := b.functions.DecideCodeBuild(c, s, now); handled {
 		return record, err
 	}
-	if record, err, handled := b.data.Decide(b.ledger, c, s, now); handled {
+	if record, err, handled := b.data.Decide(b.authority, c, s, now); handled {
 		return record, err
 	}
 	if slices.Contains([]string{runtimeprotocol.ConfirmationAnswerSchema, runtimeprotocol.ConfirmationType + ".review", runtimeprotocol.ConfirmationType + ".tick"}, s.GetSchema().GetName()) {
@@ -500,7 +500,7 @@ func (b *Build) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb.
 	if name := s.GetSchema().GetName(); name == AgentType+".create" || name == AgentType+".edit" {
 		agentEntity = b.agent.DraftEntity()
 	}
-	entities := []platform.Entity{b.objectEntity(), b.actionTypeEntity(), pageEntity, b.apps.ApplicationEntity(), b.testPlanEntity(), propertyKind.entity(b), valueKind.entity(b), b.objectTypeGroupEntity(), linkKind.entity(b), b.queries.Entity(), interfaceKind.entity(b), b.functions.Entity(), b.functions.CallEntity(), b.evaluations.Entity(), agentEntity, b.sampleSets.Entity(), b.branchEntity(), b.data.ConfirmationEntity(), b.data.DispatchEntity(), b.productEntity(), b.productVersionEntity()}
+	entities := []platform.RecordType{b.objectEntity(), b.actionTypeEntity(), pageEntity, b.apps.ApplicationEntity(), b.testPlanEntity(), propertyKind.entity(b), valueKind.entity(b), b.objectTypeGroupEntity(), linkKind.entity(b), b.queries.Entity(), interfaceKind.entity(b), b.functions.Entity(), b.functions.CallEntity(), b.evaluations.Entity(), agentEntity, b.sampleSets.Entity(), b.branchEntity(), b.data.ConfirmationEntity(), b.data.DispatchEntity(), b.productEntity(), b.productVersionEntity()}
 	entities = append(entities, b.data.Entities()...)
 	entities = append(entities, b.resourceEntities()...)
 	entities = append(entities, workingStateEntity())
@@ -531,19 +531,19 @@ func (b *Build) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb.
 			}
 		}
 	}
-	if record, err, ok := b.ledger.Generated(c, s, now, nil, entities...); ok {
+	if record, err, ok := b.authority.Generated(c, s, now, nil, entities...); ok {
 		return record, err
 	}
 	return nil, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_UNKNOWN_SCHEMA}
 }
 
-func (b *Build) Fork(ledger platform.Authority) (platform.App, error) {
+func (b *Build) Fork(authority platform.Authority) (platform.Service, error) {
 	catalog := b.installationCatalog
 	if catalog != nil {
 		catalog = platform.NewCatalog(catalog.All()...)
 	}
 	fork := *b
-	fork.ledger = ledger
+	fork.authority = authority
 	fork.installationCatalog = catalog
 	fork.installed = maps.Clone(b.installed)
 	fork.jointEntities = maps.Clone(b.jointEntities)
@@ -572,7 +572,7 @@ func (b *Build) Fork(ledger platform.Authority) (platform.App, error) {
 func (b *Build) newSimulation(tenant string) *Build {
 	return New(tenant, b.authorities, b.publicationBase, b.resolver, b.objectPublication, b.queryFactory, b.functionFactory, b.agentFactory, b.functionEvaluationFactory, b.testPlanFactory, b.evaluationSetFactory, b.sampleSetFactory, b.application, b.automationFactory)
 }
-func (b *Build) NewSimulationApp(tenant string) platform.App { return b.newSimulation(tenant) }
+func (b *Build) NewSimulationApp(tenant string) platform.Service { return b.newSimulation(tenant) }
 func (b *Build) NewSimulationSandbox(tenant string) ConstructionSandbox {
 	return b.newSimulation(tenant)
 }
@@ -612,7 +612,7 @@ const (
 func TypeOf(name string) string { return ID + "." + name }
 
 type ConstructionDrafts interface {
-	platform.App
+	platform.Service
 	runtimeprotocol.FlowReleaseOwner
 	CompleteBlueprintAssets([]platform.ReleaseAsset) ([]platform.ReleaseAsset, error)
 	RootDrafts([]platform.AssetRef) ([]JointDraftRef, error)
@@ -633,7 +633,7 @@ type ConstructionDraftReader interface {
 }
 
 type ConstructionSandbox interface {
-	platform.App
+	platform.Service
 	runtimeprotocol.AssetDefinitionReader
 	Reinstall() error
 	BeginAssetBootstrap([]platform.ReleaseAsset) (func(), error)

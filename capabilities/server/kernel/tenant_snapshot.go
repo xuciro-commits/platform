@@ -126,8 +126,8 @@ func (s *TenantImage[Job, Endpoint]) RestoreOperations(q *Sequence) error {
 type TenantSnapshots[Job, Endpoint any] struct {
 	Compatibility func() (SnapshotCompatibility, error)
 	Build         func() string
-	Apps          []platform.App
-	AppOf         func(string) platform.App
+	Apps          []platform.Service
+	AppOf         func(string) platform.Service
 	Inputs        func(string) platform.AcceptedInputApp
 	ReadCandidate func(string, []byte) (protocol.ReleaseCandidate, error)
 	Quarantined   func() bool

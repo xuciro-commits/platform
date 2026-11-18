@@ -87,8 +87,8 @@ func (o *Owner) Inventory() ([]protocol.Function, error) {
 	return o.inventory()
 }
 
-func (o *Owner) Entity() platform.Entity {
-	return platform.Entity{Type: protocol.FunctionType, Title: "AI function", Plural: "AI functions", Model: protocol.Function{}, Display: "title",
+func (o *Owner) Entity() platform.RecordType {
+	return platform.RecordType{Type: protocol.FunctionType, Title: "AI function", Plural: "AI functions", Model: protocol.Function{}, Display: "title",
 		Description: "A bounded typed inference over one published object; draft edits do not change installed calls.",
 		Scope:       platform.Scope{Default: platform.ScopeNone, Levels: map[string]string{"builder": platform.ScopeTenant}},
 		Standard:    platform.Standard{Create: true, Edit: true, Archive: true, Roles: []string{"builder"}, Capability: "functions"},
@@ -105,8 +105,8 @@ func (o *Owner) Entity() platform.Entity {
 			}}}}
 }
 
-func (o *Owner) CallEntity() platform.Entity {
-	return platform.Entity{Type: protocol.FunctionCallType, Title: "AI function call", Plural: "AI function calls", Model: protocol.FunctionRun{}, Display: "function",
+func (o *Owner) CallEntity() platform.RecordType {
+	return platform.RecordType{Type: protocol.FunctionCallType, Title: "AI function call", Plural: "AI function calls", Model: protocol.FunctionRun{}, Display: "function",
 		Description: "A retained typed suggestion or refusal; it never changes its source record.",
 		Scope: platform.Scope{Default: platform.ScopeOwn, Owner: "member", Levels: map[string]string{"builder": platform.ScopeTenant}, Participants: func(record any) []string {
 			run := record.(protocol.FunctionRun)

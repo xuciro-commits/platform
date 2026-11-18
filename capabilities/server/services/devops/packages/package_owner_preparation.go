@@ -19,7 +19,7 @@ import (
 	"platformserver/platform"
 	dataowner "platformserver/services/data"
 	packagedesc "platformserver/services/devops/descriptor"
-	"platformserver/services/resources/authoring"
+	build "platformserver/services/resources/authoring"
 	"platformserver/services/resources/publication"
 )
 
@@ -183,7 +183,7 @@ func Preparation(id, version string, blueprint platform.PackageBlueprint, instal
 
 type PreparationSource struct {
 	Find     func(string, string) (DraftState, error)
-	App      func(string) platform.App
+	App      func(string) platform.Service
 	Model    func(string, string, platform.ModelOptions) (string, string)
 	Resolver publication.Resolver
 }
@@ -259,7 +259,7 @@ type PreparationHooks struct {
 	Source    func() (PreparationOwner, bool)
 	Drafts    func() (build.ConstructionDrafts, bool)
 	Records   func(typ string, q platform.Query) (int, []any, *platform.Error)
-	App       func(string) platform.App
+	App       func(string) platform.Service
 	Resolve   func(purpose, model string, options platform.ModelOptions) (string, *platform.Error)
 	Callable  func(model string) *platform.Error
 }

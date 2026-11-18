@@ -18,11 +18,11 @@ import (
 	"platformserver/services/resources/publication"
 )
 
-func CheckProcess(p protocol.Process, entity platform.Entity, lookup ProcessLookup, objects []platform.Entity, engines ...platform.RuleEngine) *platform.Error {
+func CheckProcess(p protocol.Process, entity platform.RecordType, lookup ProcessLookup, objects []platform.RecordType, engines ...platform.RuleEngine) *platform.Error {
 	refuse := func(message string, args ...any) *platform.Error {
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, message, args...)
 	}
-	actionModels := map[string]platform.Entity{}
+	actionModels := map[string]platform.RecordType{}
 	for _, model := range append(objects, entity) {
 		if model.Type != "" {
 			actionModels[model.Type] = model
@@ -346,7 +346,7 @@ func CheckProcess(p protocol.Process, entity platform.Entity, lookup ProcessLook
 					}
 				}
 				if step.WaitUntil.Source == "subject" {
-					field, err := platform.RecordPathField(p.Object, step.WaitUntil.Path, func(typ string) (platform.EntityInfo, bool) {
+					field, err := platform.RecordPathField(p.Object, step.WaitUntil.Path, func(typ string) (platform.RecordTypeInfo, bool) {
 						if model, ok := actionModels[typ]; ok {
 							info, err := records.Describe(lookup.App, model, func(reflect.Type) string { return "" })
 							return info, err == nil

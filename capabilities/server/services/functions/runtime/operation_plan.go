@@ -1,4 +1,4 @@
-package compute
+package runtime
 
 import (
 	"encoding/json"
@@ -17,7 +17,7 @@ const operationEndpoint = "operation"
 type OperationPlan struct {
 	Tenant     string
 	Member     func(string) (platform.Member, bool)
-	App        func(string) platform.App
+	App        func(string) platform.Service
 	Definition func(app, name string, version int) (platform.Operation, int, bool)
 	Authorize  func(applicant platform.Caller, owner string, op platform.Operation, at time.Time, sources []string, definition string) *platform.Error
 	Closure    func(owner string, op platform.Operation, version int, release *string) (string, string, error)
@@ -27,7 +27,7 @@ type OperationPlan struct {
 	Queued     int
 	Retained   func(module string) bool
 	Bind       func(ref platform.AssetRef, release, dependencies string) ([]platform.AssetBinding, error)
-	Entity     func(string) (platform.EntityInfo, bool)
+	Entity     func(string) (platform.RecordTypeInfo, bool)
 	Rules      platform.RuleEngine
 }
 

@@ -387,10 +387,10 @@ func AppendObjectAssets(objects []Object, sourceVersion string, add func(platfor
 
 type ObjectInstallationEnvironment struct {
 	Host           protocol.BuildHost
-	Entity         func(Object) platform.Entity
-	CheckProcesses func(platform.Caller, platform.Entity, platform.Entity, bool, bool) error
+	Entity         func(Object) platform.RecordType
+	CheckProcesses func(platform.Caller, platform.RecordType, platform.RecordType, bool, bool) error
 	Pages          func(Object) ([]platform.Page, string, error)
-	Actions        func(Object, platform.Entity) []platform.Action
+	Actions        func(Object, platform.RecordType) []platform.Action
 	JointMode      func() bool
 }
 
@@ -449,28 +449,28 @@ func ObjectFreezePublication(objects []Object, retained func(platform.ReleaseAss
 type ObjectPublicationEnvironment struct {
 	Host      func() protocol.BuildHost
 	Authority func() platform.Authority
-	Entity    func(Object) platform.Entity
+	Entity    func(Object) platform.RecordType
 	Portable  func(Object) (Object, error)
-	Actions   func(Object, platform.Entity) []platform.Action
+	Actions   func(Object, platform.RecordType) []platform.Action
 	Page      func(Object) platform.Page
 	Pages     func(Object) ([]platform.Page, string, error)
 	Validate  func(platform.Caller, Object) error
-	Installed func(platform.Entity)
+	Installed func(platform.RecordType)
 }
 
 func ObjectPublication(env ObjectPublicationEnvironment) publication.Hooks {
-	image := func(raw json.RawMessage) (Object, platform.Entity, []platform.Action, []platform.Page, error) {
+	image := func(raw json.RawMessage) (Object, platform.RecordType, []platform.Action, []platform.Page, error) {
 		published, err := ReadObjectPublication(raw)
 		if err != nil {
-			return Object{}, platform.Entity{}, nil, nil, err
+			return Object{}, platform.RecordType{}, nil, nil, err
 		}
 		entity := env.Entity(published)
 		portable, err := env.Portable(published)
 		if err != nil {
-			return Object{}, platform.Entity{}, nil, nil, err
+			return Object{}, platform.RecordType{}, nil, nil, err
 		}
 		if err := CheckObjectSchemas(portable); err != nil {
-			return Object{}, platform.Entity{}, nil, nil, err
+			return Object{}, platform.RecordType{}, nil, nil, err
 		}
 		actions := env.Actions(published, entity)
 		return published, entity, actions, []platform.Page{env.Page(published)}, nil

@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"platformserver/kernel/protocol"
 
-	"platformserver/services/resources/authoring"
+	build "platformserver/services/resources/authoring"
 )
 
 func (t *Tenant) installPublicationLinkConstraint(store *records.Store, schema string, image []byte) error {

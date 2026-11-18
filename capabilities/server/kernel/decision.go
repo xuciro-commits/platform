@@ -47,7 +47,7 @@ type Decision struct {
 	Observed          bool
 	Hops              int
 	RequestCounts     map[string]int
-	PrivateApps       map[string]platform.App
+	PrivateApps       map[string]platform.Service
 	States            map[string]platform.AcceptedStateApp
 	StateBases        map[string]json.RawMessage
 	Connectors        *protocol.Connectors
@@ -57,7 +57,7 @@ type Decision struct {
 	CallbackWrites    map[string]CallbackWrite
 	Rules             ConstraintRules
 	DirectRows        func([]acceptedformat.InputRow, string, time.Time) error
-	BusinessQuery     func(platform.EntityInfo, platform.Query, platform.Member, time.Time) platform.Query
+	BusinessQuery     func(platform.RecordTypeInfo, platform.Query, platform.Member, time.Time) platform.Query
 }
 
 func NewDecision(base *records.Store, s *Sequence, simulation bool) Decision {

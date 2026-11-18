@@ -1,4 +1,4 @@
-package agents
+package runtime
 
 import (
 	"encoding/json"
@@ -132,8 +132,8 @@ func (o *builderAgentOwner) definition(a Agent) platform.Agent {
 	return d
 }
 
-func (o *builderAgentOwner) entity() platform.Entity {
-	return platform.Entity{Type: o.env.Type, Title: "Agent", Plural: "Agents", Model: Agent{}, Display: "title",
+func (o *builderAgentOwner) entity() platform.RecordType {
+	return platform.RecordType{Type: o.env.Type, Title: "Agent", Plural: "Agents", Model: Agent{}, Display: "title",
 		Description: "An AI agent over the ontology: bounded tools, a budget, checkpoints and cases; publishing installs it.",
 		Scope:       platform.Scope{Default: platform.ScopeNone, Levels: map[string]string{o.env.Builder: platform.ScopeTenant}},
 		Standard:    platform.Standard{Create: true, Edit: true, Archive: true, Roles: []string{o.env.Builder}, Capability: "functions"},
@@ -150,7 +150,7 @@ func (o *builderAgentOwner) entity() platform.Entity {
 			}}}}
 }
 
-func (o *builderAgentOwner) draftEntity() platform.Entity {
+func (o *builderAgentOwner) draftEntity() platform.RecordType {
 	entity := o.entity()
 	entity.Validate = func(c platform.Caller, record any) *platform.Error {
 		if c.Replaying {

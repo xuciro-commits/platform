@@ -2,7 +2,7 @@ package security
 
 import "platformserver/platform"
 
-func ProjectApprovals(owner platform.App, project string) int {
+func ProjectApprovals(owner platform.Service, project string) int {
 	if access, ok := owner.(interface {
 		SnapshotState() platform.AuthorizationState
 	}); ok {
@@ -13,7 +13,7 @@ func ProjectApprovals(owner platform.App, project string) int {
 	return 1
 }
 
-func CompartmentExists(owner platform.App, id string) bool {
+func CompartmentExists(owner platform.Service, id string) bool {
 	for _, marking := range owner.(interface{ MarkingViews() []platform.Marking }).MarkingViews() {
 		if marking.ID == id && !marking.Classification && !marking.Archived {
 			return true

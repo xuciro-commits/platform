@@ -10,7 +10,7 @@ import (
 
 type RecordPath struct {
 	Record func(c platform.Caller, typ, id string, at time.Time) (json.RawMessage, *platform.Error)
-	Entity func(typ string) (platform.EntityInfo, bool)
+	Entity func(typ string) (platform.RecordTypeInfo, bool)
 }
 
 func (h RecordPath) Read(c platform.Caller, typ, id string, path []string, at time.Time) (json.RawMessage, []string, *platform.Error) {

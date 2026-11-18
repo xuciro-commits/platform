@@ -1,4 +1,4 @@
-package build
+package authoring
 
 import (
 	"encoding/json"
@@ -11,15 +11,15 @@ import (
 
 type CodeDefinitions struct {
 	CheckPage     func(platform.Page) error
-	Apps          []platform.App
-	Entities      []platform.EntityInfo
-	Narrowable    func(info platform.EntityInfo) []string
-	CheckSections func(p platform.Page, page platform.EntityInfo) error
+	Apps          []platform.Service
+	Entities      []platform.RecordTypeInfo
+	Narrowable    func(info platform.RecordTypeInfo) []string
+	CheckSections func(p platform.Page, page platform.RecordTypeInfo) error
 	BindInterface func(q platform.NamedQuery) (platform.NamedQuery, error)
 	InstallLink   func(l platform.LinkType) error
-	NativeFlow    func(owner platform.App, name string, version int) (platform.ReleaseAsset, error)
+	NativeFlow    func(owner platform.Service, name string, version int) (platform.ReleaseAsset, error)
 	Resolver      releasepub.Resolver
-	CheckObject   func(info platform.EntityInfo) error
+	CheckObject   func(info platform.RecordTypeInfo) error
 	Describe      func(def platform.Definition) (platform.Definition, error)
 	Store         func(def platform.Definition)
 	Current       func() []platform.Definition
@@ -40,7 +40,7 @@ func (h CodeDefinitions) Register() error {
 		}
 	}
 	objects := map[string]platform.AssetRef{}
-	objectInfo := map[string]platform.EntityInfo{}
+	objectInfo := map[string]platform.RecordTypeInfo{}
 	for _, info := range h.Entities {
 		objects[info.Type] = platform.AssetRef{App: info.App, Kind: platform.AssetObject, Name: info.Type}
 		objectInfo[info.Type] = info

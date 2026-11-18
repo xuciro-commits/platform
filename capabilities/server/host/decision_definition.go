@@ -2,7 +2,7 @@ package host
 
 import (
 	releaseowner "platformserver/services/devops/releases"
-	"platformserver/services/resources/authoring"
+	build "platformserver/services/resources/authoring"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformserver/platform"

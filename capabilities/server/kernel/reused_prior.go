@@ -7,7 +7,7 @@ import (
 	"platformserver/platform"
 )
 
-func (c *Committed) ReusedPrior(apps []platform.App, tenant, key, principal, correlation string) (*pb.ChangeRecord, *platform.Error, bool) {
+func (c *Committed) ReusedPrior(apps []platform.Service, tenant, key, principal, correlation string) (*pb.ChangeRecord, *platform.Error, bool) {
 	for _, app := range apps {
 		var original *pb.Submission
 		var receipt *pb.ChangeRecord

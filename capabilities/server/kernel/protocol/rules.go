@@ -11,7 +11,7 @@ import (
 	"time"
 )
 
-func EvaluateRule(expr platform.Expr, reads platform.RuleReadSpec, caller platform.Caller, record any, inputs map[string]any, at time.Time, lookup func(string) (platform.EntityInfo, bool)) (result platform.ExprResult, refusal *platform.Error) {
+func EvaluateRule(expr platform.Expr, reads platform.RuleReadSpec, caller platform.Caller, record any, inputs map[string]any, at time.Time, lookup func(string) (platform.RecordTypeInfo, bool)) (result platform.ExprResult, refusal *platform.Error) {
 	var observed *platform.ExprContext
 	if caller.TraceEnabled() {
 		defer func() {
@@ -82,7 +82,7 @@ func EvaluateRule(expr platform.Expr, reads platform.RuleReadSpec, caller platfo
 	return value, nil
 }
 
-func EvaluateCriteria(plan platform.RuleCriteria, c platform.Caller, record any, inputs map[string]any, at time.Time, lookup func(string) (platform.EntityInfo, bool)) (bool, string, *platform.Error) {
+func EvaluateCriteria(plan platform.RuleCriteria, c platform.Caller, record any, inputs map[string]any, at time.Time, lookup func(string) (platform.RecordTypeInfo, bool)) (bool, string, *platform.Error) {
 	for _, condition := range plan.Conditions {
 		value, err := EvaluateRule(condition.Expr, plan.Reads, c, record, inputs, at, lookup)
 		if err != nil {
@@ -99,7 +99,7 @@ func EvaluateCriteria(plan platform.RuleCriteria, c platform.Caller, record any,
 	return true, "", nil
 }
 
-func DecideTable(plan platform.RuleTablePlan, facts platform.ExprContext, lookup func(string) (platform.EntityInfo, bool), engines ...platform.RuleEngine) (json.RawMessage, error) {
+func DecideTable(plan platform.RuleTablePlan, facts platform.ExprContext, lookup func(string) (platform.RecordTypeInfo, bool), engines ...platform.RuleEngine) (json.RawMessage, error) {
 	schemas := []platform.ExprSchema{}
 	for _, row := range plan.Rows {
 		schema, err := RuleSchema(row.Condition, plan.Reads, lookup, engines...)
@@ -167,7 +167,7 @@ func ruleTraceContext(expr platform.Expr, context platform.ExprContext) platform
 	return out
 }
 
-func RuleAssignment(e platform.Expr, s platform.RuleReadSpec, c platform.Caller, record any, inputs map[string]any, now time.Time, lookup func(string) (platform.EntityInfo, bool), provenance ...*[]string) (any, *platform.Error) {
+func RuleAssignment(e platform.Expr, s platform.RuleReadSpec, c platform.Caller, record any, inputs map[string]any, now time.Time, lookup func(string) (platform.RecordTypeInfo, bool), provenance ...*[]string) (any, *platform.Error) {
 	r, err := EvaluateRule(e, s, c, record, inputs, now, lookup)
 	for _, refs := range provenance {
 		*refs = append(*refs, r.Sources...)

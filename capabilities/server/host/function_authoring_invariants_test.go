@@ -80,7 +80,7 @@ func TestInvariantK1FunctionAuthoringPublishesEvaluatesReviewsAndReplays(t *test
 	live.accept(t, "build.function.publish", protocol.FunctionType, "FUNCTION", map[string]any{})
 	live.accept(t, "build.agent.publish", build.AgentType, "AGENT", map[string]any{})
 
-	functionVersion := func(app platform.App, version, expected int, instructions string) {
+	functionVersion := func(app platform.Service, version, expected int, instructions string) {
 		t.Helper()
 		definition, ordinal, ok := app.(platform.FunctionDefinitions).FunctionDefinition("answer", version)
 		if !ok || ordinal != expected || definition.Instructions != instructions {
@@ -90,7 +90,7 @@ func TestInvariantK1FunctionAuthoringPublishesEvaluatesReviewsAndReplays(t *test
 	functionVersion(owner, 1, 1, "Return the original answer.")
 	functionVersion(owner, 0, 2, "Return the revised answer.")
 	functionVersion(fork, 0, 1, "Return the original answer.")
-	agentVersion := func(app platform.App, expected int, instructions string) {
+	agentVersion := func(app platform.Service, expected int, instructions string) {
 		t.Helper()
 		agents := app.Manifest().Agents
 		if len(agents) != 1 || agents[0].Name != "helper" || !strings.Contains(agents[0].Instructions, instructions) {

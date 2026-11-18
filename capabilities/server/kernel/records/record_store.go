@@ -40,7 +40,7 @@ type Store struct {
 type Type struct {
 	store              *Store
 	indexes            DerivedIndexes
-	info               platform.EntityInfo
+	info               platform.RecordTypeInfo
 	rows               Rows
 	fullImage          bool
 	knowledge          bool
@@ -50,7 +50,7 @@ type Type struct {
 
 func NewStore() *Store {
 	s := &Store{rules: platform.NativeRules{}, types: map[string]*Type{}, byGo: map[reflect.Type]*Type{}}
-	s.current = NewCurrentScope(func(typ string) platform.EntityInfo { return s.types[typ].info })
+	s.current = NewCurrentScope(func(typ string) platform.RecordTypeInfo { return s.types[typ].info })
 	return s
 }
 
@@ -65,7 +65,7 @@ func (s *Store) ForkRecordsLocked() *Store {
 	draft := &Store{rules: s.rules, liveVersions: maps.Clone(s.liveVersions), uniqueLinks: maps.Clone(s.uniqueLinks), archiveLinks: maps.Clone(s.archiveLinks), parent: s, generation: s.generation, baseGeneration: s.generation, types: make(map[string]*Type, len(s.types)),
 		byGo: make(map[reflect.Type]*Type, len(s.byGo)), writes: map[string]bool{},
 		dirty: s.dirty, recentChanges: s.recentChanges.Fork()}
-	draft.current = s.current.Fork(func(typ string) platform.EntityInfo { return draft.types[typ].info })
+	draft.current = s.current.Fork(func(typ string) platform.RecordTypeInfo { return draft.types[typ].info })
 	for typ, et := range s.types {
 		copied := &Type{store: draft, indexes: et.indexes.Fork(), info: et.info, knowledge: et.knowledge, rows: et.rows, fullImage: s.parent != nil && et.fullImage, retainedProjection: et.retainedProjection, formats: et.formats}
 		if copied.rows.Sourced() {
@@ -130,12 +130,12 @@ func (s *Store) PromoteRecords(draft *Store) error {
 	return nil
 }
 
-func (s *Store) EntityInfo(name string) (platform.EntityInfo, bool) {
+func (s *Store) EntityInfo(name string) (platform.RecordTypeInfo, bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	et := s.types[name]
 	if et == nil {
-		return platform.EntityInfo{}, false
+		return platform.RecordTypeInfo{}, false
 	}
 	return et.Info(), true
 }
@@ -312,7 +312,7 @@ func (s *Store) AttachHistory(et *Type, id string, r *Row, store persistence.Run
 	et.SetRow(id, &copy)
 }
 
-func DecodeRowImage(info platform.EntityInfo, raw json.RawMessage, projection *Projection, release, format string) (json.RawMessage, error) {
+func DecodeRowImage(info platform.RecordTypeInfo, raw json.RawMessage, projection *Projection, release, format string) (json.RawMessage, error) {
 	decode, err := DecodeFormattedImage(info, raw, projection, release, format)
 	if err == nil {
 		return decode, nil
@@ -324,7 +324,7 @@ func DecodeRowImage(info platform.EntityInfo, raw json.RawMessage, projection *P
 	return DecodeFormattedImage(info, pruned, projection, release, format)
 }
 
-func (s *Store) Install(info platform.EntityInfo) error {
+func (s *Store) Install(info platform.RecordTypeInfo) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if other := s.byGo[info.Go]; other != nil && other.info.Type != info.Type {
@@ -405,16 +405,16 @@ func (s *Store) SetTouched(touched func(string, string)) { s.touched = touched }
 func (s *Store) InheritDecision(base *Store) {
 	s.parent, s.baseGeneration, s.writes = base.parent, base.baseGeneration, maps.Clone(base.writes)
 }
-func (s *Store) Restored()                 { s.generation++ }
-func (et *Type) Info() platform.EntityInfo { return et.info }
-func (et *Type) Rows() Rows                { return et.rows }
-func (et *Type) Knowledge() bool           { return et.knowledge }
-func (et *Type) RetainedProjection() bool  { return et.retainedProjection }
-func NewTypeView(info platform.EntityInfo, rows Rows, retained bool) *Type {
+func (s *Store) Restored()                     { s.generation++ }
+func (et *Type) Info() platform.RecordTypeInfo { return et.info }
+func (et *Type) Rows() Rows                    { return et.rows }
+func (et *Type) Knowledge() bool               { return et.knowledge }
+func (et *Type) RetainedProjection() bool      { return et.retainedProjection }
+func NewTypeView(info platform.RecordTypeInfo, rows Rows, retained bool) *Type {
 	return &Type{info: info, rows: rows, retainedProjection: retained}
 }
 
-func (s *Store) ReplaceReadType(info platform.EntityInfo, rows Rows, retained bool) *Type {
+func (s *Store) ReplaceReadType(info platform.RecordTypeInfo, rows Rows, retained bool) *Type {
 	knowledge := KnowledgeBearing(info)
 	if old := s.types[info.Type]; old != nil {
 		knowledge = old.knowledge

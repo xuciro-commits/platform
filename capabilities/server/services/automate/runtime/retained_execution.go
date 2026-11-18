@@ -1,4 +1,4 @@
-package automation
+package runtime
 
 import (
 	"encoding/json"
@@ -15,7 +15,7 @@ import (
 
 type RetainedSource func() (shape string, value json.RawMessage, ok bool)
 
-func RetainedFields(current, info platform.EntityInfo, raw []byte, source RetainedSource) (json.RawMessage, error) {
+func RetainedFields(current, info platform.RecordTypeInfo, raw []byte, source RetainedSource) (json.RawMessage, error) {
 	var fields map[string]json.RawMessage
 	if json.Unmarshal(raw, &fields) != nil {
 		return nil, fmt.Errorf("retained record cannot be decoded")
@@ -40,7 +40,7 @@ func RetainedFields(current, info platform.EntityInfo, raw []byte, source Retain
 	return json.Marshal(fields)
 }
 
-func RetainedView(reads *records.ForkCache, base *records.Store, release string, shapes map[string]platform.EntityInfo) (*records.Store, error) {
+func RetainedView(reads *records.ForkCache, base *records.Store, release string, shapes map[string]platform.RecordTypeInfo) (*records.Store, error) {
 	return reads.Fork(base, func(store *records.Store, original func(string) records.Rows) error {
 		for typ, info := range shapes {
 			current := store.Type(typ)
@@ -65,7 +65,7 @@ func RetainedView(reads *records.ForkCache, base *records.Store, release string,
 	})
 }
 
-func RetainedRow(current, info platform.EntityInfo, release string, value *records.Row) (*records.Row, error) {
+func RetainedRow(current, info platform.RecordTypeInfo, release string, value *records.Row) (*records.Row, error) {
 	raw, err := value.Image()
 	if err != nil {
 		return nil, err
@@ -87,13 +87,13 @@ func RetainedRow(current, info platform.EntityInfo, release string, value *recor
 	return &records.Row{Value: decoded.Elem(), Format: value.Format, HistoryHead: value.HistoryHead, HistoryParent: value.HistoryParent, History: value.History, LoadHistory: value.LoadHistory, HistoryCount: value.HistoryCount}, nil
 }
 
-func RetainedGet(base *records.Store, shapes map[string]platform.EntityInfo, release string, c platform.Caller, typ reflect.Type, id string) (any, bool, error) {
+func RetainedGet(base *records.Store, shapes map[string]platform.RecordTypeInfo, release string, c platform.Caller, typ reflect.Type, id string) (any, bool, error) {
 	for name, info := range shapes {
 		if info.Go != typ || info.App != c.App {
 			continue
 		}
 		var value *records.Row
-		var stored platform.EntityInfo
+		var stored platform.RecordTypeInfo
 		func() {
 			base.Lock()
 			defer base.Unlock()
@@ -115,7 +115,7 @@ func RetainedGet(base *records.Store, shapes map[string]platform.EntityInfo, rel
 	return out, ok, nil
 }
 
-func RetainedWrite(shape, old, current platform.EntityInfo, before, input, stored map[string]json.RawMessage, hasStored bool) (map[string]json.RawMessage, []string, error) {
+func RetainedWrite(shape, old, current platform.RecordTypeInfo, before, input, stored map[string]json.RawMessage, hasStored bool) (map[string]json.RawMessage, []string, error) {
 	before, input = maps.Clone(before), maps.Clone(input)
 	for _, target := range current.Fields {
 		if string(before[target.Name]) == string(input[target.Name]) || target.AliasOf != "" {
@@ -150,7 +150,7 @@ func RetainedWrite(shape, old, current platform.EntityInfo, before, input, store
 	return result, fields, nil
 }
 
-func ReadableFields(raw []byte, info *platform.EntityInfo, c platform.Caller) (json.RawMessage, error) {
+func ReadableFields(raw []byte, info *platform.RecordTypeInfo, c platform.Caller) (json.RawMessage, error) {
 	var fields map[string]json.RawMessage
 	_ = json.Unmarshal(raw, &fields)
 	if info != nil {
@@ -225,8 +225,8 @@ func AssetsOf(assets []platform.ReleaseAsset, app string) []platform.ReleaseAsse
 	return selected
 }
 
-func RetainedShapes(app string, entities []platform.Entity, selected []platform.ReleaseAsset) ([]platform.EntityInfo, error) {
-	var out []platform.EntityInfo
+func RetainedShapes(app string, entities []platform.RecordType, selected []platform.ReleaseAsset) ([]platform.RecordTypeInfo, error) {
+	var out []platform.RecordTypeInfo
 	for _, entity := range entities {
 		if !slices.ContainsFunc(selected, func(a platform.ReleaseAsset) bool {
 			return a.Ref.Kind == platform.AssetObject && a.Ref.Name == entity.Type
@@ -301,7 +301,7 @@ func (s RetainedRows[R]) convert(row R) R {
 	return value
 }
 
-func PlanRetainedPut(shape, old, current platform.EntityInfo, entity, prior any, stored json.RawMessage, hasStored bool) (result, input map[string]json.RawMessage, fields []string, err error) {
+func PlanRetainedPut(shape, old, current platform.RecordTypeInfo, entity, prior any, stored json.RawMessage, hasStored bool) (result, input map[string]json.RawMessage, fields []string, err error) {
 	raw, _ := json.Marshal(entity)
 	if json.Unmarshal(raw, &input) != nil {
 		return nil, nil, nil, fmt.Errorf("retained action wrote an invalid record")
@@ -318,7 +318,7 @@ func PlanRetainedPut(shape, old, current platform.EntityInfo, entity, prior any,
 	return result, input, fields, err
 }
 
-func RetainedRecord(info platform.EntityInfo, result, input map[string]json.RawMessage) (any, error) {
+func RetainedRecord(info platform.RecordTypeInfo, result, input map[string]json.RawMessage) (any, error) {
 	result["id"], result["archived"] = input["id"], input["archived"]
 	decoded := reflect.New(info.Go)
 	raw, _ := json.Marshal(result)
@@ -339,7 +339,7 @@ func NativeFlowCandidate(flows []platform.Flow, asset platform.ReleaseAsset, loa
 }
 
 type RetainedPut struct {
-	Shapes    map[string]platform.EntityInfo
+	Shapes    map[string]platform.RecordTypeInfo
 	Release   string
 	Current   *records.Store
 	Authorize func(platform.AuthzRequest) *platform.Error
@@ -407,17 +407,17 @@ func conflictOf(err error) *platform.Error {
 }
 
 type RetainedOwners struct {
-	Apps    []platform.App
+	Apps    []platform.Service
 	Assets  []platform.ReleaseAsset
 	Builder string
 	Current func() ([]platform.ReleaseAsset, error)
-	Native  func(owner platform.App, name string, version int) (platform.ReleaseAsset, error)
+	Native  func(owner platform.Service, name string, version int) (platform.ReleaseAsset, error)
 	Claim   func(i int, key string)
-	Bind    func(bound platform.App)
+	Bind    func(bound platform.Service)
 }
 
-func (r RetainedOwners) Select() ([]platform.App, map[string]platform.EntityInfo, error) {
-	apps, shapes := slices.Clone(r.Apps), map[string]platform.EntityInfo{}
+func (r RetainedOwners) Select() ([]platform.Service, map[string]platform.RecordTypeInfo, error) {
+	apps, shapes := slices.Clone(r.Apps), map[string]platform.RecordTypeInfo{}
 	for i, owner := range apps {
 		selected := AssetsOf(r.Assets, owner.Manifest().ID)
 		if len(selected) == 0 {
@@ -461,7 +461,7 @@ func (r RetainedOwners) Select() ([]platform.App, map[string]platform.EntityInfo
 }
 
 func ReadableRecord(raw json.RawMessage, current *records.Type, c platform.Caller) (json.RawMessage, *platform.Error) {
-	var info *platform.EntityInfo
+	var info *platform.RecordTypeInfo
 	if current != nil {
 		stored := current.Info()
 		info = &stored
@@ -473,7 +473,7 @@ func ReadableRecord(raw json.RawMessage, current *records.Type, c platform.Calle
 	return out, nil
 }
 
-func RetainedAction(owner platform.App, schema string) (string, platform.Action, bool) {
+func RetainedAction(owner platform.Service, schema string) (string, platform.Action, bool) {
 	if owner == nil {
 		return "", platform.Action{}, false
 	}
@@ -481,9 +481,9 @@ func RetainedAction(owner platform.App, schema string) (string, platform.Action,
 	return owner.Manifest().ID, action, ok
 }
 
-func RetainedCatalog(apps []platform.App, ledger platform.Authority) *platform.Catalog {
+func RetainedCatalog(apps []platform.Service, authority platform.Authority) *platform.Catalog {
 	for _, owner := range apps {
-		if owner.Authority() == ledger {
+		if owner.Authority() == authority {
 			return owner.Manifest().Actions
 		}
 	}

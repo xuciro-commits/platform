@@ -27,9 +27,9 @@ type File = platform.File
 var sha256Hex = regexp.MustCompile(`^[0-9a-f]{64}$`)
 
 type Files struct {
-	mu     sync.Mutex
-	host   platform.FileHost
-	ledger platform.Authority
+	mu        sync.Mutex
+	host      platform.FileHost
+	authority platform.Authority
 }
 
 func (f *Files) AttachFiles(h platform.FileHost) { f.host = h }
@@ -38,7 +38,7 @@ func (f *Files) AttachOwner(bindings runtimeprotocol.OwnerBindings) { f.AttachFi
 
 func New(tenant string, authorities platform.Authorities) *Files {
 	any := []string{platform.AnyMember}
-	return &Files{ledger: authorities(tenant, ID, platform.NewCatalog(
+	return &Files{authority: authorities(tenant, ID, platform.NewCatalog(
 		platform.Action{Schema: SchemaAttach, Target: FileType, Capability: "files", Title: "Attach file", Roles: any,
 			Description: "Attach an uploaded file to a record you may read; whoever may read the record may read the file.",
 			Payload: []platform.Field{{Name: "hash", Type: "string", Required: true, Description: "The SHA-256 the upload answered with"},
@@ -53,29 +53,29 @@ func New(tenant string, authorities platform.Authorities) *Files {
 	), FileType)}
 }
 
-func entities() []platform.Entity {
-	return []platform.Entity{{Type: FileType, Title: "File", Model: File{}, Display: "name", Synonyms: "attachment,document",
+func entities() []platform.RecordType {
+	return []platform.RecordType{{Type: FileType, Title: "File", Model: File{}, Display: "name", Synonyms: "attachment,document",
 		Description: "A file attached to a record, readable exactly when the record is.",
 		Scope:       platform.Scope{Through: func(record any) string { return record.(File).Target }}}}
 }
 
 func (f *Files) Manifest() platform.Manifest {
-	return platform.Manifest{ID: ID, Title: platform.BuiltinManifestTitle(ID), Version: "1", Actions: f.ledger.Catalog(), Entities: entities(),
+	return platform.Manifest{ID: ID, Title: platform.BuiltinManifestTitle(ID), Version: "1", Actions: f.authority.Catalog(), Entities: entities(),
 		Settings: []platform.Setting{{Name: SettingMax, Title: "Largest file, MB", Type: "integer", Default: "25",
 			Description: "Uploads larger than this are refused."}}}
 }
 
-func (f *Files) Declarations() []*pb.AuthorityDeclaration { return f.ledger.Declarations() }
-func (f *Files) Authority() platform.Authority            { return f.ledger }
+func (f *Files) Declarations() []*pb.AuthorityDeclaration { return f.authority.Declarations() }
+func (f *Files) Authority() platform.Authority            { return f.authority }
 
 func (f *Files) SnapshotFormat() string { return "platform.ledger.v1" }
 
-func (f *Files) Snapshot() (json.RawMessage, error) { return f.ledger.Snapshot() }
-func (f *Files) Restore(raw json.RawMessage) error  { return f.ledger.Restore(raw) }
+func (f *Files) Snapshot() (json.RawMessage, error) { return f.authority.Snapshot() }
+func (f *Files) Restore(raw json.RawMessage) error  { return f.authority.Restore(raw) }
 func (f *Files) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *platform.Error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	return f.ledger.Receive(c, s, now, nil, func() (func(*pb.ChangeRecord), *platform.Error) {
+	return f.authority.Receive(c, s, now, nil, func() (func(*pb.ChangeRecord), *platform.Error) {
 		invalid := &platform.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 		id := s.GetTarget().GetId()
 		existing, known := platform.Get[File](c, id)
@@ -131,6 +131,6 @@ func (f *Files) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb.
 	})
 }
 
-func (f *Files) Fork(ledger platform.Authority) (platform.App, error) {
-	return &Files{host: f.host, ledger: ledger}, nil
+func (f *Files) Fork(authority platform.Authority) (platform.Service, error) {
+	return &Files{host: f.host, authority: authority}, nil
 }

@@ -6,7 +6,7 @@ import (
 
 	"platformserver/platform"
 	dataowner "platformserver/services/data"
-	"platformserver/services/resources/authoring"
+	build "platformserver/services/resources/authoring"
 )
 
 func (t *Tenant) listenerInput(ctx context.Context, m platform.Member, path, secret, origin string, body []byte, now time.Time) (any, *platform.Error) {

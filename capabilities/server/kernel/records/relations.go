@@ -37,11 +37,11 @@ func ReadRelation(row *Row) RelationImage {
 	return image
 }
 
-func IsRelationSchema(info platform.EntityInfo) bool {
+func IsRelationSchema(info platform.RecordTypeInfo) bool {
 	return strings.HasSuffix(info.Type, ".__relation") && info.App != "" && info.Go == reflect.TypeOf(protocol.RelationEntity(info.App).Model)
 }
 
-func ConstraintValues(info platform.EntityInfo, value reflect.Value) map[string]any {
+func ConstraintValues(info platform.RecordTypeInfo, value reflect.Value) map[string]any {
 	values := map[string]any{"id": Header(value).ID, "archived": Header(value).Archived}
 	for _, field := range info.Fields {
 		values[field.Name] = value.FieldByIndex(field.Index).Interface()

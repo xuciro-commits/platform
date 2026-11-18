@@ -1,4 +1,4 @@
-package aigateway
+package gateway
 
 import (
 	"encoding/json"
@@ -105,7 +105,7 @@ func (ask ModelAsk) EvaluationDrift(model platform.AIModel, provider platform.AI
 	return ""
 }
 
-func AnswerSubmission(tenant string, x platform.Effect, o platform.Outcome, usage *platform.AIUsage, app func(string) platform.App, authority func(string) string) (platform.App, *pb.Submission) {
+func AnswerSubmission(tenant string, x platform.Effect, o platform.Outcome, usage *platform.AIUsage, app func(string) platform.Service, authority func(string) string) (platform.Service, *pb.Submission) {
 	var ask ModelAsk
 	json.Unmarshal([]byte(x.Body), &ask)
 	owner := app(x.App)

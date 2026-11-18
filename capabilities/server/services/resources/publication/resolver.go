@@ -26,7 +26,7 @@ type Resolver struct {
 	CheckApplicationResources func(platform.Application) error
 	CheckApplicationExtension func(platform.Application) error
 	ApplicationDependencies   func(platform.Application, string) []platform.AssetRef
-	ObjectDescriptor          func([]byte) (platform.EntityInfo, error)
+	ObjectDescriptor          func([]byte) (platform.RecordTypeInfo, error)
 	ActionDescriptor          func(json.RawMessage) (platform.Action, error)
 	ObjectDependencies        func(platform.ReleaseAsset, bool) ([]platform.AssetRef, []platform.Capability, error)
 	ActionDependencies        func(platform.ReleaseAsset, bool) ([]platform.AssetRef, []platform.Capability, error)

@@ -10,7 +10,7 @@ import (
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformserver/platform"
 	functions "platformserver/services/functions/authoring"
-	"platformserver/services/resources/authoring"
+	build "platformserver/services/resources/authoring"
 )
 
 func (t *Tenant) InvokeCapability(ctx context.Context, m platform.Member, q protocol.CapabilityInvocation, now time.Time) (protocol.CapabilityResult, *platform.Error) {

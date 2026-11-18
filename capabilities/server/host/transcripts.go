@@ -8,9 +8,9 @@ import (
 	"platformserver/services/ai/gateway"
 )
 
-func (t *Tenant) transcripts() aigateway.Transcripts {
-	days := aigateway.TranscriptDays(func(name string) string { return t.setting(t.automation(protocol.AgentApp, false), name) })
-	return aigateway.Transcripts{Tenant: t.ID, Days: days, Enabled: t.Agents != nil, Store: t.Log()}
+func (t *Tenant) transcripts() gateway.Transcripts {
+	days := gateway.TranscriptDays(func(name string) string { return t.setting(t.automation(protocol.AgentApp, false), name) })
+	return gateway.Transcripts{Tenant: t.ID, Days: days, Enabled: t.Agents != nil, Store: t.Log()}
 }
 
 func (t *Tenant) transcribe(x Transcript) {

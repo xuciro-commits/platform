@@ -2,8 +2,8 @@ package kernel
 
 import "platformserver/platform"
 
-func ForkApps(apps []platform.App) ([]platform.App, error) {
-	forks := make([]platform.App, len(apps))
+func ForkApps(apps []platform.Service) ([]platform.Service, error) {
+	forks := make([]platform.Service, len(apps))
 	for i, app := range apps {
 		ledger, err := app.Authority().ForkRead()
 		if err != nil {

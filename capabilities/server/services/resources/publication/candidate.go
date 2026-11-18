@@ -98,10 +98,10 @@ func (resolver Resolver) candidate(roots []platform.AssetRef, available []platfo
 			if err := json.Unmarshal(body, &observation); err != nil {
 				return empty, err
 			}
-			if err := observationprotocol.CheckObservationDefinition(observation, func(typ string) (platform.EntityInfo, bool) {
+			if err := observationprotocol.CheckObservationDefinition(observation, func(typ string) (platform.RecordTypeInfo, bool) {
 				target, exists := lookup[observation.Object]
 				if typ != observation.Object.Name || !exists {
-					return platform.EntityInfo{}, false
+					return platform.RecordTypeInfo{}, false
 				}
 				info, err := resolver.ObjectDescriptor(target.Body)
 				return info, err == nil

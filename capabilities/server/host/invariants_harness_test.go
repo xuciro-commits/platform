@@ -24,7 +24,7 @@ import (
 	functionauthoring "platformserver/services/functions/authoring"
 	"platformserver/services/objects"
 	"platformserver/services/ontology"
-	"platformserver/services/resources/authoring"
+	build "platformserver/services/resources/authoring"
 	"platformserver/services/resources/publication"
 	"platformserver/services/security"
 	controlowner "platformserver/services/security/control"
@@ -47,14 +47,14 @@ func newInvariantTenant(tb testing.TB, id string, seats ...runtimeprotocol.Seat)
 	return newInvariantTenantWithApps(tb, id, nil, seats...)
 }
 
-func newInvariantTenantWithApps(tb testing.TB, id string, apps []platform.App, seats ...runtimeprotocol.Seat) *invariantTenant {
+func newInvariantTenantWithApps(tb testing.TB, id string, apps []platform.Service, seats ...runtimeprotocol.Seat) *invariantTenant {
 	tb.Helper()
 	live := newInvariantTenantSetup(tb, id, apps, seats...)
 	seedInvariantProject(tb, live)
 	return live
 }
 
-func newInvariantTenantReplayWithApps(tb testing.TB, id string, apps []platform.App, seats ...runtimeprotocol.Seat) *invariantTenant {
+func newInvariantTenantReplayWithApps(tb testing.TB, id string, apps []platform.Service, seats ...runtimeprotocol.Seat) *invariantTenant {
 	tb.Helper()
 	live := newInvariantTenantSetup(tb, id, apps, seats...)
 	live.project = invariantProject
@@ -67,7 +67,7 @@ func seedInvariantProject(tb testing.TB, live *invariantTenant) {
 	live.accept(tb, runtimeprotocol.AppType+".create", runtimeprotocol.AppType, invariantProject, map[string]any{"name": "invariantproject", "title": "Invariant project"})
 }
 
-func newInvariantTenantSetup(tb testing.TB, id string, apps []platform.App, seats ...runtimeprotocol.Seat) *invariantTenant {
+func newInvariantTenantSetup(tb testing.TB, id string, apps []platform.Service, seats ...runtimeprotocol.Seat) *invariantTenant {
 	tb.Helper()
 	services := runtimeprotocol.DefaultRuntimeCapabilities(security.Standard{})
 	services.BindOwner = runtimeprotocol.BindOwner
@@ -79,7 +79,7 @@ func newInvariantTenantSetup(tb testing.TB, id string, apps []platform.App, seat
 		actions = append(actions, packages.Actions()...)
 		return controlowner.Owners{Policies: security.NewPolicies(), Packages: packages.New(id, PublicationResolver()), Actions: actions}
 	}, append([]runtimeprotocol.Seat{seat}, seats...)...)
-	tenant, err := NewTenantWithCapabilities(id, services, append([]platform.App{console, build.New(id, actions.NewAuthority, []publication.Hooks{ontology.ActionTypePublication()}, PublicationResolver(), ontology.ObjectPublication, objects.QueryPublication, functionauthoring.NewOwner, agentowner.BuilderPublication, agentevaluation.NewOwner, devopsauthoring.TestPlanPublication, agentevaluation.EvaluationPublication, devopsauthoring.SampleSetPublication, build.ApplicationOwners{New: appsauthoring.NewOwner, ObjectPage: appsauthoring.CompileObjectPage, ListDetailPage: appsauthoring.ListDetailPage}, automationauthoring.New)}, apps...)...)
+	tenant, err := NewTenantWithCapabilities(id, services, append([]platform.Service{console, build.New(id, actions.NewAuthority, []publication.Hooks{ontology.ActionTypePublication()}, PublicationResolver(), ontology.ObjectPublication, objects.QueryPublication, functionauthoring.NewOwner, agentowner.BuilderPublication, agentevaluation.NewOwner, devopsauthoring.TestPlanPublication, agentevaluation.EvaluationPublication, devopsauthoring.SampleSetPublication, build.ApplicationOwners{New: appsauthoring.NewOwner, ObjectPage: appsauthoring.CompileObjectPage, ListDetailPage: appsauthoring.ListDetailPage}, automationauthoring.New)}, apps...)...)
 	if err != nil {
 		tb.Fatal(err)
 	}

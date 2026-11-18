@@ -1,4 +1,4 @@
-package build
+package authoring
 
 import (
 	"platformserver/platform"
@@ -10,7 +10,7 @@ const SchemaEvaluationSetPublish = TestPlanType + ".publish"
 func (b *Build) functionEvaluationEnvironment() publication.FunctionEvaluationEnvironment {
 	return publication.FunctionEvaluationEnvironment{
 		App: ID, Builder: Builder,
-		Authority: func() platform.Authority { return b.ledger },
+		Authority: func() platform.Authority { return b.authority },
 		Function:  b.functions.Definition,
 		Plan: func(c platform.Caller, id string) (publication.FunctionEvaluationPlan, bool) {
 			plan, ok := platform.Get[TestPlan](c, id)

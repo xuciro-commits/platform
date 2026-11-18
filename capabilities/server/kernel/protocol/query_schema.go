@@ -6,7 +6,7 @@ import (
 	"slices"
 )
 
-func entityValueSchema(info platform.EntityInfo) (platform.ValueSchema, bool) {
+func entityValueSchema(info platform.RecordTypeInfo) (platform.ValueSchema, bool) {
 	stamp := platform.ValueSchema{Type: "object", Properties: map[string]platform.ValueSchema{"by": {Type: "string"}, "at": {Type: "string"}, "change": {Type: "string"}}}
 	s := platform.ValueSchema{Type: "object", Properties: map[string]platform.ValueSchema{
 		"id": {Type: "string"}, "revision": {Type: "integer"}, "created": stamp, "changed": stamp, "archived": {Type: "boolean"},
@@ -55,10 +55,10 @@ func QueryInputSchema(q platform.NamedQuery) platform.ValueSchema {
 	}
 	return input
 }
-func QueryCapabilitySchemas(q platform.NamedQuery, info platform.EntityInfo) (*platform.ValueSchema, *platform.ValueSchema) {
+func QueryCapabilitySchemas(q platform.NamedQuery, info platform.RecordTypeInfo) (*platform.ValueSchema, *platform.ValueSchema) {
 	input := QueryInputSchema(q)
 	if q.InterfaceShape != nil {
-		common := platform.EntityInfo{}
+		common := platform.RecordTypeInfo{}
 		for _, f := range q.InterfaceShape.Fields {
 			common.Fields = append(common.Fields, platform.FieldInfo{Name: f.Name, Type: f.Type})
 		}

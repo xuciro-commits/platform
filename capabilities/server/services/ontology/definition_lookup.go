@@ -2,7 +2,7 @@ package ontology
 
 import "platformserver/platform"
 
-func DeclaredAction(owner platform.App, definitions []platform.Definition, schema string) (string, platform.Action, bool) {
+func DeclaredAction(owner platform.Service, definitions []platform.Definition, schema string) (string, platform.Action, bool) {
 	if owner == nil {
 		return "", platform.Action{}, false
 	}
@@ -35,7 +35,7 @@ func ModelQueryBinding(definitions []platform.Definition, ref platform.AssetRef)
 	return platform.AssetBinding{}, false
 }
 
-func RuleQuery(owner platform.App, name string, version int, named func(string) (platform.NamedQuery, bool)) (platform.NamedQuery, int, bool) {
+func RuleQuery(owner platform.Service, name string, version int, named func(string) (platform.NamedQuery, bool)) (platform.NamedQuery, int, bool) {
 	if owner == nil {
 		return platform.NamedQuery{}, 0, false
 	}

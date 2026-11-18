@@ -19,8 +19,8 @@ type Sources interface {
 	Engine() platform.AuthorizationEngine
 	LookupMember(string) (platform.Member, bool)
 	DeclaredPrincipal(string) bool
-	App(string) platform.App
-	ActionOwner(string) platform.App
+	App(string) platform.Service
+	ActionOwner(string) platform.Service
 	OwnerActive(string) bool
 	AgentSuspended(string) bool
 	NamedReadAllowed(platform.Member, string) bool

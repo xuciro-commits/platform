@@ -5,10 +5,10 @@ import (
 )
 
 type IntegrationRuntime struct {
-	App               platform.App
+	App               platform.Service
 	Ledger            func() platform.Authority
 	JointDeclarations func() map[platform.AssetRef]platform.ReleaseAsset
-	Lookup            func(string) (platform.EntityInfo, bool)
+	Lookup            func(string) (platform.RecordTypeInfo, bool)
 	Record            func(string) (any, bool)
 	FreezeProtocol    func(platform.ConfirmationParty) (*platform.ConfirmationProtocol, error)
 	Holding           func(string, string) []string

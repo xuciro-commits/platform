@@ -169,8 +169,8 @@ func TestInvariantK13DefinitionPlansFollowPublishedReadImages(t *testing.T) {
 }
 
 func TestInvariantK13PublicLiveReadsShareOnlyTenantScopedResults(t *testing.T) {
-	info := platform.EntityInfo{Type: "build.loaditem", App: build.ID, Scope: platform.Scope{Owner: platform.OwnerCreated, Default: platform.ScopeNone, Levels: map[string]string{build.User: platform.ScopeTenant}}}
-	entity := func(typ string) (platform.EntityInfo, bool) { return info, typ == info.Type }
+	info := platform.RecordTypeInfo{Type: "build.loaditem", App: build.ID, Scope: platform.Scope{Owner: platform.OwnerCreated, Default: platform.ScopeNone, Levels: map[string]string{build.User: platform.ScopeTenant}}}
+	entity := func(typ string) (platform.RecordTypeInfo, bool) { return info, typ == info.Type }
 	member := func(id string) platform.Member {
 		return platform.Member{ID: id, Roles: map[string]string{build.ID: build.User}}
 	}
@@ -186,12 +186,12 @@ func TestInvariantK13PublicLiveReadsShareOnlyTenantScopedResults(t *testing.T) {
 	}
 	scoped := info
 	scoped.Scope.Levels = map[string]string{build.User: platform.ScopeOwn}
-	if _, ok := build.PublicLiveKey(member("left"), "/v1/records/build.loaditem?limit=25", "version", "en", func(string) (platform.EntityInfo, bool) { return scoped, true }); ok {
+	if _, ok := build.PublicLiveKey(member("left"), "/v1/records/build.loaditem?limit=25", "version", "en", func(string) (platform.RecordTypeInfo, bool) { return scoped, true }); ok {
 		t.Fatal("an owner-scoped read was shared across members")
 	}
 	participant := info
 	participant.Scope.Participants = func(any) []string { return nil }
-	if _, ok := build.PublicLiveKey(member("left"), "/v1/records/build.loaditem?limit=25", "version", "en", func(string) (platform.EntityInfo, bool) { return participant, true }); ok {
+	if _, ok := build.PublicLiveKey(member("left"), "/v1/records/build.loaditem?limit=25", "version", "en", func(string) (platform.RecordTypeInfo, bool) { return participant, true }); ok {
 		t.Fatal("a participant-scoped read was shared across members")
 	}
 }

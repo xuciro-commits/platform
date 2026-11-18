@@ -21,7 +21,7 @@ type FunctionEvaluationEnvironment struct {
 }
 
 type FunctionEvaluationBinding struct {
-	Entity  func() platform.Entity
+	Entity  func() platform.RecordType
 	Actions func() []platform.Action
 	Handles func(string) bool
 	Submit  func(platform.Caller, *pb.Submission, time.Time) (*pb.ChangeRecord, *platform.Error)

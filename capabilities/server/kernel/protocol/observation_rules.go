@@ -21,7 +21,7 @@ func CheckObservationCoverage(coverage platform.ObservationCoverage, window plat
 	return nil
 }
 
-func CheckObservationDefinition(def platform.ObservationDefinition, lookup func(string) (platform.EntityInfo, bool), engines ...platform.RuleEngine) error {
+func CheckObservationDefinition(def platform.ObservationDefinition, lookup func(string) (platform.RecordTypeInfo, bool), engines ...platform.RuleEngine) error {
 	if err := def.Check(engines...); err != nil {
 		return err
 	}
@@ -51,7 +51,7 @@ func CheckObservationDefinition(def platform.ObservationDefinition, lookup func(
 	return nil
 }
 
-func ObservationRuleSchema(def platform.ObservationDefinition, entity platform.EntityInfo) (platform.ExprSchema, error) {
+func ObservationRuleSchema(def platform.ObservationDefinition, entity platform.RecordTypeInfo) (platform.ExprSchema, error) {
 	schema := platform.ExprSchema{Refs: map[string]platform.ExprType{"record.id": {Kind: "text"}, "observation.latest": {Kind: "decimal"}, "observation.lastat": {Kind: "datetime"}}, Windows: map[string]platform.ExprWindowType{"observation": {Unit: def.Unit}}}
 	if def.Decision != nil && def.Decision.Mode == "intervals" {
 		schema.Refs = map[string]platform.ExprType{"record.id": {Kind: "text"}, "intervals.count": {Kind: "integer"}, "intervals.since": {Kind: "datetime"}, "intervals.until": {Kind: "datetime"}}
@@ -119,20 +119,20 @@ func ObservationRuleContext(def platform.ObservationDefinition, record json.RawM
 	return context, nil
 }
 
-func EvaluateObservation(def platform.ObservationDefinition, entity platform.EntityInfo, record json.RawMessage, window platform.ObservationWindow, at time.Time, engines ...platform.RuleEngine) (bool, map[string]json.RawMessage, error) {
+func EvaluateObservation(def platform.ObservationDefinition, entity platform.RecordTypeInfo, record json.RawMessage, window platform.ObservationWindow, at time.Time, engines ...platform.RuleEngine) (bool, map[string]json.RawMessage, error) {
 	return evaluateObservationResult(platform.RuleEngineOf(engines), def, entity, record, window, nil, at)
 }
 
-func EvaluateObservationIntervals(def platform.ObservationDefinition, entity platform.EntityInfo, record json.RawMessage, result platform.ObservationIntervalResult, at time.Time, engines ...platform.RuleEngine) (bool, map[string]json.RawMessage, error) {
+func EvaluateObservationIntervals(def platform.ObservationDefinition, entity platform.RecordTypeInfo, record json.RawMessage, result platform.ObservationIntervalResult, at time.Time, engines ...platform.RuleEngine) (bool, map[string]json.RawMessage, error) {
 	if err := result.Check(); err != nil {
 		return false, nil, err
 	}
 	return evaluateObservationResult(platform.RuleEngineOf(engines), def, entity, record, platform.ObservationWindow{Since: result.Since, Until: result.Until, Unit: def.Unit}, &result, at)
 }
 
-func evaluateObservationResult(engine platform.RuleEngine, def platform.ObservationDefinition, entity platform.EntityInfo, record json.RawMessage, window platform.ObservationWindow, intervals *platform.ObservationIntervalResult, at time.Time) (bool, map[string]json.RawMessage, error) {
+func evaluateObservationResult(engine platform.RuleEngine, def platform.ObservationDefinition, entity platform.RecordTypeInfo, record json.RawMessage, window platform.ObservationWindow, intervals *platform.ObservationIntervalResult, at time.Time) (bool, map[string]json.RawMessage, error) {
 	inputs := map[string]json.RawMessage{}
-	if err := CheckObservationDefinition(def, func(typ string) (platform.EntityInfo, bool) { return entity, typ == entity.Type }, engine); err != nil {
+	if err := CheckObservationDefinition(def, func(typ string) (platform.RecordTypeInfo, bool) { return entity, typ == entity.Type }, engine); err != nil {
 		return false, inputs, err
 	}
 	if def.Decision == nil {

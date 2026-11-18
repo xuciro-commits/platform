@@ -8,7 +8,7 @@ import (
 type AgentAuthoringEnvironment struct {
 	App, Type, Builder string
 	Authority          func() Authority
-	JointEntities      func() map[string]EntityInfo
+	JointEntities      func() map[string]RecordTypeInfo
 	JointAssets        func() map[AssetRef]bool
 	JointDeclarations  func() map[AssetRef]ReleaseAsset
 	QueryExists        func(string) bool
@@ -26,8 +26,8 @@ type AgentAuthoringEnvironment struct {
 
 type AgentAuthoringBinding struct {
 	Fork           func(AgentAuthoringEnvironment) AgentAuthoringBinding
-	Entity         func() Entity
-	DraftEntity    func() Entity
+	Entity         func() RecordType
+	DraftEntity    func() RecordType
 	Stamps         func() []string
 	Declarations   func() []Agent
 	Version        func(string) int

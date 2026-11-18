@@ -17,7 +17,7 @@ import (
 	"google.golang.org/protobuf/encoding/protojson"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformserver/platform"
-	"platformserver/services/resources/authoring"
+	build "platformserver/services/resources/authoring"
 	"platformserver/services/resources/monitoring"
 	controlowner "platformserver/services/security/control"
 )
@@ -34,7 +34,7 @@ func newListenerProbe(tenant string) *listenerProbe {
 }
 
 func (p *listenerProbe) Authority() platform.Authority { return p.ledger }
-func (p *listenerProbe) Fork(ledger platform.Authority) (platform.App, error) {
+func (p *listenerProbe) Fork(ledger platform.Authority) (platform.Service, error) {
 	return &listenerProbe{ledger: ledger}, nil
 }
 func (p *listenerProbe) Declarations() []*pb.AuthorityDeclaration { return p.ledger.Declarations() }
@@ -43,7 +43,7 @@ func (p *listenerProbe) Snapshot() (json.RawMessage, error)       { return p.led
 func (p *listenerProbe) Restore(raw json.RawMessage) error        { return p.ledger.Restore(raw) }
 func (p *listenerProbe) Manifest() platform.Manifest {
 	return platform.Manifest{ID: "listenerprobe", Title: "Listener probe", Version: "1", Roles: []string{"sender"}, Actions: p.ledger.Catalog(),
-		Entities: []platform.Entity{{Type: "listenerprobe.event", Title: "Event", Model: listenerProbeRecord{}}}, Inputs: map[string]bool{"listenerprobe": true}}
+		Entities: []platform.RecordType{{Type: "listenerprobe.event", Title: "Event", Model: listenerProbeRecord{}}}, Inputs: map[string]bool{"listenerprobe": true}}
 }
 func (p *listenerProbe) AcceptedInputs() []string { return []string{"listenerprobe"} }
 func (p *listenerProbe) DecodeAcceptedInput(raw json.RawMessage) (any, error) {
@@ -79,10 +79,10 @@ func TestInvariantK2ListenersAndMonitoringViews(t *testing.T) {
 		{Subjects: []string{"other"}, Member: platform.Member{ID: "other", Roles: map[string]string{}}},
 	}
 	fresh := func() *invariantTenant {
-		return newInvariantTenantWithApps(t, tenant, []platform.App{monitoring.New(tenant, actions.NewAuthority), newListenerProbe(tenant)}, seats...)
+		return newInvariantTenantWithApps(t, tenant, []platform.Service{monitoring.New(tenant, actions.NewAuthority), newListenerProbe(tenant)}, seats...)
 	}
 	replay := func() *invariantTenant {
-		return newInvariantTenantReplayWithApps(t, tenant, []platform.App{monitoring.New(tenant, actions.NewAuthority), newListenerProbe(tenant)}, seats...)
+		return newInvariantTenantReplayWithApps(t, tenant, []platform.Service{monitoring.New(tenant, actions.NewAuthority), newListenerProbe(tenant)}, seats...)
 	}
 	live := fresh()
 	live.Secrets = func(name string) ([]byte, bool) { return []byte("shared-value"), name == "listener-secret" }

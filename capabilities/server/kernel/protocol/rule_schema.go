@@ -12,7 +12,7 @@ import (
 	"time"
 )
 
-func RuleCollectionSubjectField(object, of string, lookup func(string) (platform.EntityInfo, bool)) (platform.FieldInfo, bool, error) {
+func RuleCollectionSubjectField(object, of string, lookup func(string) (platform.RecordTypeInfo, bool)) (platform.FieldInfo, bool, error) {
 	name, selected := strings.CutPrefix(of, "$subject.")
 	if !selected {
 		return platform.FieldInfo{}, false, nil
@@ -28,7 +28,7 @@ func RuleCollectionSubjectField(object, of string, lookup func(string) (platform
 	return field, true, nil
 }
 
-func RuleSchema(expr platform.Expr, spec platform.RuleReadSpec, lookup func(string) (platform.EntityInfo, bool), engines ...platform.RuleEngine) (platform.ExprSchema, error) {
+func RuleSchema(expr platform.Expr, spec platform.RuleReadSpec, lookup func(string) (platform.RecordTypeInfo, bool), engines ...platform.RuleEngine) (platform.ExprSchema, error) {
 	schema := platform.ExprSchema{Refs: map[string]platform.ExprType{"caller.id": {Kind: "text"}, "caller.tenant": {Kind: "text"}, "observation.ready": {Kind: "boolean"}, "observation.source": {Kind: "text"}, "observation.object": {Kind: "text"}, "observation.subject": {Kind: "text"}}, Sets: map[string]platform.ExprSetType{}}
 	for key, typ := range spec.Inputs {
 		name := "input." + key
@@ -40,7 +40,7 @@ func RuleSchema(expr platform.Expr, spec platform.RuleReadSpec, lookup func(stri
 			schema.Refs[key] = typ
 		}
 	}
-	var record platform.EntityInfo
+	var record platform.RecordTypeInfo
 	if spec.Object != "" {
 		var ok bool
 		record, ok = lookup(spec.Object)
@@ -158,7 +158,7 @@ func RuleSchema(expr platform.Expr, spec platform.RuleReadSpec, lookup func(stri
 	return schema, nil
 }
 
-func RuleContext(c platform.Caller, expr platform.Expr, spec platform.RuleReadSpec, lookup func(string) (platform.EntityInfo, bool), record any, inputs map[string]any, now time.Time) (platform.ExprContext, error) {
+func RuleContext(c platform.Caller, expr platform.Expr, spec platform.RuleReadSpec, lookup func(string) (platform.RecordTypeInfo, bool), record any, inputs map[string]any, now time.Time) (platform.ExprContext, error) {
 	ctx := platform.ExprContext{Refs: map[string]platform.ExprValue{"caller.id": platform.ExprPresent("text", c.ID), "caller.tenant": platform.ExprPresent("text", c.Tenant)}, Sets: map[string]platform.ExprCollection{}, Me: c.ID, Now: now.UTC(), Today: c.Today(now)}
 	for name, fact := range observationRuleFacts(c) {
 		ctx.Refs[name] = fact
@@ -513,7 +513,7 @@ func observationRuleFacts(c platform.Caller) map[string]platform.ExprValue {
 
 func ruleRecordSet(c platform.Caller, object, id, name string, record any, at time.Time) (platform.RecordSetResult, *platform.Error) {
 	if runtime := c.StagedDecision(); runtime != nil {
-		return runtime.ReadRecordSetCandidate(c, object, id, name, platform.Raw(record), at)
+		return runtime.ReadDecisionRecordSet(c, object, id, name, platform.Raw(record), at)
 	}
 	return c.ReadRecordSet(object, id, name, at)
 }

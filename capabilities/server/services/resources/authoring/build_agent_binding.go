@@ -1,4 +1,4 @@
-package build
+package authoring
 
 import (
 	"reflect"
@@ -16,8 +16,8 @@ const SchemaAgentPublish = AgentType + ".publish"
 func (b *Build) agentEnvironment() platform.AgentAuthoringEnvironment {
 	return platform.AgentAuthoringEnvironment{
 		App: ID, Type: AgentType, Builder: Builder,
-		Authority:         func() platform.Authority { return b.ledger },
-		JointEntities:     func() map[string]platform.EntityInfo { return b.jointEntities },
+		Authority:         func() platform.Authority { return b.authority },
+		JointEntities:     func() map[string]platform.RecordTypeInfo { return b.jointEntities },
 		JointAssets:       func() map[platform.AssetRef]bool { return b.jointAssets },
 		JointDeclarations: func() map[platform.AssetRef]platform.ReleaseAsset { return b.jointDeclarations },
 		QueryExists:       b.queries.Exists,

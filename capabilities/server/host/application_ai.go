@@ -6,7 +6,7 @@ import (
 	agentevaluation "platformserver/services/ai/evaluation"
 	applicationowner "platformserver/services/apps"
 	functionauthoring "platformserver/services/functions/authoring"
-	"platformserver/services/resources/authoring"
+	build "platformserver/services/resources/authoring"
 )
 
 func (t *Tenant) applicationAILocked(m platform.Member, assets []platform.ReleaseAsset, visible map[platform.AssetRef]bool) ([]protocol.ApplicationAI, *platform.Error) {

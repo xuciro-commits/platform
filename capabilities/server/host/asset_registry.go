@@ -20,7 +20,7 @@ func (h hostView) ValidateCodeAsset(asset platform.ReleaseAsset) error {
 	return releaseowner.ValidateCodeAsset(asset, h.t.App, h.t.codeReleaseAssetsLocked)
 }
 func (t *Tenant) assetRegistryLocked() (*publication.AssetRegistry, error) {
-	return releaseowner.NewRegistry(PublicationResolver(), t.LiveApps(), t.codeReleaseAssetsLocked, func(app platform.App, ref platform.AssetRef, source string) (platform.ReleaseAsset, error) {
+	return releaseowner.NewRegistry(PublicationResolver(), t.LiveApps(), t.codeReleaseAssetsLocked, func(app platform.Service, ref platform.AssetRef, source string) (platform.ReleaseAsset, error) {
 		for _, flow := range app.Manifest().Flows {
 			asset, err := t.nativeFlowAsset(app, flow.Name, flow.Version)
 			if err != nil {

@@ -6,7 +6,7 @@ import (
 	"slices"
 )
 
-func (o *Owner) scheduleEntity() platform.Entity {
+func (o *Owner) scheduleEntity() platform.RecordType {
 	return ScheduleEntity(func(c platform.Caller, schedule *platform.Schedule) *platform.Error {
 		if err := o.checkName(schedule.Name, schedule.ID); err != nil {
 			return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())

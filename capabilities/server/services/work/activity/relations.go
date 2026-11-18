@@ -1,4 +1,4 @@
-package relations
+package activity
 
 import (
 	"encoding/json"
@@ -32,8 +32,8 @@ type Follow = runtimeprotocol.RecordFollow
 
 var mention = regexp.MustCompile(`@([A-Za-z0-9][A-Za-z0-9._-]*)`)
 
-func entities() []platform.Entity {
-	return []platform.Entity{
+func entities() []platform.RecordType {
+	return []platform.RecordType{
 		{Type: CommentType, Title: "Comment", Model: Comment{}, Display: "text", Description: "A member's comment on a record; readable exactly when the record is.",
 			Scope: platform.Scope{Through: func(record any) string { return record.(Comment).Target }}},
 		{Type: FollowType, Title: "Follow", Model: Follow{}, Description: "A member following a record, told of its changes and comments.",
@@ -45,11 +45,11 @@ type Link = platform.RelationLink
 type Note = platform.RelationNote
 
 type Relations struct {
-	host   platform.RelationsHost
-	mu     sync.Mutex
-	links  []Link
-	notes  []Note
-	ledger platform.Authority
+	host      platform.RelationsHost
+	mu        sync.Mutex
+	links     []Link
+	notes     []Note
+	authority platform.Authority
 }
 
 func New(tenant string, authorities platform.Authorities) *Relations {
@@ -57,7 +57,7 @@ func New(tenant string, authorities platform.Authorities) *Relations {
 	ref := func(name string) platform.Field {
 		return platform.Field{Name: name, Type: "entity", Required: true, Description: "<type>/<id> of an entity of an app you hold a role in"}
 	}
-	return &Relations{ledger: authorities(tenant, ID, platform.NewCatalog(
+	return &Relations{authority: authorities(tenant, ID, platform.NewCatalog(
 		platform.Action{Schema: SchemaLink, Target: LinkType, Capability: "links", Title: "Link entities",
 			Description: "Relate two entities, of the same or of different apps.", Payload: []platform.Field{ref("from"), ref("to")}, Roles: any},
 		platform.Action{Schema: SchemaUnlink, Target: LinkType, Capability: "links", Title: "Unlink entities",
@@ -82,14 +82,14 @@ func (r *Relations) SnapshotFormat() string { return "relations.state.v1" }
 func (r *Relations) Snapshot() (json.RawMessage, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	return r.ledger.SnapshotWith(relationsState{r.links, r.notes})
+	return r.authority.SnapshotWith(relationsState{r.links, r.notes})
 }
 
 func (r *Relations) Restore(raw json.RawMessage) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	var s relationsState
-	if err := r.ledger.RestoreWith(raw, &s); err != nil {
+	if err := r.authority.RestoreWith(raw, &s); err != nil {
 		return err
 	}
 	r.links, r.notes = s.Links, s.Notes
@@ -103,17 +103,17 @@ func (r *Relations) LegacyRelations() []platform.RelationLink {
 }
 
 func (r *Relations) Manifest() platform.Manifest {
-	return platform.Manifest{ID: ID, Title: platform.BuiltinManifestTitle(ID), Version: "1", Actions: r.ledger.Catalog(), Reads: []string{"links", "timeline"}, Everyone: []string{"links", "timeline"},
+	return platform.Manifest{ID: ID, Title: platform.BuiltinManifestTitle(ID), Version: "1", Actions: r.authority.Catalog(), Reads: []string{"links", "timeline"}, Everyone: []string{"links", "timeline"},
 		Entities: entities()}
 }
 
-func (r *Relations) Declarations() []*pb.AuthorityDeclaration { return r.ledger.Declarations() }
-func (r *Relations) Authority() platform.Authority            { return r.ledger }
+func (r *Relations) Declarations() []*pb.AuthorityDeclaration { return r.authority.Declarations() }
+func (r *Relations) Authority() platform.Authority            { return r.authority }
 
-func (r *Relations) Fork(ledger platform.Authority) (platform.App, error) {
+func (r *Relations) Fork(authority platform.Authority) (platform.Service, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	return &Relations{host: r.host, links: slices.Clone(r.links), ledger: ledger}, nil
+	return &Relations{host: r.host, links: slices.Clone(r.links), authority: authority}, nil
 }
 func (r *Relations) AcceptedState() (json.RawMessage, error) {
 	r.mu.Lock()
@@ -175,7 +175,7 @@ func (r *Relations) Submit(c platform.Caller, s *pb.Submission, now time.Time) (
 	allowed := func() bool {
 		return !slices.ContainsFunc(entities, func(e string) bool { return !r.sees(c, e) })
 	}
-	return r.ledger.Receive(c, s, now, allowed, func() (func(*pb.ChangeRecord), *platform.Error) {
+	return r.authority.Receive(c, s, now, allowed, func() (func(*pb.ChangeRecord), *platform.Error) {
 		invalid := &platform.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 		if slices.ContainsFunc(entities, func(e string) bool { return !strings.Contains(e, "/") }) {
 			return nil, invalid
@@ -312,7 +312,7 @@ func (r *Relations) Link(c platform.Caller, from, to *pb.EntityRef, key string, 
 func (r *Relations) collaborate(c platform.Caller, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *platform.Error) {
 	var p struct{ Target, Text string }
 	json.Unmarshal(s.GetPayload(), &p)
-	return r.ledger.Receive(c, s, now, nil, func() (func(*pb.ChangeRecord), *platform.Error) {
+	return r.authority.Receive(c, s, now, nil, func() (func(*pb.ChangeRecord), *platform.Error) {
 		id := s.GetTarget().GetId()
 		if s.GetSchema().GetName() == SchemaUnfollow {
 			f, ok := platform.Get[Follow](c, id)

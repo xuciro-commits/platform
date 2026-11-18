@@ -20,8 +20,8 @@ import (
 	"platformserver/services/data/lineage"
 	"platformserver/services/data/transform"
 	"platformserver/services/devops/releases"
-	"platformserver/services/functions/runtime"
-	"platformserver/services/resources/authoring"
+	compute "platformserver/services/functions/runtime"
+	build "platformserver/services/resources/authoring"
 	"platformserver/services/resources/monitoring"
 
 	controlowner "platformserver/services/security/control"
@@ -65,26 +65,26 @@ type Tenant struct {
 	acted         int
 	opsMu         sync.Mutex
 	work          automation.WorkBoard
-	breakers      integrations.Breakers
+	breakers      transform.Breakers
 	settings      controlowner.Settings
 	words         controlowner.Words
 	endpoints     actions.Endpoints
 	outbound      actions.Outbox
 	tenantPorts
 	cancels  compute.Cancels
-	memFiles resources.MemoryFiles
-	uploads  resources.Uploads
+	memFiles blobs.MemoryFiles
+	uploads  blobs.Uploads
 
 	includeArchivedDefinitions bool
 }
 
 func (t *Tenant) Audit() []runtimeprotocol.AuditEntry { return t.AuditLog.All() }
 
-func NewTenantWithCapabilities(id string, services runtimeprotocol.RuntimeCapabilities, apps ...platform.App) (*Tenant, error) {
+func NewTenantWithCapabilities(id string, services runtimeprotocol.RuntimeCapabilities, apps ...platform.Service) (*Tenant, error) {
 	if services.BindOwner == nil {
 		return nil, fmt.Errorf("tenant composition requires owner bindings")
 	}
-	if err := aigateway.BindPolicy(&services); err != nil {
+	if err := gateway.BindPolicy(&services); err != nil {
 		return nil, err
 	}
 	if err := services.Check(); err != nil {
@@ -139,17 +139,17 @@ func NewTenantWithCapabilities(id string, services runtimeprotocol.RuntimeCapabi
 		return nil, fmt.Errorf("tenant %s has %w", id, err)
 	}
 	t.ownerRoles = roles
-	if err := runtimekernel.DeclareOwned(id, apps, func(m platform.Manifest) bool { return len(m.Agents) > 0 }, t.Agents, "agent", func(r runtimeprotocol.AgentRuntime, a platform.App) error { return r.DeclareAgentApp(a) }); err != nil {
+	if err := runtimekernel.DeclareOwned(id, apps, func(m platform.Manifest) bool { return len(m.Agents) > 0 }, t.Agents, "agent", func(r runtimeprotocol.AgentRuntime, a platform.Service) error { return r.DeclareAgentApp(a) }); err != nil {
 		return nil, err
 	}
-	if err := runtimekernel.DeclareOwned(id, apps, func(m platform.Manifest) bool { return len(m.Flows) > 0 }, t.Processes, "flow", func(r automation.FlowProcesses, a platform.App) error { return r.Declare(a) }); err != nil {
+	if err := runtimekernel.DeclareOwned(id, apps, func(m platform.Manifest) bool { return len(m.Flows) > 0 }, t.Processes, "flow", func(r automation.FlowProcesses, a platform.Service) error { return r.Declare(a) }); err != nil {
 		return nil, err
 	}
 	if err := t.registerDefinitions(); err != nil {
 		return nil, fmt.Errorf("tenant %s: %v", id, err)
 	}
 	{
-		infos := map[string]platform.EntityInfo{}
+		infos := map[string]platform.RecordTypeInfo{}
 		for _, et := range t.Projection.SortedTypes() {
 			infos[et.Info().Type] = et.Info()
 		}
@@ -182,12 +182,12 @@ func NewTenantWithCapabilities(id string, services runtimeprotocol.RuntimeCapabi
 	return t, nil
 }
 
-func (t *Tenant) caller(m platform.Member, app platform.App, replaying bool) platform.Caller {
+func (t *Tenant) caller(m platform.Member, app platform.Service, replaying bool) platform.Caller {
 	return platform.NewCaller(runtime{t: t, scoped: true}, m, app.Manifest().ID, replaying, false)
 }
 
 func (t *Tenant) translator() transport.Translator {
-	return transport.NewTranslator(func() []platform.App { return t.apps },
-		func(a platform.App) platform.Manifest { return transport.ManifestOf(a, t.definitionsFingerprint()) },
+	return transport.NewTranslator(func() []platform.Service { return t.apps },
+		func(a platform.Service) platform.Manifest { return transport.ManifestOf(a, t.definitionsFingerprint()) },
 		t.words.Clone, PlatformLanguages)
 }

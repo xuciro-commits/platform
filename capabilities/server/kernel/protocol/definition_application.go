@@ -14,13 +14,13 @@ type BuildHost interface {
 	ManagedDefinition(platform.AssetRef) bool
 	Action(schema string) (app string, a platform.Action, ok bool)
 	Automation(parent platform.Caller, app string) platform.Caller
-	BindInterfaceQuery(platform.NamedQuery, ...platform.EntityInfo) (platform.NamedQuery, error)
+	BindInterfaceQuery(platform.NamedQuery, ...platform.RecordTypeInfo) (platform.NamedQuery, error)
 	Caller(parent platform.Caller, m platform.Member, app string) platform.Caller
 	Declares(name string) bool
-	Entity(typ string) (platform.EntityInfo, bool)
+	Entity(typ string) (platform.RecordTypeInfo, bool)
 	EntitySource(typ string) (platform.AssetBinding, bool)
 	Function(app, name string, version int) (platform.AIFunction, int, bool)
-	Install(c platform.Caller, e platform.Entity, actions []platform.Action, pages ...platform.Page) error
+	Install(c platform.Caller, e platform.RecordType, actions []platform.Action, pages ...platform.Page) error
 	InstallApplication(c platform.Caller, a platform.Application) error
 	InstallFunction(c platform.Caller, f platform.AIFunction, version int) error
 	InstallInterface(c platform.Caller, i platform.Interface, version int) error
@@ -43,7 +43,7 @@ type BuildHost interface {
 	ResolvePropertyType(binding platform.AssetBinding) (platform.PropertyType, bool)
 	ResolveValueType(binding platform.AssetBinding) (platform.ValueType, bool)
 	ValidateInstallApplication(a platform.Application) error
-	ValidateInstallDependents(c platform.Caller, e platform.Entity, actions []platform.Action, generatedPage string, pages ...platform.Page) error
+	ValidateInstallDependents(c platform.Caller, e platform.RecordType, actions []platform.Action, generatedPage string, pages ...platform.Page) error
 	ValidateInstallFunction(f platform.AIFunction) error
 	ValidateInstallInterface(i platform.Interface) error
 	ValidateInstallLinkType(l platform.LinkType) error
@@ -52,9 +52,9 @@ type BuildHost interface {
 	ValidateInstallObjectTypeGroup(g platform.ObjectTypeGroup) error
 	ValidateInstallPropertyType(p platform.PropertyType) error
 	ValidateInstallValueType(v platform.ValueType) error
-	ValidateObjectPresentation(info platform.EntityInfo) error
+	ValidateObjectPresentation(info platform.RecordTypeInfo) error
 	ValidateInstallQuery(q platform.NamedQuery) error
-	ValidateRecordSet(platform.EntityInfo, platform.RecordSet) error
+	ValidateRecordSet(platform.RecordTypeInfo, platform.RecordSet) error
 	ValidateCodeAsset(platform.ReleaseAsset) error
 	ProductVersion(platform.ProductVersionRequest) (platform.FrozenProductVersion, error)
 }
@@ -227,8 +227,8 @@ type ApplicationView struct {
 }
 
 type PageView struct {
-	Application ApplicationView      `json:"application"`
-	Page        platform.Page        `json:"page"`
-	Entity      *platform.EntityInfo `json:"entity,omitempty"`
-	Actions     []platform.Action    `json:"actions"`
+	Application ApplicationView          `json:"application"`
+	Page        platform.Page            `json:"page"`
+	Entity      *platform.RecordTypeInfo `json:"entity,omitempty"`
+	Actions     []platform.Action        `json:"actions"`
 }

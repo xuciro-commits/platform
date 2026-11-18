@@ -9,13 +9,13 @@ import (
 	"strings"
 
 	"platformserver/platform"
-	"platformserver/services/resources/authoring"
+	build "platformserver/services/resources/authoring"
 )
 
-func (t *Tenant) Install(app platform.App, e platform.Entity, actions []platform.Action, pages ...platform.Page) error {
+func (t *Tenant) Install(app platform.Service, e platform.RecordType, actions []platform.Action, pages ...platform.Page) error {
 	return build.ObjectInstall{
 		Owners: t.owner, Owner: t.App, Installing: func() bool { return t.installingSet },
-		Properties: t.checkObjectProperties, RecordSets: func(info platform.EntityInfo) error {
+		Properties: t.checkObjectProperties, RecordSets: func(info platform.RecordTypeInfo) error {
 			return t.objectOwner(t.Projection).CheckRecordSetDeclarations(info)
 		}, Entity: t.Entity,
 		Install:     t.Projection.Install,
@@ -34,7 +34,7 @@ func (t *Tenant) storeDefinition(index int, def platform.Definition) {
 	t.setDefinitions(t.definitions)
 }
 
-func (t *Tenant) installDefinitions(app string, info platform.EntityInfo, actions []platform.Action, pages []platform.Page, protocols ...platform.Provision) error {
+func (t *Tenant) installDefinitions(app string, info platform.RecordTypeInfo, actions []platform.Action, pages []platform.Page, protocols ...platform.Provision) error {
 	var err error
 	for _, definition := range releaseowner.ObjectDefinitions(app, info, actions, pages, protocols...) {
 		var def platform.Definition
@@ -72,11 +72,11 @@ func (t *Tenant) reinstall() error {
 	return t.validateAssetSet()
 }
 
-func (t *Tenant) InstallPage(app platform.App, p platform.Page) error {
+func (t *Tenant) InstallPage(app platform.Service, p platform.Page) error {
 	return t.installPage(app, p, true)
 }
 
-func (t *Tenant) installPage(app platform.App, p platform.Page, targets bool, engines ...platform.RuleEngine) error {
+func (t *Tenant) installPage(app platform.Service, p platform.Page, targets bool, engines ...platform.RuleEngine) error {
 	canonical, info, err := t.pageBindings().CheckInstall(p, app.Manifest().ID, targets, engines...)
 	if err != nil {
 		return err
@@ -84,7 +84,7 @@ func (t *Tenant) installPage(app platform.App, p platform.Page, targets bool, en
 	return t.installDefinitions(app.Manifest().ID, info, nil, []platform.Page{canonical})
 }
 
-func (t *Tenant) checkSections(p platform.Page, page platform.EntityInfo) error {
+func (t *Tenant) checkSections(p platform.Page, page platform.RecordTypeInfo) error {
 	return t.pageBindings().CheckSections(p, page)
 }
 
@@ -109,9 +109,11 @@ func (t *Tenant) pageBindings() pageowner.Bindings {
 	}
 }
 
-func (t *Tenant) Entity(typ string) (platform.EntityInfo, bool) { return t.Projection.EntityInfo(typ) }
+func (t *Tenant) Entity(typ string) (platform.RecordTypeInfo, bool) {
+	return t.Projection.EntityInfo(typ)
+}
 
-func (t *Tenant) InstallApplication(app platform.App, a platform.Application) error {
+func (t *Tenant) InstallApplication(app platform.Service, a platform.Application) error {
 	id := app.Manifest().ID
 	if err := t.checkApplicationExtension(platform.AssetRef{App: id, Kind: platform.AssetApp, Name: a.Name}, a); err != nil {
 		return err
@@ -136,7 +138,7 @@ func (t *Tenant) InstallApplication(app platform.App, a platform.Application) er
 	return t.storeApplication(app, a)
 }
 
-func (t *Tenant) storeApplication(app platform.App, a platform.Application) error {
+func (t *Tenant) storeApplication(app platform.Service, a platform.Application) error {
 	id := app.Manifest().ID
 	installed := a
 	def := platform.Definition{Ref: platform.AssetRef{App: id, Kind: platform.AssetApp, Name: a.Name}, Source: "tenant", Version: "1",

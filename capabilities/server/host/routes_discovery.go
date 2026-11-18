@@ -13,7 +13,7 @@ import (
 	"platformserver/services/actions"
 	dataowner "platformserver/services/data"
 	releaseowner "platformserver/services/devops/releases"
-	"platformserver/services/resources/authoring"
+	build "platformserver/services/resources/authoring"
 	controlowner "platformserver/services/security/control"
 	"strconv"
 	"time"
@@ -55,7 +55,7 @@ func (h *Host) routesDiscovery(rt *routes) {
 		}
 		return protocols, nil
 	}))
-	rt.metadata(transport.Route{Pattern: "GET /v1/entities", Summary: "The entity types of the apps the caller holds a role in, with their meaning, in their language", Answer: []platform.EntityInfo{}}, viewRoute("entities", "Entity declarations are unavailable"))
+	rt.metadata(transport.Route{Pattern: "GET /v1/entities", Summary: "The entity types of the apps the caller holds a role in, with their meaning, in their language", Answer: []platform.RecordTypeInfo{}}, viewRoute("entities", "Entity declarations are unavailable"))
 	rt.handle(transport.Route{Pattern: "GET /v1/dispatches/{id}/targets", Summary: "Ready external target identities available to the dispatch's current human reviewer; no environment addresses or credentials", Answer: []dataowner.DispatchTarget{}}, saying(func(r *http.Request, m platform.Member, t *Tenant) ([]dataowner.DispatchTarget, *platform.Error) {
 		return t.DispatchTargets(m, r.PathValue("id"), h.Now())
 	}))

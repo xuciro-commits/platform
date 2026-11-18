@@ -22,9 +22,9 @@ type Owner struct {
 	MayRead                func(*records.Store, platform.Member, time.Time, bool) func(string) bool
 	MayCallRead            func(platform.Member, string) bool
 	Definitions            func(platform.Member) []platform.Definition
-	Entity                 func(string) (platform.EntityInfo, bool)
-	App                    func(string) platform.App
-	BindInterface          func(platform.NamedQuery, ...platform.EntityInfo) (platform.NamedQuery, error)
+	Entity                 func(string) (platform.RecordTypeInfo, bool)
+	App                    func(string) platform.Service
+	BindInterface          func(platform.NamedQuery, ...platform.RecordTypeInfo) (platform.NamedQuery, error)
 	ValidateInterfaceQuery func(platform.NamedQuery) error
 	VisibleLink            func(platform.Member, platform.AssetBinding) *platform.LinkType
 	HasProcesses           func() bool
@@ -63,11 +63,11 @@ func (o *Owner) mayReadIn(store *records.Store, m platform.Member, at time.Time,
 	return o.MayRead(store, m, at, held)
 }
 
-func (o *Owner) entity(typ string) (platform.EntityInfo, bool) {
+func (o *Owner) entity(typ string) (platform.RecordTypeInfo, bool) {
 	return o.Entity(typ)
 }
 
-func (o *Owner) app(id string) platform.App {
+func (o *Owner) app(id string) platform.Service {
 	return o.App(id)
 }
 
@@ -75,7 +75,7 @@ func (o *Owner) definitions(m platform.Member) []platform.Definition {
 	return o.Definitions(m)
 }
 
-func (o *Owner) bindInterfaceQuery(q platform.NamedQuery, drafts ...platform.EntityInfo) (platform.NamedQuery, error) {
+func (o *Owner) bindInterfaceQuery(q platform.NamedQuery, drafts ...platform.RecordTypeInfo) (platform.NamedQuery, error) {
 	return o.BindInterface(q, drafts...)
 }
 

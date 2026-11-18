@@ -12,8 +12,8 @@ type ApplicationEnvironment interface {
 	AppID() string
 	Version() string
 	Resolver() Resolver
-	Entity(string) (platform.EntityInfo, bool)
-	DraftObjectLookup(platform.Caller) (func(string) (platform.EntityInfo, bool), error)
+	Entity(string) (platform.RecordTypeInfo, bool)
+	DraftObjectLookup(platform.Caller) (func(string) (platform.RecordTypeInfo, bool), error)
 	CheckName(string, string) error
 }
 
@@ -21,7 +21,7 @@ type ApplicationProjection struct {
 	Member         platform.Member
 	Resolver       Resolver
 	Definitions    []platform.Definition
-	Entities       map[string]platform.EntityInfo
+	Entities       map[string]platform.RecordTypeInfo
 	Pages          map[platform.AssetRef]bool
 	Resources      map[platform.AssetRef]bool
 	PublishedFlows map[platform.AssetRef]bool
@@ -46,10 +46,10 @@ type ApplicationAuthoring interface {
 	PageAsset(protocol.Page, string) (platform.ReleaseAsset, error)
 	ApplicationAsset(protocol.Application, string) (platform.ReleaseAsset, error)
 	DecodeInstallation(string, json.RawMessage) (protocol.AssetInstallation, error)
-	PageEntity() platform.Entity
-	ApplicationEntity() platform.Entity
+	PageEntity() platform.RecordType
+	ApplicationEntity() platform.RecordType
 	CheckPageObject(platform.Caller, string) (bool, error)
-	PageDraftEntity() platform.Entity
+	PageDraftEntity() platform.RecordType
 	CheckPageDraft(protocol.Page, bool) (protocol.Page, platform.AssetRef, platform.AssetRef, bool, error)
 	CheckApplicationDraft(protocol.Application, bool) (protocol.Application, platform.AssetRef, platform.AssetRef, bool, error)
 }

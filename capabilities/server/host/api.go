@@ -62,7 +62,7 @@ type SubmissionAnswer struct {
 }
 
 func (h *Host) OpenAPI(t *Tenant, m *platform.Member) map[string]any {
-	var entities []platform.EntityInfo
+	var entities []platform.RecordTypeInfo
 	var actions []platform.Action
 	if t != nil && m != nil {
 		entities, actions = t.Entities(*m), t.Catalog(*m)

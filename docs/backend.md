@@ -9,7 +9,7 @@
 - 包按服务边界划分。包之间只经接口调用，不共享内部状态，不成环。
 - 权威写入只经接受路径：拥有者返回编辑与意图，不直接写存储。任何旁路写存储都是缺陷。
 - 记录读取只经协调读取。读记录的 HTTP 路由只用 `rt.recordRead`。
-- `Entity`、`EntityInfo`、字段与生命周期是 SDK 线格式；从 Go 模型反射记录形状、别名、派生字段、
+- `RecordType`、`RecordTypeInfo`、字段与生命周期是 SDK 声明；从 Go 模型反射记录形状、别名、派生字段、
   enterprise use 与呈现绑定归 `kernel/records`，调用方不自行解释模型标签。
 - 授权只经唯一的决定函数，不在调用点另写判断。
 - 条件用 Expr，对象读取用对象集；不新增第二种过滤或查询语言。
@@ -87,7 +87,7 @@
   `platform` 不读取页面契约，也不复制页面限制。
 - 服务运行接口按决策、读取、操作、效果、记录、授权、组织、关系与 enterprise 使用拆分；
   服务运行调用只经 `Caller` 门面，不取得聚合运行时；需要校验的能力继续由装配时的接口收回。
-- `BusinessTxn`、`TxnStep` 及其嵌套类型、严格 JSON 解码和 `Entity`/`Action` 内嵌字段是 SDK 线格式；
+- `BusinessTxn`、`TxnStep` 及其嵌套类型、严格 JSON 解码和 `RecordType`/`Action` 内嵌字段是 SDK 线格式；
   事务规范化、编号、步骤校验、遍历、生命周期目的地与对象/动作冻结描述归 `services/ontology`。
   事务执行与拒绝改路归 `services/actions`，资源服务提供保留版本、集成绑定和跨类型草稿上下文。
 - 连接、数据源、数据集、管道、回写、确认和设备派发及其外部调用结算与补偿归 `services/data`；

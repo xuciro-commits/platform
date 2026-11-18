@@ -15,7 +15,7 @@ func (t *Tenant) recordSetBinding(binding platform.AssetBinding) (*platform.Defi
 	return selected, selected != nil
 }
 
-func (h hostView) ValidateRecordSet(info platform.EntityInfo, set platform.RecordSet) error {
+func (h hostView) ValidateRecordSet(info platform.RecordTypeInfo, set platform.RecordSet) error {
 	return h.t.objectOwner(h.t.Projection).ValidateRecordSet(info, set)
 }
 
@@ -27,7 +27,7 @@ func (d *stagedDecision) ReadRecordSet(c platform.Caller, object, id, name strin
 	return d.tenant.readRecordSetFrom(d.Records, c, object, id, name, at)
 }
 
-func (d *stagedDecision) ReadRecordSetCandidate(c platform.Caller, object, id, name string, raw json.RawMessage, at time.Time) (platform.RecordSetResult, *platform.Error) {
+func (d *stagedDecision) ReadDecisionRecordSet(c platform.Caller, object, id, name string, raw json.RawMessage, at time.Time) (platform.RecordSetResult, *platform.Error) {
 	store := d.Records.ForkRecords()
 	et := store.Type(object)
 	if !c.Staging() || et == nil || et.Info().App != c.App || id == "" {

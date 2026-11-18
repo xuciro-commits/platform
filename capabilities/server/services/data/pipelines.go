@@ -16,8 +16,8 @@ import (
 
 var StepKinds = []string{"select", "rename", "cast", "filter", "compute", "lookup", "join", "dedupe", "aggregate", "sort", "declassify"}
 
-func (o *Owner) pipelineEntity() platform.Entity {
-	return platform.Entity{Type: PipelineType, Title: "Pipeline", Plural: "Pipelines", Model: Pipeline{}, Display: "title",
+func (o *Owner) pipelineEntity() platform.RecordType {
+	return platform.RecordType{Type: PipelineType, Title: "Pipeline", Plural: "Pipelines", Model: Pipeline{}, Display: "title",
 		Validate: func(c platform.Caller, record any) *platform.Error {
 			p := record.(*Pipeline)
 			if !c.Replaying {
@@ -291,8 +291,8 @@ func checkStep(c platform.Caller, s protocol.TransformStep) error {
 	return fmt.Errorf("is not one of %s", strings.Join(StepKinds, ", "))
 }
 
-func (o *Owner) SubmitPipelineRan(ledger platform.Authority, c platform.Caller, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *platform.Error) {
-	return ledger.Receive(c, s, now, nil, func() (func(*pb.ChangeRecord), *platform.Error) {
+func (o *Owner) SubmitPipelineRan(authority platform.Authority, c platform.Caller, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *platform.Error) {
+	return authority.Receive(c, s, now, nil, func() (func(*pb.ChangeRecord), *platform.Error) {
 		var payload struct {
 			Run PipelineRun `json:"run"`
 		}

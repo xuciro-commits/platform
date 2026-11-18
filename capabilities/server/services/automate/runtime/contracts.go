@@ -1,4 +1,4 @@
-package automation
+package runtime
 
 import (
 	"crypto/sha256"
@@ -17,7 +17,7 @@ type FlowFrameStore interface {
 }
 
 type ContinuousFlowOwner interface {
-	platform.App
+	platform.Service
 	PlanBatch(protocol.FlowInstance, platform.Caller) (FlowBatchPreparation, *platform.Error)
 	PlanComputeRetry(protocol.FlowInstance, platform.Caller, time.Time) (FlowComputeRetryPreparation, *platform.Error)
 	PlanArtifactCleanup(protocol.FlowInstance, time.Time) (FlowArtifactCleanupPreparation, *platform.Error)
@@ -44,7 +44,7 @@ type FlowBatchPreparation interface {
 }
 
 type FlowPreparedDecision interface {
-	Decision(platform.App) platform.App
+	Decision(platform.Service) platform.Service
 	Submission(tenant string) *pb.Submission
 	Matches(protocol.FlowInstance) bool
 }

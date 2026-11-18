@@ -21,7 +21,7 @@ type ScopeDirectory interface {
 	Below(units []string, structure string, day platform.Date) []string
 }
 
-func FieldView(m platform.Member, source platform.EntityInfo) (view platform.EntityInfo, hidden []platform.FieldInfo) {
+func FieldView(m platform.Member, source platform.RecordTypeInfo) (view platform.RecordTypeInfo, hidden []platform.FieldInfo) {
 	roles := m.RolesIn(source.App)
 	readable := func(f platform.FieldInfo) bool {
 		if !f.ReadsAny(roles) || m.AIContext && f.AIInput != nil && !*f.AIInput {
@@ -71,7 +71,7 @@ func FieldView(m platform.Member, source platform.EntityInfo) (view platform.Ent
 	return info, hidden
 }
 
-func ScopePolicy(info platform.EntityInfo, m platform.Member, directory ScopeDirectory, now time.Time, through func(reflect.Value) bool, engines ...platform.RuleEngine) (*RowFilter, *platform.Error) {
+func ScopePolicy(info platform.RecordTypeInfo, m platform.Member, directory ScopeDirectory, now time.Time, through func(reflect.Value) bool, engines ...platform.RuleEngine) (*RowFilter, *platform.Error) {
 	roles, scope := m.RolesIn(info.App), info.Scope
 	text := ruleexpr.Type{Kind: "text"}
 	deny := func() (*RowFilter, *platform.Error) {
@@ -120,7 +120,7 @@ var createdBy = RowAttribute{Ref: "$created.by", Type: ruleexpr.Type{Kind: "text
 	return ruleexpr.TextValue("text", Header(v).Created.By)
 }}
 
-func scopeExpr(directory ScopeDirectory, m platform.Member, info platform.EntityInfo, roles []string, now time.Time) (ruleexpr.Expr, bool) {
+func scopeExpr(directory ScopeDirectory, m platform.Member, info platform.RecordTypeInfo, roles []string, now time.Time) (ruleexpr.Expr, bool) {
 	if len(roles) > 1 {
 		var parts []ruleexpr.Expr
 		for _, role := range roles {
@@ -196,7 +196,7 @@ func scopeExpr(directory ScopeDirectory, m platform.Member, info platform.Entity
 	return ruleexpr.Expr{}, false
 }
 
-func Write(info platform.EntityInfo, receipt *pb.ChangeRecord, prev *Row, v reflect.Value) (*Row, *platform.Error) {
+func Write(info platform.RecordTypeInfo, receipt *pb.ChangeRecord, prev *Row, v reflect.Value) (*Row, *platform.Error) {
 	rec := Header(v)
 	stamp := platform.Stamp{By: receipt.GetSubmission().GetPrincipalId(), At: receipt.GetRecordedTime().AsTime(), Change: receipt.GetChangeId()}
 	change := RecordChange{Change: receipt.GetChangeId(), Schema: receipt.GetSubmission().GetSchema().GetName(), By: stamp.By, At: stamp.At, Fields: []FieldChange{}}
@@ -256,13 +256,13 @@ type CurrentScope struct {
 	tenant, release string
 	applied         int64
 	position        func() int64
-	info            func(string) platform.EntityInfo
+	info            func(string) platform.RecordTypeInfo
 }
 
-func NewCurrentScope(info func(string) platform.EntityInfo) *CurrentScope {
+func NewCurrentScope(info func(string) platform.RecordTypeInfo) *CurrentScope {
 	return &CurrentScope{info: info}
 }
-func (s *CurrentScope) Fork(info func(string) platform.EntityInfo) *CurrentScope {
+func (s *CurrentScope) Fork(info func(string) platform.RecordTypeInfo) *CurrentScope {
 	copy := *s
 	copy.info = info
 	return &copy
@@ -279,14 +279,14 @@ func (s *CurrentScope) MarkApplied(position int64)          { s.applied = positi
 func (s *CurrentScope) Position() func() int64              { return s.position }
 func (s *CurrentScope) Release() string                     { return s.release }
 func (s *CurrentScope) SelectRelease(release string)        { s.release = release }
-func (s *CurrentScope) Source(typ string, info *platform.EntityInfo) RowSource {
+func (s *CurrentScope) Source(typ string, info *platform.RecordTypeInfo) RowSource {
 	return &currentRows{store: s, typ: typ, info: info}
 }
 
 type currentRows struct {
 	store *CurrentScope
 	typ   string
-	info  *platform.EntityInfo
+	info  *platform.RecordTypeInfo
 }
 
 func (r *currentRows) view() persistence.StateReadView {

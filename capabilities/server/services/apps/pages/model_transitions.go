@@ -5,7 +5,7 @@ import (
 	"platformserver/platform"
 )
 
-func ModelTransition(owner platform.App, ref platform.AssetRef) (platform.ActionType, string, bool) {
+func ModelTransition(owner platform.Service, ref platform.AssetRef) (platform.ActionType, string, bool) {
 	if ref.Kind != platform.AssetAction || owner == nil || owner.Manifest().ID != ref.App {
 		return platform.ActionType{}, "", false
 	}
@@ -22,7 +22,7 @@ func ModelTransition(owner platform.App, ref platform.AssetRef) (platform.Action
 	return platform.ActionType{}, "", false
 }
 
-func ModelCriteria(owner platform.App, ref platform.AssetRef) (*platform.RuleCriteria, bool) {
+func ModelCriteria(owner platform.Service, ref platform.AssetRef) (*platform.RuleCriteria, bool) {
 	transition, _, ok := ModelTransition(owner, ref)
 	if !ok || transition.Criteria.Business == nil {
 		return nil, false
@@ -30,12 +30,12 @@ func ModelCriteria(owner platform.App, ref platform.AssetRef) (*platform.RuleCri
 	return transition.Criteria.Business, true
 }
 
-func VisibleLookup(visible []platform.EntityInfo) func(string) (platform.EntityInfo, bool) {
-	entities := map[string]platform.EntityInfo{}
+func VisibleLookup(visible []platform.RecordTypeInfo) func(string) (platform.RecordTypeInfo, bool) {
+	entities := map[string]platform.RecordTypeInfo{}
 	for _, entity := range visible {
 		entities[entity.Type] = entity
 	}
-	return func(typ string) (platform.EntityInfo, bool) {
+	return func(typ string) (platform.RecordTypeInfo, bool) {
 		value, ok := entities[typ]
 		return ruleprotocol.ConstraintEntity(value), ok
 	}

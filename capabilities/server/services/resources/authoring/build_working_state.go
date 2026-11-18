@@ -1,4 +1,4 @@
-package build
+package authoring
 
 import (
 	"crypto/sha256"
@@ -33,8 +33,8 @@ func WorkingStateID(member, branch, typ, draft string) string {
 	return hex.EncodeToString(digest[:])
 }
 
-func workingStateEntity() platform.Entity {
-	return platform.Entity{Type: WorkingStateType, Title: "Working state", Model: WorkingState{}, Display: "draft", Scope: platform.Scope{Default: platform.ScopeOwn, Owner: "member"}}
+func workingStateEntity() platform.RecordType {
+	return platform.RecordType{Type: WorkingStateType, Title: "Working state", Model: WorkingState{}, Display: "draft", Scope: platform.Scope{Default: platform.ScopeOwn, Owner: "member"}}
 }
 
 func workingStateActions() []platform.Action {
@@ -45,7 +45,7 @@ func workingStateActions() []platform.Action {
 }
 
 func (b *Build) submitWorkingState(c platform.Caller, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *platform.Error) {
-	return b.ledger.Receive(c, s, now, nil, func() (func(*pb.ChangeRecord), *platform.Error) {
+	return b.authority.Receive(c, s, now, nil, func() (func(*pb.ChangeRecord), *platform.Error) {
 		id := s.GetTarget().GetId()
 		state, exists := platform.Get[WorkingState](c, id)
 		if exists && state.Member != c.ID {

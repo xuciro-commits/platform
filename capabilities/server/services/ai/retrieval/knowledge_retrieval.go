@@ -1,4 +1,4 @@
-package knowledge
+package retrieval
 
 import (
 	"crypto/sha256"
@@ -111,7 +111,7 @@ type Source struct {
 	Apps                       []string
 }
 
-func RecordSources(info platform.EntityInfo, v reflect.Value) []Source {
+func RecordSources(info platform.RecordTypeInfo, v reflect.Value) []Source {
 	var out []Source
 	rec := v.FieldByName("Record").Interface().(platform.Record)
 	title := rec.ID

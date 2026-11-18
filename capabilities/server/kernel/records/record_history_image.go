@@ -97,7 +97,7 @@ func RefreshProjection(p *Projection, value any) error {
 	return nil
 }
 
-func DecodeImage(info platform.EntityInfo, value json.RawMessage, projection *Projection, release string) (json.RawMessage, error) {
+func DecodeImage(info platform.RecordTypeInfo, value json.RawMessage, projection *Projection, release string) (json.RawMessage, error) {
 	if projection == nil {
 		return value, nil
 	}
@@ -384,7 +384,7 @@ func ImageAlreadyApplied(prior *Row, image Image) bool {
 	return err == nil && err2 == nil && a == b
 }
 
-func DecodeFormattedImage(info platform.EntityInfo, value json.RawMessage, projection *Projection, release, format string) (json.RawMessage, error) {
+func DecodeFormattedImage(info platform.RecordTypeInfo, value json.RawMessage, projection *Projection, release, format string) (json.RawMessage, error) {
 	decoded, err := DecodeImage(info, value, projection, release)
 	if err != nil {
 		return nil, err
@@ -401,7 +401,7 @@ func DecodeFormattedImage(info platform.EntityInfo, value json.RawMessage, proje
 	return DecodeRecordImage(info, format, decoded)
 }
 
-func PruneImage(info platform.EntityInfo, raw json.RawMessage) (json.RawMessage, error) {
+func PruneImage(info platform.RecordTypeInfo, raw json.RawMessage) (json.RawMessage, error) {
 	var object map[string]json.RawMessage
 	if err := json.Unmarshal(raw, &object); err != nil {
 		return nil, err

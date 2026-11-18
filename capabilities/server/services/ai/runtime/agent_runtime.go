@@ -1,4 +1,4 @@
-package agents
+package runtime
 
 import (
 	"cmp"
@@ -31,7 +31,7 @@ type Agents struct {
 	host        runtimeprotocol.AgentHost
 	mu          sync.Mutex
 	tenant      string
-	ledger      platform.Authority
+	authority   platform.Authority
 	authorities platform.Authorities
 	defs        map[string]*runtimeprotocol.CompiledAgent
 	buildStamp  string
@@ -73,13 +73,13 @@ func New(tenant string, authorities platform.Authorities) *Agents {
 	actions = append(actions, platform.Action{Schema: runtimeprotocol.SchemaToolPropose, Target: runtimeprotocol.RunType, Capability: "runs", Title: "Propose a tool action", Description: "Save a tool's write as a proposal for the person to confirm; nothing changes until they do.", Roles: []string{platform.AnyMember}, Payload: []platform.Field{
 		{Name: "owner", Type: "string", Required: true}, {Name: "action", Type: "string", Required: true}, {Name: "target", Type: "string", Required: true}, {Name: "payload", Type: "json", Required: true}, {Name: "rationale", Type: "string"}}})
 	actions = append(actions, switchActions()...)
-	return &Agents{tenant: tenant, authorities: authorities, ledger: authorities(tenant, runtimeprotocol.AgentApp, platform.NewCatalog(actions...), runtimeprotocol.RunType, runtimeprotocol.EvaluationType, runtimeprotocol.MemoryType, runtimeprotocol.SwitchType), defs: map[string]*runtimeprotocol.CompiledAgent{}, busy: map[string]bool{}}
+	return &Agents{tenant: tenant, authorities: authorities, authority: authorities(tenant, runtimeprotocol.AgentApp, platform.NewCatalog(actions...), runtimeprotocol.RunType, runtimeprotocol.EvaluationType, runtimeprotocol.MemoryType, runtimeprotocol.SwitchType), defs: map[string]*runtimeprotocol.CompiledAgent{}, busy: map[string]bool{}}
 }
 
-func (a *Agents) NewSimulationApp(tenant string) platform.App { return New(tenant, a.authorities) }
+func (a *Agents) NewSimulationApp(tenant string) platform.Service { return New(tenant, a.authorities) }
 
-func agentEntities() []platform.Entity {
-	return []platform.Entity{{Type: runtimeprotocol.RunType, Title: "Agent run", Model: runtimeprotocol.AgentRunRecord{}, Display: "title",
+func agentEntities() []platform.RecordType {
+	return []platform.RecordType{{Type: runtimeprotocol.RunType, Title: "Agent run", Model: runtimeprotocol.AgentRunRecord{}, Display: "title",
 		Derived: []platform.Derivation{
 			{From: "ref", Fields: []string{"seen", "citations"}},
 			{From: "steps.sources", Fields: []string{"arguments", "outcome", "calls", "content"}},
@@ -92,7 +92,7 @@ func agentEntities() []platform.Entity {
 }
 
 func (a *Agents) Manifest() platform.Manifest {
-	return platform.Manifest{Languages: languages, ID: runtimeprotocol.AgentApp, Title: platform.BuiltinManifestTitle(runtimeprotocol.AgentApp), Version: "1", Actions: a.ledger.Catalog(), Entities: agentEntities(),
+	return platform.Manifest{Languages: languages, ID: runtimeprotocol.AgentApp, Title: platform.BuiltinManifestTitle(runtimeprotocol.AgentApp), Version: "1", Actions: a.authority.Catalog(), Entities: agentEntities(),
 		Reads: []string{"agents", "runs", "memories", "agent-overview"}, Everyone: []string{"agents", "runs", "memories"},
 		ReadSources: map[string]string{"agents": "record", "agent-overview": "record"},
 		Settings: []platform.Setting{
@@ -108,15 +108,15 @@ func (a *Agents) Manifest() platform.Manifest {
 		}}
 }
 
-func (a *Agents) Declarations() []*pb.AuthorityDeclaration { return a.ledger.Declarations() }
+func (a *Agents) Declarations() []*pb.AuthorityDeclaration { return a.authority.Declarations() }
 
-func (a *Agents) Authority() platform.Authority { return a.ledger }
+func (a *Agents) Authority() platform.Authority { return a.authority }
 
 func (a *Agents) SnapshotFormat() string { return "platform.ledger.v1" }
 
-func (a *Agents) Snapshot() (json.RawMessage, error) { return a.ledger.Snapshot() }
+func (a *Agents) Snapshot() (json.RawMessage, error) { return a.authority.Snapshot() }
 
-func (a *Agents) Restore(raw json.RawMessage) error { return a.ledger.Restore(raw) }
+func (a *Agents) Restore(raw json.RawMessage) error { return a.authority.Restore(raw) }
 
 func agentToolName(s string) string {
 	return strings.NewReplacer(".", "_", "#", "__", "/", "_", ":", "_", "-", "_").Replace(s)
@@ -268,10 +268,10 @@ func (a *Agents) changedDefinition(run runtimeprotocol.AgentRunRecord, d *runtim
 	return dynamic && run.DefinitionVersion != "" && run.DefinitionVersion != a.definitionVersion(d)
 }
 
-func (a *Agents) Fork(ledger platform.Authority) (platform.App, error) {
+func (a *Agents) Fork(authority platform.Authority) (platform.Service, error) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
-	return &Agents{tenant: a.tenant, host: a.host, ledger: ledger, authorities: a.authorities, defs: maps.Clone(a.defs),
+	return &Agents{tenant: a.tenant, host: a.host, authority: authority, authorities: a.authorities, defs: maps.Clone(a.defs),
 		buildStamp: a.buildStamp, busy: map[string]bool{}}, nil
 }
 
@@ -342,7 +342,7 @@ func (a *Agents) handle(c platform.Caller, e platform.Event, now time.Time) *pla
 		task, _ := platform.Get[runtimeprotocol.WorkTask](a.host.Automation(c, runtimeprotocol.WorkApp), id)
 		s := &pb.Submission{TenantId: a.tenant, PrincipalId: c.ID, Authority: runtimeprotocol.AgentApp, IdempotencyKey: fmt.Sprintf("%s:%d", run.ID, run.Revision+1),
 			Target: &pb.EntityRef{Type: runtimeprotocol.RunType, Id: run.ID}, Schema: &pb.SchemaRef{Name: runtimeprotocol.SchemaRunStep, Version: 1}, Payload: []byte("{}")}
-		_, err := a.ledger.Receive(c, s, now, nil, func() (func(*pb.ChangeRecord), *platform.Error) {
+		_, err := a.authority.Receive(c, s, now, nil, func() (func(*pb.ChangeRecord), *platform.Error) {
 			last := &run.Steps[len(run.Steps)-1]
 			last.Outcome += fmt.Sprintf("\nanswered by %s: %s", task.Assignee, cmp.Or(task.Answer, "done"))
 			run.State, run.Task = "running", ""
@@ -376,7 +376,7 @@ func (a *Agents) AgentEffectEnded(c platform.Caller, r *pb.ChangeRecord, x platf
 		ac := a.host.Automation(c, runtimeprotocol.AgentApp)
 		s := &pb.Submission{TenantId: a.tenant, PrincipalId: ac.ID, Authority: runtimeprotocol.AgentApp, IdempotencyKey: fmt.Sprintf("%s:%d", run.ID, run.Revision+1),
 			Target: &pb.EntityRef{Type: runtimeprotocol.RunType, Id: run.ID}, Schema: &pb.SchemaRef{Name: runtimeprotocol.SchemaRunStep, Version: 1}, Payload: []byte("{}")}
-		a.ledger.Receive(ac, s, now, nil, func() (func(*pb.ChangeRecord), *platform.Error) {
+		a.authority.Receive(ac, s, now, nil, func() (func(*pb.ChangeRecord), *platform.Error) {
 			return func(r *pb.ChangeRecord) { ac.Put(r, run) }, nil
 		})
 		return

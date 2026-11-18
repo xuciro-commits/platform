@@ -1,4 +1,4 @@
-package automation
+package runtime
 
 import (
 	"cmp"
@@ -216,7 +216,7 @@ func (ss *session) run(x *FlowInstance, token ...int) *platform.Run {
 func (f *Flows) decide(c platform.Caller, schema, id, key string, now time.Time, build func(ss *session) *platform.Error) (*pb.ChangeRecord, *platform.Error) {
 	s := &pb.Submission{TenantId: c.Tenant, PrincipalId: c.ID, Authority: ID, IdempotencyKey: key,
 		Target: &pb.EntityRef{Type: InstanceType, Id: id}, Schema: &pb.SchemaRef{Name: schema, Version: 1}, Payload: []byte("{}")}
-	return f.ledger.Receive(c, s, now, nil, func() (func(*pb.ChangeRecord), *platform.Error) {
+	return f.authority.Receive(c, s, now, nil, func() (func(*pb.ChangeRecord), *platform.Error) {
 		ss := f.session(c, now)
 		if err := build(ss); err != nil {
 			return nil, err
@@ -386,7 +386,7 @@ func (f *Flows) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb.
 	if schema == SchemaFlowReplay {
 		return f.replayDeadLetter(c, s, now)
 	}
-	return f.ledger.Receive(c, s, now, nil, func() (func(*pb.ChangeRecord), *platform.Error) {
+	return f.authority.Receive(c, s, now, nil, func() (func(*pb.ChangeRecord), *platform.Error) {
 		ss := f.session(f.host.Automation(c, ID), now)
 		x := ss.load(id)
 		if x == nil {

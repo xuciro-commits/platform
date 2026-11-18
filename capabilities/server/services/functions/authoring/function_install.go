@@ -10,7 +10,7 @@ import (
 
 type FunctionInstall struct {
 	Manifest   platform.Manifest
-	Source     func(object string) (platform.EntityInfo, bool)
+	Source     func(object string) (platform.RecordTypeInfo, bool)
 	Narrowable func(object string) []string
 
 	Check       func(platform.AIFunction) error

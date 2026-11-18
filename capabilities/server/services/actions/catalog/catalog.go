@@ -34,7 +34,7 @@ func payloadColumns(columns []platform.FieldInfo) []platform.Field {
 	return out
 }
 
-func EntityActions(e platform.Entity) []platform.Action {
+func EntityActions(e platform.RecordType) []platform.Action {
 	info, err := records.Describe("", e, func(reflect.Type) string { return "?" })
 	if err != nil {
 		panic(err)

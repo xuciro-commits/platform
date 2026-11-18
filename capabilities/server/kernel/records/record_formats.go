@@ -23,7 +23,7 @@ type FormatSet struct {
 	fields []formattedField
 }
 
-func CompileFormats(info platform.EntityInfo, engines ...platform.RuleEngine) (*FormatSet, error) {
+func CompileFormats(info platform.RecordTypeInfo, engines ...platform.RuleEngine) (*FormatSet, error) {
 	set := &FormatSet{}
 	for _, field := range info.Fields {
 		if len(field.Format) == 0 {

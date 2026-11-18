@@ -14,8 +14,8 @@ type ActionTypeEntityEnvironment struct {
 	CheckObject func(platform.Caller, Object) error
 }
 
-func ActionTypeEntity(env ActionTypeEntityEnvironment) platform.Entity {
-	return platform.Entity{Type: ActionTypeType, Title: "Action type", Plural: "Action types", Model: ActionType{}, Display: "title",
+func ActionTypeEntity(env ActionTypeEntityEnvironment) platform.RecordType {
+	return platform.RecordType{Type: ActionTypeType, Title: "Action type", Plural: "Action types", Model: ActionType{}, Display: "title",
 		Scope:    platform.Scope{Default: platform.ScopeNone, Levels: map[string]string{BuilderRole: platform.ScopeTenant}},
 		Standard: platform.Standard{Create: true, Edit: true, Archive: true, Roles: []string{BuilderRole}, Capability: "objects"},
 		Lifecycle: &platform.Lifecycle{Field: "state", Initial: "draft", States: []platform.State{{Name: "draft", Title: "Draft"}, {Name: "published", Title: "Published"}},

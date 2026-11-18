@@ -38,14 +38,14 @@ func (v *View) UnmarshalJSON(raw []byte) error {
 	return nil
 }
 
-func (e *Enterprise) Authority() platform.Authority { return e.ledger }
+func (e *Enterprise) Authority() platform.Authority { return e.authority }
 
-func (e *Enterprise) Fork(ledger platform.Authority) (platform.App, error) {
+func (e *Enterprise) Fork(authority platform.Authority) (platform.Service, error) {
 	raw, err := e.AcceptedState()
 	if err != nil {
 		return nil, err
 	}
-	fork := &Enterprise{tenant: e.tenant, ledger: ledger, authorities: e.authorities}
+	fork := &Enterprise{tenant: e.tenant, authority: authority, authorities: e.authorities}
 	if err := fork.ApplyAcceptedState(raw); err != nil {
 		return nil, err
 	}

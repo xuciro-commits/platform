@@ -1,4 +1,4 @@
-package build
+package authoring
 
 import (
 	"encoding/json"
@@ -10,7 +10,7 @@ import (
 	ontology "platformserver/services/ontology"
 )
 
-func (b *Build) actionTypeEntity() platform.Entity {
+func (b *Build) actionTypeEntity() platform.RecordType {
 	return ontology.ActionTypeEntity(ontology.ActionTypeEntityEnvironment{
 		BindActions: b.bindObjectActions,
 		CheckObject: func(c platform.Caller, object ontology.Object) error {
@@ -36,11 +36,11 @@ func (b *Build) writeObject(c platform.Caller, r *pb.ChangeRecord, verb, id stri
 		delete(input, "actions")
 		payload = platform.Raw(input)
 	}
-	return b.ledger.ApplyTxnRecord(c, r, b.objectEntity(), verb, id, payload, now)
+	return b.authority.ApplyTxnRecord(c, r, b.objectEntity(), verb, id, payload, now)
 }
 
 func (b *Build) writeActionType(c platform.Caller, r *pb.ChangeRecord, verb, id string, payload json.RawMessage, now time.Time) *platform.Error {
-	if refusal := b.ledger.ApplyTxnRecord(c, r, b.actionTypeEntity(), verb, id, payload, now); refusal != nil {
+	if refusal := b.authority.ApplyTxnRecord(c, r, b.actionTypeEntity(), verb, id, payload, now); refusal != nil {
 		return refusal
 	}
 	action, _ := platform.Get[ontology.ActionType](c, id)
@@ -69,7 +69,7 @@ func (b *Build) writeActionType(c platform.Caller, r *pb.ChangeRecord, verb, id 
 	ref := platform.AssetRef{App: ID, Kind: platform.AssetAction, Name: action.Name}
 	if !slices.ContainsFunc(object.ActionTypes, func(binding platform.AssetBinding) bool { return binding.Ref == ref }) {
 		object.ActionTypes = append(slices.Clone(object.ActionTypes), platform.AssetBinding{Ref: ref})
-		if refusal := b.ledger.ApplyTxnRecord(c, r, b.objectEntity(), "edit", object.ID, platform.Raw(map[string]any{"actionTypes": object.ActionTypes}), now); refusal != nil {
+		if refusal := b.authority.ApplyTxnRecord(c, r, b.objectEntity(), "edit", object.ID, platform.Raw(map[string]any{"actionTypes": object.ActionTypes}), now); refusal != nil {
 			return refusal
 		}
 		b.trackResource(c, r, ObjectType, object.ID, now)
@@ -78,7 +78,7 @@ func (b *Build) writeActionType(c platform.Caller, r *pb.ChangeRecord, verb, id 
 }
 
 func (b *Build) submitOntologyWrite(c platform.Caller, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *platform.Error) {
-	return b.ledger.Receive(c, s, now, nil, func() (func(*pb.ChangeRecord), *platform.Error) {
+	return b.authority.Receive(c, s, now, nil, func() (func(*pb.ChangeRecord), *platform.Error) {
 		return func(r *pb.ChangeRecord) {
 			verb := "edit"
 			if s.GetSchema().GetName() == s.GetTarget().GetType()+".create" {

@@ -12,8 +12,8 @@ import (
 
 type Translator struct {
 	base         platform.Languages
-	apps         func() []platform.App
-	manifest     func(platform.App) platform.Manifest
+	apps         func() []platform.Service
+	manifest     func(platform.Service) platform.Manifest
 	tenant       func() map[string]map[string]string
 	mu           sync.Mutex
 	applications map[string]platform.Languages
@@ -28,7 +28,7 @@ type translationDictionary struct {
 	patterns []pattern
 }
 
-func (x *Translator) appManifest(a platform.App) platform.Manifest {
+func (x *Translator) appManifest(a platform.Service) platform.Manifest {
 	if x.manifest != nil {
 		return x.manifest(a)
 	}
@@ -388,7 +388,7 @@ func (tr *Translator) TranslateMessages(v any, lang string) any {
 	return tree
 }
 
-func NewTranslator(apps func() []platform.App, manifest func(platform.App) platform.Manifest, tenant func() map[string]map[string]string, base platform.Languages) Translator {
+func NewTranslator(apps func() []platform.Service, manifest func(platform.Service) platform.Manifest, tenant func() map[string]map[string]string, base platform.Languages) Translator {
 	return Translator{apps: apps, manifest: manifest, tenant: tenant, base: base}
 }
 

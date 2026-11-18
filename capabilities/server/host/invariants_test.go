@@ -7,7 +7,7 @@ import (
 	dataowner "platformserver/services/data"
 	"platformserver/services/data/lineage"
 	"platformserver/services/ontology"
-	"platformserver/services/resources/merge"
+	branches "platformserver/services/resources/merge"
 
 	"reflect"
 	"slices"
@@ -21,7 +21,7 @@ import (
 	"platformserver/kernel/acceptedformat"
 	persistence "platformserver/kernel/store"
 	"platformserver/platform"
-	"platformserver/services/resources/authoring"
+	build "platformserver/services/resources/authoring"
 )
 
 func TestInvariantK1ReplayIsByteIdentical(t *testing.T) {

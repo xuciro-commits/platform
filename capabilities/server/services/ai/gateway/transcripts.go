@@ -1,4 +1,4 @@
-package aigateway
+package gateway
 
 import (
 	"strconv"

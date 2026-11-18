@@ -40,15 +40,15 @@ func (t *Tenant) Words(app string) transport.WordsView {
 	return transport.WordsOf(app, apps, t.i18n.Languages(), transport.TextsOf(app, manifest, t.definitions, t.typeInfos()), t.i18n.Say, t.words.Clone())
 }
 
-func (t *Tenant) typeInfos() []platform.EntityInfo {
-	var infos []platform.EntityInfo
+func (t *Tenant) typeInfos() []platform.RecordTypeInfo {
+	var infos []platform.RecordTypeInfo
 	for _, et := range t.Projection.SortedTypes() {
 		infos = append(infos, et.Info())
 	}
 	return infos
 }
 
-func (t *Tenant) names(info platform.EntityInfo, q string) (string, bool) {
+func (t *Tenant) names(info platform.RecordTypeInfo, q string) (string, bool) {
 	var terms []string
 	if t.Glossary != nil {
 		terms = t.Glossary.TermsFor(info.Type)

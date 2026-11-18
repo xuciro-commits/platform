@@ -1,4 +1,4 @@
-package automation
+package runtime
 
 import (
 	"bytes"
@@ -95,7 +95,7 @@ func (p *ArtifactCleanupPreparation) Submission(tenant string) *pb.Submission {
 		Payload: platform.Raw(map[string]string{"digest": p.digest})}
 }
 
-func (p *ArtifactCleanupPreparation) Decision(owner platform.App) platform.App {
+func (p *ArtifactCleanupPreparation) Decision(owner platform.Service) platform.Service {
 	return preparedArtifactCleanupDecision{Flows: owner.(*Flows), prepared: p}
 }
 
@@ -104,8 +104,8 @@ type preparedArtifactCleanupDecision struct {
 	prepared *ArtifactCleanupPreparation
 }
 
-func (d preparedArtifactCleanupDecision) Fork(ledger platform.Authority) (platform.App, error) {
-	fork, err := d.Flows.Fork(ledger)
+func (d preparedArtifactCleanupDecision) Fork(authority platform.Authority) (platform.Service, error) {
+	fork, err := d.Flows.Fork(authority)
 	if err != nil {
 		return nil, err
 	}
@@ -119,7 +119,7 @@ func (d preparedArtifactCleanupDecision) Submit(c platform.Caller, sub *pb.Submi
 		!bytes.Equal(sub.GetPayload(), p.Submission(p.tenant).GetPayload()) || sub.GetIdempotencyKey() != p.Submission(p.tenant).GetIdempotencyKey() || !now.Equal(p.at) {
 		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "Only the host can acknowledge retired Flow artifacts")
 	}
-	return d.ledger.Receive(c, sub, now, nil, func() (func(*pb.ChangeRecord), *platform.Error) {
+	return d.authority.Receive(c, sub, now, nil, func() (func(*pb.ChangeRecord), *platform.Error) {
 		ss := d.session(c, now)
 		x := ss.load(p.before.ID)
 		if x == nil || !p.Matches(*x) {

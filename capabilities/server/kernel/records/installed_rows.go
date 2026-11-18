@@ -42,7 +42,7 @@ func (s *Store) InstallImage(record string, image json.RawMessage) error {
 	return nil
 }
 
-func (s *Store) ResetReshaped(shapes map[string]platform.EntityInfo) {
+func (s *Store) ResetReshaped(shapes map[string]platform.RecordTypeInfo) {
 	for typ, shape := range shapes {
 		if old := s.Type(typ); old != nil && old.Info().Go != shape.Go {
 			old.SetRows(Index[*Row]{})

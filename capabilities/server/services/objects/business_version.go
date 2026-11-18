@@ -5,7 +5,7 @@ import (
 	"time"
 )
 
-func businessQuery(info platform.EntityInfo, q platform.Query, member platform.Member, at time.Time) platform.Query {
+func businessQuery(info platform.RecordTypeInfo, q platform.Query, member platform.Member, at time.Time) platform.Query {
 	if info.Versioning == nil || q.BusinessTime != nil && (q.BusinessTime.All || q.BusinessTime.At != "") {
 		return q
 	}
@@ -18,6 +18,6 @@ func businessQuery(info platform.EntityInfo, q platform.Query, member platform.M
 	return q
 }
 
-func BusinessQuery(info platform.EntityInfo, q platform.Query, member platform.Member, at time.Time) platform.Query {
+func BusinessQuery(info platform.RecordTypeInfo, q platform.Query, member platform.Member, at time.Time) platform.Query {
 	return businessQuery(info, q, member, at)
 }

@@ -1,4 +1,4 @@
-package build
+package authoring
 
 import (
 	ontology "platformserver/services/ontology"

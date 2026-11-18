@@ -16,7 +16,7 @@ import (
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformserver/platform"
 	"platformserver/services/ai/modelconfig"
-	"platformserver/services/ai/state"
+	aistate "platformserver/services/ai/state"
 )
 
 //go:embed i18n
@@ -68,7 +68,7 @@ type AI struct {
 	daily              map[string]int
 	recent             map[string][]time.Time
 	reservations       map[string]runtimeprotocol.AIReservation
-	ledger             platform.Authority
+	authority          platform.Authority
 	authorities        platform.Authorities
 }
 
@@ -77,7 +77,7 @@ func New(tenant string, authorities platform.Authorities) *AI {
 	f := func(name, typ, description string, required bool) platform.Field {
 		return platform.Field{Name: name, Type: typ, Required: required, Description: description}
 	}
-	return &AI{authorities: authorities, trainingPolicies: map[string]runtimeprotocol.AITrainingPolicy{}, trainingCandidates: map[string]runtimeprotocol.AITrainingCandidate{}, limits: map[string]Limit{}, daily: map[string]int{}, recent: map[string][]time.Time{}, reservations: map[string]runtimeprotocol.AIReservation{}, ledger: authorities(tenant, ID, platform.NewCatalog(append(trainingActions(), []platform.Action{
+	return &AI{authorities: authorities, trainingPolicies: map[string]runtimeprotocol.AITrainingPolicy{}, trainingCandidates: map[string]runtimeprotocol.AITrainingCandidate{}, limits: map[string]Limit{}, daily: map[string]int{}, recent: map[string][]time.Time{}, reservations: map[string]runtimeprotocol.AIReservation{}, authority: authorities(tenant, ID, platform.NewCatalog(append(trainingActions(), []platform.Action{
 		platform.Action{Schema: SchemaProviderAdd, Target: ProviderType, Capability: "providers", Title: "Add AI provider", Roles: admin,
 			Description: "Add a source of models: a vendor (Anthropic, OpenAI, Gemini, Moonshot, DeepSeek, Qwen, Zhipu, OpenRouter), a third-party OpenAI-compatible API, or a local model server (LM Studio, Ollama, llama.cpp).",
 			Payload: []platform.Field{f("kind", "string", "vendor, compatible or local", true), f("vendor", "string", "For a vendor: its ID", false),
@@ -108,14 +108,14 @@ func (a *AI) SnapshotFormat() string { return "ai.state.v1" }
 func (a *AI) Snapshot() (json.RawMessage, error) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
-	return a.ledger.SnapshotWith(aistate.State{Providers: a.providers, Models: a.models, Limits: a.limits, Usage: a.usage, Daily: a.daily, Reservations: a.reservations, TrainingPolicies: a.trainingPolicies, TrainingCandidates: a.trainingCandidates})
+	return a.authority.SnapshotWith(aistate.State{Providers: a.providers, Models: a.models, Limits: a.limits, Usage: a.usage, Daily: a.daily, Reservations: a.reservations, TrainingPolicies: a.trainingPolicies, TrainingCandidates: a.trainingCandidates})
 }
 
 func (a *AI) Restore(raw json.RawMessage) error {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	var s aistate.State
-	if err := a.ledger.RestoreWith(raw, &s); err != nil {
+	if err := a.authority.RestoreWith(raw, &s); err != nil {
 		return err
 	}
 	a.providers, a.models, a.limits, a.usage, a.daily = s.Providers, s.Models, s.Limits, s.Usage, s.Daily
@@ -144,7 +144,7 @@ func (a *AI) Restore(raw json.RawMessage) error {
 }
 
 func (a *AI) Manifest() platform.Manifest {
-	return platform.Manifest{Languages: languages, ID: ID, Title: platform.BuiltinManifestTitle(ID), Version: "1", Actions: a.ledger.Catalog(), Reads: []string{"ai-providers", "ai-models", "ai-usage", "ai-limits", "ai-training"},
+	return platform.Manifest{Languages: languages, ID: ID, Title: platform.BuiltinManifestTitle(ID), Version: "1", Actions: a.authority.Catalog(), Reads: []string{"ai-providers", "ai-models", "ai-usage", "ai-limits", "ai-training"},
 		ReadSources: map[string]string{"ai-providers": "record", "ai-models": "record", "ai-usage": "record", "ai-limits": "record", "ai-training": "record"},
 		Everyone:    []string{"ai-models", "ai-usage"}, Roles: []string{User},
 		Settings: []platform.Setting{
@@ -159,7 +159,7 @@ func (a *AI) Manifest() platform.Manifest {
 				Description: "Organization-wide generation budget per call. New model options must fit within it; 0 requires a reviewed model limit."}}}
 }
 
-func (a *AI) Declarations() []*pb.AuthorityDeclaration { return a.ledger.Declarations() }
+func (a *AI) Declarations() []*pb.AuthorityDeclaration { return a.authority.Declarations() }
 
 func (a *AI) Provider(id string) (Provider, bool) {
 	a.mu.Lock()
@@ -178,7 +178,7 @@ func (a *AI) provider(id string) (Provider, bool) {
 func (a *AI) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *platform.Error) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
-	return a.ledger.Receive(c, s, now, nil, func() (func(*pb.ChangeRecord), *platform.Error) {
+	return a.authority.Receive(c, s, now, nil, func() (func(*pb.ChangeRecord), *platform.Error) {
 		invalid := &platform.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 		notFound := &platform.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
 		id := s.GetTarget().GetId()
@@ -567,4 +567,4 @@ func (a *AI) Spent(member string, now time.Time) int {
 	return a.daily[now.UTC().Format(time.DateOnly)+"|"+member]
 }
 
-func (a *AI) NewSimulationApp(tenant string) platform.App { return New(tenant, a.authorities) }
+func (a *AI) NewSimulationApp(tenant string) platform.Service { return New(tenant, a.authorities) }

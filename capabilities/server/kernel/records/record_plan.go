@@ -17,7 +17,7 @@ type Plan struct {
 	Candidates        func(IndexImage, ImageLookup) ([]string, bool)
 }
 
-func CompilePlan(info platform.EntityInfo, filter ruleexpr.Expr, search string, engines ...platform.RuleEngine) (Plan, error) {
+func CompilePlan(info platform.RecordTypeInfo, filter ruleexpr.Expr, search string, engines ...platform.RuleEngine) (Plan, error) {
 	if filter.Op == "" && filter.Lit == nil && filter.Ref == "" {
 		filter = boolLit(true)
 	}
@@ -255,7 +255,7 @@ func indexedSource(image IndexImage, lookup ImageLookup, field string, values []
 	return candidateSource{size: len(ids), ids: ids}, true
 }
 
-func uniqueRule(info platform.EntityInfo, field string) (platform.Constraint, bool) {
+func uniqueRule(info platform.RecordTypeInfo, field string) (platform.Constraint, bool) {
 	for _, rule := range info.Constraints {
 		if rule.Kind == "unique" && len(rule.Fields) == 1 && rule.Fields[0] == field && (rule.Scope == "" || rule.Scope == "tenant") {
 			return rule, true

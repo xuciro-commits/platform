@@ -31,6 +31,7 @@
 | Resource | 资源 | 有 RID、属于一个项目的定义 | domain |
 | RID | RID | 资源的不可变标识 `ri.<service>.<tenant>.<kind>.<id>` | domain |
 | API name | API 名 | 可被引用的稳定名 | domain |
+| Record type | 记录类型 | 声明记录的字段、关系、生命周期与动作，在 Go SDK 中称为 `RecordType` | 本体 |
 | Project | 项目 | 资源的容器与访问边界 | 主页 |
 | Folder | 文件夹 | 项目内的组织层级 | 主页 |
 | Managed project | 受管项目 | 安装产品后放置其资源的只读项目 | 交付 |

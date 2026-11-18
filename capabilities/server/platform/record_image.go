@@ -48,7 +48,7 @@ type RecordImageFormat struct {
 	Convert func(json.RawMessage) (json.RawMessage, error)
 }
 
-func RecordPathField(typ string, path []string, entity func(string) (EntityInfo, bool)) (FieldInfo, error) {
+func RecordPathField(typ string, path []string, entity func(string) (RecordTypeInfo, bool)) (FieldInfo, error) {
 	if len(path) == 0 || len(path) > 16 {
 		return FieldInfo{}, fmt.Errorf("a record path needs 1–16 declared fields")
 	}

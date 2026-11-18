@@ -11,7 +11,7 @@ import (
 	"platformserver/services/resources/publication"
 )
 
-func checkRefusalDeclarations(ctx TransactionContext, object Object, action Action, declarations []platform.Refusal, scope platform.RuleReadSpec, row string, lookup func(string) (platform.EntityInfo, bool), engines ...platform.RuleEngine) error {
+func checkRefusalDeclarations(ctx TransactionContext, object Object, action Action, declarations []platform.Refusal, scope platform.RuleReadSpec, row string, lookup func(string) (platform.RecordTypeInfo, bool), engines ...platform.RuleEngine) error {
 	if len(declarations) > 16 {
 		return fmt.Errorf("transaction refusals exceed their limit")
 	}
@@ -205,7 +205,7 @@ func checkRefusalCycles(object Object) error {
 	return nil
 }
 
-func checkTxnIntervals(ctx TransactionContext, step platform.TxnStep, scope platform.RuleReadSpec, lookup func(string) (platform.EntityInfo, bool)) error {
+func checkTxnIntervals(ctx TransactionContext, step platform.TxnStep, scope platform.RuleReadSpec, lookup func(string) (platform.RecordTypeInfo, bool)) error {
 	p := step.Intervals
 	if p == nil || (platform.AssetRef{App: ctx.App, Kind: platform.AssetObservation, Name: p.Source}).Check() != nil || !publication.ValidName(p.Set) || step.Target != (platform.TxnRef{}) {
 		return fmt.Errorf("Interval projection needs its logical source and original collection")
@@ -248,7 +248,7 @@ func checkTxnIntervals(ctx TransactionContext, step platform.TxnStep, scope plat
 	return nil
 }
 
-func checkTypedTxnStep(ctx TransactionContext, step platform.TxnStep, scope platform.RuleReadSpec, lookup func(string) (platform.EntityInfo, bool), engines ...platform.RuleEngine) error {
+func checkTypedTxnStep(ctx TransactionContext, step platform.TxnStep, scope platform.RuleReadSpec, lookup func(string) (platform.RecordTypeInfo, bool), engines ...platform.RuleEngine) error {
 	check := func(expr *platform.Expr, kinds ...string) error {
 		if expr == nil {
 			return nil
@@ -364,7 +364,7 @@ func checkTypedTxnStep(ctx TransactionContext, step platform.TxnStep, scope plat
 	return nil
 }
 
-func checkTxnRange(span platform.TxnRange, scope platform.RuleReadSpec, lookup func(string) (platform.EntityInfo, bool), engines ...platform.RuleEngine) error {
+func checkTxnRange(span platform.TxnRange, scope platform.RuleReadSpec, lookup func(string) (platform.RecordTypeInfo, bool), engines ...platform.RuleEngine) error {
 	if span.From.Kind != "date" && span.From.Kind != "datetime" && span.From.Kind != "integer" || span.Until.Kind != span.From.Kind || span.Unit != "day" && span.Unit != "hour" && span.Unit != "item" || (span.From.Kind == "integer") != (span.Unit == "item") || span.Unit == "hour" && span.From.Kind != "datetime" || span.Step < 1 || span.Step > platform.TxnMaxIterations || span.Limit < 1 || span.Limit > platform.TxnMaxIterations {
 		return fmt.Errorf("Range iteration needs matching integers, dates or timestamps, a compatible step and a bounded limit")
 	}

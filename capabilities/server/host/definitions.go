@@ -10,16 +10,16 @@ import (
 
 	"platformserver/platform"
 	pageowner "platformserver/services/apps/pages"
-	"platformserver/services/resources/authoring"
+	build "platformserver/services/resources/authoring"
 )
 
 func (t *Tenant) registerDefinitions() error {
-	entities := []platform.EntityInfo{}
+	entities := []platform.RecordTypeInfo{}
 	for _, et := range t.Projection.SortedTypes() {
 		entities = append(entities, et.Info())
 	}
 	err := build.CodeDefinitions{Apps: t.apps, Entities: entities, CheckPage: pageowner.CheckSafety,
-		Narrowable:    func(info platform.EntityInfo) []string { return t.narrowable(t.Projection.Type(info.Type)) },
+		Narrowable:    func(info platform.RecordTypeInfo) []string { return t.narrowable(t.Projection.Type(info.Type)) },
 		CheckSections: t.checkSections,
 		BindInterface: func(q platform.NamedQuery) (platform.NamedQuery, error) { return t.bindInterfaceQuery(q) },
 		InstallLink:   t.Projection.InstallLinkConstraint,

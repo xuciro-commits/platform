@@ -37,7 +37,7 @@ const (
 )
 
 type ApprovalOwner interface {
-	platform.App
+	platform.Service
 	RequestApproval(platform.Caller, *pb.Submission, time.Time) (*pb.ChangeRecord, *platform.Error)
 }
 

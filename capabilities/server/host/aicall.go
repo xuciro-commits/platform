@@ -12,9 +12,9 @@ import (
 	runtimekernel "platformserver/kernel"
 	"platformserver/platform"
 	"platformserver/services/actions"
-	"platformserver/services/ai/gateway"
+	aigateway "platformserver/services/ai/gateway"
 	"platformserver/services/ai/gateway/providers"
-	"platformserver/services/resources/authoring"
+	build "platformserver/services/resources/authoring"
 	"platformserver/services/resources/monitoring"
 	controlowner "platformserver/services/security/control"
 )
@@ -80,8 +80,8 @@ func (t *Tenant) reserveCall(m platform.Member, model platform.AIModel, req plat
 				return refusal
 			},
 		}.Prepare(m, model, req, input, output, now), nil
-	}, func(t *Tenant, candidate preparedAccepted, failure *platform.AIError, refusal *platform.Error) (*platform.AIError, *platform.Error) {
-		_, refusal = t.finishPreparedInput(platform.Member{ID: "app:" + protocol.AIApp, Tenant: t.ID}, protocol.AIReserveCall, candidate, nil, refusal)
+	}, func(t *Tenant, decision preparedAccepted, failure *platform.AIError, refusal *platform.Error) (*platform.AIError, *platform.Error) {
+		_, refusal = t.finishPreparedInput(platform.Member{ID: "app:" + protocol.AIApp, Tenant: t.ID}, protocol.AIReserveCall, decision, nil, refusal)
 		if refusal != nil {
 			return aigateway.ReservationFailure(refusal), nil
 		}
@@ -102,8 +102,8 @@ func (t *Tenant) releaseCall(call string, now time.Time) *platform.Error {
 		}
 		body, _ := json.Marshal(protocol.AIReserveInput{Reservation: r, Cancel: true})
 		return t.inputAccepted(t.Models, member, protocol.AIReserveCall, body, now)
-	}, func(t *Tenant, candidate preparedAccepted, answer any, refusal *platform.Error) (any, *platform.Error) {
-		return t.finishPreparedInput(member, protocol.AIReserveCall, candidate, answer, refusal)
+	}, func(t *Tenant, decision preparedAccepted, answer any, refusal *platform.Error) (any, *platform.Error) {
+		return t.finishPreparedInput(member, protocol.AIReserveCall, decision, answer, refusal)
 	})
 	return refusal
 }
@@ -133,11 +133,11 @@ func (t *Tenant) call(pv platform.AIProvider, model platform.AIModel, m platform
 func (t *Tenant) meter(m platform.Member, u platform.AIUsage) *platform.Error {
 	_, refusal := decideOnImage(t, context.Background(), "model:usage", func(t *Tenant) (struct{}, *platform.Error) {
 		return struct{}{}, t.acceptUsage(m, u)
-	}, func(t *Tenant, candidate preparedAccepted, value struct{}, refusal *platform.Error) (struct{}, *platform.Error) {
-		if len(candidate.entry.Body) == 0 {
+	}, func(t *Tenant, decision preparedAccepted, value struct{}, refusal *platform.Error) (struct{}, *platform.Error) {
+		if len(decision.entry.Body) == 0 {
 			return value, refusal
 		}
-		return value, t.finishUsage(candidate)
+		return value, t.finishUsage(decision)
 	})
 	return refusal
 }
@@ -180,17 +180,17 @@ func (t *Tenant) acceptUsage(m platform.Member, u platform.AIUsage) *platform.Er
 	if refusal != nil || raw == nil {
 		return refusal
 	}
-	candidate := preparedAccepted{entry: runtimekernel.AcceptedEntry(protocol.AIApp, m, raw, r.At, nil), key: r.Key, hash: r.RequestHash}
-	if t.stage(candidate) {
+	decision := preparedAccepted{entry: runtimekernel.AcceptedEntry(protocol.AIApp, m, raw, r.At, nil), key: r.Key, hash: r.RequestHash}
+	if t.stage(decision) {
 		return nil
 	}
-	return t.finishUsage(candidate)
+	return t.finishUsage(decision)
 }
 
-func (t *Tenant) finishUsage(candidate preparedAccepted) *platform.Error {
-	committed, err := t.acceptResult(candidate.entry, candidate.key, candidate.hash)
+func (t *Tenant) finishUsage(decision preparedAccepted) *platform.Error {
+	committed, err := t.acceptResult(decision.entry, decision.key, decision.hash)
 	if err != nil {
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The model usage was not accepted")
 	}
-	return t.usageAcceptance().Finish(committed, candidate.key, candidate.hash)
+	return t.usageAcceptance().Finish(committed, decision.key, decision.hash)
 }

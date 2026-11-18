@@ -1,4 +1,4 @@
-package agents
+package runtime
 
 import (
 	"cmp"
@@ -13,7 +13,7 @@ import (
 	"time"
 )
 
-func (a *Agents) DeclareAgentApp(app platform.App) error {
+func (a *Agents) DeclareAgentApp(app platform.Service) error {
 	m := app.Manifest()
 	for _, ag := range m.Agents {
 		id := m.ID + "." + ag.Name

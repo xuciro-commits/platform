@@ -130,7 +130,7 @@ func (d *Console) AttachOwner(bindings runtimeprotocol.OwnerBindings) {
 
 func (d *Console) MemberCount() int { d.mu.Lock(); defer d.mu.Unlock(); return len(d.members) }
 
-func (d *Console) NewSimulationIdentity(tenant string, members []platform.Member) platform.App {
+func (d *Console) NewSimulationIdentity(tenant string, members []platform.Member) platform.Service {
 	members = append(slices.Clone(members), CandidateTestMember(tenant))
 	seats := make([]runtimeprotocol.Seat, 0, len(members))
 	for _, member := range members {
@@ -163,7 +163,7 @@ func (d *Console) UnitGrantUsage(unit, until string) []platform.UnitGrantUsage {
 		}
 	}
 	d.mu.Unlock()
-	for _, record := range d.ledger.RecordsFor(d.tenant) {
+	for _, record := range d.authority.RecordsFor(d.tenant) {
 		submission := record.GetSubmission()
 		if submission.GetSchema().GetName() == runtimeprotocol.SchemaTeamSave {
 			var team platform.Team

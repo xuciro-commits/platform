@@ -21,7 +21,7 @@ func DraftLogicalName(ref platform.AssetRef) string {
 	return ref.Name
 }
 
-func DraftSubmission(tenant, candidate string, context protocol.AssetReleaseContext, request *OwnerDraftRequest, ordinal int, draft protocol.AssetDraft, info platform.EntityInfo) (*pb.Submission, error) {
+func DraftSubmission(tenant, candidate string, context protocol.AssetReleaseContext, request *OwnerDraftRequest, ordinal int, draft protocol.AssetDraft, info platform.RecordTypeInfo) (*pb.Submission, error) {
 	raw, err := AssetDraftPayload(info, draft.Image)
 	if err != nil {
 		return nil, err
@@ -42,7 +42,7 @@ func DraftSubmission(tenant, candidate string, context protocol.AssetReleaseCont
 		Target: &pb.EntityRef{Type: draft.Type, Id: draft.Name}, Schema: &pb.SchemaRef{Name: draft.Schema, Version: 1}, Payload: raw}, nil
 }
 
-func DraftRefusal(app platform.App, draft protocol.AssetDraft, rejected *platform.Error) error {
+func DraftRefusal(app platform.Service, draft protocol.AssetDraft, rejected *platform.Error) error {
 	if rejected.Code == pb.ErrorCode_ERROR_CODE_POLICY_DENIED {
 		action, _ := app.Manifest().Actions.Action(draft.Schema)
 		return fmt.Errorf("create target draft %s/%s needs the %s role and matching token scope: %w", draft.Type, draft.Name, strings.Join(action.Roles, " role or "), rejected)

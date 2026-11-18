@@ -7,7 +7,7 @@ import (
 	"platformserver/kernel/transport"
 	"platformserver/platform"
 	"platformserver/services/objects"
-	"platformserver/services/resources/authoring"
+	build "platformserver/services/resources/authoring"
 	"reflect"
 	"strings"
 	"time"
@@ -21,7 +21,7 @@ func (t *Tenant) Changed(e platform.Event) []string {
 
 func (t *Tenant) held(ref string) (any, bool) { return t.Projection.Held(ref) }
 
-func (t *Tenant) Entities(m platform.Member) []platform.EntityInfo {
+func (t *Tenant) Entities(m platform.Member) []platform.RecordTypeInfo {
 	gen, key := t.definitionsFingerprint(), transport.Rights(m)
 	if out, ok := t.viewCache().Entities(gen, key); ok {
 		return out

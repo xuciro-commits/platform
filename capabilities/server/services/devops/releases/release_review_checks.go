@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"platformserver/kernel/protocol"
 	"platformserver/platform"
-	"platformserver/services/resources/authoring"
+	build "platformserver/services/resources/authoring"
 
 	"time"
 )

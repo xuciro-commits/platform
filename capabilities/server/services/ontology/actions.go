@@ -11,7 +11,7 @@ import (
 
 var ValueInputTypes = map[string]string{"text": "string", "longtext": "string", "integer": "integer", "decimal": "number", "date": "date", "datetime": "datetime", "boolean": "boolean", "choice": "string", "reference": "string", "attachment": "attachment"}
 
-func CheckProcess(o Object, app, objectType, builderRole, userRole, functionCallType string, lookup func(string) (platform.EntityInfo, bool)) error {
+func CheckProcess(o Object, app, objectType, builderRole, userRole, functionCallType string, lookup func(string) (platform.RecordTypeInfo, bool)) error {
 	if len(o.States) == 0 && len(o.Actions) > 0 {
 		return fmt.Errorf("an object needs states before it has actions")
 	}
@@ -149,7 +149,7 @@ func CheckActionAdoption(a Action, app, functionCallType string) error {
 	return nil
 }
 
-func CheckAdoptionSources(o Object, objectType string, a Action, lookup func(string) (platform.EntityInfo, bool)) error {
+func CheckAdoptionSources(o Object, objectType string, a Action, lookup func(string) (platform.RecordTypeInfo, bool)) error {
 	if a.Adoption == nil || a.Transaction == nil {
 		return nil
 	}
@@ -222,15 +222,15 @@ func RuleSpec(o Object, app string, a Action, read *platform.RuleReadSpec) platf
 	return s
 }
 
-func RuleLookup(o Object, app, builderRole string, lookup func(string) (platform.EntityInfo, bool)) func(string) (platform.EntityInfo, bool) {
-	return func(typ string) (platform.EntityInfo, bool) {
+func RuleLookup(o Object, app, builderRole string, lookup func(string) (platform.RecordTypeInfo, bool)) func(string) (platform.RecordTypeInfo, bool) {
+	return func(typ string) (platform.RecordTypeInfo, bool) {
 		if typ != app+"."+o.Name {
 			if lookup == nil {
-				return platform.EntityInfo{}, false
+				return platform.RecordTypeInfo{}, false
 			}
 			return lookup(typ)
 		}
-		info := platform.EntityInfo{Type: typ, App: app, Sets: o.Sets}
+		info := platform.RecordTypeInfo{Type: typ, App: app, Sets: o.Sets}
 		for _, f := range o.Fields {
 			read := f.Read
 			if len(read) > 0 {
@@ -245,7 +245,7 @@ func RuleLookup(o Object, app, builderRole string, lookup func(string) (platform
 	}
 }
 
-func ActionCriteria(o Object, app, builderRole string, a Action, lookup func(string) (platform.EntityInfo, bool)) (*platform.RuleCriteria, error) {
+func ActionCriteria(o Object, app, builderRole string, a Action, lookup func(string) (platform.RecordTypeInfo, bool)) (*platform.RuleCriteria, error) {
 	plan := &platform.RuleCriteria{Reads: RuleSpec(o, app, a, a.Transaction.Reads)}
 	used := map[string]bool{}
 	var visit func(platform.Expr)

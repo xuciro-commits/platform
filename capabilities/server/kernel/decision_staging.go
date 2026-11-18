@@ -90,12 +90,12 @@ func (d *Decision) RunProbe(rt platform.Runtime, c platform.Caller, decide func(
 	return err
 }
 
-func (d *Decision) PrivateApp(app platform.App, bind func(platform.App)) (platform.App, bool) {
+func (d *Decision) PrivateApp(app platform.Service, bind func(platform.Service)) (platform.Service, bool) {
 	id := app.Manifest().ID
 	if existing := d.PrivateApps[id]; existing != nil {
 		return existing, true
 	}
-	var fork platform.App
+	var fork platform.Service
 	var before json.RawMessage
 	var err error
 	owner, ownsState := app.(platform.AcceptedStateApp)
@@ -109,7 +109,7 @@ func (d *Decision) PrivateApp(app platform.App, bind func(platform.App)) (platfo
 		return nil, false
 	}
 	if d.PrivateApps == nil {
-		d.PrivateApps = map[string]platform.App{}
+		d.PrivateApps = map[string]platform.Service{}
 	}
 	d.PrivateApps[id] = fork
 	bind(fork)
@@ -131,8 +131,8 @@ func (d *Decision) PrivateApp(app platform.App, bind func(platform.App)) (platfo
 }
 
 type ObserverHooks struct {
-	Apps    func() []platform.App
-	Private func(platform.App) platform.App
+	Apps    func() []platform.Service
+	Private func(platform.Service) platform.Service
 	Caller  func(id string) platform.Caller
 	Events  func(platform.Event) []string
 }
@@ -170,7 +170,7 @@ func (d *Decision) StageObservers(h ObserverHooks) (*platform.Error, bool) {
 	return d.Failure, true
 }
 
-func (d *Decision) AllocateNumber(c platform.Caller, tenant string, owner func(string) platform.App, rec *pb.ChangeRecord, name string, date time.Time) (number string, err *platform.Error) {
+func (d *Decision) AllocateNumber(c platform.Caller, tenant string, owner func(string) platform.Service, rec *pb.ChangeRecord, name string, date time.Time) (number string, err *platform.Error) {
 	defer func() {
 		if err != nil {
 			d.FailDecision(err)
@@ -208,7 +208,7 @@ func (d *Decision) AllocateNumber(c platform.Caller, tenant string, owner func(s
 	return s.Format(date.Year(), d.Sequences[key]), nil
 }
 
-func (d *Decision) PublishRecord(app platform.App, c platform.Caller, record *pb.ChangeRecord, installLink func(schema string, raw []byte) error) bool {
+func (d *Decision) PublishRecord(app platform.Service, c platform.Caller, record *pb.ChangeRecord, installLink func(schema string, raw []byte) error) bool {
 	if tracker, ok := app.(interface {
 		TrackResource(platform.Caller, *pb.ChangeRecord, time.Time)
 	}); ok {
@@ -250,7 +250,7 @@ func (d *Decision) PublishRecord(app platform.App, c platform.Caller, record *pb
 	return true
 }
 
-func (d *Decision) DecideApp(c platform.Caller, app platform.App, s *pb.Submission, at time.Time, definition func() (*platform.DecisionDefinition, error)) (*pb.ChangeRecord, *platform.Error, bool) {
+func (d *Decision) DecideApp(c platform.Caller, app platform.Service, s *pb.Submission, at time.Time, definition func() (*platform.DecisionDefinition, error)) (*pb.ChangeRecord, *platform.Error, bool) {
 	if app.Authority() == nil {
 		return nil, nil, false
 	}

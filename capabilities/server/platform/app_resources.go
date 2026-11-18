@@ -117,7 +117,7 @@ func (s *Resources) Close(ctx context.Context) error {
 	}
 }
 
-func CallRead(app App, c Caller, name string, _ ...json.RawMessage) (any, *Error) {
+func CallRead(app Service, c Caller, name string, _ ...json.RawMessage) (any, *Error) {
 	if app == nil {
 		return nil, &Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
 	}

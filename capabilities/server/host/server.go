@@ -109,8 +109,8 @@ func (h *Host) join(t *Tenant, subject string, now time.Time) bool {
 			return nil, refusal
 		}
 		return t.accept(t.IdentityOwner, caller.Member, sub, now, acceptOptions{automation: true})
-	}, func(t *Tenant, candidate preparedAccepted, record *pb.ChangeRecord, refusal *platform.Error) (*pb.ChangeRecord, *platform.Error) {
-		return t.finishPreparedSubmission(platform.Member{ID: "app:" + controlowner.PlatformApp, Tenant: t.ID}, candidate, record, refusal)
+	}, func(t *Tenant, decision preparedAccepted, record *pb.ChangeRecord, refusal *platform.Error) (*pb.ChangeRecord, *platform.Error) {
+		return t.finishPreparedSubmission(platform.Member{ID: "app:" + controlowner.PlatformApp, Tenant: t.ID}, decision, record, refusal)
 	})
 	if refusal != nil {
 		log.Printf("join %s to %s: %s", subject, t.ID, refusal.Error())

@@ -18,13 +18,13 @@ import (
 	agentowner "platformserver/services/ai/runtime"
 	releaseowner "platformserver/services/devops/releases"
 	"platformserver/services/objects"
-	"platformserver/services/resources/authoring"
+	build "platformserver/services/resources/authoring"
 )
 
 func (h hostView) ProtocolActions(protocol string) []platform.Action {
 	return actions.ProtocolActions(h.t.LiveApps(), protocol)
 }
-func (h hostView) ProtocolProvider(schema string) (platform.App, string, bool) {
+func (h hostView) ProtocolProvider(schema string) (platform.Service, string, bool) {
 	return h.t.router().Provider(schema)
 }
 func (h hostView) InvokeDecision(c platform.Caller, protocol, action, id string, raw []byte, key, correlation string, now time.Time) (*pb.EntityRef, *pb.ChangeRecord, *platform.Error) {
@@ -151,7 +151,7 @@ func (h hostView) AgentProviderAvailable(provider string, now time.Time) bool {
 	return h.t.breakers.Allow("ai:"+provider, now, false)
 }
 func (h hostView) CallAgentModel(provider platform.AIProvider, model platform.AIModel, member platform.Member, request platform.ChatRequest, now time.Time) (platform.ChatAnswer, *platform.AIError) {
-	return aigateway.AgentCall{
+	return gateway.AgentCall{
 		Authorize: func(member platform.Member, request platform.ChatRequest) *platform.AIError {
 			_, refusal := recordRead(h.t, context.Background(), func(t *Tenant) (struct{}, *platform.Error) {
 				return struct{}{}, t.modelAllowed(runtimeprotocol.AgentApp, member, request.Model)
@@ -199,7 +199,7 @@ func aiContextReader(reader *platform.Member) *platform.Member {
 	return &copy
 }
 
-func (h hostView) AgentEvaluationApp(candidate, agent string) (platform.App, string, error) {
+func (h hostView) AgentEvaluationApp(candidate, agent string) (platform.Service, string, error) {
 	return h.t.candidateEvaluation().App(candidate, agent)
 }
 
@@ -258,9 +258,9 @@ func (t *Tenant) agentSchedule() agentowner.Schedule {
 func (t *Tenant) applyAgentStep(b runtimeprotocol.AgentResultStep, now time.Time) bool {
 	applied, refusal := decideOnImage(t, context.Background(), "agent:settle", func(t *Tenant) (bool, *platform.Error) {
 		return t.agentSchedule().Prepare(b, now), nil
-	}, func(t *Tenant, candidate preparedAccepted, applied bool, refusal *platform.Error) (bool, *platform.Error) {
-		if len(candidate.entry.Body) != 0 {
-			t.finishAgentStep(candidate)
+	}, func(t *Tenant, decision preparedAccepted, applied bool, refusal *platform.Error) (bool, *platform.Error) {
+		if len(decision.entry.Body) != 0 {
+			t.finishAgentStep(decision)
 		}
 		return applied && !t.quarantined(), refusal
 	})
@@ -279,7 +279,7 @@ func (t *Tenant) Evaluate(now time.Time) {
 }
 
 func (h hostView) AgentModelConfigurationDigest(model platform.AIModel, provider platform.AIProvider, binding *platform.AIModelBinding) (string, error) {
-	return aigateway.ConfigurationDigest(model, provider, binding)
+	return gateway.ConfigurationDigest(model, provider, binding)
 }
 
 func (h hostView) AgentAnswerText(outcome platform.Outcome) string { return actions.AnswerOf(outcome) }
@@ -304,17 +304,17 @@ func (t *Tenant) acceptAgentStep(b runtimeprotocol.AgentResultStep, at time.Time
 			return draft.batchResult(last.App, last.Record.GetSubmission(), last.Record, at)
 		},
 		Prepared: func(body, principal []byte, key, hash string) {
-			t.stageCandidate(draft, runtimeprotocol.AgentApp, body, principal, key, hash, at, t.finishAgentStep)
+			t.stageDecision(draft, runtimeprotocol.AgentApp, body, principal, key, hash, at, t.finishAgentStep)
 		}}.Accept(b, at)
 }
 
-func (t *Tenant) finishAgentStep(candidate preparedAccepted) {
+func (t *Tenant) finishAgentStep(decision preparedAccepted) {
 	runtimekernel.AgentFinish{Settlement: t.settlement(),
-		Commit: func() ([]byte, error) { return t.acceptResult(candidate.entry, candidate.key, candidate.hash) },
+		Commit: func() ([]byte, error) { return t.acceptResult(decision.entry, decision.key, decision.hash) },
 		Apply: func(committed []byte) error {
 			_, err := t.applyAcceptedAgent(committed)
 			return err
-		}}.Finish(candidate.key, candidate.hash)
+		}}.Finish(decision.key, decision.hash)
 }
 
 func (t *Tenant) applyAcceptedAgent(raw []byte) (acceptedformat.RuntimeAgent, error) {

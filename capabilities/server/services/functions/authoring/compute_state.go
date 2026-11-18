@@ -137,5 +137,5 @@ func (o *Owner) Compute(_ context.Context, name string, input json.RawMessage) (
 		return nil, err
 	}
 	legacy := len(tb.Rows) > 0 && len(tb.Rows[0].Expressions) == 0
-	return ruleprotocol.DecideTable(*plan, TableInput(plan.Reads, legacy, values), func(string) (platform.EntityInfo, bool) { return platform.EntityInfo{}, false })
+	return ruleprotocol.DecideTable(*plan, TableInput(plan.Reads, legacy, values), func(string) (platform.RecordTypeInfo, bool) { return platform.RecordTypeInfo{}, false })
 }

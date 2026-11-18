@@ -7,8 +7,8 @@ import (
 	"platformserver/platform"
 )
 
-func BindInterfaceQuery(q platform.NamedQuery, declared []platform.Interface, types []platform.EntityInfo, entity func(string) (platform.EntityInfo, bool), engine platform.RuleEngine, drafts ...platform.EntityInfo) (platform.NamedQuery, error) {
-	overlay := map[string]platform.EntityInfo{}
+func BindInterfaceQuery(q platform.NamedQuery, declared []platform.Interface, types []platform.RecordTypeInfo, entity func(string) (platform.RecordTypeInfo, bool), engine platform.RuleEngine, drafts ...platform.RecordTypeInfo) (platform.NamedQuery, error) {
+	overlay := map[string]platform.RecordTypeInfo{}
 	for _, info := range drafts {
 		overlay[info.Type] = info
 	}
@@ -60,7 +60,7 @@ func BindInterfaceQuery(q platform.NamedQuery, declared []platform.Interface, ty
 }
 
 func CheckInterfaceQueryFields(q platform.NamedQuery, engine platform.RuleEngine) error {
-	info := platform.EntityInfo{}
+	info := platform.RecordTypeInfo{}
 	for _, field := range q.InterfaceShape.Fields {
 		info.Fields = append(info.Fields, platform.FieldInfo{Name: field.Name, Type: field.Type})
 	}

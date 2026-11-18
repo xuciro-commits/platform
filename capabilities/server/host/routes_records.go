@@ -12,7 +12,7 @@ import (
 	pageowner "platformserver/services/apps/pages"
 	automation "platformserver/services/automate/runtime"
 	"platformserver/services/objects"
-	"platformserver/services/resources/authoring"
+	build "platformserver/services/resources/authoring"
 	enterprisemodel "platformserver/services/security/organization"
 	"reflect"
 	"strings"

@@ -1,4 +1,4 @@
-package build
+package authoring
 
 import (
 	"encoding/json"
@@ -19,7 +19,7 @@ import (
 type definitionKind interface {
 	assetKind() platform.AssetKind
 	schema() string
-	entity(*Build) platform.Entity
+	entity(*Build) platform.RecordType
 	resolve(*Build, string, string) (platform.ReleaseAsset, error)
 	assets(*Build) ([]platform.ReleaseAsset, error)
 	draftAssets(*Build, string) ([]platform.ReleaseAsset, []platform.ReleaseAsset, platform.AssetRef, platform.AssetRef, bool, error)
@@ -103,8 +103,8 @@ func (k *resourceKind[T, D]) schema() string { return k.descriptor().publication
 
 func (k *resourceKind[T, D]) label() string { return strings.ToLower(k.title) }
 
-func (k *resourceKind[T, D]) entity(b *Build) platform.Entity {
-	return platform.Entity{Type: k.typ, Title: k.title, Plural: k.plural, Model: *new(T), Display: "title",
+func (k *resourceKind[T, D]) entity(b *Build) platform.RecordType {
+	return platform.RecordType{Type: k.typ, Title: k.title, Plural: k.plural, Model: *new(T), Display: "title",
 		Description: k.description,
 		Scope:       platform.Scope{Default: platform.ScopeNone, Levels: map[string]string{Builder: platform.ScopeTenant}},
 		Standard:    platform.Standard{Create: true, Edit: true, Archive: true, Roles: []string{Builder}, Capability: k.capability},

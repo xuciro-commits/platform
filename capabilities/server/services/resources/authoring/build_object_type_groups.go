@@ -1,4 +1,4 @@
-package build
+package authoring
 
 import (
 	"fmt"
@@ -35,7 +35,7 @@ func (b *Build) checkObjectTypeGroup(g ontology.ObjectTypeGroup, published bool)
 	return nil
 }
 
-func (b *Build) objectTypeGroupEntity() platform.Entity {
+func (b *Build) objectTypeGroupEntity() platform.RecordType {
 	entity := objectTypeGroupKind.entity(b)
 	entity.Validate = func(c platform.Caller, record any) *platform.Error {
 		if !c.Replaying {

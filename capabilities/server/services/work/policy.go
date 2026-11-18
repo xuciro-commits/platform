@@ -22,8 +22,8 @@ type ApprovalPolicy struct {
 	Approvals int    `json:"approvals" field:"required" title:"Approvals needed" help:"Distinct members who must approve, at least 1"`
 }
 
-func policyEntity() platform.Entity {
-	return platform.Entity{Type: PolicyType, Title: "Approval policy", Plural: "Approval policies", Model: ApprovalPolicy{}, Display: "schema",
+func policyEntity() platform.RecordType {
+	return platform.RecordType{Type: PolicyType, Title: "Approval policy", Plural: "Approval policies", Model: ApprovalPolicy{}, Display: "schema",
 		Description: "How many distinct approvals an action needs in this tenant, on top of the action's own levels."}
 }
 

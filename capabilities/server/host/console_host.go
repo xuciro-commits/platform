@@ -12,8 +12,8 @@ import (
 	"platformserver/platform"
 )
 
-func (h hostView) Apps() []platform.App { return h.t.LiveApps() }
-func (h hostView) App(id string) platform.App {
+func (h hostView) Apps() []platform.Service { return h.t.LiveApps() }
+func (h hostView) App(id string) platform.Service {
 	if !h.t.OwnerActive(id) {
 		return nil
 	}

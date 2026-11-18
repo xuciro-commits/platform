@@ -6,13 +6,13 @@ import (
 	runtimekernel "platformserver/kernel"
 	"platformserver/kernel/protocol"
 	"platformserver/services/actions"
-	"platformserver/services/resources/merge"
+	branches "platformserver/services/resources/merge"
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformserver/platform"
 	trialowner "platformserver/services/devops/trials"
-	"platformserver/services/resources/authoring"
+	build "platformserver/services/resources/authoring"
 )
 
 func (t *Tenant) decideBranchStep(draft *stagedDecision, m platform.Member, schema string, submission *pb.Submission, automation bool, now time.Time) branches.StageChild {
@@ -170,8 +170,8 @@ func (t *Tenant) MergeBranch(m platform.Member, id string, request BranchMergeRe
 func (t *Tenant) applyBranch(m platform.Member, id string, resolutions []branches.BranchResolution, simulate bool, now time.Time) (branches.MergePlan, *platform.Error) {
 	return decideOnImage(t, context.Background(), "branch:merge", func(t *Tenant) (branches.MergePlan, *platform.Error) {
 		return t.prepareBranchMerge(m, id, resolutions, simulate, now)
-	}, func(t *Tenant, candidate preparedAccepted, plan branches.MergePlan, refusal *platform.Error) (branches.MergePlan, *platform.Error) {
-		_, refusal = t.finishPreparedSubmission(m, candidate, nil, refusal)
+	}, func(t *Tenant, decision preparedAccepted, plan branches.MergePlan, refusal *platform.Error) (branches.MergePlan, *platform.Error) {
+		_, refusal = t.finishPreparedSubmission(m, decision, nil, refusal)
 		return plan, refusal
 	})
 }

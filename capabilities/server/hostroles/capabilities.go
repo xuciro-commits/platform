@@ -11,7 +11,7 @@ import (
 	aigateway "platformserver/services/ai/gateway"
 	automation "platformserver/services/automate/runtime"
 	"platformserver/services/devops/packages"
-	"platformserver/services/resources/authoring"
+	build "platformserver/services/resources/authoring"
 	controlowner "platformserver/services/security/control"
 )
 
@@ -46,7 +46,7 @@ type Capabilities struct {
 	Knowledge               map[string]platform.Glossary
 }
 
-func CapabilitiesOf(apps []platform.App) Capabilities {
+func CapabilitiesOf(apps []platform.Service) Capabilities {
 	out := Capabilities{
 		States: map[string]platform.AcceptedStateApp{}, Inputs: map[string]platform.AcceptedInputApp{},
 		Assets: map[string]protocol.AssetLifecycleOwner{}, Answerers: map[string]platform.Answerer{},
@@ -288,7 +288,7 @@ type PrivateRoles struct {
 	Directories      map[string]platform.Directory
 }
 
-func (p *PrivateRoles) Add(app platform.App) {
+func (p *PrivateRoles) Add(app platform.Service) {
 	id := app.Manifest().ID
 	switch owner := app.(type) {
 	case protocol.IdentityProfile:

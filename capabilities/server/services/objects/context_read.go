@@ -8,7 +8,7 @@ import (
 
 type ContextReader struct {
 	Detail   func(sections ...string) (RecordView, *platform.Error)
-	Info     func() platform.EntityInfo
+	Info     func() platform.RecordTypeInfo
 	Links    func(entity string) []string
 	Readable func(ref string) bool
 	Flows    func(q platform.Query) ([]any, bool)

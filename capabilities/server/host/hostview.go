@@ -19,7 +19,7 @@ import (
 
 type hostView struct {
 	t        *Tenant
-	app      platform.App
+	app      platform.Service
 	decision *stagedDecision
 }
 
@@ -38,7 +38,7 @@ func (h hostView) ReadProtocolRecords(c platform.Caller, typ string) ([]any, *pl
 	return objects.ProtocolRecords(h.t.objectOwner(store).RecordsFrom(store, c.Member, typ, platform.Query{Limit: 200}, time.Now()))
 }
 
-func (h hostView) Install(c platform.Caller, e platform.Entity, actions []platform.Action, pages ...platform.Page) error {
+func (h hostView) Install(c platform.Caller, e platform.RecordType, actions []platform.Action, pages ...platform.Page) error {
 	if c.Staging() {
 		unsupportedStagedEffect()
 	}
@@ -55,7 +55,7 @@ func (h hostView) installationView(recordView *records.Store) *Tenant {
 	return draft
 }
 
-func (h hostView) ValidateInstallDependents(c platform.Caller, e platform.Entity, actions []platform.Action, generatedPage string, pages ...platform.Page) error {
+func (h hostView) ValidateInstallDependents(c platform.Caller, e platform.RecordType, actions []platform.Action, generatedPage string, pages ...platform.Page) error {
 	var engine platform.RuleEngine = h.t.services.Rules
 	if c.Replaying {
 		engine = platform.NativeRules{}
@@ -70,15 +70,15 @@ func (h hostView) ValidateInstallDependents(c platform.Caller, e platform.Entity
 			return ontology.InstallDraft{
 				Records: draft.Projection,
 				Install: func() error { return draft.Install(h.app, e, actions, pages...) },
-				CheckSets: func(info platform.EntityInfo, engine platform.RuleEngine) error {
+				CheckSets: func(info platform.RecordTypeInfo, engine platform.RuleEngine) error {
 					return draft.objectOwner(draft.Projection).CheckRecordSetDeclarations(info, engine)
 				},
 				Entity: draft.Entity, CheckQueries: draft.checkPageQueries,
-				App:         func(id string) platform.App { return draft.App(id) },
+				App:         func(id string) platform.Service { return draft.App(id) },
 				LinkType:    func(app string, l platform.LinkType) error { return owner(app).ValidateInstallLinkType(l) },
 				Query:       func(app string, q platform.NamedQuery) error { return owner(app).ValidateInstallQuery(q) },
 				Function:    func(app string, f platform.AIFunction) error { return owner(app).ValidateInstallFunction(f) },
-				InstallPage: func(app platform.App, p platform.Page) error { return draft.InstallPage(app, p) },
+				InstallPage: func(app platform.Service, p platform.Page) error { return draft.InstallPage(app, p) },
 			}
 		},
 	}.Validate()
@@ -131,7 +131,7 @@ func (h hostView) Action(schema string) (string, platform.Action, bool) {
 	return ontology.DeclaredAction(h.actionOwner(schema), h.t.definitions, schema)
 }
 
-func (h hostView) actionOwner(schema string) platform.App {
+func (h hostView) actionOwner(schema string) platform.Service {
 	return h.t.App(h.t.owner["action:"+schema])
 }
 
@@ -140,7 +140,7 @@ func (h hostView) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*p
 }
 
 func (h hostView) Attempt(c platform.Caller, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *platform.Error) {
-	return runtimekernel.AttemptTo(c, func() platform.App { return h.actionOwner(s.GetSchema().GetName()) }, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}, s, now)
+	return runtimekernel.AttemptTo(c, func() platform.Service { return h.actionOwner(s.GetSchema().GetName()) }, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}, s, now)
 }
 
 func (h hostView) Recipients(c platform.Caller, now time.Time, to []platform.Recipient) []string {
@@ -172,14 +172,14 @@ func (h hostView) Invoke(c platform.Caller, protocol, action, id string, payload
 
 func (h hostView) Tasks() platform.Tasks {
 	if h.decision != nil && h.t.Tasks != nil {
-		return h.decision.stateApp(h.t.Tasks.(platform.App)).(platform.Tasks)
+		return h.decision.stateApp(h.t.Tasks.(platform.Service)).(platform.Tasks)
 	}
 	return h.t.Tasks
 }
 
 func (h hostView) Processes() runtimeprotocol.Processes {
 	if h.decision != nil && h.t.Processes != nil {
-		return h.decision.stateApp(h.t.Processes.(platform.App)).(runtimeprotocol.Processes)
+		return h.decision.stateApp(h.t.Processes.(platform.Service)).(runtimeprotocol.Processes)
 	}
 	return h.t.Processes
 }
@@ -222,7 +222,7 @@ func (h hostView) ValidateInstallApplication(a platform.Application) error {
 	return h.installationDraft().InstallApplication(h.app, a)
 }
 
-func (h hostView) Entity(typ string) (platform.EntityInfo, bool) { return h.t.Entity(typ) }
+func (h hostView) Entity(typ string) (platform.RecordTypeInfo, bool) { return h.t.Entity(typ) }
 
 func (h hostView) EntitySource(typ string) (platform.AssetBinding, bool) {
 	return ontology.EntitySource(h.t.definitions, typ)
@@ -247,7 +247,7 @@ func (h hostView) DynamicAgent(id string) (runtimeprotocol.DynamicAgentDefinitio
 	return owner, ok
 }
 
-func (h hostView) BindInterfaceQuery(q platform.NamedQuery, drafts ...platform.EntityInfo) (platform.NamedQuery, error) {
+func (h hostView) BindInterfaceQuery(q platform.NamedQuery, drafts ...platform.RecordTypeInfo) (platform.NamedQuery, error) {
 	for _, info := range drafts {
 		if info.App != h.app.Manifest().ID {
 			return q, fmt.Errorf("interface query draft belongs to another owner")
@@ -311,7 +311,7 @@ func (h hostView) CheckPageModel(c platform.Caller, p platform.Page) error {
 func (h hostView) ownerBindings() runtimeprotocol.OwnerBindings {
 	return runtimeprotocol.OwnerBindings{Training: h, Agent: h, Console: h, Build: h, Transaction: h, Files: h, Knowledge: h, Relations: h, Flow: h, Work: h}
 }
-func (h hostView) bindOwner(app platform.App) { h.t.services.BindOwner(app, h.ownerBindings()) }
+func (h hostView) bindOwner(app platform.Service) { h.t.services.BindOwner(app, h.ownerBindings()) }
 
 func (h hostView) BuildProcessConsumptions() []platform.Consumption {
 	var processes runtimeprotocol.Processes = h.t.Processes

@@ -24,7 +24,7 @@ type ImportLine struct {
 	Outcome string
 }
 
-func ParseImport(info platform.EntityInfo, data []byte, currency string) (string, []ImportLine, bool) {
+func ParseImport(info platform.RecordTypeInfo, data []byte, currency string) (string, []ImportLine, bool) {
 	rows, err := csv.NewReader(bytes.NewReader(data)).ReadAll()
 	if err != nil || len(rows) < 1 || !slices.Contains(rows[0], "id") {
 		return "", nil, false
@@ -114,7 +114,7 @@ type Export struct {
 	w      *csv.Writer
 }
 
-func NewExport(info platform.EntityInfo) *Export {
+func NewExport(info platform.RecordTypeInfo) *Export {
 	e := &Export{}
 	e.w = csv.NewWriter(&e.buf)
 	header := []string{"id"}

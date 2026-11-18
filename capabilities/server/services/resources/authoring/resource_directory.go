@@ -1,4 +1,4 @@
-package build
+package authoring
 
 import (
 	"encoding/json"
@@ -42,9 +42,9 @@ type Hit struct {
 
 type Search struct {
 	Resources []ResourceEntry
-	Owned     []platform.Entity
-	Entities  []platform.EntityInfo
-	Names     func(platform.EntityInfo, string) (string, bool)
+	Owned     []platform.RecordType
+	Entities  []platform.RecordTypeInfo
+	Names     func(platform.RecordTypeInfo, string) (string, bool)
 	Read      func(typ string, query platform.Query) ([]any, *platform.Error)
 }
 

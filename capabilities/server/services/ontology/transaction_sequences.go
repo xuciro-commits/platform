@@ -7,7 +7,7 @@ import (
 	"platformserver/platform"
 )
 
-func TransactionSequences(installed map[string]platform.Entity) []platform.Sequence {
+func TransactionSequences(installed map[string]platform.RecordType) []platform.Sequence {
 	byName := map[string]platform.Sequence{}
 	for _, typ := range slices.Sorted(maps.Keys(installed)) {
 		if txn := installed[typ].CreateTxn; txn != nil {

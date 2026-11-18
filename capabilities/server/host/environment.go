@@ -11,7 +11,7 @@ import (
 
 	"platformserver/platform"
 	releaseowner "platformserver/services/devops/releases"
-	"platformserver/services/resources/authoring"
+	build "platformserver/services/resources/authoring"
 	controlowner "platformserver/services/security/control"
 )
 

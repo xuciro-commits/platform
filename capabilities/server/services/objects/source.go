@@ -36,12 +36,12 @@ func (t *Owner) SourceState(typ, id string, required bool) ([]records.RecordChan
 	return row.RecordHistory(), fields, header.Archived, header.Changed.Change, nil
 }
 
-func (t *Owner) SourceObjectStates(object string) (platform.EntityInfo, map[string]bool, *platform.Error) {
+func (t *Owner) SourceObjectStates(object string) (platform.RecordTypeInfo, map[string]bool, *platform.Error) {
 	t.Store.Lock()
 	defer t.Store.Unlock()
 	entity := t.Store.Type(object)
 	if entity == nil {
-		return platform.EntityInfo{}, nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "The target object is no longer installed")
+		return platform.RecordTypeInfo{}, nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "The target object is no longer installed")
 	}
 	rows := map[string]bool{}
 	for id, row := range entity.Rows().All() {

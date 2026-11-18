@@ -8,7 +8,7 @@ import (
 	"platformserver/kernel/records"
 	"platformserver/kernel/transport"
 	"platformserver/platform"
-	"platformserver/services/resources/authoring"
+	build "platformserver/services/resources/authoring"
 	"slices"
 	"time"
 )

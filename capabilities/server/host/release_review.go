@@ -4,7 +4,7 @@ import (
 	"platformserver/kernel/protocol"
 	"platformserver/platform"
 	releaseowner "platformserver/services/devops/releases"
-	"platformserver/services/resources/authoring"
+	build "platformserver/services/resources/authoring"
 )
 
 func (h *Host) promotionSnapshots(source string) []releaseowner.PromotionSnapshot {

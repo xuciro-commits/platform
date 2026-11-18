@@ -13,7 +13,7 @@ import (
 	"platformserver/platform"
 	"platformserver/services/actions"
 	automation "platformserver/services/automate/runtime"
-	"platformserver/services/functions/runtime"
+	compute "platformserver/services/functions/runtime"
 	controlowner "platformserver/services/security/control"
 	"time"
 )

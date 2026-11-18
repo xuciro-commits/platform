@@ -8,7 +8,7 @@ import (
 	"time"
 )
 
-func ActionInputSchema(action Action, entity *EntityInfo, roles []string) map[string]any {
+func ActionInputSchema(action Action, entity *RecordTypeInfo, roles []string) map[string]any {
 	properties := map[string]any{}
 	required := []string{}
 	for _, field := range action.Payload {

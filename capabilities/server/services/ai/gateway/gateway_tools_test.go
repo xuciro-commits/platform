@@ -1,4 +1,4 @@
-package aigateway
+package gateway
 
 import (
 	"context"
@@ -18,7 +18,7 @@ type proposalHost struct {
 
 func (h *proposalHost) ModelToolSurface(platform.Member) platform.AgentSurface {
 	return platform.AgentSurface{
-		Entities: []platform.EntityInfo{{Type: h.action.Target, App: "build", Title: "Widget", Plural: "Widgets"}},
+		Entities: []platform.RecordTypeInfo{{Type: h.action.Target, App: "build", Title: "Widget", Plural: "Widgets"}},
 		Actions:  []platform.AgentAction{{Owner: "build", Action: h.action}},
 	}
 }

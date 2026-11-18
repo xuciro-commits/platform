@@ -8,7 +8,7 @@ import (
 	"platformserver/platform"
 )
 
-func CheckObjectConstraints(o Object, entity platform.Entity, lookup func(string) (platform.EntityInfo, bool), checkCollections func(platform.RuleReadSpec, string, func(string) (platform.EntityInfo, bool)) error, engines ...platform.RuleEngine) error {
+func CheckObjectConstraints(o Object, entity platform.RecordType, lookup func(string) (platform.RecordTypeInfo, bool), checkCollections func(platform.RuleReadSpec, string, func(string) (platform.RecordTypeInfo, bool)) error, engines ...platform.RuleEngine) error {
 	if len(o.Constraints) == 0 {
 		return nil
 	}

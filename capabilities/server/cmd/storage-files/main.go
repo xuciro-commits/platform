@@ -22,17 +22,17 @@ func main() {
 	var store platform.FileStore
 	var err error
 	if strings.HasPrefix(address, "http://") || strings.HasPrefix(address, "https://") {
-		store, err = resources.OpenS3Files(ctx, address)
+		store, err = blobs.OpenS3Files(ctx, address)
 	} else {
 		if info, statErr := os.Stat(address); statErr != nil || !info.IsDir() {
 			log.Fatal("the local file store must already exist")
 		}
-		store, err = resources.NewLocalFiles(address)
+		store, err = blobs.NewLocalFiles(address)
 	}
 	if err != nil {
 		log.Fatal(err)
 	}
-	manifest, err := resources.FileStoreManifest(ctx, store)
+	manifest, err := blobs.FileStoreManifest(ctx, store)
 	if err != nil {
 		log.Fatal(err)
 	}

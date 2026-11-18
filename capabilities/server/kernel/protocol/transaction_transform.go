@@ -46,9 +46,9 @@ type QuarantinedRow struct {
 
 type BusinessRuntimeContext struct {
 	App      string
-	Entities map[string]platform.Entity
+	Entities map[string]platform.RecordType
 	Ledger   platform.Authority
-	Lookup   func(string) (platform.EntityInfo, bool)
+	Lookup   func(string) (platform.RecordTypeInfo, bool)
 	Prepare  func(platform.Caller, *pb.ChangeRecord, *platform.BusinessTxn, time.Time) (TransactionProposal, *platform.Error)
 	Link     func(platform.AssetBinding) (platform.LinkType, error)
 	Effect   func(platform.Caller, string) (TransactionEffectDefinition, *platform.Error)
@@ -57,7 +57,7 @@ type BusinessRuntimeContext struct {
 }
 
 type TransactionProposal struct {
-	Apply  func(platform.Entity, platform.EntityInfo, map[string]any, []string) (platform.Entity, map[string]any)
+	Apply  func(platform.RecordType, platform.RecordTypeInfo, map[string]any, []string) (platform.RecordType, map[string]any)
 	Finish func(platform.Caller, *pb.ChangeRecord, time.Time) *platform.Error
 }
 

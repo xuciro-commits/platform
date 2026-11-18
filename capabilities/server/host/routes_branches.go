@@ -5,8 +5,8 @@ import (
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	transport "platformserver/kernel/transport"
 	"platformserver/platform"
-	"platformserver/services/resources/authoring"
-	"platformserver/services/resources/merge"
+	build "platformserver/services/resources/authoring"
+	branches "platformserver/services/resources/merge"
 	"time"
 )
 

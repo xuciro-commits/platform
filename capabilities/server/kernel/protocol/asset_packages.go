@@ -129,7 +129,7 @@ type PackageState struct {
 type PackageHost interface {
 	PackageLifecycleImpact(platform.Caller, string, []platform.ReleaseAsset) (platform.PackageLifecycleImpact, error)
 	PrepareManagedPackage(platform.Caller, platform.PackageDescriptor, []platform.ReleaseAsset, bool, bool, bool) (func(*pb.ChangeRecord), *platform.Error)
-	Apps() []platform.App
+	Apps() []platform.Service
 	CodeReleaseAssets() ([]platform.ReleaseAsset, error)
 	PutPackageArtifact(string, []byte) error
 	GetPackageArtifact(string) ([]byte, error)

@@ -19,14 +19,14 @@ type ModelHost interface {
 	AuthorizePreview(platform.Member) *platform.Error
 	ModelCaller(m platform.Member, app string) platform.Caller
 	FilterCaller(platform.Caller) platform.Caller
-	Entity(typ string) (platform.EntityInfo, bool)
+	Entity(typ string) (platform.RecordTypeInfo, bool)
 	Definitions(platform.Member) []platform.Definition
 	AllDefinitions() []platform.Definition
 	ModelQueryBinding(platform.AssetRef) (platform.AssetBinding, bool)
 	ModelCriteria(platform.AssetRef) (*platform.RuleCriteria, bool)
 	Rules() platform.RuleEngine
-	VisibleLookup(platform.Member) func(string) (platform.EntityInfo, bool)
-	RuleEntities() map[string]platform.EntityInfo
+	VisibleLookup(platform.Member) func(string) (platform.RecordTypeInfo, bool)
+	RuleEntities() map[string]platform.RecordTypeInfo
 	RuleRecord(typ, id string, fallback any) any
 	LoadObjectSet(c platform.Caller, set platform.ObjectSet, w objects.Window, at time.Time, bound ...platform.NamedQuery) (objects.RecordPage, string, *platform.Error)
 }
@@ -90,7 +90,7 @@ type pageModelFilter struct {
 	model    *platform.ModelBinding
 	criteria *platform.RuleCriteria
 	inputs   map[string]any
-	lookup   func(string) (platform.EntityInfo, bool)
+	lookup   func(string) (platform.RecordTypeInfo, bool)
 	at       time.Time
 	partial  bool
 	err      *platform.Error
@@ -492,7 +492,7 @@ func (r ModelReader) rows(c platform.Caller, page platform.Page, section platfor
 		filter = &pageModelFilter{
 			caller: r.host.FilterCaller(c),
 			model:  model, criteria: criteria, inputs: inputs, at: at,
-			lookup: func(typ string) (platform.EntityInfo, bool) {
+			lookup: func(typ string) (platform.RecordTypeInfo, bool) {
 				info, ok := allEntities[typ]
 				return ruleprotocol.ConstraintEntity(info), ok
 			},
@@ -501,7 +501,7 @@ func (r ModelReader) rows(c platform.Caller, page platform.Page, section platfor
 	var projectedErr *platform.Error
 	window := objects.Window{
 		Sort: result.sort, Offset: request.Offset, Limit: request.Limit, Bounded: true,
-		Project: func(_ platform.EntityInfo, _ reflect.Value, record any) any {
+		Project: func(_ platform.RecordTypeInfo, _ reflect.Value, record any) any {
 			if projectedErr != nil {
 				return nil
 			}

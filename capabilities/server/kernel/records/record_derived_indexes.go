@@ -125,7 +125,7 @@ type DerivedIndexes struct {
 }
 
 type IndexImage struct {
-	Info               platform.EntityInfo
+	Info               platform.RecordTypeInfo
 	Rows               Rows
 	Indexes            *DerivedIndexes
 	RetainedProjection bool
@@ -216,7 +216,7 @@ func (i *DerivedIndexes) ReferenceBucket(image IndexImage, field platform.FieldI
 	return bucket
 }
 
-func UniqueKey(lookup ImageLookup, info platform.EntityInfo, rule platform.Constraint, value reflect.Value) (string, error) {
+func UniqueKey(lookup ImageLookup, info platform.RecordTypeInfo, rule platform.Constraint, value reflect.Value) (string, error) {
 	values := make([]any, 0, len(rule.Fields)+2)
 	for _, name := range rule.Fields {
 		field, _ := info.Field(name)
@@ -286,7 +286,7 @@ func (i *DerivedIndexes) Unique(image IndexImage, lookup ImageLookup, rule platf
 	return index
 }
 
-func prepareUniqueScopeReferences(lookup ImageLookup, info platform.EntityInfo, rule platform.Constraint) {
+func prepareUniqueScopeReferences(lookup ImageLookup, info platform.RecordTypeInfo, rule platform.Constraint) {
 	if rule.Scope == "" || rule.Scope == "tenant" {
 		return
 	}
@@ -308,7 +308,7 @@ func prepareUniqueScopeReferences(lookup ImageLookup, info platform.EntityInfo, 
 	}
 }
 
-func ScopeDependents(lookup ImageLookup, info platform.EntityInfo, rule platform.Constraint, changedType, changedID string) Index[bool] {
+func ScopeDependents(lookup ImageLookup, info platform.RecordTypeInfo, rule platform.Constraint, changedType, changedID string) Index[bool] {
 	var out Index[bool]
 	if rule.Scope == "" || rule.Scope == "tenant" {
 		return out
@@ -376,7 +376,7 @@ func ConstraintEmpty(value any) bool {
 	return false
 }
 
-func (i *DerivedIndexes) ReplaceReferences(info platform.EntityInfo, rows Rows, id string, value *Row) {
+func (i *DerivedIndexes) ReplaceReferences(info platform.RecordTypeInfo, rows Rows, id string, value *Row) {
 	previous := rows.Get(id)
 	for name, index := range i.references {
 		field, _ := info.Field(name)

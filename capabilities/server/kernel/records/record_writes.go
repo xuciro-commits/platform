@@ -15,7 +15,7 @@ import (
 	"time"
 )
 
-func (s *Store) Declare(a platform.App) error {
+func (s *Store) Declare(a platform.Service) error {
 	m := a.Manifest()
 	own := map[reflect.Type]string{}
 	for _, e := range m.Entities {
@@ -396,7 +396,7 @@ func (s *Store) CheckArchiveWriteLocked(et *Type, value reflect.Value) *platform
 	return nil
 }
 
-func (s *Store) UniqueConstraint(info platform.EntityInfo, rule platform.Constraint, value reflect.Value) (bool, error) {
+func (s *Store) UniqueConstraint(info platform.RecordTypeInfo, rule platform.Constraint, value reflect.Value) (bool, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	key, err := UniqueKey(s.IndexImage, info, rule, value)

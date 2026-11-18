@@ -1,4 +1,4 @@
-package build
+package authoring
 
 import (
 	"platformserver/kernel/protocol"
@@ -20,16 +20,16 @@ func (e appEnvironment) Version() string          { return ValueDefinitionVersio
 func (e appEnvironment) Resolver() publication.Resolver {
 	return e.b.resolver
 }
-func (e appEnvironment) Entity(typ string) (platform.EntityInfo, bool) {
+func (e appEnvironment) Entity(typ string) (platform.RecordTypeInfo, bool) {
 	return e.b.lookupEntity(typ)
 }
 
-func (e appEnvironment) DraftObjectLookup(c platform.Caller) (func(string) (platform.EntityInfo, bool), error) {
+func (e appEnvironment) DraftObjectLookup(c platform.Caller) (func(string) (platform.RecordTypeInfo, bool), error) {
 	objects, err := readDefinitionInventory[ontology.Object](c)
 	if err != nil {
 		return nil, err
 	}
-	models := map[string]platform.EntityInfo{}
+	models := map[string]platform.RecordTypeInfo{}
 	for _, object := range objects {
 		if object.Archived {
 			continue
@@ -40,7 +40,7 @@ func (e appEnvironment) DraftObjectLookup(c platform.Caller) (func(string) (plat
 		}
 		models[info.Type] = info
 	}
-	return func(typ string) (platform.EntityInfo, bool) {
+	return func(typ string) (platform.RecordTypeInfo, bool) {
 		if info, saved := models[typ]; saved {
 			return info, true
 		}

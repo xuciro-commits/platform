@@ -157,9 +157,9 @@ func (b Branch) Base(typ, id string) (json.RawMessage, bool) {
 	return nil, false
 }
 
-func (o *Owner) Entity() platform.Entity {
+func (o *Owner) Entity() platform.RecordType {
 	builder := []string{"builder"}
-	return platform.Entity{Type: BranchType, Title: "Branch", Plural: "Branches", Model: Branch{}, Display: "title",
+	return platform.RecordType{Type: BranchType, Title: "Branch", Plural: "Branches", Model: Branch{}, Display: "title",
 		Description: "A named overlay of resource drafts: saves append to its change set, instance data is never part of it, and a reviewed proposal merges it into the drafts as one release.",
 		Scope:       platform.Scope{Default: platform.ScopeNone, Levels: map[string]string{"builder": platform.ScopeTenant}},
 		Standard:    platform.Standard{Create: true, Edit: true, Archive: true, Roles: builder, Capability: "branches"},

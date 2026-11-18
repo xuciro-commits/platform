@@ -1,4 +1,4 @@
-package automation
+package runtime
 
 import (
 	"cmp"
@@ -80,7 +80,7 @@ func (ss *session) deadLetterAct(x *FlowInstance, token *Token, step *platform.S
 }
 
 func (f *Flows) replayDeadLetter(c platform.Caller, sub *pb.Submission, now time.Time) (*pb.ChangeRecord, *platform.Error) {
-	return f.ledger.Receive(c, sub, now, nil, func() (func(*pb.ChangeRecord), *platform.Error) {
+	return f.authority.Receive(c, sub, now, nil, func() (func(*pb.ChangeRecord), *platform.Error) {
 		asset, ok := platform.Get[protocol.FlowDeadLetterAsset](c, sub.GetTarget().GetId())
 		if !ok {
 			return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_NOT_FOUND, "The Flow dead letter is unavailable")

@@ -87,7 +87,7 @@ func (resolver Resolver) ArtifactOfApplication(root platform.AssetRef, available
 
 func (resolver Resolver) applicationAssetRoles(asset platform.ReleaseAsset) ([]protocol.ApplicationRole, error) {
 	var descriptor struct {
-		Entity platform.EntityInfo `json:"entity"`
+		Entity platform.RecordTypeInfo `json:"entity"`
 		Access []struct {
 			Role string `json:"role"`
 			Read string `json:"read"`

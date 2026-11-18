@@ -11,9 +11,9 @@ import (
 
 type Composition struct {
 	Base        []runtimeprotocol.CapabilityModule
-	Apps        []platform.App
+	Apps        []platform.Service
 	Bindings    func() map[string]string
-	Entity      func(string) (platform.EntityInfo, bool)
+	Entity      func(string) (platform.RecordTypeInfo, bool)
 	PlatformApp string
 	Directory   string
 }
@@ -42,7 +42,7 @@ func (c Composition) Modules() []runtimeprotocol.CapabilityModule {
 				}
 			}
 		}
-		if m.ID == c.PlatformApp && c.Directory != "" && slices.ContainsFunc(c.Apps, func(app platform.App) bool { return app.Manifest().ID == c.Directory }) {
+		if m.ID == c.PlatformApp && c.Directory != "" && slices.ContainsFunc(c.Apps, func(app platform.Service) bool { return app.Manifest().ID == c.Directory }) {
 			needs[c.Directory] = true
 		}
 		for id := range needs {

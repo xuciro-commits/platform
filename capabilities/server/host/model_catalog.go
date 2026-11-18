@@ -2,7 +2,7 @@ package host
 
 import (
 	"platformserver/kernel/protocol"
-	"platformserver/services/ai/gateway"
+	aigateway "platformserver/services/ai/gateway"
 	"platformserver/services/ai/gateway/providers"
 
 	"platformserver/platform"

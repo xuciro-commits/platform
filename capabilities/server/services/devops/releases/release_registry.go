@@ -127,7 +127,7 @@ func CheckApplicationExtension(ref platform.AssetRef, a platform.Application, de
 	return nil
 }
 
-func ObjectDefinitions(app string, info platform.EntityInfo, actions []platform.Action, pages []platform.Page, protocols ...platform.Provision) []platform.Definition {
+func ObjectDefinitions(app string, info platform.RecordTypeInfo, actions []platform.Action, pages []platform.Page, protocols ...platform.Provision) []platform.Definition {
 	definitions := []platform.Definition{}
 	object := platform.AssetRef{App: app, Kind: platform.AssetObject, Name: info.Type}
 	entity := info

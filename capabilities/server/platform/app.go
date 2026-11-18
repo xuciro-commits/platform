@@ -145,7 +145,7 @@ type StagedDecision interface {
 	ConfirmationTransport() ConfirmationTransport
 	ConfirmationCompletion(Caller, string, string, string) bool
 	DispatchTransport() DispatchTransport
-	ReadRecordSetCandidate(Caller, string, string, string, json.RawMessage, time.Time) (RecordSetResult, *Error)
+	ReadDecisionRecordSet(Caller, string, string, string, json.RawMessage, time.Time) (RecordSetResult, *Error)
 	ObservationContext(Caller) *ObservationContext
 	TxnTransport() TxnTransport
 	CaptureTxnIteration(Caller, *pb.ChangeRecord, TxnIteration) *Error
@@ -188,14 +188,14 @@ type AcceptedPublisher interface {
 }
 
 type AcceptedStateApp interface {
-	App
+	Service
 	AcceptedState() (json.RawMessage, error)
 	ValidateAcceptedState(json.RawMessage) error
 	ApplyAcceptedState(json.RawMessage) error
 }
 
 type AcceptedInputApp interface {
-	App
+	Service
 	InputReceiver
 	AcceptedInputs() []string
 	DecodeAcceptedInput(json.RawMessage) (any, error)
@@ -245,7 +245,7 @@ func ProbeDecision(c Caller, decide func(Caller) *Error) *Error {
 	return c.rt.ProbeDecision(c, decide)
 }
 
-func Decide(c Caller, app App, s *pb.Submission, at time.Time) (*pb.ChangeRecord, *Error) {
+func Decide(c Caller, app Service, s *pb.Submission, at time.Time) (*pb.ChangeRecord, *Error) {
 	if c.Simulating() {
 		if action, ok := app.Manifest().Actions.Action(s.GetSchema().GetName()); ok && action.Adoption != nil {
 			return nil, Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "Proposal adoption does not execute in isolated trials")
@@ -282,7 +282,7 @@ type Manifest struct {
 	Retry         *Retry
 	Settings      []Setting
 	Emits         []EffectKind
-	Entities      []Entity
+	Entities      []RecordType
 	Pages         []Page
 	LinkTypes     []LinkType
 	PropertyTypes []PropertyType
@@ -310,12 +310,12 @@ func (m Manifest) AllRoles() []string {
 	return out
 }
 
-type App interface {
+type Service interface {
 	Authority() Authority
 	Manifest() Manifest
 	Declarations() []*pb.AuthorityDeclaration
 	Submit(c Caller, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *Error)
-	Fork(authority Authority) (App, error)
+	Fork(authority Authority) (Service, error)
 	Snapshot() (json.RawMessage, error)
 	Restore(json.RawMessage) error
 	SnapshotFormat() string
@@ -386,7 +386,7 @@ type CompositionReady interface {
 }
 
 type IdentityDirectory interface {
-	App
+	Service
 	MemberByID(id string) (Member, bool)
 	MemberBySubject(subject string) (Member, bool)
 	Holding(app, role string) []string
@@ -401,8 +401,8 @@ type UnitGrantUsage struct {
 }
 
 type AppCatalog interface {
-	Apps() []App
-	App(id string) App
+	Apps() []Service
+	App(id string) Service
 	AppIDs() []string
 	Manifest(app string) Manifest
 }

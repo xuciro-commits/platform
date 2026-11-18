@@ -5,9 +5,9 @@ import (
 	"encoding/json"
 	runtimekernel "platformserver/kernel"
 	"platformserver/kernel/protocol"
-	"platformserver/services/automate/runtime"
+	automation "platformserver/services/automate/runtime"
 	dataowner "platformserver/services/data"
-	"platformserver/services/functions/runtime"
+	compute "platformserver/services/functions/runtime"
 	"platformserver/services/resources/monitoring"
 	"time"
 
@@ -15,7 +15,7 @@ import (
 	"platformserver/kernel/acceptedformat"
 	"platformserver/platform"
 	"platformserver/services/actions"
-	"platformserver/services/resources/authoring"
+	build "platformserver/services/resources/authoring"
 	controlowner "platformserver/services/security/control"
 )
 

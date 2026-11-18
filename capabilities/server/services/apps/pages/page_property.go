@@ -7,7 +7,7 @@ import (
 	"platformserver/services/objects"
 )
 
-func CheckPropertySchema(p platform.Page, variable platform.PageVariable, object platform.EntityInfo) error {
+func CheckPropertySchema(p platform.Page, variable platform.PageVariable, object platform.RecordTypeInfo) error {
 	source := variable.Source
 	if source == nil || source.Object == nil || source.Object.Name != object.Type || source.Object.App != object.App || recordVariableObject(p, source.Variable) != object.Type {
 		return fmt.Errorf("property record object is unavailable or incompatible")

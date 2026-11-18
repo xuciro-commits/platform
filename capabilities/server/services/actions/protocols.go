@@ -15,7 +15,7 @@ import (
 )
 
 type Binding struct {
-	Provider  platform.App
+	Provider  platform.Service
 	Provision platform.Provision
 }
 
@@ -63,7 +63,7 @@ func (b *Bindings) set(protocol, provider string) {
 	b.providers[protocol] = provider
 }
 
-func (b *Bindings) Bind(prior []platform.App, a platform.App) error {
+func (b *Bindings) Bind(prior []platform.Service, a platform.Service) error {
 	for _, c := range a.Manifest().Consumes {
 		var found []string
 		for _, p := range prior {
@@ -87,9 +87,9 @@ func (b *Bindings) Bind(prior []platform.App, a platform.App) error {
 }
 
 type ProtocolHost interface {
-	LiveApps() []platform.App
+	LiveApps() []platform.Service
 	OwnerActive(id string) bool
-	App(id string) platform.App
+	App(id string) platform.Service
 	AuthorityOf(dataClass string) string
 	StageSubmission(c platform.Caller, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *platform.Error)
 }
@@ -152,7 +152,7 @@ func (r Router) Resolve(protocol string) (Binding, bool) {
 	return Binding{}, false
 }
 
-func (r Router) Provider(used string) (platform.App, string, bool) {
+func (r Router) Provider(used string) (platform.Service, string, bool) {
 	protocol, action, ok := strings.Cut(used, "#")
 	if !ok {
 		return nil, "", false
@@ -380,7 +380,7 @@ func (r Router) Protocols() []ProtocolInfo {
 	return out
 }
 
-func Explained(err *platform.Error, a platform.App, schema, target string) *platform.Error {
+func Explained(err *platform.Error, a platform.Service, schema, target string) *platform.Error {
 	if err == nil || err.Message != "" {
 		return err
 	}

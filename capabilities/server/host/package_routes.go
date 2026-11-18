@@ -9,7 +9,7 @@ import (
 	"platformserver/kernel/transport"
 	"platformserver/platform"
 	"platformserver/services/devops/packages"
-	"platformserver/services/resources/authoring"
+	build "platformserver/services/resources/authoring"
 	controlowner "platformserver/services/security/control"
 	"time"
 )

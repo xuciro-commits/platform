@@ -1,4 +1,4 @@
-package build
+package authoring
 
 import (
 	"fmt"
@@ -21,7 +21,7 @@ func (b *Build) checkVersioning(o ontology.Object) error {
 	if err != nil {
 		return err
 	}
-	lookup := func(typ string) (platform.EntityInfo, bool) {
+	lookup := func(typ string) (platform.RecordTypeInfo, bool) {
 		if typ == info.Type {
 			return info, true
 		}
@@ -92,7 +92,7 @@ func (b *Build) captureObjectSchema(object *ontology.Object) error {
 	return nil
 }
 
-func objectActions(object ontology.Object, entity platform.Entity) []platform.Action {
+func objectActions(object ontology.Object, entity platform.RecordType) []platform.Action {
 	actions := actioncatalog.EntityActions(entity)
 	var binding platform.SchemaVersion
 	if len(object.SchemaVersions) > 0 {

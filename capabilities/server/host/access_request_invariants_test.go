@@ -17,7 +17,7 @@ func TestInvariantAccessRequestAppliesGrantOnApproval(t *testing.T) {
 	owner := protocol.Seat{Subjects: []string{"owner"}, Member: platform.Member{ID: "owner"}}
 	requester := protocol.Seat{Subjects: []string{"requester"}, Member: platform.Member{ID: "requester"}}
 	administrator := protocol.Seat{Subjects: []string{"request-admin"}, Member: platform.Member{ID: "request-admin", Roles: map[string]string{"platform": "admin"}}}
-	tn := newInvariantTenantWithApps(t, "access-request", []platform.App{work.New("access-request", actions.NewAuthority)}, owner, requester, administrator)
+	tn := newInvariantTenantWithApps(t, "access-request", []platform.Service{work.New("access-request", actions.NewAuthority)}, owner, requester, administrator)
 	if action, ok := tn.App("platform").Manifest().Actions.Action(controlowner.SchemaAccessRequest); !ok || action.Target != controlowner.AccessRequestType {
 		t.Fatal("the access request action is not declared for its target")
 	}

@@ -14,8 +14,8 @@ import (
 	dataowner "platformserver/services/data"
 	releaseowner "platformserver/services/devops/releases"
 	trialowner "platformserver/services/devops/trials"
-	"platformserver/services/functions/runtime"
-	"platformserver/services/resources/authoring"
+	compute "platformserver/services/functions/runtime"
+	build "platformserver/services/resources/authoring"
 	controlowner "platformserver/services/security/control"
 	"time"
 )

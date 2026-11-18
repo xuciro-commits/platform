@@ -1,4 +1,4 @@
-package build
+package authoring
 
 import (
 	"encoding/json"
@@ -20,8 +20,8 @@ const (
 	SchemaProductVersion = packagedesc.SchemaProductVersion
 )
 
-func (b *Build) productEntity() platform.Entity {
-	return platform.Entity{
+func (b *Build) productEntity() platform.RecordType {
+	return platform.RecordType{
 		Type: ProductType, Title: "Product", Plural: "Products", Model: Product{}, Display: "title",
 		Description: "A product chooses the project resources that DevOps packages into immutable versions.",
 		Scope:       platform.Scope{Default: platform.ScopeTenant, Levels: map[string]string{Builder: platform.ScopeTenant, Publisher: platform.ScopeTenant}},
@@ -58,7 +58,7 @@ func (b *Build) productEntity() platform.Entity {
 	}
 }
 
-func (b *Build) productVersionEntity() platform.Entity {
+func (b *Build) productVersionEntity() platform.RecordType {
 	return packagedesc.ProductVersionEntity()
 }
 
@@ -98,7 +98,7 @@ func (b *Build) submitProductVersion(c platform.Caller, s *pb.Submission, now ti
 	if err != nil {
 		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The product version cannot be frozen: {reason}", err.Error())
 	}
-	return b.ledger.Receive(c, s, now, nil, func() (func(*pb.ChangeRecord), *platform.Error) {
+	return b.authority.Receive(c, s, now, nil, func() (func(*pb.ChangeRecord), *platform.Error) {
 		return func(r *pb.ChangeRecord) {
 			if _, exists := platform.Get[ProductVersion](c, s.GetTarget().GetId()); exists {
 				c.FailDecision(platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "A product version cannot be replaced"))

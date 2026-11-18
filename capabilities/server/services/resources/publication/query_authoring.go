@@ -10,9 +10,9 @@ import (
 type QueryAuthoringEnvironment struct {
 	App, Type, Builder, Version string
 	Host                        func() protocol.BuildHost
-	InstalledObject             func(string) (platform.Entity, bool)
-	LookupEntity                func(string) (platform.EntityInfo, bool)
-	JointEntities               func() map[string]platform.EntityInfo
+	InstalledObject             func(string) (platform.RecordType, bool)
+	LookupEntity                func(string) (platform.RecordTypeInfo, bool)
+	JointEntities               func() map[string]platform.RecordTypeInfo
 	JointDeclarations           func() map[platform.AssetRef]platform.ReleaseAsset
 	JointMode                   func() bool
 	AssetVersion                func(platform.ReleaseAsset) int
@@ -22,14 +22,14 @@ type QueryAuthoringEnvironment struct {
 
 type QueryAuthoringBinding struct {
 	Fork            func(QueryAuthoringEnvironment) QueryAuthoringBinding
-	Entity          func() platform.Entity
+	Entity          func() platform.RecordType
 	Declarations    func() []platform.NamedQuery
 	Definition      func(string, int) (platform.NamedQuery, int, bool)
 	Exists          func(string) bool
 	ToolNames       func(platform.Caller) ([]string, error)
 	Stamps          func() []string
 	Published       func(platform.Caller, string) bool
-	CheckRecordSets func(platform.EntityInfo, func(string) (platform.EntityInfo, bool), ...platform.RuleEngine) error
+	CheckRecordSets func(platform.RecordTypeInfo, func(string) (platform.RecordTypeInfo, bool), ...platform.RuleEngine) error
 	Assets          func() ([]platform.ReleaseAsset, error)
 	Resolve         func(string, string) (platform.ReleaseAsset, error)
 	InstallAsset    func(platform.ReleaseAsset) error

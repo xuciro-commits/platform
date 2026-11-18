@@ -71,8 +71,8 @@ func NewOwner(env publication.FunctionEvaluationEnvironment) publication.Functio
 	}
 }
 
-func (o *evaluationOwner) entity() platform.Entity {
-	return platform.Entity{Type: EvaluationType, Title: "Function evaluation", Plural: "Function evaluations", Model: Evaluation{}, Display: "function",
+func (o *evaluationOwner) entity() platform.RecordType {
+	return platform.RecordType{Type: EvaluationType, Title: "Function evaluation", Plural: "Function evaluations", Model: Evaluation{}, Display: "function",
 		Description: "A retained candidate-bound report of repeated model calls over synthetic benchmark cases.",
 		Scope:       platform.Scope{Default: platform.ScopeNone, Levels: map[string]string{o.env.Builder: platform.ScopeTenant}}}
 }

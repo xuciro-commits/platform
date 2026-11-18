@@ -1,4 +1,4 @@
-package agents
+package runtime
 
 import (
 	"encoding/json"
@@ -31,7 +31,7 @@ type FunctionDispatch struct {
 }
 type FunctionContext struct {
 	Tenant           string
-	App              func(string) platform.App
+	App              func(string) platform.Service
 	Member           func(string) (platform.Member, bool)
 	AuthorityOf      func(string) string
 	Authorize        func(platform.Caller, string, platform.AIFunction, []string, string, time.Time) *platform.Error
@@ -145,7 +145,7 @@ func PlanFunction(ctx FunctionContext, c platform.Caller, r *pb.ChangeRecord, re
 	return call, effect, nil
 }
 
-func FunctionDefinition(app platform.App, name string, version int) (platform.AIFunction, int, bool) {
+func FunctionDefinition(app platform.Service, name string, version int) (platform.AIFunction, int, bool) {
 	if app == nil {
 		return platform.AIFunction{}, 0, false
 	}
@@ -212,7 +212,7 @@ type FunctionAccess struct {
 	AuthorityOf func(string) string
 	Suspended   func(string) bool
 	Authorize   func(platform.Member, string, platform.AIFunction, []string, string, time.Time) bool
-	Source      func(string, string) (platform.EntityInfo, bool)
+	Source      func(string, string) (platform.RecordTypeInfo, bool)
 }
 
 func FunctionAllowed(ctx FunctionAccess, app string, binding *FunctionBinding, model, record, call string, prompt protocol.Prompt, at time.Time) bool {

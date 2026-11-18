@@ -12,11 +12,11 @@ import (
 )
 
 type ObjectRuntimeEnvironment struct {
-	Lookup      func(string) (platform.EntityInfo, bool)
+	Lookup      func(string) (platform.RecordTypeInfo, bool)
 	Transaction func(platform.Caller, *pb.ChangeRecord, *platform.BusinessTxn, time.Time) *platform.Error
 }
 
-func CompileObjectEntity(o Object, env ObjectRuntimeEnvironment) platform.Entity {
+func CompileObjectEntity(o Object, env ObjectRuntimeEnvironment) platform.RecordType {
 	entity := CompileObjectShape(o, AppID, BuilderRole)
 	std, scope, roles := CompileAccess(o, BuilderRole, UserRole)
 	entity.Standard, entity.Scope = std, scope
@@ -78,7 +78,7 @@ func compileLifecycle(o Object, roles []string, env ObjectRuntimeEnvironment) *p
 	return life
 }
 
-func validateObject(o Object, model any, lookup func(string) (platform.EntityInfo, bool)) func(platform.Caller, any) *platform.Error {
+func validateObject(o Object, model any, lookup func(string) (platform.RecordTypeInfo, bool)) func(platform.Caller, any) *platform.Error {
 	if o.Extends == "" {
 		return nil
 	}
@@ -89,7 +89,7 @@ func validateObject(o Object, model any, lookup func(string) (platform.EntityInf
 			if !exists {
 				return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Extension base {type} is unavailable", o.Extends)
 			}
-			shape := platform.EntityInfo{Type: AppID + "." + o.Name, Extends: o.Extends, ExtensionSource: o.ExtensionSource}
+			shape := platform.RecordTypeInfo{Type: AppID + "." + o.Name, Extends: o.Extends, ExtensionSource: o.ExtensionSource}
 			for _, field := range o.Fields {
 				shape.Fields = append(shape.Fields, platform.FieldInfo{Name: field.Name, Type: field.Type, Ref: field.Ref, Required: field.Required, ReadOnly: field.ReadOnly, AliasOf: field.AliasOf})
 			}
@@ -132,8 +132,8 @@ type ObjectEntityEnvironment struct {
 	Install              func(platform.Caller, Object) *platform.Error
 }
 
-func ObjectEntity(env ObjectEntityEnvironment) platform.Entity {
-	return platform.Entity{Type: ObjectType, Title: "Object type", Plural: "Object types", Model: Object{}, Display: "title",
+func ObjectEntity(env ObjectEntityEnvironment) platform.RecordType {
+	return platform.RecordType{Type: ObjectType, Title: "Object type", Plural: "Object types", Model: Object{}, Display: "title",
 		Description: "An object this organisation defines itself: its name, what people call it and its fields. Publishing it installs it, and records of it are kept like any other app's.",
 		Validate: func(c platform.Caller, record any) *platform.Error {
 			if c.Replaying {

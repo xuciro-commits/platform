@@ -1,4 +1,4 @@
-package build
+package authoring
 
 import (
 	"bytes"
@@ -141,8 +141,8 @@ func (b *Build) WorkingDrafts(owner string) ([]DraftChange, error) {
 	return slices.DeleteFunc(changes, func(change DraftChange) bool { return change.Owner != owner }), nil
 }
 
-func (b *Build) draftEntities(kind platform.AssetKind) []platform.Entity {
-	var out []platform.Entity
+func (b *Build) draftEntities(kind platform.AssetKind) []platform.RecordType {
+	var out []platform.RecordType
 	for _, entity := range b.Manifest().Entities {
 		ref, err := draftAssetRef(entity.Type, "")
 		if err == nil && (ref.Kind == kind || entity.Type == TestPlanType && kind == platform.AssetEvaluation) {
@@ -198,7 +198,7 @@ func draftOwner(r platform.Record) string {
 	return r.Changed.By
 }
 
-func (b *Build) draftComparison(record any, published string, info platform.EntityInfo, ref platform.AssetRef) (before, after map[string]json.RawMessage, portable bool, err error) {
+func (b *Build) draftComparison(record any, published string, info platform.RecordTypeInfo, ref platform.AssetRef) (before, after map[string]json.RawMessage, portable bool, err error) {
 	current := platform.Raw(record)
 	previous := json.RawMessage(`{}`)
 	if published != "" {

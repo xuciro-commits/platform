@@ -107,7 +107,7 @@ type CapabilityVersion struct {
 	Revision     int
 	Query        *platform.NamedQuery
 	QueryVersion string
-	Entity       platform.EntityInfo
+	Entity       platform.RecordTypeInfo
 	Operation    *platform.Operation
 	Function     *platform.AIFunction
 }

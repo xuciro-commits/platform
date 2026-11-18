@@ -24,14 +24,14 @@ import (
 	"platformserver/platform"
 	"platformserver/services/actions"
 	agentevaluation "platformserver/services/ai/evaluation"
-	"platformserver/services/ai/runtime"
-	"platformserver/services/automate/runtime"
+	agents "platformserver/services/ai/runtime"
+	automation "platformserver/services/automate/runtime"
 	devopsauthoring "platformserver/services/devops/authoring"
 	"platformserver/services/devops/packages"
 	"platformserver/services/functions/authoring"
 	"platformserver/services/objects"
 	"platformserver/services/ontology"
-	"platformserver/services/resources/authoring"
+	build "platformserver/services/resources/authoring"
 	"platformserver/services/resources/publication"
 	"platformserver/services/security"
 	controlowner "platformserver/services/security/control"
@@ -49,7 +49,7 @@ type monitoringEvent struct {
 }
 
 func (a *monitoringFixture) Authority() platform.Authority { return a.ledger }
-func (a *monitoringFixture) Fork(ledger platform.Authority) (platform.App, error) {
+func (a *monitoringFixture) Fork(ledger platform.Authority) (platform.Service, error) {
 	return &monitoringFixture{ledger: ledger, undoBlocked: a.undoBlocked}, nil
 }
 func (a *monitoringFixture) Declarations() []*pb.AuthorityDeclaration {
@@ -97,7 +97,7 @@ func (a *monitoringFixture) Manifest() platform.Manifest {
 		flows = append(flows, flow)
 	}
 	return platform.Manifest{ID: "probe", Title: "Probe", Version: "1", Actions: a.ledger.Catalog(), Roles: []string{"runner"},
-		Entities: []platform.Entity{{Type: "probe.event", Title: "Probe event", Model: monitoringEvent{}, Display: "title"}}, Flows: flows,
+		Entities: []platform.RecordType{{Type: "probe.event", Title: "Probe event", Model: monitoringEvent{}, Display: "title"}}, Flows: flows,
 		Agents: []platform.Agent{{Name: "helper", Title: "Probe helper", Instructions: "Answer the goal", Budget: platform.Budget{Steps: 10, Tokens: 1000, Actions: 10}}},
 		Jobs:   []platform.Job{{Name: "failed", Title: "Failed probe job", Every: time.Minute}},
 		Operations: []platform.Operation{{Name: "echo", Title: "Echo", Roles: []string{"runner"},

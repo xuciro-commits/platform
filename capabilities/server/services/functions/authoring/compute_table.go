@@ -20,7 +20,7 @@ const (
 
 var columnName = regexp.MustCompile(`^[a-z][a-z0-9]{0,31}$`)
 
-func CheckTableShape(tb Table, lookup func(string) (platform.EntityInfo, bool), checkCollections func(platform.RuleReadSpec, string, func(string) (platform.EntityInfo, bool)) error, engines ...platform.RuleEngine) error {
+func CheckTableShape(tb Table, lookup func(string) (platform.RecordTypeInfo, bool), checkCollections func(platform.RuleReadSpec, string, func(string) (platform.RecordTypeInfo, bool)) error, engines ...platform.RuleEngine) error {
 	if strings.TrimSpace(tb.Title) == "" || len(tb.Inputs) == 0 || len(tb.Outputs) == 0 || len(tb.Inputs)+len(tb.Outputs) > tableCols || len(tb.Rows) == 0 || len(tb.Rows) > tableRows {
 		return fmt.Errorf("a table needs a title, 1 to %d columns and 1 to %d rows", tableCols, tableRows)
 	}

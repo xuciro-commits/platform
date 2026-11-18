@@ -8,7 +8,7 @@ import (
 	"platformserver/platform"
 	"platformserver/services/actions"
 	trialowner "platformserver/services/devops/trials"
-	"platformserver/services/resources/authoring"
+	build "platformserver/services/resources/authoring"
 	"slices"
 	"time"
 )

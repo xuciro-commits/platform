@@ -30,7 +30,7 @@ type SampleSetEnvironment struct {
 }
 
 type SampleSetPublication struct {
-	Entity               func() platform.Entity
+	Entity               func() platform.RecordType
 	Asset                func(SampleSetRecord, int) (platform.ReleaseAsset, error)
 	Draft                func(platform.ReleaseAsset) (SampleSetRecord, error)
 	Assets               func() ([]platform.ReleaseAsset, error)

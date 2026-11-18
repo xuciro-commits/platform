@@ -84,11 +84,11 @@ func (t *Tenant) EvaluateObservation(ctx context.Context, m platform.Member, ref
 	answer, refusal := decideOnImage(t, ctx, "observation:answer", func(t *Tenant) (dataowner.ObservationAnswer, *platform.Error) {
 		m = t.authorizationMember(m)
 		return t.observationDecision().Commit(m, ref, q, key, identity, initial, outcome, now)
-	}, func(t *Tenant, candidate preparedAccepted, value dataowner.ObservationAnswer, refusal *platform.Error) (dataowner.ObservationAnswer, *platform.Error) {
-		if len(candidate.entry.Body) == 0 {
+	}, func(t *Tenant, decision preparedAccepted, value dataowner.ObservationAnswer, refusal *platform.Error) (dataowner.ObservationAnswer, *platform.Error) {
+		if len(decision.entry.Body) == 0 {
 			return value, refusal
 		}
-		receipt, refusal := t.finishPreparedSubmission(m, candidate, nil, refusal)
+		receipt, refusal := t.finishPreparedSubmission(m, decision, nil, refusal)
 		if receipt != nil {
 			value.Receipt = receipt
 		}

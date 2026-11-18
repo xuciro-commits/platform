@@ -9,15 +9,15 @@ import (
 	"platformserver/services/objects"
 )
 
-func (b Bindings) CheckInstall(p platform.Page, id string, targets bool, engines ...platform.RuleEngine) (platform.Page, platform.EntityInfo, error) {
+func (b Bindings) CheckInstall(p platform.Page, id string, targets bool, engines ...platform.RuleEngine) (platform.Page, platform.RecordTypeInfo, error) {
 	canonical := p
 	safe, err := Safety(p)
 	if err != nil {
-		return p, platform.EntityInfo{}, err
+		return p, platform.RecordTypeInfo{}, err
 	}
 	p = safe
 	if err := CheckSafety(p); err != nil {
-		return p, platform.EntityInfo{}, err
+		return p, platform.RecordTypeInfo{}, err
 	}
 	for _, trigger := range p.ActionTriggers {
 		refs := slices.Clone(trigger.Actions)
@@ -33,18 +33,18 @@ func (b Bindings) CheckInstall(p platform.Page, id string, targets bool, engines
 		}
 		for _, ref := range refs {
 			if _, action, ok := b.Action(ref.Name); ok && platform.StaticControlAction(action) {
-				return p, platform.EntityInfo{}, fmt.Errorf("page %s cannot bind static control action %s", p.Name, ref.Name)
+				return p, platform.RecordTypeInfo{}, fmt.Errorf("page %s cannot bind static control action %s", p.Name, ref.Name)
 			}
 		}
 	}
 	if err := CheckModelBindings(p, b.Entity, b.Criteria, engines...); err != nil {
-		return p, platform.EntityInfo{}, err
+		return p, platform.RecordTypeInfo{}, err
 	}
 	if err := CheckModelQueries(p, b.Definitions, b.Entity); err != nil {
-		return p, platform.EntityInfo{}, err
+		return p, platform.RecordTypeInfo{}, err
 	}
 	if err := b.CheckQueries(p); err != nil {
-		return p, platform.EntityInfo{}, err
+		return p, platform.RecordTypeInfo{}, err
 	}
 	if iface := p.InputSchema.Interface; iface != nil {
 		for _, ports := range []map[string]platform.PagePort{iface.Inputs, iface.Outputs} {
@@ -52,7 +52,7 @@ func (b Bindings) CheckInstall(p platform.Page, id string, targets bool, engines
 				if port.Object != nil {
 					info, ok := b.Entity(port.Object.Name)
 					if !ok || info.App != port.Object.App {
-						return p, platform.EntityInfo{}, fmt.Errorf("page port %s has an unknown object", id)
+						return p, platform.RecordTypeInfo{}, fmt.Errorf("page port %s has an unknown object", id)
 					}
 				}
 			}
@@ -60,27 +60,27 @@ func (b Bindings) CheckInstall(p platform.Page, id string, targets bool, engines
 	}
 	info, known := b.Entity(p.Object.Name)
 	if p.Name == "" || !known {
-		return p, platform.EntityInfo{}, fmt.Errorf("page %s object %s is unavailable", p.Name, p.Object.Name)
+		return p, platform.RecordTypeInfo{}, fmt.Errorf("page %s object %s is unavailable", p.Name, p.Object.Name)
 	}
 	if err := b.CheckSections(p, info); err != nil {
-		return p, platform.EntityInfo{}, err
+		return p, platform.RecordTypeInfo{}, err
 	}
 	if targets {
 		for _, d := range b.Definitions {
 			if d.Application != nil && d.Ref.App == id && slices.Contains(d.Application.Pages, p.Name) {
 				if err := CheckPageVariables(*d.Application, p); err != nil {
-					return p, platform.EntityInfo{}, err
+					return p, platform.RecordTypeInfo{}, err
 				}
 			}
 		}
 		if err := CheckNavigation(p, id, b.Definitions); err != nil {
-			return p, platform.EntityInfo{}, err
+			return p, platform.RecordTypeInfo{}, err
 		}
 	}
 	return canonical, info, nil
 }
 
-func (b Bindings) CheckSections(p platform.Page, page platform.EntityInfo) error {
+func (b Bindings) CheckSections(p platform.Page, page platform.RecordTypeInfo) error {
 	safe, err := Safety(p)
 	if err != nil {
 		return err

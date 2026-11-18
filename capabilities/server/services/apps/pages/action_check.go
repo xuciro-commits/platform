@@ -48,7 +48,7 @@ type ActionChecks struct {
 	Lifecycle  string
 	Moves      bool
 	Read       func() (json.RawMessage, *platform.Error)
-	Entity     func(string) (platform.EntityInfo, bool)
+	Entity     func(string) (platform.RecordTypeInfo, bool)
 	Say        func(string) string
 	Localize   func([]platform.FieldIssue) []platform.FieldIssue
 }

@@ -13,8 +13,8 @@ import (
 
 const MatchType = "build.match"
 
-func (o *Owner) matchEntity() platform.Entity {
-	return platform.Entity{Type: MatchType, Title: "Matching rule", Plural: "Matching rules", Model: Match{}, Display: "title",
+func (o *Owner) matchEntity() platform.RecordType {
+	return platform.RecordType{Type: MatchType, Title: "Matching rule", Plural: "Matching rules", Model: Match{}, Display: "title",
 		Description: "When rows from different systems are one party, material or site, and whose value wins per field.",
 		Validate: func(c platform.Caller, record any) *platform.Error {
 			m := record.(*Match)

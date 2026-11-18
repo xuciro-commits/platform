@@ -119,7 +119,7 @@ func WalkBusinessTxn(txn *platform.BusinessTxn, visit func(platform.TxnStep)) {
 	}
 }
 
-func WithTxnRow(spec platform.RuleReadSpec, info platform.EntityInfo) platform.RuleReadSpec {
+func WithTxnRow(spec platform.RuleReadSpec, info platform.RecordTypeInfo) platform.RuleReadSpec {
 	spec.Inputs = maps.Clone(spec.Inputs)
 	for _, field := range ruleprotocol.ConstraintEntity(info).Fields {
 		spec.Inputs["row."+field.Name] = platform.ExprType{Kind: platform.RuleFieldKind(field.Type), Object: field.Ref}
@@ -152,18 +152,18 @@ func WithTxnRange(scope platform.RuleReadSpec, kind string) platform.RuleReadSpe
 	return scope
 }
 
-func TxnIterationSource(owner, subject, of string, lookup func(string) (platform.EntityInfo, bool)) (platform.EntityInfo, error) {
+func TxnIterationSource(owner, subject, of string, lookup func(string) (platform.RecordTypeInfo, bool)) (platform.RecordTypeInfo, error) {
 	typ := subject
 	if of != "" {
 		field, err := platform.RecordPathField(subject, strings.Split(of, "."), lookup)
 		if err != nil || field.Type != "reference" || field.Ref == "" {
-			return platform.EntityInfo{}, fmt.Errorf("Iteration source must be a declared record reference")
+			return platform.RecordTypeInfo{}, fmt.Errorf("Iteration source must be a declared record reference")
 		}
 		typ = field.Ref
 	}
 	info, ok := lookup(typ)
 	if !ok || info.App != owner {
-		return platform.EntityInfo{}, fmt.Errorf("Iteration source must belong to its transaction owner")
+		return platform.RecordTypeInfo{}, fmt.Errorf("Iteration source must belong to its transaction owner")
 	}
 	return info, nil
 }

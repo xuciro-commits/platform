@@ -56,7 +56,7 @@ func (i Interface) Check(app string) error {
 	return nil
 }
 
-func (i Interface) Implements(info EntityInfo) error {
+func (i Interface) Implements(info RecordTypeInfo) error {
 	for _, want := range i.Fields {
 		k := slices.IndexFunc(info.Fields, func(f FieldInfo) bool { return f.Name == want.Name })
 		if k < 0 {

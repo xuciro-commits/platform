@@ -263,7 +263,7 @@ func (d *Decision) SavedCallbackRows(published map[string]bool) ([]acceptedforma
 
 func (d *Decision) Put(c platform.Caller, r *pb.ChangeRecord, entity any) *platform.Error {
 	var before *records.Row
-	var info platform.EntityInfo
+	var info platform.RecordTypeInfo
 	var ref string
 	func() {
 		d.Records.Lock()

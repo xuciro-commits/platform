@@ -38,7 +38,7 @@ type Money struct {
 	Currency string `json:"currency"`
 }
 
-type Entity struct {
+type RecordType struct {
 	DataSources       []DataSourceBinding
 	LocalRules        map[string]Expr
 	EnterpriseUse     *Expr
@@ -321,7 +321,7 @@ func (f FieldInfo) Active(valueOf func(field string) string, engines ...RuleEngi
 	return f.When == nil || f.When.Holds(valueOf(f.When.Field), engines...)
 }
 
-type EntityInfo struct {
+type RecordTypeInfo struct {
 	DataSources     []DataSourceBinding `json:"datasources,omitempty"`
 	LocalRules      map[string]Expr     `json:"localRules,omitempty"`
 	EnterpriseUse   *Expr               `json:"enterpriseUse,omitempty"`
@@ -354,7 +354,7 @@ type EntityInfo struct {
 	Withheld        []int               `json:"-"`
 }
 
-func (e EntityInfo) Field(name string) (FieldInfo, bool) {
+func (e RecordTypeInfo) Field(name string) (FieldInfo, bool) {
 	i := slices.IndexFunc(e.Fields, func(f FieldInfo) bool { return f.Name == name })
 	if i < 0 {
 		return FieldInfo{}, false

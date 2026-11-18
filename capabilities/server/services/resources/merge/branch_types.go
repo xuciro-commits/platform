@@ -1,4 +1,4 @@
-package branches
+package merge
 
 import (
 	branchowner "platformserver/services/resources/merge/owner"

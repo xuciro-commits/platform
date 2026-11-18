@@ -48,7 +48,7 @@ func (r FormatRule) Format() FieldFormat {
 	return FieldFormat{Tone: r.Tone, Icon: r.Icon, Label: r.Label}
 }
 
-func CheckPresentation(info EntityInfo) error {
+func CheckPresentation(info RecordTypeInfo) error {
 	if info.Icon != "" && !IconName(info.Icon) {
 		return fmt.Errorf("entity %s: icon %q is not an icon name", info.Type, info.Icon)
 	}

@@ -56,7 +56,7 @@ type AgentFunction struct {
 }
 
 type AgentSurface struct {
-	Entities  []EntityInfo
+	Entities  []RecordTypeInfo
 	Actions   []AgentAction
 	Functions []AgentFunction
 }

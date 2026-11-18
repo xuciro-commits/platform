@@ -26,9 +26,9 @@ type Authority interface {
 	Declarations() []*pb.AuthorityDeclaration
 	Extend(classes []string, actions []Action) error
 	Receive(c Caller, s *pb.Submission, now time.Time, allowed func() bool, rules func() (func(*pb.ChangeRecord), *Error)) (*pb.ChangeRecord, *Error)
-	Generated(c Caller, s *pb.Submission, now time.Time, allowed func() bool, entities ...Entity) (*pb.ChangeRecord, *Error, bool)
-	ApplyTxnRecord(c Caller, r *pb.ChangeRecord, e Entity, verb, id string, payload json.RawMessage, now time.Time) *Error
-	ApplyTxnRoute(c Caller, r *pb.ChangeRecord, e Entity, target TxnRef, now time.Time, run func(Caller, *pb.ChangeRecord, *BusinessTxn, time.Time) *Error) *Error
+	Generated(c Caller, s *pb.Submission, now time.Time, allowed func() bool, entities ...RecordType) (*pb.ChangeRecord, *Error, bool)
+	ApplyTxnRecord(c Caller, r *pb.ChangeRecord, e RecordType, verb, id string, payload json.RawMessage, now time.Time) *Error
+	ApplyTxnRoute(c Caller, r *pb.ChangeRecord, e RecordType, target TxnRef, now time.Time, run func(Caller, *pb.ChangeRecord, *BusinessTxn, time.Time) *Error) *Error
 	RecordsFor(tenant string) []*pb.ChangeRecord
 	LastAccepted(tenant string) *pb.ChangeRecord
 	AcceptedFor(tenant, key string) *pb.ChangeRecord

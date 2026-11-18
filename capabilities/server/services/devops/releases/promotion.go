@@ -9,7 +9,7 @@ import (
 	"platformserver/kernel/acceptedformat"
 	"platformserver/kernel/protocol"
 	"platformserver/platform"
-	"platformserver/services/resources/authoring"
+	build "platformserver/services/resources/authoring"
 	"platformserver/services/resources/publication"
 
 	"slices"

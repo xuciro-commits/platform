@@ -12,7 +12,7 @@ import (
 	"time"
 )
 
-func (l *authority) ApplyTxnRecord(c platform.Caller, r *pb.ChangeRecord, e platform.Entity, verb, id string, payload json.RawMessage, now time.Time) (refusal *platform.Error) {
+func (l *authority) ApplyTxnRecord(c platform.Caller, r *pb.ChangeRecord, e platform.RecordType, verb, id string, payload json.RawMessage, now time.Time) (refusal *platform.Error) {
 	if c.TraceEnabled() {
 		before, _ := c.ReadRecord(e.Type, id, now)
 		defer func() {
@@ -102,7 +102,7 @@ func (l *authority) ApplyTxnRecord(c platform.Caller, r *pb.ChangeRecord, e plat
 	return nil
 }
 
-func (l *authority) ApplyTxnRoute(c platform.Caller, r *pb.ChangeRecord, e platform.Entity, target platform.TxnRef, now time.Time, run func(platform.Caller, *pb.ChangeRecord, *platform.BusinessTxn, time.Time) *platform.Error) *platform.Error {
+func (l *authority) ApplyTxnRoute(c platform.Caller, r *pb.ChangeRecord, e platform.RecordType, target platform.TxnRef, now time.Time, run func(platform.Caller, *pb.ChangeRecord, *platform.BusinessTxn, time.Time) *platform.Error) *platform.Error {
 	if !c.Staging() || c.Replaying || c.App != l.authority || target.Type != e.Type || target.Action == "" || target.ID == "" || e.Lifecycle == nil || run == nil {
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Refusal route requires its original transaction owner / 拒绝改路须经原事务归属方")
 	}

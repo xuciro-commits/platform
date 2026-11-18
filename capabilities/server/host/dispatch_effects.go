@@ -7,7 +7,7 @@ import (
 
 	"platformserver/platform"
 	"platformserver/services/actions"
-	"platformserver/services/resources/authoring"
+	build "platformserver/services/resources/authoring"
 )
 
 func (t *Tenant) beginDispatchAttempt(x platform.Effect, at time.Time) bool {

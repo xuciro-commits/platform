@@ -1,4 +1,4 @@
-package compute
+package runtime
 
 import (
 	"context"
@@ -230,7 +230,7 @@ func CheckCancel(tenant string, c platform.Caller, r *pb.ChangeRecord, id string
 	return true, nil
 }
 
-func RulesRevoked(member platform.Member, rules platform.RuleTablePlan, query func(platform.AssetRef, int) (platform.NamedQuery, bool), entity func(string) (platform.EntityInfo, bool), authz platform.AuthorizationEngine) string {
+func RulesRevoked(member platform.Member, rules platform.RuleTablePlan, query func(platform.AssetRef, int) (platform.NamedQuery, bool), entity func(string) (platform.RecordTypeInfo, bool), authz platform.AuthorizationEngine) string {
 	for _, set := range rules.Reads.Collections {
 		q, ok := query(platform.AssetRef{App: set.App, Kind: platform.AssetQuery, Name: set.Query}, set.Version)
 		if !ok || q.Object != set.Object {

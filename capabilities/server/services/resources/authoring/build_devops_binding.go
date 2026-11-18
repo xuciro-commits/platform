@@ -1,4 +1,4 @@
-package build
+package authoring
 
 import (
 	"platformserver/platform"
@@ -10,7 +10,7 @@ func (b *Build) bindTestPlans() {
 	env := testPlanEnvironment{
 		App: ID, Type: TestPlanType, Builder: Builder,
 		Caller:             func() platform.Caller { return b.host.Automation(platform.Caller{}, ID) },
-		Authority:          func() platform.Authority { return b.ledger },
+		Authority:          func() platform.Authority { return b.authority },
 		SourceVersion:      func() string { return b.Manifest().Version },
 		WithDependencies:   b.resolver.WithDependencies,
 		CheckDependencies:  b.resolver.CheckAssetDependencies,

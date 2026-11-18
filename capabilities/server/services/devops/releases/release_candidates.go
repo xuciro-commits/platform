@@ -9,7 +9,7 @@ import (
 	"platformserver/platform"
 	pageowner "platformserver/services/apps/pages"
 	"platformserver/services/ontology"
-	"platformserver/services/resources/authoring"
+	build "platformserver/services/resources/authoring"
 	"platformserver/services/resources/publication"
 	"slices"
 	"strings"
@@ -119,7 +119,7 @@ type ReleaseActive struct {
 	ID string `json:"id"`
 }
 
-func CodeObjectDescriptor(entity platform.Entity, info platform.EntityInfo) any {
+func CodeObjectDescriptor(entity platform.RecordType, info platform.RecordTypeInfo) any {
 	type scope struct {
 		Levels       map[string]string `json:"levels"`
 		Default      string            `json:"default"`
@@ -168,13 +168,13 @@ func CodeObjectDescriptor(entity platform.Entity, info platform.EntityInfo) any 
 		}
 	}
 	return struct {
-		Type      string                `json:"type"`
-		Entity    platform.EntityInfo   `json:"entity"`
-		Scope     scope                 `json:"scope"`
-		Standard  platform.Standard     `json:"standard"`
-		Derived   []platform.Derivation `json:"derived"`
-		Withheld  string                `json:"withheld"`
-		Lifecycle *lifecycle            `json:"lifecycle"`
+		Type      string                  `json:"type"`
+		Entity    platform.RecordTypeInfo `json:"entity"`
+		Scope     scope                   `json:"scope"`
+		Standard  platform.Standard       `json:"standard"`
+		Derived   []platform.Derivation   `json:"derived"`
+		Withheld  string                  `json:"withheld"`
+		Lifecycle *lifecycle              `json:"lifecycle"`
 	}{
 		Type: info.Type, Entity: info,
 		Scope: scope{Levels: entity.Scope.Levels, Default: entity.Scope.Default, Structure: entity.Scope.Structure,
@@ -452,7 +452,7 @@ func CodeReleaseAssets(resolver publication.Resolver, manifest platform.Manifest
 		case platform.AssetInterface, platform.AssetProtocol, platform.AssetObservation:
 			available = append(available, special[def.Ref])
 		case platform.AssetObject:
-			i := slices.IndexFunc(manifest.Entities, func(e platform.Entity) bool { return e.Type == def.Ref.Name })
+			i := slices.IndexFunc(manifest.Entities, func(e platform.RecordType) bool { return e.Type == def.Ref.Name })
 			if i < 0 || def.Entity == nil {
 				return nil, fmt.Errorf("code object %s has no owner declaration", def.Ref)
 			}
@@ -595,7 +595,7 @@ func (p Planner) Assets(builderAssets []platform.ReleaseAsset, replaceBuilder bo
 	return append(out, builderAssets...), nil
 }
 
-func CodeAssets(app platform.App, allDefinitions []platform.Definition, definitionAsset func(platform.Definition) (platform.ReleaseAsset, error), nativeFlow func(platform.App, string, int) (platform.ReleaseAsset, error), describe func(platform.ReleaseAsset) (platform.ReleaseAsset, error), resolver publication.Resolver) ([]platform.ReleaseAsset, error) {
+func CodeAssets(app platform.Service, allDefinitions []platform.Definition, definitionAsset func(platform.Definition) (platform.ReleaseAsset, error), nativeFlow func(platform.Service, string, int) (platform.ReleaseAsset, error), describe func(platform.ReleaseAsset) (platform.ReleaseAsset, error), resolver publication.Resolver) ([]platform.ReleaseAsset, error) {
 	manifest := app.Manifest()
 	definitions := []platform.Definition{}
 	special := map[platform.AssetRef]platform.ReleaseAsset{}
@@ -802,7 +802,7 @@ func (p Planner) PreviewWithActions(drafts []build.JointDraftRef, member platfor
 
 }
 
-func ActionSchemaVersion(definitions []platform.Definition, app platform.App, action platform.Action) (platform.SchemaVersion, error) {
+func ActionSchemaVersion(definitions []platform.Definition, app platform.Service, action platform.Action) (platform.SchemaVersion, error) {
 	if action.SchemaVersion != nil {
 		return *action.SchemaVersion, nil
 	}

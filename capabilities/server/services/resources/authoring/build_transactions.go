@@ -1,4 +1,4 @@
-package build
+package authoring
 
 import (
 	"encoding/json"
@@ -39,7 +39,7 @@ func (b *Build) checkTransactions(object ontology.Object, engines ...platform.Ru
 		App:         ID,
 		BuilderRole: Builder,
 		Lookup:      b.conditionLookup,
-		ObjectInfo: func() (platform.EntityInfo, error) {
+		ObjectInfo: func() (platform.RecordTypeInfo, error) {
 			return records.Describe(ID, Entity(object), func(reflect.Type) string { return "" })
 		},
 		Saved: func(typ string) bool {
@@ -67,7 +67,7 @@ func (b *Build) checkTransactions(object ontology.Object, engines ...platform.Ru
 			}
 			return nil
 		},
-		Reads: func(spec platform.RuleReadSpec, where string, lookup func(string) (platform.EntityInfo, bool)) error {
+		Reads: func(spec platform.RuleReadSpec, where string, lookup func(string) (platform.RecordTypeInfo, bool)) error {
 			return b.checkRuleCollections(spec, where, lookup)
 		},
 	}, engines...)
@@ -85,7 +85,7 @@ func (b *Build) CanonicalObject(object ontology.Object) (ontology.Object, error)
 }
 
 func (b *Build) businessRuntime() protocol.TransactionExecutor {
-	return b.host.TransactionRuntime(protocol.BusinessRuntimeContext{App: ID, Entities: b.installed, Ledger: b.ledger, Lookup: b.conditionLookup, Link: b.transactionLink, Dispatch: b.data.OpenDispatch, Confirm: b.data.OpenConfirmation,
+	return b.host.TransactionRuntime(protocol.BusinessRuntimeContext{App: ID, Entities: b.installed, Ledger: b.authority, Lookup: b.conditionLookup, Link: b.transactionLink, Dispatch: b.data.OpenDispatch, Confirm: b.data.OpenConfirmation,
 		Prepare: func(c platform.Caller, r *pb.ChangeRecord, txn *platform.BusinessTxn, now time.Time) (protocol.TransactionProposal, *platform.Error) {
 			return b.functions.PrepareProposal(c, r, txn, b.installed[txn.Subject], now)
 		}, Effect: b.data.TransactionEffect})

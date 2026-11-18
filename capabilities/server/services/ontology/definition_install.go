@@ -15,10 +15,10 @@ type DefinitionInstall struct {
 	Definitions func() []platform.Definition
 	Describe    func(platform.Definition) (platform.Definition, error)
 	Store       func(int, platform.Definition)
-	Entity      func(string) (platform.EntityInfo, bool)
-	Types       func() []platform.EntityInfo
+	Entity      func(string) (platform.RecordTypeInfo, bool)
+	Types       func() []platform.RecordTypeInfo
 	Bind        func(platform.NamedQuery) (platform.NamedQuery, error)
-	Query       func(platform.NamedQuery, platform.EntityInfo) error
+	Query       func(platform.NamedQuery, platform.RecordTypeInfo) error
 	Link        func(platform.LinkType) error
 	Constrain   func(platform.LinkType) error
 	Staged      func()
@@ -247,7 +247,7 @@ func (in DefinitionInstall) ObjectTypeGroup(g platform.ObjectTypeGroup, version 
 	return in.storeOwned(d, "Object type group is owned by code")
 }
 
-func CheckObjectBindings(info platform.EntityInfo, property func(platform.AssetBinding) (platform.PropertyType, bool), value func(platform.AssetBinding) (platform.ValueType, bool)) error {
+func CheckObjectBindings(info platform.RecordTypeInfo, property func(platform.AssetBinding) (platform.PropertyType, bool), value func(platform.AssetBinding) (platform.ValueType, bool)) error {
 	for _, f := range info.Fields {
 		if f.Property == nil {
 			continue

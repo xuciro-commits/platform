@@ -9,7 +9,7 @@ import (
 
 type SharedRuntime struct{}
 
-func (SharedRuntime) Decide(c platform.Caller, app platform.App, s *pb.Submission, at time.Time) (*pb.ChangeRecord, *platform.Error) {
+func (SharedRuntime) Decide(c platform.Caller, app platform.Service, s *pb.Submission, at time.Time) (*pb.ChangeRecord, *platform.Error) {
 	if !c.Replaying {
 		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "A new decision requires a private runtime")
 	}

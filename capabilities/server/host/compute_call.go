@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformserver/platform"
-	"platformserver/services/functions/runtime"
+	compute "platformserver/services/functions/runtime"
 	controlowner "platformserver/services/security/control"
 	"slices"
 	"time"
@@ -70,8 +70,8 @@ func (t *Tenant) InvokeOperation(member platform.Member, q platform.OperationReq
 			known := t.PriorOf(owner, q.Key).Known()
 			_, refusal := t.accept(owner, latest, s, now, acceptOptions{inputs: []*preparedOperationInput{prepared}})
 			return !known, refusal
-		}, func(t *Tenant, candidate preparedAccepted, keep bool, refusal *platform.Error) (bool, *platform.Error) {
-			_, refusal = t.finishPreparedSubmission(current, candidate, nil, refusal)
+		}, func(t *Tenant, decision preparedAccepted, keep bool, refusal *platform.Error) (bool, *platform.Error) {
+			_, refusal = t.finishPreparedSubmission(current, decision, nil, refusal)
 			if _, rejected := t.Committed.Refusal(controlowner.PlatformApp + "/" + q.Key); rejected {
 				keep = false
 			}

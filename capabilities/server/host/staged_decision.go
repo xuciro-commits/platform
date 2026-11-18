@@ -57,7 +57,7 @@ func (t *Tenant) newStagedDecisionOn(base *records.Store) *stagedDecision {
 	return &stagedDecision{tenant: t, Decision: decision}
 }
 
-func (d *stagedDecision) Decide(c platform.Caller, app platform.App, s *pb.Submission, at time.Time) (*pb.ChangeRecord, *platform.Error) {
+func (d *stagedDecision) Decide(c platform.Caller, app platform.Service, s *pb.Submission, at time.Time) (*pb.ChangeRecord, *platform.Error) {
 	app = d.stateApp(app)
 	if d.Simulation {
 		if candidate, err := d.tenant.releases.Candidate(d.tenant.releases.Active()); err == nil {
@@ -67,7 +67,7 @@ func (d *stagedDecision) Decide(c platform.Caller, app platform.App, s *pb.Submi
 	return d.decideAppFrom(c, app, s, at, d.routingTenant(), d.tenant.releases.Active())
 }
 
-func (d *stagedDecision) decideAppFrom(c platform.Caller, app platform.App, s *pb.Submission, at time.Time, view *Tenant, release string, retained ...[]platform.ReleaseAsset) (*pb.ChangeRecord, *platform.Error) {
+func (d *stagedDecision) decideAppFrom(c platform.Caller, app platform.Service, s *pb.Submission, at time.Time, view *Tenant, release string, retained ...[]platform.ReleaseAsset) (*pb.ChangeRecord, *platform.Error) {
 	r, err, ok := d.DecideApp(c, app, s, at, func() (*platform.DecisionDefinition, error) {
 		return view.decisionDefinition(app.Manifest().ID, s, release, retained...)
 	})
@@ -126,7 +126,7 @@ func (d *stagedDecision) Emit(c platform.Caller, kind, key, entity string, data 
 }
 func (d *stagedDecision) CheckEnterpriseUsage(c platform.Caller, id, until string, deleting bool, now time.Time) *platform.Error {
 	original := d.routingTenant()
-	apps := make([]platform.App, len(original.apps))
+	apps := make([]platform.Service, len(original.apps))
 	for i, app := range original.apps {
 		apps[i] = d.stateApp(app)
 	}
@@ -160,7 +160,7 @@ func (d *stagedDecision) Related(c platform.Caller, element, stereotype string, 
 func (d *stagedDecision) Links(c platform.Caller, entity string) []string {
 	var out []string
 	if d.tenant.Linker != nil {
-		out = d.stateApp(d.tenant.Linker.(platform.App)).(platform.Linker).Links(c, entity)
+		out = d.stateApp(d.tenant.Linker.(platform.Service)).(platform.Linker).Links(c, entity)
 	}
 	return records.AppendRelationNeighbors(out, c.OwnedRelations(entity), entity)
 }
@@ -168,7 +168,7 @@ func (d *stagedDecision) Link(c platform.Caller, from, to *pb.EntityRef, key str
 	if d.tenant.Linker == nil {
 		return &platform.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
 	}
-	owner := d.stateApp(d.tenant.Linker.(platform.App))
+	owner := d.stateApp(d.tenant.Linker.(platform.Service))
 	err := owner.(platform.Linker).Link(c, from, to, key, now)
 	d.FailDecision(err)
 	return err
@@ -196,7 +196,7 @@ func (d *stagedDecision) directoryView() platform.Directory {
 	return d.privateRoles.Directories[d.stateApp(d.tenant.App(d.tenant.DirectoryOwner)).Manifest().ID]
 }
 
-func (d *stagedDecision) stateApp(app platform.App) platform.App {
+func (d *stagedDecision) stateApp(app platform.Service) platform.Service {
 	fork, ok := d.PrivateApp(app, d.bindPrivate)
 	if !ok {
 		unsupportedStagedEffect()
@@ -204,7 +204,7 @@ func (d *stagedDecision) stateApp(app platform.App) platform.App {
 	return fork
 }
 
-func (d *stagedDecision) bindPrivate(app platform.App) {
+func (d *stagedDecision) bindPrivate(app platform.Service) {
 	(hostView{t: d.tenant, app: app, decision: d}).bindOwner(app)
 	d.privateRoles.Add(app)
 }
@@ -309,7 +309,7 @@ func (t *Tenant) forkControl(images map[string]json.RawMessage) (*Tenant, error)
 	view := t.newControlFork()
 	_, marks := t.ConnectorRoster.State()
 	view.ConnectorRoster.RestoreMarks(marks)
-	view.i18n = transport.NewTranslator(func() []platform.App { return view.apps }, nil, view.words.Clone, PlatformLanguages)
+	view.i18n = transport.NewTranslator(func() []platform.Service { return view.apps }, nil, view.words.Clone, PlatformLanguages)
 	view.i18n.InstallApplications(view.definitions)
 	if err := view.controlOwners().InstallAll(images); err != nil {
 		return nil, err

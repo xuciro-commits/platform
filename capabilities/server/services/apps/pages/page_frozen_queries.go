@@ -15,7 +15,7 @@ func CheckFrozenQueries(original platform.Page, assets map[platform.AssetRef]pla
 	if err != nil {
 		return err
 	}
-	lookup := func(typ string) (platform.EntityInfo, bool) {
+	lookup := func(typ string) (platform.RecordTypeInfo, bool) {
 		asset, ok := assets[ontology.ModelObject(typ)]
 		if !ok {
 			for ref, value := range assets {

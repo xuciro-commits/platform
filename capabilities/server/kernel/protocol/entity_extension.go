@@ -9,7 +9,7 @@ import (
 	"strings"
 )
 
-func CheckExtension(extension, base platform.EntityInfo) error {
+func CheckExtension(extension, base platform.RecordTypeInfo) error {
 	if extension.Extends == "" || extension.Extends != base.Type || extension.Type == base.Type {
 		return fmt.Errorf("extension %s has an unavailable base %s", extension.Type, extension.Extends)
 	}
@@ -42,7 +42,7 @@ func CheckExtension(extension, base platform.EntityInfo) error {
 	return nil
 }
 
-func CheckInterfaceRegistry(interfaces []platform.Interface, infos map[string]platform.EntityInfo) error {
+func CheckInterfaceRegistry(interfaces []platform.Interface, infos map[string]platform.RecordTypeInfo) error {
 	declared := map[string]platform.Interface{}
 	for _, i := range interfaces {
 		app, _, _ := strings.Cut(i.Name, ".")

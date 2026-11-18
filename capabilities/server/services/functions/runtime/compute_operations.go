@@ -1,4 +1,4 @@
-package compute
+package runtime
 
 import (
 	"context"
@@ -54,7 +54,7 @@ type ExecutionReads struct {
 	Current func(id string, generation uint32) bool
 	Refusal func(member platform.Member, app string, b OperationBinding, now time.Time) *platform.Error
 	Query   func(member platform.Member, ref platform.AssetRef, version int) (platform.NamedQuery, bool)
-	Entity  func(string) (platform.EntityInfo, bool)
+	Entity  func(string) (platform.RecordTypeInfo, bool)
 	Authz   platform.AuthorizationEngine
 }
 
@@ -210,7 +210,7 @@ func Execute(ctx context.Context, host ExecutionHost, tenant string, x platform.
 	return out
 }
 
-func OperationDefinition(app platform.App, owner ruleprotocol.OperationDefinitions, name string, version int) (platform.Operation, int, bool) {
+func OperationDefinition(app platform.Service, owner ruleprotocol.OperationDefinitions, name string, version int) (platform.Operation, int, bool) {
 	if app == nil {
 		return platform.Operation{}, 0, false
 	}
@@ -257,7 +257,7 @@ func ResultOf(x platform.Effect) platform.OperationResult {
 type CallSetup struct {
 	Tenant      string
 	Member      func(id string) (platform.Member, bool)
-	App         func(id string) platform.App
+	App         func(id string) platform.Service
 	Definition  func(app, name string, version int) (platform.Operation, int, bool)
 	Prior       func(callID string) (string, bool)
 	Quarantined func() bool

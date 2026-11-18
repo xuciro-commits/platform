@@ -2,7 +2,7 @@ package host
 
 import (
 	"platformserver/kernel/records"
-	"platformserver/services/resources/authoring"
+	build "platformserver/services/resources/authoring"
 )
 
 func (t *Tenant) enterpriseHistoricalReferencePaths(store *records.Store) map[string][][]string {

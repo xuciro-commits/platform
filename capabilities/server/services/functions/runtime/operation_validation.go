@@ -1,4 +1,4 @@
-package compute
+package runtime
 
 import (
 	"fmt"
@@ -9,7 +9,7 @@ import (
 	"platformserver/platform"
 )
 
-func ValidateOperation(o platform.Operation, app platform.App, executor ruleprotocol.OperationExecutor, engine platform.RuleEngine, ruleQuery func(app, name string, version int) (platform.NamedQuery, int, bool), entity func(string) (platform.EntityInfo, bool), retained func(module string) bool) error {
+func ValidateOperation(o platform.Operation, app platform.Service, executor ruleprotocol.OperationExecutor, engine platform.RuleEngine, ruleQuery func(app, name string, version int) (platform.NamedQuery, int, bool), entity func(string) (platform.RecordTypeInfo, bool), retained func(module string) bool) error {
 	if err := o.Check(); err != nil {
 		return err
 	}
@@ -57,11 +57,11 @@ func ValidateOperation(o platform.Operation, app platform.App, executor ruleprot
 }
 
 type OperationInstall struct {
-	App         platform.App
+	App         platform.Service
 	Executor    ruleprotocol.OperationExecutor
 	Rules       platform.RuleEngine
 	RuleQuery   func(app, name string, version int) (platform.NamedQuery, int, bool)
-	Entity      func(string) (platform.EntityInfo, bool)
+	Entity      func(string) (platform.RecordTypeInfo, bool)
 	Retained    func(module string) bool
 	Describe    func(platform.Definition) (platform.Definition, error)
 	Definitions func() []platform.Definition

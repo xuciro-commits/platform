@@ -11,7 +11,7 @@ import (
 
 	persistence "platformserver/kernel/store"
 	"platformserver/platform"
-	"platformserver/services/resources/authoring"
+	build "platformserver/services/resources/authoring"
 )
 
 type sqlShapedReads struct {

@@ -12,13 +12,13 @@ type SubmissionTrial struct {
 	Quarantined   func() bool
 	Authorize     func(platform.Member) *platform.Error
 	Member        func(id string) (platform.Member, bool)
-	Owner         func(schema string) platform.App
-	Current       func(platform.App, *pb.Submission) *pb.Submission
+	Owner         func(schema string) platform.Service
+	Current       func(platform.Service, *pb.Submission) *pb.Submission
 	Bound         func(platform.Member, *pb.Submission) *platform.Error
 	Tenant        string
 }
 
-func (h SubmissionTrial) Prepare(member platform.Member, as, branch string, s *pb.Submission) (platform.Member, platform.Member, platform.App, *pb.Submission, *platform.Error) {
+func (h SubmissionTrial) Prepare(member platform.Member, as, branch string, s *pb.Submission) (platform.Member, platform.Member, platform.Service, *pb.Submission, *platform.Error) {
 	if err := h.Admits(member); err != nil {
 		return member, member, nil, nil, err
 	}

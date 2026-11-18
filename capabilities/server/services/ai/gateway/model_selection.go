@@ -1,4 +1,4 @@
-package aigateway
+package gateway
 
 import (
 	"encoding/json"
@@ -25,7 +25,7 @@ type ModelSelection struct {
 	Models          []ModelChoice         `json:"models"`
 }
 
-func (r Resolver) Selection(m platform.Member, purpose string, apps []platform.App, read func() ([]platform.AIModel, *platform.Error)) (ModelSelection, *platform.Error) {
+func (r Resolver) Selection(m platform.Member, purpose string, apps []platform.Service, read func() ([]platform.AIModel, *platform.Error)) (ModelSelection, *platform.Error) {
 	out := ModelSelection{Purpose: purpose, Models: []ModelChoice{}}
 	if purpose != "generation" && purpose != "agent" && purpose != "embedding" {
 		return out, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Choose a model purpose")

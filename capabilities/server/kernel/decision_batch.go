@@ -22,7 +22,7 @@ type ResultSources struct {
 	Pending    bool
 	Observers  bool
 	Pure       func(platform.Manifest, string) bool
-	App        func(string) platform.App
+	App        func(string) platform.Service
 	Control    func() (*acceptedformat.Control, error)
 	Operations func() ([]acceptedformat.OperationCancellation, error)
 	Plan       func(platform.Event) (protocol.AcceptedEventPlan, *platform.Error)
@@ -155,7 +155,7 @@ func (d *Decision) ChangePlan(control func() (*acceptedformat.Control, error)) (
 	return plan, err
 }
 
-func CheckObservations(app func(string) platform.App, saved []acceptedformat.Observation) error {
+func CheckObservations(app func(string) platform.Service, saved []acceptedformat.Observation) error {
 	for _, item := range saved {
 		if len(item.Body) == 0 {
 			return fmt.Errorf("accepted observation needs missing projection %s", item.App)
@@ -172,7 +172,7 @@ func CheckObservations(app func(string) platform.App, saved []acceptedformat.Obs
 	return nil
 }
 
-func ApplyObservations(app func(string) platform.App, saved []acceptedformat.Observation) error {
+func ApplyObservations(app func(string) platform.Service, saved []acceptedformat.Observation) error {
 	for _, item := range saved {
 		switch owner := app(item.App).(type) {
 		case platform.AcceptedObserver:

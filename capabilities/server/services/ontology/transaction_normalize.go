@@ -9,7 +9,7 @@ import (
 	"platformserver/platform"
 )
 
-func NormalizeTransaction(object Object, action *Action, lookup func(string) (platform.EntityInfo, bool)) error {
+func NormalizeTransaction(object Object, action *Action, lookup func(string) (platform.RecordTypeInfo, bool)) error {
 	var lower func([]platform.TxnStep, platform.RuleReadSpec) error
 	lower = func(steps []platform.TxnStep, scope platform.RuleReadSpec) error {
 		scope.Inputs = maps.Clone(scope.Inputs)

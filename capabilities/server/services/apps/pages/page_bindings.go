@@ -9,7 +9,7 @@ import (
 	"platformserver/platform"
 )
 
-func checkDataBinding(p platform.Page, binding platform.PageDataBinding, lookup func(string) (platform.EntityInfo, bool), criteria func(platform.AssetRef) (*platform.RuleCriteria, bool), engines ...platform.RuleEngine) error {
+func checkDataBinding(p platform.Page, binding platform.PageDataBinding, lookup func(string) (platform.RecordTypeInfo, bool), criteria func(platform.AssetRef) (*platform.RuleCriteria, bool), engines ...platform.RuleEngine) error {
 	if binding.Object.Name != "" {
 		info, ok := lookup(binding.Object.Name)
 		if !ok || info.App != binding.Object.App {
@@ -52,7 +52,7 @@ func checkDataBinding(p platform.Page, binding platform.PageDataBinding, lookup 
 		if !known {
 			return fmt.Errorf("page binding %s object is unavailable", binding.ID)
 		}
-		metadata := func(typ string) (platform.EntityInfo, bool) {
+		metadata := func(typ string) (platform.RecordTypeInfo, bool) {
 			value, found := lookup(typ)
 			return ruleprotocol.ConstraintEntity(value), found
 		}
@@ -191,7 +191,7 @@ func checkDataBinding(p platform.Page, binding platform.PageDataBinding, lookup 
 	return nil
 }
 
-func checkRuleExpression(expr platform.Expr, reads platform.RuleReadSpec, lookup func(string) (platform.EntityInfo, bool), engines ...platform.RuleEngine) error {
+func checkRuleExpression(expr platform.Expr, reads platform.RuleReadSpec, lookup func(string) (platform.RecordTypeInfo, bool), engines ...platform.RuleEngine) error {
 	schema, err := ruleprotocol.RuleSchema(expr, reads, lookup, engines...)
 	if err != nil {
 		return err

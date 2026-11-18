@@ -7,8 +7,8 @@ import (
 	"time"
 )
 
-func ScheduleEntity(validate func(platform.Caller, *platform.Schedule) *platform.Error) platform.Entity {
-	return platform.Entity{Type: platform.ScheduleType, Title: "Schedule", Plural: "Schedules", Model: platform.Schedule{}, Display: "title",
+func ScheduleEntity(validate func(platform.Caller, *platform.Schedule) *platform.Error) platform.RecordType {
+	return platform.RecordType{Type: platform.ScheduleType, Title: "Schedule", Plural: "Schedules", Model: platform.Schedule{}, Display: "title",
 		Description: "An independent time plan for pipeline builds.",
 		Scope:       platform.Scope{Default: platform.ScopeNone, Levels: map[string]string{"builder": platform.ScopeTenant, "integrator": platform.ScopeTenant}},
 		Standard:    platform.Standard{Create: true, Edit: true, Archive: true, Roles: []string{"builder", "integrator"}, Capability: "integrations"},
@@ -29,8 +29,8 @@ func ScheduleActions() []platform.Action {
 	return []platform.Action{{Schema: platform.SchemaScheduleRan, Target: platform.ScheduleType, Title: "Keep scheduled build", Description: "Retain the accepted time that requested a pipeline build.", Capability: "integrations", Roles: []string{"builder", "integrator"}, Payload: []platform.Field{{Name: "at", Type: "datetime", Required: true}}}}
 }
 
-func SubmitScheduleRan(ledger platform.Authority, c platform.Caller, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *platform.Error) {
-	return ledger.Receive(c, s, now, nil, func() (func(*pb.ChangeRecord), *platform.Error) {
+func SubmitScheduleRan(authority platform.Authority, c platform.Caller, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *platform.Error) {
+	return authority.Receive(c, s, now, nil, func() (func(*pb.ChangeRecord), *platform.Error) {
 		var payload struct {
 			At time.Time `json:"at"`
 		}

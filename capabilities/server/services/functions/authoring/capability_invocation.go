@@ -119,7 +119,7 @@ func CapabilityPermission(d platform.Definition) (string, []string) {
 	return "", nil
 }
 
-func FunctionReadable(function platform.AIFunction, entities []platform.EntityInfo) bool {
+func FunctionReadable(function platform.AIFunction, entities []platform.RecordTypeInfo) bool {
 	readable := false
 	for _, entity := range entities {
 		if entity.Type == function.Object && !slices.ContainsFunc(function.Fields, func(name string) bool { _, exists := entity.Field(name); return !exists }) {
@@ -129,13 +129,13 @@ func FunctionReadable(function platform.AIFunction, entities []platform.EntityIn
 	return readable
 }
 
-func QueryEntity(entities []platform.EntityInfo, object string) platform.EntityInfo {
+func QueryEntity(entities []platform.RecordTypeInfo, object string) platform.RecordTypeInfo {
 	for _, entity := range entities {
 		if entity.Type == object {
 			return entity
 		}
 	}
-	return platform.EntityInfo{}
+	return platform.RecordTypeInfo{}
 }
 
 func MemberQueryVersion(definitions []platform.Definition, appVersion string, ref platform.AssetRef, version int, resolver publication.Resolver) (platform.NamedQuery, string, bool) {
@@ -196,13 +196,13 @@ func DescribeCapability(ref platform.AssetRef, version int, retained func() (pro
 
 type RetainedHooks struct {
 	Query     func() (platform.NamedQuery, string, bool)
-	Entities  func() []platform.EntityInfo
-	Function  func(app platform.App, name string, version int) (platform.AIFunction, int, bool)
+	Entities  func() []platform.RecordTypeInfo
+	Function  func(app platform.Service, name string, version int) (platform.AIFunction, int, bool)
 	Operation func(app, name string, version int) (platform.Operation, int, bool)
 	Allowed   func(name string, roles []string) bool
 }
 
-func RetainedCapability(app platform.App, ref platform.AssetRef, version int, h RetainedHooks) (protocol.CapabilityDescriptor, bool) {
+func RetainedCapability(app platform.Service, ref platform.AssetRef, version int, h RetainedHooks) (protocol.CapabilityDescriptor, bool) {
 	if app == nil || version < 1 {
 		return protocol.CapabilityDescriptor{}, false
 	}

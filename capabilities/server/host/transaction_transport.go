@@ -11,7 +11,7 @@ import (
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	runtimekernel "platformserver/kernel"
 	"platformserver/services/actions"
-	"platformserver/services/resources/authoring"
+	build "platformserver/services/resources/authoring"
 
 	"platformserver/platform"
 )
@@ -38,7 +38,7 @@ func (h hostView) BeginTxnCalls(c platform.Caller, at time.Time) (platform.TxnCa
 		}}, nil
 }
 
-func (t *Tenant) submitAutomated(app platform.App, caller platform.Caller, sub *pb.Submission, now time.Time) *platform.Error {
+func (t *Tenant) submitAutomated(app platform.Service, caller platform.Caller, sub *pb.Submission, now time.Time) *platform.Error {
 	sub.PrincipalId = caller.ID
 	_, err := t.accept(app, caller.Member, sub, now, acceptOptions{automation: true})
 	return err

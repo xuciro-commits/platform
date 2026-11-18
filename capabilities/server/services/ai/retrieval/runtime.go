@@ -1,4 +1,4 @@
-package knowledge
+package retrieval
 
 import (
 	"context"
@@ -50,22 +50,22 @@ func (r Runtime) Corpus() Corpus {
 	return c
 }
 
-func (r Runtime) types() []platform.EntityInfo {
+func (r Runtime) types() []platform.RecordTypeInfo {
 	r.Projection.Lock()
 	defer r.Projection.Unlock()
-	var out []platform.EntityInfo
+	var out []platform.RecordTypeInfo
 	for _, et := range r.Projection.Types() {
 		out = append(out, et.Info())
 	}
 	return out
 }
 
-func (r Runtime) row(typ, id string) (platform.EntityInfo, reflect.Value, bool) {
+func (r Runtime) row(typ, id string) (platform.RecordTypeInfo, reflect.Value, bool) {
 	r.Projection.Lock()
 	defer r.Projection.Unlock()
 	et := r.Projection.Type(typ)
 	if et == nil || et.Rows().Get(id) == nil {
-		return platform.EntityInfo{}, reflect.Value{}, false
+		return platform.RecordTypeInfo{}, reflect.Value{}, false
 	}
 	return et.Info(), et.Rows().Get(id).Value, true
 }

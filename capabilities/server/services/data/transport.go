@@ -18,7 +18,7 @@ type Transport struct {
 	Assets          func() ([]platform.ReleaseAsset, error)
 	Release         func() string
 	Protocol        func(platform.ConfirmationParty) (*platform.ConfirmationProtocol, error)
-	App             func(string) platform.App
+	App             func(string) platform.Service
 	Member          func(string) (platform.Member, bool)
 	Readable        func(platform.Member, string, time.Time) bool
 	Applicant       func(platform.Member) platform.Caller

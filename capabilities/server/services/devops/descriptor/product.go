@@ -57,8 +57,8 @@ type ProductVersion struct {
 	Descriptor      platform.PackageDescriptor `json:"descriptor" field:"readonly" type:"json"`
 }
 
-func ProductVersionEntity() platform.Entity {
-	return platform.Entity{
+func ProductVersionEntity() platform.RecordType {
+	return platform.RecordType{
 		Type: ProductVersionType, Title: "Product version", Plural: "Product versions", Model: ProductVersion{}, Display: "version",
 		Description: "A frozen product version references one saved release candidate and keeps the exact package contents.",
 		Scope:       platform.Scope{Default: platform.ScopeTenant, Levels: map[string]string{"builder": platform.ScopeTenant, "publisher": platform.ScopeTenant}},

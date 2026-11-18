@@ -8,7 +8,7 @@ import (
 	"platformserver/platform"
 	"platformserver/services/actions"
 	trialowner "platformserver/services/devops/trials"
-	"platformserver/services/resources/authoring"
+	build "platformserver/services/resources/authoring"
 	"slices"
 	"time"
 )
@@ -24,7 +24,7 @@ func (t *Tenant) Simulate(member platform.Member, as, branch string, s *pb.Submi
 				return authorizationRefusal(t.authorizeNative(caller, "POST /v1/simulate", "action", []string{build.Builder}, true))
 			},
 			Member:  t.member,
-			Owner:   func(schema string) platform.App { return t.App(t.owner["action:"+schema]) },
+			Owner:   func(schema string) platform.Service { return t.App(t.owner["action:"+schema]) },
 			Current: t.CurrentSchema,
 			Bound:   t.delegatedBound,
 			Tenant:  t.ID,

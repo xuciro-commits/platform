@@ -9,7 +9,7 @@ import (
 	"platformserver/kernel/protocol"
 	"platformserver/platform"
 	"platformserver/services/actions"
-	"platformserver/services/functions/runtime"
+	compute "platformserver/services/functions/runtime"
 	controlowner "platformserver/services/security/control"
 )
 
@@ -48,23 +48,23 @@ func (t *Tenant) claimOperation(id string, now time.Time) (platform.Effect, bool
 		if !ok {
 			return claim{}, nil
 		}
-		candidate := preparedAccepted{entry: runtimekernel.AcceptedEntry(controlowner.PlatformApp, t.automation(controlowner.PlatformApp, false).Member, raw, now, nil), key: r.Key, hash: r.RequestHash}
-		return claim{r.After, t.stage(candidate) || t.finishOperationClaim(candidate)}, nil
-	}, func(t *Tenant, candidate preparedAccepted, value claim, refusal *platform.Error) (claim, *platform.Error) {
-		if len(candidate.entry.Body) > 0 {
+		decision := preparedAccepted{entry: runtimekernel.AcceptedEntry(controlowner.PlatformApp, t.automation(controlowner.PlatformApp, false).Member, raw, now, nil), key: r.Key, hash: r.RequestHash}
+		return claim{r.After, t.stage(decision) || t.finishOperationClaim(decision)}, nil
+	}, func(t *Tenant, decision preparedAccepted, value claim, refusal *platform.Error) (claim, *platform.Error) {
+		if len(decision.entry.Body) > 0 {
 			busy := t.outbound.Any(func(x actions.Queued) bool { return x.ID == id && x.Sending })
 			if busy {
 				return claim{}, nil
 			}
-			value.claimed = t.finishOperationClaim(candidate)
+			value.claimed = t.finishOperationClaim(decision)
 		}
 		return value, refusal
 	})
 	return value.effect, value.claimed && refusal == nil
 }
 
-func (t *Tenant) finishOperationClaim(candidate preparedAccepted) bool {
-	saved, err := t.acceptResult(candidate.entry, candidate.key, candidate.hash)
+func (t *Tenant) finishOperationClaim(decision preparedAccepted) bool {
+	saved, err := t.acceptResult(decision.entry, decision.key, decision.hash)
 	return err == nil && t.operationClaims().Settle(saved)
 }
 
