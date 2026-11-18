@@ -54,8 +54,7 @@
         { "company": "Pioneer Steelworks", "region": "northamerica", "industry": "manufacturing", "tier": "strategic", "city": "Katowice", "contact": "Tomasz Nowak", "employees": 3600, "since": "2018-02-12" },
         { "company": "Lattice Systems", "region": "northamerica", "industry": "software", "tier": "key", "city": "Utrecht", "contact": "Sanne de Vries", "employees": 310, "since": "2022-10-04" },
         { "company": "Riverside Market", "region": "northamerica", "industry": "retail", "tier": "standard", "city": "Leeds", "contact": "Hannah Clarke", "employees": 520, "since": "2023-12-01" },
-        { "company": "Hartmann Fabrication", "region": "northamerica", "industry": "manufacturing", "tier": "standard", "city": "Essen" },
-        { "company": "Polar Cold Chain", "region": "northamerica", "industry": "logistics", "tier": "key", "city": "Oulu", "contact": "Mikko Laine", "employees": 670, "since": "2021-04-26" }
+        { "company": "Hartmann Fabrication", "region": "northamerica", "industry": "manufacturing", "tier": "standard", "city": "Essen" }
       ]
     },
     {
