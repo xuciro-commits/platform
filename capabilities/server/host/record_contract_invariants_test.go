@@ -371,3 +371,50 @@ func TestInvariantK17FormatsUseOnlyReadableFields(t *testing.T) {
 		}
 	}
 }
+
+func TestInvariantK18UndoUsesAnAcceptedActionWithTheOriginalRevision(t *testing.T) {
+	live := newInvariantTenant(t, "invariant-k18")
+	const typ = "build.opportunity"
+	object := invariantObject("opportunity", "Opportunity")
+	object["states"] = []ontology.State{{Name: "open", Title: "Open"}, {Name: "won", Title: "Won"}}
+	live.accept(t, "build.object.create", build.ObjectType, "OPPORTUNITY", object)
+	for _, move := range []struct{ name, from, to string }{{"win", "open", "won"}, {"reopen", "won", "open"}} {
+		state := platform.Expr{Kind: "choice", Lit: &platform.ExprLiteral{Value: platform.Raw(move.to)}}
+		step := platform.TxnStep{Name: "move", Kind: "update", Target: platform.TxnRef{Type: typ, ID: "$subject"}, Changes: []platform.TxnSet{{Field: "state", Expr: &state}}}
+		action := ontology.Action{Name: move.name, Title: move.name, From: []string{move.from}, Transaction: &platform.BusinessTxn{Subject: typ, Steps: []platform.TxnStep{step}}}
+		live.accept(t, "build.actiontype.create", build.ActionTypeType, move.name, map[string]any{"name": typ + "." + move.name, "object": typ, "definition": action})
+		live.accept(t, "build.actiontype.publish", build.ActionTypeType, move.name, map[string]any{})
+	}
+	live.accept(t, "build.object.publish", build.ObjectType, "OPPORTUNITY", nil)
+	live.accept(t, typ+".create", typ, "OPP-001", map[string]any{"note": "first"})
+	_, handler := observationHost(live.Tenant)
+	res := observationRequest(t, handler, live.ID, observationToken(live.ID, "builder"), "/v1/actions", nil)
+	var catalog []platform.Action
+	if res.Code != http.StatusOK || json.Unmarshal(res.Body.Bytes(), &catalog) != nil {
+		t.Fatalf("catalog: HTTP %d %s", res.Code, res.Body)
+	}
+	forward := map[string]string{}
+	for _, action := range catalog {
+		forward[action.Schema] = action.Reverse
+	}
+	if forward[typ+".archive"] != typ+".restore" || forward[typ+".restore"] != typ+".archive" || forward[typ+".win"] != typ+".reopen" || forward[typ+".reopen"] != typ+".win" || forward["build.object.publish"] != "" {
+		t.Fatalf("invalid reverse declarations: archive=%q restore=%q win=%q reopen=%q publish=%q", forward[typ+".archive"], forward[typ+".restore"], forward[typ+".win"], forward[typ+".reopen"], forward["build.object.publish"])
+	}
+	archived := live.accept(t, typ+".archive", typ, "OPP-001", map[string]any{})
+	item, checked := checkRecordAction(t, handler, live.ID, "builder", typ+".restore", typ, "OPP-001")
+	if !item.Allowed || !checked.Allowed {
+		t.Fatalf("restore: read=%+v check=%+v", item, checked)
+	}
+	live.accept(t, typ+".edit", typ, "OPP-001", map[string]any{"note": "changed while archived"})
+	sub := live.submission(typ+".restore", typ, "OPP-001", map[string]any{})
+	stale := archived.GetRevision()
+	sub.ExpectedRevision = &stale
+	if _, refusal := live.Submit(live.member(t), sub, invariantClock); refusal == nil || refusal.CurrentRevision == nil || *refusal.CurrentRevision != stale+1 {
+		t.Fatalf("stale undo: %+v", refusal)
+	}
+	live.accept(t, typ+".restore", typ, "OPP-001", map[string]any{})
+	view, err := live.Records(t.Context(), live.member(t), typ, platform.Query{}, invariantClock)
+	if err != nil || len(view.Records) != 1 || !strings.Contains(string(platform.Raw(view.Records[0])), "changed while archived") {
+		t.Fatalf("record was not restored with its accepted edits: %+v %v", view, err)
+	}
+}

@@ -148,6 +148,7 @@ func inputFieldSchema(field Field, columns []FieldInfo, roles []string) map[stri
 }
 
 type Action struct {
+	Reverse          string            `json:"reverse,omitempty"`
 	RecordEdit       bool              `json:"-"`
 	Adoption         *ProposalAdoption `json:"adoption,omitempty"`
 	SchemaVersion    *SchemaVersion    `json:"schemaVersion,omitempty"`

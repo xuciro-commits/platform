@@ -338,7 +338,7 @@ func recordAction(e platform.RecordType, schema string) (platform.ActionType, bo
 }
 
 func builtinAction(e platform.RecordType, verb string) (platform.ActionType, bool) {
-	if verb == "create" && e.Standard.Create || verb == "edit" && e.Standard.Edit || verb == "archive" && e.Standard.Archive {
+	if verb == "create" && e.Standard.Create || verb == "edit" && e.Standard.Edit || verb == "archive" && e.Standard.Archive || verb == "restore" && e.Standard.Restore {
 		return platform.ActionType{Name: verb}, true
 	}
 	return platform.ActionType{}, false
@@ -382,9 +382,15 @@ func executeAction(c platform.Caller, e platform.RecordType, t platform.ActionTy
 		v.Elem().Set(reflect.ValueOf(existing))
 	}
 	switch t.Name {
-	case "create", "edit", "archive":
-		if t.Name == "archive" {
-			v.Elem().Field(0).Addr().Interface().(*platform.Record).Archived = true
+	case "create", "edit", "archive", "restore":
+		if t.Name == "archive" || t.Name == "restore" {
+			header := v.Elem().Field(0).Addr().Interface().(*platform.Record)
+			if t.Name == "restore" {
+				if refusal := restoreRefusal(header.Archived); refusal != nil {
+					return nil, refusal
+				}
+			}
+			header.Archived = t.Name == "archive"
 		} else {
 			invalid := &platform.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 			var given map[string]json.RawMessage

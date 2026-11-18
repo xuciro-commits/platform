@@ -42,5 +42,14 @@ func (h CatalogHooks) Of(m platform.Member) []platform.Action {
 			}
 		}
 	}
+	visible := make(map[string]bool, len(out))
+	for _, action := range out {
+		visible[action.Schema] = true
+	}
+	for i := range out {
+		if !visible[out[i].Reverse] {
+			out[i].Reverse = ""
+		}
+	}
 	return out
 }

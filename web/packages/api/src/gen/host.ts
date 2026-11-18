@@ -197,6 +197,7 @@ export type Account = {
 };
 
 export type Action = {
+  reverse?: string;
   adoption?: ProposalAdoption;
   schemaVersion?: SchemaVersion;
   schema: string;

@@ -19,6 +19,7 @@ type ObjectRuntimeEnvironment struct {
 func CompileObjectEntity(o Object, env ObjectRuntimeEnvironment) platform.RecordType {
 	entity := CompileObjectShape(o, AppID, BuilderRole)
 	std, scope, roles := CompileAccess(o, BuilderRole, UserRole)
+	std.Restore = std.Archive && !slices.ContainsFunc(o.Actions, func(action Action) bool { return action.Name == "restore" })
 	entity.Standard, entity.Scope = std, scope
 	entity.Lifecycle = compileLifecycle(o, roles, env)
 	entity.TransactionDestination = TransactionDestination

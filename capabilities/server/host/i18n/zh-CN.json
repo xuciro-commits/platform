@@ -275,6 +275,7 @@
   "{record} is {state}; {transition} takes it only from {states}": "{record} 当前是 {state}；{transition} 只能从 {states} 开始",
   "The record changed since you opened it": "这条记录在你打开后已更改",
   "The action could not be checked": "暂时无法检查这项操作",
+  "Only archived records can be restored": "只能恢复已归档的记录",
   "Case": "用例",
   "Passes": "通过次数",
   "Runs": "运行次数",

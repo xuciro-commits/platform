@@ -180,7 +180,7 @@ type TransitionInfo struct {
 }
 
 type Standard struct {
-	Create, Edit, Archive                bool
+	Create, Edit, Archive, Restore       bool
 	Roles                                []string
 	Capability                           string
 	CreateRoles, EditRoles, ArchiveRoles []string

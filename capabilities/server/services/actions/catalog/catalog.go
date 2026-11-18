@@ -95,10 +95,19 @@ func EntityActions(e platform.RecordType) []platform.Action {
 			Description: "Change fields of " + article(info.Title) + "; fields left out keep their value.", Payload: editable, Roles: roles(e.Standard, "edit")})
 	}
 	if e.Standard.Archive {
-		out = append(out, platform.Action{Schema: e.Type + ".archive", Target: e.Type, Capability: capability, Title: "Archive " + strings.ToLower(info.Title),
+		reverse := ""
+		if e.Standard.Restore {
+			reverse = e.Type + ".restore"
+		}
+		out = append(out, platform.Action{Schema: e.Type + ".archive", Reverse: reverse, Target: e.Type, Capability: capability, Title: "Archive " + strings.ToLower(info.Title),
 			Description: "Archive " + article(info.Title) + ": it leaves lists but stays referenced and in history.", Payload: []platform.Field{}, Roles: roles(e.Standard, "archive")})
 	}
+	if e.Standard.Restore {
+		out = append(out, platform.Action{Schema: e.Type + ".restore", Reverse: e.Type + ".archive", Target: e.Type, Capability: capability, Title: "Restore " + strings.ToLower(info.Title),
+			Description: "Return this archived record to its lists.", Payload: []platform.Field{}, Roles: roles(e.Standard, "archive")})
+	}
 	if e.Lifecycle != nil {
+		reverses := stateReverses(e, info.Lifecycle)
 		for i, t := range e.Lifecycle.Actions {
 			c := t.Capability
 			if c == "" {
@@ -117,7 +126,7 @@ func EntityActions(e platform.RecordType) []platform.Action {
 				}
 				description = fmt.Sprintf("Move %s from %s to %s.", article(info.Title), strings.Join(move.From, " or "), strings.Join(to, " or "))
 			}
-			out = append(out, platform.Action{Schema: e.Type + "." + t.Name, Target: e.Type, Capability: c, Title: info.Lifecycle.Transitions[i].Title,
+			out = append(out, platform.Action{Schema: e.Type + "." + t.Name, Reverse: reverses[i], Target: e.Type, Capability: c, Title: info.Lifecycle.Transitions[i].Title,
 				Description: description, Payload: payload, Roles: t.Roles, Adoption: t.Adoption, Approval: t.Approval, DeferRequired: t.DeferRequired, ConfirmationOnly: t.ConfirmationOnly})
 			if t.Approval != nil && t.Approval.Pending != "" {
 				for _, m := range [][2]string{{platform.ApprovalHeld, "Hold for approval"}, {platform.ApprovalRejected, "Mark rejected"}, {platform.ApprovalReturned, "Return from approval"}} {
@@ -129,6 +138,45 @@ func EntityActions(e platform.RecordType) []platform.Action {
 		}
 	}
 	return out
+}
+
+func stateReverses(e platform.RecordType, life *platform.LifecycleInfo) map[int]string {
+	type route struct{ from, to string }
+	directions := make(map[route][]int)
+	for i, action := range e.Lifecycle.Actions {
+		move := life.Transitions[i]
+		if len(move.From) != 1 || len(move.To) != 1 || move.From[0] == move.To[0] || move.ToInput != "" ||
+			action.Approval != nil || action.Adoption != nil || action.ConfirmationOnly || len(action.Effects) != 0 || len(action.Parameters) != 0 || len(action.Rules) != 1 {
+			continue
+		}
+		rule := action.Rules[0]
+		if rule.Function != nil || rule.Receipt != nil {
+			continue
+		}
+		if rule.Transaction != nil {
+			txn := rule.Transaction.Spec
+			if txn == nil || txn.Guard != nil || txn.Confirmation != nil || txn.Dispatch != nil || len(txn.Refusals) != 0 || len(txn.Steps) != 1 {
+				continue
+			}
+			step := txn.Steps[0]
+			if step.Kind != "update" || step.Target.Type != e.Type || step.Target.ID != "$subject" || step.Target.Via != "" || step.When != nil ||
+				len(step.Refusals) != 0 || len(step.Changes) != 1 || step.Changes[0].Field != life.Field {
+				continue
+			}
+		} else if rule.Edit == nil || rule.Edit.Field != life.Field || rule.Edit.Parameter != "" {
+			continue
+		}
+		key := route{move.From[0], move.To[0]}
+		directions[key] = append(directions[key], i)
+	}
+	reverses := make(map[int]string)
+	for key, moves := range directions {
+		back := directions[route{key.to, key.from}]
+		if len(moves) == 1 && len(back) == 1 {
+			reverses[moves[0]] = life.Transitions[back[0]].Schema
+		}
+	}
+	return reverses
 }
 
 func article(title string) string {

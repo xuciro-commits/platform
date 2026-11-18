@@ -187,7 +187,7 @@ func (c *Catalog) DecideSubmission(caller Caller, s *pb.Submission, at time.Time
 			}
 			slices.Sort(fields)
 		}
-	} else if schema == typ+".archive" {
+	} else if action, _ := c.Action(schema); schema == typ+".archive" || schema == typ+".restore" && action.Reverse == typ+".archive" {
 		kind = "archive"
 	}
 	return caller.Authorize(AuthzRequest{Principal: caller.ID, Tenant: caller.Tenant, Kind: kind, Type: typ, Record: s.GetTarget().GetId(), Fields: fields, Action: schema}, at)
@@ -225,8 +225,6 @@ func (c *Catalog) AuthorizationRequest(caller Caller, schema, target string) (Au
 	return AuthorizationInput{Subject: AuthorizationSubject{ID: caller.ID, App: caller.App, Roles: caller.RolesHere(), Agent: caller.Agent, Automation: caller.Automation},
 		Permission: schema, Resource: target, Allowed: allowed, Attributes: attrs}, rules, true
 }
-
-func (c *Catalog) For(role string) []Action { return c.ForRoles([]string{role}) }
 
 func (c *Catalog) ForRoles(roles []string) []Action {
 	c.mu.RLock()

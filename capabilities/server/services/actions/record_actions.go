@@ -3,6 +3,7 @@ package actions
 import (
 	"encoding/json"
 	"log/slog"
+	"reflect"
 	"strings"
 	"time"
 
@@ -146,6 +147,13 @@ func checkAction(c platform.Caller, manifest platform.Manifest, action platform.
 		result.Message = unavailableAction
 		return result
 	}
+	if action.Schema == action.Target+".restore" && action.Reverse == action.Target+".archive" {
+		archived, _ := subject["archived"].(bool)
+		if refusal := restoreRefusal(archived); refusal != nil {
+			result.Message = refusal.Message
+			return result
+		}
+	}
 	for _, entity := range manifest.Entities {
 		if entity.Type != action.Target || entity.Lifecycle == nil {
 			continue
@@ -197,6 +205,28 @@ func checkAction(c platform.Caller, manifest platform.Manifest, action platform.
 	return result
 }
 
+func restoreRefusal(archived bool) *platform.Error {
+	if !archived {
+		return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Only archived records can be restored")
+	}
+	return nil
+}
+
+func readActionSubject(c platform.Caller, typ, id string, now time.Time, lookup func(string) (platform.RecordTypeInfo, bool)) (map[string]any, *platform.Error) {
+	subject, refusal := transactionSubject(c, typ, id, now)
+	if refusal == nil || refusal.Code != pb.ErrorCode_ERROR_CODE_NOT_FOUND {
+		return subject, refusal
+	}
+	if info, ok := lookup(typ); ok {
+		if decision := c.Authorize(platform.AuthzRequest{Principal: c.ID, Tenant: c.Tenant, Kind: "read", Type: typ, Record: id}, now); decision.Allow {
+			if record, exists := c.RecordValue(info.Go, id); exists && reflect.ValueOf(record).Field(0).Interface().(platform.Record).Archived {
+				return map[string]any{"id": id, "archived": true}, nil
+			}
+		}
+	}
+	return subject, refusal
+}
+
 func CheckAction(owner platform.Service, c platform.Caller, action platform.Action, id string, inputs json.RawMessage, now time.Time, lookup func(string) (platform.RecordTypeInfo, bool), say func(string) string) (ActionCheckResult, *platform.Error) {
 	if len(inputs) != 0 && string(inputs) != "null" {
 		value, err := platform.DecodeValue(inputs, 64<<10)
@@ -208,7 +238,7 @@ func CheckAction(owner platform.Service, c platform.Caller, action platform.Acti
 	}
 	sub := &pb.Submission{Target: &pb.EntityRef{Type: action.Target, Id: id}, Schema: &pb.SchemaRef{Name: action.Schema}, Payload: inputs}
 	result := checkAction(c, owner.Manifest(), action, sub, func() (map[string]any, *platform.Error) {
-		return transactionSubject(c, action.Target, id, now)
+		return readActionSubject(c, action.Target, id, now, lookup)
 	}, now, lookup)
 	result.Message = say(result.Message)
 	for i := range result.Conditions {
@@ -233,7 +263,7 @@ func RecordActions(owner platform.Service, c platform.Caller, typ, id string, no
 		sub := &pb.Submission{Target: &pb.EntityRef{Type: typ, Id: id}, Schema: &pb.SchemaRef{Name: entry.Schema}}
 		result := checkAction(c, manifest, entry, sub, func() (map[string]any, *platform.Error) {
 			if !read {
-				subject, refusal = transactionSubject(c, typ, id, now)
+				subject, refusal = readActionSubject(c, typ, id, now, lookup)
 				read = true
 			}
 			return subject, refusal

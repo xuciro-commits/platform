@@ -53,7 +53,7 @@ func (p PermissionsReport) Permissions() []AppPermissions {
 		}
 		for _, role := range m.AllRoles() {
 			rp := RolePermissions{Role: role, Holders: p.Holders(m.ID, role), Actions: []PermissionAction{}}
-			for _, act := range m.Actions.For(role) {
+			for _, act := range m.Actions.ForRoles([]string{role}) {
 				rp.Actions = append(rp.Actions, PermissionAction{ID: act.Schema, Title: act.Title, Scope: act.Target})
 			}
 			ap.Roles = append(ap.Roles, rp)

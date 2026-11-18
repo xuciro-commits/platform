@@ -158,7 +158,7 @@ func Describe(app string, e Entity, typeOf func(reflect.Type) string) (EntityInf
 			info.Lifecycle.Transitions = append(info.Lifecycle.Transitions, TransitionInfo{Name: t.Name, Schema: e.Type + "." + t.Name, Title: title, From: from, To: to, ToInput: inputName})
 		}
 	}
-	for _, x := range [][2]any{{e.Standard.Create, ".create"}, {e.Standard.Edit, ".edit"}, {e.Standard.Archive, ".archive"}} {
+	for _, x := range [][2]any{{e.Standard.Create, ".create"}, {e.Standard.Edit, ".edit"}, {e.Standard.Archive, ".archive"}, {e.Standard.Restore, ".restore"}} {
 		if x[0].(bool) {
 			info.Standard = append(info.Standard, e.Type+x[1].(string))
 		}
