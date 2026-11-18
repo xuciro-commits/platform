@@ -18,7 +18,7 @@ import (
 )
 
 type ManagedRows struct {
-	Archived func(resource build.Resource, archived bool) any
+	Archived func(resource protocol.Resource, archived bool) any
 	Decode   func(typ string, image json.RawMessage) (any, error)
 	Image    func(record string) json.RawMessage
 	Install  func(platform.ReleaseInstallation)
@@ -28,7 +28,7 @@ type ManagedRows struct {
 type Managed struct {
 	Caller     platform.Caller
 	Descriptor platform.PackageDescriptor
-	Resources  []build.Resource
+	Resources  []protocol.Resource
 	Rows       ManagedRows
 }
 
@@ -53,7 +53,7 @@ type ManagedPreparation struct {
 
 func NewManaged(caller platform.Caller, descriptor platform.PackageDescriptor, rows func() *records.Store, install func(platform.ReleaseInstallation), fail func(*platform.Error)) Managed {
 	return Managed{Caller: caller, Descriptor: descriptor, Resources: Resources(rows()), Rows: ManagedRows{
-		Archived: func(resource build.Resource, archived bool) any {
+		Archived: func(resource protocol.Resource, archived bool) any {
 			return rows().ArchivedCopy(resource.Type, resource.Draft, archived)
 		},
 		Decode:  func(typ string, image json.RawMessage) (any, error) { return rows().DecodeRow(typ, image) },
@@ -63,11 +63,11 @@ func NewManaged(caller platform.Caller, descriptor platform.PackageDescriptor, r
 	}}
 }
 
-func Resources(store *records.Store) []build.Resource {
-	var resources []build.Resource
+func Resources(store *records.Store) []protocol.Resource {
+	var resources []protocol.Resource
 	if directory := store.Type(build.ResourceType); directory != nil {
 		for _, row := range directory.Rows().All() {
-			resources = append(resources, row.Value.Interface().(build.Resource))
+			resources = append(resources, row.Value.Interface().(protocol.Resource))
 		}
 	}
 	return resources
@@ -173,7 +173,7 @@ func (m Managed) Project() (id, name string) {
 	return "package:" + m.Descriptor.ID, fmt.Sprintf("pkg%x", hash[:12])
 }
 
-func (m Managed) archive(r *pb.ChangeRecord, resource build.Resource, archived bool) {
+func (m Managed) archive(r *pb.ChangeRecord, resource protocol.Resource, archived bool) {
 	resource.State, resource.Archived = "active", archived
 	if archived {
 		resource.State = "archived"
@@ -221,7 +221,7 @@ func (m Managed) Install(r *pb.ChangeRecord, refs map[platform.AssetRef]bool, pl
 	project.ID, project.Name, project.Title, project.State, project.Archived = projectID, projectName, m.Descriptor.Title, "published", false
 	m.Caller.Put(r, project)
 	projectRef := platform.AssetRef{App: build.ID, Kind: platform.AssetApp, Name: projectName}
-	m.Caller.Put(r, build.Resource{Record: platform.Record{ID: protocol.ResourceID(tenant, projectRef)}, Ref: projectRef, Type: protocol.AppType, Draft: projectID, Project: projectID, Title: m.Descriptor.Title, State: "active", Version: 1, ManagedBy: m.Descriptor.ID})
+	m.Caller.Put(r, protocol.Resource{Record: platform.Record{ID: protocol.ResourceID(tenant, projectRef)}, Ref: projectRef, Type: protocol.AppType, Draft: projectID, Project: projectID, Title: m.Descriptor.Title, State: "active", Version: 1, ManagedBy: m.Descriptor.ID})
 	for _, plan := range plans {
 		typ, id, _ := strings.Cut(plan.Record, "/")
 		value, err := m.Rows.Decode(typ, plan.Image)
@@ -238,7 +238,7 @@ func (m Managed) Install(r *pb.ChangeRecord, refs map[platform.AssetRef]bool, pl
 		if title.Title == "" {
 			title.Title = ref.Name
 		}
-		resource, _ := platform.Get[build.Resource](m.Caller, protocol.ResourceID(tenant, ref))
+		resource, _ := platform.Get[protocol.Resource](m.Caller, protocol.ResourceID(tenant, ref))
 		resource.ID, resource.Ref, resource.Type, resource.Draft = protocol.ResourceID(tenant, ref), ref, typ, id
 		resource.Project, resource.ManagedBy, resource.State, resource.Title, resource.Archived = projectID, m.Descriptor.ID, "active", title.Title, false
 		resource.Version++

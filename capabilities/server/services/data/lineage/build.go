@@ -3,13 +3,13 @@ package lineage
 import (
 	"fmt"
 	"platformserver/kernel/protocol"
+	dataowner "platformserver/services/data"
 	"slices"
 	"strconv"
 	"strings"
 	"time"
 
 	"platformserver/platform"
-	build "platformserver/services/resources/authoring"
 )
 
 func Build(in Input, basis Basis) Graph {
@@ -288,7 +288,7 @@ func objectType(name string) string {
 	if name == "" || strings.Contains(name, ".") {
 		return name
 	}
-	return build.ID + "." + name
+	return dataowner.App + "." + name
 }
 
 func executionVersion(value string) int {

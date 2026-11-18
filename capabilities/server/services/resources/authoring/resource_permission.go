@@ -9,8 +9,8 @@ import (
 
 type ResourceRows struct {
 	Get       func(typ, id string) (any, bool)
-	ForDraft  func(typ, id string) (Resource, bool)
-	ForObject func(typ string) (Resource, bool)
+	ForDraft  func(typ, id string) (protocol.Resource, bool)
+	ForObject func(typ string) (protocol.Resource, bool)
 	Role      func(project string) string
 }
 
@@ -50,7 +50,7 @@ func (r ResourceRows) Permission(m platform.Member, typ, id, kind string) (bool,
 		if !ok {
 			return true, false
 		}
-		project = row.(Resource).Project
+		project = row.(protocol.Resource).Project
 	default:
 		if resource, ok := r.ForDraft(typ, id); ok {
 			project = resource.Project

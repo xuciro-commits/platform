@@ -20,17 +20,17 @@ func StoreResourceRows(store *records.Store, role func(project string) string) R
 			}
 			return nil, false
 		},
-		ForDraft: func(typ, id string) (Resource, bool) {
+		ForDraft: func(typ, id string) (protocol.Resource, bool) {
 			return records.FindRow(store, ResourceType, []records.StateMatch{
 				{Path: []string{"value", "type"}, Values: []string{typ}},
 				{Path: []string{"value", "draft"}, Values: []string{id}},
-			}, func(resource Resource) bool { return resource.Type == typ && resource.Draft == id })
+			}, func(resource protocol.Resource) bool { return resource.Type == typ && resource.Draft == id })
 		},
-		ForObject: func(typ string) (Resource, bool) {
+		ForObject: func(typ string) (protocol.Resource, bool) {
 			return records.FindRow(store, ResourceType, []records.StateMatch{
 				{Path: []string{"value", "ref", "kind"}, Values: []string{string(platform.AssetObject)}},
 				{Path: []string{"value", "ref", "name"}, Values: []string{typ}},
-			}, func(resource Resource) bool {
+			}, func(resource protocol.Resource) bool {
 				return resource.Ref.Kind == platform.AssetObject && resource.Ref.Name == typ
 			})
 		},
@@ -46,18 +46,18 @@ func ResourceActionRetired(store *records.Store, name, target string) bool {
 	_, retired := records.FindRow(store, ResourceType, []records.StateMatch{
 		{Path: []string{"value", "state"}, Values: []string{"archived"}},
 		{Path: []string{"value", "ref", "name"}, Values: names},
-	}, func(resource Resource) bool {
+	}, func(resource protocol.Resource) bool {
 		return resource.ManagedBy != "" && resource.State == "archived" &&
 			(resource.Ref.Name == name || resource.Ref.Kind == platform.AssetObject && resource.Ref.Name == target)
 	})
 	return retired
 }
 
-func StoreResources(store *records.Store) []Resource {
-	var out []Resource
+func StoreResources(store *records.Store) []protocol.Resource {
+	var out []protocol.Resource
 	if rows := store.Type(ResourceType); rows != nil {
 		for _, row := range rows.Rows().All() {
-			out = append(out, row.Value.Interface().(Resource))
+			out = append(out, row.Value.Interface().(protocol.Resource))
 		}
 	}
 	return out
@@ -94,7 +94,7 @@ func StoreBootstrap(tenant string, definitions []platform.Definition, store *rec
 			existing := store.Type(ResourceType)
 			return existing != nil && existing.Rows().Get(rid) != nil
 		},
-		Snapshot: func() (apps []protocol.Application, resources []Resource) {
+		Snapshot: func() (apps []protocol.Application, resources []protocol.Resource) {
 			store.Lock()
 			defer store.Unlock()
 			if rows := store.Type(protocol.AppType); rows != nil {
@@ -106,7 +106,7 @@ func StoreBootstrap(tenant string, definitions []platform.Definition, store *rec
 		}}
 }
 
-func MarkedResources(marked map[platform.AssetRef]bool, resources []Resource, role func(project string) string) []ResourceEntry {
+func MarkedResources(marked map[platform.AssetRef]bool, resources []protocol.Resource, role func(project string) string) []ResourceEntry {
 	out := []ResourceEntry{}
 	for _, resource := range resources {
 		if marked[resource.Ref] && !resource.Archived {
@@ -211,7 +211,7 @@ func ProjectHidden(store *records.Store, tenant string, m platform.Member, et *r
 	if row == nil {
 		return false
 	}
-	held := role(m, row.Value.Interface().(Resource).Project)
+	held := role(m, row.Value.Interface().(protocol.Resource).Project)
 	return held == "" || held == protocol.ProjectDiscovererRole
 }
 
@@ -239,7 +239,7 @@ func ManagedDefinition(store *records.Store, tenant string, ref platform.AssetRe
 		return false
 	}
 	row := directory.Rows().Get(protocol.ResourceID(tenant, ref))
-	return row != nil && row.Value.Interface().(Resource).ManagedBy != ""
+	return row != nil && row.Value.Interface().(protocol.Resource).ManagedBy != ""
 }
 
 func ProjectRoleOf(m platform.Member, access protocol.ProjectAccess, project string) string {

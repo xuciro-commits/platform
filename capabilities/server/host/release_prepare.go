@@ -126,7 +126,7 @@ type releaseInstallationRuntime struct{ t *Tenant }
 func (r releaseInstallationRuntime) HasAgentRuntime() bool { return r.t.Agents != nil }
 
 func (r releaseInstallationRuntime) ReleaseProject(candidate protocol.ReleaseCandidate) string {
-	return releaseowner.ResourceProject(candidate, records.LockedRows[build.Resource](r.t.Projection, build.ResourceType))
+	return releaseowner.ResourceProject(candidate, records.LockedRows[protocol.Resource](r.t.Projection, build.ResourceType))
 }
 
 func (r releaseInstallationRuntime) Registry() (*publication.AssetRegistry, error) {

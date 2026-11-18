@@ -2,6 +2,7 @@ package host
 
 import (
 	"context"
+	"platformserver/kernel/protocol"
 	"platformserver/kernel/records"
 	"platformserver/platform"
 	"platformserver/services/data/lineage"
@@ -12,21 +13,28 @@ import (
 
 func (t *Tenant) RecordGeneration() uint64 { return t.Projection.Generation() }
 
-func (t *Tenant) LineageState() (lineage.Input, []build.Resource, uint64) {
+func (t *Tenant) LineageState() (lineage.Input, []protocol.Resource, uint64) {
 	t.Projection.Lock()
 	defer t.Projection.Unlock()
-	return lineage.StoreInput(t.Projection), records.RowsOf[build.Resource](t.Projection, build.ResourceType), t.Projection.Generation()
+	return lineage.StoreInput(t.Projection), records.RowsOf[protocol.Resource](t.Projection, build.ResourceType), t.Projection.Generation()
 }
 
-func (t *Tenant) LineageResources() []build.Resource {
+func (t *Tenant) LineageResources() []protocol.Resource {
 	t.Projection.Lock()
 	defer t.Projection.Unlock()
-	return records.RowsOf[build.Resource](t.Projection, build.ResourceType)
+	return records.RowsOf[protocol.Resource](t.Projection, build.ResourceType)
 }
 
 func (t *Tenant) ResourceReadable(m platform.Member, typ, id string) bool {
 	allowed, _ := t.ResourcePermission(t.Projection, m, typ, id, "read", false)
 	return allowed
+}
+
+func (t *Tenant) ProjectDelegated(m platform.Member) bool { return build.ProjectDelegated(m) }
+
+func (t *Tenant) BranchRevision(m platform.Member, id string, now time.Time) (uint32, *platform.Error) {
+	branch, refusal := t.ReadBranch(m, id, now)
+	return branch.Revision, refusal
 }
 
 func (t *Tenant) LineageCache() *lineage.Cache[lineage.Host] { return &t.lineageCache }

@@ -1,13 +1,11 @@
 package host
 
 import (
-	"time"
-
-	records "platformserver/kernel/records"
-	"platformserver/services/objects"
-
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
+	records "platformserver/kernel/records"
 	"platformserver/platform"
+	"platformserver/services/objects"
+	"time"
 )
 
 func (t *Tenant) namedQuery(app, name string) (platform.NamedQuery, bool) {
@@ -36,4 +34,12 @@ func (t *Tenant) runDeclaredQueryWindowFrom(store *records.Store, m platform.Mem
 	}
 	page, _, err := t.loadObjectSet(store, platform.NewCaller(runtime{t: t, scoped: true}, m, "", false, false), set, bounds, now, q)
 	return page, err
+}
+
+func (h hostView) ValidateInstallQuery(q platform.NamedQuery) error {
+	return h.definitionInstall().ValidateQuery(q)
+}
+
+func (h hostView) InstallQuery(c platform.Caller, q platform.NamedQuery, version int) error {
+	return h.definitionInstall().InstallQuery(c, q, version)
 }

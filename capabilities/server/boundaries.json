@@ -5,14 +5,14 @@
     "kernel/protocol": ["capability", "expr", "platform", "kernel/values"],
     "capability": [],
     "platform": ["capability", "expr", "kernel/values"],
-    "services/resources": ["platform", "services/actions/catalog", "services/devops/descriptor", "services/resources/publication", "kernel/records", "kernel/acceptedformat", "kernel/protocol"],
+    "services/resources": ["platform", "services/actions/catalog", "services/data", "services/devops/descriptor", "services/ontology", "services/resources/publication", "kernel/records", "kernel/acceptedformat", "kernel/protocol"],
     "services/resources/publication": ["platform", "kernel/protocol"],
-    "services/ontology": ["platform", "services/resources", "kernel/records", "kernel/acceptedformat", "kernel/protocol"],
+    "services/ontology": ["platform", "services/resources/publication", "kernel/records", "kernel/acceptedformat", "kernel/protocol"],
     "services/objects": ["expr", "platform", "services/ontology", "services/resources/publication", "kernel/records", "kernel/acceptedformat", "kernel/protocol"],
     "services/actions": ["platform", "services/objects", "services/functions", "services/ontology", "services/resources/publication", "kernel/records", "kernel/acceptedformat", "kernel/protocol"],
     "services/actions/catalog": ["platform", "kernel/records"],
     "services/functions": ["expr", "platform", "services/actions/catalog", "services/resources/publication", "kernel/records", "kernel/acceptedformat", "kernel/protocol"],
-    "services/data": ["expr", "platform", "services/resources", "services/actions/catalog", "kernel/records", "kernel/acceptedformat", "kernel/protocol", "kernel/fileio"],
+    "services/data": ["expr", "platform", "services/resources/publication", "services/actions/catalog", "services/ontology", "kernel/records", "kernel/acceptedformat", "kernel/protocol", "kernel/fileio"],
     "services/automate": ["expr", "platform", "services/actions", "services/resources/publication", "kernel/records", "kernel/acceptedformat", "kernel/protocol"],
     "services/apps": ["expr", "platform", "services/objects", "services/actions", "services/ontology", "services/resources/publication", "kernel/records", "kernel/acceptedformat", "kernel/protocol"],
     "services/work": ["platform", "services/actions", "kernel/records", "kernel/acceptedformat", "kernel/protocol"],
@@ -25,8 +25,5 @@
     "host": ["kernel", "platform", "apps", "services", "hostroles"],
     "cmd": ["*"]
   },
-  "exceptions": {
-    "services/data": ["services/ontology"],
-    "services/resources": ["services/data", "services/ontology"]
-  }
+  "exceptions": {}
 }

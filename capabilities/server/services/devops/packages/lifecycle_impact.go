@@ -9,11 +9,10 @@ import (
 	"platformserver/kernel/records"
 	"platformserver/platform"
 	dataowner "platformserver/services/data"
-	build "platformserver/services/resources/authoring"
 )
 
 type Impact struct {
-	Resources  []build.Resource
+	Resources  []protocol.Resource
 	Records    func(typ string) (int, bool)
 	Connection func(id string) (platform.PackageImpactConnection, bool, error)
 	Removals   func(removed, replaced map[platform.AssetRef]bool) []platform.PackageImpactReference

@@ -19,20 +19,6 @@ const SchemaResourceMigrateProjects = ResourceType + ".migrate-projects"
 const SchemaResourceRehome = ResourceType + ".rehome"
 const WorkspaceProject = "workspace"
 
-type Resource struct {
-	platform.Record
-	Ref       platform.AssetRef `json:"ref" field:"readonly" type:"json"`
-	Type      string            `json:"type,omitempty" field:"readonly"`
-	Draft     string            `json:"draft,omitempty" field:"readonly"`
-	Variant   string            `json:"variant,omitempty" field:"readonly"`
-	Title     string            `json:"title" field:"readonly,search"`
-	Project   string            `json:"project" field:"readonly"`
-	Folder    string            `json:"folder,omitempty" field:"readonly"`
-	Version   uint32            `json:"version" field:"readonly"`
-	State     string            `json:"state" field:"readonly"`
-	ManagedBy string            `json:"managedBy,omitempty" field:"readonly"`
-}
-
 type Folder struct {
 	platform.Record
 	Name    string `json:"name" field:"required,search"`
@@ -42,7 +28,7 @@ type Folder struct {
 
 func (b *Build) resourceEntities() []platform.Entity {
 	return []platform.Entity{
-		{Type: ResourceType, Title: "Resource", Plural: "Resources", Model: Resource{}, Display: "title", Scope: platform.Scope{Default: platform.ScopeTenant}},
+		{Type: ResourceType, Title: "Resource", Plural: "Resources", Model: protocol.Resource{}, Display: "title", Scope: platform.Scope{Default: platform.ScopeTenant}},
 		{Type: FolderType, Title: "Folder", Plural: "Folders", Model: Folder{}, Display: "name", Scope: platform.Scope{Default: platform.ScopeTenant}, Standard: platform.Standard{Create: true, Edit: true, Archive: true, Roles: []string{Builder}, Capability: "resources"}, Validate: func(c platform.Caller, record any) *platform.Error {
 			folder := record.(*Folder)
 			project, found := platform.Get[protocol.Application](c, folder.Project)
@@ -107,20 +93,20 @@ func (b *Build) submitResource(c platform.Caller, s *pb.Submission, now time.Tim
 	}
 	return b.ledger.Receive(c, s, now, nil, func() (func(*pb.ChangeRecord), *platform.Error) {
 		id := s.GetTarget().GetId()
-		resource, found := platform.Get[Resource](c, id)
+		resource, found := platform.Get[protocol.Resource](c, id)
 		if s.GetSchema().GetName() == SchemaResourceRegister {
 			var input struct {
-				Resources []Resource `json:"resources"`
+				Resources []protocol.Resource `json:"resources"`
 			}
 			if json.Unmarshal(s.GetPayload(), &input) != nil || len(input.Resources) == 0 {
 				return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Choose the resources to register")
 			}
-			pending := []Resource{}
+			pending := []protocol.Resource{}
 			for _, item := range input.Resources {
 				if item.Ref.Check() != nil || protocol.ResourceID(c.Tenant, item.Ref) != item.ID {
 					return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "A resource registration needs its RID and reference")
 				}
-				if _, exists := platform.Get[Resource](c, item.ID); !exists {
+				if _, exists := platform.Get[protocol.Resource](c, item.ID); !exists {
 					pending = append(pending, item)
 				}
 			}
@@ -141,7 +127,7 @@ func (b *Build) submitResource(c platform.Caller, s *pb.Submission, now time.Tim
 				return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Choose the resources and their projects")
 			}
 			for _, item := range input.Assignments {
-				resource, known := platform.Get[Resource](c, item.ID)
+				resource, known := platform.Get[protocol.Resource](c, item.ID)
 				project, exists := platform.Get[protocol.Application](c, item.Project)
 				if !known || resource.Project != WorkspaceProject || !exists || project.Archived || item.Project == WorkspaceProject {
 					return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The legacy resource project assignment is stale")
@@ -149,7 +135,7 @@ func (b *Build) submitResource(c platform.Caller, s *pb.Submission, now time.Tim
 			}
 			return func(r *pb.ChangeRecord) {
 				for _, item := range input.Assignments {
-					resource, _ := platform.Get[Resource](c, item.ID)
+					resource, _ := platform.Get[protocol.Resource](c, item.ID)
 					resource.Project = item.Project
 					c.Put(r, resource)
 				}
@@ -171,7 +157,7 @@ func (b *Build) submitResource(c platform.Caller, s *pb.Submission, now time.Tim
 			}
 			seen := map[string]bool{}
 			for _, item := range input.Entries {
-				resource, known := platform.Get[Resource](c, item.ID)
+				resource, known := platform.Get[protocol.Resource](c, item.ID)
 				project, exists := platform.Get[protocol.Application](c, item.Project)
 				if !known || !exists || project.Archived || item.Project == "" || seen[item.ID] {
 					return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The resource ownership request is stale")
@@ -189,7 +175,7 @@ func (b *Build) submitResource(c platform.Caller, s *pb.Submission, now time.Tim
 			}
 			return func(r *pb.ChangeRecord) {
 				for _, item := range input.Entries {
-					resource, _ := platform.Get[Resource](c, item.ID)
+					resource, _ := platform.Get[protocol.Resource](c, item.ID)
 					resource.Project, resource.ManagedBy = item.Project, item.ManagedBy
 					resource.Version++
 					c.Put(r, resource)
@@ -234,7 +220,7 @@ func (b *Build) ensureWorkspace(c platform.Caller, r *pb.ChangeRecord) {
 	if _, exists := platform.Get[protocol.Application](c, WorkspaceProject); !exists {
 		c.Put(r, protocol.Application{Record: platform.Record{ID: WorkspaceProject}, Name: WorkspaceProject, Title: "Workspace", Pages: []string{}, State: "draft"})
 		ref := platform.AssetRef{App: ID, Kind: platform.AssetApp, Name: WorkspaceProject}
-		c.Put(r, Resource{Record: platform.Record{ID: protocol.ResourceID(c.Tenant, ref)}, Ref: ref, Type: protocol.AppType, Draft: WorkspaceProject, Project: WorkspaceProject, Title: "Workspace", State: "active", Version: 1})
+		c.Put(r, protocol.Resource{Record: platform.Record{ID: protocol.ResourceID(c.Tenant, ref)}, Ref: ref, Type: protocol.AppType, Draft: WorkspaceProject, Project: WorkspaceProject, Title: "Workspace", State: "active", Version: 1})
 	}
 }
 
@@ -267,7 +253,7 @@ func (b *Build) trackResource(c platform.Caller, r *pb.ChangeRecord, typ, id str
 		ref.Kind = platform.AssetEvaluation
 	}
 	rid := protocol.ResourceID(c.Tenant, ref)
-	resource, exists := platform.Get[Resource](c, rid)
+	resource, exists := platform.Get[protocol.Resource](c, rid)
 	if !exists {
 		project := submissionProject(r.GetSubmission())
 		if typ == protocol.AppType {
@@ -276,7 +262,7 @@ func (b *Build) trackResource(c platform.Caller, r *pb.ChangeRecord, typ, id str
 		if project == "" {
 			return
 		}
-		resource = Resource{Record: platform.Record{ID: rid}, Ref: ref, Type: typ, Draft: id, Project: project}
+		resource = protocol.Resource{Record: platform.Record{ID: rid}, Ref: ref, Type: typ, Draft: id, Project: project}
 	}
 	if typ == protocol.AppType {
 		resource.Project = id
@@ -317,9 +303,9 @@ func submissionProject(s *pb.Submission) string {
 	return value.Project
 }
 
-func (b *Build) ResourceInventory(c platform.Caller) ([]Resource, error) {
-	inventory, err := readDefinitionInventory[Resource](c)
-	slices.SortFunc(inventory, func(a, b Resource) int { return strings.Compare(a.ID, b.ID) })
+func (b *Build) ResourceInventory(c platform.Caller) ([]protocol.Resource, error) {
+	inventory, err := readDefinitionInventory[protocol.Resource](c)
+	slices.SortFunc(inventory, func(a, b protocol.Resource) int { return strings.Compare(a.ID, b.ID) })
 	return inventory, err
 }
 
@@ -390,7 +376,7 @@ func (b *Build) saveResource(c platform.Caller, s *pb.Submission, now time.Time)
 			return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
 		}
 		rid := protocol.ResourceID(c.Tenant, ref)
-		resource, known := platform.Get[Resource](c, rid)
+		resource, known := platform.Get[protocol.Resource](c, rid)
 		if known {
 			input.Project = resource.Project
 			if resource.ManagedBy != "" {
@@ -429,7 +415,7 @@ func (b *Build) saveResource(c platform.Caller, s *pb.Submission, now time.Time)
 			}
 		}
 		if !known {
-			resource = Resource{Record: platform.Record{ID: rid}, Ref: ref, Type: typ, Draft: id, Project: input.Project, Title: meta.Name, State: "new"}
+			resource = protocol.Resource{Record: platform.Record{ID: rid}, Ref: ref, Type: typ, Draft: id, Project: input.Project, Title: meta.Name, State: "new"}
 		}
 		if typ == ProductType {
 			var spec map[string]json.RawMessage
@@ -492,7 +478,7 @@ func (b *Build) projectFromSpec(c platform.Caller, typ string, spec json.RawMess
 		return ""
 	}
 	if value.App != "" {
-		if resource, found := platform.Get[Resource](c, protocol.ResourceID(c.Tenant, platform.AssetRef{App: value.App, Kind: platform.AssetApp, Name: value.App})); found {
+		if resource, found := platform.Get[protocol.Resource](c, protocol.ResourceID(c.Tenant, platform.AssetRef{App: value.App, Kind: platform.AssetApp, Name: value.App})); found {
 			return resource.Project
 		}
 	}
@@ -507,7 +493,7 @@ func (b *Build) projectFromSpec(c platform.Caller, typ string, spec json.RawMess
 		if name == "" {
 			continue
 		}
-		if resource, found := platform.Get[Resource](c, protocol.ResourceID(c.Tenant, platform.AssetRef{App: ID, Kind: platform.AssetObject, Name: name})); found {
+		if resource, found := platform.Get[protocol.Resource](c, protocol.ResourceID(c.Tenant, platform.AssetRef{App: ID, Kind: platform.AssetObject, Name: name})); found {
 			return resource.Project
 		}
 	}

@@ -11,7 +11,6 @@ import (
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformserver/platform"
 	dataowner "platformserver/services/data"
-	build "platformserver/services/resources/authoring"
 	"platformserver/services/resources/publication"
 )
 
@@ -77,7 +76,7 @@ func (r Reader) Read(m platform.Member, request LineageRequest) (Lineage, *platf
 	if err := r.host.Admits(m); err != nil {
 		return Lineage{}, err
 	}
-	if !m.Holds(build.ID, build.Builder) && !m.Holds(build.ID, build.Integrator) {
+	if !m.Holds(dataowner.App, dataowner.Builder) && !m.Holds(dataowner.App, dataowner.Integrator) {
 		return Lineage{}, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_POLICY_DENIED}
 	}
 	now := time.Now()
@@ -88,11 +87,11 @@ func (r Reader) Read(m platform.Member, request LineageRequest) (Lineage, *platf
 	var refusal *platform.Error
 	if request.Branch != "" {
 		mainGeneration := r.host.RecordGeneration()
-		branch, branchRefusal := r.host.ReadBranch(m, request.Branch, now)
+		revision, branchRefusal := r.host.BranchRevision(m, request.Branch, now)
 		if branchRefusal != nil {
 			return Lineage{}, branchRefusal
 		}
-		cacheKey := request.Branch + ":" + strconv.FormatUint(mainGeneration, 10) + ":" + strconv.FormatUint(uint64(branch.Revision), 10)
+		cacheKey := request.Branch + ":" + strconv.FormatUint(mainGeneration, 10) + ":" + strconv.FormatUint(uint64(revision), 10)
 		world, cachedWorld := r.host.LineageCache().World(cacheKey)
 		if !cachedWorld {
 			built, refusal := r.host.BranchView(m, request.Branch, now)
@@ -181,7 +180,7 @@ func lineagePreviewBasis(branch string) string {
 	return "main · saved definitions"
 }
 
-func baseMeta(resources []build.Resource, raw Input) map[string]Meta {
+func baseMeta(resources []protocol.Resource, raw Input) map[string]Meta {
 	meta := map[string]Meta{}
 	projectRID := map[string]string{}
 	for _, row := range resources {
@@ -222,9 +221,9 @@ func (r Reader) access(m platform.Member, base map[string]Meta) (map[string]Meta
 			}
 			role := r.host.ResourceRole(m, project)
 			allowed = role != "" && role != protocol.ProjectDiscovererRole
-		} else if build.ProjectDelegated(m) {
+		} else if r.host.ProjectDelegated(m) {
 			typ, id := lineageNodeType(node)
-			if typ != "" && typ != build.ObjectType {
+			if typ != "" && typ != ontology.ObjectType {
 				allowed = r.host.ResourceReadable(m, typ, id)
 			}
 		}
@@ -234,7 +233,7 @@ func (r Reader) access(m platform.Member, base map[string]Meta) (map[string]Meta
 	return meta, visible
 }
 
-func focusOf(resources []build.Resource, request LineageRequest) (string, *platform.Error) {
+func focusOf(resources []protocol.Resource, request LineageRequest) (string, *platform.Error) {
 	value := strings.TrimSpace(request.Focus)
 	if value == "" {
 		value = strings.TrimSpace(request.Ref)
@@ -377,7 +376,7 @@ func lineageEvidence(input Input) []Evidence {
 	return out
 }
 
-func lineageNodeID(resource build.Resource) string {
+func lineageNodeID(resource protocol.Resource) string {
 	switch resource.Ref.Kind {
 	case platform.AssetObject:
 		return "object:" + resource.Ref.Name
@@ -412,7 +411,7 @@ func lineageNodeType(node string) (string, string) {
 	case "writeback":
 		return dataowner.WritebackType, id
 	case "object":
-		return build.ObjectType, id
+		return ontology.ObjectType, id
 	}
 	return "", ""
 }
@@ -421,7 +420,7 @@ func lineageObjectType(name string) string {
 	if name == "" || strings.Contains(name, ".") {
 		return name
 	}
-	return build.ID + "." + name
+	return dataowner.App + "." + name
 }
 
 func responseNodes(nodes []Node) []LineageNode {

@@ -15,7 +15,7 @@ import (
 const memberType = "platform.member"
 
 type ResourceEntry struct {
-	Resource
+	protocol.Resource
 	Path    []string `json:"path"`
 	CanOpen bool     `json:"canOpen"`
 	CanEdit bool     `json:"canEdit"`
@@ -108,7 +108,7 @@ func (s Search) Find(q string) []Hit {
 	return out
 }
 
-func NewDirectory(resources []Resource, saved []Folder, role func(project string) string) ResourceDirectory {
+func NewDirectory(resources []protocol.Resource, saved []Folder, role func(project string) string) ResourceDirectory {
 	out := ResourceDirectory{Resources: []ResourceEntry{}, Folders: []Folder{}}
 	for _, resource := range resources {
 		role := role(resource.Project)
@@ -145,7 +145,7 @@ func NewDirectory(resources []Resource, saved []Folder, role func(project string
 	return out
 }
 
-func LegacyProjectAssignments(apps []protocol.Application, resources []Resource) []LegacyResourceProject {
+func LegacyProjectAssignments(apps []protocol.Application, resources []protocol.Resource) []LegacyResourceProject {
 	referenced := map[platform.AssetRef][]string{}
 	projects := map[string]bool{}
 	{
@@ -198,12 +198,12 @@ type ResourceBootstrap struct {
 	Definitions []platform.Definition
 	Drafts      func(match func(typ string) bool) []DraftRecord
 	Exists      func(rid string) bool
-	Snapshot    func() ([]protocol.Application, []Resource)
+	Snapshot    func() ([]protocol.Application, []protocol.Resource)
 	Submit      func(*pb.Submission) error
 }
 
 func (h ResourceBootstrap) Initialize() error {
-	directory := map[string]Resource{}
+	directory := map[string]protocol.Resource{}
 	for _, draft := range h.Drafts(BranchDraftType) {
 		raw, _ := json.Marshal(draft.Value)
 		var meta struct {
@@ -237,7 +237,7 @@ func (h ResourceBootstrap) Initialize() error {
 		if draft.Type == TestPlanType {
 			variant = meta.Variant
 		}
-		directory[rid] = Resource{Record: platform.Record{ID: rid}, Ref: ref, Type: draft.Type, Draft: draft.ID, Title: meta.Title, Variant: variant, Project: project, State: state, Version: meta.Revision}
+		directory[rid] = protocol.Resource{Record: platform.Record{ID: rid}, Ref: ref, Type: draft.Type, Draft: draft.ID, Title: meta.Title, Variant: variant, Project: project, State: state, Version: meta.Revision}
 	}
 	for id := range directory {
 		if h.Exists(id) {
@@ -249,9 +249,9 @@ func (h ResourceBootstrap) Initialize() error {
 		if _, exists := directory[rid]; exists || h.Exists(rid) {
 			continue
 		}
-		directory[rid] = Resource{Record: platform.Record{ID: rid}, Ref: definition.Ref, Title: definition.Ref.Name, Project: WorkspaceProject, State: "active", Version: 1, ManagedBy: "platform"}
+		directory[rid] = protocol.Resource{Record: platform.Record{ID: rid}, Ref: definition.Ref, Title: definition.Ref.Name, Project: WorkspaceProject, State: "active", Version: 1, ManagedBy: "platform"}
 	}
-	pending := []Resource{}
+	pending := []protocol.Resource{}
 	for _, rid := range slices.SortedFunc(maps.Keys(directory), strings.Compare) {
 		pending = append(pending, directory[rid])
 	}

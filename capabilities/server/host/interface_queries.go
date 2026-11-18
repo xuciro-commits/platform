@@ -18,3 +18,11 @@ func (t *Tenant) bindInterfaceQuery(q platform.NamedQuery, drafts ...platform.En
 func (t *Tenant) checkInterfaceQueryFields(q platform.NamedQuery) error {
 	return objects.CheckInterfaceQueryFields(q, t.services.Rules)
 }
+
+func (h hostView) ValidateInstallInterface(i platform.Interface) error {
+	return h.definitionInstall().ValidateInterface(i)
+}
+
+func (h hostView) InstallInterface(c platform.Caller, i platform.Interface, version int) error {
+	return h.definitionInstall().InstallInterface(c, i, version)
+}

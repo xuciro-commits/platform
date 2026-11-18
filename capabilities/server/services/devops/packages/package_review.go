@@ -9,7 +9,6 @@ import (
 	"strings"
 
 	"platformserver/platform"
-	build "platformserver/services/resources/authoring"
 	"platformserver/services/resources/publication"
 )
 
@@ -37,7 +36,7 @@ func FindView(views []protocol.PackageView, id, version string) *protocol.Packag
 	return nil
 }
 
-func RemovalImpacts(resources []build.Resource, definitions []platform.Definition, active func(string) bool, removed, replaced map[platform.AssetRef]bool) []platform.PackageImpactReference {
+func RemovalImpacts(resources []protocol.Resource, definitions []platform.Definition, active func(string) bool, removed, replaced map[platform.AssetRef]bool) []platform.PackageImpactReference {
 	archived := map[platform.AssetRef]bool{}
 	for _, resource := range resources {
 		archived[resource.Ref] = resource.Archived

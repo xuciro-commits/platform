@@ -18,7 +18,7 @@ type Workspace struct {
 	Read      func(m platform.Member, typ, id string, now time.Time) (json.RawMessage, *platform.Error)
 	List      func(m platform.Member, typ string, q platform.Query, now time.Time) ([]any, *platform.Error)
 	Fields    func(typ string) ([]platform.FieldInfo, bool)
-	Resources func() []build.Resource
+	Resources func() []protocol.Resource
 	Project   func(id string) (protocol.Application, bool)
 	Role      func(m platform.Member, project string) string
 	Base      func() string

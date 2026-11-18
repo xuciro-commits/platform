@@ -120,7 +120,7 @@ func CheckRequest(m platform.Member, candidateID, key string, now time.Time, qua
 	return nil
 }
 
-func ResourceProject(candidate protocol.ReleaseCandidate, resources []build.Resource) string {
+func ResourceProject(candidate protocol.ReleaseCandidate, resources []protocol.Resource) string {
 	projects := func(apps bool) []string {
 		out := []string{}
 		for _, asset := range candidate.Assets {

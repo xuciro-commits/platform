@@ -212,14 +212,14 @@ func invariantPublishData(t *testing.T, tenant *invariantTenant, member platform
 	return id
 }
 
-func resourceRecord(t *testing.T, live *invariantTenant, ref platform.AssetRef) build.Resource {
+func resourceRecord(t *testing.T, live *invariantTenant, ref platform.AssetRef) runtimeprotocol.Resource {
 	t.Helper()
 	rid := runtimeprotocol.ResourceID(live.ID, ref)
 	view, refusal := live.RecordOf(t.Context(), live.member(t), build.ResourceType, rid, invariantClock)
 	if refusal != nil {
 		t.Fatalf("read resource %s: %v", ref, refusal)
 	}
-	var record build.Resource
+	var record runtimeprotocol.Resource
 	if err := json.Unmarshal(platform.Raw(view.Record), &record); err != nil {
 		t.Fatal(err)
 	}

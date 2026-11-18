@@ -11,12 +11,12 @@ import (
 	"platformserver/platform"
 )
 
-func StoreResourceRow(store *records.Store, tenant string, ref platform.AssetRef) (Resource, bool) {
+func StoreResourceRow(store *records.Store, tenant string, ref platform.AssetRef) (protocol.Resource, bool) {
 	row, ok := store.LockedRow(ResourceType, protocol.ResourceID(tenant, ref))
 	if !ok {
-		return Resource{}, false
+		return protocol.Resource{}, false
 	}
-	return row.(Resource), true
+	return row.(protocol.Resource), true
 }
 
 func StoreProjectTitle(store *records.Store, project string) string {
@@ -56,7 +56,7 @@ func StoreProjectEdits(store *records.Store, member string, access protocol.Proj
 	if resources := store.Type(ResourceType); resources != nil {
 		kinds := append([]string{kind}, projectRefKinds[kind]...)
 		for _, row := range resources.Rows().All() {
-			resource := row.Value.Interface().(Resource)
+			resource := row.Value.Interface().(protocol.Resource)
 			if slices.Contains(kinds, string(resource.Ref.Kind)) && slices.ContainsFunc(names, func(name string) bool {
 				return name == resource.Draft || name == resource.Ref.Name || ID+"."+name == resource.Ref.Name
 			}) {

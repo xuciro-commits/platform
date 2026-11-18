@@ -1,6 +1,7 @@
 package host
 
 import (
+	"platformserver/kernel/protocol"
 	"platformserver/services/actions"
 	pageowner "platformserver/services/apps/pages"
 	"platformserver/services/objects"
@@ -36,7 +37,7 @@ func (t *Tenant) definitionsFrom(m platform.Member, registeredDefinitions []plat
 		OwnerActive:  t.OwnerActive,
 		Denied:       func() bool { return t.Admits(m) != nil },
 		ResourceRole: func(project string) string { return t.ResourceRole(m, project) },
-		ResourceOf: func(ref platform.AssetRef) (build.Resource, bool) {
+		ResourceOf: func(ref platform.AssetRef) (protocol.Resource, bool) {
 			return build.StoreResourceRow(t.Projection, t.ID, ref)
 		},
 		ProjectTitle: func(project string) string { return build.StoreProjectTitle(t.Projection, project) },

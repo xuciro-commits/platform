@@ -22,7 +22,7 @@ type DefinitionVisibility struct {
 	OwnerActive               func(app string) bool
 	Denied                    func() bool
 	ResourceRole              func(project string) string
-	ResourceOf                func(ref platform.AssetRef) (Resource, bool)
+	ResourceOf                func(ref platform.AssetRef) (protocol.Resource, bool)
 	ProjectTitle              func(project string) string
 	Capability                func(app, name string, roles []string) bool
 	NativeRead                func(app, name string, roles []string) bool

@@ -4,11 +4,9 @@ import (
 	"context"
 	"fmt"
 	"platformserver/kernel/protocol"
-
+	"platformserver/platform"
 	"platformserver/services/functions/authoring"
 	"platformserver/services/resources/authoring"
-
-	"platformserver/platform"
 )
 
 func (t *Tenant) DraftActionCapabilities(m platform.Member) ([]protocol.CapabilityDescriptor, error) {
@@ -30,4 +28,12 @@ func (t *Tenant) DraftActionCapabilities(m platform.Member) ([]protocol.Capabili
 		}
 		return authoring.DraftActionBlocks(build.ID, actions), nil
 	})
+}
+
+func (h hostView) ValidateInstallObjectTypeGroup(g platform.ObjectTypeGroup) error {
+	return h.definitionInstall().ValidateObjectTypeGroup(g)
+}
+
+func (h hostView) InstallObjectTypeGroup(c platform.Caller, g platform.ObjectTypeGroup, version int) error {
+	return h.definitionInstall().InstallObjectTypeGroup(c, g, version)
 }

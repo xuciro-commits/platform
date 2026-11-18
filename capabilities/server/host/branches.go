@@ -32,8 +32,10 @@ func (t *Tenant) branchWorkspace() branches.Workspace {
 			page, refusal := t.objectOwner(t.Projection).RecordsFrom(t.Projection, m, typ, q, now)
 			return page.Records, refusal
 		},
-		Fields:    func(typ string) ([]platform.FieldInfo, bool) { return records.LockedFields(t.Projection, typ) },
-		Resources: func() []build.Resource { return records.LockedRows[build.Resource](t.Projection, build.ResourceType) },
+		Fields: func(typ string) ([]platform.FieldInfo, bool) { return records.LockedFields(t.Projection, typ) },
+		Resources: func() []protocol.Resource {
+			return records.LockedRows[protocol.Resource](t.Projection, build.ResourceType)
+		},
 		Project: func(id string) (protocol.Application, bool) {
 			return records.LockedRow[protocol.Application](t.Projection, protocol.AppType, id)
 		},

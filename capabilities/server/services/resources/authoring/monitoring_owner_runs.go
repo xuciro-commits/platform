@@ -88,9 +88,9 @@ func (x OwnerRuns) Page() (monitoring.MonitoringRunPage, *platform.Error) {
 	if refusal != nil {
 		return runs.Partial(), refusal
 	}
-	x.Data.SourceRuns(runs, sources, &coverage, x.Now)
+	sourceRuns(x.Data, runs, sources, &coverage, x.Now)
 	runs.Cover(coverage)
-	if refusal := collectOwnerRuns(x, runs, "pipeline", "latest", "latest-only", dataowner.PipelineType, func(rows []dataowner.Pipeline) { dataowner.PipelineRuns(runs, rows) }); refusal != nil {
+	if refusal := collectOwnerRuns(x, runs, "pipeline", "latest", "latest-only", dataowner.PipelineType, func(rows []dataowner.Pipeline) { pipelineRuns(runs, rows) }); refusal != nil {
 		return runs.Partial(), refusal
 	}
 	compilations := map[string]time.Time{}
@@ -119,7 +119,7 @@ func (x OwnerRuns) Page() (monitoring.MonitoringRunPage, *platform.Error) {
 			return collectOwnerRuns(x, runs, "code", "latest", "latest-only", protocol.CodeType, func(rows []protocol.Code) { CodeRuns(runs, rows, compilations) })
 		},
 		func() *platform.Error {
-			return collectOwnerRuns(x, runs, "projection", "latest", "latest-only", dataowner.DatasetType, func(rows []dataowner.Dataset) { dataowner.DatasetRuns(runs, rows) })
+			return collectOwnerRuns(x, runs, "projection", "latest", "latest-only", dataowner.DatasetType, func(rows []dataowner.Dataset) { datasetRuns(runs, rows) })
 		},
 		func() *platform.Error {
 			return collectOwnerRuns(x, runs, "function", "retained", "", protocol.FunctionCallType, func(rows []protocol.FunctionRun) { FunctionRuns(runs, rows) })
