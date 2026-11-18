@@ -4,7 +4,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/url"
+	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformserver/kernel/protocol"
+	"platformserver/services/ontology"
 	"strings"
 
 	"platformserver/platform"
@@ -47,13 +49,19 @@ func DraftPage(page RecordPage, draft func(any) (any, *platform.Error)) (RecordP
 	return page, nil
 }
 
-func DraftView(view *RecordView, draft func(any) (any, *platform.Error)) {
+func DraftView(view *RecordView, draft func(any) (any, *platform.Error)) *platform.Error {
 	if record, refusal := draft(view.Record); refusal == nil {
 		view.Record = record
+		changes, err := ontology.DraftChanges(record)
+		if err != nil {
+			return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Published object definition is unavailable")
+		}
+		view.Changes = changes
 	} else {
 		if view.ValueErrors == nil {
 			view.ValueErrors = map[string]string{}
 		}
 		view.ValueErrors["actions"] = refusal.Message
 	}
+	return nil
 }

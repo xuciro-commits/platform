@@ -30,8 +30,8 @@ type Object struct {
 	Versioning        *platform.Versioning         `json:"versioning,omitempty" type:"json" field:"aside" title:"Business versioning"`
 	VersionPins       []platform.VersionPinBinding `json:"versionPins,omitempty" type:"json" field:"aside" title:"Pinned business versions"`
 	EnterpriseUse     *platform.Expr               `json:"enterpriseUse,omitempty" type:"json" field:"aside" title:"Current enterprise use"`
-	States            []State                      `json:"states,omitempty" field:"aside" title:"States"`
-	ActionTypes       []platform.AssetBinding      `json:"actionTypes,omitempty" field:"aside" type:"json" title:"Action types"`
+	States            []State                      `json:"states,omitempty" rail:"true" title:"States"`
+	ActionTypes       []platform.AssetBinding      `json:"actionTypes,omitempty" rail:"true" type:"json" title:"Action types"`
 	Actions           []Action                     `json:"actions,omitempty" field:"aside" title:"Actions"`
 	Access            []Access                     `json:"access,omitempty" field:"aside" title:"Access"`
 	Scope             *ObjectScope                 `json:"scope,omitempty" type:"json" field:"aside" title:"Scope fields"`

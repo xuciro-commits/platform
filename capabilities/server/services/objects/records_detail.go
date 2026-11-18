@@ -6,6 +6,7 @@ import (
 	"platformserver/kernel/protocol"
 	"platformserver/kernel/records"
 	"platformserver/platform"
+	"platformserver/services/ontology"
 	"reflect"
 	"slices"
 	"strings"
@@ -13,6 +14,7 @@ import (
 )
 
 type RecordView struct {
+	Changes     []ontology.ObjectChange         `json:"changes,omitempty"`
 	Partial     bool                            `json:"partial,omitempty"`
 	Actions     []RecordAction                  `json:"actions,omitempty"`
 	Refs        map[string]map[string]string    `json:"refs,omitempty"`

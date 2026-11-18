@@ -3221,6 +3221,13 @@ export type NotificationEffect = {
   role: string;
 };
 
+export type ObjectChange = {
+  path: string;
+  change: "added" | "removed" | "changed";
+  from?: unknown;
+  to?: unknown;
+};
+
 export type ObjectSet = {
   object?: string;
   interface?: string;
@@ -4599,6 +4606,7 @@ export type RecordVersionPin = {
 };
 
 export type RecordView = {
+  changes?: ObjectChange[];
   partial?: boolean;
   actions?: RecordAction[];
   refs?: Record<string, Record<string, string>>;
