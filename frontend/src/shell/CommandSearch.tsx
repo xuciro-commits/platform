@@ -6,7 +6,7 @@ import { Text } from "@astryxdesign/core/Text";
 import type { SearchSource } from "@astryxdesign/core/Typeahead";
 import { createContext, type ReactNode, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { type App, type NavItem, pathOf } from "../apps";
-import { entries } from "../apps/entries";
+import { entries, homes } from "../apps/entries";
 import { type Api, request, useRead } from "../host";
 import { t } from "../i18n";
 import { navigate, usePath } from "../router";
@@ -118,13 +118,16 @@ export function CommandSearch({ app, item, apps, tenant, children }: { app: App;
         const people = (members.status === "fulfilled" ? members.value : [])
           .filter((member) => matches(member.name) || matches(member.id)).slice(0, 8)
           .map((member) => destination({ href: `/admin/members?member=${encodeURIComponent(member.id)}`, label: member.name }, t("Members")));
-        const records = (objects.status === "fulfilled" ? objects.value : [])
-          .filter((hit) => hit.id && hit.group !== "member" && (!hit.resource || scoped))
-          .map((hit) => destination({
-            href: `/ontology/objects/${encodeURIComponent(hit.type)}/${encodeURIComponent(hit.id)}`,
+        const found = (objects.status === "fulfilled" ? objects.value : [])
+          .filter((hit) => hit.id && hit.group !== "member" && hit.resource?.canOpen !== false)
+          .map((hit) => ({ resource: hit.group === "resource", item: {
+            href: `${homes[hit.type] ?? `/ontology/objects/${encodeURIComponent(hit.type)}`}/${encodeURIComponent(hit.id)}`,
             label: hit.title || t(hit.typeTitle ?? hit.type),
-          }, t("Objects")));
-        const results = [...local, ...[...new Map(records.map((record) => [record.id, record])).values()].slice(0, 12), ...people];
+          } }));
+        const unique = [...new Map(found.map((hit) => [hit.item.href, hit])).values()];
+        const resources = unique.filter((hit) => hit.resource).slice(0, 8).map((hit) => destination(hit.item, t("Resources")));
+        const records = unique.filter((hit) => !hit.resource).slice(0, 12).map((hit) => destination(hit.item, t("Objects")));
+        const results = [...local, ...resources, ...records, ...people];
         if (!signal.aborted) {
           shown.current = { query, items: results };
           setFailure([

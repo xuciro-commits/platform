@@ -64,8 +64,5 @@ func (t *Tenant) searchRead(reader *platform.Member, q string, now time.Time) []
 			page, err := t.objectOwner(t.Projection).Records(m, typ, query, now)
 			return page.Records, err
 		}}
-	if owner := t.App(build.ID); owner != nil {
-		search.Owned = owner.Manifest().Entities
-	}
 	return search.Find(q)
 }

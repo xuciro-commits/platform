@@ -167,6 +167,7 @@ export const zhCN: Record<string, string> = {
   "Value types": "值类型",
   "Object type groups": "对象类型组",
   Objects: "对象",
+  Resources: "资源",
   Functions: "函数",
   Automations: "自动化",
   Modules: "模块",

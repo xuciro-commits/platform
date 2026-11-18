@@ -1161,6 +1161,13 @@ test("command palette: open a record and the inbox with the keyboard", async ({ 
   await expect(page.getByText("Archived", { exact: true })).toHaveCount(0);
 
   await page.keyboard.press("ControlOrMeta+K");
+  await search.fill("Opportunity");
+  await expect(palette.getByRole("group", { name: "Objects" }).getByRole("option", { name: "Press line retrofit" })).toBeVisible();
+  await palette.getByRole("group", { name: "Resources" }).getByRole("option", { name: "Opportunity", exact: true }).click();
+  await expect(page).toHaveURL(/\/ontology\/object-types\/OBJ-opportunity$/);
+  await expect(page.getByRole("heading", { name: "Opportunity", exact: true })).toBeVisible();
+
+  await page.keyboard.press("ControlOrMeta+K");
   await search.fill("Inbox");
   await expect(palette.getByRole("option", { name: "Inbox", exact: true })).toBeVisible();
   await search.press("Enter");

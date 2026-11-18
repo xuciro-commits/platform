@@ -1,7 +1,12 @@
 import type { ComponentType } from "react";
 
-const modules = import.meta.glob<{ default: ComponentType }>("./*/*.{ts,tsx}", { eager: true });
+type Entry = ComponentType & { recordType?: string };
 
-export const entries: Record<string, ComponentType> = {
+const modules = import.meta.glob<{ default: Entry }>("./*/*.{ts,tsx}", { eager: true });
+
+export const entries: Record<string, Entry> = {
   ...Object.fromEntries(Object.entries(modules).map(([path, module]) => [path.replace(/^\.\/|\.tsx?$/g, ""), module.default])),
 };
+
+export const homes: Record<string, string> = Object.fromEntries(Object.entries(entries)
+  .flatMap(([key, entry]) => entry.recordType ? [[entry.recordType, `/${key}`]] : []));

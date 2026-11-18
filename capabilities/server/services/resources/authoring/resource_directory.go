@@ -42,7 +42,6 @@ type Hit struct {
 
 type Search struct {
 	Resources []ResourceEntry
-	Owned     []platform.RecordType
 	Entities  []platform.RecordTypeInfo
 	Names     func(platform.RecordTypeInfo, string) (string, bool)
 	Read      func(typ string, query platform.Query) ([]any, *platform.Error)
@@ -74,10 +73,6 @@ func (s Search) Find(q string) []Hit {
 		out = append(out, Hit{Type: resource.Type, ID: resource.Draft, Title: resource.Title, Group: "resource", Resource: &resource})
 		counts[resource.Type]++
 	}
-	resources := map[string]bool{}
-	for _, entity := range s.Owned {
-		resources[entity.Type] = true
-	}
 	for _, info := range s.Entities {
 		if info.Type == protocol.FollowType || info.Type == ResourceType || BranchDraftType(info.Type) || only != "" && info.Type != only {
 			continue
@@ -93,8 +88,6 @@ func (s Search) Find(q string) []Hit {
 		group := "object"
 		if info.Type == memberType {
 			group = "member"
-		} else if resources[info.Type] || info.App != ID {
-			group = "resource"
 		}
 		for _, r := range page {
 			v := reflect.ValueOf(r)

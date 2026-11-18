@@ -204,10 +204,10 @@ function shape(described: Described, declared: Declared, listPath: string, move?
 }
 
 export function recordList(declared: Declared) {
-  return function RecordListEntry() {
+  return Object.assign(function RecordListEntry() {
     const [, app, entry, id] = usePath().split("/");
     return <Records declared={declared} listPath={`/${app}/${entry}`} id={id} />;
-  };
+  }, { recordType: declared.type });
 }
 
 export function Records({ declared, listPath, id, back }: { declared: Declared; listPath: string; id?: string; back?: Back }) {
