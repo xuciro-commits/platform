@@ -4579,6 +4579,9 @@ export type RecordSetResult = {
   partial: boolean;
   sources?: string[];
   definition: string;
+  total?: number;
+  sums?: Record<string, unknown>;
+  sumErrors?: Record<string, string>;
 };
 
 export type RecordSetSort = {

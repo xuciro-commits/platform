@@ -49,12 +49,12 @@ func (h *Host) routesRecords(rt *routes) {
 		}
 		return pageowner.ModelRules(t.definitions, t.modelCriteria), nil
 	}))
-	rt.recordRead(transport.Route{Pattern: "GET /v1/record-sets/{type}/{id}/{name}", Summary: "Read a bounded declared collection through its original owner", Answer: platform.RecordSetResult{}}, transport.Answering(func(r *http.Request, m platform.Member, t *Tenant) (platform.RecordSetResult, *platform.Error) {
+	rt.recordRead(transport.Route{Pattern: "GET /v1/record-sets/{type}/{id}/{name}", Summary: "Read a bounded declared collection; inverse collections include visible totals", Answer: objects.RecordSetResult{}}, transport.Answering(func(r *http.Request, m platform.Member, t *Tenant) (objects.RecordSetResult, *platform.Error) {
 		info, ok := t.Entity(r.PathValue("type"))
 		if !ok {
-			return platform.RecordSetResult{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_NOT_FOUND, "Collection object is unavailable")
+			return objects.RecordSetResult{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_NOT_FOUND, "Collection object is unavailable")
 		}
-		return platform.NewCaller(runtime{t: t}, m, info.App, false, false).ReadRecordSet(info.Type, r.PathValue("id"), r.PathValue("name"), h.Now())
+		return t.objectOwner(t.Projection).RecordSetPage(m, info, r.PathValue("id"), r.PathValue("name"), h.Now())
 	}))
 	rt.recordRead(transport.Route{Pattern: "POST /v1/relation-migrations/preview", Summary: "Preview an explicit migration of historical links into their endpoint owner's records", Body: platform.AssetBinding{}, Answer: protocol.RelationMigrationPlan{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
 		var binding platform.AssetBinding

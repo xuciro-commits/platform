@@ -418,3 +418,55 @@ func TestInvariantK18UndoUsesAnAcceptedActionWithTheOriginalRevision(t *testing.
 		t.Fatalf("record was not restored with its accepted edits: %+v %v", view, err)
 	}
 }
+
+func TestInvariantK19InverseSetTotalsOnlyUseReadableRowsAndFields(t *testing.T) {
+	live := newInvariantTenant(t, "invariant-k19", protocol.Seat{Subjects: []string{"other"}, Member: platform.Member{ID: "other", Roles: map[string]string{build.ID: ontology.UserRole}}})
+	const parent, child = "build.purchase", "build.purchaseline"
+	live.accept(t, "build.object.create", build.ObjectType, "PARENT", map[string]any{
+		"name": "purchase", "title": "Purchase", "access": []ontology.Access{{Role: ontology.UserRole, Read: "all"}},
+		"fields": []ontology.Field{{Name: "name", Type: "text", Title: "Name"}},
+	})
+	live.accept(t, "build.object.publish", build.ObjectType, "PARENT", nil)
+	live.accept(t, "build.object.create", build.ObjectType, "CHILD", map[string]any{
+		"name": "purchaseline", "title": "Purchase line", "access": []ontology.Access{{Role: ontology.UserRole, Read: "own", Create: true}},
+		"fields": []ontology.Field{
+			{Name: "purchase", Type: "reference", Title: "Purchase", Ref: parent, Inverse: "lines", Required: true},
+			{Name: "amount", Type: "decimal", Title: "Amount"},
+			{Name: "private", Type: "integer", Title: "Private", Read: []string{ontology.BuilderRole}},
+		},
+	})
+	live.accept(t, "build.object.publish", build.ObjectType, "CHILD", nil)
+	sub := live.submission("build.object.edit", build.ObjectType, "PARENT", map[string]any{"sets": []platform.RecordSet{{Name: "lines", From: "lines", Direction: "inverse", Object: child, Order: []platform.RecordSetSort{{Expr: platform.ExprReference("text", "id")}}, Limit: 25}}})
+	if _, refusal := live.Submit(live.member(t), sub, invariantClock); refusal != nil {
+		t.Fatal(refusal.Message)
+	}
+	live.accept(t, "build.object.publish", build.ObjectType, "PARENT", nil)
+	live.accept(t, parent+".create", parent, "ORDER", map[string]any{"name": "Order"})
+	live.accept(t, child+".create", child, "RESTRICTED", map[string]any{"purchase": "ORDER", "amount": 999, "private": 23})
+	user, _ := live.Member("other")
+	request := live.submission(child+".create", child, "VISIBLE", map[string]any{"purchase": "ORDER", "amount": 12.5})
+	request.PrincipalId = user.ID
+	_, refusal := live.Submit(user, request, invariantClock)
+	if refusal != nil {
+		t.Fatal(refusal.Message)
+	}
+	latest := live.accept(t, child+".edit", child, "VISIBLE", map[string]any{"private": 2})
+	_, handler := observationHost(live.Tenant)
+	for _, sample := range []struct {
+		role   string
+		total  int
+		amount string
+	}{{"builder", 2, "1011.5"}, {"other", 1, "12.5"}} {
+		res := observationRequest(t, handler, live.ID, observationToken(live.ID, sample.role), "/v1/record-sets/"+parent+"/ORDER/lines", nil)
+		var page objects.RecordSetResult
+		if res.Code != http.StatusOK || json.Unmarshal(res.Body.Bytes(), &page) != nil || page.Total == nil || *page.Total != sample.total || len(page.Records) != sample.total || string(page.Sums["amount"]) != sample.amount {
+			t.Fatalf("%s lines: HTTP %d %s", sample.role, res.Code, res.Body)
+		}
+		if sample.role == "other" {
+			var line platform.Record
+			if json.Unmarshal(page.Records[0], &line) != nil || line.ID != "VISIBLE" || line.Revision != latest.GetRevision() || page.Sums["private"] != nil || bytes.Contains(res.Body.Bytes(), []byte("RESTRICTED")) {
+				t.Fatalf("restricted lines response: %s", res.Body)
+			}
+		}
+	}
+}
