@@ -1,5 +1,8 @@
 export const zhCN: Record<string, string> = {
   Search: "搜索",
+  "Find a record": "查找记录",
+  "No matching records": "没有匹配的记录",
+  "Records could not be searched": "无法搜索记录",
   Yes: "是",
   No: "否",
   "Budget approved": "预算已批准",

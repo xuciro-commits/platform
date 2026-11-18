@@ -14,6 +14,7 @@ import { reasonOf, send } from "./act";
 import type { Described, Section, Values } from "./describe";
 import { type InputStatus, ParameterInput, enterable, settles } from "./ParameterInput";
 import { plain, present, shown } from "./values";
+import { ReferenceLink } from "./ReferenceField";
 
 type Conflict = { name: string; before: unknown; mine: unknown; saved: unknown; revision: number };
 export type Editor = {
@@ -29,7 +30,8 @@ export type Editor = {
 const blank = (value: unknown) => value == null || value === "";
 const same = (left: unknown, right: unknown) => left === right || (blank(left) && blank(right));
 
-export function useEditor(edit: Api.Action | undefined, id: string, values: Values, revision: number): Editor {
+export function useEditor(described: Described, id: string, values: Values, revision: number): Editor {
+  const edit = described.edit;
   const [drafts, setDrafts] = useState<Values>({});
   const [status, setStatus] = useState<Record<string, InputStatus>>({});
   const [conflict, setConflict] = useState<Conflict>();
@@ -88,7 +90,7 @@ export function useEditor(edit: Api.Action | undefined, id: string, values: Valu
     }
   };
 
-  const text = new Set((edit?.payload ?? []).filter((parameter) => !settles(parameter)).map((parameter) => parameter.name));
+  const text = new Set((edit?.payload ?? []).filter((parameter) => !settles(parameter, described.field(parameter.name))).map((parameter) => parameter.name));
 
   const settle = () => {
     for (const [name, value] of Object.entries(pending.current)) if (text.has(name)) save(name, value);
@@ -123,19 +125,19 @@ export function useEditor(edit: Api.Action | undefined, id: string, values: Valu
       refused.current.delete(parameter.name);
       setDrafts((previous) => ({ ...previous, [parameter.name]: value }));
       setStatus(({ [parameter.name]: _, ...rest }) => rest);
-      if (settles(parameter)) save(parameter.name, value);
+      if (settles(parameter, described.field(parameter.name))) save(parameter.name, value);
     },
     settle,
   };
 }
 
-type FieldGroupProps = { described: Described; editor: Editor; sections: Section[]; direction: "horizontal-labels" | "vertical"; focusEmpty?: boolean };
+type FieldGroupProps = { described: Described; editor: Editor; sections: Section[]; direction: "horizontal-labels" | "vertical"; focusEmpty?: boolean; refs?: Api.RecordView["refs"] };
 
 const styles = stylex.create({
   aligned: { gridTemplateColumns: { default: "minmax(0, 1fr) minmax(0, 3fr)", "@media (max-width: 480px)": "100%" } },
 });
 
-export function FieldGroup({ described, editor, sections, direction, focusEmpty }: FieldGroupProps) {
+export function FieldGroup({ described, editor, sections, direction, focusEmpty, refs }: FieldGroupProps) {
   const parameters = new Map((described.edit?.payload ?? []).filter(enterable).map((parameter) => [parameter.name, parameter]));
   const visible = (fields: Api.FieldInfo[]) =>
     fields.filter((field) => {
@@ -196,12 +198,17 @@ export function FieldGroup({ described, editor, sections, direction, focusEmpty 
           <FormLayout direction={direction} defaultOptionality="optional" xstyle={direction === "horizontal-labels" ? styles.aligned : undefined}>
             {section.fields.map((field) => {
               const parameter = parameters.get(field.name);
+              const value = editor.values[field.name];
+              const reference = field.type === "reference" && field.ref;
+              const id = String(value ?? "");
+              const referenceName = reference ? refs?.[field.name]?.[id] : undefined;
               return parameter ? (
                 <ParameterInput
                   key={field.name}
                   parameter={parameter}
                   described={described.entity}
-                  value={editor.values[field.name]}
+                  value={value}
+                  referenceName={referenceName}
                   status={editor.status[field.name]}
                   onChange={(value) => editor.change(parameter, value)}
                   onEnter={editor.settle}
@@ -209,7 +216,9 @@ export function FieldGroup({ described, editor, sections, direction, focusEmpty 
                 />
               ) : (
                 <Field key={field.name} label={t(field.title)} inputID={`shown-${field.name}`}>
-                  <Text type="body">{present(field, editor.values[field.name])}</Text>
+                  {reference && referenceName
+                    ? <ReferenceLink type={reference} id={id} name={referenceName} />
+                    : <Text type="body">{present(field, value)}</Text>}
                 </Field>
               );
             })}

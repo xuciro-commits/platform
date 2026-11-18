@@ -4,6 +4,7 @@ import { Switch } from "@astryxdesign/core/Switch";
 import { TextInput } from "@astryxdesign/core/TextInput";
 import type { Api } from "../host";
 import { t } from "../i18n";
+import { ReferenceInput } from "./ReferenceField";
 
 export type InputStatus = { type: "error" | "success"; message?: string };
 type ParameterInputProps = {
@@ -14,23 +15,29 @@ type ParameterInputProps = {
   onChange: (value: unknown) => void;
   onEnter?: () => void;
   focused?: boolean;
+  referenceName?: string;
 };
 
-const typed = new Set(["string", "longtext", "date", "datetime", "entity", "choice"]);
+const typed = new Set(["string", "longtext", "date", "datetime", "entity", "reference", "choice"]);
 const numeric = new Set(["integer", "number"]);
 
 export function enterable(parameter: Api.Field) {
   return Boolean(parameter.choices) || parameter.type === "boolean" || typed.has(parameter.type) || numeric.has(parameter.type);
 }
 
-export function settles(parameter: Api.Field) {
-  return Boolean(parameter.choices) || parameter.type === "boolean" || numeric.has(parameter.type);
+export function settles(parameter: Api.Field, field?: Api.FieldInfo) {
+  return Boolean(parameter.ref || parameter.choices) || field?.type === "reference" || parameter.type === "reference" || parameter.type === "boolean" || numeric.has(parameter.type);
 }
 
-export function ParameterInput({ parameter, described, value, status, onChange, onEnter, focused }: ParameterInputProps) {
+export function ParameterInput({ parameter, described, value, status, onChange, onEnter, focused, referenceName }: ParameterInputProps) {
   const field = described.fields.find((candidate) => candidate.name === parameter.name);
   const label = t(field?.title ?? parameter.name);
   const description = field?.help;
+  const reference = parameter.ref ?? (field?.type === "reference" ? field.ref : undefined);
+  if (reference) {
+    return <ReferenceInput type={reference} id={String(value ?? "")} name={referenceName} label={label} description={description}
+      required={parameter.required} focused={focused} status={status} onChange={onChange} />;
+  }
   if (parameter.choices) {
     return (
       <Selector

@@ -43,6 +43,7 @@
         { "company": "Pioneer Steelworks", "industry": "manufacturing", "tier": "strategic", "city": "Katowice", "contact": "Tomasz Nowak", "employees": 3600, "since": "2018-02-12" },
         { "company": "Lattice Systems", "industry": "software", "tier": "key", "city": "Utrecht", "contact": "Sanne de Vries", "employees": 310, "since": "2022-10-04" },
         { "company": "Riverside Market", "industry": "retail", "tier": "standard", "city": "Leeds", "contact": "Hannah Clarke", "employees": 520, "since": "2023-12-01" },
+        { "company": "Hartmann Fabrication", "industry": "manufacturing", "tier": "standard", "city": "Essen" },
         { "company": "Polar Cold Chain", "industry": "logistics", "tier": "key", "city": "Oulu", "contact": "Mikko Laine", "employees": 670, "since": "2021-04-26" }
       ]
     },
@@ -55,7 +56,7 @@
         "display": "subject",
         "fields": [
           { "name": "subject", "title": "Subject", "type": "text", "required": true, "search": true, "group": "Commercial" },
-          { "name": "customer", "title": "Customer", "type": "text", "search": true, "group": "Commercial" },
+          { "name": "customer", "title": "Customer", "type": "reference", "ref": "build.customer", "search": true, "group": "Commercial" },
           { "name": "stage", "title": "Stage", "type": "choice", "choices": "qualifying,proposal,negotiation,won,lost", "aside": true, "format": [{ "when": { "op": "=", "kind": "boolean", "args": [{ "kind": "text", "ref": "stage" }, { "kind": "text", "lit": { "value": "qualifying" } }] }, "tone": "neutral" }, { "when": { "op": "=", "kind": "boolean", "args": [{ "kind": "text", "ref": "stage" }, { "kind": "text", "lit": { "value": "proposal" } }] }, "tone": "info" }, { "when": { "op": "=", "kind": "boolean", "args": [{ "kind": "text", "ref": "stage" }, { "kind": "text", "lit": { "value": "negotiation" } }] }, "tone": "warning" }, { "when": { "op": "=", "kind": "boolean", "args": [{ "kind": "text", "ref": "stage" }, { "kind": "text", "lit": { "value": "won" } }] }, "tone": "success" }, { "when": { "op": "=", "kind": "boolean", "args": [{ "kind": "text", "ref": "stage" }, { "kind": "text", "lit": { "value": "lost" } }] }, "tone": "danger" }] },
           { "name": "amount", "title": "Amount", "type": "decimal", "group": "Commercial" },
           { "name": "budgetapproved", "title": "Budget approved", "type": "boolean", "group": "Commercial" },
@@ -68,26 +69,26 @@
         "states": [{ "name": "open", "title": "Open", "tone": "info", "description": "Being worked on by the sales team." }]
       },
       "records": [
-        { "subject": "Press line retrofit", "customer": "Northwind Tools", "stage": "negotiation", "amount": 184000, "budgetapproved": true, "deposit": { "amount": 125000, "currency": "USD" }, "owner": "Dana Whitfield", "closing": "2026-12-12", "next": "Send revised terms" },
-        { "subject": "Spare parts frame agreement", "customer": "Northwind Tools", "stage": "won", "amount": 62000, "owner": "Dana Whitfield", "closing": "2026-10-30", "next": "Kick-off call" },
-        { "subject": "Fleet tracking rollout", "customer": "Harbor Freight Lines", "stage": "proposal", "amount": 97500, "owner": "Omar Haddad", "closing": "2027-01-20", "next": "Present proposal to operations" },
-        { "subject": "Warehouse scanners", "customer": "Harbor Freight Lines", "stage": "qualifying", "amount": 28000, "owner": "Omar Haddad", "closing": "2027-02-14", "next": "Confirm budget holder" },
-        { "subject": "Store replenishment pilot", "customer": "Lumen Retail Group", "stage": "proposal", "amount": 45000, "owner": "Yuki Tanaka", "closing": "2026-12-19", "next": "Agree pilot stores" },
-        { "subject": "Loyalty data integration", "customer": "Lumen Retail Group", "stage": "lost", "amount": 71000, "owner": "Yuki Tanaka", "closing": "2026-09-15", "next": "Review in six months", "reason": "Chose their existing vendor" },
-        { "subject": "Foundry quality tracking", "customer": "Atlas Castings", "stage": "qualifying", "amount": 33500, "owner": "Dana Whitfield", "closing": "2027-03-03", "next": "Site visit" },
-        { "subject": "Support contract renewal", "customer": "Brightpath Software", "stage": "negotiation", "amount": 12400, "owner": "Omar Haddad", "closing": "2026-11-28", "next": "Legal review" },
-        { "subject": "Clinic scheduling rollout", "customer": "Meridian Clinics", "stage": "won", "amount": 228000, "owner": "Yuki Tanaka", "closing": "2026-08-22", "next": "Phase two scoping" },
-        { "subject": "Patient intake forms", "customer": "Meridian Clinics", "stage": "proposal", "amount": 54000, "owner": "Yuki Tanaka", "closing": "2027-01-09", "next": "Demo to head nurses" },
-        { "subject": "Label printing line", "customer": "Cobalt Packaging", "stage": "qualifying", "amount": 76000, "owner": "Dana Whitfield", "closing": "2027-02-27", "next": "Collect line specifications" },
-        { "subject": "Seasonal stock planning", "customer": "Fjord Outdoor", "stage": "negotiation", "amount": 19800, "owner": "Omar Haddad", "closing": "2026-12-05", "next": "Final pricing" },
-        { "subject": "Robot cell integration", "customer": "Kestrel Robotics", "stage": "proposal", "amount": 138000, "owner": "Omar Haddad", "closing": "2027-01-30", "next": "Send layout drawings" },
-        { "subject": "Guest app refresh", "customer": "Saffron Hotels", "stage": "qualifying", "amount": 22000, "owner": "Yuki Tanaka", "closing": "2027-03-12", "next": "Find project sponsor" },
-        { "subject": "Cross-dock automation", "customer": "Granite Logistics", "stage": "negotiation", "amount": 312000, "owner": "Dana Whitfield", "closing": "2026-12-18", "next": "Align on service levels" },
-        { "subject": "Usage billing module", "customer": "Nimbus Analytics", "stage": "won", "amount": 18500, "owner": "Omar Haddad", "closing": "2026-10-02", "next": "Hand over to delivery" },
-        { "subject": "Device traceability", "customer": "Alder Medical Devices", "stage": "proposal", "amount": 87000, "owner": "Yuki Tanaka", "closing": "2027-02-05", "next": "Answer audit questions" },
-        { "subject": "Route planning trial", "customer": "Orbit Freight", "stage": "lost", "amount": 15000, "owner": "Omar Haddad", "closing": "2026-09-28", "next": "Revisit next budget year", "reason": "Budget moved to fleet renewal" },
-        { "subject": "Batch recall readiness", "customer": "Copperleaf Foods", "stage": "qualifying", "amount": 64000, "owner": "Dana Whitfield", "closing": "2027-03-20", "next": "Map current recall steps" },
-        { "subject": "Furnace monitoring", "customer": "Pioneer Steelworks", "stage": "negotiation", "amount": 205000, "owner": "Dana Whitfield", "closing": "2026-12-22", "next": "Confirm sensor count" }
+        { "subject": "Press line retrofit", "customer": "CUS-001", "stage": "negotiation", "amount": 184000, "budgetapproved": true, "deposit": { "amount": 125000, "currency": "USD" }, "owner": "Dana Whitfield", "closing": "2026-12-12", "next": "Send revised terms" },
+        { "subject": "Spare parts frame agreement", "customer": "CUS-001", "stage": "won", "amount": 62000, "owner": "Dana Whitfield", "closing": "2026-10-30", "next": "Kick-off call" },
+        { "subject": "Fleet tracking rollout", "customer": "CUS-002", "stage": "proposal", "amount": 97500, "owner": "Omar Haddad", "closing": "2027-01-20", "next": "Present proposal to operations" },
+        { "subject": "Warehouse scanners", "customer": "CUS-002", "stage": "qualifying", "amount": 28000, "owner": "Omar Haddad", "closing": "2027-02-14", "next": "Confirm budget holder" },
+        { "subject": "Store replenishment pilot", "customer": "CUS-003", "stage": "proposal", "amount": 45000, "owner": "Yuki Tanaka", "closing": "2026-12-19", "next": "Agree pilot stores" },
+        { "subject": "Loyalty data integration", "customer": "CUS-003", "stage": "lost", "amount": 71000, "owner": "Yuki Tanaka", "closing": "2026-09-15", "next": "Review in six months", "reason": "Chose their existing vendor" },
+        { "subject": "Foundry quality tracking", "customer": "CUS-004", "stage": "qualifying", "amount": 33500, "owner": "Dana Whitfield", "closing": "2027-03-03", "next": "Site visit" },
+        { "subject": "Support contract renewal", "customer": "CUS-005", "stage": "negotiation", "amount": 12400, "owner": "Omar Haddad", "closing": "2026-11-28", "next": "Legal review" },
+        { "subject": "Clinic scheduling rollout", "customer": "CUS-006", "stage": "won", "amount": 228000, "owner": "Yuki Tanaka", "closing": "2026-08-22", "next": "Phase two scoping" },
+        { "subject": "Patient intake forms", "customer": "CUS-006", "stage": "proposal", "amount": 54000, "owner": "Yuki Tanaka", "closing": "2027-01-09", "next": "Demo to head nurses" },
+        { "subject": "Label printing line", "customer": "CUS-007", "stage": "qualifying", "amount": 76000, "owner": "Dana Whitfield", "closing": "2027-02-27", "next": "Collect line specifications" },
+        { "subject": "Seasonal stock planning", "customer": "CUS-008", "stage": "negotiation", "amount": 19800, "owner": "Omar Haddad", "closing": "2026-12-05", "next": "Final pricing" },
+        { "subject": "Robot cell integration", "customer": "CUS-009", "stage": "proposal", "amount": 138000, "owner": "Omar Haddad", "closing": "2027-01-30", "next": "Send layout drawings" },
+        { "subject": "Guest app refresh", "customer": "CUS-010", "stage": "qualifying", "amount": 22000, "owner": "Yuki Tanaka", "closing": "2027-03-12", "next": "Find project sponsor" },
+        { "subject": "Cross-dock automation", "customer": "CUS-011", "stage": "negotiation", "amount": 312000, "owner": "Dana Whitfield", "closing": "2026-12-18", "next": "Align on service levels" },
+        { "subject": "Usage billing module", "customer": "CUS-012", "stage": "won", "amount": 18500, "owner": "Omar Haddad", "closing": "2026-10-02", "next": "Hand over to delivery" },
+        { "subject": "Device traceability", "customer": "CUS-013", "stage": "proposal", "amount": 87000, "owner": "Yuki Tanaka", "closing": "2027-02-05", "next": "Answer audit questions" },
+        { "subject": "Route planning trial", "customer": "CUS-014", "stage": "lost", "amount": 15000, "owner": "Omar Haddad", "closing": "2026-09-28", "next": "Revisit next budget year", "reason": "Budget moved to fleet renewal" },
+        { "subject": "Batch recall readiness", "customer": "CUS-015", "stage": "qualifying", "amount": 64000, "owner": "Dana Whitfield", "closing": "2027-03-20", "next": "Map current recall steps" },
+        { "subject": "Furnace monitoring", "customer": "CUS-017", "stage": "negotiation", "amount": 205000, "owner": "Dana Whitfield", "closing": "2026-12-22", "next": "Confirm sensor count" }
       ]
     },
     {

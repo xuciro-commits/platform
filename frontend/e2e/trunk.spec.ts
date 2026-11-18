@@ -304,3 +304,21 @@ test("mobile: the navigation drawer contains the application controls", async ({
   await drawer.getByRole("button", { name: "Sign out", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Sign in", exact: true })).toBeVisible();
 });
+
+test("reference: search by name, save the selected record and follow its link", async ({ page }) => {
+  await signIn(page);
+  await open(page, "Ontology", "Objects");
+  await page.getByRole("link", { name: "Opportunities" }).click();
+  await page.getByRole("link", { name: "Press line retrofit" }).click();
+  await page.getByRole("button", { name: /Customer.*Northwind Tools/ }).click();
+  await page.getByRole("combobox", { name: "Customer", exact: true }).fill("Hart");
+  await page.getByRole("option", { name: /Hartmann/ }).click();
+  await expect(page.getByRole("link", { name: "Hartmann Fabrication", exact: true })).toBeVisible();
+  await page.reload();
+  const customer = page.getByRole("link", { name: "Hartmann Fabrication", exact: true });
+  await expect(customer).toBeVisible();
+  await customer.hover();
+  await expect(page.getByRole("heading", { name: "Hartmann Fabrication", exact: true })).toBeVisible();
+  await customer.click();
+  await expect(page.getByRole("heading", { level: 1, name: "Hartmann Fabrication", exact: true })).toBeVisible();
+});

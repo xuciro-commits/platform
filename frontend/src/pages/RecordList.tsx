@@ -18,6 +18,7 @@ type Back = { href: string; label: string };
 type Stamp = { at?: string };
 type Formats = Record<string, Api.FieldFormat>;
 const formatted = "__formats";
+const referenced = "__refs";
 const formats = (row: Row) => (row[formatted] as Formats | undefined) ?? {};
 
 function keyOf(field: Api.FieldInfo | undefined, title: string) {
@@ -28,8 +29,11 @@ function keyOf(field: Api.FieldInfo | undefined, title: string) {
 function shape(described: Described, declared: Declared, listPath: string, move?: Move, bulk?: ListShape<Api.RecordPage, Row>["bulk"], accepts?: (id: string, to: string) => boolean): ListShape<Api.RecordPage, Row> {
   const lifecycle = described.lifecycle;
   const states = lifecycle?.states ?? [];
-  const say = (field: Api.FieldInfo) => (row: Row) =>
-    field.name === lifecycle?.field ? t(described.state(row)?.title ?? present(field, row[field.name])) : present(field, row[field.name]);
+  const say = (field: Api.FieldInfo) => (row: Row) => {
+    const label = field.type === "reference" ? (row[referenced] as Api.RecordPage["refs"])?.[field.name]?.[String(row[field.name])] : undefined;
+    if (label) return label;
+    return field.name === lifecycle?.field ? t(described.state(row)?.title ?? present(field, row[field.name])) : present(field, row[field.name]);
+  };
   const dot = (field: Api.FieldInfo) => (row: Row) => {
     const tone = field.name === lifecycle?.field ? described.state(row)?.tone : formats(row)[field.name]?.tone;
     return tone ? (dots as Record<string, Dot | undefined>)[tone] ?? dots.neutral : undefined;
@@ -41,7 +45,7 @@ function shape(described: Described, declared: Declared, listPath: string, move?
     about: declared.about,
     move,
     bulk,
-    rows: (answer) => (answer.records as Row[]).map((row) => ({ ...row, [formatted]: answer.formats?.[String(row.id)] })),
+    rows: (answer) => (answer.records as Row[]).map((row) => ({ ...row, [formatted]: answer.formats?.[String(row.id)], [referenced]: answer.refs })),
     id: (row) => String(row.id),
     link: (row) => `${listPath}/${encodeURIComponent(String(row.id))}`,
     columns: [
@@ -121,6 +125,7 @@ export function Records({ declared, listPath, id, back }: { declared: Declared; 
   if (described && id) {
     return (
       <RecordPage
+        key={id}
         described={described}
         id={decodeURIComponent(id)}
         listPath={listPath}

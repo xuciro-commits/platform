@@ -42,10 +42,10 @@ function Loading() {
   );
 }
 
-function Rail({ described, editor, kept }: { described: Described; editor: Editor; kept: Kept }) {
+function Rail({ described, editor, kept, refs }: { described: Described; editor: Editor; kept: Kept; refs?: Api.RecordView["refs"] }) {
   return (
     <VStack gap={6}>
-      <FieldGroup described={described} editor={editor} sections={[{ title: "Properties", fields: described.aside }]} direction="vertical" />
+      <FieldGroup described={described} editor={editor} sections={[{ title: "Properties", fields: described.aside }]} direction="vertical" refs={refs} />
       <VStack gap={4}>
         <Heading level={3}>{t("Record")}</Heading>
         <MetadataList>
@@ -118,7 +118,8 @@ export function RecordPage({ described, id, listPath, listTitle, instances }: Re
     [read],
   );
   const kept = read.status === "ready" ? (read.data.record as Kept) : undefined;
-  const editor = useEditor(described.edit, id, values, kept?.revision ?? 0);
+  const refs = read.status === "ready" ? read.data.refs : undefined;
+  const editor = useEditor(described, id, values, kept?.revision ?? 0);
   const state = described.state(values);
   const status = kept?.archived ? { tone: "neutral", title: "Archived" } : state;
   const name = described.name(values, id);
@@ -225,17 +226,17 @@ export function RecordPage({ described, id, listPath, listTitle, instances }: Re
           {kept && tab === "details" && (
             <VStack gap={6}>
               {refusal && <Banner status="error" title={t("Not done")} description={refusal} />}
-              <FieldGroup described={described} editor={editor} sections={described.sections} direction="horizontal-labels" focusEmpty={fresh} />
+              <FieldGroup described={described} editor={editor} sections={described.sections} direction="horizontal-labels" focusEmpty={fresh} refs={refs} />
             </VStack>
           )}
           {kept && tab === "activity" && <History described={described} id={id} />}
-          {kept && tab === "properties" && <Rail described={described} editor={editor} kept={kept} />}
+          {kept && tab === "properties" && <Rail described={described} editor={editor} kept={kept} refs={refs} />}
         </LayoutContent>
       }
       end={
         kept && !narrow ? (
           <LayoutPanel width={340} padding={6} role="complementary" hasDivider>
-            <Rail described={described} editor={editor} kept={kept} />
+            <Rail described={described} editor={editor} kept={kept} refs={refs} />
           </LayoutPanel>
         ) : undefined
       }
