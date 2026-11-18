@@ -20,23 +20,24 @@
 ## 0 清场
 
 - **0.2 夹具补齐**〔定式〕
-  做：商机加分节（Commercial、Delivery）、旁栏字段（owner、stage）、选项标题、明细行字段 items（product、quantity、price）、
-  引用字段 customer、只在 stage 为 lost 时出现的 lossReason；客户与商机各补到 20 条。宿主不收某个属性就停下上报。
-  验收：`make frontend-host` 灌入无错；`/v1/entities` 里商机的字段带 group、aside、choiceTitles、fields、when。
+  做：用宿主现在收的属性：商机加只在 stage 为 lost 时出现的 lossReason（`when`），状态带语气与说明；客户与商机各补到 20 条。
+  customer 暂不改成引用：值会变成标识，1.4.3 之前界面只能显示标识。
+  验收：`make frontend-host` 灌入无错；`/v1/entities` 里商机的 lossReason 带 when。
 
 ## 1.2 界面描述〔灵魂〕
 
 目标：表现不再各自猜布局。类型描述里的每个属性（分节、旁栏、只读、条件显示、选项标题、明细行的列）在所有页面一次生效。
 
-- **1.2.1 立 describe**〔灵魂〕
-  做：`src/pages/describe.ts`，输出见 frontend“运行时的核心”。RecordPage、RecordFields、RecordList、BoardView、Transitions 改读它；
-  删除各自的推断（`columnLimit`、`tabular`、可编辑集合、对 `lifecycle` 的直接读取）。
-  验收：trunk 现有两条通过；`grep -n "\.fields" frontend/src/pages` 只剩 describe.ts 与 ParameterInput.tsx。
+- **1.2.0 宿主：作者定义的字段带分节与旁栏**〔主会话〕高风险：发布与安装；宿主侧交由另一会话做
+  现状：内置类型的字段有 group、aside、choiceTitles、lines 子字段；作者定义的字段（`services/ontology/types.go` 的 Field）没有，
+  所以业务类型的界面用不上。做：group、aside 加成可选属性并随发布进类型描述；选项标题与明细行先核对、给出建议，由主会话与负责人定。
+  验收：`make contract` 后作者定义的字段在 `/v1/entities` 带 group、aside；旧的已发布类型读出来不变；`make check`、`make packages`。
+  之后：夹具给商机加分节（Commercial、Delivery）与旁栏字段（owner、stage）。明细行的定法若改为“子对象加引用”，同步改 1.4.2、1.6.2 与 ux。
 - **1.2.2 值的显示只有一处**〔执行者〕
   做：`values.ts` 的 `present(字段, 值, 格式)` 照 design“数据怎样显示”逐行实现：选项取标题并按宿主 `formats` 的语气画状态点，
   金额千分位、等宽、右对齐、带币种，日期相对时间、悬停绝对时间，布尔对勾，空值留空，标识等宽次要色。表格、只读区、看板卡共用。
   验收：trunk：商机列表 Stage 列显示标题加状态点，Amount 列带币种。
-- **1.2.3 记录页按分节**〔灵魂〕依赖 1.2.1
+- **1.2.3 记录页按分节**〔灵魂〕依赖 1.2.0
   做：字段区按分节排成带标题的组；旁栏字段进右栏“属性”组，同样就地编辑；只读字段只显示值；`when` 不满足的字段不出现。
   验收：trunk：Press line retrofit 有 Commercial 分节标题，右栏能改 Owner。负责人六步。
 - **1.2.4 条件显示即时**〔执行者〕依赖 1.2.3

@@ -5,6 +5,7 @@ import { t } from "../i18n";
 import { navigate, usePath } from "../router";
 import { ActionDialog } from "./ActionDialog";
 import { type BulkAction, type ListShape, ListView, type Move } from "./ListPage";
+import { type Described, describe, numeric } from "./describe";
 import { RecordPage } from "./RecordPage";
 import { dots } from "./Transitions";
 import { shown } from "./values";
@@ -12,23 +13,15 @@ import { shown } from "./values";
 type Row = Record<string, unknown>;
 type Declared = { type: string; title?: string; about: string; fields?: string[]; project?: boolean; instances?: { field: string; path: string } };
 type Back = { href: string; label: string };
-const tabular = new Set(["text", "integer", "decimal", "money", "date", "datetime", "boolean", "choice", "reference", "tags"]);
-const numeric = new Set(["integer", "decimal", "money"]);
 type Stamp = { at?: string };
-const columnLimit = 6;
 
-function shape(described: Api.EntityInfo, declared: Declared, listPath: string, move?: Move, bulk?: BulkAction[], edit?: Api.Action): ListShape<Api.RecordPage, Row> {
-  const candidates = described.fields.filter((field) => tabular.has(field.type));
-  const lead = candidates.filter((field) => field.name === described.display);
-  const rest = candidates.filter((field) => field.name !== described.display);
+function shape(described: Described, declared: Declared, listPath: string, move?: Move, bulk?: BulkAction[]): ListShape<Api.RecordPage, Row> {
   const lifecycle = described.lifecycle;
   const states = lifecycle?.states ?? [];
   const say = (field: Api.FieldInfo) => (row: Row) =>
-    field.name === lifecycle?.field ? t(states.find((state) => state.name === row[field.name])?.title ?? shown(row[field.name])) : shown(row[field.name]);
+    field.name === lifecycle?.field ? t(described.state(row)?.title ?? shown(row[field.name])) : shown(row[field.name]);
   const marks = Object.fromEntries(states.map((state) => [t(state.title), dots[state.tone ?? "neutral"]]));
-  const chosen = declared.fields
-    ? declared.fields.flatMap((name) => described.fields.filter((field) => field.name === name))
-    : [...lead, ...rest].slice(0, columnLimit);
+  const chosen = declared.fields ? declared.fields.flatMap((name) => described.field(name) ?? []) : described.columns;
   return {
     title: declared.title ?? described.plural,
     about: declared.about,
@@ -49,14 +42,12 @@ function shape(described: Api.EntityInfo, declared: Declared, listPath: string, 
       })),
       { key: "changed", header: "Updated", width: 140, kind: "time" as const, text: (row: Row) => (row.changed as Stamp | undefined)?.at ?? "" },
     ],
-    groups: described.fields
-      .filter((field) => field.type === "choice")
-      .map((field) => ({
-        key: field.name,
-        label: field.title,
-        of: say(field),
-        order: edit?.payload.some((parameter) => parameter.name === field.name) ? field.choices : undefined,
-      })),
+    groups: described.groups.map((field) => ({
+      key: field.name,
+      label: field.title,
+      of: say(field),
+      order: described.lanes.includes(field) ? field.choices : undefined,
+    })),
   };
 }
 
@@ -72,10 +63,10 @@ export function Records({ declared, listPath, id, back }: { declared: Declared; 
   const types = useRead<Api.EntityInfo[]>("/v1/entities");
   const actions = useRead<Api.Action[]>("/v1/actions");
   const [creating, setCreating] = useState(false);
-  const described = types.status === "ready" ? types.data.find((candidate) => candidate.type === declared.type) : undefined;
+  const entity = types.status === "ready" ? types.data.find((candidate) => candidate.type === declared.type) : undefined;
+  const described = useMemo(() => (entity && actions.status === "ready" ? describe(entity, actions.data) : undefined), [entity, actions]);
   const records = useRead<Api.RecordPage>(described && !id ? `/v1/records/${declared.type}?limit=200` : null);
-  const act = (name: string) => (actions.status === "ready" ? actions.data.find((action) => action.schema === `${declared.type}.${name}`) : undefined);
-  const edit = act("edit");
+  const edit = described?.edit;
   const kept = records.status === "ready" ? (records.data.records as Row[]) : undefined;
   const move = useMemo(
     () =>
@@ -84,7 +75,7 @@ export function Records({ declared, listPath, id, back }: { declared: Declared; 
         : undefined,
     [edit, kept],
   );
-  const archive = act("archive");
+  const archive = described?.other.find((action) => action.schema === `${declared.type}.archive`);
   const bulk = useMemo(
     () =>
       archive && kept
@@ -99,21 +90,21 @@ export function Records({ declared, listPath, id, back }: { declared: Declared; 
         : undefined,
     [archive, kept],
   );
-  const definition = useMemo(() => (described ? shape(described, declared, listPath, move, bulk, edit) : pending), [described, declared, listPath, pending, move, bulk, edit]);
-  const create = act("create");
+  const definition = useMemo(() => (described ? shape(described, declared, listPath, move, bulk) : pending), [described, declared, listPath, pending, move, bulk]);
+  const create = described?.create;
   if (described && id) {
-    return <RecordPage
+    return (
+      <RecordPage
         described={described}
         id={decodeURIComponent(id)}
         listPath={listPath}
         listTitle={declared.title ?? described.plural}
-        edit={edit}
-        actions={actions.status === "ready" ? actions.data : []}
         instances={declared.instances}
-      />;
+      />
+    );
   }
   const missing: Read<Api.RecordPage> = { status: "error", reason: t("This type is not published in this workspace.") };
-  const read: Read<Api.RecordPage> = types.status !== "ready" ? types : described ? records : missing;
+  const read: Read<Api.RecordPage> = types.status !== "ready" ? types : actions.status !== "ready" ? actions : described ? records : missing;
   return (
     <>
       <ListView
@@ -125,7 +116,7 @@ export function Records({ declared, listPath, id, back }: { declared: Declared; 
       {creating && create && described && (
         <ActionDialog
           action={create}
-          described={described}
+          described={described.entity}
           heading={t(create.title)}
           confirm={t("Create")}
           revision={0}
