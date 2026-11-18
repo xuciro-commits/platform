@@ -2,7 +2,7 @@ package build
 
 import (
 	"encoding/json"
-	appsauthoring "platformserver/services/apps/authoring"
+	"platformserver/kernel/protocol"
 	"slices"
 	"strings"
 	"time"
@@ -45,7 +45,7 @@ func (b *Build) resourceEntities() []platform.Entity {
 		{Type: ResourceType, Title: "Resource", Plural: "Resources", Model: Resource{}, Display: "title", Scope: platform.Scope{Default: platform.ScopeTenant}},
 		{Type: FolderType, Title: "Folder", Plural: "Folders", Model: Folder{}, Display: "name", Scope: platform.Scope{Default: platform.ScopeTenant}, Standard: platform.Standard{Create: true, Edit: true, Archive: true, Roles: []string{Builder}, Capability: "resources"}, Validate: func(c platform.Caller, record any) *platform.Error {
 			folder := record.(*Folder)
-			project, found := platform.Get[appsauthoring.Application](c, folder.Project)
+			project, found := platform.Get[protocol.Application](c, folder.Project)
 			if !found || project.Archived || !canEditProject(c, folder.Project) {
 				return platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "Choose a project you can edit")
 			}
@@ -142,7 +142,7 @@ func (b *Build) submitResource(c platform.Caller, s *pb.Submission, now time.Tim
 			}
 			for _, item := range input.Assignments {
 				resource, known := platform.Get[Resource](c, item.ID)
-				project, exists := platform.Get[appsauthoring.Application](c, item.Project)
+				project, exists := platform.Get[protocol.Application](c, item.Project)
 				if !known || resource.Project != WorkspaceProject || !exists || project.Archived || item.Project == WorkspaceProject {
 					return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The legacy resource project assignment is stale")
 				}
@@ -172,14 +172,14 @@ func (b *Build) submitResource(c platform.Caller, s *pb.Submission, now time.Tim
 			seen := map[string]bool{}
 			for _, item := range input.Entries {
 				resource, known := platform.Get[Resource](c, item.ID)
-				project, exists := platform.Get[appsauthoring.Application](c, item.Project)
+				project, exists := platform.Get[protocol.Application](c, item.Project)
 				if !known || !exists || project.Archived || item.Project == "" || seen[item.ID] {
 					return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The resource ownership request is stale")
 				}
 				if item.Version != resource.Version {
 					return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The resource ownership request is stale")
 				}
-				if resource.Type == AppType && resource.Draft == resource.Project && item.Project != resource.Project {
+				if resource.Type == protocol.AppType && resource.Draft == resource.Project && item.Project != resource.Project {
 					return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "A project application keeps its project identity")
 				}
 				if resource.Folder != "" && item.Project != resource.Project {
@@ -206,7 +206,7 @@ func (b *Build) submitResource(c platform.Caller, s *pb.Submission, now time.Tim
 			if json.Unmarshal(s.GetPayload(), &input) != nil {
 				return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Choose a destination project and folder")
 			}
-			project, exists := platform.Get[appsauthoring.Application](c, input.Project)
+			project, exists := platform.Get[protocol.Application](c, input.Project)
 			if !exists || project.Archived || !canEditProject(c, resource.Project) || !canEditProject(c, input.Project) {
 				return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "Moving a resource requires editing both projects")
 			}
@@ -231,10 +231,10 @@ func (b *Build) submitResource(c platform.Caller, s *pb.Submission, now time.Tim
 }
 
 func (b *Build) ensureWorkspace(c platform.Caller, r *pb.ChangeRecord) {
-	if _, exists := platform.Get[appsauthoring.Application](c, WorkspaceProject); !exists {
-		c.Put(r, appsauthoring.Application{Record: platform.Record{ID: WorkspaceProject}, Name: WorkspaceProject, Title: "Workspace", Pages: []string{}, State: "draft"})
+	if _, exists := platform.Get[protocol.Application](c, WorkspaceProject); !exists {
+		c.Put(r, protocol.Application{Record: platform.Record{ID: WorkspaceProject}, Name: WorkspaceProject, Title: "Workspace", Pages: []string{}, State: "draft"})
 		ref := platform.AssetRef{App: ID, Kind: platform.AssetApp, Name: WorkspaceProject}
-		c.Put(r, Resource{Record: platform.Record{ID: platform.ResourceID(c.Tenant, ref)}, Ref: ref, Type: AppType, Draft: WorkspaceProject, Project: WorkspaceProject, Title: "Workspace", State: "active", Version: 1})
+		c.Put(r, Resource{Record: platform.Record{ID: platform.ResourceID(c.Tenant, ref)}, Ref: ref, Type: protocol.AppType, Draft: WorkspaceProject, Project: WorkspaceProject, Title: "Workspace", State: "active", Version: 1})
 	}
 }
 
@@ -270,7 +270,7 @@ func (b *Build) trackResource(c platform.Caller, r *pb.ChangeRecord, typ, id str
 	resource, exists := platform.Get[Resource](c, rid)
 	if !exists {
 		project := submissionProject(r.GetSubmission())
-		if typ == AppType {
+		if typ == protocol.AppType {
 			project = id
 		}
 		if project == "" {
@@ -278,7 +278,7 @@ func (b *Build) trackResource(c platform.Caller, r *pb.ChangeRecord, typ, id str
 		}
 		resource = Resource{Record: platform.Record{ID: rid}, Ref: ref, Type: typ, Draft: id, Project: project}
 	}
-	if typ == AppType {
+	if typ == protocol.AppType {
 		resource.Project = id
 	}
 	if resource.Project == "" {
@@ -344,7 +344,7 @@ func (b *Build) saveResource(c platform.Caller, s *pb.Submission, now time.Time)
 		} else if json.Unmarshal(s.GetPayload(), &input) != nil {
 			return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Choose a resource type, identity and definition")
 		}
-		if typ != AppType {
+		if typ != protocol.AppType {
 			var spec map[string]json.RawMessage
 			if json.Unmarshal(input.Spec, &spec) == nil {
 				if raw, exists := spec["project"]; exists {
@@ -397,7 +397,7 @@ func (b *Build) saveResource(c platform.Caller, s *pb.Submission, now time.Time)
 				return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "Managed resources are read-only; create an extension")
 			}
 		}
-		if typ == AppType {
+		if typ == protocol.AppType {
 			if input.Project == "" {
 				input.Project = id
 			}
@@ -419,7 +419,7 @@ func (b *Build) saveResource(c platform.Caller, s *pb.Submission, now time.Time)
 				return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Choose the project that owns this resource")
 			}
 			if !c.Replaying {
-				project, exists := platform.Get[appsauthoring.Application](c, input.Project)
+				project, exists := platform.Get[protocol.Application](c, input.Project)
 				if (!exists || project.Archived) && !c.Automation {
 					return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Choose an existing project")
 				}
@@ -446,7 +446,7 @@ func (b *Build) saveResource(c platform.Caller, s *pb.Submission, now time.Time)
 				break
 			}
 		}
-		if typ == PageType {
+		if typ == protocol.PageType {
 			entity = b.apps.PageDraftEntity()
 		}
 		if typ == AgentType {
@@ -498,7 +498,7 @@ func (b *Build) projectFromSpec(c platform.Caller, typ string, spec json.RawMess
 	}
 	names := []string{}
 	switch typ {
-	case ActionTypeType, PageType, QueryType, LinkTypeType, PropertyTypeType, ValueTypeType:
+	case ActionTypeType, protocol.PageType, QueryType, LinkTypeType, PropertyTypeType, ValueTypeType:
 		names = append(names, value.Object, value.Parent)
 	default:
 		return ""

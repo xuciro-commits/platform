@@ -6,7 +6,6 @@ import (
 
 	"platformserver/kernel/records"
 	"platformserver/platform"
-	appsauthoring "platformserver/services/apps/authoring"
 	"platformserver/services/resources/publication"
 )
 
@@ -52,4 +51,8 @@ func (e appEnvironment) CheckName(name, id string) error {
 	return e.b.checkName(name, id)
 }
 
-var _ appsauthoring.Environment = appEnvironment{}
+type ApplicationOwners struct {
+	New            func(publication.ApplicationEnvironment) publication.ApplicationAuthoring
+	ObjectPage     func(ontology.Object, string) platform.Page
+	ListDetailPage func(string, string, string, platform.AssetRef, []string, []string, []platform.AssetRef) platform.Page
+}

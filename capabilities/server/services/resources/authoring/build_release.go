@@ -3,7 +3,7 @@ package build
 import (
 	"encoding/json"
 	"fmt"
-	appsauthoring "platformserver/services/apps/authoring"
+	"platformserver/kernel/protocol"
 
 	"reflect"
 	"slices"
@@ -89,7 +89,7 @@ func (b *Build) ReleaseAssets() ([]platform.ReleaseAsset, error) {
 	return b.data.BindReleaseAssets(assets)
 }
 
-func (b *Build) releaseInventory() ([]ontology.Object, []appsauthoring.Page, []appsauthoring.Application, error) {
+func (b *Build) releaseInventory() ([]ontology.Object, []protocol.Page, []protocol.Application, error) {
 	if b.host == nil {
 		return nil, nil, nil, fmt.Errorf("builder has no host")
 	}
@@ -156,10 +156,10 @@ func (b *Build) objectInstallationPages(record ontology.Object) ([]platform.Page
 	if explicit {
 		return nil, "", nil
 	}
-	return []platform.Page{appsauthoring.CompileObjectPage(record, ID)}, record.Name, nil
+	return []platform.Page{b.application.ObjectPage(record, ID)}, record.Name, nil
 }
 
-func (b *Build) releaseAssets(objects []ontology.Object, pages []appsauthoring.Page, apps []appsauthoring.Application, processes []automationauthoring.Process, sourceVersion string) ([]platform.ReleaseAsset, error) {
+func (b *Build) releaseAssets(objects []ontology.Object, pages []protocol.Page, apps []protocol.Application, processes []automationauthoring.Process, sourceVersion string) ([]platform.ReleaseAsset, error) {
 	var assets []platform.ReleaseAsset
 	index := map[platform.AssetRef]int{}
 	add := func(asset platform.ReleaseAsset, replacesGeneratedPage bool) error {
@@ -176,7 +176,9 @@ func (b *Build) releaseAssets(objects []ontology.Object, pages []appsauthoring.P
 	}
 	if err := ontology.AppendObjectAssets(objects, sourceVersion, add, b.resolver.WithDependencies, func(object ontology.Object) []platform.Action {
 		return objectActions(object, Entity(object))
-	}, b.apps.ObjectPageAsset); err != nil {
+	}, func(object ontology.Object, version string) (platform.ReleaseAsset, error) {
+		return b.apps.PageAssetFromView(b.application.ObjectPage(object, ID), version)
+	}); err != nil {
 		return nil, err
 	}
 
@@ -184,7 +186,7 @@ func (b *Build) releaseAssets(objects []ontology.Object, pages []appsauthoring.P
 		if record.Archived || record.Published == "" {
 			continue
 		}
-		var saved appsauthoring.Page
+		var saved protocol.Page
 		if err := json.Unmarshal([]byte(record.Published), &saved); err != nil {
 			return nil, fmt.Errorf("invalid published page %s: %w", record.ID, err)
 		}
@@ -203,7 +205,7 @@ func (b *Build) releaseAssets(objects []ontology.Object, pages []appsauthoring.P
 		if record.Archived || record.Published == "" {
 			continue
 		}
-		var saved appsauthoring.Application
+		var saved protocol.Application
 		if err := json.Unmarshal([]byte(record.Published), &saved); err != nil {
 			return nil, fmt.Errorf("invalid published application %s: %w", record.ID, err)
 		}

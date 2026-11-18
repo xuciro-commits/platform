@@ -6,7 +6,6 @@ import (
 	"strings"
 
 	"platformserver/platform"
-	appsauthoring "platformserver/services/apps/authoring"
 	dataowner "platformserver/services/data"
 	functionauthoring "platformserver/services/functions/authoring"
 	ontology "platformserver/services/ontology"
@@ -32,6 +31,7 @@ type DefinitionVisibility struct {
 	ObservationSourceActive   func(id string) bool
 	CheckQuery                func(q platform.NamedQuery, info platform.EntityInfo) error
 	Page                      func(def platform.Definition) (platform.Definition, bool)
+	ProjectApplication        func(platform.Definition, publication.ApplicationProjection) (platform.Definition, bool)
 	VisibleQuery              func(q platform.NamedQuery, entities map[string]platform.EntityInfo) (platform.NamedQuery, bool)
 	FilterNavigation          func([]platform.Definition) []platform.Definition
 	FilterExplorationAssets   func([]platform.Definition) []platform.Definition
@@ -242,12 +242,12 @@ func (v DefinitionVisibility) Project() []platform.Definition {
 			}
 		}
 	}
-	applications := appsauthoring.ApplicationProjection{Member: m, Resolver: v.Resolver, Definitions: out, Entities: entities, Pages: opens, Resources: visibleResources, PublishedFlows: publishedFlows}
+	applications := publication.ApplicationProjection{Member: m, Resolver: v.Resolver, Definitions: out, Entities: entities, Pages: opens, Resources: visibleResources, PublishedFlows: publishedFlows}
 	for _, registered := range v.Registered {
 		if !v.OwnerActive(registered.Ref.App) || v.ApplicationEntryWithdrawn(registered.Ref) {
 			continue
 		}
-		if def, ok := appsauthoring.ProjectApplication(registered, applications); ok {
+		if def, ok := v.ProjectApplication(registered, applications); ok {
 			if index := slices.IndexFunc(out, func(candidate platform.Definition) bool { return candidate.Ref == def.Ref }); index >= 0 {
 				out[index] = def
 			} else {

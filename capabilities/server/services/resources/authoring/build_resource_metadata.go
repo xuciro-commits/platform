@@ -2,6 +2,7 @@ package build
 
 import (
 	"fmt"
+	"platformserver/kernel/protocol"
 	functionauthoring "platformserver/services/functions/authoring"
 	"slices"
 
@@ -102,11 +103,11 @@ var resourceDescriptors = []resourceDescriptor{
 		presentations: []resourcePresentation{presented("action", "action-type", "Action type", "Action types", 1)},
 	},
 	{
-		app: ID, typ: PageType, kind: platform.AssetPage, family: recordResources, released: true, defaultDraft: true, directInstall: true, acceptedPublication: true,
+		app: ID, typ: protocol.PageType, kind: platform.AssetPage, family: recordResources, released: true, defaultDraft: true, directInstall: true, acceptedPublication: true,
 		presentations: []resourcePresentation{withPageRoute(presented("page", "module", "Page", "Pages", 10))},
 	},
 	{
-		app: ID, typ: AppType, kind: platform.AssetApp, family: recordResources, released: true, defaultDraft: true, directInstall: true, acceptedPublication: true,
+		app: ID, typ: protocol.AppType, kind: platform.AssetApp, family: recordResources, released: true, defaultDraft: true, directInstall: true, acceptedPublication: true,
 		presentations: []resourcePresentation{releaseOnly("app", "project", "Application", "Applications", 30)},
 	},
 	{

@@ -3,6 +3,7 @@ package host
 import (
 	"context"
 	"encoding/json"
+	"platformserver/kernel/protocol"
 
 	"slices"
 	"testing"
@@ -16,7 +17,7 @@ import (
 func TestInvariantK9PackageRetireAndReinstallPreserveData(t *testing.T) {
 	source := newInvariantTenant(t, "package-lifecycle-source")
 	source.accept(t, "build.object.create", build.ObjectType, "OBJ1", invariantObject("alpha", "Alpha"))
-	source.accept(t, "build.app.create", build.AppType, "APP1", map[string]any{
+	source.accept(t, "build.app.create", protocol.AppType, "APP1", map[string]any{
 		"name": "alphaapp", "title": "Alpha application",
 		"resources": []platform.AssetRef{{App: build.ID, Kind: platform.AssetObject, Name: "build.alpha"}},
 	})

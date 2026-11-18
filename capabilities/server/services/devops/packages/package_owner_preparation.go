@@ -9,6 +9,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"platformserver/kernel/protocol"
 
 	"slices"
 	"strings"
@@ -99,7 +100,7 @@ func Preparation(id, version string, blueprint platform.PackageBlueprint, instal
 		if err != nil {
 			return PackagePreparation{}, err
 		}
-		state, err := source.Find(build.AppType, root.Name)
+		state, err := source.Find(protocol.AppType, root.Name)
 		if err != nil {
 			return PackagePreparation{}, err
 		}

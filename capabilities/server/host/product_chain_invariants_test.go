@@ -2,6 +2,7 @@ package host
 
 import (
 	"encoding/json"
+	"platformserver/kernel/protocol"
 	"slices"
 	"testing"
 
@@ -14,7 +15,7 @@ func TestInvariantK7ProductVersionFreezesSavedCandidate(t *testing.T) {
 	live := newInvariantTenant(t, "invariant-product-chain")
 	object := invariantObject("alpha", "Alpha")
 	live.accept(t, build.ObjectType+".create", build.ObjectType, "OBJ1", object)
-	live.accept(t, build.AppType+".create", build.AppType, "APP1", map[string]any{
+	live.accept(t, protocol.AppType+".create", protocol.AppType, "APP1", map[string]any{
 		"name": "alphaapp", "title": "Alpha application",
 		"resources": []platform.AssetRef{{App: build.ID, Kind: platform.AssetObject, Name: "build.alpha"}},
 	})

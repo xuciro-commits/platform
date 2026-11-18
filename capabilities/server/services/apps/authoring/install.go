@@ -3,6 +3,7 @@ package authoring
 import (
 	"encoding/json"
 	"fmt"
+	"platformserver/kernel/protocol"
 	"slices"
 
 	"platformserver/platform"
@@ -10,7 +11,7 @@ import (
 )
 
 func (o *Owner) HandlesPublication(schema string) bool {
-	return schema == SchemaRelease || schema == SchemaHandOver
+	return schema == protocol.SchemaRelease || schema == protocol.SchemaHandOver
 }
 
 func (o *Owner) DecodeInstallation(schema string, image json.RawMessage) (platform.AssetInstallation, error) {
@@ -70,7 +71,7 @@ func (o *Owner) RestorePages() error {
 		return err
 	}
 	for _, p := range pages {
-		was, ok := publication.Read[Page](p.Published)
+		was, ok := publication.Read[protocol.Page](p.Published)
 		if !ok || p.Archived {
 			continue
 		}
@@ -79,7 +80,7 @@ func (o *Owner) RestorePages() error {
 		}
 	}
 	for _, p := range pages {
-		was, ok := publication.Read[Page](p.Published)
+		was, ok := publication.Read[protocol.Page](p.Published)
 		if !ok || p.Archived {
 			continue
 		}
@@ -96,7 +97,7 @@ func (o *Owner) RestoreApplications() error {
 		return err
 	}
 	for _, a := range applications {
-		was, ok := publication.Read[Application](a.Published)
+		was, ok := publication.Read[protocol.Application](a.Published)
 		if !ok || a.Archived {
 			continue
 		}
@@ -109,10 +110,10 @@ func (o *Owner) RestoreApplications() error {
 
 func (o *Owner) publicationKind(schema string) (string, platform.AssetKind, error) {
 	switch schema {
-	case SchemaRelease:
-		return PageType, platform.AssetPage, nil
-	case SchemaHandOver:
-		return AppType, platform.AssetApp, nil
+	case protocol.SchemaRelease:
+		return protocol.PageType, platform.AssetPage, nil
+	case protocol.SchemaHandOver:
+		return protocol.AppType, platform.AssetApp, nil
 	default:
 		return "", "", fmt.Errorf("not a page or application publication schema")
 	}
@@ -120,24 +121,24 @@ func (o *Owner) publicationKind(schema string) (string, platform.AssetKind, erro
 
 func (o *Owner) publicationDefinition(schema string, image []byte) (*platform.Page, *platform.Application, error) {
 	switch schema {
-	case SchemaRelease:
-		var record Page
+	case protocol.SchemaRelease:
+		var record protocol.Page
 		if err := json.Unmarshal(image, &record); err != nil {
 			return nil, nil, err
 		}
-		published, ok := publication.Read[Page](record.Published)
+		published, ok := publication.Read[protocol.Page](record.Published)
 		if !ok || record.State != "published" || record.ID != published.ID ||
 			record.Name != published.Name {
 			return nil, nil, fmt.Errorf("accepted page has no published definition")
 		}
 		page := Descriptor(published, o.env.AppID(), o.env.Version())
 		return &page, nil, nil
-	case SchemaHandOver:
-		var record Application
+	case protocol.SchemaHandOver:
+		var record protocol.Application
 		if err := json.Unmarshal(image, &record); err != nil {
 			return nil, nil, err
 		}
-		published, ok := publication.Read[Application](record.Published)
+		published, ok := publication.Read[protocol.Application](record.Published)
 		if !ok || record.State != "published" || record.ID != published.ID ||
 			record.Name != published.Name {
 			return nil, nil, fmt.Errorf("accepted application has no published definition")

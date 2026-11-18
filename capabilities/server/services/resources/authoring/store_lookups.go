@@ -2,7 +2,7 @@ package build
 
 import (
 	"encoding/json"
-	appsauthoring "platformserver/services/apps/authoring"
+	"platformserver/kernel/protocol"
 	"slices"
 	"strings"
 
@@ -20,8 +20,8 @@ func StoreResourceRow(store *records.Store, tenant string, ref platform.AssetRef
 }
 
 func StoreProjectTitle(store *records.Store, project string) string {
-	if row, ok := store.LockedRow(AppType, project); ok {
-		return row.(appsauthoring.Application).Title
+	if row, ok := store.LockedRow(protocol.AppType, project); ok {
+		return row.(protocol.Application).Title
 	}
 	return ""
 }
@@ -32,7 +32,7 @@ func StoreApplicationEntryWithdrawn(store *records.Store, ref platform.AssetRef)
 	}
 	store.Lock()
 	defer store.Unlock()
-	entity := store.Type(AppType)
+	entity := store.Type(protocol.AppType)
 	if entity == nil {
 		return false
 	}

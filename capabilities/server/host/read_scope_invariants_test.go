@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"maps"
+	"platformserver/kernel/protocol"
 	"slices"
 	"testing"
 
@@ -173,7 +174,7 @@ func TestInvariantRecordAuthorizationOutsideTheReadScopeReadsTheRecord(t *testin
 	withSQLShapedReads(t, live, reads)
 	member := live.member(t)
 	c := platform.NewCaller(runtime{t: live.Tenant}, member, build.ID, false, false)
-	live.authorizeFrom(live.Projection, c, platform.AuthzRequest{Principal: member.ID, Tenant: live.ID, Kind: "action", Action: "build.app.create", Type: build.AppType, Record: "workspace"}, invariantClock, false)
+	live.authorizeFrom(live.Projection, c, platform.AuthzRequest{Principal: member.ID, Tenant: live.ID, Kind: "action", Action: "build.app.create", Type: protocol.AppType, Record: "workspace"}, invariantClock, false)
 	if reads.opened == 0 {
 		t.Fatal("the record authorization did not open the read scope")
 	}

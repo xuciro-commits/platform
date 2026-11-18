@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"maps"
+	"platformserver/kernel/protocol"
 	pageowner "platformserver/services/apps/pages"
 	"reflect"
 	"slices"
@@ -14,7 +15,7 @@ import (
 	"platformserver/services/resources/publication"
 )
 
-func Descriptor(p Page, app, version string) platform.Page {
+func Descriptor(p protocol.Page, app, version string) platform.Page {
 	owner, _, _ := strings.Cut(p.Object, ".")
 	value := platform.Page{Format: p.Format, Name: p.Name, Title: p.Title, Description: p.Description, Object: platform.AssetRef{App: owner, Kind: platform.AssetObject, Name: p.Object}, DataBindings: p.DataBindings, ActionTriggers: p.ActionTriggers, InputSchema: p.InputSchema, ScopeVisibility: p.ScopeVisibility, WidgetSpec: p.WidgetSpec}
 	raw, _ := json.Marshal(value)
@@ -22,7 +23,7 @@ func Descriptor(p Page, app, version string) platform.Page {
 	return value
 }
 
-func (o *Owner) PageAsset(p Page, sourceVersion string) (platform.ReleaseAsset, error) {
+func (o *Owner) PageAsset(p protocol.Page, sourceVersion string) (platform.ReleaseAsset, error) {
 	return o.env.Resolver().PageReleaseAsset(o.env.AppID(), sourceVersion, Descriptor(p, o.env.AppID(), o.env.Version()))
 }
 
@@ -30,17 +31,13 @@ func (o *Owner) PageAssetFromView(p platform.Page, sourceVersion string) (platfo
 	return o.env.Resolver().PageReleaseAsset(o.env.AppID(), sourceVersion, p)
 }
 
-func (o *Owner) ObjectPageAsset(object ontology.Object, sourceVersion string) (platform.ReleaseAsset, error) {
-	return o.env.Resolver().PageReleaseAsset(o.env.AppID(), sourceVersion, CompileObjectPage(object, o.env.AppID()))
-}
-
-func (o *Owner) PublishedPage(p Page) string {
+func (o *Owner) PublishedPage(p protocol.Page) string {
 	p.Published = ""
 	p.Versions = nil
 	return string(platform.Raw(p))
 }
 
-func (o *Owner) RetainPagePublication(p *Page) error {
+func (o *Owner) RetainPagePublication(p *protocol.Page) error {
 	snapshots := append(slices.Clone(p.Versions), p.Published, o.PublishedPage(*p))
 	kept := []string{}
 	seen := map[string]bool{}
@@ -48,7 +45,7 @@ func (o *Owner) RetainPagePublication(p *Page) error {
 		if raw == "" {
 			continue
 		}
-		saved, ok := publication.Read[Page](raw)
+		saved, ok := publication.Read[protocol.Page](raw)
 		if !ok || saved.ID != p.ID || saved.Name == "" || saved.Published != "" || len(saved.Versions) != 0 {
 			return fmt.Errorf("invalid original page publication history")
 		}
@@ -86,7 +83,7 @@ func (o *Owner) PageContent(name, version string) (platform.Page, bool) {
 			continue
 		}
 		for _, raw := range append(slices.Clone(p.Versions), p.Published) {
-			saved, ok := publication.Read[Page](raw)
+			saved, ok := publication.Read[protocol.Page](raw)
 			if !ok || saved.ID != p.ID || saved.Name == "" || saved.Published != "" || len(saved.Versions) != 0 {
 				return platform.Page{}, false
 			}
@@ -112,7 +109,7 @@ func (o *Owner) HasPublishedPage(name string) (bool, error) {
 		if record.Archived || record.Published == "" {
 			continue
 		}
-		saved, ok := publication.Read[Page](record.Published)
+		saved, ok := publication.Read[protocol.Page](record.Published)
 		if !ok {
 			return false, fmt.Errorf("invalid published page %s", record.ID)
 		}
@@ -123,72 +120,72 @@ func (o *Owner) HasPublishedPage(name string) (bool, error) {
 	return false, nil
 }
 
-func (o *Owner) PageFromDescriptor(pageDescriptor platform.Page) (Page, error) {
+func (o *Owner) PageFromDescriptor(pageDescriptor platform.Page) (protocol.Page, error) {
 	raw, err := json.Marshal(pageDescriptor)
 	if err != nil {
-		return Page{}, err
+		return protocol.Page{}, err
 	}
 	var original map[string]json.RawMessage
 	if err = json.Unmarshal(raw, &original); err != nil {
-		return Page{}, err
+		return protocol.Page{}, err
 	}
 	original["object"] = platform.Raw(pageDescriptor.Object.Name)
-	var frozen Page
+	var frozen protocol.Page
 	if err = json.Unmarshal(platform.Raw(original), &frozen); err != nil {
-		return Page{}, err
+		return protocol.Page{}, err
 	}
 	return frozen, nil
 }
 
-func (o *Owner) PreparePagePublication(asset platform.ReleaseAsset, all []platform.ReleaseAsset, current Page) (Page, bool, error) {
+func (o *Owner) PreparePagePublication(asset platform.ReleaseAsset, all []platform.ReleaseAsset, current protocol.Page) (protocol.Page, bool, error) {
 	if current.ID == "" {
 		generated, err := o.generatedReleasePage(asset, all)
 		if err != nil {
-			return Page{}, false, err
+			return protocol.Page{}, false, err
 		}
 		if generated {
-			return Page{}, true, nil
+			return protocol.Page{}, true, nil
 		}
 	}
 	var pageDescriptor platform.Page
 	if err := json.Unmarshal(asset.Body, &pageDescriptor); err != nil || pageDescriptor.Name != asset.Ref.Name {
-		return Page{}, false, fmt.Errorf("invalid saved page %s", asset.Ref)
+		return protocol.Page{}, false, fmt.Errorf("invalid saved page %s", asset.Ref)
 	}
-	if previous, ok := publication.Read[Page](current.Published); ok && !maps.Equal(pageFunctionBindings(pageDescriptor), pageFunctionBindings(Descriptor(previous, o.env.AppID(), o.env.Version()))) {
-		return Page{}, false, fmt.Errorf("page %s changes AI function bindings; publish the binding through its owner before release activation", asset.Ref)
+	if previous, ok := publication.Read[protocol.Page](current.Published); ok && !maps.Equal(pageFunctionBindings(pageDescriptor), pageFunctionBindings(Descriptor(previous, o.env.AppID(), o.env.Version()))) {
+		return protocol.Page{}, false, fmt.Errorf("page %s changes AI function bindings; publish the binding through its owner before release activation", asset.Ref)
 	}
 	frozen, err := o.PageFromDescriptor(pageDescriptor)
 	if err != nil {
-		return Page{}, false, fmt.Errorf("%w in page %s", err, asset.Ref)
+		return protocol.Page{}, false, fmt.Errorf("%w in page %s", err, asset.Ref)
 	}
 	frozen.Record = current.Record
 	frozen.Versions = slices.Clone(current.Versions)
 	frozen.Published = current.Published
 	if err := o.RetainPagePublication(&frozen); err != nil {
-		return Page{}, false, err
+		return protocol.Page{}, false, err
 	}
 	current.State, current.Published, current.Versions = "published", frozen.Published, frozen.Versions
 	return current, false, nil
 }
 
-func (o *Owner) CheckPageDraft(record Page, validate bool) (Page, platform.AssetRef, platform.AssetRef, bool, error) {
+func (o *Owner) CheckPageDraft(record protocol.Page, validate bool) (protocol.Page, platform.AssetRef, platform.AssetRef, bool, error) {
 	var prior platform.AssetRef
 	hadPrior := false
-	if was, ok := publication.Read[Page](record.Published); ok {
+	if was, ok := publication.Read[protocol.Page](record.Published); ok {
 		prior = platform.AssetRef{App: o.env.AppID(), Kind: platform.AssetPage, Name: was.Name}
 		hadPrior = true
 	}
 	next := platform.AssetRef{App: o.env.AppID(), Kind: platform.AssetPage, Name: record.Name}
 	if err := o.checkPage(record); err != nil {
-		return Page{}, prior, next, hadPrior, err
+		return protocol.Page{}, prior, next, hadPrior, err
 	}
 	if validate {
 		if err := o.env.Host().ValidateInstallPage(Descriptor(record, o.env.AppID(), o.env.Version())); err != nil {
-			return Page{}, prior, next, hadPrior, err
+			return protocol.Page{}, prior, next, hadPrior, err
 		}
 	}
 	if err := o.RetainPagePublication(&record); err != nil {
-		return Page{}, prior, next, hadPrior, err
+		return protocol.Page{}, prior, next, hadPrior, err
 	}
 	return record, prior, next, hadPrior, nil
 }

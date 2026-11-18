@@ -1,6 +1,7 @@
 package build
 
 import (
+	"platformserver/kernel/protocol"
 	"slices"
 
 	"platformserver/platform"
@@ -33,7 +34,7 @@ func (r ResourceRows) Permission(m platform.Member, typ, id, kind string) (bool,
 			}
 		}
 		return true, false
-	case AppType:
+	case protocol.AppType:
 		project = id
 		if resource, ok := r.ForDraft(typ, id); ok {
 			project = resource.Project

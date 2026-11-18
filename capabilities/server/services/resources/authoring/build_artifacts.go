@@ -3,7 +3,7 @@ package build
 import (
 	"encoding/json"
 	"fmt"
-	appsauthoring "platformserver/services/apps/authoring"
+	"platformserver/kernel/protocol"
 	"platformserver/services/ontology"
 	"platformserver/services/resources/publication"
 	"slices"
@@ -42,8 +42,8 @@ func (b *Build) prepareReleasePublications(assets []platform.ReleaseAsset) ([]pl
 		preparedAsset := asset
 		switch asset.Ref.Kind {
 		case platform.AssetPage:
-			i := slices.IndexFunc(pages, func(p appsauthoring.Page) bool { return !p.Archived && p.Name == asset.Ref.Name })
-			current := appsauthoring.Page{Record: platform.Record{ID: asset.Ref.Name}, Name: asset.Ref.Name}
+			i := slices.IndexFunc(pages, func(p protocol.Page) bool { return !p.Archived && p.Name == asset.Ref.Name })
+			current := protocol.Page{Record: platform.Record{ID: asset.Ref.Name}, Name: asset.Ref.Name}
 			if i >= 0 {
 				current = pages[i]
 			}
@@ -54,11 +54,11 @@ func (b *Build) prepareReleasePublications(assets []platform.ReleaseAsset) ([]pl
 			if generated {
 				continue
 			}
-			if err := add(SchemaRelease, prepared); err != nil {
+			if err := add(protocol.SchemaRelease, prepared); err != nil {
 				return nil, nil, err
 			}
 		case platform.AssetApp:
-			i := slices.IndexFunc(apps, func(a appsauthoring.Application) bool { return !a.Archived && a.Name == asset.Ref.Name })
+			i := slices.IndexFunc(apps, func(a protocol.Application) bool { return !a.Archived && a.Name == asset.Ref.Name })
 			if i < 0 {
 				return nil, nil, fmt.Errorf("saved application %s has no matching draft", asset.Ref)
 			}
@@ -66,7 +66,7 @@ func (b *Build) prepareReleasePublications(assets []platform.ReleaseAsset) ([]pl
 			if err != nil {
 				return nil, nil, err
 			}
-			if err := add(SchemaHandOver, prepared); err != nil {
+			if err := add(protocol.SchemaHandOver, prepared); err != nil {
 				return nil, nil, err
 			}
 		}
@@ -126,7 +126,7 @@ type Draft struct {
 func (b *Build) releaseDraftsOf(candidate platform.ReleaseCandidate) ([]Draft, error) {
 	authored := map[string]bool{}
 	if b.host != nil {
-		pages, err := readDefinitionInventory[appsauthoring.Page](b.host.Automation(platform.Caller{}, ID))
+		pages, err := readDefinitionInventory[protocol.Page](b.host.Automation(platform.Caller{}, ID))
 		if err != nil {
 			return nil, err
 		}
@@ -190,7 +190,7 @@ func (b *Build) releaseDraftsOf(candidate platform.ReleaseCandidate) ([]Draft, e
 			if err != nil {
 				return nil, fmt.Errorf("%w in page %s", err, asset.Ref)
 			}
-			if err := add(PageType, p.Name, p); err != nil {
+			if err := add(protocol.PageType, p.Name, p); err != nil {
 				return nil, err
 			}
 		case platform.AssetApp:
@@ -198,7 +198,7 @@ func (b *Build) releaseDraftsOf(candidate platform.ReleaseCandidate) ([]Draft, e
 			if err != nil {
 				return nil, err
 			}
-			if err := add(AppType, a.Name, a); err != nil {
+			if err := add(protocol.AppType, a.Name, a); err != nil {
 				return nil, err
 			}
 		case platform.AssetFlow:

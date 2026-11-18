@@ -4,7 +4,7 @@ import (
 	"crypto/sha256"
 	"encoding/json"
 	"fmt"
-	appsauthoring "platformserver/services/apps/authoring"
+	"platformserver/kernel/protocol"
 	"reflect"
 	"slices"
 	"strings"
@@ -189,7 +189,7 @@ func (m Managed) Archive(r *pb.ChangeRecord) {
 		}
 	}
 	projectID, _ := m.Project()
-	if project, exists := platform.Get[appsauthoring.Application](m.Caller, projectID); exists {
+	if project, exists := platform.Get[protocol.Application](m.Caller, projectID); exists {
 		project.Archived = true
 		m.Caller.Put(r, project)
 	}
@@ -217,11 +217,11 @@ func (m Managed) Owned(code, owned []platform.ReleaseAsset) (map[platform.AssetR
 func (m Managed) Install(r *pb.ChangeRecord, refs map[platform.AssetRef]bool, plans []platform.AssetInstallation, media []platform.MediaSetVersion) {
 	tenant := m.Caller.Member.Tenant
 	projectID, projectName := m.Project()
-	project, _ := platform.Get[appsauthoring.Application](m.Caller, projectID)
+	project, _ := platform.Get[protocol.Application](m.Caller, projectID)
 	project.ID, project.Name, project.Title, project.State, project.Archived = projectID, projectName, m.Descriptor.Title, "published", false
 	m.Caller.Put(r, project)
 	projectRef := platform.AssetRef{App: build.ID, Kind: platform.AssetApp, Name: projectName}
-	m.Caller.Put(r, build.Resource{Record: platform.Record{ID: platform.ResourceID(tenant, projectRef)}, Ref: projectRef, Type: build.AppType, Draft: projectID, Project: projectID, Title: m.Descriptor.Title, State: "active", Version: 1, ManagedBy: m.Descriptor.ID})
+	m.Caller.Put(r, build.Resource{Record: platform.Record{ID: platform.ResourceID(tenant, projectRef)}, Ref: projectRef, Type: protocol.AppType, Draft: projectID, Project: projectID, Title: m.Descriptor.Title, State: "active", Version: 1, ManagedBy: m.Descriptor.ID})
 	for _, plan := range plans {
 		typ, id, _ := strings.Cut(plan.Record, "/")
 		value, err := m.Rows.Decode(typ, plan.Image)

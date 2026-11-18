@@ -6,7 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"maps"
-	appsauthoring "platformserver/services/apps/authoring"
+	"platformserver/kernel/protocol"
 	automationauthoring "platformserver/services/automate/authoring"
 	"platformserver/services/ontology"
 	"slices"
@@ -212,8 +212,8 @@ func findReleaseAsset(assets []platform.ReleaseAsset, ref platform.AssetRef) (pl
 
 type draftInventories struct {
 	objects   []ontology.Object
-	pages     []appsauthoring.Page
-	apps      []appsauthoring.Application
+	pages     []protocol.Page
+	apps      []protocol.Application
 	processes []automationauthoring.Process
 }
 
@@ -257,21 +257,21 @@ func (b *Build) applyRecordDraft(inv *draftInventories, table []publication.Hook
 			inv.processes[i] = prepared
 		}
 	case platform.AssetPage:
-		i := slices.IndexFunc(inv.pages, func(p appsauthoring.Page) bool { return p.ID == id && !p.Archived })
+		i := slices.IndexFunc(inv.pages, func(p protocol.Page) bool { return p.ID == id && !p.Archived })
 		if i < 0 {
 			return prior, next, false, fmt.Errorf("draft page %q not found", id)
 		}
-		var record appsauthoring.Page
+		var record protocol.Page
 		record, prior, next, hadPrior, err = b.apps.CheckPageDraft(inv.pages[i], !joint)
 		if err == nil {
 			inv.pages[i] = record
 		}
 	case platform.AssetApp:
-		i := slices.IndexFunc(inv.apps, func(a appsauthoring.Application) bool { return a.ID == id && !a.Archived })
+		i := slices.IndexFunc(inv.apps, func(a protocol.Application) bool { return a.ID == id && !a.Archived })
 		if i < 0 {
 			return prior, next, false, fmt.Errorf("draft application %q not found", id)
 		}
-		var record appsauthoring.Application
+		var record protocol.Application
 		record, prior, next, hadPrior, err = b.apps.CheckApplicationDraft(inv.apps[i], !joint)
 		if err == nil {
 			inv.apps[i] = record
@@ -414,7 +414,7 @@ func (b *Build) ReferencedDrafts(kind platform.AssetKind, id, owner string) ([]J
 				}
 			}
 		case platform.AssetPage:
-			i := slices.IndexFunc(pages, func(p appsauthoring.Page) bool { return p.ID == next.ID })
+			i := slices.IndexFunc(pages, func(p protocol.Page) bool { return p.ID == next.ID })
 			if i < 0 {
 				return nil, fmt.Errorf("no saved page draft %s", next.ID)
 			}
@@ -422,7 +422,7 @@ func (b *Build) ReferencedDrafts(kind platform.AssetKind, id, owner string) ([]J
 				dependencies[platform.AssetObject] = append(dependencies[platform.AssetObject], pages[i].Object)
 			}
 		case platform.AssetApp:
-			i := slices.IndexFunc(apps, func(a appsauthoring.Application) bool { return a.ID == next.ID })
+			i := slices.IndexFunc(apps, func(a protocol.Application) bool { return a.ID == next.ID })
 			if i < 0 {
 				return nil, fmt.Errorf("no saved application draft %s", next.ID)
 			}

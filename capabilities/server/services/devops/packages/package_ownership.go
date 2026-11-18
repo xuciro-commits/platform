@@ -1,7 +1,7 @@
 package packages
 
 import (
-	appsauthoring "platformserver/services/apps/authoring"
+	"platformserver/kernel/protocol"
 	"slices"
 	"strings"
 
@@ -37,16 +37,16 @@ func OwnershipFor(views []platform.PackageView, id, version string, store *recor
 	}
 	managed := Managed{Descriptor: view.Descriptor, Resources: Resources(store)}
 	projectID, _ := managed.Project()
-	var project *appsauthoring.Application
-	if row := store.Type(build.AppType).Rows().Get(projectID); row != nil {
-		application := row.Value.Interface().(appsauthoring.Application)
+	var project *protocol.Application
+	if row := store.Type(protocol.AppType).Rows().Get(projectID); row != nil {
+		application := row.Value.Interface().(protocol.Application)
 		project = &application
 	}
 	plan, err := managed.Ownership(project, owner)
 	return &plan, err
 }
 
-func (m Managed) Ownership(project *appsauthoring.Application, owner build.ConstructionDrafts) (PackageOwnership, error) {
+func (m Managed) Ownership(project *protocol.Application, owner build.ConstructionDrafts) (PackageOwnership, error) {
 	id, name := m.Project()
 	plan := PackageOwnership{ID: m.Descriptor.ID, Version: m.Descriptor.Version, Project: id, Name: name, Title: m.Descriptor.Title, CreateProject: project == nil, Entries: []PackageOwnershipEntry{}, Problems: []string{}}
 	if project != nil && project.Archived {
@@ -67,7 +67,7 @@ func (m Managed) Ownership(project *appsauthoring.Application, owner build.Const
 		if !refs[resource.Ref] || resource.ManagedBy == m.Descriptor.ID {
 			continue
 		}
-		if resource.Folder != "" || resource.Draft == resource.Project && resource.Type == build.AppType {
+		if resource.Folder != "" || resource.Draft == resource.Project && resource.Type == protocol.AppType {
 			plan.Problems = append(plan.Problems, "Move the resource out of its folder before rehoming it: "+resource.Ref.String())
 			continue
 		}

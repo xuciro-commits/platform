@@ -1,6 +1,7 @@
 package host
 
 import (
+	"platformserver/kernel/protocol"
 	"testing"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
@@ -13,7 +14,7 @@ func TestInvariantResourceOwnershipRehome(t *testing.T) {
 		ID: "admin", Roles: map[string]string{"platform": "admin", build.ID: build.Builder},
 	}}
 	live := newInvariantTenant(t, "invariant-resource-rehome", adminSeat)
-	live.accept(t, build.AppType+".create", build.AppType, "REHOMEPROJECT", map[string]any{"name": "rehomeproject", "title": "Rehome project"})
+	live.accept(t, protocol.AppType+".create", protocol.AppType, "REHOMEPROJECT", map[string]any{"name": "rehomeproject", "title": "Rehome project"})
 	live.accept(t, "build.object.create", build.ObjectType, "OBJ1", invariantObject("rehomeobject", "Rehome object"))
 	live.accept(t, "build.object.publish", build.ObjectType, "OBJ1", map[string]any{})
 	live.accept(t, "build.rehomeobject.create", "build.rehomeobject", "ROW1", map[string]any{"note": "Keep my record"})

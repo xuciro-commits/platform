@@ -2,6 +2,7 @@ package build
 
 import (
 	"encoding/json"
+	"platformserver/kernel/protocol"
 	"platformserver/kernel/records"
 	"platformserver/platform"
 	functionauthoring "platformserver/services/functions/authoring"
@@ -10,7 +11,7 @@ import (
 var publishedKinds = map[string]platform.AssetKind{
 	PropertyTypeType: platform.AssetPropertyType, ValueTypeType: platform.AssetValueType, ObjectTypeGroupType: platform.AssetObjectTypeGroup,
 	LinkTypeType: platform.AssetLinkType, QueryType: platform.AssetQuery, InterfaceType: platform.AssetInterface, ObjectType: platform.AssetObject,
-	PageType: platform.AssetPage, AppType: platform.AssetApp, ProcessType: platform.AssetFlow, functionauthoring.FunctionType: platform.AssetFunction,
+	protocol.PageType: platform.AssetPage, protocol.AppType: platform.AssetApp, ProcessType: platform.AssetFlow, functionauthoring.FunctionType: platform.AssetFunction,
 	functionauthoring.CodeType: platform.AssetCompute, functionauthoring.TableType: platform.AssetCompute,
 }
 

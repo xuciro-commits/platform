@@ -2,7 +2,7 @@ package branches
 
 import (
 	"encoding/json"
-	appsauthoring "platformserver/services/apps/authoring"
+	"platformserver/kernel/protocol"
 	functionauthoring "platformserver/services/functions/authoring"
 	"slices"
 	"strconv"
@@ -20,7 +20,7 @@ type Workspace struct {
 	List      func(m platform.Member, typ string, q platform.Query, now time.Time) ([]any, *platform.Error)
 	Fields    func(typ string) ([]platform.FieldInfo, bool)
 	Resources func() []build.Resource
-	Project   func(id string) (appsauthoring.Application, bool)
+	Project   func(id string) (protocol.Application, bool)
 	Role      func(m platform.Member, project string) string
 	Base      func() string
 	Stored    func(module string) bool
@@ -306,7 +306,7 @@ func (w Workspace) PrepareSave(m platform.Member, id, typ, draft string, request
 	}
 	project := request.Project
 	if op == "create" {
-		if typ == build.AppType {
+		if typ == protocol.AppType {
 			project = draft
 		}
 	} else {
@@ -328,7 +328,7 @@ func (w Workspace) PrepareSave(m platform.Member, id, typ, draft string, request
 	if previousProject := previous.Project; touched && previousProject != "" && previousProject != project {
 		return SavePlan{}, Refuse("A resource keeps the project recorded by its first branch change")
 	}
-	if op == "create" && typ == build.AppType {
+	if op == "create" && typ == protocol.AppType {
 		if !m.Holds("platform", "admin") && !build.HoldsIndependentRole(m, build.Builder) {
 			return SavePlan{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "Creating a project needs an independent builder")
 		}
@@ -539,7 +539,7 @@ func (w Workspace) Actions(plans []ResourcePlan) ([]Action, *platform.Error) {
 			switch {
 			case x.Action == "archive":
 				return 3
-			case x.Plan.Type == build.AppType:
+			case x.Plan.Type == protocol.AppType:
 				return 2
 			case x.Action == "edit":
 				return 1

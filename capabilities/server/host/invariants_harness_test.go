@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	appsauthoring "platformserver/services/apps/authoring"
 	"slices"
 	"sync/atomic"
 	"testing"
@@ -62,7 +63,7 @@ func newInvariantTenantReplayWithApps(tb testing.TB, id string, apps []platform.
 func seedInvariantProject(tb testing.TB, live *invariantTenant) {
 	tb.Helper()
 	live.project = invariantProject
-	live.accept(tb, build.AppType+".create", build.AppType, invariantProject, map[string]any{"name": "invariantproject", "title": "Invariant project"})
+	live.accept(tb, runtimeprotocol.AppType+".create", runtimeprotocol.AppType, invariantProject, map[string]any{"name": "invariantproject", "title": "Invariant project"})
 }
 
 func newInvariantTenantSetup(tb testing.TB, id string, apps []platform.App, seats ...platform.Seat) *invariantTenant {
@@ -77,7 +78,7 @@ func newInvariantTenantSetup(tb testing.TB, id string, apps []platform.App, seat
 		actions = append(actions, packages.Actions()...)
 		return controlowner.Owners{Policies: security.NewPolicies(), Packages: packages.New(id, PublicationResolver()), Actions: actions}
 	}, append([]platform.Seat{seat}, seats...)...)
-	tenant, err := NewTenantWithCapabilities(id, services, append([]platform.App{console, build.New(id, actions.NewAuthority, []publication.Hooks{ontology.ActionTypePublication()}, PublicationResolver(), ontology.ObjectPublication, objects.QueryPublication, functionauthoring.NewOwner, agentowner.BuilderPublication, agentevaluation.NewOwner, devopsauthoring.TestPlanPublication, agentevaluation.EvaluationPublication, devopsauthoring.SampleSetPublication)}, apps...)...)
+	tenant, err := NewTenantWithCapabilities(id, services, append([]platform.App{console, build.New(id, actions.NewAuthority, []publication.Hooks{ontology.ActionTypePublication()}, PublicationResolver(), ontology.ObjectPublication, objects.QueryPublication, functionauthoring.NewOwner, agentowner.BuilderPublication, agentevaluation.NewOwner, devopsauthoring.TestPlanPublication, agentevaluation.EvaluationPublication, devopsauthoring.SampleSetPublication, build.ApplicationOwners{New: appsauthoring.NewOwner, ObjectPage: appsauthoring.CompileObjectPage, ListDetailPage: appsauthoring.ListDetailPage})}, apps...)...)
 	if err != nil {
 		tb.Fatal(err)
 	}
@@ -99,7 +100,7 @@ func (t *invariantTenant) member(tb testing.TB) platform.Member {
 }
 
 func (t *invariantTenant) submission(schema, typ, id string, payload any) *pb.Submission {
-	if t.project != "" && typ != build.AppType && build.BranchDraftType(typ) && schema == typ+".create" {
+	if t.project != "" && typ != runtimeprotocol.AppType && build.BranchDraftType(typ) && schema == typ+".create" {
 		raw, _ := json.Marshal(payload)
 		var object map[string]any
 		if json.Unmarshal(raw, &object) == nil {

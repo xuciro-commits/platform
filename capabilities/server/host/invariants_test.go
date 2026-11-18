@@ -3,6 +3,7 @@ package host
 import (
 	"bytes"
 	"encoding/json"
+	"platformserver/kernel/protocol"
 	dataowner "platformserver/services/data"
 	"platformserver/services/data/lineage"
 	"platformserver/services/ontology"
@@ -484,7 +485,7 @@ func TestInvariantK6BranchSavesIsolateMainAndMergeAsOneResult(t *testing.T) {
 func TestInvariantBranchSaveRejectsSpoofedProject(t *testing.T) {
 	live := newInvariantTenant(t, "invariant-branch-project")
 	member := live.member(t)
-	live.accept(t, "build.app.create", build.AppType, "other-project", map[string]any{"name": "otherproject", "title": "Other project"})
+	live.accept(t, "build.app.create", protocol.AppType, "other-project", map[string]any{"name": "otherproject", "title": "Other project"})
 	live.accept(t, "build.object.create", build.ObjectType, "OBJ", invariantObject("alpha", "Alpha"))
 	branch, refusal := live.CreateBranch(member, branches.BranchCreateRequest{Name: "projectguard", Title: "Project guard"}, invariantClock)
 	if refusal != nil {

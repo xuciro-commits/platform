@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	appsauthoring "platformserver/services/apps/authoring"
+	"platformserver/kernel/protocol"
 	"platformserver/services/ontology"
 	"reflect"
 	"slices"
@@ -19,7 +19,7 @@ func (b *Build) SavedDraftChanges(c platform.Caller, application, typ, id string
 	out := []DraftChange{}
 	held := map[platform.AssetRef]bool{}
 	if application != "" {
-		app, ok := platform.Get[appsauthoring.Application](c, application)
+		app, ok := platform.Get[protocol.Application](c, application)
 		if !ok || app.Archived {
 			return nil, fmt.Errorf("application draft is unavailable")
 		}
@@ -60,7 +60,7 @@ func (b *Build) SavedDraftChanges(c platform.Caller, application, typ, id string
 			if entity.Type == TestPlanType && meta.Variant == "evaluation-set" {
 				ref.Kind = platform.AssetEvaluation
 			}
-			if application != "" && !(entity.Type == AppType && meta.ID == application) && !held[ref] {
+			if application != "" && !(entity.Type == protocol.AppType && meta.ID == application) && !held[ref] {
 				var original struct {
 					Name string
 					Ref  platform.AssetRef

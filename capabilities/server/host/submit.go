@@ -7,6 +7,7 @@ import (
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	runtimekernel "platformserver/kernel"
 	acceptedformat "platformserver/kernel/acceptedformat"
+	"platformserver/kernel/protocol"
 	"platformserver/kernel/records"
 	"platformserver/platform"
 	"platformserver/services/actions"
@@ -262,7 +263,7 @@ func (t *Tenant) applyAcceptedBatch(l platform.Authority, raw []byte) (bool, err
 }
 
 func (t *Tenant) batchApply() runtimekernel.BatchApply {
-	h := runtimekernel.BatchApply{App: t.App, OwnerLedger: runtimekernel.LedgerOf(t.App), CheckBindings: build.CheckRunApplicationBindings, DefinitionType: build.AppType,
+	h := runtimekernel.BatchApply{App: t.App, OwnerLedger: runtimekernel.LedgerOf(t.App), CheckBindings: build.CheckRunApplicationBindings, DefinitionType: protocol.AppType,
 		Claims: t.Claims.BatchPrepare(t.ID),
 		Rows: func(draft *records.Store, result acceptedformat.Batch) error {
 			return actions.CallbackRows{
@@ -306,7 +307,7 @@ func (t *Tenant) publishAcceptedBatch(result acceptedformat.Batch) {
 }
 
 func (t *Tenant) applyAcceptedResult(l platform.Authority, raw []byte) (bool, error) {
-	return t.ApplyRecordResult(l, raw, runtimekernel.RecordApply{App: t.App, CheckBindings: build.CheckRunApplicationBindings, DefinitionType: build.AppType,
+	return t.ApplyRecordResult(l, raw, runtimekernel.RecordApply{App: t.App, CheckBindings: build.CheckRunApplicationBindings, DefinitionType: protocol.AppType,
 		Claims: func(result acceptedformat.Record, receipt *pb.ChangeRecord) (func() error, error) {
 			return t.Claims.RecordClaims(t.ID, result, receipt)
 		}})

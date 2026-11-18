@@ -9,6 +9,7 @@ import (
 	agentevaluation "platformserver/services/ai/evaluation"
 	agentowner "platformserver/services/ai/runtime"
 	"platformserver/services/ai/sources"
+	appsauthoring "platformserver/services/apps/authoring"
 	automation "platformserver/services/automate/runtime"
 	devopsauthoring "platformserver/services/devops/authoring"
 	"platformserver/services/devops/packages"
@@ -36,7 +37,7 @@ func BuiltinApps(id string, seats ...platform.Seat) []platform.App {
 	return []platform.App{
 		NewConsole(id, seats...),
 		enterprise.New(id, actions.NewAuthority, platform.OrgSeed{Memberships: controlowner.Memberships(seats)}), relations.New(id, actions.NewAuthority), ai.New(id, actions.NewAuthority), work.New(id, actions.NewAuthority), monitoring.New(id, actions.NewAuthority), automation.New(id, actions.NewAuthority, platformserver.PublicationResolver()), knowledge.New(id, actions.NewAuthority),
-		agentowner.New(id, actions.NewAuthority), files.New(id, actions.NewAuthority), build.New(id, actions.NewAuthority, []publication.Hooks{ontology.ActionTypePublication()}, platformserver.PublicationResolver(), ontology.ObjectPublication, objects.QueryPublication, functionauthoring.NewOwner, agentowner.BuilderPublication, agentevaluation.NewOwner, devopsauthoring.TestPlanPublication, agentevaluation.EvaluationPublication, devopsauthoring.SampleSetPublication),
+		agentowner.New(id, actions.NewAuthority), files.New(id, actions.NewAuthority), build.New(id, actions.NewAuthority, []publication.Hooks{ontology.ActionTypePublication()}, platformserver.PublicationResolver(), ontology.ObjectPublication, objects.QueryPublication, functionauthoring.NewOwner, agentowner.BuilderPublication, agentevaluation.NewOwner, devopsauthoring.TestPlanPublication, agentevaluation.EvaluationPublication, devopsauthoring.SampleSetPublication, build.ApplicationOwners{New: appsauthoring.NewOwner, ObjectPage: appsauthoring.CompileObjectPage, ListDetailPage: appsauthoring.ListDetailPage}),
 	}
 }
 

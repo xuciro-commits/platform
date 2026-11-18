@@ -2,7 +2,7 @@ package build
 
 import (
 	"encoding/json"
-	appsauthoring "platformserver/services/apps/authoring"
+	"platformserver/kernel/protocol"
 	"platformserver/services/ontology"
 	"slices"
 	"strings"
@@ -94,12 +94,12 @@ func StoreBootstrap(tenant string, definitions []platform.Definition, store *rec
 			existing := store.Type(ResourceType)
 			return existing != nil && existing.Rows().Get(rid) != nil
 		},
-		Snapshot: func() (apps []appsauthoring.Application, resources []Resource) {
+		Snapshot: func() (apps []protocol.Application, resources []Resource) {
 			store.Lock()
 			defer store.Unlock()
-			if rows := store.Type(AppType); rows != nil {
+			if rows := store.Type(protocol.AppType); rows != nil {
 				for _, row := range rows.Rows().All() {
-					apps = append(apps, row.Value.Interface().(appsauthoring.Application))
+					apps = append(apps, row.Value.Interface().(protocol.Application))
 				}
 			}
 			return apps, StoreResources(store)

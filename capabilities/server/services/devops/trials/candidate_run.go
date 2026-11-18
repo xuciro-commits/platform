@@ -139,7 +139,7 @@ func (r *CandidateRun) Step(i int, step SimulationStep) (Simulation, *platform.E
 		})
 		function := step.Type == functionauthoring.FunctionCallType && slices.ContainsFunc(r.Candidate.Assets, func(asset platform.ReleaseAsset) bool { return asset.Ref.Kind == platform.AssetFunction })
 		if (!business && !function) || owner != build.ID || step.ID == "" || !strings.HasPrefix(step.Type, build.ID+".") ||
-			step.Type == build.ObjectType || step.Type == build.PageType || step.Type == build.AppType || step.Type == build.TestPlanType || step.Type == build.ProcessType || step.Type == functionauthoring.FunctionType {
+			step.Type == build.ObjectType || step.Type == protocol.PageType || step.Type == protocol.AppType || step.Type == build.TestPlanType || step.Type == build.ProcessType || step.Type == functionauthoring.FunctionType {
 			return Simulation{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Test step {step} must name an action and record of the candidate objects", fmt.Sprint(i+1))
 		}
 		payload := step.Payload

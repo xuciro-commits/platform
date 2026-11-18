@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"maps"
-	appsauthoring "platformserver/services/apps/authoring"
+	"platformserver/kernel/protocol"
 	automationauthoring "platformserver/services/automate/authoring"
 	"platformserver/services/ontology"
 	"platformserver/services/resources/publication"
@@ -306,15 +306,15 @@ func (b *Build) applicationDrafts(id string, selectDrafts map[JointDraftRef]bool
 				o.Published = published(o)
 				assets, err = b.releaseAssets([]ontology.Object{o}, nil, nil, nil, b.Manifest().Version)
 			case platform.AssetPage:
-				i := slices.IndexFunc(pages, func(p appsauthoring.Page) bool { return p.ID == draft.ID })
+				i := slices.IndexFunc(pages, func(p protocol.Page) bool { return p.ID == draft.ID })
 				p := pages[i]
 				p.Published = published(p)
-				assets, err = b.releaseAssets(nil, []appsauthoring.Page{p}, nil, nil, b.Manifest().Version)
+				assets, err = b.releaseAssets(nil, []protocol.Page{p}, nil, nil, b.Manifest().Version)
 			case platform.AssetApp:
-				i := slices.IndexFunc(apps, func(a appsauthoring.Application) bool { return a.ID == draft.ID })
+				i := slices.IndexFunc(apps, func(a protocol.Application) bool { return a.ID == draft.ID })
 				a := apps[i]
 				a.Published = published(a)
-				assets, err = b.releaseAssets(nil, nil, []appsauthoring.Application{a}, nil, b.Manifest().Version)
+				assets, err = b.releaseAssets(nil, nil, []protocol.Application{a}, nil, b.Manifest().Version)
 			case platform.AssetFlow:
 				i := slices.IndexFunc(processes, func(p automationauthoring.Process) bool { return p.ID == draft.ID })
 				p := processes[i]

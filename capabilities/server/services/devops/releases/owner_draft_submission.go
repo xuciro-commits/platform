@@ -3,6 +3,7 @@ package releases
 import (
 	"encoding/json"
 	"fmt"
+	"platformserver/kernel/protocol"
 	"slices"
 	"strconv"
 	"strings"
@@ -25,7 +26,7 @@ func DraftSubmission(tenant, candidate string, context platform.AssetReleaseCont
 	if err != nil {
 		return nil, err
 	}
-	if context.Project != "" && build.BranchDraftType(draft.Type) && draft.Type != build.AppType {
+	if context.Project != "" && build.BranchDraftType(draft.Type) && draft.Type != protocol.AppType {
 		var payload map[string]json.RawMessage
 		if json.Unmarshal(raw, &payload) != nil {
 			return nil, fmt.Errorf("asset draft %s/%s is unreadable", draft.Type, draft.Name)

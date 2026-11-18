@@ -56,9 +56,7 @@ func (t *Tenant) definitionsFrom(m platform.Member, registeredDefinitions []plat
 		},
 		Readable:                func(ref string) bool { return t.readable(m, ref, time.Now()) },
 		ObservationSourceActive: func(id string) bool { return t.Projection.ObservationSourceActive(id) },
-		CheckQuery: func(q platform.NamedQuery, info platform.EntityInfo) error {
-			return objects.CheckNamedQuery(q, info, t.services.Rules)
-		},
+		CheckQuery:              pages.CheckQuery, ProjectApplication: pageowner.ProjectApplication,
 		Page:                      pages.Page,
 		VisibleQuery:              pageowner.VisibleQuery,
 		FilterNavigation:          pageowner.FilterNavigation,

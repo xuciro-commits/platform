@@ -1,6 +1,7 @@
 package host
 
 import (
+	"platformserver/kernel/protocol"
 	"platformserver/services/actions"
 	"slices"
 	"testing"
@@ -20,7 +21,7 @@ func TestInvariantAccessRequestAppliesGrantOnApproval(t *testing.T) {
 	if action, ok := tn.App("platform").Manifest().Actions.Action(controlowner.SchemaAccessRequest); !ok || action.Target != controlowner.AccessRequestType {
 		t.Fatal("the access request action is not declared for its target")
 	}
-	tn.accept(t, build.AppType+".create", build.AppType, "PROJ", map[string]any{"name": "accessproject", "title": "Access project"})
+	tn.accept(t, protocol.AppType+".create", protocol.AppType, "PROJ", map[string]any{"name": "accessproject", "title": "Access project"})
 	save := tn.submission(platform.SchemaProjectSave, platform.ProjectType, "PROJ", map[string]any{
 		"title": "Access project", "approvals": 1,
 		"members": []platform.ProjectMember{{Member: "owner", Role: platform.ProjectOwnerRole}},

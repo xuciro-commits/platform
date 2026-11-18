@@ -1,6 +1,7 @@
 package host
 
 import (
+	"platformserver/kernel/protocol"
 	"platformserver/services/ontology"
 	"platformserver/services/resources/merge"
 	"slices"
@@ -19,8 +20,8 @@ func TestInvariantK12LineageGuardAndProjectScope(t *testing.T) {
 	delegated := platform.Seat{Subjects: []string{"delegated"}, Member: platform.Member{ID: "delegated", Grants: []platform.Grant{{App: build.ID, Role: build.Builder, By: "project:p1"}}}}
 	uncleared := platform.Seat{Subjects: []string{"uncleared"}, Member: platform.Member{ID: "uncleared"}}
 	live := newInvariantTenant(t, "invariant-k12", delegated, uncleared)
-	live.accept(t, build.AppType+".create", build.AppType, "p1", map[string]any{"name": "projectone", "title": "Project one"})
-	live.accept(t, build.AppType+".create", build.AppType, "p2", map[string]any{"name": "projecttwo", "title": "Project two"})
+	live.accept(t, protocol.AppType+".create", protocol.AppType, "p1", map[string]any{"name": "projectone", "title": "Project one"})
+	live.accept(t, protocol.AppType+".create", protocol.AppType, "p2", map[string]any{"name": "projecttwo", "title": "Project two"})
 	project := func(id, title string, members []platform.ProjectMember) {
 		t.Helper()
 		sub := live.submission(platform.SchemaProjectSave, platform.ProjectType, id, map[string]any{"title": title, "members": members})

@@ -3,6 +3,7 @@ package authoring
 import (
 	"encoding/json"
 	"fmt"
+	"platformserver/kernel/protocol"
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
@@ -12,36 +13,14 @@ import (
 	"platformserver/services/resources/publication"
 )
 
-const (
-	PageType      = "build.page"
-	SchemaRelease = PageType + ".publish"
-)
-
-type Page struct {
-	platform.Record
-	Format          int                          `json:"format,omitempty"`
-	DataBindings    []platform.PageDataBinding   `json:"dataBindings,omitempty" type:"json"`
-	ActionTriggers  []platform.PageActionTrigger `json:"actionTriggers,omitempty" type:"json"`
-	InputSchema     platform.PageInputSchema     `json:"inputSchema,omitzero" type:"json"`
-	ScopeVisibility platform.PageScopeVisibility `json:"scopeVisibility,omitzero" type:"json"`
-	WidgetSpec      platform.PageWidgetSpec      `json:"widgetSpec,omitzero" type:"json"`
-	Name            string                       `json:"name" field:"required,search" help:"Its name in the platform, lower-case letters and digits" example:"visits"`
-	Title           string                       `json:"title" field:"required,search" title:"What people call it" example:"Visits"`
-	Description     string                       `json:"description,omitempty" type:"longtext" help:"What people do on this page"`
-	Object          string                       `json:"object" field:"required" title:"Object it shows" help:"An object this tenant has: one it defined, or an app's own" example:"build.visits"`
-	State           string                       `json:"state" field:"readonly" choices:"draft,published"`
-	Published       string                       `json:"published,omitempty" field:"readonly" type:"longtext" title:"What is installed"`
-	Versions        []string                     `json:"versions,omitempty" field:"readonly" type:"lines" title:"Published page contents"`
-}
-
 func (o *Owner) PageEntity() platform.Entity {
-	return platform.Entity{Type: PageType, Title: "Page", Plural: "Pages", Model: Page{}, Display: "title",
+	return platform.Entity{Type: protocol.PageType, Title: "Page", Plural: "Pages", Model: protocol.Page{}, Display: "title",
 		Description: "A list and detail page this organisation composed over an object it may read: the fields it shows and the actions it offers.",
 		Validate: func(c platform.Caller, record any) *platform.Error {
 			if c.Replaying {
 				return nil
 			}
-			if err := o.validatePageDocument(record.(*Page), o.env.Entity); err != nil {
+			if err := o.validatePageDocument(record.(*protocol.Page), o.env.Entity); err != nil {
 				return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
 			}
 			return nil
@@ -65,7 +44,7 @@ func (o *Owner) PageEntity() platform.Entity {
 func (o *Owner) PageDraftEntity() platform.Entity {
 	entity := o.PageEntity()
 	entity.Validate = func(c platform.Caller, record any) *platform.Error {
-		page := record.(*Page)
+		page := record.(*protocol.Page)
 		if c.Replaying {
 			return nil
 		}
@@ -94,9 +73,9 @@ func (o *Owner) CheckPageObject(c platform.Caller, object string) (bool, error) 
 }
 
 func (o *Owner) publishPage(c platform.Caller, record any, _ json.RawMessage, _ time.Time) *platform.Error {
-	var page *Page
+	var page *protocol.Page
 	switch value := record.(type) {
-	case *Page:
+	case *protocol.Page:
 		page = value
 	default:
 		return &platform.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
@@ -126,7 +105,7 @@ func (o *Owner) publishPage(c platform.Caller, record any, _ json.RawMessage, _ 
 	return nil
 }
 
-func (o *Owner) installPage(c platform.Caller, p Page) *platform.Error {
+func (o *Owner) installPage(c platform.Caller, p protocol.Page) *platform.Error {
 	if err := o.checkPage(p); err != nil {
 		return &platform.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, Message: err.Error()}
 	}
@@ -136,7 +115,7 @@ func (o *Owner) installPage(c platform.Caller, p Page) *platform.Error {
 	return nil
 }
 
-func (o *Owner) validatePageDocument(page *Page, lookup func(string) (platform.EntityInfo, bool), engines ...platform.RuleEngine) error {
+func (o *Owner) validatePageDocument(page *protocol.Page, lookup func(string) (platform.EntityInfo, bool), engines ...platform.RuleEngine) error {
 	if err := o.normalizePageModel(page, lookup); err != nil {
 		return err
 	}
@@ -150,7 +129,7 @@ func (o *Owner) validatePageDocument(page *Page, lookup func(string) (platform.E
 	return pageowner.CheckSafety(Descriptor(*page, o.env.AppID(), o.env.Version()))
 }
 
-func (o *Owner) checkPage(p Page) error {
+func (o *Owner) checkPage(p protocol.Page) error {
 	if !publication.ValidName(p.Name) {
 		return fmt.Errorf("the name %q is not lower-case letters and digits", p.Name)
 	}
@@ -165,7 +144,7 @@ func (o *Owner) checkPage(p Page) error {
 	return nil
 }
 
-func (o *Owner) normalizePageModel(p *Page, lookup func(string) (platform.EntityInfo, bool)) error {
+func (o *Owner) normalizePageModel(p *protocol.Page, lookup func(string) (platform.EntityInfo, bool)) error {
 	d := Descriptor(*p, o.env.AppID(), o.env.Version())
 	if err := pageowner.NormalizeModelBindings(&d, lookup); err != nil {
 		return err

@@ -3,7 +3,7 @@ package build
 import (
 	"encoding/json"
 	"maps"
-	appsauthoring "platformserver/services/apps/authoring"
+	"platformserver/kernel/protocol"
 	"reflect"
 	"slices"
 	"strings"
@@ -48,7 +48,7 @@ type Search struct {
 	Read      func(typ string, query platform.Query) ([]any, *platform.Error)
 }
 
-var searchScopes = map[byte]string{'#': AppType, ':': ObjectType, '@': memberType}
+var searchScopes = map[byte]string{'#': protocol.AppType, ':': ObjectType, '@': memberType}
 
 func (s Search) Find(q string) []Hit {
 	out := []Hit{}
@@ -124,7 +124,7 @@ func NewDirectory(resources []Resource, saved []Folder, role func(project string
 	}
 	projects := map[string]string{}
 	for _, resource := range out.Resources {
-		if resource.Type == AppType {
+		if resource.Type == protocol.AppType {
 			projects[resource.Draft] = resource.Title
 		}
 	}
@@ -145,7 +145,7 @@ func NewDirectory(resources []Resource, saved []Folder, role func(project string
 	return out
 }
 
-func LegacyProjectAssignments(apps []appsauthoring.Application, resources []Resource) []LegacyResourceProject {
+func LegacyProjectAssignments(apps []protocol.Application, resources []Resource) []LegacyResourceProject {
 	referenced := map[platform.AssetRef][]string{}
 	projects := map[string]bool{}
 	{
@@ -198,7 +198,7 @@ type ResourceBootstrap struct {
 	Definitions []platform.Definition
 	Drafts      func(match func(typ string) bool) []DraftRecord
 	Exists      func(rid string) bool
-	Snapshot    func() ([]appsauthoring.Application, []Resource)
+	Snapshot    func() ([]protocol.Application, []Resource)
 	Submit      func(*pb.Submission) error
 }
 
@@ -226,7 +226,7 @@ func (h ResourceBootstrap) Initialize() error {
 		}
 		rid := platform.ResourceID(h.Tenant, ref)
 		project := WorkspaceProject
-		if draft.Type == AppType {
+		if draft.Type == protocol.AppType {
 			project = draft.ID
 		}
 		state := "active"
