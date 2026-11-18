@@ -289,3 +289,14 @@ test("leave: a refused inline edit asks whether to stay or discard", async ({ pa
   await page.getByRole("link", { name: "Fleet tracking rollout" }).click();
   await expect(subject).toHaveValue("Fleet tracking rollout");
 });
+
+test("mobile: the navigation drawer contains the application controls", async ({ page }) => {
+  await page.setViewportSize({ width: 375, height: 812 });
+  await signIn(page);
+  await page.getByRole("button", { name: "Open navigation" }).click();
+  const drawer = page.getByRole("dialog");
+  await expect(drawer.getByRole("button", { name: "Search", exact: true })).toBeVisible();
+  await expect(drawer.getByRole("button", { name: "Notifications", exact: true })).toBeVisible();
+  await drawer.getByRole("button", { name: "Sign out", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Sign in", exact: true })).toBeVisible();
+});

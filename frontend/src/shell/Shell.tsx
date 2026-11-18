@@ -1,5 +1,6 @@
 import { AppShell, useAppShellMobile } from "@astryxdesign/core/AppShell";
 import { HStack } from "@astryxdesign/core/HStack";
+import { MobileNav } from "@astryxdesign/core/MobileNav";
 import { Suspense } from "react";
 import { type App, locate, type NavItem } from "../apps";
 import { entries } from "../apps/entries";
@@ -16,7 +17,15 @@ export function Shell() {
   if (!session) return <SignIn />;
   const Entry = entries[`${app.id}/${item.id}`];
   return (
-    <AppShell contentPadding={0} sideNav={<Navigation app={app} item={item} />}>
+    <AppShell
+      contentPadding={0}
+      sideNav={<Navigation app={app} item={item} />}
+      mobileNav={{ content: (
+        <MobileNav header={<AppRail current={app} compact />}>
+          <AppSidebar app={app} item={item} />
+        </MobileNav>
+      ) }}
+    >
       <Suspense fallback={null}>{Entry ? <Entry key={`${app.id}/${item.id}`} /> : <Unbuilt item={item} />}</Suspense>
     </AppShell>
   );
