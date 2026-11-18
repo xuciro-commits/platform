@@ -27,14 +27,14 @@ func main() {
 	deployment.Rebuild = func(id string) (*platformserver.Tenant, error) {
 		return deployment.RebuildWithCapabilities(id, runtimeprotocol.DefaultRuntimeCapabilities(security.Standard{}))
 	}
-	development := platform.TenantSpec{ID: *tenant}
+	development := runtimeprotocol.TenantSpec{ID: *tenant}
 	if *admin != "" {
 		roles := map[string]string{
 			controlowner.PlatformApp: controlowner.Admin,
 			build.ID:                 build.Builder, ai.ID: ai.Admin,
-			work.ID: work.Admin, platform.AgentApp: platform.AgentAdmin,
+			work.ID: work.Admin, runtimeprotocol.AgentApp: runtimeprotocol.AgentAdmin,
 		}
-		development.Seats = []platform.Seat{{Subjects: []string{*admin}, Member: platform.Member{
+		development.Seats = []runtimeprotocol.Seat{{Subjects: []string{*admin}, Member: platform.Member{
 			ID: "builder", Roles: roles,
 		}}}
 	}

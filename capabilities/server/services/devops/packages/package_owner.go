@@ -8,6 +8,7 @@ import (
 	"maps"
 	"os"
 	"path/filepath"
+	"platformserver/kernel/protocol"
 	"platformserver/services/resources/publication"
 
 	"slices"
@@ -25,39 +26,39 @@ type Owner struct {
 	mu             sync.Mutex
 	tenant         string
 	resolver       publication.Resolver
-	packages       map[string]*platform.InstalledPackage
-	packageSources map[string]platform.PackageSource
-	index          *platform.PackageIndex
-	host           platform.PackageHost
+	packages       map[string]*protocol.InstalledPackage
+	packageSources map[string]protocol.PackageSource
+	index          *protocol.PackageIndex
+	host           protocol.PackageHost
 }
 
 func New(tenant string, resolver publication.Resolver) *Owner {
-	return &Owner{tenant: tenant, resolver: resolver, packages: map[string]*platform.InstalledPackage{}, index: &platform.PackageIndex{}}
+	return &Owner{tenant: tenant, resolver: resolver, packages: map[string]*protocol.InstalledPackage{}, index: &protocol.PackageIndex{}}
 }
 
-func (d *Owner) Attach(host platform.PackageHost) { d.host = host }
+func (d *Owner) Attach(host protocol.PackageHost) { d.host = host }
 
-func (d *Owner) BindPackageIndex(index *platform.PackageIndex) {
+func (d *Owner) BindPackageIndex(index *protocol.PackageIndex) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	d.index = index
 }
 
-func (d *Owner) BoundIndex() *platform.PackageIndex { d.mu.Lock(); defer d.mu.Unlock(); return d.index }
+func (d *Owner) BoundIndex() *protocol.PackageIndex { d.mu.Lock(); defer d.mu.Unlock(); return d.index }
 
-func (d *Owner) SnapshotState() platform.PackageState {
+func (d *Owner) SnapshotState() protocol.PackageState {
 	d.mu.Lock()
 	defer d.mu.Unlock()
-	return platform.PackageState{Packages: maps.Clone(d.packages), Sources: maps.Clone(d.packageSources)}
+	return protocol.PackageState{Packages: maps.Clone(d.packages), Sources: maps.Clone(d.packageSources)}
 }
 
-func (d *Owner) Restore(s platform.PackageState) {
+func (d *Owner) Restore(s protocol.PackageState) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	d.packages = s.Packages
 	d.packageSources = s.Sources
 	if d.packages == nil {
-		d.packages = map[string]*platform.InstalledPackage{}
+		d.packages = map[string]*protocol.InstalledPackage{}
 	}
 }
 
@@ -69,7 +70,7 @@ func (d *Owner) Prepare(c platform.Caller, s *pb.Submission) (func(*pb.ChangeRec
 	return func(r *pb.ChangeRecord) { d.mu.Lock(); defer d.mu.Unlock(); apply(r) }, err
 }
 
-var _ platform.BlueprintCatalog = (*Owner)(nil)
+var _ protocol.BlueprintCatalog = (*Owner)(nil)
 
 const (
 	SchemaPackageInstall   = "platform.package.install"
@@ -86,27 +87,27 @@ func Actions() []platform.Action {
 	fields := []platform.Field{{Name: "id", Type: "string", Required: true, Description: "The package's ID"},
 		{Name: "version", Type: "string", Description: "The version; empty: the newest the index offers"}}
 	return []platform.Action{
-		{Schema: SchemaPackageImport, Target: platform.PackageType, Capability: "packages", Title: "Add reviewed package", Description: "Keep exactly the reviewed package in this tenant's available library; install separately.", Payload: []platform.Field{{Name: "id", Type: "string", Required: true}, {Name: "digest", Type: "string", Required: true}}, Roles: admin},
-		{Schema: SchemaPackageRemoveSource, Target: platform.PackageType, Capability: "packages", Title: "Remove package source", Description: "Remove an uninstalled source from the library; installed artifacts and business history stay.", Payload: []platform.Field{{Name: "id", Type: "string", Required: true}, {Name: "digest", Type: "string", Required: true}}, Roles: admin},
-		{Schema: SchemaPackageInstall, Target: platform.PackageType, Capability: "packages", Title: "Install package",
+		{Schema: SchemaPackageImport, Target: protocol.PackageType, Capability: "packages", Title: "Add reviewed package", Description: "Keep exactly the reviewed package in this tenant's available library; install separately.", Payload: []platform.Field{{Name: "id", Type: "string", Required: true}, {Name: "digest", Type: "string", Required: true}}, Roles: admin},
+		{Schema: SchemaPackageRemoveSource, Target: protocol.PackageType, Capability: "packages", Title: "Remove package source", Description: "Remove an uninstalled source from the library; installed artifacts and business history stay.", Payload: []platform.Field{{Name: "id", Type: "string", Required: true}, {Name: "digest", Type: "string", Required: true}}, Roles: admin},
+		{Schema: SchemaPackageInstall, Target: protocol.PackageType, Capability: "packages", Title: "Install package",
 			Description: "Precheck a package's requirements and register the contributions it brings.", Payload: fields, Roles: admin},
-		{Schema: SchemaPackageUpgrade, Target: platform.PackageType, Capability: "packages", Title: "Upgrade package",
+		{Schema: SchemaPackageUpgrade, Target: protocol.PackageType, Capability: "packages", Title: "Upgrade package",
 			Description: "Replace an installed package's version, keeping the artifact it replaced.", Payload: fields, Roles: admin},
-		{Schema: SchemaPackageDowngrade, Target: platform.PackageType, Capability: "packages", Title: "Downgrade package",
+		{Schema: SchemaPackageDowngrade, Target: protocol.PackageType, Capability: "packages", Title: "Downgrade package",
 			Description: "Switch to an older exact version only when its storage and extensions remain compatible; the replaced artifact stays retained.", Payload: fields, Roles: admin},
-		{Schema: SchemaPackageRollback, Target: platform.PackageType, Capability: "packages", Title: "Roll back package",
+		{Schema: SchemaPackageRollback, Target: protocol.PackageType, Capability: "packages", Title: "Roll back package",
 			Description: "Restore the immediately previous retained version only when its storage and extensions remain compatible.", Payload: fields, Roles: admin},
-		{Schema: SchemaPackageDrain, Target: platform.PackageType, Capability: "packages", Title: "Mark package for uninstall",
+		{Schema: SchemaPackageDrain, Target: protocol.PackageType, Capability: "packages", Title: "Mark package for uninstall",
 			Description: "Check dependent products and mark the package for uninstall. New use is not blocked until runtime draining is enabled; finish work in flight before retiring.",
 			Payload:     []platform.Field{{Name: "id", Type: "string", Required: true}}, Roles: admin},
-		{Schema: SchemaPackageRetire, Target: platform.PackageType, Capability: "packages", Title: "Retire package",
+		{Schema: SchemaPackageRetire, Target: protocol.PackageType, Capability: "packages", Title: "Retire package",
 			Description: "Archive the package's managed definitions and project; business records, extensions, history and artifacts stay.",
 			Payload:     []platform.Field{{Name: "id", Type: "string", Required: true}}, Roles: admin},
 	}
 }
 
-func LoadPackageIndex(resolver publication.Resolver, dir string) (*platform.PackageIndex, error) {
-	index := &platform.PackageIndex{Directory: dir}
+func LoadPackageIndex(resolver publication.Resolver, dir string) (*protocol.PackageIndex, error) {
+	index := &protocol.PackageIndex{Directory: dir}
 	if dir == "" {
 		return index, nil
 	}
@@ -146,19 +147,19 @@ func LoadPackageIndex(resolver publication.Resolver, dir string) (*platform.Pack
 	return index, nil
 }
 
-func BlueprintCandidate(resolver publication.Resolver, b platform.PackageBlueprint, owner build.ConstructionDrafts, code []platform.ReleaseAsset) (platform.ReleaseCandidate, error) {
+func BlueprintCandidate(resolver publication.Resolver, b platform.PackageBlueprint, owner build.ConstructionDrafts, code []platform.ReleaseAsset) (protocol.ReleaseCandidate, error) {
 	assets, err := owner.CompleteBlueprintAssets(b.Assets)
 	if err != nil {
-		return platform.ReleaseCandidate{}, err
+		return protocol.ReleaseCandidate{}, err
 	}
 	for i, asset := range assets {
 		if asset.Ref.App != "build" {
-			return platform.ReleaseCandidate{}, fmt.Errorf("a package blueprint contains only Build-owned definitions")
+			return protocol.ReleaseCandidate{}, fmt.Errorf("a package blueprint contains only Build-owned definitions")
 		}
 		var err error
 		assets[i], err = resolver.WithDependencies(asset)
 		if err != nil {
-			return platform.ReleaseCandidate{}, err
+			return protocol.ReleaseCandidate{}, err
 		}
 	}
 	return resolver.Candidate(b.Roots, append(assets, code...))
@@ -180,35 +181,35 @@ func (d *Owner) sealedPackageDescriptor(id, version, artifact string) (platform.
 	return descriptor, nil
 }
 
-func (d *Owner) BlueprintViews() []platform.PackageView {
+func (d *Owner) BlueprintViews() []protocol.PackageView {
 	d.mu.Lock()
-	var installed []platform.InstalledPackage
+	var installed []protocol.InstalledPackage
 	for _, p := range d.packages {
 		if p.State == "active" {
 			installed = append(installed, *p)
 		}
 	}
 	d.mu.Unlock()
-	out := []platform.PackageView{}
+	out := []protocol.PackageView{}
 	for _, p := range installed {
 		descriptor, err := d.sealedPackageDescriptor(p.ID, p.Version, p.Artifact)
 		if err != nil || descriptor.Blueprint == nil {
 			continue
 		}
 		copy := p
-		out = append(out, platform.PackageView{Descriptor: descriptor, Installed: &copy, Precheck: platform.Precheck{ID: p.ID, Version: p.Version, OK: true}, Source: "installed"})
+		out = append(out, protocol.PackageView{Descriptor: descriptor, Installed: &copy, Precheck: protocol.Precheck{ID: p.ID, Version: p.Version, OK: true}, Source: "installed"})
 	}
-	slices.SortFunc(out, func(a, b platform.PackageView) int { return strings.Compare(a.Descriptor.ID, b.Descriptor.ID) })
+	slices.SortFunc(out, func(a, b protocol.PackageView) int { return strings.Compare(a.Descriptor.ID, b.Descriptor.ID) })
 	return out
 }
 
-func (d *Owner) packagesOf() map[string]*platform.InstalledPackage {
+func (d *Owner) packagesOf() map[string]*protocol.InstalledPackage {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	return maps.Clone(d.packages)
 }
 
-func (d *Owner) packageIndex() (*platform.PackageIndex, error) {
+func (d *Owner) packageIndex() (*protocol.PackageIndex, error) {
 	d.mu.Lock()
 	bound := d.index
 	d.mu.Unlock()
@@ -222,8 +223,8 @@ func (d *Owner) packageIndex() (*platform.PackageIndex, error) {
 	return d.sourceIndex(current)
 }
 
-func (d *Owner) precheck(p platform.PackageDescriptor, index *platform.PackageIndex, planned ...[]platform.PackageDescriptor) platform.Precheck {
-	out := platform.Precheck{ID: p.ID, Version: p.Version, OK: true}
+func (d *Owner) precheck(p platform.PackageDescriptor, index *protocol.PackageIndex, planned ...[]platform.PackageDescriptor) protocol.Precheck {
+	out := protocol.Precheck{ID: p.ID, Version: p.Version, OK: true}
 	var proposed []platform.PackageDescriptor
 	if len(planned) > 0 {
 		proposed = planned[0]
@@ -266,7 +267,7 @@ func (d *Owner) precheck(p platform.PackageDescriptor, index *platform.PackageIn
 	}
 	for _, descriptor := range proposed {
 		if descriptor.ID != p.ID {
-			installed[descriptor.ID] = &platform.InstalledPackage{ID: descriptor.ID, Version: descriptor.Version, State: "active"}
+			installed[descriptor.ID] = &protocol.InstalledPackage{ID: descriptor.ID, Version: descriptor.Version, State: "active"}
 		}
 	}
 	for _, requirement := range p.Requires {
@@ -324,14 +325,14 @@ func ArtifactKey(tenant, id, version string) string {
 	return "packages/" + tenant + "/" + id + "/" + version + ".json"
 }
 
-func (d *Owner) verifyPackageVersion(descriptor platform.PackageDescriptor, prior *platform.InstalledPackage) error {
+func (d *Owner) verifyPackageVersion(descriptor platform.PackageDescriptor, prior *protocol.InstalledPackage) error {
 	if prior == nil {
 		return nil
 	}
 	artifact := ""
 	if prior.Version == descriptor.Version {
 		artifact = prior.Artifact
-	} else if i := slices.IndexFunc(prior.Retained, func(r platform.RetainedArtifact) bool { return r.Version == descriptor.Version }); i >= 0 {
+	} else if i := slices.IndexFunc(prior.Retained, func(r protocol.RetainedArtifact) bool { return r.Version == descriptor.Version }); i >= 0 {
 		artifact = prior.Retained[i].Digest
 	} else {
 		return nil
@@ -367,7 +368,7 @@ func (d *Owner) sealPackageBytes(descriptor platform.PackageDescriptor, director
 	return "sha256:" + hex.EncodeToString(sum[:]), nil
 }
 
-func (d *Owner) verifySealedPackage(held platform.InstalledPackage) error {
+func (d *Owner) verifySealedPackage(held protocol.InstalledPackage) error {
 	if held.Artifact == "" {
 		return nil
 	}
@@ -383,9 +384,9 @@ func (d *Owner) verifySealedPackage(held platform.InstalledPackage) error {
 	return nil
 }
 
-func latestRetained(retained []platform.RetainedArtifact) (platform.RetainedArtifact, bool) {
+func latestRetained(retained []protocol.RetainedArtifact) (protocol.RetainedArtifact, bool) {
 	if len(retained) == 0 {
-		return platform.RetainedArtifact{}, false
+		return protocol.RetainedArtifact{}, false
 	}
 	latest := retained[0]
 	for _, item := range retained[1:] {
@@ -415,7 +416,7 @@ func (d *Owner) decide(c platform.Caller, s *pb.Submission) (func(*pb.ChangeReco
 			return nil, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
 		}
 		state := "draining"
-		removal := &platform.PackageRemoval{ID: p.ID}
+		removal := &protocol.PackageRemoval{ID: p.ID}
 		impact, err := d.LifecycleImpact(c, p.ID, nil)
 		if err != nil {
 			return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Package impact could not be inspected: {reason}", err.Error())
@@ -474,7 +475,7 @@ func (d *Owner) decide(c platform.Caller, s *pb.Submission) (func(*pb.ChangeReco
 			return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The retained package artifact is unavailable: {reason}", err.Error())
 		}
 		descriptor, ok = sealed, true
-		index = &platform.PackageIndex{Directory: index.Directory, Packages: slices.Clone(index.Packages)}
+		index = &protocol.PackageIndex{Directory: index.Directory, Packages: slices.Clone(index.Packages)}
 		index.Packages = append(index.Packages, descriptor)
 	} else {
 		descriptor, ok = packagedesc.Find(index, p.ID, p.Version)
@@ -484,7 +485,7 @@ func (d *Owner) decide(c platform.Caller, s *pb.Submission) (func(*pb.ChangeReco
 			artifact := ""
 			if prior.Version == p.Version {
 				artifact = prior.Artifact
-			} else if i := slices.IndexFunc(prior.Retained, func(r platform.RetainedArtifact) bool { return r.Version == p.Version }); i >= 0 {
+			} else if i := slices.IndexFunc(prior.Retained, func(r protocol.RetainedArtifact) bool { return r.Version == p.Version }); i >= 0 {
 				artifact = prior.Retained[i].Digest
 			}
 			if artifact == "" {
@@ -495,7 +496,7 @@ func (d *Owner) decide(c platform.Caller, s *pb.Submission) (func(*pb.ChangeReco
 				return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The retained package artifact is unavailable: {reason}", err.Error())
 			}
 			descriptor, ok = sealed, true
-			index = &platform.PackageIndex{Directory: index.Directory, Packages: slices.Clone(index.Packages)}
+			index = &protocol.PackageIndex{Directory: index.Directory, Packages: slices.Clone(index.Packages)}
 			index.Packages = append(index.Packages, descriptor)
 		}
 	}
@@ -555,15 +556,15 @@ func (d *Owner) decide(c platform.Caller, s *pb.Submission) (func(*pb.ChangeReco
 		}
 		now := time.Now().UTC()
 		if d.packages == nil {
-			d.packages = map[string]*platform.InstalledPackage{}
+			d.packages = map[string]*protocol.InstalledPackage{}
 		}
 		prior := d.packages[descriptor.ID]
-		installed := &platform.InstalledPackage{ID: descriptor.ID, Version: descriptor.Version, Namespace: descriptor.Namespace,
+		installed := &protocol.InstalledPackage{ID: descriptor.ID, Version: descriptor.Version, Namespace: descriptor.Namespace,
 			Title: descriptor.Title, State: "active", Contributions: descriptor.Contributions, Digest: descriptor.ArtifactDigest,
 			Artifact: sealed, InstalledAt: now, ChangedAt: now}
 		if prior != nil {
 			installed.InstalledAt = prior.InstalledAt
-			installed.Retained = slices.DeleteFunc(slices.Clone(prior.Retained), func(r platform.RetainedArtifact) bool {
+			installed.Retained = slices.DeleteFunc(slices.Clone(prior.Retained), func(r protocol.RetainedArtifact) bool {
 				return r.Version == descriptor.Version || r.Version == prior.Version
 			})
 			if prior.Version != descriptor.Version {
@@ -571,15 +572,15 @@ func (d *Owner) decide(c platform.Caller, s *pb.Submission) (func(*pb.ChangeReco
 				if retained == "" {
 					retained = prior.Digest
 				}
-				installed.Retained = append(installed.Retained, platform.RetainedArtifact{Version: prior.Version, Digest: retained, At: now})
+				installed.Retained = append(installed.Retained, protocol.RetainedArtifact{Version: prior.Version, Digest: retained, At: now})
 			}
 		}
 		d.packages[descriptor.ID] = installed
 	}, nil
 }
 
-func (d *Owner) PackageViews() []platform.PackageView {
-	out := []platform.PackageView{}
+func (d *Owner) PackageViews() []protocol.PackageView {
+	out := []protocol.PackageView{}
 	index, indexErr := d.packageIndex()
 	installed := d.packagesOf()
 	products := map[string]platform.ProductVersionView{}
@@ -598,7 +599,7 @@ func (d *Owner) PackageViews() []platform.PackageView {
 			pre.OK = false
 			pre.Problems = append(pre.Problems, indexErr.Error())
 		}
-		view := platform.PackageView{Descriptor: descriptor, Precheck: pre, Plan: d.installationPlan(descriptor, index), Source: "index"}
+		view := protocol.PackageView{Descriptor: descriptor, Precheck: pre, Plan: d.installationPlan(descriptor, index), Source: "index"}
 		if product, found := products[descriptor.ID+"@"+descriptor.Version]; found {
 			view.Source, view.Product, view.Candidate = "product", product.Product, product.Candidate
 		}
@@ -628,7 +629,7 @@ func (d *Owner) PackageViews() []platform.PackageView {
 			continue
 		}
 		descriptor := platform.PackageDescriptor{ID: held.ID, Version: held.Version, Title: held.Title, Namespace: held.Namespace, Contributions: held.Contributions}
-		pre := platform.Precheck{ID: held.ID, Version: held.Version}
+		pre := protocol.Precheck{ID: held.ID, Version: held.Version}
 		if held.Artifact != "" {
 			if sealed, err := d.sealedPackageDescriptor(held.ID, held.Version, held.Artifact); err == nil {
 				descriptor = sealed
@@ -636,11 +637,11 @@ func (d *Owner) PackageViews() []platform.PackageView {
 				pre.Problems = append(pre.Problems, err.Error())
 			}
 		}
-		sealedIndex := &platform.PackageIndex{Directory: index.Directory, Packages: slices.Clone(index.Packages)}
+		sealedIndex := &protocol.PackageIndex{Directory: index.Directory, Packages: slices.Clone(index.Packages)}
 		sealedIndex.Packages = append(sealedIndex.Packages, descriptor)
 		pre = d.precheck(descriptor, sealedIndex)
 		copy := *held
-		out = append(out, platform.PackageView{Descriptor: descriptor, Installed: &copy, Precheck: pre, Plan: d.installationPlan(descriptor, sealedIndex), Source: "installed", Removal: d.packageRemoval(held.ID)})
+		out = append(out, protocol.PackageView{Descriptor: descriptor, Installed: &copy, Precheck: pre, Plan: d.installationPlan(descriptor, sealedIndex), Source: "installed", Removal: d.packageRemoval(held.ID)})
 	}
 	for _, held := range installed {
 		if held.State != "active" {
@@ -652,7 +653,7 @@ func (d *Owner) PackageViews() []platform.PackageView {
 			}
 			descriptor, err := d.sealedPackageDescriptor(held.ID, retained.Version, retained.Digest)
 			copy := *held
-			view := platform.PackageView{Source: "retained", Installed: &copy, Descriptor: descriptor}
+			view := protocol.PackageView{Source: "retained", Installed: &copy, Descriptor: descriptor}
 			view.Downgrade = err == nil && packagedesc.ComparePackageVersions(retained.Version, held.Version) < 0
 			previous, found := latestRetained(held.Retained)
 			view.Rollback = err == nil && packagedesc.ComparePackageVersions(retained.Version, held.Version) != 0 && found && previous.Version == retained.Version
@@ -661,7 +662,7 @@ func (d *Owner) PackageViews() []platform.PackageView {
 				view.Descriptor = descriptor
 				view.Precheck.Problems = []string{err.Error()}
 			} else {
-				sealedIndex := &platform.PackageIndex{Directory: index.Directory, Packages: slices.Clone(index.Packages)}
+				sealedIndex := &protocol.PackageIndex{Directory: index.Directory, Packages: slices.Clone(index.Packages)}
 				sealedIndex.Packages = append(sealedIndex.Packages, descriptor)
 				view.Descriptor, view.Precheck, view.Plan = descriptor, d.precheck(descriptor, sealedIndex), d.installationPlan(descriptor, sealedIndex)
 			}
@@ -669,7 +670,7 @@ func (d *Owner) PackageViews() []platform.PackageView {
 			out = append(out, view)
 		}
 	}
-	slices.SortFunc(out, func(a, b platform.PackageView) int {
+	slices.SortFunc(out, func(a, b protocol.PackageView) int {
 		if a.Descriptor.ID != b.Descriptor.ID {
 			return strings.Compare(a.Descriptor.ID, b.Descriptor.ID)
 		}
@@ -678,13 +679,13 @@ func (d *Owner) PackageViews() []platform.PackageView {
 	return out
 }
 
-func (d *Owner) Contributions() []platform.Contribution {
-	out := []platform.Contribution{}
+func (d *Owner) Contributions() []protocol.Contribution {
+	out := []protocol.Contribution{}
 	if d.host != nil {
 		for _, app := range d.host.Apps() {
 			manifest := app.Manifest()
 			for _, page := range manifest.Pages {
-				out = append(out, platform.Contribution{Key: manifest.ID + "." + page.Name, View: page.Name, Title: page.Title,
+				out = append(out, protocol.Contribution{Key: manifest.ID + "." + page.Name, View: page.Name, Title: page.Title,
 					Kind: "view", App: manifest.ID, Source: manifest.ID, State: "active"})
 			}
 		}
@@ -703,11 +704,11 @@ func (d *Owner) Contributions() []platform.Contribution {
 			if kind == "" {
 				kind = "view"
 			}
-			out = append(out, platform.Contribution{Key: p.Namespace + "." + c.View, View: c.View, Surface: surface, Title: c.Title,
+			out = append(out, protocol.Contribution{Key: p.Namespace + "." + c.View, View: c.View, Surface: surface, Title: c.Title,
 				Kind: kind, App: c.App, Source: p.ID, State: p.State})
 		}
 	}
 	d.mu.Unlock()
-	slices.SortFunc(out, func(a, b platform.Contribution) int { return strings.Compare(a.Key, b.Key) })
+	slices.SortFunc(out, func(a, b protocol.Contribution) int { return strings.Compare(a.Key, b.Key) })
 	return out
 }

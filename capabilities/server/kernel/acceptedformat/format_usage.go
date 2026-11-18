@@ -2,6 +2,7 @@ package acceptedformat
 
 import (
 	"fmt"
+	"platformserver/kernel/protocol"
 	"platformserver/platform"
 	"time"
 )
@@ -54,7 +55,7 @@ func DecodeUsage(raw []byte) (Usage, error) {
 
 	hash, err := UsageHash(r.Before, r.Usage)
 	digest, digestErr := DigestUsage(r)
-	if err != nil || digestErr != nil || r.Version != 1 || r.Kind != "usage-result" || r.Tenant == "" || r.App != platform.AIApp || r.Before == "" ||
+	if err != nil || digestErr != nil || r.Version != 1 || r.Kind != "usage-result" || r.Tenant == "" || r.App != protocol.AIApp || r.Before == "" ||
 		r.Member != r.Usage.Member || !ValidUsage(r.Usage) || !r.At.Equal(r.Usage.At) || r.RequestHash != hash || r.Key != "usage:"+hash || r.Digest != digest {
 		return r, fmt.Errorf("usage result has inconsistent identity, reading or digest")
 	}

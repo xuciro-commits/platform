@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"maps"
+	"platformserver/kernel/protocol"
 	packagedesc "platformserver/services/devops/descriptor"
 
 	"slices"
@@ -13,7 +14,7 @@ import (
 	build "platformserver/services/resources/authoring"
 )
 
-func (d *Owner) installedDescriptors(index *platform.PackageIndex) (map[string]platform.PackageDescriptor, error) {
+func (d *Owner) installedDescriptors(index *protocol.PackageIndex) (map[string]platform.PackageDescriptor, error) {
 	out := map[string]platform.PackageDescriptor{}
 	for id, held := range d.packagesOf() {
 		if held.State == "retired" {
@@ -38,7 +39,7 @@ func (d *Owner) installedDescriptors(index *platform.PackageIndex) (map[string]p
 	return out, nil
 }
 
-func ResolveDependencies(root platform.PackageDescriptor, index *platform.PackageIndex, installed map[string]platform.PackageDescriptor) ([]platform.PackageDescriptor, error) {
+func ResolveDependencies(root platform.PackageDescriptor, index *protocol.PackageIndex, installed map[string]platform.PackageDescriptor) ([]platform.PackageDescriptor, error) {
 	var failure error
 	var solve func(map[string]platform.PackageDescriptor) ([]platform.PackageDescriptor, bool)
 	solve = func(chosen map[string]platform.PackageDescriptor) ([]platform.PackageDescriptor, bool) {
@@ -138,7 +139,7 @@ func ResolveDependencies(root platform.PackageDescriptor, index *platform.Packag
 	return nil, failure
 }
 
-func (d *Owner) prerequisiteAssets(root platform.PackageDescriptor, index *platform.PackageIndex, proposed []platform.PackageDescriptor) ([]platform.ReleaseAsset, error) {
+func (d *Owner) prerequisiteAssets(root platform.PackageDescriptor, index *protocol.PackageIndex, proposed []platform.PackageDescriptor) ([]platform.ReleaseAsset, error) {
 	available, err := d.host.CodeReleaseAssets()
 	if err != nil {
 		return nil, err
@@ -218,8 +219,8 @@ func (d *Owner) PackagePrerequisites(id, version string) ([]platform.ReleaseAsse
 	return d.prerequisiteAssets(descriptor, index, nil)
 }
 
-func (d *Owner) installationPlan(root platform.PackageDescriptor, index *platform.PackageIndex) platform.PackageInstallPlan {
-	plan := platform.PackageInstallPlan{Steps: []platform.PackageInstallStep{}}
+func (d *Owner) installationPlan(root platform.PackageDescriptor, index *protocol.PackageIndex) protocol.PackageInstallPlan {
+	plan := protocol.PackageInstallPlan{Steps: []protocol.PackageInstallStep{}}
 	installed, err := d.installedDescriptors(index)
 	if err != nil {
 		plan.Problems = []string{err.Error()}
@@ -232,7 +233,7 @@ func (d *Owner) installationPlan(root platform.PackageDescriptor, index *platfor
 	}
 	for _, descriptor := range ordered {
 		held, exists := installed[descriptor.ID]
-		step := platform.PackageInstallStep{ID: descriptor.ID, Version: descriptor.Version, Title: descriptor.Title}
+		step := protocol.PackageInstallStep{ID: descriptor.ID, Version: descriptor.Version, Title: descriptor.Title}
 		if exists && held.Version == descriptor.Version {
 			step.Action, step.Status = SchemaPackageInstall, "installed"
 			plan.Steps = append(plan.Steps, step)

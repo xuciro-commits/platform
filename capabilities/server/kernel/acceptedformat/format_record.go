@@ -7,6 +7,7 @@ import (
 	"google.golang.org/protobuf/encoding/protojson"
 	"io"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
+	"platformserver/kernel/protocol"
 	"platformserver/kernel/records"
 	persistence "platformserver/kernel/store"
 	"platformserver/platform"
@@ -34,7 +35,7 @@ type Record struct {
 	Digest         string                       `json:"digest,omitempty"`
 	Receipt        json.RawMessage              `json:"receipt"`
 	Row            records.Image                `json:"row"`
-	Event          platform.AcceptedEventPlan   `json:"event"`
+	Event          protocol.AcceptedEventPlan   `json:"event"`
 }
 
 func DecodeRecord(raw []byte) (Record, *pb.ChangeRecord, error) {

@@ -4,6 +4,7 @@ import (
 	"google.golang.org/protobuf/encoding/protojson"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformserver/kernel/acceptedformat"
+	"platformserver/kernel/protocol"
 	"platformserver/kernel/records"
 	"platformserver/platform"
 )
@@ -56,7 +57,7 @@ func (b BatchInstall) Install(draft *records.Store, result acceptedformat.Batch)
 	return draft, install, nil
 }
 
-func PublishBatch(result acceptedformat.Batch, publish func(platform.Event, platform.AcceptedEventPlan)) {
+func PublishBatch(result acceptedformat.Batch, publish func(platform.Event, protocol.AcceptedEventPlan)) {
 	for _, decision := range result.Decisions {
 		r := new(pb.ChangeRecord)
 		_ = protojson.Unmarshal(decision.Receipt, r)

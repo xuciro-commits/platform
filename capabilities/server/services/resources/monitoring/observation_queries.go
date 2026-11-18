@@ -2,6 +2,7 @@ package monitoring
 
 import (
 	"net/url"
+	"platformserver/kernel/protocol"
 	"slices"
 	"strconv"
 	"strings"
@@ -18,10 +19,10 @@ func invalidArgument() *platform.Error {
 	return &platform.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 }
 
-func AuditQuery(values url.Values, tenant string, now time.Time) (platform.AuditQuery, *platform.Error) {
+func AuditQuery(values url.Values, tenant string, now time.Time) (protocol.AuditQuery, *platform.Error) {
 	query, refusal := auditWindow(values, now)
 	if refusal != nil {
-		return platform.AuditQuery{}, refusal
+		return protocol.AuditQuery{}, refusal
 	}
 	query.Tenant = tenant
 	query.Member = values.Get("member")
@@ -31,34 +32,34 @@ func AuditQuery(values url.Values, tenant string, now time.Time) (platform.Audit
 	query.Cursor = values.Get("cursor")
 	limit, refusal := pageLimit(values)
 	if refusal != nil {
-		return platform.AuditQuery{}, refusal
+		return protocol.AuditQuery{}, refusal
 	}
 	query.Limit = limit
 	return query, nil
 }
 
-func PersonalReadQuery(values url.Values, tenant string, now time.Time) (platform.PersonalReadQuery, *platform.Error) {
+func PersonalReadQuery(values url.Values, tenant string, now time.Time) (protocol.PersonalReadQuery, *platform.Error) {
 	window, refusal := auditWindow(values, now)
 	if refusal != nil {
-		return platform.PersonalReadQuery{}, refusal
+		return protocol.PersonalReadQuery{}, refusal
 	}
 	limit, refusal := pageLimit(values)
 	if refusal != nil {
-		return platform.PersonalReadQuery{}, refusal
+		return protocol.PersonalReadQuery{}, refusal
 	}
-	return platform.PersonalReadQuery{
+	return protocol.PersonalReadQuery{
 		Tenant: tenant, From: window.From, To: window.To,
 		Member: values.Get("member"), Type: values.Get("type"),
 		Cursor: values.Get("cursor"), Limit: limit,
 	}, nil
 }
 
-func auditWindow(values url.Values, now time.Time) (platform.AuditQuery, *platform.Error) {
+func auditWindow(values url.Values, now time.Time) (protocol.AuditQuery, *platform.Error) {
 	to := now.UTC()
 	if text := values.Get("to"); text != "" {
 		parsed, err := time.Parse(time.RFC3339, text)
 		if err != nil {
-			return platform.AuditQuery{}, invalidArgument()
+			return protocol.AuditQuery{}, invalidArgument()
 		}
 		to = parsed.UTC()
 	}
@@ -66,14 +67,14 @@ func auditWindow(values url.Values, now time.Time) (platform.AuditQuery, *platfo
 	if text := values.Get("from"); text != "" {
 		parsed, err := time.Parse(time.RFC3339, text)
 		if err != nil {
-			return platform.AuditQuery{}, invalidArgument()
+			return protocol.AuditQuery{}, invalidArgument()
 		}
 		from = parsed.UTC()
 	}
 	if !from.Before(to) || to.Sub(from) > maxAuditWindow {
-		return platform.AuditQuery{}, invalidArgument()
+		return protocol.AuditQuery{}, invalidArgument()
 	}
-	return platform.AuditQuery{From: from, To: to}, nil
+	return protocol.AuditQuery{From: from, To: to}, nil
 }
 
 func pageLimit(values url.Values) (int, *platform.Error) {
@@ -103,28 +104,28 @@ func filterSummary(from, to time.Time, limit int, search string, filters ...filt
 	return strings.Join(parts, " ")
 }
 
-func AuditFilterSummary(query platform.AuditQuery) string {
+func AuditFilterSummary(query protocol.AuditQuery) string {
 	return filterSummary(query.From, query.To, query.Limit, query.Search,
 		filter{"member", query.Member}, filter{"app", query.App}, filter{"action", query.Action}, filter{"cursor", query.Cursor})
 }
 
-func PersonalReadFilterSummary(query platform.PersonalReadQuery) string {
+func PersonalReadFilterSummary(query protocol.PersonalReadQuery) string {
 	return filterSummary(query.From, query.To, query.Limit, "",
 		filter{"member", query.Member}, filter{"type", query.Type}, filter{"cursor", query.Cursor})
 }
 
-func ObservationFilterSummary(query platform.ObservationQuery) string {
+func ObservationFilterSummary(query protocol.ObservationQuery) string {
 	return filterSummary(query.From, query.To, query.Limit, query.Search,
 		filter{"level", query.Level}, filter{"source", query.Source}, filter{"app", query.App}, filter{"member", query.Member},
 		filter{"requestId", query.RequestID}, filter{"traceId", query.TraceID}, filter{"runId", query.RunID}, filter{"resource", query.Resource})
 }
 
-func ObservationQuery(values url.Values, tenant string, now time.Time, levelRank func(string) int) (platform.ObservationQuery, *platform.Error) {
+func ObservationQuery(values url.Values, tenant string, now time.Time, levelRank func(string) int) (protocol.ObservationQuery, *platform.Error) {
 	to := now.UTC()
 	if text := values.Get("to"); text != "" {
 		parsed, err := time.Parse(time.RFC3339, text)
 		if err != nil {
-			return platform.ObservationQuery{}, invalidArgument()
+			return protocol.ObservationQuery{}, invalidArgument()
 		}
 		to = parsed.UTC()
 	}
@@ -132,26 +133,26 @@ func ObservationQuery(values url.Values, tenant string, now time.Time, levelRank
 	if text := values.Get("from"); text != "" {
 		parsed, err := time.Parse(time.RFC3339, text)
 		if err != nil {
-			return platform.ObservationQuery{}, invalidArgument()
+			return protocol.ObservationQuery{}, invalidArgument()
 		}
 		from = parsed.UTC()
 	}
 	if !from.Before(to) || to.Sub(from) > maxObservationWindow {
-		return platform.ObservationQuery{}, invalidArgument()
+		return protocol.ObservationQuery{}, invalidArgument()
 	}
 	limit, refusal := pageLimit(values)
 	if refusal != nil {
-		return platform.ObservationQuery{}, refusal
+		return protocol.ObservationQuery{}, refusal
 	}
 	level := values.Get("level")
 	if level != "" && levelRank(level) < 0 {
-		return platform.ObservationQuery{}, invalidArgument()
+		return protocol.ObservationQuery{}, invalidArgument()
 	}
 	source := values.Get("source")
 	if source != "" && !slices.Contains([]string{"request", "submit", "run", "worker", "data", "app"}, source) {
-		return platform.ObservationQuery{}, invalidArgument()
+		return protocol.ObservationQuery{}, invalidArgument()
 	}
-	return platform.ObservationQuery{
+	return protocol.ObservationQuery{
 		Tenant:    tenant,
 		From:      from,
 		To:        to,
@@ -199,20 +200,20 @@ type ObservationReads struct {
 	TenantWide     bool
 	Member         string
 	LevelRank      func(string) int
-	Query          func(platform.ObservationQuery) (platform.ObservationPage, error)
-	Summarize      func(member string, from, to time.Time) (platform.ObservationSummary, error)
-	Audit          func(platform.AuditQuery) (platform.AuditPage, error)
-	PersonalReads  func(platform.PersonalReadQuery) (platform.PersonalReadPage, error)
+	Query          func(protocol.ObservationQuery) (protocol.ObservationPage, error)
+	Summarize      func(member string, from, to time.Time) (protocol.ObservationSummary, error)
+	Audit          func(protocol.AuditQuery) (protocol.AuditPage, error)
+	PersonalReads  func(protocol.PersonalReadQuery) (protocol.PersonalReadPage, error)
 	Remember       func(action, target string)
 	Flush          func()
 	Dropped        func() int64
 	RequestPercent func() int
 }
 
-func (o ObservationReads) Logs(values url.Values) (platform.ObservationPage, *platform.Error) {
+func (o ObservationReads) Logs(values url.Values) (protocol.ObservationPage, *platform.Error) {
 	query, refusal := ObservationQuery(values, o.Tenant, o.Now, o.LevelRank)
 	if refusal != nil {
-		return platform.ObservationPage{}, refusal
+		return protocol.ObservationPage{}, refusal
 	}
 	if !o.TenantWide {
 		query.Member = o.Member
@@ -233,10 +234,10 @@ func (o ObservationReads) Logs(values url.Values) (platform.ObservationPage, *pl
 	return page, nil
 }
 
-func (o ObservationReads) Traces(values url.Values) (platform.ObservationPage, *platform.Error) {
+func (o ObservationReads) Traces(values url.Values) (protocol.ObservationPage, *platform.Error) {
 	query, refusal := ObservationQuery(values, o.Tenant, o.Now, o.LevelRank)
 	if refusal != nil {
-		return platform.ObservationPage{}, refusal
+		return protocol.ObservationPage{}, refusal
 	}
 	query.Source = "request"
 	query.Level = ""
@@ -255,10 +256,10 @@ func (o ObservationReads) Traces(values url.Values) (platform.ObservationPage, *
 	return page, nil
 }
 
-func (o ObservationReads) Metrics(values url.Values) (platform.ObservationSummary, *platform.Error) {
+func (o ObservationReads) Metrics(values url.Values) (protocol.ObservationSummary, *platform.Error) {
 	query, refusal := ObservationQuery(values, o.Tenant, o.Now, o.LevelRank)
 	if refusal != nil {
-		return platform.ObservationSummary{}, refusal
+		return protocol.ObservationSummary{}, refusal
 	}
 	if !o.TenantWide {
 		query.Member = o.Member

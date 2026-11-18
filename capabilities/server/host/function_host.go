@@ -35,9 +35,9 @@ func (t *Tenant) planFunction(c platform.Caller, r *pb.ChangeRecord, request pla
 			return t.bindApplications(ref, release, dependencies)
 		},
 		Model: func(c platform.Caller, r *pb.ChangeRecord, q platform.Request, pending []platform.Effect, options platform.ModelOptions) (agentowner.FunctionDispatch, *platform.Error) {
-			stage := platform.AIStageRuntime
+			stage := protocol.AIStageRuntime
 			if t.simulation {
-				stage = platform.AIStageDesign
+				stage = protocol.AIStageDesign
 			}
 			return t.modelResolver().FunctionDispatch(t.gatewayRuntime().Plan(c, r, q, pending), options, stage)
 		},

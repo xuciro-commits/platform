@@ -16,7 +16,7 @@ import (
 
 type AgentEvaluator struct {
 	mu                sync.Mutex
-	pendingEvaluation *platform.Evaluation
+	pendingEvaluation *runtimeprotocol.Evaluation
 	context           runtimeprotocol.AgentEvaluationRuntime
 }
 
@@ -30,7 +30,7 @@ const evaluationRuns = 20
 const outcomeLimit = 4000
 const suiteRuns = 3
 
-func decision(d *runtimeprotocol.CompiledAgent, steps []platform.RunStep, result string, value func(i int) string) (actions []string, bad []string, out string) {
+func decision(d *runtimeprotocol.CompiledAgent, steps []runtimeprotocol.RunStep, result string, value func(i int) string) (actions []string, bad []string, out string) {
 	for i, s := range steps {
 		tool, ok := d.Toolset[s.Tool]
 		if !ok || tool.Kind != "action" && tool.Kind != "protocol" {
@@ -94,7 +94,7 @@ func minBudget(a, b platform.Budget) platform.Budget {
 	return out
 }
 
-func (a *AgentEvaluator) Evaluate(ctx runtimeprotocol.AgentEvaluationRuntime, ev platform.Evaluation, now time.Time, checkpoint func(*platform.Evaluation) bool) platform.Evaluation {
+func (a *AgentEvaluator) Evaluate(ctx runtimeprotocol.AgentEvaluationRuntime, ev runtimeprotocol.Evaluation, now time.Time, checkpoint func(*runtimeprotocol.Evaluation) bool) runtimeprotocol.Evaluation {
 	a.context = ctx
 	a.mu.Lock()
 	pending := a.pendingEvaluation
@@ -108,7 +108,7 @@ func (a *AgentEvaluator) Evaluate(ctx runtimeprotocol.AgentEvaluationRuntime, ev
 		a.pendingEvaluation = nil
 		a.mu.Unlock()
 	}
-	save := func(ev *platform.Evaluation) bool {
+	save := func(ev *runtimeprotocol.Evaluation) bool {
 		if checkpoint(ev) {
 			return true
 		}
@@ -127,7 +127,7 @@ func (a *AgentEvaluator) Evaluate(ctx runtimeprotocol.AgentEvaluationRuntime, ev
 	digest, config, initialize := "", "", false
 	if refusal := a.read(func() {
 		h := a.context.Host
-		c := a.context.Automation(platform.AgentApp, false)
+		c := a.context.Automation(runtimeprotocol.AgentApp, false)
 		d = a.context.Definition(ev.Agent)
 		digest = ""
 		if ev.Candidate != "" {
@@ -135,7 +135,7 @@ func (a *AgentEvaluator) Evaluate(ctx runtimeprotocol.AgentEvaluationRuntime, ev
 		} else if d != nil {
 			digest = a.context.Version(d)
 		}
-		if ev.Binding == nil || ev.Binding.Stage != platform.AIStageDesign {
+		if ev.Binding == nil || ev.Binding.Stage != runtimeprotocol.AIStageDesign {
 			definitionErr = fmt.Errorf("the evaluation has no trusted execution stage; start a new evaluation")
 		}
 		if definitionErr == nil && ev.DefinitionDigest != "" && digest != ev.DefinitionDigest {
@@ -150,7 +150,7 @@ func (a *AgentEvaluator) Evaluate(ctx runtimeprotocol.AgentEvaluationRuntime, ev
 				if d != nil {
 					options = d.ModelOptions
 				}
-				current, _, refusal := h.ResolveAgentModel(ev.Model, options, platform.AIStageDesign)
+				current, _, refusal := h.ResolveAgentModel(ev.Model, options, runtimeprotocol.AIStageDesign)
 				if refusal != nil {
 					definitionErr = fmt.Errorf("the evaluation model options are invalid")
 				}
@@ -167,11 +167,11 @@ func (a *AgentEvaluator) Evaluate(ctx runtimeprotocol.AgentEvaluationRuntime, ev
 		initialize = ev.DefinitionDigest == "" || ev.ModelConfig == ""
 		if !ev.Suite && ev.Inputs == nil {
 			domain, _ := json.Marshal([]any{[]any{"agent", "=", ev.Agent}, []any{"state", "=", "done"}})
-			past, _, _ := platform.Find[platform.AgentRunRecord](c, platform.Query{Domain: domain, Sort: []string{"-created"}, Limit: 200})
-			ev.Inputs = []platform.EvaluationInput{}
+			past, _, _ := platform.Find[runtimeprotocol.AgentRunRecord](c, platform.Query{Domain: domain, Sort: []string{"-created"}, Limit: 200})
+			ev.Inputs = []runtimeprotocol.EvaluationInput{}
 			for _, run := range past {
 				if len(run.Signals) != 0 {
-					ev.Inputs = append(ev.Inputs, platform.EvaluationInput{Run: run.ID, Revision: run.Revision})
+					ev.Inputs = append(ev.Inputs, runtimeprotocol.EvaluationInput{Run: run.ID, Revision: run.Revision})
 					if len(ev.Inputs) == evaluationRuns {
 						break
 					}
@@ -188,7 +188,7 @@ func (a *AgentEvaluator) Evaluate(ctx runtimeprotocol.AgentEvaluationRuntime, ev
 		if definitionErr != nil {
 			reason = definitionErr.Error()
 		}
-		ev.Cases = append(slices.Clone(ev.Cases), platform.EvalCase{Verdict: "fails", Candidate: reason})
+		ev.Cases = append(slices.Clone(ev.Cases), runtimeprotocol.EvalCase{Verdict: "fails", Candidate: reason})
 		ev.Fails++
 		ev.Score, ev.State = 0, "done"
 		return ev
@@ -203,14 +203,14 @@ func (a *AgentEvaluator) Evaluate(ctx runtimeprotocol.AgentEvaluationRuntime, ev
 		return a.suite(ev, d, model, pv, who, now, save)
 	}
 	for _, input := range ev.Inputs[len(ev.Cases):] {
-		var run platform.AgentRunRecord
+		var run runtimeprotocol.AgentRunRecord
 		var known bool
 		if refusal := a.read(func() {
-			run, known = platform.Get[platform.AgentRunRecord](a.context.Automation(platform.AgentApp, false), input.Run)
+			run, known = platform.Get[runtimeprotocol.AgentRunRecord](a.context.Automation(runtimeprotocol.AgentApp, false), input.Run)
 		}); refusal != nil {
 			return ev
 		}
-		x := platform.EvalCase{Run: input.Run, Verdict: "fails", Candidate: "the evaluation's historical run revision changed"}
+		x := runtimeprotocol.EvalCase{Run: input.Run, Verdict: "fails", Candidate: "the evaluation's historical run revision changed"}
 		if known && run.Revision == input.Revision {
 			x = a.rerun(ev.ID, d, run, model, pv, who, now)
 		}
@@ -221,13 +221,13 @@ func (a *AgentEvaluator) Evaluate(ctx runtimeprotocol.AgentEvaluationRuntime, ev
 		}
 	}
 	if len(ev.Cases) == 0 {
-		ev.Cases = []platform.EvalCase{{Verdict: "nothing", Candidate: "No run of this agent was confirmed, changed or rejected by a person yet, so there is nothing to compare the candidate with. Let people judge its runs first, or run its declared cases."}}
+		ev.Cases = []runtimeprotocol.EvalCase{{Verdict: "nothing", Candidate: "No run of this agent was confirmed, changed or rejected by a person yet, so there is nothing to compare the candidate with. Let people judge its runs first, or run its declared cases."}}
 	}
 	ev.State = "done"
 	return ev
 }
 
-func evaluationScore(ev *platform.Evaluation) {
+func evaluationScore(ev *runtimeprotocol.Evaluation) {
 	ev.Agrees, ev.Differs, ev.Repeats, ev.Avoids, ev.Asks, ev.Fails = 0, 0, 0, 0, 0, 0
 	ev.Tokens, ev.Cost, ev.Score = 0, 0, 0
 	total, passed := 0, 0
@@ -262,12 +262,12 @@ func evaluationScore(ev *platform.Evaluation) {
 	}
 }
 
-func (a *AgentEvaluator) rerun(evaluation string, d *runtimeprotocol.CompiledAgent, run platform.AgentRunRecord, model platform.AIModel, pv platform.AIProvider, who platform.Member, now time.Time) platform.EvalCase {
+func (a *AgentEvaluator) rerun(evaluation string, d *runtimeprotocol.CompiledAgent, run runtimeprotocol.AgentRunRecord, model platform.AIModel, pv platform.AIProvider, who platform.Member, now time.Time) runtimeprotocol.EvalCase {
 	if refusal := a.read(func() { d = a.context.Compiled(run, d) }); refusal != nil {
-		return platform.EvalCase{Run: run.ID, Verdict: "fails", Candidate: refusal.Error()}
+		return runtimeprotocol.EvalCase{Run: run.ID, Verdict: "fails", Candidate: refusal.Error()}
 	}
 	last := run.Signals[len(run.Signals)-1]
-	x := platform.EvalCase{Run: run.ID, Signal: last.Kind}
+	x := runtimeprotocol.EvalCase{Run: run.ID, Signal: last.Kind}
 	changed := func(i int) string {
 		if strings.Contains(run.Steps[i].Outcome, "\nchanged by ") {
 			for _, s := range run.Signals {
@@ -320,8 +320,8 @@ func (a *AgentEvaluator) rerun(evaluation string, d *runtimeprotocol.CompiledAge
 	return x
 }
 
-func (a *AgentEvaluator) suite(ev platform.Evaluation, d *runtimeprotocol.CompiledAgent, model platform.AIModel, pv platform.AIProvider, who platform.Member, now time.Time, checkpoint func(*platform.Evaluation) bool) platform.Evaluation {
-	if refusal := a.read(func() { d = a.context.Compiled(platform.AgentRunRecord{Agent: ev.Agent, OnBehalf: who.ID}, d) }); refusal != nil {
+func (a *AgentEvaluator) suite(ev runtimeprotocol.Evaluation, d *runtimeprotocol.CompiledAgent, model platform.AIModel, pv platform.AIProvider, who platform.Member, now time.Time, checkpoint func(*runtimeprotocol.Evaluation) bool) runtimeprotocol.Evaluation {
+	if refusal := a.read(func() { d = a.context.Compiled(runtimeprotocol.AgentRunRecord{Agent: ev.Agent, OnBehalf: who.ID}, d) }); refusal != nil {
 		return ev
 	}
 	ceiling, spent := evalBudget(d.Budget, len(d.Cases)*suiteRuns), platform.Budget{}
@@ -332,7 +332,7 @@ func (a *AgentEvaluator) suite(ev platform.Evaluation, d *runtimeprotocol.Compil
 	}
 	for n, c := range d.Cases {
 		if n == len(ev.Cases) {
-			ev.Cases = append(ev.Cases, platform.EvalCase{Case: c.Name})
+			ev.Cases = append(ev.Cases, runtimeprotocol.EvalCase{Case: c.Name})
 		}
 		for ev.Cases[n].Runs < suiteRuns {
 			x := ev.Cases[n]
@@ -340,7 +340,7 @@ func (a *AgentEvaluator) suite(ev platform.Evaluation, d *runtimeprotocol.Compil
 			room := budgetLeft(ceiling, spent)
 			miss := "over the evaluation's budget"
 			if room.Steps > 0 && room.Tokens > 0 && (ceiling.Cost == 0 || room.Cost > 0) {
-				run := platform.AgentRunRecord{Record: platform.Record{ID: fmt.Sprintf("%s:%s:%d", ev.ID, c.Name, i+1)}, Agent: ev.Agent, Goal: c.Goal, Ref: c.Ref, OnBehalf: who.ID}
+				run := runtimeprotocol.AgentRunRecord{Record: platform.Record{ID: fmt.Sprintf("%s:%s:%d", ev.ID, c.Name, i+1)}, Agent: ev.Agent, Goal: c.Goal, Ref: c.Ref, OnBehalf: who.ID}
 				dry, failed := a.dryRun(ev.ID, d, run, model, pv, who, now, minBudget(d.Budget, room))
 				x.Steps, x.Tokens, x.Cost = x.Steps+dry.StepsUsed, x.Tokens+dry.TokensUsed, x.Cost+dry.Cost
 				spent.Steps, spent.Tokens, spent.Cost = spent.Steps+dry.StepsUsed, spent.Tokens+dry.TokensUsed, spent.Cost+dry.Cost
@@ -386,9 +386,9 @@ func (a *AgentEvaluator) suite(ev platform.Evaluation, d *runtimeprotocol.Compil
 	return ev
 }
 
-func (a *AgentEvaluator) dryRun(evaluation string, d *runtimeprotocol.CompiledAgent, run platform.AgentRunRecord, model platform.AIModel, pv platform.AIProvider, who platform.Member, now time.Time, room platform.Budget) (platform.AgentRunRecord, string) {
+func (a *AgentEvaluator) dryRun(evaluation string, d *runtimeprotocol.CompiledAgent, run runtimeprotocol.AgentRunRecord, model platform.AIModel, pv platform.AIProvider, who platform.Member, now time.Time, room platform.Budget) (runtimeprotocol.AgentRunRecord, string) {
 	h := a.context.Host
-	dry := platform.AgentRunRecord{Protocol: map[int]json.RawMessage{}, Record: run.Record, Agent: run.Agent, Goal: run.Goal, Ref: run.Ref, Seen: run.Seen, OnBehalf: run.OnBehalf, Steps: []platform.RunStep{}}
+	dry := runtimeprotocol.AgentRunRecord{Protocol: map[int]json.RawMessage{}, Record: run.Record, Agent: run.Agent, Goal: run.Goal, Ref: run.Ref, Seen: run.Seen, OnBehalf: run.OnBehalf, Steps: []runtimeprotocol.RunStep{}}
 	priorTokens := 0
 	for _, usage := range h.AgentUsage() {
 		if usage.Run == evaluation+":"+run.ID+":evaluation" {
@@ -398,12 +398,12 @@ func (a *AgentEvaluator) dryRun(evaluation string, d *runtimeprotocol.CompiledAg
 	for dry.StepsUsed < room.Steps && dry.TokensUsed < room.Tokens {
 		var req platform.ChatRequest
 		if refusal := a.read(func() {
-			req = a.context.Prompt(a.context.Automation(platform.AgentApp, false), d, dry, model.Name(), now)
+			req = a.context.Prompt(a.context.Automation(runtimeprotocol.AgentApp, false), d, dry, model.Name(), now)
 		}); refusal != nil {
 			return dry, refusal.Error()
 		}
 		req.Run = evaluation + ":" + run.ID + ":evaluation"
-		binding, _, problem := h.ResolveAgentModel(model.Name(), model.Defaults, platform.AIStageDesign)
+		binding, _, problem := h.ResolveAgentModel(model.Name(), model.Defaults, runtimeprotocol.AIStageDesign)
 		if problem != nil {
 			return dry, problem.Error()
 		}
@@ -448,7 +448,7 @@ func (a *AgentEvaluator) dryRun(evaluation string, d *runtimeprotocol.CompiledAg
 		for i, call := range calls {
 			var args map[string]any
 			json.Unmarshal(call.Arguments, &args)
-			step := platform.RunStep{At: now, Tool: call.Name, Arguments: string(call.Arguments), CallID: call.ID}
+			step := runtimeprotocol.RunStep{At: now, Tool: call.Name, Arguments: string(call.Arguments), CallID: call.ID}
 			if i == 0 {
 				step.Calls, step.Content = calls, answer.Content
 			}
@@ -475,7 +475,7 @@ func (a *AgentEvaluator) dryRun(evaluation string, d *runtimeprotocol.CompiledAg
 	return dry, ""
 }
 
-func (a *AgentEvaluator) dryUse(d *runtimeprotocol.CompiledAgent, run, dry platform.AgentRunRecord, tool runtimeprotocol.CompiledAgentTool, args map[string]any, raw json.RawMessage, now time.Time) string {
+func (a *AgentEvaluator) dryUse(d *runtimeprotocol.CompiledAgent, run, dry runtimeprotocol.AgentRunRecord, tool runtimeprotocol.CompiledAgentTool, args map[string]any, raw json.RawMessage, now time.Time) string {
 	strip := func(s string) string {
 		var m map[string]json.RawMessage
 		json.Unmarshal([]byte(s), &m)
@@ -501,11 +501,11 @@ func (a *AgentEvaluator) dryUse(d *runtimeprotocol.CompiledAgent, run, dry platf
 	return answer
 }
 
-func (a *AgentEvaluator) dryUseScoped(d *runtimeprotocol.CompiledAgent, run, dry platform.AgentRunRecord, tool runtimeprotocol.CompiledAgentTool, args map[string]any, raw json.RawMessage, now time.Time, observes bool) string {
+func (a *AgentEvaluator) dryUseScoped(d *runtimeprotocol.CompiledAgent, run, dry runtimeprotocol.AgentRunRecord, tool runtimeprotocol.CompiledAgentTool, args map[string]any, raw json.RawMessage, now time.Time, observes bool) string {
 	h := a.context.Host
-	c := a.context.Automation(platform.AgentApp, true)
+	c := a.context.Automation(runtimeprotocol.AgentApp, true)
 	if observes && tool.Kind != "knowledge" {
-		out, _ := a.context.Use(c, d, &dry, tool, args, raw, &platform.RunStep{}, now)
+		out, _ := a.context.Use(c, d, &dry, tool, args, raw, &runtimeprotocol.RunStep{}, now)
 		return out
 	}
 	target, _ := args["target"].(string)

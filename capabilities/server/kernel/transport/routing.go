@@ -2,6 +2,7 @@ package transport
 
 import (
 	"net/http"
+	"platformserver/kernel/protocol"
 
 	"google.golang.org/protobuf/encoding/protojson"
 
@@ -50,12 +51,12 @@ func DecodeSubmission(body []byte, correctionOf string) (*pb.Submission, *platfo
 	return sub, nil
 }
 
-func SignInOf(issuer, client string, development bool, identities func() []platform.LoginIdentity, mint func(string) string) SignIn {
+func SignInOf(issuer, client string, development bool, identities func() []protocol.LoginIdentity, mint func(string) string) SignIn {
 	out := SignIn{}
 	if issuer != "" {
 		out.Issuer, out.Client = issuer, client
 	} else if development {
-		out.Identities = append([]platform.LoginIdentity{}, identities()...)
+		out.Identities = append([]protocol.LoginIdentity{}, identities()...)
 		if mint != nil {
 			for i := range out.Identities {
 				out.Identities[i].Token = mint(out.Identities[i].Token)

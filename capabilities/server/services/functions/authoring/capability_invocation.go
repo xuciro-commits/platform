@@ -3,6 +3,7 @@ package authoring
 import (
 	"encoding/json"
 	"fmt"
+	"platformserver/kernel/protocol"
 	"slices"
 	"strconv"
 	"strings"
@@ -14,20 +15,20 @@ import (
 )
 
 type CapabilityPreparation struct {
-	Descriptor platform.CapabilityDescriptor
+	Descriptor protocol.CapabilityDescriptor
 	Inputs     json.RawMessage
 	Sources    []string
 	Query      json.RawMessage
 }
 
 type CapabilityHooks struct {
-	Retained  func() (platform.CapabilityDescriptor, bool)
-	Palette   func() []platform.CapabilityDescriptor
+	Retained  func() (protocol.CapabilityDescriptor, bool)
+	Palette   func() []protocol.CapabilityDescriptor
 	ReadQuery func() (json.RawMessage, *platform.Error)
 	Bind      func() (json.RawMessage, []string, *platform.Error)
 }
 
-func CheckInvocation(q platform.CapabilityInvocation) *platform.Error {
+func CheckInvocation(q protocol.CapabilityInvocation) *platform.Error {
 	if len(q.Key) == 0 || len(q.Key) > 200 || strings.ContainsAny(q.Key, "/\x00\r\n") || q.Version < 0 {
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Choose a capability and bounded stable invocation key")
 	}
@@ -37,7 +38,7 @@ func CheckInvocation(q platform.CapabilityInvocation) *platform.Error {
 	return nil
 }
 
-func PrepareCapability(h CapabilityHooks, q platform.CapabilityInvocation) (CapabilityPreparation, *platform.Error) {
+func PrepareCapability(h CapabilityHooks, q protocol.CapabilityInvocation) (CapabilityPreparation, *platform.Error) {
 	out := CapabilityPreparation{}
 	selected := false
 	if q.Version > 0 {
@@ -75,7 +76,7 @@ func PrepareCapability(h CapabilityHooks, q platform.CapabilityInvocation) (Capa
 	return out, nil
 }
 
-func BoundActionPayload(q platform.CapabilityInvocation, bound json.RawMessage) (json.RawMessage, *platform.Error) {
+func BoundActionPayload(q protocol.CapabilityInvocation, bound json.RawMessage) (json.RawMessage, *platform.Error) {
 	if len(q.Bindings) == 0 && q.Record == "" {
 		return q.Inputs, nil
 	}
@@ -90,7 +91,7 @@ func BoundActionPayload(q platform.CapabilityInvocation, bound json.RawMessage) 
 	return payload, nil
 }
 
-func FunctionCallPayload(q platform.CapabilityInvocation) ([]byte, *platform.Error) {
+func FunctionCallPayload(q protocol.CapabilityInvocation) ([]byte, *platform.Error) {
 	if q.Target != "" || q.ExpectedRevision != nil || len(q.Sources) != 0 || q.Record != "" || len(q.Bindings) != 0 {
 		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "AI function takes a readable source record")
 	}
@@ -163,7 +164,7 @@ func MemberQueryVersion(definitions []platform.Definition, appVersion string, re
 	return platform.NamedQuery{}, "", false
 }
 
-func VisibleCapabilities(definitions []platform.Definition, builder bool, allowed func(d platform.Definition, permission string, roles []string) bool) []platform.CapabilityDescriptor {
+func VisibleCapabilities(definitions []platform.Definition, builder bool, allowed func(d platform.Definition, permission string, roles []string) bool) []protocol.CapabilityDescriptor {
 	visible := make([]platform.Definition, 0, len(definitions))
 	for _, definition := range definitions {
 		if len(definition.Provides) == 0 {
@@ -178,19 +179,19 @@ func VisibleCapabilities(definitions []platform.Definition, builder bool, allowe
 	return CapabilityPalette(visible, builder)
 }
 
-func DescribeCapability(ref platform.AssetRef, version int, retained func() (platform.CapabilityDescriptor, bool), palette func() []platform.CapabilityDescriptor) (platform.CapabilityDescriptor, *platform.Error) {
+func DescribeCapability(ref platform.AssetRef, version int, retained func() (protocol.CapabilityDescriptor, bool), palette func() []protocol.CapabilityDescriptor) (protocol.CapabilityDescriptor, *platform.Error) {
 	if version > 0 {
 		if descriptor, ok := retained(); ok {
 			return descriptor, nil
 		}
-		return platform.CapabilityDescriptor{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "Retained capability is unavailable to this member")
+		return protocol.CapabilityDescriptor{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "Retained capability is unavailable to this member")
 	}
 	for _, descriptor := range palette() {
 		if descriptor.Ref == ref {
 			return descriptor, nil
 		}
 	}
-	return platform.CapabilityDescriptor{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "Capability or retained version is unavailable to this member")
+	return protocol.CapabilityDescriptor{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "Capability or retained version is unavailable to this member")
 }
 
 type RetainedHooks struct {
@@ -201,38 +202,38 @@ type RetainedHooks struct {
 	Allowed   func(name string, roles []string) bool
 }
 
-func RetainedCapability(app platform.App, ref platform.AssetRef, version int, h RetainedHooks) (platform.CapabilityDescriptor, bool) {
+func RetainedCapability(app platform.App, ref platform.AssetRef, version int, h RetainedHooks) (protocol.CapabilityDescriptor, bool) {
 	if app == nil || version < 1 {
-		return platform.CapabilityDescriptor{}, false
+		return protocol.CapabilityDescriptor{}, false
 	}
 	selected := CapabilityVersion{Ref: ref, AppVersion: app.Manifest().Version, Revision: version}
 	switch ref.Kind {
 	case platform.AssetQuery:
 		query, source, ok := h.Query()
 		if !ok {
-			return platform.CapabilityDescriptor{}, false
+			return protocol.CapabilityDescriptor{}, false
 		}
 		selected.Query, selected.QueryVersion = &query, source
 		selected.Entity = QueryEntity(h.Entities(), query.Object)
 	case platform.AssetCompute:
 		operation, ordinal, ok := h.Operation(ref.App, ref.Name, version)
 		if !ok || ordinal != version || !h.Allowed(operation.Name, operation.Roles) {
-			return platform.CapabilityDescriptor{}, false
+			return protocol.CapabilityDescriptor{}, false
 		}
 		selected.Operation = &operation
 	case platform.AssetFunction:
 		function, ordinal, ok := h.Function(app, ref.Name, version)
 		if !ok || ordinal != version || !h.Allowed(function.Name, function.Roles) || !FunctionReadable(function, h.Entities()) {
-			return platform.CapabilityDescriptor{}, false
+			return protocol.CapabilityDescriptor{}, false
 		}
 		selected.Function = &function
 	default:
-		return platform.CapabilityDescriptor{}, false
+		return protocol.CapabilityDescriptor{}, false
 	}
 	return DescribeRetainedCapability(selected)
 }
 
-func ActionAnswer(answer platform.CapabilityResult, record *pb.ChangeRecord) platform.CapabilityResult {
+func ActionAnswer(answer protocol.CapabilityResult, record *pb.ChangeRecord) protocol.CapabilityResult {
 	if record == nil {
 		answer.State = "pending"
 		return answer
@@ -260,24 +261,24 @@ type Closures struct {
 	Resolver publication.Resolver
 	Assets   func() ([]platform.ReleaseAsset, error)
 	Describe func(platform.ReleaseAsset) (platform.ReleaseAsset, error)
-	Retain   func(candidate platform.ReleaseCandidate, ref platform.AssetRef, sourceVersion string, retained *string) (platform.ReleaseCandidate, string, error)
+	Retain   func(candidate protocol.ReleaseCandidate, ref platform.AssetRef, sourceVersion string, retained *string) (protocol.ReleaseCandidate, string, error)
 	Version  func(app string) string
 }
 
 func NewClosures(resolver publication.Resolver, assets func() ([]platform.ReleaseAsset, error), describe func(platform.ReleaseAsset) (platform.ReleaseAsset, error),
-	retain func(platform.ReleaseCandidate, platform.AssetRef, string, *string) (platform.ReleaseCandidate, string, error),
+	retain func(protocol.ReleaseCandidate, platform.AssetRef, string, *string) (protocol.ReleaseCandidate, string, error),
 	version func(string) string) Closures {
 	return Closures{Resolver: resolver, Assets: assets, Describe: describe, Retain: retain, Version: version}
 }
 
-func (c Closures) capability(ref platform.AssetRef, body json.RawMessage, sourceVersion string, retained *string) (platform.ReleaseCandidate, string, error) {
+func (c Closures) capability(ref platform.AssetRef, body json.RawMessage, sourceVersion string, retained *string) (protocol.ReleaseCandidate, string, error) {
 	available, err := c.Assets()
 	if err != nil {
-		return platform.ReleaseCandidate{}, "", err
+		return protocol.ReleaseCandidate{}, "", err
 	}
 	i := slices.IndexFunc(available, func(a platform.ReleaseAsset) bool { return a.Ref == ref })
 	if i < 0 {
-		return platform.ReleaseCandidate{}, "", fmt.Errorf("capability %s has no release owner", ref)
+		return protocol.ReleaseCandidate{}, "", fmt.Errorf("capability %s has no release owner", ref)
 	}
 	available[i].Body = body
 	if sourceVersion != "" {
@@ -285,19 +286,19 @@ func (c Closures) capability(ref platform.AssetRef, body json.RawMessage, source
 	}
 	available[i], err = c.Describe(available[i])
 	if err != nil {
-		return platform.ReleaseCandidate{}, "", err
+		return protocol.ReleaseCandidate{}, "", err
 	}
 	candidate, err := c.Resolver.Candidate([]platform.AssetRef{ref}, available)
 	if err != nil {
-		return platform.ReleaseCandidate{}, "", err
+		return protocol.ReleaseCandidate{}, "", err
 	}
 	return c.Retain(candidate, ref, sourceVersion, retained)
 }
 
-func (c Closures) closure(app string, kind platform.AssetKind, name, suffix string, definition any, version int, retained *string) (platform.ReleaseCandidate, string, error) {
+func (c Closures) closure(app string, kind platform.AssetKind, name, suffix string, definition any, version int, retained *string) (protocol.ReleaseCandidate, string, error) {
 	body, err := json.Marshal(definition)
 	if err != nil {
-		return platform.ReleaseCandidate{}, "", err
+		return protocol.ReleaseCandidate{}, "", err
 	}
 	sourceVersion := ""
 	if version > 0 {
@@ -306,10 +307,10 @@ func (c Closures) closure(app string, kind platform.AssetKind, name, suffix stri
 	return c.capability(platform.AssetRef{App: app, Kind: kind, Name: name}, body, sourceVersion, retained)
 }
 
-func (c Closures) Operation(app string, op platform.Operation, version int, retained *string) (platform.ReleaseCandidate, string, error) {
+func (c Closures) Operation(app string, op platform.Operation, version int, retained *string) (protocol.ReleaseCandidate, string, error) {
 	return c.closure(app, platform.AssetCompute, op.Name, ".compute-", op, version, retained)
 }
 
-func (c Closures) Function(app string, f platform.AIFunction, version int, retained *string) (platform.ReleaseCandidate, string, error) {
+func (c Closures) Function(app string, f platform.AIFunction, version int, retained *string) (protocol.ReleaseCandidate, string, error) {
 	return c.closure(app, platform.AssetFunction, f.Name, ".function-", f, version, retained)
 }

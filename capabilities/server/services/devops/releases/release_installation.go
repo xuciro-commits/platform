@@ -102,7 +102,7 @@ func CompatibleStoredRemoval(old, next platform.EntityInfo) bool {
 
 type ReleaseExtensionReview = platform.PackageImpactExtension
 
-func InstallationPlan(registry *publication.AssetRegistry, installation platform.ReleaseInstallation) (platform.AssetInstallation, error) {
+func InstallationPlan(registry *publication.AssetRegistry, installation platform.ReleaseInstallation) (ruleprotocol.AssetInstallation, error) {
 	app := build.ID
 	if installation.Ref != nil {
 		app = installation.Ref.App
@@ -117,7 +117,7 @@ func InstallationPlan(registry *publication.AssetRegistry, installation platform
 	return plan, nil
 }
 
-func BindInstallationPredecessors(plans []platform.AssetInstallation, read func(string) (string, error)) ([]platform.ReleaseInstallation, error) {
+func BindInstallationPredecessors(plans []ruleprotocol.AssetInstallation, read func(string) (string, error)) ([]platform.ReleaseInstallation, error) {
 	installations := make([]platform.ReleaseInstallation, 0, len(plans))
 	for _, plan := range plans {
 		before, err := read(plan.Record)
@@ -129,9 +129,9 @@ func BindInstallationPredecessors(plans []platform.AssetInstallation, read func(
 	}
 	return installations, nil
 }
-func SelectOwnerDrafts(drafts []platform.AssetDraft, context platform.AssetReleaseContext, request *OwnerDraftRequest) ([]platform.AssetDraft, error) {
+func SelectOwnerDrafts(drafts []ruleprotocol.AssetDraft, context ruleprotocol.AssetReleaseContext, request *OwnerDraftRequest) ([]ruleprotocol.AssetDraft, error) {
 	if request != nil && request.Refs != nil {
-		drafts = slices.DeleteFunc(drafts, func(draft platform.AssetDraft) bool { return !request.Refs[draft.Ref] })
+		drafts = slices.DeleteFunc(drafts, func(draft ruleprotocol.AssetDraft) bool { return !request.Refs[draft.Ref] })
 	}
 	if request != nil && request.Until != 0 {
 		if !context.DraftsOnly || request.From < 0 || request.Until > len(drafts) || request.From >= request.Until || request.Until-request.From > 64 {
@@ -208,14 +208,14 @@ func CheckExtensions(entities []platform.EntityInfo, lookup func(string) (platfo
 		if !exists {
 			return fmt.Errorf("extension %s base %s is unavailable", info.Type, info.Extends)
 		}
-		if err := platform.CheckExtension(info, base); err != nil {
+		if err := ruleprotocol.CheckExtension(info, base); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-func ExtensionReview(candidate platform.ReleaseCandidate, entities []platform.EntityInfo, shapes map[string]platform.EntityInfo, lookup func(string) (platform.EntityInfo, bool), source func(string) (platform.AssetBinding, bool)) ([]ReleaseExtensionReview, error) {
+func ExtensionReview(candidate ruleprotocol.ReleaseCandidate, entities []platform.EntityInfo, shapes map[string]platform.EntityInfo, lookup func(string) (platform.EntityInfo, bool), source func(string) (platform.AssetBinding, bool)) ([]ReleaseExtensionReview, error) {
 	versions := map[string]string{}
 	for _, asset := range candidate.Assets {
 		if asset.Ref.Kind == platform.AssetObject {
@@ -254,7 +254,7 @@ func ExtensionReview(candidate platform.ReleaseCandidate, entities []platform.En
 		}
 		if !exists {
 			row.Issue = "extension base is unavailable"
-		} else if err := platform.CheckExtension(extension, base); err != nil {
+		} else if err := ruleprotocol.CheckExtension(extension, base); err != nil {
 			row.Issue = err.Error()
 		}
 		result = append(result, row)
@@ -262,7 +262,7 @@ func ExtensionReview(candidate platform.ReleaseCandidate, entities []platform.En
 	return result, nil
 }
 
-func ReviewExtensions(candidate platform.ReleaseCandidate, apps []platform.App, entities []platform.EntityInfo,
+func ReviewExtensions(candidate ruleprotocol.ReleaseCandidate, apps []platform.App, entities []platform.EntityInfo,
 	lookup func(string) (platform.EntityInfo, bool), source func(string) (platform.AssetBinding, bool)) ([]ReleaseExtensionReview, error) {
 	shapes, err := AssetShapes(apps, candidate.Assets)
 	if err != nil {
@@ -287,7 +287,7 @@ func AssetShapes(apps []platform.App, available []platform.ReleaseAsset) (map[st
 	if len(assets) == 0 {
 		return shapes, nil
 	}
-	bound, err := owner.(platform.ReleaseExecutionOwner).ForkReleaseExecution(assets)
+	bound, err := owner.(ruleprotocol.ReleaseExecutionOwner).ForkReleaseExecution(assets)
 	if err != nil {
 		return nil, err
 	}
@@ -306,7 +306,7 @@ func AssetShapes(apps []platform.App, available []platform.ReleaseAsset) (map[st
 	return shapes, nil
 }
 
-func PrepareInstallation(runtime InstallationRuntime, candidate platform.ReleaseCandidate, member platform.Member, at time.Time, upgrade, activating bool) ([]platform.ReleaseInstallation, json.RawMessage, error) {
+func PrepareInstallation(runtime InstallationRuntime, candidate ruleprotocol.ReleaseCandidate, member platform.Member, at time.Time, upgrade, activating bool) ([]platform.ReleaseInstallation, json.RawMessage, error) {
 	if !runtime.HasAgentRuntime() && slices.ContainsFunc(candidate.Assets, func(asset platform.ReleaseAsset) bool {
 		return asset.Ref.App == build.ID && asset.Ref.Kind == platform.AssetAgent
 	}) {
@@ -316,7 +316,7 @@ func PrepareInstallation(runtime InstallationRuntime, candidate platform.Release
 	if err != nil {
 		return nil, nil, err
 	}
-	context := platform.AssetReleaseContext{Member: member, At: at, Upgrade: upgrade}
+	context := ruleprotocol.AssetReleaseContext{Member: member, At: at, Upgrade: upgrade}
 	context.Project = runtime.ReleaseProject(candidate)
 	view, bootstrap, err := runtime.Bootstrap(candidate, context, !activating)
 	if err != nil {
@@ -357,7 +357,7 @@ func PrepareInstallation(runtime InstallationRuntime, candidate platform.Release
 	return installations, bootstrap, nil
 }
 
-func PrepareLifecycle(runtime InstallationRuntime, candidate platform.ReleaseCandidate, member platform.Member, at time.Time, upgrade bool) ([]platform.ReleaseInstallation, json.RawMessage, error) {
+func PrepareLifecycle(runtime InstallationRuntime, candidate ruleprotocol.ReleaseCandidate, member platform.Member, at time.Time, upgrade bool) ([]platform.ReleaseInstallation, json.RawMessage, error) {
 	if err := CheckProposalFunctions(candidate); err != nil {
 		return nil, nil, err
 	}
@@ -367,10 +367,10 @@ func PrepareLifecycle(runtime InstallationRuntime, candidate platform.ReleaseCan
 type InstallationRuntime interface {
 	HasAgentRuntime() bool
 	Registry() (*publication.AssetRegistry, error)
-	Bootstrap(platform.ReleaseCandidate, platform.AssetReleaseContext, bool) (InstallationRuntime, json.RawMessage, error)
+	Bootstrap(ruleprotocol.ReleaseCandidate, ruleprotocol.AssetReleaseContext, bool) (InstallationRuntime, json.RawMessage, error)
 	Predecessor(string) (string, error)
 	Stage([]platform.ReleaseInstallation, bool) (InstallationRuntime, error)
-	ReleaseProject(platform.ReleaseCandidate) string
+	ReleaseProject(ruleprotocol.ReleaseCandidate) string
 	CheckExtensions() error
 	CheckStorage(InstallationRuntime, bool) error
 	Pending(string, []byte) error
@@ -479,7 +479,7 @@ type ValidationContext struct {
 	Navigation              func(platform.Page, string) error
 }
 
-func StageInstallations(registry *publication.AssetRegistry, installations []platform.ReleaseInstallation, apply platform.AssetApplyContext, check func(platform.AssetInstallation, platform.ReleaseInstallation) error, record func(platform.AssetInstallation) error) error {
+func StageInstallations(registry *publication.AssetRegistry, installations []platform.ReleaseInstallation, apply ruleprotocol.AssetApplyContext, check func(ruleprotocol.AssetInstallation, platform.ReleaseInstallation) error, record func(ruleprotocol.AssetInstallation) error) error {
 	for _, installation := range installations {
 		plan, err := InstallationPlan(registry, installation)
 		if err != nil {
@@ -499,7 +499,7 @@ func StageInstallations(registry *publication.AssetRegistry, installations []pla
 }
 
 func StageReleaseInstallation(registry *publication.AssetRegistry, installations []platform.ReleaseInstallation, projection *records.Store,
-	apply platform.AssetApplyContext, register func(platform.AssetInstallation) error) error {
+	apply ruleprotocol.AssetApplyContext, register func(ruleprotocol.AssetInstallation) error) error {
 	for _, installation := range installations {
 		plan, err := InstallationPlan(registry, installation)
 		if err != nil {
@@ -522,8 +522,8 @@ func StageReleaseInstallation(registry *publication.AssetRegistry, installations
 	return nil
 }
 
-func RegisterInstalledDefinition(definitions []platform.Definition, plan platform.AssetInstallation,
-	resolve func(platform.AssetInstallation) (platform.Definition, bool, error), set func([]platform.Definition)) error {
+func RegisterInstalledDefinition(definitions []platform.Definition, plan ruleprotocol.AssetInstallation,
+	resolve func(ruleprotocol.AssetInstallation) (platform.Definition, bool, error), set func([]platform.Definition)) error {
 	definition, indexed, err := resolve(plan)
 	if err != nil || !indexed {
 		return err

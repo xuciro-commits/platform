@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"platformserver/kernel/protocol"
 	"slices"
 	"strings"
 	"time"
@@ -210,6 +211,6 @@ func DispatchAnswerSubmission(tenant, authority string, caller platform.Member, 
 	}
 	return &pb.Submission{TenantId: tenant, PrincipalId: caller.ID, Authority: authority,
 		IdempotencyKey: fmt.Sprintf("dispatch-read:%s:%d:%s", run.ID, run.Revision, at.UTC().Format(time.RFC3339Nano)),
-		Target:         &pb.EntityRef{Type: platform.DispatchType, Id: run.ID}, Schema: &pb.SchemaRef{Name: platform.DispatchAnswerSchema, Version: 1},
+		Target:         &pb.EntityRef{Type: protocol.DispatchType, Id: run.ID}, Schema: &pb.SchemaRef{Name: protocol.DispatchAnswerSchema, Version: 1},
 		Payload: platform.Raw(map[string]any{"revision": run.Revision, "intent": run.Intent, "outcome": reading.State, "reason": reading.Reason, "reading": reading, "answer": reading.Observed})}
 }

@@ -4,12 +4,11 @@ import (
 	"encoding/base64"
 	"fmt"
 	"maps"
+	"platformserver/kernel/protocol"
 	"slices"
 	"strconv"
 	"strings"
 	"time"
-
-	"platformserver/platform"
 )
 
 const (
@@ -17,7 +16,7 @@ const (
 	maxObservationLimit     = 200
 )
 
-func normalizeObservation(event platform.Observation) platform.Observation {
+func normalizeObservation(event protocol.Observation) protocol.Observation {
 	event.At = event.At.UTC()
 	if event.Attributes == nil {
 		event.Attributes = map[string]string{}
@@ -27,7 +26,7 @@ func normalizeObservation(event platform.Observation) platform.Observation {
 	return event
 }
 
-func encodeObservationCursor(event platform.Observation) string {
+func encodeObservationCursor(event protocol.Observation) string {
 	payload := strconv.FormatInt(event.At.Unix(), 10) + "." + fmt.Sprintf("%09d", event.At.Nanosecond()) + "." + event.ID
 	return base64.RawURLEncoding.EncodeToString([]byte(payload))
 }
@@ -52,7 +51,7 @@ func decodeObservationCursor(cursor string) (time.Time, string, error) {
 	return time.Unix(seconds, nanos).UTC(), parts[2], nil
 }
 
-func prepareObservationQuery(query platform.ObservationQuery) (time.Time, string, bool, error) {
+func prepareObservationQuery(query protocol.ObservationQuery) (time.Time, string, bool, error) {
 	if query.Tenant == "" {
 		return time.Time{}, "", false, fmt.Errorf("observations: tenant is required")
 	}
@@ -73,7 +72,7 @@ func observationLimit(limit int) int {
 	return limit
 }
 
-func observationMatches(event platform.Observation, query platform.ObservationQuery) bool {
+func observationMatches(event protocol.Observation, query protocol.ObservationQuery) bool {
 	if event.Tenant != query.Tenant {
 		return false
 	}
@@ -125,12 +124,12 @@ func observationMatches(event platform.Observation, query platform.ObservationQu
 	return true
 }
 
-func observationBefore(event platform.Observation, at time.Time, id string) bool {
+func observationBefore(event protocol.Observation, at time.Time, id string) bool {
 	return event.At.Before(at) || event.At.Equal(at) && event.ID < id
 }
 
-func sortObservationsNewest(events []platform.Observation) {
-	slices.SortFunc(events, func(left, right platform.Observation) int {
+func sortObservationsNewest(events []protocol.Observation) {
+	slices.SortFunc(events, func(left, right protocol.Observation) int {
 		if order := right.At.Compare(left.At); order != 0 {
 			return order
 		}
@@ -138,8 +137,8 @@ func sortObservationsNewest(events []platform.Observation) {
 	})
 }
 
-func sortObservationsOldest(events []platform.Observation) {
-	slices.SortFunc(events, func(left, right platform.Observation) int {
+func sortObservationsOldest(events []protocol.Observation) {
+	slices.SortFunc(events, func(left, right protocol.Observation) int {
 		if order := left.At.Compare(right.At); order != 0 {
 			return order
 		}
@@ -147,7 +146,7 @@ func sortObservationsOldest(events []platform.Observation) {
 	})
 }
 
-func earliestObservation(events []platform.Observation, tenant string) time.Time {
+func earliestObservation(events []protocol.Observation, tenant string) time.Time {
 	var earliest time.Time
 	for _, event := range events {
 		if event.Tenant != tenant {
@@ -160,13 +159,13 @@ func earliestObservation(events []platform.Observation, tenant string) time.Time
 	return earliest.UTC()
 }
 
-func selectObservationPage(events []platform.Observation, query platform.ObservationQuery, retainedFrom time.Time) (platform.ObservationPage, error) {
+func selectObservationPage(events []protocol.Observation, query protocol.ObservationQuery, retainedFrom time.Time) (protocol.ObservationPage, error) {
 	cursorAt, cursorID, hasCursor, err := prepareObservationQuery(query)
 	if err != nil {
-		return platform.ObservationPage{}, err
+		return protocol.ObservationPage{}, err
 	}
 	limit := observationLimit(query.Limit)
-	matched := make([]platform.Observation, 0, min(len(events), limit+1))
+	matched := make([]protocol.Observation, 0, min(len(events), limit+1))
 	for _, event := range events {
 		if hasCursor && !observationBefore(event, cursorAt, cursorID) {
 			continue
@@ -183,14 +182,14 @@ func selectObservationPage(events []platform.Observation, query platform.Observa
 	return finishObservationPage(matched, retainedFrom, hasMore), nil
 }
 
-func finishObservationPage(entries []platform.Observation, retainedFrom time.Time, hasMore bool) platform.ObservationPage {
+func finishObservationPage(entries []protocol.Observation, retainedFrom time.Time, hasMore bool) protocol.ObservationPage {
 	if entries == nil {
-		entries = []platform.Observation{}
+		entries = []protocol.Observation{}
 	}
-	page := platform.ObservationPage{
+	page := protocol.ObservationPage{
 		Entries:  entries,
 		HasMore:  hasMore,
-		Coverage: platform.ObservationLogCoverage{RetainedFrom: retainedFrom.UTC(), Truncated: hasMore},
+		Coverage: protocol.ObservationLogCoverage{RetainedFrom: retainedFrom.UTC(), Truncated: hasMore},
 	}
 	if hasMore {
 		page.NextCursor = encodeObservationCursor(entries[len(entries)-1])

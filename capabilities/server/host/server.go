@@ -46,8 +46,8 @@ type Host struct {
 	stats               *transport.Stats
 	limiter             *transport.Limiter
 	web                 *transport.WebFiles
-	Templates           func() []platform.TenantTemplate
-	CreateTenant        func(platform.CreateTenantRequest, string) (*Tenant, error)
+	Templates           func() []runtimeprotocol.TenantTemplate
+	CreateTenant        func(runtimeprotocol.CreateTenantRequest, string) (*Tenant, error)
 	routes              []transport.Route
 	SecondFactor        Attest
 }
@@ -77,7 +77,7 @@ func (h *Host) currentTenants() []*Tenant {
 	return tenants
 }
 
-func consoleOf(t *Tenant) platform.IdentitySessions {
+func consoleOf(t *Tenant) runtimeprotocol.IdentitySessions {
 	return t.IdentityOwner
 }
 

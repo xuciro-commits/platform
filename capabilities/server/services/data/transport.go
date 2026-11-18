@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/url"
+	runtimeprotocol "platformserver/kernel/protocol"
 	"slices"
 	"strings"
 	"time"
@@ -129,12 +130,12 @@ func (t Transport) QueueConfirmation(c platform.Caller, r *pb.ChangeRecord, run 
 		}
 		receipt := proto.Clone(r).(*pb.ChangeRecord)
 		receipt.Submission.PrincipalId = member.ID
-		receipt.Submission.Target = &pb.EntityRef{Type: platform.ConfirmationType, Id: run.ID}
+		receipt.Submission.Target = &pb.EntityRef{Type: runtimeprotocol.ConfirmationType, Id: run.ID}
 		target := declaration.Target
 		if target == "" || target == "$subject" {
 			_, target, _ = strings.Cut(run.Subject, "/")
 		}
-		applicant.Request(receipt, platform.Request{Tag: p.Name + map[bool]string{true: ":compensate"}[compensate], Key: intent, Provider: p.Protocol.Provider, Protocol: declaration.Protocol, Action: action, Target: target, Payload: run.Input, Reply: platform.ConfirmationAnswerSchema})
+		applicant.Request(receipt, platform.Request{Tag: p.Name + map[bool]string{true: ":compensate"}[compensate], Key: intent, Provider: p.Protocol.Provider, Protocol: declaration.Protocol, Action: action, Target: target, Payload: run.Input, Reply: runtimeprotocol.ConfirmationAnswerSchema})
 		return nil
 	}
 	var req WritebackRequest
@@ -188,7 +189,7 @@ func (t Transport) ResolveConfirmationDelivery(c platform.Caller, run platform.C
 	}
 	resolve := func(id, state, reason string) *platform.Error {
 		effect, sending, ok := t.Queued(id)
-		if !ok || platform.EffectSettled(effect.State) {
+		if !ok || runtimeprotocol.EffectSettled(effect.State) {
 			return nil
 		}
 		var request WritebackRequest

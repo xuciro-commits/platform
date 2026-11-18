@@ -14,6 +14,7 @@ import (
 	"net/url"
 	"os"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
+	"platformserver/kernel/protocol"
 	"platformserver/platform"
 	"regexp"
 	"slices"
@@ -25,23 +26,23 @@ import (
 type Credentials struct {
 	mu     sync.RWMutex
 	tenant string
-	values map[string]platform.CredentialState
+	values map[string]protocol.CredentialState
 }
 
 func NewCredentials(tenant string) *Credentials {
-	return &Credentials{tenant: tenant, values: map[string]platform.CredentialState{}}
+	return &Credentials{tenant: tenant, values: map[string]protocol.CredentialState{}}
 }
-func (d *Credentials) SnapshotState() map[string]platform.CredentialState {
+func (d *Credentials) SnapshotState() map[string]protocol.CredentialState {
 	d.mu.RLock()
 	defer d.mu.RUnlock()
 	return maps.Clone(d.values)
 }
-func (d *Credentials) Restore(state map[string]platform.CredentialState) {
+func (d *Credentials) Restore(state map[string]protocol.CredentialState) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	d.values = state
 	if d.values == nil {
-		d.values = map[string]platform.CredentialState{}
+		d.values = map[string]protocol.CredentialState{}
 	}
 }
 
@@ -73,11 +74,11 @@ func credentialCipher() (cipher.AEAD, error) {
 	}
 	return cipher.NewGCMWithRandomNonce(block)
 }
-func credentialAAD(tenant string, w platform.CredentialWrite) []byte {
+func credentialAAD(tenant string, w protocol.CredentialWrite) []byte {
 	w.Sealed = ""
 	return platform.Raw(struct {
 		Tenant string                   `json:"tenant"`
-		Write  platform.CredentialWrite `json:"write"`
+		Write  protocol.CredentialWrite `json:"write"`
 	}{tenant, w})
 }
 func CredentialOrigin(address string) string {
@@ -91,7 +92,7 @@ func CredentialOrigin(address string) string {
 	}
 	return scheme + "://" + host
 }
-func checkCredentialDefinition(w platform.CredentialWrite) error {
+func checkCredentialDefinition(w protocol.CredentialWrite) error {
 	if !credentialName.MatchString(w.ID) || strings.TrimSpace(w.Title) == "" || w.ExpectedVersion < 0 || !slices.Contains([]string{"api-key", "bearer", "password"}, w.Kind) || !slices.Contains([]string{"managed", "deployment"}, w.Source) || len(w.Bindings) == 0 || len(w.Bindings) > 32 {
 		return fmt.Errorf("Credential identity, type, source and bounded use bindings are required")
 	}
@@ -106,7 +107,7 @@ func checkCredentialDefinition(w platform.CredentialWrite) error {
 	}
 	return nil
 }
-func openCredential(tenant string, w platform.CredentialWrite) ([]byte, error) {
+func openCredential(tenant string, w protocol.CredentialWrite) ([]byte, error) {
 	aead, err := credentialCipher()
 	if err != nil {
 		return nil, err
@@ -135,8 +136,8 @@ func CheckCredentialSave(tenant string, s *pb.Submission) *platform.Error {
 	return nil
 }
 
-func DecodeCredentialWrite(tenant string, raw []byte) (platform.CredentialWrite, error) {
-	var w platform.CredentialWrite
+func DecodeCredentialWrite(tenant string, raw []byte) (protocol.CredentialWrite, error) {
+	var w protocol.CredentialWrite
 	decoder := json.NewDecoder(bytes.NewReader(raw))
 	decoder.DisallowUnknownFields()
 	if err := decoder.Decode(&w); err != nil {
@@ -153,28 +154,28 @@ func DecodeCredentialWrite(tenant string, raw []byte) (platform.CredentialWrite,
 	return w, nil
 }
 
-func (d *Credentials) Credential(id string) (platform.CredentialState, bool) {
+func (d *Credentials) Credential(id string) (protocol.CredentialState, bool) {
 	d.mu.RLock()
 	defer d.mu.RUnlock()
 	value, ok := d.values[id]
 	return value, ok
 }
-func (d *Credentials) Catalog() platform.CredentialCatalog {
+func (d *Credentials) Catalog() protocol.CredentialCatalog {
 	d.mu.RLock()
 	defer d.mu.RUnlock()
 	_, err := credentialCipher()
-	out := platform.CredentialCatalog{Credentials: []platform.CredentialInfo{}, ManagedAvailable: err == nil}
+	out := protocol.CredentialCatalog{Credentials: []protocol.CredentialInfo{}, ManagedAvailable: err == nil}
 	for _, value := range d.values {
 		out.Credentials = append(out.Credentials, value.CredentialInfo)
 	}
-	slices.SortFunc(out.Credentials, func(a, b platform.CredentialInfo) int { return strings.Compare(a.ID, b.ID) })
+	slices.SortFunc(out.Credentials, func(a, b protocol.CredentialInfo) int { return strings.Compare(a.ID, b.ID) })
 	return out
 }
 func (d *Credentials) Prepare(c platform.Caller, s *pb.Submission, now time.Time) (func(*pb.ChangeRecord), *platform.Error) {
 	id := s.GetTarget().GetId()
 	previous, exists := d.Credential(id)
 	version := previous.Version
-	var next platform.CredentialState
+	var next protocol.CredentialState
 	if s.GetSchema().GetName() == SchemaCredentialDisable {
 		var request struct {
 			ExpectedVersion int `json:"expectedVersion"`
@@ -192,13 +193,13 @@ func (d *Credentials) Prepare(c platform.Caller, s *pb.Submission, now time.Time
 		if w.ExpectedVersion != version {
 			return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Credential version changed; reload before saving")
 		}
-		next = platform.CredentialState{CredentialInfo: platform.CredentialInfo{CredentialDefinition: w.CredentialDefinition, State: "active"}, Sealed: w.Sealed, SealedVersion: w.ExpectedVersion}
+		next = protocol.CredentialState{CredentialInfo: protocol.CredentialInfo{CredentialDefinition: w.CredentialDefinition, State: "active"}, Sealed: w.Sealed, SealedVersion: w.ExpectedVersion}
 	}
 	next.Version, next.UpdatedAt, next.UpdatedBy = version+1, now, c.ID
 	return func(*pb.ChangeRecord) { d.mu.Lock(); defer d.mu.Unlock(); d.values[id] = next }, nil
 }
 
-func ResolveCredential(tenant string, owner platform.Credentials, secret func(string) ([]byte, bool), name, consumer, address string) ([]byte, string, error) {
+func ResolveCredential(tenant string, owner protocol.Credentials, secret func(string) ([]byte, bool), name, consumer, address string) ([]byte, string, error) {
 	deployment := func(reference, kind string) ([]byte, string, error) {
 		value, ok := secret(reference)
 		if !ok {
@@ -217,37 +218,37 @@ func ResolveCredential(tenant string, owner platform.Credentials, secret func(st
 	if record.State != "active" {
 		return nil, "", fmt.Errorf("Credential is disabled. Enable or replace it in Credentials.")
 	}
-	if !slices.ContainsFunc(record.Bindings, func(b platform.CredentialBinding) bool { return b.Consumer == consumer && b.Origin == origin }) {
+	if !slices.ContainsFunc(record.Bindings, func(b protocol.CredentialBinding) bool { return b.Consumer == consumer && b.Origin == origin }) {
 		return nil, "", fmt.Errorf("Credential is saved but is not authorized for this service and address. Edit its allowed uses in Credentials.")
 	}
 	if record.Source == "deployment" {
 		return deployment(record.Reference, record.Kind)
 	}
-	value, err := openCredential(tenant, platform.CredentialWrite{CredentialDefinition: record.CredentialDefinition, ExpectedVersion: record.SealedVersion, Sealed: record.Sealed})
+	value, err := openCredential(tenant, protocol.CredentialWrite{CredentialDefinition: record.CredentialDefinition, ExpectedVersion: record.SealedVersion, Sealed: record.Sealed})
 	if err != nil {
 		return nil, record.Kind, fmt.Errorf("Saved credential cannot be decrypted. Check the host encryption key or replace the credential in Credentials.")
 	}
 	return value, record.Kind, nil
 }
 
-func SealCredential(tenant string, owner platform.Credentials, request platform.CredentialSealRequest) (platform.CredentialWrite, *platform.Error) {
+func SealCredential(tenant string, owner protocol.Credentials, request protocol.CredentialSealRequest) (protocol.CredentialWrite, *platform.Error) {
 	if request.Source != "managed" || request.Sealed != "" || len(request.Value) > 8192 || strings.ContainsAny(request.Value, "\r\n") || checkCredentialDefinition(request.CredentialWrite) != nil {
-		return platform.CredentialWrite{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "A valid credential and nonempty single-line value are required")
+		return protocol.CredentialWrite{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "A valid credential and nonempty single-line value are required")
 	}
 	if request.Value == "" {
 		record, exists := owner.Credential(request.ID)
 		if !exists || record.Source != "managed" || record.Version != request.ExpectedVersion {
-			return platform.CredentialWrite{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Enter a value for a new credential or reload the current version")
+			return protocol.CredentialWrite{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Enter a value for a new credential or reload the current version")
 		}
-		value, err := openCredential(tenant, platform.CredentialWrite{CredentialDefinition: record.CredentialDefinition, ExpectedVersion: record.SealedVersion, Sealed: record.Sealed})
+		value, err := openCredential(tenant, protocol.CredentialWrite{CredentialDefinition: record.CredentialDefinition, ExpectedVersion: record.SealedVersion, Sealed: record.Sealed})
 		if err != nil {
-			return platform.CredentialWrite{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "The current encrypted value is unavailable")
+			return protocol.CredentialWrite{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "The current encrypted value is unavailable")
 		}
 		request.Value = string(value)
 	}
 	aead, err := credentialCipher()
 	if err != nil {
-		return platform.CredentialWrite{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
+		return protocol.CredentialWrite{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
 	}
 	request.Sealed = credentialEnvelopePrefix + base64.StdEncoding.EncodeToString(aead.Seal(nil, nil, []byte(request.Value), credentialAAD(tenant, request.CredentialWrite)))
 	return request.CredentialWrite, nil

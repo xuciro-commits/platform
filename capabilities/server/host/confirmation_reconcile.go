@@ -3,6 +3,7 @@ package host
 import (
 	"context"
 	"encoding/json"
+	"platformserver/kernel/protocol"
 	dataowner "platformserver/services/data"
 	"time"
 
@@ -19,7 +20,7 @@ func (t *Tenant) ReconcileConfirmations(at time.Time) {
 	dataowner.ConfirmationReconcile{Schedule: &t.schedules.Confirmations,
 		Pending: func() ([]platform.ConfirmationRun, *platform.Error) {
 			return recordRead(t, context.Background(), func(t *Tenant) ([]platform.ConfirmationRun, *platform.Error) {
-				return platform.PendingConfirmations(t.automation(build.ID, false))
+				return protocol.PendingConfirmations(t.automation(build.ID, false))
 			})
 		},
 		Plan: func(id string, i int) (dataowner.ConfirmationReadPlan, *platform.Error) {

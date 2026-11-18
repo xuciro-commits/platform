@@ -43,7 +43,7 @@ type ManagedPreparation struct {
 	Resolver   publication.Resolver
 	Code       func() ([]platform.ReleaseAsset, error)
 	Impact     func(string, []platform.ReleaseAsset) (platform.PackageLifecycleImpact, error)
-	Bootstrap  func(platform.ReleaseCandidate, platform.AssetReleaseContext) error
+	Bootstrap  func(protocol.ReleaseCandidate, protocol.AssetReleaseContext) error
 	Registry   func() (*publication.AssetRegistry, error)
 	Projection *records.Store
 
@@ -132,7 +132,7 @@ func (p ManagedPreparation) Prepare() (func(*pb.ChangeRecord), *platform.Error) 
 		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Remove references to {resource} from {consumer} before switching the product version", impact.References[0].Resource.String(), impact.References[0].Consumer.String())
 	}
 	projectID, _ := p.Managed.Project()
-	context := platform.AssetReleaseContext{Member: p.Caller.Member, At: p.At, ManagedBy: p.Descriptor.ID, ManagedAssets: refs, Project: projectID, Upgrade: p.Upgrade}
+	context := protocol.AssetReleaseContext{Member: p.Caller.Member, At: p.At, ManagedBy: p.Descriptor.ID, ManagedAssets: refs, Project: projectID, Upgrade: p.Upgrade}
 	if err := p.Bootstrap(candidate, context); err != nil {
 		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The package cannot be installed: {reason}", err.Error())
 	}
@@ -214,14 +214,14 @@ func (m Managed) Owned(code, owned []platform.ReleaseAsset) (map[platform.AssetR
 	return refs, nil
 }
 
-func (m Managed) Install(r *pb.ChangeRecord, refs map[platform.AssetRef]bool, plans []platform.AssetInstallation, media []platform.MediaSetVersion) {
+func (m Managed) Install(r *pb.ChangeRecord, refs map[platform.AssetRef]bool, plans []protocol.AssetInstallation, media []platform.MediaSetVersion) {
 	tenant := m.Caller.Member.Tenant
 	projectID, projectName := m.Project()
 	project, _ := platform.Get[protocol.Application](m.Caller, projectID)
 	project.ID, project.Name, project.Title, project.State, project.Archived = projectID, projectName, m.Descriptor.Title, "published", false
 	m.Caller.Put(r, project)
 	projectRef := platform.AssetRef{App: build.ID, Kind: platform.AssetApp, Name: projectName}
-	m.Caller.Put(r, build.Resource{Record: platform.Record{ID: platform.ResourceID(tenant, projectRef)}, Ref: projectRef, Type: protocol.AppType, Draft: projectID, Project: projectID, Title: m.Descriptor.Title, State: "active", Version: 1, ManagedBy: m.Descriptor.ID})
+	m.Caller.Put(r, build.Resource{Record: platform.Record{ID: protocol.ResourceID(tenant, projectRef)}, Ref: projectRef, Type: protocol.AppType, Draft: projectID, Project: projectID, Title: m.Descriptor.Title, State: "active", Version: 1, ManagedBy: m.Descriptor.ID})
 	for _, plan := range plans {
 		typ, id, _ := strings.Cut(plan.Record, "/")
 		value, err := m.Rows.Decode(typ, plan.Image)
@@ -238,8 +238,8 @@ func (m Managed) Install(r *pb.ChangeRecord, refs map[platform.AssetRef]bool, pl
 		if title.Title == "" {
 			title.Title = ref.Name
 		}
-		resource, _ := platform.Get[build.Resource](m.Caller, platform.ResourceID(tenant, ref))
-		resource.ID, resource.Ref, resource.Type, resource.Draft = platform.ResourceID(tenant, ref), ref, typ, id
+		resource, _ := platform.Get[build.Resource](m.Caller, protocol.ResourceID(tenant, ref))
+		resource.ID, resource.Ref, resource.Type, resource.Draft = protocol.ResourceID(tenant, ref), ref, typ, id
 		resource.Project, resource.ManagedBy, resource.State, resource.Title, resource.Archived = projectID, m.Descriptor.ID, "active", title.Title, false
 		resource.Version++
 		m.Caller.Put(r, resource)

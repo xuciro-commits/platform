@@ -178,7 +178,7 @@ func (b *Runtime) transactAttempt(c platform.Caller, receipt *pb.ChangeRecord, t
 			if json.Unmarshal(invocation.GetPayload(), &submitted) != nil {
 				return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Invalid transaction inputs / 事务输入无效")
 			}
-			if issues := platform.InputIssues(transition.Parameters, submitted); len(issues) > 0 {
+			if issues := ruleprotocol.InputIssues(transition.Parameters, submitted); len(issues) > 0 {
 				refusal := c.RefuseFields(issues)
 				for _, issue := range issues {
 					if issue.Code == "required" && len(issue.Path) > 0 {
@@ -641,10 +641,10 @@ func (b *Runtime) transactAttempt(c platform.Caller, receipt *pb.ChangeRecord, t
 }
 
 type Runtime struct {
-	platform.BusinessRuntimeContext
+	ruleprotocol.BusinessRuntimeContext
 }
 
-func NewRuntime(context platform.BusinessRuntimeContext) platform.TransactionExecutor {
+func NewRuntime(context ruleprotocol.BusinessRuntimeContext) ruleprotocol.TransactionExecutor {
 	return &Runtime{BusinessRuntimeContext: context}
 }
 

@@ -5,6 +5,7 @@ import (
 	"io"
 	"net/http"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
+	"platformserver/kernel/protocol"
 	"platformserver/kernel/records"
 	transport "platformserver/kernel/transport"
 	"platformserver/platform"
@@ -54,7 +55,7 @@ func (h *Host) routesRecords(rt *routes) {
 		}
 		return platform.NewCaller(runtime{t: t}, m, info.App, false, false).ReadRecordSet(info.Type, r.PathValue("id"), r.PathValue("name"), h.Now())
 	}))
-	rt.recordRead(transport.Route{Pattern: "POST /v1/relation-migrations/preview", Summary: "Preview an explicit migration of historical links into their endpoint owner's records", Body: platform.AssetBinding{}, Answer: platform.RelationMigrationPlan{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
+	rt.recordRead(transport.Route{Pattern: "POST /v1/relation-migrations/preview", Summary: "Preview an explicit migration of historical links into their endpoint owner's records", Body: platform.AssetBinding{}, Answer: protocol.RelationMigrationPlan{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
 		var binding platform.AssetBinding
 		decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 64<<10))
 		decoder.DisallowUnknownFields()
@@ -88,7 +89,7 @@ func (h *Host) routesRecords(rt *routes) {
 	rt.recordRead(transport.Route{Pattern: "GET /v1/chain/{type}/{id}", Summary: "The chain an agent run or a flow instance belongs to: its record, flows, runs and the effects they caused", Answer: automation.Chain{}}, transport.Answering(func(r *http.Request, m platform.Member, t *Tenant) (automation.Chain, *platform.Error) {
 		return t.chainRead(m, r.PathValue("type")+"/"+r.PathValue("id"), h.Now())
 	}))
-	rt.handle(transport.Route{Pattern: "POST /v1/import/{type}", Summary: "Import records from CSV: a header of field names with an id column; each row is the type's generated create or edit as the caller", Query: []transport.Param{{Name: "preview", Description: "true: check each row and apply none"}}, Body: []byte{}, Answer: []platform.ImportRow{}}, transport.Answering(func(r *http.Request, m platform.Member, t *Tenant) ([]platform.ImportRow, *platform.Error) {
+	rt.handle(transport.Route{Pattern: "POST /v1/import/{type}", Summary: "Import records from CSV: a header of field names with an id column; each row is the type's generated create or edit as the caller", Query: []transport.Param{{Name: "preview", Description: "true: check each row and apply none"}}, Body: []byte{}, Answer: []protocol.ImportRow{}}, transport.Answering(func(r *http.Request, m platform.Member, t *Tenant) ([]protocol.ImportRow, *platform.Error) {
 		body, _ := io.ReadAll(io.LimitReader(r.Body, 16<<20))
 		rows, err := t.Import(m, r.PathValue("type"), body, r.URL.Query().Get("preview") == "true", h.Now())
 		if err == nil {
@@ -152,7 +153,7 @@ func (h *Host) routesRecords(rt *routes) {
 	rt.recordRead(transport.Route{Pattern: "GET /v1/search", Summary: "Records of every type the caller may read, by words and by the types' names", Answer: []build.Hit{}, Query: []transport.Param{{Name: "q", Description: "What to find"}}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
 		WriteJSON(w, http.StatusOK, t.searchRead(&m, r.URL.Query().Get("q"), h.Now()))
 	})
-	rt.handle(transport.Route{Pattern: "GET /v1/knowledge", Summary: "Passages of the knowledge the caller may read, best first", Answer: []platform.Passage{}, Query: []transport.Param{{Name: "q", Description: "What to find"}}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
+	rt.handle(transport.Route{Pattern: "GET /v1/knowledge", Summary: "Passages of the knowledge the caller may read, best first", Answer: []protocol.Passage{}, Query: []transport.Param{{Name: "q", Description: "What to find"}}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
 		WriteJSON(w, http.StatusOK, t.Knowledge(&m, "", r.URL.Query().Get("q"), 8, h.Now()))
 	})
 	rt.recordRead(transport.Route{Pattern: "GET /v1/transcripts", Summary: "Model calls in full, for administrators of the agent or AI app who may also read what the run read (#130)", Answer: []Transcript{}, Query: []transport.Param{{Name: "run", Description: "An agent run"}}}, transport.Answering(func(r *http.Request, m platform.Member, t *Tenant) ([]Transcript, *platform.Error) {

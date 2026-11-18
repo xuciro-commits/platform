@@ -3,6 +3,7 @@ package ontology
 import (
 	"encoding/json"
 	"fmt"
+	runtimeprotocol "platformserver/kernel/protocol"
 	"slices"
 	"strings"
 
@@ -199,7 +200,7 @@ func ObjectDependencies(asset platform.ReleaseAsset, historical bool) ([]platfor
 		}
 		requires = append(requires, info.ObjectView.Application, info.ObjectView.Page)
 	}
-	provides = append(provides, platform.Capability{Kind: "interface", Name: asset.Ref.Name, Side: platform.CapabilityPure, Inputs: platform.ValueSchema{}, Outputs: platform.CapabilityEntitySchema(info)})
+	provides = append(provides, platform.Capability{Kind: "interface", Name: asset.Ref.Name, Side: platform.CapabilityPure, Inputs: platform.ValueSchema{}, Outputs: runtimeprotocol.CapabilityEntitySchema(info)})
 	for _, name := range info.Implements {
 		owner, _, _ := strings.Cut(name, ".")
 		requires = append(requires, platform.AssetRef{App: owner, Kind: platform.AssetInterface, Name: name})
@@ -427,6 +428,6 @@ func ActionDependencies(asset platform.ReleaseAsset, historical bool) ([]platfor
 	for _, ref := range transaction.Bindings {
 		add(ref)
 	}
-	provides := []platform.Capability{{Kind: "action", Name: action.Schema, Side: platform.CapabilityAuthoritative, Roles: action.Roles, Inputs: platform.CapabilityFieldsSchema(action.Payload), Parameters: action.Payload}}
+	provides := []platform.Capability{{Kind: "action", Name: action.Schema, Side: platform.CapabilityAuthoritative, Roles: action.Roles, Inputs: runtimeprotocol.CapabilityFieldsSchema(action.Payload), Parameters: action.Payload}}
 	return requires, provides, nil
 }

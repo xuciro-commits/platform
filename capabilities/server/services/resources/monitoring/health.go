@@ -1,10 +1,9 @@
 package monitoring
 
 import (
+	"platformserver/kernel/protocol"
 	"runtime/debug"
 	"time"
-
-	"platformserver/platform"
 )
 
 var Started = time.Now().UTC().Truncate(time.Second)
@@ -55,7 +54,7 @@ func Queues(now time.Time, apps []string, due func(app string) []time.Time) []Qu
 	return queues
 }
 
-func OpenBreakers(breakers []platform.Breaker) int {
+func OpenBreakers(breakers []protocol.Breaker) int {
 	open := 0
 	for _, b := range breakers {
 		if b.State != "closed" {
@@ -85,7 +84,7 @@ type Health struct {
 	Apps          int                `json:"apps"`
 	Queues        []QueueHealth      `json:"queues"`
 	Failed        int                `json:"failed"`
-	Breakers      []platform.Breaker `json:"breakers"`
+	Breakers      []protocol.Breaker `json:"breakers"`
 	OpenBreakers  int                `json:"openBreakers"`
 	Connectors    int                `json:"connectorsFailing"`
 	Endpoints     int                `json:"endpointsFailing"`
@@ -97,7 +96,7 @@ type HealthSource struct {
 	Apps         int
 	Fault        func() (string, bool)
 	Dropped      func() int64
-	Breakers     func() []platform.Breaker
+	Breakers     func() []protocol.Breaker
 	Queues       func() ([]QueueHealth, int)
 	Connectors   func() int
 	Endpoints    func() int
@@ -107,7 +106,7 @@ type HealthSource struct {
 
 func (s HealthSource) Assess() Health {
 	if reason, faulted := s.Fault(); faulted {
-		return Health{Status: "quarantined", RecoveryError: reason, Started: Started, Built: Built(), Apps: s.Apps, Queues: []QueueHealth{}, Breakers: []platform.Breaker{},
+		return Health{Status: "quarantined", RecoveryError: reason, Started: Started, Built: Built(), Apps: s.Apps, Queues: []QueueHealth{}, Breakers: []protocol.Breaker{},
 			Observations: ObservationHealth{Dropped: s.Dropped()}, Readiness: Quarantined(reason)}
 	}
 	h := Health{Status: "ok", Started: Started, Built: Built(), Apps: s.Apps, Queues: []QueueHealth{}, Breakers: s.Breakers()}

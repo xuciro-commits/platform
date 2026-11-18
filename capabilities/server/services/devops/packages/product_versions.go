@@ -4,6 +4,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
+	"platformserver/kernel/protocol"
 
 	"slices"
 
@@ -12,7 +13,7 @@ import (
 	"platformserver/services/resources/publication"
 )
 
-func FreezeVersion(resolver publication.Resolver, raw []byte, request platform.ProductVersionRequest, views func() []platform.PackageView) (platform.FrozenProductVersion, error) {
+func FreezeVersion(resolver publication.Resolver, raw []byte, request platform.ProductVersionRequest, views func() []protocol.PackageView) (platform.FrozenProductVersion, error) {
 	if len(raw) == 0 {
 		return platform.FrozenProductVersion{}, fmt.Errorf("release candidate %s is not saved", request.Candidate)
 	}
@@ -36,7 +37,7 @@ func FreezeVersion(resolver publication.Resolver, raw []byte, request platform.P
 	}, nil
 }
 
-func productDescriptor(resolver publication.Resolver, candidate platform.ReleaseCandidate, request platform.ProductVersionRequest, packageViews func() []platform.PackageView) (platform.PackageDescriptor, error) {
+func productDescriptor(resolver publication.Resolver, candidate protocol.ReleaseCandidate, request platform.ProductVersionRequest, packageViews func() []protocol.PackageView) (platform.PackageDescriptor, error) {
 	closed, err := resolver.Closure(candidate, request.Roots)
 	if err != nil {
 		return platform.PackageDescriptor{}, err
@@ -48,7 +49,7 @@ func productDescriptor(resolver publication.Resolver, candidate platform.Release
 	external := map[platform.AssetRef]bool{}
 	if len(product.Requires) > 0 {
 		views := packageViews()
-		index := &platform.PackageIndex{}
+		index := &protocol.PackageIndex{}
 		installed := map[string]platform.PackageDescriptor{}
 		for _, view := range views {
 			index.Packages = append(index.Packages, view.Descriptor)

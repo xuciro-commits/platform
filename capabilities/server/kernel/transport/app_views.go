@@ -3,6 +3,7 @@ package transport
 import (
 	"cmp"
 	"encoding/json"
+	"platformserver/kernel/protocol"
 	"slices"
 
 	"platformserver/platform"
@@ -81,6 +82,6 @@ type MeView struct {
 	Languages   []string              `json:"languages"`
 	Preferred   string                `json:"preferred,omitempty"`
 	Currency    string                `json:"currency"`
-	Account     platform.Account      `json:"account"`
-	Tenant      platform.TenantRecord `json:"tenant"`
+	Account     protocol.Account      `json:"account"`
+	Tenant      protocol.TenantRecord `json:"tenant"`
 }

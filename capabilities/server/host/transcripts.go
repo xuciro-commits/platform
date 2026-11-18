@@ -1,6 +1,7 @@
 package host
 
 import (
+	"platformserver/kernel/protocol"
 	"time"
 
 	"platformserver/platform"
@@ -8,7 +9,7 @@ import (
 )
 
 func (t *Tenant) transcripts() aigateway.Transcripts {
-	days := aigateway.TranscriptDays(func(name string) string { return t.setting(t.automation(platform.AgentApp, false), name) })
+	days := aigateway.TranscriptDays(func(name string) string { return t.setting(t.automation(protocol.AgentApp, false), name) })
 	return aigateway.Transcripts{Tenant: t.ID, Days: days, Enabled: t.Agents != nil, Store: t.Log()}
 }
 
@@ -34,7 +35,7 @@ func (t *Tenant) withheld(m platform.Member, run string, now time.Time) bool {
 	if t.Agents == nil || run == "" {
 		return true
 	}
-	r, known := platform.Get[platform.AgentRunRecord](t.automation(platform.AgentApp, false), run)
+	r, known := platform.Get[protocol.AgentRunRecord](t.automation(protocol.AgentApp, false), run)
 	if !known {
 		return true
 	}

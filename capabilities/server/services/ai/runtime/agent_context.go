@@ -18,13 +18,13 @@ import (
 )
 
 func visibleAgentInstructions(c platform.Caller, d *protocol.CompiledAgent) string {
-	if d.App == "build" && !c.Holds(platform.AgentApp, platform.AgentAdmin) && !c.Holds("build", "builder") {
+	if d.App == "build" && !c.Holds(protocol.AgentApp, protocol.AgentAdmin) && !c.Holds("build", "builder") {
 		return ""
 	}
 	return d.Instructions
 }
 
-func (a *Agents) ObserveAgentKnowledge(run platform.AgentRunRecord, args json.RawMessage, now time.Time) json.RawMessage {
+func (a *Agents) ObserveAgentKnowledge(run protocol.AgentRunRecord, args json.RawMessage, now time.Time) json.RawMessage {
 	var p struct{ Query string }
 	json.Unmarshal(args, &p)
 	app := ""
@@ -34,7 +34,7 @@ func (a *Agents) ObserveAgentKnowledge(run platform.AgentRunRecord, args json.Ra
 	return a.host.AgentKnowledge(a.reader(run), app, p.Query, 4, now)
 }
 
-func (a *Agents) prompt(c platform.Caller, d *protocol.CompiledAgent, run platform.AgentRunRecord, model string, now time.Time) platform.ChatRequest {
+func (a *Agents) prompt(c platform.Caller, d *protocol.CompiledAgent, run protocol.AgentRunRecord, model string, now time.Time) platform.ChatRequest {
 	input := agents.Prompt{Goal: run.Goal, OnBehalf: run.OnBehalf, Ref: run.Ref,
 		Instructions: d.Instructions, Meaning: a.host.AgentMeaning(d.App),
 		Glossary: a.host.AgentGlossary(d.App), Language: a.host.AgentLanguage(run.Language)}
@@ -72,7 +72,7 @@ func (a *Agents) prompt(c platform.Caller, d *protocol.CompiledAgent, run platfo
 	return request
 }
 
-func (a *Agents) reader(run platform.AgentRunRecord) *platform.Member {
+func (a *Agents) reader(run protocol.AgentRunRecord) *platform.Member {
 	if run.OnBehalf != "" {
 		if m, ok := a.host.Member(run.OnBehalf); ok {
 			m.Scopes = slices.Clone(run.Scopes)
@@ -83,7 +83,7 @@ func (a *Agents) reader(run platform.AgentRunRecord) *platform.Member {
 	return nil
 }
 
-func (a *Agents) readsAs(run platform.AgentRunRecord) *platform.Member {
+func (a *Agents) readsAs(run protocol.AgentRunRecord) *platform.Member {
 	if m := a.reader(run); m != nil {
 		return m
 	}
@@ -92,17 +92,17 @@ func (a *Agents) readsAs(run platform.AgentRunRecord) *platform.Member {
 		app = d.App
 	}
 	if app == "" {
-		return &platform.Member{ID: "app:" + platform.AgentApp, Tenant: a.tenant}
+		return &platform.Member{ID: "app:" + protocol.AgentApp, Tenant: a.tenant}
 	}
 	return a.host.AgentAppReader(app)
 }
 
 func memoryEntity() platform.Entity {
-	people := []string{platform.AgentAdmin, platform.AnyMember}
-	return platform.Entity{Type: platform.MemoryType, Title: "Agent memory", Model: platform.Memory{}, Display: "fact",
+	people := []string{protocol.AgentAdmin, platform.AnyMember}
+	return platform.Entity{Type: protocol.MemoryType, Title: "Agent memory", Model: protocol.Memory{}, Display: "fact",
 		Derived:  []platform.Derivation{{From: "sources", Fields: []string{"fact", "sources"}}},
 		Withheld: "withheld",
-		Scope:    platform.Scope{Participants: func(record any) []string { return []string{record.(platform.Memory).For} }},
+		Scope:    platform.Scope{Participants: func(record any) []string { return []string{record.(protocol.Memory).For} }},
 		Lifecycle: &platform.Lifecycle{Field: "state", Initial: "proposed",
 			States: []platform.State{{Name: "proposed", Title: "Proposed", Tone: "warning"}, {Name: "active", Title: "Remembered", Tone: "success"},
 				{Name: "forgotten", Title: "Forgotten", Tone: "neutral"}},
@@ -115,7 +115,7 @@ func memoryEntity() platform.Entity {
 					Description: "Keep a memory for good: an agent administrator any, a person those about them.",
 					Criteria:    platform.ActionCriteria{State: &platform.FieldCondition{Field: "state", In: []string{"proposed", "active"}}},
 					Rules: []platform.ActionRule{{Function: func(c platform.Caller, record any, _ json.RawMessage, _ time.Time) *platform.Error {
-						m := record.(*platform.Memory)
+						m := record.(*protocol.Memory)
 						if err := mayRemember(c, *m); err != nil {
 							return err
 						}
@@ -131,35 +131,35 @@ func memoryEntity() platform.Entity {
 					Description: "Forget a memory: an agent administrator any, a person those about them.",
 					Criteria:    platform.ActionCriteria{State: &platform.FieldCondition{Field: "state", In: []string{"proposed", "active"}}},
 					Rules: []platform.ActionRule{{Function: func(c platform.Caller, record any, _ json.RawMessage, _ time.Time) *platform.Error {
-						return mayRemember(c, *record.(*platform.Memory))
+						return mayRemember(c, *record.(*protocol.Memory))
 					}}, {Edit: &platform.PropertyRule{Field: "state", Allowed: []string{"forgotten"}}}},
 				},
 			}}}
 }
 
-func mayRemember(c platform.Caller, m platform.Memory) *platform.Error {
-	if c.Replaying || c.Roles[platform.AgentApp] == platform.AgentAdmin || m.For != "" && m.For == c.ID {
+func mayRemember(c platform.Caller, m protocol.Memory) *platform.Error {
+	if c.Replaying || c.Roles[protocol.AgentApp] == protocol.AgentAdmin || m.For != "" && m.For == c.ID {
 		return nil
 	}
 	return &platform.Error{Code: pb.ErrorCode_ERROR_CODE_POLICY_DENIED}
 }
 
-func (a *Agents) remember(c platform.Caller, run *platform.AgentRunRecord, fact string, aboutPerson bool, now time.Time) (string, func(*pb.ChangeRecord)) {
+func (a *Agents) remember(c platform.Caller, run *protocol.AgentRunRecord, fact string, aboutPerson bool, now time.Time) (string, func(*pb.ChangeRecord)) {
 	fact = strings.TrimSpace(fact)
 	if fact == "" {
 		return "refused: nothing to remember", nil
 	}
-	m := platform.Memory{Record: platform.Record{ID: fmt.Sprintf("%s:m%d", run.ID, len(run.Steps)+1)}, Agent: run.Agent, Fact: agents.Clip(fact, 500), Run: run.ID,
+	m := protocol.Memory{Record: platform.Record{ID: fmt.Sprintf("%s:m%d", run.ID, len(run.Steps)+1)}, Agent: run.Agent, Fact: agents.Clip(fact, 500), Run: run.ID,
 		Sources: run.SourceRefs(), State: "active", Expires: now.AddDate(0, 0, memoryDays)}
 	if aboutPerson {
 		m.For = run.OnBehalf
 	}
 	return "remembered" + map[bool]string{true: " about " + m.For, false: ""}[m.For != ""], func(r *pb.ChangeRecord) {
-		a.host.Automation(c, platform.AgentApp).Put(r, m)
+		a.host.Automation(c, protocol.AgentApp).Put(r, m)
 	}
 }
 
-func (a *Agents) propose(c platform.Caller, r *pb.ChangeRecord, run platform.AgentRunRecord, s platform.Signal, now time.Time) {
+func (a *Agents) propose(c platform.Caller, r *pb.ChangeRecord, run protocol.AgentRunRecord, s protocol.Signal, now time.Time) {
 	var fact, about string
 	switch s.Kind {
 	case "changed":
@@ -173,19 +173,19 @@ func (a *Agents) propose(c platform.Caller, r *pb.ChangeRecord, run platform.Age
 	default:
 		return
 	}
-	m := platform.Memory{Record: platform.Record{ID: fmt.Sprintf("%s:p%d", run.ID, len(run.Signals))}, Agent: run.Agent, Fact: fact, For: about, Run: run.ID, Sources: run.SourceRefs(),
+	m := protocol.Memory{Record: platform.Record{ID: fmt.Sprintf("%s:p%d", run.ID, len(run.Signals))}, Agent: run.Agent, Fact: fact, For: about, Run: run.ID, Sources: run.SourceRefs(),
 		State: "proposed", Expires: now.AddDate(0, 0, proposalDays)}
-	a.host.Automation(c, platform.AgentApp).Put(r, m)
+	a.host.Automation(c, protocol.AgentApp).Put(r, m)
 }
 
-func (a *Agents) memories(c platform.Caller, run platform.AgentRunRecord, now time.Time) []platform.Memory {
+func (a *Agents) memories(c platform.Caller, run protocol.AgentRunRecord, now time.Time) []protocol.Memory {
 	domain, _ := json.Marshal([]any{[]any{"agent", "=", run.Agent}, []any{"state", "=", "active"}})
-	all, _, _ := platform.Find[platform.Memory](c, platform.Query{Domain: domain, Sort: []string{"-created"}, Limit: 500})
+	all, _, _ := platform.Find[protocol.Memory](c, platform.Query{Domain: domain, Sort: []string{"-created"}, Limit: 500})
 	goal := map[string]bool{}
 	for _, w := range ailanguage.TokenizeWords(run.Goal) {
 		goal[w] = true
 	}
-	overlap := func(m platform.Memory) int {
+	overlap := func(m protocol.Memory) int {
 		n := 0
 		for _, w := range ailanguage.TokenizeWords(m.Fact) {
 			if goal[w] {
@@ -194,9 +194,9 @@ func (a *Agents) memories(c platform.Caller, run platform.AgentRunRecord, now ti
 		}
 		return n
 	}
-	all = slices.DeleteFunc(all, func(m platform.Memory) bool {
+	all = slices.DeleteFunc(all, func(m protocol.Memory) bool {
 		return m.For != "" && m.For != run.OnBehalf || !m.Expires.IsZero() && m.Expires.Before(now)
 	})
-	slices.SortStableFunc(all, func(x, y platform.Memory) int { return overlap(y) - overlap(x) })
+	slices.SortStableFunc(all, func(x, y protocol.Memory) int { return overlap(y) - overlap(x) })
 	return all[:min(len(all), memoriesUsed)]
 }

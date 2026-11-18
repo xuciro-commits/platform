@@ -3,6 +3,7 @@ package host
 import (
 	"context"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
+	"platformserver/kernel/protocol"
 	"platformserver/platform"
 	agentevaluation "platformserver/services/ai/evaluation"
 	aigateway "platformserver/services/ai/gateway"
@@ -15,11 +16,11 @@ func (t *Tenant) EvaluateRelease(m platform.Member, request releaseowner.Release
 	result, refusal := decideOnImage(t, context.Background(), "release:evaluate", func(t *Tenant) (readAnswer[string], *platform.Error) {
 		caller := t.automation(build.ID, false)
 		id, err := releaseowner.PrepareReleaseEvaluation(t.ID, m, request, now, releaseowner.EvaluationHooks{
-			Candidate:      func(id string) (platform.ReleaseCandidate, error) { return t.releases.Candidate(id) },
+			Candidate:      func(id string) (protocol.ReleaseCandidate, error) { return t.releases.Candidate(id) },
 			Plan:           releaseowner.EvaluationPlan(caller),
 			Function:       releaseowner.EvaluationFunction(caller),
 			BuilderVersion: func() string { return t.App(build.ID).Manifest().Version },
-			AppModel:       func() string { return t.setting(t.automation(platform.AIApp, false), platform.AISettingAppModel) },
+			AppModel:       func() string { return t.setting(t.automation(protocol.AIApp, false), protocol.AISettingAppModel) },
 			HasProvider:    func() bool { return t.Models != nil },
 			ModelConfig: func(name string, definition platform.AIFunction) (string, error) {
 				return aigateway.EvaluationModelConfig(name, definition, t.Models.Model, t.modelResolver())

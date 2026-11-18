@@ -22,7 +22,7 @@ func (t *Tenant) operationClaims() compute.OperationClaims {
 		Claimed: func(id string, after platform.Effect) { t.outbound.Reserve(id, after, true) },
 		Live: func(id string, generation uint32) bool {
 			return t.outbound.Any(func(x actions.Queued) bool {
-				return x.ID == id && x.Generation == generation && !platform.EffectSettled(x.State)
+				return x.ID == id && x.Generation == generation && !protocol.EffectSettled(x.State)
 			})
 		},
 		Works: func() *protocol.Works { return t.Works }, Fork: t.forkWorkState, Install: func(w *protocol.Works) { t.Works = w },

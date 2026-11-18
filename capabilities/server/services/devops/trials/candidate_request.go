@@ -3,6 +3,7 @@ package trials
 import (
 	"encoding/json"
 	"fmt"
+	"platformserver/kernel/protocol"
 	"slices"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
@@ -10,7 +11,7 @@ import (
 	"platformserver/services/resources/authoring"
 )
 
-func (request *CandidateSimulationRequest) Check(staged *platform.ReleaseCandidate) *platform.Error {
+func (request *CandidateSimulationRequest) Check(staged *protocol.ReleaseCandidate) *platform.Error {
 	if staged != nil {
 		request.ObjectID, request.ProcessID, request.ApplicationID, request.Roots, request.CandidateID = "", "", "", nil, ""
 		if request.FunctionID == "" {
@@ -108,7 +109,7 @@ func (request *CandidateSimulationRequest) Root() (platform.AssetKind, string) {
 	return kind, id
 }
 
-func (request *CandidateSimulationRequest) SelectSample(candidate platform.ReleaseCandidate) error {
+func (request *CandidateSimulationRequest) SelectSample(candidate protocol.ReleaseCandidate) error {
 	for _, asset := range candidate.Assets {
 		if asset.Ref.Kind == platform.AssetSampleSet && asset.Ref.Name == request.Sample {
 			var sample platform.SampleSet
@@ -126,7 +127,7 @@ func (request *CandidateSimulationRequest) SelectSample(candidate platform.Relea
 	return fmt.Errorf("Choose a sample asset in this application's draft closure")
 }
 
-func CandidateModules(candidate platform.ReleaseCandidate, modules map[string][]byte, read func(string) ([]byte, error)) *platform.Error {
+func CandidateModules(candidate protocol.ReleaseCandidate, modules map[string][]byte, read func(string) ([]byte, error)) *platform.Error {
 	for _, asset := range candidate.Assets {
 		if asset.Ref.Kind != platform.AssetCompute {
 			continue
@@ -166,15 +167,15 @@ type CandidateHooks[E any] struct {
 	Quarantined func() bool
 	Member      func(string) (platform.Member, bool)
 	Source      CandidateSource
-	Environment func(candidate platform.ReleaseCandidate) (E, error)
+	Environment func(candidate protocol.ReleaseCandidate) (E, error)
 	Modules     func(E) map[string][]byte
 	ReadModule  func(string) ([]byte, error)
-	Run         func(candidate platform.ReleaseCandidate, environment E, actor platform.Member, members []platform.Member, functionName string) (CandidateSimulation, *platform.Error)
+	Run         func(candidate protocol.ReleaseCandidate, environment E, actor platform.Member, members []platform.Member, functionName string) (CandidateSimulation, *platform.Error)
 }
 
 func SimulateCandidate[E any](request CandidateSimulationRequest, builder platform.Member, selected *StagedCandidate, h CandidateHooks[E]) (CandidateSimulation, *platform.Error) {
 	var empty CandidateSimulation
-	var staged *platform.ReleaseCandidate
+	var staged *protocol.ReleaseCandidate
 	if selected != nil {
 		staged = &selected.Candidate
 	}

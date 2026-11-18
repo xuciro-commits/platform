@@ -2,6 +2,7 @@ package objects
 
 import (
 	"fmt"
+	"platformserver/kernel/protocol"
 	"slices"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
@@ -14,10 +15,10 @@ type Importer struct {
 	Verb           func(key, id string) string
 }
 
-func (i Importer) Rows(info platform.EntityInfo, file string, lines []ImportLine) []platform.ImportRow {
-	out := []platform.ImportRow{}
+func (i Importer) Rows(info platform.EntityInfo, file string, lines []ImportLine) []protocol.ImportRow {
+	out := []protocol.ImportRow{}
 	for _, line := range lines {
-		r := platform.ImportRow{Row: line.Row, ID: line.ID, Outcome: line.Outcome}
+		r := protocol.ImportRow{Row: line.Row, ID: line.ID, Outcome: line.Outcome}
 		if r.Outcome == "" {
 			try := func(verb, key string) *platform.Error {
 				r.Error = nil
@@ -29,7 +30,7 @@ func (i Importer) Rows(info platform.EntityInfo, file string, lines []ImportLine
 					Target: &pb.EntityRef{Type: info.Type, Id: r.ID}, Schema: &pb.SchemaRef{Name: r.Action, Version: 1}, Payload: line.Payload}
 				err, issues := i.Submit(s)
 				if err != nil {
-					r.Error = &platform.ErrorBody{Code: err.Code.String(), Message: err.Message, Issues: issues}
+					r.Error = &protocol.ErrorBody{Code: err.Code.String(), Message: err.Message, Issues: issues}
 				}
 				return err
 			}

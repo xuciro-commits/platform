@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/url"
+	"platformserver/kernel/protocol"
 	"platformserver/platform"
 	"slices"
 	"strings"
@@ -19,7 +20,7 @@ func Origin(address string) (string, error) {
 	return strings.ToLower(u.Scheme + "://" + u.Host), nil
 }
 
-func CheckPolicy(policy platform.AIInferencePolicy) error {
+func CheckPolicy(policy protocol.AIInferencePolicy) error {
 	seen := map[string]bool{}
 	for _, site := range policy.Runtime {
 		origin, err := Origin(site.Origin)
@@ -34,11 +35,11 @@ func CheckPolicy(policy platform.AIInferencePolicy) error {
 	return nil
 }
 
-func Bind(policy platform.AIInferencePolicy, provider platform.AIProvider, binding platform.AIModelBinding, stage string) (platform.AIModelBinding, error) {
+func Bind(policy protocol.AIInferencePolicy, provider platform.AIProvider, binding platform.AIModelBinding, stage string) (platform.AIModelBinding, error) {
 	if err := CheckPolicy(policy); err != nil {
 		return binding, err
 	}
-	if stage != platform.AIStageDesign && stage != platform.AIStageRuntime {
+	if stage != protocol.AIStageDesign && stage != protocol.AIStageRuntime {
 		return binding, fmt.Errorf("The model request has no trusted execution stage; start a new request")
 	}
 	origin, err := Origin(provider.BaseURL)
@@ -46,12 +47,12 @@ func Bind(policy platform.AIInferencePolicy, provider platform.AIProvider, bindi
 		return binding, err
 	}
 	sites := slices.Clone(policy.Runtime)
-	slices.SortFunc(sites, func(a, b platform.AIInferenceSite) int {
+	slices.SortFunc(sites, func(a, b protocol.AIInferenceSite) int {
 		return strings.Compare(a.Provider+"|"+a.Origin, b.Provider+"|"+b.Origin)
 	})
 	raw, _ := json.Marshal(struct {
 		Version string
-		Sites   []platform.AIInferenceSite
+		Sites   []protocol.AIInferenceSite
 	}{"ai-stage.v1", sites})
 	digest := sha256.Sum256(raw)
 	binding.Stage, binding.PolicyRevision, binding.ProviderOrigin, binding.InferenceLocation = stage, hex.EncodeToString(digest[:]), origin, "cloud"
@@ -61,13 +62,13 @@ func Bind(policy platform.AIInferencePolicy, provider platform.AIProvider, bindi
 			break
 		}
 	}
-	if stage == platform.AIStageRuntime && binding.InferenceLocation == "cloud" {
+	if stage == protocol.AIStageRuntime && binding.InferenceLocation == "cloud" {
 		return binding, fmt.Errorf("Runtime inference requires an operator-approved local or edge provider; cloud models are limited to design tasks")
 	}
 	return binding, nil
 }
 
-func Check(policy platform.AIInferencePolicy, provider platform.AIProvider, binding platform.AIModelBinding) error {
+func Check(policy protocol.AIInferencePolicy, provider platform.AIProvider, binding platform.AIModelBinding) error {
 	current, err := Bind(policy, provider, binding, binding.Stage)
 	if err != nil {
 		return err

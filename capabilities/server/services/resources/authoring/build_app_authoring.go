@@ -1,6 +1,7 @@
 package build
 
 import (
+	"platformserver/kernel/protocol"
 	"platformserver/services/ontology"
 	"reflect"
 
@@ -13,7 +14,7 @@ type appEnvironment struct {
 	b *Build
 }
 
-func (e appEnvironment) Host() platform.BuildHost { return e.b.host }
+func (e appEnvironment) Host() protocol.BuildHost { return e.b.host }
 func (e appEnvironment) AppID() string            { return ID }
 func (e appEnvironment) Version() string          { return ValueDefinitionVersion }
 func (e appEnvironment) Resolver() publication.Resolver {

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"maps"
+	runtimeprotocol "platformserver/kernel/protocol"
 	"slices"
 	"sync"
 
@@ -144,7 +145,7 @@ func (t *Tenant) restoreDefinitions(s *runtimekernel.TenantImage[automation.Task
 
 func (t *Tenant) restoreServices(s *runtimekernel.TenantImage[automation.Task, actions.Endpoint]) error {
 	t.AuditLog.Restore(s.Audit, s.Deliveries)
-	image := platform.HostControlImage{Lifecycle: s.HostLifecycle, Support: s.Support, Migrations: s.Migrations, Requests: s.HostRequests, RuntimeSelection: s.RuntimeSelection, DisabledOwners: s.DisabledOwners}
+	image := runtimeprotocol.HostControlImage{Lifecycle: s.HostLifecycle, Support: s.Support, Migrations: s.Migrations, Requests: s.HostRequests, RuntimeSelection: s.RuntimeSelection, DisabledOwners: s.DisabledOwners}
 	if err := acceptedformat.ValidateHostImage(t.ID, image); err != nil {
 		return err
 	}

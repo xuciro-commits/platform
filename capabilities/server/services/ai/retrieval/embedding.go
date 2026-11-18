@@ -2,6 +2,7 @@ package knowledge
 
 import (
 	"fmt"
+	"platformserver/kernel/protocol"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformserver/platform"
@@ -40,11 +41,11 @@ func VectorSpace(name string, lookup func(string) (platform.AIModel, platform.AI
 
 type EmbeddingSetting struct {
 	Resolve func(value string) (platform.AIProvider, *platform.Error)
-	Status  func() platform.KnowledgeIndexStatus
+	Status  func() protocol.KnowledgeIndexStatus
 }
 
 func (s EmbeddingSetting) Check(id, value string) *platform.Error {
-	if id != platform.KnowledgeApp+"/"+platform.SettingKnowledgeEmbeddingNext && id != platform.KnowledgeApp+"/"+platform.SettingKnowledgeEmbeddingModel {
+	if id != protocol.KnowledgeApp+"/"+protocol.SettingKnowledgeEmbeddingNext && id != protocol.KnowledgeApp+"/"+protocol.SettingKnowledgeEmbeddingModel {
 		return nil
 	}
 	if value == "" {
@@ -57,7 +58,7 @@ func (s EmbeddingSetting) Check(id, value string) *platform.Error {
 	if pv.Wire != "openai" {
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "This provider adapter does not support embeddings")
 	}
-	if id == platform.KnowledgeApp+"/"+platform.SettingKnowledgeEmbeddingModel {
+	if id == protocol.KnowledgeApp+"/"+protocol.SettingKnowledgeEmbeddingModel {
 		status := s.Status()
 		if status.Preparing != value || !status.Ready {
 			return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Build this model's index in AI configuration before activating it")

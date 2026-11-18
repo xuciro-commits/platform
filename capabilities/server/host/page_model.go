@@ -2,11 +2,10 @@ package host
 
 import (
 	"encoding/json"
-	"platformserver/services/security"
-	"time"
-
 	"platformserver/platform"
 	pageowner "platformserver/services/apps/pages"
+	"platformserver/services/security"
+	"time"
 )
 
 func (t *Tenant) modelTransition(ref platform.AssetRef) (platform.ActionType, string, bool) {
@@ -36,4 +35,22 @@ func (r pageModelRuntime) ReadRecordPath(c platform.Caller, typ, id string, path
 		}
 		return entity.Info(), true
 	}}.Read(c, typ, id, path, at)
+}
+
+func (t *Tenant) pageOperation(binding *platform.AssetBinding) (platform.Operation, int, error) {
+	return pageowner.PinnedOperation{App: t.App, Definition: t.operationDefinition, Registry: t.assetRegistryLocked}.Resolve(binding)
+}
+
+func (t *Tenant) PageContentDefinition(m platform.Member, ref platform.AssetRef, version string) (platform.Definition, *platform.Error) {
+	return pageowner.ContentHost{Admits: t.Admits, Current: func() []platform.Definition { return t.definitions }, Visible: t.Definitions,
+		Pinned: func(ref platform.AssetRef, version, content string) (platform.ReleaseAsset, error) {
+			registry, err := t.assetRegistryLocked()
+			if err != nil {
+				return platform.ReleaseAsset{}, err
+			}
+			return registry.ResolvePinned(ref, version, content)
+		},
+		Registered:  func() ([]platform.Definition, error) { return t.ownedAssetDefinitions(t.definitions) },
+		Definitions: t.definitionsFrom,
+	}.Definition(m, ref, version)
 }

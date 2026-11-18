@@ -1,17 +1,18 @@
 package host
 
 import (
+	"platformserver/kernel/protocol"
 	"platformserver/services/ai/gateway"
 	"platformserver/services/ai/gateway/providers"
 
 	"platformserver/platform"
 )
 
-func (t *Tenant) ProviderModels(m platform.Member, provider string, refresh bool) ([]platform.CatalogModel, *platform.Error, *platform.AIError) {
+func (t *Tenant) ProviderModels(m platform.Member, provider string, refresh bool) ([]protocol.CatalogModel, *platform.Error, *platform.AIError) {
 	return aigateway.ProviderCatalog{Tenant: t.ID, Available: t.Models != nil,
 		Authorize: func() *platform.Error {
-			c := platform.NewCaller(runtime{t: t}, m, platform.AIApp, false, false)
-			return authorizationRefusal(t.authorizeNative(c, "GET /v1/ai/providers/{provider}/models", "read", []string{platform.AIAdmin}, true))
+			c := platform.NewCaller(runtime{t: t}, m, protocol.AIApp, false, false)
+			return authorizationRefusal(t.authorizeNative(c, "GET /v1/ai/providers/{provider}/models", "read", []string{protocol.AIAdmin}, true))
 		},
 		Provider: func(id string) (platform.AIProvider, bool) { return t.Models.Provider(id) },
 		Credential: func(pv platform.AIProvider) ([]byte, error) {

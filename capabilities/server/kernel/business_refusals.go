@@ -2,6 +2,7 @@ package kernel
 
 import (
 	"encoding/json"
+	"platformserver/kernel/protocol"
 	"slices"
 	"strings"
 
@@ -17,14 +18,14 @@ type RefusalView struct {
 	Exists     func() bool
 	Correction func(*pb.Submission) string
 	Category   func(platform.Error, *platform.BusinessRefusalFact, []platform.FieldIssue) (string, string)
-	Changes    func(before, after []byte) []platform.BusinessInputChange
+	Changes    func(before, after []byte) []protocol.BusinessInputChange
 	Issues     func([]platform.FieldIssue) []platform.FieldIssue
 	Fact       func(platform.BusinessRefusalFact) platform.BusinessRefusalFact
 }
 
-func (c *Committed) BusinessRefusals(v RefusalView, typ, id, key string, offset, limit int) platform.BusinessRefusalPage {
-	out := platform.BusinessRefusalPage{Records: []platform.BusinessRefusalEntry{}}
-	add := func(sub *pb.Submission, e platform.BusinessRefusalEntry) {
+func (c *Committed) BusinessRefusals(v RefusalView, typ, id, key string, offset, limit int) protocol.BusinessRefusalPage {
+	out := protocol.BusinessRefusalPage{Records: []protocol.BusinessRefusalEntry{}}
+	add := func(sub *pb.Submission, e protocol.BusinessRefusalEntry) {
 		if sub.GetTarget().GetType() != typ || sub.GetTarget().GetId() != id {
 			return
 		}
@@ -65,7 +66,7 @@ func (c *Committed) BusinessRefusals(v RefusalView, typ, id, key string, offset,
 			continue
 		}
 		category, code := v.Category(r.Error, r.Business, r.Issues)
-		e := platform.BusinessRefusalEntry{At: r.At, Category: category, Code: code, Message: r.Error.Message, State: "refused", Issues: r.Issues}
+		e := protocol.BusinessRefusalEntry{At: r.At, Category: category, Code: code, Message: r.Error.Message, State: "refused", Issues: r.Issues}
 		if r.Business != nil {
 			e.Facts = []platform.BusinessRefusalFact{acceptedformat.CloneBusinessFact(*r.Business)}
 			e.Message = r.Business.Message
@@ -89,7 +90,7 @@ func (c *Committed) BusinessRefusals(v RefusalView, typ, id, key string, offset,
 			continue
 		}
 		if len(r.Business) == 0 {
-			add(sub, platform.BusinessRefusalEntry{At: r.At, State: "accepted", Category: "business"})
+			add(sub, protocol.BusinessRefusalEntry{At: r.At, State: "accepted", Category: "business"})
 			continue
 		}
 		for _, decision := range r.Decisions {
@@ -107,11 +108,11 @@ func (c *Committed) BusinessRefusals(v RefusalView, typ, id, key string, offset,
 			if len(facts) == 0 {
 				continue
 			}
-			e := platform.BusinessRefusalEntry{At: r.At, State: "accepted", Category: "business", Facts: facts, Code: facts[0].Code, Message: facts[0].Message}
+			e := protocol.BusinessRefusalEntry{At: r.At, State: "accepted", Category: "business", Facts: facts, Code: facts[0].Code, Message: facts[0].Message}
 			add(child, e)
 		}
 	}
-	slices.SortFunc(out.Records, func(a, b platform.BusinessRefusalEntry) int {
+	slices.SortFunc(out.Records, func(a, b protocol.BusinessRefusalEntry) int {
 		if c := b.At.Compare(a.At); c != 0 {
 			return c
 		}

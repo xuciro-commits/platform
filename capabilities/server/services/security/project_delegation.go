@@ -2,6 +2,7 @@ package security
 
 import (
 	"encoding/json"
+	"platformserver/kernel/protocol"
 	"slices"
 	"strings"
 
@@ -17,10 +18,10 @@ type ProjectDelegation struct {
 	Permits   func(roles []string, action string) bool
 	Target    func(*pb.Submission) string
 	DraftName func(*pb.Submission) string
-	Edits     func(member string, access platform.ProjectAccess, kind string, names []string) bool
+	Edits     func(member string, access protocol.ProjectAccess, kind string, names []string) bool
 }
 
-func (p ProjectDelegation) Bound(m platform.Member, s *pb.Submission, access platform.ProjectAccess) *platform.Error {
+func (p ProjectDelegation) Bound(m platform.Member, s *pb.Submission, access protocol.ProjectAccess) *platform.Error {
 	if p.Exempt(s) {
 		return nil
 	}
@@ -48,7 +49,7 @@ func (p ProjectDelegation) Bound(m platform.Member, s *pb.Submission, access pla
 		if access == nil || json.Unmarshal(s.GetPayload(), &payload) != nil || payload.Project == "" {
 			return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Choose the project that owns this resource")
 		}
-		if role := access.ProjectRole(m.ID, payload.Project); role == platform.ProjectOwnerRole || role == platform.ProjectEditorRole {
+		if role := access.ProjectRole(m.ID, payload.Project); role == protocol.ProjectOwnerRole || role == protocol.ProjectEditorRole {
 			return nil
 		}
 		return outside()
@@ -64,23 +65,23 @@ func (p ProjectDelegation) Bound(m platform.Member, s *pb.Submission, access pla
 	return nil
 }
 
-func (p ProjectDelegation) asset(s *pb.Submission) (platform.ProjectAsset, bool) {
+func (p ProjectDelegation) asset(s *pb.Submission) (protocol.ProjectAsset, bool) {
 	typ, schema := s.GetTarget().GetType(), s.GetSchema().GetName()
 	if !strings.HasPrefix(typ, p.App+".") || !strings.HasPrefix(schema, typ+".") {
-		return platform.ProjectAsset{}, false
+		return protocol.ProjectAsset{}, false
 	}
 	switch strings.TrimPrefix(schema, typ+".") {
 	case "create", "edit", "save", "archive":
 	default:
-		return platform.ProjectAsset{}, false
+		return protocol.ProjectAsset{}, false
 	}
 	id := s.GetTarget().GetId()
 	if id == "" {
-		return platform.ProjectAsset{}, false
+		return protocol.ProjectAsset{}, false
 	}
 	var payload struct {
 		App string `json:"app"`
 	}
 	_ = json.Unmarshal(s.GetPayload(), &payload)
-	return platform.ProjectAsset{App: payload.App, Kind: strings.TrimPrefix(typ, p.App+"."), Name: id}, true
+	return protocol.ProjectAsset{App: payload.App, Kind: strings.TrimPrefix(typ, p.App+"."), Name: id}, true
 }

@@ -2,6 +2,7 @@ package security
 
 import (
 	"encoding/json"
+	"platformserver/kernel/protocol"
 	"testing"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
@@ -21,16 +22,16 @@ func projectSaveSubmission(t *testing.T, id string, members []platform.ProjectMe
 	if err != nil {
 		t.Fatal(err)
 	}
-	return &pb.Submission{Target: &pb.EntityRef{Type: platform.ProjectType, Id: id}, Schema: &pb.SchemaRef{Name: platform.SchemaProjectSave, Version: 1}, Payload: payload}
+	return &pb.Submission{Target: &pb.EntityRef{Type: protocol.ProjectType, Id: id}, Schema: &pb.SchemaRef{Name: protocol.SchemaProjectSave, Version: 1}, Payload: payload}
 }
 
 func TestPrepareProjectByOwnerDoesNotDeadlock(t *testing.T) {
 	d := NewPolicies()
 	d.Attach(stubCatalog{})
-	d.projects["P1"] = &platform.BuildProject{Members: []platform.ProjectMember{{Member: "owner", Role: platform.ProjectOwnerRole}}}
+	d.projects["P1"] = &platform.BuildProject{Members: []platform.ProjectMember{{Member: "owner", Role: protocol.ProjectOwnerRole}}}
 	d.projects["P1"].ID = "P1"
 	caller := platform.Caller{Member: platform.Member{ID: "owner"}}
-	members := []platform.ProjectMember{{Member: "owner", Role: platform.ProjectOwnerRole}}
+	members := []platform.ProjectMember{{Member: "owner", Role: protocol.ProjectOwnerRole}}
 	done := make(chan struct{})
 	var apply func(*pb.ChangeRecord)
 	var kerr error
@@ -54,10 +55,10 @@ func TestPrepareProjectByOwnerDoesNotDeadlock(t *testing.T) {
 func TestPrepareProjectRefusesNonManager(t *testing.T) {
 	d := NewPolicies()
 	d.Attach(stubCatalog{})
-	d.projects["P1"] = &platform.BuildProject{Members: []platform.ProjectMember{{Member: "owner", Role: platform.ProjectOwnerRole}}}
+	d.projects["P1"] = &platform.BuildProject{Members: []platform.ProjectMember{{Member: "owner", Role: protocol.ProjectOwnerRole}}}
 	d.projects["P1"].ID = "P1"
 	caller := platform.Caller{Member: platform.Member{ID: "stranger"}}
-	members := []platform.ProjectMember{{Member: "owner", Role: platform.ProjectOwnerRole}}
+	members := []platform.ProjectMember{{Member: "owner", Role: protocol.ProjectOwnerRole}}
 	apply, err := d.PrepareProject(caller, projectSaveSubmission(t, "P1", members), []string{"owner"})
 	if err == nil || apply != nil {
 		t.Fatal("non-manager must not save project access")

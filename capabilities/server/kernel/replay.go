@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	acceptedformat "platformserver/kernel/acceptedformat"
+	"platformserver/kernel/protocol"
 	persistence "platformserver/kernel/store"
 	"platformserver/platform"
 	"time"
@@ -32,7 +33,7 @@ type ReplayHooks struct {
 	Pin           func(versions map[string]int)
 	App           func(id string) platform.App
 	Enqueue       func(time.Time)
-	PublishRecord func(platform.Event, platform.AcceptedEventPlan)
+	PublishRecord func(platform.Event, protocol.AcceptedEventPlan)
 }
 
 func (s *Sequence) ReplayEntries(entries []persistence.Entry, h ReplayHooks) error {

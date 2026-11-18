@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"maps"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
+	"platformserver/kernel/protocol"
 	"platformserver/kernel/records"
 	"platformserver/platform"
 	"reflect"
@@ -437,7 +438,7 @@ func (r RetainedOwners) Select() ([]platform.App, map[string]platform.EntityInfo
 			}
 			continue
 		}
-		compiler := owner.(platform.ReleaseExecutionOwner)
+		compiler := owner.(protocol.ReleaseExecutionOwner)
 		bound, err := compiler.ForkReleaseExecution(selected)
 		if err != nil || bound == nil || bound.Authority() != owner.Authority() {
 			return nil, nil, fmt.Errorf("retained owner %s cannot select its original execution: %v", owner.Manifest().ID, err)

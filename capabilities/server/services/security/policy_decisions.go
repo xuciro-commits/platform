@@ -3,6 +3,7 @@ package security
 import (
 	"encoding/json"
 	"maps"
+	"platformserver/kernel/protocol"
 	"platformserver/platform"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
@@ -90,7 +91,7 @@ func (d *Policies) decideAccess(c platform.Caller, s *pb.Submission, members []s
 	switch s.GetSchema().GetName() {
 	case platform.SchemaMarkingSave, platform.SchemaMarkingArchive:
 		return d.decideMarking(c, s, members)
-	case platform.SchemaRoleSave:
+	case protocol.SchemaRoleSave:
 		var p platform.CustomRole
 		if json.Unmarshal(s.GetPayload(), &p) != nil || len(p.Actions) == 0 {
 			return nil, invalid
@@ -111,7 +112,7 @@ func (d *Policies) decideAccess(c platform.Caller, s *pb.Submission, members []s
 				app.Manifest().Actions.DefineRole(id, p.Actions)
 			}
 		}, nil
-	case platform.SchemaRoleRemove:
+	case protocol.SchemaRoleRemove:
 		r := d.roles[id]
 		if r == nil {
 			return nil, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
@@ -122,7 +123,7 @@ func (d *Policies) decideAccess(c platform.Caller, s *pb.Submission, members []s
 				app.Manifest().Actions.DefineRole(id, nil)
 			}
 		}, nil
-	case platform.SchemaPolicySave:
+	case protocol.SchemaPolicySave:
 		var p platform.PolicyRecord
 		if json.Unmarshal(s.GetPayload(), &p) != nil || p.Effect != "deny" && p.Effect != "allow" || p.Permission == "" || !day(p.From) || !day(p.Until) {
 			return nil, invalid
@@ -134,12 +135,12 @@ func (d *Policies) decideAccess(c platform.Caller, s *pb.Submission, members []s
 		}
 		p.ID = id
 		return func(*pb.ChangeRecord) { d.policies[id] = &p }, nil
-	case platform.SchemaPolicyDrop:
+	case protocol.SchemaPolicyDrop:
 		if d.policies[id] == nil {
 			return nil, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
 		}
 		return func(*pb.ChangeRecord) { delete(d.policies, id) }, nil
-	case platform.SchemaTeamSave:
+	case protocol.SchemaTeamSave:
 		var p platform.Team
 		if json.Unmarshal(s.GetPayload(), &p) != nil || p.Name == "" {
 			return nil, invalid
@@ -164,7 +165,7 @@ func (d *Policies) decideAccess(c platform.Caller, s *pb.Submission, members []s
 			p.Grants = []platform.Grant{}
 		}
 		return func(*pb.ChangeRecord) { d.teams[id] = &p }, nil
-	case platform.SchemaTeamRemove:
+	case protocol.SchemaTeamRemove:
 		if d.teams[id] == nil {
 			return nil, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
 		}
@@ -241,7 +242,7 @@ func (d *Policies) Access() platform.AccessConfig {
 	return out
 }
 
-var projectRoles = []string{platform.ProjectOwnerRole, platform.ProjectEditorRole, platform.ProjectViewerRole, platform.ProjectDiscovererRole}
+var projectRoles = []string{protocol.ProjectOwnerRole, protocol.ProjectEditorRole, protocol.ProjectViewerRole, protocol.ProjectDiscovererRole}
 
 func (d *Policies) decideProject(c platform.Caller, s *pb.Submission, members []string) (func(*pb.ChangeRecord), *platform.Error) {
 	invalid := &platform.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
@@ -264,11 +265,11 @@ func (d *Policies) decideProject(c platform.Caller, s *pb.Submission, members []
 			return nil, invalid
 		}
 		seen[e.Member] = true
-		if e.Role == platform.ProjectOwnerRole {
+		if e.Role == protocol.ProjectOwnerRole {
 			owners++
 		}
 	}
-	if !platform.ProjectManager(c.Member, d.projectRole(c.ID, id)) {
+	if !protocol.ProjectManager(c.Member, d.projectRole(c.ID, id)) {
 		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "Only the project's owners, builders and administrators manage its access")
 	}
 	if owners == 0 {
@@ -330,7 +331,7 @@ func (d *Policies) ProjectGrants(member string, agent bool) []platform.Grant {
 		for _, e := range p.Members {
 			if e.Member == member && slices.Contains(projectRoles, e.Role) && (e.Until == "" || today < e.Until) {
 				role := e.Role
-				if role == platform.ProjectOwnerRole || role == platform.ProjectEditorRole {
+				if role == protocol.ProjectOwnerRole || role == protocol.ProjectEditorRole {
 					role = "builder"
 				}
 				out = append(out, platform.Grant{App: "build", Role: role, By: "project:" + id, Reason: p.Title})

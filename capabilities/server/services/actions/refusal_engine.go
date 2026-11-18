@@ -4,6 +4,7 @@ import (
 	"cmp"
 	"encoding/json"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
+	"platformserver/kernel/protocol"
 	"platformserver/platform"
 	"slices"
 	"strings"
@@ -32,7 +33,7 @@ func CorrectionOf(sub *pb.Submission) string {
 	}
 	return key
 }
-func ChangedBusinessInputs(before, after []byte) []platform.BusinessInputChange {
+func ChangedBusinessInputs(before, after []byte) []protocol.BusinessInputChange {
 	var a, b map[string]json.RawMessage
 	if json.Unmarshal(before, &a) != nil || json.Unmarshal(after, &b) != nil {
 		return nil
@@ -44,17 +45,17 @@ func ChangedBusinessInputs(before, after []byte) []platform.BusinessInputChange 
 	for k := range b {
 		names[k] = true
 	}
-	var out []platform.BusinessInputChange
+	var out []protocol.BusinessInputChange
 	for k := range names {
 		ah, _ := platform.CanonicalDigest(a[k])
 		bh, _ := platform.CanonicalDigest(b[k])
 		_, aExists := a[k]
 		_, bExists := b[k]
 		if ah != bh || aExists != bExists {
-			out = append(out, platform.BusinessInputChange{Field: k, Before: slices.Clone(a[k]), After: slices.Clone(b[k])})
+			out = append(out, protocol.BusinessInputChange{Field: k, Before: slices.Clone(a[k]), After: slices.Clone(b[k])})
 		}
 	}
-	slices.SortFunc(out, func(a, b platform.BusinessInputChange) int { return strings.Compare(a.Field, b.Field) })
+	slices.SortFunc(out, func(a, b protocol.BusinessInputChange) int { return strings.Compare(a.Field, b.Field) })
 	return out
 }
 

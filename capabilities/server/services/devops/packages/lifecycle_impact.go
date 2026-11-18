@@ -2,6 +2,7 @@ package packages
 
 import (
 	"fmt"
+	"platformserver/kernel/protocol"
 	"slices"
 	"strings"
 
@@ -16,11 +17,11 @@ type Impact struct {
 	Records    func(typ string) (int, bool)
 	Connection func(id string) (platform.PackageImpactConnection, bool, error)
 	Removals   func(removed, replaced map[platform.AssetRef]bool) []platform.PackageImpactReference
-	Extensions func(platform.ReleaseCandidate) ([]platform.PackageImpactExtension, error)
-	Runs       func(ref platform.AssetRef, offset int) (platform.ApplicationRunPage, *platform.Error)
+	Extensions func(protocol.ReleaseCandidate) ([]platform.PackageImpactExtension, error)
+	Runs       func(ref platform.AssetRef, offset int) (protocol.ApplicationRunPage, *platform.Error)
 }
 
-func StoredImpact(store *records.Store, definitions []platform.Definition, active func(string) bool, extensions func(platform.ReleaseCandidate) ([]platform.PackageImpactExtension, error), runs func(platform.AssetRef, int) (platform.ApplicationRunPage, *platform.Error)) Impact {
+func StoredImpact(store *records.Store, definitions []platform.Definition, active func(string) bool, extensions func(protocol.ReleaseCandidate) ([]platform.PackageImpactExtension, error), runs func(platform.AssetRef, int) (protocol.ApplicationRunPage, *platform.Error)) Impact {
 	resources := Resources(store)
 	return Impact{Resources: resources,
 		Records: func(typ string) (int, bool) {
@@ -74,7 +75,7 @@ func (i Impact) Of(id string, after []platform.ReleaseAsset) (platform.PackageLi
 	for _, impact := range i.Removals(removed, replaced) {
 		out.References = append(out.References, impact)
 	}
-	extensions, err := i.Extensions(platform.ReleaseCandidate{Assets: after})
+	extensions, err := i.Extensions(protocol.ReleaseCandidate{Assets: after})
 	if err != nil {
 		return out, err
 	}

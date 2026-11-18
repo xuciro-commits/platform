@@ -53,7 +53,7 @@ func (v DefinitionVisibility) Project() []platform.Definition {
 			if resource, ok := v.ResourceOf(registered.Ref); ok {
 				project = resource.Project
 			}
-			if role := v.ResourceRole(project); role == "" || role == platform.ProjectDiscovererRole {
+			if role := v.ResourceRole(project); role == "" || role == protocol.ProjectDiscovererRole {
 				continue
 			}
 		}
@@ -135,7 +135,7 @@ func (v DefinitionVisibility) Project() []platform.Definition {
 				continue
 			}
 		case platform.AssetAgent:
-			if def.Agent == nil || !m.Active() || len(m.RolesIn(def.Ref.App)) == 0 && !m.Holds(platform.AgentApp, platform.AgentAdmin) {
+			if def.Agent == nil || !m.Active() || len(m.RolesIn(def.Ref.App)) == 0 && !m.Holds(protocol.AgentApp, protocol.AgentAdmin) {
 				continue
 			}
 			if def.Source == "builder" && (def.OwnerRecord == "" || !v.Readable(def.OwnerRecord)) {
@@ -267,7 +267,7 @@ func (v DefinitionVisibility) Project() []platform.Definition {
 			out[i].Requires = []platform.AssetRef{}
 		}
 		out[i].Provides = v.visibleProvides(out[i])
-		out[i].RID = platform.ResourceID(v.Tenant, out[i].Ref)
+		out[i].RID = protocol.ResourceID(v.Tenant, out[i].Ref)
 		out[i].OwningProject, out[i].OwningProjectTitle, out[i].ManagedBy = v.owner(out[i])
 	}
 	return out

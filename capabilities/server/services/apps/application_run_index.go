@@ -2,14 +2,15 @@ package applications
 
 import (
 	"encoding/json"
+	"platformserver/kernel/protocol"
 	"slices"
 	"strings"
 
 	"platformserver/platform"
 )
 
-func IndexedRuns(entries []platform.RunIndexEntry, ref platform.AssetRef, title string, offset, limit int, filters ...platform.ApplicationRunFilter) platform.ApplicationRunPage {
-	filter := platform.ApplicationRunFilter{}
+func IndexedRuns(entries []protocol.RunIndexEntry, ref platform.AssetRef, title string, offset, limit int, filters ...protocol.ApplicationRunFilter) protocol.ApplicationRunPage {
+	filter := protocol.ApplicationRunFilter{}
 	if len(filters) > 0 {
 		filter = filters[0]
 	}
@@ -45,15 +46,15 @@ func IndexedRuns(entries []platform.RunIndexEntry, ref platform.AssetRef, title 
 		}
 		return strings.Compare(a.Kind+"/"+a.ID, b.Kind+"/"+b.ID)
 	})
-	out := platform.ApplicationRunPage{Application: ref, Title: title, Runs: []platform.ApplicationRun{}, Total: len(runs)}
+	out := protocol.ApplicationRunPage{Application: ref, Title: title, Runs: []platform.ApplicationRun{}, Total: len(runs)}
 	out.Summary = runSummary(runs)
 	start := min(offset, len(runs))
 	out.Runs = append(out.Runs, runs[start:min(start+limit, len(runs))]...)
 	return out
 }
 
-func runSummary(runs []platform.ApplicationRun) platform.ApplicationRunSummary {
-	out := platform.ApplicationRunSummary{}
+func runSummary(runs []platform.ApplicationRun) protocol.ApplicationRunSummary {
+	out := protocol.ApplicationRunSummary{}
 	for _, run := range runs {
 		if run.Kind == "agent" || run.Kind == "function" {
 			out.AITokens += run.AITokens

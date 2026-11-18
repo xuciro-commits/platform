@@ -51,7 +51,7 @@ func (h *Host) routesEditProposals(rt *routes) {
 		}
 		WriteJSON(w, http.StatusOK, proposal)
 	})
-	rt.handle(transport.Route{Pattern: "POST /v1/capabilities/calls/{engine}/{id}/edits", Summary: "Explicitly apply the original edit proposal through the normal authorized action engine", Body: ApplyEditsRequest{}, Answer: platform.CompositeAnswer{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
+	rt.handle(transport.Route{Pattern: "POST /v1/capabilities/calls/{engine}/{id}/edits", Summary: "Explicitly apply the original edit proposal through the normal authorized action engine", Body: ApplyEditsRequest{}, Answer: protocol.CompositeAnswer{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
 		var request ApplyEditsRequest
 		if err := transport.DecodeBodyLimit(r, &request, 4096); err != nil {
 			Reply(w, nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Choose a stable request key"))
@@ -62,14 +62,14 @@ func (h *Host) routesEditProposals(rt *routes) {
 			Reply(w, nil, refusal)
 			return
 		}
-		edits := make([]platform.CompositeEdit, 0, len(proposal.Edits))
+		edits := make([]protocol.CompositeEdit, 0, len(proposal.Edits))
 		for _, edit := range proposal.Edits {
 			if !json.Valid([]byte(edit.Payload)) {
 				Reply(w, nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "A proposed action needs JSON inputs"))
 				return
 			}
 			revision := edit.Revision
-			edits = append(edits, platform.CompositeEdit{Schema: edit.Schema, Target: &pb.EntityRef{Type: edit.Type, Id: edit.ID}, Payload: json.RawMessage(edit.Payload), ExpectedRevision: &revision})
+			edits = append(edits, protocol.CompositeEdit{Schema: edit.Schema, Target: &pb.EntityRef{Type: edit.Type, Id: edit.ID}, Payload: json.RawMessage(edit.Payload), ExpectedRevision: &revision})
 		}
 		answer, err := t.Composite(m, request.Key, edits, h.Now())
 		if err != nil {

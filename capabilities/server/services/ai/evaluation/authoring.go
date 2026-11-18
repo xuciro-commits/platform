@@ -4,6 +4,7 @@ import (
 	"cmp"
 	"encoding/json"
 	"fmt"
+	"platformserver/kernel/protocol"
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
@@ -81,7 +82,7 @@ func (*evaluationOwner) actions() []platform.Action {
 		{Schema: SchemaEvaluationStart, Target: EvaluationType, New: true, Capability: "functions", Title: "Start function evaluation",
 			Description: "Run bounded synthetic cases against the candidate's pinned function and model.", Automation: true, Payload: []platform.Field{}},
 		{Schema: SchemaEvaluationAnswer, Target: EvaluationType, Capability: "functions", Title: "Record function evaluation answer",
-			Description: "Save one measured model answer in the candidate evaluation.", Automation: true, Payload: platform.FunctionAnswerFields()},
+			Description: "Save one measured model answer in the candidate evaluation.", Automation: true, Payload: protocol.FunctionAnswerFields()},
 	}
 }
 
@@ -93,9 +94,9 @@ func evalEqual(a, b []byte) bool {
 	return (platform.EvaluationPolicy{}).Matches(a, b)
 }
 
-func ApplicationReports(c platform.Caller) func(string, int, string) ([]platform.ApplicationAIEvaluation, *platform.Error) {
-	return func(function string, version int, config string) ([]platform.ApplicationAIEvaluation, *platform.Error) {
-		out := []platform.ApplicationAIEvaluation{}
+func ApplicationReports(c platform.Caller) func(string, int, string) ([]protocol.ApplicationAIEvaluation, *platform.Error) {
+	return func(function string, version int, config string) ([]protocol.ApplicationAIEvaluation, *platform.Error) {
+		out := []protocol.ApplicationAIEvaluation{}
 		for offset := 0; ; {
 			rows, total, problem := platform.Find[Evaluation](c, platform.Query{Limit: 500, Offset: offset, Sort: []string{"id"}})
 			if problem != nil {
@@ -109,7 +110,7 @@ func ApplicationReports(c platform.Caller) func(string, int, string) ([]platform
 				if (state == "passed" || state == "failed") && (config == "" || report.ModelConfig != config) {
 					state = "Configuration changed; evaluate again"
 				}
-				out = append(out, platform.ApplicationAIEvaluation{ID: report.ID, Candidate: report.Candidate, State: state, Model: report.Model, Quality: report.Quality, CostUSD: report.CostUSD})
+				out = append(out, protocol.ApplicationAIEvaluation{ID: report.ID, Candidate: report.Candidate, State: state, Model: report.Model, Quality: report.Quality, CostUSD: report.CostUSD})
 			}
 			offset += len(rows)
 			if offset >= total || len(rows) == 0 {
@@ -119,11 +120,11 @@ func ApplicationReports(c platform.Caller) func(string, int, string) ([]platform
 	}
 }
 
-func AgentApplicationReports(c platform.Caller) func(string, string, string) ([]platform.ApplicationAIEvaluation, *platform.Error) {
-	return func(agent, digest, config string) ([]platform.ApplicationAIEvaluation, *platform.Error) {
-		out := []platform.ApplicationAIEvaluation{}
+func AgentApplicationReports(c platform.Caller) func(string, string, string) ([]protocol.ApplicationAIEvaluation, *platform.Error) {
+	return func(agent, digest, config string) ([]protocol.ApplicationAIEvaluation, *platform.Error) {
+		out := []protocol.ApplicationAIEvaluation{}
 		for offset := 0; ; {
-			rows, total, problem := platform.Find[platform.Evaluation](c, platform.Query{
+			rows, total, problem := platform.Find[protocol.Evaluation](c, platform.Query{
 				Domain: platform.Raw([]any{[]any{"agent", "=", agent}, []any{"definitionDigest", "=", digest}}),
 				Sort:   []string{"id"}, Limit: 500, Offset: offset,
 			})
@@ -144,7 +145,7 @@ func AgentApplicationReports(c platform.Caller) func(string, string, string) ([]
 				if report.State == "done" && (config == "" || report.ModelConfig != config) {
 					state = "Configuration changed; evaluate again"
 				}
-				out = append(out, platform.ApplicationAIEvaluation{ID: report.ID, Candidate: report.Candidate, State: state, Model: report.Model, Quality: report.Score, CostUSD: report.Cost})
+				out = append(out, protocol.ApplicationAIEvaluation{ID: report.ID, Candidate: report.Candidate, State: state, Model: report.Model, Quality: report.Score, CostUSD: report.Cost})
 			}
 			offset += len(rows)
 			if offset >= total || len(rows) == 0 {
@@ -195,12 +196,12 @@ func (o *evaluationOwner) submit(c platform.Caller, s *pb.Submission, now time.T
 				for i, attempt := range run.Attempts {
 					c.Request(r, platform.Request{Model: start.Model, Target: attempt.Call, Reply: SchemaEvaluationAnswer,
 						Evaluation: true, EvaluationConfig: start.ModelConfig, EvaluationFunction: &start.Definition,
-						Payload: platform.Prompt{System: start.Definition.SystemPrompt(), User: string(start.Policy.Cases[i/EvaluationRepeats].Input),
+						Payload: protocol.Prompt{System: start.Definition.SystemPrompt(), User: string(start.Policy.Cases[i/EvaluationRepeats].Input),
 							MaxTokens: start.Definition.MaxTokens}})
 				}
 			}, nil
 		}
-		var answer platform.Answer
+		var answer protocol.Answer
 		if !exists || run.State != "pending" || json.Unmarshal(s.GetPayload(), &answer) != nil ||
 			(answer.Outcome != "accepted" && answer.Outcome != "refused") || answer.Call == "" {
 			return nil, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}

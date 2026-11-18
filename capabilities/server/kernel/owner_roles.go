@@ -2,6 +2,7 @@ package kernel
 
 import (
 	"fmt"
+	"platformserver/kernel/protocol"
 	"slices"
 	"time"
 
@@ -11,8 +12,8 @@ import (
 )
 
 type OperationOwner interface {
-	platform.OperationDefinitions
-	platform.OperationExecutor
+	protocol.OperationDefinitions
+	protocol.OperationExecutor
 }
 
 type OptionalRoles struct {

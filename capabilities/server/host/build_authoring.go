@@ -3,6 +3,7 @@ package host
 import (
 	"context"
 	"fmt"
+	"platformserver/kernel/protocol"
 
 	"platformserver/services/functions/authoring"
 	"platformserver/services/resources/authoring"
@@ -10,8 +11,8 @@ import (
 	"platformserver/platform"
 )
 
-func (t *Tenant) DraftActionCapabilities(m platform.Member) ([]platform.CapabilityDescriptor, error) {
-	return readWithError(t, context.Background(), func(t *Tenant) ([]platform.CapabilityDescriptor, error) {
+func (t *Tenant) DraftActionCapabilities(m platform.Member) ([]protocol.CapabilityDescriptor, error) {
+	return readWithError(t, context.Background(), func(t *Tenant) ([]protocol.CapabilityDescriptor, error) {
 		if err := t.Admits(m); err != nil {
 			return nil, err
 		}

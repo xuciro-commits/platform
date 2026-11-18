@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"os"
 	"path/filepath"
+	"platformserver/kernel/protocol"
 	"slices"
 	"strings"
 
@@ -31,8 +32,8 @@ func (r RecipientBook) Members(app string, to []platform.Recipient, date string)
 		})
 }
 
-func (r RecipientBook) Reach(members []string) map[string]platform.Reach {
-	out := map[string]platform.Reach{}
+func (r RecipientBook) Reach(members []string) map[string]protocol.Reach {
+	out := map[string]protocol.Reach{}
 	if r.Identity == nil {
 		return out
 	}

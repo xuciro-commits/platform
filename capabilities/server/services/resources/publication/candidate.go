@@ -18,20 +18,20 @@ type releaseBytes struct {
 	Assets []platform.ReleaseAsset `json:"assets"`
 }
 
-func (resolver Resolver) Closure(c platform.ReleaseCandidate, roots []platform.AssetRef) (platform.ReleaseCandidate, error) {
+func (resolver Resolver) Closure(c observationprotocol.ReleaseCandidate, roots []platform.AssetRef) (observationprotocol.ReleaseCandidate, error) {
 	checked, err := resolver.ReadCandidate(c.ID, c.Bytes)
 	if err != nil {
-		return platform.ReleaseCandidate{}, err
+		return observationprotocol.ReleaseCandidate{}, err
 	}
 	return resolver.candidate(roots, checked.Assets, true)
 }
 
-func (resolver Resolver) Candidate(roots []platform.AssetRef, available []platform.ReleaseAsset) (platform.ReleaseCandidate, error) {
+func (resolver Resolver) Candidate(roots []platform.AssetRef, available []platform.ReleaseAsset) (observationprotocol.ReleaseCandidate, error) {
 	return resolver.candidate(roots, available, false)
 }
 
-func (resolver Resolver) candidate(roots []platform.AssetRef, available []platform.ReleaseAsset, historical bool) (platform.ReleaseCandidate, error) {
-	var empty platform.ReleaseCandidate
+func (resolver Resolver) candidate(roots []platform.AssetRef, available []platform.ReleaseAsset, historical bool) (observationprotocol.ReleaseCandidate, error) {
+	var empty observationprotocol.ReleaseCandidate
 	if len(roots) == 0 {
 		return empty, fmt.Errorf("a release needs at least one root")
 	}
@@ -165,7 +165,7 @@ func (resolver Resolver) candidate(roots []platform.AssetRef, available []platfo
 			}
 		}
 		if ref.Kind == platform.AssetEvaluation {
-			evaluation, err := platform.ReadEvaluationSet(body)
+			evaluation, err := observationprotocol.ReadEvaluationSet(body)
 			if err != nil {
 				return empty, err
 			}
@@ -232,7 +232,7 @@ func (resolver Resolver) candidate(roots []platform.AssetRef, available []platfo
 		if ref.Kind == platform.AssetFlow || ref.Kind == platform.AssetPage {
 			var bindings []platform.AssetBinding
 			if ref.Kind == platform.AssetFlow {
-				var flow platform.FlowReleaseDescriptor
+				var flow observationprotocol.FlowReleaseDescriptor
 				if err := json.Unmarshal(body, &flow); err != nil {
 					return empty, err
 				}
@@ -325,21 +325,21 @@ func (resolver Resolver) candidate(roots []platform.AssetRef, available []platfo
 		return empty, fmt.Errorf("encode release candidate: %w", err)
 	}
 	hash := sha256.Sum256(raw)
-	return platform.ReleaseCandidate{ID: "sha256-v1:" + hex.EncodeToString(hash[:]), Bytes: raw, Assets: closed}, nil
+	return observationprotocol.ReleaseCandidate{ID: "sha256-v1:" + hex.EncodeToString(hash[:]), Bytes: raw, Assets: closed}, nil
 }
 
-func (resolver Resolver) ReadCandidate(id string, raw []byte) (platform.ReleaseCandidate, error) {
+func (resolver Resolver) ReadCandidate(id string, raw []byte) (observationprotocol.ReleaseCandidate, error) {
 	var wire releaseBytes
 	if len(raw) == 0 || len(raw) > 16<<20 {
-		return platform.ReleaseCandidate{}, fmt.Errorf("release candidate is empty or exceeds 16 MiB")
+		return observationprotocol.ReleaseCandidate{}, fmt.Errorf("release candidate is empty or exceeds 16 MiB")
 	}
 	decoder := json.NewDecoder(bytes.NewReader(raw))
 	decoder.DisallowUnknownFields()
 	if err := decoder.Decode(&wire); err != nil {
-		return platform.ReleaseCandidate{}, err
+		return observationprotocol.ReleaseCandidate{}, err
 	}
 	if err := decoder.Decode(new(any)); err != io.EOF || wire.Format != 1 {
-		return platform.ReleaseCandidate{}, fmt.Errorf("invalid release format or trailing data")
+		return observationprotocol.ReleaseCandidate{}, fmt.Errorf("invalid release format or trailing data")
 	}
 	roots := make([]platform.AssetRef, len(wire.Assets))
 	for i, asset := range wire.Assets {
@@ -347,10 +347,10 @@ func (resolver Resolver) ReadCandidate(id string, raw []byte) (platform.ReleaseC
 	}
 	checked, err := resolver.candidate(roots, wire.Assets, true)
 	if err != nil {
-		return platform.ReleaseCandidate{}, err
+		return observationprotocol.ReleaseCandidate{}, err
 	}
 	if checked.ID != id || !bytes.Equal(checked.Bytes, raw) {
-		return platform.ReleaseCandidate{}, fmt.Errorf("release candidate identity or canonical bytes differ")
+		return observationprotocol.ReleaseCandidate{}, fmt.Errorf("release candidate identity or canonical bytes differ")
 	}
 	return checked, nil
 }

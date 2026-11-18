@@ -78,7 +78,7 @@ type DraftState struct {
 	Pages                                                 []string
 }
 
-func Preparation(id, version string, blueprint platform.PackageBlueprint, installed *platform.InstalledPackage, candidate platform.ReleaseCandidate, m platform.Member, source PreparationSource) (PackagePreparation, error) {
+func Preparation(id, version string, blueprint platform.PackageBlueprint, installed *protocol.InstalledPackage, candidate protocol.ReleaseCandidate, m platform.Member, source PreparationSource) (PackagePreparation, error) {
 	out := PackagePreparation{Package: id, Version: version, Applications: []PackageApplication{}, Connections: []PackageConnection{}, AI: []PackageAIRequirement{}, Roles: []PackageRoleRequirement{}, Setup: blueprint.Setup}
 	if installed != nil {
 		out.InstalledVersion, out.InstallationState = installed.Version, installed.State
@@ -188,8 +188,8 @@ type PreparationSource struct {
 	Resolver publication.Resolver
 }
 
-func Inspect(ctx context.Context, resolver publication.Resolver, tenant string, request platform.PackageInspectRequest, send func(*http.Request, bool) (*http.Response, error), files platform.FileStore, check func(context.Context, platform.PackageDescriptor) (platform.Precheck, error)) (platform.PackagePreview, error) {
-	var preview platform.PackagePreview
+func Inspect(ctx context.Context, resolver publication.Resolver, tenant string, request protocol.PackageInspectRequest, send func(*http.Request, bool) (*http.Response, error), files platform.FileStore, check func(context.Context, platform.PackageDescriptor) (protocol.Precheck, error)) (protocol.PackagePreview, error) {
+	var preview protocol.PackagePreview
 	content, origin := []byte(request.Content), "local-file"
 	if (request.URL == "") == (len(content) == 0) {
 		return preview, fmt.Errorf("Choose one package source: a URL or a local package file")
@@ -235,21 +235,21 @@ func Inspect(ctx context.Context, resolver publication.Resolver, tenant string, 
 	if err != nil {
 		return preview, err
 	}
-	raw, err := json.Marshal(platform.Offer{Descriptor: descriptor, Origin: origin})
+	raw, err := json.Marshal(protocol.Offer{Descriptor: descriptor, Origin: origin})
 	if err != nil {
-		return platform.PackagePreview{}, err
+		return protocol.PackagePreview{}, err
 	}
 	sum := sha256.Sum256(raw)
 	digest := "sha256:" + hex.EncodeToString(sum[:])
 	if err = files.Put(ctx, OfferKey(tenant, digest), raw, "application/json"); err != nil {
-		return platform.PackagePreview{}, err
+		return protocol.PackagePreview{}, err
 	}
-	return platform.PackagePreview{Descriptor: descriptor, Digest: digest, Origin: origin, Precheck: precheck}, nil
+	return protocol.PackagePreview{Descriptor: descriptor, Digest: digest, Origin: origin, Precheck: precheck}, nil
 
 }
 
 type PreparationOwner interface {
-	PreparationBlueprint(id, version string) (platform.PackageBlueprint, *platform.InstalledPackage, error)
+	PreparationBlueprint(id, version string) (platform.PackageBlueprint, *protocol.InstalledPackage, error)
 	PackagePrerequisites(id, version string) ([]platform.ReleaseAsset, error)
 }
 

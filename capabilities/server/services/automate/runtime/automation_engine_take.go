@@ -141,7 +141,7 @@ func (ss *session) take(x *FlowInstance, token int) {
 			return
 		}
 		x.Seq++
-		if ref.GetType() == platform.WorkApprovalType {
+		if ref.GetType() == runtimeprotocol.WorkApprovalType {
 			tok.Waits, tok.Child = "approval", ref.GetId()
 			if due, ok := ss.timeout(x, step); ok {
 				tok.Due = due

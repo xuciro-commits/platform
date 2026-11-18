@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"platformserver/kernel/acceptedformat"
+	"platformserver/kernel/protocol"
 	"platformserver/platform"
 	"platformserver/services/resources/authoring"
 	"platformserver/services/resources/publication"
@@ -80,7 +81,7 @@ type PromotionDestination struct {
 	PriorBytes  func(candidate string) json.RawMessage
 }
 
-func (t PromotionDestination) Preflight(candidate platform.ReleaseCandidate, raw []byte, key string, hash func() (string, error)) (bool, error) {
+func (t PromotionDestination) Preflight(candidate protocol.ReleaseCandidate, raw []byte, key string, hash func() (string, error)) (bool, error) {
 	if err := MissingAssetHost(candidate, t.ID, t.HasApp); err != nil {
 		return false, err
 	}
@@ -118,7 +119,7 @@ func ReadSealed(resolver publication.Resolver, id string, artifact platform.Seal
 
 type PromotionPlan struct {
 	Result    PromotionResult
-	Candidate platform.ReleaseCandidate
+	Candidate protocol.ReleaseCandidate
 	Raw       []byte
 	From      string
 	Key       string
@@ -145,7 +146,7 @@ func PlanPromotion(resolver publication.Resolver, from, to, candidateID, key str
 	}, nil
 }
 
-func (p PromotionPlan) Prepare(destination PromotionDestination, lifecycle func(platform.ReleaseCandidate, platform.Member, time.Time, bool) ([]platform.ReleaseInstallation, json.RawMessage, error), commit func(acceptedformat.Release) error) (PromotionResult, error) {
+func (p PromotionPlan) Prepare(destination PromotionDestination, lifecycle func(protocol.ReleaseCandidate, platform.Member, time.Time, bool) ([]platform.ReleaseInstallation, json.RawMessage, error), commit func(acceptedformat.Release) error) (PromotionResult, error) {
 	replay, err := destination.Preflight(p.Candidate, p.Raw, p.Key, func() (string, error) {
 		return acceptedformat.ReleaseRequestHash(destination.ID, p.Member.ID, "promotion:"+p.Key, p.Candidate.ID, p.Activate)
 	})

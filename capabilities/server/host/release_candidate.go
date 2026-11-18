@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"platformserver/kernel/protocol"
 	"platformserver/kernel/records"
 	"platformserver/platform"
 	releaseowner "platformserver/services/devops/releases"
@@ -99,7 +100,7 @@ func (t *Tenant) PreviewReleaseDrafts(m platform.Member, drafts []build.JointDra
 
 func (t *Tenant) releasePlannerLocked() releaseowner.Planner {
 	return releaseowner.Planner{Definitions: t.definitions, Registry: t.assetRegistryLocked, Resolver: PublicationResolver(), Drafts: t.builders[build.ID],
-		Validate: func(candidate platform.ReleaseCandidate, member platform.Member, at time.Time) error {
+		Validate: func(candidate protocol.ReleaseCandidate, member platform.Member, at time.Time) error {
 			_, _, err := releaseowner.PrepareInstallation(releaseInstallationRuntime{t}, candidate, member, at, true, false)
 			return err
 		}}
@@ -110,7 +111,7 @@ func (t *Tenant) releaseAssetsLocked(assets []platform.ReleaseAsset, replace boo
 func (t *Tenant) codeReleaseAssetsLocked(app platform.App) ([]platform.ReleaseAsset, error) {
 	return releaseowner.CodeAssets(app, t.definitions, t.describer().DefinitionAsset, t.nativeFlowAsset, t.describer().DescribeOwnedAsset, PublicationResolver())
 }
-func (t *Tenant) candidateWithBindings(roots []platform.AssetRef, available []platform.ReleaseAsset, fixed []platform.AssetRef) (platform.ReleaseCandidate, error) {
+func (t *Tenant) candidateWithBindings(roots []platform.AssetRef, available []platform.ReleaseAsset, fixed []platform.AssetRef) (protocol.ReleaseCandidate, error) {
 	return t.releasePlannerLocked().WithBindings(roots, available, fixed)
 }
 
@@ -123,10 +124,10 @@ func (t *Tenant) releaseAcceptance() releaseowner.ReleaseAcceptance {
 		Answer:      func(key string) json.RawMessage { return t.Committed.Answer(key) },
 		SaveAnswer:  func(key string, raw json.RawMessage) { t.Committed.SaveAnswer(key, raw) },
 		Promoted: func(at time.Time, member, target string) {
-			t.AuditLog.Remember(platform.AuditEntry{At: at, Member: member, App: controlowner.PlatformApp, Action: "host.promotion", Target: target})
+			t.AuditLog.Remember(protocol.AuditEntry{At: at, Member: member, App: controlowner.PlatformApp, Action: "host.promotion", Target: target})
 		},
 		Enqueue: t.enqueue,
-		Preview: func(drafts []build.JointDraftRef, member platform.Member) (releaseowner.ReleasePreview, platform.ReleaseCandidate, error) {
+		Preview: func(drafts []build.JointDraftRef, member platform.Member) (releaseowner.ReleasePreview, protocol.ReleaseCandidate, error) {
 			return t.releasePlannerLocked().Preview(drafts, member)
 		},
 		Lifecycle: t.prepareReleaseLifecycleLocked,
@@ -205,8 +206,8 @@ func (t *Tenant) applyPreparedRelease(m platform.Member) func(*Tenant, preparedA
 
 func (t *Tenant) pendingWorkFitsLocked(candidateID string, raw []byte) error {
 	var caller *platform.Caller
-	if t.App(platform.WorkApp) != nil {
-		c := t.automation(platform.WorkApp, false)
+	if t.App(protocol.WorkApp) != nil {
+		c := t.automation(protocol.WorkApp, false)
 		caller = &c
 	}
 	return releaseowner.PendingWorkFits(PublicationResolver(), candidateID, raw, caller, t.releases.Raw)
@@ -215,7 +216,7 @@ func (t *Tenant) pendingWorkFitsLocked(candidateID string, raw []byte) error {
 func (t *Tenant) acceptedAssets() releaseowner.AcceptedAssets {
 	return releaseowner.AcceptedAssets{
 		Available: func() ([]platform.ReleaseAsset, error) { return t.releaseAssetsLocked(nil, false) },
-		WithBindings: func(roots []platform.AssetRef, available []platform.ReleaseAsset) (platform.ReleaseCandidate, error) {
+		WithBindings: func(roots []platform.AssetRef, available []platform.ReleaseAsset) (protocol.ReleaseCandidate, error) {
 			return t.candidateWithBindings(roots, available, nil)
 		},
 		Apps:       func() []platform.App { return t.apps },

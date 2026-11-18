@@ -4,29 +4,10 @@ import (
 	"fmt"
 	"math"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"regexp"
+	"platformserver/kernel/values"
 	"slices"
-	"strings"
 	"time"
-	"unicode/utf16"
 )
-
-var inputInstant = regexp.MustCompile(`^\d{4}-\d{2}-\d{2}T([01]\d|2[0-3]):[0-5]\d:[0-5]\d(\.\d{1,9})?(Z|[+-]([01]\d|2[0-3]):[0-5]\d)$`)
-
-func absoluteDate(typ, text string) (time.Time, error) {
-	layout := time.DateOnly
-	if typ == "datetime" {
-		layout = time.RFC3339Nano
-		if !inputInstant.MatchString(text) || strings.HasSuffix(text, "-00:00") {
-			return time.Time{}, fmt.Errorf("invalid datetime bound")
-		}
-	}
-	value, err := time.Parse(layout, text)
-	if err != nil || value.Year() < 1 || value.Year() > 9999 {
-		return time.Time{}, fmt.Errorf("invalid %s bound", typ)
-	}
-	return value, nil
-}
 
 func CheckInputs(fields []Field) error {
 	byName := map[string]Field{}
@@ -63,13 +44,13 @@ func CheckInputs(fields []Field) error {
 				var earliest, latest time.Time
 				var err error
 				if c.Earliest != "" {
-					earliest, err = absoluteDate(f.Type, c.Earliest)
+					earliest, err = values.AbsoluteDate(f.Type, c.Earliest)
 					if err != nil {
 						return fmt.Errorf("%s: %w", f.Name, err)
 					}
 				}
 				if c.Latest != "" {
-					latest, err = absoluteDate(f.Type, c.Latest)
+					latest, err = values.AbsoluteDate(f.Type, c.Latest)
 					if err != nil {
 						return fmt.Errorf("%s: %w", f.Name, err)
 					}
@@ -140,158 +121,6 @@ func CheckInputs(fields []Field) error {
 		}
 	}
 	return nil
-}
-
-func InputIssues(fields []Field, values map[string]any) []FieldIssue {
-	issues := []FieldIssue{}
-	dependencies := map[string]bool{}
-	for _, f := range fields {
-		if c := f.Constraints; c != nil {
-			dependencies[c.Before] = true
-			dependencies[c.After] = true
-		}
-	}
-	valid := map[string]bool{}
-	add := func(f Field, code, message string, related string) {
-		if len(issues) >= 64 {
-			return
-		}
-		issue := FieldIssue{Code: code, Message: message, Path: []string{f.Name}}
-		if related != "" {
-			issue.RelatedPaths = [][]string{{related}}
-		}
-		issues = append(issues, issue)
-	}
-	for _, f := range fields {
-		v, ok := values[f.Name]
-		text, isText := v.(string)
-		empty := !ok || v == nil || isText && strings.TrimSpace(text) == ""
-		if empty && f.Required {
-			add(f, "required", "Enter a value.", "")
-			continue
-		}
-		c := f.Constraints
-		if c == nil {
-			if !dependencies[f.Name] {
-				continue
-			}
-			c = &InputConstraints{}
-		}
-		if empty {
-			continue
-		}
-		valid[f.Name] = true
-		bad := false
-		switch f.Type {
-		case "string":
-			bad = !isText
-		case "date":
-			_, err := time.Parse(time.DateOnly, text)
-			bad = !isText || err != nil || strings.HasPrefix(text, "0000-")
-			if bad && c.DateTime {
-				_, err = time.Parse("2006-01-02T15:04", text)
-				bad = !isText || err != nil || strings.HasPrefix(text, "0000-")
-			}
-		case "datetime":
-			_, err := time.Parse(time.RFC3339Nano, text)
-			bad = !isText || err != nil || !inputInstant.MatchString(text) || strings.HasPrefix(text, "0000-") || strings.HasSuffix(text, "-00:00")
-		case "integer", "number":
-			n, yes := v.(float64)
-			bad = !yes || math.IsNaN(n) || math.IsInf(n, 0) || f.Type == "integer" && (math.Trunc(n) != n || math.Abs(n) > 9007199254740991)
-		case "boolean":
-			_, yes := v.(bool)
-			bad = !yes
-		}
-		if bad {
-			valid[f.Name] = false
-			add(f, "type", "Enter a valid value.", "")
-			continue
-		}
-		if len(f.Choices) > 0 && !slices.Contains(f.Choices, text) {
-			add(f, "choice", "Choose a listed value.", "")
-		}
-		if isText {
-			n := len(utf16.Encode([]rune(text)))
-			if c.MinLength != nil && n < *c.MinLength {
-				add(f, "minLength", fmt.Sprintf("Use at least %d characters.", *c.MinLength), "")
-			}
-			if c.MaxLength != nil && n > *c.MaxLength {
-				add(f, "maxLength", fmt.Sprintf("Use at most %d characters.", *c.MaxLength), "")
-			}
-			if c.Pattern != "" {
-				if program, err := patternProgram(c.Pattern); err != nil || !program.MatchString(text) {
-					add(f, "pattern", "Use the expected format.", "")
-				}
-			}
-		}
-		if n, yes := v.(float64); yes {
-			if c.Min != nil && (n < *c.Min || c.ExclusiveMin && n == *c.Min) {
-				add(f, "min", fmt.Sprintf("Value must be %s %g.", map[bool]string{false: "at least", true: "greater than"}[c.ExclusiveMin], *c.Min), "")
-			}
-			if c.Max != nil && (n > *c.Max || c.ExclusiveMax && n == *c.Max) {
-				add(f, "max", fmt.Sprintf("Value must be %s %g.", map[bool]string{false: "at most", true: "less than"}[c.ExclusiveMax], *c.Max), "")
-			}
-		}
-		if (f.Type == "date" || f.Type == "datetime") && (c.Earliest != "" || c.Latest != "") {
-			value, _ := absoluteDate(f.Type, text)
-			if c.Earliest != "" {
-				earliest, _ := absoluteDate(f.Type, c.Earliest)
-				if value.Before(earliest) {
-					add(f, "earliest", fmt.Sprintf("Value must be on or after %s.", c.Earliest), "")
-				}
-			}
-			if c.Latest != "" {
-				latest, _ := absoluteDate(f.Type, c.Latest)
-				if value.After(latest) {
-					add(f, "latest", fmt.Sprintf("Value must be on or before %s.", c.Latest), "")
-				}
-			}
-		}
-	}
-	for _, f := range fields {
-		c := f.Constraints
-		if c == nil || !valid[f.Name] {
-			continue
-		}
-		for _, relation := range []struct {
-			name   string
-			before bool
-		}{{c.Before, true}, {c.After, false}} {
-			if relation.name == "" || !valid[relation.name] {
-				continue
-			}
-			v, other := values[f.Name], values[relation.name]
-			cmp := 0
-			switch x := v.(type) {
-			case string:
-				y := other.(string)
-				cmp = strings.Compare(x, y)
-				if f.Type == "datetime" {
-					a, _ := time.Parse(time.RFC3339Nano, x)
-					b, _ := time.Parse(time.RFC3339Nano, y)
-					cmp = a.Compare(b)
-				}
-			case float64:
-				y := other.(float64)
-				if x < y {
-					cmp = -1
-				} else if x > y {
-					cmp = 1
-				}
-			}
-			if relation.before && cmp > 0 || !relation.before && cmp < 0 || cmp == 0 && !c.Inclusive {
-				word := "after"
-				if relation.before {
-					word = "before"
-				}
-				if c.Inclusive {
-					word += " or equal to"
-				}
-				add(f, "relation", fmt.Sprintf("Value must be %s %s.", word, relation.name), relation.name)
-			}
-		}
-	}
-	return issues
 }
 
 func (c Caller) RefuseFields(issues []FieldIssue) *Error {

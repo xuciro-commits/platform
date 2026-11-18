@@ -1,6 +1,7 @@
 package host
 
 import (
+	"platformserver/kernel/protocol"
 	"slices"
 
 	"platformserver/platform"
@@ -9,8 +10,8 @@ import (
 )
 
 func (h hostView) ProductVersion(request platform.ProductVersionRequest) (platform.FrozenProductVersion, error) {
-	return packages.FreezeVersion(PublicationResolver(), slices.Clone(h.t.releases.Raw(request.Candidate)), request, func() []platform.PackageView {
-		return h.t.App("platform").(interface{ PackageViews() []platform.PackageView }).PackageViews()
+	return packages.FreezeVersion(PublicationResolver(), slices.Clone(h.t.releases.Raw(request.Candidate)), request, func() []protocol.PackageView {
+		return h.t.App("platform").(interface{ PackageViews() []protocol.PackageView }).PackageViews()
 	})
 }
 

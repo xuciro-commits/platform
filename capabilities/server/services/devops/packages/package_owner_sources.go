@@ -79,14 +79,14 @@ func (d *Owner) decidePackageSource(_ platform.Caller, s *pb.Submission) (func(*
 	}
 	return func(*pb.ChangeRecord) {
 		if d.packageSources == nil {
-			d.packageSources = map[string]platform.PackageSource{}
+			d.packageSources = map[string]runtimeprotocol.PackageSource{}
 		}
-		d.packageSources[input.Digest] = platform.PackageSource{ID: input.ID, Version: offer.Descriptor.Version, Digest: input.Digest, Origin: offer.Origin}
+		d.packageSources[input.Digest] = runtimeprotocol.PackageSource{ID: input.ID, Version: offer.Descriptor.Version, Digest: input.Digest, Origin: offer.Origin}
 	}, nil
 }
 
-func (d *Owner) sourceIndex(index *platform.PackageIndex) (*platform.PackageIndex, error) {
-	out := &platform.PackageIndex{Directory: index.Directory, Packages: slices.Clone(index.Packages)}
+func (d *Owner) sourceIndex(index *runtimeprotocol.PackageIndex) (*runtimeprotocol.PackageIndex, error) {
+	out := &runtimeprotocol.PackageIndex{Directory: index.Directory, Packages: slices.Clone(index.Packages)}
 	appendDescriptor := func(descriptor platform.PackageDescriptor) error {
 		if prior, found := packagedesc.Find(out, descriptor.ID, descriptor.Version); found {
 			a, _ := json.Marshal(prior)
@@ -107,12 +107,12 @@ func (d *Owner) sourceIndex(index *platform.PackageIndex) (*platform.PackageInde
 		}
 	}
 	d.mu.Lock()
-	sources := make([]platform.PackageSource, 0, len(d.packageSources))
+	sources := make([]runtimeprotocol.PackageSource, 0, len(d.packageSources))
 	for _, source := range d.packageSources {
 		sources = append(sources, source)
 	}
 	d.mu.Unlock()
-	slices.SortFunc(sources, func(a, b platform.PackageSource) int { return strings.Compare(a.Digest, b.Digest) })
+	slices.SortFunc(sources, func(a, b runtimeprotocol.PackageSource) int { return strings.Compare(a.Digest, b.Digest) })
 	for _, source := range sources {
 		offer, err := d.Offer(source.Digest)
 		if err != nil {
@@ -157,7 +157,7 @@ func (d *Owner) InstalledBlueprint(id, version string) ([]platform.AssetRef, []p
 	return blueprint.Roots, blueprint.Assets, err
 }
 
-func (d *Owner) PreparationBlueprint(id, version string) (platform.PackageBlueprint, *platform.InstalledPackage, error) {
+func (d *Owner) PreparationBlueprint(id, version string) (platform.PackageBlueprint, *runtimeprotocol.InstalledPackage, error) {
 	for _, view := range d.PackageViews() {
 		if view.Descriptor.ID != id || view.Descriptor.Version != version {
 			continue
@@ -191,7 +191,7 @@ func (d *Owner) packageDependents(id string) []string {
 		if held.Artifact != "" {
 			descriptor, err = d.sealedPackageDescriptor(other, held.Version, held.Artifact)
 		} else {
-			var index *platform.PackageIndex
+			var index *runtimeprotocol.PackageIndex
 			index, err = d.packageIndex()
 			if err == nil {
 				var found bool
@@ -212,12 +212,12 @@ func (d *Owner) packageDependents(id string) []string {
 	return blockers
 }
 
-func (d *Owner) packageRemoval(id string) *platform.PackageRemoval {
+func (d *Owner) packageRemoval(id string) *runtimeprotocol.PackageRemoval {
 	if held := d.packagesOf()[id]; held != nil && held.State == "retired" {
-		return &platform.PackageRemoval{ID: id, OK: true, Blockers: []string{}}
+		return &runtimeprotocol.PackageRemoval{ID: id, OK: true, Blockers: []string{}}
 	}
 	blockers := d.packageDependents(id)
-	return &platform.PackageRemoval{ID: id, OK: len(blockers) == 0, Blockers: blockers}
+	return &runtimeprotocol.PackageRemoval{ID: id, OK: len(blockers) == 0, Blockers: blockers}
 }
 
 func Contract(id string) runtimeprotocol.CapabilityContract {
@@ -233,7 +233,7 @@ func Module(p platform.PackageDescriptor) runtimeprotocol.CapabilityModule {
 	return module
 }
 
-func (d *Owner) packageComposition(candidate platform.PackageDescriptor, index *platform.PackageIndex, proposed ...platform.PackageDescriptor) (runtimeprotocol.CompositionPlan, error) {
+func (d *Owner) packageComposition(candidate platform.PackageDescriptor, index *runtimeprotocol.PackageIndex, proposed ...platform.PackageDescriptor) (runtimeprotocol.CompositionPlan, error) {
 	modules := d.host.BaseModules()
 	installed, err := d.installedDescriptors(index)
 	if err != nil {
@@ -249,12 +249,14 @@ func (d *Owner) packageComposition(candidate platform.PackageDescriptor, index *
 	return runtimeprotocol.ResolveComposition(modules, nil)
 }
 
-type Catalog interface{ BindPackageIndex(*platform.PackageIndex) }
+type Catalog interface {
+	BindPackageIndex(*runtimeprotocol.PackageIndex)
+}
 
-func (d *Owner) Precheck(p platform.PackageDescriptor) platform.Precheck {
+func (d *Owner) Precheck(p platform.PackageDescriptor) runtimeprotocol.Precheck {
 	index, err := d.packageIndex()
 	if err != nil {
-		return platform.Precheck{ID: p.ID, Version: p.Version, Problems: []string{err.Error()}}
+		return runtimeprotocol.Precheck{ID: p.ID, Version: p.Version, Problems: []string{err.Error()}}
 	}
 	if current, found := packagedesc.Find(index, p.ID, p.Version); found {
 		p = current
@@ -262,8 +264,8 @@ func (d *Owner) Precheck(p platform.PackageDescriptor) platform.Precheck {
 	return d.precheck(p, index)
 }
 
-func (d *Owner) Offer(digest string) (platform.Offer, error) {
-	var offer platform.Offer
+func (d *Owner) Offer(digest string) (runtimeprotocol.Offer, error) {
+	var offer runtimeprotocol.Offer
 	if !platform.ValidDigest(digest) {
 		return offer, fmt.Errorf("The reviewed package digest is invalid")
 	}

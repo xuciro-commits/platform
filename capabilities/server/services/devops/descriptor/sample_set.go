@@ -2,6 +2,7 @@ package descriptor
 
 import (
 	"encoding/json"
+	"platformserver/kernel/protocol"
 
 	"platformserver/platform"
 )
@@ -34,8 +35,8 @@ type SampleSetPublication struct {
 	Draft                func(platform.ReleaseAsset) (SampleSetRecord, error)
 	Assets               func() ([]platform.ReleaseAsset, error)
 	Resolve              func(platform.AssetRef, string) (platform.ReleaseAsset, error)
-	PrepareInstallations func([]platform.ReleaseAsset) ([]platform.AssetInstallation, error)
-	DecodeInstallation   func(json.RawMessage) (platform.AssetInstallation, error)
+	PrepareInstallations func([]platform.ReleaseAsset) ([]protocol.AssetInstallation, error)
+	DecodeInstallation   func(json.RawMessage) (protocol.AssetInstallation, error)
 	ReadFrozen           func(json.RawMessage) (json.RawMessage, error)
 	VersionedDraft       func(string, func() ([]platform.ReleaseAsset, error)) ([]platform.ReleaseAsset, []platform.ReleaseAsset, platform.AssetRef, platform.AssetRef, bool, error)
 }

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"google.golang.org/protobuf/encoding/protojson"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
+	"platformserver/kernel/protocol"
 	"platformserver/platform"
 	"strings"
 	"time"
@@ -42,7 +43,7 @@ func ReleaseRequestHash(tenant, member, key, id string, active bool, upgrade ...
 	}{tenant, member, key, id, active, upgradeID})
 }
 
-func EncodeRelease(saved Release, readCandidate func(string, []byte) (platform.ReleaseCandidate, error)) ([]byte, error) {
+func EncodeRelease(saved Release, readCandidate func(string, []byte) (protocol.ReleaseCandidate, error)) ([]byte, error) {
 	var err error
 	saved.Digest, err = DigestRelease(saved)
 	if err != nil {
@@ -61,7 +62,7 @@ func DigestRelease(saved Release) (string, error) {
 	return platform.CanonicalDigest(saved)
 }
 
-func DecodeRelease(raw []byte, readCandidate func(string, []byte) (platform.ReleaseCandidate, error)) (Release, error) {
+func DecodeRelease(raw []byte, readCandidate func(string, []byte) (protocol.ReleaseCandidate, error)) (Release, error) {
 	var saved Release
 	if len(raw) == 0 || len(raw) > 24<<20 {
 		return saved, fmt.Errorf("release result is empty or too large")

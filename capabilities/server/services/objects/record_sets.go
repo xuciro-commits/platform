@@ -52,7 +52,7 @@ func (t *Owner) checkRecordSetDeclarations(info platform.EntityInfo, engines ...
 		}
 		return t.entity(typ)
 	}
-	if err := platform.CheckVersioning(info, lookup); err != nil {
+	if err := ruleprotocol.CheckVersioning(info, lookup); err != nil {
 		return err
 	}
 	if err := records.CheckRecordSets(info, lookup, engines...); err != nil {

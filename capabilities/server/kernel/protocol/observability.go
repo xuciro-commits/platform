@@ -1,6 +1,8 @@
-package platform
+package protocol
 
-import "time"
+import (
+	"time"
+)
 
 type Observation struct {
 	ID           string            `json:"id"`

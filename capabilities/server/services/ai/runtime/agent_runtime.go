@@ -48,62 +48,62 @@ func New(tenant string, authorities platform.Authorities) *Agents {
 		actions = append(actions, actioncatalog.EntityActions(e)...)
 	}
 	actions = append(actions,
-		platform.Action{Schema: platform.SchemaRunStart, Target: platform.RunType, Capability: "runs", Title: "Ask an agent", Roles: []string{platform.AnyMember},
+		platform.Action{Schema: runtimeprotocol.SchemaRunStart, Target: runtimeprotocol.RunType, Capability: "runs", Title: "Ask an agent", Roles: []string{platform.AnyMember},
 			Description: "Give one of your apps' agents a goal; it works on your behalf, within what you may do yourself.",
 			Payload: []platform.Field{{Name: "agent", Type: "string", Required: true, Description: "The agent, <app>.<name>"},
 				{Name: "goal", Type: "string", Required: true, Description: "What it should achieve"}, {Name: "ref", Type: "string", Description: "The record it is about, <type>/<id>"},
 				{Name: "act", Type: "boolean", Description: "Retained historical input; new runs always require confirmation for writes"},
 				{Name: "language", Type: "string", Description: "The language to answer in, such as zh-CN; empty: English"}}},
-		platform.Action{Schema: platform.SchemaRunStep, Target: platform.RunType, Capability: "runs", Title: "Take step", Payload: []platform.Field{}, Roles: []string{platform.AgentAdmin},
+		platform.Action{Schema: runtimeprotocol.SchemaRunStep, Target: runtimeprotocol.RunType, Capability: "runs", Title: "Take step", Payload: []platform.Field{}, Roles: []string{runtimeprotocol.AgentAdmin},
 			Description: "Made by the host: a step the model chose."},
-		platform.Action{Schema: platform.SchemaRunCancel, Target: platform.RunType, Capability: "runs", Title: "Stop run", Payload: []platform.Field{}, Roles: []string{platform.AgentAdmin, platform.AnyMember},
+		platform.Action{Schema: runtimeprotocol.SchemaRunCancel, Target: runtimeprotocol.RunType, Capability: "runs", Title: "Stop run", Payload: []platform.Field{}, Roles: []string{runtimeprotocol.AgentAdmin, platform.AnyMember},
 			Description: "Stop a run; what it did stays done. Anyone may stop a run on their behalf."},
-		platform.Action{Schema: platform.SchemaRunConfirm, Target: platform.RunType, Capability: "runs", Title: "Confirm draft", Roles: []string{platform.AnyMember},
+		platform.Action{Schema: runtimeprotocol.SchemaRunConfirm, Target: runtimeprotocol.RunType, Capability: "runs", Title: "Confirm draft", Roles: []string{platform.AnyMember},
 			Description: "Do what the agent running for you drafted, as yourself; change its fields first if you want.",
 			Payload:     []platform.Field{{Name: "payload", Type: "json", Description: "The action's fields, changed; empty: as drafted"}}},
-		platform.Action{Schema: platform.SchemaRunReject, Target: platform.RunType, Capability: "runs", Title: "Reject draft", Roles: []string{platform.AnyMember},
+		platform.Action{Schema: runtimeprotocol.SchemaRunReject, Target: runtimeprotocol.RunType, Capability: "runs", Title: "Reject draft", Roles: []string{platform.AnyMember},
 			Description: "Refuse what the agent running for you drafted; it goes on with your reason.",
 			Payload:     []platform.Field{{Name: "reason", Type: "string", Description: "Why, for the agent"}}},
-		platform.Action{Schema: platform.SchemaEvalStart, Target: platform.EvaluationType, Capability: "evaluations", Title: "Evaluate a model", Roles: []string{platform.AgentAdmin},
+		platform.Action{Schema: runtimeprotocol.SchemaEvalStart, Target: runtimeprotocol.EvaluationType, Capability: "evaluations", Title: "Evaluate a model", Roles: []string{runtimeprotocol.AgentAdmin},
 			Description: "Re-run an agent's past runs that people confirmed or corrected, dry, with a candidate model, and compare.",
 			Payload: []platform.Field{{Name: "agent", Type: "string", Required: true, Description: "The agent, <app>.<name>"},
 				{Name: "model", Type: "string", Required: true, Description: "The candidate, an enabled model <provider>/<model>"},
 				{Name: "suite", Type: "boolean", Description: "Run the agent's declared cases, three times each, instead of its past runs"},
 				{Name: "candidate", Type: "string", Description: "Saved release candidate containing this agent; requires a builder and declared cases"}}})
-	actions = append(actions, platform.Action{Schema: platform.SchemaToolPropose, Target: platform.RunType, Capability: "runs", Title: "Propose a tool action", Description: "Save a tool's write as a proposal for the person to confirm; nothing changes until they do.", Roles: []string{platform.AnyMember}, Payload: []platform.Field{
+	actions = append(actions, platform.Action{Schema: runtimeprotocol.SchemaToolPropose, Target: runtimeprotocol.RunType, Capability: "runs", Title: "Propose a tool action", Description: "Save a tool's write as a proposal for the person to confirm; nothing changes until they do.", Roles: []string{platform.AnyMember}, Payload: []platform.Field{
 		{Name: "owner", Type: "string", Required: true}, {Name: "action", Type: "string", Required: true}, {Name: "target", Type: "string", Required: true}, {Name: "payload", Type: "json", Required: true}, {Name: "rationale", Type: "string"}}})
 	actions = append(actions, switchActions()...)
-	return &Agents{tenant: tenant, authorities: authorities, ledger: authorities(tenant, platform.AgentApp, platform.NewCatalog(actions...), platform.RunType, platform.EvaluationType, platform.MemoryType, platform.SwitchType), defs: map[string]*runtimeprotocol.CompiledAgent{}, busy: map[string]bool{}}
+	return &Agents{tenant: tenant, authorities: authorities, ledger: authorities(tenant, runtimeprotocol.AgentApp, platform.NewCatalog(actions...), runtimeprotocol.RunType, runtimeprotocol.EvaluationType, runtimeprotocol.MemoryType, runtimeprotocol.SwitchType), defs: map[string]*runtimeprotocol.CompiledAgent{}, busy: map[string]bool{}}
 }
 
 func (a *Agents) NewSimulationApp(tenant string) platform.App { return New(tenant, a.authorities) }
 
 func agentEntities() []platform.Entity {
-	return []platform.Entity{{Type: platform.RunType, Title: "Agent run", Model: platform.AgentRunRecord{}, Display: "title",
+	return []platform.Entity{{Type: runtimeprotocol.RunType, Title: "Agent run", Model: runtimeprotocol.AgentRunRecord{}, Display: "title",
 		Derived: []platform.Derivation{
 			{From: "ref", Fields: []string{"seen", "citations"}},
 			{From: "steps.sources", Fields: []string{"arguments", "outcome", "calls", "content"}},
 			{From: "citations.document", Element: true},
 			{From: "draft.type/target", Element: true},
 			{From: "*", Fields: []string{"result", "pending"}}},
-		Withheld: "withheld", Scope: platform.Scope{Participants: func(record any) []string { return []string{record.(platform.AgentRunRecord).OnBehalf} }}},
-		{Type: platform.EvaluationType, Title: "Agent evaluation", Model: platform.Evaluation{}, Display: "model"}, memoryEntity(),
-		{Type: platform.SwitchType, Title: "Agent switch", Model: platform.Switch{}, Description: "An agent's off switch: suspended by an administrator, or working."}}
+		Withheld: "withheld", Scope: platform.Scope{Participants: func(record any) []string { return []string{record.(runtimeprotocol.AgentRunRecord).OnBehalf} }}},
+		{Type: runtimeprotocol.EvaluationType, Title: "Agent evaluation", Model: runtimeprotocol.Evaluation{}, Display: "model"}, memoryEntity(),
+		{Type: runtimeprotocol.SwitchType, Title: "Agent switch", Model: runtimeprotocol.Switch{}, Description: "An agent's off switch: suspended by an administrator, or working."}}
 }
 
 func (a *Agents) Manifest() platform.Manifest {
-	return platform.Manifest{Languages: languages, ID: platform.AgentApp, Title: platform.BuiltinManifestTitle(platform.AgentApp), Version: "1", Actions: a.ledger.Catalog(), Entities: agentEntities(),
+	return platform.Manifest{Languages: languages, ID: runtimeprotocol.AgentApp, Title: platform.BuiltinManifestTitle(runtimeprotocol.AgentApp), Version: "1", Actions: a.ledger.Catalog(), Entities: agentEntities(),
 		Reads: []string{"agents", "runs", "memories", "agent-overview"}, Everyone: []string{"agents", "runs", "memories"},
 		ReadSources: map[string]string{"agents": "record", "agent-overview": "record"},
 		Settings: []platform.Setting{
-			{Name: platform.SettingAgentModel, Title: "Model for agents", Type: "text", Default: "",
+			{Name: runtimeprotocol.SettingAgentModel, Title: "Model for agents", Type: "text", Default: "",
 				Description: "The enabled model agents call, <provider>/<model>; it must call tools. Empty: agents stop and hand their goal to a person."},
-			{Name: platform.SettingAgentModel + "-options", Title: "Agent model options", Type: "text", Default: "", Description: "Input, generation and thinking overrides configured in AI configuration."},
-			{Name: platform.SettingAgentDaily, Title: "Tokens per agent per day", Type: "integer", Default: "200000",
+			{Name: runtimeprotocol.SettingAgentModel + "-options", Title: "Agent model options", Type: "text", Default: "", Description: "Input, generation and thinking overrides configured in AI configuration."},
+			{Name: runtimeprotocol.SettingAgentDaily, Title: "Tokens per agent per day", Type: "integer", Default: "200000",
 				Description: "An agent that has used this many tokens today stops its runs until tomorrow."},
-			{Name: platform.SettingPublished, Title: "Published over A2A", Type: "text", Default: "",
+			{Name: runtimeprotocol.SettingPublished, Title: "Published over A2A", Type: "text", Default: "",
 				Description: "Agents other systems may call over A2A 1.0, comma-separated <app>.<name>; their cards are at /a2a/<tenant>/<agent>/.well-known/agent-card.json."},
-			{Name: platform.SettingTranscriptDays, Title: "Days transcripts are kept", Type: "integer", Default: "30",
+			{Name: runtimeprotocol.SettingTranscriptDays, Title: "Days transcripts are kept", Type: "integer", Default: "30",
 				Description: "Every model call's full request and answer are kept this many days outside the journal, for agent administrators; they may hold personal data. 0: none are kept, and what was kept is forgotten."},
 		}}
 }
@@ -186,11 +186,11 @@ func (a *Agents) AgentPrincipal(agent string) platform.Member {
 	return platform.Member{ID: "agent:" + agent, Tenant: a.tenant, Roles: map[string]string{}, Agent: true}
 }
 
-func (a *Agents) run(r platform.AgentRunRecord) platform.AgentRun {
+func (a *Agents) run(r runtimeprotocol.AgentRunRecord) platform.AgentRun {
 	return platform.AgentRun{ID: r.ID, Agent: r.Agent, Goal: r.Goal, Ref: r.Ref, OnBehalf: r.OnBehalf}
 }
 
-func (a *Agents) runs(c platform.Caller, state ...string) []platform.AgentRunRecord {
+func (a *Agents) runs(c platform.Caller, state ...string) []runtimeprotocol.AgentRunRecord {
 	var terms []any
 	for i, s := range state {
 		if i < len(state)-1 {
@@ -199,39 +199,39 @@ func (a *Agents) runs(c platform.Caller, state ...string) []platform.AgentRunRec
 		terms = append(terms, []any{"state", "=", s})
 	}
 	domain, _ := json.Marshal(terms)
-	out, _, _ := platform.Find[platform.AgentRunRecord](c, platform.Query{Domain: domain, Sort: []string{"id"}})
+	out, _, _ := platform.Find[runtimeprotocol.AgentRunRecord](c, platform.Query{Domain: domain, Sort: []string{"id"}})
 	return out
 }
 
 func (a *Agents) Read(c platform.Caller, name string) (any, *platform.Error) {
 	if name == "memories" {
 		about, _ := json.Marshal([]any{[]any{"for", "=", c.ID}, []any{"state", "!=", "forgotten"}})
-		out, _, _ := platform.Find[platform.Memory](a.host.Automation(c, platform.AgentApp), platform.Query{Domain: about, Sort: []string{"-created"}, Limit: 100})
+		out, _, _ := platform.Find[runtimeprotocol.Memory](a.host.Automation(c, runtimeprotocol.AgentApp), platform.Query{Domain: about, Sort: []string{"-created"}, Limit: 100})
 		return out, nil
 	}
 	if name == "agent-overview" {
-		if c.Roles[platform.AgentApp] != platform.AgentAdmin {
+		if c.Roles[runtimeprotocol.AgentApp] != runtimeprotocol.AgentAdmin {
 			return nil, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_POLICY_DENIED}
 		}
 		return a.AgentOverview(), nil
 	}
 	if name == "runs" {
 		mine, _ := json.Marshal([]any{[]any{"onBehalf", "=", c.ID}})
-		out, _, _ := platform.Find[platform.AgentRunRecord](a.host.Automation(c, platform.AgentApp), platform.Query{Domain: mine, Sort: []string{"-created"}, Limit: 50})
-		out = slices.DeleteFunc(out, func(run platform.AgentRunRecord) bool {
+		out, _, _ := platform.Find[runtimeprotocol.AgentRunRecord](a.host.Automation(c, runtimeprotocol.AgentApp), platform.Query{Domain: mine, Sort: []string{"-created"}, Limit: 50})
+		out = slices.DeleteFunc(out, func(run runtimeprotocol.AgentRunRecord) bool {
 			d := a.def(run.Agent)
 			return !run.ToolOnly && (d == nil || c.Roles[d.App] == "")
 		})
 		return out, nil
 	}
-	out := []platform.AgentInfo{}
+	out := []runtimeprotocol.AgentInfo{}
 	a.refresh()
 	for _, id := range slices.Sorted(maps.Keys(a.defs)) {
 		d := a.defs[id]
-		if c.Roles[platform.AgentApp] != platform.AgentAdmin && c.Roles[d.App] == "" {
+		if c.Roles[runtimeprotocol.AgentApp] != runtimeprotocol.AgentAdmin && c.Roles[d.App] == "" {
 			continue
 		}
-		out = append(out, platform.AgentInfo{ID: id, App: d.App, Title: d.Title, Instructions: visibleAgentInstructions(c, d), Tools: append(slices.Clone(d.Agent.Tools), "context", "search", "knowledge", "remember", "ask", "finish"), Budget: d.Budget})
+		out = append(out, runtimeprotocol.AgentInfo{ID: id, App: d.App, Title: d.Title, Instructions: visibleAgentInstructions(c, d), Tools: append(slices.Clone(d.Agent.Tools), "context", "search", "knowledge", "remember", "ask", "finish"), Budget: d.Budget})
 	}
 	return out, nil
 }
@@ -260,7 +260,7 @@ func (a *Agents) definitionVersion(d *runtimeprotocol.CompiledAgent) string {
 	return "agent.sha256." + digest
 }
 
-func (a *Agents) changedDefinition(run platform.AgentRunRecord, d *runtimeprotocol.CompiledAgent) bool {
+func (a *Agents) changedDefinition(run runtimeprotocol.AgentRunRecord, d *runtimeprotocol.CompiledAgent) bool {
 	if d == nil {
 		return false
 	}
@@ -275,7 +275,7 @@ func (a *Agents) Fork(ledger platform.Authority) (platform.App, error) {
 		buildStamp: a.buildStamp, busy: map[string]bool{}}, nil
 }
 
-func (a *Agents) AllowsAgentRun(run platform.AgentRunRecord) bool {
+func (a *Agents) AllowsAgentRun(run runtimeprotocol.AgentRunRecord) bool {
 	d := a.def(run.Agent)
 	if d == nil {
 		return false
@@ -301,11 +301,11 @@ func (a *Agents) Start(c platform.Caller, r *pb.ChangeRecord, s platform.RunStar
 		c.FailDecision(err)
 		return
 	}
-	a.host.Automation(c, platform.AgentApp).Put(r, run)
+	a.host.Automation(c, runtimeprotocol.AgentApp).Put(r, run)
 }
 
 func (a *Agents) Signal(c platform.Caller, r *pb.ChangeRecord, run string, s platform.RunSignal, now time.Time) {
-	a.RecordAgentSignal(c, r, run, platform.Signal{At: s.At, Kind: s.Kind, By: s.By, Detail: s.Detail}, now)
+	a.RecordAgentSignal(c, r, run, runtimeprotocol.Signal{At: s.At, Kind: s.Kind, By: s.By, Detail: s.Detail}, now)
 }
 
 func (a *Agents) Finished(c platform.Caller, flow, step string) []string {
@@ -314,7 +314,7 @@ func (a *Agents) Finished(c platform.Caller, flow, step string) []string {
 		where = append(where, []any{"step", "=", step})
 	}
 	domain, _ := json.Marshal(where)
-	runs, _, _ := platform.Find[platform.AgentRunRecord](a.host.Automation(c, platform.AgentApp), platform.Query{Domain: domain, Sort: []string{"created", "id"}})
+	runs, _, _ := platform.Find[runtimeprotocol.AgentRunRecord](a.host.Automation(c, runtimeprotocol.AgentApp), platform.Query{Domain: domain, Sort: []string{"created", "id"}})
 	var out []string
 	for _, run := range runs {
 		out = append(out, run.ID)
@@ -330,7 +330,7 @@ func (a *Agents) Listen(c platform.Caller, e platform.Event, _ []string, now tim
 
 func (a *Agents) interested(e platform.Event) bool {
 	s := e.Record.GetSubmission()
-	return e.App == platform.WorkApp && s.GetSchema().GetName() == "work.task.complete" && strings.HasPrefix(s.GetTarget().GetId(), platform.AgentApp+":")
+	return e.App == runtimeprotocol.WorkApp && s.GetSchema().GetName() == "work.task.complete" && strings.HasPrefix(s.GetTarget().GetId(), runtimeprotocol.AgentApp+":")
 }
 
 func (a *Agents) handle(c platform.Caller, e platform.Event, now time.Time) *platform.Error {
@@ -339,9 +339,9 @@ func (a *Agents) handle(c platform.Caller, e platform.Event, now time.Time) *pla
 		if run.Task != id {
 			continue
 		}
-		task, _ := platform.Get[platform.WorkTask](a.host.Automation(c, platform.WorkApp), id)
-		s := &pb.Submission{TenantId: a.tenant, PrincipalId: c.ID, Authority: platform.AgentApp, IdempotencyKey: fmt.Sprintf("%s:%d", run.ID, run.Revision+1),
-			Target: &pb.EntityRef{Type: platform.RunType, Id: run.ID}, Schema: &pb.SchemaRef{Name: platform.SchemaRunStep, Version: 1}, Payload: []byte("{}")}
+		task, _ := platform.Get[runtimeprotocol.WorkTask](a.host.Automation(c, runtimeprotocol.WorkApp), id)
+		s := &pb.Submission{TenantId: a.tenant, PrincipalId: c.ID, Authority: runtimeprotocol.AgentApp, IdempotencyKey: fmt.Sprintf("%s:%d", run.ID, run.Revision+1),
+			Target: &pb.EntityRef{Type: runtimeprotocol.RunType, Id: run.ID}, Schema: &pb.SchemaRef{Name: runtimeprotocol.SchemaRunStep, Version: 1}, Payload: []byte("{}")}
 		_, err := a.ledger.Receive(c, s, now, nil, func() (func(*pb.ChangeRecord), *platform.Error) {
 			last := &run.Steps[len(run.Steps)-1]
 			last.Outcome += fmt.Sprintf("\nanswered by %s: %s", task.Assignee, cmp.Or(task.Answer, "done"))
@@ -355,7 +355,7 @@ func (a *Agents) handle(c platform.Caller, e platform.Event, now time.Time) *pla
 
 func (a *Agents) AgentEffectEnded(c platform.Caller, r *pb.ChangeRecord, x platform.Effect, o platform.Outcome, now time.Time) {
 	task := "effect:" + x.Event + ":" + x.Key
-	for _, run := range a.runs(a.host.Automation(c, platform.AgentApp), "waiting") {
+	for _, run := range a.runs(a.host.Automation(c, runtimeprotocol.AgentApp), "waiting") {
 		if run.Task != task {
 			continue
 		}
@@ -370,12 +370,12 @@ func (a *Agents) AgentEffectEnded(c platform.Caller, r *pb.ChangeRecord, x platf
 		}
 		run.State, run.Task = "running", ""
 		if r != nil {
-			a.host.Automation(c, platform.AgentApp).Put(r, run)
+			a.host.Automation(c, runtimeprotocol.AgentApp).Put(r, run)
 			return
 		}
-		ac := a.host.Automation(c, platform.AgentApp)
-		s := &pb.Submission{TenantId: a.tenant, PrincipalId: ac.ID, Authority: platform.AgentApp, IdempotencyKey: fmt.Sprintf("%s:%d", run.ID, run.Revision+1),
-			Target: &pb.EntityRef{Type: platform.RunType, Id: run.ID}, Schema: &pb.SchemaRef{Name: platform.SchemaRunStep, Version: 1}, Payload: []byte("{}")}
+		ac := a.host.Automation(c, runtimeprotocol.AgentApp)
+		s := &pb.Submission{TenantId: a.tenant, PrincipalId: ac.ID, Authority: runtimeprotocol.AgentApp, IdempotencyKey: fmt.Sprintf("%s:%d", run.ID, run.Revision+1),
+			Target: &pb.EntityRef{Type: runtimeprotocol.RunType, Id: run.ID}, Schema: &pb.SchemaRef{Name: runtimeprotocol.SchemaRunStep, Version: 1}, Payload: []byte("{}")}
 		a.ledger.Receive(ac, s, now, nil, func() (func(*pb.ChangeRecord), *platform.Error) {
 			return func(r *pb.ChangeRecord) { ac.Put(r, run) }, nil
 		})

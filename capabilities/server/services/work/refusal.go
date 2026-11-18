@@ -2,6 +2,7 @@ package work
 
 import (
 	"encoding/json"
+	"platformserver/kernel/protocol"
 	"reflect"
 	"time"
 
@@ -16,7 +17,7 @@ func refusalEscalationAction() platform.Action {
 }
 
 func (w *Work) runRefusalEscalations(c platform.Caller, at time.Time) *platform.Error {
-	pending, err := platform.PendingRefusalEscalations(c, at)
+	pending, err := protocol.PendingRefusalEscalations(c, at)
 	if err != nil || len(pending) == 0 {
 		return err
 	}
@@ -30,7 +31,7 @@ func (w *Work) escalateRefusal(c platform.Caller, s *pb.Submission, at time.Time
 	if json.Unmarshal(s.GetPayload(), &request) != nil || s.GetTarget().GetId() != request.TaskID() || s.GetIdempotencyKey() != "refusal-escalation:"+request.Key {
 		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "A refusal escalation needs its original durable business facts")
 	}
-	pending, err := platform.PendingRefusalEscalations(c, at)
+	pending, err := protocol.PendingRefusalEscalations(c, at)
 	if err != nil {
 		return nil, err
 	}

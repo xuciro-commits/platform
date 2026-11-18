@@ -5,6 +5,7 @@ import transport "platformserver/kernel/transport"
 import (
 	"encoding/json"
 	"net/http"
+	"platformserver/kernel/protocol"
 	"platformserver/services/ai/gateway"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
@@ -12,12 +13,12 @@ import (
 )
 
 func (h *Host) routesAI(rt *routes) {
-	rt.handle(transport.Route{Pattern: "GET /v1/ai/training/export", Summary: "Export a fixed currently qualified SFT or DPO dataset without external calls", Answer: platform.AITrainingExport{}, Query: []transport.Param{{Name: "format", Description: "sft or dpo"}}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
-		answer, refusal := recordRead(t, r.Context(), func(t *Tenant) (platform.AITrainingExport, *platform.Error) {
+	rt.handle(transport.Route{Pattern: "GET /v1/ai/training/export", Summary: "Export a fixed currently qualified SFT or DPO dataset without external calls", Answer: protocol.AITrainingExport{}, Query: []transport.Param{{Name: "format", Description: "sft or dpo"}}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
+		answer, refusal := recordRead(t, r.Context(), func(t *Tenant) (protocol.AITrainingExport, *platform.Error) {
 			if t.Training == nil {
-				return platform.AITrainingExport{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_NOT_FOUND, "Training data is unavailable")
+				return protocol.AITrainingExport{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_NOT_FOUND, "Training data is unavailable")
 			}
-			return t.Training.TrainingExport(platform.NewCaller(runtime{t: t}, m, platform.AIApp, false, false), r.URL.Query().Get("format"), h.Now())
+			return t.Training.TrainingExport(platform.NewCaller(runtime{t: t}, m, protocol.AIApp, false, false), r.URL.Query().Get("format"), h.Now())
 		})
 		if refusal != nil {
 			Reply(w, nil, refusal)
@@ -30,7 +31,7 @@ func (h *Host) routesAI(rt *routes) {
 		}
 		WriteJSON(w, http.StatusOK, answer)
 	})
-	rt.handle(transport.Route{Pattern: "GET /v1/ai/knowledge-index", Summary: "Original knowledge vector index preparation and current retrieval mode", Answer: platform.KnowledgeIndexStatus{}}, transport.Answering(func(r *http.Request, m platform.Member, t *Tenant) (platform.KnowledgeIndexStatus, *platform.Error) {
+	rt.handle(transport.Route{Pattern: "GET /v1/ai/knowledge-index", Summary: "Original knowledge vector index preparation and current retrieval mode", Answer: protocol.KnowledgeIndexStatus{}}, transport.Answering(func(r *http.Request, m platform.Member, t *Tenant) (protocol.KnowledgeIndexStatus, *platform.Error) {
 		status, err := t.KnowledgeIndexStatus(r.Context(), m)
 		status.Problem = t.i18n.Say(t.Language(m, r), status.Problem)
 		return status, err
@@ -59,7 +60,7 @@ func (h *Host) routesAI(rt *routes) {
 			}.Serve(w, r)
 		})
 	}
-	rt.handle(transport.Route{Pattern: "GET /v1/ai/providers/{id}/models", Summary: "A provider's catalog of models", Answer: []platform.CatalogModel{}, Query: []transport.Param{{Name: "refresh", Description: "true reads the catalog from the provider again"}}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
+	rt.handle(transport.Route{Pattern: "GET /v1/ai/providers/{id}/models", Summary: "A provider's catalog of models", Answer: []protocol.CatalogModel{}, Query: []transport.Param{{Name: "refresh", Description: "true reads the catalog from the provider again"}}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
 		models, err, failure := t.ProviderModels(m, r.PathValue("id"), r.URL.Query().Get("refresh") == "true")
 		switch {
 		case err != nil:
@@ -70,8 +71,8 @@ func (h *Host) routesAI(rt *routes) {
 			WriteJSON(w, http.StatusOK, models)
 		}
 	})
-	rt.handle(transport.Route{Pattern: "GET /v1/ai/vendors", Summary: "The vendors a provider may be", Answer: []platform.AIVendor{}}, func(w http.ResponseWriter, _ *http.Request, _ platform.Member, _ *Tenant) {
-		WriteJSON(w, http.StatusOK, platform.AIVendors)
+	rt.handle(transport.Route{Pattern: "GET /v1/ai/vendors", Summary: "The vendors a provider may be", Answer: []protocol.AIVendor{}}, func(w http.ResponseWriter, _ *http.Request, _ platform.Member, _ *Tenant) {
+		WriteJSON(w, http.StatusOK, protocol.AIVendors)
 	})
 	rt.handle(transport.Route{Pattern: "GET /v1/capabilities/calls/ai/{id}", Summary: "Read the original typed AI call result after member and source checks", Answer: platform.OperationResult{}}, transport.Answering(func(r *http.Request, m platform.Member, t *Tenant) (platform.OperationResult, *platform.Error) {
 		return t.ReadCapabilityAI(r.Context(), m, r.PathValue("id"), h.Now())

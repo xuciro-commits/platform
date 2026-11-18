@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"net/http"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
+	"platformserver/kernel/protocol"
 	"platformserver/platform"
 	controlowner "platformserver/services/security/control"
 )
@@ -26,8 +27,8 @@ func (t *Tenant) CredentialHeader(name, consumer, address string) ([]byte, bool)
 }
 
 func (h *Host) routesCredentials(rt *routes) {
-	rt.authorized(transport.Route{Pattern: "POST /v1/credentials/seal", Summary: "Encrypt a transient credential before ordinary submission", Body: platform.CredentialSealRequest{}, Answer: platform.CredentialWrite{}}, controlowner.PlatformApp, []string{controlowner.Admin}, func(w http.ResponseWriter, r *http.Request, _ platform.Member, t *Tenant) {
-		var request platform.CredentialSealRequest
+	rt.authorized(transport.Route{Pattern: "POST /v1/credentials/seal", Summary: "Encrypt a transient credential before ordinary submission", Body: protocol.CredentialSealRequest{}, Answer: protocol.CredentialWrite{}}, controlowner.PlatformApp, []string{controlowner.Admin}, func(w http.ResponseWriter, r *http.Request, _ platform.Member, t *Tenant) {
+		var request protocol.CredentialSealRequest
 		decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 32<<10))
 		decoder.DisallowUnknownFields()
 		if decoder.Decode(&request) != nil {

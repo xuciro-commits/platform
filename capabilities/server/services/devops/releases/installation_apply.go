@@ -1,6 +1,7 @@
 package releases
 
 import (
+	"platformserver/kernel/protocol"
 	"platformserver/platform"
 	"platformserver/services/resources/publication"
 )
@@ -11,7 +12,7 @@ func ApplyInstallations(registry *publication.AssetRegistry, installations []pla
 		if err != nil {
 			return err
 		}
-		if err := registry.ApplyInstallation(plan, platform.AssetApplyContext{}); err != nil {
+		if err := registry.ApplyInstallation(plan, protocol.AssetApplyContext{}); err != nil {
 			return err
 		}
 	}

@@ -80,8 +80,8 @@ func (a WorkAcceptance) Accept(task *Task, now time.Time) string {
 	return draft.Commit(result)
 }
 
-func (b *WorkBoard) Restorer(delivered func(platform.Delivery)) func(acceptedformat.Work) (platform.ScheduledTaskState, string, func(*pb.Work), error) {
-	return func(result acceptedformat.Work) (platform.ScheduledTaskState, string, func(*pb.Work), error) {
+func (b *WorkBoard) Restorer(delivered func(protocol.Delivery)) func(acceptedformat.Work) (protocol.ScheduledTaskState, string, func(*pb.Work), error) {
+	return func(result acceptedformat.Work) (protocol.ScheduledTaskState, string, func(*pb.Work), error) {
 		var task *Task
 		b.Lock()
 		if result.Input.Kind == "job" {
@@ -91,7 +91,7 @@ func (b *WorkBoard) Restorer(delivered func(platform.Delivery)) func(acceptedfor
 		}
 		b.Unlock()
 		if task == nil {
-			return platform.ScheduledTaskState{}, "", nil, fmt.Errorf("work result needs missing work %s", result.Input.ID)
+			return protocol.ScheduledTaskState{}, "", nil, fmt.Errorf("work result needs missing work %s", result.Input.ID)
 		}
 		before, err := StateOfTask(task)
 		if err != nil {
@@ -109,7 +109,7 @@ func (b *WorkBoard) Restorer(delivered func(platform.Delivery)) func(acceptedfor
 			b.Unlock()
 			if task.Kind == "delivery" {
 				s := task.Event.Record.GetSubmission()
-				delivered(platform.Delivery{At: result.At, App: task.Event.App, Action: s.GetSchema().GetName(), Target: target(s),
+				delivered(protocol.Delivery{At: result.At, App: task.Event.App, Action: s.GetSchema().GetName(), Target: target(s),
 					Subscriber: task.App, Outcome: result.Outcome, Attempt: task.Attempts})
 			}
 		}, nil

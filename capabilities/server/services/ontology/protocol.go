@@ -2,6 +2,7 @@ package ontology
 
 import (
 	"fmt"
+	runtimeprotocol "platformserver/kernel/protocol"
 	"reflect"
 	"slices"
 	"strings"
@@ -110,7 +111,7 @@ func CheckObjectProtocols(object Object, env ProtocolEnvironment) error {
 			reads[read] = true
 		}
 		if declaration.Contract != nil {
-			if err := platform.CheckProtocol(*declaration.Contract, actual); err != nil {
+			if err := runtimeprotocol.CheckProtocol(*declaration.Contract, actual); err != nil {
 				return err
 			}
 		}
@@ -122,13 +123,13 @@ func CheckObjectProtocols(object Object, env ProtocolEnvironment) error {
 				if installed.Type != entity.Type {
 					return fmt.Errorf("Protocol %s is already provided by %s", id, installed.Type)
 				}
-				if err := platform.CheckProtocol(provision.Protocol, actual); err != nil {
+				if err := runtimeprotocol.CheckProtocol(provision.Protocol, actual); err != nil {
 					return err
 				}
 			}
 		}
 		if contract, exists := env.Contract(id); exists {
-			if err := platform.CheckProtocol(contract, actual); err != nil {
+			if err := runtimeprotocol.CheckProtocol(contract, actual); err != nil {
 				return err
 			}
 		}

@@ -2,6 +2,7 @@ package publication
 
 import (
 	"encoding/json"
+	"platformserver/kernel/protocol"
 	"slices"
 
 	"platformserver/platform"
@@ -25,7 +26,7 @@ type Frozen struct {
 	Asset         platform.ReleaseAsset
 	Skip          bool
 	Publications  []platform.ReleasePublication
-	Installations []platform.AssetInstallation
+	Installations []protocol.AssetInstallation
 }
 
 type SchemaHooks struct {
@@ -43,8 +44,8 @@ type Hooks struct {
 	Closure             func(platform.Caller, string, platform.Member) (DraftClosure, error)
 	ReadFrozen          func(json.RawMessage) (json.RawMessage, error)
 	FreezeBatch         func([]platform.ReleaseAsset) ([]platform.ReleasePublication, error)
-	FreezeInstallations func([]platform.ReleaseAsset) ([]platform.AssetInstallation, error)
-	DirectInstallation  func(json.RawMessage) (platform.AssetInstallation, error)
+	FreezeInstallations func([]platform.ReleaseAsset) ([]protocol.AssetInstallation, error)
+	DirectInstallation  func(json.RawMessage) (protocol.AssetInstallation, error)
 	VersionedDraft      func(string, func() ([]platform.ReleaseAsset, error)) (DraftClosure, error)
 	LoadExecution       func(platform.ReleaseAsset) error
 }

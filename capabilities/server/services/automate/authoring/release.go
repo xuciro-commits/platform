@@ -117,7 +117,7 @@ func (o *Owner) FlowReleaseAsset(name string, version int) (platform.ReleaseAsse
 }
 
 func (o *Owner) ProcessFromAsset(asset platform.ReleaseAsset) (runtimeprotocol.Process, error) {
-	var envelope platform.FlowReleaseDescriptor
+	var envelope runtimeprotocol.FlowReleaseDescriptor
 	var p runtimeprotocol.Process
 	if asset.Ref.App != o.env.AppID() || asset.Ref.Kind != platform.AssetFlow || asset.ContractVersion != 1 || o.resolver.CheckAssetDependencies(asset) != nil {
 		return p, fmt.Errorf("unsupported process release asset %s", asset.Ref)
@@ -236,7 +236,7 @@ func (o *Owner) processReleaseAsset(saved runtimeprotocol.Process, sourceVersion
 	if err != nil {
 		return platform.ReleaseAsset{}, err
 	}
-	body, err := json.Marshal(platform.FlowReleaseDescriptor{Name: ref.Name, Subject: subject, Actions: actions, Definition: definition, Functions: functions, Operations: operations, Queries: queries, Dependencies: dependencies})
+	body, err := json.Marshal(runtimeprotocol.FlowReleaseDescriptor{Name: ref.Name, Subject: subject, Actions: actions, Definition: definition, Functions: functions, Operations: operations, Queries: queries, Dependencies: dependencies})
 	if err != nil {
 		return platform.ReleaseAsset{}, err
 	}
@@ -255,7 +255,7 @@ func (o *Owner) Draft(asset platform.ReleaseAsset) (string, any, bool, error) {
 	return "", nil, false, nil
 }
 
-func (o *Owner) DecodeInstallation(schema string, image json.RawMessage) (platform.AssetInstallation, error) {
+func (o *Owner) DecodeInstallation(schema string, image json.RawMessage) (runtimeprotocol.AssetInstallation, error) {
 	switch schema {
 	case runtimeprotocol.SchemaProcess:
 		var record struct {
@@ -263,17 +263,17 @@ func (o *Owner) DecodeInstallation(schema string, image json.RawMessage) (platfo
 			Name string `json:"name"`
 		}
 		if json.Unmarshal(image, &record) != nil || record.ID == "" || record.Name == "" {
-			return platform.AssetInstallation{}, fmt.Errorf("invalid release publication row")
+			return runtimeprotocol.AssetInstallation{}, fmt.Errorf("invalid release publication row")
 		}
-		return platform.AssetInstallation{
+		return runtimeprotocol.AssetInstallation{
 			Ref:    platform.AssetRef{App: o.env.AppID(), Kind: platform.AssetFlow, Name: o.QualifiedName(record.Name)},
 			Schema: schema, Record: runtimeprotocol.ProcessType + "/" + record.ID, Image: slices.Clone(image),
 		}, nil
 	}
-	return platform.AssetInstallation{}, fmt.Errorf("not an automation installation schema")
+	return runtimeprotocol.AssetInstallation{}, fmt.Errorf("not an automation installation schema")
 }
 
-func (o *Owner) ValidateInstallation(plan platform.AssetInstallation) error {
+func (o *Owner) ValidateInstallation(plan runtimeprotocol.AssetInstallation) error {
 	decoded, err := o.DecodeInstallation(plan.Schema, plan.Image)
 	if err != nil {
 		return err

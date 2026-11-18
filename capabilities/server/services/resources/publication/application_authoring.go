@@ -8,7 +8,7 @@ import (
 )
 
 type ApplicationEnvironment interface {
-	Host() platform.BuildHost
+	Host() protocol.BuildHost
 	AppID() string
 	Version() string
 	Resolver() Resolver
@@ -45,7 +45,7 @@ type ApplicationAuthoring interface {
 	HasPublishedPage(string) (bool, error)
 	PageAsset(protocol.Page, string) (platform.ReleaseAsset, error)
 	ApplicationAsset(protocol.Application, string) (platform.ReleaseAsset, error)
-	DecodeInstallation(string, json.RawMessage) (platform.AssetInstallation, error)
+	DecodeInstallation(string, json.RawMessage) (protocol.AssetInstallation, error)
 	PageEntity() platform.Entity
 	ApplicationEntity() platform.Entity
 	CheckPageObject(platform.Caller, string) (bool, error)

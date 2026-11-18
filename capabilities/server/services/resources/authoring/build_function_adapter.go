@@ -3,6 +3,7 @@ package build
 import (
 	"context"
 	"encoding/json"
+	"platformserver/kernel/protocol"
 
 	"platformserver/platform"
 	"platformserver/services/resources/publication"
@@ -12,7 +13,7 @@ type functionEnvironment struct {
 	b *Build
 }
 
-func (e functionEnvironment) Host() platform.BuildHost   { return e.b.host }
+func (e functionEnvironment) Host() protocol.BuildHost   { return e.b.host }
 func (e functionEnvironment) Ledger() platform.Authority { return e.b.ledger }
 func (e functionEnvironment) Resolver() publication.Resolver {
 	return e.b.resolver
@@ -55,7 +56,7 @@ func (b *Build) FunctionReleaseAsset(name string, sourceVersion string) (platfor
 	return b.functions.Resolve(name, sourceVersion)
 }
 
-func (b *Build) TrainingCandidates(c platform.Caller, event platform.Event, images map[string]json.RawMessage) []platform.AITrainingCandidate {
+func (b *Build) TrainingCandidates(c platform.Caller, event platform.Event, images map[string]json.RawMessage) []protocol.AITrainingCandidate {
 	return b.functions.TrainingCandidates(c, event, images)
 }
 

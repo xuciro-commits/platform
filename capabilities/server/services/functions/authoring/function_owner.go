@@ -132,7 +132,7 @@ func functionCallActions(roles []string) []platform.Action {
 			{Name: "release", Type: "string", Description: "Retained release for a native automation; empty keeps a development run"},
 			{Name: "onBehalf", Type: "string", Description: "Retained member for a native automation"}}},
 		{Schema: protocol.SchemaFunctionAnswer, Target: protocol.FunctionCallType, Capability: "functions", Title: "Record AI function answer",
-			Description: "Keep the validated suggestion or refusal on its call record.", Automation: true, Payload: platform.FunctionAnswerFields()}}, platform.Action{Schema: protocol.SchemaProposalReview, Target: protocol.FunctionCallType, Capability: "functions", Title: "Review AI proposal", Description: "Reject or expire a retained proposal without changing its business source.", Roles: []string{platform.AnyMember}, Payload: []platform.Field{{Name: "decision", Type: "string", Required: true, Choices: []string{"rejected", "expired"}, Description: "Proposal decision"}}})
+			Description: "Keep the validated suggestion or refusal on its call record.", Automation: true, Payload: protocol.FunctionAnswerFields()}}, platform.Action{Schema: protocol.SchemaProposalReview, Target: protocol.FunctionCallType, Capability: "functions", Title: "Review AI proposal", Description: "Reject or expire a retained proposal without changing its business source.", Roles: []string{platform.AnyMember}, Payload: []platform.Field{{Name: "decision", Type: "string", Required: true, Choices: []string{"rejected", "expired"}, Description: "Proposal decision"}}})
 }
 
 func (o *Owner) validate(f protocol.Function) (protocol.Function, error) {
@@ -433,7 +433,7 @@ func (o *Owner) submitCall(c platform.Caller, s *pb.Submission, now time.Time) (
 					Model: call.Model, InputHash: call.InputHash, Release: call.Release, Sources: call.Sources})
 			}, nil
 		}
-		var answer platform.Answer
+		var answer protocol.Answer
 		if !exists || run.State != "pending" || json.Unmarshal(s.GetPayload(), &answer) != nil || answer.Call != id ||
 			answer.Outcome != "accepted" && answer.Outcome != "refused" {
 			return nil, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
@@ -459,7 +459,7 @@ func (o *Owner) submitCall(c platform.Caller, s *pb.Submission, now time.Time) (
 					if err := c.Assign(r, platform.Assignment{Title: "Review AI proposal", Ref: protocol.FunctionCallType + "/" + run.ID, To: []platform.Recipient{recipient}, Due: run.ExpiresAt, Key: key}); err != nil {
 						return
 					}
-					if task, ok := platform.Get[platform.WorkTask](o.env.Host().Automation(c, platform.WorkApp), o.env.App()+":"+key); ok {
+					if task, ok := platform.Get[protocol.WorkTask](o.env.Host().Automation(c, protocol.WorkApp), o.env.App()+":"+key); ok {
 						run.Reviewers = slices.Clone(task.Candidates)
 					}
 				}
@@ -517,8 +517,8 @@ func NeedsHandover(run protocol.FunctionRun) bool {
 	return json.Unmarshal([]byte(run.Output), &values) != nil || json.Unmarshal(values[p.ConfidenceField], &confidence) != nil || confidence < p.MinimumConfidence
 }
 
-func (o *Owner) TrainingCandidates(c platform.Caller, event platform.Event, images map[string]json.RawMessage) []platform.AITrainingCandidate {
-	out := []platform.AITrainingCandidate{}
+func (o *Owner) TrainingCandidates(c platform.Caller, event platform.Event, images map[string]json.RawMessage) []protocol.AITrainingCandidate {
+	out := []protocol.AITrainingCandidate{}
 	at := event.Record.GetRecordedTime().AsTime()
 	for _, ref := range event.Changed {
 		prefix := protocol.FunctionCallType + "/"
@@ -529,7 +529,7 @@ func (o *Owner) TrainingCandidates(c platform.Caller, event platform.Event, imag
 		if json.Unmarshal(images[ref], &run) != nil || (run.Decision != "adopted" && run.Decision != "rejected") || run.State != "ready" {
 			continue
 		}
-		candidate := platform.AITrainingCandidate{Tenant: c.Tenant, Intent: run.ID, Run: ref, App: o.env.App(), Action: run.AdoptedAction, Definition: run.Definition, Sources: map[string]uint32{run.Source: run.SourceRevision}, SourceFields: map[string][]string{run.Source: slices.Clone(run.Contract.Fields)}, ExpectedSources: run.TrainingSources, Authorization: run.TrainingAuthorization, Model: run.Model, Evidence: event.App + "/" + event.Record.GetChangeId(), At: at, Outcome: run.Decision, Target: run.Source}
+		candidate := protocol.AITrainingCandidate{Tenant: c.Tenant, Intent: run.ID, Run: ref, App: o.env.App(), Action: run.AdoptedAction, Definition: run.Definition, Sources: map[string]uint32{run.Source: run.SourceRevision}, SourceFields: map[string][]string{run.Source: slices.Clone(run.Contract.Fields)}, ExpectedSources: run.TrainingSources, Authorization: run.TrainingAuthorization, Model: run.Model, Evidence: event.App + "/" + event.Record.GetChangeId(), At: at, Outcome: run.Decision, Target: run.Source}
 		if run.Decision == "adopted" {
 			candidate.Outcome = "accepted"
 			_ = json.Unmarshal([]byte(run.Output), &candidate.Chosen)

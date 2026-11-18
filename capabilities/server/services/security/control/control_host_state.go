@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"maps"
-	"platformserver/platform"
+	"platformserver/kernel/protocol"
 	"slices"
 	"sync"
 	"sync/atomic"
@@ -14,9 +14,9 @@ import (
 type HostState struct {
 	lifecycle        atomic.Pointer[string]
 	mu               sync.Mutex
-	support          []platform.SupportGrant
-	migrations       []platform.MigrationManifest
-	requests         map[string]platform.HostControlReceipt
+	support          []protocol.SupportGrant
+	migrations       []protocol.MigrationManifest
+	requests         map[string]protocol.HostControlReceipt
 	runtimeSelection map[string]string
 	disabledOwners   []string
 }
@@ -33,7 +33,7 @@ func (h *HostState) Suspended() bool {
 	return l != "" && l != "open"
 }
 
-func (h *HostState) SupportGrants() []platform.SupportGrant {
+func (h *HostState) SupportGrants() []protocol.SupportGrant {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	out := slices.Clone(h.support)
@@ -41,32 +41,32 @@ func (h *HostState) SupportGrants() []platform.SupportGrant {
 	return out
 }
 
-func (h *HostState) UsableSupport(tenant, id string, now time.Time) (platform.SupportGrant, error) {
+func (h *HostState) UsableSupport(tenant, id string, now time.Time) (protocol.SupportGrant, error) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
-	index := slices.IndexFunc(h.support, func(g platform.SupportGrant) bool { return g.ID == id })
+	index := slices.IndexFunc(h.support, func(g protocol.SupportGrant) bool { return g.ID == id })
 	if index < 0 {
-		return platform.SupportGrant{}, fmt.Errorf("no support session %s in %s", id, tenant)
+		return protocol.SupportGrant{}, fmt.Errorf("no support session %s in %s", id, tenant)
 	}
 	if !h.support[index].Expires.After(now) {
-		return platform.SupportGrant{}, fmt.Errorf("support session %s has ended", id)
+		return protocol.SupportGrant{}, fmt.Errorf("support session %s has ended", id)
 	}
 	return h.support[index], nil
 }
 
-func (h *HostState) Migrations() []platform.MigrationManifest {
+func (h *HostState) Migrations() []protocol.MigrationManifest {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	return slices.Clone(h.migrations)
 }
 
-func (h *HostState) SnapshotState() platform.HostControlImage {
+func (h *HostState) SnapshotState() protocol.HostControlImage {
 	h.mu.Lock()
 	defer h.mu.Unlock()
-	return platform.HostControlImage{Lifecycle: h.State(), Support: slices.Clone(h.support), Migrations: slices.Clone(h.migrations), Requests: maps.Clone(h.requests), RuntimeSelection: maps.Clone(h.runtimeSelection), DisabledOwners: slices.Clone(h.disabledOwners)}
+	return protocol.HostControlImage{Lifecycle: h.State(), Support: slices.Clone(h.support), Migrations: slices.Clone(h.migrations), Requests: maps.Clone(h.requests), RuntimeSelection: maps.Clone(h.runtimeSelection), DisabledOwners: slices.Clone(h.disabledOwners)}
 }
 
-func (h *HostState) Restore(image platform.HostControlImage) {
+func (h *HostState) Restore(image protocol.HostControlImage) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	h.lifecycle.Store(&image.Lifecycle)
@@ -88,11 +88,11 @@ func (h *HostState) DisabledOwners() []string {
 	return slices.Clone(h.disabledOwners)
 }
 
-func (h *HostState) Image() (platform.HostControlImage, error) {
+func (h *HostState) Image() (protocol.HostControlImage, error) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
-	raw, err := json.Marshal(platform.HostControlImage{Lifecycle: h.State(), Support: h.support, Migrations: h.migrations, Requests: h.requests, RuntimeSelection: h.runtimeSelection, DisabledOwners: h.disabledOwners})
-	var image platform.HostControlImage
+	raw, err := json.Marshal(protocol.HostControlImage{Lifecycle: h.State(), Support: h.support, Migrations: h.migrations, Requests: h.requests, RuntimeSelection: h.runtimeSelection, DisabledOwners: h.disabledOwners})
+	var image protocol.HostControlImage
 	if err == nil {
 		err = json.Unmarshal(raw, &image)
 	}

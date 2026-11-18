@@ -1,6 +1,7 @@
 package host
 
 import (
+	"platformserver/kernel/protocol"
 	"platformserver/kernel/records"
 	"platformserver/platform"
 	"platformserver/services/objects"
@@ -40,10 +41,10 @@ func (t *Tenant) objectCaller(m platform.Member, app string) platform.Caller {
 }
 
 func (t *Tenant) objectFollows(m platform.Member, target string) bool {
-	follow, ok := platform.Get[platform.RecordFollow](t.automation(platform.RelationsApp, false), platform.FollowID(m.ID, target))
+	follow, ok := platform.Get[protocol.RecordFollow](t.automation(protocol.RelationsApp, false), protocol.FollowID(m.ID, target))
 	return ok && !follow.Archived
 }
 
-func (t *Tenant) objectPersonalRead(read platform.PersonalRead) {
+func (t *Tenant) objectPersonalRead(read protocol.PersonalRead) {
 	t.AuditLog.ReadPersonal(read)
 }

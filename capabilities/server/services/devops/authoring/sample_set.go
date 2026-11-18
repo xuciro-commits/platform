@@ -3,6 +3,7 @@ package authoring
 import (
 	"encoding/json"
 	"fmt"
+	"platformserver/kernel/protocol"
 	"reflect"
 	"slices"
 	"strconv"
@@ -141,26 +142,26 @@ func (o *sampleSetOwner) resolve(ref platform.AssetRef, version string) (platfor
 	return platform.ReleaseAsset{}, fmt.Errorf("The sample set version is not retained")
 }
 
-func (o *sampleSetOwner) decodeInstallation(image json.RawMessage) (platform.AssetInstallation, error) {
+func (o *sampleSetOwner) decodeInstallation(image json.RawMessage) (protocol.AssetInstallation, error) {
 	var record descriptor.SampleSetRecord
 	var asset platform.ReleaseAsset
 	if json.Unmarshal(image, &record) != nil || record.ID == "" || record.State != "published" || json.Unmarshal([]byte(record.Published), &asset) != nil {
-		return platform.AssetInstallation{}, fmt.Errorf("Invalid sample installation")
+		return protocol.AssetInstallation{}, fmt.Errorf("Invalid sample installation")
 	}
 	_, version, err := o.decode(asset)
 	if err != nil || version != record.DefinitionVersion || asset.Ref.Name != record.Name || len(record.Versions) != version || record.Versions[len(record.Versions)-1] != record.Published {
-		return platform.AssetInstallation{}, fmt.Errorf("Invalid sample version history")
+		return protocol.AssetInstallation{}, fmt.Errorf("Invalid sample version history")
 	}
 	for i, raw := range record.Versions {
 		var prior platform.ReleaseAsset
 		if json.Unmarshal([]byte(raw), &prior) != nil {
-			return platform.AssetInstallation{}, fmt.Errorf("Invalid sample version history")
+			return protocol.AssetInstallation{}, fmt.Errorf("Invalid sample version history")
 		}
 		if _, ordinal, err := o.decode(prior); err != nil || ordinal != i+1 || prior.Ref.Name != record.Name {
-			return platform.AssetInstallation{}, fmt.Errorf("Invalid sample version history")
+			return protocol.AssetInstallation{}, fmt.Errorf("Invalid sample version history")
 		}
 	}
-	return platform.AssetInstallation{Ref: asset.Ref, Schema: o.env.Type + ".publish", Record: o.env.Type + "/" + record.ID, Image: slices.Clone(image)}, nil
+	return protocol.AssetInstallation{Ref: asset.Ref, Schema: o.env.Type + ".publish", Record: o.env.Type + "/" + record.ID, Image: slices.Clone(image)}, nil
 }
 
 func (*sampleSetOwner) readFrozen(image json.RawMessage) (json.RawMessage, error) {
@@ -236,12 +237,12 @@ func (o *sampleSetOwner) draftAssets(id string, releaseAssets func() ([]platform
 	return
 }
 
-func (o *sampleSetOwner) prepare(assets []platform.ReleaseAsset) ([]platform.AssetInstallation, error) {
+func (o *sampleSetOwner) prepare(assets []platform.ReleaseAsset) ([]protocol.AssetInstallation, error) {
 	rows, err := o.inventory()
 	if err != nil {
 		return nil, err
 	}
-	out := []platform.AssetInstallation{}
+	out := []protocol.AssetInstallation{}
 
 	for _, a := range assets {
 		if a.Ref.Kind != platform.AssetSampleSet || a.Ref.App != o.env.App {
@@ -272,7 +273,7 @@ func (o *sampleSetOwner) prepare(assets []platform.ReleaseAsset) ([]platform.Ass
 		m.Published = string(raw)
 		m.Versions = append(slices.Clone(m.Versions), m.Published)
 		image, _ := json.Marshal(m)
-		out = append(out, platform.AssetInstallation{Ref: a.Ref, Schema: o.env.Type + ".publish", Record: o.env.Type + "/" + m.ID, Image: image})
+		out = append(out, protocol.AssetInstallation{Ref: a.Ref, Schema: o.env.Type + ".publish", Record: o.env.Type + "/" + m.ID, Image: image})
 	}
 	return out, nil
 }

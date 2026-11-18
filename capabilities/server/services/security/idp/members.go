@@ -1,6 +1,7 @@
 package idp
 
 import (
+	"platformserver/kernel/protocol"
 	"strings"
 	"time"
 
@@ -12,7 +13,7 @@ import (
 type Console[T any] struct {
 	Tenant   T
 	ID       string
-	Sessions platform.IdentitySessions
+	Sessions protocol.IdentitySessions
 	Join     func(subject string, now time.Time) bool
 }
 

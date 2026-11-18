@@ -5,6 +5,7 @@ import (
 	"io"
 	"net/http"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
+	runtimeprotocol "platformserver/kernel/protocol"
 	"platformserver/kernel/transport"
 	"platformserver/platform"
 	"platformserver/services/actions"
@@ -74,8 +75,8 @@ func (h *Host) routesIntegration(rt *routes) {
 		_, record, err, issues := t.invokeDiagnosed(m, r.PathValue("protocol")+"/"+r.PathValue("version"), r.PathValue("action"), call.Target, call.Payload, call.IdempotencyKey, h.Now())
 		Reply(w, record, t.i18n.Said(err, t.Language(m, r)), t.localizedFieldIssues(m, issues, t.Language(m, r))...)
 	})
-	rt.handle(transport.Route{Pattern: "POST /v1/capabilities/invoke", Summary: "Route a typed call to its canonical query, action, AI or compute owner", Body: platform.CapabilityInvocation{}, Answer: platform.CapabilityResult{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
-		var q platform.CapabilityInvocation
+	rt.handle(transport.Route{Pattern: "POST /v1/capabilities/invoke", Summary: "Route a typed call to its canonical query, action, AI or compute owner", Body: runtimeprotocol.CapabilityInvocation{}, Answer: runtimeprotocol.CapabilityResult{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
+		var q runtimeprotocol.CapabilityInvocation
 		if !readCapabilityBody(w, r, &q) {
 			return
 		}

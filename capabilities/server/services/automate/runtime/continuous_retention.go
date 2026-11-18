@@ -8,9 +8,9 @@ import (
 
 type Retention struct {
 	Artifacts     []protocol.FlowStateArtifact
-	Input         *platform.OperationInputArtifact
+	Input         *protocol.OperationInputArtifact
 	Discard       func(protocol.FlowStateArtifact) error
-	DiscardInput  func(platform.OperationInputArtifact)
+	DiscardInput  func(protocol.OperationInputArtifact)
 	KeepArtifacts bool
 	KeepInput     bool
 }

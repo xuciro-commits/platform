@@ -189,10 +189,10 @@ func (r *Runs) Flows(flows []protocol.FlowInstance, retrySchema string) {
 	}
 }
 
-func (r *Runs) Agents(agents []platform.AgentRunRecord) {
+func (r *Runs) Agents(agents []protocol.AgentRunRecord) {
 	for _, agent := range agents {
 		app, name, _ := strings.Cut(agent.Agent, ".")
-		run := MonitoringRun{Type: "function", Source: "agent", ID: "agent:" + agent.ID, Title: cmp.Or(agent.Title, agent.Agent), ResourceRef: &platform.AssetRef{App: app, Kind: platform.AssetAgent, Name: name}, RecordRef: platform.RunType + "/" + agent.ID, When: agent.Changed.At, Status: "unknown", OwnerStatus: agent.State}
+		run := MonitoringRun{Type: "function", Source: "agent", ID: "agent:" + agent.ID, Title: cmp.Or(agent.Title, agent.Agent), ResourceRef: &platform.AssetRef{App: app, Kind: platform.AssetAgent, Name: name}, RecordRef: protocol.RunType + "/" + agent.ID, When: agent.Changed.At, Status: "unknown", OwnerStatus: agent.State}
 		if run.When.IsZero() {
 			run.When = agent.Created.At
 		}
@@ -213,7 +213,7 @@ func (r *Runs) Agents(agents []platform.AgentRunRecord) {
 	}
 }
 
-func FromIndex(entries []platform.RunIndexEntry, filter MonitoringRunFilter, coverage []MonitoringCoverage) MonitoringRunPage {
+func FromIndex(entries []protocol.RunIndexEntry, filter MonitoringRunFilter, coverage []MonitoringCoverage) MonitoringRunPage {
 	out := MonitoringRunPage{Runs: []MonitoringRun{}, Offset: filter.Offset, Limit: filter.Limit, Coverage: coverage}
 	for _, entry := range entries {
 		var run MonitoringRun

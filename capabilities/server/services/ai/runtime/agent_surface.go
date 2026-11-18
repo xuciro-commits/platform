@@ -2,6 +2,7 @@ package agents
 
 import (
 	"encoding/json"
+	"platformserver/kernel/protocol"
 
 	"platformserver/platform"
 	evaluation "platformserver/services/ai/evaluation"
@@ -46,11 +47,11 @@ func (s SurfaceSource) conditions(ref platform.AssetRef) []string {
 	return out
 }
 
-func QueryObservation(object string, records, page any) platform.AgentObservation {
+func QueryObservation(object string, records, page any) protocol.AgentObservation {
 	raw, _ := json.Marshal(records)
 	var ids []struct{ ID string }
 	_ = json.Unmarshal(raw, &ids)
-	out := platform.AgentObservation{}
+	out := protocol.AgentObservation{}
 	for _, row := range ids {
 		out.Sources = append(out.Sources, object+"/"+row.ID)
 	}
@@ -58,13 +59,13 @@ func QueryObservation(object string, records, page any) platform.AgentObservatio
 	return out
 }
 
-func ObjectObservation(object string, page any) platform.AgentObservation {
+func ObjectObservation(object string, page any) protocol.AgentObservation {
 	body, _ := json.Marshal(page)
 	var rows struct {
 		Records []struct{ ID string } `json:"records"`
 	}
 	_ = json.Unmarshal(body, &rows)
-	out := platform.AgentObservation{Body: body}
+	out := protocol.AgentObservation{Body: body}
 	for _, row := range rows.Records {
 		if object != "" && row.ID != "" {
 			out.Sources = append(out.Sources, object+"/"+row.ID)
@@ -73,12 +74,12 @@ func ObjectObservation(object string, page any) platform.AgentObservation {
 	return out
 }
 
-func Observe(value any, sources []string) platform.AgentObservation {
+func Observe(value any, sources []string) protocol.AgentObservation {
 	raw, _ := json.Marshal(value)
-	return platform.AgentObservation{Body: raw, Sources: sources}
+	return protocol.AgentObservation{Body: raw, Sources: sources}
 }
 
-func SearchObservation[T any](found []T, ref func(T) string) platform.AgentObservation {
+func SearchObservation[T any](found []T, ref func(T) string) protocol.AgentObservation {
 	var sources []string
 	for _, hit := range found {
 		sources = append(sources, ref(hit))
@@ -86,7 +87,7 @@ func SearchObservation[T any](found []T, ref func(T) string) platform.AgentObser
 	return Observe(found, sources)
 }
 
-func KnowledgeObservation(found []platform.Passage) json.RawMessage {
+func KnowledgeObservation(found []protocol.Passage) json.RawMessage {
 	for i := range found {
 		found[i].Text = evaluation.Clip(found[i].Text, 700)
 	}

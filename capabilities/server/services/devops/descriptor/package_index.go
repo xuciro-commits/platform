@@ -1,8 +1,11 @@
 package descriptor
 
-import "platformserver/platform"
+import (
+	"platformserver/kernel/protocol"
+	"platformserver/platform"
+)
 
-func Latest(i *platform.PackageIndex, id string) (platform.PackageDescriptor, bool) {
+func Latest(i *protocol.PackageIndex, id string) (platform.PackageDescriptor, bool) {
 	var out platform.PackageDescriptor
 	found := false
 	for _, p := range i.Packages {
@@ -14,7 +17,7 @@ func Latest(i *platform.PackageIndex, id string) (platform.PackageDescriptor, bo
 	return out, found
 }
 
-func Find(i *platform.PackageIndex, id, version string) (platform.PackageDescriptor, bool) {
+func Find(i *protocol.PackageIndex, id, version string) (platform.PackageDescriptor, bool) {
 	if version == "" {
 		return Latest(i, id)
 	}

@@ -24,8 +24,8 @@ func (o *Owner) DecideCompute(c platform.Caller, s *pb.Submission, now time.Time
 		return nil, nil, false
 	}
 	code, table := o.CodeEntity(), o.TableEntity()
-	code.Scope.Levels[platform.ProjectViewerRole] = platform.ScopeTenant
-	table.Scope.Levels[platform.ProjectViewerRole] = platform.ScopeTenant
+	code.Scope.Levels[protocol.ProjectViewerRole] = platform.ScopeTenant
+	table.Scope.Levels[protocol.ProjectViewerRole] = platform.ScopeTenant
 	if name == protocol.CodeType+".archive" || name == protocol.TableType+".archive" {
 		if !c.Replaying {
 			if !c.Holds(c.App, "builder") {

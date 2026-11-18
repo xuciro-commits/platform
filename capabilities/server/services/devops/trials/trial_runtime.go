@@ -27,7 +27,7 @@ type Simulation struct {
 	Changes         []SimulatedChange        `json:"changes"`
 	Matched         *bool                    `json:"matched,omitempty"`
 	Flows           []SimulatedFlow          `json:"flows,omitempty"`
-	Tasks           []platform.WorkTask      `json:"tasks,omitempty"`
+	Tasks           []protocol.WorkTask      `json:"tasks,omitempty"`
 	Functions       []protocol.FunctionRun   `json:"functions,omitempty"`
 	ComputeMatched  *bool                    `json:"computeMatched,omitempty"`
 	FunctionMatched *bool                    `json:"functionMatched,omitempty"`
@@ -111,10 +111,10 @@ type SimulationSample struct {
 
 type Environment struct {
 	Organization        *platform.OrgSeed
-	OrganizationFactory platform.SimulationOrganizationFactory
-	Factories           map[string]platform.SimulationFactory
+	OrganizationFactory protocol.SimulationOrganizationFactory
+	Factories           map[string]protocol.SimulationFactory
 	Builder             build.ConstructionDrafts
-	Identity            platform.SimulationIdentityFactory
+	Identity            protocol.SimulationIdentityFactory
 	Modules             map[string][]byte
 	Manifests           []platform.Manifest
 	Authorities         platform.Authorities
@@ -122,10 +122,10 @@ type Environment struct {
 }
 
 type SimulationOwners struct {
-	Factories     map[string]platform.SimulationFactory
+	Factories     map[string]protocol.SimulationFactory
 	Builder       build.ConstructionDrafts
-	Identities    map[string]platform.SimulationIdentityFactory
-	Organizations map[string]platform.SimulationOrganizationFactory
+	Identities    map[string]protocol.SimulationIdentityFactory
+	Organizations map[string]protocol.SimulationOrganizationFactory
 }
 
 type sampleOwner struct {
@@ -152,7 +152,7 @@ func (a *sampleOwner) Fork(ledger platform.Authority) (platform.App, error) {
 func (a *sampleOwner) Submit(platform.Caller, *pb.Submission, time.Time) (*pb.ChangeRecord, *platform.Error) {
 	return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Native business actions require an isolated owner test fixture")
 }
-func PrepareEnvironment(apps []platform.App, simulationOwners SimulationOwners, authorities platform.Authorities, candidate platform.ReleaseCandidate, samples []SimulationSample) (Environment, error) {
+func PrepareEnvironment(apps []platform.App, simulationOwners SimulationOwners, authorities platform.Authorities, candidate protocol.ReleaseCandidate, samples []SimulationSample) (Environment, error) {
 	environment := Environment{Authorities: authorities, Modules: map[string][]byte{}, Samples: samples, Factories: simulationOwners.Factories, Builder: simulationOwners.Builder}
 	ownersByID := map[string]platform.App{}
 	for _, app := range apps {
@@ -179,7 +179,7 @@ func PrepareEnvironment(apps []platform.App, simulationOwners SimulationOwners, 
 	for _, asset := range candidate.Assets {
 		selected[asset.Ref] = true
 		if asset.Ref.Kind == platform.AssetFlow {
-			var descriptor platform.FlowReleaseDescriptor
+			var descriptor protocol.FlowReleaseDescriptor
 			if json.Unmarshal(asset.Body, &descriptor) != nil {
 				return environment, fmt.Errorf("flow descriptor is invalid")
 			}
@@ -320,7 +320,7 @@ type Runtime interface {
 	Check() error
 }
 
-func RunCandidate(request CandidateSimulationRequest, candidate platform.ReleaseCandidate, member platform.Member, members []platform.Member, functionName string, compose func() (Runtime, error)) (CandidateSimulation, *platform.Error) {
+func RunCandidate(request CandidateSimulationRequest, candidate protocol.ReleaseCandidate, member platform.Member, members []platform.Member, functionName string, compose func() (Runtime, error)) (CandidateSimulation, *platform.Error) {
 	var empty CandidateSimulation
 	sandbox, err := compose()
 	if err != nil {

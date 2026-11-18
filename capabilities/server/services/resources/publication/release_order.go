@@ -3,6 +3,7 @@ package publication
 import (
 	"fmt"
 	"maps"
+	"platformserver/kernel/protocol"
 	"slices"
 	"strings"
 
@@ -29,19 +30,19 @@ func (resolver Resolver) OrderReleaseAssets(assets []platform.ReleaseAsset) ([]p
 	return out, nil
 }
 
-func (resolver Resolver) OrderInstallations(assets []platform.ReleaseAsset, plans []platform.AssetInstallation) ([]platform.AssetInstallation, error) {
+func (resolver Resolver) OrderInstallations(assets []platform.ReleaseAsset, plans []protocol.AssetInstallation) ([]protocol.AssetInstallation, error) {
 	ordered, err := resolver.OrderReleaseAssets(assets)
 	if err != nil {
 		return nil, err
 	}
-	byRef := map[platform.AssetRef]platform.AssetInstallation{}
+	byRef := map[platform.AssetRef]protocol.AssetInstallation{}
 	for _, plan := range plans {
 		if _, ok := byRef[plan.Ref]; ok {
 			return nil, fmt.Errorf("duplicate installation %s", plan.Ref)
 		}
 		byRef[plan.Ref] = plan
 	}
-	var out []platform.AssetInstallation
+	var out []protocol.AssetInstallation
 	for _, asset := range ordered {
 		if plan, ok := byRef[asset.Ref]; ok {
 			out = append(out, plan)

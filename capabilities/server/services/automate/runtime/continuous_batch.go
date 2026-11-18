@@ -31,7 +31,7 @@ type BatchIntake struct {
 	CommitCleanup func(FlowArtifactCleanupPreparation, time.Time) *platform.Error
 	Instance      func(string) (FlowInstance, *platform.Error)
 	CheckSource   func(platform.Member, FlowBatchPreparation, FlowInstance, SourceCheckpoint, bool, time.Time) *platform.Error
-	DiscardInput  func(platform.OperationInputArtifact)
+	DiscardInput  func(protocol.OperationInputArtifact)
 }
 
 func (b BatchIntake) ConsumeBatch(m platform.Member, id string, batch Batch, now time.Time) (protocol.FlowBatchOutcome, *platform.Error) {

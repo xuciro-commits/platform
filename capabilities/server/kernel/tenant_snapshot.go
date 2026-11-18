@@ -24,7 +24,7 @@ type TenantImage[Job, Endpoint any] struct {
 	Records             map[string][]records.StoredState        `json:"records"`
 	Facts               json.RawMessage                         `json:"facts,omitempty"`
 	Identities          *protocol.IdentityState                 `json:"identities,omitempty"`
-	Audit               []platform.AuditEntry                   `json:"audit"`
+	Audit               []protocol.AuditEntry                   `json:"audit"`
 	Refusals            map[string]acceptedformat.Refusal       `json:"refusals,omitempty"`
 	AcceptedAnswers     map[string]json.RawMessage              `json:"acceptedAnswers,omitempty"`
 	AcceptedInputs      map[string]json.RawMessage              `json:"acceptedInputs,omitempty"`
@@ -32,13 +32,13 @@ type TenantImage[Job, Endpoint any] struct {
 	ReleaseRequests     map[string]string                       `json:"releaseRequests,omitempty"`
 	ReleaseApplied      map[string]string                       `json:"releaseApplied,omitempty"`
 	ActiveRelease       string                                  `json:"activeRelease,omitempty"`
-	Deliveries          []platform.Delivery                     `json:"deliveries"`
+	Deliveries          []protocol.Delivery                     `json:"deliveries"`
 	Acted               int                                     `json:"acted"`
 	Bindings            map[string]string                       `json:"bindings"`
 	Works               json.RawMessage                         `json:"works"`
 	Queues              map[string][]string                     `json:"queues"`
 	Failed              []string                                `json:"failed"`
-	Tasks               []platform.ScheduledTaskState           `json:"tasks"`
+	Tasks               []protocol.ScheduledTaskState           `json:"tasks"`
 	Jobs                []Job                                   `json:"jobs"`
 	Connectors          json.RawMessage                         `json:"connectors"`
 	Marks               []protocol.ConnectorMark                `json:"marks"`
@@ -49,14 +49,14 @@ type TenantImage[Job, Endpoint any] struct {
 	Words               map[string]map[string]string            `json:"words,omitempty"`
 	Endpoints           []*Endpoint                             `json:"endpoints"`
 	Outbound            []acceptedformat.EffectState            `json:"outbound"`
-	HostRequests        map[string]platform.HostControlReceipt  `json:"hostRequests,omitempty"`
+	HostRequests        map[string]protocol.HostControlReceipt  `json:"hostRequests,omitempty"`
 	HostLifecycle       string                                  `json:"hostLifecycle,omitempty"`
 	RuntimeSelection    map[string]string                       `json:"runtimeSelection,omitempty"`
 	DisabledOwners      []string                                `json:"disabledOwners,omitempty"`
-	Support             []platform.SupportGrant                 `json:"support,omitempty"`
+	Support             []protocol.SupportGrant                 `json:"support,omitempty"`
 	Sealed              map[string]platform.SealedArtifact      `json:"sealed,omitempty"`
 	ReleaseOrigins      map[string]platform.ReleaseOrigin       `json:"releaseOrigins,omitempty"`
-	Migrations          []platform.MigrationManifest            `json:"migrations,omitempty"`
+	Migrations          []protocol.MigrationManifest            `json:"migrations,omitempty"`
 	CompositeAnswers    map[string]json.RawMessage              `json:"compositeAnswers,omitempty"`
 	Composites          map[string]string                       `json:"composites,omitempty"`
 	Staged              map[string]platform.StagedResult        `json:"staged,omitempty"`
@@ -67,7 +67,7 @@ func (s *TenantImage[Job, Endpoint]) CaptureEvidence(q *Sequence) error {
 	s.Audit, s.Deliveries = q.AuditLog.SnapshotState()
 	if facts := q.Claims.Facts.Records(q.ID); len(facts) > 0 {
 		var err error
-		if s.Facts, err = platform.Protos(facts); err != nil {
+		if s.Facts, err = protocol.Protos(facts); err != nil {
 			return err
 		}
 	}
@@ -79,7 +79,7 @@ func (s *TenantImage[Job, Endpoint]) CaptureEvidence(q *Sequence) error {
 
 func (s *TenantImage[Job, Endpoint]) RestoreEvidence(q *Sequence) error {
 	if len(s.Facts) > 0 {
-		facts, err := platform.Unprotos[*pb.FactRecord](s.Facts)
+		facts, err := protocol.Unprotos[*pb.FactRecord](s.Facts)
 		if err != nil {
 			return err
 		}
@@ -93,11 +93,11 @@ func (s *TenantImage[Job, Endpoint]) RestoreEvidence(q *Sequence) error {
 
 func (s *TenantImage[Job, Endpoint]) CaptureOperations(q *Sequence) error {
 	var err error
-	if s.Works, err = platform.Protos(q.Works.All()); err != nil {
+	if s.Works, err = protocol.Protos(q.Works.All()); err != nil {
 		return err
 	}
 	descriptors, marks := q.ConnectorRoster.State()
-	if s.Connectors, err = platform.Protos(descriptors); err != nil {
+	if s.Connectors, err = protocol.Protos(descriptors); err != nil {
 		return err
 	}
 	s.Marks = marks
@@ -108,11 +108,11 @@ func (s *TenantImage[Job, Endpoint]) CaptureOperations(q *Sequence) error {
 }
 
 func (s *TenantImage[Job, Endpoint]) RestoreOperations(q *Sequence) error {
-	works, err := platform.Unprotos[*pb.Work](s.Works)
+	works, err := protocol.Unprotos[*pb.Work](s.Works)
 	if err != nil {
 		return err
 	}
-	descriptors, err := platform.Unprotos[*pb.ConnectorDescriptor](s.Connectors)
+	descriptors, err := protocol.Unprotos[*pb.ConnectorDescriptor](s.Connectors)
 	if err != nil {
 		return err
 	}
@@ -129,7 +129,7 @@ type TenantSnapshots[Job, Endpoint any] struct {
 	Apps          []platform.App
 	AppOf         func(string) platform.App
 	Inputs        func(string) platform.AcceptedInputApp
-	ReadCandidate func(string, []byte) (platform.ReleaseCandidate, error)
+	ReadCandidate func(string, []byte) (protocol.ReleaseCandidate, error)
 	Quarantined   func() bool
 	Pending       func() bool
 	Scopes        func() bool

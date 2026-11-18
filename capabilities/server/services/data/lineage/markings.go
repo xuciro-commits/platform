@@ -1,6 +1,7 @@
 package lineage
 
 import (
+	"platformserver/kernel/protocol"
 	"reflect"
 	"slices"
 	"sync"
@@ -27,7 +28,7 @@ func IndexMarkings(graph Graph, generation uint64) MarkingIndex {
 			index.datasets[node.Record] = node.Guard
 			index.datasetCompartments[node.Record] = node.GuardCompartments
 		case "object":
-			index.types[node.Name] = platform.HigherMarking(index.types[node.Name], node.Guard)
+			index.types[node.Name] = protocol.HigherMarking(index.types[node.Name], node.Guard)
 			index.typeCompartments[node.Name] = platform.JoinCompartments(index.typeCompartments[node.Name], node.GuardCompartments)
 		}
 	}
@@ -79,7 +80,7 @@ func (x MarkingIndex) Highest(typ string, value reflect.Value) string {
 	}
 	highest := ""
 	for _, marking := range x.datasets {
-		highest = platform.HigherMarking(highest, marking)
+		highest = protocol.HigherMarking(highest, marking)
 	}
 	return highest
 }

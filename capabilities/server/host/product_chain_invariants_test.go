@@ -81,8 +81,8 @@ func TestInvariantK7ProductVersionFreezesSavedCandidate(t *testing.T) {
 		t.Fatal("replay changed the frozen product version")
 	}
 
-	catalog := live.App("platform").(interface{ PackageViews() []platform.PackageView }).PackageViews()
-	var found *platform.PackageView
+	catalog := live.App("platform").(interface{ PackageViews() []protocol.PackageView }).PackageViews()
+	var found *protocol.PackageView
 	for i := range catalog {
 		if catalog[i].Descriptor.ID == "alpha" && catalog[i].Descriptor.Version == "1.0.0" {
 			found = &catalog[i]

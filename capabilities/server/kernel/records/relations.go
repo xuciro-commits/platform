@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"platformserver/kernel/protocol"
 	"reflect"
 	"slices"
 	"strings"
@@ -37,7 +38,7 @@ func ReadRelation(row *Row) RelationImage {
 }
 
 func IsRelationSchema(info platform.EntityInfo) bool {
-	return strings.HasSuffix(info.Type, ".__relation") && info.App != "" && info.Go == reflect.TypeOf(platform.RelationEntity(info.App).Model)
+	return strings.HasSuffix(info.Type, ".__relation") && info.App != "" && info.Go == reflect.TypeOf(protocol.RelationEntity(info.App).Model)
 }
 
 func ConstraintValues(info platform.EntityInfo, value reflect.Value) map[string]any {
@@ -49,7 +50,7 @@ func ConstraintValues(info platform.EntityInfo, value reflect.Value) map[string]
 }
 
 func RelationViolations(s *Store, link platform.LinkType) ([]RelationViolation, error) {
-	et := s.Type(platform.OwnedRelationType(link.Child.App))
+	et := s.Type(protocol.OwnedRelationType(link.Child.App))
 	if et == nil || !IsRelationSchema(et.Info()) {
 		return nil, fmt.Errorf("owned relationship storage is unavailable")
 	}
@@ -113,7 +114,7 @@ func OwnedRelationRefs(store *Store, link platform.LinkType, direction, source s
 	refs := []string{}
 	store.Lock()
 	defer store.Unlock()
-	et := store.Type(platform.OwnedRelationType(link.Child.App))
+	et := store.Type(protocol.OwnedRelationType(link.Child.App))
 	if et != nil {
 		for _, row := range et.Rows().All() {
 			if Header(row.Value).Archived {

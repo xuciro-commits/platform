@@ -79,7 +79,7 @@ func (s Search) Find(q string) []Hit {
 		resources[entity.Type] = true
 	}
 	for _, info := range s.Entities {
-		if info.Type == platform.FollowType || info.Type == ResourceType || BranchDraftType(info.Type) || only != "" && info.Type != only {
+		if info.Type == protocol.FollowType || info.Type == ResourceType || BranchDraftType(info.Type) || only != "" && info.Type != only {
 			continue
 		}
 		query := platform.Query{Search: q, Limit: 5}
@@ -115,7 +115,7 @@ func NewDirectory(resources []Resource, saved []Folder, role func(project string
 		if role == "" {
 			continue
 		}
-		out.Resources = append(out.Resources, ResourceEntry{Resource: resource, CanOpen: role != platform.ProjectDiscovererRole, CanEdit: resource.ManagedBy == "" && (role == platform.ProjectOwnerRole || role == platform.ProjectEditorRole)})
+		out.Resources = append(out.Resources, ResourceEntry{Resource: resource, CanOpen: role != protocol.ProjectDiscovererRole, CanEdit: resource.ManagedBy == "" && (role == protocol.ProjectOwnerRole || role == protocol.ProjectEditorRole)})
 	}
 	for _, folder := range saved {
 		if !folder.Archived && role(folder.Project) != "" {
@@ -224,7 +224,7 @@ func (h ResourceBootstrap) Initialize() error {
 		if draft.Type == TestPlanType && meta.Variant == "evaluation-set" {
 			ref.Kind = platform.AssetEvaluation
 		}
-		rid := platform.ResourceID(h.Tenant, ref)
+		rid := protocol.ResourceID(h.Tenant, ref)
 		project := WorkspaceProject
 		if draft.Type == protocol.AppType {
 			project = draft.ID
@@ -245,7 +245,7 @@ func (h ResourceBootstrap) Initialize() error {
 		}
 	}
 	for _, definition := range h.Definitions {
-		rid := platform.ResourceID(h.Tenant, definition.Ref)
+		rid := protocol.ResourceID(h.Tenant, definition.Ref)
 		if _, exists := directory[rid]; exists || h.Exists(rid) {
 			continue
 		}

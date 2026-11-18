@@ -3,6 +3,7 @@ package security
 import (
 	"encoding/json"
 	"maps"
+	"platformserver/kernel/protocol"
 	"regexp"
 	"slices"
 	"strings"
@@ -52,7 +53,7 @@ func (d *Policies) decideMarking(c platform.Caller, s *pb.Submission, members []
 		next.Title, next.Members, next.Teams = input.Title, slices.Clone(input.Members), slices.Clone(input.Teams)
 		next.Declassifiers, next.DeclassifierTeams, next.Archived = slices.Clone(input.Declassifiers), slices.Clone(input.DeclassifierTeams), false
 	}
-	next.ID, next.RID = id, platform.ResourceID(c.Tenant, platform.AssetRef{App: "platform", Kind: "marking", Name: id})
+	next.ID, next.RID = id, protocol.ResourceID(c.Tenant, platform.AssetRef{App: "platform", Kind: "marking", Name: id})
 	next.Classification = slices.Contains(platform.Markings, id)
 	return func(r *pb.ChangeRecord) {
 		stamp := platform.Stamp{By: c.ID, At: r.GetRecordedTime().AsTime(), Change: r.GetChangeId()}

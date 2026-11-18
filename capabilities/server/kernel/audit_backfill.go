@@ -3,13 +3,14 @@ package kernel
 import (
 	"encoding/json"
 	"log"
+	"platformserver/kernel/protocol"
 
 	acceptedformat "platformserver/kernel/acceptedformat"
 	persistence "platformserver/kernel/store"
 	"platformserver/platform"
 )
 
-func BackfillAudit(tenant string, entries []persistence.Entry, remember func(platform.AuditEntry)) {
+func BackfillAudit(tenant string, entries []persistence.Entry, remember func(protocol.AuditEntry)) {
 	written := 0
 	for _, entry := range entries {
 		if entry.Kind != "accepted-result" {
@@ -27,7 +28,7 @@ func BackfillAudit(tenant string, entries []persistence.Entry, remember func(pla
 			if err != nil {
 				continue
 			}
-			remember(platform.AuditEntry{
+			remember(protocol.AuditEntry{
 				ID: "submit:" + entry.App + ":" + receipt.GetSubmission().GetIdempotencyKey(),
 				At: saved.At, Member: member.ID, App: entry.App,
 				Action: receipt.GetSubmission().GetSchema().GetName(),
@@ -43,7 +44,7 @@ func BackfillAudit(tenant string, entries []persistence.Entry, remember func(pla
 			if err != nil {
 				continue
 			}
-			remember(platform.AuditEntry{
+			remember(protocol.AuditEntry{
 				ID: "submit:" + entry.App + ":" + sub.GetIdempotencyKey(),
 				At: saved.At, Member: member.ID, App: entry.App,
 				Action: sub.GetSchema().GetName(),
@@ -55,7 +56,7 @@ func BackfillAudit(tenant string, entries []persistence.Entry, remember func(pla
 			if err != nil {
 				continue
 			}
-			remember(platform.AuditEntry{
+			remember(protocol.AuditEntry{
 				At: input.At, Member: input.Member, App: input.App, Action: "input:" + input.Name,
 			})
 			written++

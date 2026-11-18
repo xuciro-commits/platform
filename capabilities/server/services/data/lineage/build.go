@@ -2,6 +2,7 @@ package lineage
 
 import (
 	"fmt"
+	"platformserver/kernel/protocol"
 	"slices"
 	"strconv"
 	"strings"
@@ -362,7 +363,7 @@ func propagate(g *Graph, basis Basis, in Input) {
 			if g.Nodes[to].Kind == "pipeline" {
 				incoming = incoming.Without(declassified[g.Nodes[to].ID])
 			}
-			level := platform.HigherMarking(g.Nodes[to].Effective, incoming.Level)
+			level := protocol.HigherMarking(g.Nodes[to].Effective, incoming.Level)
 			compartments := platform.JoinCompartments(g.Nodes[to].EffectiveCompartments, incoming.Compartments)
 			if level != g.Nodes[to].Effective || !slices.Equal(compartments, g.Nodes[to].EffectiveCompartments) {
 				g.Nodes[to].Effective, g.Nodes[to].EffectiveCompartments, changed = level, compartments, true
@@ -370,7 +371,7 @@ func propagate(g *Graph, basis Basis, in Input) {
 		}
 	}
 	for i := range g.Nodes {
-		g.Nodes[i].Guard = platform.HigherMarking(g.Nodes[i].Guard, g.Nodes[i].Effective)
+		g.Nodes[i].Guard = protocol.HigherMarking(g.Nodes[i].Guard, g.Nodes[i].Effective)
 		g.Nodes[i].GuardCompartments = platform.JoinCompartments(g.Nodes[i].GuardCompartments, g.Nodes[i].EffectiveCompartments)
 	}
 	for _, evidence := range in.Evidence {
@@ -378,7 +379,7 @@ func propagate(g *Graph, basis Basis, in Input) {
 		if !ok {
 			continue
 		}
-		g.Nodes[i].Guard = platform.HigherMarking(g.Nodes[i].Guard, evidence.Marking)
+		g.Nodes[i].Guard = protocol.HigherMarking(g.Nodes[i].Guard, evidence.Marking)
 		g.Nodes[i].GuardCompartments = platform.JoinCompartments(g.Nodes[i].GuardCompartments, evidence.Compartments)
 	}
 	for i := range g.Nodes {

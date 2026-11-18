@@ -3,6 +3,7 @@ package records
 import (
 	"encoding/json"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
+	"platformserver/kernel/protocol"
 	"platformserver/platform"
 	"reflect"
 	"slices"
@@ -195,7 +196,7 @@ func RecordLabel(info platform.EntityInfo, value any, id string) string {
 }
 
 func KnowledgeBearing(info platform.EntityInfo) bool {
-	return info.Type == platform.KnowledgeDocumentType || info.Type == platform.FileType || info.KnowledgeFiles ||
+	return info.Type == protocol.KnowledgeDocumentType || info.Type == platform.FileType || info.KnowledgeFiles ||
 		slices.ContainsFunc(info.Fields, func(f platform.FieldInfo) bool { return f.Knowledge })
 }
 
@@ -265,7 +266,7 @@ func CheckFields(info platform.EntityInfo, entity any, v reflect.Value, replayin
 		if !resolved {
 			return nil, invalid
 		}
-		if issues := platform.InputIssues(fields, values); len(issues) > 0 {
+		if issues := protocol.InputIssues(fields, values); len(issues) > 0 {
 			return issues, nil
 		}
 	}
@@ -306,7 +307,7 @@ func CheckFields(info platform.EntityInfo, entity any, v reflect.Value, replayin
 			if err != nil {
 				return nil, invalid
 			}
-			if err := platform.ValidateRecordJSON(raw); err != nil {
+			if err := protocol.ValidateRecordJSON(raw); err != nil {
 				return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "{field}: {reason}", f.Name, err.Error())
 			}
 		case "date":

@@ -2,19 +2,19 @@ package kernel
 
 import (
 	"encoding/json"
+	"platformserver/kernel/protocol"
 	"sync"
 	"sync/atomic"
 	"time"
 
 	persistence "platformserver/kernel/store"
-	"platformserver/platform"
 )
 
 const observationPendingLimit = 2000
 
 type ObservationBuffer struct {
 	mu         sync.Mutex
-	pending    []platform.Observation
+	pending    []protocol.Observation
 	usageDay   time.Time
 	usageBytes int64
 	dropped    atomic.Int64
@@ -51,7 +51,7 @@ func ObservationLevelRank(level string) int {
 	return -1
 }
 
-func (b *ObservationBuffer) Record(store persistence.Store, event platform.Observation, quotaBytes int64) error {
+func (b *ObservationBuffer) Record(store persistence.Store, event protocol.Observation, quotaBytes int64) error {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	var usageErr error

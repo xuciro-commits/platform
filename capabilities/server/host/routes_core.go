@@ -5,6 +5,7 @@ import (
 	"io"
 	"net/http"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
+	"platformserver/kernel/protocol"
 	transport "platformserver/kernel/transport"
 	"platformserver/platform"
 	"platformserver/services/security"
@@ -16,7 +17,7 @@ import (
 
 func (h *Host) routesCore(rt *routes) {
 	mux := rt.mux
-	rt.handle(transport.Route{Pattern: "GET /v1/business-refusals", Summary: "Read the original record's durable refusal and correction evidence", Answer: platform.BusinessRefusalPage{}, Query: []transport.Param{{Name: "type", Description: "original record type"}, {Name: "id", Description: "original record ID"}, {Name: "key", Description: "optional original request key"}, {Name: "offset", Description: "first result"}, {Name: "limit", Description: "at most 200 results"}}}, transport.Answering(func(r *http.Request, m platform.Member, t *Tenant) (platform.BusinessRefusalPage, *platform.Error) {
+	rt.handle(transport.Route{Pattern: "GET /v1/business-refusals", Summary: "Read the original record's durable refusal and correction evidence", Answer: protocol.BusinessRefusalPage{}, Query: []transport.Param{{Name: "type", Description: "original record type"}, {Name: "id", Description: "original record ID"}, {Name: "key", Description: "optional original request key"}, {Name: "offset", Description: "first result"}, {Name: "limit", Description: "at most 200 results"}}}, transport.Answering(func(r *http.Request, m platform.Member, t *Tenant) (protocol.BusinessRefusalPage, *platform.Error) {
 		q := r.URL.Query()
 		offset, _ := strconv.Atoi(q.Get("offset"))
 		limit, _ := strconv.Atoi(q.Get("limit"))
@@ -63,10 +64,10 @@ func (h *Host) routesCore(rt *routes) {
 		refusal = t.i18n.Said(refusal, t.Language(m, r))
 		Reply(w, record, refusal, localized...)
 	})
-	rt.authorized(transport.Route{Pattern: "GET /v1/authz/explain", Summary: "Why a member may or may not exercise a permission: their roles, the roles it names, the engine's verdict (administrators, auditors)", Answer: security.Explanation{}, Query: []transport.Param{{Name: "member", Description: "the member to ask about"}, {Name: "permission", Description: "an action's schema, or <app>:read:<name>"}}}, controlowner.PlatformApp, []string{controlowner.Admin, platform.Auditor}, transport.Answering(func(r *http.Request, _ platform.Member, t *Tenant) (security.Explanation, *platform.Error) {
+	rt.authorized(transport.Route{Pattern: "GET /v1/authz/explain", Summary: "Why a member may or may not exercise a permission: their roles, the roles it names, the engine's verdict (administrators, auditors)", Answer: security.Explanation{}, Query: []transport.Param{{Name: "member", Description: "the member to ask about"}, {Name: "permission", Description: "an action's schema, or <app>:read:<name>"}}}, controlowner.PlatformApp, []string{controlowner.Admin, protocol.Auditor}, transport.Answering(func(r *http.Request, _ platform.Member, t *Tenant) (security.Explanation, *platform.Error) {
 		return t.Explain(r.URL.Query().Get("member"), r.URL.Query().Get("permission"))
 	}))
-	rt.authorized(transport.Route{Pattern: "POST /v1/authz/explain", Summary: "Explain the ordered owner authorization decision for a record, fields and source", Body: platform.AuthzRequest{}, Answer: platform.AuthzDecision{}}, controlowner.PlatformApp, []string{controlowner.Admin, platform.Auditor}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
+	rt.authorized(transport.Route{Pattern: "POST /v1/authz/explain", Summary: "Explain the ordered owner authorization decision for a record, fields and source", Body: platform.AuthzRequest{}, Answer: platform.AuthzDecision{}}, controlowner.PlatformApp, []string{controlowner.Admin, protocol.Auditor}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
 		var request platform.AuthzRequest
 		if !readCapabilityBody(w, r, &request) {
 			return
@@ -74,13 +75,13 @@ func (h *Host) routesCore(rt *routes) {
 		decision, err := t.ExplainOperation(request, h.Now())
 		transport.Answer(w, decision, err)
 	})
-	rt.handle(transport.Route{Pattern: "GET /v1/sessions", Summary: "The caller's sessions: the credentials the host has seen act as them, the current one marked", Answer: []platform.Session{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
+	rt.handle(transport.Route{Pattern: "GET /v1/sessions", Summary: "The caller's sessions: the credentials the host has seen act as them, the current one marked", Answer: []protocol.Session{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
 		WriteJSON(w, http.StatusOK, consoleOf(t).Sessions(m.ID, bearer(r), h.Now()))
 	})
 	rt.handle(transport.Route{Pattern: "POST /v1/sessions/end-others", Summary: "End every session of the caller but this one: the host refuses those credentials from now on", Answer: map[string]int{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
 		WriteJSON(w, http.StatusOK, map[string]int{"ended": consoleOf(t).EndOtherSessions(m.ID, bearer(r), h.Now())})
 	})
-	rt.handle(transport.Route{Pattern: "GET /v1/tokens", Summary: "The caller's personal tokens, never their secrets", Answer: []platform.TokenView{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
+	rt.handle(transport.Route{Pattern: "GET /v1/tokens", Summary: "The caller's personal tokens, never their secrets", Answer: []protocol.TokenView{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
 		WriteJSON(w, http.StatusOK, consoleOf(t).Tokens(m.ID, h.Now()))
 	})
 	rt.handle(transport.Route{Pattern: "GET /v1/tokens/{id}/secret", Summary: "The secret of a token the caller just issued, once", Answer: map[string]string{}}, transport.Answering(func(r *http.Request, m platform.Member, t *Tenant) (map[string]string, *platform.Error) {
@@ -105,8 +106,8 @@ func (h *Host) routesCore(rt *routes) {
 	})
 }
 
-func (h *Host) loginIdentities() []platform.LoginIdentity {
-	var out []platform.LoginIdentity
+func (h *Host) loginIdentities() []protocol.LoginIdentity {
+	var out []protocol.LoginIdentity
 	for _, t := range h.currentTenants() {
 		if t.IdentityOwner != nil {
 			out = append(out, t.IdentityOwner.Identities()...)

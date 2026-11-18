@@ -2,6 +2,7 @@ package kernel
 
 import (
 	"fmt"
+	"platformserver/kernel/protocol"
 
 	"platformserver/kernel/acceptedformat"
 	"platformserver/kernel/records"
@@ -20,7 +21,7 @@ type PreparedChanges struct {
 	Child   *PreparedBatch
 }
 
-func (p *PreparedChanges) PublishChild(publish func(platform.Event, platform.AcceptedEventPlan)) {
+func (p *PreparedChanges) PublishChild(publish func(platform.Event, protocol.AcceptedEventPlan)) {
 	if p.Child != nil {
 		PublishBatch(p.Child.Result, publish)
 	}

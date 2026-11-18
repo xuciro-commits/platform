@@ -24,7 +24,7 @@ const (
 	trainingCandidatesBytes = platform.AcceptedResultMaxBytes / 4
 )
 
-func (a *AI) AttachAITraining(h platform.AITrainingHost) { a.trainingHost = h }
+func (a *AI) AttachAITraining(h runtimeprotocol.AITrainingHost) { a.trainingHost = h }
 
 func (a *AI) AttachOwner(bindings runtimeprotocol.OwnerBindings) {
 	a.AttachAITraining(bindings.Training)
@@ -43,7 +43,7 @@ func (a *AI) trainingDecision(c platform.Caller, s *pb.Submission, now time.Time
 	id := s.GetTarget().GetId()
 	switch s.GetSchema().GetName() {
 	case trainingPolicySet:
-		var policy platform.AITrainingPolicy
+		var policy runtimeprotocol.AITrainingPolicy
 		if json.Unmarshal(s.GetPayload(), &policy) != nil || id == "" || policy.RetainDays < 1 || policy.RetainDays > 3650 {
 			return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Training policy needs a name and a retention period of 1–3650 days")
 		}
@@ -124,7 +124,7 @@ func (a *AI) Listen(c platform.Caller, event platform.Event, _ []string, now tim
 		}
 		if candidate.Outcome == "accepted" && len(candidate.Rejected) == 0 && candidate.Policy != "" && candidate.Authorization != "" {
 			current, _ := platform.CanonicalDigest([]any{candidate.Intent, candidate.Action, candidate.Definition, candidate.Sources, candidate.ModelConfig, candidate.Policy, candidate.PolicyVersion, candidate.Authorization})
-			var rejected platform.AITrainingCandidate
+			var rejected runtimeprotocol.AITrainingCandidate
 			for _, previous := range a.trainingCandidates {
 				if previous.Outcome != "rejected" || len(previous.Rejected) == 0 || previous.At.After(candidate.At) {
 					continue
@@ -149,13 +149,13 @@ func (a *AI) Listen(c platform.Caller, event platform.Event, _ []string, now tim
 		}
 	}
 	candidates := slices.Collect(maps.Values(a.trainingCandidates))
-	slices.SortFunc(candidates, func(left, right platform.AITrainingCandidate) int {
+	slices.SortFunc(candidates, func(left, right runtimeprotocol.AITrainingCandidate) int {
 		if order := right.At.Compare(left.At); order != 0 {
 			return order
 		}
 		return strings.Compare(right.ID, left.ID)
 	})
-	retained := make(map[string]platform.AITrainingCandidate, min(len(candidates), trainingCandidatesKept))
+	retained := make(map[string]runtimeprotocol.AITrainingCandidate, min(len(candidates), trainingCandidatesKept))
 	bytes := 2
 	for _, candidate := range candidates {
 		if len(retained) == trainingCandidatesKept {
@@ -186,7 +186,7 @@ func (a *AI) Listen(c platform.Caller, event platform.Event, _ []string, now tim
 	return nil
 }
 
-func (a *AI) trainingProblem(member platform.Member, candidate platform.AITrainingCandidate, now time.Time, quality bool) string {
+func (a *AI) trainingProblem(member platform.Member, candidate runtimeprotocol.AITrainingCandidate, now time.Time, quality bool) string {
 	policy, known := a.trainingPolicies[candidate.Policy]
 	switch {
 	case candidate.Revoked:
@@ -209,14 +209,14 @@ func (a *AI) trainingProblem(member platform.Member, candidate platform.AITraini
 	return a.trainingHost.TrainingReadable(member, candidate, now)
 }
 
-func (a *AI) TrainingExport(c platform.Caller, format string, now time.Time) (platform.AITrainingExport, *platform.Error) {
+func (a *AI) TrainingExport(c platform.Caller, format string, now time.Time) (runtimeprotocol.AITrainingExport, *platform.Error) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	if !c.Holds(ID, Admin) || c.Agent {
-		return platform.AITrainingExport{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "Only a person with AI administration access can export training data")
+		return runtimeprotocol.AITrainingExport{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "Only a person with AI administration access can export training data")
 	}
 	if format != "sft" && format != "dpo" {
-		return platform.AITrainingExport{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Choose SFT or DPO")
+		return runtimeprotocol.AITrainingExport{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Choose SFT or DPO")
 	}
 	rows, manifest := []string{}, []any{}
 	for _, id := range slices.Sorted(maps.Keys(a.trainingCandidates)) {
@@ -250,5 +250,5 @@ func (a *AI) TrainingExport(c platform.Caller, format string, now time.Time) (pl
 	digest := sha256.Sum256(identity)
 	id := hex.EncodeToString(digest[:])
 	raw, _ := json.Marshal(map[string]any{"version": 1, "id": id, "format": format, "samples": manifest, "revocation": "Revocation prevents future exports. Downloaded files cannot be recalled."})
-	return platform.AITrainingExport{ID: id, Format: format, JSONL: jsonl, Manifest: raw}, nil
+	return runtimeprotocol.AITrainingExport{ID: id, Format: format, JSONL: jsonl, Manifest: raw}, nil
 }

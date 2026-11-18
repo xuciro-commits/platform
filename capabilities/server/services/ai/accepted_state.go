@@ -7,6 +7,7 @@ import (
 	"io"
 	"maps"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
+	"platformserver/kernel/protocol"
 	"slices"
 	"time"
 
@@ -57,13 +58,13 @@ func (a *AI) ApplyAcceptedState(raw json.RawMessage) error {
 	a.usage, a.daily, a.reservations = state.Usage, state.Daily, state.Reservations
 	a.trainingPolicies, a.trainingCandidates = state.TrainingPolicies, state.TrainingCandidates
 	if a.trainingPolicies == nil {
-		a.trainingPolicies = map[string]platform.AITrainingPolicy{}
+		a.trainingPolicies = map[string]protocol.AITrainingPolicy{}
 	}
 	if a.trainingCandidates == nil {
-		a.trainingCandidates = map[string]platform.AITrainingCandidate{}
+		a.trainingCandidates = map[string]protocol.AITrainingCandidate{}
 	}
 	if a.reservations == nil {
-		a.reservations = map[string]platform.AIReservation{}
+		a.reservations = map[string]protocol.AIReservation{}
 	}
 	if a.limits == nil {
 		a.limits = map[string]Limit{}
@@ -76,9 +77,9 @@ func (a *AI) ApplyAcceptedState(raw json.RawMessage) error {
 
 var _ platform.AcceptedStateApp = (*AI)(nil)
 
-func (*AI) AcceptedInputs() []string { return []string{platform.AIReserveCall} }
+func (*AI) AcceptedInputs() []string { return []string{protocol.AIReserveCall} }
 func (*AI) DecodeAcceptedInput(raw json.RawMessage) (any, error) {
-	var r platform.AIReservation
+	var r protocol.AIReservation
 	if err := json.Unmarshal(raw, &r); err != nil {
 		return nil, err
 	}
@@ -88,10 +89,10 @@ func (*AI) DecodeAcceptedInput(raw json.RawMessage) (any, error) {
 	return r, nil
 }
 func (a *AI) Input(c platform.Caller, name string, raw []byte, now time.Time) (any, *platform.Error) {
-	if c.ID != "app:"+ID || !c.Staging() || name != platform.AIReserveCall {
+	if c.ID != "app:"+ID || !c.Staging() || name != protocol.AIReserveCall {
 		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "Only the AI meter can reserve model usage")
 	}
-	var input platform.AIReserveInput
+	var input protocol.AIReserveInput
 	decoder := json.NewDecoder(bytes.NewReader(raw))
 	decoder.DisallowUnknownFields()
 	if decoder.Decode(&input) != nil || decoder.Decode(new(any)) != io.EOF {

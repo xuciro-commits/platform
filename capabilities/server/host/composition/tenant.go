@@ -28,13 +28,13 @@ import (
 	"platformserver/services/work/activity"
 )
 
-func NewTenantWithCapabilities(id string, services runtimeprotocol.RuntimeCapabilities, seats ...platform.Seat) (*platformserver.Tenant, error) {
+func NewTenantWithCapabilities(id string, services runtimeprotocol.RuntimeCapabilities, seats ...runtimeprotocol.Seat) (*platformserver.Tenant, error) {
 	services.BindOwner = runtimeprotocol.BindOwner
 	services.NewAgentEvaluator = agentevaluation.NewAgentEvaluator
 	services.NewTransactionExecutor = actions.NewRuntime
 	return platformserver.NewTenantWithCapabilities(id, services, BuiltinApps(id, seats...)...)
 }
-func BuiltinApps(id string, seats ...platform.Seat) []platform.App {
+func BuiltinApps(id string, seats ...runtimeprotocol.Seat) []platform.App {
 	return []platform.App{
 		NewConsole(id, seats...),
 		enterprise.New(id, actions.NewAuthority, platform.OrgSeed{Memberships: controlowner.Memberships(seats)}), relations.New(id, actions.NewAuthority), ai.New(id, actions.NewAuthority), work.New(id, actions.NewAuthority), monitoring.New(id, actions.NewAuthority), automation.New(id, actions.NewAuthority, platformserver.PublicationResolver()), knowledge.New(id, actions.NewAuthority),
@@ -42,9 +42,9 @@ func BuiltinApps(id string, seats ...platform.Seat) []platform.App {
 	}
 }
 
-func NewConsole(tenant string, seats ...platform.Seat) *controlowner.Console {
+func NewConsole(tenant string, seats ...runtimeprotocol.Seat) *controlowner.Console {
 	return controlowner.NewConsole(tenant, actions.NewAuthority, func(id string) controlowner.Owners {
-		actions := append(platform.AccessActions(), platform.ProjectActions()...)
+		actions := append(runtimeprotocol.AccessActions(), runtimeprotocol.ProjectActions()...)
 		actions = append(actions, packages.Actions()...)
 		return controlowner.Owners{Policies: security.NewPolicies(), Packages: packages.New(id, platformserver.PublicationResolver()), Actions: actions}
 	}, seats...)

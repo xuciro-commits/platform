@@ -51,8 +51,8 @@ func DecodeAgent(raw []byte) (RuntimeAgent, error) {
 	hash, err := AgentRequestHash(r)
 	digest, digestErr := DigestAgent(r)
 	batch, receipt, batchErr := DecodeBatch(r.Changes)
-	if err != nil || digestErr != nil || batchErr != nil || r.Version != 1 || r.Kind != "agent-result" || r.Tenant == "" || r.App != platform.AgentApp || r.Member == "" || r.At.IsZero() || r.Step.Run == "" || r.RequestHash != hash || r.Digest != digest ||
-		batch.Tenant != r.Tenant || batch.App != platform.AgentApp || !batch.At.Equal(r.At) || receipt.GetSubmission().GetPrincipalId() != r.Member || r.Key != "agent:"+receipt.GetSubmission().GetIdempotencyKey() {
+	if err != nil || digestErr != nil || batchErr != nil || r.Version != 1 || r.Kind != "agent-result" || r.Tenant == "" || r.App != protocol.AgentApp || r.Member == "" || r.At.IsZero() || r.Step.Run == "" || r.RequestHash != hash || r.Digest != digest ||
+		batch.Tenant != r.Tenant || batch.App != protocol.AgentApp || !batch.At.Equal(r.At) || receipt.GetSubmission().GetPrincipalId() != r.Member || r.Key != "agent:"+receipt.GetSubmission().GetIdempotencyKey() {
 		return r, fmt.Errorf("agent result has inconsistent identity or changes")
 	}
 	if r.Step.Evaluation == nil && r.Step.Usage.Model != "" {
@@ -80,9 +80,9 @@ type HostControl struct {
 	Digest         string                    `json:"digest"`
 	Before         string                    `json:"before"`
 	AuditBefore    string                    `json:"auditBefore"`
-	Image          platform.HostControlImage `json:"image"`
-	Audit          platform.AuditEntry       `json:"audit"`
-	Answer         platform.SupportGrant     `json:"answer,omitempty"`
+	Image          protocol.HostControlImage `json:"image"`
+	Audit          protocol.AuditEntry       `json:"audit"`
+	Answer         protocol.SupportGrant     `json:"answer,omitempty"`
 }
 
 func HostRequestHash(r HostControl) (string, error) {
@@ -133,11 +133,11 @@ type Work struct {
 	At             time.Time                   `json:"at"`
 	RequestHash    string                      `json:"requestHash"`
 	Digest         string                      `json:"digest"`
-	Input          platform.ScheduledTaskState `json:"input"`
+	Input          protocol.ScheduledTaskState `json:"input"`
 	PriorWork      json.RawMessage             `json:"priorWork,omitempty"`
 	Work           json.RawMessage             `json:"work"`
 	Outcome        string                      `json:"outcome"`
-	After          platform.ScheduledTask      `json:"after"`
+	After          protocol.ScheduledTask      `json:"after"`
 	Changes        json.RawMessage             `json:"changes,omitempty"`
 	Notices        *Notices                    `json:"notices,omitempty"`
 	Intents        []platform.Effect           `json:"intents,omitempty"`
@@ -145,7 +145,7 @@ type Work struct {
 	Control        *Control                    `json:"control,omitempty"`
 }
 
-func WorkInputHash(input platform.ScheduledTaskState, prior json.RawMessage) (string, error) {
+func WorkInputHash(input protocol.ScheduledTaskState, prior json.RawMessage) (string, error) {
 	return platform.CanonicalDigest([]any{input, prior})
 }
 
@@ -250,7 +250,7 @@ func DecodeOperationClaim(raw []byte) (OperationClaim, error) {
 	}
 	digest, err := OperationClaimDigest(saved)
 	hash, _ := platform.CanonicalDigest([]any{saved.Before, saved.PriorWork})
-	if err != nil || saved.Kind != "operation-claim" || saved.Version != 1 || saved.Tenant == "" || saved.App != EffectApp || saved.RequestHash != hash || saved.Digest != digest || saved.Before.Endpoint != OperationEndpoint || saved.Before.ID == "" || platform.EffectSettled(saved.Before.State) || saved.At.IsZero() {
+	if err != nil || saved.Kind != "operation-claim" || saved.Version != 1 || saved.Tenant == "" || saved.App != EffectApp || saved.RequestHash != hash || saved.Digest != digest || saved.Before.Endpoint != OperationEndpoint || saved.Before.ID == "" || protocol.EffectSettled(saved.Before.State) || saved.At.IsZero() {
 		return saved, fmt.Errorf("invalid operation ownership result")
 	}
 	if saved.After.Generation == 0 || saved.Key != fmt.Sprintf("operation-claim:%s:%d", saved.Before.ID, saved.After.Generation) {
@@ -272,17 +272,17 @@ type Composite struct {
 	Member      string                   `json:"member"`
 	Key         string                   `json:"key"`
 	At          time.Time                `json:"at"`
-	Edits       []platform.CompositeEdit `json:"edits"`
+	Edits       []protocol.CompositeEdit `json:"edits"`
 	Changes     json.RawMessage          `json:"changes,omitempty"`
 	Refusal     string                   `json:"refusal,omitempty"`
 	RequestHash string                   `json:"requestHash"`
 	Digest      string                   `json:"digest"`
 }
 
-func CompositeRequestHash(tenant, member, key string, edits []platform.CompositeEdit) (string, error) {
+func CompositeRequestHash(tenant, member, key string, edits []protocol.CompositeEdit) (string, error) {
 	return platform.CanonicalDigest(struct {
 		Tenant, Member, Key string
-		Edits               []platform.CompositeEdit
+		Edits               []protocol.CompositeEdit
 	}{tenant, member, key, edits})
 }
 
@@ -372,7 +372,7 @@ func DecodeComposite(raw []byte) (Composite, error) {
 	return saved, nil
 }
 
-func ValidateHostImage(tenant string, image platform.HostControlImage) error {
+func ValidateHostImage(tenant string, image protocol.HostControlImage) error {
 	owners := map[string]bool{}
 	for _, id := range image.DisabledOwners {
 		if id == "" || len(id) > 128 || owners[id] {
@@ -416,7 +416,7 @@ func ValidateHostImage(tenant string, image platform.HostControlImage) error {
 			return fmt.Errorf("invalid host receipt")
 		}
 		if tag == "support.open" || tag == "support.use" {
-			i := slices.IndexFunc(image.Support, func(g platform.SupportGrant) bool { return g.ID == receipt.Answer.ID })
+			i := slices.IndexFunc(image.Support, func(g protocol.SupportGrant) bool { return g.ID == receipt.Answer.ID })
 			if i < 0 {
 				return fmt.Errorf("host receipt names no support grant")
 			}
@@ -428,7 +428,7 @@ func ValidateHostImage(tenant string, image platform.HostControlImage) error {
 			if current != receipt.Answer {
 				return fmt.Errorf("host receipt rewrites its support authority")
 			}
-		} else if receipt.Answer != (platform.SupportGrant{}) {
+		} else if receipt.Answer != (protocol.SupportGrant{}) {
 			return fmt.Errorf("host receipt has an unrelated answer")
 		}
 	}

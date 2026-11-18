@@ -2,11 +2,11 @@ package lineage
 
 import (
 	"maps"
+	"platformserver/kernel/protocol"
 	"platformserver/services/ontology"
 	"slices"
 	"time"
 
-	"platformserver/platform"
 	dataowner "platformserver/services/data"
 )
 
@@ -350,7 +350,7 @@ func (g Graph) group() []Group {
 		case "unknown", "unreadable":
 			group.Unreadable++
 		}
-		group.Guard = platform.HigherMarking(group.Guard, node.Guard)
+		group.Guard = protocol.HigherMarking(group.Guard, node.Guard)
 	}
 	for _, edge := range g.Edges {
 		from, fromOK := at[edge.From]

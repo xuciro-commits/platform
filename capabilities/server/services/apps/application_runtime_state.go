@@ -5,6 +5,7 @@ import (
 	"google.golang.org/protobuf/encoding/protojson"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformserver/kernel/acceptedformat"
+	"platformserver/kernel/protocol"
 	"platformserver/platform"
 	"platformserver/services/actions"
 
@@ -13,8 +14,8 @@ import (
 	"time"
 )
 
-func (ctx Context) maintenance(artifact platform.ApplicationArtifact) platform.ApplicationMaintenance {
-	out := platform.ApplicationMaintenance{Extensions: []platform.ApplicationExtension{}, Retention: []platform.ApplicationRetention{}}
+func (ctx Context) maintenance(artifact protocol.ApplicationArtifact) protocol.ApplicationMaintenance {
+	out := protocol.ApplicationMaintenance{Extensions: []protocol.ApplicationExtension{}, Retention: []protocol.ApplicationRetention{}}
 	models := map[string]bool{}
 	for _, binding := range artifact.Model {
 		if binding.Ref.Kind == platform.AssetObject {
@@ -27,7 +28,7 @@ func (ctx Context) maintenance(artifact platform.ApplicationArtifact) platform.A
 		}
 		info, ok := ctx.Entity(binding.Ref.Name)
 		if ok && info.Extends != "" {
-			extension := platform.ApplicationExtension{Resource: binding, Base: info.Extends}
+			extension := protocol.ApplicationExtension{Resource: binding, Base: info.Extends}
 			if info.ExtensionSource != nil && models[info.ExtensionSource.Base.Ref.Name] {
 				source := info.ExtensionSource.Base
 				extension.Source = &source
@@ -37,15 +38,15 @@ func (ctx Context) maintenance(artifact platform.ApplicationArtifact) platform.A
 	}
 	if artifact.Profile != nil {
 		for category, duration := range artifact.Profile.Retention {
-			out.Retention = append(out.Retention, platform.ApplicationRetention{Category: category, Duration: duration, State: "declared"})
+			out.Retention = append(out.Retention, protocol.ApplicationRetention{Category: category, Duration: duration, State: "declared"})
 		}
-		slices.SortFunc(out.Retention, func(a, b platform.ApplicationRetention) int { return strings.Compare(a.Category, b.Category) })
+		slices.SortFunc(out.Retention, func(a, b protocol.ApplicationRetention) int { return strings.Compare(a.Category, b.Category) })
 	}
 	return out
 }
 
-func (ctx Context) Runtime(m platform.Member, ref platform.AssetRef, now time.Time) (platform.ApplicationRuntime, *platform.Error) {
-	out := platform.ApplicationRuntime{Scope: "authorized", State: "healthy", Versions: []platform.ApplicationVersion{}, Data: []platform.ApplicationData{}, Warnings: []platform.ApplicationWarning{}}
+func (ctx Context) Runtime(m platform.Member, ref platform.AssetRef, now time.Time) (protocol.ApplicationRuntime, *platform.Error) {
+	out := protocol.ApplicationRuntime{Scope: "authorized", State: "healthy", Versions: []protocol.ApplicationVersion{}, Data: []protocol.ApplicationData{}, Warnings: []protocol.ApplicationWarning{}}
 	if ref.Kind != platform.AssetApp || ref.Check() != nil {
 		return out, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Choose a published application")
 	}
@@ -57,8 +58,8 @@ func (ctx Context) Runtime(m platform.Member, ref platform.AssetRef, now time.Ti
 			return out, refusal
 		}
 		out.State = "isolated"
-		out.Artifact = platform.ApplicationArtifact{Ref: ref, Model: []platform.AssetBinding{}, Rules: []platform.AssetBinding{}, Pages: []platform.AssetBinding{}, Flows: []platform.AssetBinding{}, AI: []platform.AssetBinding{}, Integrations: []platform.AssetBinding{}, Roles: []platform.ApplicationRole{}, Depends: []platform.AssetBinding{}, Environment: []platform.ApplicationBinding{}}
-		out.Recovery = platform.ApplicationRecovery{State: "isolated", Predecessors: "unverified", Quarantined: true, Scope: "tenant"}
+		out.Artifact = protocol.ApplicationArtifact{Ref: ref, Model: []platform.AssetBinding{}, Rules: []platform.AssetBinding{}, Pages: []platform.AssetBinding{}, Flows: []platform.AssetBinding{}, AI: []platform.AssetBinding{}, Integrations: []platform.AssetBinding{}, Roles: []protocol.ApplicationRole{}, Depends: []platform.AssetBinding{}, Environment: []protocol.ApplicationBinding{}}
+		out.Recovery = protocol.ApplicationRecovery{State: "isolated", Predecessors: "unverified", Quarantined: true, Scope: "tenant"}
 		return out, nil
 	}
 	visible := map[platform.AssetRef]bool{}
@@ -95,7 +96,7 @@ func (ctx Context) Runtime(m platform.Member, ref platform.AssetRef, now time.Ti
 		return out, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Application runtime dependencies are unavailable")
 	}
 	out.Artifact = artifact
-	out.Monitoring.AgentBudgets = []platform.ApplicationAgentBudget{}
+	out.Monitoring.AgentBudgets = []protocol.ApplicationAgentBudget{}
 	if len(artifact.AI) > 0 {
 		out.Monitoring.MemberQuota = ctx.Quota(m, now)
 	}
@@ -107,7 +108,7 @@ func (ctx Context) Runtime(m platform.Member, ref platform.AssetRef, now time.Ti
 		if err := json.Unmarshal(asset.Body, &descriptor); err != nil {
 			return out, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Application runtime dependencies are unavailable")
 		}
-		out.Monitoring.AgentBudgets = append(out.Monitoring.AgentBudgets, platform.ApplicationAgentBudget{Resource: platform.AssetBinding{Ref: asset.Ref, SourceVersion: asset.SourceVersion}, Budget: descriptor.Budget})
+		out.Monitoring.AgentBudgets = append(out.Monitoring.AgentBudgets, protocol.ApplicationAgentBudget{Resource: platform.AssetBinding{Ref: asset.Ref, SourceVersion: asset.SourceVersion}, Budget: descriptor.Budget})
 	}
 	model := map[string]bool{}
 	for _, binding := range artifact.Model {
@@ -185,9 +186,9 @@ func (ctx Context) Runtime(m platform.Member, ref platform.AssetRef, now time.Ti
 		if err != nil {
 			return out, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Application version history is unavailable")
 		}
-		out.Versions = append(out.Versions, platform.ApplicationVersion{Version: version.Version, Release: candidate.ID, At: release.At, Active: version.Version == artifact.Version})
+		out.Versions = append(out.Versions, protocol.ApplicationVersion{Version: version.Version, Release: candidate.ID, At: release.At, Active: version.Version == artifact.Version})
 	}
-	slices.SortFunc(out.Versions, func(a, b platform.ApplicationVersion) int {
+	slices.SortFunc(out.Versions, func(a, b protocol.ApplicationVersion) int {
 		if a.At.After(b.At) {
 			return -1
 		}
@@ -203,7 +204,7 @@ func (ctx Context) Runtime(m platform.Member, ref platform.AssetRef, now time.Ti
 		}
 	}
 	if len(out.Versions) == 0 {
-		out.Versions = append(out.Versions, platform.ApplicationVersion{Version: artifact.Version, Active: true})
+		out.Versions = append(out.Versions, protocol.ApplicationVersion{Version: artifact.Version, Active: true})
 	}
 	project := func(bindings []platform.AssetBinding) []platform.AssetBinding {
 		return slices.DeleteFunc(slices.Clone(bindings), func(binding platform.AssetBinding) bool { return !visible[binding.Ref] })
@@ -211,8 +212,8 @@ func (ctx Context) Runtime(m platform.Member, ref platform.AssetRef, now time.Ti
 	out.Artifact.Model, out.Artifact.Rules, out.Artifact.Pages = project(artifact.Model), project(artifact.Rules), project(artifact.Pages)
 	out.Artifact.Flows, out.Artifact.AI, out.Artifact.Integrations = project(artifact.Flows), project(artifact.AI), project(artifact.Integrations)
 	out.Artifact.Depends = project(artifact.Depends)
-	out.Artifact.Environment = slices.DeleteFunc(slices.Clone(artifact.Environment), func(binding platform.ApplicationBinding) bool { return !visible[binding.Ref] })
-	out.Artifact.Roles = slices.DeleteFunc(slices.Clone(artifact.Roles), func(role platform.ApplicationRole) bool {
+	out.Artifact.Environment = slices.DeleteFunc(slices.Clone(artifact.Environment), func(binding protocol.ApplicationBinding) bool { return !visible[binding.Ref] })
+	out.Artifact.Roles = slices.DeleteFunc(slices.Clone(artifact.Roles), func(role protocol.ApplicationRole) bool {
 		return !visible[role.Resource.Ref] || !slices.Contains(m.RolesIn(role.Resource.Ref.App), "builder") && !slices.Contains(m.RolesIn(role.Resource.Ref.App), role.Role)
 	})
 	for i := range out.Artifact.Roles {
@@ -246,13 +247,13 @@ func (ctx Context) Runtime(m platform.Member, ref platform.AssetRef, now time.Ti
 			out.State = "degraded"
 			continue
 		}
-		data := platform.ApplicationData{Ref: binding.Ref, Records: count}
+		data := protocol.ApplicationData{Ref: binding.Ref, Records: count}
 		if artifact.Profile != nil {
 			data.Expected = artifact.Profile.ExpectedRecords[binding.Ref.Name]
 		}
 		out.Data = append(out.Data, data)
 		if data.Expected > 0 && int64(data.Records) > data.Expected {
-			out.Warnings = append(out.Warnings, platform.ApplicationWarning{Kind: "records", Resource: binding.Ref.Name, Actual: int64(data.Records), Expected: data.Expected})
+			out.Warnings = append(out.Warnings, protocol.ApplicationWarning{Kind: "records", Resource: binding.Ref.Name, Actual: int64(data.Records), Expected: data.Expected})
 		}
 	}
 	runs, refusal := ctx.Runs(m, ref, 0, 100, now)
@@ -261,7 +262,7 @@ func (ctx Context) Runtime(m platform.Member, ref platform.AssetRef, now time.Ti
 	}
 	out.Runs = runs.Total
 	if artifact.Profile != nil && artifact.Profile.ExpectedRuns > 0 && int64(out.Runs) > artifact.Profile.ExpectedRuns {
-		out.Warnings = append(out.Warnings, platform.ApplicationWarning{Kind: "runs", Actual: int64(out.Runs), Expected: artifact.Profile.ExpectedRuns})
+		out.Warnings = append(out.Warnings, protocol.ApplicationWarning{Kind: "runs", Actual: int64(out.Runs), Expected: artifact.Profile.ExpectedRuns})
 	}
 	out.Recovery.FailedRuns, out.Recovery.PendingEffects = runs.Summary.Failed, runs.Summary.PendingEffects
 	out.Monitoring.Runs = runs.Summary

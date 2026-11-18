@@ -126,7 +126,7 @@ func (b *Build) ForkReleaseExecution(assets []platform.ReleaseAsset) (platform.A
 	return &releaseExecution{Build: bound, catalog: b.ledger.Catalog().WithActions(actions)}, nil
 }
 
-var _ platform.ReleaseExecutionOwner = (*Build)(nil)
+var _ protocol.ReleaseExecutionOwner = (*Build)(nil)
 
 func (b *Build) checkManagedDefinitionWrite(s *pb.Submission) *platform.Error {
 	typ, id := s.GetTarget().GetType(), s.GetTarget().GetId()

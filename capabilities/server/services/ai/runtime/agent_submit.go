@@ -18,7 +18,7 @@ import (
 func (a *Agents) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *platform.Error) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
-	if s.GetSchema().GetName() == platform.SchemaRunStep {
+	if s.GetSchema().GetName() == runtimeprotocol.SchemaRunStep {
 		return nil, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_POLICY_DENIED}
 	}
 	if record, err, ok := a.ledger.Generated(c, s, now, nil, agentEntities()...); ok {
@@ -33,23 +33,23 @@ func (a *Agents) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb
 	json.Unmarshal(s.GetPayload(), &p)
 	d := a.def(p.Agent)
 	id := s.GetTarget().GetId()
-	run, known := platform.Get[platform.AgentRunRecord](a.host.Automation(c, platform.AgentApp), id)
+	run, known := platform.Get[runtimeprotocol.AgentRunRecord](a.host.Automation(c, runtimeprotocol.AgentApp), id)
 	allowed := func() bool {
 		switch s.GetSchema().GetName() {
-		case platform.SchemaToolPropose:
+		case runtimeprotocol.SchemaToolPropose:
 			return true
-		case platform.SchemaRunStart:
+		case runtimeprotocol.SchemaRunStart:
 			return d != nil && c.Roles[d.App] != ""
-		case platform.SchemaRunCancel:
-			return c.Roles[platform.AgentApp] == platform.AgentAdmin || known && run.OnBehalf == c.ID
-		case platform.SchemaEvalStart, platform.SchemaSuspend, platform.SchemaResume:
+		case runtimeprotocol.SchemaRunCancel:
+			return c.Roles[runtimeprotocol.AgentApp] == runtimeprotocol.AgentAdmin || known && run.OnBehalf == c.ID
+		case runtimeprotocol.SchemaEvalStart, runtimeprotocol.SchemaSuspend, runtimeprotocol.SchemaResume:
 			return true
 		}
 		return known && !c.Agent && !c.Automation && (run.OnBehalf == c.ID || slices.Contains(run.Reviewers, c.ID))
 	}
 	return a.ledger.Receive(c, s, now, allowed, func() (func(*pb.ChangeRecord), *platform.Error) {
 		switch s.GetSchema().GetName() {
-		case platform.SchemaRunStart:
+		case runtimeprotocol.SchemaRunStart:
 			if known {
 				return nil, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
 			}
@@ -65,8 +65,8 @@ func (a *Agents) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb
 			}
 			run.Acts, run.Language = p.Act && c.Replaying, p.Language
 			run.Scopes = slices.Clone(c.Scopes)
-			return func(r *pb.ChangeRecord) { a.host.Automation(c, platform.AgentApp).Put(r, run) }, nil
-		case platform.SchemaToolPropose:
+			return func(r *pb.ChangeRecord) { a.host.Automation(c, runtimeprotocol.AgentApp).Put(r, run) }, nil
+		case runtimeprotocol.SchemaToolPropose:
 			if known {
 				return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The proposal already exists")
 			}
@@ -75,47 +75,47 @@ func (a *Agents) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb
 				return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_NOT_FOUND, "The action owner is unavailable")
 			}
 			action, ok := app.Manifest().Actions.Action(p.Action)
-			if !ok || platform.StaticControlAction(action) || action.Automation || strings.HasPrefix(p.Action, "agent.run.") || p.Action == platform.SchemaToolPropose {
+			if !ok || platform.StaticControlAction(action) || action.Automation || strings.HasPrefix(p.Action, "agent.run.") || p.Action == runtimeprotocol.SchemaToolPropose {
 				return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "This tool cannot propose confirmation or runtime control")
 			}
-			run = platform.AgentRunRecord{Record: platform.Record{ID: id}, Agent: p.Owner + ".Tool", Title: action.Title, Goal: action.Title, Ref: action.Target + "/" + p.Target, OnBehalf: c.ID, Scopes: slices.Clone(c.Scopes), State: "waiting", ToolOnly: true, Steps: []platform.RunStep{{At: now, Tool: agentToolName(p.Action), Outcome: "awaiting confirmation"}}}
-			draft, refusal := a.toolDraft(c, run, platform.Draft{Kind: "action", Owner: p.Owner, Action: p.Action, Type: action.Target, Target: p.Target, Payload: string(p.Payload), Rationale: p.Rationale}, now)
+			run = runtimeprotocol.AgentRunRecord{Record: platform.Record{ID: id}, Agent: p.Owner + ".Tool", Title: action.Title, Goal: action.Title, Ref: action.Target + "/" + p.Target, OnBehalf: c.ID, Scopes: slices.Clone(c.Scopes), State: "waiting", ToolOnly: true, Steps: []runtimeprotocol.RunStep{{At: now, Tool: agentToolName(p.Action), Outcome: "awaiting confirmation"}}}
+			draft, refusal := a.toolDraft(c, run, runtimeprotocol.Draft{Kind: "action", Owner: p.Owner, Action: p.Action, Type: action.Target, Target: p.Target, Payload: string(p.Payload), Rationale: p.Rationale}, now)
 			if refusal != nil {
 				return nil, refusal
 			}
-			run.Draft = []platform.Draft{draft}
+			run.Draft = []runtimeprotocol.Draft{draft}
 			run.Proposals = append(run.Proposals, draft)
 			return func(receipt *pb.ChangeRecord) {
-				run.Proposals[len(run.Proposals)-1].Evidence = platform.AgentApp + "/" + receipt.GetChangeId()
-				a.host.Automation(c, platform.AgentApp).Put(receipt, run)
+				run.Proposals[len(run.Proposals)-1].Evidence = runtimeprotocol.AgentApp + "/" + receipt.GetChangeId()
+				a.host.Automation(c, runtimeprotocol.AgentApp).Put(receipt, run)
 				a.assignDraft(c, receipt, &run, action.Title, now)
-				a.host.Automation(c, platform.AgentApp).Put(receipt, run)
+				a.host.Automation(c, runtimeprotocol.AgentApp).Put(receipt, run)
 			}, nil
-		case platform.SchemaEvalStart:
+		case runtimeprotocol.SchemaEvalStart:
 			return a.startEvaluation(c, id, struct {
 				Agent, Model, Candidate string
 				Suite                   bool
 			}{p.Agent, p.Model, p.Candidate, p.Suite})
-		case platform.SchemaSuspend, platform.SchemaResume:
+		case runtimeprotocol.SchemaSuspend, runtimeprotocol.SchemaResume:
 			return a.switchDecision(c, s, struct{ Reason string }{p.Reason})
-		case platform.SchemaRunCancel:
+		case runtimeprotocol.SchemaRunCancel:
 			if !known || run.State == "done" || run.State == "stopped" {
 				return nil, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
 			}
 			return func(r *pb.ChangeRecord) {
 				a.stop(c, r, &run, "stopped by "+c.ID, now)
-				a.host.Automation(c, platform.AgentApp).Put(r, run)
+				a.host.Automation(c, runtimeprotocol.AgentApp).Put(r, run)
 			}, nil
-		case platform.SchemaRunConfirm, platform.SchemaRunReject:
+		case runtimeprotocol.SchemaRunConfirm, runtimeprotocol.SchemaRunReject:
 			if len(run.Draft) == 0 || run.State != "waiting" {
 				return nil, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
 			}
-			draft, proposed := run.Draft[0], (*platform.Signal)(nil)
+			draft, proposed := run.Draft[0], (*runtimeprotocol.Signal)(nil)
 			originalDraft := draft
 			step := &run.Steps[draft.Step]
-			if s.GetSchema().GetName() == platform.SchemaRunReject {
+			if s.GetSchema().GetName() == runtimeprotocol.SchemaRunReject {
 				step.Outcome += "\nrejected by " + c.ID + ": " + cmp.Or(p.Reason, "no reason given")
-				run.Signals = append(run.Signals, platform.Signal{At: now, Kind: "rejected", By: c.ID, Detail: p.Reason})
+				run.Signals = append(run.Signals, runtimeprotocol.Signal{At: now, Kind: "rejected", By: c.ID, Detail: p.Reason})
 				proposed = &run.Signals[len(run.Signals)-1]
 			} else {
 				payload, kind := draft.Payload, "confirmed"
@@ -127,7 +127,7 @@ func (a *Agents) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb
 					return nil, err
 				}
 				step.Outcome += "\n" + kind + " by " + c.ID + ": " + done
-				signal := platform.Signal{At: now, Kind: kind, By: c.ID}
+				signal := runtimeprotocol.Signal{At: now, Kind: kind, By: c.ID}
 				if kind == "changed" {
 					signal.Value = payload
 				}
@@ -160,7 +160,7 @@ func (a *Agents) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb
 				}
 				draft.Outcome = "accepted"
 			}
-			if s.GetSchema().GetName() == platform.SchemaRunReject {
+			if s.GetSchema().GetName() == runtimeprotocol.SchemaRunReject {
 				draft.Rejected, draft.Outcome = draft.Payload, "rejected"
 			}
 			if draft.Authorization != "" {
@@ -182,11 +182,11 @@ func (a *Agents) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb
 				run.State, run.Task = "waiting", fmt.Sprintf("effect:%s/%s:agent:%s:%d:confirm", draft.Owner, draft.Action, run.ID, draft.Step+1)
 			}
 			return func(r *pb.ChangeRecord) {
-				run.Proposals[len(run.Proposals)-1].Evidence = platform.AgentApp + "/" + r.GetChangeId()
+				run.Proposals[len(run.Proposals)-1].Evidence = runtimeprotocol.AgentApp + "/" + r.GetChangeId()
 				if oldTask != "" {
 					a.host.AgentTasks().Close(c, r, oldTask)
 				}
-				a.host.Automation(c, platform.AgentApp).Put(r, run)
+				a.host.Automation(c, runtimeprotocol.AgentApp).Put(r, run)
 				if proposed != nil {
 					a.propose(c, r, run, *proposed, now)
 				}
@@ -196,7 +196,7 @@ func (a *Agents) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb
 	})
 }
 
-func (a *Agents) confirm(c platform.Caller, run platform.AgentRunRecord, d platform.Draft, payload string, now time.Time) (string, *platform.Error) {
+func (a *Agents) confirm(c platform.Caller, run runtimeprotocol.AgentRunRecord, d runtimeprotocol.Draft, payload string, now time.Time) (string, *platform.Error) {
 	if !run.ToolOnly && a.changedDefinition(run, a.def(run.Agent)) {
 		return "", platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The agent definition changed; start a new run")
 	}
@@ -263,16 +263,16 @@ func sameJSON(x, y []byte) bool {
 	return aerr == nil && berr == nil && bytes.Equal(a, b)
 }
 
-func (a *Agents) RecordAgentSignal(c platform.Caller, r *pb.ChangeRecord, id string, sig platform.Signal, now time.Time) {
-	c = a.host.Automation(c, platform.AgentApp)
-	if run, ok := platform.Get[platform.AgentRunRecord](c, id); ok {
+func (a *Agents) RecordAgentSignal(c platform.Caller, r *pb.ChangeRecord, id string, sig runtimeprotocol.Signal, now time.Time) {
+	c = a.host.Automation(c, runtimeprotocol.AgentApp)
+	if run, ok := platform.Get[runtimeprotocol.AgentRunRecord](c, id); ok {
 		run.Signals = append(run.Signals, sig)
 		c.Put(r, run)
 		a.propose(c, r, run, sig, now)
 	}
 }
 
-func (a *Agents) stop(c platform.Caller, r *pb.ChangeRecord, run *platform.AgentRunRecord, why string, now time.Time) {
+func (a *Agents) stop(c platform.Caller, r *pb.ChangeRecord, run *runtimeprotocol.AgentRunRecord, why string, now time.Time) {
 	run.State, run.Stopped, run.Draft = "stopped", why, nil
 	finishPendingCalls(run, now)
 	if run.Task != "" {
@@ -290,7 +290,7 @@ func (a *Agents) stop(c platform.Caller, r *pb.ChangeRecord, run *platform.Agent
 	}
 	key := "agent:" + run.ID + ":stopped"
 	rc := a.reviewers(c, *run)
-	people := rc.Notify(platform.Notification{Title: "Take over from the agent: " + run.Title, Ref: platform.RunType + "/" + run.ID, Key: key}, now, recipients...)
+	people := rc.Notify(platform.Notification{Title: "Take over from the agent: " + run.Title, Ref: runtimeprotocol.RunType + "/" + run.ID, Key: key}, now, recipients...)
 	people = slices.DeleteFunc(people, func(id string) bool {
 		member, ok := a.host.Member(id)
 		return !ok || member.Agent || member.Status == platform.MemberLeft || member.Status == platform.MemberSuspended
@@ -299,22 +299,22 @@ func (a *Agents) stop(c platform.Caller, r *pb.ChangeRecord, run *platform.Agent
 		run.Handoff = "No eligible recipient is configured"
 		return
 	}
-	if err := rc.Assign(r, platform.Assignment{Title: "Take over from the agent: " + run.Title, Body: "The agent " + run.Agent + " stopped: " + why + ".", Ref: platform.RunType + "/" + run.ID, To: recipients, Key: key}); err != nil {
+	if err := rc.Assign(r, platform.Assignment{Title: "Take over from the agent: " + run.Title, Body: "The agent " + run.Agent + " stopped: " + why + ".", Ref: runtimeprotocol.RunType + "/" + run.ID, To: recipients, Key: key}); err != nil {
 		run.Handoff = err.Error()
 		return
 	}
-	run.Task, run.Handoff = platform.AgentApp+":"+key, "assigned"
+	run.Task, run.Handoff = runtimeprotocol.AgentApp+":"+key, "assigned"
 
 }
 
-func (a *Agents) ended(c platform.Caller, r *pb.ChangeRecord, run platform.AgentRunRecord, now time.Time) {
+func (a *Agents) ended(c platform.Caller, r *pb.ChangeRecord, run runtimeprotocol.AgentRunRecord, now time.Time) {
 	processes := a.host.AgentFlows()
 	if run.Flow != "" && processes != nil {
 		processes.RunEnded(c, platform.RunEnd{ID: run.ID, Agent: run.Agent, Flow: run.Flow, State: run.State, Result: run.Result, Stopped: run.Stopped, Token: run.Token}, now)
 	}
 }
 
-func (a *Agents) replayLegacyAction(c platform.Caller, d *runtimeprotocol.CompiledAgent, run *platform.AgentRunRecord, tool runtimeprotocol.CompiledAgentTool, args map[string]any, raw json.RawMessage, step *platform.RunStep, now time.Time) (string, func(*pb.ChangeRecord)) {
+func (a *Agents) replayLegacyAction(c platform.Caller, d *runtimeprotocol.CompiledAgent, run *runtimeprotocol.AgentRunRecord, tool runtimeprotocol.CompiledAgentTool, args map[string]any, raw json.RawMessage, step *runtimeprotocol.RunStep, now time.Time) (string, func(*pb.ChangeRecord)) {
 	h := a.host
 	str := func(name string) string { value, _ := args[name].(string); return value }
 	if run.ActionsUsed >= d.Budget.Actions {
@@ -323,7 +323,7 @@ func (a *Agents) replayLegacyAction(c platform.Caller, d *runtimeprotocol.Compil
 	if tool.Kind == "effect" {
 		key := fmt.Sprintf("%s:%d", run.ID, len(run.Steps)+1)
 		sender := platform.AgentCaller(c, a.AgentPrincipal(run.Agent), d.App, run.ID)
-		n, err := sender.Emit(tool.Schema, key, cmp.Or(run.Ref, platform.RunType+"/"+run.ID), map[string]string{"message": str("message"), "run": run.ID, "agent": run.Agent}, now)
+		n, err := sender.Emit(tool.Schema, key, cmp.Or(run.Ref, runtimeprotocol.RunType+"/"+run.ID), map[string]string{"message": str("message"), "run": run.ID, "agent": run.Agent}, now)
 		switch {
 		case err != nil:
 			return "refused: " + err.Error(), nil
@@ -364,11 +364,11 @@ func (a *Agents) replayLegacyAction(c platform.Caller, d *runtimeprotocol.Compil
 		return "refused: this checkpoint waits for a person", nil
 	}
 	draft := func(typ string) (string, func(*pb.ChangeRecord)) {
-		run.Draft = []platform.Draft{{Kind: tool.Kind, Action: tool.Schema, Target: target, Type: typ, Payload: string(body), Rationale: str("rationale"), Step: len(run.Steps)}}
+		run.Draft = []runtimeprotocol.Draft{{Kind: tool.Kind, Action: tool.Schema, Target: target, Type: typ, Payload: string(body), Rationale: str("rationale"), Step: len(run.Steps)}}
 		run.State = "waiting"
 		title, _, _ := strings.Cut(tool.Tool.Description, ":")
 		return "drafted for " + person.ID + " to confirm: " + tool.Schema + " " + target + " " + string(body), func(*pb.ChangeRecord) {
-			c.Notify(platform.Notification{Title: "Confirm the agent's draft: " + title + " " + target, Body: str("rationale"), Ref: platform.RunType + "/" + run.ID,
+			c.Notify(platform.Notification{Title: "Confirm the agent's draft: " + title + " " + target, Body: str("rationale"), Ref: runtimeprotocol.RunType + "/" + run.ID,
 				Key: key + ":draft"}, now, platform.Recipient{Member: person.ID})
 		}
 	}

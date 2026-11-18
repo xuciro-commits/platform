@@ -101,8 +101,8 @@ func (r *flowExecutionRuntime) DecisionCatalog(ledger platform.Authority) *platf
 	return automation.RetainedCatalog(r.view.apps, ledger)
 }
 func (r *flowExecutionRuntime) Decide(c platform.Caller, app platform.App, s *pb.Submission, at time.Time) (*pb.ChangeRecord, *platform.Error) {
-	if app.Manifest().ID == platform.WorkApp {
-		private := r.stateApp(r.tenant.App(platform.WorkApp))
+	if app.Manifest().ID == protocol.WorkApp {
+		private := r.stateApp(r.tenant.App(protocol.WorkApp))
 		context := hostView{t: r.tenant, app: private, decision: r.stagedDecision}
 		bindings := context.ownerBindings()
 		bindings.Work = flowExecution{hostView: context, rt: r}

@@ -3,12 +3,11 @@ package store
 import (
 	"encoding/base64"
 	"fmt"
+	"platformserver/kernel/protocol"
 	"slices"
 	"strconv"
 	"strings"
 	"time"
-
-	"platformserver/platform"
 )
 
 const (
@@ -51,24 +50,24 @@ func auditLimit(limit int) int {
 	return limit
 }
 
-func normalizeAuditEntry(entry platform.AuditEntry) platform.AuditEntry {
+func normalizeAuditEntry(entry protocol.AuditEntry) protocol.AuditEntry {
 	entry.At = entry.At.UTC()
 	return entry
 }
 
-func normalizePersonalRead(read platform.PersonalRead) platform.PersonalRead {
+func normalizePersonalRead(read protocol.PersonalRead) protocol.PersonalRead {
 	read.At = read.At.UTC()
 	read.IDs = slices.Clone(read.IDs)
 	read.Fields = slices.Clone(read.Fields)
 	return read
 }
 
-func auditBefore(entry platform.AuditEntry, at time.Time, id string) bool {
+func auditBefore(entry protocol.AuditEntry, at time.Time, id string) bool {
 	return entry.At.Before(at) || entry.At.Equal(at) && entry.ID < id
 }
 
-func sortAuditNewest(entries []platform.AuditEntry) {
-	slices.SortFunc(entries, func(left, right platform.AuditEntry) int {
+func sortAuditNewest(entries []protocol.AuditEntry) {
+	slices.SortFunc(entries, func(left, right protocol.AuditEntry) int {
 		if order := right.At.Compare(left.At); order != 0 {
 			return order
 		}
@@ -76,8 +75,8 @@ func sortAuditNewest(entries []platform.AuditEntry) {
 	})
 }
 
-func sortPersonalReadsNewest(reads []platform.PersonalRead) {
-	slices.SortFunc(reads, func(left, right platform.PersonalRead) int {
+func sortPersonalReadsNewest(reads []protocol.PersonalRead) {
+	slices.SortFunc(reads, func(left, right protocol.PersonalRead) int {
 		if order := right.At.Compare(left.At); order != 0 {
 			return order
 		}
@@ -85,7 +84,7 @@ func sortPersonalReadsNewest(reads []platform.PersonalRead) {
 	})
 }
 
-func earliestAudit(entries []platform.AuditEntry, tenant string) time.Time {
+func earliestAudit(entries []protocol.AuditEntry, tenant string) time.Time {
 	var earliest time.Time
 	for _, entry := range entries {
 		if entry.At.IsZero() {
@@ -101,7 +100,7 @@ func earliestAudit(entries []platform.AuditEntry, tenant string) time.Time {
 	return earliest.UTC()
 }
 
-func earliestPersonalRead(reads []platform.PersonalRead) time.Time {
+func earliestPersonalRead(reads []protocol.PersonalRead) time.Time {
 	var earliest time.Time
 	for _, read := range reads {
 		if read.At.IsZero() {
@@ -114,18 +113,18 @@ func earliestPersonalRead(reads []platform.PersonalRead) time.Time {
 	return earliest.UTC()
 }
 
-func selectAuditPage(entries []platform.AuditEntry, query platform.AuditQuery, retainedFrom time.Time) (platform.AuditPage, error) {
+func selectAuditPage(entries []protocol.AuditEntry, query protocol.AuditQuery, retainedFrom time.Time) (protocol.AuditPage, error) {
 	var cursorAt time.Time
 	var cursorID string
 	if query.Cursor != "" {
 		var err error
 		cursorAt, cursorID, err = decodeAuditCursor(query.Cursor)
 		if err != nil {
-			return platform.AuditPage{}, err
+			return protocol.AuditPage{}, err
 		}
 	}
 	limit := auditLimit(query.Limit)
-	matched := make([]platform.AuditEntry, 0, min(len(entries), limit+1))
+	matched := make([]protocol.AuditEntry, 0, min(len(entries), limit+1))
 	needle := strings.ToLower(query.Search)
 	for _, entry := range entries {
 		if query.Cursor != "" && !auditBefore(entry, cursorAt, cursorID) {
@@ -147,12 +146,12 @@ func selectAuditPage(entries []platform.AuditEntry, query platform.AuditQuery, r
 		matched = matched[:limit]
 	}
 	if matched == nil {
-		matched = []platform.AuditEntry{}
+		matched = []protocol.AuditEntry{}
 	}
-	page := platform.AuditPage{
+	page := protocol.AuditPage{
 		Entries:  matched,
 		HasMore:  hasMore,
-		Coverage: platform.AuditCoverage{RetainedFrom: retainedFrom.UTC(), Truncated: hasMore},
+		Coverage: protocol.AuditCoverage{RetainedFrom: retainedFrom.UTC(), Truncated: hasMore},
 	}
 	if hasMore {
 		last := matched[len(matched)-1]
@@ -161,20 +160,20 @@ func selectAuditPage(entries []platform.AuditEntry, query platform.AuditQuery, r
 	return page, nil
 }
 
-func selectPersonalReadPage(reads []platform.PersonalRead, query platform.PersonalReadQuery, retainedFrom time.Time) (platform.PersonalReadPage, error) {
+func selectPersonalReadPage(reads []protocol.PersonalRead, query protocol.PersonalReadQuery, retainedFrom time.Time) (protocol.PersonalReadPage, error) {
 	var cursorAt time.Time
 	var cursorID string
 	if query.Cursor != "" {
 		var err error
 		cursorAt, cursorID, err = decodeAuditCursor(query.Cursor)
 		if err != nil {
-			return platform.PersonalReadPage{}, err
+			return protocol.PersonalReadPage{}, err
 		}
 	}
 	limit := auditLimit(query.Limit)
-	matched := make([]platform.PersonalRead, 0, min(len(reads), limit+1))
+	matched := make([]protocol.PersonalRead, 0, min(len(reads), limit+1))
 	for _, read := range reads {
-		if query.Cursor != "" && !auditBefore(platform.AuditEntry{At: read.At, ID: read.ID}, cursorAt, cursorID) {
+		if query.Cursor != "" && !auditBefore(protocol.AuditEntry{At: read.At, ID: read.ID}, cursorAt, cursorID) {
 			continue
 		}
 		if !query.From.IsZero() && read.At.Before(query.From) ||
@@ -191,12 +190,12 @@ func selectPersonalReadPage(reads []platform.PersonalRead, query platform.Person
 		matched = matched[:limit]
 	}
 	if matched == nil {
-		matched = []platform.PersonalRead{}
+		matched = []protocol.PersonalRead{}
 	}
-	page := platform.PersonalReadPage{
+	page := protocol.PersonalReadPage{
 		Entries:  matched,
 		HasMore:  hasMore,
-		Coverage: platform.PersonalReadCoverage{RetainedFrom: retainedFrom.UTC(), Truncated: hasMore},
+		Coverage: protocol.PersonalReadCoverage{RetainedFrom: retainedFrom.UTC(), Truncated: hasMore},
 	}
 	if hasMore {
 		last := matched[len(matched)-1]

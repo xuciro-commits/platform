@@ -13,8 +13,8 @@ import (
 	"platformserver/services/resources/authoring"
 )
 
-func (t *Tenant) InvokeCapability(ctx context.Context, m platform.Member, q platform.CapabilityInvocation, now time.Time) (platform.CapabilityResult, *platform.Error) {
-	answer := platform.CapabilityResult{Ref: q.Ref}
+func (t *Tenant) InvokeCapability(ctx context.Context, m platform.Member, q protocol.CapabilityInvocation, now time.Time) (protocol.CapabilityResult, *platform.Error) {
+	answer := protocol.CapabilityResult{Ref: q.Ref}
 	if refusal := t.Admits(m); refusal != nil {
 		return answer, refusal
 	}
@@ -64,10 +64,10 @@ func (t *Tenant) InvokeCapability(ctx context.Context, m platform.Member, q plat
 	}
 }
 
-func (t *Tenant) prepareCapability(m platform.Member, q platform.CapabilityInvocation, now time.Time) (functions.CapabilityPreparation, *platform.Error) {
+func (t *Tenant) prepareCapability(m platform.Member, q protocol.CapabilityInvocation, now time.Time) (functions.CapabilityPreparation, *platform.Error) {
 	return functions.PrepareCapability(functions.CapabilityHooks{
-		Retained: func() (platform.CapabilityDescriptor, bool) { return t.retainedCapability(m, q.Ref, q.Version) },
-		Palette:  func() []platform.CapabilityDescriptor { return t.capabilities(m) },
+		Retained: func() (protocol.CapabilityDescriptor, bool) { return t.retainedCapability(m, q.Ref, q.Version) },
+		Palette:  func() []protocol.CapabilityDescriptor { return t.capabilities(m) },
 		ReadQuery: func() (json.RawMessage, *platform.Error) {
 			return platform.NewCaller(runtime{t: t}, m, q.Ref.App, false, false).ReadQueryVersion(q.Ref.App, q.Ref.Name, q.Version, q.Inputs, now)
 		},

@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"maps"
+	"platformserver/kernel/protocol"
 	"reflect"
 	"slices"
 	"strings"
@@ -15,7 +16,7 @@ import (
 	"platformserver/platform"
 )
 
-func AcceptedIdentity(raw []byte, readCandidate func(string, []byte) (platform.ReleaseCandidate, error)) (persistence.Identity, error) {
+func AcceptedIdentity(raw []byte, readCandidate func(string, []byte) (protocol.ReleaseCandidate, error)) (persistence.Identity, error) {
 	var identity persistence.Identity
 	var envelope struct{ Kind string }
 	if err := json.Unmarshal(raw, &envelope); err != nil {

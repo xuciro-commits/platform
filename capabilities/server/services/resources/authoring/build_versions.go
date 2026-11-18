@@ -2,6 +2,7 @@ package build
 
 import (
 	"fmt"
+	"platformserver/kernel/protocol"
 	"platformserver/services/ontology"
 	"platformserver/services/resources/publication"
 
@@ -26,7 +27,7 @@ func (b *Build) checkVersioning(o ontology.Object) error {
 		}
 		return b.conditionLookup(typ)
 	}
-	if err := platform.CheckVersioning(info, lookup); err != nil {
+	if err := protocol.CheckVersioning(info, lookup); err != nil {
 		return err
 	}
 	if old, ok := publication.Read[ontology.Object](o.Published); ok && (old.Versioning != nil && !reflect.DeepEqual(old.Versioning, o.Versioning) || len(old.VersionPins) > 0 && !reflect.DeepEqual(old.VersionPins, o.VersionPins)) {

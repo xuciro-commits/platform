@@ -1,6 +1,7 @@
 package host
 
 import (
+	"platformserver/kernel/protocol"
 	"reflect"
 	"testing"
 	"time"
@@ -11,8 +12,8 @@ import (
 )
 
 func TestInvariantOwnedRelationsReadWithoutNestedRecordLock(t *testing.T) {
-	live := newInvariantTenant(t, "invariant-owned-relations", platform.Seat{Subjects: []string{"reader"}, Member: platform.Member{ID: "reader", Roles: map[string]string{build.ID: "user"}}})
-	info, err := records.Describe(build.ID, platform.RelationEntity(build.ID), func(reflect.Type) string { return "" })
+	live := newInvariantTenant(t, "invariant-owned-relations", protocol.Seat{Subjects: []string{"reader"}, Member: platform.Member{ID: "reader", Roles: map[string]string{build.ID: "user"}}})
+	info, err := records.Describe(build.ID, protocol.RelationEntity(build.ID), func(reflect.Type) string { return "" })
 	if err != nil {
 		t.Fatal(err)
 	}

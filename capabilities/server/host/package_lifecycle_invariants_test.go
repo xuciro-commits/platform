@@ -37,7 +37,7 @@ func TestInvariantK9PackageRetireAndReinstallPreserveData(t *testing.T) {
 		},
 	}
 
-	seat := platform.Seat{Subjects: []string{"package-admin"}, Member: platform.Member{
+	seat := protocol.Seat{Subjects: []string{"package-admin"}, Member: platform.Member{
 		ID: "package-admin", Roles: map[string]string{"platform": "admin"},
 	}}
 	target := newInvariantTenant(t, "package-lifecycle-target", seat)
@@ -45,13 +45,13 @@ func TestInvariantK9PackageRetireAndReinstallPreserveData(t *testing.T) {
 	if admin.Holds(build.ID, build.Builder) {
 		t.Fatal("the installation administrator must not need a builder role")
 	}
-	inspected, err := target.inspectPackage(context.Background(), platform.PackageInspectRequest{Content: platform.Raw(descriptor)})
+	inspected, err := target.inspectPackage(context.Background(), protocol.PackageInspectRequest{Content: platform.Raw(descriptor)})
 	if err != nil {
 		t.Fatal(err)
 	}
 	submit := func(schema string, payload any) {
 		t.Helper()
-		submission := target.submission(schema, platform.PackageType, descriptor.ID, payload)
+		submission := target.submission(schema, protocol.PackageType, descriptor.ID, payload)
 		submission.Authority, submission.PrincipalId = "platform", admin.ID
 		if _, refusal := target.Submit(admin, submission, invariantClock); refusal != nil {
 			t.Fatalf("%s: %#v", schema, refusal)
@@ -59,8 +59,8 @@ func TestInvariantK9PackageRetireAndReinstallPreserveData(t *testing.T) {
 	}
 	submit(packages.SchemaPackageImport, map[string]any{"id": descriptor.ID, "digest": inspected.Digest})
 	submit(packages.SchemaPackageInstall, map[string]any{"id": descriptor.ID, "version": descriptor.Version})
-	views := target.App("platform").(interface{ PackageViews() []platform.PackageView }).PackageViews()
-	var receipt *platform.PackageView
+	views := target.App("platform").(interface{ PackageViews() []protocol.PackageView }).PackageViews()
+	var receipt *protocol.PackageView
 	for i := range views {
 		if views[i].Descriptor.ID == descriptor.ID && views[i].Installed != nil && views[i].Installed.Version == descriptor.Version {
 			receipt = &views[i]
@@ -130,7 +130,7 @@ func TestInvariantK9PackageRetireAndReinstallPreserveData(t *testing.T) {
 
 	next := descriptor
 	next.Version = "1.1.0"
-	nextOffer, err := target.inspectPackage(context.Background(), platform.PackageInspectRequest{Content: platform.Raw(next)})
+	nextOffer, err := target.inspectPackage(context.Background(), protocol.PackageInspectRequest{Content: platform.Raw(next)})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -138,7 +138,7 @@ func TestInvariantK9PackageRetireAndReinstallPreserveData(t *testing.T) {
 	submit(packages.SchemaPackageUpgrade, map[string]any{"id": next.ID, "version": next.Version})
 	submit(packages.SchemaPackageDowngrade, map[string]any{"id": next.ID, "version": descriptor.Version})
 	installedVersion := func() string {
-		for _, view := range target.App("platform").(interface{ PackageViews() []platform.PackageView }).PackageViews() {
+		for _, view := range target.App("platform").(interface{ PackageViews() []protocol.PackageView }).PackageViews() {
 			if view.Descriptor.ID == descriptor.ID && view.Installed != nil {
 				return view.Installed.Version
 			}

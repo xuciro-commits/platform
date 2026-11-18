@@ -50,7 +50,7 @@ func EvaluationPublication[O, P any](env descriptor.TestPlanEnvironment[protocol
 			return env.WithDependencies(platform.ReleaseAsset{Ref: platform.AssetRef{App: env.App, Kind: platform.AssetEvaluation, Name: plan.Name}, ContractVersion: 1, SourceVersion: env.SourceVersion() + ".evaluation-" + strconv.Itoa(version), Body: body})
 		},
 		Draft: func(asset platform.ReleaseAsset) (descriptor.TestPlan[O, P, protocol.Function], error) {
-			d, err := platform.ReadEvaluationSet(asset.Body)
+			d, err := protocol.ReadEvaluationSet(asset.Body)
 			if err != nil {
 				return descriptor.TestPlan[O, P, protocol.Function]{}, err
 			}

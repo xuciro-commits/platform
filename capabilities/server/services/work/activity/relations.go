@@ -27,8 +27,8 @@ const (
 	SchemaUnfollow = "platform.follow.remove"
 )
 
-type Comment = platform.RecordComment
-type Follow = platform.RecordFollow
+type Comment = runtimeprotocol.RecordComment
+type Follow = runtimeprotocol.RecordFollow
 
 var mention = regexp.MustCompile(`@([A-Za-z0-9][A-Za-z0-9._-]*)`)
 
@@ -325,7 +325,7 @@ func (r *Relations) collaborate(c platform.Caller, s *pb.Submission, now time.Ti
 		if !strings.Contains(p.Target, "/") || !c.Replaying && !r.host.Readable(c.Member, p.Target, now) {
 			return nil, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
 		}
-		follow := Follow{Record: platform.Record{ID: platform.FollowID(c.ID, p.Target)}, Member: c.ID, Target: p.Target}
+		follow := Follow{Record: platform.Record{ID: runtimeprotocol.FollowID(c.ID, p.Target)}, Member: c.ID, Target: p.Target}
 		existing, following := platform.Get[Follow](c, follow.ID)
 		following = following && !existing.Archived
 		if s.GetSchema().GetName() == SchemaFollow {

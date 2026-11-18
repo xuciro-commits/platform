@@ -229,7 +229,7 @@ func (t *Tenant) prepareContinuousOperationInput(member platform.Member, instanc
 			})
 			return bound.operation, bound.version, refusal
 		},
-		Seal: func(app, key, member, definition, hash string, inputs json.RawMessage, budget int) (platform.OperationInputArtifact, error) {
+		Seal: func(app, key, member, definition, hash string, inputs json.RawMessage, budget int) (protocol.OperationInputArtifact, error) {
 			return t.staged.SealInput(fmt.Sprintf("%s:%s:operation:%s:%s", t.ID, app, key, acceptedformat.OperationEndpoint), member, definition, hash, inputs, budget)
 		},
 		Discard: t.staged.DiscardInput,

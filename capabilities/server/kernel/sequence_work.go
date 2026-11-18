@@ -44,8 +44,8 @@ type WorkApply struct {
 	Changes ChangeApply
 	Works   *protocol.Works
 	App     func(string) platform.App
-	Task    func(acceptedformat.Work) (platform.ScheduledTaskState, string, func(*pb.Work), error)
-	Publish func(platform.Event, platform.AcceptedEventPlan)
+	Task    func(acceptedformat.Work) (protocol.ScheduledTaskState, string, func(*pb.Work), error)
+	Publish func(platform.Event, protocol.AcceptedEventPlan)
 }
 
 func (s *Sequence) ApplyWorkResult(raw []byte, h WorkApply) (bool, error) {

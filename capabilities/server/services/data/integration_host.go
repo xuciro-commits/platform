@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"platformserver/kernel/protocol"
 	"slices"
 	"strings"
 	"time"
@@ -230,7 +231,7 @@ func (o *Owner) CollectPipelineInputs(c platform.Caller, p Pipeline, marking str
 				inputErr = err
 				break
 			}
-			marking = platform.HigherMarking(marking, fixed.Marking)
+			marking = protocol.HigherMarking(marking, fixed.Marking)
 			compartments = platform.JoinCompartments(compartments, fixed.Compartments)
 		}
 	}

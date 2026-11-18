@@ -15,10 +15,10 @@ import (
 	"platformserver/services/resources/publication"
 )
 
-func (b *Build) DecodeAssetInstallation(schema string, image json.RawMessage) (platform.AssetInstallation, error) {
+func (b *Build) DecodeAssetInstallation(schema string, image json.RawMessage) (protocol.AssetInstallation, error) {
 	descriptor, known := resourceDescriptorOfSchema(schema)
 	if !known {
-		return platform.AssetInstallation{}, fmt.Errorf("invalid publication schema")
+		return protocol.AssetInstallation{}, fmt.Errorf("invalid publication schema")
 	}
 	if descriptor.family == integrationResources {
 		return b.data.DecodeInstallation(schema, image)
@@ -37,22 +37,22 @@ func (b *Build) DecodeAssetInstallation(schema string, image json.RawMessage) (p
 		Name string `json:"name"`
 	}
 	if !descriptor.acceptedPublication || json.Unmarshal(image, &record) != nil || record.ID == "" {
-		return platform.AssetInstallation{}, fmt.Errorf("invalid release publication row")
+		return protocol.AssetInstallation{}, fmt.Errorf("invalid release publication row")
 	}
 	ref, err := draftAssetRef(descriptor.typ, record.Name)
 	if err != nil {
-		return platform.AssetInstallation{}, err
+		return protocol.AssetInstallation{}, err
 	}
 	if hooks, found := publication.Schema(b.publications, schema); found && hooks.Decode != nil {
 		ref, err = hooks.Decode(image)
 		if err != nil {
-			return platform.AssetInstallation{}, err
+			return protocol.AssetInstallation{}, err
 		}
 	}
-	return platform.AssetInstallation{Ref: ref, Schema: schema, Record: descriptor.record(record.ID), Image: slices.Clone(image)}, nil
+	return protocol.AssetInstallation{Ref: ref, Schema: schema, Record: descriptor.record(record.ID), Image: slices.Clone(image)}, nil
 }
 
-func (b *Build) ValidateAssetInstallation(plan platform.AssetInstallation) error {
+func (b *Build) ValidateAssetInstallation(plan protocol.AssetInstallation) error {
 	decoded, err := b.DecodeAssetInstallation(plan.Schema, plan.Image)
 	if err != nil {
 		return err
@@ -69,7 +69,7 @@ func (b *Build) ValidateAssetInstallation(plan platform.AssetInstallation) error
 	return b.data.ValidateInstallation(plan)
 }
 
-func (b *Build) ApplyAssetInstallation(plan platform.AssetInstallation, ctx platform.AssetApplyContext) error {
+func (b *Build) ApplyAssetInstallation(plan protocol.AssetInstallation, ctx protocol.AssetApplyContext) error {
 	if dataowner.ValueIntegrationKind(plan.Ref.Kind) {
 		return b.data.ApplyInstallation(plan, ctx)
 	}
@@ -86,7 +86,7 @@ func (b *Build) ApplyAssetInstallation(plan platform.AssetInstallation, ctx plat
 	return b.ApplyAcceptedPublication(plan.Schema, plan.Image)
 }
 
-var _ platform.AssetLifecycleOwner = (*Build)(nil)
+var _ protocol.AssetLifecycleOwner = (*Build)(nil)
 
 func draftAssetRef(typ, name string) (platform.AssetRef, error) {
 	descriptor, ok := resourceDescriptorOfType(typ)
@@ -162,7 +162,7 @@ func (b *Build) BeginAssetBootstrap(assets []platform.ReleaseAsset) (func(), err
 	for _, asset := range assets {
 		b.jointDeclarations[asset.Ref] = asset
 	}
-	restoreTargets, err := b.data.BeginTargets(assets, platform.AssetReleaseContext{})
+	restoreTargets, err := b.data.BeginTargets(assets, protocol.AssetReleaseContext{})
 	if err != nil {
 		b.jointEntities, b.jointMode, b.jointAssets, b.jointDeclarations = saved, savedMode, savedAssets, savedDeclarations
 		return nil, err

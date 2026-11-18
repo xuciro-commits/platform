@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	runtimekernel "platformserver/kernel"
+	"platformserver/kernel/protocol"
 	"platformserver/platform"
 	controlowner "platformserver/services/security/control"
 	"slices"
@@ -96,7 +97,7 @@ func (t *Tenant) readFrom(m platform.Member, a platform.App, name string, inputs
 		return nil, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
 	}
 	entry := t.authorizeEntry(m, a.Manifest().ID, name, "read", Now())
-	if name == "packages" && !m.Holds(controlowner.PlatformApp, controlowner.Admin) && !m.Holds(controlowner.PlatformApp, platform.Auditor) {
+	if name == "packages" && !m.Holds(controlowner.PlatformApp, controlowner.Admin) && !m.Holds(controlowner.PlatformApp, protocol.Auditor) {
 		caller := t.caller(m, a, false)
 		entry = caller.May("build", "build.app.create", []string{"builder"})
 		if !m.InScope("build.app.create") {

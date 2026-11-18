@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"platformserver/kernel/protocol"
 	"platformserver/services/actions"
 	dataowner "platformserver/services/data"
 	"slices"
@@ -72,7 +73,7 @@ func (p *listenerProbe) Submit(c platform.Caller, s *pb.Submission, at time.Time
 
 func TestInvariantK2ListenersAndMonitoringViews(t *testing.T) {
 	const tenant = "listeners-monitoring"
-	seats := []platform.Seat{
+	seats := []protocol.Seat{
 		{Subjects: []string{"admin"}, Member: platform.Member{ID: "admin", Roles: map[string]string{"platform": "admin"}}},
 		{Subjects: []string{"sender"}, Member: platform.Member{ID: "sender", Roles: map[string]string{"listenerprobe": "sender"}}},
 		{Subjects: []string{"other"}, Member: platform.Member{ID: "other", Roles: map[string]string{}}},
@@ -103,12 +104,12 @@ func TestInvariantK2ListenersAndMonitoringViews(t *testing.T) {
 		return response
 	}
 	t.Setenv("PLATFORM_CREDENTIAL_KEY", strings.Repeat("01", 32))
-	seal := platform.CredentialSealRequest{CredentialWrite: platform.CredentialWrite{CredentialDefinition: platform.CredentialDefinition{
+	seal := protocol.CredentialSealRequest{CredentialWrite: protocol.CredentialWrite{CredentialDefinition: protocol.CredentialDefinition{
 		ID: "listener-secret", Title: "Inbound verification", Kind: "api-key", Source: "managed",
-		Bindings: []platform.CredentialBinding{{Consumer: "listener/LISTENER", Origin: "http://example.com"}},
+		Bindings: []protocol.CredentialBinding{{Consumer: "listener/LISTENER", Origin: "http://example.com"}},
 	}}, Value: "shared-value"}
 	sealed := request(http.MethodPost, "/v1/credentials/seal", "admin", "", platform.Raw(seal))
-	var credential platform.CredentialWrite
+	var credential protocol.CredentialWrite
 	if sealed.Code != http.StatusOK || json.Unmarshal(sealed.Body.Bytes(), &credential) != nil || credential.Sealed == "" {
 		t.Fatalf("managed listener credential sealing: HTTP %d: %s", sealed.Code, sealed.Body)
 	}
@@ -221,7 +222,7 @@ func TestInvariantK2ListenersAndMonitoringViews(t *testing.T) {
 			t.Fatal(err)
 		}
 		response := request(http.MethodGet, "/v1/monitoring/views", member, "", nil)
-		var views []platform.MonitoringView
+		var views []protocol.MonitoringView
 		if response.Code != http.StatusOK || json.Unmarshal(response.Body.Bytes(), &views) != nil || len(views) != 1 || views[0].Owner != member || views[0].Type != "sync" || views[0].Status != "failed" {
 			t.Fatalf("owner-scoped monitoring views: HTTP %d: %s", response.Code, response.Body)
 		}
@@ -235,7 +236,7 @@ func TestInvariantK2ListenersAndMonitoringViews(t *testing.T) {
 		}
 	}
 	page, recordRefusal := live.Records(t.Context(), other, monitoring.ViewType, platform.Query{}, invariantClock)
-	if recordRefusal != nil || len(page.Records) != 1 || page.Records[0].(platform.MonitoringView).Owner != "other" {
+	if recordRefusal != nil || len(page.Records) != 1 || page.Records[0].(protocol.MonitoringView).Owner != "other" {
 		t.Fatalf("generic records leaked a view: %+v: %v", page, recordRefusal)
 	}
 	remove := live.submission(monitoring.SchemaViewRemove, monitoring.ViewType, "other-view", map[string]any{})

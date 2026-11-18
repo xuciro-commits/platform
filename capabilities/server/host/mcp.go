@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
+	"platformserver/kernel/protocol"
 	"platformserver/platform"
 	"platformserver/services/ai/gateway"
 	"time"
@@ -29,13 +30,13 @@ func (t *Tenant) ModelToolReads(m platform.Member) []string {
 	}
 	return out
 }
-func (t *Tenant) ProposeModelTool(m platform.Member, proposal platform.ModelToolProposal, at time.Time) *platform.Error {
+func (t *Tenant) ProposeModelTool(m platform.Member, proposal protocol.ModelToolProposal, at time.Time) *platform.Error {
 	owner, refusal := recordRead(t, context.Background(), func(t *Tenant) (string, *platform.Error) { return t.AuthorityOf(proposal.Action.Target), nil })
 	if refusal != nil {
 		return refusal
 	}
 	raw := platform.Raw(map[string]any{"owner": owner, "action": proposal.Action.Schema, "target": proposal.Target, "payload": proposal.Payload, "rationale": "Proposed through MCP"})
-	_, refusal = t.Submit(m, &pb.Submission{TenantId: t.ID, PrincipalId: m.ID, Authority: platform.AgentApp, Target: &pb.EntityRef{Type: platform.RunType, Id: proposal.ID}, Schema: &pb.SchemaRef{Name: platform.SchemaToolPropose, Version: 1}, IdempotencyKey: proposal.Key, Payload: raw}, at)
+	_, refusal = t.Submit(m, &pb.Submission{TenantId: t.ID, PrincipalId: m.ID, Authority: protocol.AgentApp, Target: &pb.EntityRef{Type: protocol.RunType, Id: proposal.ID}, Schema: &pb.SchemaRef{Name: protocol.SchemaToolPropose, Version: 1}, IdempotencyKey: proposal.Key, Payload: raw}, at)
 	return refusal
 }
 
@@ -46,8 +47,8 @@ func (t *Tenant) ModelToolSurface(m platform.Member) platform.AgentSurface {
 	return value
 }
 
-func (t *Tenant) AgentObjects(m platform.Member, op string, raw json.RawMessage, now time.Time) (platform.AgentObservation, *platform.Error) {
-	return recordRead(t, context.Background(), func(t *Tenant) (platform.AgentObservation, *platform.Error) {
+func (t *Tenant) AgentObjects(m platform.Member, op string, raw json.RawMessage, now time.Time) (protocol.AgentObservation, *platform.Error) {
+	return recordRead(t, context.Background(), func(t *Tenant) (protocol.AgentObservation, *platform.Error) {
 		return (hostView{t: t}).AgentObjects(m, op, raw, now)
 	})
 }

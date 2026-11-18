@@ -3,6 +3,7 @@ package organization
 import (
 	"encoding/json"
 	"fmt"
+	"platformserver/kernel/protocol"
 	"platformserver/platform"
 	"slices"
 	"time"
@@ -25,7 +26,7 @@ func periodsOrLegacy(periods []platform.Period, from, until platform.Date) []pla
 }
 
 func periodsActive(periods []platform.Period, from, until, day platform.Date) bool {
-	return slices.ContainsFunc(periodsOrLegacy(periods, from, until), func(p platform.Period) bool { return platform.ActiveOn(p.From, p.Until, day) })
+	return slices.ContainsFunc(periodsOrLegacy(periods, from, until), func(p platform.Period) bool { return protocol.ActiveOn(p.From, p.Until, day) })
 }
 
 func (e Element) ActiveOn(day platform.Date) bool {

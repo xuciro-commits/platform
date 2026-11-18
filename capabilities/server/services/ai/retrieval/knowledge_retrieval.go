@@ -133,7 +133,7 @@ func fingerprint(title, text string) string {
 }
 
 func DocumentSource(d knowledgesources.Document) Source {
-	return Source{Key: platform.KnowledgeDocumentType + "/" + d.ID, Title: d.Title, Text: d.Text, Revision: fingerprint(d.Title, d.Text) + "/" + strings.Join(d.Apps, ","), Apps: d.Apps}
+	return Source{Key: runtimeprotocol.KnowledgeDocumentType + "/" + d.ID, Title: d.Title, Text: d.Text, Revision: fingerprint(d.Title, d.Text) + "/" + strings.Join(d.Apps, ","), Apps: d.Apps}
 }
 
 func cut(s Source) []*chunk {
@@ -236,8 +236,8 @@ func cosine(a, b []float32) float64 {
 	return dot / math.Sqrt(na*nb)
 }
 
-func (k *Index) Search(ctx Context, reader *platform.Member, app, q string, limit int, now time.Time) []platform.Passage {
-	out := []platform.Passage{}
+func (k *Index) Search(ctx Context, reader *platform.Member, app, q string, limit int, now time.Time) []runtimeprotocol.Passage {
+	out := []runtimeprotocol.Passage{}
 	if strings.TrimSpace(q) == "" || reader != nil && reader.Tenant != ctx.Tenant {
 		return out
 	}
@@ -365,10 +365,10 @@ func (k *Index) Search(ctx Context, reader *platform.Member, app, q string, limi
 			if !k.currentInLane(ctx, c, reader, app, now) {
 				continue
 			}
-			out = append(out, platform.Passage{Document: c.doc, Title: c.title, Chunk: c.n, Text: c.text, Score: math.Round(r*10000) / 10000})
+			out = append(out, runtimeprotocol.Passage{Document: c.doc, Title: c.title, Chunk: c.n, Text: c.text, Score: math.Round(r*10000) / 10000})
 		}
 	})
-	slices.SortStableFunc(out, func(a, b platform.Passage) int {
+	slices.SortStableFunc(out, func(a, b runtimeprotocol.Passage) int {
 		if a.Score != b.Score {
 			return cmpFloat(b.Score, a.Score)
 		}

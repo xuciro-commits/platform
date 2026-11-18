@@ -3,6 +3,7 @@ package build
 import (
 	"fmt"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
+	"platformserver/kernel/protocol"
 	"platformserver/services/resources/publication"
 
 	"platformserver/platform"
@@ -61,10 +62,10 @@ var linkKind = resourceKind[ontology.LinkType, platform.LinkType]{
 	fromDeclaration: ontology.LinkTypeFromDeclaration,
 	contract:        func(d platform.LinkType) int { return d.Contract() },
 	admit:           func(d platform.LinkType) bool { return d.Parent.App == ID && d.Child.App == ID },
-	install: func(h platform.BuildHost, c platform.Caller, d platform.LinkType, version int) error {
+	install: func(h protocol.BuildHost, c platform.Caller, d platform.LinkType, version int) error {
 		return h.InstallLinkType(c, d, version)
 	},
-	validateInstall: func(h platform.BuildHost, d platform.LinkType) error { return h.ValidateInstallLinkType(d) },
+	validateInstall: func(h protocol.BuildHost, d platform.LinkType) error { return h.ValidateInstallLinkType(d) },
 }
 
 func (b *Build) migrateLinkType(c platform.Caller, submission *pb.Submission, at time.Time) (*pb.ChangeRecord, *platform.Error) {

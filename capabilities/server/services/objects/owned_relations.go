@@ -1,6 +1,7 @@
 package objects
 
 import (
+	"platformserver/kernel/protocol"
 	"reflect"
 	"slices"
 	"strings"
@@ -26,10 +27,10 @@ func (o OwnedRelations) authority(c platform.Caller, receipt *pb.ChangeRecord) b
 	return c.Staging() && !c.Replaying && receipt.GetChangeId() != "" && receipt.GetSubmission().GetAuthority() == c.App && receipt.GetSubmission().GetPrincipalId() == c.ID && receipt.GetSubmission().GetTenantId() == o.Tenant
 }
 
-func (o OwnedRelations) Plan(c platform.Caller, binding platform.AssetBinding, at time.Time) (platform.RelationMigrationPlan, *platform.Error) {
+func (o OwnedRelations) Plan(c platform.Caller, binding platform.AssetBinding, at time.Time) (protocol.RelationMigrationPlan, *platform.Error) {
 	definition, ok := o.Binding(binding)
 	if !ok || definition.LinkType == nil || definition.LinkType.Storage != "edge" || binding.Ref.App != c.App {
-		return platform.RelationMigrationPlan{Binding: binding, Links: []platform.RelationLink{}}, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Migration needs the owner's retained edge declaration")
+		return protocol.RelationMigrationPlan{Binding: binding, Links: []platform.RelationLink{}}, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Migration needs the owner's retained edge declaration")
 	}
 	return o.Records.RelationMigrationPlan(c, binding, definition.LinkType, o.Legacy, func(ref string) bool { return o.ReadableAt(c.Member, ref, at) })
 }
@@ -92,7 +93,7 @@ func (o OwnedRelations) Write(c platform.Caller, receipt *pb.ChangeRecord, reque
 		return fail("Owned relationship endpoints are unavailable")
 	}
 	id := records.RelationID(request.Binding.Ref.String(), parent, child)
-	entity := platform.RelationEntity(c.App)
+	entity := protocol.RelationEntity(c.App)
 	et := o.Records.Type(entity.Type)
 	if et == nil || et.Info().App != c.App {
 		return fail("Relationship owner has not declared its relation records")
@@ -104,7 +105,7 @@ func (o OwnedRelations) Write(c platform.Caller, receipt *pb.ChangeRecord, reque
 	if !remove && prior != nil && !records.Header(prior.Value).Archived {
 		return fail("Owned relationship already exists")
 	}
-	return o.Put(c, receipt, platform.RelationValue(entity, id, request.Binding.Ref.Name, request.Binding.SourceVersion, parent, child, remove, legacy...))
+	return o.Put(c, receipt, protocol.RelationValue(entity, id, request.Binding.Ref.Name, request.Binding.SourceVersion, parent, child, remove, legacy...))
 }
 
 func (o *Owner) OwnedRelations(store *records.Store, c platform.Caller, entity string, at time.Time, readable func(ref string) bool) []platform.RelationLink {

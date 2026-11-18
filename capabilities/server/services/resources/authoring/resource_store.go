@@ -111,7 +111,7 @@ func MarkedResources(marked map[platform.AssetRef]bool, resources []Resource, ro
 	for _, resource := range resources {
 		if marked[resource.Ref] && !resource.Archived {
 			held := role(resource.Project)
-			out = append(out, ResourceEntry{Resource: resource, Path: []string{}, CanOpen: held != "" && held != platform.ProjectDiscovererRole, CanEdit: false})
+			out = append(out, ResourceEntry{Resource: resource, Path: []string{}, CanOpen: held != "" && held != protocol.ProjectDiscovererRole, CanEdit: false})
 		}
 	}
 	slices.SortFunc(out, func(a, b ResourceEntry) int { return strings.Compare(a.ID, b.ID) })
@@ -119,7 +119,7 @@ func MarkedResources(marked map[platform.AssetRef]bool, resources []Resource, ro
 }
 
 type BranchReviewers struct {
-	People   []platform.ProjectPerson `json:"people"`
+	People   []protocol.ProjectPerson `json:"people"`
 	Required int                      `json:"required"`
 }
 
@@ -131,7 +131,7 @@ type ReviewerHooks struct {
 }
 
 func (h ReviewerHooks) Eligible(branch Branch, caller string, projects []string, required int) BranchReviewers {
-	out := BranchReviewers{People: []platform.ProjectPerson{}, Required: required}
+	out := BranchReviewers{People: []protocol.ProjectPerson{}, Required: required}
 	for _, id := range h.Holding {
 		member, found := h.Member(id)
 		if !found || !member.Active() || member.Agent || id == branch.Created.By || id == caller || slices.ContainsFunc(branch.Changes, func(change BranchChange) bool { return change.By == id }) {
@@ -139,9 +139,9 @@ func (h ReviewerHooks) Eligible(branch Branch, caller string, projects []string,
 		}
 		if !slices.ContainsFunc(projects, func(project string) bool {
 			role := h.Role(member, project)
-			return role != platform.ProjectOwnerRole && role != platform.ProjectEditorRole
+			return role != protocol.ProjectOwnerRole && role != protocol.ProjectEditorRole
 		}) {
-			out.People = append(out.People, platform.ProjectPerson{ID: id, Name: h.Name(id)})
+			out.People = append(out.People, protocol.ProjectPerson{ID: id, Name: h.Name(id)})
 		}
 	}
 	return out
@@ -207,12 +207,12 @@ func ProjectHidden(store *records.Store, tenant string, m platform.Member, et *r
 	if resources == nil {
 		return false
 	}
-	row := resources.Rows().Get(platform.ResourceID(tenant, platform.AssetRef{App: ID, Kind: platform.AssetObject, Name: info.Type}))
+	row := resources.Rows().Get(protocol.ResourceID(tenant, platform.AssetRef{App: ID, Kind: platform.AssetObject, Name: info.Type}))
 	if row == nil {
 		return false
 	}
 	held := role(m, row.Value.Interface().(Resource).Project)
-	return held == "" || held == platform.ProjectDiscovererRole
+	return held == "" || held == protocol.ProjectDiscovererRole
 }
 
 func MaskDraftObject(record any, m platform.Member, reader ConstructionDraftReader, mask func(canonical any) any) (any, *platform.Error) {
@@ -238,13 +238,13 @@ func ManagedDefinition(store *records.Store, tenant string, ref platform.AssetRe
 	if directory == nil {
 		return false
 	}
-	row := directory.Rows().Get(platform.ResourceID(tenant, ref))
+	row := directory.Rows().Get(protocol.ResourceID(tenant, ref))
 	return row != nil && row.Value.Interface().(Resource).ManagedBy != ""
 }
 
-func ProjectRoleOf(m platform.Member, access platform.ProjectAccess, project string) string {
+func ProjectRoleOf(m platform.Member, access protocol.ProjectAccess, project string) string {
 	if m.Holds("platform", "admin") || HoldsIndependentRole(m, Builder) {
-		return platform.ProjectOwnerRole
+		return protocol.ProjectOwnerRole
 	}
 	if access == nil {
 		return ""

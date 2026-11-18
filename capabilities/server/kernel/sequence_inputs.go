@@ -3,6 +3,7 @@ package kernel
 import (
 	"encoding/json"
 	"fmt"
+	"platformserver/kernel/protocol"
 	"slices"
 	"time"
 
@@ -39,7 +40,7 @@ func SealInput(result acceptedformat.Input) ([]byte, error) {
 type InputApply struct {
 	Changes ChangeApply
 	Input   func(app string) platform.AcceptedInputApp
-	Publish func(platform.Event, platform.AcceptedEventPlan)
+	Publish func(platform.Event, protocol.AcceptedEventPlan)
 	Refused func(member, name string, refusal *platform.Error, at time.Time)
 }
 

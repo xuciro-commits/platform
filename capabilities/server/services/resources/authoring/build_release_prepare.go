@@ -3,29 +3,30 @@ package build
 import (
 	"encoding/json"
 	"fmt"
+	"platformserver/kernel/protocol"
 
 	"platformserver/platform"
 	dataowner "platformserver/services/data"
 	"platformserver/services/resources/publication"
 )
 
-func (b *Build) ReleaseDrafts(assets []platform.ReleaseAsset, ctx platform.AssetReleaseContext) ([]platform.AssetDraft, error) {
+func (b *Build) ReleaseDrafts(assets []platform.ReleaseAsset, ctx protocol.AssetReleaseContext) ([]protocol.AssetDraft, error) {
 	ordered, err := b.resolver.OrderReleaseAssets(assets)
 	if err != nil {
 		return nil, err
 	}
 	assets = ordered
-	old, err := b.releaseDraftsOf(platform.ReleaseCandidate{Assets: assets})
+	old, err := b.releaseDraftsOf(protocol.ReleaseCandidate{Assets: assets})
 	if err != nil {
 		return nil, err
 	}
-	var out []platform.AssetDraft
+	var out []protocol.AssetDraft
 	for _, draft := range old {
 		ref, err := draftAssetRef(draft.Type, draft.Name)
 		if err != nil {
 			return nil, err
 		}
-		out = append(out, platform.AssetDraft{Ref: ref, Type: draft.Type, Name: draft.Name, Schema: draft.Type + ".create", Image: draft.Image})
+		out = append(out, protocol.AssetDraft{Ref: ref, Type: draft.Type, Name: draft.Name, Schema: draft.Type + ".create", Image: draft.Image})
 	}
 	integrations, err := b.data.IntegrationDrafts(assets, ctx)
 	if err != nil {
@@ -47,9 +48,9 @@ func (b *Build) ReleaseDrafts(assets []platform.ReleaseAsset, ctx platform.Asset
 		if err != nil {
 			return nil, err
 		}
-		out = append(out, platform.AssetDraft{Ref: asset.Ref, Type: typ, Name: asset.Ref.Name, Schema: typ + ".create", Image: raw})
+		out = append(out, protocol.AssetDraft{Ref: asset.Ref, Type: typ, Name: asset.Ref.Name, Schema: typ + ".create", Image: raw})
 	}
-	byRef := map[platform.AssetRef]platform.AssetDraft{}
+	byRef := map[platform.AssetRef]protocol.AssetDraft{}
 	for _, draft := range out {
 		byRef[draft.Ref] = draft
 	}
@@ -71,7 +72,7 @@ func (b *Build) ReleaseDrafts(assets []platform.ReleaseAsset, ctx platform.Asset
 	return out, nil
 }
 
-func (b *Build) PrepareReleaseAssets(assets []platform.ReleaseAsset, ctx platform.AssetReleaseContext) ([]platform.AssetInstallation, error) {
+func (b *Build) PrepareReleaseAssets(assets []platform.ReleaseAsset, ctx protocol.AssetReleaseContext) ([]protocol.AssetInstallation, error) {
 	ordered, err := b.resolver.OrderReleaseAssets(assets)
 	if err != nil {
 		return nil, err
@@ -81,7 +82,7 @@ func (b *Build) PrepareReleaseAssets(assets []platform.ReleaseAsset, ctx platfor
 	if err != nil {
 		return nil, err
 	}
-	out := []platform.AssetInstallation{}
+	out := []protocol.AssetInstallation{}
 	sampleHooks, _ := publication.Kind(b.publications, platform.AssetSampleSet)
 	samples, err := sampleHooks.FreezeInstallations(assets)
 	if err != nil {
@@ -110,7 +111,7 @@ func (b *Build) PrepareReleaseAssets(assets []platform.ReleaseAsset, ctx platfor
 	return b.resolver.OrderInstallations(assets, out)
 }
 
-func (b *Build) AssetEnvironmentRequirements(asset platform.ReleaseAsset) ([]platform.AssetEnvironmentRequirement, error) {
+func (b *Build) AssetEnvironmentRequirements(asset platform.ReleaseAsset) ([]protocol.AssetEnvironmentRequirement, error) {
 	if dataowner.IsIntegration(asset.Ref.Kind) {
 		return b.data.EnvironmentRequirements(asset)
 	}

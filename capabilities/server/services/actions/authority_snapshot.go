@@ -3,19 +3,19 @@ package actions
 import (
 	"encoding/json"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformserver/platform"
+	"platformserver/kernel/protocol"
 )
 
 func (l *authority) Snapshot() (json.RawMessage, error) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
-	return platform.Protos(l.changes.Records(l.tenant))
+	return protocol.Protos(l.changes.Records(l.tenant))
 }
 
 func (l *authority) Restore(raw json.RawMessage) error {
 	l.mu.Lock()
 	defer l.mu.Unlock()
-	records, err := platform.Unprotos[*pb.ChangeRecord](raw)
+	records, err := protocol.Unprotos[*pb.ChangeRecord](raw)
 	if err == nil {
 		l.changes.Restore(l.tenant, records)
 	}

@@ -63,7 +63,7 @@ func (e EffectControl) RemoveEndpoint(c platform.Caller, id string, now time.Tim
 		e.Endpoints.Remove(id)
 		var dropped []platform.Effect
 		e.Outbox.UpdateAll(func(x *Queued) {
-			if x.Endpoint == id && !platform.EffectSettled(x.State) {
+			if x.Endpoint == id && !protocol.EffectSettled(x.State) {
 				x.State = "discarded"
 				dropped = append(dropped, x.Effect)
 			}
@@ -108,7 +108,7 @@ func (e EffectControl) Approve(c platform.Caller, id string, now time.Time) (fun
 	return func(r *pb.ChangeRecord) {
 		e.Outbox.Update(id, func(q *Queued) { q.State, q.Due = "pending", now })
 		if x.Run != "" && e.Agents != nil {
-			e.Agents.RecordAgentSignal(c, r, x.Run, platform.Signal{At: now, Kind: "approved", By: c.ID, Detail: x.Event}, now)
+			e.Agents.RecordAgentSignal(c, r, x.Run, protocol.Signal{At: now, Kind: "approved", By: c.ID, Detail: x.Event}, now)
 		}
 	}, nil
 }
@@ -121,7 +121,7 @@ func (e EffectControl) Discard(c platform.Caller, id string, now time.Time) (fun
 	if found && x.State == "unknown" {
 		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "An unknown delivery needs reconciliation or a recorded human decision")
 	}
-	if !found || platform.EffectSettled(x.State) {
+	if !found || protocol.EffectSettled(x.State) {
 		return nil, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
 	}
 	return func(r *pb.ChangeRecord) {
@@ -132,7 +132,7 @@ func (e EffectControl) Discard(c platform.Caller, id string, now time.Time) (fun
 			x = *q
 		})
 		if held && x.Run != "" && e.Agents != nil {
-			e.Agents.RecordAgentSignal(c, r, x.Run, platform.Signal{At: now, Kind: "discarded", By: c.ID, Detail: x.Event}, now)
+			e.Agents.RecordAgentSignal(c, r, x.Run, protocol.Signal{At: now, Kind: "discarded", By: c.ID, Detail: x.Event}, now)
 		}
 		if e.Agents != nil {
 			e.Agents.AgentEffectEnded(c, r, x.Effect, platform.Outcome{Result: "discarded", Detail: "discarded by " + c.ID}, now)

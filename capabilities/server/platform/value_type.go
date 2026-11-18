@@ -2,10 +2,9 @@ package platform
 
 import (
 	"fmt"
-	"regexp"
+	"platformserver/kernel/values"
 	"slices"
 	"strings"
-	"sync"
 	"unicode/utf8"
 )
 
@@ -91,24 +90,10 @@ func checkPattern(pattern string) error {
 	if len(pattern) > maxValuePattern || !utf8.ValidString(pattern) {
 		return fmt.Errorf("pattern exceeds %d bytes", maxValuePattern)
 	}
-	if _, err := patternProgram(pattern); err != nil {
+	if _, err := values.PatternProgram(pattern); err != nil {
 		return fmt.Errorf("pattern is not a valid RE2 expression")
 	}
 	return nil
-}
-
-var patternPrograms sync.Map
-
-func patternProgram(pattern string) (*regexp.Regexp, error) {
-	if cached, ok := patternPrograms.Load(pattern); ok {
-		return cached.(*regexp.Regexp), nil
-	}
-	program, err := regexp.Compile(pattern)
-	if err != nil {
-		return nil, err
-	}
-	cached, _ := patternPrograms.LoadOrStore(pattern, program)
-	return cached.(*regexp.Regexp), nil
 }
 
 func (d Definition) ValueVersion(version string) *Definition {

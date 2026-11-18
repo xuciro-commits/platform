@@ -119,7 +119,7 @@ func (h ComputeFixtureHooks) Apply(fixture platform.ComputeFixture) (bool, error
 func PendingCompute(effects []platform.Effect) []platform.Effect {
 	var out []platform.Effect
 	for _, effect := range effects {
-		if effect.Endpoint == acceptedformat.OperationEndpoint && !platform.EffectSettled(effect.State) {
+		if effect.Endpoint == acceptedformat.OperationEndpoint && !protocol.EffectSettled(effect.State) {
 			out = append(out, effect)
 		}
 	}
@@ -129,7 +129,7 @@ func PendingCompute(effects []platform.Effect) []platform.Effect {
 func PendingFunctionCalls(effects []platform.Effect, ask func(platform.Effect) (record string, function bool)) []FunctionCall {
 	var pending []FunctionCall
 	for _, effect := range effects {
-		if effect.Endpoint != acceptedformat.ModelEndpoint || platform.EffectSettled(effect.State) {
+		if effect.Endpoint != acceptedformat.ModelEndpoint || protocol.EffectSettled(effect.State) {
 			continue
 		}
 		if record, function := ask(effect); function {

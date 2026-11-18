@@ -3,6 +3,7 @@ package kernel
 import (
 	"encoding/json"
 	"fmt"
+	"platformserver/kernel/protocol"
 	"slices"
 	"time"
 
@@ -77,7 +78,7 @@ func (s *Sequence) FinishInput(a platform.AcceptedInputApp, m platform.Member, n
 	}
 	h.Applied()
 	if applied && result.Refusal == nil {
-		s.AuditLog.Remember(platform.AuditEntry{At: result.At, Member: m.ID, App: result.App, Action: "input:" + name})
+		s.AuditLog.Remember(protocol.AuditEntry{At: result.At, Member: m.ID, App: result.App, Action: "input:" + name})
 		h.Enqueue(result.At)
 		h.ChangedOwner(result.App)
 	}

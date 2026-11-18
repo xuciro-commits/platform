@@ -28,7 +28,7 @@ type Sandbox struct {
 	Compute   func(actor platform.Member, fixture platform.ComputeFixture, now time.Time) (bool, error)
 	Function  func(actor platform.Member, fixture platform.FunctionFixture, now time.Time) (bool, error)
 	Records   func(actor platform.Member, typ string, q platform.Query, now time.Time) ([]any, int, *platform.Error)
-	Inbox     func(actor platform.Member) ([]platform.WorkTask, bool)
+	Inbox     func(actor platform.Member) ([]protocol.WorkTask, bool)
 	Waiting   func() (compute, functions bool)
 	Faulted   func() string
 	Save      func() (json.RawMessage, error)
@@ -38,7 +38,7 @@ type Sandbox struct {
 
 type CandidateRun struct {
 	Request   CandidateSimulationRequest
-	Candidate platform.ReleaseCandidate
+	Candidate protocol.ReleaseCandidate
 	Sandbox   Sandbox
 	Member    platform.Member
 	Now       time.Time
@@ -76,7 +76,7 @@ func (r *CandidateRun) Step(i int, step SimulationStep) (Simulation, *platform.E
 		var found bool
 		for _, asset := range r.Candidate.Assets {
 			if asset.Ref.Kind == platform.AssetFlow && asset.Ref.Name == step.Flow {
-				var envelope platform.FlowReleaseDescriptor
+				var envelope protocol.FlowReleaseDescriptor
 				_ = json.Unmarshal(asset.Body, &envelope)
 				found = envelope.Subject.Name == step.Type
 			}
@@ -97,13 +97,13 @@ func (r *CandidateRun) Step(i int, step SimulationStep) (Simulation, *platform.E
 			refusal = platform.Refuse(pb.ErrorCode_ERROR_CODE_NOT_FOUND, "This test record has no waiting task at that step")
 		} else {
 			payload, _ := json.Marshal(map[string]string{"answer": step.Answer})
-			sub = &pb.Submission{Authority: platform.WorkApp, Target: &pb.EntityRef{Type: platform.WorkTaskType, Id: taskID}, Schema: &pb.SchemaRef{Name: "work.task.complete", Version: 1}, Payload: payload}
+			sub = &pb.Submission{Authority: protocol.WorkApp, Target: &pb.EntityRef{Type: protocol.WorkTaskType, Id: taskID}, Schema: &pb.SchemaRef{Name: "work.task.complete", Version: 1}, Payload: payload}
 		}
 	} else if step.Type == protocol.ProcessType && step.Action == protocol.SchemaProcessRun && step.ID == r.Request.ProcessID {
 		processID := ""
 		for _, asset := range r.Candidate.Assets {
 			if asset.Ref.Kind == platform.AssetFlow {
-				var definition platform.FlowReleaseDescriptor
+				var definition protocol.FlowReleaseDescriptor
 				json.Unmarshal(asset.Body, &definition)
 				processID = definition.Name
 				break
@@ -114,7 +114,7 @@ func (r *CandidateRun) Step(i int, step SimulationStep) (Simulation, *platform.E
 		var instanceExists bool
 		for _, asset := range r.Candidate.Assets {
 			if asset.Ref.Kind == platform.AssetFlow {
-				var definition platform.FlowReleaseDescriptor
+				var definition protocol.FlowReleaseDescriptor
 				json.Unmarshal(asset.Body, &definition)
 				if _, ok := r.Sandbox.Flow(definition.Name + ":" + step.ID); ok {
 					instanceExists = true

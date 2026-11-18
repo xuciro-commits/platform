@@ -30,7 +30,7 @@ type Owner struct {
 	HasProcesses           func() bool
 	Follows                func(platform.Member, string) bool
 	Deliveries             func(string, time.Time) []RecordDelivery
-	AuditPersonal          func(platform.PersonalRead)
+	AuditPersonal          func(protocol.PersonalRead)
 	RecordSetBinding       func(platform.AssetBinding) (*platform.Definition, bool)
 	Claims                 *protocol.FactLog
 }

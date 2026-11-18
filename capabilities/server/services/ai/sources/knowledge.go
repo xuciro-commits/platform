@@ -62,7 +62,7 @@ func (k *Knowledge) Manifest() platform.Manifest {
 	return platform.Manifest{ID: ID, Title: platform.BuiltinManifestTitle(ID), Version: "1", Actions: k.ledger.Catalog(), Entities: knowledgeEntities(),
 		Settings: []platform.Setting{{Name: SettingEmbeddingModel, Title: "Embedding model", Type: "text", Default: "",
 			Description: "The enabled model that embeds passages, <provider>/<model>, on the OpenAI wire. Empty: knowledge is searched by words only."},
-			{Name: platform.SettingKnowledgeEmbeddingNext, Title: "Build vector index with", Type: "text", Default: "", Description: "Explicitly prepare an index with this model before activating it in AI configuration; indexing may incur provider charges."}}}
+			{Name: runtimeprotocol.SettingKnowledgeEmbeddingNext, Title: "Build vector index with", Type: "text", Default: "", Description: "Explicitly prepare an index with this model before activating it in AI configuration; indexing may incur provider charges."}}}
 }
 
 func (k *Knowledge) Authority() platform.Authority { return k.ledger }

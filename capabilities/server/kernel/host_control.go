@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"maps"
+	"platformserver/kernel/protocol"
 	"slices"
 	"strings"
 	"time"
@@ -17,11 +18,11 @@ type HostRequest struct {
 	Tenant, Action, Member string
 	Request                any
 	At                     time.Time
-	Audit                  platform.AuditEntry
+	Audit                  protocol.AuditEntry
 	Evidence               []acceptedformat.AuthorizationEvidence
 }
 
-func PrepareHostControl(q HostRequest, image platform.HostControlImage, audits []platform.AuditEntry, decide func(*platform.HostControlImage) (platform.SupportGrant, error)) (acceptedformat.HostControl, []byte, *platform.SupportGrant, error) {
+func PrepareHostControl(q HostRequest, image protocol.HostControlImage, audits []protocol.AuditEntry, decide func(*protocol.HostControlImage) (protocol.SupportGrant, error)) (acceptedformat.HostControl, []byte, *protocol.SupportGrant, error) {
 	r := acceptedformat.HostControl{Version: 1, Kind: "host-result", Tenant: q.Tenant, App: acceptedformat.EffectApp, Member: q.Member, Action: q.Action, At: q.At.UTC(), Request: platform.Raw(q.Request)}
 	r.Authorizations = slices.Clone(q.Evidence)
 	var err error
@@ -46,9 +47,9 @@ func PrepareHostControl(q HostRequest, image platform.HostControlImage, audits [
 		return r, nil, nil, err
 	}
 	if image.Requests == nil {
-		image.Requests = map[string]platform.HostControlReceipt{}
+		image.Requests = map[string]protocol.HostControlReceipt{}
 	}
-	image.Requests[r.Key] = platform.HostControlReceipt{RequestHash: r.RequestHash, Answer: r.Answer}
+	image.Requests[r.Key] = protocol.HostControlReceipt{RequestHash: r.RequestHash, Answer: r.Answer}
 	r.Image = image
 	audit := q.Audit
 	audit.At, audit.Member, audit.App = r.At, q.Member, acceptedformat.EffectApp
@@ -66,7 +67,7 @@ func PrepareHostControl(q HostRequest, image platform.HostControlImage, audits [
 	return r, raw, nil, nil
 }
 
-func CheckHostControl(raw []byte, tenant string, current platform.HostControlImage, audits []platform.AuditEntry) (acceptedformat.HostControl, bool, error) {
+func CheckHostControl(raw []byte, tenant string, current protocol.HostControlImage, audits []protocol.AuditEntry) (acceptedformat.HostControl, bool, error) {
 	r, err := acceptedformat.DecodeHostControl(raw)
 	if err != nil {
 		return r, false, err
@@ -88,17 +89,17 @@ func CheckHostControl(raw []byte, tenant string, current platform.HostControlIma
 	return r, true, hostTransition(current, r)
 }
 
-func hostTransition(current platform.HostControlImage, r acceptedformat.HostControl) error {
+func hostTransition(current protocol.HostControlImage, r acceptedformat.HostControl) error {
 	raw, err := json.Marshal(current)
-	var expected platform.HostControlImage
+	var expected protocol.HostControlImage
 	if err == nil {
 		err = json.Unmarshal(raw, &expected)
 	}
 	if err != nil {
 		return err
 	}
-	var answer platform.SupportGrant
-	audit := platform.AuditEntry{At: r.At, Member: r.Member, App: acceptedformat.EffectApp}
+	var answer protocol.SupportGrant
+	audit := protocol.AuditEntry{At: r.At, Member: r.Member, App: acceptedformat.EffectApp}
 	switch r.Action {
 	case "composition":
 		var body acceptedformat.CompositionRequest
@@ -147,7 +148,7 @@ func hostTransition(current platform.HostControlImage, r acceptedformat.HostCont
 		if err := acceptedformat.DecodeControl(r.Request, &body); err != nil {
 			return err
 		}
-		i := slices.IndexFunc(expected.Support, func(g platform.SupportGrant) bool { return g.ID == body.ID })
+		i := slices.IndexFunc(expected.Support, func(g protocol.SupportGrant) bool { return g.ID == body.ID })
 		if i < 0 || !expected.Support[i].Expires.After(r.At) || !strings.HasPrefix(r.Member, "host:") {
 			return fmt.Errorf("host support use predecessor differs")
 		}
@@ -155,17 +156,17 @@ func hostTransition(current platform.HostControlImage, r acceptedformat.HostCont
 		answer = expected.Support[i]
 		audit.Action, audit.Target = "host.support.use", body.ID
 	case "migration":
-		var body platform.MigrationResult
+		var body protocol.MigrationResult
 		if err := acceptedformat.DecodeControl(r.Request, &body); err != nil {
 			return err
 		}
-		expected.Migrations = append(expected.Migrations, platform.MigrationManifest{At: r.At, From: body.From, To: body.To, Key: body.Key, Member: r.Member, Types: body.Types})
+		expected.Migrations = append(expected.Migrations, protocol.MigrationManifest{At: r.At, From: body.From, To: body.To, Key: body.Key, Member: r.Member, Types: body.Types})
 		audit.Action, audit.Target = "host.migration", body.Key
 	}
 	if expected.Requests == nil {
-		expected.Requests = map[string]platform.HostControlReceipt{}
+		expected.Requests = map[string]protocol.HostControlReceipt{}
 	}
-	expected.Requests[r.Key] = platform.HostControlReceipt{RequestHash: r.RequestHash, Answer: answer}
+	expected.Requests[r.Key] = protocol.HostControlReceipt{RequestHash: r.RequestHash, Answer: answer}
 	want, err := platform.CanonicalDigest(expected)
 	got, gotErr := platform.CanonicalDigest(r.Image)
 	wantAudit, auditErr := platform.CanonicalDigest(audit)
@@ -177,8 +178,8 @@ func hostTransition(current platform.HostControlImage, r acceptedformat.HostCont
 }
 
 type HostControlOwner struct {
-	Image   func() (platform.HostControlImage, error)
-	Restore func(platform.HostControlImage)
+	Image   func() (protocol.HostControlImage, error)
+	Restore func(protocol.HostControlImage)
 	Audit   *AuditLog
 }
 
@@ -196,14 +197,14 @@ func (s *Sequence) ApplyHostControl(raw []byte, o HostControlOwner) (acceptedfor
 	return r, nil
 }
 
-func (s *Sequence) AcceptHostControl(q HostRequest, o HostControlOwner, decide func(*platform.HostControlImage) (platform.SupportGrant, error), commit func(persistence.Entry, string, string) ([]byte, error), quarantine func(error)) (platform.SupportGrant, bool, error) {
+func (s *Sequence) AcceptHostControl(q HostRequest, o HostControlOwner, decide func(*protocol.HostControlImage) (protocol.SupportGrant, error), commit func(persistence.Entry, string, string) ([]byte, error), quarantine func(error)) (protocol.SupportGrant, bool, error) {
 	image, err := o.Image()
 	if err != nil {
-		return platform.SupportGrant{}, false, err
+		return protocol.SupportGrant{}, false, err
 	}
 	r, raw, prior, err := PrepareHostControl(q, image, o.Audit.All(), decide)
 	if err != nil {
-		return platform.SupportGrant{}, false, err
+		return protocol.SupportGrant{}, false, err
 	}
 	if prior != nil {
 		return *prior, false, nil
@@ -211,17 +212,17 @@ func (s *Sequence) AcceptHostControl(q HostRequest, o HostControlOwner, decide f
 	principal, _ := json.Marshal(platform.Member{ID: q.Member, Tenant: s.ID})
 	committed, err := commit(persistence.Entry{App: acceptedformat.EffectApp, Kind: "accepted-result", Principal: principal, Body: raw, At: r.At}, r.Key, r.RequestHash)
 	if err != nil {
-		return platform.SupportGrant{}, false, err
+		return protocol.SupportGrant{}, false, err
 	}
 	saved, err := acceptedformat.DecodeHostControl(committed)
 	if err != nil || saved.Key != r.Key || saved.RequestHash != r.RequestHash {
 		err = fmt.Errorf("committed host result differs: %v", err)
 		quarantine(err)
-		return platform.SupportGrant{}, false, err
+		return protocol.SupportGrant{}, false, err
 	}
 	if _, err = s.ApplyHostControl(committed, o); err != nil {
 		quarantine(err)
-		return platform.SupportGrant{}, false, err
+		return protocol.SupportGrant{}, false, err
 	}
 	return saved.Answer, true, nil
 }

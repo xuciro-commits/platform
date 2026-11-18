@@ -1,6 +1,7 @@
 package host
 
 import (
+	"platformserver/kernel/protocol"
 	"platformserver/services/actions"
 
 	"slices"
@@ -12,7 +13,7 @@ import (
 )
 
 func (d *stagedDecision) PendingRefusalEscalations(c platform.Caller, at time.Time) ([]platform.RefusalEscalationRequest, *platform.Error) {
-	if !c.Staging() || !c.Automation || c.App != platform.WorkApp || c.ID != "app:"+platform.WorkApp || c.Replaying || c.Tenant != d.tenant.ID {
+	if !c.Staging() || !c.Automation || c.App != protocol.WorkApp || c.ID != "app:"+protocol.WorkApp || c.Replaying || c.Tenant != d.tenant.ID {
 		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "Business refusal escalation requires the private Work owner")
 	}
 	events, err := actions.BusinessRefusalEvents(d.tenant.Committed.AllRefusals("business"), d.tenant.Committed.AllAnswers("business"))
@@ -20,7 +21,7 @@ func (d *stagedDecision) PendingRefusalEscalations(c platform.Caller, at time.Ti
 		return nil, err
 	}
 	return actions.RefusalEscalations(events, at, func(id string) bool {
-		_, exists := platform.Get[platform.WorkTask](c, id)
+		_, exists := platform.Get[protocol.WorkTask](c, id)
 		return exists
 	}, func(request platform.RefusalEscalationRequest, role string) []string {
 		caller := platform.NewCaller(d, platform.Member{ID: "app:" + request.App, Tenant: c.Tenant}, request.App, false, true)

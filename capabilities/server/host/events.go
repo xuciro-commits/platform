@@ -3,6 +3,7 @@ package host
 import automation "platformserver/services/automate/runtime"
 
 import (
+	"platformserver/kernel/protocol"
 	"platformserver/platform"
 )
 
@@ -12,7 +13,7 @@ func (t *Tenant) publish(e platform.Event) {
 	t.acted++
 }
 
-func (t *Tenant) planAcceptedEvent(e platform.Event) (platform.AcceptedEventPlan, *platform.Error) {
+func (t *Tenant) planAcceptedEvent(e platform.Event) (protocol.AcceptedEventPlan, *platform.Error) {
 	return automation.AcceptedEventPlanner{
 		Routed: t.router().Events,
 		Effects: func(e platform.Event, names []string) ([]platform.Effect, *platform.Error) {
@@ -24,9 +25,9 @@ func (t *Tenant) planAcceptedEvent(e platform.Event) (platform.AcceptedEventPlan
 	}.Plan(e)
 }
 
-func (t *Tenant) publishAccepted(e platform.Event, plan platform.AcceptedEventPlan) {
+func (t *Tenant) publishAccepted(e platform.Event, plan protocol.AcceptedEventPlan) {
 	t.acted++
 	t.events = append(t.events, automation.QueuedEvent{Event: e, Hops: plan.Hops, Span: t.current(), Plan: &plan})
 }
 
-func (t *Tenant) Deliveries() []platform.Delivery { return t.AuditLog.RecentDeliveries() }
+func (t *Tenant) Deliveries() []protocol.Delivery { return t.AuditLog.RecentDeliveries() }

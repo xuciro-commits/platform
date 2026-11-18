@@ -2,6 +2,7 @@ package actions
 
 import (
 	"fmt"
+	"platformserver/kernel/protocol"
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
@@ -16,7 +17,7 @@ type EffectAnswer struct {
 	Model      func() (platform.App, *pb.Submission)
 	Decide     func(c platform.Caller, a platform.App, s *pb.Submission, at time.Time) *platform.Error
 	Operation  func(platform.Effect)
-	Completion func() platform.OperationCompletion
+	Completion func() protocol.OperationCompletion
 	Answerer   func(app string) platform.Answerer
 	Source     func(id string) (Queued, bool)
 	Origin     func(*platform.Effect, func() *platform.Error) *platform.Error

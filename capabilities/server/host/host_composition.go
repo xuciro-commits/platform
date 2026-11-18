@@ -12,7 +12,6 @@ import (
 	"slices"
 
 	runtimeprotocol "platformserver/kernel/protocol"
-	"platformserver/platform"
 )
 
 func (t *Tenant) desiredRuntime() map[string]string {
@@ -31,8 +30,8 @@ func (t *Tenant) compositionView(providers runtimeprotocol.RuntimeProviders) pac
 
 func (h *Host) hostCompositionRoutes(mux *http.ServeMux) {
 	providers := h.RuntimeProviders
-	h.hostRoute(mux, transport.Route{Pattern: "POST /v1/host/tenants/{tenant}/packages/inspect", Summary: "Inspect package contents during tenant maintenance without installing or granting access", Body: platform.PackageInspectRequest{}, Answer: platform.PackagePreview{}}, func(w http.ResponseWriter, r *http.Request, _ string, t *Tenant) {
-		var body platform.PackageInspectRequest
+	h.hostRoute(mux, transport.Route{Pattern: "POST /v1/host/tenants/{tenant}/packages/inspect", Summary: "Inspect package contents during tenant maintenance without installing or granting access", Body: runtimeprotocol.PackageInspectRequest{}, Answer: runtimeprotocol.PackagePreview{}}, func(w http.ResponseWriter, r *http.Request, _ string, t *Tenant) {
+		var body runtimeprotocol.PackageInspectRequest
 		if err := transport.DecodeBodyLimit(r, &body, packages.MaxPackageImportBytes+4096); err != nil {
 			WriteJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
 			return
@@ -67,14 +66,14 @@ func (h *Host) hostCompositionRoutes(mux *http.ServeMux) {
 			WriteJSON(w, http.StatusConflict, map[string]string{"error": err.Error()})
 			return
 		}
-		_, err := t.acceptHostControl("composition", "host:"+subject, body, body.At, platform.AuditEntry{Action: "host.composition", Target: t.ID + ":" + body.Reason}, func(image *platform.HostControlImage) (platform.SupportGrant, error) {
+		_, err := t.acceptHostControl("composition", "host:"+subject, body, body.At, runtimeprotocol.AuditEntry{Action: "host.composition", Target: t.ID + ":" + body.Reason}, func(image *runtimeprotocol.HostControlImage) (runtimeprotocol.SupportGrant, error) {
 			if t.quarantined() {
-				return platform.SupportGrant{}, fmt.Errorf("Repair this tenant before changing its implementation")
+				return runtimeprotocol.SupportGrant{}, fmt.Errorf("Repair this tenant before changing its implementation")
 			}
 			image.RuntimeSelection = maps.Clone(body.Selection)
 			image.DisabledOwners = slices.Clone(body.DisabledOwners)
 			image.Lifecycle = "suspend"
-			return platform.SupportGrant{}, nil
+			return runtimeprotocol.SupportGrant{}, nil
 		}, hostRequestAuthorization(r, t.ID)...)
 		t.Lane.Unlock()
 		if err != nil {

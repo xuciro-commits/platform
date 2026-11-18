@@ -2,6 +2,7 @@ package applications
 
 import (
 	"encoding/json"
+	"platformserver/kernel/protocol"
 	"slices"
 	"time"
 
@@ -9,15 +10,15 @@ import (
 	"platformserver/platform"
 )
 
-func (c Context) ScopedRuns(m platform.Member, ref platform.AssetRef, offset, limit int, now time.Time, filters ...platform.ApplicationRunFilter) (platform.ApplicationRunPage, *platform.Error) {
+func (c Context) ScopedRuns(m platform.Member, ref platform.AssetRef, offset, limit int, now time.Time, filters ...protocol.ApplicationRunFilter) (protocol.ApplicationRunPage, *platform.Error) {
 	if ref.Kind != platform.AssetApp || ref.Check() != nil || offset < 0 || limit < 1 || limit > 100 {
-		return platform.ApplicationRunPage{Application: ref, Runs: []platform.ApplicationRun{}}, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Choose an application and a run page of 1–100")
+		return protocol.ApplicationRunPage{Application: ref, Runs: []platform.ApplicationRun{}}, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Choose an application and a run page of 1–100")
 	}
 	if len(filters) > 0 {
 		filter := filters[0]
 		if filter.Kind != "" && !slices.Contains([]string{"flow", "agent", "compute", "function", "effect", "job", "dispatch"}, filter.Kind) ||
 			len(filter.State) > 64 || len(filter.Subject) > 512 || !filter.Since.IsZero() && !filter.Until.IsZero() && filter.Since.After(filter.Until) {
-			return platform.ApplicationRunPage{Application: ref, Runs: []platform.ApplicationRun{}}, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Choose a valid application run filter")
+			return protocol.ApplicationRunPage{Application: ref, Runs: []platform.ApplicationRun{}}, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Choose a valid application run filter")
 		}
 	}
 	m = c.AuthorizationMember(m)
@@ -52,13 +53,13 @@ func (c Context) rebuildRunIndex(m platform.Member, ref platform.AssetRef, key s
 			break
 		}
 	}
-	entries := make([]platform.RunIndexEntry, 0, len(runs))
+	entries := make([]protocol.RunIndexEntry, 0, len(runs))
 	for _, run := range runs {
 		raw, err := json.Marshal(run)
 		if err != nil {
 			return &platform.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
 		}
-		entries = append(entries, platform.RunIndexEntry{ID: run.Kind + "/" + run.ID, Scope: m.ID, Type: "application", App: ref.Name, Status: run.State, At: run.Created, Payload: raw})
+		entries = append(entries, protocol.RunIndexEntry{ID: run.Kind + "/" + run.ID, Scope: m.ID, Type: "application", App: ref.Name, Status: run.State, At: run.Created, Payload: raw})
 	}
 	if err := c.ReplaceRunIndex(key, entries); err != nil {
 		return &platform.Error{Code: pb.ErrorCode_ERROR_CODE_UNSPECIFIED, Message: err.Error()}
@@ -66,10 +67,10 @@ func (c Context) rebuildRunIndex(m platform.Member, ref platform.AssetRef, key s
 	return nil
 }
 
-func (c Context) runsFromIndex(m platform.Member, ref platform.AssetRef, offset, limit int, filters ...platform.ApplicationRunFilter) (platform.ApplicationRunPage, error) {
+func (c Context) runsFromIndex(m platform.Member, ref platform.AssetRef, offset, limit int, filters ...protocol.ApplicationRunFilter) (protocol.ApplicationRunPage, error) {
 	indexed, err := c.QueryRunIndex("application/" + ref.App + "/" + ref.Name + "/" + m.ID)
 	if err != nil {
-		return platform.ApplicationRunPage{}, err
+		return protocol.ApplicationRunPage{}, err
 	}
 	title := ""
 	for _, definition := range c.Definitions(m) {
@@ -81,8 +82,8 @@ func (c Context) runsFromIndex(m platform.Member, ref platform.AssetRef, offset,
 	return IndexedRuns(indexed, ref, title, offset, limit, filters...), nil
 }
 
-func (c Context) RecordDiagnostic(m platform.Member, ref platform.AssetRef, typ, id string, now time.Time) (platform.ApplicationDiagnostic, *platform.Error) {
-	out := platform.ApplicationDiagnostic{Application: ref, Type: typ, Record: id, Decisions: []platform.ApplicationDecisionTrace{}, Runs: []platform.ApplicationRun{}}
+func (c Context) RecordDiagnostic(m platform.Member, ref platform.AssetRef, typ, id string, now time.Time) (protocol.ApplicationDiagnostic, *platform.Error) {
+	out := protocol.ApplicationDiagnostic{Application: ref, Type: typ, Record: id, Decisions: []protocol.ApplicationDecisionTrace{}, Runs: []platform.ApplicationRun{}}
 	runtime, refusal := c.RuntimeOf(m, ref, now)
 	if refusal != nil {
 		return out, refusal
@@ -108,7 +109,7 @@ func (c Context) RecordDiagnostic(m platform.Member, ref platform.AssetRef, typ,
 		visible[definition.Ref] = true
 	}
 	for _, change := range history {
-		trace := platform.ApplicationDecisionTrace{Change: change.Change, Schema: change.Schema, At: change.At, Versions: []platform.ApplicationVersion{}}
+		trace := protocol.ApplicationDecisionTrace{Change: change.Change, Schema: change.Schema, At: change.At, Versions: []protocol.ApplicationVersion{}}
 		if definition := c.Decision(owner + "/" + change.Change); definition != nil && definition.Definition.Ref.Name == change.Schema {
 			projection := *definition
 			if projection.Observation != nil {
@@ -119,7 +120,7 @@ func (c Context) RecordDiagnostic(m platform.Member, ref platform.AssetRef, typ,
 			trace.Definition, trace.Content = &projection, &projection.Contract
 			for _, binding := range projection.Applications {
 				if binding.Ref == ref {
-					trace.Versions = append(trace.Versions, platform.ApplicationVersion{Version: binding.SourceVersion, Release: projection.Release, At: change.At, Active: binding.SourceVersion == runtime.Artifact.Version})
+					trace.Versions = append(trace.Versions, protocol.ApplicationVersion{Version: binding.SourceVersion, Release: projection.Release, At: change.At, Active: binding.SourceVersion == runtime.Artifact.Version})
 				}
 			}
 		}
@@ -132,7 +133,7 @@ func (c Context) RecordDiagnostic(m platform.Member, ref platform.AssetRef, typ,
 	}
 	subject := typ + "/" + id
 	for skip := 0; ; skip += 100 {
-		page, refusal := c.RunsPage(m, ref, skip, 100, now, platform.ApplicationRunFilter{Subject: subject})
+		page, refusal := c.RunsPage(m, ref, skip, 100, now, protocol.ApplicationRunFilter{Subject: subject})
 		if refusal != nil {
 			return out, refusal
 		}

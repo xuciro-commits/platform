@@ -2,6 +2,7 @@ package ontology
 
 import (
 	"encoding/json"
+	"platformserver/kernel/protocol"
 	"reflect"
 	"slices"
 	"time"
@@ -92,7 +93,7 @@ func validateObject(o Object, model any, lookup func(string) (platform.EntityInf
 			for _, field := range o.Fields {
 				shape.Fields = append(shape.Fields, platform.FieldInfo{Name: field.Name, Type: field.Type, Ref: field.Ref, Required: field.Required, ReadOnly: field.ReadOnly, AliasOf: field.AliasOf})
 			}
-			if err := platform.CheckExtension(shape, base); err != nil {
+			if err := protocol.CheckExtension(shape, base); err != nil {
 				return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, err.Error())
 			}
 		}

@@ -3,6 +3,7 @@ package knowledge
 import (
 	"context"
 	"io"
+	"platformserver/kernel/protocol"
 	knowledgesources "platformserver/services/ai/sources"
 	"reflect"
 	"time"
@@ -83,7 +84,7 @@ func (r Runtime) SourceReadable(store *records.Store, m platform.Member, id, fie
 	if m.Tenant != r.Tenant || field != "" && field != "title" && field != "text" {
 		return false
 	}
-	et := store.Type(platform.KnowledgeDocumentType)
+	et := store.Type(protocol.KnowledgeDocumentType)
 	if et == nil || et.Rows().Get(id) == nil {
 		return false
 	}
@@ -143,8 +144,8 @@ func (r Runtime) Context() Context {
 		},
 		Visible:       r.PassageReadable,
 		ScopeReadable: r.ScopeReadable,
-		Active:        func() string { return r.Setting(platform.SettingKnowledgeEmbeddingModel) },
-		Preparing:     func() string { return r.Setting(platform.SettingKnowledgeEmbeddingNext) },
+		Active:        func() string { return r.Setting(protocol.SettingKnowledgeEmbeddingModel) },
+		Preparing:     func() string { return r.Setting(protocol.SettingKnowledgeEmbeddingNext) },
 		NeedsRebuild:  r.NeedsRebuild,
 		Space:         r.VectorSpace,
 		Embed:         r.Embed,
@@ -189,9 +190,9 @@ func (r Runtime) Sync() {
 	}.Load)
 }
 
-func (r Runtime) Knowledge(reader *platform.Member, app, q string, limit int, at time.Time) []platform.Passage {
+func (r Runtime) Knowledge(reader *platform.Member, app, q string, limit int, at time.Time) []protocol.Passage {
 	if !r.Available {
-		return []platform.Passage{}
+		return []protocol.Passage{}
 	}
 	return r.Index.Search(r.Context(), reader, app, q, limit, at)
 }
@@ -203,7 +204,7 @@ func (r Runtime) EmbedAll(at time.Time) {
 	r.Index.Embed(r.Context(), at)
 }
 
-func (r Runtime) Status() platform.KnowledgeIndexStatus {
+func (r Runtime) Status() protocol.KnowledgeIndexStatus {
 	r.Sync()
 	return r.Index.Status(r.Context())
 }

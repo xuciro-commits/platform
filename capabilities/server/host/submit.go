@@ -214,7 +214,7 @@ func decideAcceptedAs(a platform.App, draft *stagedDecision, m platform.Member, 
 		}
 	}()
 	if declared, _ := a.Manifest().Actions.Action(s.GetSchema().GetName()); declared.Approval != nil &&
-		draft.tenant.App(draft.tenant.owner["action:"+platform.WorkApprovalRequestSchema]) != nil {
+		draft.tenant.App(draft.tenant.owner["action:"+protocol.WorkApprovalRequestSchema]) != nil {
 		record, refusal = draft.approvals().Submit(a, m, s, now)
 	} else {
 		caller := platform.NewCaller(draft, m, a.Manifest().ID, false, automation)

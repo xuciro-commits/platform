@@ -25,7 +25,7 @@ import (
 type Deployment struct {
 	idp.Flags
 	specs                   *controlowner.Specs
-	packageIndex            *platform.PackageIndex
+	packageIndex            *runtimeprotocol.PackageIndex
 	Rebuild                 func(id string) (*Tenant, error)
 	RebuildWithCapabilities func(id string, services runtimeprotocol.RuntimeCapabilities) (*Tenant, error)
 	RuntimeProviders        *runtimeprotocol.RuntimeProviders
@@ -216,7 +216,7 @@ func (d *Deployment) Serve(tenants ...*Tenant) (serveErr error) {
 	host.Templates = d.Templates
 	if d.Rebuild != nil {
 		var createMu sync.Mutex
-		host.CreateTenant = func(req platform.CreateTenantRequest, by string) (*Tenant, error) {
+		host.CreateTenant = func(req runtimeprotocol.CreateTenantRequest, by string) (*Tenant, error) {
 			createMu.Lock()
 			defer createMu.Unlock()
 			t, err := d.createTenant(req, by, files, func(t *Tenant) error {
@@ -274,7 +274,7 @@ func (d *Deployment) Serve(tenants ...*Tenant) (serveErr error) {
 	})
 }
 
-func (d *Deployment) createTenant(req platform.CreateTenantRequest, by string, files platform.FileStore, open, seed func(*Tenant) error) (*Tenant, error) {
+func (d *Deployment) createTenant(req runtimeprotocol.CreateTenantRequest, by string, files platform.FileStore, open, seed func(*Tenant) error) (*Tenant, error) {
 	now := Now()
 	spec, tpl, err := controlowner.NewTenantSpec(d.Templates, req, by, now)
 	if err != nil {

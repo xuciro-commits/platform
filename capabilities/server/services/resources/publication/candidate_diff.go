@@ -4,12 +4,13 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"platformserver/kernel/protocol"
 	"slices"
 
 	"platformserver/platform"
 )
 
-func (resolver Resolver) CandidateDiff(before, after platform.ReleaseCandidate) (added, removed, changed []platform.AssetRef, err error) {
+func (resolver Resolver) CandidateDiff(before, after protocol.ReleaseCandidate) (added, removed, changed []platform.AssetRef, err error) {
 	before, err = resolver.ReadCandidate(before.ID, before.Bytes)
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("previous candidate: %w", err)

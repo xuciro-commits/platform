@@ -2,6 +2,7 @@ package host
 
 import (
 	"context"
+	"platformserver/kernel/protocol"
 	"time"
 
 	"platformserver/platform"
@@ -20,7 +21,7 @@ func (t *Tenant) knowledgeRuntime() knowledgeindex.Runtime {
 	source := t.readOriginOrSelf()
 	return knowledgeindex.Runtime{
 		Tenant: t.ID, Available: t.Glossary != nil, AI: t.Models != nil, Index: t.index,
-		Documents: t.automation(platform.KnowledgeApp, false),
+		Documents: t.automation(protocol.KnowledgeApp, false),
 		Files: func() (platform.Caller, bool) {
 			if t.App(platform.FileApp) == nil {
 				return platform.Caller{}, false
@@ -46,7 +47,7 @@ func (t *Tenant) knowledgeRuntime() knowledgeindex.Runtime {
 		Host:     t.host,
 		Readable: func(m platform.Member, scope string, at time.Time) bool { return t.readable(m, scope, at) },
 		Setting: func(name string) string {
-			return readOnly(t, func(t *Tenant) string { return t.setting(t.automation(platform.KnowledgeApp, false), name) })
+			return readOnly(t, func(t *Tenant) string { return t.setting(t.automation(protocol.KnowledgeApp, false), name) })
 		},
 		ActiveSpace: func() string {
 			value, _ := t.settings.Get(embeddingActiveSpace)
@@ -64,28 +65,28 @@ func (t *Tenant) knowledgeRuntime() knowledgeindex.Runtime {
 			return provider, refusal
 		},
 		Stage: func(binding platform.AIModelBinding, pv platform.AIProvider) *platform.Error {
-			_, refusal := t.modelResolver().Stage(binding, pv, platform.AIStageRuntime)
+			_, refusal := t.modelResolver().Stage(binding, pv, protocol.AIStageRuntime)
 			return refusal
 		},
 		EmbedModel: func(name string, model platform.AIModel, pv platform.AIProvider, input []string) ([][]float32, error) {
-			return t.gatewayRuntime().Embed(platform.Member{ID: "app:" + platform.KnowledgeApp, Tenant: t.ID}, name, model, pv, input, time.Now())
+			return t.gatewayRuntime().Embed(platform.Member{ID: "app:" + protocol.KnowledgeApp, Tenant: t.ID}, name, model, pv, input, time.Now())
 		},
 		Stopped: func() bool { return source.businessStopped() },
-		Changed: func() { source.operationsChanged(platform.KnowledgeApp) },
+		Changed: func() { source.operationsChanged(protocol.KnowledgeApp) },
 	}
 }
 
-func (t *Tenant) KnowledgeIndexStatus(ctx context.Context, m platform.Member) (platform.KnowledgeIndexStatus, *platform.Error) {
-	return recordRead(t, ctx, func(t *Tenant) (platform.KnowledgeIndexStatus, *platform.Error) {
+func (t *Tenant) KnowledgeIndexStatus(ctx context.Context, m platform.Member) (protocol.KnowledgeIndexStatus, *platform.Error) {
+	return recordRead(t, ctx, func(t *Tenant) (protocol.KnowledgeIndexStatus, *platform.Error) {
 		c := platform.NewCaller(runtime{t: t}, m, controlowner.PlatformApp, false, false)
 		if err := authorizationRefusal(t.authorizeNative(c, "GET /v1/ai/knowledge-index", "read", []string{controlowner.Admin}, true)); err != nil {
-			return platform.KnowledgeIndexStatus{}, err
+			return protocol.KnowledgeIndexStatus{}, err
 		}
 		return t.knowledgeRuntime().Status(), nil
 	})
 }
 
-func (t *Tenant) Knowledge(reader *platform.Member, app, q string, limit int, at time.Time) []platform.Passage {
+func (t *Tenant) Knowledge(reader *platform.Member, app, q string, limit int, at time.Time) []protocol.Passage {
 	return t.knowledgeRuntime().Knowledge(reader, app, q, limit, at)
 }
 

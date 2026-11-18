@@ -21,7 +21,7 @@ func DraftLogicalName(ref platform.AssetRef) string {
 	return ref.Name
 }
 
-func DraftSubmission(tenant, candidate string, context platform.AssetReleaseContext, request *OwnerDraftRequest, ordinal int, draft platform.AssetDraft, info platform.EntityInfo) (*pb.Submission, error) {
+func DraftSubmission(tenant, candidate string, context protocol.AssetReleaseContext, request *OwnerDraftRequest, ordinal int, draft protocol.AssetDraft, info platform.EntityInfo) (*pb.Submission, error) {
 	raw, err := AssetDraftPayload(info, draft.Image)
 	if err != nil {
 		return nil, err
@@ -42,7 +42,7 @@ func DraftSubmission(tenant, candidate string, context platform.AssetReleaseCont
 		Target: &pb.EntityRef{Type: draft.Type, Id: draft.Name}, Schema: &pb.SchemaRef{Name: draft.Schema, Version: 1}, Payload: raw}, nil
 }
 
-func DraftRefusal(app platform.App, draft platform.AssetDraft, rejected *platform.Error) error {
+func DraftRefusal(app platform.App, draft protocol.AssetDraft, rejected *platform.Error) error {
 	if rejected.Code == pb.ErrorCode_ERROR_CODE_POLICY_DENIED {
 		action, _ := app.Manifest().Actions.Action(draft.Schema)
 		return fmt.Errorf("create target draft %s/%s needs the %s role and matching token scope: %w", draft.Type, draft.Name, strings.Join(action.Roles, " role or "), rejected)
@@ -53,13 +53,13 @@ func DraftRefusal(app platform.App, draft platform.AssetDraft, rejected *platfor
 	return fmt.Errorf("create target draft %s/%s: %w", draft.Type, draft.Name, rejected)
 }
 
-func BootstrapDrafts(registry *publication.AssetRegistry, candidate platform.ReleaseCandidate, context platform.AssetReleaseContext, request *OwnerDraftRequest) ([]platform.AssetDraft, error) {
+func BootstrapDrafts(registry *publication.AssetRegistry, candidate protocol.ReleaseCandidate, context protocol.AssetReleaseContext, request *OwnerDraftRequest) ([]protocol.AssetDraft, error) {
 	drafts, err := registry.ReleaseDrafts(candidate.Assets, context)
 	if err != nil {
 		return nil, err
 	}
 	if context.ManagedAssets != nil {
-		drafts = slices.DeleteFunc(drafts, func(draft platform.AssetDraft) bool { return !context.ManagedAssets[draft.Ref] })
+		drafts = slices.DeleteFunc(drafts, func(draft protocol.AssetDraft) bool { return !context.ManagedAssets[draft.Ref] })
 	}
 	return SelectOwnerDrafts(drafts, context, request)
 }

@@ -17,7 +17,7 @@ import (
 )
 
 type Tools struct {
-	Host platform.ModelToolHost
+	Host runtimeprotocol.ModelToolHost
 	Now  func() time.Time
 }
 
@@ -154,7 +154,7 @@ func (g Tools) Call(ctx context.Context, m platform.Member, name string, args ma
 		return text(map[string]string{"error": "not in your catalog"}, true)
 	}
 	action := catalog[i]
-	if platform.StaticControlAction(action) || strings.HasPrefix(action.Schema, "agent.run.") || action.Schema == platform.SchemaToolPropose {
+	if platform.StaticControlAction(action) || strings.HasPrefix(action.Schema, "agent.run.") || action.Schema == runtimeprotocol.SchemaToolPropose {
 		return text(map[string]string{"error": "MCP cannot confirm proposals or control agent runs"}, true)
 	}
 	key, _ := args["idempotencyKey"].(string)
@@ -177,7 +177,7 @@ func (g Tools) Call(ctx context.Context, m platform.Member, name string, args ma
 	} else if given, ok := args["payload"].(map[string]any); ok {
 		payload = given
 	}
-	err := g.Host.ProposeModelTool(m, platform.ModelToolProposal{ID: id, Key: key, Action: action, Target: target, Payload: platform.Raw(payload)}, g.Now())
+	err := g.Host.ProposeModelTool(m, runtimeprotocol.ModelToolProposal{ID: id, Key: key, Action: action, Target: target, Payload: platform.Raw(payload)}, g.Now())
 	if err != nil {
 		return text(map[string]string{"error": cmp.Or(err.Message, err.Error())}, true)
 	}

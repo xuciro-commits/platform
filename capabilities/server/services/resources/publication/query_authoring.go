@@ -2,13 +2,14 @@ package publication
 
 import (
 	"encoding/json"
+	"platformserver/kernel/protocol"
 
 	"platformserver/platform"
 )
 
 type QueryAuthoringEnvironment struct {
 	App, Type, Builder, Version string
-	Host                        func() platform.BuildHost
+	Host                        func() protocol.BuildHost
 	InstalledObject             func(string) (platform.Entity, bool)
 	LookupEntity                func(string) (platform.EntityInfo, bool)
 	JointEntities               func() map[string]platform.EntityInfo

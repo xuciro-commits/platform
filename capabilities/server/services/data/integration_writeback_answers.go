@@ -3,6 +3,7 @@ package data
 import (
 	"encoding/json"
 	"fmt"
+	"platformserver/kernel/protocol"
 	"slices"
 	"strings"
 	"time"
@@ -25,7 +26,7 @@ func (o *Owner) Answer(c platform.Caller, effect platform.Effect, out platform.O
 			return nil
 		}
 		key := fmt.Sprintf("%s:%d:%s", effect.ID, effect.Attempts, out.Result)
-		_, err := platform.Decide(c, o.integration.App, o.dispatchSubmission(c, req.Dispatch, platform.DispatchAnswerSchema, key, map[string]any{"intent": effect.ID, "outcome": outcome, "reason": out.Detail, "answer": out.Answer}, now), now)
+		_, err := platform.Decide(c, o.integration.App, o.dispatchSubmission(c, req.Dispatch, protocol.DispatchAnswerSchema, key, map[string]any{"intent": effect.ID, "outcome": outcome, "reason": out.Detail, "answer": out.Answer}, now), now)
 		return err
 	}
 	if req.Confirmation != "" {

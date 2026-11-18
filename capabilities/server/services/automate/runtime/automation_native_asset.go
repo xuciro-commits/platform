@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"maps"
+	"platformserver/kernel/protocol"
 	"platformserver/platform"
 	"slices"
 	"strconv"
@@ -71,7 +72,7 @@ func (f *Flows) NativeFlowAsset(manifest platform.Manifest, name string, version
 	if err != nil {
 		return platform.ReleaseAsset{}, err
 	}
-	descriptor := platform.FlowReleaseDescriptor{Native: true, Name: manifest.ID + "." + name, Definition: raw}
+	descriptor := protocol.FlowReleaseDescriptor{Native: true, Name: manifest.ID + "." + name, Definition: raw}
 	for _, ref := range requires {
 		switch ref.Kind {
 		case platform.AssetAction:

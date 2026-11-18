@@ -37,8 +37,8 @@ func (t *Tenant) simulateCandidate(builder platform.Member, request trialowner.C
 			Member:      t.member,
 			Source: trialowner.CandidateSource{
 				Drafts:    func() (build.ConstructionDrafts, bool) { owner := t.builders[build.ID]; return owner, owner != nil },
-				Candidate: func(id string) (platform.ReleaseCandidate, error) { return t.releases.Candidate(id) },
-				Preview: func(drafts []build.JointDraftRef) (string, platform.ReleaseCandidate, error) {
+				Candidate: func(id string) (protocol.ReleaseCandidate, error) { return t.releases.Candidate(id) },
+				Preview: func(drafts []build.JointDraftRef) (string, protocol.ReleaseCandidate, error) {
 					review, prepared, problem := reader.releasePlannerLocked().Preview(drafts, builder)
 					return review.Diagnostic, prepared, problem
 				},
@@ -47,7 +47,7 @@ func (t *Tenant) simulateCandidate(builder platform.Member, request trialowner.C
 					return selected.Name
 				},
 			},
-			Environment: func(candidate platform.ReleaseCandidate) (simulationEnvironment, error) {
+			Environment: func(candidate protocol.ReleaseCandidate) (simulationEnvironment, error) {
 				prepared, err := trialowner.PrepareEnvironment(t.apps, t.simulations, actions.NewAuthority, candidate, request.Samples)
 				environment := simulationEnvironment{Environment: prepared, Services: t.services}
 				if err == nil {
@@ -58,14 +58,14 @@ func (t *Tenant) simulateCandidate(builder platform.Member, request trialowner.C
 			},
 			Modules:    func(environment simulationEnvironment) map[string][]byte { return environment.Modules },
 			ReadModule: func(module string) ([]byte, error) { return t.artifacts().Read(context.Background(), module) },
-			Run: func(candidate platform.ReleaseCandidate, environment simulationEnvironment, actor platform.Member, members []platform.Member, functionName string) (trialowner.CandidateSimulation, *platform.Error) {
+			Run: func(candidate protocol.ReleaseCandidate, environment simulationEnvironment, actor platform.Member, members []platform.Member, functionName string) (trialowner.CandidateSimulation, *platform.Error) {
 				return runCandidateSimulation(request, candidate, environment, actor, members, functionName)
 			},
 		})
 	})
 }
 
-func runCandidateSimulation(request trialowner.CandidateSimulationRequest, candidate platform.ReleaseCandidate, environment simulationEnvironment, m platform.Member, members []platform.Member, functionName string) (trialowner.CandidateSimulation, *platform.Error) {
+func runCandidateSimulation(request trialowner.CandidateSimulationRequest, candidate protocol.ReleaseCandidate, environment simulationEnvironment, m platform.Member, members []platform.Member, functionName string) (trialowner.CandidateSimulation, *platform.Error) {
 	compose := func() (trialowner.Runtime, error) {
 		sandbox, err := candidateTestTenantWithEnvironment(candidate, m, environment, slices.DeleteFunc(slices.Clone(members), func(actor platform.Member) bool { return actor.ID == m.ID })...)
 		if err != nil {
@@ -118,12 +118,12 @@ func (t *Tenant) trialSandbox() trialowner.Sandbox {
 			page, refusal := t.objectOwner(t.Projection).Records(actor, typ, q, now)
 			return page.Records, page.Total, refusal
 		},
-		Inbox: func(actor platform.Member) ([]platform.WorkTask, bool) {
+		Inbox: func(actor platform.Member) ([]protocol.WorkTask, bool) {
 			inbox, err := t.read(actor, "inbox")
 			if err != nil {
 				return nil, false
 			}
-			return inbox.([]platform.WorkTask), true
+			return inbox.([]protocol.WorkTask), true
 		},
 		Waiting: func() (bool, bool) {
 			effects := t.outboundEffects()

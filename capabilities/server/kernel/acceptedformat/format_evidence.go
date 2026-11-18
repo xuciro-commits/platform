@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"google.golang.org/protobuf/proto"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
+	runtimeprotocol "platformserver/kernel/protocol"
 	"platformserver/kernel/records"
 	persistence "platformserver/kernel/store"
 	"platformserver/platform"
@@ -96,10 +97,10 @@ type Publication struct {
 }
 
 type Decision struct {
-	Definition  *platform.DecisionDefinition `json:"definition,omitempty"`
-	Receipt     json.RawMessage              `json:"receipt"`
-	Event       platform.AcceptedEventPlan   `json:"event"`
-	Publication *Publication                 `json:"publication,omitempty"`
+	Definition  *platform.DecisionDefinition      `json:"definition,omitempty"`
+	Receipt     json.RawMessage                   `json:"receipt"`
+	Event       runtimeprotocol.AcceptedEventPlan `json:"event"`
+	Publication *Publication                      `json:"publication,omitempty"`
 }
 
 type BatchRow struct {

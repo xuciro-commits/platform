@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"io"
 	"platformserver/kernel/protocol"
-	"platformserver/platform"
 	"strings"
 	"time"
 )
@@ -17,7 +16,7 @@ const a2aWait = 60 * time.Second
 
 type A2AHooks struct {
 	Published func(agent string) bool
-	Run       func(id string) (platform.AgentRunRecord, bool)
+	Run       func(id string) (protocol.AgentRunRecord, bool)
 	Decide    func(app, schema, typ, id, key string, payload any) error
 }
 
@@ -76,10 +75,10 @@ func A2AServe(body io.Reader, version, agent, member string, h A2AHooks) map[str
 	if !h.Published(agent) {
 		return reply(nil, -32001, "no published agent "+agent)
 	}
-	run := func(id string) (platform.AgentRunRecord, string, bool) {
+	run := func(id string) (protocol.AgentRunRecord, string, bool) {
 		x, ok := h.Run(id)
 		if !ok || x.OnBehalf != member || x.Agent != agent {
-			return platform.AgentRunRecord{}, "", false
+			return protocol.AgentRunRecord{}, "", false
 		}
 		question := ""
 		if x.State == "waiting" && len(x.Steps) > 0 {
@@ -88,9 +87,9 @@ func A2AServe(body io.Reader, version, agent, member string, h A2AHooks) map[str
 		return x, question, true
 	}
 	decide := func(schema, typ, id, key string, payload any) error {
-		app := platform.AgentApp
-		if typ == platform.WorkTaskType {
-			app = platform.WorkApp
+		app := protocol.AgentApp
+		if typ == protocol.WorkTaskType {
+			app = protocol.WorkApp
 		}
 		return h.Decide(app, schema, typ, id, key, payload)
 	}
@@ -111,16 +110,16 @@ func A2AServe(body io.Reader, version, agent, member string, h A2AHooks) map[str
 			if !ok {
 				return reply(nil, -32001, "task not found")
 			}
-			if x.State != "waiting" || !strings.HasPrefix(x.Task, platform.WorkApp+":") && !strings.HasPrefix(x.Task, platform.AgentApp+":") {
+			if x.State != "waiting" || !strings.HasPrefix(x.Task, protocol.WorkApp+":") && !strings.HasPrefix(x.Task, protocol.AgentApp+":") {
 				return reply(nil, -32004, "the task is not waiting for input")
 			}
-			if err := decide("work.task.complete", platform.WorkTaskType, x.Task, "a2a:"+p.Message.MessageID, map[string]string{"answer": p.Message.Text()}); err != nil {
+			if err := decide("work.task.complete", protocol.WorkTaskType, x.Task, "a2a:"+p.Message.MessageID, map[string]string{"answer": p.Message.Text()}); err != nil {
 				return reply(nil, -32603, err.Error())
 			}
 		} else {
 			sum := sha256.Sum256([]byte(member + "\x00" + p.Message.MessageID))
 			id = "A2A-" + strings.ToUpper(hex.EncodeToString(sum[:6]))
-			if err := decide(platform.SchemaRunStart, platform.RunType, id, "a2a:"+p.Message.MessageID, map[string]any{"agent": agent, "goal": p.Message.Text()}); err != nil &&
+			if err := decide(protocol.SchemaRunStart, protocol.RunType, id, "a2a:"+p.Message.MessageID, map[string]any{"agent": agent, "goal": p.Message.Text()}); err != nil &&
 				!strings.Contains(err.Error(), "CONFLICT") {
 				return reply(nil, -32603, err.Error())
 			}
@@ -150,7 +149,7 @@ func A2AServe(body io.Reader, version, agent, member string, h A2AHooks) map[str
 		if x.State == "done" || x.State == "stopped" {
 			return reply(nil, -32002, "the task has ended")
 		}
-		if err := decide(platform.SchemaRunCancel, platform.RunType, x.ID, "a2a-cancel:"+x.ID, map[string]any{}); err != nil {
+		if err := decide(protocol.SchemaRunCancel, protocol.RunType, x.ID, "a2a-cancel:"+x.ID, map[string]any{}); err != nil {
 			return reply(nil, -32603, err.Error())
 		}
 		x, question, _ := run(p.ID)

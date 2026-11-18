@@ -2,28 +2,28 @@ package trials
 
 import (
 	"fmt"
+	"platformserver/kernel/protocol"
 	"slices"
 
-	"platformserver/platform"
 	"platformserver/services/resources/authoring"
 )
 
 type StagedCandidate struct {
-	Candidate platform.ReleaseCandidate
+	Candidate protocol.ReleaseCandidate
 	Drafts    []build.JointDraftRef
 }
 
 type CandidateSource struct {
 	Drafts    func() (build.ConstructionDrafts, bool)
-	Candidate func(id string) (platform.ReleaseCandidate, error)
-	Preview   func(drafts []build.JointDraftRef) (diagnostic string, candidate platform.ReleaseCandidate, err error)
+	Candidate func(id string) (protocol.ReleaseCandidate, error)
+	Preview   func(drafts []build.JointDraftRef) (diagnostic string, candidate protocol.ReleaseCandidate, err error)
 	Function  func(id string) string
 }
 
-func (r CandidateSimulationRequest) Select(source CandidateSource, staged *StagedCandidate) (platform.ReleaseCandidate, string, error) {
+func (r CandidateSimulationRequest) Select(source CandidateSource, staged *StagedCandidate) (protocol.ReleaseCandidate, string, error) {
 	kind, id := r.Root()
 	drafts := []build.JointDraftRef{{Kind: kind, ID: id}}
-	var candidate platform.ReleaseCandidate
+	var candidate protocol.ReleaseCandidate
 	var err error
 	diagnostic := ""
 	if staged != nil && r.FunctionID == "" {

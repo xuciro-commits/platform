@@ -83,7 +83,7 @@ func (w Workspace) canEdit(m platform.Member, project string) bool {
 		return false
 	}
 	role := w.Role(m, project)
-	return role == platform.ProjectOwnerRole || role == platform.ProjectEditorRole
+	return role == protocol.ProjectOwnerRole || role == protocol.ProjectEditorRole
 }
 
 func (w Workspace) fields(typ string) (map[string]bool, *platform.Error) {
@@ -152,7 +152,7 @@ func (w Workspace) RID(typ, id string, spec map[string]json.RawMessage) string {
 	if err != nil {
 		return ""
 	}
-	return platform.ResourceID(w.Tenant, ref)
+	return protocol.ResourceID(w.Tenant, ref)
 }
 
 func summary(branch Branch) BranchDetail {

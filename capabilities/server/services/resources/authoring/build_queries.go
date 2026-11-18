@@ -1,6 +1,7 @@
 package build
 
 import (
+	"platformserver/kernel/protocol"
 	"reflect"
 
 	"platformserver/kernel/records"
@@ -21,7 +22,7 @@ func (b *Build) QueryDefinition(name string, version int) (platform.NamedQuery, 
 func (b *Build) queryEnvironment() publication.QueryAuthoringEnvironment {
 	return publication.QueryAuthoringEnvironment{
 		App: ID, Type: QueryType, Builder: Builder, Version: ValueDefinitionVersion,
-		Host:              func() platform.BuildHost { return b.host },
+		Host:              func() protocol.BuildHost { return b.host },
 		InstalledObject:   func(typ string) (platform.Entity, bool) { entity, ok := b.installed[typ]; return entity, ok },
 		LookupEntity:      b.lookupEntity,
 		JointEntities:     func() map[string]platform.EntityInfo { return b.jointEntities },

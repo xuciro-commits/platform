@@ -42,19 +42,19 @@ type invariantTenant struct {
 	entries []Entry
 }
 
-func newInvariantTenant(tb testing.TB, id string, seats ...platform.Seat) *invariantTenant {
+func newInvariantTenant(tb testing.TB, id string, seats ...runtimeprotocol.Seat) *invariantTenant {
 	tb.Helper()
 	return newInvariantTenantWithApps(tb, id, nil, seats...)
 }
 
-func newInvariantTenantWithApps(tb testing.TB, id string, apps []platform.App, seats ...platform.Seat) *invariantTenant {
+func newInvariantTenantWithApps(tb testing.TB, id string, apps []platform.App, seats ...runtimeprotocol.Seat) *invariantTenant {
 	tb.Helper()
 	live := newInvariantTenantSetup(tb, id, apps, seats...)
 	seedInvariantProject(tb, live)
 	return live
 }
 
-func newInvariantTenantReplayWithApps(tb testing.TB, id string, apps []platform.App, seats ...platform.Seat) *invariantTenant {
+func newInvariantTenantReplayWithApps(tb testing.TB, id string, apps []platform.App, seats ...runtimeprotocol.Seat) *invariantTenant {
 	tb.Helper()
 	live := newInvariantTenantSetup(tb, id, apps, seats...)
 	live.project = invariantProject
@@ -67,18 +67,18 @@ func seedInvariantProject(tb testing.TB, live *invariantTenant) {
 	live.accept(tb, runtimeprotocol.AppType+".create", runtimeprotocol.AppType, invariantProject, map[string]any{"name": "invariantproject", "title": "Invariant project"})
 }
 
-func newInvariantTenantSetup(tb testing.TB, id string, apps []platform.App, seats ...platform.Seat) *invariantTenant {
+func newInvariantTenantSetup(tb testing.TB, id string, apps []platform.App, seats ...runtimeprotocol.Seat) *invariantTenant {
 	tb.Helper()
 	services := runtimeprotocol.DefaultRuntimeCapabilities(security.Standard{})
 	services.BindOwner = runtimeprotocol.BindOwner
 	services.NewAgentEvaluator = agentevaluation.NewAgentEvaluator
 	services.NewTransactionExecutor = actions.NewRuntime
-	seat := platform.Seat{Subjects: []string{"builder"}, Member: platform.Member{ID: "builder", Roles: map[string]string{build.ID: build.Builder}}}
+	seat := runtimeprotocol.Seat{Subjects: []string{"builder"}, Member: platform.Member{ID: "builder", Roles: map[string]string{build.ID: build.Builder}}}
 	console := controlowner.NewConsole(id, actions.NewAuthority, func(id string) controlowner.Owners {
-		actions := append(platform.AccessActions(), platform.ProjectActions()...)
+		actions := append(runtimeprotocol.AccessActions(), runtimeprotocol.ProjectActions()...)
 		actions = append(actions, packages.Actions()...)
 		return controlowner.Owners{Policies: security.NewPolicies(), Packages: packages.New(id, PublicationResolver()), Actions: actions}
-	}, append([]platform.Seat{seat}, seats...)...)
+	}, append([]runtimeprotocol.Seat{seat}, seats...)...)
 	tenant, err := NewTenantWithCapabilities(id, services, append([]platform.App{console, build.New(id, actions.NewAuthority, []publication.Hooks{ontology.ActionTypePublication()}, PublicationResolver(), ontology.ObjectPublication, objects.QueryPublication, functionauthoring.NewOwner, agentowner.BuilderPublication, agentevaluation.NewOwner, devopsauthoring.TestPlanPublication, agentevaluation.EvaluationPublication, devopsauthoring.SampleSetPublication, build.ApplicationOwners{New: appsauthoring.NewOwner, ObjectPage: appsauthoring.CompileObjectPage, ListDetailPage: appsauthoring.ListDetailPage}, automationauthoring.New)}, apps...)...)
 	if err != nil {
 		tb.Fatal(err)
@@ -125,7 +125,7 @@ func (t *invariantTenant) accept(tb testing.TB, schema, typ, id string, payload 
 	return record
 }
 
-func (t *invariantTenant) restore(tb testing.TB, entries []Entry, seats ...platform.Seat) *invariantTenant {
+func (t *invariantTenant) restore(tb testing.TB, entries []Entry, seats ...runtimeprotocol.Seat) *invariantTenant {
 	tb.Helper()
 	stored := make([]Entry, len(entries))
 	for i, e := range entries {
@@ -214,7 +214,7 @@ func invariantPublishData(t *testing.T, tenant *invariantTenant, member platform
 
 func resourceRecord(t *testing.T, live *invariantTenant, ref platform.AssetRef) build.Resource {
 	t.Helper()
-	rid := platform.ResourceID(live.ID, ref)
+	rid := runtimeprotocol.ResourceID(live.ID, ref)
 	view, refusal := live.RecordOf(t.Context(), live.member(t), build.ResourceType, rid, invariantClock)
 	if refusal != nil {
 		t.Fatalf("read resource %s: %v", ref, refusal)

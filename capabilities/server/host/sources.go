@@ -3,6 +3,7 @@ package host
 import (
 	"context"
 	"net/http"
+	"platformserver/kernel/protocol"
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
@@ -125,7 +126,7 @@ func (t *Tenant) integration() dataowner.Integration {
 				return t.DataOwner().ExecutionSchedules(t.automation(build.ID, false))
 			})
 		},
-		Composite: func(member platform.Member, key string, edits []platform.CompositeEdit, now time.Time) error {
+		Composite: func(member platform.Member, key string, edits []protocol.CompositeEdit, now time.Time) error {
 			if _, refusal := t.Composite(member, key, edits, now); refusal != nil {
 				return refusal
 			}

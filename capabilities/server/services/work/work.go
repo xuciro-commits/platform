@@ -18,22 +18,22 @@ import (
 )
 
 const (
-	ID               = platform.WorkApp
-	ApprovalType     = platform.WorkApprovalType
-	TaskType         = platform.WorkTaskType
+	ID               = runtimeprotocol.WorkApp
+	ApprovalType     = runtimeprotocol.WorkApprovalType
+	TaskType         = runtimeprotocol.WorkTaskType
 	Admin            = "admin"
-	SchemaRequest    = platform.WorkApprovalRequestSchema
+	SchemaRequest    = runtimeprotocol.WorkApprovalRequestSchema
 	DelegationType   = "work.delegation"
 	SchemaDelegate   = "work.delegation.add"
 	SchemaUndelegate = "work.delegation.end"
-	ViewType         = platform.WorkViewType
+	ViewType         = runtimeprotocol.WorkViewType
 	SchemaViewSave   = "work.view.save"
 	SchemaViewRemove = "work.view.remove"
 )
 
-type ApprovalRequest = platform.ApprovalRequest
+type ApprovalRequest = runtimeprotocol.ApprovalRequest
 
-type ApprovalStep = platform.ApprovalStep
+type ApprovalStep = runtimeprotocol.ApprovalStep
 
 func approvalRequired(s ApprovalStep) int {
 	if s.All {
@@ -45,23 +45,23 @@ func approvalRequired(s ApprovalStep) int {
 	return 1
 }
 
-type Delegation = platform.WorkDelegation
+type Delegation = runtimeprotocol.WorkDelegation
 
-type WorkTask = platform.WorkTask
+type WorkTask = runtimeprotocol.WorkTask
 
-type SavedView = platform.SavedView
+type SavedView = runtimeprotocol.SavedView
 
 type Work struct {
 	mu          sync.Mutex
-	host        platform.WorkHost
+	host        runtimeprotocol.WorkHost
 	ledger      platform.Authority
 	authorities platform.Authorities
 }
 
-var _ platform.ApprovalOwner = (*Work)(nil)
+var _ runtimeprotocol.ApprovalOwner = (*Work)(nil)
 var _ runtimeprotocol.OwnerAttacher = (*Work)(nil)
 
-func (w *Work) AttachWork(h platform.WorkHost) { w.host = h }
+func (w *Work) AttachWork(h runtimeprotocol.WorkHost) { w.host = h }
 
 func (w *Work) AttachOwner(bindings runtimeprotocol.OwnerBindings) { w.AttachWork(bindings.Work) }
 
@@ -511,7 +511,7 @@ func (w *Work) view(c platform.Caller, s *pb.Submission) (func(*pb.ChangeRecord)
 	if json.Unmarshal(s.GetPayload(), &p) != nil || exists && p.Entity != v.Entity {
 		return nil, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 	}
-	if err := platform.CheckWorkViewState(p.State); err != nil {
+	if err := runtimeprotocol.CheckWorkViewState(p.State); err != nil {
 		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
 	}
 	v.ID, v.Title, v.Entity, v.State, v.Owner, v.Archived = id, p.Title, p.Entity, p.State, c.ID, false

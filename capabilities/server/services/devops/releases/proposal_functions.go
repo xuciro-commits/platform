@@ -3,13 +3,14 @@ package releases
 import (
 	"encoding/json"
 	"fmt"
+	"platformserver/kernel/protocol"
 
 	"platformserver/platform"
 	functionauthoring "platformserver/services/functions/authoring"
 	"platformserver/services/ontology"
 )
 
-func CheckProposalFunctions(candidate platform.ReleaseCandidate) error {
+func CheckProposalFunctions(candidate protocol.ReleaseCandidate) error {
 	functions := map[platform.AssetRef]platform.ReleaseAsset{}
 	for _, asset := range candidate.Assets {
 		if asset.Ref.Kind == platform.AssetFunction {

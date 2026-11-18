@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"platformserver/kernel/protocol"
 	"platformserver/platform"
 	"reflect"
 	"slices"
@@ -64,17 +65,17 @@ type integrationEntry struct {
 	typ           string
 	recordType    reflect.Type
 	requiresToken bool
-	publish       func(*Owner, any, platform.ReleaseAsset, platform.AssetReleaseContext) (any, error)
+	publish       func(*Owner, any, platform.ReleaseAsset, protocol.AssetReleaseContext) (any, error)
 }
 
-func newIntegrationEntry[T any](typ string, requiresToken bool, publish func(*Owner, T, platform.ReleaseAsset, platform.AssetReleaseContext) (T, error)) integrationEntry {
+func newIntegrationEntry[T any](typ string, requiresToken bool, publish func(*Owner, T, platform.ReleaseAsset, protocol.AssetReleaseContext) (T, error)) integrationEntry {
 	resource, ok := integrationResourceOfType(typ)
 	if !ok {
 		panic("integration resource " + typ + " has no metadata")
 	}
 	entry := integrationEntry{kind: resource.kind, typ: typ, recordType: reflect.TypeFor[T](), requiresToken: requiresToken}
 	if publish != nil {
-		entry.publish = func(o *Owner, record any, asset platform.ReleaseAsset, ctx platform.AssetReleaseContext) (any, error) {
+		entry.publish = func(o *Owner, record any, asset platform.ReleaseAsset, ctx protocol.AssetReleaseContext) (any, error) {
 			return publish(o, record.(T), asset, ctx)
 		}
 	}
@@ -86,18 +87,18 @@ var integrationEntries []integrationEntry
 func init() {
 	integrationEntries = []integrationEntry{
 		newIntegrationEntry[Connection](ConnectionType, false, nil),
-		newIntegrationEntry[Listener](ListenerType, true, func(_ *Owner, r Listener, _ platform.ReleaseAsset, _ platform.AssetReleaseContext) (Listener, error) {
+		newIntegrationEntry[Listener](ListenerType, true, func(_ *Owner, r Listener, _ platform.ReleaseAsset, _ protocol.AssetReleaseContext) (Listener, error) {
 			r.State, r.Enabled = "published", true
 			return r, nil
 		}),
-		newIntegrationEntry[Source](SourceType, true, func(_ *Owner, r Source, _ platform.ReleaseAsset, ctx platform.AssetReleaseContext) (Source, error) {
+		newIntegrationEntry[Source](SourceType, true, func(_ *Owner, r Source, _ platform.ReleaseAsset, ctx protocol.AssetReleaseContext) (Source, error) {
 			r.State, r.Publisher, r.PublisherScopes = "published", ctx.Member.ID, string(platform.Raw(ctx.Member.Scopes))
 			if r.Stream && r.Dataset != "" && r.Puller == "" {
 				r.Puller, r.PullerScopes = ctx.Member.ID, string(platform.Raw(ctx.Member.Scopes))
 			}
 			return r, nil
 		}),
-		newIntegrationEntry[platform.MediaSet](platform.MediaSetType, false, func(o *Owner, r platform.MediaSet, asset platform.ReleaseAsset, _ platform.AssetReleaseContext) (platform.MediaSet, error) {
+		newIntegrationEntry[platform.MediaSet](platform.MediaSetType, false, func(o *Owner, r platform.MediaSet, asset platform.ReleaseAsset, _ protocol.AssetReleaseContext) (platform.MediaSet, error) {
 			configuration, err := o.integrationConfiguration(asset)
 			if err != nil {
 				return r, err
@@ -106,7 +107,7 @@ func init() {
 			fixed.Record, fixed.DefinitionVersion, fixed.Published, fixed.Versions = r.Record, r.DefinitionVersion, r.Published, r.Versions
 			return fixed, nil
 		}),
-		newIntegrationEntry[platform.Schedule](platform.ScheduleType, false, func(o *Owner, r platform.Schedule, asset platform.ReleaseAsset, ctx platform.AssetReleaseContext) (platform.Schedule, error) {
+		newIntegrationEntry[platform.Schedule](platform.ScheduleType, false, func(o *Owner, r platform.Schedule, asset platform.ReleaseAsset, ctx protocol.AssetReleaseContext) (platform.Schedule, error) {
 			configuration, err := o.integrationConfiguration(asset)
 			if err != nil {
 				return r, err
@@ -117,18 +118,18 @@ func init() {
 			return fixed, nil
 		}),
 		newIntegrationEntry[Dataset](DatasetType, false, nil),
-		newIntegrationEntry[Pipeline](PipelineType, true, func(_ *Owner, r Pipeline, _ platform.ReleaseAsset, ctx platform.AssetReleaseContext) (Pipeline, error) {
+		newIntegrationEntry[Pipeline](PipelineType, true, func(_ *Owner, r Pipeline, _ platform.ReleaseAsset, ctx protocol.AssetReleaseContext) (Pipeline, error) {
 			if !ctx.DraftsOnly && !ctx.Member.CanDeclassify(r.PublishedDeclassifications()) {
 				return r, fmt.Errorf("declassification publication requires clearance and permission for every selected marking")
 			}
 			r.State = "published"
 			return r, nil
 		}),
-		newIntegrationEntry[Writeback](WritebackType, true, func(_ *Owner, r Writeback, _ platform.ReleaseAsset, ctx platform.AssetReleaseContext) (Writeback, error) {
+		newIntegrationEntry[Writeback](WritebackType, true, func(_ *Owner, r Writeback, _ platform.ReleaseAsset, ctx protocol.AssetReleaseContext) (Writeback, error) {
 			r.State, r.Publisher = "published", ctx.Member.ID
 			return r, nil
 		}),
-		newIntegrationEntry[Observation](ObservationType, true, func(o *Owner, r Observation, asset platform.ReleaseAsset, ctx platform.AssetReleaseContext) (Observation, error) {
+		newIntegrationEntry[Observation](ObservationType, true, func(o *Owner, r Observation, asset platform.ReleaseAsset, ctx protocol.AssetReleaseContext) (Observation, error) {
 			configuration, err := o.integrationConfiguration(asset)
 			if err != nil {
 				return r, err
@@ -139,7 +140,7 @@ func init() {
 			fixed.DefinitionVersion, fixed.Published, fixed.Versions = r.DefinitionVersion, r.Published, r.Versions
 			return fixed, nil
 		}),
-		newIntegrationEntry[Match](MatchType, true, func(_ *Owner, r Match, _ platform.ReleaseAsset, ctx platform.AssetReleaseContext) (Match, error) {
+		newIntegrationEntry[Match](MatchType, true, func(_ *Owner, r Match, _ platform.ReleaseAsset, ctx protocol.AssetReleaseContext) (Match, error) {
 			r.State, r.Publisher = "published", ctx.Member.ID
 			return r, nil
 		}),

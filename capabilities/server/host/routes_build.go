@@ -52,14 +52,14 @@ func (h *Host) routesBuild(rt *routes) {
 			return t.actionCheck(m, r.PathValue("schema"), request, h.Now(), t.Language(m, r))
 		})
 	}))
-	rt.authorized(transport.Route{Pattern: "GET /v1/build/drafts/actions", Summary: "Describe saved object actions for authoring without installing them or granting execution", Answer: []platform.CapabilityDescriptor{}}, build.ID, builder, transport.AnsweringOr(http.StatusConflict, func(_ *http.Request, m platform.Member, t *Tenant) ([]platform.CapabilityDescriptor, error) {
+	rt.authorized(transport.Route{Pattern: "GET /v1/build/drafts/actions", Summary: "Describe saved object actions for authoring without installing them or granting execution", Answer: []protocol.CapabilityDescriptor{}}, build.ID, builder, transport.AnsweringOr(http.StatusConflict, func(_ *http.Request, m platform.Member, t *Tenant) ([]protocol.CapabilityDescriptor, error) {
 		return t.DraftActionCapabilities(m)
 	}))
 	compositeBody := struct {
 		Key   string                   `json:"key"`
-		Edits []platform.CompositeEdit `json:"edits"`
+		Edits []protocol.CompositeEdit `json:"edits"`
 	}{}
-	rt.handle(transport.Route{Pattern: "POST /v1/composites", Summary: "Edit several of an application's assets as one unit: every edit is probed, and either all apply or none", Body: compositeBody, Answer: platform.CompositeAnswer{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
+	rt.handle(transport.Route{Pattern: "POST /v1/composites", Summary: "Edit several of an application's assets as one unit: every edit is probed, and either all apply or none", Body: compositeBody, Answer: protocol.CompositeAnswer{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
 		body, _ := io.ReadAll(io.LimitReader(r.Body, 4<<20))
 		request := compositeBody
 		if json.Unmarshal(body, &request) != nil {
@@ -73,8 +73,8 @@ func (h *Host) routesBuild(rt *routes) {
 		}
 		WriteJSON(w, http.StatusOK, answer)
 	})
-	rt.authorized(transport.Route{Pattern: "POST /v1/build/code/sdk", Summary: "Generate the Go/TinyGo input, output and command wrapper from the same bounded schema", Body: platform.ComputeSDKRequest{}, Answer: platform.ComputeSDK{}}, build.ID, builder, func(w http.ResponseWriter, r *http.Request, m platform.Member, _ *Tenant) {
-		var q platform.ComputeSDKRequest
+	rt.authorized(transport.Route{Pattern: "POST /v1/build/code/sdk", Summary: "Generate the Go/TinyGo input, output and command wrapper from the same bounded schema", Body: protocol.ComputeSDKRequest{}, Answer: protocol.ComputeSDK{}}, build.ID, builder, func(w http.ResponseWriter, r *http.Request, m platform.Member, _ *Tenant) {
+		var q protocol.ComputeSDKRequest
 		if !readCapabilityBody(w, r, &q) {
 			return
 		}
@@ -83,7 +83,7 @@ func (h *Host) routesBuild(rt *routes) {
 			Reply(w, nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error()))
 			return
 		}
-		WriteJSON(w, http.StatusOK, platform.ComputeSDK{Source: string(source)})
+		WriteJSON(w, http.StatusOK, protocol.ComputeSDK{Source: string(source)})
 	})
 	rt.authorized(transport.Route{Pattern: "POST /v1/build/process/check", Summary: "Validate a workflow draft with its owner compiler without executing it", Query: []transport.Param{{Name: "branch", Description: "a branch id: the draft is validated against that branch's staged definitions, where objects that exist only on the branch resolve"}}, Body: protocol.Process{}, Answer: build.ProcessDiagnostics{}}, build.ID, builder, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
 		var p protocol.Process
@@ -187,10 +187,10 @@ func (h *Host) routesBuild(rt *routes) {
 	rt.authorized(transport.Route{Pattern: "POST /v1/simulate/candidate", Summary: "Test an application draft closure or retained candidate with synthetic samples, controlled members and original executor traces", Body: trialowner.CandidateSimulationRequest{}, Answer: trialowner.CandidateSimulation{}}, build.ID, builder, transport.Bounded(1<<20, "The test plan must be a valid bounded JSON object", func(_ *http.Request, m platform.Member, t *Tenant, request trialowner.CandidateSimulationRequest) (trialowner.CandidateSimulation, *platform.Error) {
 		return t.SimulateCandidate(m, request)
 	}))
-	rt.handle(transport.Route{Pattern: "GET /v1/projects/{id}/access", Summary: "A project's members and roles; owners, builders and administrators also get the people they may add", Answer: platform.ProjectAccessView{}}, transport.Answering(func(r *http.Request, m platform.Member, t *Tenant) (platform.ProjectAccessView, *platform.Error) {
-		d, _ := t.App(controlowner.PlatformApp).(platform.ProjectAccess)
+	rt.handle(transport.Route{Pattern: "GET /v1/projects/{id}/access", Summary: "A project's members and roles; owners, builders and administrators also get the people they may add", Answer: protocol.ProjectAccessView{}}, transport.Answering(func(r *http.Request, m platform.Member, t *Tenant) (protocol.ProjectAccessView, *platform.Error) {
+		d, _ := t.App(controlowner.PlatformApp).(protocol.ProjectAccess)
 		if d == nil || !m.Holds(build.ID, build.Builder) && !m.Holds(controlowner.PlatformApp, controlowner.Admin) {
-			return platform.ProjectAccessView{}, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_POLICY_DENIED}
+			return protocol.ProjectAccessView{}, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_POLICY_DENIED}
 		}
 		return d.ProjectAccess(m, r.PathValue("id")), nil
 	}))

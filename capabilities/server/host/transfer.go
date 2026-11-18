@@ -2,6 +2,7 @@ package host
 
 import (
 	"context"
+	"platformserver/kernel/protocol"
 	"platformserver/services/objects"
 	controlowner "platformserver/services/security/control"
 	"time"
@@ -10,7 +11,7 @@ import (
 	"platformserver/platform"
 )
 
-func (t *Tenant) Import(m platform.Member, typ string, data []byte, preview bool, now time.Time) ([]platform.ImportRow, *platform.Error) {
+func (t *Tenant) Import(m platform.Member, typ string, data []byte, preview bool, now time.Time) ([]protocol.ImportRow, *platform.Error) {
 	if err := t.Admits(m); err != nil {
 		return nil, err
 	}

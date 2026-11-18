@@ -50,7 +50,7 @@ func (t *Tenant) contextRead(reader *platform.Member, typ, id string, now time.T
 		},
 		Readable: func(ref string) bool { return t.readable(m, ref, now) },
 		Flows:    records(t.Processes != nil, protocol.FlowInstanceType),
-		Tasks:    records(t.Tasks != nil, platform.WorkTaskType),
+		Tasks:    records(t.Tasks != nil, protocol.WorkTaskType),
 	}.Read(typ, id)
 }
 

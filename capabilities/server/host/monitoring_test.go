@@ -119,14 +119,14 @@ func newMonitoringTenant(tb testing.TB) *invariantTenant {
 	services.NewAgentEvaluator = agentevaluation.NewAgentEvaluator
 	services.NewTransactionExecutor = actions.NewRuntime
 	console := controlowner.NewConsole(id, actions.NewAuthority, func(id string) controlowner.Owners {
-		actions := append(platform.AccessActions(), platform.ProjectActions()...)
+		actions := append(runtimeprotocol.AccessActions(), runtimeprotocol.ProjectActions()...)
 		actions = append(actions, packages.Actions()...)
 		return controlowner.Owners{Policies: security.NewPolicies(), Packages: packages.New(id, PublicationResolver()), Actions: actions}
-	}, platform.Seat{Subjects: []string{"admin"}, Member: platform.Member{ID: "admin", Roles: map[string]string{controlowner.PlatformApp: controlowner.Admin, build.ID: build.Builder, "probe": "runner", runtimeprotocol.FlowApp: automation.Admin, platform.AgentApp: platform.AgentAdmin}}},
-		platform.Seat{Subjects: []string{"builder"}, Member: platform.Member{ID: "builder", Roles: map[string]string{build.ID: build.Builder, "probe": "runner"}}},
-		platform.Seat{Subjects: []string{"other"}, Member: platform.Member{ID: "other", Roles: map[string]string{build.ID: build.Builder, "probe": "runner"}}},
-		platform.Seat{Subjects: []string{"scoped"}, Member: platform.Member{ID: "scoped", Roles: map[string]string{build.ID: build.Builder, controlowner.PlatformApp: controlowner.Admin, runtimeprotocol.FlowApp: automation.Admin, platform.AgentApp: platform.AgentAdmin}, Scopes: []string{dataowner.SchemaSourcePulled}}},
-		platform.Seat{Subjects: []string{"user"}, Member: platform.Member{ID: "user", Roles: map[string]string{}}})
+	}, runtimeprotocol.Seat{Subjects: []string{"admin"}, Member: platform.Member{ID: "admin", Roles: map[string]string{controlowner.PlatformApp: controlowner.Admin, build.ID: build.Builder, "probe": "runner", runtimeprotocol.FlowApp: automation.Admin, runtimeprotocol.AgentApp: runtimeprotocol.AgentAdmin}}},
+		runtimeprotocol.Seat{Subjects: []string{"builder"}, Member: platform.Member{ID: "builder", Roles: map[string]string{build.ID: build.Builder, "probe": "runner"}}},
+		runtimeprotocol.Seat{Subjects: []string{"other"}, Member: platform.Member{ID: "other", Roles: map[string]string{build.ID: build.Builder, "probe": "runner"}}},
+		runtimeprotocol.Seat{Subjects: []string{"scoped"}, Member: platform.Member{ID: "scoped", Roles: map[string]string{build.ID: build.Builder, controlowner.PlatformApp: controlowner.Admin, runtimeprotocol.FlowApp: automation.Admin, runtimeprotocol.AgentApp: runtimeprotocol.AgentAdmin}, Scopes: []string{dataowner.SchemaSourcePulled}}},
+		runtimeprotocol.Seat{Subjects: []string{"user"}, Member: platform.Member{ID: "user", Roles: map[string]string{}}})
 	var probeActions []platform.Action
 	for _, schema := range []string{"probe.start", "probe.step", "probe.undo"} {
 		probeActions = append(probeActions, platform.Action{Schema: schema, Target: "probe.event", Title: schema, Description: "Drive the monitoring owner boundary probe", Roles: []string{"runner"}, Payload: []platform.Field{{Name: "flow", Type: "text"}}})
@@ -164,7 +164,7 @@ func TestInvariantK4MonitoringOwnerBoundaries(t *testing.T) {
 	}
 	source := sourceView.Record.(dataowner.Source)
 	live.accept(t, dataowner.SchemaSourcePulled, dataowner.SourceType, "SRC1", map[string]any{"pull": dataowner.SourcePull{At: invariantClock, DefinitionVersion: source.ExecutionVersion(), Error: "source failed"}})
-	live.accept(t, "build.pipeline.create", dataowner.PipelineType, "PL1", map[string]any{"name": "transform", "title": "Transform", "input": "DS1", "outputDataset": "DS2", "steps": []platform.TransformStep{{Kind: "select", Columns: []string{"id"}}}})
+	live.accept(t, "build.pipeline.create", dataowner.PipelineType, "PL1", map[string]any{"name": "transform", "title": "Transform", "input": "DS1", "outputDataset": "DS2", "steps": []runtimeprotocol.TransformStep{{Kind: "select", Columns: []string{"id"}}}})
 	live.accept(t, "build.pipeline.publish", dataowner.PipelineType, "PL1", map[string]any{})
 	pipelineView, refusal := live.RecordOf(t.Context(), live.member(t), dataowner.PipelineType, "PL1", now)
 	if refusal != nil {
@@ -396,7 +396,7 @@ func TestInvariantK4MonitoringOwnerBoundaries(t *testing.T) {
 			if id == "private-agent" {
 				member = "other"
 			}
-			submit(member, platform.AgentApp, platform.SchemaRunStart, platform.RunType, id, map[string]string{"agent": "probe.helper", "goal": "Goal " + id})
+			submit(member, runtimeprotocol.AgentApp, runtimeprotocol.SchemaRunStart, runtimeprotocol.RunType, id, map[string]string{"agent": "probe.helper", "goal": "Goal " + id})
 		}
 		for _, step := range []runtimeprotocol.AgentResultStep{
 			{Run: "waiting", Tool: "ask", Arguments: platform.Raw(map[string]string{"question": "What next?"})},
@@ -408,7 +408,7 @@ func TestInvariantK4MonitoringOwnerBoundaries(t *testing.T) {
 				t.Fatalf("the Agent result was not accepted: %+v", step)
 			}
 		}
-		submit("builder", platform.AgentApp, platform.SchemaRunCancel, platform.RunType, "cancelled", map[string]any{})
+		submit("builder", runtimeprotocol.AgentApp, runtimeprotocol.SchemaRunCancel, runtimeprotocol.RunType, "cancelled", map[string]any{})
 		beforeRecords, beforeEntries := live.recordImage(t), len(live.entries)
 		adminPage, builderPage, otherPage := read("admin", "?limit=100"), read("builder", "?limit=100"), read("other", "?limit=100")
 		if len(live.entries) != beforeEntries || len(differingTypes(beforeRecords, live.recordImage(t))) != 0 {
@@ -429,13 +429,13 @@ func TestInvariantK4MonitoringOwnerBoundaries(t *testing.T) {
 			}
 			for id, want := range map[string]string{"running": "running", "waiting": "pending", "done": "ok", "failed": "failed", "cancelled": "cancelled"} {
 				run := find(page, "agent:"+id)
-				view, refusal := live.RecordOf(t.Context(), admin, platform.RunType, id, now)
+				view, refusal := live.RecordOf(t.Context(), admin, runtimeprotocol.RunType, id, now)
 				if refusal != nil {
 					t.Fatal(refusal)
 				}
-				x := view.Record.(platform.AgentRunRecord)
+				x := view.Record.(runtimeprotocol.AgentRunRecord)
 				ref := platform.AssetRef{App: "probe", Kind: platform.AssetAgent, Name: "helper"}
-				if run.Type != "function" || run.Source != "agent" || run.Status != want || run.OwnerStatus != x.State || run.RecordRef != platform.RunType+"/"+id || run.ResourceRef == nil || *run.ResourceRef != ref || run.Title != x.Title || !run.When.Equal(x.Changed.At) || run.Retryable || run.RetrySchema != "" || run.RetryTarget != nil {
+				if run.Type != "function" || run.Source != "agent" || run.Status != want || run.OwnerStatus != x.State || run.RecordRef != runtimeprotocol.RunType+"/"+id || run.ResourceRef == nil || *run.ResourceRef != ref || run.Title != x.Title || !run.When.Equal(x.Changed.At) || run.Retryable || run.RetrySchema != "" || run.RetryTarget != nil {
 					t.Fatalf("Agent owner projection: %+v; owner=%+v", run, x)
 				}
 			}

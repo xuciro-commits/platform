@@ -33,10 +33,10 @@ func (a AgentAcceptance) Accept(b protocol.AgentResultStep, at time.Time) (err e
 	}
 	member := a.Agent.AgentPrincipal(name)
 	if b.Evaluation != nil && b.Evaluation.Candidate != "" {
-		member = platform.Member{ID: "app:" + platform.AgentApp, Tenant: a.Tenant}
+		member = platform.Member{ID: "app:" + protocol.AgentApp, Tenant: a.Tenant}
 	}
-	c := platform.NewCaller(a.Draft, member, platform.AgentApp, false, true)
-	r := acceptedformat.RuntimeAgent{Version: 1, Kind: "agent-result", Tenant: a.Tenant, App: platform.AgentApp, Member: member.ID, At: at.UTC(), Step: b}
+	c := platform.NewCaller(a.Draft, member, protocol.AgentApp, false, true)
+	r := acceptedformat.RuntimeAgent{Version: 1, Kind: "agent-result", Tenant: a.Tenant, App: protocol.AgentApp, Member: member.ID, At: at.UTC(), Step: b}
 	if b.Evaluation == nil && b.Usage.Model != "" {
 		if r.UsageBefore, err = a.UsageBefore(); err != nil {
 			return err

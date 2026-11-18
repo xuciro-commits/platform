@@ -3,6 +3,7 @@ package aigateway
 import (
 	"encoding/json"
 	"fmt"
+	"platformserver/kernel/protocol"
 	"strconv"
 	"strings"
 
@@ -15,7 +16,7 @@ type ModelAsk struct {
 	Model              string                   `json:"model"`
 	Binding            *platform.AIModelBinding `json:"binding,omitempty"`
 	ConfigurationError string                   `json:"configurationError,omitempty"`
-	Prompt             platform.Prompt          `json:"prompt"`
+	Prompt             protocol.Prompt          `json:"prompt"`
 	Reply              string                   `json:"reply"`
 	Record             string                   `json:"record"`
 	Call               string                   `json:"call"`
@@ -66,7 +67,7 @@ func (ask ModelAsk) Outcome(out platform.Outcome, answer platform.ChatAnswer, fa
 }
 
 func (ask ModelAsk) Submission(tenant string, x platform.Effect, o platform.Outcome, usage *platform.AIUsage, authority func(string) string) *pb.Submission {
-	answer := platform.Answer{Call: ask.Call, Action: "ask", Outcome: "accepted"}
+	answer := protocol.Answer{Call: ask.Call, Action: "ask", Outcome: "accepted"}
 	if (ask.Function != nil || ask.Evaluation) && usage != nil {
 		answer.Metered, answer.TokensReported = true, usage.TokensReported
 		answer.InputTokens, answer.OutputTokens = usage.Input, usage.Output

@@ -2,9 +2,9 @@ package host
 
 import (
 	runtimekernel "platformserver/kernel"
+	"platformserver/kernel/protocol"
 	controlowner "platformserver/services/security/control"
 
-	"platformserver/platform"
 	"platformserver/services/actions"
 	"time"
 )
@@ -25,7 +25,7 @@ func (t *Tenant) Replay(entries []Entry) error {
 				saved, applied, err := t.applyAcceptedInput(body)
 				return runtimekernel.ReplayedResult{App: saved.App, Member: saved.Member, At: saved.At, Applied: applied, After: func(at time.Time) {
 					if saved.Refusal == nil {
-						t.AuditLog.Remember(platform.AuditEntry{At: at, Member: saved.Member, App: saved.App, Action: "input:" + saved.Name})
+						t.AuditLog.Remember(protocol.AuditEntry{At: at, Member: saved.Member, App: saved.App, Action: "input:" + saved.Name})
 						t.enqueue(at)
 					}
 				}}, err

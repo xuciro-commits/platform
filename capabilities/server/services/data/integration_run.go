@@ -10,6 +10,7 @@ import (
 	"io"
 	"log"
 	"maps"
+	"platformserver/kernel/protocol"
 	transform "platformserver/services/data/transform"
 	"slices"
 	"strings"
@@ -61,7 +62,7 @@ type Integration struct {
 	ScheduleExists     func(id string) bool
 	PipelineProject    func(id string) string
 	ExecutionSchedules func() ([]platform.Schedule, *platform.Error)
-	Composite          func(member platform.Member, key string, edits []platform.CompositeEdit, now time.Time) error
+	Composite          func(member platform.Member, key string, edits []protocol.CompositeEdit, now time.Time) error
 }
 
 type IntegrationPreparation struct {

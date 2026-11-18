@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"platformserver/kernel/protocol"
 	"platformserver/platform"
 	"platformserver/services/resources/authoring"
 	"platformserver/services/resources/publication"
@@ -14,15 +15,15 @@ import (
 
 type AcceptedAssets struct {
 	Available    func() ([]platform.ReleaseAsset, error)
-	WithBindings func(roots []platform.AssetRef, available []platform.ReleaseAsset) (platform.ReleaseCandidate, error)
+	WithBindings func(roots []platform.AssetRef, available []platform.ReleaseAsset) (protocol.ReleaseCandidate, error)
 	Apps         func() []platform.App
 	CodeAssets   func(platform.App) ([]platform.ReleaseAsset, error)
 }
 
-func RunningRelease(saved platform.ReleaseCandidate, assets AcceptedAssets) (platform.ReleaseCandidate, error) {
+func RunningRelease(saved protocol.ReleaseCandidate, assets AcceptedAssets) (protocol.ReleaseCandidate, error) {
 	available, err := assets.Available()
 	if err != nil {
-		return platform.ReleaseCandidate{}, err
+		return protocol.ReleaseCandidate{}, err
 	}
 	roots := make([]platform.AssetRef, 0, len(saved.Assets))
 	installed := make(map[platform.AssetRef]bool, len(available))
@@ -35,21 +36,21 @@ func RunningRelease(saved platform.ReleaseCandidate, assets AcceptedAssets) (pla
 		}
 	}
 	if len(roots) == 0 {
-		return platform.ReleaseCandidate{}, nil
+		return protocol.ReleaseCandidate{}, nil
 	}
 	return assets.WithBindings(roots, available)
 }
 
-func AcceptedInstallationRelease(saved platform.ReleaseCandidate, assets AcceptedAssets) (platform.ReleaseCandidate, error) {
+func AcceptedInstallationRelease(saved protocol.ReleaseCandidate, assets AcceptedAssets) (protocol.ReleaseCandidate, error) {
 	available, err := assets.Available()
 	if err != nil {
-		return platform.ReleaseCandidate{}, err
+		return protocol.ReleaseCandidate{}, err
 	}
 	code := map[platform.AssetRef]bool{}
 	for _, app := range assets.Apps() {
 		owned, err := assets.CodeAssets(app)
 		if err != nil {
-			return platform.ReleaseCandidate{}, err
+			return protocol.ReleaseCandidate{}, err
 		}
 		for _, asset := range owned {
 			code[asset.Ref] = true
@@ -79,7 +80,7 @@ func PendingWorkFits(resolver publication.Resolver, candidateID string, raw []by
 	if err != nil {
 		return err
 	}
-	actionIn := func(c platform.ReleaseCandidate, name string) []byte {
+	actionIn := func(c protocol.ReleaseCandidate, name string) []byte {
 		for _, a := range c.Assets {
 			if a.Ref.Kind == platform.AssetAction && a.Ref.Name == name {
 				out, _ := json.Marshal(a)
@@ -88,7 +89,7 @@ func PendingWorkFits(resolver publication.Resolver, candidateID string, raw []by
 		}
 		return nil
 	}
-	approvals, _, _ := platform.Find[platform.ApprovalRequest](*caller,
+	approvals, _, _ := platform.Find[protocol.ApprovalRequest](*caller,
 		platform.Query{Domain: json.RawMessage(`[["state","=","pending"]]`), Sort: []string{"id"}})
 	for _, request := range approvals {
 		next := actionIn(candidate, request.Action)
@@ -119,7 +120,7 @@ func CheckRequest(m platform.Member, candidateID, key string, now time.Time, qua
 	return nil
 }
 
-func ResourceProject(candidate platform.ReleaseCandidate, resources []build.Resource) string {
+func ResourceProject(candidate protocol.ReleaseCandidate, resources []build.Resource) string {
 	projects := func(apps bool) []string {
 		out := []string{}
 		for _, asset := range candidate.Assets {
@@ -148,8 +149,8 @@ func ResourceProject(candidate platform.ReleaseCandidate, resources []build.Reso
 }
 
 type Activation struct {
-	UpgradePlan func(candidate platform.ReleaseCandidate) (*ReleaseUpgradePlan, error)
-	Lifecycle   func(candidate platform.ReleaseCandidate) ([]platform.ReleaseInstallation, json.RawMessage, error)
+	UpgradePlan func(candidate protocol.ReleaseCandidate) (*ReleaseUpgradePlan, error)
+	Lifecycle   func(candidate protocol.ReleaseCandidate) ([]platform.ReleaseInstallation, json.RawMessage, error)
 }
 
 func PlanActivation(resolver publication.Resolver, candidateID string, raw []byte, upgradeID string, activation Activation) ([]platform.ReleaseInstallation, json.RawMessage, error) {
@@ -169,7 +170,7 @@ func PlanActivation(resolver publication.Resolver, candidateID string, raw []byt
 	return activation.Lifecycle(candidate)
 }
 
-func SavedCandidateBytes(prior []byte, preview func() (ReleasePreview, platform.ReleaseCandidate, error), candidateID string) ([]byte, error) {
+func SavedCandidateBytes(prior []byte, preview func() (ReleasePreview, protocol.ReleaseCandidate, error), candidateID string) ([]byte, error) {
 	if prior != nil {
 		return slices.Clone(prior), nil
 	}

@@ -12,13 +12,13 @@ import (
 	dataowner "platformserver/services/data"
 )
 
-func (b *Build) prepareReleasePublications(assets []platform.ReleaseAsset) ([]platform.ReleasePublication, []platform.AssetInstallation, error) {
+func (b *Build) prepareReleasePublications(assets []platform.ReleaseAsset) ([]platform.ReleasePublication, []protocol.AssetInstallation, error) {
 	objects, pages, apps, err := b.releaseInventory()
 	if err != nil {
 		return nil, nil, err
 	}
 	var publications []platform.ReleasePublication
-	var installations []platform.AssetInstallation
+	var installations []protocol.AssetInstallation
 	hooks := slices.Clone(b.publications)
 	for i := range hooks {
 		if slices.Contains(hooks[i].Kinds, platform.AssetObject) {
@@ -122,7 +122,7 @@ type Draft struct {
 	Image json.RawMessage
 }
 
-func (b *Build) releaseDraftsOf(candidate platform.ReleaseCandidate) ([]Draft, error) {
+func (b *Build) releaseDraftsOf(candidate protocol.ReleaseCandidate) ([]Draft, error) {
 	authored := map[string]bool{}
 	if b.host != nil {
 		pages, err := readDefinitionInventory[protocol.Page](b.host.Automation(platform.Caller{}, ID))

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"maps"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
+	runtimeprotocol "platformserver/kernel/protocol"
 	"platformserver/platform"
 	"slices"
 	"strings"
@@ -24,7 +25,7 @@ const (
 	Admin           = "admin"
 )
 
-func Memberships(seats []platform.Seat) []platform.Membership {
+func Memberships(seats []runtimeprotocol.Seat) []platform.Membership {
 	var out []platform.Membership
 	for _, s := range seats {
 		for _, m := range s.Units {
@@ -36,20 +37,20 @@ func Memberships(seats []platform.Seat) []platform.Membership {
 }
 
 type Owners struct {
-	Policies platform.ConsolePolicies
-	Packages platform.ConsolePackages
+	Policies runtimeprotocol.ConsolePolicies
+	Packages runtimeprotocol.ConsolePackages
 	Actions  []platform.Action
 }
 
 type IdentityOwner interface {
 	platform.IdentityDirectory
-	platform.IdentityProfile
-	platform.IdentitySessions
-	platform.HostIdentities
-	platform.IdentityRecovery
-	platform.IdentityCounts
-	platform.Credentials
-	platform.ProjectAccess
+	runtimeprotocol.IdentityProfile
+	runtimeprotocol.IdentitySessions
+	runtimeprotocol.HostIdentities
+	runtimeprotocol.IdentityRecovery
+	runtimeprotocol.IdentityCounts
+	runtimeprotocol.Credentials
+	runtimeprotocol.ProjectAccess
 }
 
 type Console struct {
@@ -61,7 +62,7 @@ type Console struct {
 	subjects        map[string]string
 	directoryShared bool
 	then            func()
-	profiles        map[string]*platform.Profile
+	profiles        map[string]*runtimeprotocol.Profile
 	tokens          map[string]*Token
 	minted          map[string]bool
 	accessRequests  map[string]*AccessRequest
@@ -71,8 +72,8 @@ type Console struct {
 	acceptedDigest  string
 	acceptedValid   bool
 	sessions        sessionTable
-	platform.ConsolePolicies
-	platform.ConsolePackages
+	runtimeprotocol.ConsolePolicies
+	runtimeprotocol.ConsolePackages
 	ledger      platform.Authority
 	authorities platform.Authorities
 	host        platform.ConsoleHost
@@ -111,15 +112,15 @@ func ConsoleActions(ownerActions []platform.Action) *platform.Catalog {
 	return platform.NewCatalog(actions...)
 }
 
-func NewConsole(tenant string, authorities platform.Authorities, newOwners func(string) Owners, seats ...platform.Seat) *Console {
+func NewConsole(tenant string, authorities platform.Authorities, newOwners func(string) Owners, seats ...runtimeprotocol.Seat) *Console {
 	owners := newOwners(tenant)
-	d := &Console{tenant: tenant, newOwners: newOwners, members: map[string]*platform.Member{}, subjects: map[string]string{}, profiles: map[string]*platform.Profile{},
+	d := &Console{tenant: tenant, newOwners: newOwners, members: map[string]*platform.Member{}, subjects: map[string]string{}, profiles: map[string]*runtimeprotocol.Profile{},
 		ConsolePolicies: owners.Policies,
-		tokens:          map[string]*Token{}, minted: map[string]bool{}, accessRequests: map[string]*AccessRequest{}, lastSeen: map[string]time.Time{}, sessions: sessionTable{seen: map[string]map[string]*platform.Session{}, revoked: map[string]bool{}},
+		tokens:          map[string]*Token{}, minted: map[string]bool{}, accessRequests: map[string]*AccessRequest{}, lastSeen: map[string]time.Time{}, sessions: sessionTable{seen: map[string]map[string]*runtimeprotocol.Session{}, revoked: map[string]bool{}},
 		ConsolePackages: owners.Packages,
 		Credentials:     NewCredentials(tenant),
 		authorities:     authorities,
-		ledger:          authorities(tenant, PlatformApp, ConsoleActions(owners.Actions), MemberType, ProfileType, platform.MarkingType, platform.RoleType, platform.PolicyType, platform.TeamType, TokenType, platform.ProjectType, AccessRequestType, platform.PackageType, CredentialType, ConnectorType, SettingType, WorkType, NotificationType, ProtocolType, EndpointType, EffectType, OperationType, TranslationType)}
+		ledger:          authorities(tenant, PlatformApp, ConsoleActions(owners.Actions), MemberType, ProfileType, platform.MarkingType, runtimeprotocol.RoleType, runtimeprotocol.PolicyType, runtimeprotocol.TeamType, TokenType, runtimeprotocol.ProjectType, AccessRequestType, runtimeprotocol.PackageType, CredentialType, ConnectorType, SettingType, WorkType, NotificationType, ProtocolType, EndpointType, EffectType, OperationType, TranslationType)}
 	for _, s := range seats {
 		m := s.Member
 		m.Tenant, m.Roles = tenant, maps.Clone(m.Roles)
@@ -134,33 +135,33 @@ func NewConsole(tenant string, authorities platform.Authorities, newOwners func(
 	return d
 }
 
-func (d *Console) Identities() []platform.LoginIdentity {
+func (d *Console) Identities() []runtimeprotocol.LoginIdentity {
 	d.mu.Lock()
 	defer d.mu.Unlock()
-	out := []platform.LoginIdentity{}
+	out := []runtimeprotocol.LoginIdentity{}
 	for subject, id := range d.subjects {
 		if m := d.members[id]; m != nil && m.Status != platform.MemberLeft {
-			out = append(out, platform.LoginIdentity{Token: subject, Tenant: d.tenant, Member: id, Roles: d.currentMember(m).Roles})
+			out = append(out, runtimeprotocol.LoginIdentity{Token: subject, Tenant: d.tenant, Member: id, Roles: d.currentMember(m).Roles})
 		}
 	}
-	slices.SortFunc(out, func(a, b platform.LoginIdentity) int { return strings.Compare(a.Token, b.Token) })
+	slices.SortFunc(out, func(a, b runtimeprotocol.LoginIdentity) int { return strings.Compare(a.Token, b.Token) })
 	return out
 }
 
 type consoleState struct {
-	PackageSources map[string]platform.PackageSource     `json:"packageSources,omitempty"`
-	Credentials    map[string]platform.CredentialState   `json:"credentials,omitempty"`
-	Members        map[string]*platform.Member           `json:"members"`
-	Subjects       map[string]string                     `json:"subjects"`
-	Profiles       map[string]*platform.Profile          `json:"profiles,omitempty"`
-	Projects       map[string]*platform.BuildProject     `json:"projects,omitempty"`
-	Packages       map[string]*platform.InstalledPackage `json:"packages,omitempty"`
-	Markings       map[string]*platform.Marking          `json:"markings,omitempty"`
-	Roles          map[string]*platform.CustomRole       `json:"roles,omitempty"`
-	Policies       map[string]*platform.PolicyRecord     `json:"policies,omitempty"`
-	Teams          map[string]*platform.Team             `json:"teams,omitempty"`
-	Tokens         map[string]*Token                     `json:"tokens,omitempty"`
-	AccessRequests map[string]*AccessRequest             `json:"accessRequests,omitempty"`
+	PackageSources map[string]runtimeprotocol.PackageSource     `json:"packageSources,omitempty"`
+	Credentials    map[string]runtimeprotocol.CredentialState   `json:"credentials,omitempty"`
+	Members        map[string]*platform.Member                  `json:"members"`
+	Subjects       map[string]string                            `json:"subjects"`
+	Profiles       map[string]*runtimeprotocol.Profile          `json:"profiles,omitempty"`
+	Projects       map[string]*platform.BuildProject            `json:"projects,omitempty"`
+	Packages       map[string]*runtimeprotocol.InstalledPackage `json:"packages,omitempty"`
+	Markings       map[string]*platform.Marking                 `json:"markings,omitempty"`
+	Roles          map[string]*platform.CustomRole              `json:"roles,omitempty"`
+	Policies       map[string]*platform.PolicyRecord            `json:"policies,omitempty"`
+	Teams          map[string]*platform.Team                    `json:"teams,omitempty"`
+	Tokens         map[string]*Token                            `json:"tokens,omitempty"`
+	AccessRequests map[string]*AccessRequest                    `json:"accessRequests,omitempty"`
 }
 
 func (d *Console) state() consoleState {
@@ -188,14 +189,14 @@ func (d *Console) Restore(raw json.RawMessage) error {
 	d.acceptedDigest = ""
 	d.acceptedValid = false
 	if d.profiles == nil {
-		d.profiles = map[string]*platform.Profile{}
+		d.profiles = map[string]*runtimeprotocol.Profile{}
 	}
 	d.restoreAccess(s)
 	return nil
 }
 
 func (d *Console) restoreAccess(s consoleState) {
-	d.ConsolePackages.Restore(platform.PackageState{Packages: s.Packages, Sources: s.PackageSources})
+	d.ConsolePackages.Restore(runtimeprotocol.PackageState{Packages: s.Packages, Sources: s.PackageSources})
 	d.Credentials.Restore(s.Credentials)
 	d.ConsolePolicies.Restore(platform.AuthorizationState{Markings: s.Markings, Projects: s.Projects, Roles: s.Roles, Policies: s.Policies, Teams: s.Teams})
 	d.tokens = s.Tokens
@@ -257,7 +258,7 @@ func clone(m *platform.Member) platform.Member {
 }
 
 func (d *Console) Manifest() platform.Manifest {
-	return platform.Manifest{ID: PlatformApp, Title: platform.BuiltinManifestTitle(PlatformApp), Version: "1", Actions: d.ledger.Catalog(), Roles: []string{Admin, platform.Auditor, "confidential", "restricted"},
+	return platform.Manifest{ID: PlatformApp, Title: platform.BuiltinManifestTitle(PlatformApp), Version: "1", Actions: d.ledger.Catalog(), Roles: []string{Admin, runtimeprotocol.Auditor, "confidential", "restricted"},
 		Reads:       []string{"members", "tenant", "account", "audit", "deliveries", "work", "connectors", "settings", "notifications", "endpoints", "effects", "health", "personal-reads", "permissions", "access", "access-requests", "packages", "contributions", "credentials", "markings"},
 		ReadSources: map[string]string{"members": "record", "tenant": "record", "account": "record", "audit": "record", "deliveries": "record", "connectors": "record", "settings": "record", "endpoints": "record", "health": "record", "personal-reads": "record", "permissions": "record", "access": "record", "access-requests": "record", "packages": "record", "credentials": "record", "contributions": "record", "markings": "record"},
 		Everyone:    []string{"notifications", "tenant", "account", "markings", "access-requests"}, Inputs: map[string]bool{"heartbeat": false},
@@ -280,7 +281,7 @@ func (d *Console) Fork(ledger platform.Authority) (platform.App, error) {
 	fork.members, fork.subjects = state.Members, state.Subjects
 	fork.ConsolePolicies.Restore(platform.AuthorizationState{Markings: state.Markings, Projects: state.Projects, Roles: state.Roles, Policies: state.Policies, Teams: state.Teams})
 	fork.ConsolePolicies.Attach(d.host)
-	fork.ConsolePackages.Restore(platform.PackageState{Packages: state.Packages, Sources: state.PackageSources})
+	fork.ConsolePackages.Restore(runtimeprotocol.PackageState{Packages: state.Packages, Sources: state.PackageSources})
 	if state.Credentials != nil {
 		fork.Credentials.Restore(state.Credentials)
 	}
@@ -408,7 +409,7 @@ func (d *Console) ApplyAcceptedState(raw json.RawMessage) error {
 	d.acceptedDigest = ""
 	d.acceptedValid = true
 	if d.profiles == nil {
-		d.profiles = map[string]*platform.Profile{}
+		d.profiles = map[string]*runtimeprotocol.Profile{}
 	}
 	d.restoreAccess(state)
 	return nil
@@ -420,7 +421,7 @@ func (d *Console) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*p
 		if declared.Target == OperationType {
 			return d.decideOperation(c, s, now)
 		}
-		if declared.Target == MemberType || declared.Target == ProfileType || declared.Target == platform.MarkingType || declared.Target == platform.RoleType || declared.Target == platform.PolicyType || declared.Target == platform.TeamType || declared.Target == TokenType {
+		if declared.Target == MemberType || declared.Target == ProfileType || declared.Target == platform.MarkingType || declared.Target == runtimeprotocol.RoleType || declared.Target == runtimeprotocol.PolicyType || declared.Target == runtimeprotocol.TeamType || declared.Target == TokenType {
 			d.mu.Lock()
 			if d.directoryShared && (declared.Target == MemberType || declared.Target == ProfileType || declared.Target == TokenType) {
 				d.acceptedState = nil
@@ -458,7 +459,7 @@ func (d *Console) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*p
 				apply, err = d.decideToken(c, s)
 			case declared.Target != MemberType:
 				apply, err = d.ConsolePolicies.PrepareAccess(c, s, slices.Collect(maps.Keys(d.members)))
-			case s.GetSchema().GetName() == platform.SchemaDelegate:
+			case s.GetSchema().GetName() == runtimeprotocol.SchemaDelegate:
 				apply, err = d.decideDelegate(c, s)
 			case slices.Contains([]string{SchemaInvite, SchemaJoin, SchemaMemberSuspend, SchemaMemberResume, SchemaOffboard}, s.GetSchema().GetName()):
 				apply, err = d.decideLifecycle(c, s)
@@ -495,7 +496,7 @@ func (d *Console) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*p
 				apply(r)
 			}, err
 		}
-		if declared.Target == platform.PackageType {
+		if declared.Target == runtimeprotocol.PackageType {
 			apply, err := d.ConsolePackages.Prepare(c, s)
 			if apply == nil {
 				return nil, err
@@ -507,7 +508,7 @@ func (d *Console) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*p
 				apply(r)
 			}, err
 		}
-		if declared.Target == platform.ProjectType {
+		if declared.Target == runtimeprotocol.ProjectType {
 			d.mu.Lock()
 			members := slices.Collect(maps.Keys(d.members))
 			d.mu.Unlock()
@@ -633,7 +634,7 @@ func (d *Console) Read(c platform.Caller, name string) (any, *platform.Error) {
 		}
 		return d.Credentials.Catalog(), nil
 	}
-	if name == "packages" && !c.Holds(PlatformApp, Admin) && !c.Holds(PlatformApp, platform.Auditor) && c.Member.InScope("build.app.create") && c.May("build", "build.app.create", []string{"builder"}).Allow {
+	if name == "packages" && !c.Holds(PlatformApp, Admin) && !c.Holds(PlatformApp, runtimeprotocol.Auditor) && c.Member.InScope("build.app.create") && c.May("build", "build.app.create", []string{"builder"}).Allow {
 		return d.ConsolePackages.BlueprintViews(), nil
 	}
 	if name == "markings" {
@@ -644,8 +645,8 @@ func (d *Console) Read(c platform.Caller, name string) (any, *platform.Error) {
 				markings[i].Cleared = platform.MarkingCleared(c.Member, markings[i].ID)
 			}
 			markings[i].CanDeclassify = c.Member.CanDeclassify([]string{markings[i].ID})
-			markings[i].RID = platform.ResourceID(c.Tenant, platform.AssetRef{App: PlatformApp, Kind: "marking", Name: markings[i].ID})
-			if !c.Holds(PlatformApp, Admin) && !c.Holds(PlatformApp, platform.Auditor) {
+			markings[i].RID = runtimeprotocol.ResourceID(c.Tenant, platform.AssetRef{App: PlatformApp, Kind: "marking", Name: markings[i].ID})
+			if !c.Holds(PlatformApp, Admin) && !c.Holds(PlatformApp, runtimeprotocol.Auditor) {
 				markings[i].Members, markings[i].Teams, markings[i].Declassifiers, markings[i].DeclassifierTeams = nil, nil, nil, nil
 			}
 		}
@@ -654,7 +655,7 @@ func (d *Console) Read(c platform.Caller, name string) (any, *platform.Error) {
 	if name == "access-requests" {
 		return d.AccessRequests(c), nil
 	}
-	if h == nil || !c.Holds(PlatformApp, Admin) && (!c.Holds(PlatformApp, platform.Auditor) || !platform.AuditorMayRead(name)) {
+	if h == nil || !c.Holds(PlatformApp, Admin) && (!c.Holds(PlatformApp, runtimeprotocol.Auditor) || !runtimeprotocol.AuditorMayRead(name)) {
 		return nil, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_POLICY_DENIED}
 	}
 	switch name {
@@ -668,9 +669,9 @@ func (d *Console) Read(c platform.Caller, name string) (any, *platform.Error) {
 	def := d.defaults()
 	d.mu.Lock()
 	defer d.mu.Unlock()
-	out := []platform.MemberView{}
+	out := []runtimeprotocol.MemberView{}
 	for _, m := range d.members {
-		v := platform.MemberView{Member: d.currentMember(m), Subjects: []string{}, Profile: d.account(m.ID, def).Profile}
+		v := runtimeprotocol.MemberView{Member: d.currentMember(m), Subjects: []string{}, Profile: d.account(m.ID, def).Profile}
 		for subject, id := range d.subjects {
 			if id == m.ID {
 				v.Subjects = append(v.Subjects, subject)
@@ -679,7 +680,7 @@ func (d *Console) Read(c platform.Caller, name string) (any, *platform.Error) {
 		slices.Sort(v.Subjects)
 		out = append(out, v)
 	}
-	slices.SortFunc(out, func(a, b platform.MemberView) int { return strings.Compare(a.ID, b.ID) })
+	slices.SortFunc(out, func(a, b runtimeprotocol.MemberView) int { return strings.Compare(a.ID, b.ID) })
 	return out, nil
 }
 

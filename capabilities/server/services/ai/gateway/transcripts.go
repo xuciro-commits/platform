@@ -20,7 +20,7 @@ func (r TranscriptReader[T]) Read(m platform.Member, run string, limit int) ([]T
 	if err := r.Admits(m); err != nil {
 		return nil, err
 	}
-	if m.Roles[platform.AgentApp] != platform.AgentAdmin && m.Roles[platform.AIApp] != platform.AIAdmin {
+	if m.Roles[runtimeprotocol.AgentApp] != runtimeprotocol.AgentAdmin && m.Roles[runtimeprotocol.AIApp] != runtimeprotocol.AIAdmin {
 		return nil, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_POLICY_DENIED, Message: "only an administrator of the agent or AI app reads transcripts"}
 	}
 	found := r.Find(run, limit)
@@ -42,7 +42,7 @@ func (r TranscriptReader[T]) Read(m platform.Member, run string, limit int) ([]T
 var PurgeAll = time.Date(9999, 12, 31, 0, 0, 0, 0, time.UTC)
 
 func TranscriptDays(setting func(string) string) int {
-	days, err := strconv.Atoi(setting(platform.SettingTranscriptDays))
+	days, err := strconv.Atoi(setting(runtimeprotocol.SettingTranscriptDays))
 	if err != nil {
 		return 0
 	}

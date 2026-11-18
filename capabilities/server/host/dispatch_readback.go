@@ -2,6 +2,7 @@ package host
 
 import (
 	"context"
+	"platformserver/kernel/protocol"
 	dataowner "platformserver/services/data"
 	"slices"
 	"time"
@@ -18,7 +19,7 @@ func (t *Tenant) ReadDispatches(at time.Time) {
 	dataowner.DispatchPoll{Schedule: &t.schedules.Dispatches,
 		Pending: func() ([]platform.DispatchRun, *platform.Error) {
 			return recordRead(t, context.Background(), func(t *Tenant) ([]platform.DispatchRun, *platform.Error) {
-				return platform.PendingDispatches(t.automation(build.ID, false))
+				return protocol.PendingDispatches(t.automation(build.ID, false))
 			})
 		},
 		Plan: func(id string) (dataowner.DispatchReadPlan, *platform.Error) {

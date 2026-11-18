@@ -3,6 +3,7 @@ package applications
 import (
 	"encoding/json"
 	"fmt"
+	"platformserver/kernel/protocol"
 	"slices"
 	"strings"
 
@@ -15,9 +16,9 @@ import (
 type ApplicationAI struct {
 	Model               func(kind, name string, options platform.ModelOptions) (string, string, bool)
 	Resolver            publication.Resolver
-	AgentEvaluations    func(string, string, string) ([]platform.ApplicationAIEvaluation, *platform.Error)
+	AgentEvaluations    func(string, string, string) ([]protocol.ApplicationAIEvaluation, *platform.Error)
 	FunctionDefinition  func(platform.ReleaseAsset) (platform.AIFunction, int, error)
-	FunctionEvaluations func(string, int, string) ([]platform.ApplicationAIEvaluation, *platform.Error)
+	FunctionEvaluations func(string, int, string) ([]protocol.ApplicationAIEvaluation, *platform.Error)
 	Roles               []string
 }
 
@@ -25,8 +26,8 @@ func conflict(err error) *platform.Error {
 	return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, err.Error())
 }
 
-func (a ApplicationAI) List(m platform.Member, assets []platform.ReleaseAsset, visible map[platform.AssetRef]bool) ([]platform.ApplicationAI, *platform.Error) {
-	out := []platform.ApplicationAI{}
+func (a ApplicationAI) List(m platform.Member, assets []platform.ReleaseAsset, visible map[platform.AssetRef]bool) ([]protocol.ApplicationAI, *platform.Error) {
+	out := []protocol.ApplicationAI{}
 	for _, asset := range assets {
 		if !visible[asset.Ref] {
 			continue
@@ -37,7 +38,7 @@ func (a ApplicationAI) List(m platform.Member, assets []platform.ReleaseAsset, v
 			if json.Unmarshal(asset.Body, &definition) != nil || a.Resolver.CheckAgent(definition) != nil {
 				return nil, conflict(fmt.Errorf("invalid agent declaration"))
 			}
-			item := platform.ApplicationAI{Resource: platform.AssetBinding{Ref: asset.Ref, SourceVersion: asset.SourceVersion}, Placement: "assist", Model: definition.Model, HandoffRole: definition.HandoffRole, Adoptions: []string{}, Checkpoints: slices.Clone(definition.Checkpoints), Evaluations: []platform.ApplicationAIEvaluation{}}
+			item := protocol.ApplicationAI{Resource: platform.AssetBinding{Ref: asset.Ref, SourceVersion: asset.SourceVersion}, Placement: "assist", Model: definition.Model, HandoffRole: definition.HandoffRole, Adoptions: []string{}, Checkpoints: slices.Clone(definition.Checkpoints), Evaluations: []protocol.ApplicationAIEvaluation{}}
 			currentConfig := ""
 			if bound, config, ok := a.Model("agent", definition.Model, definition.ModelOptions); ok {
 				item.Model, currentConfig = bound, config
@@ -74,7 +75,7 @@ func (a ApplicationAI) List(m platform.Member, assets []platform.ReleaseAsset, v
 		if err != nil {
 			return nil, conflict(err)
 		}
-		item := platform.ApplicationAI{Resource: platform.AssetBinding{Ref: asset.Ref, SourceVersion: asset.SourceVersion}, Placement: "assist", Model: definition.Model, Adoptions: []string{}, Checkpoints: []string{}, Evaluations: []platform.ApplicationAIEvaluation{}}
+		item := protocol.ApplicationAI{Resource: platform.AssetBinding{Ref: asset.Ref, SourceVersion: asset.SourceVersion}, Placement: "assist", Model: definition.Model, Adoptions: []string{}, Checkpoints: []string{}, Evaluations: []protocol.ApplicationAIEvaluation{}}
 		currentConfig := ""
 		if bound, config, ok := a.Model("generation", definition.Model, definition.ModelOptions.Override(platform.ModelOptions{MaxTokens: definition.MaxTokens})); ok {
 			item.Model, currentConfig = bound, config
@@ -119,7 +120,7 @@ func (a ApplicationAI) List(m platform.Member, assets []platform.ReleaseAsset, v
 	return out, nil
 }
 
-func ApplicationAIUsage(report platform.AIUsageReport, application platform.AssetRef, items []platform.ApplicationAI) []platform.ApplicationAI {
+func ApplicationAIUsage(report protocol.AIUsageReport, application platform.AssetRef, items []protocol.ApplicationAI) []protocol.ApplicationAI {
 	for _, total := range report.Applications {
 		if total.Resource == nil || total.Application.Ref != application {
 			continue
@@ -137,15 +138,15 @@ func ApplicationAIUsage(report platform.AIUsageReport, application platform.Asse
 			item.CostUnknown += total.CostUnknown
 		}
 	}
-	slices.SortFunc(items, func(a, b platform.ApplicationAI) int {
+	slices.SortFunc(items, func(a, b protocol.ApplicationAI) int {
 		return strings.Compare(a.Resource.Ref.String(), b.Resource.Ref.String())
 	})
 	return items
 }
 
-func ApplicationAIUsageOf(value any, application platform.AssetRef, items []platform.ApplicationAI) []platform.ApplicationAI {
+func ApplicationAIUsageOf(value any, application platform.AssetRef, items []protocol.ApplicationAI) []protocol.ApplicationAI {
 	switch report := value.(type) {
-	case platform.AIUsageReport:
+	case protocol.AIUsageReport:
 		return ApplicationAIUsage(report, application, items)
 	}
 	return items

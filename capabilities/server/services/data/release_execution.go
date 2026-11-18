@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"platformserver/kernel/protocol"
 	"reflect"
 	"slices"
 	"strconv"
@@ -45,7 +46,7 @@ func (o *Owner) ConnectionConfiguration(live Connection) (Connection, error) {
 		return Connection{}, fmt.Errorf("connection binding kind differs from its accepted definition")
 	}
 	r.Record, r.Address, r.Secret, r.AllowPrivate, r.State, r.Requested, r.Last = live.Record, live.Address, live.Secret, live.AllowPrivate, live.State, live.Requested, live.Last
-	r.Marking = platform.HigherMarking(r.Marking, live.Marking)
+	r.Marking = protocol.HigherMarking(r.Marking, live.Marking)
 	r.Compartments = platform.JoinCompartments(r.Compartments, live.Compartments)
 	r.DefinitionVersion, r.Published, r.Versions = live.DefinitionVersion, live.Published, live.Versions
 	return r, nil
@@ -82,7 +83,7 @@ func (o *Owner) ExecutionDataset(live Dataset) (Dataset, error) {
 		return Dataset{}, err
 	}
 	r.Record, r.Producer, r.Schema, r.Version, r.Last = live.Record, live.Producer, live.Schema, live.Version, live.Last
-	r.Marking = platform.HigherMarking(r.Marking, live.Marking)
+	r.Marking = protocol.HigherMarking(r.Marking, live.Marking)
 	r.Compartments = platform.JoinCompartments(r.Compartments, live.Compartments)
 	r.DefinitionVersion, r.Published, r.Versions = live.DefinitionVersion, live.Published, live.Versions
 	return r, nil
@@ -204,7 +205,7 @@ func freezeDirectIntegration[T any](o *Owner, kind platform.AssetKind, record T)
 	if err != nil {
 		return zero, err
 	}
-	if err := o.validateIntegrationUpgrade(platform.AssetInstallation{Ref: asset.Ref, Schema: integrationDescriptor(kind).publication(), Record: integrationDescriptor(kind).record(integrationRecord(fixed).ID), Image: image}); err != nil {
+	if err := o.validateIntegrationUpgrade(protocol.AssetInstallation{Ref: asset.Ref, Schema: integrationDescriptor(kind).publication(), Record: integrationDescriptor(kind).record(integrationRecord(fixed).ID), Image: image}); err != nil {
 		return zero, err
 	}
 	return integrationAs[T](fixed)
@@ -350,8 +351,8 @@ type PipelineDefinition struct {
 	Name             string                          `json:"name"`
 	Title            string                          `json:"title"`
 	Input            string                          `json:"input"`
-	Steps            []platform.TransformStep        `json:"steps"`
-	Expectations     []platform.TransformExpectation `json:"expectations,omitempty"`
+	Steps            []protocol.TransformStep        `json:"steps"`
+	Expectations     []protocol.TransformExpectation `json:"expectations,omitempty"`
 	OutputDataset    string                          `json:"outputDataset,omitempty"`
 	OutputObject     string                          `json:"outputObject,omitempty"`
 	OutputEnterprise *EnterpriseTarget               `json:"outputEnterprise,omitempty"`

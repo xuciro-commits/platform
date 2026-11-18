@@ -32,7 +32,7 @@ type ownerSet struct {
 	owner         map[string]string
 	states        map[string]platform.AcceptedStateApp
 	inputs        map[string]platform.AcceptedInputApp
-	assets        map[string]platform.AssetLifecycleOwner
+	assets        map[string]protocol.AssetLifecycleOwner
 	answerers     map[string]platform.Answerer
 	builders      map[string]build.ConstructionDrafts
 	operations    map[string]runtimekernel.OperationOwner
@@ -86,8 +86,8 @@ func (s ownerSet) dynamicAgentList() []protocol.DynamicAgentDefinitions {
 	return out
 }
 
-func (s ownerSet) assetOwners(active func(string) bool) []platform.AssetLifecycleOwner {
-	var out []platform.AssetLifecycleOwner
+func (s ownerSet) assetOwners(active func(string) bool) []protocol.AssetLifecycleOwner {
+	var out []protocol.AssetLifecycleOwner
 	for _, id := range s.ids {
 		if owner := s.assets[id]; owner != nil && active(id) {
 			out = append(out, owner)

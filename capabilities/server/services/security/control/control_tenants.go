@@ -11,6 +11,7 @@ import (
 	"maps"
 	"os"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
+	"platformserver/kernel/protocol"
 	"platformserver/platform"
 	"regexp"
 	"slices"
@@ -46,7 +47,7 @@ const endedSessionsShown = 24 * time.Hour
 
 type sessionTable struct {
 	mu      sync.Mutex
-	seen    map[string]map[string]*platform.Session
+	seen    map[string]map[string]*protocol.Session
 	revoked map[string]bool
 }
 
@@ -283,10 +284,10 @@ func (d *Console) MemberByToken(secret string, now time.Time) (platform.Member, 
 	return platform.Member{}, false
 }
 
-func (d *Console) Tokens(member string, now time.Time) []platform.TokenView {
+func (d *Console) Tokens(member string, now time.Time) []protocol.TokenView {
 	d.mu.Lock()
 	defer d.mu.Unlock()
-	out := []platform.TokenView{}
+	out := []protocol.TokenView{}
 	for _, id := range slices.Sorted(maps.Keys(d.tokens)) {
 		t := d.tokens[id]
 		if t.Member != member {
@@ -296,7 +297,7 @@ func (d *Console) Tokens(member string, now time.Time) []platform.TokenView {
 		if scopes == nil {
 			scopes = []string{}
 		}
-		out = append(out, platform.TokenView{ID: t.ID, Label: t.Label, Scopes: scopes, Until: t.Until, Issued: t.Issued, LastUsed: d.lastSeen["token:"+t.ID],
+		out = append(out, protocol.TokenView{ID: t.ID, Label: t.Label, Scopes: scopes, Until: t.Until, Issued: t.Issued, LastUsed: d.lastSeen["token:"+t.ID],
 			Expired: t.Until != "" && now.UTC().Format(time.DateOnly) >= t.Until})
 	}
 	return out
@@ -327,7 +328,7 @@ func (d *Console) NoticeSession(member, credential, agent string, kind string, n
 		return false
 	}
 	if d.sessions.seen[member] == nil {
-		d.sessions.seen[member] = map[string]*platform.Session{}
+		d.sessions.seen[member] = map[string]*protocol.Session{}
 	}
 	s := d.sessions.seen[member][id]
 	if s != nil && kind == "sign-in" && hours > 0 && now.Sub(s.First) >= time.Duration(hours)*time.Hour {
@@ -335,7 +336,7 @@ func (d *Console) NoticeSession(member, credential, agent string, kind string, n
 		return false
 	}
 	if s == nil {
-		s = &platform.Session{ID: id, Kind: kind, Token: token, First: now, Agent: summarize(agent)}
+		s = &protocol.Session{ID: id, Kind: kind, Token: token, First: now, Agent: summarize(agent)}
 		d.sessions.seen[member][id] = s
 	}
 	s.Last = now
@@ -366,11 +367,11 @@ func (d *Console) EndOtherSessions(member, credential string, now time.Time) int
 	return n
 }
 
-func (d *Console) Sessions(member, credential string, now time.Time) []platform.Session {
+func (d *Console) Sessions(member, credential string, now time.Time) []protocol.Session {
 	cur := sessionID(credential)
 	d.sessions.mu.Lock()
 	defer d.sessions.mu.Unlock()
-	out := []platform.Session{}
+	out := []protocol.Session{}
 	for id, s := range d.sessions.seen[member] {
 		if !s.Ended.IsZero() && now.Sub(s.Ended) > endedSessionsShown {
 			delete(d.sessions.seen[member], id)
@@ -380,7 +381,7 @@ func (d *Console) Sessions(member, credential string, now time.Time) []platform.
 		v.Current = v.ID == cur
 		out = append(out, v)
 	}
-	slices.SortFunc(out, func(a, b platform.Session) int {
+	slices.SortFunc(out, func(a, b protocol.Session) int {
 		if (a.Ended.IsZero()) != (b.Ended.IsZero()) {
 			if a.Ended.IsZero() {
 				return -1
@@ -471,20 +472,20 @@ func (d *Console) JoinableSubject(subject string) bool {
 type Specs struct {
 	mu   sync.Mutex
 	file string
-	list []platform.TenantSpec
+	list []protocol.TenantSpec
 }
 
-func (s *Specs) Load(file string, development platform.TenantSpec) error {
+func (s *Specs) Load(file string, development protocol.TenantSpec) error {
 	s.file = file
 	if file == "" {
-		s.list = []platform.TenantSpec{development}
+		s.list = []protocol.TenantSpec{development}
 		return nil
 	}
 	raw, err := os.ReadFile(file)
 	if err != nil {
 		return err
 	}
-	var list []platform.TenantSpec
+	var list []protocol.TenantSpec
 	if err := json.Unmarshal(raw, &list); err != nil {
 		return fmt.Errorf("%s: %w", file, err)
 	}
@@ -499,7 +500,7 @@ func (s *Specs) Load(file string, development platform.TenantSpec) error {
 	return nil
 }
 
-func (s *Specs) Get(id string) (platform.TenantSpec, bool) {
+func (s *Specs) Get(id string) (protocol.TenantSpec, bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	for _, t := range s.list {
@@ -507,19 +508,19 @@ func (s *Specs) Get(id string) (platform.TenantSpec, bool) {
 			return t, true
 		}
 	}
-	return platform.TenantSpec{}, false
+	return protocol.TenantSpec{}, false
 }
 
-func (s *Specs) All() []platform.TenantSpec {
+func (s *Specs) All() []protocol.TenantSpec {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return slices.Clone(s.list)
 }
 
-func (s *Specs) Add(spec platform.TenantSpec) error {
+func (s *Specs) Add(spec protocol.TenantSpec) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if slices.ContainsFunc(s.list, func(t platform.TenantSpec) bool { return t.ID == spec.ID }) {
+	if slices.ContainsFunc(s.list, func(t protocol.TenantSpec) bool { return t.ID == spec.ID }) {
 		return fmt.Errorf("tenant %s exists", spec.ID)
 	}
 	next := append(slices.Clone(s.list), spec)

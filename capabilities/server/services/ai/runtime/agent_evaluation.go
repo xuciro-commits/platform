@@ -50,7 +50,7 @@ func (a *Agents) startEvaluation(c platform.Caller, id string, p struct {
 	Agent, Model, Candidate string
 	Suite                   bool
 }) (func(*pb.ChangeRecord), *platform.Error) {
-	if _, known := platform.Get[platform.Evaluation](c, id); known {
+	if _, known := platform.Get[protocol.Evaluation](c, id); known {
 		return nil, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
 	}
 	d := a.def(p.Agent)
@@ -68,7 +68,7 @@ func (a *Agents) startEvaluation(c platform.Caller, id string, p struct {
 		if refusal != nil {
 			return nil, refusal
 		}
-		binding, _, refusal := a.host.ResolveAgentModel(p.Model, d.ModelOptions, platform.AIStageDesign)
+		binding, _, refusal := a.host.ResolveAgentModel(p.Model, d.ModelOptions, protocol.AIStageDesign)
 		if refusal != nil {
 			return nil, refusal
 		}
@@ -83,7 +83,7 @@ func (a *Agents) startEvaluation(c platform.Caller, id string, p struct {
 	if p.Suite && len(d.Cases) == 0 {
 		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "The agent {agent} declares no cases", p.Agent)
 	}
-	binding, _, refusal := a.host.ResolveAgentModel(p.Model, d.ModelOptions, platform.AIStageDesign)
+	binding, _, refusal := a.host.ResolveAgentModel(p.Model, d.ModelOptions, protocol.AIStageDesign)
 	if refusal != nil {
 		return nil, refusal
 	}
@@ -91,8 +91,8 @@ func (a *Agents) startEvaluation(c platform.Caller, id string, p struct {
 		model, pv, _ := a.host.AgentModel(p.Model)
 		config, _ = a.host.AgentModelConfigurationDigest(model, pv, &binding)
 	}
-	ev := platform.Evaluation{Binding: &binding, Record: platform.Record{ID: id}, Agent: p.Agent, Model: p.Model, State: "queued", Cases: []platform.EvalCase{}, Suite: p.Suite, Candidate: p.Candidate, DefinitionDigest: digest, ModelConfig: config}
-	return func(r *pb.ChangeRecord) { a.host.Automation(c, platform.AgentApp).Put(r, ev) }, nil
+	ev := protocol.Evaluation{Binding: &binding, Record: platform.Record{ID: id}, Agent: p.Agent, Model: p.Model, State: "queued", Cases: []protocol.EvalCase{}, Suite: p.Suite, Candidate: p.Candidate, DefinitionDigest: digest, ModelConfig: config}
+	return func(r *pb.ChangeRecord) { a.host.Automation(c, protocol.AgentApp).Put(r, ev) }, nil
 }
 
 func (a *Agents) AgentEvaluationRuntime() protocol.AgentEvaluationRuntime {

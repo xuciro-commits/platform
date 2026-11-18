@@ -3,6 +3,7 @@ package actions
 import (
 	"encoding/json"
 	"fmt"
+	"platformserver/kernel/protocol"
 	"slices"
 
 	"platformserver/platform"
@@ -76,7 +77,7 @@ func EndpointHealth(endpoints []Endpoint, effects []Queued, secretMissing func(E
 			case x.Endpoint != ep.ID:
 			case x.State == "delivered":
 				v.Delivers++
-			case !platform.EffectSettled(x.State):
+			case !protocol.EffectSettled(x.State):
 				v.Pending++
 				if x.State == "retrying" && v.Failing == 0 {
 					v.Failing, v.Health = x.Attempts, "failing"

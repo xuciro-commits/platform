@@ -54,7 +54,7 @@ type Build struct {
 	sampleSetFactory          func(devopsmodel.SampleSetEnvironment) devopsmodel.SampleSetPublication
 	sampleSets                devopsmodel.SampleSetPublication
 	installationCatalog       *platform.Catalog
-	host                      platform.BuildHost
+	host                      runtimeprotocol.BuildHost
 	transaction               platform.TransactionHost
 	data                      *dataowner.Owner
 	automation                publication.AutomationAuthoring
@@ -83,7 +83,7 @@ type testPlanPublication = devopsmodel.TestPlanPublication[ontology.Object, runt
 
 func (b *Build) bindPublications() {
 	object := b.objectPublication(ontology.ObjectPublicationEnvironment{
-		Host:      func() platform.BuildHost { return b.host },
+		Host:      func() runtimeprotocol.BuildHost { return b.host },
 		Authority: func() platform.Authority { return b.ledger },
 		Entity:    b.entity,
 		Portable:  b.data.PortableObject,
@@ -135,7 +135,7 @@ func (b *Build) bindPublications() {
 	})
 }
 
-func (b *Build) AttachBuild(h platform.BuildHost)             { b.host = h }
+func (b *Build) AttachBuild(h runtimeprotocol.BuildHost)      { b.host = h }
 func (b *Build) AttachTransaction(h platform.TransactionHost) { b.transaction = h }
 func (b *Build) AttachFiles(h runtimeprotocol.MediaFileHost)  { b.data.AttachFiles(h) }
 
@@ -192,7 +192,7 @@ func New(tenant string, authorities platform.Authorities, publications []publica
 	actions = append(actions, devopsmodel.ProductVersionActions()...)
 	actions = append(actions, platform.Action{Schema: SchemaEvaluationSetPublish, Target: TestPlanType, Title: "Publish test plan", Description: "Freeze a portable business scenario or the evaluation cases for one function version.", Capability: "objects", Roles: []string{Builder}, Payload: []platform.Field{}})
 	actions = resourceActions(actions)
-	classes := []string{ObjectType, ActionTypeType, runtimeprotocol.PageType, runtimeprotocol.AppType, TestPlanType, runtimeprotocol.ProcessType, runtimeprotocol.FunctionType, PropertyTypeType, ValueTypeType, ObjectTypeGroupType, LinkTypeType, b.queries.Entity().Type, InterfaceType, runtimeprotocol.FunctionCallType, b.evaluations.Entity().Type, runtimeprotocol.CodeType, runtimeprotocol.TableType, AgentType, SampleSetType, BranchType, ResourceType, FolderType, WorkingStateType, ProductType, ProductVersionType, platform.OwnedRelationType(ID), platform.ConfirmationType, platform.DispatchType}
+	classes := []string{ObjectType, ActionTypeType, runtimeprotocol.PageType, runtimeprotocol.AppType, TestPlanType, runtimeprotocol.ProcessType, runtimeprotocol.FunctionType, PropertyTypeType, ValueTypeType, ObjectTypeGroupType, LinkTypeType, b.queries.Entity().Type, InterfaceType, runtimeprotocol.FunctionCallType, b.evaluations.Entity().Type, runtimeprotocol.CodeType, runtimeprotocol.TableType, AgentType, SampleSetType, BranchType, ResourceType, FolderType, WorkingStateType, ProductType, ProductVersionType, runtimeprotocol.OwnedRelationType(ID), runtimeprotocol.ConfirmationType, runtimeprotocol.DispatchType}
 	classes = append(classes, b.data.Types()...)
 	b.authorities = authorities
 	b.ledger = authorities(tenant, ID, platform.NewCatalog(actions...), classes...)
@@ -206,7 +206,7 @@ func (b *Build) settings() []platform.Setting {
 }
 
 func (b *Build) manifestRoles() []string {
-	roles := []string{User, Builder, Publisher, Integrator, platform.ProjectViewerRole, platform.ProjectDiscovererRole}
+	roles := []string{User, Builder, Publisher, Integrator, runtimeprotocol.ProjectViewerRole, runtimeprotocol.ProjectDiscovererRole}
 	for _, typ := range sortedTypes(b.installed) {
 		for role := range b.installed[typ].Scope.Levels {
 			if !slices.Contains(roles, role) {
@@ -223,7 +223,7 @@ func (b *Build) Manifest() platform.Manifest {
 	if b.installationCatalog != nil {
 		catalog = b.installationCatalog
 	}
-	entities := []platform.Entity{platform.RelationEntity(ID), b.objectEntity(), b.actionTypeEntity(), b.apps.PageEntity(), b.apps.ApplicationEntity(), b.testPlanEntity(), b.automation.ProcessEntity(), propertyKind.entity(b), valueKind.entity(b), b.objectTypeGroupEntity(), linkKind.entity(b), b.queries.Entity(), interfaceKind.entity(b), b.functions.Entity(), b.functions.CallEntity(), b.evaluations.Entity(), b.agent.Entity(), b.functions.CodeEntity(), b.functions.TableEntity(), b.sampleSets.Entity(), b.branchEntity(), b.data.ConfirmationEntity(), b.data.DispatchEntity(), b.productEntity(), b.productVersionEntity()}
+	entities := []platform.Entity{runtimeprotocol.RelationEntity(ID), b.objectEntity(), b.actionTypeEntity(), b.apps.PageEntity(), b.apps.ApplicationEntity(), b.testPlanEntity(), b.automation.ProcessEntity(), propertyKind.entity(b), valueKind.entity(b), b.objectTypeGroupEntity(), linkKind.entity(b), b.queries.Entity(), interfaceKind.entity(b), b.functions.Entity(), b.functions.CallEntity(), b.evaluations.Entity(), b.agent.Entity(), b.functions.CodeEntity(), b.functions.TableEntity(), b.sampleSets.Entity(), b.branchEntity(), b.data.ConfirmationEntity(), b.data.DispatchEntity(), b.productEntity(), b.productVersionEntity()}
 	entities = append(entities, b.data.Entities()...)
 	entities = append(entities, b.resourceEntities()...)
 	entities = append(entities, workingStateEntity())
@@ -232,7 +232,7 @@ func (b *Build) Manifest() platform.Manifest {
 			if entities[i].Scope.Levels == nil {
 				entities[i].Scope.Levels = map[string]string{}
 			}
-			entities[i].Scope.Levels[platform.ProjectViewerRole] = platform.ScopeTenant
+			entities[i].Scope.Levels[runtimeprotocol.ProjectViewerRole] = platform.ScopeTenant
 		}
 	}
 	for _, typ := range sortedTypes(b.installed) {
@@ -422,10 +422,10 @@ func (b *Build) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb.
 	if record, err, handled := b.data.Decide(b.ledger, c, s, now); handled {
 		return record, err
 	}
-	if slices.Contains([]string{platform.ConfirmationAnswerSchema, platform.ConfirmationType + ".review", platform.ConfirmationType + ".tick"}, s.GetSchema().GetName()) {
+	if slices.Contains([]string{runtimeprotocol.ConfirmationAnswerSchema, runtimeprotocol.ConfirmationType + ".review", runtimeprotocol.ConfirmationType + ".tick"}, s.GetSchema().GetName()) {
 		return b.data.UpdateConfirmation(c, s, now)
 	}
-	if slices.Contains([]string{platform.DispatchAnswerSchema, platform.DispatchReviewSchema, platform.DispatchTickSchema}, s.GetSchema().GetName()) {
+	if slices.Contains([]string{runtimeprotocol.DispatchAnswerSchema, runtimeprotocol.DispatchReviewSchema, runtimeprotocol.DispatchTickSchema}, s.GetSchema().GetName()) {
 		return b.data.UpdateDispatch(c, s, now)
 	}
 	if name := s.GetSchema().GetName(); name == runtimeprotocol.SchemaProposalReview || name == runtimeprotocol.SchemaFunctionCall || name == runtimeprotocol.SchemaFunctionAnswer {
@@ -509,7 +509,7 @@ func (b *Build) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb.
 			if entities[i].Scope.Levels == nil {
 				entities[i].Scope.Levels = map[string]string{}
 			}
-			entities[i].Scope.Levels[platform.ProjectViewerRole] = platform.ScopeTenant
+			entities[i].Scope.Levels[runtimeprotocol.ProjectViewerRole] = platform.ScopeTenant
 		}
 	}
 	for _, typ := range sortedTypes(b.installed) {
@@ -613,7 +613,7 @@ func TypeOf(name string) string { return ID + "." + name }
 
 type ConstructionDrafts interface {
 	platform.App
-	platform.FlowReleaseOwner
+	runtimeprotocol.FlowReleaseOwner
 	CompleteBlueprintAssets([]platform.ReleaseAsset) ([]platform.ReleaseAsset, error)
 	RootDrafts([]platform.AssetRef) ([]JointDraftRef, error)
 	ApplicationDrafts(string) ([]JointDraftRef, error)
@@ -634,7 +634,7 @@ type ConstructionDraftReader interface {
 
 type ConstructionSandbox interface {
 	platform.App
-	platform.AssetDefinitionReader
+	runtimeprotocol.AssetDefinitionReader
 	Reinstall() error
 	BeginAssetBootstrap([]platform.ReleaseAsset) (func(), error)
 	ProcessFromAsset(platform.ReleaseAsset) (runtimeprotocol.Process, error)

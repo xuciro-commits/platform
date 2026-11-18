@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"platformserver/kernel/protocol"
 	"slices"
 	"strings"
 
@@ -20,7 +21,7 @@ type ReleaseSnapshot struct {
 	Active            string
 }
 
-func (q *Sequence) RestoreCommitted(s CommittedState, releases ReleaseSnapshot, apps []platform.App, appOf func(string) platform.App, inputs func(string) platform.AcceptedInputApp, readCandidate func(string, []byte) (platform.ReleaseCandidate, error)) error {
+func (q *Sequence) RestoreCommitted(s CommittedState, releases ReleaseSnapshot, apps []platform.App, appOf func(string) platform.App, inputs func(string) platform.AcceptedInputApp, readCandidate func(string, []byte) (protocol.ReleaseCandidate, error)) error {
 	for key, binding := range s.SubmissionSchemas {
 		app, request, _ := strings.Cut(key, "/")
 		owner := appOf(app)

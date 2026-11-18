@@ -3,6 +3,7 @@ package host
 import (
 	"encoding/json"
 	"fmt"
+	"platformserver/kernel/protocol"
 	"reflect"
 	"slices"
 	"testing"
@@ -17,10 +18,10 @@ import (
 
 func TestInvariantK13ConsoleForksRetainMembersProfilesAndDelegations(t *testing.T) {
 	live := newInvariantTenant(t, "invariant-console-forks",
-		platform.Seat{Subjects: []string{"admin"}, Member: platform.Member{ID: "admin", Roles: map[string]string{"platform": "admin", build.ID: build.Builder}}},
-		platform.Seat{Subjects: []string{"member"}, Member: platform.Member{ID: "member", Roles: map[string]string{build.ID: build.Builder}}},
-		platform.Seat{Subjects: []string{"departing"}, Member: platform.Member{ID: "departing", Roles: map[string]string{build.ID: build.Builder}}},
-		platform.Seat{Subjects: []string{"delegatee"}, Member: platform.Member{ID: "delegatee", Roles: map[string]string{}}},
+		protocol.Seat{Subjects: []string{"admin"}, Member: platform.Member{ID: "admin", Roles: map[string]string{"platform": "admin", build.ID: build.Builder}}},
+		protocol.Seat{Subjects: []string{"member"}, Member: platform.Member{ID: "member", Roles: map[string]string{build.ID: build.Builder}}},
+		protocol.Seat{Subjects: []string{"departing"}, Member: platform.Member{ID: "departing", Roles: map[string]string{build.ID: build.Builder}}},
+		protocol.Seat{Subjects: []string{"delegatee"}, Member: platform.Member{ID: "delegatee", Roles: map[string]string{}}},
 	)
 	submit := func(actor, schema, typ, id string, payload any) {
 		t.Helper()
@@ -38,7 +39,7 @@ func TestInvariantK13ConsoleForksRetainMembersProfilesAndDelegations(t *testing.
 	live.accept(t, "build.object.publish", build.ObjectType, "OBJECT", map[string]any{})
 	live.accept(t, "build.alpha.create", "build.alpha", "A1", map[string]any{"note": "retained"})
 	submit("admin", controlowner.SchemaProfileUpdate, controlowner.ProfileType, "member", map[string]any{"displayName": "Before"})
-	submit("departing", platform.SchemaDelegate, controlowner.MemberType, "delegatee", map[string]any{"app": build.ID, "until": "2099-01-01"})
+	submit("departing", protocol.SchemaDelegate, controlowner.MemberType, "delegatee", map[string]any{"app": build.ID, "until": "2099-01-01"})
 	image := live.readImage.Load()
 	left, err := image.state.forkReadState(t.Context())
 	if err != nil {
@@ -148,7 +149,7 @@ func TestInvariantK13DefinitionPlansFollowPublishedReadImages(t *testing.T) {
 	if err != nil || updated == nil || updated.Closure == want.Closure || published.readScope.definitions == cache {
 		t.Fatalf("a publication reused the old execution plan: %+v, %v", updated, err)
 	}
-	rid := platform.ResourceID(live.ID, platform.AssetRef{App: build.ID, Kind: platform.AssetObject, Name: "build.alpha"})
+	rid := protocol.ResourceID(live.ID, platform.AssetRef{App: build.ID, Kind: platform.AssetObject, Name: "build.alpha"})
 	live.accept(t, build.SchemaResourceMove, build.ResourceType, rid, map[string]any{"project": invariantProject, "folder": "PLANFOLDER"})
 	moved, err := live.readImage.Load().state.forkReadState(t.Context())
 	if err != nil {

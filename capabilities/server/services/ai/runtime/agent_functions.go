@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
+	"platformserver/kernel/protocol"
 	"platformserver/kernel/records"
 	"platformserver/platform"
 	"strings"
@@ -36,7 +37,7 @@ type FunctionContext struct {
 	Authorize        func(platform.Caller, string, platform.AIFunction, []string, string, time.Time) *platform.Error
 	Source           func(platform.Member, platform.FunctionRequest, platform.AIFunction, string, string, string, int) (FunctionSource, *platform.Error)
 	Readable         func(platform.Member, string, time.Time) bool
-	Closure          func(string, platform.AIFunction, int, *string) (platform.ReleaseCandidate, string, error)
+	Closure          func(string, platform.AIFunction, int, *string) (protocol.ReleaseCandidate, string, error)
 	BindApplications func(platform.AssetRef, string, string) ([]platform.AssetBinding, error)
 	Model            func(platform.Caller, *pb.ChangeRecord, platform.Request, []platform.Effect, platform.ModelOptions) (FunctionDispatch, *platform.Error)
 	Bind             func(platform.Effect, FunctionBinding, platform.AIModelBinding) platform.Effect
@@ -126,7 +127,7 @@ func PlanFunction(ctx FunctionContext, c platform.Caller, r *pb.ChangeRecord, re
 	}
 	hash, _ := platform.CanonicalDigest(string(raw))
 	q := platform.Request{Model: f.Model, Target: target.GetId(), Reply: request.Reply,
-		Payload: platform.Prompt{System: f.SystemPrompt(), User: string(raw), MaxTokens: f.MaxTokens}}
+		Payload: protocol.Prompt{System: f.SystemPrompt(), User: string(raw), MaxTokens: f.MaxTokens}}
 	dispatch, problem := ctx.Model(c, r, q, pending, f.ModelOptions.Override(platform.ModelOptions{MaxTokens: f.MaxTokens}))
 	if problem != nil {
 		return platform.FunctionCall{}, platform.Effect{}, problem
@@ -214,7 +215,7 @@ type FunctionAccess struct {
 	Source      func(string, string) (platform.EntityInfo, bool)
 }
 
-func FunctionAllowed(ctx FunctionAccess, app string, binding *FunctionBinding, model, record, call string, prompt platform.Prompt, at time.Time) bool {
+func FunctionAllowed(ctx FunctionAccess, app string, binding *FunctionBinding, model, record, call string, prompt protocol.Prompt, at time.Time) bool {
 	f := binding.Definition
 	owner := binding.Owner
 	if owner == "" {

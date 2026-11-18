@@ -3,6 +3,7 @@ package records
 import (
 	"encoding/json"
 	"fmt"
+	"platformserver/kernel/protocol"
 	"reflect"
 	"slices"
 	"strings"
@@ -11,12 +12,12 @@ import (
 )
 
 type DefinitionOwners struct {
-	Owners              []platform.AssetLifecycleOwner
+	Owners              []protocol.AssetLifecycleOwner
 	Active              func(app string) bool
 	Publishes           func(app string) bool
-	Reader              func(app string) (platform.AssetDefinitionReader, bool)
+	Reader              func(app string) (protocol.AssetDefinitionReader, bool)
 	DescribeAsset       func(platform.ReleaseAsset) (platform.Dependencies, error)
-	InstallationDecoder func() (func(string, string, json.RawMessage) (platform.AssetInstallation, error), error)
+	InstallationDecoder func() (func(string, string, json.RawMessage) (protocol.AssetInstallation, error), error)
 	IncludeArchived     bool
 }
 
@@ -25,7 +26,7 @@ func (o DefinitionOwners) Metadata(ref platform.AssetRef) bool {
 	return ok && owner.DefinitionMetadataKind(ref.Kind)
 }
 
-func (o DefinitionOwners) Definition(plan platform.AssetInstallation) (platform.Definition, bool, error) {
+func (o DefinitionOwners) Definition(plan protocol.AssetInstallation) (platform.Definition, bool, error) {
 	if !o.Metadata(plan.Ref) {
 		return platform.Definition{}, false, nil
 	}
@@ -135,9 +136,9 @@ func (s *Store) OwnedDefinitions(base []platform.Definition, o DefinitionOwners)
 				}
 				continue
 			}
-			var reader platform.AssetDefinitionReader
+			var reader protocol.AssetDefinitionReader
 			switch value := provider.(type) {
-			case platform.AssetDefinitionReader:
+			case protocol.AssetDefinitionReader:
 				reader = value
 			default:
 				return nil, fmt.Errorf("agent owner has no definition descriptor")

@@ -4,6 +4,7 @@ import releaseowner "platformserver/services/devops/releases"
 
 import (
 	"encoding/json"
+	"platformserver/kernel/protocol"
 
 	"slices"
 	"time"
@@ -16,7 +17,7 @@ import (
 	"platformserver/services/resources/publication"
 )
 
-func (t *Tenant) bootstrapOwnerDraftsLockedWithArchived(candidate platform.ReleaseCandidate, context platform.AssetReleaseContext, definitionOnly bool, request *releaseowner.OwnerDraftRequest, includeArchived bool, existing ...*stagedDecision) (*stagedDecision, json.RawMessage, error) {
+func (t *Tenant) bootstrapOwnerDraftsLockedWithArchived(candidate protocol.ReleaseCandidate, context protocol.AssetReleaseContext, definitionOnly bool, request *releaseowner.OwnerDraftRequest, includeArchived bool, existing ...*stagedDecision) (*stagedDecision, json.RawMessage, error) {
 	registry, err := t.assetRegistryLocked()
 	if err != nil {
 		return nil, nil, err
@@ -71,7 +72,7 @@ func (t *Tenant) bootstrapOwnerDraftsLockedWithArchived(candidate platform.Relea
 		Records:     decision.Records,
 		KeepChanges: decision.KeepChanges,
 		Register:    view.registerInstalledAsset,
-		Decide: func(info platform.EntityInfo, draft platform.AssetDraft, submission *pb.Submission) (*pb.ChangeRecord, error) {
+		Decide: func(info platform.EntityInfo, draft protocol.AssetDraft, submission *pb.Submission) (*pb.ChangeRecord, error) {
 			app := view.App(info.App)
 			if request != nil {
 				if refusal := t.delegatedBound(context.Member, submission); refusal != nil {
@@ -116,7 +117,7 @@ func (t *Tenant) bootstrapOwnerDraftsLockedWithArchived(candidate platform.Relea
 	return decision, raw, err
 }
 
-func (t *Tenant) prepareReleaseLifecycleLocked(candidate platform.ReleaseCandidate, member platform.Member, at time.Time, upgrade bool) ([]platform.ReleaseInstallation, json.RawMessage, error) {
+func (t *Tenant) prepareReleaseLifecycleLocked(candidate protocol.ReleaseCandidate, member platform.Member, at time.Time, upgrade bool) ([]platform.ReleaseInstallation, json.RawMessage, error) {
 	return releaseowner.PrepareLifecycle(releaseInstallationRuntime{t}, candidate, member, at, upgrade)
 }
 
@@ -124,14 +125,14 @@ type releaseInstallationRuntime struct{ t *Tenant }
 
 func (r releaseInstallationRuntime) HasAgentRuntime() bool { return r.t.Agents != nil }
 
-func (r releaseInstallationRuntime) ReleaseProject(candidate platform.ReleaseCandidate) string {
+func (r releaseInstallationRuntime) ReleaseProject(candidate protocol.ReleaseCandidate) string {
 	return releaseowner.ResourceProject(candidate, records.LockedRows[build.Resource](r.t.Projection, build.ResourceType))
 }
 
 func (r releaseInstallationRuntime) Registry() (*publication.AssetRegistry, error) {
 	return r.t.assetRegistryLocked()
 }
-func (r releaseInstallationRuntime) Bootstrap(candidate platform.ReleaseCandidate, context platform.AssetReleaseContext, definitionOnly bool) (releaseowner.InstallationRuntime, json.RawMessage, error) {
+func (r releaseInstallationRuntime) Bootstrap(candidate protocol.ReleaseCandidate, context protocol.AssetReleaseContext, definitionOnly bool) (releaseowner.InstallationRuntime, json.RawMessage, error) {
 	decision, raw, err := r.t.bootstrapOwnerDraftsLockedWithArchived(candidate, context, definitionOnly, nil, false)
 	if err != nil {
 		return nil, nil, err
@@ -160,7 +161,7 @@ func (r releaseInstallationRuntime) Pending(id string, raw []byte) error {
 	return r.t.pendingWorkFitsLocked(id, raw)
 }
 
-func (t *Tenant) registerInstalledAsset(plan platform.AssetInstallation) error {
+func (t *Tenant) registerInstalledAsset(plan protocol.AssetInstallation) error {
 	return releaseowner.RegisterInstalledDefinition(t.definitions, plan, t.definitionOwners(false).Definition, t.setDefinitions)
 }
 

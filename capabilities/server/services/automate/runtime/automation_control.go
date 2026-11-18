@@ -2,15 +2,15 @@ package automation
 
 import (
 	"encoding/json"
+	"platformserver/kernel/protocol"
 
 	"platformserver/kernel/acceptedformat"
-	"platformserver/platform"
 )
 
 type ControlWork struct {
 	Queues map[string][]string           `json:"queues"`
 	Failed []string                      `json:"failed"`
-	Tasks  []platform.ScheduledTaskState `json:"tasks"`
+	Tasks  []protocol.ScheduledTaskState `json:"tasks"`
 	Jobs   []Task                        `json:"jobs"`
 }
 

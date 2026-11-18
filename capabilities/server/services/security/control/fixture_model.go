@@ -3,6 +3,7 @@ package control
 import (
 	"encoding/json"
 	"fmt"
+	"platformserver/kernel/protocol"
 	"strings"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
@@ -10,7 +11,7 @@ import (
 )
 
 func CandidateTestMember(tenant string) platform.Member {
-	return platform.Member{ID: "app:candidate-test", Tenant: tenant, Roles: map[string]string{PlatformApp: Admin, platform.AIApp: platform.AIAdmin}}
+	return platform.Member{ID: "app:candidate-test", Tenant: tenant, Roles: map[string]string{PlatformApp: Admin, protocol.AIApp: protocol.AIAdmin}}
 }
 
 func FixtureModelSubmissions(tenant, model string) (platform.Member, []*pb.Submission, error) {
@@ -23,8 +24,8 @@ func FixtureModelSubmissions(tenant, model string) (platform.Member, []*pb.Submi
 		app, schema, kind, id string
 		payload               any
 	}{
-		{platform.AIApp, platform.AISchemaProviderAdd, platform.AIProviderType, provider, map[string]string{"kind": "local", "baseUrl": "http://candidate.invalid", "wire": "openai"}},
-		{platform.AIApp, platform.AISchemaModelEnable, platform.AIModelType, model, map[string]string{"access": "users"}},
+		{protocol.AIApp, protocol.AISchemaProviderAdd, protocol.AIProviderType, provider, map[string]string{"kind": "local", "baseUrl": "http://candidate.invalid", "wire": "openai"}},
+		{protocol.AIApp, protocol.AISchemaModelEnable, protocol.AIModelType, model, map[string]string{"access": "users"}},
 		{PlatformApp, SchemaSettingSet, SettingType, "ai/app-model", map[string]string{"value": model}},
 	}
 	out := make([]*pb.Submission, len(settings))

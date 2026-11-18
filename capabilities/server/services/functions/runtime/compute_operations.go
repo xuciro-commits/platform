@@ -15,14 +15,14 @@ import (
 )
 
 type OperationBinding struct {
-	Definition  platform.Operation               `json:"definition"`
-	Call        platform.OperationCall           `json:"call"`
-	Member      string                           `json:"member"`
-	Inputs      json.RawMessage                  `json:"inputs,omitempty"`
-	SealedInput *platform.OperationInputArtifact `json:"sealedInput,omitempty"`
-	RuleFacts   *platform.ExprContext            `json:"ruleFacts,omitempty"`
-	RuleSchemas []platform.ExprSchema            `json:"ruleSchemas,omitempty"`
-	Build       *platform.CodeBuildRequest       `json:"build,omitempty"`
+	Definition  platform.Operation                   `json:"definition"`
+	Call        platform.OperationCall               `json:"call"`
+	Member      string                               `json:"member"`
+	Inputs      json.RawMessage                      `json:"inputs,omitempty"`
+	SealedInput *ruleprotocol.OperationInputArtifact `json:"sealedInput,omitempty"`
+	RuleFacts   *platform.ExprContext                `json:"ruleFacts,omitempty"`
+	RuleSchemas []platform.ExprSchema                `json:"ruleSchemas,omitempty"`
+	Build       *platform.CodeBuildRequest           `json:"build,omitempty"`
 }
 
 func (b OperationBinding) Permission() (string, []string, bool) {
@@ -41,10 +41,10 @@ func (b OperationBinding) Timeout() time.Duration {
 
 type ExecutionHost struct {
 	Read         func(ctx context.Context, read func(ExecutionReads)) *platform.Error
-	BuildCode    func(ctx context.Context, q platform.CodeBuildRequest) (platform.CodeBuildResult, error)
-	ReadInput    func(ctx context.Context, ref platform.OperationInputArtifact) ([]byte, error)
+	BuildCode    func(ctx context.Context, q platform.CodeBuildRequest) (ruleprotocol.CodeBuildResult, error)
+	ReadInput    func(ctx context.Context, ref ruleprotocol.OperationInputArtifact) ([]byte, error)
 	StageOutput  func(op platform.Operation, call string, output []byte) (json.RawMessage, *platform.StagedResult, error)
-	Executor     func(id string) platform.OperationExecutor
+	Executor     func(id string) ruleprotocol.OperationExecutor
 	ReadArtifact func(ctx context.Context, digest string) ([]byte, error)
 	Rules        func() platform.RuleEngine
 }
@@ -108,7 +108,7 @@ func Execute(ctx context.Context, host ExecutionHost, tenant string, x platform.
 	var output json.RawMessage
 	var err error
 	if b.Build != nil {
-		var result platform.CodeBuildResult
+		var result ruleprotocol.CodeBuildResult
 		result, err = host.BuildCode(ctx, *b.Build)
 		output, _ = json.Marshal(result)
 		out.Result = "delivered"
@@ -179,12 +179,12 @@ func Execute(ctx context.Context, host ExecutionHost, tenant string, x platform.
 			module, err = host.ReadArtifact(ctx, op.Binding.Module)
 			if err == nil {
 				worker := EnvironmentWasmWorker()
-				var result platform.WasmResponse
-				request := platform.WasmRequest{ABI: op.Binding.ABI, Module: module, Digest: op.Binding.Module, Input: inputs, Limits: op.Limits}
+				var result ruleprotocol.WasmResponse
+				request := ruleprotocol.WasmRequest{ABI: op.Binding.ABI, Module: module, Digest: op.Binding.Module, Input: inputs, Limits: op.Limits}
 				if op.Limits.DataInputBytes > 0 {
 					sum := sha256.Sum256(inputs)
 					request.Input = nil
-					request.Data = &platform.WasmDataInput{Tenant: tenant, Call: x.ID, Digest: hex.EncodeToString(sum[:]), Bytes: inputs}
+					request.Data = &ruleprotocol.WasmDataInput{Tenant: tenant, Call: x.ID, Digest: hex.EncodeToString(sum[:]), Bytes: inputs}
 				}
 				result, err = worker.Execute(ctx, request)
 				output = result.Output
@@ -210,7 +210,7 @@ func Execute(ctx context.Context, host ExecutionHost, tenant string, x platform.
 	return out
 }
 
-func OperationDefinition(app platform.App, owner platform.OperationDefinitions, name string, version int) (platform.Operation, int, bool) {
+func OperationDefinition(app platform.App, owner ruleprotocol.OperationDefinitions, name string, version int) (platform.Operation, int, bool) {
 	if app == nil {
 		return platform.Operation{}, 0, false
 	}

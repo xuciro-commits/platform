@@ -132,7 +132,7 @@ func (t *Owner) readRecordBase(m platform.Member, typ, id string, now time.Time)
 	if versioning := et.Info().Versioning; versioning != nil {
 		field, _ := et.Info().Field(versioning.ValidFrom)
 		clock := businessQuery(et.Info(), platform.Query{}, m, now).BusinessTime.At
-		active, _ := platform.EffectiveAt(field.Type, records.BusinessField(et.Info(), r.Value, versioning.ValidFrom), records.BusinessField(et.Info(), r.Value, versioning.ValidUntil), clock)
+		active, _ := protocol.EffectiveAt(field.Type, records.BusinessField(et.Info(), r.Value, versioning.ValidFrom), records.BusinessField(et.Info(), r.Value, versioning.ValidUntil), clock)
 		view.Effective = &active
 	}
 	t.readPersonal(m, seen, []string{id}, now)
@@ -236,8 +236,8 @@ func (t *Owner) recordRelated(m platform.Member, base recordBase, now time.Time)
 }
 
 func (t *Owner) recordLinked(m platform.Member, typ, id string, now time.Time, partial bool) ([]Related, bool) {
-	rel := t.app(platform.RelationsApp)
-	if rel == nil || typ == platform.CommentType || typ == platform.FollowType {
+	rel := t.app(protocol.RelationsApp)
+	if rel == nil || typ == protocol.CommentType || typ == protocol.FollowType {
 		return nil, partial
 	}
 	out := t.linkRecords(m, rel.Manifest().ID, typ+"/"+id, now)
@@ -245,8 +245,8 @@ func (t *Owner) recordLinked(m platform.Member, typ, id string, now time.Time, p
 }
 
 func (t *Owner) recordActivity(m platform.Member, typ, id string, now time.Time) ([]any, bool) {
-	rel := t.app(platform.RelationsApp)
-	if rel == nil || typ == platform.CommentType || typ == platform.FollowType {
+	rel := t.app(protocol.RelationsApp)
+	if rel == nil || typ == protocol.CommentType || typ == protocol.FollowType {
 		return nil, false
 	}
 	return t.timeline(m, rel.Manifest().ID, typ+"/"+id), false
@@ -276,19 +276,19 @@ func (t *Owner) recordWork(m platform.Member, typ, id string, now time.Time) ([]
 			processes, partial = page.Records, page.Partial
 		}
 	}
-	work := t.app(platform.WorkApp)
-	if typ != platform.WorkTaskType && work != nil {
+	work := t.app(protocol.WorkApp)
+	if typ != protocol.WorkTaskType && work != nil {
 		domain, _ := json.Marshal([]any{[]any{"ref", "=", typ + "/" + id}, []any{"state", "=", "open"}})
-		page, err := t.recordsRead(m, platform.WorkTaskType, platform.Query{Domain: domain, Sort: []string{"due"}, Limit: 20}, now)
+		page, err := t.recordsRead(m, protocol.WorkTaskType, platform.Query{Domain: domain, Sort: []string{"due"}, Limit: 20}, now)
 		if err != nil {
 			partial = true
 		} else {
 			tasks, partial = page.Records, partial || page.Partial
 		}
 	}
-	if typ != platform.WorkApprovalType && work != nil {
+	if typ != protocol.WorkApprovalType && work != nil {
 		domain, _ := json.Marshal([]any{[]any{"target", "=", typ + "/" + id}})
-		page, err := t.recordsRead(m, platform.WorkApprovalType, platform.Query{Domain: domain, Sort: []string{"-created"}, Limit: 20}, now)
+		page, err := t.recordsRead(m, protocol.WorkApprovalType, platform.Query{Domain: domain, Sort: []string{"-created"}, Limit: 20}, now)
 		if err != nil {
 			partial = true
 		} else {
@@ -299,12 +299,12 @@ func (t *Owner) recordWork(m platform.Member, typ, id string, now time.Time) ([]
 }
 
 func (t *Owner) recordComments(m platform.Member, typ, id string, now time.Time) ([]any, bool, bool) {
-	rel := t.app(platform.RelationsApp)
-	if rel == nil || typ == platform.CommentType || typ == platform.FollowType {
+	rel := t.app(protocol.RelationsApp)
+	if rel == nil || typ == protocol.CommentType || typ == protocol.FollowType {
 		return nil, false, false
 	}
 	about, _ := json.Marshal([]any{[]any{"target", "=", typ + "/" + id}})
-	page, err := t.recordsRead(m, platform.CommentType, platform.Query{Domain: about, Sort: []string{"created"}, Limit: 200}, now)
+	page, err := t.recordsRead(m, protocol.CommentType, platform.Query{Domain: about, Sort: []string{"created"}, Limit: 200}, now)
 	if err != nil {
 		return nil, false, true
 	}
@@ -365,7 +365,7 @@ func (t *Owner) readPersonal(m platform.Member, view *records.Type, ids []string
 	if len(fields) == 0 || len(ids) == 0 || strings.HasPrefix(m.ID, "app:") {
 		return
 	}
-	t.AuditPersonal(platform.PersonalRead{At: now, Member: m.ID, Type: view.Info().Type, IDs: ids, Fields: fields})
+	t.AuditPersonal(protocol.PersonalRead{At: now, Member: m.ID, Type: view.Info().Type, IDs: ids, Fields: fields})
 }
 
 func (t *Owner) RecordOf(m platform.Member, typ, id string, now time.Time) (RecordView, *platform.Error) {

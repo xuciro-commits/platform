@@ -11,7 +11,7 @@ import (
 
 type AutomationEnvironment interface {
 	Application() platform.App
-	Host() platform.BuildHost
+	Host() protocol.BuildHost
 	Ledger() platform.Authority
 	AppID() string
 	Version() string
@@ -42,7 +42,7 @@ type AutomationAuthoring interface {
 	CheckDraft(c platform.Caller, record protocol.Process, source platform.Entity, models []platform.Entity, member platform.Member, validate bool) (protocol.Process, platform.AssetRef, platform.AssetRef, bool, error)
 	CheckObjectDefinition(c platform.Caller, entity, previous platform.Entity, changed, compatible bool) error
 	ProcessAssets(processes []protocol.Process, sourceVersion string) ([]platform.ReleaseAsset, error)
-	DecodeInstallation(schema string, image json.RawMessage) (platform.AssetInstallation, error)
+	DecodeInstallation(schema string, image json.RawMessage) (protocol.AssetInstallation, error)
 	ProcessActions() []platform.Action
 	ProcessEntity() platform.Entity
 	Decide(ledger platform.Authority, c platform.Caller, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *platform.Error, bool)

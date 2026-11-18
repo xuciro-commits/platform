@@ -155,8 +155,8 @@ func TestInvariantK3StaleRevisionIsRefusedAndSealed(t *testing.T) {
 
 func TestInvariantK4RefusalsCarryReasonAndMarkingsGate(t *testing.T) {
 	tn := newInvariantTenant(t, "invariant-k4",
-		platform.Seat{Subjects: []string{"cleared-builder"}, Member: platform.Member{ID: "cleared-builder", Roles: map[string]string{build.ID: build.Builder, "platform": "confidential"}}},
-		platform.Seat{Subjects: []string{"unprivileged"}, Member: platform.Member{ID: "unprivileged"}},
+		protocol.Seat{Subjects: []string{"cleared-builder"}, Member: platform.Member{ID: "cleared-builder", Roles: map[string]string{build.ID: build.Builder, "platform": "confidential"}}},
+		protocol.Seat{Subjects: []string{"unprivileged"}, Member: platform.Member{ID: "unprivileged"}},
 	)
 	uncleared := tn.member(t)
 	cleared, ok := tn.Member("cleared-builder")
@@ -255,8 +255,8 @@ func TestInvariantK4RefusalsCarryReasonAndMarkingsGate(t *testing.T) {
 		}
 	})
 	t.Run("discovery exposes resource identity without granting definition access", func(t *testing.T) {
-		sub := tn.submission(platform.SchemaProjectSave, platform.ProjectType, invariantProject, map[string]any{
-			"title": "Invariant project", "members": []platform.ProjectMember{{Member: uncleared.ID, Role: platform.ProjectOwnerRole}, {Member: unprivileged.ID, Role: platform.ProjectDiscovererRole}},
+		sub := tn.submission(protocol.SchemaProjectSave, protocol.ProjectType, invariantProject, map[string]any{
+			"title": "Invariant project", "members": []platform.ProjectMember{{Member: uncleared.ID, Role: protocol.ProjectOwnerRole}, {Member: unprivileged.ID, Role: protocol.ProjectDiscovererRole}},
 		})
 		sub.Authority = "platform"
 		if _, refusal := tn.Submit(uncleared, sub, invariantClock); refusal != nil {
@@ -268,7 +268,7 @@ func TestInvariantK4RefusalsCarryReasonAndMarkingsGate(t *testing.T) {
 				t.Fatalf("%s resource discovery: %+v", reader.ID, hits)
 			}
 			resource := hits[0].Resource
-			if resource.ID != platform.ResourceID(tn.ID, platform.AssetRef{App: build.ID, Kind: platform.AssetDataset, Name: "guarded"}) || resource.Project != invariantProject || resource.CanOpen != (reader.ID == uncleared.ID) {
+			if resource.ID != protocol.ResourceID(tn.ID, platform.AssetRef{App: build.ID, Kind: platform.AssetDataset, Name: "guarded"}) || resource.Project != invariantProject || resource.CanOpen != (reader.ID == uncleared.ID) {
 				t.Fatalf("%s discovered wrong identity or permission: %+v", reader.ID, resource)
 			}
 		}
@@ -280,7 +280,7 @@ func TestInvariantK4RefusalsCarryReasonAndMarkingsGate(t *testing.T) {
 }
 
 func TestInvariantK5MarkingsPropagateThroughSourcesAndPipelines(t *testing.T) {
-	clearance := platform.Seat{Subjects: []string{"inspector"}, Member: platform.Member{ID: "inspector", Roles: map[string]string{build.ID: build.Builder, "platform": "restricted"}}}
+	clearance := protocol.Seat{Subjects: []string{"inspector"}, Member: platform.Member{ID: "inspector", Roles: map[string]string{build.ID: build.Builder, "platform": "restricted"}}}
 	live := newInvariantTenant(t, "invariant-k5", clearance)
 	inspector, ok := live.Member("inspector")
 	if !ok {
@@ -300,7 +300,7 @@ func TestInvariantK5MarkingsPropagateThroughSourcesAndPipelines(t *testing.T) {
 	})
 	live.accept(t, "build.pipeline.create", dataowner.PipelineType, "PIPELINE", map[string]any{
 		"name": "combine", "title": "Combine", "input": "INPUT", "outputDataset": "OUTPUT",
-		"steps": []platform.TransformStep{{Kind: "join", Dataset: "OTHER", Column: "id", Match: "id"}},
+		"steps": []protocol.TransformStep{{Kind: "join", Dataset: "OTHER", Column: "id", Match: "id"}},
 	})
 	object := invariantObject("alpha", "Alpha")
 	object["datasources"] = []platform.DataSourceBinding{{Kind: "dataset", Source: "OUTPUT", Key: "id", Columns: []platform.DataSourceColumn{{Column: "note", Attribute: "note"}}}}
@@ -357,7 +357,7 @@ func TestInvariantK5MarkingsPropagateThroughSourcesAndPipelines(t *testing.T) {
 }
 
 func TestInvariantK6BranchSavesIsolateMainAndMergeAsOneResult(t *testing.T) {
-	live := newInvariantTenantWithApps(t, "invariant-k6", nil, platform.Seat{Subjects: []string{"reviewer"}, Member: platform.Member{ID: "reviewer", Roles: map[string]string{build.ID: build.Builder}}})
+	live := newInvariantTenantWithApps(t, "invariant-k6", nil, protocol.Seat{Subjects: []string{"reviewer"}, Member: platform.Member{ID: "reviewer", Roles: map[string]string{build.ID: build.Builder}}})
 	member := live.member(t)
 	objects := []struct{ id, name, title string }{{"OBJ1", "alpha", "Alpha"}, {"OBJ2", "beta", "Beta"}}
 	for _, object := range objects {

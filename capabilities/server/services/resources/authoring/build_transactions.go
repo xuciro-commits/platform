@@ -3,6 +3,7 @@ package build
 import (
 	"encoding/json"
 	"fmt"
+	"platformserver/kernel/protocol"
 	"reflect"
 	"strconv"
 	"strings"
@@ -83,9 +84,9 @@ func (b *Build) CanonicalObject(object ontology.Object) (ontology.Object, error)
 	return canonical, nil
 }
 
-func (b *Build) businessRuntime() platform.TransactionExecutor {
-	return b.host.TransactionRuntime(platform.BusinessRuntimeContext{App: ID, Entities: b.installed, Ledger: b.ledger, Lookup: b.conditionLookup, Link: b.transactionLink, Dispatch: b.data.OpenDispatch, Confirm: b.data.OpenConfirmation,
-		Prepare: func(c platform.Caller, r *pb.ChangeRecord, txn *platform.BusinessTxn, now time.Time) (platform.TransactionProposal, *platform.Error) {
+func (b *Build) businessRuntime() protocol.TransactionExecutor {
+	return b.host.TransactionRuntime(protocol.BusinessRuntimeContext{App: ID, Entities: b.installed, Ledger: b.ledger, Lookup: b.conditionLookup, Link: b.transactionLink, Dispatch: b.data.OpenDispatch, Confirm: b.data.OpenConfirmation,
+		Prepare: func(c platform.Caller, r *pb.ChangeRecord, txn *platform.BusinessTxn, now time.Time) (protocol.TransactionProposal, *platform.Error) {
 			return b.functions.PrepareProposal(c, r, txn, b.installed[txn.Subject], now)
 		}, Effect: b.data.TransactionEffect})
 }

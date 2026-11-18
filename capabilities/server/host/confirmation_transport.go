@@ -2,6 +2,7 @@ package host
 
 import (
 	"fmt"
+	runtimeprotocol "platformserver/kernel/protocol"
 	"slices"
 	"time"
 
@@ -83,7 +84,7 @@ func (d *stagedDecision) transport() dataowner.Transport {
 	}
 	x.SettleAll = func(owned func(platform.Effect) bool, state, reason string, at time.Time) {
 		d.controlHost().outbound.UpdateAll(func(q *actions.Queued) {
-			if owned(q.Effect) && !platform.EffectSettled(q.State) {
+			if owned(q.Effect) && !runtimeprotocol.EffectSettled(q.State) {
 				q.State, q.Error, q.Last = state, reason, at
 			}
 		})

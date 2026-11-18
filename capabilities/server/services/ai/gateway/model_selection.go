@@ -2,6 +2,7 @@ package aigateway
 
 import (
 	"encoding/json"
+	"platformserver/kernel/protocol"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformserver/platform"
@@ -52,7 +53,7 @@ func (r Resolver) Selection(m platform.Member, purpose string, apps []platform.A
 		} else {
 			choice.Effective = &binding
 		}
-		if m.Roles[platform.AIApp] == platform.AIAdmin {
+		if m.Roles[protocol.AIApp] == protocol.AIAdmin {
 			for _, use := range []string{"generation", "agent", "embedding"} {
 				owner, setting := PurposeSetting(use)
 				if actual, _, _ := r.Resolve(use, "", platform.ModelOptions{}); actual.Model == model.Name() {

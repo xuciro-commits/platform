@@ -4,8 +4,8 @@ import records "platformserver/kernel/records"
 
 import (
 	"fmt"
+	"platformserver/kernel/protocol"
 
-	"platformserver/platform"
 	"platformserver/services/resources/authoring"
 )
 
@@ -17,7 +17,7 @@ func (t *Tenant) installPublicationLinkConstraint(store *records.Store, schema s
 	if owner == nil {
 		return fmt.Errorf("link publication owner is unavailable")
 	}
-	declaration, err := owner.(platform.LinkPublicationReader).LinkPublication(image)
+	declaration, err := owner.(protocol.LinkPublicationReader).LinkPublication(image)
 	if err != nil {
 		return err
 	}

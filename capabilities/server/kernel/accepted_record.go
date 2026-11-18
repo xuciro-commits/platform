@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"google.golang.org/protobuf/encoding/protojson"
 	"io"
+	"platformserver/kernel/protocol"
 	persistence "platformserver/kernel/store"
 	"platformserver/platform"
 	"reflect"
@@ -74,7 +75,7 @@ type RecordResult struct {
 	At             time.Time
 	SchemaVersion  *platform.SchemaVersion
 	Definition     *platform.DecisionDefinition
-	Event          platform.AcceptedEventPlan
+	Event          protocol.AcceptedEventPlan
 	Authorizations []acceptedformat.AuthorizationEvidence
 	Unique         []persistence.StateUnique
 }

@@ -46,7 +46,7 @@ func (t *Tenant) enqueue(now time.Time) {
 	}
 }
 
-func (t *Tenant) delivered(d platform.Delivery) { t.AuditLog.Delivered(d) }
+func (t *Tenant) delivered(d protocol.Delivery) { t.AuditLog.Delivered(d) }
 
 func (t *Tenant) automation(app string, replaying bool) platform.Caller {
 	return platform.NewCaller(runtime{t: t, scoped: true}, platform.Member{ID: "app:" + app, Tenant: t.ID, Roles: map[string]string{}}, app, replaying, true)
@@ -147,7 +147,7 @@ func (t *Tenant) notify(c platform.Caller, n platform.Notification, now time.Tim
 	delivery := book.Reach(members)
 	t.opsMu.Lock()
 	defer t.opsMu.Unlock()
-	out := t.Notices.Deliver(c.App, n, now, members, delivery, func(x platform.Notification, to platform.Reach) {
+	out := t.Notices.Deliver(c.App, n, now, members, delivery, func(x platform.Notification, to protocol.Reach) {
 		t.outbound.Add(trace.SpanContext{}, actions.PlanMailNotice(t.ID, x, to, t.endpoints.All, func(lang, s string) string { return t.i18n.Say(lang, s) })...)
 	})
 	t.acted += len(out)
@@ -177,8 +177,8 @@ func (t *Tenant) settingDecision() controlowner.Decider {
 		Checks: controlowner.SettingChecks{App: t.App, Logging: t.logging().CheckSetting,
 			Values: []func(string, string) *platform.Error{func(id, value string) *platform.Error { return t.knowledgeRuntime().CheckSetting(id, value) }, t.modelResolver().CheckSetting}},
 		Settings:       &t.settings,
-		EmbeddingModel: platform.KnowledgeApp + "/" + platform.SettingKnowledgeEmbeddingModel,
-		EmbeddingNext:  platform.KnowledgeApp + "/" + platform.SettingKnowledgeEmbeddingNext,
+		EmbeddingModel: protocol.KnowledgeApp + "/" + protocol.SettingKnowledgeEmbeddingModel,
+		EmbeddingNext:  protocol.KnowledgeApp + "/" + protocol.SettingKnowledgeEmbeddingNext,
 		ActiveSpace:    embeddingActiveSpace,
 		VectorSpace:    func(name string) string { return t.knowledgeRuntime().VectorSpace(name) },
 	}.Decide
@@ -206,7 +206,7 @@ func (d *stagedDecision) Notify(c platform.Caller, n platform.Notification, now 
 	if private := d.privateRoles.IdentityProfiles[controlowner.PlatformApp]; private != nil {
 		console = private
 	}
-	return d.Notices.Deliver(c.App, n, now, d.recipients(c, now, to), console, func(x platform.Notification, reach platform.Reach) []platform.Effect {
+	return d.Notices.Deliver(c.App, n, now, d.recipients(c, now, to), console, func(x platform.Notification, reach protocol.Reach) []platform.Effect {
 		router := d.routingTenant()
 		router.opsMu.Lock()
 		defer router.opsMu.Unlock()

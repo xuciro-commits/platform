@@ -2,6 +2,7 @@ package ai
 
 import (
 	"encoding/json"
+	runtimeprotocol "platformserver/kernel/protocol"
 	"strings"
 	"time"
 
@@ -20,8 +21,8 @@ type TrainingWorld struct {
 	Image    func(ref, change string) (json.RawMessage, bool)
 }
 
-func (w TrainingWorld) Evidence(event platform.Event) platform.AITrainingEvidence {
-	out := platform.AITrainingEvidence{}
+func (w TrainingWorld) Evidence(event platform.Event) runtimeprotocol.AITrainingEvidence {
+	out := runtimeprotocol.AITrainingEvidence{}
 	images := map[string]json.RawMessage{}
 	for _, ref := range event.Changed {
 		if image, ok := w.Image(ref, event.Record.GetChangeId()); ok {
@@ -30,7 +31,7 @@ func (w TrainingWorld) Evidence(event platform.Event) platform.AITrainingEvidenc
 	}
 	for _, app := range w.Live() {
 		switch owner := app.(type) {
-		case platform.TrainingEvidenceOwner:
+		case runtimeprotocol.TrainingEvidenceOwner:
 			out.Candidates = append(out.Candidates, owner.TrainingCandidates(w.Caller(app.Manifest().ID), event, images)...)
 		}
 	}
@@ -46,14 +47,14 @@ func (w TrainingWorld) Evidence(event platform.Event) platform.AITrainingEvidenc
 		}
 	}
 	sub := event.Record.GetSubmission()
-	if sub.GetTarget().GetType() != platform.RunType {
+	if sub.GetTarget().GetType() != runtimeprotocol.RunType {
 		return out
 	}
-	image, ok := images[platform.RunType+"/"+sub.GetTarget().GetId()]
+	image, ok := images[runtimeprotocol.RunType+"/"+sub.GetTarget().GetId()]
 	if !ok {
 		return out
 	}
-	var run platform.AgentRunRecord
+	var run runtimeprotocol.AgentRunRecord
 	if json.Unmarshal(image, &run) != nil {
 		return out
 	}
@@ -63,7 +64,7 @@ func (w TrainingWorld) Evidence(event platform.Event) platform.AITrainingEvidenc
 			continue
 		}
 		identity, _ := platform.CanonicalDigest([]any{w.Tenant, run.ID, i, draft.Definition, draft.Sources, draft.Accepted, draft.Rejected, draft.Outcome})
-		candidate := platform.AITrainingCandidate{Target: draft.Type + "/" + draft.Target, ExpectedSources: draft.ExpectedSources, Authorization: draft.Authorization, ID: identity, Tenant: w.Tenant, Intent: run.ID, Run: run.ID, Step: i, App: draft.Owner, Action: draft.Action, Definition: draft.Definition, ActionDefinition: draft.Definition, Sources: draft.Sources, Model: run.Model, Evidence: draft.Evidence, At: at, Outcome: draft.Outcome}
+		candidate := runtimeprotocol.AITrainingCandidate{Target: draft.Type + "/" + draft.Target, ExpectedSources: draft.ExpectedSources, Authorization: draft.Authorization, ID: identity, Tenant: w.Tenant, Intent: run.ID, Run: run.ID, Step: i, App: draft.Owner, Action: draft.Action, Definition: draft.Definition, ActionDefinition: draft.Definition, Sources: draft.Sources, Model: run.Model, Evidence: draft.Evidence, At: at, Outcome: draft.Outcome}
 		if run.ModelBinding != nil {
 			candidate.PolicyRevision = run.ModelBinding.PolicyRevision
 			candidate.ModelConfig, _ = platform.CanonicalDigest(run.ModelBinding)
@@ -122,7 +123,7 @@ func (w TrainingWorld) Evidence(event platform.Event) platform.AITrainingEvidenc
 	return out
 }
 
-func (w TrainingWorld) Readable(c platform.Caller, candidate platform.AITrainingCandidate, now time.Time) string {
+func (w TrainingWorld) Readable(c platform.Caller, candidate runtimeprotocol.AITrainingCandidate, now time.Time) string {
 	if candidate.Tenant != w.Tenant {
 		return "The training candidate belongs to another tenant"
 	}

@@ -18,14 +18,14 @@ import (
 type Capabilities struct {
 	States                  map[string]platform.AcceptedStateApp
 	Inputs                  map[string]platform.AcceptedInputApp
-	Assets                  map[string]platform.AssetLifecycleOwner
+	Assets                  map[string]protocol.AssetLifecycleOwner
 	Answerers               map[string]platform.Answerer
 	Builders                map[string]build.ConstructionDrafts
 	Operations              map[string]runtimekernel.OperationOwner
 	DynamicAgents           map[string]protocol.DynamicAgentDefinitions
-	SimulationFactories     map[string]platform.SimulationFactory
-	SimulationIdentities    map[string]platform.SimulationIdentityFactory
-	SimulationOrganizations map[string]platform.SimulationOrganizationFactory
+	SimulationFactories     map[string]protocol.SimulationFactory
+	SimulationIdentities    map[string]protocol.SimulationIdentityFactory
+	SimulationOrganizations map[string]protocol.SimulationOrganizationFactory
 	Observers               map[string]platform.Observer
 	Listeners               map[string]platform.Listener
 	Identity                map[string]platform.IdentityDirectory
@@ -33,14 +33,14 @@ type Capabilities struct {
 	Directories             map[string]platform.Directory
 	Linkers                 map[string]platform.Linker
 	Models                  map[string]aigateway.Models
-	Training                map[string]platform.AITrainingOwner
+	Training                map[string]protocol.AITrainingOwner
 	Tasks                   map[string]platform.Tasks
 	Processes               map[string]automation.FlowProcesses
 	PackageOwners           map[string]packages.PreparationOwner
 	PackageCatalogs         map[string]packages.Catalog
-	IdentityProfiles        map[string]platform.IdentityProfile
+	IdentityProfiles        map[string]protocol.IdentityProfile
 	InputReceivers          map[string]platform.InputReceiver
-	RelationSources         map[string]platform.LegacyRelationSource
+	RelationSources         map[string]protocol.LegacyRelationSource
 	FunctionAssets          map[string]platform.RetainedFunctionAssets
 	Agents                  map[string]protocol.AgentRuntime
 	Knowledge               map[string]platform.Glossary
@@ -49,16 +49,16 @@ type Capabilities struct {
 func CapabilitiesOf(apps []platform.App) Capabilities {
 	out := Capabilities{
 		States: map[string]platform.AcceptedStateApp{}, Inputs: map[string]platform.AcceptedInputApp{},
-		Assets: map[string]platform.AssetLifecycleOwner{}, Answerers: map[string]platform.Answerer{},
+		Assets: map[string]protocol.AssetLifecycleOwner{}, Answerers: map[string]platform.Answerer{},
 		Builders: map[string]build.ConstructionDrafts{}, Operations: map[string]runtimekernel.OperationOwner{},
-		DynamicAgents: map[string]protocol.DynamicAgentDefinitions{}, SimulationFactories: map[string]platform.SimulationFactory{},
-		SimulationIdentities: map[string]platform.SimulationIdentityFactory{}, SimulationOrganizations: map[string]platform.SimulationOrganizationFactory{},
+		DynamicAgents: map[string]protocol.DynamicAgentDefinitions{}, SimulationFactories: map[string]protocol.SimulationFactory{},
+		SimulationIdentities: map[string]protocol.SimulationIdentityFactory{}, SimulationOrganizations: map[string]protocol.SimulationOrganizationFactory{},
 		Observers: map[string]platform.Observer{}, Listeners: map[string]platform.Listener{}, Identity: map[string]platform.IdentityDirectory{},
 		IdentityOwners: map[string]controlowner.IdentityOwner{}, Directories: map[string]platform.Directory{}, Linkers: map[string]platform.Linker{},
-		Models: map[string]aigateway.Models{}, Training: map[string]platform.AITrainingOwner{}, Tasks: map[string]platform.Tasks{},
+		Models: map[string]aigateway.Models{}, Training: map[string]protocol.AITrainingOwner{}, Tasks: map[string]platform.Tasks{},
 		Processes: map[string]automation.FlowProcesses{}, PackageOwners: map[string]packages.PreparationOwner{},
-		PackageCatalogs: map[string]packages.Catalog{}, IdentityProfiles: map[string]platform.IdentityProfile{},
-		InputReceivers: map[string]platform.InputReceiver{}, RelationSources: map[string]platform.LegacyRelationSource{},
+		PackageCatalogs: map[string]packages.Catalog{}, IdentityProfiles: map[string]protocol.IdentityProfile{},
+		InputReceivers: map[string]platform.InputReceiver{}, RelationSources: map[string]protocol.LegacyRelationSource{},
 		FunctionAssets: map[string]platform.RetainedFunctionAssets{},
 		Agents:         map[string]protocol.AgentRuntime{}, Knowledge: map[string]platform.Glossary{},
 	}
@@ -73,7 +73,7 @@ func CapabilitiesOf(apps []platform.App) Capabilities {
 			out.Inputs[id] = owner
 		}
 		switch owner := app.(type) {
-		case platform.AssetLifecycleOwner:
+		case protocol.AssetLifecycleOwner:
 			out.Assets[id] = owner
 		}
 		switch owner := app.(type) {
@@ -93,15 +93,15 @@ func CapabilitiesOf(apps []platform.App) Capabilities {
 			out.DynamicAgents[id] = owner
 		}
 		switch owner := app.(type) {
-		case platform.SimulationFactory:
+		case protocol.SimulationFactory:
 			out.SimulationFactories[id] = owner
 		}
 		switch owner := app.(type) {
-		case platform.SimulationIdentityFactory:
+		case protocol.SimulationIdentityFactory:
 			out.SimulationIdentities[id] = owner
 		}
 		switch owner := app.(type) {
-		case platform.SimulationOrganizationFactory:
+		case protocol.SimulationOrganizationFactory:
 			out.SimulationOrganizations[id] = owner
 		}
 		switch owner := app.(type) {
@@ -133,7 +133,7 @@ func CapabilitiesOf(apps []platform.App) Capabilities {
 			out.Models[id] = owner
 		}
 		switch owner := app.(type) {
-		case platform.AITrainingOwner:
+		case protocol.AITrainingOwner:
 			out.Training[id] = owner
 		}
 		switch owner := app.(type) {
@@ -153,7 +153,7 @@ func CapabilitiesOf(apps []platform.App) Capabilities {
 			out.PackageCatalogs[id] = owner
 		}
 		switch owner := app.(type) {
-		case platform.IdentityProfile:
+		case protocol.IdentityProfile:
 			out.IdentityProfiles[id] = owner
 		}
 		switch owner := app.(type) {
@@ -161,7 +161,7 @@ func CapabilitiesOf(apps []platform.App) Capabilities {
 			out.InputReceivers[id] = owner
 		}
 		switch owner := app.(type) {
-		case platform.LegacyRelationSource:
+		case protocol.LegacyRelationSource:
 			out.RelationSources[id] = owner
 		}
 		switch owner := app.(type) {
@@ -208,14 +208,14 @@ type Roles struct {
 	DirectoryOwner  string
 	Linker          platform.Linker
 	Models          aigateway.Models
-	Training        platform.AITrainingOwner
+	Training        protocol.AITrainingOwner
 	Tasks           platform.Tasks
 	Processes       automation.FlowProcesses
 	PackageOwner    packages.PreparationOwner
 	PackageCatalog  packages.Catalog
-	IdentityProfile platform.IdentityProfile
+	IdentityProfile protocol.IdentityProfile
 	InputReceivers  map[string]platform.InputReceiver
-	RelationSource  platform.LegacyRelationSource
+	RelationSource  protocol.LegacyRelationSource
 	FunctionAssets  map[string]platform.RetainedFunctionAssets
 	Agents          protocol.AgentRuntime
 	Glossary        platform.Glossary
@@ -283,7 +283,7 @@ func Resolve(c Capabilities, ids []string, active func(string) bool) (Roles, err
 }
 
 type PrivateRoles struct {
-	IdentityProfiles map[string]platform.IdentityProfile
+	IdentityProfiles map[string]protocol.IdentityProfile
 	InputReceivers   map[string]platform.InputReceiver
 	Directories      map[string]platform.Directory
 }
@@ -291,9 +291,9 @@ type PrivateRoles struct {
 func (p *PrivateRoles) Add(app platform.App) {
 	id := app.Manifest().ID
 	switch owner := app.(type) {
-	case platform.IdentityProfile:
+	case protocol.IdentityProfile:
 		if p.IdentityProfiles == nil {
-			p.IdentityProfiles = map[string]platform.IdentityProfile{}
+			p.IdentityProfiles = map[string]protocol.IdentityProfile{}
 		}
 		p.IdentityProfiles[id] = owner
 	}

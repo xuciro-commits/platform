@@ -35,7 +35,7 @@ func (s EffectSettlement) Settle(id string, out platform.Outcome, usage *platfor
 	if !found || out.Effect != id {
 		return
 	}
-	if platform.EffectSettled(before.State) && before.State != "discarded" {
+	if protocol.EffectSettled(before.State) && before.State != "discarded" {
 		return
 	}
 	if usage != nil {

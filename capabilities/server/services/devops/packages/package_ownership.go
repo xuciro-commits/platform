@@ -30,7 +30,7 @@ type PackageOwnershipEntry struct {
 	From      string            `json:"from"`
 }
 
-func OwnershipFor(views []platform.PackageView, id, version string, store *records.Store, owner build.ConstructionDrafts) (*PackageOwnership, error) {
+func OwnershipFor(views []protocol.PackageView, id, version string, store *records.Store, owner build.ConstructionDrafts) (*PackageOwnership, error) {
 	view := FindView(views, id, version)
 	if view == nil {
 		return nil, nil

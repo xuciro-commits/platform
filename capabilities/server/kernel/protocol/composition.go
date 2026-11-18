@@ -19,16 +19,16 @@ func ResolveComposition(modules []CapabilityModule, selected map[string]string) 
 }
 
 type OwnerBindings struct {
-	Training    platform.AITrainingHost
+	Training    AITrainingHost
 	Agent       AgentHost
 	Console     platform.ConsoleHost
-	Build       platform.BuildHost
+	Build       BuildHost
 	Transaction platform.TransactionHost
 	Files       MediaFileHost
 	Knowledge   platform.KnowledgeHost
 	Relations   platform.RelationsHost
 	Flow        FlowHost
-	Work        platform.WorkHost
+	Work        WorkHost
 }
 
 type MediaFileHost interface {
@@ -48,10 +48,10 @@ func BindOwner(app platform.App, bindings OwnerBindings) {
 }
 
 type RuntimeCapabilities struct {
-	NewTransactionExecutor func(platform.BusinessRuntimeContext) platform.TransactionExecutor
+	NewTransactionExecutor func(BusinessRuntimeContext) TransactionExecutor
 	NewAgentEvaluator      func() AgentEvaluator
 	BindOwner              func(platform.App, OwnerBindings)
-	AIInference            *platform.AIInferencePolicy
+	AIInference            *AIInferencePolicy
 	Rules                  platform.RuleEngine
 	Authorization          platform.AuthorizationEngine
 	RuleModule             CapabilityModule

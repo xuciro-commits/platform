@@ -10,7 +10,7 @@ import (
 )
 
 type FunctionEnvironment interface {
-	Host() platform.BuildHost
+	Host() protocol.BuildHost
 	Ledger() platform.Authority
 	Resolver() Resolver
 	App() string
@@ -54,13 +54,13 @@ type FunctionAuthoring interface {
 	OperationDraft(asset platform.ReleaseAsset) (string, any, error)
 	OperationReleaseAsset(name, version string) (platform.ReleaseAsset, error)
 	Prepare(assets []platform.ReleaseAsset) ([]platform.ReleasePublication, error)
-	PrepareProposal(c platform.Caller, r *pb.ChangeRecord, txn *platform.BusinessTxn, entity platform.Entity, now time.Time) (platform.TransactionProposal, *platform.Error)
+	PrepareProposal(c platform.Caller, r *pb.ChangeRecord, txn *platform.BusinessTxn, entity platform.Entity, now time.Time) (protocol.TransactionProposal, *platform.Error)
 	Resolve(name, sourceVersion string) (platform.ReleaseAsset, error)
 	Restore() error
 	RestoreCodes() error
 	RestoreTables() error
 	Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *platform.Error)
 	TableEntity() platform.Entity
-	TrainingCandidates(c platform.Caller, event platform.Event, images map[string]json.RawMessage) []platform.AITrainingCandidate
+	TrainingCandidates(c platform.Caller, event platform.Event, images map[string]json.RawMessage) []protocol.AITrainingCandidate
 	ValidateImage(raw []byte) error
 }

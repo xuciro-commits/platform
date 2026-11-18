@@ -12,7 +12,7 @@ import (
 )
 
 func StoreResourceRow(store *records.Store, tenant string, ref platform.AssetRef) (Resource, bool) {
-	row, ok := store.LockedRow(ResourceType, platform.ResourceID(tenant, ref))
+	row, ok := store.LockedRow(ResourceType, protocol.ResourceID(tenant, ref))
 	if !ok {
 		return Resource{}, false
 	}
@@ -50,7 +50,7 @@ var projectRefKinds = map[string][]string{
 	"objecttypegroup": {"object-type-group"},
 }
 
-func StoreProjectEdits(store *records.Store, member string, access platform.ProjectAccess, kind string, names []string) bool {
+func StoreProjectEdits(store *records.Store, member string, access protocol.ProjectAccess, kind string, names []string) bool {
 	store.Lock()
 	covering := []string{}
 	if resources := store.Type(ResourceType); resources != nil {
@@ -66,7 +66,7 @@ func StoreProjectEdits(store *records.Store, member string, access platform.Proj
 	}
 	store.Unlock()
 	for _, project := range covering {
-		if role := access.ProjectRole(member, project); role == platform.ProjectOwnerRole || role == platform.ProjectEditorRole {
+		if role := access.ProjectRole(member, project); role == protocol.ProjectOwnerRole || role == protocol.ProjectEditorRole {
 			return true
 		}
 	}

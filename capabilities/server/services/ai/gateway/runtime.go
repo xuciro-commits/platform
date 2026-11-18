@@ -1,6 +1,7 @@
 package aigateway
 
 import (
+	"platformserver/kernel/protocol"
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
@@ -12,7 +13,7 @@ import (
 type Runtime struct {
 	Tenant          string
 	Models          Models
-	Inference       platform.AIInferencePolicy
+	Inference       protocol.AIInferencePolicy
 	Settings        func(string, string) string
 	Resolver        Resolver
 	Suspended       func(string) bool
@@ -35,7 +36,7 @@ type Runtime struct {
 	Read            func(func(Runtime) *platform.Error) *platform.Error
 }
 
-func (r Runtime) Limits() platform.AIDefaults {
+func (r Runtime) Limits() protocol.AIDefaults {
 	return Limits(func(app, name string) string { return r.Settings(app, name) })
 }
 
@@ -45,7 +46,7 @@ func (r Runtime) Chat(m platform.Member, req platform.ChatRequest, stage string,
 			read := r.Read(func(current Runtime) *platform.Error {
 				model, pv, prepared, refusal = ChatSetup{
 					Design: func() *platform.Error {
-						if stage != platform.AIStageDesign {
+						if stage != protocol.AIStageDesign {
 							return nil
 						}
 						return current.DesignAllowed(m)
@@ -79,7 +80,7 @@ func (r Runtime) Plan(c platform.Caller, rec *pb.ChangeRecord, q platform.Reques
 	return ModelPlanning{
 		Resolver:   r.Resolver,
 		Provider:   r.ProviderOf,
-		Default:    func() string { return r.Settings(platform.AIApp, platform.AISettingAppModel) },
+		Default:    func() string { return r.Settings(protocol.AIApp, protocol.AISettingAppModel) },
 		Simulation: r.Simulation,
 		Queued:     r.Queued,
 	}.Effect(r.Tenant, c, rec, q, pending, acceptedformat.ModelEndpoint)

@@ -3,6 +3,7 @@ package host
 import (
 	"context"
 	runtimekernel "platformserver/kernel"
+	"platformserver/kernel/protocol"
 	"platformserver/services/actions"
 
 	"time"
@@ -16,18 +17,18 @@ func (t *Tenant) checkBusinessCorrection(m platform.Member, sub *pb.Submission, 
 	return actions.CheckCorrection(m.ID, sub, binding, t.Committed.Refusal)
 }
 
-func (t *Tenant) BusinessRefusals(m platform.Member, typ, id string, offset, limit int, at time.Time, keys ...string) (platform.BusinessRefusalPage, *platform.Error) {
-	return recordRead(t, context.Background(), func(t *Tenant) (platform.BusinessRefusalPage, *platform.Error) {
+func (t *Tenant) BusinessRefusals(m platform.Member, typ, id string, offset, limit int, at time.Time, keys ...string) (protocol.BusinessRefusalPage, *platform.Error) {
+	return recordRead(t, context.Background(), func(t *Tenant) (protocol.BusinessRefusalPage, *platform.Error) {
 		return t.scopedBusinessRefusals(m, typ, id, offset, limit, at, keys...)
 	})
 }
 
-func (t *Tenant) scopedBusinessRefusals(m platform.Member, typ, id string, offset, limit int, at time.Time, keys ...string) (platform.BusinessRefusalPage, *platform.Error) {
+func (t *Tenant) scopedBusinessRefusals(m platform.Member, typ, id string, offset, limit int, at time.Time, keys ...string) (protocol.BusinessRefusalPage, *platform.Error) {
 	if err := t.Admits(m); err != nil {
-		return platform.BusinessRefusalPage{Records: []platform.BusinessRefusalEntry{}}, err
+		return protocol.BusinessRefusalPage{Records: []protocol.BusinessRefusalEntry{}}, err
 	}
 	if typ == "" || id == "" {
-		return platform.BusinessRefusalPage{Records: []platform.BusinessRefusalEntry{}}, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Choose the original business record")
+		return protocol.BusinessRefusalPage{Records: []protocol.BusinessRefusalEntry{}}, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Choose the original business record")
 	}
 	key := ""
 	if len(keys) > 0 {

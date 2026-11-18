@@ -3,10 +3,10 @@ package kernel
 import (
 	"context"
 	"errors"
+	"platformserver/kernel/protocol"
 	"time"
 
 	persistence "platformserver/kernel/store"
-	"platformserver/platform"
 )
 
 type LaneHealth struct {
@@ -42,17 +42,17 @@ func (s *Sequence) StorageReady(ctx context.Context) error {
 	if _, err := journal.Entries(ctx, s.ID, journal.Position(s.ID)); err != nil {
 		return err
 	}
-	if _, err := s.Log().QueryObservations(platform.ObservationQuery{Tenant: s.ID, To: time.Now().UTC(), Limit: 1}); err != nil {
+	if _, err := s.Log().QueryObservations(protocol.ObservationQuery{Tenant: s.ID, To: time.Now().UTC(), Limit: 1}); err != nil {
 		return err
 	}
-	if _, err := s.Log().QueryAuditEntries(platform.AuditQuery{Tenant: s.ID, To: time.Now().UTC(), Limit: 1}); err != nil {
+	if _, err := s.Log().QueryAuditEntries(protocol.AuditQuery{Tenant: s.ID, To: time.Now().UTC(), Limit: 1}); err != nil {
 		return err
 	}
 	return nil
 }
 
 func (s *Sequence) AuditEmpty() bool {
-	page, err := s.Log().QueryAuditEntries(platform.AuditQuery{Tenant: s.ID, Limit: 1})
+	page, err := s.Log().QueryAuditEntries(protocol.AuditQuery{Tenant: s.ID, Limit: 1})
 	return err == nil && len(page.Entries) == 0
 }
 

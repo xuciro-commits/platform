@@ -12,11 +12,10 @@ import (
 	pgx "github.com/jackc/pgx/v5"
 	"io"
 	"log"
+	"platformserver/kernel/protocol"
 	"strings"
 	"sync"
 	"time"
-
-	"platformserver/platform"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -549,7 +548,7 @@ func (j *Postgres) PurgeTranscripts(tenant string, before time.Time) {
 	}
 }
 
-func (j *Postgres) SaveObservations(events []platform.Observation) error {
+func (j *Postgres) SaveObservations(events []protocol.Observation) error {
 	if len(events) == 0 {
 		return nil
 	}
@@ -584,10 +583,10 @@ func (j *Postgres) SaveObservations(events []platform.Observation) error {
 	return tx.Commit(ctx)
 }
 
-func (j *Postgres) QueryObservations(query platform.ObservationQuery) (platform.ObservationPage, error) {
+func (j *Postgres) QueryObservations(query protocol.ObservationQuery) (protocol.ObservationPage, error) {
 	cursorAt, cursorID, hasCursor, err := prepareObservationQuery(query)
 	if err != nil {
-		return platform.ObservationPage{}, err
+		return protocol.ObservationPage{}, err
 	}
 	limit := observationLimit(query.Limit)
 	args := []any{query.Tenant}
@@ -631,27 +630,27 @@ func (j *Postgres) QueryObservations(query platform.ObservationQuery) (platform.
 		fmt.Sprintf(" order by at desc, id desc limit %d", limit+1)
 	rows, err := j.pool.Query(context.Background(), statement, args...)
 	if err != nil {
-		return platform.ObservationPage{}, err
+		return protocol.ObservationPage{}, err
 	}
 	defer rows.Close()
-	entries := make([]platform.Observation, 0, limit+1)
+	entries := make([]protocol.Observation, 0, limit+1)
 	for rows.Next() {
-		var event platform.Observation
+		var event protocol.Observation
 		if err := rows.Scan(&event.Tenant, &event.ID, &event.At, &event.Level, &event.Source, &event.Member,
 			&event.App, &event.Route, &event.RequestID, &event.TraceID, &event.SpanID, &event.RunID,
 			&event.Resource, &event.SubmissionID, &event.ChangeID, &event.Outcome, &event.Message,
 			&event.Attributes); err != nil {
-			return platform.ObservationPage{}, err
+			return protocol.ObservationPage{}, err
 		}
 		event.At = event.At.UTC()
 		entries = append(entries, event)
 	}
 	if err := rows.Err(); err != nil {
-		return platform.ObservationPage{}, err
+		return protocol.ObservationPage{}, err
 	}
 	var retainedFrom *time.Time
 	if err := j.pool.QueryRow(context.Background(), `select min(at) from observations where tenant = $1`, query.Tenant).Scan(&retainedFrom); err != nil {
-		return platform.ObservationPage{}, err
+		return protocol.ObservationPage{}, err
 	}
 	hasMore := len(entries) > limit
 	if hasMore {
@@ -680,8 +679,8 @@ func (j *Postgres) ObservationUsage(tenant string, from time.Time) (int64, error
 	return total, nil
 }
 
-func (j *Postgres) SummarizeObservations(tenant, member string, from, to time.Time) (platform.ObservationSummary, error) {
-	out := platform.ObservationSummary{From: from.UTC(), To: to.UTC()}
+func (j *Postgres) SummarizeObservations(tenant, member string, from, to time.Time) (protocol.ObservationSummary, error) {
+	out := protocol.ObservationSummary{From: from.UTC(), To: to.UTC()}
 	memberClause := ""
 	args := []any{tenant, from, to}
 	if member != "" {
@@ -695,12 +694,12 @@ func (j *Postgres) SummarizeObservations(tenant, member string, from, to time.Ti
 		coalesce(avg((attributes ->> 'durationMs')::bigint) filter (where source = 'request' and attributes ->> 'durationMs' ~ '^[0-9]+$'), 0)::float8,
 		coalesce(max((attributes ->> 'durationMs')::bigint) filter (where source = 'request' and attributes ->> 'durationMs' ~ '^[0-9]+$'), 0)
 		from observations where tenant = $1 and at >= $2 and at < $3`+memberClause, args...).Scan(&out.Requests, &out.Errors, &out.Warnings, &out.AverageMillis, &out.MaxMillis); err != nil {
-		return platform.ObservationSummary{}, err
+		return protocol.ObservationSummary{}, err
 	}
 	return out, nil
 }
 
-func (j *Postgres) SaveAuditEntries(tenant string, entries []platform.AuditEntry) error {
+func (j *Postgres) SaveAuditEntries(tenant string, entries []protocol.AuditEntry) error {
 	if tenant == "" || len(entries) == 0 {
 		return nil
 	}
@@ -733,7 +732,7 @@ func (j *Postgres) SaveAuditEntries(tenant string, entries []platform.AuditEntry
 	return tx.Commit(ctx)
 }
 
-func (j *Postgres) QueryAuditEntries(query platform.AuditQuery) (platform.AuditPage, error) {
+func (j *Postgres) QueryAuditEntries(query protocol.AuditQuery) (protocol.AuditPage, error) {
 	limit := auditLimit(query.Limit)
 	args := []any{query.Tenant}
 	where := []string{"tenant = $1"}
@@ -762,7 +761,7 @@ func (j *Postgres) QueryAuditEntries(query platform.AuditQuery) (platform.AuditP
 	if query.Cursor != "" {
 		at, id, err := decodeAuditCursor(query.Cursor)
 		if err != nil {
-			return platform.AuditPage{}, err
+			return protocol.AuditPage{}, err
 		}
 		args = append(args, at, id)
 		where = append(where, fmt.Sprintf("(at < $%d or (at = $%d and id < $%d))", len(args)-1, len(args)-1, len(args)))
@@ -771,37 +770,37 @@ func (j *Postgres) QueryAuditEntries(query platform.AuditQuery) (platform.AuditP
 		fmt.Sprintf(" order by at desc, id desc limit %d", limit+1)
 	rows, err := j.pool.Query(context.Background(), statement, args...)
 	if err != nil {
-		return platform.AuditPage{}, err
+		return protocol.AuditPage{}, err
 	}
 	defer rows.Close()
-	entries := make([]platform.AuditEntry, 0, limit+1)
+	entries := make([]protocol.AuditEntry, 0, limit+1)
 	for rows.Next() {
-		var entry platform.AuditEntry
+		var entry protocol.AuditEntry
 		if err := rows.Scan(&entry.ID, &entry.At, &entry.Member, &entry.App, &entry.Action, &entry.Target); err != nil {
-			return platform.AuditPage{}, err
+			return protocol.AuditPage{}, err
 		}
 		entry.At = entry.At.UTC()
 		entries = append(entries, entry)
 	}
 	if err := rows.Err(); err != nil {
-		return platform.AuditPage{}, err
+		return protocol.AuditPage{}, err
 	}
 	var retainedFrom *time.Time
 	if err := j.pool.QueryRow(context.Background(), `select min(at) from audit_entries where tenant = $1`, query.Tenant).Scan(&retainedFrom); err != nil {
-		return platform.AuditPage{}, err
+		return protocol.AuditPage{}, err
 	}
 	hasMore := len(entries) > limit
 	if hasMore {
 		entries = entries[:limit]
 	}
 	if entries == nil {
-		entries = []platform.AuditEntry{}
+		entries = []protocol.AuditEntry{}
 	}
 	var earliest time.Time
 	if retainedFrom != nil {
 		earliest = retainedFrom.UTC()
 	}
-	page := platform.AuditPage{Entries: entries, HasMore: hasMore, Coverage: platform.AuditCoverage{RetainedFrom: earliest, Truncated: hasMore}}
+	page := protocol.AuditPage{Entries: entries, HasMore: hasMore, Coverage: protocol.AuditCoverage{RetainedFrom: earliest, Truncated: hasMore}}
 	if hasMore {
 		last := entries[len(entries)-1]
 		page.NextCursor = encodeAuditCursor(last.At, last.ID)
@@ -809,7 +808,7 @@ func (j *Postgres) QueryAuditEntries(query platform.AuditQuery) (platform.AuditP
 	return page, nil
 }
 
-func (j *Postgres) SavePersonalReads(tenant string, reads []platform.PersonalRead) error {
+func (j *Postgres) SavePersonalReads(tenant string, reads []protocol.PersonalRead) error {
 	if tenant == "" || len(reads) == 0 {
 		return nil
 	}
@@ -844,7 +843,7 @@ func (j *Postgres) SavePersonalReads(tenant string, reads []platform.PersonalRea
 	return tx.Commit(ctx)
 }
 
-func (j *Postgres) QueryPersonalReads(query platform.PersonalReadQuery) (platform.PersonalReadPage, error) {
+func (j *Postgres) QueryPersonalReads(query protocol.PersonalReadQuery) (protocol.PersonalReadPage, error) {
 	limit := auditLimit(query.Limit)
 	args := []any{query.Tenant}
 	where := []string{"tenant = $1"}
@@ -868,7 +867,7 @@ func (j *Postgres) QueryPersonalReads(query platform.PersonalReadQuery) (platfor
 	if query.Cursor != "" {
 		at, id, err := decodeAuditCursor(query.Cursor)
 		if err != nil {
-			return platform.PersonalReadPage{}, err
+			return protocol.PersonalReadPage{}, err
 		}
 		args = append(args, at, id)
 		where = append(where, fmt.Sprintf("(at < $%d or (at = $%d and id < $%d))", len(args)-1, len(args)-1, len(args)))
@@ -877,41 +876,41 @@ func (j *Postgres) QueryPersonalReads(query platform.PersonalReadQuery) (platfor
 		fmt.Sprintf(" order by at desc, id desc limit %d", limit+1)
 	rows, err := j.pool.Query(context.Background(), statement, args...)
 	if err != nil {
-		return platform.PersonalReadPage{}, err
+		return protocol.PersonalReadPage{}, err
 	}
 	defer rows.Close()
-	reads := make([]platform.PersonalRead, 0, limit+1)
+	reads := make([]protocol.PersonalRead, 0, limit+1)
 	for rows.Next() {
-		var read platform.PersonalRead
+		var read protocol.PersonalRead
 		var ids, fields []byte
 		if err := rows.Scan(&read.ID, &read.At, &read.Member, &read.Type, &ids, &fields); err != nil {
-			return platform.PersonalReadPage{}, err
+			return protocol.PersonalReadPage{}, err
 		}
 		if json.Unmarshal(ids, &read.IDs) != nil || json.Unmarshal(fields, &read.Fields) != nil {
-			return platform.PersonalReadPage{}, fmt.Errorf("personal read has invalid arrays")
+			return protocol.PersonalReadPage{}, fmt.Errorf("personal read has invalid arrays")
 		}
 		read.At = read.At.UTC()
 		reads = append(reads, read)
 	}
 	if err := rows.Err(); err != nil {
-		return platform.PersonalReadPage{}, err
+		return protocol.PersonalReadPage{}, err
 	}
 	var retainedFrom *time.Time
 	if err := j.pool.QueryRow(context.Background(), `select min(at) from personal_reads where tenant = $1`, query.Tenant).Scan(&retainedFrom); err != nil {
-		return platform.PersonalReadPage{}, err
+		return protocol.PersonalReadPage{}, err
 	}
 	hasMore := len(reads) > limit
 	if hasMore {
 		reads = reads[:limit]
 	}
 	if reads == nil {
-		reads = []platform.PersonalRead{}
+		reads = []protocol.PersonalRead{}
 	}
 	var earliest time.Time
 	if retainedFrom != nil {
 		earliest = retainedFrom.UTC()
 	}
-	page := platform.PersonalReadPage{Entries: reads, HasMore: hasMore, Coverage: platform.PersonalReadCoverage{RetainedFrom: earliest, Truncated: hasMore}}
+	page := protocol.PersonalReadPage{Entries: reads, HasMore: hasMore, Coverage: protocol.PersonalReadCoverage{RetainedFrom: earliest, Truncated: hasMore}}
 	if hasMore {
 		last := reads[len(reads)-1]
 		page.NextCursor = encodeAuditCursor(last.At, last.ID)
@@ -919,7 +918,7 @@ func (j *Postgres) QueryPersonalReads(query platform.PersonalReadQuery) (platfor
 	return page, nil
 }
 
-func (j *Postgres) ReplaceRunIndex(tenant, scope string, entries []platform.RunIndexEntry) error {
+func (j *Postgres) ReplaceRunIndex(tenant, scope string, entries []protocol.RunIndexEntry) error {
 	ctx := context.Background()
 	tx, err := j.pool.Begin(ctx)
 	if err != nil {
@@ -955,7 +954,7 @@ func (j *Postgres) ReplaceRunIndex(tenant, scope string, entries []platform.RunI
 	return tx.Commit(ctx)
 }
 
-func (j *Postgres) QueryRunIndex(query platform.RunIndexQuery) (platform.RunIndexPage, error) {
+func (j *Postgres) QueryRunIndex(query protocol.RunIndexQuery) (protocol.RunIndexPage, error) {
 	limit := query.Limit
 	if limit < 1 {
 		limit = 1
@@ -987,35 +986,35 @@ func (j *Postgres) QueryRunIndex(query platform.RunIndexQuery) (platform.RunInde
 	var total int
 	countStatement := `select count(*) from run_index where ` + strings.Join(where, " and ")
 	if err := j.pool.QueryRow(context.Background(), countStatement, args...).Scan(&total); err != nil {
-		return platform.RunIndexPage{}, err
+		return protocol.RunIndexPage{}, err
 	}
 	args = append(args, max(0, query.Offset), limit)
 	statement := `select id, type, source, app, status, at, payload from run_index where ` + strings.Join(where, " and ") +
 		fmt.Sprintf(" order by at desc, id desc offset $%d limit $%d", len(args)-1, len(args))
 	rows, err := j.pool.Query(context.Background(), statement, args...)
 	if err != nil {
-		return platform.RunIndexPage{}, err
+		return protocol.RunIndexPage{}, err
 	}
 	defer rows.Close()
-	entries := []platform.RunIndexEntry{}
+	entries := []protocol.RunIndexEntry{}
 	for rows.Next() {
-		var entry platform.RunIndexEntry
+		var entry protocol.RunIndexEntry
 		if err := rows.Scan(&entry.ID, &entry.Type, &entry.Source, &entry.App, &entry.Status, &entry.At, &entry.Payload); err != nil {
-			return platform.RunIndexPage{}, err
+			return protocol.RunIndexPage{}, err
 		}
 		entry.At = entry.At.UTC()
 		entries = append(entries, entry)
 	}
 	if err := rows.Err(); err != nil {
-		return platform.RunIndexPage{}, err
+		return protocol.RunIndexPage{}, err
 	}
 	var retainedFrom *time.Time
 	if err := j.pool.QueryRow(context.Background(), `select min(at) from run_index where tenant = $1 and scope = $2`, query.Tenant, query.Scope).Scan(&retainedFrom); err != nil {
-		return platform.RunIndexPage{}, err
+		return protocol.RunIndexPage{}, err
 	}
 	var earliest time.Time
 	if retainedFrom != nil {
 		earliest = retainedFrom.UTC()
 	}
-	return platform.RunIndexPage{Entries: entries, Total: total, RetainedFrom: earliest}, nil
+	return protocol.RunIndexPage{Entries: entries, Total: total, RetainedFrom: earliest}, nil
 }

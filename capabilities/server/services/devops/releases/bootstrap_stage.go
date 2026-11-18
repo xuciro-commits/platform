@@ -3,6 +3,7 @@ package releases
 import (
 	"encoding/json"
 	"fmt"
+	"platformserver/kernel/protocol"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformserver/kernel/records"
@@ -12,17 +13,17 @@ import (
 
 type BootstrapStage struct {
 	Tenant          string
-	Candidate       platform.ReleaseCandidate
-	Context         platform.AssetReleaseContext
+	Candidate       protocol.ReleaseCandidate
+	Context         protocol.AssetReleaseContext
 	Request         *OwnerDraftRequest
 	IncludeArchived bool
 	Registry        *publication.AssetRegistry
-	Drafts          []platform.AssetDraft
+	Drafts          []protocol.AssetDraft
 	Put             func(app string, receipt *pb.ChangeRecord, value any) *platform.Error
 	Records         *records.Store
 	KeepChanges     func(receipt *pb.ChangeRecord)
-	Register        func(plan platform.AssetInstallation) error
-	Decide          func(info platform.EntityInfo, draft platform.AssetDraft, submission *pb.Submission) (*pb.ChangeRecord, error)
+	Register        func(plan protocol.AssetInstallation) error
+	Decide          func(info platform.EntityInfo, draft protocol.AssetDraft, submission *pb.Submission) (*pb.ChangeRecord, error)
 	Rebind          func(app string) (*publication.AssetRegistry, error)
 	AttachHosts     func()
 }
@@ -59,7 +60,7 @@ func (s BootstrapStage) Run() (*pb.ChangeRecord, error) {
 				}
 				s.KeepChanges(receipt)
 			}
-			if err := registry.ApplyInstallation(plan, platform.AssetApplyContext{Private: true}); err != nil {
+			if err := registry.ApplyInstallation(plan, protocol.AssetApplyContext{Private: true}); err != nil {
 				return err
 			}
 			if context.DraftsOnly {

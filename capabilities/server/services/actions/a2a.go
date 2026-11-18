@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"platformserver/kernel/protocol"
 	"platformserver/platform"
 	"strings"
 	"time"
@@ -56,7 +57,7 @@ func (m A2AMessage) Text() string {
 	return strings.Join(out, "\n")
 }
 
-func TaskOf(run platform.AgentRunRecord, question string) A2ATask {
+func TaskOf(run protocol.AgentRunRecord, question string) A2ATask {
 	var x A2ATask
 	x.ID, x.ContextID, x.Status.Timestamp = run.ID, run.ID, run.Changed.At
 	say := func(text string) *A2AMessage {

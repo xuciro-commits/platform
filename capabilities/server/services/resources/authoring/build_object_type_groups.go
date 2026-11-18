@@ -2,6 +2,7 @@ package build
 
 import (
 	"fmt"
+	"platformserver/kernel/protocol"
 	"slices"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
@@ -58,10 +59,10 @@ var objectTypeGroupKind = resourceKind[ontology.ObjectTypeGroup, platform.Object
 	},
 	identity:        func(a, b ontology.ObjectTypeGroup) bool { return a.Name == b.Name },
 	fromDeclaration: ontology.ObjectTypeGroupFromDeclaration,
-	install: func(h platform.BuildHost, c platform.Caller, g platform.ObjectTypeGroup, version int) error {
+	install: func(h protocol.BuildHost, c platform.Caller, g platform.ObjectTypeGroup, version int) error {
 		return h.InstallObjectTypeGroup(c, g, version)
 	},
-	validateInstall: func(h platform.BuildHost, g platform.ObjectTypeGroup) error {
+	validateInstall: func(h protocol.BuildHost, g platform.ObjectTypeGroup) error {
 		return h.ValidateInstallObjectTypeGroup(g)
 	},
 }

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"maps"
+	"platformserver/kernel/protocol"
 	"reflect"
 	"slices"
 	"strings"
@@ -19,16 +20,16 @@ type assetOwnerKey struct {
 
 type AssetRegistry struct {
 	resolver Resolver
-	owners   map[string]platform.AssetLifecycleOwner
-	kinds    map[assetOwnerKey]platform.AssetLifecycleOwner
+	owners   map[string]protocol.AssetLifecycleOwner
+	kinds    map[assetOwnerKey]protocol.AssetLifecycleOwner
 }
 
 func (r *AssetRegistry) Resolver() Resolver {
 	return r.resolver
 }
 
-func (resolver Resolver) NewAssetRegistry(owners ...platform.AssetLifecycleOwner) (*AssetRegistry, error) {
-	registry := &AssetRegistry{resolver: resolver, owners: map[string]platform.AssetLifecycleOwner{}, kinds: map[assetOwnerKey]platform.AssetLifecycleOwner{}}
+func (resolver Resolver) NewAssetRegistry(owners ...protocol.AssetLifecycleOwner) (*AssetRegistry, error) {
+	registry := &AssetRegistry{resolver: resolver, owners: map[string]protocol.AssetLifecycleOwner{}, kinds: map[assetOwnerKey]protocol.AssetLifecycleOwner{}}
 	for _, owner := range owners {
 		if err := registry.Register(owner); err != nil {
 			return nil, err
@@ -37,7 +38,7 @@ func (resolver Resolver) NewAssetRegistry(owners ...platform.AssetLifecycleOwner
 	return registry, nil
 }
 
-func (r *AssetRegistry) Register(owner platform.AssetLifecycleOwner) error {
+func (r *AssetRegistry) Register(owner protocol.AssetLifecycleOwner) error {
 	if owner == nil || reflect.ValueOf(owner).Kind() == reflect.Pointer && reflect.ValueOf(owner).IsNil() {
 		return fmt.Errorf("asset lifecycle owner is nil")
 	}
@@ -47,8 +48,8 @@ func (r *AssetRegistry) Register(owner platform.AssetLifecycleOwner) error {
 		return fmt.Errorf("asset lifecycle owner needs its app identity and ledger")
 	}
 	if r.owners == nil {
-		r.owners = map[string]platform.AssetLifecycleOwner{}
-		r.kinds = map[assetOwnerKey]platform.AssetLifecycleOwner{}
+		r.owners = map[string]protocol.AssetLifecycleOwner{}
+		r.kinds = map[assetOwnerKey]protocol.AssetLifecycleOwner{}
 	}
 	if r.owners[app] != nil {
 		return fmt.Errorf("asset lifecycle owner %s is registered twice", app)
@@ -74,7 +75,7 @@ func (r *AssetRegistry) Register(owner platform.AssetLifecycleOwner) error {
 	return nil
 }
 
-func (r *AssetRegistry) Owner(ref platform.AssetRef) (platform.AssetLifecycleOwner, error) {
+func (r *AssetRegistry) Owner(ref platform.AssetRef) (protocol.AssetLifecycleOwner, error) {
 	if err := ref.Check(); err != nil {
 		return nil, err
 	}
@@ -88,11 +89,11 @@ func (r *AssetRegistry) Owner(ref platform.AssetRef) (platform.AssetLifecycleOwn
 	return owner, nil
 }
 
-func (r *AssetRegistry) Owners() []platform.AssetLifecycleOwner {
+func (r *AssetRegistry) Owners() []protocol.AssetLifecycleOwner {
 	if r == nil {
 		return nil
 	}
-	var owners []platform.AssetLifecycleOwner
+	var owners []protocol.AssetLifecycleOwner
 	for _, app := range slices.Sorted(maps.Keys(r.owners)) {
 		owners = append(owners, r.owners[app])
 	}
@@ -209,12 +210,12 @@ func (r *AssetRegistry) groupedAssets(assets []platform.ReleaseAsset) (map[strin
 	return grouped, nil
 }
 
-func (r *AssetRegistry) EnvironmentRequirements(assets []platform.ReleaseAsset) ([]platform.AssetEnvironmentRequirement, error) {
+func (r *AssetRegistry) EnvironmentRequirements(assets []platform.ReleaseAsset) ([]protocol.AssetEnvironmentRequirement, error) {
 	grouped, err := r.groupedAssets(assets)
 	if err != nil {
 		return nil, err
 	}
-	requirements := map[platform.AssetRef]platform.AssetEnvironmentRequirement{}
+	requirements := map[platform.AssetRef]protocol.AssetEnvironmentRequirement{}
 	for _, app := range slices.Sorted(maps.Keys(grouped)) {
 		for _, asset := range grouped[app] {
 			owned, err := r.owners[app].AssetEnvironmentRequirements(asset)
@@ -241,14 +242,14 @@ func (r *AssetRegistry) EnvironmentRequirements(assets []platform.ReleaseAsset) 
 			}
 		}
 	}
-	var out []platform.AssetEnvironmentRequirement
+	var out []protocol.AssetEnvironmentRequirement
 	for _, ref := range slices.SortedFunc(maps.Keys(requirements), CompareAssetRef) {
 		out = append(out, requirements[ref])
 	}
 	return out, nil
 }
 
-func (r *AssetRegistry) PrepareReleaseAssets(assets []platform.ReleaseAsset, context platform.AssetReleaseContext) ([]platform.AssetInstallation, error) {
+func (r *AssetRegistry) PrepareReleaseAssets(assets []platform.ReleaseAsset, context protocol.AssetReleaseContext) ([]protocol.AssetInstallation, error) {
 	grouped, err := r.groupedAssets(assets)
 	if err != nil {
 		return nil, err
@@ -256,7 +257,7 @@ func (r *AssetRegistry) PrepareReleaseAssets(assets []platform.ReleaseAsset, con
 	if _, err := r.EnvironmentRequirements(assets); err != nil {
 		return nil, err
 	}
-	var out []platform.AssetInstallation
+	var out []protocol.AssetInstallation
 	seen := map[platform.AssetRef]bool{}
 	records := map[string]bool{}
 	for _, app := range slices.Sorted(maps.Keys(grouped)) {
@@ -279,7 +280,7 @@ func (r *AssetRegistry) PrepareReleaseAssets(assets []platform.ReleaseAsset, con
 	return out, nil
 }
 
-func (r *AssetRegistry) ReleaseDrafts(assets []platform.ReleaseAsset, context platform.AssetReleaseContext) ([]platform.AssetDraft, error) {
+func (r *AssetRegistry) ReleaseDrafts(assets []platform.ReleaseAsset, context protocol.AssetReleaseContext) ([]protocol.AssetDraft, error) {
 	grouped, err := r.groupedAssets(assets)
 	if err != nil {
 		return nil, err
@@ -287,7 +288,7 @@ func (r *AssetRegistry) ReleaseDrafts(assets []platform.ReleaseAsset, context pl
 	if _, err := r.EnvironmentRequirements(assets); err != nil {
 		return nil, err
 	}
-	var out []platform.AssetDraft
+	var out []protocol.AssetDraft
 	seen := map[string]bool{}
 	refs := map[platform.AssetRef]bool{}
 	for _, app := range slices.Sorted(maps.Keys(grouped)) {
@@ -342,24 +343,24 @@ func (r *AssetRegistry) BeginBootstrap(assets []platform.ReleaseAsset) (func(), 
 	return release, nil
 }
 
-func (r *AssetRegistry) DecodeAssetInstallation(app, schema string, image json.RawMessage) (platform.AssetInstallation, error) {
+func (r *AssetRegistry) DecodeAssetInstallation(app, schema string, image json.RawMessage) (protocol.AssetInstallation, error) {
 	if r == nil || r.owners[app] == nil {
-		return platform.AssetInstallation{}, fmt.Errorf("installation has no lifecycle owner %s", app)
+		return protocol.AssetInstallation{}, fmt.Errorf("installation has no lifecycle owner %s", app)
 	}
 	plan, err := r.owners[app].DecodeAssetInstallation(schema, bytes.Clone(image))
 	if err != nil {
-		return platform.AssetInstallation{}, err
+		return protocol.AssetInstallation{}, err
 	}
 	if plan.Ref.App != app || plan.Schema != schema || !bytes.Equal(plan.Image, image) {
-		return platform.AssetInstallation{}, fmt.Errorf("owner changed historical installation identity or bytes")
+		return protocol.AssetInstallation{}, fmt.Errorf("owner changed historical installation identity or bytes")
 	}
 	if err := r.checkInstallationShape(plan); err != nil {
-		return platform.AssetInstallation{}, err
+		return protocol.AssetInstallation{}, err
 	}
 	return plan, nil
 }
 
-func (r *AssetRegistry) checkInstallationShape(plan platform.AssetInstallation) error {
+func (r *AssetRegistry) checkInstallationShape(plan protocol.AssetInstallation) error {
 	if _, err := r.Owner(plan.Ref); err != nil {
 		return err
 	}
@@ -370,7 +371,7 @@ func (r *AssetRegistry) checkInstallationShape(plan platform.AssetInstallation) 
 	return nil
 }
 
-func (r *AssetRegistry) checkInstallationImage(plan platform.AssetInstallation) error {
+func (r *AssetRegistry) checkInstallationImage(plan protocol.AssetInstallation) error {
 	decoded, err := r.DecodeAssetInstallation(plan.Ref.App, plan.Schema, plan.Image)
 	if err != nil {
 		return err
@@ -381,7 +382,7 @@ func (r *AssetRegistry) checkInstallationImage(plan platform.AssetInstallation) 
 	return nil
 }
 
-func (r *AssetRegistry) ValidateInstallation(plan platform.AssetInstallation) error {
+func (r *AssetRegistry) ValidateInstallation(plan protocol.AssetInstallation) error {
 	if err := r.checkInstallationImage(plan); err != nil {
 		return err
 	}
@@ -390,13 +391,13 @@ func (r *AssetRegistry) ValidateInstallation(plan platform.AssetInstallation) er
 	return owner.ValidateAssetInstallation(plan)
 }
 
-func (r *AssetRegistry) ApplyInstallation(plan platform.AssetInstallation, context platform.AssetApplyContext) error {
+func (r *AssetRegistry) ApplyInstallation(plan protocol.AssetInstallation, context protocol.AssetApplyContext) error {
 	if err := r.checkInstallationImage(plan); err != nil {
 		return err
 	}
 	owner, _ := r.Owner(plan.Ref)
 	if context.Validate {
-		if err := owner.ValidateAssetInstallation(platform.AssetInstallation{Ref: plan.Ref, Schema: plan.Schema, Record: plan.Record, Image: bytes.Clone(plan.Image)}); err != nil {
+		if err := owner.ValidateAssetInstallation(protocol.AssetInstallation{Ref: plan.Ref, Schema: plan.Schema, Record: plan.Record, Image: bytes.Clone(plan.Image)}); err != nil {
 			return err
 		}
 	}

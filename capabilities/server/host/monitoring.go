@@ -4,6 +4,7 @@ import (
 	"cmp"
 	"encoding/json"
 	runtimekernel "platformserver/kernel"
+	"platformserver/kernel/protocol"
 	"platformserver/services/automate/runtime"
 	dataowner "platformserver/services/data"
 	"platformserver/services/functions/runtime"
@@ -22,8 +23,8 @@ func (t *Tenant) monitoringRuns(m platform.Member, filter monitoring.MonitoringR
 	m = t.authorizationMember(m)
 	return monitoring.RunIndex{
 		Tenant: t.ID, Scope: m.ID,
-		Query:   func(q platform.RunIndexQuery) (platform.RunIndexPage, error) { return t.Log().QueryRunIndex(q) },
-		Replace: func(entries []platform.RunIndexEntry) error { return t.Log().ReplaceRunIndex(t.ID, m.ID, entries) },
+		Query:   func(q protocol.RunIndexQuery) (protocol.RunIndexPage, error) { return t.Log().QueryRunIndex(q) },
+		Replace: func(entries []protocol.RunIndexEntry) error { return t.Log().ReplaceRunIndex(t.ID, m.ID, entries) },
 		Refresh: func(rebuild func() ([]monitoring.MonitoringCoverage, bool)) []monitoring.MonitoringCoverage {
 			return t.runIndex.Refresh(m.ID, now, rebuild)
 		},

@@ -94,7 +94,7 @@ func (a ActionChecks) Check(action platform.Action, request ActionCheckRequest, 
 		return ActionCheckResult{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Action inputs must be one JSON object")
 	}
 	supplied = supplied && len(inputs) > 0
-	result.Issues = platform.InputIssues(action.Payload, inputs)
+	result.Issues = ruleprotocol.InputIssues(action.Payload, inputs)
 	if len(result.Issues) > 0 && supplied {
 		result.Allowed = false
 		if result.Message == "" {

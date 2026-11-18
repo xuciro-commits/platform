@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	runtimeprotocol "platformserver/kernel/protocol"
 	"platformserver/platform"
 	"platformserver/services/ai/gateway/providers"
 	"platformserver/services/ai/modelconfig"
@@ -13,7 +14,7 @@ import (
 )
 
 type Calls struct {
-	Inference  platform.AIInferencePolicy
+	Inference  runtimeprotocol.AIInferencePolicy
 	MostTokens func() int
 	Reserve    func(platform.Member, platform.AIModel, platform.ChatRequest, int, int, time.Time) *platform.AIError
 	Release    func(string, time.Time) *platform.Error
@@ -68,7 +69,7 @@ func (g Calls) Call(pv platform.AIProvider, model platform.AIModel, m platform.M
 		Messages []map[string]any
 		Tools    []platform.Tool
 	}{providers.OpenAIMessages(req.Messages), req.Tools})
-	estimated := platform.EstimateModelTokens(string(input))
+	estimated := runtimeprotocol.EstimateModelTokens(string(input))
 	if configErr == nil && binding.Capabilities != nil && binding.Capabilities.InputTokens != nil && estimated > *binding.Capabilities.InputTokens {
 		configErr = fmt.Errorf("Input exceeds the model input limit; shorten the prompt or history")
 	}
@@ -129,7 +130,7 @@ func (g Calls) Call(pv platform.AIProvider, model platform.AIModel, m platform.M
 		for _, c := range answer.ToolCalls {
 			said += string(c.Arguments)
 		}
-		u.Input, u.Output, u.TokensEstimated = platform.EstimateModelTokens(string(request)), platform.EstimateModelTokens(said), true
+		u.Input, u.Output, u.TokensEstimated = runtimeprotocol.EstimateModelTokens(string(request)), runtimeprotocol.EstimateModelTokens(said), true
 		knownCache := 0
 		for _, count := range []*int{u.CacheReadInput, u.CacheWriteInput} {
 			if count != nil {

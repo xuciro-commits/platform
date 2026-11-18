@@ -3,6 +3,7 @@ package releases
 import (
 	"encoding/json"
 	"fmt"
+	"platformserver/kernel/protocol"
 	"platformserver/platform"
 	"platformserver/services/resources/authoring"
 
@@ -32,7 +33,7 @@ type ReleasePage struct {
 }
 
 type SavedReleaseReview struct {
-	AI                   []platform.ApplicationAI `json:"ai,omitempty"`
+	AI                   []protocol.ApplicationAI `json:"ai,omitempty"`
 	Preview              ReleasePreview           `json:"preview"`
 	Assets               []platform.ReleaseAsset  `json:"assets"`
 	Active               bool                     `json:"active"`
@@ -176,10 +177,10 @@ func (s *Store) Review(id string, context ReviewContext) (SavedReleaseReview, er
 }
 
 type ReviewContext struct {
-	AI            func([]platform.ReleaseAsset, map[platform.AssetRef]bool) ([]platform.ApplicationAI, *platform.Error)
-	Extensions    func(platform.ReleaseCandidate) ([]ReleaseExtensionReview, error)
-	Running       func(platform.ReleaseCandidate) (platform.ReleaseCandidate, error)
+	AI            func([]platform.ReleaseAsset, map[platform.AssetRef]bool) ([]protocol.ApplicationAI, *platform.Error)
+	Extensions    func(protocol.ReleaseCandidate) ([]ReleaseExtensionReview, error)
+	Running       func(protocol.ReleaseCandidate) (protocol.ReleaseCandidate, error)
 	CheckExisting func(string, []byte) error
-	Prepare       func(platform.ReleaseCandidate, bool) error
-	Upgrade       func(platform.ReleaseCandidate) (*ReleaseUpgradePlan, error)
+	Prepare       func(protocol.ReleaseCandidate, bool) error
+	Upgrade       func(protocol.ReleaseCandidate) (*ReleaseUpgradePlan, error)
 }

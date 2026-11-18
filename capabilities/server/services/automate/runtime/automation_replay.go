@@ -2,6 +2,7 @@ package automation
 
 import (
 	"fmt"
+	"platformserver/kernel/protocol"
 	"slices"
 	"time"
 
@@ -22,7 +23,7 @@ type EventRoute struct {
 	Apps       []platform.App
 	Listeners  []string
 	Names      func(event platform.Event) []string
-	Delivered  func(platform.Delivery)
+	Delivered  func(protocol.Delivery)
 	Observe    func(event platform.Event, names []string)
 	Add        func(effects ...platform.Effect)
 	Emit       func(event platform.Event, names []string)
@@ -35,7 +36,7 @@ func (r EventRoute) Route(e QueuedEvent, now time.Time) {
 	s := e.Record.GetSubmission()
 	names := append([]string{s.GetSchema().GetName()}, r.Names(e.Event)...)
 	stopped := func(id string) {
-		r.Delivered(platform.Delivery{At: now, App: e.App, Action: s.GetSchema().GetName(), Target: target(s), Subscriber: id,
+		r.Delivered(protocol.Delivery{At: now, App: e.App, Action: s.GetSchema().GetName(), Target: target(s), Subscriber: id,
 			Outcome: fmt.Sprintf("stopped: more than %d events caused by events", r.MaxHops)})
 	}
 	if e.Plan != nil {
@@ -85,7 +86,7 @@ type Replay struct {
 	Start     func(id string) uint32
 	Finish    func(id string, generation uint32, failed bool)
 	SetHops   func(int)
-	Delivered func(platform.Delivery)
+	Delivered func(protocol.Delivery)
 	Failed    func(title, why, id string)
 	Observe   func(source, runID, app, resource, status, title, detail string)
 	Enqueue   func()
@@ -119,7 +120,7 @@ func (r Replay) Attempt(task *Task, now time.Time) string {
 	r.SetHops(0)
 	r.Finish(task.ID, generation, outcome != "ok")
 	s := task.Event.Record.GetSubmission()
-	r.Delivered(platform.Delivery{At: now, App: task.Event.App, Action: s.GetSchema().GetName(), Target: target(s), Subscriber: task.App,
+	r.Delivered(protocol.Delivery{At: now, App: task.Event.App, Action: s.GetSchema().GetName(), Target: target(s), Subscriber: task.App,
 		Outcome: outcome, Attempt: int(generation)})
 	r.Board.Lock()
 	task.ScheduledTask = task.Settle(int(generation), outcome, r.Retry(task.App), now)
@@ -168,7 +169,7 @@ func (b *WorkBoard) Deliver(subscriber string, e QueuedEvent, now time.Time) {
 	s := e.Record.GetSubmission()
 	b.Lock()
 	defer b.Unlock()
-	b.Queue(subscriber, &Task{ScheduledTask: platform.ScheduledTask{ID: "delivery:" + subscriber + ":" + e.App + "/" + e.Record.GetChangeId(), Kind: "delivery", App: subscriber,
+	b.Queue(subscriber, &Task{ScheduledTask: protocol.ScheduledTask{ID: "delivery:" + subscriber + ":" + e.App + "/" + e.Record.GetChangeId(), Kind: "delivery", App: subscriber,
 		Title: s.GetSchema().GetName() + " " + target(s), State: "queued", Due: now.UTC()}, Event: &e})
 }
 

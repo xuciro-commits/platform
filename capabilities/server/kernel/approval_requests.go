@@ -1,6 +1,7 @@
 package kernel
 
 import (
+	"platformserver/kernel/protocol"
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
@@ -34,9 +35,9 @@ func (h ApprovalRequests) Submit(a platform.App, m platform.Member, s *pb.Submis
 	}); err != nil {
 		return nil, err
 	}
-	owner := h.App(platform.WorkApp)
+	owner := h.App(protocol.WorkApp)
 	if owner == nil {
 		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The approval owner is unavailable")
 	}
-	return owner.(platform.ApprovalOwner).RequestApproval(c, s, now)
+	return owner.(protocol.ApprovalOwner).RequestApproval(c, s, now)
 }

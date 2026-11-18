@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"maps"
+	"platformserver/kernel/protocol"
 	"platformserver/platform"
 	"strings"
 	"sync"
@@ -20,7 +21,7 @@ const MaxStagedOutputBytes = 16 << 20
 
 const MaxOperationInputBytes = 64 << 20
 
-func (c *Channel) InputKey(ref platform.OperationInputArtifact) (string, error) {
+func (c *Channel) InputKey(ref protocol.OperationInputArtifact) (string, error) {
 	ticket, te := hex.DecodeString(ref.Ticket)
 	digest, de := hex.DecodeString(ref.Digest)
 	definition, oe := hex.DecodeString(ref.Definition)
@@ -32,15 +33,15 @@ func (c *Channel) InputKey(ref platform.OperationInputArtifact) (string, error) 
 	return fmt.Sprintf("%s/artifacts/compute-input/%x/%s/%s.json", c.tenant, owner, ref.Ticket, ref.Digest), nil
 }
 
-func (c *Channel) SealInput(call, member, definition, hash string, raw []byte, budget int) (platform.OperationInputArtifact, error) {
+func (c *Channel) SealInput(call, member, definition, hash string, raw []byte, budget int) (protocol.OperationInputArtifact, error) {
 	if budget < 1 || budget > MaxOperationInputBytes || len(raw) < 1 || len(raw) > budget || !json.Valid(raw) {
-		return platform.OperationInputArtifact{}, fmt.Errorf("the input exceeds its declared data channel budget")
+		return protocol.OperationInputArtifact{}, fmt.Errorf("the input exceeds its declared data channel budget")
 	}
 	var ticket [16]byte
 	if _, err := rand.Read(ticket[:]); err != nil {
-		return platform.OperationInputArtifact{}, err
+		return protocol.OperationInputArtifact{}, err
 	}
-	ref := platform.OperationInputArtifact{Tenant: c.tenant, Call: call, Member: member, Definition: definition, InputHash: hash, Ticket: hex.EncodeToString(ticket[:]), Digest: fmt.Sprintf("%x", sha256.Sum256(raw)), Size: len(raw)}
+	ref := protocol.OperationInputArtifact{Tenant: c.tenant, Call: call, Member: member, Definition: definition, InputHash: hash, Ticket: hex.EncodeToString(ticket[:]), Digest: fmt.Sprintf("%x", sha256.Sum256(raw)), Size: len(raw)}
 	key, err := c.InputKey(ref)
 	if err != nil {
 		return ref, err
@@ -48,7 +49,7 @@ func (c *Channel) SealInput(call, member, definition, hash string, raw []byte, b
 	return ref, c.files().Put(context.Background(), key, raw, "application/json")
 }
 
-func (c *Channel) ReadInput(ctx context.Context, ref platform.OperationInputArtifact) ([]byte, error) {
+func (c *Channel) ReadInput(ctx context.Context, ref protocol.OperationInputArtifact) ([]byte, error) {
 	key, err := c.InputKey(ref)
 	if err != nil {
 		return nil, err
@@ -68,7 +69,7 @@ func (c *Channel) ReadInput(ctx context.Context, ref platform.OperationInputArti
 	return raw, nil
 }
 
-func (c *Channel) DiscardInput(ref platform.OperationInputArtifact) {
+func (c *Channel) DiscardInput(ref protocol.OperationInputArtifact) {
 	if key, err := c.InputKey(ref); err == nil {
 		c.files().Delete(context.Background(), key)
 	}

@@ -1,6 +1,7 @@
 package host
 
 import (
+	"platformserver/kernel/protocol"
 	dataowner "platformserver/services/data"
 	"slices"
 	"strings"
@@ -12,10 +13,10 @@ import (
 )
 
 func TestInvariantK1K4K5CompartmentClearancesAndDeclassification(t *testing.T) {
-	seats := []platform.Seat{
-		platform.Seat{Subjects: []string{"admin"}, Member: platform.Member{ID: "admin", Roles: map[string]string{"platform": "admin", "build": "builder"}}},
-		platform.Seat{Subjects: []string{"reader"}, Member: platform.Member{ID: "reader", Roles: map[string]string{"build": "builder"}}},
-		platform.Seat{Subjects: []string{"partial"}, Member: platform.Member{ID: "partial", Roles: map[string]string{"build": "builder"}}},
+	seats := []protocol.Seat{
+		protocol.Seat{Subjects: []string{"admin"}, Member: platform.Member{ID: "admin", Roles: map[string]string{"platform": "admin", "build": "builder"}}},
+		protocol.Seat{Subjects: []string{"reader"}, Member: platform.Member{ID: "reader", Roles: map[string]string{"build": "builder"}}},
+		protocol.Seat{Subjects: []string{"partial"}, Member: platform.Member{ID: "partial", Roles: map[string]string{"build": "builder"}}},
 	}
 	live := newInvariantTenant(t, "compartment-invariants", seats...)
 	admin, _ := live.Member("admin")
@@ -27,7 +28,7 @@ func TestInvariantK1K4K5CompartmentClearancesAndDeclassification(t *testing.T) {
 			t.Fatalf("%s: %v", schema, refusal)
 		}
 	}
-	save(platform.SchemaTeamSave, platform.TeamType, "finance-team", map[string]any{"name": "Finance team", "members": []string{"reader", "builder"}, "grants": []platform.Grant{}})
+	save(protocol.SchemaTeamSave, protocol.TeamType, "finance-team", map[string]any{"name": "Finance team", "members": []string{"reader", "builder"}, "grants": []platform.Grant{}})
 	finance := func(declassifiers []string) {
 		save(platform.SchemaMarkingSave, platform.MarkingType, "finance", map[string]any{"title": "Finance", "teams": []string{"finance-team"}, "declassifiers": declassifiers})
 	}
@@ -54,7 +55,7 @@ func TestInvariantK1K4K5CompartmentClearancesAndDeclassification(t *testing.T) {
 		t.Fatal("editing removed mandatory markings")
 	}
 	live.accept(t, "build.dataset.create", dataowner.DatasetType, "OUTPUT", map[string]any{"name": "declassified", "title": "Declassified", "keep": 10})
-	live.accept(t, "build.pipeline.create", dataowner.PipelineType, "PIPE", map[string]any{"name": "releasepublic", "title": "Release public data", "input": "INPUT", "outputDataset": "OUTPUT", "steps": []platform.TransformStep{{Kind: "declassify", Markings: []string{"confidential", "pii", "finance"}}}})
+	live.accept(t, "build.pipeline.create", dataowner.PipelineType, "PIPE", map[string]any{"name": "releasepublic", "title": "Release public data", "input": "INPUT", "outputDataset": "OUTPUT", "steps": []protocol.TransformStep{{Kind: "declassify", Markings: []string{"confidential", "pii", "finance"}}}})
 	drafts := []build.JointDraftRef{{Kind: platform.AssetDataset, ID: "INPUT"}, {Kind: platform.AssetDataset, ID: "OUTPUT"}, {Kind: platform.AssetPipeline, ID: "PIPE"}}
 	preview, err := live.PreviewReleaseDrafts(admin, drafts, "", invariantClock)
 	if err != nil || !strings.Contains(preview.Diagnostic, "declassification") {

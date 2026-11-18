@@ -3,6 +3,7 @@ package compute
 import (
 	"bytes"
 	"encoding/json"
+	"platformserver/kernel/protocol"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformserver/platform"
@@ -23,19 +24,19 @@ func PriorSealedDefinition(body string) (platform.Operation, int, bool) {
 	return platform.Operation{}, 0, false
 }
 
-func (c *Channel) SealCallInput(call, member string, q platform.OperationRequest, op platform.Operation, version int) (platform.OperationRequest, platform.OperationInputArtifact, string, *platform.Error) {
+func (c *Channel) SealCallInput(call, member string, q platform.OperationRequest, op platform.Operation, version int) (platform.OperationRequest, protocol.OperationInputArtifact, string, *platform.Error) {
 	if len(q.Inputs) > op.Limits.DataInputBytes {
-		return q, platform.OperationInputArtifact{}, "", platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "The input exceeds its declared data channel budget")
+		return q, protocol.OperationInputArtifact{}, "", platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "The input exceeds its declared data channel budget")
 	}
 	raw := bytes.Clone(q.Inputs)
 	if err := op.Input.Validate(raw, op.Limits.DataInputBytes); err != nil {
-		return q, platform.OperationInputArtifact{}, "", platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
+		return q, protocol.OperationInputArtifact{}, "", platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
 	}
 	hash, _ := platform.CanonicalDigest(json.RawMessage(raw))
 	definition, _ := platform.CanonicalDigest([]any{q.App, op, version})
 	ref, err := c.SealInput(call, member, definition, hash, raw, op.Limits.DataInputBytes)
 	if err != nil {
-		return q, platform.OperationInputArtifact{}, "", platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, err.Error())
+		return q, protocol.OperationInputArtifact{}, "", platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, err.Error())
 	}
 	q.Inputs = platform.Raw(map[string]any{"sealedInput": map[string]any{"digest": ref.Digest, "size": ref.Size, "inputHash": ref.InputHash, "definition": ref.Definition}})
 	requestHash, _ := platform.CanonicalDigest(q)

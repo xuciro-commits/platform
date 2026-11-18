@@ -2,12 +2,13 @@ package ontology
 
 import (
 	"fmt"
+	"platformserver/kernel/protocol"
 	"slices"
 
 	"platformserver/platform"
 )
 
-func CheckPropertyFields(fields []Field, app string, host platform.BuildHost) error {
+func CheckPropertyFields(fields []Field, app string, host protocol.BuildHost) error {
 	for _, field := range fields {
 		if field.Property == nil {
 			continue
@@ -26,7 +27,7 @@ func CheckPropertyFields(fields []Field, app string, host platform.BuildHost) er
 	return nil
 }
 
-func CheckValueTypeFields(fields []Field, app string, host platform.BuildHost) error {
+func CheckValueTypeFields(fields []Field, app string, host protocol.BuildHost) error {
 	for _, field := range fields {
 		if field.ValueType == nil {
 			continue

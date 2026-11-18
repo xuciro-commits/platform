@@ -3,6 +3,7 @@ package kernel
 import (
 	"encoding/json"
 	"fmt"
+	"platformserver/kernel/protocol"
 	"time"
 
 	"google.golang.org/protobuf/proto"
@@ -16,7 +17,7 @@ type CommittedResult struct {
 	App         func(string) platform.App
 	ApplyBatch  func(platform.Authority, []byte) (bool, error)
 	ApplyRecord func(platform.Authority, []byte) (bool, error)
-	Publish     func(platform.Event, platform.AcceptedEventPlan)
+	Publish     func(platform.Event, protocol.AcceptedEventPlan)
 }
 
 func (s *Sequence) FinishCommitted(a platform.App, m platform.Member, hash string, committed []byte, h CommittedResult) (*pb.ChangeRecord, *platform.Error) {
@@ -158,7 +159,7 @@ func (s *Sequence) CheckSubmission(m platform.Member, sub *pb.Submission) *platf
 	return nil
 }
 
-func Submitted(member string, a platform.App, s *pb.Submission, at time.Time) platform.AuditEntry {
-	return platform.AuditEntry{ID: "submit:" + a.Manifest().ID + ":" + s.GetIdempotencyKey(), At: at, Member: member, App: a.Manifest().ID, Action: s.GetSchema().GetName(),
+func Submitted(member string, a platform.App, s *pb.Submission, at time.Time) protocol.AuditEntry {
+	return protocol.AuditEntry{ID: "submit:" + a.Manifest().ID + ":" + s.GetIdempotencyKey(), At: at, Member: member, App: a.Manifest().ID, Action: s.GetSchema().GetName(),
 		Target: s.GetTarget().GetType() + "/" + s.GetTarget().GetId()}
 }

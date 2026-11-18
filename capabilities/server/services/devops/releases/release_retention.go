@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"maps"
+	"platformserver/kernel/protocol"
 	"slices"
 
 	"platformserver/platform"
@@ -35,13 +36,13 @@ func NewStore(resolver publication.Resolver) Store {
 }
 
 type RetentionChecks struct {
-	SameRetained func(platform.ReleaseCandidate, platform.ReleaseCandidate) bool
+	SameRetained func(protocol.ReleaseCandidate, protocol.ReleaseCandidate) bool
 	CodeMatches  func(platform.ReleaseAsset, platform.ReleaseAsset) (bool, error)
 }
 
 func NewRetentionChecks(resolver publication.Resolver) RetentionChecks {
 	return RetentionChecks{
-		SameRetained: func(current, retained platform.ReleaseCandidate) bool {
+		SameRetained: func(current, retained protocol.ReleaseCandidate) bool {
 			return SameRetainedCapability(resolver, current, retained)
 		},
 		CodeMatches: func(current, retained platform.ReleaseAsset) (bool, error) {
@@ -64,7 +65,7 @@ func (r *Store) RememberRequest(key, hash string) {
 
 func (r *Store) Raw(id string) json.RawMessage { return r.candidates[id] }
 
-func (r *Store) Candidate(id string) (platform.ReleaseCandidate, error) {
+func (r *Store) Candidate(id string) (protocol.ReleaseCandidate, error) {
 	return r.resolver.ReadCandidate(id, r.candidates[id])
 }
 
@@ -155,7 +156,7 @@ func (r *Store) SelectPreview(id string) { r.active = id }
 type runtimeAssetOwner struct {
 	platform.App
 	resolver   publication.Resolver
-	lifecycle  platform.AssetLifecycleOwner
+	lifecycle  protocol.AssetLifecycleOwner
 	code       []platform.ReleaseAsset
 	nativeFlow func(platform.AssetRef, string) (platform.ReleaseAsset, error)
 }
@@ -231,7 +232,7 @@ func (o runtimeAssetOwner) controlled(assets []platform.ReleaseAsset) ([]platfor
 	return out, nil
 }
 
-func (o runtimeAssetOwner) AssetEnvironmentRequirements(asset platform.ReleaseAsset) ([]platform.AssetEnvironmentRequirement, error) {
+func (o runtimeAssetOwner) AssetEnvironmentRequirements(asset platform.ReleaseAsset) ([]protocol.AssetEnvironmentRequirement, error) {
 	controlled, err := o.controlled([]platform.ReleaseAsset{asset})
 	if err != nil {
 		return nil, err
@@ -241,7 +242,7 @@ func (o runtimeAssetOwner) AssetEnvironmentRequirements(asset platform.ReleaseAs
 	}
 	return o.lifecycle.AssetEnvironmentRequirements(asset)
 }
-func (o runtimeAssetOwner) ReleaseDrafts(assets []platform.ReleaseAsset, context platform.AssetReleaseContext) ([]platform.AssetDraft, error) {
+func (o runtimeAssetOwner) ReleaseDrafts(assets []platform.ReleaseAsset, context protocol.AssetReleaseContext) ([]protocol.AssetDraft, error) {
 	controlled, err := o.controlled(assets)
 	if err != nil {
 		return nil, err
@@ -261,7 +262,7 @@ func (o runtimeAssetOwner) BeginAssetBootstrap(assets []platform.ReleaseAsset) (
 	}
 	return o.lifecycle.BeginAssetBootstrap(controlled)
 }
-func (o runtimeAssetOwner) PrepareReleaseAssets(assets []platform.ReleaseAsset, context platform.AssetReleaseContext) ([]platform.AssetInstallation, error) {
+func (o runtimeAssetOwner) PrepareReleaseAssets(assets []platform.ReleaseAsset, context protocol.AssetReleaseContext) ([]protocol.AssetInstallation, error) {
 	controlled, err := o.controlled(assets)
 	if err != nil {
 		return nil, err
@@ -271,19 +272,19 @@ func (o runtimeAssetOwner) PrepareReleaseAssets(assets []platform.ReleaseAsset, 
 	}
 	return o.lifecycle.PrepareReleaseAssets(controlled, context)
 }
-func (o runtimeAssetOwner) DecodeAssetInstallation(schema string, image json.RawMessage) (platform.AssetInstallation, error) {
+func (o runtimeAssetOwner) DecodeAssetInstallation(schema string, image json.RawMessage) (protocol.AssetInstallation, error) {
 	if o.lifecycle == nil {
-		return platform.AssetInstallation{}, fmt.Errorf("code owner %s cannot install %s", o.Manifest().ID, schema)
+		return protocol.AssetInstallation{}, fmt.Errorf("code owner %s cannot install %s", o.Manifest().ID, schema)
 	}
 	return o.lifecycle.DecodeAssetInstallation(schema, bytes.Clone(image))
 }
-func (o runtimeAssetOwner) ValidateAssetInstallation(plan platform.AssetInstallation) error {
+func (o runtimeAssetOwner) ValidateAssetInstallation(plan protocol.AssetInstallation) error {
 	if o.lifecycle == nil {
 		return fmt.Errorf("code owner %s has no installation image", o.Manifest().ID)
 	}
 	return o.lifecycle.ValidateAssetInstallation(plan)
 }
-func (o runtimeAssetOwner) ApplyAssetInstallation(plan platform.AssetInstallation, context platform.AssetApplyContext) error {
+func (o runtimeAssetOwner) ApplyAssetInstallation(plan protocol.AssetInstallation, context protocol.AssetApplyContext) error {
 	if o.lifecycle == nil {
 		return fmt.Errorf("code owner %s has no installation image", o.Manifest().ID)
 	}
@@ -322,7 +323,7 @@ func NewRegistry(resolver publication.Resolver, apps []platform.App, codeAssets 
 		if err != nil {
 			return nil, err
 		}
-		lifecycle, _ := app.(platform.AssetLifecycleOwner)
+		lifecycle, _ := app.(protocol.AssetLifecycleOwner)
 		owner := runtimeAssetOwner{App: app, resolver: resolver, lifecycle: lifecycle, code: code, nativeFlow: func(ref platform.AssetRef, source string) (platform.ReleaseAsset, error) {
 			return nativeFlow(app, ref, source)
 		}}

@@ -3,25 +3,24 @@ package store
 import (
 	"encoding/json"
 	"fmt"
+	"platformserver/kernel/protocol"
 	"slices"
 	"strconv"
 	"sync"
 	"time"
-
-	"platformserver/platform"
 )
 
 type Memory struct {
 	mu             sync.Mutex
 	vectors        map[string][]float32
 	transcripts    map[string][]Transcript
-	observations   map[string][]platform.Observation
+	observations   map[string][]protocol.Observation
 	observationIDs map[string]map[string]struct{}
-	audit          map[string][]platform.AuditEntry
+	audit          map[string][]protocol.AuditEntry
 	auditIDs       map[string]map[string]struct{}
-	personal       map[string][]platform.PersonalRead
+	personal       map[string][]protocol.PersonalRead
 	personalIDs    map[string]map[string]struct{}
-	runs           map[string][]platform.RunIndexEntry
+	runs           map[string][]protocol.RunIndexEntry
 }
 
 const (
@@ -86,14 +85,14 @@ func (m *Memory) PurgeTranscripts(tenant string, before time.Time) {
 	m.transcripts[tenant] = slices.DeleteFunc(m.transcripts[tenant], func(x Transcript) bool { return x.At.Before(before) })
 }
 
-func (m *Memory) SaveObservations(events []platform.Observation) error {
+func (m *Memory) SaveObservations(events []protocol.Observation) error {
 	if len(events) == 0 {
 		return nil
 	}
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if m.observations == nil {
-		m.observations = map[string][]platform.Observation{}
+		m.observations = map[string][]protocol.Observation{}
 	}
 	if m.observationIDs == nil {
 		m.observationIDs = map[string]map[string]struct{}{}
@@ -133,7 +132,7 @@ func (m *Memory) SaveObservations(events []platform.Observation) error {
 	return nil
 }
 
-func (m *Memory) QueryObservations(query platform.ObservationQuery) (platform.ObservationPage, error) {
+func (m *Memory) QueryObservations(query protocol.ObservationQuery) (protocol.ObservationPage, error) {
 	m.mu.Lock()
 	events := slices.Clone(m.observations[query.Tenant])
 	var retainedFrom time.Time
@@ -151,7 +150,7 @@ func (m *Memory) PurgeObservations(tenant string, before time.Time) (int, error)
 	if len(events) == 0 {
 		return 0, nil
 	}
-	kept := make([]platform.Observation, 0, len(events))
+	kept := make([]protocol.Observation, 0, len(events))
 	for _, event := range events {
 		if event.At.Before(before) {
 			continue
@@ -194,11 +193,11 @@ func (m *Memory) ObservationUsage(tenant string, from time.Time) (int64, error) 
 	return total, nil
 }
 
-func (m *Memory) SummarizeObservations(tenant, member string, from, to time.Time) (platform.ObservationSummary, error) {
+func (m *Memory) SummarizeObservations(tenant, member string, from, to time.Time) (protocol.ObservationSummary, error) {
 	m.mu.Lock()
 	events := slices.Clone(m.observations[tenant])
 	m.mu.Unlock()
-	out := platform.ObservationSummary{From: from.UTC(), To: to.UTC()}
+	out := protocol.ObservationSummary{From: from.UTC(), To: to.UTC()}
 	var total int64
 	for _, event := range events {
 		if event.At.Before(from) || !event.At.Before(to) || member != "" && event.Member != member {
@@ -225,14 +224,14 @@ func (m *Memory) SummarizeObservations(tenant, member string, from, to time.Time
 	return out, nil
 }
 
-func (m *Memory) SaveAuditEntries(tenant string, entries []platform.AuditEntry) error {
+func (m *Memory) SaveAuditEntries(tenant string, entries []protocol.AuditEntry) error {
 	if len(entries) == 0 {
 		return nil
 	}
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if m.audit == nil {
-		m.audit = map[string][]platform.AuditEntry{}
+		m.audit = map[string][]protocol.AuditEntry{}
 	}
 	if m.auditIDs == nil {
 		m.auditIDs = map[string]map[string]struct{}{}
@@ -256,21 +255,21 @@ func (m *Memory) SaveAuditEntries(tenant string, entries []platform.AuditEntry) 
 	return nil
 }
 
-func (m *Memory) QueryAuditEntries(query platform.AuditQuery) (platform.AuditPage, error) {
+func (m *Memory) QueryAuditEntries(query protocol.AuditQuery) (protocol.AuditPage, error) {
 	m.mu.Lock()
 	entries := slices.Clone(m.audit[query.Tenant])
 	m.mu.Unlock()
 	return selectAuditPage(entries, query, earliestAudit(entries, query.Tenant))
 }
 
-func (m *Memory) SavePersonalReads(tenant string, reads []platform.PersonalRead) error {
+func (m *Memory) SavePersonalReads(tenant string, reads []protocol.PersonalRead) error {
 	if len(reads) == 0 {
 		return nil
 	}
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if m.personal == nil {
-		m.personal = map[string][]platform.PersonalRead{}
+		m.personal = map[string][]protocol.PersonalRead{}
 	}
 	if m.personalIDs == nil {
 		m.personalIDs = map[string]map[string]struct{}{}
@@ -294,18 +293,18 @@ func (m *Memory) SavePersonalReads(tenant string, reads []platform.PersonalRead)
 	return nil
 }
 
-func (m *Memory) QueryPersonalReads(query platform.PersonalReadQuery) (platform.PersonalReadPage, error) {
+func (m *Memory) QueryPersonalReads(query protocol.PersonalReadQuery) (protocol.PersonalReadPage, error) {
 	m.mu.Lock()
 	reads := slices.Clone(m.personal[query.Tenant])
 	m.mu.Unlock()
 	return selectPersonalReadPage(reads, query, earliestPersonalRead(reads))
 }
 
-func (m *Memory) ReplaceRunIndex(tenant, scope string, entries []platform.RunIndexEntry) error {
+func (m *Memory) ReplaceRunIndex(tenant, scope string, entries []protocol.RunIndexEntry) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if m.runs == nil {
-		m.runs = map[string][]platform.RunIndexEntry{}
+		m.runs = map[string][]protocol.RunIndexEntry{}
 	}
 	key := tenant + "\x00" + scope
 	for index := range entries {
@@ -315,7 +314,7 @@ func (m *Memory) ReplaceRunIndex(tenant, scope string, entries []platform.RunInd
 	return nil
 }
 
-func (m *Memory) QueryRunIndex(query platform.RunIndexQuery) (platform.RunIndexPage, error) {
+func (m *Memory) QueryRunIndex(query protocol.RunIndexQuery) (protocol.RunIndexPage, error) {
 	m.mu.Lock()
 	entries := slices.Clone(m.runs[query.Tenant+"\x00"+query.Scope])
 	m.mu.Unlock()

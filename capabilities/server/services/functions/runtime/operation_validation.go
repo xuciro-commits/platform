@@ -9,7 +9,7 @@ import (
 	"platformserver/platform"
 )
 
-func ValidateOperation(o platform.Operation, app platform.App, executor platform.OperationExecutor, engine platform.RuleEngine, ruleQuery func(app, name string, version int) (platform.NamedQuery, int, bool), entity func(string) (platform.EntityInfo, bool), retained func(module string) bool) error {
+func ValidateOperation(o platform.Operation, app platform.App, executor ruleprotocol.OperationExecutor, engine platform.RuleEngine, ruleQuery func(app, name string, version int) (platform.NamedQuery, int, bool), entity func(string) (platform.EntityInfo, bool), retained func(module string) bool) error {
 	if err := o.Check(); err != nil {
 		return err
 	}
@@ -58,7 +58,7 @@ func ValidateOperation(o platform.Operation, app platform.App, executor platform
 
 type OperationInstall struct {
 	App         platform.App
-	Executor    platform.OperationExecutor
+	Executor    ruleprotocol.OperationExecutor
 	Rules       platform.RuleEngine
 	RuleQuery   func(app, name string, version int) (platform.NamedQuery, int, bool)
 	Entity      func(string) (platform.EntityInfo, bool)

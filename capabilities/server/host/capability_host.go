@@ -1,14 +1,15 @@
 package host
 
 import (
+	"platformserver/kernel/protocol"
 	"platformserver/platform"
 	agentowner "platformserver/services/ai/runtime"
 	"platformserver/services/functions/authoring"
 )
 
-func (t *Tenant) capabilities(m platform.Member) []platform.CapabilityDescriptor {
+func (t *Tenant) capabilities(m platform.Member) []protocol.CapabilityDescriptor {
 	if t.Admits(m) != nil {
-		return []platform.CapabilityDescriptor{}
+		return []protocol.CapabilityDescriptor{}
 	}
 	m = t.authorizationMember(m)
 	return authoring.VisibleCapabilities(t.Definitions(m), m.Holds("build", "builder"), func(d platform.Definition, permission string, roles []string) bool {
@@ -16,14 +17,14 @@ func (t *Tenant) capabilities(m platform.Member) []platform.CapabilityDescriptor
 	})
 }
 
-func (t *Tenant) describeCapability(m platform.Member, ref platform.AssetRef, version int) (platform.CapabilityDescriptor, *platform.Error) {
+func (t *Tenant) describeCapability(m platform.Member, ref platform.AssetRef, version int) (protocol.CapabilityDescriptor, *platform.Error) {
 	if refusal := t.Admits(m); refusal != nil {
-		return platform.CapabilityDescriptor{}, refusal
+		return protocol.CapabilityDescriptor{}, refusal
 	}
-	return authoring.DescribeCapability(ref, version, func() (platform.CapabilityDescriptor, bool) { return t.retainedCapability(m, ref, version) }, func() []platform.CapabilityDescriptor { return t.capabilities(m) })
+	return authoring.DescribeCapability(ref, version, func() (protocol.CapabilityDescriptor, bool) { return t.retainedCapability(m, ref, version) }, func() []protocol.CapabilityDescriptor { return t.capabilities(m) })
 }
 
-func (t *Tenant) retainedCapability(m platform.Member, ref platform.AssetRef, version int) (platform.CapabilityDescriptor, bool) {
+func (t *Tenant) retainedCapability(m platform.Member, ref platform.AssetRef, version int) (protocol.CapabilityDescriptor, bool) {
 	m = t.authorizationMember(m)
 	return authoring.RetainedCapability(t.App(ref.App), ref, version, authoring.RetainedHooks{
 		Query:    func() (platform.NamedQuery, string, bool) { return t.memberQueryVersion(m, ref, version) },

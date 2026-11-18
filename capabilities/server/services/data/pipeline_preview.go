@@ -3,6 +3,7 @@ package data
 import (
 	"encoding/json"
 	"fmt"
+	"platformserver/kernel/protocol"
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
@@ -23,13 +24,13 @@ type PipelinePreview struct {
 	SampledRows  int                       `json:"sampledRows"`
 	Truncated    bool                      `json:"truncated"`
 	Rows         []map[string]any          `json:"rows"`
-	Quarantine   []platform.QuarantinedRow `json:"quarantine"`
+	Quarantine   []protocol.QuarantinedRow `json:"quarantine"`
 	Marking      string                    `json:"marking,omitempty"`
 	Compartments []string                  `json:"compartments,omitempty"`
 }
 
 func (o *Owner) PreviewPipeline(caller platform.Caller, request PipelinePreviewRequest, at time.Time, rules platform.RuleEngine, authorize func(sources []string) *platform.Error) (PipelinePreview, *platform.Error) {
-	out := PipelinePreview{Rows: []map[string]any{}, Quarantine: []platform.QuarantinedRow{}}
+	out := PipelinePreview{Rows: []map[string]any{}, Quarantine: []protocol.QuarantinedRow{}}
 	p := request.Pipeline
 	raw, err := json.Marshal(p)
 	if err != nil || len(raw) > 1<<20 || len(p.Steps) > 64 || len(p.Expectations) > 64 {
@@ -65,7 +66,7 @@ func (o *Owner) PreviewPipeline(caller platform.Caller, request PipelinePreviewR
 			return out, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The input dataset version is unavailable")
 		}
 		sources = append(sources, DatasetType+"/"+id, DatasetVersionType+"/"+versionID+"#data")
-		out.Marking = platform.HigherMarking(out.Marking, dataset.Marking)
+		out.Marking = protocol.HigherMarking(out.Marking, dataset.Marking)
 		out.Compartments = platform.JoinCompartments(out.Compartments, dataset.Compartments)
 		if id == p.Input {
 			out.InputRows, out.InputVersion = len(rows), dataset.Version

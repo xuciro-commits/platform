@@ -5,6 +5,7 @@ import (
 	"fmt"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformserver/kernel/acceptedformat"
+	"platformserver/kernel/protocol"
 	"platformserver/platform"
 	"slices"
 )
@@ -35,7 +36,7 @@ func (a UsageAcceptance) Seal(m platform.Member, u platform.AIUsage) (acceptedfo
 			return acceptedformat.Usage{}, nil, nil
 		}
 	}
-	c := a.Caller(platform.Member{ID: "app:" + platform.AIApp, Tenant: m.Tenant})
+	c := a.Caller(platform.Member{ID: "app:" + protocol.AIApp, Tenant: m.Tenant})
 	decision, refusal := a.Authorize(c, m.Tenant == a.Tenant && m.ID != "" && m.ID == u.Member && acceptedformat.ValidUsage(u))
 	if refusal != nil {
 		return acceptedformat.Usage{}, nil, refusal
@@ -45,7 +46,7 @@ func (a UsageAcceptance) Seal(m platform.Member, u platform.AIUsage) (acceptedfo
 	if err != nil {
 		return acceptedformat.Usage{}, nil, cannot
 	}
-	r := acceptedformat.Usage{Version: 1, Kind: "usage-result", Tenant: a.Tenant, App: platform.AIApp, Member: m.ID, At: u.At.UTC(), Before: before, Usage: u}
+	r := acceptedformat.Usage{Version: 1, Kind: "usage-result", Tenant: a.Tenant, App: protocol.AIApp, Member: m.ID, At: u.At.UTC(), Before: before, Usage: u}
 	r.Authorizations = []acceptedformat.AuthorizationEvidence{{Request: platform.AuthzRequest{Principal: c.ID, Tenant: c.Tenant, Kind: "derive", Action: "usage:observe"}, Decision: decision, Roles: slices.Clone(c.RolesHere())}}
 	if r.RequestHash, err = acceptedformat.UsageHash(before, u); err != nil {
 		return acceptedformat.Usage{}, nil, unknown

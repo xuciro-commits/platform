@@ -3,6 +3,7 @@ package monitoring
 import (
 	"fmt"
 	"net/http"
+	"platformserver/kernel/protocol"
 	"strconv"
 	"time"
 
@@ -10,7 +11,7 @@ import (
 	"platformserver/platform"
 )
 
-func OwnerRunObservation(at time.Time, source, runID, app, resource, status, title, detail string) platform.Observation {
+func OwnerRunObservation(at time.Time, source, runID, app, resource, status, title, detail string) protocol.Observation {
 	level, outcome := "info", "ok"
 	switch status {
 	case "failed":
@@ -27,13 +28,13 @@ func OwnerRunObservation(at time.Time, source, runID, app, resource, status, tit
 		}
 		attributes["error"] = detail
 	}
-	return platform.Observation{
+	return protocol.Observation{
 		At: at, Level: level, Source: source, App: app, RunID: runID,
 		Resource: resource, Outcome: outcome, Message: title + " " + status, Attributes: attributes,
 	}
 }
 
-func RequestObservation(at time.Time, member, route, requestID, traceID, spanID string, status int, duration time.Duration) platform.Observation {
+func RequestObservation(at time.Time, member, route, requestID, traceID, spanID string, status int, duration time.Duration) protocol.Observation {
 	level, outcome := "info", "ok"
 	switch {
 	case status >= http.StatusInternalServerError:
@@ -41,7 +42,7 @@ func RequestObservation(at time.Time, member, route, requestID, traceID, spanID 
 	case status >= http.StatusBadRequest:
 		level, outcome = "warn", "refused"
 	}
-	return platform.Observation{
+	return protocol.Observation{
 		At:        at,
 		Level:     level,
 		Source:    "request",
@@ -59,7 +60,7 @@ func RequestObservation(at time.Time, member, route, requestID, traceID, spanID 
 	}
 }
 
-func SubmissionObservation(at time.Time, member, requestID, traceID, spanID string, sub *pb.Submission, record *pb.ChangeRecord, refusal *platform.Error) platform.Observation {
+func SubmissionObservation(at time.Time, member, requestID, traceID, spanID string, sub *pb.Submission, record *pb.ChangeRecord, refusal *platform.Error) protocol.Observation {
 	level, outcome := "info", "ok"
 	if refusal != nil {
 		level, outcome = "warn", "refused"
@@ -71,7 +72,7 @@ func SubmissionObservation(at time.Time, member, requestID, traceID, spanID stri
 	if refusal != nil {
 		attributes["errorCode"] = refusal.Error()
 	}
-	event := platform.Observation{
+	event := protocol.Observation{
 		At:         at,
 		Level:      level,
 		Source:     "submit",

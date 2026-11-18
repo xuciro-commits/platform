@@ -238,7 +238,7 @@ func (l *authority) checked(c platform.Caller, s *pb.Submission, now time.Time, 
 			if !resolved {
 				return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "A bound value type is unavailable")
 			}
-			issues := platform.InputIssues(fields, payload)
+			issues := protocol.InputIssues(fields, payload)
 			if declared.DeferRequired {
 				issues = slices.DeleteFunc(issues, func(issue platform.FieldIssue) bool { return issue.Code == "required" })
 			}

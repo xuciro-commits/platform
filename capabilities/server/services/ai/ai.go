@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"maps"
 	"net/url"
+	runtimeprotocol "platformserver/kernel/protocol"
 	"slices"
 	"strconv"
 	"strings"
@@ -24,41 +25,41 @@ var languageFiles embed.FS
 var languages = platform.LoadLanguages(languageFiles, "i18n")
 
 const (
-	ID                   = platform.AIApp
-	ProviderType         = platform.AIProviderType
-	ModelType            = platform.AIModelType
-	SchemaProviderAdd    = platform.AISchemaProviderAdd
-	SchemaProviderEdit   = platform.AISchemaProviderEdit
-	SchemaProviderRemove = platform.AISchemaProviderRemove
-	SchemaModelEnable    = platform.AISchemaModelEnable
-	SchemaModelDisable   = platform.AISchemaModelDisable
-	LimitType            = platform.AILimitType
-	SchemaLimitSet       = platform.AISchemaLimitSet
-	SchemaLimitRemove    = platform.AISchemaLimitRemove
-	SettingDailyTokens   = platform.AISettingDailyTokens
-	SettingPerMinute     = platform.AISettingPerMinute
-	SettingAppModel      = platform.AISettingAppModel
-	SettingMaxTokens     = platform.AISettingMaxTokens
-	Admin                = platform.AIAdmin
-	User                 = platform.AIUser
+	ID                   = runtimeprotocol.AIApp
+	ProviderType         = runtimeprotocol.AIProviderType
+	ModelType            = runtimeprotocol.AIModelType
+	SchemaProviderAdd    = runtimeprotocol.AISchemaProviderAdd
+	SchemaProviderEdit   = runtimeprotocol.AISchemaProviderEdit
+	SchemaProviderRemove = runtimeprotocol.AISchemaProviderRemove
+	SchemaModelEnable    = runtimeprotocol.AISchemaModelEnable
+	SchemaModelDisable   = runtimeprotocol.AISchemaModelDisable
+	LimitType            = runtimeprotocol.AILimitType
+	SchemaLimitSet       = runtimeprotocol.AISchemaLimitSet
+	SchemaLimitRemove    = runtimeprotocol.AISchemaLimitRemove
+	SettingDailyTokens   = runtimeprotocol.AISettingDailyTokens
+	SettingPerMinute     = runtimeprotocol.AISettingPerMinute
+	SettingAppModel      = runtimeprotocol.AISettingAppModel
+	SettingMaxTokens     = runtimeprotocol.AISettingMaxTokens
+	Admin                = runtimeprotocol.AIAdmin
+	User                 = runtimeprotocol.AIUser
 )
 
-type Vendor = platform.AIVendor
+type Vendor = runtimeprotocol.AIVendor
 
-var Vendors = platform.AIVendors
+var Vendors = runtimeprotocol.AIVendors
 
 type Provider = platform.AIProvider
 
 type Model = platform.AIModel
 
-type Limit = platform.AILimit
+type Limit = runtimeprotocol.AILimit
 
 type Usage = platform.AIUsage
 
 type AI struct {
-	trainingHost       platform.AITrainingHost
-	trainingPolicies   map[string]platform.AITrainingPolicy
-	trainingCandidates map[string]platform.AITrainingCandidate
+	trainingHost       runtimeprotocol.AITrainingHost
+	trainingPolicies   map[string]runtimeprotocol.AITrainingPolicy
+	trainingCandidates map[string]runtimeprotocol.AITrainingCandidate
 	mu                 sync.Mutex
 	providers          []Provider
 	models             []Model
@@ -66,7 +67,7 @@ type AI struct {
 	usage              []Usage
 	daily              map[string]int
 	recent             map[string][]time.Time
-	reservations       map[string]platform.AIReservation
+	reservations       map[string]runtimeprotocol.AIReservation
 	ledger             platform.Authority
 	authorities        platform.Authorities
 }
@@ -76,7 +77,7 @@ func New(tenant string, authorities platform.Authorities) *AI {
 	f := func(name, typ, description string, required bool) platform.Field {
 		return platform.Field{Name: name, Type: typ, Required: required, Description: description}
 	}
-	return &AI{authorities: authorities, trainingPolicies: map[string]platform.AITrainingPolicy{}, trainingCandidates: map[string]platform.AITrainingCandidate{}, limits: map[string]Limit{}, daily: map[string]int{}, recent: map[string][]time.Time{}, reservations: map[string]platform.AIReservation{}, ledger: authorities(tenant, ID, platform.NewCatalog(append(trainingActions(), []platform.Action{
+	return &AI{authorities: authorities, trainingPolicies: map[string]runtimeprotocol.AITrainingPolicy{}, trainingCandidates: map[string]runtimeprotocol.AITrainingCandidate{}, limits: map[string]Limit{}, daily: map[string]int{}, recent: map[string][]time.Time{}, reservations: map[string]runtimeprotocol.AIReservation{}, ledger: authorities(tenant, ID, platform.NewCatalog(append(trainingActions(), []platform.Action{
 		platform.Action{Schema: SchemaProviderAdd, Target: ProviderType, Capability: "providers", Title: "Add AI provider", Roles: admin,
 			Description: "Add a source of models: a vendor (Anthropic, OpenAI, Gemini, Moonshot, DeepSeek, Qwen, Zhipu, OpenRouter), a third-party OpenAI-compatible API, or a local model server (LM Studio, Ollama, llama.cpp).",
 			Payload: []platform.Field{f("kind", "string", "vendor, compatible or local", true), f("vendor", "string", "For a vendor: its ID", false),
@@ -130,14 +131,14 @@ func (a *AI) Restore(raw json.RawMessage) error {
 	}
 	a.trainingPolicies, a.trainingCandidates = s.TrainingPolicies, s.TrainingCandidates
 	if a.trainingPolicies == nil {
-		a.trainingPolicies = map[string]platform.AITrainingPolicy{}
+		a.trainingPolicies = map[string]runtimeprotocol.AITrainingPolicy{}
 	}
 	if a.trainingCandidates == nil {
-		a.trainingCandidates = map[string]platform.AITrainingCandidate{}
+		a.trainingCandidates = map[string]runtimeprotocol.AITrainingCandidate{}
 	}
 	a.reservations = s.Reservations
 	if a.reservations == nil {
-		a.reservations = map[string]platform.AIReservation{}
+		a.reservations = map[string]runtimeprotocol.AIReservation{}
 	}
 	return nil
 }
@@ -349,9 +350,9 @@ func (a *AI) Usage() []Usage {
 	return slices.Clone(a.usage)
 }
 
-type Defaults = platform.AIDefaults
+type Defaults = runtimeprotocol.AIDefaults
 
-func (a *AI) allowLocked(m platform.Member, model Model, d Defaults, r platform.AIReservation, now time.Time) string {
+func (a *AI) allowLocked(m platform.Member, model Model, d Defaults, r runtimeprotocol.AIReservation, now time.Time) string {
 	day := now.UTC().Format(time.DateOnly)
 	memberReserved, modelReserved := 0, 0
 	for _, pending := range a.reservations {
@@ -424,21 +425,21 @@ func (a *AI) callsLocked(member string, now time.Time) int {
 	return n
 }
 
-func (a *AI) Reservation(call string) (platform.AIReservation, bool) {
+func (a *AI) Reservation(call string) (runtimeprotocol.AIReservation, bool) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	r, ok := a.reservations[call]
 	if !ok {
 		for _, u := range a.usage {
 			if u.Call != "" && u.Call == call {
-				return platform.AIReservation{Call: call, Member: u.Member, Model: u.Model, State: "settled"}, true
+				return runtimeprotocol.AIReservation{Call: call, Member: u.Member, Model: u.Model, State: "settled"}, true
 			}
 		}
 	}
 	return r, ok
 }
 
-type Total = platform.AITotal
+type Total = runtimeprotocol.AITotal
 
 func (a *AI) Read(c platform.Caller, name string) (any, *platform.Error) {
 	visibleApps := c.VisibleApplications()
@@ -450,7 +451,7 @@ func (a *AI) Read(c platform.Caller, name string) (any, *platform.Error) {
 		if !admin {
 			return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "AI administration access is required")
 		}
-		report := platform.AITrainingReport{Policies: slices.Collect(maps.Values(a.trainingPolicies)), Candidates: []platform.AITrainingCandidate{}}
+		report := runtimeprotocol.AITrainingReport{Policies: slices.Collect(maps.Values(a.trainingPolicies)), Candidates: []runtimeprotocol.AITrainingCandidate{}}
 		for _, candidate := range a.trainingCandidates {
 			if why := a.trainingProblem(c.Member, candidate, time.Now().UTC(), true); why != "" {
 				candidate.Problems = []string{why}
@@ -462,7 +463,7 @@ func (a *AI) Read(c platform.Caller, name string) (any, *platform.Error) {
 			candidate.Chosen, candidate.Rejected = nil, nil
 			report.Candidates = append(report.Candidates, candidate)
 		}
-		slices.SortFunc(report.Candidates, func(a, b platform.AITrainingCandidate) int { return strings.Compare(a.ID, b.ID) })
+		slices.SortFunc(report.Candidates, func(a, b runtimeprotocol.AITrainingCandidate) int { return strings.Compare(a.ID, b.ID) })
 		return report, nil
 	case "ai-providers":
 		if !admin {
@@ -485,7 +486,7 @@ func (a *AI) Read(c platform.Caller, name string) (any, *platform.Error) {
 		}
 		return out, nil
 	}
-	byApplication := []platform.AIApplicationTotal{}
+	byApplication := []runtimeprotocol.AIApplicationTotal{}
 	calls, totals := []Usage{}, []Total{}
 	for i := len(a.usage) - 1; i >= 0; i-- {
 		u := a.usage[i]
@@ -495,11 +496,11 @@ func (a *AI) Read(c platform.Caller, name string) (any, *platform.Error) {
 		shared := len(u.Applications) > 1
 		u.Applications = slices.DeleteFunc(slices.Clone(u.Applications), func(binding platform.AssetBinding) bool { return !slices.Contains(visibleApps, binding.Ref) })
 		for _, binding := range u.Applications {
-			j := slices.IndexFunc(byApplication, func(total platform.AIApplicationTotal) bool {
+			j := slices.IndexFunc(byApplication, func(total runtimeprotocol.AIApplicationTotal) bool {
 				return total.Application == binding && (total.Resource == nil && u.Resource == nil || total.Resource != nil && u.Resource != nil && *total.Resource == *u.Resource)
 			})
 			if j < 0 {
-				byApplication = append(byApplication, platform.AIApplicationTotal{Application: binding, Resource: u.Resource})
+				byApplication = append(byApplication, runtimeprotocol.AIApplicationTotal{Application: binding, Resource: u.Resource})
 				j = len(byApplication) - 1
 			}
 			total := &byApplication[j]
@@ -537,17 +538,17 @@ func (a *AI) Read(c platform.Caller, name string) (any, *platform.Error) {
 			t.Failed++
 		}
 	}
-	reservations := []platform.AIReservation{}
+	reservations := []runtimeprotocol.AIReservation{}
 	for _, r := range a.reservations {
 		if admin || r.Member == c.ID {
 			reservations = append(reservations, r)
 		}
 	}
-	slices.SortFunc(reservations, func(a, b platform.AIReservation) int { return strings.Compare(a.Call, b.Call) })
+	slices.SortFunc(reservations, func(a, b runtimeprotocol.AIReservation) int { return strings.Compare(a.Call, b.Call) })
 	return AIUsage{Calls: calls, Totals: totals, Applications: byApplication, Reservations: reservations}, nil
 }
 
-type AIUsage = platform.AIUsageReport
+type AIUsage = runtimeprotocol.AIUsageReport
 
 func (a *AI) Model(name string) (Model, Provider, *platform.Error) {
 	a.mu.Lock()

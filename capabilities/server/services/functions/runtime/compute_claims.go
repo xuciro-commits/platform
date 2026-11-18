@@ -148,7 +148,7 @@ func (a Artifacts) Read(ctx context.Context, digest string) ([]byte, error) {
 	return raw, nil
 }
 
-func (a Artifacts) Build(ctx context.Context, q platform.CodeBuildRequest) (platform.CodeBuildResult, error) {
+func (a Artifacts) Build(ctx context.Context, q platform.CodeBuildRequest) (protocol.CodeBuildResult, error) {
 	result, module, err := EnvironmentCompiler().Compile(ctx, q)
 	if err == nil {
 		err = ValidateWasm(ctx, module, q.ABI)
@@ -214,7 +214,7 @@ func CheckCancel(tenant string, c platform.Caller, r *pb.ChangeRecord, id string
 	if !ok || x.Endpoint != operationEndpoint {
 		return false, platform.Refuse(pb.ErrorCode_ERROR_CODE_NOT_FOUND, "Operation call was not found")
 	}
-	if platform.EffectSettled(x.State) {
+	if protocol.EffectSettled(x.State) {
 		return false, nil
 	}
 	var b OperationBinding

@@ -2,7 +2,7 @@
   "imports": {
     "expr": [],
     "kernel": ["expr", "platform", "kernel/protocol"],
-    "kernel/protocol": ["capability", "expr", "platform"],
+    "kernel/protocol": ["capability", "expr", "platform", "kernel/values"],
     "capability": [],
     "platform": ["capability", "expr", "kernel/values"],
     "services/resources": ["platform", "services/actions/catalog", "services/devops/descriptor", "services/resources/publication", "kernel/records", "kernel/acceptedformat", "kernel/protocol"],
@@ -17,7 +17,7 @@
     "services/apps": ["expr", "platform", "services/objects", "services/actions", "services/ontology", "services/resources/publication", "kernel/records", "kernel/acceptedformat", "kernel/protocol"],
     "services/work": ["platform", "services/actions", "kernel/records", "kernel/acceptedformat", "kernel/protocol"],
     "services/devops": ["platform", "services/devops/descriptor", "services/resources", "services/apps", "services/functions", "services/ontology", "services/data", "kernel/records", "kernel/acceptedformat", "kernel/protocol"],
-    "services/devops/descriptor": ["platform"],
+    "services/devops/descriptor": ["platform", "kernel/protocol"],
     "services/security": ["platform", "kernel/records", "kernel/acceptedformat", "kernel/protocol"],
     "services/ai": ["platform", "services/functions", "services/actions", "services/devops/descriptor", "services/resources/publication", "kernel/records", "kernel/acceptedformat", "kernel/protocol"],
     "apps": ["platform"],

@@ -1,7 +1,8 @@
-package platform
+package protocol
 
 import (
 	"encoding/json"
+	"platformserver/platform"
 	"time"
 )
 
@@ -54,8 +55,8 @@ type AITrainingEvidence struct {
 }
 
 type AITrainingHost interface {
-	TrainingEvidence(Event) AITrainingEvidence
-	TrainingReadable(Member, AITrainingCandidate, time.Time) string
+	TrainingEvidence(platform.Event) AITrainingEvidence
+	TrainingReadable(platform.Member, AITrainingCandidate, time.Time) string
 }
 
 type AITrainingReport struct {
@@ -71,5 +72,5 @@ type AITrainingExport struct {
 }
 
 type AITrainingOwner interface {
-	TrainingExport(Caller, string, time.Time) (AITrainingExport, *Error)
+	TrainingExport(platform.Caller, string, time.Time) (AITrainingExport, *platform.Error)
 }

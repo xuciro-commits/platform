@@ -28,12 +28,12 @@ type AgentHost interface {
 	ProtocolActions(string) []platform.Action
 	ProtocolProvider(string) (platform.App, string, bool)
 	InvokeDecision(platform.Caller, string, string, string, []byte, string, string, time.Time) (*pb.EntityRef, *pb.ChangeRecord, *platform.Error)
-	AgentContext(*platform.Member, string, string, time.Time) (platform.AgentObservation, *platform.Error)
-	AgentSearch(*platform.Member, string, time.Time) platform.AgentObservation
-	AgentQuery(platform.Member, platform.NamedQuery, string, time.Time) (platform.AgentObservation, *platform.Error)
-	AgentRead(platform.Member, string, ...json.RawMessage) (platform.AgentObservation, *platform.Error)
+	AgentContext(*platform.Member, string, string, time.Time) (AgentObservation, *platform.Error)
+	AgentSearch(*platform.Member, string, time.Time) AgentObservation
+	AgentQuery(platform.Member, platform.NamedQuery, string, time.Time) (AgentObservation, *platform.Error)
+	AgentRead(platform.Member, string, ...json.RawMessage) (AgentObservation, *platform.Error)
 	AgentSurface(platform.Member, string) platform.AgentSurface
-	AgentObjects(platform.Member, string, json.RawMessage, time.Time) (platform.AgentObservation, *platform.Error)
+	AgentObjects(platform.Member, string, json.RawMessage, time.Time) (AgentObservation, *platform.Error)
 	AgentSources(any) []string
 	AgentKnowledge(*platform.Member, string, string, int, time.Time) json.RawMessage
 	AgentAppReader(string) *platform.Member
@@ -84,22 +84,22 @@ type AgentOverview struct {
 }
 
 type AgentResultStep struct {
-	Protocol    json.RawMessage      `json:"protocol,omitempty"`
-	Run         string               `json:"run"`
-	Calls       []platform.ToolCall  `json:"calls,omitempty"`
-	CallID      string               `json:"callId,omitempty"`
-	Tool        string               `json:"tool,omitempty"`
-	Arguments   json.RawMessage      `json:"arguments,omitempty"`
-	Content     string               `json:"content,omitempty"`
-	Usage       platform.AIUsage     `json:"usage"`
-	Failure     string               `json:"failure,omitempty"`
-	Stop        string               `json:"stop,omitempty"`
-	Observation json.RawMessage      `json:"observation,omitempty"`
-	Evaluation  *platform.Evaluation `json:"evaluation,omitempty"`
+	Protocol    json.RawMessage     `json:"protocol,omitempty"`
+	Run         string              `json:"run"`
+	Calls       []platform.ToolCall `json:"calls,omitempty"`
+	CallID      string              `json:"callId,omitempty"`
+	Tool        string              `json:"tool,omitempty"`
+	Arguments   json.RawMessage     `json:"arguments,omitempty"`
+	Content     string              `json:"content,omitempty"`
+	Usage       platform.AIUsage    `json:"usage"`
+	Failure     string              `json:"failure,omitempty"`
+	Stop        string              `json:"stop,omitempty"`
+	Observation json.RawMessage     `json:"observation,omitempty"`
+	Evaluation  *Evaluation         `json:"evaluation,omitempty"`
 }
 
 type AgentTurn struct {
-	Run      platform.AgentRunRecord
+	Run      AgentRunRecord
 	Model    platform.AIModel
 	Provider platform.AIProvider
 	Request  platform.ChatRequest
@@ -114,12 +114,12 @@ type AgentRuntime interface {
 	ClaimAgentTurn(string) bool
 	IdleAgentTurn(string)
 	AgentPrincipal(string) platform.Member
-	AllowsAgentRun(platform.AgentRunRecord) bool
-	ObserveAgentKnowledge(platform.AgentRunRecord, json.RawMessage, time.Time) json.RawMessage
+	AllowsAgentRun(AgentRunRecord) bool
+	ObserveAgentKnowledge(AgentRunRecord, json.RawMessage, time.Time) json.RawMessage
 	ApplyAgentStep(AgentResultStep, time.Time, bool) *platform.Error
 	ApplyAgentStepCaller(platform.Caller, AgentResultStep, time.Time) *platform.Error
 	AgentEvaluationRuntime() AgentEvaluationRuntime
-	RecordAgentSignal(platform.Caller, *pb.ChangeRecord, string, platform.Signal, time.Time)
+	RecordAgentSignal(platform.Caller, *pb.ChangeRecord, string, Signal, time.Time)
 	AgentEffectEnded(platform.Caller, *pb.ChangeRecord, platform.Effect, platform.Outcome, time.Time)
 	AgentDeclaration(string) (AgentCardDeclaration, bool)
 	AgentOverview() []AgentOverview
@@ -151,16 +151,16 @@ type AgentEvaluationRuntime struct {
 	Definition       func(string) *CompiledAgent
 	Compile          func(string, string) (*CompiledAgent, string, error)
 	Version          func(*CompiledAgent) string
-	Prompt           func(platform.Caller, *CompiledAgent, platform.AgentRunRecord, string, time.Time) platform.ChatRequest
+	Prompt           func(platform.Caller, *CompiledAgent, AgentRunRecord, string, time.Time) platform.ChatRequest
 	Principal        func(string) platform.Member
-	Reader           func(platform.AgentRunRecord) *platform.Member
+	Reader           func(AgentRunRecord) *platform.Member
 	Automation       func(string, bool) platform.Caller
-	View             func(platform.AgentRunRecord) platform.AgentRun
-	Use              func(platform.Caller, *CompiledAgent, *platform.AgentRunRecord, CompiledAgentTool, map[string]any, json.RawMessage, *platform.RunStep, time.Time) (string, func(*pb.ChangeRecord))
-	ObserveKnowledge func(platform.AgentRunRecord, json.RawMessage, time.Time) json.RawMessage
-	Compiled         func(platform.AgentRunRecord, *CompiledAgent) *CompiledAgent
+	View             func(AgentRunRecord) platform.AgentRun
+	Use              func(platform.Caller, *CompiledAgent, *AgentRunRecord, CompiledAgentTool, map[string]any, json.RawMessage, *RunStep, time.Time) (string, func(*pb.ChangeRecord))
+	ObserveKnowledge func(AgentRunRecord, json.RawMessage, time.Time) json.RawMessage
+	Compiled         func(AgentRunRecord, *CompiledAgent) *CompiledAgent
 }
 
 type AgentEvaluator interface {
-	Evaluate(AgentEvaluationRuntime, platform.Evaluation, time.Time, func(*platform.Evaluation) bool) platform.Evaluation
+	Evaluate(AgentEvaluationRuntime, Evaluation, time.Time, func(*Evaluation) bool) Evaluation
 }

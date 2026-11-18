@@ -2,6 +2,7 @@ package host
 
 import (
 	"fmt"
+	"platformserver/kernel/protocol"
 	"slices"
 
 	"platformserver/platform"
@@ -40,7 +41,7 @@ func (t *Tenant) checkOwnerRemoval(disabled []string) error {
 			}
 		}
 		for _, effect := range t.outbound.Select(nil) {
-			if removed[effect.App] && !platform.EffectSettled(effect.State) {
+			if removed[effect.App] && !protocol.EffectSettled(effect.State) {
 				return fmt.Errorf("Resolve external attempt %s before removing %s", effect.ID, effect.App)
 			}
 		}

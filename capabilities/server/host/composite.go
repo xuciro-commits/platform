@@ -3,6 +3,7 @@ package host
 import (
 	"encoding/json"
 	"fmt"
+	"platformserver/kernel/protocol"
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
@@ -11,21 +12,21 @@ import (
 	"platformserver/services/resources/authoring"
 )
 
-func (t *Tenant) Composite(m platform.Member, key string, edits []platform.CompositeEdit, now time.Time) (platform.CompositeAnswer, error) {
-	return decideWithError(t, "composite", func(t *Tenant) (platform.CompositeAnswer, error) { return t.prepareComposite(m, key, edits, now) }, func(t *Tenant, candidate preparedAccepted) (platform.CompositeAnswer, error) {
+func (t *Tenant) Composite(m platform.Member, key string, edits []protocol.CompositeEdit, now time.Time) (protocol.CompositeAnswer, error) {
+	return decideWithError(t, "composite", func(t *Tenant) (protocol.CompositeAnswer, error) { return t.prepareComposite(m, key, edits, now) }, func(t *Tenant, candidate preparedAccepted) (protocol.CompositeAnswer, error) {
 		saved, err := acceptedformat.DecodeComposite(candidate.entry.Body)
 		if err != nil {
-			return platform.CompositeAnswer{}, err
+			return protocol.CompositeAnswer{}, err
 		}
 		committed, err := t.acceptResult(candidate.entry, candidate.key, candidate.hash)
 		if err != nil {
-			return platform.CompositeAnswer{}, err
+			return protocol.CompositeAnswer{}, err
 		}
 		return t.finishCommittedComposite(m, saved, committed)
 	})
 }
 
-func (t *Tenant) prepareComposite(m platform.Member, key string, edits []platform.CompositeEdit, now time.Time) (platform.CompositeAnswer, error) {
+func (t *Tenant) prepareComposite(m platform.Member, key string, edits []protocol.CompositeEdit, now time.Time) (protocol.CompositeAnswer, error) {
 	var draft *stagedDecision
 	answer, prepared, err := (build.CompositePlan{
 		Tenant: t.ID, Admits: t.Admits, Quarantined: t.quarantined, Bound: t.delegatedBound,
@@ -58,23 +59,23 @@ func (t *Tenant) prepareComposite(m platform.Member, key string, edits []platfor
 	}
 	committed, err := t.acceptResult(entry, saved.Key, saved.RequestHash)
 	if err != nil {
-		return platform.CompositeAnswer{}, err
+		return protocol.CompositeAnswer{}, err
 	}
 	return t.finishCommittedComposite(m, saved, committed)
 }
 
-func (t *Tenant) finishCommittedComposite(m platform.Member, saved acceptedformat.Composite, committed []byte) (answer platform.CompositeAnswer, err error) {
+func (t *Tenant) finishCommittedComposite(m platform.Member, saved acceptedformat.Composite, committed []byte) (answer protocol.CompositeAnswer, err error) {
 	defer func() {
 		if failure := recover(); failure != nil {
 			err = fmt.Errorf("apply committed composite: %v", failure)
 			t.quarantine(err)
-			answer = platform.CompositeAnswer{}
+			answer = protocol.CompositeAnswer{}
 		}
 	}()
 	applied, err := t.applyAcceptedComposite(committed)
 	if err != nil || applied.Key != saved.Key || applied.RequestHash != saved.RequestHash || applied.Member != m.ID {
 		t.quarantine(fmt.Errorf("committed composite result differs: %v", err))
-		return platform.CompositeAnswer{}, fmt.Errorf("committed composite result differs: %v", err)
+		return protocol.CompositeAnswer{}, fmt.Errorf("committed composite result differs: %v", err)
 	}
 	t.acceptedResultApplied()
 	t.changed()

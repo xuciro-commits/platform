@@ -2,6 +2,7 @@ package host
 
 import (
 	"fmt"
+	"platformserver/kernel/protocol"
 	"platformserver/kernel/records"
 	"platformserver/platform"
 	pageowner "platformserver/services/apps/pages"
@@ -20,7 +21,7 @@ func (t *Tenant) stageReleaseInstallationLocked(installations []platform.Release
 	}
 	draft.installingSet = true
 	err = releaseowner.StageReleaseInstallation(registry, installations, draft.Projection,
-		platform.AssetApplyContext{Validate: validate, Upgrade: len(upgrade) > 0 && upgrade[0], Private: true}, draft.registerInstalledAsset)
+		protocol.AssetApplyContext{Validate: validate, Upgrade: len(upgrade) > 0 && upgrade[0], Private: true}, draft.registerInstalledAsset)
 	if err != nil {
 		return nil, err
 	}
@@ -83,6 +84,6 @@ func (t *Tenant) validateAssetSet(engines ...platform.RuleEngine) error {
 func (t *Tenant) checkExtensionSet() error {
 	return releaseowner.CheckExtensions(releaseowner.StoredEntities(t.Projection), t.Entity)
 }
-func (t *Tenant) releaseExtensionReview(candidate platform.ReleaseCandidate) ([]releaseowner.ReleaseExtensionReview, error) {
+func (t *Tenant) releaseExtensionReview(candidate protocol.ReleaseCandidate) ([]releaseowner.ReleaseExtensionReview, error) {
 	return releaseowner.ReviewExtensions(candidate, t.apps, releaseowner.StoredEntities(t.Projection), t.Entity, (hostView{t: t}).EntitySource)
 }

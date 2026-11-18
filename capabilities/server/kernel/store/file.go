@@ -12,13 +12,12 @@ import (
 	"os"
 	"path/filepath"
 	"platformserver/kernel/fileio"
+	"platformserver/kernel/protocol"
 	"sort"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
-
-	"platformserver/platform"
 )
 
 type File struct {
@@ -554,7 +553,7 @@ func (j *File) loadObservationIDs() error {
 	return nil
 }
 
-func (j *File) readObservations() ([]platform.Observation, error) {
+func (j *File) readObservations() ([]protocol.Observation, error) {
 	file, err := os.Open(j.observationsPath())
 	if os.IsNotExist(err) {
 		return nil, nil
@@ -566,14 +565,14 @@ func (j *File) readObservations() ([]platform.Observation, error) {
 	lines := bufio.NewScanner(file)
 	lines.Buffer(make([]byte, 0, 1<<20), 64<<20)
 	number := 0
-	var events []platform.Observation
+	var events []protocol.Observation
 	seen := map[string]struct{}{}
 	for lines.Scan() {
 		number++
 		if len(lines.Bytes()) == 0 {
 			continue
 		}
-		var event platform.Observation
+		var event protocol.Observation
 		if err := json.Unmarshal(lines.Bytes(), &event); err != nil {
 			return nil, fmt.Errorf("observations: %s line %d: %v", j.observationsPath(), number, err)
 		}
@@ -590,7 +589,7 @@ func (j *File) readObservations() ([]platform.Observation, error) {
 	return events, nil
 }
 
-func (j *File) SaveObservations(events []platform.Observation) error {
+func (j *File) SaveObservations(events []protocol.Observation) error {
 	if len(events) == 0 {
 		return nil
 	}
@@ -651,15 +650,15 @@ func (j *File) SaveObservations(events []platform.Observation) error {
 	return nil
 }
 
-func (j *File) QueryObservations(query platform.ObservationQuery) (platform.ObservationPage, error) {
+func (j *File) QueryObservations(query protocol.ObservationQuery) (protocol.ObservationPage, error) {
 	if query.Tenant == "" {
-		return platform.ObservationPage{}, fmt.Errorf("observations: tenant is required")
+		return protocol.ObservationPage{}, fmt.Errorf("observations: tenant is required")
 	}
 	j.observationMu.Lock()
 	events, err := j.readObservations()
 	j.observationMu.Unlock()
 	if err != nil {
-		return platform.ObservationPage{}, err
+		return protocol.ObservationPage{}, err
 	}
 	return selectObservationPage(events, query, earliestObservation(events, query.Tenant))
 }
@@ -671,7 +670,7 @@ func (j *File) PurgeObservations(tenant string, before time.Time) (int, error) {
 	if err != nil {
 		return 0, err
 	}
-	kept := make([]platform.Observation, 0, len(events))
+	kept := make([]protocol.Observation, 0, len(events))
 	removed := 0
 	for _, event := range events {
 		if event.Tenant == tenant && event.At.Before(before) {
@@ -734,14 +733,14 @@ func (j *File) ObservationUsage(tenant string, from time.Time) (int64, error) {
 	return total, nil
 }
 
-func (j *File) SummarizeObservations(tenant, member string, from, to time.Time) (platform.ObservationSummary, error) {
+func (j *File) SummarizeObservations(tenant, member string, from, to time.Time) (protocol.ObservationSummary, error) {
 	j.observationMu.Lock()
 	events, err := j.readObservations()
 	j.observationMu.Unlock()
 	if err != nil {
-		return platform.ObservationSummary{}, err
+		return protocol.ObservationSummary{}, err
 	}
-	out := platform.ObservationSummary{From: from.UTC(), To: to.UTC()}
+	out := protocol.ObservationSummary{From: from.UTC(), To: to.UTC()}
 	var total int64
 	for _, event := range events {
 		if event.Tenant != tenant || event.At.Before(from) || !event.At.Before(to) || member != "" && event.Member != member {
@@ -770,7 +769,7 @@ func (j *File) SummarizeObservations(tenant, member string, from, to time.Time) 
 
 type auditLine struct {
 	Tenant string              `json:"tenant"`
-	Entry  platform.AuditEntry `json:"entry"`
+	Entry  protocol.AuditEntry `json:"entry"`
 }
 
 func (j *File) readAuditEntries() ([]auditLine, error) {
@@ -810,7 +809,7 @@ func (j *File) readAuditEntries() ([]auditLine, error) {
 	return entries, nil
 }
 
-func (j *File) SaveAuditEntries(tenant string, entries []platform.AuditEntry) error {
+func (j *File) SaveAuditEntries(tenant string, entries []protocol.AuditEntry) error {
 	if len(entries) == 0 {
 		return nil
 	}
@@ -849,17 +848,17 @@ func (j *File) SaveAuditEntries(tenant string, entries []platform.AuditEntry) er
 	return appendFileSync(j.auditPath(), raw.Bytes(), "audit")
 }
 
-func (j *File) QueryAuditEntries(query platform.AuditQuery) (platform.AuditPage, error) {
+func (j *File) QueryAuditEntries(query protocol.AuditQuery) (protocol.AuditPage, error) {
 	if query.Tenant == "" {
-		return platform.AuditPage{}, fmt.Errorf("audit: tenant is required")
+		return protocol.AuditPage{}, fmt.Errorf("audit: tenant is required")
 	}
 	j.auditMu.Lock()
 	lines, err := j.readAuditEntries()
 	j.auditMu.Unlock()
 	if err != nil {
-		return platform.AuditPage{}, err
+		return protocol.AuditPage{}, err
 	}
-	entries := make([]platform.AuditEntry, 0, len(lines))
+	entries := make([]protocol.AuditEntry, 0, len(lines))
 	for _, line := range lines {
 		if line.Tenant == query.Tenant {
 			entries = append(entries, line.Entry)
@@ -870,7 +869,7 @@ func (j *File) QueryAuditEntries(query platform.AuditQuery) (platform.AuditPage,
 
 type personalReadLine struct {
 	Tenant string                `json:"tenant"`
-	Read   platform.PersonalRead `json:"read"`
+	Read   protocol.PersonalRead `json:"read"`
 }
 
 func (j *File) readPersonalReads() ([]personalReadLine, error) {
@@ -910,7 +909,7 @@ func (j *File) readPersonalReads() ([]personalReadLine, error) {
 	return reads, nil
 }
 
-func (j *File) SavePersonalReads(tenant string, reads []platform.PersonalRead) error {
+func (j *File) SavePersonalReads(tenant string, reads []protocol.PersonalRead) error {
 	if len(reads) == 0 {
 		return nil
 	}
@@ -949,17 +948,17 @@ func (j *File) SavePersonalReads(tenant string, reads []platform.PersonalRead) e
 	return appendFileSync(j.personalReadsPath(), raw.Bytes(), "personal reads")
 }
 
-func (j *File) QueryPersonalReads(query platform.PersonalReadQuery) (platform.PersonalReadPage, error) {
+func (j *File) QueryPersonalReads(query protocol.PersonalReadQuery) (protocol.PersonalReadPage, error) {
 	if query.Tenant == "" {
-		return platform.PersonalReadPage{}, fmt.Errorf("personal reads: tenant is required")
+		return protocol.PersonalReadPage{}, fmt.Errorf("personal reads: tenant is required")
 	}
 	j.personalMu.Lock()
 	lines, err := j.readPersonalReads()
 	j.personalMu.Unlock()
 	if err != nil {
-		return platform.PersonalReadPage{}, err
+		return protocol.PersonalReadPage{}, err
 	}
-	reads := make([]platform.PersonalRead, 0, len(lines))
+	reads := make([]protocol.PersonalRead, 0, len(lines))
 	for _, line := range lines {
 		if line.Tenant == query.Tenant {
 			reads = append(reads, line.Read)
@@ -984,14 +983,14 @@ func appendFileSync(path string, raw []byte, label string) error {
 	return file.Close()
 }
 
-func (j *File) ReplaceRunIndex(tenant, scope string, entries []platform.RunIndexEntry) error {
+func (j *File) ReplaceRunIndex(tenant, scope string, entries []protocol.RunIndexEntry) error {
 	j.runMu.Lock()
 	defer j.runMu.Unlock()
 	current, err := j.readRunIndex()
 	if err != nil {
 		return err
 	}
-	byKey := map[string][]platform.RunIndexEntry{}
+	byKey := map[string][]protocol.RunIndexEntry{}
 	for _, entry := range current {
 		parts := strings.SplitN(entry.ID, "\x00", 3)
 		if len(parts) < 2 {
@@ -1035,7 +1034,7 @@ func (j *File) ReplaceRunIndex(tenant, scope string, entries []platform.RunIndex
 	return fileio.WriteAtomic(j.runIndexPath(), raw.Bytes())
 }
 
-func (j *File) readRunIndex() ([]platform.RunIndexEntry, error) {
+func (j *File) readRunIndex() ([]protocol.RunIndexEntry, error) {
 	file, err := os.Open(j.runIndexPath())
 	if os.IsNotExist(err) {
 		return nil, nil
@@ -1047,13 +1046,13 @@ func (j *File) readRunIndex() ([]platform.RunIndexEntry, error) {
 	lines := bufio.NewScanner(file)
 	lines.Buffer(make([]byte, 0, 1<<20), 64<<20)
 	number := 0
-	var entries []platform.RunIndexEntry
+	var entries []protocol.RunIndexEntry
 	for lines.Scan() {
 		number++
 		if len(lines.Bytes()) == 0 {
 			continue
 		}
-		var entry platform.RunIndexEntry
+		var entry protocol.RunIndexEntry
 		if err := json.Unmarshal(lines.Bytes(), &entry); err != nil {
 			return nil, fmt.Errorf("run index: %s line %d: %v", j.runIndexPath(), number, err)
 		}
@@ -1065,14 +1064,14 @@ func (j *File) readRunIndex() ([]platform.RunIndexEntry, error) {
 	return entries, nil
 }
 
-func (j *File) QueryRunIndex(query platform.RunIndexQuery) (platform.RunIndexPage, error) {
+func (j *File) QueryRunIndex(query protocol.RunIndexQuery) (protocol.RunIndexPage, error) {
 	j.runMu.Lock()
 	entries, err := j.readRunIndex()
 	j.runMu.Unlock()
 	if err != nil {
-		return platform.RunIndexPage{}, err
+		return protocol.RunIndexPage{}, err
 	}
-	var tenantEntries []platform.RunIndexEntry
+	var tenantEntries []protocol.RunIndexEntry
 	for _, entry := range entries {
 		parts := strings.SplitN(entry.ID, "\x00", 3)
 		if len(parts) >= 2 && parts[0] == query.Tenant {

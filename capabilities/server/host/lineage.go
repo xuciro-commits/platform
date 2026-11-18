@@ -2,12 +2,12 @@ package host
 
 import (
 	"context"
-	build "platformserver/services/resources/authoring"
-	"time"
-
 	"platformserver/kernel/records"
 	"platformserver/platform"
 	"platformserver/services/data/lineage"
+	build "platformserver/services/resources/authoring"
+	"reflect"
+	"time"
 )
 
 func (t *Tenant) RecordGeneration() uint64 { return t.Projection.Generation() }
@@ -45,4 +45,28 @@ func (t *Tenant) lineage(ctx context.Context, m platform.Member, request lineage
 	return recordRead(t, ctx, func(t *Tenant) (lineage.Lineage, *platform.Error) {
 		return lineage.NewReader(t).Read(m, request)
 	})
+}
+
+func (t *Tenant) markingsIn(store *records.Store, held bool) lineage.MarkingIndex {
+	if !held {
+		store.Lock()
+		defer store.Unlock()
+	}
+	return t.markings.Get(store, store.Generation(), store == t.Projection, func() lineage.MarkingIndex {
+		return lineage.IndexMarkings(lineage.Build(lineage.NewReader(t).Guard(lineage.StoreInput(store)), lineage.Guard), store.Generation())
+	})
+}
+
+func rowValue(row *records.Row) reflect.Value {
+	if row == nil {
+		return reflect.Value{}
+	}
+	return row.Value
+}
+
+func (t *Tenant) files() platform.FileStore {
+	if t.Files != nil {
+		return t.Files
+	}
+	return &t.memFiles
 }

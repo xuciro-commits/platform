@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"platformserver/kernel/protocol"
 	"reflect"
 	"slices"
 	"strings"
@@ -169,5 +170,5 @@ func ConfirmationAnswerSubmission(tenant, authority string, caller platform.Memb
 	}
 	p := run.Parties[i]
 	payload := map[string]any{"party": p.Name, "revision": run.Revision, "outcome": outcome, "reason": "Source reconciliation", "difference": diff, "answer": diff.Observed}
-	return &pb.Submission{TenantId: tenant, PrincipalId: caller.ID, Authority: authority, IdempotencyKey: "reconcile:" + run.ID + ":" + p.Name + ":" + at.UTC().Format(time.RFC3339Nano), Target: &pb.EntityRef{Type: platform.ConfirmationType, Id: run.ID}, Schema: &pb.SchemaRef{Name: platform.ConfirmationAnswerSchema, Version: 1}, Payload: platform.Raw(payload)}
+	return &pb.Submission{TenantId: tenant, PrincipalId: caller.ID, Authority: authority, IdempotencyKey: "reconcile:" + run.ID + ":" + p.Name + ":" + at.UTC().Format(time.RFC3339Nano), Target: &pb.EntityRef{Type: protocol.ConfirmationType, Id: run.ID}, Schema: &pb.SchemaRef{Name: protocol.ConfirmationAnswerSchema, Version: 1}, Payload: platform.Raw(payload)}
 }

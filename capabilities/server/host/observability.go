@@ -4,23 +4,23 @@ import (
 	"log"
 	mathrand "math/rand/v2"
 	"net/http"
-	"time"
-
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	runtimekernel "platformserver/kernel"
+	"platformserver/kernel/protocol"
 	"platformserver/kernel/transport"
 	"platformserver/platform"
 	"platformserver/services/resources/monitoring"
 	controlowner "platformserver/services/security/control"
+	"time"
 )
 
 func (t *Tenant) bindAuditStore() {
-	t.AuditLog.SetSink(func(entry platform.AuditEntry) {
-		if err := t.Log().SaveAuditEntries(t.ID, []platform.AuditEntry{entry}); err != nil {
+	t.AuditLog.SetSink(func(entry protocol.AuditEntry) {
+		if err := t.Log().SaveAuditEntries(t.ID, []protocol.AuditEntry{entry}); err != nil {
 			log.Printf("audit %s: %v", t.ID, err)
 		}
-	}, func(read platform.PersonalRead) {
-		if err := t.Log().SavePersonalReads(t.ID, []platform.PersonalRead{read}); err != nil {
+	}, func(read protocol.PersonalRead) {
+		if err := t.Log().SavePersonalReads(t.ID, []protocol.PersonalRead{read}); err != nil {
 			log.Printf("personal read audit %s: %v", t.ID, err)
 		}
 	})
@@ -42,7 +42,7 @@ func (t *Tenant) LogPolicies() []controlowner.LogPolicyView {
 	return t.logging().Policies(apps)
 }
 
-func (t *Tenant) recordObservation(event platform.Observation) {
+func (t *Tenant) recordObservation(event protocol.Observation) {
 	logging := t.logging()
 	if logging.RetentionDays() == 0 || !logging.Allows(event.Level, event.App, Now()) {
 		return
@@ -96,4 +96,21 @@ func (t *Tenant) PurgeObservations(now time.Time) {
 	if removed > 0 {
 		log.Printf("purged %d observations for %s", removed, t.ID)
 	}
+}
+
+func (t *Tenant) backfillAudit(entries []Entry) {
+	runtimekernel.BackfillAudit(t.ID, entries, t.AuditLog.Remember)
+}
+
+func (d *stagedDecision) ObservationContext(c platform.Caller) *platform.ObservationContext {
+	evidence := d.ObservationInput
+	if evidence == nil || c.App != evidence.Definition.Ref.App || c.Tenant != d.tenant.ID {
+		return nil
+	}
+	proof := &platform.ObservationContext{Definition: evidence.Definition, Record: evidence.Record}
+	if evidence.Intervals != nil {
+		copy := evidence.Intervals.Clone()
+		proof.Intervals = &copy
+	}
+	return proof
 }

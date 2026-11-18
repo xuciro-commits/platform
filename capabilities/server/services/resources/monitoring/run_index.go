@@ -3,6 +3,7 @@ package monitoring
 import (
 	"encoding/json"
 	"fmt"
+	"platformserver/kernel/protocol"
 	"slices"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
@@ -12,8 +13,8 @@ import (
 type RunIndex struct {
 	Tenant     string
 	Scope      string
-	Query      func(platform.RunIndexQuery) (platform.RunIndexPage, error)
-	Replace    func(entries []platform.RunIndexEntry) error
+	Query      func(protocol.RunIndexQuery) (protocol.RunIndexPage, error)
+	Replace    func(entries []protocol.RunIndexEntry) error
 	Refresh    func(rebuild func() ([]MonitoringCoverage, bool)) []MonitoringCoverage
 	FromOwners func(filter MonitoringRunFilter) (MonitoringRunPage, *platform.Error)
 	Observe    func(run MonitoringRun)
@@ -29,7 +30,7 @@ func (x RunIndex) Runs(filter MonitoringRunFilter) (MonitoringRunPage, *platform
 	if refusal != nil {
 		return x.fallback(filter)
 	}
-	indexed, err := x.Query(platform.RunIndexQuery{Tenant: x.Tenant, Scope: x.Scope, Offset: 0, Limit: 1000})
+	indexed, err := x.Query(protocol.RunIndexQuery{Tenant: x.Tenant, Scope: x.Scope, Offset: 0, Limit: 1000})
 	if err != nil {
 		return x.fallback(filter)
 	}
@@ -46,7 +47,7 @@ func (x RunIndex) fallback(filter MonitoringRunFilter) (MonitoringRunPage, *plat
 }
 
 func (x RunIndex) rebuild() ([]MonitoringCoverage, *platform.Error) {
-	previous, _ := x.Query(platform.RunIndexQuery{Tenant: x.Tenant, Scope: x.Scope, Offset: 0, Limit: 1000})
+	previous, _ := x.Query(protocol.RunIndexQuery{Tenant: x.Tenant, Scope: x.Scope, Offset: 0, Limit: 1000})
 	previousStatus := map[string]string{}
 	for _, entry := range previous.Entries {
 		previousStatus[entry.ID] = entry.Status
@@ -65,7 +66,7 @@ func (x RunIndex) rebuild() ([]MonitoringCoverage, *platform.Error) {
 			break
 		}
 	}
-	entries := make([]platform.RunIndexEntry, 0, len(runs))
+	entries := make([]protocol.RunIndexEntry, 0, len(runs))
 	for _, run := range runs {
 		if len(previous.Entries) > 0 && (run.Source == "flow" || run.Source == "agent" || run.Source == "function" || run.Source == "compute" || run.Source == "projection" || run.Source == "code" || run.Source == "effect") &&
 			(run.Status == "failed" || run.Status == "cancelled") && previousStatus[run.ID] != run.Status {
@@ -75,7 +76,7 @@ func (x RunIndex) rebuild() ([]MonitoringCoverage, *platform.Error) {
 		if err != nil {
 			return nil, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT, Message: fmt.Sprintf("run index: %v", err)}
 		}
-		entries = append(entries, platform.RunIndexEntry{ID: run.ID, Scope: x.Scope, Type: run.Type, Source: run.Source, App: RunResourceApp(run), Status: run.Status, At: run.When, Payload: raw})
+		entries = append(entries, protocol.RunIndexEntry{ID: run.ID, Scope: x.Scope, Type: run.Type, Source: run.Source, App: RunResourceApp(run), Status: run.Status, At: run.When, Payload: raw})
 	}
 	if err := x.Replace(entries); err != nil {
 		return nil, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_UNSPECIFIED, Message: err.Error()}

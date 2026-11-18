@@ -1,6 +1,7 @@
 package security
 
 import (
+	"platformserver/kernel/protocol"
 	"platformserver/kernel/records"
 	"platformserver/platform"
 	"reflect"
@@ -118,7 +119,7 @@ func (a Authorizer) Authorize(store *records.Store, c platform.Caller, q platfor
 			if et.Info().Scope.Participants != nil || et.Info().Scope.Through != nil {
 				request.Allowed = []string{platform.AnyMember}
 			}
-			if et.Info().Type == platform.KnowledgeDocumentType && q.Kind == "derive" {
+			if et.Info().Type == protocol.KnowledgeDocumentType && q.Kind == "derive" {
 				request.Allowed = []string{platform.AnyMember}
 			}
 		} else {
@@ -140,7 +141,7 @@ func (a Authorizer) Authorize(store *records.Store, c platform.Caller, q platfor
 		if q.Record != "" && q.Kind != "create" && (q.Kind != "action" || current != nil) {
 			if c.Automation && c.App == et.Info().App {
 				context.Row = passGate("the declared owner service boundary")
-			} else if et.Info().Type == platform.KnowledgeDocumentType && q.Kind == "derive" {
+			} else if et.Info().Type == protocol.KnowledgeDocumentType && q.Kind == "derive" {
 				context.Row = platform.AuthorizationGate{Allowed: a.sources.KnowledgeReadable(store, c.Member, q.Record, ""), Reason: "The document is outside the caller's source grants"}
 			} else if et.Info().Scope.Through != nil && (current == nil || depth >= 16 || cycle) {
 				context.Row = platform.AuthorizationGate{Reason: "The owning record is unavailable or exceeds 16 segments"}
@@ -171,7 +172,7 @@ func (a Authorizer) Authorize(store *records.Store, c platform.Caller, q platfor
 				continue
 			}
 			allowed := known && field.ReadsAny(c.RolesIn(et.Info().App), c.Rules()) && !(c.AIContext && field.AIInput != nil && !*field.AIInput)
-			if et.Info().Type == platform.KnowledgeDocumentType && q.Kind == "derive" {
+			if et.Info().Type == protocol.KnowledgeDocumentType && q.Kind == "derive" {
 				allowed = a.sources.KnowledgeReadable(store, c.Member, q.Record, name)
 			}
 			if q.Kind == "write" || q.Kind == "create" {

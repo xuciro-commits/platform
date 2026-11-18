@@ -1,7 +1,7 @@
 package integrations
 
 import (
-	"platformserver/platform"
+	"platformserver/kernel/protocol"
 	"sync"
 	"time"
 )
@@ -89,10 +89,10 @@ func OnLane(jobs []func()) {
 	wg.Wait()
 }
 
-func (b *Breakers) View(now time.Time) []platform.Breaker {
+func (b *Breakers) View(now time.Time) []protocol.Breaker {
 	b.mu.Lock()
 	defer b.mu.Unlock()
-	out := []platform.Breaker{}
+	out := []protocol.Breaker{}
 	for dest, x := range b.m {
 		state := "closed"
 		switch {
@@ -104,7 +104,7 @@ func (b *Breakers) View(now time.Time) []platform.Breaker {
 			state = "probing"
 		}
 		if x.failures > 0 {
-			out = append(out, platform.Breaker{Destination: dest, State: state, Failures: x.failures, Until: x.until})
+			out = append(out, protocol.Breaker{Destination: dest, State: state, Failures: x.failures, Until: x.until})
 		}
 	}
 	return out

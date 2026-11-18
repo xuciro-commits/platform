@@ -165,7 +165,7 @@ func TestInvariantK1FunctionAuthoringPublishesEvaluatesReviewsAndReplays(t *test
 			t.Fatalf("started evaluation %s differs: %+v", evaluation.id, run)
 		}
 		for _, attempt := range run.Attempts {
-			answer := platform.Answer{Call: attempt.Call, Outcome: "accepted", Text: evaluation.answer, Metered: true, TokensReported: true,
+			answer := protocol.Answer{Call: attempt.Call, Outcome: "accepted", Text: evaluation.answer, Metered: true, TokensReported: true,
 				InputTokens: 10, OutputTokens: 5, CostReported: true, CostUSD: 0.01, LatencyMillis: 10, ServedModel: "test-model"}
 			if _, refusal := submitEvaluation(agentevaluation.SchemaEvaluationAnswer, evaluation.id, answer); refusal != nil {
 				t.Fatalf("answer evaluation %s: %v", evaluation.id, refusal)
@@ -176,7 +176,7 @@ func TestInvariantK1FunctionAuthoringPublishesEvaluatesReviewsAndReplays(t *test
 			t.Fatalf("finished evaluation %s differs: %+v", evaluation.id, run)
 		}
 	}
-	duplicate := platform.Answer{Call: "EVALUATION:1:1", Outcome: "accepted", Metered: true, CostReported: true, CostUSD: 0.01, LatencyMillis: 10}
+	duplicate := protocol.Answer{Call: "EVALUATION:1:1", Outcome: "accepted", Metered: true, CostReported: true, CostUSD: 0.01, LatencyMillis: 10}
 	if _, refusal := submitEvaluation(agentevaluation.SchemaEvaluationAnswer, "EVALUATION", duplicate); refusal == nil || refusal.Code != pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT {
 		t.Fatalf("completed evaluation accepted another answer: %+v", refusal)
 	}
@@ -188,8 +188,8 @@ func TestInvariantK1FunctionAuthoringPublishesEvaluatesReviewsAndReplays(t *test
 	releaseID, err := releaseowner.PrepareReleaseEvaluation(live.ID, live.member(t), releaseowner.ReleaseEvaluationRequest{
 		CandidateID: "CANDIDATE", PlanID: "PLAN", Key: "release-evaluation",
 	}, invariantClock, releaseowner.EvaluationHooks{
-		Candidate: func(string) (platform.ReleaseCandidate, error) {
-			return platform.ReleaseCandidate{ID: "CANDIDATE", Assets: []platform.ReleaseAsset{retained, evaluationSet}}, nil
+		Candidate: func(string) (protocol.ReleaseCandidate, error) {
+			return protocol.ReleaseCandidate{ID: "CANDIDATE", Assets: []platform.ReleaseAsset{retained, evaluationSet}}, nil
 		},
 		Plan: func(string) (descriptor.FunctionEvaluationPlan, bool) {
 			return descriptor.FunctionEvaluationPlan{Revision: plan.Revision, Name: plan.Name, Function: string(plan.Function),
@@ -221,7 +221,7 @@ func TestInvariantK1FunctionAuthoringPublishesEvaluatesReviewsAndReplays(t *test
 		t.Fatalf("release evaluation start differs: %+v", releaseEvaluation)
 	}
 	for _, attempt := range releaseEvaluation.Attempts {
-		answer := platform.Answer{Call: attempt.Call, Outcome: "accepted", Text: `{"answer":"ok"}`, Metered: true, TokensReported: true,
+		answer := protocol.Answer{Call: attempt.Call, Outcome: "accepted", Text: `{"answer":"ok"}`, Metered: true, TokensReported: true,
 			InputTokens: 10, OutputTokens: 5, CostReported: true, CostUSD: 0.01, LatencyMillis: 10, ServedModel: "test-model"}
 		if _, refusal := submitEvaluation(agentevaluation.SchemaEvaluationAnswer, releaseID, answer); refusal != nil {
 			t.Fatalf("answer release evaluation: %v", refusal)
@@ -240,7 +240,7 @@ func TestInvariantK1FunctionAuthoringPublishesEvaluatesReviewsAndReplays(t *test
 	if refusal != nil {
 		t.Fatalf("application AI view: %v", refusal)
 	}
-	var applicationFunction, applicationAgent *platform.ApplicationAI
+	var applicationFunction, applicationAgent *protocol.ApplicationAI
 	for i := range ai {
 		switch ai[i].Resource.Ref {
 		case ref:
@@ -259,7 +259,7 @@ func TestInvariantK1FunctionAuthoringPublishesEvaluatesReviewsAndReplays(t *test
 	if !evaluations["EVALUATION"] || !evaluations["EVALUATION-FAILED"] {
 		t.Fatalf("application AI evaluations differ: %+v", applicationFunction.Evaluations)
 	}
-	bad := platform.ReleaseCandidate{Assets: []platform.ReleaseAsset{{
+	bad := protocol.ReleaseCandidate{Assets: []platform.ReleaseAsset{{
 		Ref: platform.AssetRef{App: build.ID, Kind: platform.AssetObject, Name: "build.alpha"},
 		Body: platform.Raw(map[string]any{"name": "alpha", "actions": []ontology.Action{{
 			Name: "adopt", Adoption: &platform.ProposalAdoption{Function: platform.FunctionRef{Name: "missing"}},
@@ -296,7 +296,7 @@ func TestInvariantK1FunctionAuthoringPublishesEvaluatesReviewsAndReplays(t *test
 	if refusal != nil {
 		t.Fatalf("replayed application AI view: %v", refusal)
 	}
-	replayedFunction := slices.IndexFunc(replayedAI, func(item platform.ApplicationAI) bool { return item.Resource.Ref == ref })
+	replayedFunction := slices.IndexFunc(replayedAI, func(item protocol.ApplicationAI) bool { return item.Resource.Ref == ref })
 	if len(replayedAI) != 2 || replayedFunction < 0 || len(replayedAI[replayedFunction].Evaluations) != 3 {
 		t.Fatalf("application AI replay differs: %+v", replayedAI)
 	}

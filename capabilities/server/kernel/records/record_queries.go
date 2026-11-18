@@ -730,11 +730,11 @@ func (s *Store) EffectivePredicate(et *Type, q platform.Query) (func(reflect.Val
 	}
 	info := s.types[et.info.Type].info
 	field, _ := info.Field(v.ValidFrom)
-	if _, err := platform.EffectiveAt(field.Type, q.BusinessTime.At, "", q.BusinessTime.At); err != nil {
+	if _, err := ruleprotocol.EffectiveAt(field.Type, q.BusinessTime.At, "", q.BusinessTime.At); err != nil {
 		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
 	}
 	return func(value reflect.Value) bool {
-		active, err := platform.EffectiveAt(field.Type, BusinessField(info, value, v.ValidFrom), BusinessField(info, value, v.ValidUntil), q.BusinessTime.At)
+		active, err := ruleprotocol.EffectiveAt(field.Type, BusinessField(info, value, v.ValidFrom), BusinessField(info, value, v.ValidUntil), q.BusinessTime.At)
 		return err == nil && active
 	}, nil
 }

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	runtimeprotocol "platformserver/kernel/protocol"
 	"slices"
 	"strings"
 
@@ -219,7 +220,7 @@ func (resolver Resolver) describeAsset(asset platform.ReleaseAsset, historical b
 		} else {
 			addObject(f.Object)
 		}
-		capability("function", f.Name, platform.CapabilityEffect, f.Roles, platform.ValueSchema{Type: "object", Properties: map[string]platform.ValueSchema{"source": {Type: "string"}}, Required: []string{"source"}}, platform.CapabilityFieldsSchema(f.Output), nil)
+		capability("function", f.Name, platform.CapabilityEffect, f.Roles, platform.ValueSchema{Type: "object", Properties: map[string]platform.ValueSchema{"source": {Type: "string"}}, Required: []string{"source"}}, runtimeprotocol.CapabilityFieldsSchema(f.Output), nil)
 	case platform.AssetCompute:
 		var operation platform.Operation
 		if err := json.Unmarshal(asset.Body, &operation); err != nil {
@@ -234,7 +235,7 @@ func (resolver Resolver) describeAsset(asset platform.ReleaseAsset, historical b
 		}
 		capability("operation", operation.Name, platform.CapabilityPure, operation.Roles, operation.Input, operation.Output, nil)
 	case platform.AssetFlow:
-		var flow platform.FlowReleaseDescriptor
+		var flow runtimeprotocol.FlowReleaseDescriptor
 		if err := json.Unmarshal(asset.Body, &flow); err != nil {
 			return out, err
 		}
@@ -312,13 +313,13 @@ func (resolver Resolver) describeAsset(asset platform.ReleaseAsset, historical b
 		}
 		capability("operation", agent.Name, platform.CapabilityEffect, nil, platform.ValueSchema{}, platform.ValueSchema{}, nil)
 	case platform.AssetEvaluation:
-		evaluation, err := platform.ReadEvaluationSet(asset.Body)
+		evaluation, err := runtimeprotocol.ReadEvaluationSet(asset.Body)
 		if err != nil {
 			return out, err
 		}
 		add(evaluation.Function.Ref)
 	case platform.AssetTestPlan:
-		plan, err := platform.ReadTestPlan(asset.Body)
+		plan, err := runtimeprotocol.ReadTestPlan(asset.Body)
 		if err != nil {
 			return out, err
 		}
@@ -346,7 +347,7 @@ func (resolver Resolver) describeAsset(asset platform.ReleaseAsset, historical b
 		for _, field := range shape.Fields {
 			fields = append(fields, platform.Field{Name: field.Name, Type: field.Type, Description: field.Title})
 		}
-		capability("interface", shape.Name, platform.CapabilityPure, nil, platform.ValueSchema{}, platform.CapabilityFieldsSchema(fields), fields)
+		capability("interface", shape.Name, platform.CapabilityPure, nil, platform.ValueSchema{}, runtimeprotocol.CapabilityFieldsSchema(fields), fields)
 	case platform.AssetProtocol:
 		dependencies, err := describeProtocolDependencies(asset)
 		if err != nil {

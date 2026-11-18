@@ -2,6 +2,7 @@ package ontology
 
 import (
 	"fmt"
+	"platformserver/kernel/protocol"
 	"reflect"
 	"slices"
 	"strings"
@@ -169,7 +170,7 @@ func CheckObjectShape(o Object, app, objectType string, model platform.Entity, d
 				return err
 			}
 			info.ExtensionSource = nil
-			if err := platform.CheckExtension(info, base); err != nil {
+			if err := protocol.CheckExtension(info, base); err != nil {
 				return err
 			}
 		}

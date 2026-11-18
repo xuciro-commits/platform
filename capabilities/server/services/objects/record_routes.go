@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/url"
+	"platformserver/kernel/protocol"
 	"strings"
 
 	"platformserver/platform"
@@ -24,7 +25,7 @@ func PagedQueryFromValues(values url.Values) platform.Query {
 	return q
 }
 
-func LocalizeImportRows(rows []platform.ImportRow, localize func([]platform.FieldIssue) []platform.FieldIssue) {
+func LocalizeImportRows(rows []protocol.ImportRow, localize func([]platform.FieldIssue) []platform.FieldIssue) {
 	for i := range rows {
 		if rows[i].Error != nil {
 			rows[i].Error.Issues = localize(rows[i].Error.Issues)

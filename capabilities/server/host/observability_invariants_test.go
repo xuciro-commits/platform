@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"platformserver/kernel/protocol"
 	"reflect"
 	"strings"
 	"testing"
@@ -22,9 +23,9 @@ import (
 func newObservationTenant(tb testing.TB, id string) *invariantTenant {
 	tb.Helper()
 	live := newInvariantTenant(tb, id,
-		platform.Seat{Subjects: []string{"other"}, Member: platform.Member{ID: "other", Roles: map[string]string{}}},
-		platform.Seat{Subjects: []string{"admin"}, Member: platform.Member{ID: "admin", Roles: map[string]string{controlowner.PlatformApp: controlowner.Admin}}},
-		platform.Seat{Subjects: []string{"auditor"}, Member: platform.Member{ID: "auditor", Roles: map[string]string{controlowner.PlatformApp: platform.Auditor}}},
+		protocol.Seat{Subjects: []string{"other"}, Member: platform.Member{ID: "other", Roles: map[string]string{}}},
+		protocol.Seat{Subjects: []string{"admin"}, Member: platform.Member{ID: "admin", Roles: map[string]string{controlowner.PlatformApp: controlowner.Admin}}},
+		protocol.Seat{Subjects: []string{"auditor"}, Member: platform.Member{ID: "auditor", Roles: map[string]string{controlowner.PlatformApp: protocol.Auditor}}},
 	)
 	live.settings.Set(controlowner.PlatformApp+"/"+controlowner.SettingLogRequests, "0")
 	return live
@@ -58,30 +59,30 @@ func observationRequest(tb testing.TB, handler http.Handler, tenant, token, path
 	return response
 }
 
-func decodeObservationPage(tb testing.TB, response *httptest.ResponseRecorder) platform.ObservationPage {
+func decodeObservationPage(tb testing.TB, response *httptest.ResponseRecorder) protocol.ObservationPage {
 	tb.Helper()
 	if response.Code != http.StatusOK {
 		tb.Fatalf("logs: HTTP %d: %s", response.Code, response.Body)
 	}
-	var page platform.ObservationPage
+	var page protocol.ObservationPage
 	if err := json.Unmarshal(response.Body.Bytes(), &page); err != nil {
 		tb.Fatal(err)
 	}
 	return page
 }
 
-func addObservation(tb testing.TB, live *invariantTenant, event platform.Observation) {
+func addObservation(tb testing.TB, live *invariantTenant, event protocol.Observation) {
 	tb.Helper()
 	event.Tenant = live.ID
 	if event.ID == "" {
 		event.ID = fmt.Sprintf("observation-%d", invariantKeys.Add(1))
 	}
-	if err := live.Log().SaveObservations([]platform.Observation{event}); err != nil {
+	if err := live.Log().SaveObservations([]protocol.Observation{event}); err != nil {
 		tb.Fatal(err)
 	}
 }
 
-func storedObservations(tb testing.TB, live *invariantTenant, query platform.ObservationQuery) platform.ObservationPage {
+func storedObservations(tb testing.TB, live *invariantTenant, query protocol.ObservationQuery) protocol.ObservationPage {
 	tb.Helper()
 	live.FlushObservations()
 	query.Tenant = live.ID
@@ -96,8 +97,8 @@ func TestInvariantObservationTenantIsolation(t *testing.T) {
 	first := newObservationTenant(t, "observation-first")
 	second := newObservationTenant(t, "observation-second")
 	at := invariantClock.Add(-10 * time.Minute)
-	addObservation(t, first, platform.Observation{ID: "first-only", At: at, Level: "info", Source: "app", Member: "builder", Message: "first tenant event"})
-	addObservation(t, second, platform.Observation{ID: "second-only", At: at, Level: "info", Source: "app", Member: "builder", Message: "second tenant event"})
+	addObservation(t, first, protocol.Observation{ID: "first-only", At: at, Level: "info", Source: "app", Member: "builder", Message: "first tenant event"})
+	addObservation(t, second, protocol.Observation{ID: "second-only", At: at, Level: "info", Source: "app", Member: "builder", Message: "second tenant event"})
 	_, handler := observationHost(first.Tenant, second.Tenant)
 	firstPage := decodeObservationPage(t, observationRequest(t, handler, first.ID, observationToken(first.ID, "builder"), "/v1/monitoring/logs", nil))
 	if len(firstPage.Entries) != 1 || firstPage.Entries[0].ID != "first-only" || firstPage.Entries[0].Tenant != first.ID {
@@ -112,8 +113,8 @@ func TestInvariantObservationTenantIsolation(t *testing.T) {
 func TestInvariantObservationMemberScope(t *testing.T) {
 	live := newObservationTenant(t, "observation-members")
 	at := invariantClock.Add(-5 * time.Minute)
-	addObservation(t, live, platform.Observation{ID: "builder-event", At: at, Level: "info", Source: "app", Member: "builder", Message: "builder event"})
-	addObservation(t, live, platform.Observation{ID: "other-event", At: at.Add(time.Second), Level: "info", Source: "app", Member: "other", Message: "other event"})
+	addObservation(t, live, protocol.Observation{ID: "builder-event", At: at, Level: "info", Source: "app", Member: "builder", Message: "builder event"})
+	addObservation(t, live, protocol.Observation{ID: "other-event", At: at.Add(time.Second), Level: "info", Source: "app", Member: "other", Message: "other event"})
 	_, handler := observationHost(live.Tenant)
 	builderPage := decodeObservationPage(t, observationRequest(t, handler, live.ID, observationToken(live.ID, "builder"), "/v1/monitoring/logs", url.Values{"member": {"other"}}))
 	if len(builderPage.Entries) != 1 || builderPage.Entries[0].Member != "builder" {
@@ -134,7 +135,7 @@ func TestInvariantObservationMemberScope(t *testing.T) {
 
 func TestInvariantObservationReadKeepsAcceptedState(t *testing.T) {
 	live := newObservationTenant(t, "observation-state")
-	addObservation(t, live, platform.Observation{ID: "state-event", At: invariantClock.Add(-time.Minute), Level: "info", Source: "app", Member: "builder", Message: "state event"})
+	addObservation(t, live, protocol.Observation{ID: "state-event", At: invariantClock.Add(-time.Minute), Level: "info", Source: "app", Member: "builder", Message: "state event"})
 	entries := append([]Entry{}, live.entries...)
 	records := live.recordImage(t)
 	_, handler := observationHost(live.Tenant)
@@ -151,10 +152,10 @@ func TestInvariantObservationRetentionAndCoverage(t *testing.T) {
 	live := newObservationTenant(t, "observation-retention")
 	live.settings.Set(controlowner.PlatformApp+"/"+controlowner.SettingLogRetention, "1")
 	keptAt := invariantClock.Add(-2 * time.Hour)
-	addObservation(t, live, platform.Observation{ID: "beyond-retention", At: invariantClock.Add(-48 * time.Hour), Level: "info", Source: "app", Message: "expired"})
-	addObservation(t, live, platform.Observation{ID: "retained", At: keptAt, Level: "info", Source: "app", Message: "retained"})
+	addObservation(t, live, protocol.Observation{ID: "beyond-retention", At: invariantClock.Add(-48 * time.Hour), Level: "info", Source: "app", Message: "expired"})
+	addObservation(t, live, protocol.Observation{ID: "retained", At: keptAt, Level: "info", Source: "app", Message: "retained"})
 	live.PurgeObservations(invariantClock)
-	page := storedObservations(t, live, platform.ObservationQuery{From: invariantClock.Add(-96 * time.Hour), To: invariantClock.Add(time.Hour), Limit: 100})
+	page := storedObservations(t, live, protocol.ObservationQuery{From: invariantClock.Add(-96 * time.Hour), To: invariantClock.Add(time.Hour), Limit: 100})
 	if len(page.Entries) != 1 || page.Entries[0].ID != "retained" {
 		t.Fatalf("retention did not remove only the expired event: %+v", page.Entries)
 	}
@@ -162,9 +163,9 @@ func TestInvariantObservationRetentionAndCoverage(t *testing.T) {
 		t.Fatalf("retained-from is %s, want %s", page.Coverage.RetainedFrom, keptAt)
 	}
 	live.settings.Set(controlowner.PlatformApp+"/"+controlowner.SettingLogRetention, "0")
-	live.recordObservation(platform.Observation{ID: "suppressed", At: invariantClock, Level: "info", Source: "app", Message: "suppressed"})
+	live.recordObservation(protocol.Observation{ID: "suppressed", At: invariantClock, Level: "info", Source: "app", Message: "suppressed"})
 	live.PurgeObservations(invariantClock.Add(2 * time.Hour))
-	page = storedObservations(t, live, platform.ObservationQuery{From: invariantClock.Add(-96 * time.Hour), To: invariantClock.Add(3 * time.Hour), Limit: 100})
+	page = storedObservations(t, live, protocol.ObservationQuery{From: invariantClock.Add(-96 * time.Hour), To: invariantClock.Add(3 * time.Hour), Limit: 100})
 	if len(page.Entries) != 1 || page.Entries[0].ID != "retained" {
 		t.Fatalf("zero retention did not keep existing events and suppress new ones: %+v", page.Entries)
 	}
@@ -172,7 +173,7 @@ func TestInvariantObservationRetentionAndCoverage(t *testing.T) {
 
 func TestInvariantObservationReadAudit(t *testing.T) {
 	live := newObservationTenant(t, "observation-audit")
-	addObservation(t, live, platform.Observation{ID: "audit-event", At: invariantClock.Add(-time.Minute), Level: "info", Source: "app", Message: "audit event"})
+	addObservation(t, live, protocol.Observation{ID: "audit-event", At: invariantClock.Add(-time.Minute), Level: "info", Source: "app", Message: "audit event"})
 	before := len(live.Audit())
 	_, handler := observationHost(live.Tenant)
 	response := observationRequest(t, handler, live.ID, observationToken(live.ID, "builder"), "/v1/monitoring/logs", url.Values{"level": {"warn"}, "q": {"private-search"}})
@@ -193,7 +194,7 @@ func TestInvariantObservationReadAudit(t *testing.T) {
 func TestInvariantAuditDoesNotDependOnMemoryRing(t *testing.T) {
 	live := newObservationTenant(t, "audit-persistent")
 	for index := 0; index < 1005; index++ {
-		live.AuditLog.Remember(platform.AuditEntry{
+		live.AuditLog.Remember(protocol.AuditEntry{
 			ID:     fmt.Sprintf("audit-%04d", index),
 			At:     invariantClock.Add(time.Duration(index) * time.Second),
 			Member: "builder", App: build.ID, Action: "build.object.create", Target: fmt.Sprintf("build.object/OBJ-%04d", index),
@@ -202,18 +203,18 @@ func TestInvariantAuditDoesNotDependOnMemoryRing(t *testing.T) {
 	if got := len(live.Audit()); got != 1000 {
 		t.Fatalf("hot audit ring kept %d entries, want its bounded 1000", got)
 	}
-	page, err := live.Log().QueryAuditEntries(platform.AuditQuery{Tenant: live.ID, From: invariantClock, To: invariantClock.Add(2 * time.Hour), Limit: 200})
+	page, err := live.Log().QueryAuditEntries(protocol.AuditQuery{Tenant: live.ID, From: invariantClock, To: invariantClock.Add(2 * time.Hour), Limit: 200})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if !page.HasMore || len(page.Entries) != 200 || page.Entries[0].ID != "audit-1004" {
 		t.Fatalf("durable audit page: %+v", page)
 	}
-	first, err := live.Log().QueryAuditEntries(platform.AuditQuery{Tenant: live.ID, From: invariantClock, To: invariantClock.Add(2 * time.Hour), Limit: 200, Cursor: ""})
+	first, err := live.Log().QueryAuditEntries(protocol.AuditQuery{Tenant: live.ID, From: invariantClock, To: invariantClock.Add(2 * time.Hour), Limit: 200, Cursor: ""})
 	if err != nil {
 		t.Fatal(err)
 	}
-	next, err := live.Log().QueryAuditEntries(platform.AuditQuery{Tenant: live.ID, From: invariantClock, To: invariantClock.Add(2 * time.Hour), Limit: 200, Cursor: first.NextCursor})
+	next, err := live.Log().QueryAuditEntries(protocol.AuditQuery{Tenant: live.ID, From: invariantClock, To: invariantClock.Add(2 * time.Hour), Limit: 200, Cursor: first.NextCursor})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -224,13 +225,13 @@ func TestInvariantAuditDoesNotDependOnMemoryRing(t *testing.T) {
 
 func TestInvariantAuditReadThroughHost(t *testing.T) {
 	live := newObservationTenant(t, "audit-http")
-	live.AuditLog.Remember(platform.AuditEntry{ID: "accepted-a", At: invariantClock.Add(-time.Minute), Member: "builder", App: build.ID, Action: "build.object.create", Target: "build.object/OBJ1"})
+	live.AuditLog.Remember(protocol.AuditEntry{ID: "accepted-a", At: invariantClock.Add(-time.Minute), Member: "builder", App: build.ID, Action: "build.object.create", Target: "build.object/OBJ1"})
 	_, handler := observationHost(live.Tenant)
 	response := observationRequest(t, handler, live.ID, observationToken(live.ID, "admin"), "/v1/audit", url.Values{"limit": {"10"}})
 	if response.Code != http.StatusOK {
 		t.Fatalf("audit: HTTP %d: %s", response.Code, response.Body)
 	}
-	var page platform.AuditPage
+	var page protocol.AuditPage
 	if err := json.Unmarshal(response.Body.Bytes(), &page); err != nil {
 		t.Fatal(err)
 	}
@@ -266,7 +267,7 @@ func TestInvariantObservationRequestCorrelation(t *testing.T) {
 	if _, err := hex.DecodeString(requestID); err != nil {
 		t.Fatalf("request ID is not hexadecimal: %q", requestID)
 	}
-	page := storedObservations(t, live, platform.ObservationQuery{From: invariantClock.Add(-time.Minute), To: invariantClock.Add(time.Minute), RequestID: requestID, Source: "request", Limit: 10})
+	page := storedObservations(t, live, protocol.ObservationQuery{From: invariantClock.Add(-time.Minute), To: invariantClock.Add(time.Minute), RequestID: requestID, Source: "request", Limit: 10})
 	if len(page.Entries) != 1 {
 		t.Fatalf("request observation count is %d", len(page.Entries))
 	}
@@ -283,7 +284,7 @@ func TestInvariantObservationRequestCorrelation(t *testing.T) {
 	noParent.Header.Set(TenantHeader, live.ID)
 	noParentResponse := httptest.NewRecorder()
 	handler.ServeHTTP(noParentResponse, noParent)
-	generated := storedObservations(t, live, platform.ObservationQuery{From: invariantClock.Add(-time.Minute), To: invariantClock.Add(time.Minute), RequestID: noParentResponse.Header().Get("X-Request-Id"), Source: "request", Limit: 10}).Entries
+	generated := storedObservations(t, live, protocol.ObservationQuery{From: invariantClock.Add(-time.Minute), To: invariantClock.Add(time.Minute), RequestID: noParentResponse.Header().Get("X-Request-Id"), Source: "request", Limit: 10}).Entries
 	if len(generated) != 1 || len(generated[0].TraceID) != 32 || len(generated[0].SpanID) != 16 {
 		t.Fatalf("generated trace correlation: %+v", generated)
 	}
@@ -306,7 +307,7 @@ func TestInvariantObservationSubmissionEvidence(t *testing.T) {
 	if response.Code != http.StatusOK {
 		t.Fatalf("submission: HTTP %d: %s", response.Code, response.Body)
 	}
-	accepted := storedObservations(t, live, platform.ObservationQuery{From: invariantClock.Add(-time.Minute), To: invariantClock.Add(time.Minute), RequestID: response.Header().Get("X-Request-Id"), Source: "submit", Limit: 10}).Entries
+	accepted := storedObservations(t, live, protocol.ObservationQuery{From: invariantClock.Add(-time.Minute), To: invariantClock.Add(time.Minute), RequestID: response.Header().Get("X-Request-Id"), Source: "submit", Limit: 10}).Entries
 	if len(accepted) != 1 {
 		t.Fatalf("accepted submission observation count is %d", len(accepted))
 	}
@@ -326,7 +327,7 @@ func TestInvariantObservationSubmissionEvidence(t *testing.T) {
 	if badResponse.Code != http.StatusBadRequest {
 		t.Fatalf("invalid submission: HTTP %d: %s", badResponse.Code, badResponse.Body)
 	}
-	refused := storedObservations(t, live, platform.ObservationQuery{From: invariantClock.Add(-time.Minute), To: invariantClock.Add(time.Minute), RequestID: badResponse.Header().Get("X-Request-Id"), Source: "submit", Limit: 10}).Entries
+	refused := storedObservations(t, live, protocol.ObservationQuery{From: invariantClock.Add(-time.Minute), To: invariantClock.Add(time.Minute), RequestID: badResponse.Header().Get("X-Request-Id"), Source: "submit", Limit: 10}).Entries
 	if len(refused) != 1 || refused[0].Outcome != "refused" || !strings.Contains(refused[0].Attributes["errorCode"], "INVALID_ARGUMENT") {
 		t.Fatalf("refused submission evidence: %+v", refused)
 	}

@@ -3,6 +3,7 @@ package data
 import (
 	"encoding/json"
 	"fmt"
+	runtimeprotocol "platformserver/kernel/protocol"
 	"platformserver/services/ontology"
 
 	"slices"
@@ -13,9 +14,9 @@ import (
 	"platformserver/platform"
 )
 
-const confirmationType = platform.ConfirmationType
+const confirmationType = runtimeprotocol.ConfirmationType
 
-const confirmationAnswer = platform.ConfirmationAnswerSchema
+const confirmationAnswer = runtimeprotocol.ConfirmationAnswerSchema
 
 const confirmationReview = confirmationType + ".review"
 

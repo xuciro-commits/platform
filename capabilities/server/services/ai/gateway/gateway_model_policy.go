@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
+	"platformserver/kernel/protocol"
 	"platformserver/platform"
 	"platformserver/services/ai/gateway/providers"
 	"slices"
@@ -20,7 +21,7 @@ var catalogs = struct {
 
 type cachedCatalog struct {
 	at     time.Time
-	models []platform.CatalogModel
+	models []protocol.CatalogModel
 }
 
 type ProviderCatalog struct {
@@ -33,7 +34,7 @@ type ProviderCatalog struct {
 	Client     func(provider platform.AIProvider) providers.Client
 }
 
-func (c ProviderCatalog) Models(provider string, refresh bool) ([]platform.CatalogModel, *platform.Error, *platform.AIError) {
+func (c ProviderCatalog) Models(provider string, refresh bool) ([]protocol.CatalogModel, *platform.Error, *platform.AIError) {
 	if !c.Available {
 		return nil, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}, nil
 	}
@@ -52,7 +53,7 @@ func (c ProviderCatalog) Models(provider string, refresh bool) ([]platform.Catal
 	return models, nil, failure
 }
 
-func ReadModels(tenant string, pv platform.AIProvider, secret []byte, version int, refresh bool, client providers.Client) ([]platform.CatalogModel, *platform.AIError) {
+func ReadModels(tenant string, pv platform.AIProvider, secret []byte, version int, refresh bool, client providers.Client) ([]protocol.CatalogModel, *platform.AIError) {
 	config, _ := json.Marshal(pv)
 	key := fmt.Sprintf("%s/%x/%d/%x", tenant, sha256.Sum256(config), version, sha256.Sum256(secret))
 	catalogs.Lock()
@@ -65,7 +66,7 @@ func ReadModels(tenant string, pv platform.AIProvider, secret []byte, version in
 	if failure != nil {
 		return nil, failure
 	}
-	models := []platform.CatalogModel{}
+	models := []protocol.CatalogModel{}
 	for _, entry := range entries {
 		model, err := CatalogModel(pv, entry, time.Now().UTC())
 		if err != nil {
@@ -74,13 +75,13 @@ func ReadModels(tenant string, pv platform.AIProvider, secret []byte, version in
 		models = append(models, model)
 	}
 
-	slices.SortFunc(models, func(a, b platform.CatalogModel) int { return strings.Compare(a.ID, b.ID) })
+	slices.SortFunc(models, func(a, b protocol.CatalogModel) int { return strings.Compare(a.ID, b.ID) })
 	catalogs.Lock()
 	catalogs.byKey[key] = cachedCatalog{at: time.Now(), models: models}
 	catalogs.Unlock()
 	return models, nil
 }
-func CatalogModel(pv platform.AIProvider, raw json.RawMessage, at time.Time) (platform.CatalogModel, error) {
+func CatalogModel(pv platform.AIProvider, raw json.RawMessage, at time.Time) (protocol.CatalogModel, error) {
 	var d struct {
 		ID          string `json:"id"`
 		Name        string `json:"name"`
@@ -128,7 +129,7 @@ func CatalogModel(pv platform.AIProvider, raw json.RawMessage, at time.Time) (pl
 		} `json:"architecture"`
 	}
 	if json.Unmarshal(raw, &d) != nil || d.ID == "" {
-		return platform.CatalogModel{}, fmt.Errorf("The provider returned an invalid model")
+		return protocol.CatalogModel{}, fmt.Errorf("The provider returned an invalid model")
 	}
 	c := &platform.ModelCapabilities{Source: pv.BaseURL + "/models", ObservedAt: at, InputTokens: d.Input, OutputTokens: d.Output, ContextTokens: d.Context, Parameters: d.Parameters, InputModalities: d.InputModalities, OutputModalities: d.OutputModalities}
 	if c.ContextTokens == nil {
@@ -189,7 +190,7 @@ func CatalogModel(pv platform.AIProvider, raw json.RawMessage, at time.Time) (pl
 			*limit = nil
 		}
 	}
-	m := platform.CatalogModel{ID: d.ID, Name: d.Name, Capabilities: c}
+	m := protocol.CatalogModel{ID: d.ID, Name: d.Name, Capabilities: c}
 	if m.Name == "" {
 		m.Name = d.DisplayName
 	}
@@ -206,11 +207,11 @@ func CatalogModel(pv platform.AIProvider, raw json.RawMessage, at time.Time) (pl
 func PurposeSetting(purpose string) (string, string) {
 	switch purpose {
 	case "agent":
-		return platform.AgentApp, platform.SettingAgentModel
+		return protocol.AgentApp, protocol.SettingAgentModel
 	case "embedding":
-		return platform.KnowledgeApp, platform.SettingKnowledgeEmbeddingModel
+		return protocol.KnowledgeApp, protocol.SettingKnowledgeEmbeddingModel
 	default:
-		return platform.AIApp, platform.AISettingAppModel
+		return protocol.AIApp, protocol.AISettingAppModel
 	}
 }
 

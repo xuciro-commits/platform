@@ -1,6 +1,7 @@
 package automation
 
 import (
+	"platformserver/kernel/protocol"
 	"platformserver/platform"
 	"slices"
 )
@@ -13,13 +14,13 @@ type AcceptedEventPlanner struct {
 	Listener  func(id string) platform.Listener
 }
 
-func (p AcceptedEventPlanner) Plan(e platform.Event) (platform.AcceptedEventPlan, *platform.Error) {
+func (p AcceptedEventPlanner) Plan(e platform.Event) (protocol.AcceptedEventPlan, *platform.Error) {
 	names := append([]string{e.Record.GetSubmission().GetSchema().GetName()}, p.Routed(e)...)
 	effects, refusal := p.Effects(e, names)
 	if refusal != nil {
-		return platform.AcceptedEventPlan{}, refusal
+		return protocol.AcceptedEventPlan{}, refusal
 	}
-	plan := platform.AcceptedEventPlan{App: e.App, Changed: slices.Clone(e.Changed), Names: names, Effects: effects}
+	plan := protocol.AcceptedEventPlan{App: e.App, Changed: slices.Clone(e.Changed), Names: names, Effects: effects}
 	for _, a := range p.Apps() {
 		if slices.ContainsFunc(a.Manifest().Subscribes, func(x string) bool { return slices.Contains(names, x) }) {
 			plan.Subscribers = append(plan.Subscribers, a.Manifest().ID)

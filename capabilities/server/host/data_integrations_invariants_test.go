@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
+	runtimeprotocol "platformserver/kernel/protocol"
 	"slices"
 	"strings"
 	"testing"
@@ -143,7 +144,7 @@ func TestInvariantK1DataIntegrationsAcceptSettleCompensateAndReplay(t *testing.T
 		{Name: "send", Title: "Send command", EndpointKind: "http", Writeback: "DISPATCH", Idempotent: true, ReceiverDeduplicates: true, Compensate: "undo"},
 		{Name: "undo", Title: "Undo command", EndpointKind: "http", Writeback: "DISPATCH-UNDO", Idempotent: true, ReceiverDeduplicates: true},
 	}
-	object["protocols"] = []platform.ProtocolBinding{{
+	object["protocols"] = []runtimeprotocol.ProtocolBinding{{
 		Name: "recordapi", Version: 1,
 		Actions: map[string]string{"reserve": "reserve", "send": "send"},
 	}}
@@ -196,13 +197,13 @@ func TestInvariantK1DataIntegrationsAcceptSettleCompensateAndReplay(t *testing.T
 	}
 
 	live.accept(t, "build.record.reserve", "build.record", "A", map[string]any{})
-	run, refusal := platform.PendingConfirmations(automation)
+	run, refusal := runtimeprotocol.PendingConfirmations(automation)
 	if refusal != nil || len(run) != 1 || len(run[0].Parties) != 1 || run[0].Parties[0].State != "pending" {
 		t.Fatalf("confirmation was not opened: %+v %v", run, refusal)
 	}
 	confirmation := run[0]
-	answer(platform.ConfirmationAnswerSchema, platform.ConfirmationType, confirmation.ID, "unknown")
-	live.accept(t, platform.ConfirmationType+".review", platform.ConfirmationType, confirmation.ID, map[string]any{
+	answer(runtimeprotocol.ConfirmationAnswerSchema, runtimeprotocol.ConfirmationType, confirmation.ID, "unknown")
+	live.accept(t, runtimeprotocol.ConfirmationType+".review", runtimeprotocol.ConfirmationType, confirmation.ID, map[string]any{
 		"party": "carrier", "outcome": "accepted", "reason": "The provider receipt was reconciled",
 	})
 	confirmation, _ = platform.Get[platform.ConfirmationRun](automation, confirmation.ID)
@@ -211,7 +212,7 @@ func TestInvariantK1DataIntegrationsAcceptSettleCompensateAndReplay(t *testing.T
 	}
 
 	live.accept(t, "build.record.reserve", "build.record", "B", map[string]any{})
-	run, _ = platform.PendingConfirmations(automation)
+	run, _ = runtimeprotocol.PendingConfirmations(automation)
 	var rejected platform.ConfirmationRun
 	for _, candidate := range run {
 		if candidate.Subject == "build.record/B" {
@@ -221,14 +222,14 @@ func TestInvariantK1DataIntegrationsAcceptSettleCompensateAndReplay(t *testing.T
 	if rejected.ID == "" {
 		t.Fatalf("rejected confirmation was not opened: %+v", run)
 	}
-	answer(platform.ConfirmationAnswerSchema, platform.ConfirmationType, rejected.ID, "refused")
+	answer(runtimeprotocol.ConfirmationAnswerSchema, runtimeprotocol.ConfirmationType, rejected.ID, "refused")
 	rejected, _ = platform.Get[platform.ConfirmationRun](automation, rejected.ID)
 	if rejected.State != "partial" || rejected.Parties[0].State != "rejected" {
 		t.Fatalf("confirmation refusal was not retained: %+v", rejected)
 	}
 
 	live.accept(t, "build.record.reserve", "build.record", "C", map[string]any{})
-	run, _ = platform.PendingConfirmations(automation)
+	run, _ = runtimeprotocol.PendingConfirmations(automation)
 	var compensated platform.ConfirmationRun
 	for _, candidate := range run {
 		if candidate.Subject == "build.record/C" {
@@ -238,11 +239,11 @@ func TestInvariantK1DataIntegrationsAcceptSettleCompensateAndReplay(t *testing.T
 	if compensated.ID == "" {
 		t.Fatalf("compensated confirmation was not opened: %+v", run)
 	}
-	answer(platform.ConfirmationAnswerSchema, platform.ConfirmationType, compensated.ID, "accepted")
-	live.accept(t, platform.ConfirmationType+".review", platform.ConfirmationType, compensated.ID, map[string]any{
+	answer(runtimeprotocol.ConfirmationAnswerSchema, runtimeprotocol.ConfirmationType, compensated.ID, "accepted")
+	live.accept(t, runtimeprotocol.ConfirmationType+".review", runtimeprotocol.ConfirmationType, compensated.ID, map[string]any{
 		"party": "carrier", "outcome": "compensate", "reason": "Reverse the confirmed reservation",
 	})
-	submission := live.submission(platform.ConfirmationAnswerSchema, platform.ConfirmationType, compensated.ID, map[string]any{
+	submission := live.submission(runtimeprotocol.ConfirmationAnswerSchema, runtimeprotocol.ConfirmationType, compensated.ID, map[string]any{
 		"tag": "carrier:compensate", "outcome": "accepted", "reason": "The provider reversed the reservation",
 	})
 	submission.PrincipalId = automation.ID
@@ -255,8 +256,8 @@ func TestInvariantK1DataIntegrationsAcceptSettleCompensateAndReplay(t *testing.T
 	}
 
 	live.accept(t, "build.record.send", "build.record", "D", map[string]any{})
-	run, _ = platform.PendingConfirmations(automation)
-	dispatches, refusal := platform.PendingDispatches(automation)
+	run, _ = runtimeprotocol.PendingConfirmations(automation)
+	dispatches, refusal := runtimeprotocol.PendingDispatches(automation)
 	if refusal != nil || len(dispatches) < 1 {
 		t.Fatalf("dispatch was not opened: %+v %v", dispatches, refusal)
 	}
@@ -288,7 +289,7 @@ func TestInvariantK1DataIntegrationsAcceptSettleCompensateAndReplay(t *testing.T
 
 	dispatchFor := func(subject string) platform.DispatchRun {
 		t.Helper()
-		runs, refusal := platform.PendingDispatches(automation)
+		runs, refusal := runtimeprotocol.PendingDispatches(automation)
 		if refusal != nil {
 			t.Fatal(refusal)
 		}
@@ -315,7 +316,7 @@ func TestInvariantK1DataIntegrationsAcceptSettleCompensateAndReplay(t *testing.T
 	retried := dispatchFor("build.record/J")
 	retryFailure := effectFor(build.ID+"/dispatch", retried.Subject)
 	settleEffect(retryFailure, platform.Outcome{Effect: retryFailure.ID, Result: "unknown", Detail: "No delivery answer arrived"}, invariantClock.Add(4*time.Second))
-	live.accept(t, platform.DispatchType+".review", platform.DispatchType, retried.ID, map[string]any{
+	live.accept(t, runtimeprotocol.DispatchType+".review", runtimeprotocol.DispatchType, retried.ID, map[string]any{
 		"outcome": "retry", "reason": "Resend the idempotent command",
 	})
 	retried, _ = platform.Get[platform.DispatchRun](automation, retried.ID)
@@ -343,7 +344,7 @@ func TestInvariantK1DataIntegrationsAcceptSettleCompensateAndReplay(t *testing.T
 	if retargeted.State != "unknown" {
 		t.Fatalf("dispatch unknown outcome was not retained: %+v", retargeted)
 	}
-	live.accept(t, platform.DispatchType+".review", platform.DispatchType, retargeted.ID, map[string]any{
+	live.accept(t, runtimeprotocol.DispatchType+".review", runtimeprotocol.DispatchType, retargeted.ID, map[string]any{
 		"outcome": "retarget", "target": "ALTERNATE", "reason": "The first receiver is unavailable",
 	})
 	retargeted, _ = platform.Get[platform.DispatchRun](automation, retargeted.ID)

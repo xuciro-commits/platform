@@ -1,10 +1,8 @@
 package platform
 
 import (
-	"bytes"
 	"encoding/json"
 	"fmt"
-	"io"
 	"strings"
 	"time"
 )
@@ -67,16 +65,6 @@ func CheckSimulationOrganization(seed *OrgSeed) error {
 		return fmt.Errorf("Synthetic organization exceeds its bounded fixture size")
 	}
 	return nil
-}
-
-func ReadTestPlan(raw []byte) (TestPlanDescriptor, error) {
-	var p TestPlanDescriptor
-	decoder := json.NewDecoder(bytes.NewReader(raw))
-	decoder.DisallowUnknownFields()
-	if len(raw) > 512<<10 || decoder.Decode(&p) != nil || decoder.Decode(new(any)) != io.EOF {
-		return p, fmt.Errorf("invalid test plan descriptor")
-	}
-	return p, p.Check()
 }
 
 func (p TestPlanDescriptor) Dependencies() []AssetRef {

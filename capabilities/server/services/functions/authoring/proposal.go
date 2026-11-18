@@ -21,12 +21,12 @@ type Proposal struct {
 	amendments json.RawMessage
 }
 
-func (o *Owner) PrepareProposal(c platform.Caller, r *pb.ChangeRecord, txn *platform.BusinessTxn, entity platform.Entity, now time.Time) (platform.TransactionProposal, *platform.Error) {
+func (o *Owner) PrepareProposal(c platform.Caller, r *pb.ChangeRecord, txn *platform.BusinessTxn, entity platform.Entity, now time.Time) (protocol.TransactionProposal, *platform.Error) {
 	p, err := o.prepareProposal(c, r, txn, entity, now)
 	if err != nil {
-		return platform.TransactionProposal{}, err
+		return protocol.TransactionProposal{}, err
 	}
-	return platform.TransactionProposal{Apply: p.Apply, Finish: p.Finish}, nil
+	return protocol.TransactionProposal{Apply: p.Apply, Finish: p.Finish}, nil
 }
 
 func (o *Owner) prepareProposal(c platform.Caller, r *pb.ChangeRecord, txn *platform.BusinessTxn, entity platform.Entity, now time.Time) (*Proposal, *platform.Error) {

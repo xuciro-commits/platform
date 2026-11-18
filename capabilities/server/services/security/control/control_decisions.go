@@ -1,6 +1,7 @@
 package control
 
 import (
+	"platformserver/kernel/protocol"
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
@@ -63,7 +64,7 @@ func (s StagedControl) Decide(c platform.Caller, sub *pb.Submission) (func(*pb.C
 	if sub.GetTarget().GetType() == EffectType && sub.GetSchema().GetName() == SchemaEffectDiscard {
 		current := s.Effect(sub.GetTarget().GetId())
 		if current.Endpoint == acceptedformat.OperationEndpoint {
-			if platform.EffectSettled(current.State) {
+			if protocol.EffectSettled(current.State) {
 				return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_NOT_FOUND, ""), true
 			}
 			return func(*pb.ChangeRecord) {

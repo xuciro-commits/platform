@@ -2,6 +2,7 @@ package knowledge
 
 import (
 	"encoding/json"
+	"platformserver/kernel/protocol"
 	knowledgesources "platformserver/services/ai/sources"
 	"reflect"
 	"slices"
@@ -59,7 +60,7 @@ func (c Corpus) Changed(changed map[string]bool) []Source {
 	for ref := range changed {
 		typ, id, _ := strings.Cut(ref, "/")
 		switch typ {
-		case platform.KnowledgeDocumentType:
+		case protocol.KnowledgeDocumentType:
 			if d, known := platform.Get[knowledgesources.Document](c.Documents, id); known && !d.Archived {
 				out = append(out, DocumentSource(d))
 			}
@@ -99,7 +100,7 @@ func (c Corpus) file(f platform.File) (Source, bool) {
 	}
 	typ, id, _ := strings.Cut(f.Target, "/")
 	var apps []string
-	if typ == platform.KnowledgeDocumentType {
+	if typ == protocol.KnowledgeDocumentType {
 		d, known := platform.Get[knowledgesources.Document](c.Documents, id)
 		if !known || d.Archived {
 			return Source{}, false
@@ -118,7 +119,7 @@ func (c Corpus) file(f platform.File) (Source, bool) {
 		return Source{}, false
 	}
 	scope := f.Target
-	if typ == platform.KnowledgeDocumentType {
+	if typ == protocol.KnowledgeDocumentType {
 		scope = ""
 	}
 	return Source{Key: platform.FileType + "/" + f.ID, Title: f.Name, Text: text,
@@ -126,7 +127,7 @@ func (c Corpus) file(f platform.File) (Source, bool) {
 }
 
 func DocumentReadable(row func(typ, id string) (platform.EntityInfo, reflect.Value, bool), document string, reader *platform.Member, app string) bool {
-	id, isDocument := strings.CutPrefix(document, platform.KnowledgeDocumentType+"/")
+	id, isDocument := strings.CutPrefix(document, protocol.KnowledgeDocumentType+"/")
 	if !isDocument {
 		fileID, fileSource := strings.CutPrefix(document, platform.FileType+"/")
 		if !fileSource {
@@ -140,11 +141,11 @@ func DocumentReadable(row func(typ, id string) (platform.EntityInfo, reflect.Val
 		if file.Archived {
 			return false
 		}
-		if id, isDocument = strings.CutPrefix(file.Target, platform.KnowledgeDocumentType+"/"); !isDocument {
+		if id, isDocument = strings.CutPrefix(file.Target, protocol.KnowledgeDocumentType+"/"); !isDocument {
 			return false
 		}
 	}
-	_, v, ok := row(platform.KnowledgeDocumentType, id)
+	_, v, ok := row(protocol.KnowledgeDocumentType, id)
 	if !ok {
 		return false
 	}

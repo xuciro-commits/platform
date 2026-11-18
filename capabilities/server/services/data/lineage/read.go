@@ -1,6 +1,7 @@
 package lineage
 
 import (
+	"platformserver/kernel/protocol"
 	"platformserver/services/ontology"
 	"slices"
 	"strconv"
@@ -220,7 +221,7 @@ func (r Reader) access(m platform.Member, base map[string]Meta) (map[string]Meta
 				project = entry.Project
 			}
 			role := r.host.ResourceRole(m, project)
-			allowed = role != "" && role != platform.ProjectDiscovererRole
+			allowed = role != "" && role != protocol.ProjectDiscovererRole
 		} else if build.ProjectDelegated(m) {
 			typ, id := lineageNodeType(node)
 			if typ != "" && typ != build.ObjectType {

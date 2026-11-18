@@ -314,7 +314,7 @@ type CompileHooks struct {
 	Read    func(m platform.Member, id string, now time.Time) (Branch, *platform.Error)
 	Main    func(m platform.Member, typ, draft string, now time.Time) (MainDraft, *platform.Error)
 	Project func(m platform.Member, typ, draft string, now time.Time) (MainDraft, string, *platform.Error)
-	Build   func(ctx context.Context, request platform.CodeBuildRequest) (platform.CodeBuildResult, error)
+	Build   func(ctx context.Context, request platform.CodeBuildRequest) (protocol.CodeBuildResult, error)
 	Append  func(m platform.Member, plan SavePlan, typ, draft string, now time.Time) (BranchDetail, *platform.Error)
 }
 

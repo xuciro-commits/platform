@@ -24,7 +24,7 @@ const (
 	toolNameLimit    = 64
 )
 
-func (a *Agents) Compiled(run platform.AgentRunRecord, d *protocol.CompiledAgent) *protocol.CompiledAgent {
+func (a *Agents) Compiled(run protocol.AgentRunRecord, d *protocol.CompiledAgent) *protocol.CompiledAgent {
 	if d == nil {
 		return nil
 	}
@@ -42,7 +42,7 @@ func (a *Agents) Compiled(run platform.AgentRunRecord, d *protocol.CompiledAgent
 	return &out
 }
 
-func (a *Agents) tool(run platform.AgentRunRecord, d *protocol.CompiledAgent, name string) (protocol.CompiledAgentTool, bool) {
+func (a *Agents) tool(run protocol.AgentRunRecord, d *protocol.CompiledAgent, name string) (protocol.CompiledAgentTool, bool) {
 	if tool, ok := d.Toolset[name]; ok {
 		return tool, true
 	}
@@ -50,7 +50,7 @@ func (a *Agents) tool(run platform.AgentRunRecord, d *protocol.CompiledAgent, na
 	return tool, ok
 }
 
-func (a *Agents) derived(run platform.AgentRunRecord, d *protocol.CompiledAgent) map[string]protocol.CompiledAgentTool {
+func (a *Agents) derived(run protocol.AgentRunRecord, d *protocol.CompiledAgent) map[string]protocol.CompiledAgentTool {
 	reader := a.readsAs(run)
 	if reader == nil {
 		return nil
@@ -199,10 +199,10 @@ func functionTool(f platform.AgentFunction) protocol.CompiledAgentTool {
 			Properties:  properties, Required: required}}
 }
 
-func (a *Agents) objects(run platform.AgentRunRecord, tool protocol.CompiledAgentTool, args map[string]any, now time.Time) (platform.AgentObservation, *platform.Error) {
+func (a *Agents) objects(run protocol.AgentRunRecord, tool protocol.CompiledAgentTool, args map[string]any, now time.Time) (protocol.AgentObservation, *platform.Error) {
 	reader := a.readsAs(run)
 	if reader == nil {
-		return platform.AgentObservation{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "A read needs a reader")
+		return protocol.AgentObservation{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "A read needs a reader")
 	}
 	op, raw := ObjectRequest(tool, args)
 	return a.host.AgentObjects(*reader, op, raw, now)

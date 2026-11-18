@@ -5,6 +5,7 @@ import automation "platformserver/services/automate/runtime"
 import (
 	"context"
 	"encoding/json"
+	"platformserver/kernel/protocol"
 	"platformserver/services/functions/runtime"
 	"platformserver/services/objects"
 	"platformserver/services/resources/monitoring"
@@ -20,23 +21,23 @@ import (
 	"time"
 )
 
-func (t *Tenant) Applications(m platform.Member) []platform.ApplicationView {
+func (t *Tenant) Applications(m platform.Member) []protocol.ApplicationView {
 	return appowner.Applications(t.Definitions(m))
 }
-func (t *Tenant) PageView(m platform.Member, app, owner, page string) (platform.PageView, *platform.Error) {
+func (t *Tenant) PageView(m platform.Member, app, owner, page string) (protocol.PageView, *platform.Error) {
 	return appowner.PageView(t.Definitions(m), t.Entities(m), t.Catalog(m), app, owner, page)
 }
-func (t *Tenant) ApplicationRuns(m platform.Member, ref platform.AssetRef, offset, limit int, now time.Time, filters ...platform.ApplicationRunFilter) (platform.ApplicationRunPage, *platform.Error) {
-	return recordRead(t, context.Background(), func(t *Tenant) (platform.ApplicationRunPage, *platform.Error) {
+func (t *Tenant) ApplicationRuns(m platform.Member, ref platform.AssetRef, offset, limit int, now time.Time, filters ...protocol.ApplicationRunFilter) (protocol.ApplicationRunPage, *platform.Error) {
+	return recordRead(t, context.Background(), func(t *Tenant) (protocol.ApplicationRunPage, *platform.Error) {
 		return t.applicationContext().ScopedRuns(m, ref, offset, limit, now, filters...)
 	})
 }
 
-func (t *Tenant) ApplicationRuntimeOf(m platform.Member, ref platform.AssetRef, now time.Time) (platform.ApplicationRuntime, *platform.Error) {
+func (t *Tenant) ApplicationRuntimeOf(m platform.Member, ref platform.AssetRef, now time.Time) (protocol.ApplicationRuntime, *platform.Error) {
 	if t.quarantined() {
 		return t.applicationContext().Runtime(m, ref, now)
 	}
-	return recordRead(t, context.Background(), func(t *Tenant) (platform.ApplicationRuntime, *platform.Error) {
+	return recordRead(t, context.Background(), func(t *Tenant) (protocol.ApplicationRuntime, *platform.Error) {
 		return t.applicationContext().Runtime(m, ref, now)
 	})
 }
@@ -46,8 +47,8 @@ func (t *Tenant) bindApplications(resource platform.AssetRef, release, dependenc
 func (h hostView) ApplicationBindings(resource platform.AssetRef, release, dependencies string) ([]platform.AssetBinding, error) {
 	return h.t.bindApplications(resource, release, dependencies)
 }
-func (t *Tenant) ApplicationRecordDiagnostic(m platform.Member, ref platform.AssetRef, typ, id string, now time.Time) (platform.ApplicationDiagnostic, *platform.Error) {
-	return recordRead(t, context.Background(), func(t *Tenant) (platform.ApplicationDiagnostic, *platform.Error) {
+func (t *Tenant) ApplicationRecordDiagnostic(m platform.Member, ref platform.AssetRef, typ, id string, now time.Time) (protocol.ApplicationDiagnostic, *platform.Error) {
+	return recordRead(t, context.Background(), func(t *Tenant) (protocol.ApplicationDiagnostic, *platform.Error) {
 		return t.applicationContext().RecordDiagnostic(m, ref, typ, id, now)
 	})
 }
@@ -109,11 +110,11 @@ func (t *Tenant) applicationContext() appowner.Context {
 		RefreshRunIndex: func(key string, now time.Time, rebuild func() bool) {
 			t.runIndex.Refresh(key, now, func() ([]monitoring.MonitoringCoverage, bool) { return nil, rebuild() })
 		},
-		ReplaceRunIndex: func(key string, entries []platform.RunIndexEntry) error {
+		ReplaceRunIndex: func(key string, entries []protocol.RunIndexEntry) error {
 			return t.Log().ReplaceRunIndex(t.ID, key, entries)
 		},
-		QueryRunIndex: func(scope string) ([]platform.RunIndexEntry, error) {
-			indexed, err := t.Log().QueryRunIndex(platform.RunIndexQuery{Tenant: t.ID, Scope: scope, Offset: 0, Limit: 1000})
+		QueryRunIndex: func(scope string) ([]protocol.RunIndexEntry, error) {
+			indexed, err := t.Log().QueryRunIndex(protocol.RunIndexQuery{Tenant: t.ID, Scope: scope, Offset: 0, Limit: 1000})
 			return indexed.Entries, err
 		},
 		RuntimeOf: t.ApplicationRuntimeOf,

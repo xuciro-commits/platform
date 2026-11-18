@@ -2,6 +2,7 @@ package build
 
 import (
 	"encoding/json"
+	"platformserver/kernel/protocol"
 	"platformserver/services/ontology"
 	"slices"
 	"strings"
@@ -50,10 +51,10 @@ var interfaceKind = resourceKind[ontology.InterfaceRecord, ontology.InterfaceDef
 	stable:          func(a, b ontology.InterfaceRecord) bool { return a.KeepsPublishedFields(b) },
 	guarantees:      func(a, b ontology.InterfaceRecord) bool { return a.KeepsPublishedFields(b) },
 	fromDeclaration: ontology.InterfaceRecordFromDeclaration,
-	install: func(h platform.BuildHost, c platform.Caller, i ontology.InterfaceDefinition, version int) error {
+	install: func(h protocol.BuildHost, c platform.Caller, i ontology.InterfaceDefinition, version int) error {
 		return h.InstallInterface(c, platform.Interface(i), version)
 	},
-	validateInstall: func(h platform.BuildHost, i ontology.InterfaceDefinition) error {
+	validateInstall: func(h protocol.BuildHost, i ontology.InterfaceDefinition) error {
 		return h.ValidateInstallInterface(platform.Interface(i))
 	},
 }

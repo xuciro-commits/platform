@@ -3,6 +3,7 @@ package control
 import (
 	"encoding/json"
 	"fmt"
+	"platformserver/kernel/protocol"
 	"slices"
 	"strings"
 	"time"
@@ -11,7 +12,7 @@ import (
 	"platformserver/platform"
 )
 
-var requestableProjectRoles = []string{platform.ProjectViewerRole, platform.ProjectEditorRole, platform.ProjectDiscovererRole}
+var requestableProjectRoles = []string{protocol.ProjectViewerRole, protocol.ProjectEditorRole, protocol.ProjectDiscovererRole}
 
 const (
 	AccessRequestType    = "platform.access-request"
@@ -66,7 +67,7 @@ func AccessRequestActions() []platform.Action {
 func (d *Console) AccessRequests(c platform.Caller) []AccessRequest {
 	d.mu.Lock()
 	defer d.mu.Unlock()
-	all := c.Holds(PlatformApp, Admin) || c.Holds(PlatformApp, platform.Auditor)
+	all := c.Holds(PlatformApp, Admin) || c.Holds(PlatformApp, protocol.Auditor)
 	out := []AccessRequest{}
 	for _, request := range d.accessRequests {
 		canDecide := request.State == "pending" && request.Requester != c.ID && slices.Contains(d.accessApprovers(request), c.ID)
@@ -249,7 +250,7 @@ func (d *Console) prepareAccessGrant(c platform.Caller, request *AccessRequest) 
 			ids = append(ids, member)
 		}
 		s := &pb.Submission{TenantId: c.Tenant, PrincipalId: c.ID, Authority: PlatformApp, IdempotencyKey: "access-grant:" + request.ID,
-			Target: &pb.EntityRef{Type: platform.ProjectType, Id: request.Project}, Schema: &pb.SchemaRef{Name: platform.SchemaProjectSave, Version: 1}, Payload: payload}
+			Target: &pb.EntityRef{Type: protocol.ProjectType, Id: request.Project}, Schema: &pb.SchemaRef{Name: protocol.SchemaProjectSave, Version: 1}, Payload: payload}
 		return d.ConsolePolicies.PrepareProject(c, s, ids)
 	case "role":
 		if request.Requester == "" || d.members[request.Requester] == nil || !d.members[request.Requester].Active() {
@@ -299,7 +300,7 @@ func (d *Console) projectApprovers(project, requester string) []string {
 			continue
 		}
 		for _, member := range item.Members {
-			if member.Role == platform.ProjectOwnerRole && member.Member != requester && d.activeMember(member.Member) {
+			if member.Role == protocol.ProjectOwnerRole && member.Member != requester && d.activeMember(member.Member) {
 				out = append(out, member.Member)
 			}
 		}
@@ -360,13 +361,13 @@ func accessRequestTarget(request AccessRequest) string {
 
 func projectRoleRank(role string) int {
 	switch role {
-	case platform.ProjectOwnerRole:
+	case protocol.ProjectOwnerRole:
 		return 4
-	case platform.ProjectEditorRole:
+	case protocol.ProjectEditorRole:
 		return 3
-	case platform.ProjectViewerRole:
+	case protocol.ProjectViewerRole:
 		return 2
-	case platform.ProjectDiscovererRole:
+	case protocol.ProjectDiscovererRole:
 		return 1
 	default:
 		return 0

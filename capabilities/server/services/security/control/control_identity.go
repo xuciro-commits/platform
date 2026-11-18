@@ -132,11 +132,11 @@ func (d *Console) MemberCount() int { d.mu.Lock(); defer d.mu.Unlock(); return l
 
 func (d *Console) NewSimulationIdentity(tenant string, members []platform.Member) platform.App {
 	members = append(slices.Clone(members), CandidateTestMember(tenant))
-	seats := make([]platform.Seat, 0, len(members))
+	seats := make([]runtimeprotocol.Seat, 0, len(members))
 	for _, member := range members {
 		member.Tenant = tenant
 		member.Roles = maps.Clone(member.Roles)
-		seats = append(seats, platform.Seat{Subjects: []string{member.ID}, Member: member})
+		seats = append(seats, runtimeprotocol.Seat{Subjects: []string{member.ID}, Member: member})
 	}
 	return NewConsole(tenant, d.authorities, d.newOwners, seats...)
 }
@@ -165,7 +165,7 @@ func (d *Console) UnitGrantUsage(unit, until string) []platform.UnitGrantUsage {
 	d.mu.Unlock()
 	for _, record := range d.ledger.RecordsFor(d.tenant) {
 		submission := record.GetSubmission()
-		if submission.GetSchema().GetName() == platform.SchemaTeamSave {
+		if submission.GetSchema().GetName() == runtimeprotocol.SchemaTeamSave {
 			var team platform.Team
 			if json.Unmarshal(submission.GetPayload(), &team) == nil && slices.ContainsFunc(team.Grants, func(grant platform.Grant) bool { return grant.Unit == unit }) {
 				id := "team:" + submission.GetTarget().GetId()
@@ -268,9 +268,9 @@ func tenantSettings() []platform.Setting {
 	}
 }
 
-func (d *Console) TenantRecord() platform.TenantRecord {
+func (d *Console) TenantRecord() runtimeprotocol.TenantRecord {
 	h := d.host
-	out := platform.TenantRecord{ID: d.tenant, Settings: map[string]string{}, Apps: []string{}, Status: "active"}
+	out := runtimeprotocol.TenantRecord{ID: d.tenant, Settings: map[string]string{}, Apps: []string{}, Status: "active"}
 	if h == nil {
 		return out
 	}
@@ -308,8 +308,8 @@ func (d *Console) defaults() defaults {
 	return out
 }
 
-func (d *Console) account(member string, def defaults) platform.Account {
-	out := platform.Account{Profile: platform.Profile{Member: member}}
+func (d *Console) account(member string, def defaults) runtimeprotocol.Account {
+	out := runtimeprotocol.Account{Profile: runtimeprotocol.Profile{Member: member}}
 	if m := d.members[member]; m != nil {
 		out.Language = m.Language
 	}
@@ -345,7 +345,7 @@ func (d *Console) account(member string, def defaults) platform.Account {
 	return out
 }
 
-func (d *Console) Account(member string) platform.Account {
+func (d *Console) Account(member string) runtimeprotocol.Account {
 	def := d.defaults()
 	d.mu.Lock()
 	defer d.mu.Unlock()
@@ -373,7 +373,7 @@ func (d *Console) decideProfile(c platform.Caller, s *pb.Submission) (func(*pb.C
 	if json.Unmarshal(s.GetPayload(), &fields) != nil {
 		return nil, invalid
 	}
-	var p platform.Profile
+	var p runtimeprotocol.Profile
 	if json.Unmarshal(s.GetPayload(), &p) != nil {
 		return nil, invalid
 	}
@@ -397,7 +397,7 @@ func (d *Console) decideProfile(c platform.Caller, s *pb.Submission) (func(*pb.C
 	return func(*pb.ChangeRecord) {
 		cur := d.profiles[id]
 		if cur == nil {
-			cur = &platform.Profile{Member: id, Language: d.members[id].Language}
+			cur = &runtimeprotocol.Profile{Member: id, Language: d.members[id].Language}
 			d.profiles[id] = cur
 		}
 		set := func(name string, dst *string, v string) {
@@ -467,9 +467,9 @@ func (d *Console) rememberSeen(key string, now time.Time) {
 	d.lastSeen[key] = now
 }
 
-func (d *Console) Reach(member string) platform.Reach {
+func (d *Console) Reach(member string) runtimeprotocol.Reach {
 	a := d.Account(member)
-	out := platform.Reach{InApp: true, Mail: true, Address: a.Effective.Email, Language: d.Language(member), Digest: a.Effective.Digest,
+	out := runtimeprotocol.Reach{InApp: true, Mail: true, Address: a.Effective.Email, Language: d.Language(member), Digest: a.Effective.Digest,
 		QuietFrom: a.QuietFrom, QuietTo: a.QuietTo, Location: d.Location(member)}
 	if a.InApp != nil {
 		out.InApp = *a.InApp
@@ -504,8 +504,8 @@ func (d *Console) decideDelegate(c platform.Caller, s *pb.Submission) (func(*pb.
 	}, nil
 }
 
-func (d *Console) ProjectAccess(m platform.Member, project string) platform.ProjectAccessView {
-	out := platform.ProjectAccessView{Members: []platform.ProjectMember{}, Manage: platform.ProjectManager(m, d.ConsolePolicies.ProjectRole(m.ID, project))}
+func (d *Console) ProjectAccess(m platform.Member, project string) runtimeprotocol.ProjectAccessView {
+	out := runtimeprotocol.ProjectAccessView{Members: []platform.ProjectMember{}, Manage: runtimeprotocol.ProjectManager(m, d.ConsolePolicies.ProjectRole(m.ID, project))}
 	for _, p := range d.ConsolePolicies.ProjectViews() {
 		if p.ID == project && !p.Archived {
 			out.Members = slices.Clone(p.Members)
@@ -531,13 +531,13 @@ func (d *Console) ProjectAccess(m platform.Member, project string) platform.Proj
 		if name == "" {
 			name = member.ID
 		}
-		out.People = append(out.People, platform.ProjectPerson{ID: member.ID, Name: name})
+		out.People = append(out.People, runtimeprotocol.ProjectPerson{ID: member.ID, Name: name})
 	}
-	slices.SortFunc(out.People, func(a, b platform.ProjectPerson) int { return strings.Compare(a.Name, b.Name) })
+	slices.SortFunc(out.People, func(a, b runtimeprotocol.ProjectPerson) int { return strings.Compare(a.Name, b.Name) })
 	return out
 }
 
-func JoinSubmission(d platform.IdentitySessions, tenant, subject string, principal func() string) (*pb.Submission, *platform.Error) {
+func JoinSubmission(d runtimeprotocol.IdentitySessions, tenant, subject string, principal func() string) (*pb.Submission, *platform.Error) {
 	if _, known := d.MemberBySubject(subject); known {
 		return nil, nil
 	}

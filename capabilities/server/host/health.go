@@ -3,6 +3,7 @@ package host
 import (
 	"context"
 	runtimekernel "platformserver/kernel"
+	"platformserver/kernel/protocol"
 	"platformserver/platform"
 	"platformserver/services/actions"
 	"platformserver/services/resources/monitoring"
@@ -53,7 +54,7 @@ func (t *Tenant) healthState(now time.Time) monitoring.Health {
 			return fault.Reason, true
 		},
 		Dropped:    t.ObservationBuffer.Dropped,
-		Breakers:   func() []platform.Breaker { return t.Breakers(now) },
+		Breakers:   func() []protocol.Breaker { return t.Breakers(now) },
 		Queues:     func() ([]monitoring.QueueHealth, int) { return t.queueHealth(now) },
 		Connectors: func() int { return t.ConnectorRoster.Failing(now) },
 		Endpoints:  func() int { return actions.FailingEndpoints(t.Endpoints()) },
@@ -75,7 +76,7 @@ func (t *Tenant) finishHealth(h *monitoring.Health, now time.Time) {
 		journalDetail = "in-memory test store"
 	}
 	h.Complete(func() (time.Time, bool) {
-		page, err := t.Log().QueryObservations(platform.ObservationQuery{Tenant: t.ID, To: now, Limit: 1})
+		page, err := t.Log().QueryObservations(protocol.ObservationQuery{Tenant: t.ID, To: now, Limit: 1})
 		return page.Coverage.RetainedFrom, err == nil
 	}, t.Log() != nil, journalDetail, !t.businessStopped())
 }
@@ -97,4 +98,4 @@ func (t *Tenant) queueHealth(now time.Time) ([]monitoring.QueueHealth, int) {
 	return queues, t.work.FailedCount()
 }
 
-func (t *Tenant) Breakers(now time.Time) []platform.Breaker { return t.breakers.View(now) }
+func (t *Tenant) Breakers(now time.Time) []protocol.Breaker { return t.breakers.View(now) }

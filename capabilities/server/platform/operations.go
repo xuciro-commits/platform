@@ -1,7 +1,6 @@
 package platform
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
@@ -12,36 +11,12 @@ import (
 	"time"
 )
 
-type CapabilityInvocation struct {
-	Ref              AssetRef           `json:"ref"`
-	Key              string             `json:"key"`
-	Inputs           json.RawMessage    `json:"inputs"`
-	Target           string             `json:"target,omitempty"`
-	Version          int                `json:"version,omitempty"`
-	ExpectedRevision *uint32            `json:"expectedRevision,omitempty"`
-	Sources          []string           `json:"sources,omitempty"`
-	Record           string             `json:"record,omitempty"`
-	Bindings         map[string]Binding `json:"bindings,omitempty"`
-}
-
-type CapabilityResult struct {
-	Issues []FieldIssue    `json:"issues,omitempty"`
-	Ref    AssetRef        `json:"ref"`
-	State  string          `json:"state"`
-	Call   string          `json:"call,omitempty"`
-	Result json.RawMessage `json:"result,omitempty"`
-}
-
 const WasmCommandABI = "platform-wasip1-json/v1"
 const WasmDataABI = "platform-wasip1-data/v2"
 
 type ValueSchema = values.ValueSchema
 
 func DecodeValue(raw []byte, limit int) (any, error) { return values.Decode(raw, limit) }
-
-func ValidateRecordJSON(raw []byte) error {
-	return values.ValidateRecord(raw, 2*ExprMaxDepth+16)
-}
 
 type OperationBinding struct {
 	Kind   string `json:"kind"`
@@ -111,9 +86,6 @@ func (o Operation) Check() error {
 	return nil
 }
 
-type OperationExecutor interface {
-	Compute(context.Context, string, json.RawMessage) (json.RawMessage, error)
-}
 type OperationRequest struct {
 	App      string          `json:"app,omitempty"`
 	Name     string          `json:"name"`
@@ -179,13 +151,6 @@ type CodeBuildRequest struct {
 	Source   string      `json:"source"`
 	Input    ValueSchema `json:"input"`
 	Output   ValueSchema `json:"output"`
-}
-type CodeBuildResult struct {
-	Module      string `json:"module,omitempty"`
-	SourceHash  string `json:"sourceHash"`
-	BuildHash   string `json:"buildHash"`
-	Toolchain   string `json:"toolchain"`
-	Diagnostics string `json:"diagnostics,omitempty"`
 }
 
 func (c Caller) RequestCompilation(r *pb.ChangeRecord, key, target string, q CodeBuildRequest) (OperationCall, *Error) {
@@ -263,56 +228,4 @@ func (c Caller) Notify(n Notification, now time.Time, to ...Recipient) []string 
 		return nil
 	}
 	return c.rt.Notify(c, n, now, to)
-}
-
-type WasmRequest struct {
-	ABI    string          `json:"abi,omitempty"`
-	Data   *WasmDataInput  `json:"data,omitempty"`
-	Module []byte          `json:"module"`
-	Digest string          `json:"digest"`
-	Input  json.RawMessage `json:"input,omitempty"`
-	Limits OperationLimits `json:"limits"`
-}
-
-type WasmDataInput struct {
-	Tenant string `json:"tenant"`
-	Call   string `json:"call"`
-	Digest string `json:"digest"`
-	Bytes  []byte `json:"bytes"`
-}
-
-type WasmResponse struct {
-	Output            json.RawMessage `json:"output,omitempty"`
-	Error             string          `json:"error,omitempty"`
-	InstantiateMicros int64           `json:"instantiateMicros"`
-	ExecuteMicros     int64           `json:"executeMicros"`
-}
-
-type WasmWorker interface {
-	Execute(context.Context, WasmRequest) (WasmResponse, error)
-}
-
-type CodeCompiler interface {
-	Compile(context.Context, CodeBuildRequest) (CodeBuildResult, []byte, error)
-}
-
-type ComputeSDKRequest struct {
-	ABI    string      `json:"abi,omitempty"`
-	Input  ValueSchema `json:"input"`
-	Output ValueSchema `json:"output"`
-}
-
-type ComputeSDK struct {
-	Source string `json:"source"`
-}
-
-type OperationInputArtifact struct {
-	Tenant     string `json:"tenant"`
-	Call       string `json:"call"`
-	Member     string `json:"member"`
-	Definition string `json:"definition"`
-	InputHash  string `json:"inputHash"`
-	Ticket     string `json:"ticket"`
-	Digest     string `json:"digest"`
-	Size       int    `json:"size"`
 }

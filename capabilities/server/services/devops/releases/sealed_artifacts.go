@@ -4,6 +4,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
+	"platformserver/kernel/protocol"
 	"platformserver/platform"
 	"platformserver/services/resources/publication"
 
@@ -44,7 +45,7 @@ func FindSealed(sealed map[string]platform.SealedArtifact, candidate string) (pl
 	return platform.SealedArtifact{}, false
 }
 
-func MissingAssetHost(candidate platform.ReleaseCandidate, tenant string, hasApp func(string) bool) error {
+func MissingAssetHost(candidate protocol.ReleaseCandidate, tenant string, hasApp func(string) bool) error {
 	for _, asset := range candidate.Assets {
 		if !hasApp(asset.Ref.App) {
 			return fmt.Errorf("%s does not host %s, which %s belongs to", tenant, asset.Ref.App, asset.Ref.Name)

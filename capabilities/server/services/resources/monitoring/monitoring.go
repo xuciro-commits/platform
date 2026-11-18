@@ -3,6 +3,7 @@ package monitoring
 import (
 	"encoding/json"
 	"net/url"
+	"platformserver/kernel/protocol"
 	"slices"
 	"strings"
 	"time"
@@ -13,13 +14,13 @@ import (
 
 const (
 	ID               = "monitoring"
-	ViewType         = platform.MonitoringViewType
+	ViewType         = protocol.MonitoringViewType
 	SchemaViewSave   = "monitoring.view.save"
 	SchemaViewRemove = "monitoring.view.remove"
 	ReadViews        = "monitoring-views"
 )
 
-type SavedView = platform.MonitoringView
+type SavedView = protocol.MonitoringView
 
 type Monitoring struct {
 	ledger platform.Authority

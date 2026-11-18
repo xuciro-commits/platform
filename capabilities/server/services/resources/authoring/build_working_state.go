@@ -4,6 +4,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"platformserver/kernel/protocol"
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
@@ -23,7 +24,7 @@ type WorkingState struct {
 	Base     json.RawMessage         `json:"base,omitempty" field:"readonly" type:"json"`
 	Spec     json.RawMessage         `json:"spec" field:"readonly" type:"json"`
 	Inputs   json.RawMessage         `json:"inputs,omitempty" field:"readonly" type:"json"`
-	Edit     *platform.CompositeEdit `json:"edit,omitempty" field:"readonly" type:"json"`
+	Edit     *protocol.CompositeEdit `json:"edit,omitempty" field:"readonly" type:"json"`
 	Problems []string                `json:"problems,omitempty" field:"readonly"`
 }
 

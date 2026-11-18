@@ -78,7 +78,7 @@ type Tenant struct {
 	includeArchivedDefinitions bool
 }
 
-func (t *Tenant) Audit() []platform.AuditEntry { return t.AuditLog.All() }
+func (t *Tenant) Audit() []runtimeprotocol.AuditEntry { return t.AuditLog.All() }
 
 func NewTenantWithCapabilities(id string, services runtimeprotocol.RuntimeCapabilities, apps ...platform.App) (*Tenant, error) {
 	if services.BindOwner == nil {
@@ -128,7 +128,7 @@ func NewTenantWithCapabilities(id string, services runtimeprotocol.RuntimeCapabi
 			return nil, fmt.Errorf("tenant %s: %s: %v", id, m.ID, err)
 		}
 		for _, j := range m.Jobs {
-			t.work.AddJob(&automation.Task{ScheduledTask: platform.ScheduledTask{ID: "job:" + m.ID + "/" + j.Name, Kind: "job", App: m.ID, Title: j.Title, State: "scheduled"}, Job: j})
+			t.work.AddJob(&automation.Task{ScheduledTask: runtimeprotocol.ScheduledTask{ID: "job:" + m.ID + "/" + j.Name, Kind: "job", App: m.ID, Title: j.Title, State: "scheduled"}, Job: j})
 		}
 		if err := runtimekernel.ClaimNames(t.owner, id, m); err != nil {
 			return nil, err
@@ -153,7 +153,7 @@ func NewTenantWithCapabilities(id string, services runtimeprotocol.RuntimeCapabi
 		for _, et := range t.Projection.SortedTypes() {
 			infos[et.Info().Type] = et.Info()
 		}
-		if err := platform.CheckInterfaceRegistry((hostView{t: t}).Interfaces(), infos); err != nil {
+		if err := runtimeprotocol.CheckInterfaceRegistry((hostView{t: t}).Interfaces(), infos); err != nil {
 			return nil, fmt.Errorf("tenant %s: %v", id, err)
 		}
 	}

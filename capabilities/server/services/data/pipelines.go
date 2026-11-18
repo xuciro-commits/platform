@@ -3,6 +3,7 @@ package data
 import (
 	"encoding/json"
 	"fmt"
+	"platformserver/kernel/protocol"
 	"regexp"
 	"slices"
 	"strings"
@@ -218,7 +219,7 @@ func (o *Owner) checkPipeline(c platform.Caller, p Pipeline) *platform.Error {
 	return nil
 }
 
-func checkStep(c platform.Caller, s platform.TransformStep) error {
+func checkStep(c platform.Caller, s protocol.TransformStep) error {
 	need := func(ok bool, what string) error {
 		if !ok {
 			return fmt.Errorf("needs %s", what)
@@ -332,7 +333,7 @@ func (o *Owner) inputMarking(c platform.Caller, p Pipeline) (string, error) {
 			if err != nil {
 				return "", err
 			}
-			marking = platform.HigherMarking(marking, fixed.Marking)
+			marking = protocol.HigherMarking(marking, fixed.Marking)
 		}
 	}
 	return marking, nil
@@ -348,8 +349,8 @@ type Pipeline struct {
 	Name              string                          `json:"name" field:"required,search"`
 	Title             string                          `json:"title" field:"required,search"`
 	Input             string                          `json:"input" field:"required" ref:"build.dataset"`
-	Steps             []platform.TransformStep        `json:"steps" type:"json"`
-	Expectations      []platform.TransformExpectation `json:"expectations,omitempty" type:"json"`
+	Steps             []protocol.TransformStep        `json:"steps" type:"json"`
+	Expectations      []protocol.TransformExpectation `json:"expectations,omitempty" type:"json"`
 	OutputDataset     string                          `json:"outputDataset,omitempty" ref:"build.dataset" title:"Output dataset"`
 	OutputObject      string                          `json:"outputObject,omitempty" title:"Output object"`
 	Key               string                          `json:"key,omitempty" title:"Record id column"`
@@ -383,7 +384,7 @@ type PipelineRun struct {
 	Quarantined       int                       `json:"quarantined"`
 	Failed            int                       `json:"failed"`
 	Error             string                    `json:"error,omitempty"`
-	Quarantine        []platform.QuarantinedRow `json:"quarantine,omitempty"`
+	Quarantine        []protocol.QuarantinedRow `json:"quarantine,omitempty"`
 	Failures          []SourceFailure           `json:"failures,omitempty"`
 	Output            int                       `json:"outputVersion,omitempty"`
 }

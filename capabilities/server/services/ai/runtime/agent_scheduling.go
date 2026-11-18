@@ -16,7 +16,7 @@ type Turns struct {
 	Stopped     func() bool
 	Quarantined func() bool
 	DueTurns    func(time.Time) []protocol.AgentTurn
-	Allowed     func(platform.AgentRunRecord) (bool, *platform.Error)
+	Allowed     func(protocol.AgentRunRecord) (bool, *platform.Error)
 	Running     func(run string) bool
 	Call        func(platform.AIProvider, platform.AIModel, platform.Member, platform.ChatRequest, time.Time) (platform.ChatAnswer, *platform.AIError)
 	Meter       func(platform.Member, platform.AIUsage) *platform.Error
@@ -24,7 +24,7 @@ type Turns struct {
 	Wake        func()
 }
 
-func RunUsage(usage platform.AIUsage, run platform.AgentRunRecord) platform.AIUsage {
+func RunUsage(usage platform.AIUsage, run protocol.AgentRunRecord) platform.AIUsage {
 	usage.Applications = append([]platform.AssetBinding(nil), run.Applications...)
 	usage.Run = run.ID
 	if owner, name, valid := strings.Cut(run.Agent, "."); valid {
@@ -101,7 +101,7 @@ func (r Turns) take(x protocol.AgentTurn, now time.Time) {
 	}
 }
 
-func (r Turns) continueCalls(run platform.AgentRunRecord, now time.Time) {
+func (r Turns) continueCalls(run protocol.AgentRunRecord, now time.Time) {
 	defer r.Wake()
 	calls := run.Pending[:1]
 	if calls[0].Name == "knowledge" {

@@ -2,6 +2,7 @@ package data
 
 import (
 	"fmt"
+	"platformserver/kernel/protocol"
 	"slices"
 	"time"
 
@@ -9,7 +10,7 @@ import (
 )
 
 func (o *Owner) RunConfirmations(c platform.Caller, at time.Time) *platform.Error {
-	runs, err := platform.PendingConfirmations(c)
+	runs, err := protocol.PendingConfirmations(c)
 	if err != nil {
 		return err
 	}

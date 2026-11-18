@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	acceptedformat "platformserver/kernel/acceptedformat"
+	"platformserver/kernel/protocol"
 	"slices"
 	"time"
 
@@ -74,27 +75,27 @@ func PromoteCandidate(from, to *Tenant, candidateID, key string, activate bool, 
 	})
 }
 
-func MigrateRecords(from, to *Tenant, source, target platform.Member, types []string, now time.Time) (platform.MigrationResult, error) {
+func MigrateRecords(from, to *Tenant, source, target platform.Member, types []string, now time.Time) (protocol.MigrationResult, error) {
 	if from == nil || to == nil || from.ID == to.ID {
-		return platform.MigrationResult{}, fmt.Errorf("migration needs two different environments")
+		return protocol.MigrationResult{}, fmt.Errorf("migration needs two different environments")
 	}
 	return controlowner.MigrateRecords(from.ID, to.ID, types, controlowner.MigrationHooks{
 		Hosted: to.Projection.TypeNames,
 		Export: func(typ string) ([]byte, *platform.Error) {
 			return from.Export(context.Background(), source, typ, platform.Query{}, now)
 		},
-		Import: func(typ string, data []byte) ([]platform.ImportRow, *platform.Error) {
+		Import: func(typ string, data []byte) ([]protocol.ImportRow, *platform.Error) {
 			return to.Import(target, typ, data, false, now)
 		},
 	})
 }
 
-func (t *Tenant) rememberMigration(result platform.MigrationResult, member string, now time.Time, evidence ...acceptedformat.AuthorizationEvidence) error {
+func (t *Tenant) rememberMigration(result protocol.MigrationResult, member string, now time.Time, evidence ...acceptedformat.AuthorizationEvidence) error {
 	t.Lane.Lock()
 	defer t.Lane.Unlock()
-	_, err := t.acceptHostAction(controlowner.MigrationAction(result), member, now, func(image *platform.HostControlImage) (platform.SupportGrant, error) {
+	_, err := t.acceptHostAction(controlowner.MigrationAction(result), member, now, func(image *protocol.HostControlImage) (protocol.SupportGrant, error) {
 		controlowner.RecordMigration(image, result, member, now)
-		return platform.SupportGrant{}, nil
+		return protocol.SupportGrant{}, nil
 	}, evidence...)
 	return err
 }

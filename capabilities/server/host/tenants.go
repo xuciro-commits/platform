@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"platformserver/kernel/protocol"
 	controlowner "platformserver/services/security/control"
 	"slices"
 
@@ -16,7 +17,7 @@ import (
 	"platformserver/platform"
 )
 
-func (d *Deployment) Tenants(development platform.TenantSpec) []platform.TenantSpec {
+func (d *Deployment) Tenants(development protocol.TenantSpec) []protocol.TenantSpec {
 	d.specs = &controlowner.Specs{}
 	if err := d.specs.Load(d.TenantsFile, development); err != nil {
 		log.Fatalf("tenants: %v", err)
@@ -24,7 +25,7 @@ func (d *Deployment) Tenants(development platform.TenantSpec) []platform.TenantS
 	return d.specs.All()
 }
 
-func (d *Deployment) SeatsFor(id string) []platform.Seat {
+func (d *Deployment) SeatsFor(id string) []protocol.Seat {
 	if d.specs == nil {
 		return nil
 	}
@@ -32,11 +33,11 @@ func (d *Deployment) SeatsFor(id string) []platform.Seat {
 	return spec.Seats
 }
 
-func (d *Deployment) Templates() []platform.TenantTemplate {
+func (d *Deployment) Templates() []protocol.TenantTemplate {
 	return controlowner.LoadTemplates(d.TemplatesDir)
 }
 
-func firstDecisions(t *Tenant, spec platform.TenantSpec, tpl platform.TenantTemplate, now time.Time) error {
+func firstDecisions(t *Tenant, spec protocol.TenantSpec, tpl protocol.TenantTemplate, now time.Time) error {
 	return controlowner.FirstDecisions(controlowner.FirstDecisionHooks{
 		Tenant: t.ID,
 		Member: t.member,
@@ -62,21 +63,21 @@ func firstDecisions(t *Tenant, spec platform.TenantSpec, tpl platform.TenantTemp
 }
 
 func (h *Host) tenantRoutes(mux *http.ServeMux) {
-	h.hostRoute(mux, transport.Route{Pattern: "GET /v1/host/templates", Summary: "Tenant templates this host offers (host administrators)", Answer: []platform.TenantTemplate{}},
+	h.hostRoute(mux, transport.Route{Pattern: "GET /v1/host/templates", Summary: "Tenant templates this host offers (host administrators)", Answer: []protocol.TenantTemplate{}},
 		hostAnswer(func(string, *Tenant) any {
-			out := []platform.TenantTemplate{}
+			out := []protocol.TenantTemplate{}
 			if h.Templates != nil {
 				out = h.Templates()
 			}
 			return out
 		}))
-	h.hostRoute(mux, transport.Route{Pattern: "POST /v1/host/tenants", Summary: "Create a tenant from a template with its first administrator; it serves on the next request and survives restarts (host administrators)", Body: platform.CreateTenantRequest{}, Answer: controlowner.HostTenantView{}},
+	h.hostRoute(mux, transport.Route{Pattern: "POST /v1/host/tenants", Summary: "Create a tenant from a template with its first administrator; it serves on the next request and survives restarts (host administrators)", Body: protocol.CreateTenantRequest{}, Answer: controlowner.HostTenantView{}},
 		func(w http.ResponseWriter, r *http.Request, subject string, _ *Tenant) {
 			if h.CreateTenant == nil {
 				WriteJSON(w, http.StatusNotImplemented, map[string]any{"error": "this host does not create tenants"})
 				return
 			}
-			var body platform.CreateTenantRequest
+			var body protocol.CreateTenantRequest
 			if err := transport.DecodeBodyLimit(r, &body, 1<<20); err != nil {
 				transport.AnswerOr(w, http.StatusBadRequest, nil, err)
 				return
@@ -94,7 +95,7 @@ func (h *Host) tenantRoutes(mux *http.ServeMux) {
 		})
 }
 
-func (d *Deployment) Run(development platform.TenantSpec) error {
+func (d *Deployment) Run(development protocol.TenantSpec) error {
 	if d.Rebuild == nil && d.RebuildWithCapabilities == nil {
 		return fmt.Errorf("run: no tenant factory")
 	}

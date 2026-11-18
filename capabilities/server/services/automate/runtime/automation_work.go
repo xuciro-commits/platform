@@ -5,6 +5,7 @@ import (
 	"go.opentelemetry.io/otel/trace"
 	"maps"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
+	"platformserver/kernel/protocol"
 	"platformserver/platform"
 	"slices"
 	"sync"
@@ -14,7 +15,7 @@ import (
 type WorkState struct {
 	Queues map[string][]string
 	Failed []string
-	Tasks  []platform.ScheduledTaskState
+	Tasks  []protocol.ScheduledTaskState
 	Jobs   []Task
 }
 type WorkLoop struct {
@@ -55,7 +56,7 @@ func (w Worker) Run(task *Task, now time.Time, replaying bool) string {
 }
 
 type Task struct {
-	platform.ScheduledTask
+	protocol.ScheduledTask
 	Status  string       `json:"status,omitempty" source:"record"`
 	Since   int          `json:"-"`
 	Event   *QueuedEvent `json:"-"`
@@ -67,15 +68,15 @@ type QueuedEvent struct {
 	platform.Event
 	Hops int
 	Span trace.SpanContext
-	Plan *platform.AcceptedEventPlan
+	Plan *protocol.AcceptedEventPlan
 }
 
-func StateOfTask(task *Task) (platform.ScheduledTaskState, error) {
-	s := platform.ScheduledTaskState{ScheduledTask: task.ScheduledTask, Since: task.Since}
+func StateOfTask(task *Task) (protocol.ScheduledTaskState, error) {
+	s := protocol.ScheduledTaskState{ScheduledTask: task.ScheduledTask, Since: task.Since}
 	if task.Event != nil {
 		s.EventApp, s.Hops, s.Changed, s.Plan = task.Event.App, task.Event.Hops, slices.Clone(task.Event.Changed), task.Event.Plan
 		var err error
-		s.Event, err = platform.Protos([]*pb.ChangeRecord{task.Event.Record})
+		s.Event, err = protocol.Protos([]*pb.ChangeRecord{task.Event.Record})
 		if err != nil {
 			return s, err
 		}
@@ -229,7 +230,7 @@ func (b *WorkBoard) Restore(tenant string, s WorkState) error {
 		task := Task{ScheduledTask: x.ScheduledTask}
 		task.Since = x.Since
 		if x.Event != nil {
-			records, err := platform.Unprotos[*pb.ChangeRecord](x.Event)
+			records, err := protocol.Unprotos[*pb.ChangeRecord](x.Event)
 			if err != nil || len(records) != 1 {
 				return fmt.Errorf("tenant %s: task %s: bad event", tenant, x.ID)
 			}
@@ -385,7 +386,7 @@ func (task *Task) RestoreOutcome(saved Task) {
 	task.Event, task.Job, task.Since = event, job, since
 }
 
-func (t *Task) Settle(attempts int, outcome string, retry platform.Retry, now time.Time) platform.ScheduledTask {
+func (t *Task) Settle(attempts int, outcome string, retry platform.Retry, now time.Time) protocol.ScheduledTask {
 	after := t.ScheduledTask
 	after.Attempts, after.Last, after.Error = attempts, now, ""
 	if t.Kind == "job" {

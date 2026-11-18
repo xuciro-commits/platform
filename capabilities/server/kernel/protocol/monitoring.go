@@ -1,9 +1,12 @@
-package platform
+package protocol
 
-import "time"
+import (
+	"platformserver/platform"
+	"time"
+)
 
 type MonitoringView struct {
-	Record
+	platform.Record
 	Title   string    `json:"title" field:"required,search" source:"record"`
 	Family  string    `json:"family,omitempty" choices:"runs,logs" source:"record"`
 	Query   string    `json:"query,omitempty" source:"record"`

@@ -2,6 +2,7 @@ package host
 
 import (
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
+	"platformserver/kernel/protocol"
 	"platformserver/kernel/records"
 	"platformserver/kernel/transport"
 	"platformserver/platform"
@@ -62,7 +63,7 @@ func (t *Tenant) recordOf(m platform.Member, typ, id string, now time.Time) (obj
 	return t.objectOwner(t.Projection).RecordOf(m, typ, id, now)
 }
 
-func (t *Tenant) PersonalReads() []platform.PersonalRead { return t.AuditLog.PersonalReads() }
+func (t *Tenant) PersonalReads() []protocol.PersonalRead { return t.AuditLog.PersonalReads() }
 
 func (t *Tenant) enterpriseReferencesRead(m platform.Member, element string, offset, limit int, now time.Time) ([]records.EnterpriseReferenceGroup, *platform.Error) {
 	return objects.EnterpriseReferencesRead(t.Projection, m, element, offset, limit, t.Admits, func(et *records.Type) (func(reflect.Value) bool, *platform.Error) {

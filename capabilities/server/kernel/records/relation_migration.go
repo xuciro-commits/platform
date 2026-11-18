@@ -1,6 +1,7 @@
 package records
 
 import (
+	"platformserver/kernel/protocol"
 	"reflect"
 	"slices"
 	"strings"
@@ -62,8 +63,8 @@ func (s *Store) LegacyRelationWritable(from, to string) bool {
 	return !fromOK || !toOK || a == nil || b == nil || a.Info().App != b.Info().App
 }
 
-func (s *Store) RelationMigrationPlan(c platform.Caller, binding platform.AssetBinding, link *platform.LinkType, legacy func() []platform.RelationLink, readable func(ref string) bool) (platform.RelationMigrationPlan, *platform.Error) {
-	plan := platform.RelationMigrationPlan{Binding: binding, Links: []platform.RelationLink{}}
+func (s *Store) RelationMigrationPlan(c platform.Caller, binding platform.AssetBinding, link *platform.LinkType, legacy func() []platform.RelationLink, readable func(ref string) bool) (protocol.RelationMigrationPlan, *platform.Error) {
+	plan := protocol.RelationMigrationPlan{Binding: binding, Links: []platform.RelationLink{}}
 	if !slices.ContainsFunc(link.Roles, func(role string) bool { return slices.Contains(c.RolesHere(), role) }) {
 		return plan, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "The caller cannot migrate this relationship")
 	}
@@ -71,7 +72,7 @@ func (s *Store) RelationMigrationPlan(c platform.Caller, binding platform.AssetB
 	func() {
 		s.Lock()
 		defer s.Unlock()
-		et = s.Type(platform.OwnedRelationType(c.App))
+		et = s.Type(protocol.OwnedRelationType(c.App))
 		if et != nil {
 			plan.Migrated = ReadRelation(et.Rows().Get(migrationID(binding.Ref))).Migration
 		}
@@ -115,7 +116,7 @@ type MigratedLink struct {
 	Legacy  platform.RelationLink
 }
 
-func MigrationLinks(binding platform.AssetBinding, link *platform.LinkType, plan platform.RelationMigrationPlan) []MigratedLink {
+func MigrationLinks(binding platform.AssetBinding, link *platform.LinkType, plan protocol.RelationMigrationPlan) []MigratedLink {
 	out := make([]MigratedLink, 0, len(plan.Links))
 	for _, legacy := range plan.Links {
 		parent, child := legacy.From, legacy.To
@@ -131,7 +132,7 @@ func MigrationLinks(binding platform.AssetBinding, link *platform.LinkType, plan
 
 func (s *Store) MigrationOverlaps(app string, m MigratedLink) *platform.Error {
 	parent, child := m.Request.Parent.Type+"/"+m.Request.Parent.ID, m.Request.Child.Type+"/"+m.Request.Child.ID
-	prior := s.Type(platform.RelationEntity(app).Type).Rows().Get(RelationID(m.Request.Binding.Ref.String(), parent, child))
+	prior := s.Type(protocol.RelationEntity(app).Type).Rows().Get(RelationID(m.Request.Binding.Ref.String(), parent, child))
 	if prior != nil && !Header(prior.Value).Archived {
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Migration overlaps an existing owned relationship")
 	}
@@ -139,7 +140,7 @@ func (s *Store) MigrationOverlaps(app string, m MigratedLink) *platform.Error {
 }
 
 func MigrationMarker(app string, binding platform.AssetBinding, links []platform.RelationLink) any {
-	value := reflect.ValueOf(platform.RelationValue(platform.RelationEntity(app), migrationID(binding.Ref), binding.Ref.Name, binding.SourceVersion, "", "", false, links...))
+	value := reflect.ValueOf(protocol.RelationValue(protocol.RelationEntity(app), migrationID(binding.Ref), binding.Ref.Name, binding.SourceVersion, "", "", false, links...))
 	marker := reflect.New(value.Type()).Elem()
 	marker.Set(value)
 	marker.FieldByName("Migration").SetBool(true)

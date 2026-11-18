@@ -1,6 +1,7 @@
 package build
 
 import (
+	"platformserver/kernel/protocol"
 	"reflect"
 
 	"platformserver/kernel/records"
@@ -34,8 +35,8 @@ var valueKind = resourceKind[ontology.ValueType, platform.ValueType]{
 	validate:        func(_ *Build, f ontology.ValueType) (ontology.ValueType, error) { return f, ontology.CheckValueType(f) },
 	identity:        func(a, b ontology.ValueType) bool { return a.Name == b.Name && a.Base == b.Base },
 	fromDeclaration: ontology.ValueTypeFromDeclaration,
-	install: func(h platform.BuildHost, c platform.Caller, d platform.ValueType, version int) error {
+	install: func(h protocol.BuildHost, c platform.Caller, d platform.ValueType, version int) error {
 		return h.InstallValueType(c, d, version)
 	},
-	validateInstall: func(h platform.BuildHost, d platform.ValueType) error { return h.ValidateInstallValueType(d) },
+	validateInstall: func(h protocol.BuildHost, d platform.ValueType) error { return h.ValidateInstallValueType(d) },
 }

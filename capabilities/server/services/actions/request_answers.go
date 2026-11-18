@@ -3,6 +3,7 @@ package actions
 import (
 	"encoding/json"
 	"fmt"
+	"platformserver/kernel/protocol"
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
@@ -57,7 +58,7 @@ func (r RequestAnswers) answer(q PendingRequest, now time.Time) (refusal *platfo
 	if q.Key != "" {
 		providerKey = q.Key
 	}
-	answer := platform.Answer{Tag: q.Tag, Call: q.Target, Action: q.Action, Outcome: "accepted"}
+	answer := protocol.Answer{Tag: q.Tag, Call: q.Target, Action: q.Action, Outcome: "accepted"}
 	var ref *pb.EntityRef
 	_, err := r.Attempt(func() (*pb.ChangeRecord, *platform.Error) {
 		var record *pb.ChangeRecord

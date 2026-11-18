@@ -2,6 +2,7 @@ package host
 
 import (
 	runtimekernel "platformserver/kernel"
+	"platformserver/kernel/protocol"
 	releaseowner "platformserver/services/devops/releases"
 	"time"
 
@@ -25,16 +26,16 @@ func (h flowExecution) ApprovalRelease(app, action, typ string) (string, *platfo
 	return h.rt.release, nil
 }
 
-func (h hostView) ApprovalExecution(c platform.Caller, a platform.ApprovalRequest) (platform.WorkHost, *platform.Error) {
+func (h hostView) ApprovalExecution(c platform.Caller, a protocol.ApprovalRequest) (protocol.WorkHost, *platform.Error) {
 	if a.Release == "" {
 		return h, nil
 	}
-	bound, err := releaseowner.ApprovalExecution(&h.t.releases, a, func(assets []platform.ReleaseAsset) (platform.WorkHost, error) {
+	bound, err := releaseowner.ApprovalExecution(&h.t.releases, a, func(assets []platform.ReleaseAsset) (protocol.WorkHost, error) {
 		execution, err := h.retainedExecution(c, a.Release, assets)
 		if err != nil {
 			return nil, err
 		}
-		return execution.(platform.WorkHost), nil
+		return execution.(protocol.WorkHost), nil
 	})
 	if err != nil {
 		return nil, runtimekernel.ConflictRefusal(err)
@@ -65,7 +66,7 @@ func (r *flowExecutionRuntime) RequestApproval(c platform.Caller, app string, s 
 	}); refusal != nil {
 		return nil, refusal
 	}
-	work := r.stateApp(r.tenant.App(platform.WorkApp)).(platform.ApprovalOwner)
+	work := r.stateApp(r.tenant.App(protocol.WorkApp)).(protocol.ApprovalOwner)
 	context := hostView{t: r.tenant, app: work, decision: r.stagedDecision}
 	bindings := context.ownerBindings()
 	bindings.Work = flowExecution{hostView: context, rt: r}

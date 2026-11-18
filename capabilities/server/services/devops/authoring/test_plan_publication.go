@@ -3,6 +3,7 @@ package authoring
 import (
 	"encoding/json"
 	"fmt"
+	"platformserver/kernel/protocol"
 	"slices"
 	"strconv"
 	"strings"
@@ -69,11 +70,11 @@ func testPlanVersionPrefix(kind platform.AssetKind) string {
 
 func (o *testPlanOwner[O, P, F]) testPlanAssetName(asset platform.ReleaseAsset) (string, error) {
 	if asset.Ref.Kind == platform.AssetTestPlan {
-		descriptor, err := platform.ReadTestPlan(asset.Body)
+		descriptor, err := protocol.ReadTestPlan(asset.Body)
 		return descriptor.Name, err
 	}
 	if asset.Ref.Kind == platform.AssetEvaluation {
-		descriptor, err := platform.ReadEvaluationSet(asset.Body)
+		descriptor, err := protocol.ReadEvaluationSet(asset.Body)
 		return descriptor.Name, err
 	}
 	return "", fmt.Errorf("unsupported test plan asset kind")
@@ -266,7 +267,7 @@ func (o *testPlanOwner[O, P, F]) prepareTestPlanPublications(assets []platform.R
 
 func (o *testPlanOwner[O, P, F]) testPlanDraft(asset platform.ReleaseAsset) (descriptor.TestPlan[O, P, F], error) {
 	if asset.Ref.Kind == platform.AssetTestPlan {
-		d, err := platform.ReadTestPlan(asset.Body)
+		d, err := protocol.ReadTestPlan(asset.Body)
 		if err != nil {
 			return descriptor.TestPlan[O, P, F]{}, err
 		}

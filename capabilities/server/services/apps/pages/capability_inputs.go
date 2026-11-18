@@ -2,6 +2,7 @@ package pages
 
 import (
 	"encoding/json"
+	"platformserver/kernel/protocol"
 	"slices"
 	"strings"
 	"time"
@@ -10,7 +11,7 @@ import (
 	"platformserver/platform"
 )
 
-func BindCapabilityInputs(caller platform.Caller, q platform.CapabilityInvocation, now time.Time) (json.RawMessage, []string, *platform.Error) {
+func BindCapabilityInputs(caller platform.Caller, q protocol.CapabilityInvocation, now time.Time) (json.RawMessage, []string, *platform.Error) {
 	refuse := func(message string) (json.RawMessage, []string, *platform.Error) {
 		return nil, nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, message)
 	}

@@ -3,6 +3,7 @@ package build
 import (
 	"encoding/json"
 	"fmt"
+	"platformserver/kernel/protocol"
 	"slices"
 
 	"platformserver/platform"
@@ -32,11 +33,11 @@ func (b *Build) DefinitionDescriptor(asset platform.ReleaseAsset) (platform.Defi
 		definition.SampleSet = &samples
 	case platform.AssetEvaluation:
 		var descriptor platform.EvaluationSetDescriptor
-		descriptor, err = platform.ReadEvaluationSet(asset.Body)
+		descriptor, err = protocol.ReadEvaluationSet(asset.Body)
 		definition.Evaluation = &descriptor
 	case platform.AssetTestPlan:
 		var descriptor platform.TestPlanDescriptor
-		descriptor, err = platform.ReadTestPlan(asset.Body)
+		descriptor, err = protocol.ReadTestPlan(asset.Body)
 		definition.TestPlan = &descriptor
 	case platform.AssetAgent:
 		var descriptor platform.AgentReleaseDescriptor

@@ -1,6 +1,7 @@
 package control
 
 import (
+	"platformserver/kernel/protocol"
 	"platformserver/platform"
 	"strconv"
 	"time"
@@ -70,7 +71,7 @@ type MigrationRequest struct {
 
 func (r MigrationRequest) Complete() bool { return r.SourceGrant != "" && r.TargetGrant != "" }
 
-func ActiveSupport(grants []platform.SupportGrant, now time.Time) int {
+func ActiveSupport(grants []protocol.SupportGrant, now time.Time) int {
 	n := 0
 	for _, g := range grants {
 		if g.Expires.After(now) {
@@ -83,26 +84,26 @@ func ActiveSupport(grants []platform.SupportGrant, now time.Time) int {
 type HostAction struct {
 	Name    string
 	Request any
-	Audit   platform.AuditEntry
+	Audit   protocol.AuditEntry
 }
 
 func LifecycleAction(tenant, action, reason string) HostAction {
-	return HostAction{"lifecycle", struct{ Action, Reason string }{action, reason}, platform.AuditEntry{Action: "host.lifecycle." + action, Target: tenant + ":" + reason}}
+	return HostAction{"lifecycle", struct{ Action, Reason string }{action, reason}, protocol.AuditEntry{Action: "host.lifecycle." + action, Target: tenant + ":" + reason}}
 }
 
 func SupportOpenAction(r SupportOpenRequest) HostAction {
 	return HostAction{"support.open", struct {
 		Member, Reason string
 		Minutes        int
-	}{r.Member, r.Reason, r.Minutes}, platform.AuditEntry{Action: "host.support.open", Target: r.Member + ":" + r.Reason}}
+	}{r.Member, r.Reason, r.Minutes}, protocol.AuditEntry{Action: "host.support.open", Target: r.Member + ":" + r.Reason}}
 }
 
 func SupportUseAction(id string) HostAction {
-	return HostAction{"support.use", struct{ ID string }{id}, platform.AuditEntry{Action: "host.support.use", Target: id}}
+	return HostAction{"support.use", struct{ ID string }{id}, protocol.AuditEntry{Action: "host.support.use", Target: id}}
 }
 
-func MigrationAction(result platform.MigrationResult) HostAction {
-	return HostAction{"migration", result, platform.AuditEntry{Action: "host.migration", Target: result.Key}}
+func MigrationAction(result protocol.MigrationResult) HostAction {
+	return HostAction{"migration", result, protocol.AuditEntry{Action: "host.migration", Target: result.Key}}
 }
 
 func SupportGrantID(tenant, subject string, action HostAction, now time.Time) (string, error) {
@@ -113,6 +114,6 @@ func SupportGrantID(tenant, subject string, action HostAction, now time.Time) (s
 	return "support:" + strconv.FormatInt(now.UTC().UnixNano(), 36) + ":" + hash[:12], nil
 }
 
-func RecordMigration(image *platform.HostControlImage, result platform.MigrationResult, member string, now time.Time) {
-	image.Migrations = append(image.Migrations, platform.MigrationManifest{At: now.UTC(), From: result.From, To: result.To, Key: result.Key, Member: member, Types: result.Types})
+func RecordMigration(image *protocol.HostControlImage, result protocol.MigrationResult, member string, now time.Time) {
+	image.Migrations = append(image.Migrations, protocol.MigrationManifest{At: now.UTC(), From: result.From, To: result.To, Key: result.Key, Member: member, Types: result.Types})
 }

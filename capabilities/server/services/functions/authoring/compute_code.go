@@ -95,7 +95,7 @@ func (o *Owner) submitCodeCompiled(c platform.Caller, s *pb.Submission, now time
 	return o.env.Ledger().Receive(c, s, now, nil, func() (func(*pb.ChangeRecord), *platform.Error) {
 		var payload struct {
 			Call    string                    `json:"call"`
-			Result  platform.CodeBuildResult  `json:"result"`
+			Result  protocol.CodeBuildResult  `json:"result"`
 			Request platform.CodeBuildRequest `json:"request"`
 		}
 		code, ok := platform.Get[protocol.Code](c, s.GetTarget().GetId())
@@ -123,7 +123,7 @@ func (o *Owner) AnswerCompilation(c platform.Caller, app platform.App, effect pl
 	if effect.Endpoint != "operation" || !strings.HasPrefix(effect.Target, protocol.CodeType+"/") {
 		return nil
 	}
-	var result platform.CodeBuildResult
+	var result protocol.CodeBuildResult
 	var binding struct {
 		Build *platform.CodeBuildRequest `json:"build"`
 	}
@@ -139,7 +139,7 @@ func (o *Owner) AnswerCompilation(c platform.Caller, app platform.App, effect pl
 	}
 	payload, _ := json.Marshal(struct {
 		Call    string                    `json:"call"`
-		Result  platform.CodeBuildResult  `json:"result"`
+		Result  protocol.CodeBuildResult  `json:"result"`
 		Request platform.CodeBuildRequest `json:"request"`
 	}{effect.ID, result, *binding.Build})
 	_, err := platform.Decide(c, app, &pb.Submission{TenantId: c.Tenant, PrincipalId: c.ID, Authority: o.env.App(), IdempotencyKey: "compiled:" + effect.ID, Target: &pb.EntityRef{Type: protocol.CodeType, Id: strings.TrimPrefix(effect.Target, protocol.CodeType+"/")}, Schema: &pb.SchemaRef{Name: protocol.SchemaCodeCompiled, Version: 1}, Payload: payload}, now)

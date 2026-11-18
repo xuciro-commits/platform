@@ -2,6 +2,7 @@ package host
 
 import (
 	"context"
+	"platformserver/kernel/protocol"
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
@@ -18,7 +19,7 @@ func (t *Tenant) PreviewPipeline(member platform.Member, request dataowner.Pipel
 }
 
 func (t *Tenant) scopedPreviewPipeline(member platform.Member, request dataowner.PipelinePreviewRequest, at time.Time) (dataowner.PipelinePreview, *platform.Error) {
-	out := dataowner.PipelinePreview{Rows: []map[string]any{}, Quarantine: []platform.QuarantinedRow{}}
+	out := dataowner.PipelinePreview{Rows: []map[string]any{}, Quarantine: []protocol.QuarantinedRow{}}
 	if problem := t.Admits(member); problem != nil {
 		return out, problem
 	}

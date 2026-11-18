@@ -119,16 +119,16 @@ func (a *Agents) DeclareAgentApp(app platform.App) error {
 	return nil
 }
 
-func (a *Agents) create(id, agent, goal, ref, onBehalf, flow, step string, token int, now time.Time, captureBinding bool) (platform.AgentRunRecord, *platform.Error) {
+func (a *Agents) create(id, agent, goal, ref, onBehalf, flow, step string, token int, now time.Time, captureBinding bool) (runtimeprotocol.AgentRunRecord, *platform.Error) {
 	title := goal
 	if len(title) > 80 {
 		title = title[:77] + "..."
 	}
-	run := platform.AgentRunRecord{Record: platform.Record{ID: id}, Agent: agent, Title: title, Goal: goal, Ref: ref, OnBehalf: onBehalf, Flow: flow, Step: step, Token: token,
-		State: "running", Steps: []platform.RunStep{}}
+	run := runtimeprotocol.AgentRunRecord{Record: platform.Record{ID: id}, Agent: agent, Title: title, Goal: goal, Ref: ref, OnBehalf: onBehalf, Flow: flow, Step: step, Token: token,
+		State: "running", Steps: []runtimeprotocol.RunStep{}}
 	recorded := captureBinding
 	if recorded {
-		name := a.automation(platform.AgentApp, false).Setting(platform.SettingAgentModel)
+		name := a.automation(runtimeprotocol.AgentApp, false).Setting(runtimeprotocol.SettingAgentModel)
 		options := platform.ModelOptions{}
 		if d := a.def(agent); d != nil {
 			if d.Model != "" {
@@ -136,7 +136,7 @@ func (a *Agents) create(id, agent, goal, ref, onBehalf, flow, step string, token
 			}
 			options = d.ModelOptions
 		}
-		binding, _, err := a.host.ResolveAgentModel(name, options, platform.AIStageRuntime)
+		binding, _, err := a.host.ResolveAgentModel(name, options, runtimeprotocol.AIStageRuntime)
 		if err != nil && name != "" {
 			return run, err
 		}
@@ -176,7 +176,7 @@ func (a *Agents) create(id, agent, goal, ref, onBehalf, flow, step string, token
 	return run, nil
 }
 
-func (a *Agents) toolDraft(c platform.Caller, run platform.AgentRunRecord, draft platform.Draft, now time.Time) (platform.Draft, *platform.Error) {
+func (a *Agents) toolDraft(c platform.Caller, run runtimeprotocol.AgentRunRecord, draft runtimeprotocol.Draft, now time.Time) (runtimeprotocol.Draft, *platform.Error) {
 	h := a.host
 	member := a.AgentPrincipal(run.Agent)
 	if run.OnBehalf != "" {
@@ -262,7 +262,7 @@ func (a *Agents) toolDraft(c platform.Caller, run platform.AgentRunRecord, draft
 	return draft, nil
 }
 
-func (a *Agents) assignDraft(c platform.Caller, receipt *pb.ChangeRecord, run *platform.AgentRunRecord, title string, now time.Time) {
+func (a *Agents) assignDraft(c platform.Caller, receipt *pb.ChangeRecord, run *runtimeprotocol.AgentRunRecord, title string, now time.Time) {
 	recipients := a.recipients(c, a.def(run.Agent), *run)
 	if len(recipients) == 0 {
 		run.Handoff = "No eligible recipient is configured"
@@ -270,31 +270,31 @@ func (a *Agents) assignDraft(c platform.Caller, receipt *pb.ChangeRecord, run *p
 	}
 	key := fmt.Sprintf("agent:%s:%d:draft", run.ID, len(run.Steps))
 	rc := a.reviewers(c, *run)
-	run.Reviewers = rc.Notify(platform.Notification{Title: "Confirm the agent's draft: " + title, Ref: platform.RunType + "/" + run.ID, Key: key}, now, recipients...)
+	run.Reviewers = rc.Notify(platform.Notification{Title: "Confirm the agent's draft: " + title, Ref: runtimeprotocol.RunType + "/" + run.ID, Key: key}, now, recipients...)
 	run.Reviewers = slices.DeleteFunc(run.Reviewers, func(id string) bool {
 		member, ok := a.host.Member(id)
 		return !ok || member.Agent || member.Status == platform.MemberLeft || member.Status == platform.MemberSuspended
 	})
 	if len(run.Reviewers) == 0 {
 		run.Handoff = "No eligible recipient is configured"
-		a.host.Automation(c, platform.AgentApp).Put(receipt, *run)
+		a.host.Automation(c, runtimeprotocol.AgentApp).Put(receipt, *run)
 		return
 	}
-	if err := rc.Assign(receipt, platform.Assignment{Title: "Confirm the agent's draft: " + title, Body: "Review the simulated proposal before applying the business action.", Ref: platform.RunType + "/" + run.ID, To: recipients, Key: key}); err != nil {
+	if err := rc.Assign(receipt, platform.Assignment{Title: "Confirm the agent's draft: " + title, Body: "Review the simulated proposal before applying the business action.", Ref: runtimeprotocol.RunType + "/" + run.ID, To: recipients, Key: key}); err != nil {
 		run.Handoff = err.Error()
 		return
 	}
-	run.Task, run.Handoff = platform.AgentApp+":"+key, "assigned"
-	a.host.Automation(c, platform.AgentApp).Put(receipt, *run)
+	run.Task, run.Handoff = runtimeprotocol.AgentApp+":"+key, "assigned"
+	a.host.Automation(c, runtimeprotocol.AgentApp).Put(receipt, *run)
 }
 
 func switchActions() []platform.Action {
-	admin := []string{platform.AgentAdmin}
+	admin := []string{runtimeprotocol.AgentAdmin}
 	return []platform.Action{
-		{Schema: platform.SchemaSuspend, Target: platform.SwitchType, New: true, Capability: "switch", Title: "Suspend agent", Roles: admin,
+		{Schema: runtimeprotocol.SchemaSuspend, Target: runtimeprotocol.SwitchType, New: true, Capability: "switch", Title: "Suspend agent", Roles: admin,
 			Description: "Stop an agent (target its member ID, such as agent:assistant): its runs stop at their next step, new ones are refused, and an outside agent's decisions and model calls are refused.",
 			Payload:     []platform.Field{{Name: "reason", Type: "string", Description: "Why, for the audit and whom its runs were for"}}},
-		{Schema: platform.SchemaResume, Target: platform.SwitchType, Capability: "switch", Title: "Resume agent", Roles: admin,
+		{Schema: runtimeprotocol.SchemaResume, Target: runtimeprotocol.SwitchType, Capability: "switch", Title: "Resume agent", Roles: admin,
 			Description: "Let a suspended agent work again.", Payload: []platform.Field{}},
 	}
 }
@@ -304,9 +304,9 @@ func (a *Agents) switchDecision(c platform.Caller, s *pb.Submission, p struct{ R
 	if id == "" {
 		return nil, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 	}
-	app := a.host.Automation(c, platform.AgentApp)
-	sw, _ := platform.Get[platform.Switch](app, id)
-	suspend := s.GetSchema().GetName() == platform.SchemaSuspend
+	app := a.host.Automation(c, runtimeprotocol.AgentApp)
+	sw, _ := platform.Get[runtimeprotocol.Switch](app, id)
+	suspend := s.GetSchema().GetName() == runtimeprotocol.SchemaSuspend
 	if sw.Suspended == suspend {
 		return nil, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
 	}

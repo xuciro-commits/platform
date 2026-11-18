@@ -3,6 +3,7 @@ package actions
 import (
 	"encoding/json"
 	"fmt"
+	"platformserver/kernel/protocol"
 	"slices"
 	"strings"
 	"time"
@@ -76,7 +77,7 @@ func RunnableIDs(queued []Queued, now time.Time, limit int) []string {
 		}
 	}
 	for _, x := range queued {
-		if !x.Sending && !platform.EffectSettled(x.State) && !x.Due.After(now) && len(ids)+active < limit {
+		if !x.Sending && !protocol.EffectSettled(x.State) && !x.Due.After(now) && len(ids)+active < limit {
 			ids = append(ids, x.ID)
 		}
 	}

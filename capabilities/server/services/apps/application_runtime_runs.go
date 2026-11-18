@@ -11,12 +11,12 @@ import (
 	"time"
 )
 
-func (ctx Context) Runs(m platform.Member, ref platform.AssetRef, offset, limit int, now time.Time, filters ...platform.ApplicationRunFilter) (platform.ApplicationRunPage, *platform.Error) {
-	out := platform.ApplicationRunPage{Application: ref, Runs: []platform.ApplicationRun{}}
+func (ctx Context) Runs(m platform.Member, ref platform.AssetRef, offset, limit int, now time.Time, filters ...protocol.ApplicationRunFilter) (protocol.ApplicationRunPage, *platform.Error) {
+	out := protocol.ApplicationRunPage{Application: ref, Runs: []platform.ApplicationRun{}}
 	if ref.Kind != platform.AssetApp || ref.Check() != nil || offset < 0 || limit < 1 || limit > 100 {
 		return out, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Choose an application and a run page of 1–100")
 	}
-	filter := platform.ApplicationRunFilter{}
+	filter := protocol.ApplicationRunFilter{}
 	if len(filters) > 0 {
 		filter = filters[0]
 	}
@@ -180,11 +180,11 @@ func (ctx Context) Runs(m platform.Member, ref platform.AssetRef, offset, limit 
 			appendRun(run)
 		}
 	}
-	if rows, err := records(platform.RunType, nil); err != nil {
+	if rows, err := records(protocol.RunType, nil); err != nil {
 		return out, err
 	} else {
 		for _, row := range rows {
-			var x platform.AgentRunRecord
+			var x protocol.AgentRunRecord
 			raw, _ := json.Marshal(row)
 			if json.Unmarshal(raw, &x) != nil {
 				continue
@@ -285,7 +285,7 @@ func (ctx Context) Runs(m platform.Member, ref platform.AssetRef, offset, limit 
 			appendRun(run)
 		}
 	}
-	if rows, err := records(platform.DispatchType, nil); err != nil {
+	if rows, err := records(protocol.DispatchType, nil); err != nil {
 		return out, err
 	} else {
 		for _, row := range rows {

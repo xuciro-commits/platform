@@ -4,6 +4,7 @@ import (
 	"cmp"
 	"encoding/json"
 	"net/http"
+	"platformserver/kernel/protocol"
 	"strings"
 	"time"
 
@@ -24,8 +25,8 @@ func ReservationFailure(refusal *platform.Error) *platform.AIError {
 
 type Reservations struct {
 	Stopped func() bool
-	Prior   func(call string) (platform.AIReservation, bool)
-	Limits  func() platform.AIDefaults
+	Prior   func(call string) (protocol.AIReservation, bool)
+	Limits  func() protocol.AIDefaults
 	Accept  func(body []byte) *platform.Error
 }
 
@@ -39,8 +40,8 @@ func (r Reservations) Prepare(m platform.Member, model platform.AIModel, req pla
 		}
 		return &platform.AIError{Status: 409, Detail: "The model call already has an unsettled or saved result; reconcile it before retrying"}
 	}
-	reservation := platform.AIReservation{RequestHash: req.RequestHash, Call: req.Call, At: now, Member: m.ID, Agent: m.Agent, Model: model.Name(), Run: req.Run, Input: input, Output: output, State: "pending"}
-	body, _ := json.Marshal(platform.AIReserveInput{Reservation: reservation, Defaults: r.Limits(), RunTokens: req.RunTokens})
+	reservation := protocol.AIReservation{RequestHash: req.RequestHash, Call: req.Call, At: now, Member: m.ID, Agent: m.Agent, Model: model.Name(), Run: req.Run, Input: input, Output: output, State: "pending"}
+	body, _ := json.Marshal(protocol.AIReserveInput{Reservation: reservation, Defaults: r.Limits(), RunTokens: req.RunTokens})
 	if refusal := r.Accept(body); refusal != nil {
 		return ReservationFailure(refusal)
 	}
@@ -58,7 +59,7 @@ type ChatSetup struct {
 func (s ChatSetup) Prepare(m platform.Member, req platform.ChatRequest, stage string) (platform.AIModel, platform.AIProvider, platform.ChatRequest, *platform.Error) {
 	var model platform.AIModel
 	var pv platform.AIProvider
-	if stage == platform.AIStageDesign {
+	if stage == protocol.AIStageDesign {
 		if refusal := s.Design(); refusal != nil {
 			return model, pv, req, refusal
 		}
@@ -157,7 +158,7 @@ type ModelPlanning struct {
 }
 
 func (p ModelPlanning) Effect(tenant string, c platform.Caller, rec *pb.ChangeRecord, q platform.Request, pending []platform.Effect, endpoint string) platform.Effect {
-	prompt, _ := q.Payload.(platform.Prompt)
+	prompt, _ := q.Payload.(protocol.Prompt)
 	options := platform.ModelOptions{MaxTokens: prompt.MaxTokens}
 	if q.EvaluationFunction != nil {
 		options = q.EvaluationFunction.ModelOptions.Override(options)
@@ -173,9 +174,9 @@ func (p ModelPlanning) Effect(tenant string, c platform.Caller, rec *pb.ChangeRe
 				failure = "The selected model is disabled or missing"
 			}
 		} else {
-			stage := platform.AIStageRuntime
+			stage := protocol.AIStageRuntime
 			if q.Evaluation || p.Simulation {
-				stage = platform.AIStageDesign
+				stage = protocol.AIStageDesign
 			}
 			if pinned, refusal := p.Resolver.Stage(resolved, p.Provider(resolved.Model), stage); refusal != nil {
 				failure = refusal.Message
@@ -239,7 +240,7 @@ func (ask ModelAsk) Ready(out platform.Outcome, s ModelSend) (platform.Outcome, 
 			if refusal != nil {
 				return current, refusal
 			}
-			return s.Resolver.Stage(current, pv, platform.AIStageDesign)
+			return s.Resolver.Stage(current, pv, protocol.AIStageDesign)
 		}); detail != "" {
 			return reject(detail)
 		}

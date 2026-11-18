@@ -17,16 +17,16 @@ type FlowBindingContext struct {
 	Asset          func(string, string, int) (platform.ReleaseAsset, error)
 	Assets         func() ([]platform.ReleaseAsset, error)
 	Active         func() string
-	Candidate      func(string) (platform.ReleaseCandidate, error)
+	Candidate      func(string) (protocol.ReleaseCandidate, error)
 	Applications   func(platform.AssetRef, string, string) ([]platform.AssetBinding, error)
-	CloseCandidate func([]platform.AssetRef, []platform.ReleaseAsset, []platform.AssetRef) (platform.ReleaseCandidate, error)
-	SameRetained   func(platform.ReleaseCandidate, platform.ReleaseCandidate) bool
+	CloseCandidate func([]platform.AssetRef, []platform.ReleaseAsset, []platform.AssetRef) (protocol.ReleaseCandidate, error)
+	SameRetained   func(protocol.ReleaseCandidate, protocol.ReleaseCandidate) bool
 	CodeMatches    func(platform.ReleaseAsset, platform.ReleaseAsset) (bool, error)
 }
 
 func (h FlowBindingContext) BindFlow(app, name string, version int, prior protocol.FlowBinding) (protocol.FlowBinding, error) {
 	if prior.Existing && prior.Dependencies == "" && prior.Release == "" {
-		if _, controlled := h.App(app).(platform.FlowReleaseOwner); !controlled {
+		if _, controlled := h.App(app).(protocol.FlowReleaseOwner); !controlled {
 			return protocol.FlowBinding{}, nil
 		}
 	}
@@ -87,52 +87,52 @@ func (h FlowBindingContext) BindFlow(app, name string, version int, prior protoc
 	return binding, nil
 }
 
-func (h FlowBindingContext) Retained(app, name string, version int, prior protocol.FlowBinding) (platform.ReleaseCandidate, error) {
+func (h FlowBindingContext) Retained(app, name string, version int, prior protocol.FlowBinding) (protocol.ReleaseCandidate, error) {
 	if prior.Dependencies == "" {
-		return platform.ReleaseCandidate{}, fmt.Errorf("flow has no retained starting dependency descriptor")
+		return protocol.ReleaseCandidate{}, fmt.Errorf("flow has no retained starting dependency descriptor")
 	}
 	root, err := h.Asset(app, name, version)
 	if err != nil {
-		return platform.ReleaseCandidate{}, err
+		return protocol.ReleaseCandidate{}, err
 	}
 	saved, err := h.Candidate(prior.Release)
 	if err != nil {
-		return platform.ReleaseCandidate{}, err
+		return protocol.ReleaseCandidate{}, err
 	}
 	closed, err := h.Resolver.Closure(saved, []platform.AssetRef{root.Ref})
 	if err != nil || closed.ID != prior.Dependencies {
-		return platform.ReleaseCandidate{}, fmt.Errorf("flow starting dependency descriptor differs")
+		return protocol.ReleaseCandidate{}, fmt.Errorf("flow starting dependency descriptor differs")
 	}
 	for _, asset := range closed.Assets {
 		if asset.Ref == root.Ref {
-			var descriptor platform.FlowReleaseDescriptor
+			var descriptor protocol.FlowReleaseDescriptor
 			if json.Unmarshal(root.Body, &descriptor) != nil {
-				return platform.ReleaseCandidate{}, fmt.Errorf("retained flow descriptor is invalid")
+				return protocol.ReleaseCandidate{}, fmt.Errorf("retained flow descriptor is invalid")
 			}
 			if !descriptor.Native {
 				continue
 			}
 			same, err := h.CodeMatches(root, asset)
 			if err != nil || !same {
-				return platform.ReleaseCandidate{}, fmt.Errorf("retained native flow differs from its starting release")
+				return protocol.ReleaseCandidate{}, fmt.Errorf("retained native flow differs from its starting release")
 			}
 		}
 	}
 	return closed, nil
 }
 
-func (h FlowBindingContext) Closure(app, name string, version int) (platform.ReleaseCandidate, platform.AssetRef, error) {
+func (h FlowBindingContext) Closure(app, name string, version int) (protocol.ReleaseCandidate, platform.AssetRef, error) {
 	asset, err := h.Asset(app, name, version)
 	if err != nil {
-		return platform.ReleaseCandidate{}, platform.AssetRef{}, err
+		return protocol.ReleaseCandidate{}, platform.AssetRef{}, err
 	}
 	available, err := h.Assets()
 	if err != nil {
-		return platform.ReleaseCandidate{}, asset.Ref, err
+		return protocol.ReleaseCandidate{}, asset.Ref, err
 	}
 	i := slices.IndexFunc(available, func(a platform.ReleaseAsset) bool { return a.Ref == asset.Ref })
 	if i < 0 {
-		return platform.ReleaseCandidate{}, asset.Ref, fmt.Errorf("flow %s has no installed release asset", asset.Ref)
+		return protocol.ReleaseCandidate{}, asset.Ref, fmt.Errorf("flow %s has no installed release asset", asset.Ref)
 	}
 	available[i] = asset
 	closure, err := h.CloseCandidate([]platform.AssetRef{asset.Ref}, available, nil)

@@ -1,22 +1,21 @@
 package host
 
-import records "platformserver/kernel/records"
-
-import "platformserver/services/functions/runtime"
-
-import automation "platformserver/services/automate/runtime"
-
 import (
+	"bytes"
 	"context"
 	"encoding/json"
-	acceptedformat "platformserver/kernel/acceptedformat"
-	controlowner "platformserver/services/security/control"
-
-	"time"
-
+	"io"
+	"net/http"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
+	acceptedformat "platformserver/kernel/acceptedformat"
+	"platformserver/kernel/protocol"
+	records "platformserver/kernel/records"
 	"platformserver/platform"
 	"platformserver/services/actions"
+	automation "platformserver/services/automate/runtime"
+	"platformserver/services/functions/runtime"
+	controlowner "platformserver/services/security/control"
+	"time"
 )
 
 func intend[C any](d *stagedDecision, call C, intent platform.Effect, err *platform.Error) (C, *platform.Error) {
@@ -42,8 +41,8 @@ func (d *stagedDecision) RequestOperation(c platform.Caller, r *pb.ChangeRecord,
 	call, intent, err := d.tenant.planOperation(c, r, q, d.Records, d.Intents, input)
 	return intend(d, call, intent, err)
 }
-func (t *Tenant) planOperation(c platform.Caller, r *pb.ChangeRecord, q platform.OperationRequest, store *records.Store, pending []platform.Effect, sealed ...*platform.OperationInputArtifact) (platform.OperationCall, platform.Effect, *platform.Error) {
-	var input *platform.OperationInputArtifact
+func (t *Tenant) planOperation(c platform.Caller, r *pb.ChangeRecord, q platform.OperationRequest, store *records.Store, pending []platform.Effect, sealed ...*protocol.OperationInputArtifact) (platform.OperationCall, platform.Effect, *platform.Error) {
+	var input *protocol.OperationInputArtifact
 	if len(sealed) == 1 {
 		input = sealed[0]
 	}
@@ -55,7 +54,7 @@ func (t *Tenant) planOperation(c platform.Caller, r *pb.ChangeRecord, q platform
 			closure, bound, err := t.closures().Operation(owner, op, version, release)
 			return closure.ID, bound, err
 		},
-		InputKey: func(input platform.OperationInputArtifact) error { _, err := t.staged.InputKey(input); return err },
+		InputKey: func(input protocol.OperationInputArtifact) error { _, err := t.staged.InputKey(input); return err },
 		Exists:   func(id string) bool { _, ok := t.outbound.Get(id); return ok },
 		Retained: func(module string) bool { return t.artifacts().Exists(context.Background(), module) },
 		Bind: func(ref platform.AssetRef, release, dependencies string) ([]platform.AssetBinding, error) {
@@ -131,16 +130,16 @@ func (t *Tenant) executeOperation(x platform.Effect, now time.Time) platform.Out
 			})
 			return refusal
 		},
-		BuildCode: func(ctx context.Context, q platform.CodeBuildRequest) (platform.CodeBuildResult, error) {
+		BuildCode: func(ctx context.Context, q platform.CodeBuildRequest) (protocol.CodeBuildResult, error) {
 			return t.artifacts().Build(ctx, q)
 		},
-		ReadInput: func(ctx context.Context, ref platform.OperationInputArtifact) ([]byte, error) {
+		ReadInput: func(ctx context.Context, ref protocol.OperationInputArtifact) ([]byte, error) {
 			return t.staged.ReadInput(ctx, ref)
 		},
 		StageOutput: func(op platform.Operation, call string, output []byte) (json.RawMessage, *platform.StagedResult, error) {
 			return t.staged.Output(op, call, output)
 		},
-		Executor: func(id string) platform.OperationExecutor { return t.operations[id] },
+		Executor: func(id string) protocol.OperationExecutor { return t.operations[id] },
 		ReadArtifact: func(ctx context.Context, digest string) ([]byte, error) {
 			return t.artifacts().Read(ctx, digest)
 		},
@@ -150,6 +149,46 @@ func (t *Tenant) executeOperation(x platform.Effect, now time.Time) platform.Out
 
 func (t *Tenant) queuedOperations() int {
 	return len(t.outbound.Select(func(x actions.Queued) bool {
-		return x.Endpoint == acceptedformat.OperationEndpoint && !platform.EffectSettled(x.State)
+		return x.Endpoint == acceptedformat.OperationEndpoint && !protocol.EffectSettled(x.State)
 	}))
+}
+
+type preparedOperationInput = automation.OperationInput
+
+func (h hostView) operationInstall() compute.OperationInstall {
+	return compute.OperationInstall{App: h.app, Executor: h.t.operations[h.app.Manifest().ID], Rules: h.t.services.Rules, RuleQuery: h.RuleQuery, Entity: h.t.Entity,
+		Retained: func(module string) bool { return h.t.artifacts().Exists(context.Background(), module) },
+		Describe: func(def platform.Definition) (platform.Definition, error) {
+			return h.t.describer().DescribeDefinition(def)
+		},
+		Definitions: func() []platform.Definition { return h.t.definitions },
+		Store:       h.t.storeDefinition}
+}
+func (h hostView) ValidateInstallOperation(c platform.Caller, o platform.Operation) error {
+	return h.operationInstall().Validate(c, o)
+}
+func (h hostView) InstallOperation(c platform.Caller, o platform.Operation, version int) error {
+	if c.Staging() {
+		unsupportedStagedEffect()
+	}
+	return h.operationInstall().Install(c, o, version)
+}
+
+func readCapabilityBody(w http.ResponseWriter, r *http.Request, value any) bool {
+	raw, err := io.ReadAll(io.LimitReader(r.Body, (128<<10)+1))
+	if err != nil || len(raw) > 128<<10 {
+		w.WriteHeader(http.StatusRequestEntityTooLarge)
+		return false
+	}
+	if _, err = platform.DecodeValue(raw, 128<<10); err != nil {
+		WriteJSON(w, http.StatusBadRequest, map[string]any{"error": map[string]string{"message": err.Error()}})
+		return false
+	}
+	decoder := json.NewDecoder(bytes.NewReader(raw))
+	decoder.DisallowUnknownFields()
+	if err = decoder.Decode(value); err != nil || decoder.Decode(new(any)) != io.EOF {
+		WriteJSON(w, http.StatusBadRequest, map[string]any{"error": map[string]string{"message": "Use the declared request fields"}})
+		return false
+	}
+	return true
 }

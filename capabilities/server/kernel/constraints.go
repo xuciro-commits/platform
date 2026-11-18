@@ -277,7 +277,7 @@ func (k ConstraintCheck) depends(info platform.EntityInfo, rule platform.Constra
 					return true
 				}
 				declaration := info.Sets[index]
-				if (typ == declaration.Object || typ == platform.OwnedRelationType(info.App)) && k.setDepends(info, root, declaration, typ, id, old) {
+				if (typ == declaration.Object || typ == ruleprotocol.OwnedRelationType(info.App)) && k.setDepends(info, root, declaration, typ, id, old) {
 					return true
 				}
 				continue
@@ -507,7 +507,7 @@ func (k ConstraintCheck) setDepends(info platform.EntityInfo, root *records.Row,
 			return true
 		}
 		if link.Storage == "edge" {
-			et := k.Records.Type(platform.OwnedRelationType(info.App))
+			et := k.Records.Type(ruleprotocol.OwnedRelationType(info.App))
 			if et == nil {
 				return true
 			}
@@ -638,18 +638,18 @@ func (k ConstraintCheck) ownedRelations() *platform.Error {
 			return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, err.Error())
 		}
 		for _, violation := range violations {
-			ref := platform.OwnedRelationType(link.Child.App) + "/" + violation.ID
+			ref := ruleprotocol.OwnedRelationType(link.Child.App) + "/" + violation.ID
 			if violation.Reason == "required" {
 				ref = violation.Child
 			}
 			write, changed := k.Writes[ref]
 			if !changed && violation.Reason == "required" {
 				for edgeRef, candidate := range k.Writes {
-					if !strings.HasPrefix(edgeRef, platform.OwnedRelationType(link.Child.App)+"/") {
+					if !strings.HasPrefix(edgeRef, ruleprotocol.OwnedRelationType(link.Child.App)+"/") {
 						continue
 					}
-					id := strings.TrimPrefix(edgeRef, platform.OwnedRelationType(link.Child.App)+"/")
-					et := k.Records.Type(platform.OwnedRelationType(link.Child.App))
+					id := strings.TrimPrefix(edgeRef, ruleprotocol.OwnedRelationType(link.Child.App)+"/")
+					et := k.Records.Type(ruleprotocol.OwnedRelationType(link.Child.App))
 					for _, row := range []*records.Row{candidate.Before, et.Rows().Get(id)} {
 						image := records.ReadRelation(row)
 						if image.Binding == link.Name && image.Child == violation.Child {

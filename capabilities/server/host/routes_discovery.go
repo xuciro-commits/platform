@@ -7,6 +7,7 @@ import (
 	"google.golang.org/protobuf/encoding/protojson"
 	"net/http"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
+	runtimeprotocol "platformserver/kernel/protocol"
 	transport "platformserver/kernel/transport"
 	"platformserver/platform"
 	"platformserver/services/actions"
@@ -58,18 +59,18 @@ func (h *Host) routesDiscovery(rt *routes) {
 	rt.handle(transport.Route{Pattern: "GET /v1/dispatches/{id}/targets", Summary: "Ready external target identities available to the dispatch's current human reviewer; no environment addresses or credentials", Answer: []dataowner.DispatchTarget{}}, saying(func(r *http.Request, m platform.Member, t *Tenant) ([]dataowner.DispatchTarget, *platform.Error) {
 		return t.DispatchTargets(m, r.PathValue("id"), h.Now())
 	}))
-	rt.handle(transport.Route{Pattern: "GET /v1/applications/{app}/{name}/runs", Summary: "Authorized runs related to current or retained application resources; shared use does not imply exclusive application origin", Answer: platform.ApplicationRunPage{}, Query: []transport.Param{{Name: "offset", Description: "Nonnegative run offset"}, {Name: "limit", Description: "1–100, default 50"}, {Name: "kind", Description: "Run kind"}, {Name: "state", Description: "Original owner state"}, {Name: "subject", Description: "Exact type/id"}, {Name: "since", Description: "Inclusive RFC3339 startup time"}, {Name: "until", Description: "Inclusive RFC3339 startup time"}}}, transport.Answering(func(r *http.Request, m platform.Member, t *Tenant) (platform.ApplicationRunPage, *platform.Error) {
+	rt.handle(transport.Route{Pattern: "GET /v1/applications/{app}/{name}/runs", Summary: "Authorized runs related to current or retained application resources; shared use does not imply exclusive application origin", Answer: runtimeprotocol.ApplicationRunPage{}, Query: []transport.Param{{Name: "offset", Description: "Nonnegative run offset"}, {Name: "limit", Description: "1–100, default 50"}, {Name: "kind", Description: "Run kind"}, {Name: "state", Description: "Original owner state"}, {Name: "subject", Description: "Exact type/id"}, {Name: "since", Description: "Inclusive RFC3339 startup time"}, {Name: "until", Description: "Inclusive RFC3339 startup time"}}}, transport.Answering(func(r *http.Request, m platform.Member, t *Tenant) (runtimeprotocol.ApplicationRunPage, *platform.Error) {
 		offset, limit := transport.PageBounds(r, 0, 50)
 		filter, refusal := transport.ApplicationRunFilterOf(r.URL.Query())
 		if refusal != nil {
-			return platform.ApplicationRunPage{}, refusal
+			return runtimeprotocol.ApplicationRunPage{}, refusal
 		}
 		return t.ApplicationRuns(m, applicationRef(r), offset, limit, h.Now(), filter)
 	}))
-	rt.handle(transport.Route{Pattern: "GET /v1/applications/{app}/{name}/runtime", Summary: "Installed application artifact, retained versions, authorized capacity and original-owner recovery projection", Answer: platform.ApplicationRuntime{}}, transport.Answering(func(r *http.Request, m platform.Member, t *Tenant) (platform.ApplicationRuntime, *platform.Error) {
+	rt.handle(transport.Route{Pattern: "GET /v1/applications/{app}/{name}/runtime", Summary: "Installed application artifact, retained versions, authorized capacity and original-owner recovery projection", Answer: runtimeprotocol.ApplicationRuntime{}}, transport.Answering(func(r *http.Request, m platform.Member, t *Tenant) (runtimeprotocol.ApplicationRuntime, *platform.Error) {
 		return t.ApplicationRuntimeOf(m, applicationRef(r), h.Now())
 	}))
-	rt.handle(transport.Route{Pattern: "GET /v1/applications/{app}/{name}/records/{type}/{id}/diagnostic", Summary: "Original authorized record decisions and application runs without time-based execution attribution", Answer: platform.ApplicationDiagnostic{}}, transport.Answering(func(r *http.Request, m platform.Member, t *Tenant) (platform.ApplicationDiagnostic, *platform.Error) {
+	rt.handle(transport.Route{Pattern: "GET /v1/applications/{app}/{name}/records/{type}/{id}/diagnostic", Summary: "Original authorized record decisions and application runs without time-based execution attribution", Answer: runtimeprotocol.ApplicationDiagnostic{}}, transport.Answering(func(r *http.Request, m platform.Member, t *Tenant) (runtimeprotocol.ApplicationDiagnostic, *platform.Error) {
 		return t.ApplicationRecordDiagnostic(m, applicationRef(r), r.PathValue("type"), r.PathValue("id"), h.Now())
 	}))
 	rt.metadata(transport.Route{Pattern: "GET /v1/definitions", Summary: "Installed object, action and page definitions the caller may discover, with qualified references and dependencies", Answer: []platform.Definition{}}, viewRoute("definitions", "Asset discovery is unavailable because accepted owner metadata could not be read"))
@@ -87,10 +88,10 @@ func (h *Host) routesDiscovery(rt *routes) {
 	rt.metadata(transport.Route{Pattern: "GET /v1/pages/{app}/{name}/{contentVersion}", Summary: "Read exact published page content through current member discovery permissions", Answer: platform.Definition{}}, translating(func(r *http.Request, m platform.Member, t *Tenant) (platform.Definition, *platform.Error) {
 		return t.PageContentDefinition(m, platform.AssetRef{App: r.PathValue("app"), Kind: platform.AssetPage, Name: r.PathValue("name")}, r.PathValue("contentVersion"))
 	}))
-	rt.metadata(transport.Route{Pattern: "GET /v1/capabilities", Summary: "Typed Block projections of the caller's installed owner capabilities", Answer: []platform.CapabilityDescriptor{}}, translating(func(_ *http.Request, m platform.Member, t *Tenant) ([]platform.CapabilityDescriptor, *platform.Error) {
+	rt.metadata(transport.Route{Pattern: "GET /v1/capabilities", Summary: "Typed Block projections of the caller's installed owner capabilities", Answer: []runtimeprotocol.CapabilityDescriptor{}}, translating(func(_ *http.Request, m platform.Member, t *Tenant) ([]runtimeprotocol.CapabilityDescriptor, *platform.Error) {
 		return t.capabilities(m), nil
 	}))
-	rt.metadata(transport.Route{Pattern: "GET /v1/capabilities/{app}/{kind}/{name}", Summary: "Read a callable owner's exact retained input/output schema", Query: []transport.Param{{Name: "version", Description: "Retained query/compute/AI ordinal; zero selects code declarations or the installed compute/AI version"}}, Answer: platform.CapabilityDescriptor{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
+	rt.metadata(transport.Route{Pattern: "GET /v1/capabilities/{app}/{kind}/{name}", Summary: "Read a callable owner's exact retained input/output schema", Query: []transport.Param{{Name: "version", Description: "Retained query/compute/AI ordinal; zero selects code declarations or the installed compute/AI version"}}, Answer: runtimeprotocol.CapabilityDescriptor{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
 		version := 0
 		if text := r.URL.Query().Get("version"); text != "" {
 			var err error
@@ -163,11 +164,11 @@ func (t *Tenant) WriteView(kind string, m platform.Member, lang string, w http.R
 }
 
 func (h *Host) routesApplications(rt *routes) {
-	rt.metadata(transport.Route{Pattern: "GET /v1/applications", Summary: "Every application this member may open, with the pages each offers", Answer: []platform.ApplicationView{}},
-		translating(func(_ *http.Request, m platform.Member, t *Tenant) ([]platform.ApplicationView, *platform.Error) {
+	rt.metadata(transport.Route{Pattern: "GET /v1/applications", Summary: "Every application this member may open, with the pages each offers", Answer: []runtimeprotocol.ApplicationView{}},
+		translating(func(_ *http.Request, m platform.Member, t *Tenant) ([]runtimeprotocol.ApplicationView, *platform.Error) {
 			return t.Applications(m), nil
 		}))
-	rt.metadata(transport.Route{Pattern: "POST /v1/page-view", Summary: "One page of an application resolved for the caller: its object, fields and the actions they may take", Body: PageRequest{}, Answer: platform.PageView{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
+	rt.metadata(transport.Route{Pattern: "POST /v1/page-view", Summary: "One page of an application resolved for the caller: its object, fields and the actions they may take", Body: PageRequest{}, Answer: runtimeprotocol.PageView{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
 		body, ok := transport.DecodeOne[PageRequest](w, r, 1<<16)
 		if !ok || body.App == "" || body.Page == "" {
 			Reply(w, nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "A page view names one application and one page"))

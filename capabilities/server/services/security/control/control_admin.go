@@ -8,6 +8,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"platformserver/kernel/protocol"
 	"platformserver/platform"
 	"regexp"
 	"slices"
@@ -25,7 +26,7 @@ type HostArtifactView struct {
 	Note      string `json:"note,omitempty"`
 }
 
-func HostArtifacts(ids []string, active string, raw func(string) []byte, readCandidate func(string, []byte) (platform.ReleaseCandidate, error)) []HostArtifactView {
+func HostArtifacts(ids []string, active string, raw func(string) []byte, readCandidate func(string, []byte) (protocol.ReleaseCandidate, error)) []HostArtifactView {
 	out := []HostArtifactView{}
 	for _, id := range ids {
 		body := raw(id)
@@ -55,7 +56,7 @@ func (e SupportError) Error() string { return string(e) }
 
 var ErrUnknownGrant = SupportError("unknown support grant")
 
-func ApplyLifecycle(image *platform.HostControlImage, action string, quarantined bool, resumeBlocked func() bool) error {
+func ApplyLifecycle(image *protocol.HostControlImage, action string, quarantined bool, resumeBlocked func() bool) error {
 	if quarantined && action != "open" && action != "resume" {
 		return SupportError("a quarantined tenant is already stopped; repair it through recovery")
 	}
@@ -83,25 +84,25 @@ func ValidSupportSession(member, reason, subject string, minutes int, now time.T
 	return nil
 }
 
-func OpenSupportGrant(image *platform.HostControlImage, id, tenant, member, reason, subject string, minutes int, now time.Time) platform.SupportGrant {
-	grant := platform.SupportGrant{ID: id, Tenant: tenant, Member: member, Reason: reason, Opened: subject, Expires: now.UTC().Add(time.Duration(minutes) * time.Minute)}
+func OpenSupportGrant(image *protocol.HostControlImage, id, tenant, member, reason, subject string, minutes int, now time.Time) protocol.SupportGrant {
+	grant := protocol.SupportGrant{ID: id, Tenant: tenant, Member: member, Reason: reason, Opened: subject, Expires: now.UTC().Add(time.Duration(minutes) * time.Minute)}
 	image.Support = append(image.Support, grant)
 	return grant
 }
 
-func UseSupportGrant(image *platform.HostControlImage, id string, now time.Time) (platform.SupportGrant, error) {
-	i := slices.IndexFunc(image.Support, func(g platform.SupportGrant) bool { return g.ID == id })
+func UseSupportGrant(image *protocol.HostControlImage, id string, now time.Time) (protocol.SupportGrant, error) {
+	i := slices.IndexFunc(image.Support, func(g protocol.SupportGrant) bool { return g.ID == id })
 	if i < 0 {
-		return platform.SupportGrant{}, ErrUnknownGrant
+		return protocol.SupportGrant{}, ErrUnknownGrant
 	}
 	if !image.Support[i].Expires.After(now) {
-		return platform.SupportGrant{}, SupportError("the support session has ended")
+		return protocol.SupportGrant{}, SupportError("the support session has ended")
 	}
 	image.Support[i].Uses++
 	return image.Support[i], nil
 }
 
-func TailAudit(entries []platform.AuditEntry, n int) []platform.AuditEntry {
+func TailAudit(entries []protocol.AuditEntry, n int) []protocol.AuditEntry {
 	if len(entries) > n {
 		entries = entries[len(entries)-n:]
 	}
@@ -111,12 +112,12 @@ func TailAudit(entries []platform.AuditEntry, n int) []platform.AuditEntry {
 type MigrationHooks struct {
 	Hosted func() map[string]bool
 	Export func(typ string) ([]byte, *platform.Error)
-	Import func(typ string, data []byte) ([]platform.ImportRow, *platform.Error)
+	Import func(typ string, data []byte) ([]protocol.ImportRow, *platform.Error)
 }
 
-func MigrateRecords(from, to string, types []string, h MigrationHooks) (platform.MigrationResult, error) {
+func MigrateRecords(from, to string, types []string, h MigrationHooks) (protocol.MigrationResult, error) {
 	if len(types) == 0 {
-		return platform.MigrationResult{}, fmt.Errorf("name at least one type to migrate")
+		return protocol.MigrationResult{}, fmt.Errorf("name at least one type to migrate")
 	}
 	sorted := slices.Clone(types)
 	slices.Sort(sorted)
@@ -124,12 +125,12 @@ func MigrateRecords(from, to string, types []string, h MigrationHooks) (platform
 	hosted := h.Hosted()
 	for _, typ := range sorted {
 		if !hosted[typ] {
-			return platform.MigrationResult{}, fmt.Errorf("%s does not host %s", to, typ)
+			return protocol.MigrationResult{}, fmt.Errorf("%s does not host %s", to, typ)
 		}
 	}
 	sum := sha256.Sum256([]byte(from + "\x00" + to + "\x00" + strings.Join(sorted, ",")))
 	key := "migration:" + hex.EncodeToString(sum[:8])
-	result := platform.MigrationResult{From: from, To: to, Key: key, Types: []platform.MigrationType{}}
+	result := protocol.MigrationResult{From: from, To: to, Key: key, Types: []protocol.MigrationType{}}
 	for _, typ := range sorted {
 		data, refusal := h.Export(typ)
 		if refusal != nil {
@@ -139,7 +140,7 @@ func MigrateRecords(from, to string, types []string, h MigrationHooks) (platform
 		if refusal != nil {
 			return result, fmt.Errorf("import %s into %s: %s", typ, to, refusal.Code)
 		}
-		part := platform.MigrationType{Type: typ, Rows: len(rows)}
+		part := protocol.MigrationType{Type: typ, Rows: len(rows)}
 		for _, row := range rows {
 			if row.Outcome == "ok" {
 				part.Written++
@@ -152,8 +153,8 @@ func MigrateRecords(from, to string, types []string, h MigrationHooks) (platform
 	return result, nil
 }
 
-func LoadTemplates(dir string) []platform.TenantTemplate {
-	out := []platform.TenantTemplate{}
+func LoadTemplates(dir string) []protocol.TenantTemplate {
+	out := []protocol.TenantTemplate{}
 	if dir == "" {
 		return out
 	}
@@ -166,7 +167,7 @@ func LoadTemplates(dir string) []platform.TenantTemplate {
 		if err != nil {
 			continue
 		}
-		var t platform.TenantTemplate
+		var t protocol.TenantTemplate
 		if json.Unmarshal(raw, &t) != nil {
 			log.Printf("template %s: not a tenant template", e.Name())
 			continue
@@ -177,23 +178,23 @@ func LoadTemplates(dir string) []platform.TenantTemplate {
 		}
 		out = append(out, t)
 	}
-	slices.SortFunc(out, func(a, b platform.TenantTemplate) int { return strings.Compare(a.Name, b.Name) })
+	slices.SortFunc(out, func(a, b protocol.TenantTemplate) int { return strings.Compare(a.Name, b.Name) })
 	return out
 }
 
-func NewTenantSpec(templates func() []platform.TenantTemplate, req platform.CreateTenantRequest, by string, now time.Time) (platform.TenantSpec, platform.TenantTemplate, error) {
-	var tpl platform.TenantTemplate
+func NewTenantSpec(templates func() []protocol.TenantTemplate, req protocol.CreateTenantRequest, by string, now time.Time) (protocol.TenantSpec, protocol.TenantTemplate, error) {
+	var tpl protocol.TenantTemplate
 	if !ValidTenantID(req.ID) {
-		return platform.TenantSpec{}, tpl, fmt.Errorf("tenant id: 2-32 lower-case letters, digits and dashes, starting with a letter")
+		return protocol.TenantSpec{}, tpl, fmt.Errorf("tenant id: 2-32 lower-case letters, digits and dashes, starting with a letter")
 	}
 	if !strings.HasPrefix(req.Admin, "user:") && !strings.HasPrefix(req.Admin, "client:") {
-		return platform.TenantSpec{}, tpl, fmt.Errorf("admin: user:<email> or client:<id>")
+		return protocol.TenantSpec{}, tpl, fmt.Errorf("admin: user:<email> or client:<id>")
 	}
 	if req.Template != "" {
 		offered := templates()
-		i := slices.IndexFunc(offered, func(t platform.TenantTemplate) bool { return t.Name == req.Template })
+		i := slices.IndexFunc(offered, func(t protocol.TenantTemplate) bool { return t.Name == req.Template })
 		if i < 0 {
-			return platform.TenantSpec{}, tpl, fmt.Errorf("template %q: not offered", req.Template)
+			return protocol.TenantSpec{}, tpl, fmt.Errorf("template %q: not offered", req.Template)
 		}
 		tpl = offered[i]
 	}
@@ -213,8 +214,8 @@ func NewTenantSpec(templates func() []platform.TenantTemplate, req platform.Crea
 	if id == "" {
 		id = "admin"
 	}
-	seat := platform.Seat{Subjects: []string{req.Admin}, Member: platform.Member{ID: id, Roles: map[string]string{PlatformApp: Admin}}}
-	return platform.TenantSpec{ID: req.ID, Name: req.Name, Template: req.Template, Seats: []platform.Seat{seat}, Settings: settings, Created: now.UTC(), By: by}, tpl, nil
+	seat := protocol.Seat{Subjects: []string{req.Admin}, Member: platform.Member{ID: id, Roles: map[string]string{PlatformApp: Admin}}}
+	return protocol.TenantSpec{ID: req.ID, Name: req.Name, Template: req.Template, Seats: []protocol.Seat{seat}, Settings: settings, Created: now.UTC(), By: by}, tpl, nil
 }
 
 type FirstDecisionHooks struct {
@@ -225,7 +226,7 @@ type FirstDecisionHooks struct {
 	Submit       func(admin platform.Member, key int, schema, typ, id string, payload any) error
 }
 
-func FirstDecisions(h FirstDecisionHooks, spec platform.TenantSpec, tpl platform.TenantTemplate) error {
+func FirstDecisions(h FirstDecisionHooks, spec protocol.TenantSpec, tpl protocol.TenantTemplate) error {
 	if len(spec.Seats) == 0 {
 		return nil
 	}

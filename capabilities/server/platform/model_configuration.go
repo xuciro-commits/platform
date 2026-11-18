@@ -1,8 +1,6 @@
 package platform
 
 import (
-	"context"
-	"encoding/json"
 	"time"
 )
 
@@ -32,21 +30,6 @@ type ModelOptions struct {
 	Effort      string `json:"effort,omitempty"`
 }
 
-const (
-	AIStageDesign  = "design"
-	AIStageRuntime = "runtime"
-)
-
-type AIInferenceSite struct {
-	Provider string `json:"provider"`
-	Origin   string `json:"origin"`
-	Location string `json:"location"`
-}
-
-type AIInferencePolicy struct {
-	Runtime []AIInferenceSite `json:"runtime,omitempty"`
-}
-
 type AIModelBinding struct {
 	Stage             string             `json:"stage,omitempty"`
 	PolicyRevision    string             `json:"policyRevision,omitempty"`
@@ -74,36 +57,4 @@ func (o ModelOptions) Override(v ModelOptions) ModelOptions {
 		o.Effort = v.Effort
 	}
 	return o
-}
-
-func EstimateModelTokens(text string) int {
-	if text == "" {
-		return 0
-	}
-	return (len(text) + 2) / 3
-}
-
-type CatalogModel struct {
-	ID           string             `json:"id"`
-	Name         string             `json:"name,omitempty"`
-	Context      int                `json:"context,omitempty"`
-	Free         bool               `json:"free,omitempty"`
-	PriceKnown   bool               `json:"priceKnown,omitempty"`
-	Capabilities *ModelCapabilities `json:"capabilities,omitempty"`
-}
-
-type ModelToolProposal struct {
-	ID      string
-	Key     string
-	Action  Action
-	Target  string
-	Payload json.RawMessage
-}
-type ModelToolHost interface {
-	ModelToolSurface(Member) AgentSurface
-	AgentObjects(Member, string, json.RawMessage, time.Time) (AgentObservation, *Error)
-	Catalog(Member) []Action
-	ModelToolReads(Member) []string
-	Read(context.Context, Member, string, ...json.RawMessage) (any, *Error)
-	ProposeModelTool(Member, ModelToolProposal, time.Time) *Error
 }

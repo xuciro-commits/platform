@@ -17,7 +17,7 @@ import (
 )
 
 func (o *Owner) DispatchEntity() platform.Entity {
-	return platform.Entity{Type: platform.DispatchType, Title: "Device dispatch", Plural: "Device dispatches", Model: platform.DispatchRun{}, Display: "subject",
+	return platform.Entity{Type: ruleprotocol.DispatchType, Title: "Device dispatch", Plural: "Device dispatches", Model: platform.DispatchRun{}, Display: "subject",
 		Description: "Declared commands, durable delivery attempts, status reads and authorized human intervention. Control loops and safety interlocks remain local to the equipment.",
 		Scope: ScopeWithParticipants(func(value any) []string {
 			run := value.(platform.DispatchRun)
@@ -27,9 +27,9 @@ func (o *Owner) DispatchEntity() platform.Entity {
 
 func DispatchActions() []platform.Action {
 	return []platform.Action{
-		{Schema: platform.DispatchAnswerSchema, Target: platform.DispatchType, Title: "Record dispatch status", Description: "Retain transport evidence and the declared status read.", Capability: "dispatches", Automation: true, Payload: []platform.Field{}},
-		{Schema: platform.DispatchTickSchema, Target: platform.DispatchType, Title: "Advance dispatch work", Description: "Apply the business deadline and explicit intervention policy.", Capability: "dispatches", Automation: true, Payload: []platform.Field{}},
-		{Schema: platform.DispatchReviewSchema, Target: platform.DispatchType, Title: "Review device dispatch", Description: "Resend, change target, mark complete or cancel with recorded evidence.", Capability: "dispatches", Roles: []string{platform.AnyMember}, Payload: []platform.Field{
+		{Schema: ruleprotocol.DispatchAnswerSchema, Target: ruleprotocol.DispatchType, Title: "Record dispatch status", Description: "Retain transport evidence and the declared status read.", Capability: "dispatches", Automation: true, Payload: []platform.Field{}},
+		{Schema: ruleprotocol.DispatchTickSchema, Target: ruleprotocol.DispatchType, Title: "Advance dispatch work", Description: "Apply the business deadline and explicit intervention policy.", Capability: "dispatches", Automation: true, Payload: []platform.Field{}},
+		{Schema: ruleprotocol.DispatchReviewSchema, Target: ruleprotocol.DispatchType, Title: "Review device dispatch", Description: "Resend, change target, mark complete or cancel with recorded evidence.", Capability: "dispatches", Roles: []string{platform.AnyMember}, Payload: []platform.Field{
 			{Name: "outcome", Type: "string", Required: true, Choices: []string{"retry", "retarget", "complete", "cancel"}},
 			{Name: "target", Type: "string", Description: "The replacement external connection"},
 			{Name: "reason", Type: "string", Required: true, Description: "Evidence supporting the intervention"},

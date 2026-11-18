@@ -117,7 +117,7 @@ func (b *Build) submitResource(c platform.Caller, s *pb.Submission, now time.Tim
 			}
 			pending := []Resource{}
 			for _, item := range input.Resources {
-				if item.Ref.Check() != nil || platform.ResourceID(c.Tenant, item.Ref) != item.ID {
+				if item.Ref.Check() != nil || protocol.ResourceID(c.Tenant, item.Ref) != item.ID {
 					return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "A resource registration needs its RID and reference")
 				}
 				if _, exists := platform.Get[Resource](c, item.ID); !exists {
@@ -234,7 +234,7 @@ func (b *Build) ensureWorkspace(c platform.Caller, r *pb.ChangeRecord) {
 	if _, exists := platform.Get[protocol.Application](c, WorkspaceProject); !exists {
 		c.Put(r, protocol.Application{Record: platform.Record{ID: WorkspaceProject}, Name: WorkspaceProject, Title: "Workspace", Pages: []string{}, State: "draft"})
 		ref := platform.AssetRef{App: ID, Kind: platform.AssetApp, Name: WorkspaceProject}
-		c.Put(r, Resource{Record: platform.Record{ID: platform.ResourceID(c.Tenant, ref)}, Ref: ref, Type: protocol.AppType, Draft: WorkspaceProject, Project: WorkspaceProject, Title: "Workspace", State: "active", Version: 1})
+		c.Put(r, Resource{Record: platform.Record{ID: protocol.ResourceID(c.Tenant, ref)}, Ref: ref, Type: protocol.AppType, Draft: WorkspaceProject, Project: WorkspaceProject, Title: "Workspace", State: "active", Version: 1})
 	}
 }
 
@@ -266,7 +266,7 @@ func (b *Build) trackResource(c platform.Caller, r *pb.ChangeRecord, typ, id str
 	if typ == TestPlanType && draft.Variant == "evaluation-set" {
 		ref.Kind = platform.AssetEvaluation
 	}
-	rid := platform.ResourceID(c.Tenant, ref)
+	rid := protocol.ResourceID(c.Tenant, ref)
 	resource, exists := platform.Get[Resource](c, rid)
 	if !exists {
 		project := submissionProject(r.GetSubmission())
@@ -389,7 +389,7 @@ func (b *Build) saveResource(c platform.Caller, s *pb.Submission, now time.Time)
 		if err != nil {
 			return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
 		}
-		rid := platform.ResourceID(c.Tenant, ref)
+		rid := protocol.ResourceID(c.Tenant, ref)
 		resource, known := platform.Get[Resource](c, rid)
 		if known {
 			input.Project = resource.Project
@@ -492,7 +492,7 @@ func (b *Build) projectFromSpec(c platform.Caller, typ string, spec json.RawMess
 		return ""
 	}
 	if value.App != "" {
-		if resource, found := platform.Get[Resource](c, platform.ResourceID(c.Tenant, platform.AssetRef{App: value.App, Kind: platform.AssetApp, Name: value.App})); found {
+		if resource, found := platform.Get[Resource](c, protocol.ResourceID(c.Tenant, platform.AssetRef{App: value.App, Kind: platform.AssetApp, Name: value.App})); found {
 			return resource.Project
 		}
 	}
@@ -507,7 +507,7 @@ func (b *Build) projectFromSpec(c platform.Caller, typ string, spec json.RawMess
 		if name == "" {
 			continue
 		}
-		if resource, found := platform.Get[Resource](c, platform.ResourceID(c.Tenant, platform.AssetRef{App: ID, Kind: platform.AssetObject, Name: name})); found {
+		if resource, found := platform.Get[Resource](c, protocol.ResourceID(c.Tenant, platform.AssetRef{App: ID, Kind: platform.AssetObject, Name: name})); found {
 			return resource.Project
 		}
 	}

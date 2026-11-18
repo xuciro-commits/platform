@@ -3,13 +3,14 @@ package actions
 import (
 	"encoding/json"
 	"fmt"
+	"platformserver/kernel/protocol"
 	"slices"
 	"strings"
 
 	"platformserver/platform"
 )
 
-func PlanMailNotice(tenant string, n platform.Notification, to platform.Reach, endpoints func() []Endpoint, say func(lang, s string) string) []platform.Effect {
+func PlanMailNotice(tenant string, n platform.Notification, to protocol.Reach, endpoints func() []Endpoint, say func(lang, s string) string) []platform.Effect {
 	var effects []platform.Effect
 	address, lang := to.Address, to.Language
 	if address == "" || !to.Mail {

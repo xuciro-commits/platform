@@ -3,6 +3,7 @@ package pages
 import (
 	"fmt"
 	"maps"
+	"platformserver/kernel/protocol"
 	"platformserver/platform"
 	"regexp"
 	"slices"
@@ -433,7 +434,7 @@ func checkCreateForm(p platform.Page, b platform.PageDataBinding, info platform.
 		}
 		switch binding.Source {
 		case "literal":
-			if err := platform.CapabilityFieldSchema(field.Type, field.Title, field.Choices).Validate(binding.Value, 64<<10); err != nil {
+			if err := protocol.CapabilityFieldSchema(field.Type, field.Title, field.Choices).Validate(binding.Value, 64<<10); err != nil {
 				return fmt.Errorf("%s: form input %s: %w", where, name, err)
 			}
 		case "subject":

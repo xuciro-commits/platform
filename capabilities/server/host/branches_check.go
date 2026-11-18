@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	runtimekernel "platformserver/kernel"
+	"platformserver/kernel/protocol"
 	"platformserver/services/actions"
 	"platformserver/services/resources/merge"
 	"time"
@@ -73,8 +74,8 @@ func (t *Tenant) branchWorldLocked(m platform.Member, id string, now time.Time) 
 	})
 }
 
-func (t *Tenant) branchPreview(m platform.Member) func([]build.JointDraftRef) (branches.GraphPreview, platform.ReleaseCandidate, error) {
-	return func(drafts []build.JointDraftRef) (branches.GraphPreview, platform.ReleaseCandidate, error) {
+func (t *Tenant) branchPreview(m platform.Member) func([]build.JointDraftRef) (branches.GraphPreview, protocol.ReleaseCandidate, error) {
+	return func(drafts []build.JointDraftRef) (branches.GraphPreview, protocol.ReleaseCandidate, error) {
 		preview, candidate, err := t.releasePlannerLocked().Preview(drafts, m)
 		return branches.GraphPreview{Diagnostic: preview.Diagnostic, Candidate: candidate.ID, Added: preview.Added, Removed: preview.Removed, Changed: preview.Changed}, candidate, err
 	}
@@ -90,7 +91,7 @@ func (t *Tenant) stageGraphLocked(m platform.Member, stage branches.Stage[*stage
 		reader = view
 		owner := view.builders[build.ID]
 		return owner, owner != nil, nil
-	}, func(drafts []build.JointDraftRef) (branches.GraphPreview, platform.ReleaseCandidate, error) {
+	}, func(drafts []build.JointDraftRef) (branches.GraphPreview, protocol.ReleaseCandidate, error) {
 		return reader.branchPreview(m)(drafts)
 	}, actions)
 	if drafts == nil {

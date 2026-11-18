@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"maps"
+	"platformserver/kernel/protocol"
 	"platformserver/platform"
 	pageowner "platformserver/services/apps/pages"
 	"platformserver/services/ontology"
@@ -216,7 +217,7 @@ func codeApprovalDescriptor(approval *platform.Approval) any {
 	}{Pending: approval.Pending, Rejected: approval.Rejected, Levels: levels}
 }
 
-func CandidateWithBindings(resolver publication.Resolver, roots []platform.AssetRef, available []platform.ReleaseAsset, fixed []platform.AssetRef, resolve func(platform.AssetRef, string, ...string) (platform.ReleaseAsset, error)) (platform.ReleaseCandidate, error) {
+func CandidateWithBindings(resolver publication.Resolver, roots []platform.AssetRef, available []platform.ReleaseAsset, fixed []platform.AssetRef, resolve func(platform.AssetRef, string, ...string) (platform.ReleaseAsset, error)) (protocol.ReleaseCandidate, error) {
 	assets := slices.Clone(available)
 	indices := map[platform.AssetRef]int{}
 	for i, asset := range assets {
@@ -282,13 +283,13 @@ func CandidateWithBindings(resolver publication.Resolver, roots []platform.Asset
 				}
 			}
 		} else if ref.Kind == platform.AssetEvaluation {
-			descriptor, err := platform.ReadEvaluationSet(asset.Body)
+			descriptor, err := protocol.ReadEvaluationSet(asset.Body)
 			if err != nil {
 				return err
 			}
 			bindings = append(bindings, descriptor.Function)
 		} else if ref.Kind == platform.AssetFlow {
-			var flow platform.FlowReleaseDescriptor
+			var flow protocol.FlowReleaseDescriptor
 			if err := json.Unmarshal(asset.Body, &flow); err != nil {
 				return err
 			}
@@ -411,30 +412,30 @@ func CandidateWithBindings(resolver publication.Resolver, roots []platform.Asset
 			break
 		}
 		if !errors.Is(err, restart) {
-			return platform.ReleaseCandidate{}, err
+			return protocol.ReleaseCandidate{}, err
 		}
 		if pass >= 4*len(assets) {
-			return platform.ReleaseCandidate{}, fmt.Errorf("page content bindings do not converge")
+			return protocol.ReleaseCandidate{}, fmt.Errorf("page content bindings do not converge")
 		}
 	}
 	for _, ref := range slices.SortedFunc(maps.Keys(pins), func(a, b platform.AssetRef) int { return strings.Compare(a.String(), b.String()) }) {
 		version := pins[ref]
 		i, exists := indices[ref]
 		if !exists {
-			return platform.ReleaseCandidate{}, fmt.Errorf("release requires missing bound asset %s", ref)
+			return protocol.ReleaseCandidate{}, fmt.Errorf("release requires missing bound asset %s", ref)
 		}
 		if assets[i].SourceVersion == version {
 			continue
 		}
 		if slices.Contains(fixed, ref) {
-			return platform.ReleaseCandidate{}, fmt.Errorf("asset %s differs from the version pinned by its dependents", ref)
+			return protocol.ReleaseCandidate{}, fmt.Errorf("asset %s differs from the version pinned by its dependents", ref)
 		}
 		asset, err := resolve(ref, version)
 		if err != nil {
-			return platform.ReleaseCandidate{}, err
+			return protocol.ReleaseCandidate{}, err
 		}
 		if asset.Ref != ref || asset.SourceVersion != version {
-			return platform.ReleaseCandidate{}, fmt.Errorf("asset %s returned a different retained version", ref)
+			return protocol.ReleaseCandidate{}, fmt.Errorf("asset %s returned a different retained version", ref)
 		}
 		assets[i] = asset
 	}
@@ -634,10 +635,10 @@ func CodeAssets(app platform.App, allDefinitions []platform.Definition, definiti
 	return assets, nil
 }
 
-func (p Planner) Candidate(selected []platform.AssetRef, builderAssets []platform.ReleaseAsset, additionalRoots []platform.AssetRef) (platform.ReleaseCandidate, error) {
+func (p Planner) Candidate(selected []platform.AssetRef, builderAssets []platform.ReleaseAsset, additionalRoots []platform.AssetRef) (protocol.ReleaseCandidate, error) {
 	available, err := p.Assets(builderAssets, true)
 	if err != nil {
-		return platform.ReleaseCandidate{}, err
+		return protocol.ReleaseCandidate{}, err
 	}
 	var roots []platform.AssetRef
 	for _, ref := range selected {
@@ -652,10 +653,10 @@ func (p Planner) Candidate(selected []platform.AssetRef, builderAssets []platfor
 	return p.WithBindings(roots, available, selected)
 }
 
-func (p Planner) Preview(drafts []build.JointDraftRef, member platform.Member) (ReleasePreview, platform.ReleaseCandidate, error) {
+func (p Planner) Preview(drafts []build.JointDraftRef, member platform.Member) (ReleasePreview, protocol.ReleaseCandidate, error) {
 	owner := p.Drafts
 	if owner == nil {
-		return ReleasePreview{}, platform.ReleaseCandidate{}, fmt.Errorf("tenant has no builder")
+		return ReleasePreview{}, protocol.ReleaseCandidate{}, fmt.Errorf("tenant has no builder")
 	}
 	assets, diagnostic := owner.DraftReleaseAssetsMulti(drafts, member, p.withReview)
 	reply := ReleasePreview{CandidateActions: []platform.Action{}, Included: []platform.AssetRef{}, Added: []platform.AssetRef{}, Removed: []platform.AssetRef{}, Changed: []platform.AssetRef{}}
@@ -690,14 +691,14 @@ func (p Planner) Preview(drafts []build.JointDraftRef, member platform.Member) (
 				}
 			}
 		}
-		return reply, platform.ReleaseCandidate{}, nil
+		return reply, protocol.ReleaseCandidate{}, nil
 	}
-	var current platform.ReleaseCandidate
+	var current protocol.ReleaseCandidate
 	var oldOwners []platform.AssetRef
 	if len(assets.Priors) > 0 {
 		available, err := p.Assets(assets.Before, true)
 		if err != nil {
-			return ReleasePreview{}, platform.ReleaseCandidate{}, err
+			return ReleasePreview{}, protocol.ReleaseCandidate{}, err
 		}
 		for _, prior := range assets.Priors {
 			for _, owner := range DependentRoots(prior, available) {
@@ -708,7 +709,7 @@ func (p Planner) Preview(drafts []build.JointDraftRef, member platform.Member) (
 		}
 		current, err = p.WithBindings(oldOwners, available, assets.Priors)
 		if err != nil {
-			return ReleasePreview{}, platform.ReleaseCandidate{}, fmt.Errorf("installed definition: %w", err)
+			return ReleasePreview{}, protocol.ReleaseCandidate{}, fmt.Errorf("installed definition: %w", err)
 		}
 		reply.CurrentID = current.ID
 		oldOwners = slices.DeleteFunc(oldOwners, func(ref platform.AssetRef) bool {
@@ -718,12 +719,12 @@ func (p Planner) Preview(drafts []build.JointDraftRef, member platform.Member) (
 	candidate, err := p.Candidate(assets.Nexts, assets.After, oldOwners)
 	if err != nil {
 		reply.Diagnostic = err.Error()
-		return reply, platform.ReleaseCandidate{}, nil
+		return reply, protocol.ReleaseCandidate{}, nil
 	}
 	if len(drafts) > 1 {
 		if err := p.Validate(candidate, member, time.Now().UTC()); err != nil {
 			reply.Diagnostic = err.Error()
-			return reply, platform.ReleaseCandidate{}, nil
+			return reply, protocol.ReleaseCandidate{}, nil
 		}
 	}
 	reply.CandidateID = candidate.ID
@@ -745,14 +746,14 @@ type Planner struct {
 	Registry    func() (*publication.AssetRegistry, error)
 	Resolver    publication.Resolver
 	Drafts      build.ConstructionDrafts
-	Validate    func(platform.ReleaseCandidate, platform.Member, time.Time) error
+	Validate    func(protocol.ReleaseCandidate, platform.Member, time.Time) error
 	withReview  bool
 }
 
-func (p Planner) WithBindings(roots []platform.AssetRef, available []platform.ReleaseAsset, fixed []platform.AssetRef) (platform.ReleaseCandidate, error) {
+func (p Planner) WithBindings(roots []platform.AssetRef, available []platform.ReleaseAsset, fixed []platform.AssetRef) (protocol.ReleaseCandidate, error) {
 	registry, err := p.Registry()
 	if err != nil {
-		return platform.ReleaseCandidate{}, err
+		return protocol.ReleaseCandidate{}, err
 	}
 	return CandidateWithBindings(p.Resolver, roots, available, fixed, registry.ResolvePinned)
 }

@@ -3,6 +3,7 @@ package ontology
 import (
 	"encoding/json"
 	"fmt"
+	"platformserver/kernel/protocol"
 	"reflect"
 	"slices"
 	"time"
@@ -274,7 +275,7 @@ func ReadObjectPublication(image []byte) (Object, error) {
 }
 
 type ObjectDraftEnvironment struct {
-	Host             platform.BuildHost
+	Host             protocol.BuildHost
 	Authority        platform.Authority
 	BindActions      func(platform.Caller, *Object) error
 	CaptureExtension func(*Object) error
@@ -385,7 +386,7 @@ func AppendObjectAssets(objects []Object, sourceVersion string, add func(platfor
 }
 
 type ObjectInstallationEnvironment struct {
-	Host           platform.BuildHost
+	Host           protocol.BuildHost
 	Entity         func(Object) platform.Entity
 	CheckProcesses func(platform.Caller, platform.Entity, platform.Entity, bool, bool) error
 	Pages          func(Object) ([]platform.Page, string, error)
@@ -446,7 +447,7 @@ func ObjectFreezePublication(objects []Object, retained func(platform.ReleaseAss
 }
 
 type ObjectPublicationEnvironment struct {
-	Host      func() platform.BuildHost
+	Host      func() protocol.BuildHost
 	Authority func() platform.Authority
 	Entity    func(Object) platform.Entity
 	Portable  func(Object) (Object, error)

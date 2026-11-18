@@ -32,8 +32,8 @@ func (a evaluationApp) Manifest() platform.Manifest {
 
 type CandidateEvaluation struct {
 	Builder   string
-	Candidate func(id string) (platform.ReleaseCandidate, error)
-	Owner     platform.ReleaseExecutionOwner
+	Candidate func(id string) (protocol.ReleaseCandidate, error)
+	Owner     protocol.ReleaseExecutionOwner
 }
 
 func (c CandidateEvaluation) App(candidate, agent string) (platform.App, string, error) {
@@ -64,7 +64,7 @@ func (c CandidateEvaluation) App(candidate, agent string) (platform.App, string,
 type ReleaseEvaluation struct {
 	Tenant       string
 	Candidate    CandidateEvaluation
-	Existing     func(id string) (platform.Evaluation, bool)
+	Existing     func(id string) (protocol.Evaluation, bool)
 	DefaultModel func() string
 	Resolve      func(model string, options platform.ModelOptions) (string, *platform.Error)
 	Accept       func(*pb.Submission) *platform.Error
@@ -109,9 +109,9 @@ func (r ReleaseEvaluation) Start(m platform.Member, candidate, agent, key string
 	if model == "" {
 		return "", fmt.Errorf("set the agent model before evaluating a candidate")
 	}
-	sub := &pb.Submission{TenantId: r.Tenant, PrincipalId: m.ID, Authority: platform.AgentApp,
-		IdempotencyKey: "evaluation:" + identity, Target: &pb.EntityRef{Type: platform.EvaluationType, Id: id},
-		Schema: &pb.SchemaRef{Name: platform.SchemaEvalStart, Version: 1}, Payload: platform.Raw(map[string]any{"agent": agent, "model": model, "suite": true, "candidate": candidate})}
+	sub := &pb.Submission{TenantId: r.Tenant, PrincipalId: m.ID, Authority: protocol.AgentApp,
+		IdempotencyKey: "evaluation:" + identity, Target: &pb.EntityRef{Type: protocol.EvaluationType, Id: id},
+		Schema: &pb.SchemaRef{Name: protocol.SchemaEvalStart, Version: 1}, Payload: platform.Raw(map[string]any{"agent": agent, "model": model, "suite": true, "candidate": candidate})}
 	if refusal := r.Accept(sub); refusal != nil {
 		return "", fmt.Errorf("agent evaluation was refused: %s", refusal.Message)
 	}
@@ -121,9 +121,9 @@ func (r ReleaseEvaluation) Start(m platform.Member, candidate, agent, key string
 type StepPreparation struct {
 	Quarantined func() bool
 	Recording   func() bool
-	Run         func(id string) (platform.AgentRunRecord, bool)
-	Evaluation  func(id string) (platform.Evaluation, bool)
-	Allows      func(platform.AgentRunRecord) bool
+	Run         func(id string) (protocol.AgentRunRecord, bool)
+	Evaluation  func(id string) (protocol.Evaluation, bool)
+	Allows      func(protocol.AgentRunRecord) bool
 	Accept      func(protocol.AgentResultStep, time.Time) error
 	Failed      func(now time.Time, run, detail string)
 }
@@ -166,9 +166,9 @@ func (s StepPreparation) Prepare(b protocol.AgentResultStep, now time.Time) bool
 
 type EvaluationQueue struct {
 	Stopped  func() bool
-	Queued   func() ([]platform.Evaluation, *platform.Error)
-	Current  func(id string) (platform.Evaluation, bool)
-	Evaluate func(ev platform.Evaluation, now time.Time, step func(*platform.Evaluation) bool) platform.Evaluation
+	Queued   func() ([]protocol.Evaluation, *platform.Error)
+	Current  func(id string) (protocol.Evaluation, bool)
+	Evaluate func(ev protocol.Evaluation, now time.Time, step func(*protocol.Evaluation) bool) protocol.Evaluation
 	Apply    func(protocol.AgentResultStep, time.Time) bool
 }
 
@@ -181,7 +181,7 @@ func (q EvaluationQueue) Drain(now time.Time) {
 		if refusal != nil || len(evals) == 0 {
 			return
 		}
-		report := q.Evaluate(evals[0], now, func(ev *platform.Evaluation) bool {
+		report := q.Evaluate(evals[0], now, func(ev *protocol.Evaluation) bool {
 			revision := ev.Revision
 			q.Apply(protocol.AgentResultStep{Run: ev.ID, Evaluation: ev}, now)
 			current, known := q.Current(ev.ID)

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
+	"platformserver/kernel/protocol"
 	"platformserver/kernel/transport"
 	"platformserver/platform"
 	"platformserver/services/devops/packages"
@@ -23,10 +24,10 @@ func (h *Host) routesPackages(rt *routes) {
 		return value, err
 	}))
 	h.routesPackageReview(rt)
-	rt.authorized(transport.Route{Pattern: "POST /v1/packages/inspect", Summary: "Inspect an online or local platform package without installing or executing it", Body: platform.PackageInspectRequest{}, Answer: platform.PackagePreview{}}, controlowner.PlatformApp, []string{controlowner.Admin}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
-		var request platform.PackageInspectRequest
+	rt.authorized(transport.Route{Pattern: "POST /v1/packages/inspect", Summary: "Inspect an online or local platform package without installing or executing it", Body: protocol.PackageInspectRequest{}, Answer: protocol.PackagePreview{}}, controlowner.PlatformApp, []string{controlowner.Admin}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
+		var request protocol.PackageInspectRequest
 		err := transport.DecodeBodyLimit(r, &request, packages.MaxPackageImportBytes+4096)
-		var preview platform.PackagePreview
+		var preview protocol.PackagePreview
 		if err == nil {
 			preview, err = t.inspectPackage(r.Context(), request)
 		}
@@ -69,20 +70,20 @@ func (t *Tenant) PackagePreparation(ctx context.Context, m platform.Member, id, 
 	})
 }
 
-func (t *Tenant) inspectPackage(ctx context.Context, request platform.PackageInspectRequest) (platform.PackagePreview, error) {
+func (t *Tenant) inspectPackage(ctx context.Context, request protocol.PackageInspectRequest) (protocol.PackagePreview, error) {
 	send := t.sender()
-	return packages.Inspect(ctx, PublicationResolver(), t.ID, request, send, t.files(), func(ctx context.Context, descriptor platform.PackageDescriptor) (platform.Precheck, error) {
-		precheck, refusal := recordRead(t, ctx, func(t *Tenant) (platform.Precheck, *platform.Error) {
+	return packages.Inspect(ctx, PublicationResolver(), t.ID, request, send, t.files(), func(ctx context.Context, descriptor platform.PackageDescriptor) (protocol.Precheck, error) {
+		precheck, refusal := recordRead(t, ctx, func(t *Tenant) (protocol.Precheck, *platform.Error) {
 			owner, ok := t.App(controlowner.PlatformApp).(interface {
-				Precheck(platform.PackageDescriptor) platform.Precheck
+				Precheck(platform.PackageDescriptor) protocol.Precheck
 			})
 			if !ok {
-				return platform.Precheck{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Package management is unavailable")
+				return protocol.Precheck{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Package management is unavailable")
 			}
 			return owner.Precheck(descriptor), nil
 		})
 		if refusal != nil {
-			return platform.Precheck{}, fmt.Errorf("The package dependencies could not be inspected")
+			return protocol.Precheck{}, fmt.Errorf("The package dependencies could not be inspected")
 		}
 		return precheck, nil
 	})

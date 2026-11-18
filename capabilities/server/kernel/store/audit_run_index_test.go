@@ -1,10 +1,9 @@
 package store
 
 import (
+	"platformserver/kernel/protocol"
 	"testing"
 	"time"
-
-	"platformserver/platform"
 )
 
 func TestFileAuditAndRunIndexSurviveReopen(t *testing.T) {
@@ -18,18 +17,18 @@ func TestFileAuditAndRunIndexSurviveReopen(t *testing.T) {
 	}
 	at := time.Date(2026, 11, 5, 10, 0, 0, 0, time.UTC)
 	first := open()
-	if err := first.SaveAuditEntries("tenant-a", []platform.AuditEntry{
+	if err := first.SaveAuditEntries("tenant-a", []protocol.AuditEntry{
 		{ID: "audit-a", At: at, Member: "admin", App: "platform", Action: "build.object.create", Target: "build.object/OBJ1"},
 	}); err != nil {
 		t.Fatal(err)
 	}
-	if err := first.SavePersonalReads("tenant-a", []platform.PersonalRead{
+	if err := first.SavePersonalReads("tenant-a", []protocol.PersonalRead{
 		{ID: "read-a", At: at, Member: "admin", Type: "build.object", IDs: []string{"OBJ1"}, Fields: []string{"email"}},
 	}); err != nil {
 		t.Fatal(err)
 	}
 	payload := []byte(`{"id":"source:SRC1","type":"sync","status":"failed"}`)
-	if err := first.ReplaceRunIndex("tenant-a", "admin", []platform.RunIndexEntry{
+	if err := first.ReplaceRunIndex("tenant-a", "admin", []protocol.RunIndexEntry{
 		{ID: "source:SRC1", Type: "sync", Source: "source", App: "build", Status: "failed", At: at, Payload: payload},
 	}); err != nil {
 		t.Fatal(err)
@@ -38,21 +37,21 @@ func TestFileAuditAndRunIndexSurviveReopen(t *testing.T) {
 
 	second := open()
 	defer second.Close()
-	audit, err := second.QueryAuditEntries(platform.AuditQuery{Tenant: "tenant-a", To: at.Add(time.Hour), Limit: 10})
+	audit, err := second.QueryAuditEntries(protocol.AuditQuery{Tenant: "tenant-a", To: at.Add(time.Hour), Limit: 10})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if len(audit.Entries) != 1 || audit.Entries[0].ID != "audit-a" {
 		t.Fatalf("audit after reopen: %+v", audit.Entries)
 	}
-	reads, err := second.QueryPersonalReads(platform.PersonalReadQuery{Tenant: "tenant-a", To: at.Add(time.Hour), Limit: 10})
+	reads, err := second.QueryPersonalReads(protocol.PersonalReadQuery{Tenant: "tenant-a", To: at.Add(time.Hour), Limit: 10})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if len(reads.Entries) != 1 || reads.Entries[0].ID != "read-a" {
 		t.Fatalf("personal reads after reopen: %+v", reads.Entries)
 	}
-	runs, err := second.QueryRunIndex(platform.RunIndexQuery{Tenant: "tenant-a", Scope: "admin", Limit: 10})
+	runs, err := second.QueryRunIndex(protocol.RunIndexQuery{Tenant: "tenant-a", Scope: "admin", Limit: 10})
 	if err != nil {
 		t.Fatal(err)
 	}

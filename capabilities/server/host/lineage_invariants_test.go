@@ -17,21 +17,21 @@ import (
 )
 
 func TestInvariantK12LineageGuardAndProjectScope(t *testing.T) {
-	delegated := platform.Seat{Subjects: []string{"delegated"}, Member: platform.Member{ID: "delegated", Grants: []platform.Grant{{App: build.ID, Role: build.Builder, By: "project:p1"}}}}
-	uncleared := platform.Seat{Subjects: []string{"uncleared"}, Member: platform.Member{ID: "uncleared"}}
+	delegated := protocol.Seat{Subjects: []string{"delegated"}, Member: platform.Member{ID: "delegated", Grants: []platform.Grant{{App: build.ID, Role: build.Builder, By: "project:p1"}}}}
+	uncleared := protocol.Seat{Subjects: []string{"uncleared"}, Member: platform.Member{ID: "uncleared"}}
 	live := newInvariantTenant(t, "invariant-k12", delegated, uncleared)
 	live.accept(t, protocol.AppType+".create", protocol.AppType, "p1", map[string]any{"name": "projectone", "title": "Project one"})
 	live.accept(t, protocol.AppType+".create", protocol.AppType, "p2", map[string]any{"name": "projecttwo", "title": "Project two"})
 	project := func(id, title string, members []platform.ProjectMember) {
 		t.Helper()
-		sub := live.submission(platform.SchemaProjectSave, platform.ProjectType, id, map[string]any{"title": title, "members": members})
+		sub := live.submission(protocol.SchemaProjectSave, protocol.ProjectType, id, map[string]any{"title": title, "members": members})
 		sub.Authority = "platform"
 		if _, refusal := live.Submit(live.member(t), sub, invariantClock); refusal != nil {
 			t.Fatalf("%s project save: %s: %s", id, refusal.Code, refusal.Message)
 		}
 	}
-	project("p1", "Project one", []platform.ProjectMember{{Member: "builder", Role: platform.ProjectOwnerRole}, {Member: "delegated", Role: platform.ProjectEditorRole}})
-	project("p2", "Project two", []platform.ProjectMember{{Member: "builder", Role: platform.ProjectOwnerRole}})
+	project("p1", "Project one", []platform.ProjectMember{{Member: "builder", Role: protocol.ProjectOwnerRole}, {Member: "delegated", Role: protocol.ProjectEditorRole}})
+	project("p2", "Project two", []platform.ProjectMember{{Member: "builder", Role: protocol.ProjectOwnerRole}})
 	connection := func(project, id string) {
 		t.Helper()
 		sub := live.submission("build.connection.create", dataowner.ConnectionType, id, map[string]any{
@@ -139,7 +139,7 @@ func TestInvariantK12LineageImpactFieldsAndScope(t *testing.T) {
 	live.accept(t, dataowner.SchemaDatasetLoad, dataowner.DatasetType, "OUTPUT", map[string]any{"rows": []map[string]any{{"id": "A1", "title": "from pipeline"}}})
 	live.accept(t, "build.pipeline.create", dataowner.PipelineType, "PIPE", map[string]any{
 		"name": "rename", "title": "Rename", "input": "INPUT", "outputDataset": "OUTPUT",
-		"steps": []platform.TransformStep{{Kind: "rename", From: "note", To: "title"}},
+		"steps": []protocol.TransformStep{{Kind: "rename", From: "note", To: "title"}},
 	})
 	object := invariantObject("alpha", "Alpha")
 	object["fields"] = append(object["fields"].([]ontology.Field), ontology.Field{Name: "manual", Title: "Manual", Type: "text"})
@@ -341,11 +341,11 @@ func TestInvariantK12LineageFieldDerivationAndWriteback(t *testing.T) {
 		},
 		Pipelines: []dataowner.Pipeline{
 			{Record: platform.Record{ID: "COMPUTE"}, Name: "compute", Title: "Compute", Input: "IN", OutputDataset: "OUT",
-				Steps: []platform.TransformStep{{Kind: "compute", To: "label", FormulaExpr: &platform.Expr{Kind: "text", Ref: "note"}}}},
+				Steps: []protocol.TransformStep{{Kind: "compute", To: "label", FormulaExpr: &platform.Expr{Kind: "text", Ref: "note"}}}},
 			{Record: platform.Record{ID: "LOOKUP"}, Name: "lookup", Title: "Lookup", Input: "IN", OutputDataset: "OUT",
-				Steps: []platform.TransformStep{{Kind: "lookup", Dataset: "LOOK", Columns: []string{"value"}, Column: "key", Match: "key"}}},
+				Steps: []protocol.TransformStep{{Kind: "lookup", Dataset: "LOOK", Columns: []string{"value"}, Column: "key", Match: "key"}}},
 			{Record: platform.Record{ID: "JOIN"}, Name: "join", Title: "Join", Input: "IN", OutputDataset: "JOINED",
-				Steps: []platform.TransformStep{{Kind: "join", Dataset: "LOOK"}}},
+				Steps: []protocol.TransformStep{{Kind: "join", Dataset: "LOOK"}}},
 		},
 		Objects: []ontology.Object{{
 			Record: platform.Record{ID: "OBJ"}, Name: "alpha", Title: "Alpha",

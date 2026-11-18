@@ -19,6 +19,7 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
+	"platformserver/kernel/protocol"
 	"platformserver/platform"
 	"regexp"
 	"slices"
@@ -44,8 +45,8 @@ func NewWasmEngine(concurrency int) *WasmEngine {
 	return &WasmEngine{cache: wazero.NewCompilationCache(), slots: make(chan struct{}, concurrency), modules: map[string]bool{}}
 }
 func (e *WasmEngine) Close(ctx context.Context) error { return e.cache.Close(ctx) }
-func (e *WasmEngine) Execute(ctx context.Context, q platform.WasmRequest) (platform.WasmResponse, error) {
-	var result platform.WasmResponse
+func (e *WasmEngine) Execute(ctx context.Context, q protocol.WasmRequest) (protocol.WasmResponse, error) {
+	var result protocol.WasmResponse
 	hash := sha256.Sum256(q.Module)
 	if len(q.Module) == 0 || len(q.Module) > 16<<20 || hex.EncodeToString(hash[:]) != q.Digest || q.Limits.MemoryPages < 1 || q.Limits.MemoryPages > 4096 || q.Limits.TimeoutMillis < 1 || q.Limits.TimeoutMillis > 30000 || q.Limits.MaxOutputBytes < 1 || q.Limits.MaxOutputBytes > 48<<10 || q.Limits.MaxInputBytes < 1 || q.Limits.MaxInputBytes > 1<<20 || len(q.Input) > q.Limits.MaxInputBytes || q.Limits.StagedOutputBytes < 0 || q.Limits.StagedOutputBytes > 16<<20 {
 		return result, fmt.Errorf("invalid worker module or resource request")
@@ -289,7 +290,7 @@ func ServeWasmWorker(ctx context.Context, socket string, concurrency int) error 
 	defer engine.Close(context.Background())
 	mux := http.NewServeMux()
 	mux.HandleFunc("POST /execute", func(w http.ResponseWriter, r *http.Request) {
-		var q platform.WasmRequest
+		var q protocol.WasmRequest
 		d := json.NewDecoder(http.MaxBytesReader(w, r.Body, 112<<20))
 		d.DisallowUnknownFields()
 		if d.Decode(&q) != nil || d.Decode(new(any)) != io.EOF {
@@ -325,11 +326,11 @@ func ServeWasmWorker(ctx context.Context, socket string, concurrency int) error 
 
 type socketWasmWorker struct{ socket string }
 
-func EnvironmentWasmWorker() platform.WasmWorker {
+func EnvironmentWasmWorker() protocol.WasmWorker {
 	return socketWasmWorker{socket: os.Getenv("PLATFORM_WASM_WORKER_SOCKET")}
 }
-func (s socketWasmWorker) Execute(ctx context.Context, q platform.WasmRequest) (platform.WasmResponse, error) {
-	var result platform.WasmResponse
+func (s socketWasmWorker) Execute(ctx context.Context, q protocol.WasmRequest) (protocol.WasmResponse, error) {
+	var result protocol.WasmResponse
 	if s.socket == "" {
 		return result, fmt.Errorf("The isolated Go/Wasm worker is not configured")
 	}
@@ -372,7 +373,7 @@ func (s socketWasmWorker) Execute(ctx context.Context, q platform.WasmRequest) (
 
 type ContainerCompiler struct{ GoImage, TinyGoImage string }
 
-func EnvironmentCompiler() platform.CodeCompiler {
+func EnvironmentCompiler() protocol.CodeCompiler {
 	if socket := os.Getenv("PLATFORM_CODE_BUILDER_SOCKET"); socket != "" {
 		return socketCodeCompiler{socket}
 	}
@@ -380,13 +381,13 @@ func EnvironmentCompiler() platform.CodeCompiler {
 }
 
 type codeCompilerResponse struct {
-	Result platform.CodeBuildResult `json:"result"`
+	Result protocol.CodeBuildResult `json:"result"`
 	Module []byte                   `json:"module,omitempty"`
 	Error  string                   `json:"error,omitempty"`
 }
 type socketCodeCompiler struct{ socket string }
 
-func (s socketCodeCompiler) Compile(ctx context.Context, q platform.CodeBuildRequest) (platform.CodeBuildResult, []byte, error) {
+func (s socketCodeCompiler) Compile(ctx context.Context, q platform.CodeBuildRequest) (protocol.CodeBuildResult, []byte, error) {
 	raw, _ := json.Marshal(q)
 	client := &http.Client{Transport: &http.Transport{DialContext: func(ctx context.Context, _, _ string) (net.Conn, error) {
 		return (&net.Dialer{}).DialContext(ctx, "unix", s.socket)
@@ -394,15 +395,15 @@ func (s socketCodeCompiler) Compile(ctx context.Context, q platform.CodeBuildReq
 	defer client.CloseIdleConnections()
 	req, err := http.NewRequestWithContext(ctx, "POST", "http://builder/compile", bytes.NewReader(raw))
 	if err != nil {
-		return platform.CodeBuildResult{}, nil, err
+		return protocol.CodeBuildResult{}, nil, err
 	}
 	resp, err := client.Do(req)
 	if err != nil {
-		return platform.CodeBuildResult{}, nil, err
+		return protocol.CodeBuildResult{}, nil, err
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		return platform.CodeBuildResult{}, nil, fmt.Errorf("isolated compiler is busy or refused input")
+		return protocol.CodeBuildResult{}, nil, fmt.Errorf("isolated compiler is busy or refused input")
 	}
 	var answer codeCompilerResponse
 	decoder := json.NewDecoder(io.LimitReader(resp.Body, 24<<20))
@@ -476,8 +477,8 @@ func ServeCodeBuilder(ctx context.Context, socket string, compiler ContainerComp
 
 var pinnedImage = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9._:/-]*@sha256:[0-9a-f]{64}$`)
 
-func (c ContainerCompiler) Compile(ctx context.Context, q platform.CodeBuildRequest) (platform.CodeBuildResult, []byte, error) {
-	var result platform.CodeBuildResult
+func (c ContainerCompiler) Compile(ctx context.Context, q platform.CodeBuildRequest) (protocol.CodeBuildResult, []byte, error) {
+	var result protocol.CodeBuildResult
 	hash := sha256.Sum256([]byte(q.Source))
 	result.SourceHash = hex.EncodeToString(hash[:])
 	result.BuildHash, _ = platform.CanonicalDigest(q)

@@ -18,7 +18,7 @@ type EffectApply struct {
 	Usage   func() (json.RawMessage, error)
 	Settle  func(id string, after acceptedformat.EffectState, finished *pb.Work)
 	Meter   func(platform.AIUsage)
-	Publish func(platform.Event, platform.AcceptedEventPlan)
+	Publish func(platform.Event, protocol.AcceptedEventPlan)
 }
 
 func (s *Sequence) ApplyEffectResult(raw []byte, h EffectApply) (acceptedformat.Effect, bool, error) {

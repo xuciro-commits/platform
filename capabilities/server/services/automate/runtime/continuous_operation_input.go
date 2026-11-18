@@ -9,16 +9,16 @@ import (
 
 type OperationInputSealer struct {
 	Operation func(request platform.OperationRequest) (platform.Operation, int, *platform.Error)
-	Seal      func(app, key, member, definition, hash string, inputs json.RawMessage, budget int) (platform.OperationInputArtifact, error)
-	Discard   func(platform.OperationInputArtifact)
+	Seal      func(app, key, member, definition, hash string, inputs json.RawMessage, budget int) (protocol.OperationInputArtifact, error)
+	Discard   func(protocol.OperationInputArtifact)
 }
 
 type OperationInput struct {
-	Artifact    platform.OperationInputArtifact
+	Artifact    protocol.OperationInputArtifact
 	RequestHash string
 }
 
-func (i *OperationInput) ArtifactPointer() *platform.OperationInputArtifact {
+func (i *OperationInput) ArtifactPointer() *protocol.OperationInputArtifact {
 	if i == nil {
 		return nil
 	}
@@ -85,7 +85,7 @@ func PendingOperationInputs(inputs map[string][]*OperationInput) int {
 	return pending
 }
 
-func TakeOperationInput(inputs map[string][]*OperationInput, c platform.Caller, q platform.OperationRequest, platformApp string) (*platform.OperationInputArtifact, *platform.Error) {
+func TakeOperationInput(inputs map[string][]*OperationInput, c platform.Caller, q platform.OperationRequest, platformApp string) (*protocol.OperationInputArtifact, *platform.Error) {
 	hash, _ := platform.CanonicalDigest(q)
 	pending := inputs[hash]
 	if len(pending) == 0 {

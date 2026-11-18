@@ -10,7 +10,7 @@ import (
 )
 
 func TestInvariantResourceOwnershipRehome(t *testing.T) {
-	adminSeat := platform.Seat{Subjects: []string{"admin"}, Member: platform.Member{
+	adminSeat := protocol.Seat{Subjects: []string{"admin"}, Member: platform.Member{
 		ID: "admin", Roles: map[string]string{"platform": "admin", build.ID: build.Builder},
 	}}
 	live := newInvariantTenant(t, "invariant-resource-rehome", adminSeat)

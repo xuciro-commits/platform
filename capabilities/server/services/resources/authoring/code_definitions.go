@@ -3,6 +3,7 @@ package build
 import (
 	"encoding/json"
 	"fmt"
+	runtimeprotocol "platformserver/kernel/protocol"
 
 	"platformserver/platform"
 	releasepub "platformserver/services/resources/publication"
@@ -33,7 +34,7 @@ func (h CodeDefinitions) Register() error {
 		manifest := app.Manifest()
 		versions[manifest.ID] = manifest.Version
 		declarations.Manifests = append(declarations.Manifests, manifest)
-		_, declarations.NativeExecutors[manifest.ID] = app.(platform.OperationExecutor)
+		_, declarations.NativeExecutors[manifest.ID] = app.(runtimeprotocol.OperationExecutor)
 		for _, declaration := range app.Declarations() {
 			classes[declaration.GetDataClass()] = true
 		}
@@ -205,7 +206,7 @@ func (h CodeDefinitions) Register() error {
 			if err != nil {
 				return err
 			}
-			var descriptor platform.FlowReleaseDescriptor
+			var descriptor runtimeprotocol.FlowReleaseDescriptor
 			if json.Unmarshal(asset.Body, &descriptor) != nil {
 				return fmt.Errorf("native flow descriptor is invalid")
 			}

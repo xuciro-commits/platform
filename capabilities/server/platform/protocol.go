@@ -9,9 +9,6 @@ import (
 	"time"
 )
 
-const ConfirmationType = "build.confirmation"
-const ConfirmationAnswerSchema = ConfirmationType + ".answer"
-
 type ConfirmationTransport interface {
 	FreezeConfirmationProtocol(ConfirmationParty) (*ConfirmationProtocol, error)
 	FreezeConfirmation(Caller, string, Confirmation, time.Time) (string, []ReleaseAsset, error)
@@ -152,28 +149,6 @@ type ConfirmationDifference struct {
 	Observed json.RawMessage `json:"observed,omitempty"`
 	Error    string          `json:"error,omitempty"`
 }
-
-func PendingConfirmations(c Caller) ([]ConfirmationRun, *Error) {
-	var all []ConfirmationRun
-	for {
-		rows, count, err := Find[ConfirmationRun](c, Query{Domain: json.RawMessage(`[["state","!=","compensated"],["completion","=",""],["completionError","=",""]]`), Sort: []string{"id"}, Limit: 500, Offset: len(all)})
-		if err != nil {
-			return nil, err
-		}
-		all = append(all, rows...)
-		if len(all) >= count {
-			return all, nil
-		}
-		if len(rows) == 0 {
-			return nil, Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The confirmation inventory changed while being read")
-		}
-	}
-}
-
-const DispatchType = "build.dispatch"
-const DispatchAnswerSchema = DispatchType + ".answer"
-const DispatchReviewSchema = DispatchType + ".review"
-const DispatchTickSchema = DispatchType + ".tick"
 
 type DispatchCommand struct {
 	Name                 string `json:"name"`
@@ -328,23 +303,6 @@ func (c Caller) DispatchTransport() DispatchTransport {
 	return rt.DispatchTransport()
 }
 
-func PendingDispatches(c Caller) ([]DispatchRun, *Error) {
-	var all []DispatchRun
-	for {
-		rows, count, err := Find[DispatchRun](c, Query{Domain: json.RawMessage(`[["state","!=","completed"],["state","!=","cancelled"],["state","!=","compensated"]]`), Sort: []string{"id"}, Limit: 500, Offset: len(all)})
-		if err != nil {
-			return nil, err
-		}
-		all = append(all, rows...)
-		if len(all) >= count {
-			return all, nil
-		}
-		if len(rows) == 0 {
-			return nil, Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The dispatch inventory changed while being read")
-		}
-	}
-}
-
 type EffectKind struct {
 	Name         string `json:"name"`
 	Title        string `json:"title"`
@@ -420,66 +378,6 @@ type ProtocolEvent struct {
 	Title string `json:"title"`
 }
 
-type ProtocolBinding struct {
-	Contract *Protocol         `json:"contract,omitempty"`
-	Name     string            `json:"name"`
-	Version  int               `json:"version"`
-	Actions  map[string]string `json:"actions"`
-	Reads    []string          `json:"reads,omitempty"`
-	Events   map[string]string `json:"events,omitempty"`
-}
-
-func CheckProtocolActions(contract Protocol, actions []Action) error {
-	for _, required := range contract.Actions {
-		index := slices.IndexFunc(actions, func(a Action) bool { return a.Schema == required.Schema })
-		if index < 0 || len(actions[index].Payload) != len(required.Payload) {
-			return fmt.Errorf("protocol %s action %s has an incompatible payload", contract.ID(), required.Schema)
-		}
-		kind := func(typ string) string {
-			switch typ {
-			case "string", "text", "longtext":
-				return "text"
-			case "number", "decimal":
-				return "decimal"
-			}
-			return typ
-		}
-		for _, field := range required.Payload {
-			matched := slices.ContainsFunc(actions[index].Payload, func(actual Field) bool {
-				return actual.Name == field.Name && kind(actual.Type) == kind(field.Type) && actual.Required == field.Required && actual.Ref == field.Ref && slices.Equal(actual.Choices, field.Choices)
-			})
-			if !matched {
-				return fmt.Errorf("protocol %s action %s field %s differs", contract.ID(), required.Schema, field.Name)
-			}
-		}
-	}
-	if len(actions) != len(contract.Actions) {
-		return fmt.Errorf("protocol %s action set differs", contract.ID())
-	}
-	return nil
-}
-
-func CheckProtocol(contract, actual Protocol) error {
-	if contract.ID() != actual.ID() {
-		return fmt.Errorf("protocol contract identity differs")
-	}
-	if err := CheckProtocolActions(contract, actual.Actions); err != nil {
-		return err
-	}
-	names := func(p Protocol) []string {
-		out := append([]string{}, p.Reads...)
-		for _, event := range p.Events {
-			out = append(out, "event:"+event.Name)
-		}
-		slices.Sort(out)
-		return out
-	}
-	if !slices.Equal(names(contract), names(actual)) {
-		return fmt.Errorf("protocol %s read or event declarations differ", contract.ID())
-	}
-	return nil
-}
-
 func (p Protocol) ID() string { return fmt.Sprintf("%s/%d", p.Name, p.Version) }
 
 type Provision struct {
@@ -493,8 +391,6 @@ type Consumption struct {
 	Protocol string
 	Optional bool
 }
-
-func ProtocolAction(protocol, action string) string { return protocol + "#" + action }
 
 type ProviderResult struct {
 	Provider string
@@ -521,53 +417,6 @@ type Request struct {
 	Evaluation         bool
 	EvaluationConfig   string
 	EvaluationFunction *AIFunction
-}
-
-type Prompt struct {
-	System    string `json:"system,omitempty"`
-	User      string `json:"user"`
-	MaxTokens int    `json:"maxTokens,omitempty"`
-}
-
-type Answer struct {
-	Tag            string  `json:"tag,omitempty"`
-	Call           string  `json:"call"`
-	Action         string  `json:"action,omitempty"`
-	Outcome        string  `json:"outcome"`
-	Code           string  `json:"code,omitempty"`
-	Reason         string  `json:"reason,omitempty"`
-	Ref            string  `json:"ref,omitempty"`
-	Text           string  `json:"text,omitempty"`
-	Metered        bool    `json:"metered,omitempty"`
-	TokensReported bool    `json:"tokensReported,omitempty"`
-	InputTokens    int     `json:"inputTokens,omitempty"`
-	OutputTokens   int     `json:"outputTokens,omitempty"`
-	CostReported   bool    `json:"costReported,omitempty"`
-	CostUSD        float64 `json:"costUsd,omitempty"`
-	LatencyMillis  int64   `json:"latencyMillis,omitempty"`
-	ServedModel    string  `json:"servedModel,omitempty"`
-}
-
-func AnswerFields() []Field {
-	return []Field{{Name: "call", Type: "string", Required: true, Description: "What was asked of the provider"},
-		{Name: "action", Type: "string", Description: "The protocol action"},
-		{Name: "outcome", Type: "string", Required: true, Description: "accepted or refused", Choices: []string{"accepted", "refused", "released"}},
-		{Name: "code", Type: "string", Description: "The refusal's code"},
-		{Name: "reason", Type: "string", Description: "Why it was refused, as the provider said"},
-		{Name: "ref", Type: "string", Description: "The provider's record"},
-		{Name: "text", Type: "string", Description: "A model's answer"}}
-}
-
-func FunctionAnswerFields() []Field {
-	return append(AnswerFields(),
-		Field{Name: "metered", Type: "boolean", Description: "The provider was called"},
-		Field{Name: "tokensReported", Type: "boolean", Description: "The provider reported token counts"},
-		Field{Name: "inputTokens", Type: "integer", Description: "Reported input tokens"},
-		Field{Name: "outputTokens", Type: "integer", Description: "Reported output tokens"},
-		Field{Name: "costReported", Type: "boolean", Description: "The provider reported a USD cost"},
-		Field{Name: "costUsd", Type: "decimal", Description: "Reported USD cost"},
-		Field{Name: "latencyMillis", Type: "integer", Description: "Model call latency in milliseconds"},
-		Field{Name: "servedModel", Type: "string", Description: "Provider-reported model when different"})
 }
 
 func (c Caller) Request(r *pb.ChangeRecord, q Request) {
@@ -610,30 +459,6 @@ type RelationsHost interface {
 	Readable(m Member, ref string, now time.Time) bool
 }
 
-const (
-	RelationsApp = "relations"
-	CommentType  = "platform.comment"
-	FollowType   = "platform.follow"
-)
-
-type RecordComment struct {
-	Record
-	Target   string   `json:"target" field:"readonly" title:"On" source:"record"`
-	Text     string   `json:"text" field:"required,search" type:"longtext"`
-	By       string   `json:"by" field:"readonly" source:"record"`
-	Mentions []string `json:"mentions,omitempty" field:"readonly"`
-}
-
-type RecordFollow struct {
-	Record
-	Member string `json:"member" field:"readonly"`
-	Target string `json:"target" field:"readonly" title:"Follows"`
-}
-
-func FollowID(member, target string) string {
-	return member + "@" + strings.ReplaceAll(target, "/", "~")
-}
-
 type RelationLink struct {
 	From string    `json:"from" source:"record"`
 	To   string    `json:"to" source:"record"`
@@ -661,11 +486,4 @@ func (c Caller) Link(from, to *pb.EntityRef, key string, now time.Time) *Error {
 		return notFound()
 	}
 	return c.rt.Link(c, from, to, key, now)
-}
-
-type Breaker struct {
-	Destination string    `json:"destination"`
-	State       string    `json:"state"`
-	Failures    int       `json:"failures"`
-	Until       time.Time `json:"until,omitzero"`
 }

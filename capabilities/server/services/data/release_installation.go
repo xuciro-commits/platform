@@ -5,17 +5,18 @@ import (
 	"encoding/json"
 	"fmt"
 	"maps"
+	"platformserver/kernel/protocol"
 	"reflect"
 	"slices"
 
 	"platformserver/platform"
 )
 
-func (o *Owner) EnvironmentRequirements(asset platform.ReleaseAsset) ([]platform.AssetEnvironmentRequirement, error) {
+func (o *Owner) EnvironmentRequirements(asset platform.ReleaseAsset) ([]protocol.AssetEnvironmentRequirement, error) {
 	if !ValueIntegrationKind(asset.Ref.Kind) {
 		return nil, nil
 	}
-	var requirement platform.AssetEnvironmentRequirement
+	var requirement protocol.AssetEnvironmentRequirement
 	switch asset.Ref.Kind {
 	case platform.AssetConnection:
 		var definition ConnectionDefinition
@@ -25,7 +26,7 @@ func (o *Owner) EnvironmentRequirements(asset platform.ReleaseAsset) ([]platform
 		if definition.Name != asset.Ref.Name || !slices.Contains(connectionKinds, definition.Kind) {
 			return nil, fmt.Errorf("invalid connection binding descriptor")
 		}
-		requirement = platform.AssetEnvironmentRequirement{Ref: asset.Ref, Profile: definition.Kind, Credential: definition.Credential}
+		requirement = protocol.AssetEnvironmentRequirement{Ref: asset.Ref, Profile: definition.Kind, Credential: definition.Credential}
 	case platform.AssetSource:
 		var definition SourceDefinition
 		if err := ValueDecodeIntegration(asset.Body, &definition); err != nil {
@@ -41,7 +42,7 @@ func (o *Owner) EnvironmentRequirements(asset platform.ReleaseAsset) ([]platform
 		if definition.Connection == "" {
 			return nil, fmt.Errorf("source has no environment connection")
 		}
-		requirement = platform.AssetEnvironmentRequirement{Ref: platform.AssetRef{App: App, Kind: platform.AssetConnection, Name: definition.Connection}, Profile: kind}
+		requirement = protocol.AssetEnvironmentRequirement{Ref: platform.AssetRef{App: App, Kind: platform.AssetConnection, Name: definition.Connection}, Profile: kind}
 	case platform.AssetObservation:
 		var definition platform.ObservationDefinition
 		if err := ValueDecodeIntegration(asset.Body, &definition); err != nil {
@@ -50,7 +51,7 @@ func (o *Owner) EnvironmentRequirements(asset platform.ReleaseAsset) ([]platform
 		if definition.Connection.Kind != platform.AssetConnection || definition.Connection.Name == "" {
 			return nil, fmt.Errorf("observation source has no environment connection")
 		}
-		requirement = platform.AssetEnvironmentRequirement{Ref: definition.Connection, Profile: "http"}
+		requirement = protocol.AssetEnvironmentRequirement{Ref: definition.Connection, Profile: "http"}
 	case platform.AssetWriteback:
 		var definition WritebackDefinition
 		if err := ValueDecodeIntegration(asset.Body, &definition); err != nil {
@@ -59,14 +60,14 @@ func (o *Owner) EnvironmentRequirements(asset platform.ReleaseAsset) ([]platform
 		if definition.Connection == "" {
 			return nil, fmt.Errorf("writeback has no environment connection")
 		}
-		requirement = platform.AssetEnvironmentRequirement{Ref: platform.AssetRef{App: App, Kind: platform.AssetConnection, Name: definition.Connection}}
+		requirement = protocol.AssetEnvironmentRequirement{Ref: platform.AssetRef{App: App, Kind: platform.AssetConnection, Name: definition.Connection}}
 	default:
 		return nil, nil
 	}
-	return []platform.AssetEnvironmentRequirement{requirement}, nil
+	return []protocol.AssetEnvironmentRequirement{requirement}, nil
 }
 
-func (o *Owner) integrationTargets(assets []platform.ReleaseAsset, ctx platform.AssetReleaseContext) (func(), error) {
+func (o *Owner) integrationTargets(assets []platform.ReleaseAsset, ctx protocol.AssetReleaseContext) (func(), error) {
 	saved := o.releaseDraftIDs
 	o.releaseDraftIDs = maps.Clone(saved)
 	if o.releaseDraftIDs == nil {
@@ -114,17 +115,17 @@ func (o *Owner) integrationTargets(assets []platform.ReleaseAsset, ctx platform.
 	return restore, nil
 }
 
-func (o *Owner) BeginTargets(assets []platform.ReleaseAsset, ctx platform.AssetReleaseContext) (func(), error) {
+func (o *Owner) BeginTargets(assets []platform.ReleaseAsset, ctx protocol.AssetReleaseContext) (func(), error) {
 	return o.integrationTargets(assets, ctx)
 }
 
-func (o *Owner) IntegrationDrafts(assets []platform.ReleaseAsset, ctx platform.AssetReleaseContext) ([]platform.AssetDraft, error) {
+func (o *Owner) IntegrationDrafts(assets []platform.ReleaseAsset, ctx protocol.AssetReleaseContext) ([]protocol.AssetDraft, error) {
 	restore, err := o.integrationTargets(assets, ctx)
 	if err != nil {
 		return nil, err
 	}
 	defer restore()
-	var out []platform.AssetDraft
+	var out []protocol.AssetDraft
 	for _, asset := range assets {
 		if asset.Ref.App != App || !ValueIntegrationKind(asset.Ref.Kind) {
 			continue
@@ -152,18 +153,18 @@ func (o *Owner) IntegrationDrafts(assets []platform.ReleaseAsset, ctx platform.A
 		if id := ctx.DraftIDs[asset.Ref]; id != "" {
 			name = id
 		}
-		out = append(out, platform.AssetDraft{Ref: asset.Ref, Type: typ, Name: name, Schema: typ + ".create", Image: raw})
+		out = append(out, protocol.AssetDraft{Ref: asset.Ref, Type: typ, Name: name, Schema: typ + ".create", Image: raw})
 	}
 	return out, nil
 }
 
-func (o *Owner) Prepare(assets []platform.ReleaseAsset, ctx platform.AssetReleaseContext) ([]platform.AssetInstallation, error) {
+func (o *Owner) Prepare(assets []platform.ReleaseAsset, ctx protocol.AssetReleaseContext) ([]protocol.AssetInstallation, error) {
 	restore, err := o.integrationTargets(assets, ctx)
 	if err != nil {
 		return nil, err
 	}
 	defer restore()
-	out := []platform.AssetInstallation{}
+	out := []protocol.AssetInstallation{}
 	for _, asset := range assets {
 		if asset.Ref.App != App || !ValueIntegrationKind(asset.Ref.Kind) {
 			continue
@@ -201,7 +202,7 @@ func (o *Owner) Prepare(assets []platform.ReleaseAsset, ctx platform.AssetReleas
 			continue
 		}
 		descriptor := integrationDescriptor(asset.Ref.Kind)
-		out = append(out, platform.AssetInstallation{Ref: asset.Ref, Schema: descriptor.publication(), Record: descriptor.record(integrationRecord(record).ID), Image: raw})
+		out = append(out, protocol.AssetInstallation{Ref: asset.Ref, Schema: descriptor.publication(), Record: descriptor.record(integrationRecord(record).ID), Image: raw})
 	}
 	if !ctx.DraftsOnly {
 		for _, plan := range out {
@@ -213,27 +214,27 @@ func (o *Owner) Prepare(assets []platform.ReleaseAsset, ctx platform.AssetReleas
 	return out, nil
 }
 
-func (o *Owner) DecodeInstallation(schema string, image json.RawMessage) (platform.AssetInstallation, error) {
+func (o *Owner) DecodeInstallation(schema string, image json.RawMessage) (protocol.AssetInstallation, error) {
 	resource, known := integrationResourceOfSchema(schema)
 	if !known {
-		return platform.AssetInstallation{}, fmt.Errorf("invalid publication schema")
+		return protocol.AssetInstallation{}, fmt.Errorf("invalid publication schema")
 	}
 	record, err := integrationInstallationRecord(resource.kind, image)
 	if err != nil {
-		return platform.AssetInstallation{}, err
+		return protocol.AssetInstallation{}, err
 	}
 	name, version, raw, _ := integrationMetadata(record)
 	var asset platform.ReleaseAsset
 	if integrationRecord(record).ID == "" || version < 1 || ValueDecodeIntegration([]byte(raw), &asset) != nil || asset.Ref != (platform.AssetRef{App: App, Kind: resource.kind, Name: name}) {
-		return platform.AssetInstallation{}, fmt.Errorf("invalid integration installation")
+		return protocol.AssetInstallation{}, fmt.Errorf("invalid integration installation")
 	}
 	if err := o.validateIntegrationFamily(record, asset); err != nil {
-		return platform.AssetInstallation{}, err
+		return protocol.AssetInstallation{}, err
 	}
 	if err := o.validateIntegrationDescriptor(asset); err != nil {
-		return platform.AssetInstallation{}, err
+		return protocol.AssetInstallation{}, err
 	}
-	return platform.AssetInstallation{Ref: asset.Ref, Schema: schema, Record: resource.record(integrationRecord(record).ID), Image: slices.Clone(image)}, nil
+	return protocol.AssetInstallation{Ref: asset.Ref, Schema: schema, Record: resource.record(integrationRecord(record).ID), Image: slices.Clone(image)}, nil
 }
 
 func integrationResourceOfSchema(schema string) (integrationResource, bool) {
@@ -245,7 +246,7 @@ func integrationResourceOfSchema(schema string) (integrationResource, bool) {
 	return integrationResource{}, false
 }
 
-func (o *Owner) ValidateInstallation(plan platform.AssetInstallation) error {
+func (o *Owner) ValidateInstallation(plan protocol.AssetInstallation) error {
 	decoded, err := o.DecodeInstallation(plan.Schema, plan.Image)
 	if err != nil {
 		return err
@@ -323,7 +324,7 @@ func (o *Owner) ValidateInstallation(plan platform.AssetInstallation) error {
 	return err
 }
 
-func (o *Owner) ApplyInstallation(plan platform.AssetInstallation, ctx platform.AssetApplyContext) error {
+func (o *Owner) ApplyInstallation(plan protocol.AssetInstallation, ctx protocol.AssetApplyContext) error {
 	if ctx.Validate && ctx.Upgrade {
 		if err := o.validateIntegrationUpgrade(plan); err != nil {
 			return err
@@ -352,7 +353,7 @@ func (o *Owner) ApplyInstallation(plan platform.AssetInstallation, ctx platform.
 	return err
 }
 
-func (o *Owner) validateIntegrationUpgrade(plan platform.AssetInstallation) error {
+func (o *Owner) validateIntegrationUpgrade(plan protocol.AssetInstallation) error {
 	if !ValueIntegrationKind(plan.Ref.Kind) {
 		return nil
 	}

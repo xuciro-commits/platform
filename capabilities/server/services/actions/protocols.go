@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"maps"
+	runtimeprotocol "platformserver/kernel/protocol"
 	"slices"
 	"strings"
 	"sync"
@@ -248,7 +249,7 @@ func (r Router) holder(c platform.Caller, bound Binding, protocol, action string
 
 func (r Router) Probe(c platform.Caller, protocol, action, id string, payload []byte, now time.Time) *platform.Error {
 	if c.Replaying {
-		if _, _, bound := r.Provider(platform.ProtocolAction(protocol, action)); !bound {
+		if _, _, bound := r.Provider(runtimeprotocol.ProtocolAction(protocol, action)); !bound {
 			return &platform.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
 		}
 		return nil
@@ -306,7 +307,7 @@ func (r Router) Events(e platform.Event) []string {
 		for _, pv := range a.Manifest().Provides {
 			for event, schema := range pv.Events {
 				if schema == e.Record.GetSubmission().GetSchema().GetName() {
-					out = append(out, platform.ProtocolAction(pv.Protocol.ID(), event))
+					out = append(out, runtimeprotocol.ProtocolAction(pv.Protocol.ID(), event))
 				}
 			}
 		}

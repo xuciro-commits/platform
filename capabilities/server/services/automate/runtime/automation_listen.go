@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"maps"
+	"platformserver/kernel/protocol"
 	"platformserver/platform"
 	"slices"
 	"strings"
@@ -28,7 +29,7 @@ func (f *Flows) Interested(names []string, e platform.Event) bool {
 		}
 	}
 	s := e.Record.GetSubmission()
-	return s.GetSchema().GetName() == "work.task.complete" && e.App == platform.WorkApp
+	return s.GetSchema().GetName() == "work.task.complete" && e.App == protocol.WorkApp
 }
 
 func (f *Flows) Listen(c platform.Caller, e platform.Event, names []string, now time.Time) *platform.Error {
@@ -108,7 +109,7 @@ func (f *Flows) Listen(c platform.Caller, e platform.Event, names []string, now 
 					return err
 				}
 			case tok.Waits == "ask" && s.GetSchema().GetName() == "work.task.complete" && s.GetTarget().GetId() == tok.Task:
-				task, _ := platform.Get[platform.WorkTask](f.host.Automation(c, platform.WorkApp), tok.Task)
+				task, _ := platform.Get[protocol.WorkTask](f.host.Automation(c, protocol.WorkApp), tok.Task)
 				answer := cmp.Or(task.Answer, "done")
 				if err := f.step(c, x.ID, now, func(ss *session, in *FlowInstance) {
 					in.Answer = answer
@@ -255,7 +256,7 @@ func (f *Flows) resumeInvocation(c platform.Caller, id string, token int, now ti
 			output = result.Output
 		}
 	} else if tok.Waits == "approval" {
-		approval, ok := platform.Get[platform.ApprovalRequest](f.host.Automation(c, platform.WorkApp), tok.Child)
+		approval, ok := platform.Get[protocol.ApprovalRequest](f.host.Automation(c, protocol.WorkApp), tok.Child)
 		if !ok || approval.State == "pending" {
 			return nil
 		}

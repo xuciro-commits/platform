@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"platformserver/kernel/acceptedformat"
+	"platformserver/kernel/protocol"
 	"platformserver/kernel/records"
 	"platformserver/platform"
 	"platformserver/services/resources/authoring"
@@ -43,8 +44,8 @@ type ReleaseAcceptance struct {
 	SaveAnswer  func(key string, raw json.RawMessage)
 	Promoted    func(at time.Time, member, target string)
 	Enqueue     func(time.Time)
-	Preview     func(drafts []build.JointDraftRef, member platform.Member) (ReleasePreview, platform.ReleaseCandidate, error)
-	Lifecycle   func(candidate platform.ReleaseCandidate, member platform.Member, at time.Time, upgrade bool) ([]platform.ReleaseInstallation, json.RawMessage, error)
+	Preview     func(drafts []build.JointDraftRef, member platform.Member) (ReleasePreview, protocol.ReleaseCandidate, error)
+	Lifecycle   func(candidate protocol.ReleaseCandidate, member platform.Member, at time.Time, upgrade bool) ([]platform.ReleaseInstallation, json.RawMessage, error)
 	Bootstrap   func(app string, raw json.RawMessage) (*AcceptedBootstrap, error)
 	Stage       func(records *records.Store, candidateID string, installations []platform.ReleaseInstallation, upgrade bool) (StagedInstallation, error)
 	Assets      func() AcceptedAssets
@@ -139,7 +140,7 @@ func (a ReleaseAcceptance) Save(m platform.Member, drafts []build.JointDraftRef,
 	if err := a.admitted(m, candidateID, key, now); err != nil {
 		return "", err
 	}
-	candidateBytes, err := SavedCandidateBytes(a.Store.Raw(candidateID), func() (ReleasePreview, platform.ReleaseCandidate, error) {
+	candidateBytes, err := SavedCandidateBytes(a.Store.Raw(candidateID), func() (ReleasePreview, protocol.ReleaseCandidate, error) {
 		return a.Preview(drafts, m)
 	}, candidateID)
 	if err != nil {
@@ -172,10 +173,10 @@ func (a ReleaseAcceptance) Activate(m platform.Member, candidateID, key, upgrade
 		return "", fmt.Errorf("release candidate %s is not saved", candidateID)
 	}
 	installations, bootstrap, err := PlanActivation(a.Store.resolver, candidateID, raw, upgradeID, Activation{
-		UpgradePlan: func(candidate platform.ReleaseCandidate) (*ReleaseUpgradePlan, error) {
+		UpgradePlan: func(candidate protocol.ReleaseCandidate) (*ReleaseUpgradePlan, error) {
 			return a.upgradePlan(candidate, m, now)
 		},
-		Lifecycle: func(candidate platform.ReleaseCandidate) ([]platform.ReleaseInstallation, json.RawMessage, error) {
+		Lifecycle: func(candidate protocol.ReleaseCandidate) ([]platform.ReleaseInstallation, json.RawMessage, error) {
 			return a.Lifecycle(candidate, m, now, upgradeID != "")
 		},
 	})
@@ -199,21 +200,21 @@ func (a ReleaseAcceptance) Activate(m platform.Member, candidateID, key, upgrade
 }
 
 func (a ReleaseAcceptance) Review(id string, member platform.Member, context ReviewContext) (SavedReleaseReview, error) {
-	context.Prepare = func(candidate platform.ReleaseCandidate, upgrade bool) error {
+	context.Prepare = func(candidate protocol.ReleaseCandidate, upgrade bool) error {
 		_, _, err := a.Lifecycle(candidate, member, time.Now().UTC(), upgrade)
 		return err
 	}
-	context.Upgrade = func(candidate platform.ReleaseCandidate) (*ReleaseUpgradePlan, error) {
+	context.Upgrade = func(candidate protocol.ReleaseCandidate) (*ReleaseUpgradePlan, error) {
 		return a.upgradePlan(candidate, member, time.Now().UTC())
 	}
 	return a.Store.Review(id, context)
 }
 
-func (a ReleaseAcceptance) Running(saved platform.ReleaseCandidate) (platform.ReleaseCandidate, error) {
+func (a ReleaseAcceptance) Running(saved protocol.ReleaseCandidate) (protocol.ReleaseCandidate, error) {
 	return RunningRelease(saved, a.Assets())
 }
 
-func (a ReleaseAcceptance) upgradePlan(candidate platform.ReleaseCandidate, member platform.Member, now time.Time) (*ReleaseUpgradePlan, error) {
+func (a ReleaseAcceptance) upgradePlan(candidate protocol.ReleaseCandidate, member platform.Member, now time.Time) (*ReleaseUpgradePlan, error) {
 	installations, bootstrap, err := a.Lifecycle(candidate, member, now, true)
 	if err != nil {
 		return nil, err

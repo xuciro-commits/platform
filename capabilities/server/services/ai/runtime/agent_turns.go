@@ -15,7 +15,7 @@ import (
 )
 
 func (a *Agents) AgentOverview() []protocol.AgentOverview {
-	c := a.automation(platform.AgentApp, false)
+	c := a.automation(protocol.AgentApp, false)
 	rows := map[string]*protocol.AgentOverview{}
 	a.each(func(id string, d *protocol.CompiledAgent) {
 		rows["agent:"+id] = &protocol.AgentOverview{Member: "agent:" + id, Title: d.Title, Judged: map[string]int{}}
@@ -26,7 +26,7 @@ func (a *Agents) AgentOverview() []protocol.AgentOverview {
 		}
 	}
 
-	runs, _, _ := platform.Find[platform.AgentRunRecord](c, platform.Query{})
+	runs, _, _ := platform.Find[protocol.AgentRunRecord](c, platform.Query{})
 	for _, r := range runs {
 		row := rows["agent:"+r.Agent]
 		if row == nil {
@@ -64,13 +64,13 @@ func (a *Agents) AgentOverview() []protocol.AgentOverview {
 
 func (a *Agents) DueAgentTurns(now time.Time) []protocol.AgentTurn {
 	h := a.host
-	c := a.automation(platform.AgentApp, false)
+	c := a.automation(protocol.AgentApp, false)
 	var out []protocol.AgentTurn
 	for _, run := range a.runs(c, "running") {
 		x := protocol.AgentTurn{Run: run}
 		d := a.def(run.Agent)
 		reader := a.reader(run)
-		name := c.Setting(platform.SettingAgentModel)
+		name := c.Setting(protocol.SettingAgentModel)
 		if run.ModelBinding != nil {
 			name = run.ModelBinding.Model
 		}
@@ -89,8 +89,8 @@ func (a *Agents) DueAgentTurns(now time.Time) []protocol.AgentTurn {
 		case len(run.Pending) == 0 && agents.SpentOut(d.Budget, run.StepsUsed, run.TokensUsed, run.Cost):
 			x.Stop = agents.BudgetReason(d.Budget, run.StepsUsed, run.TokensUsed, run.Cost)
 		case h.AgentSuspended("agent:" + run.Agent):
-			sw, _ := h.Record(platform.SwitchType + "/agent:" + run.Agent)
-			x.Stop = "suspended by " + sw.(platform.Switch).By
+			sw, _ := h.Record(protocol.SwitchType + "/agent:" + run.Agent)
+			x.Stop = "suspended by " + sw.(protocol.Switch).By
 		default:
 			if len(run.Pending) > 0 {
 				break
@@ -100,7 +100,7 @@ func (a *Agents) DueAgentTurns(now time.Time) []protocol.AgentTurn {
 				x.Stop = "the model " + name + " is not enabled"
 				break
 			}
-			if run.ModelBinding == nil || run.ModelBinding.Stage != platform.AIStageRuntime {
+			if run.ModelBinding == nil || run.ModelBinding.Stage != protocol.AIStageRuntime {
 				x.Stop = "the run has no trusted execution stage; start a new run"
 				break
 			}
@@ -120,7 +120,7 @@ func (a *Agents) DueAgentTurns(now time.Time) []protocol.AgentTurn {
 }
 
 func (a *Agents) ApplyAgentStep(b protocol.AgentResultStep, now time.Time, replaying bool) *platform.Error {
-	return a.ApplyAgentStepCaller(a.automation(platform.AgentApp, replaying), b, now)
+	return a.ApplyAgentStepCaller(a.automation(protocol.AgentApp, replaying), b, now)
 }
 
 func (a *Agents) ApplyAgentStepCaller(c platform.Caller, b protocol.AgentResultStep, now time.Time) *platform.Error {
@@ -130,32 +130,32 @@ func (a *Agents) ApplyAgentStepCaller(c platform.Caller, b protocol.AgentResultS
 		if ev.State == "queued" {
 			key = fmt.Sprintf("%s:checkpoint:%d", ev.ID, ev.Revision+1)
 		}
-		s := &pb.Submission{TenantId: c.Tenant, PrincipalId: c.ID, Authority: platform.AgentApp, IdempotencyKey: key,
-			Target: &pb.EntityRef{Type: platform.EvaluationType, Id: ev.ID}, Schema: &pb.SchemaRef{Name: platform.SchemaRunStep, Version: 1}, Payload: []byte("{}")}
+		s := &pb.Submission{TenantId: c.Tenant, PrincipalId: c.ID, Authority: protocol.AgentApp, IdempotencyKey: key,
+			Target: &pb.EntityRef{Type: protocol.EvaluationType, Id: ev.ID}, Schema: &pb.SchemaRef{Name: protocol.SchemaRunStep, Version: 1}, Payload: []byte("{}")}
 		_, err := a.ledger.Receive(c, s, now, nil, func() (func(*pb.ChangeRecord), *platform.Error) {
-			if _, known := platform.Get[platform.Evaluation](c, ev.ID); !known {
+			if _, known := platform.Get[protocol.Evaluation](c, ev.ID); !known {
 				return nil, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
 			}
 			return func(r *pb.ChangeRecord) { c.Put(r, *ev) }, nil
 		})
 		return err
 	}
-	run, known := platform.Get[platform.AgentRunRecord](c, b.Run)
+	run, known := platform.Get[protocol.AgentRunRecord](c, b.Run)
 	if !known {
 		return &platform.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
 	}
 	if !c.Staging() {
 		h.ReplayAgentUsage(b.Usage)
 	}
-	s := &pb.Submission{TenantId: c.Tenant, PrincipalId: c.ID, Authority: platform.AgentApp, IdempotencyKey: fmt.Sprintf("%s:%d", run.ID, run.Revision+1),
-		Target: &pb.EntityRef{Type: platform.RunType, Id: run.ID}, Schema: &pb.SchemaRef{Name: platform.SchemaRunStep, Version: 1}, Payload: []byte("{}")}
+	s := &pb.Submission{TenantId: c.Tenant, PrincipalId: c.ID, Authority: protocol.AgentApp, IdempotencyKey: fmt.Sprintf("%s:%d", run.ID, run.Revision+1),
+		Target: &pb.EntityRef{Type: protocol.RunType, Id: run.ID}, Schema: &pb.SchemaRef{Name: protocol.SchemaRunStep, Version: 1}, Payload: []byte("{}")}
 	_, err := a.ledger.Receive(c, s, now, nil, func() (func(*pb.ChangeRecord), *platform.Error) {
 		return a.take(c, run, b, now), nil
 	})
 	return err
 }
 
-func (a *Agents) take(c platform.Caller, run platform.AgentRunRecord, b protocol.AgentResultStep, now time.Time) func(*pb.ChangeRecord) {
+func (a *Agents) take(c platform.Caller, run protocol.AgentRunRecord, b protocol.AgentResultStep, now time.Time) func(*pb.ChangeRecord) {
 	continuing := b.CallID != ""
 	if len(b.Calls) > 0 {
 		call := b.Calls[0]
@@ -184,7 +184,7 @@ func (a *Agents) take(c platform.Caller, run platform.AgentRunRecord, b protocol
 		run.Protocol[len(run.Steps)] = b.Protocol
 	}
 	d := a.def(run.Agent)
-	step := platform.RunStep{At: now, Tool: b.Tool, Arguments: string(b.Arguments), Tokens: b.Usage.Input + b.Usage.Output,
+	step := protocol.RunStep{At: now, Tool: b.Tool, Arguments: string(b.Arguments), Tokens: b.Usage.Input + b.Usage.Output,
 		Calls: b.Calls, CallID: b.CallID, Content: b.Content}
 	if len(b.Calls) > 0 {
 		step.Sources = run.SourceRefs()
@@ -237,10 +237,10 @@ func (a *Agents) take(c platform.Caller, run platform.AgentRunRecord, b protocol
 			break
 		}
 		if tool.Kind == "knowledge" {
-			var found []platform.Passage
+			var found []protocol.Passage
 			json.Unmarshal(b.Observation, &found)
 			for _, p := range found {
-				run.Citations = append(run.Citations, platform.Citation{Document: p.Document, Title: p.Title, Chunk: p.Chunk, Step: len(run.Steps)})
+				run.Citations = append(run.Citations, protocol.Citation{Document: p.Document, Title: p.Title, Chunk: p.Chunk, Step: len(run.Steps)})
 			}
 			for _, p := range found {
 				step.Sources = append(step.Sources, p.Document)
@@ -264,7 +264,7 @@ func (a *Agents) take(c platform.Caller, run platform.AgentRunRecord, b protocol
 			finishPendingCalls(&run, now)
 		}
 		if len(run.Proposals) > 0 && run.Proposals[len(run.Proposals)-1].Evidence == "" {
-			run.Proposals[len(run.Proposals)-1].Evidence = platform.AgentApp + "/" + r.GetChangeId()
+			run.Proposals[len(run.Proposals)-1].Evidence = protocol.AgentApp + "/" + r.GetChangeId()
 		}
 		c.Put(r, run)
 		if run.State == "done" {
@@ -273,16 +273,16 @@ func (a *Agents) take(c platform.Caller, run platform.AgentRunRecord, b protocol
 	}
 }
 
-func finishPendingCalls(run *platform.AgentRunRecord, now time.Time) {
+func finishPendingCalls(run *protocol.AgentRunRecord, now time.Time) {
 	sources := run.SourceRefs()
 	for _, call := range run.Pending {
-		run.Steps = append(run.Steps, platform.RunStep{At: now, Tool: call.Name, Arguments: string(call.Arguments), CallID: call.ID,
+		run.Steps = append(run.Steps, protocol.RunStep{At: now, Tool: call.Name, Arguments: string(call.Arguments), CallID: call.ID,
 			Outcome: "not executed: the run " + run.State, Sources: sources})
 	}
 	run.Pending = nil
 }
 
-func (a *Agents) use(c platform.Caller, d *protocol.CompiledAgent, run *platform.AgentRunRecord, tool protocol.CompiledAgentTool, args map[string]any, raw json.RawMessage, step *platform.RunStep, now time.Time) (string, func(*pb.ChangeRecord)) {
+func (a *Agents) use(c platform.Caller, d *protocol.CompiledAgent, run *protocol.AgentRunRecord, tool protocol.CompiledAgentTool, args map[string]any, raw json.RawMessage, step *protocol.RunStep, now time.Time) (string, func(*pb.ChangeRecord)) {
 	h := a.host
 	str := func(k string) string { s, _ := args[k].(string); return s }
 	switch tool.Kind {
@@ -300,10 +300,10 @@ func (a *Agents) use(c platform.Caller, d *protocol.CompiledAgent, run *platform
 		}
 		to := a.recipients(c, d, *run)
 		key := fmt.Sprintf("agent:%s:%d", run.ID, len(run.Steps)+1)
-		run.State, run.Task = "waiting", platform.AgentApp+":"+key
+		run.State, run.Task = "waiting", protocol.AgentApp+":"+key
 		return "asked: " + str("question"), func(r *pb.ChangeRecord) {
 			c.Assign(r, platform.Assignment{Title: str("question"), Body: fmt.Sprintf("Asked by the agent %s for: %s", run.Agent, run.Goal),
-				Ref: platform.RunType + "/" + run.ID, To: to, Key: key, Answers: answers})
+				Ref: protocol.RunType + "/" + run.ID, To: to, Key: key, Answers: answers})
 		}
 	case "context":
 		view, err := h.AgentContext(a.readsAs(*run), str("type"), str("id"), now)
@@ -353,7 +353,7 @@ func (a *Agents) use(c platform.Caller, d *protocol.CompiledAgent, run *platform
 			}
 		}
 		inputs, _ := json.Marshal(values)
-		var view platform.AgentObservation
+		var view protocol.AgentObservation
 		var err *platform.Error
 		if m := a.reader(*run); m != nil {
 			view, err = h.AgentRead(*m, tool.Schema, inputs)
@@ -381,11 +381,11 @@ func (a *Agents) use(c platform.Caller, d *protocol.CompiledAgent, run *platform
 	}
 	if tool.Kind == "effect" {
 		payload, _ := json.Marshal(map[string]string{"message": str("message"), "run": run.ID, "agent": run.Agent})
-		draft, refusal := a.toolDraft(c, *run, platform.Draft{Kind: "effect", Owner: d.App, Action: tool.Schema, Target: run.Ref, Payload: string(payload), Rationale: str("rationale"), Step: len(run.Steps)}, now)
+		draft, refusal := a.toolDraft(c, *run, protocol.Draft{Kind: "effect", Owner: d.App, Action: tool.Schema, Target: run.Ref, Payload: string(payload), Rationale: str("rationale"), Step: len(run.Steps)}, now)
 		if refusal != nil {
 			return "refused: " + reason(refusal), nil
 		}
-		run.Draft, run.State = []platform.Draft{draft}, "waiting"
+		run.Draft, run.State = []protocol.Draft{draft}, "waiting"
 		run.Proposals = append(run.Proposals, draft)
 		return "drafted for confirmation: " + tool.Schema, func(r *pb.ChangeRecord) { a.assignDraft(c, r, run, tool.Schema, now) }
 	}
@@ -406,24 +406,24 @@ func (a *Agents) use(c platform.Caller, d *protocol.CompiledAgent, run *platform
 			return "refused by its guard: " + err.Error(), nil
 		}
 	}
-	draft, refusal := a.toolDraft(c, *run, platform.Draft{Kind: tool.Kind, Owner: cmp.Or(tool.Owner, d.App), Action: tool.Schema, Type: tool.Target, Target: target, Payload: string(body), Rationale: str("rationale"), Step: len(run.Steps)}, now)
+	draft, refusal := a.toolDraft(c, *run, protocol.Draft{Kind: tool.Kind, Owner: cmp.Or(tool.Owner, d.App), Action: tool.Schema, Type: tool.Target, Target: target, Payload: string(body), Rationale: str("rationale"), Step: len(run.Steps)}, now)
 	if refusal != nil {
 		return "refused: " + reason(refusal), nil
 	}
-	run.Draft, run.State = []platform.Draft{draft}, "waiting"
+	run.Draft, run.State = []protocol.Draft{draft}, "waiting"
 	run.Proposals = append(run.Proposals, draft)
 	return "drafted for confirmation: " + tool.Schema + " " + target, func(r *pb.ChangeRecord) { a.assignDraft(c, r, run, tool.Tool.Description, now) }
 
 }
 
-func (a *Agents) reviewers(c platform.Caller, run platform.AgentRunRecord) platform.Caller {
+func (a *Agents) reviewers(c platform.Caller, run protocol.AgentRunRecord) platform.Caller {
 	if d := a.def(run.Agent); d != nil && run.OnBehalf == "" && d.App != "" {
 		return platform.RouteCaller(c, d.App)
 	}
 	return c
 }
 
-func (a *Agents) recipients(c platform.Caller, d *protocol.CompiledAgent, run platform.AgentRunRecord) []platform.Recipient {
+func (a *Agents) recipients(c platform.Caller, d *protocol.CompiledAgent, run protocol.AgentRunRecord) []platform.Recipient {
 	if run.OnBehalf != "" {
 		return []platform.Recipient{{Member: run.OnBehalf}}
 	}

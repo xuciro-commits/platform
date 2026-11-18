@@ -115,7 +115,7 @@ func (d *Decision) PrepareBusinessRecord(c platform.Caller, entity any, at time.
 		}
 		field, _ := info.Field(versioning.ValidFrom)
 		from, until := records.BusinessField(info, value, versioning.ValidFrom), records.BusinessField(info, value, versioning.ValidUntil)
-		if _, err := platform.EffectiveAt(field.Type, from, until, from); err != nil {
+		if _, err := protocol.EffectiveAt(field.Type, from, until, from); err != nil {
 			return refuse(err.Error())
 		}
 		if before != nil && (records.BusinessField(info, value, versioning.Key) != records.BusinessField(info, before.Value, versioning.Key) || records.BusinessField(info, value, versioning.Version) != records.BusinessField(info, before.Value, versioning.Version)) {
@@ -167,7 +167,7 @@ func (d *Decision) PrepareBusinessRecord(c platform.Caller, entity any, at time.
 		clock := d.BusinessQuery(source.Info(), platform.Query{}, c.Member, at).BusinessTime.At
 		from, until := records.BusinessField(source.Info(), selected.Value, versioning.ValidFrom), records.BusinessField(source.Info(), selected.Value, versioning.ValidUntil)
 		timeField, _ := source.Info().Field(versioning.ValidFrom)
-		active, err := platform.EffectiveAt(timeField.Type, from, until, clock)
+		active, err := protocol.EffectiveAt(timeField.Type, from, until, clock)
 		if err != nil || !active {
 			return refuse("New references require a currently effective business version")
 		}

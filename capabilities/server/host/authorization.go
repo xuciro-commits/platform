@@ -2,6 +2,7 @@ package host
 
 import (
 	runtimekernel "platformserver/kernel"
+	"platformserver/kernel/protocol"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformserver/platform"
@@ -25,7 +26,7 @@ func (t *Tenant) delegatedBound(m platform.Member, s *pb.Submission) *platform.E
 		Permits:   func(roles []string, action string) bool { return owner.Manifest().Actions.PermitsAny(roles, action) },
 		Target:    runtimekernel.Target,
 		DraftName: func(s *pb.Submission) string { return build.StoreDraftName(t.Projection, s) },
-		Edits: func(member string, access platform.ProjectAccess, kind string, names []string) bool {
+		Edits: func(member string, access protocol.ProjectAccess, kind string, names []string) bool {
 			return build.StoreProjectEdits(t.Projection, member, access, kind, names)
 		},
 	}.Bound(m, s, access)

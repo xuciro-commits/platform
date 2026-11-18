@@ -2,9 +2,9 @@ package kernel
 
 import (
 	"fmt"
+	"platformserver/kernel/protocol"
 
 	"platformserver/kernel/acceptedformat"
-	"platformserver/platform"
 )
 
 type EffectFinish struct {
@@ -53,5 +53,5 @@ func (h AgentFinish) Finish(key, hash string) {
 		h.Quarantine(err)
 		return
 	}
-	h.Settled(saved.At, platform.AgentApp, true)
+	h.Settled(saved.At, protocol.AgentApp, true)
 }

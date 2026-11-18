@@ -14,7 +14,7 @@ type automationEnvironment struct {
 }
 
 func (e automationEnvironment) Application() platform.App  { return e.b }
-func (e automationEnvironment) Host() platform.BuildHost   { return e.b.host }
+func (e automationEnvironment) Host() protocol.BuildHost   { return e.b.host }
 func (e automationEnvironment) Ledger() platform.Authority { return e.b.ledger }
 func (e automationEnvironment) AppID() string              { return ID }
 func (e automationEnvironment) Version() string            { return e.b.Manifest().Version }

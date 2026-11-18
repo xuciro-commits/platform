@@ -29,8 +29,8 @@ type ObjectQuery struct {
 	Format     bool
 }
 
-func RunValue(value any) (platform.AgentRunRecord, bool) {
-	return records.As[platform.AgentRunRecord](value)
+func RunValue(value any) (protocol.AgentRunRecord, bool) {
+	return records.As[protocol.AgentRunRecord](value)
 }
 
 type Objects struct {
@@ -38,19 +38,19 @@ type Objects struct {
 	Aggregate func(ObjectQuery, time.Time) (any, *platform.Error)
 }
 
-func (o Objects) ObserveRaw(op string, raw json.RawMessage, now time.Time) (platform.AgentObservation, *platform.Error) {
+func (o Objects) ObserveRaw(op string, raw json.RawMessage, now time.Time) (protocol.AgentObservation, *platform.Error) {
 	var q ObjectQuery
 	decoder := json.NewDecoder(bytes.NewReader(raw))
 	decoder.DisallowUnknownFields()
 	if decoder.Decode(&q) != nil || decoder.Decode(new(any)) != io.EOF || q.Offset < 0 || q.Limit < 0 || q.Set.Check() != nil {
-		return platform.AgentObservation{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "The object set request is not valid")
+		return protocol.AgentObservation{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "The object set request is not valid")
 	}
 	return o.Observe(op, q, now)
 }
 
-func (o Objects) Observe(op string, q ObjectQuery, now time.Time) (platform.AgentObservation, *platform.Error) {
-	invalid := func(message string) (platform.AgentObservation, *platform.Error) {
-		return platform.AgentObservation{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, message)
+func (o Objects) Observe(op string, q ObjectQuery, now time.Time) (protocol.AgentObservation, *platform.Error) {
+	invalid := func(message string) (protocol.AgentObservation, *platform.Error) {
+		return protocol.AgentObservation{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, message)
 	}
 	aggregated := len(q.Groups) > 0 || len(q.Measures) > 0 || q.Window != nil || q.Histogram != nil || q.MaxRows != 0 || q.Collection != nil
 	switch op {
@@ -63,7 +63,7 @@ func (o Objects) Observe(op string, q ObjectQuery, now time.Time) (platform.Agen
 		}
 		page, object, err := o.Load(q, now)
 		if err != nil {
-			return platform.AgentObservation{}, err
+			return protocol.AgentObservation{}, err
 		}
 		return ObjectObservation(object, page), nil
 	case "aggregate":
@@ -72,9 +72,9 @@ func (o Objects) Observe(op string, q ObjectQuery, now time.Time) (platform.Agen
 		}
 		result, err := o.Aggregate(q, now)
 		if err != nil {
-			return platform.AgentObservation{}, err
+			return protocol.AgentObservation{}, err
 		}
-		out := platform.AgentObservation{}
+		out := protocol.AgentObservation{}
 		out.Body, _ = json.Marshal(result)
 		return out, nil
 	default:
@@ -86,7 +86,7 @@ type ReleaseRunner struct {
 	Tenant       string
 	Candidate    CandidateEvaluation
 	Agent        bool
-	Existing     func(string) (platform.Evaluation, bool)
+	Existing     func(string) (protocol.Evaluation, bool)
 	DefaultModel func() string
 	Resolve      func(string, platform.ModelOptions) (string, *platform.Error)
 	Accept       func(*pb.Submission) *platform.Error
@@ -99,7 +99,7 @@ func (r ReleaseRunner) Start(m platform.Member, candidate, agent, key string) (s
 	return ReleaseEvaluation{Tenant: r.Tenant, Candidate: r.Candidate, Existing: r.Existing, DefaultModel: r.DefaultModel, Resolve: r.Resolve, Accept: r.Accept}.Start(m, candidate, agent, key)
 }
 
-func DecisionMembers(values []platform.AuditEntry) []string {
+func DecisionMembers(values []protocol.AuditEntry) []string {
 	var out []string
 	for _, entry := range values {
 		out = append(out, entry.Member)
@@ -109,9 +109,9 @@ func DecisionMembers(values []platform.AuditEntry) []string {
 
 type ScheduleView struct {
 	Agents     protocol.AgentRuntime
-	Run        func(string) (platform.AgentRunRecord, bool)
-	Evaluation func(string) (platform.Evaluation, bool)
-	Queued     func() ([]platform.Evaluation, *platform.Error)
+	Run        func(string) (protocol.AgentRunRecord, bool)
+	Evaluation func(string) (protocol.Evaluation, bool)
+	Queued     func() ([]protocol.Evaluation, *platform.Error)
 }
 
 type Schedule struct {
@@ -124,8 +124,8 @@ type Schedule struct {
 	Meter       func(platform.Member, platform.AIUsage) *platform.Error
 	Step        func(protocol.AgentResultStep, time.Time) bool
 	Wake        func()
-	Run         func(string) (platform.AgentRunRecord, bool)
-	Evaluation  func(string) (platform.Evaluation, bool)
+	Run         func(string) (protocol.AgentRunRecord, bool)
+	Evaluation  func(string) (protocol.Evaluation, bool)
 	Accept      func(protocol.AgentResultStep, time.Time) error
 	Failed      func(time.Time, string, string)
 	Evaluator   protocol.AgentEvaluator
@@ -138,7 +138,7 @@ func (s Schedule) Turns() Turns {
 			s.Read(func(v ScheduleView) *platform.Error { turns = v.Agents.DueAgentTurns(now); return nil })
 			return turns
 		},
-		Allowed: func(run platform.AgentRunRecord) (allowed bool, refusal *platform.Error) {
+		Allowed: func(run protocol.AgentRunRecord) (allowed bool, refusal *platform.Error) {
 			refusal = s.Read(func(v ScheduleView) *platform.Error { allowed = v.Agents.AllowsAgentRun(run); return nil })
 			return allowed, refusal
 		},
@@ -154,20 +154,20 @@ func (s Schedule) Turns() Turns {
 
 func (s Schedule) Prepare(b protocol.AgentResultStep, now time.Time) bool {
 	return StepPreparation{Quarantined: s.Quarantined, Recording: s.Recording, Run: s.Run, Evaluation: s.Evaluation,
-		Allows: func(run platform.AgentRunRecord) bool { return s.Agents.AllowsAgentRun(run) }, Accept: s.Accept, Failed: s.Failed}.Prepare(b, now)
+		Allows: func(run protocol.AgentRunRecord) bool { return s.Agents.AllowsAgentRun(run) }, Accept: s.Accept, Failed: s.Failed}.Prepare(b, now)
 }
 
 func (s Schedule) Drain(now time.Time) {
 	EvaluationQueue{Stopped: s.Stopped,
-		Queued: func() (evals []platform.Evaluation, refusal *platform.Error) {
+		Queued: func() (evals []protocol.Evaluation, refusal *platform.Error) {
 			refusal = s.Read(func(v ScheduleView) (inner *platform.Error) { evals, inner = v.Queued(); return })
 			return evals, refusal
 		},
-		Current: func(id string) (current platform.Evaluation, known bool) {
+		Current: func(id string) (current protocol.Evaluation, known bool) {
 			refusal := s.Read(func(v ScheduleView) *platform.Error { current, known = v.Evaluation(id); return nil })
 			return current, known && refusal == nil
 		},
-		Evaluate: func(ev platform.Evaluation, at time.Time, step func(*platform.Evaluation) bool) platform.Evaluation {
+		Evaluate: func(ev protocol.Evaluation, at time.Time, step func(*protocol.Evaluation) bool) protocol.Evaluation {
 			return s.Evaluator.Evaluate(s.Agents.AgentEvaluationRuntime(), ev, at, step)
 		}, Apply: s.Step}.Drain(now)
 }

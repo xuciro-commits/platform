@@ -3,6 +3,7 @@ package host
 import (
 	"encoding/json"
 	acceptedformat "platformserver/kernel/acceptedformat"
+	"platformserver/kernel/protocol"
 	"platformserver/kernel/records"
 	aiowner "platformserver/services/ai"
 
@@ -12,12 +13,12 @@ import (
 	"time"
 )
 
-func (h hostView) TrainingEvidence(event platform.Event) platform.AITrainingEvidence {
+func (h hostView) TrainingEvidence(event platform.Event) protocol.AITrainingEvidence {
 	return h.t.training().Evidence(event)
 }
 
-func (h hostView) TrainingReadable(member platform.Member, candidate platform.AITrainingCandidate, now time.Time) string {
-	return h.t.training().Readable(platform.NewCaller(runtime{t: h.t}, member, platform.AIApp, false, false), candidate, now)
+func (h hostView) TrainingReadable(member platform.Member, candidate protocol.AITrainingCandidate, now time.Time) string {
+	return h.t.training().Readable(platform.NewCaller(runtime{t: h.t}, member, protocol.AIApp, false, false), candidate, now)
 }
 
 func (t *Tenant) training() aiowner.TrainingWorld {
@@ -37,4 +38,4 @@ func (t *Tenant) training() aiowner.TrainingWorld {
 		}}
 }
 
-var _ platform.AITrainingHost = hostView{}
+var _ protocol.AITrainingHost = hostView{}

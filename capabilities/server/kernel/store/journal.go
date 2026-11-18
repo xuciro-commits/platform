@@ -5,7 +5,6 @@ import (
 	"encoding/binary"
 	"math"
 	runtimeprotocol "platformserver/kernel/protocol"
-	"platformserver/platform"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -17,17 +16,17 @@ type Store interface {
 	SaveTranscript(x Transcript)
 	Transcripts(tenant, run string, limit int) []Transcript
 	PurgeTranscripts(tenant string, before time.Time)
-	SaveObservations(events []platform.Observation) error
-	QueryObservations(query platform.ObservationQuery) (platform.ObservationPage, error)
+	SaveObservations(events []runtimeprotocol.Observation) error
+	QueryObservations(query runtimeprotocol.ObservationQuery) (runtimeprotocol.ObservationPage, error)
 	PurgeObservations(tenant string, before time.Time) (int, error)
 	ObservationUsage(tenant string, from time.Time) (int64, error)
-	SummarizeObservations(tenant, member string, from, to time.Time) (platform.ObservationSummary, error)
-	SaveAuditEntries(tenant string, entries []platform.AuditEntry) error
-	QueryAuditEntries(query platform.AuditQuery) (platform.AuditPage, error)
-	SavePersonalReads(tenant string, reads []platform.PersonalRead) error
-	QueryPersonalReads(query platform.PersonalReadQuery) (platform.PersonalReadPage, error)
-	ReplaceRunIndex(tenant, scope string, entries []platform.RunIndexEntry) error
-	QueryRunIndex(query platform.RunIndexQuery) (platform.RunIndexPage, error)
+	SummarizeObservations(tenant, member string, from, to time.Time) (runtimeprotocol.ObservationSummary, error)
+	SaveAuditEntries(tenant string, entries []runtimeprotocol.AuditEntry) error
+	QueryAuditEntries(query runtimeprotocol.AuditQuery) (runtimeprotocol.AuditPage, error)
+	SavePersonalReads(tenant string, reads []runtimeprotocol.PersonalRead) error
+	QueryPersonalReads(query runtimeprotocol.PersonalReadQuery) (runtimeprotocol.PersonalReadPage, error)
+	ReplaceRunIndex(tenant, scope string, entries []runtimeprotocol.RunIndexEntry) error
+	QueryRunIndex(query runtimeprotocol.RunIndexQuery) (runtimeprotocol.RunIndexPage, error)
 }
 
 type Transcript = runtimeprotocol.Transcript

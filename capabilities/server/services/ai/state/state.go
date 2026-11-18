@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"platformserver/kernel/protocol"
 	"platformserver/platform"
 	"platformserver/services/ai/modelconfig"
 	"strings"
@@ -14,14 +15,14 @@ import (
 const UsageKept = 5000
 
 type State struct {
-	TrainingPolicies   map[string]platform.AITrainingPolicy    `json:"trainingPolicies,omitempty"`
-	TrainingCandidates map[string]platform.AITrainingCandidate `json:"trainingCandidates,omitempty"`
+	TrainingPolicies   map[string]protocol.AITrainingPolicy    `json:"trainingPolicies,omitempty"`
+	TrainingCandidates map[string]protocol.AITrainingCandidate `json:"trainingCandidates,omitempty"`
 	Providers          []platform.AIProvider                   `json:"providers"`
 	Models             []platform.AIModel                      `json:"models"`
-	Limits             map[string]platform.AILimit             `json:"limits,omitempty"`
+	Limits             map[string]protocol.AILimit             `json:"limits,omitempty"`
 	Usage              []platform.AIUsage                      `json:"usage"`
 	Daily              map[string]int                          `json:"daily,omitempty"`
-	Reservations       map[string]platform.AIReservation       `json:"reservations,omitempty"`
+	Reservations       map[string]protocol.AIReservation       `json:"reservations,omitempty"`
 }
 
 func Decode(raw json.RawMessage) (State, error) {

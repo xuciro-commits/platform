@@ -3,6 +3,7 @@ package data
 import (
 	"encoding/json"
 	"log"
+	"platformserver/kernel/protocol"
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
@@ -14,7 +15,7 @@ type ScheduleRuns struct {
 	Exists    func(schedule string) bool
 	Project   func(pipeline string) string
 	Schedules func() ([]platform.Schedule, *platform.Error)
-	Composite func(platform.Member, string, []platform.CompositeEdit, time.Time) error
+	Composite func(platform.Member, string, []protocol.CompositeEdit, time.Time) error
 }
 
 func (o *Owner) ExecutionSchedules(c platform.Caller) ([]platform.Schedule, *platform.Error) {
@@ -52,9 +53,9 @@ func (r ScheduleRuns) Run(pipelines []Pipeline, now time.Time) {
 				log.Printf("schedule migration refused: pipeline %s has no project", pipeline.ID)
 				continue
 			}
-			edits := []platform.CompositeEdit{{Schema: platform.ScheduleType + ".create", Target: &pb.EntityRef{Type: platform.ScheduleType, Id: id}, Payload: platform.Raw(map[string]any{"name": "schedule" + pipeline.Name, "title": pipeline.Title, "pipeline": pipeline.ID, "every": pipeline.Every, "enabled": true, "project": project})}}
+			edits := []protocol.CompositeEdit{{Schema: platform.ScheduleType + ".create", Target: &pb.EntityRef{Type: platform.ScheduleType, Id: id}, Payload: platform.Raw(map[string]any{"name": "schedule" + pipeline.Name, "title": pipeline.Title, "pipeline": pipeline.ID, "every": pipeline.Every, "enabled": true, "project": project})}}
 			if pipeline.Last != nil {
-				edits = append(edits, platform.CompositeEdit{Schema: platform.SchemaScheduleRan, Target: &pb.EntityRef{Type: platform.ScheduleType, Id: id}, Payload: platform.Raw(map[string]any{"at": pipeline.Last.At})})
+				edits = append(edits, protocol.CompositeEdit{Schema: platform.SchemaScheduleRan, Target: &pb.EntityRef{Type: platform.ScheduleType, Id: id}, Payload: platform.Raw(map[string]any{"at": pipeline.Last.At})})
 			}
 			if err := r.Composite(member, "schedule-migration:"+pipeline.ID, edits, now); err != nil {
 				log.Printf("schedule migration refused: %v", err)
@@ -84,7 +85,7 @@ func (r ScheduleRuns) Run(pipelines []Pipeline, now time.Time) {
 			stamp = next.UTC().Format(time.RFC3339Nano)
 		}
 		key := "schedule:" + schedule.ID + ":" + stamp
-		edits := []platform.CompositeEdit{
+		edits := []protocol.CompositeEdit{
 			{Schema: PipelineType + ".run", Target: &pb.EntityRef{Type: PipelineType, Id: schedule.Pipeline}, Payload: platform.Raw(map[string]any{})},
 			{Schema: platform.SchemaScheduleRan, Target: &pb.EntityRef{Type: platform.ScheduleType, Id: schedule.ID}, Payload: platform.Raw(map[string]any{"at": now})},
 		}

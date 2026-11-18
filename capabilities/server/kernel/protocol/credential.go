@@ -1,4 +1,4 @@
-package platform
+package protocol
 
 import (
 	"time"
@@ -8,6 +8,7 @@ type CredentialBinding struct {
 	Consumer string `json:"consumer"`
 	Origin   string `json:"origin"`
 }
+
 type CredentialDefinition struct {
 	ID        string              `json:"id"`
 	Title     string              `json:"title"`
@@ -16,6 +17,7 @@ type CredentialDefinition struct {
 	Reference string              `json:"reference,omitempty"`
 	Bindings  []CredentialBinding `json:"bindings"`
 }
+
 type CredentialInfo struct {
 	CredentialDefinition
 	Version   int       `json:"version"`
@@ -23,15 +25,18 @@ type CredentialInfo struct {
 	UpdatedAt time.Time `json:"updatedAt"`
 	UpdatedBy string    `json:"updatedBy"`
 }
+
 type CredentialWrite struct {
 	CredentialDefinition
 	ExpectedVersion int    `json:"expectedVersion"`
 	Sealed          string `json:"sealed,omitempty"`
 }
+
 type CredentialSealRequest struct {
 	CredentialWrite
 	Value string `json:"value"`
 }
+
 type CredentialCatalog struct {
 	Credentials      []CredentialInfo `json:"credentials"`
 	ManagedAvailable bool             `json:"managedAvailable"`
@@ -40,6 +45,7 @@ type CredentialCatalog struct {
 type Credentials interface {
 	Credential(string) (CredentialState, bool)
 }
+
 type CredentialState struct {
 	CredentialInfo
 	SealedVersion int    `json:"sealedVersion,omitempty"`

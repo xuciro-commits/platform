@@ -2,6 +2,7 @@ package releases
 
 import (
 	"fmt"
+	"platformserver/kernel/protocol"
 
 	"slices"
 
@@ -9,7 +10,7 @@ import (
 	"platformserver/services/resources/publication"
 )
 
-func (r *Store) RetainedClosure(candidate platform.ReleaseCandidate, ref platform.AssetRef, sourceVersion string, retained *string) (platform.ReleaseCandidate, string, error) {
+func (r *Store) RetainedClosure(candidate protocol.ReleaseCandidate, ref platform.AssetRef, sourceVersion string, retained *string) (protocol.ReleaseCandidate, string, error) {
 	release := r.Active()
 	if retained != nil {
 		release = *retained
@@ -19,11 +20,11 @@ func (r *Store) RetainedClosure(candidate platform.ReleaseCandidate, ref platfor
 	}
 	saved, err := r.Candidate(release)
 	if err != nil {
-		return platform.ReleaseCandidate{}, "", err
+		return protocol.ReleaseCandidate{}, "", err
 	}
 	if !slices.ContainsFunc(saved.Assets, func(a platform.ReleaseAsset) bool { return a.Ref == ref }) {
 		if retained != nil {
-			return platform.ReleaseCandidate{}, "", fmt.Errorf("capability %s is missing from its retained release", ref)
+			return protocol.ReleaseCandidate{}, "", fmt.Errorf("capability %s is missing from its retained release", ref)
 		}
 		return candidate, "", nil
 	}
@@ -42,12 +43,12 @@ func (r *Store) RetainedClosure(candidate platform.ReleaseCandidate, ref platfor
 				}
 			}
 		}
-		return platform.ReleaseCandidate{}, "", fmt.Errorf("capability %s differs from its activated release", ref)
+		return protocol.ReleaseCandidate{}, "", fmt.Errorf("capability %s differs from its activated release", ref)
 	}
 	return active, release, nil
 }
 
-func SameRetainedCapability(resolver publication.Resolver, current, retained platform.ReleaseCandidate) bool {
+func SameRetainedCapability(resolver publication.Resolver, current, retained protocol.ReleaseCandidate) bool {
 	if current.ID == retained.ID {
 		return true
 	}

@@ -4,6 +4,7 @@ import (
 	"cmp"
 	"net/http"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
+	"platformserver/kernel/protocol"
 	"platformserver/kernel/records"
 	"platformserver/kernel/transport"
 	"platformserver/platform"
@@ -22,7 +23,7 @@ func (t *Tenant) resourceActionActive(name string) bool {
 }
 
 func (t *Tenant) ResourceRole(m platform.Member, project string) string {
-	access, _ := t.App("platform").(platform.ProjectAccess)
+	access, _ := t.App("platform").(protocol.ProjectAccess)
 	return build.ProjectRoleOf(m, access, project)
 }
 
@@ -64,7 +65,7 @@ func (t *Tenant) initializeResources(now time.Time) error {
 func (h *Host) routesResources(rt *routes) {
 	rt.recordRead(transport.Route{Pattern: "GET /v1/markings/{id}/resources", Summary: "Resources carrying a marking, without their data", Answer: []build.ResourceEntry{}}, transport.Answering(func(r *http.Request, m platform.Member, t *Tenant) ([]build.ResourceEntry, *platform.Error) {
 		caller := t.caller(m, t.App("platform"), false)
-		if refusal := authorizationRefusal(t.authorizeNative(caller, "GET /v1/markings/{id}/resources", "read", []string{"admin", platform.Auditor}, true)); refusal != nil {
+		if refusal := authorizationRefusal(t.authorizeNative(caller, "GET /v1/markings/{id}/resources", "read", []string{"admin", protocol.Auditor}, true)); refusal != nil {
 			return nil, refusal
 		}
 		marked := t.markingsIn(t.Projection, false).Marked(r.PathValue("id"))

@@ -34,7 +34,7 @@ func recordFieldSchema(f platform.FieldInfo) (platform.ValueSchema, bool) {
 		if len(choices) > 0 && !f.Required && !slices.Contains(choices, "") {
 			choices = append(choices, "")
 		}
-		return platform.CapabilityFieldSchema(f.Type, f.Help, choices), true
+		return CapabilityFieldSchema(f.Type, f.Help, choices), true
 	}
 	row := platform.ValueSchema{Type: "object", Properties: map[string]platform.ValueSchema{}}
 	for _, column := range f.Fields {

@@ -271,8 +271,8 @@ func (k *Index) Embed(ctx Context, now time.Time) {
 	}
 }
 
-func (k *Index) Status(ctx Context) platform.KnowledgeIndexStatus {
-	out := platform.KnowledgeIndexStatus{Active: ctx.Active(), Preparing: ctx.Preparing()}
+func (k *Index) Status(ctx Context) runtimeprotocol.KnowledgeIndexStatus {
+	out := runtimeprotocol.KnowledgeIndexStatus{Active: ctx.Active(), Preparing: ctx.Preparing()}
 	if ctx.NeedsRebuild(out.Active) {
 		out.NeedsRebuild = true
 		out.Problem = "Model configuration changed; prepare and activate a new vector index to resume semantic search"

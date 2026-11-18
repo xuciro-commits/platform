@@ -3,6 +3,7 @@ package host
 import (
 	"encoding/json"
 	"fmt"
+	"platformserver/kernel/protocol"
 	"platformserver/kernel/records"
 	"platformserver/platform"
 	agentowner "platformserver/services/ai/runtime"
@@ -37,7 +38,7 @@ func (t *Tenant) definitionOwners(includeArchived bool) records.DefinitionOwners
 	owners := t.assetOwners(t.OwnerActive)
 	return records.DefinitionOwners{Owners: owners, Active: t.OwnerActive, IncludeArchived: includeArchived,
 		DescribeAsset: PublicationResolver().DescribeAsset,
-		InstallationDecoder: func() (func(string, string, json.RawMessage) (platform.AssetInstallation, error), error) {
+		InstallationDecoder: func() (func(string, string, json.RawMessage) (protocol.AssetInstallation, error), error) {
 			registry, err := PublicationResolver().NewAssetRegistry(owners...)
 			if err != nil {
 				return nil, err
@@ -45,11 +46,11 @@ func (t *Tenant) definitionOwners(includeArchived bool) records.DefinitionOwners
 			return registry.DecodeAssetInstallation, nil
 		},
 		Publishes: func(app string) bool { return t.assets[app] != nil },
-		Reader: func(app string) (platform.AssetDefinitionReader, bool) {
+		Reader: func(app string) (protocol.AssetDefinitionReader, bool) {
 			if app != "build" {
 				return nil, false
 			}
-			return t.App(app).(platform.AssetDefinitionReader), true
+			return t.App(app).(protocol.AssetDefinitionReader), true
 		}}
 }
 

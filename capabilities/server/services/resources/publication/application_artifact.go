@@ -3,14 +3,15 @@ package publication
 import (
 	"encoding/json"
 	"fmt"
+	"platformserver/kernel/protocol"
 	"slices"
 	"strings"
 
 	"platformserver/platform"
 )
 
-func (resolver Resolver) ArtifactOfApplication(root platform.AssetRef, available []platform.ReleaseAsset) (platform.ApplicationArtifact, error) {
-	artifact := platform.ApplicationArtifact{Ref: root, Model: []platform.AssetBinding{}, Rules: []platform.AssetBinding{}, Pages: []platform.AssetBinding{}, Flows: []platform.AssetBinding{}, AI: []platform.AssetBinding{}, Integrations: []platform.AssetBinding{}, Samples: []platform.AssetBinding{}, Roles: []platform.ApplicationRole{}, Depends: []platform.AssetBinding{}, Environment: []platform.ApplicationBinding{}}
+func (resolver Resolver) ArtifactOfApplication(root platform.AssetRef, available []platform.ReleaseAsset) (protocol.ApplicationArtifact, error) {
+	artifact := protocol.ApplicationArtifact{Ref: root, Model: []platform.AssetBinding{}, Rules: []platform.AssetBinding{}, Pages: []platform.AssetBinding{}, Flows: []platform.AssetBinding{}, AI: []platform.AssetBinding{}, Integrations: []platform.AssetBinding{}, Samples: []platform.AssetBinding{}, Roles: []protocol.ApplicationRole{}, Depends: []platform.AssetBinding{}, Environment: []protocol.ApplicationBinding{}}
 	if root.Kind != platform.AssetApp {
 		return artifact, fmt.Errorf("an application artifact needs its application root")
 	}
@@ -63,14 +64,14 @@ func (resolver Resolver) ArtifactOfApplication(root platform.AssetRef, available
 			if err := json.Unmarshal(asset.Body, &contract); err != nil {
 				return artifact, err
 			}
-			artifact.Environment = append(artifact.Environment, platform.ApplicationBinding{Ref: asset.Ref, Kind: contract.Kind, Credential: contract.Credential})
+			artifact.Environment = append(artifact.Environment, protocol.ApplicationBinding{Ref: asset.Ref, Kind: contract.Kind, Credential: contract.Credential})
 		}
 		if asset.Ref.Kind == platform.AssetEvaluation {
-			set, err := platform.ReadEvaluationSet(asset.Body)
+			set, err := protocol.ReadEvaluationSet(asset.Body)
 			if err != nil {
 				return artifact, err
 			}
-			artifact.Environment = append(artifact.Environment, platform.ApplicationBinding{Ref: asset.Ref, Kind: "ai-model", Name: set.Model})
+			artifact.Environment = append(artifact.Environment, protocol.ApplicationBinding{Ref: asset.Ref, Kind: "ai-model", Name: set.Model})
 		}
 		if asset.Ref.App != root.App {
 			artifact.Depends = append(artifact.Depends, binding)
@@ -84,7 +85,7 @@ func (resolver Resolver) ArtifactOfApplication(root platform.AssetRef, available
 	return artifact, nil
 }
 
-func (resolver Resolver) applicationAssetRoles(asset platform.ReleaseAsset) ([]platform.ApplicationRole, error) {
+func (resolver Resolver) applicationAssetRoles(asset platform.ReleaseAsset) ([]protocol.ApplicationRole, error) {
 	var descriptor struct {
 		Entity platform.EntityInfo `json:"entity"`
 		Access []struct {
@@ -111,12 +112,12 @@ func (resolver Resolver) applicationAssetRoles(asset platform.ReleaseAsset) ([]p
 	if err := json.Unmarshal(asset.Body, &descriptor); err != nil {
 		return nil, err
 	}
-	roles := map[string]*platform.ApplicationRole{}
-	add := func(role string) *platform.ApplicationRole {
+	roles := map[string]*protocol.ApplicationRole{}
+	add := func(role string) *protocol.ApplicationRole {
 		if value := roles[role]; value != nil {
 			return value
 		}
-		value := &platform.ApplicationRole{Resource: platform.AssetBinding{Ref: asset.Ref, SourceVersion: asset.SourceVersion}, Role: role}
+		value := &protocol.ApplicationRole{Resource: platform.AssetBinding{Ref: asset.Ref, SourceVersion: asset.SourceVersion}, Role: role}
 		roles[role] = value
 		return value
 	}
@@ -158,11 +159,11 @@ func (resolver Resolver) applicationAssetRoles(asset platform.ReleaseAsset) ([]p
 			value.WriteFields = append(value.WriteFields, field.Name)
 		}
 	}
-	out := make([]platform.ApplicationRole, 0, len(roles))
+	out := make([]protocol.ApplicationRole, 0, len(roles))
 	for _, role := range roles {
 		out = append(out, *role)
 	}
-	slices.SortFunc(out, func(a, b platform.ApplicationRole) int { return strings.Compare(a.Role, b.Role) })
+	slices.SortFunc(out, func(a, b protocol.ApplicationRole) int { return strings.Compare(a.Role, b.Role) })
 	return out, nil
 }
 

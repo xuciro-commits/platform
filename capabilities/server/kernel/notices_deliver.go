@@ -1,17 +1,18 @@
 package kernel
 
 import (
+	"platformserver/kernel/protocol"
 	"time"
 
 	"platformserver/platform"
 )
 
-func (b *NoticeBoard) Deliver(app string, n platform.Notification, now time.Time, members []string, delivery map[string]platform.Reach, mail func(platform.Notification, platform.Reach)) []string {
+func (b *NoticeBoard) Deliver(app string, n platform.Notification, now time.Time, members []string, delivery map[string]protocol.Reach, mail func(platform.Notification, protocol.Reach)) []string {
 	var out []string
 	for _, m := range members {
 		to, known := delivery[m]
 		if !known {
-			to = platform.Reach{InApp: true}
+			to = protocol.Reach{InApp: true}
 		}
 		x := n
 		x.App, x.At, x.Read = app, now, !to.InApp
@@ -25,10 +26,10 @@ func (b *NoticeBoard) Deliver(app string, n platform.Notification, now time.Time
 	return out
 }
 
-func (d *NoticeDraft) Deliver(app string, n platform.Notification, now time.Time, members []string, console platform.IdentityProfile, mail func(platform.Notification, platform.Reach) []platform.Effect) []string {
+func (d *NoticeDraft) Deliver(app string, n platform.Notification, now time.Time, members []string, console protocol.IdentityProfile, mail func(platform.Notification, protocol.Reach) []platform.Effect) []string {
 	var out []string
 	for _, member := range members {
-		var reach platform.Reach
+		var reach protocol.Reach
 		if console != nil {
 			reach = console.Reach(member)
 		}

@@ -14,17 +14,17 @@ import (
 )
 
 func TestInvariantAccessRequestAppliesGrantOnApproval(t *testing.T) {
-	owner := platform.Seat{Subjects: []string{"owner"}, Member: platform.Member{ID: "owner"}}
-	requester := platform.Seat{Subjects: []string{"requester"}, Member: platform.Member{ID: "requester"}}
-	administrator := platform.Seat{Subjects: []string{"request-admin"}, Member: platform.Member{ID: "request-admin", Roles: map[string]string{"platform": "admin"}}}
+	owner := protocol.Seat{Subjects: []string{"owner"}, Member: platform.Member{ID: "owner"}}
+	requester := protocol.Seat{Subjects: []string{"requester"}, Member: platform.Member{ID: "requester"}}
+	administrator := protocol.Seat{Subjects: []string{"request-admin"}, Member: platform.Member{ID: "request-admin", Roles: map[string]string{"platform": "admin"}}}
 	tn := newInvariantTenantWithApps(t, "access-request", []platform.App{work.New("access-request", actions.NewAuthority)}, owner, requester, administrator)
 	if action, ok := tn.App("platform").Manifest().Actions.Action(controlowner.SchemaAccessRequest); !ok || action.Target != controlowner.AccessRequestType {
 		t.Fatal("the access request action is not declared for its target")
 	}
 	tn.accept(t, protocol.AppType+".create", protocol.AppType, "PROJ", map[string]any{"name": "accessproject", "title": "Access project"})
-	save := tn.submission(platform.SchemaProjectSave, platform.ProjectType, "PROJ", map[string]any{
+	save := tn.submission(protocol.SchemaProjectSave, protocol.ProjectType, "PROJ", map[string]any{
 		"title": "Access project", "approvals": 1,
-		"members": []platform.ProjectMember{{Member: "owner", Role: platform.ProjectOwnerRole}},
+		"members": []platform.ProjectMember{{Member: "owner", Role: protocol.ProjectOwnerRole}},
 	})
 	save.Authority = "platform"
 	if _, refusal := tn.Submit(tn.member(t), save, invariantClock); refusal != nil {
@@ -45,7 +45,7 @@ func TestInvariantAccessRequestAppliesGrantOnApproval(t *testing.T) {
 		return record
 	}
 	submit("requester", "REQ1", controlowner.SchemaAccessRequest, map[string]any{
-		"scope": "project", "project": "PROJ", "role": platform.ProjectViewerRole, "reason": "Inspect the line",
+		"scope": "project", "project": "PROJ", "role": protocol.ProjectViewerRole, "reason": "Inspect the line",
 	})
 	requesterMember, _ := tn.Member("requester")
 	requests, refusal := tn.read(requesterMember, "access-requests")
@@ -57,7 +57,7 @@ func TestInvariantAccessRequestAppliesGrantOnApproval(t *testing.T) {
 	}
 	ownerMember, _ := tn.Member("owner")
 	inbox, refusal := tn.read(ownerMember, "inbox")
-	if refusal != nil || !slices.ContainsFunc(inbox.([]platform.WorkTask), func(task platform.WorkTask) bool {
+	if refusal != nil || !slices.ContainsFunc(inbox.([]protocol.WorkTask), func(task protocol.WorkTask) bool {
 		return task.Key == "access:REQ1" && task.Title != "" && !task.Withheld
 	}) {
 		t.Fatalf("approver inbox has no access task: %+v: %v", inbox, refusal)
@@ -73,21 +73,21 @@ func TestInvariantAccessRequestAppliesGrantOnApproval(t *testing.T) {
 	}
 	submit("owner", "REQ1", controlowner.SchemaAccessApprove, map[string]any{"comment": "Approved for the shift"})
 	inbox, refusal = tn.read(ownerMember, "inbox")
-	if refusal != nil || slices.ContainsFunc(inbox.([]platform.WorkTask), func(task platform.WorkTask) bool {
+	if refusal != nil || slices.ContainsFunc(inbox.([]protocol.WorkTask), func(task protocol.WorkTask) bool {
 		return task.Key == "access:REQ1"
 	}) {
 		t.Fatalf("approved access task stayed open: %+v: %v", inbox, refusal)
 	}
 	current, ok := tn.Member("requester")
-	if !ok || tn.App("platform").(platform.ProjectAccess).ProjectRole("requester", "PROJ") != platform.ProjectViewerRole || !current.Holds(build.ID, platform.ProjectViewerRole) {
-		t.Fatalf("approval did not grant project viewer access: member=%+v role=%q", current, tn.App("platform").(platform.ProjectAccess).ProjectRole("requester", "PROJ"))
+	if !ok || tn.App("platform").(protocol.ProjectAccess).ProjectRole("requester", "PROJ") != protocol.ProjectViewerRole || !current.Holds(build.ID, protocol.ProjectViewerRole) {
+		t.Fatalf("approval did not grant project viewer access: member=%+v role=%q", current, tn.App("platform").(protocol.ProjectAccess).ProjectRole("requester", "PROJ"))
 	}
 	requests, _ = tn.read(requesterMember, "access-requests")
 	if got := requests.([]controlowner.AccessRequest)[0]; got.State != "approved" || got.DecidedBy != "owner" || got.Granted == "" {
 		t.Fatalf("approved request was not retained: %+v", got)
 	}
 	again := tn.submission(controlowner.SchemaAccessRequest, controlowner.AccessRequestType, "REQ1b", map[string]any{
-		"scope": "project", "project": "PROJ", "role": platform.ProjectViewerRole, "reason": "Request again",
+		"scope": "project", "project": "PROJ", "role": protocol.ProjectViewerRole, "reason": "Request again",
 	})
 	again.Authority, again.PrincipalId = "platform", "requester"
 	if _, refusal := tn.Submit(requesterMember, again, invariantClock); refusal == nil {

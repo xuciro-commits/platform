@@ -11,7 +11,7 @@ import (
 	"strings"
 )
 
-func Transform(engine platform.RuleEngine, steps []platform.TransformStep, expectations []platform.TransformExpectation, input []map[string]any, read func(dataset string) ([]map[string]any, error), rowLimit ...int) ([]map[string]any, []platform.QuarantinedRow, error) {
+func Transform(engine platform.RuleEngine, steps []ruleprotocol.TransformStep, expectations []ruleprotocol.TransformExpectation, input []map[string]any, read func(dataset string) ([]map[string]any, error), rowLimit ...int) ([]map[string]any, []ruleprotocol.QuarantinedRow, error) {
 	if len(rowLimit) > 0 && rowLimit[0] > 0 && len(input) > rowLimit[0] {
 		return nil, nil, fmt.Errorf("pipeline input exceeds the %d row limit", rowLimit[0])
 	}
@@ -33,7 +33,7 @@ func Transform(engine platform.RuleEngine, steps []platform.TransformStep, expec
 	return kept, quarantined, nil
 }
 
-func ApplyStep(engine platform.RuleEngine, s platform.TransformStep, rows []map[string]any, read func(string) ([]map[string]any, error), rowLimit ...int) ([]map[string]any, error) {
+func ApplyStep(engine platform.RuleEngine, s ruleprotocol.TransformStep, rows []map[string]any, read func(string) ([]map[string]any, error), rowLimit ...int) ([]map[string]any, error) {
 	switch s.Kind {
 	case "declassify":
 		return rows, nil
@@ -276,13 +276,13 @@ func ApplyStep(engine platform.RuleEngine, s platform.TransformStep, rows []map[
 	return nil, fmt.Errorf("unknown step")
 }
 
-func Expect(expectations []platform.TransformExpectation, rows []map[string]any) ([]map[string]any, []platform.QuarantinedRow) {
+func Expect(expectations []ruleprotocol.TransformExpectation, rows []map[string]any) ([]map[string]any, []ruleprotocol.QuarantinedRow) {
 	if len(expectations) == 0 {
 		return rows, nil
 	}
 	seen := map[string]map[string]bool{}
 	var kept []map[string]any
-	var bad []platform.QuarantinedRow
+	var bad []ruleprotocol.QuarantinedRow
 	for _, r := range rows {
 		reason := ""
 		for _, e := range expectations {
@@ -323,7 +323,7 @@ func Expect(expectations []platform.TransformExpectation, rows []map[string]any)
 			}
 		}
 		if reason != "" {
-			bad = append(bad, platform.QuarantinedRow{Reason: reason, Row: r})
+			bad = append(bad, ruleprotocol.QuarantinedRow{Reason: reason, Row: r})
 		} else {
 			kept = append(kept, r)
 		}

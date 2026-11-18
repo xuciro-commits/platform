@@ -4,7 +4,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
-	"platformserver/platform"
+	"platformserver/kernel/protocol"
 	"slices"
 	"sync"
 	"time"
@@ -17,11 +17,11 @@ const (
 
 type AuditLog struct {
 	mu         sync.Mutex
-	entries    []platform.AuditEntry
-	deliveries []platform.Delivery
-	personal   []platform.PersonalRead
-	sink       func(platform.AuditEntry)
-	readSink   func(platform.PersonalRead)
+	entries    []protocol.AuditEntry
+	deliveries []protocol.Delivery
+	personal   []protocol.PersonalRead
+	sink       func(protocol.AuditEntry)
+	readSink   func(protocol.PersonalRead)
 }
 
 func (l *AuditLog) Fork() AuditLog {
@@ -37,7 +37,7 @@ func keepLast[T any](xs []T, n int) []T {
 	return xs
 }
 
-func (l *AuditLog) Remember(e platform.AuditEntry) {
+func (l *AuditLog) Remember(e protocol.AuditEntry) {
 	if e.ID == "" {
 		e.ID = auditIdentity(e.At, e.Member, e.App, e.Action, e.Target)
 	}
@@ -51,25 +51,25 @@ func (l *AuditLog) Remember(e platform.AuditEntry) {
 	}
 }
 
-func (l *AuditLog) All() []platform.AuditEntry {
+func (l *AuditLog) All() []protocol.AuditEntry {
 	l.mu.Lock()
 	defer l.mu.Unlock()
-	return append([]platform.AuditEntry{}, l.entries...)
+	return append([]protocol.AuditEntry{}, l.entries...)
 }
 
-func (l *AuditLog) Delivered(d platform.Delivery) {
+func (l *AuditLog) Delivered(d protocol.Delivery) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	l.deliveries = keepLast(append(l.deliveries, d), auditKept)
 }
 
-func (l *AuditLog) RecentDeliveries() []platform.Delivery {
+func (l *AuditLog) RecentDeliveries() []protocol.Delivery {
 	l.mu.Lock()
 	defer l.mu.Unlock()
-	return append([]platform.Delivery{}, l.deliveries...)
+	return append([]protocol.Delivery{}, l.deliveries...)
 }
 
-func (l *AuditLog) ReadPersonal(r platform.PersonalRead) {
+func (l *AuditLog) ReadPersonal(r protocol.PersonalRead) {
 	if r.ID == "" {
 		raw, _ := json.Marshal([]any{r.At.UTC().Format(time.RFC3339Nano), r.Member, r.Type, r.IDs, r.Fields})
 		sum := sha256.Sum256(raw)
@@ -85,20 +85,20 @@ func (l *AuditLog) ReadPersonal(r platform.PersonalRead) {
 	}
 }
 
-func (l *AuditLog) PersonalReads() []platform.PersonalRead {
+func (l *AuditLog) PersonalReads() []protocol.PersonalRead {
 	l.mu.Lock()
 	defer l.mu.Unlock()
-	out := append([]platform.PersonalRead{}, l.personal...)
+	out := append([]protocol.PersonalRead{}, l.personal...)
 	slices.Reverse(out)
 	return out
 }
 
-func (l *AuditLog) SnapshotState() ([]platform.AuditEntry, []platform.Delivery) {
+func (l *AuditLog) SnapshotState() ([]protocol.AuditEntry, []protocol.Delivery) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	return slices.Clone(l.entries), slices.Clone(l.deliveries)
 }
-func (l *AuditLog) Restore(entries []platform.AuditEntry, deliveries []platform.Delivery) {
+func (l *AuditLog) Restore(entries []protocol.AuditEntry, deliveries []protocol.Delivery) {
 	l.mu.Lock()
 	l.entries = slices.Clone(entries)
 	l.deliveries = slices.Clone(deliveries)
@@ -116,7 +116,7 @@ func (l *AuditLog) Restore(entries []platform.AuditEntry, deliveries []platform.
 	}
 }
 
-func (l *AuditLog) SetSink(sink func(platform.AuditEntry), readSink func(platform.PersonalRead)) {
+func (l *AuditLog) SetSink(sink func(protocol.AuditEntry), readSink func(protocol.PersonalRead)) {
 	l.mu.Lock()
 	l.sink, l.readSink = sink, readSink
 	l.mu.Unlock()

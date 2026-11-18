@@ -54,7 +54,7 @@ func (c OperationClaims) Apply(raw []byte) (acceptedformat.OperationClaim, error
 
 func (c OperationClaims) Prepare(id string, now time.Time) (acceptedformat.OperationClaim, []byte, bool) {
 	before, sending, ok := c.Queued(id)
-	if !ok || sending || platform.EffectSettled(before.State) || before.Due.After(now) {
+	if !ok || sending || protocol.EffectSettled(before.State) || before.Due.After(now) {
 		return acceptedformat.OperationClaim{}, nil, false
 	}
 	generation, prior, rawWork, ok := StartClaim(c.Fork(), id)
@@ -160,7 +160,7 @@ func (c OperationCancellations) Validate(saved []acceptedformat.OperationCancell
 			return fmt.Errorf("duplicate operation cancellation")
 		}
 		seen[r.Before.ID] = true
-		if r.Before.Endpoint != acceptedformat.OperationEndpoint || platform.EffectSettled(r.Before.State) || !strings.HasPrefix(r.Before.ID, c.Tenant+":") {
+		if r.Before.Endpoint != acceptedformat.OperationEndpoint || protocol.EffectSettled(r.Before.State) || !strings.HasPrefix(r.Before.ID, c.Tenant+":") {
 			return fmt.Errorf("invalid operation cancellation")
 		}
 		expected, err := c.One(r.Before.ID)

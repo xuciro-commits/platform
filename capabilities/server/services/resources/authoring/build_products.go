@@ -48,7 +48,7 @@ func (b *Build) productEntity() platform.Entity {
 				return platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "Choose a project you can edit")
 			}
 			for _, root := range product.Roots {
-				resource, exists := platform.Get[Resource](c, platform.ResourceID(c.Tenant, root))
+				resource, exists := platform.Get[Resource](c, protocol.ResourceID(c.Tenant, root))
 				if !exists || resource.Archived || resource.Project != product.Project {
 					return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Product contents must be resources in its project")
 				}

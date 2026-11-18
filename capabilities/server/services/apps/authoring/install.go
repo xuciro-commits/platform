@@ -14,25 +14,25 @@ func (o *Owner) HandlesPublication(schema string) bool {
 	return schema == protocol.SchemaRelease || schema == protocol.SchemaHandOver
 }
 
-func (o *Owner) DecodeInstallation(schema string, image json.RawMessage) (platform.AssetInstallation, error) {
+func (o *Owner) DecodeInstallation(schema string, image json.RawMessage) (protocol.AssetInstallation, error) {
 	typ, kind, err := o.publicationKind(schema)
 	if err != nil {
-		return platform.AssetInstallation{}, err
+		return protocol.AssetInstallation{}, err
 	}
 	var record struct {
 		platform.Record
 		Name string `json:"name"`
 	}
 	if json.Unmarshal(image, &record) != nil || record.ID == "" {
-		return platform.AssetInstallation{}, fmt.Errorf("invalid release publication row")
+		return protocol.AssetInstallation{}, fmt.Errorf("invalid release publication row")
 	}
-	return platform.AssetInstallation{
+	return protocol.AssetInstallation{
 		Ref:    platform.AssetRef{App: o.env.AppID(), Kind: kind, Name: record.Name},
 		Schema: schema, Record: typ + "/" + record.ID, Image: slices.Clone(image),
 	}, nil
 }
 
-func (o *Owner) ValidateInstallation(plan platform.AssetInstallation) error {
+func (o *Owner) ValidateInstallation(plan protocol.AssetInstallation) error {
 	decoded, err := o.DecodeInstallation(plan.Schema, plan.Image)
 	if err != nil {
 		return err

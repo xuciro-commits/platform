@@ -8,18 +8,18 @@ import (
 	"strings"
 )
 
-func CapabilityPalette(defs []platform.Definition, controls bool) []platform.CapabilityDescriptor {
-	out := []platform.CapabilityDescriptor{}
+func CapabilityPalette(defs []platform.Definition, controls bool) []protocol.CapabilityDescriptor {
+	out := []protocol.CapabilityDescriptor{}
 	if controls {
-		out = append(out, platform.ControlBlocks()...)
+		out = append(out, protocol.ControlBlocks()...)
 	}
 	for _, d := range defs {
 		if len(d.Provides) == 0 {
 			continue
 		}
 		provided := d.Provides[0]
-		c := platform.CapabilityDescriptor{Ref: d.Ref, Source: d.Source, Version: d.Version, Effects: []string{},
-			Ports: []platform.BlockPort{{ID: "in", Title: "In", Direction: "input", Channel: "control", Type: "flow"}, {ID: "next", Title: "Next", Direction: "output", Channel: "control", Type: "flow"}, {ID: "error", Title: "Error", Direction: "output", Channel: "control", Type: "flow"}}}
+		c := protocol.CapabilityDescriptor{Ref: d.Ref, Source: d.Source, Version: d.Version, Effects: []string{},
+			Ports: []protocol.BlockPort{{ID: "in", Title: "In", Direction: "input", Channel: "control", Type: "flow"}, {ID: "next", Title: "Next", Direction: "output", Channel: "control", Type: "flow"}, {ID: "error", Title: "Error", Direction: "output", Channel: "control", Type: "flow"}}}
 		switch {
 		case d.Action != nil:
 			c = ActionBlock(d.Ref, d.Source, d.Version, *d.Action)
@@ -60,7 +60,7 @@ func CapabilityPalette(defs []platform.Definition, controls bool) []platform.Cap
 		}
 		out = append(out, c)
 	}
-	slices.SortFunc(out, func(a, b platform.CapabilityDescriptor) int {
+	slices.SortFunc(out, func(a, b protocol.CapabilityDescriptor) int {
 		if n := strings.Compare(a.Group, b.Group); n != 0 {
 			return n
 		}
@@ -69,10 +69,10 @@ func CapabilityPalette(defs []platform.Definition, controls bool) []platform.Cap
 	return out
 }
 
-func ActionBlock(ref platform.AssetRef, source, version string, action platform.Action) platform.CapabilityDescriptor {
-	c := platform.CapabilityDescriptor{Ref: ref, Source: source, Version: version, Kind: "action",
+func ActionBlock(ref platform.AssetRef, source, version string, action platform.Action) protocol.CapabilityDescriptor {
+	c := protocol.CapabilityDescriptor{Ref: ref, Source: source, Version: version, Kind: "action",
 		Title: action.Title, Description: action.Description, Group: "Actions", Icon: "zap", Tone: "success", Target: action.Target,
-		Effects: []string{"decision"}, Ports: []platform.BlockPort{
+		Effects: []string{"decision"}, Ports: []protocol.BlockPort{
 			{ID: "in", Title: "In", Direction: "input", Channel: "control", Type: "flow"},
 			{ID: "next", Title: "Next", Direction: "output", Channel: "control", Type: "flow"},
 			{ID: "error", Title: "Error", Direction: "output", Channel: "control", Type: "flow"},
@@ -83,8 +83,8 @@ func ActionBlock(ref platform.AssetRef, source, version string, action platform.
 	return c
 }
 
-func DraftActionBlocks(app string, actions []platform.Action) []platform.CapabilityDescriptor {
-	result := []platform.CapabilityDescriptor{}
+func DraftActionBlocks(app string, actions []platform.Action) []protocol.CapabilityDescriptor {
+	result := []protocol.CapabilityDescriptor{}
 	for _, action := range actions {
 		if action.Automation {
 			continue
@@ -92,7 +92,7 @@ func DraftActionBlocks(app string, actions []platform.Action) []platform.Capabil
 		block := ActionBlock(platform.AssetRef{App: app, Kind: platform.AssetAction, Name: action.Schema}, "draft", "", action)
 		block.Side = platform.CapabilityAuthoritative
 		block.Parameters = slices.Clone(action.Payload)
-		input := platform.CapabilityFieldsSchema(action.Payload)
+		input := protocol.CapabilityFieldsSchema(action.Payload)
 		if input.Type != "" {
 			block.Input = &input
 		}
@@ -112,8 +112,8 @@ type CapabilityVersion struct {
 	Function     *platform.AIFunction
 }
 
-func DescribeRetainedCapability(version CapabilityVersion) (platform.CapabilityDescriptor, bool) {
-	d := platform.CapabilityDescriptor{Ref: version.Ref, Version: version.AppVersion, Revision: version.Revision, Source: "tenant", Side: platform.CapabilityPure, Effects: []string{}, Ports: []platform.BlockPort{
+func DescribeRetainedCapability(version CapabilityVersion) (protocol.CapabilityDescriptor, bool) {
+	d := protocol.CapabilityDescriptor{Ref: version.Ref, Version: version.AppVersion, Revision: version.Revision, Source: "tenant", Side: platform.CapabilityPure, Effects: []string{}, Ports: []protocol.BlockPort{
 		{ID: "in", Title: "In", Direction: "input", Channel: "control", Type: "flow"},
 		{ID: "next", Title: "Next", Direction: "output", Channel: "control", Type: "flow"},
 		{ID: "error", Title: "Error", Direction: "output", Channel: "control", Type: "flow"},
@@ -130,7 +130,7 @@ func DescribeRetainedCapability(version CapabilityVersion) (platform.CapabilityD
 	case version.Function != nil:
 		f := version.Function
 		input := platform.ValueSchema{Type: "object", Properties: map[string]platform.ValueSchema{"source": {Type: "string"}}, Required: []string{"source"}}
-		output := platform.CapabilityFieldsSchema(f.Output)
+		output := protocol.CapabilityFieldsSchema(f.Output)
 		d.Kind, d.Title, d.Description, d.Group, d.Icon, d.Tone, d.Target, d.Input, d.Output = "ai", f.Title, f.Description, "AI", "sparkles", "info", f.Object, &input, &output
 		d.Version += ".function-" + strconv.Itoa(version.Revision)
 		d.Side, d.Effects = platform.CapabilityEffect, []string{"model"}

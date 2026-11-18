@@ -4,13 +4,6 @@ import (
 	"encoding/json"
 )
 
-const (
-	KnowledgeApp                   = "knowledge"
-	KnowledgeDocumentType          = "knowledge.document"
-	SettingKnowledgeEmbeddingModel = "embedding-model"
-	SettingKnowledgeEmbeddingNext  = "embedding-next-model"
-)
-
 type KnowledgeTerm struct {
 	Record
 	Term     string   `json:"term" field:"required,search" help:"The word people here use" example:"PO"`
@@ -28,25 +21,6 @@ type KnowledgeHost interface {
 type Glossary interface {
 	Terms(app string) []KnowledgeTerm
 	TermsFor(declaration string) []string
-}
-
-type Passage struct {
-	Document string  `json:"document"`
-	Title    string  `json:"title"`
-	Chunk    int     `json:"chunk"`
-	Text     string  `json:"text"`
-	Score    float64 `json:"score"`
-}
-
-type KnowledgeIndexStatus struct {
-	NeedsRebuild bool   `json:"needsRebuild,omitempty"`
-	Active       string `json:"active"`
-	Preparing    string `json:"preparing"`
-	Total        int    `json:"total"`
-	Completed    int    `json:"completed"`
-	Dimensions   int    `json:"dimensions,omitempty"`
-	Ready        bool   `json:"ready"`
-	Problem      string `json:"problem,omitempty"`
 }
 
 type Message struct {

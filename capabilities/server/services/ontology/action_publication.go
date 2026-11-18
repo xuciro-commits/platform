@@ -3,6 +3,7 @@ package ontology
 import (
 	"encoding/json"
 	"fmt"
+	"platformserver/kernel/protocol"
 	"slices"
 	"strconv"
 
@@ -93,13 +94,13 @@ func FreezeActionTypes(c platform.Caller, _ string, asset platform.ReleaseAsset,
 	if err != nil {
 		return publication.Frozen{}, err
 	}
-	var plans []platform.AssetInstallation
+	var plans []protocol.AssetInstallation
 	add := func(action ActionType) error {
 		raw, err := json.Marshal(action)
 		if err != nil {
 			return fmt.Errorf("%s: %w", SchemaActionType, err)
 		}
-		plans = append(plans, platform.AssetInstallation{Ref: platform.AssetRef{App: AppID, Kind: platform.AssetAction, Name: action.Name}, Schema: SchemaActionType, Record: ActionTypeType + "/" + action.ID, Image: raw})
+		plans = append(plans, protocol.AssetInstallation{Ref: platform.AssetRef{App: AppID, Kind: platform.AssetAction, Name: action.Name}, Schema: SchemaActionType, Record: ActionTypeType + "/" + action.ID, Image: raw})
 		return nil
 	}
 	bindings := slices.Clone(frozen.ActionTypes)

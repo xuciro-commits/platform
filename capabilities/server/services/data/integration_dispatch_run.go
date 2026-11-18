@@ -202,7 +202,7 @@ func (o *Owner) UpdateDispatch(c platform.Caller, submission *pb.Submission, at 
 		if json.Unmarshal(submission.GetPayload(), &in) != nil || len(in.Reason) > 4096 || len(in.Answer) > 64<<10 {
 			return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Invalid dispatch status")
 		}
-		manual := submission.GetSchema().GetName() == platform.DispatchReviewSchema
+		manual := submission.GetSchema().GetName() == ruleprotocol.DispatchReviewSchema
 		transport := c.DispatchTransport()
 		if transport == nil {
 			return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Dispatch transport is unavailable")
@@ -235,7 +235,7 @@ func (o *Owner) UpdateDispatch(c platform.Caller, submission *pb.Submission, at 
 				return nil, problem
 			}
 		}
-		if !manual && submission.GetSchema().GetName() != platform.DispatchTickSchema && !slices.Contains([]string{"accepted", "running", "completed", "stuck", "failed", "unknown"}, in.Outcome) {
+		if !manual && submission.GetSchema().GetName() != ruleprotocol.DispatchTickSchema && !slices.Contains([]string{"accepted", "running", "completed", "stuck", "failed", "unknown"}, in.Outcome) {
 			return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Invalid dispatch result")
 		}
 		var replacementRequest, replacementConnection, replacementCompensation json.RawMessage
@@ -392,22 +392,22 @@ func (o *Owner) dispatchState(c platform.Caller, receipt *pb.ChangeRecord, run *
 		case "escalate":
 			if !run.Escalated {
 				run.Escalated = true
-				c.Notify(platform.Notification{Key: "dispatch-attention:" + run.ID, Title: "Device dispatch needs attention", Body: run.Reason, Ref: platform.DispatchType + "/" + run.ID}, at, platform.Recipient{AppRole: run.Definition.ReviewerRole})
+				c.Notify(platform.Notification{Key: "dispatch-attention:" + run.ID, Title: "Device dispatch needs attention", Body: run.Reason, Ref: ruleprotocol.DispatchType + "/" + run.ID}, at, platform.Recipient{AppRole: run.Definition.ReviewerRole})
 			}
 		}
 	}
-	c.Assign(receipt, platform.Assignment{Key: run.ID, Ref: platform.DispatchType + "/" + run.ID, Title: run.Command.Title, Body: fmt.Sprintf("%s · %s\n%s", run.Command.Title, run.Subject, run.Reason), To: []platform.Recipient{{AppRole: run.Definition.ReviewerRole}}})
+	c.Assign(receipt, platform.Assignment{Key: run.ID, Ref: ruleprotocol.DispatchType + "/" + run.ID, Title: run.Command.Title, Body: fmt.Sprintf("%s · %s\n%s", run.Command.Title, run.Subject, run.Reason), To: []platform.Recipient{{AppRole: run.Definition.ReviewerRole}}})
 	return nil
 }
 
 func (o *Owner) RunDispatches(c platform.Caller, at time.Time) *platform.Error {
-	runs, err := platform.PendingDispatches(c)
+	runs, err := ruleprotocol.PendingDispatches(c)
 	if err != nil {
 		return err
 	}
 	for _, run := range runs {
 		if !at.Before(run.Deadline) && !slices.Contains([]string{"stuck", "failed", "unknown"}, run.State) {
-			_, err := platform.Decide(c, o.integration.App, o.dispatchSubmission(c, run.ID, platform.DispatchTickSchema, fmt.Sprintf("deadline:%d", run.Revision), map[string]any{}, at), at)
+			_, err := platform.Decide(c, o.integration.App, o.dispatchSubmission(c, run.ID, ruleprotocol.DispatchTickSchema, fmt.Sprintf("deadline:%d", run.Revision), map[string]any{}, at), at)
 			return err
 		}
 	}
@@ -415,5 +415,5 @@ func (o *Owner) RunDispatches(c platform.Caller, at time.Time) *platform.Error {
 }
 
 func (o *Owner) dispatchSubmission(c platform.Caller, id, schema, key string, payload any, at time.Time) *pb.Submission {
-	return &pb.Submission{TenantId: c.Tenant, PrincipalId: c.ID, Authority: App, IdempotencyKey: "dispatch:" + id + ":" + key, Target: &pb.EntityRef{Type: platform.DispatchType, Id: id}, Schema: &pb.SchemaRef{Name: schema, Version: 1}, Payload: platform.Raw(payload)}
+	return &pb.Submission{TenantId: c.Tenant, PrincipalId: c.ID, Authority: App, IdempotencyKey: "dispatch:" + id + ":" + key, Target: &pb.EntityRef{Type: ruleprotocol.DispatchType, Id: id}, Schema: &pb.SchemaRef{Name: schema, Version: 1}, Payload: platform.Raw(payload)}
 }

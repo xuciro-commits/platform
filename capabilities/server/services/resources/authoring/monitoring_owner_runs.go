@@ -128,7 +128,7 @@ func (x OwnerRuns) Page() (monitoring.MonitoringRunPage, *platform.Error) {
 			return collectOwnerRuns(x, runs, "flow", "retained", "permission-filtered", protocol.FlowInstanceType, func(rows []protocol.FlowInstance) { runs.Flows(rows, x.Schemas.FlowRetry) })
 		},
 		func() *platform.Error {
-			return collectOwnerRuns(x, runs, "agent", "retained", "permission-filtered", platform.RunType, runs.Agents)
+			return collectOwnerRuns(x, runs, "agent", "retained", "permission-filtered", protocol.RunType, runs.Agents)
 		},
 	} {
 		if refusal := collect(); refusal != nil {

@@ -1,10 +1,8 @@
 package platform
 
 import (
-	"bytes"
 	"encoding/json"
 	"fmt"
-	"io"
 	"math"
 	"reflect"
 	"slices"
@@ -97,19 +95,6 @@ func (e EvaluationSetDescriptor) Check() error {
 		return fmt.Errorf("evaluation set needs a name, title and pinned function")
 	}
 	return e.Policy.Check()
-}
-
-func ReadEvaluationSet(raw []byte) (EvaluationSetDescriptor, error) {
-	var e EvaluationSetDescriptor
-	decoder := json.NewDecoder(bytes.NewReader(raw))
-	decoder.DisallowUnknownFields()
-	if err := decoder.Decode(&e); err != nil {
-		return e, err
-	}
-	if decoder.Decode(new(any)) != io.EOF {
-		return e, fmt.Errorf("evaluation set has trailing data")
-	}
-	return e, e.Check()
 }
 
 func (f AIFunction) EvaluationInput(raw []byte) bool {

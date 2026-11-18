@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/url"
+	"platformserver/kernel/protocol"
 	"reflect"
 	"slices"
 	"sort"
@@ -366,7 +367,7 @@ func (o *Owner) SubmitDatasetLoad(ledger platform.Authority, c platform.Caller, 
 			if payload.Producer != "" {
 				ds.Producer = payload.Producer
 			}
-			ds.Marking = platform.HigherMarking(ds.Marking, payload.Marking)
+			ds.Marking = protocol.HigherMarking(ds.Marking, payload.Marking)
 			ds.Compartments = platform.JoinCompartments(ds.Compartments, payload.Compartments)
 			c.Put(r, ds)
 			version := DatasetVersion{Record: platform.Record{ID: VersionID(ds.ID, ds.Version)}, Dataset: ds.ID, Version: ds.Version, Type: payload.Type, At: now, Rows: len(payload.Rows), Data: data}

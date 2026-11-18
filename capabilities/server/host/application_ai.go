@@ -1,6 +1,7 @@
 package host
 
 import (
+	"platformserver/kernel/protocol"
 	"platformserver/platform"
 	agentevaluation "platformserver/services/ai/evaluation"
 	applicationowner "platformserver/services/apps"
@@ -8,10 +9,10 @@ import (
 	"platformserver/services/resources/authoring"
 )
 
-func (t *Tenant) applicationAILocked(m platform.Member, assets []platform.ReleaseAsset, visible map[platform.AssetRef]bool) ([]platform.ApplicationAI, *platform.Error) {
-	var agentEvaluations func(string, string, string) ([]platform.ApplicationAIEvaluation, *platform.Error)
+func (t *Tenant) applicationAILocked(m platform.Member, assets []platform.ReleaseAsset, visible map[platform.AssetRef]bool) ([]protocol.ApplicationAI, *platform.Error) {
+	var agentEvaluations func(string, string, string) ([]protocol.ApplicationAIEvaluation, *platform.Error)
 	if t.Agents != nil {
-		caller := t.automation(platform.AgentApp, false)
+		caller := t.automation(protocol.AgentApp, false)
 		agentEvaluations = agentevaluation.AgentApplicationReports(caller)
 	}
 	return applicationowner.ApplicationAI{
@@ -22,7 +23,7 @@ func (t *Tenant) applicationAILocked(m platform.Member, assets []platform.Releas
 	}.List(m, assets, visible)
 }
 
-func (t *Tenant) applicationAIUsage(m platform.Member, application platform.AssetRef, items []platform.ApplicationAI) []platform.ApplicationAI {
+func (t *Tenant) applicationAIUsage(m platform.Member, application platform.AssetRef, items []protocol.ApplicationAI) []protocol.ApplicationAI {
 	value, _ := t.Read(t.readContext(), m, "ai-usage")
 	return applicationowner.ApplicationAIUsageOf(value, application, items)
 }

@@ -2,6 +2,7 @@ package packages
 
 import (
 	"encoding/json"
+	"platformserver/kernel/protocol"
 
 	"reflect"
 	"slices"
@@ -15,7 +16,7 @@ import (
 type PackageReview struct {
 	ID         string                            `json:"id"`
 	Version    string                            `json:"version"`
-	Changes    []platform.PackageResourceChange  `json:"changes"`
+	Changes    []protocol.PackageResourceChange  `json:"changes"`
 	Extensions []platform.PackageImpactExtension `json:"extensions"`
 	Removals   []PackageRemovalImpact            `json:"removals"`
 	Problems   []string                          `json:"problems,omitempty"`
@@ -27,7 +28,7 @@ type PackageRemovalImpact struct {
 	Consumer platform.AssetRef `json:"consumer"`
 }
 
-func FindView(views []platform.PackageView, id, version string) *platform.PackageView {
+func FindView(views []protocol.PackageView, id, version string) *protocol.PackageView {
 	for i, view := range views {
 		if view.Descriptor.ID == id && view.Descriptor.Version == version {
 			return &views[i]
@@ -64,8 +65,8 @@ type Review struct {
 	Resolver  publication.Resolver
 }
 
-func (rv Review) Of(views []platform.PackageView, chosen *platform.PackageView, uninstall bool) (PackageReview, error) {
-	answer := PackageReview{ID: chosen.Descriptor.ID, Version: chosen.Descriptor.Version, Changes: []platform.PackageResourceChange{}, Extensions: []platform.PackageImpactExtension{}}
+func (rv Review) Of(views []protocol.PackageView, chosen *protocol.PackageView, uninstall bool) (PackageReview, error) {
+	answer := PackageReview{ID: chosen.Descriptor.ID, Version: chosen.Descriptor.Version, Changes: []protocol.PackageResourceChange{}, Extensions: []platform.PackageImpactExtension{}}
 	before, after := map[platform.AssetRef]platform.ReleaseAsset{}, map[platform.AssetRef]platform.ReleaseAsset{}
 	if held := chosen.Installed; held != nil && held.State != "retired" {
 		for _, view := range views {
@@ -139,13 +140,13 @@ func (rv Review) Of(views []platform.PackageView, chosen *platform.PackageView, 
 		if exists {
 			change = "Changed"
 		}
-		answer.Changes = append(answer.Changes, platform.PackageResourceChange{Ref: ref, Change: change, Before: old.SourceVersion, After: asset.SourceVersion})
+		answer.Changes = append(answer.Changes, protocol.PackageResourceChange{Ref: ref, Change: change, Before: old.SourceVersion, After: asset.SourceVersion})
 	}
 	for ref, asset := range before {
 		if _, exists := after[ref]; !exists {
-			answer.Changes = append(answer.Changes, platform.PackageResourceChange{Ref: ref, Change: "Removed", Before: asset.SourceVersion})
+			answer.Changes = append(answer.Changes, protocol.PackageResourceChange{Ref: ref, Change: "Removed", Before: asset.SourceVersion})
 		}
 	}
-	slices.SortFunc(answer.Changes, func(a, b platform.PackageResourceChange) int { return strings.Compare(a.Ref.String(), b.Ref.String()) })
+	slices.SortFunc(answer.Changes, func(a, b protocol.PackageResourceChange) int { return strings.Compare(a.Ref.String(), b.Ref.String()) })
 	return answer, nil
 }

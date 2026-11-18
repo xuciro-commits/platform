@@ -21,7 +21,7 @@ type OperationPlan struct {
 	Definition func(app, name string, version int) (platform.Operation, int, bool)
 	Authorize  func(applicant platform.Caller, owner string, op platform.Operation, at time.Time, sources []string, definition string) *platform.Error
 	Closure    func(owner string, op platform.Operation, version int, release *string) (string, string, error)
-	InputKey   func(platform.OperationInputArtifact) error
+	InputKey   func(ruleprotocol.OperationInputArtifact) error
 	Recording  bool
 	Exists     func(id string) bool
 	Queued     int
@@ -31,7 +31,7 @@ type OperationPlan struct {
 	Rules      platform.RuleEngine
 }
 
-func (p OperationPlan) Plan(c platform.Caller, r *pb.ChangeRecord, q platform.OperationRequest, pending []platform.Effect, input *platform.OperationInputArtifact) (platform.OperationCall, platform.Effect, *platform.Error) {
+func (p OperationPlan) Plan(c platform.Caller, r *pb.ChangeRecord, q platform.OperationRequest, pending []platform.Effect, input *ruleprotocol.OperationInputArtifact) (platform.OperationCall, platform.Effect, *platform.Error) {
 	refuse := func(code pb.ErrorCode, msg string) (platform.OperationCall, platform.Effect, *platform.Error) {
 		return platform.OperationCall{}, platform.Effect{}, platform.Refuse(code, msg)
 	}

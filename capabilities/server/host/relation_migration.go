@@ -1,6 +1,7 @@
 package host
 
 import (
+	"platformserver/kernel/protocol"
 	"platformserver/kernel/records"
 	"time"
 
@@ -33,7 +34,7 @@ func (d *stagedDecision) ownedRelationWriter() objects.OwnedRelations {
 	return writer
 }
 
-func (t *Tenant) relationMigrationPlan(store *records.Store, c platform.Caller, binding platform.AssetBinding, at time.Time) (platform.RelationMigrationPlan, *platform.Error) {
+func (t *Tenant) relationMigrationPlan(store *records.Store, c platform.Caller, binding platform.AssetBinding, at time.Time) (protocol.RelationMigrationPlan, *platform.Error) {
 	return t.ownedRelationWriter(store).Plan(c, binding, at)
 }
 

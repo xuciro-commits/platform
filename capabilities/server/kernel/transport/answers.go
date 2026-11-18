@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"platformserver/kernel/protocol"
 	"strconv"
 	"time"
 
@@ -32,7 +33,7 @@ var statuses = map[pb.ErrorCode]int{
 func Reply(w http.ResponseWriter, record *pb.ChangeRecord, err *platform.Error, issues ...platform.FieldIssue) {
 	switch {
 	case err != nil:
-		body := platform.ErrorBody{Code: err.Error(), Message: err.Message, Issues: issues}
+		body := protocol.ErrorBody{Code: err.Error(), Message: err.Message, Issues: issues}
 		if len(issues) > 0 && issues[0].Constraint != "" {
 			body.Code = "CONSTRAINT_VIOLATION"
 			body.Message = issues[0].Constraint + ": " + issues[0].Message
@@ -179,7 +180,7 @@ func DecodeCommand(w http.ResponseWriter, r *http.Request, into any, limit int, 
 }
 
 type InboxTask struct {
-	platform.WorkTask
+	protocol.WorkTask
 	AnswerTitles []string `json:"answerTitles,omitempty"`
 }
 
@@ -191,11 +192,11 @@ type MeTenant struct {
 type SignIn struct {
 	Issuer     string                   `json:"issuer,omitempty"`
 	Client     string                   `json:"client,omitempty"`
-	Identities []platform.LoginIdentity `json:"identities,omitempty"`
+	Identities []protocol.LoginIdentity `json:"identities,omitempty"`
 }
 
-func ApplicationRunFilterOf(query url.Values) (platform.ApplicationRunFilter, *platform.Error) {
-	filter := platform.ApplicationRunFilter{Kind: query.Get("kind"), State: query.Get("state"), Subject: query.Get("subject")}
+func ApplicationRunFilterOf(query url.Values) (protocol.ApplicationRunFilter, *platform.Error) {
+	filter := protocol.ApplicationRunFilter{Kind: query.Get("kind"), State: query.Get("state"), Subject: query.Get("subject")}
 	for key, target := range map[string]*time.Time{"since": &filter.Since, "until": &filter.Until} {
 		if value := query.Get(key); value != "" {
 			parsed, err := time.Parse(time.RFC3339, value)

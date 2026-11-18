@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"maps"
+	"platformserver/kernel/protocol"
 	"slices"
 	"strings"
 	"time"
@@ -24,7 +25,7 @@ type ResultSources struct {
 	App        func(string) platform.App
 	Control    func() (*acceptedformat.Control, error)
 	Operations func() ([]acceptedformat.OperationCancellation, error)
-	Plan       func(platform.Event) (platform.AcceptedEventPlan, *platform.Error)
+	Plan       func(platform.Event) (protocol.AcceptedEventPlan, *platform.Error)
 }
 
 func (d *Decision) BatchResult(src ResultSources, app string, request *pb.Submission, receipt *pb.ChangeRecord, at time.Time) ([]byte, error) {

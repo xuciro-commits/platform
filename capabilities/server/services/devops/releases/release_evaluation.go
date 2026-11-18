@@ -25,7 +25,7 @@ type ReleaseEvaluationStarted struct {
 }
 
 type EvaluationHooks struct {
-	Candidate      func(id string) (platform.ReleaseCandidate, error)
+	Candidate      func(id string) (protocol.ReleaseCandidate, error)
 	Plan           func(id string) (descriptor.FunctionEvaluationPlan, bool)
 	Function       func(id string) (protocol.Function, bool)
 	BuilderVersion func() string
@@ -106,7 +106,7 @@ func PrepareEvaluation(candidateID, planID string, hooks EvaluationHooks) (descr
 		if selected.Ref.Kind != platform.AssetEvaluation || selected.Ref.App != build.ID || selected.Ref.Name != plan.Name {
 			continue
 		}
-		set, err := platform.ReadEvaluationSet(selected.Body)
+		set, err := protocol.ReadEvaluationSet(selected.Body)
 		if err != nil {
 			return descriptor.FunctionEvaluationStart{}, err
 		}

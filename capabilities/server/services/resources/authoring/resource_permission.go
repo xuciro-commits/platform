@@ -66,12 +66,12 @@ func (r ResourceRows) Permission(m platform.Member, typ, id, kind string) (bool,
 		return definition, false
 	}
 	role := r.Role(project)
-	allowed := role != "" && role != platform.ProjectDiscovererRole
+	allowed := role != "" && role != protocol.ProjectDiscovererRole
 	if typ == ResourceType || typ == FolderType {
 		allowed = role != ""
 	}
 	if !slices.Contains([]string{"read", "derive", "export"}, kind) {
-		allowed = role == platform.ProjectOwnerRole || role == platform.ProjectEditorRole
+		allowed = role == protocol.ProjectOwnerRole || role == protocol.ProjectEditorRole
 	}
 	return allowed, definition && allowed
 }

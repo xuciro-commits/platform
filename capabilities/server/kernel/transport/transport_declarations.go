@@ -155,15 +155,17 @@ func (s *schemas) ref(t reflect.Type) map[string]any {
 		switch t.PkgPath() {
 		case "platformserver/platform":
 			if public := map[string]string{
-				"AIVendor": "Vendor", "AIProvider": "Provider", "AIModel": "Model", "AILimit": "Limit",
-				"AIUsage": "Usage", "AITotal": "Total", "AIUsageReport": "AIUsage",
+				"AIProvider": "Provider", "AIModel": "Model", "AIUsage": "Usage",
 				"RelationLink": "Link", "RelationNote": "Note",
-				"LoginIdentity": "Identity",
 			}[name]; public != "" {
 				name = public
 			}
 		case "platformserver/kernel/protocol":
-			if public := map[string]string{"FlowToken": "Token", "FlowLoopFrame": "LoopFrame", "FlowTraceLine": "TraceLine"}[name]; public != "" {
+			if public := map[string]string{
+				"FlowToken": "Token", "FlowLoopFrame": "LoopFrame", "FlowTraceLine": "TraceLine",
+				"AIVendor": "Vendor", "AILimit": "Limit", "AITotal": "Total", "AIUsageReport": "AIUsage",
+				"LoginIdentity": "Identity",
+			}[name]; public != "" {
 				name = public
 			}
 		case "platformserver/services/security/organization":

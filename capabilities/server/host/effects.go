@@ -265,10 +265,10 @@ func (t *Tenant) stageEffectAnswer(draft *stagedDecision, x platform.Effect, out
 		Operation: func(x platform.Effect) {
 			draft.OperationAnswers = map[string]platform.OperationResult{x.ID: compute.ResultOf(x)}
 		},
-		Completion: func() platform.OperationCompletion {
-			var completion platform.OperationCompletion
+		Completion: func() protocol.OperationCompletion {
+			var completion protocol.OperationCompletion
 			if t.Processes != nil {
-				completion, _ = draft.stateApp(t.Processes).(platform.OperationCompletion)
+				completion, _ = draft.stateApp(t.Processes).(protocol.OperationCompletion)
 			}
 			return completion
 		},
@@ -282,7 +282,7 @@ func (t *Tenant) stageEffectAnswer(draft *stagedDecision, x platform.Effect, out
 		Origin: draft.AnswerWithOrigin,
 		Agents: func(c platform.Caller, x platform.Effect, out platform.Outcome, at time.Time) {
 			if t.Agents != nil {
-				draft.stateApp(t.Agents).(protocol.AgentRuntime).AgentEffectEnded(t.automated(c, platform.AgentApp), nil, x, out, at)
+				draft.stateApp(t.Agents).(protocol.AgentRuntime).AgentEffectEnded(t.automated(c, protocol.AgentApp), nil, x, out, at)
 			}
 		},
 		Finish: draft.finishStaged}.Stage(x, out, at)

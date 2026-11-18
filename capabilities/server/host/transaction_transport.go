@@ -4,6 +4,7 @@ import records "platformserver/kernel/records"
 
 import (
 	"encoding/json"
+	"platformserver/kernel/protocol"
 	dataowner "platformserver/services/data"
 	"time"
 
@@ -61,6 +62,6 @@ func (h hostView) QueueTxnEffect(c platform.Caller, receipt *pb.ChangeRecord, st
 
 var _ platform.TransactionHost = hostView{}
 
-func (h hostView) TransactionRuntime(context platform.BusinessRuntimeContext) platform.TransactionExecutor {
+func (h hostView) TransactionRuntime(context protocol.BusinessRuntimeContext) protocol.TransactionExecutor {
 	return h.t.services.NewTransactionExecutor(context)
 }

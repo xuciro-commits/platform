@@ -32,7 +32,7 @@ func (s CandidateSandbox) Restore(rows map[string][]json.RawMessage) (bool, erro
 	return s.RestoreRecords(saved)
 }
 
-func (e Environment) CandidateApps(candidate platform.ReleaseCandidate, member platform.Member, others ...platform.Member) ([]platform.App, build.ConstructionSandbox, error) {
+func (e Environment) CandidateApps(candidate protocol.ReleaseCandidate, member platform.Member, others ...platform.Member) ([]platform.App, build.ConstructionSandbox, error) {
 	fresh := func(id string) (platform.App, error) {
 		factory := e.Factories[id]
 		if factory == nil {
@@ -89,16 +89,16 @@ func (e Environment) CandidateApps(candidate platform.ReleaseCandidate, member p
 	})
 	var owners []string
 	if (hasProposal || hasApproval) && !has(platform.AssetFlow) {
-		owners = append(owners, platform.WorkApp)
+		owners = append(owners, protocol.WorkApp)
 	}
 	if has(platform.AssetFunction) {
-		owners = append(owners, platform.AIApp)
+		owners = append(owners, protocol.AIApp)
 	}
 	if has(platform.AssetFlow) {
-		owners = append(owners, platform.WorkApp, protocol.FlowApp)
+		owners = append(owners, protocol.WorkApp, protocol.FlowApp)
 	}
 	if has(platform.AssetAgent) {
-		owners = append(owners, platform.AgentApp)
+		owners = append(owners, protocol.AgentApp)
 	}
 	for _, id := range owners {
 		app, err := fresh(id)
@@ -116,7 +116,7 @@ func (e Environment) CandidateApps(candidate platform.ReleaseCandidate, member p
 	return append(apps, b), b, nil
 }
 
-func (e Environment) InstallCandidate(candidate platform.ReleaseCandidate, b build.ConstructionSandbox, sandbox CandidateSandbox) error {
+func (e Environment) InstallCandidate(candidate protocol.ReleaseCandidate, b build.ConstructionSandbox, sandbox CandidateSandbox) error {
 	for digest, raw := range e.Modules {
 		if err := sandbox.PutModule(digest, raw); err != nil {
 			return err

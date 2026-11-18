@@ -47,7 +47,7 @@ func (b *Build) captureExtensionSource(object *ontology.Object) error {
 	if err != nil {
 		return err
 	}
-	return platform.CheckExtension(info, base)
+	return protocol.CheckExtension(info, base)
 }
 
 func (b *Build) checkExtensionDependents(object ontology.Object) error {
@@ -75,7 +75,7 @@ func (b *Build) checkExtensionDependents(object ontology.Object) error {
 			extension = next
 			extension.ExtensionSource = nil
 		}
-		if err := platform.CheckExtension(extension, base); err != nil {
+		if err := protocol.CheckExtension(extension, base); err != nil {
 			return err
 		}
 	}

@@ -69,7 +69,7 @@ func (c *ContextView) AddFlows(records []any) {
 
 func (c *ContextView) AddTasks(records []any) {
 	for _, record := range records {
-		x := record.(platform.WorkTask)
+		x := record.(protocol.WorkTask)
 		c.Tasks = append(c.Tasks, TaskSummary{ID: x.ID, Title: x.Title, State: x.State, Answer: x.Answer})
 	}
 }

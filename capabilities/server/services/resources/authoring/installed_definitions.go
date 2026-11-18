@@ -41,7 +41,7 @@ func CheckRunApplicationBindings(record any) error {
 	switch run := record.(type) {
 	case ruleprotocol.FlowInstance:
 		bindings = run.Applications
-	case platform.AgentRunRecord:
+	case ruleprotocol.AgentRunRecord:
 		bindings = run.Applications
 	case ruleprotocol.FunctionRun:
 		bindings = run.Applications

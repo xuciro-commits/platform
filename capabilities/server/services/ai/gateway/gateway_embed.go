@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"platformserver/kernel/protocol"
 	knowledgeindex "platformserver/services/ai/retrieval"
 	"time"
 
@@ -68,7 +69,7 @@ func (g Calls) Embed(member platform.Member, name string, model platform.AIModel
 		u.Input, u.TokensReported = *out.Usage.Prompt, true
 	} else {
 		for _, text := range input {
-			u.Input += platform.EstimateModelTokens(text)
+			u.Input += protocol.EstimateModelTokens(text)
 		}
 		u.TokensEstimated = u.Input > 0
 	}

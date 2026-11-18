@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformserver/kernel/acceptedformat"
+	"platformserver/kernel/protocol"
 	"platformserver/kernel/records"
 	"platformserver/platform"
 	"platformserver/services/resources/publication"
@@ -20,9 +21,9 @@ type Context struct {
 	Entity              func(string) (platform.EntityInfo, bool)
 	App                 func(string) platform.App
 	Assets              func() ([]platform.ReleaseAsset, error)
-	Candidate           func(string) (platform.ReleaseCandidate, error)
+	Candidate           func(string) (protocol.ReleaseCandidate, error)
 	Candidates          func() map[string]json.RawMessage
-	CloseCandidate      func([]platform.AssetRef, []platform.ReleaseAsset, []platform.AssetRef) (platform.ReleaseCandidate, error)
+	CloseCandidate      func([]platform.AssetRef, []platform.ReleaseAsset, []platform.AssetRef) (protocol.ReleaseCandidate, error)
 	Rows                func(platform.Member, string, platform.Query, time.Time) ([]any, *platform.Error)
 	Computations        func(platform.Member) []Computation
 	Effects             func(platform.Member) ([]platform.Effect, *platform.Error)
@@ -33,15 +34,15 @@ type Context struct {
 	Quota               func(platform.Member, time.Time) *platform.AIQuota
 	Refusals            func(field ...string) map[string]acceptedformat.Refusal
 	Answers             func(field ...string) map[string]json.RawMessage
-	AI                  func(platform.Member, []platform.ReleaseAsset, map[platform.AssetRef]bool) ([]platform.ApplicationAI, *platform.Error)
-	AIUsage             func(platform.Member, platform.AssetRef, []platform.ApplicationAI) []platform.ApplicationAI
+	AI                  func(platform.Member, []platform.ReleaseAsset, map[platform.AssetRef]bool) ([]protocol.ApplicationAI, *platform.Error)
+	AIUsage             func(platform.Member, platform.AssetRef, []protocol.ApplicationAI) []protocol.ApplicationAI
 	RecordCount         func(platform.Member, string, time.Time) (int, *platform.Error)
 	AuthorizationMember func(platform.Member) platform.Member
 	RefreshRunIndex     func(key string, now time.Time, rebuild func() bool)
-	ReplaceRunIndex     func(key string, entries []platform.RunIndexEntry) error
-	QueryRunIndex       func(scope string) ([]platform.RunIndexEntry, error)
-	RuntimeOf           func(platform.Member, platform.AssetRef, time.Time) (platform.ApplicationRuntime, *platform.Error)
-	RunsPage            func(platform.Member, platform.AssetRef, int, int, time.Time, ...platform.ApplicationRunFilter) (platform.ApplicationRunPage, *platform.Error)
+	ReplaceRunIndex     func(key string, entries []protocol.RunIndexEntry) error
+	QueryRunIndex       func(scope string) ([]protocol.RunIndexEntry, error)
+	RuntimeOf           func(platform.Member, platform.AssetRef, time.Time) (protocol.ApplicationRuntime, *platform.Error)
+	RunsPage            func(platform.Member, platform.AssetRef, int, int, time.Time, ...protocol.ApplicationRunFilter) (protocol.ApplicationRunPage, *platform.Error)
 	RecordHistory       func(platform.Member, string, string, time.Time) ([]records.RecordChange, *platform.Error)
 	RecordOwner         func(typ string) string
 	Receipts            func(owner string) []*pb.ChangeRecord
@@ -66,7 +67,7 @@ type Job struct {
 }
 
 type ActiveVersion struct {
-	Candidate platform.ReleaseCandidate
+	Candidate protocol.ReleaseCandidate
 	At        time.Time
 }
 
@@ -80,21 +81,21 @@ type functionRun struct {
 	CostReported, Withheld                                      bool
 }
 
-func Applications(definitions []platform.Definition) []platform.ApplicationView {
+func Applications(definitions []platform.Definition) []protocol.ApplicationView {
 	pages := map[string]*platform.Page{}
 	for i := range definitions {
 		if definition := definitions[i]; definition.Ref.Kind == platform.AssetPage && definition.Page != nil {
 			pages[pageKey(definition.Ref.App, definition.Ref.Name)] = definition.Page
 		}
 	}
-	out := []platform.ApplicationView{}
+	out := []protocol.ApplicationView{}
 	for _, definition := range definitions {
 		if definition.Ref.Kind != platform.AssetApp || definition.Application == nil {
 			continue
 		}
 		application := *definition.Application
-		view := platform.ApplicationView{App: definition.Ref.App, Name: definition.Ref.Name, Title: application.Title,
-			Description: application.Description, Icon: application.Icon, Source: definition.Source, Pages: []platform.ApplicationPage{}}
+		view := protocol.ApplicationView{App: definition.Ref.App, Name: definition.Ref.Name, Title: application.Title,
+			Description: application.Description, Icon: application.Icon, Source: definition.Source, Pages: []protocol.ApplicationPage{}}
 		if view.Title == "" {
 			view.Title = view.Name
 		}
@@ -103,7 +104,7 @@ func Applications(definitions []platform.Definition) []platform.ApplicationView 
 			if page == nil {
 				continue
 			}
-			view.Pages = append(view.Pages, platform.ApplicationPage{Name: page.Name, Title: page.Title,
+			view.Pages = append(view.Pages, protocol.ApplicationPage{Name: page.Name, Title: page.Title,
 				Description: page.Description, Object: page.Object.Name})
 		}
 		if len(view.Pages) == 0 {
@@ -111,11 +112,11 @@ func Applications(definitions []platform.Definition) []platform.ApplicationView 
 		}
 		out = append(out, view)
 	}
-	slices.SortFunc(out, func(a, b platform.ApplicationView) int { return strings.Compare(a.Name, b.Name) })
+	slices.SortFunc(out, func(a, b protocol.ApplicationView) int { return strings.Compare(a.Name, b.Name) })
 	return out
 }
 
-func PageView(definitions []platform.Definition, entities []platform.EntityInfo, catalog []platform.Action, app, owner, page string) (platform.PageView, *platform.Error) {
+func PageView(definitions []platform.Definition, entities []platform.EntityInfo, catalog []platform.Action, app, owner, page string) (protocol.PageView, *platform.Error) {
 	var application *platform.Definition
 	for i := range definitions {
 		definition := &definitions[i]
@@ -130,7 +131,7 @@ func PageView(definitions []platform.Definition, entities []platform.EntityInfo,
 		}
 	}
 	if application == nil {
-		return platform.PageView{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_NOT_FOUND, "This workspace offers no such application")
+		return protocol.PageView{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_NOT_FOUND, "This workspace offers no such application")
 	}
 	wanted := false
 	for _, name := range application.Application.Pages {
@@ -148,18 +149,18 @@ func PageView(definitions []platform.Definition, entities []platform.EntityInfo,
 		}
 	}
 	if declared == nil {
-		return platform.PageView{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_NOT_FOUND, "This application has no such page")
+		return protocol.PageView{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_NOT_FOUND, "This application has no such page")
 	}
-	view := platform.PageView{Page: *declared, Actions: []platform.Action{}, Application: platform.ApplicationView{
+	view := protocol.PageView{Page: *declared, Actions: []platform.Action{}, Application: protocol.ApplicationView{
 		App: application.Ref.App, Name: application.Ref.Name, Title: application.Application.Title,
 		Description: application.Application.Description, Icon: application.Application.Icon, Source: application.Source}}
 	for _, other := range definitions {
 		if other.Ref.Kind == platform.AssetPage && other.Ref.App == application.Ref.App && other.Page != nil {
-			view.Application.Pages = append(view.Application.Pages, platform.ApplicationPage{Name: other.Page.Name, Title: other.Page.Title,
+			view.Application.Pages = append(view.Application.Pages, protocol.ApplicationPage{Name: other.Page.Name, Title: other.Page.Title,
 				Description: other.Page.Description, Object: other.Page.Object.Name})
 		}
 	}
-	slices.SortFunc(view.Application.Pages, func(a, b platform.ApplicationPage) int {
+	slices.SortFunc(view.Application.Pages, func(a, b protocol.ApplicationPage) int {
 		return indexIn(application.Application.Pages, a.Name) - indexIn(application.Application.Pages, b.Name)
 	})
 	if declared.Object.Name != "" {

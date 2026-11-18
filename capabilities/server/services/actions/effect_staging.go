@@ -1,6 +1,7 @@
 package actions
 
 import (
+	"platformserver/kernel/protocol"
 	"time"
 
 	"platformserver/kernel/acceptedformat"
@@ -27,7 +28,7 @@ func (s EffectStaging) Stage(result *acceptedformat.Effect, before acceptedforma
 			Body: after.Error + ". Retry it in Settings → Automation once the cause is fixed.",
 			Key:  "failed:" + after.ID}, s.At, platform.Recipient{AppRole: s.Admin})
 	}
-	if (platform.EffectSettled(after.State) || after.State == "unknown") && before.State != "discarded" {
+	if (protocol.EffectSettled(after.State) || after.State == "unknown") && before.State != "discarded" {
 		if err := s.Answer(); err != nil {
 			if s.Quarantined() {
 				return err

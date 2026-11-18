@@ -36,7 +36,7 @@ type ChainReader struct {
 
 func (c ChainReader) Read(ref string) (Chain, *platform.Error) {
 	typ, id, _ := strings.Cut(ref, "/")
-	if typ != platform.RunType && typ != protocol.FlowInstanceType {
+	if typ != protocol.RunType && typ != protocol.FlowInstanceType {
 		return Chain{}, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 	}
 	if _, err := c.Record(typ, id); err != nil {
@@ -70,9 +70,9 @@ func (c ChainReader) Read(ref string) (Chain, *platform.Error) {
 		}
 	}
 	top := ""
-	if typ == platform.RunType {
-		v, _ := c.Record(platform.RunType, id)
-		run := v.(platform.AgentRunRecord)
+	if typ == protocol.RunType {
+		v, _ := c.Record(protocol.RunType, id)
+		run := v.(protocol.AgentRunRecord)
 		if run.Flow == "" {
 			c.run(run, add, link)
 			return out, nil
@@ -100,9 +100,9 @@ func (c ChainReader) Read(ref string) (Chain, *platform.Error) {
 			add(ChainNode{Ref: x.Subject, Kind: "record", Title: x.Subject})
 			link(x.Subject, ref)
 		}
-		for _, r := range find(platform.RunType, "flow", id) {
-			run := r.(platform.AgentRunRecord)
-			link(ref, platform.RunType+"/"+run.ID)
+		for _, r := range find(protocol.RunType, "flow", id) {
+			run := r.(protocol.AgentRunRecord)
+			link(ref, protocol.RunType+"/"+run.ID)
 			c.run(run, add, link)
 		}
 		for _, c := range find(protocol.FlowInstanceType, "parent", id) {
@@ -115,8 +115,8 @@ func (c ChainReader) Read(ref string) (Chain, *platform.Error) {
 	return out, nil
 }
 
-func (c ChainReader) run(run platform.AgentRunRecord, add func(ChainNode), link func(string, string)) {
-	ref := platform.RunType + "/" + run.ID
+func (c ChainReader) run(run protocol.AgentRunRecord, add func(ChainNode), link func(string, string)) {
+	ref := protocol.RunType + "/" + run.ID
 	add(ChainNode{Ref: ref, Kind: "run", Title: run.Title, State: run.State, Detail: run.Agent})
 	for _, x := range c.Effects() {
 		if x.Run == run.ID {

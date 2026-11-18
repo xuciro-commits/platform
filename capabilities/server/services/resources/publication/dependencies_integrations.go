@@ -3,6 +3,7 @@ package publication
 import (
 	"encoding/json"
 	"fmt"
+	runtimeprotocol "platformserver/kernel/protocol"
 	"slices"
 	"strings"
 
@@ -39,7 +40,7 @@ func describeProtocolDependencies(asset platform.ReleaseAsset) (out platform.Dep
 		if frozen, ok := protocol.ActionRoles[action.Schema]; ok {
 			roles = frozen
 		}
-		capability("protocol", protocol.Name+"#"+action.Schema, platform.CapabilityAuthoritative, roles, platform.CapabilityFieldsSchema(action.Payload), platform.ValueSchema{}, action.Payload)
+		capability("protocol", protocol.Name+"#"+action.Schema, platform.CapabilityAuthoritative, roles, runtimeprotocol.CapabilityFieldsSchema(action.Payload), platform.ValueSchema{}, action.Payload)
 	}
 	for _, read := range protocol.Reads {
 		capability("protocol", protocol.Name+"#"+read, platform.CapabilityPure, nil, platform.ValueSchema{}, platform.ValueSchema{}, nil)

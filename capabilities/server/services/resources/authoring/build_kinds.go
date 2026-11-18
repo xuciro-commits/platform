@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
+	"platformserver/kernel/protocol"
 	"platformserver/services/resources/publication"
 	"slices"
 	"strconv"
@@ -51,8 +52,8 @@ type resourceKind[T interface{ Definition() D }, D interface{ Check() error }] s
 	fromDeclaration func(D) T
 	contract        func(D) int
 	admit           func(D) bool
-	install         func(platform.BuildHost, platform.Caller, D, int) error
-	validateInstall func(platform.BuildHost, D) error
+	install         func(protocol.BuildHost, platform.Caller, D, int) error
+	validateInstall func(protocol.BuildHost, D) error
 	beforeInstall   func(*Build)
 }
 

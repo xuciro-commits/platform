@@ -8,6 +8,7 @@ import (
 	"maps"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformserver/kernel/acceptedformat"
+	"platformserver/kernel/protocol"
 	"platformserver/kernel/records"
 	persistence "platformserver/kernel/store"
 	"platformserver/platform"
@@ -17,7 +18,7 @@ import (
 
 type UsageApplier func(json.RawMessage, platform.AIUsage) (json.RawMessage, error)
 
-func StorageDelta(raw []byte, applyUsage UsageApplier, readCandidate func(string, []byte) (platform.ReleaseCandidate, error)) (persistence.StateDelta, error) {
+func StorageDelta(raw []byte, applyUsage UsageApplier, readCandidate func(string, []byte) (protocol.ReleaseCandidate, error)) (persistence.StateDelta, error) {
 	b := storageDeltaBuilder{applyUsage: applyUsage, readCandidate: readCandidate, records: map[string]persistence.StateRecord{}, changes: map[string]persistence.StateChange{}, values: map[string]persistence.StateValue{}, unique: map[string]persistence.StateUnique{}}
 	if err := b.accepted(raw); err != nil {
 		return persistence.StateDelta{}, err
@@ -31,7 +32,7 @@ func StorageDelta(raw []byte, applyUsage UsageApplier, readCandidate func(string
 
 type storageDeltaBuilder struct {
 	applyUsage    UsageApplier
-	readCandidate func(string, []byte) (platform.ReleaseCandidate, error)
+	readCandidate func(string, []byte) (protocol.ReleaseCandidate, error)
 	records       map[string]persistence.StateRecord
 	replacements  []persistence.StateReplacement
 	changes       map[string]persistence.StateChange
@@ -51,7 +52,7 @@ func (b *storageDeltaBuilder) value(owner, key string, image any) {
 }
 
 func (b *storageDeltaBuilder) meter(usage platform.AIUsage) {
-	b.valueUpdates = append(b.valueUpdates, persistence.StateValueUpdate{Owner: "app-state", Key: platform.AIApp, Apply: func(raw json.RawMessage) (json.RawMessage, error) { return b.applyUsage(raw, usage) }})
+	b.valueUpdates = append(b.valueUpdates, persistence.StateValueUpdate{Owner: "app-state", Key: protocol.AIApp, Apply: func(raw json.RawMessage) (json.RawMessage, error) { return b.applyUsage(raw, usage) }})
 }
 
 func (b *storageDeltaBuilder) record(r records.Image, base int) error {

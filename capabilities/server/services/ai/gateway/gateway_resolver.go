@@ -23,18 +23,18 @@ type Models interface {
 	Provider(id string) (platform.AIProvider, bool)
 	Meter(u platform.AIUsage)
 	Spent(member string, now time.Time) int
-	Reservation(string) (platform.AIReservation, bool)
+	Reservation(string) (runtimeprotocol.AIReservation, bool)
 	Usage() []platform.AIUsage
-	Quota(platform.Member, platform.AIDefaults, time.Time) platform.AIQuota
+	Quota(platform.Member, runtimeprotocol.AIDefaults, time.Time) platform.AIQuota
 }
 
-func Limits(setting func(app, name string) string) platform.AIDefaults {
+func Limits(setting func(app, name string) string) runtimeprotocol.AIDefaults {
 	number := func(app, name string) int {
 		n, _ := strconv.Atoi(setting(app, name))
 		return n
 	}
-	return platform.AIDefaults{People: number(platform.AIApp, platform.AISettingDailyTokens), Agents: number(platform.AgentApp, platform.SettingAgentDaily),
-		PerMinute: number(platform.AIApp, platform.AISettingPerMinute)}
+	return runtimeprotocol.AIDefaults{People: number(runtimeprotocol.AIApp, runtimeprotocol.AISettingDailyTokens), Agents: number(runtimeprotocol.AgentApp, runtimeprotocol.SettingAgentDaily),
+		PerMinute: number(runtimeprotocol.AIApp, runtimeprotocol.AISettingPerMinute)}
 }
 
 type Registry interface {
@@ -44,10 +44,10 @@ type Registry interface {
 type Resolver struct {
 	Registry Registry
 	Setting  func(app, key string) string
-	Policy   platform.AIInferencePolicy
+	Policy   runtimeprotocol.AIInferencePolicy
 }
 
-func ResolverFor(setting func(string, string) string, policy *platform.AIInferencePolicy, registry Registry) Resolver {
+func ResolverFor(setting func(string, string) string, policy *runtimeprotocol.AIInferencePolicy, registry Registry) Resolver {
 	r := Resolver{Setting: setting, Registry: registry}
 	if policy != nil {
 		r.Policy = *policy
@@ -56,7 +56,7 @@ func ResolverFor(setting func(string, string) string, policy *platform.AIInferen
 }
 
 func (r Resolver) MostTokens() int {
-	n, _ := strconv.Atoi(r.Setting(platform.AIApp, platform.AISettingMaxTokens))
+	n, _ := strconv.Atoi(r.Setting(runtimeprotocol.AIApp, runtimeprotocol.AISettingMaxTokens))
 	return n
 }
 
@@ -69,7 +69,7 @@ func (r Resolver) Resolve(purpose, name string, override platform.ModelOptions) 
 		return platform.AIModelBinding{}, platform.AIProvider{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Choose a default model in AI configuration")
 	}
 	if purpose == "agent" && name == "@generation" {
-		name = r.Setting(platform.AIApp, platform.AISettingAppModel)
+		name = r.Setting(runtimeprotocol.AIApp, runtimeprotocol.AISettingAppModel)
 	}
 	model, pv, err := r.Registry.Model(name)
 	if err != nil {
@@ -90,7 +90,7 @@ func (r Resolver) Resolve(purpose, name string, override platform.ModelOptions) 
 }
 
 func (r Resolver) CheckSetting(id, value string) *platform.Error {
-	if id == platform.AIApp+"/"+platform.AISettingMaxTokens || id == platform.AIApp+"/"+platform.AISettingDailyTokens || id == platform.AIApp+"/"+platform.AISettingPerMinute || id == platform.AgentApp+"/"+platform.SettingAgentDaily {
+	if id == runtimeprotocol.AIApp+"/"+runtimeprotocol.AISettingMaxTokens || id == runtimeprotocol.AIApp+"/"+runtimeprotocol.AISettingDailyTokens || id == runtimeprotocol.AIApp+"/"+runtimeprotocol.AISettingPerMinute || id == runtimeprotocol.AgentApp+"/"+runtimeprotocol.SettingAgentDaily {
 		n, err := strconv.Atoi(value)
 		if err != nil || n < 0 {
 			return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Token and call limits cannot be negative")
@@ -117,7 +117,7 @@ func (r Resolver) CheckSetting(id, value string) *platform.Error {
 		}
 		if id == app+"/"+key+"-options" {
 			if purpose == "agent" && name == "@generation" {
-				name = r.Setting(platform.AIApp, platform.AISettingAppModel)
+				name = r.Setting(runtimeprotocol.AIApp, runtimeprotocol.AISettingAppModel)
 			}
 			model, _, err := r.Registry.Model(name)
 			if err != nil {
@@ -144,7 +144,7 @@ func (r Resolver) Stage(binding platform.AIModelBinding, provider platform.AIPro
 
 func BindPolicy(services *runtimeprotocol.RuntimeCapabilities) error {
 	if services.AIInference == nil {
-		policy := platform.AIInferencePolicy{}
+		policy := runtimeprotocol.AIInferencePolicy{}
 		if raw := strings.TrimSpace(os.Getenv("PLATFORM_AI_INFERENCE_POLICY")); raw != "" {
 			decoder := json.NewDecoder(strings.NewReader(raw))
 			decoder.DisallowUnknownFields()
@@ -161,7 +161,7 @@ func BindPolicy(services *runtimeprotocol.RuntimeCapabilities) error {
 		return err
 	}
 	policy := *services.AIInference
-	policy.Runtime = append([]platform.AIInferenceSite{}, policy.Runtime...)
+	policy.Runtime = append([]runtimeprotocol.AIInferenceSite{}, policy.Runtime...)
 	services.AIInference = &policy
 	return nil
 }
@@ -184,7 +184,7 @@ func EvaluationModelConfig(name string, definition platform.AIFunction, lookup f
 	if refusal != nil {
 		return "", fmt.Errorf("model options: %s", refusal.Message)
 	}
-	binding, refusal = resolver.Stage(binding, provider, platform.AIStageDesign)
+	binding, refusal = resolver.Stage(binding, provider, runtimeprotocol.AIStageDesign)
 	if refusal != nil {
 		return "", fmt.Errorf("model stage: %s", refusal.Message)
 	}
@@ -198,7 +198,7 @@ func (r Resolver) Describe(purpose, name string, override platform.ModelOptions)
 	}
 	model, _, _ := r.Registry.Model(binding.Model)
 	config := ""
-	if pinned, refusal := r.Stage(binding, pv, platform.AIStageDesign); refusal == nil {
+	if pinned, refusal := r.Stage(binding, pv, runtimeprotocol.AIStageDesign); refusal == nil {
 		config, _ = ConfigurationDigest(model, pv, &pinned)
 	}
 	return binding.Model, config, true

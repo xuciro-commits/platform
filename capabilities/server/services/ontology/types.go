@@ -1,6 +1,7 @@
 package ontology
 
 import (
+	"platformserver/kernel/protocol"
 	"slices"
 
 	"platformserver/platform"
@@ -18,7 +19,7 @@ type Object struct {
 	Description       string                       `json:"description,omitempty" type:"longtext" help:"What one record of it is, for people and agents"`
 	Fields            []Field                      `json:"fields" title:"Fields"`
 	DataSources       []platform.DataSourceBinding `json:"datasources,omitempty" type:"json" field:"aside" title:"Data sources"`
-	Protocols         []platform.ProtocolBinding   `json:"protocols,omitempty" type:"json" field:"aside" title:"Protocol bindings"`
+	Protocols         []protocol.ProtocolBinding   `json:"protocols,omitempty" type:"json" field:"aside" title:"Protocol bindings"`
 	Reads             *platform.RuleReadSpec       `json:"reads,omitempty" type:"json" field:"aside"`
 	Constraints       []platform.Constraint        `json:"constraints,omitempty" type:"json" field:"aside" title:"Business constraints"`
 	Sets              []platform.RecordSet         `json:"sets,omitempty" type:"json" field:"aside" title:"Declared record sets"`

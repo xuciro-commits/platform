@@ -3,13 +3,14 @@ package host
 import (
 	"context"
 	"fmt"
+	"platformserver/kernel/protocol"
 	records "platformserver/kernel/records"
 	"platformserver/platform"
 	trialowner "platformserver/services/devops/trials"
 	controlowner "platformserver/services/security/control"
 )
 
-func candidateTestTenantWithEnvironment(candidate platform.ReleaseCandidate, member platform.Member, environment simulationEnvironment, others ...platform.Member) (*Tenant, error) {
+func candidateTestTenantWithEnvironment(candidate protocol.ReleaseCandidate, member platform.Member, environment simulationEnvironment, others ...platform.Member) (*Tenant, error) {
 	apps, b, err := environment.CandidateApps(candidate, member, others...)
 	if err != nil {
 		return nil, err

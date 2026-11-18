@@ -3,6 +3,7 @@ package aigateway
 import (
 	"context"
 	"encoding/json"
+	"platformserver/kernel/protocol"
 	"strings"
 	"testing"
 	"time"
@@ -12,7 +13,7 @@ import (
 
 type proposalHost struct {
 	action   platform.Action
-	proposed platform.ModelToolProposal
+	proposed protocol.ModelToolProposal
 }
 
 func (h *proposalHost) ModelToolSurface(platform.Member) platform.AgentSurface {
@@ -22,8 +23,8 @@ func (h *proposalHost) ModelToolSurface(platform.Member) platform.AgentSurface {
 	}
 }
 
-func (*proposalHost) AgentObjects(platform.Member, string, json.RawMessage, time.Time) (platform.AgentObservation, *platform.Error) {
-	return platform.AgentObservation{}, nil
+func (*proposalHost) AgentObjects(platform.Member, string, json.RawMessage, time.Time) (protocol.AgentObservation, *platform.Error) {
+	return protocol.AgentObservation{}, nil
 }
 
 func (h *proposalHost) Catalog(platform.Member) []platform.Action {
@@ -36,7 +37,7 @@ func (*proposalHost) Read(context.Context, platform.Member, string, ...json.RawM
 	return nil, nil
 }
 
-func (h *proposalHost) ProposeModelTool(_ platform.Member, proposal platform.ModelToolProposal, _ time.Time) *platform.Error {
+func (h *proposalHost) ProposeModelTool(_ platform.Member, proposal protocol.ModelToolProposal, _ time.Time) *platform.Error {
 	h.proposed = proposal
 	return nil
 }

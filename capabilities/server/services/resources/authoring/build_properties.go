@@ -1,6 +1,7 @@
 package build
 
 import (
+	"platformserver/kernel/protocol"
 	"platformserver/platform"
 	ontology "platformserver/services/ontology"
 )
@@ -16,8 +17,8 @@ var propertyKind = resourceKind[ontology.PropertyType, platform.PropertyType]{
 	},
 	identity:        func(a, b ontology.PropertyType) bool { return a.Name == b.Name && a.Type == b.Type },
 	fromDeclaration: ontology.PropertyTypeFromDeclaration,
-	install: func(h platform.BuildHost, c platform.Caller, d platform.PropertyType, version int) error {
+	install: func(h protocol.BuildHost, c platform.Caller, d platform.PropertyType, version int) error {
 		return h.InstallPropertyType(c, d, version)
 	},
-	validateInstall: func(h platform.BuildHost, d platform.PropertyType) error { return h.ValidateInstallPropertyType(d) },
+	validateInstall: func(h protocol.BuildHost, d platform.PropertyType) error { return h.ValidateInstallPropertyType(d) },
 }

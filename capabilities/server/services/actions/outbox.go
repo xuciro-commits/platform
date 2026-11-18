@@ -1,6 +1,7 @@
 package actions
 
 import (
+	"platformserver/kernel/protocol"
 	"slices"
 	"strings"
 	"sync"
@@ -34,7 +35,7 @@ func (o *Outbox) Add(span trace.SpanContext, effects ...platform.Effect) {
 		o.all = append(o.all, &Queued{Effect: x, Span: span})
 	}
 	for len(o.all) > effectsKept {
-		i := slices.IndexFunc(o.all, func(x *Queued) bool { return platform.EffectSettled(x.State) })
+		i := slices.IndexFunc(o.all, func(x *Queued) bool { return protocol.EffectSettled(x.State) })
 		if i < 0 {
 			return
 		}
@@ -116,7 +117,7 @@ func (o *Outbox) Claim(endpoint string, now time.Time) (Queued, bool) {
 	o.mu.Lock()
 	defer o.mu.Unlock()
 	i := slices.IndexFunc(o.all, func(x *Queued) bool {
-		return x.Endpoint == endpoint && !platform.EffectSettled(x.State) && x.State != "held"
+		return x.Endpoint == endpoint && !protocol.EffectSettled(x.State) && x.State != "held"
 	})
 	if i >= 0 && o.all[i].State == "unknown" {
 		blocked := o.all[i].ID
@@ -134,7 +135,7 @@ func (o *Outbox) Claim(endpoint string, now time.Time) (Queued, bool) {
 func ConnectionEndpoints(queued []Queued, prefix string) []Endpoint {
 	var out []Endpoint
 	for _, x := range queued {
-		if !strings.HasPrefix(x.Endpoint, prefix) || platform.EffectSettled(x.State) {
+		if !strings.HasPrefix(x.Endpoint, prefix) || protocol.EffectSettled(x.State) {
 			continue
 		}
 		if !slices.ContainsFunc(out, func(ep Endpoint) bool { return ep.ID == x.Endpoint }) {

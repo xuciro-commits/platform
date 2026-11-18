@@ -3,6 +3,7 @@ package host
 import (
 	"encoding/json"
 	"net/http"
+	"platformserver/kernel/protocol"
 	"platformserver/services/actions"
 	"slices"
 	"strings"
@@ -18,7 +19,7 @@ func (t *Tenant) published(agent string) bool {
 	if _, ok := t.Agents.AgentDeclaration(agent); !ok {
 		return false
 	}
-	list := strings.Split(t.setting(t.automation(platform.AgentApp, false), platform.SettingPublished), ",")
+	list := strings.Split(t.setting(t.automation(protocol.AgentApp, false), protocol.SettingPublished), ",")
 	return slices.ContainsFunc(list, func(s string) bool { return strings.TrimSpace(s) == agent })
 }
 
@@ -32,10 +33,10 @@ func (h *Host) serveA2A(w http.ResponseWriter, r *http.Request) {
 	}
 	WriteJSON(w, http.StatusOK, actions.A2AServe(r.Body, r.Header.Get("A2A-Version"), agent, m.ID, actions.A2AHooks{
 		Published: t.published,
-		Run: func(id string) (platform.AgentRunRecord, bool) {
-			value, refusal := recordRead(t, r.Context(), func(t *Tenant) (pair[platform.AgentRunRecord, bool], *platform.Error) {
-				x, ok := platform.Get[platform.AgentRunRecord](t.automation(platform.AgentApp, false), id)
-				return pair[platform.AgentRunRecord, bool]{x, ok}, nil
+		Run: func(id string) (protocol.AgentRunRecord, bool) {
+			value, refusal := recordRead(t, r.Context(), func(t *Tenant) (pair[protocol.AgentRunRecord, bool], *platform.Error) {
+				x, ok := platform.Get[protocol.AgentRunRecord](t.automation(protocol.AgentApp, false), id)
+				return pair[protocol.AgentRunRecord, bool]{x, ok}, nil
 			})
 			return value.first, value.second && refusal == nil
 		},
