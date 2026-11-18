@@ -663,3 +663,20 @@ test("views: save, pin and reopen a filtered view from the sidebar", async ({ pa
   await page.reload();
   await expect(page.getByRole("link", { name: "Robot cell integration" })).toBeVisible();
 });
+
+test("views: a published type opens with its declared default view", async ({ page }) => {
+  const requests: URLSearchParams[] = [];
+  page.on("request", (request) => {
+    const url = new URL(request.url());
+    if (url.pathname === "/v1/records/build.customer") requests.push(url.searchParams);
+  });
+  await signIn(page);
+  await page.goto("/ontology/objects/build.customer");
+  await expect(page.getByRole("columnheader", { name: "Region", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Group by: Region", exact: true })).toBeVisible();
+  await expect.poll(() => requests.at(-1)?.get("sort")).toBe("company");
+  const rows = page.getByRole("table").locator("tbody tr").filter({ has: page.getByRole("link") });
+  await expect(rows.first()).toContainText("Alder Medical Devices");
+  await expect(page.getByText("europe", { exact: true }).first()).toBeVisible();
+  await expect(page.getByText("northamerica", { exact: true }).first()).toBeVisible();
+});
