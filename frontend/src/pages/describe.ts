@@ -20,6 +20,7 @@ export type Described = {
   edit?: Api.Action;
   steps: Step[];
   other: Api.Action[];
+  action: (schema: string) => Api.Action | undefined;
   field: (name: string) => Api.FieldInfo | undefined;
   shows: (field: Api.FieldInfo, values: Values) => boolean;
   state: (values: Values) => Api.State | undefined;
@@ -76,6 +77,7 @@ export function describe(entity: Api.EntityInfo, actions: Api.Action[]): Describ
     edit,
     steps,
     other,
+    action: (schema) => own.find((candidate) => candidate.schema === schema),
     field: (name) => entity.fields.find((field) => field.name === name),
     shows: (field, values) => !field.when || field.when.in.includes(shown(values[field.when.field])),
     state: (values) => (lifecycle ? states.find((state) => state.name === values[lifecycle.field]) : undefined),

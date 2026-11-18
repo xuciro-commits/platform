@@ -1,5 +1,8 @@
 import { Button } from "@astryxdesign/core/Button";
+import { Icon } from "@astryxdesign/core/Icon";
 import { HStack } from "@astryxdesign/core/Layout";
+import { MoreMenu } from "@astryxdesign/core/MoreMenu";
+import { Tooltip } from "@astryxdesign/core/Tooltip";
 import type { Api } from "../host";
 import { t } from "../i18n";
 import { useAct } from "./act";
@@ -15,10 +18,11 @@ export type TransitionsProps = {
   revision: number;
   title: string;
   instances?: Instances;
+  allowed?: Api.RecordAction[];
   onFailure: (reason: string) => void;
 };
 
-export function Transitions({ described, id, values, revision, title, instances, onFailure }: TransitionsProps) {
+export function Transitions({ described, id, values, revision, title, instances, allowed, onFailure }: TransitionsProps) {
   const act = useAct(described);
   const lifecycle = described.lifecycle;
   const current = lifecycle ? String(values[lifecycle.field] ?? "") : "";
@@ -42,6 +46,25 @@ export function Transitions({ described, id, values, revision, title, instances,
     });
   };
 
+  const offeredMore = described.other.flatMap((action) => {
+    const verdict = allowed?.find((entry) => entry.schema === action.schema);
+    return verdict ? [{ action, verdict }] : [];
+  });
+  const items = offeredMore.map(({ action, verdict }) => {
+    const label = t(action.title);
+    return {
+      id: action.schema,
+      label,
+      endContent: verdict.allowed || !verdict.reason ? undefined : (
+        <Tooltip content={verdict.reason}>
+          <Icon icon="info" />
+        </Tooltip>
+      ),
+      isDisabled: !verdict.allowed || act.busy,
+      onClick: () => act.run({ action, id, revision, label, name: title, reversible: false, onRefused: onFailure }),
+    };
+  });
+
   return (
     <>
       <HStack gap={2} vAlign="center">
@@ -49,6 +72,7 @@ export function Transitions({ described, id, values, revision, title, instances,
         {offered.map((step, index) => (
           <Button key={step.transition.name} label={t(step.transition.title)} variant={index === 0 ? "primary" : "secondary"} isDisabled={act.busy} onClick={() => click(step)} />
         ))}
+        {items.length > 0 && <MoreMenu label={t("More actions")} items={items} alignment="end" />}
       </HStack>
       {act.element}
     </>

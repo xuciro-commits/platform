@@ -1,4 +1,6 @@
 import { AlertDialog } from "@astryxdesign/core/AlertDialog";
+import { Button } from "@astryxdesign/core/Button";
+import { useToast } from "@astryxdesign/core/Toast";
 import { useState } from "react";
 import { type Api, submit } from "../host";
 import { t } from "../i18n";
@@ -37,12 +39,33 @@ export type Intent = {
 export function useAct(described: Described) {
   const [pending, setPending] = useState<Intent>();
   const [busy, setBusy] = useState(false);
+  const toast = useToast();
 
   const fire = async (intent: Intent) => {
     intent.onRefused("");
     setBusy(true);
     try {
-      await send(intent.action, intent.id, {}, intent.revision);
+      const kept = await send(intent.action, intent.id, {}, intent.revision);
+      const back = intent.action.reverse ? described.action(intent.action.reverse) : undefined;
+      if (back) {
+        const dismiss = toast({
+          body: `${t("Done")}: ${intent.label} “${intent.name}”`,
+          endContent: (
+            <Button
+              label={t("Undo")}
+              variant="ghost"
+              onClick={async () => {
+                dismiss();
+                try {
+                  await send(back, intent.id, {}, kept.revision);
+                } catch (problem) {
+                  toast({ body: reasonOf(problem), type: "error" });
+                }
+              }}
+            />
+          ),
+        });
+      }
     } catch (problem) {
       intent.onRefused(reasonOf(problem));
     }
@@ -51,7 +74,7 @@ export function useAct(described: Described) {
   };
 
   const run = (intent: Intent) => {
-    if (intent.action.payload.some(enterable) || !intent.reversible) setPending(intent);
+    if (intent.action.payload.some(enterable) || !(intent.reversible || intent.action.reverse)) setPending(intent);
     else fire(intent);
   };
 

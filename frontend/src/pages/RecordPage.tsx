@@ -66,6 +66,7 @@ export function RecordPage({ described, id, listPath, listTitle, instances }: Re
                   revision={kept.revision}
                   title={name}
                   instances={instances}
+                  allowed={read.status === "ready" ? read.data.actions : undefined}
                   onFailure={setRefusal}
                 />
               )}

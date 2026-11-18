@@ -18,6 +18,7 @@ test("records: open a list, open a record, change a field in place", async ({ pa
   const retrofit = page.getByRole("row", { name: /Press line retrofit/ });
   await expect(retrofit.getByText("Negotiation", { exact: true })).toBeVisible();
   await expect(retrofit.getByText("184,000", { exact: true })).toBeVisible();
+  await expect(retrofit.getByLabel("Negotiation")).toBeVisible();
 
   await page.getByRole("link", { name: "Press line retrofit" }).click();
   await expect(page.getByRole("combobox", { name: "Stage" })).toContainText("Negotiation");
@@ -86,6 +87,59 @@ test("submit: an answer lost on the way is retried and accepted once", async ({ 
   await page.reload();
   await expect(page.getByRole("textbox", { name: "Next step" })).toHaveValue("Book the site visit");
   await expect(page.getByRole("complementary").getByText("2", { exact: true })).toBeVisible();
+});
+
+test("actions: archive from the record menu, then undo from the notice", async ({ page }) => {
+  await signIn(page);
+  await open(page, "Ontology", "Objects");
+  await page.getByRole("link", { name: "Opportunities" }).click();
+  await page.getByRole("link", { name: "Label printing line" }).click();
+
+  await page.getByRole("button", { name: "More actions" }).click();
+  await page.getByRole("menuitem", { name: "Archive" }).click();
+  await expect(page.getByRole("alertdialog")).toHaveCount(0);
+  const undo = page.getByRole("button", { name: "Undo" });
+  await expect(undo).toBeVisible();
+  await undo.click();
+
+  await page.getByRole("link", { name: "Opportunities" }).click();
+  await expect(page.getByRole("link", { name: "Label printing line" })).toBeVisible();
+});
+
+test("conflict: the second writer sees both values and chooses", async ({ browser }) => {
+  const pages = await Promise.all([browser.newPage(), browser.newPage()]);
+  for (const page of pages) {
+    await signIn(page);
+    await open(page, "Ontology", "Objects");
+    await page.getByRole("link", { name: "Opportunities" }).click();
+    await page.getByRole("link", { name: "Store replenishment pilot" }).click();
+    await expect(page.getByRole("textbox", { name: "Next step" })).toHaveValue("Agree pilot stores");
+  }
+  const [first, second] = pages;
+
+  await first.getByRole("textbox", { name: "Next step" }).fill("Pilot in four stores");
+  await first.getByRole("textbox", { name: "Next step" }).press("Enter");
+  await expect(first.getByRole("complementary").getByText("2", { exact: true })).toBeVisible();
+
+  await second.getByRole("complementary").getByRole("textbox", { name: "Owner" }).fill("Omar Haddad");
+  await second.getByRole("complementary").getByRole("textbox", { name: "Owner" }).press("Enter");
+  await expect(second.getByRole("complementary").getByText("3", { exact: true })).toBeVisible();
+  await expect(second.getByRole("dialog")).toHaveCount(0);
+
+  await second.getByRole("textbox", { name: "Next step" }).fill("Pilot in two stores");
+  await first.getByRole("textbox", { name: "Next step" }).fill("Pilot in six stores");
+  await first.getByRole("textbox", { name: "Next step" }).press("Enter");
+  await expect(first.getByRole("complementary").getByText("4", { exact: true })).toBeVisible();
+  await second.getByRole("textbox", { name: "Next step" }).press("Enter");
+  const choice = second.getByRole("dialog");
+  await expect(choice).toContainText("Pilot in six stores");
+  await expect(choice).toContainText("Pilot in two stores");
+  await choice.getByRole("button", { name: "Use mine" }).click();
+  await expect(second.getByRole("complementary").getByText("5", { exact: true })).toBeVisible();
+
+  await first.reload();
+  await expect(first.getByRole("textbox", { name: "Next step" })).toHaveValue("Pilot in two stores");
+  await Promise.all(pages.map((page) => page.close()));
 });
 
 test("publish: a draft type goes live from its record page and takes records", async ({ page }) => {

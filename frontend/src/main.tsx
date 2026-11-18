@@ -1,4 +1,5 @@
 import "./globals.css";
+import { LayerProvider } from "@astryxdesign/core/Layer";
 import { LinkProvider } from "@astryxdesign/core/Link";
 import { Theme } from "@astryxdesign/core/theme";
 import { StrictMode } from "react";
@@ -12,9 +13,11 @@ if (import.meta.env.DEV) void import("virtual:stylex:runtime");
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
     <Theme theme={themes[defaultThemeSlug]}>
-      <LinkProvider component={RouterLink}>
-        <Shell />
-      </LinkProvider>
+      <LayerProvider>
+        <LinkProvider component={RouterLink}>
+          <Shell />
+        </LinkProvider>
+      </LayerProvider>
     </Theme>
   </StrictMode>,
 );
