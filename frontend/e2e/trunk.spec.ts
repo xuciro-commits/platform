@@ -561,7 +561,7 @@ test("object definition: create and bind an action type before publishing a tran
   await expect(page.getByText("Active", { exact: true }).first()).toBeVisible();
 });
 
-test("object gate: create a type from zero, preview, publish and transition a record", async ({ page }) => {
+test("gate: build a type and use it, install a package and use its action, then check each role", async ({ page, browser }) => {
   await signIn(page);
   await open(page, "Ontology", "Object types");
   await page.getByRole("button", { name: "New", exact: true }).click();
@@ -609,13 +609,9 @@ test("object gate: create a type from zero, preview, publish and transition a re
   const confirm = page.getByRole("alertdialog");
   await confirm.getByRole("button", { name: "Activate gate item", exact: true }).click();
   await expect(page.getByText("Active", { exact: true }).first()).toBeVisible();
-});
 
-test("applications: review and install a package from the marketplace", async ({ page }) => {
-  await signIn(page);
   await open(page, "Delivery", "Marketplace");
   const provider = page.getByRole("listitem").filter({ hasText: "application.production-provider · 0.1.4" });
-  await expect(provider).toBeVisible();
   await provider.getByRole("button", { name: "Review and install", exact: true }).click();
   const review = page.getByRole("dialog", { name: /Review and install/ });
   await expect(review).toContainText("application.production-provider");
@@ -623,7 +619,37 @@ test("applications: review and install a package from the marketplace", async ({
   await expect(page).toHaveURL(/\/delivery\/installations$/);
   const installed = page.getByRole("listitem").filter({ hasText: "Production batch provider" });
   await expect(installed).toContainText("0.1.4");
-  await expect(installed.getByRole("button", { name: "Manage installation", exact: true })).toBeVisible();
+
+  await page.reload();
+  await page.getByRole("link", { name: "Production order provider", exact: true }).click();
+  await page.getByRole("navigation", { name: "Primary navigation" }).getByRole("link", { name: "Production orders", exact: true }).click();
+  await page.getByRole("button", { name: "New", exact: true }).click();
+  const order = page.getByRole("dialog");
+  await order.getByRole("textbox", { name: /^Order number/ }).fill("GATE-1");
+  await order.getByRole("textbox", { name: /^Product/ }).fill("Gate valve");
+  await order.getByRole("spinbutton", { name: /^Ordered quantity/ }).fill("12");
+  await order.getByRole("spinbutton", { name: /^Unit production cost/ }).fill("40");
+  await page.keyboard.press("Tab");
+  await order.getByRole("button", { name: "Create", exact: true }).click();
+  await expect(page.getByRole("heading", { level: 1, name: "GATE-1", exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "More actions" }).click();
+  await page.getByRole("menuitem", { name: "Start upstream production", exact: true }).click();
+  const contributed = page.getByRole("dialog", { name: "Start upstream production", exact: true });
+  await contributed.getByRole("textbox", { name: /^Shop order/ }).fill("WO-GATE-1");
+  await contributed.getByRole("button", { name: "Start upstream production", exact: true }).click();
+  await expect(contributed).toBeHidden();
+  await expect(page.getByText("Running", { exact: true }).first()).toBeVisible();
+
+  for (const seat of ["builder-1", "user-1"]) {
+    const context = await browser.newContext();
+    const member = await context.newPage();
+    await member.goto("/");
+    await member.getByRole("button", { name: `${seat} · acceptance` }).click();
+    await expect(member.getByRole("link", { name: "Home", exact: true })).toBeVisible();
+    await expect(member.getByRole("link", { name: "Admin", exact: true })).toHaveCount(0);
+    await expect(member.getByRole("link", { name: "Host", exact: true })).toHaveCount(0);
+    await context.close();
+  }
 });
 
 test("applications: an installed package contributes a menu and an object list", async ({ page }) => {
@@ -1045,7 +1071,7 @@ test("applications: shared records respect roles and keep their history after re
   const manage = installation.getByRole("button", { name: "Manage installation", exact: true });
   await manage.click();
   const review = page.getByRole("dialog", { name: /Manage installation/ });
-  await expect(review.getByText("Business records retained: 1", { exact: true })).toBeVisible();
+  await expect(review.getByText("Business records retained: 2", { exact: true })).toBeVisible();
   await review.getByRole("button", { name: "Mark for uninstall", exact: true }).click();
   await expect(review).toBeHidden();
   await expect(installation).toContainText("draining");
@@ -1056,7 +1082,7 @@ test("applications: shared records respect roles and keep their history after re
   await expect(page.getByRole("link", { name: "Production order provider", exact: true })).toHaveCount(0);
   expect(await direct(page)).toMatchObject({ code: "ERROR_CODE_POLICY_DENIED", message: expect.stringContaining("The package contribution is retired") });
   await manage.click();
-  await expect(review.getByText("Business records retained: 1", { exact: true })).toBeVisible();
+  await expect(review.getByText("Business records retained: 2", { exact: true })).toBeVisible();
   await page.goto(appRecord.href);
   await expect(page.getByRole("textbox", { name: "First shop order", exact: true })).toHaveValue("WO-1043");
   const retiredMenu = page.getByRole("button", { name: "More actions" });
