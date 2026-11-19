@@ -39,7 +39,7 @@ export function withRestrictedFields(entity: Api.EntityInfo, restricted: Api.Rec
   return { ...entity, fields };
 }
 
-const tabular = new Set(["text", "integer", "decimal", "money", "date", "datetime", "boolean", "choice", "reference", "member", "tags"]);
+const tabular = new Set(["text", "longtext", "integer", "decimal", "money", "date", "datetime", "boolean", "choice", "reference", "member", "tags"]);
 const columnLimit = 6;
 const ungrouped = "Details";
 
@@ -71,10 +71,11 @@ export function describe(entity: Api.EntityInfo, actions: Api.Action[]): Describ
   const listed = entity.fields.filter((field) => tabular.has(field.type) && (field.name !== lifecycle?.field || (lifecycle.states?.length ?? 0) > 1));
   const rank = (field: Api.FieldInfo) =>
     field.name === entity.display ? 0 : field.required || field.search || field.type === "choice" || field.name === lifecycle?.field ? 1 : 2;
-  const picked = new Set([...listed].sort((a, b) => rank(a) - rank(b)).slice(0, columnLimit));
+  const picked = new Set(listed.filter((field) => field.type !== "longtext" || field.name === entity.display)
+    .sort((a, b) => rank(a) - rank(b)).slice(0, columnLimit));
   const columns = [...listed.filter((field) => rank(field) === 0), ...listed.filter((field) => rank(field) > 0)].filter((field) => picked.has(field));
   const groups = entity.fields.filter((field) => field.type === "choice");
-  const lanes = groups.filter((field) => editable.has(field.name));
+  const lanes = groups.filter((field) => editable.has(field.name) && !field.readOnly && field.choices?.length && field.choices.length <= 8);
   const states = lifecycle?.states ?? [];
   return {
     entity,
@@ -91,7 +92,8 @@ export function describe(entity: Api.EntityInfo, actions: Api.Action[]): Describ
     create,
     edit,
     steps,
-    step: (from, to) => steps.find((candidate) => candidate.transition.from.includes(from) && candidate.transition.to[0] === to),
+    step: (from, to) => steps.find(({ transition }) => transition.from.includes(from) &&
+      (transition.toInput ? transition.to.includes(to) : transition.to[0] === to)),
     other,
     action: (schema) => own.find((candidate) => candidate.schema === schema),
     field: (name) => entity.fields.find((field) => field.name === name),

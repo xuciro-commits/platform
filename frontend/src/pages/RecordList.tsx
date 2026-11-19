@@ -6,17 +6,18 @@ import { type Api, type Read, request, useRead } from "../host";
 import { t } from "../i18n";
 import { navigate, usePath, useSearch } from "../router";
 import { ActionDialog } from "./ActionDialog";
-import { send, stepIntent, useAct } from "./act";
+import { type Intent, send, stepIntent, useAct } from "./act";
 import { type ListShape, ListView, type Move } from "./ListPage";
+import { enterable } from "./ParameterInput";
 import { type Described, describe, numeric } from "./describe";
-import { BatchActions } from "./BatchActions";
+import { BatchActions, canBatch } from "./BatchActions";
 import { RecordPage } from "./RecordPage";
 import { type Dot, dots, Transitions } from "./Transitions";
 import { money, plain, present, shown } from "./values";
-import { domainOf, newView, readView, type ViewState } from "./view";
+import { domainOf, hasFilters, newView, readView, type ViewState } from "./view";
 
 type Row = Record<string, unknown>;
-type Declared = { type: string; title?: string; about: string; fields?: string[]; project?: boolean; instances?: { field: string; path: string } };
+type Declared = { type: string; title?: string; about: string; fields?: string[]; headers?: Record<string, string>; project?: boolean; instances?: { field: string; path: string } };
 type Back = { href: string; label: string };
 type Stamp = { at?: string };
 type Formats = Record<string, Api.FieldFormat>;
@@ -79,6 +80,8 @@ function useRecordPages(type: string, view: ViewState, enabled: boolean, choiceV
   if (view.search.trim()) query.set("search", view.search.trim());
   const path = enabled ? `/v1/records/${type}?${query}` : null;
   const page = useRead<Api.RecordPage>(path);
+  const filtered = hasFilters(view, externalDomain);
+  const count = useRead<Pick<Api.RecordPage, "total">>(enabled && filtered ? `/v1/records/${type}?limit=1` : null);
   useEffect(() => {
     if (loaded.signature !== signature) setOffset(0);
   }, [loaded.signature, signature]);
@@ -104,6 +107,7 @@ function useRecordPages(type: string, view: ViewState, enabled: boolean, choiceV
     read,
     answer,
     total: loaded.total,
+    unfiltered: filtered ? count.status === "ready" ? count.data.total : undefined : loaded.total,
     loaded: loaded.records.length,
     hasMore: loaded.signature === signature && loaded.records.length < loaded.total,
     loading: loaded.signature === signature && page.status === "loading",
@@ -147,7 +151,9 @@ function useOptions(described: Described | undefined) {
   }, [members, references, described]);
 }
 
-function shape(described: Described, declared: Declared, listPath: string, move?: Move, bulk?: ListShape<Api.RecordPage, Row>["bulk"], accepts?: (id: string, to: string) => boolean, options: Options = {}, detail?: ListShape<Api.RecordPage, Row>["detail"]): ListShape<Api.RecordPage, Row> {
+type RecordShape = ListShape<Api.RecordPage, Row>;
+
+function shape(described: Described, declared: Declared, listPath: string, extra?: Pick<RecordShape, "board" | "bulk" | "detail">, options: Options = {}): RecordShape {
   const lifecycle = described.lifecycle;
   const states = lifecycle?.states ?? [];
   const say = (field: Api.FieldInfo) => (row: Row) => {
@@ -161,13 +167,12 @@ function shape(described: Described, declared: Declared, listPath: string, move?
     return tone ? (dots as Record<string, Dot | undefined>)[tone] ?? dots.neutral : undefined;
   };
   const titles = (field: Api.FieldInfo) => field.choiceTitles ?? field.choices;
-  const chosen = declared.fields ? declared.fields.flatMap((name) => described.field(name) ?? []) : described.table;
+  const defaults = declared.fields ? declared.fields.flatMap((name) => described.field(name) ?? []) : described.columns;
+  const chosen = [...defaults, ...described.table.filter((field) => !defaults.includes(field))];
   return {
     title: declared.title ?? described.plural,
     about: declared.about,
-    move,
-    bulk,
-    detail,
+    ...extra,
     defaultView: described.entity.view,
     carryView: true,
     savedViews: declared.type,
@@ -177,29 +182,26 @@ function shape(described: Described, declared: Declared, listPath: string, move?
     columns: [
       ...chosen.map((field) => ({
         key: field.name,
-        header: field.title,
+        header: declared.headers?.[field.name] ?? field.title,
         text: say(field),
-        kind: field.type === "choice" ? ("enum" as const) : numeric.has(field.type) ? ("number" as const) : field.type === "date" || field.type === "datetime" ? ("time" as const) : field.type === "member" ? ("member" as const) : ("string" as const),
+        kind: field.type === "choice" ? ("enum" as const) : numeric.has(field.type) ? ("number" as const) : field.type === "date" || field.type === "datetime" ? ("time" as const) : field.type === "member" ? ("member" as const) : ["name", "key", "id", "code", "slug"].includes(field.name) ? ("code" as const) : ("string" as const),
         choices: field.name === lifecycle?.field ? states.map((state) => t(state.title)) : titles(field),
         options: options[field.name],
         boolean: field.type === "boolean",
         chip: field.type !== "money",
-        hiddenByDefault: !declared.fields && !described.columns.includes(field),
+        hiddenByDefault: !defaults.includes(field),
         dot: dot(field),
         reference: field.type === "reference" && field.ref ? (row: Row) => (row[field.name] ? { type: String(field.ref), id: String(row[field.name]) } : undefined) : undefined,
         value: numeric.has(field.type) ? (row: Row) => field.type === "money" ? money(row[field.name])?.amount : plain(row[field.name]) : undefined,
       })),
       { key: "changed", header: "Updated", width: 140, kind: "time" as const, text: (row: Row) => (row.changed as Stamp | undefined)?.at ?? "" },
     ],
-    groups: described.groups
-      .map((field) => ({
-        key: field.name,
-        label: field.title,
-        of: say(field),
-        order: field.name === lifecycle?.field ? states.map((state) => t(state.title)) : described.lanes.includes(field) ? titles(field) : undefined,
-        accepts: field.name === lifecycle?.field ? accepts : undefined,
-      }))
-      .sort((a, b) => Number(b.key === lifecycle?.field) - Number(a.key === lifecycle?.field)),
+    groups: described.groups.map((field) => ({
+      key: field.name,
+      label: field.title,
+      of: say(field),
+      order: field.name === lifecycle?.field ? states.map((state) => t(state.title)) : titles(field),
+    })),
   };
 }
 
@@ -225,35 +227,62 @@ export function Records({ declared, listPath, id, back }: { declared: Declared; 
   const view = useMemo(() => readView(new URLSearchParams(currentSearch).get("view"), fallback), [currentSearch, fallback]);
   const externalDomain = new URLSearchParams(currentSearch).get("domain") ?? "";
   const records = useRecordPages(declared.type, view, Boolean(described && !id), (field, value) => keyOf(described?.field(field), value) ?? value, externalDomain);
-  const edit = described?.edit;
   const kept = records.answer.records as Row[];
   const act = useAct(described);
-  const lifecycle = described?.lifecycle;
-  const stateOf = (title: string) => lifecycle?.states.find((state) => t(state.title) === title)?.name ?? "";
-  const move: Move | undefined =
-    described && kept && (edit || lifecycle)
-      ? (moving, field, to) => {
-          const row = kept.find((candidate) => candidate.id === moving);
-          const revision = Number(row?.revision);
-          if (!lifecycle || field !== lifecycle.field) return edit ? send(edit, moving, { [field]: keyOf(described.field(field), to) }, revision) : Promise.resolve();
-          const current = String(row?.[lifecycle.field] ?? "");
-          const step = described.step(current, stateOf(to));
-          if (!step) return Promise.resolve();
-          return new Promise<void>((resolve, reject) =>
-            act.run(
-              stepIntent(described, step, current, { id: moving, revision, name: described.name(row ?? {}, moving) }, {
-                onRefused: (reason) => reason && reject(new Error(reason)),
-                onDone: resolve,
-                onCancel: () => reject(new Error("")),
-              }),
-            ),
-          );
-        }
-      : undefined;
-  const accepts = (moving: string, to: string) => {
-    const row = kept?.find((candidate) => candidate.id === moving);
-    return Boolean(lifecycle && row && described?.step(String(row[lifecycle.field] ?? ""), stateOf(to)));
+  const lifecycle = (described?.lifecycle?.states.length ?? 0) > 1 ? described?.lifecycle : undefined;
+  const laneField = lifecycle ? described?.field(lifecycle.field) : described?.lanes[0];
+  const allowed = (id: string, schema: string) => records.answer.actions?.[id]?.some((action) => action.schema === schema && action.allowed);
+  const byId = useMemo(() => new Map(kept.map((row) => [String(row.id), row])), [kept]);
+  const actionFor = (id: string, to: string) => {
+    if (!described || !laneField) return;
+    const row = byId.get(id);
+    if (!row) return;
+    const current = String(row[laneField.name] ?? "");
+    const step = lifecycle ? described.step(current, to) : undefined;
+    const action = lifecycle ? step?.action : described.edit;
+    if (action && !action.confirmationOnly && allowed(id, action.schema) &&
+        !action.payload.some((parameter) => parameter.required && !enterable(parameter))) return { row, current, step, action };
   };
+  const move: Move = async (id, to) => {
+    const moving = actionFor(id, to);
+    if (!moving || !described || !laneField) return;
+    const { row, current, step, action } = moving;
+    const revision = Number(row.revision);
+    if (!step && !action.needsApproval && !action.payload.some((parameter) => parameter.required && parameter.name !== laneField.name)) {
+      await send(action, id, { [laneField.name]: to }, revision);
+      return;
+    }
+    await new Promise<void>((resolve, reject) => {
+      const record = { id, revision, name: described.name(row, id) };
+      const callbacks = {
+        onRefused: (reason) => { if (reason) reject(new Error(reason)); },
+        onDone: resolve,
+        onCancel: resolve,
+      } satisfies Pick<Intent, "onRefused" | "onDone" | "onCancel">;
+      const intent = step ? stepIntent(described, step, current, record, callbacks, to)
+        : { action, ...record, label: t(action.title), reversible: false, ...callbacks };
+      const target = step ? step.transition.toInput : laneField.name;
+      act.run(target ? { ...intent, fixed: { [target]: to }, reversible: false } : intent);
+    });
+  };
+  const numericField = described?.table.find((field) => numeric.has(field.type));
+  const board: RecordShape["board"] = laneField ? {
+    key: laneField.name,
+    lanes: lifecycle ? lifecycle.states.map((state) => ({ key: state.name, label: t(state.title) }))
+      : (laneField.choices ?? []).map((key, index) => ({ key, label: t(laneField.choiceTitles?.[index] ?? key) })),
+    of: (row) => String(row[laneField.name] ?? ""),
+    accepts: (id, to) => Boolean(actionFor(id, to)),
+    move,
+    total: numericField && {
+      label: numericField.title,
+      value: (row) => {
+        const value = row[numericField.name];
+        if (numericField.type === "money") return money(value);
+        const amount = plain(value);
+        return typeof amount === "number" && Number.isFinite(amount) ? { amount } : undefined;
+      },
+    },
+  } : undefined;
   const options = useOptions(described);
   const [detailFailure, setDetailFailure] = useState("");
   const detail: ListShape<Api.RecordPage, Row>["detail"] = described && ((chosen) => {
@@ -274,17 +303,18 @@ export function Records({ declared, listPath, id, back }: { declared: Declared; 
       </VStack>
     );
   }) || undefined;
-  const bulk: ListShape<Api.RecordPage, Row>["bulk"] = described && ((ids, clear) => (
+  const bulk: RecordShape["bulk"] = described && actions.status === "ready" && actions.data.some((action) => action.target === described.type && canBatch(action, described)) && ((ids, clear) => (
     <BatchActions described={described} ids={ids} clear={clear} records={records.answer} />
   )) || undefined;
   const definition = useMemo(() => {
     if (!described) return pending;
     return {
-      ...shape(described, declared, listPath, move, bulk, accepts, options, detail),
+      ...shape(described, declared, listPath, { board, bulk, detail }, options),
       remote: "all" as const,
+      unfiltered: records.unfiltered,
       page: { total: records.total, loaded: records.loaded, hasMore: records.hasMore, loading: records.loading, loadMore: records.loadMore },
     };
-  }, [described, declared, listPath, pending, move, bulk, accepts, options, detail, records.total, records.loaded, records.hasMore, records.loading, records.loadMore]);
+  }, [described, declared, listPath, pending, board, bulk, options, detail, records.total, records.unfiltered, records.loaded, records.hasMore, records.loading, records.loadMore]);
   const create = described?.create;
   if (described && id) {
     return (

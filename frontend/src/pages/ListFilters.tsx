@@ -22,7 +22,7 @@ import { t } from "../i18n";
 export type Chip = { key: string; label: string; kind: "many" | "range" | "date" | "boolean"; options: { value: string; label: string }[] };
 type Range = [number | null, number | null];
 
-const readoutReserve = 184;
+const readoutReserve = 128;
 const day = 86_400_000;
 const presets = [
   { key: "past7", label: "Past 7 days", from: -7, to: 0 },
@@ -85,15 +85,14 @@ type FilterBarProps = {
   search: string;
   onSearch: (next: string) => void;
   count: string;
-  toggle: ReactNode;
+  onClear?: () => void;
   compact: boolean;
 };
 
-export function FilterBar({ chips, filters, onFilters, search, onSearch, count, toggle, compact }: FilterBarProps) {
+export function FilterBar({ chips, filters, onFilters, search, onSearch, count, onClear, compact }: FilterBarProps) {
   const [draft, setDraft] = useState(search);
   useEffect(() => setDraft(search), [search]);
   const replace = (key: string, next: PowerSearchFilter[]) => onFilters([...filters.filter((filter) => filter.field !== key), ...next]);
-  const dirty = filters.length > 0 || search !== "";
 
   const controls = chips.map((chip) => {
     const mine = chipFilters(chip, filters);
@@ -213,7 +212,7 @@ export function FilterBar({ chips, filters, onFilters, search, onSearch, count, 
   });
 
   return (
-    <HStack gap={2} vAlign="center" wrap="nowrap" minHeight={32} xstyle={styles.filterRow}>
+    <HStack gap={2} vAlign="center" wrap="nowrap" minHeight={32} role="group" aria-label={t("Filter")} xstyle={styles.filterRow}>
       <StackItem xstyle={styles.searchSlot}>
         <TextInput
           label={t("Search this list")}
@@ -233,19 +232,13 @@ export function FilterBar({ chips, filters, onFilters, search, onSearch, count, 
           {controls}
         </OverflowList>
         <HStack gap={2} vAlign="center" xstyle={styles.meta}>
-          {toggle}
           <Text type="supporting" color="secondary" hasTabularNumbers>
             {count}
           </Text>
-          {dirty && (
-            <>
-              <Text type="supporting" color="secondary">
-                •
-              </Text>
-              <Link type="supporting" onClick={() => { setDraft(""); onFilters([]); onSearch(""); }}>
-                {t("Clear all")}
-              </Link>
-            </>
+          {onClear && (
+            <Link type="supporting" onClick={() => { setDraft(""); onClear(); }}>
+              {t("Clear all")}
+            </Link>
           )}
         </HStack>
       </StackItem>

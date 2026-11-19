@@ -69,9 +69,9 @@ export function stepIntent(
   current: string,
   record: { id: string; revision: number; name: string },
   callbacks: Pick<Intent, "onRefused" | "onDone" | "onCancel">,
+  to = transition.to[0],
 ): Intent {
   const lifecycle = described.lifecycle;
-  const to = transition.to[0];
   const state = lifecycle?.states.find((candidate) => candidate.name === to);
   return {
     action,
@@ -131,7 +131,7 @@ export function useAct(described?: Described) {
 
   const asked = (intent: Intent) => intent.action.payload.some((parameter) => enterable(parameter) && !(parameter.name in (intent.fixed ?? {})));
   const run = (intent: Intent) => {
-    if (asked(intent) || !(intent.reversible || intent.action.reverse)) setPending(intent);
+    if (intent.action.schema === "build.object.publish" || intent.action.needsApproval || asked(intent) || !(intent.reversible || intent.action.reverse)) setPending(intent);
     else fire(intent);
   };
 

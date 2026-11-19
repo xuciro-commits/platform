@@ -666,12 +666,12 @@ test("views: filters, order and visible columns survive refresh and return", asy
   const recordRequests: URLSearchParams[] = [];
   page.on("request", (request) => {
     const url = new URL(request.url());
-    if (url.pathname === "/v1/records/build.opportunity") recordRequests.push(url.searchParams);
+    if (url.pathname === "/v1/records/build.opportunity" && url.searchParams.has("actions")) recordRequests.push(url.searchParams);
   });
   await signIn(page);
   await page.goto("/ontology/objects/build.opportunity");
   await expect(page.getByRole("heading", { level: 1, name: "Opportunities" })).toBeVisible();
-  await expect(page.getByText(/\d+ \/ \d+/, { exact: true })).toBeVisible();
+  await expect(page.getByRole("group", { name: "Filter", exact: true }).getByText(/^\d+$/, { exact: true })).toBeVisible();
   expect(recordRequests.at(-1)?.get("limit")).toBe("100");
   expect(recordRequests.at(-1)?.get("actions")).toBe("1");
 
@@ -702,6 +702,42 @@ test("views: filters, order and visible columns survive refresh and return", asy
   await expect(page.getByRole("columnheader", { name: "Next step", exact: true })).toHaveCount(0);
 });
 
+test("list: metadata controls default columns, layout and empty states", async ({ page }) => {
+  await signIn(page);
+  await open(page, "Ontology", "Object types");
+  const apiName = page.getByRole("columnheader", { name: "API name", exact: true });
+  await expect(apiName).toBeVisible();
+  await expect(page.getByRole("columnheader", { name: "Plural", exact: true })).toHaveCount(0);
+  await apiName.getByRole("button").click();
+  await expect(apiName).toHaveAttribute("aria-sort", "ascending");
+  await page.getByRole("button", { name: "View options", exact: true }).click();
+  await expect(page.getByRole("button", { name: "Add Plural", exact: true })).toBeVisible();
+  await page.keyboard.press("Escape");
+
+  const search = page.getByRole("textbox", { name: "Search this list" });
+  await search.fill("No object matches this phrase");
+  await search.press("Enter");
+  await expect(page.getByRole("heading", { name: "No matches", exact: true })).toBeVisible();
+  await page.getByRole("main", { name: "Object types", exact: true }).getByRole("button", { name: "Clear all", exact: true }).click();
+  await expect(apiName).toBeVisible();
+
+  await page.route("**/v1/records/build.object?*", (route) => route.fulfill({ json: { records: [], total: 0 } }));
+  await page.reload();
+  await expect(page.getByRole("heading", { name: "Nothing here yet", exact: true })).toBeVisible();
+  await expect(page.getByRole("main", { name: "Object types", exact: true }).getByRole("button", { name: "New", exact: true })).toBeVisible();
+  await page.unroute("**/v1/records/build.object?*");
+
+  await page.goto("/ontology/objects/build.opportunity");
+  await page.getByRole("radio", { name: "Board" }).click();
+  await expect(page.getByRole("region", { name: "Proposal", exact: true })).toBeVisible();
+  await expect(page.getByText(/Amount · Total ·/).first()).toBeVisible();
+
+  await open(page, "Operations", "Logs");
+  await expect(page.getByRole("table")).toBeVisible();
+  await expect(page.getByRole("radio", { name: "Board" })).toHaveCount(0);
+  await expect(page.getByRole("table").getByRole("checkbox")).toHaveCount(0);
+});
+
 test("views: ten thousand rows stay windowed and load at the scroll edge", async ({ page }) => {
   const offsets: number[] = [];
   await page.route("**/v1/records/build.opportunity?*", async (route) => {
@@ -730,7 +766,7 @@ test("views: ten thousand rows stay windowed and load at the scroll edge", async
   await signIn(page);
   await page.goto("/ontology/objects/build.opportunity");
   const resultCount = page;
-  await expect(resultCount.getByText("100 / 10000", { exact: true })).toBeVisible();
+  await expect(resultCount.getByText("10000", { exact: true })).toBeVisible();
   const table = page.getByRole("table");
   const scroller = page.getByRole("region", { name: "Records" });
   await expect(scroller).toBeVisible();
@@ -738,14 +774,12 @@ test("views: ten thousand rows stay windowed and load at the scroll edge", async
 
   await scroller.evaluate((element) => element.scrollTo({ top: element.scrollHeight }));
   await expect.poll(() => offsets.includes(100)).toBe(true);
-  await expect(resultCount.getByText("200 / 10000", { exact: true })).toBeVisible();
   await scroller.evaluate((element) => element.scrollTo({ top: element.scrollHeight }));
   const secondPage = page.getByRole("link", { name: "Generated opportunity 0199" });
   await expect(secondPage).toBeVisible();
   await secondPage.click();
   await expect(page).toHaveURL(/build\.opportunity\/GEN-0199/);
   await page.goBack();
-  await expect(resultCount.getByText(/200 \/ 10000|300 \/ 10000/)).toBeVisible();
   await expect(page.getByRole("link", { name: "Generated opportunity 0199" })).toBeVisible();
   await page.getByRole("radio", { name: "Board" }).click();
   const previousOffset = offsets.at(-1);
@@ -786,6 +820,17 @@ test("views: save, pin and reopen a filtered view from the sidebar", async ({ pa
   await expect(sidebar.getByRole("link", { name: "My proposals" })).toBeVisible();
   await page.getByRole("button", { name: "Saved views", exact: true }).click();
   await expect(page.getByRole("button", { name: "My proposals", exact: true })).toHaveAttribute("aria-pressed", "true");
+  const search = page.getByRole("textbox", { name: "Search this list" });
+  await search.fill("robot");
+  await search.press("Enter");
+  await expect(page.getByText("Unsaved view changes")).toBeVisible();
+  await page.getByRole("button", { name: "Reset view", exact: true }).click();
+  await expect(search).toHaveValue("");
+  await expect(page.getByText("Unsaved view changes")).toHaveCount(0);
+  await search.fill("robot");
+  await search.press("Enter");
+  await page.getByRole("button", { name: "Save", exact: true }).click();
+  await expect(page.getByText("Unsaved view changes")).toHaveCount(0);
   await page.getByRole("button", { name: "Edit saved view", exact: true }).click();
   const edit = page.getByRole("dialog");
   await edit.getByRole("checkbox", { name: "Pin to the top", exact: true }).check();
@@ -1102,7 +1147,8 @@ test("record fields: a date uses its field name for assistive technology", async
   await expect(date).toHaveAttribute("aria-label", "Expected close");
 });
 
-test("list: chips filter on the host, a row opens its details, the selection band replaces the bar", async ({ page }) => {
+test("list: chips filter on the host, a row opens its details and selection opens the bottom bar", async ({ page }) => {
+  await page.setViewportSize({ width: 1500, height: 900 });
   const requests: URLSearchParams[] = [];
   page.on("request", (request) => {
     const url = new URL(request.url());
@@ -1114,10 +1160,10 @@ test("list: chips filter on the host, a row opens its details, the selection ban
   await header.getByRole("combobox", { name: "Stage filter", exact: true }).click();
   await page.getByRole("option", { name: "Proposal", exact: true }).click();
   await page.keyboard.press("Escape");
-  await expect.poll(() => requests.at(-1)?.get("domain")).toContain("proposal");
+  await expect.poll(() => requests.filter((params) => params.has("actions")).at(-1)?.get("domain")).toContain("proposal");
   const rows = page.getByRole("table").locator("tbody tr").filter({ has: page.getByRole("link") });
   await expect(rows).toHaveCount(5);
-  await expect(header.getByText("5 / 5", { exact: true })).toBeVisible();
+  await expect(header.getByText(/^5 \/ [1-9]\d*$/).filter({ hasNotText: "5 / 5" })).toBeVisible();
 
   await rows.filter({ hasText: "Robot cell integration" }).getByRole("cell").nth(2).click();
   const details = page.getByRole("complementary", { name: "Details" });
@@ -1128,15 +1174,16 @@ test("list: chips filter on the host, a row opens its details, the selection ban
   await expect(details).toHaveCount(0);
 
   await rows.first().getByRole("checkbox").check();
-  await expect(header.getByText("1 selected")).toBeVisible();
-  await expect(header.getByRole("textbox", { name: "Search this list" })).toHaveCount(0);
-  await header.getByRole("button", { name: "Clear selection", exact: true }).click();
+  const batch = page.getByRole("region", { name: "Batch actions" });
+  await expect(batch.getByText("1 selected")).toBeVisible();
+  await expect(header.getByRole("textbox", { name: "Search this list" })).toBeVisible();
+  await batch.getByRole("button", { name: "Clear selection", exact: true }).click();
   await header.getByRole("button", { name: "Clear all", exact: true }).click();
   await expect.poll(() => rows.count()).toBeGreaterThan(5);
 
   const unapproved = { version: 1, layout: "table", columns: ["subject", "budgetapproved"], sort: [], filters: [{ field: "budgetapproved", operator: "is_false", value: { type: "empty" } }], search: "", group: "none", lanes: "" };
   await page.goto(`/ontology/objects/build.opportunity?view=${encodeURIComponent(JSON.stringify(unapproved))}`);
-  await expect.poll(() => requests.at(-1)?.get("domain")).toBe(JSON.stringify([["budgetapproved", "!=", true]]));
+  await expect.poll(() => requests.filter((params) => params.has("actions")).at(-1)?.get("domain")).toBe(JSON.stringify([["budgetapproved", "!=", true]]));
   await expect.poll(() => rows.count()).toBeGreaterThan(5);
   await expect(rows.filter({ hasText: "Press line retrofit" })).toHaveCount(0);
 });
@@ -1357,10 +1404,10 @@ test("reads: each read list opens, the audit loads its next page, and a marking 
   await expect(main.getByRole("table").or(main.getByText("No matches")).first()).toBeVisible();
 
   await open(page, "Operations", "Audit");
-  await expect(page.getByText("100 / 100", { exact: true })).toBeVisible();
+  await expect(page.getByText("100+", { exact: true })).toBeVisible();
   await page.getByRole("region", { name: "Records" }).evaluate((node) => node.scrollTo(0, node.scrollHeight));
-  await expect(page.getByText("100 / 100", { exact: true })).toHaveCount(0);
-  await expect.poll(async () => Number((await page.getByText(/^\d+ \/ \d+$/).first().textContent())?.split(" / ")[1])).toBeGreaterThan(100);
+  await expect(page.getByText("100+", { exact: true })).toHaveCount(0);
+  await expect.poll(async () => Number.parseInt((await page.getByRole("group", { name: "Filter", exact: true }).getByText(/^\d+\+?$/).textContent()) ?? "", 10)).toBeGreaterThan(100);
 
   await open(page, "Admin", "Markings");
   await page.getByRole("button", { name: "New", exact: true }).click();

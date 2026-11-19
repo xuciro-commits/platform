@@ -1,6 +1,7 @@
 import { AlertDialog } from "@astryxdesign/core/AlertDialog";
 import { Button } from "@astryxdesign/core/Button";
 import { HStack, VStack } from "@astryxdesign/core/Layout";
+import { Card } from "@astryxdesign/core/Card";
 import { Text } from "@astryxdesign/core/Text";
 import { useRef, useState } from "react";
 import type { Api } from "../host";
@@ -13,6 +14,11 @@ import { enterable } from "./ParameterInput";
 
 type Batch = { action: Api.Action; rows: BatchRow[] };
 
+export function canBatch(action: Api.Action, described: Described) {
+  return !action.new && action.schema !== described.edit?.schema && action.schema !== "build.object.publish" &&
+    !action.confirmationOnly && !action.payload.some((parameter) => parameter.required && !enterable(parameter));
+}
+
 export function BatchActions({ described, records, ids, clear }: { described: Described; records: Api.RecordPage; ids: string[]; clear: () => void }) {
   const [pending, setPending] = useState<Batch>();
   const [result, setResult] = useState<{ action: Api.Action; rows: BatchRow[]; payload: Values }>();
@@ -20,7 +26,7 @@ export function BatchActions({ described, records, ids, clear }: { described: De
   const locked = useRef(false);
   const can = ids.length ? (records.actions?.[ids[0]] ?? []).flatMap((item) => {
     const action = described.action(item.schema);
-    return action && !action.new && action.schema !== described.edit?.schema && item.allowed &&
+    return action && canBatch(action, described) && item.allowed &&
       ids.every((id) => records.actions?.[id]?.some((current) => current.schema === action.schema && current.allowed)) ? [action] : [];
   }) : [];
   const run = async (batch: Batch, payload: Values, retry = false) => {
@@ -50,15 +56,28 @@ export function BatchActions({ described, records, ids, clear }: { described: De
   usePageCommands(busy ? [] : commands);
   return (
     <>
-      {can.length > 0 && (
-        <HStack gap={2} wrap="wrap">
-          {commands.map(({ id, label, run }) => <Button key={id} label={label} variant="secondary" size="sm" isDisabled={busy} onClick={run} />)}
-        </HStack>
-      )}
-      {result && (
-        <VStack gap={2}>
-          {result.rows.map((row) => <Text key={row.id} type="body">{row.name}: {row.reason || t("Done")}</Text>)}
-          {failed.length > 0 && <Button label={t("Retry failed rows")} variant="secondary" isDisabled={busy} onClick={() => run({ action: result.action, rows: failed }, result.payload, true)} />}
+      {(ids.length > 0 || result) && (
+        <VStack hAlign="center" padding={2} role="region" aria-label={t("Batch actions")}>
+          <Card padding={2}>
+            <VStack gap={2}>
+              {ids.length > 0 && (
+                <HStack gap={2} wrap="wrap" vAlign="center">
+                  <Text type="body" weight="medium" hasTabularNumbers>{ids.length} {t("selected")}</Text>
+                  {commands.map(({ id, label, run }) => <Button key={id} label={label} variant="secondary" size="sm" isDisabled={busy} onClick={run} />)}
+                  <Button label={t("Clear selection")} variant="ghost" size="sm" isDisabled={busy} onClick={clear} />
+                </HStack>
+              )}
+              {result && (
+                <VStack gap={2}>
+                  {result.rows.map((row) => <Text key={row.id} type="body">{row.name}: {row.reason || t("Done")}</Text>)}
+                  <HStack gap={2} wrap="wrap">
+                    {failed.length > 0 && <Button label={t("Retry failed rows")} variant="secondary" size="sm" isDisabled={busy} onClick={() => run({ action: result.action, rows: failed }, result.payload, true)} />}
+                    <Button label={t("Close")} variant="ghost" size="sm" isDisabled={busy} onClick={() => setResult(undefined)} />
+                  </HStack>
+                </VStack>
+              )}
+            </VStack>
+          </Card>
         </VStack>
       )}
       {pending && (pending.action.payload.some(enterable) ? (

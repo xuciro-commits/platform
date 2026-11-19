@@ -312,7 +312,7 @@ export function ListOptions({ view, update, columns, locked, defaults, groups, o
                     density="compact"
                     label={labelOf(key)}
                     endContent={
-                      <IconButton label={`${t("Add")} ${labelOf(key)}`} variant="ghost" size="sm" icon={<Icon icon={PlusIcon} size="sm" />} xstyle={styles.endAction} onClick={() => commit([...displayed, key])} />
+                      <IconButton label={`${t("Add")} ${labelOf(key)}`} tooltip={`${t("Add")} ${labelOf(key)}`} variant="ghost" size="sm" icon={<Icon icon={PlusIcon} size="sm" />} xstyle={styles.endAction} onClick={() => commit([...displayed, key])} />
                     }
                     xstyle={[styles.item, styles.padEnd]}
                   />

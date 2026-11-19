@@ -5,9 +5,7 @@ import { Divider } from "@astryxdesign/core/Divider";
 import { EmptyState } from "@astryxdesign/core/EmptyState";
 import { Icon } from "@astryxdesign/core/Icon";
 import { IconButton } from "@astryxdesign/core/IconButton";
-import { HStack, Layout, LayoutContent, LayoutHeader, LayoutPanel, StackItem, VStack } from "@astryxdesign/core/Layout";
-import { Link } from "@astryxdesign/core/Link";
-import { MetadataList, MetadataListItem } from "@astryxdesign/core/MetadataList";
+import { HStack, Layout, LayoutContent, LayoutFooter, LayoutHeader, LayoutPanel, StackItem, VStack } from "@astryxdesign/core/Layout";
 import { type FieldDefinition, PowerSearch, type PowerSearchFilter, usePowerSearchConfig } from "@astryxdesign/core/PowerSearch";
 import { ProgressBar } from "@astryxdesign/core/ProgressBar";
 import { ResizeHandle, useResizable } from "@astryxdesign/core/Resizable";
@@ -15,15 +13,13 @@ import { ScrollableArea } from "@astryxdesign/core/ScrollableArea";
 import { Section } from "@astryxdesign/core/Section";
 import { SegmentedControl, SegmentedControlItem } from "@astryxdesign/core/SegmentedControl";
 import { Skeleton } from "@astryxdesign/core/Skeleton";
-import { StatusDot } from "@astryxdesign/core/StatusDot";
-import { Table, pixel, proportional, useTableGroupedRows, useTableSelection, useTableSelectionState, useTableSortable, useTableStickyColumns } from "@astryxdesign/core/Table";
+import { Table, pixel, useTableGroupedRows, useTableSelection, useTableSelectionState, useTableSortable, useTableStickyColumns } from "@astryxdesign/core/Table";
 import type { TableColumn, TablePlugin } from "@astryxdesign/core/Table";
-import { Heading, Text } from "@astryxdesign/core/Text";
-import { Timestamp } from "@astryxdesign/core/Timestamp";
+import { Heading } from "@astryxdesign/core/Text";
 import { ToggleButton } from "@astryxdesign/core/ToggleButton";
 import { useMediaQuery } from "@astryxdesign/core/hooks";
-import { colorVars, durationVars, easeVars, radiusVars, spacingVars } from "@astryxdesign/core/theme/tokens.stylex";
-import { AdjustmentsHorizontalIcon, ArrowPathIcon, MagnifyingGlassIcon, TableCellsIcon, ViewColumnsIcon, XMarkIcon } from "@heroicons/react/24/outline";
+import { colorVars } from "@astryxdesign/core/theme/tokens.stylex";
+import { AdjustmentsHorizontalIcon, ArrowPathIcon, MagnifyingGlassIcon, TableCellsIcon, ViewColumnsIcon } from "@heroicons/react/24/outline";
 import { AdjustmentsHorizontalIcon as AdjustmentsHorizontalSolidIcon } from "@heroicons/react/24/solid";
 import * as stylex from "@stylexjs/stylex";
 import { type ReactNode, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
@@ -37,7 +33,7 @@ import { ListOptions } from "./ListOptions";
 import { type Cells, dotOf, idKey, ListCell, ListDetail, targetOf, typeOf } from "./ListDetail";
 import { useSavedViews } from "./SavedViews";
 import type { Dot } from "./Transitions";
-import { type Density, newView, readView, type StickyEdge, type ViewSort, type ViewState } from "./view";
+import { type Density, newView, readView, hasFilters, type StickyEdge, type ViewSort, type ViewState } from "./view";
 
 export type ListColumn<Row> = {
   key: string;
@@ -55,8 +51,16 @@ export type ListColumn<Row> = {
   reference?: (row: Row) => { type: string; id: string } | undefined;
 };
 type Done = Promise<unknown>;
-export type ListGroup<Row> = { key: string; label: string; of: (row: Row) => string; order?: string[]; accepts?: (id: string, to: string) => boolean };
-export type Move = (id: string, group: string, to: string) => Done;
+export type ListGroup<Row> = { key: string; label: string; of: (row: Row) => string; order?: string[] };
+export type Move = (id: string, to: string) => Done;
+type ListBoard<Row> = {
+  key: string;
+  lanes: { key: string; label: string }[];
+  of: (row: Row) => string;
+  accepts?: (id: string, to: string) => boolean;
+  move?: Move;
+  total?: { label: string; value: (row: Row) => { amount: number; currency?: string } | undefined };
+};
 export type ListShape<Answer, Row> = {
   title: string;
   about: string;
@@ -65,12 +69,13 @@ export type ListShape<Answer, Row> = {
   link?: (row: Row) => string;
   columns: ListColumn<Row>[];
   groups?: ListGroup<Row>[];
-  move?: Move;
+  board?: ListBoard<Row>;
   bulk?: (ids: string[], clear: () => void) => ReactNode;
   detail?: (id: string) => ReactNode;
   defaultView?: unknown;
   carryView?: boolean;
   page?: { total: number; loaded: number; hasMore: boolean; loading: boolean; loadMore: () => void };
+  unfiltered?: number;
   savedViews?: string;
   remote?: "all" | "search";
 };
@@ -82,7 +87,6 @@ const compare = (left: unknown, right: unknown) =>
   : String(left ?? "").localeCompare(String(right ?? ""));
 const textKey = "__text";
 const groupPrefix = "__group_";
-const ungrouped = "none";
 const overscan = 12;
 const heights: Record<Density, number> = { compact: 36, balanced: 48, spacious: 60 };
 const compactQuery = "(max-width: 768px), (max-width: 1024px) and (pointer: coarse) and (hover: none)";
@@ -98,15 +102,7 @@ const styles = stylex.create({
   toolbarContainer: { containerName: "toolbar", containerType: "inline-size" },
   toolbarPrimary: { flexBasis: { default: 0, "@container toolbar (max-width: 860px)": "100%" } },
   toolbarEnd: { marginInlineStart: "auto" },
-  band: { borderRadius: radiusVars["--radius-element"], backgroundColor: colorVars["--color-background-muted"] },
-  bandEnter: {
-    opacity: 1,
-    transform: "translateY(0)",
-    transitionProperty: "opacity, transform",
-    transitionDuration: { default: durationVars["--duration-medium"], "@media (prefers-reduced-motion: reduce)": "0s" },
-    transitionTimingFunction: easeVars["--ease-standard"],
-    "@starting-style": { opacity: 0, transform: `translateY(${spacingVars["--spacing-3"]})` },
-  },
+  tableWidth: (maxWidth: number) => ({ maxWidth }),
   clickable: { cursor: "pointer" },
   activeRow: {
     backgroundColor: colorVars["--color-overlay-pressed"],
@@ -151,16 +147,14 @@ export function ListView<Answer, Row>({ definition, read, primary, back }: ListV
   };
   const [selected, setSelected] = useState<Set<string>>(() => new Set());
   const [collapsed, setCollapsed] = useState<Set<string>>(() => new Set());
-  const [moved, setMoved] = useState<Record<string, string>>({});
   const [failure, setFailure] = useState("");
   const group = definition.groups?.find((candidate) => candidate.key === view.group);
-  const lanes = definition.groups?.find((candidate) => candidate.key === view.lanes && candidate.order) ?? (group?.order ? group : definition.groups?.find((candidate) => candidate.order));
-  const board = view.layout === "board" && lanes?.order ? lanes : undefined;
+  const lanes = definition.board;
+  const board = view.layout === "board" ? lanes : undefined;
   const orderedColumns = useMemo(() => {
     const ordered = view.columns.flatMap((key) => definition.columns.find((column) => column.key === key) ?? []);
     return ordered.length ? ordered : definition.columns.slice(0, 1);
   }, [definition.columns, view.columns]);
-  useEffect(() => setMoved({}), [read]);
 
   const chips = useMemo<Chip[]>(
     () =>
@@ -213,7 +207,7 @@ export function ListView<Answer, Row>({ definition, read, primary, back }: ListV
       const href = definition.link?.(row) ?? "";
       const params = new URLSearchParams(currentSearch);
       if (definition.carryView) params.set("view", JSON.stringify(view));
-      const cells: Cells = { [idKey]: definition.id(row), __group: group ? group.of(row) : "", __lane: lanes ? lanes.of(row) : "", __href: href && definition.carryView ? href + "?" + params : href };
+      const cells: Cells = { [idKey]: definition.id(row), __group: group ? group.of(row) : "", __lane: board ? board.of(row) : "", __href: href && definition.carryView ? href + "?" + params : href };
       const raw: Raw = { [idKey]: cells[idKey] };
       for (const column of definition.columns) {
         cells[column.key] = column.text(row);
@@ -224,9 +218,16 @@ export function ListView<Answer, Row>({ definition, read, primary, back }: ListV
         const value = column.value ? column.value(row) : column.boolean ? cells[column.key] === t("Yes") : cells[column.key];
         raw[column.key] = column.kind === "time" ? (value ? new Date(String(value)) : undefined) : value;
       }
+      if (board?.total) {
+        const amount = board.total.value(row);
+        if (amount) {
+          cells.__amount = String(amount.amount);
+          cells.__currency = amount.currency ?? "";
+        }
+      }
       return { cells, raw };
     });
-  }, [read, definition, group, lanes, currentSearch, view]);
+  }, [read, definition, group, board, currentSearch, view]);
 
   const shown = useMemo(() => {
     if (definition.remote === "all") return all.map((entry) => entry.cells);
@@ -296,14 +297,20 @@ export function ListView<Answer, Row>({ definition, read, primary, back }: ListV
     },
   };
 
+  const widths = orderedColumns.map((column, position) => column.width ?? (position === 0 ? 300 : column.boolean ? 100
+    : column.kind === "time" || column.kind === "number" ? 140 : column.kind === "enum" || column.kind === "code" ? 150 : 200));
+  const tableWidth = widths.reduce((sum, width) => sum + width, definition.bulk ? 48 : 0);
   const columns: TableColumn<Cells>[] = orderedColumns.map((column, position) => ({
     key: column.key,
     header: t(column.header),
-    width: column.width ? pixel(column.width) : position === 0 ? proportional(2, { minWidth: 220 }) : proportional(1, { minWidth: 140 }),
+    width: pixel(widths[position]),
     sortable: true,
-    align: column.kind === "number" ? ("end" as const) : undefined,
+    align: column.kind === "number" || column.kind === "time" ? "end" : column.boolean ? "center" : undefined,
     renderCell: (cells) => (group && isHeader(cells) ? null : <ListCell column={column} cells={cells} first={position === 0} />),
   }));
+  const sortIndicator: TablePlugin<Cells> = {
+    transformHeaderCell: (props) => ({ ...props, xstyle: [...props.xstyle, stylex.defaultMarker()] }),
+  };
   const windowed = Boolean(definition.page && !group);
   const first = windowed ? Math.max(0, Math.min(shown.length, Math.floor(scrollTop / rowHeight) - overscan)) : 0;
   const last = windowed ? Math.min(shown.length, first + Math.ceil(viewportHeight / rowHeight) + overscan * 2) : shown.length;
@@ -347,9 +354,18 @@ export function ListView<Answer, Row>({ definition, read, primary, back }: ListV
   }, [scrollKey, read.status, shown.length, rowHeight, definition.page?.hasMore, definition.page?.loading, definition.page?.loadMore]);
 
   const saved = useSavedViews({ entity: definition.savedViews ?? "", view, fallback, columnCount: definition.columns.length, filterLabel, compact: compactSurface });
-  const count = definition.remote === "all" && definition.page ? `${all.length} / ${definition.page.total}` : `${shown.length} / ${all.length}`;
-  const dirty = view.filters.length > 0 || view.search !== "";
-  const clearAll = () => update({ filters: [], search: "" });
+  const params = new URLSearchParams(currentSearch);
+  const dirty = hasFilters(view, params.get("domain"));
+  const total = definition.page?.total ?? all.length;
+  const unfiltered = definition.remote ? definition.unfiltered : definition.page?.hasMore ? undefined : all.length;
+  const matched = definition.remote === "all" || !dirty ? total : shown.length;
+  const count = dirty && unfiltered !== undefined ? `${matched} / ${unfiltered}`
+    : `${matched}${definition.page?.hasMore && definition.remote !== "all" ? "+" : ""}`;
+  const clearAll = () => {
+    params.delete("domain");
+    params.set("view", JSON.stringify({ ...view, filters: [], search: "" }));
+    void navigate(currentPath + "?" + params, history.state);
+  };
   const powerLabel = power ? t("Switch to filter chips") : t("Advanced search");
   const powerToggle = (
     <ToggleButton
@@ -371,16 +387,17 @@ export function ListView<Answer, Row>({ definition, read, primary, back }: ListV
       search={view.search}
       onSearch={(search) => update({ search })}
       count={count}
-      toggle={powerToggle}
+      onClear={dirty ? clearAll : undefined}
       compact={compactSurface}
     />
   );
   const onGroup = (key: string) => {
-    update({ group: key, lanes: definition.groups?.find((candidate) => candidate.key === key && candidate.order)?.key ?? view.lanes });
+    update({ group: key });
     setCollapsed(new Set());
   };
   const bulk = definition.bulk?.(chosen, () => setSelected(new Set()));
   const ready = read.status === "ready";
+  const empty = ready && shown.length === 0;
   const toolbar = definition.columns.length > 0 && read.status !== "error" && read.status !== "refused";
 
   const activeCells = active ? shown.find((cells) => cells[idKey] === active) : undefined;
@@ -419,89 +436,52 @@ export function ListView<Answer, Row>({ definition, read, primary, back }: ListV
                         <Heading level={1}>{t(definition.title)}</Heading>
                       </VStack>
                     </StackItem>
-                    {lanes && (
-                      <SegmentedControl size="sm" label={t("Layout")} value={view.layout} onChange={(layout) => update({ layout: layout as ViewState["layout"], lanes: lanes?.key ?? "" })}>
-                        <SegmentedControlItem value="table" label={t("Table")} icon={<Icon icon={TableCellsIcon} size="sm" />} />
-                        <SegmentedControlItem value="board" label={t("Board")} icon={<Icon icon={ViewColumnsIcon} size="sm" />} />
-                      </SegmentedControl>
-                    )}
-                    <IconButton label={t("Refresh")} tooltip={t("Refresh")} variant="ghost" size="sm" icon={<Icon icon={ArrowPathIcon} size="sm" />} onClick={reread} />
-                    {primary}
+                    {(!empty || dirty) && primary}
                   </HStack>
                   {toolbar && (
-                    <VStack gap={0} paddingInline={chosen.length ? 3 : 0} paddingBlock={chosen.length ? 1.5 : 0} xstyle={chosen.length ? [styles.band, styles.bandEnter] : undefined}>
-                      <HStack gap={3} vAlign="center" wrap="wrap" minHeight={32}>
-                        <StackItem size="fill" xstyle={styles.toolbarPrimary}>
-                          <VStack gap={2}>
-                            {bulk}
-                            {chosen.length === 0 && (power ? (
-                              <PowerSearch
-                                config={config}
-                                filters={tokens}
-                                onChange={(next) => {
-                                  const text = next.filter((filter) => filter.field === textKey).at(-1)?.value;
-                                  update({ filters: next.filter((filter) => filter.field !== textKey), search: text?.type === "string" ? text.value : "" });
-                                }}
-                                label={t("Filter")}
-                                placeholder={t("Search or filter by any column")}
-                                resultCount={count}
-                              />
-                            ) : viewsOpen && definition.savedViews ? saved.bar : filterBar)}
-                          </VStack>
-                        </StackItem>
-                        {chosen.length > 0 ? (
-                          <HStack gap={3} vAlign="center">
-                            <Text type="body" hasTabularNumbers>
-                              {String(chosen.length)} {t("selected")}
-                            </Text>
-                            <Text type="supporting" color="secondary">
-                              •
-                            </Text>
-                            <Button label={t("Clear selection")} variant="ghost" size="sm" onClick={() => setSelected(new Set())} />
-                          </HStack>
-                        ) : (
-                          <HStack gap={3} vAlign="center" xstyle={styles.toolbarEnd}>
-                            {!viewsOpen && (
-                              <>
-                                {power && powerToggle}
-                                <ListOptions
-                                  view={view}
-                                  update={update}
-                                  columns={definition.columns}
-                                  locked={orderedColumns[0]?.key ?? ""}
-                                  defaults={fallback.columns}
-                                  groups={definition.groups ?? []}
-                                  onGroup={onGroup}
-                                  compact={compactSurface}
-                                />
-                                {definition.savedViews && saved.createButton}
-                              </>
-                            )}
-                            {definition.savedViews && (
-                              <ToggleButton
-                                label={t("Saved views")}
-                                tooltip={t("Saved views")}
-                                isIconOnly
-                                size="sm"
-                                isPressed={viewsOpen}
-                                icon={<Icon icon={saved.toggleIcons.off} size="sm" />}
-                                pressedIcon={<Icon icon={saved.toggleIcons.on} size="sm" />}
-                                onPressedChange={(next) => {
-                                  setViewsOpen(next);
-                                  if (next) setPower(false);
-                                }}
-                              />
-                            )}
-                          </HStack>
-                        )}
+                    <HStack gap={3} vAlign="center" wrap="wrap" minHeight={32}>
+                      <StackItem size="fill" xstyle={styles.toolbarPrimary}>
+                        {power ? (
+                          <PowerSearch config={config} filters={tokens} label={t("Filter")} placeholder={t("Search or filter by any column")} resultCount={count}
+                            onChange={(next) => {
+                              const text = next.filter((filter) => filter.field === textKey).at(-1)?.value;
+                              update({ filters: next.filter((filter) => filter.field !== textKey), search: text?.type === "string" ? text.value : "" });
+                            }} />
+                        ) : filterBar}
+                      </StackItem>
+                      <HStack gap={2} vAlign="center" wrap="wrap" xstyle={styles.toolbarEnd}>
+                        <IconButton label={t("Refresh")} tooltip={t("Refresh")} variant="ghost" size="sm" icon={<Icon icon={ArrowPathIcon} size="sm" />} onClick={reread} />
+                        {powerToggle}
+                        <Divider orientation="vertical" />
+                        <HStack gap={1} vAlign="center" role="group" aria-label={t("View options")}>
+                          {lanes && (
+                            <SegmentedControl size="sm" label={t("Layout")} value={view.layout} onChange={(layout) => update({ layout: layout as ViewState["layout"], lanes: lanes.key })}>
+                              <SegmentedControlItem value="table" label={t("Table")} icon={<Icon icon={TableCellsIcon} size="sm" />} />
+                              <SegmentedControlItem value="board" label={t("Board")} icon={<Icon icon={ViewColumnsIcon} size="sm" />} />
+                            </SegmentedControl>
+                          )}
+                          <ListOptions view={view} update={update} columns={definition.columns} locked={orderedColumns[0]?.key ?? ""} defaults={fallback.columns}
+                            groups={definition.groups ?? []} onGroup={onGroup} compact={compactSurface} />
+                          {definition.savedViews && (
+                            <>
+                              {saved.createButton}
+                              <ToggleButton label={t("Saved views")} tooltip={t("Saved views")} isIconOnly size="sm" isPressed={viewsOpen}
+                                icon={<Icon icon={saved.toggleIcons.off} size="sm" />} pressedIcon={<Icon icon={saved.toggleIcons.on} size="sm" />}
+                                onPressedChange={setViewsOpen} />
+                            </>
+                          )}
+                        </HStack>
                       </HStack>
-                    </VStack>
+                    </HStack>
                   )}
+                  {viewsOpen && definition.savedViews && saved.bar}
+                  {saved.unsaved}
                 </VStack>
               </Section>
             </VStack>
           </LayoutHeader>
         }
+        footer={bulk && <LayoutFooter padding={0}>{bulk}</LayoutFooter>}
         content={
           <LayoutContent role="main" padding={0} label={t(definition.title)}>
             {read.status === "loading" && (
@@ -517,7 +497,7 @@ export function ListView<Answer, Row>({ definition, read, primary, back }: ListV
               </VStack>
             )}
             {read.status === "refused" && <EmptyState headingLevel={2} title={t("You cannot see this list")} description={read.reason || t("Ask an administrator of this workspace for access.")} />}
-            {ready && shown.length === 0 && !dirty && <EmptyState headingLevel={2} title={t("Nothing here yet")} description={t(definition.about)} />}
+            {ready && shown.length === 0 && !dirty && <EmptyState headingLevel={2} title={t("Nothing here yet")} description={t(definition.about)} actions={primary} />}
             {ready && shown.length === 0 && dirty && (
               <EmptyState
                 headingLevel={2}
@@ -539,27 +519,23 @@ export function ListView<Answer, Row>({ definition, read, primary, back }: ListV
             )}
             {ready && shown.length > 0 && board && (
               <BoardView
-                columns={board.order ?? []}
+                columns={board.lanes}
                 page={definition.page}
+                total={board.total?.label}
                 cards={shown.map((cells) => ({
                   id: cells[idKey],
-                  column: moved[cells[idKey]] ?? cells.__lane,
+                  column: cells.__lane,
                   title: cells[orderedColumns[0].key],
                   href: cells.__href,
                   lines: orderedColumns.slice(1, 5).filter((column) => column.key !== board.key && column.kind !== "time" && cells[column.key]).map((column) => cells[column.key]),
+                  amount: cells.__amount === undefined ? undefined : Number(cells.__amount),
+                  currency: cells.__currency,
                 }))}
                 accepts={board.accepts}
-                onMove={
-                  definition.move &&
-                  ((id, to) => {
-                    setFailure("");
-                    setMoved((previous) => ({ ...previous, [id]: to }));
-                    definition.move?.(id, board.key, to).catch((refused: Error) => {
-                      setMoved(({ [id]: _, ...rest }) => rest);
-                      setFailure(refused.message);
-                    });
-                  })
-                }
+                onMove={board.move && ((id, to) => {
+                  setFailure("");
+                  board.move?.(id, to).catch((refused: Error) => setFailure(refused.message));
+                })}
               />
             )}
             {ready && shown.length > 0 && !board && (
@@ -573,9 +549,10 @@ export function ListView<Answer, Row>({ definition, read, primary, back }: ListV
                   rowCount={definition.remote === "all" ? definition.page?.total : undefined}
                   density={view.density}
                   dividers="rows"
+                  xstyle={styles.tableWidth(tableWidth)}
                   textOverflow="truncate"
                   hasHover
-                  plugins={{ ...(definition.bulk ? { selection } : {}), sortable, sticky, activation, ...(group ? { grouped: grouped.plugin } : {}) }}
+                  plugins={{ ...(definition.bulk ? { selection } : {}), sortable, sortIndicator, sticky, activation, ...(group ? { grouped: grouped.plugin } : {}) }}
                 />
                 {windowed && last < shown.length && <Section variant="transparent" height={(shown.length - last) * rowHeight} padding={0} />}
               </ScrollableArea>

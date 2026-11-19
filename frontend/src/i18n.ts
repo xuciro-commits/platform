@@ -483,6 +483,12 @@ export const zhCN: Record<string, string> = {
   "Failures": "失败次数",
   "Until": "截止时间",
   "Open logs": "打开日志",
+  "Loaded subtotal": "已加载小计",
+  "Total": "合计",
+  "Batch actions": "批量操作",
+  "Unsaved view changes": "视图有未保存的改动",
+  "Reset view": "重置视图",
+  "Label": "标签",
   "Each app's settings for this workspace; a change applies to every member.": "本工作区里每个应用的设置；改动对所有成员生效。",
   "Back": "返回",
 };
@@ -580,9 +586,6 @@ Object.assign(zhCN, {
 
 Object.assign(zhCN, {
   Mentions: "提及与评论",
-});
-
-Object.assign(zhCN, {
   Commands: "命令",
   "Current app": "当前应用",
   "Command palette": "命令面板",

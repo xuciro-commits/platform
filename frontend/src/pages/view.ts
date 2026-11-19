@@ -51,6 +51,10 @@ export function sameView(left: ViewState, right: ViewState) {
   return JSON.stringify(left) === JSON.stringify(right);
 }
 
+export function hasFilters(view: ViewState, domain?: string | null) {
+  return Boolean(view.filters.length || view.search.trim() || (domain && domain !== "[]"));
+}
+
 export function domainOf(filters: PowerSearchFilter[], choiceValue: (field: string, value: string) => string = (_field, value) => value): unknown[][] {
   return filters.flatMap((filter): unknown[][] => {
     const field = filter.field;

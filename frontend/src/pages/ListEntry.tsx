@@ -36,6 +36,7 @@ export function listPage<Answer, Row>(definition: ListDefinition<Answer, Row>) {
     const term = definition.query ? readView(new URLSearchParams(currentSearch).get("view"), newView([])).search.trim() : "";
     const path = term ? `${definition.read}${definition.read.includes("?") ? "&" : "?"}${definition.query}=${encodeURIComponent(term)}` : definition.read;
     const first = useRead<Answer>(path);
+    const unsearched = useRead<Answer>(term ? definition.read : null);
     const [later, setLater] = useState<Later<Answer>>({ answers: [], loading: false });
     const own = later.base === first;
     const answers = first.status === "ready" ? [first.data, ...(own ? later.answers : [])] : [];
@@ -117,6 +118,7 @@ export function listPage<Answer, Row>(definition: ListDefinition<Answer, Row>) {
             detail,
             carryView: true,
             remote: definition.query ? "search" : undefined,
+            unfiltered: unsearched.status === "ready" && !definition.more?.(unsearched.data) ? definition.rows(unsearched.data).length : undefined,
             page: definition.more ? { total: rows.length, loaded: rows.length, hasMore: Boolean(next), loading: own && later.loading, loadMore } : undefined,
           }}
           read={first}

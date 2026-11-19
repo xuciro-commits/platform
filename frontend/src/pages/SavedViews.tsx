@@ -65,7 +65,7 @@ export function useSavedViews({ entity, view, fallback, columnCount, filterLabel
   const [busy, setBusy] = useState(false);
   const catalog = useRead<Api.Action[]>(entity ? "/v1/actions" : null);
   const views = useRead<Api.SavedView[]>(entity ? "/v1/views" : null);
-  const me = useRead<Api.MeView>("/v1/me");
+  const me = useRead<Api.MeView>(entity ? "/v1/me" : null);
   const projects = useRead<Api.RecordPage>(editing?.scope === "project" ? "/v1/records/build.app?limit=200" : null);
   const principal = me.status === "ready" ? me.data.principalId : "";
   const preferenceId = principal && entity ? `${principal}@${entity}` : "";
@@ -222,6 +222,25 @@ export function useSavedViews({ entity, view, fallback, columnCount, filterLabel
     <IconButton label={t("Create saved view")} tooltip={t("Create saved view")} variant="ghost" size="sm" isDisabled={!saveAction} icon={<Icon icon={BookmarkSquareIcon} size="sm" />} onClick={() => { setFailure(""); setCreating(""); }} />
   );
 
+  const unsaved = current && changed && (
+    <VStack gap={1}>
+      <HStack gap={2} vAlign="center" wrap="wrap">
+        <Text type="supporting" color="secondary">{t("Unsaved view changes")}</Text>
+        {saveAction && (
+          <Button label={owned ? t("Save") : t("Create saved view")} variant="secondary" size="sm" isDisabled={busy}
+            onClick={() => {
+              if (!owned) { setFailure(""); setCreating(""); return; }
+              void attempt(async () => {
+                await send(saveAction, current.id, { title: current.title, entity, state: JSON.stringify(view) }, current.revision);
+              });
+            }} />
+        )}
+        <Button label={t("Reset view")} variant="ghost" size="sm" isDisabled={busy} onClick={() => { setFailure(""); apply(current); }} />
+      </HStack>
+      {failure && creating === null && editing === null && <Banner title={t("Not saved")} description={failure} status="error" />}
+    </VStack>
+  );
+
   const dialogs = (
     <>
       {creating != null && <Adaptive isOpen onOpenChange={(open) => !open && setCreating(null)} title={t("Create saved view")} subtitle={t("Captures the filters and the table as they are now.")} compact={compact}>
@@ -293,7 +312,7 @@ export function useSavedViews({ entity, view, fallback, columnCount, filterLabel
     </>
   );
 
-  return { bar, createButton, dialogs, toggleIcons: { off: BookmarkIcon, on: BookmarkSolidIcon } };
+  return { bar, unsaved, createButton, dialogs, toggleIcons: { off: BookmarkIcon, on: BookmarkSolidIcon } };
 }
 
 function Adaptive({ isOpen, onOpenChange, title, subtitle, compact, children }: { isOpen: boolean; onOpenChange: (open: boolean) => void; title: string; subtitle: string; compact: boolean; children: ReactNode }) {

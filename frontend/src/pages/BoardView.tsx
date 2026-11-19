@@ -7,10 +7,11 @@ import * as stylex from "@stylexjs/stylex";
 import { type PointerEvent as ReactPointerEvent, type ReactNode, useEffect, useRef, useState } from "react";
 import { t } from "../i18n";
 
-export type BoardCard = { id: string; column: string; title: string; href: string; lines: string[] };
+export type BoardCard = { id: string; column: string; title: string; href: string; lines: string[]; amount?: number; currency?: string };
 type BoardProps = {
-  columns: string[];
+  columns: { key: string; label: string }[];
   cards: BoardCard[];
+  total?: string;
   onMove?: (id: string, to: string) => void;
   accepts?: (id: string, to: string) => boolean;
   page?: { hasMore: boolean; loading: boolean; loadMore: () => void };
@@ -45,7 +46,7 @@ function CardBody({ card }: { card: BoardCard }) {
   );
 }
 
-export function BoardView({ columns, cards, onMove, accepts, page }: BoardProps) {
+export function BoardView({ columns, cards, onMove, accepts, page, total }: BoardProps) {
   const [drag, setDrag] = useState<Drag | null>(null);
   const columnElements = useRef(new Map<string, HTMLElement>());
   const cardElements = useRef(new Map<string, HTMLElement>());
@@ -102,31 +103,44 @@ export function BoardView({ columns, cards, onMove, accepts, page }: BoardProps)
 
   const lifted = drag ? cards.find((card) => card.id === drag.id) : undefined;
 
-  const column = (name: string): ReactNode => {
-    const own = cards.filter((card) => card.column === name);
+  const known = new Set(columns.map((column) => column.key));
+  const missing = cards.filter((card) => !known.has(card.column));
+  const column = ({ key, label }: BoardProps["columns"][number]): ReactNode => {
+    const own = key ? cards.filter((card) => card.column === key) : missing;
     const resting = drag ? own.filter((card) => card.id !== drag.id) : own;
+    const sums = new Map<string, number>();
+    for (const card of own) {
+      if (card.amount === undefined) continue;
+      const currency = card.currency ?? "";
+      sums.set(currency, (sums.get(currency) ?? 0) + card.amount);
+    }
+    const subtotal = [...sums].map(([currency, amount]) => {
+      const digits = currency ? { minimumFractionDigits: 2, maximumFractionDigits: 2 } : { maximumFractionDigits: 8 };
+      return currency ? `${(amount / 100).toLocaleString(undefined, digits)} ${currency}` : amount.toLocaleString(undefined, digits);
+    }).join(" · ");
     return (
-      <Card key={name} variant="muted" padding={0} xstyle={styles.column}>
+      <Card key={key} variant="muted" padding={0} xstyle={styles.column}>
         <Layout
           height="fill"
           header={
             <LayoutHeader hasDivider padding={3}>
-              <HStack hAlign="between" vAlign="center">
-                <Heading level={4}>{name}</Heading>
-                <Text type="supporting" color="secondary" hasTabularNumbers>
-                  {String(own.length)}
-                </Text>
-              </HStack>
+              <VStack gap={1}>
+                <HStack hAlign="between" vAlign="center">
+                  <Heading level={4}>{label}</Heading>
+                  <Text type="supporting" color="secondary" hasTabularNumbers>{own.length.toLocaleString()}{page?.hasMore ? "+" : ""}</Text>
+                </HStack>
+                {total && <Text type="supporting" color="secondary" hasTabularNumbers>{t(total)} · {page?.hasMore ? t("Loaded subtotal") : t("Total")} · {subtotal || (own.length ? "—" : "0")}</Text>}
+              </VStack>
             </LayoutHeader>
           }
           content={
             <LayoutContent
               role="region"
-              label={name}
+              label={label}
               padding={2}
               ref={(element: HTMLDivElement | null) => {
-                if (element) columnElements.current.set(name, element);
-                else columnElements.current.delete(name);
+                if (element && key) columnElements.current.set(key, element);
+                else columnElements.current.delete(key);
               }}>
               <VStack gap={2}>
                 {resting.map((card) => (
@@ -143,7 +157,7 @@ export function BoardView({ columns, cards, onMove, accepts, page }: BoardProps)
                   </Card>
                 ))}
                 {page?.hasMore && <Button label={t("Load more")} variant="secondary" size="sm" isLoading={page.loading} onClick={page.loadMore} />}
-                {drag && drag.target === name && <VStack xstyle={styles.ghost(drag.height)} />}
+                {drag && drag.target === key && <VStack xstyle={styles.ghost(drag.height)} />}
               </VStack>
             </LayoutContent>
           }
@@ -156,6 +170,7 @@ export function BoardView({ columns, cards, onMove, accepts, page }: BoardProps)
     <>
       <HStack gap={4} xstyle={styles.columns}>
         {columns.map(column)}
+        {missing.length > 0 && column({ key: "", label: t("None") })}
       </HStack>
       {drag && lifted && (
         <Card padding={3} xstyle={[styles.floating, styles.floatingAt(drag.pointerX - drag.offsetX, drag.pointerY - drag.offsetY, drag.width)]}>
