@@ -85,6 +85,8 @@ export const zhCN: Record<string, string> = {
   Stay: "留下",
   Discard: "放弃",
   Notifications: "通知",
+  "Show sidebar": "展开侧栏",
+  "Hide sidebar": "收起侧栏",
   Home: "主页",
   Data: "数据",
   Ontology: "本体",
@@ -92,9 +94,9 @@ export const zhCN: Record<string, string> = {
   Apps: "应用",
   AI: "AI",
   Delivery: "交付",
+  Host: "宿主",
   Operations: "运行",
   Admin: "管理",
-  Host: "宿主",
   Workspace: "工作区",
   Ingest: "接入",
   Transform: "加工",
@@ -523,9 +525,6 @@ Object.assign(zhCN, {
   "Find a member": "搜索成员",
   "No matching members": "没有匹配的成员",
   "Members could not be searched": "无法搜索成员",
-});
-
-Object.assign(zhCN, {
   "Add": "添加",
   "Advanced search": "高级查询",
   "All columns are displayed.": "所有列都已显示。",

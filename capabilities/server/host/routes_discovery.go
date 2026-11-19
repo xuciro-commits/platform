@@ -16,6 +16,7 @@ import (
 	build "platformserver/services/resources/authoring"
 	controlowner "platformserver/services/security/control"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -23,6 +24,9 @@ func (h *Host) routesDiscovery(rt *routes) {
 	rt.metadata(transport.Route{Pattern: "GET /v1/me", Summary: "Who the caller is on this host: tenant, member, the apps they may open, their language", Answer: transport.MeView{}}, translating(func(r *http.Request, m platform.Member, t *Tenant) (transport.MeView, *platform.Error) {
 		view := transport.MeView{TenantID: m.Tenant, PrincipalID: m.ID, Profile: m, Apps: t.AppsOf(m), Tenants: h.tenantsOf(r),
 			Language: t.Language(m, r), Languages: t.i18n.Languages(), Preferred: m.Language, Currency: t.setting(t.automation(controlowner.PlatformApp, false), controlowner.SettingCurrency)}
+		if subject, authenticated := h.authenticate(strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")); authenticated {
+			view.HostAdmin = h.HostAdmins[subject]
+		}
 		if d := t.IdentityOwner; d != nil {
 			view.Account, view.Tenant = d.Account(m.ID), d.TenantRecord()
 		}

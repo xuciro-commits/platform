@@ -9,6 +9,7 @@ import {
   DropdownMenuSubMenu,
 } from "@astryxdesign/core/DropdownMenu";
 import { IconButton } from "@astryxdesign/core/IconButton";
+import { Tooltip } from "@astryxdesign/core/Tooltip";
 import { apps } from "../apps";
 import { endSession, startSession, useSession } from "../host";
 import { t } from "../i18n";
@@ -47,7 +48,9 @@ export function MemberMenu({ compact }: { compact?: boolean }) {
       menuWidth={240}
       menuMaxHeight={480}
       renderTrigger={(props) => (
-        <IconButton {...props} label={t("Account")} tooltip={name || t("Account")} variant="ghost" icon={<Avatar name={name} size="sm" tooltip={false} />} />
+        <Tooltip content={name || t("Account")} placement={compact ? "below" : "end"}>
+          <IconButton {...props} label={t("Account")} variant="ghost" icon={<Avatar name={name} size="sm" tooltip={false} />} />
+        </Tooltip>
       )}
     >
       <DropdownMenuItem label={name} description={data?.tenant.name || data?.tenantId} isDisabled />

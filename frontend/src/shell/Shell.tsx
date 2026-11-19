@@ -1,10 +1,12 @@
 import { AppShell, useAppShellMobile } from "@astryxdesign/core/AppShell";
+import { Divider } from "@astryxdesign/core/Divider";
 import { EmptyState } from "@astryxdesign/core/EmptyState";
+import { useHotkeys } from "@astryxdesign/core/hooks";
 import { HStack } from "@astryxdesign/core/HStack";
 import { RectangleGroupIcon } from "@heroicons/react/24/outline";
 import { MobileNav } from "@astryxdesign/core/MobileNav";
 import { useToast } from "@astryxdesign/core/Toast";
-import { Suspense, useEffect, useMemo } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
 import { type App, apps, locate, type NavItem } from "../apps";
 import { entries, recordHref } from "../apps/entries";
 import { type Api, useRead, useSession } from "../host";
@@ -31,7 +33,7 @@ function installedApps(views: Api.ApplicationView[]): App[] {
       return items.length ? [{ title: group.title || "Pages", items }] : [];
     });
     if (!sections.length) return [];
-    return [{ id: view.name || view.app, label: view.title, icon: RectangleGroupIcon, sections, installed: true }];
+    return [{ id: view.name || view.app, label: view.title, icon: RectangleGroupIcon, group: "installed", sections }];
   });
 }
 
@@ -70,7 +72,11 @@ export function Shell() {
     void navigate(destination ?? "/home/overview", null, true);
     if (!destination) toast({ body: t("This legacy link has no corresponding page in the new frontend.") });
   }, [signedIn, legacy, hash, resource, resourcePath, toast]);
-  const available = useMemo(() => projected.status === "ready" ? [...apps, ...installedApps(projected.data).filter((app) => !apps.some((known) => known.id === app.id))] : apps, [projected]);
+  const available = useMemo(() => {
+    const granted: Record<string, boolean> = me.status === "ready" ? { admin: me.data.apps.some((entry) => entry.id === "platform"), host: Boolean(me.data.hostAdmin) } : {};
+    const fixed = apps.filter((known) => me.status !== "ready" || known.group !== "manage" || granted[known.id]);
+    return projected.status === "ready" ? [...fixed, ...installedApps(projected.data).filter((app) => !apps.some((known) => known.id === app.id))] : fixed;
+  }, [projected, me]);
   const { app, item } = locate(path, available);
   const object = item.object ?? (app.id === "ontology" && item.id === "objects" ? decodeURIComponent(segments[3] ?? "") : "");
   const listPath = app.id === "ontology" && item.id === "objects" ? `/ontology/objects/${encodeURIComponent(object)}` : item.object ? `/${app.id}/${item.id}` : undefined;
@@ -80,7 +86,7 @@ export function Shell() {
   const retiredLink = projected.status === "ready" && segments[3] && !available.some((application) => application.id === segments[1]);
   const content = retiredLink ? <RetainedRecord key={path} path={path} />
     : Entry ? <Entry key={`${app.id}/${item.id}`} />
-    : app.installed && item.object && listPath ? <Records key={`${app.id}/${item.id}`} declared={{ title: item.label, about: item.description ?? "", type: item.object }} listPath={listPath} id={segments[3]} />
+    : app.group === "installed" && item.object && listPath ? <Records key={`${app.id}/${item.id}`} declared={{ title: item.label, about: item.description ?? "", type: item.object }} listPath={listPath} id={segments[3]} />
     : null;
   return (
     <CommandSearch app={app} item={item} apps={available} tenant={session.tenant}>
@@ -113,13 +119,26 @@ function RetainedRecord({ path }: { path: string }) {
     : null;
 }
 
+const collapsedKey = "platform:sidebar-collapsed";
+
 function Navigation({ app, item, apps, object, listPath }: { app: App; item: NavItem; apps: App[]; object?: string; listPath?: string }) {
   const { isMobile } = useAppShellMobile();
+  const [collapsed, setCollapsed] = useState(() => localStorage.getItem(collapsedKey) === "true");
+  const collapse = (next: boolean) => {
+    localStorage.setItem(collapsedKey, String(next));
+    setCollapsed(next);
+  };
+  useHotkeys([
+    ...["meta+b", "ctrl+b"].map((keys) => ({ keys, onPress: () => collapse(!collapsed), allowInInputs: true, isDisabled: isMobile })),
+    { keys: "[", onPress: () => collapse(!collapsed), isDisabled: isMobile },
+  ]);
   if (isMobile) return <AppSidebar app={app} item={item} apps={apps} object={object} listPath={listPath} />;
   return (
     <HStack height="100%">
-      <AppRail current={app} apps={apps} />
-      <AppSidebar app={app} item={item} apps={apps} object={object} listPath={listPath} />
+      <AppRail current={app} apps={apps} collapsed={collapsed} onExpand={() => collapse(false)} />
+      <Divider orientation="vertical" />
+      {!collapsed && <AppSidebar app={app} item={item} apps={apps} object={object} listPath={listPath} onCollapse={() => collapse(true)} />}
+      {!collapsed && <Divider orientation="vertical" />}
     </HStack>
   );
 }

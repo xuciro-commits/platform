@@ -84,4 +84,5 @@ type MeView struct {
 	Currency    string                `json:"currency"`
 	Account     protocol.Account      `json:"account"`
 	Tenant      protocol.TenantRecord `json:"tenant"`
+	HostAdmin   bool                  `json:"hostAdmin,omitempty"`
 }

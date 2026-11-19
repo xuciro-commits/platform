@@ -63,7 +63,7 @@ export function CommandSearch({ app, item, apps, tenant, children }: { app: App;
   useHotkeys(["meta+k", "ctrl+k"].map((keys) => ({ keys, onPress: scope.openSearch, allowInInputs: true, isDisabled: open })));
 
   const targets = useMemo(() => apps.flatMap((application) => application.sections.flatMap((section) => section.items
-    .filter((entry) => application.installed || Object.hasOwn(entries, `${application.id}/${entry.id}`))
+    .filter((entry) => application.group === "installed" || Object.hasOwn(entries, `${application.id}/${entry.id}`))
     .map((entry) => ({ application, href: pathOf(application, entry), label: t(entry.label) })))), [apps]);
   const entryHref = pathOf(app, item);
   useEffect(() => {

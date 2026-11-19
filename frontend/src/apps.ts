@@ -60,11 +60,13 @@ import {
 
 export type NavItem = { id: string; label: string; icon: IconType; object?: string; description?: string };
 export type NavSection = { title: string; items: NavItem[] };
-export type App = { id: string; label: string; icon: IconType; sections: NavSection[]; installed?: boolean };
+export type RailGroup = "start" | "installed" | "build" | "run" | "manage";
+export type App = { id: string; label: string; icon: IconType; group: RailGroup; sections: NavSection[] };
 
 export const apps: App[] = [
   {
     id: "home",
+    group: "start",
     label: "Home",
     icon: HomeIcon,
     sections: [
@@ -81,6 +83,7 @@ export const apps: App[] = [
   },
   {
     id: "data",
+    group: "build",
     label: "Data",
     icon: CircleStackIcon,
     sections: [
@@ -114,6 +117,7 @@ export const apps: App[] = [
   },
   {
     id: "ontology",
+    group: "build",
     label: "Ontology",
     icon: CubeIcon,
     sections: [
@@ -139,6 +143,7 @@ export const apps: App[] = [
   },
   {
     id: "logic",
+    group: "build",
     label: "Logic",
     icon: CodeBracketIcon,
     sections: [
@@ -153,6 +158,7 @@ export const apps: App[] = [
   },
   {
     id: "apps",
+    group: "build",
     label: "Apps",
     icon: RectangleGroupIcon,
     sections: [
@@ -167,6 +173,7 @@ export const apps: App[] = [
   },
   {
     id: "ai",
+    group: "build",
     label: "AI",
     icon: SparklesIcon,
     sections: [
@@ -182,6 +189,7 @@ export const apps: App[] = [
   },
   {
     id: "delivery",
+    group: "run",
     label: "Delivery",
     icon: TruckIcon,
     sections: [
@@ -205,6 +213,7 @@ export const apps: App[] = [
   },
   {
     id: "operations",
+    group: "run",
     label: "Operations",
     icon: ChartBarIcon,
     sections: [
@@ -224,6 +233,7 @@ export const apps: App[] = [
   },
   {
     id: "admin",
+    group: "manage",
     label: "Admin",
     icon: Cog6ToothIcon,
     sections: [
@@ -256,6 +266,7 @@ export const apps: App[] = [
   },
   {
     id: "host",
+    group: "manage",
     label: "Host",
     icon: ServerIcon,
     sections: [

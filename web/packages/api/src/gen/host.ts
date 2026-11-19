@@ -2879,6 +2879,7 @@ export type MeView = {
   currency: string;
   account: Account;
   tenant: TenantRecord;
+  hostAdmin?: boolean;
 };
 
 export type MediaItem = {
