@@ -20,7 +20,7 @@ export default defineConfig({
   use: { baseURL: page, locale: "en-US", channel: "chrome", trace: "retain-on-failure", actionTimeout: 10_000 },
   webServer: [
     {
-      command: `go run ./cmd/platform-server -addr 127.0.0.1:18521 -tenants ${work}/tenants.json -host-admins admin`,
+      command: `go run ./cmd/platform-server -addr 127.0.0.1:18521 -tenants ${work}/tenants.json -host-admins admin,root`,
       cwd: `${root}capabilities/server`,
       url: `${host}/healthz`,
       timeout: 240_000,

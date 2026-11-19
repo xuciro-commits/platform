@@ -1,5 +1,5 @@
 {
-  "members": { "admin-1": "Dana Whitfield", "builder-1": "Omar Haddad", "user-1": "Yuki Tanaka" },
+  "members": { "root": "Root Admin", "admin-1": "Dana Whitfield", "builder-1": "Omar Haddad", "user-1": "Yuki Tanaka" },
   "project": { "name": "sales", "title": "Sales" },
   "steps": [
     ["enterprise.kind.add", "enterprise.model", "management", { "name": "Management", "kind": "management" }],

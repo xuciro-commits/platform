@@ -12,16 +12,14 @@
         "subjects": [
           "root"
         ],
-        "grants": [
-          { "app": "platform", "role": "admin" },
-          { "app": "build", "role": "builder" },
-          { "app": "build", "role": "publisher" },
-          { "app": "build", "role": "integrator" },
-          { "app": "ai", "role": "admin" },
-          { "app": "agent", "role": "admin" },
-          { "app": "enterprise", "role": "admin" },
-          { "app": "work", "role": "admin" }
-        ]
+        "roles": {
+          "platform": "admin",
+          "build": "builder",
+          "ai": "admin",
+          "agent": "admin",
+          "enterprise": "admin",
+          "work": "admin"
+        }
       },
       {
         "id": "admin-1",
@@ -70,14 +68,38 @@
           "root"
         ],
         "grants": [
-          { "app": "platform", "role": "admin" },
-          { "app": "build", "role": "builder" },
-          { "app": "build", "role": "publisher" },
-          { "app": "build", "role": "integrator" },
-          { "app": "ai", "role": "admin" },
-          { "app": "agent", "role": "admin" },
-          { "app": "enterprise", "role": "admin" },
-          { "app": "work", "role": "admin" }
+          {
+            "app": "platform",
+            "role": "admin"
+          },
+          {
+            "app": "build",
+            "role": "builder"
+          },
+          {
+            "app": "build",
+            "role": "publisher"
+          },
+          {
+            "app": "build",
+            "role": "integrator"
+          },
+          {
+            "app": "ai",
+            "role": "admin"
+          },
+          {
+            "app": "agent",
+            "role": "admin"
+          },
+          {
+            "app": "enterprise",
+            "role": "admin"
+          },
+          {
+            "app": "work",
+            "role": "admin"
+          }
         ]
       },
       {
@@ -115,16 +137,14 @@
         "subjects": [
           "root"
         ],
-        "grants": [
-          { "app": "platform", "role": "admin" },
-          { "app": "build", "role": "builder" },
-          { "app": "build", "role": "publisher" },
-          { "app": "build", "role": "integrator" },
-          { "app": "ai", "role": "admin" },
-          { "app": "agent", "role": "admin" },
-          { "app": "enterprise", "role": "admin" },
-          { "app": "work", "role": "admin" }
-        ]
+        "roles": {
+          "platform": "admin",
+          "build": "builder",
+          "ai": "admin",
+          "agent": "admin",
+          "enterprise": "admin",
+          "work": "admin"
+        }
       },
       {
         "id": "admin-1",

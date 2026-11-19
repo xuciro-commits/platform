@@ -94,8 +94,9 @@ def bootstrap(root=None, check=False):
     local.mkdir(parents=True, mode=0o700)
     suffix = secrets.token_hex(6)
     tenant = 'dev-' + suffix
-    accounts = [{'email': name + '@platform.test', 'member': 'dev-' + name, 'password': 'Dev-' + secrets.token_urlsafe(24)} for name in ['admin', 'builder', 'user']]
+    accounts = [{'email': name + '@platform.test', 'member': 'dev-' + name, 'password': 'Dev-' + secrets.token_urlsafe(24)} for name in ['admin', 'root', 'builder', 'user']]
     roles = {
+        'dev-root': [('platform', 'admin'), ('ai', 'admin'), ('agent', 'admin'), ('enterprise', 'admin'), ('work', 'admin'), ('build', 'builder'), ('build', 'publisher'), ('build', 'integrator')],
         'dev-admin': [('platform', 'admin'), ('ai', 'admin'), ('agent', 'admin'), ('enterprise', 'admin'), ('work', 'admin'), ('build', 'publisher')],
         'dev-builder': [('build', 'builder'), ('build', 'integrator')],
         'dev-user': [],
@@ -109,7 +110,7 @@ def bootstrap(root=None, check=False):
         'PLATFORM_LOCAL_FORMAT': FORMAT, 'PLATFORM_LOCAL_ROOT': str(local),
         'PLATFORM_TENANTS_FILE': str(local / 'tenants.json'), 'PLATFORM_DATA_NAMESPACE': 'platform-dev-' + suffix,
         'PLATFORM_PUBLIC_URL': public_url, 'PLATFORM_PORT': '8495', 'PLATFORM_DATABASE_NAME': 'platform_dev',
-        'PLATFORM_HOST_ADMINS': 'user:admin@platform.test', 'PLATFORM_RUN_UID': str(os.getuid()), 'PLATFORM_RUN_GID': str(os.getgid()),
+        'PLATFORM_HOST_ADMINS': 'user:root@platform.test,user:admin@platform.test', 'PLATFORM_RUN_UID': str(os.getuid()), 'PLATFORM_RUN_GID': str(os.getgid()),
         'POSTGRES_PASSWORD': secrets.token_hex(24), 'PLATFORM_S3_ACCESS_KEY': 'platform' + secrets.token_hex(6),
         'PLATFORM_S3_SECRET_KEY': secrets.token_hex(32), 'PLATFORM_CREDENTIAL_KEY': secrets.token_hex(32),
         'PLATFORM_PERSONAL_TOKEN_KEY': secrets.token_hex(32), 'PG_PORT': '5433', 'IDP_PORT': '8480', 'FILES_PORT': '9000',
@@ -158,7 +159,7 @@ rp_origin = '{public_url}'
         local / 'rauthy/bootstrap/clients.json': json_text([client]),
         local / 'rauthy/bootstrap/api_keys.json': json_text(branding),
         local / 'credentials.md': '# 本地开发测试账号\n\n入口：' + public_url + '\n\n业务工作区：`' + tenant + '`\n\n| 账号 | 密码 | 权限 |\n|---|---|---|\n' + '\n'.join(
-            '| ' + a['email'] + ' | `' + a['password'] + '` | ' + description + ' |' for a, description in zip(accounts, ['平台和宿主管理；无默认业务角色', '构建与集成；无宿主管理', '普通成员；无业务角色'])
+            '| ' + a['email'] + ' | `' + a['password'] + '` | ' + description + ' |' for a, description in zip(accounts, ['平台和宿主管理；无默认业务角色', '全显式内置角色与宿主管理', '构建与集成；无宿主管理', '普通成员；无业务角色'])
         ) + '\n\n这些密码仅供本机开发测试。首次登录管理员可能需要确认个人资料。AI服务、业务包与业务角色均需另行配置。\n日常启动保持本文件、密钥和数据不变；不要提交或公开本文件。\n',
         env_path: '\n'.join(key + '=' + shlex.quote(value) for key, value in config.items()) + '\n',
     }
