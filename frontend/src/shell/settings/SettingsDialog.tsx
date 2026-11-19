@@ -14,7 +14,7 @@ import { useId, useState } from "react";
 import { t } from "../../i18n";
 import { useAccount } from "../account";
 import { AppearancePanel, LanguagePanel, NotificationsPanel, ProfilePanel, SecurityPanel } from "./panels";
-import { type IconComponent, row } from "./rows";
+import { type IconComponent, row } from "../../pages/SettingsRows";
 
 type PanelId = "profile" | "security" | "appearance" | "notifications" | "language";
 type Panel = { id: PanelId; label: string; description: string; icon: IconComponent };

@@ -12,6 +12,7 @@ import (
 
 type AppSettings struct {
 	App      string         `json:"app"`
+	Title    string         `json:"title"`
 	Settings []SettingValue `json:"settings"`
 }
 
@@ -26,7 +27,7 @@ func (s *Settings) Apps(manifests []platform.Manifest) []AppSettings {
 		if len(m.Settings) == 0 {
 			continue
 		}
-		app := AppSettings{App: m.ID}
+		app := AppSettings{App: m.ID, Title: m.Title}
 		for _, x := range m.Settings {
 			v, ok := s.Get(m.ID + "/" + x.Name)
 			if !ok {

@@ -242,8 +242,6 @@ export const zhCN: Record<string, string> = {
   "No matches": "没有匹配的记录",
   "You cannot see this list": "你无权查看这个列表",
   "This list could not be loaded": "列表加载失败",
-  "Not built yet": "尚未重建",
-  "This entry has not been rebuilt in the new frontend.": "这个入口还没有在新前端里重建。",
   Name: "名称",
   Owner: "拥有者",
   Project: "项目",
@@ -288,7 +286,6 @@ export const zhCN: Record<string, string> = {
   "A test plan holds fixed sample inputs and the outcomes expected from a draft.": "测试计划保存固定的样本输入与对草稿预期的结果。",
   "A sample set is a named collection of sample records used by test plans.": "样本集是一组有名字的样本记录，供测试计划使用。",
   "View all": "查看全部",
-  "Not built": "未重建",
   "Pages": "页面",
   "This page could not be loaded": "页面加载失败",
   "You cannot see this page": "你无权查看这个页面",
@@ -486,6 +483,8 @@ export const zhCN: Record<string, string> = {
   "Failures": "失败次数",
   "Until": "截止时间",
   "Open logs": "打开日志",
+  "Each app's settings for this workspace; a change applies to every member.": "本工作区里每个应用的设置；改动对所有成员生效。",
+  "Back": "返回",
 };
 
 const supported = (language: string) => (language.startsWith("zh") ? "zh-CN" : "en");

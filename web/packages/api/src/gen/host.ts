@@ -401,6 +401,7 @@ export type AppPermissions = {
 
 export type AppSettings = {
   app: string;
+  title: string;
   settings: SettingValue[];
 };
 

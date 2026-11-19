@@ -1,9 +1,7 @@
-import { Badge } from "@astryxdesign/core/Badge";
 import { DropdownMenu } from "@astryxdesign/core/DropdownMenu";
 import { SideNav, SideNavItem, SideNavSection } from "@astryxdesign/core/SideNav";
 import { BookmarkSquareIcon } from "@heroicons/react/24/outline";
 import { type App, type NavItem, pathOf } from "../apps";
-import { entries } from "../apps/entries";
 import { type Api, useRead } from "../host";
 import { t } from "../i18n";
 import { navigate, useSearch } from "../router";
@@ -40,7 +38,6 @@ export function AppSidebar({ app, item, apps, object, listPath }: { app: App; it
               icon={entry.icon}
               href={pathOf(app, entry)}
               isSelected={entry.id === item.id}
-              endContent={app.installed || entries[`${app.id}/${entry.id}`] ? undefined : <Badge variant="neutral" label={t("Not built")} />}
             />
           ))}
         </SideNavSection>

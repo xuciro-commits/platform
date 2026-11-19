@@ -17,7 +17,6 @@ import { AppSidebar } from "./AppSidebar";
 import { CommandSearch } from "./CommandSearch";
 import { legacyTarget } from "./legacy";
 import { SignIn } from "./SignIn";
-import { Unbuilt } from "./Unbuilt";
 
 function installedApps(views: Api.ApplicationView[]): App[] {
   return views.flatMap((view) => {
@@ -82,7 +81,7 @@ export function Shell() {
   const content = retiredLink ? <RetainedRecord key={path} path={path} />
     : Entry ? <Entry key={`${app.id}/${item.id}`} />
     : app.installed && item.object && listPath ? <Records key={`${app.id}/${item.id}`} declared={{ title: item.label, about: item.description ?? "", type: item.object }} listPath={listPath} id={segments[3]} />
-    : <Unbuilt item={item} />;
+    : null;
   return (
     <CommandSearch app={app} item={item} apps={available} tenant={session.tenant}>
       <AppShell

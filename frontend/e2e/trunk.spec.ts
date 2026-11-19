@@ -1327,7 +1327,6 @@ test("entries: record types open as lists and dropped entries are gone from the 
   for (const [app, entry] of [["Logic", "Automations"], ["Apps", "Object views"], ["AI", "Evaluations"]]) {
     await open(page, app, entry);
     await expect(page.getByRole("heading", { level: 1, name: entry, exact: true })).toBeVisible();
-    await expect(page.getByText("Not built yet")).toHaveCount(0);
   }
   const menu = page.getByRole("navigation", { name: "Primary navigation" });
   await page.getByRole("link", { name: "Home" }).click();
@@ -1351,7 +1350,6 @@ test("reads: each read list opens, the audit loads its next page, and a marking 
     await open(page, app, entry);
     await expect(page.getByRole("heading", { level: 1, name: entry, exact: true })).toBeVisible();
     await expect(main.getByRole("table").or(main.getByText("Nothing here yet")).first()).toBeVisible();
-    await expect(page.getByText("Not built yet")).toHaveCount(0);
   }
 
   await page.getByRole("textbox", { name: "Search this list" }).fill("retrofit");
@@ -1403,16 +1401,44 @@ test("trees: the organization rolls people up its units and a trace opens to its
 test("dashboards: metrics and health show their blocks", async ({ page }) => {
   await signIn(page);
   const main = page.getByRole("main");
-  const unbuilt = main.getByText("Not built yet", { exact: true });
 
   await open(page, "Operations", "Metrics");
   await expect(main.getByRole("heading", { level: 1, name: "Metrics", exact: true })).toBeVisible();
   await expect(main.getByRole("heading", { name: "Requests", exact: true })).toBeVisible();
-  await expect(unbuilt).toHaveCount(0);
 
   await open(page, "Operations", "Health");
   await expect(main.getByRole("heading", { level: 1, name: "Health", exact: true })).toBeVisible();
   await expect(main.getByRole("heading", { name: "Failed work", exact: true })).toBeVisible();
   await expect(main.getByRole("heading", { name: "Readiness", exact: true })).toBeVisible();
-  await expect(unbuilt).toHaveCount(0);
+});
+
+test("settings: an app's setting changes in place and survives a reload", async ({ page }) => {
+  await signIn(page);
+  await open(page, "Admin", "Settings");
+  await expect(page.getByRole("heading", { level: 1, name: "Settings", exact: true })).toBeVisible();
+  await page.getByRole("main").getByRole("button", { name: "Agent Studio", exact: true }).click();
+  await expect(page.getByRole("heading", { level: 2, name: "Agent Studio", exact: true })).toBeVisible();
+  const days = page.getByRole("textbox", { name: "Days transcripts are kept" });
+  const saved = () => page.waitForResponse((response) => response.url().endsWith("/v1/submissions"));
+  await expect(days).not.toHaveValue("");
+  const before = await days.inputValue();
+  await days.fill("45");
+  await Promise.all([saved(), days.press("Enter")]);
+  await page.reload();
+  await page.getByRole("main").getByRole("button", { name: "Agent Studio", exact: true }).click();
+  await expect(days).toHaveValue("45");
+  await days.fill(before);
+  await Promise.all([saved(), days.press("Enter")]);
+});
+
+test("menu: every entry in every app opens a page with its own title", async ({ page }) => {
+  await signIn(page);
+  const menu = page.getByRole("navigation", { name: "Primary navigation" });
+  for (const app of ["Home", "Data", "Ontology", "Logic", "Apps", "AI", "Delivery", "Operations", "Admin", "Host"]) {
+    await page.getByRole("link", { name: app, exact: true }).click();
+    for (const name of await menu.getByRole("link").allInnerTexts()) {
+      await menu.getByRole("link", { name: name.trim(), exact: true }).click();
+      await expect(page.getByRole("heading", { level: 1, name: name.trim(), exact: true })).toBeVisible();
+    }
+  }
 });

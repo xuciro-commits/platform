@@ -23,26 +23,11 @@
 5. **说明不进代码。** 我们不写注释：模板说明里讲的道理，留在这里或 [frontend](frontend.md)，代码里删掉注释。
 6. **一个表现服务所有入口。** 新表现做成 `src/pages/` 里的一个声明函数（像 `recordList`、`listPage`），入口只写一句声明。
 
-顺序：1.10.2d → 1.10.3 → 1.10.4。
+顺序：1.10.3 → 1.10.4。
 
 ## 1.10 切换
 
 目标：入口 8495 打开的是新前端；旧书签与旧链接到同一资源；侧栏没有空白入口；回退只切入口。
-
-### 1.10.2 未建入口按数据形状落地
-
-侧栏还有 1 个“未建”入口，按宿主给的数据形状归为一类；每类一个表现，入口只写声明。
-
-| 类 | 数据形状 | 表现 | 起点 | 入口 |
-|---|---|---|---|---|
-| d | 按应用分组的设置项 | `settingsPage`（新） | 自己的设置行（来自官方 `settings-dialog`），框架同官方 `settings-sidebar` | 设置 |
-
-**1.10.2d 设置页** 把 `src/shell/settings/rows.tsx` 挪到 `src/pages/SettingsRows.tsx`，设置对话框与新页共用。
-`settingsPage` 框架同官方 `settings-sidebar`：左边 SideNav 列出 `/v1/settings` 的应用，右边按设置项的 `type` 出控件
-（文字 TextSetting、布尔 Switch、选项 Selector、数字 TextSetting），失焦或回车经 `platform.setting.set` 提交。
-`admin/settings.ts` 一句声明。验收 trunk：改一个布尔设置，刷新后保持。
-
-验收 trunk（整个 1.10.2）：逐个点侧栏入口，没有一个显示“未建”；之后删掉 `src/shell/Unbuilt.tsx` 与它的文案。
 
 ### 1.10.3 切默认入口
 

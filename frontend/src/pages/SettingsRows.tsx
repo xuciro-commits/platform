@@ -12,8 +12,8 @@ import { colorVars, radiusVars, spacingVars } from "@astryxdesign/core/theme/tok
 import { ComputerDesktopIcon, MoonIcon, SunIcon } from "@heroicons/react/24/outline";
 import * as stylex from "@stylexjs/stylex";
 import { Children, type ComponentType, type ReactNode, type SVGProps, useEffect, useState } from "react";
-import { defaultThemeSlug, themes } from "../../astryx-themes";
-import { t } from "../../i18n";
+import { defaultThemeSlug, themes } from "../astryx-themes";
+import { t } from "../i18n";
 
 export type IconComponent = ComponentType<SVGProps<SVGSVGElement>>;
 

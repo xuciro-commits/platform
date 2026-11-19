@@ -14,7 +14,7 @@ import { type Api, request, reread, useRead } from "../../host";
 import { t } from "../../i18n";
 import { reasonOf } from "../../pages/act";
 import { type ProfileValues, useAccount } from "../account";
-import { controlWidth, SettingsCard, SettingsRow, TextSetting, ThemeChoiceCards } from "./rows";
+import { controlWidth, SettingsCard, SettingsRow, TextSetting, ThemeChoiceCards } from "../../pages/SettingsRows";
 
 type Account = ReturnType<typeof useAccount>;
 

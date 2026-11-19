@@ -53,7 +53,7 @@ export default recordList({
 | `src/router.tsx` | 地址即状态：读取路径、跳转、Astryx 链接的适配 |
 | `src/apps.ts` | 应用清单：每个应用的图标、分节菜单与入口 |
 | `src/apps/<应用>/<入口>.ts` | 入口声明 |
-| `src/shell/` | 外壳：应用轨、应用侧栏、登录页、未重建入口的占位 |
+| `src/shell/` | 外壳：应用轨、应用侧栏、登录页、个人设置对话框 |
 | `src/pages/` | 表现，以及建在表现上的入口形状 |
 | `src/host/` | 会话、读取、写入、契约类型；唯一允许网络调用的目录 |
 | `src/templates/` | 刚落地、还没改造完的官方模板；改造完就删，不长期保留 |
@@ -147,9 +147,10 @@ export default recordList({
 | `ActionDialog` | 按动作参数生成的表单对话框 | 官方对话框与表单组件的组合 |
 | `ParameterInput` | 按字段类型选输入控件；对话框与就地编辑共用 | 官方输入组件 |
 | `DashboardPage` | 仪表盘：统计块与紧凑表格 | 官方 `dashboard` |
+| `SettingsPage` | 设置页：左列各应用，右边按设置的类型出控件，失焦、回车或切换即提交；窄屏先列表后详情 | 官方 `settings-sidebar`，行取自 `SettingsRows`（个人设置对话框共用） |
 
 入口形状建在表现上：`recordList`（一类记录）、`resourceList`（一类资源的目录）、
-`objectBrowser`（所有已发布的业务类型）、`listPage`（任意读取路径）、`treeList`（层级）、`dashboardPage`。
+`objectBrowser`（所有已发布的业务类型）、`listPage`（任意读取路径）、`treeList`（层级）、`dashboardPage`、`settingsPage`（按应用分组的设置）。
 `listPage` 可按答案出列、接着读下一页、把搜索交给宿主，并把动作放进页头“新建”与详情栏；
 新建要填的必填参数里有表单填不了的（json），就不出“新建”。
 
