@@ -261,7 +261,6 @@ func (b *Build) entity(o ontology.Object) platform.RecordType {
 			return b.businessRuntime().Transact(c, r, transaction, now)
 		},
 	})
-	entity.DataSources = slices.Clone(o.DataSources)
 	entity.ComputeAt = computeRulesOf(o, b.conditionLookup)
 	entity.Protocols = b.objectProvisions(o, entity)
 	return entity

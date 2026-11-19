@@ -81,6 +81,15 @@ type testPlanEnvironment = devopsmodel.TestPlanEnvironment[runtimeprotocol.Funct
 type evaluationPublication = devopsmodel.EvaluationPublication[ontology.Object, runtimeprotocol.Process, runtimeprotocol.Function]
 type testPlanPublication = devopsmodel.TestPlanPublication[ontology.Object, runtimeprotocol.Process, runtimeprotocol.Function]
 
+func versionedDraft(load func(string, func() ([]platform.ReleaseAsset, error)) ([]platform.ReleaseAsset, []platform.ReleaseAsset, platform.AssetRef, platform.AssetRef, bool, error)) func(string, func() ([]platform.ReleaseAsset, error)) (publication.DraftClosure, error) {
+	return func(id string, assets func() ([]platform.ReleaseAsset, error)) (publication.DraftClosure, error) {
+		var draft publication.DraftClosure
+		var err error
+		draft.Before, draft.After, draft.Prior, draft.Next, draft.HasPrior, err = load(id, assets)
+		return draft, err
+	}
+}
+
 func (b *Build) bindPublications() {
 	object := b.objectPublication(ontology.ObjectPublicationEnvironment{
 		Host:      func() runtimeprotocol.BuildHost { return b.host },
@@ -98,40 +107,28 @@ func (b *Build) bindPublications() {
 	b.publications = append(b.publications, publication.Hooks{
 		Kinds: []platform.AssetKind{platform.AssetQuery}, Schemas: []publication.SchemaHooks{{Name: SchemaQueryPublish, Validate: queries.ValidateImage, Install: queries.InstallImage}},
 		FreezeBatch: queries.FreezeBatch, LoadExecution: queries.LoadExecution,
-		VersionedDraft: func(id string, releaseAssets func() ([]platform.ReleaseAsset, error)) (publication.DraftClosure, error) {
-			before, after, prior, next, had, err := queries.VersionedDraft(id, releaseAssets)
-			return publication.DraftClosure{Before: before, After: after, Prior: prior, Next: next, HasPrior: had}, err
-		},
+		VersionedDraft: versionedDraft(queries.VersionedDraft),
 	})
 	agent := b.agent
 	b.publications = append(b.publications, publication.Hooks{
 		Kinds: []platform.AssetKind{platform.AssetAgent}, Schemas: []publication.SchemaHooks{{Name: SchemaAgentPublish, Validate: agent.ValidateImage, Install: agent.InstallImage}},
 		ReadFrozen:  agent.ReadFrozen,
 		FreezeBatch: agent.FreezeBatch, LoadExecution: agent.LoadExecution,
-		VersionedDraft: func(id string, releaseAssets func() ([]platform.ReleaseAsset, error)) (publication.DraftClosure, error) {
-			before, after, prior, next, had, err := agent.VersionedDraft(id, releaseAssets)
-			return publication.DraftClosure{Before: before, After: after, Prior: prior, Next: next, HasPrior: had}, err
-		},
+		VersionedDraft: versionedDraft(agent.VersionedDraft),
 	})
 	plan := b.testPlans
 	b.publications = append(b.publications, publication.Hooks{
 		Kinds: []platform.AssetKind{platform.AssetEvaluation, platform.AssetTestPlan}, Schemas: []publication.SchemaHooks{{Name: SchemaEvaluationSetPublish, Decode: plan.Decode, Validate: plan.Validate, Install: plan.Validate}},
-		ReadFrozen:  plan.ReadFrozen,
-		FreezeBatch: plan.FreezeBatch,
-		VersionedDraft: func(id string, releaseAssets func() ([]platform.ReleaseAsset, error)) (publication.DraftClosure, error) {
-			before, after, prior, next, had, err := plan.VersionedDraft(id, releaseAssets)
-			return publication.DraftClosure{Before: before, After: after, Prior: prior, Next: next, HasPrior: had}, err
-		},
+		ReadFrozen:     plan.ReadFrozen,
+		FreezeBatch:    plan.FreezeBatch,
+		VersionedDraft: versionedDraft(plan.VersionedDraft),
 	})
 	b.publications = append(b.publications, b.functions.ComputePublication())
 	samples := b.sampleSets
 	b.publications = append(b.publications, publication.Hooks{
 		Kinds:              []platform.AssetKind{platform.AssetSampleSet},
 		DirectInstallation: samples.DecodeInstallation, FreezeInstallations: samples.PrepareInstallations, ReadFrozen: samples.ReadFrozen,
-		VersionedDraft: func(id string, releaseAssets func() ([]platform.ReleaseAsset, error)) (publication.DraftClosure, error) {
-			before, after, prior, next, had, err := samples.VersionedDraft(id, releaseAssets)
-			return publication.DraftClosure{Before: before, After: after, Prior: prior, Next: next, HasPrior: had}, err
-		},
+		VersionedDraft: versionedDraft(samples.VersionedDraft),
 	})
 }
 
@@ -223,23 +220,8 @@ func (b *Build) Manifest() platform.Manifest {
 	if b.installationCatalog != nil {
 		catalog = b.installationCatalog
 	}
-	entities := []platform.RecordType{runtimeprotocol.RelationEntity(ID), b.objectEntity(), b.actionTypeEntity(), b.apps.PageEntity(), b.apps.ApplicationEntity(), b.testPlanEntity(), b.automation.ProcessEntity(), propertyKind.entity(b), valueKind.entity(b), b.objectTypeGroupEntity(), linkKind.entity(b), b.queries.Entity(), interfaceKind.entity(b), b.functions.Entity(), b.functions.CallEntity(), b.evaluations.Entity(), b.agent.Entity(), b.functions.CodeEntity(), b.functions.TableEntity(), b.sampleSets.Entity(), b.branchEntity(), b.data.ConfirmationEntity(), b.data.DispatchEntity(), b.productEntity(), b.productVersionEntity()}
-	entities = append(entities, b.data.Entities()...)
-	entities = append(entities, b.resourceEntities()...)
-	entities = append(entities, workingStateEntity())
-	for i := range entities {
-		if BranchDraftType(entities[i].Type) {
-			if entities[i].Scope.Levels == nil {
-				entities[i].Scope.Levels = map[string]string{}
-			}
-			entities[i].Scope.Levels[runtimeprotocol.ProjectViewerRole] = platform.ScopeTenant
-		}
-	}
-	for _, typ := range sortedTypes(b.installed) {
-		entities = append(entities, b.installed[typ])
-	}
 	provisions, reads := b.objectProtocols()
-	return platform.Manifest{ID: ID, Title: platform.BuiltinManifestTitle(ID), Version: ValueDefinitionVersion, Sequences: ontology.TransactionSequences(b.installed), Actions: catalog, Entities: entities, Roles: b.manifestRoles(), Settings: b.settings(), Jobs: []platform.Job{{Name: "confirmations", Title: "Advance business confirmations", Every: time.Second}, {Name: "dispatches", Title: "Advance device dispatches", Every: time.Second}}, Provides: provisions, Consumes: b.consumedProtocols(), Reads: append([]string{ReadReleaseProfile}, reads...), ReadSources: protocolReadSources(reads), Queries: b.queries.Declarations(), Functions: b.functions.Declarations(), Agents: b.agent.Declarations(), Operations: b.functions.OperationDeclarations(),
+	return platform.Manifest{ID: ID, Title: platform.BuiltinManifestTitle(ID), Version: ValueDefinitionVersion, Sequences: ontology.TransactionSequences(b.installed), Actions: catalog, Entities: b.recordTypes("", true), Roles: b.manifestRoles(), Settings: b.settings(), Jobs: []platform.Job{{Name: "confirmations", Title: "Advance business confirmations", Every: time.Second}, {Name: "dispatches", Title: "Advance device dispatches", Every: time.Second}}, Provides: provisions, Consumes: b.consumedProtocols(), Reads: append([]string{ReadReleaseProfile}, reads...), ReadSources: protocolReadSources(reads), Queries: b.queries.Declarations(), Functions: b.functions.Declarations(), Agents: b.agent.Declarations(), Operations: b.functions.OperationDeclarations(),
 		Pages: []platform.Page{
 			b.application.ListDetailPage("objects", "Objects", "The objects this organisation defines. Publish one to install it.",
 				platform.AssetRef{App: ID, Kind: platform.AssetObject, Name: ObjectType},
@@ -313,52 +295,14 @@ type ReleaseProfile struct {
 }
 
 func (b *Build) checkDefinitionArchive(c platform.Caller, typ, id string) *platform.Error {
+	descriptor, _ := resourceDescriptorOfType(typ)
+	if descriptor.published == nil && typ != ProductType {
+		return nil
+	}
 	if !c.Holds(c.App, Builder) && !(typ == dataowner.ObservationType && c.Holds(c.App, Integrator)) {
 		return &platform.Error{Code: pb.ErrorCode_ERROR_CODE_POLICY_DENIED}
 	}
-	published := false
-	switch typ {
-	case ObjectType:
-		record, _ := platform.Get[ontology.Object](c, id)
-		published = record.Published != ""
-	case runtimeprotocol.PageType:
-		record, _ := platform.Get[runtimeprotocol.Page](c, id)
-		published = record.Published != ""
-	case runtimeprotocol.AppType:
-		record, _ := platform.Get[runtimeprotocol.Application](c, id)
-		published = record.Published != ""
-	case PropertyTypeType:
-		record, _ := platform.Get[ontology.PropertyType](c, id)
-		published = record.Published != ""
-	case ValueTypeType:
-		record, _ := platform.Get[ontology.ValueType](c, id)
-		published = record.Published != ""
-	case ObjectTypeGroupType:
-		record, _ := platform.Get[ontology.ObjectTypeGroup](c, id)
-		published = record.Published != ""
-	case LinkTypeType:
-		record, _ := platform.Get[ontology.LinkType](c, id)
-		published = record.Published != ""
-	case QueryType:
-		published = b.queries.Published(c, id)
-	case InterfaceType:
-		record, _ := platform.Get[ontology.InterfaceRecord](c, id)
-		published = record.Published != ""
-	case runtimeprotocol.FunctionType:
-		record, _ := platform.Get[runtimeprotocol.Function](c, id)
-		published = record.Published != ""
-	case AgentType:
-		published = b.agent.Published(c, id)
-	case dataowner.ObservationType:
-		record, _ := platform.Get[dataowner.Observation](c, id)
-		published = record.Published != ""
-	case SampleSetType:
-		record, _ := platform.Get[SampleSetRecord](c, id)
-		published = record.Published != ""
-	case TestPlanType:
-		record, _ := platform.Get[TestPlan](c, id)
-		published = record.Published != ""
-	case ProductType:
+	if typ == ProductType {
 		versions, err := readDefinitionInventory[ProductVersion](c)
 		if err != nil {
 			return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Product versions could not be read")
@@ -368,7 +312,7 @@ func (b *Build) checkDefinitionArchive(c platform.Caller, typ, id string) *platf
 			return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "A product with published versions cannot be archived")
 		}
 	}
-	if !published {
+	if descriptor.published == nil || !descriptor.published(b, c, id) {
 		return nil
 	}
 	if typ == ObjectType {
@@ -440,7 +384,7 @@ func (b *Build) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb.
 	if name := s.GetSchema().GetName(); b.evaluations.Handles(name) {
 		return b.evaluations.Submit(c, s, now)
 	}
-	if typ, archive := strings.CutSuffix(s.GetSchema().GetName(), ".archive"); archive && !c.Replaying && slices.Contains([]string{ObjectType, runtimeprotocol.PageType, runtimeprotocol.AppType, PropertyTypeType, ValueTypeType, ObjectTypeGroupType, LinkTypeType, QueryType, InterfaceType, runtimeprotocol.FunctionType, AgentType, TestPlanType, SampleSetType, dataowner.ObservationType, ProductType}, typ) {
+	if typ, archive := strings.CutSuffix(s.GetSchema().GetName(), ".archive"); archive && !c.Replaying {
 		if err := b.checkDefinitionArchive(c, typ, s.GetTarget().GetId()); err != nil {
 			return nil, err
 		}
@@ -492,45 +436,7 @@ func (b *Build) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb.
 	if !c.Replaying && (s.GetTarget().GetType() == ObjectType || s.GetTarget().GetType() == ActionTypeType) && (s.GetSchema().GetName() == s.GetTarget().GetType()+".create" || s.GetSchema().GetName() == s.GetTarget().GetType()+".edit") {
 		return b.submitOntologyWrite(c, s, now)
 	}
-	pageEntity := b.apps.PageEntity()
-	if name := s.GetSchema().GetName(); name == runtimeprotocol.PageType+".create" || name == runtimeprotocol.PageType+".edit" {
-		pageEntity = b.apps.PageDraftEntity()
-	}
-	agentEntity := b.agent.Entity()
-	if name := s.GetSchema().GetName(); name == AgentType+".create" || name == AgentType+".edit" {
-		agentEntity = b.agent.DraftEntity()
-	}
-	entities := []platform.RecordType{b.objectEntity(), b.actionTypeEntity(), pageEntity, b.apps.ApplicationEntity(), b.testPlanEntity(), propertyKind.entity(b), valueKind.entity(b), b.objectTypeGroupEntity(), linkKind.entity(b), b.queries.Entity(), interfaceKind.entity(b), b.functions.Entity(), b.functions.CallEntity(), b.evaluations.Entity(), agentEntity, b.sampleSets.Entity(), b.branchEntity(), b.data.ConfirmationEntity(), b.data.DispatchEntity(), b.productEntity(), b.productVersionEntity()}
-	entities = append(entities, b.data.Entities()...)
-	entities = append(entities, b.resourceEntities()...)
-	entities = append(entities, workingStateEntity())
-	for i := range entities {
-		if BranchDraftType(entities[i].Type) {
-			if entities[i].Scope.Levels == nil {
-				entities[i].Scope.Levels = map[string]string{}
-			}
-			entities[i].Scope.Levels[runtimeprotocol.ProjectViewerRole] = platform.ScopeTenant
-		}
-	}
-	for _, typ := range sortedTypes(b.installed) {
-		entities = append(entities, b.installed[typ])
-	}
-	if s.GetSchema().GetName() == runtimeprotocol.AppType+".withdraw" || s.GetSchema().GetName() == runtimeprotocol.AppType+".restore" {
-		for i := range entities {
-			if entities[i].Type == runtimeprotocol.AppType {
-				entities[i].Validate = nil
-			}
-		}
-	}
-	if typ, archive := strings.CutSuffix(s.GetSchema().GetName(), ".archive"); archive {
-		if _, err := draftAssetRef(typ, ""); err == nil {
-			for i := range entities {
-				if entities[i].Type == typ {
-					entities[i].Validate = nil
-				}
-			}
-		}
-	}
+	entities := b.recordTypes(s.GetSchema().GetName(), false)
 	if record, err, ok := b.authority.Generated(c, s, now, nil, entities...); ok {
 		return record, err
 	}

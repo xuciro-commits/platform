@@ -298,33 +298,54 @@ func (s *Store) Aggregate(et *Type, q AggregateQuery, rows []reflect.Value, comp
 	}
 	type acc struct {
 		keys  []any
+		count int
 		folds []platform.ExprNumericAggregate
 	}
 	byKey := map[string]*acc{}
 	var order []*acc
 	slices.SortFunc(rows, func(a, b reflect.Value) int { return strings.Compare(Header(a).ID, Header(b).ID) })
-	for _, value := range rows {
-		keys := make([]any, len(groups))
-		for i, group := range groups {
-			keys[i] = group.key(value)
+	keys := make([]any, len(groups))
+	stringKeys := map[string]string{}
+	groupKey := func(keys []any) (string, error) {
+		if len(keys) == 0 {
+			return "[]", nil
 		}
-		encoded, err := json.Marshal(keys)
+		var label string
+		var cacheable bool
+		if len(keys) == 1 {
+			label, cacheable = keys[0].(string)
+			if cacheable {
+				if key, found := stringKeys[label]; found {
+					return key, nil
+				}
+			}
+		}
+		raw, err := json.Marshal(keys)
+		key := string(raw)
+		if cacheable {
+			stringKeys[label] = key
+		}
+		return key, err
+	}
+	for _, value := range rows {
+		for i, field := range groups {
+			keys[i] = field.key(value)
+		}
+		key, err := groupKey(keys)
 		if err != nil {
 			return Aggregate{}, invalid
 		}
-		key := string(encoded)
 		group := byKey[key]
 		if group == nil {
 			if maxRows > 0 && len(order) >= maxRows {
 				return Aggregate{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Aggregate has {count} groups; limit is {limit}", len(order)+1, maxRows)
 			}
-			group = &acc{keys: keys, folds: make([]platform.ExprNumericAggregate, len(measures))}
-			for i, measure := range measures {
-				kind := measure.kind
-				if measure.op == "count" {
-					kind = "integer"
+			group = &acc{keys: slices.Clone(keys), folds: make([]platform.ExprNumericAggregate, len(measures))}
+			for i, m := range measures {
+				if m.op == "count" {
+					continue
 				}
-				group.folds[i], err = s.rules.NewExprNumericAggregate(measure.op, kind, "")
+				group.folds[i], err = s.rules.NewExprNumericAggregate(m.op, m.kind, "")
 				if err != nil {
 					return Aggregate{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
 				}
@@ -332,22 +353,21 @@ func (s *Store) Aggregate(et *Type, q AggregateQuery, rows []reflect.Value, comp
 			byKey[key] = group
 			order = append(order, group)
 		}
+		group.count++
 		for i, measure := range measures {
-			input := platform.ExprValue{}
-			if measure.op != "count" {
-				operand := aggregateGroupValue(value.FieldByIndex(measure.field.Index))
-				if measure.field.Type == "money" {
-					switch money := operand.(type) {
-					case platform.Money:
-						operand = money.Amount
-					}
-				}
-				kind := platform.RuleFieldKind(measure.field.Type)
-				if measure.field.Type == "money" {
-					kind = "integer"
-				}
-				input = platform.ExprPresent(kind, operand)
+			if measure.op == "count" {
+				continue
 			}
+			operand := aggregateGroupValue(value.FieldByIndex(measure.field.Index))
+			kind := platform.RuleFieldKind(measure.field.Type)
+			if measure.field.Type == "money" {
+				switch money := operand.(type) {
+				case platform.Money:
+					operand = money.Amount
+				}
+				kind = "integer"
+			}
+			input := platform.ExprPresent(kind, operand)
 			if err := group.folds[i].Add(input); err != nil {
 				return Aggregate{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Aggregate {measure}: {reason}", measure.column.Name, err.Error())
 			}
@@ -374,6 +394,10 @@ func (s *Store) Aggregate(et *Type, q AggregateQuery, rows []reflect.Value, comp
 			row[g.column.Name] = a.keys[i]
 		}
 		for i, measure := range measures {
+			if measure.op == "count" {
+				row[measure.column.Name] = a.count
+				continue
+			}
 			result, err := a.folds[i].Result()
 			if err != nil {
 				return Aggregate{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Aggregate {measure}: {reason}", measure.column.Name, err.Error())
@@ -381,18 +405,6 @@ func (s *Store) Aggregate(et *Type, q AggregateQuery, rows []reflect.Value, comp
 			value, err := ruleprotocol.ExprGoValue(result)
 			if err != nil {
 				return Aggregate{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
-			}
-			if measure.op == "count" {
-				switch number := value.(type) {
-				case json.Number:
-					count, err := strconv.Atoi(number.String())
-					if err != nil {
-						return Aggregate{}, invalid
-					}
-					value = count
-				default:
-					return Aggregate{}, invalid
-				}
 			}
 			row[measure.column.Name] = value
 		}
@@ -435,9 +447,9 @@ func histogramNumber(v reflect.Value) (*big.Rat, bool) {
 	var text string
 	switch v.Kind() {
 	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
-		text = strconv.FormatInt(v.Int(), 10)
+		return new(big.Rat).SetInt64(v.Int()), true
 	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
-		text = strconv.FormatUint(v.Uint(), 10)
+		return new(big.Rat).SetUint64(v.Uint()), true
 	case reflect.Float32, reflect.Float64:
 		x := v.Float()
 		if math.IsNaN(x) || math.IsInf(x, 0) {
@@ -494,10 +506,10 @@ func (s *Store) Histogram(et *Type, q AggregateQuery, rows []reflect.Value) (Agg
 		}
 		values = append(values, value)
 		if minimum == nil || value.Cmp(minimum) < 0 {
-			minimum = new(big.Rat).Set(value)
+			minimum = value
 		}
 		if maximum == nil || value.Cmp(maximum) > 0 {
-			maximum = new(big.Rat).Set(value)
+			maximum = value
 		}
 	}
 	result.Valid = len(values)
@@ -521,9 +533,12 @@ func (s *Store) Histogram(et *Type, q AggregateQuery, rows []reflect.Value) (Agg
 	for i := range result.Buckets {
 		result.Buckets[i] = HistogramBucket{Lower: histogramBound(edges[i]), Upper: histogramBound(edges[i+1]), UpperInclusive: i == h.Bins-1}
 	}
+	var ratio big.Rat
+	var bucket big.Int
 	for _, value := range values {
-		ratio := new(big.Rat).Quo(new(big.Rat).Sub(value, minimum), step)
-		index := new(big.Int).Quo(ratio.Num(), ratio.Denom()).Int64()
+		ratio.Sub(value, minimum)
+		ratio.Quo(&ratio, step)
+		index := bucket.Quo(ratio.Num(), ratio.Denom()).Int64()
 		if index == int64(h.Bins) {
 			index--
 		}
@@ -678,10 +693,10 @@ func (s *Store) AggregateWindow(et *Type, q AggregateQuery, rows []reflect.Value
 		}
 		sum.Add(sum, value)
 		if minimum == nil || value.Cmp(minimum) < 0 {
-			minimum = new(big.Rat).Set(value)
+			minimum = value
 		}
 		if maximum == nil || value.Cmp(maximum) > 0 {
-			maximum = new(big.Rat).Set(value)
+			maximum = value
 		}
 	}
 	if out.Valid > 0 {

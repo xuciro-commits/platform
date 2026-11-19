@@ -97,18 +97,34 @@ func (o *Owner) lookupEntity(typ string) (platform.RecordTypeInfo, bool) {
 }
 
 func (o *Owner) Entities() []platform.RecordType {
-	return append([]platform.RecordType{
-		o.connectionEntity(),
-		o.datasetEntity(),
-		o.datasetVersionEntity(),
-		o.sourceEntity(),
-		o.listenerEntity(),
-		o.pipelineEntity(),
-		o.writebackEntity(),
-		o.matchEntity(),
-		o.observationEntity(),
-		o.scheduleEntity(),
-	}, MediaSetEntities()...)
+	entities := make([]platform.RecordType, 0, 12)
+	o.VisitEntities(func(string) bool { return true }, func(entity platform.RecordType) { entities = append(entities, entity) })
+	return entities
+}
+
+func (o *Owner) VisitEntities(include func(string) bool, visit func(platform.RecordType)) {
+	add := func(typ string, build func() platform.RecordType) {
+		if include(typ) {
+			visit(build())
+		}
+	}
+	add(ConnectionType, o.connectionEntity)
+	add(DatasetType, o.datasetEntity)
+	add(DatasetVersionType, o.datasetVersionEntity)
+	add(SourceType, o.sourceEntity)
+	add(ListenerType, o.listenerEntity)
+	add(PipelineType, o.pipelineEntity)
+	add(WritebackType, o.writebackEntity)
+	add(MatchType, o.matchEntity)
+	add(ObservationType, o.observationEntity)
+	add(platform.ScheduleType, o.scheduleEntity)
+	if include(platform.MediaSetType) || include(platform.MediaSetVersionType) {
+		for _, entity := range MediaSetEntities() {
+			if include(entity.Type) {
+				visit(entity)
+			}
+		}
+	}
 }
 
 func (o *Owner) Actions() []platform.Action {

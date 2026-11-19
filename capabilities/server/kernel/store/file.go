@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"maps"
 	"os"
 	"path/filepath"
 	"platformserver/kernel/fileio"
@@ -25,20 +26,27 @@ type File struct {
 	identify Identify
 	file     *os.File
 
-	mu          sync.Mutex
-	locks       map[string]*sync.Mutex
+	mu          sync.RWMutex
+	writer      sync.Mutex
 	entries     map[string][]Entry
 	next        map[string]int64
-	results     map[string]map[string]string
+	results     map[[4]string]fileResult
 	writeFault  error
 	vectors     map[string]map[string][]float32
 	transcripts []Transcript
 
 	observationMu  sync.Mutex
-	observationIDs map[string]map[string]struct{}
+	observationIDs map[string]map[string]observationSize
+	auditIDs       map[[2]string]struct{}
 	auditMu        sync.Mutex
+	personalIDs    map[[2]string]struct{}
 	personalMu     sync.Mutex
 	runMu          sync.Mutex
+}
+
+type fileResult struct {
+	hash string
+	body []byte
 }
 
 type fileLine struct {
@@ -65,8 +73,8 @@ func OpenFile(dir string, identify Identify) (*File, error) {
 			return nil, fmt.Errorf("journal: %w", err)
 		}
 	}
-	j := &File{dir: dir, identify: identify, locks: map[string]*sync.Mutex{}, entries: map[string][]Entry{}, next: map[string]int64{},
-		results: map[string]map[string]string{}, vectors: map[string]map[string][]float32{}}
+	j := &File{dir: dir, identify: identify, entries: map[string][]Entry{}, next: map[string]int64{},
+		results: map[[4]string]fileResult{}, vectors: map[string]map[string][]float32{}}
 	if err := j.loadEntries(); err != nil {
 		return nil, err
 	}
@@ -135,20 +143,13 @@ func (j *File) loadEntries() error {
 			if err != nil {
 				return fmt.Errorf("%w: tenant %s entry %d: %v", ErrTenantJournal, line.Tenant, line.Seq, err)
 			}
-			j.index(line.Tenant, identity.App, identity.Scope, identity.Key, identity.Hash)
+			j.results[[4]string{line.Tenant, identity.App, identity.Scope, identity.Key}] = fileResult{identity.Hash, line.Entry.Body}
 		}
 	}
 	if err := lines.Err(); err != nil {
 		return fmt.Errorf("journal: %w", err)
 	}
 	return nil
-}
-
-func (j *File) index(tenant, app, scope, key, hash string) {
-	if j.results[tenant] == nil {
-		j.results[tenant] = map[string]string{}
-	}
-	j.results[tenant][app+"|"+scope+"|"+key] = hash
 }
 
 func (j *File) loadVectors() error {
@@ -194,17 +195,6 @@ func (j *File) loadTranscripts() error {
 	return lines.Err()
 }
 
-func (j *File) lock(tenant string) *sync.Mutex {
-	j.mu.Lock()
-	defer j.mu.Unlock()
-	lock := j.locks[tenant]
-	if lock == nil {
-		lock = &sync.Mutex{}
-		j.locks[tenant] = lock
-	}
-	return lock
-}
-
 func (j *File) Entries(_ context.Context, tenant string, after int64) ([]Entry, error) {
 	j.mu.Lock()
 	defer j.mu.Unlock()
@@ -218,50 +208,9 @@ func (j *File) Entries(_ context.Context, tenant string, after int64) ([]Entry, 
 }
 
 func (j *File) Position(tenant string) int64 {
-	j.mu.Lock()
-	defer j.mu.Unlock()
+	j.mu.RLock()
+	defer j.mu.RUnlock()
 	return j.next[tenant] - 1
-}
-
-func (j *File) appendLocked(tenant string, e Entry) error {
-	j.mu.Lock()
-	defer j.mu.Unlock()
-	if j.writeFault != nil {
-		return j.writeFault
-	}
-	seq, read := j.next[tenant]
-	if !read {
-		return fmt.Errorf("journal: append to %s before reading its entries", tenant)
-	}
-	line := fileLine{Tenant: tenant, Seq: seq, Entry: e}
-	raw, err := json.Marshal(line)
-	if err != nil {
-		return fmt.Errorf("journal: %w", err)
-	}
-	if n, err := j.file.Write(append(raw, '\n')); err != nil {
-		if n > 0 {
-			j.writeFault = fmt.Errorf("%w: partial journal append: %v", ErrCommitUnknown, err)
-			return j.writeFault
-		}
-		return fmt.Errorf("journal: %w", err)
-	}
-	if err := j.file.Sync(); err != nil {
-		j.writeFault = fmt.Errorf("%w: sync journal append: %v", ErrCommitUnknown, err)
-		return j.writeFault
-	}
-	var stored fileLine
-	if err := json.Unmarshal(raw, &stored); err != nil {
-		return fmt.Errorf("%w: decode committed entry: %v", ErrCommitUnknown, err)
-	}
-	stored.Entry.At = stored.Entry.At.UTC()
-	j.entries[tenant] = append(j.entries[tenant], stored.Entry)
-	j.next[tenant] = seq + 1
-	if stored.Entry.Kind == "accepted-result" {
-		if identity, err := j.identify(stored.Entry.Body); err == nil {
-			j.index(tenant, identity.App, identity.Scope, identity.Key, identity.Hash)
-		}
-	}
-	return nil
 }
 
 func (j *File) AppendAccepted(_ context.Context, tenant string, e Entry, key, hash string) ([]byte, error) {
@@ -272,39 +221,51 @@ func (j *File) AppendAccepted(_ context.Context, tenant string, e Entry, key, ha
 	if identity.Hash != hash {
 		return nil, ErrAcceptedConflict
 	}
-	lock := j.lock(tenant)
-	lock.Lock()
-	defer lock.Unlock()
-	j.mu.Lock()
-	priorHash, known := j.results[tenant][identity.App+"|"+identity.Scope+"|"+key]
-	found := j.findAccepted(tenant, identity.App, identity.Scope, key)
-	j.mu.Unlock()
-	if known {
-		if priorHash != hash {
+	index := [4]string{tenant, identity.App, identity.Scope, key}
+	j.writer.Lock()
+	defer j.writer.Unlock()
+	if prior, ok := j.results[index]; ok {
+		if prior.hash != hash {
 			return nil, ErrAcceptedConflict
 		}
-		return found, nil
+		return bytes.Clone(prior.body), nil
 	}
-	if err := j.appendLocked(tenant, e); err != nil {
-		return nil, err
+	if j.writeFault != nil {
+		return nil, j.writeFault
 	}
+	j.mu.RLock()
+	seq, read := j.next[tenant]
+	j.mu.RUnlock()
+	if !read {
+		return nil, fmt.Errorf("journal: append to %s before reading its entries", tenant)
+	}
+	line := fileLine{Tenant: tenant, Seq: seq, Entry: e}
+	raw, err := json.Marshal(line)
+	if err != nil {
+		return nil, fmt.Errorf("journal: %w", err)
+	}
+	if n, err := j.file.Write(append(raw, '\n')); err != nil {
+		if n > 0 {
+			j.writeFault = fmt.Errorf("%w: partial journal append: %v", ErrCommitUnknown, err)
+			return nil, j.writeFault
+		}
+		return nil, fmt.Errorf("journal: %w", err)
+	}
+	if err := j.file.Sync(); err != nil {
+		j.writeFault = fmt.Errorf("%w: sync journal append: %v", ErrCommitUnknown, err)
+		return nil, j.writeFault
+	}
+	var stored fileLine
+	if err := json.Unmarshal(raw, &stored); err != nil {
+		return nil, fmt.Errorf("%w: decode committed entry: %v", ErrCommitUnknown, err)
+	}
+	stored.Entry.At = stored.Entry.At.UTC()
 	j.mu.Lock()
-	defer j.mu.Unlock()
-	return j.findAccepted(tenant, identity.App, identity.Scope, key), nil
-}
-
-func (j *File) findAccepted(tenant, app, scope, key string) []byte {
-	for i := len(j.entries[tenant]) - 1; i >= 0; i-- {
-		e := j.entries[tenant][i]
-		if e.Kind != "accepted-result" || e.App != app {
-			continue
-		}
-		identity, err := j.identify(e.Body)
-		if err == nil && identity.App == app && identity.Scope == scope && identity.Key == key {
-			return e.Body
-		}
-	}
-	return nil
+	j.entries[tenant] = append(j.entries[tenant], stored.Entry)
+	j.next[tenant] = seq + 1
+	j.mu.Unlock()
+	j.results[index] = fileResult{hash, stored.Entry.Body}
+	return bytes.Clone(stored.Entry.Body), nil
 }
 
 func (j *File) SaveSnapshot(_ context.Context, tenant string, seq int64, code string, state []byte) error {
@@ -437,8 +398,8 @@ func (j *File) putVector(tenant, model, hash string, vector []float32) {
 }
 
 func (j *File) Vectors(tenant, model string, hashes []string) map[string][]float32 {
-	j.mu.Lock()
-	defer j.mu.Unlock()
+	j.mu.RLock()
+	defer j.mu.RUnlock()
 	out := map[string][]float32{}
 	for _, hash := range hashes {
 		if v, ok := j.vectors[tenant+"|"+model][hash]; ok {
@@ -493,8 +454,8 @@ func (j *File) SaveTranscript(x Transcript) {
 }
 
 func (j *File) Transcripts(tenant, run string, limit int) []Transcript {
-	j.mu.Lock()
-	defer j.mu.Unlock()
+	j.mu.RLock()
+	defer j.mu.RUnlock()
 	out := []Transcript{}
 	for i := len(j.transcripts) - 1; i >= 0 && len(out) < limit; i-- {
 		x := j.transcripts[i]
@@ -537,17 +498,29 @@ func (j *File) PurgeTranscripts(tenant string, before time.Time) {
 	}
 }
 
+type observationSize struct {
+	at    time.Time
+	bytes int64
+}
+
 func (j *File) loadObservationIDs() error {
+	if j.observationIDs != nil {
+		return nil
+	}
 	events, err := j.readObservations()
 	if err != nil {
 		return err
 	}
-	ids := map[string]map[string]struct{}{}
+	ids := map[string]map[string]observationSize{}
 	for _, event := range events {
 		if ids[event.Tenant] == nil {
-			ids[event.Tenant] = map[string]struct{}{}
+			ids[event.Tenant] = map[string]observationSize{}
 		}
-		ids[event.Tenant][event.ID] = struct{}{}
+		raw, err := json.Marshal(event)
+		if err != nil {
+			return err
+		}
+		ids[event.Tenant][event.ID] = observationSize{event.At, int64(len(raw))}
 	}
 	j.observationIDs = ids
 	return nil
@@ -595,57 +568,40 @@ func (j *File) SaveObservations(events []protocol.Observation) error {
 	}
 	j.observationMu.Lock()
 	defer j.observationMu.Unlock()
-	if j.observationIDs == nil {
-		if err := j.loadObservationIDs(); err != nil {
-			return err
-		}
+	if err := j.loadObservationIDs(); err != nil {
+		return err
 	}
-	added := map[string][]string{}
-	pending := map[string]struct{}{}
+	added := map[[2]string]observationSize{}
 	var raw bytes.Buffer
 	for _, event := range events {
 		event = normalizeObservation(event)
 		if _, seen := j.observationIDs[event.Tenant][event.ID]; seen {
 			continue
 		}
-		key := event.Tenant + "\x00" + event.ID
-		if _, seen := pending[key]; seen {
+		key := [2]string{event.Tenant, event.ID}
+		if _, seen := added[key]; seen {
 			continue
 		}
 		line, err := json.Marshal(event)
 		if err != nil {
 			return fmt.Errorf("observations: %w", err)
 		}
-		pending[key] = struct{}{}
-		added[event.Tenant] = append(added[event.Tenant], event.ID)
+		added[key] = observationSize{event.At, int64(len(line))}
 		raw.Write(line)
 		raw.WriteByte('\n')
 	}
 	if raw.Len() == 0 {
 		return nil
 	}
-	file, err := os.OpenFile(j.observationsPath(), os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o600)
-	if err != nil {
-		return fmt.Errorf("observations: %w", err)
+	if err := appendFileSync(j.observationsPath(), raw.Bytes(), "observations"); err != nil {
+		j.observationIDs = nil
+		return err
 	}
-	if _, err := file.Write(raw.Bytes()); err != nil {
-		file.Close()
-		return fmt.Errorf("observations: %w", err)
-	}
-	if err := file.Sync(); err != nil {
-		file.Close()
-		return fmt.Errorf("observations: %w", err)
-	}
-	if err := file.Close(); err != nil {
-		return fmt.Errorf("observations: %w", err)
-	}
-	for tenant, ids := range added {
-		if j.observationIDs[tenant] == nil {
-			j.observationIDs[tenant] = map[string]struct{}{}
+	for key, size := range added {
+		if j.observationIDs[key[0]] == nil {
+			j.observationIDs[key[0]] = map[string]observationSize{}
 		}
-		for _, id := range ids {
-			j.observationIDs[tenant][id] = struct{}{}
-		}
+		j.observationIDs[key[0]][key[1]] = size
 	}
 	return nil
 }
@@ -701,34 +657,21 @@ func (j *File) PurgeObservations(tenant string, before time.Time) (int, error) {
 			return 0, err
 		}
 	}
-	ids := map[string]map[string]struct{}{}
-	for _, event := range kept {
-		if ids[event.Tenant] == nil {
-			ids[event.Tenant] = map[string]struct{}{}
-		}
-		ids[event.Tenant][event.ID] = struct{}{}
-	}
-	j.observationIDs = ids
+	j.observationIDs = nil
 	return removed, nil
 }
 
 func (j *File) ObservationUsage(tenant string, from time.Time) (int64, error) {
 	j.observationMu.Lock()
-	events, err := j.readObservations()
-	j.observationMu.Unlock()
-	if err != nil {
+	defer j.observationMu.Unlock()
+	if err := j.loadObservationIDs(); err != nil {
 		return 0, err
 	}
 	var total int64
-	for _, event := range events {
-		if event.Tenant != tenant || event.At.Before(from) {
-			continue
+	for _, event := range j.observationIDs[tenant] {
+		if !event.at.Before(from) {
+			total += event.bytes
 		}
-		raw, err := json.Marshal(event)
-		if err != nil {
-			return 0, err
-		}
-		total += int64(len(raw))
 	}
 	return total, nil
 }
@@ -815,37 +758,20 @@ func (j *File) SaveAuditEntries(tenant string, entries []protocol.AuditEntry) er
 	}
 	j.auditMu.Lock()
 	defer j.auditMu.Unlock()
-	existing, err := j.readAuditEntries()
-	if err != nil {
-		return err
-	}
-	seen := map[string]struct{}{}
-	for _, line := range existing {
-		if line.Tenant == tenant {
-			seen[line.Entry.ID] = struct{}{}
-		}
-	}
-	var raw bytes.Buffer
-	for _, entry := range entries {
-		entry = normalizeAuditEntry(entry)
-		if entry.ID == "" {
-			return fmt.Errorf("audit entry needs an identity")
-		}
-		if _, duplicate := seen[entry.ID]; duplicate {
-			continue
-		}
-		seen[entry.ID] = struct{}{}
-		line, err := json.Marshal(auditLine{Tenant: tenant, Entry: entry})
+	if j.auditIDs == nil {
+		existing, err := j.readAuditEntries()
 		if err != nil {
-			return fmt.Errorf("audit: %w", err)
+			return err
 		}
-		raw.Write(line)
-		raw.WriteByte('\n')
+		j.auditIDs = make(map[[2]string]struct{}, len(existing))
+		for _, line := range existing {
+			j.auditIDs[[2]string{line.Tenant, line.Entry.ID}] = struct{}{}
+		}
 	}
-	if raw.Len() == 0 {
-		return nil
-	}
-	return appendFileSync(j.auditPath(), raw.Bytes(), "audit")
+	return appendDistinct(j.auditPath(), "audit", tenant, &j.auditIDs, entries, func(value protocol.AuditEntry) (string, any) {
+		return value.ID, auditLine{tenant, normalizeAuditEntry(value)}
+	}, "audit entry")
+
 }
 
 func (j *File) QueryAuditEntries(query protocol.AuditQuery) (protocol.AuditPage, error) {
@@ -915,37 +841,20 @@ func (j *File) SavePersonalReads(tenant string, reads []protocol.PersonalRead) e
 	}
 	j.personalMu.Lock()
 	defer j.personalMu.Unlock()
-	existing, err := j.readPersonalReads()
-	if err != nil {
-		return err
-	}
-	seen := map[string]struct{}{}
-	for _, line := range existing {
-		if line.Tenant == tenant {
-			seen[line.Read.ID] = struct{}{}
-		}
-	}
-	var raw bytes.Buffer
-	for _, read := range reads {
-		read = normalizePersonalRead(read)
-		if read.ID == "" {
-			return fmt.Errorf("personal read needs an identity")
-		}
-		if _, duplicate := seen[read.ID]; duplicate {
-			continue
-		}
-		seen[read.ID] = struct{}{}
-		line, err := json.Marshal(personalReadLine{Tenant: tenant, Read: read})
+	if j.personalIDs == nil {
+		existing, err := j.readPersonalReads()
 		if err != nil {
-			return fmt.Errorf("personal reads: %w", err)
+			return err
 		}
-		raw.Write(line)
-		raw.WriteByte('\n')
+		j.personalIDs = make(map[[2]string]struct{}, len(existing))
+		for _, line := range existing {
+			j.personalIDs[[2]string{line.Tenant, line.Read.ID}] = struct{}{}
+		}
 	}
-	if raw.Len() == 0 {
-		return nil
-	}
-	return appendFileSync(j.personalReadsPath(), raw.Bytes(), "personal reads")
+	return appendDistinct(j.personalReadsPath(), "personal reads", tenant, &j.personalIDs, reads, func(value protocol.PersonalRead) (string, any) {
+		return value.ID, personalReadLine{tenant, normalizePersonalRead(value)}
+	}, "personal read")
+
 }
 
 func (j *File) QueryPersonalReads(query protocol.PersonalReadQuery) (protocol.PersonalReadPage, error) {
@@ -965,6 +874,38 @@ func (j *File) QueryPersonalReads(query protocol.PersonalReadQuery) (protocol.Pe
 		}
 	}
 	return selectPersonalReadPage(reads, query, earliestPersonalRead(reads))
+}
+
+func appendDistinct[T any](path, label, tenant string, ids *map[[2]string]struct{}, values []T, line func(T) (string, any), identity string) error {
+	var raw bytes.Buffer
+	encoder := json.NewEncoder(&raw)
+	pending := make(map[[2]string]struct{}, len(values))
+	for _, value := range values {
+		id, entry := line(value)
+		if id == "" {
+			return fmt.Errorf("%s needs an identity", identity)
+		}
+		key := [2]string{tenant, id}
+		if _, exists := (*ids)[key]; exists {
+			continue
+		}
+		if _, exists := pending[key]; exists {
+			continue
+		}
+		if err := encoder.Encode(entry); err != nil {
+			return fmt.Errorf("%s: %w", label, err)
+		}
+		pending[key] = struct{}{}
+	}
+	if raw.Len() == 0 {
+		return nil
+	}
+	if err := appendFileSync(path, raw.Bytes(), label); err != nil {
+		*ids = nil
+		return err
+	}
+	maps.Copy(*ids, pending)
+	return nil
 }
 
 func appendFileSync(path string, raw []byte, label string) error {

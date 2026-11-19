@@ -16,6 +16,22 @@ func (c Context) ref(name string) (Value, bool) {
 	if c.source != nil {
 		return c.source.Ref(name)
 	}
+	return c.field(name)
+}
+
+type itemScope struct {
+	fields map[string]Value
+	parent *itemScope
+}
+
+func (c Context) field(name string) (Value, bool) {
+	if field, item := strings.CutPrefix(name, "item."); item {
+		for scope := c.item; scope != nil; scope = scope.parent {
+			if v, ok := scope.fields[field]; ok {
+				return v, true
+			}
+		}
+	}
 	v, ok := c.Refs[name]
 	return v, ok
 }
