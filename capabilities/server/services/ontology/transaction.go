@@ -110,6 +110,10 @@ func CheckTransactions(object Object, ctx TransactionContext, engines ...platfor
 	for _, action := range object.Actions {
 		txn := action.Transaction
 		proposalFields := map[string]bool{}
+		declaredReadOnly := map[string]bool{}
+		for _, field := range object.Fields {
+			declaredReadOnly[field.Name] = field.ReadOnly && field.Formula == "" && field.FormulaExpr == nil && field.AliasOf == ""
+		}
 		if action.Adoption != nil {
 			for _, field := range object.Fields {
 				if field.ReadOnly && field.SourceType == "generated" && field.Formula == "" && field.FormulaExpr == nil && field.AliasOf == "" {
@@ -379,7 +383,7 @@ func CheckTransactions(object Object, ctx TransactionContext, engines ...platfor
 				for _, assignment := range step.Changes {
 					field, found := info.Field(assignment.Field)
 					proposalField := proposalFields[field.Name] && step.Kind == "update" && step.Target.Type == subject && step.Target.ID == "$subject" && step.Target.Via == "" && row == ""
-					if !found || field.ReadOnly && !(field.Name == "state" && step.Target.Type == subject) && !proposalField || used[field.Name] || assignment.Expr == nil && assignment.From == "" {
+					if !found || field.ReadOnly && !((field.Name == "state" || declaredReadOnly[field.Name]) && step.Target.Type == subject) && !proposalField || used[field.Name] || assignment.Expr == nil && assignment.From == "" {
 						return fmt.Errorf("%s needs distinct writable Expr assignments", where)
 					}
 					used[field.Name] = true

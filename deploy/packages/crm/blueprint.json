@@ -2791,6 +2791,9 @@
               "converted": {
                 "type": "boolean"
               },
+              "deal": {
+                "type": "string"
+              },
               "email": {
                 "type": "string"
               },

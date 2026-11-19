@@ -1,6 +1,6 @@
 {
   "id": "crm",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "namespace": "crm",
   "title": "CRM",
   "description": "Leads, deals, organizations, contacts, tasks and notes, with lead-to-deal conversion. Built in the crm project and released through Delivery.",
@@ -1754,6 +1754,7 @@
           "action": {
             "capability": "lead",
             "description": "Create or link the organization, create the contact and the deal from this lead, and mark the lead converted.",
+            "open": "deal",
             "payload": [
               {
                 "constraints": {},
@@ -1766,8 +1767,8 @@
             ],
             "schema": "build.lead.convert",
             "schemaVersion": {
-              "family": 1,
-              "version": "schema.sha256.10bd639237669dbb5d1cb1eae6780ed6faa29f4eca12f887ecb987ca4fbae546"
+              "family": 2,
+              "version": "schema.sha256.6f1532f4957a1dbdc74d80ad8334ca20514c9a6329058d1adf86dd6ad9e52e42"
             },
             "target": "build.lead",
             "title": "Convert to deal"
@@ -2164,8 +2165,8 @@
             ],
             "schema": "build.lead.create",
             "schemaVersion": {
-              "family": 1,
-              "version": "schema.sha256.10bd639237669dbb5d1cb1eae6780ed6faa29f4eca12f887ecb987ca4fbae546"
+              "family": 2,
+              "version": "schema.sha256.6f1532f4957a1dbdc74d80ad8334ca20514c9a6329058d1adf86dd6ad9e52e42"
             },
             "target": "build.lead",
             "title": "Create lead"
@@ -2553,8 +2554,8 @@
             ],
             "schema": "build.lead.edit",
             "schemaVersion": {
-              "family": 1,
-              "version": "schema.sha256.10bd639237669dbb5d1cb1eae6780ed6faa29f4eca12f887ecb987ca4fbae546"
+              "family": 2,
+              "version": "schema.sha256.6f1532f4957a1dbdc74d80ad8334ca20514c9a6329058d1adf86dd6ad9e52e42"
             },
             "target": "build.lead",
             "title": "Edit lead"
@@ -3606,6 +3607,7 @@
             },
             {
               "name": "rate",
+              "required": true,
               "title": "Standard rate",
               "type": "money"
             },
@@ -3625,7 +3627,7 @@
           "schemaVersions": [
             {
               "family": 1,
-              "version": "schema.sha256.6b50934884c51c7d557c4dbac5a0dd6ef6f76f0403b63ca727851ad93e085426"
+              "version": "schema.sha256.860e4db51a392881b0ec247cf0d59bcc473ed512b2624afda09180ad49ee1afd"
             }
           ],
           "title": "Product",
@@ -4759,6 +4761,9 @@
                 "converted": {
                   "type": "boolean"
                 },
+                "deal": {
+                  "type": "string"
+                },
                 "email": {
                   "type": "string"
                 },
@@ -4869,6 +4874,7 @@
                 }
               ],
               "name": "convert",
+              "open": "deal",
               "title": "Convert to deal",
               "transaction": {
                 "guard": {
@@ -5217,6 +5223,14 @@
                           "op": ""
                         },
                         "field": "status"
+                      },
+                      {
+                        "expr": {
+                          "kind": "reference",
+                          "op": "",
+                          "ref": "step.deal"
+                        },
+                        "field": "deal"
                       }
                     ],
                     "kind": "update",
@@ -5318,6 +5332,14 @@
               "name": "converted",
               "title": "Converted",
               "type": "boolean"
+            },
+            {
+              "group": "Closure",
+              "name": "deal",
+              "readOnly": true,
+              "ref": "build.deal",
+              "title": "Deal",
+              "type": "reference"
             },
             {
               "group": "Closure",
@@ -5506,12 +5528,12 @@
               "version": "schema.sha256.39676cff2a49bdd883c351b27e4c79e5d82583eecdc7d9d149287f439bc6b807"
             },
             {
-              "family": 1,
-              "version": "schema.sha256.33f42f871969f8a123a2e52e1d728cc13fbe075f41b08f47a720095d3a2d0ab3"
+              "family": 2,
+              "version": "schema.sha256.5e1511e2b54bf0efc9832d8c4f9a3bb8c7aea4a7b4e80ffeda0bc2de702efaf5"
             },
             {
-              "family": 1,
-              "version": "schema.sha256.10bd639237669dbb5d1cb1eae6780ed6faa29f4eca12f887ecb987ca4fbae546"
+              "family": 2,
+              "version": "schema.sha256.6f1532f4957a1dbdc74d80ad8334ca20514c9a6329058d1adf86dd6ad9e52e42"
             }
           ],
           "states": [
@@ -7083,6 +7105,9 @@
                   "name": "converted"
                 },
                 {
+                  "name": "deal"
+                },
+                {
                   "name": "lostreason"
                 },
                 {
@@ -7140,6 +7165,9 @@
                   },
                   {
                     "name": "converted"
+                  },
+                  {
+                    "name": "deal"
                   },
                   {
                     "name": "lostreason"

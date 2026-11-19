@@ -125,19 +125,18 @@ type State struct {
 }
 
 type ActionType struct {
-	ConfirmationOnly bool
-	Adoption         *ProposalAdoption `json:"-"`
-	Criteria         ActionCriteria    `json:"-"`
-	Name             string
-	Title            string
-	Description      string
-	Roles            []string
-	Parameters       []Field
-	DeferRequired    bool `json:"-"`
-	Capability       string
-	Approval         *Approval
-	Rules            []ActionRule                                                    `json:"-"`
-	Effects          []func(c Caller, r *pb.ChangeRecord, record any, now time.Time) `json:"-"`
+	ConfirmationOnly         bool
+	Open                     string
+	Adoption                 *ProposalAdoption `json:"-"`
+	Criteria                 ActionCriteria    `json:"-"`
+	Name, Title, Description string
+	Roles                    []string
+	Parameters               []Field
+	DeferRequired            bool `json:"-"`
+	Capability               string
+	Approval                 *Approval
+	Rules                    []ActionRule                                                    `json:"-"`
+	Effects                  []func(c Caller, r *pb.ChangeRecord, record any, now time.Time) `json:"-"`
 }
 
 type ActionCriteria struct {

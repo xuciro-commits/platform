@@ -87,6 +87,7 @@ type Action struct {
 	From             []string                   `json:"from" title:"Taken from" help:"The states it takes a record from"`
 	Inputs           []Input                    `json:"inputs,omitempty" title:"Inputs" help:"What people give"`
 	Transaction      *platform.BusinessTxn      `json:"transaction,omitempty"`
+	Open             string                     `json:"open,omitempty" title:"Opens" help:"A reference field of this object; after the action people land on the record it names, such as the one the action created"`
 	Roles            []string                   `json:"roles,omitempty" title:"Taken by"`
 	Approval         *ActionApproval            `json:"approval,omitempty" title:"Approval"`
 }

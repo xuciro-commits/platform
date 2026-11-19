@@ -2,12 +2,15 @@ import { AlertDialog } from "@astryxdesign/core/AlertDialog";
 import { Button } from "@astryxdesign/core/Button";
 import { useToast } from "@astryxdesign/core/Toast";
 import { useRef, useState } from "react";
-import { type Api, request, submit } from "../host";
+import { recordHref } from "../apps/entries";
+import { type Api, request, submit, useRead } from "../host";
 import { t } from "../i18n";
 import { ActionDialog } from "./ActionDialog";
 import type { Described, Step, Values } from "./describe";
 import { enterable } from "./ParameterInput";
 import { PublishDialog } from "./PublishDialog";
+import { navigate, usePath } from "../router";
+import { plain } from "./values";
 
 const attempts = 3;
 
@@ -89,6 +92,22 @@ export function useAct(described?: Described) {
   const [busy, setBusy] = useState(false);
   const toast = useToast();
   const firing = useRef(false);
+  const path = usePath();
+  const views = useRead<Api.ApplicationView[]>("/v1/applications");
+
+  const land = async (intent: Intent) => {
+    const field = intent.action.open;
+    const type = field ? described?.field(field)?.ref : undefined;
+    if (!field || !type) return;
+    const subject = await request<Api.RecordView>(`/v1/records/${intent.action.target}/${encodeURIComponent(intent.id)}`);
+    const id = plain(subject.values?.[field]);
+    if (typeof id !== "string" || !id) return;
+    const app = path.split("/")[1];
+    const page = views.status === "ready"
+      ? views.data.find((view) => (view.name || view.app) === app)?.menu?.flatMap((group) => group.entries).find((entry) => entry.object === type)
+      : undefined;
+    await navigate(page ? `/${app}/${page.name}/${encodeURIComponent(id)}` : recordHref(type, id));
+  };
 
   const cancel = () => {
     pending?.onCancel?.();
@@ -122,6 +141,7 @@ export function useAct(described?: Described) {
         });
       }
       intent.onDone?.();
+      await land(intent);
     } catch (problem) {
       intent.onRefused(reasonOf(problem));
     }
@@ -150,6 +170,7 @@ export function useAct(described?: Described) {
       onDone={() => {
         pending.onDone?.();
         setPending(undefined);
+        void land(pending);
       }}
     />
   ) : pending.action.schema === "build.object.publish" ? (

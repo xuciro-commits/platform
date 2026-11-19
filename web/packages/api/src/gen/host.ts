@@ -212,6 +212,7 @@ export type Action = {
   idPrefix?: string;
   automation?: boolean;
   confirmationOnly?: boolean;
+  open?: string;
 };
 
 export type ActionCheckRequest = {

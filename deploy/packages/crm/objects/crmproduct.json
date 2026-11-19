@@ -17,6 +17,7 @@
     },
     {
       "name": "rate",
+      "required": true,
       "title": "Standard rate",
       "type": "money"
     },
@@ -36,7 +37,7 @@
   "schemaVersions": [
     {
       "family": 1,
-      "version": "schema.sha256.6b50934884c51c7d557c4dbac5a0dd6ef6f76f0403b63ca727851ad93e085426"
+      "version": "schema.sha256.860e4db51a392881b0ec247cf0d59bcc473ed512b2624afda09180ad49ee1afd"
     }
   ],
   "title": "Product",

@@ -78,12 +78,25 @@ func (l *authority) ApplyTxnRecord(c platform.Caller, r *pb.ChangeRecord, e plat
 			}
 		}
 	}
-	if raw, exists := given["state"]; exists {
+	own := verb == "create" || e.Type == invocation.GetTarget().GetType() && id == invocation.GetTarget().GetId()
+	fixed := map[string]reflect.Value{}
+	for name, raw := range given {
+		f, found := info.Field(name)
+		if !found || !f.ReadOnly {
+			continue
+		}
 		var state string
-		if verb != "create" && (e.Type != invocation.GetTarget().GetType() || id != invocation.GetTarget().GetId()) || e.Lifecycle == nil || e.Lifecycle.Field != "state" || json.Unmarshal(raw, &state) != nil || !slices.ContainsFunc(e.Lifecycle.States, func(s platform.State) bool { return s.Name == state }) {
+		if name == "state" && (!own || e.Lifecycle == nil || e.Lifecycle.Field != "state" || json.Unmarshal(raw, &state) != nil || !slices.ContainsFunc(e.Lifecycle.States, func(s platform.State) bool { return s.Name == state })) {
 			return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Transaction state must be a declared state of its subject")
 		}
-		delete(given, "state")
+		value := reflect.New(reflect.TypeOf(e.Model).FieldByIndex(f.Index).Type)
+		if !own || json.Unmarshal(raw, value.Interface()) != nil {
+			return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Transaction writes a read-only field outside its subject")
+		}
+		fixed[name] = value.Elem()
+		delete(given, name)
+	}
+	if len(fixed) > 0 {
 		payload = platform.Raw(given)
 		s.Payload = payload
 		compute := e.Compute
@@ -91,7 +104,11 @@ func (l *authority) ApplyTxnRecord(c platform.Caller, r *pb.ChangeRecord, e plat
 			if compute != nil {
 				compute(value)
 			}
-			reflect.ValueOf(value).Elem().FieldByName("State").SetString(state)
+			record := reflect.ValueOf(value).Elem()
+			for name, set := range fixed {
+				f, _ := info.Field(name)
+				record.FieldByIndex(f.Index).Set(set)
+			}
 		}
 	}
 	apply, err := l.checked(c, s, now, catalog, func() (func(*pb.ChangeRecord), *platform.Error) { return executeAction(c, e, action, s, now) })()

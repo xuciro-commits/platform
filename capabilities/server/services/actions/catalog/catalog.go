@@ -127,7 +127,7 @@ func EntityActions(e platform.RecordType) []platform.Action {
 				description = fmt.Sprintf("Move %s from %s to %s.", article(info.Title), strings.Join(move.From, " or "), strings.Join(to, " or "))
 			}
 			out = append(out, platform.Action{Schema: e.Type + "." + t.Name, Reverse: reverses[i], Target: e.Type, Capability: c, Title: info.Lifecycle.Transitions[i].Title,
-				Description: description, Payload: payload, Roles: t.Roles, Adoption: t.Adoption, Approval: t.Approval, DeferRequired: t.DeferRequired, ConfirmationOnly: t.ConfirmationOnly})
+				Description: description, Payload: payload, Roles: t.Roles, Adoption: t.Adoption, Approval: t.Approval, DeferRequired: t.DeferRequired, ConfirmationOnly: t.ConfirmationOnly, Open: t.Open})
 			if t.Approval != nil && t.Approval.Pending != "" {
 				for _, m := range [][2]string{{platform.ApprovalHeld, "Hold for approval"}, {platform.ApprovalRejected, "Mark rejected"}, {platform.ApprovalReturned, "Return from approval"}} {
 					suffix, title := m[0], m[1]

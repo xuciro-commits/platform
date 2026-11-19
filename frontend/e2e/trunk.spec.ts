@@ -1752,6 +1752,10 @@ async function crmMainline(page: Page, go: (type: string, plural: string) => Pro
   const convert = page.getByRole("dialog", { name: "Convert to deal", exact: true });
   await convert.getByRole("button", { name: "Convert to deal", exact: true }).click();
   await expect(convert).toBeHidden();
+  await expect(page).toHaveURL(/\/(build\.)?deal\/[^/]+$/);
+  await expect(page.getByRole("heading", { level: 1, name: company, exact: true })).toBeVisible();
+  await page.goto(leadPage);
+  await expect(page.getByRole("link", { name: company, exact: true }).first()).toBeVisible();
   await page.getByRole("button", { name: "More actions" }).click();
   await expect(page.getByRole("menuitem", { name: "Convert to deal", exact: true })).toBeDisabled();
   await page.keyboard.press("Escape");

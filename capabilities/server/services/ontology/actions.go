@@ -53,6 +53,8 @@ func CheckProcess(o Object, app, objectType, builderRole, userRole, functionCall
 			return fmt.Errorf("%s says no state it is taken from", where)
 		case a.Transaction == nil:
 			return fmt.Errorf("%s has no transaction", where)
+		case a.Open != "" && fields[a.Open].Type != "reference":
+			return fmt.Errorf("%s opens %q, which is not a reference field of the object", where, a.Open)
 		}
 		seen[a.Name] = true
 		for _, s := range a.From {

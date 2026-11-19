@@ -67,7 +67,7 @@ func compileLifecycle(o Object, roles []string, env ObjectRuntimeEnvironment) *p
 		if description == "" {
 			description = "Apply this business transaction."
 		}
-		life.Actions = append(life.Actions, platform.ActionType{ConfirmationOnly: action.ConfirmationOnly, Adoption: action.Adoption,
+		life.Actions = append(life.Actions, platform.ActionType{ConfirmationOnly: action.ConfirmationOnly, Adoption: action.Adoption, Open: action.Open,
 			Criteria: platform.ActionCriteria{State: &platform.FieldCondition{Field: life.Field, In: slices.Clone(action.From)}, Business: criteria},
 			Name:     action.Name, Title: action.Title, Description: description, Roles: takers, Capability: o.Name, Parameters: payload, Approval: approval, DeferRequired: true,
 			Rules: []platform.ActionRule{{Transaction: &platform.TransactionRule{Spec: action.Transaction, Run: func(c platform.Caller, r *pb.ChangeRecord, now time.Time) *platform.Error {

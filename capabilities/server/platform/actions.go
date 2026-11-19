@@ -166,6 +166,7 @@ type Action struct {
 	IDPrefix         string            `json:"idPrefix,omitempty"`
 	Automation       bool              `json:"automation,omitempty"`
 	ConfirmationOnly bool              `json:"confirmationOnly,omitempty"`
+	Open             string            `json:"open,omitempty"`
 	DeferRequired    bool              `json:"-"`
 }
 
