@@ -179,10 +179,6 @@ export const zhCN: Record<string, string> = {
   "Monday": "星期一",
   "Sunday": "星期日",
   "Saturday": "星期六",
-  "Profile": "个人资料",
-  "Login & security": "登录与安全",
-  "Preferences": "偏好",
-  "Language & region": "语言与地区",
   "Email": "邮箱",
   "name@company.com": "name@company.com",
   "Password": "密码",
@@ -477,8 +473,6 @@ export const zhCN: Record<string, string> = {
   "Failing endpoints": "失败的端点",
   "Readiness": "就绪检查",
   "Check": "检查项",
-  "Ready": "已就绪",
-  "Not ready": "未就绪",
   "Queues": "队列",
   "Depth": "队列深度",
   "Oldest, seconds": "最久等待（秒）",
@@ -495,6 +489,10 @@ export const zhCN: Record<string, string> = {
   "Label": "标签",
   "Each app's settings for this workspace; a change applies to every member.": "本工作区里每个应用的设置；改动对所有成员生效。",
   "Back": "返回",
+  "Added": "新增",
+  "Changed": "已更改",
+  "Removed": "删除",
+  "Product": "产品",
 };
 
 const supported = (language: string) => (language.startsWith("zh") ? "zh-CN" : "en");

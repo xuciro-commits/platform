@@ -1,7 +1,7 @@
 import { Banner } from "@astryxdesign/core/Banner";
 import { Button } from "@astryxdesign/core/Button";
 import { VStack } from "@astryxdesign/core/Layout";
-import { useEffect, useMemo, useState } from "react";
+import { type ComponentType, useEffect, useMemo, useState } from "react";
 import { type Api, type Read, request, useRead } from "../host";
 import { t } from "../i18n";
 import { navigate, usePath, useSearch } from "../router";
@@ -17,7 +17,8 @@ import { money, plain, present, shown } from "./values";
 import { domainOf, hasFilters, newView, readView, type ViewState } from "./view";
 
 type Row = Record<string, unknown>;
-type Declared = { type: string; title?: string; about: string; fields?: string[]; headers?: Record<string, string>; project?: boolean; instances?: { field: string; path: string } };
+type Creator = ComponentType<{ onClose: () => void; onDone: (id: string) => void }>;
+type Declared = { type: string; title?: string; about: string; fields?: string[]; headers?: Record<string, string>; project?: boolean; instances?: { field: string; path: string }; creator?: Creator };
 type Back = { href: string; label: string };
 type Stamp = { at?: string };
 type Formats = Record<string, Api.FieldFormat>;
@@ -343,7 +344,10 @@ export function Records({ declared, listPath, id, back }: { declared: Declared; 
         primary={create ? <Button label={t("New")} variant="primary" onClick={() => setCreating(true)} /> : undefined}
       />
       {act.element}
-      {creating && create && described && (
+      {creating && create && described && declared.creator && (
+        <declared.creator onClose={() => setCreating(false)} onDone={(created) => navigate(`${listPath}/${encodeURIComponent(created)}`, { fresh: created })} />
+      )}
+      {creating && create && described && !declared.creator && (
         <ActionDialog
           action={create}
           described={described.entity}

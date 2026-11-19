@@ -1851,3 +1851,24 @@ test("crm: the released package installs into an empty tenant whose CRM app runs
     await expect(page.getByRole("heading", { level: 1, name: plural, exact: true })).toBeVisible();
   }, "Tove Berg", "Saga Logistics");
 });
+
+test("delivery: a builder picks a project, reviews what it contains and publishes a version", async ({ page }) => {
+  await signIn(page);
+  await page.goto("/delivery/versions");
+  await expect(page.getByRole("heading", { level: 1, name: "Versions", exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "New", exact: true }).first().click();
+  const release = page.getByRole("dialog", { name: "Publish product version", exact: true });
+  await release.getByRole("combobox", { name: "Product" }).click();
+  await page.getByRole("option", { name: "CRM · Create product", exact: true }).click();
+  await expect(release.getByRole("textbox", { name: "Version" })).toHaveValue("0.1.0");
+  await expect(release.getByText("Convert to deal", { exact: true })).toBeVisible();
+  await expect(release.getByText("Added", { exact: true }).first()).toBeVisible();
+  await release.getByRole("button", { name: "Publish product version", exact: true }).click();
+  await expect(page).toHaveURL(/\/delivery\/versions\/crm%400\.1\.0$/);
+  await expect(page.getByRole("heading", { level: 1, name: "0.1.0", exact: true })).toBeVisible();
+  await page.goto("/delivery/versions");
+  await page.getByRole("button", { name: "New", exact: true }).first().click();
+  await release.getByRole("combobox", { name: "Product" }).click();
+  await page.getByRole("option", { name: "CRM · CRM", exact: true }).click();
+  await expect(release.getByRole("textbox", { name: "Version" })).toHaveValue("0.1.1");
+});
