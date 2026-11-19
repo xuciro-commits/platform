@@ -1,0 +1,13 @@
+{
+  "icon": "users",
+  "name": "crm",
+  "pages": [
+    "lead",
+    "deal",
+    "organization",
+    "crmcontact",
+    "crmtask",
+    "note"
+  ],
+  "title": "CRM"
+}

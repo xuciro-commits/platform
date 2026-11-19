@@ -1,0 +1,39 @@
+{
+  "display": "title",
+  "fields": [
+    {
+      "name": "title",
+      "required": true,
+      "search": true,
+      "title": "Industry",
+      "type": "text"
+    }
+  ],
+  "name": "industry",
+  "plural": "Industries",
+  "schemaVersions": [
+    {
+      "family": 1,
+      "version": "schema.sha256.bb3219d78d634ce96bdc9d3421722ac43a37878e56f8a716038f1a0bbea185e3"
+    }
+  ],
+  "title": "Industry",
+  "type": "build.industry",
+  "view": {
+    "columns": [
+      "title"
+    ],
+    "filters": [],
+    "group": "none",
+    "lanes": "",
+    "layout": "table",
+    "search": "",
+    "sort": [
+      {
+        "direction": "ascending",
+        "sortKey": "title"
+      }
+    ],
+    "version": 1
+  }
+}

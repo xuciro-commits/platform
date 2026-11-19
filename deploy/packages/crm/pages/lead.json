@@ -1,0 +1,275 @@
+{
+  "actionTriggers": [
+    {
+      "actions": [
+        {
+          "app": "build",
+          "kind": "action",
+          "name": "build.lead.create"
+        },
+        {
+          "app": "build",
+          "kind": "action",
+          "name": "build.lead.edit"
+        },
+        {
+          "app": "build",
+          "kind": "action",
+          "name": "build.lead.convert"
+        }
+      ],
+      "binding": "page",
+      "id": "page"
+    },
+    {
+      "binding": "list",
+      "id": "list",
+      "owner": "binding:list"
+    },
+    {
+      "binding": "detail",
+      "id": "detail",
+      "owner": "binding:detail"
+    }
+  ],
+  "dataBindings": [
+    {
+      "fields": [
+        {
+          "name": "fullname"
+        },
+        {
+          "name": "organizationname"
+        },
+        {
+          "name": "email"
+        },
+        {
+          "name": "mobile"
+        },
+        {
+          "name": "state"
+        }
+      ],
+      "id": "list",
+      "kind": "record",
+      "model": {
+        "fields": [
+          {
+            "name": "fullname"
+          },
+          {
+            "name": "organizationname"
+          },
+          {
+            "name": "email"
+          },
+          {
+            "name": "mobile"
+          },
+          {
+            "name": "state"
+          }
+        ],
+        "type": "build.lead"
+      },
+      "object": {
+        "app": "build",
+        "kind": "object",
+        "name": "build.lead"
+      },
+      "owner": "binding:list",
+      "ports": {
+        "parentable": "true",
+        "selectionMode": "write",
+        "widget": "table"
+      }
+    },
+    {
+      "fields": [
+        {
+          "name": "fullname"
+        },
+        {
+          "name": "organizationname"
+        },
+        {
+          "name": "email"
+        },
+        {
+          "name": "mobile"
+        },
+        {
+          "name": "phone"
+        },
+        {
+          "name": "website"
+        },
+        {
+          "name": "jobtitle"
+        },
+        {
+          "name": "source"
+        },
+        {
+          "name": "industry"
+        },
+        {
+          "name": "territory"
+        },
+        {
+          "name": "employees"
+        },
+        {
+          "name": "annualrevenue"
+        },
+        {
+          "name": "converted"
+        },
+        {
+          "name": "lostreason"
+        },
+        {
+          "name": "lostnotes"
+        },
+        {
+          "name": "status"
+        },
+        {
+          "name": "owner"
+        },
+        {
+          "name": "state"
+        }
+      ],
+      "id": "detail",
+      "kind": "record",
+      "model": {
+        "fields": [
+          {
+            "name": "fullname"
+          },
+          {
+            "name": "organizationname"
+          },
+          {
+            "name": "email"
+          },
+          {
+            "name": "mobile"
+          },
+          {
+            "name": "phone"
+          },
+          {
+            "name": "website"
+          },
+          {
+            "name": "jobtitle"
+          },
+          {
+            "name": "source"
+          },
+          {
+            "name": "industry"
+          },
+          {
+            "name": "territory"
+          },
+          {
+            "name": "employees"
+          },
+          {
+            "name": "annualrevenue"
+          },
+          {
+            "name": "converted"
+          },
+          {
+            "name": "lostreason"
+          },
+          {
+            "name": "lostnotes"
+          },
+          {
+            "name": "status"
+          },
+          {
+            "name": "owner"
+          },
+          {
+            "name": "state"
+          }
+        ],
+        "type": "build.lead"
+      },
+      "object": {
+        "app": "build",
+        "kind": "object",
+        "name": "build.lead"
+      },
+      "owner": "binding:detail",
+      "ports": {
+        "selectionMode": "read",
+        "widget": "detail"
+      }
+    }
+  ],
+  "format": 4,
+  "inputSchema": {},
+  "name": "lead",
+  "object": {
+    "app": "build",
+    "kind": "object",
+    "name": "build.lead"
+  },
+  "scopeVisibility": {
+    "owners": {
+      "detail": "binding:detail",
+      "list": "binding:list"
+    },
+    "root": "page",
+    "scopes": [
+      {
+        "id": "page",
+        "kind": "page"
+      },
+      {
+        "binding": "list",
+        "id": "binding:list",
+        "kind": "page",
+        "parent": "page"
+      },
+      {
+        "binding": "detail",
+        "id": "binding:detail",
+        "kind": "page",
+        "parent": "page"
+      }
+    ]
+  },
+  "title": "Leads",
+  "widgetSpec": {
+    "body": {
+      "document": null,
+      "layout": "list-detail",
+      "sections": [
+        {
+          "binding": "list",
+          "id": "list",
+          "triggers": [
+            "list"
+          ]
+        },
+        {
+          "binding": "detail",
+          "id": "detail",
+          "triggers": [
+            "detail"
+          ]
+        }
+      ]
+    },
+    "format": "platform.page.web.v1"
+  }
+}

@@ -1,0 +1,53 @@
+{
+  "display": "title",
+  "fields": [
+    {
+      "name": "title",
+      "required": true,
+      "search": true,
+      "title": "Territory",
+      "type": "text"
+    },
+    {
+      "name": "parent",
+      "ref": "build.territory",
+      "title": "Parent territory",
+      "type": "reference"
+    },
+    {
+      "name": "manager",
+      "title": "Territory manager",
+      "type": "member"
+    },
+    {
+      "name": "isgroup",
+      "title": "Is group",
+      "type": "boolean"
+    }
+  ],
+  "name": "territory",
+  "plural": "Territories",
+  "schemaVersions": [
+    {
+      "family": 1,
+      "version": "schema.sha256.34bb84fd28d967f3e0c2f8bbb6db5f5e6e04bb6ed7faa58663385bff9489de06"
+    }
+  ],
+  "title": "Territory",
+  "type": "build.territory",
+  "view": {
+    "columns": [
+      "title",
+      "parent",
+      "manager",
+      "isgroup"
+    ],
+    "filters": [],
+    "group": "none",
+    "lanes": "",
+    "layout": "table",
+    "search": "",
+    "sort": [],
+    "version": 1
+  }
+}

@@ -49,6 +49,7 @@
   `required`、`search`、`choices`、`ref`、`group`、`aside`、`when`。`states` 在同一对象类型记录上声明状态的 `name`、`title`、`tone`、`description`。
 - 转换定义在 `build.actiontype` 资源上。`build.actiontype.edit` 的 `definition` 包含动作名、标题、起始状态 `from` 与事务 `transaction`。
   事务通过更新业务记录的 `state` 执行转换。对象类型用 `actionTypes` 绑定动作类型的资源引用，发布时使用绑定的版本。
+  安装到没有这条动作类型的租户时，按包里随对象冻结的定义建出它，作为该租户的第 1 版。
 - 一个事务可在同一权威里新建与更新多条记录，一次接受全部生效。没填的可选参数与条件不成立而跳过的步骤，其值为空；
   算出为空的赋值不写入：新建时字段留空，更新时保持原值。
 - 对象类型单条读取的 `changes` 比较已发布定义。字段用 `fields.<字段名>` 标识，新增、删除、修改分别返回 `added`、`removed`、`changed`。

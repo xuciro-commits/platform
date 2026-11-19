@@ -1,0 +1,138 @@
+{
+  "action": {
+    "capability": "lead",
+    "description": "Change fields of a lead; fields left out keep their value.",
+    "payload": [
+      {
+        "description": "Full name",
+        "group": "Contact",
+        "name": "fullname",
+        "type": "string"
+      },
+      {
+        "description": "Organization",
+        "group": "Contact",
+        "name": "organizationname",
+        "type": "string"
+      },
+      {
+        "description": "Email",
+        "group": "Contact",
+        "name": "email",
+        "type": "string"
+      },
+      {
+        "description": "Mobile no.",
+        "group": "Contact",
+        "name": "mobile",
+        "type": "string"
+      },
+      {
+        "description": "Phone",
+        "group": "Contact",
+        "name": "phone",
+        "type": "string"
+      },
+      {
+        "description": "Website",
+        "group": "Contact",
+        "name": "website",
+        "type": "string"
+      },
+      {
+        "description": "Job title",
+        "group": "Contact",
+        "name": "jobtitle",
+        "type": "string"
+      },
+      {
+        "description": "Source",
+        "group": "Classification",
+        "name": "source",
+        "type": "string"
+      },
+      {
+        "description": "Industry",
+        "group": "Classification",
+        "name": "industry",
+        "type": "string"
+      },
+      {
+        "description": "Territory",
+        "group": "Classification",
+        "name": "territory",
+        "type": "string"
+      },
+      {
+        "choices": [
+          "1-10",
+          "11-50",
+          "51-200",
+          "201-500",
+          "501-1000",
+          "1000+"
+        ],
+        "description": "Employees (1-10, 11-50, 51-200, 201-500, 501-1000, 1000+)",
+        "group": "Classification",
+        "name": "employees",
+        "type": "string"
+      },
+      {
+        "description": "Annual revenue",
+        "group": "Classification",
+        "name": "annualrevenue",
+        "type": "money"
+      },
+      {
+        "description": "Converted",
+        "group": "Closure",
+        "name": "converted",
+        "type": "boolean"
+      },
+      {
+        "description": "Lost reason",
+        "group": "Closure",
+        "name": "lostreason",
+        "type": "string"
+      },
+      {
+        "description": "Lost notes",
+        "group": "Closure",
+        "name": "lostnotes",
+        "type": "string"
+      },
+      {
+        "choices": [
+          "new",
+          "contacted",
+          "nurture",
+          "qualified",
+          "converted",
+          "unqualified",
+          "junk"
+        ],
+        "description": "Status (new, contacted, nurture, qualified, converted, unqualified, junk)",
+        "name": "status",
+        "type": "string"
+      },
+      {
+        "description": "Lead owner",
+        "name": "owner",
+        "type": "string"
+      }
+    ],
+    "schema": "build.lead.edit",
+    "schemaVersion": {
+      "family": 1,
+      "version": "schema.sha256.10bd639237669dbb5d1cb1eae6780ed6faa29f4eca12f887ecb987ca4fbae546"
+    },
+    "target": "build.lead",
+    "title": "Edit lead"
+  },
+  "roles": [
+    "builder",
+    "user"
+  ],
+  "schema": "build.lead.edit",
+  "target": "build.lead"
+}

@@ -1,0 +1,64 @@
+{
+  "display": "name",
+  "fields": [
+    {
+      "name": "code",
+      "required": true,
+      "search": true,
+      "title": "Product code",
+      "type": "text"
+    },
+    {
+      "name": "name",
+      "required": true,
+      "search": true,
+      "title": "Product name",
+      "type": "text"
+    },
+    {
+      "name": "rate",
+      "title": "Standard rate",
+      "type": "money"
+    },
+    {
+      "name": "disabled",
+      "title": "Disabled",
+      "type": "boolean"
+    },
+    {
+      "name": "description",
+      "title": "Description",
+      "type": "longtext"
+    }
+  ],
+  "name": "crmproduct",
+  "plural": "Products",
+  "schemaVersions": [
+    {
+      "family": 1,
+      "version": "schema.sha256.6b50934884c51c7d557c4dbac5a0dd6ef6f76f0403b63ca727851ad93e085426"
+    }
+  ],
+  "title": "Product",
+  "type": "build.crmproduct",
+  "view": {
+    "columns": [
+      "code",
+      "name",
+      "rate",
+      "disabled"
+    ],
+    "filters": [],
+    "group": "none",
+    "lanes": "",
+    "layout": "table",
+    "search": "",
+    "sort": [
+      {
+        "direction": "ascending",
+        "sortKey": "code"
+      }
+    ],
+    "version": 1
+  }
+}

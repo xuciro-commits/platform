@@ -1,0 +1,50 @@
+{
+  "action": {
+    "capability": "note",
+    "description": "Change fields of a note; fields left out keep their value.",
+    "payload": [
+      {
+        "description": "Title",
+        "group": "Note",
+        "name": "title",
+        "type": "string"
+      },
+      {
+        "description": "Content",
+        "group": "Note",
+        "name": "content",
+        "type": "string"
+      },
+      {
+        "description": "Lead",
+        "group": "Note",
+        "name": "lead",
+        "type": "string"
+      },
+      {
+        "description": "Deal",
+        "group": "Note",
+        "name": "deal",
+        "type": "string"
+      },
+      {
+        "description": "Pinned",
+        "name": "pinned",
+        "type": "boolean"
+      }
+    ],
+    "schema": "build.note.edit",
+    "schemaVersion": {
+      "family": 1,
+      "version": "schema.sha256.41264d93c93f7b99e54d569a2c5bc8ef14748cf3ff99800344a258f09caa3c3b"
+    },
+    "target": "build.note",
+    "title": "Edit note"
+  },
+  "roles": [
+    "builder",
+    "user"
+  ],
+  "schema": "build.note.edit",
+  "target": "build.note"
+}

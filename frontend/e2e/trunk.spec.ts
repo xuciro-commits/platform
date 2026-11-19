@@ -1704,39 +1704,37 @@ test("crm: every CRM type can be created, edited and filtered, and lead and deal
   await expect(page.getByRole("region", { name: "Demo/Making", exact: true }).getByRole("heading", { level: 4, name: "Vanguard fleet portal", exact: true })).toBeVisible();
 });
 
-test("crm: a lead with a note and a task converts into an organization, contact and deal, and the deal is won", async ({ page }) => {
-  test.setTimeout(120000);
-  await signIn(page);
-  await page.goto("/ontology/objects/build.lead");
+async function crmMainline(page: Page, go: (type: string, plural: string) => Promise<unknown>, person: string, company: string) {
+  await go("build.lead", "Leads");
   await page.getByRole("button", { name: "New", exact: true }).click();
   const lead = page.getByRole("dialog");
-  await lead.getByRole("textbox", { name: "Full name" }).fill("Mira Holm");
+  await lead.getByRole("textbox", { name: "Full name" }).fill(person);
   await lead.getByRole("combobox", { name: "Status" }).click();
   await page.getByRole("option", { name: "New", exact: true }).click();
   await lead.getByRole("button", { name: "Create", exact: true }).click();
-  await expect(page.getByRole("heading", { level: 1, name: "Mira Holm", exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1, name: person, exact: true })).toBeVisible();
   const leadPage = page.url();
   const organization = page.getByRole("textbox", { name: "Organization", exact: true });
-  await organization.fill("Fjord Analytics");
+  await organization.fill(company);
   await organization.press("Enter");
   await expect(page.getByRole("complementary").getByText("2", { exact: true })).toBeVisible();
 
   for (const [type, fill] of [
-    ["build.note", async (form: ReturnType<Page["getByRole"]>) => { await form.getByRole("textbox", { name: "Title" }).fill("Fjord discovery call"); }],
+    ["build.note", async (form: ReturnType<Page["getByRole"]>) => { await form.getByRole("textbox", { name: "Title" }).fill(`${company} discovery call`); }],
     ["build.crmtask", async (form: ReturnType<Page["getByRole"]>) => {
-      await form.getByRole("textbox", { name: "Title" }).fill("Send Fjord the pilot plan");
+      await form.getByRole("textbox", { name: "Title" }).fill(`Send ${company} the pilot plan`);
       await form.getByRole("combobox", { name: "Status" }).click();
       await page.getByRole("option", { name: "Todo", exact: true }).click();
     }],
   ] as const) {
-    await page.goto(`/ontology/objects/${type}`);
+    await go(type, type === "build.note" ? "Notes" : "Tasks");
     await page.getByRole("button", { name: "New", exact: true }).click();
     const form = page.getByRole("dialog");
     await fill(form);
     await form.getByRole("button", { name: "Create", exact: true }).click();
     await expect(page.getByRole("dialog")).toBeHidden();
-    await page.getByRole("combobox", { name: "Lead", exact: true }).fill("Mira");
-    await page.getByRole("option", { name: /Mira Holm/ }).click();
+    await page.getByRole("combobox", { name: "Lead", exact: true }).fill(person.split(" ")[0]);
+    await page.getByRole("option", { name: new RegExp(person) }).click();
     await expect(page.getByRole("complementary").getByText("2", { exact: true })).toBeVisible();
   }
 
@@ -1750,9 +1748,9 @@ test("crm: a lead with a note and a task converts into an organization, contact 
   await expect(page.getByRole("menuitem", { name: "Convert to deal", exact: true })).toBeDisabled();
   await page.keyboard.press("Escape");
 
-  await page.goto("/ontology/objects/build.deal");
+  await go("build.deal", "Deals");
   await page.getByRole("radio", { name: "Board" }).click();
-  const card = page.getByRole("region", { name: "Qualification", exact: true }).getByRole("heading", { level: 4, name: "Fjord Analytics", exact: true });
+  const card = page.getByRole("region", { name: "Qualification", exact: true }).getByRole("heading", { level: 4, name: company, exact: true });
   await expect(card).toBeVisible();
   const won = page.getByRole("region", { name: "Won", exact: true });
   const from = (await card.boundingBox())!;
@@ -1763,15 +1761,34 @@ test("crm: a lead with a note and a task converts into an organization, contact 
   await page.mouse.move(to.x + to.width / 2, to.y + to.height / 2, { steps: 8 });
   await page.mouse.up();
   await page.reload();
-  await expect(page.getByRole("region", { name: "Won", exact: true }).getByRole("heading", { level: 4, name: "Fjord Analytics", exact: true })).toBeVisible();
+  await expect(page.getByRole("region", { name: "Won", exact: true }).getByRole("heading", { level: 4, name: company, exact: true })).toBeVisible();
 
-  await page.goto("/ontology/objects/build.organization");
+  await go("build.organization", "Organizations");
   const search = page.getByRole("textbox", { name: "Search this list" });
-  await search.fill("Fjord");
+  await search.fill(company.split(" ")[0]);
   await search.press("Enter");
-  await page.getByRole("link", { name: "Fjord Analytics", exact: true }).first().click();
-  await expect(page.getByRole("heading", { level: 1, name: "Fjord Analytics", exact: true })).toBeVisible();
+  await page.getByRole("link", { name: company, exact: true }).first().click();
+  await expect(page.getByRole("heading", { level: 1, name: company, exact: true })).toBeVisible();
   await page.getByRole("link", { name: "Links", exact: true }).click();
-  await expect(page.getByText("Mira Holm", { exact: true }).first()).toBeVisible();
-  await expect(page.getByRole("link", { name: "Fjord Analytics", exact: true }).first()).toBeVisible();
+  await expect(page.getByText(person, { exact: true }).first()).toBeVisible();
+  await expect(page.getByRole("link", { name: company, exact: true }).first()).toBeVisible();
+}
+
+test("crm: a lead with a note and a task converts into an organization, contact and deal, and the deal is won", async ({ page }) => {
+  test.setTimeout(120000);
+  await signIn(page);
+  await crmMainline(page, (type) => page.goto(`/ontology/objects/${type}`), "Mira Holm", "Fjord Analytics");
+});
+
+test("crm: the released package installs into an empty tenant whose CRM app runs the same mainline", async ({ page }) => {
+  test.setTimeout(120000);
+  await page.goto("/");
+  await page.getByRole("button", { name: "admin-1 · crm" }).click();
+  await page.getByRole("link", { name: "CRM", exact: true }).click();
+  const navigation = page.getByRole("navigation", { name: "Primary navigation" });
+  for (const entry of ["Leads", "Deals", "Organizations", "CRM Contacts", "Tasks", "Notes"]) await expect(navigation.getByRole("link", { name: entry, exact: true })).toBeVisible();
+  await crmMainline(page, async (_, plural) => {
+    await navigation.getByRole("link", { name: plural, exact: true }).click();
+    await expect(page.getByRole("heading", { level: 1, name: plural, exact: true })).toBeVisible();
+  }, "Tove Berg", "Saga Logistics");
 });

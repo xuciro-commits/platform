@@ -1,0 +1,29 @@
+{
+  "action": {
+    "capability": "lead",
+    "description": "Create or link the organization, create the contact and the deal from this lead, and mark the lead converted.",
+    "payload": [
+      {
+        "constraints": {},
+        "description": "Link to organization",
+        "label": "Link to organization",
+        "name": "organization",
+        "ref": "build.organization",
+        "type": "string"
+      }
+    ],
+    "schema": "build.lead.convert",
+    "schemaVersion": {
+      "family": 1,
+      "version": "schema.sha256.10bd639237669dbb5d1cb1eae6780ed6faa29f4eca12f887ecb987ca4fbae546"
+    },
+    "target": "build.lead",
+    "title": "Convert to deal"
+  },
+  "roles": [
+    "builder",
+    "user"
+  ],
+  "schema": "build.lead.convert",
+  "target": "build.lead"
+}

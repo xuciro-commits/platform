@@ -1,0 +1,324 @@
+{
+  "display": "title",
+  "fields": [
+    {
+      "group": "Commercial",
+      "name": "title",
+      "required": true,
+      "search": true,
+      "title": "Deal",
+      "type": "text"
+    },
+    {
+      "group": "Commercial",
+      "inverse": "deals",
+      "name": "organization",
+      "ref": "build.organization",
+      "search": true,
+      "title": "Organization",
+      "type": "reference"
+    },
+    {
+      "group": "Commercial",
+      "name": "contact",
+      "ref": "build.crmcontact",
+      "title": "Primary contact",
+      "type": "reference"
+    },
+    {
+      "group": "Commercial",
+      "name": "lead",
+      "ref": "build.lead",
+      "title": "Source lead",
+      "type": "reference"
+    },
+    {
+      "group": "Commercial",
+      "name": "dealvalue",
+      "title": "Deal value",
+      "type": "money"
+    },
+    {
+      "group": "Commercial",
+      "name": "total",
+      "title": "Products total",
+      "type": "money"
+    },
+    {
+      "group": "Commercial",
+      "name": "expectedclose",
+      "title": "Expected close",
+      "type": "date"
+    },
+    {
+      "group": "Commercial",
+      "name": "closeddate",
+      "title": "Closed date",
+      "type": "date",
+      "when": "status=won,lost"
+    },
+    {
+      "group": "Classification",
+      "name": "source",
+      "ref": "build.leadsource",
+      "title": "Source",
+      "type": "reference"
+    },
+    {
+      "group": "Classification",
+      "name": "industry",
+      "ref": "build.industry",
+      "title": "Industry",
+      "type": "reference"
+    },
+    {
+      "group": "Classification",
+      "name": "territory",
+      "ref": "build.territory",
+      "title": "Territory",
+      "type": "reference"
+    },
+    {
+      "group": "Closure",
+      "name": "lostreason",
+      "ref": "build.lostreason",
+      "title": "Lost reason",
+      "type": "reference",
+      "when": "status=lost"
+    },
+    {
+      "group": "Closure",
+      "name": "lostnotes",
+      "title": "Lost notes",
+      "type": "longtext",
+      "when": "status=lost"
+    },
+    {
+      "aside": true,
+      "choices": "qualification,demomaking,proposalquotation,negotiation,readytoclose,won,lost",
+      "format": [
+        {
+          "tone": "neutral",
+          "when": {
+            "args": [
+              {
+                "kind": "text",
+                "op": "",
+                "ref": "status"
+              },
+              {
+                "kind": "text",
+                "lit": {
+                  "value": "qualification"
+                },
+                "op": ""
+              }
+            ],
+            "kind": "boolean",
+            "op": "="
+          }
+        },
+        {
+          "tone": "info",
+          "when": {
+            "args": [
+              {
+                "kind": "text",
+                "op": "",
+                "ref": "status"
+              },
+              {
+                "kind": "text",
+                "lit": {
+                  "value": "demomaking"
+                },
+                "op": ""
+              }
+            ],
+            "kind": "boolean",
+            "op": "="
+          }
+        },
+        {
+          "tone": "info",
+          "when": {
+            "args": [
+              {
+                "kind": "text",
+                "op": "",
+                "ref": "status"
+              },
+              {
+                "kind": "text",
+                "lit": {
+                  "value": "proposalquotation"
+                },
+                "op": ""
+              }
+            ],
+            "kind": "boolean",
+            "op": "="
+          }
+        },
+        {
+          "tone": "warning",
+          "when": {
+            "args": [
+              {
+                "kind": "text",
+                "op": "",
+                "ref": "status"
+              },
+              {
+                "kind": "text",
+                "lit": {
+                  "value": "negotiation"
+                },
+                "op": ""
+              }
+            ],
+            "kind": "boolean",
+            "op": "="
+          }
+        },
+        {
+          "tone": "info",
+          "when": {
+            "args": [
+              {
+                "kind": "text",
+                "op": "",
+                "ref": "status"
+              },
+              {
+                "kind": "text",
+                "lit": {
+                  "value": "readytoclose"
+                },
+                "op": ""
+              }
+            ],
+            "kind": "boolean",
+            "op": "="
+          }
+        },
+        {
+          "tone": "success",
+          "when": {
+            "args": [
+              {
+                "kind": "text",
+                "op": "",
+                "ref": "status"
+              },
+              {
+                "kind": "text",
+                "lit": {
+                  "value": "won"
+                },
+                "op": ""
+              }
+            ],
+            "kind": "boolean",
+            "op": "="
+          }
+        },
+        {
+          "tone": "danger",
+          "when": {
+            "args": [
+              {
+                "kind": "text",
+                "op": "",
+                "ref": "status"
+              },
+              {
+                "kind": "text",
+                "lit": {
+                  "value": "lost"
+                },
+                "op": ""
+              }
+            ],
+            "kind": "boolean",
+            "op": "="
+          }
+        }
+      ],
+      "name": "status",
+      "required": true,
+      "title": "Status",
+      "type": "choice"
+    },
+    {
+      "aside": true,
+      "name": "probability",
+      "title": "Probability %",
+      "type": "integer"
+    },
+    {
+      "aside": true,
+      "name": "owner",
+      "title": "Deal owner",
+      "type": "member"
+    }
+  ],
+  "name": "deal",
+  "plural": "Deals",
+  "schemaVersions": [
+    {
+      "family": 1,
+      "version": "schema.sha256.c57a7aaac6339c2572b2339aa5ae5f3a0a7d7c0c92eb1dcfdbf66bd3834db080"
+    },
+    {
+      "family": 2,
+      "version": "schema.sha256.456a48691a0c1c64c5571e6fb45b9fd528a74bc82ef876cbe5896c38a75b160e"
+    }
+  ],
+  "sets": [
+    {
+      "direction": "inverse",
+      "from": "lines",
+      "limit": 200,
+      "name": "lines",
+      "object": "build.dealline",
+      "order": [
+        {
+          "expr": {
+            "kind": "text",
+            "op": "",
+            "ref": "id"
+          }
+        }
+      ]
+    }
+  ],
+  "states": [
+    {
+      "description": "Active deal record.",
+      "name": "open",
+      "title": "Open",
+      "tone": "info"
+    }
+  ],
+  "title": "Deal",
+  "type": "build.deal",
+  "view": {
+    "columns": [
+      "title",
+      "organization",
+      "status",
+      "dealvalue",
+      "probability",
+      "owner",
+      "expectedclose"
+    ],
+    "filters": [],
+    "group": "none",
+    "lanes": "status",
+    "layout": "table",
+    "search": "",
+    "sort": [],
+    "version": 1
+  }
+}

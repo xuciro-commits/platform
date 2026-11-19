@@ -1,0 +1,90 @@
+{
+  "action": {
+    "capability": "crmtask",
+    "description": "Create a task.",
+    "new": true,
+    "payload": [
+      {
+        "description": "Title",
+        "group": "Task",
+        "name": "title",
+        "required": true,
+        "type": "string"
+      },
+      {
+        "description": "Description",
+        "group": "Task",
+        "name": "description",
+        "type": "string"
+      },
+      {
+        "description": "Lead",
+        "group": "Task",
+        "name": "lead",
+        "type": "string"
+      },
+      {
+        "description": "Deal",
+        "group": "Task",
+        "name": "deal",
+        "type": "string"
+      },
+      {
+        "choices": [
+          "backlog",
+          "todo",
+          "inprogress",
+          "done",
+          "canceled"
+        ],
+        "description": "Status (backlog, todo, inprogress, done, canceled)",
+        "name": "status",
+        "required": true,
+        "type": "string"
+      },
+      {
+        "choices": [
+          "low",
+          "medium",
+          "high"
+        ],
+        "description": "Priority (low, medium, high)",
+        "name": "priority",
+        "type": "string"
+      },
+      {
+        "description": "Assigned to",
+        "name": "assignee",
+        "type": "string"
+      },
+      {
+        "description": "Start date",
+        "name": "startdate",
+        "type": "date"
+      },
+      {
+        "description": "Due date",
+        "name": "duedate",
+        "type": "date"
+      },
+      {
+        "description": "All day",
+        "name": "allday",
+        "type": "boolean"
+      }
+    ],
+    "schema": "build.crmtask.create",
+    "schemaVersion": {
+      "family": 1,
+      "version": "schema.sha256.53343cf4736628958544fa8a3d49c20729a0185d158b4af3dd3486441c943a4a"
+    },
+    "target": "build.crmtask",
+    "title": "Create task"
+  },
+  "roles": [
+    "builder",
+    "user"
+  ],
+  "schema": "build.crmtask.create",
+  "target": "build.crmtask"
+}

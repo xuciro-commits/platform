@@ -8,6 +8,22 @@
     },
     "seats": [
       {
+        "id": "root",
+        "subjects": [
+          "root"
+        ],
+        "grants": [
+          { "app": "platform", "role": "admin" },
+          { "app": "build", "role": "builder" },
+          { "app": "build", "role": "publisher" },
+          { "app": "build", "role": "integrator" },
+          { "app": "ai", "role": "admin" },
+          { "app": "agent", "role": "admin" },
+          { "app": "enterprise", "role": "admin" },
+          { "app": "work", "role": "admin" }
+        ]
+      },
+      {
         "id": "admin-1",
         "subjects": [
           "admin"
@@ -49,6 +65,22 @@
     },
     "seats": [
       {
+        "id": "root",
+        "subjects": [
+          "root"
+        ],
+        "grants": [
+          { "app": "platform", "role": "admin" },
+          { "app": "build", "role": "builder" },
+          { "app": "build", "role": "publisher" },
+          { "app": "build", "role": "integrator" },
+          { "app": "ai", "role": "admin" },
+          { "app": "agent", "role": "admin" },
+          { "app": "enterprise", "role": "admin" },
+          { "app": "work", "role": "admin" }
+        ]
+      },
+      {
         "id": "publisher-1",
         "subjects": [
           "publisher"
@@ -66,6 +98,60 @@
         "roles": {
           "platform": "admin",
           "build": "builder"
+        }
+      }
+    ]
+  },
+  {
+    "id": "crm",
+    "settings": {
+      "language": "en",
+      "timezone": "UTC",
+      "currency": "USD"
+    },
+    "seats": [
+      {
+        "id": "root",
+        "subjects": [
+          "root"
+        ],
+        "grants": [
+          { "app": "platform", "role": "admin" },
+          { "app": "build", "role": "builder" },
+          { "app": "build", "role": "publisher" },
+          { "app": "build", "role": "integrator" },
+          { "app": "ai", "role": "admin" },
+          { "app": "agent", "role": "admin" },
+          { "app": "enterprise", "role": "admin" },
+          { "app": "work", "role": "admin" }
+        ]
+      },
+      {
+        "id": "admin-1",
+        "subjects": [
+          "admin"
+        ],
+        "roles": {
+          "platform": "admin",
+          "build": "builder"
+        }
+      },
+      {
+        "id": "builder-1",
+        "subjects": [
+          "builder"
+        ],
+        "roles": {
+          "build": "builder"
+        }
+      },
+      {
+        "id": "user-1",
+        "subjects": [
+          "user"
+        ],
+        "roles": {
+          "build": "user"
         }
       }
     ]

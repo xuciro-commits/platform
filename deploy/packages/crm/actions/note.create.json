@@ -1,0 +1,52 @@
+{
+  "action": {
+    "capability": "note",
+    "description": "Create a note.",
+    "new": true,
+    "payload": [
+      {
+        "description": "Title",
+        "group": "Note",
+        "name": "title",
+        "required": true,
+        "type": "string"
+      },
+      {
+        "description": "Content",
+        "group": "Note",
+        "name": "content",
+        "type": "string"
+      },
+      {
+        "description": "Lead",
+        "group": "Note",
+        "name": "lead",
+        "type": "string"
+      },
+      {
+        "description": "Deal",
+        "group": "Note",
+        "name": "deal",
+        "type": "string"
+      },
+      {
+        "description": "Pinned",
+        "name": "pinned",
+        "type": "boolean"
+      }
+    ],
+    "schema": "build.note.create",
+    "schemaVersion": {
+      "family": 1,
+      "version": "schema.sha256.41264d93c93f7b99e54d569a2c5bc8ef14748cf3ff99800344a258f09caa3c3b"
+    },
+    "target": "build.note",
+    "title": "Create note"
+  },
+  "roles": [
+    "builder",
+    "user"
+  ],
+  "schema": "build.note.create",
+  "target": "build.note"
+}

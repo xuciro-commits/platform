@@ -118,10 +118,6 @@ func FreezeActionTypes(c platform.Caller, _ string, asset platform.ReleaseAsset,
 		if !slices.ContainsFunc(assets, func(asset platform.ReleaseAsset) bool { return asset.Ref == binding.Ref }) {
 			continue
 		}
-		index := slices.IndexFunc(all, func(action ActionType) bool { return action.Name == binding.Ref.Name })
-		if index < 0 {
-			return publication.Frozen{}, fmt.Errorf("action type %s is unavailable", binding.Ref.Name)
-		}
 		version, err := strconv.Atoi(binding.SourceVersion)
 		if err != nil || version < 1 {
 			return publication.Frozen{}, fmt.Errorf("action type %s has no retained version %s", binding.Ref.Name, binding.SourceVersion)
@@ -129,6 +125,16 @@ func FreezeActionTypes(c platform.Caller, _ string, asset platform.ReleaseAsset,
 		definition := slices.IndexFunc(frozen.Actions, func(definition Action) bool { return AppID+"."+frozen.Name+"."+definition.Name == binding.Ref.Name })
 		if definition < 0 {
 			return publication.Frozen{}, fmt.Errorf("action type %s has no frozen definition", binding.Ref.Name)
+		}
+		index := slices.IndexFunc(all, func(action ActionType) bool { return action.Name == binding.Ref.Name })
+		if index < 0 {
+			fresh := ActionType{Record: platform.Record{ID: binding.Ref.Name}, Name: binding.Ref.Name, Object: AppID + "." + frozen.Name, Title: frozen.Actions[definition].Title, Definition: frozen.Actions[definition], State: "published", Version: 1,
+				Versions: []ActionTypeVersion{{Version: 1, Definition: frozen.Actions[definition]}}}
+			fresh.Published = fresh.Snapshot(1)
+			if err := add(fresh); err != nil {
+				return publication.Frozen{}, err
+			}
+			continue
 		}
 		action := all[index]
 		if !legacyBindings {

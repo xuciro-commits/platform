@@ -1,0 +1,3358 @@
+{
+  "roots": [
+    {
+      "app": "build",
+      "kind": "app",
+      "name": "crm"
+    }
+  ],
+  "assets": [
+    {
+      "ref": {
+        "app": "build",
+        "kind": "action",
+        "name": "build.crmcontact.create"
+      },
+      "path": "actions/crmcontact.create.json",
+      "contractVersion": 1,
+      "sourceVersion": "1",
+      "requires": [
+        {
+          "app": "build",
+          "kind": "object",
+          "name": "build.crmcontact"
+        }
+      ],
+      "provides": [
+        {
+          "kind": "action",
+          "name": "build.crmcontact.create",
+          "inputs": {
+            "type": "object",
+            "properties": {
+              "address": {
+                "type": "string",
+                "description": "Address"
+              },
+              "designation": {
+                "type": "string",
+                "description": "Designation"
+              },
+              "email": {
+                "type": "string",
+                "description": "Email"
+              },
+              "fullname": {
+                "type": "string",
+                "description": "Full name"
+              },
+              "gender": {
+                "type": "string",
+                "enum": [
+                  "female",
+                  "male",
+                  "other"
+                ],
+                "description": "Gender (female, male, other)"
+              },
+              "mobile": {
+                "type": "string",
+                "description": "Mobile no."
+              },
+              "organization": {
+                "type": "string",
+                "description": "Organization"
+              },
+              "phone": {
+                "type": "string",
+                "description": "Phone"
+              },
+              "salutation": {
+                "type": "string",
+                "enum": [
+                  "mr",
+                  "ms",
+                  "dr",
+                  "prof"
+                ],
+                "description": "Salutation (mr, ms, dr, prof)"
+              }
+            },
+            "required": [
+              "fullname"
+            ]
+          },
+          "outputs": {
+            "type": ""
+          },
+          "roles": [
+            "builder",
+            "user"
+          ],
+          "side": "authoritative",
+          "parameters": [
+            {
+              "name": "fullname",
+              "type": "string",
+              "required": true,
+              "description": "Full name",
+              "group": "Contact"
+            },
+            {
+              "name": "email",
+              "type": "string",
+              "description": "Email",
+              "group": "Contact"
+            },
+            {
+              "name": "mobile",
+              "type": "string",
+              "description": "Mobile no.",
+              "group": "Contact"
+            },
+            {
+              "name": "phone",
+              "type": "string",
+              "description": "Phone",
+              "group": "Contact"
+            },
+            {
+              "name": "organization",
+              "type": "string",
+              "description": "Organization",
+              "group": "Contact"
+            },
+            {
+              "name": "designation",
+              "type": "string",
+              "description": "Designation",
+              "group": "Contact"
+            },
+            {
+              "name": "salutation",
+              "type": "string",
+              "description": "Salutation (mr, ms, dr, prof)",
+              "choices": [
+                "mr",
+                "ms",
+                "dr",
+                "prof"
+              ]
+            },
+            {
+              "name": "gender",
+              "type": "string",
+              "description": "Gender (female, male, other)",
+              "choices": [
+                "female",
+                "male",
+                "other"
+              ]
+            },
+            {
+              "name": "address",
+              "type": "string",
+              "description": "Address"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "ref": {
+        "app": "build",
+        "kind": "action",
+        "name": "build.crmcontact.edit"
+      },
+      "path": "actions/crmcontact.edit.json",
+      "contractVersion": 1,
+      "sourceVersion": "1",
+      "requires": [
+        {
+          "app": "build",
+          "kind": "object",
+          "name": "build.crmcontact"
+        }
+      ],
+      "provides": [
+        {
+          "kind": "action",
+          "name": "build.crmcontact.edit",
+          "inputs": {
+            "type": "object",
+            "properties": {
+              "address": {
+                "type": "string",
+                "description": "Address"
+              },
+              "designation": {
+                "type": "string",
+                "description": "Designation"
+              },
+              "email": {
+                "type": "string",
+                "description": "Email"
+              },
+              "fullname": {
+                "type": "string",
+                "description": "Full name"
+              },
+              "gender": {
+                "type": "string",
+                "enum": [
+                  "female",
+                  "male",
+                  "other"
+                ],
+                "description": "Gender (female, male, other)"
+              },
+              "mobile": {
+                "type": "string",
+                "description": "Mobile no."
+              },
+              "organization": {
+                "type": "string",
+                "description": "Organization"
+              },
+              "phone": {
+                "type": "string",
+                "description": "Phone"
+              },
+              "salutation": {
+                "type": "string",
+                "enum": [
+                  "mr",
+                  "ms",
+                  "dr",
+                  "prof"
+                ],
+                "description": "Salutation (mr, ms, dr, prof)"
+              }
+            }
+          },
+          "outputs": {
+            "type": ""
+          },
+          "roles": [
+            "builder",
+            "user"
+          ],
+          "side": "authoritative",
+          "parameters": [
+            {
+              "name": "fullname",
+              "type": "string",
+              "description": "Full name",
+              "group": "Contact"
+            },
+            {
+              "name": "email",
+              "type": "string",
+              "description": "Email",
+              "group": "Contact"
+            },
+            {
+              "name": "mobile",
+              "type": "string",
+              "description": "Mobile no.",
+              "group": "Contact"
+            },
+            {
+              "name": "phone",
+              "type": "string",
+              "description": "Phone",
+              "group": "Contact"
+            },
+            {
+              "name": "organization",
+              "type": "string",
+              "description": "Organization",
+              "group": "Contact"
+            },
+            {
+              "name": "designation",
+              "type": "string",
+              "description": "Designation",
+              "group": "Contact"
+            },
+            {
+              "name": "salutation",
+              "type": "string",
+              "description": "Salutation (mr, ms, dr, prof)",
+              "choices": [
+                "mr",
+                "ms",
+                "dr",
+                "prof"
+              ]
+            },
+            {
+              "name": "gender",
+              "type": "string",
+              "description": "Gender (female, male, other)",
+              "choices": [
+                "female",
+                "male",
+                "other"
+              ]
+            },
+            {
+              "name": "address",
+              "type": "string",
+              "description": "Address"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "ref": {
+        "app": "build",
+        "kind": "action",
+        "name": "build.crmtask.create"
+      },
+      "path": "actions/crmtask.create.json",
+      "contractVersion": 1,
+      "sourceVersion": "1",
+      "requires": [
+        {
+          "app": "build",
+          "kind": "object",
+          "name": "build.crmtask"
+        }
+      ],
+      "provides": [
+        {
+          "kind": "action",
+          "name": "build.crmtask.create",
+          "inputs": {
+            "type": "object",
+            "properties": {
+              "allday": {
+                "type": "boolean",
+                "description": "All day"
+              },
+              "assignee": {
+                "type": "string",
+                "description": "Assigned to"
+              },
+              "deal": {
+                "type": "string",
+                "description": "Deal"
+              },
+              "description": {
+                "type": "string",
+                "description": "Description"
+              },
+              "duedate": {
+                "type": "string",
+                "description": "Due date"
+              },
+              "lead": {
+                "type": "string",
+                "description": "Lead"
+              },
+              "priority": {
+                "type": "string",
+                "enum": [
+                  "low",
+                  "medium",
+                  "high"
+                ],
+                "description": "Priority (low, medium, high)"
+              },
+              "startdate": {
+                "type": "string",
+                "description": "Start date"
+              },
+              "status": {
+                "type": "string",
+                "enum": [
+                  "backlog",
+                  "todo",
+                  "inprogress",
+                  "done",
+                  "canceled"
+                ],
+                "description": "Status (backlog, todo, inprogress, done, canceled)"
+              },
+              "title": {
+                "type": "string",
+                "description": "Title"
+              }
+            },
+            "required": [
+              "status",
+              "title"
+            ]
+          },
+          "outputs": {
+            "type": ""
+          },
+          "roles": [
+            "builder",
+            "user"
+          ],
+          "side": "authoritative",
+          "parameters": [
+            {
+              "name": "title",
+              "type": "string",
+              "required": true,
+              "description": "Title",
+              "group": "Task"
+            },
+            {
+              "name": "description",
+              "type": "string",
+              "description": "Description",
+              "group": "Task"
+            },
+            {
+              "name": "lead",
+              "type": "string",
+              "description": "Lead",
+              "group": "Task"
+            },
+            {
+              "name": "deal",
+              "type": "string",
+              "description": "Deal",
+              "group": "Task"
+            },
+            {
+              "name": "status",
+              "type": "string",
+              "required": true,
+              "description": "Status (backlog, todo, inprogress, done, canceled)",
+              "choices": [
+                "backlog",
+                "todo",
+                "inprogress",
+                "done",
+                "canceled"
+              ]
+            },
+            {
+              "name": "priority",
+              "type": "string",
+              "description": "Priority (low, medium, high)",
+              "choices": [
+                "low",
+                "medium",
+                "high"
+              ]
+            },
+            {
+              "name": "assignee",
+              "type": "string",
+              "description": "Assigned to"
+            },
+            {
+              "name": "startdate",
+              "type": "date",
+              "description": "Start date"
+            },
+            {
+              "name": "duedate",
+              "type": "date",
+              "description": "Due date"
+            },
+            {
+              "name": "allday",
+              "type": "boolean",
+              "description": "All day"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "ref": {
+        "app": "build",
+        "kind": "action",
+        "name": "build.crmtask.edit"
+      },
+      "path": "actions/crmtask.edit.json",
+      "contractVersion": 1,
+      "sourceVersion": "1",
+      "requires": [
+        {
+          "app": "build",
+          "kind": "object",
+          "name": "build.crmtask"
+        }
+      ],
+      "provides": [
+        {
+          "kind": "action",
+          "name": "build.crmtask.edit",
+          "inputs": {
+            "type": "object",
+            "properties": {
+              "allday": {
+                "type": "boolean",
+                "description": "All day"
+              },
+              "assignee": {
+                "type": "string",
+                "description": "Assigned to"
+              },
+              "deal": {
+                "type": "string",
+                "description": "Deal"
+              },
+              "description": {
+                "type": "string",
+                "description": "Description"
+              },
+              "duedate": {
+                "type": "string",
+                "description": "Due date"
+              },
+              "lead": {
+                "type": "string",
+                "description": "Lead"
+              },
+              "priority": {
+                "type": "string",
+                "enum": [
+                  "low",
+                  "medium",
+                  "high"
+                ],
+                "description": "Priority (low, medium, high)"
+              },
+              "startdate": {
+                "type": "string",
+                "description": "Start date"
+              },
+              "status": {
+                "type": "string",
+                "enum": [
+                  "backlog",
+                  "todo",
+                  "inprogress",
+                  "done",
+                  "canceled"
+                ],
+                "description": "Status (backlog, todo, inprogress, done, canceled)"
+              },
+              "title": {
+                "type": "string",
+                "description": "Title"
+              }
+            }
+          },
+          "outputs": {
+            "type": ""
+          },
+          "roles": [
+            "builder",
+            "user"
+          ],
+          "side": "authoritative",
+          "parameters": [
+            {
+              "name": "title",
+              "type": "string",
+              "description": "Title",
+              "group": "Task"
+            },
+            {
+              "name": "description",
+              "type": "string",
+              "description": "Description",
+              "group": "Task"
+            },
+            {
+              "name": "lead",
+              "type": "string",
+              "description": "Lead",
+              "group": "Task"
+            },
+            {
+              "name": "deal",
+              "type": "string",
+              "description": "Deal",
+              "group": "Task"
+            },
+            {
+              "name": "status",
+              "type": "string",
+              "description": "Status (backlog, todo, inprogress, done, canceled)",
+              "choices": [
+                "backlog",
+                "todo",
+                "inprogress",
+                "done",
+                "canceled"
+              ]
+            },
+            {
+              "name": "priority",
+              "type": "string",
+              "description": "Priority (low, medium, high)",
+              "choices": [
+                "low",
+                "medium",
+                "high"
+              ]
+            },
+            {
+              "name": "assignee",
+              "type": "string",
+              "description": "Assigned to"
+            },
+            {
+              "name": "startdate",
+              "type": "date",
+              "description": "Start date"
+            },
+            {
+              "name": "duedate",
+              "type": "date",
+              "description": "Due date"
+            },
+            {
+              "name": "allday",
+              "type": "boolean",
+              "description": "All day"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "ref": {
+        "app": "build",
+        "kind": "action",
+        "name": "build.deal.create"
+      },
+      "path": "actions/deal.create.json",
+      "contractVersion": 1,
+      "sourceVersion": "1",
+      "requires": [
+        {
+          "app": "build",
+          "kind": "object",
+          "name": "build.deal"
+        }
+      ],
+      "provides": [
+        {
+          "kind": "action",
+          "name": "build.deal.create",
+          "inputs": {
+            "type": "object",
+            "properties": {
+              "closeddate": {
+                "type": "string",
+                "description": "Closed date"
+              },
+              "contact": {
+                "type": "string",
+                "description": "Primary contact"
+              },
+              "dealvalue": {
+                "type": "object",
+                "properties": {
+                  "amount": {
+                    "type": "integer"
+                  },
+                  "currency": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "amount",
+                  "currency"
+                ],
+                "description": "Deal value"
+              },
+              "expectedclose": {
+                "type": "string",
+                "description": "Expected close"
+              },
+              "industry": {
+                "type": "string",
+                "description": "Industry"
+              },
+              "lead": {
+                "type": "string",
+                "description": "Source lead"
+              },
+              "lostnotes": {
+                "type": "string",
+                "description": "Lost notes"
+              },
+              "lostreason": {
+                "type": "string",
+                "description": "Lost reason"
+              },
+              "organization": {
+                "type": "string",
+                "description": "Organization"
+              },
+              "owner": {
+                "type": "string",
+                "description": "Deal owner"
+              },
+              "probability": {
+                "type": "integer",
+                "description": "Probability %"
+              },
+              "source": {
+                "type": "string",
+                "description": "Source"
+              },
+              "status": {
+                "type": "string",
+                "enum": [
+                  "qualification",
+                  "demomaking",
+                  "proposalquotation",
+                  "negotiation",
+                  "readytoclose",
+                  "won",
+                  "lost"
+                ],
+                "description": "Status (qualification, demomaking, proposalquotation, negotiation, readytoclose, won, lost)"
+              },
+              "territory": {
+                "type": "string",
+                "description": "Territory"
+              },
+              "title": {
+                "type": "string",
+                "description": "Deal"
+              },
+              "total": {
+                "type": "object",
+                "properties": {
+                  "amount": {
+                    "type": "integer"
+                  },
+                  "currency": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "amount",
+                  "currency"
+                ],
+                "description": "Products total"
+              }
+            },
+            "required": [
+              "status",
+              "title"
+            ]
+          },
+          "outputs": {
+            "type": ""
+          },
+          "roles": [
+            "builder",
+            "user"
+          ],
+          "side": "authoritative",
+          "parameters": [
+            {
+              "name": "title",
+              "type": "string",
+              "required": true,
+              "description": "Deal",
+              "group": "Commercial"
+            },
+            {
+              "name": "organization",
+              "type": "string",
+              "description": "Organization",
+              "group": "Commercial"
+            },
+            {
+              "name": "contact",
+              "type": "string",
+              "description": "Primary contact",
+              "group": "Commercial"
+            },
+            {
+              "name": "lead",
+              "type": "string",
+              "description": "Source lead",
+              "group": "Commercial"
+            },
+            {
+              "name": "dealvalue",
+              "type": "money",
+              "description": "Deal value",
+              "group": "Commercial"
+            },
+            {
+              "name": "total",
+              "type": "money",
+              "description": "Products total",
+              "group": "Commercial"
+            },
+            {
+              "name": "expectedclose",
+              "type": "date",
+              "description": "Expected close",
+              "group": "Commercial"
+            },
+            {
+              "name": "closeddate",
+              "type": "date",
+              "description": "Closed date",
+              "group": "Commercial"
+            },
+            {
+              "name": "source",
+              "type": "string",
+              "description": "Source",
+              "group": "Classification"
+            },
+            {
+              "name": "industry",
+              "type": "string",
+              "description": "Industry",
+              "group": "Classification"
+            },
+            {
+              "name": "territory",
+              "type": "string",
+              "description": "Territory",
+              "group": "Classification"
+            },
+            {
+              "name": "lostreason",
+              "type": "string",
+              "description": "Lost reason",
+              "group": "Closure"
+            },
+            {
+              "name": "lostnotes",
+              "type": "string",
+              "description": "Lost notes",
+              "group": "Closure"
+            },
+            {
+              "name": "status",
+              "type": "string",
+              "required": true,
+              "description": "Status (qualification, demomaking, proposalquotation, negotiation, readytoclose, won, lost)",
+              "choices": [
+                "qualification",
+                "demomaking",
+                "proposalquotation",
+                "negotiation",
+                "readytoclose",
+                "won",
+                "lost"
+              ]
+            },
+            {
+              "name": "probability",
+              "type": "integer",
+              "description": "Probability %"
+            },
+            {
+              "name": "owner",
+              "type": "string",
+              "description": "Deal owner"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "ref": {
+        "app": "build",
+        "kind": "action",
+        "name": "build.deal.edit"
+      },
+      "path": "actions/deal.edit.json",
+      "contractVersion": 1,
+      "sourceVersion": "1",
+      "requires": [
+        {
+          "app": "build",
+          "kind": "object",
+          "name": "build.deal"
+        }
+      ],
+      "provides": [
+        {
+          "kind": "action",
+          "name": "build.deal.edit",
+          "inputs": {
+            "type": "object",
+            "properties": {
+              "closeddate": {
+                "type": "string",
+                "description": "Closed date"
+              },
+              "contact": {
+                "type": "string",
+                "description": "Primary contact"
+              },
+              "dealvalue": {
+                "type": "object",
+                "properties": {
+                  "amount": {
+                    "type": "integer"
+                  },
+                  "currency": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "amount",
+                  "currency"
+                ],
+                "description": "Deal value"
+              },
+              "expectedclose": {
+                "type": "string",
+                "description": "Expected close"
+              },
+              "industry": {
+                "type": "string",
+                "description": "Industry"
+              },
+              "lead": {
+                "type": "string",
+                "description": "Source lead"
+              },
+              "lostnotes": {
+                "type": "string",
+                "description": "Lost notes"
+              },
+              "lostreason": {
+                "type": "string",
+                "description": "Lost reason"
+              },
+              "organization": {
+                "type": "string",
+                "description": "Organization"
+              },
+              "owner": {
+                "type": "string",
+                "description": "Deal owner"
+              },
+              "probability": {
+                "type": "integer",
+                "description": "Probability %"
+              },
+              "source": {
+                "type": "string",
+                "description": "Source"
+              },
+              "status": {
+                "type": "string",
+                "enum": [
+                  "qualification",
+                  "demomaking",
+                  "proposalquotation",
+                  "negotiation",
+                  "readytoclose",
+                  "won",
+                  "lost"
+                ],
+                "description": "Status (qualification, demomaking, proposalquotation, negotiation, readytoclose, won, lost)"
+              },
+              "territory": {
+                "type": "string",
+                "description": "Territory"
+              },
+              "title": {
+                "type": "string",
+                "description": "Deal"
+              },
+              "total": {
+                "type": "object",
+                "properties": {
+                  "amount": {
+                    "type": "integer"
+                  },
+                  "currency": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "amount",
+                  "currency"
+                ],
+                "description": "Products total"
+              }
+            }
+          },
+          "outputs": {
+            "type": ""
+          },
+          "roles": [
+            "builder",
+            "user"
+          ],
+          "side": "authoritative",
+          "parameters": [
+            {
+              "name": "title",
+              "type": "string",
+              "description": "Deal",
+              "group": "Commercial"
+            },
+            {
+              "name": "organization",
+              "type": "string",
+              "description": "Organization",
+              "group": "Commercial"
+            },
+            {
+              "name": "contact",
+              "type": "string",
+              "description": "Primary contact",
+              "group": "Commercial"
+            },
+            {
+              "name": "lead",
+              "type": "string",
+              "description": "Source lead",
+              "group": "Commercial"
+            },
+            {
+              "name": "dealvalue",
+              "type": "money",
+              "description": "Deal value",
+              "group": "Commercial"
+            },
+            {
+              "name": "total",
+              "type": "money",
+              "description": "Products total",
+              "group": "Commercial"
+            },
+            {
+              "name": "expectedclose",
+              "type": "date",
+              "description": "Expected close",
+              "group": "Commercial"
+            },
+            {
+              "name": "closeddate",
+              "type": "date",
+              "description": "Closed date",
+              "group": "Commercial"
+            },
+            {
+              "name": "source",
+              "type": "string",
+              "description": "Source",
+              "group": "Classification"
+            },
+            {
+              "name": "industry",
+              "type": "string",
+              "description": "Industry",
+              "group": "Classification"
+            },
+            {
+              "name": "territory",
+              "type": "string",
+              "description": "Territory",
+              "group": "Classification"
+            },
+            {
+              "name": "lostreason",
+              "type": "string",
+              "description": "Lost reason",
+              "group": "Closure"
+            },
+            {
+              "name": "lostnotes",
+              "type": "string",
+              "description": "Lost notes",
+              "group": "Closure"
+            },
+            {
+              "name": "status",
+              "type": "string",
+              "description": "Status (qualification, demomaking, proposalquotation, negotiation, readytoclose, won, lost)",
+              "choices": [
+                "qualification",
+                "demomaking",
+                "proposalquotation",
+                "negotiation",
+                "readytoclose",
+                "won",
+                "lost"
+              ]
+            },
+            {
+              "name": "probability",
+              "type": "integer",
+              "description": "Probability %"
+            },
+            {
+              "name": "owner",
+              "type": "string",
+              "description": "Deal owner"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "ref": {
+        "app": "build",
+        "kind": "action",
+        "name": "build.lead.convert"
+      },
+      "path": "actions/lead.convert.json",
+      "contractVersion": 1,
+      "sourceVersion": "1.action-1",
+      "requires": [
+        {
+          "app": "build",
+          "kind": "object",
+          "name": "build.lead"
+        },
+        {
+          "app": "build",
+          "kind": "object",
+          "name": "build.organization"
+        }
+      ],
+      "provides": [
+        {
+          "kind": "action",
+          "name": "build.lead.convert",
+          "inputs": {
+            "type": "object",
+            "properties": {
+              "organization": {
+                "type": "string",
+                "description": "Link to organization"
+              }
+            }
+          },
+          "outputs": {
+            "type": ""
+          },
+          "roles": [
+            "builder",
+            "user"
+          ],
+          "side": "authoritative",
+          "parameters": [
+            {
+              "name": "organization",
+              "type": "string",
+              "description": "Link to organization",
+              "ref": "build.organization",
+              "label": "Link to organization",
+              "constraints": {}
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "ref": {
+        "app": "build",
+        "kind": "action",
+        "name": "build.lead.create"
+      },
+      "path": "actions/lead.create.json",
+      "contractVersion": 1,
+      "sourceVersion": "1",
+      "requires": [
+        {
+          "app": "build",
+          "kind": "object",
+          "name": "build.lead"
+        }
+      ],
+      "provides": [
+        {
+          "kind": "action",
+          "name": "build.lead.create",
+          "inputs": {
+            "type": "object",
+            "properties": {
+              "annualrevenue": {
+                "type": "object",
+                "properties": {
+                  "amount": {
+                    "type": "integer"
+                  },
+                  "currency": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "amount",
+                  "currency"
+                ],
+                "description": "Annual revenue"
+              },
+              "converted": {
+                "type": "boolean",
+                "description": "Converted"
+              },
+              "email": {
+                "type": "string",
+                "description": "Email"
+              },
+              "employees": {
+                "type": "string",
+                "enum": [
+                  "1-10",
+                  "11-50",
+                  "51-200",
+                  "201-500",
+                  "501-1000",
+                  "1000+"
+                ],
+                "description": "Employees (1-10, 11-50, 51-200, 201-500, 501-1000, 1000+)"
+              },
+              "fullname": {
+                "type": "string",
+                "description": "Full name"
+              },
+              "industry": {
+                "type": "string",
+                "description": "Industry"
+              },
+              "jobtitle": {
+                "type": "string",
+                "description": "Job title"
+              },
+              "lostnotes": {
+                "type": "string",
+                "description": "Lost notes"
+              },
+              "lostreason": {
+                "type": "string",
+                "description": "Lost reason"
+              },
+              "mobile": {
+                "type": "string",
+                "description": "Mobile no."
+              },
+              "organizationname": {
+                "type": "string",
+                "description": "Organization"
+              },
+              "owner": {
+                "type": "string",
+                "description": "Lead owner"
+              },
+              "phone": {
+                "type": "string",
+                "description": "Phone"
+              },
+              "source": {
+                "type": "string",
+                "description": "Source"
+              },
+              "status": {
+                "type": "string",
+                "enum": [
+                  "new",
+                  "contacted",
+                  "nurture",
+                  "qualified",
+                  "converted",
+                  "unqualified",
+                  "junk"
+                ],
+                "description": "Status (new, contacted, nurture, qualified, converted, unqualified, junk)"
+              },
+              "territory": {
+                "type": "string",
+                "description": "Territory"
+              },
+              "website": {
+                "type": "string",
+                "description": "Website"
+              }
+            },
+            "required": [
+              "fullname",
+              "status"
+            ]
+          },
+          "outputs": {
+            "type": ""
+          },
+          "roles": [
+            "builder",
+            "user"
+          ],
+          "side": "authoritative",
+          "parameters": [
+            {
+              "name": "fullname",
+              "type": "string",
+              "required": true,
+              "description": "Full name",
+              "group": "Contact"
+            },
+            {
+              "name": "organizationname",
+              "type": "string",
+              "description": "Organization",
+              "group": "Contact"
+            },
+            {
+              "name": "email",
+              "type": "string",
+              "description": "Email",
+              "group": "Contact"
+            },
+            {
+              "name": "mobile",
+              "type": "string",
+              "description": "Mobile no.",
+              "group": "Contact"
+            },
+            {
+              "name": "phone",
+              "type": "string",
+              "description": "Phone",
+              "group": "Contact"
+            },
+            {
+              "name": "website",
+              "type": "string",
+              "description": "Website",
+              "group": "Contact"
+            },
+            {
+              "name": "jobtitle",
+              "type": "string",
+              "description": "Job title",
+              "group": "Contact"
+            },
+            {
+              "name": "source",
+              "type": "string",
+              "description": "Source",
+              "group": "Classification"
+            },
+            {
+              "name": "industry",
+              "type": "string",
+              "description": "Industry",
+              "group": "Classification"
+            },
+            {
+              "name": "territory",
+              "type": "string",
+              "description": "Territory",
+              "group": "Classification"
+            },
+            {
+              "name": "employees",
+              "type": "string",
+              "description": "Employees (1-10, 11-50, 51-200, 201-500, 501-1000, 1000+)",
+              "choices": [
+                "1-10",
+                "11-50",
+                "51-200",
+                "201-500",
+                "501-1000",
+                "1000+"
+              ],
+              "group": "Classification"
+            },
+            {
+              "name": "annualrevenue",
+              "type": "money",
+              "description": "Annual revenue",
+              "group": "Classification"
+            },
+            {
+              "name": "converted",
+              "type": "boolean",
+              "description": "Converted",
+              "group": "Closure"
+            },
+            {
+              "name": "lostreason",
+              "type": "string",
+              "description": "Lost reason",
+              "group": "Closure"
+            },
+            {
+              "name": "lostnotes",
+              "type": "string",
+              "description": "Lost notes",
+              "group": "Closure"
+            },
+            {
+              "name": "status",
+              "type": "string",
+              "required": true,
+              "description": "Status (new, contacted, nurture, qualified, converted, unqualified, junk)",
+              "choices": [
+                "new",
+                "contacted",
+                "nurture",
+                "qualified",
+                "converted",
+                "unqualified",
+                "junk"
+              ]
+            },
+            {
+              "name": "owner",
+              "type": "string",
+              "description": "Lead owner"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "ref": {
+        "app": "build",
+        "kind": "action",
+        "name": "build.lead.edit"
+      },
+      "path": "actions/lead.edit.json",
+      "contractVersion": 1,
+      "sourceVersion": "1",
+      "requires": [
+        {
+          "app": "build",
+          "kind": "object",
+          "name": "build.lead"
+        }
+      ],
+      "provides": [
+        {
+          "kind": "action",
+          "name": "build.lead.edit",
+          "inputs": {
+            "type": "object",
+            "properties": {
+              "annualrevenue": {
+                "type": "object",
+                "properties": {
+                  "amount": {
+                    "type": "integer"
+                  },
+                  "currency": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "amount",
+                  "currency"
+                ],
+                "description": "Annual revenue"
+              },
+              "converted": {
+                "type": "boolean",
+                "description": "Converted"
+              },
+              "email": {
+                "type": "string",
+                "description": "Email"
+              },
+              "employees": {
+                "type": "string",
+                "enum": [
+                  "1-10",
+                  "11-50",
+                  "51-200",
+                  "201-500",
+                  "501-1000",
+                  "1000+"
+                ],
+                "description": "Employees (1-10, 11-50, 51-200, 201-500, 501-1000, 1000+)"
+              },
+              "fullname": {
+                "type": "string",
+                "description": "Full name"
+              },
+              "industry": {
+                "type": "string",
+                "description": "Industry"
+              },
+              "jobtitle": {
+                "type": "string",
+                "description": "Job title"
+              },
+              "lostnotes": {
+                "type": "string",
+                "description": "Lost notes"
+              },
+              "lostreason": {
+                "type": "string",
+                "description": "Lost reason"
+              },
+              "mobile": {
+                "type": "string",
+                "description": "Mobile no."
+              },
+              "organizationname": {
+                "type": "string",
+                "description": "Organization"
+              },
+              "owner": {
+                "type": "string",
+                "description": "Lead owner"
+              },
+              "phone": {
+                "type": "string",
+                "description": "Phone"
+              },
+              "source": {
+                "type": "string",
+                "description": "Source"
+              },
+              "status": {
+                "type": "string",
+                "enum": [
+                  "new",
+                  "contacted",
+                  "nurture",
+                  "qualified",
+                  "converted",
+                  "unqualified",
+                  "junk"
+                ],
+                "description": "Status (new, contacted, nurture, qualified, converted, unqualified, junk)"
+              },
+              "territory": {
+                "type": "string",
+                "description": "Territory"
+              },
+              "website": {
+                "type": "string",
+                "description": "Website"
+              }
+            }
+          },
+          "outputs": {
+            "type": ""
+          },
+          "roles": [
+            "builder",
+            "user"
+          ],
+          "side": "authoritative",
+          "parameters": [
+            {
+              "name": "fullname",
+              "type": "string",
+              "description": "Full name",
+              "group": "Contact"
+            },
+            {
+              "name": "organizationname",
+              "type": "string",
+              "description": "Organization",
+              "group": "Contact"
+            },
+            {
+              "name": "email",
+              "type": "string",
+              "description": "Email",
+              "group": "Contact"
+            },
+            {
+              "name": "mobile",
+              "type": "string",
+              "description": "Mobile no.",
+              "group": "Contact"
+            },
+            {
+              "name": "phone",
+              "type": "string",
+              "description": "Phone",
+              "group": "Contact"
+            },
+            {
+              "name": "website",
+              "type": "string",
+              "description": "Website",
+              "group": "Contact"
+            },
+            {
+              "name": "jobtitle",
+              "type": "string",
+              "description": "Job title",
+              "group": "Contact"
+            },
+            {
+              "name": "source",
+              "type": "string",
+              "description": "Source",
+              "group": "Classification"
+            },
+            {
+              "name": "industry",
+              "type": "string",
+              "description": "Industry",
+              "group": "Classification"
+            },
+            {
+              "name": "territory",
+              "type": "string",
+              "description": "Territory",
+              "group": "Classification"
+            },
+            {
+              "name": "employees",
+              "type": "string",
+              "description": "Employees (1-10, 11-50, 51-200, 201-500, 501-1000, 1000+)",
+              "choices": [
+                "1-10",
+                "11-50",
+                "51-200",
+                "201-500",
+                "501-1000",
+                "1000+"
+              ],
+              "group": "Classification"
+            },
+            {
+              "name": "annualrevenue",
+              "type": "money",
+              "description": "Annual revenue",
+              "group": "Classification"
+            },
+            {
+              "name": "converted",
+              "type": "boolean",
+              "description": "Converted",
+              "group": "Closure"
+            },
+            {
+              "name": "lostreason",
+              "type": "string",
+              "description": "Lost reason",
+              "group": "Closure"
+            },
+            {
+              "name": "lostnotes",
+              "type": "string",
+              "description": "Lost notes",
+              "group": "Closure"
+            },
+            {
+              "name": "status",
+              "type": "string",
+              "description": "Status (new, contacted, nurture, qualified, converted, unqualified, junk)",
+              "choices": [
+                "new",
+                "contacted",
+                "nurture",
+                "qualified",
+                "converted",
+                "unqualified",
+                "junk"
+              ]
+            },
+            {
+              "name": "owner",
+              "type": "string",
+              "description": "Lead owner"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "ref": {
+        "app": "build",
+        "kind": "action",
+        "name": "build.note.create"
+      },
+      "path": "actions/note.create.json",
+      "contractVersion": 1,
+      "sourceVersion": "1",
+      "requires": [
+        {
+          "app": "build",
+          "kind": "object",
+          "name": "build.note"
+        }
+      ],
+      "provides": [
+        {
+          "kind": "action",
+          "name": "build.note.create",
+          "inputs": {
+            "type": "object",
+            "properties": {
+              "content": {
+                "type": "string",
+                "description": "Content"
+              },
+              "deal": {
+                "type": "string",
+                "description": "Deal"
+              },
+              "lead": {
+                "type": "string",
+                "description": "Lead"
+              },
+              "pinned": {
+                "type": "boolean",
+                "description": "Pinned"
+              },
+              "title": {
+                "type": "string",
+                "description": "Title"
+              }
+            },
+            "required": [
+              "title"
+            ]
+          },
+          "outputs": {
+            "type": ""
+          },
+          "roles": [
+            "builder",
+            "user"
+          ],
+          "side": "authoritative",
+          "parameters": [
+            {
+              "name": "title",
+              "type": "string",
+              "required": true,
+              "description": "Title",
+              "group": "Note"
+            },
+            {
+              "name": "content",
+              "type": "string",
+              "description": "Content",
+              "group": "Note"
+            },
+            {
+              "name": "lead",
+              "type": "string",
+              "description": "Lead",
+              "group": "Note"
+            },
+            {
+              "name": "deal",
+              "type": "string",
+              "description": "Deal",
+              "group": "Note"
+            },
+            {
+              "name": "pinned",
+              "type": "boolean",
+              "description": "Pinned"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "ref": {
+        "app": "build",
+        "kind": "action",
+        "name": "build.note.edit"
+      },
+      "path": "actions/note.edit.json",
+      "contractVersion": 1,
+      "sourceVersion": "1",
+      "requires": [
+        {
+          "app": "build",
+          "kind": "object",
+          "name": "build.note"
+        }
+      ],
+      "provides": [
+        {
+          "kind": "action",
+          "name": "build.note.edit",
+          "inputs": {
+            "type": "object",
+            "properties": {
+              "content": {
+                "type": "string",
+                "description": "Content"
+              },
+              "deal": {
+                "type": "string",
+                "description": "Deal"
+              },
+              "lead": {
+                "type": "string",
+                "description": "Lead"
+              },
+              "pinned": {
+                "type": "boolean",
+                "description": "Pinned"
+              },
+              "title": {
+                "type": "string",
+                "description": "Title"
+              }
+            }
+          },
+          "outputs": {
+            "type": ""
+          },
+          "roles": [
+            "builder",
+            "user"
+          ],
+          "side": "authoritative",
+          "parameters": [
+            {
+              "name": "title",
+              "type": "string",
+              "description": "Title",
+              "group": "Note"
+            },
+            {
+              "name": "content",
+              "type": "string",
+              "description": "Content",
+              "group": "Note"
+            },
+            {
+              "name": "lead",
+              "type": "string",
+              "description": "Lead",
+              "group": "Note"
+            },
+            {
+              "name": "deal",
+              "type": "string",
+              "description": "Deal",
+              "group": "Note"
+            },
+            {
+              "name": "pinned",
+              "type": "boolean",
+              "description": "Pinned"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "ref": {
+        "app": "build",
+        "kind": "action",
+        "name": "build.organization.create"
+      },
+      "path": "actions/organization.create.json",
+      "contractVersion": 1,
+      "sourceVersion": "1",
+      "requires": [
+        {
+          "app": "build",
+          "kind": "object",
+          "name": "build.organization"
+        }
+      ],
+      "provides": [
+        {
+          "kind": "action",
+          "name": "build.organization.create",
+          "inputs": {
+            "type": "object",
+            "properties": {
+              "address": {
+                "type": "string",
+                "description": "Address"
+              },
+              "description": {
+                "type": "string",
+                "description": "Company description"
+              },
+              "employees": {
+                "type": "string",
+                "enum": [
+                  "1-10",
+                  "11-50",
+                  "51-200",
+                  "201-500",
+                  "501-1000",
+                  "1000+"
+                ],
+                "description": "Employees (1-10, 11-50, 51-200, 201-500, 501-1000, 1000+)"
+              },
+              "industry": {
+                "type": "string",
+                "description": "Industry"
+              },
+              "name": {
+                "type": "string",
+                "description": "Organization"
+              },
+              "revenue": {
+                "type": "object",
+                "properties": {
+                  "amount": {
+                    "type": "integer"
+                  },
+                  "currency": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "amount",
+                  "currency"
+                ],
+                "description": "Annual revenue"
+              },
+              "territory": {
+                "type": "string",
+                "description": "Territory"
+              },
+              "website": {
+                "type": "string",
+                "description": "Website"
+              }
+            },
+            "required": [
+              "name"
+            ]
+          },
+          "outputs": {
+            "type": ""
+          },
+          "roles": [
+            "builder",
+            "user"
+          ],
+          "side": "authoritative",
+          "parameters": [
+            {
+              "name": "name",
+              "type": "string",
+              "required": true,
+              "description": "Organization",
+              "group": "Details"
+            },
+            {
+              "name": "website",
+              "type": "string",
+              "description": "Website",
+              "group": "Details"
+            },
+            {
+              "name": "industry",
+              "type": "string",
+              "description": "Industry",
+              "group": "Details"
+            },
+            {
+              "name": "territory",
+              "type": "string",
+              "description": "Territory",
+              "group": "Details"
+            },
+            {
+              "name": "employees",
+              "type": "string",
+              "description": "Employees (1-10, 11-50, 51-200, 201-500, 501-1000, 1000+)",
+              "choices": [
+                "1-10",
+                "11-50",
+                "51-200",
+                "201-500",
+                "501-1000",
+                "1000+"
+              ]
+            },
+            {
+              "name": "revenue",
+              "type": "money",
+              "description": "Annual revenue",
+              "group": "Details"
+            },
+            {
+              "name": "address",
+              "type": "string",
+              "description": "Address"
+            },
+            {
+              "name": "description",
+              "type": "string",
+              "description": "Company description",
+              "group": "Details"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "ref": {
+        "app": "build",
+        "kind": "action",
+        "name": "build.organization.edit"
+      },
+      "path": "actions/organization.edit.json",
+      "contractVersion": 1,
+      "sourceVersion": "1",
+      "requires": [
+        {
+          "app": "build",
+          "kind": "object",
+          "name": "build.organization"
+        }
+      ],
+      "provides": [
+        {
+          "kind": "action",
+          "name": "build.organization.edit",
+          "inputs": {
+            "type": "object",
+            "properties": {
+              "address": {
+                "type": "string",
+                "description": "Address"
+              },
+              "description": {
+                "type": "string",
+                "description": "Company description"
+              },
+              "employees": {
+                "type": "string",
+                "enum": [
+                  "1-10",
+                  "11-50",
+                  "51-200",
+                  "201-500",
+                  "501-1000",
+                  "1000+"
+                ],
+                "description": "Employees (1-10, 11-50, 51-200, 201-500, 501-1000, 1000+)"
+              },
+              "industry": {
+                "type": "string",
+                "description": "Industry"
+              },
+              "name": {
+                "type": "string",
+                "description": "Organization"
+              },
+              "revenue": {
+                "type": "object",
+                "properties": {
+                  "amount": {
+                    "type": "integer"
+                  },
+                  "currency": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "amount",
+                  "currency"
+                ],
+                "description": "Annual revenue"
+              },
+              "territory": {
+                "type": "string",
+                "description": "Territory"
+              },
+              "website": {
+                "type": "string",
+                "description": "Website"
+              }
+            }
+          },
+          "outputs": {
+            "type": ""
+          },
+          "roles": [
+            "builder",
+            "user"
+          ],
+          "side": "authoritative",
+          "parameters": [
+            {
+              "name": "name",
+              "type": "string",
+              "description": "Organization",
+              "group": "Details"
+            },
+            {
+              "name": "website",
+              "type": "string",
+              "description": "Website",
+              "group": "Details"
+            },
+            {
+              "name": "industry",
+              "type": "string",
+              "description": "Industry",
+              "group": "Details"
+            },
+            {
+              "name": "territory",
+              "type": "string",
+              "description": "Territory",
+              "group": "Details"
+            },
+            {
+              "name": "employees",
+              "type": "string",
+              "description": "Employees (1-10, 11-50, 51-200, 201-500, 501-1000, 1000+)",
+              "choices": [
+                "1-10",
+                "11-50",
+                "51-200",
+                "201-500",
+                "501-1000",
+                "1000+"
+              ]
+            },
+            {
+              "name": "revenue",
+              "type": "money",
+              "description": "Annual revenue",
+              "group": "Details"
+            },
+            {
+              "name": "address",
+              "type": "string",
+              "description": "Address"
+            },
+            {
+              "name": "description",
+              "type": "string",
+              "description": "Company description",
+              "group": "Details"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "ref": {
+        "app": "build",
+        "kind": "app",
+        "name": "crm"
+      },
+      "path": "applications/crm.json",
+      "contractVersion": 1,
+      "sourceVersion": "1",
+      "requires": [
+        {
+          "app": "build",
+          "kind": "page",
+          "name": "crmcontact"
+        },
+        {
+          "app": "build",
+          "kind": "page",
+          "name": "crmtask"
+        },
+        {
+          "app": "build",
+          "kind": "page",
+          "name": "deal"
+        },
+        {
+          "app": "build",
+          "kind": "page",
+          "name": "lead"
+        },
+        {
+          "app": "build",
+          "kind": "page",
+          "name": "note"
+        },
+        {
+          "app": "build",
+          "kind": "page",
+          "name": "organization"
+        }
+      ],
+      "provides": []
+    },
+    {
+      "ref": {
+        "app": "build",
+        "kind": "object",
+        "name": "build.crmcontact"
+      },
+      "path": "objects/crmcontact.json",
+      "contractVersion": 1,
+      "sourceVersion": "1",
+      "requires": [
+        {
+          "app": "build",
+          "kind": "object",
+          "name": "build.organization"
+        }
+      ],
+      "provides": [
+        {
+          "kind": "interface",
+          "name": "build.crmcontact",
+          "inputs": {
+            "type": ""
+          },
+          "outputs": {
+            "type": "object",
+            "properties": {
+              "address": {
+                "type": "string"
+              },
+              "archived": {
+                "type": "boolean"
+              },
+              "designation": {
+                "type": "string"
+              },
+              "email": {
+                "type": "string"
+              },
+              "fullname": {
+                "type": "string"
+              },
+              "gender": {
+                "type": "string",
+                "enum": [
+                  "female",
+                  "male",
+                  "other"
+                ]
+              },
+              "id": {
+                "type": "string"
+              },
+              "mobile": {
+                "type": "string"
+              },
+              "organization": {
+                "type": "string"
+              },
+              "phone": {
+                "type": "string"
+              },
+              "revision": {
+                "type": "integer"
+              },
+              "salutation": {
+                "type": "string",
+                "enum": [
+                  "mr",
+                  "ms",
+                  "dr",
+                  "prof"
+                ]
+              }
+            },
+            "required": [
+              "id",
+              "revision"
+            ]
+          },
+          "roles": null,
+          "side": "pure"
+        }
+      ]
+    },
+    {
+      "ref": {
+        "app": "build",
+        "kind": "object",
+        "name": "build.crmproduct"
+      },
+      "path": "objects/crmproduct.json",
+      "contractVersion": 1,
+      "sourceVersion": "1",
+      "requires": [],
+      "provides": [
+        {
+          "kind": "interface",
+          "name": "build.crmproduct",
+          "inputs": {
+            "type": ""
+          },
+          "outputs": {
+            "type": "object",
+            "properties": {
+              "archived": {
+                "type": "boolean"
+              },
+              "code": {
+                "type": "string"
+              },
+              "description": {
+                "type": "string"
+              },
+              "disabled": {
+                "type": "boolean"
+              },
+              "id": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              },
+              "rate": {
+                "type": "object",
+                "properties": {
+                  "amount": {
+                    "type": "integer"
+                  },
+                  "currency": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "amount",
+                  "currency"
+                ]
+              },
+              "revision": {
+                "type": "integer"
+              }
+            },
+            "required": [
+              "id",
+              "revision"
+            ]
+          },
+          "roles": null,
+          "side": "pure"
+        }
+      ]
+    },
+    {
+      "ref": {
+        "app": "build",
+        "kind": "object",
+        "name": "build.crmtask"
+      },
+      "path": "objects/crmtask.json",
+      "contractVersion": 1,
+      "sourceVersion": "1",
+      "requires": [
+        {
+          "app": "build",
+          "kind": "object",
+          "name": "build.deal"
+        },
+        {
+          "app": "build",
+          "kind": "object",
+          "name": "build.lead"
+        }
+      ],
+      "provides": [
+        {
+          "kind": "interface",
+          "name": "build.crmtask",
+          "inputs": {
+            "type": ""
+          },
+          "outputs": {
+            "type": "object",
+            "properties": {
+              "allday": {
+                "type": "boolean"
+              },
+              "archived": {
+                "type": "boolean"
+              },
+              "assignee": {
+                "type": "string"
+              },
+              "deal": {
+                "type": "string"
+              },
+              "description": {
+                "type": "string"
+              },
+              "duedate": {
+                "type": "string"
+              },
+              "id": {
+                "type": "string"
+              },
+              "lead": {
+                "type": "string"
+              },
+              "priority": {
+                "type": "string",
+                "enum": [
+                  "low",
+                  "medium",
+                  "high"
+                ]
+              },
+              "revision": {
+                "type": "integer"
+              },
+              "startdate": {
+                "type": "string"
+              },
+              "state": {
+                "type": "string",
+                "enum": [
+                  "open"
+                ]
+              },
+              "status": {
+                "type": "string",
+                "enum": [
+                  "backlog",
+                  "todo",
+                  "inprogress",
+                  "done",
+                  "canceled"
+                ]
+              },
+              "title": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "revision"
+            ]
+          },
+          "roles": null,
+          "side": "pure"
+        }
+      ]
+    },
+    {
+      "ref": {
+        "app": "build",
+        "kind": "object",
+        "name": "build.deal"
+      },
+      "path": "objects/deal.json",
+      "contractVersion": 1,
+      "sourceVersion": "1",
+      "requires": [
+        {
+          "app": "build",
+          "kind": "object",
+          "name": "build.crmcontact"
+        },
+        {
+          "app": "build",
+          "kind": "object",
+          "name": "build.dealline"
+        },
+        {
+          "app": "build",
+          "kind": "object",
+          "name": "build.industry"
+        },
+        {
+          "app": "build",
+          "kind": "object",
+          "name": "build.lead"
+        },
+        {
+          "app": "build",
+          "kind": "object",
+          "name": "build.leadsource"
+        },
+        {
+          "app": "build",
+          "kind": "object",
+          "name": "build.lostreason"
+        },
+        {
+          "app": "build",
+          "kind": "object",
+          "name": "build.organization"
+        },
+        {
+          "app": "build",
+          "kind": "object",
+          "name": "build.territory"
+        }
+      ],
+      "provides": [
+        {
+          "kind": "interface",
+          "name": "build.deal",
+          "inputs": {
+            "type": ""
+          },
+          "outputs": {
+            "type": "object",
+            "properties": {
+              "archived": {
+                "type": "boolean"
+              },
+              "closeddate": {
+                "type": "string"
+              },
+              "contact": {
+                "type": "string"
+              },
+              "dealvalue": {
+                "type": "object",
+                "properties": {
+                  "amount": {
+                    "type": "integer"
+                  },
+                  "currency": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "amount",
+                  "currency"
+                ]
+              },
+              "expectedclose": {
+                "type": "string"
+              },
+              "id": {
+                "type": "string"
+              },
+              "industry": {
+                "type": "string"
+              },
+              "lead": {
+                "type": "string"
+              },
+              "lostnotes": {
+                "type": "string"
+              },
+              "lostreason": {
+                "type": "string"
+              },
+              "organization": {
+                "type": "string"
+              },
+              "owner": {
+                "type": "string"
+              },
+              "probability": {
+                "type": "integer"
+              },
+              "revision": {
+                "type": "integer"
+              },
+              "source": {
+                "type": "string"
+              },
+              "state": {
+                "type": "string",
+                "enum": [
+                  "open"
+                ]
+              },
+              "status": {
+                "type": "string",
+                "enum": [
+                  "qualification",
+                  "demomaking",
+                  "proposalquotation",
+                  "negotiation",
+                  "readytoclose",
+                  "won",
+                  "lost"
+                ]
+              },
+              "territory": {
+                "type": "string"
+              },
+              "title": {
+                "type": "string"
+              },
+              "total": {
+                "type": "object",
+                "properties": {
+                  "amount": {
+                    "type": "integer"
+                  },
+                  "currency": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "amount",
+                  "currency"
+                ]
+              }
+            },
+            "required": [
+              "id",
+              "revision"
+            ]
+          },
+          "roles": null,
+          "side": "pure"
+        }
+      ]
+    },
+    {
+      "ref": {
+        "app": "build",
+        "kind": "object",
+        "name": "build.dealline"
+      },
+      "path": "objects/dealline.json",
+      "contractVersion": 1,
+      "sourceVersion": "1",
+      "requires": [
+        {
+          "app": "build",
+          "kind": "object",
+          "name": "build.crmproduct"
+        },
+        {
+          "app": "build",
+          "kind": "object",
+          "name": "build.deal"
+        }
+      ],
+      "provides": [
+        {
+          "kind": "interface",
+          "name": "build.dealline",
+          "inputs": {
+            "type": ""
+          },
+          "outputs": {
+            "type": "object",
+            "properties": {
+              "amount": {
+                "type": "number"
+              },
+              "archived": {
+                "type": "boolean"
+              },
+              "deal": {
+                "type": "string"
+              },
+              "discount": {
+                "type": "number"
+              },
+              "id": {
+                "type": "string"
+              },
+              "product": {
+                "type": "string"
+              },
+              "productname": {
+                "type": "string"
+              },
+              "qty": {
+                "type": "integer"
+              },
+              "rate": {
+                "type": "number"
+              },
+              "revision": {
+                "type": "integer"
+              }
+            },
+            "required": [
+              "id",
+              "revision"
+            ]
+          },
+          "roles": null,
+          "side": "pure"
+        }
+      ]
+    },
+    {
+      "ref": {
+        "app": "build",
+        "kind": "object",
+        "name": "build.industry"
+      },
+      "path": "objects/industry.json",
+      "contractVersion": 1,
+      "sourceVersion": "1",
+      "requires": [],
+      "provides": [
+        {
+          "kind": "interface",
+          "name": "build.industry",
+          "inputs": {
+            "type": ""
+          },
+          "outputs": {
+            "type": "object",
+            "properties": {
+              "archived": {
+                "type": "boolean"
+              },
+              "id": {
+                "type": "string"
+              },
+              "revision": {
+                "type": "integer"
+              },
+              "title": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "revision"
+            ]
+          },
+          "roles": null,
+          "side": "pure"
+        }
+      ]
+    },
+    {
+      "ref": {
+        "app": "build",
+        "kind": "object",
+        "name": "build.lead"
+      },
+      "path": "objects/lead.json",
+      "contractVersion": 1,
+      "sourceVersion": "1",
+      "requires": [
+        {
+          "app": "build",
+          "kind": "object",
+          "name": "build.crmcontact"
+        },
+        {
+          "app": "build",
+          "kind": "object",
+          "name": "build.deal"
+        },
+        {
+          "app": "build",
+          "kind": "object",
+          "name": "build.industry"
+        },
+        {
+          "app": "build",
+          "kind": "object",
+          "name": "build.leadsource"
+        },
+        {
+          "app": "build",
+          "kind": "object",
+          "name": "build.lostreason"
+        },
+        {
+          "app": "build",
+          "kind": "object",
+          "name": "build.organization"
+        },
+        {
+          "app": "build",
+          "kind": "object",
+          "name": "build.territory"
+        }
+      ],
+      "provides": [
+        {
+          "kind": "interface",
+          "name": "build.lead",
+          "inputs": {
+            "type": ""
+          },
+          "outputs": {
+            "type": "object",
+            "properties": {
+              "annualrevenue": {
+                "type": "object",
+                "properties": {
+                  "amount": {
+                    "type": "integer"
+                  },
+                  "currency": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "amount",
+                  "currency"
+                ]
+              },
+              "archived": {
+                "type": "boolean"
+              },
+              "converted": {
+                "type": "boolean"
+              },
+              "email": {
+                "type": "string"
+              },
+              "employees": {
+                "type": "string",
+                "enum": [
+                  "1-10",
+                  "11-50",
+                  "51-200",
+                  "201-500",
+                  "501-1000",
+                  "1000+"
+                ]
+              },
+              "fullname": {
+                "type": "string"
+              },
+              "id": {
+                "type": "string"
+              },
+              "industry": {
+                "type": "string"
+              },
+              "jobtitle": {
+                "type": "string"
+              },
+              "lostnotes": {
+                "type": "string"
+              },
+              "lostreason": {
+                "type": "string"
+              },
+              "mobile": {
+                "type": "string"
+              },
+              "organizationname": {
+                "type": "string"
+              },
+              "owner": {
+                "type": "string"
+              },
+              "phone": {
+                "type": "string"
+              },
+              "revision": {
+                "type": "integer"
+              },
+              "source": {
+                "type": "string"
+              },
+              "state": {
+                "type": "string",
+                "enum": [
+                  "open"
+                ]
+              },
+              "status": {
+                "type": "string",
+                "enum": [
+                  "new",
+                  "contacted",
+                  "nurture",
+                  "qualified",
+                  "converted",
+                  "unqualified",
+                  "junk"
+                ]
+              },
+              "territory": {
+                "type": "string"
+              },
+              "website": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "revision"
+            ]
+          },
+          "roles": null,
+          "side": "pure"
+        }
+      ]
+    },
+    {
+      "ref": {
+        "app": "build",
+        "kind": "object",
+        "name": "build.leadsource"
+      },
+      "path": "objects/leadsource.json",
+      "contractVersion": 1,
+      "sourceVersion": "1",
+      "requires": [],
+      "provides": [
+        {
+          "kind": "interface",
+          "name": "build.leadsource",
+          "inputs": {
+            "type": ""
+          },
+          "outputs": {
+            "type": "object",
+            "properties": {
+              "archived": {
+                "type": "boolean"
+              },
+              "details": {
+                "type": "string"
+              },
+              "id": {
+                "type": "string"
+              },
+              "revision": {
+                "type": "integer"
+              },
+              "title": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "revision"
+            ]
+          },
+          "roles": null,
+          "side": "pure"
+        }
+      ]
+    },
+    {
+      "ref": {
+        "app": "build",
+        "kind": "object",
+        "name": "build.lostreason"
+      },
+      "path": "objects/lostreason.json",
+      "contractVersion": 1,
+      "sourceVersion": "1",
+      "requires": [],
+      "provides": [
+        {
+          "kind": "interface",
+          "name": "build.lostreason",
+          "inputs": {
+            "type": ""
+          },
+          "outputs": {
+            "type": "object",
+            "properties": {
+              "archived": {
+                "type": "boolean"
+              },
+              "description": {
+                "type": "string"
+              },
+              "id": {
+                "type": "string"
+              },
+              "revision": {
+                "type": "integer"
+              },
+              "title": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "revision"
+            ]
+          },
+          "roles": null,
+          "side": "pure"
+        }
+      ]
+    },
+    {
+      "ref": {
+        "app": "build",
+        "kind": "object",
+        "name": "build.note"
+      },
+      "path": "objects/note.json",
+      "contractVersion": 1,
+      "sourceVersion": "1",
+      "requires": [
+        {
+          "app": "build",
+          "kind": "object",
+          "name": "build.deal"
+        },
+        {
+          "app": "build",
+          "kind": "object",
+          "name": "build.lead"
+        }
+      ],
+      "provides": [
+        {
+          "kind": "interface",
+          "name": "build.note",
+          "inputs": {
+            "type": ""
+          },
+          "outputs": {
+            "type": "object",
+            "properties": {
+              "archived": {
+                "type": "boolean"
+              },
+              "content": {
+                "type": "string"
+              },
+              "deal": {
+                "type": "string"
+              },
+              "id": {
+                "type": "string"
+              },
+              "lead": {
+                "type": "string"
+              },
+              "pinned": {
+                "type": "boolean"
+              },
+              "revision": {
+                "type": "integer"
+              },
+              "title": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "revision"
+            ]
+          },
+          "roles": null,
+          "side": "pure"
+        }
+      ]
+    },
+    {
+      "ref": {
+        "app": "build",
+        "kind": "object",
+        "name": "build.organization"
+      },
+      "path": "objects/organization.json",
+      "contractVersion": 1,
+      "sourceVersion": "1",
+      "requires": [
+        {
+          "app": "build",
+          "kind": "object",
+          "name": "build.industry"
+        },
+        {
+          "app": "build",
+          "kind": "object",
+          "name": "build.territory"
+        }
+      ],
+      "provides": [
+        {
+          "kind": "interface",
+          "name": "build.organization",
+          "inputs": {
+            "type": ""
+          },
+          "outputs": {
+            "type": "object",
+            "properties": {
+              "address": {
+                "type": "string"
+              },
+              "archived": {
+                "type": "boolean"
+              },
+              "description": {
+                "type": "string"
+              },
+              "employees": {
+                "type": "string",
+                "enum": [
+                  "1-10",
+                  "11-50",
+                  "51-200",
+                  "201-500",
+                  "501-1000",
+                  "1000+"
+                ]
+              },
+              "id": {
+                "type": "string"
+              },
+              "industry": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              },
+              "revenue": {
+                "type": "object",
+                "properties": {
+                  "amount": {
+                    "type": "integer"
+                  },
+                  "currency": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "amount",
+                  "currency"
+                ]
+              },
+              "revision": {
+                "type": "integer"
+              },
+              "territory": {
+                "type": "string"
+              },
+              "website": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "revision"
+            ]
+          },
+          "roles": null,
+          "side": "pure"
+        }
+      ]
+    },
+    {
+      "ref": {
+        "app": "build",
+        "kind": "object",
+        "name": "build.territory"
+      },
+      "path": "objects/territory.json",
+      "contractVersion": 1,
+      "sourceVersion": "1",
+      "requires": [],
+      "provides": [
+        {
+          "kind": "interface",
+          "name": "build.territory",
+          "inputs": {
+            "type": ""
+          },
+          "outputs": {
+            "type": "object",
+            "properties": {
+              "archived": {
+                "type": "boolean"
+              },
+              "id": {
+                "type": "string"
+              },
+              "isgroup": {
+                "type": "boolean"
+              },
+              "manager": {
+                "type": "string"
+              },
+              "parent": {
+                "type": "string"
+              },
+              "revision": {
+                "type": "integer"
+              },
+              "title": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "revision"
+            ]
+          },
+          "roles": null,
+          "side": "pure"
+        }
+      ]
+    },
+    {
+      "ref": {
+        "app": "build",
+        "kind": "page",
+        "name": "crmcontact"
+      },
+      "path": "pages/crmcontact.json",
+      "contractVersion": 1,
+      "sourceVersion": "1",
+      "requires": [
+        {
+          "app": "build",
+          "kind": "action",
+          "name": "build.crmcontact.create"
+        },
+        {
+          "app": "build",
+          "kind": "action",
+          "name": "build.crmcontact.edit"
+        },
+        {
+          "app": "build",
+          "kind": "object",
+          "name": "build.crmcontact"
+        }
+      ],
+      "provides": []
+    },
+    {
+      "ref": {
+        "app": "build",
+        "kind": "page",
+        "name": "crmtask"
+      },
+      "path": "pages/crmtask.json",
+      "contractVersion": 1,
+      "sourceVersion": "1",
+      "requires": [
+        {
+          "app": "build",
+          "kind": "action",
+          "name": "build.crmtask.create"
+        },
+        {
+          "app": "build",
+          "kind": "action",
+          "name": "build.crmtask.edit"
+        },
+        {
+          "app": "build",
+          "kind": "object",
+          "name": "build.crmtask"
+        }
+      ],
+      "provides": []
+    },
+    {
+      "ref": {
+        "app": "build",
+        "kind": "page",
+        "name": "deal"
+      },
+      "path": "pages/deal.json",
+      "contractVersion": 1,
+      "sourceVersion": "1",
+      "requires": [
+        {
+          "app": "build",
+          "kind": "action",
+          "name": "build.deal.create"
+        },
+        {
+          "app": "build",
+          "kind": "action",
+          "name": "build.deal.edit"
+        },
+        {
+          "app": "build",
+          "kind": "object",
+          "name": "build.deal"
+        }
+      ],
+      "provides": []
+    },
+    {
+      "ref": {
+        "app": "build",
+        "kind": "page",
+        "name": "lead"
+      },
+      "path": "pages/lead.json",
+      "contractVersion": 1,
+      "sourceVersion": "1",
+      "requires": [
+        {
+          "app": "build",
+          "kind": "action",
+          "name": "build.lead.convert"
+        },
+        {
+          "app": "build",
+          "kind": "action",
+          "name": "build.lead.create"
+        },
+        {
+          "app": "build",
+          "kind": "action",
+          "name": "build.lead.edit"
+        },
+        {
+          "app": "build",
+          "kind": "object",
+          "name": "build.lead"
+        }
+      ],
+      "provides": []
+    },
+    {
+      "ref": {
+        "app": "build",
+        "kind": "page",
+        "name": "note"
+      },
+      "path": "pages/note.json",
+      "contractVersion": 1,
+      "sourceVersion": "1",
+      "requires": [
+        {
+          "app": "build",
+          "kind": "action",
+          "name": "build.note.create"
+        },
+        {
+          "app": "build",
+          "kind": "action",
+          "name": "build.note.edit"
+        },
+        {
+          "app": "build",
+          "kind": "object",
+          "name": "build.note"
+        }
+      ],
+      "provides": []
+    },
+    {
+      "ref": {
+        "app": "build",
+        "kind": "page",
+        "name": "organization"
+      },
+      "path": "pages/organization.json",
+      "contractVersion": 1,
+      "sourceVersion": "1",
+      "requires": [
+        {
+          "app": "build",
+          "kind": "action",
+          "name": "build.organization.create"
+        },
+        {
+          "app": "build",
+          "kind": "action",
+          "name": "build.organization.edit"
+        },
+        {
+          "app": "build",
+          "kind": "object",
+          "name": "build.organization"
+        }
+      ],
+      "provides": []
+    }
+  ]
+}

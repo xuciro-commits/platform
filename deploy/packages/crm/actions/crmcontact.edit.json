@@ -1,0 +1,83 @@
+{
+  "action": {
+    "capability": "crmcontact",
+    "description": "Change fields of a crm contact; fields left out keep their value.",
+    "payload": [
+      {
+        "description": "Full name",
+        "group": "Contact",
+        "name": "fullname",
+        "type": "string"
+      },
+      {
+        "description": "Email",
+        "group": "Contact",
+        "name": "email",
+        "type": "string"
+      },
+      {
+        "description": "Mobile no.",
+        "group": "Contact",
+        "name": "mobile",
+        "type": "string"
+      },
+      {
+        "description": "Phone",
+        "group": "Contact",
+        "name": "phone",
+        "type": "string"
+      },
+      {
+        "description": "Organization",
+        "group": "Contact",
+        "name": "organization",
+        "type": "string"
+      },
+      {
+        "description": "Designation",
+        "group": "Contact",
+        "name": "designation",
+        "type": "string"
+      },
+      {
+        "choices": [
+          "mr",
+          "ms",
+          "dr",
+          "prof"
+        ],
+        "description": "Salutation (mr, ms, dr, prof)",
+        "name": "salutation",
+        "type": "string"
+      },
+      {
+        "choices": [
+          "female",
+          "male",
+          "other"
+        ],
+        "description": "Gender (female, male, other)",
+        "name": "gender",
+        "type": "string"
+      },
+      {
+        "description": "Address",
+        "name": "address",
+        "type": "string"
+      }
+    ],
+    "schema": "build.crmcontact.edit",
+    "schemaVersion": {
+      "family": 1,
+      "version": "schema.sha256.8b045179d29df273e2d7c4676dafb593adf33e95334b30a343129f3388bc0af0"
+    },
+    "target": "build.crmcontact",
+    "title": "Edit crm contact"
+  },
+  "roles": [
+    "builder",
+    "user"
+  ],
+  "schema": "build.crmcontact.edit",
+  "target": "build.crmcontact"
+}

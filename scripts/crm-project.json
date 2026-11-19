@@ -3,6 +3,10 @@
     "name": "crm",
     "title": "CRM"
   },
+  "install": {
+    "tenant": "crm",
+    "package": "../deploy/packages/crm.json"
+  },
   "words": {
     "en": {
       "new": "New",
@@ -41,7 +45,10 @@
       "purple": "Purple",
       "pink": "Pink",
       "amber": "Amber",
-      "cyan": "Cyan"
+      "cyan": "Cyan",
+      "won": "Won",
+      "lost": "Lost",
+      "negotiation": "Negotiation"
     },
     "zh-CN": {
       "new": "新建",
@@ -80,7 +87,10 @@
       "purple": "紫",
       "pink": "粉",
       "amber": "琥珀",
-      "cyan": "青"
+      "cyan": "青",
+      "won": "赢单",
+      "lost": "丢单",
+      "negotiation": "谈判"
     }
   },
   "types": [
