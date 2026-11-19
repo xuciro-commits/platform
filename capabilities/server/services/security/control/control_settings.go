@@ -13,8 +13,28 @@ import (
 )
 
 type Settings struct {
-	mu     sync.Mutex
-	values atomic.Pointer[map[string]string]
+	mu       sync.Mutex
+	values   atomic.Pointer[map[string]string]
+	defaults map[string]string
+}
+
+func (s *Settings) Defaults(tenantWide map[string]string) {
+	s.defaults = map[string]string{}
+	for name, value := range tenantWide {
+		s.defaults[PlatformApp+"/"+name] = value
+	}
+}
+
+func (s *Settings) Mirror(from *Settings) {
+	s.Restore(from.Snapshot())
+	s.defaults = from.defaults
+}
+
+func (s *Settings) fallback(key, declared string) string {
+	if v, ok := s.defaults[key]; ok {
+		return v
+	}
+	return declared
 }
 
 func (s *Settings) Get(key string) (string, bool) {

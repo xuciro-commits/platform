@@ -71,6 +71,8 @@ func (d *Deployment) composeRuntime(id string, selection map[string]string) (*Te
 	}
 	tenant.services.StorageModule = services.StorageModule
 	d.bindPackageIndex(tenant)
+	spec, _ := d.specs.Get(id)
+	tenant.settings.Defaults(spec.Settings)
 	return tenant, nil
 }
 

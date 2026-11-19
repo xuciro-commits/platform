@@ -261,6 +261,13 @@ func (b *Build) entity(o ontology.Object) platform.RecordType {
 		Transaction: func(c platform.Caller, r *pb.ChangeRecord, transaction *platform.BusinessTxn, now time.Time) *platform.Error {
 			return b.businessRuntime().Transact(c, r, transaction, now)
 		},
+		Touch: func(c platform.Caller, r *pb.ChangeRecord, typ, id string, now time.Time) *platform.Error {
+			e, ok := b.installed[typ]
+			if !ok {
+				return nil
+			}
+			return b.authority.ApplyTxnRecord(c, r, e, "edit", id, json.RawMessage(`{}`), now)
+		},
 	})
 	entity.ComputeAt = computeRulesOf(o, b.conditionLookup)
 	entity.Protocols = b.objectProvisions(o, entity)

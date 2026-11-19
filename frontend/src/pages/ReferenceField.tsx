@@ -58,16 +58,19 @@ type ReferenceInputProps = {
   description?: string;
   required?: boolean;
   focused?: boolean;
+  labelHidden?: boolean;
   status?: InputStatus;
   onChange: (value: string) => void;
 };
 
-export function ReferenceInput({ type, id, name, label, description, required, focused, status, onChange, control }: ReferenceInputProps) {
+export function ReferenceInput({ type, id, name, label, description, required, focused, labelHidden, status, onChange, control }: ReferenceInputProps) {
   const [picked, setPicked] = useState<Reference>();
   const [searchFailed, setSearchFailed] = useState(false);
   const types = useRead<Api.EntityInfo[]>("/v1/entities");
   const target = types.status === "ready" ? types.data.find((item) => item.type === type) : undefined;
   const display = target?.display;
+  const named = useRead<Api.RecordView>(id && !name && picked?.id !== id ? `/v1/records/${encodeURIComponent(type)}/${encodeURIComponent(id)}` : null);
+  const known = named.status === "ready" && display ? shown(plain(named.data.values?.[display])) : "";
   const searchSource = useMemo(() => {
     const known = new Map<string, Reference>();
     const find = async (query: string, context?: SearchContext<Reference>) => {
@@ -94,10 +97,11 @@ export function ReferenceInput({ type, id, name, label, description, required, f
     };
     return { bootstrap: () => find(""), search: find };
   }, [type, display]);
-  const selection = id ? { id, label: name ?? (picked?.id === id ? picked.label : id) } : null;
+  const selection = id ? { id, label: name ?? (picked?.id === id ? picked.label : known || id) } : null;
   const input = (
     <Typeahead
       label={name ? "" : label}
+      isLabelHidden={labelHidden}
       description={description}
       isRequired={required}
       status={status}
@@ -115,7 +119,7 @@ export function ReferenceInput({ type, id, name, label, description, required, f
     />
   );
   return name ? (
-    <InputGroup label={label} description={description} isRequired={required} status={status}>
+    <InputGroup label={label} isLabelHidden={labelHidden} description={description} isRequired={required} status={status}>
       {input}
       <ReferenceLink type={type} id={id} name={name} compact />
     </InputGroup>

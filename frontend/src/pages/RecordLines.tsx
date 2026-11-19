@@ -23,7 +23,7 @@ export function RecordLines({ parent, id, set, child }: { parent: string; id: st
   const act = useAct(child);
   const via = child.entity.fields.find((field) => field.ref === parent && field.inverse === set.from);
   const create = via && child.create;
-  const fields = child.columns.filter((field) => field.name !== via?.name);
+  const fields = child.table.filter((field) => field.name !== via?.name && !field.aside);
   const archive = child.action(`${child.type}.archive`);
   const title = t(child.plural);
   const answer = read.status === "ready" ? read.data : null;

@@ -132,7 +132,7 @@ func (d *stagedDecision) CheckEnterpriseUsage(c platform.Caller, id, until strin
 	}
 	view := &Tenant{services: original.services, disabledOwners: original.disabledOwners, ID: original.ID, ownerSet: original.with(apps), ownerRoles: original.ownerRoles,
 		Projection: d.Records, Secrets: original.Secrets, releases: original.releases}
-	view.settings.Restore(original.settings.Snapshot())
+	view.settings.Mirror(&original.settings)
 	return view.checkEnterpriseUsage(c, d.Records, id, until, deleting, now)
 }
 func (d *stagedDecision) CheckEnterpriseTenantConnection(c platform.Caller, id string, now time.Time) *platform.Error {

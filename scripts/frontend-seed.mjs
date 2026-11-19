@@ -116,8 +116,9 @@ for (const file of files) {
   const track = (id, record) => revisions.set(`build.object/${id}`, record.revision);
   for (const type of sample.types ?? []) {
     const id = `OBJ-${type.name}`;
-    const { sets, ...definition } = type.definition;
-    track(id, await main.submit("build.object", id, "create", { ...definition, name: type.name, project: sample.project.name }));
+    const { sets, reads, ...definition } = type.definition;
+    const fields = definition.fields?.map(({ formulaExpr, ...field }) => (formulaExpr && !JSON.stringify(formulaExpr).includes('"agg"') ? { ...field, formulaExpr } : field));
+    track(id, await main.submit("build.object", id, "create", { ...definition, fields, name: type.name, project: sample.project.name }));
     if (!type.draft) track(id, await main.submit("build.object", id, "publish", {}, "build", 1));
   }
 
@@ -125,7 +126,7 @@ for (const file of files) {
     if (!type.definition.sets?.length) continue;
     const id = `OBJ-${type.name}`;
     const revision = type.draft ? 1 : 2;
-    track(id, await main.submit("build.object", id, "edit", { sets: type.definition.sets }, "build", revision));
+    track(id, await main.submit("build.object", id, "edit", { sets: type.definition.sets, reads: type.definition.reads, fields: type.definition.fields }, "build", revision));
     if (!type.draft) track(id, await main.submit("build.object", id, "publish", {}, "build", revision + 1));
   }
 

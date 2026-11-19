@@ -31,7 +31,7 @@ func (s *Settings) Apps(manifests []platform.Manifest) []AppSettings {
 		for _, x := range m.Settings {
 			v, ok := s.Get(m.ID + "/" + x.Name)
 			if !ok {
-				v = x.Default
+				v = s.fallback(m.ID+"/"+x.Name, x.Default)
 			}
 			app.Settings = append(app.Settings, SettingValue{Setting: x, Value: v})
 		}
@@ -63,7 +63,7 @@ func (s *Settings) Value(app, name string, declared func(app string) ([]platform
 	if i < 0 {
 		return ""
 	}
-	return settings[i].Default
+	return s.fallback(app+"/"+name, settings[i].Default)
 }
 
 func (s *Settings) ValueFor(app, name string, apps []platform.Service) string {

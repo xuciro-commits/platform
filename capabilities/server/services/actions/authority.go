@@ -496,18 +496,18 @@ func executeAction(c platform.Caller, e platform.RecordType, t platform.ActionTy
 			}
 		}
 		c.Put(r, value)
-		if t.Name == "create" && e.CreateTxn != nil && e.ApplyCreateTxn != nil && !c.Replaying && !c.SourceProjection() {
+		if e.Follow != nil && !c.Replaying && !c.SourceProjection() {
 			if c.CreationDepth() >= 16 {
 				c.FailDecision(platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Creation transactions exceed their depth limit"))
 				return
 			}
 			created := c.WithTransactionInput(s)
 			created = created.Deeper()
-			if err := e.ApplyCreateTxn(created, r, now); err != nil {
+			if err := e.Follow(created, r, t.Name, now); err != nil {
 				c.FailDecision(err)
 				return
 			}
-			if final, exists := c.RecordValue(typ, id); exists {
+			if final, exists := c.RecordValue(typ, id); exists && t.Name == "create" && e.CreateTxn != nil {
 				if err := c.Check(final); err != nil {
 					c.FailDecision(err)
 				}

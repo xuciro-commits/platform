@@ -268,7 +268,7 @@ export function ParameterInput({ parameter, described, value, form, status, onCh
   const reference = parameter.ref ?? (field?.type === "reference" ? field.ref : undefined);
   if (reference) {
     return <ReferenceInput type={reference} id={String(value ?? "")} name={referenceName} label={label} description={description}
-      required={parameter.required} focused={focused} status={status} onChange={onChange} control={control} />;
+      required={parameter.required} focused={focused} labelHidden={labelHidden} status={status} onChange={onChange} control={control} />;
   }
   if (field?.type === "member" || parameter.type === "member") {
     return <MemberInput id={String(value ?? "")} name={referenceName} label={label} description={description}

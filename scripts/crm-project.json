@@ -1632,7 +1632,17 @@
             "name": "total",
             "title": "Products total",
             "type": "money",
-            "group": "Commercial"
+            "group": "Commercial",
+            "formulaExpr": {
+              "op": "sum",
+              "kind": "money",
+              "agg": {
+                "source": "lines",
+                "field": [
+                  "amount"
+                ]
+              }
+            }
           },
           {
             "name": "expectedclose",
@@ -2073,7 +2083,19 @@
             "tone": "info",
             "description": "Active deal record."
           }
-        ]
+        ],
+        "reads": {
+          "collections": {
+            "lines": {
+              "app": "build",
+              "object": "build.dealline",
+              "set": "lines",
+              "query": "",
+              "version": 0,
+              "policy": "complete"
+            }
+          }
+        }
       },
       "records": [
         {
@@ -2085,10 +2107,6 @@
           "probability": 70,
           "owner": "admin-1",
           "dealvalue": {
-            "amount": 1850000,
-            "currency": "USD"
-          },
-          "total": {
             "amount": 1850000,
             "currency": "USD"
           },
@@ -2126,10 +2144,6 @@
             "amount": 2400000,
             "currency": "USD"
           },
-          "total": {
-            "amount": 2400000,
-            "currency": "USD"
-          },
           "expectedclose": "2027-01-18",
           "source": "SRC-010",
           "industry": "IND-004",
@@ -2159,10 +2173,6 @@
           "probability": 90,
           "owner": "admin-1",
           "dealvalue": {
-            "amount": 1460000,
-            "currency": "USD"
-          },
-          "total": {
             "amount": 1460000,
             "currency": "USD"
           },
@@ -2313,18 +2323,64 @@
           {
             "name": "rate",
             "title": "Rate",
-            "type": "decimal",
+            "type": "money",
             "required": true
           },
           {
             "name": "discount",
-            "title": "Discount %",
-            "type": "decimal"
+            "title": "Discount",
+            "type": "money"
           },
           {
             "name": "amount",
             "title": "Amount",
-            "type": "decimal"
+            "type": "money",
+            "formulaExpr": {
+              "op": "-",
+              "kind": "money",
+              "args": [
+                {
+                  "op": "*",
+                  "kind": "money",
+                  "args": [
+                    {
+                      "kind": "integer",
+                      "ref": "qty"
+                    },
+                    {
+                      "kind": "money",
+                      "ref": "rate"
+                    }
+                  ]
+                },
+                {
+                  "op": "coalesce",
+                  "kind": "money",
+                  "args": [
+                    {
+                      "kind": "money",
+                      "ref": "discount"
+                    },
+                    {
+                      "op": "*",
+                      "kind": "money",
+                      "args": [
+                        {
+                          "kind": "money",
+                          "ref": "rate"
+                        },
+                        {
+                          "kind": "integer",
+                          "lit": {
+                            "value": 0
+                          }
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
           }
         ]
       },
@@ -2334,54 +2390,84 @@
           "product": "PRD-001",
           "productname": "Platform Core Seat",
           "qty": 50,
-          "rate": 120,
-          "discount": 0,
-          "amount": 6000
+          "rate": {
+            "amount": 12000,
+            "currency": "USD"
+          },
+          "discount": {
+            "amount": 0,
+            "currency": "USD"
+          }
         },
         {
           "deal": "DEL-001",
           "product": "PRD-002",
           "productname": "Enterprise Governance Pack",
           "qty": 1,
-          "rate": 4500,
-          "discount": 0,
-          "amount": 4500
+          "rate": {
+            "amount": 450000,
+            "currency": "USD"
+          },
+          "discount": {
+            "amount": 0,
+            "currency": "USD"
+          }
         },
         {
           "deal": "DEL-001",
           "product": "PRD-004",
           "productname": "Onboarding & Migration",
           "qty": 1,
-          "rate": 8000,
-          "discount": 0,
-          "amount": 8000
+          "rate": {
+            "amount": 800000,
+            "currency": "USD"
+          },
+          "discount": {
+            "amount": 0,
+            "currency": "USD"
+          }
         },
         {
           "deal": "DEL-003",
           "product": "PRD-001",
           "productname": "Platform Core Seat",
           "qty": 100,
-          "rate": 120,
-          "discount": 10,
-          "amount": 10800
+          "rate": {
+            "amount": 12000,
+            "currency": "USD"
+          },
+          "discount": {
+            "amount": 1000,
+            "currency": "USD"
+          }
         },
         {
           "deal": "DEL-003",
           "product": "PRD-005",
           "productname": "Dedicated SLA Support",
           "qty": 1,
-          "rate": 3600,
-          "discount": 0,
-          "amount": 3600
+          "rate": {
+            "amount": 360000,
+            "currency": "USD"
+          },
+          "discount": {
+            "amount": 0,
+            "currency": "USD"
+          }
         },
         {
           "deal": "DEL-005",
           "product": "PRD-003",
           "productname": "ERP Connector Module",
           "qty": 1,
-          "rate": 2800,
-          "discount": 0,
-          "amount": 2800
+          "rate": {
+            "amount": 280000,
+            "currency": "USD"
+          },
+          "discount": {
+            "amount": 0,
+            "currency": "USD"
+          }
         }
       ]
     },

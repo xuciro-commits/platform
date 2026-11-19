@@ -39,6 +39,16 @@
       "type": "money"
     },
     {
+      "formulaExpr": {
+        "agg": {
+          "field": [
+            "amount"
+          ],
+          "source": "lines"
+        },
+        "kind": "money",
+        "op": "sum"
+      },
       "group": "Commercial",
       "name": "total",
       "title": "Products total",
@@ -496,6 +506,18 @@
   ],
   "name": "deal",
   "plural": "Deals",
+  "reads": {
+    "collections": {
+      "lines": {
+        "app": "build",
+        "object": "build.dealline",
+        "policy": "complete",
+        "query": "",
+        "set": "lines",
+        "version": 0
+      }
+    }
+  },
   "schemaVersions": [
     {
       "family": 1,
@@ -503,7 +525,7 @@
     },
     {
       "family": 2,
-      "version": "schema.sha256.8fcfee154633cd50df7e060e3bba078845c3132e9799d4bd485e636df497cb57"
+      "version": "schema.sha256.04cfcc4a2c4bab8e89777e66ab067d393b27ba4b85a4550293e6fc2281e2a0c8"
     }
   ],
   "sets": [

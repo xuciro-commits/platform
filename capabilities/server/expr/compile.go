@@ -337,12 +337,13 @@ func check(e Expr, s Schema, at string, depth int, nodes *int, mode int) (Type, 
 			lo, hi = 1, 2
 		}
 		good = arity(lo, hi) && numeric(e.Kind)
+		scale := e.Kind == "money" && len(args) == 2 && (args[0].Kind == "money") != (args[1].Kind == "money") && (e.Op == "*" || e.Op == "/" && args[0].Kind == "money")
 		for i, a := range args {
 			if e.Op == "round" && i == 1 {
 				good = good && a.Kind == "integer"
 				continue
 			}
-			good = good && numeric(a.Kind) && (a.Kind == "money" && e.Kind == "money" || a.Kind != "money" && (e.Kind != "money" || currency != "" && !moneyUnknown))
+			good = good && numeric(a.Kind) && (a.Kind == "money" && e.Kind == "money" || a.Kind != "money" && (e.Kind != "money" || scale || currency != "" && !moneyUnknown))
 		}
 		if good && e.Kind == "integer" && e.Op != "round" {
 			good = all("integer")

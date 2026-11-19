@@ -110,7 +110,7 @@ func readFromImage[T any](t *Tenant, ctx context.Context, read func(*Tenant) (T,
 func (t *Tenant) forkReadState(ctx context.Context) (*Tenant, error) {
 	view := t.newControlFork()
 	view.ConnectorRoster = t.ConnectorRoster.Fork()
-	view.settings.Restore(t.settings.Snapshot())
+	view.settings.Mirror(&t.settings)
 	view.words.Restore(t.words.Clone())
 	view.endpoints.Restore(t.endpoints.Saved())
 	t.outbound.CopyTo(&view.outbound)

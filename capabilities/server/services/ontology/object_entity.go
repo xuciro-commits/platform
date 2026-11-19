@@ -15,6 +15,7 @@ type ObjectRuntimeEnvironment struct {
 	Lookup      func(string) (platform.RecordTypeInfo, bool)
 	Member      func(string) (platform.Member, bool)
 	Transaction func(platform.Caller, *pb.ChangeRecord, *platform.BusinessTxn, time.Time) *platform.Error
+	Touch       func(platform.Caller, *pb.ChangeRecord, string, string, time.Time) *platform.Error
 }
 
 func CompileObjectEntity(o Object, env ObjectRuntimeEnvironment) platform.RecordType {
@@ -27,15 +28,46 @@ func CompileObjectEntity(o Object, env ObjectRuntimeEnvironment) platform.Record
 	entity.Validate = validateObject(o, entity.Model, env)
 	entity.CreateTxn = o.CreateTransaction
 	entity.EnterpriseUse = o.EnterpriseUse
-	if o.CreateTransaction != nil {
-		entity.ApplyCreateTxn = func(c platform.Caller, r *pb.ChangeRecord, now time.Time) *platform.Error {
-			if env.Transaction == nil {
-				return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Creation transactions need their original owner")
+	parents := slices.DeleteFunc(slices.Clone(o.Fields), func(f Field) bool { return f.Type != "reference" || f.Inverse == "" })
+	if o.CreateTransaction != nil || len(parents) > 0 {
+		entity.Follow = func(c platform.Caller, r *pb.ChangeRecord, verb string, now time.Time) *platform.Error {
+			if verb == "create" && o.CreateTransaction != nil {
+				if env.Transaction == nil {
+					return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Creation transactions need their original owner")
+				}
+				if err := env.Transaction(c, r, o.CreateTransaction, now); err != nil {
+					return err
+				}
 			}
-			return env.Transaction(c, r, o.CreateTransaction, now)
+			return rollUp(c, r, o, reflect.TypeOf(entity.Model), parents, env, now)
 		}
 	}
 	return entity
+}
+
+func rollUp(c platform.Caller, r *pb.ChangeRecord, o Object, model reflect.Type, parents []Field, env ObjectRuntimeEnvironment, now time.Time) *platform.Error {
+	if env.Touch == nil || env.Lookup == nil {
+		return nil
+	}
+	value, found := c.RecordValue(model, c.TransactionInput(r).GetTarget().GetId())
+	var record map[string]json.RawMessage
+	if !found || json.Unmarshal(platform.Raw(value), &record) != nil {
+		return nil
+	}
+	for _, f := range parents {
+		info, ok := env.Lookup(f.Ref)
+		if !ok || len(info.LocalRules) == 0 || !slices.ContainsFunc(info.Sets, func(set platform.RecordSet) bool { return set.Object == AppID+"."+o.Name && set.From == f.Inverse }) {
+			continue
+		}
+		var parent string
+		if json.Unmarshal(record[f.Name], &parent) != nil || parent == "" {
+			continue
+		}
+		if err := env.Touch(c, r, f.Ref, parent, now); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func compileLifecycle(o Object, roles []string, env ObjectRuntimeEnvironment) *platform.Lifecycle {

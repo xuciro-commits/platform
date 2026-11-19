@@ -501,6 +501,9 @@ func (s *Specs) Load(file string, development protocol.TenantSpec) error {
 }
 
 func (s *Specs) Get(id string) (protocol.TenantSpec, bool) {
+	if s == nil {
+		return protocol.TenantSpec{}, false
+	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	for _, t := range s.list {

@@ -726,22 +726,6 @@
               "title": {
                 "type": "string",
                 "description": "Deal"
-              },
-              "total": {
-                "type": "object",
-                "properties": {
-                  "amount": {
-                    "type": "integer"
-                  },
-                  "currency": {
-                    "type": "string"
-                  }
-                },
-                "required": [
-                  "amount",
-                  "currency"
-                ],
-                "description": "Products total"
               }
             },
             "required": [
@@ -787,12 +771,6 @@
               "name": "dealvalue",
               "type": "money",
               "description": "Deal value",
-              "group": "Commercial"
-            },
-            {
-              "name": "total",
-              "type": "money",
-              "description": "Products total",
               "group": "Commercial"
             },
             {
@@ -969,22 +947,6 @@
               "title": {
                 "type": "string",
                 "description": "Deal"
-              },
-              "total": {
-                "type": "object",
-                "properties": {
-                  "amount": {
-                    "type": "integer"
-                  },
-                  "currency": {
-                    "type": "string"
-                  }
-                },
-                "required": [
-                  "amount",
-                  "currency"
-                ],
-                "description": "Products total"
               }
             }
           },
@@ -1025,12 +987,6 @@
               "name": "dealvalue",
               "type": "money",
               "description": "Deal value",
-              "group": "Commercial"
-            },
-            {
-              "name": "total",
-              "type": "money",
-              "description": "Products total",
               "group": "Commercial"
             },
             {
@@ -2631,7 +2587,19 @@
             "type": "object",
             "properties": {
               "amount": {
-                "type": "number"
+                "type": "object",
+                "properties": {
+                  "amount": {
+                    "type": "integer"
+                  },
+                  "currency": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "amount",
+                  "currency"
+                ]
               },
               "archived": {
                 "type": "boolean"
@@ -2640,7 +2608,19 @@
                 "type": "string"
               },
               "discount": {
-                "type": "number"
+                "type": "object",
+                "properties": {
+                  "amount": {
+                    "type": "integer"
+                  },
+                  "currency": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "amount",
+                  "currency"
+                ]
               },
               "id": {
                 "type": "string"
@@ -2655,7 +2635,19 @@
                 "type": "integer"
               },
               "rate": {
-                "type": "number"
+                "type": "object",
+                "properties": {
+                  "amount": {
+                    "type": "integer"
+                  },
+                  "currency": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "amount",
+                  "currency"
+                ]
               },
               "revision": {
                 "type": "integer"

@@ -32,17 +32,68 @@
       "name": "rate",
       "required": true,
       "title": "Rate",
-      "type": "decimal"
+      "type": "money"
     },
     {
       "name": "discount",
-      "title": "Discount %",
-      "type": "decimal"
+      "title": "Discount",
+      "type": "money"
     },
     {
+      "formulaExpr": {
+        "args": [
+          {
+            "args": [
+              {
+                "kind": "integer",
+                "op": "",
+                "ref": "qty"
+              },
+              {
+                "kind": "money",
+                "op": "",
+                "ref": "rate"
+              }
+            ],
+            "kind": "money",
+            "op": "*"
+          },
+          {
+            "args": [
+              {
+                "kind": "money",
+                "op": "",
+                "ref": "discount"
+              },
+              {
+                "args": [
+                  {
+                    "kind": "money",
+                    "op": "",
+                    "ref": "rate"
+                  },
+                  {
+                    "kind": "integer",
+                    "lit": {
+                      "value": 0
+                    },
+                    "op": ""
+                  }
+                ],
+                "kind": "money",
+                "op": "*"
+              }
+            ],
+            "kind": "money",
+            "op": "coalesce"
+          }
+        ],
+        "kind": "money",
+        "op": "-"
+      },
       "name": "amount",
       "title": "Amount",
-      "type": "decimal"
+      "type": "money"
     }
   ],
   "name": "dealline",
@@ -50,7 +101,7 @@
   "schemaVersions": [
     {
       "family": 1,
-      "version": "schema.sha256.ffb634e70fa52fb9eefd51522dbb619c2fbac37794c90bdefcab45e3bc15e566"
+      "version": "schema.sha256.e5c2a2011152dbfc6b07d4eb886845fb085b21c00d9d4a440def35d7cf9e0f71"
     }
   ],
   "title": "Deal product line",

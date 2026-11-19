@@ -1691,6 +1691,13 @@ test("crm: every CRM type can be created, edited and filtered, and lead and deal
   const lines = page.getByRole("table", { name: "Deal product lines" });
   await expect(lines).toBeVisible();
   await expect.poll(() => lines.getByRole("textbox", { name: "Product name" }).evaluateAll((inputs) => inputs.map((input) => (input as HTMLInputElement).value))).toContain("Platform Core Seat");
+  await expect(page.getByText("19,500.00 USD", { exact: true }).first()).toBeVisible();
+  const added = lines.getByRole("row").filter({ hasText: "1,000.00 USD" });
+  await added.getByRole("spinbutton", { name: "Quantity" }).fill("3");
+  await added.getByRole("spinbutton", { name: "Quantity" }).press("Enter");
+  await expect(lines.getByText("1,500.00 USD", { exact: true })).toBeVisible();
+  await page.reload();
+  await expect(page.getByText("20,000.00 USD", { exact: true }).first()).toBeVisible();
 
   await page.goto("/ontology/objects/build.lead");
   await page.getByRole("radio", { name: "Board" }).click();

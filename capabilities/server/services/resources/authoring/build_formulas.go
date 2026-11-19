@@ -97,6 +97,10 @@ func computeRulesOf(o ontology.Object, lookup func(string) (platform.RecordTypeI
 					holder.Set(reflect.ValueOf(ctx.Sources))
 				}
 			}
+			if result.Value.Status == "null" {
+				reflect.ValueOf(record).Elem().FieldByName(ontology.GoName(f.Name)).SetZero()
+				continue
+			}
 			value, err := ruleprotocol.ExprGoValue(result.Value)
 			if err == nil {
 				err = assign(reflect.ValueOf(record).Elem().FieldByName(ontology.GoName(f.Name)), value)

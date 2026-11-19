@@ -72,6 +72,9 @@ func (a *NumericAggregate) Result() (Value, error) {
 		if a.op != "sum" {
 			return Value{}, fail("empty", "aggregate", "numeric aggregate has no operands")
 		}
+		if a.kind == "money" && a.currency == "" {
+			return Null(a.kind), nil
+		}
 		return numericValue(a.kind, new(big.Rat), a.currency, "aggregate")
 	}
 	value := new(big.Rat).Set(a.total)

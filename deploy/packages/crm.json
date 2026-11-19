@@ -1,6 +1,6 @@
 {
   "id": "crm",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "namespace": "crm",
   "title": "CRM",
   "description": "Leads, deals, organizations, contacts, tasks and notes, with lead-to-deal conversion. Built in the crm project and released through Delivery.",
@@ -1072,22 +1072,6 @@
                 "title": {
                   "type": "string",
                   "description": "Deal"
-                },
-                "total": {
-                  "type": "object",
-                  "properties": {
-                    "amount": {
-                      "type": "integer"
-                    },
-                    "currency": {
-                      "type": "string"
-                    }
-                  },
-                  "required": [
-                    "amount",
-                    "currency"
-                  ],
-                  "description": "Products total"
                 }
               },
               "required": [
@@ -1133,12 +1117,6 @@
                 "name": "dealvalue",
                 "type": "money",
                 "description": "Deal value",
-                "group": "Commercial"
-              },
-              {
-                "name": "total",
-                "type": "money",
-                "description": "Products total",
                 "group": "Commercial"
               },
               {
@@ -1249,12 +1227,6 @@
                 "type": "money"
               },
               {
-                "description": "Products total",
-                "group": "Commercial",
-                "name": "total",
-                "type": "money"
-              },
-              {
                 "description": "Expected close",
                 "group": "Commercial",
                 "name": "expectedclose",
@@ -1325,7 +1297,7 @@
             "schema": "build.deal.create",
             "schemaVersion": {
               "family": 2,
-              "version": "schema.sha256.8fcfee154633cd50df7e060e3bba078845c3132e9799d4bd485e636df497cb57"
+              "version": "schema.sha256.04cfcc4a2c4bab8e89777e66ab067d393b27ba4b85a4550293e6fc2281e2a0c8"
             },
             "target": "build.deal",
             "title": "Create deal"
@@ -1440,22 +1412,6 @@
                 "title": {
                   "type": "string",
                   "description": "Deal"
-                },
-                "total": {
-                  "type": "object",
-                  "properties": {
-                    "amount": {
-                      "type": "integer"
-                    },
-                    "currency": {
-                      "type": "string"
-                    }
-                  },
-                  "required": [
-                    "amount",
-                    "currency"
-                  ],
-                  "description": "Products total"
                 }
               }
             },
@@ -1496,12 +1452,6 @@
                 "name": "dealvalue",
                 "type": "money",
                 "description": "Deal value",
-                "group": "Commercial"
-              },
-              {
-                "name": "total",
-                "type": "money",
-                "description": "Products total",
                 "group": "Commercial"
               },
               {
@@ -1609,12 +1559,6 @@
                 "type": "money"
               },
               {
-                "description": "Products total",
-                "group": "Commercial",
-                "name": "total",
-                "type": "money"
-              },
-              {
                 "description": "Expected close",
                 "group": "Commercial",
                 "name": "expectedclose",
@@ -1684,7 +1628,7 @@
             "schema": "build.deal.edit",
             "schemaVersion": {
               "family": 2,
-              "version": "schema.sha256.8fcfee154633cd50df7e060e3bba078845c3132e9799d4bd485e636df497cb57"
+              "version": "schema.sha256.04cfcc4a2c4bab8e89777e66ab067d393b27ba4b85a4550293e6fc2281e2a0c8"
             },
             "target": "build.deal",
             "title": "Edit deal"
@@ -4174,6 +4118,16 @@
               "type": "money"
             },
             {
+              "formulaExpr": {
+                "agg": {
+                  "field": [
+                    "amount"
+                  ],
+                  "source": "lines"
+                },
+                "kind": "money",
+                "op": "sum"
+              },
               "group": "Commercial",
               "name": "total",
               "title": "Products total",
@@ -4631,6 +4585,18 @@
           ],
           "name": "deal",
           "plural": "Deals",
+          "reads": {
+            "collections": {
+              "lines": {
+                "app": "build",
+                "object": "build.dealline",
+                "policy": "complete",
+                "query": "",
+                "set": "lines",
+                "version": 0
+              }
+            }
+          },
           "schemaVersions": [
             {
               "family": 1,
@@ -4638,7 +4604,7 @@
             },
             {
               "family": 2,
-              "version": "schema.sha256.8fcfee154633cd50df7e060e3bba078845c3132e9799d4bd485e636df497cb57"
+              "version": "schema.sha256.04cfcc4a2c4bab8e89777e66ab067d393b27ba4b85a4550293e6fc2281e2a0c8"
             }
           ],
           "sets": [
@@ -4720,7 +4686,19 @@
               "type": "object",
               "properties": {
                 "amount": {
-                  "type": "number"
+                  "type": "object",
+                  "properties": {
+                    "amount": {
+                      "type": "integer"
+                    },
+                    "currency": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "amount",
+                    "currency"
+                  ]
                 },
                 "archived": {
                   "type": "boolean"
@@ -4729,7 +4707,19 @@
                   "type": "string"
                 },
                 "discount": {
-                  "type": "number"
+                  "type": "object",
+                  "properties": {
+                    "amount": {
+                      "type": "integer"
+                    },
+                    "currency": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "amount",
+                    "currency"
+                  ]
                 },
                 "id": {
                   "type": "string"
@@ -4744,7 +4734,19 @@
                   "type": "integer"
                 },
                 "rate": {
-                  "type": "number"
+                  "type": "object",
+                  "properties": {
+                    "amount": {
+                      "type": "integer"
+                    },
+                    "currency": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "amount",
+                    "currency"
+                  ]
                 },
                 "revision": {
                   "type": "integer"
@@ -4793,17 +4795,68 @@
               "name": "rate",
               "required": true,
               "title": "Rate",
-              "type": "decimal"
+              "type": "money"
             },
             {
               "name": "discount",
-              "title": "Discount %",
-              "type": "decimal"
+              "title": "Discount",
+              "type": "money"
             },
             {
+              "formulaExpr": {
+                "args": [
+                  {
+                    "args": [
+                      {
+                        "kind": "integer",
+                        "op": "",
+                        "ref": "qty"
+                      },
+                      {
+                        "kind": "money",
+                        "op": "",
+                        "ref": "rate"
+                      }
+                    ],
+                    "kind": "money",
+                    "op": "*"
+                  },
+                  {
+                    "args": [
+                      {
+                        "kind": "money",
+                        "op": "",
+                        "ref": "discount"
+                      },
+                      {
+                        "args": [
+                          {
+                            "kind": "money",
+                            "op": "",
+                            "ref": "rate"
+                          },
+                          {
+                            "kind": "integer",
+                            "lit": {
+                              "value": 0
+                            },
+                            "op": ""
+                          }
+                        ],
+                        "kind": "money",
+                        "op": "*"
+                      }
+                    ],
+                    "kind": "money",
+                    "op": "coalesce"
+                  }
+                ],
+                "kind": "money",
+                "op": "-"
+              },
               "name": "amount",
               "title": "Amount",
-              "type": "decimal"
+              "type": "money"
             }
           ],
           "name": "dealline",
@@ -4811,7 +4864,7 @@
           "schemaVersions": [
             {
               "family": 1,
-              "version": "schema.sha256.ffb634e70fa52fb9eefd51522dbb619c2fbac37794c90bdefcab45e3bc15e566"
+              "version": "schema.sha256.e5c2a2011152dbfc6b07d4eb886845fb085b21c00d9d4a440def35d7cf9e0f71"
             }
           ],
           "title": "Deal product line",
