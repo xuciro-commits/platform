@@ -9,7 +9,7 @@ export const registeredManifests = {
   },
   "build": {
     "id": "build",
-    "title": "Files"
+    "title": "Build"
   },
   "enterprise": {
     "id": "enterprise",
@@ -149,7 +149,7 @@ export const registeredApplications = {
   },
   "build": {
     "id": "build",
-    "title": "Files",
+    "title": "Build",
     "manifest": "build",
     "serves": [
       "build"

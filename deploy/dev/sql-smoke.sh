@@ -57,7 +57,7 @@ database="postgres://platform:${POSTGRES_PASSWORD}@127.0.0.1:${PG_PORT}/${db}"
 
 start() {
   .build/host/platform-server -addr "127.0.0.1:${port}" -tenants "$work/tenants.json" \
-    -database "$database" -project -web web/apps/workspace/dist >"$work/server.log" 2>&1 &
+    -database "$database" -project -web frontend/dist >"$work/server.log" 2>&1 &
   pid=$!
   for _ in $(seq 1 120); do
     if curl -fsS "http://127.0.0.1:${port}/healthz" >/dev/null 2>&1; then

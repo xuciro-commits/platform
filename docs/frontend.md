@@ -184,7 +184,7 @@ pnpm --dir frontend astryx docs tokens
 |---|---|
 | 静态 | `make check-frontend`：裸元素、内联样式、硬编码值、未批准的依赖与导入、没翻译的文字、注释、文件长度、类型检查与构建 |
 | 真实数据 | `make frontend-host` 起夹具宿主（自带示例销售项目：客户与商机）；`frontend/.env` 写 `PLATFORM_HOST=http://127.0.0.1:18511`；`pnpm --dir frontend dev`，打开 `http://localhost:8496`，登录页选 `admin-1` |
-| 正式登录 | `make local` 起整套（身份服务在内）；`frontend/.env` 写 `PLATFORM_HOST=http://127.0.0.1:18495`，开 `http://localhost:8496`，用身份服务里的账号登录。`deploy/local/identity.py` 每次启动把 8496 登记为允许的来源与回跳地址 |
+| 正式登录 | `make local` 起整套（身份服务在内）；入口 `http://localhost:8495` 就是 `frontend/` 的 Vite（热更新，代理到 18495），用身份服务里的账号登录。另开 8496 时 `deploy/local/identity.py` 也把它登记为允许的来源与回跳地址 |
 | 主干验收 | `make trunk`：`frontend/e2e/trunk.spec.ts` 按阶段门槛的演示路径走，自己起内存宿主、灌示例数据、起前端。只走主干，不测单个组件；每做一行给它加一步，控件按角色与可见的名字找 |
 | 观感 | 亮色与暗色、窄窗口、中文各看一眼；然后交给负责人按 [design](design.md) 的六步看 |
 
@@ -196,6 +196,7 @@ pnpm --dir frontend astryx docs tokens
 
 - 在 `frontend/` 工作时不读它，不把它的结构、命名与组件带过来。它的界面不是新界面的输入；输入是 ux、design 与官方模板。
 - 只修让它起不来、或让 `make check` 过不去的缺陷。
+- 要对照时 `make web` 在 8497 起它，代理到 `make local` 的宿主；只在本地，容器镜像与 `make build` 都不再带它。
 - 删除它之前要先搬走两样东西：生成的宿主类型（现在在 `web/packages/api`，`frontend/` 以链接取用）、
   `make check` 里契约比对的路径。夹具宿主的租户配置已是 `scripts/frontend-tenants.json`。
 

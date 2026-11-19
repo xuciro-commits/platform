@@ -18,11 +18,11 @@ read -r -a pnpm <<< "${PNPM:-pnpm}"
 
 data_dir=".build/lite/platform"
 bin=".build/lite/platform-server"
-web_dist="web/apps/workspace/dist"
+web_dist="frontend/dist"
 mkdir -p "$data_dir"
 
-echo "==> Building the workspace / 构建工作台..."
-(cd web && "${pnpm[@]}" --dir apps/workspace build)
+echo "==> Building the frontend / 构建前端..."
+(cd frontend && "${pnpm[@]}" build)
 
 echo "==> Building the host / 编译平台宿主..."
 (cd capabilities/server && "$go" build -o "$root/$bin" ./cmd/platform-server)

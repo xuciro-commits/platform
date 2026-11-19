@@ -206,14 +206,14 @@ def serve():
                 raise RuntimeError(f'端口 {port} 已被占用（PID {sorted(listeners)}）；请先停止对应宿主，本地启动不会接管其他进程。')
         air = os.environ.get('AIR') or shutil.which('air')
         node = shutil.which('node')
-        vite = ROOT / 'web/apps/workspace/node_modules/vite/bin/vite.js'
+        vite = ROOT / 'frontend/node_modules/vite/bin/vite.js'
         if not air or not node or not vite.is_file():
             raise RuntimeError('缺少 Air、Node 或 Vite，请先运行 make setup。')
         commands = [
             ('worker', [str(COMPUTE / 'wasm-worker'), '-socket=' + str(COMPUTE / 'worker.sock')], ROOT),
             ('builder', [str(COMPUTE / 'code-builder'), '-socket=' + str(COMPUTE / 'builder.sock')], ROOT),
             ('api', [air, '-c', 'deploy/dev/air.toml'], ROOT),
-            ('web', [node, str(vite), '--host', '127.0.0.1', '--port', str(state['webPort'])], ROOT / 'web/apps/workspace'),
+            ('web', [node, str(vite), '--host', '127.0.0.1', '--port', str(state['webPort'])], ROOT / 'frontend'),
         ]
         env = {**os.environ, **config, 'PLATFORM_HOST': f'http://127.0.0.1:{API_PORT}'}
         compose = json.loads(subprocess.check_output(COMPOSE + ['config', '--format', 'json'], cwd=ROOT))
@@ -295,7 +295,7 @@ def prepare_docker():
 def docker():
     configuration()
     dirty = subprocess.check_output(['git', 'status', '--porcelain', '--', 'capabilities/server', 'apps',
-                                    'protocols', 'contract', 'web/packages', 'web/apps/workspace/src'],
+                                    'protocols', 'contract', 'web/packages', 'frontend/src'],
                                    cwd=ROOT, text=True)
     if dirty:
         raise RuntimeError('请先提交源码再切到 Docker，以便核对镜像版本；本地环境仍保留运行。')

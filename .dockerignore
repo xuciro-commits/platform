@@ -4,4 +4,3 @@
 .build
 **/.build
 web/**/dist
-!web/apps/workspace/dist

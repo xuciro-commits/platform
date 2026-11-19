@@ -12,6 +12,6 @@ RUN apk add --no-cache tzdata
 ARG PLATFORM_REVISION
 LABEL org.opencontainers.image.revision=$PLATFORM_REVISION
 COPY --from=build /platform-server /usr/local/bin/platform-server
-COPY web/apps/workspace/dist /web
+COPY frontend/dist /web
 USER nobody
 ENTRYPOINT ["platform-server"]

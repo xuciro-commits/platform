@@ -33,7 +33,7 @@ if mode == 'native':
         raise SystemExit('The native binary differs from the committed revision')
 else:
     environment.prepare_docker()
-    subprocess.run(['pnpm', '--dir', 'web/apps/workspace', 'build'], check=True)
+    subprocess.run(['pnpm', '--dir', 'frontend', 'build'], check=True)
     subprocess.run(environment.COMPOSE + ['up', '-d', '--no-deps', '--build', 'platform-server'], check=True)
     container = subprocess.check_output(environment.COMPOSE + ['ps', '-q', 'platform-server'], text=True).strip()
     image = subprocess.check_output(['docker', 'inspect', '--format', '{{.Image}}', container], text=True).strip()
@@ -62,13 +62,13 @@ if mode == 'native':
     if b'/@vite/client' not in html:
         raise SystemExit('The selected native workspace is not Vite')
 else:
-    if html != (root / 'web/apps/workspace/dist/index.html').read_bytes():
+    if html != (root / 'frontend/dist/index.html').read_bytes():
         raise SystemExit('The served workspace differs from its build')
 assets = sorted(set(re.findall(r'(?:src|href)="(/[^\"]+)"', html.decode())))
 for asset in assets:
     with urllib.request.urlopen(base + asset, timeout=10) as response:
         body = response.read()
-    if not body or mode == 'docker' and body != (root / 'web/apps/workspace/dist' / asset.lstrip('/')).read_bytes():
+    if not body or mode == 'docker' and body != (root / 'frontend/dist' / asset.lstrip('/')).read_bytes():
         raise SystemExit('The served page resource is missing or stale')
 environment.write_state({'mode': mode, 'status': 'ready', 'url': base}) if mode == 'docker' else None
 report = {'revision': revision, 'mode': mode, 'url': base, 'health': health, 'identityIssuer': discovery['issuer'], 'matchedAssets': len(assets), 'checkedAtUTC': datetime.datetime.now(datetime.timezone.utc).isoformat()}
