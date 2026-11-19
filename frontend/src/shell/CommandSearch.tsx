@@ -125,7 +125,9 @@ export function CommandSearch({ app, item, apps, tenant, children }: { app: App;
             label: hit.title || t(hit.typeTitle ?? hit.type),
           } }));
         const unique = [...new Map(found.map((hit) => [hit.item.href, hit])).values()];
-        const resources = unique.filter((hit) => hit.resource).slice(0, 8).map((hit) => destination(hit.item, t("Resources")));
+        const resources = unique.filter((hit) => hit.resource)
+          .sort((a, b) => Number(b.item.label.toLocaleLowerCase() === needle) - Number(a.item.label.toLocaleLowerCase() === needle))
+          .slice(0, 8).map((hit) => destination(hit.item, t("Resources")));
         const records = unique.filter((hit) => !hit.resource).slice(0, 12).map((hit) => destination(hit.item, t("Objects")));
         const results = [...local, ...resources, ...records, ...people];
         if (!signal.aborted) {

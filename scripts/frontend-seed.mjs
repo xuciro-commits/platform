@@ -79,11 +79,12 @@ for (const type of sample.types) {
 }
 
 catalogue = await call("/v1/actions");
-const declarations = await call("/v1/declarations");
+let declarations = await call("/v1/declarations");
+const authorityFor = (type) => declarations.find((entry) => entry.tenantId === identity.tenantId && entry.dataClass === type)?.authorityId;
 let written = 0;
 for (const type of sample.types.filter((each) => !each.draft)) {
   const full = `build.${type.name}`;
-  const authority = declarations.find((entry) => entry.tenantId === identity.tenantId && entry.dataClass === full)?.authorityId;
+  const authority = authorityFor(full);
   if (!authority) throw new Error(`${full}: no write authority after publishing`);
   for (const [index, record] of type.records.entries()) {
     await submit(full, `${type.prefix}-${String(index + 1).padStart(3, "0")}`, "create", record, authority);
@@ -97,14 +98,28 @@ for (const path of ["./frontend-fixtures/production-provider-0.1.4.json", "../de
   const accepted = await submit("platform.package", inspected.descriptor.id, "import", { id: inspected.descriptor.id, digest: inspected.digest }, "platform", packageRevision);
   packageRevision = accepted.revision;
 }
-for (const [schema, type, id, payload] of sample.organization) {
-  const authority = declarations.find((entry) => entry.tenantId === identity.tenantId && entry.dataClass === type)?.authorityId;
+const revisions = new Map();
+for (const [schema, type, id, payload] of sample.steps) {
+  let authority = authorityFor(type);
+  if (!authority) {
+    catalogue = await call("/v1/actions");
+    declarations = await call("/v1/declarations");
+    authority = authorityFor(type);
+  }
   if (!authority) throw new Error(`${type}: no write authority`);
-  await send(schema, type, id, payload, authority);
+  const key = `${type}/${id}`;
+  let input = payload;
+  if (schema === "build.branch.propose") {
+    const { check } = await call(`/v1/branches/${encodeURIComponent(id)}/checks`, {});
+    if (!check.passed) throw new Error(`branch ${id}: ${JSON.stringify(check)}`);
+    input = { ...payload, checks: check };
+  }
+  const accepted = await send(schema, type, id, input, authority, revisions.get(key) ?? 0);
+  revisions.set(key, accepted.revision);
 }
-const words = declarations.find((entry) => entry.tenantId === identity.tenantId && entry.dataClass === "platform.translation")?.authorityId;
+const words = authorityFor("platform.translation");
 if (!words) throw new Error("platform.translation: no write authority");
 for (const [language, entries] of Object.entries(sample.words)) {
   for (const [revision, [text, translation]] of Object.entries(entries).entries()) await submit("platform.translation", language, "set", { text, translation }, words, revision);
 }
-console.log(`frontend-seed: ${sample.types.length} object types (${sample.types.filter((each) => each.draft).length} left as drafts) and ${written} records in project ${sample.project.name} on ${host}`);
+console.log(`frontend-seed: ${sample.types.length} base object types (${sample.types.filter((each) => each.draft).length} left as drafts), ${written} base records and ${sample.steps.length} additional steps in project ${sample.project.name} on ${host}`);
