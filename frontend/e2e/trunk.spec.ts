@@ -64,7 +64,7 @@ test("records: open a list, open a record, change a field in place", async ({ pa
   await expect(page.getByRole("heading", { level: 3, name: "Follow-up" })).toBeVisible();
   await expect(page.getByRole("textbox", { name: "Loss reason" })).toHaveCount(0);
   await expect(page.getByRole("switch", { name: "Budget approved" })).toBeChecked();
-  await expect(page.getByText("1,250.00 USD", { exact: true })).toBeVisible();
+  await expect(page.getByRole("spinbutton", { name: "Proposed deposit", exact: true })).toHaveValue("1,250.00");
   await expect(page.getByRole("complementary").getByRole("button", { name: /Owner.*Dana Whitfield/ })).toBeVisible();
 
   const next = page.getByRole("textbox", { name: "Next step" });
@@ -1619,6 +1619,8 @@ test("crm: every CRM type can be created, edited and filtered, and lead and deal
       create: async (form) => {
         await form.getByRole("textbox", { name: "Product code" }).fill("CRM-TRN");
         await form.getByRole("textbox", { name: "Product name" }).fill("Admin Training");
+        await form.getByRole("spinbutton", { name: "Standard rate" }).fill("1200");
+        await form.getByRole("spinbutton", { name: "Standard rate" }).press("Tab");
       },
       createdTitle: "Admin Training", editField: "Product name", editValue: "Admin Training Pack",
     },
@@ -1718,6 +1720,12 @@ async function crmMainline(page: Page, go: (type: string, plural: string) => Pro
   await organization.fill(company);
   await organization.press("Enter");
   await expect(page.getByRole("complementary").getByText("2", { exact: true })).toBeVisible();
+  const revenue = page.getByRole("spinbutton", { name: "Annual revenue", exact: true });
+  await revenue.fill("250000");
+  await revenue.press("Enter");
+  await expect(page.getByRole("complementary").getByText("3", { exact: true })).toBeVisible();
+  await page.reload();
+  await expect(page.getByRole("spinbutton", { name: "Annual revenue", exact: true })).toHaveValue(/250,000\.00/);
 
   for (const [type, fill] of [
     ["build.note", async (form: ReturnType<Page["getByRole"]>) => { await form.getByRole("textbox", { name: "Title" }).fill(`${company} discovery call`); }],

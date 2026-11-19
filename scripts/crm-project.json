@@ -1011,7 +1011,8 @@
           {
             "name": "rate",
             "title": "Standard rate",
-            "type": "money"
+            "type": "money",
+            "required": true
           },
           {
             "name": "disabled",

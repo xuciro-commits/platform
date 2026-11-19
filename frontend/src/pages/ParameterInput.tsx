@@ -19,6 +19,7 @@ import { type Api, request, requestBlob, useRead } from "../host";
 import { t } from "../i18n";
 import { reasonOf, send } from "./act";
 import { MemberInput } from "./MemberField";
+import { money } from "./values";
 import { ReferenceInput } from "./ReferenceField";
 
 export type InputStatus = { type: "error" | "success"; message?: string };
@@ -37,7 +38,7 @@ type ParameterInputProps = {
 };
 
 const typed = new Set(["string", "longtext", "date", "datetime", "entity", "reference", "choice", "member"]);
-const numeric = new Set(["integer", "number"]);
+const numeric = new Set(["integer", "number", "money"]);
 const multiple = new Set(["member[]", "action[]"]);
 type Attachment = { mediaSet?: string; item?: string };
 
@@ -217,6 +218,32 @@ function AttachmentInput({ parameter, value, onChange, label, description }: { p
   );
 }
 
+function MoneyInput({ parameter, value, label, description, status, onChange, labelHidden, control, focused }: ParameterInputProps & {
+  label: string;
+  description?: string;
+  control?: ComponentProps<typeof NumberInput>["controlXstyle"];
+}) {
+  const me = useRead<Api.MeView>("/v1/me");
+  const given = money(value);
+  const currency = given?.currency || (me.status === "ready" ? me.data.currency : "");
+  return (
+    <NumberInput
+      label={label}
+      isLabelHidden={labelHidden}
+      description={description}
+      isRequired={parameter.required}
+      status={status}
+      units={currency || null}
+      isDisabled={!currency}
+      value={given ? given.amount / 100 : null}
+      formatValue={(number) => number.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+      controlXstyle={control}
+      onChange={(number) => onChange(Number.isFinite(number) ? { amount: Math.round(number * 100), currency } : "")}
+      hasAutoFocus={focused}
+    />
+  );
+}
+
 const styles = stylex.create({
   quiet: {
     borderColor: { default: "transparent", ":hover": colorVars["--color-border"], ":focus-within": colorVars["--color-border-emphasized"] },
@@ -287,6 +314,10 @@ export function ParameterInput({ parameter, described, value, form, status, onCh
         onChange={(date) => onChange(date ?? "")}
       />
     );
+  }
+  if (parameter.type === "money") {
+    return <MoneyInput parameter={parameter} value={value} label={label} description={description} status={status} onChange={onChange}
+      labelHidden={labelHidden} control={control} focused={focused} />;
   }
   if (numeric.has(parameter.type)) {
     return (
