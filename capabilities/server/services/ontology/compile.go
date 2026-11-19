@@ -79,6 +79,9 @@ func CompileObjectShape(o Object, app, builderRole string) platform.RecordType {
 			tag += fmt.Sprintf(` type:"%s"`, f.Type)
 		case "choice":
 			tag += fmt.Sprintf(` choices:"%s"`, strings.Join(ValueChoices(f.Choices), ","))
+			if titles := ChoiceTitles(f.Choices); titles != nil {
+				tag += fmt.Sprintf(` choiceTitles:%q`, strings.Join(titles, ","))
+			}
 		case "reference":
 			tag += fmt.Sprintf(` ref:"%s"`, f.Ref)
 			if f.Stereotype != "" {

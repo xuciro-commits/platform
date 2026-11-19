@@ -269,6 +269,9 @@ func describeFields(e Entity, t reflect.Type, from int, typeOf func(reflect.Type
 			f.Type = refined
 		case ft.Kind() == reflect.String && sf.Tag.Get("choices") != "":
 			f.Type, f.Choices = "choice", strings.Split(sf.Tag.Get("choices"), ",")
+			if titles := sf.Tag.Get("choiceTitles"); titles != "" {
+				f.ChoiceTitles = strings.Split(titles, ",")
+			}
 		case ft.Kind() == reflect.String:
 			f.Type = "text"
 		case ft.Kind() == reflect.Bool:

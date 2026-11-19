@@ -69,7 +69,7 @@
     "schema": "build.crmcontact.edit",
     "schemaVersion": {
       "family": 1,
-      "version": "schema.sha256.8b045179d29df273e2d7c4676dafb593adf33e95334b30a343129f3388bc0af0"
+      "version": "schema.sha256.33882c5e012f37d64d17fc4bce185ac5f2c43b24aa2aee051579413cd3606739"
     },
     "target": "build.crmcontact",
     "title": "Edit crm contact"

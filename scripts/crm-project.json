@@ -8,89 +8,50 @@
     "package": "../deploy/packages/crm.json"
   },
   "words": {
-    "en": {
-      "new": "New",
-      "contacted": "Contacted",
-      "nurture": "Nurture",
-      "qualified": "Qualified",
-      "converted": "Converted",
-      "unqualified": "Unqualified",
-      "junk": "Junk",
-      "qualification": "Qualification",
-      "demomaking": "Demo/Making",
-      "proposalquotation": "Proposal/Quotation",
-      "readytoclose": "Ready to Close",
-      "backlog": "Backlog",
-      "todo": "Todo",
-      "inprogress": "In Progress",
-      "done": "Done",
-      "canceled": "Canceled",
-      "low": "Low",
-      "medium": "Medium",
-      "high": "High",
-      "ongoing": "Ongoing",
-      "onhold": "On Hold",
-      "mr": "Mr",
-      "ms": "Ms",
-      "dr": "Dr",
-      "prof": "Prof",
-      "female": "Female",
-      "male": "Male",
-      "other": "Other",
-      "gray": "Gray",
-      "blue": "Blue",
-      "green": "Green",
-      "red": "Red",
-      "orange": "Orange",
-      "purple": "Purple",
-      "pink": "Pink",
-      "amber": "Amber",
-      "cyan": "Cyan",
-      "won": "Won",
-      "lost": "Lost",
-      "negotiation": "Negotiation"
-    },
     "zh-CN": {
-      "new": "新建",
-      "contacted": "已联系",
-      "nurture": "培育中",
-      "qualified": "已确认资格",
-      "converted": "已转化",
-      "unqualified": "不合格",
-      "junk": "无效线索",
-      "qualification": "资格确认",
-      "demomaking": "演示制作",
-      "proposalquotation": "方案报价",
-      "readytoclose": "待成交",
-      "backlog": "待办池",
-      "todo": "待处理",
-      "inprogress": "进行中",
-      "done": "已完成",
-      "canceled": "已取消",
-      "low": "低",
-      "medium": "中",
-      "high": "高",
-      "ongoing": "推进中",
-      "onhold": "暂停",
-      "mr": "先生",
-      "ms": "女士",
-      "dr": "博士",
-      "prof": "教授",
-      "female": "女",
-      "male": "男",
-      "other": "其他",
-      "gray": "灰",
-      "blue": "蓝",
-      "green": "绿",
-      "red": "红",
-      "orange": "橙",
-      "purple": "紫",
-      "pink": "粉",
-      "amber": "琥珀",
-      "cyan": "青",
-      "won": "赢单",
-      "lost": "丢单",
-      "negotiation": "谈判"
+      "New": "新建",
+      "Contacted": "已联系",
+      "Nurture": "培育中",
+      "Qualified": "已确认资格",
+      "Converted": "已转化",
+      "Unqualified": "不合格",
+      "Junk": "无效线索",
+      "Qualification": "资格确认",
+      "Demo/Making": "演示制作",
+      "Proposal/Quotation": "方案报价",
+      "Ready to Close": "待成交",
+      "Backlog": "待办池",
+      "Todo": "待处理",
+      "In Progress": "进行中",
+      "Done": "已完成",
+      "Canceled": "已取消",
+      "Low": "低",
+      "Medium": "中",
+      "High": "高",
+      "Ongoing": "推进中",
+      "On Hold": "暂停",
+      "Mr": "先生",
+      "Ms": "女士",
+      "Dr": "博士",
+      "Prof": "教授",
+      "Female": "女",
+      "Male": "男",
+      "Other": "其他",
+      "Gray": "灰",
+      "Blue": "蓝",
+      "Green": "绿",
+      "Red": "红",
+      "Orange": "橙",
+      "Purple": "紫",
+      "Pink": "粉",
+      "Amber": "琥珀",
+      "Cyan": "青",
+      "Won": "赢单",
+      "Lost": "丢单",
+      "Negotiation": "谈判",
+      "Leave empty to create a new organization from the lead.": "不选就按线索新建一个组织。",
+      "Link to organization": "关联已有组织",
+      "Convert to deal": "转为商机"
     }
   },
   "types": [
@@ -133,7 +94,7 @@
             "name": "color",
             "title": "Color",
             "type": "choice",
-            "choices": "gray,blue,green,red,orange,purple,pink,amber,cyan"
+            "choices": "gray:Gray,blue:Blue,green:Green,red:Red,orange:Orange,purple:Purple,pink:Pink,amber:Amber,cyan:Cyan"
           },
           {
             "name": "position",
@@ -144,7 +105,7 @@
             "name": "kind",
             "title": "Type",
             "type": "choice",
-            "choices": "open,ongoing,onhold,won,lost"
+            "choices": "open,ongoing:Ongoing,onhold:On Hold,won:Won,lost:Lost"
           }
         ]
       },
@@ -233,7 +194,7 @@
             "name": "color",
             "title": "Color",
             "type": "choice",
-            "choices": "gray,blue,green,red,orange,purple,pink,amber,cyan"
+            "choices": "gray:Gray,blue:Blue,green:Green,red:Red,orange:Orange,purple:Purple,pink:Pink,amber:Amber,cyan:Cyan"
           },
           {
             "name": "position",
@@ -249,7 +210,7 @@
             "name": "kind",
             "title": "Type",
             "type": "choice",
-            "choices": "open,ongoing,onhold,won,lost"
+            "choices": "open,ongoing:Ongoing,onhold:On Hold,won:Won,lost:Lost"
           }
         ]
       },
@@ -865,14 +826,14 @@
             "name": "salutation",
             "title": "Salutation",
             "type": "choice",
-            "choices": "mr,ms,dr,prof",
+            "choices": "mr:Mr,ms:Ms,dr:Dr,prof:Prof",
             "aside": true
           },
           {
             "name": "gender",
             "title": "Gender",
             "type": "choice",
-            "choices": "female,male,other",
+            "choices": "female:Female,male:Male,other:Other",
             "aside": true
           },
           {
@@ -1219,7 +1180,7 @@
             "name": "status",
             "title": "Status",
             "type": "choice",
-            "choices": "new,contacted,nurture,qualified,converted,unqualified,junk",
+            "choices": "new:New,contacted:Contacted,nurture:Nurture,qualified:Qualified,converted:Converted,unqualified:Unqualified,junk:Junk",
             "required": true,
             "aside": true,
             "format": [
@@ -1726,7 +1687,7 @@
             "name": "status",
             "title": "Status",
             "type": "choice",
-            "choices": "qualification,demomaking,proposalquotation,negotiation,readytoclose,won,lost",
+            "choices": "qualification:Qualification,demomaking:Demo/Making,proposalquotation:Proposal/Quotation,negotiation:Negotiation,readytoclose:Ready to Close,won:Won,lost:Lost",
             "required": true,
             "aside": true,
             "format": [
@@ -2273,7 +2234,7 @@
             "name": "status",
             "title": "Status",
             "type": "choice",
-            "choices": "backlog,todo,inprogress,done,canceled",
+            "choices": "backlog:Backlog,todo:Todo,inprogress:In Progress,done:Done,canceled:Canceled",
             "required": true,
             "aside": true,
             "format": [
@@ -2378,7 +2339,7 @@
             "name": "priority",
             "title": "Priority",
             "type": "choice",
-            "choices": "low,medium,high",
+            "choices": "low:Low,medium:Medium,high:High",
             "aside": true
           },
           {
@@ -2693,7 +2654,7 @@
             "name": "status",
             "title": "Status",
             "type": "choice",
-            "choices": "new,contacted,nurture,qualified,converted,unqualified,junk",
+            "choices": "new:New,contacted:Contacted,nurture:Nurture,qualified:Qualified,converted:Converted,unqualified:Unqualified,junk:Junk",
             "required": true,
             "aside": true,
             "format": [
@@ -2861,7 +2822,8 @@
               "name": "organization",
               "title": "Link to organization",
               "type": "reference",
-              "ref": "build.organization"
+              "ref": "build.organization",
+              "help": "Leave empty to create a new organization from the lead."
             }
           ],
           "transaction": {

@@ -57,6 +57,7 @@
 - 对象类型单条读取的 `changes` 比较已发布定义。字段用 `fields.<字段名>` 标识，新增、删除、修改分别返回 `added`、`removed`、`changed`。
 - 字段类型：`text`、`longtext`、`integer`、`decimal`、`money`、`boolean`、`date`、`datetime`、`choice`、`tags`、
   `reference`（引用另一类型）、`references`、`member`（租户成员）、`lines`（明细行，行有自己的字段）、`attachment`、`json`。
+- `choices` 用逗号分隔可选值；写成 `值:显示名` 给值起显示名。显示名随类型发布与安装，看板、筛选与输入框都显示它；存储与条件只用值。
 - 成员字段保存成员标识，记录新建和编辑时核对标识属于当前租户。列表和记录读取在 `refs[字段][标识]` 中返回资料里的显示名，只为调用者可读的字段解析。
   租户成员通过 `GET /v1/member-directory` 查找有显示名的在职人员；这个读取只返回标识和显示名。没有显示名时，界面显示“未命名成员”。
 - 字段可声明：必填、只读、可搜索、默认值、帮助文字、在另一字段取某些值时才出现。

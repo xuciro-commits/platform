@@ -124,7 +124,7 @@
     "schema": "build.lead.edit",
     "schemaVersion": {
       "family": 2,
-      "version": "schema.sha256.6f1532f4957a1dbdc74d80ad8334ca20514c9a6329058d1adf86dd6ad9e52e42"
+      "version": "schema.sha256.927c56a7c766b9878c2029815594b39d9e56c51ede87e0a302290559fce1de75"
     },
     "target": "build.lead",
     "title": "Edit lead"

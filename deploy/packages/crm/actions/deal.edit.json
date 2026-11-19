@@ -109,7 +109,7 @@
     "schema": "build.deal.edit",
     "schemaVersion": {
       "family": 2,
-      "version": "schema.sha256.456a48691a0c1c64c5571e6fb45b9fd528a74bc82ef876cbe5896c38a75b160e"
+      "version": "schema.sha256.0798f1568bfb421efbf404ace2c2fa61862349f0c507e2804723b81471ff27cc"
     },
     "target": "build.deal",
     "title": "Edit deal"

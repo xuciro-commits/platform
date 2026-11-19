@@ -12,7 +12,7 @@ import { Timestamp } from "@astryxdesign/core/Timestamp";
 import { type ReactNode, useEffect, useMemo, useState } from "react";
 import { type Api, useRead } from "../host";
 import { t } from "../i18n";
-import { usePath, useSearch } from "../router";
+import { originOf, usePath, useSearch } from "../router";
 import { useCommandSearch } from "../shell/CommandSearch";
 import { PageTitle, useGutter } from "./frame";
 import { DefinitionRows, stateProblem } from "./DefinitionRows";
@@ -77,6 +77,10 @@ export function RecordPage({ described, id, listPath, listTitle, instances, enti
   const [refusal, setRefusal] = useState("");
   const [fresh] = useState(() => (history.state as { fresh?: string } | null)?.fresh === id);
   const base = `${listPath}/${encodeURIComponent(id)}`;
+  const origin = originOf(history.state, (href) => {
+    const path = href.split("?")[0];
+    return path === base || path.startsWith(`${base}/`);
+  });
   const query = useSearch();
   const listHref = listPath + query;
   const asked = usePath().slice(base.length + 1);
@@ -142,7 +146,7 @@ export function RecordPage({ described, id, listPath, listTitle, instances, enti
       header={
         <LayoutHeader padding={gutter} paddingBlockEnd={0} hasDivider>
           <VStack gap={4}>
-            <PageTitle title={name} back={{ href: listHref, label: t(listTitle) }} actions={!narrow && actions}>
+            <PageTitle title={name} back={origin ? { href: origin.href, label: origin.title || t(listTitle) } : { href: listHref, label: t(listTitle) }} actions={!narrow && actions}>
                   <HStack gap={1} vAlign="center" wrap="wrap">
                     <Text type="code" color="secondary">
                       {id}

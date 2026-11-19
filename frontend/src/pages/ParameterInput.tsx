@@ -256,7 +256,7 @@ export function ParameterInput({ parameter, described, value, form, status, onCh
   const control = quiet && !status ? styles.quiet : undefined;
   const field = described?.fields.find((candidate) => candidate.name === parameter.name);
   const label = t(field?.title ?? parameter.label ?? parameter.name);
-  const description = field?.help;
+  const description = field?.help ?? (parameter.label && parameter.description !== parameter.label ? t(parameter.description) : undefined);
   if (multiple.has(parameter.type)) {
     return <MultipleInput parameter={parameter} value={value} form={form} label={label} description={description ?? t(parameter.description)}
       status={status} onChange={onChange} labelHidden={labelHidden} control={control} />;

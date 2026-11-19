@@ -6,8 +6,9 @@ import { Link } from "@astryxdesign/core/Link";
 import { VStack } from "@astryxdesign/core/Layout";
 import { MetadataList, MetadataListItem } from "@astryxdesign/core/MetadataList";
 import { Heading, Text } from "@astryxdesign/core/Text";
-import { Typeahead } from "@astryxdesign/core/Typeahead";
+import { type SearchContext, Typeahead } from "@astryxdesign/core/Typeahead";
 import { useMemo, useState } from "react";
+import { useRecordHref } from "../apps/entries";
 import { type Api, request, useRead } from "../host";
 import { t } from "../i18n";
 import type { InputStatus } from "./ParameterInput";
@@ -17,6 +18,7 @@ type Reference = { id: string; label: string };
 
 export function ReferenceLink({ type, id, name, compact }: { type: string; id: string; name: string; compact?: boolean }) {
   const [open, setOpen] = useState(false);
+  const href = useRecordHref();
   const types = useRead<Api.EntityInfo[]>(open ? "/v1/entities" : null);
   const read = useRead<Api.RecordView>(open ? `/v1/records/${encodeURIComponent(type)}/${encodeURIComponent(id)}` : null);
   const target = types.status === "ready" ? types.data.find((item) => item.type === type) : undefined;
@@ -40,7 +42,7 @@ export function ReferenceLink({ type, id, name, compact }: { type: string; id: s
         </VStack>
       }
     >
-      <Link href={`/ontology/objects/${encodeURIComponent(type)}/${encodeURIComponent(id)}`} label={compact ? name : undefined}>
+      <Link href={href(type, id)} label={compact ? name : undefined}>
         {compact ? <Icon icon="externalLink" size="sm" /> : name}
       </Link>
     </HoverCard>
@@ -66,26 +68,32 @@ export function ReferenceInput({ type, id, name, label, description, required, f
   const types = useRead<Api.EntityInfo[]>("/v1/entities");
   const target = types.status === "ready" ? types.data.find((item) => item.type === type) : undefined;
   const display = target?.display;
-  const searchSource = useMemo(() => ({
-    bootstrap: () => [],
-    search: async (query: string) => {
+  const searchSource = useMemo(() => {
+    const known = new Map<string, Reference>();
+    const find = async (query: string, context?: SearchContext<Reference>) => {
+      const needle = query.toLocaleLowerCase();
+      const shownFirst = [...known.values()].filter((item) => item.label.toLocaleLowerCase().includes(needle));
+      context?.update(shownFirst);
       try {
         const [answer, described] = await Promise.all([
-          request<Api.RecordPage>(`/v1/records/${encodeURIComponent(type)}?search=${encodeURIComponent(query)}&limit=10`),
+          request<Api.RecordPage>(`/v1/records/${encodeURIComponent(type)}?${new URLSearchParams(query ? { search: query, limit: "10" } : { limit: "10" })}`),
           display ? undefined : request<Api.EntityInfo[]>("/v1/entities"),
         ]);
         const field = display ?? described?.find((item) => item.type === type)?.display;
         setSearchFailed(false);
-        return (answer.records as Record<string, unknown>[]).map((row) => ({
+        const found = (answer.records as Record<string, unknown>[]).map((row) => ({
           id: String(row.id),
           label: shown(plain(field ? row[field] : row.id)) || String(row.id),
         }));
+        for (const item of found) known.set(item.id, item);
+        return context ? [...shownFirst, ...found.filter((item) => !shownFirst.some((early) => early.id === item.id))] : found;
       } catch {
         setSearchFailed(true);
         return [];
       }
-    },
-  }), [type, display]);
+    };
+    return { bootstrap: () => find(""), search: find };
+  }, [type, display]);
   const selection = id ? { id, label: name ?? (picked?.id === id ? picked.label : id) } : null;
   const input = (
     <Typeahead
@@ -95,6 +103,7 @@ export function ReferenceInput({ type, id, name, label, description, required, f
       status={status}
       controlXstyle={control}
       hasAutoFocus={focused}
+      hasEntriesOnFocus
       placeholder={t("Find a record")}
       emptySearchText={searchFailed ? t("Records could not be searched") : t("No matching records")}
       searchSource={searchSource}

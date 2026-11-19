@@ -801,7 +801,7 @@
   "Fields": "字段",
   "Label": "标签",
   "Choices": "可选值",
-  "For a choice: the values, comma-separated": "选择类字段的可选值，用逗号分隔",
+  "For a choice: the values, comma-separated; value:Label gives one a display name": "选择类字段的可选值，用逗号分隔；写成“值:显示名”给它起显示名",
   "For a reference: the object it points at": "引用类字段指向的对象",
   "Required": "必填",
   "Searchable": "可搜索",

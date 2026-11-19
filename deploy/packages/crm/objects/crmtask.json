@@ -33,7 +33,7 @@
     },
     {
       "aside": true,
-      "choices": "backlog,todo,inprogress,done,canceled",
+      "choices": "backlog:Backlog,todo:Todo,inprogress:In Progress,done:Done,canceled:Canceled",
       "format": [
         {
           "tone": "neutral",
@@ -148,7 +148,7 @@
     },
     {
       "aside": true,
-      "choices": "low,medium,high",
+      "choices": "low:Low,medium:Medium,high:High",
       "name": "priority",
       "title": "Priority",
       "type": "choice"
@@ -183,7 +183,7 @@
   "schemaVersions": [
     {
       "family": 1,
-      "version": "schema.sha256.53343cf4736628958544fa8a3d49c20729a0185d158b4af3dd3486441c943a4a"
+      "version": "schema.sha256.db9513fe058672c00e73ec539d3bd7030ae57cbbc12177e07e02a1cb73ce3642"
     }
   ],
   "states": [

@@ -6,7 +6,7 @@ import { Text } from "@astryxdesign/core/Text";
 import type { SearchSource } from "@astryxdesign/core/Typeahead";
 import { createContext, type ReactNode, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { type App, type NavItem, pathOf } from "../apps";
-import { entries, recordHref } from "../apps/entries";
+import { entries, useRecordHref } from "../apps/entries";
 import { type Api, request, useRead } from "../host";
 import { t } from "../i18n";
 import { navigate, usePath } from "../router";
@@ -41,6 +41,7 @@ function destination(item: Destination, group: string): Result {
 
 export function CommandSearch({ app, item, apps, tenant, children }: { app: App; item: NavItem; apps: App[]; tenant: string; children: ReactNode }) {
   const path = usePath();
+  const recordAt = useRecordHref();
   const [open, setOpen] = useState(false);
   const [failure, setFailure] = useState("");
   const me = useRead<Api.MeView>("/v1/me");
@@ -121,7 +122,7 @@ export function CommandSearch({ app, item, apps, tenant, children }: { app: App;
         const found = (objects.status === "fulfilled" ? objects.value : [])
           .filter((hit) => hit.id && hit.group !== "member" && hit.resource?.canOpen !== false)
           .map((hit) => ({ resource: hit.group === "resource", item: {
-            href: recordHref(hit.type, hit.id),
+            href: recordAt(hit.type, hit.id),
             label: hit.title || t(hit.typeTitle ?? hit.type),
           } }));
         const unique = [...new Map(found.map((hit) => [hit.item.href, hit])).values()];
@@ -140,7 +141,7 @@ export function CommandSearch({ app, item, apps, tenant, children }: { app: App;
         return results;
       },
     };
-  }, [app.id, storageKey, targets]);
+  }, [app.id, storageKey, targets, recordAt]);
 
   const choose = (id: string) => {
     setOpen(false);

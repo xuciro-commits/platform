@@ -17,6 +17,7 @@
       ],
       "inputs": [
         {
+          "help": "Leave empty to create a new organization from the lead.",
           "name": "organization",
           "ref": "build.organization",
           "title": "Link to organization",
@@ -508,7 +509,7 @@
     },
     {
       "aside": true,
-      "choices": "new,contacted,nurture,qualified,converted,unqualified,junk",
+      "choices": "new:New,contacted:Contacted,nurture:Nurture,qualified:Qualified,converted:Converted,unqualified:Unqualified,junk:Junk",
       "format": [
         {
           "tone": "neutral",
@@ -675,15 +676,15 @@
   "schemaVersions": [
     {
       "family": 1,
-      "version": "schema.sha256.39676cff2a49bdd883c351b27e4c79e5d82583eecdc7d9d149287f439bc6b807"
+      "version": "schema.sha256.ac0c19912e77407d421232fb454fe5ffb7833b9709dc7bc8ade37c947a593224"
     },
     {
       "family": 2,
-      "version": "schema.sha256.5e1511e2b54bf0efc9832d8c4f9a3bb8c7aea4a7b4e80ffeda0bc2de702efaf5"
+      "version": "schema.sha256.26675b965eb2856203fe48ecda6ca86a6cfabf5d09bb918d31a6be56b29e6e56"
     },
     {
       "family": 2,
-      "version": "schema.sha256.6f1532f4957a1dbdc74d80ad8334ca20514c9a6329058d1adf86dd6ad9e52e42"
+      "version": "schema.sha256.927c56a7c766b9878c2029815594b39d9e56c51ede87e0a302290559fce1de75"
     }
   ],
   "states": [

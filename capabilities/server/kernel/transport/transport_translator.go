@@ -230,9 +230,13 @@ func (x *Translator) TranslateInApp(v any, app, lang string) any {
 	presentation(tree, app)
 	walkTextsWithApp(tree, app, func(app, s string) string { return x.SayInApp(app, lang, s) })
 	walkChoicesWithApp(tree, app, func(app string, m map[string]any, choices []any) {
+		declared, _ := m["choiceTitles"].([]any)
 		titles := make([]any, len(choices))
 		for i, c := range choices {
 			s, _ := c.(string)
+			if len(declared) == len(choices) {
+				s, _ = declared[i].(string)
+			}
 			titles[i] = x.SayInApp(app, lang, s)
 		}
 		m["choiceTitles"] = titles

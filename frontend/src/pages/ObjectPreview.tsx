@@ -15,8 +15,9 @@ function fieldOf(raw: unknown): Api.FieldInfo | undefined {
   if (!raw || typeof raw !== "object") return undefined;
   const field = raw as Record<string, unknown>;
   if (typeof field.name !== "string" || typeof field.title !== "string" || typeof field.type !== "string") return undefined;
-  const choices = typeof field.choices === "string"
-    ? field.choices.split(",").map((choice) => choice.trim()).filter(Boolean)
+  const listed = typeof field.choices === "string" ? field.choices.split(",").map((choice) => choice.split(":")).filter(([value]) => value.trim()) : undefined;
+  const choices = listed
+    ? listed.map(([value]) => value.trim())
     : Array.isArray(field.choices) ? field.choices.filter((choice): choice is string => typeof choice === "string") : undefined;
   return {
     ...field,
@@ -24,6 +25,7 @@ function fieldOf(raw: unknown): Api.FieldInfo | undefined {
     title: field.title,
     type: field.type as Api.FieldInfo["type"],
     choices,
+    choiceTitles: listed?.some(([, title]) => title?.trim()) ? listed.map(([value, title]) => title?.trim() || value.trim()) : undefined,
     when: field.when && typeof field.when === "object" ? field.when as Api.FieldCondition : undefined,
   } as Api.FieldInfo;
 }

@@ -73,7 +73,7 @@
     "schema": "build.crmtask.edit",
     "schemaVersion": {
       "family": 1,
-      "version": "schema.sha256.53343cf4736628958544fa8a3d49c20729a0185d158b4af3dd3486441c943a4a"
+      "version": "schema.sha256.db9513fe058672c00e73ec539d3bd7030ae57cbbc12177e07e02a1cb73ce3642"
     },
     "target": "build.crmtask",
     "title": "Edit task"

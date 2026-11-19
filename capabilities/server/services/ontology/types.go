@@ -55,7 +55,7 @@ type Field struct {
 	Group       string                 `json:"group,omitempty" title:"Section"`
 	Aside       bool                   `json:"aside,omitempty" title:"Side rail"`
 	Type        string                 `json:"type" field:"required" choices:"text,longtext,integer,decimal,money,date,datetime,boolean,choice,reference,member,attachment" example:"date"`
-	Choices     string                 `json:"choices,omitempty" help:"For a choice: the values, comma-separated" example:"open,done"`
+	Choices     string                 `json:"choices,omitempty" help:"For a choice: the values, comma-separated; value:Label gives one a display name" example:"open:Open,done:Done"`
 	Ref         string                 `json:"ref,omitempty" title:"Refers to" help:"For a reference: the object it points at" example:"core.partner"`
 	Stereotype  string                 `json:"stereotype,omitempty" title:"Element type" help:"Enterprise element type"`
 	Stereotypes []string               `json:"stereotypes,omitempty" title:"Element types" help:"Enterprise element types"`
@@ -114,8 +114,9 @@ type Input struct {
 	MinLength   *int                       `json:"minLength,omitempty" title:"Minimum length"`
 	Name        string                     `json:"name" field:"required" example:"to"`
 	Title       string                     `json:"title" field:"required" title:"Label" example:"Handed to"`
+	Help        string                     `json:"help,omitempty" help:"What to give, shown under the input" example:"Leave empty to create one from the lead"`
 	Type        string                     `json:"type" field:"required" choices:"text,longtext,integer,decimal,date,datetime,boolean,choice,reference,attachment"`
-	Choices     string                     `json:"choices,omitempty" help:"For a choice: the values, comma-separated"`
+	Choices     string                     `json:"choices,omitempty" help:"For a choice: the values, comma-separated; value:Label gives one a display name"`
 	Required    bool                       `json:"required,omitempty"`
 }
 
@@ -127,7 +128,11 @@ func (in Input) Field() platform.Field {
 	if in.MinLength != nil {
 		c.MinLength = in.MinLength
 	}
-	return platform.Field{Name: in.Name, Type: ValueInputTypes[in.Type], Ref: in.Ref, Stereotype: in.Stereotype, Stereotypes: in.Stereotypes, Required: in.Required, Label: in.Title, Description: in.Title, Choices: ValueChoices(in.Choices), Constraints: &c, Range: in.Range, Group: in.Group}
+	description := in.Title
+	if in.Help != "" {
+		description = in.Help
+	}
+	return platform.Field{Name: in.Name, Type: ValueInputTypes[in.Type], Ref: in.Ref, Stereotype: in.Stereotype, Stereotypes: in.Stereotypes, Required: in.Required, Label: in.Title, Description: description, Choices: ValueChoices(in.Choices), Constraints: &c, Range: in.Range, Group: in.Group}
 }
 
 type Set = platform.TxnSet

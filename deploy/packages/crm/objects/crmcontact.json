@@ -44,14 +44,14 @@
     },
     {
       "aside": true,
-      "choices": "mr,ms,dr,prof",
+      "choices": "mr:Mr,ms:Ms,dr:Dr,prof:Prof",
       "name": "salutation",
       "title": "Salutation",
       "type": "choice"
     },
     {
       "aside": true,
-      "choices": "female,male,other",
+      "choices": "female:Female,male:Male,other:Other",
       "name": "gender",
       "title": "Gender",
       "type": "choice"
@@ -68,7 +68,7 @@
   "schemaVersions": [
     {
       "family": 1,
-      "version": "schema.sha256.8b045179d29df273e2d7c4676dafb593adf33e95334b30a343129f3388bc0af0"
+      "version": "schema.sha256.33882c5e012f37d64d17fc4bce185ac5f2c43b24aa2aee051579413cd3606739"
     }
   ],
   "title": "CRM Contact",

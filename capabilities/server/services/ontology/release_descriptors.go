@@ -48,13 +48,10 @@ func ObjectDescriptor(body []byte) (platform.RecordTypeInfo, error) {
 		if choicesRaw, ok := raw["choices"]; ok {
 			var source string
 			if json.Unmarshal(choicesRaw, &source) == nil {
-				options := []string{}
-				for _, part := range strings.Split(source, ",") {
-					if value := strings.TrimSpace(part); value != "" {
-						options = append(options, value)
-					}
+				raw["choices"], _ = json.Marshal(append([]string{}, ValueChoices(source)...))
+				if titles := ChoiceTitles(source); titles != nil {
+					raw["choiceTitles"], _ = json.Marshal(titles)
 				}
-				raw["choices"], _ = json.Marshal(options)
 			}
 		}
 		if whenRaw, ok := raw["when"]; ok {
@@ -96,13 +93,7 @@ func ObjectDescriptor(body []byte) (platform.RecordTypeInfo, error) {
 				if kind == "choice" {
 					kind = "string"
 				}
-				var options []string
-				for _, option := range strings.Split(input.Choices, ",") {
-					if value := strings.TrimSpace(option); value != "" {
-						options = append(options, value)
-					}
-				}
-				inputs = append(inputs, platform.Field{Name: input.Name, Type: kind, Required: input.Required, Choices: options})
+				inputs = append(inputs, platform.Field{Name: input.Name, Type: kind, Required: input.Required, Choices: ValueChoices(input.Choices)})
 			}
 			if to, input := TransactionDestination(shape.Type, "state", action.Transaction, inputs); len(to) > 0 {
 				if slices.ContainsFunc(to, func(state string) bool { return !slices.Contains(choices, state) }) {

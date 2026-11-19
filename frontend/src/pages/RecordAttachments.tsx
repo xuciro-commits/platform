@@ -8,6 +8,7 @@ import { Link } from "@astryxdesign/core/Link";
 import { List, ListItem } from "@astryxdesign/core/List";
 import { Text } from "@astryxdesign/core/Text";
 import { useEffect, useState } from "react";
+import { useRecordHref } from "../apps/entries";
 import { type Api, type Read, request, requestBlob } from "../host";
 import { t } from "../i18n";
 import { reasonOf, send } from "./act";
@@ -24,6 +25,7 @@ export function relatedGroups(section: Api.RecordSectionView) {
 }
 
 export function RecordLinks({ read, id, entities }: { read: Section; id: string; entities: Api.EntityInfo[] }) {
+  const href = useRecordHref();
   if (read.status === "loading") return <Text type="supporting">{t("Loading…")}</Text>;
   if (read.status !== "ready") return <Banner status="warning" title={t("Links could not be loaded")} description={read.reason} />;
   const groups = relatedGroups(read.data);
@@ -36,7 +38,7 @@ export function RecordLinks({ read, id, entities }: { read: Section; id: string;
         const rows = group.records as (Values & { id: string })[];
         const linked = (read.data.linked ?? []).includes(group);
         const domain = linked ? [["id", "in", rows.map((row) => row.id)]] : [[group.field, "=", id]];
-        const route = `/ontology/objects/${encodeURIComponent(group.type)}`;
+        const route = href(group.type);
         return (
           <VStack key={`${group.type}/${group.field}/${linked}`} gap={2}>
             <List header={`${t(group.title)} · ${group.total}`}>

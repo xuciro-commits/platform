@@ -130,9 +130,29 @@ func CheckConditions(fields []Field) error {
 func ValueChoices(s string) []string {
 	var out []string
 	for _, c := range strings.Split(s, ",") {
-		if c = strings.TrimSpace(c); c != "" {
-			out = append(out, c)
+		if value, _, _ := strings.Cut(c, ":"); strings.TrimSpace(value) != "" {
+			out = append(out, strings.TrimSpace(value))
 		}
+	}
+	return out
+}
+
+func ChoiceTitles(s string) []string {
+	var out []string
+	titled := false
+	for _, c := range strings.Split(s, ",") {
+		value, title, found := strings.Cut(c, ":")
+		if value = strings.TrimSpace(value); value == "" {
+			continue
+		}
+		if title = strings.TrimSpace(title); found && title != "" {
+			out, titled = append(out, title), true
+		} else {
+			out = append(out, value)
+		}
+	}
+	if !titled {
+		return nil
 	}
 	return out
 }

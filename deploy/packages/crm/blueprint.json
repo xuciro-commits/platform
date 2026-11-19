@@ -1133,7 +1133,7 @@
             "properties": {
               "organization": {
                 "type": "string",
-                "description": "Link to organization"
+                "description": "Leave empty to create a new organization from the lead."
               }
             }
           },
@@ -1149,7 +1149,7 @@
             {
               "name": "organization",
               "type": "string",
-              "description": "Link to organization",
+              "description": "Leave empty to create a new organization from the lead.",
               "ref": "build.organization",
               "label": "Link to organization",
               "constraints": {}

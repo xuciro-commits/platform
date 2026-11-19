@@ -1,6 +1,6 @@
 {
   "id": "crm",
-  "version": "0.1.1",
+  "version": "0.1.3",
   "namespace": "crm",
   "title": "CRM",
   "description": "Leads, deals, organizations, contacts, tasks and notes, with lead-to-deal conversion. Built in the crm project and released through Delivery.",
@@ -235,7 +235,7 @@
             "schema": "build.crmcontact.create",
             "schemaVersion": {
               "family": 1,
-              "version": "schema.sha256.8b045179d29df273e2d7c4676dafb593adf33e95334b30a343129f3388bc0af0"
+              "version": "schema.sha256.33882c5e012f37d64d17fc4bce185ac5f2c43b24aa2aee051579413cd3606739"
             },
             "target": "build.crmcontact",
             "title": "Create crm contact"
@@ -464,7 +464,7 @@
             "schema": "build.crmcontact.edit",
             "schemaVersion": {
               "family": 1,
-              "version": "schema.sha256.8b045179d29df273e2d7c4676dafb593adf33e95334b30a343129f3388bc0af0"
+              "version": "schema.sha256.33882c5e012f37d64d17fc4bce185ac5f2c43b24aa2aee051579413cd3606739"
             },
             "target": "build.crmcontact",
             "title": "Edit crm contact"
@@ -715,7 +715,7 @@
             "schema": "build.crmtask.create",
             "schemaVersion": {
               "family": 1,
-              "version": "schema.sha256.53343cf4736628958544fa8a3d49c20729a0185d158b4af3dd3486441c943a4a"
+              "version": "schema.sha256.db9513fe058672c00e73ec539d3bd7030ae57cbbc12177e07e02a1cb73ce3642"
             },
             "target": "build.crmtask",
             "title": "Create task"
@@ -957,7 +957,7 @@
             "schema": "build.crmtask.edit",
             "schemaVersion": {
               "family": 1,
-              "version": "schema.sha256.53343cf4736628958544fa8a3d49c20729a0185d158b4af3dd3486441c943a4a"
+              "version": "schema.sha256.db9513fe058672c00e73ec539d3bd7030ae57cbbc12177e07e02a1cb73ce3642"
             },
             "target": "build.crmtask",
             "title": "Edit task"
@@ -1325,7 +1325,7 @@
             "schema": "build.deal.create",
             "schemaVersion": {
               "family": 2,
-              "version": "schema.sha256.456a48691a0c1c64c5571e6fb45b9fd528a74bc82ef876cbe5896c38a75b160e"
+              "version": "schema.sha256.0798f1568bfb421efbf404ace2c2fa61862349f0c507e2804723b81471ff27cc"
             },
             "target": "build.deal",
             "title": "Create deal"
@@ -1684,7 +1684,7 @@
             "schema": "build.deal.edit",
             "schemaVersion": {
               "family": 2,
-              "version": "schema.sha256.456a48691a0c1c64c5571e6fb45b9fd528a74bc82ef876cbe5896c38a75b160e"
+              "version": "schema.sha256.0798f1568bfb421efbf404ace2c2fa61862349f0c507e2804723b81471ff27cc"
             },
             "target": "build.deal",
             "title": "Edit deal"
@@ -1726,7 +1726,7 @@
               "properties": {
                 "organization": {
                   "type": "string",
-                  "description": "Link to organization"
+                  "description": "Leave empty to create a new organization from the lead."
                 }
               }
             },
@@ -1742,7 +1742,7 @@
               {
                 "name": "organization",
                 "type": "string",
-                "description": "Link to organization",
+                "description": "Leave empty to create a new organization from the lead.",
                 "ref": "build.organization",
                 "label": "Link to organization",
                 "constraints": {}
@@ -1758,7 +1758,7 @@
             "payload": [
               {
                 "constraints": {},
-                "description": "Link to organization",
+                "description": "Leave empty to create a new organization from the lead.",
                 "label": "Link to organization",
                 "name": "organization",
                 "ref": "build.organization",
@@ -1768,7 +1768,7 @@
             "schema": "build.lead.convert",
             "schemaVersion": {
               "family": 2,
-              "version": "schema.sha256.6f1532f4957a1dbdc74d80ad8334ca20514c9a6329058d1adf86dd6ad9e52e42"
+              "version": "schema.sha256.927c56a7c766b9878c2029815594b39d9e56c51ede87e0a302290559fce1de75"
             },
             "target": "build.lead",
             "title": "Convert to deal"
@@ -2166,7 +2166,7 @@
             "schema": "build.lead.create",
             "schemaVersion": {
               "family": 2,
-              "version": "schema.sha256.6f1532f4957a1dbdc74d80ad8334ca20514c9a6329058d1adf86dd6ad9e52e42"
+              "version": "schema.sha256.927c56a7c766b9878c2029815594b39d9e56c51ede87e0a302290559fce1de75"
             },
             "target": "build.lead",
             "title": "Create lead"
@@ -2555,7 +2555,7 @@
             "schema": "build.lead.edit",
             "schemaVersion": {
               "family": 2,
-              "version": "schema.sha256.6f1532f4957a1dbdc74d80ad8334ca20514c9a6329058d1adf86dd6ad9e52e42"
+              "version": "schema.sha256.927c56a7c766b9878c2029815594b39d9e56c51ede87e0a302290559fce1de75"
             },
             "target": "build.lead",
             "title": "Edit lead"
@@ -3471,14 +3471,14 @@
             },
             {
               "aside": true,
-              "choices": "mr,ms,dr,prof",
+              "choices": "mr:Mr,ms:Ms,dr:Dr,prof:Prof",
               "name": "salutation",
               "title": "Salutation",
               "type": "choice"
             },
             {
               "aside": true,
-              "choices": "female,male,other",
+              "choices": "female:Female,male:Male,other:Other",
               "name": "gender",
               "title": "Gender",
               "type": "choice"
@@ -3495,7 +3495,7 @@
           "schemaVersions": [
             {
               "family": 1,
-              "version": "schema.sha256.8b045179d29df273e2d7c4676dafb593adf33e95334b30a343129f3388bc0af0"
+              "version": "schema.sha256.33882c5e012f37d64d17fc4bce185ac5f2c43b24aa2aee051579413cd3606739"
             }
           ],
           "title": "CRM Contact",
@@ -3786,7 +3786,7 @@
             },
             {
               "aside": true,
-              "choices": "backlog,todo,inprogress,done,canceled",
+              "choices": "backlog:Backlog,todo:Todo,inprogress:In Progress,done:Done,canceled:Canceled",
               "format": [
                 {
                   "tone": "neutral",
@@ -3901,7 +3901,7 @@
             },
             {
               "aside": true,
-              "choices": "low,medium,high",
+              "choices": "low:Low,medium:Medium,high:High",
               "name": "priority",
               "title": "Priority",
               "type": "choice"
@@ -3936,7 +3936,7 @@
           "schemaVersions": [
             {
               "family": 1,
-              "version": "schema.sha256.53343cf4736628958544fa8a3d49c20729a0185d158b4af3dd3486441c943a4a"
+              "version": "schema.sha256.db9513fe058672c00e73ec539d3bd7030ae57cbbc12177e07e02a1cb73ce3642"
             }
           ],
           "states": [
@@ -4230,7 +4230,7 @@
             },
             {
               "aside": true,
-              "choices": "qualification,demomaking,proposalquotation,negotiation,readytoclose,won,lost",
+              "choices": "qualification:Qualification,demomaking:Demo/Making,proposalquotation:Proposal/Quotation,negotiation:Negotiation,readytoclose:Ready to Close,won:Won,lost:Lost",
               "format": [
                 {
                   "tone": "neutral",
@@ -4403,11 +4403,11 @@
           "schemaVersions": [
             {
               "family": 1,
-              "version": "schema.sha256.c57a7aaac6339c2572b2339aa5ae5f3a0a7d7c0c92eb1dcfdbf66bd3834db080"
+              "version": "schema.sha256.76fcaf52e6ca27c9de25781d5ec3c09a33e5cdf8b9404b4729b83638ad1189a4"
             },
             {
               "family": 2,
-              "version": "schema.sha256.456a48691a0c1c64c5571e6fb45b9fd528a74bc82ef876cbe5896c38a75b160e"
+              "version": "schema.sha256.0798f1568bfb421efbf404ace2c2fa61862349f0c507e2804723b81471ff27cc"
             }
           ],
           "sets": [
@@ -4867,6 +4867,7 @@
               ],
               "inputs": [
                 {
+                  "help": "Leave empty to create a new organization from the lead.",
                   "name": "organization",
                   "ref": "build.organization",
                   "title": "Link to organization",
@@ -5358,7 +5359,7 @@
             },
             {
               "aside": true,
-              "choices": "new,contacted,nurture,qualified,converted,unqualified,junk",
+              "choices": "new:New,contacted:Contacted,nurture:Nurture,qualified:Qualified,converted:Converted,unqualified:Unqualified,junk:Junk",
               "format": [
                 {
                   "tone": "neutral",
@@ -5525,15 +5526,15 @@
           "schemaVersions": [
             {
               "family": 1,
-              "version": "schema.sha256.39676cff2a49bdd883c351b27e4c79e5d82583eecdc7d9d149287f439bc6b807"
+              "version": "schema.sha256.ac0c19912e77407d421232fb454fe5ffb7833b9709dc7bc8ade37c947a593224"
             },
             {
               "family": 2,
-              "version": "schema.sha256.5e1511e2b54bf0efc9832d8c4f9a3bb8c7aea4a7b4e80ffeda0bc2de702efaf5"
+              "version": "schema.sha256.26675b965eb2856203fe48ecda6ca86a6cfabf5d09bb918d31a6be56b29e6e56"
             },
             {
               "family": 2,
-              "version": "schema.sha256.6f1532f4957a1dbdc74d80ad8334ca20514c9a6329058d1adf86dd6ad9e52e42"
+              "version": "schema.sha256.927c56a7c766b9878c2029815594b39d9e56c51ede87e0a302290559fce1de75"
             }
           ],
           "states": [
