@@ -24,13 +24,14 @@ export type ActionDialogProps = {
   fixed?: Values;
   owned?: boolean;
   quick?: boolean;
+  only?: string[];
   onClose: () => void;
   onDone: (id: string) => void;
   perform?: (payload: Values) => Applied;
 };
 
 
-export function ActionDialog({ action, described, heading, confirm, id, revision, initial = {}, fixed = {}, owned, quick, onClose, onDone, perform }: ActionDialogProps) {
+export function ActionDialog({ action, described, heading, confirm, id, revision, initial = {}, fixed = {}, owned, quick, only, onClose, onDone, perform }: ActionDialogProps) {
   const [values, setValues] = useState<Values>(() => ({
     ...Object.fromEntries(action.payload.filter((field) => field.default != null).map((field) => [field.name, field.default])),
     ...initial,
@@ -46,7 +47,8 @@ export function ActionDialog({ action, described, heading, confirm, id, revision
     }
     return next;
   });
-  const shownParameters = action.payload.filter((parameter) => !(parameter.name in fixed) && enterable(parameter) && (!quick || parameter.required || parameter.name === described?.display));
+  const shownParameters = action.payload.filter((parameter) => !(parameter.name in fixed) && enterable(parameter) && (!quick || parameter.required || parameter.name === described?.display))
+    .flatMap((parameter) => (!only ? [parameter] : only.includes(parameter.name) ? [{ ...parameter, required: true }] : []));
   const blocked = action.payload.filter((parameter) => parameter.required && !(parameter.name in fixed) && !enterable(parameter)).map((parameter) => parameter.name);
   const missing = shownParameters.some((parameter) => missingValue(parameter, values[parameter.name]));
 

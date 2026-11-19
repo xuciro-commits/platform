@@ -51,12 +51,13 @@ export function useEditor(described: Described, id: string, values: Values, revi
     setStatus((previous) => Object.fromEntries(Object.entries(previous).filter(([, entry]) => entry.type === "error")));
   }, [values]);
 
-  const write = async (name: string, value: unknown, before: unknown) => {
+  const write = async (name: string, value: unknown, before: unknown, together: Values = {}) => {
     if (!edit) return;
     try {
-      const accepted = await send(edit, id, { [name]: value }, latest.current);
+      const accepted = await send(edit, id, { ...together, [name]: value }, latest.current);
       latest.current = accepted.revision;
-      setStatus((previous) => ({ ...previous, [name]: { type: "success" } }));
+      for (const sent of [name, ...Object.keys(together)]) refused.current.delete(sent);
+      setStatus((previous) => ({ ...previous, ...Object.fromEntries([name, ...Object.keys(together)].map((sent) => [sent, { type: "success" as const }])) }));
     } catch (problem) {
       if (!(problem instanceof HostRefusal && problem.reasonCode === "stale_revision")) {
         if (same(pending.current[name], value)) {
@@ -69,16 +70,31 @@ export function useEditor(described: Described, id: string, values: Values, revi
       const revision = (now.record as { revision: number }).revision;
       const saved = plain(now.values?.[name]);
       latest.current = revision;
-      if (same(saved, before)) return write(name, value, before);
+      if (same(saved, before)) return write(name, value, before, together);
       setConflict({ name, before, mine: value, saved, revision });
     }
   };
 
   const save = (name: string, value: unknown) => {
     if (!edit || same(value, values[name]) || (name in sent.current && sent.current[name] === value)) return;
+    const drafted = (other: string) => other !== name && other in pending.current && !same(pending.current[other], values[other]);
+    const form = { ...values, ...pending.current, [name]: value };
+    const controller = described.field(name)?.when?.field;
+    const together: Values = controller && drafted(controller) ? { [controller]: pending.current[controller] } : {};
+    const changed = [name, ...Object.keys(together)];
+    for (const field of described.entity.fields) {
+      if (field.when && changed.includes(field.when.field) && drafted(field.name) && described.shows(field, form)) together[field.name] = pending.current[field.name];
+    }
+    const missing = described.needs(form, changed).filter((field) => field.name !== name && !(field.name in together));
+    if (missing.length) {
+      refused.current.add(name);
+      setStatus((previous) => ({ ...previous, [name]: { type: "error", message: `${t("Also fill in")}: ${missing.map((field) => t(field.title)).join(", ")}` } }));
+      return;
+    }
     sent.current[name] = value;
+    Object.assign(sent.current, together);
     const before = values[name];
-    queue.current = queue.current.then(() => write(name, value, before));
+    queue.current = queue.current.then(() => write(name, value, before, together));
   };
 
   const resolve = (keep: "mine" | "saved") => {

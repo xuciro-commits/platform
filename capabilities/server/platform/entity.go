@@ -53,7 +53,7 @@ type RecordType struct {
 	ValueTypeBindings map[string]AssetBinding
 	Format            map[string][]FormatRule
 	Compute           func(record any)
-	ComputeAt         func(c Caller, record any, now time.Time) *Error
+	ComputeAt         func(c Caller, record, previous any, now time.Time) *Error
 	Validate          func(c Caller, record any) *Error
 
 	Type                   string

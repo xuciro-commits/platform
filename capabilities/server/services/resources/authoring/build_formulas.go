@@ -14,15 +14,21 @@ import (
 	ontology "platformserver/services/ontology"
 )
 
-func computeRulesOf(o ontology.Object, lookup func(string) (platform.RecordTypeInfo, bool)) func(platform.Caller, any, time.Time) *platform.Error {
+func computeRulesOf(o ontology.Object, lookup func(string) (platform.RecordTypeInfo, bool)) func(platform.Caller, any, any, time.Time) *platform.Error {
 	list, orderErr := ontology.FormulaOrder(o.Fields)
-	if len(list) == 0 {
+	followed := slices.DeleteFunc(slices.Clone(o.Fields), func(f ontology.Field) bool { return f.From == nil })
+	if len(list) == 0 && len(followed) == 0 {
 		return nil
 	}
 	lookup = ruleLookup(o, lookup)
-	return func(c platform.Caller, record any, now time.Time) *platform.Error {
+	return func(c platform.Caller, record, previous any, now time.Time) *platform.Error {
 		if orderErr != nil {
 			return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, orderErr.Error())
+		}
+		for _, f := range followed {
+			if err := follow(c, o, f, lookup, record, previous, now); err != nil {
+				return err
+			}
 		}
 		for _, f := range list {
 			e, err := ontology.FormulaExpr(o.Fields, f)
@@ -101,6 +107,57 @@ func computeRulesOf(o ontology.Object, lookup func(string) (platform.RecordTypeI
 		}
 		return nil
 	}
+}
+
+func follow(c platform.Caller, o ontology.Object, f ontology.Field, lookup func(string) (platform.RecordTypeInfo, bool), record, previous any, now time.Time) *platform.Error {
+	target := reflect.ValueOf(record).Elem().FieldByName(ontology.GoName(f.Name))
+	if previous == nil && !target.IsZero() {
+		return nil
+	}
+	if previous != nil {
+		before := reflect.ValueOf(previous)
+		changed := func(ref string) bool {
+			name, _, _ := strings.Cut(ref, ".")
+			now, then := reflect.ValueOf(record).Elem().FieldByName(ontology.GoName(name)), before.FieldByName(ontology.GoName(name))
+			return now.IsValid() && then.IsValid() && !reflect.DeepEqual(now.Interface(), then.Interface())
+		}
+		if !reflect.DeepEqual(before.FieldByName(ontology.GoName(f.Name)).Interface(), target.Interface()) || !reads(*f.From, changed) {
+			return nil
+		}
+	}
+	s := ruleSpec(o, ontology.Action{}, o.Reads)
+	schema, err := ruleprotocol.RuleSchema(*f.From, s, lookup, c.Rules())
+	if err != nil {
+		return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
+	}
+	ctx, err := ruleprotocol.RuleContext(c, *f.From, s, lookup, record, nil, now)
+	if err != nil {
+		return platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, err.Error())
+	}
+	program, err := c.Rules().CompileExpr(*f.From, schema)
+	if err != nil {
+		return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
+	}
+	result, err := program.Eval(ctx)
+	if err != nil {
+		return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Field {field}: {reason} / 字段 {field}：{reason}", f.Name, err.Error(), f.Name, err.Error())
+	}
+	if result.Value.Status != "value" {
+		target.SetZero()
+		return nil
+	}
+	value, err := ruleprotocol.ExprGoValue(result.Value)
+	if err == nil {
+		err = assign(target, value)
+	}
+	if err != nil {
+		return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
+	}
+	return nil
+}
+
+func reads(e platform.Expr, changed func(string) bool) bool {
+	return e.Ref != "" && changed(e.Ref) || slices.ContainsFunc(e.Args, func(arg platform.Expr) bool { return reads(arg, changed) }) || e.In != nil && reads(*e.In, changed)
 }
 
 func ruleLookup(o ontology.Object, lookup func(string) (platform.RecordTypeInfo, bool)) func(string) (platform.RecordTypeInfo, bool) {
@@ -199,6 +256,14 @@ func (b *Build) checkObjectRules(o ontology.Object, engines ...platform.RuleEngi
 				return fmt.Errorf("field %s formula result type differs", f.Name)
 			}
 			if err := check(*f.FormulaExpr, ruleSpec(o, ontology.Action{}, o.Reads), "field "+f.Name); err != nil {
+				return err
+			}
+		}
+		if f.From != nil {
+			if f.FormulaExpr != nil || f.Formula != "" || f.ReadOnly || f.AliasOf != "" || platform.RuleFieldKind(f.Type) != platform.RuleFieldKind(f.From.Kind) {
+				return fmt.Errorf("field %s follows a rule only as an editable field of the same type", f.Name)
+			}
+			if err := check(*f.From, ruleSpec(o, ontology.Action{}, o.Reads), "field "+f.Name); err != nil {
 				return err
 			}
 		}

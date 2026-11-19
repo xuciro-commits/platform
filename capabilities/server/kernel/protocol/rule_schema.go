@@ -225,7 +225,7 @@ func RuleContext(c platform.Caller, expr platform.Expr, spec platform.RuleReadSp
 		} else if raw, ok := values[field.Name]; ok {
 			value.Status = "value"
 			value.Data = raw
-			if string(raw) == "null" {
+			if string(raw) == "null" || string(raw) == `""` && (value.Kind == "date" || value.Kind == "datetime") {
 				value.Status = "null"
 			}
 		}

@@ -66,6 +66,7 @@ type Field struct {
 	AliasOf     string                 `json:"aliasOf,omitempty" title:"Read alias" help:"Read alias of. The retained old name reads this field; it cannot be written directly"`
 	When        string                 `json:"when,omitempty" title:"Only when" help:"field=value,value — another choice or boolean field of this object and the values that make this field apply" example:"kind=refund,return"`
 	FormulaExpr *platform.Expr         `json:"formulaExpr,omitempty" type:"json" field:"aside"`
+	From        *platform.Expr         `json:"from,omitempty" type:"json" field:"aside"`
 	Formula     string                 `json:"formula,omitempty" help:"For a number: price * qty, (ordered - received), …" example:"price * qty"`
 	Read        []string               `json:"read,omitempty" title:"Read by" help:"Roles that read it; empty: every role that reads the object"`
 	Write       []string               `json:"write,omitempty" title:"Set by" help:"Roles that set it; empty: every role that edits the object"`

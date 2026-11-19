@@ -162,7 +162,7 @@ func (p *Proposal) Apply(entity platform.RecordType, info platform.RecordTypeInf
 		}
 	}
 	compute := entity.ComputeAt
-	entity.ComputeAt = func(c platform.Caller, record any, at time.Time) *platform.Error {
+	entity.ComputeAt = func(c platform.Caller, record, previous any, at time.Time) *platform.Error {
 		reflectRecord := reflect.ValueOf(record).Elem()
 		for name, value := range generated {
 			field, _ := info.Field(name)
@@ -171,7 +171,7 @@ func (p *Proposal) Apply(entity platform.RecordType, info platform.RecordTypeInf
 			}
 		}
 		if compute != nil {
-			if err := compute(c, record, at); err != nil {
+			if err := compute(c, record, previous, at); err != nil {
 				return err
 			}
 		}

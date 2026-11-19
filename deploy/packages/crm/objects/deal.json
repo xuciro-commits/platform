@@ -51,6 +51,43 @@
       "type": "date"
     },
     {
+      "from": {
+        "args": [
+          {
+            "args": [
+              {
+                "kind": "choice",
+                "op": "",
+                "ref": "status"
+              },
+              {
+                "kind": "set",
+                "lit": {
+                  "element": "choice",
+                  "value": [
+                    "won",
+                    "lost"
+                  ]
+                },
+                "op": ""
+              }
+            ],
+            "kind": "boolean",
+            "op": "in"
+          },
+          {
+            "kind": "date",
+            "op": "$today"
+          },
+          {
+            "kind": "date",
+            "op": "",
+            "ref": "closeddate"
+          }
+        ],
+        "kind": "date",
+        "op": "if"
+      },
       "group": "Commercial",
       "name": "closeddate",
       "title": "Closed date",
@@ -82,6 +119,7 @@
       "group": "Closure",
       "name": "lostreason",
       "ref": "build.lostreason",
+      "required": true,
       "title": "Lost reason",
       "type": "reference",
       "when": "status=lost"
@@ -252,6 +290,199 @@
     },
     {
       "aside": true,
+      "from": {
+        "args": [
+          {
+            "args": [
+              {
+                "kind": "choice",
+                "op": "",
+                "ref": "status"
+              },
+              {
+                "kind": "choice",
+                "lit": {
+                  "value": "qualification"
+                },
+                "op": ""
+              }
+            ],
+            "kind": "boolean",
+            "op": "="
+          },
+          {
+            "kind": "integer",
+            "lit": {
+              "value": 10
+            },
+            "op": ""
+          },
+          {
+            "args": [
+              {
+                "args": [
+                  {
+                    "kind": "choice",
+                    "op": "",
+                    "ref": "status"
+                  },
+                  {
+                    "kind": "choice",
+                    "lit": {
+                      "value": "demomaking"
+                    },
+                    "op": ""
+                  }
+                ],
+                "kind": "boolean",
+                "op": "="
+              },
+              {
+                "kind": "integer",
+                "lit": {
+                  "value": 25
+                },
+                "op": ""
+              },
+              {
+                "args": [
+                  {
+                    "args": [
+                      {
+                        "kind": "choice",
+                        "op": "",
+                        "ref": "status"
+                      },
+                      {
+                        "kind": "choice",
+                        "lit": {
+                          "value": "proposalquotation"
+                        },
+                        "op": ""
+                      }
+                    ],
+                    "kind": "boolean",
+                    "op": "="
+                  },
+                  {
+                    "kind": "integer",
+                    "lit": {
+                      "value": 50
+                    },
+                    "op": ""
+                  },
+                  {
+                    "args": [
+                      {
+                        "args": [
+                          {
+                            "kind": "choice",
+                            "op": "",
+                            "ref": "status"
+                          },
+                          {
+                            "kind": "choice",
+                            "lit": {
+                              "value": "negotiation"
+                            },
+                            "op": ""
+                          }
+                        ],
+                        "kind": "boolean",
+                        "op": "="
+                      },
+                      {
+                        "kind": "integer",
+                        "lit": {
+                          "value": 70
+                        },
+                        "op": ""
+                      },
+                      {
+                        "args": [
+                          {
+                            "args": [
+                              {
+                                "kind": "choice",
+                                "op": "",
+                                "ref": "status"
+                              },
+                              {
+                                "kind": "choice",
+                                "lit": {
+                                  "value": "readytoclose"
+                                },
+                                "op": ""
+                              }
+                            ],
+                            "kind": "boolean",
+                            "op": "="
+                          },
+                          {
+                            "kind": "integer",
+                            "lit": {
+                              "value": 90
+                            },
+                            "op": ""
+                          },
+                          {
+                            "args": [
+                              {
+                                "args": [
+                                  {
+                                    "kind": "choice",
+                                    "op": "",
+                                    "ref": "status"
+                                  },
+                                  {
+                                    "kind": "choice",
+                                    "lit": {
+                                      "value": "won"
+                                    },
+                                    "op": ""
+                                  }
+                                ],
+                                "kind": "boolean",
+                                "op": "="
+                              },
+                              {
+                                "kind": "integer",
+                                "lit": {
+                                  "value": 100
+                                },
+                                "op": ""
+                              },
+                              {
+                                "kind": "integer",
+                                "lit": {
+                                  "value": 0
+                                },
+                                "op": ""
+                              }
+                            ],
+                            "kind": "integer",
+                            "op": "if"
+                          }
+                        ],
+                        "kind": "integer",
+                        "op": "if"
+                      }
+                    ],
+                    "kind": "integer",
+                    "op": "if"
+                  }
+                ],
+                "kind": "integer",
+                "op": "if"
+              }
+            ],
+            "kind": "integer",
+            "op": "if"
+          }
+        ],
+        "kind": "integer",
+        "op": "if"
+      },
       "name": "probability",
       "title": "Probability %",
       "type": "integer"
@@ -268,11 +499,11 @@
   "schemaVersions": [
     {
       "family": 1,
-      "version": "schema.sha256.76fcaf52e6ca27c9de25781d5ec3c09a33e5cdf8b9404b4729b83638ad1189a4"
+      "version": "schema.sha256.70f0f49ecea90d5fc77688f2bf536d2b003c1d209d072a51130e5035b6d808e2"
     },
     {
       "family": 2,
-      "version": "schema.sha256.0798f1568bfb421efbf404ace2c2fa61862349f0c507e2804723b81471ff27cc"
+      "version": "schema.sha256.8fcfee154633cd50df7e060e3bba078845c3132e9799d4bd485e636df497cb57"
     }
   ],
   "sets": [

@@ -1645,7 +1645,41 @@
             "title": "Closed date",
             "type": "date",
             "when": "status=won,lost",
-            "group": "Commercial"
+            "group": "Commercial",
+            "from": {
+              "op": "if",
+              "kind": "date",
+              "args": [
+                {
+                  "op": "in",
+                  "kind": "boolean",
+                  "args": [
+                    {
+                      "kind": "choice",
+                      "ref": "status"
+                    },
+                    {
+                      "kind": "set",
+                      "lit": {
+                        "value": [
+                          "won",
+                          "lost"
+                        ],
+                        "element": "choice"
+                      }
+                    }
+                  ]
+                },
+                {
+                  "op": "$today",
+                  "kind": "date"
+                },
+                {
+                  "kind": "date",
+                  "ref": "closeddate"
+                }
+              ]
+            }
           },
           {
             "name": "source",
@@ -1674,7 +1708,8 @@
             "type": "reference",
             "ref": "build.lostreason",
             "when": "status=lost",
-            "group": "Closure"
+            "group": "Closure",
+            "required": true
           },
           {
             "name": "lostnotes",
@@ -1830,7 +1865,181 @@
             "name": "probability",
             "title": "Probability %",
             "type": "integer",
-            "aside": true
+            "aside": true,
+            "from": {
+              "op": "if",
+              "kind": "integer",
+              "args": [
+                {
+                  "op": "=",
+                  "kind": "boolean",
+                  "args": [
+                    {
+                      "kind": "choice",
+                      "ref": "status"
+                    },
+                    {
+                      "kind": "choice",
+                      "lit": {
+                        "value": "qualification"
+                      }
+                    }
+                  ]
+                },
+                {
+                  "kind": "integer",
+                  "lit": {
+                    "value": 10
+                  }
+                },
+                {
+                  "op": "if",
+                  "kind": "integer",
+                  "args": [
+                    {
+                      "op": "=",
+                      "kind": "boolean",
+                      "args": [
+                        {
+                          "kind": "choice",
+                          "ref": "status"
+                        },
+                        {
+                          "kind": "choice",
+                          "lit": {
+                            "value": "demomaking"
+                          }
+                        }
+                      ]
+                    },
+                    {
+                      "kind": "integer",
+                      "lit": {
+                        "value": 25
+                      }
+                    },
+                    {
+                      "op": "if",
+                      "kind": "integer",
+                      "args": [
+                        {
+                          "op": "=",
+                          "kind": "boolean",
+                          "args": [
+                            {
+                              "kind": "choice",
+                              "ref": "status"
+                            },
+                            {
+                              "kind": "choice",
+                              "lit": {
+                                "value": "proposalquotation"
+                              }
+                            }
+                          ]
+                        },
+                        {
+                          "kind": "integer",
+                          "lit": {
+                            "value": 50
+                          }
+                        },
+                        {
+                          "op": "if",
+                          "kind": "integer",
+                          "args": [
+                            {
+                              "op": "=",
+                              "kind": "boolean",
+                              "args": [
+                                {
+                                  "kind": "choice",
+                                  "ref": "status"
+                                },
+                                {
+                                  "kind": "choice",
+                                  "lit": {
+                                    "value": "negotiation"
+                                  }
+                                }
+                              ]
+                            },
+                            {
+                              "kind": "integer",
+                              "lit": {
+                                "value": 70
+                              }
+                            },
+                            {
+                              "op": "if",
+                              "kind": "integer",
+                              "args": [
+                                {
+                                  "op": "=",
+                                  "kind": "boolean",
+                                  "args": [
+                                    {
+                                      "kind": "choice",
+                                      "ref": "status"
+                                    },
+                                    {
+                                      "kind": "choice",
+                                      "lit": {
+                                        "value": "readytoclose"
+                                      }
+                                    }
+                                  ]
+                                },
+                                {
+                                  "kind": "integer",
+                                  "lit": {
+                                    "value": 90
+                                  }
+                                },
+                                {
+                                  "op": "if",
+                                  "kind": "integer",
+                                  "args": [
+                                    {
+                                      "op": "=",
+                                      "kind": "boolean",
+                                      "args": [
+                                        {
+                                          "kind": "choice",
+                                          "ref": "status"
+                                        },
+                                        {
+                                          "kind": "choice",
+                                          "lit": {
+                                            "value": "won"
+                                          }
+                                        }
+                                      ]
+                                    },
+                                    {
+                                      "kind": "integer",
+                                      "lit": {
+                                        "value": 100
+                                      }
+                                    },
+                                    {
+                                      "kind": "integer",
+                                      "lit": {
+                                        "value": 0
+                                      }
+                                    }
+                                  ]
+                                }
+                              ]
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
           },
           {
             "name": "owner",

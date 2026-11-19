@@ -248,7 +248,8 @@ export function Records({ declared, listPath, id, back }: { declared: Declared; 
     if (!moving || !described || !laneField) return;
     const { row, current, step, action } = moving;
     const revision = Number(row.revision);
-    if (!step && !action.needsApproval && !action.payload.some((parameter) => parameter.required && parameter.name !== laneField.name)) {
+    const only = step ? undefined : described.needs({ ...row, [laneField.name]: to }, [laneField.name]).map((field) => field.name);
+    if (!step && !only?.length && !action.needsApproval && !action.payload.some((parameter) => parameter.required && parameter.name !== laneField.name)) {
       await send(action, id, { [laneField.name]: to }, revision);
       return;
     }
@@ -260,7 +261,7 @@ export function Records({ declared, listPath, id, back }: { declared: Declared; 
         onCancel: resolve,
       } satisfies Pick<Intent, "onRefused" | "onDone" | "onCancel">;
       const intent = step ? stepIntent(described, step, current, record, callbacks, to)
-        : { action, ...record, label: t(action.title), reversible: false, ...callbacks };
+        : { action, ...record, label: t(action.title), reversible: false, only: only?.length ? only : undefined, ...callbacks };
       const target = step ? step.transition.toInput : laneField.name;
       act.run(target ? { ...intent, fixed: { [target]: to }, reversible: false } : intent);
     });

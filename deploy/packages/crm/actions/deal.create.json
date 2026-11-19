@@ -112,7 +112,7 @@
     "schema": "build.deal.create",
     "schemaVersion": {
       "family": 2,
-      "version": "schema.sha256.0798f1568bfb421efbf404ace2c2fa61862349f0c507e2804723b81471ff27cc"
+      "version": "schema.sha256.8fcfee154633cd50df7e060e3bba078845c3132e9799d4bd485e636df497cb57"
     },
     "target": "build.deal",
     "title": "Create deal"

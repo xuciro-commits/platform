@@ -337,6 +337,13 @@ func recordAction(e platform.RecordType, schema string) (platform.ActionType, bo
 	return platform.ActionType{}, false
 }
 
+func when(f platform.FieldInfo) string {
+	if f.When == nil {
+		return ""
+	}
+	return f.When.Field
+}
+
 func builtinAction(e platform.RecordType, verb string) (platform.ActionType, bool) {
 	if verb == "create" && e.Standard.Create || verb == "edit" && e.Standard.Edit || verb == "archive" && e.Standard.Archive || verb == "restore" && e.Standard.Restore {
 		return platform.ActionType{Name: verb}, true
@@ -417,6 +424,15 @@ func executeAction(c platform.Caller, e platform.RecordType, t platform.ActionTy
 				return nil, invalid
 			}
 			v.Elem().Field(0).Addr().Interface().(*platform.Record).ID = id
+			for _, f := range info.Fields {
+				on, found := info.Field(when(f))
+				if _, set := given[f.Name]; set || !found {
+					continue
+				}
+				if _, moved := given[on.Name]; moved && !f.When.Holds(fmt.Sprint(v.Elem().FieldByIndex(on.Index).Interface()), c.Rules()) {
+					v.Elem().FieldByIndex(f.Index).SetZero()
+				}
+			}
 		}
 		if c.RestoreSource() {
 			v.Elem().Field(0).Addr().Interface().(*platform.Record).Archived = false
@@ -450,7 +466,11 @@ func executeAction(c platform.Caller, e platform.RecordType, t platform.ActionTy
 		return nil, err
 	}
 	if e.ComputeAt != nil {
-		if err := e.ComputeAt(c, v.Interface(), now); err != nil {
+		var previous any
+		if t.Name != "create" {
+			previous = existing
+		}
+		if err := e.ComputeAt(c, v.Interface(), previous, now); err != nil {
 			return nil, err
 		}
 	}

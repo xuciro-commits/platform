@@ -583,8 +583,6 @@ Object.assign(zhCN, {
   "move cancelled": "已取消移动",
   "picked up": "已拿起",
   "position": "位置",
-});
-Object.assign(zhCN, {
   Mentions: "提及与评论",
   Commands: "命令",
   "Current app": "当前应用",
@@ -596,4 +594,5 @@ Object.assign(zhCN, {
   Navigate: "移动",
   Select: "选择",
   "Select…": "选择…",
+  "Also fill in": "还需填写",
 });
