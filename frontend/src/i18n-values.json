@@ -53,6 +53,7 @@
   "is any of": "是其中之一",
   "is no": "为否",
   "is yes": "为是",
+  "journal": "事务日志",
   "Label": "标签",
   "Language, formats and time zone.": "语言、格式与时区。",
   "Lists, records and boards are generated from each type.": "列表、记录页与看板由类型生成。",
@@ -72,6 +73,7 @@
   "No saved views": "没有保存的视图",
   "Notification": "通知",
   "object": "对象",
+  "observations": "运行观测",
   "ok": "正常",
   "OK": "正常",
   "Only when": "仅当",
@@ -85,6 +87,7 @@
   "pipeline": "管道",
   "Product": "产品",
   "proposed": "已提出",
+  "probing": "探测中",
   "Proposed deposit": "拟定订金",
   "Public": "公开",
   "Publish": "发布",
@@ -128,6 +131,7 @@
   "warning": "警告",
   "Warning": "警告",
   "What reaches you, and where it arrives.": "哪些消息会送到你，送到哪里。",
+  "work-loop": "后台工作循环",
   "worker": "后台",
   "writeback": "回写"
 }

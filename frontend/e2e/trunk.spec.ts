@@ -1399,3 +1399,20 @@ test("trees: the organization rolls people up its units and a trace opens to its
   await expect.poll(() => main.getByRole("row").count()).toBeGreaterThan(before);
   await expect(main.getByRole("row").filter({ hasText: "Request completed" }).first()).toBeVisible();
 });
+
+test("dashboards: metrics and health show their blocks", async ({ page }) => {
+  await signIn(page);
+  const main = page.getByRole("main");
+  const unbuilt = main.getByText("Not built yet", { exact: true });
+
+  await open(page, "Operations", "Metrics");
+  await expect(main.getByRole("heading", { level: 1, name: "Metrics", exact: true })).toBeVisible();
+  await expect(main.getByRole("heading", { name: "Requests", exact: true })).toBeVisible();
+  await expect(unbuilt).toHaveCount(0);
+
+  await open(page, "Operations", "Health");
+  await expect(main.getByRole("heading", { level: 1, name: "Health", exact: true })).toBeVisible();
+  await expect(main.getByRole("heading", { name: "Failed work", exact: true })).toBeVisible();
+  await expect(main.getByRole("heading", { name: "Readiness", exact: true })).toBeVisible();
+  await expect(unbuilt).toHaveCount(0);
+});
