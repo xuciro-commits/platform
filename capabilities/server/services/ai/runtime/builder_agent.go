@@ -23,16 +23,16 @@ type Agent struct {
 	Model        string                `json:"model,omitempty" field:"aside"`
 	ModelOptions platform.ModelOptions `json:"modelOptions,omitzero" field:"aside" type:"json"`
 	Tools        []string              `json:"tools" field:"aside" help:"Beyond what its objects, actions and functions derive for it: extra queries (query:<name>)"`
-	Steps        int                   `json:"steps,omitempty" title:"Model turns per run" help:"Default 10"`
-	Tokens       int                   `json:"tokens,omitempty" title:"Tokens per run" help:"Default 40000"`
-	Actions      int                   `json:"actions,omitempty" title:"Actions per run" help:"Default 3"`
-	Cost         float64               `json:"cost,omitempty" title:"USD per run" help:"0: no cap"`
+	Steps        int                   `json:"steps,omitempty" title:"Turn limit" help:"Model turns per run. Default 10"`
+	Tokens       int                   `json:"tokens,omitempty" title:"Token limit" help:"Tokens per run. Default 40000"`
+	Actions      int                   `json:"actions,omitempty" title:"Action limit" help:"Actions per run. Default 3"`
+	Cost         float64               `json:"cost,omitempty" title:"Budget (USD)" help:"USD per run. 0: no cap"`
 	Checkpoints  []string              `json:"checkpoints,omitempty" field:"aside" help:"Tools that always wait for a person to confirm"`
-	HandoffRole  string                `json:"handoffRole,omitempty" title:"Hands over to" help:"The builder-app role that takes the goal when a run stops; empty: the builder"`
+	HandoffRole  string                `json:"handoffRole,omitempty" title:"Handoff role" help:"Hands over to. The builder-app role that takes the goal when a run stops; empty: the builder"`
 	Cases        []AgentCase           `json:"cases,omitempty" type:"json" title:"Evaluation cases"`
 	State        string                `json:"state" field:"readonly" choices:"draft,published"`
 	Version      int                   `json:"version,omitempty" field:"readonly"`
-	Published    string                `json:"published,omitempty" field:"readonly" type:"longtext" title:"What is installed"`
+	Published    string                `json:"published,omitempty" field:"readonly" type:"longtext" title:"Installed" help:"What is installed"`
 	Versions     []string              `json:"versions,omitempty" field:"readonly" type:"json" title:"Published versions"`
 }
 

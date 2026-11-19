@@ -38,14 +38,14 @@ type AgentRunRecord struct {
 	Handoff           string                   `json:"handoff,omitempty" field:"readonly" source:"record"`
 	Applications      []platform.AssetBinding  `json:"applications,omitempty" field:"readonly" type:"json"`
 	Release           string                   `json:"release,omitempty" field:"readonly" title:"Startup release" source:"record"`
-	DefinitionVersion string                   `json:"definitionVersion,omitempty" field:"readonly" title:"Startup agent definition" source:"record"`
+	DefinitionVersion string                   `json:"definitionVersion,omitempty" field:"readonly" title:"Agent definition" help:"Startup agent definition" source:"record"`
 	Agent             string                   `json:"agent" field:"readonly,search" source:"record"`
 	Title             string                   `json:"title" field:"readonly,search" source:"record"`
 	Goal              string                   `json:"goal" field:"readonly" type:"longtext" source:"record"`
 	Ref               string                   `json:"ref,omitempty" field:"readonly" source:"record"`
-	Seen              string                   `json:"seen,omitempty" field:"readonly" type:"longtext" title:"What it saw of the record"`
-	OnBehalf          string                   `json:"onBehalf,omitempty" field:"readonly" title:"On behalf of" source:"record"`
-	Acts              bool                     `json:"acts,omitempty" field:"readonly" title:"Acts without drafts"`
+	Seen              string                   `json:"seen,omitempty" field:"readonly" type:"longtext" title:"Record snapshot" help:"What it saw of the record"`
+	OnBehalf          string                   `json:"onBehalf,omitempty" field:"readonly" title:"Represented member" help:"On behalf of" source:"record"`
+	Acts              bool                     `json:"acts,omitempty" field:"readonly" title:"Direct actions" help:"Acts without drafts"`
 	Language          string                   `json:"language,omitempty" field:"readonly" source:"record"`
 	Flow              string                   `json:"flow,omitempty" field:"readonly" source:"record"`
 	Token             int                      `json:"token,omitempty" field:"readonly"`
@@ -63,12 +63,12 @@ type AgentRunRecord struct {
 	Cost        float64             `json:"cost,omitempty" field:"readonly"`
 	Result      string              `json:"result,omitempty" field:"readonly" type:"longtext"`
 	Task        string              `json:"task,omitempty" field:"readonly" source:"record"`
-	Stopped     string              `json:"stopped,omitempty" field:"readonly" title:"Why it stopped" source:"record"`
+	Stopped     string              `json:"stopped,omitempty" field:"readonly" title:"Stop reason" help:"Why it stopped" source:"record"`
 	Proposals   []Draft             `json:"proposals,omitempty" field:"readonly" type:"json" read:"-"`
-	Draft       []Draft             `json:"draft,omitempty" field:"readonly" title:"Draft to confirm"`
-	Citations   []Citation          `json:"citations,omitempty" field:"readonly" title:"Sources it read"`
-	Signals     []Signal            `json:"signals,omitempty" field:"readonly" title:"What people made of it"`
-	Withheld    bool                `json:"withheld,omitempty" field:"readonly" title:"Part of this trace is no longer readable to you"`
+	Draft       []Draft             `json:"draft,omitempty" field:"readonly" title:"Confirmation draft" help:"Draft to confirm"`
+	Citations   []Citation          `json:"citations,omitempty" field:"readonly" title:"Read sources" help:"Sources it read"`
+	Signals     []Signal            `json:"signals,omitempty" field:"readonly" title:"Feedback" help:"What people made of it"`
+	Withheld    bool                `json:"withheld,omitempty" field:"readonly" title:"Withheld trace" help:"Part of this trace is no longer readable to you"`
 }
 
 type Draft struct {
@@ -117,7 +117,7 @@ type RunStep struct {
 	Calls     []platform.ToolCall `json:"calls,omitempty"`
 	CallID    string              `json:"callId,omitempty"`
 	Content   string              `json:"content,omitempty"`
-	Sources   []string            `json:"sources,omitempty" title:"Records it read"`
+	Sources   []string            `json:"sources,omitempty" title:"Read records" help:"Records it read"`
 }
 
 type AgentInfo struct {
@@ -152,21 +152,21 @@ type Evaluation struct {
 	Agent            string                   `json:"agent" field:"readonly,search"`
 	Model            string                   `json:"model" field:"readonly,search" title:"Candidate model"`
 	State            string                   `json:"state" field:"readonly" choices:"queued,done"`
-	Agrees           int                      `json:"agrees" field:"readonly" title:"Agrees with accepted"`
-	Differs          int                      `json:"differs" field:"readonly" title:"Differs from accepted"`
-	Repeats          int                      `json:"repeats" field:"readonly" title:"Repeats a correction"`
-	Avoids           int                      `json:"avoids" field:"readonly" title:"Avoids a correction"`
+	Agrees           int                      `json:"agrees" field:"readonly" title:"Agreements" help:"Agrees with accepted"`
+	Differs          int                      `json:"differs" field:"readonly" title:"Differences" help:"Differs from accepted"`
+	Repeats          int                      `json:"repeats" field:"readonly" title:"Repeated corrections" help:"Repeats a correction"`
+	Avoids           int                      `json:"avoids" field:"readonly" title:"Corrections avoided" help:"Avoids a correction"`
 	Asks             int                      `json:"asks" field:"readonly"`
 	Fails            int                      `json:"fails" field:"readonly"`
 	Score            float64                  `json:"score" field:"readonly"`
 	Tokens           int                      `json:"tokens" field:"readonly"`
-	Cost             float64                  `json:"cost,omitempty" field:"readonly" title:"Model cost, USD"`
+	Cost             float64                  `json:"cost,omitempty" field:"readonly" title:"Cost (USD)" help:"Model cost, USD"`
 	Cases            []EvalCase               `json:"cases" field:"readonly"`
 	Suite            bool                     `json:"suite,omitempty" field:"readonly" title:"Declared cases"`
 	Candidate        string                   `json:"candidate,omitempty" field:"readonly" title:"Release candidate"`
 	DefinitionDigest string                   `json:"definitionDigest,omitempty" field:"readonly" title:"Evaluated definition"`
 	Binding          *platform.AIModelBinding `json:"binding,omitempty" field:"readonly" type:"json"`
-	ModelConfig      string                   `json:"modelConfig,omitempty" field:"readonly" title:"Evaluated model configuration"`
+	ModelConfig      string                   `json:"modelConfig,omitempty" field:"readonly" title:"Model configuration" help:"Evaluated model configuration"`
 	Inputs           []EvaluationInput        `json:"inputs,omitempty" field:"readonly"`
 }
 
@@ -199,10 +199,10 @@ type Memory struct {
 	Fact     string    `json:"fact" field:"readonly,search" type:"longtext"`
 	For      string    `json:"for,omitempty" field:"readonly" title:"About"`
 	Run      string    `json:"run,omitempty" field:"readonly" title:"From run"`
-	Sources  []string  `json:"sources,omitempty" field:"readonly" title:"Records behind it"`
+	Sources  []string  `json:"sources,omitempty" field:"readonly" title:"Source records" help:"Records behind it"`
 	State    string    `json:"state" field:"readonly" choices:"proposed,active,forgotten"`
 	Expires  time.Time `json:"expires,omitzero" field:"readonly"`
-	Withheld bool      `json:"withheld,omitempty" field:"readonly" title:"Part of this is no longer readable to you"`
+	Withheld bool      `json:"withheld,omitempty" field:"readonly" title:"Withheld data" help:"Part of this is no longer readable to you"`
 }
 
 const (

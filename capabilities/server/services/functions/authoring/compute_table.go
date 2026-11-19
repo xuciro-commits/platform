@@ -93,7 +93,7 @@ type Table struct {
 	Reads       *platform.RuleReadSpec `json:"reads,omitempty" type:"json" field:"aside"`
 	Inputs      []TableColumn          `json:"inputs" title:"Condition columns"`
 	Outputs     []TableColumn          `json:"outputs" title:"Result columns"`
-	Proposal    bool                   `json:"proposal,omitempty" title:"Return edit proposals"`
+	Proposal    bool                   `json:"proposal,omitempty" title:"Edit proposals" help:"Return edit proposals"`
 	Rows        []TableRow             `json:"rows"`
 	Default     []string               `json:"default,omitempty" title:"Default result"`
 	State       string                 `json:"state" field:"readonly"`

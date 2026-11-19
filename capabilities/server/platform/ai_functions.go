@@ -35,7 +35,7 @@ type AIFunction struct {
 }
 
 type FunctionCall struct {
-	SourceValues   map[string]json.RawMessage `json:"sourceValues,omitempty" field:"readonly" type:"json" title:"Accepted AI inputs"`
+	SourceValues   map[string]json.RawMessage `json:"sourceValues,omitempty" field:"readonly" type:"json" title:"AI inputs" help:"Accepted AI inputs"`
 	SourceRevision uint32                     `json:"sourceRevision,omitempty"`
 	Applications   []AssetBinding             `json:"applications,omitempty" field:"readonly" type:"json"`
 	Definition     string                     `json:"definition"`

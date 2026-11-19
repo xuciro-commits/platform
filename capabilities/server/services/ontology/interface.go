@@ -15,7 +15,7 @@ type InterfaceRecord struct {
 	Fields      []platform.InterfaceField `json:"fields" field:"required" type:"json"`
 	State       string                    `json:"state" field:"readonly" choices:"draft,published"`
 	Version     int                       `json:"version,omitempty" field:"readonly"`
-	Published   string                    `json:"published,omitempty" field:"readonly" type:"longtext" title:"What is installed"`
+	Published   string                    `json:"published,omitempty" field:"readonly" type:"longtext" title:"Installed" help:"What is installed"`
 	Versions    []string                  `json:"versions,omitempty" field:"readonly" title:"Published versions"`
 }
 

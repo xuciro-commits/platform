@@ -21,7 +21,7 @@ const (
 
 type Function struct {
 	platform.Record
-	Proposal       *platform.ProposalPolicy `json:"proposal,omitempty" type:"json" field:"aside" title:"Business proposal review"`
+	Proposal       *platform.ProposalPolicy `json:"proposal,omitempty" type:"json" field:"aside" title:"Proposal review" help:"Business proposal review"`
 	Conversation   bool                     `json:"conversation,omitempty" field:"aside" title:"Conversation input"`
 	Name           string                   `json:"name" field:"required,search"`
 	Title          string                   `json:"title" field:"required,search"`
@@ -33,13 +33,13 @@ type Function struct {
 	OutputMode     string                   `json:"outputMode,omitempty" field:"aside" choices:"fields,edit-proposal" title:"Output mode"`
 	Model          string                   `json:"model,omitempty"`
 	ModelOptions   platform.ModelOptions    `json:"modelOptions,omitzero" type:"json"`
-	MaxInputBytes  int                      `json:"maxInputBytes" field:"required" title:"Maximum input bytes"`
-	MaxOutputBytes int                      `json:"maxOutputBytes" field:"required" title:"Maximum output bytes"`
+	MaxInputBytes  int                      `json:"maxInputBytes" field:"required" title:"Input limit" help:"Maximum input bytes"`
+	MaxOutputBytes int                      `json:"maxOutputBytes" field:"required" title:"Output limit" help:"Maximum output bytes"`
 	MaxTokens      int                      `json:"maxTokens" field:"required" title:"Maximum tokens"`
 	Roles          []string                 `json:"roles" field:"aside" title:"Callable by"`
 	State          string                   `json:"state" field:"readonly" choices:"draft,published"`
 	Version        int                      `json:"version,omitempty" field:"readonly"`
-	Published      string                   `json:"published,omitempty" field:"readonly" type:"longtext" title:"What is installed"`
+	Published      string                   `json:"published,omitempty" field:"readonly" type:"longtext" title:"Installed" help:"What is installed"`
 	Versions       []string                 `json:"versions,omitempty" field:"readonly" title:"Published versions"`
 }
 
@@ -53,10 +53,10 @@ type FunctionRun struct {
 	platform.Record
 	TrainingAuthorization string                     `json:"trainingAuthorization,omitempty" field:"readonly"`
 	TrainingSources       map[string]uint32          `json:"trainingSources,omitempty" field:"readonly" type:"json"`
-	SourceValues          map[string]json.RawMessage `json:"sourceValues,omitempty" field:"readonly" type:"json" title:"Accepted AI inputs"`
+	SourceValues          map[string]json.RawMessage `json:"sourceValues,omitempty" field:"readonly" type:"json" title:"AI inputs" help:"Accepted AI inputs"`
 	SourceRevision        uint32                     `json:"sourceRevision,omitempty" field:"readonly" title:"Source revision"`
 	Decision              string                     `json:"decision,omitempty" field:"readonly" choices:"pending,adopted,rejected,expired" title:"Proposal decision"`
-	ExpiresAt             time.Time                  `json:"expiresAt,omitzero" field:"readonly" title:"Proposal expires at"`
+	ExpiresAt             time.Time                  `json:"expiresAt,omitzero" field:"readonly" title:"Proposal expiry" help:"Proposal expires at"`
 	Reviewers             []string                   `json:"reviewers,omitempty" field:"readonly" title:"Proposal reviewers"`
 	DecidedBy             string                     `json:"decidedBy,omitempty" field:"readonly" title:"Decided by"`
 	DecidedAt             time.Time                  `json:"decidedAt,omitzero" field:"readonly" title:"Decided at"`
@@ -81,16 +81,16 @@ type FunctionRun struct {
 	Model                 string                     `json:"model" field:"readonly"`
 	InputHash             string                     `json:"inputHash" field:"readonly" title:"Input hash"`
 	Release               string                     `json:"release,omitempty" field:"readonly"`
-	Metered               bool                       `json:"metered,omitempty" field:"readonly" title:"Model call measured"`
-	TokensReported        bool                       `json:"tokensReported,omitempty" field:"readonly" title:"Token counts reported"`
+	Metered               bool                       `json:"metered,omitempty" field:"readonly" title:"Measured call" help:"Model call measured"`
+	TokensReported        bool                       `json:"tokensReported,omitempty" field:"readonly" title:"Reported tokens" help:"Token counts reported"`
 	InputTokens           int                        `json:"inputTokens,omitempty" field:"readonly" title:"Input tokens"`
 	OutputTokens          int                        `json:"outputTokens,omitempty" field:"readonly" title:"Output tokens"`
-	CostReported          bool                       `json:"costReported,omitempty" field:"readonly" title:"USD cost reported"`
-	CostUSD               float64                    `json:"costUsd,omitempty" field:"readonly" title:"Reported USD cost"`
-	LatencyMillis         int64                      `json:"latencyMillis,omitempty" field:"readonly" title:"Model latency in milliseconds"`
+	CostReported          bool                       `json:"costReported,omitempty" field:"readonly" title:"Cost reported" help:"USD cost reported"`
+	CostUSD               float64                    `json:"costUsd,omitempty" field:"readonly" title:"Reported cost" help:"Reported USD cost"`
+	LatencyMillis         int64                      `json:"latencyMillis,omitempty" field:"readonly" title:"Latency (ms)" help:"Model latency in milliseconds"`
 	ServedModel           string                     `json:"servedModel,omitempty" field:"readonly" title:"Served model"`
 	Sources               []string                   `json:"sources" field:"readonly"`
-	Withheld              bool                       `json:"withheld,omitempty" field:"readonly" title:"Some sources cannot be read"`
+	Withheld              bool                       `json:"withheld,omitempty" field:"readonly" title:"Withheld sources" help:"Some sources cannot be read"`
 }
 
 const CodeType = "build.code"

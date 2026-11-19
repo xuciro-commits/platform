@@ -64,13 +64,13 @@ const (
 
 type Branch struct {
 	platform.Record
-	Name        string          `json:"name" field:"required" help:"Lower-case letters and digits" example:"q4pricing"`
-	Title       string          `json:"title" field:"required" title:"What people call it" example:"Q4 pricing rework"`
+	Name        string          `json:"name" field:"required" title:"API name" help:"Lower-case letters and digits" example:"q4pricing"`
+	Title       string          `json:"title" field:"required" title:"Name" help:"What people call it" example:"Q4 pricing rework"`
 	Description string          `json:"description,omitempty" type:"longtext" help:"What this branch changes and why"`
 	State       string          `json:"state" field:"readonly"`
 	Changes     []BranchChange  `json:"changes" type:"json" field:"readonly" title:"Change set"`
 	Proposal    *BranchProposal `json:"proposal,omitempty" type:"json" field:"readonly"`
-	Check       json.RawMessage `json:"check,omitempty" type:"json" field:"readonly" title:"Last staged check"`
+	Check       json.RawMessage `json:"check,omitempty" type:"json" field:"readonly" title:"Staged check" help:"Last staged check"`
 	Merge       *BranchMerge    `json:"merge,omitempty" type:"json" field:"readonly"`
 }
 

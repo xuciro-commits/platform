@@ -10,7 +10,7 @@ type LinkType struct {
 	platform.Record
 	Storage      string   `json:"storage,omitempty" choices:"reference,edge"`
 	Roles        []string `json:"roles,omitempty" field:"aside"`
-	DeletePolicy string   `json:"deletePolicy,omitempty" choices:"owner,restrict-active" title:"Relationship archive policy"`
+	DeletePolicy string   `json:"deletePolicy,omitempty" choices:"owner,restrict-active" title:"Archive policy" help:"Relationship archive policy"`
 	Cardinality  string   `json:"cardinality,omitempty" choices:"one-to-many,one-to-one,many-to-many" title:"Relationship cardinality"`
 	Name         string   `json:"name" field:"required,search"`
 	Title        string   `json:"title" field:"required,search"`
@@ -20,7 +20,7 @@ type LinkType struct {
 	Via          string   `json:"via,omitempty"`
 	Forward      string   `json:"forward" field:"required"`
 	Reverse      string   `json:"reverse" field:"required"`
-	Required     bool     `json:"required" title:"Parent relationship required"`
+	Required     bool     `json:"required" title:"Required parent" help:"Parent relationship required"`
 	State        string   `json:"state" field:"readonly" choices:"draft,published"`
 	Version      int      `json:"version,omitempty" field:"readonly"`
 	Published    string   `json:"published,omitempty" field:"readonly" type:"longtext"`

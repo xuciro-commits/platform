@@ -14,7 +14,7 @@ type SampleSetRecord struct {
 	Samples           []platform.SampleRecords `json:"samples" type:"json" field:"required"`
 	State             string                   `json:"state" field:"readonly" choices:"draft,published"`
 	DefinitionVersion int                      `json:"definitionVersion,omitempty" field:"readonly" title:"Definition version"`
-	Published         string                   `json:"published,omitempty" field:"readonly" type:"longtext" title:"What is installed"`
+	Published         string                   `json:"published,omitempty" field:"readonly" type:"longtext" title:"Installed" help:"What is installed"`
 	Versions          []string                 `json:"versions,omitempty" field:"readonly" title:"Published versions"`
 }
 

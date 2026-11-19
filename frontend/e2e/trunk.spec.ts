@@ -528,8 +528,8 @@ test("object definition: add a field, publish it and review a removal", async ({
   await publish.getByRole("button", { name: "Cancel" }).click();
 
   await page.getByRole("button", { name: "Add state", exact: true }).click();
-  await edit.getByRole("textbox", { name: /^Name/ }).fill("left");
-  await edit.getByRole("textbox", { name: /^What people call it/ }).fill("Left");
+  await edit.getByRole("textbox", { name: /^API name/ }).fill("left");
+  await edit.getByRole("textbox", { name: /^Name/ }).fill("Left");
   await edit.getByRole("button", { name: "Save", exact: true }).click();
   await expect(edit).toBeHidden();
   await page.getByRole("button", { name: "Publish", exact: true }).click();
@@ -568,8 +568,8 @@ test("object gate: create a type from zero, preview, publish and transition a re
   const createType = page.getByRole("dialog");
   await createType.getByRole("combobox", { name: /^Project/ }).click();
   await page.getByRole("option", { name: "Sales", exact: true }).click();
-  await createType.getByRole("textbox", { name: /^Name/ }).fill("gateitem");
-  await createType.getByRole("textbox", { name: /^What people call it/ }).fill("Gate item");
+  await createType.getByRole("textbox", { name: /^API name/ }).fill("gateitem");
+  await createType.getByRole("textbox", { name: /^Name/ }).fill("Gate item");
   await createType.getByRole("button", { name: "Create", exact: true }).click();
   await expect(page.getByRole("heading", { level: 1, name: "Gate item", exact: true })).toBeVisible();
 
@@ -585,8 +585,8 @@ test("object gate: create a type from zero, preview, publish and transition a re
   for (const [name, title] of [["draft", "Draft"], ["active", "Active"]] as const) {
     await page.getByRole("button", { name: "Add state", exact: true }).click();
     const state = page.getByRole("dialog");
-    await state.getByRole("textbox", { name: /^Name/ }).fill(name);
-    await state.getByRole("textbox", { name: /^What people call it/ }).fill(title);
+    await state.getByRole("textbox", { name: /^API name/ }).fill(name);
+    await state.getByRole("textbox", { name: /^Name/ }).fill(title);
     await state.getByRole("button", { name: "Save", exact: true }).click();
   }
   await page.getByRole("button", { name: "Create transition", exact: true }).click();
@@ -867,8 +867,8 @@ test("views: a published type opens with its declared default view", async ({ pa
   const rows = page.getByRole("table").locator("tbody tr").filter({ has: page.getByRole("link") });
   await expect(rows.first()).toContainText("Atlas Castings");
   await expect(rows.filter({ hasText: "Alder Medical Devices" })).toHaveCount(1);
-  await expect(page.getByRole("row", { name: /^Collapse group europe/ })).toBeVisible();
-  await expect(page.getByRole("row", { name: /^Collapse group northamerica/ })).toBeVisible();
+  await expect(page.getByRole("row", { name: /^Collapse group Europe/ })).toBeVisible();
+  await expect(page.getByRole("row", { name: /^Collapse group North America/ })).toBeVisible();
 });
 
 test("files: an attachment field stores a media set item on the record", async ({ page }) => {

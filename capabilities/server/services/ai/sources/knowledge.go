@@ -25,8 +25,8 @@ type Document struct {
 	platform.Record
 	Title  string   `json:"title" field:"required,search"`
 	Text   string   `json:"text" field:"required" type:"longtext"`
-	Source string   `json:"source,omitempty" title:"Where it comes from"`
-	Apps   []string `json:"apps,omitempty" title:"Read by members of"`
+	Source string   `json:"source,omitempty" title:"Source" help:"Where it comes from"`
+	Apps   []string `json:"apps,omitempty" title:"Reader apps" help:"Read by members of"`
 }
 
 type Term = platform.KnowledgeTerm

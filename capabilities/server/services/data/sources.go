@@ -362,18 +362,18 @@ type Source struct {
 	Connection        string        `json:"connection,omitempty" ref:"build.connection"`
 	Profile           string        `json:"profile,omitempty" choices:"json,csv,odata,table"`
 	URL               string        `json:"url,omitempty" title:"URL"`
-	Entity            string        `json:"entity,omitempty" title:"Entity or table"`
+	Entity            string        `json:"entity,omitempty" title:"Source entity" help:"Entity or table"`
 	Filter            string        `json:"filter,omitempty" title:"Filter" help:"OData $filter, or a WHERE fragment of simple comparisons"`
 	Since             string        `json:"since,omitempty" title:"Incremental column" help:"A timestamp or sequence property; each pull reads rows past the cursor"`
 	Cursor            string        `json:"cursor,omitempty" field:"readonly"`
-	AllowPrivate      bool          `json:"allowPrivate,omitempty" title:"Allow private address" help:"Also accept http and private networks, for on-premise systems"`
+	AllowPrivate      bool          `json:"allowPrivate,omitempty" title:"Private address" help:"Allow private address. Also accept http and private networks, for on-premise systems"`
 	Header            string        `json:"header,omitempty" title:"Request header" help:"One header such as Authorization: Bearer …"`
 	Path              string        `json:"path,omitempty" title:"Rows at" help:"Dotted path to the array, such as data.items; empty when the answer is the array"`
 	Dataset           string        `json:"dataset,omitempty" ref:"build.dataset" title:"Target dataset"`
 	Object            string        `json:"object,omitempty" title:"Target object"`
-	Key               string        `json:"key,omitempty" title:"Row id field"`
+	Key               string        `json:"key,omitempty" title:"Row ID" help:"Row id field"`
 	Mapping           []SourceField `json:"mapping,omitempty" title:"Field mapping"`
-	Stream            bool          `json:"stream,omitempty" title:"Continuous Flow source"`
+	Stream            bool          `json:"stream,omitempty" title:"Continuous source" help:"Continuous Flow source"`
 	Every             string        `json:"every,omitempty" title:"Pull every" help:"A period such as 15m, 1h or 24h; empty: only when asked"`
 	State             string        `json:"state" field:"readonly"`
 	Publisher         string        `json:"publisher,omitempty" field:"readonly"`
@@ -383,7 +383,7 @@ type Source struct {
 	Requested         bool          `json:"requested,omitempty" field:"readonly" title:"Pull requested"`
 	Last              *SourcePull   `json:"last,omitempty" field:"readonly" type:"json" title:"Last pull"`
 	DefinitionVersion int           `json:"definitionVersion,omitempty" field:"readonly" title:"Version"`
-	Published         string        `json:"published,omitempty" field:"readonly" type:"longtext" title:"What is installed"`
+	Published         string        `json:"published,omitempty" field:"readonly" type:"longtext" title:"Installed" help:"What is installed"`
 	Versions          []string      `json:"definitionVersions,omitempty" field:"readonly" type:"json" title:"Published versions"`
 }
 

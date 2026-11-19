@@ -44,7 +44,7 @@ type ProjectMember struct {
 type BuildProject struct {
 	Record
 	Approvals int             `json:"approvals,omitempty"`
-	Title     string          `json:"title" field:"required,search" title:"What people call it" example:"Spring rollout"`
+	Title     string          `json:"title" field:"required,search" title:"Name" help:"What people call it" example:"Spring rollout"`
 	Members   []ProjectMember `json:"members,omitempty" title:"Members"`
 }
 

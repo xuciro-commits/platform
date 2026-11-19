@@ -10,9 +10,9 @@ import (
 
 type Object struct {
 	platform.Record
-	Name              string                       `json:"name" field:"required,search" help:"Its name in the platform, lower-case letters and digits" example:"visit"`
-	Title             string                       `json:"title" field:"required,search" title:"What people call it" example:"Visit"`
-	Plural            string                       `json:"plural,omitempty" title:"What people call several" example:"Visits"`
+	Name              string                       `json:"name" field:"required,search" title:"API name" help:"Its name in the platform, lower-case letters and digits" example:"visit"`
+	Title             string                       `json:"title" field:"required,search" title:"Name" help:"What people call it" example:"Visit"`
+	Plural            string                       `json:"plural,omitempty" title:"Plural" help:"What people call several" example:"Visits"`
 	Icon              string                       `json:"icon,omitempty" title:"Icon" help:"An icon name, lower-case with hyphens" example:"calendar"`
 	Color             string                       `json:"color,omitempty" title:"Color" choices:"neutral,info,success,warning,danger,purple,pink,teal,orange"`
 	Display           string                       `json:"display,omitempty" title:"Title field" help:"The text field that names one record; empty: the first searchable field" example:"name"`
@@ -24,12 +24,12 @@ type Object struct {
 	Protocols         []protocol.ProtocolBinding   `json:"protocols,omitempty" type:"json" field:"aside" title:"Protocol bindings"`
 	Reads             *platform.RuleReadSpec       `json:"reads,omitempty" type:"json" field:"aside"`
 	Constraints       []platform.Constraint        `json:"constraints,omitempty" type:"json" field:"aside" title:"Business constraints"`
-	Sets              []platform.RecordSet         `json:"sets,omitempty" type:"json" field:"aside" title:"Declared record sets"`
+	Sets              []platform.RecordSet         `json:"sets,omitempty" type:"json" field:"aside" title:"Record sets" help:"Declared record sets"`
 	DispatchCommands  []platform.DispatchCommand   `json:"dispatchCommands,omitempty" type:"json" field:"aside" title:"Device commands"`
 	CreateTransaction *platform.BusinessTxn        `json:"createTransaction,omitempty" type:"json" field:"aside" title:"Creation transaction"`
 	Versioning        *platform.Versioning         `json:"versioning,omitempty" type:"json" field:"aside" title:"Business versioning"`
-	VersionPins       []platform.VersionPinBinding `json:"versionPins,omitempty" type:"json" field:"aside" title:"Pinned business versions"`
-	EnterpriseUse     *platform.Expr               `json:"enterpriseUse,omitempty" type:"json" field:"aside" title:"Current enterprise use"`
+	VersionPins       []platform.VersionPinBinding `json:"versionPins,omitempty" type:"json" field:"aside" title:"Version pins" help:"Pinned business versions"`
+	EnterpriseUse     *platform.Expr               `json:"enterpriseUse,omitempty" type:"json" field:"aside" title:"Enterprise use" help:"Current enterprise use"`
 	States            []State                      `json:"states,omitempty" rail:"true" title:"States"`
 	ActionTypes       []platform.AssetBinding      `json:"actionTypes,omitempty" rail:"true" type:"json" title:"Action types"`
 	Actions           []Action                     `json:"actions,omitempty" field:"aside" title:"Actions"`
@@ -41,12 +41,12 @@ type Object struct {
 	SchemaVersions    []platform.SchemaVersion     `json:"schemaVersions,omitempty" field:"readonly,aside" type:"json" title:"Schema versions" help:"Retained content versions and compatible schema families captured at publication"`
 	State             string                       `json:"state" field:"readonly" choices:"draft,published"`
 	Installed         string                       `json:"installed,omitempty" field:"readonly" title:"Installed as" help:"The type records of it are stored under"`
-	Published         string                       `json:"published,omitempty" field:"readonly" type:"longtext" title:"What is installed"`
+	Published         string                       `json:"published,omitempty" field:"readonly" type:"longtext" title:"Installed" help:"What is installed"`
 }
 
 type Field struct {
-	AIInput     *bool                  `json:"aiInput,omitempty" title:"Allow AI context"`
-	SourceType  string                 `json:"sourceType,omitempty" choices:"record,user-input,external-input,generated" title:"Text source type"`
+	AIInput     *bool                  `json:"aiInput,omitempty" title:"AI context" help:"Allow AI context"`
+	SourceType  string                 `json:"sourceType,omitempty" choices:"record,user-input,external-input,generated" title:"Text source" help:"Text source type"`
 	Property    *platform.AssetBinding `json:"property,omitempty" type:"json" field:"aside"`
 	ValueType   *platform.AssetBinding `json:"valueType,omitempty" type:"json" field:"aside"`
 	Format      []platform.FormatRule  `json:"format,omitempty" type:"json" field:"aside"`
@@ -57,13 +57,13 @@ type Field struct {
 	Type        string                 `json:"type" field:"required" choices:"text,longtext,integer,decimal,money,date,datetime,boolean,choice,reference,member,attachment" example:"date"`
 	Choices     string                 `json:"choices,omitempty" help:"For a choice: the values, comma-separated" example:"open,done"`
 	Ref         string                 `json:"ref,omitempty" title:"Refers to" help:"For a reference: the object it points at" example:"core.partner"`
-	Stereotype  string                 `json:"stereotype,omitempty" title:"Enterprise element type"`
-	Stereotypes []string               `json:"stereotypes,omitempty" title:"Enterprise element types"`
-	Inverse     string                 `json:"inverse,omitempty" title:"Seen from there as" help:"For a reference: what the referenced record calls these records" example:"visits"`
+	Stereotype  string                 `json:"stereotype,omitempty" title:"Element type" help:"Enterprise element type"`
+	Stereotypes []string               `json:"stereotypes,omitempty" title:"Element types" help:"Enterprise element types"`
+	Inverse     string                 `json:"inverse,omitempty" title:"Inverse name" help:"Seen from there as. For a reference: what the referenced record calls these records" example:"visits"`
 	Required    bool                   `json:"required,omitempty"`
 	Search      bool                   `json:"search,omitempty" title:"Searchable"`
 	ReadOnly    bool                   `json:"readOnly,omitempty" title:"Read only"`
-	AliasOf     string                 `json:"aliasOf,omitempty" title:"Read alias of" help:"The retained old name reads this field; it cannot be written directly"`
+	AliasOf     string                 `json:"aliasOf,omitempty" title:"Read alias" help:"Read alias of. The retained old name reads this field; it cannot be written directly"`
 	When        string                 `json:"when,omitempty" title:"Only when" help:"field=value,value — another choice or boolean field of this object and the values that make this field apply" example:"kind=refund,return"`
 	FormulaExpr *platform.Expr         `json:"formulaExpr,omitempty" type:"json" field:"aside"`
 	Formula     string                 `json:"formula,omitempty" help:"For a number: price * qty, (ordered - received), …" example:"price * qty"`
@@ -72,35 +72,35 @@ type Field struct {
 }
 
 type State struct {
-	Name        string `json:"name" field:"required" help:"Lower-case letters and digits" example:"found"`
-	Title       string `json:"title" field:"required" title:"What people call it" example:"Found"`
+	Name        string `json:"name" field:"required" title:"API name" help:"Lower-case letters and digits" example:"found"`
+	Title       string `json:"title" field:"required" title:"Name" help:"What people call it" example:"Found"`
 	Tone        string `json:"tone,omitempty" choices:"info,success,warning,danger,neutral"`
 	Description string `json:"description,omitempty" help:"What a record in this state means"`
 }
 
 type Action struct {
-	ConfirmationOnly bool                       `json:"confirmationOnly,omitempty" title:"Require original confirmation receipt"`
+	ConfirmationOnly bool                       `json:"confirmationOnly,omitempty" title:"Confirmation receipt" help:"Require original confirmation receipt"`
 	Adoption         *platform.ProposalAdoption `json:"adoption,omitempty" type:"json" field:"aside"`
-	Name             string                     `json:"name" field:"required" help:"Lower-case letters and digits" example:"return"`
-	Title            string                     `json:"title" field:"required" title:"What people call it" example:"Hand it back"`
+	Name             string                     `json:"name" field:"required" title:"API name" help:"Lower-case letters and digits" example:"return"`
+	Title            string                     `json:"title" field:"required" title:"Name" help:"What people call it" example:"Hand it back"`
 	Description      string                     `json:"description,omitempty" help:"What it does, for people and agents"`
 	From             []string                   `json:"from" title:"Taken from" help:"The states it takes a record from"`
-	Inputs           []Input                    `json:"inputs,omitempty" title:"What people give"`
+	Inputs           []Input                    `json:"inputs,omitempty" title:"Inputs" help:"What people give"`
 	Transaction      *platform.BusinessTxn      `json:"transaction,omitempty"`
 	Roles            []string                   `json:"roles,omitempty" title:"Taken by"`
 	Approval         *ActionApproval            `json:"approval,omitempty" title:"Approval"`
 }
 
 type ActionApproval struct {
-	Pending  string          `json:"pending" title:"While it waits"`
+	Pending  string          `json:"pending" title:"Pending state" help:"While it waits"`
 	Rejected string          `json:"rejected,omitempty" title:"If rejected"`
 	Levels   []ApproverLevel `json:"levels" title:"Approver levels"`
 }
 
 type ApproverLevel struct {
-	Title string `json:"title" title:"What this level is called"`
+	Title string `json:"title" title:"Level name" help:"What this level is called"`
 	Role  string `json:"role" title:"Approver role"`
-	All   bool   `json:"all,omitempty" title:"Everyone in the role must approve"`
+	All   bool   `json:"all,omitempty" title:"Unanimous approval" help:"Everyone in the role must approve"`
 }
 
 type Input struct {
@@ -108,8 +108,8 @@ type Input struct {
 	Range       *platform.DateRange        `json:"range,omitempty"`
 	Group       string                     `json:"group,omitempty"`
 	Ref         string                     `json:"ref,omitempty" title:"Reference object"`
-	Stereotype  string                     `json:"stereotype,omitempty" title:"Enterprise element type"`
-	Stereotypes []string                   `json:"stereotypes,omitempty" title:"Enterprise element types"`
+	Stereotype  string                     `json:"stereotype,omitempty" title:"Element type" help:"Enterprise element type"`
+	Stereotypes []string                   `json:"stereotypes,omitempty" title:"Element types" help:"Enterprise element types"`
 	MinLength   *int                       `json:"minLength,omitempty" title:"Minimum length"`
 	Name        string                     `json:"name" field:"required" example:"to"`
 	Title       string                     `json:"title" field:"required" title:"Label" example:"Handed to"`

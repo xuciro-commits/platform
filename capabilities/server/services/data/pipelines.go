@@ -353,7 +353,7 @@ type Pipeline struct {
 	Expectations      []protocol.TransformExpectation `json:"expectations,omitempty" type:"json"`
 	OutputDataset     string                          `json:"outputDataset,omitempty" ref:"build.dataset" title:"Output dataset"`
 	OutputObject      string                          `json:"outputObject,omitempty" title:"Output object"`
-	Key               string                          `json:"key,omitempty" title:"Record id column"`
+	Key               string                          `json:"key,omitempty" title:"ID column" help:"Record id column"`
 	Compartments      []string                        `json:"compartments,omitempty" field:"readonly" title:"Compartment markings"`
 	Marking           string                          `json:"marking,omitempty" field:"readonly" title:"Marking"`
 	OutputEnterprise  *EnterpriseTarget               `json:"outputEnterprise,omitempty" type:"json" title:"Enterprise model"`
@@ -364,7 +364,7 @@ type Pipeline struct {
 	Requested         bool                            `json:"requested,omitempty" field:"readonly"`
 	Last              *PipelineRun                    `json:"last,omitempty" field:"readonly" type:"json" title:"Last run"`
 	DefinitionVersion int                             `json:"definitionVersion,omitempty" field:"readonly" title:"Version"`
-	Published         string                          `json:"published,omitempty" field:"readonly" type:"longtext" title:"What is installed"`
+	Published         string                          `json:"published,omitempty" field:"readonly" type:"longtext" title:"Installed" help:"What is installed"`
 	Versions          []string                        `json:"definitionVersions,omitempty" field:"readonly" type:"json" title:"Published versions"`
 }
 

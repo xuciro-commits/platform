@@ -24,13 +24,13 @@ type Process struct {
 	Object      string                  `json:"object,omitempty" title:"Source object"`
 	Trigger     *platform.Expr          `json:"trigger,omitempty" type:"json"`
 	Repeat      bool                    `json:"repeat,omitempty"`
-	When        string                  `json:"when,omitempty" title:"Record start state"`
+	When        string                  `json:"when,omitempty" title:"Start state" help:"Record start state"`
 	Manual      bool                    `json:"manual,omitempty" title:"Manual start"`
 	Every       string                  `json:"every,omitempty" title:"Repeat every" help:"A period such as 15m, 1h or 24h; empty: not scheduled"`
 	Scheduler   string                  `json:"scheduler,omitempty" field:"readonly" title:"Runs as"`
 	Input       json.RawMessage         `json:"input,omitempty" type:"json" title:"Default input"`
 	InputSchema *platform.ValueSchema   `json:"inputSchema,omitempty" type:"json" title:"Input schema"`
-	Continuous  *platform.Continuous    `json:"continuous,omitempty" type:"json" title:"Continuous source intake"`
+	Continuous  *platform.Continuous    `json:"continuous,omitempty" type:"json" title:"Continuous intake" help:"Continuous source intake"`
 	Steps       []ProcessStep           `json:"steps" field:"aside"`
 	Lanes       []ProcessLane           `json:"lanes,omitempty" field:"aside" title:"Lanes"`
 	Layout      map[string]NodePosition `json:"layout,omitempty" type:"json" title:"Canvas layout"`
@@ -69,7 +69,7 @@ type ProcessStep struct {
 	Target         *platform.Binding           `json:"target,omitempty" type:"json"`
 	Condition      *platform.Expr              `json:"condition,omitempty" type:"json"`
 	Collection     *platform.Binding           `json:"collection,omitempty" type:"json"`
-	WaitUntil      *platform.Binding           `json:"waitUntil,omitempty" type:"json" title:"Wait until timestamp"`
+	WaitUntil      *platform.Binding           `json:"waitUntil,omitempty" type:"json" title:"Wait until" help:"Wait until timestamp"`
 	Cases          map[string]string           `json:"cases,omitempty" type:"json"`
 	Branches       []string                    `json:"branches,omitempty"`
 	Next           string                      `json:"next,omitempty"`
@@ -80,7 +80,7 @@ type ProcessStep struct {
 	Protocol       string                      `json:"protocol,omitempty"`
 	App            string                      `json:"app,omitempty"`
 	Query          string                      `json:"query,omitempty"`
-	QueryVersion   int                         `json:"queryVersion,omitempty" title:"Retained query version"`
+	QueryVersion   int                         `json:"queryVersion,omitempty" title:"Query version" help:"Retained query version"`
 	Function       *platform.FunctionRef       `json:"function,omitempty" type:"json"`
 	Operation      *OperationRef               `json:"operation,omitempty" type:"json"`
 	Body           string                      `json:"body,omitempty"`

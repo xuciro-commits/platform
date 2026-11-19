@@ -10,7 +10,7 @@ type KnowledgeTerm struct {
 	Meaning  string   `json:"meaning" field:"required" type:"longtext" help:"What it means in this organisation"`
 	Synonyms string   `json:"synonyms,omitempty" help:"Other words for it, comma-separated"`
 	RefersTo string   `json:"refersTo,omitempty" title:"Refers to" help:"The declaration it names: an entity type, <type>.<field> or an action" example:"core.material"`
-	Apps     []string `json:"apps,omitempty" title:"Read by members of"`
+	Apps     []string `json:"apps,omitempty" title:"Reader apps" help:"Read by members of"`
 }
 
 type KnowledgeHost interface {

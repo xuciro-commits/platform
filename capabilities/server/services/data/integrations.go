@@ -426,14 +426,14 @@ type Connection struct {
 	Kind              string           `json:"kind" field:"required" choices:"http,odata,postgres" source:"record"`
 	Address           string           `json:"address" help:"Service root URL, or postgres://user@host:5432/db?sslmode=require without the password" source:"record"`
 	Secret            string           `json:"secret,omitempty" title:"Secret name" help:"The credential's name in the host's secret store, never the credential" source:"record"`
-	AllowPrivate      bool             `json:"allowPrivate,omitempty" title:"Allow private address" help:"Also accept http and private networks, for on-premise systems"`
+	AllowPrivate      bool             `json:"allowPrivate,omitempty" title:"Private address" help:"Allow private address. Also accept http and private networks, for on-premise systems"`
 	Compartments      []string         `json:"compartments,omitempty" title:"Compartment markings"`
 	Marking           string           `json:"marking,omitempty" choices:"internal,confidential,restricted" title:"Marking" help:"What is read through it is at least this: internal, confidential or restricted"`
 	State             string           `json:"state" field:"readonly" source:"record"`
 	Requested         bool             `json:"requested,omitempty" field:"readonly" title:"Check requested"`
 	Last              *ConnectionCheck `json:"last,omitempty" field:"readonly" type:"json" title:"Last check"`
 	DefinitionVersion int              `json:"definitionVersion,omitempty" field:"readonly" title:"Version"`
-	Published         string           `json:"published,omitempty" field:"readonly" type:"longtext" title:"What is installed" source:"record"`
+	Published         string           `json:"published,omitempty" field:"readonly" type:"longtext" title:"Installed" help:"What is installed" source:"record"`
 	Versions          []string         `json:"definitionVersions,omitempty" field:"readonly" type:"json" title:"Published versions"`
 }
 
@@ -496,7 +496,7 @@ type Dataset struct {
 	Last              *DatasetLoad        `json:"last,omitempty" field:"readonly" type:"json" title:"Latest load"`
 	Projections       []DatasetProjection `json:"projections,omitempty" field:"readonly" type:"json" title:"Projections"`
 	DefinitionVersion int                 `json:"definitionVersion,omitempty" field:"readonly" title:"Version"`
-	Published         string              `json:"published,omitempty" field:"readonly" type:"longtext" title:"What is installed"`
+	Published         string              `json:"published,omitempty" field:"readonly" type:"longtext" title:"Installed" help:"What is installed"`
 	Versions          []string            `json:"definitionVersions,omitempty" field:"readonly" type:"json" title:"Published versions"`
 }
 

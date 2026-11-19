@@ -96,8 +96,22 @@
     ["build.branch.propose", "build.branch", "SALES-REVIEW", {"reviewers": ["builder-1"], "note": "Review the default unit used in sales follow-up reporting."}]
   ],
   "words": {
-    "en": { "qualifying": "Qualifying", "proposal": "Proposal", "negotiation": "Negotiation", "won": "Won", "lost": "Lost" },
-    "zh-CN": { "qualifying": "资格确认", "proposal": "方案", "negotiation": "谈判", "won": "赢单", "lost": "丢单" }
+    "en": {
+      "europe": "Europe", "northamerica": "North America",
+      "manufacturing": "Manufacturing", "retail": "Retail", "logistics": "Logistics", "software": "Software", "healthcare": "Healthcare",
+      "strategic": "Strategic", "key": "Key", "standard": "Standard",
+      "qualifying": "Qualifying", "proposal": "Proposal", "negotiation": "Negotiation", "won": "Won", "lost": "Lost",
+      "sponsor": "Sponsor", "buyer": "Buyer", "user": "User",
+      "active": "Active", "open": "Open", "draft": "Draft", "planned": "Planned"
+    },
+    "zh-CN": {
+      "europe": "欧洲", "northamerica": "北美",
+      "manufacturing": "制造业", "retail": "零售", "logistics": "物流", "software": "软件", "healthcare": "医疗健康",
+      "strategic": "战略", "key": "重点", "standard": "标准",
+      "qualifying": "资格确认", "proposal": "方案", "negotiation": "谈判", "won": "赢单", "lost": "丢单",
+      "sponsor": "发起人", "buyer": "采购方", "user": "使用者",
+      "active": "启用", "open": "进行中", "draft": "草稿", "planned": "已计划"
+    }
   },
   "types": [
     {

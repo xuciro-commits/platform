@@ -255,14 +255,14 @@ type FlowInstance struct {
 	Key             string                     `json:"key" field:"readonly,search"`
 	Subject         string                     `json:"subject,omitempty" field:"readonly"`
 	State           string                     `json:"state" field:"readonly" choices:"running,waiting,done,compensating,compensated,canceled,stuck"`
-	OnBehalf        string                     `json:"onBehalf,omitempty" field:"readonly" title:"On behalf of"`
+	OnBehalf        string                     `json:"onBehalf,omitempty" field:"readonly" title:"Represented member" help:"On behalf of"`
 	Data            string                     `json:"data,omitempty" field:"readonly" type:"longtext" source:"external-input"`
 	Outputs         map[string]json.RawMessage `json:"outputs,omitempty" field:"readonly" type:"json"`
 	Sources         []string                   `json:"sources,omitempty" field:"readonly"`
 	Withheld        bool                       `json:"withheld,omitempty" field:"readonly"`
 	Answer          string                     `json:"answer,omitempty" field:"readonly"`
 	Parent          string                     `json:"parent,omitempty" field:"readonly"`
-	Tokens          []FlowToken                `json:"tokens" field:"readonly" title:"Where it stands"`
+	Tokens          []FlowToken                `json:"tokens" field:"readonly" title:"Execution position" help:"Where it stands"`
 	Batch           *FlowBatchFrame            `json:"batch,omitempty" field:"readonly" type:"json"`
 	ArtifactCleanup []FlowStateArtifact        `json:"artifactCleanup,omitempty" field:"readonly" type:"json"`
 	CleanupPending  bool                       `json:"cleanupPending,omitempty" field:"readonly"`

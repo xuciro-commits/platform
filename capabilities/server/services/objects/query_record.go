@@ -15,7 +15,7 @@ type Query struct {
 	Description     string              `json:"description" field:"required" type:"longtext"`
 	Object          string              `json:"object,omitempty" title:"Source object"`
 	Interface       string              `json:"interface,omitempty" title:"Source interface"`
-	InterfaceShape  *platform.Interface `json:"interfaceShape,omitempty" field:"readonly,aside" type:"json" title:"Published interface shape"`
+	InterfaceShape  *platform.Interface `json:"interfaceShape,omitempty" field:"readonly,aside" type:"json" title:"Published interface" help:"Published interface shape"`
 	Implementations []string            `json:"implementations,omitempty" field:"readonly,aside" title:"Published implementations"`
 	By              string              `json:"by,omitempty" title:"Parent reference"`
 	Domain          json.RawMessage     `json:"domain,omitempty" field:"aside" type:"json"`
@@ -24,7 +24,7 @@ type Query struct {
 	Limit           int                 `json:"limit" field:"required"`
 	State           string              `json:"state" field:"readonly" choices:"draft,published"`
 	Version         int                 `json:"version,omitempty" field:"readonly"`
-	Published       string              `json:"published,omitempty" field:"readonly" type:"longtext" title:"What is installed"`
+	Published       string              `json:"published,omitempty" field:"readonly" type:"longtext" title:"Installed" help:"What is installed"`
 	Versions        []string            `json:"versions,omitempty" field:"readonly" title:"Published versions"`
 }
 

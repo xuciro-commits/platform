@@ -15,13 +15,13 @@ type Page struct {
 	InputSchema     platform.PageInputSchema     `json:"inputSchema,omitzero" type:"json"`
 	ScopeVisibility platform.PageScopeVisibility `json:"scopeVisibility,omitzero" type:"json"`
 	WidgetSpec      platform.PageWidgetSpec      `json:"widgetSpec,omitzero" type:"json"`
-	Name            string                       `json:"name" field:"required,search" help:"Its name in the platform, lower-case letters and digits" example:"visits"`
-	Title           string                       `json:"title" field:"required,search" title:"What people call it" example:"Visits"`
+	Name            string                       `json:"name" field:"required,search" title:"API name" help:"Its name in the platform, lower-case letters and digits" example:"visits"`
+	Title           string                       `json:"title" field:"required,search" title:"Name" help:"What people call it" example:"Visits"`
 	Description     string                       `json:"description,omitempty" type:"longtext" help:"What people do on this page"`
-	Object          string                       `json:"object" field:"required" title:"Object it shows" help:"An object this tenant has: one it defined, or an app's own" example:"build.visits"`
+	Object          string                       `json:"object" field:"required" title:"Source object" help:"Object it shows. An object this tenant has: one it defined, or an app's own" example:"build.visits"`
 	State           string                       `json:"state" field:"readonly" choices:"draft,published"`
-	Published       string                       `json:"published,omitempty" field:"readonly" type:"longtext" title:"What is installed"`
-	Versions        []string                     `json:"versions,omitempty" field:"readonly" type:"lines" title:"Published page contents"`
+	Published       string                       `json:"published,omitempty" field:"readonly" type:"longtext" title:"Installed" help:"What is installed"`
+	Versions        []string                     `json:"versions,omitempty" field:"readonly" type:"lines" title:"Published contents" help:"Published page contents"`
 }
 
 const (
@@ -40,8 +40,8 @@ type Application struct {
 	Entry        string                                `json:"entry,omitempty" field:"aside"`
 	Replacements []platform.ApplicationPageReplacement `json:"replacements,omitempty" field:"aside" type:"json"`
 	Variables    map[string]platform.PageVariable      `json:"variables,omitempty" field:"aside" type:"json" title:"Application variables"`
-	Name         string                                `json:"name" field:"required,search" help:"Its name in the platform, lower-case letters and digits" example:"frontdesk"`
-	Title        string                                `json:"title" field:"required,search" title:"What people call it" example:"Front desk"`
+	Name         string                                `json:"name" field:"required,search" title:"API name" help:"Its name in the platform, lower-case letters and digits" example:"frontdesk"`
+	Title        string                                `json:"title" field:"required,search" title:"Name" help:"What people call it" example:"Front desk"`
 	Description  string                                `json:"description,omitempty" type:"longtext" help:"What people do in it"`
 	Icon         string                                `json:"icon,omitempty" help:"How it is drawn in the launcher"`
 	Pages        []string                              `json:"pages" title:"Pages" help:"The pages it holds, by their name, in the order people see them"`
@@ -49,7 +49,7 @@ type Application struct {
 	Concepts     []platform.AppConcept                 `json:"concepts,omitempty" field:"aside" type:"json" title:"Business concepts" help:"Named studio groups; grouping changes navigation only"`
 	Groups       []Group                               `json:"groups,omitempty" title:"Groups" help:"Headings in its navigation, each over some of its pages in their order"`
 	State        string                                `json:"state" field:"readonly" choices:"draft,published,withdrawn"`
-	Published    string                                `json:"published,omitempty" field:"readonly" type:"longtext" title:"What is installed"`
+	Published    string                                `json:"published,omitempty" field:"readonly" type:"longtext" title:"Installed" help:"What is installed"`
 }
 
 type Group struct {

@@ -90,8 +90,8 @@ type TestStep struct {
 	Action         string           `json:"action"`
 	Payload        string           `json:"payload"`
 	Expect         string           `json:"expect" title:"Expected outcome"`
-	As             string           `json:"as,omitempty" title:"Step member ID (empty: plan member)"`
-	AdvanceSeconds int              `json:"advanceSeconds,omitempty" title:"Advance clock (seconds)"`
+	As             string           `json:"as,omitempty" title:"Step member" help:"Step member ID (empty: plan member)"`
+	AdvanceSeconds int              `json:"advanceSeconds,omitempty" title:"Clock advance" help:"Advance clock (seconds)"`
 	Flow           string           `json:"flow,omitempty"`
 	Step           string           `json:"step,omitempty"`
 	Answer         string           `json:"answer,omitempty"`
