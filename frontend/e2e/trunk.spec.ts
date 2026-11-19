@@ -857,7 +857,8 @@ test("views: a published type opens with its declared default view", async ({ pa
   });
   await signIn(page);
   await page.goto("/ontology/objects/build.customer");
-  await expect(page.getByRole("columnheader", { name: "Region", exact: true })).toBeVisible();
+  await expect(page.getByRole("columnheader", { name: "Company", exact: true })).toBeVisible();
+  await expect(page.getByRole("columnheader", { name: "Region", exact: true })).toHaveCount(0);
   await page.getByRole("button", { name: "View options", exact: true }).click();
   await page.getByRole("button", { name: "Grouping", exact: true }).click();
   await expect(page.getByRole("radio", { name: "Region", exact: true })).toBeChecked();
@@ -866,8 +867,8 @@ test("views: a published type opens with its declared default view", async ({ pa
   const rows = page.getByRole("table").locator("tbody tr").filter({ has: page.getByRole("link") });
   await expect(rows.first()).toContainText("Atlas Castings");
   await expect(rows.filter({ hasText: "Alder Medical Devices" })).toHaveCount(1);
-  await expect(page.getByRole("table").getByText("europe", { exact: true }).first()).toBeVisible();
-  await expect(page.getByRole("table").getByText("northamerica", { exact: true }).first()).toBeVisible();
+  await expect(page.getByRole("row", { name: /^Collapse group europe/ })).toBeVisible();
+  await expect(page.getByRole("row", { name: /^Collapse group northamerica/ })).toBeVisible();
 });
 
 test("files: an attachment field stores a media set item on the record", async ({ page }) => {

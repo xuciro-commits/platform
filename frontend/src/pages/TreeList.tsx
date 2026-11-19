@@ -2,7 +2,7 @@ import { Banner } from "@astryxdesign/core/Banner";
 import { EmptyState } from "@astryxdesign/core/EmptyState";
 import { Icon } from "@astryxdesign/core/Icon";
 import { IconButton } from "@astryxdesign/core/IconButton";
-import { HStack, Layout, LayoutContent, LayoutHeader, StackItem, VStack } from "@astryxdesign/core/Layout";
+import { HStack, Layout, LayoutContent, LayoutHeader, VStack } from "@astryxdesign/core/Layout";
 import { ScrollableArea } from "@astryxdesign/core/ScrollableArea";
 import { Section } from "@astryxdesign/core/Section";
 import { SegmentedControl, SegmentedControlItem } from "@astryxdesign/core/SegmentedControl";
@@ -11,7 +11,7 @@ import { Skeleton } from "@astryxdesign/core/Skeleton";
 import { StatusDot } from "@astryxdesign/core/StatusDot";
 import { Table, pixel, proportional, useTableSortable, useTableSortableState, useTableTreeData, useTableTreeState } from "@astryxdesign/core/Table";
 import type { TableColumn, TablePlugin } from "@astryxdesign/core/Table";
-import { Heading, Text } from "@astryxdesign/core/Text";
+import { Text } from "@astryxdesign/core/Text";
 import { TextInput } from "@astryxdesign/core/TextInput";
 import { Timestamp } from "@astryxdesign/core/Timestamp";
 import { colorVars } from "@astryxdesign/core/theme/tokens.stylex";
@@ -20,6 +20,7 @@ import * as stylex from "@stylexjs/stylex";
 import { type KeyboardEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { reread, useRead } from "../host";
 import { t } from "../i18n";
+import { PageTitle, useGutter } from "./frame";
 import type { Dot } from "./Transitions";
 
 export type TreeColumn<Row> = {
@@ -178,6 +179,7 @@ export function treeList<Answer, Row>(definition: TreeDefinition<Answer, Row>) {
     type Entry = Item<Row>;
     const read = useRead<Answer>(definition.read);
     const views = read.status === "ready" ? definition.views?.(read.data) ?? [] : [];
+    const gutter = useGutter();
     const [chosen, setChosen] = useState("");
     const view = views.some((option) => option.value === chosen) ? chosen : views[0]?.value ?? "";
     const [query, setQuery] = useState("");
@@ -256,13 +258,10 @@ export function treeList<Answer, Row>(definition: TreeDefinition<Answer, Row>) {
         padding={0}
         xstyle={styles.surface}
         header={
-          <LayoutHeader hasDivider label={t("List filters and actions")}>
-            <Section variant="transparent" padding={4}>
+          <LayoutHeader label={t("List filters and actions")}>
+            <Section variant="transparent" padding={gutter} paddingBlockEnd={3}>
               <VStack gap={4}>
-                <HStack gap={3} vAlign="center" wrap="wrap">
-                  <StackItem size="fill">
-                    <Heading level={1}>{t(definition.title)}</Heading>
-                  </StackItem>
+                <PageTitle title={t(definition.title)} actions={<HStack gap={3} vAlign="center">
                   {views.length >= 2 && views.length <= 3 && (
                     <SegmentedControl size="sm" label={t("Structure")} value={view} onChange={setChosen}>
                       {views.map((option) => <SegmentedControlItem key={option.value} value={option.value} label={t(option.label)} />)}
@@ -272,7 +271,7 @@ export function treeList<Answer, Row>(definition: TreeDefinition<Answer, Row>) {
                     <Selector label={t("Structure")} isLabelHidden size="sm" value={view} onChange={setChosen} options={views.map((option) => ({ value: option.value, label: t(option.label) }))} />
                   )}
                   <IconButton label={t("Refresh")} tooltip={t("Refresh")} variant="ghost" size="sm" icon={<Icon icon={ArrowPathIcon} size="sm" />} onClick={reread} />
-                </HStack>
+                </HStack>} />
                 {read.status === "ready" && whole.length > 0 && (
                   <TextInput label={t("Search this list")} isLabelHidden size="sm" value={query} onChange={setQuery} placeholder={t("Search")} startIcon={<Icon icon={MagnifyingGlassIcon} size="sm" />} />
                 )}
@@ -283,12 +282,12 @@ export function treeList<Answer, Row>(definition: TreeDefinition<Answer, Row>) {
         content={
           <LayoutContent role="main" padding={0} label={t(definition.title)}>
             {read.status === "loading" && (
-              <VStack gap={2} padding={4}>
+              <VStack gap={2} paddingInline={gutter}>
                 {[0, 1, 2, 3, 4, 5].map((index) => <Skeleton key={index} height={36} index={index} />)}
               </VStack>
             )}
             {read.status === "error" && (
-              <VStack padding={4}>
+              <VStack paddingInline={gutter}>
                 <Banner status="error" title={t("This list could not be loaded")} description={read.reason || t("Reload the page to try again.")} />
               </VStack>
             )}
@@ -299,7 +298,9 @@ export function treeList<Answer, Row>(definition: TreeDefinition<Answer, Row>) {
             )}
             {data.length > 0 && (
               <ScrollableArea ref={bodyRef} axis="block" role="region" label={t("Records")} height="100%">
-                <Table<Item<Row>> data={visibleData} columns={columns} idKey="id" dividers="rows" hasHover textOverflow="truncate" plugins={{ tree, sort, keyboard }} />
+                <VStack paddingInline={gutter} paddingBlockEnd={gutter}>
+                  <Table<Item<Row>> data={visibleData} columns={columns} idKey="id" dividers="rows" hasHover textOverflow="truncate" plugins={{ tree, sort, keyboard }} />
+                </VStack>
               </ScrollableArea>
             )}
           </LayoutContent>

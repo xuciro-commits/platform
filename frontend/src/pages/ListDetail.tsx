@@ -31,7 +31,7 @@ const styles = stylex.create({
 
 export function ListCell({ column, cells, first }: { column: Column; cells: Cells; first: boolean }) {
   return first && cells.__href ? (
-    <Link href={cells.__href} color="primary" weight="medium" maxLines={1}>{column.kind === "member" && cells[column.key] ? <MemberLabel name={cells[column.key]} /> : cells[column.key] || cells[idKey]}</Link>
+    <Link href={cells.__href} color="primary" weight="semibold" maxLines={1}>{column.kind === "member" && cells[column.key] ? <MemberLabel name={cells[column.key]} /> : cells[column.key] || cells[idKey]}</Link>
   ) : cells[targetOf(column.key)] ? (
     <ReferenceLink type={cells[typeOf(column.key)]} id={cells[targetOf(column.key)]} name={cells[column.key]} />
   ) : column.kind === "member" && cells[column.key] ? (
@@ -54,7 +54,7 @@ export function ListCell({ column, cells, first }: { column: Column; cells: Cell
       </Text>
     </HStack>
   ) : (
-    <Text type="body" maxLines={1} weight={first ? "medium" : undefined} color={column.kind === "number" ? "secondary" : undefined} hasTabularNumbers={column.kind === "number"}>
+    <Text type="body" maxLines={1} weight={first ? "semibold" : undefined} hasTabularNumbers={column.kind === "number"}>
       {cells[column.key] ?? ""}
     </Text>
   );

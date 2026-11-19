@@ -32,11 +32,6 @@ type Draft = { title: string; scope: Scope; project: string; pinned: boolean; pr
 type Work = { (): Promise<void> };
 
 const styles = stylex.create({
-  dialogHeaderBleed: {
-    marginInlineStart: "calc(-1 * var(--container-padding-inline-start, 0px))",
-    marginInlineEnd: "calc(-1 * var(--container-padding-inline-end, 0px))",
-    marginBlockStart: "calc(-1 * var(--container-padding-block-start, 0px))",
-  },
   label: { flexShrink: 0 },
   slot: { flexShrink: 1, minWidth: 0 },
   scroller: { overflowX: "auto", overflowY: "hidden", overscrollBehaviorInline: "contain", scrollbarWidth: "none" },
@@ -339,8 +334,8 @@ function Adaptive({ isOpen, onOpenChange, title, subtitle, compact, children }: 
     );
   }
   return (
-    <Dialog isOpen={isOpen} onOpenChange={onOpenChange} purpose="form" width={440}>
-      <DialogHeader title={title} subtitle={subtitle} onOpenChange={onOpenChange} xstyle={styles.dialogHeaderBleed} />
+    <Dialog isOpen={isOpen} onOpenChange={onOpenChange} purpose="form" width={440} padding={0}>
+      <DialogHeader title={title} subtitle={subtitle} onOpenChange={onOpenChange} />
       <Section variant="transparent" padding={4}>
         <VStack gap={4}>{children}</VStack>
       </Section>

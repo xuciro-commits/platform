@@ -1,31 +1,32 @@
 import { Button } from "@astryxdesign/core/Button";
-import { HStack, Layout, LayoutContent, LayoutHeader, VStack } from "@astryxdesign/core/Layout";
+import { HStack, Layout, LayoutContent, LayoutHeader } from "@astryxdesign/core/Layout";
 import { List, ListItem } from "@astryxdesign/core/List";
-import { Heading, Text } from "@astryxdesign/core/Text";
+import { Text } from "@astryxdesign/core/Text";
 import { useState } from "react";
 import { type Api, useRead } from "../../host";
 import { t } from "../../i18n";
 import { navigate } from "../../router";
+import { PageTitle, useGutter } from "../../pages/frame";
 import { PackageReview } from "../../pages/PackageReview";
 
 export default function Marketplace() {
   const packages = useRead<Api.PackageView[]>("/v1/packages");
   const [selected, setSelected] = useState<Api.PackageView>();
+  const gutter = useGutter();
   const rows = packages.status === "ready" ? packages.data : [];
   return (
     <>
       <Layout
         height="fill"
         header={
-          <LayoutHeader padding={6} hasDivider>
-            <VStack gap={2}>
-              <Heading level={1}>{t("Marketplace")}</Heading>
+          <LayoutHeader padding={gutter} hasDivider>
+            <PageTitle title={t("Marketplace")}>
               <Text type="body" color="secondary">{t("Review versions, dependencies and their installation scope before adding them to this workspace.")}</Text>
-            </VStack>
+            </PageTitle>
           </LayoutHeader>
         }
         content={
-          <LayoutContent padding={6} role="main">
+          <LayoutContent padding={gutter} role="main">
             {packages.status === "loading" && <Text type="supporting">{t("Loading…")}</Text>}
             {packages.status !== "loading" && rows.length === 0 && <Text type="body">{t("No package versions are available.")}</Text>}
             {rows.length > 0 && (

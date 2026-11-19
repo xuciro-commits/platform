@@ -13,9 +13,8 @@ import { ScrollableArea } from "@astryxdesign/core/ScrollableArea";
 import { Section } from "@astryxdesign/core/Section";
 import { SegmentedControl, SegmentedControlItem } from "@astryxdesign/core/SegmentedControl";
 import { Skeleton } from "@astryxdesign/core/Skeleton";
-import { Table, pixel, useTableGroupedRows, useTableSelection, useTableSelectionState, useTableSortable, useTableStickyColumns } from "@astryxdesign/core/Table";
+import { Table, pixel, proportional, useTableGroupedRows, useTableSelection, useTableSelectionState, useTableSortable, useTableStickyColumns } from "@astryxdesign/core/Table";
 import type { TableColumn, TablePlugin } from "@astryxdesign/core/Table";
-import { Heading } from "@astryxdesign/core/Text";
 import { ToggleButton } from "@astryxdesign/core/ToggleButton";
 import { useMediaQuery } from "@astryxdesign/core/hooks";
 import { colorVars } from "@astryxdesign/core/theme/tokens.stylex";
@@ -26,7 +25,7 @@ import { type ReactNode, useEffect, useLayoutEffect, useMemo, useRef, useState }
 import { type Read, reread } from "../host";
 import { t } from "../i18n";
 import { navigate, usePath, useSearch } from "../router";
-import { BackLink } from "./BackLink";
+import { PageTitle, useGutter } from "./frame";
 import { BoardView } from "./BoardView";
 import { type Chip, FilterBar } from "./ListFilters";
 import { ListOptions } from "./ListOptions";
@@ -86,6 +85,9 @@ const compare = (left: unknown, right: unknown) =>
   : typeof left === "number" && typeof right === "number" ? left - right
   : String(left ?? "").localeCompare(String(right ?? ""));
 const textKey = "__text";
+const fillKey = "__fill";
+const widthOf: Record<string, number> = { string: 200, code: 160, enum: 150, member: 160, number: 120, time: 140, boolean: 110 };
+const headerWidth = (text: string) => [...text].reduce((sum, letter) => sum + (letter.charCodeAt(0) > 0x2e7f ? 14 : 8), 48);
 const groupPrefix = "__group_";
 const overscan = 12;
 const heights: Record<Density, number> = { compact: 36, balanced: 48, spacious: 60 };
@@ -102,7 +104,6 @@ const styles = stylex.create({
   toolbarContainer: { containerName: "toolbar", containerType: "inline-size" },
   toolbarPrimary: { flexBasis: { default: 0, "@container toolbar (max-width: 860px)": "100%" } },
   toolbarEnd: { marginInlineStart: "auto" },
-  tableWidth: (maxWidth: number) => ({ maxWidth }),
   clickable: { cursor: "pointer" },
   activeRow: {
     backgroundColor: colorVars["--color-overlay-pressed"],
@@ -122,6 +123,7 @@ type ListViewProps<Answer, Row> = {
 export function ListView<Answer, Row>({ definition, read, primary, back }: ListViewProps<Answer, Row>) {
   const currentPath = usePath();
   const currentSearch = useSearch();
+  const gutter = useGutter();
   const compactSurface = useMediaQuery(compactQuery);
   const scrollRef = useRef<HTMLDivElement>(null);
   const [scrollTop, setScrollTop] = useState(0);
@@ -153,8 +155,9 @@ export function ListView<Answer, Row>({ definition, read, primary, back }: ListV
   const board = view.layout === "board" ? lanes : undefined;
   const orderedColumns = useMemo(() => {
     const ordered = view.columns.flatMap((key) => definition.columns.find((column) => column.key === key) ?? []);
-    return ordered.length ? ordered : definition.columns.slice(0, 1);
-  }, [definition.columns, view.columns]);
+    const shownColumns = ordered.filter((column, position) => position === 0 || column.key !== view.group);
+    return shownColumns.length ? shownColumns : definition.columns.slice(0, 1);
+  }, [definition.columns, view.columns, view.group]);
 
   const chips = useMemo<Chip[]>(
     () =>
@@ -297,17 +300,17 @@ export function ListView<Answer, Row>({ definition, read, primary, back }: ListV
     },
   };
 
-  const widths = orderedColumns.map((column, position) => column.width ?? (position === 0 ? 300 : column.boolean ? 100
-    : column.kind === "time" || column.kind === "number" ? 140 : column.kind === "enum" || column.kind === "code" ? 150 : 200));
-  const tableWidth = widths.reduce((sum, width) => sum + width, definition.bulk ? 48 : 0);
-  const columns: TableColumn<Cells>[] = orderedColumns.map((column, position) => ({
-    key: column.key,
-    header: t(column.header),
-    width: pixel(widths[position]),
-    sortable: true,
-    align: column.kind === "number" || column.kind === "time" ? "end" : column.boolean ? "center" : undefined,
-    renderCell: (cells) => (group && isHeader(cells) ? null : <ListCell column={column} cells={cells} first={position === 0} />),
-  }));
+  const columns: TableColumn<Cells>[] = [
+    ...orderedColumns.map((column, position): TableColumn<Cells> => ({
+      key: column.key,
+      header: t(column.header),
+      width: pixel(Math.max(column.width ?? (position === 0 ? 280 : widthOf[column.boolean ? "boolean" : column.kind ?? "string"]), headerWidth(t(column.header)))),
+      sortable: true,
+      align: column.kind === "number" || column.kind === "time" ? "end" : undefined,
+      renderCell: (cells) => (group && isHeader(cells) ? null : <ListCell column={column} cells={cells} first={position === 0} />),
+    })),
+    { key: fillKey, header: "", width: proportional(1, { minWidth: 0 }), renderCell: () => null },
+  ];
   const sortIndicator: TablePlugin<Cells> = {
     transformHeaderCell: (props) => ({ ...props, xstyle: [...props.xstyle, stylex.defaultMarker()] }),
   };
@@ -424,20 +427,12 @@ export function ListView<Answer, Row>({ definition, read, primary, back }: ListV
         xstyle={styles.surface}
         end={compactSurface ? undefined : detailPanel}
         header={
-          <LayoutHeader hasDivider label={t("List filters and actions")}>
+          <LayoutHeader label={t("List filters and actions")}>
             <VStack gap={0} xstyle={styles.headerWrap}>
               {definition.page?.loading && <ProgressBar label={t("Loading…")} isLabelHidden isIndeterminate xstyle={styles.progress} />}
-              <Section variant="transparent" padding={4} xstyle={styles.toolbarContainer}>
+              <Section variant="transparent" padding={gutter} paddingBlockEnd={3} xstyle={styles.toolbarContainer}>
                 <VStack gap={4}>
-                  <HStack gap={3} vAlign="center" wrap="wrap">
-                    <StackItem size="fill">
-                      <VStack gap={2}>
-                        {back && <BackLink href={back.href} label={t(back.label)} />}
-                        <Heading level={1}>{t(definition.title)}</Heading>
-                      </VStack>
-                    </StackItem>
-                    {(!empty || dirty) && primary}
-                  </HStack>
+                  <PageTitle title={t(definition.title)} back={back && { href: back.href, label: t(back.label) }} actions={(!empty || dirty) && primary} />
                   {toolbar && (
                     <HStack gap={3} vAlign="center" wrap="wrap" minHeight={32}>
                       <StackItem size="fill" xstyle={styles.toolbarPrimary}>
@@ -485,14 +480,14 @@ export function ListView<Answer, Row>({ definition, read, primary, back }: ListV
         content={
           <LayoutContent role="main" padding={0} label={t(definition.title)}>
             {read.status === "loading" && (
-              <VStack gap={2} padding={4}>
+              <VStack gap={2} paddingInline={gutter}>
                 {[0, 1, 2, 3, 4, 5].map((index) => (
                   <Skeleton key={index} height={36} index={index} />
                 ))}
               </VStack>
             )}
             {read.status === "error" && (
-              <VStack padding={4}>
+              <VStack paddingInline={gutter}>
                 <Banner status="error" title={t("This list could not be loaded")} description={read.reason || t("Reload the page to try again.")} />
               </VStack>
             )}
@@ -513,7 +508,7 @@ export function ListView<Answer, Row>({ definition, read, primary, back }: ListV
               />
             )}
             {failure && (
-              <VStack padding={4}>
+              <VStack paddingInline={gutter} paddingBlockEnd={4}>
                 <Banner status="error" title={t("Not saved")} description={failure} />
               </VStack>
             )}
@@ -540,6 +535,7 @@ export function ListView<Answer, Row>({ definition, read, primary, back }: ListV
             )}
             {ready && shown.length > 0 && !board && (
               <ScrollableArea ref={scrollRef} axis="block" role="region" label={t("Records")} height="100%">
+                <VStack paddingInline={gutter} paddingBlockEnd={gutter}>
                 {windowed && first > 0 && <Section variant="transparent" height={first * rowHeight} padding={0} />}
                 <Table
                   data={tableRows}
@@ -549,12 +545,12 @@ export function ListView<Answer, Row>({ definition, read, primary, back }: ListV
                   rowCount={definition.remote === "all" ? definition.page?.total : undefined}
                   density={view.density}
                   dividers="rows"
-                  xstyle={styles.tableWidth(tableWidth)}
                   textOverflow="truncate"
                   hasHover
                   plugins={{ ...(definition.bulk ? { selection } : {}), sortable, sortIndicator, sticky, activation, ...(group ? { grouped: grouped.plugin } : {}) }}
                 />
                 {windowed && last < shown.length && <Section variant="transparent" height={(shown.length - last) * rowHeight} padding={0} />}
+                </VStack>
               </ScrollableArea>
             )}
           </LayoutContent>

@@ -24,6 +24,7 @@ import * as stylex from "@stylexjs/stylex";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { type Api, reread, useRead } from "../host";
 import { t } from "../i18n";
+import { PageTitle, useGutter } from "./frame";
 import { usePath } from "../router";
 import { reasonOf, send } from "./act";
 import { type InboxItem, type InboxTab, inTab, inboxTabs, useInbox } from "./inbox";
@@ -136,11 +137,12 @@ function ItemPane({ item, act, onClose, isFullWidth }: { item: InboxItem; act: A
     act(item, "platform.notification.read");
   }, [item, act]);
   const task = item.task;
+  const gutter = useGutter();
   const close = <IconButton variant="ghost" label={t("Close")} tooltip={t("Close")} icon={<Icon icon={XMarkIcon} size="sm" />} onClick={onClose} />;
   const record = item.ref && !item.ref.startsWith("work.task/") ? item.ref : undefined;
   return (
     <VStack height="100%">
-      <VStack paddingBlockStart={4} paddingInlineStart={isFullWidth ? 0 : 3} paddingInlineEnd={isFullWidth ? 0 : 2}>
+      <VStack paddingBlockStart={gutter} paddingInline={isFullWidth ? 0 : gutter}>
         <Toolbar
           label={t("Item")}
           startContent={
@@ -156,7 +158,7 @@ function ItemPane({ item, act, onClose, isFullWidth }: { item: InboxItem; act: A
         />
       </VStack>
       <StackItem size="fill">
-        <VStack paddingInline={isFullWidth ? 0 : 6} paddingBlockEnd={6} gap={4} isScrollable height="100%">
+        <VStack paddingInline={isFullWidth ? 0 : gutter} paddingBlockEnd={gutter} gap={4} isScrollable height="100%">
           {isFullWidth && (
             <Heading level={2} maxLines={2}>
               {item.title}
@@ -218,6 +220,7 @@ export function InboxPage() {
   const asked = usePath().slice(base.length + 1) as InboxTab;
   const tab = inboxTabs.some((candidate) => candidate.value === asked) ? asked : "all";
   const inbox = useInbox();
+  const gutter = useGutter();
   const { act, failure } = useActions();
   const [chosenId, setChosenId] = useState<string | null | undefined>(undefined);
   const visible = useMemo(() => inbox.items.filter((item) => inTab(item, tab)), [inbox.items, tab]);
@@ -347,19 +350,15 @@ export function InboxPage() {
       header={
         <LayoutHeader hasDivider={isPaneFullWidth} padding={0}>
           <VStack gap={0}>
-            <HStack gap={3} vAlign="center" wrap="wrap" padding={4}>
-              <StackItem size="fill">
-                <VStack gap={0.5}>
-                  <Heading level={1}>{t("Inbox")}</Heading>
-                  <Text type="supporting">
-                    {unreadCount} {t("unread")}
-                  </Text>
-                </VStack>
-              </StackItem>
-              <Button label={t("Refresh")} variant="ghost" icon={<Icon icon={ArrowPathIcon} size="sm" />} onClick={reread} />
-            </HStack>
+            <VStack padding={gutter} paddingBlockEnd={3}>
+              <PageTitle title={t("Inbox")} actions={<Button label={t("Refresh")} variant="ghost" icon={<Icon icon={ArrowPathIcon} size="sm" />} onClick={reread} />}>
+                <Text type="supporting">
+                  {unreadCount} {t("unread")}
+                </Text>
+              </PageTitle>
+            </VStack>
             {!isPaneFullWidth && (
-              <VStack paddingInline={1}>
+              <VStack paddingInline={gutter}>
                 <TabList hasDivider value={tab} onChange={() => undefined}>
                   {inboxTabs.map((option) => (
                     <Tab
@@ -381,7 +380,7 @@ export function InboxPage() {
         </LayoutHeader>
       }
       content={
-        <LayoutContent role="main" ref={listRef} padding={4} isScrollable>
+        <LayoutContent role="main" ref={listRef} padding={gutter} isScrollable>
           {failure && <Banner status="error" title={t("Not done")} description={failure} />}
           {inbox.status === "loading" && (
             <VStack gap={2}>

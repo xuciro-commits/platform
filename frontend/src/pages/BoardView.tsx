@@ -6,6 +6,7 @@ import { Heading, Text } from "@astryxdesign/core/Text";
 import * as stylex from "@stylexjs/stylex";
 import { type PointerEvent as ReactPointerEvent, type ReactNode, useEffect, useRef, useState } from "react";
 import { t } from "../i18n";
+import { useGutter } from "./frame";
 
 export type BoardCard = { id: string; column: string; title: string; href: string; lines: string[]; amount?: number; currency?: string };
 type BoardProps = {
@@ -22,7 +23,7 @@ const dragThreshold = 5;
 const columnWidth = 300;
 
 const styles = stylex.create({
-  columns: { overflowX: "auto", overflowY: "hidden", height: "100%", padding: "var(--spacing-4)" },
+  columns: { overflowX: "auto", overflowY: "hidden", height: "100%" },
   column: { flexShrink: 0, flexBasis: columnWidth, height: "100%" },
   card: { cursor: "grab", userSelect: "none", touchAction: "none", transition: "box-shadow 120ms ease", ":hover": { boxShadow: "var(--shadow-med)" } },
   fixed: { cursor: "default" },
@@ -47,6 +48,7 @@ function CardBody({ card }: { card: BoardCard }) {
 }
 
 export function BoardView({ columns, cards, onMove, accepts, page, total }: BoardProps) {
+  const gutter = useGutter();
   const [drag, setDrag] = useState<Drag | null>(null);
   const columnElements = useRef(new Map<string, HTMLElement>());
   const cardElements = useRef(new Map<string, HTMLElement>());
@@ -168,7 +170,7 @@ export function BoardView({ columns, cards, onMove, accepts, page, total }: Boar
 
   return (
     <>
-      <HStack gap={4} xstyle={styles.columns}>
+      <HStack gap={4} paddingInline={gutter} paddingBlockEnd={gutter} xstyle={styles.columns}>
         {columns.map(column)}
         {missing.length > 0 && column({ key: "", label: t("None") })}
       </HStack>

@@ -3,7 +3,7 @@ import { Button } from "@astryxdesign/core/Button";
 import { EmptyState } from "@astryxdesign/core/EmptyState";
 import { useMediaQuery } from "@astryxdesign/core/hooks";
 import { Icon } from "@astryxdesign/core/Icon";
-import { Layout, LayoutContent, LayoutPanel, VStack } from "@astryxdesign/core/Layout";
+import { HStack, Layout, LayoutContent, LayoutPanel, VStack } from "@astryxdesign/core/Layout";
 import { List, ListItem } from "@astryxdesign/core/List";
 import { Selector } from "@astryxdesign/core/Selector";
 import { Skeleton } from "@astryxdesign/core/Skeleton";
@@ -16,6 +16,7 @@ import { useState } from "react";
 import { type Api, useRead } from "../host";
 import { t } from "../i18n";
 import { reasonOf, send } from "./act";
+import { PageTitle, useGutter } from "./frame";
 import { controlWidth, type IconComponent, row, SettingsCard, SettingsRow, TextSetting } from "./SettingsRows";
 
 export type SettingItem = { name: string; title: string; description?: string; type: string; value: string; choices?: string[] };
@@ -45,6 +46,7 @@ export function settingsPage<Answer>(definition: SettingsDefinition<Answer>) {
     const catalog = useRead<Api.Action[]>("/v1/actions");
     const toast = useToast();
     const narrow = useMediaQuery("(max-width: 768px)");
+    const gutter = useGutter();
     const [chosen, setChosen] = useState("");
     const [detail, setDetail] = useState(false);
     const groups = read.status === "ready" ? definition.groups(read.data) : [];
@@ -64,10 +66,8 @@ export function settingsPage<Answer>(definition: SettingsDefinition<Answer>) {
     };
 
     const nav = (
-      <VStack gap={4} paddingBlock={4} paddingInline={3}>
-        <VStack paddingInline={4}>
-          <Heading level={1}>{t(definition.title)}</Heading>
-        </VStack>
+      <VStack gap={4} padding={gutter}>
+        <PageTitle title={t(definition.title)} />
         <List density="spacious" aria-label={t("Apps")}>
           {groups.map((candidate) => (
             <ListItem
@@ -96,7 +96,9 @@ export function settingsPage<Answer>(definition: SettingsDefinition<Answer>) {
             }
           />
         ) : (
-          <Heading level={2}>{t(group.label)}</Heading>
+          <HStack minHeight={36} vAlign="center">
+            <Heading level={2}>{t(group.label)}</Heading>
+          </HStack>
         )}
         <SettingsCard>
           {group.settings.map((setting) => (
@@ -115,9 +117,9 @@ export function settingsPage<Answer>(definition: SettingsDefinition<Answer>) {
     if (read.status !== "ready") {
       return (
         <Layout height="fill" content={
-          <LayoutContent role="main" padding={4} label={t(definition.title)}>
+          <LayoutContent role="main" padding={gutter} label={t(definition.title)}>
             <VStack gap={4}>
-              <Heading level={1}>{t(definition.title)}</Heading>
+              <PageTitle title={t(definition.title)} />
               {read.status === "loading" && [0, 1, 2, 3].map((index) => <Skeleton key={index} height={48} index={index} />)}
               {read.status === "error" && <Banner status="error" title={t("This list could not be loaded")} description={read.reason || t("Reload the page to try again.")} />}
               {read.status === "refused" && <EmptyState headingLevel={2} title={t("You cannot see this list")} description={read.reason || t("Ask an administrator of this workspace for access.")} />}
@@ -129,9 +131,9 @@ export function settingsPage<Answer>(definition: SettingsDefinition<Answer>) {
     if (!group) {
       return (
         <Layout height="fill" content={
-          <LayoutContent role="main" padding={4} label={t(definition.title)}>
+          <LayoutContent role="main" padding={gutter} label={t(definition.title)}>
             <VStack gap={4}>
-              <Heading level={1}>{t(definition.title)}</Heading>
+              <PageTitle title={t(definition.title)} />
               <EmptyState headingLevel={2} title={t("Nothing here yet")} description={t(definition.about)} />
             </VStack>
           </LayoutContent>
@@ -139,7 +141,7 @@ export function settingsPage<Answer>(definition: SettingsDefinition<Answer>) {
       );
     }
     if (narrow && !detail) {
-      return <Layout height="fill" content={<LayoutContent role="main" padding={2} label={t(definition.title)}>{nav}</LayoutContent>} />;
+      return <Layout height="fill" content={<LayoutContent role="main" padding={0} label={t(definition.title)}>{nav}</LayoutContent>} />;
     }
     return (
       <Layout
@@ -147,7 +149,7 @@ export function settingsPage<Answer>(definition: SettingsDefinition<Answer>) {
         contentWidth={1200}
         start={narrow ? undefined : <LayoutPanel hasDivider padding={0}>{nav}</LayoutPanel>}
         content={
-          <LayoutContent role="main" padding={4} label={t(definition.title)}>
+          <LayoutContent role="main" padding={gutter} label={t(definition.title)}>
             {body}
           </LayoutContent>
         }

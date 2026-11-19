@@ -2,7 +2,7 @@ import { AlertDialog } from "@astryxdesign/core/AlertDialog";
 import { Banner } from "@astryxdesign/core/Banner";
 import { EmptyState } from "@astryxdesign/core/EmptyState";
 import { useMediaQuery } from "@astryxdesign/core/hooks";
-import { HStack, Layout, LayoutContent, LayoutHeader, LayoutPanel, StackItem, VStack } from "@astryxdesign/core/Layout";
+import { HStack, Layout, LayoutContent, LayoutHeader, LayoutPanel, VStack } from "@astryxdesign/core/Layout";
 import { MetadataList, MetadataListItem } from "@astryxdesign/core/MetadataList";
 import { Skeleton } from "@astryxdesign/core/Skeleton";
 import { StatusDot } from "@astryxdesign/core/StatusDot";
@@ -14,7 +14,7 @@ import { type Api, useRead } from "../host";
 import { t } from "../i18n";
 import { usePath, useSearch } from "../router";
 import { useCommandSearch } from "../shell/CommandSearch";
-import { BackLink } from "./BackLink";
+import { PageTitle, useGutter } from "./frame";
 import { DefinitionRows, stateProblem } from "./DefinitionRows";
 import { describe, type Described, type Values, withRestrictedFields } from "./describe";
 import { KeyboardHelp } from "./KeyboardHelp";
@@ -81,6 +81,7 @@ export function RecordPage({ described, id, listPath, listTitle, instances, enti
   const listHref = listPath + query;
   const asked = usePath().slice(base.length + 1);
   const narrow = useMediaQuery("(max-width: 1024px)");
+  const gutter = useGutter();
   const read = useRead<Api.RecordView>(`/v1/records/${described.type}/${encodeURIComponent(id)}`);
   const values = useMemo(
     () => (read.status === "ready" ? Object.fromEntries(Object.entries(read.data.values ?? {}).map(([name, value]) => [name, plain(value)])) : {}),
@@ -139,15 +140,9 @@ export function RecordPage({ described, id, listPath, listTitle, instances, enti
       height="fill"
       contentWidth={1260}
       header={
-        <LayoutHeader padding={6} paddingBlockEnd={0} hasDivider>
+        <LayoutHeader padding={gutter} paddingBlockEnd={0} hasDivider>
           <VStack gap={4}>
-            <HStack gap={4} vAlign="start">
-              <StackItem size="fill">
-                <VStack gap={2}>
-                  <BackLink href={listHref} label={t(listTitle)} />
-                  <Heading level={1} maxLines={2}>
-                    {name}
-                  </Heading>
+            <PageTitle title={name} back={{ href: listHref, label: t(listTitle) }} actions={!narrow && actions}>
                   <HStack gap={1} vAlign="center" wrap="wrap">
                     <Text type="code" color="secondary">
                       {id}
@@ -174,10 +169,7 @@ export function RecordPage({ described, id, listPath, listTitle, instances, enti
                       </>
                     )}
                   </HStack>
-                </VStack>
-              </StackItem>
-              {!narrow && actions}
-            </HStack>
+            </PageTitle>
             {narrow && actions}
             <TabList value={tab} onChange={() => undefined} size="lg" isFullBleed>
               {tabs.map((candidate) => (
@@ -193,7 +185,7 @@ export function RecordPage({ described, id, listPath, listTitle, instances, enti
         </LayoutHeader>
       }
       content={
-        <LayoutContent padding={6} role="main">
+        <LayoutContent padding={gutter} role="main">
           <KeyboardHelp />
           {editor.leave && (
             <AlertDialog
@@ -252,7 +244,7 @@ export function RecordPage({ described, id, listPath, listTitle, instances, enti
       }
       end={
         kept && !narrow && tab !== "preview" ? (
-          <LayoutPanel width={340} padding={6} role="complementary" hasDivider>
+          <LayoutPanel width={340} padding={gutter} role="complementary" hasDivider>
             <Rail described={detail} editor={editor} kept={kept} refs={refs} restricted={restricted} collaboration={collaboration} />
           </LayoutPanel>
         ) : undefined

@@ -10,6 +10,7 @@ import type { TableColumn } from "@astryxdesign/core/Table";
 import { Heading, Text } from "@astryxdesign/core/Text";
 import { useRead } from "../host";
 import { t } from "../i18n";
+import { PageTitle, useGutter } from "./frame";
 
 type Cells = Record<string, string>;
 export type DashboardMetric<Answer> = { title: string; href: string; value: (answer: Answer) => number };
@@ -31,13 +32,14 @@ export type DashboardDefinition<Answer> = {
 export function dashboardPage<Answer>(definition: DashboardDefinition<Answer>) {
   return function DashboardEntry() {
     const read = useRead<Answer>(definition.read);
+    const gutter = useGutter();
     return (
       <Layout
         height="fill"
         content={
-          <LayoutContent role="main" padding={6}>
+          <LayoutContent role="main" padding={gutter}>
             <VStack gap={6}>
-              <Heading level={1}>{t(definition.title)}</Heading>
+              <PageTitle title={t(definition.title)} />
               {read.status === "loading" && (
                 <Grid columns={{ minWidth: 240, repeat: "fit" }} gap={4}>
                   {definition.metrics.map((metric, index) => (

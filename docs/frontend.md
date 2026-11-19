@@ -138,6 +138,7 @@ export default recordList({
 
 | 表现 | 给出什么 | 起点 |
 |---|---|---|
+| `frame` | 全站唯一的页边距与页头标题（返回、H1、主动作、说明行）；每个表现都用它，不另写页边距 | 官方 `LayoutHeader` 的页头 |
 | `ListView` | 列表：条件筛选、排序、分组、勾选批量、表格与看板切换 | 官方 `table-grouped`、`table-filter` |
 | `TreeList` | 树表：父行由子行汇总（不存）；兄弟间排序，搜索剪枝后重算汇总并强制展开；只有一个根时默认展开它；方向键走树 | 官方 `table-tree` |
 | `BoardView` | 看板：按可编辑的选项字段分列，拖卡即提交编辑动作 | 官方 `kanban-board` |
