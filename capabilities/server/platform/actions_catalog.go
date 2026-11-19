@@ -47,19 +47,27 @@ func (c *Catalog) AuthorizationPolicies() []AuthorizationPolicy {
 	return lookup()
 }
 
+func checkAction(a *Action) {
+	if err := CheckInputs(a.Payload); err != nil {
+		panic(err)
+	}
+	a.NeedsApproval = a.Approval != nil
+}
+
 func NewCatalog(actions ...Action) *Catalog {
 	for i := range actions {
-		if err := CheckInputs(actions[i].Payload); err != nil {
-			panic(err)
-		}
+		checkAction(&actions[i])
 		if actions[i].SchemaVersion != nil {
 			if err := actions[i].SchemaVersion.Check(); err != nil {
 				panic(err)
 			}
 		}
-		actions[i].NeedsApproval = actions[i].Approval != nil
 	}
 	return &Catalog{actions: actions, disabled: map[string]bool{}}
+}
+
+func (c *Catalog) CloneActions() *Catalog {
+	return &Catalog{actions: c.All(), disabled: map[string]bool{}}
 }
 
 func (c *Catalog) WithActions(actions []Action) *Catalog {
@@ -89,10 +97,7 @@ func (c *Catalog) Add(actions ...Action) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	for _, a := range actions {
-		if err := CheckInputs(a.Payload); err != nil {
-			panic(err)
-		}
-		a.NeedsApproval = a.Approval != nil
+		checkAction(&a)
 		if i := slices.IndexFunc(c.actions, func(x Action) bool { return x.Schema == a.Schema }); i >= 0 {
 			c.actions[i] = a
 			continue
@@ -102,21 +107,15 @@ func (c *Catalog) Add(actions ...Action) {
 }
 
 func (c *Catalog) ReplaceTarget(target string, actions []Action) {
-	for _, action := range actions {
-		if action.Target != target {
+	for i := range actions {
+		if actions[i].Target != target {
 			panic("replacement action belongs to another target")
 		}
-		if err := CheckInputs(action.Payload); err != nil {
-			panic(err)
-		}
+		checkAction(&actions[i])
 	}
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	c.actions = slices.DeleteFunc(c.actions, func(action Action) bool { return action.Target == target })
-	for _, action := range actions {
-		action.NeedsApproval = action.Approval != nil
-		c.actions = append(c.actions, action)
-	}
+	c.actions = append(slices.DeleteFunc(c.actions, func(action Action) bool { return action.Target == target }), actions...)
 }
 
 func (c *Catalog) All() []Action {

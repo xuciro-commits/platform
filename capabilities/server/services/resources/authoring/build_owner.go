@@ -75,6 +75,8 @@ type Build struct {
 	functions                 publication.FunctionAuthoring
 	apps                      publication.ApplicationAuthoring
 	application               ApplicationOwners
+	manifestCache             *buildManifestCache
+	manifestPages             []platform.Page
 }
 
 type testPlanEnvironment = devopsmodel.TestPlanEnvironment[runtimeprotocol.Function]
@@ -100,7 +102,10 @@ func (b *Build) bindPublications() {
 		Page:      func(object ontology.Object) platform.Page { return b.application.ObjectPage(object, ID) },
 		Pages:     b.objectInstallationPages,
 		Validate:  b.validateObjectInstallation,
-		Installed: func(entity platform.RecordType) { b.installed[entity.Type] = entity },
+		Installed: func(entity platform.RecordType) {
+			b.installed[entity.Type] = entity
+			b.invalidateManifest()
+		},
 	})
 	b.publications = append([]publication.Hooks{object}, b.publicationBase...)
 	queries := b.queries
@@ -143,7 +148,7 @@ func (b *Build) AttachOwner(bindings runtimeprotocol.OwnerBindings) {
 }
 
 func New(tenant string, authorities platform.Authorities, publications []publication.Hooks, resolver publication.Resolver, objectPublication func(ontology.ObjectPublicationEnvironment) publication.Hooks, queryFactory func(publication.QueryAuthoringEnvironment) publication.QueryAuthoringBinding, functionFactory func(publication.FunctionEnvironment) publication.FunctionAuthoring, agentFactory func(platform.AgentAuthoringEnvironment) platform.AgentAuthoringBinding, functionEvaluationFactory func(publication.FunctionEvaluationEnvironment) publication.FunctionEvaluationBinding, testPlanFactory func(testPlanEnvironment, evaluationPublication) testPlanPublication, evaluationSetFactory func(testPlanEnvironment) evaluationPublication, sampleSetFactory func(devopsmodel.SampleSetEnvironment) devopsmodel.SampleSetPublication, application ApplicationOwners, automationFactory func(publication.AutomationEnvironment, publication.Resolver) publication.AutomationAuthoring) *Build {
-	b := &Build{resolver: resolver, publicationBase: slices.Clone(publications), objectPublication: objectPublication, queryFactory: queryFactory, functionFactory: functionFactory, agentFactory: agentFactory, functionEvaluationFactory: functionEvaluationFactory, testPlanFactory: testPlanFactory, evaluationSetFactory: evaluationSetFactory, sampleSetFactory: sampleSetFactory, installed: map[string]platform.RecordType{}, linkTypes: map[string]ontology.LinkType{}, propertyTypes: map[string]ontology.PropertyType{}, valueTypes: map[string]ontology.ValueType{}, objectTypeGroups: map[string]ontology.ObjectTypeGroup{}, interfaces: map[string]ontology.InterfaceRecord{}}
+	b := &Build{resolver: resolver, publicationBase: slices.Clone(publications), objectPublication: objectPublication, queryFactory: queryFactory, functionFactory: functionFactory, agentFactory: agentFactory, functionEvaluationFactory: functionEvaluationFactory, testPlanFactory: testPlanFactory, evaluationSetFactory: evaluationSetFactory, sampleSetFactory: sampleSetFactory, installed: map[string]platform.RecordType{}, linkTypes: map[string]ontology.LinkType{}, propertyTypes: map[string]ontology.PropertyType{}, valueTypes: map[string]ontology.ValueType{}, objectTypeGroups: map[string]ontology.ObjectTypeGroup{}, interfaces: map[string]ontology.InterfaceRecord{}, manifestCache: new(buildManifestCache)}
 	b.queries = b.queryFactory(b.queryEnvironment())
 	b.data = dataowner.New(buildDataHost{b}, resolver)
 	b.data.AttachIntegrationRuntime(b.integrationRuntime())
@@ -152,6 +157,7 @@ func New(tenant string, authorities platform.Authorities, publications []publica
 	b.functions = b.functionFactory(functionEnvironment{b})
 	b.evaluations = b.functionEvaluationFactory(b.functionEvaluationEnvironment())
 	b.application = application
+	b.manifestPages = b.buildManifestPages()
 	b.apps = b.application.New(appEnvironment{b})
 	b.branches = branchowner.New(branchEnvironment{b})
 	b.agent = b.agentFactory(b.agentEnvironment())
@@ -215,32 +221,45 @@ func (b *Build) manifestRoles() []string {
 	return roles
 }
 
+var buildManifestJobs = []platform.Job{
+	{Name: "confirmations", Title: "Advance business confirmations", Every: time.Second},
+	{Name: "dispatches", Title: "Advance device dispatches", Every: time.Second},
+}
+
+func (b *Build) buildManifestPages() []platform.Page {
+	return []platform.Page{
+		b.application.ListDetailPage("objects", "Objects", "The objects this organisation defines. Publish one to install it.",
+			platform.AssetRef{App: ID, Kind: platform.AssetObject, Name: ObjectType},
+			[]string{"title", "name", "state", "installed"},
+			[]string{"title", "name", "plural", "description", "fields", "state", "installed"},
+			[]platform.AssetRef{{App: ID, Kind: platform.AssetAction, Name: ObjectType + ".create"},
+				{App: ID, Kind: platform.AssetAction, Name: ObjectType + ".edit"}, {App: ID, Kind: platform.AssetAction, Name: ObjectType + ".archive"}, {App: ID, Kind: platform.AssetAction, Name: SchemaPublish}}),
+		b.application.ListDetailPage("applications", "Applications", "The applications this organisation hands to its people. Each holds pages and appears in their launcher.",
+			platform.AssetRef{App: ID, Kind: platform.AssetObject, Name: runtimeprotocol.AppType},
+			[]string{"title", "name", "icon", "state"},
+			[]string{"title", "name", "description", "icon", "pages", "groups", "state"},
+			[]platform.AssetRef{{App: ID, Kind: platform.AssetAction, Name: runtimeprotocol.AppType + ".create"},
+				{App: ID, Kind: platform.AssetAction, Name: runtimeprotocol.AppType + ".edit"}, {App: ID, Kind: platform.AssetAction, Name: runtimeprotocol.AppType + ".archive"}, {App: ID, Kind: platform.AssetAction, Name: runtimeprotocol.SchemaHandOver}}),
+		b.application.ListDetailPage("pages", "Pages", "The pages this organisation composes over the objects it may read. Publish one to put it in the workspace.",
+			platform.AssetRef{App: ID, Kind: platform.AssetObject, Name: runtimeprotocol.PageType},
+			[]string{"title", "name", "object", "state"},
+			[]string{"title", "name", "description", "object", "state"},
+			[]platform.AssetRef{{App: ID, Kind: platform.AssetAction, Name: runtimeprotocol.PageType + ".create"},
+				{App: ID, Kind: platform.AssetAction, Name: runtimeprotocol.PageType + ".edit"}, {App: ID, Kind: platform.AssetAction, Name: runtimeprotocol.PageType + ".archive"}, {App: ID, Kind: platform.AssetAction, Name: runtimeprotocol.SchemaRelease}}),
+	}
+}
+
 func (b *Build) Manifest() platform.Manifest {
 	catalog := b.authority.Catalog()
 	if b.installationCatalog != nil {
 		catalog = b.installationCatalog
 	}
-	provisions, reads := b.objectProtocols()
-	return platform.Manifest{ID: ID, Title: platform.BuiltinManifestTitle(ID), Version: ValueDefinitionVersion, Sequences: ontology.TransactionSequences(b.installed), Actions: catalog, Entities: b.recordTypes("", true), Roles: b.manifestRoles(), Settings: b.settings(), Jobs: []platform.Job{{Name: "confirmations", Title: "Advance business confirmations", Every: time.Second}, {Name: "dispatches", Title: "Advance device dispatches", Every: time.Second}}, Provides: provisions, Consumes: b.consumedProtocols(), Reads: append([]string{ReadReleaseProfile}, reads...), ReadSources: protocolReadSources(reads), Queries: b.queries.Declarations(), Functions: b.functions.Declarations(), Agents: b.agent.Declarations(), Operations: b.functions.OperationDeclarations(),
-		Pages: []platform.Page{
-			b.application.ListDetailPage("objects", "Objects", "The objects this organisation defines. Publish one to install it.",
-				platform.AssetRef{App: ID, Kind: platform.AssetObject, Name: ObjectType},
-				[]string{"title", "name", "state", "installed"},
-				[]string{"title", "name", "plural", "description", "fields", "state", "installed"},
-				[]platform.AssetRef{{App: ID, Kind: platform.AssetAction, Name: ObjectType + ".create"},
-					{App: ID, Kind: platform.AssetAction, Name: ObjectType + ".edit"}, {App: ID, Kind: platform.AssetAction, Name: ObjectType + ".archive"}, {App: ID, Kind: platform.AssetAction, Name: SchemaPublish}}),
-			b.application.ListDetailPage("applications", "Applications", "The applications this organisation hands to its people. Each holds pages and appears in their launcher.",
-				platform.AssetRef{App: ID, Kind: platform.AssetObject, Name: runtimeprotocol.AppType},
-				[]string{"title", "name", "icon", "state"},
-				[]string{"title", "name", "description", "icon", "pages", "groups", "state"},
-				[]platform.AssetRef{{App: ID, Kind: platform.AssetAction, Name: runtimeprotocol.AppType + ".create"},
-					{App: ID, Kind: platform.AssetAction, Name: runtimeprotocol.AppType + ".edit"}, {App: ID, Kind: platform.AssetAction, Name: runtimeprotocol.AppType + ".archive"}, {App: ID, Kind: platform.AssetAction, Name: runtimeprotocol.SchemaHandOver}}),
-			b.application.ListDetailPage("pages", "Pages", "The pages this organisation composes over the objects it may read. Publish one to put it in the workspace.",
-				platform.AssetRef{App: ID, Kind: platform.AssetObject, Name: runtimeprotocol.PageType},
-				[]string{"title", "name", "object", "state"},
-				[]string{"title", "name", "description", "object", "state"},
-				[]platform.AssetRef{{App: ID, Kind: platform.AssetAction, Name: runtimeprotocol.PageType + ".create"},
-					{App: ID, Kind: platform.AssetAction, Name: runtimeprotocol.PageType + ".edit"}, {App: ID, Kind: platform.AssetAction, Name: runtimeprotocol.PageType + ".archive"}, {App: ID, Kind: platform.AssetAction, Name: runtimeprotocol.SchemaRelease}})}}
+	entities, roles, sequences, provisions, reads, readSources := b.cachedManifestState()
+	pages := b.manifestPages
+	if pages == nil {
+		pages = b.buildManifestPages()
+	}
+	return platform.Manifest{ID: ID, Title: platform.BuiltinManifestTitle(ID), Version: ValueDefinitionVersion, Sequences: sequences, Actions: catalog, Entities: entities, Roles: roles, Settings: b.settings(), Jobs: buildManifestJobs, Provides: provisions, Consumes: b.consumedProtocols(), Reads: reads, ReadSources: readSources, Queries: b.queries.Declarations(), Functions: b.functions.Declarations(), Agents: b.agent.Declarations(), Operations: b.functions.OperationDeclarations(), Pages: pages}
 }
 
 func sortedTypes(installed map[string]platform.RecordType) []string {
@@ -446,11 +465,12 @@ func (b *Build) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb.
 func (b *Build) Fork(authority platform.Authority) (platform.Service, error) {
 	catalog := b.installationCatalog
 	if catalog != nil {
-		catalog = platform.NewCatalog(catalog.All()...)
+		catalog = catalog.CloneActions()
 	}
 	fork := *b
 	fork.authority = authority
 	fork.installationCatalog = catalog
+	fork.manifestCache = new(buildManifestCache)
 	fork.installed = maps.Clone(b.installed)
 	fork.jointEntities = maps.Clone(b.jointEntities)
 	fork.jointAssets = maps.Clone(b.jointAssets)

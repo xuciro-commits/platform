@@ -56,6 +56,7 @@ func (b *Build) ForkReleaseExecution(assets []platform.ReleaseAsset) (platform.S
 	}
 	bound := app.(*Build)
 	bound.installed = map[string]platform.RecordType{}
+	bound.invalidateManifest()
 	bound.queries = bound.queryFactory(bound.queryEnvironment())
 	bound.interfaces = map[string]ontology.InterfaceRecord{}
 	bound.jointEntities = map[string]platform.RecordTypeInfo{}
@@ -120,6 +121,7 @@ func (b *Build) ForkReleaseExecution(assets []platform.ReleaseAsset) (platform.S
 			}
 			entity := bound.entity(object)
 			bound.installed[entity.Type] = entity
+			bound.invalidateManifest()
 			actions = append(actions, objectActions(object, entity)...)
 		}
 	}

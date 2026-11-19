@@ -27,7 +27,10 @@ type AuditLog struct {
 func (l *AuditLog) Fork() AuditLog {
 	l.mu.Lock()
 	defer l.mu.Unlock()
-	return AuditLog{entries: slices.Clone(l.entries), deliveries: slices.Clone(l.deliveries), personal: slices.Clone(l.personal)}
+	l.entries = l.entries[:len(l.entries):len(l.entries)]
+	l.deliveries = l.deliveries[:len(l.deliveries):len(l.deliveries)]
+	l.personal = l.personal[:len(l.personal):len(l.personal)]
+	return AuditLog{entries: l.entries, deliveries: l.deliveries, personal: l.personal}
 }
 
 func keepLast[T any](xs []T, n int) []T {

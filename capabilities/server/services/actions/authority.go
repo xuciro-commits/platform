@@ -115,7 +115,7 @@ func (l *authority) ForkRead() (platform.Authority, error) {
 	fork := &authority{tenant: l.tenant, authority: l.authority, declarations: slices.Clone(l.declarations),
 		schemaRefs: slices.Clone(l.schemaRefs), schemas: registry,
 		changes: l.changes.ForkWithSchemas(registry), archive: l.archive,
-		authorities: protocol.NewAuthorities(), catalog: platform.NewCatalog(l.catalog.All()...)}
+		authorities: protocol.NewAuthorities(), catalog: l.catalog.CloneActions()}
 	for _, declaration := range fork.declarations {
 		if err := fork.authorities.Declare(declaration); err != nil {
 			return nil, err

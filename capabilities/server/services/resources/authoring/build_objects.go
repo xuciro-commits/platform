@@ -246,6 +246,7 @@ func (b *Build) install(c platform.Caller, o ontology.Object) *platform.Error {
 		return &platform.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, Message: err.Error()}
 	}
 	b.installed[entity.Type] = entity
+	b.invalidateManifest()
 	return nil
 }
 

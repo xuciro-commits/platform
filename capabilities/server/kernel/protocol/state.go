@@ -9,6 +9,9 @@ import (
 )
 
 func (l *ChangeLog) Restore(tenant string, records []*pb.ChangeRecord) {
+	l.base = nil
+	l.compacted = false
+	l.ensureWritable()
 	l.logs[tenant] = slices.Clone(records)
 	l.byKey[tenant] = map[string]*pb.ChangeRecord{}
 	l.byID[tenant] = map[string]bool{}
