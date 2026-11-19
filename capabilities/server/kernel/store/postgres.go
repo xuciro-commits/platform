@@ -405,13 +405,13 @@ func (j *Postgres) AppendAccepted(ctx context.Context, tenant string, e Entry, k
 		advance()
 		return raw, nil
 	}
-	if prior, err := read(); err != nil || prior != nil {
-		return prior, err
-	}
 	j.mu.Lock()
 	seq, ok := j.next[tenant]
 	j.mu.Unlock()
 	if !ok {
+		if prior, err := read(); err != nil || prior != nil {
+			return prior, err
+		}
 		return nil, fmt.Errorf("journal: append to %s before reading its entries", tenant)
 	}
 	tx, err := j.pool.Begin(ctx)
@@ -428,25 +428,28 @@ func (j *Postgres) AppendAccepted(ctx context.Context, tenant string, e Entry, k
 	if stateErr == nil {
 		active = true
 		if statePosition != seq-1 {
+			_ = tx.Rollback(ctx)
+			if prior, err := read(); err != nil || prior != nil {
+				return prior, err
+			}
 			return nil, fmt.Errorf("tenant %s state position differs", tenant)
 		}
 	} else if !errors.Is(stateErr, pgx.ErrNoRows) {
 		return nil, stateErr
 	}
-	tag, err := tx.Exec(ctx, `insert into journal (tenant, seq, app, kind, principal, body, at, versions, epoch)
- values ($1,$2,$3,$4,$5,$6,$7,$8,$9) on conflict do nothing`, tenant, seq, e.App, e.Kind, e.Principal, e.Body, e.At, e.Versions, e.Epoch)
-	if err != nil {
-		return nil, err
-	}
-	if tag.RowsAffected() == 0 {
+	var saved []byte
+	err = tx.QueryRow(ctx, `insert into journal (tenant, seq, app, kind, principal, body, at, versions, epoch)
+	select $1,$2,$3,$4,$5,$6,$7,$8,$9 where not exists
+	(select 1 from runtime_results where tenant=$1 and app=$3 and scope=$10 and key=$11)
+	on conflict do nothing returning body`, tenant, seq, e.App, e.Kind, e.Principal, e.Body, e.At, e.Versions, e.Epoch, identity.Scope, key).Scan(&saved)
+	if errors.Is(err, pgx.ErrNoRows) {
 		_ = tx.Rollback(ctx)
 		if prior, err := read(); err != nil || prior != nil {
 			return prior, err
 		}
 		return nil, fmt.Errorf("journal: concurrent writer changed tenant %s at %d", tenant, seq)
 	}
-	var saved []byte
-	if err = tx.QueryRow(ctx, `select body from journal where tenant=$1 and seq=$2`, tenant, seq).Scan(&saved); err != nil {
+	if err != nil {
 		return nil, err
 	}
 	if active {
@@ -460,10 +463,10 @@ func (j *Postgres) AppendAccepted(ctx context.Context, tenant string, e Entry, k
 		if err = j.writeState(ctx, tx, tenant, seq, delta); err != nil {
 			return nil, err
 		}
-		if _, err = tx.Exec(ctx, `insert into runtime_results (tenant,app,scope,key,hash,seq,body) values ($1,$2,$3,$4,$5,$6,$7)`, tenant, e.App, identity.Scope, key, hash, seq, saved); err != nil {
-			return nil, err
-		}
-		if _, err = tx.Exec(ctx, `update runtime_tenants set seq=$2 where tenant=$1`, tenant, seq); err != nil {
+		var finish pgx.Batch
+		finish.Queue(`insert into runtime_results (tenant,app,scope,key,hash,seq,body) values ($1,$2,$3,$4,$5,$6,$7)`, tenant, e.App, identity.Scope, key, hash, seq, saved)
+		finish.Queue(`update runtime_tenants set seq=$2 where tenant=$1`, tenant, seq)
+		if err := tx.SendBatch(ctx, &finish).Close(); err != nil {
 			return nil, err
 		}
 	}
@@ -483,14 +486,7 @@ func (j *Postgres) AppendAccepted(ctx context.Context, tenant string, e Entry, k
 	j.mu.Lock()
 	j.next[tenant] = seq + 1
 	j.mu.Unlock()
-	committed, err := read()
-	if err != nil {
-		return nil, fmt.Errorf("%w: read committed result: %v", ErrCommitUnknown, err)
-	}
-	if len(committed) == 0 {
-		return nil, fmt.Errorf("%w: accepted result missing after append", ErrCommitUnknown)
-	}
-	return committed, nil
+	return saved, nil
 }
 
 func (j *Postgres) Close() { j.readPool.Close(); j.pool.Close() }

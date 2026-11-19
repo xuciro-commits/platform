@@ -3,6 +3,7 @@ package authoring
 import (
 	"fmt"
 	"platformserver/kernel/protocol"
+	"platformserver/services/ontology"
 	"slices"
 
 	"platformserver/platform"
@@ -74,7 +75,15 @@ func withReleasePlanRoute(presentation resourcePresentation, projectView string)
 	return presentation
 }
 
+func publishedVersion[T any](version func(T) string) func(*Build, platform.Caller, string) bool {
+	return func(_ *Build, c platform.Caller, id string) bool {
+		record, _ := platform.Get[T](c, id)
+		return version(record) != ""
+	}
+}
+
 type resourceDescriptor struct {
+	published           func(*Build, platform.Caller, string) bool
 	app                 string
 	typ                 string
 	kind                platform.AssetKind
@@ -94,6 +103,7 @@ func (d resourceDescriptor) record(id string) string { return d.typ + "/" + id }
 var resourceDescriptors = []resourceDescriptor{
 	{
 		app: ID, typ: ObjectType, kind: platform.AssetObject, family: recordResources, released: true, qualifiedName: true, defaultDraft: true, directInstall: true, acceptedPublication: true,
+		published:     publishedVersion(func(record ontology.Object) string { return record.Published }),
 		presentations: []resourcePresentation{presented("object", "object-type", "Object type", "Object types", 3)},
 	},
 	{
@@ -102,10 +112,12 @@ var resourceDescriptors = []resourceDescriptor{
 	},
 	{
 		app: ID, typ: protocol.PageType, kind: platform.AssetPage, family: recordResources, released: true, defaultDraft: true, directInstall: true, acceptedPublication: true,
+		published:     publishedVersion(func(record protocol.Page) string { return record.Published }),
 		presentations: []resourcePresentation{withPageRoute(presented("page", "module", "Page", "Pages", 10))},
 	},
 	{
 		app: ID, typ: protocol.AppType, kind: platform.AssetApp, family: recordResources, released: true, defaultDraft: true, directInstall: true, acceptedPublication: true,
+		published:     publishedVersion(func(record protocol.Application) string { return record.Published }),
 		presentations: []resourcePresentation{releaseOnly("app", "project", "Application", "Applications", 30)},
 	},
 	{
@@ -125,6 +137,7 @@ var resourceDescriptors = []resourceDescriptor{
 	},
 	{
 		app: ID, typ: AgentType, kind: platform.AssetAgent, family: versionedResources, released: true, defaultDraft: true, directInstall: true, acceptedPublication: true,
+		published:     func(b *Build, c platform.Caller, id string) bool { return b.agent.Published(c, id) },
 		presentations: []resourcePresentation{presented("agent", "agent", "Agent", "Agents", 16)},
 	},
 	{
@@ -133,10 +146,12 @@ var resourceDescriptors = []resourceDescriptor{
 	},
 	{
 		app: ID, typ: TestPlanType, kind: platform.AssetTestPlan, family: versionedResources, released: true, defaultDraft: true, acceptedPublication: true,
+		published:     publishedVersion(func(record TestPlan) string { return record.Published }),
 		presentations: []resourcePresentation{withReleasePlanRoute(presented("test-plan", "test-plan", "Business test plan", "Business test plans", 15), "project")},
 	},
 	{
 		app: ID, typ: SampleSetType, kind: platform.AssetSampleSet, family: versionedResources, released: true, defaultDraft: true,
+		published:     publishedVersion(func(record SampleSetRecord) string { return record.Published }),
 		presentations: []resourcePresentation{presented("sample-set", "sample-set", "Sample set", "Sample sets", 2)},
 	},
 	{
@@ -173,6 +188,7 @@ var resourceDescriptors = []resourceDescriptor{
 	},
 	{
 		app: ID, typ: dataowner.ObservationType, kind: platform.AssetObservation, family: integrationResources, released: true, defaultDraft: true,
+		published:     publishedVersion(func(record dataowner.Observation) string { return record.Published }),
 		presentations: []resourcePresentation{presented("observation", "observation-source", "Observation source", "Observation sources", 20)},
 	},
 	{
@@ -181,30 +197,37 @@ var resourceDescriptors = []resourceDescriptor{
 	},
 	{
 		app: ID, typ: QueryType, kind: platform.AssetQuery, family: definitionResources, released: true, defaultDraft: true, directInstall: true, acceptedPublication: true,
+		published:     func(b *Build, c platform.Caller, id string) bool { return b.queries.Published(c, id) },
 		presentations: []resourcePresentation{presented("query", "object-set", "Object set", "Object sets", 9)},
 	},
 	{
 		app: ID, typ: PropertyTypeType, kind: platform.AssetPropertyType, family: definitionResources, released: true, defaultDraft: true, directInstall: true, acceptedPublication: true,
+		published:     publishedVersion(func(record ontology.PropertyType) string { return record.Published }),
 		presentations: []resourcePresentation{presented("property-type", "property-type", "Shared property", "Shared properties", 6)},
 	},
 	{
 		app: ID, typ: ValueTypeType, kind: platform.AssetValueType, family: definitionResources, released: true, defaultDraft: true, directInstall: true, acceptedPublication: true,
+		published:     publishedVersion(func(record ontology.ValueType) string { return record.Published }),
 		presentations: []resourcePresentation{presented("value-type", "value-type", "Value type", "Value types", 7)},
 	},
 	{
 		app: ID, typ: LinkTypeType, kind: platform.AssetLinkType, family: definitionResources, released: true, defaultDraft: true, directInstall: true, acceptedPublication: true,
+		published:     publishedVersion(func(record ontology.LinkType) string { return record.Published }),
 		presentations: []resourcePresentation{presented("link-type", "link-type", "Link type", "Link types", 5)},
 	},
 	{
 		app: ID, typ: InterfaceType, kind: platform.AssetInterface, family: definitionResources, released: true, defaultDraft: true, directInstall: true, acceptedPublication: true,
+		published:     publishedVersion(func(record ontology.InterfaceRecord) string { return record.Published }),
 		presentations: []resourcePresentation{presented("interface", "interfaces", "Interface", "Interfaces", 8)},
 	},
 	{
 		app: ID, typ: protocol.FunctionType, kind: platform.AssetFunction, family: definitionResources, released: true, defaultDraft: true, directInstall: true, acceptedPublication: true,
+		published:     publishedVersion(func(record protocol.Function) string { return record.Published }),
 		presentations: []resourcePresentation{presented("function", "function", "AI function", "AI functions", 13)},
 	},
 	{
 		app: ID, typ: ObjectTypeGroupType, kind: platform.AssetObjectTypeGroup, family: definitionResources, released: true, defaultDraft: true, directInstall: true, acceptedPublication: true,
+		published:     publishedVersion(func(record ontology.ObjectTypeGroup) string { return record.Published }),
 		presentations: []resourcePresentation{presented("object-type-group", "object-type-group", "Object type group", "Object type groups", 4)},
 	},
 	{

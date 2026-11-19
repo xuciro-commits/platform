@@ -18,15 +18,16 @@ const MaxContextBytes = 8 << 20
 const MaxText = 4096
 
 type Expr struct {
-	Op     string           `json:"op"`
-	Kind   string           `json:"kind"`
-	Args   []Expr           `json:"args,omitempty"`
-	Lit    *Literal         `json:"lit,omitempty"`
-	Ref    string           `json:"ref,omitempty"`
-	Path   []string         `json:"path,omitempty"`
-	Agg    *Aggregate       `json:"agg,omitempty"`
-	In     *Expr            `json:"in,omitempty"`
-	Window *WindowReference `json:"window,omitempty"`
+	location string
+	Op       string           `json:"op"`
+	Kind     string           `json:"kind"`
+	Args     []Expr           `json:"args,omitempty"`
+	Lit      *Literal         `json:"lit,omitempty"`
+	Ref      string           `json:"ref,omitempty"`
+	Path     []string         `json:"path,omitempty"`
+	Agg      *Aggregate       `json:"agg,omitempty"`
+	In       *Expr            `json:"in,omitempty"`
+	Window   *WindowReference `json:"window,omitempty"`
 }
 type Literal struct {
 	Value   json.RawMessage `json:"value"`
@@ -81,6 +82,7 @@ type Context struct {
 	Me      string                   `json:"me"`
 	Now     time.Time                `json:"now"`
 	Today   string                   `json:"today"`
+	item    *itemScope
 	source  RefSource
 }
 type Issue struct {

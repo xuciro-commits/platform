@@ -42,16 +42,21 @@ func (p *Program) EvalFrozenFormula(c Context) (Result, error) {
 
 var trueData, falseData = json.RawMessage("true"), json.RawMessage("false")
 
-func (p *Program) arg(at string, i int) string {
+func (p *Program) arg(e Expr, at string, i int) string {
 	if p.row {
 		return at
+	}
+	if path := e.Args[i].location; path != "" {
+		return path
 	}
 	return fmt.Sprintf("%s.args[%d]", at, i)
 }
 func (p *Program) Eval(c Context) (Result, error) {
-	raw, encodeErr := json.Marshal(c)
-	if encodeErr != nil || len(raw) > MaxContextBytes {
-		return Result{}, fail("budget", "$", fmt.Sprintf("captured rule context is %d bytes; limit is %d", len(raw), MaxContextBytes))
+	if !c.fitsBudget() {
+		raw, err := json.Marshal(c)
+		if err != nil || len(raw) > MaxContextBytes {
+			return Result{}, fail("budget", "$", fmt.Sprintf("captured rule context is %d bytes; limit is %d", len(raw), MaxContextBytes))
+		}
 	}
 	reasons := []Issue{}
 	v, err := p.eval(p.expr, c, "$", &reasons)
@@ -123,7 +128,7 @@ func (p *Program) eval(e Expr, c Context, at string, reasons *[]Issue) (Value, e
 	}
 	if e.Op == "path" {
 		key := e.Args[0].Ref + "." + strings.Join(e.Path, ".")
-		if v, ok := c.Refs[key]; ok {
+		if v, ok := c.field(key); ok {
 			if !same(v.Kind, e.Kind) {
 				return Value{}, fail("type", at, "path runtime type differs")
 			}
@@ -133,26 +138,26 @@ func (p *Program) eval(e Expr, c Context, at string, reasons *[]Issue) (Value, e
 		return Missing(e.Kind), nil
 	}
 	if e.Op == "if" {
-		condition, err := p.eval(e.Args[0], c, p.arg(at, 0), reasons)
+		condition, err := p.eval(e.Args[0], c, p.arg(e, at, 0), reasons)
 		if err != nil {
 			return Value{}, err
 		}
-		value, err := validateValue(condition, p.arg(at, 0))
+		value, err := validateValue(condition, p.arg(e, at, 0))
 		if err != nil {
 			return Value{}, err
 		}
 		if value == nil {
-			return Value{}, fail("missing", p.arg(at, 0), "conditional test is missing or null")
+			return Value{}, fail("missing", p.arg(e, at, 0), "conditional test is missing or null")
 		}
 		branch := 2
 		if value.(bool) {
 			branch = 1
 		}
-		return p.eval(e.Args[branch], c, p.arg(at, branch), reasons)
+		return p.eval(e.Args[branch], c, p.arg(e, at, branch), reasons)
 	}
 	if e.Op == "coalesce" {
 		for i, arg := range e.Args {
-			v, err := p.eval(arg, c, p.arg(at, i), reasons)
+			v, err := p.eval(arg, c, p.arg(e, at, i), reasons)
 			if err != nil {
 				return Value{}, err
 			}
@@ -167,10 +172,15 @@ func (p *Program) eval(e Expr, c Context, at string, reasons *[]Issue) (Value, e
 		}
 		return Value{Kind: e.Kind, Status: "null"}, nil
 	}
-	values := make([]any, 0, len(e.Args))
-	states := make([]Value, 0, len(e.Args))
+	var localValues [2]any
+	var localStates [2]Value
+	values, states := localValues[:0], localStates[:0]
+	if len(e.Args) > len(localValues) {
+		values = make([]any, 0, len(e.Args))
+		states = make([]Value, 0, len(e.Args))
+	}
 	for i, arg := range e.Args {
-		v, err := p.eval(arg, c, p.arg(at, i), reasons)
+		v, err := p.eval(arg, c, p.arg(e, at, i), reasons)
 		if err != nil {
 			return Value{}, err
 		}
@@ -193,7 +203,7 @@ func (p *Program) eval(e Expr, c Context, at string, reasons *[]Issue) (Value, e
 					return Value{}, fail("missing", at, "emptiness operand is missing")
 				}
 			default:
-				return Value{}, fail("missing", p.arg(at, i), "required operand is missing or null")
+				return Value{}, fail("missing", p.arg(e, at, i), "required operand is missing or null")
 			}
 		}
 		values = append(values, x)
@@ -556,6 +566,18 @@ func (p *Program) eval(e Expr, c Context, at string, reasons *[]Issue) (Value, e
 
 func jsonEqual(a, b any) bool {
 	switch x := a.(type) {
+	case nil:
+		if b == nil {
+			return true
+		}
+	case bool:
+		if y, ok := b.(bool); ok {
+			return x == y
+		}
+	case string:
+		if y, ok := b.(string); ok && x == y {
+			return true
+		}
 	case json.Number:
 		switch y := b.(type) {
 		case json.Number:
@@ -593,12 +615,10 @@ func (p *Program) aggregate(e Expr, c Context, at string, reasons *[]Issue) (Val
 	}
 	items := append([]Item(nil), set.Items...)
 	slices.SortFunc(items, func(a, b Item) int { return strings.Compare(a.ID, b.ID) })
-	seen := map[string]bool{}
-	for _, item := range items {
-		if item.ID == "" || seen[item.ID] {
+	for i, item := range items {
+		if item.ID == "" || i > 0 && items[i-1].ID == item.ID {
 			return Value{}, fail("identity", at, "collection keys must be distinct and stable")
 		}
-		seen[item.ID] = true
 	}
 	quantifier := e.Op == "all" || e.Op == "any" || e.Op == "none"
 	var projected []json.RawMessage
@@ -627,25 +647,20 @@ func (p *Program) aggregate(e Expr, c Context, at string, reasons *[]Issue) (Val
 			return Value{}, err
 		}
 	}
+	field := strings.Join(e.Agg.Field, ".")
 	for i, item := range items {
 		if e.Op == "count" {
 			_ = fold.Add(Value{})
 			continue
 		}
-		child := c
-		child.Refs = map[string]Value{}
-		for key, value := range c.Refs {
-			child.Refs[key] = value
-		}
-		for key, value := range item.Fields {
-			child.Refs["item."+key] = value
-		}
 		var value Value
 		var err error
 		if e.In != nil {
+			child := c
+			child.item = &itemScope{item.Fields, c.item}
 			value, err = p.eval(*e.In, child, fmt.Sprintf("%s.items[%d]", at, i), reasons)
 		} else {
-			value = item.Fields[strings.Join(e.Agg.Field, ".")]
+			value = item.Fields[field]
 			if value.Kind == "" {
 				value = Missing(e.Kind)
 			}

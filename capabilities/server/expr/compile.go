@@ -38,7 +38,7 @@ func compile(e Expr, s Schema, mode int) (*Program, error) {
 	}
 	var schema Schema
 	json.Unmarshal(schemaRaw, &schema)
-	program := &Program{expr: cloneExpr(e), schema: schema, patterns: map[string]*regexp.Regexp{}, row: mode == modeRecord}
+	program := &Program{expr: cloneExpr(e, "$"), schema: schema, patterns: map[string]*regexp.Regexp{}, row: mode == modeRecord}
 	if mode != modeFrozen {
 		cacheLiterals(&program.expr)
 	}
@@ -59,10 +59,15 @@ func compile(e Expr, s Schema, mode int) (*Program, error) {
 	patterns(e)
 	return program, nil
 }
-func cloneExpr(e Expr) Expr {
+func cloneExpr(e Expr, location string) Expr {
+	e.location = location
 	e.Args = append([]Expr(nil), e.Args...)
 	for i := range e.Args {
-		e.Args[i] = cloneExpr(e.Args[i])
+		path := ""
+		if location != "" {
+			path = fmt.Sprintf("%s.args[%d]", location, i)
+		}
+		e.Args[i] = cloneExpr(e.Args[i], path)
 	}
 	e.Path = append([]string(nil), e.Path...)
 	if e.Lit != nil {
@@ -80,7 +85,7 @@ func cloneExpr(e Expr) Expr {
 		e.Window = &value
 	}
 	if e.In != nil {
-		child := cloneExpr(*e.In)
+		child := cloneExpr(*e.In, "")
 		e.In = &child
 	}
 	return e

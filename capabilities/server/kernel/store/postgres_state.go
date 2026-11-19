@@ -280,6 +280,9 @@ func (j *Postgres) compareState(ctx context.Context, tx pgx.Tx, tenant string, p
 }
 
 func sameJSON(a, b []byte) bool {
+	if bytes.Equal(a, b) {
+		return json.Valid(a)
+	}
 	var x, y any
 	dx := json.NewDecoder(bytes.NewReader(a))
 	dx.UseNumber()
@@ -294,13 +297,56 @@ func sameJSON(a, b []byte) bool {
 }
 
 func (j *Postgres) writeState(ctx context.Context, tx pgx.Tx, tenant string, position int64, d StateDelta) error {
-	for _, r := range d.Records {
-		var n int
-		var head string
-		err := tx.QueryRow(ctx, `select history_count,history_head from runtime_records where tenant=$1 and type=$2 and id=$3`, tenant, r.Type, r.ID).Scan(&n, &head)
-		if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+	type historyTip struct {
+		count int
+		head  string
+	}
+	tips := make(map[[2]string]historyTip, len(d.Records))
+	if len(d.Records) != 0 {
+		types, ids := make([]string, len(d.Records)), make([]string, len(d.Records))
+		for i, record := range d.Records {
+			types[i], ids[i] = record.Type, record.ID
+		}
+		rows, err := tx.Query(ctx, `select r.type,r.id,r.history_count,r.history_head from runtime_records r
+			join unnest($2::text[],$3::text[]) as wanted(type,id) using(type,id) where r.tenant=$1`, tenant, types, ids)
+		if err != nil {
 			return err
 		}
+		for rows.Next() {
+			var typ, id string
+			var tip historyTip
+			if err := rows.Scan(&typ, &id, &tip.count, &tip.head); err != nil {
+				rows.Close()
+				return err
+			}
+			tips[[2]string{typ, id}] = tip
+		}
+		rows.Close()
+		if err := rows.Err(); err != nil {
+			return err
+		}
+	}
+	var batch pgx.Batch
+	flush := func() error {
+		if batch.Len() == 0 {
+			return nil
+		}
+		err := tx.SendBatch(ctx, &batch).Close()
+		batch = pgx.Batch{}
+		return err
+	}
+	queue := func(sql string, args ...any) error {
+		batch.Queue(sql, args...)
+		if batch.Len() == 256 {
+			return flush()
+		}
+		return nil
+	}
+	for _, r := range d.Records {
+		key := [2]string{r.Type, r.ID}
+		tip := tips[key]
+		n, head := tip.count, tip.head
+		var err error
 		base, h := r.HistoryBase, r.History
 		if base < 0 {
 			base = n
@@ -359,13 +405,17 @@ func (j *Postgres) writeState(ctx context.Context, tx pgx.Tx, tenant string, pos
 			return fmt.Errorf("record history appended chain differs")
 		}
 		for i, image := range h {
-			if _, err = tx.Exec(ctx, `insert into runtime_history (tenant,type,id,pos,image,query) values ($1,$2,$3,$4,$5,$6::jsonb)`, tenant, r.Type, r.ID, base+i, []byte(image), string(image)); err != nil {
+			if err := queue(`insert into runtime_history (tenant,type,id,pos,image,query) values ($1,$2,$3,$4,$5,$6::jsonb)`, tenant, r.Type, r.ID, base+i, []byte(image), string(image)); err != nil {
 				return err
 			}
 		}
-		if _, err = tx.Exec(ctx, `insert into runtime_records (tenant,type,id,image,query,history_count,seq,history_head) values ($1,$2,$3,$4,$5::jsonb,$6,$7,$8) on conflict(tenant,type,id) do update set image=excluded.image,query=excluded.query,history_count=excluded.history_count,seq=excluded.seq,history_head=excluded.history_head`, tenant, r.Type, r.ID, []byte(r.Image), string(r.Image), base+len(h), position, head); err != nil {
+		if err := queue(`insert into runtime_records (tenant,type,id,image,query,history_count,seq,history_head) values ($1,$2,$3,$4,$5::jsonb,$6,$7,$8) on conflict(tenant,type,id) do update set image=excluded.image,query=excluded.query,history_count=excluded.history_count,seq=excluded.seq,history_head=excluded.history_head`, tenant, r.Type, r.ID, []byte(r.Image), string(r.Image), base+len(h), position, head); err != nil {
 			return err
 		}
+		tips[key] = historyTip{base + len(h), head}
+	}
+	if err := flush(); err != nil {
+		return err
 	}
 	for _, replacement := range d.Replacements {
 		var image []byte
@@ -381,19 +431,18 @@ func (j *Postgres) writeState(ctx context.Context, tx pgx.Tx, tenant string, pos
 		}
 	}
 	for _, c := range d.Changes {
-		if c.Index == 0 {
-			if err := tx.QueryRow(ctx, `select coalesce(max(num),0)+1 from runtime_changes where tenant=$1 and app=$2`, tenant, c.App).Scan(&c.Index); err != nil {
-				return err
-			}
-		}
-		if _, err := tx.Exec(ctx, `insert into runtime_changes (tenant,app,id,key,num,image) values ($1,$2,$3,$4,$5,$6)`, tenant, c.App, c.ID, c.Key, c.Index, c.Image); err != nil {
+		if err := queue(`insert into runtime_changes (tenant,app,id,key,num,image) values ($1,$2,$3,$4,
+			coalesce(nullif($5::int,0),(select coalesce(max(num),0)+1 from runtime_changes where tenant=$1 and app=$2)), $6)`, tenant, c.App, c.ID, c.Key, c.Index, c.Image); err != nil {
 			return err
 		}
 	}
 	for _, v := range d.Values {
-		if _, err := tx.Exec(ctx, `insert into runtime_values (tenant,owner,key,image,query,seq) values ($1,$2,$3,$4,$5::jsonb,$6) on conflict(tenant,owner,key) do update set image=excluded.image,query=excluded.query,seq=excluded.seq`, tenant, v.Owner, v.Key, []byte(v.Image), string(v.Image), position); err != nil {
+		if err := queue(`insert into runtime_values (tenant,owner,key,image,query,seq) values ($1,$2,$3,$4,$5::jsonb,$6) on conflict(tenant,owner,key) do update set image=excluded.image,query=excluded.query,seq=excluded.seq`, tenant, v.Owner, v.Key, []byte(v.Image), string(v.Image), position); err != nil {
 			return err
 		}
+	}
+	if err := flush(); err != nil {
+		return err
 	}
 	for _, update := range d.ValueUpdates {
 		var image []byte

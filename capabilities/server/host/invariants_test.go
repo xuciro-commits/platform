@@ -2,7 +2,10 @@ package host
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
+	"errors"
+	"os"
 	"platformserver/kernel/protocol"
 	dataowner "platformserver/services/data"
 	"platformserver/services/data/lineage"
@@ -52,6 +55,139 @@ func TestInvariantK1ReplayIsByteIdentical(t *testing.T) {
 		if differing := differingTypes(want, restored.recordImage(t)); len(differing) != 0 {
 			t.Fatalf("replay %d differs from the live record store in %v", replay, differing)
 		}
+	}
+	for _, mode := range []string{"file", "postgres"} {
+		t.Run(mode, func(t *testing.T) {
+			decode := func(raw json.RawMessage) any {
+				var value any
+				decoder := json.NewDecoder(bytes.NewReader(raw))
+				decoder.UseNumber()
+				if err := decoder.Decode(&value); err != nil {
+					t.Fatal(err)
+				}
+				return value
+			}
+
+			ctx := context.Background()
+			dir := t.TempDir()
+			open := func() persistence.StorageBundle {
+				var store persistence.StorageBundle
+				var err error
+				if mode == "file" {
+					store, err = OpenFileJournal(dir)
+				} else {
+					url := os.Getenv("PLATFORM_BENCH_DATABASE")
+					if url == "" {
+						t.Skip("requires an isolated PostgreSQL database")
+					}
+					store, err = OpenJournal(ctx, url)
+				}
+				if err != nil {
+					t.Fatal(err)
+				}
+				return store
+			}
+			journal := open()
+			defer func() { journal.Close() }()
+			if _, err := journal.Entries(ctx, live.ID, 0); err != nil {
+				t.Fatal(err)
+			}
+			fresh := newInvariantTenantSetup(t, live.ID, nil)
+			if mode == "postgres" {
+				base, err := fresh.RuntimeStateDelta(fresh.runtimeOwners())
+				if err != nil {
+					t.Fatal(err)
+				}
+				if err := journal.InitializeState(ctx, live.ID, 0, base); err != nil {
+					t.Fatal(err)
+				}
+			}
+			for i, entry := range live.entries {
+				id, err := acceptedIdentity(entry.Body)
+				if err != nil {
+					t.Fatal(err)
+				}
+				saved, err := journal.AppendAccepted(ctx, live.ID, entry, id.Key, id.Hash)
+				if err != nil {
+					t.Fatal(err)
+				}
+				retry, err := journal.AppendAccepted(ctx, live.ID, entry, id.Key, id.Hash)
+				if err != nil || !bytes.Equal(saved, retry) || journal.Position(live.ID) != int64(i+1) {
+					t.Fatalf("retry at %d: %v", i+1, err)
+				}
+				if _, err := journal.AppendAccepted(ctx, live.ID, entry, id.Key, id.Hash+"x"); !errors.Is(err, persistence.ErrAcceptedConflict) {
+					t.Fatalf("conflict at %d: %v", i+1, err)
+				}
+				if mode == "file" && i+1 == len(live.entries)/2 {
+					prefix, err := journal.Entries(ctx, live.ID, 0)
+					if err != nil {
+						t.Fatal(err)
+					}
+					if err := fresh.recoverEntries(prefix); err != nil {
+						t.Fatal(err)
+					}
+					raw, pos, err := fresh.Snapshot(func() int64 { return journal.Position(live.ID) })
+					if err != nil {
+						t.Fatal(err)
+					}
+					if err := journal.SaveSnapshot(ctx, live.ID, pos, "test", raw); err != nil {
+						t.Fatal(err)
+					}
+				}
+			}
+			journal.Close()
+			journal = open()
+			entries, err := journal.Entries(ctx, live.ID, 0)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(entries) != len(live.entries) {
+				t.Fatalf("reopened with %d results", len(entries))
+			}
+			for i, entry := range entries {
+				if !reflect.DeepEqual(decode(entry.Body), decode(live.entries[i].Body)) {
+					t.Fatalf("stored result %d differs", i+1)
+				}
+			}
+			full := live.restore(t, entries)
+			got := full.recordImage(t)
+			for _, typ := range differingTypes(want, got) {
+				if mode == "file" {
+					t.Fatalf("file replay changed %s", typ)
+				}
+				if !reflect.DeepEqual(decode(want[typ]), decode(got[typ])) {
+					t.Fatalf("SQL replay changed %s", typ)
+				}
+			}
+			if mode == "file" {
+				pos, raw, found, err := journal.Snapshot(ctx, live.ID, "test")
+				if err != nil || !found || pos != int64(len(entries)/2) {
+					t.Fatalf("snapshot position %d: %v", pos, err)
+				}
+				tail := newInvariantTenantSetup(t, live.ID, nil)
+				if err := tail.Restore(raw); err != nil {
+					t.Fatal(err)
+				}
+				suffix, err := journal.Entries(ctx, live.ID, pos)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if err := tail.recoverEntries(suffix); err != nil {
+					t.Fatal(err)
+				}
+				if diff := differingTypes(want, tail.recordImage(t)); len(diff) > 0 {
+					t.Fatalf("snapshot recovery differs for %v", diff)
+				}
+			} else {
+				expected, err := live.RuntimeStateDelta(live.runtimeOwners())
+				if err != nil {
+					t.Fatal(err)
+				}
+				if err := journal.InitializeState(ctx, live.ID, int64(len(entries)), expected); err != nil {
+					t.Fatal(err)
+				}
+			}
+		})
 	}
 	for i, e := range live.entries {
 		if e.Epoch != persistence.FormatEpoch {

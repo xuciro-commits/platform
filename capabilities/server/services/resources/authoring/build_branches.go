@@ -29,8 +29,8 @@ const (
 )
 
 func BranchDraftType(typ string) bool {
-	_, err := draftAssetRef(typ, "")
-	return err == nil
+	_, found := resourceDescriptorOfType(typ)
+	return found
 }
 
 func BranchResource(typ, name string) (platform.AssetRef, error) {
