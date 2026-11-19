@@ -1375,3 +1375,27 @@ test("reads: each read list opens, the audit loads its next page, and a marking 
   await page.getByRole("alertdialog").getByRole("button", { name: "Archive marking", exact: true }).click();
   await expect(main.getByRole("row", { name: /Trunk marking.*Archived/ })).toBeVisible();
 });
+
+test("trees: the organization rolls people up its units and a trace opens to its steps", async ({ page }) => {
+  await signIn(page);
+  const main = page.getByRole("main");
+  await open(page, "Admin", "Organization");
+  await expect(main.getByRole("row").filter({ hasText: "Acme Industries" })).toContainText("3");
+  const sales = main.getByRole("row").filter({ hasText: /^Sales\s*department/ });
+  await expect(sales).toContainText("2");
+  await expect(main.getByRole("row").filter({ hasText: "Sales North" })).toHaveCount(0);
+  await sales.click();
+  await page.keyboard.press("ArrowRight");
+  await expect(main.getByRole("row").filter({ hasText: "Sales North" })).toContainText("1");
+  await page.getByRole("radio", { name: "Sites" }).click();
+  await expect(main.getByRole("row").filter({ hasText: /^Operations/ })).toContainText("1");
+
+  await open(page, "Operations", "Traces");
+  const traces = main.getByRole("row").filter({ hasText: /^GET / });
+  await expect(traces.first()).toBeVisible();
+  const before = await main.getByRole("row").count();
+  await traces.first().click();
+  await page.keyboard.press("ArrowRight");
+  await expect.poll(() => main.getByRole("row").count()).toBeGreaterThan(before);
+  await expect(main.getByRole("row").filter({ hasText: "Request completed" }).first()).toBeVisible();
+});

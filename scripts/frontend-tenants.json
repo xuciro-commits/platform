@@ -16,7 +16,8 @@
           "platform": "admin",
           "build": "builder",
           "ai": "admin",
-          "agent": "admin"
+          "agent": "admin",
+          "enterprise": "admin"
         }
       },
       {

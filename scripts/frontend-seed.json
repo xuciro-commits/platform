@@ -1,6 +1,23 @@
 {
   "members": { "admin-1": "Dana Whitfield", "builder-1": "Omar Haddad", "user-1": "Yuki Tanaka" },
   "project": { "name": "sales", "title": "Sales" },
+  "organization": [
+    ["enterprise.kind.add", "enterprise.model", "management", { "name": "Management", "kind": "management" }],
+    ["enterprise.kind.add", "enterprise.model", "sites", { "name": "Sites", "kind": "site" }],
+    ["enterprise.element.add", "enterprise.element", "acme", { "stereotype": "ActualOrganization", "name": "Acme Industries", "kind": "company" }],
+    ["enterprise.element.add", "enterprise.element", "sales", { "stereotype": "ActualOrganization", "name": "Sales", "kind": "department" }],
+    ["enterprise.element.add", "enterprise.element", "operations", { "stereotype": "ActualOrganization", "name": "Operations", "kind": "department" }],
+    ["enterprise.element.add", "enterprise.element", "sales-north", { "stereotype": "ActualOrganization", "name": "Sales North", "kind": "team" }],
+    ["enterprise.element.add", "enterprise.element", "sales-south", { "stereotype": "ActualOrganization", "name": "Sales South", "kind": "team" }],
+    ["enterprise.relationship.add", "enterprise.relationship", "sales-in-acme", { "stereotype": "ActualResourceRelationship", "source": "sales", "target": "acme", "kind": "management" }],
+    ["enterprise.relationship.add", "enterprise.relationship", "operations-in-acme", { "stereotype": "ActualResourceRelationship", "source": "operations", "target": "acme", "kind": "management" }],
+    ["enterprise.relationship.add", "enterprise.relationship", "north-in-sales", { "stereotype": "ActualResourceRelationship", "source": "sales-north", "target": "sales", "kind": "management" }],
+    ["enterprise.relationship.add", "enterprise.relationship", "south-in-sales", { "stereotype": "ActualResourceRelationship", "source": "sales-south", "target": "sales", "kind": "management" }],
+    ["enterprise.relationship.add", "enterprise.relationship", "north-at-operations", { "stereotype": "ActualResourceRelationship", "source": "sales-north", "target": "operations", "kind": "sites" }],
+    ["enterprise.relationship.add", "enterprise.relationship", "admin-in-acme", { "stereotype": "ActualOrganizationRole", "source": "member:admin-1", "target": "acme", "role": "chair" }],
+    ["enterprise.relationship.add", "enterprise.relationship", "builder-in-north", { "stereotype": "ActualOrganizationRole", "source": "member:builder-1", "target": "sales-north", "role": "employee" }],
+    ["enterprise.relationship.add", "enterprise.relationship", "user-in-south", { "stereotype": "ActualOrganizationRole", "source": "member:user-1", "target": "sales-south", "role": "employee" }]
+  ],
   "words": {
     "en": { "qualifying": "Qualifying", "proposal": "Proposal", "negotiation": "Negotiation", "won": "Won", "lost": "Lost" },
     "zh-CN": { "qualifying": "资格确认", "proposal": "方案", "negotiation": "谈判", "won": "赢单", "lost": "丢单" }

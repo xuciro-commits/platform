@@ -36,6 +36,7 @@
   "Draft": "草稿",
   "draft": "草稿",
   "error": "错误",
+  "Error": "错误",
   "Every change goes through rules, roles and an audit trail.": "每一次改动都经过规则、角色与审计。",
   "everyone": "所有人",
   "failed": "失败",
@@ -72,6 +73,7 @@
   "Notification": "通知",
   "object": "对象",
   "ok": "正常",
+  "OK": "正常",
   "Only when": "仅当",
   "Open": "进行中",
   "open": "进行中",
@@ -124,6 +126,7 @@
   "Views": "视图",
   "warn": "警告",
   "warning": "警告",
+  "Warning": "警告",
   "What reaches you, and where it arrives.": "哪些消息会送到你，送到哪里。",
   "worker": "后台",
   "writeback": "回写"

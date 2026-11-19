@@ -28,7 +28,10 @@ const identity = await ready();
 let catalogue = await call("/v1/actions");
 
 async function submit(type, id, action, payload, authority = "build", expectedRevision = 0) {
-  const schema = `${type}.${action}`;
+  return send(`${type}.${action}`, type, id, payload, authority, expectedRevision);
+}
+
+async function send(schema, type, id, payload, authority, expectedRevision = 0) {
   const version = catalogue.find((entry) => entry.schema === schema)?.schemaVersion;
   const response = await fetch(host + "/v1/submissions", {
     method: "POST",
@@ -93,6 +96,11 @@ for (const path of ["./frontend-fixtures/production-provider-0.1.4.json", "../de
   const inspected = await call("/v1/packages/inspect", { content });
   const accepted = await submit("platform.package", inspected.descriptor.id, "import", { id: inspected.descriptor.id, digest: inspected.digest }, "platform", packageRevision);
   packageRevision = accepted.revision;
+}
+for (const [schema, type, id, payload] of sample.organization) {
+  const authority = declarations.find((entry) => entry.tenantId === identity.tenantId && entry.dataClass === type)?.authorityId;
+  if (!authority) throw new Error(`${type}: no write authority`);
+  await send(schema, type, id, payload, authority);
 }
 const words = declarations.find((entry) => entry.tenantId === identity.tenantId && entry.dataClass === "platform.translation")?.authorityId;
 if (!words) throw new Error("platform.translation: no write authority");

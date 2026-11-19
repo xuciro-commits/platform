@@ -23,7 +23,7 @@
 5. **说明不进代码。** 我们不写注释：模板说明里讲的道理，留在这里或 [frontend](frontend.md)，代码里删掉注释。
 6. **一个表现服务所有入口。** 新表现做成 `src/pages/` 里的一个声明函数（像 `recordList`、`listPage`），入口只写一句声明。
 
-顺序：1.10.2c → d → e → 1.10.3 → 1.10.4。
+顺序：1.10.2d → e → 1.10.3 → 1.10.4。
 
 ## 1.10 切换
 
@@ -31,31 +31,12 @@
 
 ### 1.10.2 未建入口按数据形状落地
 
-侧栏还有 5 个“未建”入口，按宿主给的数据形状分成三类；每类一个表现，入口只写声明。
+侧栏还有 3 个“未建”入口，按宿主给的数据形状分成两类；每类一个表现，入口只写声明。
 
 | 类 | 数据形状 | 表现 | 起点 | 入口 |
 |---|---|---|---|---|
-| c | 父行由子行汇总出来的层级 | `treeList`（新） | 官方 `table-tree` | 组织、追踪 |
 | d | 按应用分组的设置项 | `settingsPage`（新） | 自己的设置行（来自官方 `settings-dialog`），框架同官方 `settings-sidebar` | 设置 |
 | e | 一份汇总数字加几张小表 | `dashboardPage`（已有） | 已有（官方 `dashboard`） | 指标、健康 |
-
-**1.10.2c 树表** 落官方 `table-tree`，改成 `src/pages/TreeList.tsx` 的 `treeList({ title, about, read, nodes, columns, rollup })`；
-`nodes(answer)` 给出 `{ id, parent?, row }`，`rollup(children)` 给出父行的汇总列。模板说明里这些照留：
-
-- 展开与拍平用 `useTableTreeState`，缩进与箭头用 `useTableTreeData`；不手写展开集合与递归拍平。
-- 排序经 `sortSiblings: applySort`，只在兄弟间排，子行不离开父行。
-- 汇总从叶子算，不存；同一行的几列取自同一个子行。搜索剪枝后重算一次汇总；搜索时强制展开，清空后还原原来的展开。
-- 键盘插件 `useTreeKeyboardNav` 照搬；模板用路径当标识，我们的标识不是路径，父行查找改用 `parent` 建的表。
-- 光标与选中分开；树列换行不截断；名称列 `proportional` 带最小宽，固定长度的列用 `pixel`。
-- 删掉仓库外壳：关于栏、分支栏、README、社交计数；图标换成 Heroicons。
-
-两个入口：
-
-- `admin/organization`：`/v1/organization` 有多个结构（`structures`），页头一个结构选择（不超过三个用 SegmentedControl，否则 Selector）。
-  选中结构的 `edges` 定父子；只取今天有效的期间。列：单位、种类、人数（`memberships` 含下级的汇总）。
-  夹具宿主下管理员读它是 403：先查哪个角色可读，在 `scripts/frontend-tenants.json` 给夹具身份授上，不放宽宿主。
-- `operations/traces`：`/v1/monitoring/traces` 的条目按 `traceId` 成父行。父行：路由、开始（最早）、耗时（最晚减最早）、
-  结果（错 > 警告 > 正常，用状态点）、条数；子行按时间排。验收 trunk：组织展开一层看到汇总人数；追踪展开一条看到子行。
 
 **1.10.2d 设置页** 把 `src/shell/settings/rows.tsx` 挪到 `src/pages/SettingsRows.tsx`，设置对话框与新页共用。
 `settingsPage` 框架同官方 `settings-sidebar`：左边 SideNav 列出 `/v1/settings` 的应用，右边按设置项的 `type` 出控件

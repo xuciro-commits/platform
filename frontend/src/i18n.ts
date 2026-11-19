@@ -458,6 +458,14 @@ export const zhCN: Record<string, string> = {
   "Opened by": "开启人",
   "Expires": "到期",
   "Uses": "使用次数",
+  "The organization's units in each structure, with the people who belong to each unit and everything below it.": "组织在每个结构里的单位，以及属于每个单位及其下级的人数。",
+  "Unit": "单位",
+  "A trace follows one request through the platform: every step it took, how long it ran and how it ended.": "追踪跟着一次请求走过平台：它经过的每一步、运行了多久、怎样结束。",
+  "Step": "步骤",
+  "Duration": "耗时",
+  "Steps": "步数",
+  "Structure": "结构",
+  "Try a different search.": "换个词再搜。",
 };
 
 const supported = (language: string) => (language.startsWith("zh") ? "zh-CN" : "en");
