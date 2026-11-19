@@ -13,5 +13,11 @@ export default listPage<Api.AccessConfig, Api.CustomRole>({
     { key: "actions", header: "Actions", kind: "code", text: (role) => role.actions.join(", ") },
   ],
   groups: [{ key: "app", label: "App", of: (role) => role.app }],
-  actions: { create: "platform.role.save", row: () => [{ schema: "platform.role.remove" }] },
+  actions: {
+    create: "platform.role.save",
+    row: (role) => [
+      { schema: "platform.role.save", label: "Edit", initial: { title: role.title, actions: role.actions }, fixed: { app: role.app } },
+      { schema: "platform.role.remove" },
+    ],
+  },
 });

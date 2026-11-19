@@ -29,7 +29,8 @@ export type Editor = {
 };
 
 const blank = (value: unknown) => value == null || value === "";
-const same = (left: unknown, right: unknown) => left === right || (blank(left) && blank(right));
+const same = (left: unknown, right: unknown) => left === right || (blank(left) && blank(right)) ||
+  (Array.isArray(left) && Array.isArray(right) && JSON.stringify(left) === JSON.stringify(right));
 
 export function useEditor(described: Described, id: string, values: Values, revision: number): Editor {
   const edit = described.edit;
@@ -220,6 +221,7 @@ export function FieldGroup({ described, editor, sections, direction, focusEmpty,
                   parameter={parameter}
                   described={described.entity}
                   value={value}
+                  form={editor.values}
                   referenceName={referenceName}
                   status={editor.status[field.name]}
                   onChange={(value) => editor.change(parameter, value)}

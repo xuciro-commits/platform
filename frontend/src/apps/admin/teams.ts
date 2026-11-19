@@ -12,5 +12,11 @@ export default listPage<Api.AccessConfig, Api.Team>({
     { key: "members", header: "Members", text: (team) => team.members.join(", ") },
     { key: "grants", header: "Grants", text: (team) => team.grants.map((grant) => `${grant.app}: ${grant.role}`).join(", ") },
   ],
-  actions: { create: "platform.team.save", row: () => [{ schema: "platform.team.remove" }] },
+  actions: {
+    create: "platform.team.save",
+    row: (team) => [
+      { schema: "platform.team.save", label: "Edit", initial: { name: team.name, members: team.members }, fixed: { grants: team.grants } },
+      { schema: "platform.team.remove" },
+    ],
+  },
 });

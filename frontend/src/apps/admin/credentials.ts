@@ -23,6 +23,13 @@ export default listPage<Api.CredentialCatalog, Api.CredentialInfo>({
   ],
   actions: {
     create: "platform.credential.save",
-    row: (credential) => (credential.state === "active" ? [{ schema: "platform.credential.disable", fixed: { expectedVersion: credential.version } }] : []),
+    row: (credential) => [
+      {
+        schema: "platform.credential.save", label: "Edit",
+        initial: { title: credential.title, kind: credential.kind, source: credential.source, reference: credential.reference, bindings: credential.bindings },
+        fixed: { id: credential.id, expectedVersion: credential.version },
+      },
+      ...(credential.state === "active" ? [{ schema: "platform.credential.disable", fixed: { expectedVersion: credential.version } }] : []),
+    ],
   },
 });

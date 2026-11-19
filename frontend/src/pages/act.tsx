@@ -53,6 +53,7 @@ export type Intent = {
   id: string;
   revision?: number;
   fixed?: Values;
+  initial?: Values;
   label: string;
   name: string;
   consequence?: string;
@@ -140,10 +141,11 @@ export function useAct(described?: Described) {
       action={pending.action}
       described={described?.entity}
       heading={pending.label}
-      confirm={pending.label}
+      confirm={pending.initial ? t("Save") : pending.label}
       id={pending.id}
       revision={pending.revision}
       fixed={pending.fixed}
+      initial={pending.initial}
       onClose={cancel}
       onDone={() => {
         pending.onDone?.();

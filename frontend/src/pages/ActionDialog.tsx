@@ -8,7 +8,7 @@ import { useState } from "react";
 import { type Api, useRead } from "../host";
 import { t } from "../i18n";
 import { reasonOf, send } from "./act";
-import { ParameterInput, enterable } from "./ParameterInput";
+import { ParameterInput, enterable, missingValue } from "./ParameterInput";
 
 type Values = Record<string, unknown>;
 type Applied = Promise<void>;
@@ -31,15 +31,24 @@ export type ActionDialogProps = {
 
 
 export function ActionDialog({ action, described, heading, confirm, id, revision, initial = {}, fixed = {}, owned, quick, onClose, onDone, perform }: ActionDialogProps) {
-  const [values, setValues] = useState<Values>(initial);
+  const [values, setValues] = useState<Values>(() => ({
+    ...Object.fromEntries(action.payload.filter((field) => field.default != null).map((field) => [field.name, field.default])),
+    ...initial,
+  }));
   const [project, setProject] = useState("");
   const [busy, setBusy] = useState(false);
   const [failure, setFailure] = useState("");
   const projects = useRead<Api.RecordPage>(owned ? "/v1/records/build.app?limit=200" : null);
-  const set = (name: string, value: unknown) => setValues((previous) => ({ ...previous, [name]: value }));
+  const set = (name: string, value: unknown) => setValues((previous) => {
+    const next = { ...previous, [name]: value };
+    if (name === "app" && String(value ?? "").trim() !== String(previous.app ?? "").trim()) {
+      for (const parameter of action.payload) if (parameter.type === "action[]") delete next[parameter.name];
+    }
+    return next;
+  });
   const shownParameters = action.payload.filter((parameter) => !(parameter.name in fixed) && enterable(parameter) && (!quick || parameter.required || parameter.name === described?.display));
   const blocked = action.payload.filter((parameter) => parameter.required && !(parameter.name in fixed) && !enterable(parameter)).map((parameter) => parameter.name);
-  const missing = shownParameters.some((parameter) => parameter.required && (values[parameter.name] == null || values[parameter.name] === ""));
+  const missing = shownParameters.some((parameter) => missingValue(parameter, values[parameter.name]));
 
   const apply = async () => {
     setBusy(true);
@@ -47,7 +56,7 @@ export function ActionDialog({ action, described, heading, confirm, id, revision
     const payload: Values = { ...fixed };
     for (const parameter of shownParameters) {
       const value = values[parameter.name];
-      if (value != null && value !== "" && value !== initial[parameter.name]) payload[parameter.name] = value;
+      if (value != null && value !== "") payload[parameter.name] = value;
     }
     if (owned) payload.project = project;
     const target = id ?? (typeof values.name === "string" ? values.name : `${action.idPrefix ?? ""}${crypto.randomUUID()}`);
@@ -89,6 +98,7 @@ export function ActionDialog({ action, described, heading, confirm, id, revision
                   parameter={parameter}
                   described={described}
                   value={values[parameter.name]}
+                  form={{ ...values, ...fixed }}
                   onChange={(value) => set(parameter.name, value)}
                 />
               ))}

@@ -56,7 +56,19 @@ const (
 var credentialName = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$`)
 
 func CredentialActions() []platform.Action {
-	fields := []platform.Field{{Name: "id", Type: "string", Required: true}, {Name: "title", Type: "string", Required: true}, {Name: "kind", Type: "string", Required: true}, {Name: "source", Type: "string", Required: true}, {Name: "reference", Type: "string"}, {Name: "bindings", Type: "json", Required: true}, {Name: "expectedVersion", Type: "integer", Required: true}, {Name: "sealed", Type: "string"}}
+	fields := []platform.Field{
+		{Name: "id", Type: "string", Required: true, Label: "Credential ID"},
+		{Name: "title", Type: "string", Required: true, Label: "Title"},
+		{Name: "kind", Type: "string", Required: true, Label: "Kind", Choices: []string{"api-key", "bearer", "password"}},
+		{Name: "source", Type: "string", Required: true, Label: "Source", Choices: []string{"deployment", "managed"}},
+		{Name: "reference", Type: "string", Label: "Reference"},
+		{Name: "bindings", Type: "lines", Required: true, Label: "Bindings", Description: "Use a consumer such as connection/sales-crm and an exact origin such as https://crm.example.com.", Fields: []platform.Field{
+			{Name: "consumer", Type: "string", Required: true, Label: "Consumer"},
+			{Name: "origin", Type: "string", Required: true, Label: "Origin"},
+		}},
+		{Name: "expectedVersion", Type: "integer", Required: true, Label: "Version", Default: platform.Raw(0)},
+		{Name: "sealed", Type: "string", Label: "Encrypted value"},
+	}
 	return []platform.Action{
 		{Schema: SchemaCredentialSave, Target: CredentialType, Capability: "credentials", Title: "Save credential", Description: "Save an authenticated encrypted value or a deployment reference; never submit plaintext.", Roles: []string{"admin"}, Payload: fields},
 		{Schema: SchemaCredentialDisable, Target: CredentialType, Capability: "credentials", Title: "Disable credential", Description: "Stop new credential use without deleting encrypted history", Roles: []string{"admin"}, Payload: []platform.Field{{Name: "expectedVersion", Type: "integer", Required: true}}},

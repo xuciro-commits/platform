@@ -30,7 +30,7 @@ func CapabilityFieldSchema(kind, description string, choices []string) platform.
 		value.Type = "number"
 	case "boolean":
 		value.Type = "boolean"
-	case "string[]", "tags", "references":
+	case "string[]", "tags", "references", "member[]", "action[]":
 		item := platform.ValueSchema{Type: "string"}
 		value.Type = "array"
 		value.Items = &item

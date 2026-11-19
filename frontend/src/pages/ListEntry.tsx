@@ -13,7 +13,7 @@ import { type ListColumn, type ListShape, ListView } from "./ListPage";
 import { enterable } from "./ParameterInput";
 import { newView, readView } from "./view";
 
-export type RowAction = { schema: string; id?: string; fixed?: Values; revision?: number };
+export type RowAction = { schema: string; id?: string; fixed?: Values; initial?: Values; label?: string; revision?: number };
 export type ListDefinition<Answer, Row> = Omit<ListShape<Answer, Row>, "columns" | "page" | "remote"> & {
   read: string;
   columns: ListColumn<Row>[] | { (answer: Answer): ListColumn<Row>[] };
@@ -82,7 +82,7 @@ export function listPage<Answer, Row>(definition: ListDefinition<Answer, Row>) {
               {offered.map((offer) => (
                 <Button
                   key={offer.schema}
-                  label={t(offer.action.title)}
+                  label={t(offer.label ?? offer.action.title)}
                   variant="secondary"
                   size="sm"
                   isDisabled={act.busy}
@@ -92,7 +92,8 @@ export function listPage<Answer, Row>(definition: ListDefinition<Answer, Row>) {
                       id: offer.id ?? id,
                       revision: offer.revision,
                       fixed: offer.fixed,
-                      label: t(offer.action.title),
+                      initial: offer.initial,
+                      label: t(offer.label ?? offer.action.title),
                       name,
                       reversible: false,
                       onRefused: (reason) => setRefusal({ id, reason }),
@@ -127,7 +128,7 @@ export function listPage<Answer, Row>(definition: ListDefinition<Answer, Row>) {
         {act.element}
         {creating && create && (
           <ActionDialog action={create} heading={t(create.title)} confirm={t("Create")} onClose={() => setCreating(false)} onDone={() => setCreating(false)}
-            perform={async (payload) => void (await send(create, nameOf(payload), payload))} />
+            perform={async (payload) => void (await send(create, typeof payload.id === "string" ? payload.id : nameOf(payload), payload))} />
         )}
       </>
     );

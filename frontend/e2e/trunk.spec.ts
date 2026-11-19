@@ -1422,6 +1422,34 @@ test("reads: each read list opens, the audit loads its next page, and a marking 
   await expect(main.getByRole("row", { name: /Trunk marking.*Archived/ })).toBeVisible();
 });
 
+test("teams: create a team with two members, open it and remove it", async ({ page }) => {
+  await signIn(page);
+  await open(page, "Admin", "Teams");
+  await page.getByRole("button", { name: "New", exact: true }).click();
+  const form = page.getByRole("dialog");
+  await form.getByRole("textbox", { name: /^Name/ }).fill("Trunk review team");
+  const members = form.getByRole("button", { name: /^Members/ });
+  await members.click();
+  const options = page.getByRole("listbox");
+  await options.getByRole("option", { name: "Omar Haddad", exact: true }).click();
+  await options.getByRole("option", { name: "Yuki Tanaka", exact: true }).click();
+  await page.keyboard.press("Escape");
+  await form.getByRole("button", { name: "Create", exact: true }).click();
+  await expect(form).toBeHidden();
+
+  const team = page.getByRole("row", { name: /Trunk review team/ });
+  await team.click();
+  const details = page.getByRole("complementary", { name: "Details" });
+  await expect(details.getByRole("heading", { name: "Trunk review team" })).toBeVisible();
+  await details.getByRole("button", { name: "Edit", exact: true }).click();
+  await expect(members).toContainText("Omar Haddad");
+  await expect(members).toContainText("Yuki Tanaka");
+  await form.getByRole("button", { name: "Cancel", exact: true }).click();
+  await details.getByRole("button", { name: "Remove team", exact: true }).click();
+  await page.getByRole("alertdialog").getByRole("button", { name: "Remove team", exact: true }).click();
+  await expect(team).toHaveCount(0);
+});
+
 test("trees: the organization rolls people up its units and a trace opens to its steps", async ({ page }) => {
   await signIn(page);
   const main = page.getByRole("main");

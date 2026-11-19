@@ -66,6 +66,8 @@ export const zhCN: Record<string, string> = {
   Assignee: "负责人",
   Actions: "动作",
   "Add a row": "加一行",
+  "Remove row": "移除行",
+  "Enter an app first": "先填写应用",
   "Archive row": "归档行",
   "Cannot view": "无权查看",
   Totals: "合计",
@@ -582,7 +584,6 @@ Object.assign(zhCN, {
   "picked up": "已拿起",
   "position": "位置",
 });
-
 Object.assign(zhCN, {
   Mentions: "提及与评论",
   Commands: "命令",
@@ -594,4 +595,5 @@ Object.assign(zhCN, {
   "Objects could not be searched": "无法搜索对象",
   Navigate: "移动",
   Select: "选择",
+  "Select…": "选择…",
 });

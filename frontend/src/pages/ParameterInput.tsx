@@ -5,6 +5,7 @@ import { Field } from "@astryxdesign/core/Field";
 import { FileInput } from "@astryxdesign/core/FileInput";
 import { FormLayout } from "@astryxdesign/core/FormLayout";
 import { HStack, StackItem, VStack } from "@astryxdesign/core/Layout";
+import { MultiSelector } from "@astryxdesign/core/MultiSelector";
 import { NumberInput } from "@astryxdesign/core/NumberInput";
 import { Selector } from "@astryxdesign/core/Selector";
 import { Skeleton } from "@astryxdesign/core/Skeleton";
@@ -25,6 +26,7 @@ type ParameterInputProps = {
   parameter: Api.Field;
   described?: Api.EntityInfo;
   value: unknown;
+  form?: Record<string, unknown>;
   status?: InputStatus;
   onChange: (value: unknown) => void;
   onEnter?: () => void;
@@ -36,14 +38,90 @@ type ParameterInputProps = {
 
 const typed = new Set(["string", "longtext", "date", "datetime", "entity", "reference", "choice", "member"]);
 const numeric = new Set(["integer", "number"]);
+const multiple = new Set(["member[]", "action[]"]);
 type Attachment = { mediaSet?: string; item?: string };
 
-export function enterable(parameter: Api.Field) {
-  return Boolean(parameter.choices) || parameter.type === "boolean" || parameter.type === "attachment" || typed.has(parameter.type) || numeric.has(parameter.type);
+export function enterable(parameter: Api.Field): boolean {
+  if (parameter.type === "lines") return Boolean(parameter.fields?.length && parameter.fields.every(enterable));
+  return Boolean(parameter.choices) || parameter.type === "boolean" || parameter.type === "attachment" || typed.has(parameter.type) || numeric.has(parameter.type) || multiple.has(parameter.type);
 }
 
 export function settles(parameter: Api.Field, field?: Api.FieldInfo) {
-  return Boolean(parameter.ref || parameter.choices) || field?.type === "reference" || field?.type === "member" || parameter.type === "member" || parameter.type === "reference" || parameter.type === "boolean" || parameter.type === "attachment" || numeric.has(parameter.type);
+  return Boolean(parameter.ref || parameter.choices) || field?.type === "reference" || field?.type === "member" || parameter.type === "member" || parameter.type === "reference" || parameter.type === "boolean" || parameter.type === "attachment" || numeric.has(parameter.type) || multiple.has(parameter.type);
+}
+
+export function missingValue(parameter: Api.Field, value: unknown): boolean {
+  if (value == null || value === "") return Boolean(parameter.required);
+  if (parameter.type === "lines" && Array.isArray(value)) {
+    return (Boolean(parameter.required) && value.length === 0) ||
+      value.some((row) => parameter.fields?.some((field) => missingValue(field, row[field.name])));
+  }
+  return parameter.type === "action[]" && Boolean(parameter.required) && Array.isArray(value) && value.length === 0;
+}
+
+function MultipleInput({ parameter, value, form, label, description, status, onChange, labelHidden, control }: ParameterInputProps & {
+  label: string;
+  description?: string;
+  control?: ComponentProps<typeof MultiSelector>["controlXstyle"];
+}) {
+  const members = parameter.type === "member[]";
+  const app = String(form?.app ?? "").trim();
+  const directory = useRead<Api.MemberOption[]>(members ? "/v1/member-directory" : null);
+  const catalog = useRead<Api.Action[]>(!members && app ? "/v1/actions" : null);
+  const read = members ? directory : catalog;
+  const selected = Array.isArray(value) ? value as string[] : [];
+  const options = members
+    ? (directory.status === "ready" ? directory.data.map((member) => ({ value: member.id, label: member.name })) : [])
+    : (catalog.status === "ready" ? catalog.data.filter((action) => action.schema.startsWith(app + "."))
+      .map((action) => ({ value: action.schema, label: `${t(action.title)} · ${action.schema}` })) : []);
+  for (const id of selected) {
+    if (!options.some((option) => option.value === id)) options.push({ value: id, label: members ? t("Unnamed member") : id });
+  }
+  return <MultiSelector
+    label={label}
+    description={description}
+    isRequired={parameter.required}
+    isLabelHidden={labelHidden}
+    isLoading={read.status === "loading"}
+    isDisabled={!members && !app}
+    disabledMessage={!members && !app ? t("Enter an app first") : undefined}
+    status={status ?? (read.status === "refused" || read.status === "error" ? { type: "error", message: read.reason } : undefined)}
+    controlXstyle={control}
+    options={options}
+    value={selected}
+    onChange={onChange}
+    triggerDisplay="labels"
+    presentation="adaptive"
+    hasSearch
+    placeholder={t("Select…")}
+    searchPlaceholder={t("Search")}
+    emptyText={t("No results")}
+    emptySearchText={t("No results")}
+  />;
+}
+
+function LinesInput({ parameter, value, label, description, status, onChange, labelHidden }: ParameterInputProps & { label: string; description?: string }) {
+  const id = useId();
+  const rows = Array.isArray(value) ? value as Record<string, unknown>[] : [];
+  return <Field label={label} inputID={id} labelID={`${id}-label`} isGroupLabel isLabelHidden={labelHidden}
+    isRequired={parameter.required} description={description} descriptionID={description ? `${id}-description` : undefined} status={status} statusVariant="detached">
+    <VStack id={id} role="group" aria-labelledby={`${id}-label`} aria-describedby={description ? `${id}-description` : undefined} gap={3}>
+      {rows.map((row, index) => (
+        <VStack key={index} gap={2}>
+          <FormLayout defaultOptionality="optional">
+            {parameter.fields?.map((column) => <ParameterInput key={column.name} parameter={column} value={row[column.name]} form={row}
+              onChange={(value) => onChange(rows.map((entry, i) => i === index ? { ...entry, [column.name]: value } : entry))} />)}
+          </FormLayout>
+          <HStack hAlign="start">
+            <Button label={t("Remove row")} variant="ghost" size="sm" onClick={() => onChange(rows.filter((_, i) => i !== index))} />
+          </HStack>
+        </VStack>
+      ))}
+      <HStack hAlign="start">
+        <Button label={t("Add a row")} variant="secondary" size="sm" onClick={() => onChange([...rows, {}])} />
+      </HStack>
+    </VStack>
+  </Field>;
 }
 
 function AttachmentInput({ parameter, value, onChange, label, description }: { parameter: Api.Field; value: unknown; onChange: (value: unknown) => void; label: string; description?: string }) {
@@ -146,12 +224,20 @@ const styles = stylex.create({
   },
 });
 
-export function ParameterInput({ parameter, described, value, status, onChange, onEnter, focused, referenceName, labelHidden, quiet }: ParameterInputProps) {
+export function ParameterInput({ parameter, described, value, form, status, onChange, onEnter, focused, referenceName, labelHidden, quiet }: ParameterInputProps) {
   const [switchID, setSwitchID] = useState("");
   const control = quiet && !status ? styles.quiet : undefined;
   const field = described?.fields.find((candidate) => candidate.name === parameter.name);
   const label = t(field?.title ?? parameter.label ?? parameter.name);
   const description = field?.help;
+  if (multiple.has(parameter.type)) {
+    return <MultipleInput parameter={parameter} value={value} form={form} label={label} description={description ?? t(parameter.description)}
+      status={status} onChange={onChange} labelHidden={labelHidden} control={control} />;
+  }
+  if (parameter.type === "lines") {
+    return <LinesInput parameter={parameter} value={value} label={label} description={description ?? t(parameter.description)}
+      status={status} onChange={onChange} labelHidden={labelHidden} />;
+  }
   const reference = parameter.ref ?? (field?.type === "reference" ? field.ref : undefined);
   if (reference) {
     return <ReferenceInput type={reference} id={String(value ?? "")} name={referenceName} label={label} description={description}

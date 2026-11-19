@@ -15,7 +15,7 @@ func ActionInputSchema(action Action, entity *RecordTypeInfo, roles []string) ma
 		var columns []FieldInfo
 		if entity != nil && entity.Type == action.Target && field.Type == "lines" {
 			if original, ok := entity.Field(field.Name); ok && original.Type == "lines" {
-				columns = original.Fields
+				columns, field.Fields = original.Fields, nil
 			}
 		}
 		properties[field.Name] = inputFieldSchema(field, columns, roles)
@@ -59,14 +59,15 @@ func inputFieldSchema(field Field, columns []FieldInfo, roles []string) map[stri
 		schema["type"] = "number"
 	case "boolean":
 		schema["type"] = "boolean"
-	case "string[]", "tags", "references":
+	case "string[]", "tags", "references", "member[]", "action[]":
 		schema["type"], schema["items"] = "array", map[string]any{"type": "string"}
 	case "attachment":
 		schema = map[string]any{"type": "object", "properties": map[string]any{"mediaSet": map[string]any{"type": "string", "minLength": 1}, "item": map[string]any{"type": "string", "pattern": "^[0-9a-f]{64}$"}}, "required": []string{"mediaSet", "item"}, "additionalProperties": false}
 	case "money":
 		schema = map[string]any{"type": "object", "properties": map[string]any{"amount": map[string]any{"type": "integer"}, "currency": map[string]any{"type": "string"}}, "required": []string{"amount", "currency"}, "additionalProperties": false}
 	case "lines":
-		row, required := map[string]any{}, []string{}
+		items := ActionInputSchema(Action{Payload: field.Fields}, nil, roles)
+		row, required := items["properties"].(map[string]any), items["required"].([]string)
 		for _, column := range columns {
 			if column.ReadOnly || roles != nil && (!column.ReadsAny(roles) || !column.WritesAny(roles)) {
 				continue
@@ -80,11 +81,10 @@ func inputFieldSchema(field Field, columns []FieldInfo, roles []string) map[stri
 				required = append(required, column.Name)
 			}
 		}
-		items := map[string]any{}
-		if len(columns) > 0 {
-			items = map[string]any{"type": "object", "properties": row, "required": required, "additionalProperties": false}
+		schema["type"], schema["items"] = "array", map[string]any{}
+		if len(columns) > 0 || len(field.Fields) > 0 {
+			items["required"], schema["items"] = required, items
 		}
-		schema["type"], schema["items"] = "array", items
 	case "json":
 	default:
 		schema["type"] = "string"
