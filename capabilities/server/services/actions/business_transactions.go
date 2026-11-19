@@ -184,6 +184,11 @@ func (b *Runtime) transactAttempt(c platform.Caller, receipt *pb.ChangeRecord, t
 				}
 				return refusal
 			}
+			for _, field := range transition.Parameters {
+				if _, given := values[field.Name]; !given {
+					values[field.Name] = nil
+				}
+			}
 			spec = transactionReadSpec(txn, transition.Parameters)
 		}
 	}
@@ -303,6 +308,8 @@ func (b *Runtime) transactAttempt(c platform.Caller, receipt *pb.ChangeRecord, t
 					return err
 				}
 				if string(result.Value.Data) != "true" {
+					facts["step."+step.Name] = nil
+					ontology.TxnResult(&scope, step)
 					continue
 				}
 			}
@@ -570,9 +577,17 @@ func (b *Runtime) transactAttempt(c platform.Caller, receipt *pb.ChangeRecord, t
 				if err != nil {
 					return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
 				}
-				value, failure := ruleprotocol.RuleAssignment(expr, scope, c, subject, facts, now, b.Lookup, &sources)
+				result, failure := ruleprotocol.EvaluateRule(expr, scope, c, subject, facts, now, b.Lookup)
+				sources = append(sources, result.Sources...)
 				if failure != nil {
 					return failure
+				}
+				if result.Value.Status == "null" || result.Value.Status == "missing" {
+					continue
+				}
+				value, conversion := ruleprotocol.ExprGoValue(result.Value)
+				if conversion != nil {
+					return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, conversion.Error())
 				}
 				patch[assignment.Field] = value
 			}

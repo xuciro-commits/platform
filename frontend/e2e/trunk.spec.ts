@@ -1544,3 +1544,234 @@ test("menu: every entry in every app opens a page with its own title", async ({ 
     }
   }
 });
+
+test("crm: every CRM type can be created, edited and filtered, and lead and deal move on the kanban", async ({ page }) => {
+  test.setTimeout(120000);
+  await signIn(page);
+  const dragCard = async (fromColumn: string, cardName: string, toColumn: string) => {
+    const source = page.getByRole("region", { name: fromColumn, exact: true });
+    const target = page.getByRole("region", { name: toColumn, exact: true });
+    const card = source.getByRole("heading", { level: 4, name: cardName, exact: true });
+    await expect(card).toBeVisible();
+    const from = (await card.boundingBox())!;
+    const to = (await target.boundingBox())!;
+    await page.mouse.move(from.x + 2, from.y - 4);
+    await page.mouse.down();
+    await page.mouse.move(from.x + 40, from.y + 20, { steps: 4 });
+    await page.mouse.move(to.x + to.width / 2, to.y + to.height / 2, { steps: 8 });
+    await page.mouse.up();
+    await expect(target.getByRole("heading", { level: 4, name: cardName, exact: true })).toBeVisible();
+  };
+
+  type Case = {
+    type: string;
+    plural: string;
+    filterTerm: string;
+    filterHit: string;
+    create: (form: ReturnType<Page["getByRole"]>) => Promise<void>;
+    createdTitle: string;
+    editField: string;
+    editValue: string;
+  };
+  const cases: Case[] = [
+    {
+      type: "build.leadstatus", plural: "Lead statuses", filterTerm: "Nurture", filterHit: "Nurture",
+      create: async (form) => { await form.getByRole("textbox", { name: "Lead status" }).fill("Dormant"); },
+      createdTitle: "Dormant", editField: "Lead status", editValue: "Dormant lead",
+    },
+    {
+      type: "build.dealstatus", plural: "Deal statuses", filterTerm: "Negotiation", filterHit: "Negotiation",
+      create: async (form) => { await form.getByRole("textbox", { name: "Deal status" }).fill("Legal Review"); },
+      createdTitle: "Legal Review", editField: "Deal status", editValue: "Contract Review",
+    },
+    {
+      type: "build.leadsource", plural: "Lead sources", filterTerm: "Exhibition", filterHit: "Exhibition",
+      create: async (form) => { await form.getByRole("textbox", { name: "Source name" }).fill("Partner Webinar"); },
+      createdTitle: "Partner Webinar", editField: "Source name", editValue: "Partner Event",
+    },
+    {
+      type: "build.industry", plural: "Industries", filterTerm: "Logistics", filterHit: "Logistics",
+      create: async (form) => { await form.getByRole("textbox", { name: "Industry" }).fill("Aerospace"); },
+      createdTitle: "Aerospace", editField: "Industry", editValue: "Aerospace & Defense",
+    },
+    {
+      type: "build.territory", plural: "Territories", filterTerm: "DACH", filterHit: "DACH",
+      create: async (form) => { await form.getByRole("textbox", { name: "Territory" }).fill("Nordics"); },
+      createdTitle: "Nordics", editField: "Territory", editValue: "Nordic Region",
+    },
+    {
+      type: "build.lostreason", plural: "Lost reasons", filterTerm: "Pricing", filterHit: "Pricing",
+      create: async (form) => { await form.getByRole("textbox", { name: "Lost reason" }).fill("Timeline Mismatch"); },
+      createdTitle: "Timeline Mismatch", editField: "Lost reason", editValue: "Schedule Mismatch",
+    },
+    {
+      type: "build.organization", plural: "Organizations", filterTerm: "Helios", filterHit: "Helios Precision",
+      create: async (form) => { await form.getByRole("textbox", { name: "Organization" }).fill("Orion Systems"); },
+      createdTitle: "Orion Systems", editField: "Website", editValue: "https://orion.example",
+    },
+    {
+      type: "build.crmcontact", plural: "CRM Contacts", filterTerm: "Clara", filterHit: "Clara Vogel",
+      create: async (form) => { await form.getByRole("textbox", { name: "Full name" }).fill("Nadia Chen"); },
+      createdTitle: "Nadia Chen", editField: "Designation", editValue: "Operations Lead",
+    },
+    {
+      type: "build.crmproduct", plural: "Products", filterTerm: "CRM-CORE", filterHit: "CRM-CORE",
+      create: async (form) => {
+        await form.getByRole("textbox", { name: "Product code" }).fill("CRM-TRN");
+        await form.getByRole("textbox", { name: "Product name" }).fill("Admin Training");
+      },
+      createdTitle: "Admin Training", editField: "Product name", editValue: "Admin Training Pack",
+    },
+    {
+      type: "build.lead", plural: "Leads", filterTerm: "Jonas", filterHit: "Jonas Lindqvist",
+      create: async (form) => {
+        await form.getByRole("textbox", { name: "Full name" }).fill("Sven Lindholm");
+        await form.getByRole("combobox", { name: "Status" }).click();
+        await page.getByRole("option", { name: "New", exact: true }).click();
+      },
+      createdTitle: "Sven Lindholm", editField: "Organization", editValue: "Baltic Robotics",
+    },
+    {
+      type: "build.deal", plural: "Deals", filterTerm: "Helios", filterHit: "Helios plant CRM rollout",
+      create: async (form) => {
+        await form.getByRole("textbox", { name: "Deal" }).fill("Orion phase one");
+        await form.getByRole("combobox", { name: "Status" }).click();
+        await page.getByRole("option", { name: "Qualification", exact: true }).click();
+      },
+      createdTitle: "Orion phase one", editField: "Deal", editValue: "Orion phase one rollout",
+    },
+    {
+      type: "build.dealline", plural: "Deal product lines", filterTerm: "ERP Connector", filterHit: "ERP Connector Module",
+      create: async (form) => {
+        await form.getByRole("combobox", { name: "Deal" }).fill("Helios");
+        await page.getByRole("option", { name: /Helios plant CRM rollout/ }).click();
+        await form.getByRole("textbox", { name: "Product name" }).fill("Custom Workshop");
+        await form.getByRole("spinbutton", { name: "Quantity" }).fill("2");
+        await form.getByRole("spinbutton", { name: "Rate" }).fill("500");
+        await form.getByRole("spinbutton", { name: "Rate" }).press("Tab");
+      },
+      createdTitle: "Custom Workshop", editField: "Product name", editValue: "Custom Workshop Day",
+    },
+    {
+      type: "build.crmtask", plural: "Tasks", filterTerm: "Boreal", filterHit: "Send discovery deck to Boreal",
+      create: async (form) => {
+        await form.getByRole("textbox", { name: "Title" }).fill("Confirm CRM pilot dates");
+        await form.getByRole("combobox", { name: "Status" }).click();
+        await page.getByRole("option", { name: "Todo", exact: true }).click();
+      },
+      createdTitle: "Confirm CRM pilot dates", editField: "Title", editValue: "Confirm CRM pilot schedule",
+    },
+    {
+      type: "build.note", plural: "Notes", filterTerm: "Boreal", filterHit: "Boreal intro call summary",
+      create: async (form) => { await form.getByRole("textbox", { name: "Title" }).fill("Pilot kickoff notes"); },
+      createdTitle: "Pilot kickoff notes", editField: "Title", editValue: "Pilot kickoff summary",
+    },
+  ];
+
+  for (const entry of cases) {
+    await page.goto(`/ontology/objects/${entry.type}`);
+    await expect(page.getByRole("heading", { level: 1, name: entry.plural, exact: true })).toBeVisible();
+    const search = page.getByRole("textbox", { name: "Search this list" });
+    await search.fill(entry.filterTerm);
+    await search.press("Enter");
+    await expect(page.getByRole("link", { name: entry.filterHit, exact: true }).first()).toBeVisible();
+    await page.getByRole("button", { name: "New", exact: true }).click();
+    const form = page.getByRole("dialog");
+    await entry.create(form);
+    await form.getByRole("button", { name: "Create", exact: true }).click();
+    await expect(page.getByRole("heading", { level: 1, name: entry.createdTitle, exact: true })).toBeVisible();
+    const field = page.getByRole("textbox", { name: entry.editField, exact: true });
+    await field.fill(entry.editValue);
+    await field.press("Enter");
+    await expect(page.getByRole("complementary").getByText("2", { exact: true })).toBeVisible();
+  }
+
+  await page.goto("/ontology/objects/build.deal/DEL-001");
+  const lines = page.getByRole("table", { name: "Deal product lines" });
+  await expect(lines).toBeVisible();
+  await expect.poll(() => lines.getByRole("textbox", { name: "Product name" }).evaluateAll((inputs) => inputs.map((input) => (input as HTMLInputElement).value))).toContain("Platform Core Seat");
+
+  await page.goto("/ontology/objects/build.lead");
+  await page.getByRole("radio", { name: "Board" }).click();
+  await dragCard("New", "Jonas Lindqvist", "Contacted");
+  await page.reload();
+  await expect(page.getByRole("region", { name: "Contacted", exact: true }).getByRole("heading", { level: 4, name: "Jonas Lindqvist", exact: true })).toBeVisible();
+
+  await page.goto("/ontology/objects/build.deal");
+  await page.getByRole("radio", { name: "Board" }).click();
+  await dragCard("Qualification", "Vanguard fleet portal", "Demo/Making");
+  await page.reload();
+  await expect(page.getByRole("region", { name: "Demo/Making", exact: true }).getByRole("heading", { level: 4, name: "Vanguard fleet portal", exact: true })).toBeVisible();
+});
+
+test("crm: a lead with a note and a task converts into an organization, contact and deal, and the deal is won", async ({ page }) => {
+  test.setTimeout(120000);
+  await signIn(page);
+  await page.goto("/ontology/objects/build.lead");
+  await page.getByRole("button", { name: "New", exact: true }).click();
+  const lead = page.getByRole("dialog");
+  await lead.getByRole("textbox", { name: "Full name" }).fill("Mira Holm");
+  await lead.getByRole("combobox", { name: "Status" }).click();
+  await page.getByRole("option", { name: "New", exact: true }).click();
+  await lead.getByRole("button", { name: "Create", exact: true }).click();
+  await expect(page.getByRole("heading", { level: 1, name: "Mira Holm", exact: true })).toBeVisible();
+  const leadPage = page.url();
+  const organization = page.getByRole("textbox", { name: "Organization", exact: true });
+  await organization.fill("Fjord Analytics");
+  await organization.press("Enter");
+  await expect(page.getByRole("complementary").getByText("2", { exact: true })).toBeVisible();
+
+  for (const [type, fill] of [
+    ["build.note", async (form: ReturnType<Page["getByRole"]>) => { await form.getByRole("textbox", { name: "Title" }).fill("Fjord discovery call"); }],
+    ["build.crmtask", async (form: ReturnType<Page["getByRole"]>) => {
+      await form.getByRole("textbox", { name: "Title" }).fill("Send Fjord the pilot plan");
+      await form.getByRole("combobox", { name: "Status" }).click();
+      await page.getByRole("option", { name: "Todo", exact: true }).click();
+    }],
+  ] as const) {
+    await page.goto(`/ontology/objects/${type}`);
+    await page.getByRole("button", { name: "New", exact: true }).click();
+    const form = page.getByRole("dialog");
+    await fill(form);
+    await form.getByRole("button", { name: "Create", exact: true }).click();
+    await expect(page.getByRole("dialog")).toBeHidden();
+    await page.getByRole("combobox", { name: "Lead", exact: true }).fill("Mira");
+    await page.getByRole("option", { name: /Mira Holm/ }).click();
+    await expect(page.getByRole("complementary").getByText("2", { exact: true })).toBeVisible();
+  }
+
+  await page.goto(leadPage);
+  await page.getByRole("button", { name: "More actions" }).click();
+  await page.getByRole("menuitem", { name: "Convert to deal", exact: true }).click();
+  const convert = page.getByRole("dialog", { name: "Convert to deal", exact: true });
+  await convert.getByRole("button", { name: "Convert to deal", exact: true }).click();
+  await expect(convert).toBeHidden();
+  await page.getByRole("button", { name: "More actions" }).click();
+  await expect(page.getByRole("menuitem", { name: "Convert to deal", exact: true })).toBeDisabled();
+  await page.keyboard.press("Escape");
+
+  await page.goto("/ontology/objects/build.deal");
+  await page.getByRole("radio", { name: "Board" }).click();
+  const card = page.getByRole("region", { name: "Qualification", exact: true }).getByRole("heading", { level: 4, name: "Fjord Analytics", exact: true });
+  await expect(card).toBeVisible();
+  const won = page.getByRole("region", { name: "Won", exact: true });
+  const from = (await card.boundingBox())!;
+  const to = (await won.boundingBox())!;
+  await page.mouse.move(from.x + 2, from.y - 4);
+  await page.mouse.down();
+  await page.mouse.move(from.x + 40, from.y + 20, { steps: 4 });
+  await page.mouse.move(to.x + to.width / 2, to.y + to.height / 2, { steps: 8 });
+  await page.mouse.up();
+  await page.reload();
+  await expect(page.getByRole("region", { name: "Won", exact: true }).getByRole("heading", { level: 4, name: "Fjord Analytics", exact: true })).toBeVisible();
+
+  await page.goto("/ontology/objects/build.organization");
+  const search = page.getByRole("textbox", { name: "Search this list" });
+  await search.fill("Fjord");
+  await search.press("Enter");
+  await page.getByRole("link", { name: "Fjord Analytics", exact: true }).first().click();
+  await expect(page.getByRole("heading", { level: 1, name: "Fjord Analytics", exact: true })).toBeVisible();
+  await page.getByRole("link", { name: "Links", exact: true }).click();
+  await expect(page.getByText("Mira Holm", { exact: true }).first()).toBeVisible();
+  await expect(page.getByRole("link", { name: "Fjord Analytics", exact: true }).first()).toBeVisible();
+});

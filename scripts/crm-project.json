@@ -1,0 +1,2980 @@
+{
+  "project": {
+    "name": "crm",
+    "title": "CRM"
+  },
+  "words": {
+    "en": {
+      "new": "New",
+      "contacted": "Contacted",
+      "nurture": "Nurture",
+      "qualified": "Qualified",
+      "converted": "Converted",
+      "unqualified": "Unqualified",
+      "junk": "Junk",
+      "qualification": "Qualification",
+      "demomaking": "Demo/Making",
+      "proposalquotation": "Proposal/Quotation",
+      "readytoclose": "Ready to Close",
+      "backlog": "Backlog",
+      "todo": "Todo",
+      "inprogress": "In Progress",
+      "done": "Done",
+      "canceled": "Canceled",
+      "low": "Low",
+      "medium": "Medium",
+      "high": "High",
+      "ongoing": "Ongoing",
+      "onhold": "On Hold",
+      "mr": "Mr",
+      "ms": "Ms",
+      "dr": "Dr",
+      "prof": "Prof",
+      "female": "Female",
+      "male": "Male",
+      "other": "Other",
+      "gray": "Gray",
+      "blue": "Blue",
+      "green": "Green",
+      "red": "Red",
+      "orange": "Orange",
+      "purple": "Purple",
+      "pink": "Pink",
+      "amber": "Amber",
+      "cyan": "Cyan"
+    },
+    "zh-CN": {
+      "new": "新建",
+      "contacted": "已联系",
+      "nurture": "培育中",
+      "qualified": "已确认资格",
+      "converted": "已转化",
+      "unqualified": "不合格",
+      "junk": "无效线索",
+      "qualification": "资格确认",
+      "demomaking": "演示制作",
+      "proposalquotation": "方案报价",
+      "readytoclose": "待成交",
+      "backlog": "待办池",
+      "todo": "待处理",
+      "inprogress": "进行中",
+      "done": "已完成",
+      "canceled": "已取消",
+      "low": "低",
+      "medium": "中",
+      "high": "高",
+      "ongoing": "推进中",
+      "onhold": "暂停",
+      "mr": "先生",
+      "ms": "女士",
+      "dr": "博士",
+      "prof": "教授",
+      "female": "女",
+      "male": "男",
+      "other": "其他",
+      "gray": "灰",
+      "blue": "蓝",
+      "green": "绿",
+      "red": "红",
+      "orange": "橙",
+      "purple": "紫",
+      "pink": "粉",
+      "amber": "琥珀",
+      "cyan": "青"
+    }
+  },
+  "types": [
+    {
+      "name": "leadstatus",
+      "prefix": "LDS",
+      "definition": {
+        "title": "Lead status",
+        "plural": "Lead statuses",
+        "display": "title",
+        "view": {
+          "version": 1,
+          "layout": "table",
+          "columns": [
+            "title",
+            "color",
+            "position",
+            "kind"
+          ],
+          "sort": [
+            {
+              "sortKey": "position",
+              "direction": "ascending"
+            }
+          ],
+          "filters": [],
+          "search": "",
+          "group": "none",
+          "lanes": ""
+        },
+        "fields": [
+          {
+            "name": "title",
+            "title": "Lead status",
+            "type": "text",
+            "required": true,
+            "search": true
+          },
+          {
+            "name": "color",
+            "title": "Color",
+            "type": "choice",
+            "choices": "gray,blue,green,red,orange,purple,pink,amber,cyan"
+          },
+          {
+            "name": "position",
+            "title": "Position",
+            "type": "integer"
+          },
+          {
+            "name": "kind",
+            "title": "Type",
+            "type": "choice",
+            "choices": "open,ongoing,onhold,won,lost"
+          }
+        ]
+      },
+      "records": [
+        {
+          "title": "New",
+          "color": "gray",
+          "position": 1,
+          "kind": "open"
+        },
+        {
+          "title": "Contacted",
+          "color": "blue",
+          "position": 2,
+          "kind": "ongoing"
+        },
+        {
+          "title": "Nurture",
+          "color": "purple",
+          "position": 3,
+          "kind": "ongoing"
+        },
+        {
+          "title": "Qualified",
+          "color": "green",
+          "position": 4,
+          "kind": "won"
+        },
+        {
+          "title": "Converted",
+          "color": "green",
+          "position": 5,
+          "kind": "won"
+        },
+        {
+          "title": "Unqualified",
+          "color": "red",
+          "position": 6,
+          "kind": "lost"
+        },
+        {
+          "title": "Junk",
+          "color": "amber",
+          "position": 7,
+          "kind": "lost"
+        }
+      ]
+    },
+    {
+      "name": "dealstatus",
+      "prefix": "DLS",
+      "definition": {
+        "title": "Deal status",
+        "plural": "Deal statuses",
+        "display": "title",
+        "view": {
+          "version": 1,
+          "layout": "table",
+          "columns": [
+            "title",
+            "color",
+            "position",
+            "probability",
+            "kind"
+          ],
+          "sort": [
+            {
+              "sortKey": "position",
+              "direction": "ascending"
+            }
+          ],
+          "filters": [],
+          "search": "",
+          "group": "none",
+          "lanes": ""
+        },
+        "fields": [
+          {
+            "name": "title",
+            "title": "Deal status",
+            "type": "text",
+            "required": true,
+            "search": true
+          },
+          {
+            "name": "color",
+            "title": "Color",
+            "type": "choice",
+            "choices": "gray,blue,green,red,orange,purple,pink,amber,cyan"
+          },
+          {
+            "name": "position",
+            "title": "Position",
+            "type": "integer"
+          },
+          {
+            "name": "probability",
+            "title": "Probability",
+            "type": "integer"
+          },
+          {
+            "name": "kind",
+            "title": "Type",
+            "type": "choice",
+            "choices": "open,ongoing,onhold,won,lost"
+          }
+        ]
+      },
+      "records": [
+        {
+          "title": "Qualification",
+          "color": "gray",
+          "position": 1,
+          "probability": 10,
+          "kind": "open"
+        },
+        {
+          "title": "Demo/Making",
+          "color": "blue",
+          "position": 2,
+          "probability": 25,
+          "kind": "ongoing"
+        },
+        {
+          "title": "Proposal/Quotation",
+          "color": "purple",
+          "position": 3,
+          "probability": 50,
+          "kind": "ongoing"
+        },
+        {
+          "title": "Negotiation",
+          "color": "orange",
+          "position": 4,
+          "probability": 70,
+          "kind": "ongoing"
+        },
+        {
+          "title": "Ready to Close",
+          "color": "cyan",
+          "position": 5,
+          "probability": 90,
+          "kind": "ongoing"
+        },
+        {
+          "title": "Won",
+          "color": "green",
+          "position": 6,
+          "probability": 100,
+          "kind": "won"
+        },
+        {
+          "title": "Lost",
+          "color": "red",
+          "position": 7,
+          "probability": 0,
+          "kind": "lost"
+        }
+      ]
+    },
+    {
+      "name": "leadsource",
+      "prefix": "SRC",
+      "definition": {
+        "title": "Lead source",
+        "plural": "Lead sources",
+        "display": "title",
+        "view": {
+          "version": 1,
+          "layout": "table",
+          "columns": [
+            "title"
+          ],
+          "sort": [
+            {
+              "sortKey": "title",
+              "direction": "ascending"
+            }
+          ],
+          "filters": [],
+          "search": "",
+          "group": "none",
+          "lanes": ""
+        },
+        "fields": [
+          {
+            "name": "title",
+            "title": "Source name",
+            "type": "text",
+            "required": true,
+            "search": true
+          },
+          {
+            "name": "details",
+            "title": "Details",
+            "type": "longtext"
+          }
+        ]
+      },
+      "records": [
+        {
+          "title": "Email"
+        },
+        {
+          "title": "Existing Customer"
+        },
+        {
+          "title": "Reference"
+        },
+        {
+          "title": "Advertisement"
+        },
+        {
+          "title": "Cold Calling"
+        },
+        {
+          "title": "Exhibition"
+        },
+        {
+          "title": "Supplier Reference"
+        },
+        {
+          "title": "Mass Mailing"
+        },
+        {
+          "title": "Customer's Vendor"
+        },
+        {
+          "title": "Campaign"
+        },
+        {
+          "title": "Walk In"
+        },
+        {
+          "title": "Facebook"
+        },
+        {
+          "title": "Website"
+        },
+        {
+          "title": "Web Form"
+        },
+        {
+          "title": "WhatsApp"
+        }
+      ]
+    },
+    {
+      "name": "industry",
+      "prefix": "IND",
+      "definition": {
+        "title": "Industry",
+        "plural": "Industries",
+        "display": "title",
+        "view": {
+          "version": 1,
+          "layout": "table",
+          "columns": [
+            "title"
+          ],
+          "sort": [
+            {
+              "sortKey": "title",
+              "direction": "ascending"
+            }
+          ],
+          "filters": [],
+          "search": "",
+          "group": "none",
+          "lanes": ""
+        },
+        "fields": [
+          {
+            "name": "title",
+            "title": "Industry",
+            "type": "text",
+            "required": true,
+            "search": true
+          }
+        ]
+      },
+      "records": [
+        {
+          "title": "Manufacturing"
+        },
+        {
+          "title": "Software"
+        },
+        {
+          "title": "Logistics"
+        },
+        {
+          "title": "Healthcare"
+        },
+        {
+          "title": "Retail"
+        },
+        {
+          "title": "Energy"
+        },
+        {
+          "title": "Telecommunications"
+        },
+        {
+          "title": "Automotive"
+        },
+        {
+          "title": "Construction"
+        },
+        {
+          "title": "Financial Services"
+        }
+      ]
+    },
+    {
+      "name": "territory",
+      "prefix": "TER",
+      "definition": {
+        "title": "Territory",
+        "plural": "Territories",
+        "display": "title",
+        "view": {
+          "version": 1,
+          "layout": "table",
+          "columns": [
+            "title",
+            "parent",
+            "manager",
+            "isgroup"
+          ],
+          "sort": [],
+          "filters": [],
+          "search": "",
+          "group": "none",
+          "lanes": ""
+        },
+        "fields": [
+          {
+            "name": "title",
+            "title": "Territory",
+            "type": "text",
+            "required": true,
+            "search": true
+          },
+          {
+            "name": "parent",
+            "title": "Parent territory",
+            "type": "reference",
+            "ref": "build.territory"
+          },
+          {
+            "name": "manager",
+            "title": "Territory manager",
+            "type": "member"
+          },
+          {
+            "name": "isgroup",
+            "title": "Is group",
+            "type": "boolean"
+          }
+        ]
+      },
+      "records": [
+        {
+          "title": "Global",
+          "isgroup": true
+        },
+        {
+          "title": "Europe",
+          "parent": "TER-001",
+          "manager": "admin-1",
+          "isgroup": true
+        },
+        {
+          "title": "North America",
+          "parent": "TER-001",
+          "manager": "builder-1",
+          "isgroup": true
+        },
+        {
+          "title": "DACH",
+          "parent": "TER-002",
+          "manager": "admin-1",
+          "isgroup": false
+        },
+        {
+          "title": "US West",
+          "parent": "TER-003",
+          "manager": "user-1",
+          "isgroup": false
+        }
+      ]
+    },
+    {
+      "name": "lostreason",
+      "prefix": "LRS",
+      "definition": {
+        "title": "Lost reason",
+        "plural": "Lost reasons",
+        "display": "title",
+        "view": {
+          "version": 1,
+          "layout": "table",
+          "columns": [
+            "title"
+          ],
+          "sort": [
+            {
+              "sortKey": "title",
+              "direction": "ascending"
+            }
+          ],
+          "filters": [],
+          "search": "",
+          "group": "none",
+          "lanes": ""
+        },
+        "fields": [
+          {
+            "name": "title",
+            "title": "Lost reason",
+            "type": "text",
+            "required": true,
+            "search": true
+          },
+          {
+            "name": "description",
+            "title": "Description",
+            "type": "longtext"
+          }
+        ]
+      },
+      "records": [
+        {
+          "title": "Pricing"
+        },
+        {
+          "title": "Competition"
+        },
+        {
+          "title": "Budget Constraints"
+        },
+        {
+          "title": "Missing Features"
+        },
+        {
+          "title": "Long Sales Cycle"
+        },
+        {
+          "title": "No Decision-Maker"
+        },
+        {
+          "title": "Unresponsive Prospect"
+        },
+        {
+          "title": "Poor Fit"
+        },
+        {
+          "title": "Other"
+        }
+      ]
+    },
+    {
+      "name": "organization",
+      "prefix": "ORG",
+      "definition": {
+        "title": "Organization",
+        "plural": "Organizations",
+        "display": "name",
+        "view": {
+          "version": 1,
+          "layout": "table",
+          "columns": [
+            "name",
+            "website",
+            "industry",
+            "territory",
+            "revenue"
+          ],
+          "sort": [
+            {
+              "sortKey": "name",
+              "direction": "ascending"
+            }
+          ],
+          "filters": [],
+          "search": "",
+          "group": "none",
+          "lanes": ""
+        },
+        "fields": [
+          {
+            "name": "name",
+            "title": "Organization",
+            "type": "text",
+            "required": true,
+            "search": true,
+            "group": "Details"
+          },
+          {
+            "name": "website",
+            "title": "Website",
+            "type": "text",
+            "search": true,
+            "group": "Details"
+          },
+          {
+            "name": "industry",
+            "title": "Industry",
+            "type": "reference",
+            "ref": "build.industry",
+            "group": "Details"
+          },
+          {
+            "name": "territory",
+            "title": "Territory",
+            "type": "reference",
+            "ref": "build.territory",
+            "group": "Details"
+          },
+          {
+            "name": "employees",
+            "title": "Employees",
+            "type": "choice",
+            "choices": "1-10,11-50,51-200,201-500,501-1000,1000+",
+            "aside": true
+          },
+          {
+            "name": "revenue",
+            "title": "Annual revenue",
+            "type": "money",
+            "group": "Details"
+          },
+          {
+            "name": "address",
+            "title": "Address",
+            "type": "text",
+            "aside": true
+          },
+          {
+            "name": "description",
+            "title": "Company description",
+            "type": "longtext",
+            "group": "Details"
+          }
+        ]
+      },
+      "records": [
+        {
+          "name": "Helios Precision",
+          "website": "https://helios-precision.example",
+          "industry": "IND-001",
+          "territory": "TER-004",
+          "employees": "201-500",
+          "revenue": {
+            "amount": 4200000000,
+            "currency": "USD"
+          },
+          "address": "Munich, Germany"
+        },
+        {
+          "name": "Vanguard Logistics",
+          "website": "https://vanguard-logistics.example",
+          "industry": "IND-003",
+          "territory": "TER-002",
+          "employees": "501-1000",
+          "revenue": {
+            "amount": 8500000000,
+            "currency": "USD"
+          },
+          "address": "Rotterdam, Netherlands"
+        },
+        {
+          "name": "Solstice Health",
+          "website": "https://solstice-health.example",
+          "industry": "IND-004",
+          "territory": "TER-005",
+          "employees": "1000+",
+          "revenue": {
+            "amount": 16000000000,
+            "currency": "USD"
+          },
+          "address": "Seattle, USA"
+        },
+        {
+          "name": "Aether Cloud",
+          "website": "https://aether-cloud.example",
+          "industry": "IND-002",
+          "territory": "TER-005",
+          "employees": "51-200",
+          "revenue": {
+            "amount": 1800000000,
+            "currency": "USD"
+          },
+          "address": "San Francisco, USA"
+        },
+        {
+          "name": "Nordic Retail Co",
+          "website": "https://nordic-retail.example",
+          "industry": "IND-005",
+          "territory": "TER-002",
+          "employees": "201-500",
+          "revenue": {
+            "amount": 6100000000,
+            "currency": "USD"
+          },
+          "address": "Stockholm, Sweden"
+        },
+        {
+          "name": "Apex Energy Grid",
+          "website": "https://apex-energy.example",
+          "industry": "IND-006",
+          "territory": "TER-003",
+          "employees": "501-1000",
+          "revenue": {
+            "amount": 12400000000,
+            "currency": "USD"
+          },
+          "address": "Calgary, Canada"
+        },
+        {
+          "name": "Vertex Mobility",
+          "website": "https://vertex-mobility.example",
+          "industry": "IND-008",
+          "territory": "TER-004",
+          "employees": "201-500",
+          "revenue": {
+            "amount": 5300000000,
+            "currency": "USD"
+          },
+          "address": "Stuttgart, Germany"
+        },
+        {
+          "name": "Summit Builders",
+          "website": "https://summit-builders.example",
+          "industry": "IND-009",
+          "territory": "TER-003",
+          "employees": "51-200",
+          "revenue": {
+            "amount": 2900000000,
+            "currency": "USD"
+          },
+          "address": "Denver, USA"
+        }
+      ]
+    },
+    {
+      "name": "crmcontact",
+      "prefix": "CCT",
+      "definition": {
+        "title": "CRM Contact",
+        "plural": "CRM Contacts",
+        "display": "fullname",
+        "view": {
+          "version": 1,
+          "layout": "table",
+          "columns": [
+            "fullname",
+            "email",
+            "mobile",
+            "organization",
+            "designation"
+          ],
+          "sort": [
+            {
+              "sortKey": "fullname",
+              "direction": "ascending"
+            }
+          ],
+          "filters": [],
+          "search": "",
+          "group": "none",
+          "lanes": ""
+        },
+        "fields": [
+          {
+            "name": "fullname",
+            "title": "Full name",
+            "type": "text",
+            "required": true,
+            "search": true,
+            "group": "Contact"
+          },
+          {
+            "name": "email",
+            "title": "Email",
+            "type": "text",
+            "search": true,
+            "group": "Contact"
+          },
+          {
+            "name": "mobile",
+            "title": "Mobile no.",
+            "type": "text",
+            "group": "Contact"
+          },
+          {
+            "name": "phone",
+            "title": "Phone",
+            "type": "text",
+            "group": "Contact"
+          },
+          {
+            "name": "organization",
+            "title": "Organization",
+            "type": "reference",
+            "ref": "build.organization",
+            "inverse": "contacts",
+            "group": "Contact"
+          },
+          {
+            "name": "designation",
+            "title": "Designation",
+            "type": "text",
+            "group": "Contact"
+          },
+          {
+            "name": "salutation",
+            "title": "Salutation",
+            "type": "choice",
+            "choices": "mr,ms,dr,prof",
+            "aside": true
+          },
+          {
+            "name": "gender",
+            "title": "Gender",
+            "type": "choice",
+            "choices": "female,male,other",
+            "aside": true
+          },
+          {
+            "name": "address",
+            "title": "Address",
+            "type": "text",
+            "aside": true
+          }
+        ]
+      },
+      "records": [
+        {
+          "fullname": "Clara Vogel",
+          "email": "clara.vogel@helios-precision.example",
+          "mobile": "+49-151-1001",
+          "organization": "ORG-001",
+          "designation": "VP Operations",
+          "salutation": "ms"
+        },
+        {
+          "fullname": "Marcus Weber",
+          "email": "marcus.weber@helios-precision.example",
+          "mobile": "+49-151-1002",
+          "organization": "ORG-001",
+          "designation": "Plant Director",
+          "salutation": "mr"
+        },
+        {
+          "fullname": "Hendrik Bakker",
+          "email": "h.bakker@vanguard-logistics.example",
+          "mobile": "+31-6-2001",
+          "organization": "ORG-002",
+          "designation": "Fleet Lead",
+          "salutation": "mr"
+        },
+        {
+          "fullname": "Rachel Lin",
+          "email": "rachel.lin@solstice-health.example",
+          "mobile": "+1-206-3001",
+          "organization": "ORG-003",
+          "designation": "Chief Medical Officer",
+          "salutation": "dr"
+        },
+        {
+          "fullname": "David Morales",
+          "email": "dmorales@solstice-health.example",
+          "mobile": "+1-206-3002",
+          "organization": "ORG-003",
+          "designation": "IT Procurement",
+          "salutation": "mr"
+        },
+        {
+          "fullname": "Priya Nair",
+          "email": "priya@aether-cloud.example",
+          "mobile": "+1-415-4001",
+          "organization": "ORG-004",
+          "designation": "CTO",
+          "salutation": "ms"
+        },
+        {
+          "fullname": "Astrid Holm",
+          "email": "astrid@nordic-retail.example",
+          "mobile": "+46-70-5001",
+          "organization": "ORG-005",
+          "designation": "Head of Merchandising",
+          "salutation": "ms"
+        },
+        {
+          "fullname": "Liam O'Connor",
+          "email": "liam@apex-energy.example",
+          "mobile": "+1-403-6001",
+          "organization": "ORG-006",
+          "designation": "Grid Operations Manager",
+          "salutation": "mr"
+        },
+        {
+          "fullname": "Stefan Bauer",
+          "email": "s.bauer@vertex-mobility.example",
+          "mobile": "+49-170-7001",
+          "organization": "ORG-007",
+          "designation": "Supply Chain Director",
+          "salutation": "mr"
+        },
+        {
+          "fullname": "Elena Rossi",
+          "email": "elena@summit-builders.example",
+          "mobile": "+1-303-8001",
+          "organization": "ORG-008",
+          "designation": "Project Controls Lead",
+          "salutation": "ms"
+        }
+      ]
+    },
+    {
+      "name": "crmproduct",
+      "prefix": "PRD",
+      "definition": {
+        "title": "Product",
+        "plural": "Products",
+        "display": "name",
+        "view": {
+          "version": 1,
+          "layout": "table",
+          "columns": [
+            "code",
+            "name",
+            "rate",
+            "disabled"
+          ],
+          "sort": [
+            {
+              "sortKey": "code",
+              "direction": "ascending"
+            }
+          ],
+          "filters": [],
+          "search": "",
+          "group": "none",
+          "lanes": ""
+        },
+        "fields": [
+          {
+            "name": "code",
+            "title": "Product code",
+            "type": "text",
+            "required": true,
+            "search": true
+          },
+          {
+            "name": "name",
+            "title": "Product name",
+            "type": "text",
+            "required": true,
+            "search": true
+          },
+          {
+            "name": "rate",
+            "title": "Standard rate",
+            "type": "money"
+          },
+          {
+            "name": "disabled",
+            "title": "Disabled",
+            "type": "boolean"
+          },
+          {
+            "name": "description",
+            "title": "Description",
+            "type": "longtext"
+          }
+        ]
+      },
+      "records": [
+        {
+          "code": "CRM-CORE",
+          "name": "Platform Core Seat",
+          "rate": {
+            "amount": 12000,
+            "currency": "USD"
+          },
+          "disabled": false,
+          "description": "Annual seat license."
+        },
+        {
+          "code": "CRM-ENT",
+          "name": "Enterprise Governance Pack",
+          "rate": {
+            "amount": 450000,
+            "currency": "USD"
+          },
+          "disabled": false,
+          "description": "Audit, SSO and regional access controls."
+        },
+        {
+          "code": "CRM-SYNC",
+          "name": "ERP Connector Module",
+          "rate": {
+            "amount": 280000,
+            "currency": "USD"
+          },
+          "disabled": false,
+          "description": "Bi-directional ERP order and catalog sync."
+        },
+        {
+          "code": "CRM-IMPL",
+          "name": "Onboarding & Migration",
+          "rate": {
+            "amount": 800000,
+            "currency": "USD"
+          },
+          "disabled": false,
+          "description": "Fixed-scope implementation package."
+        },
+        {
+          "code": "CRM-SUPP",
+          "name": "Dedicated SLA Support",
+          "rate": {
+            "amount": 360000,
+            "currency": "USD"
+          },
+          "disabled": false,
+          "description": "24/7 response coverage."
+        },
+        {
+          "code": "CRM-OLD",
+          "name": "Legacy Connector (Retired)",
+          "rate": {
+            "amount": 150000,
+            "currency": "USD"
+          },
+          "disabled": true,
+          "description": "Deprecated connector."
+        }
+      ]
+    },
+    {
+      "name": "lead",
+      "prefix": "LED",
+      "definition": {
+        "title": "Lead",
+        "plural": "Leads",
+        "display": "fullname",
+        "view": {
+          "version": 1,
+          "layout": "table",
+          "columns": [
+            "fullname",
+            "organizationname",
+            "status",
+            "email",
+            "mobile",
+            "owner"
+          ],
+          "sort": [],
+          "filters": [],
+          "search": "",
+          "group": "none",
+          "lanes": "status"
+        },
+        "fields": [
+          {
+            "name": "fullname",
+            "title": "Full name",
+            "type": "text",
+            "required": true,
+            "search": true,
+            "group": "Contact"
+          },
+          {
+            "name": "organizationname",
+            "title": "Organization",
+            "type": "text",
+            "search": true,
+            "group": "Contact"
+          },
+          {
+            "name": "email",
+            "title": "Email",
+            "type": "text",
+            "search": true,
+            "group": "Contact"
+          },
+          {
+            "name": "mobile",
+            "title": "Mobile no.",
+            "type": "text",
+            "group": "Contact"
+          },
+          {
+            "name": "phone",
+            "title": "Phone",
+            "type": "text",
+            "group": "Contact"
+          },
+          {
+            "name": "website",
+            "title": "Website",
+            "type": "text",
+            "group": "Contact"
+          },
+          {
+            "name": "jobtitle",
+            "title": "Job title",
+            "type": "text",
+            "group": "Contact"
+          },
+          {
+            "name": "source",
+            "title": "Source",
+            "type": "reference",
+            "ref": "build.leadsource",
+            "group": "Classification"
+          },
+          {
+            "name": "industry",
+            "title": "Industry",
+            "type": "reference",
+            "ref": "build.industry",
+            "group": "Classification"
+          },
+          {
+            "name": "territory",
+            "title": "Territory",
+            "type": "reference",
+            "ref": "build.territory",
+            "group": "Classification"
+          },
+          {
+            "name": "employees",
+            "title": "Employees",
+            "type": "choice",
+            "choices": "1-10,11-50,51-200,201-500,501-1000,1000+",
+            "group": "Classification"
+          },
+          {
+            "name": "annualrevenue",
+            "title": "Annual revenue",
+            "type": "money",
+            "group": "Classification"
+          },
+          {
+            "name": "converted",
+            "title": "Converted",
+            "type": "boolean",
+            "group": "Closure"
+          },
+          {
+            "name": "lostreason",
+            "title": "Lost reason",
+            "type": "reference",
+            "ref": "build.lostreason",
+            "when": "status=unqualified,junk",
+            "group": "Closure"
+          },
+          {
+            "name": "lostnotes",
+            "title": "Lost notes",
+            "type": "longtext",
+            "when": "status=unqualified,junk",
+            "group": "Closure"
+          },
+          {
+            "name": "status",
+            "title": "Status",
+            "type": "choice",
+            "choices": "new,contacted,nurture,qualified,converted,unqualified,junk",
+            "required": true,
+            "aside": true,
+            "format": [
+              {
+                "when": {
+                  "op": "=",
+                  "kind": "boolean",
+                  "args": [
+                    {
+                      "kind": "text",
+                      "ref": "status"
+                    },
+                    {
+                      "kind": "text",
+                      "lit": {
+                        "value": "new"
+                      }
+                    }
+                  ]
+                },
+                "tone": "neutral"
+              },
+              {
+                "when": {
+                  "op": "=",
+                  "kind": "boolean",
+                  "args": [
+                    {
+                      "kind": "text",
+                      "ref": "status"
+                    },
+                    {
+                      "kind": "text",
+                      "lit": {
+                        "value": "contacted"
+                      }
+                    }
+                  ]
+                },
+                "tone": "info"
+              },
+              {
+                "when": {
+                  "op": "=",
+                  "kind": "boolean",
+                  "args": [
+                    {
+                      "kind": "text",
+                      "ref": "status"
+                    },
+                    {
+                      "kind": "text",
+                      "lit": {
+                        "value": "nurture"
+                      }
+                    }
+                  ]
+                },
+                "tone": "info"
+              },
+              {
+                "when": {
+                  "op": "=",
+                  "kind": "boolean",
+                  "args": [
+                    {
+                      "kind": "text",
+                      "ref": "status"
+                    },
+                    {
+                      "kind": "text",
+                      "lit": {
+                        "value": "qualified"
+                      }
+                    }
+                  ]
+                },
+                "tone": "success"
+              },
+              {
+                "when": {
+                  "op": "=",
+                  "kind": "boolean",
+                  "args": [
+                    {
+                      "kind": "text",
+                      "ref": "status"
+                    },
+                    {
+                      "kind": "text",
+                      "lit": {
+                        "value": "converted"
+                      }
+                    }
+                  ]
+                },
+                "tone": "success"
+              },
+              {
+                "when": {
+                  "op": "=",
+                  "kind": "boolean",
+                  "args": [
+                    {
+                      "kind": "text",
+                      "ref": "status"
+                    },
+                    {
+                      "kind": "text",
+                      "lit": {
+                        "value": "unqualified"
+                      }
+                    }
+                  ]
+                },
+                "tone": "danger"
+              },
+              {
+                "when": {
+                  "op": "=",
+                  "kind": "boolean",
+                  "args": [
+                    {
+                      "kind": "text",
+                      "ref": "status"
+                    },
+                    {
+                      "kind": "text",
+                      "lit": {
+                        "value": "junk"
+                      }
+                    }
+                  ]
+                },
+                "tone": "warning"
+              }
+            ]
+          },
+          {
+            "name": "owner",
+            "title": "Lead owner",
+            "type": "member",
+            "aside": true
+          }
+        ],
+        "states": [
+          {
+            "name": "open",
+            "title": "Open",
+            "tone": "info",
+            "description": "Active lead record."
+          }
+        ]
+      },
+      "records": [
+        {
+          "fullname": "Jonas Lindqvist",
+          "organizationname": "Boreal Automation",
+          "email": "jonas@boreal.example",
+          "mobile": "+46-70-1101",
+          "status": "new",
+          "owner": "admin-1",
+          "source": "SRC-013",
+          "industry": "IND-001",
+          "territory": "TER-002"
+        },
+        {
+          "fullname": "Maya Patel",
+          "organizationname": "Cascade Robotics",
+          "email": "maya@cascade.example",
+          "mobile": "+1-415-1102",
+          "status": "new",
+          "owner": "builder-1",
+          "source": "SRC-014",
+          "industry": "IND-002",
+          "territory": "TER-005"
+        },
+        {
+          "fullname": "Lukas Gruber",
+          "organizationname": "Alpen Metalworks",
+          "email": "lukas@alpen.example",
+          "mobile": "+43-664-1103",
+          "status": "new",
+          "owner": "admin-1",
+          "source": "SRC-006",
+          "industry": "IND-001",
+          "territory": "TER-004"
+        },
+        {
+          "fullname": "Sophie Laurent",
+          "organizationname": "Lumiere Freight",
+          "email": "sophie@lumiere.example",
+          "mobile": "+33-6-1104",
+          "status": "contacted",
+          "owner": "user-1",
+          "source": "SRC-001",
+          "industry": "IND-003",
+          "territory": "TER-002"
+        },
+        {
+          "fullname": "Daniel Kim",
+          "organizationname": "Pacific BioLabs",
+          "email": "dkim@pacificbio.example",
+          "mobile": "+1-206-1105",
+          "status": "contacted",
+          "owner": "builder-1",
+          "source": "SRC-003",
+          "industry": "IND-004",
+          "territory": "TER-005"
+        },
+        {
+          "fullname": "Hannah Meyer",
+          "organizationname": "Rhein Energy",
+          "email": "hannah@rhein.example",
+          "mobile": "+49-151-1106",
+          "status": "contacted",
+          "owner": "admin-1",
+          "source": "SRC-010",
+          "industry": "IND-006",
+          "territory": "TER-004"
+        },
+        {
+          "fullname": "Mateo Silva",
+          "organizationname": "Andes Telecom",
+          "email": "mateo@andes.example",
+          "mobile": "+1-303-1107",
+          "status": "nurture",
+          "owner": "user-1",
+          "source": "SRC-004",
+          "industry": "IND-007",
+          "territory": "TER-003"
+        },
+        {
+          "fullname": "Nora Bergstrom",
+          "organizationname": "Fjord Mobility",
+          "email": "nora@fjordmob.example",
+          "mobile": "+47-900-1108",
+          "status": "nurture",
+          "owner": "admin-1",
+          "source": "SRC-013",
+          "industry": "IND-008",
+          "territory": "TER-002"
+        },
+        {
+          "fullname": "Owen Brooks",
+          "organizationname": "Timberline Construction",
+          "email": "owen@timberline.example",
+          "mobile": "+1-403-1109",
+          "status": "nurture",
+          "owner": "builder-1",
+          "source": "SRC-005",
+          "industry": "IND-009",
+          "territory": "TER-003"
+        },
+        {
+          "fullname": "Chloe Dubois",
+          "organizationname": "Mercure Retail",
+          "email": "chloe@mercure.example",
+          "mobile": "+33-6-1110",
+          "status": "qualified",
+          "owner": "admin-1",
+          "source": "SRC-002",
+          "industry": "IND-005",
+          "territory": "TER-002"
+        },
+        {
+          "fullname": "Ethan Clark",
+          "organizationname": "Sierra FinTech",
+          "email": "ethan@sierrafin.example",
+          "mobile": "+1-415-1111",
+          "status": "qualified",
+          "owner": "builder-1",
+          "source": "SRC-003",
+          "industry": "IND-010",
+          "territory": "TER-005"
+        },
+        {
+          "fullname": "Freja Nielsen",
+          "organizationname": "Baltic Marine Systems",
+          "email": "freja@baltic.example",
+          "mobile": "+45-20-1112",
+          "status": "qualified",
+          "owner": "user-1",
+          "source": "SRC-006",
+          "industry": "IND-003",
+          "territory": "TER-002"
+        },
+        {
+          "fullname": "Clara Vogel",
+          "organizationname": "Helios Precision",
+          "email": "clara.vogel@helios-precision.example",
+          "mobile": "+49-151-1001",
+          "status": "converted",
+          "converted": true,
+          "owner": "admin-1",
+          "source": "SRC-003",
+          "industry": "IND-001",
+          "territory": "TER-004"
+        },
+        {
+          "fullname": "Hendrik Bakker",
+          "organizationname": "Vanguard Logistics",
+          "email": "h.bakker@vanguard-logistics.example",
+          "mobile": "+31-6-2001",
+          "status": "converted",
+          "converted": true,
+          "owner": "builder-1",
+          "source": "SRC-013",
+          "industry": "IND-003",
+          "territory": "TER-002"
+        },
+        {
+          "fullname": "Rachel Lin",
+          "organizationname": "Solstice Health",
+          "email": "rachel.lin@solstice-health.example",
+          "mobile": "+1-206-3001",
+          "status": "converted",
+          "converted": true,
+          "owner": "user-1",
+          "source": "SRC-010",
+          "industry": "IND-004",
+          "territory": "TER-005"
+        },
+        {
+          "fullname": "Victor Popescu",
+          "organizationname": "Danube Parts",
+          "email": "victor@danube.example",
+          "mobile": "+40-721-1116",
+          "status": "unqualified",
+          "owner": "builder-1",
+          "source": "SRC-005",
+          "industry": "IND-001",
+          "territory": "TER-002",
+          "lostreason": "LRS-003",
+          "lostnotes": "No budget allocated this fiscal year."
+        },
+        {
+          "fullname": "Grace Okafor",
+          "organizationname": "Redwood Apparel",
+          "email": "grace@redwood.example",
+          "mobile": "+1-415-1117",
+          "status": "unqualified",
+          "owner": "user-1",
+          "source": "SRC-012",
+          "industry": "IND-005",
+          "territory": "TER-005",
+          "lostreason": "LRS-008",
+          "lostnotes": "Needs B2C storefront rather than B2B CRM."
+        },
+        {
+          "fullname": "Tomas Novak",
+          "organizationname": "Moravia Logistics",
+          "email": "tomas@moravia.example",
+          "mobile": "+420-601-1118",
+          "status": "new",
+          "owner": "admin-1",
+          "source": "SRC-001",
+          "industry": "IND-003",
+          "territory": "TER-004"
+        },
+        {
+          "fullname": "Amina Hassan",
+          "organizationname": "Crescent Diagnostics",
+          "email": "amina@crescent.example",
+          "mobile": "+1-403-1119",
+          "status": "contacted",
+          "owner": "user-1",
+          "source": "SRC-014",
+          "industry": "IND-004",
+          "territory": "TER-003"
+        },
+        {
+          "fullname": "Test Spam Inquiry",
+          "organizationname": "Unknown",
+          "email": "promo@spam.example",
+          "mobile": "+1-000-0000",
+          "status": "junk",
+          "owner": "admin-1",
+          "source": "SRC-014",
+          "lostreason": "LRS-009",
+          "lostnotes": "Automated marketing submission."
+        }
+      ]
+    },
+    {
+      "name": "deal",
+      "prefix": "DEL",
+      "definition": {
+        "title": "Deal",
+        "plural": "Deals",
+        "display": "title",
+        "view": {
+          "version": 1,
+          "layout": "table",
+          "columns": [
+            "title",
+            "organization",
+            "status",
+            "dealvalue",
+            "probability",
+            "owner",
+            "expectedclose"
+          ],
+          "sort": [],
+          "filters": [],
+          "search": "",
+          "group": "none",
+          "lanes": "status"
+        },
+        "fields": [
+          {
+            "name": "title",
+            "title": "Deal",
+            "type": "text",
+            "required": true,
+            "search": true,
+            "group": "Commercial"
+          },
+          {
+            "name": "organization",
+            "title": "Organization",
+            "type": "reference",
+            "ref": "build.organization",
+            "inverse": "deals",
+            "search": true,
+            "group": "Commercial"
+          },
+          {
+            "name": "contact",
+            "title": "Primary contact",
+            "type": "reference",
+            "ref": "build.crmcontact",
+            "group": "Commercial"
+          },
+          {
+            "name": "lead",
+            "title": "Source lead",
+            "type": "reference",
+            "ref": "build.lead",
+            "group": "Commercial"
+          },
+          {
+            "name": "dealvalue",
+            "title": "Deal value",
+            "type": "money",
+            "group": "Commercial"
+          },
+          {
+            "name": "total",
+            "title": "Products total",
+            "type": "money",
+            "group": "Commercial"
+          },
+          {
+            "name": "expectedclose",
+            "title": "Expected close",
+            "type": "date",
+            "group": "Commercial"
+          },
+          {
+            "name": "closeddate",
+            "title": "Closed date",
+            "type": "date",
+            "when": "status=won,lost",
+            "group": "Commercial"
+          },
+          {
+            "name": "source",
+            "title": "Source",
+            "type": "reference",
+            "ref": "build.leadsource",
+            "group": "Classification"
+          },
+          {
+            "name": "industry",
+            "title": "Industry",
+            "type": "reference",
+            "ref": "build.industry",
+            "group": "Classification"
+          },
+          {
+            "name": "territory",
+            "title": "Territory",
+            "type": "reference",
+            "ref": "build.territory",
+            "group": "Classification"
+          },
+          {
+            "name": "lostreason",
+            "title": "Lost reason",
+            "type": "reference",
+            "ref": "build.lostreason",
+            "when": "status=lost",
+            "group": "Closure"
+          },
+          {
+            "name": "lostnotes",
+            "title": "Lost notes",
+            "type": "longtext",
+            "when": "status=lost",
+            "group": "Closure"
+          },
+          {
+            "name": "status",
+            "title": "Status",
+            "type": "choice",
+            "choices": "qualification,demomaking,proposalquotation,negotiation,readytoclose,won,lost",
+            "required": true,
+            "aside": true,
+            "format": [
+              {
+                "when": {
+                  "op": "=",
+                  "kind": "boolean",
+                  "args": [
+                    {
+                      "kind": "text",
+                      "ref": "status"
+                    },
+                    {
+                      "kind": "text",
+                      "lit": {
+                        "value": "qualification"
+                      }
+                    }
+                  ]
+                },
+                "tone": "neutral"
+              },
+              {
+                "when": {
+                  "op": "=",
+                  "kind": "boolean",
+                  "args": [
+                    {
+                      "kind": "text",
+                      "ref": "status"
+                    },
+                    {
+                      "kind": "text",
+                      "lit": {
+                        "value": "demomaking"
+                      }
+                    }
+                  ]
+                },
+                "tone": "info"
+              },
+              {
+                "when": {
+                  "op": "=",
+                  "kind": "boolean",
+                  "args": [
+                    {
+                      "kind": "text",
+                      "ref": "status"
+                    },
+                    {
+                      "kind": "text",
+                      "lit": {
+                        "value": "proposalquotation"
+                      }
+                    }
+                  ]
+                },
+                "tone": "info"
+              },
+              {
+                "when": {
+                  "op": "=",
+                  "kind": "boolean",
+                  "args": [
+                    {
+                      "kind": "text",
+                      "ref": "status"
+                    },
+                    {
+                      "kind": "text",
+                      "lit": {
+                        "value": "negotiation"
+                      }
+                    }
+                  ]
+                },
+                "tone": "warning"
+              },
+              {
+                "when": {
+                  "op": "=",
+                  "kind": "boolean",
+                  "args": [
+                    {
+                      "kind": "text",
+                      "ref": "status"
+                    },
+                    {
+                      "kind": "text",
+                      "lit": {
+                        "value": "readytoclose"
+                      }
+                    }
+                  ]
+                },
+                "tone": "info"
+              },
+              {
+                "when": {
+                  "op": "=",
+                  "kind": "boolean",
+                  "args": [
+                    {
+                      "kind": "text",
+                      "ref": "status"
+                    },
+                    {
+                      "kind": "text",
+                      "lit": {
+                        "value": "won"
+                      }
+                    }
+                  ]
+                },
+                "tone": "success"
+              },
+              {
+                "when": {
+                  "op": "=",
+                  "kind": "boolean",
+                  "args": [
+                    {
+                      "kind": "text",
+                      "ref": "status"
+                    },
+                    {
+                      "kind": "text",
+                      "lit": {
+                        "value": "lost"
+                      }
+                    }
+                  ]
+                },
+                "tone": "danger"
+              }
+            ]
+          },
+          {
+            "name": "probability",
+            "title": "Probability %",
+            "type": "integer",
+            "aside": true
+          },
+          {
+            "name": "owner",
+            "title": "Deal owner",
+            "type": "member",
+            "aside": true
+          }
+        ],
+        "sets": [
+          {
+            "name": "lines",
+            "from": "lines",
+            "direction": "inverse",
+            "object": "build.dealline",
+            "order": [
+              {
+                "expr": {
+                  "op": "",
+                  "kind": "text",
+                  "ref": "id"
+                }
+              }
+            ],
+            "limit": 200
+          }
+        ],
+        "states": [
+          {
+            "name": "open",
+            "title": "Open",
+            "tone": "info",
+            "description": "Active deal record."
+          }
+        ]
+      },
+      "records": [
+        {
+          "title": "Helios plant CRM rollout",
+          "organization": "ORG-001",
+          "contact": "CCT-001",
+          "lead": "LED-013",
+          "status": "negotiation",
+          "probability": 70,
+          "owner": "admin-1",
+          "dealvalue": {
+            "amount": 1850000,
+            "currency": "USD"
+          },
+          "total": {
+            "amount": 1850000,
+            "currency": "USD"
+          },
+          "expectedclose": "2026-12-15",
+          "source": "SRC-003",
+          "industry": "IND-001",
+          "territory": "TER-004"
+        },
+        {
+          "title": "Vanguard fleet portal",
+          "organization": "ORG-002",
+          "contact": "CCT-003",
+          "lead": "LED-014",
+          "status": "qualification",
+          "probability": 10,
+          "owner": "builder-1",
+          "dealvalue": {
+            "amount": 920000,
+            "currency": "USD"
+          },
+          "expectedclose": "2027-02-20",
+          "source": "SRC-013",
+          "industry": "IND-003",
+          "territory": "TER-002"
+        },
+        {
+          "title": "Solstice clinic onboarding",
+          "organization": "ORG-003",
+          "contact": "CCT-004",
+          "lead": "LED-015",
+          "status": "proposalquotation",
+          "probability": 50,
+          "owner": "user-1",
+          "dealvalue": {
+            "amount": 2400000,
+            "currency": "USD"
+          },
+          "total": {
+            "amount": 2400000,
+            "currency": "USD"
+          },
+          "expectedclose": "2027-01-18",
+          "source": "SRC-010",
+          "industry": "IND-004",
+          "territory": "TER-005"
+        },
+        {
+          "title": "Aether enterprise license",
+          "organization": "ORG-004",
+          "contact": "CCT-006",
+          "status": "demomaking",
+          "probability": 25,
+          "owner": "builder-1",
+          "dealvalue": {
+            "amount": 780000,
+            "currency": "USD"
+          },
+          "expectedclose": "2027-01-30",
+          "source": "SRC-014",
+          "industry": "IND-002",
+          "territory": "TER-005"
+        },
+        {
+          "title": "Nordic store analytics",
+          "organization": "ORG-005",
+          "contact": "CCT-007",
+          "status": "readytoclose",
+          "probability": 90,
+          "owner": "admin-1",
+          "dealvalue": {
+            "amount": 1460000,
+            "currency": "USD"
+          },
+          "total": {
+            "amount": 1460000,
+            "currency": "USD"
+          },
+          "expectedclose": "2026-12-05",
+          "source": "SRC-002",
+          "industry": "IND-005",
+          "territory": "TER-002"
+        },
+        {
+          "title": "Apex grid telemetry CRM",
+          "organization": "ORG-006",
+          "contact": "CCT-008",
+          "status": "won",
+          "probability": 100,
+          "owner": "admin-1",
+          "dealvalue": {
+            "amount": 3100000,
+            "currency": "USD"
+          },
+          "expectedclose": "2026-11-10",
+          "closeddate": "2026-11-12",
+          "source": "SRC-003",
+          "industry": "IND-006",
+          "territory": "TER-003"
+        },
+        {
+          "title": "Vertex dealer network",
+          "organization": "ORG-007",
+          "contact": "CCT-009",
+          "status": "lost",
+          "probability": 0,
+          "owner": "builder-1",
+          "dealvalue": {
+            "amount": 1150000,
+            "currency": "USD"
+          },
+          "expectedclose": "2026-10-25",
+          "closeddate": "2026-10-28",
+          "source": "SRC-006",
+          "industry": "IND-008",
+          "territory": "TER-004",
+          "lostreason": "LRS-002",
+          "lostnotes": "Selected incumbent automotive suite."
+        },
+        {
+          "title": "Summit field sales tracker",
+          "organization": "ORG-008",
+          "contact": "CCT-010",
+          "status": "qualification",
+          "probability": 10,
+          "owner": "user-1",
+          "dealvalue": {
+            "amount": 640000,
+            "currency": "USD"
+          },
+          "expectedclose": "2027-03-01",
+          "source": "SRC-005",
+          "industry": "IND-009",
+          "territory": "TER-003"
+        },
+        {
+          "title": "Helios service desk expansion",
+          "organization": "ORG-001",
+          "contact": "CCT-002",
+          "status": "demomaking",
+          "probability": 25,
+          "owner": "admin-1",
+          "dealvalue": {
+            "amount": 540000,
+            "currency": "USD"
+          },
+          "expectedclose": "2027-02-10",
+          "source": "SRC-002",
+          "industry": "IND-001",
+          "territory": "TER-004"
+        },
+        {
+          "title": "Solstice SLA renewal",
+          "organization": "ORG-003",
+          "contact": "CCT-005",
+          "status": "won",
+          "probability": 100,
+          "owner": "user-1",
+          "dealvalue": {
+            "amount": 720000,
+            "currency": "USD"
+          },
+          "expectedclose": "2026-11-01",
+          "closeddate": "2026-11-02",
+          "source": "SRC-002",
+          "industry": "IND-004",
+          "territory": "TER-005"
+        }
+      ]
+    },
+    {
+      "name": "dealline",
+      "prefix": "DLI",
+      "definition": {
+        "title": "Deal product line",
+        "plural": "Deal product lines",
+        "display": "productname",
+        "view": {
+          "version": 1,
+          "layout": "table",
+          "columns": [
+            "productname",
+            "deal",
+            "qty",
+            "rate",
+            "discount",
+            "amount"
+          ],
+          "sort": [],
+          "filters": [],
+          "search": "",
+          "group": "none",
+          "lanes": ""
+        },
+        "fields": [
+          {
+            "name": "deal",
+            "title": "Deal",
+            "type": "reference",
+            "ref": "build.deal",
+            "inverse": "lines",
+            "required": true
+          },
+          {
+            "name": "product",
+            "title": "Product",
+            "type": "reference",
+            "ref": "build.crmproduct"
+          },
+          {
+            "name": "productname",
+            "title": "Product name",
+            "type": "text",
+            "required": true,
+            "search": true
+          },
+          {
+            "name": "qty",
+            "title": "Quantity",
+            "type": "integer",
+            "required": true
+          },
+          {
+            "name": "rate",
+            "title": "Rate",
+            "type": "decimal",
+            "required": true
+          },
+          {
+            "name": "discount",
+            "title": "Discount %",
+            "type": "decimal"
+          },
+          {
+            "name": "amount",
+            "title": "Amount",
+            "type": "decimal"
+          }
+        ]
+      },
+      "records": [
+        {
+          "deal": "DEL-001",
+          "product": "PRD-001",
+          "productname": "Platform Core Seat",
+          "qty": 50,
+          "rate": 120,
+          "discount": 0,
+          "amount": 6000
+        },
+        {
+          "deal": "DEL-001",
+          "product": "PRD-002",
+          "productname": "Enterprise Governance Pack",
+          "qty": 1,
+          "rate": 4500,
+          "discount": 0,
+          "amount": 4500
+        },
+        {
+          "deal": "DEL-001",
+          "product": "PRD-004",
+          "productname": "Onboarding & Migration",
+          "qty": 1,
+          "rate": 8000,
+          "discount": 0,
+          "amount": 8000
+        },
+        {
+          "deal": "DEL-003",
+          "product": "PRD-001",
+          "productname": "Platform Core Seat",
+          "qty": 100,
+          "rate": 120,
+          "discount": 10,
+          "amount": 10800
+        },
+        {
+          "deal": "DEL-003",
+          "product": "PRD-005",
+          "productname": "Dedicated SLA Support",
+          "qty": 1,
+          "rate": 3600,
+          "discount": 0,
+          "amount": 3600
+        },
+        {
+          "deal": "DEL-005",
+          "product": "PRD-003",
+          "productname": "ERP Connector Module",
+          "qty": 1,
+          "rate": 2800,
+          "discount": 0,
+          "amount": 2800
+        }
+      ]
+    },
+    {
+      "name": "crmtask",
+      "prefix": "TSK",
+      "definition": {
+        "title": "Task",
+        "plural": "Tasks",
+        "display": "title",
+        "view": {
+          "version": 1,
+          "layout": "table",
+          "columns": [
+            "title",
+            "status",
+            "priority",
+            "duedate",
+            "assignee"
+          ],
+          "sort": [],
+          "filters": [],
+          "search": "",
+          "group": "none",
+          "lanes": "status"
+        },
+        "fields": [
+          {
+            "name": "title",
+            "title": "Title",
+            "type": "text",
+            "required": true,
+            "search": true,
+            "group": "Task"
+          },
+          {
+            "name": "description",
+            "title": "Description",
+            "type": "longtext",
+            "group": "Task"
+          },
+          {
+            "name": "lead",
+            "title": "Lead",
+            "type": "reference",
+            "ref": "build.lead",
+            "inverse": "tasks",
+            "group": "Task"
+          },
+          {
+            "name": "deal",
+            "title": "Deal",
+            "type": "reference",
+            "ref": "build.deal",
+            "inverse": "tasks",
+            "group": "Task"
+          },
+          {
+            "name": "status",
+            "title": "Status",
+            "type": "choice",
+            "choices": "backlog,todo,inprogress,done,canceled",
+            "required": true,
+            "aside": true,
+            "format": [
+              {
+                "when": {
+                  "op": "=",
+                  "kind": "boolean",
+                  "args": [
+                    {
+                      "kind": "text",
+                      "ref": "status"
+                    },
+                    {
+                      "kind": "text",
+                      "lit": {
+                        "value": "backlog"
+                      }
+                    }
+                  ]
+                },
+                "tone": "neutral"
+              },
+              {
+                "when": {
+                  "op": "=",
+                  "kind": "boolean",
+                  "args": [
+                    {
+                      "kind": "text",
+                      "ref": "status"
+                    },
+                    {
+                      "kind": "text",
+                      "lit": {
+                        "value": "todo"
+                      }
+                    }
+                  ]
+                },
+                "tone": "info"
+              },
+              {
+                "when": {
+                  "op": "=",
+                  "kind": "boolean",
+                  "args": [
+                    {
+                      "kind": "text",
+                      "ref": "status"
+                    },
+                    {
+                      "kind": "text",
+                      "lit": {
+                        "value": "inprogress"
+                      }
+                    }
+                  ]
+                },
+                "tone": "warning"
+              },
+              {
+                "when": {
+                  "op": "=",
+                  "kind": "boolean",
+                  "args": [
+                    {
+                      "kind": "text",
+                      "ref": "status"
+                    },
+                    {
+                      "kind": "text",
+                      "lit": {
+                        "value": "done"
+                      }
+                    }
+                  ]
+                },
+                "tone": "success"
+              },
+              {
+                "when": {
+                  "op": "=",
+                  "kind": "boolean",
+                  "args": [
+                    {
+                      "kind": "text",
+                      "ref": "status"
+                    },
+                    {
+                      "kind": "text",
+                      "lit": {
+                        "value": "canceled"
+                      }
+                    }
+                  ]
+                },
+                "tone": "danger"
+              }
+            ]
+          },
+          {
+            "name": "priority",
+            "title": "Priority",
+            "type": "choice",
+            "choices": "low,medium,high",
+            "aside": true
+          },
+          {
+            "name": "assignee",
+            "title": "Assigned to",
+            "type": "member",
+            "aside": true
+          },
+          {
+            "name": "startdate",
+            "title": "Start date",
+            "type": "date",
+            "aside": true
+          },
+          {
+            "name": "duedate",
+            "title": "Due date",
+            "type": "date",
+            "aside": true
+          },
+          {
+            "name": "allday",
+            "title": "All day",
+            "type": "boolean",
+            "aside": true
+          }
+        ],
+        "states": [
+          {
+            "name": "open",
+            "title": "Open",
+            "tone": "info",
+            "description": "CRM task."
+          }
+        ]
+      },
+      "records": [
+        {
+          "title": "Send discovery deck to Boreal",
+          "description": "Share architecture overview before intro call.",
+          "lead": "LED-001",
+          "status": "todo",
+          "priority": "high",
+          "assignee": "admin-1",
+          "duedate": "2026-11-22"
+        },
+        {
+          "title": "Follow up with Cascade CTO",
+          "description": "Confirm technical evaluation window.",
+          "lead": "LED-002",
+          "status": "inprogress",
+          "priority": "medium",
+          "assignee": "builder-1",
+          "duedate": "2026-11-24"
+        },
+        {
+          "title": "Finalize Helios security review",
+          "description": "Return completed SOC2 questionnaire.",
+          "deal": "DEL-001",
+          "status": "inprogress",
+          "priority": "high",
+          "assignee": "admin-1",
+          "duedate": "2026-11-25"
+        },
+        {
+          "title": "Prepare Solstice pricing tiers",
+          "description": "Compare 100-seat vs 150-seat volume discounts.",
+          "deal": "DEL-003",
+          "status": "todo",
+          "priority": "high",
+          "assignee": "user-1",
+          "duedate": "2026-11-27"
+        },
+        {
+          "title": "Schedule Nordic contract signing",
+          "description": "Coordinate legal sign-off call.",
+          "deal": "DEL-005",
+          "status": "done",
+          "priority": "medium",
+          "assignee": "admin-1",
+          "duedate": "2026-11-18"
+        },
+        {
+          "title": "Archive old RFP checklist",
+          "description": "Superseded by Vertex loss post-mortem.",
+          "deal": "DEL-007",
+          "status": "canceled",
+          "priority": "low",
+          "assignee": "builder-1",
+          "duedate": "2026-11-15"
+        }
+      ]
+    },
+    {
+      "name": "note",
+      "prefix": "NOT",
+      "definition": {
+        "title": "Note",
+        "plural": "Notes",
+        "display": "title",
+        "view": {
+          "version": 1,
+          "layout": "table",
+          "columns": [
+            "title",
+            "lead",
+            "deal",
+            "pinned"
+          ],
+          "sort": [],
+          "filters": [],
+          "search": "",
+          "group": "none",
+          "lanes": ""
+        },
+        "fields": [
+          {
+            "name": "title",
+            "title": "Title",
+            "type": "text",
+            "required": true,
+            "search": true,
+            "group": "Note"
+          },
+          {
+            "name": "content",
+            "title": "Content",
+            "type": "longtext",
+            "group": "Note"
+          },
+          {
+            "name": "lead",
+            "title": "Lead",
+            "type": "reference",
+            "ref": "build.lead",
+            "inverse": "notes",
+            "group": "Note"
+          },
+          {
+            "name": "deal",
+            "title": "Deal",
+            "type": "reference",
+            "ref": "build.deal",
+            "inverse": "notes",
+            "group": "Note"
+          },
+          {
+            "name": "pinned",
+            "title": "Pinned",
+            "type": "boolean",
+            "aside": true
+          }
+        ]
+      },
+      "records": [
+        {
+          "title": "Boreal intro call summary",
+          "content": "Looking to replace spreadsheets across 3 plants in Q1.",
+          "lead": "LED-001",
+          "pinned": true
+        },
+        {
+          "title": "Cascade technical stack",
+          "content": "Uses PostgreSQL and wants SSO with Okta.",
+          "lead": "LED-002",
+          "pinned": false
+        },
+        {
+          "title": "Helios procurement timeline",
+          "content": "Board approval scheduled for Dec 10; legal wants standard MSA.",
+          "deal": "DEL-001",
+          "pinned": true
+        },
+        {
+          "title": "Solstice clinical stakeholders",
+          "content": "CMO sponsors rollout; IT procurement owns security sign-off.",
+          "deal": "DEL-003",
+          "pinned": true
+        },
+        {
+          "title": "Nordic ERP sync scope",
+          "content": "Only needs product catalog and closed-won order handoff.",
+          "deal": "DEL-005",
+          "pinned": false
+        },
+        {
+          "title": "Vertex loss post-mortem",
+          "content": "Incumbent bundled dealer warranty module at zero extra fee.",
+          "deal": "DEL-007",
+          "pinned": false
+        }
+      ]
+    }
+  ],
+  "steps": [
+    [
+      "build.actiontype.create",
+      "build.actiontype",
+      "CRM-LEAD-CONVERT",
+      {
+        "name": "build.lead.convert",
+        "project": "crm",
+        "object": "build.lead",
+        "definition": {
+          "name": "convert",
+          "title": "Convert to deal",
+          "description": "Create or link the organization, create the contact and the deal from this lead, and mark the lead converted.",
+          "from": [
+            "open"
+          ],
+          "inputs": [
+            {
+              "name": "organization",
+              "title": "Link to organization",
+              "type": "reference",
+              "ref": "build.organization"
+            }
+          ],
+          "transaction": {
+            "subject": "build.lead",
+            "guard": {
+              "op": "and",
+              "kind": "boolean",
+              "args": [
+                {
+                  "op": "!=",
+                  "kind": "boolean",
+                  "args": [
+                    {
+                      "op": "coalesce",
+                      "kind": "boolean",
+                      "args": [
+                        {
+                          "op": "",
+                          "kind": "boolean",
+                          "ref": "converted"
+                        },
+                        {
+                          "op": "",
+                          "kind": "boolean",
+                          "lit": {
+                            "value": false
+                          }
+                        }
+                      ]
+                    },
+                    {
+                      "op": "",
+                      "kind": "boolean",
+                      "lit": {
+                        "value": true
+                      }
+                    }
+                  ]
+                },
+                {
+                  "op": "!=",
+                  "kind": "boolean",
+                  "args": [
+                    {
+                      "op": "",
+                      "kind": "choice",
+                      "ref": "status"
+                    },
+                    {
+                      "op": "",
+                      "kind": "choice",
+                      "lit": {
+                        "value": "unqualified"
+                      }
+                    }
+                  ]
+                },
+                {
+                  "op": "!=",
+                  "kind": "boolean",
+                  "args": [
+                    {
+                      "op": "",
+                      "kind": "choice",
+                      "ref": "status"
+                    },
+                    {
+                      "op": "",
+                      "kind": "choice",
+                      "lit": {
+                        "value": "junk"
+                      }
+                    }
+                  ]
+                }
+              ]
+            },
+            "message": "Only an open lead that is not yet converted, unqualified or junk can become a deal.",
+            "steps": [
+              {
+                "name": "organization",
+                "kind": "create",
+                "target": {
+                  "type": "build.organization"
+                },
+                "when": {
+                  "op": "empty",
+                  "kind": "boolean",
+                  "args": [
+                    {
+                      "op": "",
+                      "kind": "reference",
+                      "ref": "input.organization"
+                    }
+                  ]
+                },
+                "changes": [
+                  {
+                    "field": "name",
+                    "expr": {
+                      "op": "coalesce",
+                      "kind": "text",
+                      "args": [
+                        {
+                          "op": "",
+                          "kind": "text",
+                          "ref": "organizationname"
+                        },
+                        {
+                          "op": "",
+                          "kind": "text",
+                          "ref": "fullname"
+                        }
+                      ]
+                    }
+                  },
+                  {
+                    "field": "website",
+                    "expr": {
+                      "op": "",
+                      "kind": "text",
+                      "ref": "website"
+                    }
+                  },
+                  {
+                    "field": "industry",
+                    "expr": {
+                      "op": "",
+                      "kind": "reference",
+                      "ref": "industry"
+                    }
+                  },
+                  {
+                    "field": "territory",
+                    "expr": {
+                      "op": "",
+                      "kind": "reference",
+                      "ref": "territory"
+                    }
+                  },
+                  {
+                    "field": "employees",
+                    "expr": {
+                      "op": "",
+                      "kind": "choice",
+                      "ref": "employees"
+                    }
+                  }
+                ]
+              },
+              {
+                "name": "contact",
+                "kind": "create",
+                "target": {
+                  "type": "build.crmcontact"
+                },
+                "changes": [
+                  {
+                    "field": "fullname",
+                    "expr": {
+                      "op": "",
+                      "kind": "text",
+                      "ref": "fullname"
+                    }
+                  },
+                  {
+                    "field": "email",
+                    "expr": {
+                      "op": "",
+                      "kind": "text",
+                      "ref": "email"
+                    }
+                  },
+                  {
+                    "field": "mobile",
+                    "expr": {
+                      "op": "",
+                      "kind": "text",
+                      "ref": "mobile"
+                    }
+                  },
+                  {
+                    "field": "phone",
+                    "expr": {
+                      "op": "",
+                      "kind": "text",
+                      "ref": "phone"
+                    }
+                  },
+                  {
+                    "field": "designation",
+                    "expr": {
+                      "op": "",
+                      "kind": "text",
+                      "ref": "jobtitle"
+                    }
+                  },
+                  {
+                    "field": "organization",
+                    "expr": {
+                      "op": "coalesce",
+                      "kind": "reference",
+                      "args": [
+                        {
+                          "op": "",
+                          "kind": "reference",
+                          "ref": "input.organization"
+                        },
+                        {
+                          "op": "",
+                          "kind": "reference",
+                          "ref": "step.organization"
+                        }
+                      ]
+                    }
+                  }
+                ]
+              },
+              {
+                "name": "deal",
+                "kind": "create",
+                "target": {
+                  "type": "build.deal"
+                },
+                "changes": [
+                  {
+                    "field": "title",
+                    "expr": {
+                      "op": "coalesce",
+                      "kind": "text",
+                      "args": [
+                        {
+                          "op": "",
+                          "kind": "text",
+                          "ref": "organizationname"
+                        },
+                        {
+                          "op": "",
+                          "kind": "text",
+                          "ref": "fullname"
+                        }
+                      ]
+                    }
+                  },
+                  {
+                    "field": "organization",
+                    "expr": {
+                      "op": "coalesce",
+                      "kind": "reference",
+                      "args": [
+                        {
+                          "op": "",
+                          "kind": "reference",
+                          "ref": "input.organization"
+                        },
+                        {
+                          "op": "",
+                          "kind": "reference",
+                          "ref": "step.organization"
+                        }
+                      ]
+                    }
+                  },
+                  {
+                    "field": "contact",
+                    "expr": {
+                      "op": "",
+                      "kind": "reference",
+                      "ref": "step.contact"
+                    }
+                  },
+                  {
+                    "field": "lead",
+                    "from": "$subject"
+                  },
+                  {
+                    "field": "source",
+                    "expr": {
+                      "op": "",
+                      "kind": "reference",
+                      "ref": "source"
+                    }
+                  },
+                  {
+                    "field": "industry",
+                    "expr": {
+                      "op": "",
+                      "kind": "reference",
+                      "ref": "industry"
+                    }
+                  },
+                  {
+                    "field": "territory",
+                    "expr": {
+                      "op": "",
+                      "kind": "reference",
+                      "ref": "territory"
+                    }
+                  },
+                  {
+                    "field": "status",
+                    "expr": {
+                      "op": "",
+                      "kind": "choice",
+                      "lit": {
+                        "value": "qualification"
+                      }
+                    }
+                  },
+                  {
+                    "field": "probability",
+                    "expr": {
+                      "op": "",
+                      "kind": "integer",
+                      "lit": {
+                        "value": 10
+                      }
+                    }
+                  },
+                  {
+                    "field": "owner",
+                    "expr": {
+                      "op": "",
+                      "kind": "text",
+                      "ref": "owner"
+                    }
+                  }
+                ]
+              },
+              {
+                "name": "lead",
+                "kind": "update",
+                "target": {
+                  "type": "build.lead",
+                  "id": "$subject"
+                },
+                "changes": [
+                  {
+                    "field": "converted",
+                    "expr": {
+                      "op": "",
+                      "kind": "boolean",
+                      "lit": {
+                        "value": true
+                      }
+                    }
+                  },
+                  {
+                    "field": "status",
+                    "expr": {
+                      "op": "",
+                      "kind": "choice",
+                      "lit": {
+                        "value": "qualified"
+                      }
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      }
+    ],
+    [
+      "build.actiontype.publish",
+      "build.actiontype",
+      "CRM-LEAD-CONVERT",
+      {}
+    ],
+    [
+      "build.object.publish",
+      "build.object",
+      "OBJ-lead",
+      {}
+    ],
+    [
+      "build.app.edit",
+      "build.app",
+      "crm",
+      {
+        "icon": "users",
+        "pages": [
+          "lead",
+          "deal",
+          "organization",
+          "crmcontact",
+          "crmtask",
+          "note"
+        ]
+      }
+    ]
+  ]
+}

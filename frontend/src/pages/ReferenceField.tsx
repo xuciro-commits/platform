@@ -70,11 +70,15 @@ export function ReferenceInput({ type, id, name, label, description, required, f
     bootstrap: () => [],
     search: async (query: string) => {
       try {
-        const answer = await request<Api.RecordPage>(`/v1/records/${encodeURIComponent(type)}?search=${encodeURIComponent(query)}&limit=10`);
+        const [answer, described] = await Promise.all([
+          request<Api.RecordPage>(`/v1/records/${encodeURIComponent(type)}?search=${encodeURIComponent(query)}&limit=10`),
+          display ? undefined : request<Api.EntityInfo[]>("/v1/entities"),
+        ]);
+        const field = display ?? described?.find((item) => item.type === type)?.display;
         setSearchFailed(false);
         return (answer.records as Record<string, unknown>[]).map((row) => ({
           id: String(row.id),
-          label: shown(plain(display ? row[display] : row.id)) || String(row.id),
+          label: shown(plain(field ? row[field] : row.id)) || String(row.id),
         }));
       } catch {
         setSearchFailed(true);

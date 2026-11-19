@@ -230,7 +230,7 @@ export function Records({ declared, listPath, id, back }: { declared: Declared; 
   const kept = records.answer.records as Row[];
   const act = useAct(described);
   const lifecycle = (described?.lifecycle?.states.length ?? 0) > 1 ? described?.lifecycle : undefined;
-  const laneField = lifecycle ? described?.field(lifecycle.field) : described?.lanes[0];
+  const laneField = lifecycle ? described?.field(lifecycle.field) : described?.lanes.find((field) => field.name === view.lanes) ?? described?.lanes[0];
   const allowed = (id: string, schema: string) => records.answer.actions?.[id]?.some((action) => action.schema === schema && action.allowed);
   const byId = useMemo(() => new Map(kept.map((row) => [String(row.id), row])), [kept]);
   const actionFor = (id: string, to: string) => {
