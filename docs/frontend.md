@@ -57,7 +57,8 @@ export default recordList({
 | `src/pages/` | 表现，以及建在表现上的入口形状 |
 | `src/host/` | 会话、读取、写入、契约类型；唯一允许网络调用的目录 |
 | `src/templates/` | 刚落地、还没改造完的官方模板；改造完就删，不长期保留 |
-| `src/i18n.ts` | 以英文原文为键的字典与 `t()` |
+| `src/i18n.ts` | 以英文原文为键的字典与 `t()`：源码里写出的文字 |
+| `src/i18n-values.json` | 只经变量到达 `t()` 的词：宿主给的状态、种类与代码，类型与字段名 |
 
 ## 契约
 
@@ -148,6 +149,8 @@ export default recordList({
 
 入口形状建在表现上：`recordList`（一类记录）、`resourceList`（一类资源的目录）、
 `objectBrowser`（所有已发布的业务类型）、`listPage`（任意读取路径）、`dashboardPage`。
+`listPage` 可按答案出列、接着读下一页、把搜索交给宿主，并把动作放进页头“新建”与详情栏；
+新建要填的必填参数里有表单填不了的（json），就不出“新建”。
 
 ## 做一个新界面
 

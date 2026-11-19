@@ -1,6 +1,6 @@
 import { createElement } from "react";
 import type { Api } from "../../host";
-import { listPage } from "../../pages/ListPage";
+import { listPage } from "../../pages/ListEntry";
 import { MemberDirectoryEntry } from "../../pages/MemberDirectoryEntry";
 import { useSearch } from "../../router";
 

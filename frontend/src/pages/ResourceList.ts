@@ -1,5 +1,5 @@
 import type { Api } from "../host";
-import { listPage } from "./ListPage";
+import { listPage } from "./ListEntry";
 
 export function resourceList({ kind, title, about }: { kind: string; title: string; about: string }) {
   return listPage<{ resources: Api.ResourceEntry[] }, Api.ResourceEntry>({

@@ -259,8 +259,8 @@ func clone(m *platform.Member) platform.Member {
 
 func (d *Console) Manifest() platform.Manifest {
 	return platform.Manifest{ID: PlatformApp, Title: platform.BuiltinManifestTitle(PlatformApp), Version: "1", Actions: d.authority.Catalog(), Roles: []string{Admin, runtimeprotocol.Auditor, "confidential", "restricted"},
-		Reads:       []string{"members", "member-directory", "tenant", "account", "audit", "deliveries", "work", "connectors", "settings", "notifications", "endpoints", "effects", "health", "personal-reads", "permissions", "access", "access-requests", "packages", "contributions", "credentials", "markings"},
-		ReadSources: map[string]string{"members": "record", "member-directory": "record", "tenant": "record", "account": "record", "audit": "record", "deliveries": "record", "connectors": "record", "settings": "record", "endpoints": "record", "health": "record", "personal-reads": "record", "permissions": "record", "access": "record", "access-requests": "record", "packages": "record", "credentials": "record", "contributions": "record", "markings": "record"},
+		Reads:       []string{"members", "member-directory", "tenant", "account", "audit", "deliveries", "work", "connectors", "settings", "notifications", "endpoints", "effects", "health", "personal-reads", "permissions", "access", "access-requests", "packages", "contributions", "credentials", "markings", "support-grants"},
+		ReadSources: map[string]string{"members": "record", "member-directory": "record", "tenant": "record", "account": "record", "audit": "record", "deliveries": "record", "connectors": "record", "settings": "record", "endpoints": "record", "health": "record", "personal-reads": "record", "permissions": "record", "access": "record", "access-requests": "record", "packages": "record", "credentials": "record", "contributions": "record", "markings": "record", "support-grants": "record"},
 		Everyone:    []string{"notifications", "member-directory", "tenant", "account", "markings", "access-requests"}, Inputs: map[string]bool{"heartbeat": false},
 		Settings: tenantSettings()}
 }
@@ -662,7 +662,7 @@ func (d *Console) Read(c platform.Caller, name string) (any, *platform.Error) {
 		return nil, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_POLICY_DENIED}
 	}
 	switch name {
-	case "audit", "deliveries", "work", "connectors", "settings", "endpoints", "effects", "health", "personal-reads", "permissions":
+	case "audit", "deliveries", "work", "connectors", "settings", "endpoints", "effects", "health", "personal-reads", "permissions", "support-grants":
 		return h.GovernanceRead(c, name)
 	case "access":
 		return d.Access(), nil

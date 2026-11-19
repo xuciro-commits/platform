@@ -23,7 +23,7 @@
 5. **说明不进代码。** 我们不写注释：模板说明里讲的道理，留在这里或 [frontend](frontend.md)，代码里删掉注释。
 6. **一个表现服务所有入口。** 新表现做成 `src/pages/` 里的一个声明函数（像 `recordList`、`listPage`），入口只写一句声明。
 
-顺序：1.10.2b → c → d → e → 1.10.3。
+顺序：1.10.2c → d → e → 1.10.3 → 1.10.4。
 
 ## 1.10 切换
 
@@ -31,46 +31,13 @@
 
 ### 1.10.2 未建入口按数据形状落地
 
-侧栏还有 20 个“未建”入口，按宿主给的数据形状分成四类；每类一个表现，入口只写声明。
+侧栏还有 5 个“未建”入口，按宿主给的数据形状分成三类；每类一个表现，入口只写声明。
 
 | 类 | 数据形状 | 表现 | 起点 | 入口 |
 |---|---|---|---|---|
-| b | 一个读取给出一组平行行 | `listPage`（已有，补四处） | 已有（`table-filter`、`table-grouped`） | 见 b |
 | c | 父行由子行汇总出来的层级 | `treeList`（新） | 官方 `table-tree` | 组织、追踪 |
 | d | 按应用分组的设置项 | `settingsPage`（新） | 自己的设置行（来自官方 `settings-dialog`），框架同官方 `settings-sidebar` | 设置 |
 | e | 一份汇总数字加几张小表 | `dashboardPage`（已有） | 已有（官方 `dashboard`） | 指标、健康 |
-
-**1.10.2b 读取列表** 先给 `listPage` 补四处，再写十四个入口。补的四处（只改 `src/pages/ListPage.tsx`，超 600 行就把工具栏拆出去）：
-
-- `columns` 也可以是 `(answer) => ListColumn[]`：词汇按租户语言出列。
-- `more?: (answer) => string | undefined`：下一页的读取路径；表现把新行接在后面，驱动已有的 `page`。
-  日志用 `nextCursor`，审计用 `hasMore` 加 `offset`。
-- `actions?: { create?: string; row?: string[] }`：动作的 schema。`create` 进页头主按钮，`row` 进行的“⋯”，目标是 `id(row)`；
-  都经 `useAct` 运行器，拒绝原因回到发起处。动作的目标形状先在 `/v1/actions` 里对一遍。
-- `query?: string`：工具栏的搜索不在本地筛，作为这个查询参数交给宿主重读（知识用 `q`）。
-
-| 入口 | 读取 | 行 | 分组 | 动作 |
-|---|---|---|---|---|
-| `home/proposals` | `/v1/branches` | 整个答案 | `state` | 无；`detail` 显示变更的资源 |
-| `operations/runs` | `/v1/monitoring/runs` | `.runs` | `type`、`status` | 行上 `retrySchema`；有 `recordRef` 时 `link` 用 `recordHref` |
-| `operations/logs` | `/v1/monitoring/logs` | `.entries` | `level`、`source` | 无；`detail` 显示整条；`more` 用 `nextCursor` |
-| `operations/alerts` | `/v1/monitoring/alerts` | 整个答案 | `role` | 无 |
-| `operations/audit` | `/v1/audit` | `.entries` | `app` | 无；`more` 用 `hasMore` |
-| `admin/teams` | `/v1/access` | `.teams` | — | `platform.team.save`；行 `platform.team.remove` |
-| `admin/roles` | `/v1/access` | `.roles` | `app` | `platform.role.save`；行 `platform.role.remove` |
-| `admin/markings` | `/v1/markings` | 整个答案 | `classification` | `platform.marking.save`；行 `platform.marking.archive` |
-| `admin/credentials` | `/v1/credentials` | `.credentials` | `kind`、`state` | `platform.credential.save`；行 `platform.credential.disable` |
-| `admin/models` | `/v1/ai-models` | 整个答案 | `provider` | 行 `ai.model.enable`、`ai.model.disable` |
-| `admin/vocabulary` | `/v1/words` | `.words` | — | 无（宿主没有改词的动作）；列 = 原文 + 每种语言 |
-| `host/tenants` | `/v1/host/overview` | `.tenants` | `lifecycle` | 无；只给宿主管理员 |
-| `data/lineage` | `/v1/lineage` | `.nodes`，从 `.edges` 数出上游与下游 | `kind`、`project` | 无；`link` 用节点的 `record` 与 `recordHref` |
-| `ai/knowledge` | `/v1/knowledge` | 整个答案（段落，按相关排好） | — | 无；`query: "q"`；页头说明取 `/v1/ai/knowledge-index` 的检索方式 |
-
-- 状态列（运行的 `status`、日志的 `level`、租户的 `fault`）用 `dot`，不只靠文字颜色。凭据从不显示值，只有引用。
-- `admin/support-grants` 缺读取：宿主只有宿主管理员的 `/v1/host/tenants/{tenant}/support`。
-  宿主加 `GET /v1/support-grants`（本租户管理员读本租户），`make contract`，再按上表写成第十五个列表。
-- 血缘这一阶段是表；图画布（React Flow）到阶段 2 做成自己的表现。
-- 验收 trunk：每个列表入口打开后显示标题与行或空状态；日志滚到底多出一页；团队新建一个再删掉；知识搜一个词有结果或空状态。
 
 **1.10.2c 树表** 落官方 `table-tree`，改成 `src/pages/TreeList.tsx` 的 `treeList({ title, about, read, nodes, columns, rollup })`；
 `nodes(answer)` 给出 `{ id, parent?, row }`，`rollup(children)` 给出父行的汇总列。模板说明里这些照留：
@@ -109,6 +76,12 @@
   `make build` 与容器的 `-web` 都取 `frontend/dist`。回退只改这一处。
 - 旧前端改到 `make web` 的 8497，只在本地留着对照；容器镜像不再带它。
 - `docs/frontend.md` 的命令与核对表、`AGENTS.md` 的命令表同一提交改。验收：负责人在 8495 走完阶段 1 的门槛演示。
+
+### 1.10.4 多值参数能在表单里填
+
+- 团队的成员、角色的动作清单、凭据的绑定在动作里是必填的 `json` 参数，表单填不了，这三个列表现在不出“新建”。
+- 宿主把它们声明成多值类型（成员多选、本应用动作多选）；`ParameterInput` 各补一个多选控件。
+  动作的结构版本会变：先核对已接受的提交在重放时不按版本拒收，再改。验收 trunk：新建一个团队再删掉。
 
 ## 之后的行
 

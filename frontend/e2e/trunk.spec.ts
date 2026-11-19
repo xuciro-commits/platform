@@ -1335,3 +1335,43 @@ test("entries: record types open as lists and dropped entries are gone from the 
   await page.getByRole("link", { name: "Apps" }).click();
   await expect(menu.getByRole("link", { name: "Templates", exact: true })).toHaveCount(0);
 });
+
+test("reads: each read list opens, the audit loads its next page, and a marking is created and archived", async ({ page }) => {
+  await signIn(page);
+  const session = await page.evaluate(() => JSON.parse(sessionStorage.getItem("platform:session")!) as { token: string; tenant: string });
+  const headers = { authorization: `Bearer ${session.token}`, "platform-tenant": session.tenant };
+  for (let index = 0; index < 120; index += 1) expect((await page.request.get("/v1/audit?limit=1", { headers })).ok()).toBeTruthy();
+
+  const main = page.getByRole("main");
+  for (const [app, entry] of [
+    ["Home", "Proposals"], ["Operations", "Runs"], ["Operations", "Logs"], ["Operations", "Alerts"], ["Operations", "Audit"],
+    ["Admin", "Teams"], ["Admin", "Business roles"], ["Admin", "Markings"], ["Admin", "Credentials"], ["Admin", "Models"],
+    ["Admin", "Support grants"], ["Admin", "Language and vocabulary"], ["Data", "Lineage"], ["AI", "Knowledge"],
+  ]) {
+    await open(page, app, entry);
+    await expect(page.getByRole("heading", { level: 1, name: entry, exact: true })).toBeVisible();
+    await expect(main.getByRole("table").or(main.getByText("Nothing here yet")).first()).toBeVisible();
+    await expect(page.getByText("Not built yet")).toHaveCount(0);
+  }
+
+  await page.getByRole("textbox", { name: "Search this list" }).fill("retrofit");
+  await page.getByRole("textbox", { name: "Search this list" }).press("Enter");
+  await expect(main.getByRole("table").or(main.getByText("No matches")).first()).toBeVisible();
+
+  await open(page, "Operations", "Audit");
+  await expect(page.getByText("100 / 100", { exact: true })).toBeVisible();
+  await page.getByRole("region", { name: "Records" }).evaluate((node) => node.scrollTo(0, node.scrollHeight));
+  await expect(page.getByText("100 / 100", { exact: true })).toHaveCount(0);
+  await expect.poll(async () => Number((await page.getByText(/^\d+ \/ \d+$/).first().textContent())?.split(" / ")[1])).toBeGreaterThan(100);
+
+  await open(page, "Admin", "Markings");
+  await page.getByRole("button", { name: "New", exact: true }).click();
+  const dialog = page.getByRole("dialog");
+  await dialog.getByRole("textbox", { name: "title" }).fill("Trunk marking");
+  await dialog.getByRole("button", { name: "Create", exact: true }).click();
+  await expect(dialog).toHaveCount(0);
+  await main.getByRole("row", { name: /Trunk marking/ }).click();
+  await page.getByRole("complementary").getByRole("button", { name: "Archive marking", exact: true }).click();
+  await page.getByRole("alertdialog").getByRole("button", { name: "Archive marking", exact: true }).click();
+  await expect(main.getByRole("row", { name: /Trunk marking.*Archived/ })).toBeVisible();
+});

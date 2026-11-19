@@ -36,7 +36,7 @@ func (h *HostState) Suspended() bool {
 func (h *HostState) SupportGrants() []protocol.SupportGrant {
 	h.mu.Lock()
 	defer h.mu.Unlock()
-	out := slices.Clone(h.support)
+	out := append([]protocol.SupportGrant{}, h.support...)
 	slices.Reverse(out)
 	return out
 }

@@ -51,7 +51,8 @@ export async function sendBatch(action: Api.Action, rows: BatchRow[], payload: V
 export type Intent = {
   action: Api.Action;
   id: string;
-  revision: number;
+  revision?: number;
+  fixed?: Values;
   label: string;
   name: string;
   consequence?: string;
@@ -82,7 +83,7 @@ export function stepIntent(
   };
 }
 
-export function useAct(described: Described | undefined) {
+export function useAct(described?: Described) {
   const [pending, setPending] = useState<Intent>();
   const [busy, setBusy] = useState(false);
   const toast = useToast();
@@ -98,7 +99,7 @@ export function useAct(described: Described | undefined) {
     firing.current = true;
     setBusy(true);
     try {
-      const kept = await send(intent.action, intent.id, {}, intent.revision);
+      const kept = await send(intent.action, intent.id, intent.fixed ?? {}, intent.revision);
       const back = intent.action.reverse ? described?.action(intent.action.reverse) : undefined;
       if (back) {
         const dismiss = toast({
@@ -128,20 +129,21 @@ export function useAct(described: Described | undefined) {
     setPending(undefined);
   };
 
+  const asked = (intent: Intent) => intent.action.payload.some((parameter) => enterable(parameter) && !(parameter.name in (intent.fixed ?? {})));
   const run = (intent: Intent) => {
-    if (intent.action.payload.some(enterable) || !(intent.reversible || intent.action.reverse)) setPending(intent);
+    if (asked(intent) || !(intent.reversible || intent.action.reverse)) setPending(intent);
     else fire(intent);
   };
 
-  const asks = Boolean(pending?.action.payload.some(enterable));
-  const element = !pending || !described ? null : asks ? (
+  const element = !pending ? null : asked(pending) ? (
     <ActionDialog
       action={pending.action}
-      described={described.entity}
+      described={described?.entity}
       heading={pending.label}
       confirm={pending.label}
       id={pending.id}
       revision={pending.revision}
+      fixed={pending.fixed}
       onClose={cancel}
       onDone={() => {
         pending.onDone?.();

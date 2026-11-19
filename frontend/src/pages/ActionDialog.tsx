@@ -15,11 +15,11 @@ type Applied = Promise<void>;
 type Project = { id: string; title: string };
 export type ActionDialogProps = {
   action: Api.Action;
-  described: Api.EntityInfo;
+  described?: Api.EntityInfo;
   heading: string;
   confirm: string;
   id?: string;
-  revision: number;
+  revision?: number;
   initial?: Values;
   fixed?: Values;
   owned?: boolean;
@@ -37,7 +37,7 @@ export function ActionDialog({ action, described, heading, confirm, id, revision
   const [failure, setFailure] = useState("");
   const projects = useRead<Api.RecordPage>(owned ? "/v1/records/build.app?limit=200" : null);
   const set = (name: string, value: unknown) => setValues((previous) => ({ ...previous, [name]: value }));
-  const shownParameters = action.payload.filter((parameter) => !(parameter.name in fixed) && enterable(parameter) && (!quick || parameter.required || parameter.name === described.display));
+  const shownParameters = action.payload.filter((parameter) => !(parameter.name in fixed) && enterable(parameter) && (!quick || parameter.required || parameter.name === described?.display));
   const blocked = action.payload.filter((parameter) => parameter.required && !(parameter.name in fixed) && !enterable(parameter)).map((parameter) => parameter.name);
   const missing = shownParameters.some((parameter) => parameter.required && (values[parameter.name] == null || values[parameter.name] === ""));
 

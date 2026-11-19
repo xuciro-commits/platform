@@ -62,6 +62,8 @@ func (h hostView) GovernanceRead(c platform.Caller, name string) (any, *platform
 		return h.t.PersonalReads(), nil
 	case "permissions":
 		return h.t.Permissions(), nil
+	case "support-grants":
+		return h.t.console.SupportGrants(), nil
 	}
 	return nil, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_UNKNOWN_SCHEMA}
 }

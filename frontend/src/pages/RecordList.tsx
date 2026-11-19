@@ -281,6 +281,7 @@ export function Records({ declared, listPath, id, back }: { declared: Declared; 
     if (!described) return pending;
     return {
       ...shape(described, declared, listPath, move, bulk, accepts, options, detail),
+      remote: "all" as const,
       page: { total: records.total, loaded: records.loaded, hasMore: records.hasMore, loading: records.loading, loadMore: records.loadMore },
     };
   }, [described, declared, listPath, pending, move, bulk, accepts, options, detail, records.total, records.loaded, records.hasMore, records.loading, records.loadMore]);

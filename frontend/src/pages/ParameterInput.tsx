@@ -23,7 +23,7 @@ import { ReferenceInput } from "./ReferenceField";
 export type InputStatus = { type: "error" | "success"; message?: string };
 type ParameterInputProps = {
   parameter: Api.Field;
-  described: Api.EntityInfo;
+  described?: Api.EntityInfo;
   value: unknown;
   status?: InputStatus;
   onChange: (value: unknown) => void;
@@ -149,7 +149,7 @@ const styles = stylex.create({
 export function ParameterInput({ parameter, described, value, status, onChange, onEnter, focused, referenceName, labelHidden, quiet }: ParameterInputProps) {
   const [switchID, setSwitchID] = useState("");
   const control = quiet && !status ? styles.quiet : undefined;
-  const field = described.fields.find((candidate) => candidate.name === parameter.name);
+  const field = described?.fields.find((candidate) => candidate.name === parameter.name);
   const label = t(field?.title ?? parameter.label ?? parameter.name);
   const description = field?.help;
   const reference = parameter.ref ?? (field?.type === "reference" ? field.ref : undefined);

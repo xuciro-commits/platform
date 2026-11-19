@@ -293,7 +293,7 @@ const (
 )
 
 var auditorReads = []string{"audit", "deliveries", "work", "connectors", "settings",
-	"endpoints", "effects", "health", "personal-reads", "permissions", "access", "access-requests", "members", "packages", "notifications"}
+	"endpoints", "effects", "health", "personal-reads", "permissions", "access", "access-requests", "members", "packages", "notifications", "support-grants"}
 
 func AuditorMayRead(name string) bool {
 	for _, r := range auditorReads {

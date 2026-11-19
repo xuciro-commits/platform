@@ -27,7 +27,7 @@ import { AdjustmentsHorizontalIcon, ArrowPathIcon, MagnifyingGlassIcon, TableCel
 import { AdjustmentsHorizontalIcon as AdjustmentsHorizontalSolidIcon } from "@heroicons/react/24/solid";
 import * as stylex from "@stylexjs/stylex";
 import { type ReactNode, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { type Read, reread, useRead } from "../host";
+import { type Read, reread } from "../host";
 import { t } from "../i18n";
 import { navigate, usePath, useSearch } from "../router";
 import { BackLink } from "./BackLink";
@@ -72,8 +72,8 @@ export type ListShape<Answer, Row> = {
   carryView?: boolean;
   page?: { total: number; loaded: number; hasMore: boolean; loading: boolean; loadMore: () => void };
   savedViews?: string;
+  remote?: "all" | "search";
 };
-export type ListDefinition<Answer, Row> = ListShape<Answer, Row> & { read: string };
 
 type Raw = Record<string, unknown>;
 const compare = (left: unknown, right: unknown) =>
@@ -115,12 +115,6 @@ const styles = stylex.create({
   },
   surface: { backgroundColor: colorVars["--color-background-surface"], "--table-sticky-background": colorVars["--color-background-surface"] },
 });
-
-export function listPage<Answer, Row>(definition: ListDefinition<Answer, Row>) {
-  return function ListEntry() {
-    return <ListView key={definition.read} definition={{ ...definition, carryView: true }} read={useRead<Answer>(definition.read)} />;
-  };
-}
 
 type ListViewProps<Answer, Row> = {
   definition: ListShape<Answer, Row>;
@@ -235,8 +229,8 @@ export function ListView<Answer, Row>({ definition, read, primary, back }: ListV
   }, [read, definition, group, lanes, currentSearch, view]);
 
   const shown = useMemo(() => {
-    if (definition.page) return all.map((entry) => entry.cells);
-    const query = view.search.trim().toLowerCase();
+    if (definition.remote === "all") return all.map((entry) => entry.cells);
+    const query = definition.remote === "search" ? "" : view.search.trim().toLowerCase();
     const searched = query ? all.filter((entry) => definition.columns.some((column) => (entry.cells[column.key] ?? "").toLowerCase().includes(query))) : all;
     const passing = new Set((applyFilters(view.filters, searched.map((entry) => entry.raw) as never) as Raw[]).map((raw) => raw[idKey]));
     const kept = searched.filter((entry) => passing.has(entry.cells[idKey]));
@@ -252,7 +246,7 @@ export function ListView<Answer, Row>({ definition, read, primary, back }: ListV
         return 0;
       })
       .map((entry) => entry.cells);
-  }, [all, view.filters, view.search, view.sort, group, applyFilters, definition.columns, definition.page]);
+  }, [all, view.filters, view.search, view.sort, group, applyFilters, definition.columns, definition.remote]);
   const grouped = useTableGroupedRows<Cells>({
     data: shown,
     groupBy: (cells) => cells.__group,
@@ -353,7 +347,7 @@ export function ListView<Answer, Row>({ definition, read, primary, back }: ListV
   }, [scrollKey, read.status, shown.length, rowHeight, definition.page?.hasMore, definition.page?.loading, definition.page?.loadMore]);
 
   const saved = useSavedViews({ entity: definition.savedViews ?? "", view, fallback, columnCount: definition.columns.length, filterLabel, compact: compactSurface });
-  const count = definition.page ? `${all.length} / ${definition.page.total}` : `${shown.length} / ${all.length}`;
+  const count = definition.remote === "all" && definition.page ? `${all.length} / ${definition.page.total}` : `${shown.length} / ${all.length}`;
   const dirty = view.filters.length > 0 || view.search !== "";
   const clearAll = () => update({ filters: [], search: "" });
   const powerLabel = power ? t("Switch to filter chips") : t("Advanced search");
@@ -576,7 +570,7 @@ export function ListView<Answer, Row>({ definition, read, primary, back }: ListV
                   columns={columns}
                   idKey={group ? grouped.idKey : idKey}
                   rowIndexStart={windowed ? first + 1 : undefined}
-                  rowCount={definition.page?.total}
+                  rowCount={definition.remote === "all" ? definition.page?.total : undefined}
                   density={view.density}
                   dividers="rows"
                   textOverflow="truncate"
