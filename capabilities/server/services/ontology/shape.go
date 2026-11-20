@@ -69,7 +69,71 @@ func CheckFields(fields []Field, known func(string) bool) error {
 			return err
 		}
 	}
+	if err := CheckOneOf(fields); err != nil {
+		return err
+	}
 	return CheckConditions(fields)
+}
+
+func oneOfGroups(fields []Field) ([]string, map[string][]Field) {
+	var order []string
+	groups := map[string][]Field{}
+	for _, f := range fields {
+		if f.OneOf == "" {
+			continue
+		}
+		if groups[f.OneOf] == nil {
+			order = append(order, f.OneOf)
+		}
+		groups[f.OneOf] = append(groups[f.OneOf], f)
+	}
+	return order, groups
+}
+
+func CheckOneOf(fields []Field) error {
+	order, groups := oneOfGroups(fields)
+	for _, name := range order {
+		members := groups[name]
+		if len(members) < 2 {
+			return fmt.Errorf("the group %q needs at least two references", name)
+		}
+		for i, f := range members {
+			if f.Type != "reference" || f.Required || f.ReadOnly {
+				return fmt.Errorf("the field %q is one of %q, so it must be an optional reference people set", f.Name, name)
+			}
+			if slices.ContainsFunc(members[:i], func(other Field) bool { return other.Ref == f.Ref }) {
+				return fmt.Errorf("the group %q refers to %q twice", name, f.Ref)
+			}
+		}
+	}
+	return nil
+}
+
+func OneOfConstraints(fields []Field) []platform.Constraint {
+	order, groups := oneOfGroups(fields)
+	var out []platform.Constraint
+	for _, name := range order {
+		members := groups[name]
+		var pairs []platform.Expr
+		names, titles := make([]string, len(members)), make([]string, len(members))
+		for i, f := range members {
+			names[i], titles[i] = f.Name, f.Title
+			for _, other := range members[i+1:] {
+				both := platform.Expr{Op: "and", Kind: "boolean", Args: []platform.Expr{
+					{Op: "not-empty", Kind: "boolean", Args: []platform.Expr{platform.ExprReference("reference", f.Name)}},
+					{Op: "not-empty", Kind: "boolean", Args: []platform.Expr{platform.ExprReference("reference", other.Name)}}}}
+				pairs = append(pairs, platform.Expr{Op: "not", Kind: "boolean", Args: []platform.Expr{both}})
+			}
+		}
+		expr := pairs[0]
+		if len(pairs) > 1 {
+			expr = platform.Expr{Op: "and", Kind: "boolean", Args: pairs}
+		}
+		out = append(out, platform.Constraint{Name: "oneof." + names[0], Kind: "expression", Fields: names, Expr: &expr,
+			Message:      fmt.Sprintf("Only one of %s can be set.", strings.Join(titles, ", ")),
+			Translations: map[string]string{"zh-CN": fmt.Sprintf("%s 只能填一个。", strings.Join(titles, "、"))}})
+	}
+	return out
 }
 
 func CheckEnterpriseReference(kind, ref, stereotype string, stereotypes []string) error {

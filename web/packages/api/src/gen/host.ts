@@ -2169,6 +2169,7 @@ export type FieldInfo = {
   stereotype?: string;
   stereotypes?: string[];
   inverse?: string;
+  oneOf?: string;
   knowledge?: boolean;
   read?: string[];
   write?: string[];

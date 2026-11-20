@@ -14,7 +14,7 @@ import { reasonOf, send } from "./act";
 import type { Described, Section, Values } from "./describe";
 import { type InputStatus, ParameterInput, enterable, settles } from "./ParameterInput";
 import { plain, present, shown } from "./values";
-import { ReferenceLink } from "./ReferenceField";
+import { OneOfInput, ReferenceLink } from "./ReferenceField";
 import { MemberLabel } from "./MemberField";
 
 type Conflict = { name: string; before: unknown; mine: unknown; saved: unknown; revision: number };
@@ -81,6 +81,8 @@ export function useEditor(described: Described, id: string, values: Values, revi
     const form = { ...values, ...pending.current, [name]: value };
     const controller = described.field(name)?.when?.field;
     const together: Values = controller && drafted(controller) ? { [controller]: pending.current[controller] } : {};
+    const field = described.field(name);
+    if (field && !blank(value)) for (const sibling of described.members(field)) if (sibling.name !== name && !blank(values[sibling.name])) together[sibling.name] = "";
     const changed = [name, ...Object.keys(together)];
     for (const field of described.entity.fields) {
       if (field.when && changed.includes(field.when.field) && drafted(field.name) && described.shows(field, form)) together[field.name] = pending.current[field.name];
@@ -141,7 +143,9 @@ export function useEditor(described: Described, id: string, values: Values, revi
     resolve,
     change: (parameter, value) => {
       refused.current.delete(parameter.name);
-      setDrafts((previous) => ({ ...previous, [parameter.name]: value }));
+      const field = described.field(parameter.name);
+      const cleared = field && !blank(value) ? described.members(field).filter((sibling) => sibling.name !== parameter.name).map((sibling) => [sibling.name, ""]) : [];
+      setDrafts((previous) => ({ ...previous, ...Object.fromEntries(cleared), [parameter.name]: value }));
       setStatus(({ [parameter.name]: _, ...rest }) => rest);
       if (settles(parameter, described.field(parameter.name))) save(parameter.name, value);
     },
@@ -203,6 +207,7 @@ export function FieldGroup({ described, editor, sections, direction, focusEmpty,
     fields.filter((field) => {
       if (restricted?.has(field.name)) return true;
       if (!described.shows(field, editor.values)) return false;
+      if (field.oneOf) return described.members(field).some((member) => parameters.has(member.name) || !blank(editor.values[member.name]));
       if (parameters.has(field.name)) return true;
       const value = editor.values[field.name];
       return (field.type === "money" || typeof value !== "object") && present(field, value) !== "";
@@ -226,6 +231,20 @@ export function FieldGroup({ described, editor, sections, direction, focusEmpty,
               const reference = field.type === "reference" && field.ref;
               const id = String(value ?? "");
               const referenceName = refs?.[field.name]?.[id];
+              if (field.oneOf) {
+                const members = described.members(field);
+                const editable = members.flatMap((member) => parameters.get(member.name) ?? []);
+                const names = Object.fromEntries(members.map((member) => [member.name, refs?.[member.name]?.[String(editor.values[member.name] ?? "")]]));
+                if (editable.length === members.length) {
+                  return <OneOfInput key={field.name} title={t(field.oneOf)} members={members} values={editor.values} names={names}
+                    status={members.map((member) => editor.status[member.name]).find(Boolean)}
+                    onChange={(name, next) => editor.change(editable.find((parameter) => parameter.name === name)!, next)} />;
+                }
+                const linked = members.find((member) => !blank(editor.values[member.name]));
+                return <Field key={field.name} label={t(field.oneOf)} inputID={`shown-${field.name}`}>
+                  {linked && names[linked.name] ? <ReferenceLink type={String(linked.ref)} id={String(editor.values[linked.name])} name={String(names[linked.name])} /> : <Text type="body">{present(field, editor.values[linked?.name ?? field.name])}</Text>}
+                </Field>;
+              }
               if (restricted?.has(field.name)) {
                 return <Field key={field.name} label={t(field.title)} inputID={`restricted-${field.name}`}>
                   <Text type="supporting" color="secondary">{t("Cannot view")}</Text>

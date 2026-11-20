@@ -24,6 +24,7 @@ export type Described = {
   other: Api.Action[];
   action: (schema: string) => Api.Action | undefined;
   field: (name: string) => Api.FieldInfo | undefined;
+  members: (field: Api.FieldInfo) => Api.FieldInfo[];
   shows: (field: Api.FieldInfo, values: Values) => boolean;
   needs: (values: Values, changed: string[]) => Api.FieldInfo[];
   state: (values: Values) => Api.State | undefined;
@@ -46,7 +47,12 @@ const ungrouped = "Details";
 
 export const numeric = new Set(["integer", "decimal", "money"]);
 
+export function grouped(fields: Api.FieldInfo[], field: Api.FieldInfo) {
+  return field.oneOf ? fields.filter((other) => other.oneOf === field.oneOf) : [field];
+}
+
 export function describe(entity: Api.EntityInfo, actions: Api.Action[]): Described {
+  const leads = (field: Api.FieldInfo) => grouped(entity.fields, field)[0].name === field.name;
   const lifecycle = entity.lifecycle;
   const own = actions.filter((action) => action.target === entity.type);
   const create = own.find((action) => action.schema === `${entity.type}.create`);
@@ -60,7 +66,7 @@ export function describe(entity: Api.EntityInfo, actions: Api.Action[]): Describ
   const stepping = new Set(steps.map((step) => step.action.schema));
   const other = own.filter((action) => action !== create && action !== edit && !stepping.has(action.schema));
   const editable = new Set(edit ? edit.payload.filter(enterable).map((parameter) => parameter.name) : []);
-  const fields = entity.fields.filter((field) => field.name !== lifecycle?.field);
+  const fields = entity.fields.filter((field) => field.name !== lifecycle?.field && leads(field));
   const aside = fields.filter((field) => field.aside);
   const sections: Section[] = [];
   for (const field of fields.filter((candidate) => !candidate.aside)) {
@@ -69,7 +75,7 @@ export function describe(entity: Api.EntityInfo, actions: Api.Action[]): Describ
     if (section) section.fields.push(field);
     else sections.push({ title, fields: [field] });
   }
-  const listed = entity.fields.filter((field) => tabular.has(field.type) && (field.name !== lifecycle?.field || (lifecycle.states?.length ?? 0) > 1));
+  const listed = entity.fields.filter((field) => tabular.has(field.type) && leads(field) && (field.name !== lifecycle?.field || (lifecycle.states?.length ?? 0) > 1));
   const rank = (field: Api.FieldInfo) =>
     field.name === entity.display ? 0 : field.required || field.search || field.type === "choice" || field.name === lifecycle?.field ? 1 : 2;
   const picked = new Set(listed.filter((field) => field.type !== "longtext" || field.name === entity.display)
@@ -98,6 +104,7 @@ export function describe(entity: Api.EntityInfo, actions: Api.Action[]): Describ
     other,
     action: (schema) => own.find((candidate) => candidate.schema === schema),
     field: (name) => entity.fields.find((field) => field.name === name),
+    members: (field) => grouped(entity.fields, field),
     shows: (field, values) => !field.when || field.when.in.includes(shown(values[field.when.field])),
     needs: (values, changed) => entity.fields.filter((field) => field.required && field.when && changed.includes(field.when.field) &&
       field.when.in.includes(shown(values[field.when.field])) && shown(values[field.name]) === ""),

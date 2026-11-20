@@ -184,8 +184,7 @@ const (
 type ApprovalLevel struct {
 	Title           string
 	Structure, Role string
-	AppRole         string
-	Member          string
+	AppRole, Member string
 	All             bool
 	When            func(c Caller, s *pb.Submission) bool
 	Due             time.Duration

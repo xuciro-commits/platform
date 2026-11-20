@@ -247,6 +247,7 @@ type FieldInfo struct {
 	Stereotype   string            `json:"stereotype,omitempty"`
 	Stereotypes  []string          `json:"stereotypes,omitempty"`
 	Inverse      string            `json:"inverse,omitempty"`
+	OneOf        string            `json:"oneOf,omitempty"`
 	Knowledge    bool              `json:"knowledge,omitempty"`
 	Read         []string          `json:"read,omitempty"`
 	Write        []string          `json:"write,omitempty"`

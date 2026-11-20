@@ -19,6 +19,7 @@
       "group": "Task",
       "inverse": "tasks",
       "name": "lead",
+      "oneOf": "Related to",
       "ref": "build.lead",
       "title": "Lead",
       "type": "reference"
@@ -27,6 +28,7 @@
       "group": "Task",
       "inverse": "tasks",
       "name": "deal",
+      "oneOf": "Related to",
       "ref": "build.deal",
       "title": "Deal",
       "type": "reference"
@@ -183,7 +185,7 @@
   "schemaVersions": [
     {
       "family": 1,
-      "version": "schema.sha256.db9513fe058672c00e73ec539d3bd7030ae57cbbc12177e07e02a1cb73ce3642"
+      "version": "schema.sha256.245fa8d0565429b6ce239d78d28b5290678dd03492d5a2df8e7ec055fed542a5"
     }
   ],
   "states": [

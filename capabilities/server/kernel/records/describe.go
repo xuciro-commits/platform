@@ -215,6 +215,7 @@ func describeFields(e Entity, t reflect.Type, from int, typeOf func(reflect.Type
 		}
 		f.Group = sf.Tag.Get("group")
 		f.Aside = sf.Tag.Get("rail") == "true"
+		f.OneOf = sf.Tag.Get("oneof")
 		if roles := sf.Tag.Get("read"); roles != "" {
 			f.Read = strings.Split(roles, ",")
 		}

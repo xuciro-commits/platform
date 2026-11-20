@@ -9,6 +9,8 @@ import { type Api, useRead } from "../host";
 import { t } from "../i18n";
 import { reasonOf, send } from "./act";
 import { ParameterInput, enterable, missingValue } from "./ParameterInput";
+import { OneOfInput } from "./ReferenceField";
+import { grouped } from "./describe";
 
 type Values = Record<string, unknown>;
 type Applied = Promise<void>;
@@ -94,16 +96,23 @@ export function ActionDialog({ action, described, heading, confirm, id, revision
                   options={projects.status === "ready" ? (projects.data.records as Project[]).map((entry) => ({ value: entry.id, label: entry.title })) : []}
                 />
               )}
-              {shownParameters.map((parameter) => (
-                <ParameterInput
+              {shownParameters.map((parameter) => {
+                const field = described?.fields.find((candidate) => candidate.name === parameter.name);
+                const members = field && described ? grouped(described.fields, field) : [];
+                if (field?.oneOf) {
+                  if (members.some((member) => member.name in fixed) || shownParameters.find((other) => members.some((member) => member.name === other.name))?.name !== parameter.name) return null;
+                  return <OneOfInput key={parameter.name} title={t(field.oneOf)} members={members.filter((member) => shownParameters.some((other) => other.name === member.name))}
+                    values={values} onChange={(name, next) => setValues((previous) => ({ ...previous, ...Object.fromEntries(members.map((member) => [member.name, ""])), [name]: next }))} />;
+                }
+                return <ParameterInput
                   key={parameter.name}
                   parameter={parameter}
                   described={described}
                   value={values[parameter.name]}
                   form={{ ...values, ...fixed }}
                   onChange={(value) => set(parameter.name, value)}
-                />
-              ))}
+                />;
+              })}
             </FormLayout>
           </LayoutContent>
         }

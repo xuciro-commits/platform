@@ -7,7 +7,9 @@ import { VStack } from "@astryxdesign/core/Layout";
 import { MetadataList, MetadataListItem } from "@astryxdesign/core/MetadataList";
 import { Heading, Text } from "@astryxdesign/core/Text";
 import { type SearchContext, Typeahead } from "@astryxdesign/core/Typeahead";
-import { useMemo, useState } from "react";
+import { SegmentedControl, SegmentedControlItem } from "@astryxdesign/core/SegmentedControl";
+import { Field } from "@astryxdesign/core/Field";
+import { useId, useMemo, useState } from "react";
 import { useRecordHref } from "../apps/entries";
 import { type Api, request, useRead } from "../host";
 import { t } from "../i18n";
@@ -124,4 +126,31 @@ export function ReferenceInput({ type, id, name, label, description, required, f
       <ReferenceLink type={type} id={id} name={name} compact />
     </InputGroup>
   ) : input;
+}
+
+type OneOfInputProps = {
+  title: string;
+  members: Api.FieldInfo[];
+  values: Record<string, unknown>;
+  names?: Record<string, string | undefined>;
+  status?: InputStatus;
+  onChange: (name: string, id: string) => void;
+};
+
+export function OneOfInput({ title, members, values, names, status, onChange }: OneOfInputProps) {
+  const [picked, setPicked] = useState<string>();
+  const inputID = useId();
+  const linked = members.find((member) => String(values[member.name] ?? "") !== "");
+  const active = members.find((member) => member.name === picked) ?? linked ?? members[0];
+  return (
+    <Field label={title} inputID={inputID} isGroupLabel>
+      <VStack gap={2}>
+        <SegmentedControl label={title} size="sm" value={active.name} onChange={setPicked}>
+          {members.map((member) => <SegmentedControlItem key={member.name} value={member.name} label={t(member.title)} />)}
+        </SegmentedControl>
+        <ReferenceInput key={active.name} type={String(active.ref)} id={String(values[active.name] ?? "")} name={names?.[active.name]} label={t(active.title)} labelHidden
+          status={status} onChange={(next) => onChange(active.name, next)} />
+      </VStack>
+    </Field>
+  );
 }

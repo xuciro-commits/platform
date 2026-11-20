@@ -157,7 +157,9 @@ type RecordShape = ListShape<Api.RecordPage, Row>;
 function shape(described: Described, declared: Declared, listPath: string, extra?: Pick<RecordShape, "board" | "bulk" | "detail">, options: Options = {}): RecordShape {
   const lifecycle = described.lifecycle;
   const states = lifecycle?.states ?? [];
-  const say = (field: Api.FieldInfo) => (row: Row) => {
+  const linked = (field: Api.FieldInfo, row: Row) => described.members(field).find((member) => row[member.name]) ?? field;
+  const say = (group: Api.FieldInfo) => (row: Row) => {
+    const field = linked(group, row);
     const label = (row[referenced] as Api.RecordPage["refs"])?.[field.name]?.[String(row[field.name])];
     if (field.type === "member") return row[field.name] ? label ?? t("Unnamed member") : "";
     if (label) return label;
@@ -183,16 +185,19 @@ function shape(described: Described, declared: Declared, listPath: string, extra
     columns: [
       ...chosen.map((field) => ({
         key: field.name,
-        header: declared.headers?.[field.name] ?? field.title,
+        header: declared.headers?.[field.name] ?? field.oneOf ?? field.title,
         text: say(field),
         kind: field.type === "choice" ? ("enum" as const) : numeric.has(field.type) ? ("number" as const) : field.type === "date" || field.type === "datetime" ? ("time" as const) : field.type === "member" ? ("member" as const) : ["name", "key", "id", "code", "slug"].includes(field.name) ? ("code" as const) : ("string" as const),
         choices: field.name === lifecycle?.field ? states.map((state) => t(state.title)) : titles(field),
-        options: options[field.name],
+        options: field.oneOf ? undefined : options[field.name],
         boolean: field.type === "boolean",
         chip: field.type !== "money",
         hiddenByDefault: !defaults.includes(field),
         dot: dot(field),
-        reference: field.type === "reference" && field.ref ? (row: Row) => (row[field.name] ? { type: String(field.ref), id: String(row[field.name]) } : undefined) : undefined,
+        reference: field.type === "reference" && field.ref ? (row: Row) => {
+          const target = linked(field, row);
+          return row[target.name] ? { type: String(target.ref), id: String(row[target.name]) } : undefined;
+        } : undefined,
         value: numeric.has(field.type) ? (row: Row) => field.type === "money" ? money(row[field.name])?.amount : plain(row[field.name]) : undefined,
       })),
       { key: "changed", header: "Updated", width: 140, kind: "time" as const, text: (row: Row) => (row.changed as Stamp | undefined)?.at ?? "" },

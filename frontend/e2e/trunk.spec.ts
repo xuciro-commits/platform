@@ -1699,6 +1699,19 @@ test("crm: every CRM type can be created, edited and filtered, and lead and deal
   await page.reload();
   await expect(page.getByText("20,000.00 USD", { exact: true }).first()).toBeVisible();
 
+  await page.goto("/ontology/objects/build.note");
+  await expect(page.getByRole("columnheader", { name: "Related to" })).toBeVisible();
+  await expect(page.getByRole("row", { name: /Helios procurement timeline/ }).getByText("Helios plant CRM rollout", { exact: true })).toBeVisible();
+  await page.goto("/ontology/objects/build.crmtask/TSK-001");
+  await expect(page.getByRole("radio", { name: "Lead", exact: true })).toBeChecked();
+  await page.getByRole("radio", { name: "Deal", exact: true }).click();
+  await page.getByRole("combobox", { name: "Deal", exact: true }).fill("Helios");
+  await page.getByRole("option", { name: "Helios plant CRM rollout" }).click();
+  await expect(page.getByRole("link", { name: "Helios plant CRM rollout" })).toBeVisible();
+  await page.reload();
+  await expect(page.getByRole("radio", { name: "Deal", exact: true })).toBeChecked();
+  await expect(page.getByRole("link", { name: "Helios plant CRM rollout" })).toBeVisible();
+
   await page.goto("/ontology/objects/build.lead");
   await page.getByRole("radio", { name: "Board" }).click();
   await dragCard("New", "Jonas Lindqvist", "Contacted");

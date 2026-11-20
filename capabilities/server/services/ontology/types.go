@@ -60,6 +60,7 @@ type Field struct {
 	Stereotype  string                 `json:"stereotype,omitempty" title:"Element type" help:"Enterprise element type"`
 	Stereotypes []string               `json:"stereotypes,omitempty" title:"Element types" help:"Enterprise element types"`
 	Inverse     string                 `json:"inverse,omitempty" title:"Inverse name" help:"Seen from there as. For a reference: what the referenced record calls these records" example:"visits"`
+	OneOf       string                 `json:"oneOf,omitempty" title:"One of" help:"For a reference: the name of a group of references to different objects, of which a record sets at most one" example:"Related to"`
 	Required    bool                   `json:"required,omitempty"`
 	Search      bool                   `json:"search,omitempty" title:"Searchable"`
 	ReadOnly    bool                   `json:"readOnly,omitempty" title:"Read only"`

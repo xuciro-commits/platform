@@ -36,7 +36,7 @@
     "schema": "build.note.edit",
     "schemaVersion": {
       "family": 1,
-      "version": "schema.sha256.41264d93c93f7b99e54d569a2c5bc8ef14748cf3ff99800344a258f09caa3c3b"
+      "version": "schema.sha256.2bebed73edadce9b2379602689932badef9800b6efe6991e9680a47907340bed"
     },
     "target": "build.note",
     "title": "Edit note"
