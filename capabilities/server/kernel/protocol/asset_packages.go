@@ -12,6 +12,7 @@ type InstalledPackage struct {
 	ID            string                         `json:"id"`
 	Version       string                         `json:"version"`
 	Namespace     string                         `json:"namespace"`
+	Space         string                         `json:"space,omitempty"`
 	Title         string                         `json:"title,omitempty"`
 	State         string                         `json:"state"`
 	Contributions []platform.PackageContribution `json:"contributions,omitempty"`
@@ -51,6 +52,7 @@ type PackageView struct {
 	Installed    *InstalledPackage          `json:"installed,omitempty"`
 	Precheck     Precheck                   `json:"precheck"`
 	Source       string                     `json:"source"`
+	Space        string                     `json:"space,omitempty"`
 }
 
 type PackageInstallStep struct {

@@ -2497,6 +2497,7 @@ export type InstalledPackage = {
   id: string;
   version: string;
   namespace: string;
+  space?: string;
   title?: string;
   state: string;
   contributions?: PackageContribution[];
@@ -3795,6 +3796,7 @@ export type PackageView = {
   installed?: InstalledPackage;
   precheck: Precheck;
   source: string;
+  space?: string;
 };
 
 export type Page = {

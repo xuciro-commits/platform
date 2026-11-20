@@ -108,6 +108,9 @@ func (p ManagedPreparation) Prepare() (func(*pb.ChangeRecord), *platform.Error) 
 	if p.Archive {
 		return p.Managed.Archive, nil
 	}
+	if space := Space(p.Descriptor); space != "" && p.Managed.Taken() {
+		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "A project named {name} already exists; install under another name", space)
+	}
 	code, err := p.Code()
 	if err != nil {
 		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "{reason}", err.Error())
@@ -169,8 +172,32 @@ func (p ManagedPreparation) Prepare() (func(*pb.ChangeRecord), *platform.Error) 
 }
 
 func (m Managed) Project() (id, name string) {
+	if space := Space(m.Descriptor); space != "" {
+		return space, space
+	}
+	for _, resource := range m.Resources {
+		if resource.ManagedBy == m.Descriptor.ID && resource.Type == protocol.AppType && resource.Draft == resource.Project {
+			return resource.Project, resource.Ref.Name
+		}
+	}
 	hash := sha256.Sum256([]byte(m.Descriptor.ID))
 	return "package:" + m.Descriptor.ID, fmt.Sprintf("pkg%x", hash[:12])
+}
+
+func (m Managed) Taken() bool {
+	_, name := m.Project()
+	ref := platform.AssetRef{App: build.ID, Kind: platform.AssetApp, Name: name}
+	held := false
+	for _, resource := range m.Resources {
+		if resource.Ref == ref {
+			if resource.ManagedBy != m.Descriptor.ID {
+				return true
+			}
+			held = true
+		}
+	}
+	_, exists := platform.Get[protocol.Application](m.Caller, name)
+	return !held && exists
 }
 
 func (m Managed) archive(r *pb.ChangeRecord, resource protocol.Resource, archived bool) {

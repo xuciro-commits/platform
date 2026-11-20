@@ -46,7 +46,7 @@ func (i Impact) Of(id string, after []platform.ReleaseAsset) (platform.PackageLi
 		replaced[asset.Ref] = true
 	}
 	for _, resource := range i.Resources {
-		if resource.ManagedBy != id || resource.Draft == "package:"+id || resource.Archived && len(after) != 0 {
+		if resource.ManagedBy != id || resource.Type == protocol.AppType && resource.Draft == resource.Project && !replaced[resource.Ref] || resource.Archived && len(after) != 0 {
 			continue
 		}
 		if !resource.Archived {

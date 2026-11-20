@@ -1,6 +1,7 @@
 package packages
 
 import (
+	"cmp"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -85,7 +86,8 @@ const (
 func Actions() []platform.Action {
 	admin := []string{"admin"}
 	fields := []platform.Field{{Name: "id", Type: "string", Required: true, Description: "The package's ID"},
-		{Name: "version", Type: "string", Description: "The version; empty: the newest the index offers"}}
+		{Name: "version", Type: "string", Description: "The version; empty: the newest the index offers"},
+		{Name: "namespace", Type: "string", Description: "The API name of the managed project its types and actions take; empty: the package's own. An installed package keeps its name"}}
 	return []platform.Action{
 		{Schema: SchemaPackageImport, Target: protocol.PackageType, Capability: "packages", Title: "Add reviewed package", Description: "Keep exactly the reviewed package in this tenant's available library; install separately.", Payload: []platform.Field{{Name: "id", Type: "string", Required: true}, {Name: "digest", Type: "string", Required: true}}, Roles: admin},
 		{Schema: SchemaPackageRemoveSource, Target: protocol.PackageType, Capability: "packages", Title: "Remove package source", Description: "Remove an uninstalled source from the library; installed artifacts and business history stay.", Payload: []platform.Field{{Name: "id", Type: "string", Required: true}, {Name: "digest", Type: "string", Required: true}}, Roles: admin},
@@ -403,7 +405,7 @@ func (d *Owner) decide(c platform.Caller, s *pb.Submission) (func(*pb.ChangeReco
 	}
 	invalid := &platform.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 	var p struct {
-		ID, Version string
+		ID, Version, Namespace string
 	}
 	if json.Unmarshal(s.GetPayload(), &p) != nil || p.ID == "" {
 		return nil, invalid
@@ -439,7 +441,7 @@ func (d *Owner) decide(c platform.Caller, s *pb.Submission) (func(*pb.ChangeReco
 		var archive func(*pb.ChangeRecord)
 		if schema == SchemaPackageRetire {
 			var refusal *platform.Error
-			archive, refusal = d.host.PrepareManagedPackage(c, platform.PackageDescriptor{ID: p.ID}, nil, true, false, false)
+			archive, refusal = d.host.PrepareManagedPackage(c, platform.PackageDescriptor{ID: p.ID, Namespace: held.Namespace}, nil, true, false, false)
 			if refusal != nil {
 				return nil, refusal
 			}
@@ -546,6 +548,17 @@ func (d *Owner) decide(c platform.Caller, s *pb.Submission) (func(*pb.ChangeReco
 	if assetErr != nil {
 		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "{reason}", assetErr.Error())
 	}
+	space := Space(descriptor)
+	namespace := cmp.Or(p.Namespace, space)
+	if prior != nil {
+		namespace = cmp.Or(prior.Space, space)
+	}
+	if namespace != space && (space == "" || !publication.ValidName(namespace) || namespace == "build" || platform.OwnerOfType(namespace+".x") != "build") {
+		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "The name {name} cannot be used for this package", namespace)
+	}
+	if descriptor, err = Rebind(descriptor, namespace); err != nil {
+		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "{reason}", err.Error())
+	}
 	install, refusal := d.host.PrepareManagedPackage(c, descriptor, available, false, upgrade || rollbackUpgrade, downgrade || rollback && !rollbackUpgrade)
 	if refusal != nil {
 		return nil, refusal
@@ -561,7 +574,7 @@ func (d *Owner) decide(c platform.Caller, s *pb.Submission) (func(*pb.ChangeReco
 		prior := d.packages[descriptor.ID]
 		installed := &protocol.InstalledPackage{ID: descriptor.ID, Version: descriptor.Version, Namespace: descriptor.Namespace,
 			Title: descriptor.Title, State: "active", Contributions: descriptor.Contributions, Digest: descriptor.ArtifactDigest,
-			Artifact: sealed, InstalledAt: now, ChangedAt: now}
+			Artifact: sealed, InstalledAt: now, ChangedAt: now, Space: namespace}
 		if prior != nil {
 			installed.InstalledAt = prior.InstalledAt
 			installed.Retained = slices.DeleteFunc(slices.Clone(prior.Retained), func(r protocol.RetainedArtifact) bool {
@@ -599,7 +612,7 @@ func (d *Owner) PackageViews() []protocol.PackageView {
 			pre.OK = false
 			pre.Problems = append(pre.Problems, indexErr.Error())
 		}
-		view := protocol.PackageView{Descriptor: descriptor, Precheck: pre, Plan: d.installationPlan(descriptor, index), Source: "index"}
+		view := protocol.PackageView{Descriptor: descriptor, Precheck: pre, Plan: d.installationPlan(descriptor, index), Source: "index", Space: Space(descriptor)}
 		if product, found := products[descriptor.ID+"@"+descriptor.Version]; found {
 			view.Source, view.Product, view.Candidate = "product", product.Product, product.Candidate
 		}

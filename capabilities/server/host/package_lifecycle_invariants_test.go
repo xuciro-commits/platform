@@ -6,6 +6,7 @@ import (
 	"platformserver/kernel/protocol"
 
 	"slices"
+	"strings"
 	"testing"
 
 	"platformserver/kernel/transport"
@@ -61,8 +62,13 @@ func TestInvariantK9PackageRetireAndReinstallPreserveData(t *testing.T) {
 		}
 	}
 	submit(packages.SchemaPackageImport, map[string]any{"id": descriptor.ID, "digest": inspected.Digest})
-	submit(packages.SchemaPackageInstall, map[string]any{"id": descriptor.ID, "version": descriptor.Version})
-	if info, ok := target.Entity("invariantproject.alpha"); !ok || !slices.Equal(info.View, defaultView) {
+	taken := target.submission(packages.SchemaPackageInstall, protocol.PackageType, descriptor.ID, map[string]any{"id": descriptor.ID, "version": descriptor.Version})
+	taken.Authority, taken.PrincipalId = "platform", admin.ID
+	if _, refusal := target.Submit(admin, taken, invariantClock); refusal == nil || !strings.Contains(refusal.Message, "already exists") {
+		t.Fatalf("installing over the tenant's own invariantproject must be refused, got %#v", refusal)
+	}
+	submit(packages.SchemaPackageInstall, map[string]any{"id": descriptor.ID, "version": descriptor.Version, "namespace": "lifecycle"})
+	if info, ok := target.Entity("lifecycle.alpha"); !ok || !slices.Equal(info.View, defaultView) {
 		t.Fatalf("package installation lost the default view: %s", info.View)
 	}
 	views := target.App("platform").(interface{ PackageViews() []protocol.PackageView }).PackageViews()
@@ -80,13 +86,13 @@ func TestInvariantK9PackageRetireAndReinstallPreserveData(t *testing.T) {
 		t.Fatalf("installed application texts are not available for translation: %+v", words)
 	}
 
-	target.accept(t, "invariantproject.alpha.create", "invariantproject.alpha", "A1", map[string]any{"note": "Keep my data"})
+	target.accept(t, "lifecycle.alpha.create", "lifecycle.alpha", "A1", map[string]any{"note": "Keep my data"})
 	impact, err := target.packageLifecycleImpact(admin, descriptor.ID, nil)
 	if err != nil || len(impact.Outputs) != 1 || impact.Outputs[0].Records != 1 || !impact.Outputs[0].Retained {
 		t.Fatalf("lifecycle impact must retain customer output: %+v: %v", impact, err)
 	}
-	objectRef := platform.AssetRef{App: build.ID, Kind: platform.AssetObject, Name: "invariantproject.alpha"}
-	if resource := resourceRecord(t, target, objectRef); resource.Archived || resource.ManagedBy != descriptor.ID || resource.Project != "package:"+descriptor.ID {
+	objectRef := platform.AssetRef{App: build.ID, Kind: platform.AssetObject, Name: "lifecycle.alpha"}
+	if resource := resourceRecord(t, target, objectRef); resource.Archived || resource.ManagedBy != descriptor.ID || resource.Project != "lifecycle" {
 		t.Fatalf("installed resource is not managed: %+v", resource)
 	}
 
@@ -95,7 +101,7 @@ func TestInvariantK9PackageRetireAndReinstallPreserveData(t *testing.T) {
 	if resource := resourceRecord(t, target, objectRef); !resource.Archived {
 		t.Fatalf("retirement did not archive the package resource: %+v", resource)
 	}
-	view, refusal := target.RecordOf(t.Context(), target.member(t), "invariantproject.alpha", "A1", invariantClock)
+	view, refusal := target.RecordOf(t.Context(), target.member(t), "lifecycle.alpha", "A1", invariantClock)
 	if refusal != nil {
 		t.Fatalf("read customer record after retirement: %v", refusal)
 	}
@@ -109,7 +115,7 @@ func TestInvariantK9PackageRetireAndReinstallPreserveData(t *testing.T) {
 	if resource := resourceRecord(t, target, objectRef); resource.Archived || resource.ManagedBy != descriptor.ID {
 		t.Fatalf("reinstall did not restore the package resource: %+v", resource)
 	}
-	view, refusal = target.RecordOf(t.Context(), target.member(t), "invariantproject.alpha", "A1", invariantClock)
+	view, refusal = target.RecordOf(t.Context(), target.member(t), "lifecycle.alpha", "A1", invariantClock)
 	if refusal != nil {
 		t.Fatalf("read customer record after reinstall: %v", refusal)
 	}
@@ -125,7 +131,7 @@ func TestInvariantK9PackageRetireAndReinstallPreserveData(t *testing.T) {
 	if resource := resourceRecord(t, replayed, objectRef); resource.Archived || resource.ManagedBy != descriptor.ID {
 		t.Fatalf("replay did not preserve the restored package resource: %+v", resource)
 	}
-	view, refusal = replayed.RecordOf(t.Context(), replayed.member(t), "invariantproject.alpha", "A1", invariantClock)
+	view, refusal = replayed.RecordOf(t.Context(), replayed.member(t), "lifecycle.alpha", "A1", invariantClock)
 	if refusal != nil {
 		t.Fatalf("read customer record after replay: %v", refusal)
 	}

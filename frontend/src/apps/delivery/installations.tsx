@@ -34,7 +34,7 @@ export default function Installations() {
                   <ListItem
                     key={view.descriptor.id}
                     label={view.descriptor.title || view.descriptor.id}
-                    description={`${view.descriptor.id} · ${view.installed?.version ?? view.descriptor.version} · ${t(view.installed?.state ?? "Unknown")}`}
+                    description={`${view.descriptor.id} · ${view.installed?.version ?? view.descriptor.version} · ${t(view.installed?.state ?? "Unknown")}${view.installed?.space && view.installed.space !== view.descriptor.id ? ` · ${view.installed.space}` : ""}`}
                     endContent={<Button label={t("Manage installation")} variant="secondary" onClick={() => setSelected(view)} />}
                   />
                 ))}

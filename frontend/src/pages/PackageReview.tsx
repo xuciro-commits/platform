@@ -3,6 +3,7 @@ import { Button } from "@astryxdesign/core/Button";
 import { Dialog, DialogHeader } from "@astryxdesign/core/Dialog";
 import { HStack, Layout, LayoutContent, LayoutFooter, StackItem, VStack } from "@astryxdesign/core/Layout";
 import { Text } from "@astryxdesign/core/Text";
+import { TextInput } from "@astryxdesign/core/TextInput";
 import { useState } from "react";
 import { type Api, reread, useRead } from "../host";
 import { t } from "../i18n";
@@ -18,6 +19,8 @@ export function PackageReview({ view, mode, close, done }: { view: Api.PackageVi
   const catalog = useRead<Api.Action[]>("/v1/actions");
   const [failure, setFailure] = useState("");
   const [busy, setBusy] = useState(false);
+  const named = mode === "install" && !view.installed && !!view.space;
+  const [namespace, setNamespace] = useState(view.space ?? "");
   const actions = catalog.status === "ready" ? catalog.data : [];
   const installAction = actions.find((action) => action.schema === (view.update ? "platform.package.upgrade" : view.downgrade ? "platform.package.downgrade" : "platform.package.install"));
   const drainAction = actions.find((action) => action.schema === "platform.package.drain");
@@ -60,6 +63,10 @@ export function PackageReview({ view, mode, close, done }: { view: Api.PackageVi
               <Text type="body">{id} · {version}</Text>
               {view.descriptor.description && <Text type="body" color="secondary">{view.descriptor.description}</Text>}
               {problems.length > 0 && <Banner status="error" title={t("This version cannot be used as it stands")} description={problems.join(" · ")} />}
+              {named && (
+                <TextInput label={t("Project API name")} isRequired value={namespace} onChange={setNamespace}
+                  description={t("The managed project, its types and its actions take this name. Choose another when this tenant already has a project with it.")} />
+              )}
               {mode === "install" && review.status === "ready" && (
                 <VStack gap={2}>
                   <Text type="body" weight="bold">{t("Installation scope")}</Text>
@@ -90,8 +97,8 @@ export function PackageReview({ view, mode, close, done }: { view: Api.PackageVi
                 <Button
                   label={t("Install package")}
                   variant="primary"
-                  isDisabled={busy || loading || !installAction || view.installed?.version === version || problems.length > 0}
-                  onClick={() => run(installAction, { id, version })}
+                  isDisabled={busy || loading || !installAction || view.installed?.version === version || problems.length > 0 || (named && !namespace)}
+                  onClick={() => run(installAction, named ? { id, version, namespace } : { id, version })}
                 />
               )}
               {mode === "manage" && state !== "draining" && state !== "retired" && (

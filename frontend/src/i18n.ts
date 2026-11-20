@@ -340,6 +340,10 @@ export const zhCN: Record<string, string> = {
   "Not configured": "未配置",
   "This version cannot be used as it stands": "这个版本当前不能使用",
   "Installation scope": "安装范围",
+  "Project API name": "项目 API 名称",
+  "The managed project, its types and its actions take this name. Choose another when this tenant already has a project with it.": "受管项目及其中的类型与动作都以它命名。本租户已有同名项目时，另取一个。",
+  "A project named {name} already exists; install under another name": "已有名为 {name} 的项目，请换一个名字安装",
+  "The name {name} cannot be used for this package": "这个产品不能使用名字 {name}",
   Applications: "应用",
   Dependencies: "依赖",
   "Existing records affected": "受影响的已有记录",
@@ -496,34 +500,6 @@ export const zhCN: Record<string, string> = {
   "Changed": "已更改",
   "Removed": "删除",
   "Product": "产品",
-};
-
-const supported = (language: string) => (language.startsWith("zh") ? "zh-CN" : "en");
-let locale = supported(navigator.language);
-const listeners = new Set<() => void>();
-
-export function setLanguage(language: string) {
-  const next = supported(language);
-  if (next === locale) return;
-  locale = next;
-  document.documentElement.lang = next;
-  listeners.forEach((notify) => notify());
-}
-
-export function useLocale() {
-  return useSyncExternalStore((notify) => {
-    listeners.add(notify);
-    return () => listeners.delete(notify);
-  }, () => locale);
-}
-
-Object.assign(zhCN, values);
-
-export function t(text: string) {
-  return locale === "zh-CN" ? (zhCN[text] ?? text) : text;
-}
-
-Object.assign(zhCN, {
   "Unnamed member": "未命名成员",
   "Find a member": "搜索成员",
   "No matching members": "没有匹配的成员",
@@ -596,4 +572,28 @@ Object.assign(zhCN, {
   Select: "选择",
   "Select…": "选择…",
   "Also fill in": "还需填写",
-});
+  ...values,
+};
+
+const supported = (language: string) => (language.startsWith("zh") ? "zh-CN" : "en");
+let locale = supported(navigator.language);
+const listeners = new Set<() => void>();
+
+export function setLanguage(language: string) {
+  const next = supported(language);
+  if (next === locale) return;
+  locale = next;
+  document.documentElement.lang = next;
+  listeners.forEach((notify) => notify());
+}
+
+export function useLocale() {
+  return useSyncExternalStore((notify) => {
+    listeners.add(notify);
+    return () => listeners.delete(notify);
+  }, () => locale);
+}
+
+export function t(text: string) {
+  return locale === "zh-CN" ? (zhCN[text] ?? text) : text;
+}

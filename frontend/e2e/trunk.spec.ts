@@ -1359,7 +1359,7 @@ test("tenants: switching keeps the entry and replaces what the page shows", asyn
 
   await tenant("publisher");
   await expect(page).toHaveURL(/\/ontology\/object-types$/);
-  await expect(page.getByText("Nothing here yet", { exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 2, name: "Nothing here yet", exact: true })).toBeVisible();
   await expect(opportunity).toHaveCount(0);
 
   await tenant("acceptance");
@@ -1929,7 +1929,7 @@ test("crm: a sales rep works only their own leads while the sales manager sees t
   await expect(page.getByText("Jonas Lindqvist", { exact: true })).toBeVisible();
 });
 
-test("delivery: a builder picks a project, reviews what it contains and publishes a version", async ({ page }) => {
+test("delivery: a builder publishes a version, which installs beside its source project under another name as its own app", async ({ page }) => {
   await signIn(page);
   await page.goto("/delivery/versions");
   await expect(page.getByRole("heading", { level: 1, name: "Versions", exact: true })).toBeVisible();
@@ -1948,4 +1948,23 @@ test("delivery: a builder picks a project, reviews what it contains and publishe
   await release.getByRole("combobox", { name: "Product" }).click();
   await page.getByRole("option", { name: "CRM · CRM", exact: true }).click();
   await expect(release.getByRole("textbox", { name: "Version" })).toHaveValue("0.1.1");
+  await release.getByRole("button", { name: "Cancel", exact: true }).click();
+
+  await page.goto("/delivery/marketplace");
+  await page.getByRole("listitem").filter({ hasText: "crm · 0.1.0" }).getByRole("button", { name: "Review and install" }).click();
+  const review = page.getByRole("dialog");
+  const name = review.getByRole("textbox", { name: "Project API name" });
+  await expect(name).toHaveValue("crm");
+  await review.getByRole("button", { name: "Install package", exact: true }).click();
+  await expect(review.getByText("A project named crm already exists; install under another name")).toBeVisible();
+  await name.fill("pipeline");
+  await review.getByRole("button", { name: "Install package", exact: true }).click();
+  await expect(page).toHaveURL(/\/delivery\/installations$/);
+  await expect(page.getByRole("listitem").filter({ hasText: "crm · 0.1.0" })).toContainText("pipeline");
+  await page.getByRole("link", { name: "CRM", exact: true }).click();
+  await expect(page).toHaveURL(/\/pipeline\/pipeline\.lead$/);
+  await expect(page.getByRole("heading", { level: 1, name: "Leads", exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 2, name: "Nothing here yet", exact: true })).toBeVisible();
+  await page.goto("/ontology/objects/crm.lead");
+  await expect(page.getByText("Jonas Lindqvist", { exact: true })).toBeVisible();
 });
