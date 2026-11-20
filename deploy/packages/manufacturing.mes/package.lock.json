@@ -5,11 +5,11 @@
   "requires": [
     "manufacturing.core@1.0.0"
   ],
-  "artifact": "sha256:a80ae75fc5a743835071e2c606ee818a2919048553c0905d1065699b5564022b",
+  "artifact": "sha256:433ad30fc22aef70fb409bfab850e2495dbdf4cd5eacd4d48c469371a049d201",
   "assets": {
     "agent/erpcorrection": "sha256:4f4ebde2b59143fadb3ac4696a337375f2ca5d6991cad2a8ec49d37de99b8a4a",
     "agent/materialplanner": "sha256:8e4c594f4d35cffc3253eb971d4bac6b462ba4947662115c9141812a436252a3",
-    "app/mesapp": "sha256:7643d6d15535d861437efa2e8e3c5ef2fe5afb5aea3e47aa96a813f35da8189d",
+    "app/mesapp": "sha256:0de589dad594161729b05b5d50e25b6d3e26b470192e8c2ec9ce811fb0a422e4",
     "connection/mesobservations": "sha256:8429c93f70dfe64caa260ff820827d4a100ed9ddee3557271edea3e1189c090b",
     "connection/productionupstream": "sha256:c0e3e2831b9372d7b70898b654292a367da2e53c596359f9a5e833da8a3b4e99",
     "dataset/mesproductionreceipts": "sha256:a8f6551be9eb28c144bd4e3005c53e24e2af1851455bba110e40c79a5b993768",

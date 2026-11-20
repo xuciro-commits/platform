@@ -19,6 +19,7 @@ func (resolver Resolver) CandidateDiff(before, after protocol.ReleaseCandidate) 
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("next candidate: %w", err)
 	}
+	added, removed, changed = []platform.AssetRef{}, []platform.AssetRef{}, []platform.AssetRef{}
 	prior := map[platform.AssetRef][]byte{}
 	for _, asset := range before.Assets {
 		raw, _ := json.Marshal(asset)

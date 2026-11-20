@@ -3,9 +3,9 @@
   "package": "application.production-provider",
   "version": "0.1.5",
   "requires": [],
-  "artifact": "sha256:73cdc15f8c6f62e11406a9e472c8b9d57160c365c82861956090e52aeca59073",
+  "artifact": "sha256:da5da62cbbe8e88a4c58b7819a7840f5f0b37b6c30eb28432c6eb6ac9c82082a",
   "assets": {
-    "app/productionprovider": "sha256:c80b7690890c9b0a13f5435f41761cd10cee603a1a7971003d5a501e1dffe0a2",
+    "app/productionprovider": "sha256:6587cb66b2295531ad36936a5ebffbc9e013433a2a2a17e0b73dccc28f621eba",
     "object/build.batchproviderbatch": "sha256:13ba692c657c6810331c0ee34216ae1b1377f0a080d934d1a6244d85687d78d8",
     "object/build.batchproviderorder": "sha256:bf23e54d53b7a9c7533e2a7c1813bb7f5264ffaab05da0a969d28b651fb2b565",
     "object/build.finishedstock": "sha256:8dbd89a9b5fe1d6ca06aac4ced25addf5c01d4ee850d3bb19a49443b85974836",

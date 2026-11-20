@@ -1,9 +1,9 @@
 {
   "format": 1,
   "package": "crm",
-  "version": "0.1.9",
+  "version": "0.1.10",
   "requires": [],
-  "artifact": "sha256:ac9efd3e1fa7c84c3ce53568cfdaafe4e5bf063f22130128403e840ab5552e92",
+  "artifact": "sha256:3f390ca20058833e94e5289a9145276ab5ffdf775e1ba8b1ad63272432d0ae5e",
   "assets": {
     "action/crm.crmcontact.create": "sha256:f2b89e8cba46ca3511076d358c01b8ea5f02688d850f933f53eba36d4a8e6d5d",
     "action/crm.crmcontact.edit": "sha256:79b4b52e7914ffbed0a3d7d86a023425e4c0ce0a9ba6c913609ad17bc4de0c36",
@@ -18,7 +18,7 @@
     "action/crm.note.edit": "sha256:e29f509db1524b6148f2912372cac751ee294d6787307b27349207183a710b0c",
     "action/crm.organization.create": "sha256:fec79cbd555e5cdfcf0c19fd3c04d41b7cd246995fa72e52c60af27fd8110cd5",
     "action/crm.organization.edit": "sha256:30fb2acc48ae89e139eccde9b5db77782d42b4a5d1e3128b569c1ba48687588a",
-    "app/crm": "sha256:be4ea8c365f979820e11c0f54e9aec2a1159ca7e3c8215d332af828ed0b305e8",
+    "app/crm": "sha256:430faedc371e34151307e39980afeb06c9135028106ed396de51eff65da02537",
     "object/crm.crmcontact": "sha256:b7fa7289cc7d017832ad22d4baa1ec64bdb89384b371768b5ffe5804d3509c09",
     "object/crm.crmproduct": "sha256:17d3ece0b407228a37bd75de6f53374cbbe2a3bce2b5b14b79efbaae22cf2a62",
     "object/crm.crmtask": "sha256:5e99d61a3ebad3efb68a844e227077d497147df223712943a6cbb36244807e40",

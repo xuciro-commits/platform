@@ -3,9 +3,9 @@
   "package": "application.heating",
   "version": "0.1.1",
   "requires": [],
-  "artifact": "sha256:54a4a4e0a5647cc1b33e4e3ab78a02806cf23e72a955840e148202a14f85ca04",
+  "artifact": "sha256:6d592dd3e73f570599a5739949614d1f033228163990a107e7f32d19362bd98c",
   "assets": {
-    "app/heatingops": "sha256:b67c25a0945a0f982725717c145414414c35ca7561ba511be422db0b0f9a8453",
+    "app/heatingops": "sha256:7b23c6e0271b888ca0aa508c113450fea547c947749e400d942780206395d174",
     "connection/heatingfield": "sha256:bc5ed99eeb87bd9b5f7e610de82f4ee0e810fcd615d2f38c2a8ef33f4b033340",
     "connection/propertyfeed": "sha256:b97b636d1cee3064f839b3ffdde1a664669b6fb16852566031a1d974eccd481e",
     "evaluation-set/heatingadvicequality": "sha256:d0c79ce769aa2a85365cb1b461a5c774cc63e531e425fe80a2051041859b41fa",

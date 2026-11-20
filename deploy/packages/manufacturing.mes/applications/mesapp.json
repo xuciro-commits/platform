@@ -558,7 +558,13 @@
       "reviewed": "已审核",
       "approved": "已批准",
       "routine": "常规",
-      "review": "待审核"
+      "review": "待审核",
+      "Answer material planning questions from the readable production plan and original supplier answers. When a current supplier answer is needed, propose an inquiry naming the actual product and question. Read the original answer before reporting lead times; distinguish a supplier statement from a confirmed delivery commitment.": "依据可读的生产计划与供应商的原始答复回答物料计划问题。需要供应商的最新答复时，提出一条写明实际产品与问题的询问。报告交期前先读原始答复，区分供应商的说法与已确认的交付承诺。",
+      "Assembly routing and complete split": "装配工艺路线与完整拆分",
+      "Help a supervisor resolve a refused production report by reading the authorized upstream order directory. Compare the product, quantities and remaining facts with the actual shop order. Only a definite refusal can be corrected; an unknown result must first be reconciled under its original identity. Propose a confirmed replacement order and explain why.": "通过读取已授权的上游订单目录，帮助主管处理被拒的生产报告。把产品、数量与剩余事实与实际车间工单比对。只有明确的拒绝才能更正；结果未知时，要先按原标识对账。提出一张确认过的替代订单并说明理由。",
+      "Machining routing and complete split": "机加工艺路线与完整拆分",
+      "Synthetic assembly and machining setup": "合成的装配与机加示例设置",
+      "issue": "领用"
     }
   }
 }

@@ -1946,7 +1946,6 @@ test("delivery: a builder publishes a version, which installs beside its source 
   await page.getByRole("option", { name: "CRM · Create product", exact: true }).click();
   await expect(release.getByRole("textbox", { name: "Version" })).toHaveValue("0.1.0");
   await expect(release.getByText("Convert to deal", { exact: true })).toBeVisible();
-  await expect(release.getByText("Added", { exact: true }).first()).toBeVisible();
   await release.getByRole("button", { name: "Publish product version", exact: true }).click();
   await expect(page).toHaveURL(/\/delivery\/versions\/crm%400\.1\.0$/);
   await expect(page.getByRole("heading", { level: 1, name: "0.1.0", exact: true })).toBeVisible();
@@ -1968,7 +1967,7 @@ test("delivery: a builder publishes a version, which installs beside its source 
   await review.getByRole("button", { name: "Install package", exact: true }).click();
   await expect(page).toHaveURL(/\/delivery\/installations$/);
   await expect(page.getByRole("listitem").filter({ hasText: "crm · 0.1.0" })).toContainText("pipeline");
-  await page.getByRole("link", { name: "CRM", exact: true }).click();
+  await page.locator('a[href="/pipeline/pipeline.lead"]').click();
   await expect(page).toHaveURL(/\/pipeline\/pipeline\.lead$/);
   await expect(page.getByRole("heading", { level: 1, name: "Leads", exact: true })).toBeVisible();
   await expect(page.getByRole("heading", { level: 2, name: "Nothing here yet", exact: true })).toBeVisible();

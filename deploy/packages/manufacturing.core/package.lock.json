@@ -3,9 +3,9 @@
   "package": "manufacturing.core",
   "version": "1.0.0",
   "requires": [],
-  "artifact": "sha256:a1f636c3ea630f53a1e0635e3515a9d63e6c3ef04dbf01ab7319ee13e07a91e2",
+  "artifact": "sha256:70ee3d7d206bbb7a1bf61845f13ca280fb4ce1fdc203c18b88596b0ea1a4301d",
   "assets": {
-    "app/manufacturingfoundation": "sha256:f19cdca39d70e3319d84eda7a9fb2af1f7ce92bc94cc5cc5026dcc087b45397d",
+    "app/manufacturingfoundation": "sha256:0dccda6b3dbd8999e4fd9a7d2b9d7730d4b0232d48dff9e9bc6f0b4c2a1d004e",
     "connection/supplieragent": "sha256:3aa1cdcca90992b18621c823ab27b36c87e4d29dcf61c7f986d7d1737a36f1c6",
     "object/build.mesleadtime": "sha256:9cb9303859aaa3f890a6e5b32dc6b22ea6600fca1d0bc4319747a9bc97276d27",
     "page/mesleadtime": "sha256:7b103cd4b116a627a280af52b3c850c4f8575b393d1cb7c5470672aaa8817074",

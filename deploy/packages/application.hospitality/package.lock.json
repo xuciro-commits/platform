@@ -3,11 +3,11 @@
   "package": "application.hospitality",
   "version": "0.1.1",
   "requires": [],
-  "artifact": "sha256:3f64639a3b31951bd2c2406f4d1cd0f755755ab39d56264128d48f251179810a",
+  "artifact": "sha256:a78a58db94298d7b9d93f49942d7e681b6ceb49d54264ae736af93492c6a0eca",
   "assets": {
     "agent/salesassistant": "sha256:1ccd29242b9f25643abb03f18b491bd26d546ee44d40d11331a0c145e1d90735",
     "app/crmapp": "sha256:4302489b38f2f52db3725ff0bce049f2d604113b94094634b9a83deb56b301fe",
-    "app/pmsapp": "sha256:d1a924e6dea30f1feea5b31b85df024f0e81ff22f24a77aa173957fcd2d5ec8a",
+    "app/pmsapp": "sha256:3ae2e7b70f8e2def25f8d466ec288fd3c687a57dfd6481cb674fd2323eed7b09",
     "connection/hotelchannel": "sha256:0838767c48e13255cb22a0b6a476bdb4afc7997d84cbb0a9d3ba8770531d9137",
     "connection/lodgingupstream": "sha256:e143bf3d4432508f49f4f90955dfd190f583dfe44e8ae5cf80bb19982432c59f",
     "dataset/lodgingreceipts": "sha256:f9bdddafbee87c4df93bb0d2410699d29458c77428b6d7f2c8ee98f95a91a358",
