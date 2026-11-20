@@ -21,6 +21,7 @@ func main() {
 	tenant := flag.String("tenant", "workspace", "default tenant when -tenants is not configured")
 	admin := flag.String("admin", "", "explicit administrator subject for the default tenant")
 	flag.Parse()
+	configureStandalone(deployment, admin)
 	deployment.RebuildWithCapabilities = func(id string, services runtimeprotocol.RuntimeCapabilities) (*platformserver.Tenant, error) {
 		return composition.NewTenantWithCapabilities(id, services, deployment.SeatsFor(id)...)
 	}

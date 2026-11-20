@@ -11,7 +11,7 @@ LITE_HOST ?= 127.0.0.1
 GOPROXY ?= https://goproxy.cn,direct
 export GOPROXY
 
-.PHONY: help hooks bootstrap setup local docker infra infra-down build-compute dev dev-light web host lite build contract local-update packages check e2e verify verify-sql load-sql frontend-host trunk
+.PHONY: help hooks bootstrap setup local docker infra infra-down build-compute dev dev-light web host lite build bundle contract local-update packages check e2e verify verify-sql load-sql frontend-host trunk
 
 help:
 	@printf '%s\n' 'make setup        安装 Web 依赖和 Air' 'make local        启动热更新环境，入口 8495' 'make docker       切到容器运行' 'make lite         无 Docker 持久化运行' 'make web          旧前端对照，8497，只在本地' 'make host         编译运行宿主，ARGS 传入部署参数' 'make build        构建前端与宿主' 'make contract     重新生成宿主类型、页面安全、应用登记与资源契约' 'make check        快速检查：Go 构建与 vet、包边界与形状、产品包、契约、文案、文档、空白' 'make check-frontend 前端的规则、类型与构建' 'make trunk        主干验收：浏览器自己把前端的演示路径走一遍，HEADED=1 看着它走' 'make test         内核不变量，RUN=K13 只跑指定编号' 'make e2e          旧前端的验收，SPEC=F17 只跑指定用例' 'make verify       check 加旧前端检查、全部不变量与旧验收' 'make verify-sql   在隔离临时 PostgreSQL 库验证接受写入与重启恢复' 'make infra-down   停止容器并保留数据' 'make local-update 更新已提交版本并核对运行状态'
@@ -78,6 +78,19 @@ build:
 	cd frontend && $(PNPM) build
 	mkdir -p .build/host
 	cd capabilities/server && $(GO) build -o ../../.build/host/platform-server ./cmd/platform-server
+
+bundle:
+	cd frontend && $(PNPM) build
+	@set -e; \
+	target_os=$${GOOS:-$$($(GO) env GOOS)}; \
+	target_arch=$${GOARCH:-$$($(GO) env GOARCH)}; \
+	ext=""; [ "$$target_os" = "windows" ] && ext=".exe"; \
+	out=".build/bundle/platform-$$target_os-$$target_arch$$ext"; \
+	mkdir -p .build/bundle capabilities/server/cmd/platform-server/webdist; \
+	trap 'rm -rf capabilities/server/cmd/platform-server/webdist' EXIT; \
+	cp -R frontend/dist/. capabilities/server/cmd/platform-server/webdist/; \
+	(cd capabilities/server && CGO_ENABLED=0 GOOS="$$target_os" GOARCH="$$target_arch" $(GO) build -trimpath -tags embedweb -ldflags="-s -w" -o "../../$$out" ./cmd/platform-server); \
+	ls -lh "$$out"
 
 contract:
 	cd capabilities/server && $(GO) run ./cmd/page-contract

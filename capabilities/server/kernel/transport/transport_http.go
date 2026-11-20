@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"io/fs"
 	"log"
 	"net"
 	"net/http"
@@ -469,7 +470,36 @@ func hashedName(name string) bool {
 	return ok && len(hash) >= 8 && !strings.Contains(hash, ".")
 }
 
+var embeddedWeb fs.FS
+
+func RegisterEmbeddedWeb(fsys fs.FS) { embeddedWeb = fsys }
+
+func loadWebFS(fsys fs.FS) *WebFiles {
+	files := &WebFiles{files: map[string]webAsset{}}
+	_ = fs.WalkDir(fsys, ".", func(p string, d fs.DirEntry, err error) error {
+		if err != nil || d.IsDir() {
+			return nil
+		}
+		body, err := fs.ReadFile(fsys, p)
+		if err != nil {
+			return nil
+		}
+		files.add("/"+p, path.Base(p), body)
+		return nil
+	})
+	if index, ok := files.files["/index.html"]; ok {
+		files.index = index
+	} else {
+		files.index = webAsset{body: []byte("<!doctype html><title>Platform</title><p>The workspace is not built."), mediaType: "text/html; charset=utf-8"}
+		files.index.etag = `"index"`
+	}
+	return files
+}
+
 func LoadWeb(dir string) *WebFiles {
+	if dir == "embedded" && embeddedWeb != nil {
+		return loadWebFS(embeddedWeb)
+	}
 	files := &WebFiles{files: map[string]webAsset{}}
 	entries, err := os.ReadDir(dir)
 	if err != nil {
