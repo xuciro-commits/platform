@@ -442,49 +442,49 @@
       },
       "records": [
         {
-          "title": "Email"
+          "title": "邮件"
         },
         {
-          "title": "Existing Customer"
+          "title": "老客户"
         },
         {
-          "title": "Reference"
+          "title": "转介绍"
         },
         {
-          "title": "Advertisement"
+          "title": "广告"
         },
         {
-          "title": "Cold Calling"
+          "title": "电话陌拜"
         },
         {
-          "title": "Exhibition"
+          "title": "展会"
         },
         {
-          "title": "Supplier Reference"
+          "title": "供应商推荐"
         },
         {
-          "title": "Mass Mailing"
+          "title": "群发邮件"
         },
         {
-          "title": "Customer's Vendor"
+          "title": "客户的供应商"
         },
         {
-          "title": "Campaign"
+          "title": "营销活动"
         },
         {
-          "title": "Walk In"
+          "title": "上门咨询"
         },
         {
-          "title": "Facebook"
+          "title": "微信公众号"
         },
         {
-          "title": "Website"
+          "title": "官网"
         },
         {
-          "title": "Web Form"
+          "title": "网页表单"
         },
         {
-          "title": "WhatsApp"
+          "title": "企业微信"
         }
       ]
     },
@@ -524,34 +524,34 @@
       },
       "records": [
         {
-          "title": "Manufacturing"
+          "title": "制造"
         },
         {
-          "title": "Software"
+          "title": "软件"
         },
         {
-          "title": "Logistics"
+          "title": "物流"
         },
         {
-          "title": "Healthcare"
+          "title": "医疗"
         },
         {
-          "title": "Retail"
+          "title": "零售"
         },
         {
-          "title": "Energy"
+          "title": "能源"
         },
         {
-          "title": "Telecommunications"
+          "title": "通信"
         },
         {
-          "title": "Automotive"
+          "title": "汽车"
         },
         {
-          "title": "Construction"
+          "title": "建筑"
         },
         {
-          "title": "Financial Services"
+          "title": "金融服务"
         }
       ]
     },
@@ -605,29 +605,29 @@
       },
       "records": [
         {
-          "title": "Global",
+          "title": "全国",
           "isgroup": true
         },
         {
-          "title": "Europe",
+          "title": "华东大区",
           "parent": "TER-001",
           "manager": "admin-1",
           "isgroup": true
         },
         {
-          "title": "North America",
+          "title": "华北大区",
           "parent": "TER-001",
           "manager": "builder-1",
           "isgroup": true
         },
         {
-          "title": "DACH",
+          "title": "长三角",
           "parent": "TER-002",
           "manager": "admin-1",
           "isgroup": false
         },
         {
-          "title": "US West",
+          "title": "京津冀",
           "parent": "TER-003",
           "manager": "user-1",
           "isgroup": false
@@ -675,31 +675,31 @@
       },
       "records": [
         {
-          "title": "Pricing"
+          "title": "价格"
         },
         {
-          "title": "Competition"
+          "title": "竞争对手"
         },
         {
-          "title": "Budget Constraints"
+          "title": "预算受限"
         },
         {
-          "title": "Missing Features"
+          "title": "功能缺失"
         },
         {
-          "title": "Long Sales Cycle"
+          "title": "销售周期过长"
         },
         {
-          "title": "No Decision-Maker"
+          "title": "没有决策人"
         },
         {
-          "title": "Unresponsive Prospect"
+          "title": "客户无回应"
         },
         {
-          "title": "Poor Fit"
+          "title": "需求不匹配"
         },
         {
-          "title": "Other"
+          "title": "其他"
         }
       ]
     },
@@ -790,8 +790,8 @@
       },
       "records": [
         {
-          "name": "Helios Precision",
-          "website": "https://helios-precision.example",
+          "name": "曦和精密",
+          "website": "https://xihe-precision.example",
           "industry": "IND-001",
           "territory": "TER-004",
           "employees": "201-500",
@@ -799,11 +799,11 @@
             "amount": 4200000000,
             "currency": "USD"
           },
-          "address": "Munich, Germany"
+          "address": "苏州"
         },
         {
-          "name": "Vanguard Logistics",
-          "website": "https://vanguard-logistics.example",
+          "name": "先锋物流",
+          "website": "https://xianfeng-logistics.example",
           "industry": "IND-003",
           "territory": "TER-002",
           "employees": "501-1000",
@@ -811,11 +811,11 @@
             "amount": 8500000000,
             "currency": "USD"
           },
-          "address": "Rotterdam, Netherlands"
+          "address": "宁波"
         },
         {
-          "name": "Solstice Health",
-          "website": "https://solstice-health.example",
+          "name": "至日健康",
+          "website": "https://zhiri-health.example",
           "industry": "IND-004",
           "territory": "TER-005",
           "employees": "1000+",
@@ -823,11 +823,11 @@
             "amount": 16000000000,
             "currency": "USD"
           },
-          "address": "Seattle, USA"
+          "address": "北京"
         },
         {
-          "name": "Aether Cloud",
-          "website": "https://aether-cloud.example",
+          "name": "以太云",
+          "website": "https://yitai-cloud.example",
           "industry": "IND-002",
           "territory": "TER-005",
           "employees": "51-200",
@@ -835,11 +835,11 @@
             "amount": 1800000000,
             "currency": "USD"
           },
-          "address": "San Francisco, USA"
+          "address": "深圳"
         },
         {
-          "name": "Nordic Retail Co",
-          "website": "https://nordic-retail.example",
+          "name": "北境零售",
+          "website": "https://beijing-retail.example",
           "industry": "IND-005",
           "territory": "TER-002",
           "employees": "201-500",
@@ -847,11 +847,11 @@
             "amount": 6100000000,
             "currency": "USD"
           },
-          "address": "Stockholm, Sweden"
+          "address": "沈阳"
         },
         {
-          "name": "Apex Energy Grid",
-          "website": "https://apex-energy.example",
+          "name": "峰顶能源电网",
+          "website": "https://fengding-energy.example",
           "industry": "IND-006",
           "territory": "TER-003",
           "employees": "501-1000",
@@ -859,11 +859,11 @@
             "amount": 12400000000,
             "currency": "USD"
           },
-          "address": "Calgary, Canada"
+          "address": "西安"
         },
         {
-          "name": "Vertex Mobility",
-          "website": "https://vertex-mobility.example",
+          "name": "维度出行",
+          "website": "https://weidu-mobility.example",
           "industry": "IND-008",
           "territory": "TER-004",
           "employees": "201-500",
@@ -871,11 +871,11 @@
             "amount": 5300000000,
             "currency": "USD"
           },
-          "address": "Stuttgart, Germany"
+          "address": "无锡"
         },
         {
-          "name": "Summit Builders",
-          "website": "https://summit-builders.example",
+          "name": "峰汇建设",
+          "website": "https://fenghui-builders.example",
           "industry": "IND-009",
           "territory": "TER-003",
           "employees": "51-200",
@@ -883,7 +883,7 @@
             "amount": 2900000000,
             "currency": "USD"
           },
-          "address": "Denver, USA"
+          "address": "天津"
         }
       ]
     },
@@ -981,83 +981,83 @@
       },
       "records": [
         {
-          "fullname": "Clara Vogel",
-          "email": "clara.vogel@helios-precision.example",
-          "mobile": "+49-151-1001",
+          "fullname": "魏清",
+          "email": "weiqing@xihe-precision.example",
+          "mobile": "+86-138-0151-1001",
           "organization": "ORG-001",
-          "designation": "VP Operations",
+          "designation": "运营副总裁",
           "salutation": "ms"
         },
         {
-          "fullname": "Marcus Weber",
-          "email": "marcus.weber@helios-precision.example",
-          "mobile": "+49-151-1002",
+          "fullname": "韦志远",
+          "email": "weizhiyuan@xihe-precision.example",
+          "mobile": "+86-138-0151-1002",
           "organization": "ORG-001",
-          "designation": "Plant Director",
+          "designation": "工厂厂长",
           "salutation": "mr"
         },
         {
-          "fullname": "Hendrik Bakker",
-          "email": "h.bakker@vanguard-logistics.example",
-          "mobile": "+31-6-2001",
+          "fullname": "包恒",
+          "email": "baoheng@xianfeng-logistics.example",
+          "mobile": "+86-139-0574-2001",
           "organization": "ORG-002",
-          "designation": "Fleet Lead",
+          "designation": "车队负责人",
           "salutation": "mr"
         },
         {
-          "fullname": "Rachel Lin",
-          "email": "rachel.lin@solstice-health.example",
-          "mobile": "+1-206-3001",
+          "fullname": "林瑞秋",
+          "email": "linruiqiu@zhiri-health.example",
+          "mobile": "+86-136-0100-3001",
           "organization": "ORG-003",
-          "designation": "Chief Medical Officer",
+          "designation": "首席医疗官",
           "salutation": "dr"
         },
         {
-          "fullname": "David Morales",
-          "email": "dmorales@solstice-health.example",
-          "mobile": "+1-206-3002",
+          "fullname": "莫德伟",
+          "email": "modewei@zhiri-health.example",
+          "mobile": "+86-136-0100-3002",
           "organization": "ORG-003",
-          "designation": "IT Procurement",
+          "designation": "IT 采购",
           "salutation": "mr"
         },
         {
-          "fullname": "Priya Nair",
-          "email": "priya@aether-cloud.example",
-          "mobile": "+1-415-4001",
+          "fullname": "倪佩雅",
+          "email": "nipeiya@yitai-cloud.example",
+          "mobile": "+86-137-0755-4001",
           "organization": "ORG-004",
-          "designation": "CTO",
+          "designation": "首席技术官",
           "salutation": "ms"
         },
         {
-          "fullname": "Astrid Holm",
-          "email": "astrid@nordic-retail.example",
-          "mobile": "+46-70-5001",
+          "fullname": "霍思睿",
+          "email": "huosirui@beijing-retail.example",
+          "mobile": "+86-135-0024-5001",
           "organization": "ORG-005",
-          "designation": "Head of Merchandising",
+          "designation": "商品企划主管",
           "salutation": "ms"
         },
         {
-          "fullname": "Liam O'Connor",
-          "email": "liam@apex-energy.example",
-          "mobile": "+1-403-6001",
+          "fullname": "欧立安",
+          "email": "oulian@fengding-energy.example",
+          "mobile": "+86-133-0029-6001",
           "organization": "ORG-006",
-          "designation": "Grid Operations Manager",
+          "designation": "电网运营经理",
           "salutation": "mr"
         },
         {
-          "fullname": "Stefan Bauer",
-          "email": "s.bauer@vertex-mobility.example",
-          "mobile": "+49-170-7001",
+          "fullname": "鲍思远",
+          "email": "baosiyuan@weidu-mobility.example",
+          "mobile": "+86-138-0510-7001",
           "organization": "ORG-007",
-          "designation": "Supply Chain Director",
+          "designation": "供应链总监",
           "salutation": "mr"
         },
         {
-          "fullname": "Elena Rossi",
-          "email": "elena@summit-builders.example",
-          "mobile": "+1-303-8001",
+          "fullname": "罗依琳",
+          "email": "luoyilin@fenghui-builders.example",
+          "mobile": "+86-139-0022-8001",
           "organization": "ORG-008",
-          "designation": "Project Controls Lead",
+          "designation": "项目控制负责人",
           "salutation": "ms"
         }
       ]
@@ -1125,63 +1125,63 @@
       "records": [
         {
           "code": "CRM-CORE",
-          "name": "Platform Core Seat",
+          "name": "平台核心席位",
           "rate": {
             "amount": 12000,
             "currency": "USD"
           },
           "disabled": false,
-          "description": "Annual seat license."
+          "description": "按年计费的席位许可。"
         },
         {
           "code": "CRM-ENT",
-          "name": "Enterprise Governance Pack",
+          "name": "企业治理包",
           "rate": {
             "amount": 450000,
             "currency": "USD"
           },
           "disabled": false,
-          "description": "Audit, SSO and regional access controls."
+          "description": "审计、单点登录与按地区的访问控制。"
         },
         {
           "code": "CRM-SYNC",
-          "name": "ERP Connector Module",
+          "name": "ERP 连接器模块",
           "rate": {
             "amount": 280000,
             "currency": "USD"
           },
           "disabled": false,
-          "description": "Bi-directional ERP order and catalog sync."
+          "description": "与 ERP 双向同步订单与产品目录。"
         },
         {
           "code": "CRM-IMPL",
-          "name": "Onboarding & Migration",
+          "name": "上线与迁移",
           "rate": {
             "amount": 800000,
             "currency": "USD"
           },
           "disabled": false,
-          "description": "Fixed-scope implementation package."
+          "description": "范围固定的实施服务包。"
         },
         {
           "code": "CRM-SUPP",
-          "name": "Dedicated SLA Support",
+          "name": "专属 SLA 支持",
           "rate": {
             "amount": 360000,
             "currency": "USD"
           },
           "disabled": false,
-          "description": "24/7 response coverage."
+          "description": "全天候响应保障。"
         },
         {
           "code": "CRM-OLD",
-          "name": "Legacy Connector (Retired)",
+          "name": "旧版连接器（已停用）",
           "rate": {
             "amount": 150000,
             "currency": "USD"
           },
           "disabled": true,
-          "description": "Deprecated connector."
+          "description": "已弃用的连接器。"
         }
       ]
     },
@@ -1490,10 +1490,10 @@
       },
       "records": [
         {
-          "fullname": "Jonas Lindqvist",
-          "organizationname": "Boreal Automation",
-          "email": "jonas@boreal.example",
-          "mobile": "+46-70-1101",
+          "fullname": "林子航",
+          "organizationname": "北辰自动化",
+          "email": "linzihang@beichen.example",
+          "mobile": "+86-138-0101-1101",
           "status": "new",
           "owner": "admin-1",
           "source": "SRC-013",
@@ -1501,10 +1501,10 @@
           "territory": "TER-002"
         },
         {
-          "fullname": "Maya Patel",
-          "organizationname": "Cascade Robotics",
-          "email": "maya@cascade.example",
-          "mobile": "+1-415-1102",
+          "fullname": "陈雨桐",
+          "organizationname": "云瀑机器人",
+          "email": "chenyutong@yunpu.example",
+          "mobile": "+86-139-0755-1102",
           "status": "new",
           "owner": "builder-1",
           "source": "SRC-014",
@@ -1512,10 +1512,10 @@
           "territory": "TER-005"
         },
         {
-          "fullname": "Lukas Gruber",
-          "organizationname": "Alpen Metalworks",
-          "email": "lukas@alpen.example",
-          "mobile": "+43-664-1103",
+          "fullname": "顾立凯",
+          "organizationname": "高山金属制品",
+          "email": "gulikai@gaoshan.example",
+          "mobile": "+86-137-0512-1103",
           "status": "new",
           "owner": "admin-1",
           "source": "SRC-006",
@@ -1523,10 +1523,10 @@
           "territory": "TER-004"
         },
         {
-          "fullname": "Sophie Laurent",
-          "organizationname": "Lumiere Freight",
-          "email": "sophie@lumiere.example",
-          "mobile": "+33-6-1104",
+          "fullname": "沈若溪",
+          "organizationname": "光华货运",
+          "email": "shenruoxi@guanghua.example",
+          "mobile": "+86-136-0571-1104",
           "status": "contacted",
           "owner": "user-1",
           "source": "SRC-001",
@@ -1534,10 +1534,10 @@
           "territory": "TER-002"
         },
         {
-          "fullname": "Daniel Kim",
-          "organizationname": "Pacific BioLabs",
-          "email": "dkim@pacificbio.example",
-          "mobile": "+1-206-1105",
+          "fullname": "金大伟",
+          "organizationname": "太平洋生物实验室",
+          "email": "jindawei@taipingyang.example",
+          "mobile": "+86-135-0532-1105",
           "status": "contacted",
           "owner": "builder-1",
           "source": "SRC-003",
@@ -1545,10 +1545,10 @@
           "territory": "TER-005"
         },
         {
-          "fullname": "Hannah Meyer",
-          "organizationname": "Rhein Energy",
-          "email": "hannah@rhein.example",
-          "mobile": "+49-151-1106",
+          "fullname": "孟涵",
+          "organizationname": "长江能源",
+          "email": "menghan@changjiang.example",
+          "mobile": "+86-138-0270-1106",
           "status": "contacted",
           "owner": "admin-1",
           "source": "SRC-010",
@@ -1556,10 +1556,10 @@
           "territory": "TER-004"
         },
         {
-          "fullname": "Mateo Silva",
-          "organizationname": "Andes Telecom",
-          "email": "mateo@andes.example",
-          "mobile": "+1-303-1107",
+          "fullname": "席明涛",
+          "organizationname": "昆仑通信",
+          "email": "ximingtao@kunlun.example",
+          "mobile": "+86-139-0991-1107",
           "status": "nurture",
           "owner": "user-1",
           "source": "SRC-004",
@@ -1567,10 +1567,10 @@
           "territory": "TER-003"
         },
         {
-          "fullname": "Nora Bergstrom",
-          "organizationname": "Fjord Mobility",
-          "email": "nora@fjordmob.example",
-          "mobile": "+47-900-1108",
+          "fullname": "白诺",
+          "organizationname": "峡湾出行",
+          "email": "bainuo@xiawan.example",
+          "mobile": "+86-137-0592-1108",
           "status": "nurture",
           "owner": "admin-1",
           "source": "SRC-013",
@@ -1578,10 +1578,10 @@
           "territory": "TER-002"
         },
         {
-          "fullname": "Owen Brooks",
-          "organizationname": "Timberline Construction",
-          "email": "owen@timberline.example",
-          "mobile": "+1-403-1109",
+          "fullname": "欧文博",
+          "organizationname": "林海建设",
+          "email": "ouwenbo@linhai.example",
+          "mobile": "+86-136-0451-1109",
           "status": "nurture",
           "owner": "builder-1",
           "source": "SRC-005",
@@ -1589,10 +1589,10 @@
           "territory": "TER-003"
         },
         {
-          "fullname": "Chloe Dubois",
-          "organizationname": "Mercure Retail",
-          "email": "chloe@mercure.example",
-          "mobile": "+33-6-1110",
+          "fullname": "杜可欣",
+          "organizationname": "星汇零售",
+          "email": "dukexin@xinghui.example",
+          "mobile": "+86-135-0020-1110",
           "status": "qualified",
           "owner": "admin-1",
           "source": "SRC-002",
@@ -1600,10 +1600,10 @@
           "territory": "TER-002"
         },
         {
-          "fullname": "Ethan Clark",
-          "organizationname": "Sierra FinTech",
-          "email": "ethan@sierrafin.example",
-          "mobile": "+1-415-1111",
+          "fullname": "柯以诚",
+          "organizationname": "山岚金融科技",
+          "email": "keyicheng@shanlan.example",
+          "mobile": "+86-138-0021-1111",
           "status": "qualified",
           "owner": "builder-1",
           "source": "SRC-003",
@@ -1611,10 +1611,10 @@
           "territory": "TER-005"
         },
         {
-          "fullname": "Freja Nielsen",
-          "organizationname": "Baltic Marine Systems",
-          "email": "freja@baltic.example",
-          "mobile": "+45-20-1112",
+          "fullname": "聂芙",
+          "organizationname": "渤海船舶系统",
+          "email": "niefu@bohai.example",
+          "mobile": "+86-139-0411-1112",
           "status": "qualified",
           "owner": "user-1",
           "source": "SRC-006",
@@ -1622,10 +1622,10 @@
           "territory": "TER-002"
         },
         {
-          "fullname": "Clara Vogel",
-          "organizationname": "Helios Precision",
-          "email": "clara.vogel@helios-precision.example",
-          "mobile": "+49-151-1001",
+          "fullname": "魏清",
+          "organizationname": "曦和精密",
+          "email": "weiqing@xihe-precision.example",
+          "mobile": "+86-138-0151-1001",
           "status": "converted",
           "converted": true,
           "owner": "admin-1",
@@ -1634,10 +1634,10 @@
           "territory": "TER-004"
         },
         {
-          "fullname": "Hendrik Bakker",
-          "organizationname": "Vanguard Logistics",
-          "email": "h.bakker@vanguard-logistics.example",
-          "mobile": "+31-6-2001",
+          "fullname": "包恒",
+          "organizationname": "先锋物流",
+          "email": "baoheng@xianfeng-logistics.example",
+          "mobile": "+86-139-0574-2001",
           "status": "converted",
           "converted": true,
           "owner": "builder-1",
@@ -1646,10 +1646,10 @@
           "territory": "TER-002"
         },
         {
-          "fullname": "Rachel Lin",
-          "organizationname": "Solstice Health",
-          "email": "rachel.lin@solstice-health.example",
-          "mobile": "+1-206-3001",
+          "fullname": "林瑞秋",
+          "organizationname": "至日健康",
+          "email": "linruiqiu@zhiri-health.example",
+          "mobile": "+86-136-0100-3001",
           "status": "converted",
           "converted": true,
           "owner": "user-1",
@@ -1658,36 +1658,36 @@
           "territory": "TER-005"
         },
         {
-          "fullname": "Victor Popescu",
-          "organizationname": "Danube Parts",
-          "email": "victor@danube.example",
-          "mobile": "+40-721-1116",
+          "fullname": "卜维",
+          "organizationname": "淮河零部件",
+          "email": "buwei@huaihe.example",
+          "mobile": "+86-137-0551-1116",
           "status": "unqualified",
           "owner": "builder-1",
           "source": "SRC-005",
           "industry": "IND-001",
           "territory": "TER-002",
           "lostreason": "LRS-003",
-          "lostnotes": "No budget allocated this fiscal year."
+          "lostnotes": "本财年没有预算。"
         },
         {
-          "fullname": "Grace Okafor",
-          "organizationname": "Redwood Apparel",
-          "email": "grace@redwood.example",
-          "mobile": "+1-415-1117",
+          "fullname": "葛欣",
+          "organizationname": "红杉服饰",
+          "email": "gexin@hongshan.example",
+          "mobile": "+86-136-0757-1117",
           "status": "unqualified",
           "owner": "user-1",
           "source": "SRC-012",
           "industry": "IND-005",
           "territory": "TER-005",
           "lostreason": "LRS-008",
-          "lostnotes": "Needs B2C storefront rather than B2B CRM."
+          "lostnotes": "需要的是面向消费者的商城，不是企业客户关系系统。"
         },
         {
-          "fullname": "Tomas Novak",
-          "organizationname": "Moravia Logistics",
-          "email": "tomas@moravia.example",
-          "mobile": "+420-601-1118",
+          "fullname": "聂涛",
+          "organizationname": "秦岭物流",
+          "email": "nietao@qinling.example",
+          "mobile": "+86-135-0029-1118",
           "status": "new",
           "owner": "admin-1",
           "source": "SRC-001",
@@ -1695,10 +1695,10 @@
           "territory": "TER-004"
         },
         {
-          "fullname": "Amina Hassan",
-          "organizationname": "Crescent Diagnostics",
-          "email": "amina@crescent.example",
-          "mobile": "+1-403-1119",
+          "fullname": "韩雅",
+          "organizationname": "新月诊断",
+          "email": "hanya@xinyue.example",
+          "mobile": "+86-138-0871-1119",
           "status": "contacted",
           "owner": "user-1",
           "source": "SRC-014",
@@ -1706,15 +1706,15 @@
           "territory": "TER-003"
         },
         {
-          "fullname": "Test Spam Inquiry",
-          "organizationname": "Unknown",
+          "fullname": "测试垃圾咨询",
+          "organizationname": "未知",
           "email": "promo@spam.example",
-          "mobile": "+1-000-0000",
+          "mobile": "+86-100-0000-0000",
           "status": "junk",
           "owner": "admin-1",
           "source": "SRC-014",
           "lostreason": "LRS-009",
-          "lostnotes": "Automated marketing submission."
+          "lostnotes": "自动提交的营销信息。"
         }
       ]
     },
@@ -2270,7 +2270,7 @@
       },
       "records": [
         {
-          "title": "Helios plant CRM rollout",
+          "title": "曦和工厂客户关系系统上线",
           "organization": "ORG-001",
           "contact": "CCT-001",
           "lead": "LED-013",
@@ -2287,7 +2287,7 @@
           "territory": "TER-004"
         },
         {
-          "title": "Vanguard fleet portal",
+          "title": "先锋车队门户",
           "organization": "ORG-002",
           "contact": "CCT-003",
           "lead": "LED-014",
@@ -2304,7 +2304,7 @@
           "territory": "TER-002"
         },
         {
-          "title": "Solstice clinic onboarding",
+          "title": "至日诊所上线",
           "organization": "ORG-003",
           "contact": "CCT-004",
           "lead": "LED-015",
@@ -2321,7 +2321,7 @@
           "territory": "TER-005"
         },
         {
-          "title": "Aether enterprise license",
+          "title": "以太云企业许可",
           "organization": "ORG-004",
           "contact": "CCT-006",
           "status": "demomaking",
@@ -2337,7 +2337,7 @@
           "territory": "TER-005"
         },
         {
-          "title": "Nordic store analytics",
+          "title": "北境门店分析",
           "organization": "ORG-005",
           "contact": "CCT-007",
           "status": "readytoclose",
@@ -2353,7 +2353,7 @@
           "territory": "TER-002"
         },
         {
-          "title": "Apex grid telemetry CRM",
+          "title": "峰顶电网遥测客户关系系统",
           "organization": "ORG-006",
           "contact": "CCT-008",
           "status": "won",
@@ -2370,7 +2370,7 @@
           "territory": "TER-003"
         },
         {
-          "title": "Vertex dealer network",
+          "title": "维度经销商网络",
           "organization": "ORG-007",
           "contact": "CCT-009",
           "status": "lost",
@@ -2386,10 +2386,10 @@
           "industry": "IND-008",
           "territory": "TER-004",
           "lostreason": "LRS-002",
-          "lostnotes": "Selected incumbent automotive suite."
+          "lostnotes": "选了现有的汽车行业套件。"
         },
         {
-          "title": "Summit field sales tracker",
+          "title": "峰汇外勤销售跟踪",
           "organization": "ORG-008",
           "contact": "CCT-010",
           "status": "qualification",
@@ -2405,7 +2405,7 @@
           "territory": "TER-003"
         },
         {
-          "title": "Helios service desk expansion",
+          "title": "曦和服务台扩容",
           "organization": "ORG-001",
           "contact": "CCT-002",
           "status": "demomaking",
@@ -2421,7 +2421,7 @@
           "territory": "TER-004"
         },
         {
-          "title": "Solstice SLA renewal",
+          "title": "至日 SLA 续约",
           "organization": "ORG-003",
           "contact": "CCT-005",
           "status": "won",
@@ -2559,7 +2559,7 @@
         {
           "deal": "DEL-001",
           "product": "PRD-001",
-          "productname": "Platform Core Seat",
+          "productname": "平台核心席位",
           "qty": 50,
           "rate": {
             "amount": 12000,
@@ -2573,7 +2573,7 @@
         {
           "deal": "DEL-001",
           "product": "PRD-002",
-          "productname": "Enterprise Governance Pack",
+          "productname": "企业治理包",
           "qty": 1,
           "rate": {
             "amount": 450000,
@@ -2587,7 +2587,7 @@
         {
           "deal": "DEL-001",
           "product": "PRD-004",
-          "productname": "Onboarding & Migration",
+          "productname": "上线与迁移",
           "qty": 1,
           "rate": {
             "amount": 800000,
@@ -2601,7 +2601,7 @@
         {
           "deal": "DEL-003",
           "product": "PRD-001",
-          "productname": "Platform Core Seat",
+          "productname": "平台核心席位",
           "qty": 100,
           "rate": {
             "amount": 12000,
@@ -2615,7 +2615,7 @@
         {
           "deal": "DEL-003",
           "product": "PRD-005",
-          "productname": "Dedicated SLA Support",
+          "productname": "专属 SLA 支持",
           "qty": 1,
           "rate": {
             "amount": 360000,
@@ -2629,7 +2629,7 @@
         {
           "deal": "DEL-005",
           "product": "PRD-003",
-          "productname": "ERP Connector Module",
+          "productname": "ERP 连接器模块",
           "qty": 1,
           "rate": {
             "amount": 280000,
@@ -2846,8 +2846,8 @@
       },
       "records": [
         {
-          "title": "Send discovery deck to Boreal",
-          "description": "Share architecture overview before intro call.",
+          "title": "给北辰发需求调研资料",
+          "description": "首次通话前先分享架构概览。",
           "lead": "LED-001",
           "status": "todo",
           "priority": "high",
@@ -2855,8 +2855,8 @@
           "duedate": "2026-11-22"
         },
         {
-          "title": "Follow up with Cascade CTO",
-          "description": "Confirm technical evaluation window.",
+          "title": "跟进云瀑的技术负责人",
+          "description": "确认技术评估的时间窗口。",
           "lead": "LED-002",
           "status": "inprogress",
           "priority": "medium",
@@ -2864,8 +2864,8 @@
           "duedate": "2026-11-24"
         },
         {
-          "title": "Finalize Helios security review",
-          "description": "Return completed SOC2 questionnaire.",
+          "title": "完成曦和的安全评审",
+          "description": "交回填好的 SOC2 问卷。",
           "deal": "DEL-001",
           "status": "inprogress",
           "priority": "high",
@@ -2873,8 +2873,8 @@
           "duedate": "2026-11-25"
         },
         {
-          "title": "Prepare Solstice pricing tiers",
-          "description": "Compare 100-seat vs 150-seat volume discounts.",
+          "title": "准备至日的价格档位",
+          "description": "比较 100 席与 150 席的批量折扣。",
           "deal": "DEL-003",
           "status": "todo",
           "priority": "high",
@@ -2882,8 +2882,8 @@
           "duedate": "2026-11-27"
         },
         {
-          "title": "Schedule Nordic contract signing",
-          "description": "Coordinate legal sign-off call.",
+          "title": "安排北境合同签署",
+          "description": "协调法务签字的会议。",
           "deal": "DEL-005",
           "status": "done",
           "priority": "medium",
@@ -2891,8 +2891,8 @@
           "duedate": "2026-11-18"
         },
         {
-          "title": "Archive old RFP checklist",
-          "description": "Superseded by Vertex loss post-mortem.",
+          "title": "归档旧的招标清单",
+          "description": "已被维度丢单复盘取代。",
           "deal": "DEL-007",
           "status": "canceled",
           "priority": "low",
@@ -2966,38 +2966,38 @@
       },
       "records": [
         {
-          "title": "Boreal intro call summary",
-          "content": "Looking to replace spreadsheets across 3 plants in Q1.",
+          "title": "北辰首次通话纪要",
+          "content": "计划一季度在 3 个工厂替换电子表格。",
           "lead": "LED-001",
           "pinned": true
         },
         {
-          "title": "Cascade technical stack",
-          "content": "Uses PostgreSQL and wants SSO with Okta.",
+          "title": "云瀑的技术栈",
+          "content": "使用 PostgreSQL，希望接入钉钉单点登录。",
           "lead": "LED-002",
           "pinned": false
         },
         {
-          "title": "Helios procurement timeline",
-          "content": "Board approval scheduled for Dec 10; legal wants standard MSA.",
+          "title": "曦和采购时间线",
+          "content": "董事会 12 月 10 日审批；法务要求标准主服务协议。",
           "deal": "DEL-001",
           "pinned": true
         },
         {
-          "title": "Solstice clinical stakeholders",
-          "content": "CMO sponsors rollout; IT procurement owns security sign-off.",
+          "title": "至日的临床干系人",
+          "content": "首席医疗官牵头上线；IT 采购负责安全签字。",
           "deal": "DEL-003",
           "pinned": true
         },
         {
-          "title": "Nordic ERP sync scope",
-          "content": "Only needs product catalog and closed-won order handoff.",
+          "title": "北境 ERP 同步范围",
+          "content": "只需要产品目录和赢单订单的交接。",
           "deal": "DEL-005",
           "pinned": false
         },
         {
-          "title": "Vertex loss post-mortem",
-          "content": "Incumbent bundled dealer warranty module at zero extra fee.",
+          "title": "维度丢单复盘",
+          "content": "现有供应商捆绑了经销商保修模块，不额外收费。",
           "deal": "DEL-007",
           "pinned": false
         }
