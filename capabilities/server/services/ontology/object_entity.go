@@ -62,7 +62,7 @@ func rollUp(c platform.Caller, r *pb.ChangeRecord, o Object, model reflect.Type,
 	}
 	for _, f := range parents {
 		info, ok := env.Lookup(f.Ref)
-		if !ok || len(info.LocalRules) == 0 || !slices.ContainsFunc(info.Sets, func(set platform.RecordSet) bool { return set.Object == AppID+"."+o.Name && set.From == f.Inverse }) {
+		if !ok || len(info.LocalRules) == 0 || !slices.ContainsFunc(info.Sets, func(set platform.RecordSet) bool { return set.Object == o.Type() && set.From == f.Inverse }) {
 			continue
 		}
 		var touched []string
@@ -155,7 +155,7 @@ func validateObject(o Object, model any, env ObjectRuntimeEnvironment) func(plat
 			if !exists {
 				return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Extension base {type} is unavailable", o.Extends)
 			}
-			shape := platform.RecordTypeInfo{Type: AppID + "." + o.Name, Extends: o.Extends, ExtensionSource: o.ExtensionSource}
+			shape := platform.RecordTypeInfo{Type: o.Type(), Extends: o.Extends, ExtensionSource: o.ExtensionSource}
 			for _, field := range o.Fields {
 				shape.Fields = append(shape.Fields, platform.FieldInfo{Name: field.Name, Type: field.Type, Ref: field.Ref, Required: field.Required, ReadOnly: field.ReadOnly, AliasOf: field.AliasOf})
 			}
@@ -261,7 +261,7 @@ func ObjectEntity(env ObjectEntityEnvironment) platform.RecordType {
 					} else if err := env.Install(c, *object); err != nil {
 						return err
 					}
-					object.Installed = AppID + "." + object.Name
+					object.Installed = object.Type()
 					object.Published = objectPublished(*object)
 					if len(object.ActionTypes) > 0 {
 						object.Actions = nil

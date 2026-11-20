@@ -25,7 +25,7 @@ func TestInvariantK1FunctionAuthoringPublishesEvaluatesReviewsAndReplays(t *test
 
 	declaration := func(instructions string) map[string]any {
 		return map[string]any{
-			"name": "answer", "title": "Order answer", "description": "Return a typed order answer", "object": "build.alpha",
+			"name": "answer", "title": "Order answer", "description": "Return a typed order answer", "object": "invariantproject.alpha",
 			"fields": []string{"note"}, "instructions": instructions,
 			"output": []platform.Field{{Name: "answer", Type: "string", Description: "Answer"}}, "roles": []string{build.Builder},
 			"maxInputBytes": 1024, "maxOutputBytes": 1024, "maxTokens": 100,
@@ -260,7 +260,7 @@ func TestInvariantK1FunctionAuthoringPublishesEvaluatesReviewsAndReplays(t *test
 		t.Fatalf("application AI evaluations differ: %+v", applicationFunction.Evaluations)
 	}
 	bad := protocol.ReleaseCandidate{Assets: []platform.ReleaseAsset{{
-		Ref: platform.AssetRef{App: build.ID, Kind: platform.AssetObject, Name: "build.alpha"},
+		Ref: platform.AssetRef{App: build.ID, Kind: platform.AssetObject, Name: "invariantproject.alpha"},
 		Body: platform.Raw(map[string]any{"name": "alpha", "actions": []ontology.Action{{
 			Name: "adopt", Adoption: &platform.ProposalAdoption{Function: platform.FunctionRef{Name: "missing"}},
 		}}}),

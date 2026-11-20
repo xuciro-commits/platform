@@ -241,7 +241,7 @@ func (b *Build) applyRecordDraft(inv *draftInventories, table []publication.Hook
 		source := b.installed[record.Object]
 		models := []platform.RecordType{}
 		for _, object := range inv.objects {
-			if _, selected := b.jointEntities[TypeOf(object.Name)]; !selected || object.Archived {
+			if _, selected := b.jointEntities[object.Type()]; !selected || object.Archived {
 				continue
 			}
 			model := Entity(object)
@@ -352,7 +352,7 @@ func (b *Build) ReferencedDrafts(kind platform.AssetKind, id, owner string) ([]J
 		switch want {
 		case platform.AssetObject:
 			for _, o := range objects {
-				if o.Published == "" && (o.Name == name || TypeOf(o.Name) == name) {
+				if o.Published == "" && (o.Name == name || o.Type() == name) {
 					return JointDraftRef{Kind: want, ID: o.ID}, true
 				}
 			}

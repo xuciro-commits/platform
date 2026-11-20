@@ -124,18 +124,18 @@
         "type": "string"
       }
     ],
-    "schema": "build.lead.create",
+    "schema": "crm.lead.create",
     "schemaVersion": {
       "family": 2,
-      "version": "schema.sha256.927c56a7c766b9878c2029815594b39d9e56c51ede87e0a302290559fce1de75"
+      "version": "schema.sha256.83c0280f3b5a590c8ebc87d9daf22e7acd1162ec8919c3e4e967e034c2217058"
     },
-    "target": "build.lead",
+    "target": "crm.lead",
     "title": "Create lead"
   },
   "roles": [
     "builder",
     "user"
   ],
-  "schema": "build.lead.create",
-  "target": "build.lead"
+  "schema": "crm.lead.create",
+  "target": "crm.lead"
 }

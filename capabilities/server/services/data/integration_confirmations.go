@@ -65,7 +65,7 @@ func (o *Owner) CheckConfirmation(spec *platform.Confirmation, object ontology.O
 			return fmt.Errorf("Reconciliation key input must name a required text or reference input of the initiating action")
 		}
 	}
-	subject := "build." + object.Name
+	subject := object.Type()
 	if spec.ReviewerRole != Builder && !slices.ContainsFunc(object.Access, func(a ontology.Access) bool { return a.Role == spec.ReviewerRole }) {
 		return fmt.Errorf("The confirmation reviewer role is not declared")
 	}
@@ -171,7 +171,7 @@ func (o *Owner) bindConfirmation(spec *platform.Confirmation, subject string) (c
 		}
 		out.Parties = append(out.Parties, binding)
 	}
-	owner, _, _ := strings.Cut(subject, ".")
+	owner := platform.OwnerOfType(subject)
 	action := func(name string) platform.AssetRef {
 		if !strings.HasPrefix(name, subject+".") {
 			name = subject + "." + name

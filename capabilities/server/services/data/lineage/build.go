@@ -122,7 +122,7 @@ func Build(in Input, basis Basis) Graph {
 		if !include(item.Archived) {
 			continue
 		}
-		name := objectType(item.Name)
+		name := item.Type()
 		add(Node{ID: "object:" + name, Kind: "object", Record: item.ID, Name: name, Title: item.Title, State: item.State})
 	}
 	for _, item := range g.Nodes {
@@ -240,7 +240,7 @@ func Build(in Input, basis Basis) Graph {
 		if !include(item.Archived) {
 			continue
 		}
-		object := "object:" + objectType(item.Name)
+		object := "object:" + item.Type()
 		for occurrence, binding := range item.DataSources {
 			source := binding.Kind + ":" + binding.Source
 			link(Edge{From: source, To: object, Role: "binding", Occurrence: occurrence, DeclaredBy: []string{object}, Unresolved: !exists(source)})

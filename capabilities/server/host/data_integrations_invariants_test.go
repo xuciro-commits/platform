@@ -71,7 +71,7 @@ func TestInvariantK1DataIntegrationsAcceptSettleCompensateAndReplay(t *testing.T
 	for _, writeback := range writebacks {
 		payload := map[string]any{
 			"name": writeback.name, "title": writeback.name, "connection": "EXTERNAL",
-			"object": "build.record", "on": writeback.on, "method": "POST", "path": writeback.path,
+			"object": "invariantproject.record", "on": writeback.on, "method": "POST", "path": writeback.path,
 		}
 		if len(writeback.result) > 0 {
 			payload["result"] = writeback.result
@@ -81,7 +81,7 @@ func TestInvariantK1DataIntegrationsAcceptSettleCompensateAndReplay(t *testing.T
 	}
 	live.accept(t, "build.source.create", dataowner.SourceType, "STATUS", map[string]any{
 		"name": "status", "title": "Device status", "connection": "EXTERNAL", "url": "/status",
-		"object": "build.record", "key": "id",
+		"object": "invariantproject.record", "key": "id",
 		"mapping": []dataowner.SourceField{{From: "state", To: "note"}},
 	})
 	live.accept(t, "build.source.publish", dataowner.SourceType, "STATUS", map[string]any{})
@@ -93,8 +93,8 @@ func TestInvariantK1DataIntegrationsAcceptSettleCompensateAndReplay(t *testing.T
 		{
 			Name: "reserve", Title: "Reserve", From: []string{"open"},
 			Transaction: &platform.BusinessTxn{
-				Subject: "build.record",
-				Steps: []platform.TxnStep{{Name: "reserve", Kind: "update", Target: platform.TxnRef{Type: "build.record", ID: "$subject"},
+				Subject: "invariantproject.record",
+				Steps: []platform.TxnStep{{Name: "reserve", Kind: "update", Target: platform.TxnRef{Type: "invariantproject.record", ID: "$subject"},
 					Changes: []platform.TxnSet{{Field: "note", Expr: ptrExpr(text("reserved"))}}}},
 				Confirmation: &platform.Confirmation{
 					Parties:         []platform.ConfirmationParty{{Name: "carrier", Title: "Carrier", Writeback: "CONFIRM", CompensateWriteback: "CONFIRM-UNDO"}},
@@ -106,16 +106,16 @@ func TestInvariantK1DataIntegrationsAcceptSettleCompensateAndReplay(t *testing.T
 		{
 			Name: "finish", Title: "Finish", From: []string{"open"},
 			Transaction: &platform.BusinessTxn{
-				Subject: "build.record",
-				Steps: []platform.TxnStep{{Name: "finish", Kind: "update", Target: platform.TxnRef{Type: "build.record", ID: "$subject"},
+				Subject: "invariantproject.record",
+				Steps: []platform.TxnStep{{Name: "finish", Kind: "update", Target: platform.TxnRef{Type: "invariantproject.record", ID: "$subject"},
 					Changes: []platform.TxnSet{{Field: "note", Expr: ptrExpr(text("finished"))}}}},
 			},
 		},
 		{
 			Name: "send", Title: "Send", From: []string{"open"},
 			Transaction: &platform.BusinessTxn{
-				Subject: "build.record",
-				Steps: []platform.TxnStep{{Name: "send", Kind: "update", Target: platform.TxnRef{Type: "build.record", ID: "$subject"},
+				Subject: "invariantproject.record",
+				Steps: []platform.TxnStep{{Name: "send", Kind: "update", Target: platform.TxnRef{Type: "invariantproject.record", ID: "$subject"},
 					Changes: []platform.TxnSet{{Field: "note", Expr: ptrExpr(text("sending"))}}}},
 				Dispatch: &platform.Dispatch{
 					Command: "send", Target: "EXTERNAL", Key: "$subject", DeadlineSeconds: 60,
@@ -128,16 +128,16 @@ func TestInvariantK1DataIntegrationsAcceptSettleCompensateAndReplay(t *testing.T
 		{
 			Name: "notify", Title: "Notify", From: []string{"open"},
 			Transaction: &platform.BusinessTxn{
-				Subject: "build.record",
-				Steps: []platform.TxnStep{{Name: "notify", Kind: "update", Target: platform.TxnRef{Type: "build.record", ID: "$subject"},
+				Subject: "invariantproject.record",
+				Steps: []platform.TxnStep{{Name: "notify", Kind: "update", Target: platform.TxnRef{Type: "invariantproject.record", ID: "$subject"},
 					Changes: []platform.TxnSet{{Field: "note", Expr: ptrExpr(text("notifying"))}}}},
 			},
 		},
 	}
 	for _, action := range actions {
-		schema := "build.record." + action.Name
+		schema := "invariantproject.record." + action.Name
 		live.accept(t, "build.actiontype.create", build.ActionTypeType, strings.ToUpper(action.Name), map[string]any{
-			"name": schema, "object": "build.record", "definition": action,
+			"name": schema, "object": "invariantproject.record", "definition": action,
 		})
 	}
 	object["dispatchCommands"] = []platform.DispatchCommand{
@@ -153,15 +153,15 @@ func TestInvariantK1DataIntegrationsAcceptSettleCompensateAndReplay(t *testing.T
 		live.accept(t, "build.actiontype.publish", build.ActionTypeType, strings.ToUpper(action), map[string]any{})
 	}
 	live.accept(t, "build.object.publish", build.ObjectType, "OBJECT", map[string]any{})
-	if _, found := owner.Manifest().Actions.Action("build.record.send"); !found {
+	if _, found := owner.Manifest().Actions.Action("invariantproject.record.send"); !found {
 		t.Fatal("the live owner did not publish the dispatch action")
 	}
 	if !slices.ContainsFunc(owner.Manifest().Provides, func(provide platform.Provision) bool {
-		return provide.Protocol.Name == "recordapi" && provide.Protocol.Version == 1 && provide.Actions["send"] == "build.record.send"
+		return provide.Protocol.Name == "recordapi" && provide.Protocol.Version == 1 && provide.Actions["send"] == "invariantproject.record.send"
 	}) {
 		t.Fatalf("the live owner did not publish its protocol binding: %+v", owner.Manifest().Provides)
 	}
-	if _, found := forked.Manifest().Actions.Action("build.record.send"); found {
+	if _, found := forked.Manifest().Actions.Action("invariantproject.record.send"); found {
 		t.Fatal("a fork captured a dispatch action published after it was created")
 	}
 	if owner.DataOwner() == forked.(*build.Build).DataOwner() {
@@ -169,7 +169,7 @@ func TestInvariantK1DataIntegrationsAcceptSettleCompensateAndReplay(t *testing.T
 	}
 
 	for _, id := range []string{"A", "B", "C", "D", "E", "F", "G", "H", "I", "J"} {
-		live.accept(t, "build.record.create", "build.record", id, map[string]any{"note": "new"})
+		live.accept(t, "invariantproject.record.create", "invariantproject.record", id, map[string]any{"note": "new"})
 	}
 
 	automation := live.automation(build.ID, false)
@@ -186,7 +186,7 @@ func TestInvariantK1DataIntegrationsAcceptSettleCompensateAndReplay(t *testing.T
 		}
 	}
 	for _, action := range []string{"reserve", "send"} {
-		submission := live.submission("build.record."+action, "build.record", "A", map[string]any{})
+		submission := live.submission("invariantproject.record."+action, "invariantproject.record", "A", map[string]any{})
 		refusal := platform.ProbeDecision(automation, func(probe platform.Caller) *platform.Error {
 			_, refusal := owner.Submit(probe, submission, invariantClock)
 			return refusal
@@ -196,7 +196,7 @@ func TestInvariantK1DataIntegrationsAcceptSettleCompensateAndReplay(t *testing.T
 		}
 	}
 
-	live.accept(t, "build.record.reserve", "build.record", "A", map[string]any{})
+	live.accept(t, "invariantproject.record.reserve", "invariantproject.record", "A", map[string]any{})
 	run, refusal := runtimeprotocol.PendingConfirmations(automation)
 	if refusal != nil || len(run) != 1 || len(run[0].Parties) != 1 || run[0].Parties[0].State != "pending" {
 		t.Fatalf("confirmation was not opened: %+v %v", run, refusal)
@@ -211,11 +211,11 @@ func TestInvariantK1DataIntegrationsAcceptSettleCompensateAndReplay(t *testing.T
 		t.Fatalf("unknown confirmation was not reconciled: %+v", confirmation)
 	}
 
-	live.accept(t, "build.record.reserve", "build.record", "B", map[string]any{})
+	live.accept(t, "invariantproject.record.reserve", "invariantproject.record", "B", map[string]any{})
 	run, _ = runtimeprotocol.PendingConfirmations(automation)
 	var rejected platform.ConfirmationRun
 	for _, candidate := range run {
-		if candidate.Subject == "build.record/B" {
+		if candidate.Subject == "invariantproject.record/B" {
 			rejected = candidate
 		}
 	}
@@ -228,11 +228,11 @@ func TestInvariantK1DataIntegrationsAcceptSettleCompensateAndReplay(t *testing.T
 		t.Fatalf("confirmation refusal was not retained: %+v", rejected)
 	}
 
-	live.accept(t, "build.record.reserve", "build.record", "C", map[string]any{})
+	live.accept(t, "invariantproject.record.reserve", "invariantproject.record", "C", map[string]any{})
 	run, _ = runtimeprotocol.PendingConfirmations(automation)
 	var compensated platform.ConfirmationRun
 	for _, candidate := range run {
-		if candidate.Subject == "build.record/C" {
+		if candidate.Subject == "invariantproject.record/C" {
 			compensated = candidate
 		}
 	}
@@ -255,7 +255,7 @@ func TestInvariantK1DataIntegrationsAcceptSettleCompensateAndReplay(t *testing.T
 		t.Fatalf("confirmation compensation was not settled: %+v", compensated)
 	}
 
-	live.accept(t, "build.record.send", "build.record", "D", map[string]any{})
+	live.accept(t, "invariantproject.record.send", "invariantproject.record", "D", map[string]any{})
 	run, _ = runtimeprotocol.PendingConfirmations(automation)
 	dispatches, refusal := runtimeprotocol.PendingDispatches(automation)
 	if refusal != nil || len(dispatches) < 1 {
@@ -263,7 +263,7 @@ func TestInvariantK1DataIntegrationsAcceptSettleCompensateAndReplay(t *testing.T
 	}
 	var dispatched platform.DispatchRun
 	for _, candidate := range dispatches {
-		if candidate.Subject == "build.record/D" {
+		if candidate.Subject == "invariantproject.record/D" {
 			dispatched = candidate
 		}
 	}
@@ -312,8 +312,8 @@ func TestInvariantK1DataIntegrationsAcceptSettleCompensateAndReplay(t *testing.T
 		return platform.Effect{}
 	}
 
-	live.accept(t, "build.record.send", "build.record", "J", map[string]any{})
-	retried := dispatchFor("build.record/J")
+	live.accept(t, "invariantproject.record.send", "invariantproject.record", "J", map[string]any{})
+	retried := dispatchFor("invariantproject.record/J")
 	retryFailure := effectFor(build.ID+"/dispatch", retried.Subject)
 	settleEffect(retryFailure, platform.Outcome{Effect: retryFailure.ID, Result: "unknown", Detail: "No delivery answer arrived"}, invariantClock.Add(4*time.Second))
 	live.accept(t, runtimeprotocol.DispatchType+".review", runtimeprotocol.DispatchType, retried.ID, map[string]any{
@@ -336,8 +336,8 @@ func TestInvariantK1DataIntegrationsAcceptSettleCompensateAndReplay(t *testing.T
 		t.Fatalf("retried dispatch did not complete: %+v", retried)
 	}
 
-	live.accept(t, "build.record.send", "build.record", "E", map[string]any{})
-	retargeted := dispatchFor("build.record/E")
+	live.accept(t, "invariantproject.record.send", "invariantproject.record", "E", map[string]any{})
+	retargeted := dispatchFor("invariantproject.record/E")
 	lost := effectFor(build.ID+"/dispatch", retargeted.Subject)
 	settleEffect(lost, platform.Outcome{Effect: lost.ID, Result: "unknown", Detail: "The receiver answer was lost"}, invariantClock.Add(6*time.Second))
 	retargeted, _ = platform.Get[platform.DispatchRun](automation, retargeted.ID)
@@ -364,8 +364,8 @@ func TestInvariantK1DataIntegrationsAcceptSettleCompensateAndReplay(t *testing.T
 		t.Fatalf("retargeted dispatch did not complete: %+v", retargeted)
 	}
 
-	live.accept(t, "build.record.send", "build.record", "F", map[string]any{})
-	compensating := dispatchFor("build.record/F")
+	live.accept(t, "invariantproject.record.send", "invariantproject.record", "F", map[string]any{})
+	compensating := dispatchFor("invariantproject.record/F")
 	failed := effectFor(build.ID+"/dispatch", compensating.Subject)
 	settleEffect(failed, platform.Outcome{Effect: failed.ID, Result: "rejected", Detail: "The receiver rejected the command"}, invariantClock.Add(8*time.Second))
 	compensating, _ = platform.Get[platform.DispatchRun](automation, compensating.ID)
@@ -399,8 +399,8 @@ func TestInvariantK1DataIntegrationsAcceptSettleCompensateAndReplay(t *testing.T
 		{id: "H", answer: "rejected one", wantEvent: "writeback/notify"},
 		{id: "I", answer: "unknown one", wantEvent: "writeback/notify"},
 	} {
-		live.accept(t, "build.record.notify", "build.record", result.id, map[string]any{})
-		effect := effectFor(result.wantEvent, "build.record/"+result.id)
+		live.accept(t, "invariantproject.record.notify", "invariantproject.record", result.id, map[string]any{})
+		effect := effectFor(result.wantEvent, "invariantproject.record/"+result.id)
 		outcome := map[string]string{"G": "delivered", "H": "rejected", "I": "unknown"}[result.id]
 		settleEffect(effect, platform.Outcome{Effect: effect.ID, Result: outcome, Answer: platform.Raw(map[string]any{"message": result.answer})}, invariantClock.Add(8*time.Second))
 	}
@@ -409,7 +409,7 @@ func TestInvariantK1DataIntegrationsAcceptSettleCompensateAndReplay(t *testing.T
 		t.Fatalf("writeback answers were not retained: %+v", writeback)
 	}
 	for id, note := range map[string]string{"G": "delivered one", "H": "notifying", "I": "notifying"} {
-		view, refusal := live.RecordOf(t.Context(), live.member(t), "build.record", id, invariantClock.Add(8*time.Second))
+		view, refusal := live.RecordOf(t.Context(), live.member(t), "invariantproject.record", id, invariantClock.Add(8*time.Second))
 		if refusal != nil {
 			t.Fatal(refusal)
 		}
@@ -420,10 +420,10 @@ func TestInvariantK1DataIntegrationsAcceptSettleCompensateAndReplay(t *testing.T
 			t.Fatalf("writeback answer left %s as %+v; want note %q: %v", id, record, note, err)
 		}
 	}
-	live.accept(t, "build.record.edit", "build.record", "G", map[string]any{"note": "edited after delivery"})
-	again := effectFor("writeback/notify", "build.record/G")
+	live.accept(t, "invariantproject.record.edit", "invariantproject.record", "G", map[string]any{"note": "edited after delivery"})
+	again := effectFor("writeback/notify", "invariantproject.record/G")
 	settleEffect(again, platform.Outcome{Effect: again.ID, Result: "delivered", Answer: platform.Raw(map[string]any{"message": "must not replace edited data"})}, invariantClock.Add(9*time.Second))
-	view, refusal := live.RecordOf(t.Context(), live.member(t), "build.record", "G", invariantClock.Add(9*time.Second))
+	view, refusal := live.RecordOf(t.Context(), live.member(t), "invariantproject.record", "G", invariantClock.Add(9*time.Second))
 	if refusal != nil {
 		t.Fatal(refusal)
 	}

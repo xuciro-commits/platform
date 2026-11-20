@@ -33,15 +33,16 @@
     }
   ],
   "name": "crmproduct",
+  "namespace": "crm",
   "plural": "Products",
   "schemaVersions": [
     {
       "family": 1,
-      "version": "schema.sha256.860e4db51a392881b0ec247cf0d59bcc473ed512b2624afda09180ad49ee1afd"
+      "version": "schema.sha256.9de8d3be5397386827a633fd89e38a6797715dc6a4314ee1e17c7bc4bbcb6c56"
     }
   ],
   "title": "Product",
-  "type": "build.crmproduct",
+  "type": "crm.crmproduct",
   "view": {
     "columns": [
       "code",

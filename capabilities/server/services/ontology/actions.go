@@ -97,7 +97,7 @@ func CheckProcess(o Object, app, objectType, builderRole, userRole, functionCall
 				return fmt.Errorf("%s: the choice input %q has no values", where, in.Name)
 			}
 			if in.Type == "reference" {
-				owner, _, ok := strings.Cut(in.Ref, ".")
+				owner, ok := platform.OwnerOfType(in.Ref), strings.Contains(in.Ref, ".")
 				if !ok || in.Choices != "" || (platform.AssetRef{App: owner, Kind: platform.AssetObject, Name: in.Ref}).Check() != nil {
 					return fmt.Errorf("%s needs a declared reference object for %s", where, in.Name)
 				}
@@ -211,7 +211,7 @@ func CheckAdoptionSources(o Object, objectType string, a Action, lookup func(str
 }
 
 func RuleSpec(o Object, app string, a Action, read *platform.RuleReadSpec) platform.RuleReadSpec {
-	s := platform.RuleReadSpec{Object: app + "." + o.Name, Inputs: map[string]platform.ExprType{}}
+	s := platform.RuleReadSpec{Object: o.Type(), Inputs: map[string]platform.ExprType{}}
 	if a.Transaction != nil {
 		s.Inputs["$subject"] = platform.ExprType{Kind: "reference", Object: s.Object}
 	}
@@ -226,7 +226,7 @@ func RuleSpec(o Object, app string, a Action, read *platform.RuleReadSpec) platf
 
 func RuleLookup(o Object, app, builderRole string, lookup func(string) (platform.RecordTypeInfo, bool)) func(string) (platform.RecordTypeInfo, bool) {
 	return func(typ string) (platform.RecordTypeInfo, bool) {
-		if typ != app+"."+o.Name {
+		if typ != o.Type() {
 			if lookup == nil {
 				return platform.RecordTypeInfo{}, false
 			}

@@ -95,7 +95,7 @@ func (o *Owner) integrationAsset(kind platform.AssetKind, record any, ordinal in
 		if typ == "" {
 			return nil
 		}
-		owner, _, _ := strings.Cut(typ, ".")
+		owner := platform.OwnerOfType(typ)
 		if info, ok := o.lookupEntity(typ); ok {
 			owner = info.App
 		}

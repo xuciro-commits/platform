@@ -135,7 +135,7 @@ func TxnWritebackEffect(c platform.Caller, receipt *pb.ChangeRecord, step string
 	if slices.ContainsFunc(declared(), func(existing platform.Effect) bool { return existing.ID == effect.ID }) {
 		return platform.Effect{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "A transaction step declared the same outbound intent twice")
 	}
-	if !strings.HasPrefix(effect.Target, c.App+".") {
+	if platform.OwnerOfType(effect.Target) != c.App {
 		return platform.Effect{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "Transaction effects cannot target another authority")
 	}
 	return effect, nil

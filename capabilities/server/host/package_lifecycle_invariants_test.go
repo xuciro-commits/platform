@@ -22,7 +22,7 @@ func TestInvariantK9PackageRetireAndReinstallPreserveData(t *testing.T) {
 	source.accept(t, "build.object.create", build.ObjectType, "OBJ1", object)
 	source.accept(t, "build.app.create", protocol.AppType, "APP1", map[string]any{
 		"name": "alphaapp", "title": "Alpha application",
-		"resources": []platform.AssetRef{{App: build.ID, Kind: platform.AssetObject, Name: "build.alpha"}},
+		"resources": []platform.AssetRef{{App: build.ID, Kind: platform.AssetObject, Name: "invariantproject.alpha"}},
 	})
 	candidateID := invariantPublishData(t, source, source.member(t), []build.JointDraftRef{
 		{Kind: platform.AssetObject, ID: "OBJ1"},
@@ -62,7 +62,7 @@ func TestInvariantK9PackageRetireAndReinstallPreserveData(t *testing.T) {
 	}
 	submit(packages.SchemaPackageImport, map[string]any{"id": descriptor.ID, "digest": inspected.Digest})
 	submit(packages.SchemaPackageInstall, map[string]any{"id": descriptor.ID, "version": descriptor.Version})
-	if info, ok := target.Entity("build.alpha"); !ok || !slices.Equal(info.View, defaultView) {
+	if info, ok := target.Entity("invariantproject.alpha"); !ok || !slices.Equal(info.View, defaultView) {
 		t.Fatalf("package installation lost the default view: %s", info.View)
 	}
 	views := target.App("platform").(interface{ PackageViews() []protocol.PackageView }).PackageViews()
@@ -80,12 +80,12 @@ func TestInvariantK9PackageRetireAndReinstallPreserveData(t *testing.T) {
 		t.Fatalf("installed application texts are not available for translation: %+v", words)
 	}
 
-	target.accept(t, "build.alpha.create", "build.alpha", "A1", map[string]any{"note": "Keep my data"})
+	target.accept(t, "invariantproject.alpha.create", "invariantproject.alpha", "A1", map[string]any{"note": "Keep my data"})
 	impact, err := target.packageLifecycleImpact(admin, descriptor.ID, nil)
 	if err != nil || len(impact.Outputs) != 1 || impact.Outputs[0].Records != 1 || !impact.Outputs[0].Retained {
 		t.Fatalf("lifecycle impact must retain customer output: %+v: %v", impact, err)
 	}
-	objectRef := platform.AssetRef{App: build.ID, Kind: platform.AssetObject, Name: "build.alpha"}
+	objectRef := platform.AssetRef{App: build.ID, Kind: platform.AssetObject, Name: "invariantproject.alpha"}
 	if resource := resourceRecord(t, target, objectRef); resource.Archived || resource.ManagedBy != descriptor.ID || resource.Project != "package:"+descriptor.ID {
 		t.Fatalf("installed resource is not managed: %+v", resource)
 	}
@@ -95,7 +95,7 @@ func TestInvariantK9PackageRetireAndReinstallPreserveData(t *testing.T) {
 	if resource := resourceRecord(t, target, objectRef); !resource.Archived {
 		t.Fatalf("retirement did not archive the package resource: %+v", resource)
 	}
-	view, refusal := target.RecordOf(t.Context(), target.member(t), "build.alpha", "A1", invariantClock)
+	view, refusal := target.RecordOf(t.Context(), target.member(t), "invariantproject.alpha", "A1", invariantClock)
 	if refusal != nil {
 		t.Fatalf("read customer record after retirement: %v", refusal)
 	}
@@ -109,7 +109,7 @@ func TestInvariantK9PackageRetireAndReinstallPreserveData(t *testing.T) {
 	if resource := resourceRecord(t, target, objectRef); resource.Archived || resource.ManagedBy != descriptor.ID {
 		t.Fatalf("reinstall did not restore the package resource: %+v", resource)
 	}
-	view, refusal = target.RecordOf(t.Context(), target.member(t), "build.alpha", "A1", invariantClock)
+	view, refusal = target.RecordOf(t.Context(), target.member(t), "invariantproject.alpha", "A1", invariantClock)
 	if refusal != nil {
 		t.Fatalf("read customer record after reinstall: %v", refusal)
 	}
@@ -125,7 +125,7 @@ func TestInvariantK9PackageRetireAndReinstallPreserveData(t *testing.T) {
 	if resource := resourceRecord(t, replayed, objectRef); resource.Archived || resource.ManagedBy != descriptor.ID {
 		t.Fatalf("replay did not preserve the restored package resource: %+v", resource)
 	}
-	view, refusal = replayed.RecordOf(t.Context(), replayed.member(t), "build.alpha", "A1", invariantClock)
+	view, refusal = replayed.RecordOf(t.Context(), replayed.member(t), "invariantproject.alpha", "A1", invariantClock)
 	if refusal != nil {
 		t.Fatalf("read customer record after replay: %v", refusal)
 	}

@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"platformserver/kernel/protocol"
 	"slices"
-	"strings"
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
@@ -137,7 +136,7 @@ func (r *CandidateRun) Step(i int, step SimulationStep) (Simulation, *platform.E
 			return asset.Ref.App == build.ID && asset.Ref.Kind == platform.AssetObject && asset.Ref.Name == step.Type
 		})
 		function := step.Type == protocol.FunctionCallType && slices.ContainsFunc(r.Candidate.Assets, func(asset platform.ReleaseAsset) bool { return asset.Ref.Kind == platform.AssetFunction })
-		if (!business && !function) || owner != build.ID || step.ID == "" || !strings.HasPrefix(step.Type, build.ID+".") ||
+		if (!business && !function) || owner != build.ID || step.ID == "" || platform.OwnerOfType(step.Type) != build.ID ||
 			step.Type == build.ObjectType || step.Type == protocol.PageType || step.Type == protocol.AppType || step.Type == build.TestPlanType || step.Type == protocol.ProcessType || step.Type == protocol.FunctionType {
 			return Simulation{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Test step {step} must name an action and record of the candidate objects", fmt.Sprint(i+1))
 		}

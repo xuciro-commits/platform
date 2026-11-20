@@ -6,12 +6,10 @@ type AuthorizationEngine interface {
 }
 
 type AuthorizationSubject struct {
-	ID         string
-	App        string
-	Roles      []string
-	Agent      bool
-	Automation bool
-	Replaying  bool
+	ID                           string
+	App                          string
+	Roles                        []string
+	Agent, Automation, Replaying bool
 }
 
 type AuthorizationInput struct {

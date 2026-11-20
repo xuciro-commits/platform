@@ -22,7 +22,7 @@ func (b *Build) ReleaseDrafts(assets []platform.ReleaseAsset, ctx protocol.Asset
 	}
 	var out []protocol.AssetDraft
 	for _, draft := range old {
-		ref, err := draftAssetRef(draft.Type, draft.Name)
+		ref, err := draftAssetRef(draft.Type, qualified(namespaceOf(draft.Image), draft.Name))
 		if err != nil {
 			return nil, err
 		}

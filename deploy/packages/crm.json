@@ -1,6 +1,6 @@
 {
   "id": "crm",
-  "version": "0.1.6",
+  "version": "0.1.8",
   "namespace": "crm",
   "title": "CRM",
   "description": "Leads, deals, organizations, contacts, tasks and notes, with lead-to-deal conversion. Built in the crm project and released through Delivery.",
@@ -17,7 +17,7 @@
         "ref": {
           "app": "build",
           "kind": "action",
-          "name": "build.crmcontact.create"
+          "name": "crm.crmcontact.create"
         },
         "contractVersion": 1,
         "sourceVersion": "1",
@@ -25,13 +25,13 @@
           {
             "app": "build",
             "kind": "object",
-            "name": "build.crmcontact"
+            "name": "crm.crmcontact"
           }
         ],
         "provides": [
           {
             "kind": "action",
-            "name": "build.crmcontact.create",
+            "name": "crm.crmcontact.create",
             "inputs": {
               "type": "object",
               "properties": {
@@ -232,27 +232,27 @@
                 "type": "string"
               }
             ],
-            "schema": "build.crmcontact.create",
+            "schema": "crm.crmcontact.create",
             "schemaVersion": {
               "family": 1,
-              "version": "schema.sha256.33882c5e012f37d64d17fc4bce185ac5f2c43b24aa2aee051579413cd3606739"
+              "version": "schema.sha256.9e00c5ca6b776c5a096fb9054a37a1d4638eea0bf861d9a84eae8c70def9f8a7"
             },
-            "target": "build.crmcontact",
+            "target": "crm.crmcontact",
             "title": "Create crm contact"
           },
           "roles": [
             "builder",
             "user"
           ],
-          "schema": "build.crmcontact.create",
-          "target": "build.crmcontact"
+          "schema": "crm.crmcontact.create",
+          "target": "crm.crmcontact"
         }
       },
       {
         "ref": {
           "app": "build",
           "kind": "action",
-          "name": "build.crmcontact.edit"
+          "name": "crm.crmcontact.edit"
         },
         "contractVersion": 1,
         "sourceVersion": "1",
@@ -260,13 +260,13 @@
           {
             "app": "build",
             "kind": "object",
-            "name": "build.crmcontact"
+            "name": "crm.crmcontact"
           }
         ],
         "provides": [
           {
             "kind": "action",
-            "name": "build.crmcontact.edit",
+            "name": "crm.crmcontact.edit",
             "inputs": {
               "type": "object",
               "properties": {
@@ -461,27 +461,27 @@
                 "type": "string"
               }
             ],
-            "schema": "build.crmcontact.edit",
+            "schema": "crm.crmcontact.edit",
             "schemaVersion": {
               "family": 1,
-              "version": "schema.sha256.33882c5e012f37d64d17fc4bce185ac5f2c43b24aa2aee051579413cd3606739"
+              "version": "schema.sha256.9e00c5ca6b776c5a096fb9054a37a1d4638eea0bf861d9a84eae8c70def9f8a7"
             },
-            "target": "build.crmcontact",
+            "target": "crm.crmcontact",
             "title": "Edit crm contact"
           },
           "roles": [
             "builder",
             "user"
           ],
-          "schema": "build.crmcontact.edit",
-          "target": "build.crmcontact"
+          "schema": "crm.crmcontact.edit",
+          "target": "crm.crmcontact"
         }
       },
       {
         "ref": {
           "app": "build",
           "kind": "action",
-          "name": "build.crmtask.create"
+          "name": "crm.crmtask.create"
         },
         "contractVersion": 1,
         "sourceVersion": "1",
@@ -489,13 +489,13 @@
           {
             "app": "build",
             "kind": "object",
-            "name": "build.crmtask"
+            "name": "crm.crmtask"
           }
         ],
         "provides": [
           {
             "kind": "action",
-            "name": "build.crmtask.create",
+            "name": "crm.crmtask.create",
             "inputs": {
               "type": "object",
               "properties": {
@@ -712,27 +712,27 @@
                 "type": "boolean"
               }
             ],
-            "schema": "build.crmtask.create",
+            "schema": "crm.crmtask.create",
             "schemaVersion": {
               "family": 1,
-              "version": "schema.sha256.245fa8d0565429b6ce239d78d28b5290678dd03492d5a2df8e7ec055fed542a5"
+              "version": "schema.sha256.67567f58922f96dcd9c1aecb48a4065ee5d25e968888978060163bc9c7de5969"
             },
-            "target": "build.crmtask",
+            "target": "crm.crmtask",
             "title": "Create task"
           },
           "roles": [
             "builder",
             "user"
           ],
-          "schema": "build.crmtask.create",
-          "target": "build.crmtask"
+          "schema": "crm.crmtask.create",
+          "target": "crm.crmtask"
         }
       },
       {
         "ref": {
           "app": "build",
           "kind": "action",
-          "name": "build.crmtask.edit"
+          "name": "crm.crmtask.edit"
         },
         "contractVersion": 1,
         "sourceVersion": "1",
@@ -740,13 +740,13 @@
           {
             "app": "build",
             "kind": "object",
-            "name": "build.crmtask"
+            "name": "crm.crmtask"
           }
         ],
         "provides": [
           {
             "kind": "action",
-            "name": "build.crmtask.edit",
+            "name": "crm.crmtask.edit",
             "inputs": {
               "type": "object",
               "properties": {
@@ -954,27 +954,27 @@
                 "type": "boolean"
               }
             ],
-            "schema": "build.crmtask.edit",
+            "schema": "crm.crmtask.edit",
             "schemaVersion": {
               "family": 1,
-              "version": "schema.sha256.245fa8d0565429b6ce239d78d28b5290678dd03492d5a2df8e7ec055fed542a5"
+              "version": "schema.sha256.67567f58922f96dcd9c1aecb48a4065ee5d25e968888978060163bc9c7de5969"
             },
-            "target": "build.crmtask",
+            "target": "crm.crmtask",
             "title": "Edit task"
           },
           "roles": [
             "builder",
             "user"
           ],
-          "schema": "build.crmtask.edit",
-          "target": "build.crmtask"
+          "schema": "crm.crmtask.edit",
+          "target": "crm.crmtask"
         }
       },
       {
         "ref": {
           "app": "build",
           "kind": "action",
-          "name": "build.deal.create"
+          "name": "crm.deal.create"
         },
         "contractVersion": 1,
         "sourceVersion": "1",
@@ -982,13 +982,13 @@
           {
             "app": "build",
             "kind": "object",
-            "name": "build.deal"
+            "name": "crm.deal"
           }
         ],
         "provides": [
           {
             "kind": "action",
-            "name": "build.deal.create",
+            "name": "crm.deal.create",
             "inputs": {
               "type": "object",
               "properties": {
@@ -1294,27 +1294,27 @@
                 "type": "string"
               }
             ],
-            "schema": "build.deal.create",
+            "schema": "crm.deal.create",
             "schemaVersion": {
               "family": 2,
-              "version": "schema.sha256.04cfcc4a2c4bab8e89777e66ab067d393b27ba4b85a4550293e6fc2281e2a0c8"
+              "version": "schema.sha256.805168ac0ac99518e1a5eae4ffc5b2edfe09a2660797b74fcf729e38aa3634d3"
             },
-            "target": "build.deal",
+            "target": "crm.deal",
             "title": "Create deal"
           },
           "roles": [
             "builder",
             "user"
           ],
-          "schema": "build.deal.create",
-          "target": "build.deal"
+          "schema": "crm.deal.create",
+          "target": "crm.deal"
         }
       },
       {
         "ref": {
           "app": "build",
           "kind": "action",
-          "name": "build.deal.edit"
+          "name": "crm.deal.edit"
         },
         "contractVersion": 1,
         "sourceVersion": "1",
@@ -1322,13 +1322,13 @@
           {
             "app": "build",
             "kind": "object",
-            "name": "build.deal"
+            "name": "crm.deal"
           }
         ],
         "provides": [
           {
             "kind": "action",
-            "name": "build.deal.edit",
+            "name": "crm.deal.edit",
             "inputs": {
               "type": "object",
               "properties": {
@@ -1625,27 +1625,27 @@
                 "type": "string"
               }
             ],
-            "schema": "build.deal.edit",
+            "schema": "crm.deal.edit",
             "schemaVersion": {
               "family": 2,
-              "version": "schema.sha256.04cfcc4a2c4bab8e89777e66ab067d393b27ba4b85a4550293e6fc2281e2a0c8"
+              "version": "schema.sha256.805168ac0ac99518e1a5eae4ffc5b2edfe09a2660797b74fcf729e38aa3634d3"
             },
-            "target": "build.deal",
+            "target": "crm.deal",
             "title": "Edit deal"
           },
           "roles": [
             "builder",
             "user"
           ],
-          "schema": "build.deal.edit",
-          "target": "build.deal"
+          "schema": "crm.deal.edit",
+          "target": "crm.deal"
         }
       },
       {
         "ref": {
           "app": "build",
           "kind": "action",
-          "name": "build.lead.convert"
+          "name": "crm.lead.convert"
         },
         "contractVersion": 1,
         "sourceVersion": "1.action-1",
@@ -1653,18 +1653,18 @@
           {
             "app": "build",
             "kind": "object",
-            "name": "build.lead"
+            "name": "crm.lead"
           },
           {
             "app": "build",
             "kind": "object",
-            "name": "build.organization"
+            "name": "crm.organization"
           }
         ],
         "provides": [
           {
             "kind": "action",
-            "name": "build.lead.convert",
+            "name": "crm.lead.convert",
             "inputs": {
               "type": "object",
               "properties": {
@@ -1687,7 +1687,7 @@
                 "name": "organization",
                 "type": "string",
                 "description": "Leave empty to create a new organization from the lead.",
-                "ref": "build.organization",
+                "ref": "crm.organization",
                 "label": "Link to organization",
                 "constraints": {}
               }
@@ -1705,31 +1705,31 @@
                 "description": "Leave empty to create a new organization from the lead.",
                 "label": "Link to organization",
                 "name": "organization",
-                "ref": "build.organization",
+                "ref": "crm.organization",
                 "type": "string"
               }
             ],
-            "schema": "build.lead.convert",
+            "schema": "crm.lead.convert",
             "schemaVersion": {
               "family": 2,
-              "version": "schema.sha256.927c56a7c766b9878c2029815594b39d9e56c51ede87e0a302290559fce1de75"
+              "version": "schema.sha256.83c0280f3b5a590c8ebc87d9daf22e7acd1162ec8919c3e4e967e034c2217058"
             },
-            "target": "build.lead",
+            "target": "crm.lead",
             "title": "Convert to deal"
           },
           "roles": [
             "builder",
             "user"
           ],
-          "schema": "build.lead.convert",
-          "target": "build.lead"
+          "schema": "crm.lead.convert",
+          "target": "crm.lead"
         }
       },
       {
         "ref": {
           "app": "build",
           "kind": "action",
-          "name": "build.lead.create"
+          "name": "crm.lead.create"
         },
         "contractVersion": 1,
         "sourceVersion": "1",
@@ -1737,13 +1737,13 @@
           {
             "app": "build",
             "kind": "object",
-            "name": "build.lead"
+            "name": "crm.lead"
           }
         ],
         "provides": [
           {
             "kind": "action",
-            "name": "build.lead.create",
+            "name": "crm.lead.create",
             "inputs": {
               "type": "object",
               "properties": {
@@ -2107,27 +2107,27 @@
                 "type": "string"
               }
             ],
-            "schema": "build.lead.create",
+            "schema": "crm.lead.create",
             "schemaVersion": {
               "family": 2,
-              "version": "schema.sha256.927c56a7c766b9878c2029815594b39d9e56c51ede87e0a302290559fce1de75"
+              "version": "schema.sha256.83c0280f3b5a590c8ebc87d9daf22e7acd1162ec8919c3e4e967e034c2217058"
             },
-            "target": "build.lead",
+            "target": "crm.lead",
             "title": "Create lead"
           },
           "roles": [
             "builder",
             "user"
           ],
-          "schema": "build.lead.create",
-          "target": "build.lead"
+          "schema": "crm.lead.create",
+          "target": "crm.lead"
         }
       },
       {
         "ref": {
           "app": "build",
           "kind": "action",
-          "name": "build.lead.edit"
+          "name": "crm.lead.edit"
         },
         "contractVersion": 1,
         "sourceVersion": "1",
@@ -2135,13 +2135,13 @@
           {
             "app": "build",
             "kind": "object",
-            "name": "build.lead"
+            "name": "crm.lead"
           }
         ],
         "provides": [
           {
             "kind": "action",
-            "name": "build.lead.edit",
+            "name": "crm.lead.edit",
             "inputs": {
               "type": "object",
               "properties": {
@@ -2496,27 +2496,27 @@
                 "type": "string"
               }
             ],
-            "schema": "build.lead.edit",
+            "schema": "crm.lead.edit",
             "schemaVersion": {
               "family": 2,
-              "version": "schema.sha256.927c56a7c766b9878c2029815594b39d9e56c51ede87e0a302290559fce1de75"
+              "version": "schema.sha256.83c0280f3b5a590c8ebc87d9daf22e7acd1162ec8919c3e4e967e034c2217058"
             },
-            "target": "build.lead",
+            "target": "crm.lead",
             "title": "Edit lead"
           },
           "roles": [
             "builder",
             "user"
           ],
-          "schema": "build.lead.edit",
-          "target": "build.lead"
+          "schema": "crm.lead.edit",
+          "target": "crm.lead"
         }
       },
       {
         "ref": {
           "app": "build",
           "kind": "action",
-          "name": "build.note.create"
+          "name": "crm.note.create"
         },
         "contractVersion": 1,
         "sourceVersion": "1",
@@ -2524,13 +2524,13 @@
           {
             "app": "build",
             "kind": "object",
-            "name": "build.note"
+            "name": "crm.note"
           }
         ],
         "provides": [
           {
             "kind": "action",
-            "name": "build.note.create",
+            "name": "crm.note.create",
             "inputs": {
               "type": "object",
               "properties": {
@@ -2638,27 +2638,27 @@
                 "type": "boolean"
               }
             ],
-            "schema": "build.note.create",
+            "schema": "crm.note.create",
             "schemaVersion": {
               "family": 1,
-              "version": "schema.sha256.2bebed73edadce9b2379602689932badef9800b6efe6991e9680a47907340bed"
+              "version": "schema.sha256.ce0ceb6d14d4e5bbea604869b214069187d31d5852c2b29fdaa82434458fc4c0"
             },
-            "target": "build.note",
+            "target": "crm.note",
             "title": "Create note"
           },
           "roles": [
             "builder",
             "user"
           ],
-          "schema": "build.note.create",
-          "target": "build.note"
+          "schema": "crm.note.create",
+          "target": "crm.note"
         }
       },
       {
         "ref": {
           "app": "build",
           "kind": "action",
-          "name": "build.note.edit"
+          "name": "crm.note.edit"
         },
         "contractVersion": 1,
         "sourceVersion": "1",
@@ -2666,13 +2666,13 @@
           {
             "app": "build",
             "kind": "object",
-            "name": "build.note"
+            "name": "crm.note"
           }
         ],
         "provides": [
           {
             "kind": "action",
-            "name": "build.note.edit",
+            "name": "crm.note.edit",
             "inputs": {
               "type": "object",
               "properties": {
@@ -2774,27 +2774,27 @@
                 "type": "boolean"
               }
             ],
-            "schema": "build.note.edit",
+            "schema": "crm.note.edit",
             "schemaVersion": {
               "family": 1,
-              "version": "schema.sha256.2bebed73edadce9b2379602689932badef9800b6efe6991e9680a47907340bed"
+              "version": "schema.sha256.ce0ceb6d14d4e5bbea604869b214069187d31d5852c2b29fdaa82434458fc4c0"
             },
-            "target": "build.note",
+            "target": "crm.note",
             "title": "Edit note"
           },
           "roles": [
             "builder",
             "user"
           ],
-          "schema": "build.note.edit",
-          "target": "build.note"
+          "schema": "crm.note.edit",
+          "target": "crm.note"
         }
       },
       {
         "ref": {
           "app": "build",
           "kind": "action",
-          "name": "build.organization.create"
+          "name": "crm.organization.create"
         },
         "contractVersion": 1,
         "sourceVersion": "1",
@@ -2802,13 +2802,13 @@
           {
             "app": "build",
             "kind": "object",
-            "name": "build.organization"
+            "name": "crm.organization"
           }
         ],
         "provides": [
           {
             "kind": "action",
-            "name": "build.organization.create",
+            "name": "crm.organization.create",
             "inputs": {
               "type": "object",
               "properties": {
@@ -2998,27 +2998,27 @@
                 "type": "string"
               }
             ],
-            "schema": "build.organization.create",
+            "schema": "crm.organization.create",
             "schemaVersion": {
               "family": 1,
-              "version": "schema.sha256.f9fc5493fe711869471b6e7cc2025f5e90c366285b703da317f7d8722a5cb02b"
+              "version": "schema.sha256.164e93d04edab558838850309316c9776b247fa1c8b5e27904307ba9eff5a03a"
             },
-            "target": "build.organization",
+            "target": "crm.organization",
             "title": "Create organization"
           },
           "roles": [
             "builder",
             "user"
           ],
-          "schema": "build.organization.create",
-          "target": "build.organization"
+          "schema": "crm.organization.create",
+          "target": "crm.organization"
         }
       },
       {
         "ref": {
           "app": "build",
           "kind": "action",
-          "name": "build.organization.edit"
+          "name": "crm.organization.edit"
         },
         "contractVersion": 1,
         "sourceVersion": "1",
@@ -3026,13 +3026,13 @@
           {
             "app": "build",
             "kind": "object",
-            "name": "build.organization"
+            "name": "crm.organization"
           }
         ],
         "provides": [
           {
             "kind": "action",
-            "name": "build.organization.edit",
+            "name": "crm.organization.edit",
             "inputs": {
               "type": "object",
               "properties": {
@@ -3216,20 +3216,20 @@
                 "type": "string"
               }
             ],
-            "schema": "build.organization.edit",
+            "schema": "crm.organization.edit",
             "schemaVersion": {
               "family": 1,
-              "version": "schema.sha256.f9fc5493fe711869471b6e7cc2025f5e90c366285b703da317f7d8722a5cb02b"
+              "version": "schema.sha256.164e93d04edab558838850309316c9776b247fa1c8b5e27904307ba9eff5a03a"
             },
-            "target": "build.organization",
+            "target": "crm.organization",
             "title": "Edit organization"
           },
           "roles": [
             "builder",
             "user"
           ],
-          "schema": "build.organization.edit",
-          "target": "build.organization"
+          "schema": "crm.organization.edit",
+          "target": "crm.organization"
         }
       },
       {
@@ -3244,32 +3244,32 @@
           {
             "app": "build",
             "kind": "page",
-            "name": "crmcontact"
+            "name": "crm.crmcontact"
           },
           {
             "app": "build",
             "kind": "page",
-            "name": "crmtask"
+            "name": "crm.crmtask"
           },
           {
             "app": "build",
             "kind": "page",
-            "name": "deal"
+            "name": "crm.deal"
           },
           {
             "app": "build",
             "kind": "page",
-            "name": "lead"
+            "name": "crm.lead"
           },
           {
             "app": "build",
             "kind": "page",
-            "name": "note"
+            "name": "crm.note"
           },
           {
             "app": "build",
             "kind": "page",
-            "name": "organization"
+            "name": "crm.organization"
           }
         ],
         "provides": [],
@@ -3277,12 +3277,12 @@
           "icon": "users",
           "name": "crm",
           "pages": [
-            "lead",
-            "deal",
-            "organization",
-            "crmcontact",
-            "crmtask",
-            "note"
+            "crm.lead",
+            "crm.deal",
+            "crm.organization",
+            "crm.crmcontact",
+            "crm.crmtask",
+            "crm.note"
           ],
           "title": "CRM"
         }
@@ -3291,7 +3291,7 @@
         "ref": {
           "app": "build",
           "kind": "object",
-          "name": "build.crmcontact"
+          "name": "crm.crmcontact"
         },
         "contractVersion": 1,
         "sourceVersion": "1",
@@ -3299,13 +3299,13 @@
           {
             "app": "build",
             "kind": "object",
-            "name": "build.organization"
+            "name": "crm.organization"
           }
         ],
         "provides": [
           {
             "kind": "interface",
-            "name": "build.crmcontact",
+            "name": "crm.crmcontact",
             "inputs": {
               "type": ""
             },
@@ -3403,7 +3403,7 @@
               "group": "Contact",
               "inverse": "contacts",
               "name": "organization",
-              "ref": "build.organization",
+              "ref": "crm.organization",
               "title": "Organization",
               "type": "reference"
             },
@@ -3435,15 +3435,16 @@
             }
           ],
           "name": "crmcontact",
+          "namespace": "crm",
           "plural": "CRM Contacts",
           "schemaVersions": [
             {
               "family": 1,
-              "version": "schema.sha256.33882c5e012f37d64d17fc4bce185ac5f2c43b24aa2aee051579413cd3606739"
+              "version": "schema.sha256.9e00c5ca6b776c5a096fb9054a37a1d4638eea0bf861d9a84eae8c70def9f8a7"
             }
           ],
           "title": "CRM Contact",
-          "type": "build.crmcontact",
+          "type": "crm.crmcontact",
           "view": {
             "columns": [
               "fullname",
@@ -3471,7 +3472,7 @@
         "ref": {
           "app": "build",
           "kind": "object",
-          "name": "build.crmproduct"
+          "name": "crm.crmproduct"
         },
         "contractVersion": 1,
         "sourceVersion": "1",
@@ -3479,7 +3480,7 @@
         "provides": [
           {
             "kind": "interface",
-            "name": "build.crmproduct",
+            "name": "crm.crmproduct",
             "inputs": {
               "type": ""
             },
@@ -3567,15 +3568,16 @@
             }
           ],
           "name": "crmproduct",
+          "namespace": "crm",
           "plural": "Products",
           "schemaVersions": [
             {
               "family": 1,
-              "version": "schema.sha256.860e4db51a392881b0ec247cf0d59bcc473ed512b2624afda09180ad49ee1afd"
+              "version": "schema.sha256.9de8d3be5397386827a633fd89e38a6797715dc6a4314ee1e17c7bc4bbcb6c56"
             }
           ],
           "title": "Product",
-          "type": "build.crmproduct",
+          "type": "crm.crmproduct",
           "view": {
             "columns": [
               "code",
@@ -3602,7 +3604,7 @@
         "ref": {
           "app": "build",
           "kind": "object",
-          "name": "build.crmtask"
+          "name": "crm.crmtask"
         },
         "contractVersion": 1,
         "sourceVersion": "1",
@@ -3610,18 +3612,18 @@
           {
             "app": "build",
             "kind": "object",
-            "name": "build.deal"
+            "name": "crm.deal"
           },
           {
             "app": "build",
             "kind": "object",
-            "name": "build.lead"
+            "name": "crm.lead"
           }
         ],
         "provides": [
           {
             "kind": "interface",
-            "name": "build.crmtask",
+            "name": "crm.crmtask",
             "inputs": {
               "type": ""
             },
@@ -3717,7 +3719,7 @@
               "inverse": "tasks",
               "name": "lead",
               "oneOf": "Related to",
-              "ref": "build.lead",
+              "ref": "crm.lead",
               "title": "Lead",
               "type": "reference"
             },
@@ -3726,7 +3728,7 @@
               "inverse": "tasks",
               "name": "deal",
               "oneOf": "Related to",
-              "ref": "build.deal",
+              "ref": "crm.deal",
               "title": "Deal",
               "type": "reference"
             },
@@ -3878,11 +3880,12 @@
             }
           ],
           "name": "crmtask",
+          "namespace": "crm",
           "plural": "Tasks",
           "schemaVersions": [
             {
               "family": 1,
-              "version": "schema.sha256.245fa8d0565429b6ce239d78d28b5290678dd03492d5a2df8e7ec055fed542a5"
+              "version": "schema.sha256.67567f58922f96dcd9c1aecb48a4065ee5d25e968888978060163bc9c7de5969"
             }
           ],
           "states": [
@@ -3894,7 +3897,7 @@
             }
           ],
           "title": "Task",
-          "type": "build.crmtask",
+          "type": "crm.crmtask",
           "view": {
             "columns": [
               "title",
@@ -3917,7 +3920,7 @@
         "ref": {
           "app": "build",
           "kind": "object",
-          "name": "build.deal"
+          "name": "crm.deal"
         },
         "contractVersion": 1,
         "sourceVersion": "1",
@@ -3925,48 +3928,48 @@
           {
             "app": "build",
             "kind": "object",
-            "name": "build.crmcontact"
+            "name": "crm.crmcontact"
           },
           {
             "app": "build",
             "kind": "object",
-            "name": "build.dealline"
+            "name": "crm.dealline"
           },
           {
             "app": "build",
             "kind": "object",
-            "name": "build.industry"
+            "name": "crm.industry"
           },
           {
             "app": "build",
             "kind": "object",
-            "name": "build.lead"
+            "name": "crm.lead"
           },
           {
             "app": "build",
             "kind": "object",
-            "name": "build.leadsource"
+            "name": "crm.leadsource"
           },
           {
             "app": "build",
             "kind": "object",
-            "name": "build.lostreason"
+            "name": "crm.lostreason"
           },
           {
             "app": "build",
             "kind": "object",
-            "name": "build.organization"
+            "name": "crm.organization"
           },
           {
             "app": "build",
             "kind": "object",
-            "name": "build.territory"
+            "name": "crm.territory"
           }
         ],
         "provides": [
           {
             "kind": "interface",
-            "name": "build.deal",
+            "name": "crm.deal",
             "inputs": {
               "type": ""
             },
@@ -4094,7 +4097,7 @@
               "group": "Commercial",
               "inverse": "deals",
               "name": "organization",
-              "ref": "build.organization",
+              "ref": "crm.organization",
               "search": true,
               "title": "Organization",
               "type": "reference"
@@ -4102,14 +4105,14 @@
             {
               "group": "Commercial",
               "name": "contact",
-              "ref": "build.crmcontact",
+              "ref": "crm.crmcontact",
               "title": "Primary contact",
               "type": "reference"
             },
             {
               "group": "Commercial",
               "name": "lead",
-              "ref": "build.lead",
+              "ref": "crm.lead",
               "title": "Source lead",
               "type": "reference"
             },
@@ -4188,28 +4191,28 @@
             {
               "group": "Classification",
               "name": "source",
-              "ref": "build.leadsource",
+              "ref": "crm.leadsource",
               "title": "Source",
               "type": "reference"
             },
             {
               "group": "Classification",
               "name": "industry",
-              "ref": "build.industry",
+              "ref": "crm.industry",
               "title": "Industry",
               "type": "reference"
             },
             {
               "group": "Classification",
               "name": "territory",
-              "ref": "build.territory",
+              "ref": "crm.territory",
               "title": "Territory",
               "type": "reference"
             },
             {
               "group": "Closure",
               "name": "lostreason",
-              "ref": "build.lostreason",
+              "ref": "crm.lostreason",
               "required": true,
               "title": "Lost reason",
               "type": "reference",
@@ -4586,12 +4589,13 @@
             }
           ],
           "name": "deal",
+          "namespace": "crm",
           "plural": "Deals",
           "reads": {
             "collections": {
               "lines": {
                 "app": "build",
-                "object": "build.dealline",
+                "object": "crm.dealline",
                 "policy": "complete",
                 "query": "",
                 "set": "lines",
@@ -4602,11 +4606,11 @@
           "schemaVersions": [
             {
               "family": 1,
-              "version": "schema.sha256.70f0f49ecea90d5fc77688f2bf536d2b003c1d209d072a51130e5035b6d808e2"
+              "version": "schema.sha256.277dffe972011a5f7920fab6844e4da53c1820526001b67fbd54159758f61d85"
             },
             {
               "family": 2,
-              "version": "schema.sha256.04cfcc4a2c4bab8e89777e66ab067d393b27ba4b85a4550293e6fc2281e2a0c8"
+              "version": "schema.sha256.805168ac0ac99518e1a5eae4ffc5b2edfe09a2660797b74fcf729e38aa3634d3"
             }
           ],
           "sets": [
@@ -4615,7 +4619,7 @@
               "from": "lines",
               "limit": 200,
               "name": "lines",
-              "object": "build.dealline",
+              "object": "crm.dealline",
               "order": [
                 {
                   "expr": {
@@ -4636,7 +4640,7 @@
             }
           ],
           "title": "Deal",
-          "type": "build.deal",
+          "type": "crm.deal",
           "view": {
             "columns": [
               "title",
@@ -4661,7 +4665,7 @@
         "ref": {
           "app": "build",
           "kind": "object",
-          "name": "build.dealline"
+          "name": "crm.dealline"
         },
         "contractVersion": 1,
         "sourceVersion": "1",
@@ -4669,18 +4673,18 @@
           {
             "app": "build",
             "kind": "object",
-            "name": "build.crmproduct"
+            "name": "crm.crmproduct"
           },
           {
             "app": "build",
             "kind": "object",
-            "name": "build.deal"
+            "name": "crm.deal"
           }
         ],
         "provides": [
           {
             "kind": "interface",
-            "name": "build.dealline",
+            "name": "crm.dealline",
             "inputs": {
               "type": ""
             },
@@ -4769,14 +4773,14 @@
             {
               "inverse": "lines",
               "name": "deal",
-              "ref": "build.deal",
+              "ref": "crm.deal",
               "required": true,
               "title": "Deal",
               "type": "reference"
             },
             {
               "name": "product",
-              "ref": "build.crmproduct",
+              "ref": "crm.crmproduct",
               "title": "Product",
               "type": "reference"
             },
@@ -4862,15 +4866,16 @@
             }
           ],
           "name": "dealline",
+          "namespace": "crm",
           "plural": "Deal product lines",
           "schemaVersions": [
             {
               "family": 1,
-              "version": "schema.sha256.e5c2a2011152dbfc6b07d4eb886845fb085b21c00d9d4a440def35d7cf9e0f71"
+              "version": "schema.sha256.3239711eca6a8f1f8f0b2ba57deafcd33af6f77219937e7a23085ac76e3dafdb"
             }
           ],
           "title": "Deal product line",
-          "type": "build.dealline",
+          "type": "crm.dealline",
           "view": {
             "columns": [
               "productname",
@@ -4894,7 +4899,7 @@
         "ref": {
           "app": "build",
           "kind": "object",
-          "name": "build.industry"
+          "name": "crm.industry"
         },
         "contractVersion": 1,
         "sourceVersion": "1",
@@ -4902,7 +4907,7 @@
         "provides": [
           {
             "kind": "interface",
-            "name": "build.industry",
+            "name": "crm.industry",
             "inputs": {
               "type": ""
             },
@@ -4943,15 +4948,16 @@
             }
           ],
           "name": "industry",
+          "namespace": "crm",
           "plural": "Industries",
           "schemaVersions": [
             {
               "family": 1,
-              "version": "schema.sha256.bb3219d78d634ce96bdc9d3421722ac43a37878e56f8a716038f1a0bbea185e3"
+              "version": "schema.sha256.a13db67be4f613c26aeb2b3eef6babb3f97683bb9a25c1f9cad93fc8891d835a"
             }
           ],
           "title": "Industry",
-          "type": "build.industry",
+          "type": "crm.industry",
           "view": {
             "columns": [
               "title"
@@ -4975,7 +4981,7 @@
         "ref": {
           "app": "build",
           "kind": "object",
-          "name": "build.lead"
+          "name": "crm.lead"
         },
         "contractVersion": 1,
         "sourceVersion": "1",
@@ -4983,43 +4989,43 @@
           {
             "app": "build",
             "kind": "object",
-            "name": "build.crmcontact"
+            "name": "crm.crmcontact"
           },
           {
             "app": "build",
             "kind": "object",
-            "name": "build.deal"
+            "name": "crm.deal"
           },
           {
             "app": "build",
             "kind": "object",
-            "name": "build.industry"
+            "name": "crm.industry"
           },
           {
             "app": "build",
             "kind": "object",
-            "name": "build.leadsource"
+            "name": "crm.leadsource"
           },
           {
             "app": "build",
             "kind": "object",
-            "name": "build.lostreason"
+            "name": "crm.lostreason"
           },
           {
             "app": "build",
             "kind": "object",
-            "name": "build.organization"
+            "name": "crm.organization"
           },
           {
             "app": "build",
             "kind": "object",
-            "name": "build.territory"
+            "name": "crm.territory"
           }
         ],
         "provides": [
           {
             "kind": "interface",
-            "name": "build.lead",
+            "name": "crm.lead",
             "inputs": {
               "type": ""
             },
@@ -5140,7 +5146,7 @@
               "ref": {
                 "app": "build",
                 "kind": "action",
-                "name": "build.lead.convert"
+                "name": "crm.lead.convert"
               },
               "sourceVersion": "1"
             }
@@ -5155,7 +5161,7 @@
                 {
                   "help": "Leave empty to create a new organization from the lead.",
                   "name": "organization",
-                  "ref": "build.organization",
+                  "ref": "crm.organization",
                   "title": "Link to organization",
                   "type": "reference"
                 }
@@ -5296,7 +5302,7 @@
                     "kind": "create",
                     "name": "organization",
                     "target": {
-                      "type": "build.organization"
+                      "type": "crm.organization"
                     },
                     "when": {
                       "args": [
@@ -5375,7 +5381,7 @@
                     "kind": "create",
                     "name": "contact",
                     "target": {
-                      "type": "build.crmcontact"
+                      "type": "crm.crmcontact"
                     }
                   },
                   {
@@ -5486,7 +5492,7 @@
                     "kind": "create",
                     "name": "deal",
                     "target": {
-                      "type": "build.deal"
+                      "type": "crm.deal"
                     }
                   },
                   {
@@ -5524,11 +5530,11 @@
                     "name": "lead",
                     "target": {
                       "id": "$subject",
-                      "type": "build.lead"
+                      "type": "crm.lead"
                     }
                   }
                 ],
-                "subject": "build.lead"
+                "subject": "crm.lead"
               }
             }
           ],
@@ -5583,21 +5589,21 @@
             {
               "group": "Classification",
               "name": "source",
-              "ref": "build.leadsource",
+              "ref": "crm.leadsource",
               "title": "Source",
               "type": "reference"
             },
             {
               "group": "Classification",
               "name": "industry",
-              "ref": "build.industry",
+              "ref": "crm.industry",
               "title": "Industry",
               "type": "reference"
             },
             {
               "group": "Classification",
               "name": "territory",
-              "ref": "build.territory",
+              "ref": "crm.territory",
               "title": "Territory",
               "type": "reference"
             },
@@ -5624,14 +5630,14 @@
               "group": "Closure",
               "name": "deal",
               "readOnly": true,
-              "ref": "build.deal",
+              "ref": "crm.deal",
               "title": "Deal",
               "type": "reference"
             },
             {
               "group": "Closure",
               "name": "lostreason",
-              "ref": "build.lostreason",
+              "ref": "crm.lostreason",
               "title": "Lost reason",
               "type": "reference",
               "when": "status=unqualified,junk"
@@ -5808,19 +5814,20 @@
             }
           ],
           "name": "lead",
+          "namespace": "crm",
           "plural": "Leads",
           "schemaVersions": [
             {
               "family": 1,
-              "version": "schema.sha256.ac0c19912e77407d421232fb454fe5ffb7833b9709dc7bc8ade37c947a593224"
+              "version": "schema.sha256.41434458b6f23f92f2b1072560f8933a47f5c70773392a5ec6be83697dd40d67"
             },
             {
               "family": 2,
-              "version": "schema.sha256.26675b965eb2856203fe48ecda6ca86a6cfabf5d09bb918d31a6be56b29e6e56"
+              "version": "schema.sha256.a412aced107791f42384d1a43aa54e36ba14d6c323837572053c820bb66c21ce"
             },
             {
               "family": 2,
-              "version": "schema.sha256.927c56a7c766b9878c2029815594b39d9e56c51ede87e0a302290559fce1de75"
+              "version": "schema.sha256.83c0280f3b5a590c8ebc87d9daf22e7acd1162ec8919c3e4e967e034c2217058"
             }
           ],
           "states": [
@@ -5832,7 +5839,7 @@
             }
           ],
           "title": "Lead",
-          "type": "build.lead",
+          "type": "crm.lead",
           "view": {
             "columns": [
               "fullname",
@@ -5856,7 +5863,7 @@
         "ref": {
           "app": "build",
           "kind": "object",
-          "name": "build.leadsource"
+          "name": "crm.leadsource"
         },
         "contractVersion": 1,
         "sourceVersion": "1",
@@ -5864,7 +5871,7 @@
         "provides": [
           {
             "kind": "interface",
-            "name": "build.leadsource",
+            "name": "crm.leadsource",
             "inputs": {
               "type": ""
             },
@@ -5913,15 +5920,16 @@
             }
           ],
           "name": "leadsource",
+          "namespace": "crm",
           "plural": "Lead sources",
           "schemaVersions": [
             {
               "family": 1,
-              "version": "schema.sha256.e556f8e131851fd53aa025f9c6d7d67fac1c4b0e35a881eaf429327f4fc0085c"
+              "version": "schema.sha256.12cdf2d5a4f80b4944a0f05aca9aab209cab48c87f0ca004e352ba6fb7f8ab51"
             }
           ],
           "title": "Lead source",
-          "type": "build.leadsource",
+          "type": "crm.leadsource",
           "view": {
             "columns": [
               "title"
@@ -5945,7 +5953,7 @@
         "ref": {
           "app": "build",
           "kind": "object",
-          "name": "build.lostreason"
+          "name": "crm.lostreason"
         },
         "contractVersion": 1,
         "sourceVersion": "1",
@@ -5953,7 +5961,7 @@
         "provides": [
           {
             "kind": "interface",
-            "name": "build.lostreason",
+            "name": "crm.lostreason",
             "inputs": {
               "type": ""
             },
@@ -6002,15 +6010,16 @@
             }
           ],
           "name": "lostreason",
+          "namespace": "crm",
           "plural": "Lost reasons",
           "schemaVersions": [
             {
               "family": 1,
-              "version": "schema.sha256.fe99efc7e4e5746b5f45e50112a345e1c7d2c172e95c7a876dae10d826eabdc2"
+              "version": "schema.sha256.b84151a2ea6f42c3d8553333cf0c29815dd962690e110e6e4ecbd6a2fc44ac9b"
             }
           ],
           "title": "Lost reason",
-          "type": "build.lostreason",
+          "type": "crm.lostreason",
           "view": {
             "columns": [
               "title"
@@ -6034,7 +6043,7 @@
         "ref": {
           "app": "build",
           "kind": "object",
-          "name": "build.note"
+          "name": "crm.note"
         },
         "contractVersion": 1,
         "sourceVersion": "1",
@@ -6042,18 +6051,18 @@
           {
             "app": "build",
             "kind": "object",
-            "name": "build.deal"
+            "name": "crm.deal"
           },
           {
             "app": "build",
             "kind": "object",
-            "name": "build.lead"
+            "name": "crm.lead"
           }
         ],
         "provides": [
           {
             "kind": "interface",
-            "name": "build.note",
+            "name": "crm.note",
             "inputs": {
               "type": ""
             },
@@ -6116,7 +6125,7 @@
               "inverse": "notes",
               "name": "lead",
               "oneOf": "Related to",
-              "ref": "build.lead",
+              "ref": "crm.lead",
               "title": "Lead",
               "type": "reference"
             },
@@ -6125,7 +6134,7 @@
               "inverse": "notes",
               "name": "deal",
               "oneOf": "Related to",
-              "ref": "build.deal",
+              "ref": "crm.deal",
               "title": "Deal",
               "type": "reference"
             },
@@ -6137,15 +6146,16 @@
             }
           ],
           "name": "note",
+          "namespace": "crm",
           "plural": "Notes",
           "schemaVersions": [
             {
               "family": 1,
-              "version": "schema.sha256.2bebed73edadce9b2379602689932badef9800b6efe6991e9680a47907340bed"
+              "version": "schema.sha256.ce0ceb6d14d4e5bbea604869b214069187d31d5852c2b29fdaa82434458fc4c0"
             }
           ],
           "title": "Note",
-          "type": "build.note",
+          "type": "crm.note",
           "view": {
             "columns": [
               "title",
@@ -6167,7 +6177,7 @@
         "ref": {
           "app": "build",
           "kind": "object",
-          "name": "build.organization"
+          "name": "crm.organization"
         },
         "contractVersion": 1,
         "sourceVersion": "1",
@@ -6175,18 +6185,18 @@
           {
             "app": "build",
             "kind": "object",
-            "name": "build.industry"
+            "name": "crm.industry"
           },
           {
             "app": "build",
             "kind": "object",
-            "name": "build.territory"
+            "name": "crm.territory"
           }
         ],
         "provides": [
           {
             "kind": "interface",
-            "name": "build.organization",
+            "name": "crm.organization",
             "inputs": {
               "type": ""
             },
@@ -6277,14 +6287,14 @@
             {
               "group": "Details",
               "name": "industry",
-              "ref": "build.industry",
+              "ref": "crm.industry",
               "title": "Industry",
               "type": "reference"
             },
             {
               "group": "Details",
               "name": "territory",
-              "ref": "build.territory",
+              "ref": "crm.territory",
               "title": "Territory",
               "type": "reference"
             },
@@ -6315,15 +6325,16 @@
             }
           ],
           "name": "organization",
+          "namespace": "crm",
           "plural": "Organizations",
           "schemaVersions": [
             {
               "family": 1,
-              "version": "schema.sha256.f9fc5493fe711869471b6e7cc2025f5e90c366285b703da317f7d8722a5cb02b"
+              "version": "schema.sha256.164e93d04edab558838850309316c9776b247fa1c8b5e27904307ba9eff5a03a"
             }
           ],
           "title": "Organization",
-          "type": "build.organization",
+          "type": "crm.organization",
           "view": {
             "columns": [
               "name",
@@ -6351,7 +6362,7 @@
         "ref": {
           "app": "build",
           "kind": "object",
-          "name": "build.territory"
+          "name": "crm.territory"
         },
         "contractVersion": 1,
         "sourceVersion": "1",
@@ -6359,7 +6370,7 @@
         "provides": [
           {
             "kind": "interface",
-            "name": "build.territory",
+            "name": "crm.territory",
             "inputs": {
               "type": ""
             },
@@ -6409,7 +6420,7 @@
             },
             {
               "name": "parent",
-              "ref": "build.territory",
+              "ref": "crm.territory",
               "title": "Parent territory",
               "type": "reference"
             },
@@ -6425,15 +6436,16 @@
             }
           ],
           "name": "territory",
+          "namespace": "crm",
           "plural": "Territories",
           "schemaVersions": [
             {
               "family": 1,
-              "version": "schema.sha256.34bb84fd28d967f3e0c2f8bbb6db5f5e6e04bb6ed7faa58663385bff9489de06"
+              "version": "schema.sha256.8cb6e434dc1a55aa049d5faba06e978bfe13e379b83a2a7189e6898ab2580628"
             }
           ],
           "title": "Territory",
-          "type": "build.territory",
+          "type": "crm.territory",
           "view": {
             "columns": [
               "title",
@@ -6455,7 +6467,7 @@
         "ref": {
           "app": "build",
           "kind": "page",
-          "name": "crmcontact"
+          "name": "crm.crmcontact"
         },
         "contractVersion": 1,
         "sourceVersion": "1",
@@ -6463,17 +6475,17 @@
           {
             "app": "build",
             "kind": "action",
-            "name": "build.crmcontact.create"
+            "name": "crm.crmcontact.create"
           },
           {
             "app": "build",
             "kind": "action",
-            "name": "build.crmcontact.edit"
+            "name": "crm.crmcontact.edit"
           },
           {
             "app": "build",
             "kind": "object",
-            "name": "build.crmcontact"
+            "name": "crm.crmcontact"
           }
         ],
         "provides": [],
@@ -6484,12 +6496,12 @@
                 {
                   "app": "build",
                   "kind": "action",
-                  "name": "build.crmcontact.create"
+                  "name": "crm.crmcontact.create"
                 },
                 {
                   "app": "build",
                   "kind": "action",
-                  "name": "build.crmcontact.edit"
+                  "name": "crm.crmcontact.edit"
                 }
               ],
               "binding": "page",
@@ -6539,12 +6551,12 @@
                     "name": "phone"
                   }
                 ],
-                "type": "build.crmcontact"
+                "type": "crm.crmcontact"
               },
               "object": {
                 "app": "build",
                 "kind": "object",
-                "name": "build.crmcontact"
+                "name": "crm.crmcontact"
               },
               "owner": "binding:list",
               "ports": {
@@ -6615,12 +6627,12 @@
                     "name": "address"
                   }
                 ],
-                "type": "build.crmcontact"
+                "type": "crm.crmcontact"
               },
               "object": {
                 "app": "build",
                 "kind": "object",
-                "name": "build.crmcontact"
+                "name": "crm.crmcontact"
               },
               "owner": "binding:detail",
               "ports": {
@@ -6631,11 +6643,11 @@
           ],
           "format": 4,
           "inputSchema": {},
-          "name": "crmcontact",
+          "name": "crm.crmcontact",
           "object": {
             "app": "build",
             "kind": "object",
-            "name": "build.crmcontact"
+            "name": "crm.crmcontact"
           },
           "scopeVisibility": {
             "owners": {
@@ -6692,7 +6704,7 @@
         "ref": {
           "app": "build",
           "kind": "page",
-          "name": "crmtask"
+          "name": "crm.crmtask"
         },
         "contractVersion": 1,
         "sourceVersion": "1",
@@ -6700,17 +6712,17 @@
           {
             "app": "build",
             "kind": "action",
-            "name": "build.crmtask.create"
+            "name": "crm.crmtask.create"
           },
           {
             "app": "build",
             "kind": "action",
-            "name": "build.crmtask.edit"
+            "name": "crm.crmtask.edit"
           },
           {
             "app": "build",
             "kind": "object",
-            "name": "build.crmtask"
+            "name": "crm.crmtask"
           }
         ],
         "provides": [],
@@ -6721,12 +6733,12 @@
                 {
                   "app": "build",
                   "kind": "action",
-                  "name": "build.crmtask.create"
+                  "name": "crm.crmtask.create"
                 },
                 {
                   "app": "build",
                   "kind": "action",
-                  "name": "build.crmtask.edit"
+                  "name": "crm.crmtask.edit"
                 }
               ],
               "binding": "page",
@@ -6782,12 +6794,12 @@
                     "name": "state"
                   }
                 ],
-                "type": "build.crmtask"
+                "type": "crm.crmtask"
               },
               "object": {
                 "app": "build",
                 "kind": "object",
-                "name": "build.crmtask"
+                "name": "crm.crmtask"
               },
               "owner": "binding:list",
               "ports": {
@@ -6870,12 +6882,12 @@
                     "name": "state"
                   }
                 ],
-                "type": "build.crmtask"
+                "type": "crm.crmtask"
               },
               "object": {
                 "app": "build",
                 "kind": "object",
-                "name": "build.crmtask"
+                "name": "crm.crmtask"
               },
               "owner": "binding:detail",
               "ports": {
@@ -6886,11 +6898,11 @@
           ],
           "format": 4,
           "inputSchema": {},
-          "name": "crmtask",
+          "name": "crm.crmtask",
           "object": {
             "app": "build",
             "kind": "object",
-            "name": "build.crmtask"
+            "name": "crm.crmtask"
           },
           "scopeVisibility": {
             "owners": {
@@ -6947,7 +6959,7 @@
         "ref": {
           "app": "build",
           "kind": "page",
-          "name": "deal"
+          "name": "crm.deal"
         },
         "contractVersion": 1,
         "sourceVersion": "1",
@@ -6955,17 +6967,17 @@
           {
             "app": "build",
             "kind": "action",
-            "name": "build.deal.create"
+            "name": "crm.deal.create"
           },
           {
             "app": "build",
             "kind": "action",
-            "name": "build.deal.edit"
+            "name": "crm.deal.edit"
           },
           {
             "app": "build",
             "kind": "object",
-            "name": "build.deal"
+            "name": "crm.deal"
           }
         ],
         "provides": [],
@@ -6976,12 +6988,12 @@
                 {
                   "app": "build",
                   "kind": "action",
-                  "name": "build.deal.create"
+                  "name": "crm.deal.create"
                 },
                 {
                   "app": "build",
                   "kind": "action",
-                  "name": "build.deal.edit"
+                  "name": "crm.deal.edit"
                 }
               ],
               "binding": "page",
@@ -7037,12 +7049,12 @@
                     "name": "state"
                   }
                 ],
-                "type": "build.deal"
+                "type": "crm.deal"
               },
               "object": {
                 "app": "build",
                 "kind": "object",
-                "name": "build.deal"
+                "name": "crm.deal"
               },
               "owner": "binding:list",
               "ports": {
@@ -7161,12 +7173,12 @@
                     "name": "state"
                   }
                 ],
-                "type": "build.deal"
+                "type": "crm.deal"
               },
               "object": {
                 "app": "build",
                 "kind": "object",
-                "name": "build.deal"
+                "name": "crm.deal"
               },
               "owner": "binding:detail",
               "ports": {
@@ -7177,11 +7189,11 @@
           ],
           "format": 4,
           "inputSchema": {},
-          "name": "deal",
+          "name": "crm.deal",
           "object": {
             "app": "build",
             "kind": "object",
-            "name": "build.deal"
+            "name": "crm.deal"
           },
           "scopeVisibility": {
             "owners": {
@@ -7238,7 +7250,7 @@
         "ref": {
           "app": "build",
           "kind": "page",
-          "name": "lead"
+          "name": "crm.lead"
         },
         "contractVersion": 1,
         "sourceVersion": "1",
@@ -7246,22 +7258,22 @@
           {
             "app": "build",
             "kind": "action",
-            "name": "build.lead.convert"
+            "name": "crm.lead.convert"
           },
           {
             "app": "build",
             "kind": "action",
-            "name": "build.lead.create"
+            "name": "crm.lead.create"
           },
           {
             "app": "build",
             "kind": "action",
-            "name": "build.lead.edit"
+            "name": "crm.lead.edit"
           },
           {
             "app": "build",
             "kind": "object",
-            "name": "build.lead"
+            "name": "crm.lead"
           }
         ],
         "provides": [],
@@ -7272,17 +7284,17 @@
                 {
                   "app": "build",
                   "kind": "action",
-                  "name": "build.lead.create"
+                  "name": "crm.lead.create"
                 },
                 {
                   "app": "build",
                   "kind": "action",
-                  "name": "build.lead.edit"
+                  "name": "crm.lead.edit"
                 },
                 {
                   "app": "build",
                   "kind": "action",
-                  "name": "build.lead.convert"
+                  "name": "crm.lead.convert"
                 }
               ],
               "binding": "page",
@@ -7338,12 +7350,12 @@
                     "name": "state"
                   }
                 ],
-                "type": "build.lead"
+                "type": "crm.lead"
               },
               "object": {
                 "app": "build",
                 "kind": "object",
-                "name": "build.lead"
+                "name": "crm.lead"
               },
               "owner": "binding:list",
               "ports": {
@@ -7474,12 +7486,12 @@
                     "name": "state"
                   }
                 ],
-                "type": "build.lead"
+                "type": "crm.lead"
               },
               "object": {
                 "app": "build",
                 "kind": "object",
-                "name": "build.lead"
+                "name": "crm.lead"
               },
               "owner": "binding:detail",
               "ports": {
@@ -7490,11 +7502,11 @@
           ],
           "format": 4,
           "inputSchema": {},
-          "name": "lead",
+          "name": "crm.lead",
           "object": {
             "app": "build",
             "kind": "object",
-            "name": "build.lead"
+            "name": "crm.lead"
           },
           "scopeVisibility": {
             "owners": {
@@ -7551,7 +7563,7 @@
         "ref": {
           "app": "build",
           "kind": "page",
-          "name": "note"
+          "name": "crm.note"
         },
         "contractVersion": 1,
         "sourceVersion": "1",
@@ -7559,17 +7571,17 @@
           {
             "app": "build",
             "kind": "action",
-            "name": "build.note.create"
+            "name": "crm.note.create"
           },
           {
             "app": "build",
             "kind": "action",
-            "name": "build.note.edit"
+            "name": "crm.note.edit"
           },
           {
             "app": "build",
             "kind": "object",
-            "name": "build.note"
+            "name": "crm.note"
           }
         ],
         "provides": [],
@@ -7580,12 +7592,12 @@
                 {
                   "app": "build",
                   "kind": "action",
-                  "name": "build.note.create"
+                  "name": "crm.note.create"
                 },
                 {
                   "app": "build",
                   "kind": "action",
-                  "name": "build.note.edit"
+                  "name": "crm.note.edit"
                 }
               ],
               "binding": "page",
@@ -7635,12 +7647,12 @@
                     "name": "deal"
                   }
                 ],
-                "type": "build.note"
+                "type": "crm.note"
               },
               "object": {
                 "app": "build",
                 "kind": "object",
-                "name": "build.note"
+                "name": "crm.note"
               },
               "owner": "binding:list",
               "ports": {
@@ -7687,12 +7699,12 @@
                     "name": "pinned"
                   }
                 ],
-                "type": "build.note"
+                "type": "crm.note"
               },
               "object": {
                 "app": "build",
                 "kind": "object",
-                "name": "build.note"
+                "name": "crm.note"
               },
               "owner": "binding:detail",
               "ports": {
@@ -7703,11 +7715,11 @@
           ],
           "format": 4,
           "inputSchema": {},
-          "name": "note",
+          "name": "crm.note",
           "object": {
             "app": "build",
             "kind": "object",
-            "name": "build.note"
+            "name": "crm.note"
           },
           "scopeVisibility": {
             "owners": {
@@ -7764,7 +7776,7 @@
         "ref": {
           "app": "build",
           "kind": "page",
-          "name": "organization"
+          "name": "crm.organization"
         },
         "contractVersion": 1,
         "sourceVersion": "1",
@@ -7772,17 +7784,17 @@
           {
             "app": "build",
             "kind": "action",
-            "name": "build.organization.create"
+            "name": "crm.organization.create"
           },
           {
             "app": "build",
             "kind": "action",
-            "name": "build.organization.edit"
+            "name": "crm.organization.edit"
           },
           {
             "app": "build",
             "kind": "object",
-            "name": "build.organization"
+            "name": "crm.organization"
           }
         ],
         "provides": [],
@@ -7793,12 +7805,12 @@
                 {
                   "app": "build",
                   "kind": "action",
-                  "name": "build.organization.create"
+                  "name": "crm.organization.create"
                 },
                 {
                   "app": "build",
                   "kind": "action",
-                  "name": "build.organization.edit"
+                  "name": "crm.organization.edit"
                 }
               ],
               "binding": "page",
@@ -7848,12 +7860,12 @@
                     "name": "territory"
                   }
                 ],
-                "type": "build.organization"
+                "type": "crm.organization"
               },
               "object": {
                 "app": "build",
                 "kind": "object",
-                "name": "build.organization"
+                "name": "crm.organization"
               },
               "owner": "binding:list",
               "ports": {
@@ -7918,12 +7930,12 @@
                     "name": "description"
                   }
                 ],
-                "type": "build.organization"
+                "type": "crm.organization"
               },
               "object": {
                 "app": "build",
                 "kind": "object",
-                "name": "build.organization"
+                "name": "crm.organization"
               },
               "owner": "binding:detail",
               "ports": {
@@ -7934,11 +7946,11 @@
           ],
           "format": 4,
           "inputSchema": {},
-          "name": "organization",
+          "name": "crm.organization",
           "object": {
             "app": "build",
             "kind": "object",
-            "name": "build.organization"
+            "name": "crm.organization"
           },
           "scopeVisibility": {
             "owners": {

@@ -10,7 +10,7 @@
     },
     {
       "name": "parent",
-      "ref": "build.territory",
+      "ref": "crm.territory",
       "title": "Parent territory",
       "type": "reference"
     },
@@ -26,15 +26,16 @@
     }
   ],
   "name": "territory",
+  "namespace": "crm",
   "plural": "Territories",
   "schemaVersions": [
     {
       "family": 1,
-      "version": "schema.sha256.34bb84fd28d967f3e0c2f8bbb6db5f5e6e04bb6ed7faa58663385bff9489de06"
+      "version": "schema.sha256.8cb6e434dc1a55aa049d5faba06e978bfe13e379b83a2a7189e6898ab2580628"
     }
   ],
   "title": "Territory",
-  "type": "build.territory",
+  "type": "crm.territory",
   "view": {
     "columns": [
       "title",

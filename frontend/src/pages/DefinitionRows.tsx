@@ -68,7 +68,7 @@ export function DefinitionRows({ described, source, entities, catalog, id, revis
     const action = edit?.payload.find((parameter) => parameter.name === slot);
     return (
       <DefinitionTable key={slot} slot={slot} field={field} rows={rowsOf(source, slot)} states={states} entities={entities}
-        subject={`build.${source.name}`}
+        subject={`${String(source.namespace || "build")}.${source.name}`}
         bound={slot === "actions" && bound}
         catalog={catalog}
         objectId={id}

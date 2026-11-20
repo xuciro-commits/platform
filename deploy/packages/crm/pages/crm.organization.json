@@ -5,12 +5,12 @@
         {
           "app": "build",
           "kind": "action",
-          "name": "build.note.create"
+          "name": "crm.organization.create"
         },
         {
           "app": "build",
           "kind": "action",
-          "name": "build.note.edit"
+          "name": "crm.organization.edit"
         }
       ],
       "binding": "page",
@@ -31,16 +31,16 @@
     {
       "fields": [
         {
-          "name": "title"
+          "name": "name"
         },
         {
-          "name": "content"
+          "name": "website"
         },
         {
-          "name": "lead"
+          "name": "industry"
         },
         {
-          "name": "deal"
+          "name": "territory"
         }
       ],
       "id": "list",
@@ -48,24 +48,24 @@
       "model": {
         "fields": [
           {
-            "name": "title"
+            "name": "name"
           },
           {
-            "name": "content"
+            "name": "website"
           },
           {
-            "name": "lead"
+            "name": "industry"
           },
           {
-            "name": "deal"
+            "name": "territory"
           }
         ],
-        "type": "build.note"
+        "type": "crm.organization"
       },
       "object": {
         "app": "build",
         "kind": "object",
-        "name": "build.note"
+        "name": "crm.organization"
       },
       "owner": "binding:list",
       "ports": {
@@ -77,19 +77,28 @@
     {
       "fields": [
         {
-          "name": "title"
+          "name": "name"
         },
         {
-          "name": "content"
+          "name": "website"
         },
         {
-          "name": "lead"
+          "name": "industry"
         },
         {
-          "name": "deal"
+          "name": "territory"
         },
         {
-          "name": "pinned"
+          "name": "employees"
+        },
+        {
+          "name": "revenue"
+        },
+        {
+          "name": "address"
+        },
+        {
+          "name": "description"
         }
       ],
       "id": "detail",
@@ -97,27 +106,36 @@
       "model": {
         "fields": [
           {
-            "name": "title"
+            "name": "name"
           },
           {
-            "name": "content"
+            "name": "website"
           },
           {
-            "name": "lead"
+            "name": "industry"
           },
           {
-            "name": "deal"
+            "name": "territory"
           },
           {
-            "name": "pinned"
+            "name": "employees"
+          },
+          {
+            "name": "revenue"
+          },
+          {
+            "name": "address"
+          },
+          {
+            "name": "description"
           }
         ],
-        "type": "build.note"
+        "type": "crm.organization"
       },
       "object": {
         "app": "build",
         "kind": "object",
-        "name": "build.note"
+        "name": "crm.organization"
       },
       "owner": "binding:detail",
       "ports": {
@@ -128,11 +146,11 @@
   ],
   "format": 4,
   "inputSchema": {},
-  "name": "note",
+  "name": "crm.organization",
   "object": {
     "app": "build",
     "kind": "object",
-    "name": "build.note"
+    "name": "crm.organization"
   },
   "scopeVisibility": {
     "owners": {
@@ -159,7 +177,7 @@
       }
     ]
   },
-  "title": "Notes",
+  "title": "Organizations",
   "widgetSpec": {
     "body": {
       "document": null,

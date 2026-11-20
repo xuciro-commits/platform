@@ -148,6 +148,9 @@ func (w Workspace) RID(typ, id string, spec map[string]json.RawMessage) string {
 	if json.Unmarshal(spec["name"], &named) == nil && named != "" {
 		name = named
 	}
+	if namespace := ""; json.Unmarshal(spec["namespace"], &namespace) == nil && namespace != "" {
+		name = namespace + "." + name
+	}
 	ref, err := build.BranchResource(typ, name)
 	if err != nil {
 		return ""
@@ -294,6 +297,16 @@ func (w Workspace) PrepareSave(m platform.Member, id, typ, draft string, request
 			if !fields[name] && !(typ == protocol.CodeType && name == CodeBuildKey) {
 				return SavePlan{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "{field} is not an authored field of {type}", name, typ)
 			}
+		}
+		if current.Exists {
+			var main map[string]json.RawMessage
+			_ = json.Unmarshal(current.Spec, &main)
+			if namespace := main["namespace"]; spec["namespace"] == nil && namespace != nil {
+				spec["namespace"] = namespace
+			} else if spec["namespace"] != nil && !SameJSON(namespace, spec["namespace"]) {
+				return SavePlan{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "A resource API name is immutable")
+			}
+			request.Spec, _ = json.Marshal(spec)
 		}
 		if typ == protocol.CodeType {
 			delete(spec, CodeBuildKey)

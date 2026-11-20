@@ -33,8 +33,8 @@ func TestInvariantK1ReplayIsByteIdentical(t *testing.T) {
 	live.accept(t, "build.object.create", build.ObjectType, "OBJ2", invariantObject("beta", "Beta"))
 	live.accept(t, "build.object.edit", build.ObjectType, "OBJ1", invariantObject("alpha", "Alpha, revised"))
 	live.accept(t, "build.object.publish", build.ObjectType, "OBJ1", map[string]any{})
-	live.accept(t, "build.alpha.create", "build.alpha", "A1", map[string]any{"note": "first"})
-	live.accept(t, "build.alpha.create", "build.alpha", "A2", map[string]any{"note": "second"})
+	live.accept(t, "invariantproject.alpha.create", "invariantproject.alpha", "A1", map[string]any{"note": "first"})
+	live.accept(t, "invariantproject.alpha.create", "invariantproject.alpha", "A2", map[string]any{"note": "second"})
 	stale := live.submission("build.object.edit", build.ObjectType, "OBJ2", invariantObject("beta", "Beta, stale"))
 	zero := uint32(0)
 	stale.ExpectedRevision = &zero
@@ -45,7 +45,7 @@ func TestInvariantK1ReplayIsByteIdentical(t *testing.T) {
 		t.Fatalf("the journal holds %d entries; want the project fixture, 6 accepted results and 1 sealed refusal", len(live.entries))
 	}
 	want := live.recordImage(t)
-	for _, typ := range []string{build.ObjectType, "build.alpha"} {
+	for _, typ := range []string{build.ObjectType, "invariantproject.alpha"} {
 		if len(want[typ]) == 0 {
 			t.Fatalf("the live record store has no %s rows", typ)
 		}
@@ -458,7 +458,7 @@ func TestInvariantK5MarkingsPropagateThroughSourcesAndPipelines(t *testing.T) {
 			}
 			for id, want := range map[string]string{
 				"connection:CONNECTION": "confidential", "source:SOURCE": "confidential", "dataset:INPUT": "confidential",
-				"dataset:OTHER": phase.other, "pipeline:PIPELINE": phase.downstream, "dataset:OUTPUT": phase.downstream, "object:build.alpha": phase.downstream,
+				"dataset:OTHER": phase.other, "pipeline:PIPELINE": phase.downstream, "dataset:OUTPUT": phase.downstream, "object:invariantproject.alpha": phase.downstream,
 			} {
 				if node, ok := nodes[id]; !ok || node.Effective != want {
 					t.Fatalf("lineage node %s: %+v; want effective marking %s", id, node, want)
@@ -469,11 +469,11 @@ func TestInvariantK5MarkingsPropagateThroughSourcesAndPipelines(t *testing.T) {
 					t.Fatalf("%s has declared marking %q; want internal so propagation is required", id, nodes[id].Declared)
 				}
 			}
-			if nodes["object:build.alpha"].Declared != "" || nodes["pipeline:PIPELINE"].Declared != "" {
+			if nodes["object:invariantproject.alpha"].Declared != "" || nodes["pipeline:PIPELINE"].Declared != "" {
 				t.Fatal("the object and pipeline must inherit their effective markings without declaring one")
 			}
 			index := live.markingsIn(live.Projection, false)
-			if got := index.Type("build.alpha"); got != phase.downstream {
+			if got := index.Type("invariantproject.alpha"); got != phase.downstream {
 				t.Fatalf("object marking index: %q; want %q", got, phase.downstream)
 			}
 			for id, want := range map[string]string{"INPUT": "confidential", "OTHER": phase.other, "OUTPUT": phase.downstream} {

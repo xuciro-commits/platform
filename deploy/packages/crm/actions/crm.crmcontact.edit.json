@@ -1,14 +1,12 @@
 {
   "action": {
     "capability": "crmcontact",
-    "description": "Create a crm contact.",
-    "new": true,
+    "description": "Change fields of a crm contact; fields left out keep their value.",
     "payload": [
       {
         "description": "Full name",
         "group": "Contact",
         "name": "fullname",
-        "required": true,
         "type": "string"
       },
       {
@@ -68,18 +66,18 @@
         "type": "string"
       }
     ],
-    "schema": "build.crmcontact.create",
+    "schema": "crm.crmcontact.edit",
     "schemaVersion": {
       "family": 1,
-      "version": "schema.sha256.33882c5e012f37d64d17fc4bce185ac5f2c43b24aa2aee051579413cd3606739"
+      "version": "schema.sha256.9e00c5ca6b776c5a096fb9054a37a1d4638eea0bf861d9a84eae8c70def9f8a7"
     },
-    "target": "build.crmcontact",
-    "title": "Create crm contact"
+    "target": "crm.crmcontact",
+    "title": "Edit crm contact"
   },
   "roles": [
     "builder",
     "user"
   ],
-  "schema": "build.crmcontact.create",
-  "target": "build.crmcontact"
+  "schema": "crm.crmcontact.edit",
+  "target": "crm.crmcontact"
 }

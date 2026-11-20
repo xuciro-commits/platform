@@ -25,7 +25,7 @@ func PublishActionType(c platform.Caller, action *ActionType, bind func(platform
 	if err != nil {
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, err.Error())
 	}
-	index := slices.IndexFunc(objects, func(object Object) bool { return AppID+"."+object.Name == action.Object && !object.Archived })
+	index := slices.IndexFunc(objects, func(object Object) bool { return object.Type() == action.Object && !object.Archived })
 	if index < 0 {
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Choose an existing object type")
 	}
@@ -72,7 +72,7 @@ func ActionTypeClosure(c platform.Caller, id string, _ platform.Member) (publica
 	if err != nil {
 		return closure, err
 	}
-	i := slices.IndexFunc(objects, func(object Object) bool { return AppID+"."+object.Name == action.Object && !object.Archived })
+	i := slices.IndexFunc(objects, func(object Object) bool { return object.Type() == action.Object && !object.Archived })
 	if i < 0 {
 		return closure, fmt.Errorf("action type %s has no target object", id)
 	}
@@ -107,7 +107,7 @@ func FreezeActionTypes(c platform.Caller, _ string, asset platform.ReleaseAsset,
 	legacyBindings := len(bindings) == 0
 	if len(bindings) == 0 {
 		for _, definition := range frozen.Actions {
-			name := AppID + "." + frozen.Name + "." + definition.Name
+			name := frozen.Type() + "." + definition.Name
 			index := slices.IndexFunc(all, func(action ActionType) bool { return action.Name == name })
 			if index >= 0 {
 				bindings = append(bindings, platform.AssetBinding{Ref: platform.AssetRef{App: AppID, Kind: platform.AssetAction, Name: name}, SourceVersion: strconv.Itoa(all[index].Version)})
@@ -122,13 +122,13 @@ func FreezeActionTypes(c platform.Caller, _ string, asset platform.ReleaseAsset,
 		if err != nil || version < 1 {
 			return publication.Frozen{}, fmt.Errorf("action type %s has no retained version %s", binding.Ref.Name, binding.SourceVersion)
 		}
-		definition := slices.IndexFunc(frozen.Actions, func(definition Action) bool { return AppID+"."+frozen.Name+"."+definition.Name == binding.Ref.Name })
+		definition := slices.IndexFunc(frozen.Actions, func(definition Action) bool { return frozen.Type()+"."+definition.Name == binding.Ref.Name })
 		if definition < 0 {
 			return publication.Frozen{}, fmt.Errorf("action type %s has no frozen definition", binding.Ref.Name)
 		}
 		index := slices.IndexFunc(all, func(action ActionType) bool { return action.Name == binding.Ref.Name })
 		if index < 0 {
-			fresh := ActionType{Record: platform.Record{ID: binding.Ref.Name}, Name: binding.Ref.Name, Object: AppID + "." + frozen.Name, Title: frozen.Actions[definition].Title, Definition: frozen.Actions[definition], State: "published", Version: 1,
+			fresh := ActionType{Record: platform.Record{ID: binding.Ref.Name}, Name: binding.Ref.Name, Object: frozen.Type(), Title: frozen.Actions[definition].Title, Definition: frozen.Actions[definition], State: "published", Version: 1,
 				Versions: []ActionTypeVersion{{Version: 1, Definition: frozen.Actions[definition]}}}
 			fresh.Published = fresh.Snapshot(1)
 			if err := add(fresh); err != nil {

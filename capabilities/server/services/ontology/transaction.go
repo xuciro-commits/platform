@@ -32,7 +32,7 @@ func checkTxnRef(ref platform.TxnRef, subject, row string, scope platform.RuleRe
 		return fmt.Errorf("record references cannot name a transaction action")
 	}
 	info, ok := lookup(ref.Type)
-	if !ok || info.App != app || !strings.HasPrefix(ref.Type, app+".") {
+	if !ok || info.App != app || platform.OwnerOfType(ref.Type) != app {
 		return fmt.Errorf("transaction target must belong to its authority")
 	}
 	if (ref.ID == "") == (ref.Via == "") {
@@ -102,7 +102,7 @@ func CheckTransactions(object Object, ctx TransactionContext, engines ...platfor
 	if err := checkRefusalCycles(object); err != nil {
 		return err
 	}
-	subject := ctx.App + "." + object.Name
+	subject := object.Type()
 	sequences := map[string]platform.Sequence{}
 	var ownInfo platform.RecordTypeInfo
 	var ownInfoErr error
@@ -353,7 +353,7 @@ func CheckTransactions(object Object, ctx TransactionContext, engines ...platfor
 					return fmt.Errorf("%s has an unsupported kind or payload", where)
 				}
 				info, ok := lookup(step.Target.Type)
-				if !ok || info.App != ctx.App || !strings.HasPrefix(info.Type, ctx.App+".") {
+				if !ok || info.App != ctx.App || platform.OwnerOfType(info.Type) != ctx.App {
 					return fmt.Errorf("%s needs its owner's object", where)
 				}
 				if step.Target.Type != subject {

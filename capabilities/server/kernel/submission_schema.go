@@ -88,9 +88,13 @@ func (s *Sequence) SchemaBinding(app platform.Service, sub *pb.Submission, conte
 			}
 			var object struct {
 				Name           string                   `json:"name"`
+				Namespace      string                   `json:"namespace"`
 				SchemaVersions []platform.SchemaVersion `json:"schemaVersions"`
 			}
-			if json.Unmarshal([]byte(metadata.Published), &object) != nil || "build."+object.Name != action.Target {
+			if object.Namespace == "" {
+				object.Namespace = "build"
+			}
+			if json.Unmarshal([]byte(metadata.Published), &object) != nil || object.Namespace+"."+object.Name != action.Target {
 				continue
 			}
 			if slices.Contains(object.SchemaVersions, *binding) && binding.Family == current.Family {

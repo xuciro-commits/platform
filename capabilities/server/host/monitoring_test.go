@@ -152,7 +152,7 @@ func TestInvariantK4MonitoringOwnerBoundaries(t *testing.T) {
 	admin, _ := live.Member("admin")
 	live.accept(t, "build.object.create", build.ObjectType, "OBJ1", invariantObject("alpha", "Alpha"))
 	live.accept(t, "build.object.publish", build.ObjectType, "OBJ1", map[string]any{})
-	live.accept(t, "build.alpha.create", "build.alpha", "A1", map[string]any{"note": "protected input"})
+	live.accept(t, "invariantproject.alpha.create", "invariantproject.alpha", "A1", map[string]any{"note": "protected input"})
 	live.accept(t, "build.dataset.create", dataowner.DatasetType, "DS1", map[string]any{"name": "input", "title": "Input"})
 	live.accept(t, "build.dataset.create", dataowner.DatasetType, "DS2", map[string]any{"name": "output", "title": "Output"})
 	live.accept(t, dataowner.SchemaDatasetLoad, dataowner.DatasetType, "DS1", map[string]any{"rows": []map[string]any{{"id": "A1", "note": "input"}}})
@@ -174,7 +174,7 @@ func TestInvariantK4MonitoringOwnerBoundaries(t *testing.T) {
 	if refusal := live.pipelineResult(live.member(t), pipeline, dataowner.PipelineRun{At: invariantClock, DefinitionVersion: pipeline.ExecutionVersion(), Quarantined: 1}, "finished", nil, invariantClock); refusal != nil {
 		t.Fatal(refusal)
 	}
-	live.accept(t, dataowner.SchemaDatasetProjected, dataowner.DatasetType, "DS1", map[string]any{"projection": dataowner.DatasetProjection{Object: "build.alpha", Version: 1, At: invariantClock, Rows: 1, Refused: 1}})
+	live.accept(t, dataowner.SchemaDatasetProjected, dataowner.DatasetType, "DS1", map[string]any{"projection": dataowner.DatasetProjection{Object: "invariantproject.alpha", Version: 1, At: invariantClock, Rows: 1, Refused: 1}})
 	live.accept(t, "build.code.create", runtimeprotocol.CodeType, "CODE1", map[string]any{"name": "algorithm", "title": "Algorithm", "language": "go", "source": "package main\nfunc main() {}", "input": platform.ValueSchema{Type: "string"}, "output": platform.ValueSchema{Type: "string"}, "roles": []string{build.Builder}, "limits": platform.OperationLimits{TimeoutMillis: 100, MemoryPages: 1, MaxInputBytes: 1024, MaxOutputBytes: 1024}})
 	live.accept(t, runtimeprotocol.SchemaCodeCompile, runtimeprotocol.CodeType, "CODE1", map[string]any{})
 	codeView, refusal := live.RecordOf(t.Context(), live.member(t), runtimeprotocol.CodeType, "CODE1", now)
@@ -199,7 +199,7 @@ func TestInvariantK4MonitoringOwnerBoundaries(t *testing.T) {
 		}
 		t.Fatal("the compilation effect disappeared")
 	}
-	call, refusal := live.InvokeOperation(live.member(t), platform.OperationRequest{App: "probe", Name: "echo", Key: "builder-call", Inputs: platform.Raw("hello"), Sources: []string{"build.alpha/A1"}}, invariantClock.Add(2*time.Second))
+	call, refusal := live.InvokeOperation(live.member(t), platform.OperationRequest{App: "probe", Name: "echo", Key: "builder-call", Inputs: platform.Raw("hello"), Sources: []string{"invariantproject.alpha/A1"}}, invariantClock.Add(2*time.Second))
 	if refusal != nil {
 		t.Fatal(refusal)
 	}
@@ -217,8 +217,8 @@ func TestInvariantK4MonitoringOwnerBoundaries(t *testing.T) {
 	}
 	live.Lane.Lock()
 	live.outbound.Add(trace.SpanContext{},
-		platform.Effect{ID: "ordinary-delivery", Endpoint: "webhook", Event: "probe/notice", Target: "build.alpha/A1", At: invariantClock, State: "failed", Body: "hidden payload", Error: "hidden failure"},
-		platform.Effect{ID: "writeback-delivery", App: build.ID, Endpoint: dataowner.WritebackEndpoint + "sample", Event: "writeback/sample", Target: "build.alpha/A1", At: invariantClock, Last: invariantClock, State: "rejected", Body: "hidden payload", Error: "hidden failure"},
+		platform.Effect{ID: "ordinary-delivery", Endpoint: "webhook", Event: "probe/notice", Target: "invariantproject.alpha/A1", At: invariantClock, State: "failed", Body: "hidden payload", Error: "hidden failure"},
+		platform.Effect{ID: "writeback-delivery", App: build.ID, Endpoint: dataowner.WritebackEndpoint + "sample", Event: "writeback/sample", Target: "invariantproject.alpha/A1", At: invariantClock, Last: invariantClock, State: "rejected", Body: "hidden payload", Error: "hidden failure"},
 		platform.Effect{ID: "unknown-delivery", Endpoint: "webhook", Event: "probe/unknown", At: invariantClock, State: "unknown"},
 		platform.Effect{ID: "dispatch-delivery", App: build.ID, Endpoint: dataowner.WritebackEndpoint + "dispatch", Event: build.ID + "/dispatch", At: invariantClock, State: "failed"})
 	live.operationsChanged()
@@ -338,7 +338,7 @@ func TestInvariantK4MonitoringOwnerBoundaries(t *testing.T) {
 				t.Fatalf("missing original recovery descriptor for %s: %+v", id, run)
 			}
 		}
-		if find(page, "effect:dispatch-delivery").Retryable || find(page, "effect:unknown-delivery").Retryable || find(page, "projection:DS1:build.alpha").Retryable {
+		if find(page, "effect:dispatch-delivery").Retryable || find(page, "effect:unknown-delivery").Retryable || find(page, "projection:DS1:invariantproject.alpha").Retryable {
 			t.Fatal("an owner-specific or ambiguous outcome advertises generic retry")
 		}
 		scoped := read("scoped", "?limit=100")

@@ -2,12 +2,12 @@
   "icon": "users",
   "name": "crm",
   "pages": [
-    "lead",
-    "deal",
-    "organization",
-    "crmcontact",
-    "crmtask",
-    "note"
+    "crm.lead",
+    "crm.deal",
+    "crm.organization",
+    "crm.crmcontact",
+    "crm.crmtask",
+    "crm.note"
   ],
   "title": "CRM"
 }

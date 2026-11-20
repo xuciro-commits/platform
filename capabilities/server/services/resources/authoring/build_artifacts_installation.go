@@ -8,6 +8,7 @@ import (
 	"platformserver/services/ontology"
 	"reflect"
 	"slices"
+	"strings"
 
 	"platformserver/kernel/records"
 	"platformserver/platform"
@@ -34,12 +35,13 @@ func (b *Build) DecodeAssetInstallation(schema string, image json.RawMessage) (p
 	}
 	var record struct {
 		platform.Record
-		Name string `json:"name"`
+		Name      string `json:"name"`
+		Namespace string `json:"namespace"`
 	}
 	if !descriptor.acceptedPublication || json.Unmarshal(image, &record) != nil || record.ID == "" {
 		return protocol.AssetInstallation{}, fmt.Errorf("invalid release publication row")
 	}
-	ref, err := draftAssetRef(descriptor.typ, record.Name)
+	ref, err := draftAssetRef(descriptor.typ, qualified(record.Namespace, record.Name))
 	if err != nil {
 		return protocol.AssetInstallation{}, err
 	}
@@ -93,7 +95,7 @@ func draftAssetRef(typ, name string) (platform.AssetRef, error) {
 	if !ok {
 		return platform.AssetRef{}, fmt.Errorf("unknown native release draft %s", typ)
 	}
-	if descriptor.qualifiedName {
+	if descriptor.qualifiedName && !strings.Contains(name, ".") {
 		name = TypeOf(name)
 	}
 	return platform.AssetRef{App: descriptor.app, Kind: descriptor.kind, Name: name}, nil
@@ -147,7 +149,7 @@ func (b *Build) BeginAssetBootstrap(assets []platform.ReleaseAsset) (func(), err
 			continue
 		}
 		var object ontology.Object
-		if err := json.Unmarshal(asset.Body, &object); err != nil || TypeOf(object.Name) != asset.Ref.Name {
+		if err := json.Unmarshal(asset.Body, &object); err != nil || object.Type() != asset.Ref.Name {
 			return nil, fmt.Errorf("invalid bootstrap object shape %s", asset.Ref)
 		}
 		shape, err := records.Describe(ID, Entity(object), func(reflect.Type) string { return "" })

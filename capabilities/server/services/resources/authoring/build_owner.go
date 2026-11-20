@@ -424,7 +424,7 @@ func (b *Build) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb.
 		if json.Unmarshal(s.GetPayload(), &p) == nil {
 			var err error
 			if p.Name != nil {
-				err = b.checkName(*p.Name, s.GetTarget().GetId())
+				err = b.checkName("", *p.Name, s.GetTarget().GetId())
 			}
 			if err == nil && p.Fields != nil {
 				err = ontology.CheckPropertyFields(*p.Fields, ID, b.host)
@@ -517,7 +517,7 @@ func (b *Build) CandidateActions(asset platform.ReleaseAsset) ([]platform.Action
 		return actions, nil
 	}
 	var object ontology.Object
-	if asset.Ref.App != ID || asset.Ref.Kind != platform.AssetObject || json.Unmarshal(asset.Body, &object) != nil || TypeOf(object.Name) != asset.Ref.Name {
+	if asset.Ref.App != ID || asset.Ref.Kind != platform.AssetObject || json.Unmarshal(asset.Body, &object) != nil || object.Type() != asset.Ref.Name {
 		return nil, fmt.Errorf("invalid construction object descriptor")
 	}
 	return objectActions(object, Entity(object)), nil
@@ -536,6 +536,23 @@ const (
 )
 
 func TypeOf(name string) string { return ID + "." + name }
+
+func qualified(namespace, name string) string {
+	if namespace == "" || name == "" {
+		return name
+	}
+	return namespace + "." + name
+}
+
+func qualifiedType(namespace, name string) string {
+	return ontology.Object{Namespace: namespace, Name: name}.Type()
+}
+
+func namespaceOf(image []byte) string {
+	var meta struct{ Namespace string }
+	_ = json.Unmarshal(image, &meta)
+	return meta.Namespace
+}
 
 type ConstructionDrafts interface {
 	platform.Service

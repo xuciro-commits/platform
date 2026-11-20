@@ -69,7 +69,7 @@ async function members(session, sample) {
 async function records(session, sample, installed) {
   let written = 0;
   for (const type of (sample.types ?? []).filter((each) => !each.draft)) {
-    const full = `build.${type.name}`;
+    const full = `${sample.project.name}.${type.name}`;
     const authority = session.authorityFor(full);
     if (!authority && installed && !installed.has(full)) continue;
     if (!authority) throw new Error(`${full}: no write authority`);

@@ -5,12 +5,17 @@
         {
           "app": "build",
           "kind": "action",
-          "name": "build.crmcontact.create"
+          "name": "crm.lead.create"
         },
         {
           "app": "build",
           "kind": "action",
-          "name": "build.crmcontact.edit"
+          "name": "crm.lead.edit"
+        },
+        {
+          "app": "build",
+          "kind": "action",
+          "name": "crm.lead.convert"
         }
       ],
       "binding": "page",
@@ -34,13 +39,16 @@
           "name": "fullname"
         },
         {
+          "name": "organizationname"
+        },
+        {
           "name": "email"
         },
         {
           "name": "mobile"
         },
         {
-          "name": "phone"
+          "name": "state"
         }
       ],
       "id": "list",
@@ -51,21 +59,24 @@
             "name": "fullname"
           },
           {
+            "name": "organizationname"
+          },
+          {
             "name": "email"
           },
           {
             "name": "mobile"
           },
           {
-            "name": "phone"
+            "name": "state"
           }
         ],
-        "type": "build.crmcontact"
+        "type": "crm.lead"
       },
       "object": {
         "app": "build",
         "kind": "object",
-        "name": "build.crmcontact"
+        "name": "crm.lead"
       },
       "owner": "binding:list",
       "ports": {
@@ -80,6 +91,9 @@
           "name": "fullname"
         },
         {
+          "name": "organizationname"
+        },
+        {
           "name": "email"
         },
         {
@@ -89,19 +103,46 @@
           "name": "phone"
         },
         {
-          "name": "organization"
+          "name": "website"
         },
         {
-          "name": "designation"
+          "name": "jobtitle"
         },
         {
-          "name": "salutation"
+          "name": "source"
         },
         {
-          "name": "gender"
+          "name": "industry"
         },
         {
-          "name": "address"
+          "name": "territory"
+        },
+        {
+          "name": "employees"
+        },
+        {
+          "name": "annualrevenue"
+        },
+        {
+          "name": "converted"
+        },
+        {
+          "name": "deal"
+        },
+        {
+          "name": "lostreason"
+        },
+        {
+          "name": "lostnotes"
+        },
+        {
+          "name": "status"
+        },
+        {
+          "name": "owner"
+        },
+        {
+          "name": "state"
         }
       ],
       "id": "detail",
@@ -110,6 +151,9 @@
         "fields": [
           {
             "name": "fullname"
+          },
+          {
+            "name": "organizationname"
           },
           {
             "name": "email"
@@ -121,27 +165,54 @@
             "name": "phone"
           },
           {
-            "name": "organization"
+            "name": "website"
           },
           {
-            "name": "designation"
+            "name": "jobtitle"
           },
           {
-            "name": "salutation"
+            "name": "source"
           },
           {
-            "name": "gender"
+            "name": "industry"
           },
           {
-            "name": "address"
+            "name": "territory"
+          },
+          {
+            "name": "employees"
+          },
+          {
+            "name": "annualrevenue"
+          },
+          {
+            "name": "converted"
+          },
+          {
+            "name": "deal"
+          },
+          {
+            "name": "lostreason"
+          },
+          {
+            "name": "lostnotes"
+          },
+          {
+            "name": "status"
+          },
+          {
+            "name": "owner"
+          },
+          {
+            "name": "state"
           }
         ],
-        "type": "build.crmcontact"
+        "type": "crm.lead"
       },
       "object": {
         "app": "build",
         "kind": "object",
-        "name": "build.crmcontact"
+        "name": "crm.lead"
       },
       "owner": "binding:detail",
       "ports": {
@@ -152,11 +223,11 @@
   ],
   "format": 4,
   "inputSchema": {},
-  "name": "crmcontact",
+  "name": "crm.lead",
   "object": {
     "app": "build",
     "kind": "object",
-    "name": "build.crmcontact"
+    "name": "crm.lead"
   },
   "scopeVisibility": {
     "owners": {
@@ -183,7 +254,7 @@
       }
     ]
   },
-  "title": "CRM Contacts",
+  "title": "Leads",
   "widgetSpec": {
     "body": {
       "document": null,

@@ -20,7 +20,7 @@
       "inverse": "notes",
       "name": "lead",
       "oneOf": "Related to",
-      "ref": "build.lead",
+      "ref": "crm.lead",
       "title": "Lead",
       "type": "reference"
     },
@@ -29,7 +29,7 @@
       "inverse": "notes",
       "name": "deal",
       "oneOf": "Related to",
-      "ref": "build.deal",
+      "ref": "crm.deal",
       "title": "Deal",
       "type": "reference"
     },
@@ -41,15 +41,16 @@
     }
   ],
   "name": "note",
+  "namespace": "crm",
   "plural": "Notes",
   "schemaVersions": [
     {
       "family": 1,
-      "version": "schema.sha256.2bebed73edadce9b2379602689932badef9800b6efe6991e9680a47907340bed"
+      "version": "schema.sha256.ce0ceb6d14d4e5bbea604869b214069187d31d5852c2b29fdaa82434458fc4c0"
     }
   ],
   "title": "Note",
-  "type": "build.note",
+  "type": "crm.note",
   "view": {
     "columns": [
       "title",

@@ -38,7 +38,7 @@ func (e functionEnvironment) JointDeclaration(ref platform.AssetRef) (platform.R
 	return asset, ok
 }
 func (e functionEnvironment) DeclaresRole(role string) bool   { return e.b.declaresRole(role) }
-func (e functionEnvironment) CheckName(name, id string) error { return e.b.checkName(name, id) }
+func (e functionEnvironment) CheckName(name, id string) error { return e.b.checkName("", name, id) }
 func (e functionEnvironment) ConditionLookup(typ string) (platform.RecordTypeInfo, bool) {
 	return e.b.conditionLookup(typ)
 }

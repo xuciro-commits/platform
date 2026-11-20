@@ -76,7 +76,7 @@ func RefusalEscalations(events []RefusalEvent, at time.Time, exists func(string)
 		if fact.Escalation == nil || fact.Escalation.Check() != nil || fact.At.After(at) {
 			return
 		}
-		app, _, _ := strings.Cut(fact.Action, ".")
+		app := platform.OwnerOfType(fact.Action)
 		g := group{app: app, subject: fact.Subject, action: fact.Action, code: fact.Code, policy: *fact.Escalation}
 		identity := app + "/" + key + "/" + fact.Subject + "/" + fact.Action + "/" + fact.Code
 		if seen[identity] {

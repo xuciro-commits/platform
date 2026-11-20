@@ -121,18 +121,18 @@
         "type": "string"
       }
     ],
-    "schema": "build.lead.edit",
+    "schema": "crm.lead.edit",
     "schemaVersion": {
       "family": 2,
-      "version": "schema.sha256.927c56a7c766b9878c2029815594b39d9e56c51ede87e0a302290559fce1de75"
+      "version": "schema.sha256.83c0280f3b5a590c8ebc87d9daf22e7acd1162ec8919c3e4e967e034c2217058"
     },
-    "target": "build.lead",
+    "target": "crm.lead",
     "title": "Edit lead"
   },
   "roles": [
     "builder",
     "user"
   ],
-  "schema": "build.lead.edit",
-  "target": "build.lead"
+  "schema": "crm.lead.edit",
+  "target": "crm.lead"
 }

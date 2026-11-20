@@ -37,7 +37,7 @@ func TestInvariantK13ConsoleForksRetainMembersProfilesAndDelegations(t *testing.
 	}
 	live.accept(t, "build.object.create", build.ObjectType, "OBJECT", invariantObject("alpha", "Alpha"))
 	live.accept(t, "build.object.publish", build.ObjectType, "OBJECT", map[string]any{})
-	live.accept(t, "build.alpha.create", "build.alpha", "A1", map[string]any{"note": "retained"})
+	live.accept(t, "invariantproject.alpha.create", "invariantproject.alpha", "A1", map[string]any{"note": "retained"})
 	submit("admin", controlowner.SchemaProfileUpdate, controlowner.ProfileType, "member", map[string]any{"displayName": "Before"})
 	submit("departing", protocol.SchemaDelegate, controlowner.MemberType, "delegatee", map[string]any{"app": build.ID, "until": "2099-01-01"})
 	image := live.readImage.Load()
@@ -88,11 +88,11 @@ func TestInvariantK13ConsoleForksRetainMembersProfilesAndDelegations(t *testing.
 			t.Fatalf("source acceptance changed a retained identity: member=%+v departing=%+v delegatee=%+v", member, departing, delegatee)
 		}
 	}
-	page, refusal := right.Records(t.Context(), retainedMember, "build.alpha", platform.Query{Sort: []string{"id"}}, invariantClock)
+	page, refusal := right.Records(t.Context(), retainedMember, "invariantproject.alpha", platform.Query{Sort: []string{"id"}}, invariantClock)
 	if refusal != nil || page.Total != 1 {
 		t.Fatalf("retained authorization was lost: total=%d refusal=%v", page.Total, refusal)
 	}
-	if _, refusal := live.Records(t.Context(), retainedMember, "build.alpha", platform.Query{}, invariantClock); refusal == nil {
+	if _, refusal := live.Records(t.Context(), retainedMember, "invariantproject.alpha", platform.Query{}, invariantClock); refusal == nil {
 		t.Fatal("the current scope retained the revoked builder authorization")
 	}
 	current, _ := live.Member("member")
@@ -116,7 +116,7 @@ func TestInvariantK13DefinitionPlansFollowPublishedReadImages(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	request := live.submission("build.alpha.create", "build.alpha", "A1", map[string]any{"note": "before"})
+	request := live.submission("invariantproject.alpha.create", "invariantproject.alpha", "A1", map[string]any{"note": "before"})
 	plan, err := left.decisionDefinition(build.ID, request, "")
 	if err != nil || plan == nil || plan.DependenciesState != "closed" || len(plan.Dependencies) == 0 {
 		t.Fatalf("published action has no closed dependency plan: %+v, %v", plan, err)
@@ -149,7 +149,7 @@ func TestInvariantK13DefinitionPlansFollowPublishedReadImages(t *testing.T) {
 	if err != nil || updated == nil || updated.Closure == want.Closure || published.readScope.definitions == cache {
 		t.Fatalf("a publication reused the old execution plan: %+v, %v", updated, err)
 	}
-	rid := protocol.ResourceID(live.ID, platform.AssetRef{App: build.ID, Kind: platform.AssetObject, Name: "build.alpha"})
+	rid := protocol.ResourceID(live.ID, platform.AssetRef{App: build.ID, Kind: platform.AssetObject, Name: "invariantproject.alpha"})
 	live.accept(t, build.SchemaResourceMove, build.ResourceType, rid, map[string]any{"project": invariantProject, "folder": "PLANFOLDER"})
 	moved, err := live.readImage.Load().state.forkReadState(t.Context())
 	if err != nil {
@@ -201,22 +201,22 @@ func TestInvariantK13SQLRecordWindowsRespectVisibilityAndPrivateRows(t *testing.
 	live.accept(t, "build.object.create", build.ObjectType, "OBJECT", invariantObject("alpha", "Alpha"))
 	live.accept(t, "build.object.publish", build.ObjectType, "OBJECT", map[string]any{})
 	for _, row := range []struct{ id, note string }{{"A", "keep"}, {"B", "skip"}, {"C", "keep"}, {"D", "skip"}, {"E", "keep"}} {
-		live.accept(t, "build.alpha.create", "build.alpha", row.id, map[string]any{"note": row.note})
+		live.accept(t, "invariantproject.alpha.create", "invariantproject.alpha", row.id, map[string]any{"note": row.note})
 	}
-	live.accept(t, "build.alpha.archive", "build.alpha", "E", map[string]any{})
+	live.accept(t, "invariantproject.alpha.archive", "invariantproject.alpha", "E", map[string]any{})
 	memory := live.Projection.ForkRecords()
-	info := memory.Type("build.alpha").Info()
-	template := memory.Type("build.alpha").Rows().Get("A").Value.Interface()
-	reads := &sqlShapedReads{rows: map[string]map[string]persistence.StateCurrent{"build.alpha": {}}}
-	for id, row := range memory.Type("build.alpha").Rows().All() {
+	info := memory.Type("invariantproject.alpha").Info()
+	template := memory.Type("invariantproject.alpha").Rows().Get("A").Value.Interface()
+	reads := &sqlShapedReads{rows: map[string]map[string]persistence.StateCurrent{"invariantproject.alpha": {}}}
+	for id, row := range memory.Type("invariantproject.alpha").Rows().All() {
 		raw, err := row.Image()
 		if err != nil {
 			t.Fatal(err)
 		}
-		reads.rows["build.alpha"][id] = persistence.StateCurrent{Image: platform.Raw(records.Image{Type: "build.alpha", ID: id, Format: row.Format, Value: raw})}
+		reads.rows["invariantproject.alpha"][id] = persistence.StateCurrent{Image: platform.Raw(records.Image{Type: "invariantproject.alpha", ID: id, Format: row.Format, Value: raw})}
 	}
 	withSQLShapedReads(t, live, reads)
-	if memory.Type("build.alpha").Rows().Sourced() {
+	if memory.Type("invariantproject.alpha").Rows().Sourced() {
 		t.Fatal("the live SQL source changed the retained memory draft")
 	}
 	if _, err := live.Projection.Current().Open(t.Context()); err != nil {
@@ -230,17 +230,17 @@ func TestInvariantK13SQLRecordWindowsRespectVisibilityAndPrivateRows(t *testing.
 			value := records.Copy(info.Go, template)
 			records.Header(value).ID = id
 			value.FieldByIndex(note.Index).SetString("private")
-			store.Type("build.alpha").SetRow(id, &records.Row{Value: value})
-			store.TrackWrite("build.alpha/" + id)
+			store.Type("invariantproject.alpha").SetRow(id, &records.Row{Value: value})
+			store.TrackWrite("invariantproject.alpha/" + id)
 		}
-		store.Type("build.alpha").SetRow("C", nil)
-		store.TrackWrite("build.alpha/C")
+		store.Type("invariantproject.alpha").SetRow("C", nil)
+		store.TrackWrite("invariantproject.alpha/C")
 	}
 	read := func(store *records.Store, query platform.Query, visible func(reflect.Value) bool) ([]string, int) {
 		t.Helper()
 		store.Lock()
 		defer store.Unlock()
-		rows, total, refusal := store.Find(store.Type("build.alpha"), query, visible)
+		rows, total, refusal := store.Find(store.Type("invariantproject.alpha"), query, visible)
 		if refusal != nil {
 			t.Fatal(refusal)
 		}

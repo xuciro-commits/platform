@@ -20,7 +20,7 @@
       "inverse": "tasks",
       "name": "lead",
       "oneOf": "Related to",
-      "ref": "build.lead",
+      "ref": "crm.lead",
       "title": "Lead",
       "type": "reference"
     },
@@ -29,7 +29,7 @@
       "inverse": "tasks",
       "name": "deal",
       "oneOf": "Related to",
-      "ref": "build.deal",
+      "ref": "crm.deal",
       "title": "Deal",
       "type": "reference"
     },
@@ -181,11 +181,12 @@
     }
   ],
   "name": "crmtask",
+  "namespace": "crm",
   "plural": "Tasks",
   "schemaVersions": [
     {
       "family": 1,
-      "version": "schema.sha256.245fa8d0565429b6ce239d78d28b5290678dd03492d5a2df8e7ec055fed542a5"
+      "version": "schema.sha256.67567f58922f96dcd9c1aecb48a4065ee5d25e968888978060163bc9c7de5969"
     }
   ],
   "states": [
@@ -197,7 +198,7 @@
     }
   ],
   "title": "Task",
-  "type": "build.crmtask",
+  "type": "crm.crmtask",
   "view": {
     "columns": [
       "title",

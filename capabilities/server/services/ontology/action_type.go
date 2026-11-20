@@ -97,7 +97,7 @@ func BindActionTypes(object *Object, app string, available []ActionType) error {
 			return fmt.Errorf("Choose an action type owned by Build")
 		}
 		index := slices.IndexFunc(available, func(action ActionType) bool { return action.Name == binding.Ref.Name })
-		if index < 0 || available[index].Object != app+"."+object.Name {
+		if index < 0 || available[index].Object != object.Type() {
 			return fmt.Errorf("Action type %s is unavailable for this object", binding.Ref.Name)
 		}
 		if available[index].Archived {

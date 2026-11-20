@@ -17,9 +17,9 @@ func TestInvariantResourceOwnershipRehome(t *testing.T) {
 	live.accept(t, protocol.AppType+".create", protocol.AppType, "REHOMEPROJECT", map[string]any{"name": "rehomeproject", "title": "Rehome project"})
 	live.accept(t, "build.object.create", build.ObjectType, "OBJ1", invariantObject("rehomeobject", "Rehome object"))
 	live.accept(t, "build.object.publish", build.ObjectType, "OBJ1", map[string]any{})
-	live.accept(t, "build.rehomeobject.create", "build.rehomeobject", "ROW1", map[string]any{"note": "Keep my record"})
+	live.accept(t, "invariantproject.rehomeobject.create", "invariantproject.rehomeobject", "ROW1", map[string]any{"note": "Keep my record"})
 
-	ref := platform.AssetRef{App: build.ID, Kind: platform.AssetObject, Name: "build.rehomeobject"}
+	ref := platform.AssetRef{App: build.ID, Kind: platform.AssetObject, Name: "invariantproject.rehomeobject"}
 	before := resourceRecord(t, live, ref)
 	payload := map[string]any{"entries": []map[string]any{{
 		"id": before.ID, "project": "REHOMEPROJECT", "managedBy": "next.package", "version": before.Version,
@@ -46,7 +46,7 @@ func TestInvariantResourceOwnershipRehome(t *testing.T) {
 	if after.Project != "REHOMEPROJECT" || after.ManagedBy != "next.package" || after.Version != before.Version+1 {
 		t.Fatalf("rehome did not transfer ownership: %+v", after)
 	}
-	view, refusal := live.RecordOf(t.Context(), live.member(t), "build.rehomeobject", "ROW1", invariantClock)
+	view, refusal := live.RecordOf(t.Context(), live.member(t), "invariantproject.rehomeobject", "ROW1", invariantClock)
 	if refusal != nil || view.Record == nil {
 		t.Fatalf("rehome changed record access: %v", refusal)
 	}
@@ -56,7 +56,7 @@ func TestInvariantResourceOwnershipRehome(t *testing.T) {
 	if replayedResource.Project != after.Project || replayedResource.ManagedBy != after.ManagedBy {
 		t.Fatalf("replay did not preserve rehome: %+v", replayedResource)
 	}
-	if _, refusal := replayed.RecordOf(t.Context(), replayed.member(t), "build.rehomeobject", "ROW1", invariantClock); refusal != nil {
+	if _, refusal := replayed.RecordOf(t.Context(), replayed.member(t), "invariantproject.rehomeobject", "ROW1", invariantClock); refusal != nil {
 		t.Fatalf("replay changed the customer record: %v", refusal)
 	}
 }

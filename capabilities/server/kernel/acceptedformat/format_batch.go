@@ -96,7 +96,7 @@ func DecodeBatch(raw []byte) (Batch, *pb.ChangeRecord, error) {
 		if f.Level == "block" || !f.At.Equal(result.At) {
 			return result, nil, fmt.Errorf("accepted business evidence is not a successful branch")
 		}
-		owner, _, _ := strings.Cut(f.Action, ".")
+		owner := platform.OwnerOfType(f.Action)
 		if err := ValidateBusinessFact(owner, f); err != nil {
 			return result, nil, err
 		}

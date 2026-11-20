@@ -180,7 +180,7 @@ func ValidateSubmissionSchemaVersion(sub *pb.Submission, binding *platform.Schem
 }
 
 func ValidateBusinessFact(app string, f platform.BusinessRefusalFact) error {
-	if !slices.Contains([]string{"block", "flag", "route", "rejected"}, f.Level) || f.Code == "" || len(f.Code) > 64 || len(f.Message) > 1024 || f.Message == "" || f.Member == "" || f.At.IsZero() || !strings.HasPrefix(f.Subject, app+".") || !strings.Contains(f.Subject, "/") || !strings.HasPrefix(f.Action, app+".") || len(f.Subject) > 512 || len(f.Original) > 64<<10 || !json.Valid(f.Original) || len(f.Inputs) > 64 || len(f.Translations) > 1 {
+	if !slices.Contains([]string{"block", "flag", "route", "rejected"}, f.Level) || f.Code == "" || len(f.Code) > 64 || len(f.Message) > 1024 || f.Message == "" || f.Member == "" || f.At.IsZero() || platform.OwnerOfType(f.Subject) != app || !strings.Contains(f.Subject, "/") || platform.OwnerOfType(f.Action) != app || len(f.Subject) > 512 || len(f.Original) > 64<<10 || !json.Valid(f.Original) || len(f.Inputs) > 64 || len(f.Translations) > 1 {
 		return fmt.Errorf("invalid business refusal evidence")
 	}
 	for language, message := range f.Translations {
@@ -220,7 +220,7 @@ func ValidateTxnIterations(app string, iterations []platform.TxnIteration) error
 			return fmt.Errorf("legacy transaction iteration carries a decision identity")
 		}
 		hash, err := hex.DecodeString(iteration.Definition)
-		if err != nil || len(hash) != 32 || iteration.Step == "" || iteration.Set == "" || steps[key] || !strings.HasPrefix(iteration.Object, owner+".") {
+		if err != nil || len(hash) != 32 || iteration.Step == "" || iteration.Set == "" || steps[key] || platform.OwnerOfType(iteration.Object) != owner {
 			return fmt.Errorf("transaction iteration witness is invalid")
 		}
 		steps[key] = true

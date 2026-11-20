@@ -202,6 +202,7 @@ func (h ResourceBootstrap) Initialize() error {
 		var meta struct {
 			platform.Record
 			Name      string `json:"name"`
+			Namespace string `json:"namespace"`
 			Title     string `json:"title"`
 			Published string `json:"published"`
 			Kind      string `json:"kind"`
@@ -210,7 +211,7 @@ func (h ResourceBootstrap) Initialize() error {
 		if err := json.Unmarshal(raw, &meta); err != nil {
 			return err
 		}
-		ref, err := BranchResource(draft.Type, meta.Name)
+		ref, err := BranchResource(draft.Type, qualified(meta.Namespace, meta.Name))
 		if err != nil {
 			return err
 		}

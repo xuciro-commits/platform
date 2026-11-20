@@ -305,7 +305,7 @@ func (r Reader) Guard(input Input) Input {
 			fixed.Archived = item.Archived
 			input.Objects[i] = fixed
 		} else if item.Published != "" {
-			input.Opaque = append(input.Opaque, "object:"+lineageObjectType(item.Name))
+			input.Opaque = append(input.Opaque, "object:"+item.Type())
 		}
 	}
 	input.Evidence = lineageEvidence(input)

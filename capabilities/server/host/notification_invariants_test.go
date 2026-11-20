@@ -16,7 +16,7 @@ import (
 
 func TestInvariantK1NotificationCategoriesSurviveReplay(t *testing.T) {
 	const tenant = "invariant-notification-categories"
-	const target = "build.incident/INC-1"
+	const target = "invariantproject.incident/INC-1"
 	const follower = "auditor"
 	apps := func() []platform.Service {
 		return []platform.Service{activity.New(tenant, actions.NewAuthority), work.New(tenant, actions.NewAuthority)}
@@ -33,7 +33,7 @@ func TestInvariantK1NotificationCategoriesSurviveReplay(t *testing.T) {
 		"fields": []ontology.Field{{Name: "note", Type: "text", Title: "Note"}},
 	})
 	live.accept(t, "build.object.publish", build.ObjectType, "INCIDENT", nil)
-	live.accept(t, "build.incident.create", "build.incident", "INC-1", map[string]string{"note": "Open"})
+	live.accept(t, "invariantproject.incident.create", "invariantproject.incident", "INC-1", map[string]string{"note": "Open"})
 	submit := func(who, app, schema, typ, id string, payload map[string]string) {
 		t.Helper()
 		member, _ := live.Member(who)
@@ -46,7 +46,7 @@ func TestInvariantK1NotificationCategoriesSurviveReplay(t *testing.T) {
 	submit(follower, activity.ID, activity.SchemaFollow, activity.FollowType, protocol.FollowID(follower, target), map[string]string{"target": target})
 	submit("builder", activity.ID, activity.SchemaComment, activity.CommentType, "COMMENT-1", map[string]string{"target": target, "text": "Please review @other today"})
 	submit("builder", work.ID, work.SchemaTaskCreate, work.TaskType, "TASK-1", map[string]string{"ref": target, "title": "Review incident", "assignee": "other"})
-	edited := live.accept(t, "build.incident.edit", "build.incident", "INC-1", map[string]string{"note": "Investigating"})
+	edited := live.accept(t, "invariantproject.incident.edit", "invariantproject.incident", "INC-1", map[string]string{"note": "Investigating"})
 
 	fresh := newInvariantTenantReplayWithApps(t, tenant, apps(), seats...)
 	fresh.Notices.Post(oldNotice, "other")

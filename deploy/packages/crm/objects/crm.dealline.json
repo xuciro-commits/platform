@@ -4,14 +4,14 @@
     {
       "inverse": "lines",
       "name": "deal",
-      "ref": "build.deal",
+      "ref": "crm.deal",
       "required": true,
       "title": "Deal",
       "type": "reference"
     },
     {
       "name": "product",
-      "ref": "build.crmproduct",
+      "ref": "crm.crmproduct",
       "title": "Product",
       "type": "reference"
     },
@@ -97,15 +97,16 @@
     }
   ],
   "name": "dealline",
+  "namespace": "crm",
   "plural": "Deal product lines",
   "schemaVersions": [
     {
       "family": 1,
-      "version": "schema.sha256.e5c2a2011152dbfc6b07d4eb886845fb085b21c00d9d4a440def35d7cf9e0f71"
+      "version": "schema.sha256.3239711eca6a8f1f8f0b2ba57deafcd33af6f77219937e7a23085ac76e3dafdb"
     }
   ],
   "title": "Deal product line",
-  "type": "build.dealline",
+  "type": "crm.dealline",
   "view": {
     "columns": [
       "productname",

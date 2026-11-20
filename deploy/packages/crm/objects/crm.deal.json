@@ -13,7 +13,7 @@
       "group": "Commercial",
       "inverse": "deals",
       "name": "organization",
-      "ref": "build.organization",
+      "ref": "crm.organization",
       "search": true,
       "title": "Organization",
       "type": "reference"
@@ -21,14 +21,14 @@
     {
       "group": "Commercial",
       "name": "contact",
-      "ref": "build.crmcontact",
+      "ref": "crm.crmcontact",
       "title": "Primary contact",
       "type": "reference"
     },
     {
       "group": "Commercial",
       "name": "lead",
-      "ref": "build.lead",
+      "ref": "crm.lead",
       "title": "Source lead",
       "type": "reference"
     },
@@ -107,28 +107,28 @@
     {
       "group": "Classification",
       "name": "source",
-      "ref": "build.leadsource",
+      "ref": "crm.leadsource",
       "title": "Source",
       "type": "reference"
     },
     {
       "group": "Classification",
       "name": "industry",
-      "ref": "build.industry",
+      "ref": "crm.industry",
       "title": "Industry",
       "type": "reference"
     },
     {
       "group": "Classification",
       "name": "territory",
-      "ref": "build.territory",
+      "ref": "crm.territory",
       "title": "Territory",
       "type": "reference"
     },
     {
       "group": "Closure",
       "name": "lostreason",
-      "ref": "build.lostreason",
+      "ref": "crm.lostreason",
       "required": true,
       "title": "Lost reason",
       "type": "reference",
@@ -505,12 +505,13 @@
     }
   ],
   "name": "deal",
+  "namespace": "crm",
   "plural": "Deals",
   "reads": {
     "collections": {
       "lines": {
         "app": "build",
-        "object": "build.dealline",
+        "object": "crm.dealline",
         "policy": "complete",
         "query": "",
         "set": "lines",
@@ -521,11 +522,11 @@
   "schemaVersions": [
     {
       "family": 1,
-      "version": "schema.sha256.70f0f49ecea90d5fc77688f2bf536d2b003c1d209d072a51130e5035b6d808e2"
+      "version": "schema.sha256.277dffe972011a5f7920fab6844e4da53c1820526001b67fbd54159758f61d85"
     },
     {
       "family": 2,
-      "version": "schema.sha256.04cfcc4a2c4bab8e89777e66ab067d393b27ba4b85a4550293e6fc2281e2a0c8"
+      "version": "schema.sha256.805168ac0ac99518e1a5eae4ffc5b2edfe09a2660797b74fcf729e38aa3634d3"
     }
   ],
   "sets": [
@@ -534,7 +535,7 @@
       "from": "lines",
       "limit": 200,
       "name": "lines",
-      "object": "build.dealline",
+      "object": "crm.dealline",
       "order": [
         {
           "expr": {
@@ -555,7 +556,7 @@
     }
   ],
   "title": "Deal",
-  "type": "build.deal",
+  "type": "crm.deal",
   "view": {
     "columns": [
       "title",

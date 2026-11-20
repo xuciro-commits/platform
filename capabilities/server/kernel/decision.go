@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"maps"
 	"platformserver/kernel/records"
-	"strings"
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
@@ -115,7 +114,7 @@ func (d *Decision) BusinessRefused(answer *platform.Error, fact platform.Busines
 	if answer == nil {
 		return
 	}
-	app, _, _ := strings.Cut(fact.Action, ".")
+	app := platform.OwnerOfType(fact.Action)
 	if err := acceptedformat.ValidateBusinessFact(app, fact); err != nil {
 		d.Failure = platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Business refusal evidence exceeds its declared bounds")
 		return

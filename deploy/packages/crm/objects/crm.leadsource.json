@@ -5,20 +5,26 @@
       "name": "title",
       "required": true,
       "search": true,
-      "title": "Industry",
+      "title": "Source name",
       "type": "text"
+    },
+    {
+      "name": "details",
+      "title": "Details",
+      "type": "longtext"
     }
   ],
-  "name": "industry",
-  "plural": "Industries",
+  "name": "leadsource",
+  "namespace": "crm",
+  "plural": "Lead sources",
   "schemaVersions": [
     {
       "family": 1,
-      "version": "schema.sha256.bb3219d78d634ce96bdc9d3421722ac43a37878e56f8a716038f1a0bbea185e3"
+      "version": "schema.sha256.12cdf2d5a4f80b4944a0f05aca9aab209cab48c87f0ca004e352ba6fb7f8ab51"
     }
   ],
-  "title": "Industry",
-  "type": "build.industry",
+  "title": "Lead source",
+  "type": "crm.leadsource",
   "view": {
     "columns": [
       "title"

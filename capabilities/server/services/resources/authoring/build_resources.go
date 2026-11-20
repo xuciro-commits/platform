@@ -1,6 +1,7 @@
 package authoring
 
 import (
+	"cmp"
 	"encoding/json"
 	"platformserver/kernel/protocol"
 	"slices"
@@ -245,7 +246,7 @@ func (b *Build) trackResource(c platform.Caller, r *pb.ChangeRecord, typ, id str
 	if json.Unmarshal(raw, &draft) != nil {
 		return
 	}
-	ref, err := BranchResource(typ, draft.Name)
+	ref, err := BranchResource(typ, qualified(namespaceOf(raw), draft.Name))
 	if err != nil {
 		return
 	}
@@ -344,7 +345,8 @@ func (b *Build) saveResource(c platform.Caller, s *pb.Submission, now time.Time)
 		}
 		var prior struct {
 			platform.Record
-			Name string `json:"name"`
+			Name      string `json:"name"`
+			Namespace string `json:"namespace"`
 		}
 		raw, refusal := c.ReadRecord(typ, id, now)
 		if refusal != nil && refusal.Code != pb.ErrorCode_ERROR_CODE_NOT_FOUND {
@@ -357,7 +359,8 @@ func (b *Build) saveResource(c platform.Caller, s *pb.Submission, now time.Time)
 			}
 		}
 		var meta struct {
-			Name string `json:"name"`
+			Name      string `json:"name"`
+			Namespace string `json:"namespace"`
 		}
 		if json.Unmarshal(input.Spec, &meta) != nil {
 			return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "The resource definition is one JSON object")
@@ -368,10 +371,30 @@ func (b *Build) saveResource(c platform.Caller, s *pb.Submission, now time.Time)
 		if meta.Name == "" {
 			meta.Name = prior.Name
 		}
+		if typ == protocol.AppType && !exists && platform.BuiltinManifestTitle(meta.Name) != "" {
+			return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "A project cannot take the name of a built-in application")
+		}
+		if exists || typ != ObjectType {
+			meta.Namespace = prior.Namespace
+		} else if platform.BuiltinManifestTitle(meta.Namespace) != "" {
+			return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "A project cannot take the name of a built-in application")
+		}
+		if typ == ObjectType && !exists && input.Project != "" && input.Project != WorkspaceProject {
+			project, _ := platform.Get[protocol.Application](c, input.Project)
+			if meta.Namespace != "" && meta.Namespace != project.Name && !c.Automation {
+				return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "A type takes the name of its project")
+			}
+			meta.Namespace = cmp.Or(meta.Namespace, project.Name)
+			var spec map[string]json.RawMessage
+			if json.Unmarshal(input.Spec, &spec) == nil {
+				spec["namespace"] = platform.Raw(meta.Namespace)
+				input.Spec, _ = json.Marshal(spec)
+			}
+		}
 		if typ == ProductType && id != meta.Name {
 			return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "A product record ID must match its API name")
 		}
-		ref, err := BranchResource(typ, meta.Name)
+		ref, err := BranchResource(typ, qualified(meta.Namespace, meta.Name))
 		if err != nil {
 			return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
 		}

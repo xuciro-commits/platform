@@ -23,7 +23,7 @@ func (b *Build) checkObjectTypeGroup(g ontology.ObjectTypeGroup, published bool)
 			continue
 		}
 		if !published && member.App == ID && slices.ContainsFunc(objects, func(o ontology.Object) bool {
-			return !o.Archived && TypeOf(o.Name) == member.Name
+			return !o.Archived && o.Type() == member.Name
 		}) {
 			continue
 		}

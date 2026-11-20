@@ -159,7 +159,7 @@ func (b *Build) releaseDraftsOf(candidate protocol.ReleaseCandidate) ([]Draft, e
 			}
 			if len(o.ActionTypes) == 0 {
 				for _, definition := range o.Actions {
-					ref := platform.AssetRef{App: ID, Kind: platform.AssetAction, Name: TypeOf(o.Name) + "." + definition.Name}
+					ref := platform.AssetRef{App: ID, Kind: platform.AssetAction, Name: o.Type() + "." + definition.Name}
 					binding := platform.AssetBinding{Ref: ref}
 					if index := slices.IndexFunc(candidate.Assets, func(item platform.ReleaseAsset) bool { return item.Ref == ref }); index >= 0 {
 						binding.SourceVersion = candidate.Assets[index].SourceVersion

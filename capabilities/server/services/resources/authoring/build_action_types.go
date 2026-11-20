@@ -24,6 +24,12 @@ func (b *Build) writeObject(c platform.Caller, r *pb.ChangeRecord, verb, id stri
 	if json.Unmarshal(payload, &input) != nil {
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "The object definition is one JSON object")
 	}
+	if raw, supplied := input["namespace"]; supplied && verb != "create" {
+		current, _ := platform.Get[ontology.Object](c, id)
+		if namespace := ""; json.Unmarshal(raw, &namespace) != nil || namespace != current.Namespace {
+			return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "A resource API name is immutable")
+		}
+	}
 	if raw, supplied := input["actions"]; supplied {
 		current, found := platform.Get[ontology.Object](c, id)
 		var actions []ontology.Action
@@ -61,7 +67,7 @@ func (b *Build) writeActionType(c platform.Caller, r *pb.ChangeRecord, verb, id 
 	if err != nil {
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, err.Error())
 	}
-	index := slices.IndexFunc(objects, func(object ontology.Object) bool { return TypeOf(object.Name) == action.Object && !object.Archived })
+	index := slices.IndexFunc(objects, func(object ontology.Object) bool { return object.Type() == action.Object && !object.Archived })
 	if index < 0 {
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Choose an existing object type")
 	}

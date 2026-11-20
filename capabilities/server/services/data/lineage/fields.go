@@ -69,7 +69,7 @@ func Fields(g Graph, in Input) ([]FieldNode, []FieldEdge) {
 	}
 	objects := map[string]ontology.Object{}
 	for _, object := range in.Objects {
-		name := objectType(object.Name)
+		name := object.Type()
 		objects[name] = object
 		for _, field := range object.Fields {
 			addNode("object:"+name, "object", object.ID, field.Name, field.Title, "unverified")
@@ -249,7 +249,7 @@ func Fields(g Graph, in Input) ([]FieldNode, []FieldEdge) {
 	}
 
 	for _, object := range in.Objects {
-		objectName := objectType(object.Name)
+		objectName := object.Type()
 		objectNode := "object:" + objectName
 		for occurrence, binding := range object.DataSources {
 			fromNode := binding.Kind + ":" + binding.Source

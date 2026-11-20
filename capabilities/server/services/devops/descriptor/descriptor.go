@@ -65,7 +65,7 @@ func Validate(p platform.PackageDescriptor, withDependencies func(platform.Relea
 		seen := map[string]bool{}
 		for _, step := range setup.Steps {
 			if step.Name == "" || len(step.Name) > 128 || seen[step.Name] || step.App == "" ||
-				!strings.HasPrefix(step.Schema, step.App+".") || step.Target.GetType() == "" || step.Target.GetId() == "" ||
+				platform.OwnerOfType(step.Schema) != step.App || step.Target.GetType() == "" || step.Target.GetId() == "" ||
 				len(step.Payload) > 64<<10 || !json.Valid([]byte(step.Payload)) {
 				return fmt.Errorf("setup requests need unique names, an owner, schema, target and bounded JSON payload")
 			}

@@ -87,7 +87,7 @@ func (b *Build) ForkReleaseExecution(assets []platform.ReleaseAsset) (platform.S
 			continue
 		}
 		var object ontology.Object
-		if asset.ContractVersion != 1 || json.Unmarshal(asset.Body, &object) != nil || TypeOf(object.Name) != asset.Ref.Name {
+		if asset.ContractVersion != 1 || json.Unmarshal(asset.Body, &object) != nil || object.Type() != asset.Ref.Name {
 			return nil, fmt.Errorf("unsupported retained object descriptor %s", asset.Ref)
 		}
 		info, err := records.Describe(ID, Entity(object), func(reflect.Type) string { return "" })
@@ -140,13 +140,13 @@ func (b *Build) checkManagedDefinitionWrite(s *pb.Submission) *platform.Error {
 	if err != nil {
 		return nil
 	}
-	var proposed struct{ Name string }
+	var proposed struct{ Name, Namespace string }
 	_ = json.Unmarshal(s.GetPayload(), &proposed)
-	names := []string{proposed.Name}
+	names := []string{qualified(proposed.Namespace, proposed.Name)}
 	if record, ok := b.host.Record(typ + "/" + id); ok {
-		var current struct{ Name string }
+		var current struct{ Name, Namespace string }
 		_ = json.Unmarshal(platform.Raw(record), &current)
-		names = append(names, current.Name)
+		names = append(names, qualified(current.Namespace, current.Name))
 	}
 	for _, name := range names {
 		if name == "" {
@@ -202,7 +202,7 @@ func (b *Build) applicationDrafts(id string, selectDrafts map[JointDraftRef]bool
 	}
 	for _, o := range objects {
 		if !o.Archived {
-			add(platform.AssetObject, o.ID, TypeOf(o.Name))
+			add(platform.AssetObject, o.ID, o.Type())
 			add(platform.AssetPage, o.ID, o.Name)
 			index[platform.AssetRef{App: ID, Kind: platform.AssetPage, Name: o.Name}] = JointDraftRef{Kind: platform.AssetObject, ID: o.ID}
 			for _, a := range objectActions(o, Entity(o)) {
@@ -369,7 +369,7 @@ func (b *Build) applicationDrafts(id string, selectDrafts map[JointDraftRef]bool
 		if deps, ok := graph[ref]; ok {
 			queue = append(queue, deps...)
 		} else if draft.Kind == platform.AssetObject {
-			queue = append(queue, platform.AssetRef{App: ID, Kind: platform.AssetObject, Name: TypeOf(objects[slices.IndexFunc(objects, func(o ontology.Object) bool { return o.ID == draft.ID })].Name)})
+			queue = append(queue, platform.AssetRef{App: ID, Kind: platform.AssetObject, Name: objects[slices.IndexFunc(objects, func(o ontology.Object) bool { return o.ID == draft.ID })].Type()})
 		}
 	}
 	return out, nil

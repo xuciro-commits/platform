@@ -22,8 +22,8 @@ test("legacy links: open records and mapped views, and explain unavailable views
   const resource = directory.resources.find((entry) => entry.type === "build.object" && entry.draft === "OBJ-opportunity");
   expect(resource?.id).toMatch(/^ri\./);
 
-  await page.goto("/#/objects/build.opportunity/OPP-001");
-  await expect(page).toHaveURL("/ontology/objects/build.opportunity/OPP-001");
+  await page.goto("/#/objects/sales.opportunity/OPP-001");
+  await expect(page).toHaveURL("/ontology/objects/sales.opportunity/OPP-001");
   await expect(page.getByRole("heading", { level: 1, name: "Press line retrofit" })).toBeVisible();
 
   await page.goto(`/#/object-type/${resource!.id}`);
@@ -294,7 +294,7 @@ test("batch: retries a stale row without submitting a successful row again", asy
   const archived: string[] = [];
   page.on("request", (request) => {
     const body = request.url().endsWith("/v1/submissions") && request.postDataJSON();
-    if (body && body.schema.name === "build.opportunity.archive") archived.push(body.target.id);
+    if (body && body.schema.name === "sales.opportunity.archive") archived.push(body.target.id);
   });
   await page.getByRole("button", { name: "Archive opportunity", exact: true }).click();
   await expect(page.getByText("Support contract renewal: Done", { exact: true })).toBeVisible();
@@ -419,7 +419,7 @@ test("links and files: navigate to related records and attach a downloadable fil
   await expect(page).toHaveURL(/\/links(?:\?|$)/);
   await expect(page.getByRole("link", { name: "Spare parts frame agreement" })).toBeVisible();
   await page.getByRole("link", { name: "View all", exact: true }).click();
-  await expect(page).toHaveURL(/build.opportunity\?domain=/);
+  await expect(page).toHaveURL(/sales.opportunity\?domain=/);
   await expect(page.getByRole("link", { name: "Spare parts frame agreement" })).toBeVisible();
   await expect(page.getByRole("link", { name: "Warehouse scanners" })).toHaveCount(0);
   await page.getByRole("link", { name: "Spare parts frame agreement" }).click();
@@ -439,7 +439,7 @@ test("links and files: navigate to related records and attach a downloadable fil
 test("restricted fields: a reader sees the field label and no amount", async ({ page }) => {
   await page.goto("/");
   await page.getByRole("button", { name: "user-1 · acceptance" }).click();
-  await page.goto("/ontology/objects/build.opportunity/OPP-001");
+  await page.goto("/ontology/objects/sales.opportunity/OPP-001");
   await expect(page.getByRole("heading", { level: 1, name: "Press line retrofit" })).toBeVisible();
   await expect(page.getByText("Amount", { exact: true })).toBeVisible();
   await expect(page.getByText("Cannot view", { exact: true })).toBeVisible();
@@ -549,7 +549,7 @@ test("object definition: create and bind an action type before publishing a tran
   const publish = page.getByRole("dialog", { name: /Publish/ });
   await publish.getByRole("button", { name: "Publish", exact: true }).click();
   await expect(publish).toBeHidden();
-  await page.goto("/ontology/objects/build.workflow");
+  await page.goto("/ontology/objects/sales.workflow");
   await page.getByRole("button", { name: "New", exact: true }).click();
   const create = page.getByRole("dialog");
   await create.getByRole("textbox", { name: /^Name/ }).fill("Ada Lovelace");
@@ -600,7 +600,7 @@ test("gate: build a type and use it, install a package and use its action, then 
   const publish = page.getByRole("dialog", { name: /Publish/ });
   await publish.getByRole("button", { name: "Publish", exact: true }).click();
   await expect(publish).toBeHidden();
-  await page.goto("/ontology/objects/build.gateitem");
+  await page.goto("/ontology/objects/sales.gateitem");
   await page.getByRole("button", { name: "New", exact: true }).click();
   const createRecord = page.getByRole("dialog");
   await createRecord.getByRole("button", { name: "Create", exact: true }).click();
@@ -608,6 +608,37 @@ test("gate: build a type and use it, install a package and use its action, then 
   const confirm = page.getByRole("alertdialog");
   await confirm.getByRole("button", { name: "Activate gate item", exact: true }).click();
   await expect(page.getByText("Active", { exact: true }).first()).toBeVisible();
+
+  await open(page, "Ontology", "Object types");
+  await page.getByRole("button", { name: "New", exact: true }).click();
+  const twin = page.getByRole("dialog");
+  await twin.getByRole("combobox", { name: /^Project/ }).click();
+  await page.getByRole("option", { name: "CRM", exact: true }).click();
+  await twin.getByRole("textbox", { name: /^API name/ }).fill("gateitem");
+  await twin.getByRole("textbox", { name: /^Name/ }).fill("CRM gate item");
+  await twin.getByRole("button", { name: "Create", exact: true }).click();
+  await expect(page.getByRole("heading", { level: 1, name: "CRM gate item", exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Add field", exact: true }).click();
+  const twinField = page.getByRole("dialog");
+  await twinField.getByRole("textbox", { name: /^Name/ }).fill("code");
+  await twinField.getByRole("textbox", { name: /^Label/ }).fill("Code");
+  await twinField.getByRole("combobox", { name: /^Type/ }).click();
+  await page.getByRole("option", { name: "text", exact: true }).click();
+  await twinField.getByRole("button", { name: "Save", exact: true }).click();
+  await expect(twinField).toBeHidden();
+  await expect(page.getByRole("cell", { name: "Code", exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Publish", exact: true }).click();
+  const publishTwin = page.getByRole("dialog", { name: /Publish/ });
+  await publishTwin.getByRole("button", { name: "Publish", exact: true }).click();
+  await expect(publishTwin).toBeHidden();
+  await page.goto("/ontology/objects/crm.gateitem");
+  await page.getByRole("button", { name: "New", exact: true }).click();
+  await page.getByRole("dialog").getByRole("button", { name: "Create", exact: true }).click();
+  await expect(page).toHaveURL(/\/ontology\/objects\/crm\.gateitem\/[^/]+$/);
+  const twinRecord = new URL(page.url()).pathname.split("/").at(-1)!;
+  await page.goto("/ontology/objects/sales.gateitem");
+  await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
+  await expect(page.locator(`a[href$="/${twinRecord}"]`)).toHaveCount(0);
 
   await open(page, "Delivery", "Marketplace");
   const provider = page.getByRole("listitem").filter({ hasText: "application.production-provider · 0.1.4" });
@@ -691,10 +722,10 @@ test("views: filters, order and visible columns survive refresh and return", asy
   const recordRequests: URLSearchParams[] = [];
   page.on("request", (request) => {
     const url = new URL(request.url());
-    if (url.pathname === "/v1/records/build.opportunity" && url.searchParams.has("actions")) recordRequests.push(url.searchParams);
+    if (url.pathname === "/v1/records/sales.opportunity" && url.searchParams.has("actions")) recordRequests.push(url.searchParams);
   });
   await signIn(page);
-  await page.goto("/ontology/objects/build.opportunity");
+  await page.goto("/ontology/objects/sales.opportunity");
   await expect(page.getByRole("heading", { level: 1, name: "Opportunities" })).toBeVisible();
   await expect(page.getByRole("group", { name: "Filter", exact: true }).getByText(/^\d+$/, { exact: true })).toBeVisible();
   expect(recordRequests.at(-1)?.get("limit")).toBe("100");
@@ -752,7 +783,7 @@ test("list: metadata controls default columns, layout and empty states", async (
   await expect(page.getByRole("main", { name: "Object types", exact: true }).getByRole("button", { name: "New", exact: true })).toBeVisible();
   await page.unroute("**/v1/records/build.object?*");
 
-  await page.goto("/ontology/objects/build.opportunity");
+  await page.goto("/ontology/objects/sales.opportunity");
   await page.getByRole("radio", { name: "Board" }).click();
   await expect(page.getByRole("region", { name: "Proposal", exact: true })).toBeVisible();
   await expect(page.getByText(/Amount · Total ·/).first()).toBeVisible();
@@ -765,7 +796,7 @@ test("list: metadata controls default columns, layout and empty states", async (
 
 test("views: ten thousand rows stay windowed and load at the scroll edge", async ({ page }) => {
   const offsets: number[] = [];
-  await page.route("**/v1/records/build.opportunity?*", async (route) => {
+  await page.route("**/v1/records/sales.opportunity?*", async (route) => {
     const url = new URL(route.request().url());
     const offset = Number(url.searchParams.get("offset") ?? 0);
     const limit = Number(url.searchParams.get("limit") ?? 100);
@@ -789,7 +820,7 @@ test("views: ten thousand rows stay windowed and load at the scroll edge", async
     await route.fulfill({ json: { records, total: 10000, actions: {}, refs: {}, formats: {} } });
   });
   await signIn(page);
-  await page.goto("/ontology/objects/build.opportunity");
+  await page.goto("/ontology/objects/sales.opportunity");
   const resultCount = page;
   await expect(resultCount.getByText("10000", { exact: true })).toBeVisible();
   const table = page.getByRole("table");
@@ -803,7 +834,7 @@ test("views: ten thousand rows stay windowed and load at the scroll edge", async
   const secondPage = page.getByRole("link", { name: "Generated opportunity 0199" });
   await expect(secondPage).toBeVisible();
   await secondPage.click();
-  await expect(page).toHaveURL(/build\.opportunity\/GEN-0199/);
+  await expect(page).toHaveURL(/sales\.opportunity\/GEN-0199/);
   await page.goBack();
   await expect(page.getByRole("link", { name: "Generated opportunity 0199" })).toBeVisible();
   await page.getByRole("radio", { name: "Board" }).click();
@@ -828,9 +859,9 @@ test("views: save, pin and reopen a filtered view from the sidebar", async ({ pa
   await signIn(page);
   const preference = page.waitForResponse((response) => {
     const url = decodeURIComponent(response.url());
-    return url.includes("/v1/records/work.viewpreference") && url.includes("admin-1@build.opportunity");
+    return url.includes("/v1/records/work.viewpreference") && url.includes("admin-1@sales.opportunity");
   });
-  await page.goto(`/ontology/objects/build.opportunity?view=${encodeURIComponent(JSON.stringify(view))}`);
+  await page.goto(`/ontology/objects/sales.opportunity?view=${encodeURIComponent(JSON.stringify(view))}`);
   expect((await preference).status()).toBe(200);
   await expect(page.getByRole("link", { name: "Robot cell integration" })).toBeVisible();
 
@@ -878,10 +909,10 @@ test("views: a published type opens with its declared default view", async ({ pa
   const requests: URLSearchParams[] = [];
   page.on("request", (request) => {
     const url = new URL(request.url());
-    if (url.pathname === "/v1/records/build.customer") requests.push(url.searchParams);
+    if (url.pathname === "/v1/records/sales.customer") requests.push(url.searchParams);
   });
   await signIn(page);
-  await page.goto("/ontology/objects/build.customer");
+  await page.goto("/ontology/objects/sales.customer");
   await expect(page.getByRole("columnheader", { name: "Company", exact: true })).toBeVisible();
   await expect(page.getByRole("columnheader", { name: "Region", exact: true })).toHaveCount(0);
   await page.getByRole("button", { name: "View options", exact: true }).click();
@@ -898,7 +929,7 @@ test("views: a published type opens with its declared default view", async ({ pa
 
 test("files: an attachment field stores a media set item on the record", async ({ page }) => {
   await signIn(page);
-  await page.goto("/ontology/objects/build.opportunity/OPP-001");
+  await page.goto("/ontology/objects/sales.opportunity/OPP-001");
   await expect(page.getByText("Brief", { exact: true })).toBeVisible();
   await page.locator('input[type="file"]').setInputFiles({
     name: "brief.txt",
@@ -908,7 +939,7 @@ test("files: an attachment field stores a media set item on the record", async (
   await expect(page.getByText("brief.txt", { exact: true })).toBeVisible();
   const readAttachment = () => page.evaluate(async () => {
     const session = JSON.parse(sessionStorage.getItem("platform:session") ?? "{}") as { token: string; tenant: string };
-    const response = await fetch("/v1/records/build.opportunity/OPP-001", {
+    const response = await fetch("/v1/records/sales.opportunity/OPP-001", {
       headers: { authorization: `Bearer ${session.token}`, "platform-tenant": session.tenant },
     });
     const answer = await response.json() as { values?: { brief?: { mediaSet?: string; item?: string } } };
@@ -925,9 +956,9 @@ test("files: an attachment field stores a media set item on the record", async (
 test("list: one bar searches and filters, identities are quiet and references open their record", async ({ page }) => {
   await signIn(page);
   await page.goto("/ontology/objects");
-  const identity = page.getByRole("cell", { name: "build.opportunity", exact: true });
+  const identity = page.getByRole("cell", { name: "sales.opportunity", exact: true });
   await expect(identity.locator('[data-type="code"]')).toBeVisible();
-  await page.goto("/ontology/objects/build.opportunity");
+  await page.goto("/ontology/objects/sales.opportunity");
   const table = page.getByRole("table");
   await expect(table.getByRole("link", { name: "Northwind Tools" }).first()).toBeVisible();
   const bar = page.getByRole("textbox", { name: "Search this list" });
@@ -944,7 +975,7 @@ test("list: one bar searches and filters, identities are quiet and references op
 
 test("record fields: values read as values and become inputs when focused", async ({ page }) => {
   await signIn(page);
-  await page.goto("/ontology/objects/build.opportunity/OPP-001");
+  await page.goto("/ontology/objects/sales.opportunity/OPP-001");
   const amount = page.getByRole("spinbutton", { name: "Amount", exact: true });
   await expect(amount).toHaveValue("184,000");
   await amount.focus();
@@ -962,7 +993,7 @@ test("files: an attachment waits for its project before offering file selection"
     await ready.promise;
     await route.continue();
   });
-  await page.goto("/ontology/objects/build.opportunity/OPP-003");
+  await page.goto("/ontology/objects/sales.opportunity/OPP-003");
   await requested.promise;
   const input = page.locator('input[type="file"]');
   try {
@@ -1102,7 +1133,7 @@ test("applications: shared records respect roles and keep their history after re
 
 test("inbox: work assigned on a record is finished from the inbox", async ({ page }) => {
   await signIn(page);
-  await page.goto("/ontology/objects/build.opportunity/OPP-002");
+  await page.goto("/ontology/objects/sales.opportunity/OPP-002");
   await page.getByRole("button", { name: "Assign work", exact: true }).click();
   const assign = page.getByRole("dialog");
   await assign.getByRole("textbox", { name: /^Title/ }).fill("Call the plant manager");
@@ -1148,7 +1179,7 @@ test("members: an opportunity owner is shown by name and can be reassigned", asy
 
 test("record fields: an attachment preserves the horizontal label alignment", async ({ page }) => {
   await signIn(page);
-  await page.goto("/ontology/objects/build.opportunity/OPP-001");
+  await page.goto("/ontology/objects/sales.opportunity/OPP-001");
   const brief = page.getByText("Brief", { exact: true });
   const customer = page.getByText("Customer", { exact: true });
   const amount = page.getByText("Amount", { exact: true });
@@ -1167,7 +1198,7 @@ test("record fields: an attachment preserves the horizontal label alignment", as
 
 test("record fields: a date uses its field name for assistive technology", async ({ page }) => {
   await signIn(page);
-  await page.goto("/ontology/objects/build.opportunity/OPP-001");
+  await page.goto("/ontology/objects/sales.opportunity/OPP-001");
   const date = page.getByRole("combobox", { name: "Expected close", exact: true });
   await expect(date).toBeVisible();
   await expect(date).toHaveAttribute("aria-label", "Expected close");
@@ -1178,10 +1209,10 @@ test("list: chips filter on the host, a row opens its details and selection open
   const requests: URLSearchParams[] = [];
   page.on("request", (request) => {
     const url = new URL(request.url());
-    if (url.pathname === "/v1/records/build.opportunity") requests.push(url.searchParams);
+    if (url.pathname === "/v1/records/sales.opportunity") requests.push(url.searchParams);
   });
   await signIn(page);
-  await page.goto("/ontology/objects/build.opportunity");
+  await page.goto("/ontology/objects/sales.opportunity");
   const header = page;
   await header.getByRole("combobox", { name: "Stage filter", exact: true }).click();
   await page.getByRole("option", { name: "Proposal", exact: true }).click();
@@ -1195,7 +1226,7 @@ test("list: chips filter on the host, a row opens its details and selection open
   const details = page.getByRole("complementary", { name: "Details" });
   await expect(details.getByRole("heading", { level: 2, name: "Robot cell integration" })).toBeVisible();
   await expect(details.getByText("Kestrel Robotics").first()).toBeVisible();
-  await expect(page).toHaveURL(/build\.opportunity\?/);
+  await expect(page).toHaveURL(/sales\.opportunity\?/);
   await details.getByRole("button", { name: "Close details", exact: true }).click();
   await expect(details).toHaveCount(0);
 
@@ -1208,7 +1239,7 @@ test("list: chips filter on the host, a row opens its details and selection open
   await expect.poll(() => rows.count()).toBeGreaterThan(5);
 
   const unapproved = { version: 1, layout: "table", columns: ["subject", "budgetapproved"], sort: [], filters: [{ field: "budgetapproved", operator: "is_false", value: { type: "empty" } }], search: "", group: "none", lanes: "" };
-  await page.goto(`/ontology/objects/build.opportunity?view=${encodeURIComponent(JSON.stringify(unapproved))}`);
+  await page.goto(`/ontology/objects/sales.opportunity?view=${encodeURIComponent(JSON.stringify(unapproved))}`);
   await expect.poll(() => requests.filter((params) => params.has("actions")).at(-1)?.get("domain")).toBe(JSON.stringify([["budgetapproved", "!=", true]]));
   await expect.poll(() => rows.count()).toBeGreaterThan(5);
   await expect(rows.filter({ hasText: "Press line retrofit" })).toHaveCount(0);
@@ -1217,7 +1248,7 @@ test("list: chips filter on the host, a row opens its details and selection open
 
 test("record fields: the date label aligns with the other commercial fields", async ({ page }) => {
   await signIn(page);
-  await page.goto("/ontology/objects/build.opportunity/OPP-001");
+  await page.goto("/ontology/objects/sales.opportunity/OPP-001");
   const commercial = page.getByRole("heading", { name: "Commercial", exact: true }).locator("..");
   const labels = ["Amount", "Budget approved", "Proposed deposit", "Expected close"]
     .map((name) => commercial.getByText(name, { exact: true }));
@@ -1230,7 +1261,7 @@ test("inbox: a comment mention opens the referenced record from the Mentions tab
   const author = await browser.newPage({ baseURL });
   await author.goto("/");
   await author.getByRole("button", { name: "user-1 · acceptance" }).click();
-  const record = "/ontology/objects/build.opportunity/OPP-002";
+  const record = "/ontology/objects/sales.opportunity/OPP-002";
   await author.goto(`${record}/activity`);
   const message = "@admin-1 Please review the spare parts agreement.";
   await author.getByRole("textbox", { name: "Write a comment" }).fill(message);
@@ -1262,7 +1293,7 @@ test("command palette: open a record and the inbox with the keyboard", async ({ 
   await search.fill("Press line retrofit");
   await expect(palette.getByRole("group", { name: "Objects" }).getByRole("option", { name: "Press line retrofit" })).toBeVisible();
   await search.press("Enter");
-  await expect(page).toHaveURL(/\/ontology\/objects\/build\.opportunity\/OPP-001$/);
+  await expect(page).toHaveURL(/\/ontology\/objects\/sales\.opportunity\/OPP-001$/);
   await expect(page.getByRole("heading", { name: "Press line retrofit", exact: true })).toBeVisible();
 
   await page.keyboard.press("ControlOrMeta+K");
@@ -1574,47 +1605,47 @@ test("crm: every CRM type can be created, edited and filtered, and lead and deal
   };
   const cases: Case[] = [
     {
-      type: "build.leadstatus", plural: "Lead statuses", filterTerm: "Nurture", filterHit: "Nurture",
+      type: "crm.leadstatus", plural: "Lead statuses", filterTerm: "Nurture", filterHit: "Nurture",
       create: async (form) => { await form.getByRole("textbox", { name: "Lead status" }).fill("Dormant"); },
       createdTitle: "Dormant", editField: "Lead status", editValue: "Dormant lead",
     },
     {
-      type: "build.dealstatus", plural: "Deal statuses", filterTerm: "Negotiation", filterHit: "Negotiation",
+      type: "crm.dealstatus", plural: "Deal statuses", filterTerm: "Negotiation", filterHit: "Negotiation",
       create: async (form) => { await form.getByRole("textbox", { name: "Deal status" }).fill("Legal Review"); },
       createdTitle: "Legal Review", editField: "Deal status", editValue: "Contract Review",
     },
     {
-      type: "build.leadsource", plural: "Lead sources", filterTerm: "Exhibition", filterHit: "Exhibition",
+      type: "crm.leadsource", plural: "Lead sources", filterTerm: "Exhibition", filterHit: "Exhibition",
       create: async (form) => { await form.getByRole("textbox", { name: "Source name" }).fill("Partner Webinar"); },
       createdTitle: "Partner Webinar", editField: "Source name", editValue: "Partner Event",
     },
     {
-      type: "build.industry", plural: "Industries", filterTerm: "Logistics", filterHit: "Logistics",
+      type: "crm.industry", plural: "Industries", filterTerm: "Logistics", filterHit: "Logistics",
       create: async (form) => { await form.getByRole("textbox", { name: "Industry" }).fill("Aerospace"); },
       createdTitle: "Aerospace", editField: "Industry", editValue: "Aerospace & Defense",
     },
     {
-      type: "build.territory", plural: "Territories", filterTerm: "DACH", filterHit: "DACH",
+      type: "crm.territory", plural: "Territories", filterTerm: "DACH", filterHit: "DACH",
       create: async (form) => { await form.getByRole("textbox", { name: "Territory" }).fill("Nordics"); },
       createdTitle: "Nordics", editField: "Territory", editValue: "Nordic Region",
     },
     {
-      type: "build.lostreason", plural: "Lost reasons", filterTerm: "Pricing", filterHit: "Pricing",
+      type: "crm.lostreason", plural: "Lost reasons", filterTerm: "Pricing", filterHit: "Pricing",
       create: async (form) => { await form.getByRole("textbox", { name: "Lost reason" }).fill("Timeline Mismatch"); },
       createdTitle: "Timeline Mismatch", editField: "Lost reason", editValue: "Schedule Mismatch",
     },
     {
-      type: "build.organization", plural: "Organizations", filterTerm: "Helios", filterHit: "Helios Precision",
+      type: "crm.organization", plural: "Organizations", filterTerm: "Helios", filterHit: "Helios Precision",
       create: async (form) => { await form.getByRole("textbox", { name: "Organization" }).fill("Orion Systems"); },
       createdTitle: "Orion Systems", editField: "Website", editValue: "https://orion.example",
     },
     {
-      type: "build.crmcontact", plural: "CRM Contacts", filterTerm: "Clara", filterHit: "Clara Vogel",
+      type: "crm.crmcontact", plural: "CRM Contacts", filterTerm: "Clara", filterHit: "Clara Vogel",
       create: async (form) => { await form.getByRole("textbox", { name: "Full name" }).fill("Nadia Chen"); },
       createdTitle: "Nadia Chen", editField: "Designation", editValue: "Operations Lead",
     },
     {
-      type: "build.crmproduct", plural: "Products", filterTerm: "CRM-CORE", filterHit: "CRM-CORE",
+      type: "crm.crmproduct", plural: "Products", filterTerm: "CRM-CORE", filterHit: "CRM-CORE",
       create: async (form) => {
         await form.getByRole("textbox", { name: "Product code" }).fill("CRM-TRN");
         await form.getByRole("textbox", { name: "Product name" }).fill("Admin Training");
@@ -1624,7 +1655,7 @@ test("crm: every CRM type can be created, edited and filtered, and lead and deal
       createdTitle: "Admin Training", editField: "Product name", editValue: "Admin Training Pack",
     },
     {
-      type: "build.lead", plural: "Leads", filterTerm: "Jonas", filterHit: "Jonas Lindqvist",
+      type: "crm.lead", plural: "Leads", filterTerm: "Jonas", filterHit: "Jonas Lindqvist",
       create: async (form) => {
         await form.getByRole("textbox", { name: "Full name" }).fill("Sven Lindholm");
         await form.getByRole("combobox", { name: "Status" }).click();
@@ -1633,7 +1664,7 @@ test("crm: every CRM type can be created, edited and filtered, and lead and deal
       createdTitle: "Sven Lindholm", editField: "Organization", editValue: "Baltic Robotics",
     },
     {
-      type: "build.deal", plural: "Deals", filterTerm: "Helios", filterHit: "Helios plant CRM rollout",
+      type: "crm.deal", plural: "Deals", filterTerm: "Helios", filterHit: "Helios plant CRM rollout",
       create: async (form) => {
         await form.getByRole("textbox", { name: "Deal" }).fill("Orion phase one");
         await form.getByRole("combobox", { name: "Status" }).click();
@@ -1642,7 +1673,7 @@ test("crm: every CRM type can be created, edited and filtered, and lead and deal
       createdTitle: "Orion phase one", editField: "Deal", editValue: "Orion phase one rollout",
     },
     {
-      type: "build.dealline", plural: "Deal product lines", filterTerm: "ERP Connector", filterHit: "ERP Connector Module",
+      type: "crm.dealline", plural: "Deal product lines", filterTerm: "ERP Connector", filterHit: "ERP Connector Module",
       create: async (form) => {
         await form.getByRole("combobox", { name: "Deal" }).fill("Helios");
         await page.getByRole("option", { name: /Helios plant CRM rollout/ }).click();
@@ -1654,7 +1685,7 @@ test("crm: every CRM type can be created, edited and filtered, and lead and deal
       createdTitle: "Custom Workshop", editField: "Product name", editValue: "Custom Workshop Day",
     },
     {
-      type: "build.crmtask", plural: "Tasks", filterTerm: "Boreal", filterHit: "Send discovery deck to Boreal",
+      type: "crm.crmtask", plural: "Tasks", filterTerm: "Boreal", filterHit: "Send discovery deck to Boreal",
       create: async (form) => {
         await form.getByRole("textbox", { name: "Title" }).fill("Confirm CRM pilot dates");
         await form.getByRole("combobox", { name: "Status" }).click();
@@ -1663,7 +1694,7 @@ test("crm: every CRM type can be created, edited and filtered, and lead and deal
       createdTitle: "Confirm CRM pilot dates", editField: "Title", editValue: "Confirm CRM pilot schedule",
     },
     {
-      type: "build.note", plural: "Notes", filterTerm: "Boreal", filterHit: "Boreal intro call summary",
+      type: "crm.note", plural: "Notes", filterTerm: "Boreal", filterHit: "Boreal intro call summary",
       create: async (form) => { await form.getByRole("textbox", { name: "Title" }).fill("Pilot kickoff notes"); },
       createdTitle: "Pilot kickoff notes", editField: "Title", editValue: "Pilot kickoff summary",
     },
@@ -1687,7 +1718,7 @@ test("crm: every CRM type can be created, edited and filtered, and lead and deal
     await expect(page.getByRole("complementary").getByText("2", { exact: true })).toBeVisible();
   }
 
-  await page.goto("/ontology/objects/build.deal/DEL-001");
+  await page.goto("/ontology/objects/crm.deal/DEL-001");
   const lines = page.getByRole("table", { name: "Deal product lines" });
   await expect(lines).toBeVisible();
   await expect.poll(() => lines.getByRole("textbox", { name: "Product name" }).evaluateAll((inputs) => inputs.map((input) => (input as HTMLInputElement).value))).toContain("Platform Core Seat");
@@ -1698,7 +1729,7 @@ test("crm: every CRM type can be created, edited and filtered, and lead and deal
   await expect(lines.getByText("1,500.00 USD", { exact: true })).toBeVisible();
   await page.reload();
   await expect(page.getByText("20,000.00 USD", { exact: true }).first()).toBeVisible();
-  await page.goto("/ontology/objects/build.dealline");
+  await page.goto("/ontology/objects/crm.dealline");
   const lineSearch = page.getByRole("textbox", { name: "Search this list" });
   await lineSearch.fill("Custom Workshop");
   await lineSearch.press("Enter");
@@ -1706,13 +1737,13 @@ test("crm: every CRM type can be created, edited and filtered, and lead and deal
   await page.getByRole("combobox", { name: "Deal", exact: true }).fill("Vanguard");
   await page.getByRole("option", { name: /Vanguard fleet portal/ }).click();
   await expect(page.getByRole("link", { name: "Vanguard fleet portal" })).toBeVisible();
-  await page.goto("/ontology/objects/build.deal/DEL-001");
+  await page.goto("/ontology/objects/crm.deal/DEL-001");
   await expect(page.getByText("18,500.00 USD", { exact: true }).first()).toBeVisible();
 
-  await page.goto("/ontology/objects/build.note");
+  await page.goto("/ontology/objects/crm.note");
   await expect(page.getByRole("columnheader", { name: "Related to" })).toBeVisible();
   await expect(page.getByRole("row", { name: /Helios procurement timeline/ }).getByText("Helios plant CRM rollout", { exact: true })).toBeVisible();
-  await page.goto("/ontology/objects/build.crmtask/TSK-001");
+  await page.goto("/ontology/objects/crm.crmtask/TSK-001");
   await expect(page.getByRole("radio", { name: "Lead", exact: true })).toBeChecked();
   await page.getByRole("radio", { name: "Deal", exact: true }).click();
   await page.getByRole("combobox", { name: "Deal", exact: true }).fill("Helios");
@@ -1722,13 +1753,13 @@ test("crm: every CRM type can be created, edited and filtered, and lead and deal
   await expect(page.getByRole("radio", { name: "Deal", exact: true })).toBeChecked();
   await expect(page.getByRole("link", { name: "Helios plant CRM rollout" })).toBeVisible();
 
-  await page.goto("/ontology/objects/build.lead");
+  await page.goto("/ontology/objects/crm.lead");
   await page.getByRole("radio", { name: "Board" }).click();
   await dragCard("New", "Jonas Lindqvist", "Contacted");
   await page.reload();
   await expect(page.getByRole("region", { name: "Contacted", exact: true }).getByRole("heading", { level: 4, name: "Jonas Lindqvist", exact: true })).toBeVisible();
 
-  await page.goto("/ontology/objects/build.deal");
+  await page.goto("/ontology/objects/crm.deal");
   await page.getByRole("radio", { name: "Board" }).click();
   await dragCard("Qualification", "Vanguard fleet portal", "Demo/Making");
   await page.reload();
@@ -1736,7 +1767,7 @@ test("crm: every CRM type can be created, edited and filtered, and lead and deal
 });
 
 async function crmMainline(page: Page, go: (type: string, plural: string) => Promise<unknown>, person: string, company: string) {
-  await go("build.lead", "Leads");
+  await go("crm.lead", "Leads");
   await page.getByRole("button", { name: "New", exact: true }).click();
   const lead = page.getByRole("dialog");
   await lead.getByRole("textbox", { name: "Full name" }).fill(person);
@@ -1757,14 +1788,14 @@ async function crmMainline(page: Page, go: (type: string, plural: string) => Pro
   await expect(page.getByRole("spinbutton", { name: "Annual revenue", exact: true })).toHaveValue(/250,000\.00/);
 
   for (const [type, fill] of [
-    ["build.note", async (form: ReturnType<Page["getByRole"]>) => { await form.getByRole("textbox", { name: "Title" }).fill(`${company} discovery call`); }],
-    ["build.crmtask", async (form: ReturnType<Page["getByRole"]>) => {
+    ["crm.note", async (form: ReturnType<Page["getByRole"]>) => { await form.getByRole("textbox", { name: "Title" }).fill(`${company} discovery call`); }],
+    ["crm.crmtask", async (form: ReturnType<Page["getByRole"]>) => {
       await form.getByRole("textbox", { name: "Title" }).fill(`Send ${company} the pilot plan`);
       await form.getByRole("combobox", { name: "Status" }).click();
       await page.getByRole("option", { name: "Todo", exact: true }).click();
     }],
   ] as const) {
-    await go(type, type === "build.note" ? "Notes" : "Tasks");
+    await go(type, type === "crm.note" ? "Notes" : "Tasks");
     await page.getByRole("button", { name: "New", exact: true }).click();
     const form = page.getByRole("dialog");
     await fill(form);
@@ -1786,10 +1817,10 @@ async function crmMainline(page: Page, go: (type: string, plural: string) => Pro
   await expect(page.getByRole("option")).toHaveCount(0);
   await convert.getByRole("button", { name: "Convert to deal", exact: true }).click();
   await expect(convert).toBeHidden();
-  await expect(page).toHaveURL(/\/(build\.)?deal\/[^/]+$/);
+  await expect(page).toHaveURL(/\/(crm\.)?deal\/[^/]+$/);
   await expect(page.getByRole("heading", { level: 1, name: company, exact: true })).toBeVisible();
   const dealPage = new URL(page.url()).pathname;
-  const organizations = dealPage.replace(/(build\.)?deal\/[^/]+$/, "$1organization/");
+  const organizations = dealPage.replace(/(crm\.)?deal\/[^/]+$/, "$1organization/");
   await page.getByRole("main").getByRole("link", { name: company, exact: true }).last().click();
   await expect(page).toHaveURL((url) => url.pathname.startsWith(organizations));
   await page.getByRole("main").getByRole("link", { name: company, exact: true }).first().click();
@@ -1800,7 +1831,7 @@ async function crmMainline(page: Page, go: (type: string, plural: string) => Pro
   await expect(page.getByRole("menuitem", { name: "Convert to deal", exact: true })).toBeDisabled();
   await page.keyboard.press("Escape");
 
-  await go("build.deal", "Deals");
+  await go("crm.deal", "Deals");
   await page.getByRole("radio", { name: "Board" }).click();
   const card = page.getByRole("region", { name: "Qualification", exact: true }).getByRole("heading", { level: 4, name: company, exact: true });
   await expect(card).toBeVisible();
@@ -1852,7 +1883,7 @@ async function crmMainline(page: Page, go: (type: string, plural: string) => Pro
   await page.reload();
   await expect(page.getByRole("spinbutton", { name: "Probability %" })).toHaveValue("100");
 
-  await go("build.organization", "Organizations");
+  await go("crm.organization", "Organizations");
   const search = page.getByRole("textbox", { name: "Search this list" });
   await search.fill(company.split(" ")[0]);
   await search.press("Enter");

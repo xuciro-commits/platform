@@ -41,7 +41,7 @@ func TestInvariantK13UploadCleanupKeepsReferencesAndReleasesLane(t *testing.T) {
 	live.Files = store
 	live.accept(t, "build.object.create", build.ObjectType, "OBJECT", invariantObject("alpha", "Alpha"))
 	live.accept(t, "build.object.publish", build.ObjectType, "OBJECT", map[string]any{})
-	live.accept(t, "build.alpha.create", "build.alpha", "A1", map[string]any{"note": "before"})
+	live.accept(t, "invariantproject.alpha.create", "invariantproject.alpha", "A1", map[string]any{"note": "before"})
 	member := live.member(t)
 	old := invariantClock.Add(-25 * time.Hour)
 	upload := func(body string, at time.Time) Upload {
@@ -53,7 +53,7 @@ func TestInvariantK13UploadCleanupKeepsReferencesAndReleasesLane(t *testing.T) {
 		return value
 	}
 	attach := func(id string, value Upload) *platform.Error {
-		submission := live.submission(filesowner.SchemaAttach, platform.FileType, id, map[string]any{"hash": value.Hash, "size": value.Size, "name": value.Name, "contentType": value.ContentType, "target": "build.alpha/A1"})
+		submission := live.submission(filesowner.SchemaAttach, platform.FileType, id, map[string]any{"hash": value.Hash, "size": value.Size, "name": value.Name, "contentType": value.ContentType, "target": "invariantproject.alpha/A1"})
 		submission.Authority = platform.FileApp
 		_, refusal := live.Submit(member, submission, invariantClock)
 		return refusal
@@ -71,7 +71,7 @@ func TestInvariantK13UploadCleanupKeepsReferencesAndReleasesLane(t *testing.T) {
 		t.Fatal("the upload was not selected for deletion")
 	}
 	ctx, cancel := context.WithTimeout(t.Context(), time.Second)
-	_, refusal := live.RecordOf(ctx, member, "build.alpha", "A1", invariantClock)
+	_, refusal := live.RecordOf(ctx, member, "invariantproject.alpha", "A1", invariantClock)
 	cancel()
 	if refusal != nil || live.Lane.State().Holder != "" {
 		t.Fatalf("object bytes deletion held the tenant lane: %v %+v", refusal, live.Lane.State())
@@ -102,14 +102,14 @@ func TestInvariantK13AgentReadDoesNotAcquireTenantLane(t *testing.T) {
 	live := newInvariantTenantWithApps(t, "invariant-agent-read", []platform.Service{agentowner.New("invariant-agent-read", actions.NewAuthority)})
 	live.accept(t, "build.object.create", build.ObjectType, "OBJECT", invariantObject("alpha", "Alpha"))
 	live.accept(t, "build.object.publish", build.ObjectType, "OBJECT", map[string]any{})
-	live.accept(t, "build.alpha.create", "build.alpha", "A1", map[string]any{"note": "snapshot"})
+	live.accept(t, "invariantproject.alpha.create", "invariantproject.alpha", "A1", map[string]any{"note": "snapshot"})
 	if err := live.Lane.Hold(t.Context(), "background"); err != nil {
 		t.Fatal(err)
 	}
 	finished := make(chan *platform.Error, 1)
 	go func() {
 		finished <- (hostView{t: live.Tenant}).WithAgentRead(func(runtime protocol.AgentEvaluationRuntime) *platform.Error {
-			if _, found := runtime.Host.Record("build.alpha/A1"); !found {
+			if _, found := runtime.Host.Record("invariantproject.alpha/A1"); !found {
 				return platform.Refuse(pb.ErrorCode_ERROR_CODE_NOT_FOUND, "missing snapshot record")
 			}
 			return nil

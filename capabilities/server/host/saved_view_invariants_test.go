@@ -15,7 +15,7 @@ import (
 )
 
 func TestInvariantK21SavedViewsShareDefinitionsWithoutAccessOrPreferenceChanges(t *testing.T) {
-	const tenant, entity = "invariant-saved-views", "build.opportunity"
+	const tenant, entity = "invariant-saved-views", "invariantproject.opportunity"
 	live := newInvariantTenantWithApps(t, tenant, []platform.Service{work.New(tenant, actions.NewAuthority)},
 		protocol.Seat{Subjects: []string{"other"}, Member: platform.Member{ID: "other", Roles: map[string]string{build.ID: ontology.UserRole}}},
 	)

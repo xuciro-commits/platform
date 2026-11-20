@@ -148,14 +148,14 @@ func (b *Build) validateObjectInstallation(c platform.Caller, record ontology.Ob
 }
 
 func (b *Build) objectInstallationPages(record ontology.Object) ([]platform.Page, string, error) {
-	explicit, err := b.apps.HasPublishedPage(record.Name)
+	explicit, err := b.apps.HasPublishedPage(record.ShownBy)
 	if err != nil {
 		return nil, "", err
 	}
 	if explicit {
 		return nil, "", nil
 	}
-	return []platform.Page{b.application.ObjectPage(record, ID)}, record.Name, nil
+	return []platform.Page{b.application.ObjectPage(record, ID)}, record.PageName(), nil
 }
 
 func (b *Build) releaseAssets(objects []ontology.Object, pages []protocol.Page, apps []protocol.Application, processes []protocol.Process, sourceVersion string) ([]platform.ReleaseAsset, error) {
@@ -195,6 +195,13 @@ func (b *Build) releaseAssets(objects []ontology.Object, pages []protocol.Page, 
 		asset, err := b.apps.PageAsset(saved, sourceVersion)
 		if err != nil {
 			return nil, err
+		}
+		if generated := (platform.AssetRef{App: ID, Kind: platform.AssetPage, Name: strings.TrimPrefix(saved.Object, ID+".")}); generated != asset.Ref && strings.HasSuffix(saved.Object, "."+saved.Name) {
+			if i, exists := index[generated]; exists {
+				delete(index, generated)
+				index[asset.Ref], assets[i] = i, asset
+				continue
+			}
 		}
 		if err := add(asset, true); err != nil {
 			return nil, err

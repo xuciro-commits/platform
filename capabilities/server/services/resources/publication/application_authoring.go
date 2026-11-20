@@ -42,7 +42,7 @@ type ApplicationAuthoring interface {
 	ApplyImage(string, []byte) error
 	RestorePages() error
 	RestoreApplications() error
-	HasPublishedPage(string) (bool, error)
+	HasPublishedPage(func(name, object string) bool) (bool, error)
 	PageAsset(protocol.Page, string) (platform.ReleaseAsset, error)
 	ApplicationAsset(protocol.Application, string) (platform.ReleaseAsset, error)
 	DecodeInstallation(string, json.RawMessage) (protocol.AssetInstallation, error)

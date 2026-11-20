@@ -146,7 +146,7 @@ func (o *Owner) processReleaseAsset(saved runtimeprotocol.Process, sourceVersion
 	ref := platform.AssetRef{App: o.env.AppID(), Kind: platform.AssetFlow, Name: o.QualifiedName(saved.Name)}
 	var subject platform.AssetRef
 	if saved.Object != "" {
-		owner, _, _ := strings.Cut(saved.Object, ".")
+		owner := platform.OwnerOfType(saved.Object)
 		subject = platform.AssetRef{App: owner, Kind: platform.AssetObject, Name: saved.Object}
 	}
 	var actions []platform.AssetRef
@@ -162,7 +162,7 @@ func (o *Owner) processReleaseAsset(saved runtimeprotocol.Process, sourceVersion
 			}
 			owner := step.App
 			if owner == "" {
-				owner, _, _ = strings.Cut(name, ".")
+				owner = platform.OwnerOfType(name)
 			}
 			actions = append(actions, platform.AssetRef{App: owner, Kind: platform.AssetAction, Name: name})
 			if step.Protocol != "" {

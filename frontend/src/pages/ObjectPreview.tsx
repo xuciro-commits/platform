@@ -51,7 +51,7 @@ export function ObjectPreview({ definition, source, catalog }: { definition: Val
     const states = Array.isArray(definition.states) ? definition.states as Api.State[] : [];
     const entity: Api.EntityInfo = {
       ...source.entity,
-      type: `build.${String(definition.name ?? "preview")}`,
+      type: `${String(definition.namespace || "build")}.${String(definition.name ?? "preview")}`,
       title: String(definition.title ?? source.entity.title),
       plural: String(definition.plural ?? source.entity.plural),
       display: String(definition.display ?? source.entity.display),

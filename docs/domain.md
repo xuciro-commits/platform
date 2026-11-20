@@ -45,6 +45,9 @@
 ## 类型
 
 - 对象类型：稳定名、显示名、复数名、显示字段、字段列表、状态与允许的转换、数据源（可以没有）。
+- 项目就是应用：在项目里新建的类型叫 `<项目名>.<名字>`，动作叫 `<项目名>.<名字>.<动词>`，两个项目可以各有一个 `lead`。
+  命名空间在新建时取自项目（安装包时保留包里的），之后不可改；项目不能用内置应用的名字。界面新建的定义以 `<项目名>.<名字>` 作记录标识。
+  工作区与旧数据里的类型仍叫 `build.<名字>`。生成的页面以类型名去掉 `build.` 命名；同项目里按名字指向同一对象的页面替换它。
 - `GET /v1/actions` 公布 `build.object.edit` 的对象类型编辑参数。`display` 选择显示字段。`fields` 整表提交，行包含 `name`、`title`、`type`、
   `required`、`search`、`choices`、`ref`、`group`、`aside`、`when`。`states` 在同一对象类型记录上声明状态的 `name`、`title`、`tone`、`description`。
 - 转换定义在 `build.actiontype` 资源上。`build.actiontype.edit` 的 `definition` 包含动作名、标题、起始状态 `from` 与事务 `transaction`。

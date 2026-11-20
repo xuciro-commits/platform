@@ -5,18 +5,14 @@ import (
 )
 
 type Agent struct {
-	Name         string
-	Title        string
-	Description  string
-	Instructions string
-	Model        string
-	ModelOptions ModelOptions
-	Tools        []string
-	Budget       Budget
-	Checkpoints  []string
-	Guard        func(c Caller, r AgentRun, action, target string, payload json.RawMessage) *Error
-	To           func(c Caller, r AgentRun) []Recipient
-	Cases        []Case
+	Name, Title, Description, Instructions, Model string
+	ModelOptions                                  ModelOptions
+	Tools                                         []string
+	Budget                                        Budget
+	Checkpoints                                   []string
+	Guard                                         func(c Caller, r AgentRun, action, target string, payload json.RawMessage) *Error
+	To                                            func(c Caller, r AgentRun) []Recipient
+	Cases                                         []Case
 }
 
 type Case struct {
@@ -36,11 +32,7 @@ type Budget struct {
 }
 
 type AgentRun struct {
-	ID       string
-	Agent    string
-	Goal     string
-	Ref      string
-	OnBehalf string
+	ID, Agent, Goal, Ref, OnBehalf string
 }
 
 type AgentAction struct {

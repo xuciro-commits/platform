@@ -49,7 +49,7 @@ func (e appEnvironment) DraftObjectLookup(c platform.Caller) (func(string) (plat
 }
 
 func (e appEnvironment) CheckName(name, id string) error {
-	return e.b.checkName(name, id)
+	return e.b.checkName("", name, id)
 }
 
 type ApplicationOwners struct {

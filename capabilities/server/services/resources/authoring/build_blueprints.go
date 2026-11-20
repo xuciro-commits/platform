@@ -17,7 +17,7 @@ func (b *Build) CompleteBlueprintAssets(input []platform.ReleaseAsset) ([]platfo
 			if err := json.Unmarshal(asset.Body, &object); err != nil {
 				return nil, fmt.Errorf("blueprint object %s: %w", asset.Ref, err)
 			}
-			if TypeOf(object.Name) != asset.Ref.Name {
+			if object.Type() != asset.Ref.Name {
 				return nil, fmt.Errorf("invalid blueprint object %s", asset.Ref)
 			}
 			object.ID = object.Name
@@ -61,7 +61,7 @@ func (b *Build) RootDrafts(roots []platform.AssetRef) ([]JointDraftRef, error) {
 		switch root.Kind {
 		case platform.AssetObject:
 			for _, o := range objects {
-				if !o.Archived && TypeOf(o.Name) == root.Name {
+				if !o.Archived && o.Type() == root.Name {
 					if id != "" {
 						return nil, fmt.Errorf("test root %s is ambiguous", root)
 					}

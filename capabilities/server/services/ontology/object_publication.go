@@ -18,7 +18,7 @@ func BusinessVersionInstallOrder(objects []Object) ([]Object, error) {
 	byType := map[string]Object{}
 	for _, record := range objects {
 		if object, ok := publication.Read[Object](record.Published); ok && !record.Archived {
-			byType["build."+object.Name] = object
+			byType[object.Type()] = object
 		}
 	}
 	status := map[string]int{}
@@ -50,7 +50,7 @@ func BusinessVersionInstallOrder(objects []Object) ([]Object, error) {
 		return nil
 	}
 	for _, record := range objects {
-		if err := visit("build." + record.Name); err != nil {
+		if err := visit(record.Type()); err != nil {
 			return nil, err
 		}
 	}
@@ -78,7 +78,7 @@ func DefinitionBody(value Object, typ string) (json.RawMessage, error) {
 
 func ObjectSchemaBody(object Object) (json.RawMessage, error) {
 	object.SchemaVersions, object.View = nil, nil
-	return DefinitionBody(object, AppID+"."+object.Name)
+	return DefinitionBody(object, object.Type())
 }
 
 func checkDefaultView(view json.RawMessage) error {
@@ -251,18 +251,18 @@ func MapObjectIntegrations(object *Object, resolve func(platform.AssetKind, stri
 
 func prepareObjectPublication(asset platform.ReleaseAsset, objects []Object, resolve func(platform.AssetKind, string) (string, error)) (Object, Object, error) {
 	var frozen Object
-	if err := json.Unmarshal(asset.Body, &frozen); err != nil || AppID+"."+frozen.Name != asset.Ref.Name {
+	if err := json.Unmarshal(asset.Body, &frozen); err != nil || frozen.Type() != asset.Ref.Name {
 		return frozen, Object{}, fmt.Errorf("invalid saved object %s", asset.Ref)
 	}
 	if err := MapObjectIntegrations(&frozen, resolve); err != nil {
 		return frozen, Object{}, err
 	}
-	i := slices.IndexFunc(objects, func(object Object) bool { return !object.Archived && object.Name == frozen.Name })
+	i := slices.IndexFunc(objects, func(object Object) bool { return !object.Archived && object.Type() == frozen.Type() })
 	if i < 0 {
 		return frozen, Object{}, fmt.Errorf("saved object %s has no matching draft; renamed or archived definitions need an upgrade plan", asset.Ref)
 	}
 	frozen.Record = objects[i].Record
-	objects[i].State, objects[i].Installed = "published", AppID+"."+frozen.Name
+	objects[i].State, objects[i].Installed = "published", frozen.Type()
 	retained := frozen
 	retained.Published = ""
 	objects[i].Published = string(platform.Raw(retained))
@@ -277,7 +277,7 @@ func ReadObjectPublication(image []byte) (Object, error) {
 		return Object{}, err
 	}
 	published, ok := publication.Read[Object](record.Published)
-	if !ok || record.State != "published" || record.ID != published.ID || record.Name != published.Name || record.Installed != AppID+"."+published.Name {
+	if !ok || record.State != "published" || record.ID != published.ID || record.Name != published.Name || record.Installed != published.Type() {
 		return Object{}, fmt.Errorf("accepted object has no matching published definition")
 	}
 	if published.ExtensionSource != nil {
@@ -313,10 +313,10 @@ func ObjectDraftPublication(objects []Object, env ObjectDraftEnvironment) public
 			}
 		}
 		if was, ok := publication.Read[Object](record.Published); ok {
-			closure.Prior = platform.AssetRef{App: AppID, Kind: platform.AssetObject, Name: AppID + "." + was.Name}
+			closure.Prior = platform.AssetRef{App: AppID, Kind: platform.AssetObject, Name: was.Type()}
 			closure.HasPrior = true
 		}
-		closure.Next = platform.AssetRef{App: AppID, Kind: platform.AssetObject, Name: AppID + "." + record.Name}
+		closure.Next = platform.AssetRef{App: AppID, Kind: platform.AssetObject, Name: record.Type()}
 		if err = env.BindActions(env.Host.Automation(platform.Caller{}, AppID), &record); err != nil {
 			return closure, err
 		}
@@ -349,7 +349,7 @@ func AppendObjectAssets(objects []Object, sourceVersion string, add func(platfor
 		if saved.ID != record.ID {
 			return fmt.Errorf("published object %s belongs to another record", record.ID)
 		}
-		ref := platform.AssetRef{App: AppID, Kind: platform.AssetObject, Name: AppID + "." + saved.Name}
+		ref := platform.AssetRef{App: AppID, Kind: platform.AssetObject, Name: saved.Type()}
 		body, err := DefinitionBody(saved, ref.Name)
 		if err != nil {
 			return err
@@ -416,11 +416,11 @@ func ValidateObjectInstallation(c platform.Caller, record Object, env ObjectInst
 	if previous.Name != "" {
 		prior, next := previous, record
 		prior.View, next.View = nil, nil
-		oldBody, err := DefinitionBody(prior, AppID+"."+previous.Name)
+		oldBody, err := DefinitionBody(prior, previous.Type())
 		if err != nil {
 			return err
 		}
-		newBody, err := DefinitionBody(next, AppID+"."+record.Name)
+		newBody, err := DefinitionBody(next, record.Type())
 		if err != nil {
 			return err
 		}

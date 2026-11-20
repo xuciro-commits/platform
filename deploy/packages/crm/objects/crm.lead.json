@@ -4,7 +4,7 @@
       "ref": {
         "app": "build",
         "kind": "action",
-        "name": "build.lead.convert"
+        "name": "crm.lead.convert"
       },
       "sourceVersion": "1"
     }
@@ -19,7 +19,7 @@
         {
           "help": "Leave empty to create a new organization from the lead.",
           "name": "organization",
-          "ref": "build.organization",
+          "ref": "crm.organization",
           "title": "Link to organization",
           "type": "reference"
         }
@@ -160,7 +160,7 @@
             "kind": "create",
             "name": "organization",
             "target": {
-              "type": "build.organization"
+              "type": "crm.organization"
             },
             "when": {
               "args": [
@@ -239,7 +239,7 @@
             "kind": "create",
             "name": "contact",
             "target": {
-              "type": "build.crmcontact"
+              "type": "crm.crmcontact"
             }
           },
           {
@@ -350,7 +350,7 @@
             "kind": "create",
             "name": "deal",
             "target": {
-              "type": "build.deal"
+              "type": "crm.deal"
             }
           },
           {
@@ -388,11 +388,11 @@
             "name": "lead",
             "target": {
               "id": "$subject",
-              "type": "build.lead"
+              "type": "crm.lead"
             }
           }
         ],
-        "subject": "build.lead"
+        "subject": "crm.lead"
       }
     }
   ],
@@ -447,21 +447,21 @@
     {
       "group": "Classification",
       "name": "source",
-      "ref": "build.leadsource",
+      "ref": "crm.leadsource",
       "title": "Source",
       "type": "reference"
     },
     {
       "group": "Classification",
       "name": "industry",
-      "ref": "build.industry",
+      "ref": "crm.industry",
       "title": "Industry",
       "type": "reference"
     },
     {
       "group": "Classification",
       "name": "territory",
-      "ref": "build.territory",
+      "ref": "crm.territory",
       "title": "Territory",
       "type": "reference"
     },
@@ -488,14 +488,14 @@
       "group": "Closure",
       "name": "deal",
       "readOnly": true,
-      "ref": "build.deal",
+      "ref": "crm.deal",
       "title": "Deal",
       "type": "reference"
     },
     {
       "group": "Closure",
       "name": "lostreason",
-      "ref": "build.lostreason",
+      "ref": "crm.lostreason",
       "title": "Lost reason",
       "type": "reference",
       "when": "status=unqualified,junk"
@@ -672,19 +672,20 @@
     }
   ],
   "name": "lead",
+  "namespace": "crm",
   "plural": "Leads",
   "schemaVersions": [
     {
       "family": 1,
-      "version": "schema.sha256.ac0c19912e77407d421232fb454fe5ffb7833b9709dc7bc8ade37c947a593224"
+      "version": "schema.sha256.41434458b6f23f92f2b1072560f8933a47f5c70773392a5ec6be83697dd40d67"
     },
     {
       "family": 2,
-      "version": "schema.sha256.26675b965eb2856203fe48ecda6ca86a6cfabf5d09bb918d31a6be56b29e6e56"
+      "version": "schema.sha256.a412aced107791f42384d1a43aa54e36ba14d6c323837572053c820bb66c21ce"
     },
     {
       "family": 2,
-      "version": "schema.sha256.927c56a7c766b9878c2029815594b39d9e56c51ede87e0a302290559fce1de75"
+      "version": "schema.sha256.83c0280f3b5a590c8ebc87d9daf22e7acd1162ec8919c3e4e967e034c2217058"
     }
   ],
   "states": [
@@ -696,7 +697,7 @@
     }
   ],
   "title": "Lead",
-  "type": "build.lead",
+  "type": "crm.lead",
   "view": {
     "columns": [
       "fullname",

@@ -6,7 +6,6 @@ import (
 	"platformserver/kernel/protocol"
 	"reflect"
 	"slices"
-	"strings"
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
@@ -58,7 +57,7 @@ func (b *Build) checkExtensionDependents(object ontology.Object) error {
 	var base platform.RecordTypeInfo
 	for _, record := range objects {
 		published, exists := publication.Read[ontology.Object](record.Published)
-		if !exists || published.Extends != ID+"."+object.Name {
+		if !exists || published.Extends != object.Type() {
 			continue
 		}
 		if base.Type == "" {
@@ -104,7 +103,7 @@ func (b *Build) conditionLookup(typ string) (platform.RecordTypeInfo, bool) {
 }
 
 func (b *Build) Check(o ontology.Object, id string, engine platform.RuleEngine) error {
-	if err := b.checkName(o.Name, id); err != nil {
+	if err := b.checkName(o.Namespace, o.Name, id); err != nil {
 		return err
 	}
 	if err := ontology.CheckPropertyFields(o.Fields, ID, b.host); err != nil {
@@ -122,7 +121,7 @@ func (b *Build) Check(o ontology.Object, id string, engine platform.RuleEngine) 
 	if err := ontology.CheckEnterpriseUse(o, engine); err != nil {
 		return err
 	}
-	if err := ontology.CheckProcess(o, ID, TypeOf(o.Name), Builder, User, protocol.FunctionCallType, b.conditionLookup); err != nil {
+	if err := ontology.CheckProcess(o, ID, o.Type(), Builder, User, protocol.FunctionCallType, b.conditionLookup); err != nil {
 		return err
 	}
 	if err := b.checkObjectRules(o, engine); err != nil {
@@ -160,14 +159,14 @@ func (b *Build) checkShape(o ontology.Object) error {
 		return nil
 	}
 	declared := b.declaredInterfaces()
-	return ontology.CheckObjectShape(o, ID, TypeOf(o.Name), Entity(o), declared, b.fieldKnown, b.lookupEntity)
+	return ontology.CheckObjectShape(o, ID, o.Type(), Entity(o), declared, b.fieldKnown, b.lookupEntity)
 }
 
-func (b *Build) checkName(name, id string) error {
+func (b *Build) checkName(namespace, name, id string) error {
 	if !publication.ValidName(name) {
 		return fmt.Errorf("the name %q is not lower-case letters and digits", name)
 	}
-	other, taken, err := b.taken(name, id)
+	other, taken, err := b.taken(qualifiedType(namespace, name), id)
 	if err != nil {
 		return err
 	}
@@ -190,22 +189,18 @@ func (b *Build) fieldKnown(ref string) bool {
 	if b.host.Declares(ref) {
 		return true
 	}
-	name, derived := strings.CutPrefix(ref, ID+".")
-	if !derived {
-		return false
-	}
 	objects, err := readDefinitionInventory[ontology.Object](b.host.Automation(platform.Caller{}, ID))
 	if err != nil {
 		return false
 	}
-	return slices.ContainsFunc(objects, func(o ontology.Object) bool { return !o.Archived && o.Name == name })
+	return slices.ContainsFunc(objects, func(o ontology.Object) bool { return !o.Archived && o.Type() == ref })
 }
 
-func (b *Build) taken(name, id string) (string, bool, error) {
+func (b *Build) taken(typ, id string) (string, bool, error) {
 	if b.host == nil {
 		return "", false, nil
 	}
-	if _, mine := b.installed[TypeOf(name)]; !mine && b.host.Declares(TypeOf(name)) {
+	if _, mine := b.installed[typ]; !mine && b.host.Declares(typ) {
 		return "an app's own type", true, nil
 	}
 	objects, err := readDefinitionInventory[ontology.Object](b.host.Automation(platform.Caller{}, ID))
@@ -213,7 +208,7 @@ func (b *Build) taken(name, id string) (string, bool, error) {
 		return "", false, err
 	}
 	for _, o := range objects {
-		if o.Name == name && o.ID != id && !o.Archived {
+		if o.Type() == typ && o.ID != id && !o.Archived {
 			return "the object " + o.Title, true, nil
 		}
 	}

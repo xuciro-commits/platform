@@ -116,8 +116,7 @@ func (q NamedQuery) Dependencies() []AssetRef {
 	}
 	refs := make([]AssetRef, 0, len(types))
 	for _, typ := range types {
-		owner, _, _ := strings.Cut(typ, ".")
-		refs = append(refs, AssetRef{App: owner, Kind: AssetObject, Name: typ})
+		refs = append(refs, AssetRef{App: OwnerOfType(typ), Kind: AssetObject, Name: typ})
 	}
 	slices.SortFunc(refs, func(a, b AssetRef) int { return strings.Compare(a.String(), b.String()) })
 	return refs

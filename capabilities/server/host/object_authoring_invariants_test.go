@@ -77,7 +77,7 @@ func TestInvariantK22ObjectDraftShowsOnlyUnpublishedAuthoringChanges(t *testing.
 func TestInvariantK23PublishCheckCountsDataAndMatchesTheOriginalDecision(t *testing.T) {
 	delegated := protocol.Seat{Subjects: []string{"other"}, Member: platform.Member{ID: "other", Grants: []platform.Grant{{App: build.ID, Role: build.Builder, By: "project:p1"}}}}
 	live := newInvariantTenant(t, "invariant-k23", delegated)
-	const id, typ = "CONTACT", "build.contact"
+	const id, typ = "CONTACT", "invariantproject.contact"
 	draft := invariantObject("contact", "Contact")
 	draft["display"] = "note"
 	live.accept(t, "build.object.create", build.ObjectType, id, draft)
@@ -117,5 +117,45 @@ func TestInvariantK23PublishCheckCountsDataAndMatchesTheOriginalDecision(t *test
 	_, refusal := live.Submit(live.member(t), request, invariantClock)
 	if result.Allowed != (refusal == nil) || refusal != nil && result.Message != refusal.Message {
 		t.Fatalf("preview=%+v publish=%+v", result, refusal)
+	}
+}
+
+func TestInvariantK25ProjectsOwnTheirTypeNames(t *testing.T) {
+	live := newInvariantTenant(t, "invariant-k25")
+	live.accept(t, protocol.AppType+".create", protocol.AppType, "SECOND", map[string]any{"name": "secondproject", "title": "Second project"})
+	second := invariantObject("lead", "Lead")
+	second["project"] = "SECOND"
+	live.accept(t, "build.object.create", build.ObjectType, "LEAD1", invariantObject("lead", "Lead"))
+	live.accept(t, "build.object.create", build.ObjectType, "LEAD2", second)
+	squatter := invariantObject("lead", "Lead")
+	squatter["namespace"] = "secondproject"
+	if _, refusal := live.Submit(live.member(t), live.submission("build.object.create", build.ObjectType, "SQUAT", squatter), invariantClock); refusal == nil {
+		t.Fatal("a project created a type in another project's namespace")
+	}
+	moved := invariantObject("lead", "Lead")
+	moved["namespace"] = "secondproject"
+	if _, refusal := live.Submit(live.member(t), live.submission("build.object.edit", build.ObjectType, "LEAD1", moved), invariantClock); refusal == nil {
+		t.Fatal("an object type moved to another project's namespace")
+	}
+	for _, id := range []string{"LEAD1", "LEAD2"} {
+		live.accept(t, "build.object.publish", build.ObjectType, id, map[string]any{})
+	}
+	live.accept(t, "build.object.create", build.ObjectType, "LEAD3", invariantObject("lead", "Lead again"))
+	if _, refusal := live.Submit(live.member(t), live.submission("build.object.publish", build.ObjectType, "LEAD3", map[string]any{}), invariantClock); refusal == nil {
+		t.Fatal("a project published a type name it already has")
+	}
+	live.accept(t, "invariantproject.lead.create", "invariantproject.lead", "L1", map[string]any{"note": "first"})
+	live.accept(t, "secondproject.lead.create", "secondproject.lead", "L1", map[string]any{"note": "second"})
+	want := live.recordImage(t)
+	for _, typ := range []string{"invariantproject.lead", "secondproject.lead"} {
+		if len(want[typ]) == 0 {
+			t.Fatalf("%s has no rows", typ)
+		}
+	}
+	if bytes.Equal(want["invariantproject.lead"], want["secondproject.lead"]) {
+		t.Fatal("two projects' lead records share one store")
+	}
+	if differing := differingTypes(want, live.restore(t, live.entries).recordImage(t)); len(differing) != 0 {
+		t.Fatalf("replay differs in %v", differing)
 	}
 }

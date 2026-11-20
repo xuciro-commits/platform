@@ -61,7 +61,7 @@ func (h buildDataHost) DraftEntity(typ string) (platform.RecordTypeInfo, bool) {
 		return platform.RecordTypeInfo{}, false
 	}
 	for _, object := range objects {
-		if object.Archived || TypeOf(object.Name) != typ {
+		if object.Archived || object.Type() != typ {
 			continue
 		}
 		info, err := records.Describe(ID, Entity(object), func(reflect.Type) string { return "" })
@@ -86,7 +86,7 @@ func (h buildDataHost) ObjectActions(c platform.Caller, typ string) ([]platform.
 		return nil, false
 	}
 	for _, object := range objects {
-		if object.Archived || TypeOf(object.Name) != typ {
+		if object.Archived || object.Type() != typ {
 			continue
 		}
 		return objectActions(object, Entity(object)), true

@@ -14,7 +14,7 @@ import { grouped } from "./describe";
 
 type Values = Record<string, unknown>;
 type Applied = Promise<void>;
-type Project = { id: string; title: string };
+type Project = { id: string; title: string; name?: string };
 export type ActionDialogProps = {
   action: Api.Action;
   described?: Api.EntityInfo;
@@ -63,7 +63,9 @@ export function ActionDialog({ action, described, heading, confirm, id, revision
       if (value != null && value !== "") payload[parameter.name] = value;
     }
     if (owned) payload.project = project;
-    const target = id ?? (typeof values.name === "string" ? values.name : `${action.idPrefix ?? ""}${crypto.randomUUID()}`);
+    const space = projects.status === "ready" ? (projects.data.records as Project[]).find((entry) => entry.id === project)?.name : undefined;
+    const named = typeof values.name === "string" ? (space && space !== "workspace" ? `${space}.${values.name}` : values.name) : undefined;
+    const target = id ?? named ?? `${action.idPrefix ?? ""}${crypto.randomUUID()}`;
     try {
       if (perform) await perform(payload);
       else await send(action, target, payload, revision);

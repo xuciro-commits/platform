@@ -48,7 +48,7 @@ func (b *Build) SavedDraftChanges(c platform.Caller, application, typ, id string
 		for _, record := range rows {
 			var meta struct {
 				platform.Record
-				Name, Title, Kind, Variant, Published string
+				Name, Namespace, Title, Kind, Variant, Published string
 			}
 			if err := json.Unmarshal(platform.Raw(record), &meta); err != nil {
 				return nil, err
@@ -56,14 +56,15 @@ func (b *Build) SavedDraftChanges(c platform.Caller, application, typ, id string
 			if meta.Archived || id != "" && meta.ID != id {
 				continue
 			}
-			ref, _ := draftAssetRef(entity.Type, meta.Name)
+			ref, _ := draftAssetRef(entity.Type, qualified(meta.Namespace, meta.Name))
 			if entity.Type == TestPlanType && meta.Variant == "evaluation-set" {
 				ref.Kind = platform.AssetEvaluation
 			}
 			if application != "" && !(entity.Type == protocol.AppType && meta.ID == application) && !held[ref] {
 				var original struct {
-					Name string
-					Ref  platform.AssetRef
+					Name      string
+					Namespace string
+					Ref       platform.AssetRef
 				}
 				_ = json.Unmarshal([]byte(meta.Published), &original)
 				prior := original.Ref
@@ -71,7 +72,7 @@ func (b *Build) SavedDraftChanges(c platform.Caller, application, typ, id string
 					if original.Name == "" {
 						continue
 					}
-					prior, _ = draftAssetRef(entity.Type, original.Name)
+					prior, _ = draftAssetRef(entity.Type, qualified(original.Namespace, original.Name))
 				}
 				if !held[prior] {
 					continue
@@ -80,13 +81,14 @@ func (b *Build) SavedDraftChanges(c platform.Caller, application, typ, id string
 			change := DraftChange{Ref: ref, Type: entity.Type, ID: meta.ID, Title: meta.Title, Variant: meta.Kind, Published: meta.Published != "", Changed: meta.Changed, Owner: draftOwner(meta.Record), Fields: []DraftChangeField{}}
 			if change.Published {
 				var original struct {
-					Name string
-					Ref  platform.AssetRef
+					Name      string
+					Namespace string
+					Ref       platform.AssetRef
 				}
 				if json.Unmarshal([]byte(meta.Published), &original) == nil {
 					change.Prior = original.Ref
 					if change.Prior.Kind == "" && original.Name != "" {
-						change.Prior, _ = draftAssetRef(entity.Type, original.Name)
+						change.Prior, _ = draftAssetRef(entity.Type, qualified(original.Namespace, original.Name))
 					}
 				}
 			}
@@ -237,7 +239,7 @@ func (b *Build) draftComparison(record any, published string, info platform.Reco
 			object.ActionTypes = slices.Clone(object.ActionTypes)
 			if len(object.ActionTypes) == 0 {
 				for _, action := range object.Actions {
-					object.ActionTypes = append(object.ActionTypes, platform.AssetBinding{Ref: platform.AssetRef{App: ID, Kind: platform.AssetAction, Name: TypeOf(object.Name) + "." + action.Name}})
+					object.ActionTypes = append(object.ActionTypes, platform.AssetBinding{Ref: platform.AssetRef{App: ID, Kind: platform.AssetAction, Name: object.Type() + "." + action.Name}})
 				}
 			}
 			for i := range object.ActionTypes {

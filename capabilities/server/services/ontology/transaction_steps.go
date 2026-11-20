@@ -94,7 +94,7 @@ func checkRefusalDeclarations(ctx TransactionContext, object Object, action Acti
 				return fmt.Errorf("refusal records must be an unconditional create on a distinct object")
 			}
 			info, ok := lookup(record.Target.Type)
-			if !ok || info.App != ctx.App || !strings.HasPrefix(record.Target.Type, ctx.App+".") {
+			if !ok || info.App != ctx.App || platform.OwnerOfType(record.Target.Type) != ctx.App {
 				return fmt.Errorf("refusal record must belong to its transaction authority")
 			}
 			if !ctx.Saved(record.Target.Type) {

@@ -455,7 +455,7 @@
             "name": "parent",
             "title": "Parent territory",
             "type": "reference",
-            "ref": "build.territory"
+            "ref": "crm.territory"
           },
           {
             "name": "manager",
@@ -617,14 +617,14 @@
             "name": "industry",
             "title": "Industry",
             "type": "reference",
-            "ref": "build.industry",
+            "ref": "crm.industry",
             "group": "Details"
           },
           {
             "name": "territory",
             "title": "Territory",
             "type": "reference",
-            "ref": "build.territory",
+            "ref": "crm.territory",
             "group": "Details"
           },
           {
@@ -813,7 +813,7 @@
             "name": "organization",
             "title": "Organization",
             "type": "reference",
-            "ref": "build.organization",
+            "ref": "crm.organization",
             "inverse": "contacts",
             "group": "Contact"
           },
@@ -1126,21 +1126,21 @@
             "name": "source",
             "title": "Source",
             "type": "reference",
-            "ref": "build.leadsource",
+            "ref": "crm.leadsource",
             "group": "Classification"
           },
           {
             "name": "industry",
             "title": "Industry",
             "type": "reference",
-            "ref": "build.industry",
+            "ref": "crm.industry",
             "group": "Classification"
           },
           {
             "name": "territory",
             "title": "Territory",
             "type": "reference",
-            "ref": "build.territory",
+            "ref": "crm.territory",
             "group": "Classification"
           },
           {
@@ -1166,7 +1166,7 @@
             "name": "lostreason",
             "title": "Lost reason",
             "type": "reference",
-            "ref": "build.lostreason",
+            "ref": "crm.lostreason",
             "when": "status=unqualified,junk",
             "group": "Closure"
           },
@@ -1604,7 +1604,7 @@
             "name": "organization",
             "title": "Organization",
             "type": "reference",
-            "ref": "build.organization",
+            "ref": "crm.organization",
             "inverse": "deals",
             "search": true,
             "group": "Commercial"
@@ -1613,14 +1613,14 @@
             "name": "contact",
             "title": "Primary contact",
             "type": "reference",
-            "ref": "build.crmcontact",
+            "ref": "crm.crmcontact",
             "group": "Commercial"
           },
           {
             "name": "lead",
             "title": "Source lead",
             "type": "reference",
-            "ref": "build.lead",
+            "ref": "crm.lead",
             "group": "Commercial"
           },
           {
@@ -1696,28 +1696,28 @@
             "name": "source",
             "title": "Source",
             "type": "reference",
-            "ref": "build.leadsource",
+            "ref": "crm.leadsource",
             "group": "Classification"
           },
           {
             "name": "industry",
             "title": "Industry",
             "type": "reference",
-            "ref": "build.industry",
+            "ref": "crm.industry",
             "group": "Classification"
           },
           {
             "name": "territory",
             "title": "Territory",
             "type": "reference",
-            "ref": "build.territory",
+            "ref": "crm.territory",
             "group": "Classification"
           },
           {
             "name": "lostreason",
             "title": "Lost reason",
             "type": "reference",
-            "ref": "build.lostreason",
+            "ref": "crm.lostreason",
             "when": "status=lost",
             "group": "Closure",
             "required": true
@@ -2064,7 +2064,7 @@
             "name": "lines",
             "from": "lines",
             "direction": "inverse",
-            "object": "build.dealline",
+            "object": "crm.dealline",
             "order": [
               {
                 "expr": {
@@ -2089,7 +2089,7 @@
           "collections": {
             "lines": {
               "app": "build",
-              "object": "build.dealline",
+              "object": "crm.dealline",
               "set": "lines",
               "query": "",
               "version": 0,
@@ -2298,7 +2298,7 @@
             "name": "deal",
             "title": "Deal",
             "type": "reference",
-            "ref": "build.deal",
+            "ref": "crm.deal",
             "inverse": "lines",
             "required": true
           },
@@ -2306,7 +2306,7 @@
             "name": "product",
             "title": "Product",
             "type": "reference",
-            "ref": "build.crmproduct"
+            "ref": "crm.crmproduct"
           },
           {
             "name": "productname",
@@ -2514,7 +2514,7 @@
             "name": "lead",
             "title": "Lead",
             "type": "reference",
-            "ref": "build.lead",
+            "ref": "crm.lead",
             "inverse": "tasks",
             "group": "Task",
             "oneOf": "Related to"
@@ -2523,7 +2523,7 @@
             "name": "deal",
             "title": "Deal",
             "type": "reference",
-            "ref": "build.deal",
+            "ref": "crm.deal",
             "inverse": "tasks",
             "group": "Task",
             "oneOf": "Related to"
@@ -2772,7 +2772,7 @@
             "name": "lead",
             "title": "Lead",
             "type": "reference",
-            "ref": "build.lead",
+            "ref": "crm.lead",
             "inverse": "notes",
             "group": "Note",
             "oneOf": "Related to"
@@ -2781,7 +2781,7 @@
             "name": "deal",
             "title": "Deal",
             "type": "reference",
-            "ref": "build.deal",
+            "ref": "crm.deal",
             "inverse": "notes",
             "group": "Note",
             "oneOf": "Related to"
@@ -2891,21 +2891,21 @@
             "name": "source",
             "title": "Source",
             "type": "reference",
-            "ref": "build.leadsource",
+            "ref": "crm.leadsource",
             "group": "Classification"
           },
           {
             "name": "industry",
             "title": "Industry",
             "type": "reference",
-            "ref": "build.industry",
+            "ref": "crm.industry",
             "group": "Classification"
           },
           {
             "name": "territory",
             "title": "Territory",
             "type": "reference",
-            "ref": "build.territory",
+            "ref": "crm.territory",
             "group": "Classification"
           },
           {
@@ -2931,7 +2931,7 @@
             "name": "deal",
             "title": "Deal",
             "type": "reference",
-            "ref": "build.deal",
+            "ref": "crm.deal",
             "readOnly": true,
             "group": "Closure"
           },
@@ -2939,7 +2939,7 @@
             "name": "lostreason",
             "title": "Lost reason",
             "type": "reference",
-            "ref": "build.lostreason",
+            "ref": "crm.lostreason",
             "when": "status=unqualified,junk",
             "group": "Closure"
           },
@@ -3107,9 +3107,9 @@
       "build.actiontype",
       "CRM-LEAD-CONVERT",
       {
-        "name": "build.lead.convert",
+        "name": "crm.lead.convert",
         "project": "crm",
-        "object": "build.lead",
+        "object": "crm.lead",
         "definition": {
           "name": "convert",
           "title": "Convert to deal",
@@ -3122,12 +3122,12 @@
               "name": "organization",
               "title": "Link to organization",
               "type": "reference",
-              "ref": "build.organization",
+              "ref": "crm.organization",
               "help": "Leave empty to create a new organization from the lead."
             }
           ],
           "transaction": {
-            "subject": "build.lead",
+            "subject": "crm.lead",
             "guard": {
               "op": "and",
               "kind": "boolean",
@@ -3207,7 +3207,7 @@
                 "name": "organization",
                 "kind": "create",
                 "target": {
-                  "type": "build.organization"
+                  "type": "crm.organization"
                 },
                 "when": {
                   "op": "empty",
@@ -3278,7 +3278,7 @@
                 "name": "contact",
                 "kind": "create",
                 "target": {
-                  "type": "build.crmcontact"
+                  "type": "crm.crmcontact"
                 },
                 "changes": [
                   {
@@ -3346,7 +3346,7 @@
                 "name": "deal",
                 "kind": "create",
                 "target": {
-                  "type": "build.deal"
+                  "type": "crm.deal"
                 },
                 "changes": [
                   {
@@ -3457,7 +3457,7 @@
                 "name": "lead",
                 "kind": "update",
                 "target": {
-                  "type": "build.lead",
+                  "type": "crm.lead",
                   "id": "$subject"
                 },
                 "changes": [
@@ -3516,12 +3516,12 @@
       {
         "icon": "users",
         "pages": [
-          "lead",
-          "deal",
-          "organization",
-          "crmcontact",
-          "crmtask",
-          "note"
+          "crm.lead",
+          "crm.deal",
+          "crm.organization",
+          "crm.crmcontact",
+          "crm.crmtask",
+          "crm.note"
         ]
       }
     ]

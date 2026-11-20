@@ -93,7 +93,7 @@ func TestInvariantK13BackgroundRoundReleasesLaneBetweenTasks(t *testing.T) {
 	live.accept(t, "build.object.publish", build.ObjectType, "OBJECT", map[string]any{})
 	live.accept(t, "build.process.create", protocol.ProcessType, "PROCESS", map[string]any{
 		"name": "scheduled", "title": "Scheduled", "kind": "automation", "every": "1m",
-		"steps": []protocol.ProcessStep{{Name: "create", Kind: "action", Act: "build.alpha.create",
+		"steps": []protocol.ProcessStep{{Name: "create", Kind: "action", Act: "invariantproject.alpha.create",
 			Target: &platform.Binding{Source: "input", Path: []string{"period"}},
 			Inputs: map[string]platform.Binding{"note": {Source: "literal", Value: json.RawMessage(`"scheduled"`)}},
 		}},
@@ -121,7 +121,7 @@ func TestInvariantK13ReadScopesKeepOneStateAndOwnContext(t *testing.T) {
 	live := newInvariantTenant(t, "invariant-read-scopes")
 	live.accept(t, "build.object.create", build.ObjectType, "OBJECT", invariantObject("alpha", "Alpha"))
 	live.accept(t, "build.object.publish", build.ObjectType, "OBJECT", map[string]any{})
-	live.accept(t, "build.alpha.create", "build.alpha", "A1", map[string]any{"note": "before"})
+	live.accept(t, "invariantproject.alpha.create", "invariantproject.alpha", "A1", map[string]any{"note": "before"})
 	member := live.member(t)
 	leftContext, cancel := context.WithCancel(t.Context())
 	defer cancel()
@@ -142,12 +142,12 @@ func TestInvariantK13ReadScopesKeepOneStateAndOwnContext(t *testing.T) {
 				_ = scope.Catalog(member)
 				_ = scope.Definitions(member)
 				for _, entity := range scope.Entities(member) {
-					if entity.Type == "build.alpha" && entity.Title != "Alpha" {
+					if entity.Type == "invariantproject.alpha" && entity.Title != "Alpha" {
 						t.Errorf("read scope mixed metadata from a later publication: %s", entity.Title)
 						return
 					}
 				}
-				view, refusal := scope.RecordOf(scope.readContext(), member, "build.alpha", "A1", invariantClock)
+				view, refusal := scope.RecordOf(scope.readContext(), member, "invariantproject.alpha", "A1", invariantClock)
 				if refusal != nil {
 					t.Errorf("read retained scope: %v", refusal)
 					return
@@ -161,18 +161,18 @@ func TestInvariantK13ReadScopesKeepOneStateAndOwnContext(t *testing.T) {
 		})
 	}
 	close(started)
-	live.accept(t, "build.alpha.edit", "build.alpha", "A1", map[string]any{"note": "after"})
+	live.accept(t, "invariantproject.alpha.edit", "invariantproject.alpha", "A1", map[string]any{"note": "after"})
 	live.accept(t, "build.object.edit", build.ObjectType, "OBJECT", map[string]any{"title": "Changed alpha"})
 	live.accept(t, "build.object.publish", build.ObjectType, "OBJECT", map[string]any{})
 	readers.Wait()
 	cancel()
-	if _, refusal := left.RecordOf(leftContext, member, "build.alpha", "A1", invariantClock); refusal == nil {
+	if _, refusal := left.RecordOf(leftContext, member, "invariantproject.alpha", "A1", invariantClock); refusal == nil {
 		t.Fatal("cancelled scope continued reading")
 	}
-	if _, refusal := right.RecordOf(t.Context(), member, "build.alpha", "A1", invariantClock); refusal != nil || right.readContext().Err() != nil {
+	if _, refusal := right.RecordOf(t.Context(), member, "invariantproject.alpha", "A1", invariantClock); refusal != nil || right.readContext().Err() != nil {
 		t.Fatalf("one scope's cancellation affected another: %v", refusal)
 	}
-	view, refusal := live.RecordOf(t.Context(), member, "build.alpha", "A1", invariantClock)
+	view, refusal := live.RecordOf(t.Context(), member, "invariantproject.alpha", "A1", invariantClock)
 	var record map[string]any
 	if refusal != nil || json.Unmarshal(platform.Raw(view.Record), &record) != nil || record["note"] != "after" {
 		t.Fatalf("current tenant lost its accepted change: %v, %v", view.Record, refusal)
@@ -183,7 +183,7 @@ func TestInvariantK13PublishedReadsDoNotWaitForBackgroundLane(t *testing.T) {
 	live := newInvariantTenant(t, "invariant-published-read")
 	live.accept(t, "build.object.create", build.ObjectType, "OBJECT", invariantObject("alpha", "Alpha"))
 	live.accept(t, "build.object.publish", build.ObjectType, "OBJECT", map[string]any{})
-	live.accept(t, "build.alpha.create", "build.alpha", "A1", map[string]any{"note": "before"})
+	live.accept(t, "invariantproject.alpha.create", "invariantproject.alpha", "A1", map[string]any{"note": "before"})
 	member := live.member(t)
 	image := live.readImage.Load()
 	if image == nil {
@@ -193,7 +193,7 @@ func TestInvariantK13PublishedReadsDoNotWaitForBackgroundLane(t *testing.T) {
 		t.Fatal(err)
 	}
 	ctx, cancel := context.WithTimeout(t.Context(), time.Second)
-	view, refusal := live.RecordOf(ctx, member, "build.alpha", "A1", invariantClock)
+	view, refusal := live.RecordOf(ctx, member, "invariantproject.alpha", "A1", invariantClock)
 	cancel()
 	lane := live.Lane.State()
 	live.Lane.Unlock()
@@ -207,7 +207,7 @@ func TestInvariantK13PublishedReadsDoNotWaitForBackgroundLane(t *testing.T) {
 	version := live.liveVersion("/v1/records/build.alpha/A1")
 	_, wake := live.Changes()
 	live.Lane.Lock()
-	submission := live.submission("build.alpha.edit", "build.alpha", "A1", map[string]any{"note": "after"})
+	submission := live.submission("invariantproject.alpha.edit", "invariantproject.alpha", "A1", map[string]any{"note": "after"})
 	_, updateRefusal := live.Tenant.accept(live.App(build.ID), member, submission, invariantClock, acceptOptions{})
 	if updateRefusal != nil {
 		live.Lane.Unlock()
@@ -228,12 +228,12 @@ func TestInvariantK13PublishedReadsDoNotWaitForBackgroundLane(t *testing.T) {
 		t.Fatal("published changes did not wake live readers")
 	}
 	retained, refusal, err := readImageState(live.Tenant, image.state, t.Context(), func(scope *Tenant) (objects.RecordView, *platform.Error) {
-		return scope.recordOf(member, "build.alpha", "A1", invariantClock)
+		return scope.recordOf(member, "invariantproject.alpha", "A1", invariantClock)
 	})
 	if err != nil || refusal != nil || json.Unmarshal(platform.Raw(retained.Record), &record) != nil || record["note"] != "before" {
 		t.Fatalf("publication changed an older reader's state: %v, %v, %v", retained.Record, refusal, err)
 	}
-	current, refusal := live.RecordOf(t.Context(), member, "build.alpha", "A1", invariantClock)
+	current, refusal := live.RecordOf(t.Context(), member, "invariantproject.alpha", "A1", invariantClock)
 	if refusal != nil || json.Unmarshal(platform.Raw(current.Record), &record) != nil || record["note"] != "after" {
 		t.Fatalf("latest publication missed an accepted update: %v, %v", current.Record, refusal)
 	}
@@ -298,11 +298,11 @@ func TestInvariantK13ConcurrentSubmissionsKeepOneSerialHistory(t *testing.T) {
 	live := newInvariantTenant(t, "invariant-concurrent-submit")
 	live.accept(t, "build.object.create", build.ObjectType, "OBJECT", invariantObject("alpha", "Alpha"))
 	live.accept(t, "build.object.publish", build.ObjectType, "OBJECT", map[string]any{})
-	live.accept(t, "build.alpha.create", "build.alpha", "A1", map[string]any{"note": "before"})
+	live.accept(t, "invariantproject.alpha.create", "invariantproject.alpha", "A1", map[string]any{"note": "before"})
 	member := live.member(t)
 	submissions := []*pb.Submission{
-		live.submission("build.alpha.edit", "build.alpha", "A1", map[string]any{"note": "first"}),
-		live.submission("build.alpha.edit", "build.alpha", "A1", map[string]any{"note": "second"}),
+		live.submission("invariantproject.alpha.edit", "invariantproject.alpha", "A1", map[string]any{"note": "first"}),
+		live.submission("invariantproject.alpha.edit", "invariantproject.alpha", "A1", map[string]any{"note": "second"}),
 	}
 	for _, submission := range submissions {
 		revision := uint32(1)
@@ -354,7 +354,7 @@ func TestInvariantK13ConcurrentSubmissionsKeepOneSerialHistory(t *testing.T) {
 			}
 		}
 	}
-	view, refusal := live.RecordOf(t.Context(), member, "build.alpha", "A1", invariantClock)
+	view, refusal := live.RecordOf(t.Context(), member, "invariantproject.alpha", "A1", invariantClock)
 	var record struct {
 		Revision uint32
 		Note     string

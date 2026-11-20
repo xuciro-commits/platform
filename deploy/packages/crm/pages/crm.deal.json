@@ -5,17 +5,12 @@
         {
           "app": "build",
           "kind": "action",
-          "name": "build.lead.create"
+          "name": "crm.deal.create"
         },
         {
           "app": "build",
           "kind": "action",
-          "name": "build.lead.edit"
-        },
-        {
-          "app": "build",
-          "kind": "action",
-          "name": "build.lead.convert"
+          "name": "crm.deal.edit"
         }
       ],
       "binding": "page",
@@ -36,16 +31,16 @@
     {
       "fields": [
         {
-          "name": "fullname"
+          "name": "title"
         },
         {
-          "name": "organizationname"
+          "name": "organization"
         },
         {
-          "name": "email"
+          "name": "contact"
         },
         {
-          "name": "mobile"
+          "name": "lead"
         },
         {
           "name": "state"
@@ -56,27 +51,27 @@
       "model": {
         "fields": [
           {
-            "name": "fullname"
+            "name": "title"
           },
           {
-            "name": "organizationname"
+            "name": "organization"
           },
           {
-            "name": "email"
+            "name": "contact"
           },
           {
-            "name": "mobile"
+            "name": "lead"
           },
           {
             "name": "state"
           }
         ],
-        "type": "build.lead"
+        "type": "crm.deal"
       },
       "object": {
         "app": "build",
         "kind": "object",
-        "name": "build.lead"
+        "name": "crm.deal"
       },
       "owner": "binding:list",
       "ports": {
@@ -88,25 +83,28 @@
     {
       "fields": [
         {
-          "name": "fullname"
+          "name": "title"
         },
         {
-          "name": "organizationname"
+          "name": "organization"
         },
         {
-          "name": "email"
+          "name": "contact"
         },
         {
-          "name": "mobile"
+          "name": "lead"
         },
         {
-          "name": "phone"
+          "name": "dealvalue"
         },
         {
-          "name": "website"
+          "name": "total"
         },
         {
-          "name": "jobtitle"
+          "name": "expectedclose"
+        },
+        {
+          "name": "closeddate"
         },
         {
           "name": "source"
@@ -118,18 +116,6 @@
           "name": "territory"
         },
         {
-          "name": "employees"
-        },
-        {
-          "name": "annualrevenue"
-        },
-        {
-          "name": "converted"
-        },
-        {
-          "name": "deal"
-        },
-        {
           "name": "lostreason"
         },
         {
@@ -137,6 +123,9 @@
         },
         {
           "name": "status"
+        },
+        {
+          "name": "probability"
         },
         {
           "name": "owner"
@@ -150,25 +139,28 @@
       "model": {
         "fields": [
           {
-            "name": "fullname"
+            "name": "title"
           },
           {
-            "name": "organizationname"
+            "name": "organization"
           },
           {
-            "name": "email"
+            "name": "contact"
           },
           {
-            "name": "mobile"
+            "name": "lead"
           },
           {
-            "name": "phone"
+            "name": "dealvalue"
           },
           {
-            "name": "website"
+            "name": "total"
           },
           {
-            "name": "jobtitle"
+            "name": "expectedclose"
+          },
+          {
+            "name": "closeddate"
           },
           {
             "name": "source"
@@ -180,18 +172,6 @@
             "name": "territory"
           },
           {
-            "name": "employees"
-          },
-          {
-            "name": "annualrevenue"
-          },
-          {
-            "name": "converted"
-          },
-          {
-            "name": "deal"
-          },
-          {
             "name": "lostreason"
           },
           {
@@ -201,18 +181,21 @@
             "name": "status"
           },
           {
+            "name": "probability"
+          },
+          {
             "name": "owner"
           },
           {
             "name": "state"
           }
         ],
-        "type": "build.lead"
+        "type": "crm.deal"
       },
       "object": {
         "app": "build",
         "kind": "object",
-        "name": "build.lead"
+        "name": "crm.deal"
       },
       "owner": "binding:detail",
       "ports": {
@@ -223,11 +206,11 @@
   ],
   "format": 4,
   "inputSchema": {},
-  "name": "lead",
+  "name": "crm.deal",
   "object": {
     "app": "build",
     "kind": "object",
-    "name": "build.lead"
+    "name": "crm.deal"
   },
   "scopeVisibility": {
     "owners": {
@@ -254,7 +237,7 @@
       }
     ]
   },
-  "title": "Leads",
+  "title": "Deals",
   "widgetSpec": {
     "body": {
       "document": null,

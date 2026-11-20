@@ -101,7 +101,7 @@ type TestStep struct {
 
 func (s TestStep) Check() error {
 	var payload map[string]json.RawMessage
-	if !strings.HasPrefix(s.Type, "build.") || s.Type == "build.object" || s.Type == "build.page" || s.Type == "build.app" || s.Type == "build.testplan" || s.Type == "build.sample-set" || s.Type == "build.process" && s.Action != "build.process.run" && s.AdvanceSeconds == 0 || s.Type == "build.function" || strings.TrimSpace(s.ID) == "" || s.AdvanceSeconds < 0 || s.AdvanceSeconds > 86400 || s.Expect != "accepted" && s.Expect != "refused" || json.Unmarshal([]byte(s.Payload), &payload) != nil || payload == nil {
+	if OwnerOfType(s.Type) != "build" || s.Type == "build.object" || s.Type == "build.page" || s.Type == "build.app" || s.Type == "build.testplan" || s.Type == "build.sample-set" || s.Type == "build.process" && s.Action != "build.process.run" && s.AdvanceSeconds == 0 || s.Type == "build.function" || strings.TrimSpace(s.ID) == "" || s.AdvanceSeconds < 0 || s.AdvanceSeconds > 86400 || s.Expect != "accepted" && s.Expect != "refused" || json.Unmarshal([]byte(s.Payload), &payload) != nil || payload == nil {
 		return fmt.Errorf("Every test step needs a candidate action or answer, record ID, JSON object, bounded time and expected outcome")
 	}
 	if s.Compute != nil && !s.Compute.Check() {

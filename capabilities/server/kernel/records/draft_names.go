@@ -12,10 +12,17 @@ func (s *Store) DraftMatches(typ, name string, reopen, managed bool) (int, error
 	if !ok {
 		return 0, fmt.Errorf("asset draft %s has no owner identity", typ)
 	}
+	namespaceField, qualified := et.Info().Field("namespace")
 	matches := 0
 	for id, row := range et.Rows().All() {
 		archived := row.Value.FieldByName("Record").Interface().(platform.Record).Archived
-		named := row.Value.FieldByIndex(nameField.Index).String() == name
+		identity := row.Value.FieldByIndex(nameField.Index).String()
+		if namespace := ""; qualified {
+			if namespace = row.Value.FieldByIndex(namespaceField.Index).String(); namespace != "" {
+				identity = namespace + "." + identity
+			}
+		}
+		named := identity == name
 		if reopen && archived && named {
 			value := reflect.New(row.Value.Type()).Elem()
 			value.Set(row.Value)

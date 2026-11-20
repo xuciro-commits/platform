@@ -15,15 +15,16 @@
     }
   ],
   "name": "lostreason",
+  "namespace": "crm",
   "plural": "Lost reasons",
   "schemaVersions": [
     {
       "family": 1,
-      "version": "schema.sha256.fe99efc7e4e5746b5f45e50112a345e1c7d2c172e95c7a876dae10d826eabdc2"
+      "version": "schema.sha256.b84151a2ea6f42c3d8553333cf0c29815dd962690e110e6e4ecbd6a2fc44ac9b"
     }
   ],
   "title": "Lost reason",
-  "type": "build.lostreason",
+  "type": "crm.lostreason",
   "view": {
     "columns": [
       "title"

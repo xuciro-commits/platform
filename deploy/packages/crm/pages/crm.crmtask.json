@@ -5,12 +5,12 @@
         {
           "app": "build",
           "kind": "action",
-          "name": "build.deal.create"
+          "name": "crm.crmtask.create"
         },
         {
           "app": "build",
           "kind": "action",
-          "name": "build.deal.edit"
+          "name": "crm.crmtask.edit"
         }
       ],
       "binding": "page",
@@ -34,13 +34,13 @@
           "name": "title"
         },
         {
-          "name": "organization"
-        },
-        {
-          "name": "contact"
+          "name": "description"
         },
         {
           "name": "lead"
+        },
+        {
+          "name": "deal"
         },
         {
           "name": "state"
@@ -54,24 +54,24 @@
             "name": "title"
           },
           {
-            "name": "organization"
-          },
-          {
-            "name": "contact"
+            "name": "description"
           },
           {
             "name": "lead"
           },
           {
+            "name": "deal"
+          },
+          {
             "name": "state"
           }
         ],
-        "type": "build.deal"
+        "type": "crm.crmtask"
       },
       "object": {
         "app": "build",
         "kind": "object",
-        "name": "build.deal"
+        "name": "crm.crmtask"
       },
       "owner": "binding:list",
       "ports": {
@@ -86,49 +86,31 @@
           "name": "title"
         },
         {
-          "name": "organization"
-        },
-        {
-          "name": "contact"
+          "name": "description"
         },
         {
           "name": "lead"
         },
         {
-          "name": "dealvalue"
-        },
-        {
-          "name": "total"
-        },
-        {
-          "name": "expectedclose"
-        },
-        {
-          "name": "closeddate"
-        },
-        {
-          "name": "source"
-        },
-        {
-          "name": "industry"
-        },
-        {
-          "name": "territory"
-        },
-        {
-          "name": "lostreason"
-        },
-        {
-          "name": "lostnotes"
+          "name": "deal"
         },
         {
           "name": "status"
         },
         {
-          "name": "probability"
+          "name": "priority"
         },
         {
-          "name": "owner"
+          "name": "assignee"
+        },
+        {
+          "name": "startdate"
+        },
+        {
+          "name": "duedate"
+        },
+        {
+          "name": "allday"
         },
         {
           "name": "state"
@@ -142,60 +124,42 @@
             "name": "title"
           },
           {
-            "name": "organization"
-          },
-          {
-            "name": "contact"
+            "name": "description"
           },
           {
             "name": "lead"
           },
           {
-            "name": "dealvalue"
-          },
-          {
-            "name": "total"
-          },
-          {
-            "name": "expectedclose"
-          },
-          {
-            "name": "closeddate"
-          },
-          {
-            "name": "source"
-          },
-          {
-            "name": "industry"
-          },
-          {
-            "name": "territory"
-          },
-          {
-            "name": "lostreason"
-          },
-          {
-            "name": "lostnotes"
+            "name": "deal"
           },
           {
             "name": "status"
           },
           {
-            "name": "probability"
+            "name": "priority"
           },
           {
-            "name": "owner"
+            "name": "assignee"
+          },
+          {
+            "name": "startdate"
+          },
+          {
+            "name": "duedate"
+          },
+          {
+            "name": "allday"
           },
           {
             "name": "state"
           }
         ],
-        "type": "build.deal"
+        "type": "crm.crmtask"
       },
       "object": {
         "app": "build",
         "kind": "object",
-        "name": "build.deal"
+        "name": "crm.crmtask"
       },
       "owner": "binding:detail",
       "ports": {
@@ -206,11 +170,11 @@
   ],
   "format": 4,
   "inputSchema": {},
-  "name": "deal",
+  "name": "crm.crmtask",
   "object": {
     "app": "build",
     "kind": "object",
-    "name": "build.deal"
+    "name": "crm.crmtask"
   },
   "scopeVisibility": {
     "owners": {
@@ -237,7 +201,7 @@
       }
     ]
   },
-  "title": "Deals",
+  "title": "Tasks",
   "widgetSpec": {
     "body": {
       "document": null,

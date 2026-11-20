@@ -16,23 +16,23 @@ func TestInvariantK1TransactionAuthoringAndReplay(t *testing.T) {
 	completion := platform.Expr{Kind: "choice", Lit: &platform.ExprLiteral{Value: platform.Raw("done")}}
 	action := ontology.Action{
 		Name: "complete", Title: "Complete", From: []string{"open"},
-		Transaction: &platform.BusinessTxn{Subject: "build.workitem", Steps: []platform.TxnStep{{
-			Name: "complete", Kind: "update", Target: platform.TxnRef{Type: "build.workitem", ID: "$subject"},
+		Transaction: &platform.BusinessTxn{Subject: "invariantproject.workitem", Steps: []platform.TxnStep{{
+			Name: "complete", Kind: "update", Target: platform.TxnRef{Type: "invariantproject.workitem", ID: "$subject"},
 			Changes: []platform.TxnSet{{Field: "state", Expr: &completion}},
 		}}},
 	}
 	live.accept(t, "build.object.create", build.ObjectType, "ITEM", object)
 	live.accept(t, "build.actiontype.create", build.ActionTypeType, "ACTION", map[string]any{
-		"name": "build.workitem.complete", "object": "build.workitem", "definition": action,
+		"name": "invariantproject.workitem.complete", "object": "invariantproject.workitem", "definition": action,
 	})
 	live.accept(t, "build.actiontype.publish", build.ActionTypeType, "ACTION", map[string]any{})
 	live.accept(t, "build.object.publish", build.ObjectType, "ITEM", map[string]any{})
-	live.accept(t, "build.workitem.create", "build.workitem", "WORK", map[string]any{"note": "open"})
-	live.accept(t, "build.workitem.complete", "build.workitem", "WORK", map[string]any{})
+	live.accept(t, "invariantproject.workitem.create", "invariantproject.workitem", "WORK", map[string]any{"note": "open"})
+	live.accept(t, "invariantproject.workitem.complete", "invariantproject.workitem", "WORK", map[string]any{})
 
 	read := func(scope *invariantTenant) string {
 		t.Helper()
-		view, refusal := scope.RecordOf(t.Context(), scope.member(t), "build.workitem", "WORK", invariantClock.Add(2))
+		view, refusal := scope.RecordOf(t.Context(), scope.member(t), "invariantproject.workitem", "WORK", invariantClock.Add(2))
 		if refusal != nil {
 			t.Fatal(refusal)
 		}

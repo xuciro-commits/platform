@@ -11,22 +11,22 @@
       "ref": {
         "app": "build",
         "kind": "action",
-        "name": "build.crmcontact.create"
+        "name": "crm.crmcontact.create"
       },
-      "path": "actions/crmcontact.create.json",
+      "path": "actions/crm.crmcontact.create.json",
       "contractVersion": 1,
       "sourceVersion": "1",
       "requires": [
         {
           "app": "build",
           "kind": "object",
-          "name": "build.crmcontact"
+          "name": "crm.crmcontact"
         }
       ],
       "provides": [
         {
           "kind": "action",
-          "name": "build.crmcontact.create",
+          "name": "crm.crmcontact.create",
           "inputs": {
             "type": "object",
             "properties": {
@@ -162,22 +162,22 @@
       "ref": {
         "app": "build",
         "kind": "action",
-        "name": "build.crmcontact.edit"
+        "name": "crm.crmcontact.edit"
       },
-      "path": "actions/crmcontact.edit.json",
+      "path": "actions/crm.crmcontact.edit.json",
       "contractVersion": 1,
       "sourceVersion": "1",
       "requires": [
         {
           "app": "build",
           "kind": "object",
-          "name": "build.crmcontact"
+          "name": "crm.crmcontact"
         }
       ],
       "provides": [
         {
           "kind": "action",
-          "name": "build.crmcontact.edit",
+          "name": "crm.crmcontact.edit",
           "inputs": {
             "type": "object",
             "properties": {
@@ -309,22 +309,22 @@
       "ref": {
         "app": "build",
         "kind": "action",
-        "name": "build.crmtask.create"
+        "name": "crm.crmtask.create"
       },
-      "path": "actions/crmtask.create.json",
+      "path": "actions/crm.crmtask.create.json",
       "contractVersion": 1,
       "sourceVersion": "1",
       "requires": [
         {
           "app": "build",
           "kind": "object",
-          "name": "build.crmtask"
+          "name": "crm.crmtask"
         }
       ],
       "provides": [
         {
           "kind": "action",
-          "name": "build.crmtask.create",
+          "name": "crm.crmtask.create",
           "inputs": {
             "type": "object",
             "properties": {
@@ -471,22 +471,22 @@
       "ref": {
         "app": "build",
         "kind": "action",
-        "name": "build.crmtask.edit"
+        "name": "crm.crmtask.edit"
       },
-      "path": "actions/crmtask.edit.json",
+      "path": "actions/crm.crmtask.edit.json",
       "contractVersion": 1,
       "sourceVersion": "1",
       "requires": [
         {
           "app": "build",
           "kind": "object",
-          "name": "build.crmtask"
+          "name": "crm.crmtask"
         }
       ],
       "provides": [
         {
           "kind": "action",
-          "name": "build.crmtask.edit",
+          "name": "crm.crmtask.edit",
           "inputs": {
             "type": "object",
             "properties": {
@@ -627,22 +627,22 @@
       "ref": {
         "app": "build",
         "kind": "action",
-        "name": "build.deal.create"
+        "name": "crm.deal.create"
       },
-      "path": "actions/deal.create.json",
+      "path": "actions/crm.deal.create.json",
       "contractVersion": 1,
       "sourceVersion": "1",
       "requires": [
         {
           "app": "build",
           "kind": "object",
-          "name": "build.deal"
+          "name": "crm.deal"
         }
       ],
       "provides": [
         {
           "kind": "action",
-          "name": "build.deal.create",
+          "name": "crm.deal.create",
           "inputs": {
             "type": "object",
             "properties": {
@@ -848,22 +848,22 @@
       "ref": {
         "app": "build",
         "kind": "action",
-        "name": "build.deal.edit"
+        "name": "crm.deal.edit"
       },
-      "path": "actions/deal.edit.json",
+      "path": "actions/crm.deal.edit.json",
       "contractVersion": 1,
       "sourceVersion": "1",
       "requires": [
         {
           "app": "build",
           "kind": "object",
-          "name": "build.deal"
+          "name": "crm.deal"
         }
       ],
       "provides": [
         {
           "kind": "action",
-          "name": "build.deal.edit",
+          "name": "crm.deal.edit",
           "inputs": {
             "type": "object",
             "properties": {
@@ -1063,27 +1063,27 @@
       "ref": {
         "app": "build",
         "kind": "action",
-        "name": "build.lead.convert"
+        "name": "crm.lead.convert"
       },
-      "path": "actions/lead.convert.json",
+      "path": "actions/crm.lead.convert.json",
       "contractVersion": 1,
       "sourceVersion": "1.action-1",
       "requires": [
         {
           "app": "build",
           "kind": "object",
-          "name": "build.lead"
+          "name": "crm.lead"
         },
         {
           "app": "build",
           "kind": "object",
-          "name": "build.organization"
+          "name": "crm.organization"
         }
       ],
       "provides": [
         {
           "kind": "action",
-          "name": "build.lead.convert",
+          "name": "crm.lead.convert",
           "inputs": {
             "type": "object",
             "properties": {
@@ -1106,7 +1106,7 @@
               "name": "organization",
               "type": "string",
               "description": "Leave empty to create a new organization from the lead.",
-              "ref": "build.organization",
+              "ref": "crm.organization",
               "label": "Link to organization",
               "constraints": {}
             }
@@ -1118,22 +1118,22 @@
       "ref": {
         "app": "build",
         "kind": "action",
-        "name": "build.lead.create"
+        "name": "crm.lead.create"
       },
-      "path": "actions/lead.create.json",
+      "path": "actions/crm.lead.create.json",
       "contractVersion": 1,
       "sourceVersion": "1",
       "requires": [
         {
           "app": "build",
           "kind": "object",
-          "name": "build.lead"
+          "name": "crm.lead"
         }
       ],
       "provides": [
         {
           "kind": "action",
-          "name": "build.lead.create",
+          "name": "crm.lead.create",
           "inputs": {
             "type": "object",
             "properties": {
@@ -1376,22 +1376,22 @@
       "ref": {
         "app": "build",
         "kind": "action",
-        "name": "build.lead.edit"
+        "name": "crm.lead.edit"
       },
-      "path": "actions/lead.edit.json",
+      "path": "actions/crm.lead.edit.json",
       "contractVersion": 1,
       "sourceVersion": "1",
       "requires": [
         {
           "app": "build",
           "kind": "object",
-          "name": "build.lead"
+          "name": "crm.lead"
         }
       ],
       "provides": [
         {
           "kind": "action",
-          "name": "build.lead.edit",
+          "name": "crm.lead.edit",
           "inputs": {
             "type": "object",
             "properties": {
@@ -1628,22 +1628,22 @@
       "ref": {
         "app": "build",
         "kind": "action",
-        "name": "build.note.create"
+        "name": "crm.note.create"
       },
-      "path": "actions/note.create.json",
+      "path": "actions/crm.note.create.json",
       "contractVersion": 1,
       "sourceVersion": "1",
       "requires": [
         {
           "app": "build",
           "kind": "object",
-          "name": "build.note"
+          "name": "crm.note"
         }
       ],
       "provides": [
         {
           "kind": "action",
-          "name": "build.note.create",
+          "name": "crm.note.create",
           "inputs": {
             "type": "object",
             "properties": {
@@ -1719,22 +1719,22 @@
       "ref": {
         "app": "build",
         "kind": "action",
-        "name": "build.note.edit"
+        "name": "crm.note.edit"
       },
-      "path": "actions/note.edit.json",
+      "path": "actions/crm.note.edit.json",
       "contractVersion": 1,
       "sourceVersion": "1",
       "requires": [
         {
           "app": "build",
           "kind": "object",
-          "name": "build.note"
+          "name": "crm.note"
         }
       ],
       "provides": [
         {
           "kind": "action",
-          "name": "build.note.edit",
+          "name": "crm.note.edit",
           "inputs": {
             "type": "object",
             "properties": {
@@ -1806,22 +1806,22 @@
       "ref": {
         "app": "build",
         "kind": "action",
-        "name": "build.organization.create"
+        "name": "crm.organization.create"
       },
-      "path": "actions/organization.create.json",
+      "path": "actions/crm.organization.create.json",
       "contractVersion": 1,
       "sourceVersion": "1",
       "requires": [
         {
           "app": "build",
           "kind": "object",
-          "name": "build.organization"
+          "name": "crm.organization"
         }
       ],
       "provides": [
         {
           "kind": "action",
-          "name": "build.organization.create",
+          "name": "crm.organization.create",
           "inputs": {
             "type": "object",
             "properties": {
@@ -1954,22 +1954,22 @@
       "ref": {
         "app": "build",
         "kind": "action",
-        "name": "build.organization.edit"
+        "name": "crm.organization.edit"
       },
-      "path": "actions/organization.edit.json",
+      "path": "actions/crm.organization.edit.json",
       "contractVersion": 1,
       "sourceVersion": "1",
       "requires": [
         {
           "app": "build",
           "kind": "object",
-          "name": "build.organization"
+          "name": "crm.organization"
         }
       ],
       "provides": [
         {
           "kind": "action",
-          "name": "build.organization.edit",
+          "name": "crm.organization.edit",
           "inputs": {
             "type": "object",
             "properties": {
@@ -2107,32 +2107,32 @@
         {
           "app": "build",
           "kind": "page",
-          "name": "crmcontact"
+          "name": "crm.crmcontact"
         },
         {
           "app": "build",
           "kind": "page",
-          "name": "crmtask"
+          "name": "crm.crmtask"
         },
         {
           "app": "build",
           "kind": "page",
-          "name": "deal"
+          "name": "crm.deal"
         },
         {
           "app": "build",
           "kind": "page",
-          "name": "lead"
+          "name": "crm.lead"
         },
         {
           "app": "build",
           "kind": "page",
-          "name": "note"
+          "name": "crm.note"
         },
         {
           "app": "build",
           "kind": "page",
-          "name": "organization"
+          "name": "crm.organization"
         }
       ],
       "provides": []
@@ -2141,22 +2141,22 @@
       "ref": {
         "app": "build",
         "kind": "object",
-        "name": "build.crmcontact"
+        "name": "crm.crmcontact"
       },
-      "path": "objects/crmcontact.json",
+      "path": "objects/crm.crmcontact.json",
       "contractVersion": 1,
       "sourceVersion": "1",
       "requires": [
         {
           "app": "build",
           "kind": "object",
-          "name": "build.organization"
+          "name": "crm.organization"
         }
       ],
       "provides": [
         {
           "kind": "interface",
-          "name": "build.crmcontact",
+          "name": "crm.crmcontact",
           "inputs": {
             "type": ""
           },
@@ -2225,16 +2225,16 @@
       "ref": {
         "app": "build",
         "kind": "object",
-        "name": "build.crmproduct"
+        "name": "crm.crmproduct"
       },
-      "path": "objects/crmproduct.json",
+      "path": "objects/crm.crmproduct.json",
       "contractVersion": 1,
       "sourceVersion": "1",
       "requires": [],
       "provides": [
         {
           "kind": "interface",
-          "name": "build.crmproduct",
+          "name": "crm.crmproduct",
           "inputs": {
             "type": ""
           },
@@ -2292,27 +2292,27 @@
       "ref": {
         "app": "build",
         "kind": "object",
-        "name": "build.crmtask"
+        "name": "crm.crmtask"
       },
-      "path": "objects/crmtask.json",
+      "path": "objects/crm.crmtask.json",
       "contractVersion": 1,
       "sourceVersion": "1",
       "requires": [
         {
           "app": "build",
           "kind": "object",
-          "name": "build.deal"
+          "name": "crm.deal"
         },
         {
           "app": "build",
           "kind": "object",
-          "name": "build.lead"
+          "name": "crm.lead"
         }
       ],
       "provides": [
         {
           "kind": "interface",
-          "name": "build.crmtask",
+          "name": "crm.crmtask",
           "inputs": {
             "type": ""
           },
@@ -2391,57 +2391,57 @@
       "ref": {
         "app": "build",
         "kind": "object",
-        "name": "build.deal"
+        "name": "crm.deal"
       },
-      "path": "objects/deal.json",
+      "path": "objects/crm.deal.json",
       "contractVersion": 1,
       "sourceVersion": "1",
       "requires": [
         {
           "app": "build",
           "kind": "object",
-          "name": "build.crmcontact"
+          "name": "crm.crmcontact"
         },
         {
           "app": "build",
           "kind": "object",
-          "name": "build.dealline"
+          "name": "crm.dealline"
         },
         {
           "app": "build",
           "kind": "object",
-          "name": "build.industry"
+          "name": "crm.industry"
         },
         {
           "app": "build",
           "kind": "object",
-          "name": "build.lead"
+          "name": "crm.lead"
         },
         {
           "app": "build",
           "kind": "object",
-          "name": "build.leadsource"
+          "name": "crm.leadsource"
         },
         {
           "app": "build",
           "kind": "object",
-          "name": "build.lostreason"
+          "name": "crm.lostreason"
         },
         {
           "app": "build",
           "kind": "object",
-          "name": "build.organization"
+          "name": "crm.organization"
         },
         {
           "app": "build",
           "kind": "object",
-          "name": "build.territory"
+          "name": "crm.territory"
         }
       ],
       "provides": [
         {
           "kind": "interface",
-          "name": "build.deal",
+          "name": "crm.deal",
           "inputs": {
             "type": ""
           },
@@ -2559,27 +2559,27 @@
       "ref": {
         "app": "build",
         "kind": "object",
-        "name": "build.dealline"
+        "name": "crm.dealline"
       },
-      "path": "objects/dealline.json",
+      "path": "objects/crm.dealline.json",
       "contractVersion": 1,
       "sourceVersion": "1",
       "requires": [
         {
           "app": "build",
           "kind": "object",
-          "name": "build.crmproduct"
+          "name": "crm.crmproduct"
         },
         {
           "app": "build",
           "kind": "object",
-          "name": "build.deal"
+          "name": "crm.deal"
         }
       ],
       "provides": [
         {
           "kind": "interface",
-          "name": "build.dealline",
+          "name": "crm.dealline",
           "inputs": {
             "type": ""
           },
@@ -2667,16 +2667,16 @@
       "ref": {
         "app": "build",
         "kind": "object",
-        "name": "build.industry"
+        "name": "crm.industry"
       },
-      "path": "objects/industry.json",
+      "path": "objects/crm.industry.json",
       "contractVersion": 1,
       "sourceVersion": "1",
       "requires": [],
       "provides": [
         {
           "kind": "interface",
-          "name": "build.industry",
+          "name": "crm.industry",
           "inputs": {
             "type": ""
           },
@@ -2710,52 +2710,52 @@
       "ref": {
         "app": "build",
         "kind": "object",
-        "name": "build.lead"
+        "name": "crm.lead"
       },
-      "path": "objects/lead.json",
+      "path": "objects/crm.lead.json",
       "contractVersion": 1,
       "sourceVersion": "1",
       "requires": [
         {
           "app": "build",
           "kind": "object",
-          "name": "build.crmcontact"
+          "name": "crm.crmcontact"
         },
         {
           "app": "build",
           "kind": "object",
-          "name": "build.deal"
+          "name": "crm.deal"
         },
         {
           "app": "build",
           "kind": "object",
-          "name": "build.industry"
+          "name": "crm.industry"
         },
         {
           "app": "build",
           "kind": "object",
-          "name": "build.leadsource"
+          "name": "crm.leadsource"
         },
         {
           "app": "build",
           "kind": "object",
-          "name": "build.lostreason"
+          "name": "crm.lostreason"
         },
         {
           "app": "build",
           "kind": "object",
-          "name": "build.organization"
+          "name": "crm.organization"
         },
         {
           "app": "build",
           "kind": "object",
-          "name": "build.territory"
+          "name": "crm.territory"
         }
       ],
       "provides": [
         {
           "kind": "interface",
-          "name": "build.lead",
+          "name": "crm.lead",
           "inputs": {
             "type": ""
           },
@@ -2875,16 +2875,16 @@
       "ref": {
         "app": "build",
         "kind": "object",
-        "name": "build.leadsource"
+        "name": "crm.leadsource"
       },
-      "path": "objects/leadsource.json",
+      "path": "objects/crm.leadsource.json",
       "contractVersion": 1,
       "sourceVersion": "1",
       "requires": [],
       "provides": [
         {
           "kind": "interface",
-          "name": "build.leadsource",
+          "name": "crm.leadsource",
           "inputs": {
             "type": ""
           },
@@ -2921,16 +2921,16 @@
       "ref": {
         "app": "build",
         "kind": "object",
-        "name": "build.lostreason"
+        "name": "crm.lostreason"
       },
-      "path": "objects/lostreason.json",
+      "path": "objects/crm.lostreason.json",
       "contractVersion": 1,
       "sourceVersion": "1",
       "requires": [],
       "provides": [
         {
           "kind": "interface",
-          "name": "build.lostreason",
+          "name": "crm.lostreason",
           "inputs": {
             "type": ""
           },
@@ -2967,27 +2967,27 @@
       "ref": {
         "app": "build",
         "kind": "object",
-        "name": "build.note"
+        "name": "crm.note"
       },
-      "path": "objects/note.json",
+      "path": "objects/crm.note.json",
       "contractVersion": 1,
       "sourceVersion": "1",
       "requires": [
         {
           "app": "build",
           "kind": "object",
-          "name": "build.deal"
+          "name": "crm.deal"
         },
         {
           "app": "build",
           "kind": "object",
-          "name": "build.lead"
+          "name": "crm.lead"
         }
       ],
       "provides": [
         {
           "kind": "interface",
-          "name": "build.note",
+          "name": "crm.note",
           "inputs": {
             "type": ""
           },
@@ -3033,27 +3033,27 @@
       "ref": {
         "app": "build",
         "kind": "object",
-        "name": "build.organization"
+        "name": "crm.organization"
       },
-      "path": "objects/organization.json",
+      "path": "objects/crm.organization.json",
       "contractVersion": 1,
       "sourceVersion": "1",
       "requires": [
         {
           "app": "build",
           "kind": "object",
-          "name": "build.industry"
+          "name": "crm.industry"
         },
         {
           "app": "build",
           "kind": "object",
-          "name": "build.territory"
+          "name": "crm.territory"
         }
       ],
       "provides": [
         {
           "kind": "interface",
-          "name": "build.organization",
+          "name": "crm.organization",
           "inputs": {
             "type": ""
           },
@@ -3128,16 +3128,16 @@
       "ref": {
         "app": "build",
         "kind": "object",
-        "name": "build.territory"
+        "name": "crm.territory"
       },
-      "path": "objects/territory.json",
+      "path": "objects/crm.territory.json",
       "contractVersion": 1,
       "sourceVersion": "1",
       "requires": [],
       "provides": [
         {
           "kind": "interface",
-          "name": "build.territory",
+          "name": "crm.territory",
           "inputs": {
             "type": ""
           },
@@ -3180,26 +3180,26 @@
       "ref": {
         "app": "build",
         "kind": "page",
-        "name": "crmcontact"
+        "name": "crm.crmcontact"
       },
-      "path": "pages/crmcontact.json",
+      "path": "pages/crm.crmcontact.json",
       "contractVersion": 1,
       "sourceVersion": "1",
       "requires": [
         {
           "app": "build",
           "kind": "action",
-          "name": "build.crmcontact.create"
+          "name": "crm.crmcontact.create"
         },
         {
           "app": "build",
           "kind": "action",
-          "name": "build.crmcontact.edit"
+          "name": "crm.crmcontact.edit"
         },
         {
           "app": "build",
           "kind": "object",
-          "name": "build.crmcontact"
+          "name": "crm.crmcontact"
         }
       ],
       "provides": []
@@ -3208,26 +3208,26 @@
       "ref": {
         "app": "build",
         "kind": "page",
-        "name": "crmtask"
+        "name": "crm.crmtask"
       },
-      "path": "pages/crmtask.json",
+      "path": "pages/crm.crmtask.json",
       "contractVersion": 1,
       "sourceVersion": "1",
       "requires": [
         {
           "app": "build",
           "kind": "action",
-          "name": "build.crmtask.create"
+          "name": "crm.crmtask.create"
         },
         {
           "app": "build",
           "kind": "action",
-          "name": "build.crmtask.edit"
+          "name": "crm.crmtask.edit"
         },
         {
           "app": "build",
           "kind": "object",
-          "name": "build.crmtask"
+          "name": "crm.crmtask"
         }
       ],
       "provides": []
@@ -3236,26 +3236,26 @@
       "ref": {
         "app": "build",
         "kind": "page",
-        "name": "deal"
+        "name": "crm.deal"
       },
-      "path": "pages/deal.json",
+      "path": "pages/crm.deal.json",
       "contractVersion": 1,
       "sourceVersion": "1",
       "requires": [
         {
           "app": "build",
           "kind": "action",
-          "name": "build.deal.create"
+          "name": "crm.deal.create"
         },
         {
           "app": "build",
           "kind": "action",
-          "name": "build.deal.edit"
+          "name": "crm.deal.edit"
         },
         {
           "app": "build",
           "kind": "object",
-          "name": "build.deal"
+          "name": "crm.deal"
         }
       ],
       "provides": []
@@ -3264,31 +3264,31 @@
       "ref": {
         "app": "build",
         "kind": "page",
-        "name": "lead"
+        "name": "crm.lead"
       },
-      "path": "pages/lead.json",
+      "path": "pages/crm.lead.json",
       "contractVersion": 1,
       "sourceVersion": "1",
       "requires": [
         {
           "app": "build",
           "kind": "action",
-          "name": "build.lead.convert"
+          "name": "crm.lead.convert"
         },
         {
           "app": "build",
           "kind": "action",
-          "name": "build.lead.create"
+          "name": "crm.lead.create"
         },
         {
           "app": "build",
           "kind": "action",
-          "name": "build.lead.edit"
+          "name": "crm.lead.edit"
         },
         {
           "app": "build",
           "kind": "object",
-          "name": "build.lead"
+          "name": "crm.lead"
         }
       ],
       "provides": []
@@ -3297,26 +3297,26 @@
       "ref": {
         "app": "build",
         "kind": "page",
-        "name": "note"
+        "name": "crm.note"
       },
-      "path": "pages/note.json",
+      "path": "pages/crm.note.json",
       "contractVersion": 1,
       "sourceVersion": "1",
       "requires": [
         {
           "app": "build",
           "kind": "action",
-          "name": "build.note.create"
+          "name": "crm.note.create"
         },
         {
           "app": "build",
           "kind": "action",
-          "name": "build.note.edit"
+          "name": "crm.note.edit"
         },
         {
           "app": "build",
           "kind": "object",
-          "name": "build.note"
+          "name": "crm.note"
         }
       ],
       "provides": []
@@ -3325,26 +3325,26 @@
       "ref": {
         "app": "build",
         "kind": "page",
-        "name": "organization"
+        "name": "crm.organization"
       },
-      "path": "pages/organization.json",
+      "path": "pages/crm.organization.json",
       "contractVersion": 1,
       "sourceVersion": "1",
       "requires": [
         {
           "app": "build",
           "kind": "action",
-          "name": "build.organization.create"
+          "name": "crm.organization.create"
         },
         {
           "app": "build",
           "kind": "action",
-          "name": "build.organization.edit"
+          "name": "crm.organization.edit"
         },
         {
           "app": "build",
           "kind": "object",
-          "name": "build.organization"
+          "name": "crm.organization"
         }
       ],
       "provides": []

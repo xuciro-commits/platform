@@ -215,7 +215,7 @@ func (o *builderAgentOwner) checkAgentWithDrafts(a Agent, tools map[string]bool,
 		if o.env.JointAssets()[platform.AssetRef{App: o.env.App, Kind: platform.AssetAction, Name: tool}] {
 			return nil
 		}
-		if _, ok := o.env.Authority().Catalog().Action(tool); !ok || !strings.HasPrefix(tool, o.env.App+".") || o.env.InstalledAction(tool) == "" {
+		if _, ok := o.env.Authority().Catalog().Action(tool); !ok || platform.OwnerOfType(tool) != o.env.App || o.env.InstalledAction(tool) == "" {
 			return fmt.Errorf("The agent %s uses %s, which is not an action of a published object", a.Name, tool)
 		}
 		return nil

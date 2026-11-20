@@ -67,7 +67,7 @@ func (p ProjectDelegation) Bound(m platform.Member, s *pb.Submission, access pro
 
 func (p ProjectDelegation) asset(s *pb.Submission) (protocol.ProjectAsset, bool) {
 	typ, schema := s.GetTarget().GetType(), s.GetSchema().GetName()
-	if !strings.HasPrefix(typ, p.App+".") || !strings.HasPrefix(schema, typ+".") {
+	if platform.OwnerOfType(typ) != p.App || !strings.HasPrefix(schema, typ+".") {
 		return protocol.ProjectAsset{}, false
 	}
 	switch strings.TrimPrefix(schema, typ+".") {

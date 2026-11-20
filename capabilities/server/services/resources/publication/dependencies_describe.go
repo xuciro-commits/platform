@@ -44,7 +44,7 @@ func (resolver Resolver) describeAsset(asset platform.ReleaseAsset, historical b
 		if ref, ok := bindings.Objects[name]; ok {
 			return ref
 		}
-		app, _, ok := strings.Cut(name, ".")
+		app, ok := platform.OwnerOfType(name), strings.Contains(name, ".")
 		if !ok {
 			app = asset.Ref.App
 		}
@@ -305,7 +305,7 @@ func (resolver Resolver) describeAsset(asset platform.ReleaseAsset, historical b
 					add(platform.AssetRef{App: asset.Ref.App, Kind: platform.AssetQuery, Name: query})
 					continue
 				}
-				if !strings.HasPrefix(tool, asset.Ref.App+".") || strings.ContainsAny(tool, "#:") {
+				if platform.OwnerOfType(tool) != asset.Ref.App || strings.ContainsAny(tool, "#:") {
 					return out, fmt.Errorf("agent %s tool %s is not a declared local action", asset.Ref, tool)
 				}
 				add(platform.AssetRef{App: asset.Ref.App, Kind: platform.AssetAction, Name: tool})

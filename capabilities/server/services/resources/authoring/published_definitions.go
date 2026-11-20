@@ -24,8 +24,9 @@ func PublishedDefinitionsMissing(saved map[string][]records.StoredState, install
 				continue
 			}
 			var published struct {
-				Name    string `json:"name"`
-				Version int    `json:"version"`
+				Name      string `json:"name"`
+				Namespace string `json:"namespace"`
+				Version   int    `json:"version"`
 			}
 			if json.Unmarshal([]byte(meta.Published), &published) != nil {
 				continue
@@ -38,7 +39,7 @@ func PublishedDefinitionsMissing(saved map[string][]records.StoredState, install
 			}
 			name := published.Name
 			if kind == platform.AssetObject {
-				name = TypeOf(name)
+				name = qualifiedType(published.Namespace, name)
 			}
 			if !installed(platform.AssetRef{App: ID, Kind: kind, Name: name}) {
 				return true

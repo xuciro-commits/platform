@@ -37,7 +37,7 @@ func (b *Build) checkObjectProtocols(object ontology.Object) error {
 			return platform.Protocol{}, false
 		},
 		CheckProcess: func(value ontology.Object) error {
-			return ontology.CheckProcess(value, ID, TypeOf(value.Name), Builder, User, protocol.FunctionCallType, b.conditionLookup)
+			return ontology.CheckProcess(value, ID, value.Type(), Builder, User, protocol.FunctionCallType, b.conditionLookup)
 		},
 	})
 }

@@ -91,7 +91,7 @@ func editableObject(value Object) (map[string]editableValue, error) {
 	}
 	fields := value.Fields
 	value.Fields = nil
-	raw, err := DefinitionBody(value, AppID+"."+value.Name)
+	raw, err := DefinitionBody(value, value.Type())
 	if err != nil {
 		return nil, err
 	}

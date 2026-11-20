@@ -26,7 +26,7 @@ func TestInvariantK14PublishedFieldPlacementPreservesActions(t *testing.T) {
 	live := newInvariantTenant(t, "invariant-k14")
 	live.accept(t, "build.object.create", build.ObjectType, "OLD", invariantObject("old", "Old"))
 	live.accept(t, "build.object.publish", build.ObjectType, "OLD", nil)
-	old, _ := live.Entity("build.old")
+	old, _ := live.Entity("invariantproject.old")
 	note, _ := old.Field("note")
 	if note.Group != "" || note.Aside {
 		t.Fatalf("old field gained placement: %+v", note)
@@ -44,9 +44,9 @@ func TestInvariantK14PublishedFieldPlacementPreservesActions(t *testing.T) {
 	if response.Code != http.StatusOK || json.Unmarshal(response.Body.Bytes(), &entities) != nil {
 		t.Fatalf("entities: HTTP %d: %s", response.Code, response.Body)
 	}
-	index := slices.IndexFunc(entities, func(info platform.RecordTypeInfo) bool { return info.Type == "build.placed" })
+	index := slices.IndexFunc(entities, func(info platform.RecordTypeInfo) bool { return info.Type == "invariantproject.placed" })
 	if index < 0 {
-		t.Fatal("build.placed is absent from entities")
+		t.Fatal("invariantproject.placed is absent from entities")
 	}
 	placed := entities[index]
 	note, _ = placed.Field("note")
@@ -54,8 +54,8 @@ func TestInvariantK14PublishedFieldPlacementPreservesActions(t *testing.T) {
 	if note.Group != `Sales "East"` || !owner.Aside {
 		t.Fatalf("published field placement: group=%q aside=%t", note.Group, owner.Aside)
 	}
-	live.accept(t, "build.placed.create", "build.placed", "ROW", map[string]any{"owner": "First"})
-	live.accept(t, "build.placed.edit", "build.placed", "ROW", map[string]any{"owner": "Second"})
+	live.accept(t, "invariantproject.placed.create", "invariantproject.placed", "ROW", map[string]any{"owner": "First"})
+	live.accept(t, "invariantproject.placed.edit", "invariantproject.placed", "ROW", map[string]any{"owner": "Second"})
 }
 
 func TestInvariantK15RecordActionAvailabilityUsesTheSubmissionDecision(t *testing.T) {
@@ -65,7 +65,7 @@ func TestInvariantK15RecordActionAvailabilityUsesTheSubmissionDecision(t *testin
 	object["access"] = []ontology.Access{{Role: ontology.UserRole, Read: "all"}}
 	completion := platform.Expr{Kind: "choice", Lit: &platform.ExprLiteral{Value: platform.Raw("done")}}
 	guard := platform.Expr{Op: "=", Kind: "boolean", Args: []platform.Expr{{Ref: "note", Kind: "text"}, {Kind: "text", Lit: &platform.ExprLiteral{Value: platform.Raw("ready")}}}}
-	const typ, schema = "build.workitem", "build.workitem.complete"
+	const typ, schema = "invariantproject.workitem", "invariantproject.workitem.complete"
 	action := ontology.Action{Name: "complete", Title: "Complete", From: []string{"open"}, Roles: []string{ontology.BuilderRole},
 		Transaction: &platform.BusinessTxn{Subject: typ, Guard: &guard, Message: "The item must be ready", Steps: []platform.TxnStep{{
 			Name: "complete", Kind: "update", Target: platform.TxnRef{Type: typ, ID: "$subject"}, Changes: []platform.TxnSet{{Field: "state", Expr: &completion}},
@@ -129,7 +129,7 @@ func checkRecordAction(t *testing.T, handler http.Handler, tenant, role, schema,
 }
 
 func TestInvariantK15EmptyGuardsAndPendingApprovalAgreeAcrossReads(t *testing.T) {
-	const tenant, typ, id = "invariant-action-availability", "build.reviewable", "ITEM"
+	const tenant, typ, id = "invariant-action-availability", "invariantproject.reviewable", "ITEM"
 	live := newInvariantTenantWithApps(t, tenant, []platform.Service{work.New(tenant, actions.NewAuthority)},
 		protocol.Seat{Subjects: []string{"other"}, Member: platform.Member{ID: "other", Roles: map[string]string{build.ID: ontology.UserRole}}},
 		protocol.Seat{Subjects: []string{"reviewer"}, Member: platform.Member{ID: "reviewer", Roles: map[string]string{build.ID: ontology.BuilderRole}}},
@@ -283,16 +283,16 @@ func TestInvariantK16ReferencesRespectTargetReadPermissions(t *testing.T) {
 			"access": []ontology.Access{{Role: ontology.UserRole, Read: kind.read}},
 		})
 		live.accept(t, "build.object.publish", build.ObjectType, kind.name, map[string]any{})
-		live.accept(t, "build."+kind.name+".create", "build."+kind.name, "TARGET", map[string]any{"note": kind.name + " label"})
+		live.accept(t, "invariantproject."+kind.name+".create", "invariantproject."+kind.name, "TARGET", map[string]any{"note": kind.name + " label"})
 	}
 	live.accept(t, "build.object.create", build.ObjectType, "ORDER", map[string]any{
 		"name": "order", "title": "Order", "access": []ontology.Access{{Role: ontology.UserRole, Read: "all"}},
-		"fields": []ontology.Field{{Name: "partner", Type: "reference", Title: "Partner", Ref: "build.partner"}, {Name: "customer", Type: "reference", Title: "Customer", Ref: "build.customer"}, {Name: "hidden", Type: "reference", Title: "Hidden", Group: "Commercial", Aside: true, Ref: "build.customer", Read: []string{ontology.BuilderRole}}, {Name: "private", Type: "reference", Title: "Private display", Ref: "build.private"}, {Name: "scoped", Type: "reference", Title: "Scoped row", Ref: "build.scoped"}},
+		"fields": []ontology.Field{{Name: "partner", Type: "reference", Title: "Partner", Ref: "invariantproject.partner"}, {Name: "customer", Type: "reference", Title: "Customer", Ref: "invariantproject.customer"}, {Name: "hidden", Type: "reference", Title: "Hidden", Group: "Commercial", Aside: true, Ref: "invariantproject.customer", Read: []string{ontology.BuilderRole}}, {Name: "private", Type: "reference", Title: "Private display", Ref: "invariantproject.private"}, {Name: "scoped", Type: "reference", Title: "Scoped row", Ref: "invariantproject.scoped"}},
 	})
 	live.accept(t, "build.object.publish", build.ObjectType, "ORDER", map[string]any{})
-	live.accept(t, "build.order.create", "build.order", "ROW", map[string]any{"partner": "TARGET", "customer": "TARGET", "hidden": "TARGET", "private": "TARGET", "scoped": "TARGET"})
+	live.accept(t, "invariantproject.order.create", "invariantproject.order", "ROW", map[string]any{"partner": "TARGET", "customer": "TARGET", "hidden": "TARGET", "private": "TARGET", "scoped": "TARGET"})
 	_, handler := observationHost(live.Tenant)
-	for _, path := range []string{"/v1/records/build.order", "/v1/records/build.order?actions=1", "/v1/records/build.order/ROW"} {
+	for _, path := range []string{"/v1/records/invariantproject.order", "/v1/records/invariantproject.order?actions=1", "/v1/records/invariantproject.order/ROW"} {
 		for _, role := range []string{"builder", "other"} {
 			response := observationRequest(t, handler, live.ID, observationToken(live.ID, role), path, nil)
 			var view struct{ Refs map[string]map[string]string }
@@ -305,7 +305,7 @@ func TestInvariantK16ReferencesRespectTargetReadPermissions(t *testing.T) {
 		}
 	}
 	for _, role := range []string{"builder", "other"} {
-		response := observationRequest(t, handler, live.ID, observationToken(live.ID, role), "/v1/records/build.order/ROW", nil)
+		response := observationRequest(t, handler, live.ID, observationToken(live.ID, role), "/v1/records/invariantproject.order/ROW", nil)
 		var view objects.RecordView
 		if response.Code != http.StatusOK || json.Unmarshal(response.Body.Bytes(), &view) != nil {
 			t.Fatalf("%s: HTTP %d: %s", role, response.Code, response.Body)
@@ -335,12 +335,12 @@ func TestInvariantK16MembersUseAuthorizedLabels(t *testing.T) {
 		},
 	})
 	live.accept(t, "build.object.publish", build.ObjectType, "ORDER", nil)
-	invalid := live.submission("build.order.create", "build.order", "INVALID", map[string]string{"owner": "missing"})
+	invalid := live.submission("invariantproject.order.create", "invariantproject.order", "INVALID", map[string]string{"owner": "missing"})
 	if _, refusal := live.Submit(live.member(t), invalid, invariantClock); refusal == nil || refusal.Code != pb.ErrorCode_ERROR_CODE_INVALID_REFERENCE {
 		t.Fatalf("a member ID outside the tenant was accepted: %+v", refusal)
 	}
-	live.accept(t, "build.order.create", "build.order", "ROW", map[string]string{"owner": "other", "reviewer": "builder"})
-	live.accept(t, "build.order.edit", "build.order", "ROW", map[string]string{"owner": "builder"})
+	live.accept(t, "invariantproject.order.create", "invariantproject.order", "ROW", map[string]string{"owner": "other", "reviewer": "builder"})
+	live.accept(t, "invariantproject.order.edit", "invariantproject.order", "ROW", map[string]string{"owner": "builder"})
 
 	_, handler := observationHost(live.Tenant)
 	other := observationToken(live.ID, "other")
@@ -348,7 +348,7 @@ func TestInvariantK16MembersUseAuthorizedLabels(t *testing.T) {
 	if directory.Code != http.StatusOK || strings.TrimSpace(directory.Body.String()) != `[{"id":"builder","name":"Casey Rivera"}]` {
 		t.Fatalf("member directory exposed more than the display name and ID: %d: %s", directory.Code, directory.Body)
 	}
-	for _, path := range []string{"/v1/records/build.order", "/v1/records/build.order?actions=1", "/v1/records/build.order/ROW"} {
+	for _, path := range []string{"/v1/records/invariantproject.order", "/v1/records/invariantproject.order?actions=1", "/v1/records/invariantproject.order/ROW"} {
 		for _, role := range []string{"builder", "other"} {
 			response := observationRequest(t, handler, live.ID, observationToken(live.ID, role), path, nil)
 			var view struct {
@@ -412,11 +412,11 @@ func TestInvariantK17FormatsUseOnlyReadableFields(t *testing.T) {
 		},
 	})
 	live.accept(t, "build.object.publish", build.ObjectType, "OPPORTUNITY", nil)
-	live.accept(t, "build.opportunity.create", "build.opportunity", "OPP-001", map[string]any{"stage": "negotiation", "private": "flagged"})
+	live.accept(t, "invariantproject.opportunity.create", "invariantproject.opportunity", "OPP-001", map[string]any{"stage": "negotiation", "private": "flagged"})
 	for _, role := range []string{"builder", "other"} {
 		member, _ := live.Member(role)
-		page, listErr := live.Records(t.Context(), member, "build.opportunity", platform.Query{}, invariantClock)
-		detail, singleErr := live.RecordOf(t.Context(), member, "build.opportunity", "OPP-001", invariantClock)
+		page, listErr := live.Records(t.Context(), member, "invariantproject.opportunity", platform.Query{}, invariantClock)
+		detail, singleErr := live.RecordOf(t.Context(), member, "invariantproject.opportunity", "OPP-001", invariantClock)
 		formats := page.Formats["OPP-001"]
 		if listErr != nil || singleErr != nil || string(platform.Raw(formats)) != string(platform.Raw(detail.Formats)) || formats["stage"].Tone != "warning" {
 			t.Fatalf("%s: list=%+v (%v), detail=%+v (%v)", role, formats, listErr, detail.Formats, singleErr)
@@ -429,7 +429,7 @@ func TestInvariantK17FormatsUseOnlyReadableFields(t *testing.T) {
 
 func TestInvariantK18UndoUsesAnAcceptedActionWithTheOriginalRevision(t *testing.T) {
 	live := newInvariantTenant(t, "invariant-k18")
-	const typ = "build.opportunity"
+	const typ = "invariantproject.opportunity"
 	object := invariantObject("opportunity", "Opportunity")
 	object["states"] = []ontology.State{{Name: "open", Title: "Open"}, {Name: "won", Title: "Won"}}
 	live.accept(t, "build.object.create", build.ObjectType, "OPPORTUNITY", object)
@@ -476,7 +476,7 @@ func TestInvariantK18UndoUsesAnAcceptedActionWithTheOriginalRevision(t *testing.
 
 func TestInvariantK19InverseSetTotalsOnlyUseReadableRowsAndFields(t *testing.T) {
 	live := newInvariantTenant(t, "invariant-k19", protocol.Seat{Subjects: []string{"other"}, Member: platform.Member{ID: "other", Roles: map[string]string{build.ID: ontology.UserRole}}})
-	const parent, child = "build.purchase", "build.purchaseline"
+	const parent, child = "invariantproject.purchase", "invariantproject.purchaseline"
 	live.accept(t, "build.object.create", build.ObjectType, "PARENT", map[string]any{
 		"name": "purchase", "title": "Purchase", "access": []ontology.Access{{Role: ontology.UserRole, Read: "all"}},
 		"fields": []ontology.Field{{Name: "name", Type: "text", Title: "Name"}},
@@ -573,8 +573,8 @@ func TestInvariantK20PublishedDefaultViewPreservesTheRecordContract(t *testing.T
 	for _, metadata := range catalog {
 		views[metadata.Type] = metadata.View
 	}
-	if len(views["build.legacyview"]) != 0 || !bytes.Equal(views["build.preferred"], view) {
-		t.Fatalf("published views: legacy=%s preferred=%s", views["build.legacyview"], views["build.preferred"])
+	if len(views["invariantproject.legacyview"]) != 0 || !bytes.Equal(views["invariantproject.preferred"], view) {
+		t.Fatalf("published views: legacy=%s preferred=%s", views["invariantproject.legacyview"], views["invariantproject.preferred"])
 	}
 	if len(before) == 0 || !bytes.Equal(before, schemaHistory()) {
 		t.Fatal("publishing only a default view changed the action schema history")

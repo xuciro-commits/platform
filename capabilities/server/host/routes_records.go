@@ -16,7 +16,6 @@ import (
 	build "platformserver/services/resources/authoring"
 	enterprisemodel "platformserver/services/security/organization"
 	"reflect"
-	"strings"
 )
 
 func (h *Host) routesRecords(rt *routes) {
@@ -31,7 +30,7 @@ func (h *Host) routesRecords(rt *routes) {
 			Reply(w, nil, err)
 			return
 		}
-		owner, _, _ := strings.Cut(value.Object, ".")
+		owner := platform.OwnerOfType(value.Object)
 		WriteJSON(w, http.StatusOK, struct {
 			pageowner.PageModelResult
 			Fields any `json:"fields"`

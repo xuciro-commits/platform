@@ -1,14 +1,12 @@
 {
   "action": {
     "capability": "note",
-    "description": "Create a note.",
-    "new": true,
+    "description": "Change fields of a note; fields left out keep their value.",
     "payload": [
       {
         "description": "Title",
         "group": "Note",
         "name": "title",
-        "required": true,
         "type": "string"
       },
       {
@@ -35,18 +33,18 @@
         "type": "boolean"
       }
     ],
-    "schema": "build.note.create",
+    "schema": "crm.note.edit",
     "schemaVersion": {
       "family": 1,
-      "version": "schema.sha256.2bebed73edadce9b2379602689932badef9800b6efe6991e9680a47907340bed"
+      "version": "schema.sha256.ce0ceb6d14d4e5bbea604869b214069187d31d5852c2b29fdaa82434458fc4c0"
     },
-    "target": "build.note",
-    "title": "Create note"
+    "target": "crm.note",
+    "title": "Edit note"
   },
   "roles": [
     "builder",
     "user"
   ],
-  "schema": "build.note.create",
-  "target": "build.note"
+  "schema": "crm.note.edit",
+  "target": "crm.note"
 }

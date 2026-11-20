@@ -1,14 +1,12 @@
 {
   "action": {
     "capability": "organization",
-    "description": "Create an organization.",
-    "new": true,
+    "description": "Change fields of an organization; fields left out keep their value.",
     "payload": [
       {
         "description": "Organization",
         "group": "Details",
         "name": "name",
-        "required": true,
         "type": "string"
       },
       {
@@ -60,18 +58,18 @@
         "type": "string"
       }
     ],
-    "schema": "build.organization.create",
+    "schema": "crm.organization.edit",
     "schemaVersion": {
       "family": 1,
-      "version": "schema.sha256.f9fc5493fe711869471b6e7cc2025f5e90c366285b703da317f7d8722a5cb02b"
+      "version": "schema.sha256.164e93d04edab558838850309316c9776b247fa1c8b5e27904307ba9eff5a03a"
     },
-    "target": "build.organization",
-    "title": "Create organization"
+    "target": "crm.organization",
+    "title": "Edit organization"
   },
   "roles": [
     "builder",
     "user"
   ],
-  "schema": "build.organization.create",
-  "target": "build.organization"
+  "schema": "crm.organization.edit",
+  "target": "crm.organization"
 }

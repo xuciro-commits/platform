@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"platformserver/kernel/protocol"
 	"slices"
+	"strings"
 
 	"platformserver/platform"
 )
@@ -11,6 +12,7 @@ import (
 type Object struct {
 	platform.Record
 	Name              string                       `json:"name" field:"required,search" title:"API name" help:"Its name in the platform, lower-case letters and digits" example:"visit"`
+	Namespace         string                       `json:"namespace,omitempty" title:"Application" help:"The project whose application owns this type; set from the project when the type is created"`
 	Title             string                       `json:"title" field:"required,search" title:"Name" help:"What people call it" example:"Visit"`
 	Plural            string                       `json:"plural,omitempty" title:"Plural" help:"What people call several" example:"Visits"`
 	Icon              string                       `json:"icon,omitempty" title:"Icon" help:"An icon name, lower-case with hyphens" example:"calendar"`
@@ -71,6 +73,21 @@ type Field struct {
 	Formula     string                 `json:"formula,omitempty" help:"For a number: price * qty, (ordered - received), …" example:"price * qty"`
 	Read        []string               `json:"read,omitempty" title:"Read by" help:"Roles that read it; empty: every role that reads the object"`
 	Write       []string               `json:"write,omitempty" title:"Set by" help:"Roles that set it; empty: every role that edits the object"`
+}
+
+func (o Object) Type() string {
+	if o.Namespace != "" {
+		return o.Namespace + "." + o.Name
+	}
+	return AppID + "." + o.Name
+}
+
+func (o Object) PageName() string {
+	return strings.TrimPrefix(o.Type(), AppID+".")
+}
+
+func (o Object) ShownBy(page, object string) bool {
+	return page == o.PageName() || page == o.Name && object == o.Type()
 }
 
 type State struct {

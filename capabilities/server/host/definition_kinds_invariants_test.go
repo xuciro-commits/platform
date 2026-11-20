@@ -45,20 +45,20 @@ func TestInvariantK1OntologyDefinitionFamiliesInstallAndReplay(t *testing.T) {
 
 	alpha := invariantObject("alpha", "Alpha")
 	beta := invariantObject("beta", "Beta")
-	beta["fields"] = append(beta["fields"].([]ontology.Field), ontology.Field{Name: "parent", Title: "Parent", Type: "reference", Ref: "build.alpha"})
+	beta["fields"] = append(beta["fields"].([]ontology.Field), ontology.Field{Name: "parent", Title: "Parent", Type: "reference", Ref: "invariantproject.alpha"})
 	live.accept(t, "build.object.create", build.ObjectType, "ALPHA", alpha)
 	live.accept(t, "build.object.create", build.ObjectType, "BETA", beta)
 	live.accept(t, "build.object.publish", build.ObjectType, "ALPHA", map[string]any{})
 	live.accept(t, "build.object.publish", build.ObjectType, "BETA", map[string]any{})
 	live.accept(t, "build.objecttypegroup.create", build.ObjectTypeGroupType, "GROUP", map[string]any{
 		"name": "operations", "title": "Operations", "description": "Operational objects",
-		"members": []platform.AssetRef{{App: build.ID, Kind: platform.AssetObject, Name: "build.alpha"}, {App: build.ID, Kind: platform.AssetObject, Name: "build.beta"}},
+		"members": []platform.AssetRef{{App: build.ID, Kind: platform.AssetObject, Name: "invariantproject.alpha"}, {App: build.ID, Kind: platform.AssetObject, Name: "invariantproject.beta"}},
 	})
 	live.accept(t, "build.objecttypegroup.publish", build.ObjectTypeGroupType, "GROUP", map[string]any{})
 	live.accept(t, "build.objecttypegroup.edit", build.ObjectTypeGroupType, "GROUP", map[string]any{"title": "All operations"})
 	live.accept(t, "build.objecttypegroup.publish", build.ObjectTypeGroupType, "GROUP", map[string]any{})
 	live.accept(t, "build.linktype.create", build.LinkTypeType, "LINK", map[string]any{
-		"name": "children", "title": "Children", "description": "Child objects", "parent": "build.alpha", "child": "build.beta",
+		"name": "children", "title": "Children", "description": "Child objects", "parent": "invariantproject.alpha", "child": "invariantproject.beta",
 		"via": "parent", "forward": "children", "reverse": "parent",
 	})
 	live.accept(t, "build.linktype.publish", build.LinkTypeType, "LINK", map[string]any{})
@@ -70,11 +70,11 @@ func TestInvariantK1OntologyDefinitionFamiliesInstallAndReplay(t *testing.T) {
 	replayed.accept(t, "build.object.publish", build.ObjectType, "REPLAYBOUND", map[string]any{})
 	replayed.accept(t, "build.objecttypegroup.create", build.ObjectTypeGroupType, "REPLAYGROUP", map[string]any{
 		"name": "replayops", "title": "Replay operations", "description": "Replay operational objects",
-		"members": []platform.AssetRef{{App: build.ID, Kind: platform.AssetObject, Name: "build.alpha"}, {App: build.ID, Kind: platform.AssetObject, Name: "build.beta"}},
+		"members": []platform.AssetRef{{App: build.ID, Kind: platform.AssetObject, Name: "invariantproject.alpha"}, {App: build.ID, Kind: platform.AssetObject, Name: "invariantproject.beta"}},
 	})
 	replayed.accept(t, "build.objecttypegroup.publish", build.ObjectTypeGroupType, "REPLAYGROUP", map[string]any{})
 	replayed.accept(t, "build.linktype.create", build.LinkTypeType, "REPLAYLINK", map[string]any{
-		"name": "replaychildren", "title": "Replay children", "description": "Replay child objects", "parent": "build.alpha", "child": "build.beta",
+		"name": "replaychildren", "title": "Replay children", "description": "Replay child objects", "parent": "invariantproject.alpha", "child": "invariantproject.beta",
 		"via": "parent", "forward": "children", "reverse": "parent",
 	})
 	replayed.accept(t, "build.linktype.publish", build.LinkTypeType, "REPLAYLINK", map[string]any{})
@@ -104,14 +104,14 @@ func TestInvariantK1QueriesPublishBindRejectAndReplay(t *testing.T) {
 	live.accept(t, "build.object.publish", build.ObjectType, "GAMMA", map[string]any{})
 
 	live.accept(t, "build.query.create", build.QueryType, "ACTIVE", map[string]any{
-		"name": "active", "title": "Active", "description": "Active alpha records", "object": "build.alpha", "sort": []string{"id"}, "limit": 50,
+		"name": "active", "title": "Active", "description": "Active alpha records", "object": "invariantproject.alpha", "sort": []string{"id"}, "limit": 50,
 	})
 	live.accept(t, "build.query.publish", build.QueryType, "ACTIVE", map[string]any{})
-	live.accept(t, "build.query.edit", build.QueryType, "ACTIVE", map[string]any{"object": "build.beta"})
+	live.accept(t, "build.query.edit", build.QueryType, "ACTIVE", map[string]any{"object": "invariantproject.beta"})
 	if _, refusal := live.Submit(live.member(t), live.submission("build.query.publish", build.QueryType, "ACTIVE", map[string]any{}), invariantClock); refusal == nil {
 		t.Fatal("a published query changed its source object")
 	}
-	live.accept(t, "build.query.edit", build.QueryType, "ACTIVE", map[string]any{"object": "build.alpha", "title": "Active v2"})
+	live.accept(t, "build.query.edit", build.QueryType, "ACTIVE", map[string]any{"object": "invariantproject.alpha", "title": "Active v2"})
 	live.accept(t, "build.query.publish", build.QueryType, "ACTIVE", map[string]any{})
 
 	live.accept(t, "build.query.create", build.QueryType, "DESCRIBEDSET", map[string]any{
@@ -127,7 +127,7 @@ func TestInvariantK1QueriesPublishBindRejectAndReplay(t *testing.T) {
 		}
 	}
 	interfaceQuery, ok := live.namedQuery(build.ID, "describedset")
-	if !ok || interfaceQuery.InterfaceShape == nil || !slices.Contains(interfaceQuery.Implementations, "build.gamma") {
+	if !ok || interfaceQuery.InterfaceShape == nil || !slices.Contains(interfaceQuery.Implementations, "invariantproject.gamma") {
 		t.Fatalf("interface query binding: %+v, found=%v", interfaceQuery, ok)
 	}
 
@@ -138,7 +138,7 @@ func TestInvariantK1QueriesPublishBindRejectAndReplay(t *testing.T) {
 		t.Fatalf("replayed historical query: page=%+v refusal=%v", page, refusal)
 	}
 	interfaceQuery, ok = replayed.namedQuery(build.ID, "describedset")
-	if !ok || interfaceQuery.InterfaceShape == nil || !slices.Contains(interfaceQuery.Implementations, "build.gamma") {
+	if !ok || interfaceQuery.InterfaceShape == nil || !slices.Contains(interfaceQuery.Implementations, "invariantproject.gamma") {
 		t.Fatalf("replayed interface query binding: %+v, found=%v", interfaceQuery, ok)
 	}
 }

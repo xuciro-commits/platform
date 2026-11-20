@@ -79,7 +79,7 @@ func NormalizeTransaction(object Object, action *Action, lookup func(string) (pl
 					}
 					continue
 				}
-				source, err := TxnIterationSource(AppID, AppID+"."+object.Name, step.ForEach.Of, lookup)
+				source, err := TxnIterationSource(AppID, object.Type(), step.ForEach.Of, lookup)
 				if err != nil {
 					return err
 				}
@@ -97,7 +97,7 @@ func NormalizeTransaction(object Object, action *Action, lookup func(string) (pl
 				continue
 			}
 			if len(step.Changes) > 0 {
-				if !strings.HasPrefix(step.Target.Type, AppID+".") {
+				if platform.OwnerOfType(step.Target.Type) != AppID {
 					return fmt.Errorf("transaction cannot change another application")
 				}
 				for i := range step.Changes {

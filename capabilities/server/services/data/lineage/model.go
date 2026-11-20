@@ -217,28 +217,12 @@ func NodeIDs(in Input) []string {
 		out = append(out, "pipeline:"+item.ID)
 	}
 	for _, item := range in.Objects {
-		out = append(out, "object:"+nameOf(item.Name))
+		out = append(out, "object:"+item.Type())
 	}
 	for _, item := range in.Writebacks {
 		out = append(out, "writeback:"+item.ID)
 	}
 	return out
-}
-
-func nameOf(name string) string {
-	if name == "" || containsDot(name) {
-		return name
-	}
-	return "build." + name
-}
-
-func containsDot(value string) bool {
-	for _, char := range value {
-		if char == '.' {
-			return true
-		}
-	}
-	return false
 }
 
 func (g Graph) normalized() Graph {

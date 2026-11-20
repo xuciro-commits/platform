@@ -5,12 +5,12 @@
         {
           "app": "build",
           "kind": "action",
-          "name": "build.crmtask.create"
+          "name": "crm.crmcontact.create"
         },
         {
           "app": "build",
           "kind": "action",
-          "name": "build.crmtask.edit"
+          "name": "crm.crmcontact.edit"
         }
       ],
       "binding": "page",
@@ -31,19 +31,16 @@
     {
       "fields": [
         {
-          "name": "title"
+          "name": "fullname"
         },
         {
-          "name": "description"
+          "name": "email"
         },
         {
-          "name": "lead"
+          "name": "mobile"
         },
         {
-          "name": "deal"
-        },
-        {
-          "name": "state"
+          "name": "phone"
         }
       ],
       "id": "list",
@@ -51,27 +48,24 @@
       "model": {
         "fields": [
           {
-            "name": "title"
+            "name": "fullname"
           },
           {
-            "name": "description"
+            "name": "email"
           },
           {
-            "name": "lead"
+            "name": "mobile"
           },
           {
-            "name": "deal"
-          },
-          {
-            "name": "state"
+            "name": "phone"
           }
         ],
-        "type": "build.crmtask"
+        "type": "crm.crmcontact"
       },
       "object": {
         "app": "build",
         "kind": "object",
-        "name": "build.crmtask"
+        "name": "crm.crmcontact"
       },
       "owner": "binding:list",
       "ports": {
@@ -83,37 +77,31 @@
     {
       "fields": [
         {
-          "name": "title"
+          "name": "fullname"
         },
         {
-          "name": "description"
+          "name": "email"
         },
         {
-          "name": "lead"
+          "name": "mobile"
         },
         {
-          "name": "deal"
+          "name": "phone"
         },
         {
-          "name": "status"
+          "name": "organization"
         },
         {
-          "name": "priority"
+          "name": "designation"
         },
         {
-          "name": "assignee"
+          "name": "salutation"
         },
         {
-          "name": "startdate"
+          "name": "gender"
         },
         {
-          "name": "duedate"
-        },
-        {
-          "name": "allday"
-        },
-        {
-          "name": "state"
+          "name": "address"
         }
       ],
       "id": "detail",
@@ -121,45 +109,39 @@
       "model": {
         "fields": [
           {
-            "name": "title"
+            "name": "fullname"
           },
           {
-            "name": "description"
+            "name": "email"
           },
           {
-            "name": "lead"
+            "name": "mobile"
           },
           {
-            "name": "deal"
+            "name": "phone"
           },
           {
-            "name": "status"
+            "name": "organization"
           },
           {
-            "name": "priority"
+            "name": "designation"
           },
           {
-            "name": "assignee"
+            "name": "salutation"
           },
           {
-            "name": "startdate"
+            "name": "gender"
           },
           {
-            "name": "duedate"
-          },
-          {
-            "name": "allday"
-          },
-          {
-            "name": "state"
+            "name": "address"
           }
         ],
-        "type": "build.crmtask"
+        "type": "crm.crmcontact"
       },
       "object": {
         "app": "build",
         "kind": "object",
-        "name": "build.crmtask"
+        "name": "crm.crmcontact"
       },
       "owner": "binding:detail",
       "ports": {
@@ -170,11 +152,11 @@
   ],
   "format": 4,
   "inputSchema": {},
-  "name": "crmtask",
+  "name": "crm.crmcontact",
   "object": {
     "app": "build",
     "kind": "object",
-    "name": "build.crmtask"
+    "name": "crm.crmcontact"
   },
   "scopeVisibility": {
     "owners": {
@@ -201,7 +183,7 @@
       }
     ]
   },
-  "title": "Tasks",
+  "title": "CRM Contacts",
   "widgetSpec": {
     "body": {
       "document": null,

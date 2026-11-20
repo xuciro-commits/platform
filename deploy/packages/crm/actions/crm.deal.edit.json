@@ -1,14 +1,12 @@
 {
   "action": {
     "capability": "deal",
-    "description": "Create a deal.",
-    "new": true,
+    "description": "Change fields of a deal; fields left out keep their value.",
     "payload": [
       {
         "description": "Deal",
         "group": "Commercial",
         "name": "title",
-        "required": true,
         "type": "string"
       },
       {
@@ -89,7 +87,6 @@
         ],
         "description": "Status (qualification, demomaking, proposalquotation, negotiation, readytoclose, won, lost)",
         "name": "status",
-        "required": true,
         "type": "string"
       },
       {
@@ -103,18 +100,18 @@
         "type": "string"
       }
     ],
-    "schema": "build.deal.create",
+    "schema": "crm.deal.edit",
     "schemaVersion": {
       "family": 2,
-      "version": "schema.sha256.04cfcc4a2c4bab8e89777e66ab067d393b27ba4b85a4550293e6fc2281e2a0c8"
+      "version": "schema.sha256.805168ac0ac99518e1a5eae4ffc5b2edfe09a2660797b74fcf729e38aa3634d3"
     },
-    "target": "build.deal",
-    "title": "Create deal"
+    "target": "crm.deal",
+    "title": "Edit deal"
   },
   "roles": [
     "builder",
     "user"
   ],
-  "schema": "build.deal.create",
-  "target": "build.deal"
+  "schema": "crm.deal.edit",
+  "target": "crm.deal"
 }

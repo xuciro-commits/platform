@@ -17,7 +17,7 @@ func TestInvariantK7ProductVersionFreezesSavedCandidate(t *testing.T) {
 	live.accept(t, build.ObjectType+".create", build.ObjectType, "OBJ1", object)
 	live.accept(t, protocol.AppType+".create", protocol.AppType, "APP1", map[string]any{
 		"name": "alphaapp", "title": "Alpha application",
-		"resources": []platform.AssetRef{{App: build.ID, Kind: platform.AssetObject, Name: "build.alpha"}},
+		"resources": []platform.AssetRef{{App: build.ID, Kind: platform.AssetObject, Name: "invariantproject.alpha"}},
 	})
 	product := map[string]any{
 		"name": "alpha", "title": "Alpha product", "description": "Delivers the Alpha application.",
@@ -47,7 +47,7 @@ func TestInvariantK7ProductVersionFreezesSavedCandidate(t *testing.T) {
 		t.Fatalf("product version: %#v", view.Record)
 	}
 	if version.Descriptor.Blueprint == nil || !slices.ContainsFunc(version.Descriptor.Blueprint.Assets, func(asset platform.ReleaseAsset) bool {
-		return asset.Ref == (platform.AssetRef{App: build.ID, Kind: platform.AssetObject, Name: "build.alpha"})
+		return asset.Ref == (platform.AssetRef{App: build.ID, Kind: platform.AssetObject, Name: "invariantproject.alpha"})
 	}) {
 		t.Fatalf("product descriptor lacks the candidate closure: %+v", version.Descriptor)
 	}

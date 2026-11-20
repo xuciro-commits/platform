@@ -147,7 +147,7 @@ func (o *Owner) bindDispatch(spec platform.Dispatch, object ontology.Object) (di
 				return platform.AssetRef{}, err
 			}
 		}
-		if !selected && fixed.State != "published" || fixed.On != "dispatch" || fixed.Object != "build."+object.Name || len(fixed.Result) != 0 {
+		if !selected && fixed.State != "published" || fixed.On != "dispatch" || fixed.Object != object.Type() || len(fixed.Result) != 0 {
 			return platform.AssetRef{}, fmt.Errorf("Dispatch needs a published dispatch-only writeback without answer field mutations")
 		}
 		path, err := url.Parse(fixed.Path)
@@ -240,13 +240,13 @@ func (o *Owner) bindDispatch(spec platform.Dispatch, object ontology.Object) (di
 		if err != nil {
 			return out, err
 		}
-		if definition.Object.Name != "build."+object.Name {
+		if definition.Object.Name != object.Type() {
 			return out, fmt.Errorf("Dispatch observation must read its business subject")
 		}
 		out.Observation = &platform.AssetRef{App: App, Kind: platform.AssetObservation, Name: definition.Name}
 	}
 	if spec.Readback.Record != "" {
-		owner, _, _ := strings.Cut(spec.Readback.Record, ".")
+		owner := platform.OwnerOfType(spec.Readback.Record)
 		out.Record = &platform.AssetRef{App: owner, Kind: platform.AssetObject, Name: spec.Readback.Record}
 	}
 	return out, nil

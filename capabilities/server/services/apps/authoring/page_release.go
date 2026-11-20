@@ -8,7 +8,6 @@ import (
 	pageowner "platformserver/services/apps/pages"
 	"reflect"
 	"slices"
-	"strings"
 
 	"platformserver/platform"
 	ontology "platformserver/services/ontology"
@@ -16,7 +15,7 @@ import (
 )
 
 func Descriptor(p protocol.Page, app, version string) platform.Page {
-	owner, _, _ := strings.Cut(p.Object, ".")
+	owner := platform.OwnerOfType(p.Object)
 	value := platform.Page{Format: p.Format, Name: p.Name, Title: p.Title, Description: p.Description, Object: platform.AssetRef{App: owner, Kind: platform.AssetObject, Name: p.Object}, DataBindings: p.DataBindings, ActionTriggers: p.ActionTriggers, InputSchema: p.InputSchema, ScopeVisibility: p.ScopeVisibility, WidgetSpec: p.WidgetSpec}
 	raw, _ := json.Marshal(value)
 	_ = json.Unmarshal(raw, &value)
@@ -100,7 +99,7 @@ func (o *Owner) PageContent(name, version string) (platform.Page, bool) {
 	return platform.Page{}, false
 }
 
-func (o *Owner) HasPublishedPage(name string) (bool, error) {
+func (o *Owner) HasPublishedPage(shows func(name, object string) bool) (bool, error) {
 	pages, err := o.Pages()
 	if err != nil {
 		return false, err
@@ -113,7 +112,7 @@ func (o *Owner) HasPublishedPage(name string) (bool, error) {
 		if !ok {
 			return false, fmt.Errorf("invalid published page %s", record.ID)
 		}
-		if saved.Name == name {
+		if shows(saved.Name, saved.Object) {
 			return true, nil
 		}
 	}

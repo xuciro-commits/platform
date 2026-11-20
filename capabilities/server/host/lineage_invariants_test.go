@@ -66,7 +66,7 @@ func TestInvariantK12LineageGuardAndProjectScope(t *testing.T) {
 	object["datasources"] = []platform.DataSourceBinding{}
 	live.accept(t, "build.object.create", build.ObjectType, "OBJ", object)
 	live.accept(t, "build.object.publish", build.ObjectType, "OBJ", map[string]any{})
-	live.accept(t, "build.guarded.create", "build.guarded", "G1", map[string]any{"note": "secret"})
+	live.accept(t, "projectone.guarded.create", "projectone.guarded", "G1", map[string]any{"note": "secret"})
 	dataset := map[string]any{"name": "guarded", "title": "Guarded", "marking": "restricted", "project": "p1"}
 	live.accept(t, "build.dataset.create", dataowner.DatasetType, "DS1", dataset)
 	live.accept(t, dataowner.SchemaDatasetLoad, dataowner.DatasetType, "DS1", map[string]any{"rows": []map[string]any{{"id": "A1", "note": "secret"}}, "marking": "restricted"})
@@ -77,21 +77,21 @@ func TestInvariantK12LineageGuardAndProjectScope(t *testing.T) {
 		t.Fatalf("add restricted binding: %s: %s", refusal.Code, refusal.Message)
 	}
 	live.accept(t, "build.object.publish", build.ObjectType, "OBJ", map[string]any{})
-	if _, refusal := live.RecordOf(t.Context(), uncleared.Member, "build.guarded", "G1", invariantClock); refusal == nil {
+	if _, refusal := live.RecordOf(t.Context(), uncleared.Member, "projectone.guarded", "G1", invariantClock); refusal == nil {
 		t.Fatal("uncleared member read a guarded object before the definition change")
 	}
 
 	edited := invariantObject("guarded", "Guarded")
 	edited["datasources"] = []platform.DataSourceBinding{}
 	live.accept(t, "build.object.edit", build.ObjectType, "OBJ", edited)
-	if _, refusal := live.RecordOf(t.Context(), uncleared.Member, "build.guarded", "G1", invariantClock); refusal == nil {
+	if _, refusal := live.RecordOf(t.Context(), uncleared.Member, "projectone.guarded", "G1", invariantClock); refusal == nil {
 		t.Fatal("unactivated object definition lowered the accepted guard")
 	}
 	preview, refusal := live.lineage(t.Context(), live.member(t), lineage.LineageRequest{Mode: "overview"})
 	if refusal != nil {
 		t.Fatalf("preview lineage: %+v", refusal)
 	}
-	node, found := lineageNode(preview, "object:build.guarded")
+	node, found := lineageNode(preview, "object:projectone.guarded")
 	if !found || node.Guard != "restricted" || node.MarkingStatus != "preview-only" {
 		t.Fatalf("preview/guard mismatch: %+v", node)
 	}
@@ -147,14 +147,14 @@ func TestInvariantK12LineageImpactFieldsAndScope(t *testing.T) {
 	object["datasources"] = []platform.DataSourceBinding{binding, binding}
 	live.accept(t, "build.object.create", build.ObjectType, "OBJECT", object)
 
-	shallow, refusal := live.lineage(t.Context(), live.member(t), lineage.LineageRequest{Mode: "focus", Focus: "object:build.alpha", Depth: 1, Fields: true})
+	shallow, refusal := live.lineage(t.Context(), live.member(t), lineage.LineageRequest{Mode: "focus", Focus: "object:invariantproject.alpha", Depth: 1, Fields: true})
 	if refusal != nil {
 		t.Fatalf("shallow lineage: %+v", refusal)
 	}
 	if shallow.Impact == nil || shallow.Impact.Upstream < 3 {
 		t.Fatalf("impact was not computed on the full visible graph: %+v", shallow.Impact)
 	}
-	deep, refusal := live.lineage(t.Context(), live.member(t), lineage.LineageRequest{Mode: "focus", Focus: "object:build.alpha", Depth: 3, Fields: true})
+	deep, refusal := live.lineage(t.Context(), live.member(t), lineage.LineageRequest{Mode: "focus", Focus: "object:invariantproject.alpha", Depth: 3, Fields: true})
 	if refusal != nil {
 		t.Fatalf("deep lineage: %+v", refusal)
 	}
@@ -165,17 +165,17 @@ func TestInvariantK12LineageImpactFieldsAndScope(t *testing.T) {
 	for _, field := range deep.FieldNodes {
 		fields[field.ID] = field
 	}
-	for _, id := range []string{"dataset:OUTPUT#title", "pipeline:PIPE#title", "object:build.alpha#note"} {
+	for _, id := range []string{"dataset:OUTPUT#title", "pipeline:PIPE#title", "object:invariantproject.alpha#note"} {
 		if _, ok := fields[id]; !ok {
 			t.Fatalf("field %s is missing from the graph: %+v", id, deep.FieldNodes)
 		}
 	}
-	if got := fields["object:build.alpha#manual"].Certainty; got != "unverified" {
+	if got := fields["object:invariantproject.alpha#manual"].Certainty; got != "unverified" {
 		t.Fatalf("a field without a declared source is %q, want unverified", got)
 	}
 	edge := false
 	for _, item := range deep.FieldEdges {
-		if item.From == "dataset:OUTPUT#title" && item.To == "object:build.alpha#note" && item.Operation == "bind" {
+		if item.From == "dataset:OUTPUT#title" && item.To == "object:invariantproject.alpha#note" && item.Operation == "bind" {
 			edge = true
 		}
 	}
@@ -184,7 +184,7 @@ func TestInvariantK12LineageImpactFieldsAndScope(t *testing.T) {
 	}
 	bindings := map[string]bool{}
 	for _, item := range deep.Edges {
-		if item.From == "dataset:OUTPUT" && item.To == "object:build.alpha" && item.Role == "binding" {
+		if item.From == "dataset:OUTPUT" && item.To == "object:invariantproject.alpha" && item.Role == "binding" {
 			bindings[item.ID] = true
 		}
 	}
@@ -192,20 +192,20 @@ func TestInvariantK12LineageImpactFieldsAndScope(t *testing.T) {
 		t.Fatalf("same-pair binding edges were merged: %+v", bindings)
 	}
 
-	limited, refusal := live.lineage(t.Context(), live.member(t), lineage.LineageRequest{Mode: "focus", Focus: "object:build.alpha", Depth: 3, NodeLimit: 1, Fields: true})
+	limited, refusal := live.lineage(t.Context(), live.member(t), lineage.LineageRequest{Mode: "focus", Focus: "object:invariantproject.alpha", Depth: 3, NodeLimit: 1, Fields: true})
 	if refusal != nil {
 		t.Fatalf("limited lineage: %+v", refusal)
 	}
 	if !limited.Truncated || !slices.Contains(limited.Truncation, "node-limit") || limited.Returned.Nodes != 1 {
 		t.Fatalf("node limit was not reported: %+v", limited)
 	}
-	if _, ok := lineageNode(limited, "object:build.alpha"); !ok {
+	if _, ok := lineageNode(limited, "object:invariantproject.alpha"); !ok {
 		t.Fatalf("node limit dropped the focus: %+v", limited.Nodes)
 	}
 	if limited.Impact == nil || limited.Impact.Upstream != shallow.Impact.Upstream {
 		t.Fatalf("truncation changed impact counts: %+v", limited.Impact)
 	}
-	edgeLimited, refusal := live.lineage(t.Context(), live.member(t), lineage.LineageRequest{Mode: "focus", Focus: "object:build.alpha", Depth: 3, EdgeLimit: 1})
+	edgeLimited, refusal := live.lineage(t.Context(), live.member(t), lineage.LineageRequest{Mode: "focus", Focus: "object:invariantproject.alpha", Depth: 3, EdgeLimit: 1})
 	if refusal != nil {
 		t.Fatalf("edge-limited lineage: %+v", refusal)
 	}
@@ -283,18 +283,18 @@ func TestInvariantK12LineageBranchReadsStagedDefinitionsWithoutChangingMain(t *t
 	if _, refusal = live.SaveBranchResource(live.member(t), branch.ID, build.ObjectType, "OBJ", merge.BranchSaveRequest{Spec: platform.Raw(changed)}, invariantClock); refusal != nil {
 		t.Fatalf("save branch object: %+v", refusal)
 	}
-	main, refusal := live.lineage(t.Context(), live.member(t), lineage.LineageRequest{Mode: "focus", Focus: "object:build.alpha"})
+	main, refusal := live.lineage(t.Context(), live.member(t), lineage.LineageRequest{Mode: "focus", Focus: "object:invariantproject.alpha"})
 	if refusal != nil {
 		t.Fatalf("main lineage: %+v", refusal)
 	}
-	branched, refusal := live.lineage(t.Context(), live.member(t), lineage.LineageRequest{Mode: "focus", Branch: branch.ID, Focus: "object:build.alpha"})
+	branched, refusal := live.lineage(t.Context(), live.member(t), lineage.LineageRequest{Mode: "focus", Branch: branch.ID, Focus: "object:invariantproject.alpha"})
 	if refusal != nil {
 		t.Fatalf("branch lineage: %+v", refusal)
 	}
-	if node, ok := lineageNode(main, "object:build.alpha"); !ok || node.Title != "Alpha" {
+	if node, ok := lineageNode(main, "object:invariantproject.alpha"); !ok || node.Title != "Alpha" {
 		t.Fatalf("main lineage changed by branch save: %+v", node)
 	}
-	node, ok := lineageNode(branched, "object:build.alpha")
+	node, ok := lineageNode(branched, "object:invariantproject.alpha")
 	if !ok || node.Title != "Alpha branch" || branched.Scope.Branch != branch.ID {
 		t.Fatalf("branch lineage did not read staged definitions: %+v scope=%+v", node, branched.Scope)
 	}

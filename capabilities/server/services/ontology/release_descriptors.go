@@ -78,7 +78,7 @@ func ObjectDescriptor(body []byte) (platform.RecordTypeInfo, error) {
 		}
 		fields = append(fields, field)
 	}
-	owner, _, _ := strings.Cut(shape.Type, ".")
+	owner := platform.OwnerOfType(shape.Type)
 	if shape.Lifecycle == nil && len(shape.States) > 0 {
 		life := platform.LifecycleInfo{Field: "state", Initial: shape.States[0].Name, States: shape.States}
 		choices := []string{}
@@ -146,7 +146,7 @@ func ObjectDependencies(asset platform.ReleaseAsset, historical bool) ([]platfor
 		if ref, ok := bindings.Objects[name]; ok {
 			return ref
 		}
-		app, _, ok := strings.Cut(name, ".")
+		app, ok := platform.OwnerOfType(name), strings.Contains(name, ".")
 		if !ok {
 			app = asset.Ref.App
 		}
@@ -193,7 +193,7 @@ func ObjectDependencies(asset platform.ReleaseAsset, historical bool) ([]platfor
 	}
 	provides = append(provides, platform.Capability{Kind: "interface", Name: asset.Ref.Name, Side: platform.CapabilityPure, Inputs: platform.ValueSchema{}, Outputs: runtimeprotocol.CapabilityEntitySchema(info)})
 	for _, name := range info.Implements {
-		owner, _, _ := strings.Cut(name, ".")
+		owner := platform.OwnerOfType(name)
 		requires = append(requires, platform.AssetRef{App: owner, Kind: platform.AssetInterface, Name: name})
 	}
 	if info.Extends != "" {
@@ -321,7 +321,7 @@ func ActionDependencies(asset platform.ReleaseAsset, historical bool) ([]platfor
 		if ref, ok := bindings.Objects[name]; ok {
 			return ref
 		}
-		app, _, ok := strings.Cut(name, ".")
+		app, ok := platform.OwnerOfType(name), strings.Contains(name, ".")
 		if !ok {
 			app = asset.Ref.App
 		}

@@ -48,9 +48,8 @@ type registeredOpenInfo struct {
 }
 
 type BuiltinApplicationAccess struct {
-	Application string
-	App         string
-	Roles       []string
+	Application, App string
+	Roles            []string
 }
 
 type applicationRegistryContents struct {

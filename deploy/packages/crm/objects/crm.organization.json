@@ -19,14 +19,14 @@
     {
       "group": "Details",
       "name": "industry",
-      "ref": "build.industry",
+      "ref": "crm.industry",
       "title": "Industry",
       "type": "reference"
     },
     {
       "group": "Details",
       "name": "territory",
-      "ref": "build.territory",
+      "ref": "crm.territory",
       "title": "Territory",
       "type": "reference"
     },
@@ -57,15 +57,16 @@
     }
   ],
   "name": "organization",
+  "namespace": "crm",
   "plural": "Organizations",
   "schemaVersions": [
     {
       "family": 1,
-      "version": "schema.sha256.f9fc5493fe711869471b6e7cc2025f5e90c366285b703da317f7d8722a5cb02b"
+      "version": "schema.sha256.164e93d04edab558838850309316c9776b247fa1c8b5e27904307ba9eff5a03a"
     }
   ],
   "title": "Organization",
-  "type": "build.organization",
+  "type": "crm.organization",
   "view": {
     "columns": [
       "name",

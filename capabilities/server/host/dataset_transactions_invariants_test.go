@@ -18,8 +18,8 @@ func TestInvariantK1K2SourceSnapshotMergeAndDeletion(t *testing.T) {
 		t.Run(mapping, func(t *testing.T) {
 			live := newInvariantTenant(t, "source-snapshot-merge-"+mapping)
 			live.accept(t, "build.dataset.create", dataowner.DatasetType, "INPUT", map[string]any{"name": "incoming", "title": "Incoming", "key": "id", "keep": 10})
-			sourceSpec := map[string]any{"name": "external", "title": "External", "url": "https://upstream.example.test/rows", "object": "build.merged"}
-			pipelineSpec := map[string]any{"name": "incomingpipe", "title": "Incoming pipeline", "input": "INPUT", "outputObject": "build.merged"}
+			sourceSpec := map[string]any{"name": "external", "title": "External", "url": "https://upstream.example.test/rows", "object": "invariantproject.merged"}
+			pipelineSpec := map[string]any{"name": "incomingpipe", "title": "Incoming pipeline", "input": "INPUT", "outputObject": "invariantproject.merged"}
 			if mapping == "legacy" {
 				sourceSpec["key"], sourceSpec["mapping"] = "id", []dataowner.SourceField{{From: "note", To: "note"}}
 				pipelineSpec["key"] = "id"
@@ -38,7 +38,7 @@ func TestInvariantK1K2SourceSnapshotMergeAndDeletion(t *testing.T) {
 			live.accept(t, "build.object.publish", build.ObjectType, "OBJECT", map[string]any{})
 			live.accept(t, "build.source.publish", dataowner.SourceType, "SOURCE", map[string]any{})
 			live.accept(t, "build.pipeline.publish", dataowner.PipelineType, "PIPE", map[string]any{})
-			live.accept(t, "build.merged.create", "build.merged", "D", map[string]any{"note": "created by action"})
+			live.accept(t, "invariantproject.merged.create", "invariantproject.merged", "D", map[string]any{"note": "created by action"})
 			rows := `[{"id":"A","note":"external A"},{"id":"B","note":"external B"},{"id":"C","note":"external C"},{"id":"D","note":"external D"}]`
 			live.Outbound = func(*http.Request, bool) (*http.Response, error) {
 				return &http.Response{StatusCode: http.StatusOK, Body: io.NopCloser(strings.NewReader(rows))}, nil
@@ -55,7 +55,7 @@ func TestInvariantK1K2SourceSnapshotMergeAndDeletion(t *testing.T) {
 			}
 			check := func(id, note string, archived bool) {
 				t.Helper()
-				view, refusal := live.RecordOf(t.Context(), live.member(t), "build.merged", id, invariantClock)
+				view, refusal := live.RecordOf(t.Context(), live.member(t), "invariantproject.merged", id, invariantClock)
 				if refusal != nil {
 					t.Fatal(refusal)
 				}
@@ -68,7 +68,7 @@ func TestInvariantK1K2SourceSnapshotMergeAndDeletion(t *testing.T) {
 				}
 			}
 			pull(invariantClock)
-			live.accept(t, "build.merged.edit", "build.merged", "C", map[string]any{"note": "action edit"})
+			live.accept(t, "invariantproject.merged.edit", "invariantproject.merged", "C", map[string]any{"note": "action edit"})
 			live.accept(t, dataowner.SchemaDatasetLoad, dataowner.DatasetType, "INPUT", map[string]any{"rows": []map[string]any{{"id": "B", "note": "pipeline B"}}})
 			live.accept(t, "build.pipeline.run", dataowner.PipelineType, "PIPE", map[string]any{})
 			live.RunPipelines(invariantClock.Add(time.Second))
