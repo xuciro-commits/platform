@@ -1698,6 +1698,16 @@ test("crm: every CRM type can be created, edited and filtered, and lead and deal
   await expect(lines.getByText("1,500.00 USD", { exact: true })).toBeVisible();
   await page.reload();
   await expect(page.getByText("20,000.00 USD", { exact: true }).first()).toBeVisible();
+  await page.goto("/ontology/objects/build.dealline");
+  const lineSearch = page.getByRole("textbox", { name: "Search this list" });
+  await lineSearch.fill("Custom Workshop");
+  await lineSearch.press("Enter");
+  await page.getByRole("link", { name: "Custom Workshop Day", exact: true }).first().click();
+  await page.getByRole("combobox", { name: "Deal", exact: true }).fill("Vanguard");
+  await page.getByRole("option", { name: /Vanguard fleet portal/ }).click();
+  await expect(page.getByRole("link", { name: "Vanguard fleet portal" })).toBeVisible();
+  await page.goto("/ontology/objects/build.deal/DEL-001");
+  await expect(page.getByText("18,500.00 USD", { exact: true }).first()).toBeVisible();
 
   await page.goto("/ontology/objects/build.note");
   await expect(page.getByRole("columnheader", { name: "Related to" })).toBeVisible();

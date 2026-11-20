@@ -30,7 +30,7 @@ func CompileObjectEntity(o Object, env ObjectRuntimeEnvironment) platform.Record
 	entity.EnterpriseUse = o.EnterpriseUse
 	parents := slices.DeleteFunc(slices.Clone(o.Fields), func(f Field) bool { return f.Type != "reference" || f.Inverse == "" })
 	if o.CreateTransaction != nil || len(parents) > 0 {
-		entity.Follow = func(c platform.Caller, r *pb.ChangeRecord, verb string, now time.Time) *platform.Error {
+		entity.Follow = func(c platform.Caller, r *pb.ChangeRecord, verb string, before any, now time.Time) *platform.Error {
 			if verb == "create" && o.CreateTransaction != nil {
 				if env.Transaction == nil {
 					return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Creation transactions need their original owner")
@@ -39,32 +39,42 @@ func CompileObjectEntity(o Object, env ObjectRuntimeEnvironment) platform.Record
 					return err
 				}
 			}
-			return rollUp(c, r, o, reflect.TypeOf(entity.Model), parents, env, now)
+			return rollUp(c, r, o, reflect.TypeOf(entity.Model), parents, env, before, now)
 		}
 	}
 	return entity
 }
 
-func rollUp(c platform.Caller, r *pb.ChangeRecord, o Object, model reflect.Type, parents []Field, env ObjectRuntimeEnvironment, now time.Time) *platform.Error {
+func rollUp(c platform.Caller, r *pb.ChangeRecord, o Object, model reflect.Type, parents []Field, env ObjectRuntimeEnvironment, before any, now time.Time) *platform.Error {
 	if env.Touch == nil || env.Lookup == nil {
 		return nil
 	}
-	value, found := c.RecordValue(model, c.TransactionInput(r).GetTarget().GetId())
-	var record map[string]json.RawMessage
-	if !found || json.Unmarshal(platform.Raw(value), &record) != nil {
+	after, found := c.RecordValue(model, c.TransactionInput(r).GetTarget().GetId())
+	if !found {
 		return nil
+	}
+	var records []map[string]json.RawMessage
+	for _, value := range []any{before, after} {
+		var record map[string]json.RawMessage
+		if raw, err := json.Marshal(value); value != nil && err == nil && json.Unmarshal(raw, &record) == nil {
+			records = append(records, record)
+		}
 	}
 	for _, f := range parents {
 		info, ok := env.Lookup(f.Ref)
 		if !ok || len(info.LocalRules) == 0 || !slices.ContainsFunc(info.Sets, func(set platform.RecordSet) bool { return set.Object == AppID+"."+o.Name && set.From == f.Inverse }) {
 			continue
 		}
-		var parent string
-		if json.Unmarshal(record[f.Name], &parent) != nil || parent == "" {
-			continue
-		}
-		if err := env.Touch(c, r, f.Ref, parent, now); err != nil {
-			return err
+		var touched []string
+		for _, record := range records {
+			var parent string
+			if json.Unmarshal(record[f.Name], &parent) != nil || parent == "" || slices.Contains(touched, parent) {
+				continue
+			}
+			touched = append(touched, parent)
+			if err := env.Touch(c, r, f.Ref, parent, now); err != nil {
+				return err
+			}
 		}
 	}
 	return nil

@@ -503,7 +503,7 @@ func executeAction(c platform.Caller, e platform.RecordType, t platform.ActionTy
 			}
 			created := c.WithTransactionInput(s)
 			created = created.Deeper()
-			if err := e.Follow(created, r, t.Name, now); err != nil {
+			if err := e.Follow(created, r, t.Name, existing, now); err != nil {
 				c.FailDecision(err)
 				return
 			}

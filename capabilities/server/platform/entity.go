@@ -44,7 +44,7 @@ type RecordType struct {
 	EnterpriseUse     *Expr
 	Protocols         []Provision
 	CreateTxn         *BusinessTxn
-	Follow            func(Caller, *pb.ChangeRecord, string, time.Time) *Error
+	Follow            func(Caller, *pb.ChangeRecord, string, any, time.Time) *Error
 	Versioning        *Versioning
 	VersionPins       []VersionPinBinding
 	Sets              []RecordSet
