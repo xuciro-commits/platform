@@ -4,9 +4,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"platformserver/kernel/protocol"
+	releaseowner "platformserver/services/devops/releases"
 	"reflect"
 	"slices"
 	"testing"
+	"time"
 
 	"go.opentelemetry.io/otel/trace"
 	"platformserver/kernel/records"
@@ -165,6 +167,74 @@ func TestInvariantK13DefinitionPlansFollowPublishedReadImages(t *testing.T) {
 	retained, err := right.decisionDefinition(build.ID, request, "")
 	if err != nil || retained == nil || retained.Closure != want.Closure || retained.Contract != want.Contract || right.readScope.definitions != cache {
 		t.Fatalf("a newer publication or resource change replaced the old scope's plan: %+v, %v", retained, err)
+	}
+}
+
+func TestInvariantK13LaneFallbackReadsOnlyCachedDefinitionPlans(t *testing.T) {
+	live := newInvariantTenant(t, "invariant-lane-plan")
+	live.accept(t, "build.object.create", build.ObjectType, "OBJECT", invariantObject("alpha", "Alpha"))
+	live.accept(t, "build.object.publish", build.ObjectType, "OBJECT", map[string]any{})
+	typ := "invariantproject.alpha"
+	request := live.submission(typ+".create", typ, "A1", map[string]any{"note": "before"})
+	image := live.readImage.Load()
+	warm, err := image.state.decisionDefinition(build.ID, request, "")
+	if err != nil || warm == nil || len(warm.Dependencies) == 0 {
+		t.Fatalf("could not prime the published cache: %+v, %v", warm, err)
+	}
+	fallback := func(schema string) (*platform.DecisionDefinition, error) {
+		candidate := live.submission(schema, typ, "A1", nil)
+		attempts := 0
+		return decideWithError(live.Tenant, "invariant-fallback", func(scope *Tenant) (*platform.DecisionDefinition, error) {
+			attempts++
+			if attempts <= 3 {
+				live.StateEpoch.Add(1)
+				return nil, nil
+			}
+			return scope.decisionDefinition(build.ID, candidate, "")
+		}, nil)
+	}
+	hit, err := fallback(typ + ".create")
+	if err != nil || hit == nil || len(hit.Dependencies) == 0 || &hit.Dependencies[0] != &warm.Dependencies[0] {
+		t.Fatalf("lane fallback rebuilt a cached plan: %+v, %v", hit, err)
+	}
+	cold, err := fallback(typ + ".edit")
+	if err != nil || cold == nil || len(cold.Dependencies) == 0 {
+		t.Fatalf("lane fallback could not build a missing plan: %+v, %v", cold, err)
+	}
+	again, err := fallback(typ + ".edit")
+	if err != nil || again == nil || len(again.Dependencies) == 0 || &again.Dependencies[0] == &cold.Dependencies[0] || !reflect.DeepEqual(again, cold) {
+		t.Fatalf("lane fallback populated the cache or rebuilt a different plan: %+v, %v", again, err)
+	}
+
+	locked, unlock, finished := make(chan struct{}), make(chan struct{}), make(chan struct{})
+	defer close(unlock)
+	go func() {
+		defer close(finished)
+		_, _ = image.state.readScope.definitions.Lookup(image.definitions, image.resources, releaseowner.DefinitionPlanKey{}, func() (*platform.DecisionDefinition, error) {
+			close(locked)
+			<-unlock
+			return nil, nil
+		})
+	}()
+	select {
+	case <-locked:
+	case <-finished:
+		t.Fatal("the published plan cache was not locked by a fill")
+	case <-time.After(10 * time.Second):
+		t.Fatal("cache fill did not start")
+	}
+	resolved := make(chan readAnswer[*platform.DecisionDefinition], 1)
+	go func() {
+		plan, err := fallback(typ + ".create")
+		resolved <- readAnswer[*platform.DecisionDefinition]{value: plan, err: err}
+	}()
+	select {
+	case answer := <-resolved:
+		if answer.err != nil || !reflect.DeepEqual(answer.value, warm) {
+			t.Fatalf("busy cache fallback rebuilt a different plan: %+v, %v", answer.value, answer.err)
+		}
+	case <-time.After(10 * time.Second):
+		t.Fatal("lane fallback waited for the published plan cache")
 	}
 }
 

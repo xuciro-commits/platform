@@ -16,14 +16,29 @@ type DefinitionPlanCache struct {
 	mu                    sync.Mutex
 	generation, resources uint64
 	plans                 map[DefinitionPlanKey]platform.DecisionDefinition
+	hitsFrom              *DefinitionPlanCache
 }
 
 func NewDefinitionPlanCache(generation, resources uint64) *DefinitionPlanCache {
 	return &DefinitionPlanCache{generation: generation, resources: resources}
 }
 
+func (c *DefinitionPlanCache) HitsOnly() *DefinitionPlanCache {
+	return &DefinitionPlanCache{generation: c.generation, resources: c.resources, hitsFrom: c}
+}
+
 func (c *DefinitionPlanCache) Lookup(generation, resources uint64, key DefinitionPlanKey, build func() (*platform.DecisionDefinition, error)) (*platform.DecisionDefinition, error) {
 	if c == nil || c.generation != generation || c.resources != resources {
+		return build()
+	}
+	if source := c.hitsFrom; source != nil {
+		if source.mu.TryLock() {
+			saved, ok := source.plans[key]
+			source.mu.Unlock()
+			if ok {
+				return &saved, nil
+			}
+		}
 		return build()
 	}
 	c.mu.Lock()

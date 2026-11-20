@@ -2,12 +2,12 @@ package host
 
 import (
 	"context"
+	"maps"
 	runtimekernel "platformserver/kernel"
+	"platformserver/platform"
 	"platformserver/services/resources/monitoring"
 	"slices"
 	"time"
-
-	"platformserver/platform"
 
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/metric"
@@ -25,6 +25,11 @@ func decideOnImage[T any](t *Tenant, ctx context.Context, holder string, prepare
 	attempt := func(state *Tenant) (value T, decision preparedAccepted, refusal *platform.Error, err error) {
 		value, refusal, err = readImageState(t, state, ctx, func(scope *Tenant) (T, *platform.Error) {
 			scope.preparedResult = &decision
+			if state == t {
+				if image := t.readImage.Load(); image != nil && maps.Equal(image.state.disabledOwners, t.disabledOwners) {
+					scope.readScope.definitions = image.state.readScope.definitions.HitsOnly()
+				}
+			}
 			return prepare(scope)
 		})
 		return

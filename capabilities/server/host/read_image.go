@@ -4,17 +4,15 @@ import (
 	"context"
 	"log"
 	"maps"
-	"platformserver/services/resources/monitoring"
-	"slices"
-
-	"platformserver/platform"
-
 	runtimekernel "platformserver/kernel"
 	"platformserver/kernel/transport"
+	"platformserver/platform"
 	"platformserver/services/data/lineage"
 	releaseowner "platformserver/services/devops/releases"
 	compute "platformserver/services/functions/runtime"
 	build "platformserver/services/resources/authoring"
+	"platformserver/services/resources/monitoring"
+	"slices"
 )
 
 type tenantReadImage struct {
@@ -78,18 +76,15 @@ func (t *Tenant) endLane() {
 	}
 }
 
-func readView() runtimekernel.ReadView[*Tenant] {
-	return runtimekernel.ReadView[*Tenant]{Fork: (*Tenant).forkReadState, Open: (*Tenant).openRecordRead, Close: (*Tenant).closeRecordRead,
-		Failure: (*Tenant).readError, Refusal: (*Tenant).recordReadRefusal}
-}
-
 func readImageState[T any](t *Tenant, state *Tenant, ctx context.Context, read func(*Tenant) (T, *platform.Error)) (value T, refusal *platform.Error, failure error) {
 	defer runtimekernel.RecoverImageRead(t.quarantine, &value, &refusal, &failure)
 	return readInView(state, ctx, read)
 }
 
 func readInView[T any](state *Tenant, ctx context.Context, read func(*Tenant) (T, *platform.Error)) (T, *platform.Error, error) {
-	return runtimekernel.ReadInView(readView(), state, ctx, read)
+	view := runtimekernel.ReadView[*Tenant]{Fork: (*Tenant).forkReadState, Open: (*Tenant).openRecordRead, Close: (*Tenant).closeRecordRead,
+		Failure: (*Tenant).readError, Refusal: (*Tenant).recordReadRefusal}
+	return runtimekernel.ReadInView(view, state, ctx, read)
 }
 
 func readFromImage[T any](t *Tenant, ctx context.Context, read func(*Tenant) (T, *platform.Error)) (T, *platform.Error) {
