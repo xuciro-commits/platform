@@ -84,7 +84,7 @@ func Describe(app string, e Entity, typeOf func(reflect.Type) string) (EntityInf
 		if x[1] != "" && !(x[0] == "owner" && x[1] == platform.OwnerCreated) {
 			f, ok := info.Field(x[1])
 			unitReference := x[0] == "unit" && f.Type == "reference" && f.Ref == "enterprise.element"
-			if !ok || f.Type != "text" && !unitReference {
+			if !ok || f.Type != "text" && !unitReference && !(x[0] == "owner" && f.Type == "member") {
 				return EntityInfo{}, fmt.Errorf("entity %s: the scope's %s field %q needs text or the unit's enterprise reference", e.Type, x[0], x[1])
 			}
 		}

@@ -3,6 +3,7 @@ package protocol
 import (
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformserver/platform"
+	"slices"
 	"strings"
 	"time"
 )
@@ -318,4 +319,26 @@ type ConsolePolicies interface {
 	ProjectRole(member, project string) string
 	ProjectGrants(string, bool) []platform.Grant
 	ApplyAccess()
+}
+
+func ApplicationRoles(hosted func(string) platform.Service, app string) []string {
+	if a := hosted(app); a != nil {
+		return a.Manifest().AllRoles()
+	}
+	owner := hosted(platform.OwnerOfType(app + "."))
+	if owner == nil || owner.Manifest().ID == app {
+		return nil
+	}
+	roles := []string{}
+	for _, entity := range owner.Manifest().Entities {
+		if space, _, _ := strings.Cut(entity.Type, "."); space == app {
+			for role := range entity.Scope.Levels {
+				if role != "builder" && !slices.Contains(roles, role) {
+					roles = append(roles, role)
+				}
+			}
+		}
+	}
+	slices.Sort(roles)
+	return roles
 }

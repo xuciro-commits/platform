@@ -106,14 +106,15 @@
     "schema": "crm.deal.create",
     "schemaVersion": {
       "family": 2,
-      "version": "schema.sha256.805168ac0ac99518e1a5eae4ffc5b2edfe09a2660797b74fcf729e38aa3634d3"
+      "version": "schema.sha256.d4f33fbed558484dba83e9b324f84813ff1f6c04a8ffab6429292fc1300ffb9d"
     },
     "target": "crm.deal",
     "title": "Create deal"
   },
   "roles": [
     "builder",
-    "user"
+    "salesrep",
+    "salesmanager"
   ],
   "schema": "crm.deal.create",
   "target": "crm.deal"

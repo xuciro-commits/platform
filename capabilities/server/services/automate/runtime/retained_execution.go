@@ -159,7 +159,7 @@ func ReadableFields(raw []byte, info *platform.RecordTypeInfo, c platform.Caller
 			if declared && field.AliasOf != "" {
 				field, declared = info.Field(field.AliasOf)
 			}
-			if declared && !field.ReadsAny(c.RolesIn(info.App), c.Rules()) {
+			if declared && !field.ReadsAny(c.RolesIn(info.Type), c.Rules()) {
 				delete(fields, name)
 			}
 		}

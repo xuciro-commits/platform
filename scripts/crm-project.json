@@ -1334,7 +1334,25 @@
             "tone": "info",
             "description": "Active lead record."
           }
-        ]
+        ],
+        "access": [
+          {
+            "role": "salesrep",
+            "read": "own",
+            "create": true,
+            "edit": true
+          },
+          {
+            "role": "salesmanager",
+            "read": "all",
+            "create": true,
+            "edit": true,
+            "archive": true
+          }
+        ],
+        "scope": {
+          "owner": "owner"
+        }
       },
       "records": [
         {
@@ -2096,6 +2114,24 @@
               "policy": "complete"
             }
           }
+        },
+        "access": [
+          {
+            "role": "salesrep",
+            "read": "own",
+            "create": true,
+            "edit": true
+          },
+          {
+            "role": "salesmanager",
+            "read": "all",
+            "create": true,
+            "edit": true,
+            "archive": true
+          }
+        ],
+        "scope": {
+          "owner": "owner"
         }
       },
       "records": [

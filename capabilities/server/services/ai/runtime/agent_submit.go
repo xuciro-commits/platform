@@ -376,7 +376,7 @@ func (a *Agents) replayLegacyAction(c platform.Caller, d *runtimeprotocol.Compil
 		protocol, schema, _ := strings.Cut(tool.Schema, "#")
 		if person != nil {
 			owner, provided, ok := h.ProtocolProvider(tool.Schema)
-			if !ok || !owner.Manifest().Actions.PermitsAny(person.RolesIn(owner.Manifest().ID), provided) {
+			if !ok || !owner.Manifest().Actions.PermitsAny(person.RolesFor(owner.Manifest().ID, provided), provided) {
 				return "refused: " + person.ID + " may not " + schema + " at the provider", nil
 			}
 			if !run.Acts || mustConfirm {

@@ -84,7 +84,7 @@ func (k ConstraintCheck) check(c platform.Caller, info platform.RecordTypeInfo, 
 		}
 		for _, name := range rule.Fields {
 			field, ok := ruleprotocol.ConstraintEntity(info).Field(name)
-			if ok && field.ReadsAny(c.RolesIn(info.App), c.Rules()) && readErr == nil {
+			if ok && field.ReadsAny(c.RolesIn(info.Type), c.Rules()) && readErr == nil {
 				raw := platform.Raw(values[name])
 				if len(raw) <= 4096 && string(raw) == string(readable[name]) {
 					visible[name] = raw

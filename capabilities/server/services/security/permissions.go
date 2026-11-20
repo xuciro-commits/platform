@@ -105,7 +105,7 @@ func (e PermissionExplainer) Explain(member, permission string) (Explanation, *p
 	for _, a := range e.Apps() {
 		mf := a.Manifest()
 		if action, own := mf.Actions.Action(permission); own {
-			out.App, out.Roles, out.Allowed = mf.ID, nonNil(m.RolesIn(mf.ID)), nonNil(action.Roles)
+			out.App, out.Roles, out.Allowed = mf.ID, nonNil(m.RolesFor(mf.ID, permission)), nonNil(action.Roles)
 			out.Verdict = mf.Actions.Decide(e.Caller(m, mf.ID), permission)
 			return out, nil
 		}

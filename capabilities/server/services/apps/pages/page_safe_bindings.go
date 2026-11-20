@@ -23,7 +23,7 @@ type DefinitionProjection struct {
 
 func (projection DefinitionProjection) Page(def platform.Definition) (platform.Definition, bool) {
 	m, entities, actions := projection.Member, projection.Entities, projection.Actions
-	if m.Roles[def.Ref.App] == "" || def.Page == nil {
+	if def.Page == nil || len(m.RolesFor(def.Ref.App, def.Page.Object.Name)) == 0 {
 		return def, false
 	}
 	if object := def.Page.Object; object.Name != "" {
@@ -167,7 +167,7 @@ func (projection DefinitionProjection) Page(def platform.Definition) (platform.D
 			}
 			edit.Fields = slices.DeleteFunc(slices.Clone(edit.Fields), func(name string) bool {
 				field, ok := info.Field(name)
-				return !ok || field.ReadOnly || !field.WritesAny(m.RolesIn(info.App))
+				return !ok || field.ReadOnly || !field.WritesAny(m.RolesIn(info.Type))
 			})
 			if len(edit.Fields) == 0 {
 				continue
@@ -187,7 +187,7 @@ func (projection DefinitionProjection) Page(def platform.Definition) (platform.D
 			source, ok := entities[function.Object]
 			if !ok || slices.ContainsFunc(function.Fields, func(name string) bool {
 				field, ok := source.Field(name)
-				return !ok || !field.ReadsAny(m.RolesIn(source.App))
+				return !ok || !field.ReadsAny(m.RolesIn(source.Type))
 			}) {
 				continue
 			}

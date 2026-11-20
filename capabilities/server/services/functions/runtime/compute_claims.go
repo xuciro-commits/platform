@@ -237,7 +237,7 @@ func RulesRevoked(member platform.Member, rules platform.RuleTablePlan, query fu
 			return "Rule collection permission was revoked"
 		}
 		info, _ := entity(set.Object)
-		if set.Policy == "complete" && info.Scope.LevelFor(member.RolesIn(info.App), authz) != platform.ScopeTenant {
+		if set.Policy == "complete" && info.Scope.LevelFor(member.RolesIn(info.Type), authz) != platform.ScopeTenant {
 			return "Complete collection permission was revoked"
 		}
 	}

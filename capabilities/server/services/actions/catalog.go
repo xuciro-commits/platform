@@ -2,6 +2,7 @@ package actions
 
 import (
 	"slices"
+	"strings"
 
 	"platformserver/platform"
 )
@@ -20,8 +21,14 @@ func (h CatalogHooks) Of(m platform.Member) []platform.Action {
 		entities[info.Type] = info
 	}
 	for _, a := range h.Apps() {
-		for _, action := range a.Manifest().Actions.ForRoles(m.RolesIn(a.Manifest().ID)) {
-			if !m.May(a.Manifest().ID, action.Schema, action.Roles).Allow {
+		permitted := map[string][]platform.Action{}
+		for _, action := range a.Manifest().Actions.All() {
+			roles := m.RolesFor(a.Manifest().ID, action.Schema)
+			key := strings.Join(roles, ",")
+			if _, known := permitted[key]; !known {
+				permitted[key] = a.Manifest().Actions.ForRoles(roles)
+			}
+			if !slices.ContainsFunc(permitted[key], func(p platform.Action) bool { return p.Schema == action.Schema }) || !m.May(a.Manifest().ID, action.Schema, action.Roles).Allow {
 				continue
 			}
 			if !slices.ContainsFunc(action.Uses, func(used string) bool {
@@ -35,7 +42,7 @@ func (h CatalogHooks) Of(m platform.Member) []platform.Action {
 					slices.Contains(info.Standard, action.Schema) && (action.Schema == info.Type+".create" || action.Schema == info.Type+".edit") {
 					action.Payload = slices.DeleteFunc(slices.Clone(action.Payload), func(input platform.Field) bool {
 						field, visible := info.Field(input.Name)
-						return !visible || field.ReadOnly || !field.Writes(m.Roles[info.App])
+						return !visible || field.ReadOnly || !slices.ContainsFunc(m.RolesIn(info.Type), field.Writes)
 					})
 				}
 				out = append(out, action)

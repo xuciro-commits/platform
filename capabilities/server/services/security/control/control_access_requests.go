@@ -139,8 +139,7 @@ func (d *Console) decideAccessRequest(c platform.Caller, s *pb.Submission, now t
 			if p.Project != "" {
 				return nil, nil, invalid
 			}
-			app := d.host.App(p.App)
-			if app == nil || !slices.Contains(app.Manifest().AllRoles(), p.Role) {
+			if !slices.Contains(protocol.ApplicationRoles(d.host.App, p.App), p.Role) {
 				return nil, nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Application {app} does not declare role {role}", p.App, p.Role)
 			}
 			if c.Holds(p.App, p.Role) {
@@ -259,8 +258,7 @@ func (d *Console) prepareAccessGrant(c platform.Caller, request *AccessRequest) 
 		if member := d.members[request.Requester]; member != nil && member.Holds(request.App, request.Role) {
 			return nil, nil
 		}
-		app := d.host.App(request.App)
-		if app == nil || !slices.Contains(app.Manifest().AllRoles(), request.Role) {
+		if !slices.Contains(protocol.ApplicationRoles(d.host.App, request.App), request.Role) {
 			return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Application {app} no longer declares role {role}", request.App, request.Role)
 		}
 		payload, err := json.Marshal(map[string]string{"app": request.App, "role": request.Role, "until": request.Until, "reason": request.Reason})

@@ -11,7 +11,7 @@ import (
 func ProjectApplication(registered platform.Definition, projection publication.ApplicationProjection) (platform.Definition, bool) {
 	m, visible, entities := projection.Member, projection.Definitions, projection.Entities
 	opens, visibleResources := projection.Pages, projection.Resources
-	if registered.Ref.Kind != platform.AssetApp || registered.Application == nil || m.Roles[registered.Ref.App] == "" {
+	if registered.Ref.Kind != platform.AssetApp || registered.Application == nil || len(m.RolesFor(registered.Ref.App, registered.Ref.Name+".")) == 0 {
 		return platform.Definition{}, false
 	}
 	def, application := registered, *registered.Application

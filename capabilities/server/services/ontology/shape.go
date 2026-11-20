@@ -302,8 +302,8 @@ func CheckScope(o Object) error {
 		sc = &ObjectScope{}
 	}
 	if sc.Owner != "" {
-		if f := field(sc.Owner); f == nil || f.Type != "text" && f.Type != "reference" {
-			return fmt.Errorf("the owner field %q is not a text or reference field of this object", sc.Owner)
+		if f := field(sc.Owner); f == nil || f.Type != "text" && f.Type != "reference" && f.Type != "member" {
+			return fmt.Errorf("the owner field %q is not a text, member or reference field of this object", sc.Owner)
 		}
 	}
 	if sc.Unit != "" {

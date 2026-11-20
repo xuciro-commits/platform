@@ -1,6 +1,6 @@
 {
   "id": "crm",
-  "version": "0.1.8",
+  "version": "0.1.9",
   "namespace": "crm",
   "title": "CRM",
   "description": "Leads, deals, organizations, contacts, tasks and notes, with lead-to-deal conversion. Built in the crm project and released through Delivery.",
@@ -1084,7 +1084,8 @@
             },
             "roles": [
               "builder",
-              "user"
+              "salesrep",
+              "salesmanager"
             ],
             "side": "authoritative",
             "parameters": [
@@ -1297,14 +1298,15 @@
             "schema": "crm.deal.create",
             "schemaVersion": {
               "family": 2,
-              "version": "schema.sha256.805168ac0ac99518e1a5eae4ffc5b2edfe09a2660797b74fcf729e38aa3634d3"
+              "version": "schema.sha256.d4f33fbed558484dba83e9b324f84813ff1f6c04a8ffab6429292fc1300ffb9d"
             },
             "target": "crm.deal",
             "title": "Create deal"
           },
           "roles": [
             "builder",
-            "user"
+            "salesrep",
+            "salesmanager"
           ],
           "schema": "crm.deal.create",
           "target": "crm.deal"
@@ -1420,7 +1422,8 @@
             },
             "roles": [
               "builder",
-              "user"
+              "salesrep",
+              "salesmanager"
             ],
             "side": "authoritative",
             "parameters": [
@@ -1628,14 +1631,15 @@
             "schema": "crm.deal.edit",
             "schemaVersion": {
               "family": 2,
-              "version": "schema.sha256.805168ac0ac99518e1a5eae4ffc5b2edfe09a2660797b74fcf729e38aa3634d3"
+              "version": "schema.sha256.d4f33fbed558484dba83e9b324f84813ff1f6c04a8ffab6429292fc1300ffb9d"
             },
             "target": "crm.deal",
             "title": "Edit deal"
           },
           "roles": [
             "builder",
-            "user"
+            "salesrep",
+            "salesmanager"
           ],
           "schema": "crm.deal.edit",
           "target": "crm.deal"
@@ -1679,7 +1683,8 @@
             },
             "roles": [
               "builder",
-              "user"
+              "salesrep",
+              "salesmanager"
             ],
             "side": "authoritative",
             "parameters": [
@@ -1712,14 +1717,15 @@
             "schema": "crm.lead.convert",
             "schemaVersion": {
               "family": 2,
-              "version": "schema.sha256.83c0280f3b5a590c8ebc87d9daf22e7acd1162ec8919c3e4e967e034c2217058"
+              "version": "schema.sha256.f38eb10764319c7ad9464d7a32cccdff3eff5cd1b813721372a1c4b304e4b926"
             },
             "target": "crm.lead",
             "title": "Convert to deal"
           },
           "roles": [
             "builder",
-            "user"
+            "salesrep",
+            "salesmanager"
           ],
           "schema": "crm.lead.convert",
           "target": "crm.lead"
@@ -1855,7 +1861,8 @@
             },
             "roles": [
               "builder",
-              "user"
+              "salesrep",
+              "salesmanager"
             ],
             "side": "authoritative",
             "parameters": [
@@ -2110,14 +2117,15 @@
             "schema": "crm.lead.create",
             "schemaVersion": {
               "family": 2,
-              "version": "schema.sha256.83c0280f3b5a590c8ebc87d9daf22e7acd1162ec8919c3e4e967e034c2217058"
+              "version": "schema.sha256.f38eb10764319c7ad9464d7a32cccdff3eff5cd1b813721372a1c4b304e4b926"
             },
             "target": "crm.lead",
             "title": "Create lead"
           },
           "roles": [
             "builder",
-            "user"
+            "salesrep",
+            "salesmanager"
           ],
           "schema": "crm.lead.create",
           "target": "crm.lead"
@@ -2249,7 +2257,8 @@
             },
             "roles": [
               "builder",
-              "user"
+              "salesrep",
+              "salesmanager"
             ],
             "side": "authoritative",
             "parameters": [
@@ -2499,14 +2508,15 @@
             "schema": "crm.lead.edit",
             "schemaVersion": {
               "family": 2,
-              "version": "schema.sha256.83c0280f3b5a590c8ebc87d9daf22e7acd1162ec8919c3e4e967e034c2217058"
+              "version": "schema.sha256.f38eb10764319c7ad9464d7a32cccdff3eff5cd1b813721372a1c4b304e4b926"
             },
             "target": "crm.lead",
             "title": "Edit lead"
           },
           "roles": [
             "builder",
-            "user"
+            "salesrep",
+            "salesmanager"
           ],
           "schema": "crm.lead.edit",
           "target": "crm.lead"
@@ -4083,6 +4093,21 @@
           }
         ],
         "body": {
+          "access": [
+            {
+              "create": true,
+              "edit": true,
+              "read": "own",
+              "role": "salesrep"
+            },
+            {
+              "archive": true,
+              "create": true,
+              "edit": true,
+              "read": "all",
+              "role": "salesmanager"
+            }
+          ],
           "display": "title",
           "fields": [
             {
@@ -4606,13 +4631,16 @@
           "schemaVersions": [
             {
               "family": 1,
-              "version": "schema.sha256.277dffe972011a5f7920fab6844e4da53c1820526001b67fbd54159758f61d85"
+              "version": "schema.sha256.b8970aa1cc6b3bbff855d8555e44b9fe775ff165353559509428f06c48f001a9"
             },
             {
               "family": 2,
-              "version": "schema.sha256.805168ac0ac99518e1a5eae4ffc5b2edfe09a2660797b74fcf729e38aa3634d3"
+              "version": "schema.sha256.d4f33fbed558484dba83e9b324f84813ff1f6c04a8ffab6429292fc1300ffb9d"
             }
           ],
+          "scope": {
+            "owner": "owner"
+          },
           "sets": [
             {
               "direction": "inverse",
@@ -5141,6 +5169,21 @@
           }
         ],
         "body": {
+          "access": [
+            {
+              "create": true,
+              "edit": true,
+              "read": "own",
+              "role": "salesrep"
+            },
+            {
+              "archive": true,
+              "create": true,
+              "edit": true,
+              "read": "all",
+              "role": "salesmanager"
+            }
+          ],
           "actionTypes": [
             {
               "ref": {
@@ -5819,17 +5862,20 @@
           "schemaVersions": [
             {
               "family": 1,
-              "version": "schema.sha256.41434458b6f23f92f2b1072560f8933a47f5c70773392a5ec6be83697dd40d67"
+              "version": "schema.sha256.73e89e6f8e7881d62555af17d9bc821b235e8ca5603a246428a797d58f7ec645"
             },
             {
               "family": 2,
-              "version": "schema.sha256.a412aced107791f42384d1a43aa54e36ba14d6c323837572053c820bb66c21ce"
+              "version": "schema.sha256.cc9b30a140bd10a1b431dfac03fe8a951d5cca00dc38ecc6d05184981cdd8755"
             },
             {
               "family": 2,
-              "version": "schema.sha256.83c0280f3b5a590c8ebc87d9daf22e7acd1162ec8919c3e4e967e034c2217058"
+              "version": "schema.sha256.f38eb10764319c7ad9464d7a32cccdff3eff5cd1b813721372a1c4b304e4b926"
             }
           ],
+          "scope": {
+            "owner": "owner"
+          },
           "states": [
             {
               "description": "Active lead record.",

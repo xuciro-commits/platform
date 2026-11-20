@@ -13,6 +13,7 @@ import (
 	"platformserver/services/objects"
 	"platformserver/services/ontology"
 	build "platformserver/services/resources/authoring"
+	controlowner "platformserver/services/security/control"
 )
 
 func TestInvariantK22ObjectDraftShowsOnlyUnpublishedAuthoringChanges(t *testing.T) {
@@ -156,6 +157,61 @@ func TestInvariantK25ProjectsOwnTheirTypeNames(t *testing.T) {
 		t.Fatal("two projects' lead records share one store")
 	}
 	if differing := differingTypes(want, live.restore(t, live.entries).recordImage(t)); len(differing) != 0 {
+		t.Fatalf("replay differs in %v", differing)
+	}
+}
+
+func TestInvariantK26ProjectRolesActOnlyInTheirProject(t *testing.T) {
+	seats := []protocol.Seat{
+		{Subjects: []string{"admin"}, Member: platform.Member{ID: "admin", Roles: map[string]string{"platform": "admin", build.ID: build.Builder}}},
+		{Subjects: []string{"rep"}, Member: platform.Member{ID: "rep", Roles: map[string]string{"invariantproject": "rep"}}},
+	}
+	live := newInvariantTenant(t, "invariant-k26", seats...)
+	live.accept(t, protocol.AppType+".create", protocol.AppType, "SECOND", map[string]any{"name": "secondproject", "title": "Second project"})
+	for _, project := range []string{"", "SECOND"} {
+		lead := invariantObject("lead", "Lead")
+		lead["access"] = []ontology.Access{{Role: "rep", Read: "own", Create: true, Edit: true}}
+		if project != "" {
+			lead["project"] = project
+		}
+		live.accept(t, "build.object.create", build.ObjectType, "LEAD"+project, lead)
+		live.accept(t, "build.object.publish", build.ObjectType, "LEAD"+project, map[string]any{})
+	}
+	as := func(actor, schema, typ, id string, payload any) *platform.Error {
+		t.Helper()
+		member, _ := live.Member(actor)
+		request := live.submission(schema, typ, id, payload)
+		request.PrincipalId = actor
+		if typ == controlowner.MemberType {
+			request.Authority = controlowner.PlatformApp
+		}
+		_, refusal := live.Submit(member, request, invariantClock)
+		return refusal
+	}
+	if refusal := as("rep", "invariantproject.lead.create", "invariantproject.lead", "MINE", map[string]any{"note": "mine"}); refusal != nil {
+		t.Fatalf("a project role could not create in its project: %v", refusal)
+	}
+	live.accept(t, "invariantproject.lead.create", "invariantproject.lead", "THEIRS", map[string]any{"note": "theirs"})
+	rep, _ := live.Member("rep")
+	if _, refusal := live.RecordOf(t.Context(), rep, "invariantproject.lead", "MINE", invariantClock); refusal != nil {
+		t.Fatalf("the creator could not read an own-scoped row: %v", refusal)
+	}
+	if _, refusal := live.RecordOf(t.Context(), rep, "invariantproject.lead", "THEIRS", invariantClock); refusal == nil {
+		t.Fatal("an own-scoped role read another member's row")
+	}
+	if as("rep", "secondproject.lead.create", "secondproject.lead", "ELSEWHERE", map[string]any{"note": "elsewhere"}) == nil {
+		t.Fatal("a role held in one project acted in another project with the same role name")
+	}
+	if as("admin", controlowner.SchemaGrant, controlowner.MemberType, "rep", map[string]any{"app": "secondproject", "role": "nobody"}) == nil {
+		t.Fatal("a grant named a role the project does not declare")
+	}
+	if refusal := as("admin", controlowner.SchemaGrant, controlowner.MemberType, "rep", map[string]any{"app": "secondproject", "role": "rep"}); refusal != nil {
+		t.Fatalf("a project role could not be granted: %v", refusal)
+	}
+	if refusal := as("rep", "secondproject.lead.create", "secondproject.lead", "ELSEWHERE", map[string]any{"note": "elsewhere"}); refusal != nil {
+		t.Fatalf("a granted project role could not create: %v", refusal)
+	}
+	if differing := differingTypes(live.recordImage(t), live.restore(t, live.entries, seats...).recordImage(t)); len(differing) != 0 {
 		t.Fatalf("replay differs in %v", differing)
 	}
 }

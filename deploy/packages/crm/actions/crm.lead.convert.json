@@ -16,14 +16,15 @@
     "schema": "crm.lead.convert",
     "schemaVersion": {
       "family": 2,
-      "version": "schema.sha256.83c0280f3b5a590c8ebc87d9daf22e7acd1162ec8919c3e4e967e034c2217058"
+      "version": "schema.sha256.f38eb10764319c7ad9464d7a32cccdff3eff5cd1b813721372a1c4b304e4b926"
     },
     "target": "crm.lead",
     "title": "Convert to deal"
   },
   "roles": [
     "builder",
-    "user"
+    "salesrep",
+    "salesmanager"
   ],
   "schema": "crm.lead.convert",
   "target": "crm.lead"

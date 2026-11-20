@@ -49,7 +49,17 @@
           "user"
         ],
         "roles": {
-          "build": "user"
+          "build": "user",
+          "crm": "salesrep"
+        }
+      },
+      {
+        "id": "manager-1",
+        "subjects": [
+          "manager"
+        ],
+        "roles": {
+          "crm": "salesmanager"
         }
       }
     ]
@@ -171,7 +181,17 @@
           "user"
         ],
         "roles": {
-          "build": "user"
+          "build": "user",
+          "crm": "salesrep"
+        }
+      },
+      {
+        "id": "manager-1",
+        "subjects": [
+          "manager"
+        ],
+        "roles": {
+          "crm": "salesmanager"
         }
       }
     ]

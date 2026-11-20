@@ -220,7 +220,7 @@ func RuleContext(c platform.Caller, expr platform.Expr, spec platform.RuleReadSp
 	}
 	for _, field := range info.Fields {
 		value := platform.ExprValue{Kind: platform.RuleFieldKind(field.Type), Status: "missing"}
-		if !field.ReadsAny(c.RolesIn(info.App), c.Rules()) {
+		if !field.ReadsAny(c.RolesIn(info.Type), c.Rules()) {
 			value.Status = "withheld"
 		} else if raw, ok := values[field.Name]; ok {
 			value.Status = "value"
@@ -412,7 +412,7 @@ func RuleContext(c platform.Caller, expr platform.Expr, spec platform.RuleReadSp
 					continue
 				}
 				v := platform.ExprValue{Kind: platform.RuleFieldKind(field.Type), Status: "missing"}
-				if !field.ReadsAny(c.RolesIn(object.App), c.Rules()) {
+				if !field.ReadsAny(c.RolesIn(object.Type), c.Rules()) {
 					v.Status = "withheld"
 					collection.Withheld = true
 				} else if raw, ok := row[field.Name]; ok {

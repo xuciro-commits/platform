@@ -131,7 +131,7 @@ func (t *Owner) ReadRecordSetFrom(store *records.Store, c platform.Caller, objec
 				bindRoot(link.Via, "id", id)
 			} else {
 				var parent string
-				if field, ok := info.Field(link.Via); !ok || !field.ReadsAny(c.RolesIn(info.App), c.Rules()) {
+				if field, ok := info.Field(link.Via); !ok || !field.ReadsAny(c.RolesIn(info.Type), c.Rules()) {
 					return result, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "Collection reference is withheld")
 				}
 				_ = json.Unmarshal(rootValues[link.Via], &parent)
@@ -140,7 +140,7 @@ func (t *Owner) ReadRecordSetFrom(store *records.Store, c platform.Caller, objec
 		}
 	} else if set.Direction == "reference" {
 		field, ok := info.Field(set.From)
-		if !ok || !field.ReadsAny(c.RolesIn(info.App), c.Rules()) {
+		if !ok || !field.ReadsAny(c.RolesIn(info.Type), c.Rules()) {
 			return result, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "Collection reference is withheld")
 		}
 		var target string

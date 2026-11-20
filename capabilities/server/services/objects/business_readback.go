@@ -58,7 +58,7 @@ func ReadableFieldIssues(store *records.Store, member platform.Member, issues []
 		}
 		for name := range issues[i].Values {
 			field, ok := info.Field(name)
-			if !ok || !field.ReadsAny(member.RolesIn(info.App)) {
+			if !ok || !field.ReadsAny(member.RolesIn(info.Type)) {
 				delete(issues[i].Values, name)
 			}
 		}
@@ -114,7 +114,7 @@ func ReadableBusinessFact(store *records.Store, m platform.Member, f platform.Bu
 	}
 	for name := range original {
 		field, ok := info.Field(name)
-		if name != "id" && (!ok || !field.ReadsAny(m.RolesIn(info.App))) {
+		if name != "id" && (!ok || !field.ReadsAny(m.RolesIn(info.Type))) {
 			delete(original, name)
 		}
 	}

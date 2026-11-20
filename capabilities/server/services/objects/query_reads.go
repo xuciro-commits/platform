@@ -48,7 +48,7 @@ func (r QueryReads) RuleQuery(c platform.Caller, set platform.RuleCollection, in
 	if !known {
 		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "Rule collection object is unavailable")
 	}
-	if set.Policy == "complete" && (info.Scope.LevelFor(c.RolesIn(info.App), r.Authorization) != platform.ScopeTenant || info.Scope.Through != nil) {
+	if set.Policy == "complete" && (info.Scope.LevelFor(c.RolesIn(info.Type), r.Authorization) != platform.ScopeTenant || info.Scope.Through != nil) {
 		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "Complete collection requires permission to read its whole object / 完整集合需要整个对象的读取权限")
 	}
 	return r.QueryVersion(c, set.App, set.Query, set.Version, input, now)

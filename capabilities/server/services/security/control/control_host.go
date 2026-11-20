@@ -592,9 +592,9 @@ func (d *Console) decideMember(c platform.Caller, s *pb.Submission) (func(*pb.Ch
 	if d.host == nil {
 		return nil, invalid
 	}
-	if app := d.host.App(p.App); app == nil {
+	if roles := runtimeprotocol.ApplicationRoles(d.host.App, p.App); roles == nil {
 		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Application {app} is not active in this tenant.", p.App)
-	} else if !slices.Contains(app.Manifest().AllRoles(), p.Role) {
+	} else if !slices.Contains(roles, p.Role) {
 		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Role {role} is not declared by application {app}. Publish its definitions before granting business roles.", p.Role, p.App)
 	}
 	if p.Unit != "" && p.Structure == "" {

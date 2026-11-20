@@ -1,4 +1,19 @@
 {
+  "access": [
+    {
+      "create": true,
+      "edit": true,
+      "read": "own",
+      "role": "salesrep"
+    },
+    {
+      "archive": true,
+      "create": true,
+      "edit": true,
+      "read": "all",
+      "role": "salesmanager"
+    }
+  ],
   "display": "title",
   "fields": [
     {
@@ -522,13 +537,16 @@
   "schemaVersions": [
     {
       "family": 1,
-      "version": "schema.sha256.277dffe972011a5f7920fab6844e4da53c1820526001b67fbd54159758f61d85"
+      "version": "schema.sha256.b8970aa1cc6b3bbff855d8555e44b9fe775ff165353559509428f06c48f001a9"
     },
     {
       "family": 2,
-      "version": "schema.sha256.805168ac0ac99518e1a5eae4ffc5b2edfe09a2660797b74fcf729e38aa3634d3"
+      "version": "schema.sha256.d4f33fbed558484dba83e9b324f84813ff1f6c04a8ffab6429292fc1300ffb9d"
     }
   ],
+  "scope": {
+    "owner": "owner"
+  },
   "sets": [
     {
       "direction": "inverse",

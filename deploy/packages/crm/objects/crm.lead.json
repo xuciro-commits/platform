@@ -1,4 +1,19 @@
 {
+  "access": [
+    {
+      "create": true,
+      "edit": true,
+      "read": "own",
+      "role": "salesrep"
+    },
+    {
+      "archive": true,
+      "create": true,
+      "edit": true,
+      "read": "all",
+      "role": "salesmanager"
+    }
+  ],
   "actionTypes": [
     {
       "ref": {
@@ -677,17 +692,20 @@
   "schemaVersions": [
     {
       "family": 1,
-      "version": "schema.sha256.41434458b6f23f92f2b1072560f8933a47f5c70773392a5ec6be83697dd40d67"
+      "version": "schema.sha256.73e89e6f8e7881d62555af17d9bc821b235e8ca5603a246428a797d58f7ec645"
     },
     {
       "family": 2,
-      "version": "schema.sha256.a412aced107791f42384d1a43aa54e36ba14d6c323837572053c820bb66c21ce"
+      "version": "schema.sha256.cc9b30a140bd10a1b431dfac03fe8a951d5cca00dc38ecc6d05184981cdd8755"
     },
     {
       "family": 2,
-      "version": "schema.sha256.83c0280f3b5a590c8ebc87d9daf22e7acd1162ec8919c3e4e967e034c2217058"
+      "version": "schema.sha256.f38eb10764319c7ad9464d7a32cccdff3eff5cd1b813721372a1c4b304e4b926"
     }
   ],
+  "scope": {
+    "owner": "owner"
+  },
   "states": [
     {
       "description": "Active lead record.",

@@ -151,8 +151,7 @@ func (d *Policies) decideAccess(c platform.Caller, s *pb.Submission, members []s
 			}
 		}
 		for i, g := range p.Grants {
-			app := d.host.App(g.App)
-			if app == nil || !slices.Contains(app.Manifest().AllRoles(), g.Role) || !day(g.From) || !day(g.Until) {
+			if !slices.Contains(protocol.ApplicationRoles(d.host.App, g.App), g.Role) || !day(g.From) || !day(g.Until) {
 				return nil, invalid
 			}
 			p.Grants[i].By, p.Grants[i].Reason = "team:"+id, p.Name

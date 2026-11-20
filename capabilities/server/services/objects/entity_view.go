@@ -18,7 +18,7 @@ func EntityView(store *records.Store, m platform.Member, hidden func(*records.Ty
 		if hidden(et) {
 			continue
 		}
-		roles := m.RolesIn(et.Info().App)
+		roles := m.RolesIn(et.Info().Type)
 		if len(roles) > 0 && et.Info().Scope.LevelFor(roles, authorization) == platform.ScopeNone && et.Info().Scope.Participants == nil {
 			continue
 		}

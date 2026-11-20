@@ -6,14 +6,12 @@ import (
 )
 
 type Assignment struct {
-	Close   bool
-	Title   string
-	Body    string
-	Ref     string
-	To      []Recipient
-	Due     time.Time
-	Key     string
-	Answers []string
+	Close            bool
+	Title, Body, Ref string
+	To               []Recipient
+	Due              time.Time
+	Key              string
+	Answers          []string
 }
 
 func (c Caller) Assign(r *pb.ChangeRecord, a Assignment) *Error {

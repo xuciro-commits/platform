@@ -221,7 +221,7 @@ func (c *Catalog) AuthorizationRequest(caller Caller, schema, target string) (Au
 	if !caller.InScope(schema) {
 		rules = append([]AuthorizationPolicy{{ID: "token-scope", Effect: "deny", Permission: schema}}, rules...)
 	}
-	return AuthorizationInput{Subject: AuthorizationSubject{ID: caller.ID, App: caller.App, Roles: caller.RolesHere(), Agent: caller.Agent, Automation: caller.Automation},
+	return AuthorizationInput{Subject: AuthorizationSubject{ID: caller.ID, App: caller.App, Roles: caller.RolesFor(caller.App, schema), Agent: caller.Agent, Automation: caller.Automation},
 		Permission: schema, Resource: target, Allowed: allowed, Attributes: attrs}, rules, true
 }
 

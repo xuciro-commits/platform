@@ -1913,6 +1913,22 @@ test("crm: the released package installs into an empty tenant whose CRM app runs
   }, "Tove Berg", "Saga Logistics");
 });
 
+test("crm: a sales rep works only their own leads while the sales manager sees the whole team's", async ({ page }) => {
+  const leads = async (seat: string) => {
+    await page.goto("/");
+    await page.getByRole("button", { name: `${seat} · acceptance` }).click();
+    await expect(page.getByRole("button", { name: "Account", exact: true })).toBeVisible();
+    await page.goto("/ontology/objects/crm.lead");
+    await expect(page.getByText("Sophie Laurent", { exact: true })).toBeVisible();
+  };
+  await leads("user-1");
+  await expect(page.getByText("Jonas Lindqvist", { exact: true })).toHaveCount(0);
+  await page.getByRole("button", { name: "Account", exact: true }).click();
+  await page.getByRole("menuitem", { name: "Sign out", exact: true }).click();
+  await leads("manager-1");
+  await expect(page.getByText("Jonas Lindqvist", { exact: true })).toBeVisible();
+});
+
 test("delivery: a builder picks a project, reviews what it contains and publishes a version", async ({ page }) => {
   await signIn(page);
   await page.goto("/delivery/versions");

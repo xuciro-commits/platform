@@ -6,32 +6,26 @@ type AuthorizationEngine interface {
 }
 
 type AuthorizationSubject struct {
-	ID                           string
-	App                          string
+	ID, App                      string
 	Roles                        []string
 	Agent, Automation, Replaying bool
 }
 
 type AuthorizationInput struct {
-	Kind       string
-	Subject    AuthorizationSubject
-	Permission string
-	Resource   string
-	Allowed    []string
-	Attributes map[string]string
-	Context    *AuthorizationContext
+	Kind                 string
+	Subject              AuthorizationSubject
+	Permission, Resource string
+	Allowed              []string
+	Attributes           map[string]string
+	Context              *AuthorizationContext
 }
 
 type AuthorizationContext struct {
-	Tenant     AuthorizationGate
-	Principal  AuthorizationGate
-	Verb       *AuthorizationGate
-	Row        AuthorizationGate
-	Fields     AuthorizationGate
-	Derived    AuthorizationGate
-	Markings   AuthorizationGate
-	Withheld   []string
-	Definition string
+	Tenant, Principal              AuthorizationGate
+	Verb                           *AuthorizationGate
+	Row, Fields, Derived, Markings AuthorizationGate
+	Withheld                       []string
+	Definition                     string
 }
 
 type AuthorizationGate struct {
@@ -59,8 +53,6 @@ type Verdict struct {
 }
 
 type AuthorizationPolicy struct {
-	ID         string
-	Effect     string
-	Permission string
-	When       func(AuthorizationInput) bool
+	ID, Effect, Permission string
+	When                   func(AuthorizationInput) bool
 }

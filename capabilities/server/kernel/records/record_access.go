@@ -22,7 +22,7 @@ type ScopeDirectory interface {
 }
 
 func FieldView(m platform.Member, source platform.RecordTypeInfo) (view platform.RecordTypeInfo, hidden []platform.FieldInfo) {
-	roles := m.RolesIn(source.App)
+	roles := m.RolesIn(source.Type)
 	readable := func(f platform.FieldInfo) bool {
 		if !f.ReadsAny(roles) || m.AIContext && f.AIInput != nil && !*f.AIInput {
 			return false
@@ -72,7 +72,7 @@ func FieldView(m platform.Member, source platform.RecordTypeInfo) (view platform
 }
 
 func ScopePolicy(info platform.RecordTypeInfo, m platform.Member, directory ScopeDirectory, now time.Time, through func(reflect.Value) bool, engines ...platform.RuleEngine) (*RowFilter, *platform.Error) {
-	roles, scope := m.RolesIn(info.App), info.Scope
+	roles, scope := m.RolesIn(info.Type), info.Scope
 	text := ruleexpr.Type{Kind: "text"}
 	deny := func() (*RowFilter, *platform.Error) {
 		filter, err := CompilePolicy(info, boolLit(false), nil, engines...)
@@ -136,7 +136,7 @@ func scopeExpr(directory ScopeDirectory, m platform.Member, info platform.Record
 	level := scope.LevelFor(roles, m.AuthorizationEngine())
 	textField := func(name string) (ruleexpr.Expr, bool) {
 		f, ok := info.Field(name)
-		if !ok || !slices.Contains([]string{"text", "longtext", "choice", "reference"}, f.Type) || f.AliasOf != "" || len(f.Index) == 0 {
+		if !ok || !slices.Contains([]string{"text", "longtext", "choice", "reference", "member"}, f.Type) || f.AliasOf != "" || len(f.Index) == 0 {
 			return ruleexpr.Expr{}, false
 		}
 		return ruleexpr.RefOf("text", name+"#text"), true

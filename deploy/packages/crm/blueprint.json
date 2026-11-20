@@ -738,7 +738,8 @@
           },
           "roles": [
             "builder",
-            "user"
+            "salesrep",
+            "salesmanager"
           ],
           "side": "authoritative",
           "parameters": [
@@ -955,7 +956,8 @@
           },
           "roles": [
             "builder",
-            "user"
+            "salesrep",
+            "salesmanager"
           ],
           "side": "authoritative",
           "parameters": [
@@ -1098,7 +1100,8 @@
           },
           "roles": [
             "builder",
-            "user"
+            "salesrep",
+            "salesmanager"
           ],
           "side": "authoritative",
           "parameters": [
@@ -1245,7 +1248,8 @@
           },
           "roles": [
             "builder",
-            "user"
+            "salesrep",
+            "salesmanager"
           ],
           "side": "authoritative",
           "parameters": [
@@ -1499,7 +1503,8 @@
           },
           "roles": [
             "builder",
-            "user"
+            "salesrep",
+            "salesmanager"
           ],
           "side": "authoritative",
           "parameters": [

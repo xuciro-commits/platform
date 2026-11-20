@@ -211,6 +211,9 @@ func (b *Build) settings() []platform.Setting {
 func (b *Build) manifestRoles() []string {
 	roles := []string{User, Builder, Publisher, Integrator, runtimeprotocol.ProjectViewerRole, runtimeprotocol.ProjectDiscovererRole}
 	for _, typ := range sortedTypes(b.installed) {
+		if platform.OwnerOfType(typ) == ID && !strings.HasPrefix(typ, ID+".") {
+			continue
+		}
 		for role := range b.installed[typ].Scope.Levels {
 			if !slices.Contains(roles, role) {
 				roles = append(roles, role)

@@ -35,7 +35,7 @@ func (u ExternalUsage) External(c platform.Caller, id, until string, now time.Ti
 				if value.Kind() == reflect.Pointer {
 					value = value.Elem()
 				}
-				allowed := records.MatchingRefs(et.Info().Fields, "", value, id, c.RolesIn(et.Info().App))
+				allowed := records.MatchingRefs(et.Info().Fields, "", value, id, c.RolesIn(et.Info().Type))
 				if len(allowed) > 0 {
 					visible = true
 					title = records.RecordLabel(et.Info(), record, records.Header(r.Value).ID)

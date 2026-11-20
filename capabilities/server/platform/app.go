@@ -44,23 +44,46 @@ func (g Grant) Active(day string) bool {
 	return (g.From == "" || g.From <= day) && (g.Until == "" || day < g.Until)
 }
 
-func (m Member) RolesIn(app string) []string {
-	var out []string
-	if r := m.Roles[app]; r != "" {
-		out = append(out, r)
+func (m Member) RolesIn(scope string) []string {
+	apps := []string{scope}
+	if space, _, typed := strings.Cut(scope, "."); typed {
+		apps = slices.Compact([]string{OwnerOfType(scope), space})
 	}
+	var out []string
+	for i, app := range apps {
+		held := len(out)
+		for _, role := range append([]string{m.Roles[app]}, m.grantedIn(app)...) {
+			if role != "" && !slices.Contains(out, role) {
+				out = append(out, role)
+			}
+		}
+		if i == 1 && len(out) > held && !slices.Contains(out, "user") {
+			out = append(out, "user")
+		}
+	}
+	return out
+}
+
+func (m Member) grantedIn(app string) (out []string) {
 	for _, g := range m.Grants {
-		if g.App == app && !slices.Contains(out, g.Role) {
+		if g.App == app {
 			out = append(out, g.Role)
 		}
 	}
 	return out
 }
 
+func (m Member) RolesFor(app, name string) []string {
+	if strings.Contains(name, ".") && !strings.ContainsAny(name, " /") && OwnerOfType(name) == app {
+		return m.RolesIn(name)
+	}
+	return m.RolesIn(app)
+}
+
 func (m Member) Holds(app, role string) bool { return slices.Contains(m.RolesIn(app), role) }
 
 func (m Member) May(app, permission string, roles []string) AuthzDecision {
-	return m.authorization.Decide(AuthorizationInput{Subject: AuthorizationSubject{ID: m.ID, App: app, Roles: m.RolesIn(app), Agent: m.Agent}, Permission: permission, Allowed: roles})
+	return m.authorization.Decide(AuthorizationInput{Subject: AuthorizationSubject{ID: m.ID, App: app, Roles: m.RolesFor(app, permission), Agent: m.Agent}, Permission: permission, Allowed: roles})
 }
 
 func (m Member) AuthorizationEngine() AuthorizationEngine { return m.authorization }
@@ -97,16 +120,13 @@ func (m Member) Today(now time.Time) string { return now.In(m.Location()).Format
 
 type Caller struct {
 	Member
-	App              string
-	Replaying        bool
-	Automation       bool
-	sourceProjection bool
-	restoreSource    bool
-	inputRefused     func(*Error, []FieldIssue)
-	rt               Runtime
-	creationDepth    int
-	transactionInput *pb.Submission
-	agentRun         string
+	App                                                    string
+	Replaying, Automation, sourceProjection, restoreSource bool
+	inputRefused                                           func(*Error, []FieldIssue)
+	rt                                                     Runtime
+	creationDepth                                          int
+	transactionInput                                       *pb.Submission
+	agentRun                                               string
 }
 
 func (c Caller) WithSourceProjection(restore bool) Caller {
@@ -266,37 +286,35 @@ func ControlDecision(c Caller, s *pb.Submission, at time.Time) (func(*pb.ChangeR
 }
 
 type Manifest struct {
-	ID            string
-	Title         string
-	Version       string
-	Actions       *Catalog
-	Reads         []string
-	ReadInputs    map[string][]Field
-	ReadSources   map[string]string
-	Inputs        map[string]bool
-	Subscribes    []string
-	Provides      []Provision
-	Consumes      []Consumption
-	Everyone      []string
-	Jobs          []Job
-	Retry         *Retry
-	Settings      []Setting
-	Emits         []EffectKind
-	Entities      []RecordType
-	Pages         []Page
-	LinkTypes     []LinkType
-	PropertyTypes []PropertyType
-	ValueTypes    []ValueType
-	Interfaces    []Interface
-	Queries       []NamedQuery
-	Functions     []AIFunction
-	Operations    []Operation
-	Observations  []ObservationDefinition
-	Flows         []Flow
-	Agents        []Agent
-	Sequences     []Sequence
-	Roles         []string
-	Languages     Languages
+	ID, Title, Version string
+	Actions            *Catalog
+	Reads              []string
+	ReadInputs         map[string][]Field
+	ReadSources        map[string]string
+	Inputs             map[string]bool
+	Subscribes         []string
+	Provides           []Provision
+	Consumes           []Consumption
+	Everyone           []string
+	Jobs               []Job
+	Retry              *Retry
+	Settings           []Setting
+	Emits              []EffectKind
+	Entities           []RecordType
+	Pages              []Page
+	LinkTypes          []LinkType
+	PropertyTypes      []PropertyType
+	ValueTypes         []ValueType
+	Interfaces         []Interface
+	Queries            []NamedQuery
+	Functions          []AIFunction
+	Operations         []Operation
+	Observations       []ObservationDefinition
+	Flows              []Flow
+	Agents             []Agent
+	Sequences          []Sequence
+	Roles              []string
+	Languages          Languages
 }
 
 func (m Manifest) AllRoles() []string {

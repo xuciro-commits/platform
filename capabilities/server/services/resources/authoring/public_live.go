@@ -31,7 +31,7 @@ func PublicLiveKey(m platform.Member, query, version, language string, entity fu
 	if !found || info.Scope.Participants != nil || info.Scope.Through != nil || ProjectDelegated(m) {
 		return "", false
 	}
-	roles := slices.Clone(m.RolesIn(info.App))
+	roles := slices.Clone(m.RolesIn(info.Type))
 	for _, role := range roles {
 		if info.Scope.Level(role) != platform.ScopeTenant {
 			return "", false

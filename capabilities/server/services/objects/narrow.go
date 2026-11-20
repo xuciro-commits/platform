@@ -410,7 +410,7 @@ func (w *narrower) Derive(et *records.Type, v reflect.Value) (reflect.Value, boo
 		if !w.held {
 			w.store.Unlock()
 		}
-		if source == nil || source.Info().Versioning == nil || !visible || !known || !reference.ReadsAny(w.m.RolesIn(et.Info().App)) || !version.ReadsAny(w.m.RolesIn(et.Info().App)) || !w.may(pin.Source+"#"+source.Info().Versioning.Version) {
+		if source == nil || source.Info().Versioning == nil || !visible || !known || !reference.ReadsAny(w.m.RolesIn(et.Info().Type)) || !version.ReadsAny(w.m.RolesIn(et.Info().Type)) || !w.may(pin.Source+"#"+source.Info().Versioning.Version) {
 			if known {
 				out.FieldByIndex(version.Index).SetZero()
 			}

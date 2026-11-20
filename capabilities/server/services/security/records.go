@@ -108,7 +108,7 @@ func (a Authorizer) Authorize(store *records.Store, c platform.Caller, q platfor
 	if q.Action == "" {
 		if et != nil {
 			request.Subject.App = et.Info().App
-			request.Subject.Roles = c.RolesIn(et.Info().App)
+			request.Subject.Roles = c.RolesIn(et.Info().Type)
 			request.Allowed = slices.Clone(request.Subject.Roles)
 			request.Permission = et.Info().Type + "." + q.Kind
 			if q.Kind == "derive" {
@@ -177,7 +177,7 @@ func (a Authorizer) Authorize(store *records.Store, c platform.Caller, q platfor
 			if !known && q.Action != "" {
 				continue
 			}
-			allowed := known && field.ReadsAny(c.RolesIn(et.Info().App), c.Rules()) && !(c.AIContext && field.AIInput != nil && !*field.AIInput)
+			allowed := known && field.ReadsAny(c.RolesIn(et.Info().Type), c.Rules()) && !(c.AIContext && field.AIInput != nil && !*field.AIInput)
 			if et.Info().Type == protocol.KnowledgeDocumentType && q.Kind == "derive" {
 				allowed = a.sources.KnowledgeReadable(store, c.Member, q.Record, name)
 			}
@@ -185,7 +185,7 @@ func (a Authorizer) Authorize(store *records.Store, c platform.Caller, q platfor
 				if field.ReadOnly {
 					continue
 				}
-				allowed = known && field.WritesAny(c.RolesIn(et.Info().App), c.Rules())
+				allowed = known && field.WritesAny(c.RolesIn(et.Info().Type), c.Rules())
 				if c.Automation && c.App == et.Info().App {
 					allowed = true
 				}

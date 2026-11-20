@@ -153,7 +153,7 @@ func ReadRecordPath(c platform.Caller, typ, id string, path []string, now time.T
 		var fields map[string]json.RawMessage
 		_ = json.Unmarshal(raw, &fields)
 		value, visible := fields[name]
-		if !known || !declared || !field.ReadsAny(c.RolesIn(info.App), c.Rules()) {
+		if !known || !declared || !field.ReadsAny(c.RolesIn(info.Type), c.Rules()) {
 			return nil, nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "Record input is unavailable to this member")
 		}
 		permission := c.Authorize(platform.AuthzRequest{Principal: c.ID, Tenant: c.Tenant, Kind: "read", Type: typ, Record: id, Fields: []string{name}}, now)

@@ -55,7 +55,7 @@ func DeclaredQueryAnswer(c platform.Caller, q platform.NamedQuery, info platform
 		sources = append(sources, ref)
 		if found {
 			for _, field := range info.Fields {
-				if field.ReadsAny(c.RolesIn(info.App), c.Rules()) {
+				if field.ReadsAny(c.RolesIn(info.Type), c.Rules()) {
 					sources = append(sources, ref+"#"+field.Name)
 				}
 			}
