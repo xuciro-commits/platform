@@ -1,6 +1,7 @@
 package transport
 
 import (
+	"cmp"
 	"encoding/json"
 	"slices"
 	"strings"
@@ -50,33 +51,6 @@ func canonical(tag string) string {
 	return "zh-CN"
 }
 
-func Texts(parts []any) []string {
-	seen := map[string]bool{}
-	out := []string{}
-	for _, p := range parts {
-		raw, _ := json.Marshal(p)
-		var tree any
-		json.Unmarshal(raw, &tree)
-		add := func(s string) string {
-			if s != "" && !seen[s] {
-				seen[s] = true
-				out = append(out, s)
-			}
-			return s
-		}
-		WalkTexts(tree, add)
-		WalkChoices(tree, func(_ map[string]any, choices []any) {
-			for _, c := range choices {
-				if s, ok := c.(string); ok {
-					add(s)
-				}
-			}
-		})
-	}
-	slices.Sort(out)
-	return out
-}
-
 func DeclaredTexts(m platform.Manifest) []any {
 	var parts []any
 	if m.Actions != nil {
@@ -100,53 +74,118 @@ func DeclaredTexts(m platform.Manifest) []any {
 	return parts
 }
 
+type Said struct {
+	Text     string `json:"text"`
+	Origin   string `json:"origin,omitempty"`
+	Conflict bool   `json:"conflict,omitempty"`
+}
+
 type Word struct {
-	Text         string            `json:"text"`
-	Translations map[string]string `json:"translations"`
-	Own          map[string]string `json:"own"`
+	Text string          `json:"text"`
+	App  string          `json:"app"`
+	Area string          `json:"area"`
+	Kind string          `json:"kind"`
+	Says map[string]Said `json:"says"`
 }
 
 type WordsView struct {
-	App       string   `json:"app"`
-	Apps      []string `json:"apps"`
 	Languages []string `json:"languages"`
 	Words     []Word   `json:"words"`
 }
 
-func WordsOf(app string, apps, languages, texts []string, say func(lang, s string) string, own map[string]map[string]string) WordsView {
-	view := WordsView{App: app, Apps: apps, Languages: languages, Words: []Word{}}
-	for _, s := range texts {
-		w := Word{Text: s, Translations: map[string]string{}, Own: map[string]string{}}
-		for _, lang := range languages {
-			if tr := say(lang, s); tr != s {
-				w.Translations[lang] = tr
-			}
-			if tr, ok := own[lang][s]; ok {
-				w.Own[lang] = tr
-			}
-		}
-		view.Words = append(view.Words, w)
+var wordKinds = []string{"type", "choice", "action", "page", "other"}
+
+func kindOf(k platform.AssetKind) string {
+	switch k {
+	case platform.AssetObject, platform.AssetObjectTypeGroup, platform.AssetLinkType, platform.AssetPropertyType, platform.AssetValueType, platform.AssetInterface:
+		return "type"
+	case platform.AssetAction:
+		return "action"
+	case platform.AssetPage, platform.AssetApp:
+		return "page"
 	}
-	return view
+	return "other"
 }
 
-func TextsOf(app string, manifest *platform.Manifest, definitions []platform.Definition, infos []platform.RecordTypeInfo) []string {
-	var m platform.Manifest
-	var parts []any
-	if manifest != nil {
-		m = *manifest
-		parts = append(parts, map[string]any{"title": m.Title}, m.Actions.All(), m.Pages, m.Settings, m.Emits)
+func WordsOf(x *Translator, manifests []platform.Manifest, definitions []platform.Definition, infos []platform.RecordTypeInfo, lang string, project func(platform.AssetRef) string) WordsView {
+	view := WordsView{Languages: x.Languages(), Words: []Word{}}
+	titles, areas, seen := map[string]string{}, map[string]int{}, map[[3]string]bool{}
+	for i, m := range manifests {
+		titles[m.ID] = x.SayInApp(m.ID, lang, cmp.Or(m.Title, m.ID))
+		areas[titles[m.ID]] = 1<<20 + i
 	}
-	for _, definition := range definitions {
-		if definition.Ref.App == app {
-			parts = append(parts, definition)
+	collect := func(app, area, kind string, part any) {
+		area = cmp.Or(area, titles[app], app)
+		if _, ok := areas[area]; !ok {
+			areas[area] = len(areas)
+		}
+		raw, _ := json.Marshal(part)
+		var tree any
+		json.Unmarshal(raw, &tree)
+		put := func(kind string) func(string) string {
+			return func(s string) string {
+				if key := [3]string{app, area, s}; s != "" && !seen[key] {
+					seen[key] = true
+					view.Words = append(view.Words, Word{Text: s, App: app, Area: area, Kind: kind})
+				}
+				return s
+			}
+		}
+		WalkChoices(tree, func(_ map[string]any, choices []any) {
+			for _, c := range choices {
+				if s, ok := c.(string); ok {
+					put("choice")(s)
+				}
+			}
+		})
+		WalkTexts(tree, put(kind))
+	}
+	projects, owners := map[string]string{}, make([]string, len(definitions))
+	for i, d := range definitions {
+		if d.Source != "code" {
+			owners[i] = project(d.Ref)
+		}
+		if d.Ref.Kind == platform.AssetObject {
+			projects[d.Ref.Name] = owners[i]
 		}
 	}
+	definitionsOf := func(types bool) {
+		for i, d := range definitions {
+			if kind := kindOf(d.Ref.Kind); (kind == "type") == types {
+				area := owners[i]
+				if d.Action != nil {
+					area = cmp.Or(area, projects[d.Action.Target])
+				}
+				collect(d.Ref.App, area, kind, d)
+			}
+		}
+	}
+	definitionsOf(true)
 	for _, info := range infos {
-		if info.App == app {
-			parts = append(parts, info)
+		collect(info.App, projects[info.Type], "type", info)
+	}
+	definitionsOf(false)
+	for _, m := range manifests {
+		collect(m.ID, "", "page", map[string]any{"title": m.Title})
+		if m.Actions != nil {
+			for _, a := range m.Actions.All() {
+				collect(m.ID, projects[a.Target], "action", a)
+			}
+		}
+		collect(m.ID, "", "page", m.Pages)
+		collect(m.ID, "", "other", []any{m.Settings, m.Emits, DeclaredTexts(m)})
+	}
+	slices.SortStableFunc(view.Words, func(a, b Word) int {
+		return cmp.Or(areas[a.Area]-areas[b.Area], slices.Index(wordKinds, a.Kind)-slices.Index(wordKinds, b.Kind), strings.Compare(a.Text, b.Text))
+	})
+	for i := range view.Words {
+		w := &view.Words[i]
+		w.Says = map[string]Said{}
+		for _, l := range view.Languages {
+			said := x.SayInApp(w.App, l, w.Text)
+			origin, conflict := x.Origin(l, w.Text, said)
+			w.Says[l] = Said{Text: said, Origin: origin, Conflict: conflict}
 		}
 	}
-	parts = append(parts, DeclaredTexts(m)...)
-	return Texts(parts)
+	return view
 }

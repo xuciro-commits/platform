@@ -16,12 +16,14 @@ export function Words() {
   const [extra, setExtra] = useState<string[]>([]);
   const [q, setQ] = useState("");
   const [onlyMissing, setOnlyMissing] = useState(false);
-  const words = useRead<Api.WordsView>(`/v1/words?app=${encodeURIComponent(app)}`);
+  const words = useRead<Api.WordsView>("/v1/words");
   const languages = Array.from(new Set(["en", ...(words.data?.languages ?? []), ...extra]));
   useEffect(() => { if (words.data && languages.length && !languages.includes(lang)) setLang(languages[0]!); }, [words.data, languages.join(" ")]);
   const needle = q.trim().toLocaleLowerCase();
-  const list = (words.data?.words ?? []).filter((w) => (!onlyMissing || !w.translations[lang]) && (!needle || w.text.toLocaleLowerCase().includes(needle) || (w.translations[lang] ?? "").toLocaleLowerCase().includes(needle)));
-  const missing = (words.data?.words ?? []).filter((w) => !w.translations[lang]).length;
+  const said = (w: Api.Word) => (w.says[lang]?.origin ? w.says[lang]!.text : "");
+  const inApp = (words.data?.words ?? []).filter((w) => w.app === app);
+  const list = inApp.filter((w) => (!onlyMissing || !said(w)) && (!needle || w.text.toLocaleLowerCase().includes(needle) || said(w).toLocaleLowerCase().includes(needle)));
+  const missing = inApp.filter((w) => !said(w)).length;
   const save = async (text: string, translation: string) => {
     const ok=await decide("platform.translation.set",{type:"platform.translation",id:lang},{text,translation});if(ok)await words.refetch();return ok;
   };
@@ -32,7 +34,7 @@ export function Words() {
       <div className="flex flex-wrap items-end gap-3 text-xs">
         <label className="grid gap-1">{t("Texts of")}<Select value={app} onChange={(e) => setApp(e.target.value)} className="w-56">
           <option value="build">{t("Tenant definitions (Build)")}</option>
-          {(words.data?.apps ?? []).filter((id) => id !== "build").map((id) => <option key={id} value={id}>{appTitle(id)} · {id}</option>)}
+          {Array.from(new Set((words.data?.words ?? []).map((w) => w.app))).filter((id) => id !== "build").map((id) => <option key={id} value={id}>{appTitle(id)} · {id}</option>)}
         </Select></label>
         <label className="grid gap-1">{t("Language")}<Select value={lang} onChange={(e) => setLang(e.target.value)} className="w-48">
           {languages.map((l) => <option key={l} value={l}>{languageName(l)}</option>)}
@@ -43,7 +45,7 @@ export function Words() {
         </Form>
         <label className="grid gap-1">{t("Find")}<Input value={q} onChange={(e) => setQ(e.target.value)} placeholder={t("Text or translation")} className="w-56" /></label>
         <Checkbox checked={onlyMissing} onChange={setOnlyMissing}>{t("Only untranslated")}</Checkbox>
-        <span className="ml-auto text-muted">{t("{n} texts · {missing} without a translation in {lang}", { n: words.data?.words.length ?? 0, missing, lang: languageName(lang) })}</span>
+        <span className="ml-auto text-muted">{t("{n} texts · {missing} without a translation in {lang}", { n: inApp.length, missing, lang: languageName(lang) })}</span>
       </div>
     </Panel>
     {words.isError && <p role="alert" className="text-sm text-[var(--tone-danger)]">{t("Words could not be loaded.")}</p>}
@@ -51,14 +53,14 @@ export function Words() {
       <div className="grid grid-cols-[minmax(12rem,1fr)_minmax(16rem,1.4fr)_6rem] items-center gap-x-3 border-b border-border pb-1 text-xs font-semibold text-muted">
         <span>{t("Text as declared")}</span><span>{languageName(lang)}</span><span>{t("Source")}</span>
       </div>
-      {list.map((w) => <WordRow key={w.text} word={w} lang={lang} onSave={save} />)}
+      {list.map((w) => <WordRow key={w.area + w.text} word={w} lang={lang} onSave={save} />)}
       {!list.length && !words.isLoading && <p className="py-3 text-sm text-muted">{onlyMissing ? t("Every text has a translation in this language.") : t("No text matches.")}</p>}
     </Panel>
   </>;
 }
 
 function WordRow({ word: w, lang, onSave }: { word: Api.Word; lang: string; onSave: (text: string, translation: string) => Promise<boolean> }) {
-  const own = w.own[lang], shipped = w.translations[lang];
+  const says = w.says[lang], own = says?.origin === "workspace" ? says.text : undefined, shipped = says?.origin && says.origin !== "workspace" ? says.text : undefined;
   const input=useDraftInput(`translation:${lang}:${w.text}`,own??"",true),value=input.text;
   const commit = async () => { if ((value.trim() || "") !== (own ?? "")) if(await onSave(w.text,value.trim()))input.clear(); };
   return <div className="grid grid-cols-[minmax(12rem,1fr)_minmax(16rem,1.4fr)_6rem] items-center gap-x-3 border-b border-border py-1 text-xs last:border-0">

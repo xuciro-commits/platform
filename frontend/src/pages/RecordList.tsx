@@ -170,6 +170,18 @@ function shape(described: Described, declared: Declared, listPath: string, extra
     return tone ? (dots as Record<string, Dot | undefined>)[tone] ?? dots.neutral : undefined;
   };
   const titles = (field: Api.FieldInfo) => field.choiceTitles ?? field.choices;
+  const edit = described.edit;
+  const cellEdit = (field: Api.FieldInfo) => {
+    const parameter = edit?.payload.find((candidate) => candidate.name === field.name);
+    if (!edit || !parameter || !described.editable.has(field.name) || field.readOnly || field.oneOf || field.name === lifecycle?.field) return undefined;
+    return {
+      parameter,
+      described: described.entity,
+      value: (row: Row) => row[field.name],
+      name: (row: Row) => (row[referenced] as Api.RecordPage["refs"])?.[field.name]?.[String(row[field.name])],
+      save: (row: Row, value: unknown) => send(edit, String(row.id), { [field.name]: value }, Number(row.revision)),
+    };
+  };
   const defaults = declared.fields ? declared.fields.flatMap((name) => described.field(name) ?? []) : described.columns;
   const chosen = [...defaults, ...described.table.filter((field) => !defaults.includes(field))];
   return {
@@ -199,6 +211,7 @@ function shape(described: Described, declared: Declared, listPath: string, extra
           return row[target.name] ? { type: String(target.ref), id: String(row[target.name]) } : undefined;
         } : undefined,
         value: numeric.has(field.type) ? (row: Row) => field.type === "money" ? money(row[field.name])?.amount : plain(row[field.name]) : undefined,
+        edit: cellEdit(field),
       })),
       { key: "changed", header: "Updated", width: 140, kind: "time" as const, text: (row: Row) => (row.changed as Stamp | undefined)?.at ?? "" },
     ],

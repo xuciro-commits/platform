@@ -81,8 +81,8 @@ func TestInvariantK9PackageRetireAndReinstallPreserveData(t *testing.T) {
 	if receipt == nil || len(receipt.Plan.Steps) == 0 || receipt.Plan.Steps[0].Status != "installed" {
 		t.Fatalf("install closure receipt: %+v", receipt)
 	}
-	words := target.Words(build.ID)
-	if !slices.Contains(words.Apps, build.ID) || !slices.ContainsFunc(words.Words, func(word transport.Word) bool { return word.Text == "Alpha application" }) {
+	words := target.Words("")
+	if !slices.ContainsFunc(words.Words, func(word transport.Word) bool { return word.Text == "Alpha application" && word.App == build.ID }) {
 		t.Fatalf("installed application texts are not available for translation: %+v", words)
 	}
 

@@ -1,7 +1,6 @@
 package host
 
 import (
-	"cmp"
 	"context"
 	"encoding/json"
 	"google.golang.org/protobuf/encoding/protojson"
@@ -44,11 +43,11 @@ func (h *Host) routesDiscovery(rt *routes) {
 	rt.metadata(transport.Route{Pattern: "GET /v1/apps", Summary: "The tenant's apps from their manifests", Answer: []transport.AppInfo{}}, translating(func(_ *http.Request, _ platform.Member, t *Tenant) ([]transport.AppInfo, *platform.Error) {
 		return t.Apps(), nil
 	}))
-	rt.metadata(transport.Route{Pattern: "GET /v1/words", Summary: "An app's declaration texts (?app=, default build: what the tenant defined) with what every language says for each (administrators)", Query: []transport.Param{{Name: "app", Description: "App ID"}}, Answer: transport.WordsView{}}, transport.Answering(func(r *http.Request, m platform.Member, t *Tenant) (transport.WordsView, *platform.Error) {
+	rt.metadata(transport.Route{Pattern: "GET /v1/words", Summary: "Every declaration text of every app and project, with what each language says for it and where that comes from: the platform, the app or package, or this workspace (administrators)", Answer: transport.WordsView{}}, transport.Answering(func(r *http.Request, m platform.Member, t *Tenant) (transport.WordsView, *platform.Error) {
 		if !m.Holds(controlowner.PlatformApp, controlowner.Admin) {
 			return transport.WordsView{}, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_POLICY_DENIED}
 		}
-		return t.Words(cmp.Or(r.URL.Query().Get("app"), controlowner.BuildApp)), nil
+		return t.Words(t.Language(m, r)), nil
 	}))
 	rt.metadata(transport.Route{Pattern: "GET /v1/protocols", Summary: "The protocols apps provide and consume, and the provider bound to each", Answer: []actions.ProtocolInfo{}}, translating(func(_ *http.Request, m platform.Member, t *Tenant) ([]actions.ProtocolInfo, *platform.Error) {
 		protocols := t.router().Protocols()

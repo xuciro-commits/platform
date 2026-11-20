@@ -17,6 +17,7 @@ type Translator struct {
 	tenant       func() map[string]map[string]string
 	mu           sync.Mutex
 	applications map[string]platform.Languages
+	conflicts    map[string]platform.Languages
 	dictionaries map[dictionaryKey]*translationDictionary
 }
 
@@ -67,7 +68,7 @@ func (x *Translator) InstallApplications(definitions []platform.Definition) {
 	}
 	x.mu.Lock()
 	defer x.mu.Unlock()
-	x.applications, x.dictionaries = applications, nil
+	x.applications, x.conflicts, x.dictionaries = applications, conflicts, nil
 }
 
 type pattern struct {
@@ -157,6 +158,26 @@ func (x *Translator) Reset() {
 	x.mu.Lock()
 	defer x.mu.Unlock()
 	x.dictionaries = nil
+}
+
+func (x *Translator) Origin(lang, s, said string) (string, bool) {
+	x.mu.Lock()
+	conflict, packaged := false, false
+	for app, languages := range x.applications {
+		conflict = conflict || x.conflicts[app][lang][s] != ""
+		packaged = packaged || languages[lang][s] == said
+	}
+	x.mu.Unlock()
+	if x.tenant != nil && x.tenant()[lang][s] != "" {
+		return "workspace", conflict
+	}
+	if said == s {
+		return "", conflict
+	}
+	if packaged {
+		return "app", conflict
+	}
+	return "platform", conflict
 }
 
 func (x *Translator) SayInApp(app, lang, s string) string {

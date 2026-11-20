@@ -1,10 +1,12 @@
 package host
 
 import (
+	"cmp"
 	"embed"
 	"net/http"
 	"platformserver/kernel/transport"
 	ontology "platformserver/services/ontology"
+	build "platformserver/services/resources/authoring"
 
 	"platformserver/platform"
 )
@@ -27,17 +29,15 @@ func (t *Tenant) Language(m platform.Member, r *http.Request) string {
 	return ""
 }
 
-func (t *Tenant) Words(app string) transport.WordsView {
-	apps := []string{}
+func (t *Tenant) Words(lang string) transport.WordsView {
+	manifests := []platform.Manifest{}
 	for _, a := range t.apps {
-		apps = append(apps, a.Manifest().ID)
+		manifests = append(manifests, a.Manifest())
 	}
-	var manifest *platform.Manifest
-	if a := t.App(app); a != nil {
-		m := a.Manifest()
-		manifest = &m
-	}
-	return transport.WordsOf(app, apps, t.i18n.Languages(), transport.TextsOf(app, manifest, t.definitions, t.typeInfos()), t.i18n.Say, t.words.Clone())
+	return transport.WordsOf(&t.i18n, manifests, t.definitions, t.typeInfos(), lang, func(ref platform.AssetRef) string {
+		resource, _ := build.StoreResourceRow(t.Projection, t.ID, ref)
+		return cmp.Or(build.StoreProjectTitle(t.Projection, resource.Project), resource.Project)
+	})
 }
 
 func (t *Tenant) typeInfos() []platform.RecordTypeInfo {

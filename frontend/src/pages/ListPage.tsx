@@ -9,7 +9,6 @@ import { HStack, Layout, LayoutContent, LayoutFooter, LayoutHeader, LayoutPanel,
 import { type FieldDefinition, PowerSearch, type PowerSearchFilter, usePowerSearchConfig } from "@astryxdesign/core/PowerSearch";
 import { ProgressBar } from "@astryxdesign/core/ProgressBar";
 import { ResizeHandle, useResizable } from "@astryxdesign/core/Resizable";
-import { ScrollableArea } from "@astryxdesign/core/ScrollableArea";
 import { Section } from "@astryxdesign/core/Section";
 import { SegmentedControl, SegmentedControlItem } from "@astryxdesign/core/SegmentedControl";
 import { Skeleton } from "@astryxdesign/core/Skeleton";
@@ -21,12 +20,14 @@ import { colorVars } from "@astryxdesign/core/theme/tokens.stylex";
 import { AdjustmentsHorizontalIcon, ArrowPathIcon, MagnifyingGlassIcon, TableCellsIcon, ViewColumnsIcon } from "@heroicons/react/24/outline";
 import { AdjustmentsHorizontalIcon as AdjustmentsHorizontalSolidIcon } from "@heroicons/react/24/solid";
 import * as stylex from "@stylexjs/stylex";
-import { type ReactNode, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { type ReactNode, useEffect, useMemo, useState } from "react";
 import { type Read, reread } from "../host";
 import { t } from "../i18n";
 import { navigate, usePath, useSearch } from "../router";
 import { PageTitle, useGutter } from "./frame";
 import { BoardView } from "./BoardView";
+import { useListWindow } from "./ListWindow";
+import { type CellEdit, CellEditor } from "./CellEditor";
 import { type Chip, FilterBar } from "./ListFilters";
 import { ListOptions } from "./ListOptions";
 import { type Cells, dotOf, idKey, ListCell, ListDetail, targetOf, typeOf } from "./ListDetail";
@@ -48,6 +49,7 @@ export type ListColumn<Row> = {
   hiddenByDefault?: boolean;
   chip?: boolean;
   reference?: (row: Row) => { type: string; id: string } | undefined;
+  edit?: CellEdit<Row>;
 };
 type Done = Promise<unknown>;
 export type ListGroup<Row> = { key: string; label: string; of: (row: Row) => string; order?: string[] };
@@ -89,8 +91,6 @@ const fillKey = "__fill";
 const widthOf: Record<string, number> = { string: 200, code: 160, enum: 150, member: 160, number: 120, time: 140, boolean: 110 };
 const headerWidth = (text: string) => [...text].reduce((sum, letter) => sum + (letter.charCodeAt(0) > 0x2e7f ? 14 : 8), 48);
 const groupPrefix = "__group_";
-const overscan = 12;
-const heights: Record<Density, number> = { compact: 36, balanced: 48, spacious: 60 };
 const compactQuery = "(max-width: 768px), (max-width: 1024px) and (pointer: coarse) and (hover: none)";
 const operators: Record<string, string> = { is: "is", is_any_of: "is any of", greater_than_or_equal: "≥", less_than_or_equal: "≤", after: "after", before: "before", contains: "contains", is_true: "is yes", is_false: "is no" };
 const stuck = (edge: StickyEdge, keys: string[], fromEnd: boolean) => {
@@ -110,6 +110,7 @@ const styles = stylex.create({
     "--table-row-overlay": colorVars["--color-overlay-pressed"],
     "--table-sticky-background": `color-mix(in srgb, ${colorVars["--color-background-surface"]} 90%, ${colorVars["--color-text-primary"]})`,
   },
+  editable: { cursor: "text" },
   surface: { backgroundColor: colorVars["--color-background-surface"], "--table-sticky-background": colorVars["--color-background-surface"] },
 });
 
@@ -125,12 +126,10 @@ export function ListView<Answer, Row>({ definition, read, primary, back }: ListV
   const currentSearch = useSearch();
   const gutter = useGutter();
   const compactSurface = useMediaQuery(compactQuery);
-  const scrollRef = useRef<HTMLDivElement>(null);
-  const [scrollTop, setScrollTop] = useState(0);
-  const [viewportHeight, setViewportHeight] = useState(600);
   const [power, setPower] = useState(false);
   const [viewsOpen, setViewsOpen] = useState(false);
   const [active, setActive] = useState<string | null>(null);
+  const [editing, setEditing] = useState<{ id: string; key: string } | null>(null);
   const detailWidth = useResizable({ defaultSize: 380, minSize: 320, maxSize: 560 });
   const fallback = useMemo(() => {
     const base = newView(definition.columns.filter((column) => !column.hiddenByDefault).map((column) => column.key));
@@ -138,7 +137,6 @@ export function ListView<Answer, Row>({ definition, read, primary, back }: ListV
     return readView(typeof definition.defaultView === "string" ? definition.defaultView : JSON.stringify(definition.defaultView), base);
   }, [definition.columns, definition.defaultView]);
   const view = useMemo(() => readView(new URLSearchParams(currentSearch).get("view"), fallback), [currentSearch, fallback]);
-  const [rowHeight, setRowHeight] = useState(heights[view.density]);
   const scrollKey = `list-scroll:${currentPath}:${JSON.stringify(view)}:${new URLSearchParams(currentSearch).get("domain") ?? ""}`;
   const update = (next: Partial<ViewState>) => {
     const changed: ViewState = { ...view, ...next, version: 1 };
@@ -228,9 +226,10 @@ export function ListView<Answer, Row>({ definition, read, primary, back }: ListV
           cells.__currency = amount.currency ?? "";
         }
       }
-      return { cells, raw };
+      return { cells, raw, row };
     });
   }, [read, definition, group, board, currentSearch, view]);
+  const rowOf = useMemo(() => new Map(all.map((entry) => [entry.cells[idKey], entry.row])), [all]);
 
   const shown = useMemo(() => {
     if (definition.remote === "all") return all.map((entry) => entry.cells);
@@ -307,54 +306,38 @@ export function ListView<Answer, Row>({ definition, read, primary, back }: ListV
       width: pixel(Math.max(column.width ?? (position === 0 ? 280 : widthOf[column.boolean ? "boolean" : column.kind ?? "string"]), headerWidth(t(column.header)))),
       sortable: true,
       align: column.kind === "number" || column.kind === "time" ? "end" : undefined,
-      renderCell: (cells) => (group && isHeader(cells) ? null : <ListCell column={column} cells={cells} first={position === 0} />),
+      renderCell: (cells) => {
+        if (group && isHeader(cells)) return null;
+        const row = rowOf.get(cells[idKey]);
+        return column.edit && row && editing?.id === cells[idKey] && editing.key === column.key
+          ? <CellEditor edit={column.edit} row={row} close={() => setEditing(null)} />
+          : <ListCell column={column} cells={cells} first={position === 0} />;
+      },
     })),
     { key: fillKey, header: "", width: proportional(1, { minWidth: 0 }), renderCell: () => null },
   ];
   const sortIndicator: TablePlugin<Cells> = {
     transformHeaderCell: (props) => ({ ...props, xstyle: [...props.xstyle, stylex.defaultMarker()] }),
   };
-  const windowed = Boolean(definition.page && !group);
-  const first = windowed ? Math.max(0, Math.min(shown.length, Math.floor(scrollTop / rowHeight) - overscan)) : 0;
-  const last = windowed ? Math.min(shown.length, first + Math.ceil(viewportHeight / rowHeight) + overscan * 2) : shown.length;
-  const tableRows = group ? grouped.data : shown.slice(first, last);
-  useLayoutEffect(() => {
-    const row = scrollRef.current?.querySelector<HTMLElement>("tbody tr[aria-rowindex], tbody tr");
-    const measured = row?.getBoundingClientRect().height;
-    if (measured && Math.abs(measured - rowHeight) > 0.5) setRowHeight(measured);
-  });
-  useEffect(() => {
-    const node = scrollRef.current;
-    if (!node) return;
-    let restoring = Number(sessionStorage.getItem(scrollKey)) || 0;
-    let frame = 0;
-    const onScroll = () => {
-      setScrollTop(node.scrollTop);
-      setViewportHeight(node.clientHeight);
-      const atEnd = node.scrollHeight - node.scrollTop - node.clientHeight < rowHeight;
-      if (restoring > node.scrollTop + rowHeight) {
-        if (atEnd && definition.page?.hasMore && !definition.page.loading) definition.page.loadMore();
-        return;
-      }
-      restoring = 0;
-      sessionStorage.setItem(scrollKey, String(node.scrollTop));
-      if (atEnd && definition.page?.hasMore && !definition.page.loading) definition.page.loadMore();
-    };
-    node.addEventListener("scroll", onScroll, { passive: true });
-    const restore = () => {
-      setViewportHeight(node.clientHeight);
-      const wanted = Math.min(restoring, node.scrollHeight - node.clientHeight);
-      node.scrollTop = wanted;
-      setScrollTop(wanted);
-      if (restoring > wanted + rowHeight && definition.page?.hasMore && !definition.page.loading) definition.page.loadMore();
-      else if (Math.abs(wanted - restoring) < rowHeight) restoring = 0;
-    };
-    frame = requestAnimationFrame(restore);
-    return () => {
-      cancelAnimationFrame(frame);
-      node.removeEventListener("scroll", onScroll);
-    };
-  }, [scrollKey, read.status, shown.length, rowHeight, definition.page?.hasMore, definition.page?.loading, definition.page?.loadMore]);
+  const rows = group ? grouped.data : shown;
+  const { first, last, plugin: windowing } = useListWindow<Cells>({ count: rows.length, density: view.density, scrollKey, ready: read.status, page: definition.page });
+  const frame: TablePlugin<Cells> = {
+    transformBodyCell: (props, column, cells) => {
+      if (column.key === orderedColumns[0]?.key || !definition.columns.find((candidate) => candidate.key === column.key)?.edit || (group && isHeader(cells))) return props;
+      const start = () => setEditing({ id: cells[idKey], key: column.key });
+      return {
+        ...props,
+        htmlProps: {
+          ...props.htmlProps,
+          onClick: (event) => {
+            event.stopPropagation();
+            start();
+          },
+        },
+        xstyle: [...props.xstyle, styles.editable],
+      };
+    },
+  };
 
   const saved = useSavedViews({ entity: definition.savedViews ?? "", view, fallback, columnCount: definition.columns.length, filterLabel, compact: compactSurface });
   const params = new URLSearchParams(currentSearch);
@@ -534,24 +517,20 @@ export function ListView<Answer, Row>({ definition, read, primary, back }: ListV
               />
             )}
             {ready && shown.length > 0 && !board && (
-              <ScrollableArea ref={scrollRef} axis="block" role="region" label={t("Records")} height="100%">
-                <VStack paddingInline={gutter} paddingBlockEnd={gutter}>
-                {windowed && first > 0 && <Section variant="transparent" height={first * rowHeight} padding={0} />}
+              <VStack height="100%" paddingInline={gutter}>
                 <Table
-                  data={tableRows}
+                  data={rows.slice(first, last)}
                   columns={columns}
                   idKey={group ? grouped.idKey : idKey}
-                  rowIndexStart={windowed ? first + 1 : undefined}
+                  rowIndexStart={first + 1}
                   rowCount={definition.remote === "all" ? definition.page?.total : undefined}
                   density={view.density}
                   dividers="rows"
                   textOverflow="truncate"
                   hasHover
-                  plugins={{ ...(definition.bulk ? { selection } : {}), sortable, sortIndicator, sticky, activation, ...(group ? { grouped: grouped.plugin } : {}) }}
+                  plugins={{ ...(definition.bulk ? { selection } : {}), sortable, sortIndicator, sticky, activation, ...(group ? { grouped: grouped.plugin } : {}), frame, windowing }}
                 />
-                {windowed && last < shown.length && <Section variant="transparent" height={(shown.length - last) * rowHeight} padding={0} />}
-                </VStack>
-              </ScrollableArea>
+              </VStack>
             )}
           </LayoutContent>
         }

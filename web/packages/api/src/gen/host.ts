@@ -4967,6 +4967,12 @@ export type RunStep = {
   sources?: string[];
 };
 
+export type Said = {
+  text: string;
+  origin?: string;
+  conflict?: boolean;
+};
+
 export type SampleRecords = {
   type: string;
   records: unknown[];
@@ -5837,13 +5843,13 @@ export type WindowSummary = {
 
 export type Word = {
   text: string;
-  translations: Record<string, string>;
-  own: Record<string, string>;
+  app: string;
+  area: string;
+  kind: string;
+  says: Record<string, Said>;
 };
 
 export type WordsView = {
-  app: string;
-  apps: string[];
   languages: string[];
   words: Word[];
 };

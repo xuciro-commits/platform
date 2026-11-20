@@ -146,5 +146,20 @@
   "Preferences": "偏好",
   "Language & region": "语言与地区",
   "Ready": "已就绪",
-  "Not ready": "未就绪"
+  "Not ready": "未就绪",
+  "Types and fields": "类型与字段",
+  "Pages and apps": "页面与应用",
+  "Other": "其他",
+  "App or package": "应用或产品包",
+  "This workspace": "本工作区",
+  "Missing": "缺译文",
+  "Conflict": "冲突",
+  "Overridden": "已覆盖",
+  "Translated": "已翻译",
+  "A project cannot take the name of a built-in application": "项目不能使用内置应用的名字",
+  "A type takes the name of its project": "类型使用所在项目的名字",
+  "A resource API name is immutable": "资源的 API 名称不可更改",
+  "A project named {name} already exists; install under another name": "已有名为 {name} 的项目，请换一个名字安装",
+  "The name {name} cannot be used for this package": "这个产品不能使用名字 {name}",
+  "No source": "无来源"
 }

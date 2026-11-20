@@ -14,9 +14,11 @@ import { enterable } from "./ParameterInput";
 import { newView, readView } from "./view";
 
 export type RowAction = { schema: string; id?: string; fixed?: Values; initial?: Values; label?: string; revision?: number };
+type Change<Row> = { schema: string; parameter: string; id: (row: Row) => string; fixed?: (row: Row) => Values; value: (row: Row) => unknown };
+type EntryColumn<Row> = ListColumn<Row> & { change?: Change<Row> };
 export type ListDefinition<Answer, Row> = Omit<ListShape<Answer, Row>, "columns" | "page" | "remote"> & {
   read: string;
-  columns: ListColumn<Row>[] | { (answer: Answer): ListColumn<Row>[] };
+  columns: EntryColumn<Row>[] | { (answer: Answer): EntryColumn<Row>[] };
   more?: (answer: Answer) => string | undefined;
   actions?: { create?: string; row?: (row: Row) => RowAction[] };
   query?: string;
@@ -53,13 +55,19 @@ export function listPage<Answer, Row>(definition: ListDefinition<Answer, Row>) {
         },
       );
     };
-    const columns = useMemo(
+    const declared = useMemo(
       () => (typeof definition.columns === "function" ? (first.status === "ready" ? definition.columns(first.data) : []) : definition.columns),
       [first],
     );
-
-    const catalog = useRead<Api.Action[]>(definition.actions ? "/v1/actions" : null);
+    const catalog = useRead<Api.Action[]>(definition.actions || declared.some((column) => column.change) ? "/v1/actions" : null);
     const action = (schema: string) => (catalog.status === "ready" ? catalog.data.find((candidate) => candidate.schema === schema) : undefined);
+    const columns = useMemo(() => declared.map(({ change, ...column }): ListColumn<Row> => {
+      const found = change && action(change.schema);
+      const parameter = found?.payload.find((candidate) => candidate.name === change?.parameter);
+      return change && found && parameter
+        ? { ...column, edit: { parameter, value: change.value, save: (row, value) => send(found, change.id(row), { ...change.fixed?.(row), [change.parameter]: value }) } }
+        : column;
+    }), [declared, catalog]);
     const create = definition.actions?.create ? action(definition.actions.create) : undefined;
     const creatable = create && !create.payload.some((parameter) => parameter.required && !enterable(parameter));
     const [creating, setCreating] = useState(false);
@@ -79,9 +87,9 @@ export function listPage<Answer, Row>(definition: ListDefinition<Answer, Row>) {
           {refusal.id === id && refusal.reason && <Banner status="error" title={t("Not saved")} description={refusal.reason} />}
           {offered.length > 0 && (
             <HStack gap={2} wrap="wrap">
-              {offered.map((offer) => (
+              {offered.map((offer, index) => (
                 <Button
-                  key={offer.schema}
+                  key={`${offer.schema}:${index}`}
                   label={t(offer.label ?? offer.action.title)}
                   variant="secondary"
                   size="sm"
