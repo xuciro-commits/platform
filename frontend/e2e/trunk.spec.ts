@@ -1913,7 +1913,7 @@ test("crm: the released package installs into an empty tenant whose CRM app runs
   }, "Tove Berg", "Saga Logistics");
 });
 
-test("crm: a sales rep works only their own leads while the sales manager sees the whole team's", async ({ page }) => {
+test("crm: a sales rep works only their own leads while the sales manager sees the whole team's, whose activity reads in names", async ({ page }) => {
   const leads = async (seat: string) => {
     await page.goto("/");
     await page.getByRole("button", { name: `${seat} · acceptance` }).click();
@@ -1927,6 +1927,13 @@ test("crm: a sales rep works only their own leads while the sales manager sees t
   await page.getByRole("menuitem", { name: "Sign out", exact: true }).click();
   await leads("manager-1");
   await expect(page.getByText("Jonas Lindqvist", { exact: true })).toBeVisible();
+
+  await page.getByText("Sophie Laurent", { exact: true }).click();
+  await page.getByRole("link", { name: "Activity", exact: true }).click();
+  const main = page.getByRole("main");
+  for (const line of ["Source: Email", "Industry: Logistics", "Territory: Europe", "Lead owner: Yuki Tanaka"]) await expect(main.getByText(line, { exact: true })).toBeVisible();
+  await expect(main.getByRole("img", { name: "Dana Whitfield", exact: true }).first()).toBeVisible();
+  await expect(main.getByText(/SRC-|IND-|TER-|admin-1|Unnamed member/)).toHaveCount(0);
 });
 
 test("delivery: a builder publishes a version, which installs beside its source project under another name as its own app", async ({ page }) => {

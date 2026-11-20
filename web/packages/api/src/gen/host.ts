@@ -4574,6 +4574,8 @@ export type RecordSectionView = {
   section: string;
   partial?: boolean;
   history?: RecordChange[];
+  refs?: Record<string, Record<string, string>>;
+  people?: Record<string, string>;
   related?: Related[];
   processes?: unknown[];
   approvals?: unknown[];
@@ -4643,6 +4645,7 @@ export type RecordView = {
   partial?: boolean;
   actions?: RecordAction[];
   refs?: Record<string, Record<string, string>>;
+  people?: Record<string, string>;
   effective?: boolean;
   values?: Record<string, unknown>;
   formats?: Record<string, FieldFormat>;

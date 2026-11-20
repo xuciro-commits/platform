@@ -18,6 +18,7 @@ type RecordView struct {
 	Partial          bool                            `json:"partial,omitempty"`
 	Actions          []RecordAction                  `json:"actions,omitempty"`
 	Refs             map[string]map[string]string    `json:"refs,omitempty"`
+	People           map[string]string               `json:"people,omitempty"`
 	Effective        *bool                           `json:"effective,omitempty"`
 	Values           map[string]any                  `json:"values,omitempty"`
 	Formats          map[string]platform.FieldFormat `json:"formats,omitempty"`
@@ -62,19 +63,21 @@ const (
 )
 
 type RecordSectionView struct {
-	Section    string                 `json:"section"`
-	Partial    bool                   `json:"partial,omitempty"`
-	History    []records.RecordChange `json:"history,omitempty"`
-	Related    []Related              `json:"related,omitempty"`
-	Processes  []any                  `json:"processes,omitempty"`
-	Approvals  []any                  `json:"approvals,omitempty"`
-	Tasks      []any                  `json:"tasks,omitempty"`
-	Files      []any                  `json:"files,omitempty"`
-	Comments   []any                  `json:"comments,omitempty"`
-	Following  bool                   `json:"following,omitempty"`
-	Linked     []Related              `json:"linked,omitempty"`
-	Activity   []any                  `json:"activity,omitempty"`
-	Deliveries []RecordDelivery       `json:"deliveries,omitempty"`
+	Section    string                       `json:"section"`
+	Partial    bool                         `json:"partial,omitempty"`
+	History    []records.RecordChange       `json:"history,omitempty"`
+	Refs       map[string]map[string]string `json:"refs,omitempty"`
+	People     map[string]string            `json:"people,omitempty"`
+	Related    []Related                    `json:"related,omitempty"`
+	Processes  []any                        `json:"processes,omitempty"`
+	Approvals  []any                        `json:"approvals,omitempty"`
+	Tasks      []any                        `json:"tasks,omitempty"`
+	Files      []any                        `json:"files,omitempty"`
+	Comments   []any                        `json:"comments,omitempty"`
+	Following  bool                         `json:"following,omitempty"`
+	Linked     []Related                    `json:"linked,omitempty"`
+	Activity   []any                        `json:"activity,omitempty"`
+	Deliveries []RecordDelivery             `json:"deliveries,omitempty"`
 }
 
 type RecordDelivery struct {
@@ -166,6 +169,7 @@ func (t *Owner) recordOf(m platform.Member, typ, id string, now time.Time) (Reco
 		return RecordView{}, err
 	}
 	base.view.Refs, base.view.Partial = t.referenceNames(m, typ, []any{base.view.Record}, now)
+	base.view.People = t.people(base.view.Record)
 	return base.view, nil
 }
 
@@ -188,11 +192,13 @@ func (t *Owner) recordSection(m platform.Member, typ, id, section string, now ti
 		out.Processes, out.Tasks, out.Approvals, out.Partial = t.recordWork(m, typ, id, now)
 	case RecordSectionHistory:
 		out.History = t.recordHistory(base)
+		out.Refs, out.Partial = t.historyNames(m, typ, out.History, now)
 	case RecordSectionComments:
 		out.Comments, out.Following, out.Partial = t.recordComments(m, typ, id, now)
 	default:
 		return RecordSectionView{}, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
 	}
+	out.People = t.people(out.History, out.Activity, out.Comments)
 	return out, nil
 }
 

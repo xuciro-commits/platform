@@ -292,7 +292,7 @@ func TestInvariantK16ReferencesRespectTargetReadPermissions(t *testing.T) {
 	live.accept(t, "build.object.publish", build.ObjectType, "ORDER", map[string]any{})
 	live.accept(t, "invariantproject.order.create", "invariantproject.order", "ROW", map[string]any{"partner": "TARGET", "customer": "TARGET", "hidden": "TARGET", "private": "TARGET", "scoped": "TARGET"})
 	_, handler := observationHost(live.Tenant)
-	for _, path := range []string{"/v1/records/invariantproject.order", "/v1/records/invariantproject.order?actions=1", "/v1/records/invariantproject.order/ROW"} {
+	for _, path := range []string{"/v1/records/invariantproject.order", "/v1/records/invariantproject.order?actions=1", "/v1/records/invariantproject.order/ROW", "/v1/records/invariantproject.order/ROW/sections/history"} {
 		for _, role := range []string{"builder", "other"} {
 			response := observationRequest(t, handler, live.ID, observationToken(live.ID, role), path, nil)
 			var view struct{ Refs map[string]map[string]string }
@@ -348,7 +348,7 @@ func TestInvariantK16MembersUseAuthorizedLabels(t *testing.T) {
 	if directory.Code != http.StatusOK || strings.TrimSpace(directory.Body.String()) != `[{"id":"builder","name":"Casey Rivera"}]` {
 		t.Fatalf("member directory exposed more than the display name and ID: %d: %s", directory.Code, directory.Body)
 	}
-	for _, path := range []string{"/v1/records/invariantproject.order", "/v1/records/invariantproject.order?actions=1", "/v1/records/invariantproject.order/ROW"} {
+	for _, path := range []string{"/v1/records/invariantproject.order", "/v1/records/invariantproject.order?actions=1", "/v1/records/invariantproject.order/ROW", "/v1/records/invariantproject.order/ROW/sections/history"} {
 		for _, role := range []string{"builder", "other"} {
 			response := observationRequest(t, handler, live.ID, observationToken(live.ID, role), path, nil)
 			var view struct {

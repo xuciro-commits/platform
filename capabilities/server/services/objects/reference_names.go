@@ -1,6 +1,7 @@
 package objects
 
 import (
+	"encoding/json"
 	"maps"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformserver/kernel/records"
@@ -19,7 +20,6 @@ func (t *Owner) referenceNames(m platform.Member, typ string, rows []any, now ti
 		return nil, false
 	}
 	byField := map[string]map[string]bool{}
-	byType := map[string]map[string]bool{}
 	m = t.authorizationMember(m)
 	sourceCaller := t.caller(m, source.App)
 	for _, field := range source.Fields {
@@ -40,12 +40,86 @@ func (t *Owner) referenceNames(m platform.Member, typ string, rows []any, now ti
 					byField[field.Name] = map[string]bool{}
 				}
 				byField[field.Name][id] = true
-				if field.Type == "reference" {
-					if byType[field.Ref] == nil {
-						byType[field.Ref] = map[string]bool{}
-					}
-					byType[field.Ref][id] = true
+			}
+		}
+	}
+	return t.nameReferences(m, source, byField, now)
+}
+
+func (t *Owner) historyNames(m platform.Member, typ string, history []records.RecordChange, now time.Time) (map[string]map[string]string, bool) {
+	source, ok := t.entity(typ)
+	if !ok || len(history) == 0 {
+		return nil, false
+	}
+	byField := map[string]map[string]bool{}
+	for _, change := range history {
+		for _, entry := range change.Fields {
+			field, ok := source.Field(entry.Field)
+			if !ok || field.Type != "member" && (field.Type != "reference" || field.Ref == "") {
+				continue
+			}
+			for _, raw := range []json.RawMessage{entry.Before, entry.After} {
+				var value any
+				if json.Unmarshal(raw, &value) != nil {
+					continue
 				}
+				if typed, ok := value.(map[string]any); ok {
+					value = typed["value"]
+				}
+				if id, ok := value.(string); ok && id != "" {
+					if byField[field.Name] == nil {
+						byField[field.Name] = map[string]bool{}
+					}
+					byField[field.Name][id] = true
+				}
+			}
+		}
+	}
+	return t.nameReferences(t.authorizationMember(m), source, byField, now)
+}
+
+func (t *Owner) people(values ...any) map[string]string {
+	out := map[string]string{}
+	var walk func(any)
+	walk = func(value any) {
+		switch x := value.(type) {
+		case map[string]any:
+			for key, inner := range x {
+				if id, ok := inner.(string); ok && key == "by" && id != "" {
+					if _, seen := out[id]; !seen {
+						out[id] = t.MemberDisplayName(id)
+					}
+				}
+				walk(inner)
+			}
+		case []any:
+			for _, inner := range x {
+				walk(inner)
+			}
+		}
+	}
+	for _, value := range values {
+		var tree any
+		if raw, err := json.Marshal(value); err == nil && json.Unmarshal(raw, &tree) == nil {
+			walk(tree)
+		}
+	}
+	maps.DeleteFunc(out, func(_, name string) bool { return name == "" })
+	if len(out) == 0 {
+		return nil
+	}
+	return out
+}
+
+func (t *Owner) nameReferences(m platform.Member, source platform.RecordTypeInfo, byField map[string]map[string]bool, now time.Time) (map[string]map[string]string, bool) {
+	byType := map[string]map[string]bool{}
+	for _, field := range source.Fields {
+		if field.Type == "reference" && field.Ref != "" {
+			for id := range byField[field.Name] {
+				if byType[field.Ref] == nil {
+					byType[field.Ref] = map[string]bool{}
+				}
+				byType[field.Ref][id] = true
 			}
 		}
 	}

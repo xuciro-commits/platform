@@ -48,7 +48,7 @@ function Loading() {
   );
 }
 
-function Rail({ described, editor, kept, refs, restricted, collaboration }: { described: Described; editor: Editor; kept: Kept; refs?: Api.RecordView["refs"]; restricted: ReadonlySet<string>; collaboration?: ReactNode }) {
+function Rail({ described, editor, kept, refs, people, restricted, collaboration }: { described: Described; editor: Editor; kept: Kept; refs?: Api.RecordView["refs"]; people?: Api.RecordView["people"]; restricted: ReadonlySet<string>; collaboration?: ReactNode }) {
   return (
     <VStack gap={6}>
       <FieldGroup described={described} editor={editor} sections={[{ title: "Properties", fields: described.aside }]} direction="vertical" refs={refs} restricted={restricted} />
@@ -58,11 +58,11 @@ function Rail({ described, editor, kept, refs, restricted, collaboration }: { de
         <MetadataList>
           <MetadataListItem label={t("Created")}>{kept.created.at && <Timestamp value={kept.created.at} format="date_time" type="body" color="primary" />}</MetadataListItem>
           <MetadataListItem label={t("Created by")}>
-            <Text type="body">{kept.created.by ?? ""}</Text>
+            <Text type="body">{kept.created.by ? people?.[kept.created.by] ?? t("Unnamed member") : ""}</Text>
           </MetadataListItem>
           <MetadataListItem label={t("Updated")}>{kept.changed.at && <Timestamp value={kept.changed.at} format="date_time" type="body" color="primary" />}</MetadataListItem>
           <MetadataListItem label={t("Updated by")}>
-            <Text type="body">{kept.changed.by ?? ""}</Text>
+            <Text type="body">{kept.changed.by ? people?.[kept.changed.by] ?? t("Unnamed member") : ""}</Text>
           </MetadataListItem>
           <MetadataListItem label={t("Revision")}>
             <Text type="body">{String(kept.revision)}</Text>
@@ -101,6 +101,7 @@ export function RecordPage({ described, id, listPath, listTitle, instances, enti
   const changes = read.status === "ready" ? read.data.changes ?? [] : [];
   const definition = described.type === "build.object" && kept ? kept as unknown as Values : undefined;
   const refs = read.status === "ready" ? read.data.refs : undefined;
+  const people = read.status === "ready" ? read.data.people : undefined;
   const restrictedFields = read.status === "ready" ? read.data.restrictedFields : undefined;
   const restricted = new Set(read.status === "ready" ? read.data.restricted : undefined);
   const detail = useMemo(() => restrictedFields?.length ? describe(withRestrictedFields(described.entity, restrictedFields), catalog) : described, [catalog, described, restrictedFields]);
@@ -243,13 +244,13 @@ export function RecordPage({ described, id, listPath, listTitle, instances, enti
           {kept && tab === "files" && <RecordFiles read={files} attach={attach} target={`${described.type}/${id}`} />}
           {kept && tab === "activity" && <RecordActivity described={described} id={id} comments={comments} catalog={catalog} />}
           {kept && tab === "preview" && definition && <ObjectPreview definition={definition} source={detail} catalog={catalog} />}
-          {kept && tab === "properties" && <Rail described={detail} editor={editor} kept={kept} refs={refs} restricted={restricted} collaboration={collaboration} />}
+          {kept && tab === "properties" && <Rail described={detail} editor={editor} kept={kept} refs={refs} people={people} restricted={restricted} collaboration={collaboration} />}
         </LayoutContent>
       }
       end={
         kept && !narrow && tab !== "preview" ? (
           <LayoutPanel width={340} padding={gutter} role="complementary" hasDivider>
-            <Rail described={detail} editor={editor} kept={kept} refs={refs} restricted={restricted} collaboration={collaboration} />
+            <Rail described={detail} editor={editor} kept={kept} refs={refs} people={people} restricted={restricted} collaboration={collaboration} />
           </LayoutPanel>
         ) : undefined
       }

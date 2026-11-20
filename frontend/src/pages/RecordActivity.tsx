@@ -41,8 +41,15 @@ export function RecordActivity({ described, id, comments, catalog }: { described
       setBusy(false);
     }
   };
-  const say = (field: Api.FieldInfo, value: unknown) =>
-    field.name === described.lifecycle?.field ? t(described.state({ [field.name]: plain(value) })?.title ?? present(field, plain(value))) : present(field, plain(value));
+  const refs = history.status === "ready" ? history.data.refs : undefined;
+  const people = Object.assign({}, ...[activity, history, comments].map((section) => section.status === "ready" ? section.data.people : undefined));
+  const say = (field: Api.FieldInfo, value: unknown) => {
+    const given = plain(value);
+    const name = typeof given === "string" ? refs?.[field.name]?.[given] : undefined;
+    if (name) return name;
+    return field.name === described.lifecycle?.field ? t(described.state({ [field.name]: given })?.title ?? present(field, given)) : present(field, given);
+  };
+  const person = (id: string) => people[id] ?? t("Unnamed member");
   const events: Event[] = [];
   if (history.status === "ready") {
     for (const change of history.data.history ?? []) {
@@ -85,11 +92,11 @@ export function RecordActivity({ described, id, comments, catalog }: { described
       {!loading && !unavailable && !events.length && <Text type="supporting">{t("No activity yet")}</Text>}
       {events.map((event) => (
         <HStack key={event.key} gap={3} vAlign="start">
-          <Avatar name={event.by} size="sm" />
+          <Avatar name={person(event.by)} size="sm" />
           <StackItem size="fill">
             <VStack gap={1}>
               <HStack gap={1} vAlign="center" wrap="wrap">
-                <Text type="body" weight="semibold">{event.by}</Text>
+                <Text type="body" weight="semibold">{person(event.by)}</Text>
                 <Text type="body">{event.title}</Text>
                 <Timestamp value={event.at} format="auto" />
               </HStack>
