@@ -208,6 +208,9 @@ func ObjectEntity(env ObjectEntityEnvironment) platform.RecordType {
 			if err := checkDefaultView(object.View); err != nil {
 				return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
 			}
+			if refusal := checkReferenceRecords(object); refusal != nil {
+				return refusal
+			}
 			if err := env.NormalizeRules(object); err != nil {
 				return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
 			}

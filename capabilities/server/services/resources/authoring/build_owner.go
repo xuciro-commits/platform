@@ -1,10 +1,12 @@
 package authoring
 
 import (
+	"cmp"
 	"encoding/json"
 	"fmt"
 	"maps"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
+	"reflect"
 
 	runtimeprotocol "platformserver/kernel/protocol"
 	"platformserver/platform"
@@ -262,7 +264,31 @@ func (b *Build) Manifest() platform.Manifest {
 	if pages == nil {
 		pages = b.buildManifestPages()
 	}
-	return platform.Manifest{ID: ID, Title: platform.BuiltinManifestTitle(ID), Version: ValueDefinitionVersion, Sequences: sequences, Actions: catalog, Entities: entities, Roles: roles, Settings: b.settings(), Jobs: buildManifestJobs, Provides: provisions, Consumes: b.consumedProtocols(), Reads: reads, ReadSources: readSources, Queries: b.queries.Declarations(), Functions: b.functions.Declarations(), Agents: b.agent.Declarations(), Operations: b.functions.OperationDeclarations(), Pages: pages}
+	return platform.Manifest{ID: ID, Title: platform.BuiltinManifestTitle(ID), Version: ValueDefinitionVersion, Sequences: sequences, Actions: catalog, Entities: entities, Roles: roles, Settings: b.settings(), Jobs: buildManifestJobs, Provides: provisions, Consumes: b.consumedProtocols(), Reads: reads, ReadSources: readSources, Queries: b.queries.Declarations(), Functions: b.functions.Declarations(), Agents: b.agent.Declarations(), Operations: b.functions.OperationDeclarations(), Pages: pages, Subscribes: []string{ontology.SchemaPublish}}
+}
+
+func (b *Build) Interested(names []string, _ platform.Event) bool {
+	return ontology.FillsReference(names)
+}
+
+func (b *Build) Handle(c platform.Caller, e platform.Event) *platform.Error {
+	return b.Listen(c, e, []string{e.Record.GetSubmission().GetSchema().GetName()}, e.Record.GetRecordedTime().AsTime())
+}
+
+func (b *Build) Listen(c platform.Caller, e platform.Event, names []string, now time.Time) *platform.Error {
+	if !ontology.FillsReference(names) {
+		return nil
+	}
+	member, _ := b.host.Member(e.Record.GetSubmission().GetPrincipalId())
+	lang := cmp.Or(member.Language, b.host.Caller(c, member, "platform").Setting("language"))
+	model := func(typ string) (reflect.Type, bool) {
+		installed, ok := b.installed[typ]
+		return reflect.TypeOf(installed.Model), ok
+	}
+	return ontology.FillReference(c, lang, model, func(s *pb.Submission) *platform.Error {
+		_, refusal := b.Submit(c, s, now)
+		return refusal
+	})
 }
 
 func sortedTypes(installed map[string]platform.RecordType) []string {

@@ -188,7 +188,13 @@
   "install": {
     "tenant": "crm",
     "package": "../deploy/packages/crm.json",
-    "members": { "root": "系统管理员", "admin-1": "王丹", "builder-1": "韩奥", "manager-1": "赵敏", "user-1": "田雪" }
+    "members": {
+      "root": "系统管理员",
+      "admin-1": "王丹",
+      "builder-1": "韩奥",
+      "manager-1": "赵敏",
+      "user-1": "田雪"
+    }
   },
   "types": [
     {
@@ -243,59 +249,59 @@
             "type": "choice",
             "choices": "open,ongoing:Ongoing,onhold:On Hold,won:Won,lost:Lost"
           }
+        ],
+        "records": [
+          {
+            "id": "new",
+            "title": "New",
+            "color": "gray",
+            "position": 1,
+            "kind": "open"
+          },
+          {
+            "id": "contacted",
+            "title": "Contacted",
+            "color": "blue",
+            "position": 2,
+            "kind": "ongoing"
+          },
+          {
+            "id": "nurture",
+            "title": "Nurture",
+            "color": "purple",
+            "position": 3,
+            "kind": "ongoing"
+          },
+          {
+            "id": "qualified",
+            "title": "Qualified",
+            "color": "green",
+            "position": 4,
+            "kind": "won"
+          },
+          {
+            "id": "converted",
+            "title": "Converted",
+            "color": "green",
+            "position": 5,
+            "kind": "won"
+          },
+          {
+            "id": "unqualified",
+            "title": "Unqualified",
+            "color": "red",
+            "position": 6,
+            "kind": "lost"
+          },
+          {
+            "id": "junk",
+            "title": "Junk",
+            "color": "amber",
+            "position": 7,
+            "kind": "lost"
+          }
         ]
-      },
-      "records": [
-        {
-          "id": "new",
-          "title": "New",
-          "color": "gray",
-          "position": 1,
-          "kind": "open"
-        },
-        {
-          "id": "contacted",
-          "title": "Contacted",
-          "color": "blue",
-          "position": 2,
-          "kind": "ongoing"
-        },
-        {
-          "id": "nurture",
-          "title": "Nurture",
-          "color": "purple",
-          "position": 3,
-          "kind": "ongoing"
-        },
-        {
-          "id": "qualified",
-          "title": "Qualified",
-          "color": "green",
-          "position": 4,
-          "kind": "won"
-        },
-        {
-          "id": "converted",
-          "title": "Converted",
-          "color": "green",
-          "position": 5,
-          "kind": "won"
-        },
-        {
-          "id": "unqualified",
-          "title": "Unqualified",
-          "color": "red",
-          "position": 6,
-          "kind": "lost"
-        },
-        {
-          "id": "junk",
-          "title": "Junk",
-          "color": "amber",
-          "position": 7,
-          "kind": "lost"
-        }
-      ]
+      }
     },
     {
       "name": "dealstatus",
@@ -355,66 +361,66 @@
             "type": "choice",
             "choices": "open,ongoing:Ongoing,onhold:On Hold,won:Won,lost:Lost"
           }
+        ],
+        "records": [
+          {
+            "id": "qualification",
+            "title": "Qualification",
+            "color": "gray",
+            "position": 1,
+            "probability": 10,
+            "kind": "open"
+          },
+          {
+            "id": "demomaking",
+            "title": "Demo/Making",
+            "color": "blue",
+            "position": 2,
+            "probability": 25,
+            "kind": "ongoing"
+          },
+          {
+            "id": "proposalquotation",
+            "title": "Proposal/Quotation",
+            "color": "purple",
+            "position": 3,
+            "probability": 50,
+            "kind": "ongoing"
+          },
+          {
+            "id": "negotiation",
+            "title": "Negotiation",
+            "color": "orange",
+            "position": 4,
+            "probability": 70,
+            "kind": "ongoing"
+          },
+          {
+            "id": "readytoclose",
+            "title": "Ready to Close",
+            "color": "cyan",
+            "position": 5,
+            "probability": 90,
+            "kind": "ongoing"
+          },
+          {
+            "id": "won",
+            "title": "Won",
+            "color": "green",
+            "position": 6,
+            "probability": 100,
+            "kind": "won"
+          },
+          {
+            "id": "lost",
+            "title": "Lost",
+            "color": "red",
+            "position": 7,
+            "probability": 0,
+            "kind": "lost"
+          }
         ]
-      },
-      "records": [
-        {
-          "id": "qualification",
-          "title": "Qualification",
-          "color": "gray",
-          "position": 1,
-          "probability": 10,
-          "kind": "open"
-        },
-        {
-          "id": "demomaking",
-          "title": "Demo/Making",
-          "color": "blue",
-          "position": 2,
-          "probability": 25,
-          "kind": "ongoing"
-        },
-        {
-          "id": "proposalquotation",
-          "title": "Proposal/Quotation",
-          "color": "purple",
-          "position": 3,
-          "probability": 50,
-          "kind": "ongoing"
-        },
-        {
-          "id": "negotiation",
-          "title": "Negotiation",
-          "color": "orange",
-          "position": 4,
-          "probability": 70,
-          "kind": "ongoing"
-        },
-        {
-          "id": "readytoclose",
-          "title": "Ready to Close",
-          "color": "cyan",
-          "position": 5,
-          "probability": 90,
-          "kind": "ongoing"
-        },
-        {
-          "id": "won",
-          "title": "Won",
-          "color": "green",
-          "position": 6,
-          "probability": 100,
-          "kind": "won"
-        },
-        {
-          "id": "lost",
-          "title": "Lost",
-          "color": "red",
-          "position": 7,
-          "probability": 0,
-          "kind": "lost"
-        }
-      ]
+      }
     },
     {
       "name": "source",

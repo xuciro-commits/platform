@@ -29,6 +29,57 @@
   "name": "leadstatus",
   "namespace": "crm",
   "plural": "Lead statuses",
+  "records": [
+    {
+      "id": "new",
+      "title": "New",
+      "color": "gray",
+      "position": 1,
+      "kind": "open"
+    },
+    {
+      "id": "contacted",
+      "title": "Contacted",
+      "color": "blue",
+      "position": 2,
+      "kind": "ongoing"
+    },
+    {
+      "id": "nurture",
+      "title": "Nurture",
+      "color": "purple",
+      "position": 3,
+      "kind": "ongoing"
+    },
+    {
+      "id": "qualified",
+      "title": "Qualified",
+      "color": "green",
+      "position": 4,
+      "kind": "won"
+    },
+    {
+      "id": "converted",
+      "title": "Converted",
+      "color": "green",
+      "position": 5,
+      "kind": "won"
+    },
+    {
+      "id": "unqualified",
+      "title": "Unqualified",
+      "color": "red",
+      "position": 6,
+      "kind": "lost"
+    },
+    {
+      "id": "junk",
+      "title": "Junk",
+      "color": "amber",
+      "position": 7,
+      "kind": "lost"
+    }
+  ],
   "schemaVersions": [
     {
       "family": 1,

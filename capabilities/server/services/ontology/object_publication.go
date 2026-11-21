@@ -77,7 +77,7 @@ func DefinitionBody(value Object, typ string) (json.RawMessage, error) {
 }
 
 func ObjectSchemaBody(object Object) (json.RawMessage, error) {
-	object.SchemaVersions, object.View = nil, nil
+	object.SchemaVersions, object.View, object.Records = nil, nil, nil
 	return DefinitionBody(object, object.Type())
 }
 
