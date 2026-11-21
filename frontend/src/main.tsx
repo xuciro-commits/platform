@@ -4,7 +4,7 @@ import { LinkProvider } from "@astryxdesign/core/Link";
 import { Theme } from "@astryxdesign/core/theme";
 import { ArrowUpIcon } from "@heroicons/react/24/outline";
 import * as stylex from "@stylexjs/stylex";
-import { StrictMode } from "react";
+import { StrictMode, useEffect } from "react";
 import { createRoot } from "react-dom/client";
 import { defaultThemeSlug, themes } from "./astryx-themes";
 import { useSession } from "./host";
@@ -25,6 +25,9 @@ const theme = { ...base, icons: { ...base.icons, arrowsUpDown: <ArrowUpIcon {...
 function Root() {
   const locale = useLocale();
   const tenant = useSession()?.tenant;
+  useEffect(() => {
+    document.documentElement.lang = locale;
+  }, [locale]);
   return (
     <Theme theme={theme} mode={useAppearance()}>
       <LayerProvider>
