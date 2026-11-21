@@ -1901,6 +1901,9 @@ async function crmMainline(page: Page, go: (type: string, plural: string) => Pro
   await page.goto(leadPage);
   await expect(page.getByRole("link", { name: company, exact: true }).first()).toBeVisible();
   await expect(page.getByRole("button", { name: "Convert to deal", exact: true })).toBeDisabled();
+  await page.getByRole("button", { name: "Why unavailable · Convert to deal", exact: true }).click();
+  await expect(page.getByText(/Only an open lead/).first()).toBeVisible();
+  await page.keyboard.press("Escape");
 
   await go("crm.deal", "Deals");
   await page.getByRole("radio", { name: "Board" }).click();
@@ -1936,6 +1939,7 @@ async function crmMainline(page: Page, go: (type: string, plural: string) => Pro
 
   await page.goto(dealPage);
   await expect(property(page, "Probability %")).toHaveText("0");
+  await expect(page.getByRole("button", { name: "About Probability %", exact: true })).toBeVisible();
   await edit(page, "Status");
   await page.getByRole("combobox", { name: "Status" }).fill("Negotiation");
   await page.getByRole("option", { name: "Negotiation", exact: true }).click();

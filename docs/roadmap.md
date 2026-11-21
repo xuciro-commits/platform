@@ -36,12 +36,11 @@
 - 2.0.2 到 2.0.4 记下的每一项在这里修完；修在界面运行时或宿主的通用处，所有类型同时得到。
 - 验收：负责人在 8495 用真实账号十分钟走完 CRM 主线无卡点。
 - **界面微件第一批**（负责人定，2026-11-20；先于本行其余各项）：每个做成 `src/pages/` 里的一个表现，所有类型同时得到；一个一次提交，trunk 在 CRM 主线里加一步用到它。
-  1. `FieldProvenance`、`ActionAvailability`：字段标出来源（公式算出、`from` 带出、只经动作写）；置灰的动作说出原因（没有权限还是状态不对）。
-     来源取自类型描述；不可用的原因由宿主随 `actions=1` 给出，前端不猜。
-  2. `DateRangeInput`、`RangeInput`、`IconPicker`：列表筛选能选日期区间与数值、金额区间；应用与对象类型的图标从 Heroicons 里挑。日期区间用 Astryx `DateRangeInput`。
-  3. `MediaPreview`、`PdfViewer`、`Markdown`：附件里的图片与 PDF 在弹层里预览，长文本（备注）按 Markdown 显示；用 Astryx `Thumbnail`、`Dialog`、`Markdown`。
-     PDF 内嵌要么给浏览器自带查看器开一个元素例外，要么引 pdf.js；做到这一项时请负责人定。
+  1. `DateRangeInput`、`RangeInput`、`IconPicker`：列表筛选能选日期区间与数值、金额区间；应用与对象类型的图标从 Heroicons 里挑。日期区间用 Astryx `DateRangeInput`。
+  2. `MediaPreview`、`PdfViewer`、`Markdown`：附件里的图片与 PDF 在弹层里预览，长文本（备注）按 Markdown 显示；用 Astryx `Thumbnail`、`Dialog`、`Markdown`。
+     PDF 用 pdf.js（负责人定，2026-11-21）；凡是可能读附件的地方（文件页签、附件字段、引用旁的预览）都走同一个预览入口，按类型挂渲染器。
 - **列表的余项**：快速筛选的标签被截成“E…”，应不截断。
+- **内部字段露出**：有公式的类型多出只读字段 `rulewithheld`，在记录页右栏显示成“Rulewithheld: No”；它是宿主的簿记，不该进字段描述。
 - **译文的余项**：包的译文按应用合并在 build 下，同一租户里两个包的同一原文译法不同就都退回原文（如 Released：酒店“已释放”、制造“已下达”），应按项目名分开；
   平台有十来个字段标题是 Go 字段名（`PauseReason`、`CandidateDigest`），英文界面直接露出，应给标题；生产包的复数写成了“Production batchs”。
   文本排序按码点，中文按公司名排出来是“北风、子午、峡湾……阿特拉斯”而不是拼音序；排序应按读者语言的排序规则（中文按拼音）。

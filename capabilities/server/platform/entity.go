@@ -239,6 +239,7 @@ type FieldInfo struct {
 	Required     bool              `json:"required,omitempty"`
 	Search       bool              `json:"search,omitempty"`
 	ReadOnly     bool              `json:"readOnly,omitempty"`
+	Provenance   string            `json:"provenance,omitempty" enum:"formula,from,action"`
 	AliasOf      string            `json:"aliasOf,omitempty"`
 	Aside        bool              `json:"aside,omitempty"`
 	Choices      []string          `json:"choices,omitempty"`

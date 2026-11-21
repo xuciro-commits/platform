@@ -113,7 +113,7 @@ export function RecordPage({ described, id, listPath, listTitle, instances, enti
   const laneKey = (described.entity.view as { lanes?: string } | undefined)?.lanes;
   const laneField = (laneKey ? described.field(laneKey) : undefined) ?? described.lanes[0];
   const ownerField = described.entity.fields.find((field) => field.type === "member");
-  const heading = [laneField, ownerField].flatMap((field) => field && !restricted.has(field.name) ? [field] : []);
+  const heading = kept ? [laneField, ownerField].flatMap((field) => field && !restricted.has(field.name) ? [field] : []) : [];
   const headed = heading.map((field) => field.name).join(",");
   const body = useMemo(() => {
     const rest = (fields: Api.FieldInfo[]) => fields.filter((field) => !headed.split(",").includes(field.name));

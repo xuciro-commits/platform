@@ -2161,6 +2161,7 @@ export type FieldInfo = {
   required?: boolean;
   search?: boolean;
   readOnly?: boolean;
+  provenance?: "formula" | "from" | "action";
   aliasOf?: string;
   aside?: boolean;
   choices?: string[];

@@ -1,8 +1,7 @@
 import { Button } from "@astryxdesign/core/Button";
-import { Icon } from "@astryxdesign/core/Icon";
+import { InfoTip } from "@astryxdesign/core/InfoTip";
 import { HStack } from "@astryxdesign/core/Layout";
 import { MoreMenu } from "@astryxdesign/core/MoreMenu";
-import { Tooltip } from "@astryxdesign/core/Tooltip";
 import type { Api } from "../host";
 import { t } from "../i18n";
 import { usePageCommands } from "../shell/CommandSearch";
@@ -23,6 +22,15 @@ export type TransitionsProps = {
   publishProblem?: string;
   onFailure: (reason: string) => void;
 };
+
+function Gated({ label, primary, verdict, busy, onClick }: { label: string; primary: boolean; verdict: Api.RecordAction; busy: boolean; onClick: () => void }) {
+  return (
+    <HStack gap={1} vAlign="center">
+      <Button label={label} variant={primary ? "primary" : "secondary"} isDisabled={!verdict.allowed || busy} onClick={onClick} />
+      {!verdict.allowed && verdict.reason && <InfoTip label={`${t("Why unavailable")} · ${label}`} content={verdict.reason} />}
+    </HStack>
+  );
+}
 
 export function Transitions({ described, id, values, revision, title, instances, allowed, publishProblem, onFailure }: TransitionsProps) {
   const act = useAct(described);
@@ -49,11 +57,7 @@ export function Transitions({ described, id, values, revision, title, instances,
     return {
       id: action.schema,
       label,
-      endContent: verdict.allowed || !verdict.reason ? undefined : (
-        <Tooltip content={verdict.reason}>
-          <Icon icon="info" />
-        </Tooltip>
-      ),
+      description: verdict.allowed ? undefined : verdict.reason,
       isDisabled: !verdict.allowed || act.busy,
       onClick: () => run(action),
     };
@@ -72,13 +76,9 @@ export function Transitions({ described, id, values, revision, title, instances,
       <HStack gap={2} vAlign="center">
         {link && <Button label={t("Open records")} variant="secondary" href={link} />}
         {offered.map(({ step, verdict }, index) => (
-          <Button key={step.transition.name} label={t(step.transition.title)} variant={index === 0 ? "primary" : "secondary"}
-            isDisabled={!verdict.allowed || act.busy} tooltip={verdict.allowed ? undefined : verdict.reason} onClick={() => click(step)} />
+          <Gated key={step.transition.name} label={t(step.transition.title)} primary={index === 0} verdict={verdict} busy={act.busy} onClick={() => click(step)} />
         ))}
-        {lead && (
-          <Button label={t(lead.action.title)} variant="primary" isDisabled={!lead.verdict.allowed || act.busy}
-            tooltip={lead.verdict.allowed ? undefined : lead.verdict.reason} onClick={() => run(lead.action)} />
-        )}
+        {lead && <Gated label={t(lead.action.title)} primary verdict={lead.verdict} busy={act.busy} onClick={() => run(lead.action)} />}
         {items.length > 0 && <MoreMenu label={t("More actions")} items={items} alignment="end" />}
       </HStack>
       {act.element}

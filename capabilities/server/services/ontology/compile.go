@@ -74,6 +74,11 @@ func CompileObjectShape(o Object, app, builderRole string) platform.RecordType {
 		if f.SourceType != "" {
 			tag += fmt.Sprintf(` source:"%s"`, f.SourceType)
 		}
+		if f.Formula != "" || f.FormulaExpr != nil {
+			tag += ` provenance:"formula"`
+		} else if f.From != nil {
+			tag += ` provenance:"from"`
+		}
 		switch f.Type {
 		case "longtext", "date", "datetime", "member":
 			tag += fmt.Sprintf(` type:"%s"`, f.Type)

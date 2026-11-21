@@ -8,6 +8,7 @@ import { VisuallyHidden } from "@astryxdesign/core/VisuallyHidden";
 import { useClickableContainer, usePressFeedback } from "@astryxdesign/core/hooks";
 import { radiusVars, sizeVars, spacingVars } from "@astryxdesign/core/theme/tokens.stylex";
 import { focusOutlineStyles, interactionOverlayStyles } from "@astryxdesign/core/utils";
+import { ArrowTurnDownRightIcon, CalculatorIcon, LockClosedIcon } from "@heroicons/react/24/outline";
 import * as stylex from "@stylexjs/stylex";
 import { type FocusEvent, type KeyboardEvent, useEffect, useId, useRef, useState } from "react";
 import type { Api } from "../host";
@@ -22,6 +23,11 @@ import { present } from "./values";
 const layers = "[role=listbox], [role=dialog], [role=menu], [role=grid], [role=tooltip]";
 const direct = new Set(["boolean", "attachment", "lines", "member[]", "action[]"]);
 const blank = (value: unknown) => value == null || value === "";
+const sources = {
+  formula: { icon: CalculatorIcon, text: "Calculated by a formula" },
+  from: { icon: ArrowTurnDownRightIcon, text: "Filled in from other fields; you can change it" },
+  action: { icon: LockClosedIcon, text: "Changed only by actions" },
+};
 
 const styles = stylex.create({
   surface: {
@@ -179,5 +185,7 @@ export function PropertyField(props: PropertyFieldProps) {
       {parameter && <VisuallyHidden><Button ref={control} label={`${t("Edit")} ${label}`} onClick={begin} /></VisuallyHidden>}
     </HStack>
   );
-  return labelHidden ? shown : <Field label={label} inputID={id}>{shown}</Field>;
+  const source = field.provenance && sources[field.provenance];
+  const about = [field.help && t(field.help), source && t(source.text)].filter(Boolean).join(" ");
+  return labelHidden ? shown : <Field label={label} inputID={id} labelIcon={source?.icon} labelTooltip={about || undefined}>{shown}</Field>;
 }

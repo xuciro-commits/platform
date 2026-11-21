@@ -241,6 +241,10 @@ func describeFields(e Entity, t reflect.Type, from int, typeOf func(reflect.Type
 				return nil, fmt.Errorf("entity %s: field %s has an unknown flag %q", e.Type, name, flag)
 			}
 		}
+		f.Provenance = sf.Tag.Get("provenance")
+		if f.Provenance == "" && f.ReadOnly && f.AliasOf == "" {
+			f.Provenance = "action"
+		}
 		refined := sf.Tag.Get("type")
 		ft := sf.Type
 		if ft.Kind() == reflect.Pointer {

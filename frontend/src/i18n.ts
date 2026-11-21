@@ -1,5 +1,6 @@
-import { useSyncExternalStore } from "react";
 import values from "./i18n-values.json";
+
+export { setLanguage, t, useLocale } from "./language";
 
 export const zhCN: Record<string, string> = {
   Search: "搜索",
@@ -571,28 +572,9 @@ export const zhCN: Record<string, string> = {
   Select: "选择",
   "Select…": "选择…",
   "Also fill in": "还需填写",
+  "Calculated by a formula": "由公式算出",
+  "Filled in from other fields; you can change it": "由其他字段带出，可以改",
+  "Changed only by actions": "只由动作改动",
+  "Why unavailable": "为什么不可用",
   ...values,
 };
-
-const supported = (language: string) => (language.startsWith("zh") ? "zh-CN" : "en");
-let locale = supported(navigator.language);
-const listeners = new Set<() => void>();
-
-export function setLanguage(language: string) {
-  const next = supported(language);
-  if (next === locale) return;
-  locale = next;
-  document.documentElement.lang = next;
-  listeners.forEach((notify) => notify());
-}
-
-export function useLocale() {
-  return useSyncExternalStore((notify) => {
-    listeners.add(notify);
-    return () => listeners.delete(notify);
-  }, () => locale);
-}
-
-export function t(text: string) {
-  return locale === "zh-CN" ? (zhCN[text] ?? text) : text;
-}
