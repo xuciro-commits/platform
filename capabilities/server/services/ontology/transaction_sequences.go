@@ -3,6 +3,7 @@ package ontology
 import (
 	"maps"
 	"slices"
+	"strings"
 
 	"platformserver/platform"
 )
@@ -10,6 +11,9 @@ import (
 func TransactionSequences(installed map[string]platform.RecordType) []platform.Sequence {
 	byName := map[string]platform.Sequence{}
 	for _, typ := range slices.Sorted(maps.Keys(installed)) {
+		if pattern := installed[typ].Naming; pattern != "" {
+			byName[typ] = platform.Sequence{Name: typ, Pattern: pattern, Yearly: strings.Contains(pattern, "{year}")}
+		}
 		if txn := installed[typ].CreateTxn; txn != nil {
 			WalkBusinessTxn(txn, func(step platform.TxnStep) {
 				if step.Sequence != nil {

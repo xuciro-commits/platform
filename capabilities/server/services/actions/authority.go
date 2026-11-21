@@ -376,7 +376,14 @@ func executeAction(c platform.Caller, e platform.RecordType, t platform.ActionTy
 	}
 	typ := reflect.TypeOf(e.Model)
 	id := s.GetTarget().GetId()
-	existing, known := c.RecordValue(typ, id)
+	if t.Name == "create" && id == "" && e.Naming == "" {
+		return nil, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
+	}
+	var existing any
+	var known bool
+	if id != "" {
+		existing, known = c.RecordValue(typ, id)
+	}
 	v := reflect.New(typ)
 	if t.Name == "create" {
 		if known {
@@ -487,6 +494,20 @@ func executeAction(c platform.Caller, e platform.RecordType, t platform.ActionTy
 		if err := c.Check(value); err != nil {
 			return nil, err
 		}
+	}
+	if t.Name == "create" && id == "" {
+		if c.Probing() {
+			id = "_probe"
+		} else {
+			assigned, err := c.Next(&pb.ChangeRecord{ChangeId: "alloc", Submission: s}, e.Type, now)
+			if err != nil {
+				return nil, err
+			}
+			id = assigned
+		}
+		s.Target.Id = id
+		v.Elem().Field(0).Addr().Interface().(*platform.Record).ID = id
+		value = v.Elem().Interface()
 	}
 	return func(r *pb.ChangeRecord) {
 		for _, rule := range t.Rules {

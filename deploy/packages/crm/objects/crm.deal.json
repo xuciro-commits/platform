@@ -393,6 +393,10 @@
     {
       "family": 2,
       "version": "schema.sha256.9da734151855ceb823739eb4e66f306f9d1bad230690eb010daf943f339f22c5"
+    },
+    {
+      "family": 3,
+      "version": "schema.sha256.a369ed82e0af48b1dc4e56ad62cc2a2bc6581ad7be35bc705d5bd9cf1655b181"
     }
   ],
   "scope": {
@@ -443,5 +447,6 @@
     "search": "",
     "sort": [],
     "version": 1
-  }
+  },
+  "naming": "CRM-DEAL-{year}-{n:5}"
 }

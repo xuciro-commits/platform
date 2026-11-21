@@ -88,13 +88,13 @@ async function crmMainline(page: Page, go: (type: string, plural: string) => Pro
   await expect(page.getByRole("option")).toHaveCount(0);
   await convert.getByRole("button", { name: "Convert to deal", exact: true }).click();
   await expect(convert).toBeHidden();
-  await expect(page).toHaveURL(/\/(crm\.)?deal\/[^/]+$/);
+  await expect(page).toHaveURL(/\/(crm\.)?deal\/CRM-DEAL-\d{4}-\d{5}$/);
   await expect(page.getByRole("heading", { level: 1, name: company, exact: true })).toBeVisible();
   const dealPage = new URL(page.url()).pathname;
   const organizations = dealPage.replace(/(crm\.)?deal\/[^/]+$/, "$1organization/");
   await page.getByRole("main").getByRole("link", { name: company, exact: true }).last().click();
   await page.getByRole("dialog", { name: company }).getByRole("link", { name: "Open full page", exact: true }).click();
-  await expect(page).toHaveURL((url) => url.pathname.startsWith(organizations));
+  await expect(page).toHaveURL((url) => url.pathname.startsWith(organizations) && /CRM-ORG-\d{4}-\d{5}$/.test(url.pathname));
   const organizationId = new URL(page.url()).pathname.split("/").pop();
   await page.getByRole("main").getByRole("link", { name: company, exact: true }).first().click();
   await expect(page).toHaveURL((url) => url.pathname === dealPage);
@@ -1811,6 +1811,24 @@ test("crm: a sales rep works only their own leads while the sales manager sees t
   await expect(main.getByText(/SRC-|IND-|TER-|admin-1|Unnamed member/)).toHaveCount(0);
 });
 
+
+test("naming: two new deals get consecutive numbers", async ({ page }) => {
+  await signIn(page, "admin-1 · crm");
+  const createDeal = async (title: string) => {
+    await page.goto("/crm/crm.deal");
+    await page.getByRole("button", { name: "New", exact: true }).click();
+    const form = page.getByRole("dialog");
+    await form.getByRole("textbox", { name: "Deal" }).fill(title);
+    await form.getByRole("combobox", { name: "Status" }).click();
+    await page.getByRole("option", { name: "Qualification", exact: true }).click();
+    await form.getByRole("button", { name: "Create", exact: true }).click();
+    await expect(page).toHaveURL(/\/crm\/crm\.deal\/CRM-DEAL-\d{4}-\d{5}$/);
+    return Number(page.url().slice(-5));
+  };
+  const first = await createDeal("Numbered deal one");
+  const second = await createDeal("Numbered deal two");
+  expect(second).toBe(first + 1);
+});
 
 test("peek: clicking a reference opens the record drawer without leaving the page, and a reference input creates a contact inline", async ({ page }) => {
   await page.goto("/");

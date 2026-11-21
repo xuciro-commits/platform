@@ -65,11 +65,16 @@ export function ActionDialog({ action, described, heading, confirm, id, revision
     if (owned) payload.project = project;
     const space = projects.status === "ready" ? (projects.data.records as Project[]).find((entry) => entry.id === project)?.name : undefined;
     const named = typeof values.name === "string" ? (space && space !== "workspace" ? `${space}.${values.name}` : values.name) : undefined;
-    const target = id ?? named ?? `${action.idPrefix ?? ""}${crypto.randomUUID()}`;
+    const autoNamed = !id && Boolean((described as { naming?: string } | undefined)?.naming) && action.schema === `${described?.type}.create`;
+    const target = autoNamed ? "" : (id ?? named ?? `${action.idPrefix ?? ""}${crypto.randomUUID()}`);
     try {
+      let created = target;
       if (perform) await perform(payload);
-      else await send(action, target, payload, revision);
-      onDone(target);
+      else {
+        const accepted = await send(action, target, payload, revision);
+        if (accepted.id) created = accepted.id;
+      }
+      onDone(created);
     } catch (problem) {
       setFailure(reasonOf(problem));
       setBusy(false);

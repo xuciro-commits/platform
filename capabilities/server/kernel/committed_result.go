@@ -103,7 +103,13 @@ func (s *Sequence) ReplayPrior(a platform.Service, sub *pb.Submission, binding *
 		return receipt, "", nil, true
 	}
 	if prior.Record != nil {
-		if !proto.Equal(prior.Record.GetSubmission(), sub) {
+		same := proto.Equal(prior.Record.GetSubmission(), sub)
+		if !same && sub.GetTarget().GetId() == "" && sub.GetSchema().GetName() == sub.GetTarget().GetType()+".create" {
+			clone := proto.Clone(sub).(*pb.Submission)
+			clone.Target.Id = prior.Record.GetSubmission().GetTarget().GetId()
+			same = proto.Equal(prior.Record.GetSubmission(), clone)
+		}
+		if !same {
 			return nil, "", &platform.Error{Code: pb.ErrorCode_ERROR_CODE_IDEMPOTENCY_CONFLICT}, true
 		}
 		saved, bound := s.Committed.SchemaVersion(a.Manifest().ID + "/" + sub.GetIdempotencyKey())

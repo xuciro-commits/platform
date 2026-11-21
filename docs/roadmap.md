@@ -25,7 +25,7 @@
 
 - 业务对照只读 `study/from-frappe-crm/matrix.md`；`study/**/captures/` 与 `study/**/evidence/` 只为核对某个具体细节时定向看一张。
 
-顺序：2.1.1 → 2.1.2 → 2.1.3 → 2.1.4 → 2.2.1 → 2.2.2 → 2.2.3。
+顺序：2.1.2 → 2.1.3 → 2.1.4 → 2.2.1 → 2.2.2 → 2.2.3。
 
 ## 承重的要求（2.1 与 2.2 都守）
 
@@ -38,19 +38,6 @@
 ## 2.1 类型语义
 
 目标：线索与商机自动编号，负责人默认是自己，商机选了组织就带出行业与地区，状态走平台状态机。
-
-### 2.1.1 编号
-
-- 灵魂：编号就是记录标识，由宿主在接受时发，唯一且连续；地址里不再有 UUID 或 `chg-…-organization`。
-- 类型声明 `naming`（`build.object` 定义，与 `display` 同级），模式沿用序列占位符 `{year}`、`{n:5}`，如 `CRM-LEAD-{year}-{n:5}`。
-  编译成一条 `platform.Sequence`（名字取类型名），与事务序列一起登记（`ontology/transaction_sequences.go` 的收集处）。
-- 内核：`kernel/protocol/change.go` 的提交校验只对“目标类型有 naming 的 `.create`”放开空标识；
-  接受时由该类型的权威调用 `Caller.Next` 取号作标识，号写进接受结果；重放与幂等重试拿到同一个号。
-- 事务：`services/actions/business_transactions.go` 新建步骤的标识现为 `receipt.GetChangeId()+"-"+step.Name`；目标类型有 naming 时改为取号。
-- 界面：`ActionDialog` 对有 naming 的类型不生成 `crypto.randomUUID()` 标识，提交后用接受结果里的标识跳转；记录页头显示编号。
-- CRM：线索 `CRM-LEAD-{year}-{n:5}`、商机 `CRM-DEAL-{year}-{n:5}`、组织与联系人各一条；夹具种子里写死标识的记录保留原标识。
-- 验收：内核不变量——并发新建同一类型与重放后编号唯一且连续（并入 K13 竞态）；
-  trunk——新建两条商机，编号相连；线索转换出来的组织、联系人、商机地址都是编号。
 
 ### 2.1.2 默认值
 

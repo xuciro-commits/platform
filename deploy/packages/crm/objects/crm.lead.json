@@ -571,6 +571,10 @@
     {
       "family": 2,
       "version": "schema.sha256.f81247f1347aea9c95bd66a7791a2f6cf7017cf1eccafa79bc79c12e10145c8e"
+    },
+    {
+      "family": 3,
+      "version": "schema.sha256.f4fd41b66fe5577b38dfb7f8e4dfdfb09c96e931f902ee98e4ea8c8062ad16c3"
     }
   ],
   "scope": {
@@ -602,5 +606,6 @@
     "search": "",
     "sort": [],
     "version": 1
-  }
+  },
+  "naming": "CRM-LEAD-{year}-{n:5}"
 }

@@ -373,10 +373,14 @@ func RuleContext(c platform.Caller, expr platform.Expr, spec platform.RuleReadSp
 		if set.Set != "" {
 			var subjectID string
 			_ = json.Unmarshal(values["id"], &subjectID)
-			page, err := ruleRecordSet(c, spec.Object, subjectID, set.Set, record, now)
-			readErr = err
-			if err == nil {
-				raw = platform.Raw(map[string]any{"records": page.Records, "total": len(page.Records), "sources": page.Sources, "partial": page.Partial})
+			if subjectID == "" {
+				raw = platform.Raw(map[string]any{"records": []any{}, "total": 0, "sources": []string{}, "partial": false})
+			} else {
+				page, err := ruleRecordSet(c, spec.Object, subjectID, set.Set, record, now)
+				readErr = err
+				if err == nil {
+					raw = platform.Raw(map[string]any{"records": page.Records, "total": len(page.Records), "sources": page.Sources, "partial": page.Partial})
+				}
 			}
 		} else {
 			raw, readErr = c.ReadRuleQuery(set, platform.Raw(queryInputs), now)

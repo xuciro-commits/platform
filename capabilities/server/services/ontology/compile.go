@@ -175,7 +175,7 @@ func CompileObjectShape(o Object, app, builderRole string) platform.RecordType {
 			localRules[field.Name] = *field.FormulaExpr
 		}
 	}
-	return platform.RecordType{DataSources: slices.Clone(o.DataSources), LocalRules: localRules, Type: o.Type(), Title: o.Title, Plural: o.Plural, Description: o.Description, Icon: o.Icon, Color: o.Color, Format: FieldFormats(o.Fields), ValueTypeBindings: ValueTypeBindings(o.Fields), PropertyBindings: PropertyBindings(o.Fields), Model: model, Display: display, ObjectView: o.ObjectView, View: slices.Clone(o.View), Constraints: append(slices.Clone(o.Constraints), OneOfConstraints(o.Fields)...), Sets: o.Sets, Versioning: o.Versioning, VersionPins: o.VersionPins, Implements: slices.Clone(o.Implements), Extends: o.Extends, ExtensionSource: o.ExtensionSource, Derived: derived, Withheld: withheld, EnterpriseUse: o.EnterpriseUse}
+	return platform.RecordType{DataSources: slices.Clone(o.DataSources), LocalRules: localRules, Type: o.Type(), Title: o.Title, Plural: o.Plural, Description: o.Description, Icon: o.Icon, Color: o.Color, Format: FieldFormats(o.Fields), ValueTypeBindings: ValueTypeBindings(o.Fields), PropertyBindings: PropertyBindings(o.Fields), Model: model, Display: display, Naming: o.Naming, ObjectView: o.ObjectView, View: slices.Clone(o.View), Constraints: append(slices.Clone(o.Constraints), OneOfConstraints(o.Fields)...), Sets: o.Sets, Versioning: o.Versioning, VersionPins: o.VersionPins, Implements: slices.Clone(o.Implements), Extends: o.Extends, ExtensionSource: o.ExtensionSource, Derived: derived, Withheld: withheld, EnterpriseUse: o.EnterpriseUse}
 }
 
 func goType(kind string) reflect.Type {

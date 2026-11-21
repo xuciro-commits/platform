@@ -551,9 +551,18 @@ func (b *Runtime) transactAttempt(c platform.Caller, receipt *pb.ChangeRecord, t
 			}
 			id, verb := "", "edit"
 			if step.Kind == "create" {
-				verb, id = "create", receipt.GetChangeId()+"-"+step.Name
-				if frame != "" {
-					id += "-" + frame
+				verb = "create"
+				if entity.Naming != "" {
+					var err *platform.Error
+					id, err = c.Next(receipt, entity.Type, now)
+					if err != nil {
+						return err
+					}
+				} else {
+					id = receipt.GetChangeId() + "-" + step.Name
+					if frame != "" {
+						id += "-" + frame
+					}
 				}
 			} else {
 				ref, err := resolve(step.Target, facts, rowID)

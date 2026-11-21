@@ -18,6 +18,7 @@ type Object struct {
 	Icon              string                       `json:"icon,omitempty" title:"Icon" help:"An icon name, lower-case with hyphens" example:"calendar"`
 	Color             string                       `json:"color,omitempty" title:"Color" choices:"neutral,info,success,warning,danger,purple,pink,teal,orange"`
 	Display           string                       `json:"display,omitempty" title:"Title field" help:"The text field that names one record; empty: the first searchable field" example:"name"`
+	Naming            string                       `json:"naming,omitempty" title:"Naming pattern" help:"Automatic record number pattern, e.g. CRM-LEAD-{year}-{n:5}" example:"CRM-LEAD-{year}-{n:5}"`
 	ObjectView        *platform.ObjectView         `json:"objectView,omitempty" type:"json" title:"Object view"`
 	View              json.RawMessage              `json:"view,omitempty" type:"json" title:"Default view"`
 	Description       string                       `json:"description,omitempty" type:"longtext" help:"What one record of it is, for people and agents"`

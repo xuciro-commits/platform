@@ -415,9 +415,25 @@ func (l *ChangeLog) ApplyAccepted(saved *pb.ChangeRecord) (bool, error) {
 	return true, nil
 }
 
+func sameSubmission(accepted, incoming *pb.Submission) bool {
+	if proto.Equal(accepted, incoming) {
+		return true
+	}
+	if incoming.GetTarget().GetId() != "" || incoming.GetSchema().GetName() != incoming.GetTarget().GetType()+".create" {
+		return false
+	}
+	clone := proto.Clone(incoming).(*pb.Submission)
+	clone.Target.Id = accepted.GetTarget().GetId()
+	return proto.Equal(accepted, clone)
+}
+
 func (l *ChangeLog) SubmitChecked(s *pb.Submission, now time.Time, authorize, check func() *platform.Error) (*pb.ChangeRecord, *platform.Error) {
+	emptyCreate := s.GetTarget().GetId() == "" && s.GetSchema().GetName() == s.GetTarget().GetType()+".create"
 	required := []string{s.GetTenantId(), s.GetPrincipalId(), s.GetAuthority(), s.GetIdempotencyKey(),
-		s.GetTarget().GetType(), s.GetTarget().GetId(), s.GetSchema().GetName()}
+		s.GetTarget().GetType(), s.GetSchema().GetName()}
+	if !emptyCreate {
+		required = append(required, s.GetTarget().GetId())
+	}
 	if slices.Contains(required, "") {
 		return nil, errorf(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT)
 	}
@@ -425,7 +441,7 @@ func (l *ChangeLog) SubmitChecked(s *pb.Submission, now time.Time, authorize, ch
 		return nil, errorf(pb.ErrorCode_ERROR_CODE_UNKNOWN_SCHEMA)
 	}
 	if existing := l.accepted(s.GetTenantId(), s.GetIdempotencyKey()); existing != nil {
-		if !proto.Equal(existing.GetSubmission(), s) {
+		if !sameSubmission(existing.GetSubmission(), s) {
 			return nil, errorf(pb.ErrorCode_ERROR_CODE_IDEMPOTENCY_CONFLICT)
 		}
 		return existing, nil
@@ -438,18 +454,28 @@ func (l *ChangeLog) SubmitChecked(s *pb.Submission, now time.Time, authorize, ch
 			return nil, errorf(pb.ErrorCode_ERROR_CODE_INVALID_REFERENCE)
 		}
 	}
-	target := [3]string{s.GetTenantId(), s.GetTarget().GetType(), s.GetTarget().GetId()}
 	if err := authorize(); err != nil {
 		return nil, err
 	}
-	revision := l.revision(target)
-	if s.ExpectedRevision != nil && s.GetExpectedRevision() != revision {
-		return nil, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT, Message: "The record changed since you opened it", CurrentRevision: &revision}
+	if !emptyCreate {
+		target := [3]string{s.GetTenantId(), s.GetTarget().GetType(), s.GetTarget().GetId()}
+		revision := l.revision(target)
+		if s.ExpectedRevision != nil && s.GetExpectedRevision() != revision {
+			return nil, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT, Message: "The record changed since you opened it", CurrentRevision: &revision}
+		}
 	}
 	if check != nil {
 		if err := check(); err != nil {
 			return nil, err
 		}
+	}
+	if s.GetTarget().GetId() == "" {
+		return nil, errorf(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT)
+	}
+	target := [3]string{s.GetTenantId(), s.GetTarget().GetType(), s.GetTarget().GetId()}
+	revision := l.revision(target)
+	if s.ExpectedRevision != nil && s.GetExpectedRevision() != revision {
+		return nil, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT, Message: "The record changed since you opened it", CurrentRevision: &revision}
 	}
 	recorded := now
 	if last := l.lastTime(s.GetTenantId()); last.After(now) {

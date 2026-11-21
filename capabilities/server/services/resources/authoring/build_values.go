@@ -13,6 +13,9 @@ func (b *Build) checkPresentation(o ontology.Object) error {
 	if err := ontology.CheckDisplay(o); err != nil {
 		return err
 	}
+	if err := ontology.CheckNaming(o); err != nil {
+		return err
+	}
 	if o.Icon == "" && o.Color == "" && ontology.FieldFormats(o.Fields) == nil {
 		return nil
 	}

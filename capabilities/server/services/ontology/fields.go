@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"platformserver/kernel/protocol"
 	"slices"
+	"strings"
 
 	"platformserver/platform"
 )
@@ -95,6 +96,13 @@ func CheckDisplay(o Object) error {
 		return fmt.Errorf("the title field %q must be a text-like field of this object", o.Display)
 	}
 	return nil
+}
+
+func CheckNaming(o Object) error {
+	if o.Naming == "" {
+		return nil
+	}
+	return platform.Sequence{Name: o.Type(), Pattern: o.Naming, Yearly: strings.Contains(o.Naming, "{year}")}.Check()
 }
 
 func CompileAccess(o Object, builderRole, userRole string) (platform.Standard, platform.Scope, []string) {

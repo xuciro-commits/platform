@@ -48,7 +48,8 @@
 - 项目就是应用：在项目里新建的类型叫 `<项目名>.<名字>`，动作叫 `<项目名>.<名字>.<动词>`，两个项目可以各有一个 `lead`。
   命名空间在新建时取自项目（安装包时保留包里的），之后不可改；项目不能用内置应用的名字。项目里新建的定义（界面与种子都一样）以 `<项目名>.<名字>` 作记录标识。
   工作区与旧数据里的类型仍叫 `build.<名字>`。生成的页面以类型名去掉 `build.` 命名；同项目里按名字指向同一对象的页面替换它。
-- `GET /v1/actions` 公布 `build.object.edit` 的对象类型编辑参数。`display` 选择显示字段。`fields` 整表提交，行包含 `name`、`title`、`type`、
+- `GET /v1/actions` 公布 `build.object.edit` 的对象类型编辑参数。`display` 选择显示字段。
+- `naming` 声明自动编号模式（`{year}`、`{n:5}`），编译为同名 `platform.Sequence`，新建空标识与事务新建步骤均由宿主调 `Caller.Next` 发号作记录标识。`fields` 整表提交，行包含 `name`、`title`、`type`、
   `required`、`search`、`choices`、`ref`、`group`、`aside`、`when`。`states` 在同一对象类型记录上声明状态的 `name`、`title`、`tone`、`description`。
 - 转换定义在 `build.actiontype` 资源上。`build.actiontype.edit` 的 `definition` 包含动作名、标题、起始状态 `from` 与事务 `transaction`。
   事务通过更新业务记录的 `state` 执行转换。对象类型用 `actionTypes` 绑定动作类型的资源引用，发布时使用绑定的版本。

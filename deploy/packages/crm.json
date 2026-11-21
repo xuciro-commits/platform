@@ -1,6 +1,6 @@
 {
   "id": "crm",
-  "version": "0.1.14",
+  "version": "0.1.15",
   "title": "CRM",
   "namespace": "crm",
   "description": "Leads, deals, organizations, contacts, tasks and notes, with lead-to-deal conversion. Built in the crm project and released through Delivery.",
@@ -3499,6 +3499,10 @@
             {
               "family": 1,
               "version": "schema.sha256.f8f27149ef68896b8aa988cd551958cf1ba903d53a633382e089487ee4aad955"
+            },
+            {
+              "family": 2,
+              "version": "schema.sha256.fd9735338b8f481c3a41f3cd52c49fa5fa998e55917097bf3631139e6dec4044"
             }
           ],
           "title": "Contact",
@@ -3523,7 +3527,8 @@
               }
             ],
             "version": 1
-          }
+          },
+          "naming": "CRM-CON-{year}-{n:5}"
         }
       },
       {
@@ -4083,6 +4088,10 @@
             {
               "family": 2,
               "version": "schema.sha256.9da734151855ceb823739eb4e66f306f9d1bad230690eb010daf943f339f22c5"
+            },
+            {
+              "family": 3,
+              "version": "schema.sha256.a369ed82e0af48b1dc4e56ad62cc2a2bc6581ad7be35bc705d5bd9cf1655b181"
             }
           ],
           "scope": {
@@ -4133,7 +4142,8 @@
             "search": "",
             "sort": [],
             "version": 1
-          }
+          },
+          "naming": "CRM-DEAL-{year}-{n:5}"
         }
       },
       {
@@ -5380,6 +5390,10 @@
             {
               "family": 2,
               "version": "schema.sha256.f81247f1347aea9c95bd66a7791a2f6cf7017cf1eccafa79bc79c12e10145c8e"
+            },
+            {
+              "family": 3,
+              "version": "schema.sha256.f4fd41b66fe5577b38dfb7f8e4dfdfb09c96e931f902ee98e4ea8c8062ad16c3"
             }
           ],
           "scope": {
@@ -5411,7 +5425,8 @@
             "search": "",
             "sort": [],
             "version": 1
-          }
+          },
+          "naming": "CRM-LEAD-{year}-{n:5}"
         }
       },
       {
@@ -5976,6 +5991,10 @@
             {
               "family": 1,
               "version": "schema.sha256.164e93d04edab558838850309316c9776b247fa1c8b5e27904307ba9eff5a03a"
+            },
+            {
+              "family": 2,
+              "version": "schema.sha256.be337673f3bd0c116d06161d9fa22f12660ebf1ef49b4a6a1a4280c6ecf3715a"
             }
           ],
           "title": "Organization",
@@ -6000,7 +6019,8 @@
               }
             ],
             "version": 1
-          }
+          },
+          "naming": "CRM-ORG-{year}-{n:5}"
         }
       },
       {

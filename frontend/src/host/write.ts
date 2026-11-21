@@ -4,7 +4,7 @@ import { refusal, request } from "./request";
 
 type Identity = { tenantId: string; principalId: string };
 type Declaration = { dataClass: string; authorityId: string };
-type Accepted = { record?: { changeId: string; revision: number }; error?: { code?: string; message?: string } };
+type Accepted = { record?: { changeId: string; revision: number; submission?: { target?: { id?: string } } }; error?: { code?: string; message?: string } };
 
 export async function submit(action: Api.Action, id: string, payload: Record<string, unknown>, expectedRevision: number | undefined, idempotencyKey: string) {
   const [identity, declarations] = await Promise.all([request<Identity>("/v1/me"), request<Declaration[]>("/v1/declarations")]);
@@ -24,5 +24,5 @@ export async function submit(action: Api.Action, id: string, payload: Record<str
   });
   if (!answer.record) throw refusal(200, answer);
   changed();
-  return answer.record;
+  return { ...answer.record, id: answer.record.submission?.target?.id || id };
 }

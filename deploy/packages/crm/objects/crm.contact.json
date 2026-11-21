@@ -70,6 +70,10 @@
     {
       "family": 1,
       "version": "schema.sha256.f8f27149ef68896b8aa988cd551958cf1ba903d53a633382e089487ee4aad955"
+    },
+    {
+      "family": 2,
+      "version": "schema.sha256.fd9735338b8f481c3a41f3cd52c49fa5fa998e55917097bf3631139e6dec4044"
     }
   ],
   "title": "Contact",
@@ -94,5 +98,6 @@
       }
     ],
     "version": 1
-  }
+  },
+  "naming": "CRM-CON-{year}-{n:5}"
 }

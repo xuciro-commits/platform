@@ -2042,6 +2042,7 @@ export type EntityInfo = {
   knowledgeFiles?: boolean;
   app: string;
   display: string;
+  naming?: string;
   objectView?: ObjectView;
   view?: unknown;
   icon?: string;

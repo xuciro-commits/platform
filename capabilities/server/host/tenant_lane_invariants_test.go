@@ -367,3 +367,72 @@ func TestInvariantK13ConcurrentSubmissionsKeepOneSerialHistory(t *testing.T) {
 		t.Fatalf("concurrent accepted history replays differently: %v", differing)
 	}
 }
+
+func TestInvariantK13ConcurrentNamingCreatesAreUniqueAndContinuous(t *testing.T) {
+	live := newInvariantTenant(t, "invariant-concurrent-naming")
+	named := invariantObject("ticket", "Ticket")
+	named["naming"] = "TKT-{year}-{n:5}"
+	live.accept(t, "build.object.create", build.ObjectType, "NAMED", named)
+	live.accept(t, "build.object.publish", build.ObjectType, "NAMED", map[string]any{})
+	live.accept(t, "build.object.create", build.ObjectType, "PLAIN", invariantObject("plain", "Plain"))
+	live.accept(t, "build.object.publish", build.ObjectType, "PLAIN", map[string]any{})
+	member := live.member(t)
+	if _, refusal := live.Submit(member, live.submission("invariantproject.plain.create", "invariantproject.plain", "", map[string]any{"note": "no-naming"}), invariantClock); refusal == nil || refusal.Code != pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT {
+		t.Fatalf("empty id without naming was not refused: %v", refusal)
+	}
+	const count = 5
+	submissions := make([]*pb.Submission, count)
+	for i := range count {
+		submissions[i] = live.submission("invariantproject.ticket.create", "invariantproject.ticket", "", map[string]any{"note": "n"})
+	}
+	type answer struct {
+		index   int
+		record  *pb.ChangeRecord
+		refusal *platform.Error
+	}
+	answered := make(chan answer, count)
+	live.Lane.Lock()
+	for index, submission := range submissions {
+		go func() {
+			record, refusal := live.Submit(member, submission, invariantClock)
+			answered <- answer{index: index, record: record, refusal: refusal}
+		}()
+	}
+	deadline := time.Now().Add(10 * time.Second)
+	for live.Lane.State().Waiters != count && time.Now().Before(deadline) {
+		time.Sleep(time.Millisecond)
+	}
+	live.Lane.Unlock()
+	ids := make([]string, 0, count)
+	for range count {
+		var result answer
+		select {
+		case result = <-answered:
+		case <-time.After(10 * time.Second):
+			t.Fatal("concurrent naming creates did not finish")
+		}
+		if result.refusal != nil {
+			t.Fatalf("concurrent naming create %d failed: %v", result.index, result.refusal)
+		}
+		got := result.record.GetSubmission().GetTarget().GetId()
+		ids = append(ids, got)
+		repeated, refusal := live.Submit(member, submissions[result.index], invariantClock)
+		if refusal != nil || !proto.Equal(result.record, repeated) {
+			t.Fatalf("idempotent retry of naming create %d differed: %v", result.index, refusal)
+		}
+	}
+	want := []string{"TKT-2026-00001", "TKT-2026-00002", "TKT-2026-00003", "TKT-2026-00004", "TKT-2026-00005"}
+	seen := map[string]bool{}
+	for _, id := range ids {
+		seen[id] = true
+	}
+	for _, expected := range want {
+		if !seen[expected] {
+			t.Fatalf("allocated ids %v do not form continuous sequence %v", ids, want)
+		}
+	}
+	restored := live.restore(t, live.entries)
+	if differing := differingTypes(live.recordImage(t), restored.recordImage(t)); len(differing) != 0 {
+		t.Fatalf("naming creates replay differently: %v", differing)
+	}
+}

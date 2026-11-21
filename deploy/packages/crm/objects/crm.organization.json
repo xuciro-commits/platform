@@ -63,6 +63,10 @@
     {
       "family": 1,
       "version": "schema.sha256.164e93d04edab558838850309316c9776b247fa1c8b5e27904307ba9eff5a03a"
+    },
+    {
+      "family": 2,
+      "version": "schema.sha256.be337673f3bd0c116d06161d9fa22f12660ebf1ef49b4a6a1a4280c6ecf3715a"
     }
   ],
   "title": "Organization",
@@ -87,5 +91,6 @@
       }
     ],
     "version": 1
-  }
+  },
+  "naming": "CRM-ORG-{year}-{n:5}"
 }

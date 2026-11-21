@@ -264,11 +264,20 @@ func BatchSubmission(result Batch, receipt *pb.ChangeRecord) (*pb.Submission, er
 	if err := protojson.Unmarshal(result.Submission, s); err != nil {
 		return nil, fmt.Errorf("record batch original submission: %w", err)
 	}
-	if receipt.GetSubmission().GetAuthority() != "work" ||
-		receipt.GetSubmission().GetSchema().GetName() != "work.approval.request" {
+	answer := receipt.GetSubmission()
+	if s.GetTarget() != nil && s.GetTarget().GetId() == "" &&
+		s.GetSchema().GetName() == s.GetTarget().GetType()+".create" &&
+		answer.GetTarget().GetId() != "" {
+		assigned := proto.Clone(s).(*pb.Submission)
+		assigned.Target.Id = answer.GetTarget().GetId()
+		if proto.Equal(assigned, answer) {
+			return s, nil
+		}
+	}
+	if answer.GetAuthority() != "work" ||
+		answer.GetSchema().GetName() != "work.approval.request" {
 		return nil, fmt.Errorf("record batch answer differs without an approval request")
 	}
-	answer := receipt.GetSubmission()
 	var payload struct {
 		Requester  string          `json:"requester"`
 		Submission json.RawMessage `json:"submission"`

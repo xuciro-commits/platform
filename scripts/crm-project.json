@@ -808,7 +808,8 @@
             "type": "longtext",
             "group": "Details"
           }
-        ]
+        ],
+        "naming": "CRM-ORG-{year}-{n:5}"
       },
       "records": [
         {
@@ -999,7 +1000,8 @@
             "type": "text",
             "aside": true
           }
-        ]
+        ],
+        "naming": "CRM-CON-{year}-{n:5}"
       },
       "records": [
         {
@@ -1374,7 +1376,8 @@
         ],
         "scope": {
           "owner": "owner"
-        }
+        },
+        "naming": "CRM-LEAD-{year}-{n:5}"
       },
       "records": [
         {
@@ -2016,7 +2019,8 @@
         ],
         "scope": {
           "owner": "owner"
-        }
+        },
+        "naming": "CRM-DEAL-{year}-{n:5}"
       },
       "records": [
         {

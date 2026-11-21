@@ -63,7 +63,7 @@ type RecordType struct {
 	Model                  any
 	RecordFormat           string
 	RecordImages           []RecordImageFormat
-	Display                string
+	Display, Naming        string
 	ObjectView             *ObjectView     `json:"objectView,omitempty"`
 	View                   json.RawMessage `json:"view,omitempty"`
 	Icon                   string
@@ -340,6 +340,7 @@ type RecordTypeInfo struct {
 	KnowledgeFiles  bool                `json:"knowledgeFiles,omitempty"`
 	App             string              `json:"app"`
 	Display         string              `json:"display"`
+	Naming          string              `json:"naming,omitempty"`
 	ObjectView      *ObjectView         `json:"objectView,omitempty"`
 	View            json.RawMessage     `json:"view,omitempty"`
 	Icon            string              `json:"icon,omitempty"`
@@ -395,7 +396,6 @@ func (c Caller) RecordValue(t reflect.Type, id string) (any, bool) {
 }
 
 func (c Caller) Readable(ref string) bool { return c.rt != nil && c.rt.Readable(c, ref) }
-
 func Get[T any](c Caller, id string) (T, bool) {
 	var zero T
 	if c.rt == nil {
