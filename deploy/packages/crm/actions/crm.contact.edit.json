@@ -1,7 +1,7 @@
 {
   "action": {
-    "capability": "crmcontact",
-    "description": "Change fields of a crm contact; fields left out keep their value.",
+    "capability": "contact",
+    "description": "Change fields of a contact; fields left out keep their value.",
     "payload": [
       {
         "description": "Full name",
@@ -66,18 +66,18 @@
         "type": "string"
       }
     ],
-    "schema": "crm.crmcontact.edit",
+    "schema": "crm.contact.edit",
     "schemaVersion": {
       "family": 1,
-      "version": "schema.sha256.9e00c5ca6b776c5a096fb9054a37a1d4638eea0bf861d9a84eae8c70def9f8a7"
+      "version": "schema.sha256.f8f27149ef68896b8aa988cd551958cf1ba903d53a633382e089487ee4aad955"
     },
-    "target": "crm.crmcontact",
-    "title": "Edit crm contact"
+    "target": "crm.contact",
+    "title": "Edit contact"
   },
   "roles": [
     "builder",
     "user"
   ],
-  "schema": "crm.crmcontact.edit",
-  "target": "crm.crmcontact"
+  "schema": "crm.contact.edit",
+  "target": "crm.contact"
 }

@@ -32,17 +32,17 @@
       "type": "longtext"
     }
   ],
-  "name": "crmproduct",
+  "name": "product",
   "namespace": "crm",
   "plural": "Products",
   "schemaVersions": [
     {
       "family": 1,
-      "version": "schema.sha256.9de8d3be5397386827a633fd89e38a6797715dc6a4314ee1e17c7bc4bbcb6c56"
+      "version": "schema.sha256.d213741506882421f39808dad3fd13f6f925df1690f5c22742a4a59d9f1bcda4"
     }
   ],
   "title": "Product",
-  "type": "crm.crmproduct",
+  "type": "crm.product",
   "view": {
     "columns": [
       "code",

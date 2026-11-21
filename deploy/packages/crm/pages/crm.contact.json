@@ -5,12 +5,12 @@
         {
           "app": "build",
           "kind": "action",
-          "name": "crm.crmcontact.create"
+          "name": "crm.contact.create"
         },
         {
           "app": "build",
           "kind": "action",
-          "name": "crm.crmcontact.edit"
+          "name": "crm.contact.edit"
         }
       ],
       "binding": "page",
@@ -60,12 +60,12 @@
             "name": "phone"
           }
         ],
-        "type": "crm.crmcontact"
+        "type": "crm.contact"
       },
       "object": {
         "app": "build",
         "kind": "object",
-        "name": "crm.crmcontact"
+        "name": "crm.contact"
       },
       "owner": "binding:list",
       "ports": {
@@ -136,12 +136,12 @@
             "name": "address"
           }
         ],
-        "type": "crm.crmcontact"
+        "type": "crm.contact"
       },
       "object": {
         "app": "build",
         "kind": "object",
-        "name": "crm.crmcontact"
+        "name": "crm.contact"
       },
       "owner": "binding:detail",
       "ports": {
@@ -152,11 +152,11 @@
   ],
   "format": 4,
   "inputSchema": {},
-  "name": "crm.crmcontact",
+  "name": "crm.contact",
   "object": {
     "app": "build",
     "kind": "object",
-    "name": "crm.crmcontact"
+    "name": "crm.contact"
   },
   "scopeVisibility": {
     "owners": {
@@ -183,7 +183,7 @@
       }
     ]
   },
-  "title": "CRM Contacts",
+  "title": "Contacts",
   "widgetSpec": {
     "body": {
       "document": null,

@@ -5,12 +5,12 @@
         {
           "app": "build",
           "kind": "action",
-          "name": "crm.crmtask.create"
+          "name": "crm.task.create"
         },
         {
           "app": "build",
           "kind": "action",
-          "name": "crm.crmtask.edit"
+          "name": "crm.task.edit"
         }
       ],
       "binding": "page",
@@ -66,12 +66,12 @@
             "name": "state"
           }
         ],
-        "type": "crm.crmtask"
+        "type": "crm.task"
       },
       "object": {
         "app": "build",
         "kind": "object",
-        "name": "crm.crmtask"
+        "name": "crm.task"
       },
       "owner": "binding:list",
       "ports": {
@@ -154,12 +154,12 @@
             "name": "state"
           }
         ],
-        "type": "crm.crmtask"
+        "type": "crm.task"
       },
       "object": {
         "app": "build",
         "kind": "object",
-        "name": "crm.crmtask"
+        "name": "crm.task"
       },
       "owner": "binding:detail",
       "ports": {
@@ -170,11 +170,11 @@
   ],
   "format": 4,
   "inputSchema": {},
-  "name": "crm.crmtask",
+  "name": "crm.task",
   "object": {
     "app": "build",
     "kind": "object",
-    "name": "crm.crmtask"
+    "name": "crm.task"
   },
   "scopeVisibility": {
     "owners": {

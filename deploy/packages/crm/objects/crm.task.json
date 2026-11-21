@@ -180,13 +180,13 @@
       "type": "boolean"
     }
   ],
-  "name": "crmtask",
+  "name": "task",
   "namespace": "crm",
   "plural": "Tasks",
   "schemaVersions": [
     {
       "family": 1,
-      "version": "schema.sha256.67567f58922f96dcd9c1aecb48a4065ee5d25e968888978060163bc9c7de5969"
+      "version": "schema.sha256.bed1c0d31017d2023726bdfbb2c8686d1c50ff41a683ef625d278155b57350ff"
     }
   ],
   "states": [
@@ -198,7 +198,7 @@
     }
   ],
   "title": "Task",
-  "type": "crm.crmtask",
+  "type": "crm.task",
   "view": {
     "columns": [
       "title",

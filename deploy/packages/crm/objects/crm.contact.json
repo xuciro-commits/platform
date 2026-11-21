@@ -63,17 +63,17 @@
       "type": "text"
     }
   ],
-  "name": "crmcontact",
+  "name": "contact",
   "namespace": "crm",
-  "plural": "CRM Contacts",
+  "plural": "Contacts",
   "schemaVersions": [
     {
       "family": 1,
-      "version": "schema.sha256.9e00c5ca6b776c5a096fb9054a37a1d4638eea0bf861d9a84eae8c70def9f8a7"
+      "version": "schema.sha256.f8f27149ef68896b8aa988cd551958cf1ba903d53a633382e089487ee4aad955"
     }
   ],
-  "title": "CRM Contact",
-  "type": "crm.crmcontact",
+  "title": "Contact",
+  "type": "crm.contact",
   "view": {
     "columns": [
       "fullname",

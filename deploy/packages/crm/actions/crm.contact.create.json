@@ -1,7 +1,7 @@
 {
   "action": {
-    "capability": "crmcontact",
-    "description": "Create a crm contact.",
+    "capability": "contact",
+    "description": "Create a contact.",
     "new": true,
     "payload": [
       {
@@ -68,18 +68,18 @@
         "type": "string"
       }
     ],
-    "schema": "crm.crmcontact.create",
+    "schema": "crm.contact.create",
     "schemaVersion": {
       "family": 1,
-      "version": "schema.sha256.9e00c5ca6b776c5a096fb9054a37a1d4638eea0bf861d9a84eae8c70def9f8a7"
+      "version": "schema.sha256.f8f27149ef68896b8aa988cd551958cf1ba903d53a633382e089487ee4aad955"
     },
-    "target": "crm.crmcontact",
-    "title": "Create crm contact"
+    "target": "crm.contact",
+    "title": "Create contact"
   },
   "roles": [
     "builder",
     "user"
   ],
-  "schema": "crm.crmcontact.create",
-  "target": "crm.crmcontact"
+  "schema": "crm.contact.create",
+  "target": "crm.contact"
 }

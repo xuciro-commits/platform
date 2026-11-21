@@ -254,7 +254,7 @@
             "kind": "create",
             "name": "contact",
             "target": {
-              "type": "crm.crmcontact"
+              "type": "crm.contact"
             }
           },
           {
@@ -462,7 +462,7 @@
     {
       "group": "Classification",
       "name": "source",
-      "ref": "crm.leadsource",
+      "ref": "crm.source",
       "title": "Source",
       "type": "reference"
     },
@@ -543,15 +543,15 @@
   "schemaVersions": [
     {
       "family": 1,
-      "version": "schema.sha256.42e2da4adc9c46088a4e934131ceec3a5ebd7c4b781100e2070108235d9632b4"
+      "version": "schema.sha256.0bba75ec9a9a0a20c2fc4db4a175cd009b42323de4c615a605df012d70657dd4"
     },
     {
       "family": 2,
-      "version": "schema.sha256.436a154f5951bdcff54891e431238b5b8314e3f4feaec6f7b01769b168fb9a4c"
+      "version": "schema.sha256.a2e56e2be5109eef802cc006384eec3889bd9dcb7f6bfb036b26d9c5b819c5d7"
     },
     {
       "family": 2,
-      "version": "schema.sha256.3cb319a687ccc1cd960c5d96ac4dc2670b0099bc3d04bb873bd023b6fe442f93"
+      "version": "schema.sha256.20d9ae23fae97b552901963ab2a366296d989c3702af414e59e3699b3f4e9af4"
     }
   ],
   "scope": {

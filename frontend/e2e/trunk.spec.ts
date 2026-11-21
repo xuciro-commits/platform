@@ -19,7 +19,7 @@ test("legacy links: open records and mapped views, and explain unavailable views
   });
   expect(response.ok()).toBeTruthy();
   const directory: Api.ResourceDirectory = await response.json();
-  const resource = directory.resources.find((entry) => entry.type === "build.object" && entry.draft === "OBJ-opportunity");
+  const resource = directory.resources.find((entry) => entry.type === "build.object" && entry.draft === "sales.opportunity");
   expect(resource?.id).toMatch(/^ri\./);
 
   await page.goto("/#/objects/sales.opportunity/OPP-001");
@@ -27,7 +27,7 @@ test("legacy links: open records and mapped views, and explain unavailable views
   await expect(page.getByRole("heading", { level: 1, name: "冲压线改造" })).toBeVisible();
 
   await page.goto(`/#/object-type/${resource!.id}`);
-  await expect(page).toHaveURL("/ontology/object-types/OBJ-opportunity");
+  await expect(page).toHaveURL("/ontology/object-types/sales.opportunity");
   await expect(page.getByRole("heading", { level: 1, name: "Opportunity", exact: true })).toBeVisible();
 
   await page.goto("/#/dataset");
@@ -205,7 +205,7 @@ test("conflict: the second writer sees both values and chooses", async ({ browse
 test("publish: a draft type goes live from its record page and takes records", async ({ page }) => {
   await signIn(page);
   await open(page, "Ontology", "Object types");
-  await page.getByRole("link", { name: "Contact", exact: true }).click();
+  await page.getByRole("row").filter({ has: page.getByRole("cell", { name: "sales", exact: true }) }).getByRole("link", { name: "Contact", exact: true }).click();
   await expect(page.getByRole("heading", { level: 1, name: "Contact" })).toBeVisible();
   await expect(page.getByText("Draft", { exact: true })).toBeVisible();
 
@@ -557,7 +557,7 @@ test("object definition: add a field, publish it and review a removal", async ({
 
 test("object definition: create and bind an action type before publishing a transition", async ({ page }) => {
   await signIn(page);
-  await page.goto("/ontology/objects/build.object/OBJ-workflow");
+  await page.goto("/ontology/objects/build.object/sales.workflow");
   await page.getByRole("button", { name: "Create transition", exact: true }).click();
   const transition = page.getByRole("dialog");
   await transition.getByRole("textbox", { name: "What people call it", exact: true }).fill("Activate contact");
@@ -1328,7 +1328,7 @@ test("command palette: open a record and the inbox with the keyboard", async ({ 
   await search.fill("Opportunity");
   await expect(palette.getByRole("group", { name: "Objects" }).getByRole("option", { name: "冲压线改造" })).toBeVisible();
   await palette.getByRole("group", { name: "Resources" }).getByRole("option", { name: "Opportunity", exact: true }).click();
-  await expect(page).toHaveURL(/\/ontology\/object-types\/OBJ-opportunity$/);
+  await expect(page).toHaveURL(/\/ontology\/object-types\/sales\.opportunity$/);
   await expect(page.getByRole("heading", { name: "Opportunity", exact: true })).toBeVisible();
 
   await page.keyboard.press("ControlOrMeta+K");
@@ -1654,7 +1654,7 @@ test("crm: every CRM type can be created, edited and filtered, and lead and deal
       createdTitle: "Legal Review", editField: "Deal status", editValue: "Contract Review",
     },
     {
-      type: "crm.leadsource", plural: "Lead sources", filterTerm: "展会", filterHit: "展会",
+      type: "crm.source", plural: "Lead sources", filterTerm: "展会", filterHit: "展会",
       create: async (form) => { await form.getByRole("textbox", { name: "Source name" }).fill("Partner Webinar"); },
       createdTitle: "Partner Webinar", editField: "Source name", editValue: "Partner Event",
     },
@@ -1679,12 +1679,12 @@ test("crm: every CRM type can be created, edited and filtered, and lead and deal
       createdTitle: "Orion Systems", editField: "Website", editValue: "https://orion.example",
     },
     {
-      type: "crm.crmcontact", plural: "CRM Contacts", filterTerm: "魏", filterHit: "魏清",
+      type: "crm.contact", plural: "Contacts", filterTerm: "魏", filterHit: "魏清",
       create: async (form) => { await form.getByRole("textbox", { name: "Full name" }).fill("Nadia Chen"); },
       createdTitle: "Nadia Chen", editField: "Designation", editValue: "Operations Lead",
     },
     {
-      type: "crm.crmproduct", plural: "Products", filterTerm: "CRM-CORE", filterHit: "CRM-CORE",
+      type: "crm.product", plural: "Products", filterTerm: "CRM-CORE", filterHit: "CRM-CORE",
       create: async (form) => {
         await form.getByRole("textbox", { name: "Product code" }).fill("CRM-TRN");
         await form.getByRole("textbox", { name: "Product name" }).fill("Admin Training");
@@ -1724,7 +1724,7 @@ test("crm: every CRM type can be created, edited and filtered, and lead and deal
       createdTitle: "Custom Workshop", editField: "Product name", editValue: "Custom Workshop Day",
     },
     {
-      type: "crm.crmtask", plural: "Tasks", filterTerm: "北辰", filterHit: "给北辰发需求调研资料",
+      type: "crm.task", plural: "Tasks", filterTerm: "北辰", filterHit: "给北辰发需求调研资料",
       create: async (form) => {
         await form.getByRole("textbox", { name: "Title" }).fill("Confirm CRM pilot dates");
         await form.getByRole("combobox", { name: "Status" }).click();
@@ -1782,7 +1782,7 @@ test("crm: every CRM type can be created, edited and filtered, and lead and deal
   await page.goto("/ontology/objects/crm.note");
   await expect(page.getByRole("columnheader", { name: "Related to" })).toBeVisible();
   await expect(page.getByRole("row", { name: /曦和采购时间线/ }).getByText("曦和工厂客户关系系统上线", { exact: true })).toBeVisible();
-  await page.goto("/ontology/objects/crm.crmtask/TSK-001");
+  await page.goto("/ontology/objects/crm.task/TSK-001");
   await expect(page.getByRole("radio", { name: "Lead", exact: true })).toBeChecked();
   await page.getByRole("radio", { name: "Deal", exact: true }).click();
   await page.getByRole("combobox", { name: "Deal", exact: true }).fill("曦和");
@@ -1828,7 +1828,7 @@ async function crmMainline(page: Page, go: (type: string, plural: string) => Pro
 
   for (const [type, fill] of [
     ["crm.note", async (form: ReturnType<Page["getByRole"]>) => { await form.getByRole("textbox", { name: "Title" }).fill(`${company} discovery call`); }],
-    ["crm.crmtask", async (form: ReturnType<Page["getByRole"]>) => {
+    ["crm.task", async (form: ReturnType<Page["getByRole"]>) => {
       await form.getByRole("textbox", { name: "Title" }).fill(`Send ${company} the pilot plan`);
       await form.getByRole("combobox", { name: "Status" }).click();
       await page.getByRole("option", { name: "Todo", exact: true }).click();
@@ -1948,7 +1948,7 @@ test("crm: the released package installs into an empty tenant whose CRM app runs
   await page.getByRole("button", { name: "admin-1 · crm" }).click();
   await page.getByRole("link", { name: "CRM", exact: true }).click();
   const navigation = page.getByRole("navigation", { name: "Primary navigation" });
-  for (const entry of ["Leads", "Deals", "Organizations", "CRM Contacts", "Tasks", "Notes"]) await expect(navigation.getByRole("link", { name: entry, exact: true })).toBeVisible();
+  for (const entry of ["Leads", "Deals", "Organizations", "Contacts", "Tasks", "Notes"]) await expect(navigation.getByRole("link", { name: entry, exact: true })).toBeVisible();
   await crmMainline(page, async (_, plural) => {
     await navigation.getByRole("link", { name: plural, exact: true }).click();
     await expect(page.getByRole("heading", { level: 1, name: plural, exact: true })).toBeVisible();

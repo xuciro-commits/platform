@@ -20,11 +20,9 @@
         "Backlog": "待办池",
         "Blue": "蓝",
         "CRM": "客户关系",
-        "CRM Contact": "联系人",
-        "CRM Contacts": "联系人",
         "CRM task.": "客户关系里的任务。",
         "Canceled": "已取消",
-        "Change fields of a crm contact; fields left out keep their value.": "修改联系人的字段；没填的字段保持原值。",
+        "Change fields of a contact; fields left out keep their value.": "修改联系人的字段；没填的字段保持原值。",
         "Change fields of a deal; fields left out keep their value.": "修改商机的字段；没填的字段保持原值。",
         "Change fields of a lead; fields left out keep their value.": "修改线索的字段；没填的字段保持原值。",
         "Change fields of a note; fields left out keep their value.": "修改备注的字段；没填的字段保持原值。",
@@ -32,17 +30,19 @@
         "Change fields of an organization; fields left out keep their value.": "修改组织的字段；没填的字段保持原值。",
         "Closed date": "成交日期",
         "Company description": "公司介绍",
+        "Contact": "联系人",
         "Contacted": "已联系",
+        "Contacts": "联系人",
         "Content": "内容",
         "Convert to deal": "转为商机",
         "Converted": "已转化",
-        "Create a crm contact.": "新建一个联系人。",
+        "Create a contact.": "新建一个联系人。",
         "Create a deal.": "新建一个商机。",
         "Create a lead.": "新建一条线索。",
         "Create a note.": "新建一条备注。",
         "Create a task.": "新建一个任务。",
         "Create an organization.": "新建一个组织。",
-        "Create crm contact": "新建联系人",
+        "Create contact": "新建联系人",
         "Create deal": "新建商机",
         "Create lead": "新建线索",
         "Create note": "新建备注",
@@ -64,7 +64,7 @@
         "Done": "已完成",
         "Dr": "博士",
         "Due date": "截止日期",
-        "Edit crm contact": "编辑联系人",
+        "Edit contact": "编辑联系人",
         "Edit deal": "编辑商机",
         "Edit lead": "编辑线索",
         "Edit note": "编辑备注",
@@ -416,7 +416,7 @@
       ]
     },
     {
-      "name": "leadsource",
+      "name": "source",
       "prefix": "SRC",
       "definition": {
         "title": "Lead source",
@@ -902,11 +902,11 @@
       ]
     },
     {
-      "name": "crmcontact",
+      "name": "contact",
       "prefix": "CCT",
       "definition": {
-        "title": "CRM Contact",
-        "plural": "CRM Contacts",
+        "title": "Contact",
+        "plural": "Contacts",
         "display": "fullname",
         "view": {
           "version": 1,
@@ -1077,7 +1077,7 @@
       ]
     },
     {
-      "name": "crmproduct",
+      "name": "product",
       "prefix": "PRD",
       "definition": {
         "title": "Product",
@@ -1274,7 +1274,7 @@
             "name": "source",
             "title": "Source",
             "type": "reference",
-            "ref": "crm.leadsource",
+            "ref": "crm.source",
             "group": "Classification"
           },
           {
@@ -1644,7 +1644,7 @@
             "name": "contact",
             "title": "Primary contact",
             "type": "reference",
-            "ref": "crm.crmcontact",
+            "ref": "crm.contact",
             "group": "Commercial"
           },
           {
@@ -1727,7 +1727,7 @@
             "name": "source",
             "title": "Source",
             "type": "reference",
-            "ref": "crm.leadsource",
+            "ref": "crm.source",
             "group": "Classification"
           },
           {
@@ -2220,7 +2220,7 @@
             "name": "product",
             "title": "Product",
             "type": "reference",
-            "ref": "crm.crmproduct"
+            "ref": "crm.product"
           },
           {
             "name": "productname",
@@ -2387,7 +2387,7 @@
       ]
     },
     {
-      "name": "crmtask",
+      "name": "task",
       "prefix": "TSK",
       "definition": {
         "title": "Task",
@@ -2752,7 +2752,7 @@
     [
       "build.object.edit",
       "build.object",
-      "OBJ-lead",
+      "crm.lead",
       {
         "fields": [
           {
@@ -2805,7 +2805,7 @@
             "name": "source",
             "title": "Source",
             "type": "reference",
-            "ref": "crm.leadsource",
+            "ref": "crm.source",
             "group": "Classification"
           },
           {
@@ -3057,7 +3057,7 @@
                 "name": "contact",
                 "kind": "create",
                 "target": {
-                  "type": "crm.crmcontact"
+                  "type": "crm.contact"
                 },
                 "changes": [
                   {
@@ -3285,7 +3285,7 @@
     [
       "build.object.publish",
       "build.object",
-      "OBJ-lead",
+      "crm.lead",
       {}
     ],
     [
@@ -3298,8 +3298,8 @@
           "crm.lead",
           "crm.deal",
           "crm.organization",
-          "crm.crmcontact",
-          "crm.crmtask",
+          "crm.contact",
+          "crm.task",
           "crm.note"
         ]
       }

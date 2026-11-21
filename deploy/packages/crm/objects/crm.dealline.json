@@ -11,7 +11,7 @@
     },
     {
       "name": "product",
-      "ref": "crm.crmproduct",
+      "ref": "crm.product",
       "title": "Product",
       "type": "reference"
     },
@@ -102,7 +102,7 @@
   "schemaVersions": [
     {
       "family": 1,
-      "version": "schema.sha256.3239711eca6a8f1f8f0b2ba57deafcd33af6f77219937e7a23085ac76e3dafdb"
+      "version": "schema.sha256.645da2ad5ac95bcbac188dead35f9e6c2309e0d41f5dd851335a42a04b5ee05d"
     }
   ],
   "title": "Deal product line",

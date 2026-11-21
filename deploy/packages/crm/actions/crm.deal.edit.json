@@ -94,7 +94,7 @@
     "schema": "crm.deal.edit",
     "schemaVersion": {
       "family": 2,
-      "version": "schema.sha256.044c6bb06c42cc8ad67ab3024619ad11ac3924ba16b22895871f990317f2f354"
+      "version": "schema.sha256.9da734151855ceb823739eb4e66f306f9d1bad230690eb010daf943f339f22c5"
     },
     "target": "crm.deal",
     "title": "Edit deal"

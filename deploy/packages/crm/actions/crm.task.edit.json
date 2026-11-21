@@ -1,14 +1,12 @@
 {
   "action": {
-    "capability": "crmtask",
-    "description": "Create a task.",
-    "new": true,
+    "capability": "task",
+    "description": "Change fields of a task; fields left out keep their value.",
     "payload": [
       {
         "description": "Title",
         "group": "Task",
         "name": "title",
-        "required": true,
         "type": "string"
       },
       {
@@ -39,7 +37,6 @@
         ],
         "description": "Status (backlog, todo, inprogress, done, canceled)",
         "name": "status",
-        "required": true,
         "type": "string"
       },
       {
@@ -73,18 +70,18 @@
         "type": "boolean"
       }
     ],
-    "schema": "crm.crmtask.create",
+    "schema": "crm.task.edit",
     "schemaVersion": {
       "family": 1,
-      "version": "schema.sha256.67567f58922f96dcd9c1aecb48a4065ee5d25e968888978060163bc9c7de5969"
+      "version": "schema.sha256.bed1c0d31017d2023726bdfbb2c8686d1c50ff41a683ef625d278155b57350ff"
     },
-    "target": "crm.crmtask",
-    "title": "Create task"
+    "target": "crm.task",
+    "title": "Edit task"
   },
   "roles": [
     "builder",
     "user"
   ],
-  "schema": "crm.crmtask.create",
-  "target": "crm.crmtask"
+  "schema": "crm.task.edit",
+  "target": "crm.task"
 }

@@ -36,7 +36,7 @@
     {
       "group": "Commercial",
       "name": "contact",
-      "ref": "crm.crmcontact",
+      "ref": "crm.contact",
       "title": "Primary contact",
       "type": "reference"
     },
@@ -122,7 +122,7 @@
     {
       "group": "Classification",
       "name": "source",
-      "ref": "crm.leadsource",
+      "ref": "crm.source",
       "title": "Source",
       "type": "reference"
     },
@@ -388,11 +388,11 @@
   "schemaVersions": [
     {
       "family": 1,
-      "version": "schema.sha256.a0f86a97eb6a63d5a6600ddd6ae93368bb5821f57fe21d3409f75542e2cb269c"
+      "version": "schema.sha256.22697d4df8a4616ed41e029edbe6119213290f6b2f5a3166ddf677ea1fd7b522"
     },
     {
       "family": 2,
-      "version": "schema.sha256.044c6bb06c42cc8ad67ab3024619ad11ac3924ba16b22895871f990317f2f354"
+      "version": "schema.sha256.9da734151855ceb823739eb4e66f306f9d1bad230690eb010daf943f339f22c5"
     }
   ],
   "scope": {

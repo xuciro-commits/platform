@@ -11,22 +11,22 @@
       "ref": {
         "app": "build",
         "kind": "action",
-        "name": "crm.crmcontact.create"
+        "name": "crm.contact.create"
       },
-      "path": "actions/crm.crmcontact.create.json",
+      "path": "actions/crm.contact.create.json",
       "contractVersion": 1,
       "sourceVersion": "1",
       "requires": [
         {
           "app": "build",
           "kind": "object",
-          "name": "crm.crmcontact"
+          "name": "crm.contact"
         }
       ],
       "provides": [
         {
           "kind": "action",
-          "name": "crm.crmcontact.create",
+          "name": "crm.contact.create",
           "inputs": {
             "type": "object",
             "properties": {
@@ -162,22 +162,22 @@
       "ref": {
         "app": "build",
         "kind": "action",
-        "name": "crm.crmcontact.edit"
+        "name": "crm.contact.edit"
       },
-      "path": "actions/crm.crmcontact.edit.json",
+      "path": "actions/crm.contact.edit.json",
       "contractVersion": 1,
       "sourceVersion": "1",
       "requires": [
         {
           "app": "build",
           "kind": "object",
-          "name": "crm.crmcontact"
+          "name": "crm.contact"
         }
       ],
       "provides": [
         {
           "kind": "action",
-          "name": "crm.crmcontact.edit",
+          "name": "crm.contact.edit",
           "inputs": {
             "type": "object",
             "properties": {
@@ -300,324 +300,6 @@
               "name": "address",
               "type": "string",
               "description": "Address"
-            }
-          ]
-        }
-      ]
-    },
-    {
-      "ref": {
-        "app": "build",
-        "kind": "action",
-        "name": "crm.crmtask.create"
-      },
-      "path": "actions/crm.crmtask.create.json",
-      "contractVersion": 1,
-      "sourceVersion": "1",
-      "requires": [
-        {
-          "app": "build",
-          "kind": "object",
-          "name": "crm.crmtask"
-        }
-      ],
-      "provides": [
-        {
-          "kind": "action",
-          "name": "crm.crmtask.create",
-          "inputs": {
-            "type": "object",
-            "properties": {
-              "allday": {
-                "type": "boolean",
-                "description": "All day"
-              },
-              "assignee": {
-                "type": "string",
-                "description": "Assigned to"
-              },
-              "deal": {
-                "type": "string",
-                "description": "Deal"
-              },
-              "description": {
-                "type": "string",
-                "description": "Description"
-              },
-              "duedate": {
-                "type": "string",
-                "description": "Due date"
-              },
-              "lead": {
-                "type": "string",
-                "description": "Lead"
-              },
-              "priority": {
-                "type": "string",
-                "enum": [
-                  "low",
-                  "medium",
-                  "high"
-                ],
-                "description": "Priority (low, medium, high)"
-              },
-              "startdate": {
-                "type": "string",
-                "description": "Start date"
-              },
-              "status": {
-                "type": "string",
-                "enum": [
-                  "backlog",
-                  "todo",
-                  "inprogress",
-                  "done",
-                  "canceled"
-                ],
-                "description": "Status (backlog, todo, inprogress, done, canceled)"
-              },
-              "title": {
-                "type": "string",
-                "description": "Title"
-              }
-            },
-            "required": [
-              "status",
-              "title"
-            ]
-          },
-          "outputs": {
-            "type": ""
-          },
-          "roles": [
-            "builder",
-            "user"
-          ],
-          "side": "authoritative",
-          "parameters": [
-            {
-              "name": "title",
-              "type": "string",
-              "required": true,
-              "description": "Title",
-              "group": "Task"
-            },
-            {
-              "name": "description",
-              "type": "string",
-              "description": "Description",
-              "group": "Task"
-            },
-            {
-              "name": "lead",
-              "type": "string",
-              "description": "Lead",
-              "group": "Task"
-            },
-            {
-              "name": "deal",
-              "type": "string",
-              "description": "Deal",
-              "group": "Task"
-            },
-            {
-              "name": "status",
-              "type": "string",
-              "required": true,
-              "description": "Status (backlog, todo, inprogress, done, canceled)",
-              "choices": [
-                "backlog",
-                "todo",
-                "inprogress",
-                "done",
-                "canceled"
-              ]
-            },
-            {
-              "name": "priority",
-              "type": "string",
-              "description": "Priority (low, medium, high)",
-              "choices": [
-                "low",
-                "medium",
-                "high"
-              ]
-            },
-            {
-              "name": "assignee",
-              "type": "string",
-              "description": "Assigned to"
-            },
-            {
-              "name": "startdate",
-              "type": "date",
-              "description": "Start date"
-            },
-            {
-              "name": "duedate",
-              "type": "date",
-              "description": "Due date"
-            },
-            {
-              "name": "allday",
-              "type": "boolean",
-              "description": "All day"
-            }
-          ]
-        }
-      ]
-    },
-    {
-      "ref": {
-        "app": "build",
-        "kind": "action",
-        "name": "crm.crmtask.edit"
-      },
-      "path": "actions/crm.crmtask.edit.json",
-      "contractVersion": 1,
-      "sourceVersion": "1",
-      "requires": [
-        {
-          "app": "build",
-          "kind": "object",
-          "name": "crm.crmtask"
-        }
-      ],
-      "provides": [
-        {
-          "kind": "action",
-          "name": "crm.crmtask.edit",
-          "inputs": {
-            "type": "object",
-            "properties": {
-              "allday": {
-                "type": "boolean",
-                "description": "All day"
-              },
-              "assignee": {
-                "type": "string",
-                "description": "Assigned to"
-              },
-              "deal": {
-                "type": "string",
-                "description": "Deal"
-              },
-              "description": {
-                "type": "string",
-                "description": "Description"
-              },
-              "duedate": {
-                "type": "string",
-                "description": "Due date"
-              },
-              "lead": {
-                "type": "string",
-                "description": "Lead"
-              },
-              "priority": {
-                "type": "string",
-                "enum": [
-                  "low",
-                  "medium",
-                  "high"
-                ],
-                "description": "Priority (low, medium, high)"
-              },
-              "startdate": {
-                "type": "string",
-                "description": "Start date"
-              },
-              "status": {
-                "type": "string",
-                "enum": [
-                  "backlog",
-                  "todo",
-                  "inprogress",
-                  "done",
-                  "canceled"
-                ],
-                "description": "Status (backlog, todo, inprogress, done, canceled)"
-              },
-              "title": {
-                "type": "string",
-                "description": "Title"
-              }
-            }
-          },
-          "outputs": {
-            "type": ""
-          },
-          "roles": [
-            "builder",
-            "user"
-          ],
-          "side": "authoritative",
-          "parameters": [
-            {
-              "name": "title",
-              "type": "string",
-              "description": "Title",
-              "group": "Task"
-            },
-            {
-              "name": "description",
-              "type": "string",
-              "description": "Description",
-              "group": "Task"
-            },
-            {
-              "name": "lead",
-              "type": "string",
-              "description": "Lead",
-              "group": "Task"
-            },
-            {
-              "name": "deal",
-              "type": "string",
-              "description": "Deal",
-              "group": "Task"
-            },
-            {
-              "name": "status",
-              "type": "string",
-              "description": "Status (backlog, todo, inprogress, done, canceled)",
-              "choices": [
-                "backlog",
-                "todo",
-                "inprogress",
-                "done",
-                "canceled"
-              ]
-            },
-            {
-              "name": "priority",
-              "type": "string",
-              "description": "Priority (low, medium, high)",
-              "choices": [
-                "low",
-                "medium",
-                "high"
-              ]
-            },
-            {
-              "name": "assignee",
-              "type": "string",
-              "description": "Assigned to"
-            },
-            {
-              "name": "startdate",
-              "type": "date",
-              "description": "Start date"
-            },
-            {
-              "name": "duedate",
-              "type": "date",
-              "description": "Due date"
-            },
-            {
-              "name": "allday",
-              "type": "boolean",
-              "description": "All day"
             }
           ]
         }
@@ -2030,6 +1712,324 @@
     {
       "ref": {
         "app": "build",
+        "kind": "action",
+        "name": "crm.task.create"
+      },
+      "path": "actions/crm.task.create.json",
+      "contractVersion": 1,
+      "sourceVersion": "1",
+      "requires": [
+        {
+          "app": "build",
+          "kind": "object",
+          "name": "crm.task"
+        }
+      ],
+      "provides": [
+        {
+          "kind": "action",
+          "name": "crm.task.create",
+          "inputs": {
+            "type": "object",
+            "properties": {
+              "allday": {
+                "type": "boolean",
+                "description": "All day"
+              },
+              "assignee": {
+                "type": "string",
+                "description": "Assigned to"
+              },
+              "deal": {
+                "type": "string",
+                "description": "Deal"
+              },
+              "description": {
+                "type": "string",
+                "description": "Description"
+              },
+              "duedate": {
+                "type": "string",
+                "description": "Due date"
+              },
+              "lead": {
+                "type": "string",
+                "description": "Lead"
+              },
+              "priority": {
+                "type": "string",
+                "enum": [
+                  "low",
+                  "medium",
+                  "high"
+                ],
+                "description": "Priority (low, medium, high)"
+              },
+              "startdate": {
+                "type": "string",
+                "description": "Start date"
+              },
+              "status": {
+                "type": "string",
+                "enum": [
+                  "backlog",
+                  "todo",
+                  "inprogress",
+                  "done",
+                  "canceled"
+                ],
+                "description": "Status (backlog, todo, inprogress, done, canceled)"
+              },
+              "title": {
+                "type": "string",
+                "description": "Title"
+              }
+            },
+            "required": [
+              "status",
+              "title"
+            ]
+          },
+          "outputs": {
+            "type": ""
+          },
+          "roles": [
+            "builder",
+            "user"
+          ],
+          "side": "authoritative",
+          "parameters": [
+            {
+              "name": "title",
+              "type": "string",
+              "required": true,
+              "description": "Title",
+              "group": "Task"
+            },
+            {
+              "name": "description",
+              "type": "string",
+              "description": "Description",
+              "group": "Task"
+            },
+            {
+              "name": "lead",
+              "type": "string",
+              "description": "Lead",
+              "group": "Task"
+            },
+            {
+              "name": "deal",
+              "type": "string",
+              "description": "Deal",
+              "group": "Task"
+            },
+            {
+              "name": "status",
+              "type": "string",
+              "required": true,
+              "description": "Status (backlog, todo, inprogress, done, canceled)",
+              "choices": [
+                "backlog",
+                "todo",
+                "inprogress",
+                "done",
+                "canceled"
+              ]
+            },
+            {
+              "name": "priority",
+              "type": "string",
+              "description": "Priority (low, medium, high)",
+              "choices": [
+                "low",
+                "medium",
+                "high"
+              ]
+            },
+            {
+              "name": "assignee",
+              "type": "string",
+              "description": "Assigned to"
+            },
+            {
+              "name": "startdate",
+              "type": "date",
+              "description": "Start date"
+            },
+            {
+              "name": "duedate",
+              "type": "date",
+              "description": "Due date"
+            },
+            {
+              "name": "allday",
+              "type": "boolean",
+              "description": "All day"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "ref": {
+        "app": "build",
+        "kind": "action",
+        "name": "crm.task.edit"
+      },
+      "path": "actions/crm.task.edit.json",
+      "contractVersion": 1,
+      "sourceVersion": "1",
+      "requires": [
+        {
+          "app": "build",
+          "kind": "object",
+          "name": "crm.task"
+        }
+      ],
+      "provides": [
+        {
+          "kind": "action",
+          "name": "crm.task.edit",
+          "inputs": {
+            "type": "object",
+            "properties": {
+              "allday": {
+                "type": "boolean",
+                "description": "All day"
+              },
+              "assignee": {
+                "type": "string",
+                "description": "Assigned to"
+              },
+              "deal": {
+                "type": "string",
+                "description": "Deal"
+              },
+              "description": {
+                "type": "string",
+                "description": "Description"
+              },
+              "duedate": {
+                "type": "string",
+                "description": "Due date"
+              },
+              "lead": {
+                "type": "string",
+                "description": "Lead"
+              },
+              "priority": {
+                "type": "string",
+                "enum": [
+                  "low",
+                  "medium",
+                  "high"
+                ],
+                "description": "Priority (low, medium, high)"
+              },
+              "startdate": {
+                "type": "string",
+                "description": "Start date"
+              },
+              "status": {
+                "type": "string",
+                "enum": [
+                  "backlog",
+                  "todo",
+                  "inprogress",
+                  "done",
+                  "canceled"
+                ],
+                "description": "Status (backlog, todo, inprogress, done, canceled)"
+              },
+              "title": {
+                "type": "string",
+                "description": "Title"
+              }
+            }
+          },
+          "outputs": {
+            "type": ""
+          },
+          "roles": [
+            "builder",
+            "user"
+          ],
+          "side": "authoritative",
+          "parameters": [
+            {
+              "name": "title",
+              "type": "string",
+              "description": "Title",
+              "group": "Task"
+            },
+            {
+              "name": "description",
+              "type": "string",
+              "description": "Description",
+              "group": "Task"
+            },
+            {
+              "name": "lead",
+              "type": "string",
+              "description": "Lead",
+              "group": "Task"
+            },
+            {
+              "name": "deal",
+              "type": "string",
+              "description": "Deal",
+              "group": "Task"
+            },
+            {
+              "name": "status",
+              "type": "string",
+              "description": "Status (backlog, todo, inprogress, done, canceled)",
+              "choices": [
+                "backlog",
+                "todo",
+                "inprogress",
+                "done",
+                "canceled"
+              ]
+            },
+            {
+              "name": "priority",
+              "type": "string",
+              "description": "Priority (low, medium, high)",
+              "choices": [
+                "low",
+                "medium",
+                "high"
+              ]
+            },
+            {
+              "name": "assignee",
+              "type": "string",
+              "description": "Assigned to"
+            },
+            {
+              "name": "startdate",
+              "type": "date",
+              "description": "Start date"
+            },
+            {
+              "name": "duedate",
+              "type": "date",
+              "description": "Due date"
+            },
+            {
+              "name": "allday",
+              "type": "boolean",
+              "description": "All day"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "ref": {
+        "app": "build",
         "kind": "app",
         "name": "crm"
       },
@@ -2040,12 +2040,7 @@
         {
           "app": "build",
           "kind": "page",
-          "name": "crm.crmcontact"
-        },
-        {
-          "app": "build",
-          "kind": "page",
-          "name": "crm.crmtask"
+          "name": "crm.contact"
         },
         {
           "app": "build",
@@ -2066,6 +2061,11 @@
           "app": "build",
           "kind": "page",
           "name": "crm.organization"
+        },
+        {
+          "app": "build",
+          "kind": "page",
+          "name": "crm.task"
         }
       ],
       "provides": []
@@ -2074,9 +2074,9 @@
       "ref": {
         "app": "build",
         "kind": "object",
-        "name": "crm.crmcontact"
+        "name": "crm.contact"
       },
-      "path": "objects/crm.crmcontact.json",
+      "path": "objects/crm.contact.json",
       "contractVersion": 1,
       "sourceVersion": "1",
       "requires": [
@@ -2089,7 +2089,7 @@
       "provides": [
         {
           "kind": "interface",
-          "name": "crm.crmcontact",
+          "name": "crm.contact",
           "inputs": {
             "type": ""
           },
@@ -2158,172 +2158,6 @@
       "ref": {
         "app": "build",
         "kind": "object",
-        "name": "crm.crmproduct"
-      },
-      "path": "objects/crm.crmproduct.json",
-      "contractVersion": 1,
-      "sourceVersion": "1",
-      "requires": [],
-      "provides": [
-        {
-          "kind": "interface",
-          "name": "crm.crmproduct",
-          "inputs": {
-            "type": ""
-          },
-          "outputs": {
-            "type": "object",
-            "properties": {
-              "archived": {
-                "type": "boolean"
-              },
-              "code": {
-                "type": "string"
-              },
-              "description": {
-                "type": "string"
-              },
-              "disabled": {
-                "type": "boolean"
-              },
-              "id": {
-                "type": "string"
-              },
-              "name": {
-                "type": "string"
-              },
-              "rate": {
-                "type": "object",
-                "properties": {
-                  "amount": {
-                    "type": "integer"
-                  },
-                  "currency": {
-                    "type": "string"
-                  }
-                },
-                "required": [
-                  "amount",
-                  "currency"
-                ]
-              },
-              "revision": {
-                "type": "integer"
-              }
-            },
-            "required": [
-              "id",
-              "revision"
-            ]
-          },
-          "roles": null,
-          "side": "pure"
-        }
-      ]
-    },
-    {
-      "ref": {
-        "app": "build",
-        "kind": "object",
-        "name": "crm.crmtask"
-      },
-      "path": "objects/crm.crmtask.json",
-      "contractVersion": 1,
-      "sourceVersion": "1",
-      "requires": [
-        {
-          "app": "build",
-          "kind": "object",
-          "name": "crm.deal"
-        },
-        {
-          "app": "build",
-          "kind": "object",
-          "name": "crm.lead"
-        }
-      ],
-      "provides": [
-        {
-          "kind": "interface",
-          "name": "crm.crmtask",
-          "inputs": {
-            "type": ""
-          },
-          "outputs": {
-            "type": "object",
-            "properties": {
-              "allday": {
-                "type": "boolean"
-              },
-              "archived": {
-                "type": "boolean"
-              },
-              "assignee": {
-                "type": "string"
-              },
-              "deal": {
-                "type": "string"
-              },
-              "description": {
-                "type": "string"
-              },
-              "duedate": {
-                "type": "string"
-              },
-              "id": {
-                "type": "string"
-              },
-              "lead": {
-                "type": "string"
-              },
-              "priority": {
-                "type": "string",
-                "enum": [
-                  "low",
-                  "medium",
-                  "high"
-                ]
-              },
-              "revision": {
-                "type": "integer"
-              },
-              "startdate": {
-                "type": "string"
-              },
-              "state": {
-                "type": "string",
-                "enum": [
-                  "open"
-                ]
-              },
-              "status": {
-                "type": "string",
-                "enum": [
-                  "backlog",
-                  "todo",
-                  "inprogress",
-                  "done",
-                  "canceled"
-                ]
-              },
-              "title": {
-                "type": "string"
-              }
-            },
-            "required": [
-              "id",
-              "revision"
-            ]
-          },
-          "roles": null,
-          "side": "pure"
-        }
-      ]
-    },
-    {
-      "ref": {
-        "app": "build",
-        "kind": "object",
         "name": "crm.deal"
       },
       "path": "objects/crm.deal.json",
@@ -2333,7 +2167,7 @@
         {
           "app": "build",
           "kind": "object",
-          "name": "crm.crmcontact"
+          "name": "crm.contact"
         },
         {
           "app": "build",
@@ -2358,17 +2192,17 @@
         {
           "app": "build",
           "kind": "object",
-          "name": "crm.leadsource"
-        },
-        {
-          "app": "build",
-          "kind": "object",
           "name": "crm.lostreason"
         },
         {
           "app": "build",
           "kind": "object",
           "name": "crm.organization"
+        },
+        {
+          "app": "build",
+          "kind": "object",
+          "name": "crm.source"
         },
         {
           "app": "build",
@@ -2497,12 +2331,12 @@
         {
           "app": "build",
           "kind": "object",
-          "name": "crm.crmproduct"
+          "name": "crm.deal"
         },
         {
           "app": "build",
           "kind": "object",
-          "name": "crm.deal"
+          "name": "crm.product"
         }
       ],
       "provides": [
@@ -2721,7 +2555,7 @@
         {
           "app": "build",
           "kind": "object",
-          "name": "crm.crmcontact"
+          "name": "crm.contact"
         },
         {
           "app": "build",
@@ -2732,11 +2566,6 @@
           "app": "build",
           "kind": "object",
           "name": "crm.industry"
-        },
-        {
-          "app": "build",
-          "kind": "object",
-          "name": "crm.leadsource"
         },
         {
           "app": "build",
@@ -2752,6 +2581,11 @@
           "app": "build",
           "kind": "object",
           "name": "crm.organization"
+        },
+        {
+          "app": "build",
+          "kind": "object",
+          "name": "crm.source"
         },
         {
           "app": "build",
@@ -2856,52 +2690,6 @@
                 "type": "string"
               },
               "website": {
-                "type": "string"
-              }
-            },
-            "required": [
-              "id",
-              "revision"
-            ]
-          },
-          "roles": null,
-          "side": "pure"
-        }
-      ]
-    },
-    {
-      "ref": {
-        "app": "build",
-        "kind": "object",
-        "name": "crm.leadsource"
-      },
-      "path": "objects/crm.leadsource.json",
-      "contractVersion": 1,
-      "sourceVersion": "1",
-      "requires": [],
-      "provides": [
-        {
-          "kind": "interface",
-          "name": "crm.leadsource",
-          "inputs": {
-            "type": ""
-          },
-          "outputs": {
-            "type": "object",
-            "properties": {
-              "archived": {
-                "type": "boolean"
-              },
-              "details": {
-                "type": "string"
-              },
-              "id": {
-                "type": "string"
-              },
-              "revision": {
-                "type": "integer"
-              },
-              "title": {
                 "type": "string"
               }
             },
@@ -3196,6 +2984,218 @@
       "ref": {
         "app": "build",
         "kind": "object",
+        "name": "crm.product"
+      },
+      "path": "objects/crm.product.json",
+      "contractVersion": 1,
+      "sourceVersion": "1",
+      "requires": [],
+      "provides": [
+        {
+          "kind": "interface",
+          "name": "crm.product",
+          "inputs": {
+            "type": ""
+          },
+          "outputs": {
+            "type": "object",
+            "properties": {
+              "archived": {
+                "type": "boolean"
+              },
+              "code": {
+                "type": "string"
+              },
+              "description": {
+                "type": "string"
+              },
+              "disabled": {
+                "type": "boolean"
+              },
+              "id": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              },
+              "rate": {
+                "type": "object",
+                "properties": {
+                  "amount": {
+                    "type": "integer"
+                  },
+                  "currency": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "amount",
+                  "currency"
+                ]
+              },
+              "revision": {
+                "type": "integer"
+              }
+            },
+            "required": [
+              "id",
+              "revision"
+            ]
+          },
+          "roles": null,
+          "side": "pure"
+        }
+      ]
+    },
+    {
+      "ref": {
+        "app": "build",
+        "kind": "object",
+        "name": "crm.source"
+      },
+      "path": "objects/crm.source.json",
+      "contractVersion": 1,
+      "sourceVersion": "1",
+      "requires": [],
+      "provides": [
+        {
+          "kind": "interface",
+          "name": "crm.source",
+          "inputs": {
+            "type": ""
+          },
+          "outputs": {
+            "type": "object",
+            "properties": {
+              "archived": {
+                "type": "boolean"
+              },
+              "details": {
+                "type": "string"
+              },
+              "id": {
+                "type": "string"
+              },
+              "revision": {
+                "type": "integer"
+              },
+              "title": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "revision"
+            ]
+          },
+          "roles": null,
+          "side": "pure"
+        }
+      ]
+    },
+    {
+      "ref": {
+        "app": "build",
+        "kind": "object",
+        "name": "crm.task"
+      },
+      "path": "objects/crm.task.json",
+      "contractVersion": 1,
+      "sourceVersion": "1",
+      "requires": [
+        {
+          "app": "build",
+          "kind": "object",
+          "name": "crm.deal"
+        },
+        {
+          "app": "build",
+          "kind": "object",
+          "name": "crm.lead"
+        }
+      ],
+      "provides": [
+        {
+          "kind": "interface",
+          "name": "crm.task",
+          "inputs": {
+            "type": ""
+          },
+          "outputs": {
+            "type": "object",
+            "properties": {
+              "allday": {
+                "type": "boolean"
+              },
+              "archived": {
+                "type": "boolean"
+              },
+              "assignee": {
+                "type": "string"
+              },
+              "deal": {
+                "type": "string"
+              },
+              "description": {
+                "type": "string"
+              },
+              "duedate": {
+                "type": "string"
+              },
+              "id": {
+                "type": "string"
+              },
+              "lead": {
+                "type": "string"
+              },
+              "priority": {
+                "type": "string",
+                "enum": [
+                  "low",
+                  "medium",
+                  "high"
+                ]
+              },
+              "revision": {
+                "type": "integer"
+              },
+              "startdate": {
+                "type": "string"
+              },
+              "state": {
+                "type": "string",
+                "enum": [
+                  "open"
+                ]
+              },
+              "status": {
+                "type": "string",
+                "enum": [
+                  "backlog",
+                  "todo",
+                  "inprogress",
+                  "done",
+                  "canceled"
+                ]
+              },
+              "title": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "revision"
+            ]
+          },
+          "roles": null,
+          "side": "pure"
+        }
+      ]
+    },
+    {
+      "ref": {
+        "app": "build",
+        "kind": "object",
         "name": "crm.territory"
       },
       "path": "objects/crm.territory.json",
@@ -3248,54 +3248,26 @@
       "ref": {
         "app": "build",
         "kind": "page",
-        "name": "crm.crmcontact"
+        "name": "crm.contact"
       },
-      "path": "pages/crm.crmcontact.json",
+      "path": "pages/crm.contact.json",
       "contractVersion": 1,
       "sourceVersion": "1",
       "requires": [
         {
           "app": "build",
           "kind": "action",
-          "name": "crm.crmcontact.create"
+          "name": "crm.contact.create"
         },
         {
           "app": "build",
           "kind": "action",
-          "name": "crm.crmcontact.edit"
+          "name": "crm.contact.edit"
         },
         {
           "app": "build",
           "kind": "object",
-          "name": "crm.crmcontact"
-        }
-      ],
-      "provides": []
-    },
-    {
-      "ref": {
-        "app": "build",
-        "kind": "page",
-        "name": "crm.crmtask"
-      },
-      "path": "pages/crm.crmtask.json",
-      "contractVersion": 1,
-      "sourceVersion": "1",
-      "requires": [
-        {
-          "app": "build",
-          "kind": "action",
-          "name": "crm.crmtask.create"
-        },
-        {
-          "app": "build",
-          "kind": "action",
-          "name": "crm.crmtask.edit"
-        },
-        {
-          "app": "build",
-          "kind": "object",
-          "name": "crm.crmtask"
+          "name": "crm.contact"
         }
       ],
       "provides": []
@@ -3413,6 +3385,34 @@
           "app": "build",
           "kind": "object",
           "name": "crm.organization"
+        }
+      ],
+      "provides": []
+    },
+    {
+      "ref": {
+        "app": "build",
+        "kind": "page",
+        "name": "crm.task"
+      },
+      "path": "pages/crm.task.json",
+      "contractVersion": 1,
+      "sourceVersion": "1",
+      "requires": [
+        {
+          "app": "build",
+          "kind": "action",
+          "name": "crm.task.create"
+        },
+        {
+          "app": "build",
+          "kind": "action",
+          "name": "crm.task.edit"
+        },
+        {
+          "app": "build",
+          "kind": "object",
+          "name": "crm.task"
         }
       ],
       "provides": []
