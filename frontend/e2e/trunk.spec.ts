@@ -1587,7 +1587,9 @@ test("delivery: a builder publishes a version, which installs beside its source 
   await review.getByRole("button", { name: "Install package", exact: true }).click();
   await expect(page).toHaveURL(/\/delivery\/installations$/, { timeout: 30_000 });
   await expect(page.getByRole("listitem").filter({ hasText: "crm · 0.1.0" })).toContainText("pipeline");
-  await page.locator('a[href="/pipeline/pipeline.lead"]').click();
+  await page.locator('a[href="/pipeline/dashboard"]').first().click();
+  await expect(page.getByRole("main").getByRole("link", { name: "Leads", exact: true })).toBeVisible();
+  await page.locator('a[href="/pipeline/pipeline.lead"]').first().click();
   await expect(page).toHaveURL(/\/pipeline\/pipeline\.lead$/);
   await expect(page.getByRole("heading", { level: 1, name: "Leads", exact: true })).toBeVisible();
   await expect(page.getByRole("heading", { level: 2, name: "Nothing here yet", exact: true })).toBeVisible();
@@ -1855,6 +1857,24 @@ function workbook(rows: string[][]) {
   end.writeUInt32LE(offset, 16);
   return Buffer.concat([...stored, ...directory, end]);
 }
+
+test("dashboard: an application's home shows its numbers and charts, and each block opens the list it counts", async ({ page }) => {
+  await signIn(page, "admin-1 · crm");
+  await page.goto("/crm/dashboard");
+  const home = page.getByRole("main");
+  for (const title of ["Leads", "Open deals", "Won deals", "Average deal value"]) await expect(home.getByRole("link", { name: title, exact: true })).toBeVisible();
+  await expect(home.getByRole("heading", { level: 1 }).filter({ hasText: /^\d+$/ })).toHaveCount(3);
+  await expect(home.getByRole("heading", { level: 1 }).filter({ hasText: /USD$/ })).toHaveCount(1);
+  for (const title of ["Sales funnel", "Deal value by stage", "Leads by source", "New deals"]) await expect(home.getByRole("heading", { name: title, exact: true })).toBeVisible();
+  await home.locator(".recharts-bar-rectangle").first().click();
+  await expect(page).toHaveURL(/\/crm\/crm\.deal\?domain=.*open.*status/);
+  await expect(page.getByRole("heading", { name: "Deals", exact: true })).toBeVisible();
+  await expect(page.getByText("Clear all", { exact: true })).toBeVisible();
+  await page.goBack();
+  await home.getByText("Won deals", { exact: true }).click();
+  await expect(page).toHaveURL(/\/crm\/crm\.deal\?domain=.*won/);
+  await expect(page.getByRole("row").nth(1)).toContainText("Won");
+});
 
 test("import: an Excel workbook of leads maps by column title, refused rows are fixed in place and retried, and the list exports what it shows as CSV", async ({ page }) => {
   await signIn(page, "admin-1 · crm");

@@ -223,6 +223,7 @@ type ApplicationMenuGroup struct {
 
 type ApplicationView struct {
 	Menu        []ApplicationMenuGroup `json:"menu"`
+	Dashboard   []DashboardBlock       `json:"dashboard,omitempty"`
 	App         string                 `json:"app"`
 	Name        string                 `json:"name"`
 	Title       string                 `json:"title"`

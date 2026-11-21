@@ -7,15 +7,14 @@ import (
 )
 
 type Flow struct {
-	Name       string
-	Title      string
-	Version    int
-	Start      Start
-	Steps      []Step
-	Subject    string
-	Owners     []string
-	From       map[string]string
-	Continuous *Continuous
+	Name, Title string
+	Version     int
+	Start       Start
+	Steps       []Step
+	Subject     string
+	Owners      []string
+	From        map[string]string
+	Continuous  *Continuous
 }
 
 type Continuous struct {

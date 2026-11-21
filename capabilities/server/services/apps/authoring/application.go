@@ -129,7 +129,15 @@ func ApplicationDescriptor(a protocol.Application) platform.Application {
 	for _, g := range a.Groups {
 		groups = append(groups, platform.AppGroup{Title: g.Title, Roles: slices.Clone(g.Roles), Pages: slices.Clone(g.Pages)})
 	}
-	return platform.Application{Languages: a.Languages, Profile: a.Profile, Header: a.Header, Name: a.Name, Title: a.Title, Description: a.Description, Icon: a.Icon, Pages: slices.Clone(a.Pages), Groups: groups, Resources: slices.Clone(a.Resources), Concepts: a.Concepts, UIProfile: a.UIProfile, Variables: a.Variables, Queries: a.Queries, Extends: a.Extends, Entry: a.Entry, Replacements: slices.Clone(a.Replacements)}
+	return platform.Application{Languages: a.Languages, Profile: a.Profile, Header: a.Header, Name: a.Name, Title: a.Title, Description: a.Description, Icon: a.Icon, Pages: slices.Clone(a.Pages), Groups: groups, Dashboard: dashboardBody(a.Dashboard), Resources: slices.Clone(a.Resources), Concepts: a.Concepts, UIProfile: a.UIProfile, Variables: a.Variables, Queries: a.Queries, Extends: a.Extends, Entry: a.Entry, Replacements: slices.Clone(a.Replacements)}
+}
+
+func dashboardBody(blocks []protocol.DashboardBlock) json.RawMessage {
+	if len(blocks) == 0 {
+		return nil
+	}
+	body, _ := json.Marshal(blocks)
+	return body
 }
 
 func (o *Owner) PublishedApplication(a protocol.Application) string {
@@ -162,6 +170,16 @@ func (o *Owner) checkApplication(a protocol.Application) error {
 	}
 	if err := pageowner.CheckApplicationHeader(ApplicationDescriptor(a)); err != nil {
 		return err
+	}
+	if err := pageowner.CheckApplicationDashboard(ApplicationDescriptor(a)); err != nil {
+		return err
+	}
+	for _, block := range a.Dashboard {
+		if o.env.Host() != nil {
+			if _, ok := o.env.Entity(block.Object); !ok {
+				return fmt.Errorf("the dashboard block %q reads %q, which this tenant does not have", block.Title, block.Object)
+			}
+		}
 	}
 	return pageowner.CheckApplicationGroups(ApplicationDescriptor(a))
 }

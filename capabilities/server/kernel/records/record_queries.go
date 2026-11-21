@@ -290,7 +290,10 @@ func (s *Store) Aggregate(et *Type, q AggregateQuery, rows []reflect.Value, comp
 			currencies[m.column.Field] = true
 			f, _ := et.info.Field(m.column.Field)
 			groups = append(groups, grouping{column: Column{Name: f.Name + ".currency", Title: f.Title + " currency", Kind: "group", Type: "nominal", Field: f.Name},
-				key: func(v reflect.Value) any { return v.FieldByIndex(f.Index).Interface().(platform.Money).Currency }})
+				key: func(v reflect.Value) any {
+					money, _ := aggregateGroupValue(v.FieldByIndex(f.Index)).(platform.Money)
+					return money.Currency
+				}})
 		}
 	}
 	if composed && len(groups) > AggregateSetMaxGroups {
@@ -300,6 +303,7 @@ func (s *Store) Aggregate(et *Type, q AggregateQuery, rows []reflect.Value, comp
 		keys  []any
 		count int
 		folds []platform.ExprNumericAggregate
+		added []bool
 	}
 	byKey := map[string]*acc{}
 	var order []*acc
@@ -340,7 +344,7 @@ func (s *Store) Aggregate(et *Type, q AggregateQuery, rows []reflect.Value, comp
 			if maxRows > 0 && len(order) >= maxRows {
 				return Aggregate{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Aggregate has {count} groups; limit is {limit}", len(order)+1, maxRows)
 			}
-			group = &acc{keys: slices.Clone(keys), folds: make([]platform.ExprNumericAggregate, len(measures))}
+			group = &acc{keys: slices.Clone(keys), folds: make([]platform.ExprNumericAggregate, len(measures)), added: make([]bool, len(measures))}
 			for i, m := range measures {
 				if m.op == "count" {
 					continue
@@ -359,6 +363,9 @@ func (s *Store) Aggregate(et *Type, q AggregateQuery, rows []reflect.Value, comp
 				continue
 			}
 			operand := aggregateGroupValue(value.FieldByIndex(measure.field.Index))
+			if operand == nil {
+				continue
+			}
 			kind := platform.RuleFieldKind(measure.field.Type)
 			if measure.field.Type == "money" {
 				switch money := operand.(type) {
@@ -368,6 +375,7 @@ func (s *Store) Aggregate(et *Type, q AggregateQuery, rows []reflect.Value, comp
 				kind = "integer"
 			}
 			input := platform.ExprPresent(kind, operand)
+			group.added[i] = true
 			if err := group.folds[i].Add(input); err != nil {
 				return Aggregate{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Aggregate {measure}: {reason}", measure.column.Name, err.Error())
 			}
@@ -396,6 +404,10 @@ func (s *Store) Aggregate(et *Type, q AggregateQuery, rows []reflect.Value, comp
 		for i, measure := range measures {
 			if measure.op == "count" {
 				row[measure.column.Name] = a.count
+				continue
+			}
+			if !a.added[i] && measure.op != "sum" {
+				row[measure.column.Name] = nil
 				continue
 			}
 			result, err := a.folds[i].Result()

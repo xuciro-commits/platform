@@ -1,3 +1,4 @@
+import type { Api } from "./host";
 import type { IconType } from "@astryxdesign/core/Icon";
 import {
   AdjustmentsHorizontalIcon,
@@ -61,7 +62,7 @@ import {
 export type NavItem = { id: string; label: string; icon: IconType; object?: string; description?: string };
 export type NavSection = { title: string; items: NavItem[] };
 export type RailGroup = "start" | "installed" | "build" | "run" | "manage";
-export type App = { id: string; label: string; icon: IconType; group: RailGroup; sections: NavSection[] };
+export type App = { id: string; label: string; icon: IconType; group: RailGroup; sections: NavSection[]; dashboard?: Api.DashboardBlock[] };
 
 export const apps: App[] = [
   {

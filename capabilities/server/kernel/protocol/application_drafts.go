@@ -1,6 +1,10 @@
 package protocol
 
-import "platformserver/platform"
+import (
+	"encoding/json"
+
+	"platformserver/platform"
+)
 
 const (
 	PageType      = "build.page"
@@ -48,8 +52,18 @@ type Application struct {
 	Resources    []platform.AssetRef                   `json:"resources,omitempty" field:"aside" title:"Application resources" help:"Published objects, workflows and functions included in its release; ownership and permissions stay with each resource"`
 	Concepts     []platform.AppConcept                 `json:"concepts,omitempty" field:"aside" type:"json" title:"Business concepts" help:"Named studio groups; grouping changes navigation only"`
 	Groups       []Group                               `json:"groups,omitempty" title:"Groups" help:"Headings in its navigation, each over some of its pages in their order"`
+	Dashboard    []DashboardBlock                      `json:"dashboard,omitempty" field:"aside" type:"json" title:"Dashboard" help:"The blocks of its home page: numbers and charts over its object types, each opening the matching list"`
 	State        string                                `json:"state" field:"readonly" choices:"draft,published,withdrawn"`
 	Published    string                                `json:"published,omitempty" field:"readonly,internal" type:"longtext" title:"Installed" help:"What is installed"`
+}
+
+type DashboardBlock struct {
+	Title   string          `json:"title"`
+	Kind    string          `json:"kind"`
+	Object  string          `json:"object"`
+	Domain  json.RawMessage `json:"domain,omitempty"`
+	Measure string          `json:"measure,omitempty"`
+	Group   string          `json:"group,omitempty"`
 }
 
 type Group struct {

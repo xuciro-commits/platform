@@ -16,6 +16,7 @@ const allowedPackages = [
   "pdfjs-dist",
   "react",
   "react-dom",
+  "recharts",
   "@astryxdesign/cli",
   "@playwright/test",
   "@stylexjs/unplugin",
@@ -25,7 +26,7 @@ const allowedPackages = [
   "typescript",
   "vite",
 ];
-const allowedImports = [/^\.\.?\//, /^react$/, /^react-dom\/client$/, /^@astryxdesign\//, /^@stylexjs\/stylex$/, /^@heroicons\/react\//, /^pdfjs-dist(\/|$)/, /^virtual:stylex:/];
+const allowedImports = [/^\.\.?\//, /^react$/, /^react-dom\/client$/, /^@astryxdesign\//, /^@stylexjs\/stylex$/, /^@heroicons\/react\//, /^pdfjs-dist(\/|$)/, /^recharts$/, /^virtual:stylex:/];
 const rawElements = { "router.tsx": ["a"] };
 const visibleProps = "label|title|description|placeholder|tooltip|heading|subheading|superheading|aria-label|buttonLabel";
 

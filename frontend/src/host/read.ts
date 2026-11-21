@@ -21,20 +21,21 @@ function subscribe(notify: () => void) {
   return () => listeners.delete(notify);
 }
 
-export function useRead<Answer>(path: string | null): Read<Answer> {
+export function useRead<Answer>(path: string | null, body?: unknown): Read<Answer> {
   const session = useSession();
   const seen = useSyncExternalStore(subscribe, () => version);
   const [read, setRead] = useState<Read<Answer>>({ status: "loading" });
   const shown = useRef("");
+  const sent = body === undefined ? undefined : JSON.stringify(body);
   useEffect(() => {
-    const asked = `${session?.tenant} ${session?.token} ${path}`;
+    const asked = `${session?.tenant} ${session?.token} ${path} ${sent}`;
     if (shown.current !== asked) setRead({ status: "loading", path });
     shown.current = asked;
     if (path === null) return;
     const controller = new AbortController();
     queueMicrotask(() => {
       if (controller.signal.aborted) return;
-      request<Answer>(path, { signal: controller.signal }).then(
+      request<Answer>(path, { signal: controller.signal, body: sent === undefined ? undefined : JSON.parse(sent) }).then(
         (data) => setRead({ status: "ready", path, data }),
         (failure: unknown) => {
           if (controller.signal.aborted) return;
@@ -44,6 +45,6 @@ export function useRead<Answer>(path: string | null): Read<Answer> {
       );
     });
     return () => controller.abort();
-  }, [path, session, seen]);
+  }, [path, sent, session, seen]);
   return read;
 }

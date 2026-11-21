@@ -1,10 +1,12 @@
 package pages
 
 import (
+	"encoding/json"
 	"fmt"
 	"slices"
 	"strings"
 
+	"platformserver/kernel/protocol"
 	"platformserver/platform"
 )
 
@@ -25,6 +27,33 @@ func CheckApplicationGroups(a platform.Application) error {
 				return fmt.Errorf("the page %q is under %q and %q", page, other, g.Title)
 			}
 			grouped[page] = g.Title
+		}
+	}
+	return nil
+}
+
+func CheckApplicationDashboard(a platform.Application) error {
+	var blocks []protocol.DashboardBlock
+	if len(a.Dashboard) > 0 && json.Unmarshal(a.Dashboard, &blocks) != nil {
+		return fmt.Errorf("the dashboard is a list of blocks")
+	}
+	if len(blocks) > 24 {
+		return fmt.Errorf("a dashboard holds at most 24 blocks")
+	}
+	titles := map[string]bool{}
+	for _, block := range blocks {
+		if strings.TrimSpace(block.Title) == "" || titles[block.Title] {
+			return fmt.Errorf("each dashboard block needs its own title")
+		}
+		titles[block.Title] = true
+		if block.Object == "" {
+			return fmt.Errorf("the dashboard block %q names no object type", block.Title)
+		}
+		if !slices.Contains([]string{"metric", "funnel", "share", "bar", "line"}, block.Kind) {
+			return fmt.Errorf("the dashboard block %q is a %q; a block is a metric, funnel, share, bar or line", block.Title, block.Kind)
+		}
+		if (block.Kind == "metric") != (block.Group == "") {
+			return fmt.Errorf("the dashboard block %q: a metric has no group, a chart needs one", block.Title)
 		}
 	}
 	return nil

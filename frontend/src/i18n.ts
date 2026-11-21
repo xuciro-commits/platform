@@ -160,6 +160,7 @@ export const zhCN: Record<string, string> = {
   "Color theme": "配色",
   "Follows you to every device you sign in on.": "在你登录的每台设备上都生效。",
   "Not set": "未设置",
+  "Dashboard": "仪表盘",
   "Where they arrive": "送到哪里",
   "In the workspace": "工作台内",
   "The bell and the inbox.": "铃铛与收件箱。",

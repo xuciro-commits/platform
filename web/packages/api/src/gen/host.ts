@@ -423,6 +423,7 @@ export type Application = {
   icon?: string;
   pages: string[];
   groups?: AppGroup[];
+  dashboard?: unknown;
   resources?: AssetRef[];
   concepts?: AppConcept[];
 };
@@ -655,6 +656,7 @@ export type ApplicationVersion = {
 
 export type ApplicationView = {
   menu: ApplicationMenuGroup[];
+  dashboard?: DashboardBlock[];
   app: string;
   name: string;
   title: string;
@@ -1587,6 +1589,15 @@ export type CustomRole = {
   app: string;
   title: string;
   actions: string[];
+};
+
+export type DashboardBlock = {
+  title: string;
+  kind: string;
+  object: string;
+  domain?: unknown;
+  measure?: string;
+  group?: string;
 };
 
 export type DataSourceBinding = {

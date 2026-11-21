@@ -121,6 +121,7 @@ func applicationView(definition platform.Definition, visible map[platform.AssetR
 		}
 	}
 	view.Menu = applicationMenu(application.Groups, pages)
+	json.Unmarshal(application.Dashboard, &view.Dashboard)
 	return view
 }
 

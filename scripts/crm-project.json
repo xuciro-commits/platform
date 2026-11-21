@@ -189,7 +189,16 @@
         "Mark junk": "标记无效",
         "Reopen": "重新打开",
         "Settings": "设置",
-        "Workspace": "工作区"
+        "Workspace": "工作区",
+        "Open deals": "进行中的商机",
+        "Won deals": "赢单",
+        "Average deal value": "平均商机金额",
+        "Sales funnel": "销售漏斗",
+        "Deal value by stage": "各阶段商机金额",
+        "Leads by source": "线索来源",
+        "Leads by status": "线索状态",
+        "New deals": "新增商机",
+        "Dashboard": "仪表盘"
       }
     }
   },
@@ -4350,6 +4359,81 @@
               "crm.product",
               "crm.territory"
             ]
+          }
+        ],
+        "dashboard": [
+          {
+            "title": "Leads",
+            "kind": "metric",
+            "object": "crm.lead"
+          },
+          {
+            "title": "Open deals",
+            "kind": "metric",
+            "object": "crm.deal",
+            "domain": [
+              [
+                "state",
+                "=",
+                "open"
+              ]
+            ]
+          },
+          {
+            "title": "Won deals",
+            "kind": "metric",
+            "object": "crm.deal",
+            "domain": [
+              [
+                "state",
+                "=",
+                "won"
+              ]
+            ]
+          },
+          {
+            "title": "Average deal value",
+            "kind": "metric",
+            "object": "crm.deal",
+            "measure": "avg:dealvalue"
+          },
+          {
+            "title": "Sales funnel",
+            "kind": "funnel",
+            "object": "crm.deal",
+            "domain": [
+              [
+                "state",
+                "=",
+                "open"
+              ]
+            ],
+            "group": "status"
+          },
+          {
+            "title": "Deal value by stage",
+            "kind": "bar",
+            "object": "crm.deal",
+            "measure": "sum:dealvalue",
+            "group": "status"
+          },
+          {
+            "title": "Leads by source",
+            "kind": "share",
+            "object": "crm.lead",
+            "group": "source"
+          },
+          {
+            "title": "Leads by status",
+            "kind": "share",
+            "object": "crm.lead",
+            "group": "status"
+          },
+          {
+            "title": "New deals",
+            "kind": "line",
+            "object": "crm.deal",
+            "group": "created:month"
           }
         ]
       }

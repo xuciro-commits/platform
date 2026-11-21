@@ -94,6 +94,7 @@ type Application struct {
 	Icon         string                       `json:"icon,omitempty"`
 	Pages        []string                     `json:"pages"`
 	Groups       []AppGroup                   `json:"groups,omitempty"`
+	Dashboard    json.RawMessage              `json:"dashboard,omitempty"`
 	Resources    []AssetRef                   `json:"resources,omitempty"`
 	Concepts     []AppConcept                 `json:"concepts,omitempty"`
 }

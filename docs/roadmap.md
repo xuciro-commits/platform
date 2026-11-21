@@ -25,7 +25,7 @@
 
 - 业务对照只读 `study/from-frappe-crm/matrix.md`；`study/**/captures/` 与 `study/**/evidence/` 只为核对某个具体细节时定向看一张。
 
-顺序：2.3 → 2.4 → 2.6。
+顺序：2.3 余项 → 2.6。
 
 ## 承重的要求
 
@@ -39,7 +39,6 @@
 
 - 界面微件第二批落在各行：每个做成 `src/pages/` 里的一个表现，所有类型同时得到；一个一次提交，trunk 加一步用到它。
   - 2.3 余项：“语言与词汇”列表的整批导入导出接到同一个 `ImportWizard` 与列表导出（记录类型的导入导出已有）。
-  - 2.4 `ChartBlock`、`MetricCard`：引入 `echarts`；指标卡、漏斗、柱图、折线、环形图，点任一块带着筛选进列表。
   - 2.6 `CalendarView`：`ListPage` 在表格、看板之后的第三种布局，按日期字段排，拖动改日期；从 Astryx `Calendar` 起步。
 
 ## 后端

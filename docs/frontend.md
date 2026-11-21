@@ -14,7 +14,7 @@
 - 手写文件不超过 600 行；不写代码注释。
 - 依赖是固定的一组：Astryx（组件、官方主题、命令行，三者同一版本，一起升级）、StyleX、Heroicons、React、Vite、TypeScript；
   验收用 Playwright。专用库负责人定了三个，到用它的那一行再加进 `package.json` 与检查的白名单：
-  PDF 预览 `pdfjs-dist`（用时才加载）、图表 `echarts`（2.4）、节点画布 `@xyflow/react` 与 `elkjs`（阶段 3）、代码与公式编辑器一个（阶段 3，到时选定）。其余新增依赖先问负责人。
+  PDF 预览 `pdfjs-dist`（用时才加载）、图表 `recharts`（与官方模板一致）、节点画布 `@xyflow/react` 与 `elkjs`（阶段 3）、代码与公式编辑器一个（阶段 3，到时选定）。其余新增依赖先问负责人。
 
 ## 三层
 
@@ -162,6 +162,7 @@ export default recordList({
 | `MediaPreview` | 读一个文件的唯一入口：按内容类型（或扩展名）挑查看器，图片用灯箱，PDF 由 pdf.js 画在对话框里，Markdown 与纯文本按 Markdown 显示；加一种文件就是加一个查看器。文件页签与附件字段都用它 | 官方 `Lightbox`、`Dialog`、`Markdown` |
 | `PropertyField` | 一个字段的查看态与编辑态：悬停微亮、点击原位编辑、选定或失焦提交；记录页、单元格、卡片、抽屉、筛选共用 | `present`、`ParameterInput` 与官方 `useClickableContainer` 的可按表面 |
 | `DashboardPage` | 仪表盘：统计块与紧凑表格 | 官方 `dashboard` |
+| `AppDashboard` | 应用首页：按应用声明的块出指标带与图表带（漏斗、柱图、占比条、折线），每块与每段点进带筛选的列表 | 官方 `dashboard` 与 `dashboard-cohort-funnel`，图用 recharts |
 | `SettingsPage` | 设置页：左列各应用，右边按设置的类型出控件，失焦、回车或切换即提交；窄屏先列表后详情 | 官方 `settings-sidebar`，行取自 `SettingsRows`（个人设置对话框共用） |
 
 入口形状建在表现上：`recordList`（一类记录）、`resourceList`（一类资源的目录）、

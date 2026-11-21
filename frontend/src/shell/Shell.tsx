@@ -3,13 +3,14 @@ import { Divider } from "@astryxdesign/core/Divider";
 import { EmptyState } from "@astryxdesign/core/EmptyState";
 import { useHotkeys } from "@astryxdesign/core/hooks";
 import { HStack } from "@astryxdesign/core/HStack";
-import { RectangleGroupIcon } from "@heroicons/react/24/outline";
+import { ChartPieIcon, RectangleGroupIcon } from "@heroicons/react/24/outline";
 import { MobileNav } from "@astryxdesign/core/MobileNav";
 import { useToast } from "@astryxdesign/core/Toast";
 import { Suspense, useEffect, useMemo, useState } from "react";
 import { type App, apps, locate, type NavItem } from "../apps";
 import { entries, recordHref } from "../apps/entries";
 import { type Api, useRead, useSession } from "../host";
+import { AppDashboard } from "../pages/AppDashboard";
 import { Records } from "../pages/RecordList";
 import { setLanguage, t } from "../i18n";
 import { navigate, useHash, usePath, useSearch } from "../router";
@@ -24,7 +25,7 @@ import { iconOf } from "../pages/icons";
 function installedApps(views: Api.ApplicationView[], entities: Api.EntityInfo[]): App[] {
   return views.flatMap((view) => {
     const sections = (view.menu ?? []).flatMap((group) => {
-      const items = group.entries.flatMap((page) => page.object ? [{
+      const items = group.entries.flatMap((page): NavItem[] => page.object ? [{
         id: page.name,
         label: page.title,
         icon: iconOf(entities.find((entity) => entity.type === page.object)?.icon, RectangleGroupIcon),
@@ -34,7 +35,10 @@ function installedApps(views: Api.ApplicationView[], entities: Api.EntityInfo[])
       return items.length ? [{ title: group.title || "Pages", items }] : [];
     });
     if (!sections.length) return [];
-    return [{ id: view.name || view.app, label: view.title, icon: iconOf(view.icon, RectangleGroupIcon), group: "installed", sections }];
+    const dashboard = view.dashboard?.length && !sections.some((section) => section.items.some((page) => page.id === "dashboard")) ? view.dashboard : undefined;
+    const overview: NavItem[] = dashboard ? [{ id: "dashboard", label: "Dashboard", icon: ChartPieIcon }] : [];
+    sections[0].items = [...overview, ...sections[0].items];
+    return [{ id: view.name || view.app, label: view.title, icon: iconOf(view.icon, RectangleGroupIcon), group: "installed", sections, dashboard }];
   });
 }
 
@@ -88,6 +92,7 @@ export function Shell() {
   const retiredLink = projected.status === "ready" && segments[3] && !available.some((application) => application.id === segments[1]);
   const content = retiredLink ? <RetainedRecord key={path} path={path} />
     : Entry ? <Entry key={`${app.id}/${item.id}`} />
+    : app.dashboard && item.id === "dashboard" ? <AppDashboard key={app.id} title={app.label} blocks={app.dashboard} listOf={(type) => listOf(app, type)} />
     : app.group === "installed" && item.object && listPath ? <Records key={`${app.id}/${item.id}`} declared={{ title: item.label, about: item.description ?? "", type: item.object }} listPath={listPath} id={segments[3]} />
     : null;
   return (
@@ -105,6 +110,11 @@ export function Shell() {
       </AppShell>
     </CommandSearch>
   );
+}
+
+function listOf(app: App, type: string) {
+  const page = app.sections.flatMap((section) => section.items).find((item) => item.object === type);
+  return page && `/${app.id}/${page.id}`;
 }
 
 function RetainedRecord({ path }: { path: string }) {
