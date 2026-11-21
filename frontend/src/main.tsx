@@ -1,4 +1,5 @@
 import "./globals.css";
+import { InternationalizationProvider } from "@astryxdesign/core/i18n";
 import { LayerProvider } from "@astryxdesign/core/Layer";
 import { LinkProvider } from "@astryxdesign/core/Link";
 import { Theme } from "@astryxdesign/core/theme";
@@ -29,13 +30,15 @@ function Root() {
     document.documentElement.lang = locale;
   }, [locale]);
   return (
-    <Theme theme={theme} mode={useAppearance()}>
-      <LayerProvider>
-        <LinkProvider component={RouterLink}>
-          <Shell key={`${locale} ${tenant}`} />
-        </LinkProvider>
-      </LayerProvider>
-    </Theme>
+    <InternationalizationProvider locale={locale}>
+      <Theme theme={theme} mode={useAppearance()}>
+        <LayerProvider>
+          <LinkProvider component={RouterLink}>
+            <Shell key={`${locale} ${tenant}`} />
+          </LinkProvider>
+        </LayerProvider>
+      </Theme>
+    </InternationalizationProvider>
   );
 }
 

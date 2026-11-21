@@ -94,16 +94,10 @@ export function ListDetail({ columns, title, cells, actions, compact, onClose }:
       <Section variant="transparent" padding={4}>
         <MetadataList columns="single" label={{ position: "start", width: 120 }}>
           {columns
-            .filter((column) => column.key !== title.key && column.key !== state?.key)
+            .filter((column) => column.key !== title.key && column.key !== state?.key && Boolean(cells[column.key]))
             .map((column) => (
               <MetadataListItem key={column.key} label={t(column.header)}>
-                {cells[column.key] ? (
-                  <ListCell column={column} cells={cells} first={false} />
-                ) : (
-                  <Text type="body" color="secondary">
-                    —
-                  </Text>
-                )}
+                <ListCell column={column} cells={cells} first={false} />
               </MetadataListItem>
             ))}
         </MetadataList>

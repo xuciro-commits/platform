@@ -88,7 +88,7 @@ const compare = (left: unknown, right: unknown) =>
   : String(left ?? "").localeCompare(String(right ?? ""));
 const textKey = "__text";
 const fillKey = "__fill";
-const widthOf: Record<string, number> = { string: 200, code: 160, enum: 150, member: 160, number: 120, time: 140, boolean: 110 };
+const widthOf: Record<string, number> = { string: 168, code: 150, enum: 116, member: 132, number: 110, time: 132, boolean: 96 };
 const headerWidth = (text: string) => [...text].reduce((sum, letter) => sum + (letter.charCodeAt(0) > 0x2e7f ? 14 : 8), 48);
 const groupPrefix = "__group_";
 const compactQuery = "(max-width: 768px), (max-width: 1024px) and (pointer: coarse) and (hover: none)";
@@ -159,7 +159,7 @@ export function ListView<Answer, Row>({ definition, read, primary, back }: ListV
 
   const chips = useMemo<Chip[]>(
     () =>
-      definition.columns.flatMap((column): Chip[] => {
+      orderedColumns.flatMap((column): Chip[] => {
         const base = { key: column.key, label: column.header };
         if (column.chip === false) return [];
         if (column.options) return [{ ...base, kind: "many", options: column.options }];
@@ -169,7 +169,7 @@ export function ListView<Answer, Row>({ definition, read, primary, back }: ListV
         if (column.kind === "time") return [{ ...base, kind: "date", options: [] }];
         return [];
       }),
-    [definition.columns],
+    [orderedColumns],
   );
   const fields = useMemo(
     () =>
@@ -303,7 +303,7 @@ export function ListView<Answer, Row>({ definition, read, primary, back }: ListV
     ...orderedColumns.map((column, position): TableColumn<Cells> => ({
       key: column.key,
       header: t(column.header),
-      width: pixel(Math.max(column.width ?? (position === 0 ? 280 : widthOf[column.boolean ? "boolean" : column.kind ?? "string"]), headerWidth(t(column.header)))),
+      width: pixel(Math.max(column.width ?? (position === 0 ? (compactSurface ? 132 : 164) : widthOf[column.boolean ? "boolean" : column.kind ?? "string"]), headerWidth(t(column.header)))),
       sortable: true,
       align: column.kind === "number" || column.kind === "time" ? "end" : undefined,
       renderCell: (cells) => {
@@ -500,15 +500,21 @@ export function ListView<Answer, Row>({ definition, read, primary, back }: ListV
                 columns={board.lanes}
                 page={definition.page}
                 total={board.total?.label}
-                cards={shown.map((cells) => ({
-                  id: cells[idKey],
-                  column: cells.__lane,
-                  title: cells[orderedColumns[0].key],
-                  href: cells.__href,
-                  lines: orderedColumns.slice(1, 5).filter((column) => column.key !== board.key && column.kind !== "time" && cells[column.key]).map((column) => cells[column.key]),
-                  amount: cells.__amount === undefined ? undefined : Number(cells.__amount),
-                  currency: cells.__currency,
-                }))}
+                cards={shown.map((cells) => {
+                  const ownerCol = definition.columns.find((column) => column.kind === "member" && cells[column.key]);
+                  const timeCol = definition.columns.find((column) => column.kind === "time" && cells[column.key]);
+                  return {
+                    id: cells[idKey],
+                    column: cells.__lane,
+                    title: cells[orderedColumns[0].key],
+                    href: cells.__href,
+                    lines: orderedColumns.slice(1, 5).filter((column) => column.key !== board.key && column.kind !== "time" && column.key !== ownerCol?.key && cells[column.key]).map((column) => cells[column.key]),
+                    amount: cells.__amount === undefined ? undefined : Number(cells.__amount),
+                    currency: cells.__currency,
+                    owner: ownerCol ? cells[ownerCol.key] : undefined,
+                    updated: timeCol ? cells[timeCol.key] : undefined,
+                  };
+                })}
                 accepts={board.accepts}
                 onMove={board.move && ((id, to) => {
                   setFailure("");
@@ -535,7 +541,7 @@ export function ListView<Answer, Row>({ definition, read, primary, back }: ListV
           </LayoutContent>
         }
       />
-      <BottomSheet isOpen={compactSurface && Boolean(detailBody)} onOpenChange={(open) => !open && setActive(null)} label={t("Details")} height="tall" padding={0}>
+      <BottomSheet isOpen={compactSurface && Boolean(detailBody)} onOpenChange={(open) => !open && setActive(null)} label={t("Details")} padding={0}>
         {detailBody}
       </BottomSheet>
       {saved.dialogs}

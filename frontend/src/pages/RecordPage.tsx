@@ -24,7 +24,7 @@ import { Collaboration, RecordActivity } from "./RecordActivity";
 import { RecordLines } from "./RecordLines";
 import { ObjectPreview } from "./ObjectPreview";
 import { dots, type Instances, Transitions } from "./Transitions";
-import { plain } from "./values";
+import { plain, present } from "./values";
 
 type Stamp = { by?: string; at?: string };
 type Kept = { id: string; revision: number; created: Stamp; changed: Stamp; archived?: boolean };
@@ -107,7 +107,11 @@ export function RecordPage({ described, id, listPath, listTitle, instances, enti
   const detail = useMemo(() => restrictedFields?.length ? describe(withRestrictedFields(described.entity, restrictedFields), catalog) : described, [catalog, described, restrictedFields]);
   const editor = useEditor(described, id, values, kept?.revision ?? 0);
   const state = described.state(values);
-  const status = kept?.archived ? { tone: "neutral", title: "Archived" } : state;
+  const laneKey = (described.entity.view as { lanes?: string } | undefined)?.lanes;
+  const laneField = laneKey ? described.field(laneKey) : undefined;
+  const laneRaw = laneField ? values[laneField.name] : undefined;
+  const laneTitle = laneField && laneRaw != null && laneRaw !== "" ? (refs?.[laneField.name]?.[String(laneRaw)] ?? present(laneField, laneRaw)) : "";
+  const status = kept?.archived ? { tone: "neutral", title: "Archived" } : laneTitle ? { tone: state?.tone ?? "neutral", title: laneTitle } : state;
   const name = described.name(values, id);
   const search = useCommandSearch();
   const loaded = read.status === "ready";

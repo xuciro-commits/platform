@@ -1,16 +1,20 @@
 import { Banner } from "@astryxdesign/core/Banner";
 import { Button } from "@astryxdesign/core/Button";
 import { EmptyState } from "@astryxdesign/core/EmptyState";
+import { Icon } from "@astryxdesign/core/Icon";
+import { IconButton } from "@astryxdesign/core/IconButton";
 import { HStack, StackItem, VStack } from "@astryxdesign/core/Layout";
 import { Table, TableBody, TableCell, TableFooter, TableHeader, TableHeaderCell, TableRow } from "@astryxdesign/core/Table";
 import { Heading, Text } from "@astryxdesign/core/Text";
+import { TrashIcon } from "@heroicons/react/24/outline";
 import { useState } from "react";
 import { type Api, useRead } from "../host";
 import { t } from "../i18n";
 import { ActionDialog } from "./ActionDialog";
 import { useAct } from "./act";
 import { type Described, type Values } from "./describe";
-import { enterable, ParameterInput } from "./ParameterInput";
+import { enterable } from "./ParameterInput";
+import { PropertyField } from "./PropertyField";
 import { EditorConflict, useEditor } from "./RecordFields";
 import { present } from "./values";
 
@@ -62,7 +66,7 @@ export function RecordLines({ parent, id, set, child }: { parent: string; id: st
               <TableRow>
                 {fields.map((field, index) => (
                   <TableCell key={field.name}>
-                    {index === 0 && <Text type="supporting" weight="semibold">{t("Totals")}</Text>}
+                    {index === 0 && <Text type="supporting" weight="medium">{t("Totals")}</Text>}
                     <Text type="body" hasTabularNumbers>{present(field, answer.sums?.[field.name])}</Text>
                   </TableCell>
                 ))}
@@ -91,16 +95,19 @@ function LineRow({ row, child, fields, withheld, archive }: { row: Line; child: 
           <TableCell key={field.name}>
             {index === 0 && <EditorConflict editor={editor} described={child} />}
             {withheld?.includes(field.name) ? <Text type="supporting">{t("Cannot view")}</Text>
-              : parameter ? (
-                <VStack onBlur={editor.settle}>
-                  <ParameterInput parameter={parameter} described={child.entity} value={editor.values[field.name]}
-                    status={editor.status[field.name]} onChange={(value) => editor.change(parameter, value)} onEnter={editor.settle} labelHidden />
-                </VStack>
-              ) : <Text type="body">{present(field, editor.values[field.name])}</Text>}
+              : (
+                <PropertyField field={field} parameter={parameter} described={child.entity} value={editor.values[field.name]} form={editor.values}
+                  status={editor.status[field.name]} saving={editor.saving.has(field.name)} labelHidden
+                  onChange={parameter && ((value) => editor.change(parameter, value))} onCommit={() => editor.commit(field.name)} />
+              )}
           </TableCell>
         );
       })}
-      {archive && <TableCell><Button label={t("Archive row")} variant="ghost" onClick={archive} /></TableCell>}
+      {archive && (
+        <TableCell>
+          <IconButton label={t("Archive row")} tooltip={t("Archive row")} variant="ghost" size="sm" icon={<Icon icon={TrashIcon} size="sm" />} onClick={archive} />
+        </TableCell>
+      )}
     </TableRow>
   );
 }

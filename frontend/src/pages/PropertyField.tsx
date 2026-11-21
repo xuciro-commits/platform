@@ -38,7 +38,7 @@ export function PropertyValue({ field, value, name }: { field: Api.FieldInfo; va
   if (field.type === "member" && !blank(value)) return <MemberLabel name={name ?? t("Unnamed member")} />;
   if (field.type === "reference" && field.ref && name && !blank(value)) return <ReferenceLink type={field.ref} id={String(value)} name={name} />;
   const text = present(field, value);
-  return text === "" ? <Text type="body" color="secondary">{t("Empty")}</Text> : <Text type="body">{text}</Text>;
+  return text === "" ? null : <Text type="body">{text}</Text>;
 }
 
 export type CellEdit<Row> = {
@@ -74,7 +74,8 @@ type PropertyFieldProps = {
 };
 
 export function PropertyField(props: PropertyFieldProps) {
-  const { field, parameter, described, value, form, name, status, saving, labelHidden, onChange } = props;
+  const { field, described, value, form, name, status, saving, labelHidden, onChange } = props;
+  const parameter = props.parameter && !field.readOnly ? props.parameter : undefined;
   const label = t(field.title);
   const id = useId();
   const [editing, setEditing] = useState(Boolean(props.open));
