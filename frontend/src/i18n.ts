@@ -577,5 +577,10 @@ export const zhCN: Record<string, string> = {
   "Custom range": "自定义区间",
   "Page": "页",
   "This file could not be shown": "这个文件显示不出来",
+  Copy: "复制",
+  Copied: "已复制",
+  "Send email": "发送邮件",
+  Call: "拨打电话",
+  changes: "项变更",
   ...values,
 };

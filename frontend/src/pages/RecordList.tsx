@@ -155,6 +155,17 @@ function shape(described: Described, declared: Declared, listPath: string, extra
       save: (row: Row, value: unknown) => send(edit, String(row.id), { [field.name]: value }, Number(row.revision)),
     };
   };
+  const hasContact = described.entity.fields.some((field) => field.type === "text" && /(?:email|phone|mobile)/i.test(field.name));
+  const kindOf = (field: Api.FieldInfo) =>
+    field.type === "choice" ? ("enum" as const)
+    : numeric.has(field.type) ? ("number" as const)
+    : field.type === "date" || field.type === "datetime" ? ("time" as const)
+    : field.type === "member" ? ("member" as const)
+    : field.type === "text" && hasContact && field.name === described.entity.display ? ("person" as const)
+    : field.type === "text" && /email/i.test(field.name) ? ("email" as const)
+    : field.type === "text" && /(?:phone|mobile)/i.test(field.name) ? ("phone" as const)
+    : ["name", "key", "id", "code", "slug"].includes(field.name) ? ("code" as const)
+    : ("string" as const);
   const defaults = declared.fields ? declared.fields.flatMap((name) => described.field(name) ?? []) : described.columns;
   const chosen = [...defaults, ...described.table.filter((field) => !defaults.includes(field))];
   return {
@@ -172,7 +183,7 @@ function shape(described: Described, declared: Declared, listPath: string, extra
         key: field.name,
         header: declared.headers?.[field.name] ?? field.oneOf ?? field.title,
         text: say(field),
-        kind: field.type === "choice" ? ("enum" as const) : numeric.has(field.type) ? ("number" as const) : field.type === "date" || field.type === "datetime" ? ("time" as const) : field.type === "member" ? ("member" as const) : ["name", "key", "id", "code", "slug"].includes(field.name) ? ("code" as const) : ("string" as const),
+        kind: kindOf(field),
         choices: field.name === lifecycle?.field ? states.map((state) => t(state.title)) : titles(field),
         options: field.oneOf ? undefined : options[field.name],
         boolean: field.type === "boolean",

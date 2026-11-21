@@ -9,7 +9,7 @@ import { Text } from "@astryxdesign/core/Text";
 import { TextArea } from "@astryxdesign/core/TextArea";
 import { Timestamp } from "@astryxdesign/core/Timestamp";
 import { colorVars, radiusVars, spacingVars } from "@astryxdesign/core/theme/tokens.stylex";
-import { ChatBubbleLeftIcon, DocumentTextIcon, PencilSquareIcon } from "@heroicons/react/24/outline";
+import { ChatBubbleLeftIcon, ChevronDownIcon, ChevronRightIcon, DocumentTextIcon, PencilSquareIcon } from "@heroicons/react/24/outline";
 import * as stylex from "@stylexjs/stylex";
 import { type KeyboardEvent, useState } from "react";
 import { type Api, type Read, useRead } from "../host";
@@ -22,10 +22,14 @@ import { plain, present } from "./values";
 type Comment = { id: string; text: string; by: string; created: { at: string } };
 type Note = { at: string; title: string; text: string; by: string };
 type ChangeLine = { field: string; before?: string; after: string };
+type ChangeEvent = { kind: "change"; key: string; at: string; by: string; title: string; changes: ChangeLine[] };
 type Event =
-  | { kind: "change"; key: string; at: string; by: string; title: string; changes: ChangeLine[] }
+  | ChangeEvent
   | { kind: "comment"; key: string; at: string; by: string; text: string }
   | { kind: "activity"; key: string; at: string; by: string; title: string; text: string };
+type TimelineItem =
+  | Event
+  | { kind: "group"; key: string; at: string; by: string; items: ChangeEvent[] };
 type Section = Read<Api.RecordSectionView>;
 
 const styles = stylex.create({
@@ -36,6 +40,23 @@ const styles = stylex.create({
   stamp: { flexShrink: 0, marginInlineStart: "auto" },
 });
 
+function collapse(events: Event[]): TimelineItem[] {
+  const result: TimelineItem[] = [];
+  for (const event of events) {
+    const prev = result.at(-1);
+    if (event.kind === "change" && prev && prev.kind === "change" && prev.by === event.by) {
+      result[result.length - 1] = { kind: "group", key: prev.key, at: prev.at, by: prev.by, items: [prev, event] };
+      continue;
+    }
+    if (event.kind === "change" && prev && prev.kind === "group" && prev.by === event.by) {
+      prev.items.push(event);
+      continue;
+    }
+    result.push(event);
+  }
+  return result;
+}
+
 export function RecordActivity({ described, id, comments, catalog }: { described: Described; id: string; comments: Section; catalog: Api.Action[] }) {
   const target = `${described.type}/${id}`;
   const root = `/v1/records/${described.type}/${encodeURIComponent(id)}/sections`;
@@ -45,6 +66,12 @@ export function RecordActivity({ described, id, comments, catalog }: { described
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
   const [failure, setFailure] = useState("");
+  const [expanded, setExpanded] = useState<Set<string>>(() => new Set());
+  const toggleGroup = (key: string) => setExpanded((previous) => {
+    const next = new Set(previous);
+    if (!next.delete(key)) next.add(key);
+    return next;
+  });
   const post = async () => {
     if (!comment || !text.trim() || busy) return;
     setBusy(true);
@@ -98,9 +125,26 @@ export function RecordActivity({ described, id, comments, catalog }: { described
     }
   }
   events.sort((a, b) => Date.parse(b.at) - Date.parse(a.at));
+  const items = collapse(events);
   const sources = [activity, history, comments];
   const unavailable = sources.find((entry) => entry.status === "error" || entry.status === "refused");
   const loading = sources.some((entry) => entry.status === "loading");
+  const renderChanges = (lines: ChangeLine[]) => (
+    <VStack gap={1}>
+      {lines.map((line, index) => (
+        <HStack key={index} gap={1} vAlign="center" wrap="wrap">
+          <Text type="supporting" color="secondary">{line.field}</Text>
+          {line.before !== undefined && (
+            <>
+              <Text type="supporting" weight="medium" maxLines={1}>{line.before}</Text>
+              <Text type="supporting" color="secondary">{"→"}</Text>
+            </>
+          )}
+          <Text type="supporting" weight="medium" maxLines={1}>{line.after}</Text>
+        </HStack>
+      ))}
+    </VStack>
+  );
   return (
     <VStack gap={5}>
       {comment && comments.status === "ready" && (
@@ -112,16 +156,17 @@ export function RecordActivity({ described, id, comments, catalog }: { described
       )}
       {unavailable && <Banner status="warning" title={t("Some activity is unavailable")} description={unavailable.reason} />}
       {loading && <Text type="supporting">{t("Loading…")}</Text>}
-      {!loading && !unavailable && !events.length && <Text type="supporting">{t("No activity yet")}</Text>}
+      {!loading && !unavailable && !items.length && <Text type="supporting">{t("No activity yet")}</Text>}
       <VStack gap={0}>
-        {events.map((event, position) => {
-          const last = position === events.length - 1;
-          const actor = person(event.by);
-          const glyph = event.kind === "comment" ? ChatBubbleLeftIcon : event.kind === "activity" ? DocumentTextIcon : PencilSquareIcon;
+        {items.map((item, position) => {
+          const last = position === items.length - 1;
+          const actor = person(item.by);
+          const glyph = item.kind === "comment" ? ChatBubbleLeftIcon : item.kind === "activity" ? DocumentTextIcon : PencilSquareIcon;
+          const open = item.kind === "group" && expanded.has(item.key);
           return (
-            <HStack key={event.key} gap={3} vAlign="stretch">
+            <HStack key={item.key} id={item.key} gap={3} vAlign="stretch">
               <VStack gap={1} xstyle={styles.rail}>
-                {event.kind === "comment" ? <Avatar name={actor} size="sm" tooltip={false} /> : <Icon icon={glyph} size="sm" color="secondary" />}
+                {item.kind === "comment" ? <Avatar name={actor} size="sm" tooltip={false} /> : <Icon icon={glyph} size="sm" color="secondary" />}
                 {!last && <VStack xstyle={styles.line} />}
               </VStack>
               <StackItem size="fill" xstyle={styles.body}>
@@ -129,37 +174,39 @@ export function RecordActivity({ described, id, comments, catalog }: { described
                   <HStack gap={2} vAlign="center" wrap="wrap">
                     <HStack gap={1} vAlign="center" wrap="wrap">
                       <Text type="body" weight="medium">{actor}</Text>
-                      <Text type="body" color="secondary">{event.kind === "comment" ? t("Commented") : event.title}</Text>
+                      {item.kind === "group" ? (
+                        <Button variant="ghost" size="sm" label={`${item.items.length} ${t("changes")}`}
+                          icon={<Icon icon={open ? ChevronDownIcon : ChevronRightIcon} size="sm" />} onClick={() => toggleGroup(item.key)} />
+                      ) : (
+                        <Text type="body" color="secondary">{item.kind === "comment" ? t("Commented") : item.title}</Text>
+                      )}
                     </HStack>
                     <HStack xstyle={styles.stamp}>
-                      <Timestamp value={event.at} format="relative" type="supporting" color="secondary" />
+                      <Timestamp value={item.at} format="relative" type="supporting" color="secondary" />
                     </HStack>
                   </HStack>
-                  {event.kind === "change" && event.changes.length > 0 && (
-                    <VStack gap={1} role="list">
-                      {event.changes.map((line, index) => (
-                        <HStack key={index} gap={1} vAlign="center" wrap="wrap" role="listitem"
-                          aria-label={`${line.field}: ${line.before === undefined ? line.after : `${line.before} → ${line.after}`}`}>
-                          <Text type="supporting" color="secondary">{line.field}</Text>
-                          {line.before !== undefined && (
-                            <>
-                              <Text type="supporting" weight="medium" maxLines={1}>{line.before}</Text>
-                              <Text type="supporting" color="secondary">{"→"}</Text>
-                            </>
-                          )}
-                          <Text type="supporting" weight="medium" maxLines={1}>{line.after}</Text>
-                        </HStack>
+                  {item.kind === "change" && item.changes.length > 0 && renderChanges(item.changes)}
+                  {item.kind === "group" && open && (
+                    <VStack gap={3}>
+                      {item.items.map((entry) => (
+                        <VStack key={entry.key} id={entry.key} gap={1}>
+                          <HStack gap={2} vAlign="center">
+                            <Text type="supporting" color="secondary">{entry.title}</Text>
+                            <Timestamp value={entry.at} format="relative" type="supporting" color="secondary" />
+                          </HStack>
+                          {entry.changes.length > 0 && renderChanges(entry.changes)}
+                        </VStack>
                       ))}
                     </VStack>
                   )}
-                  {event.kind === "comment" && (
+                  {item.kind === "comment" && (
                     <VStack xstyle={styles.bubble}>
-                      <Text type="body">{event.text}</Text>
+                      <Text type="body">{item.text}</Text>
                     </VStack>
                   )}
-                  {event.kind === "activity" && event.text && (
+                  {item.kind === "activity" && item.text && (
                     <Card padding={3}>
-                      <Text type="body">{event.text}</Text>
+                      <Text type="body">{item.text}</Text>
                     </Card>
                   )}
                 </VStack>

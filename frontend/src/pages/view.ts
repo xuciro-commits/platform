@@ -21,7 +21,7 @@ const densities: Density[] = ["compact", "balanced", "spacious"];
 const edges: StickyEdge[] = ["none", "one", "two"];
 
 export function newView(columns: string[], group = "none", lanes = ""): ViewState {
-  return { version: 1, layout: "table", columns: [...columns], sort: [], filters: [], search: "", group, lanes, density: "balanced", stickyStart: "one", stickyEnd: "none" };
+  return { version: 1, layout: "table", columns: [...columns], sort: [], filters: [], search: "", group, lanes, density: "balanced", stickyStart: "none", stickyEnd: "none" };
 }
 
 export function readView(raw: string | null, fallback: ViewState): ViewState {

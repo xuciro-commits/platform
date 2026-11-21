@@ -1,6 +1,7 @@
 import { Button } from "@astryxdesign/core/Button";
 import { Field } from "@astryxdesign/core/Field";
 import { Icon } from "@astryxdesign/core/Icon";
+import { IconButton } from "@astryxdesign/core/IconButton";
 import { Markdown } from "@astryxdesign/core/Markdown";
 import { HStack, StackItem, VStack } from "@astryxdesign/core/Layout";
 import { Spinner } from "@astryxdesign/core/Spinner";
@@ -10,7 +11,7 @@ import { VisuallyHidden } from "@astryxdesign/core/VisuallyHidden";
 import { useClickableContainer, usePressFeedback } from "@astryxdesign/core/hooks";
 import { radiusVars, sizeVars, spacingVars } from "@astryxdesign/core/theme/tokens.stylex";
 import { focusOutlineStyles, interactionOverlayStyles } from "@astryxdesign/core/utils";
-import { ArrowTurnDownRightIcon, CalculatorIcon, LockClosedIcon } from "@heroicons/react/24/outline";
+import { ArrowTurnDownRightIcon, CalculatorIcon, CheckIcon, ClipboardDocumentIcon, EnvelopeIcon, LockClosedIcon, PhoneIcon } from "@heroicons/react/24/outline";
 import * as stylex from "@stylexjs/stylex";
 import { type FocusEvent, type KeyboardEvent, useEffect, useId, useRef, useState } from "react";
 import type { Api } from "../host";
@@ -46,6 +47,26 @@ export function picks(parameter: Api.Field, field?: Api.FieldInfo) {
   return Boolean(parameter.choices || parameter.ref) || iconField(parameter.name, parameter.type) || ["choice", "reference", "member", "date"].includes(field?.type ?? parameter.type);
 }
 
+function ContactActions({ kind, value }: { kind: "email" | "phone"; value: string }) {
+  const [copied, setCopied] = useState(false);
+  const copy = () => {
+    void navigator.clipboard?.writeText(value);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1500);
+  };
+  const launch = () => {
+    window.location.href = kind === "email" ? `mailto:${value}` : `tel:${value.replace(/[^\d+]/g, "")}`;
+  };
+  return (
+    <HStack gap={0} vAlign="center" onClick={(event) => event.stopPropagation()} onPointerDown={(event) => event.stopPropagation()}>
+      <IconButton label={copied ? t("Copied") : t("Copy")} tooltip={copied ? t("Copied") : t("Copy")} variant="ghost" size="sm"
+        icon={<Icon icon={copied ? CheckIcon : ClipboardDocumentIcon} size="sm" />} onClick={copy} />
+      <IconButton label={kind === "email" ? t("Send email") : t("Call")} tooltip={kind === "email" ? t("Send email") : t("Call")} variant="ghost" size="sm"
+        icon={<Icon icon={kind === "email" ? EnvelopeIcon : PhoneIcon} size="sm" />} onClick={launch} />
+    </HStack>
+  );
+}
+
 export function PropertyValue({ field, value, name, dot }: { field: Api.FieldInfo; value: unknown; name?: string; dot?: Dot }) {
   if (field.type === "member" && !blank(value)) return <MemberLabel name={name ?? t("Unnamed member")} />;
   if (iconField(field.name, field.type) && icons[String(value)]) {
@@ -58,6 +79,12 @@ export function PropertyValue({ field, value, name, dot }: { field: Api.FieldInf
   if (field.type === "reference" && field.ref && name && !blank(value)) return <ReferenceLink type={field.ref} id={String(value)} name={name} />;
   const text = present(field, value);
   if (text === "") return null;
+  if (field.type === "text" && /email/i.test(field.name)) {
+    return <HStack gap={1} vAlign="center"><StackItem size="fill"><Text type="body" maxLines={1}>{text}</Text></StackItem><ContactActions kind="email" value={text} /></HStack>;
+  }
+  if (field.type === "text" && /(?:phone|mobile)/i.test(field.name)) {
+    return <HStack gap={1} vAlign="center"><StackItem size="fill"><Text type="body" maxLines={1} hasTabularNumbers>{text}</Text></StackItem><ContactActions kind="phone" value={text} /></HStack>;
+  }
   return field.type === "longtext" ? <Markdown density="compact" headingLevelStart={4}>{text}</Markdown> : <Text type="body">{text}</Text>;
 }
 

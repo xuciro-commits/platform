@@ -40,7 +40,7 @@ export type ListColumn<Row> = {
   header: string;
   width?: number;
   text: (row: Row) => string;
-  kind?: "string" | "enum" | "number" | "time" | "code" | "member";
+  kind?: "string" | "enum" | "number" | "time" | "code" | "member" | "person" | "email" | "phone";
   choices?: string[];
   options?: { value: string; label: string }[];
   boolean?: boolean;
@@ -89,7 +89,7 @@ const compare = (left: unknown, right: unknown) =>
   : String(left ?? "").localeCompare(String(right ?? ""));
 const textKey = "__text";
 const fillKey = "__fill";
-const widthOf: Record<string, number> = { string: 168, code: 150, enum: 116, member: 132, number: 110, time: 132, boolean: 96 };
+const widthOf: Record<string, number> = { string: 164, person: 164, email: 196, phone: 148, code: 150, enum: 120, member: 132, number: 110, time: 132, boolean: 96 };
 const headerWidth = (text: string) => [...text].reduce((sum, letter) => sum + (letter.charCodeAt(0) > 0x2e7f ? 14 : 8), 48);
 const groupPrefix = "__group_";
 const compactQuery = "(max-width: 768px), (max-width: 1024px) and (pointer: coarse) and (hover: none)";
@@ -179,7 +179,7 @@ export function ListView<Answer, Row>({ definition, read, primary, back }: ListV
         .map((column) => ({
           key: column.key,
           label: t(column.header),
-          type: column.options ? "enum" : column.boolean ? "boolean" : column.kind === "time" ? "date" : column.kind === "code" || column.kind === "member" ? "string" : column.kind ?? "string",
+          type: column.options ? "enum" : column.boolean ? "boolean" : column.kind === "time" ? "date" : column.kind === "enum" || column.kind === "number" ? column.kind : "string",
           enumValues: column.options ?? column.choices?.map((choice) => ({ value: choice, label: t(choice) })),
         }))
         .concat({ key: textKey, label: t("Any text"), type: "string", enumValues: undefined }),

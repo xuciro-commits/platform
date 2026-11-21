@@ -9,11 +9,12 @@ import { Section } from "@astryxdesign/core/Section";
 import { StatusDot } from "@astryxdesign/core/StatusDot";
 import { Heading, Text } from "@astryxdesign/core/Text";
 import { Timestamp } from "@astryxdesign/core/Timestamp";
+import { Tooltip } from "@astryxdesign/core/Tooltip";
 import { XMarkIcon } from "@heroicons/react/24/outline";
 import * as stylex from "@stylexjs/stylex";
 import type { ReactNode } from "react";
 import { t } from "../i18n";
-import { MemberLabel } from "./MemberField";
+import { PersonLabel } from "./MemberField";
 import { ReferenceLink } from "./ReferenceField";
 import type { Dot } from "./Transitions";
 
@@ -30,32 +31,59 @@ const styles = stylex.create({
 });
 
 export function ListCell({ column, cells, first }: { column: Column; cells: Cells; first: boolean }) {
-  return first && cells.__href ? (
-    <Link href={cells.__href} color="primary" weight="medium" maxLines={1}>{column.kind === "member" && cells[column.key] ? <MemberLabel name={cells[column.key]} /> : cells[column.key] || cells[idKey]}</Link>
-  ) : cells[targetOf(column.key)] ? (
-    <ReferenceLink type={cells[typeOf(column.key)]} id={cells[targetOf(column.key)]} name={cells[column.key]} />
-  ) : column.kind === "member" && cells[column.key] ? (
-    <MemberLabel name={cells[column.key]} />
-  ) : column.kind === "code" ? (
-    <Text type="code" color="secondary" maxLines={1}>
-      {cells[column.key] ?? ""}
-    </Text>
-  ) : column.boolean && cells[column.key] === t("Yes") ? (
-    <Icon icon="check" size="sm" label={t("Yes")} />
-  ) : column.kind === "time" && cells[column.key] ? (
-    <Text type="body" color="secondary" hasTabularNumbers>
-      <Timestamp value={cells[column.key]} format="relative" />
-    </Text>
-  ) : cells[dotOf(column.key)] ? (
-    <HStack gap={2} vAlign="center">
-      <StatusDot variant={cells[dotOf(column.key)] as Dot} label={cells[column.key]} />
-      <Text type="body" maxLines={1}>
-        {cells[column.key]}
+  const value = cells[column.key] ?? "";
+  if (first && cells.__href) {
+    return (
+      <Link href={cells.__href} color="primary" weight="medium" maxLines={1}>
+        {(column.kind === "member" || column.kind === "person") && value ? <PersonLabel name={value} /> : value || cells[idKey]}
+      </Link>
+    );
+  }
+  if (cells[dotOf(column.key)]) {
+    return (
+      <HStack gap={2} vAlign="center">
+        <StatusDot variant={cells[dotOf(column.key)] as Dot} label={value} />
+        <Text type="body" maxLines={1}>
+          {value}
+        </Text>
+      </HStack>
+    );
+  }
+  if (cells[targetOf(column.key)]) {
+    return <ReferenceLink type={cells[typeOf(column.key)]} id={cells[targetOf(column.key)]} name={value} />;
+  }
+  if ((column.kind === "member" || column.kind === "person") && value) {
+    return <PersonLabel name={value} />;
+  }
+  if ((column.kind === "email" || column.kind === "phone") && value) {
+    return (
+      <Tooltip content={value} hasHoverIndication={false}>
+        <Text type="body" maxLines={1} hasTabularNumbers={column.kind === "phone"}>
+          {value}
+        </Text>
+      </Tooltip>
+    );
+  }
+  if (column.kind === "code") {
+    return (
+      <Text type="code" color="secondary" maxLines={1}>
+        {value}
       </Text>
-    </HStack>
-  ) : (
+    );
+  }
+  if (column.boolean && value === t("Yes")) {
+    return <Icon icon="check" size="sm" label={t("Yes")} />;
+  }
+  if (column.kind === "time" && value) {
+    return (
+      <Text type="body" color="secondary" hasTabularNumbers>
+        <Timestamp value={value} format="relative" />
+      </Text>
+    );
+  }
+  return (
     <Text type="body" maxLines={1} weight={first ? "medium" : undefined} hasTabularNumbers={column.kind === "number"}>
-      {cells[column.key] ?? ""}
+      {value}
     </Text>
   );
 }
