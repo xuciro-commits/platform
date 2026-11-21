@@ -19,21 +19,22 @@ import { AppSidebar } from "./AppSidebar";
 import { CommandSearch } from "./CommandSearch";
 import { legacyTarget } from "./legacy";
 import { SignIn } from "./SignIn";
+import { iconOf } from "../pages/icons";
 
-function installedApps(views: Api.ApplicationView[]): App[] {
+function installedApps(views: Api.ApplicationView[], entities: Api.EntityInfo[]): App[] {
   return views.flatMap((view) => {
     const sections = (view.menu ?? []).flatMap((group) => {
       const items = group.entries.flatMap((page) => page.object ? [{
         id: page.name,
         label: page.title,
-        icon: RectangleGroupIcon,
+        icon: iconOf(entities.find((entity) => entity.type === page.object)?.icon, RectangleGroupIcon),
         object: page.object,
         description: page.description,
       }] : []);
       return items.length ? [{ title: group.title || "Pages", items }] : [];
     });
     if (!sections.length) return [];
-    return [{ id: view.name || view.app, label: view.title, icon: RectangleGroupIcon, group: "installed", sections }];
+    return [{ id: view.name || view.app, label: view.title, icon: iconOf(view.icon, RectangleGroupIcon), group: "installed", sections }];
   });
 }
 
@@ -46,6 +47,7 @@ export function Shell() {
   const segments = path.split("/");
   const projected = useRead<Api.ApplicationView[]>(session ? "/v1/applications" : null);
   const me = useRead<Api.MeView>(session ? "/v1/me" : null);
+  const entities = useRead<Api.EntityInfo[]>(session ? "/v1/entities" : null);
   useEffect(() => {
     if (me.status !== "ready") return;
     setLanguage(me.data.language);
@@ -75,8 +77,8 @@ export function Shell() {
   const available = useMemo(() => {
     const granted: Record<string, boolean> = me.status === "ready" ? { admin: me.data.apps.some((entry) => entry.id === "platform"), host: Boolean(me.data.hostAdmin) } : {};
     const fixed = apps.filter((known) => me.status !== "ready" || known.group !== "manage" || granted[known.id]);
-    return projected.status === "ready" ? [...fixed, ...installedApps(projected.data).filter((app) => !apps.some((known) => known.id === app.id))] : fixed;
-  }, [projected, me]);
+    return projected.status === "ready" ? [...fixed, ...installedApps(projected.data, entities.status === "ready" ? entities.data : []).filter((app) => !apps.some((known) => known.id === app.id))] : fixed;
+  }, [projected, me, entities]);
   const { app, item } = locate(path, available);
   const object = item.object ?? (app.id === "ontology" && item.id === "objects" ? decodeURIComponent(segments[3] ?? "") : "");
   const listPath = app.id === "ontology" && item.id === "objects" ? `/ontology/objects/${encodeURIComponent(object)}` : item.object ? `/${app.id}/${item.id}` : undefined;

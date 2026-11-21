@@ -1,5 +1,6 @@
 import { BottomSheet } from "@astryxdesign/core/BottomSheet";
 import { Button } from "@astryxdesign/core/Button";
+import { Calendar, type DateRange, type ISODateString } from "@astryxdesign/core/Calendar";
 import { ComplexSelector } from "@astryxdesign/core/ComplexSelector";
 import { Divider } from "@astryxdesign/core/Divider";
 import { HStack, StackItem, VStack } from "@astryxdesign/core/Layout";
@@ -71,6 +72,14 @@ const shortDate = (date: Date) => date.toLocaleDateString(undefined, { month: "s
 const startOfToday = () => {
   const now = new Date();
   return new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+};
+const isoOf = (time: number) => {
+  const date = new Date(time);
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}` as ISODateString;
+};
+const localDay = (iso: string) => {
+  const [year, month, date] = iso.split("-").map(Number);
+  return new Date(year, month - 1, date).getTime();
 };
 const numeric = (value: number): PowerSearchFilter["value"] => (Number.isInteger(value) ? { type: "integer", value } : { type: "float", value });
 
@@ -171,14 +180,17 @@ export function FilterBar({ chips, filters, onFilters, search, onSearch, count, 
       : after ? `${t(chip.label)} ${t("after")} ${shortDate(after)}`
       : before ? `${t(chip.label)} ${t("before")} ${shortDate(before)}`
       : undefined;
+    const at = (time: number) => ({ type: "date_absolute" as const, unixSeconds: Math.floor(time / 1000) });
+    const picked: DateRange | null = after && before ? { start: isoOf(after.getTime()), end: isoOf(before.getTime() - day) } : null;
     const choose = (key: string) => {
+      const [start, end] = key.split("~");
+      if (start && end) return replace(chip.key, [{ field: chip.key, operator: "after", value: at(localDay(start)) }, { field: chip.key, operator: "before", value: at(localDay(end) + day) }]);
       const preset = presets.find((candidate) => candidate.key === key);
       if (!preset) return replace(chip.key, []);
       const today = startOfToday();
-      const at = (offset: number) => ({ type: "date_absolute" as const, unixSeconds: Math.floor((today + offset * day) / 1000) });
       replace(chip.key, [
-        ...(preset.from == null ? [] : [{ field: chip.key, operator: "after", value: at(preset.from) }]),
-        { field: chip.key, operator: "before", value: at(preset.to === 0 && preset.from != null && preset.from < 0 ? 1 : preset.to) },
+        ...(preset.from == null ? [] : [{ field: chip.key, operator: "after", value: at(today + preset.from * day) }]),
+        { field: chip.key, operator: "before", value: at(today + (preset.to === 0 && preset.from != null && preset.from < 0 ? 1 : preset.to) * day) },
       ]);
     };
     return (
@@ -200,6 +212,9 @@ export function FilterBar({ chips, filters, onFilters, search, onSearch, count, 
                 <RadioListItem key={preset.key} value={preset.key} label={t(preset.label)} />
               ))}
             </RadioList>
+            <Divider />
+            <Calendar mode="range" value={picked} hasVariableRowCount
+              onChange={(next: DateRange | null) => { if (next?.start && next.end) { onChange(`${next.start}~${next.end}`); close(); } }} />
             <Divider />
             <HStack gap={2} hAlign="between" vAlign="center">
               <Button label={t("Clear")} variant="ghost" size="sm" isDisabled={!label} onClick={() => { onChange(""); close(); }} />

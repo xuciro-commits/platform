@@ -1,5 +1,6 @@
 import { Button } from "@astryxdesign/core/Button";
 import { Field } from "@astryxdesign/core/Field";
+import { Icon } from "@astryxdesign/core/Icon";
 import { HStack, StackItem, VStack } from "@astryxdesign/core/Layout";
 import { Spinner } from "@astryxdesign/core/Spinner";
 import { StatusDot } from "@astryxdesign/core/StatusDot";
@@ -18,6 +19,7 @@ import { MemberLabel } from "./MemberField";
 import { type InputStatus, ParameterInput } from "./ParameterInput";
 import { ReferenceLink } from "./ReferenceField";
 import type { Dot } from "./Transitions";
+import { iconField, icons } from "./icons";
 import { present } from "./values";
 
 const layers = "[role=listbox], [role=dialog], [role=menu], [role=grid], [role=tooltip]";
@@ -40,11 +42,14 @@ const styles = stylex.create({
 });
 
 export function picks(parameter: Api.Field, field?: Api.FieldInfo) {
-  return Boolean(parameter.choices || parameter.ref) || ["choice", "reference", "member", "date"].includes(field?.type ?? parameter.type);
+  return Boolean(parameter.choices || parameter.ref) || iconField(parameter.name, parameter.type) || ["choice", "reference", "member", "date"].includes(field?.type ?? parameter.type);
 }
 
 export function PropertyValue({ field, value, name, dot }: { field: Api.FieldInfo; value: unknown; name?: string; dot?: Dot }) {
   if (field.type === "member" && !blank(value)) return <MemberLabel name={name ?? t("Unnamed member")} />;
+  if (iconField(field.name, field.type) && icons[String(value)]) {
+    return <HStack gap={2} vAlign="center"><Icon icon={icons[String(value)]} size="sm" /><Text type="body">{String(value)}</Text></HStack>;
+  }
   if (dot && !blank(value)) {
     const text = name ?? present(field, value);
     return <HStack gap={2} vAlign="center"><StatusDot variant={dot} label={text} /><Text type="body">{text}</Text></HStack>;

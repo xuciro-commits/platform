@@ -12,6 +12,7 @@ import { Skeleton } from "@astryxdesign/core/Skeleton";
 import { Switch } from "@astryxdesign/core/Switch";
 import { Text } from "@astryxdesign/core/Text";
 import { TextInput } from "@astryxdesign/core/TextInput";
+import { iconField, icons } from "./icons";
 import { colorVars } from "@astryxdesign/core/theme/tokens.stylex";
 import * as stylex from "@stylexjs/stylex";
 import { type ComponentProps, useId, useState } from "react";
@@ -273,6 +274,22 @@ export function ParameterInput({ parameter, described, value, form, status, onCh
   if (field?.type === "member" || parameter.type === "member") {
     return <MemberInput id={String(value ?? "")} name={referenceName} label={label} description={description}
       isRequired={parameter.required} isLabelHidden={labelHidden} hasAutoFocus={focused} status={status} onChange={onChange} controlXstyle={control} />;
+  }
+  if (iconField(parameter.name, parameter.type)) {
+    return (
+      <Selector
+        label={label}
+        isLabelHidden={labelHidden}
+        description={description}
+        isRequired={parameter.required}
+        status={status}
+        controlXstyle={control}
+        hasSearch
+        value={String(value ?? "")}
+        onChange={(next) => onChange(next ?? "")}
+        options={Object.entries(icons).map(([name, icon]) => ({ value: name, label: name, icon }))}
+      />
+    );
   }
   if (parameter.choices) {
     return (

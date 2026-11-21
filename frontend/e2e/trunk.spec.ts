@@ -579,6 +579,13 @@ test("object definition: add a field, publish it and review a removal", async ({
   await page.getByRole("button", { name: "Publish", exact: true }).click();
   await expect(publish.getByText(/cannot be reached/)).toBeVisible();
   await expect(publish.getByRole("button", { name: "Publish", exact: true })).toBeDisabled();
+  await publish.getByRole("button", { name: "Cancel" }).click();
+  const empty = page.getByRole("button", { name: /^Show empty fields/ });
+  if (await empty.isVisible()) await empty.click();
+  await page.getByRole("button", { name: "Edit Icon", exact: true }).press("Enter");
+  await page.getByRole("option", { name: "truck", exact: true }).click();
+  await expect(page.getByRole("button", { name: "Edit Icon", exact: true })).toBeAttached();
+  await expect(property(page, "Icon")).toHaveText("truck");
 });;
 
 test("object definition: create and bind an action type before publishing a transition", async ({ page }) => {
@@ -1906,6 +1913,13 @@ async function crmMainline(page: Page, go: (type: string, plural: string) => Pro
   await page.keyboard.press("Escape");
 
   await go("crm.deal", "Deals");
+  const closeFilter = page.getByRole("combobox", { name: "Expected close filter", exact: true }).filter({ visible: true });
+  if (!(await closeFilter.count())) await page.getByRole("button", { name: /more filters?$/ }).click();
+  await closeFilter.first().click();
+  await page.getByRole("radio", { name: "Next 30 days", exact: true }).click();
+  await expect(page).toHaveURL(/expectedclose.*after.*expectedclose.*before/);
+  await page.getByText("Clear all", { exact: true }).click();
+  await expect(page).not.toHaveURL(/expectedclose.*after/);
   await page.getByRole("radio", { name: "Board" }).click();
   const card = page.getByRole("region", { name: "Qualification", exact: true }).getByRole("heading", { level: 4, name: company, exact: true });
   await expect(card).toBeVisible();

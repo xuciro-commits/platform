@@ -54,6 +54,7 @@ export default recordList({
 | `src/main.tsx` | 挂载：样式、主题、链接适配、外壳 |
 | `src/router.tsx` | 地址即状态：读取路径、跳转、Astryx 链接的适配 |
 | `src/apps.ts` | 应用清单：每个应用的图标、分节菜单与入口 |
+| `src/pages/icons.ts` | 可选图标：Heroicons 的一组，按短横线名字取；名为 `icon` 的文字字段用它挑，已安装应用与入口按类型的 `icon` 显示 |
 | `src/apps/<应用>/<入口>.ts` | 入口声明 |
 | `src/shell/` | 外壳：应用轨、应用侧栏、登录页、个人设置对话框 |
 | `src/pages/` | 表现，以及建在表现上的入口形状 |
