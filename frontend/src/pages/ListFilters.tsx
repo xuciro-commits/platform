@@ -242,7 +242,7 @@ export function FilterBar({ chips, filters, onFilters, search, onSearch, count, 
         />
       </StackItem>
       <StackItem xstyle={styles.overflowSlot}>
-        <OverflowList behavior="observeParent" gap={2} minVisibleItems={compact ? 0 : 1} overflowRenderer={(items) => <FilterOverflow items={items} compact={compact} />}>
+        <OverflowList behavior="observeParent" gap={2} overflowRenderer={(items) => <FilterOverflow items={items} compact={compact} />}>
           {controls}
         </OverflowList>
         <HStack gap={2} vAlign="center" xstyle={styles.meta}>
