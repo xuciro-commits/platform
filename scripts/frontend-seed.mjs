@@ -165,7 +165,7 @@ for (const file of files) {
     tenant.packageRevision = installed.revision;
     await tenant.refresh();
     const kinds = new Set(descriptor.blueprint.assets.filter((asset) => asset.ref.kind === "object").map((asset) => asset.ref.name));
-    await members(tenant, sample);
+    await members(tenant, sample.install);
     const copied = await records(tenant, sample, kinds);
     await words(tenant, sample);
     console.log(`frontend-seed: installed ${descriptor.id}@${descriptor.version} with ${copied} records in tenant ${sample.install.tenant}`);
