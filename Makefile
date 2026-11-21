@@ -9,16 +9,47 @@ NATIVE_COMPOSE := $(COMPOSE) -f deploy/dev/compose.native.yaml
 INFRA := postgres rauthy rustfs
 LITE_HOST ?= 127.0.0.1
 GOPROXY ?= https://goproxy.cn,direct
+STEP := bash scripts/make-step.sh
 export GOPROXY
 
-.PHONY: help hooks bootstrap setup local docker infra infra-down build-compute dev dev-light web host lite build bundle contract local-update packages check e2e verify verify-sql load-sql frontend-host trunk
+.PHONY: help hooks bootstrap setup local docker infra infra-down build-compute dev dev-light web host lite build bundle contract local-update packages check check-web check-frontend e2e verify verify-sql load-sql frontend-host frontend-dev trunk test
 
 help:
-	@printf '%s\n' 'make setup        安装 Web 依赖和 Air' 'make local        启动热更新环境，入口 8495' 'make docker       切到容器运行' 'make lite         无 Docker 持久化运行' 'make web          旧前端对照，8497，只在本地' 'make host         编译运行宿主，ARGS 传入部署参数' 'make build        构建前端与宿主' 'make contract     重新生成宿主类型、页面安全、应用登记与资源契约' 'make check        快速检查：Go 构建与 vet、包边界与形状、产品包、契约、文案、文档、空白' 'make check-frontend 前端的规则、类型与构建' 'make trunk        主干验收：浏览器自己把前端的演示路径走一遍，HEADED=1 看着它走' 'make test         内核不变量，RUN=K13 只跑指定编号' 'make e2e          旧前端的验收，SPEC=F17 只跑指定用例' 'make verify       check 加旧前端检查、全部不变量与旧验收' 'make verify-sql   在隔离临时 PostgreSQL 库验证接受写入与重启恢复' 'make infra-down   停止容器并保留数据' 'make local-update 更新已提交版本并核对运行状态'
-	@printf '%s\n' 'make frontend-host 内存宿主加验收夹具与一个示例销售项目（127.0.0.1:18511），供前端对照真实数据'
-	@printf '%s\n' 'make packages     从 deploy/packages/<id>/ 生成包制品与 package.lock.json'
-	@printf '%s\n' 'make load-sql     隔离 PostgreSQL 容量剖面；PLATFORM_LOAD_USERS、ROWS、DURATION 可调'
-	@printf '%s\n' 'make hooks        启用仓库 .githooks/（pre-commit 与 commit-msg 规范检查）'
+	@bash -c '\
+	if [ -t 1 ] && [ -z "$${NO_COLOR:-}" ]; then \
+	  B=$$'\''\033[1m'\''; C=$$'\''\033[36m'\''; D=$$'\''\033[2m'\''; Y=$$'\''\033[33m'\''; R=$$'\''\033[0m'\''; \
+	else B=""; C=""; D=""; Y=""; R=""; fi; \
+	printf "\n%sEIDOS · Platform 常用命令面板%s  %s(输入 make <命令> 执行)%s\n\n" "$$B" "$$R" "$$D" "$$R"; \
+	printf "%s日常启动%s\n" "$$B" "$$R"; \
+	printf "  %s%-18s%s %s\n" "$$C" "local" "$$R" "启动完整热更新环境（新前端 :8495 + 宿主 :18495）"; \
+	printf "  %s%-18s%s %s\n" "$$C" "frontend-host" "$$R" "启动内存夹具宿主（:18511，自带示例 CRM 数据）"; \
+	printf "  %s%-18s%s %s\n" "$$C" "frontend-dev" "$$R" "单独启动新前端热更新（:8496，配合 frontend-host）"; \
+	printf "  %s%-18s%s %s\n" "$$C" "lite" "$$R" "无 Docker 单机持久化运行"; \
+	printf "  %s%-18s%s %s\n" "$$C" "infra-down" "$$R" "停止本地 Docker 容器并保留数据"; \
+	printf "\n%s检查与验收%s\n" "$$B" "$$R"; \
+	printf "  %s%-18s%s %s\n" "$$C" "check" "$$R" "后端与仓库全检（Go 编译/边界/产品包/契约/文案/文档）"; \
+	printf "  %s%-18s%s %s\n" "$$C" "check-frontend" "$$R" "新前端静态门禁、类型检查与生产构建"; \
+	printf "  %s%-18s%s %s  %s%s%s\n" "$$C" "trunk" "$$R" "新前端浏览器主干验收" "$$D" "HEADED=1 可看过程" "$$R"; \
+	printf "  %s%-18s%s %s  %s%s%s\n" "$$C" "test" "$$R" "内核不变量测试" "$$D" "RUN=K13 只跑指定编号" "$$R"; \
+	printf "  %s%-18s%s %s\n" "$$C" "verify-sql" "$$R" "临时 PostgreSQL 写入与重启恢复验收"; \
+	printf "\n%s构建与发行%s\n" "$$B" "$$R"; \
+	printf "  %s%-18s%s %s\n" "$$C" "build" "$$R" "编译新前端与宿主二进制"; \
+	printf "  %s%-18s%s %s\n" "$$C" "bundle" "$$R" "打包单文件独立发行版（前端内嵌，.build/bundle/）"; \
+	printf "  %s%-18s%s %s\n" "$$C" "packages" "$$R" "从 deploy/packages/<id>/ 生成产品包制品"; \
+	printf "  %s%-18s%s %s\n" "$$C" "contract" "$$R" "重新生成宿主 API 类型与页面安全契约"; \
+	printf "\n%s环境与维护%s\n" "$$B" "$$R"; \
+	printf "  %s%-18s%s %s\n" "$$C" "setup" "$$R" "首次安装依赖与 Air 热重载工具"; \
+	printf "  %s%-18s%s %s\n" "$$C" "hooks" "$$R" "启用 .githooks/（提交前自动检查）"; \
+	printf "  %s%-18s%s %s\n" "$$C" "docker" "$$R" "切到全容器模式运行"; \
+	printf "  %s%-18s%s %s\n" "$$C" "local-update" "$$R" "更新已提交版本并核对运行状态"; \
+	printf "  %s%-18s%s %s  %s%s%s\n" "$$C" "load-sql" "$$R" "PostgreSQL 容量压测" "$$D" "USERS/ROWS/DURATION 可调" "$$R"; \
+	printf "  %s%-18s%s %s  %s%s%s\n" "$$C" "host" "$$R" "编译并运行宿主" "$$D" "ARGS=... 传入参数" "$$R"; \
+	printf "\n%s旧前端遗留%s %s(阶段 2 结束后删除，日常无需使用)%s\n" "$$Y" "$$R" "$$D" "$$R"; \
+	printf "  %s%-18s%s %s\n" "$$D" "web" "$$R" "启动旧前端对照（:8497）"; \
+	printf "  %s%-18s%s %s\n" "$$D" "check-web" "$$R" "旧前端类型检查与构建"; \
+	printf "  %s%-18s%s %s\n" "$$D" "e2e" "$$R" "旧前端 Playwright 验收  SPEC=F17"; \
+	printf "  %s%-18s%s %s\n\n" "$$D" "verify" "$$R" "check + check-web + test + e2e 全量旧验收"; \
+	'
 
 hooks:
 	git config core.hooksPath .githooks
@@ -71,6 +102,9 @@ frontend-host:
 	node scripts/frontend-seed.mjs &
 	cd capabilities/server && $(GO) run ./cmd/platform-server -addr 127.0.0.1:18511 -tenants ../../.build/frontend-host/tenants.json -host-admins admin,root
 
+frontend-dev:
+	$(PNPM) --dir frontend dev
+
 lite: bootstrap
 	GO="$(GO)" PNPM="$(PNPM)" LITE_HOST="$(LITE_HOST)" deploy/local/lite.sh
 
@@ -100,33 +134,27 @@ packages:
 	node scripts/package-source.mjs pack
 
 check:
-	cd capabilities/server && $(GO) build ./... && $(GO) vet ./... && test -z "$$(gofmt -l .)"
-	node scripts/check-boundaries.mjs
-	node scripts/package-source.mjs check
-	@mkdir -p .build/contract
-	@cp web/packages/api/src/gen/host.ts .build/contract/host.ts
-	@cp web/packages/api/src/gen/enterprise-sdk.ts .build/contract/enterprise-sdk.ts
-	@cp web/packages/app/src/pageui/safety.ts .build/contract/safety.ts
-	@cp web/packages/app/src/gen/apps.ts .build/contract/apps.ts
-	@cp web/packages/build/src/gen/resources.ts .build/contract/resources.ts
-	@cp capabilities/server/services/apps/pages/page_compat.json .build/contract/page_compat.json
-	$(MAKE) contract
-	@cmp .build/contract/host.ts web/packages/api/src/gen/host.ts
-	@cmp .build/contract/enterprise-sdk.ts web/packages/api/src/gen/enterprise-sdk.ts
-	@cmp .build/contract/safety.ts web/packages/app/src/pageui/safety.ts
-	@cmp .build/contract/apps.ts web/packages/app/src/gen/apps.ts
-	@cmp .build/contract/resources.ts web/packages/build/src/gen/resources.ts
-	@cmp .build/contract/page_compat.json capabilities/server/services/apps/pages/page_compat.json
-	node scripts/check-i18n.mjs
-	node scripts/check-docs.mjs
-	git diff HEAD --check
+	@printf '\n\033[1mEIDOS · 后端与仓库全检\033[0m\n'
+	@$(STEP) "[1/7]" "Go 编译、vet 与代码格式" 'cd capabilities/server && $(GO) build ./... && $(GO) vet ./... && test -z "$$(gofmt -l .)"'
+	@$(STEP) "[2/7]" "模块边界与代码形状棘轮" 'node scripts/check-boundaries.mjs'
+	@$(STEP) "[3/7]" "产品包清单完整性" 'node scripts/package-source.mjs check'
+	@$(STEP) "[4/7]" "宿主契约零漂移校验" 'mkdir -p .build/contract && cp web/packages/api/src/gen/host.ts .build/contract/host.ts && cp web/packages/api/src/gen/enterprise-sdk.ts .build/contract/enterprise-sdk.ts && cp web/packages/app/src/pageui/safety.ts .build/contract/safety.ts && cp web/packages/app/src/gen/apps.ts .build/contract/apps.ts && cp web/packages/build/src/gen/resources.ts .build/contract/resources.ts && cp capabilities/server/services/apps/pages/page_compat.json .build/contract/page_compat.json && $(MAKE) -s contract && cmp .build/contract/host.ts web/packages/api/src/gen/host.ts && cmp .build/contract/enterprise-sdk.ts web/packages/api/src/gen/enterprise-sdk.ts && cmp .build/contract/safety.ts web/packages/app/src/pageui/safety.ts && cmp .build/contract/apps.ts web/packages/app/src/gen/apps.ts && cmp .build/contract/resources.ts web/packages/build/src/gen/resources.ts && cmp .build/contract/page_compat.json capabilities/server/services/apps/pages/page_compat.json'
+	@$(STEP) "[5/7]" "文案与 i18n 键检查" 'node scripts/check-i18n.mjs'
+	@$(STEP) "[6/7]" "文档预算与引用检查" 'node scripts/check-docs.mjs'
+	@$(STEP) "[7/7]" "Git 空白字符检查" 'git diff HEAD --check'
+	@printf '\033[32m✓ 全部 7 项检查通过\033[0m\n\n'
 
 check-web:
-	cd web && $(PNPM) typecheck && $(PNPM) build
+	@printf '\n\033[1mEIDOS · 旧前端检查\033[0m\n'
+	@$(STEP) "[1/2]" "旧前端 TypeScript 类型检查" 'cd web && $(PNPM) typecheck'
+	@$(STEP) "[2/2]" "旧前端生产构建" 'cd web && $(PNPM) build'
+	@printf '\033[32m✓ 旧前端检查通过\033[0m\n\n'
 
 check-frontend:
-	node scripts/check-frontend.mjs
-	cd frontend && $(PNPM) build
+	@printf '\n\033[1mEIDOS · 新前端检查与构建\033[0m\n'
+	@$(STEP) "[1/2]" "前端规范、翻译与行数门禁" 'node scripts/check-frontend.mjs'
+	@$(STEP) "[2/2]" "TypeScript 类型检查与 Vite 构建" 'cd frontend && $(PNPM) build'
+	@printf '\033[32m✓ 新前端检查全部通过\033[0m\n\n'
 
 trunk:
 	cd frontend && $(PNPM) exec playwright test -c e2e $(if $(HEADED),--headed)
