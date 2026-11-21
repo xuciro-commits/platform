@@ -176,7 +176,9 @@ func TestInvariantK15EmptyGuardsAndPendingApprovalAgreeAcrossReads(t *testing.T)
 		item, check := checkRecordAction(t, handler, tenant, "builder", schema, typ, row)
 		res := observationRequest(t, handler, tenant, observationToken(tenant, "builder"), "/v1/records/"+typ+"?actions=1", nil)
 		var list objects.RecordPage
-		if res.Code != http.StatusOK || json.Unmarshal(res.Body.Bytes(), &list) != nil || !slices.Contains(list.Actions[row], item) || !item.Allowed {
+		if res.Code != http.StatusOK || json.Unmarshal(res.Body.Bytes(), &list) != nil || !slices.ContainsFunc(list.Actions[row], func(a objects.RecordAction) bool {
+			return a.Schema == item.Schema && a.Allowed == item.Allowed && a.Reason == item.Reason
+		}) || !item.Allowed {
 			t.Fatalf("%s empty guard or list availability: %+v %s", name, item, res.Body)
 		}
 		_, refusal := live.Submit(live.member(t), live.submission(schema, typ, row, map[string]any{}), invariantClock)

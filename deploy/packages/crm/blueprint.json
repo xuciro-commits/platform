@@ -4,6 +4,11 @@
       "app": "build",
       "kind": "app",
       "name": "crm"
+    },
+    {
+      "app": "build",
+      "kind": "matching",
+      "name": "crmorganizationmatch"
     }
   ],
   "assets": [
@@ -3396,6 +3401,16 @@
         }
       ],
       "provides": []
+    },
+    {
+      "ref": {
+        "app": "build",
+        "kind": "matching",
+        "name": "crmorganizationmatch"
+      },
+      "path": "integrations/matching/crmorganizationmatch.json",
+      "contractVersion": 1,
+      "sourceVersion": "1.matching-1"
     }
   ]
 }

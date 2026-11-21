@@ -1223,20 +1223,20 @@ test("members: an opportunity owner is shown by name and can be reassigned", asy
   await page.getByRole("link", { name: "Opportunities" }).click();
   const row = page.getByRole("row", { name: /熔炉监测/ });
   const ownerCell = row.getByRole("cell", { name: /王丹/ });
-  await expect(ownerCell.getByRole("img", { name: "王丹" })).toBeVisible();
+  await expect(ownerCell.getByRole("img", { name: "王丹", includeHidden: true })).toBeVisible();
   await expect(ownerCell.getByText("王丹", { exact: true })).toBeVisible();
 
   await row.getByRole("link", { name: "熔炉监测" }).click();
   const properties = page.getByRole("complementary");
   await expect(property(page, "Owner")).toContainText("王丹");
-  await expect(property(page, "Owner").getByRole("img", { name: "王丹" })).toBeVisible();
+  await expect(property(page, "Owner").getByRole("img", { name: "王丹", includeHidden: true })).toBeVisible();
   await edit(page, "Owner");
   await page.getByRole("combobox", { name: "Owner", exact: true }).fill("韩奥");
   await page.getByRole("option", { name: /韩奥/ }).click();
   await expect(properties.getByText("2", { exact: true })).toBeVisible();
   await page.reload();
   await expect(property(page, "Owner")).toContainText("韩奥");
-  await expect(property(page, "Owner").getByRole("img", { name: "韩奥" })).toBeVisible();
+  await expect(property(page, "Owner").getByRole("img", { name: "韩奥", includeHidden: true })).toBeVisible();
 });
 
 test("record fields: an attachment preserves the horizontal label alignment", async ({ page }) => {
@@ -1911,6 +1911,7 @@ async function crmMainline(page: Page, go: (type: string, plural: string) => Pro
   const organizations = dealPage.replace(/(crm\.)?deal\/[^/]+$/, "$1organization/");
   await page.getByRole("main").getByRole("link", { name: company, exact: true }).last().click();
   await expect(page).toHaveURL((url) => url.pathname.startsWith(organizations));
+  const organizationId = new URL(page.url()).pathname.split("/").pop();
   await page.getByRole("main").getByRole("link", { name: company, exact: true }).first().click();
   await expect(page).toHaveURL((url) => url.pathname === dealPage);
   await page.goto(leadPage);
@@ -1992,6 +1993,27 @@ async function crmMainline(page: Page, go: (type: string, plural: string) => Pro
   await page.getByRole("link", { name: "Links", exact: true }).click();
   await expect(page.getByText(person, { exact: true }).first()).toBeVisible();
   await expect(page.getByRole("link", { name: company, exact: true }).first()).toBeVisible();
+
+  await go("crm.lead", "Leads");
+  await page.getByRole("button", { name: "New", exact: true }).click();
+  const repeat = page.getByRole("dialog");
+  await repeat.getByRole("textbox", { name: "Full name" }).fill(`${person} II`);
+  await repeat.getByRole("combobox", { name: "Status" }).click();
+  await page.getByRole("option", { name: "New", exact: true }).click();
+  await repeat.getByRole("button", { name: "Create", exact: true }).click();
+  await expect(page.getByRole("heading", { level: 1, name: `${person} II`, exact: true })).toBeVisible();
+  await edit(page, "Organization");
+  const same = page.getByRole("textbox", { name: "Organization", exact: true });
+  await same.fill(` ${company.toUpperCase()}  `);
+  await same.press("Enter");
+  await expect(page.getByRole("complementary").getByText("2", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Convert to deal", exact: true }).click();
+  const relink = page.getByRole("dialog", { name: "Convert to deal", exact: true });
+  await expect(relink.getByText(company, { exact: true }).filter({ visible: true })).toBeVisible();
+  await relink.getByRole("button", { name: "Convert to deal", exact: true }).click();
+  await expect(relink).toBeHidden();
+  await page.getByRole("main").getByRole("link", { name: company, exact: true }).last().click();
+  await expect(page).toHaveURL((url) => url.pathname.split("/").pop() === organizationId);
 }
 
 test("crm: a lead with a note and a task converts into an organization, contact and deal, and the deal is won", async ({ page }) => {

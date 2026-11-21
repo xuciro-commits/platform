@@ -4531,6 +4531,7 @@ export type RecordAction = {
   schema: string;
   allowed: boolean;
   reason?: string;
+  inputs?: Record<string, unknown>;
 };
 
 export type RecordChange = {

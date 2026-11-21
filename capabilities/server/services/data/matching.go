@@ -202,13 +202,8 @@ func (r *Resolver) Resolve(row *SourceRow) bool {
 	}
 	merged := false
 	if _, known := r.fields[row.ID]; !known {
-		for i, k := range r.Rule.Keys {
-			if v := k.KeyOf(fields); v != "" {
-				if id, ok := r.index[k.Normalize+":"+ValueItoa(i)+":"+v]; ok && id != row.ID {
-					row.Key, row.ID, merged = row.Key+":as:"+id, id, true
-					break
-				}
-			}
+		if id := r.Existing(fields); id != "" {
+			row.Key, row.ID, merged = row.Key+":as:"+id, id, true
 		}
 	}
 	if existing := r.fields[row.ID]; existing != nil {
@@ -229,6 +224,31 @@ func (r *Resolver) Resolve(row *SourceRow) bool {
 		r.Merged++
 	}
 	return merged
+}
+
+func (r *Resolver) Existing(fields map[string]any) string {
+	for i, k := range r.Rule.Keys {
+		if v := k.KeyOf(fields); v != "" {
+			if id, ok := r.index[k.Normalize+":"+ValueItoa(i)+":"+v]; ok {
+				return id
+			}
+		}
+	}
+	return ""
+}
+
+func (o *Owner) Matched(c platform.Caller, object string, fields map[string]any) string {
+	info, ok := o.lookupEntity(object)
+	if !ok {
+		return ""
+	}
+	r := o.MatchResolver(c, object, "", func(offset int) ([]any, int, *platform.Error) {
+		return c.FindOf(info.Go, platform.Query{Limit: 500, Offset: offset})
+	})
+	if r == nil {
+		return ""
+	}
+	return r.Existing(fields)
 }
 
 func ValueItoa(i int) string { return string(rune('a' + i)) }

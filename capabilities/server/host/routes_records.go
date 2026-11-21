@@ -179,7 +179,7 @@ func (h *Host) routesRecords(rt *routes) {
 			err = objects.DraftView(&view, func(record any) (any, *platform.Error) { return t.objectDraftRecord(m, record) })
 		}
 		if info, ok := t.Entity(r.PathValue("type")); err == nil && ok {
-			view.Actions = actions.RecordActions(t.App(info.App), t.objectCaller(m, info.App), info.Type, r.PathValue("id"), now, t.Entity, func(reason string) string { return t.i18n.Say(t.Language(m, r), reason) })
+			view.Actions = actions.RecordActions(t.App(info.App), t.objectCaller(m, info.App), info.Type, r.PathValue("id"), now, t.Entity, func(reason string) string { return t.i18n.Say(t.Language(m, r), reason) }, t.DataOwner().Matched)
 		}
 		return view, err
 	}))

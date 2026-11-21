@@ -1,0 +1,13 @@
+{
+  "keys": [
+    {
+      "fields": [
+        "name"
+      ],
+      "normalize": "folded"
+    }
+  ],
+  "name": "crmorganizationmatch",
+  "object": "crm.organization",
+  "title": "Match organizations by name"
+}

@@ -261,11 +261,11 @@ func CheckAction(owner platform.Service, c platform.Caller, action platform.Acti
 	return result, nil
 }
 
-func RecordActions(owner platform.Service, c platform.Caller, typ, id string, now time.Time, lookup func(string) (platform.RecordTypeInfo, bool), say func(string) string) []objects.RecordAction {
+func RecordActions(owner platform.Service, c platform.Caller, typ, id string, now time.Time, lookup func(string) (platform.RecordTypeInfo, bool), say func(string) string, match Matcher) []objects.RecordAction {
 	if owner == nil {
 		return nil
 	}
-	return recordActions(owner.Manifest(), c, typ, id, now, lookup, say)
+	return recordActions(owner.Manifest(), c, typ, id, now, lookup, say, match)
 }
 
 func RecordPageActions(owner platform.Service, c platform.Caller, typ string, rows []any, now time.Time, lookup func(string) (platform.RecordTypeInfo, bool), say func(string) string) map[string][]objects.RecordAction {
@@ -276,7 +276,7 @@ func RecordPageActions(owner platform.Service, c platform.Caller, typ string, ro
 	out := make(map[string][]objects.RecordAction, len(rows))
 	for _, row := range rows {
 		id := reflect.ValueOf(row).Field(0).Interface().(platform.Record).ID
-		out[id] = recordActions(manifest, c, typ, id, now, lookup, say)
+		out[id] = recordActions(manifest, c, typ, id, now, lookup, say, nil)
 		if out[id] == nil {
 			out[id] = []objects.RecordAction{}
 		}
@@ -284,26 +284,36 @@ func RecordPageActions(owner platform.Service, c platform.Caller, typ string, ro
 	return out
 }
 
-func recordActions(manifest platform.Manifest, c platform.Caller, typ, id string, now time.Time, lookup func(string) (platform.RecordTypeInfo, bool), say func(string) string) []objects.RecordAction {
+func recordActions(manifest platform.Manifest, c platform.Caller, typ, id string, now time.Time, lookup func(string) (platform.RecordTypeInfo, bool), say func(string) string, match Matcher) []objects.RecordAction {
 	var read bool
 	var subject map[string]any
 	var refusal *platform.Error
 	var out []objects.RecordAction
+	load := func() (map[string]any, *platform.Error) {
+		if !read {
+			subject, refusal = readActionSubject(c, typ, id, now, lookup)
+			read = true
+		}
+		return subject, refusal
+	}
 	for _, entry := range manifest.Actions.All() {
 		if entry.Target != typ || entry.New || entry.ConfirmationOnly {
 			continue
 		}
 		sub := &pb.Submission{Target: &pb.EntityRef{Type: typ, Id: id}, Schema: &pb.SchemaRef{Name: entry.Schema}}
-		result := checkAction(c, manifest, entry, sub, func() (map[string]any, *platform.Error) {
-			if !read {
-				subject, refusal = readActionSubject(c, typ, id, now, lookup)
-				read = true
-			}
-			return subject, refusal
-		}, now, lookup)
-		if result.Authorization != nil {
-			out = append(out, objects.RecordAction{Schema: entry.Schema, Allowed: result.Allowed, Reason: say(result.Message)})
+		result := checkAction(c, manifest, entry, sub, load, now, lookup)
+		if result.Authorization == nil {
+			continue
 		}
+		action := objects.RecordAction{Schema: entry.Schema, Allowed: result.Allowed, Reason: say(result.Message)}
+		for _, entity := range manifest.Entities {
+			if transition, found := recordAction(entity, entry.Schema); found && entity.Type == typ && result.Allowed && match != nil {
+				if subject, refusal := load(); refusal == nil {
+					action.Inputs = prefill(c, transition, id, subject, now, lookup, match)
+				}
+			}
+		}
+		out = append(out, action)
 	}
 	return out
 }

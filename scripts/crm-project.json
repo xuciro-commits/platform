@@ -99,6 +99,7 @@
         "Lost reasons": "丢单原因",
         "Low": "低",
         "Male": "男",
+        "Match organizations by name": "按名称匹配组织",
         "Medium": "中",
         "Mobile no.": "手机号",
         "Mr": "先生",
@@ -3310,6 +3311,31 @@
       "build.object.publish",
       "build.object",
       "crm.lead",
+      {}
+    ],
+    [
+      "build.match.create",
+      "build.match",
+      "CRM-ORGANIZATION-MATCH",
+      {
+        "name": "crmorganizationmatch",
+        "title": "Match organizations by name",
+        "project": "crm",
+        "object": "crm.organization",
+        "keys": [
+          {
+            "fields": [
+              "name"
+            ],
+            "normalize": "folded"
+          }
+        ]
+      }
+    ],
+    [
+      "build.match.publish",
+      "build.match",
+      "CRM-ORGANIZATION-MATCH",
       {}
     ],
     [

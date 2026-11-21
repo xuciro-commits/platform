@@ -1,6 +1,6 @@
 {
   "id": "crm",
-  "version": "0.1.13",
+  "version": "0.1.14",
   "title": "CRM",
   "namespace": "crm",
   "description": "Leads, deals, organizations, contacts, tasks and notes, with lead-to-deal conversion. Built in the crm project and released through Delivery.",
@@ -10,6 +10,11 @@
         "app": "build",
         "kind": "app",
         "name": "crm"
+      },
+      {
+        "app": "build",
+        "kind": "matching",
+        "name": "crmorganizationmatch"
       }
     ],
     "assets": [
@@ -3242,6 +3247,7 @@
               "Lost reasons": "丢单原因",
               "Low": "低",
               "Male": "男",
+              "Match organizations by name": "按名称匹配组织",
               "Medium": "中",
               "Mobile no.": "手机号",
               "Mr": "先生",
@@ -8178,6 +8184,28 @@
             },
             "format": "platform.page.web.v1"
           }
+        }
+      },
+      {
+        "ref": {
+          "app": "build",
+          "kind": "matching",
+          "name": "crmorganizationmatch"
+        },
+        "contractVersion": 1,
+        "sourceVersion": "1.matching-1",
+        "body": {
+          "keys": [
+            {
+              "fields": [
+                "name"
+              ],
+              "normalize": "folded"
+            }
+          ],
+          "name": "crmorganizationmatch",
+          "object": "crm.organization",
+          "title": "Match organizations by name"
         }
       }
     ]

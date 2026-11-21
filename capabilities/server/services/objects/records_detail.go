@@ -48,9 +48,10 @@ type RestrictedField struct {
 }
 
 type RecordAction struct {
-	Schema  string `json:"schema"`
-	Allowed bool   `json:"allowed"`
-	Reason  string `json:"reason,omitempty"`
+	Schema  string         `json:"schema"`
+	Allowed bool           `json:"allowed"`
+	Reason  string         `json:"reason,omitempty"`
+	Inputs  map[string]any `json:"inputs,omitempty"`
 }
 
 const (

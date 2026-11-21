@@ -57,6 +57,7 @@ export type Intent = {
   revision?: number;
   fixed?: Values;
   initial?: Values;
+  prefill?: Values;
   only?: string[];
   label: string;
   name: string;
@@ -160,7 +161,7 @@ export function useAct(described?: Described) {
       id={pending.id}
       revision={pending.revision}
       fixed={pending.fixed}
-      initial={pending.initial}
+      initial={pending.initial ?? pending.prefill}
       only={pending.only}
       onClose={cancel}
       onDone={() => {
