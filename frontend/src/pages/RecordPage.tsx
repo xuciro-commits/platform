@@ -9,7 +9,7 @@ import { StatusDot } from "@astryxdesign/core/StatusDot";
 import { Tab, TabList } from "@astryxdesign/core/TabList";
 import { Heading, Text } from "@astryxdesign/core/Text";
 import { Timestamp } from "@astryxdesign/core/Timestamp";
-import { type ReactNode, useEffect, useMemo, useState } from "react";
+import { Fragment, type ReactNode, useEffect, useMemo, useState } from "react";
 import { type Api, useRead } from "../host";
 import { t } from "../i18n";
 import { originOf, usePath, useSearch } from "../router";
@@ -23,8 +23,11 @@ import { RecordFiles, RecordLinks, relatedGroups } from "./RecordAttachments";
 import { Collaboration, RecordActivity } from "./RecordActivity";
 import { RecordLines } from "./RecordLines";
 import { ObjectPreview } from "./ObjectPreview";
+import { useOptions } from "./options";
+import { enterable } from "./ParameterInput";
+import { PropertyField } from "./PropertyField";
 import { dots, type Instances, Transitions } from "./Transitions";
-import { plain, present } from "./values";
+import { plain } from "./values";
 
 type Stamp = { by?: string; at?: string };
 type Kept = { id: string; revision: number; created: Stamp; changed: Stamp; archived?: boolean };
@@ -108,10 +111,17 @@ export function RecordPage({ described, id, listPath, listTitle, instances, enti
   const editor = useEditor(described, id, values, kept?.revision ?? 0);
   const state = described.state(values);
   const laneKey = (described.entity.view as { lanes?: string } | undefined)?.lanes;
-  const laneField = laneKey ? described.field(laneKey) : undefined;
-  const laneRaw = laneField ? values[laneField.name] : undefined;
-  const laneTitle = laneField && laneRaw != null && laneRaw !== "" ? (refs?.[laneField.name]?.[String(laneRaw)] ?? present(laneField, laneRaw)) : "";
-  const status = kept?.archived ? { tone: "neutral", title: "Archived" } : laneTitle ? { tone: state?.tone ?? "neutral", title: laneTitle } : state;
+  const laneField = (laneKey ? described.field(laneKey) : undefined) ?? described.lanes[0];
+  const ownerField = described.entity.fields.find((field) => field.type === "member");
+  const heading = [laneField, ownerField].flatMap((field) => field && !restricted.has(field.name) ? [field] : []);
+  const headed = heading.map((field) => field.name).join(",");
+  const body = useMemo(() => {
+    const rest = (fields: Api.FieldInfo[]) => fields.filter((field) => !headed.split(",").includes(field.name));
+    return { ...detail, aside: rest(detail.aside), sections: detail.sections.map((section) => ({ ...section, fields: rest(section.fields) })) };
+  }, [detail, headed]);
+  const options = useOptions(described, laneField ? [laneField.name] : []);
+  const parameters = new Map((described.edit?.payload ?? []).filter(enterable).map((parameter) => [parameter.name, parameter]));
+  const status = kept?.archived ? { tone: "neutral", title: "Archived" } : laneField && (described.lifecycle?.states?.length ?? 0) <= 1 ? undefined : state;
   const name = described.name(values, id);
   const search = useCommandSearch();
   const loaded = read.status === "ready";
@@ -165,6 +175,19 @@ export function RecordPage({ described, id, listPath, listTitle, instances, enti
                         </HStack>
                       </>
                     )}
+                    {heading.map((field) => {
+                      const value = editor.values[field.name];
+                      const parameter = parameters.get(field.name);
+                      return (
+                        <Fragment key={field.name}>
+                          <Bullet />
+                          <PropertyField field={field} parameter={parameter} described={described.entity} value={value} form={editor.values}
+                            name={refs?.[field.name]?.[String(value ?? "")]} dot={options[field.name]?.find((option) => option.value === String(value ?? ""))?.dot}
+                            status={editor.status[field.name]} saving={editor.saving.has(field.name)} labelHidden hint={t(field.title)}
+                            onChange={parameter && ((next: unknown) => editor.change(parameter, next))} onCommit={() => editor.commit(field.name)} />
+                        </Fragment>
+                      );
+                    })}
                     {changes.length > 0 && (
                       <><Bullet /><Text type="supporting" color="secondary">{t("Unpublished changes")}</Text></>
                     )}
@@ -221,7 +244,7 @@ export function RecordPage({ described, id, listPath, listTitle, instances, enti
           {kept && tab === "details" && (
             <VStack gap={6}>
               {refusal && <Banner status="error" title={t("Not done")} description={refusal} />}
-              <FieldGroup described={detail} editor={editor} sections={detail.sections} direction="horizontal-labels" focusEmpty={fresh} fold={!fresh} refs={refs} restricted={restricted} />
+              <FieldGroup described={detail} editor={editor} sections={body.sections} direction="horizontal-labels" focusEmpty={fresh} fold={!fresh} refs={refs} restricted={restricted} />
               {definition && <DefinitionRows described={detail} source={definition} entities={entities} catalog={catalog} id={id} revision={kept.revision} />}
               {described.entity.sets?.flatMap((set) => {
                 if (set.direction !== "inverse") return [];
@@ -248,13 +271,13 @@ export function RecordPage({ described, id, listPath, listTitle, instances, enti
           {kept && tab === "files" && <RecordFiles read={files} attach={attach} target={`${described.type}/${id}`} />}
           {kept && tab === "activity" && <RecordActivity described={described} id={id} comments={comments} catalog={catalog} />}
           {kept && tab === "preview" && definition && <ObjectPreview definition={definition} source={detail} catalog={catalog} />}
-          {kept && tab === "properties" && <Rail described={detail} editor={editor} kept={kept} refs={refs} people={people} restricted={restricted} collaboration={collaboration} />}
+          {kept && tab === "properties" && <Rail described={body} editor={editor} kept={kept} refs={refs} people={people} restricted={restricted} collaboration={collaboration} />}
         </LayoutContent>
       }
       end={
         kept && !narrow && tab !== "preview" ? (
           <LayoutPanel width={340} padding={gutter} role="complementary" hasDivider>
-            <Rail described={detail} editor={editor} kept={kept} refs={refs} people={people} restricted={restricted} collaboration={collaboration} />
+            <Rail described={body} editor={editor} kept={kept} refs={refs} people={people} restricted={restricted} collaboration={collaboration} />
           </LayoutPanel>
         ) : undefined
       }

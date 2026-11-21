@@ -136,9 +136,10 @@ export function RecordActivity({ described, id, comments, catalog }: { described
                     </HStack>
                   </HStack>
                   {event.kind === "change" && event.changes.length > 0 && (
-                    <VStack gap={1}>
+                    <VStack gap={1} role="list">
                       {event.changes.map((line, index) => (
-                        <HStack key={index} gap={1} vAlign="center" wrap="wrap">
+                        <HStack key={index} gap={1} vAlign="center" wrap="wrap" role="listitem"
+                          aria-label={`${line.field}: ${line.before === undefined ? line.after : `${line.before} → ${line.after}`}`}>
                           <Text type="supporting" color="secondary">{line.field}</Text>
                           {line.before !== undefined && (
                             <>

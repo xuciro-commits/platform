@@ -2,6 +2,7 @@ import { Button } from "@astryxdesign/core/Button";
 import { Field } from "@astryxdesign/core/Field";
 import { HStack, StackItem, VStack } from "@astryxdesign/core/Layout";
 import { Spinner } from "@astryxdesign/core/Spinner";
+import { StatusDot } from "@astryxdesign/core/StatusDot";
 import { Text } from "@astryxdesign/core/Text";
 import { VisuallyHidden } from "@astryxdesign/core/VisuallyHidden";
 import { useClickableContainer, usePressFeedback } from "@astryxdesign/core/hooks";
@@ -15,6 +16,7 @@ import { reasonOf } from "./act";
 import { MemberLabel } from "./MemberField";
 import { type InputStatus, ParameterInput } from "./ParameterInput";
 import { ReferenceLink } from "./ReferenceField";
+import type { Dot } from "./Transitions";
 import { present } from "./values";
 
 const layers = "[role=listbox], [role=dialog], [role=menu], [role=grid], [role=tooltip]";
@@ -28,14 +30,19 @@ const styles = stylex.create({
     borderRadius: radiusVars["--radius-element"],
     minWidth: 0,
   },
+  value: { alignSelf: "stretch", display: "flex", alignItems: "center", minWidth: 0 },
 });
 
 export function picks(parameter: Api.Field, field?: Api.FieldInfo) {
   return Boolean(parameter.choices || parameter.ref) || ["choice", "reference", "member", "date"].includes(field?.type ?? parameter.type);
 }
 
-export function PropertyValue({ field, value, name }: { field: Api.FieldInfo; value: unknown; name?: string }) {
+export function PropertyValue({ field, value, name, dot }: { field: Api.FieldInfo; value: unknown; name?: string; dot?: Dot }) {
   if (field.type === "member" && !blank(value)) return <MemberLabel name={name ?? t("Unnamed member")} />;
+  if (dot && !blank(value)) {
+    const text = name ?? present(field, value);
+    return <HStack gap={2} vAlign="center"><StatusDot variant={dot} label={text} /><Text type="body">{text}</Text></HStack>;
+  }
   if (field.type === "reference" && field.ref && name && !blank(value)) return <ReferenceLink type={field.ref} id={String(value)} name={name} />;
   const text = present(field, value);
   return text === "" ? null : <Text type="body">{text}</Text>;
@@ -64,6 +71,8 @@ type PropertyFieldProps = {
   value: unknown;
   form?: Record<string, unknown>;
   name?: string;
+  dot?: Dot;
+  hint?: string;
   status?: InputStatus;
   saving?: boolean;
   labelHidden?: boolean;
@@ -163,8 +172,8 @@ export function PropertyField(props: PropertyFieldProps) {
   ) : (
     <HStack ref={surface} id={id} gap={2} vAlign="center" xstyle={parameter ? [styles.surface, interactionOverlayStyles.backgroundColor, focusOutlineStyles.focusWithin] : styles.surface}
       {...(parameter ? { ...pressable, onClick: clickable.onClick, onMouseUp: clickable.onMouseUp, onPointerDown: clickable.onPointerDown } : {})}>
-      <StackItem size="fill" role="group" aria-label={label}>
-        <PropertyValue field={field} value={value} name={name} />
+      <StackItem size="fill" role="group" aria-label={label} xstyle={styles.value}>
+        {props.hint && blank(value) ? <Text type="body" color="secondary">{props.hint}</Text> : <PropertyValue field={field} value={value} name={name} dot={props.dot} />}
       </StackItem>
       {saving && <Spinner size="sm" />}
       {parameter && <VisuallyHidden><Button ref={control} label={`${t("Edit")} ${label}`} onClick={begin} /></VisuallyHidden>}

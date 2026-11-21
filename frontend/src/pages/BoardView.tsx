@@ -12,7 +12,7 @@ import { t } from "../i18n";
 import { useGutter } from "./frame";
 import type { Dot } from "./Transitions";
 
-export type BoardCard = { id: string; column: string; title: string; href: string; lines: string[]; amount?: number; currency?: string; owner?: string; updated?: string };
+export type BoardCard = { id: string; column: string; title: string; href: string; lines: string[]; amount?: number; currency?: string; owner?: string; updated?: string; related?: string };
 type BoardProps = {
   columns: { key: string; label: string; dot?: Dot }[];
   cards: BoardCard[];
@@ -49,6 +49,7 @@ function CardBody({ card }: { card: BoardCard }) {
             {line}
           </Text>
         ))}
+        {card.related && <Text type="supporting" color="secondary" maxLines={1}>{card.related}</Text>}
       </VStack>
       {(card.owner || card.updated) && (
         <HStack gap={2} vAlign="center">

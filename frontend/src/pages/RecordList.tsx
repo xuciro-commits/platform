@@ -2,7 +2,7 @@ import { Banner } from "@astryxdesign/core/Banner";
 import { Button } from "@astryxdesign/core/Button";
 import { VStack } from "@astryxdesign/core/Layout";
 import { type ComponentType, useEffect, useMemo, useState } from "react";
-import { type Api, type Read, request, useRead } from "../host";
+import { type Api, type Read, useRead } from "../host";
 import { t } from "../i18n";
 import { navigate, usePath, useSearch } from "../router";
 import { ActionDialog } from "./ActionDialog";
@@ -11,9 +11,10 @@ import { type ListShape, ListView, type Move } from "./ListPage";
 import { enterable } from "./ParameterInput";
 import { type Described, describe, numeric } from "./describe";
 import { BatchActions, canBatch } from "./BatchActions";
+import { type Options, useOptions, useRelatedCounts } from "./options";
 import { RecordPage } from "./RecordPage";
 import { type Dot, dots, Transitions } from "./Transitions";
-import { money, plain, present, shown } from "./values";
+import { money, plain, present } from "./values";
 import { domainOf, hasFilters, newView, readView, type ViewState } from "./view";
 
 type Row = Record<string, unknown>;
@@ -22,8 +23,6 @@ type Declared = { type: string; title?: string; about: string; fields?: string[]
 type Back = { href: string; label: string };
 type Stamp = { at?: string };
 type Formats = Record<string, Api.FieldFormat>;
-type Options = Record<string, { value: string; label: string; dot?: Dot }[]>;
-const palette: Record<string, Dot> = { gray: "neutral", blue: "accent", purple: "accent", cyan: "accent", pink: "accent", green: "success", orange: "warning", amber: "warning", red: "error" };
 const formatted = "__formats";
 const referenced = "__refs";
 const formats = (row: Row) => (row[formatted] as Formats | undefined) ?? {};
@@ -123,41 +122,6 @@ function useRecordPages(type: string, view: ViewState, enabled: boolean, choiceV
 function keyOf(field: Api.FieldInfo | undefined, title: string) {
   const index = field?.choiceTitles?.indexOf(title) ?? -1;
   return index >= 0 ? field?.choices?.[index] : title;
-}
-
-function useOptions(described: Described | undefined) {
-  const members = useRead<Api.MemberOption[]>(described?.entity.fields.some((field) => field.type === "member") ? "/v1/member-directory" : null);
-  const types = useRead<Api.EntityInfo[]>("/v1/entities");
-  const [references, setReferences] = useState<Options>({});
-  const targets = useMemo(() => (described ? described.entity.fields.filter((field) => field.type === "reference" && field.ref).map((field) => [field.name, String(field.ref)] as const) : []), [described]);
-  useEffect(() => {
-    if (types.status !== "ready" || targets.length === 0) return;
-    let live = true;
-    void Promise.all(
-      targets.map(async ([name, type]) => {
-        const target = types.data.find((entity) => entity.type === type);
-        const display = target?.display;
-        const color = target?.fields.some((field) => field.name === "color" && field.type === "choice");
-        const sort = readView(target?.view == null ? null : JSON.stringify(target.view), newView([])).sort.map((item) => (item.direction === "descending" ? "-" : "") + item.sortKey).join(",");
-        const answer = await request<Api.RecordPage>(`/v1/records/${encodeURIComponent(type)}?${new URLSearchParams(sort ? { limit: "200", sort } : { limit: "200" })}`).catch(() => undefined);
-        const rows = (answer?.records ?? []) as Row[];
-        return [name, rows.map((row) => ({
-          value: String(row.id),
-          label: shown(plain(display ? row[display] : row.id)) || String(row.id),
-          dot: color ? palette[String(plain(row.color))] ?? dots.neutral : undefined,
-        }))] as const;
-      }),
-    ).then((entries) => live && setReferences(Object.fromEntries(entries)));
-    return () => {
-      live = false;
-    };
-  }, [targets, types]);
-  return useMemo<Options>(() => {
-    const people = members.status === "ready" ? members.data.map((member) => ({ value: member.id, label: member.name })) : undefined;
-    const options: Options = { ...references };
-    for (const field of described?.entity.fields ?? []) if (field.type === "member" && people) options[field.name] = people;
-    return options;
-  }, [members, references, described]);
 }
 
 type RecordShape = ListShape<Api.RecordPage, Row>;
@@ -303,6 +267,7 @@ export function Records({ declared, listPath, id, back }: { declared: Declared; 
     });
   };
   const options = useOptions(described);
+  const related = useRelatedCounts(described, types.status === "ready" ? types.data : undefined, kept.map((row) => String(row.id)), view.layout === "board");
   const numericField = described?.table.find((field) => numeric.has(field.type));
   const board: RecordShape["board"] = laneField ? {
     key: laneField.name,
@@ -312,6 +277,7 @@ export function Records({ declared, listPath, id, back }: { declared: Declared; 
     of: (row) => String(row[laneField.name] ?? ""),
     accepts: (id, to) => Boolean(actionFor(id, to)),
     move,
+    related: (row) => related[String(row.id)],
     total: numericField && {
       label: numericField.title,
       value: (row) => {

@@ -41,7 +41,10 @@ export function Transitions({ described, id, values, revision, title, instances,
     const verdict = verdicts.get(action.schema);
     return verdict ? [{ action, verdict }] : [];
   });
-  const items = offeredMore.map(({ action, verdict }) => {
+  const declared = new Set(lifecycle?.transitions.filter((transition) => transition.from.includes(current)).map((transition) => transition.schema));
+  const lead = offered.length ? undefined : offeredMore.find(({ action }) => declared.has(action.schema));
+  const run = (action: Api.Action) => act.run({ action, id, revision, label: t(action.title), name: title, reversible: false, onRefused: onFailure });
+  const items = offeredMore.filter((entry) => entry !== lead).map(({ action, verdict }) => {
     const label = t(action.title);
     return {
       id: action.schema,
@@ -52,7 +55,7 @@ export function Transitions({ described, id, values, revision, title, instances,
         </Tooltip>
       ),
       isDisabled: !verdict.allowed || act.busy,
-      onClick: () => act.run({ action, id, revision, label, name: title, reversible: false, onRefused: onFailure }),
+      onClick: () => run(action),
     };
   });
 
@@ -60,6 +63,7 @@ export function Transitions({ described, id, values, revision, title, instances,
     ...offered.filter(({ verdict }) => verdict.allowed).map(({ step }) => ({
       id: `step:${step.transition.name}`, label: t(step.transition.title), run: () => click(step),
     })),
+    ...(lead?.verdict.allowed ? [{ id: lead.action.schema, label: t(lead.action.title), run: () => run(lead.action) }] : []),
     ...items.filter((item) => !item.isDisabled).map((item) => ({ id: item.id, label: item.label, run: item.onClick })),
   ]);
 
@@ -71,6 +75,10 @@ export function Transitions({ described, id, values, revision, title, instances,
           <Button key={step.transition.name} label={t(step.transition.title)} variant={index === 0 ? "primary" : "secondary"}
             isDisabled={!verdict.allowed || act.busy} tooltip={verdict.allowed ? undefined : verdict.reason} onClick={() => click(step)} />
         ))}
+        {lead && (
+          <Button label={t(lead.action.title)} variant="primary" isDisabled={!lead.verdict.allowed || act.busy}
+            tooltip={lead.verdict.allowed ? undefined : lead.verdict.reason} onClick={() => run(lead.action)} />
+        )}
         {items.length > 0 && <MoreMenu label={t("More actions")} items={items} alignment="end" />}
       </HStack>
       {act.element}

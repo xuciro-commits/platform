@@ -61,6 +61,7 @@ type ListBoard<Row> = {
   accepts?: (id: string, to: string) => boolean;
   move?: Move;
   total?: { label: string; value: (row: Row) => { amount: number; currency?: string } | undefined };
+  related?: (row: Row) => string | undefined;
 };
 export type ListShape<Answer, Row> = {
   title: string;
@@ -219,6 +220,7 @@ export function ListView<Answer, Row>({ definition, read, primary, back }: ListV
         const value = column.value ? column.value(row) : column.boolean ? cells[column.key] === t("Yes") : cells[column.key];
         raw[column.key] = column.kind === "time" ? (value ? new Date(String(value)) : undefined) : value;
       }
+      if (board?.related) cells.__related = board.related(row) ?? "";
       if (board?.total) {
         const amount = board.total.value(row);
         if (amount) {
@@ -513,6 +515,7 @@ export function ListView<Answer, Row>({ definition, read, primary, back }: ListV
                     currency: cells.__currency,
                     owner: ownerCol ? cells[ownerCol.key] : undefined,
                     updated: timeCol ? cells[timeCol.key] : undefined,
+                    related: cells.__related || undefined,
                   };
                 })}
                 accepts={board.accepts}

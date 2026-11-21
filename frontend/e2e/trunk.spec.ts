@@ -77,7 +77,7 @@ test("records: open a list, open a record, change a field in place", async ({ pa
   await expect(page.getByRole("textbox", { name: "Loss reason" })).toHaveCount(0);
   await expect(page.getByRole("switch", { name: "Budget approved" })).toBeChecked();
   await expect(property(page, "Proposed deposit")).toContainText("1,250.00");
-  await expect(property(page.getByRole("complementary"), "Owner")).toContainText("王丹");
+  await expect(property(page, "Owner")).toContainText("王丹");
 
   await expect(property(page, "Next step")).toHaveText("发送修订后的条款");
   await edit(page, "Next step");
@@ -89,12 +89,12 @@ test("records: open a list, open a record, change a field in place", async ({ pa
   await page.reload();
   await expect(property(page, "Next step")).toHaveText("Call the plant manager");
 
-  await edit(page.getByRole("complementary"), "Owner");
-  await page.getByRole("complementary").getByRole("combobox", { name: "Owner", exact: true }).fill("韩奥");
+  await edit(page, "Owner");
+  await page.getByRole("combobox", { name: "Owner", exact: true }).fill("韩奥");
   await page.getByRole("option", { name: /韩奥/ }).click();
   await expect(page.getByRole("complementary").getByText("3", { exact: true })).toBeVisible();
   await page.reload();
-  await expect(property(page.getByRole("complementary"), "Owner")).toContainText("韩奥");
+  await expect(property(page, "Owner")).toContainText("韩奥");
 });
 
 test("cells: a list cell edits in place with the input its type asks for", async ({ page }) => {
@@ -127,6 +127,7 @@ test("sections: a field shows only when its condition holds", async ({ page }) =
   await edit(page, "Stage");
   await page.getByRole("option", { name: "Lost", exact: true }).click();
   await expect(reason.first()).toBeVisible();
+  await expect(property(page, "Stage")).toHaveText("Lost");
 
   await edit(page, "Stage");
   await page.getByRole("option", { name: "Proposal", exact: true }).click();
@@ -195,8 +196,8 @@ test("conflict: the second writer sees both values and chooses", async ({ browse
   await first.getByRole("textbox", { name: "Next step" }).press("Enter");
   await expect(first.getByRole("complementary").getByText("2", { exact: true })).toBeVisible();
 
-  await edit(second.getByRole("complementary"), "Owner");
-  await second.getByRole("complementary").getByRole("combobox", { name: "Owner", exact: true }).fill("韩奥");
+  await edit(second, "Owner");
+  await second.getByRole("combobox", { name: "Owner", exact: true }).fill("韩奥");
   await second.getByRole("option", { name: /韩奥/ }).click();
   await expect(second.getByRole("complementary").getByText("3", { exact: true })).toBeVisible();
   await expect(second.getByRole("dialog")).toHaveCount(0);
@@ -306,7 +307,7 @@ test("shape: every record page has the same header, tabs and rail", async ({ pag
   await visit("Ontology", "Objects", "Opportunities", "冲压线改造");
   await page.getByRole("link", { name: "Activity" }).click();
   await expect(page).toHaveURL(/\/activity(?:\?|$)/);
-  await expect(page.getByText("Subject: 冲压线改造")).toBeVisible();
+  await expect(page.getByRole("listitem", { name: "Subject: 冲压线改造" })).toBeVisible();
   await visit("Ontology", "Objects", "Customers", "北风工具");
   await visit("Ontology", "Object types", null, "Opportunity");
 });
@@ -412,18 +413,19 @@ test("lines: add and edit a child row from its parent record", async ({ page }) 
   await form.getByRole("button", { name: "Create" }).click();
   await expect(form).toBeHidden();
   const table = page.getByRole("table", { name: "Opportunity lines" });
-  await expect(table.getByRole("textbox", { name: "Product" })).toHaveValue("Press 200t");
+  await expect(property(table, "Product")).toHaveText("Press 200t");
   await page.reload();
-  const quantity = table.getByRole("spinbutton", { name: "Quantity" });
-  await expect(quantity).toHaveValue("2");
+  await expect(property(table, "Quantity")).toHaveText("2");
   await expect(table.getByRole("row", { name: /Totals/ })).toContainText("1,000");
+  await edit(table, "Quantity");
+  const quantity = table.getByRole("spinbutton", { name: "Quantity" });
   await quantity.fill("3");
   await quantity.press("Enter");
   await expect(table.getByRole("row", { name: /Totals/ })).toContainText("3");
   await page.reload();
-  await expect(quantity).toHaveValue("3");
+  await expect(property(table, "Quantity")).toHaveText("3");
   await table.getByRole("button", { name: "Archive row" }).click();
-  await expect(table.getByRole("textbox", { name: "Product" })).toHaveCount(0);
+  await expect(property(table, "Product")).toHaveCount(0);
 });
 
 test("activity: a comment and an inline change appear in one timeline", async ({ page }) => {
@@ -440,7 +442,7 @@ test("activity: a comment and an inline change appear in one timeline", async ({
   await page.getByRole("textbox", { name: "Write a comment" }).fill("I asked the warehouse lead.");
   await page.getByRole("button", { name: "Post comment" }).click();
   const comment = page.getByText("I asked the warehouse lead.", { exact: true });
-  const change = page.getByText(`Next step: ${before} → Confirm scanner quantities`, { exact: true });
+  const change = page.getByRole("listitem", { name: `Next step: ${before} → Confirm scanner quantities`, exact: true });
   await expect(comment).toBeVisible();
   await expect(change).toBeVisible();
   expect((await comment.boundingBox())!.y).toBeLessThan((await change.boundingBox())!.y);
@@ -705,8 +707,7 @@ test("gate: build a type and use it, install a package and use its action, then 
   await page.keyboard.press("Tab");
   await order.getByRole("button", { name: "Create", exact: true }).click();
   await expect(page.getByRole("heading", { level: 1, name: "GATE-1", exact: true })).toBeVisible();
-  await page.getByRole("button", { name: "More actions" }).click();
-  await page.getByRole("menuitem", { name: "Start upstream production", exact: true }).click();
+  await page.getByRole("button", { name: "Start upstream production", exact: true }).click();
   const contributed = page.getByRole("dialog", { name: "Start upstream production", exact: true });
   await contributed.getByRole("textbox", { name: /^Shop order/ }).fill("WO-GATE-1");
   await contributed.getByRole("button", { name: "Start upstream production", exact: true }).click();
@@ -1136,9 +1137,9 @@ test("applications: shared records respect roles and keep their history after re
   await member.goto(recordURL);
   await expect(member.getByRole("heading", { name: "PO-1042", exact: true })).toBeVisible();
   await expect(member.getByText("WO-1043", { exact: true })).toBeVisible();
+  await expect(member.getByRole("button", { name: "Start upstream production", exact: true })).toBeEnabled();
   const menu = member.getByRole("button", { name: "More actions" });
-  await menu.click();
-  await expect(member.getByRole("menuitem", { name: "Start upstream production", exact: true })).toBeVisible();
+  if (await menu.isVisible()) await menu.click();
   await expect(member.getByRole("menuitem", { name: "Set shop order", exact: true })).toHaveCount(0);
   expect((await direct(member)).code).toBe("ERROR_CODE_POLICY_DENIED");
 
@@ -1168,12 +1169,13 @@ test("applications: shared records respect roles and keep their history after re
   await member.goto(appRecord.href);
   await expect(member).toHaveURL((url) => url.pathname === recordURL);
   await expect(member.getByText("WO-1043", { exact: true })).toBeVisible();
+  await expect(member.getByRole("button", { name: "Start upstream production", exact: true })).toHaveCount(0);
   if (await menu.isVisible()) await menu.click();
   await expect(member.getByRole("menuitem", { name: "Start upstream production", exact: true })).toHaveCount(0);
   await expect(member.getByRole("link", { name: "Production order provider", exact: true })).toHaveCount(0);
   await member.goto(historyURL!);
   await expect(member).toHaveURL((url) => url.pathname === `${recordURL}/activity`);
-  await expect(member.getByText(/First shop order: .*WO-1043/)).toBeVisible();
+  await expect(member.getByRole("listitem", { name: /First shop order: .*WO-1043/ })).toBeVisible();
   await member.close();
 });
 
@@ -1211,15 +1213,15 @@ test("members: an opportunity owner is shown by name and can be reassigned", asy
 
   await row.getByRole("link", { name: "熔炉监测" }).click();
   const properties = page.getByRole("complementary");
-  await expect(property(properties, "Owner")).toContainText("王丹");
-  await expect(properties.getByRole("img", { name: "王丹" })).toBeVisible();
-  await edit(properties, "Owner");
-  await properties.getByRole("combobox", { name: "Owner", exact: true }).fill("韩奥");
+  await expect(property(page, "Owner")).toContainText("王丹");
+  await expect(property(page, "Owner").getByRole("img", { name: "王丹" })).toBeVisible();
+  await edit(page, "Owner");
+  await page.getByRole("combobox", { name: "Owner", exact: true }).fill("韩奥");
   await page.getByRole("option", { name: /韩奥/ }).click();
   await expect(properties.getByText("2", { exact: true })).toBeVisible();
   await page.reload();
-  await expect(property(properties, "Owner")).toContainText("韩奥");
-  await expect(properties.getByRole("img", { name: "韩奥" })).toBeVisible();
+  await expect(property(page, "Owner")).toContainText("韩奥");
+  await expect(property(page, "Owner").getByRole("img", { name: "韩奥" })).toBeVisible();
 });
 
 test("record fields: an attachment preserves the horizontal label alignment", async ({ page }) => {
@@ -1789,9 +1791,10 @@ test("crm: every CRM type can be created, edited and filtered, and lead and deal
   await page.goto("/ontology/objects/crm.deal/DEL-001");
   const lines = page.getByRole("table", { name: "Deal product lines" });
   await expect(lines).toBeVisible();
-  await expect.poll(() => lines.getByRole("textbox", { name: "Product name" }).evaluateAll((inputs) => inputs.map((input) => (input as HTMLInputElement).value))).toContain("平台核心席位");
+  await expect(property(lines, "Product name").filter({ hasText: "平台核心席位" }).first()).toBeVisible();
   await expect(page.getByText("19,500.00 USD", { exact: true }).first()).toBeVisible();
   const added = lines.getByRole("row").filter({ hasText: "1,000.00 USD" });
+  await edit(added, "Quantity");
   await added.getByRole("spinbutton", { name: "Quantity" }).fill("3");
   await added.getByRole("spinbutton", { name: "Quantity" }).press("Enter");
   await expect(lines.getByText("1,500.00 USD", { exact: true })).toBeVisible();
@@ -1878,8 +1881,7 @@ async function crmMainline(page: Page, go: (type: string, plural: string) => Pro
   }
 
   await page.goto(leadPage);
-  await page.getByRole("button", { name: "More actions" }).click();
-  await page.getByRole("menuitem", { name: "Convert to deal", exact: true }).click();
+  await page.getByRole("button", { name: "Convert to deal", exact: true }).click();
   const convert = page.getByRole("dialog", { name: "Convert to deal", exact: true });
   await expect(convert.getByText("Leave empty to create a new organization from the lead.", { exact: true })).toBeVisible();
   await convert.getByRole("combobox", { name: "Link to organization" }).click();
@@ -1898,9 +1900,7 @@ async function crmMainline(page: Page, go: (type: string, plural: string) => Pro
   await expect(page).toHaveURL((url) => url.pathname === dealPage);
   await page.goto(leadPage);
   await expect(page.getByRole("link", { name: company, exact: true }).first()).toBeVisible();
-  await page.getByRole("button", { name: "More actions" }).click();
-  await expect(page.getByRole("menuitem", { name: "Convert to deal", exact: true })).toBeDisabled();
-  await page.keyboard.press("Escape");
+  await expect(page.getByRole("button", { name: "Convert to deal", exact: true })).toBeDisabled();
 
   await go("crm.deal", "Deals");
   await page.getByRole("radio", { name: "Board" }).click();
@@ -2005,8 +2005,8 @@ test("crm: a sales rep works only their own leads while the sales manager sees t
   await page.getByText("沈若溪", { exact: true }).click();
   await page.getByRole("link", { name: "Activity", exact: true }).click();
   const main = page.getByRole("main");
-  for (const line of ["Source: 邮件", "Industry: 物流", "Territory: 华东大区", "Lead owner: 田雪"]) await expect(main.getByText(line, { exact: true })).toBeVisible();
-  await expect(main.getByRole("img", { name: "王丹", exact: true }).first()).toBeVisible();
+  for (const line of ["Source: 邮件", "Industry: 物流", "Territory: 华东大区", "Lead owner: 田雪"]) await expect(main.getByRole("listitem", { name: line, exact: true })).toBeVisible();
+  await expect(main.getByText("王丹", { exact: true }).first()).toBeVisible();
   await expect(main.getByText(/SRC-|IND-|TER-|admin-1|Unnamed member/)).toHaveCount(0);
 });
 
