@@ -38,6 +38,11 @@ type MigrationManifest struct {
 	Types  []MigrationType `json:"types"`
 }
 
+type ImportSheet struct {
+	Columns []string   `json:"columns"`
+	Rows    [][]string `json:"rows"`
+}
+
 type ImportRow struct {
 	Row     int        `json:"row"`
 	ID      string     `json:"id"`

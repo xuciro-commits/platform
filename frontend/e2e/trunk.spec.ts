@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import { crc32 } from "node:zlib";
 import { type Locator, type Page, expect, test } from "@playwright/test";
 import type { Api } from "../src/host";
 
@@ -1810,6 +1812,98 @@ test("crm: a sales rep works only their own leads while the sales manager sees t
   await expect(main.getByText(/SRC-|IND-|TER-|admin-1|Unnamed member/)).toHaveCount(0);
 });
 
+
+function workbook(rows: string[][]) {
+  const main = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+  const links = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
+  const strings = [...new Set(rows.flat().filter(Boolean))];
+  const cells = (row: string[], r: number) => row.map((text, c) => (text ? `<c r="${String.fromCharCode(65 + c)}${r}" t="s"><v>${strings.indexOf(text)}</v></c>` : "")).join("");
+  const parts = {
+    "xl/workbook.xml": `<workbook xmlns="${main}" xmlns:r="${links}"><sheets><sheet name="Sheet1" sheetId="1" r:id="rId1"/></sheets></workbook>`,
+    "xl/_rels/workbook.xml.rels": `<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="${links}/worksheet" Target="worksheets/sheet1.xml"/></Relationships>`,
+    "xl/sharedStrings.xml": `<sst xmlns="${main}">${strings.map((text) => `<si><t>${text}</t></si>`).join("")}</sst>`,
+    "xl/worksheets/sheet1.xml": `<worksheet xmlns="${main}"><sheetData>${rows.map((row, r) => `<row r="${r + 1}">${cells(row, r + 1)}</row>`).join("")}</sheetData></worksheet>`,
+  };
+  const stored: Buffer[] = [];
+  const directory: Buffer[] = [];
+  let offset = 0;
+  for (const [name, text] of Object.entries(parts)) {
+    const data = Buffer.from(text);
+    const path = Buffer.from(name);
+    const local = Buffer.alloc(30);
+    local.writeUInt32LE(0x04034b50, 0);
+    local.writeUInt32LE(crc32(data), 14);
+    local.writeUInt32LE(data.length, 18);
+    local.writeUInt32LE(data.length, 22);
+    local.writeUInt16LE(path.length, 26);
+    const entry = Buffer.alloc(46);
+    entry.writeUInt32LE(0x02014b50, 0);
+    entry.writeUInt32LE(crc32(data), 16);
+    entry.writeUInt32LE(data.length, 20);
+    entry.writeUInt32LE(data.length, 24);
+    entry.writeUInt16LE(path.length, 28);
+    entry.writeUInt32LE(offset, 42);
+    stored.push(local, path, data);
+    directory.push(entry, path);
+    offset += local.length + path.length + data.length;
+  }
+  const end = Buffer.alloc(22);
+  end.writeUInt32LE(0x06054b50, 0);
+  end.writeUInt16LE(directory.length / 2, 8);
+  end.writeUInt16LE(directory.length / 2, 10);
+  end.writeUInt32LE(directory.reduce((size, part) => size + part.length, 0), 12);
+  end.writeUInt32LE(offset, 16);
+  return Buffer.concat([...stored, ...directory, end]);
+}
+
+test("import: an Excel workbook of leads maps by column title, refused rows are fixed in place and retried, and the list exports what it shows as CSV", async ({ page }) => {
+  await signIn(page, "admin-1 · crm");
+  await page.goto("/crm/crm.lead");
+  await page.getByRole("button", { name: "More actions", exact: true }).click();
+  await page.getByRole("menuitem", { name: "Import", exact: true }).click();
+  const wizard = page.getByRole("dialog", { name: "Import · Leads", exact: true });
+  await wizard.locator('input[type="file"]').setInputFiles({
+    name: "leads.xlsx",
+    mimeType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    buffer: workbook([
+      ["Full name", "Organization", "Status", "Industry"],
+      ["Ada Lin", "Northwind", "New", "制造"],
+      ["Bo Chen", "Contoso", "Contacted", ""],
+      ["", "Nameless Co", "New", ""],
+      ["Cy Wu", "Fabrikam", "Pending", ""],
+    ]),
+  });
+  await expect(wizard.getByText("4 records", { exact: true })).toBeVisible();
+  await wizard.getByRole("button", { name: "Continue", exact: true }).click();
+  await wizard.getByRole("button", { name: "Continue", exact: true }).click();
+  await expect(wizard.getByText("2 can be imported · 2 need fixing", { exact: true })).toBeVisible();
+  await expect(wizard.getByText("This value cannot be read: Status", { exact: true })).toBeVisible();
+  await expect(wizard.getByRole("button", { name: "Import 2", exact: true })).toBeEnabled();
+  await wizard.getByRole("textbox", { name: "Full name · Row 3", exact: true }).fill("Fiona Gao");
+  await wizard.getByRole("textbox", { name: "Status · Row 4", exact: true }).fill("Contacted");
+  await expect(wizard.getByRole("button", { name: "Import 2", exact: true })).toBeDisabled();
+  await wizard.getByRole("button", { name: "Check", exact: true }).click();
+  await expect(wizard.getByText("4 can be imported · 0 need fixing", { exact: true })).toBeVisible();
+  await wizard.getByRole("button", { name: "Import 4", exact: true }).click();
+  await expect(wizard.getByText("4 records imported", { exact: true })).toBeVisible();
+  await wizard.getByRole("button", { name: "Done", exact: true }).click();
+  await expect(wizard).toBeHidden();
+
+  const search = page.getByRole("textbox", { name: "Search this list" });
+  await search.fill("Fiona Gao");
+  await search.press("Enter");
+  await expect(page.getByRole("link", { name: "Fiona Gao", exact: true })).toBeVisible();
+  await expect(page.getByRole("link", { name: "Ada Lin", exact: true })).toHaveCount(0);
+  const started = page.waitForEvent("download");
+  await page.getByRole("button", { name: "More actions", exact: true }).click();
+  await page.getByRole("menuitem", { name: "Export as CSV", exact: true }).click();
+  const exported = readFileSync((await (await started).path())!, "utf8");
+  expect(exported).toContain("Fiona Gao");
+  expect(exported).not.toContain("Ada Lin");
+  await page.getByRole("link", { name: "Fiona Gao", exact: true }).click();
+  await expect(page).toHaveURL((url) => /^\/crm\/crm\.lead\/CRM-LEAD-\d{4}-\d{5}$/.test(url.pathname));
+  await expect(property(page, "Lead owner")).toContainText("王丹");
+});
 
 test("naming: two new deals get consecutive numbers", async ({ page }) => {
   await signIn(page, "admin-1 · crm");

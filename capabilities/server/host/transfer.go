@@ -23,34 +23,32 @@ func (t *Tenant) Import(m platform.Member, typ string, data []byte, preview bool
 	}
 	view, _ := objects.ViewOf(m, et)
 	currency := t.setting(t.automation(controlowner.PlatformApp, false), controlowner.SettingCurrency)
-	file, lines, ok := objects.ParseImport(view.Info(), data, currency)
-	if !ok {
-		return nil, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
+	parsed, err := recordRead(t, context.Background(), func(t *Tenant) (objects.ImportFile, *platform.Error) {
+		return objects.ParseImport(view.Info(), data, currency, t.objectOwner(t.Projection).Referrer(m, now))
+	})
+	if err != nil {
+		return nil, err
 	}
 	return objects.Importer{Tenant: t.ID, Member: m.ID,
-		Submit: func(s *pb.Submission) (*platform.Error, []platform.FieldIssue) {
+		Submit: func(s *pb.Submission) (*pb.ChangeRecord, *platform.Error, []platform.FieldIssue) {
 			if preview {
 				return t.probeDiagnosed(m, s, now)
 			}
-			_, err, issues := t.submitDiagnosed(m, s, now)
-			return err, issues
+			return t.submitDiagnosed(m, s, now)
 		},
 		Verb: func(key, id string) string {
 			verb, _ := recordRead(t, context.Background(), func(t *Tenant) (string, *platform.Error) {
 				ledger := t.App(view.Info().App).Authority()
-				if ledger.AcceptedFor(t.ID, key) != nil {
-					return ".create", nil
-				}
-				if ledger.AcceptedFor(t.ID, key+":edit") != nil || t.readable(m, typ+"/"+id, now) {
+				if ledger.AcceptedFor(t.ID, key) == nil && (ledger.AcceptedFor(t.ID, key+":edit") != nil || t.readable(m, typ+"/"+id, now)) {
 					return ".edit", nil
 				}
 				return ".create", nil
 			})
 			return verb
-		}}.Rows(view.Info(), file, lines), nil
+		}}.Rows(view.Info(), parsed), nil
 }
 
-func (t *Tenant) probeDiagnosed(m platform.Member, s *pb.Submission, now time.Time) (*platform.Error, []platform.FieldIssue) {
+func (t *Tenant) probeDiagnosed(m platform.Member, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *platform.Error, []platform.FieldIssue) {
 	issues, refusal := recordRead(t, context.Background(), func(t *Tenant) ([]platform.FieldIssue, *platform.Error) {
 		app := t.App(t.owner["action:"+s.GetSchema().GetName()])
 		if app == nil {
@@ -61,7 +59,7 @@ func (t *Tenant) probeDiagnosed(m platform.Member, s *pb.Submission, now time.Ti
 		_, refusal := decideAcceptedAs(app, draft, m, s, now, false)
 		return t.readableFieldIssues(m, draft.InputIssues[refusal], now), refusal
 	})
-	return refusal, issues
+	return nil, refusal, issues
 }
 
 func (t *Tenant) exportRead(m platform.Member, typ string, q platform.Query, now time.Time) ([]byte, *platform.Error) {

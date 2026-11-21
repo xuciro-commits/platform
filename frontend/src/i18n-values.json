@@ -172,5 +172,14 @@
   "Reference record {id} names the unknown field {field}": "参考记录 {id} 用了不存在的字段 {field}",
   "Reference records": "参考记录",
   "Rows shipped with the type, such as the stages of a pipeline; a publish or an install adds the ones this workspace lacks": "随类型一起交付的记录，例如销售管道的各个阶段；发布或安装时补上本工作区还没有的几条",
-  "Only members holding one of these roles see the group; empty for everyone": "只有持有其中某个角色的成员能看到这一组；留空则所有人可见"
+  "Only members holding one of these roles see the group; empty for everyone": "只有持有其中某个角色的成员能看到这一组；留空则所有人可见",
+  "The file is not a CSV file or an Excel workbook": "这不是 CSV 文件或 Excel 工作簿",
+  "Revert to the shipped translation": "恢复为自带译文",
+  "Close details": "关闭详情",
+  "Resize details": "调整详情宽度",
+  "Open record": "打开记录",
+  "Calculated by a formula": "由公式算出",
+  "Filled in from other fields; you can change it": "由其他字段带出，可以改",
+  "Changed only by actions": "只由动作改动",
+  "changes": "项变更"
 }

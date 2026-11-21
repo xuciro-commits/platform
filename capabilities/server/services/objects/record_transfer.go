@@ -24,10 +24,15 @@ type ImportLine struct {
 	Outcome string
 }
 
-func ParseImport(info platform.RecordTypeInfo, data []byte, currency string) (string, []ImportLine, bool) {
+type ImportFile struct {
+	File  string
+	Lines []ImportLine
+}
+
+func ParseImport(info platform.RecordTypeInfo, data []byte, currency string, refer func(platform.FieldInfo, string) (string, bool)) (ImportFile, *platform.Error) {
 	rows, err := csv.NewReader(bytes.NewReader(data)).ReadAll()
-	if err != nil || len(rows) < 1 || !slices.Contains(rows[0], "id") {
-		return "", nil, false
+	if err != nil || len(rows) < 1 {
+		return ImportFile{}, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 	}
 	header := rows[0]
 	sum := sha256.Sum256(data)
@@ -60,26 +65,43 @@ func ParseImport(info platform.RecordTypeInfo, data []byte, currency string) (st
 				}
 				continue
 			}
-			v, err := fromCSV(f, value, currency)
+			v, err := fromCSV(f, value, currency, refer)
 			if err != nil {
 				r.Outcome = "ERROR_CODE_INVALID_ARGUMENT: " + name
 				break
 			}
 			payload[name] = v
 		}
-		if r.Outcome == "" && r.ID == "" {
-			r.Outcome = "ERROR_CODE_INVALID_ARGUMENT"
-		}
 		if r.Outcome == "" {
 			r.Payload, _ = json.Marshal(payload)
 		}
 		out = append(out, r)
 	}
-	return hex.EncodeToString(sum[:8]), out, true
+	return ImportFile{File: hex.EncodeToString(sum[:8]), Lines: out}, nil
 }
 
-func fromCSV(f platform.FieldInfo, value, currency string) (any, error) {
+func fromCSV(f platform.FieldInfo, value, currency string, refer func(platform.FieldInfo, string) (string, bool)) (any, error) {
 	switch f.Type {
+	case "choice":
+		for i, title := range f.ChoiceTitles {
+			if i < len(f.Choices) && !slices.Contains(f.Choices, value) && strings.EqualFold(title, value) {
+				return f.Choices[i], nil
+			}
+		}
+	case "reference":
+		id, ok := refer(f, value)
+		if !ok {
+			return nil, fmt.Errorf("no %s is named %s", f.Ref, value)
+		}
+		return id, nil
+	case "date", "datetime":
+		if days, err := strconv.ParseFloat(value, 64); err == nil {
+			at := time.Date(1899, 12, 30, 0, 0, 0, 0, time.UTC).Add(time.Duration(days * float64(24*time.Hour)))
+			if f.Type == "date" {
+				return at.Format(time.DateOnly), nil
+			}
+			return at.Round(time.Second).Format(time.RFC3339), nil
+		}
 	case "integer":
 		return strconv.Atoi(value)
 	case "decimal":
@@ -93,7 +115,17 @@ func fromCSV(f platform.FieldInfo, value, currency string) (any, error) {
 			cur = currency
 		}
 		return platform.Money{Amount: int64(x*100 + 0.5*sign(x)), Currency: cur}, err
-	case "references", "tags":
+	case "references":
+		parts := strings.Split(value, ";")
+		for i := range parts {
+			id, ok := refer(f, strings.TrimSpace(parts[i]))
+			if !ok {
+				return nil, fmt.Errorf("no %s is named %s", f.Ref, parts[i])
+			}
+			parts[i] = id
+		}
+		return parts, nil
+	case "tags":
 		return strings.Split(value, ";"), nil
 	case "lines":
 		return nil, fmt.Errorf("lines are not imported")
@@ -171,6 +203,40 @@ func toCSV(v any) string {
 		return strings.Join(parts, ";")
 	}
 	return fmt.Sprint(v)
+}
+
+func (o *Owner) Referrer(m platform.Member, now time.Time) func(platform.FieldInfo, string) (string, bool) {
+	return func(f platform.FieldInfo, value string) (string, bool) { return o.referred(m, f.Ref, value, now) }
+}
+
+func (o *Owner) referred(m platform.Member, typ, value string, now time.Time) (string, bool) {
+	o.Store.Lock()
+	et := o.Store.Type(typ)
+	o.Store.Unlock()
+	if et == nil {
+		return value, true
+	}
+	equal := func(field string) platform.Expr {
+		return platform.Expr{Op: "=", Kind: "boolean", Args: []platform.Expr{platform.ExprReference("text", field), platform.ExprLiteralValue("text", value)}}
+	}
+	filter := equal("id")
+	if display := et.Info().Display; display != "" && display != "id" {
+		filter = platform.Expr{Op: "or", Kind: "boolean", Args: []platform.Expr{filter, equal(display)}}
+	}
+	page, err := o.Records(m, typ, platform.Query{Filter: &filter, Limit: 3}, now)
+	if err != nil {
+		return value, false
+	}
+	id := func(record any) string { return reflect.ValueOf(record).Field(0).Interface().(platform.Record).ID }
+	for _, record := range page.Records {
+		if id(record) == value {
+			return value, true
+		}
+	}
+	if len(page.Records) != 1 {
+		return value, false
+	}
+	return id(page.Records[0]), true
 }
 
 func (o *Owner) ExportRead(m platform.Member, typ string, q platform.Query, now time.Time) ([]byte, *platform.Error) {

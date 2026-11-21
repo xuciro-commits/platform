@@ -62,6 +62,7 @@
 | Object type group | 对象类型组 | 浏览用的分组 | 本体 |
 | Action type | 动作类型 | 一种受治理的对象变更的定义 | 本体 |
 | Action | 动作 | 动作类型的一次执行 | domain |
+| Import | 导入 | 把文件的行逐行交给对象类型的新建或编辑动作，先试算再写入 | domain |
 | Parameter | 参数 | 动作或函数的输入 | 本体、逻辑 |
 | Rule | 规则 | 动作产生编辑的步骤 | 本体 |
 | Submission criteria | 提交条件 | 动作执行前必须满足的条件 | 本体 |

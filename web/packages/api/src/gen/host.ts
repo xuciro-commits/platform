@@ -2449,6 +2449,11 @@ export type ImportRow = {
   error?: ErrorBody;
 };
 
+export type ImportSheet = {
+  columns: string[];
+  rows: string[][];
+};
+
 export type InboxTask = {
   id: string;
   revision: number;

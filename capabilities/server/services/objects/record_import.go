@@ -1,6 +1,8 @@
 package objects
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"platformserver/kernel/protocol"
 	"slices"
@@ -11,13 +13,13 @@ import (
 
 type Importer struct {
 	Tenant, Member string
-	Submit         func(*pb.Submission) (*platform.Error, []platform.FieldIssue)
+	Submit         func(*pb.Submission) (*pb.ChangeRecord, *platform.Error, []platform.FieldIssue)
 	Verb           func(key, id string) string
 }
 
-func (i Importer) Rows(info platform.RecordTypeInfo, file string, lines []ImportLine) []protocol.ImportRow {
+func (i Importer) Rows(info platform.RecordTypeInfo, parsed ImportFile) []protocol.ImportRow {
 	out := []protocol.ImportRow{}
-	for _, line := range lines {
+	for _, line := range parsed.Lines {
 		r := protocol.ImportRow{Row: line.Row, ID: line.ID, Outcome: line.Outcome}
 		if r.Outcome == "" {
 			try := func(verb, key string) *platform.Error {
@@ -28,14 +30,24 @@ func (i Importer) Rows(info platform.RecordTypeInfo, file string, lines []Import
 				}
 				s := &pb.Submission{TenantId: i.Tenant, PrincipalId: i.Member, Authority: info.App, IdempotencyKey: key,
 					Target: &pb.EntityRef{Type: info.Type, Id: r.ID}, Schema: &pb.SchemaRef{Name: r.Action, Version: 1}, Payload: line.Payload}
-				err, issues := i.Submit(s)
+				accepted, err, issues := i.Submit(s)
+				if id := accepted.GetSubmission().GetTarget().GetId(); id != "" {
+					r.ID = id
+				}
 				if err != nil {
 					r.Error = &protocol.ErrorBody{Code: err.Code.String(), Message: err.Message, Issues: issues}
 				}
 				return err
 			}
-			key := fmt.Sprintf("import:%s:%d", file, r.Row)
-			verb := i.Verb(key, r.ID)
+			key := fmt.Sprintf("import:%s:%d", parsed.File, r.Row)
+			if r.ID == "" && info.Naming == "" {
+				sum := sha256.Sum256([]byte(i.Tenant + "/" + info.Type + "/" + key))
+				r.ID = hex.EncodeToString(sum[:16])
+			}
+			verb := ".create"
+			if r.ID != "" {
+				verb = i.Verb(key, r.ID)
+			}
 			requestKey := key
 			if verb == ".edit" {
 				requestKey += ":edit"

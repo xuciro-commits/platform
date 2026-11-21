@@ -84,7 +84,10 @@ func (h *Host) routesRecords(rt *routes) {
 	rt.recordRead(transport.Route{Pattern: "GET /v1/chain/{type}/{id}", Summary: "The chain an agent run or a flow instance belongs to: its record, flows, runs and the effects they caused", Answer: automation.Chain{}}, transport.Answering(func(r *http.Request, m platform.Member, t *Tenant) (automation.Chain, *platform.Error) {
 		return t.chainRead(m, r.PathValue("type")+"/"+r.PathValue("id"), h.Now())
 	}))
-	rt.handle(transport.Route{Pattern: "POST /v1/import/{type}", Summary: "Import records from CSV: a header of field names with an id column; each row is the type's generated create or edit as the caller", Query: []transport.Param{{Name: "preview", Description: "true: check each row and apply none"}}, Body: []byte{}, Answer: []protocol.ImportRow{}}, transport.Answering(func(r *http.Request, m platform.Member, t *Tenant) ([]protocol.ImportRow, *platform.Error) {
+	rt.handle(transport.Route{Pattern: "POST /v1/import/{type}/sheet", Summary: "Read an uploaded CSV file or Excel workbook's first sheet as column names and rows of text, to map onto the type's fields before importing", Body: []byte{}, Answer: protocol.ImportSheet{}}, transport.Answering(func(r *http.Request, m platform.Member, t *Tenant) (protocol.ImportSheet, *platform.Error) {
+		return objects.ReadSheet(r.Body)
+	}))
+	rt.handle(transport.Route{Pattern: "POST /v1/import/{type}", Summary: "Import records from CSV: a header of field names, with an optional id column; a row without an id is created, numbered when the type declares naming; each row is the type's generated create or edit as the caller", Query: []transport.Param{{Name: "preview", Description: "true: check each row and apply none"}}, Body: []byte{}, Answer: []protocol.ImportRow{}}, transport.Answering(func(r *http.Request, m platform.Member, t *Tenant) ([]protocol.ImportRow, *platform.Error) {
 		body, _ := io.ReadAll(io.LimitReader(r.Body, 16<<20))
 		rows, err := t.Import(m, r.PathValue("type"), body, r.URL.Query().Get("preview") == "true", h.Now())
 		if err == nil {

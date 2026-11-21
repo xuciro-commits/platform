@@ -1,13 +1,15 @@
 import { Banner } from "@astryxdesign/core/Banner";
 import { Button } from "@astryxdesign/core/Button";
-import { VStack } from "@astryxdesign/core/Layout";
+import { HStack, VStack } from "@astryxdesign/core/Layout";
+import { MoreMenu } from "@astryxdesign/core/MoreMenu";
 import { type ComponentType, useEffect, useMemo, useState } from "react";
-import { type Api, type Read, useRead } from "../host";
+import { type Api, type Read, requestBlob, useRead } from "../host";
 import { t } from "../i18n";
 import { navigate, usePath, useSearch } from "../router";
 import { ActionDialog } from "./ActionDialog";
-import { type Intent, send, stepIntent, useAct } from "./act";
+import { type Intent, reasonOf, send, stepIntent, useAct } from "./act";
 import { type ListShape, ListView, type Move } from "./ListPage";
+import { ImportWizard } from "./ImportWizard";
 import { enterable } from "./ParameterInput";
 import { type Described, describe, numeric } from "./describe";
 import { BatchActions, canBatch } from "./BatchActions";
@@ -80,6 +82,8 @@ function useRecordPages(type: string, view: ViewState, enabled: boolean, choiceV
   if (sort) query.set("sort", sort);
   if (view.search.trim()) query.set("search", view.search.trim());
   const path = enabled ? `/v1/records/${type}?${query}` : null;
+  const exported = new URLSearchParams(query);
+  ["offset", "limit", "actions"].forEach((name) => exported.delete(name));
   const page = useRead<Api.RecordPage>(path);
   const filtered = hasFilters(view, externalDomain);
   const count = useRead<Pick<Api.RecordPage, "total">>(enabled && filtered ? `/v1/records/${type}?limit=1` : null);
@@ -107,6 +111,7 @@ function useRecordPages(type: string, view: ViewState, enabled: boolean, choiceV
   return {
     read,
     answer,
+    exportPath: `/v1/export/${type}?${exported}`,
     total: loaded.total,
     unfiltered: filtered ? count.status === "ready" ? count.data.total : undefined : loaded.total,
     loaded: loaded.records.length,
@@ -229,6 +234,8 @@ export function Records({ declared, listPath, id, back }: { declared: Declared; 
   const types = useRead<Api.EntityInfo[]>("/v1/entities");
   const actions = useRead<Api.Action[]>("/v1/actions");
   const [creating, setCreating] = useState(false);
+  const [importing, setImporting] = useState(false);
+  const [exportFailure, setExportFailure] = useState("");
   const entity = types.status === "ready" ? types.data.find((candidate) => candidate.type === declared.type) : undefined;
   const described = useMemo(() => (entity && actions.status === "ready" ? describe(entity, actions.data) : undefined), [entity, actions]);
   const currentSearch = useSearch();
@@ -341,6 +348,16 @@ export function Records({ declared, listPath, id, back }: { declared: Declared; 
     };
   }, [described, declared, listPath, pending, board, bulk, options, detail, records.total, records.unfiltered, records.loaded, records.hasMore, records.loading, records.loadMore]);
   const create = described?.create;
+  const exportList = async () => {
+    setExportFailure("");
+    try {
+      const href = URL.createObjectURL(await requestBlob(records.exportPath));
+      Object.assign(document.createElement("a"), { href, download: `${described?.type ?? declared.type}.csv` }).click();
+      setTimeout(() => URL.revokeObjectURL(href), 1000);
+    } catch (problem) {
+      setExportFailure(reasonOf(problem));
+    }
+  };
   if (described && id) {
     return (
       <RecordPage
@@ -364,8 +381,18 @@ export function Records({ declared, listPath, id, back }: { declared: Declared; 
         definition={definition}
         read={read}
         back={back}
-        primary={create ? <Button label={t("New")} variant="primary" onClick={() => setCreating(true)} /> : undefined}
+        primary={described ? (
+          <HStack gap={2} vAlign="center">
+            {create && <Button label={t("New")} variant="primary" onClick={() => setCreating(true)} />}
+            <MoreMenu label={t("More actions")} alignment="end" items={[
+              ...(create ? [{ id: "import-records", label: t("Import"), onClick: () => setImporting(true) }] : []),
+              { id: "export-records", label: t("Export as CSV"), onClick: () => void exportList() },
+            ]} />
+          </HStack>
+        ) : undefined}
       />
+      {exportFailure && <Banner status="error" title={t("Not done")} description={exportFailure} />}
+      {importing && described && <ImportWizard described={described} onClose={() => setImporting(false)} />}
       {act.element}
       {creating && create && described && declared.creator && (
         <declared.creator onClose={() => setCreating(false)} onDone={(created) => navigate(`${listPath}/${encodeURIComponent(created)}`, { fresh: created })} />
