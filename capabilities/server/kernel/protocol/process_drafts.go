@@ -38,7 +38,7 @@ type Process struct {
 	Paused      bool                    `json:"paused,omitempty" field:"readonly"`
 	State       string                  `json:"state" field:"readonly" choices:"draft,published"`
 	Version     int                     `json:"version,omitempty" field:"readonly"`
-	Published   string                  `json:"published,omitempty" field:"readonly" type:"longtext"`
+	Published   string                  `json:"published,omitempty" field:"readonly,internal" type:"longtext"`
 	Versions    []string                `json:"versions,omitempty" field:"readonly"`
 }
 

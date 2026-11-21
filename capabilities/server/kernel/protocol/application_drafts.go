@@ -20,7 +20,7 @@ type Page struct {
 	Description     string                       `json:"description,omitempty" type:"longtext" help:"What people do on this page"`
 	Object          string                       `json:"object" field:"required" title:"Source object" help:"Object it shows. An object this tenant has: one it defined, or an app's own" example:"build.visits"`
 	State           string                       `json:"state" field:"readonly" choices:"draft,published"`
-	Published       string                       `json:"published,omitempty" field:"readonly" type:"longtext" title:"Installed" help:"What is installed"`
+	Published       string                       `json:"published,omitempty" field:"readonly,internal" type:"longtext" title:"Installed" help:"What is installed"`
 	Versions        []string                     `json:"versions,omitempty" field:"readonly" type:"lines" title:"Published contents" help:"Published page contents"`
 }
 
@@ -49,7 +49,7 @@ type Application struct {
 	Concepts     []platform.AppConcept                 `json:"concepts,omitempty" field:"aside" type:"json" title:"Business concepts" help:"Named studio groups; grouping changes navigation only"`
 	Groups       []Group                               `json:"groups,omitempty" title:"Groups" help:"Headings in its navigation, each over some of its pages in their order"`
 	State        string                                `json:"state" field:"readonly" choices:"draft,published,withdrawn"`
-	Published    string                                `json:"published,omitempty" field:"readonly" type:"longtext" title:"Installed" help:"What is installed"`
+	Published    string                                `json:"published,omitempty" field:"readonly,internal" type:"longtext" title:"Installed" help:"What is installed"`
 }
 
 type Group struct {

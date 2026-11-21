@@ -25,7 +25,7 @@ type ActionType struct {
 	Version    int                        `json:"version" field:"readonly"`
 	Versions   []ActionTypeVersion        `json:"versions,omitempty" type:"json" field:"readonly"`
 	State      string                     `json:"state" field:"readonly" choices:"draft,published"`
-	Published  string                     `json:"published,omitempty" field:"readonly" type:"longtext"`
+	Published  string                     `json:"published,omitempty" field:"readonly,internal" type:"longtext"`
 }
 
 func (a *ActionType) Revise(previous *ActionType) error {

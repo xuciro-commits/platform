@@ -16,7 +16,7 @@ type Schedule struct {
 	Runner            string     `json:"runner,omitempty" field:"readonly"`
 	RunnerScopes      string     `json:"runnerScopes,omitempty" field:"readonly" type:"json"`
 	DefinitionVersion int        `json:"definitionVersion,omitempty" field:"readonly"`
-	Published         string     `json:"published,omitempty" field:"readonly" type:"longtext"`
+	Published         string     `json:"published,omitempty" field:"readonly,internal" type:"longtext"`
 	Versions          []string   `json:"definitionVersions,omitempty" field:"readonly" type:"json"`
 }
 

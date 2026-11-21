@@ -43,7 +43,7 @@ type Object struct {
 	SchemaVersions    []platform.SchemaVersion     `json:"schemaVersions,omitempty" field:"readonly,aside" type:"json" title:"Schema versions" help:"Retained content versions and compatible schema families captured at publication"`
 	State             string                       `json:"state" field:"readonly" choices:"draft,published"`
 	Installed         string                       `json:"installed,omitempty" field:"readonly" title:"Installed as" help:"The type records of it are stored under"`
-	Published         string                       `json:"published,omitempty" field:"readonly" type:"longtext" title:"Installed" help:"What is installed"`
+	Published         string                       `json:"published,omitempty" field:"readonly,internal" type:"longtext" title:"Installed" help:"What is installed"`
 }
 
 type Field struct {
@@ -178,7 +178,7 @@ type PropertyType struct {
 	Type        string   `json:"type" field:"required" choices:"text,longtext,integer,decimal,date,datetime,boolean,attachment"`
 	State       string   `json:"state" field:"readonly" choices:"draft,published"`
 	Version     int      `json:"version,omitempty" field:"readonly"`
-	Published   string   `json:"published,omitempty" field:"readonly" type:"longtext"`
+	Published   string   `json:"published,omitempty" field:"readonly,internal" type:"longtext"`
 	Versions    []string `json:"versions,omitempty" field:"readonly"`
 }
 
@@ -201,7 +201,7 @@ type ValueType struct {
 	Choices     []string                  `json:"choices,omitempty" field:"aside" title:"Listed values"`
 	State       string                    `json:"state" field:"readonly" choices:"draft,published"`
 	Version     int                       `json:"version,omitempty" field:"readonly"`
-	Published   string                    `json:"published,omitempty" field:"readonly" type:"longtext"`
+	Published   string                    `json:"published,omitempty" field:"readonly,internal" type:"longtext"`
 	Versions    []string                  `json:"versions,omitempty" field:"readonly"`
 }
 
@@ -221,7 +221,7 @@ type ObjectTypeGroup struct {
 	Members     []platform.AssetRef `json:"members" type:"json"`
 	State       string              `json:"state" field:"readonly" choices:"draft,published"`
 	Version     int                 `json:"version,omitempty" field:"readonly"`
-	Published   string              `json:"published,omitempty" field:"readonly" type:"longtext"`
+	Published   string              `json:"published,omitempty" field:"readonly,internal" type:"longtext"`
 	Versions    []string            `json:"versions,omitempty" field:"readonly"`
 }
 

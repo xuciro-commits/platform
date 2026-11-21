@@ -260,6 +260,7 @@ type FieldInfo struct {
 	Fields       []FieldInfo       `json:"fields,omitempty"`
 	Index        []int             `json:"-"`
 	Supplemental bool              `json:"-"`
+	Internal     bool              `json:"-"`
 }
 
 func FieldName(typ reflect.Type, path []int) string {

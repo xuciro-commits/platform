@@ -210,7 +210,7 @@ type Observation struct {
 	Publisher                  string                         `json:"publisher,omitempty" field:"readonly" source:"record"`
 	PublisherScopes            string                         `json:"publisherScopes" field:"readonly" type:"json" title:"Publisher scopes"`
 	DefinitionVersion          int                            `json:"definitionVersion,omitempty" field:"readonly" title:"Version"`
-	Published                  string                         `json:"published,omitempty" field:"readonly" type:"longtext" title:"Installed" help:"What is installed" source:"record"`
+	Published                  string                         `json:"published,omitempty" field:"readonly,internal" type:"longtext" title:"Installed" help:"What is installed" source:"record"`
 	Versions                   []string                       `json:"definitionVersions,omitempty" field:"readonly" type:"json" title:"Published versions"`
 }
 

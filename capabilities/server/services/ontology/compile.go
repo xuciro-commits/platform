@@ -140,19 +140,19 @@ func CompileObjectShape(o Object, app, builderRole string) platform.RecordType {
 	for _, f := range o.Fields {
 		if f.SourceType == "generated" {
 			name := "aisources" + f.Name
-			fields = append(fields, reflect.StructField{Name: "AISources" + GoName(f.Name), Type: reflect.TypeFor[[]string](), Tag: reflect.StructTag(fmt.Sprintf(`json:"%s,omitempty" type:"json" field:"readonly,aside"`, name))})
+			fields = append(fields, reflect.StructField{Name: "AISources" + GoName(f.Name), Type: reflect.TypeFor[[]string](), Tag: reflect.StructTag(fmt.Sprintf(`json:"%s,omitempty" type:"json" field:"readonly,aside,internal"`, name))})
 			derived = append(derived, platform.Derivation{From: name, Fields: []string{f.Name}})
 		}
 		if f.FormulaExpr != nil {
 			name := "rulesources" + f.Name
-			fields = append(fields, reflect.StructField{Name: "RuleSources" + GoName(f.Name), Type: reflect.TypeFor[[]string](), Tag: reflect.StructTag(fmt.Sprintf(`json:"%s,omitempty" type:"json" field:"readonly,aside"`, name))})
+			fields = append(fields, reflect.StructField{Name: "RuleSources" + GoName(f.Name), Type: reflect.TypeFor[[]string](), Tag: reflect.StructTag(fmt.Sprintf(`json:"%s,omitempty" type:"json" field:"readonly,aside,internal"`, name))})
 			derived = append(derived, platform.Derivation{From: name, Fields: []string{f.Name}})
 		}
 	}
 	withheld := ""
 	if len(derived) > 0 {
 		withheld = "rulewithheld"
-		fields = append(fields, reflect.StructField{Name: "RuleWithheld", Type: reflect.TypeFor[bool](), Tag: reflect.StructTag(`json:"rulewithheld,omitempty" field:"readonly,aside"`)})
+		fields = append(fields, reflect.StructField{Name: "RuleWithheld", Type: reflect.TypeFor[bool](), Tag: reflect.StructTag(`json:"rulewithheld,omitempty" field:"readonly,aside,internal"`)})
 	}
 	if len(o.States) > 0 {
 		names := make([]string, 0, len(o.States))

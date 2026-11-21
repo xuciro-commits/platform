@@ -39,7 +39,7 @@ type Function struct {
 	Roles          []string                 `json:"roles" field:"aside" title:"Callable by"`
 	State          string                   `json:"state" field:"readonly" choices:"draft,published"`
 	Version        int                      `json:"version,omitempty" field:"readonly"`
-	Published      string                   `json:"published,omitempty" field:"readonly" type:"longtext" title:"Installed" help:"What is installed"`
+	Published      string                   `json:"published,omitempty" field:"readonly,internal" type:"longtext" title:"Installed" help:"What is installed"`
 	Versions       []string                 `json:"versions,omitempty" field:"readonly" title:"Published versions"`
 }
 
@@ -125,7 +125,7 @@ type Code struct {
 	Toolchain     string                   `json:"toolchain,omitempty" field:"readonly"`
 	Diagnostics   string                   `json:"diagnostics,omitempty" field:"readonly" type:"longtext"`
 	Version       int                      `json:"version,omitempty" field:"readonly"`
-	Published     string                   `json:"published,omitempty" field:"readonly" type:"longtext"`
+	Published     string                   `json:"published,omitempty" field:"readonly,internal" type:"longtext"`
 	Versions      []string                 `json:"versions,omitempty" field:"readonly"`
 }
 

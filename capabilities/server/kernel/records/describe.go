@@ -236,6 +236,8 @@ func describeFields(e Entity, t reflect.Type, from int, typeOf func(reflect.Type
 			case "aside":
 				f.Aside = true
 				f.Supplemental = true
+			case "internal":
+				f.Internal = true
 			case "":
 			default:
 				return nil, fmt.Errorf("entity %s: field %s has an unknown flag %q", e.Type, name, flag)

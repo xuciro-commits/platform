@@ -19,7 +19,7 @@ type MediaSet struct {
 	Name              string      `json:"name" field:"required,search"`
 	Title             string      `json:"title" field:"required,search"`
 	DefinitionVersion int         `json:"definitionVersion,omitempty" field:"readonly"`
-	Published         string      `json:"published,omitempty" field:"readonly" type:"longtext"`
+	Published         string      `json:"published,omitempty" field:"readonly,internal" type:"longtext"`
 	Versions          []string    `json:"definitionVersions,omitempty" field:"readonly" type:"json"`
 	Description       string      `json:"description,omitempty" type:"longtext"`
 	Version           int         `json:"version" field:"readonly"`

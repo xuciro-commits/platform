@@ -99,7 +99,7 @@ type Table struct {
 	State       string                 `json:"state" field:"readonly"`
 	Version     int                    `json:"version,omitempty" field:"readonly"`
 	Versions    []string               `json:"versions,omitempty" field:"readonly" type:"json"`
-	Published   string                 `json:"published,omitempty" field:"readonly" type:"json"`
+	Published   string                 `json:"published,omitempty" field:"readonly,internal" type:"json"`
 }
 
 type TableColumn struct {

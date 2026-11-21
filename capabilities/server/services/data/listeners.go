@@ -27,7 +27,7 @@ type Listener struct {
 	Enabled           bool     `json:"enabled"`
 	State             string   `json:"state" field:"readonly"`
 	DefinitionVersion int      `json:"definitionVersion,omitempty" field:"readonly" title:"Version"`
-	Published         string   `json:"published,omitempty" field:"readonly" type:"longtext" title:"Installed" help:"What is installed"`
+	Published         string   `json:"published,omitempty" field:"readonly,internal" type:"longtext" title:"Installed" help:"What is installed"`
 	Versions          []string `json:"definitionVersions,omitempty" field:"readonly" type:"json" title:"Published versions"`
 }
 

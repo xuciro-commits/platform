@@ -18,7 +18,7 @@ type TestPlan[O, P, F any] struct {
 	Name              string                      `json:"name,omitempty" title:"Evaluation set" help:"Evaluation set name"`
 	FunctionVersion   int                         `json:"functionVersion,omitempty" title:"Function version" help:"Evaluated function version"`
 	DefinitionVersion int                         `json:"definitionVersion,omitempty" field:"readonly"`
-	Published         string                      `json:"published,omitempty" field:"readonly" type:"longtext"`
+	Published         string                      `json:"published,omitempty" field:"readonly,internal" type:"longtext"`
 	Versions          []string                    `json:"versions,omitempty" field:"readonly"`
 	Title             string                      `json:"title" field:"required,search" title:"Name" help:"Test plan name"`
 	Object            platform.Ref[O]             `json:"object,omitempty" title:"Object draft" help:"Saved object draft"`

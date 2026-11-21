@@ -433,7 +433,7 @@ type Connection struct {
 	Requested         bool             `json:"requested,omitempty" field:"readonly" title:"Check requested"`
 	Last              *ConnectionCheck `json:"last,omitempty" field:"readonly" type:"json" title:"Last check"`
 	DefinitionVersion int              `json:"definitionVersion,omitempty" field:"readonly" title:"Version"`
-	Published         string           `json:"published,omitempty" field:"readonly" type:"longtext" title:"Installed" help:"What is installed" source:"record"`
+	Published         string           `json:"published,omitempty" field:"readonly,internal" type:"longtext" title:"Installed" help:"What is installed" source:"record"`
 	Versions          []string         `json:"definitionVersions,omitempty" field:"readonly" type:"json" title:"Published versions"`
 }
 
@@ -496,7 +496,7 @@ type Dataset struct {
 	Last              *DatasetLoad        `json:"last,omitempty" field:"readonly" type:"json" title:"Latest load"`
 	Projections       []DatasetProjection `json:"projections,omitempty" field:"readonly" type:"json" title:"Projections"`
 	DefinitionVersion int                 `json:"definitionVersion,omitempty" field:"readonly" title:"Version"`
-	Published         string              `json:"published,omitempty" field:"readonly" type:"longtext" title:"Installed" help:"What is installed"`
+	Published         string              `json:"published,omitempty" field:"readonly,internal" type:"longtext" title:"Installed" help:"What is installed"`
 	Versions          []string            `json:"definitionVersions,omitempty" field:"readonly" type:"json" title:"Published versions"`
 }
 

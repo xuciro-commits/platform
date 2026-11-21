@@ -24,7 +24,9 @@ func EntityView(store *records.Store, m platform.Member, hidden func(*records.Ty
 		}
 		if len(roles) > 0 || et.Info().Scope.Participants != nil || et.Info().Scope.Through != nil {
 			view, _ := ViewOf(m, et)
-			out = append(out, view.Info())
+			info := view.Info()
+			info.Fields = slices.DeleteFunc(slices.Clone(info.Fields), func(field platform.FieldInfo) bool { return field.Internal })
+			out = append(out, info)
 		}
 	}
 	slices.SortFunc(out, func(a, b platform.RecordTypeInfo) int { return strings.Compare(a.Type, b.Type) })
