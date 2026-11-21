@@ -13,6 +13,7 @@ import { Switch } from "@astryxdesign/core/Switch";
 import { Text } from "@astryxdesign/core/Text";
 import { TextInput } from "@astryxdesign/core/TextInput";
 import { iconField, icons } from "./icons";
+import { kindOf, MediaPreview } from "./MediaPreview";
 import { colorVars } from "@astryxdesign/core/theme/tokens.stylex";
 import * as stylex from "@stylexjs/stylex";
 import { type ComponentProps, useId, useState } from "react";
@@ -134,6 +135,7 @@ function AttachmentInput({ parameter, value, onChange, label, description }: { p
   const projects = useRead<Api.RecordPage>(attachment?.mediaSet ? null : "/v1/records/build.app?limit=200");
   const [busy, setBusy] = useState(false);
   const [failure, setFailure] = useState("");
+  const [previewing, setPreviewing] = useState(false);
   const [selectedProject, setProject] = useState<string>();
   const projectOptions = projects.status === "ready"
     ? (projects.data.records as { id: string; title: string }[]).map((entry) => ({ value: entry.id, label: entry.title }))
@@ -191,9 +193,12 @@ function AttachmentInput({ parameter, value, onChange, label, description }: { p
               <StackItem size="fill">
                 <Text type="body">{current?.name ?? attachment.item}</Text>
               </StackItem>
+              {kindOf({ name: current?.name ?? attachment.item }) && <Button label={t("Preview")} variant="ghost" onClick={() => { setFailure(""); setPreviewing(true); }} />}
               <Button label={t("Download")} variant="secondary" onClick={download} />
             </HStack>
           )}
+          {previewing && attachment?.item && <MediaPreview media={{ path: `/v1/files/${encodeURIComponent(attachment.item)}`, name: current?.name ?? attachment.item }}
+            onClose={() => setPreviewing(false)} onFailure={setFailure} />}
           {!attachment?.mediaSet && (
             <Selector
               label={t("Project")}

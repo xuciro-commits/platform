@@ -3,7 +3,6 @@ import { Button } from "@astryxdesign/core/Button";
 import { EmptyState } from "@astryxdesign/core/EmptyState";
 import { FileInput } from "@astryxdesign/core/FileInput";
 import { HStack, StackItem, VStack } from "@astryxdesign/core/Layout";
-import { Lightbox } from "@astryxdesign/core/Lightbox";
 import { Link } from "@astryxdesign/core/Link";
 import { List, ListItem } from "@astryxdesign/core/List";
 import { Text } from "@astryxdesign/core/Text";
@@ -12,13 +11,12 @@ import { useRecordHref } from "../apps/entries";
 import { type Api, type Read, request, requestBlob } from "../host";
 import { t } from "../i18n";
 import { reasonOf, send } from "./act";
+import { kindOf, MediaPreview } from "./MediaPreview";
 import type { Values } from "./describe";
 import { shown } from "./values";
 
 type Section = Read<Api.RecordSectionView>;
 type Attached = { id: string; name: string; size: number; contentType: string };
-const images = new Set(["image/png", "image/jpeg", "image/webp", "image/gif", "image/avif"]);
-const pdf = "application/pdf";
 
 export function relatedGroups(section: Api.RecordSectionView) {
   return [...(section.related ?? []), ...(section.linked ?? [])].filter((group) => group.total > 0);
@@ -58,7 +56,6 @@ export function RecordFiles({ read, attach, target }: { read: Section; attach?: 
   const [busy, setBusy] = useState(false);
   const [failure, setFailure] = useState("");
   const [preview, setPreview] = useState<Attached>();
-  const [url, setUrl] = useState("");
   const files = read.status === "ready" ? (read.data.files ?? []) as Attached[] : [];
   const path = (id: string) => `/v1/files/${encodeURIComponent(id)}`;
   const upload = async (file: File) => {
@@ -84,27 +81,6 @@ export function RecordFiles({ read, attach, target }: { read: Section; attach?: 
       setFailure(reasonOf(problem));
     }
   };
-  useEffect(() => {
-    if (!preview) return;
-    const controller = new AbortController();
-    let href = "";
-    requestBlob(path(preview.id), controller.signal).then(
-      (blob) => {
-        if (controller.signal.aborted) return;
-        href = URL.createObjectURL(blob);
-        setUrl(href);
-      },
-      (problem) => {
-        if (controller.signal.aborted) return;
-        setFailure(reasonOf(problem));
-        setPreview(undefined);
-      },
-    );
-    return () => {
-      controller.abort();
-      if (href) URL.revokeObjectURL(href);
-    };
-  }, [preview]);
   return (
     <VStack gap={4}>
       {attach && <FileInput label={t("Attach a file")} placeholder={t("Choose file")} value={null} mode="dropzone" isLoading={busy} isDisabled={busy}
@@ -119,25 +95,14 @@ export function RecordFiles({ read, attach, target }: { read: Section; attach?: 
           {files.map((file) => (
             <ListItem key={file.id} label={file.name} description={`${file.size.toLocaleString()} ${t("bytes")}`} endContent={
               <HStack gap={2}>
-                {(images.has(file.contentType) || file.contentType === pdf) && (
-                  <Button label={t("Preview")} variant="ghost" onClick={() => { setFailure(""); setUrl(""); setPreview(file); }} />
-                )}
+                {kindOf(file) && <Button label={t("Preview")} variant="ghost" onClick={() => { setFailure(""); setPreview(file); }} />}
                 <Button label={t("Download")} variant="secondary" onClick={() => download(file)} />
               </HStack>
             } />
           ))}
         </List>
       )}
-      {preview && !url && <Text type="supporting">{t("Loading preview…")}</Text>}
-      {preview && url && preview.contentType === pdf && (
-        <HStack gap={2} vAlign="center">
-          <StackItem size="fill"><Link href={url} target="_blank">{t("Open PDF in a new tab")}</Link></StackItem>
-          <Button label={t("Close")} variant="ghost" onClick={() => setPreview(undefined)} />
-        </HStack>
-      )}
-      {preview && url && images.has(preview.contentType) && (
-        <Lightbox isOpen media={{ src: url, alt: preview.name }} onOpenChange={(open) => !open && setPreview(undefined)} />
-      )}
+      {preview && <MediaPreview media={{ path: path(preview.id), name: preview.name, contentType: preview.contentType }} onClose={() => setPreview(undefined)} onFailure={setFailure} />}
     </VStack>
   );
 }

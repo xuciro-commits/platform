@@ -168,7 +168,7 @@ test("actions: archive from the record menu, then undo from the notice", async (
   await page.getByRole("link", { name: "标签打印线" }).click();
 
   await page.getByRole("button", { name: "More actions" }).click();
-  await page.getByRole("menuitem", { name: "Archive" }).click();
+  await page.getByRole("menuitem", { name: /^Archive/ }).click();
   await expect(page.getByRole("alertdialog")).toHaveCount(0);
   const undo = page.getByRole("button", { name: "Undo" });
   await expect(undo).toBeVisible();
@@ -476,6 +476,14 @@ test("links and files: navigate to related records and attach a downloadable fil
   const download = await started;
   expect(download.suggestedFilename()).toBe("schedule.txt");
   expect(await download.failure()).toBeNull();
+  await page.getByRole("button", { name: "Preview", exact: true }).click();
+  await expect(page.getByRole("dialog", { name: "schedule.txt" }).getByText("Lead time: 6 weeks")).toBeVisible();
+  await page.keyboard.press("Escape");
+  const pdf = "%PDF-1.4\n1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj\n2 0 obj<</Type/Pages/Kids[3 0 R]/Count 1>>endobj\n3 0 obj<</Type/Page/Parent 2 0 R/MediaBox[0 0 200 200]>>endobj\ntrailer<</Root 1 0 R>>\n%%EOF\n";
+  await page.locator('input[type="file"]').setInputFiles({ name: "brief.pdf", mimeType: "application/pdf", buffer: Buffer.from(pdf) });
+  await page.getByRole("listitem").filter({ hasText: "brief.pdf" }).getByRole("button", { name: "Preview", exact: true }).click();
+  await expect(page.getByRole("dialog", { name: "brief.pdf" }).getByRole("document", { name: "brief.pdf" }).locator("canvas")).toHaveCount(1);
+  await page.keyboard.press("Escape");
 });
 
 test("restricted fields: a reader sees the field label and no amount", async ({ page }) => {

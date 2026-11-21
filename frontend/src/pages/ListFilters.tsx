@@ -213,8 +213,7 @@ export function FilterBar({ chips, filters, onFilters, search, onSearch, count, 
               ))}
             </RadioList>
             <Divider />
-            <Calendar mode="range" value={picked} hasVariableRowCount
-              onChange={(next: DateRange | null) => { if (next?.start && next.end) { onChange(`${next.start}~${next.end}`); close(); } }} />
+            <CustomRange picked={picked} onPick={(range) => { onChange(range); close(); }} />
             <Divider />
             <HStack gap={2} hAlign="between" vAlign="center">
               <Button label={t("Clear")} variant="ghost" size="sm" isDisabled={!label} onClick={() => { onChange(""); close(); }} />
@@ -259,6 +258,13 @@ export function FilterBar({ chips, filters, onFilters, search, onSearch, count, 
       </StackItem>
     </HStack>
   );
+}
+
+function CustomRange({ picked, onPick }: { picked: DateRange | null; onPick: (range: string) => void }) {
+  const [open, setOpen] = useState(Boolean(picked));
+  if (!open) return <Button label={t("Custom range")} variant="ghost" size="sm" onClick={() => setOpen(true)} />;
+  return <Calendar mode="range" value={picked} hasVariableRowCount
+    onChange={(next: DateRange | null) => { if (next?.start && next.end) onPick(`${next.start}~${next.end}`); }} />;
 }
 
 function RangeEditor({ label, range, onChange, close }: { label: string; range: Range; onChange: (next: Range) => void; close: () => void }) {

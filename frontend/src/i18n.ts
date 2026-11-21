@@ -52,8 +52,6 @@ export const zhCN: Record<string, string> = {
   "Files could not be loaded": "无法加载文件",
   "No attached files": "没有附件",
   "Attached files": "附件",
-  "Loading preview…": "正在加载预览…",
-  "Open PDF in a new tab": "在新标签页打开 PDF",
   bytes: "字节",
   Preview: "预览",
   Download: "下载",
@@ -576,5 +574,8 @@ export const zhCN: Record<string, string> = {
   "Filled in from other fields; you can change it": "由其他字段带出，可以改",
   "Changed only by actions": "只由动作改动",
   "Why unavailable": "为什么不可用",
+  "Custom range": "自定义区间",
+  "Page": "页",
+  "This file could not be shown": "这个文件显示不出来",
   ...values,
 };

@@ -1,6 +1,7 @@
 import { Button } from "@astryxdesign/core/Button";
 import { Field } from "@astryxdesign/core/Field";
 import { Icon } from "@astryxdesign/core/Icon";
+import { Markdown } from "@astryxdesign/core/Markdown";
 import { HStack, StackItem, VStack } from "@astryxdesign/core/Layout";
 import { Spinner } from "@astryxdesign/core/Spinner";
 import { StatusDot } from "@astryxdesign/core/StatusDot";
@@ -56,7 +57,8 @@ export function PropertyValue({ field, value, name, dot }: { field: Api.FieldInf
   }
   if (field.type === "reference" && field.ref && name && !blank(value)) return <ReferenceLink type={field.ref} id={String(value)} name={name} />;
   const text = present(field, value);
-  return text === "" ? null : <Text type="body">{text}</Text>;
+  if (text === "") return null;
+  return field.type === "longtext" ? <Markdown density="compact" headingLevelStart={4}>{text}</Markdown> : <Text type="body">{text}</Text>;
 }
 
 export type CellEdit<Row> = {
