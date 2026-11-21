@@ -10,6 +10,7 @@ import { createRoot } from "react-dom/client";
 import { defaultThemeSlug, themes } from "./astryx-themes";
 import { useSession } from "./host";
 import { useLocale } from "./i18n";
+import { PeekProvider } from "./pages/RecordPeek";
 import { RouterLink } from "./router";
 import { useAppearance } from "./shell/appearance";
 import { Shell } from "./shell/Shell";
@@ -34,7 +35,9 @@ function Root() {
       <Theme theme={theme} mode={useAppearance()}>
         <LayerProvider>
           <LinkProvider component={RouterLink}>
-            <Shell key={`${locale} ${tenant}`} />
+            <PeekProvider key={`${locale} ${tenant}`}>
+              <Shell />
+            </PeekProvider>
           </LinkProvider>
         </LayerProvider>
       </Theme>

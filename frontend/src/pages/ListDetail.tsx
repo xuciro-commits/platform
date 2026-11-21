@@ -1,20 +1,16 @@
 import { Button } from "@astryxdesign/core/Button";
-import { Divider } from "@astryxdesign/core/Divider";
 import { Icon } from "@astryxdesign/core/Icon";
-import { IconButton } from "@astryxdesign/core/IconButton";
-import { HStack, StackItem, VStack } from "@astryxdesign/core/Layout";
+import { HStack, VStack } from "@astryxdesign/core/Layout";
 import { Link } from "@astryxdesign/core/Link";
 import { MetadataList, MetadataListItem } from "@astryxdesign/core/MetadataList";
-import { Section } from "@astryxdesign/core/Section";
 import { StatusDot } from "@astryxdesign/core/StatusDot";
-import { Heading, Text } from "@astryxdesign/core/Text";
+import { Text } from "@astryxdesign/core/Text";
 import { Timestamp } from "@astryxdesign/core/Timestamp";
 import { Tooltip } from "@astryxdesign/core/Tooltip";
-import { XMarkIcon } from "@heroicons/react/24/outline";
-import * as stylex from "@stylexjs/stylex";
-import type { ReactNode } from "react";
+import { type ReactNode, useState } from "react";
 import { t } from "../i18n";
 import { PersonLabel } from "./MemberField";
+import { PeekDrawer, type PeekSurfaceMode, RecordPeek } from "./RecordPeek";
 import { ReferenceLink } from "./ReferenceField";
 import type { Dot } from "./Transitions";
 
@@ -25,10 +21,6 @@ export const typeOf = (key: string) => `__type:${key}`;
 export const targetOf = (key: string) => `__target:${key}`;
 
 type Column = { key: string; header: string; kind?: string; boolean?: boolean };
-
-const styles = stylex.create({
-  detail: { minWidth: 0 },
-});
 
 export function ListCell({ column, cells, first }: { column: Column; cells: Cells; first: boolean }) {
   const value = cells[column.key] ?? "";
@@ -88,48 +80,70 @@ export function ListCell({ column, cells, first }: { column: Column; cells: Cell
   );
 }
 
-type ListDetailProps = { columns: Column[]; title: Column; cells: Cells; actions: ReactNode; compact: boolean; onClose: () => void };
+type ListDetailProps = {
+  recordType?: string;
+  activeId: string | null;
+  columns: Column[];
+  title?: Column;
+  cells?: Cells;
+  actions?: ReactNode;
+  surface: PeekSurfaceMode;
+  onClose: () => void;
+};
 
-export function ListDetail({ columns, title, cells, actions, compact, onClose }: ListDetailProps) {
-  const state = columns.find((column) => cells[dotOf(column.key)]);
+export function ListDetail({ recordType, activeId, columns, title, cells, actions, surface, onClose }: ListDetailProps) {
+  const [kept, setKept] = useState<Cells>();
+  if (cells && cells !== kept) setKept(cells);
+  if (recordType) {
+    return (
+      <RecordPeek
+        type={recordType}
+        id={activeId ?? undefined}
+        name={cells && title ? cells[title.key] || cells[idKey] : undefined}
+        isOpen={Boolean(activeId)}
+        onOpenChange={(open) => !open && onClose()}
+        hasScrim={false}
+        surface={surface}
+        label={t("Details")}
+      />
+    );
+  }
+  const shown = cells ?? kept;
+  if (!shown || !title) return null;
+  const state = columns.find((column) => shown[dotOf(column.key)]);
+  const heading = shown[title.key] || shown[idKey];
   return (
-    <VStack gap={0} xstyle={styles.detail}>
-      <Section variant="transparent" padding={4} paddingBlockStart={compact ? 0 : 4}>
-        <VStack gap={4}>
-          <HStack gap={2}>
-            <StackItem size="fill">
-              <VStack gap={2}>
-                {state && (
-                  <HStack gap={2} vAlign="center">
-                    <StatusDot variant={cells[dotOf(state.key)] as Dot} label={cells[state.key]} />
-                    <Text type="supporting" color="secondary">
-                      {cells[state.key]}
-                    </Text>
-                  </HStack>
-                )}
-                <Heading level={2}>{cells[title.key] || cells[idKey]}</Heading>
-              </VStack>
-            </StackItem>
-            <IconButton label={t("Close details")} variant="ghost" size="sm" icon={<Icon icon={XMarkIcon} size="sm" />} onClick={onClose} />
-          </HStack>
-          <HStack gap={2} vAlign="center" wrap="wrap">
-            {actions}
-            {cells.__href && <Button label={t("Open record")} variant="secondary" size="sm" href={cells.__href} />}
-          </HStack>
-        </VStack>
-      </Section>
-      <Divider />
-      <Section variant="transparent" padding={4}>
+    <PeekDrawer
+      isOpen={Boolean(cells)}
+      onOpenChange={(open) => !open && onClose()}
+      hasScrim={false}
+      surface={surface}
+      label={t("Details")}
+      title={heading}
+      subtitle={state && (
+        <HStack gap={2} vAlign="center">
+          <StatusDot variant={shown[dotOf(state.key)] as Dot} label={shown[state.key]} />
+          <Text type="supporting" color="secondary">{shown[state.key]}</Text>
+        </HStack>
+      )}
+      footer={shown.__href ? (
+        <HStack gap={2} hAlign="end">
+          <Button label={t("Open full page")} variant="secondary" href={shown.__href} onClick={onClose} />
+        </HStack>
+      ) : undefined}
+    >
+      <VStack gap={4}>
+        {actions && <HStack gap={2} vAlign="center" wrap="wrap">{actions}</HStack>}
         <MetadataList columns="single" label={{ position: "start", width: 120 }}>
           {columns
-            .filter((column) => column.key !== title.key && column.key !== state?.key && Boolean(cells[column.key]))
+            .filter((column) => column.key !== title.key && column.key !== state?.key && Boolean(shown[column.key]))
             .map((column) => (
               <MetadataListItem key={column.key} label={t(column.header)}>
-                <ListCell column={column} cells={cells} first={false} />
+                <ListCell column={column} cells={shown} first={false} />
               </MetadataListItem>
             ))}
         </MetadataList>
-      </Section>
-    </VStack>
+      </VStack>
+    </PeekDrawer>
   );
 }

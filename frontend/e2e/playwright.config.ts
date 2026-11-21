@@ -15,7 +15,8 @@ export default defineConfig({
   outputDir: `${work}/results`,
   timeout: 60_000,
   expect: { timeout: 10_000 },
-  workers: 1,
+  fullyParallel: true,
+  workers: 3,
   reporter: [["list"]],
   use: { baseURL: page, locale: "en-US", channel: "chrome", trace: "retain-on-failure", actionTimeout: 10_000 },
   webServer: [

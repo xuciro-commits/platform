@@ -175,6 +175,7 @@ function shape(described: Described, declared: Declared, listPath: string, extra
     defaultView: described.entity.view,
     carryView: true,
     savedViews: declared.type,
+    peekType: declared.type,
     rows: (answer) => (answer.records as Row[]).map((row) => ({ ...row, [formatted]: answer.formats?.[String(row.id)], [referenced]: answer.refs })),
     id: (row) => String(row.id),
     link: (row) => `${listPath}/${encodeURIComponent(String(row.id))}`,
@@ -197,7 +198,7 @@ function shape(described: Described, declared: Declared, listPath: string, extra
         value: numeric.has(field.type) ? (row: Row) => field.type === "money" ? money(row[field.name])?.amount : plain(row[field.name]) : undefined,
         edit: cellEdit(field),
       })),
-      { key: "changed", header: "Updated", width: 140, kind: "time" as const, text: (row: Row) => (row.changed as Stamp | undefined)?.at ?? "" },
+      { key: "changed", header: "Updated", width: 116, kind: "time" as const, text: (row: Row) => (row.changed as Stamp | undefined)?.at ?? "" },
     ],
     groups: [
       ...described.groups.map((field) => ({

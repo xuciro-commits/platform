@@ -1,14 +1,12 @@
 import { Banner } from "@astryxdesign/core/Banner";
-import { BottomSheet } from "@astryxdesign/core/BottomSheet";
 import { Button } from "@astryxdesign/core/Button";
 import { Divider } from "@astryxdesign/core/Divider";
 import { EmptyState } from "@astryxdesign/core/EmptyState";
 import { Icon } from "@astryxdesign/core/Icon";
 import { IconButton } from "@astryxdesign/core/IconButton";
-import { HStack, Layout, LayoutContent, LayoutFooter, LayoutHeader, LayoutPanel, StackItem, VStack } from "@astryxdesign/core/Layout";
+import { HStack, Layout, LayoutContent, LayoutFooter, LayoutHeader, StackItem, VStack } from "@astryxdesign/core/Layout";
 import { type FieldDefinition, PowerSearch, type PowerSearchFilter, usePowerSearchConfig } from "@astryxdesign/core/PowerSearch";
 import { ProgressBar } from "@astryxdesign/core/ProgressBar";
-import { ResizeHandle, useResizable } from "@astryxdesign/core/Resizable";
 import { Section } from "@astryxdesign/core/Section";
 import { SegmentedControl, SegmentedControlItem } from "@astryxdesign/core/SegmentedControl";
 import { Skeleton } from "@astryxdesign/core/Skeleton";
@@ -74,6 +72,7 @@ export type ListShape<Answer, Row> = {
   board?: ListBoard<Row>;
   bulk?: (ids: string[], clear: () => void) => ReactNode;
   detail?: (id: string) => ReactNode;
+  peekType?: string;
   defaultView?: unknown;
   carryView?: boolean;
   page?: { total: number; loaded: number; hasMore: boolean; loading: boolean; loadMore: () => void };
@@ -89,7 +88,7 @@ const compare = (left: unknown, right: unknown) =>
   : String(left ?? "").localeCompare(String(right ?? ""));
 const textKey = "__text";
 const fillKey = "__fill";
-const widthOf: Record<string, number> = { string: 164, person: 164, email: 196, phone: 148, code: 150, enum: 120, member: 132, number: 110, time: 132, boolean: 96 };
+const widthOf: Record<string, number> = { string: 148, person: 140, email: 212, phone: 144, code: 150, enum: 112, member: 116, number: 110, time: 116, boolean: 96 };
 const headerWidth = (text: string) => [...text].reduce((sum, letter) => sum + (letter.charCodeAt(0) > 0x2e7f ? 14 : 8), 48);
 const groupPrefix = "__group_";
 const compactQuery = "(max-width: 768px), (max-width: 1024px) and (pointer: coarse) and (hover: none)";
@@ -131,7 +130,6 @@ export function ListView<Answer, Row>({ definition, read, primary, back }: ListV
   const [viewsOpen, setViewsOpen] = useState(false);
   const [active, setActive] = useState<string | null>(null);
   const [editing, setEditing] = useState<{ id: string; key: string } | null>(null);
-  const detailWidth = useResizable({ defaultSize: 380, minSize: 320, maxSize: 560 });
   const fallback = useMemo(() => {
     const base = newView(definition.columns.filter((column) => !column.hiddenByDefault).map((column) => column.key));
     if (definition.defaultView == null) return base;
@@ -305,7 +303,7 @@ export function ListView<Answer, Row>({ definition, read, primary, back }: ListV
     ...orderedColumns.map((column, position): TableColumn<Cells> => ({
       key: column.key,
       header: t(column.header),
-      width: pixel(Math.max(column.width ?? (position === 0 ? (compactSurface ? 132 : 164) : widthOf[column.boolean ? "boolean" : column.kind ?? "string"]), headerWidth(t(column.header)))),
+      width: pixel(Math.max(column.width ?? (position === 0 ? (compactSurface ? 132 : widthOf[column.kind ?? "string"]) : widthOf[column.boolean ? "boolean" : column.kind ?? "string"]), headerWidth(t(column.header)))),
       sortable: true,
       align: column.kind === "number" || column.kind === "time" ? "end" : undefined,
       renderCell: (cells) => {
@@ -392,17 +390,7 @@ export function ListView<Answer, Row>({ definition, read, primary, back }: ListV
   useEffect(() => {
     if (active && ready && !activeCells) setActive(null);
   }, [active, ready, activeCells]);
-  const detailBody = activeCells && orderedColumns[0] && (
-    <ListDetail columns={definition.columns} title={orderedColumns[0]} cells={activeCells} actions={definition.detail?.(activeCells[idKey])} compact={compactSurface} onClose={() => setActive(null)} />
-  );
-  const detailPanel = detailBody ? (
-    <>
-      <ResizeHandle resizable={detailWidth.props} isReversed isAlwaysVisible={false} label={t("Resize details")} />
-      <LayoutPanel resizable={detailWidth.props} hasDivider padding={0} role="complementary" label={t("Details")}>
-        {detailBody}
-      </LayoutPanel>
-    </>
-  ) : undefined;
+
 
   return (
     <>
@@ -410,7 +398,6 @@ export function ListView<Answer, Row>({ definition, read, primary, back }: ListV
         height="fill"
         padding={0}
         xstyle={styles.surface}
-        end={compactSurface ? undefined : detailPanel}
         header={
           <LayoutHeader label={t("List filters and actions")}>
             <VStack gap={0} xstyle={styles.headerWrap}>
@@ -463,7 +450,23 @@ export function ListView<Answer, Row>({ definition, read, primary, back }: ListV
         }
         footer={bulk && <LayoutFooter padding={0}>{bulk}</LayoutFooter>}
         content={
-          <LayoutContent role="main" padding={0} label={t(definition.title)}>
+          <Layout
+            height="fill"
+            padding={0}
+            end={!compactSurface ? (
+              <ListDetail
+                recordType={definition.peekType}
+                activeId={active}
+                columns={definition.columns}
+                title={orderedColumns[0]}
+                cells={activeCells}
+                actions={activeCells ? definition.detail?.(activeCells[idKey]) : undefined}
+                surface="panel"
+                onClose={() => setActive(null)}
+              />
+            ) : undefined}
+            content={
+              <LayoutContent role="main" padding={0} label={t(definition.title)}>
             {read.status === "loading" && (
               <VStack gap={2} paddingInline={gutter}>
                 {[0, 1, 2, 3, 4, 5].map((index) => (
@@ -541,12 +544,23 @@ export function ListView<Answer, Row>({ definition, read, primary, back }: ListV
                 />
               </VStack>
             )}
-          </LayoutContent>
+              </LayoutContent>
+            }
+          />
         }
       />
-      <BottomSheet isOpen={compactSurface && Boolean(detailBody)} onOpenChange={(open) => !open && setActive(null)} label={t("Details")} padding={0}>
-        {detailBody}
-      </BottomSheet>
+      {compactSurface && (
+        <ListDetail
+          recordType={definition.peekType}
+          activeId={active}
+          columns={definition.columns}
+          title={orderedColumns[0]}
+          cells={activeCells}
+          actions={activeCells ? definition.detail?.(activeCells[idKey]) : undefined}
+          surface="drawer"
+          onClose={() => setActive(null)}
+        />
+      )}
       {saved.dialogs}
     </>
   );

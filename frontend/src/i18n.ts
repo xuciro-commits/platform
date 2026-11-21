@@ -582,5 +582,6 @@ export const zhCN: Record<string, string> = {
   "Send email": "发送邮件",
   Call: "拨打电话",
   changes: "项变更",
+  "Open full page": "打开完整页面",
   ...values,
 };
