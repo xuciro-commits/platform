@@ -10,7 +10,7 @@ import { t } from "../i18n";
 export function PersonLabel({ name, agent }: { name: string; agent?: boolean }) {
   return (
     <HStack gap={2} vAlign="center">
-      <Avatar name={name} size="sm" tooltip={false} />
+      <Avatar name={name} size="sm" tooltip={false} aria-hidden />
       <Text type="body" maxLines={1}>{name}</Text>
       {agent && <Badge label={t("AI")} variant="neutral" />}
     </HStack>

@@ -130,9 +130,10 @@ export function RecordActivity({ described, id, comments, catalog }: { described
   const unavailable = sources.find((entry) => entry.status === "error" || entry.status === "refused");
   const loading = sources.some((entry) => entry.status === "loading");
   const renderChanges = (lines: ChangeLine[]) => (
-    <VStack gap={1}>
+    <VStack gap={1} role="list">
       {lines.map((line, index) => (
-        <HStack key={index} gap={1} vAlign="center" wrap="wrap">
+        <HStack key={index} gap={1} vAlign="center" wrap="wrap" role="listitem"
+          aria-label={`${line.field}: ${line.before === undefined ? line.after : `${line.before} → ${line.after}`}`}>
           <Text type="supporting" color="secondary">{line.field}</Text>
           {line.before !== undefined && (
             <>
@@ -174,21 +175,23 @@ export function RecordActivity({ described, id, comments, catalog }: { described
                   <HStack gap={2} vAlign="center" wrap="wrap">
                     <HStack gap={1} vAlign="center" wrap="wrap">
                       <Text type="body" weight="medium">{actor}</Text>
-                      {item.kind === "group" ? (
-                        <Button variant="ghost" size="sm" label={`${item.items.length} ${t("changes")}`}
-                          icon={<Icon icon={open ? ChevronDownIcon : ChevronRightIcon} size="sm" />} onClick={() => toggleGroup(item.key)} />
-                      ) : (
-                        <Text type="body" color="secondary">{item.kind === "comment" ? t("Commented") : item.title}</Text>
-                      )}
+                      <Text type="body" color="secondary">{item.kind === "comment" ? t("Commented") : item.kind === "group" ? item.items[0].title : item.title}</Text>
                     </HStack>
                     <HStack xstyle={styles.stamp}>
                       <Timestamp value={item.at} format="relative" type="supporting" color="secondary" />
                     </HStack>
                   </HStack>
                   {item.kind === "change" && item.changes.length > 0 && renderChanges(item.changes)}
+                  {item.kind === "group" && item.items[0].changes.length > 0 && renderChanges(item.items[0].changes)}
+                  {item.kind === "group" && (
+                    <HStack>
+                      <Button variant="ghost" size="sm" label={`${item.items.length - 1} ${t(item.items.length === 2 ? "earlier change" : "earlier changes")}`}
+                        icon={<Icon icon={open ? ChevronDownIcon : ChevronRightIcon} size="sm" />} onClick={() => toggleGroup(item.key)} />
+                    </HStack>
+                  )}
                   {item.kind === "group" && open && (
                     <VStack gap={3}>
-                      {item.items.map((entry) => (
+                      {item.items.slice(1).map((entry) => (
                         <VStack key={entry.key} id={entry.key} gap={1}>
                           <HStack gap={2} vAlign="center">
                             <Text type="supporting" color="secondary">{entry.title}</Text>
