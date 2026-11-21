@@ -33,6 +33,7 @@ type ObjectSetCount struct {
 
 type Window struct {
 	Sort          []string
+	Collation     string
 	Offset, Limit int
 	Bounded       bool
 	Format        bool
@@ -526,6 +527,7 @@ func (r *setRead) loadObjects(node *setNode, w Window) (RecordPage, *platform.Er
 	store.Lock()
 	defer store.Unlock()
 	order, problem := records.CompileOrder(read.view.Info(), w.Sort)
+	order = order.Collate(w.Collation)
 	if problem != nil {
 		return RecordPage{}, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 	}
@@ -596,6 +598,7 @@ func (r *setRead) loadInterface(node *setNode, w Window) (RecordPage, *platform.
 	for i, read := range cs.reads {
 		var problem error
 		order, problem = records.CompileOrder(read.view.Info(), w.Sort)
+		order = order.Collate(w.Collation)
 		if problem != nil {
 			return RecordPage{}, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 		}

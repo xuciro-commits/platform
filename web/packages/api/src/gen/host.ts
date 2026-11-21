@@ -5848,6 +5848,7 @@ export type Word = {
   area: string;
   kind: string;
   says: Record<string, Said>;
+  stale?: boolean;
 };
 
 export type WordsView = {

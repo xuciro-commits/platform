@@ -980,7 +980,7 @@
           "name": "batchproviderbatch",
           "type": "build.batchproviderbatch",
           "title": "Production batch",
-          "plural": "Production batchs",
+          "plural": "Production batches",
           "fields": [
             {
               "name": "order",

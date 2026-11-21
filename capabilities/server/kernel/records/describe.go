@@ -8,6 +8,7 @@ import (
 	"slices"
 	"strings"
 	"time"
+	"unicode"
 
 	"platformserver/platform"
 )
@@ -223,7 +224,7 @@ func describeFields(e Entity, t reflect.Type, from int, typeOf func(reflect.Type
 			f.Write = strings.Split(roles, ",")
 		}
 		if f.Title == "" {
-			f.Title = strings.ToUpper(name[:1]) + name[1:]
+			f.Title = fieldTitle(name)
 		}
 		for _, flag := range strings.Split(sf.Tag.Get("field"), ",") {
 			switch flag {
@@ -314,6 +315,23 @@ func describeFields(e Entity, t reflect.Type, from int, typeOf func(reflect.Type
 		return nil, err
 	}
 	return out, nil
+}
+
+func fieldTitle(name string) string {
+	var b strings.Builder
+	for i, r := range name {
+		switch {
+		case i == 0:
+			r = unicode.ToUpper(r)
+		case unicode.IsUpper(r):
+			if previous := rune(name[i-1]); unicode.IsLower(previous) || unicode.IsDigit(previous) {
+				b.WriteByte(' ')
+			}
+			r = unicode.ToLower(r)
+		}
+		b.WriteRune(r)
+	}
+	return b.String()
 }
 
 func describeDerived(info *EntityInfo, e Entity) error {

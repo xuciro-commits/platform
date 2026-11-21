@@ -8,9 +8,22 @@ import (
 	"slices"
 	"strings"
 	"time"
+
+	"golang.org/x/text/collate"
+	"golang.org/x/text/language"
 )
 
-type SortOrder struct{ keys []sortKey }
+type SortOrder struct {
+	keys     []sortKey
+	collator *collate.Collator
+}
+
+func (order SortOrder) Collate(lang string) SortOrder {
+	if tag, err := language.Parse(lang); lang != "" && err == nil {
+		order.collator = collate.New(tag)
+	}
+	return order
+}
 
 func CompileOrder(info platform.RecordTypeInfo, names []string) (SortOrder, error) {
 	var order SortOrder
@@ -32,7 +45,11 @@ func CompileOrder(info platform.RecordTypeInfo, names []string) (SortOrder, erro
 func (order SortOrder) Keys(value reflect.Value) []any {
 	keys := make([]any, 0, len(order.keys)+1)
 	for _, key := range order.keys {
-		keys = append(keys, key.Of(value))
+		of := key.Of(value)
+		if text, ok := of.(string); ok && order.collator != nil && key.stamp == "" && (key.field.Type == "text" || key.field.Type == "longtext") {
+			of = string(order.collator.KeyFromString(&collate.Buffer{}, text))
+		}
+		keys = append(keys, of)
 	}
 	return append(keys, Header(value).ID)
 }

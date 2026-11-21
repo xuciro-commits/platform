@@ -39,20 +39,15 @@ func (x *Translator) appManifest(a platform.Service) platform.Manifest {
 func (x *Translator) InstallApplications(definitions []platform.Definition) {
 	applications := map[string]platform.Languages{}
 	conflicts := map[string]platform.Languages{}
-	for _, d := range definitions {
-		if d.Application == nil {
-			continue
+	merge := func(scope string, languages platform.Languages) {
+		if applications[scope] == nil {
+			applications[scope], conflicts[scope] = platform.Languages{}, platform.Languages{}
 		}
-		if applications[d.Ref.App] == nil {
-			applications[d.Ref.App] = platform.Languages{}
-			conflicts[d.Ref.App] = platform.Languages{}
-		}
-		for lang, words := range d.Application.Languages {
-			if applications[d.Ref.App][lang] == nil {
-				applications[d.Ref.App][lang] = map[string]string{}
-				conflicts[d.Ref.App][lang] = map[string]string{}
+		for lang, words := range languages {
+			if applications[scope][lang] == nil {
+				applications[scope][lang], conflicts[scope][lang] = map[string]string{}, map[string]string{}
 			}
-			merged, ambiguous := applications[d.Ref.App][lang], conflicts[d.Ref.App][lang]
+			merged, ambiguous := applications[scope][lang], conflicts[scope][lang]
 			for source, translation := range words {
 				if ambiguous[source] != "" {
 					continue
@@ -66,9 +61,31 @@ func (x *Translator) InstallApplications(definitions []platform.Definition) {
 			}
 		}
 	}
+	for _, d := range definitions {
+		if d.Application == nil {
+			continue
+		}
+		scopes := []string{d.Ref.App}
+		for _, resource := range d.Application.Resources {
+			if scope := scopeOf(d.Ref.App, resource.Name); !slices.Contains(scopes, scope) {
+				scopes = append(scopes, scope)
+			}
+		}
+		for _, scope := range scopes {
+			merge(scope, d.Application.Languages)
+		}
+	}
 	x.mu.Lock()
 	defer x.mu.Unlock()
 	x.applications, x.conflicts, x.dictionaries = applications, conflicts, nil
+}
+
+func scopeOf(app, name string) string {
+	app, _, _ = strings.Cut(app, "/")
+	if namespace, _, ok := strings.Cut(name, "."); ok && namespace != "" && namespace != app {
+		return app + "/" + namespace
+	}
+	return app
 }
 
 type pattern struct {
@@ -133,14 +150,20 @@ func (x *Translator) dictionary(app, lang string) *translationDictionary {
 			add(x.applications[manifest.ID][lang])
 		}
 		if app != "" {
+			base, _, scoped := strings.Cut(app, "/")
 			for _, a := range x.apps() {
 				manifest := x.appManifest(a)
-				if manifest.ID == app {
+				if manifest.ID == base {
 					add(manifest.Languages[lang])
 					break
 				}
 			}
-			add(x.applications[app][lang])
+			add(x.applications[base][lang])
+			for scope, languages := range x.applications {
+				if scope == app && scoped || !scoped && strings.HasSuffix(scope, "/"+app) {
+					add(languages[lang])
+				}
+			}
 		}
 		if x.tenant != nil {
 			add(x.tenant()[lang])
@@ -160,11 +183,10 @@ func (x *Translator) Reset() {
 	x.dictionaries = nil
 }
 
-func (x *Translator) Origin(lang, s, said string) (string, bool) {
+func (x *Translator) Origin(scope, lang, s, said string) (string, bool) {
 	x.mu.Lock()
-	conflict, packaged := false, false
-	for app, languages := range x.applications {
-		conflict = conflict || x.conflicts[app][lang][s] != ""
+	conflict, packaged := x.conflicts[scope][lang][s] != "" && x.applications[scope][lang][s] == "", false
+	for _, languages := range x.applications {
 		packaged = packaged || languages[lang][s] == said
 	}
 	x.mu.Unlock()
@@ -431,24 +453,7 @@ func opaquePresentationValue(node map[string]any, key string) bool {
 func walkChoicesWithApp(v any, currentApp string, f func(string, map[string]any, []any)) {
 	switch x := v.(type) {
 	case map[string]any:
-		app := currentApp
-		if ref, ok := x["ref"].(map[string]any); ok {
-			if owner, ok := ref["app"].(string); ok {
-				app = owner
-			}
-		}
-		if application, ok := x["application"].(map[string]any); ok {
-			if owner, ok := application["app"].(string); ok {
-				app = owner
-			}
-		}
-		if a, ok := x["app"].(string); ok && a != "" {
-			app = a
-		} else if target, ok := x["target"].(string); ok && target != "" && strings.Contains(target, ".") {
-			app, _, _ = strings.Cut(target, ".")
-		} else if schema, ok := x["schema"].(string); ok && schema != "" && strings.Contains(schema, ".") {
-			app, _, _ = strings.Cut(schema, ".")
-		}
+		app := ownerOf(x, currentApp)
 		if choices, ok := x["choices"].([]any); ok {
 			f(app, x, choices)
 		}
@@ -465,6 +470,32 @@ func walkChoicesWithApp(v any, currentApp string, f func(string, map[string]any,
 	}
 }
 
+func ownerOf(x map[string]any, current string) string {
+	app := current
+	ref, _ := x["ref"].(map[string]any)
+	if owner, ok := ref["app"].(string); ok {
+		app = owner
+	}
+	if application, ok := x["application"].(map[string]any); ok {
+		if owner, ok := application["app"].(string); ok {
+			app = owner
+		}
+	}
+	if a, ok := x["app"].(string); ok && a != "" {
+		app = a
+	} else if target, ok := x["target"].(string); ok && target != "" && strings.Contains(target, ".") {
+		app, _, _ = strings.Cut(target, ".")
+	} else if schema, ok := x["schema"].(string); ok && schema != "" && strings.Contains(schema, ".") {
+		app, _, _ = strings.Cut(schema, ".")
+	}
+	for _, id := range []any{x["type"], x["object"], x["target"], x["schema"], ref["name"]} {
+		if name, ok := id.(string); ok && strings.Contains(name, ".") {
+			return scopeOf(app, name)
+		}
+	}
+	return app
+}
+
 func WalkTexts(v any, f func(string) string) {
 	walkTextsWithApp(v, "", func(_ string, s string) string { return f(s) })
 }
@@ -472,24 +503,7 @@ func WalkTexts(v any, f func(string) string) {
 func walkTextsWithApp(v any, currentApp string, f func(string, string) string) {
 	switch x := v.(type) {
 	case map[string]any:
-		app := currentApp
-		if ref, ok := x["ref"].(map[string]any); ok {
-			if owner, ok := ref["app"].(string); ok {
-				app = owner
-			}
-		}
-		if application, ok := x["application"].(map[string]any); ok {
-			if owner, ok := application["app"].(string); ok {
-				app = owner
-			}
-		}
-		if a, ok := x["app"].(string); ok && a != "" {
-			app = a
-		} else if target, ok := x["target"].(string); ok && target != "" && strings.Contains(target, ".") {
-			app, _, _ = strings.Cut(target, ".")
-		} else if schema, ok := x["schema"].(string); ok && schema != "" && strings.Contains(schema, ".") {
-			app, _, _ = strings.Cut(schema, ".")
-		}
+		app := ownerOf(x, currentApp)
 		for k, child := range x {
 			if opaquePresentationValue(x, k) {
 				continue

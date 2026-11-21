@@ -43,7 +43,7 @@ func (h *Host) objectSetRoutes(rt *routes) {
 		if !ok {
 			return
 		}
-		page, object, err := t.loadObjectSet(t.Projection, t.objectCaller(m, ""), req.Set, objects.Window{Sort: req.Sort, Offset: req.Offset, Limit: req.Limit, Bounded: true, Format: req.Format}, h.Now())
+		page, object, err := t.loadObjectSet(t.Projection, t.objectCaller(m, ""), req.Set, objects.Window{Sort: req.Sort, Collation: t.Language(m, r), Offset: req.Offset, Limit: req.Limit, Bounded: true, Format: req.Format}, h.Now())
 		if err == nil && object == build.ObjectType {
 			page, err = objects.DraftPage(page, func(record any) (any, *platform.Error) { return t.objectDraftRecord(m, record) })
 		}

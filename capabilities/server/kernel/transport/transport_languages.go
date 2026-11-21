@@ -3,6 +3,7 @@ package transport
 import (
 	"cmp"
 	"encoding/json"
+	"maps"
 	"slices"
 	"strings"
 
@@ -81,11 +82,13 @@ type Said struct {
 }
 
 type Word struct {
-	Text string          `json:"text"`
-	App  string          `json:"app"`
-	Area string          `json:"area"`
-	Kind string          `json:"kind"`
-	Says map[string]Said `json:"says"`
+	Text  string          `json:"text"`
+	App   string          `json:"app"`
+	Area  string          `json:"area"`
+	Kind  string          `json:"kind"`
+	Says  map[string]Said `json:"says"`
+	Stale bool            `json:"stale,omitempty"`
+	scope string
 }
 
 type WordsView struct {
@@ -122,23 +125,21 @@ func WordsOf(x *Translator, manifests []platform.Manifest, definitions []platfor
 		raw, _ := json.Marshal(part)
 		var tree any
 		json.Unmarshal(raw, &tree)
-		put := func(kind string) func(string) string {
-			return func(s string) string {
-				if key := [3]string{app, area, s}; s != "" && !seen[key] {
-					seen[key] = true
-					view.Words = append(view.Words, Word{Text: s, App: app, Area: area, Kind: kind})
-				}
-				return s
+		put := func(kind, scope, s string) string {
+			if key := [3]string{app, area, s}; s != "" && !seen[key] {
+				seen[key] = true
+				view.Words = append(view.Words, Word{Text: s, App: app, Area: area, Kind: kind, scope: scope})
 			}
+			return s
 		}
-		WalkChoices(tree, func(_ map[string]any, choices []any) {
+		walkChoicesWithApp(tree, app, func(scope string, _ map[string]any, choices []any) {
 			for _, c := range choices {
 				if s, ok := c.(string); ok {
-					put("choice")(s)
+					put("choice", scope, s)
 				}
 			}
 		})
-		WalkTexts(tree, put(kind))
+		walkTextsWithApp(tree, app, func(scope, s string) string { return put(kind, scope, s) })
 	}
 	projects, owners := map[string]string{}, make([]string, len(definitions))
 	for i, d := range definitions {
@@ -182,10 +183,34 @@ func WordsOf(x *Translator, manifests []platform.Manifest, definitions []platfor
 		w := &view.Words[i]
 		w.Says = map[string]Said{}
 		for _, l := range view.Languages {
-			said := x.SayInApp(w.App, l, w.Text)
-			origin, conflict := x.Origin(l, w.Text, said)
+			said := x.SayInApp(w.scope, l, w.Text)
+			origin, conflict := x.Origin(w.scope, l, w.Text, said)
 			w.Says[l] = Said{Text: said, Origin: origin, Conflict: conflict}
 		}
+	}
+	if x.tenant == nil {
+		return view
+	}
+	current := map[string]bool{}
+	for _, w := range view.Words {
+		current[w.Text] = true
+	}
+	stale := map[string]Word{}
+	for l, words := range x.tenant() {
+		for source, translation := range words {
+			if current[source] || translation == "" {
+				continue
+			}
+			w, ok := stale[source]
+			if !ok {
+				w = Word{Text: source, Kind: "other", Says: map[string]Said{}, Stale: true}
+			}
+			w.Says[l] = Said{Text: translation, Origin: "workspace"}
+			stale[source] = w
+		}
+	}
+	for _, source := range slices.Sorted(maps.Keys(stale)) {
+		view.Words = append(view.Words, stale[source])
 	}
 	return view
 }

@@ -155,6 +155,8 @@
   "This workspace": "本工作区",
   "Missing": "缺译文",
   "Conflict": "冲突",
+  "Unused": "未使用",
+  "Delete translation": "删除译文",
   "Overridden": "已覆盖",
   "Translated": "已翻译",
   "A project cannot take the name of a built-in application": "项目不能使用内置应用的名字",
