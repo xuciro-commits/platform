@@ -324,14 +324,14 @@ export function ListView<Answer, Row>({ definition, read, primary, back }: ListV
   const frame: TablePlugin<Cells> = {
     transformBodyCell: (props, column, cells) => {
       if (column.key === orderedColumns[0]?.key || !definition.columns.find((candidate) => candidate.key === column.key)?.edit || (group && isHeader(cells))) return props;
-      const start = () => setEditing({ id: cells[idKey], key: column.key });
+      if (active !== cells[idKey]) return props;
       return {
         ...props,
         htmlProps: {
           ...props.htmlProps,
           onClick: (event) => {
             event.stopPropagation();
-            start();
+            setEditing({ id: cells[idKey], key: column.key });
           },
         },
         xstyle: [...props.xstyle, styles.editable],

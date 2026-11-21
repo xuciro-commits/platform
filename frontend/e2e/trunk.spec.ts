@@ -90,11 +90,14 @@ test("cells: a list cell edits in place with the input its type asks for", async
   await page.getByRole("link", { name: "Opportunities" }).click();
   const row = page.getByRole("row", { name: /会员数据集成/ });
   await row.getByText("Lost", { exact: true }).click();
+  await expect(page.getByRole("complementary", { name: "Details" })).toBeVisible();
+  await row.getByText("Lost", { exact: true }).click();
   await page.getByRole("option", { name: "Qualifying", exact: true }).click();
   await expect(row.getByText("Qualifying", { exact: true })).toBeVisible();
   await page.reload();
   const saved = page.getByRole("row", { name: /会员数据集成/ });
   await expect(saved.getByText("Qualifying", { exact: true })).toBeVisible();
+  await saved.getByText("Qualifying", { exact: true }).click();
   await saved.getByText("Qualifying", { exact: true }).click();
   await page.getByRole("option", { name: "Lost", exact: true }).click();
   await expect(saved.getByText("Lost", { exact: true })).toBeVisible();
@@ -1238,7 +1241,7 @@ test("list: chips filter on the host, a row opens its details and selection open
   await expect(rows).toHaveCount(5);
   await expect(header.getByText(/^5 \/ [1-9]\d*$/).filter({ hasNotText: "5 / 5" })).toBeVisible();
 
-  await rows.filter({ hasText: "机器人工作站集成" }).press("Enter");
+  await rows.filter({ hasText: "机器人工作站集成" }).getByRole("cell").nth(2).click();
   const details = page.getByRole("complementary", { name: "Details" });
   await expect(details.getByRole("heading", { level: 2, name: "机器人工作站集成" })).toBeVisible();
   await expect(details.getByText("红隼机器人").first()).toBeVisible();
@@ -1370,6 +1373,7 @@ test("vocabulary: a workspace translation wins over the shipped one and reverts"
   await page.getByRole("textbox", { name: "Search this list" }).press("Enter");
   const row = page.getByRole("row").filter({ hasText: "Types and fields" }).filter({ has: page.getByRole("cell", { name: "Opportunity", exact: true }) });
   await expect(row).toContainText("Missing");
+  await row.getByRole("cell").nth(1).click();
   await row.getByRole("cell").nth(1).click();
   await row.getByRole("textbox").fill("商机");
   await row.getByRole("textbox").press("Enter");
