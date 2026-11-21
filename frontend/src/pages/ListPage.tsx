@@ -27,7 +27,7 @@ import { navigate, usePath, useSearch } from "../router";
 import { PageTitle, useGutter } from "./frame";
 import { BoardView } from "./BoardView";
 import { useListWindow } from "./ListWindow";
-import { type CellEdit, CellEditor } from "./CellEditor";
+import { type CellEdit, CellProperty } from "./PropertyField";
 import { type Chip, FilterBar } from "./ListFilters";
 import { ListOptions } from "./ListOptions";
 import { type Cells, dotOf, idKey, ListCell, ListDetail, targetOf, typeOf } from "./ListDetail";
@@ -310,7 +310,7 @@ export function ListView<Answer, Row>({ definition, read, primary, back }: ListV
         if (group && isHeader(cells)) return null;
         const row = rowOf.get(cells[idKey]);
         return column.edit && row && editing?.id === cells[idKey] && editing.key === column.key
-          ? <CellEditor edit={column.edit} row={row} close={() => setEditing(null)} />
+          ? <CellProperty edit={column.edit} row={row} close={() => setEditing(null)} />
           : <ListCell column={column} cells={cells} first={position === 0} />;
       },
     })),

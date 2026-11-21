@@ -3,7 +3,7 @@ import { HStack } from "@astryxdesign/core/Layout";
 import { Text } from "@astryxdesign/core/Text";
 import { Typeahead, TypeaheadItem } from "@astryxdesign/core/Typeahead";
 import { type ComponentProps, useMemo, useState } from "react";
-import { type Api, useRead } from "../host";
+import { type Api, request, useRead } from "../host";
 import { t } from "../i18n";
 
 export function MemberLabel({ name }: { name: string }) {
@@ -27,9 +27,9 @@ export function MemberInput({ id, name, onChange, ...props }: MemberInputProps) 
   const selection = id ? { id, label: name ?? (picked?.id === id ? picked.label : t("Unnamed member")) } : null;
   const source = useMemo(() => ({
     bootstrap: () => [],
-    search: (query: string) => {
+    search: async (query: string) => {
       const lower = query.trim().toLocaleLowerCase();
-      return (members ?? []).filter((member) => member.name.toLocaleLowerCase().includes(lower)).slice(0, 10)
+      return (members ?? await request<Api.MemberOption[]>("/v1/member-directory")).filter((member) => member.name.toLocaleLowerCase().includes(lower)).slice(0, 10)
         .map((member) => ({ id: member.id, label: member.name }));
     },
   }), [members]);

@@ -1308,7 +1308,8 @@
             "name": "converted",
             "title": "Converted",
             "type": "boolean",
-            "group": "Closure"
+            "group": "Closure",
+            "readOnly": true
           },
           {
             "name": "lostreason",
@@ -1506,7 +1507,6 @@
           "email": "weiqing@xihe-precision.example",
           "mobile": "+86-138-0151-1001",
           "status": "converted",
-          "converted": true,
           "owner": "admin-1",
           "source": "SRC-003",
           "industry": "IND-001",
@@ -1518,7 +1518,6 @@
           "email": "baoheng@xianfeng-logistics.example",
           "mobile": "+86-139-0574-2001",
           "status": "converted",
-          "converted": true,
           "owner": "builder-1",
           "source": "SRC-013",
           "industry": "IND-003",
@@ -1530,7 +1529,6 @@
           "email": "linruiqiu@zhiri-health.example",
           "mobile": "+86-136-0100-3001",
           "status": "converted",
-          "converted": true,
           "owner": "user-1",
           "source": "SRC-010",
           "industry": "IND-004",
@@ -2839,7 +2837,8 @@
             "name": "converted",
             "title": "Converted",
             "type": "boolean",
-            "group": "Closure"
+            "group": "Closure",
+            "readOnly": true
           },
           {
             "name": "deal",
@@ -2974,6 +2973,24 @@
                       "kind": "reference",
                       "lit": {
                         "value": "junk"
+                      }
+                    }
+                  ]
+                },
+                {
+                  "op": "!=",
+                  "kind": "boolean",
+                  "args": [
+                    {
+                      "op": "",
+                      "kind": "reference",
+                      "ref": "status"
+                    },
+                    {
+                      "op": "",
+                      "kind": "reference",
+                      "lit": {
+                        "value": "converted"
                       }
                     }
                   ]

@@ -15,6 +15,7 @@ import type { Described, Section, Values } from "./describe";
 import { type InputStatus, ParameterInput, enterable, settles } from "./ParameterInput";
 import { plain, present, shown } from "./values";
 import { OneOfInput, ReferenceLink } from "./ReferenceField";
+import { PropertyField } from "./PropertyField";
 import { MemberLabel } from "./MemberField";
 
 type Conflict = { name: string; before: unknown; mine: unknown; saved: unknown; revision: number };
@@ -23,8 +24,10 @@ export type Editor = {
   conflict?: Conflict;
   resolve: (keep: "mine" | "saved") => void;
   status: Record<string, InputStatus>;
+  saving: ReadonlySet<string>;
   change: (parameter: Api.Field, value: unknown) => void;
   settle: () => void;
+  commit(name: string): Promise<void>;
   leave?: (discard: boolean) => void;
 };
 
@@ -37,8 +40,10 @@ export function useEditor(described: Described, id: string, values: Values, revi
   const [drafts, setDrafts] = useState<Values>({});
   const [status, setStatus] = useState<Record<string, InputStatus>>({});
   const [conflict, setConflict] = useState<Conflict>();
+  const [saving, setSaving] = useState<ReadonlySet<string>>(new Set());
   const [leave, setLeave] = useState<Editor["leave"]>();
   const refused = useRef(new Set<string>());
+  const reasons = useRef(new Map<string, string>());
   const latest = useRef(revision);
   const pending = useRef(drafts);
   const queue = useRef(Promise.resolve());
@@ -56,12 +61,16 @@ export function useEditor(described: Described, id: string, values: Values, revi
     try {
       const accepted = await send(edit, id, { ...together, [name]: value }, latest.current);
       latest.current = accepted.revision;
-      for (const sent of [name, ...Object.keys(together)]) refused.current.delete(sent);
+      for (const sent of [name, ...Object.keys(together)]) {
+        refused.current.delete(sent);
+        reasons.current.delete(sent);
+      }
       setStatus((previous) => ({ ...previous, ...Object.fromEntries([name, ...Object.keys(together)].map((sent) => [sent, { type: "success" as const }])) }));
     } catch (problem) {
       if (!(problem instanceof HostRefusal && problem.reasonCode === "stale_revision")) {
         if (same(pending.current[name], value)) {
           refused.current.add(name);
+          reasons.current.set(name, reasonOf(problem));
           setStatus((previous) => ({ ...previous, [name]: { type: "error", message: reasonOf(problem) } }));
         }
         return;
@@ -89,14 +98,21 @@ export function useEditor(described: Described, id: string, values: Values, revi
     }
     const missing = described.needs(form, changed).filter((field) => field.name !== name && !(field.name in together));
     if (missing.length) {
+      const message = `${t("Also fill in")}: ${missing.map((field) => t(field.title)).join(", ")}`;
       refused.current.add(name);
-      setStatus((previous) => ({ ...previous, [name]: { type: "error", message: `${t("Also fill in")}: ${missing.map((field) => t(field.title)).join(", ")}` } }));
+      reasons.current.set(name, message);
+      setStatus((previous) => ({ ...previous, [name]: { type: "error", message } }));
       return;
     }
     sent.current[name] = value;
     Object.assign(sent.current, together);
     const before = values[name];
-    queue.current = queue.current.then(() => write(name, value, before, together));
+    setSaving((previous) => new Set(previous).add(name));
+    queue.current = queue.current.then(() => write(name, value, before, together)).finally(() => setSaving((previous) => {
+      const next = new Set(previous);
+      next.delete(name);
+      return next;
+    }));
   };
 
   const resolve = (keep: "mine" | "saved") => {
@@ -114,6 +130,12 @@ export function useEditor(described: Described, id: string, values: Values, revi
 
   const settle = () => {
     for (const [name, value] of Object.entries(pending.current)) if (text.has(name)) save(name, value);
+  };
+  const commit = async (name: string) => {
+    settle();
+    await queue.current;
+    const reason = reasons.current.get(name);
+    if (reason) throw new Error(reason);
   };
   const flush = useRef(settle);
   flush.current = settle;
@@ -139,10 +161,12 @@ export function useEditor(described: Described, id: string, values: Values, revi
     values: { ...values, ...drafts },
     leave,
     status,
+    saving,
     conflict,
     resolve,
     change: (parameter, value) => {
       refused.current.delete(parameter.name);
+      reasons.current.delete(parameter.name);
       const field = described.field(parameter.name);
       const cleared = field && !blank(value) ? described.members(field).filter((sibling) => sibling.name !== parameter.name).map((sibling) => [sibling.name, ""]) : [];
       setDrafts((previous) => ({ ...previous, ...Object.fromEntries(cleared), [parameter.name]: value }));
@@ -150,6 +174,7 @@ export function useEditor(described: Described, id: string, values: Values, revi
       if (settles(parameter, described.field(parameter.name))) save(parameter.name, value);
     },
     settle,
+    commit,
   };
 }
 
@@ -195,14 +220,18 @@ export function EditorConflict({ editor, described }: { editor: Editor; describe
   );
 }
 
-type FieldGroupProps = { described: Described; editor: Editor; sections: Section[]; direction: "horizontal-labels" | "vertical"; focusEmpty?: boolean; refs?: Api.RecordView["refs"]; restricted?: ReadonlySet<string> };
+type FieldGroupProps = { described: Described; editor: Editor; sections: Section[]; direction: "horizontal-labels" | "vertical"; focusEmpty?: boolean; fold?: boolean; refs?: Api.RecordView["refs"]; restricted?: ReadonlySet<string> };
 
 const styles = stylex.create({
   aligned: { gridTemplateColumns: { default: "minmax(0, 1fr) minmax(0, 3fr)", "@media (max-width: 480px)": "100%" } },
 });
 
-export function FieldGroup({ described, editor, sections, direction, focusEmpty, refs, restricted }: FieldGroupProps) {
+export function FieldGroup({ described, editor, sections, direction, focusEmpty, fold, refs, restricted }: FieldGroupProps) {
   const parameters = new Map((described.edit?.payload ?? []).filter(enterable).map((parameter) => [parameter.name, parameter]));
+  const [folded] = useState(() => new Set(fold ? sections.flatMap((section) => section.fields)
+    .filter((field) => parameters.has(field.name) && !field.required && !field.when && !field.oneOf && !restricted?.has(field.name) && present(field, editor.values[field.name]) === "")
+    .map((field) => field.name) : []));
+  const [more, setMore] = useState(false);
   const visible = (fields: Api.FieldInfo[]) =>
     fields.filter((field) => {
       if (restricted?.has(field.name)) return true;
@@ -212,8 +241,10 @@ export function FieldGroup({ described, editor, sections, direction, focusEmpty,
       const value = editor.values[field.name];
       return (field.type === "money" || typeof value !== "object") && present(field, value) !== "";
     });
-  const shownSections = sections.map((section) => ({ ...section, fields: visible(section.fields) })).filter((section) => section.fields.length > 0);
-  if (shownSections.length === 0) return null;
+  const hidden = more ? 0 : sections.flatMap((section) => visible(section.fields)).filter((field) => folded.has(field.name)).length;
+  const shownSections = sections.map((section) => ({ ...section, fields: visible(section.fields).filter((field) => more || !folded.has(field.name)) }))
+    .filter((section) => section.fields.length > 0);
+  if (shownSections.length === 0 && hidden === 0) return null;
   const typed = (parameter?: Api.Field) => parameter && !parameter.choices && parameter.type !== "boolean" && parameter.type !== "attachment";
   const first = focusEmpty
     ? shownSections.flatMap((section) => section.fields).find((field) => !restricted?.has(field.name) && typed(parameters.get(field.name)) && shown(editor.values[field.name]) === "")?.name
@@ -250,33 +281,18 @@ export function FieldGroup({ described, editor, sections, direction, focusEmpty,
                   <Text type="supporting" color="secondary">{t("Cannot view")}</Text>
                 </Field>;
               }
-              return parameter ? (
-                <ParameterInput
-                  key={field.name}
-                  parameter={parameter}
-                  described={described.entity}
-                  value={value}
-                  form={editor.values}
-                  referenceName={referenceName}
-                  status={editor.status[field.name]}
-                  onChange={(value) => editor.change(parameter, value)}
-                  onEnter={editor.settle}
-                  focused={field.name === first}
-                  quiet
-                />
-              ) : (
-                <Field key={field.name} label={t(field.title)} inputID={`shown-${field.name}`}>
-                  {field.type === "member"
-                    ? <MemberLabel name={referenceName ?? t("Unnamed member")} />
-                    : reference && referenceName
-                    ? <ReferenceLink type={reference} id={id} name={referenceName} />
-                    : <Text type="body">{present(field, value)}</Text>}
-                </Field>
-              );
+              return <PropertyField key={field.name} field={field} parameter={parameter} described={described.entity} value={value} form={editor.values}
+                name={referenceName} status={editor.status[field.name]} saving={editor.saving.has(field.name)} open={field.name === first}
+                onChange={parameter && ((next: unknown) => editor.change(parameter, next))} onCommit={() => editor.commit(field.name)} />;
             })}
           </FormLayout>
         </VStack>
       ))}
+      {folded.size > 0 && (
+        <HStack hAlign="start">
+          <Button variant="ghost" size="sm" label={more ? t("Hide empty fields") : `${t("Show empty fields")} · ${hidden}`} onClick={() => setMore(!more)} />
+        </HStack>
+      )}
     </VStack>
   );
 }

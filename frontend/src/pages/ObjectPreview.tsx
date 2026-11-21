@@ -67,8 +67,10 @@ export function ObjectPreview({ definition, source, catalog }: { definition: Val
   const editor: Editor = {
     values: samples[0],
     status: {},
+    saving: new Set(),
     change: () => undefined,
     settle: () => undefined,
+    commit: async () => undefined,
     resolve: () => undefined,
   };
   const columns = preview.table.map((field) => ({

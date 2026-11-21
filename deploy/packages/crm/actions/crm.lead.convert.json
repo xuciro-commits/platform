@@ -16,7 +16,7 @@
     "schema": "crm.lead.convert",
     "schemaVersion": {
       "family": 2,
-      "version": "schema.sha256.20d9ae23fae97b552901963ab2a366296d989c3702af414e59e3699b3f4e9af4"
+      "version": "schema.sha256.f81247f1347aea9c95bd66a7791a2f6cf7017cf1eccafa79bc79c12e10145c8e"
     },
     "target": "crm.lead",
     "title": "Convert to deal"

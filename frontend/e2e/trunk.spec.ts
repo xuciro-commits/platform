@@ -1,4 +1,4 @@
-import { type Page, expect, test } from "@playwright/test";
+import { type Locator, type Page, expect, test } from "@playwright/test";
 import type { Api } from "../src/host";
 
 async function signIn(page: Page) {
@@ -9,6 +9,18 @@ async function signIn(page: Page) {
 async function open(page: Page, app: string, entry: string) {
   await page.getByRole("link", { name: app }).click();
   await page.getByRole("navigation", { name: "Primary navigation" }).getByRole("link", { name: entry }).click();
+}
+
+const property = (scope: Page | Locator, name: string) => scope.getByRole("group", { name, exact: true });
+
+async function edit(scope: Page | Locator, name: string) {
+  const button = scope.getByRole("button", { name: `Edit ${name}`, exact: true });
+  const more = scope.getByRole("button", { name: /^Show empty fields/ });
+  const control = scope.getByRole("textbox", { name, exact: true }).or(scope.getByRole("combobox", { name, exact: true })).or(scope.getByRole("spinbutton", { name, exact: true }));
+  await expect(button.or(more).or(control).first()).toBeVisible();
+  if (await control.count()) return control.first().click();
+  if (!(await button.count())) await more.click();
+  await button.press("Enter");
 }
 
 test("legacy links: open records and mapped views, and explain unavailable views", async ({ page }) => {
@@ -57,31 +69,32 @@ test("records: open a list, open a record, change a field in place", async ({ pa
   await expect(retrofit.getByText("1,250.00 USD", { exact: true })).toBeVisible();
 
   await page.getByRole("link", { name: "冲压线改造" }).click();
-  await expect(page.getByRole("combobox", { name: "Stage" })).toContainText("Negotiation");
+  await expect(property(page, "Stage")).toContainText("Negotiation");
   await expect(page.getByRole("heading", { level: 1, name: "冲压线改造" })).toBeVisible();
 
   await expect(page.getByRole("heading", { level: 3, name: "Commercial" })).toBeVisible();
   await expect(page.getByRole("heading", { level: 3, name: "Follow-up" })).toBeVisible();
   await expect(page.getByRole("textbox", { name: "Loss reason" })).toHaveCount(0);
   await expect(page.getByRole("switch", { name: "Budget approved" })).toBeChecked();
-  await expect(page.getByRole("spinbutton", { name: "Proposed deposit", exact: true })).toHaveValue("1,250.00");
-  await expect(page.getByRole("complementary").getByRole("button", { name: /Owner.*王丹/ })).toBeVisible();
+  await expect(property(page, "Proposed deposit")).toContainText("1,250.00");
+  await expect(property(page.getByRole("complementary"), "Owner")).toContainText("王丹");
 
+  await expect(property(page, "Next step")).toHaveText("发送修订后的条款");
+  await edit(page, "Next step");
   const next = page.getByRole("textbox", { name: "Next step" });
-  await expect(next).toHaveValue("发送修订后的条款");
   await next.fill("Call the plant manager");
   await next.press("Enter");
   await expect(page.getByRole("complementary").getByText("2", { exact: true })).toBeVisible();
 
   await page.reload();
-  await expect(page.getByRole("textbox", { name: "Next step" })).toHaveValue("Call the plant manager");
+  await expect(property(page, "Next step")).toHaveText("Call the plant manager");
 
-  await page.getByRole("complementary").getByRole("button", { name: /Owner.*王丹/ }).click();
+  await edit(page.getByRole("complementary"), "Owner");
   await page.getByRole("complementary").getByRole("combobox", { name: "Owner", exact: true }).fill("韩奥");
   await page.getByRole("option", { name: /韩奥/ }).click();
   await expect(page.getByRole("complementary").getByText("3", { exact: true })).toBeVisible();
   await page.reload();
-  await expect(page.getByRole("complementary").getByRole("button", { name: /Owner.*韩奥/ })).toBeVisible();
+  await expect(property(page.getByRole("complementary"), "Owner")).toContainText("韩奥");
 });
 
 test("cells: a list cell edits in place with the input its type asks for", async ({ page }) => {
@@ -108,14 +121,14 @@ test("sections: a field shows only when its condition holds", async ({ page }) =
   await open(page, "Ontology", "Objects");
   await page.getByRole("link", { name: "Opportunities" }).click();
   await page.getByRole("link", { name: "车队追踪上线" }).click();
-  const reason = page.getByRole("textbox", { name: "Loss reason" });
+  const reason = property(page, "Loss reason").or(page.getByRole("textbox", { name: "Loss reason" }));
   await expect(reason).toHaveCount(0);
 
-  await page.getByRole("combobox", { name: "Stage" }).click();
+  await edit(page, "Stage");
   await page.getByRole("option", { name: "Lost", exact: true }).click();
-  await expect(reason).toBeVisible();
+  await expect(reason.first()).toBeVisible();
 
-  await page.getByRole("combobox", { name: "Stage" }).click();
+  await edit(page, "Stage");
   await page.getByRole("option", { name: "Proposal", exact: true }).click();
   await expect(reason).toHaveCount(0);
 });
@@ -134,6 +147,7 @@ test("submit: an answer lost on the way is retried and accepted once", async ({ 
     await route.fetch();
     await route.abort("connectionreset");
   });
+  await edit(page, "Next step");
   const next = page.getByRole("textbox", { name: "Next step" });
   await next.fill("Book the site visit");
   await next.press("Enter");
@@ -142,7 +156,7 @@ test("submit: an answer lost on the way is retried and accepted once", async ({ 
 
   await page.unroute("**/v1/submissions");
   await page.reload();
-  await expect(page.getByRole("textbox", { name: "Next step" })).toHaveValue("Book the site visit");
+  await expect(property(page, "Next step")).toHaveText("Book the site visit");
   await expect(page.getByRole("complementary").getByText("2", { exact: true })).toBeVisible();
 });
 
@@ -172,21 +186,24 @@ test("conflict: the second writer sees both values and chooses", async ({ browse
     await open(page, "Ontology", "Objects");
     await page.getByRole("link", { name: "Opportunities" }).click();
     await page.getByRole("link", { name: "门店补货试点" }).click();
-    await expect(page.getByRole("textbox", { name: "Next step" })).toHaveValue("商定试点门店");
+    await expect(property(page, "Next step")).toHaveText("商定试点门店");
   }
   const [first, second] = pages;
 
+  await edit(first, "Next step");
   await first.getByRole("textbox", { name: "Next step" }).fill("Pilot in four stores");
   await first.getByRole("textbox", { name: "Next step" }).press("Enter");
   await expect(first.getByRole("complementary").getByText("2", { exact: true })).toBeVisible();
 
-  await second.getByRole("complementary").getByRole("button", { name: /^Owner/ }).click();
+  await edit(second.getByRole("complementary"), "Owner");
   await second.getByRole("complementary").getByRole("combobox", { name: "Owner", exact: true }).fill("韩奥");
   await second.getByRole("option", { name: /韩奥/ }).click();
   await expect(second.getByRole("complementary").getByText("3", { exact: true })).toBeVisible();
   await expect(second.getByRole("dialog")).toHaveCount(0);
 
+  await edit(second, "Next step");
   await second.getByRole("textbox", { name: "Next step" }).fill("Pilot in two stores");
+  await edit(first, "Next step");
   await first.getByRole("textbox", { name: "Next step" }).fill("Pilot in six stores");
   await first.getByRole("textbox", { name: "Next step" }).press("Enter");
   await expect(first.getByRole("complementary").getByText("4", { exact: true })).toBeVisible();
@@ -198,7 +215,7 @@ test("conflict: the second writer sees both values and chooses", async ({ browse
   await expect(second.getByRole("complementary").getByText("5", { exact: true })).toBeVisible();
 
   await first.reload();
-  await expect(first.getByRole("textbox", { name: "Next step" })).toHaveValue("Pilot in two stores");
+  await expect(property(first, "Next step")).toHaveText("Pilot in two stores");
   await Promise.all(pages.map((page) => page.close()));
 });
 
@@ -266,12 +283,13 @@ test("leave: a typed value is kept when the user walks away without Enter", asyn
   await open(page, "Ontology", "Objects");
   await page.getByRole("link", { name: "Opportunities" }).click();
   await page.getByRole("link", { name: "熔炉监测" }).click();
+  await edit(page, "Next step");
   await page.getByRole("textbox", { name: "Next step" }).fill("Book the site walk");
   await page.getByRole("link", { name: "Opportunities" }).click();
   await expect(page.getByRole("heading", { level: 1, name: "Opportunities" })).toBeVisible();
   await page.reload();
   await page.getByRole("link", { name: "熔炉监测" }).click();
-  await expect(page.getByRole("textbox", { name: "Next step" })).toHaveValue("Book the site walk");
+  await expect(property(page, "Next step")).toHaveText("Book the site walk");
 });
 
 test("shape: every record page has the same header, tabs and rail", async ({ page }) => {
@@ -304,6 +322,7 @@ test("batch: retries a stale row without submitting a successful row again", asy
   const href = await page.getByRole("link", { name: "季节性备货计划" }).getAttribute("href");
   await signIn(editing);
   await editing.goto(href!);
+  await edit(editing, "Next step");
   const next = editing.getByRole("textbox", { name: "Next step" });
   await next.fill("Check seasonal targets");
   await next.press("Enter");
@@ -332,6 +351,7 @@ test("leave: a refused inline edit asks whether to stay or discard", async ({ pa
   await open(page, "Ontology", "Objects");
   await page.getByRole("link", { name: "Opportunities" }).click();
   await page.getByRole("link", { name: "车队追踪上线" }).click();
+  await edit(page, "Subject");
   const subject = page.getByRole("textbox", { name: "Subject" });
   await subject.fill("");
   const refused = page.waitForResponse((response) => response.url().endsWith("/v1/submissions") && response.status() >= 400);
@@ -345,7 +365,7 @@ test("leave: a refused inline edit asks whether to stay or discard", async ({ pa
   await confirm.getByRole("button", { name: "Discard", exact: true }).click();
   await expect(page.getByRole("heading", { level: 1, name: "Opportunities" })).toBeVisible();
   await page.getByRole("link", { name: "车队追踪上线" }).click();
-  await expect(subject).toHaveValue("车队追踪上线");
+  await expect(property(page, "Subject")).toHaveText("车队追踪上线");
 });
 
 test("mobile: the navigation drawer contains the application controls", async ({ page }) => {
@@ -365,7 +385,7 @@ test("reference: search by name, save the selected record and follow its link", 
   await open(page, "Ontology", "Objects");
   await page.getByRole("link", { name: "Opportunities" }).click();
   await page.getByRole("link", { name: "冲压线改造" }).click();
-  await page.getByRole("button", { name: /Customer.*北风工具/ }).click();
+  await edit(page, "Customer");
   await page.getByRole("combobox", { name: "Customer", exact: true }).fill("哈特");
   await page.getByRole("option", { name: /哈特曼/ }).click();
   await expect(page.getByRole("link", { name: "哈特曼制造", exact: true })).toBeVisible();
@@ -411,6 +431,7 @@ test("activity: a comment and an inline change appear in one timeline", async ({
   await open(page, "Ontology", "Objects");
   await page.getByRole("link", { name: "Opportunities" }).click();
   await page.getByRole("link", { name: "仓库扫码枪" }).click();
+  await edit(page, "Next step");
   const next = page.getByRole("textbox", { name: "Next step" });
   const before = await next.inputValue();
   await next.fill("Confirm scanner quantities");
@@ -491,7 +512,9 @@ test("keyboard: create and edit an opportunity without using a pointer", async (
   await expect(page.getByRole("option", { name: /北风工具/ })).toBeVisible();
   await page.keyboard.press("Enter");
   await expect(page.getByRole("link", { name: "北风工具", exact: true })).toBeVisible();
-  await tabTo(page.getByRole("textbox", { name: "Next step" }));
+  await tabTo(page.getByRole("button", { name: "Edit Next step", exact: true }));
+  await page.keyboard.press("Enter");
+  await expect(page.getByRole("textbox", { name: "Next step" })).toBeFocused();
   await page.keyboard.insertText("Confirm renewal scope");
   await page.keyboard.press("Enter");
   await expect(page.getByRole("complementary").getByText("3", { exact: true })).toBeVisible();
@@ -502,7 +525,7 @@ test("keyboard: create and edit an opportunity without using a pointer", async (
   await page.keyboard.press("Escape");
   await expect(keys).toBeHidden();
   await page.reload();
-  await expect(page.getByRole("textbox", { name: "Next step" })).toHaveValue("Confirm renewal scope");
+  await expect(property(page, "Next step")).toHaveText("Confirm renewal scope");
 });
 
 test("object definition: add a field, publish it and review a removal", async ({ page }) => {
@@ -532,7 +555,8 @@ test("object definition: add a field, publish it and review a removal", async ({
   await expect(page.getByText("Unpublished changes", { exact: true })).toHaveCount(0);
   await page.getByRole("link", { name: "Open records" }).click();
   await page.getByRole("link", { name: "冲压线改造" }).click();
-  await expect(page.getByRole("textbox", { name: "Mobile", exact: true })).toBeVisible();
+  await page.getByRole("button", { name: /^Show empty fields/ }).click();
+  await expect(property(page, "Mobile")).toBeVisible();
 
   await page.getByRole("link", { name: "Opportunities", exact: true }).click();
   await page.getByRole("link", { name: "Object types", exact: true }).click();
@@ -949,6 +973,7 @@ test("views: a published type opens with its declared default view", async ({ pa
 test("files: an attachment field stores a media set item on the record", async ({ page }) => {
   await signIn(page);
   await page.goto("/ontology/objects/sales.opportunity/OPP-001");
+  await page.getByRole("button", { name: /^Show empty fields/ }).click();
   await expect(page.getByText("Brief", { exact: true })).toBeVisible();
   await page.locator('input[type="file"]').setInputFiles({
     name: "brief.txt",
@@ -995,12 +1020,13 @@ test("list: one bar searches and filters, identities are quiet and references op
 test("record fields: values read as values and become inputs when focused", async ({ page }) => {
   await signIn(page);
   await page.goto("/ontology/objects/sales.opportunity/OPP-001");
+  await expect(property(page, "Amount")).toHaveText("184,000");
+  await edit(page, "Amount");
   const amount = page.getByRole("spinbutton", { name: "Amount", exact: true });
-  await expect(amount).toHaveValue("184,000");
-  await amount.focus();
+  await expect(amount).toBeFocused();
   await expect(amount).toHaveValue("184000");
-  await amount.blur();
-  await expect(amount).toHaveValue("184,000");
+  await amount.press("Escape");
+  await expect(property(page, "Amount")).toHaveText("184,000");
 });
 
 test("files: an attachment waits for its project before offering file selection", async ({ page }) => {
@@ -1013,6 +1039,7 @@ test("files: an attachment waits for its project before offering file selection"
     await route.continue();
   });
   await page.goto("/ontology/objects/sales.opportunity/OPP-003");
+  await page.getByRole("button", { name: /^Show empty fields/ }).click();
   await requested.promise;
   const input = page.locator('input[type="file"]');
   try {
@@ -1053,10 +1080,10 @@ test("applications: install the sample version and run a contributed record acti
   await action.getByRole("textbox", { name: /^Shop order/ }).fill("WO-1042");
   await action.getByRole("button", { name: "Set shop order", exact: true }).click();
   await expect(action).toBeHidden();
-  const shopOrder = page.getByRole("textbox", { name: "First shop order", exact: true });
-  await expect(shopOrder).toHaveValue("WO-1042");
+  const shopOrder = property(page, "First shop order");
+  await expect(shopOrder).toHaveText("WO-1042");
   await page.reload();
-  await expect(shopOrder).toHaveValue("WO-1042");
+  await expect(shopOrder).toHaveText("WO-1042");
 });
 
 test("applications: shared records respect roles and keep their history after retirement", async ({ page, browser }) => {
@@ -1079,7 +1106,7 @@ test("applications: shared records respect roles and keep their history after re
   await action.getByRole("button", { name: "Set shop order", exact: true }).click();
   const sent = await submitted;
   await expect(action).toBeHidden();
-  await expect(member.getByRole("textbox", { name: "First shop order", exact: true })).toHaveValue("WO-1043");
+  await expect(property(member, "First shop order")).toHaveText("WO-1043");
   const historyURL = await member.getByRole("link", { name: "Activity", exact: true }).getAttribute("href");
   expect(new URL(historyURL!, member.url()).pathname).toBe(`${appRecord.pathname}/activity`);
 
@@ -1133,7 +1160,7 @@ test("applications: shared records respect roles and keep their history after re
   await manage.click();
   await expect(review.getByText("Business records retained: 2", { exact: true })).toBeVisible();
   await page.goto(appRecord.href);
-  await expect(page.getByRole("textbox", { name: "First shop order", exact: true })).toHaveValue("WO-1043");
+  await expect(property(page, "First shop order")).toHaveText("WO-1043");
   const retiredMenu = page.getByRole("button", { name: "More actions" });
   if (await retiredMenu.isVisible()) await retiredMenu.click();
   await expect(page.getByRole("menuitem", { name: "Set shop order", exact: true })).toHaveCount(0);
@@ -1184,21 +1211,21 @@ test("members: an opportunity owner is shown by name and can be reassigned", asy
 
   await row.getByRole("link", { name: "熔炉监测" }).click();
   const properties = page.getByRole("complementary");
-  const selected = properties.getByRole("button", { name: /Owner.*王丹/ });
-  await expect(selected).toBeVisible();
+  await expect(property(properties, "Owner")).toContainText("王丹");
   await expect(properties.getByRole("img", { name: "王丹" })).toBeVisible();
-  await selected.click();
+  await edit(properties, "Owner");
   await properties.getByRole("combobox", { name: "Owner", exact: true }).fill("韩奥");
   await page.getByRole("option", { name: /韩奥/ }).click();
   await expect(properties.getByText("2", { exact: true })).toBeVisible();
   await page.reload();
-  await expect(properties.getByRole("button", { name: /Owner.*韩奥/ })).toBeVisible();
+  await expect(property(properties, "Owner")).toContainText("韩奥");
   await expect(properties.getByRole("img", { name: "韩奥" })).toBeVisible();
 });
 
 test("record fields: an attachment preserves the horizontal label alignment", async ({ page }) => {
   await signIn(page);
   await page.goto("/ontology/objects/sales.opportunity/OPP-001");
+  await page.getByRole("button", { name: /^Show empty fields/ }).click();
   const brief = page.getByText("Brief", { exact: true });
   const customer = page.getByText("Customer", { exact: true });
   const amount = page.getByText("Amount", { exact: true });
@@ -1218,6 +1245,7 @@ test("record fields: an attachment preserves the horizontal label alignment", as
 test("record fields: a date uses its field name for assistive technology", async ({ page }) => {
   await signIn(page);
   await page.goto("/ontology/objects/sales.opportunity/OPP-001");
+  await edit(page, "Expected close");
   const date = page.getByRole("combobox", { name: "Expected close", exact: true });
   await expect(date).toBeVisible();
   await expect(date).toHaveAttribute("aria-label", "Expected close");
@@ -1751,6 +1779,7 @@ test("crm: every CRM type can be created, edited and filtered, and lead and deal
     await entry.create(form);
     await form.getByRole("button", { name: "Create", exact: true }).click();
     await expect(page.getByRole("heading", { level: 1, name: entry.createdTitle, exact: true })).toBeVisible();
+    await edit(page, entry.editField);
     const field = page.getByRole("textbox", { name: entry.editField, exact: true });
     await field.fill(entry.editValue);
     await field.press("Enter");
@@ -1773,6 +1802,7 @@ test("crm: every CRM type can be created, edited and filtered, and lead and deal
   await lineSearch.fill("Custom Workshop");
   await lineSearch.press("Enter");
   await page.getByRole("link", { name: "Custom Workshop Day", exact: true }).first().click();
+  await edit(page, "Deal");
   await page.getByRole("combobox", { name: "Deal", exact: true }).fill("先锋");
   await page.getByRole("option", { name: /先锋车队门户/ }).click();
   await expect(page.getByRole("link", { name: "先锋车队门户" })).toBeVisible();
@@ -1815,16 +1845,18 @@ async function crmMainline(page: Page, go: (type: string, plural: string) => Pro
   await lead.getByRole("button", { name: "Create", exact: true }).click();
   await expect(page.getByRole("heading", { level: 1, name: person, exact: true })).toBeVisible();
   const leadPage = page.url();
+  await edit(page, "Organization");
   const organization = page.getByRole("textbox", { name: "Organization", exact: true });
   await organization.fill(company);
   await organization.press("Enter");
   await expect(page.getByRole("complementary").getByText("2", { exact: true })).toBeVisible();
+  await edit(page, "Annual revenue");
   const revenue = page.getByRole("spinbutton", { name: "Annual revenue", exact: true });
   await revenue.fill("250000");
   await revenue.press("Enter");
   await expect(page.getByRole("complementary").getByText("3", { exact: true })).toBeVisible();
   await page.reload();
-  await expect(page.getByRole("spinbutton", { name: "Annual revenue", exact: true })).toHaveValue(/250,000\.00/);
+  await expect(property(page, "Annual revenue")).toContainText("250,000.00");
 
   for (const [type, fill] of [
     ["crm.note", async (form: ReturnType<Page["getByRole"]>) => { await form.getByRole("textbox", { name: "Title" }).fill(`${company} discovery call`); }],
@@ -1903,27 +1935,27 @@ async function crmMainline(page: Page, go: (type: string, plural: string) => Pro
   await expect(lost.getByRole("heading", { level: 4, name: company, exact: true })).toBeVisible();
 
   await page.goto(dealPage);
-  await expect(page.getByRole("spinbutton", { name: "Probability %" })).toHaveValue("0");
-  await page.getByRole("button", { name: "Status Lost", exact: true }).click();
+  await expect(property(page, "Probability %")).toHaveText("0");
+  await edit(page, "Status");
   await page.getByRole("combobox", { name: "Status" }).fill("Negotiation");
   await page.getByRole("option", { name: "Negotiation", exact: true }).click();
   await page.reload();
-  await expect(page.getByRole("spinbutton", { name: "Probability %" })).toHaveValue("70");
-  await expect(page.getByRole("combobox", { name: "Lost reason" })).toHaveCount(0);
-  await page.getByRole("button", { name: "Status Negotiation", exact: true }).click();
+  await expect(property(page, "Probability %")).toHaveText("70");
+  await expect(property(page, "Lost reason")).toHaveCount(0);
+  await edit(page, "Status");
   await page.getByRole("combobox", { name: "Status" }).fill("Lost");
   await page.getByRole("option", { name: "Lost", exact: true }).click();
   await expect(page.getByText("Also fill in: Lost reason").first()).toBeVisible();
-  await page.getByRole("combobox", { name: "Lost reason" }).click();
+  await edit(page, "Lost reason");
   await page.getByRole("option", { name: "竞争对手", exact: true }).click();
   await expect(page.getByText("Also fill in: Lost reason")).toHaveCount(0);
   await page.reload();
-  await expect(page.getByRole("spinbutton", { name: "Probability %" })).toHaveValue("0");
-  await page.getByRole("button", { name: "Status Lost", exact: true }).click();
+  await expect(property(page, "Probability %")).toHaveText("0");
+  await edit(page, "Status");
   await page.getByRole("combobox", { name: "Status" }).fill("Won");
   await page.getByRole("option", { name: "Won", exact: true }).click();
   await page.reload();
-  await expect(page.getByRole("spinbutton", { name: "Probability %" })).toHaveValue("100");
+  await expect(property(page, "Probability %")).toHaveText("100");
 
   await go("crm.organization", "Organizations");
   const search = page.getByRole("textbox", { name: "Search this list" });

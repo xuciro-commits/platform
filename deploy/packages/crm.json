@@ -1,6 +1,6 @@
 {
   "id": "crm",
-  "version": "0.1.12",
+  "version": "0.1.13",
   "title": "CRM",
   "namespace": "crm",
   "description": "Leads, deals, organizations, contacts, tasks and notes, with lead-to-deal conversion. Built in the crm project and released through Delivery.",
@@ -1170,7 +1170,7 @@
             "schema": "crm.lead.convert",
             "schemaVersion": {
               "family": 2,
-              "version": "schema.sha256.20d9ae23fae97b552901963ab2a366296d989c3702af414e59e3699b3f4e9af4"
+              "version": "schema.sha256.f81247f1347aea9c95bd66a7791a2f6cf7017cf1eccafa79bc79c12e10145c8e"
             },
             "target": "crm.lead",
             "title": "Convert to deal"
@@ -1221,10 +1221,6 @@
                     "currency"
                   ],
                   "description": "Annual revenue"
-                },
-                "converted": {
-                  "type": "boolean",
-                  "description": "Converted"
                 },
                 "email": {
                   "type": "string",
@@ -1392,12 +1388,6 @@
                 "group": "Classification"
               },
               {
-                "name": "converted",
-                "type": "boolean",
-                "description": "Converted",
-                "group": "Closure"
-              },
-              {
                 "name": "lostreason",
                 "type": "string",
                 "description": "Lost reason",
@@ -1511,12 +1501,6 @@
                 "type": "money"
               },
               {
-                "description": "Converted",
-                "group": "Closure",
-                "name": "converted",
-                "type": "boolean"
-              },
-              {
                 "description": "Lost reason",
                 "group": "Closure",
                 "name": "lostreason",
@@ -1543,7 +1527,7 @@
             "schema": "crm.lead.create",
             "schemaVersion": {
               "family": 2,
-              "version": "schema.sha256.20d9ae23fae97b552901963ab2a366296d989c3702af414e59e3699b3f4e9af4"
+              "version": "schema.sha256.f81247f1347aea9c95bd66a7791a2f6cf7017cf1eccafa79bc79c12e10145c8e"
             },
             "target": "crm.lead",
             "title": "Create lead"
@@ -1594,10 +1578,6 @@
                     "currency"
                   ],
                   "description": "Annual revenue"
-                },
-                "converted": {
-                  "type": "boolean",
-                  "description": "Converted"
                 },
                 "email": {
                   "type": "string",
@@ -1760,12 +1740,6 @@
                 "group": "Classification"
               },
               {
-                "name": "converted",
-                "type": "boolean",
-                "description": "Converted",
-                "group": "Closure"
-              },
-              {
                 "name": "lostreason",
                 "type": "string",
                 "description": "Lost reason",
@@ -1876,12 +1850,6 @@
                 "type": "money"
               },
               {
-                "description": "Converted",
-                "group": "Closure",
-                "name": "converted",
-                "type": "boolean"
-              },
-              {
                 "description": "Lost reason",
                 "group": "Closure",
                 "name": "lostreason",
@@ -1907,7 +1875,7 @@
             "schema": "crm.lead.edit",
             "schemaVersion": {
               "family": 2,
-              "version": "schema.sha256.20d9ae23fae97b552901963ab2a366296d989c3702af414e59e3699b3f4e9af4"
+              "version": "schema.sha256.f81247f1347aea9c95bd66a7791a2f6cf7017cf1eccafa79bc79c12e10145c8e"
             },
             "target": "crm.lead",
             "title": "Edit lead"
@@ -4888,6 +4856,24 @@
                       ],
                       "kind": "boolean",
                       "op": "!="
+                    },
+                    {
+                      "args": [
+                        {
+                          "kind": "reference",
+                          "op": "",
+                          "ref": "status"
+                        },
+                        {
+                          "kind": "reference",
+                          "lit": {
+                            "value": "converted"
+                          },
+                          "op": ""
+                        }
+                      ],
+                      "kind": "boolean",
+                      "op": "!="
                     }
                   ],
                   "kind": "boolean",
@@ -5273,6 +5259,7 @@
             {
               "group": "Closure",
               "name": "converted",
+              "readOnly": true,
               "title": "Converted",
               "type": "boolean"
             },
@@ -5320,15 +5307,15 @@
           "schemaVersions": [
             {
               "family": 1,
-              "version": "schema.sha256.0bba75ec9a9a0a20c2fc4db4a175cd009b42323de4c615a605df012d70657dd4"
+              "version": "schema.sha256.9cce78107ec08366dcb01eddfd76ac378ea74feb32746b3869875c91dd89757f"
             },
             {
               "family": 2,
-              "version": "schema.sha256.a2e56e2be5109eef802cc006384eec3889bd9dcb7f6bfb036b26d9c5b819c5d7"
+              "version": "schema.sha256.ebe5a34c5a2ce3eb40b649def0265579f3c8e01c0586cf7f740496ae4b36afcb"
             },
             {
               "family": 2,
-              "version": "schema.sha256.20d9ae23fae97b552901963ab2a366296d989c3702af414e59e3699b3f4e9af4"
+              "version": "schema.sha256.f81247f1347aea9c95bd66a7791a2f6cf7017cf1eccafa79bc79c12e10145c8e"
             }
           ],
           "scope": {

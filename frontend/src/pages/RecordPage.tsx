@@ -217,7 +217,7 @@ export function RecordPage({ described, id, listPath, listTitle, instances, enti
           {kept && tab === "details" && (
             <VStack gap={6}>
               {refusal && <Banner status="error" title={t("Not done")} description={refusal} />}
-              <FieldGroup described={detail} editor={editor} sections={detail.sections} direction="horizontal-labels" focusEmpty={fresh} refs={refs} restricted={restricted} />
+              <FieldGroup described={detail} editor={editor} sections={detail.sections} direction="horizontal-labels" focusEmpty={fresh} fold={!fresh} refs={refs} restricted={restricted} />
               {definition && <DefinitionRows described={detail} source={definition} entities={entities} catalog={catalog} id={id} revision={kept.revision} />}
               {described.entity.sets?.flatMap((set) => {
                 if (set.direction !== "inverse") return [];

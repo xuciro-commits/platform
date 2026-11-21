@@ -802,10 +802,6 @@
                 ],
                 "description": "Annual revenue"
               },
-              "converted": {
-                "type": "boolean",
-                "description": "Converted"
-              },
               "email": {
                 "type": "string",
                 "description": "Email"
@@ -972,12 +968,6 @@
               "group": "Classification"
             },
             {
-              "name": "converted",
-              "type": "boolean",
-              "description": "Converted",
-              "group": "Closure"
-            },
-            {
               "name": "lostreason",
               "type": "string",
               "description": "Lost reason",
@@ -1042,10 +1032,6 @@
                   "currency"
                 ],
                 "description": "Annual revenue"
-              },
-              "converted": {
-                "type": "boolean",
-                "description": "Converted"
               },
               "email": {
                 "type": "string",
@@ -1206,12 +1192,6 @@
               "type": "money",
               "description": "Annual revenue",
               "group": "Classification"
-            },
-            {
-              "name": "converted",
-              "type": "boolean",
-              "description": "Converted",
-              "group": "Closure"
             },
             {
               "name": "lostreason",

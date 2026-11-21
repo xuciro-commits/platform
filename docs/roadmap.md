@@ -36,20 +36,19 @@
 - 2.0.2 到 2.0.4 记下的每一项在这里修完；修在界面运行时或宿主的通用处，所有类型同时得到。
 - 验收：负责人在 8495 用真实账号十分钟走完 CRM 主线无卡点。
 - **界面微件第一批**（负责人定，2026-11-20；先于本行其余各项）：每个做成 `src/pages/` 里的一个表现，所有类型同时得到；一个一次提交，trunk 在 CRM 主线里加一步用到它。
-  1. `PropertyField`（frontend“字段的两态”）：把 `present` 的查看态与 `ParameterInput` 的编辑态合成一个，接管悬停、点击切换、只读锁死、保存中、Esc 撤销与原位报错。
-     先接 `RecordFields`（去掉常驻边框，冷门字段折进“更多属性”）与 `CellEditor`（并入它）；看板卡片、抽屉、筛选与分组头随各自那一项接上。
-  2. `RecordHeader`、`BoardCard`、`AvatarStack`：页头（建在 `frame` 上）放类型声明的主动作（转为商机不再藏在“⋯”）、状态胶囊与负责人；
+  1. `RecordHeader`、`BoardCard`、`AvatarStack`：页头（建在 `frame` 上）放类型声明的主动作（转为商机不再藏在“⋯”）、状态胶囊与负责人；
      看板卡片加负责人头像、相对更新时间与关联计数（备注、任务）。头像组用 Astryx `AvatarGroup`，时间用 `Timestamp`。
-  3. `FieldProvenance`、`ActionAvailability`：字段标出来源（公式算出、`from` 带出、只经动作写）；置灰的动作说出原因（没有权限还是状态不对）。
+  2. `FieldProvenance`、`ActionAvailability`：字段标出来源（公式算出、`from` 带出、只经动作写）；置灰的动作说出原因（没有权限还是状态不对）。
      来源取自类型描述；不可用的原因由宿主随 `actions=1` 给出，前端不猜。
-  4. `DateRangeInput`、`RangeInput`、`IconPicker`：列表筛选能选日期区间与数值、金额区间；应用与对象类型的图标从 Heroicons 里挑。日期区间用 Astryx `DateRangeInput`。
-  5. `MediaPreview`、`PdfViewer`、`Markdown`：附件里的图片与 PDF 在弹层里预览，长文本（备注）按 Markdown 显示；用 Astryx `Thumbnail`、`Dialog`、`Markdown`。
+  3. `DateRangeInput`、`RangeInput`、`IconPicker`：列表筛选能选日期区间与数值、金额区间；应用与对象类型的图标从 Heroicons 里挑。日期区间用 Astryx `DateRangeInput`。
+  4. `MediaPreview`、`PdfViewer`、`Markdown`：附件里的图片与 PDF 在弹层里预览，长文本（备注）按 Markdown 显示；用 Astryx `Thumbnail`、`Dialog`、`Markdown`。
      PDF 内嵌要么给浏览器自带查看器开一个元素例外，要么引 pdf.js；做到这一项时请负责人定。
 - **列表的余项**：快速筛选取到“Employees”且标签被截成“E…”，应取默认列里的字段、标签不截断；看板空汇总“Annual revenue · Total · —”不显示。
 - **译文的余项**：包的译文按应用合并在 build 下，同一租户里两个包的同一原文译法不同就都退回原文（如 Released：酒店“已释放”、制造“已下达”），应按项目名分开；
   平台有十来个字段标题是 Go 字段名（`PauseReason`、`CandidateDigest`），英文界面直接露出，应给标题；生产包的复数写成了“Production batchs”。
   文本排序按码点，中文按公司名排出来是“北风、子午、峡湾……阿特拉斯”而不是拼音序；排序应按读者语言的排序规则（中文按拼音）。
   语言与词汇页缺“原文已变”：租户用词按原文记，原文改名后旧译文无处可见，应列出并能删除；整批导入导出也没做。
+  CRM 记录页的分节 Classification 显示成平台的“密级”，相对时间（“35 seconds ago”）在中文界面不译。
 - **包带参考数据**：线索与商机状态已是字典（domain“类型”），但字典记录只由种子写入，空租户装 CRM 后看板没有列；
   字典记录的标题是业务数据不翻译，中文界面里状态显示 New、Qualification。参考数据应随包安装，标题随包的译文显示。
 - **转换时不认同名组织**：现在由人在对话框里选已有组织，不选就新建；Frappe 按组织名自动关联。已有的匹配资源（`build.match`）应能在事务里查重，并让人确认关联还是新建。
