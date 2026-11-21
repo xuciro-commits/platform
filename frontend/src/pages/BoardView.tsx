@@ -2,15 +2,17 @@ import { Card } from "@astryxdesign/core/Card";
 import { Button } from "@astryxdesign/core/Button";
 import { HStack, Layout, LayoutContent, LayoutHeader, VStack } from "@astryxdesign/core/Layout";
 import { Link } from "@astryxdesign/core/Link";
+import { StatusDot } from "@astryxdesign/core/StatusDot";
 import { Heading, Text } from "@astryxdesign/core/Text";
 import * as stylex from "@stylexjs/stylex";
 import { type PointerEvent as ReactPointerEvent, type ReactNode, useEffect, useRef, useState } from "react";
 import { t } from "../i18n";
 import { useGutter } from "./frame";
+import type { Dot } from "./Transitions";
 
 export type BoardCard = { id: string; column: string; title: string; href: string; lines: string[]; amount?: number; currency?: string };
 type BoardProps = {
-  columns: { key: string; label: string }[];
+  columns: { key: string; label: string; dot?: Dot }[];
   cards: BoardCard[];
   total?: string;
   onMove?: (id: string, to: string) => void;
@@ -107,7 +109,7 @@ export function BoardView({ columns, cards, onMove, accepts, page, total }: Boar
 
   const known = new Set(columns.map((column) => column.key));
   const missing = cards.filter((card) => !known.has(card.column));
-  const column = ({ key, label }: BoardProps["columns"][number]): ReactNode => {
+  const column = ({ key, label, dot }: BoardProps["columns"][number]): ReactNode => {
     const own = key ? cards.filter((card) => card.column === key) : missing;
     const resting = drag ? own.filter((card) => card.id !== drag.id) : own;
     const sums = new Map<string, number>();
@@ -128,7 +130,10 @@ export function BoardView({ columns, cards, onMove, accepts, page, total }: Boar
             <LayoutHeader hasDivider padding={3}>
               <VStack gap={1}>
                 <HStack hAlign="between" vAlign="center">
-                  <Heading level={4}>{label}</Heading>
+                  <HStack gap={2} vAlign="center">
+                    {dot && <StatusDot variant={dot} label={label} />}
+                    <Heading level={4}>{label}</Heading>
+                  </HStack>
                   <Text type="supporting" color="secondary" hasTabularNumbers>{own.length.toLocaleString()}{page?.hasMore ? "+" : ""}</Text>
                 </HStack>
                 {total && <Text type="supporting" color="secondary" hasTabularNumbers>{t(total)} · {page?.hasMore ? t("Loaded subtotal") : t("Total")} · {subtotal || (own.length ? "—" : "0")}</Text>}

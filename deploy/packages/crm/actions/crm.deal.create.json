@@ -78,16 +78,7 @@
         "type": "string"
       },
       {
-        "choices": [
-          "qualification",
-          "demomaking",
-          "proposalquotation",
-          "negotiation",
-          "readytoclose",
-          "won",
-          "lost"
-        ],
-        "description": "Status (qualification, demomaking, proposalquotation, negotiation, readytoclose, won, lost)",
+        "description": "Status",
         "name": "status",
         "required": true,
         "type": "string"
@@ -106,7 +97,7 @@
     "schema": "crm.deal.create",
     "schemaVersion": {
       "family": 2,
-      "version": "schema.sha256.d4f33fbed558484dba83e9b324f84813ff1f6c04a8ffab6429292fc1300ffb9d"
+      "version": "schema.sha256.044c6bb06c42cc8ad67ab3024619ad11ac3924ba16b22895871f990317f2f354"
     },
     "target": "crm.deal",
     "title": "Create deal"

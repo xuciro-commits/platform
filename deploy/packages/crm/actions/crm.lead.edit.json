@@ -102,16 +102,7 @@
         "type": "string"
       },
       {
-        "choices": [
-          "new",
-          "contacted",
-          "nurture",
-          "qualified",
-          "converted",
-          "unqualified",
-          "junk"
-        ],
-        "description": "Status (new, contacted, nurture, qualified, converted, unqualified, junk)",
+        "description": "Status",
         "name": "status",
         "type": "string"
       },
@@ -124,7 +115,7 @@
     "schema": "crm.lead.edit",
     "schemaVersion": {
       "family": 2,
-      "version": "schema.sha256.f38eb10764319c7ad9464d7a32cccdff3eff5cd1b813721372a1c4b304e4b926"
+      "version": "schema.sha256.3cb319a687ccc1cd960c5d96ac4dc2670b0099bc3d04bb873bd023b6fe442f93"
     },
     "target": "crm.lead",
     "title": "Edit lead"

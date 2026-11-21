@@ -81,14 +81,14 @@
           {
             "args": [
               {
-                "kind": "choice",
+                "kind": "reference",
                 "op": "",
                 "ref": "status"
               },
               {
                 "kind": "set",
                 "lit": {
-                  "element": "choice",
+                  "element": "reference",
                   "value": [
                     "won",
                     "lost"
@@ -158,160 +158,11 @@
     },
     {
       "aside": true,
-      "choices": "qualification:Qualification,demomaking:Demo/Making,proposalquotation:Proposal/Quotation,negotiation:Negotiation,readytoclose:Ready to Close,won:Won,lost:Lost",
-      "format": [
-        {
-          "tone": "neutral",
-          "when": {
-            "args": [
-              {
-                "kind": "text",
-                "op": "",
-                "ref": "status"
-              },
-              {
-                "kind": "text",
-                "lit": {
-                  "value": "qualification"
-                },
-                "op": ""
-              }
-            ],
-            "kind": "boolean",
-            "op": "="
-          }
-        },
-        {
-          "tone": "info",
-          "when": {
-            "args": [
-              {
-                "kind": "text",
-                "op": "",
-                "ref": "status"
-              },
-              {
-                "kind": "text",
-                "lit": {
-                  "value": "demomaking"
-                },
-                "op": ""
-              }
-            ],
-            "kind": "boolean",
-            "op": "="
-          }
-        },
-        {
-          "tone": "info",
-          "when": {
-            "args": [
-              {
-                "kind": "text",
-                "op": "",
-                "ref": "status"
-              },
-              {
-                "kind": "text",
-                "lit": {
-                  "value": "proposalquotation"
-                },
-                "op": ""
-              }
-            ],
-            "kind": "boolean",
-            "op": "="
-          }
-        },
-        {
-          "tone": "warning",
-          "when": {
-            "args": [
-              {
-                "kind": "text",
-                "op": "",
-                "ref": "status"
-              },
-              {
-                "kind": "text",
-                "lit": {
-                  "value": "negotiation"
-                },
-                "op": ""
-              }
-            ],
-            "kind": "boolean",
-            "op": "="
-          }
-        },
-        {
-          "tone": "info",
-          "when": {
-            "args": [
-              {
-                "kind": "text",
-                "op": "",
-                "ref": "status"
-              },
-              {
-                "kind": "text",
-                "lit": {
-                  "value": "readytoclose"
-                },
-                "op": ""
-              }
-            ],
-            "kind": "boolean",
-            "op": "="
-          }
-        },
-        {
-          "tone": "success",
-          "when": {
-            "args": [
-              {
-                "kind": "text",
-                "op": "",
-                "ref": "status"
-              },
-              {
-                "kind": "text",
-                "lit": {
-                  "value": "won"
-                },
-                "op": ""
-              }
-            ],
-            "kind": "boolean",
-            "op": "="
-          }
-        },
-        {
-          "tone": "danger",
-          "when": {
-            "args": [
-              {
-                "kind": "text",
-                "op": "",
-                "ref": "status"
-              },
-              {
-                "kind": "text",
-                "lit": {
-                  "value": "lost"
-                },
-                "op": ""
-              }
-            ],
-            "kind": "boolean",
-            "op": "="
-          }
-        }
-      ],
       "name": "status",
+      "ref": "crm.dealstatus",
       "required": true,
       "title": "Status",
-      "type": "choice"
+      "type": "reference"
     },
     {
       "aside": true,
@@ -320,12 +171,12 @@
           {
             "args": [
               {
-                "kind": "choice",
+                "kind": "reference",
                 "op": "",
                 "ref": "status"
               },
               {
-                "kind": "choice",
+                "kind": "reference",
                 "lit": {
                   "value": "qualification"
                 },
@@ -347,12 +198,12 @@
               {
                 "args": [
                   {
-                    "kind": "choice",
+                    "kind": "reference",
                     "op": "",
                     "ref": "status"
                   },
                   {
-                    "kind": "choice",
+                    "kind": "reference",
                     "lit": {
                       "value": "demomaking"
                     },
@@ -374,12 +225,12 @@
                   {
                     "args": [
                       {
-                        "kind": "choice",
+                        "kind": "reference",
                         "op": "",
                         "ref": "status"
                       },
                       {
-                        "kind": "choice",
+                        "kind": "reference",
                         "lit": {
                           "value": "proposalquotation"
                         },
@@ -401,12 +252,12 @@
                       {
                         "args": [
                           {
-                            "kind": "choice",
+                            "kind": "reference",
                             "op": "",
                             "ref": "status"
                           },
                           {
-                            "kind": "choice",
+                            "kind": "reference",
                             "lit": {
                               "value": "negotiation"
                             },
@@ -428,12 +279,12 @@
                           {
                             "args": [
                               {
-                                "kind": "choice",
+                                "kind": "reference",
                                 "op": "",
                                 "ref": "status"
                               },
                               {
-                                "kind": "choice",
+                                "kind": "reference",
                                 "lit": {
                                   "value": "readytoclose"
                                 },
@@ -455,12 +306,12 @@
                               {
                                 "args": [
                                   {
-                                    "kind": "choice",
+                                    "kind": "reference",
                                     "op": "",
                                     "ref": "status"
                                   },
                                   {
-                                    "kind": "choice",
+                                    "kind": "reference",
                                     "lit": {
                                       "value": "won"
                                     },
@@ -537,11 +388,11 @@
   "schemaVersions": [
     {
       "family": 1,
-      "version": "schema.sha256.b8970aa1cc6b3bbff855d8555e44b9fe775ff165353559509428f06c48f001a9"
+      "version": "schema.sha256.a0f86a97eb6a63d5a6600ddd6ae93368bb5821f57fe21d3409f75542e2cb269c"
     },
     {
       "family": 2,
-      "version": "schema.sha256.d4f33fbed558484dba83e9b324f84813ff1f6c04a8ffab6429292fc1300ffb9d"
+      "version": "schema.sha256.044c6bb06c42cc8ad67ab3024619ad11ac3924ba16b22895871f990317f2f354"
     }
   ],
   "scope": {

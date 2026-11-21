@@ -79,12 +79,12 @@
             {
               "args": [
                 {
-                  "kind": "choice",
+                  "kind": "reference",
                   "op": "",
                   "ref": "status"
                 },
                 {
-                  "kind": "choice",
+                  "kind": "reference",
                   "lit": {
                     "value": "unqualified"
                   },
@@ -97,12 +97,12 @@
             {
               "args": [
                 {
-                  "kind": "choice",
+                  "kind": "reference",
                   "op": "",
                   "ref": "status"
                 },
                 {
-                  "kind": "choice",
+                  "kind": "reference",
                   "lit": {
                     "value": "junk"
                   },
@@ -335,7 +335,7 @@
               },
               {
                 "expr": {
-                  "kind": "choice",
+                  "kind": "reference",
                   "lit": {
                     "value": "qualification"
                   },
@@ -382,7 +382,7 @@
               },
               {
                 "expr": {
-                  "kind": "choice",
+                  "kind": "reference",
                   "lit": {
                     "value": "qualified"
                   },
@@ -524,160 +524,11 @@
     },
     {
       "aside": true,
-      "choices": "new:New,contacted:Contacted,nurture:Nurture,qualified:Qualified,converted:Converted,unqualified:Unqualified,junk:Junk",
-      "format": [
-        {
-          "tone": "neutral",
-          "when": {
-            "args": [
-              {
-                "kind": "text",
-                "op": "",
-                "ref": "status"
-              },
-              {
-                "kind": "text",
-                "lit": {
-                  "value": "new"
-                },
-                "op": ""
-              }
-            ],
-            "kind": "boolean",
-            "op": "="
-          }
-        },
-        {
-          "tone": "info",
-          "when": {
-            "args": [
-              {
-                "kind": "text",
-                "op": "",
-                "ref": "status"
-              },
-              {
-                "kind": "text",
-                "lit": {
-                  "value": "contacted"
-                },
-                "op": ""
-              }
-            ],
-            "kind": "boolean",
-            "op": "="
-          }
-        },
-        {
-          "tone": "info",
-          "when": {
-            "args": [
-              {
-                "kind": "text",
-                "op": "",
-                "ref": "status"
-              },
-              {
-                "kind": "text",
-                "lit": {
-                  "value": "nurture"
-                },
-                "op": ""
-              }
-            ],
-            "kind": "boolean",
-            "op": "="
-          }
-        },
-        {
-          "tone": "success",
-          "when": {
-            "args": [
-              {
-                "kind": "text",
-                "op": "",
-                "ref": "status"
-              },
-              {
-                "kind": "text",
-                "lit": {
-                  "value": "qualified"
-                },
-                "op": ""
-              }
-            ],
-            "kind": "boolean",
-            "op": "="
-          }
-        },
-        {
-          "tone": "success",
-          "when": {
-            "args": [
-              {
-                "kind": "text",
-                "op": "",
-                "ref": "status"
-              },
-              {
-                "kind": "text",
-                "lit": {
-                  "value": "converted"
-                },
-                "op": ""
-              }
-            ],
-            "kind": "boolean",
-            "op": "="
-          }
-        },
-        {
-          "tone": "danger",
-          "when": {
-            "args": [
-              {
-                "kind": "text",
-                "op": "",
-                "ref": "status"
-              },
-              {
-                "kind": "text",
-                "lit": {
-                  "value": "unqualified"
-                },
-                "op": ""
-              }
-            ],
-            "kind": "boolean",
-            "op": "="
-          }
-        },
-        {
-          "tone": "warning",
-          "when": {
-            "args": [
-              {
-                "kind": "text",
-                "op": "",
-                "ref": "status"
-              },
-              {
-                "kind": "text",
-                "lit": {
-                  "value": "junk"
-                },
-                "op": ""
-              }
-            ],
-            "kind": "boolean",
-            "op": "="
-          }
-        }
-      ],
       "name": "status",
+      "ref": "crm.leadstatus",
       "required": true,
       "title": "Status",
-      "type": "choice"
+      "type": "reference"
     },
     {
       "aside": true,
@@ -692,15 +543,15 @@
   "schemaVersions": [
     {
       "family": 1,
-      "version": "schema.sha256.73e89e6f8e7881d62555af17d9bc821b235e8ca5603a246428a797d58f7ec645"
+      "version": "schema.sha256.42e2da4adc9c46088a4e934131ceec3a5ebd7c4b781100e2070108235d9632b4"
     },
     {
       "family": 2,
-      "version": "schema.sha256.cc9b30a140bd10a1b431dfac03fe8a951d5cca00dc38ecc6d05184981cdd8755"
+      "version": "schema.sha256.436a154f5951bdcff54891e431238b5b8314e3f4feaec6f7b01769b168fb9a4c"
     },
     {
       "family": 2,
-      "version": "schema.sha256.f38eb10764319c7ad9464d7a32cccdff3eff5cd1b813721372a1c4b304e4b926"
+      "version": "schema.sha256.3cb319a687ccc1cd960c5d96ac4dc2670b0099bc3d04bb873bd023b6fe442f93"
     }
   ],
   "scope": {

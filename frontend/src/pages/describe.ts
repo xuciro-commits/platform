@@ -82,7 +82,11 @@ export function describe(entity: Api.EntityInfo, actions: Api.Action[]): Describ
     .sort((a, b) => rank(a) - rank(b)).slice(0, columnLimit));
   const columns = [...listed.filter((field) => rank(field) === 0), ...listed.filter((field) => rank(field) > 0)].filter((field) => picked.has(field));
   const groups = entity.fields.filter((field) => field.type === "choice");
-  const lanes = groups.filter((field) => editable.has(field.name) && !field.readOnly && field.choices?.length && field.choices.length <= 8);
+  const declaredLanes = (entity.view as { lanes?: string } | undefined)?.lanes;
+  const lanes = [
+    ...groups.filter((field) => editable.has(field.name) && !field.readOnly && field.choices?.length && field.choices.length <= 8),
+    ...entity.fields.filter((field) => field.type === "reference" && field.name === declaredLanes && editable.has(field.name) && !field.readOnly),
+  ];
   const states = lifecycle?.states ?? [];
   return {
     entity,

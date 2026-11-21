@@ -246,42 +246,49 @@
       },
       "records": [
         {
+          "id": "new",
           "title": "New",
           "color": "gray",
           "position": 1,
           "kind": "open"
         },
         {
+          "id": "contacted",
           "title": "Contacted",
           "color": "blue",
           "position": 2,
           "kind": "ongoing"
         },
         {
+          "id": "nurture",
           "title": "Nurture",
           "color": "purple",
           "position": 3,
           "kind": "ongoing"
         },
         {
+          "id": "qualified",
           "title": "Qualified",
           "color": "green",
           "position": 4,
           "kind": "won"
         },
         {
+          "id": "converted",
           "title": "Converted",
           "color": "green",
           "position": 5,
           "kind": "won"
         },
         {
+          "id": "unqualified",
           "title": "Unqualified",
           "color": "red",
           "position": 6,
           "kind": "lost"
         },
         {
+          "id": "junk",
           "title": "Junk",
           "color": "amber",
           "position": 7,
@@ -351,6 +358,7 @@
       },
       "records": [
         {
+          "id": "qualification",
           "title": "Qualification",
           "color": "gray",
           "position": 1,
@@ -358,6 +366,7 @@
           "kind": "open"
         },
         {
+          "id": "demomaking",
           "title": "Demo/Making",
           "color": "blue",
           "position": 2,
@@ -365,6 +374,7 @@
           "kind": "ongoing"
         },
         {
+          "id": "proposalquotation",
           "title": "Proposal/Quotation",
           "color": "purple",
           "position": 3,
@@ -372,6 +382,7 @@
           "kind": "ongoing"
         },
         {
+          "id": "negotiation",
           "title": "Negotiation",
           "color": "orange",
           "position": 4,
@@ -379,6 +390,7 @@
           "kind": "ongoing"
         },
         {
+          "id": "readytoclose",
           "title": "Ready to Close",
           "color": "cyan",
           "position": 5,
@@ -386,6 +398,7 @@
           "kind": "ongoing"
         },
         {
+          "id": "won",
           "title": "Won",
           "color": "green",
           "position": 6,
@@ -393,6 +406,7 @@
           "kind": "won"
         },
         {
+          "id": "lost",
           "title": "Lost",
           "color": "red",
           "position": 7,
@@ -1314,145 +1328,10 @@
           {
             "name": "status",
             "title": "Status",
-            "type": "choice",
-            "choices": "new:New,contacted:Contacted,nurture:Nurture,qualified:Qualified,converted:Converted,unqualified:Unqualified,junk:Junk",
+            "type": "reference",
             "required": true,
             "aside": true,
-            "format": [
-              {
-                "when": {
-                  "op": "=",
-                  "kind": "boolean",
-                  "args": [
-                    {
-                      "kind": "text",
-                      "ref": "status"
-                    },
-                    {
-                      "kind": "text",
-                      "lit": {
-                        "value": "new"
-                      }
-                    }
-                  ]
-                },
-                "tone": "neutral"
-              },
-              {
-                "when": {
-                  "op": "=",
-                  "kind": "boolean",
-                  "args": [
-                    {
-                      "kind": "text",
-                      "ref": "status"
-                    },
-                    {
-                      "kind": "text",
-                      "lit": {
-                        "value": "contacted"
-                      }
-                    }
-                  ]
-                },
-                "tone": "info"
-              },
-              {
-                "when": {
-                  "op": "=",
-                  "kind": "boolean",
-                  "args": [
-                    {
-                      "kind": "text",
-                      "ref": "status"
-                    },
-                    {
-                      "kind": "text",
-                      "lit": {
-                        "value": "nurture"
-                      }
-                    }
-                  ]
-                },
-                "tone": "info"
-              },
-              {
-                "when": {
-                  "op": "=",
-                  "kind": "boolean",
-                  "args": [
-                    {
-                      "kind": "text",
-                      "ref": "status"
-                    },
-                    {
-                      "kind": "text",
-                      "lit": {
-                        "value": "qualified"
-                      }
-                    }
-                  ]
-                },
-                "tone": "success"
-              },
-              {
-                "when": {
-                  "op": "=",
-                  "kind": "boolean",
-                  "args": [
-                    {
-                      "kind": "text",
-                      "ref": "status"
-                    },
-                    {
-                      "kind": "text",
-                      "lit": {
-                        "value": "converted"
-                      }
-                    }
-                  ]
-                },
-                "tone": "success"
-              },
-              {
-                "when": {
-                  "op": "=",
-                  "kind": "boolean",
-                  "args": [
-                    {
-                      "kind": "text",
-                      "ref": "status"
-                    },
-                    {
-                      "kind": "text",
-                      "lit": {
-                        "value": "unqualified"
-                      }
-                    }
-                  ]
-                },
-                "tone": "danger"
-              },
-              {
-                "when": {
-                  "op": "=",
-                  "kind": "boolean",
-                  "args": [
-                    {
-                      "kind": "text",
-                      "ref": "status"
-                    },
-                    {
-                      "kind": "text",
-                      "lit": {
-                        "value": "junk"
-                      }
-                    }
-                  ]
-                },
-                "tone": "warning"
-              }
-            ]
+            "ref": "crm.leadstatus"
           },
           {
             "name": "owner",
@@ -1818,7 +1697,7 @@
                   "kind": "boolean",
                   "args": [
                     {
-                      "kind": "choice",
+                      "kind": "reference",
                       "ref": "status"
                     },
                     {
@@ -1828,7 +1707,7 @@
                           "won",
                           "lost"
                         ],
-                        "element": "choice"
+                        "element": "reference"
                       }
                     }
                   ]
@@ -1884,145 +1763,10 @@
           {
             "name": "status",
             "title": "Status",
-            "type": "choice",
-            "choices": "qualification:Qualification,demomaking:Demo/Making,proposalquotation:Proposal/Quotation,negotiation:Negotiation,readytoclose:Ready to Close,won:Won,lost:Lost",
+            "type": "reference",
             "required": true,
             "aside": true,
-            "format": [
-              {
-                "when": {
-                  "op": "=",
-                  "kind": "boolean",
-                  "args": [
-                    {
-                      "kind": "text",
-                      "ref": "status"
-                    },
-                    {
-                      "kind": "text",
-                      "lit": {
-                        "value": "qualification"
-                      }
-                    }
-                  ]
-                },
-                "tone": "neutral"
-              },
-              {
-                "when": {
-                  "op": "=",
-                  "kind": "boolean",
-                  "args": [
-                    {
-                      "kind": "text",
-                      "ref": "status"
-                    },
-                    {
-                      "kind": "text",
-                      "lit": {
-                        "value": "demomaking"
-                      }
-                    }
-                  ]
-                },
-                "tone": "info"
-              },
-              {
-                "when": {
-                  "op": "=",
-                  "kind": "boolean",
-                  "args": [
-                    {
-                      "kind": "text",
-                      "ref": "status"
-                    },
-                    {
-                      "kind": "text",
-                      "lit": {
-                        "value": "proposalquotation"
-                      }
-                    }
-                  ]
-                },
-                "tone": "info"
-              },
-              {
-                "when": {
-                  "op": "=",
-                  "kind": "boolean",
-                  "args": [
-                    {
-                      "kind": "text",
-                      "ref": "status"
-                    },
-                    {
-                      "kind": "text",
-                      "lit": {
-                        "value": "negotiation"
-                      }
-                    }
-                  ]
-                },
-                "tone": "warning"
-              },
-              {
-                "when": {
-                  "op": "=",
-                  "kind": "boolean",
-                  "args": [
-                    {
-                      "kind": "text",
-                      "ref": "status"
-                    },
-                    {
-                      "kind": "text",
-                      "lit": {
-                        "value": "readytoclose"
-                      }
-                    }
-                  ]
-                },
-                "tone": "info"
-              },
-              {
-                "when": {
-                  "op": "=",
-                  "kind": "boolean",
-                  "args": [
-                    {
-                      "kind": "text",
-                      "ref": "status"
-                    },
-                    {
-                      "kind": "text",
-                      "lit": {
-                        "value": "won"
-                      }
-                    }
-                  ]
-                },
-                "tone": "success"
-              },
-              {
-                "when": {
-                  "op": "=",
-                  "kind": "boolean",
-                  "args": [
-                    {
-                      "kind": "text",
-                      "ref": "status"
-                    },
-                    {
-                      "kind": "text",
-                      "lit": {
-                        "value": "lost"
-                      }
-                    }
-                  ]
-                },
-                "tone": "danger"
-              }
-            ]
+            "ref": "crm.dealstatus"
           },
           {
             "name": "probability",
@@ -2038,11 +1782,11 @@
                   "kind": "boolean",
                   "args": [
                     {
-                      "kind": "choice",
+                      "kind": "reference",
                       "ref": "status"
                     },
                     {
-                      "kind": "choice",
+                      "kind": "reference",
                       "lit": {
                         "value": "qualification"
                       }
@@ -2064,11 +1808,11 @@
                       "kind": "boolean",
                       "args": [
                         {
-                          "kind": "choice",
+                          "kind": "reference",
                           "ref": "status"
                         },
                         {
-                          "kind": "choice",
+                          "kind": "reference",
                           "lit": {
                             "value": "demomaking"
                           }
@@ -2090,11 +1834,11 @@
                           "kind": "boolean",
                           "args": [
                             {
-                              "kind": "choice",
+                              "kind": "reference",
                               "ref": "status"
                             },
                             {
-                              "kind": "choice",
+                              "kind": "reference",
                               "lit": {
                                 "value": "proposalquotation"
                               }
@@ -2116,11 +1860,11 @@
                               "kind": "boolean",
                               "args": [
                                 {
-                                  "kind": "choice",
+                                  "kind": "reference",
                                   "ref": "status"
                                 },
                                 {
-                                  "kind": "choice",
+                                  "kind": "reference",
                                   "lit": {
                                     "value": "negotiation"
                                   }
@@ -2142,11 +1886,11 @@
                                   "kind": "boolean",
                                   "args": [
                                     {
-                                      "kind": "choice",
+                                      "kind": "reference",
                                       "ref": "status"
                                     },
                                     {
-                                      "kind": "choice",
+                                      "kind": "reference",
                                       "lit": {
                                         "value": "readytoclose"
                                       }
@@ -2168,11 +1912,11 @@
                                       "kind": "boolean",
                                       "args": [
                                         {
-                                          "kind": "choice",
+                                          "kind": "reference",
                                           "ref": "status"
                                         },
                                         {
-                                          "kind": "choice",
+                                          "kind": "reference",
                                           "lit": {
                                             "value": "won"
                                           }
@@ -3123,145 +2867,10 @@
           {
             "name": "status",
             "title": "Status",
-            "type": "choice",
-            "choices": "new:New,contacted:Contacted,nurture:Nurture,qualified:Qualified,converted:Converted,unqualified:Unqualified,junk:Junk",
+            "type": "reference",
             "required": true,
             "aside": true,
-            "format": [
-              {
-                "when": {
-                  "op": "=",
-                  "kind": "boolean",
-                  "args": [
-                    {
-                      "kind": "text",
-                      "ref": "status"
-                    },
-                    {
-                      "kind": "text",
-                      "lit": {
-                        "value": "new"
-                      }
-                    }
-                  ]
-                },
-                "tone": "neutral"
-              },
-              {
-                "when": {
-                  "op": "=",
-                  "kind": "boolean",
-                  "args": [
-                    {
-                      "kind": "text",
-                      "ref": "status"
-                    },
-                    {
-                      "kind": "text",
-                      "lit": {
-                        "value": "contacted"
-                      }
-                    }
-                  ]
-                },
-                "tone": "info"
-              },
-              {
-                "when": {
-                  "op": "=",
-                  "kind": "boolean",
-                  "args": [
-                    {
-                      "kind": "text",
-                      "ref": "status"
-                    },
-                    {
-                      "kind": "text",
-                      "lit": {
-                        "value": "nurture"
-                      }
-                    }
-                  ]
-                },
-                "tone": "info"
-              },
-              {
-                "when": {
-                  "op": "=",
-                  "kind": "boolean",
-                  "args": [
-                    {
-                      "kind": "text",
-                      "ref": "status"
-                    },
-                    {
-                      "kind": "text",
-                      "lit": {
-                        "value": "qualified"
-                      }
-                    }
-                  ]
-                },
-                "tone": "success"
-              },
-              {
-                "when": {
-                  "op": "=",
-                  "kind": "boolean",
-                  "args": [
-                    {
-                      "kind": "text",
-                      "ref": "status"
-                    },
-                    {
-                      "kind": "text",
-                      "lit": {
-                        "value": "converted"
-                      }
-                    }
-                  ]
-                },
-                "tone": "success"
-              },
-              {
-                "when": {
-                  "op": "=",
-                  "kind": "boolean",
-                  "args": [
-                    {
-                      "kind": "text",
-                      "ref": "status"
-                    },
-                    {
-                      "kind": "text",
-                      "lit": {
-                        "value": "unqualified"
-                      }
-                    }
-                  ]
-                },
-                "tone": "danger"
-              },
-              {
-                "when": {
-                  "op": "=",
-                  "kind": "boolean",
-                  "args": [
-                    {
-                      "kind": "text",
-                      "ref": "status"
-                    },
-                    {
-                      "kind": "text",
-                      "lit": {
-                        "value": "junk"
-                      }
-                    }
-                  ]
-                },
-                "tone": "warning"
-              }
-            ]
+            "ref": "crm.leadstatus"
           },
           {
             "name": "owner",
@@ -3339,12 +2948,12 @@
                   "args": [
                     {
                       "op": "",
-                      "kind": "choice",
+                      "kind": "reference",
                       "ref": "status"
                     },
                     {
                       "op": "",
-                      "kind": "choice",
+                      "kind": "reference",
                       "lit": {
                         "value": "unqualified"
                       }
@@ -3357,12 +2966,12 @@
                   "args": [
                     {
                       "op": "",
-                      "kind": "choice",
+                      "kind": "reference",
                       "ref": "status"
                     },
                     {
                       "op": "",
-                      "kind": "choice",
+                      "kind": "reference",
                       "lit": {
                         "value": "junk"
                       }
@@ -3597,7 +3206,7 @@
                     "field": "status",
                     "expr": {
                       "op": "",
-                      "kind": "choice",
+                      "kind": "reference",
                       "lit": {
                         "value": "qualification"
                       }
@@ -3645,7 +3254,7 @@
                     "field": "status",
                     "expr": {
                       "op": "",
-                      "kind": "choice",
+                      "kind": "reference",
                       "lit": {
                         "value": "qualified"
                       }

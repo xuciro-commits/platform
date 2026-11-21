@@ -708,16 +708,7 @@
               },
               "status": {
                 "type": "string",
-                "enum": [
-                  "qualification",
-                  "demomaking",
-                  "proposalquotation",
-                  "negotiation",
-                  "readytoclose",
-                  "won",
-                  "lost"
-                ],
-                "description": "Status (qualification, demomaking, proposalquotation, negotiation, readytoclose, won, lost)"
+                "description": "Status"
               },
               "territory": {
                 "type": "string",
@@ -820,16 +811,7 @@
               "name": "status",
               "type": "string",
               "required": true,
-              "description": "Status (qualification, demomaking, proposalquotation, negotiation, readytoclose, won, lost)",
-              "choices": [
-                "qualification",
-                "demomaking",
-                "proposalquotation",
-                "negotiation",
-                "readytoclose",
-                "won",
-                "lost"
-              ]
+              "description": "Status"
             },
             {
               "name": "probability",
@@ -930,16 +912,7 @@
               },
               "status": {
                 "type": "string",
-                "enum": [
-                  "qualification",
-                  "demomaking",
-                  "proposalquotation",
-                  "negotiation",
-                  "readytoclose",
-                  "won",
-                  "lost"
-                ],
-                "description": "Status (qualification, demomaking, proposalquotation, negotiation, readytoclose, won, lost)"
+                "description": "Status"
               },
               "territory": {
                 "type": "string",
@@ -1036,16 +1009,7 @@
             {
               "name": "status",
               "type": "string",
-              "description": "Status (qualification, demomaking, proposalquotation, negotiation, readytoclose, won, lost)",
-              "choices": [
-                "qualification",
-                "demomaking",
-                "proposalquotation",
-                "negotiation",
-                "readytoclose",
-                "won",
-                "lost"
-              ]
+              "description": "Status"
             },
             {
               "name": "probability",
@@ -1218,16 +1182,7 @@
               },
               "status": {
                 "type": "string",
-                "enum": [
-                  "new",
-                  "contacted",
-                  "nurture",
-                  "qualified",
-                  "converted",
-                  "unqualified",
-                  "junk"
-                ],
-                "description": "Status (new, contacted, nurture, qualified, converted, unqualified, junk)"
+                "description": "Status"
               },
               "territory": {
                 "type": "string",
@@ -1356,16 +1311,7 @@
               "name": "status",
               "type": "string",
               "required": true,
-              "description": "Status (new, contacted, nurture, qualified, converted, unqualified, junk)",
-              "choices": [
-                "new",
-                "contacted",
-                "nurture",
-                "qualified",
-                "converted",
-                "unqualified",
-                "junk"
-              ]
+              "description": "Status"
             },
             {
               "name": "owner",
@@ -1477,16 +1423,7 @@
               },
               "status": {
                 "type": "string",
-                "enum": [
-                  "new",
-                  "contacted",
-                  "nurture",
-                  "qualified",
-                  "converted",
-                  "unqualified",
-                  "junk"
-                ],
-                "description": "Status (new, contacted, nurture, qualified, converted, unqualified, junk)"
+                "description": "Status"
               },
               "territory": {
                 "type": "string",
@@ -1609,16 +1546,7 @@
             {
               "name": "status",
               "type": "string",
-              "description": "Status (new, contacted, nurture, qualified, converted, unqualified, junk)",
-              "choices": [
-                "new",
-                "contacted",
-                "nurture",
-                "qualified",
-                "converted",
-                "unqualified",
-                "junk"
-              ]
+              "description": "Status"
             },
             {
               "name": "owner",
@@ -2415,6 +2343,11 @@
         {
           "app": "build",
           "kind": "object",
+          "name": "crm.dealstatus"
+        },
+        {
+          "app": "build",
+          "kind": "object",
           "name": "crm.industry"
         },
         {
@@ -2517,16 +2450,7 @@
                 ]
               },
               "status": {
-                "type": "string",
-                "enum": [
-                  "qualification",
-                  "demomaking",
-                  "proposalquotation",
-                  "negotiation",
-                  "readytoclose",
-                  "won",
-                  "lost"
-                ]
+                "type": "string"
               },
               "territory": {
                 "type": "string"
@@ -2672,6 +2596,79 @@
       "ref": {
         "app": "build",
         "kind": "object",
+        "name": "crm.dealstatus"
+      },
+      "path": "objects/crm.dealstatus.json",
+      "contractVersion": 1,
+      "sourceVersion": "1",
+      "requires": [],
+      "provides": [
+        {
+          "kind": "interface",
+          "name": "crm.dealstatus",
+          "inputs": {
+            "type": ""
+          },
+          "outputs": {
+            "type": "object",
+            "properties": {
+              "archived": {
+                "type": "boolean"
+              },
+              "color": {
+                "type": "string",
+                "enum": [
+                  "gray",
+                  "blue",
+                  "green",
+                  "red",
+                  "orange",
+                  "purple",
+                  "pink",
+                  "amber",
+                  "cyan"
+                ]
+              },
+              "id": {
+                "type": "string"
+              },
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "open",
+                  "ongoing",
+                  "onhold",
+                  "won",
+                  "lost"
+                ]
+              },
+              "position": {
+                "type": "integer"
+              },
+              "probability": {
+                "type": "integer"
+              },
+              "revision": {
+                "type": "integer"
+              },
+              "title": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "revision"
+            ]
+          },
+          "roles": null,
+          "side": "pure"
+        }
+      ]
+    },
+    {
+      "ref": {
+        "app": "build",
+        "kind": "object",
         "name": "crm.industry"
       },
       "path": "objects/crm.industry.json",
@@ -2740,6 +2737,11 @@
           "app": "build",
           "kind": "object",
           "name": "crm.leadsource"
+        },
+        {
+          "app": "build",
+          "kind": "object",
+          "name": "crm.leadstatus"
         },
         {
           "app": "build",
@@ -2848,16 +2850,7 @@
                 ]
               },
               "status": {
-                "type": "string",
-                "enum": [
-                  "new",
-                  "contacted",
-                  "nurture",
-                  "qualified",
-                  "converted",
-                  "unqualified",
-                  "junk"
-                ]
+                "type": "string"
               },
               "territory": {
                 "type": "string"
@@ -2904,6 +2897,76 @@
               },
               "id": {
                 "type": "string"
+              },
+              "revision": {
+                "type": "integer"
+              },
+              "title": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "revision"
+            ]
+          },
+          "roles": null,
+          "side": "pure"
+        }
+      ]
+    },
+    {
+      "ref": {
+        "app": "build",
+        "kind": "object",
+        "name": "crm.leadstatus"
+      },
+      "path": "objects/crm.leadstatus.json",
+      "contractVersion": 1,
+      "sourceVersion": "1",
+      "requires": [],
+      "provides": [
+        {
+          "kind": "interface",
+          "name": "crm.leadstatus",
+          "inputs": {
+            "type": ""
+          },
+          "outputs": {
+            "type": "object",
+            "properties": {
+              "archived": {
+                "type": "boolean"
+              },
+              "color": {
+                "type": "string",
+                "enum": [
+                  "gray",
+                  "blue",
+                  "green",
+                  "red",
+                  "orange",
+                  "purple",
+                  "pink",
+                  "amber",
+                  "cyan"
+                ]
+              },
+              "id": {
+                "type": "string"
+              },
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "open",
+                  "ongoing",
+                  "onhold",
+                  "won",
+                  "lost"
+                ]
+              },
+              "position": {
+                "type": "integer"
               },
               "revision": {
                 "type": "integer"

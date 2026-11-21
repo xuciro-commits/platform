@@ -1904,12 +1904,14 @@ async function crmMainline(page: Page, go: (type: string, plural: string) => Pro
 
   await page.goto(dealPage);
   await expect(page.getByRole("spinbutton", { name: "Probability %" })).toHaveValue("0");
-  await page.getByRole("combobox", { name: "Status" }).click();
+  await page.getByRole("button", { name: "Status Lost", exact: true }).click();
+  await page.getByRole("combobox", { name: "Status" }).fill("Negotiation");
   await page.getByRole("option", { name: "Negotiation", exact: true }).click();
   await page.reload();
   await expect(page.getByRole("spinbutton", { name: "Probability %" })).toHaveValue("70");
   await expect(page.getByRole("combobox", { name: "Lost reason" })).toHaveCount(0);
-  await page.getByRole("combobox", { name: "Status" }).click();
+  await page.getByRole("button", { name: "Status Negotiation", exact: true }).click();
+  await page.getByRole("combobox", { name: "Status" }).fill("Lost");
   await page.getByRole("option", { name: "Lost", exact: true }).click();
   await expect(page.getByText("Also fill in: Lost reason").first()).toBeVisible();
   await page.getByRole("combobox", { name: "Lost reason" }).click();
@@ -1917,7 +1919,8 @@ async function crmMainline(page: Page, go: (type: string, plural: string) => Pro
   await expect(page.getByText("Also fill in: Lost reason")).toHaveCount(0);
   await page.reload();
   await expect(page.getByRole("spinbutton", { name: "Probability %" })).toHaveValue("0");
-  await page.getByRole("combobox", { name: "Status" }).click();
+  await page.getByRole("button", { name: "Status Lost", exact: true }).click();
+  await page.getByRole("combobox", { name: "Status" }).fill("Won");
   await page.getByRole("option", { name: "Won", exact: true }).click();
   await page.reload();
   await expect(page.getByRole("spinbutton", { name: "Probability %" })).toHaveValue("100");

@@ -73,8 +73,8 @@ async function records(session, sample, installed) {
     const authority = session.authorityFor(full);
     if (!authority && installed && !installed.has(full)) continue;
     if (!authority) throw new Error(`${full}: no write authority`);
-    for (const [index, record] of (type.records ?? []).entries()) {
-      await session.submit(full, `${type.prefix}-${String(index + 1).padStart(3, "0")}`, "create", record, authority);
+    for (const [index, { id, ...record }] of (type.records ?? []).entries()) {
+      await session.submit(full, id ?? `${type.prefix}-${String(index + 1).padStart(3, "0")}`, "create", record, authority);
       written += 1;
     }
   }

@@ -175,8 +175,10 @@ func CheckConditions(fields []Field) error {
 			return fmt.Errorf("the field %q applies only when %q is set, which is not another field of this object", f.Name, name)
 		case fields[i].When != "":
 			return fmt.Errorf("the field %q depends on %q, which is conditional itself", f.Name, name)
-		case fields[i].Type != "choice" && fields[i].Type != "boolean":
-			return fmt.Errorf("the field %q depends on %q, which is neither a choice nor a boolean", f.Name, name)
+		case fields[i].Type != "choice" && fields[i].Type != "boolean" && fields[i].Type != "reference":
+			return fmt.Errorf("the field %q depends on %q, which is not a choice, a boolean or a reference", f.Name, name)
+		case fields[i].Type == "reference":
+			continue
 		}
 		allowed := []string{"true", "false"}
 		if fields[i].Type == "choice" {

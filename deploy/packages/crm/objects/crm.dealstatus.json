@@ -1,0 +1,66 @@
+{
+  "display": "title",
+  "fields": [
+    {
+      "name": "title",
+      "required": true,
+      "search": true,
+      "title": "Deal status",
+      "type": "text"
+    },
+    {
+      "choices": "gray:Gray,blue:Blue,green:Green,red:Red,orange:Orange,purple:Purple,pink:Pink,amber:Amber,cyan:Cyan",
+      "name": "color",
+      "title": "Color",
+      "type": "choice"
+    },
+    {
+      "name": "position",
+      "title": "Position",
+      "type": "integer"
+    },
+    {
+      "name": "probability",
+      "title": "Probability",
+      "type": "integer"
+    },
+    {
+      "choices": "open,ongoing:Ongoing,onhold:On Hold,won:Won,lost:Lost",
+      "name": "kind",
+      "title": "Type",
+      "type": "choice"
+    }
+  ],
+  "name": "dealstatus",
+  "namespace": "crm",
+  "plural": "Deal statuses",
+  "schemaVersions": [
+    {
+      "family": 1,
+      "version": "schema.sha256.67ac5656a5a76d10fce2911014f62be0aa579061853affedd195b9db0ef224be"
+    }
+  ],
+  "title": "Deal status",
+  "type": "crm.dealstatus",
+  "view": {
+    "columns": [
+      "title",
+      "color",
+      "position",
+      "probability",
+      "kind"
+    ],
+    "filters": [],
+    "group": "none",
+    "lanes": "",
+    "layout": "table",
+    "search": "",
+    "sort": [
+      {
+        "direction": "ascending",
+        "sortKey": "position"
+      }
+    ],
+    "version": 1
+  }
+}

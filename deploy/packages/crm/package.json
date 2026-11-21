@@ -1,8 +1,8 @@
 {
   "id": "crm",
-  "version": "0.1.10",
-  "namespace": "crm",
+  "version": "0.1.11",
   "title": "CRM",
+  "namespace": "crm",
   "description": "Leads, deals, organizations, contacts, tasks and notes, with lead-to-deal conversion. Built in the crm project and released through Delivery.",
   "artifact": "crm.json"
 }

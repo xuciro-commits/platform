@@ -56,7 +56,7 @@ export type ListGroup<Row> = { key: string; label: string; of: (row: Row) => str
 export type Move = (id: string, to: string) => Done;
 type ListBoard<Row> = {
   key: string;
-  lanes: { key: string; label: string }[];
+  lanes: { key: string; label: string; dot?: Dot }[];
   of: (row: Row) => string;
   accepts?: (id: string, to: string) => boolean;
   move?: Move;

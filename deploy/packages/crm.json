@@ -1,8 +1,8 @@
 {
   "id": "crm",
-  "version": "0.1.10",
-  "namespace": "crm",
+  "version": "0.1.11",
   "title": "CRM",
+  "namespace": "crm",
   "description": "Leads, deals, organizations, contacts, tasks and notes, with lead-to-deal conversion. Built in the crm project and released through Delivery.",
   "blueprint": {
     "roots": [
@@ -1054,16 +1054,7 @@
                 },
                 "status": {
                   "type": "string",
-                  "enum": [
-                    "qualification",
-                    "demomaking",
-                    "proposalquotation",
-                    "negotiation",
-                    "readytoclose",
-                    "won",
-                    "lost"
-                  ],
-                  "description": "Status (qualification, demomaking, proposalquotation, negotiation, readytoclose, won, lost)"
+                  "description": "Status"
                 },
                 "territory": {
                   "type": "string",
@@ -1166,16 +1157,7 @@
                 "name": "status",
                 "type": "string",
                 "required": true,
-                "description": "Status (qualification, demomaking, proposalquotation, negotiation, readytoclose, won, lost)",
-                "choices": [
-                  "qualification",
-                  "demomaking",
-                  "proposalquotation",
-                  "negotiation",
-                  "readytoclose",
-                  "won",
-                  "lost"
-                ]
+                "description": "Status"
               },
               {
                 "name": "probability",
@@ -1270,16 +1252,7 @@
                 "type": "string"
               },
               {
-                "choices": [
-                  "qualification",
-                  "demomaking",
-                  "proposalquotation",
-                  "negotiation",
-                  "readytoclose",
-                  "won",
-                  "lost"
-                ],
-                "description": "Status (qualification, demomaking, proposalquotation, negotiation, readytoclose, won, lost)",
+                "description": "Status",
                 "name": "status",
                 "required": true,
                 "type": "string"
@@ -1298,7 +1271,7 @@
             "schema": "crm.deal.create",
             "schemaVersion": {
               "family": 2,
-              "version": "schema.sha256.d4f33fbed558484dba83e9b324f84813ff1f6c04a8ffab6429292fc1300ffb9d"
+              "version": "schema.sha256.044c6bb06c42cc8ad67ab3024619ad11ac3924ba16b22895871f990317f2f354"
             },
             "target": "crm.deal",
             "title": "Create deal"
@@ -1396,16 +1369,7 @@
                 },
                 "status": {
                   "type": "string",
-                  "enum": [
-                    "qualification",
-                    "demomaking",
-                    "proposalquotation",
-                    "negotiation",
-                    "readytoclose",
-                    "won",
-                    "lost"
-                  ],
-                  "description": "Status (qualification, demomaking, proposalquotation, negotiation, readytoclose, won, lost)"
+                  "description": "Status"
                 },
                 "territory": {
                   "type": "string",
@@ -1502,16 +1466,7 @@
               {
                 "name": "status",
                 "type": "string",
-                "description": "Status (qualification, demomaking, proposalquotation, negotiation, readytoclose, won, lost)",
-                "choices": [
-                  "qualification",
-                  "demomaking",
-                  "proposalquotation",
-                  "negotiation",
-                  "readytoclose",
-                  "won",
-                  "lost"
-                ]
+                "description": "Status"
               },
               {
                 "name": "probability",
@@ -1604,16 +1559,7 @@
                 "type": "string"
               },
               {
-                "choices": [
-                  "qualification",
-                  "demomaking",
-                  "proposalquotation",
-                  "negotiation",
-                  "readytoclose",
-                  "won",
-                  "lost"
-                ],
-                "description": "Status (qualification, demomaking, proposalquotation, negotiation, readytoclose, won, lost)",
+                "description": "Status",
                 "name": "status",
                 "type": "string"
               },
@@ -1631,7 +1577,7 @@
             "schema": "crm.deal.edit",
             "schemaVersion": {
               "family": 2,
-              "version": "schema.sha256.d4f33fbed558484dba83e9b324f84813ff1f6c04a8ffab6429292fc1300ffb9d"
+              "version": "schema.sha256.044c6bb06c42cc8ad67ab3024619ad11ac3924ba16b22895871f990317f2f354"
             },
             "target": "crm.deal",
             "title": "Edit deal"
@@ -1717,7 +1663,7 @@
             "schema": "crm.lead.convert",
             "schemaVersion": {
               "family": 2,
-              "version": "schema.sha256.f38eb10764319c7ad9464d7a32cccdff3eff5cd1b813721372a1c4b304e4b926"
+              "version": "schema.sha256.3cb319a687ccc1cd960c5d96ac4dc2670b0099bc3d04bb873bd023b6fe442f93"
             },
             "target": "crm.lead",
             "title": "Convert to deal"
@@ -1831,16 +1777,7 @@
                 },
                 "status": {
                   "type": "string",
-                  "enum": [
-                    "new",
-                    "contacted",
-                    "nurture",
-                    "qualified",
-                    "converted",
-                    "unqualified",
-                    "junk"
-                  ],
-                  "description": "Status (new, contacted, nurture, qualified, converted, unqualified, junk)"
+                  "description": "Status"
                 },
                 "territory": {
                   "type": "string",
@@ -1969,16 +1906,7 @@
                 "name": "status",
                 "type": "string",
                 "required": true,
-                "description": "Status (new, contacted, nurture, qualified, converted, unqualified, junk)",
-                "choices": [
-                  "new",
-                  "contacted",
-                  "nurture",
-                  "qualified",
-                  "converted",
-                  "unqualified",
-                  "junk"
-                ]
+                "description": "Status"
               },
               {
                 "name": "owner",
@@ -2094,16 +2022,7 @@
                 "type": "string"
               },
               {
-                "choices": [
-                  "new",
-                  "contacted",
-                  "nurture",
-                  "qualified",
-                  "converted",
-                  "unqualified",
-                  "junk"
-                ],
-                "description": "Status (new, contacted, nurture, qualified, converted, unqualified, junk)",
+                "description": "Status",
                 "name": "status",
                 "required": true,
                 "type": "string"
@@ -2117,7 +2036,7 @@
             "schema": "crm.lead.create",
             "schemaVersion": {
               "family": 2,
-              "version": "schema.sha256.f38eb10764319c7ad9464d7a32cccdff3eff5cd1b813721372a1c4b304e4b926"
+              "version": "schema.sha256.3cb319a687ccc1cd960c5d96ac4dc2670b0099bc3d04bb873bd023b6fe442f93"
             },
             "target": "crm.lead",
             "title": "Create lead"
@@ -2231,16 +2150,7 @@
                 },
                 "status": {
                   "type": "string",
-                  "enum": [
-                    "new",
-                    "contacted",
-                    "nurture",
-                    "qualified",
-                    "converted",
-                    "unqualified",
-                    "junk"
-                  ],
-                  "description": "Status (new, contacted, nurture, qualified, converted, unqualified, junk)"
+                  "description": "Status"
                 },
                 "territory": {
                   "type": "string",
@@ -2363,16 +2273,7 @@
               {
                 "name": "status",
                 "type": "string",
-                "description": "Status (new, contacted, nurture, qualified, converted, unqualified, junk)",
-                "choices": [
-                  "new",
-                  "contacted",
-                  "nurture",
-                  "qualified",
-                  "converted",
-                  "unqualified",
-                  "junk"
-                ]
+                "description": "Status"
               },
               {
                 "name": "owner",
@@ -2486,16 +2387,7 @@
                 "type": "string"
               },
               {
-                "choices": [
-                  "new",
-                  "contacted",
-                  "nurture",
-                  "qualified",
-                  "converted",
-                  "unqualified",
-                  "junk"
-                ],
-                "description": "Status (new, contacted, nurture, qualified, converted, unqualified, junk)",
+                "description": "Status",
                 "name": "status",
                 "type": "string"
               },
@@ -2508,7 +2400,7 @@
             "schema": "crm.lead.edit",
             "schemaVersion": {
               "family": 2,
-              "version": "schema.sha256.f38eb10764319c7ad9464d7a32cccdff3eff5cd1b813721372a1c4b304e4b926"
+              "version": "schema.sha256.3cb319a687ccc1cd960c5d96ac4dc2670b0099bc3d04bb873bd023b6fe442f93"
             },
             "target": "crm.lead",
             "title": "Edit lead"
@@ -4130,6 +4022,11 @@
           {
             "app": "build",
             "kind": "object",
+            "name": "crm.dealstatus"
+          },
+          {
+            "app": "build",
+            "kind": "object",
             "name": "crm.industry"
           },
           {
@@ -4232,16 +4129,7 @@
                   ]
                 },
                 "status": {
-                  "type": "string",
-                  "enum": [
-                    "qualification",
-                    "demomaking",
-                    "proposalquotation",
-                    "negotiation",
-                    "readytoclose",
-                    "won",
-                    "lost"
-                  ]
+                  "type": "string"
                 },
                 "territory": {
                   "type": "string"
@@ -4357,14 +4245,14 @@
                   {
                     "args": [
                       {
-                        "kind": "choice",
+                        "kind": "reference",
                         "op": "",
                         "ref": "status"
                       },
                       {
                         "kind": "set",
                         "lit": {
-                          "element": "choice",
+                          "element": "reference",
                           "value": [
                             "won",
                             "lost"
@@ -4434,160 +4322,11 @@
             },
             {
               "aside": true,
-              "choices": "qualification:Qualification,demomaking:Demo/Making,proposalquotation:Proposal/Quotation,negotiation:Negotiation,readytoclose:Ready to Close,won:Won,lost:Lost",
-              "format": [
-                {
-                  "tone": "neutral",
-                  "when": {
-                    "args": [
-                      {
-                        "kind": "text",
-                        "op": "",
-                        "ref": "status"
-                      },
-                      {
-                        "kind": "text",
-                        "lit": {
-                          "value": "qualification"
-                        },
-                        "op": ""
-                      }
-                    ],
-                    "kind": "boolean",
-                    "op": "="
-                  }
-                },
-                {
-                  "tone": "info",
-                  "when": {
-                    "args": [
-                      {
-                        "kind": "text",
-                        "op": "",
-                        "ref": "status"
-                      },
-                      {
-                        "kind": "text",
-                        "lit": {
-                          "value": "demomaking"
-                        },
-                        "op": ""
-                      }
-                    ],
-                    "kind": "boolean",
-                    "op": "="
-                  }
-                },
-                {
-                  "tone": "info",
-                  "when": {
-                    "args": [
-                      {
-                        "kind": "text",
-                        "op": "",
-                        "ref": "status"
-                      },
-                      {
-                        "kind": "text",
-                        "lit": {
-                          "value": "proposalquotation"
-                        },
-                        "op": ""
-                      }
-                    ],
-                    "kind": "boolean",
-                    "op": "="
-                  }
-                },
-                {
-                  "tone": "warning",
-                  "when": {
-                    "args": [
-                      {
-                        "kind": "text",
-                        "op": "",
-                        "ref": "status"
-                      },
-                      {
-                        "kind": "text",
-                        "lit": {
-                          "value": "negotiation"
-                        },
-                        "op": ""
-                      }
-                    ],
-                    "kind": "boolean",
-                    "op": "="
-                  }
-                },
-                {
-                  "tone": "info",
-                  "when": {
-                    "args": [
-                      {
-                        "kind": "text",
-                        "op": "",
-                        "ref": "status"
-                      },
-                      {
-                        "kind": "text",
-                        "lit": {
-                          "value": "readytoclose"
-                        },
-                        "op": ""
-                      }
-                    ],
-                    "kind": "boolean",
-                    "op": "="
-                  }
-                },
-                {
-                  "tone": "success",
-                  "when": {
-                    "args": [
-                      {
-                        "kind": "text",
-                        "op": "",
-                        "ref": "status"
-                      },
-                      {
-                        "kind": "text",
-                        "lit": {
-                          "value": "won"
-                        },
-                        "op": ""
-                      }
-                    ],
-                    "kind": "boolean",
-                    "op": "="
-                  }
-                },
-                {
-                  "tone": "danger",
-                  "when": {
-                    "args": [
-                      {
-                        "kind": "text",
-                        "op": "",
-                        "ref": "status"
-                      },
-                      {
-                        "kind": "text",
-                        "lit": {
-                          "value": "lost"
-                        },
-                        "op": ""
-                      }
-                    ],
-                    "kind": "boolean",
-                    "op": "="
-                  }
-                }
-              ],
               "name": "status",
+              "ref": "crm.dealstatus",
               "required": true,
               "title": "Status",
-              "type": "choice"
+              "type": "reference"
             },
             {
               "aside": true,
@@ -4596,12 +4335,12 @@
                   {
                     "args": [
                       {
-                        "kind": "choice",
+                        "kind": "reference",
                         "op": "",
                         "ref": "status"
                       },
                       {
-                        "kind": "choice",
+                        "kind": "reference",
                         "lit": {
                           "value": "qualification"
                         },
@@ -4623,12 +4362,12 @@
                       {
                         "args": [
                           {
-                            "kind": "choice",
+                            "kind": "reference",
                             "op": "",
                             "ref": "status"
                           },
                           {
-                            "kind": "choice",
+                            "kind": "reference",
                             "lit": {
                               "value": "demomaking"
                             },
@@ -4650,12 +4389,12 @@
                           {
                             "args": [
                               {
-                                "kind": "choice",
+                                "kind": "reference",
                                 "op": "",
                                 "ref": "status"
                               },
                               {
-                                "kind": "choice",
+                                "kind": "reference",
                                 "lit": {
                                   "value": "proposalquotation"
                                 },
@@ -4677,12 +4416,12 @@
                               {
                                 "args": [
                                   {
-                                    "kind": "choice",
+                                    "kind": "reference",
                                     "op": "",
                                     "ref": "status"
                                   },
                                   {
-                                    "kind": "choice",
+                                    "kind": "reference",
                                     "lit": {
                                       "value": "negotiation"
                                     },
@@ -4704,12 +4443,12 @@
                                   {
                                     "args": [
                                       {
-                                        "kind": "choice",
+                                        "kind": "reference",
                                         "op": "",
                                         "ref": "status"
                                       },
                                       {
-                                        "kind": "choice",
+                                        "kind": "reference",
                                         "lit": {
                                           "value": "readytoclose"
                                         },
@@ -4731,12 +4470,12 @@
                                       {
                                         "args": [
                                           {
-                                            "kind": "choice",
+                                            "kind": "reference",
                                             "op": "",
                                             "ref": "status"
                                           },
                                           {
-                                            "kind": "choice",
+                                            "kind": "reference",
                                             "lit": {
                                               "value": "won"
                                             },
@@ -4813,11 +4552,11 @@
           "schemaVersions": [
             {
               "family": 1,
-              "version": "schema.sha256.b8970aa1cc6b3bbff855d8555e44b9fe775ff165353559509428f06c48f001a9"
+              "version": "schema.sha256.a0f86a97eb6a63d5a6600ddd6ae93368bb5821f57fe21d3409f75542e2cb269c"
             },
             {
               "family": 2,
-              "version": "schema.sha256.d4f33fbed558484dba83e9b324f84813ff1f6c04a8ffab6429292fc1300ffb9d"
+              "version": "schema.sha256.044c6bb06c42cc8ad67ab3024619ad11ac3924ba16b22895871f990317f2f354"
             }
           ],
           "scope": {
@@ -5109,6 +4848,144 @@
         "ref": {
           "app": "build",
           "kind": "object",
+          "name": "crm.dealstatus"
+        },
+        "contractVersion": 1,
+        "sourceVersion": "1",
+        "requires": [],
+        "provides": [
+          {
+            "kind": "interface",
+            "name": "crm.dealstatus",
+            "inputs": {
+              "type": ""
+            },
+            "outputs": {
+              "type": "object",
+              "properties": {
+                "archived": {
+                  "type": "boolean"
+                },
+                "color": {
+                  "type": "string",
+                  "enum": [
+                    "gray",
+                    "blue",
+                    "green",
+                    "red",
+                    "orange",
+                    "purple",
+                    "pink",
+                    "amber",
+                    "cyan"
+                  ]
+                },
+                "id": {
+                  "type": "string"
+                },
+                "kind": {
+                  "type": "string",
+                  "enum": [
+                    "open",
+                    "ongoing",
+                    "onhold",
+                    "won",
+                    "lost"
+                  ]
+                },
+                "position": {
+                  "type": "integer"
+                },
+                "probability": {
+                  "type": "integer"
+                },
+                "revision": {
+                  "type": "integer"
+                },
+                "title": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "id",
+                "revision"
+              ]
+            },
+            "roles": null,
+            "side": "pure"
+          }
+        ],
+        "body": {
+          "display": "title",
+          "fields": [
+            {
+              "name": "title",
+              "required": true,
+              "search": true,
+              "title": "Deal status",
+              "type": "text"
+            },
+            {
+              "choices": "gray:Gray,blue:Blue,green:Green,red:Red,orange:Orange,purple:Purple,pink:Pink,amber:Amber,cyan:Cyan",
+              "name": "color",
+              "title": "Color",
+              "type": "choice"
+            },
+            {
+              "name": "position",
+              "title": "Position",
+              "type": "integer"
+            },
+            {
+              "name": "probability",
+              "title": "Probability",
+              "type": "integer"
+            },
+            {
+              "choices": "open,ongoing:Ongoing,onhold:On Hold,won:Won,lost:Lost",
+              "name": "kind",
+              "title": "Type",
+              "type": "choice"
+            }
+          ],
+          "name": "dealstatus",
+          "namespace": "crm",
+          "plural": "Deal statuses",
+          "schemaVersions": [
+            {
+              "family": 1,
+              "version": "schema.sha256.67ac5656a5a76d10fce2911014f62be0aa579061853affedd195b9db0ef224be"
+            }
+          ],
+          "title": "Deal status",
+          "type": "crm.dealstatus",
+          "view": {
+            "columns": [
+              "title",
+              "color",
+              "position",
+              "probability",
+              "kind"
+            ],
+            "filters": [],
+            "group": "none",
+            "lanes": "",
+            "layout": "table",
+            "search": "",
+            "sort": [
+              {
+                "direction": "ascending",
+                "sortKey": "position"
+              }
+            ],
+            "version": 1
+          }
+        }
+      },
+      {
+        "ref": {
+          "app": "build",
+          "kind": "object",
           "name": "crm.industry"
         },
         "contractVersion": 1,
@@ -5219,6 +5096,11 @@
           {
             "app": "build",
             "kind": "object",
+            "name": "crm.leadstatus"
+          },
+          {
+            "app": "build",
+            "kind": "object",
             "name": "crm.lostreason"
           },
           {
@@ -5323,16 +5205,7 @@
                   ]
                 },
                 "status": {
-                  "type": "string",
-                  "enum": [
-                    "new",
-                    "contacted",
-                    "nurture",
-                    "qualified",
-                    "converted",
-                    "unqualified",
-                    "junk"
-                  ]
+                  "type": "string"
                 },
                 "territory": {
                   "type": "string"
@@ -5431,12 +5304,12 @@
                     {
                       "args": [
                         {
-                          "kind": "choice",
+                          "kind": "reference",
                           "op": "",
                           "ref": "status"
                         },
                         {
-                          "kind": "choice",
+                          "kind": "reference",
                           "lit": {
                             "value": "unqualified"
                           },
@@ -5449,12 +5322,12 @@
                     {
                       "args": [
                         {
-                          "kind": "choice",
+                          "kind": "reference",
                           "op": "",
                           "ref": "status"
                         },
                         {
-                          "kind": "choice",
+                          "kind": "reference",
                           "lit": {
                             "value": "junk"
                           },
@@ -5687,7 +5560,7 @@
                       },
                       {
                         "expr": {
-                          "kind": "choice",
+                          "kind": "reference",
                           "lit": {
                             "value": "qualification"
                           },
@@ -5734,7 +5607,7 @@
                       },
                       {
                         "expr": {
-                          "kind": "choice",
+                          "kind": "reference",
                           "lit": {
                             "value": "qualified"
                           },
@@ -5876,160 +5749,11 @@
             },
             {
               "aside": true,
-              "choices": "new:New,contacted:Contacted,nurture:Nurture,qualified:Qualified,converted:Converted,unqualified:Unqualified,junk:Junk",
-              "format": [
-                {
-                  "tone": "neutral",
-                  "when": {
-                    "args": [
-                      {
-                        "kind": "text",
-                        "op": "",
-                        "ref": "status"
-                      },
-                      {
-                        "kind": "text",
-                        "lit": {
-                          "value": "new"
-                        },
-                        "op": ""
-                      }
-                    ],
-                    "kind": "boolean",
-                    "op": "="
-                  }
-                },
-                {
-                  "tone": "info",
-                  "when": {
-                    "args": [
-                      {
-                        "kind": "text",
-                        "op": "",
-                        "ref": "status"
-                      },
-                      {
-                        "kind": "text",
-                        "lit": {
-                          "value": "contacted"
-                        },
-                        "op": ""
-                      }
-                    ],
-                    "kind": "boolean",
-                    "op": "="
-                  }
-                },
-                {
-                  "tone": "info",
-                  "when": {
-                    "args": [
-                      {
-                        "kind": "text",
-                        "op": "",
-                        "ref": "status"
-                      },
-                      {
-                        "kind": "text",
-                        "lit": {
-                          "value": "nurture"
-                        },
-                        "op": ""
-                      }
-                    ],
-                    "kind": "boolean",
-                    "op": "="
-                  }
-                },
-                {
-                  "tone": "success",
-                  "when": {
-                    "args": [
-                      {
-                        "kind": "text",
-                        "op": "",
-                        "ref": "status"
-                      },
-                      {
-                        "kind": "text",
-                        "lit": {
-                          "value": "qualified"
-                        },
-                        "op": ""
-                      }
-                    ],
-                    "kind": "boolean",
-                    "op": "="
-                  }
-                },
-                {
-                  "tone": "success",
-                  "when": {
-                    "args": [
-                      {
-                        "kind": "text",
-                        "op": "",
-                        "ref": "status"
-                      },
-                      {
-                        "kind": "text",
-                        "lit": {
-                          "value": "converted"
-                        },
-                        "op": ""
-                      }
-                    ],
-                    "kind": "boolean",
-                    "op": "="
-                  }
-                },
-                {
-                  "tone": "danger",
-                  "when": {
-                    "args": [
-                      {
-                        "kind": "text",
-                        "op": "",
-                        "ref": "status"
-                      },
-                      {
-                        "kind": "text",
-                        "lit": {
-                          "value": "unqualified"
-                        },
-                        "op": ""
-                      }
-                    ],
-                    "kind": "boolean",
-                    "op": "="
-                  }
-                },
-                {
-                  "tone": "warning",
-                  "when": {
-                    "args": [
-                      {
-                        "kind": "text",
-                        "op": "",
-                        "ref": "status"
-                      },
-                      {
-                        "kind": "text",
-                        "lit": {
-                          "value": "junk"
-                        },
-                        "op": ""
-                      }
-                    ],
-                    "kind": "boolean",
-                    "op": "="
-                  }
-                }
-              ],
               "name": "status",
+              "ref": "crm.leadstatus",
               "required": true,
               "title": "Status",
-              "type": "choice"
+              "type": "reference"
             },
             {
               "aside": true,
@@ -6044,15 +5768,15 @@
           "schemaVersions": [
             {
               "family": 1,
-              "version": "schema.sha256.73e89e6f8e7881d62555af17d9bc821b235e8ca5603a246428a797d58f7ec645"
+              "version": "schema.sha256.42e2da4adc9c46088a4e934131ceec3a5ebd7c4b781100e2070108235d9632b4"
             },
             {
               "family": 2,
-              "version": "schema.sha256.cc9b30a140bd10a1b431dfac03fe8a951d5cca00dc38ecc6d05184981cdd8755"
+              "version": "schema.sha256.436a154f5951bdcff54891e431238b5b8314e3f4feaec6f7b01769b168fb9a4c"
             },
             {
               "family": 2,
-              "version": "schema.sha256.f38eb10764319c7ad9464d7a32cccdff3eff5cd1b813721372a1c4b304e4b926"
+              "version": "schema.sha256.3cb319a687ccc1cd960c5d96ac4dc2670b0099bc3d04bb873bd023b6fe442f93"
             }
           ],
           "scope": {
@@ -6171,6 +5895,135 @@
               {
                 "direction": "ascending",
                 "sortKey": "title"
+              }
+            ],
+            "version": 1
+          }
+        }
+      },
+      {
+        "ref": {
+          "app": "build",
+          "kind": "object",
+          "name": "crm.leadstatus"
+        },
+        "contractVersion": 1,
+        "sourceVersion": "1",
+        "requires": [],
+        "provides": [
+          {
+            "kind": "interface",
+            "name": "crm.leadstatus",
+            "inputs": {
+              "type": ""
+            },
+            "outputs": {
+              "type": "object",
+              "properties": {
+                "archived": {
+                  "type": "boolean"
+                },
+                "color": {
+                  "type": "string",
+                  "enum": [
+                    "gray",
+                    "blue",
+                    "green",
+                    "red",
+                    "orange",
+                    "purple",
+                    "pink",
+                    "amber",
+                    "cyan"
+                  ]
+                },
+                "id": {
+                  "type": "string"
+                },
+                "kind": {
+                  "type": "string",
+                  "enum": [
+                    "open",
+                    "ongoing",
+                    "onhold",
+                    "won",
+                    "lost"
+                  ]
+                },
+                "position": {
+                  "type": "integer"
+                },
+                "revision": {
+                  "type": "integer"
+                },
+                "title": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "id",
+                "revision"
+              ]
+            },
+            "roles": null,
+            "side": "pure"
+          }
+        ],
+        "body": {
+          "display": "title",
+          "fields": [
+            {
+              "name": "title",
+              "required": true,
+              "search": true,
+              "title": "Lead status",
+              "type": "text"
+            },
+            {
+              "choices": "gray:Gray,blue:Blue,green:Green,red:Red,orange:Orange,purple:Purple,pink:Pink,amber:Amber,cyan:Cyan",
+              "name": "color",
+              "title": "Color",
+              "type": "choice"
+            },
+            {
+              "name": "position",
+              "title": "Position",
+              "type": "integer"
+            },
+            {
+              "choices": "open,ongoing:Ongoing,onhold:On Hold,won:Won,lost:Lost",
+              "name": "kind",
+              "title": "Type",
+              "type": "choice"
+            }
+          ],
+          "name": "leadstatus",
+          "namespace": "crm",
+          "plural": "Lead statuses",
+          "schemaVersions": [
+            {
+              "family": 1,
+              "version": "schema.sha256.05467177b2ed04b96a00fb644cb70e550b9d1736dc306c7fd9ad38a5d8eb55a7"
+            }
+          ],
+          "title": "Lead status",
+          "type": "crm.leadstatus",
+          "view": {
+            "columns": [
+              "title",
+              "color",
+              "position",
+              "kind"
+            ],
+            "filters": [],
+            "group": "none",
+            "lanes": "",
+            "layout": "table",
+            "search": "",
+            "sort": [
+              {
+                "direction": "ascending",
+                "sortKey": "position"
               }
             ],
             "version": 1

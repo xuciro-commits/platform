@@ -22,7 +22,8 @@ type Declared = { type: string; title?: string; about: string; fields?: string[]
 type Back = { href: string; label: string };
 type Stamp = { at?: string };
 type Formats = Record<string, Api.FieldFormat>;
-type Options = Record<string, { value: string; label: string }[]>;
+type Options = Record<string, { value: string; label: string; dot?: Dot }[]>;
+const palette: Record<string, Dot> = { gray: "neutral", blue: "accent", purple: "accent", cyan: "accent", pink: "accent", green: "success", orange: "warning", amber: "warning", red: "error" };
 const formatted = "__formats";
 const referenced = "__refs";
 const formats = (row: Row) => (row[formatted] as Formats | undefined) ?? {};
@@ -134,10 +135,17 @@ function useOptions(described: Described | undefined) {
     let live = true;
     void Promise.all(
       targets.map(async ([name, type]) => {
-        const display = types.data.find((entity) => entity.type === type)?.display;
-        const answer = await request<Api.RecordPage>(`/v1/records/${encodeURIComponent(type)}?limit=200`).catch(() => undefined);
+        const target = types.data.find((entity) => entity.type === type);
+        const display = target?.display;
+        const color = target?.fields.some((field) => field.name === "color" && field.type === "choice");
+        const sort = readView(target?.view == null ? null : JSON.stringify(target.view), newView([])).sort.map((item) => (item.direction === "descending" ? "-" : "") + item.sortKey).join(",");
+        const answer = await request<Api.RecordPage>(`/v1/records/${encodeURIComponent(type)}?${new URLSearchParams(sort ? { limit: "200", sort } : { limit: "200" })}`).catch(() => undefined);
         const rows = (answer?.records ?? []) as Row[];
-        return [name, rows.map((row) => ({ value: String(row.id), label: shown(plain(display ? row[display] : row.id)) || String(row.id) }))] as const;
+        return [name, rows.map((row) => ({
+          value: String(row.id),
+          label: shown(plain(display ? row[display] : row.id)) || String(row.id),
+          dot: color ? palette[String(plain(row.color))] ?? dots.neutral : undefined,
+        }))] as const;
       }),
     ).then((entries) => live && setReferences(Object.fromEntries(entries)));
     return () => {
@@ -166,6 +174,7 @@ function shape(described: Described, declared: Declared, listPath: string, extra
     return field.name === lifecycle?.field ? t(described.state(row)?.title ?? present(field, row[field.name])) : present(field, row[field.name]);
   };
   const dot = (field: Api.FieldInfo) => (row: Row) => {
+    if (field.type === "reference") return options[field.name]?.find((option) => option.value === String(row[field.name]))?.dot;
     const tone = field.name === lifecycle?.field ? described.state(row)?.tone : formats(row)[field.name]?.tone;
     return tone ? (dots as Record<string, Dot | undefined>)[tone] ?? dots.neutral : undefined;
   };
@@ -215,12 +224,20 @@ function shape(described: Described, declared: Declared, listPath: string, extra
       })),
       { key: "changed", header: "Updated", width: 140, kind: "time" as const, text: (row: Row) => (row.changed as Stamp | undefined)?.at ?? "" },
     ],
-    groups: described.groups.map((field) => ({
-      key: field.name,
-      label: field.title,
-      of: say(field),
-      order: field.name === lifecycle?.field ? states.map((state) => t(state.title)) : titles(field),
-    })),
+    groups: [
+      ...described.groups.map((field) => ({
+        key: field.name,
+        label: field.title,
+        of: say(field),
+        order: field.name === lifecycle?.field ? states.map((state) => t(state.title)) : titles(field),
+      })),
+      ...described.entity.fields.filter((field) => field.type === "reference" && options[field.name]?.some((option) => option.dot)).map((field) => ({
+        key: field.name,
+        label: field.title,
+        of: say(field),
+        order: options[field.name].map((option) => option.label),
+      })),
+    ],
   };
 }
 
@@ -285,10 +302,12 @@ export function Records({ declared, listPath, id, back }: { declared: Declared; 
       act.run(target ? { ...intent, fixed: { [target]: to }, reversible: false } : intent);
     });
   };
+  const options = useOptions(described);
   const numericField = described?.table.find((field) => numeric.has(field.type));
   const board: RecordShape["board"] = laneField ? {
     key: laneField.name,
     lanes: lifecycle ? lifecycle.states.map((state) => ({ key: state.name, label: t(state.title) }))
+      : laneField.type === "reference" ? (options[laneField.name] ?? []).map((option) => ({ key: option.value, label: option.label, dot: option.dot }))
       : (laneField.choices ?? []).map((key, index) => ({ key, label: t(laneField.choiceTitles?.[index] ?? key) })),
     of: (row) => String(row[laneField.name] ?? ""),
     accepts: (id, to) => Boolean(actionFor(id, to)),
@@ -303,7 +322,6 @@ export function Records({ declared, listPath, id, back }: { declared: Declared; 
       },
     },
   } : undefined;
-  const options = useOptions(described);
   const [detailFailure, setDetailFailure] = useState("");
   const detail: ListShape<Api.RecordPage, Row>["detail"] = described && ((chosen) => {
     const row = kept.find((candidate) => String(candidate.id) === chosen);

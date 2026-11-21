@@ -448,10 +448,13 @@ func checkConditions(entity string, fields []FieldInfo) error {
 			return fmt.Errorf("entity %s: field %s depends on %s, which is conditional itself", entity, f.Name, on.Name)
 		}
 		allowed := on.Choices
+		if on.Type == "reference" {
+			continue
+		}
 		if on.Type == "boolean" {
 			allowed = []string{"true", "false"}
 		} else if on.Type != "choice" {
-			return fmt.Errorf("entity %s: field %s depends on %s, which is neither a choice nor a boolean", entity, f.Name, on.Name)
+			return fmt.Errorf("entity %s: field %s depends on %s, which is not a choice, a boolean or a reference", entity, f.Name, on.Name)
 		}
 		for _, v := range f.When.In {
 			if !slices.Contains(allowed, v) {

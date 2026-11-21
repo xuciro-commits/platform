@@ -1,0 +1,60 @@
+{
+  "display": "title",
+  "fields": [
+    {
+      "name": "title",
+      "required": true,
+      "search": true,
+      "title": "Lead status",
+      "type": "text"
+    },
+    {
+      "choices": "gray:Gray,blue:Blue,green:Green,red:Red,orange:Orange,purple:Purple,pink:Pink,amber:Amber,cyan:Cyan",
+      "name": "color",
+      "title": "Color",
+      "type": "choice"
+    },
+    {
+      "name": "position",
+      "title": "Position",
+      "type": "integer"
+    },
+    {
+      "choices": "open,ongoing:Ongoing,onhold:On Hold,won:Won,lost:Lost",
+      "name": "kind",
+      "title": "Type",
+      "type": "choice"
+    }
+  ],
+  "name": "leadstatus",
+  "namespace": "crm",
+  "plural": "Lead statuses",
+  "schemaVersions": [
+    {
+      "family": 1,
+      "version": "schema.sha256.05467177b2ed04b96a00fb644cb70e550b9d1736dc306c7fd9ad38a5d8eb55a7"
+    }
+  ],
+  "title": "Lead status",
+  "type": "crm.leadstatus",
+  "view": {
+    "columns": [
+      "title",
+      "color",
+      "position",
+      "kind"
+    ],
+    "filters": [],
+    "group": "none",
+    "lanes": "",
+    "layout": "table",
+    "search": "",
+    "sort": [
+      {
+        "direction": "ascending",
+        "sortKey": "position"
+      }
+    ],
+    "version": 1
+  }
+}
