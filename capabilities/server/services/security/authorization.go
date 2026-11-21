@@ -113,7 +113,7 @@ func Decide(r platform.AuthorizationInput, policies ...platform.AuthorizationPol
 }
 
 func Widest(levels []string) string {
-	order := []string{"tenant", "below", "unit", "own", "none"}
+	order := []string{"tenant", "below", "unit", "team", "own", "none"}
 	best := len(order)
 	for _, l := range levels {
 		if i := slices.Index(order, l); i >= 0 && i < best {

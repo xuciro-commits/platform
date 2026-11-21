@@ -3,7 +3,7 @@
     {
       "create": true,
       "edit": true,
-      "read": "own",
+      "read": "team",
       "role": "salesrep"
     },
     {
@@ -389,32 +389,42 @@
           {
             "changes": [
               {
+                "field": "state",
                 "expr": {
+                  "op": "",
+                  "kind": "choice",
+                  "lit": {
+                    "value": "converted"
+                  }
+                }
+              },
+              {
+                "field": "converted",
+                "expr": {
+                  "op": "",
                   "kind": "boolean",
                   "lit": {
                     "value": true
-                  },
-                  "op": ""
-                },
-                "field": "converted"
+                  }
+                }
               },
               {
+                "field": "status",
                 "expr": {
+                  "op": "",
                   "kind": "reference",
                   "lit": {
-                    "value": "qualified"
-                  },
-                  "op": ""
-                },
-                "field": "status"
+                    "value": "converted"
+                  }
+                }
               },
               {
+                "field": "deal",
                 "expr": {
-                  "kind": "reference",
                   "op": "",
+                  "kind": "reference",
                   "ref": "step.deal"
-                },
-                "field": "deal"
+                }
               }
             ],
             "kind": "update",
@@ -426,6 +436,181 @@
           }
         ],
         "subject": "crm.lead"
+      }
+    },
+    {
+      "name": "disqualify",
+      "title": "Mark unqualified",
+      "description": "Close this lead as unqualified.",
+      "from": [
+        "open"
+      ],
+      "inputs": [
+        {
+          "name": "lostreason",
+          "title": "Lost reason",
+          "type": "reference",
+          "ref": "crm.lostreason",
+          "required": true
+        },
+        {
+          "name": "lostnotes",
+          "title": "Lost notes",
+          "type": "longtext"
+        }
+      ],
+      "transaction": {
+        "subject": "crm.lead",
+        "steps": [
+          {
+            "name": "lead",
+            "kind": "update",
+            "target": {
+              "type": "crm.lead",
+              "id": "$subject"
+            },
+            "changes": [
+              {
+                "field": "state",
+                "expr": {
+                  "op": "",
+                  "kind": "choice",
+                  "lit": {
+                    "value": "unqualified"
+                  }
+                }
+              },
+              {
+                "field": "status",
+                "expr": {
+                  "op": "",
+                  "kind": "reference",
+                  "lit": {
+                    "value": "unqualified"
+                  }
+                }
+              },
+              {
+                "field": "lostreason",
+                "expr": {
+                  "op": "",
+                  "kind": "reference",
+                  "ref": "input.lostreason"
+                }
+              },
+              {
+                "field": "lostnotes",
+                "expr": {
+                  "op": "",
+                  "kind": "text",
+                  "ref": "input.lostnotes"
+                }
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "markjunk",
+      "title": "Mark junk",
+      "description": "Close this lead as junk.",
+      "from": [
+        "open"
+      ],
+      "inputs": [
+        {
+          "name": "lostnotes",
+          "title": "Lost notes",
+          "type": "longtext"
+        }
+      ],
+      "transaction": {
+        "subject": "crm.lead",
+        "steps": [
+          {
+            "name": "lead",
+            "kind": "update",
+            "target": {
+              "type": "crm.lead",
+              "id": "$subject"
+            },
+            "changes": [
+              {
+                "field": "state",
+                "expr": {
+                  "op": "",
+                  "kind": "choice",
+                  "lit": {
+                    "value": "junk"
+                  }
+                }
+              },
+              {
+                "field": "status",
+                "expr": {
+                  "op": "",
+                  "kind": "reference",
+                  "lit": {
+                    "value": "junk"
+                  }
+                }
+              },
+              {
+                "field": "lostnotes",
+                "expr": {
+                  "op": "",
+                  "kind": "text",
+                  "ref": "input.lostnotes"
+                }
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "reopen",
+      "title": "Reopen",
+      "description": "Reopen a closed lead.",
+      "from": [
+        "unqualified",
+        "junk"
+      ],
+      "transaction": {
+        "subject": "crm.lead",
+        "steps": [
+          {
+            "name": "lead",
+            "kind": "update",
+            "target": {
+              "type": "crm.lead",
+              "id": "$subject"
+            },
+            "changes": [
+              {
+                "field": "state",
+                "expr": {
+                  "op": "",
+                  "kind": "choice",
+                  "lit": {
+                    "value": "open"
+                  }
+                }
+              },
+              {
+                "field": "status",
+                "expr": {
+                  "op": "",
+                  "kind": "reference",
+                  "lit": {
+                    "value": "new"
+                  }
+                }
+              }
+            ]
+          }
+        ]
       }
     }
   ],
@@ -553,7 +738,8 @@
       "aside": true,
       "name": "owner",
       "title": "Lead owner",
-      "type": "member"
+      "type": "member",
+      "default": "member"
     }
   ],
   "name": "lead",
@@ -575,6 +761,10 @@
     {
       "family": 3,
       "version": "schema.sha256.f4fd41b66fe5577b38dfb7f8e4dfdfb09c96e931f902ee98e4ea8c8062ad16c3"
+    },
+    {
+      "family": 4,
+      "version": "schema.sha256.7e1655787e80503cece98cfa16dfb2b8cc3075a81615dafb7c45eda85a917efb"
     }
   ],
   "scope": {
@@ -582,10 +772,28 @@
   },
   "states": [
     {
-      "description": "Active lead record.",
       "name": "open",
       "title": "Open",
-      "tone": "info"
+      "tone": "info",
+      "description": "Active lead record."
+    },
+    {
+      "name": "converted",
+      "title": "Converted",
+      "tone": "success",
+      "description": "Lead converted to a deal."
+    },
+    {
+      "name": "unqualified",
+      "title": "Unqualified",
+      "tone": "danger",
+      "description": "Lead marked unqualified."
+    },
+    {
+      "name": "junk",
+      "title": "Junk",
+      "tone": "warning",
+      "description": "Lead marked as junk."
     }
   ],
   "title": "Lead",
@@ -607,5 +815,299 @@
     "sort": [],
     "version": 1
   },
-  "naming": "CRM-LEAD-{year}-{n:5}"
+  "naming": "CRM-LEAD-{year}-{n:5}",
+  "constraints": [
+    {
+      "name": "open_status",
+      "kind": "expression",
+      "fields": [
+        "status"
+      ],
+      "expr": {
+        "op": "or",
+        "kind": "boolean",
+        "args": [
+          {
+            "op": "and",
+            "kind": "boolean",
+            "args": [
+              {
+                "op": "!=",
+                "kind": "boolean",
+                "args": [
+                  {
+                    "op": "",
+                    "kind": "choice",
+                    "ref": "state"
+                  },
+                  {
+                    "op": "",
+                    "kind": "choice",
+                    "lit": {
+                      "value": ""
+                    }
+                  }
+                ]
+              },
+              {
+                "op": "!=",
+                "kind": "boolean",
+                "args": [
+                  {
+                    "op": "",
+                    "kind": "choice",
+                    "ref": "state"
+                  },
+                  {
+                    "op": "",
+                    "kind": "choice",
+                    "lit": {
+                      "value": "open"
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "op": "and",
+            "kind": "boolean",
+            "args": [
+              {
+                "op": "!=",
+                "kind": "boolean",
+                "args": [
+                  {
+                    "op": "",
+                    "kind": "reference",
+                    "ref": "status"
+                  },
+                  {
+                    "op": "",
+                    "kind": "reference",
+                    "lit": {
+                      "value": "converted"
+                    }
+                  }
+                ]
+              },
+              {
+                "op": "!=",
+                "kind": "boolean",
+                "args": [
+                  {
+                    "op": "",
+                    "kind": "reference",
+                    "ref": "status"
+                  },
+                  {
+                    "op": "",
+                    "kind": "reference",
+                    "lit": {
+                      "value": "unqualified"
+                    }
+                  }
+                ]
+              },
+              {
+                "op": "!=",
+                "kind": "boolean",
+                "args": [
+                  {
+                    "op": "",
+                    "kind": "reference",
+                    "ref": "status"
+                  },
+                  {
+                    "op": "",
+                    "kind": "reference",
+                    "lit": {
+                      "value": "junk"
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "message": "Closing a lead requires a lifecycle action."
+    },
+    {
+      "name": "closed_status",
+      "kind": "expression",
+      "fields": [
+        "status"
+      ],
+      "expr": {
+        "op": "or",
+        "kind": "boolean",
+        "args": [
+          {
+            "op": "=",
+            "kind": "boolean",
+            "args": [
+              {
+                "op": "",
+                "kind": "choice",
+                "ref": "state"
+              },
+              {
+                "op": "",
+                "kind": "choice",
+                "lit": {
+                  "value": ""
+                }
+              }
+            ]
+          },
+          {
+            "op": "=",
+            "kind": "boolean",
+            "args": [
+              {
+                "op": "",
+                "kind": "choice",
+                "ref": "state"
+              },
+              {
+                "op": "",
+                "kind": "choice",
+                "lit": {
+                  "value": "open"
+                }
+              }
+            ]
+          },
+          {
+            "op": "and",
+            "kind": "boolean",
+            "args": [
+              {
+                "op": "=",
+                "kind": "boolean",
+                "args": [
+                  {
+                    "op": "",
+                    "kind": "choice",
+                    "ref": "state"
+                  },
+                  {
+                    "op": "",
+                    "kind": "choice",
+                    "lit": {
+                      "value": "converted"
+                    }
+                  }
+                ]
+              },
+              {
+                "op": "=",
+                "kind": "boolean",
+                "args": [
+                  {
+                    "op": "",
+                    "kind": "reference",
+                    "ref": "status"
+                  },
+                  {
+                    "op": "",
+                    "kind": "reference",
+                    "lit": {
+                      "value": "converted"
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "op": "and",
+            "kind": "boolean",
+            "args": [
+              {
+                "op": "=",
+                "kind": "boolean",
+                "args": [
+                  {
+                    "op": "",
+                    "kind": "choice",
+                    "ref": "state"
+                  },
+                  {
+                    "op": "",
+                    "kind": "choice",
+                    "lit": {
+                      "value": "unqualified"
+                    }
+                  }
+                ]
+              },
+              {
+                "op": "=",
+                "kind": "boolean",
+                "args": [
+                  {
+                    "op": "",
+                    "kind": "reference",
+                    "ref": "status"
+                  },
+                  {
+                    "op": "",
+                    "kind": "reference",
+                    "lit": {
+                      "value": "unqualified"
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "op": "and",
+            "kind": "boolean",
+            "args": [
+              {
+                "op": "=",
+                "kind": "boolean",
+                "args": [
+                  {
+                    "op": "",
+                    "kind": "choice",
+                    "ref": "state"
+                  },
+                  {
+                    "op": "",
+                    "kind": "choice",
+                    "lit": {
+                      "value": "junk"
+                    }
+                  }
+                ]
+              },
+              {
+                "op": "=",
+                "kind": "boolean",
+                "args": [
+                  {
+                    "op": "",
+                    "kind": "reference",
+                    "ref": "status"
+                  },
+                  {
+                    "op": "",
+                    "kind": "reference",
+                    "lit": {
+                      "value": "junk"
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "message": "A closed lead's status cannot be edited directly; reopen it first."
+    }
+  ]
 }

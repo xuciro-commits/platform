@@ -572,6 +572,7 @@ export const zhCN: Record<string, string> = {
   "Also fill in": "还需填写",
   "Calculated by a formula": "由公式算出",
   "Filled in from other fields; you can change it": "由其他字段带出，可以改",
+  "From {field}": "随{field}",
   "Changed only by actions": "只由动作改动",
   "Why unavailable": "为什么不可用",
   "Custom range": "自定义区间",

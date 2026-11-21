@@ -4,7 +4,7 @@ import { Dialog, DialogHeader } from "@astryxdesign/core/Dialog";
 import { FormLayout } from "@astryxdesign/core/FormLayout";
 import { HStack, Layout, LayoutContent, LayoutFooter, StackItem } from "@astryxdesign/core/Layout";
 import { Selector } from "@astryxdesign/core/Selector";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { type Api, useRead } from "../host";
 import { t } from "../i18n";
 import { reasonOf, send } from "./act";
@@ -32,23 +32,56 @@ export type ActionDialogProps = {
   perform?: (payload: Values) => Applied;
 };
 
+function resolveDefault(raw: unknown, me?: Api.MeView): unknown {
+  if (raw === "member") return me?.principalId || undefined;
+  if (raw === "today") return new Date().toISOString().slice(0, 10);
+  if (raw === "now") return new Date().toISOString();
+  if (typeof raw === "string" && raw.startsWith("setting:")) return undefined;
+  return raw;
+}
 
 export function ActionDialog({ action, described, heading, confirm, id, revision, initial = {}, fixed = {}, owned, quick, only, onClose, onDone, perform }: ActionDialogProps) {
-  const [values, setValues] = useState<Values>(() => ({
-    ...Object.fromEntries(action.payload.filter((field) => field.default != null).map((field) => [field.name, field.default])),
-    ...initial,
-  }));
+  const me = useRead<Api.MeView>("/v1/me");
+  const touched = useRef<Set<string>>(new Set(Object.keys(initial)));
+  const [values, setValues] = useState<Values>(() => {
+    const out: Values = {};
+    for (const field of action.payload) {
+      if (field.default == null) continue;
+      const resolved = resolveDefault(field.default, me.status === "ready" ? me.data : undefined);
+      if (resolved !== undefined) out[field.name] = resolved;
+    }
+    return { ...out, ...initial };
+  });
+  useEffect(() => {
+    if (me.status !== "ready") return;
+    setValues((previous) => {
+      let changed = false;
+      const next = { ...previous };
+      for (const field of action.payload) {
+        if (field.default == null || touched.current.has(field.name)) continue;
+        const resolved = resolveDefault(field.default, me.data);
+        if (resolved !== undefined && next[field.name] !== resolved) {
+          next[field.name] = resolved;
+          changed = true;
+        }
+      }
+      return changed ? next : previous;
+    });
+  }, [me.status, me.status === "ready" ? me.data.principalId : "", action]);
   const [project, setProject] = useState("");
   const [busy, setBusy] = useState(false);
   const [failure, setFailure] = useState("");
   const projects = useRead<Api.RecordPage>(owned ? "/v1/records/build.app?limit=200" : null);
-  const set = (name: string, value: unknown) => setValues((previous) => {
-    const next = { ...previous, [name]: value };
-    if (name === "app" && String(value ?? "").trim() !== String(previous.app ?? "").trim()) {
-      for (const parameter of action.payload) if (parameter.type === "action[]") delete next[parameter.name];
-    }
-    return next;
-  });
+  const set = (name: string, value: unknown) => {
+    touched.current.add(name);
+    setValues((previous) => {
+      const next = { ...previous, [name]: value };
+      if (name === "app" && String(value ?? "").trim() !== String(previous.app ?? "").trim()) {
+        for (const parameter of action.payload) if (parameter.type === "action[]") delete next[parameter.name];
+      }
+      return next;
+    });
+  };
   const shownParameters = action.payload.filter((parameter) => !(parameter.name in fixed) && enterable(parameter) && (!quick || parameter.required || parameter.name === described?.display))
     .flatMap((parameter) => (!only ? [parameter] : only.includes(parameter.name) ? [{ ...parameter, required: true }] : []));
   const blocked = action.payload.filter((parameter) => parameter.required && !(parameter.name in fixed) && !enterable(parameter)).map((parameter) => parameter.name);
@@ -65,7 +98,7 @@ export function ActionDialog({ action, described, heading, confirm, id, revision
     if (owned) payload.project = project;
     const space = projects.status === "ready" ? (projects.data.records as Project[]).find((entry) => entry.id === project)?.name : undefined;
     const named = typeof values.name === "string" ? (space && space !== "workspace" ? `${space}.${values.name}` : values.name) : undefined;
-    const autoNamed = !id && Boolean((described as { naming?: string } | undefined)?.naming) && action.schema === `${described?.type}.create`;
+    const autoNamed = !id && Boolean(described?.naming) && action.schema === `${described?.type}.create`;
     const target = autoNamed ? "" : (id ?? named ?? `${action.idPrefix ?? ""}${crypto.randomUUID()}`);
     try {
       let created = target;

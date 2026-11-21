@@ -73,8 +73,10 @@ async function records(session, sample, installed) {
     const authority = session.authorityFor(full);
     if (!authority && installed && !installed.has(full)) continue;
     if (!authority) throw new Error(`${full}: no write authority`);
-    for (const [index, { id, ...record }] of (type.records ?? []).entries()) {
-      await session.submit(full, id ?? `${type.prefix}-${String(index + 1).padStart(3, "0")}`, "create", record, authority);
+    for (const [index, { id, transition, ...record }] of (type.records ?? []).entries()) {
+      const target = id ?? `${type.prefix}-${String(index + 1).padStart(3, "0")}`;
+      const created = await session.submit(full, target, "create", record, authority);
+      if (transition) await session.submit(full, target, transition.action, transition.payload ?? {}, authority, created.revision);
       written += 1;
     }
   }
@@ -129,16 +131,28 @@ for (const file of files) {
   const track = (id, record) => revisions.set(`build.object/${id}`, record.revision);
   for (const type of sample.types ?? []) {
     const id = `${sample.project.name}.${type.name}`;
-    const { sets, reads, ...definition } = type.definition;
+    const { sets, reads, actions, ...definition } = type.definition;
     const fields = definition.fields?.map(({ formulaExpr, ...field }) => (formulaExpr && !JSON.stringify(formulaExpr).includes('"agg"') ? { ...field, formulaExpr } : field));
     track(id, await main.submit("build.object", id, "create", { ...definition, fields, name: type.name, project: sample.project.name }));
     if (!type.draft) track(id, await main.submit("build.object", id, "publish", {}, "build", 1));
   }
 
+  for (const type of (sample.types ?? []).filter((each) => !each.draft)) {
+    for (const { name, ...action } of type.definition.actions ?? []) {
+      const id = `${sample.project.name}.${type.name}.${name}`;
+      await main.submit("build.actiontype", id, "create", { name: id, project: sample.project.name, object: `${sample.project.name}.${type.name}`, definition: { name, ...action } });
+      await main.submit("build.actiontype", id, "publish", {}, "build", 1);
+    }
+    if (type.definition.actions?.length) {
+      const id = `${sample.project.name}.${type.name}`;
+      track(id, await main.submit("build.object", id, "publish", {}, "build", revisions.get(`build.object/${id}`)));
+    }
+  }
+
   for (const type of sample.types ?? []) {
     if (!type.definition.sets?.length) continue;
     const id = `${sample.project.name}.${type.name}`;
-    const revision = type.draft ? 1 : 2;
+    const revision = revisions.get(`build.object/${id}`);
     track(id, await main.submit("build.object", id, "edit", { sets: type.definition.sets, reads: type.definition.reads, fields: type.definition.fields }, "build", revision));
     if (!type.draft) track(id, await main.submit("build.object", id, "publish", {}, "build", revision + 1));
   }

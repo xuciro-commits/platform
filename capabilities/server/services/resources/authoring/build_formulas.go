@@ -17,7 +17,8 @@ import (
 func computeRulesOf(o ontology.Object, lookup func(string) (platform.RecordTypeInfo, bool)) func(platform.Caller, any, any, time.Time) *platform.Error {
 	list, orderErr := ontology.FormulaOrder(o.Fields)
 	followed := slices.DeleteFunc(slices.Clone(o.Fields), func(f ontology.Field) bool { return f.From == nil })
-	if len(list) == 0 && len(followed) == 0 {
+	defaults := slices.DeleteFunc(slices.Clone(o.Fields), func(f ontology.Field) bool { return f.Default == "" })
+	if len(list) == 0 && len(followed) == 0 && len(defaults) == 0 {
 		return nil
 	}
 	lookup = ruleLookup(o, lookup)
@@ -28,6 +29,13 @@ func computeRulesOf(o ontology.Object, lookup func(string) (platform.RecordTypeI
 		for _, f := range followed {
 			if err := follow(c, o, f, lookup, record, previous, now); err != nil {
 				return err
+			}
+		}
+		if previous == nil {
+			for _, f := range defaults {
+				if err := applyDefault(c, f, record, now); err != nil {
+					return err
+				}
 			}
 		}
 		for _, f := range list {
@@ -155,6 +163,77 @@ func follow(c platform.Caller, o ontology.Object, f ontology.Field, lookup func(
 		err = assign(target, value)
 	}
 	if err != nil {
+		return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
+	}
+	return nil
+}
+
+func applyDefault(c platform.Caller, f ontology.Field, record any, now time.Time) *platform.Error {
+	target := reflect.ValueOf(record).Elem().FieldByName(ontology.GoName(f.Name))
+	if !target.IsValid() {
+		return nil
+	}
+	if setting, ok := strings.CutPrefix(f.Default, "setting:"); ok {
+		v := c.Setting("platform/" + setting)
+		if v == "" {
+			v = c.Setting(setting)
+		}
+		if v == "" {
+			return nil
+		}
+		if f.Type == "money" {
+			if target.Kind() == reflect.Pointer && !target.IsNil() {
+				m := target.Elem().Interface().(platform.Money)
+				if m.Currency == "" {
+					m.Currency = v
+					target.Elem().Set(reflect.ValueOf(m))
+				}
+			} else if target.Kind() == reflect.Struct {
+				m := target.Interface().(platform.Money)
+				if m.Currency == "" {
+					m.Currency = v
+					target.Set(reflect.ValueOf(m))
+				}
+			}
+			return nil
+		}
+		if !target.IsZero() {
+			return nil
+		}
+		if err := assign(target, v); err != nil {
+			return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
+		}
+		return nil
+	}
+	if !target.IsZero() {
+		return nil
+	}
+	var value any
+	switch f.Default {
+	case "member":
+		if c.ID == "" || strings.HasPrefix(c.ID, "app:") {
+			return nil
+		}
+		value = c.ID
+	case "today":
+		value = string(c.Today(now))
+	case "now":
+		if f.Type == "datetime" {
+			value = now.UTC()
+		} else {
+			value = now.UTC().Format(time.RFC3339)
+		}
+	default:
+		switch f.Type {
+		case "boolean":
+			value = f.Default == "true"
+		case "integer", "decimal":
+			value = json.Number(f.Default)
+		default:
+			value = f.Default
+		}
+	}
+	if err := assign(target, value); err != nil {
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
 	}
 	return nil

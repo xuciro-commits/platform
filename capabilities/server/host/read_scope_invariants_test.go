@@ -5,13 +5,16 @@ import (
 	"encoding/json"
 	"fmt"
 	"maps"
+	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformserver/kernel/protocol"
 	"slices"
 	"testing"
 
 	persistence "platformserver/kernel/store"
 	"platformserver/platform"
+	"platformserver/services/actions"
 	build "platformserver/services/resources/authoring"
+	enterprisemodel "platformserver/services/security/organization"
 )
 
 type sqlShapedReads struct {
@@ -177,5 +180,93 @@ func TestInvariantRecordAuthorizationOutsideTheReadScopeReadsTheRecord(t *testin
 	live.authorizeFrom(live.Projection, c, platform.AuthzRequest{Principal: member.ID, Tenant: live.ID, Kind: "action", Action: "build.app.create", Type: protocol.AppType, Record: "workspace"}, invariantClock, false)
 	if reads.opened == 0 {
 		t.Fatal("the record authorization did not open the read scope")
+	}
+}
+
+func TestInvariantTeamScopeConsistentAcrossReadsAndAssignment(t *testing.T) {
+	seed := platform.OrgSeed{
+		Units:       []platform.Unit{{ID: "TEAM-A", Name: "Team A", Kind: "team"}, {ID: "TEAM-B", Name: "Team B", Kind: "team"}},
+		Memberships: []platform.Membership{{Party: "member:rep-a1", Unit: "TEAM-A", Role: "member"}, {Party: "member:rep-a2", Unit: "TEAM-A", Role: "member"}, {Party: "member:rep-b1", Unit: "TEAM-B", Role: "member"}},
+	}
+	member := func(id, role string) platform.Member {
+		return platform.Member{ID: id, Tenant: "invariant-team-scope", Roles: map[string]string{"invariantproject": role}}
+	}
+	repA1, repA2, repB1, mgr := member("rep-a1", "salesrep"), member("rep-a2", "salesrep"), member("rep-b1", "salesrep"), member("mgr-1", "salesmanager")
+	var seats []protocol.Seat
+	for _, m := range []platform.Member{repA1, repA2, repB1, mgr} {
+		seats = append(seats, protocol.Seat{Subjects: []string{m.ID}, Member: m})
+	}
+	as := func(m platform.Member, request *pb.Submission) *pb.Submission {
+		request.PrincipalId = m.ID
+		return request
+	}
+	live := newInvariantTenantWithApps(t, "invariant-team-scope", []platform.Service{enterprisemodel.New("invariant-team-scope", actions.NewAuthority, seed)}, seats...)
+	lead := map[string]any{
+		"name": "caseitem", "project": invariantProject, "title": "Case", "plural": "Cases", "display": "title",
+		"fields": []map[string]any{
+			{"name": "title", "title": "Title", "type": "text", "required": true, "search": true},
+			{"name": "owner", "title": "Owner", "type": "member", "default": "member"},
+		},
+		"access": []map[string]any{
+			{"role": "salesrep", "read": "team", "create": true, "edit": true},
+			{"role": "salesmanager", "read": "all", "create": true, "edit": true, "archive": true},
+		},
+		"scope": map[string]any{"owner": "owner"},
+	}
+	note := map[string]any{
+		"name": "casenote", "project": invariantProject, "title": "Case note", "plural": "Case notes", "display": "title",
+		"fields": []map[string]any{
+			{"name": "title", "title": "Title", "type": "text", "required": true, "search": true},
+			{"name": "subject", "title": "Subject", "type": "reference", "ref": "invariantproject.caseitem"},
+		},
+		"access": []map[string]any{
+			{"role": "salesrep", "read": "all", "create": true, "edit": true},
+			{"role": "salesmanager", "read": "all", "create": true, "edit": true},
+		},
+	}
+	live.accept(t, "build.object.create", build.ObjectType, "CASE", lead)
+	live.accept(t, "build.object.publish", build.ObjectType, "CASE", map[string]any{})
+	live.accept(t, "build.object.create", build.ObjectType, "NOTE", note)
+	live.accept(t, "build.object.publish", build.ObjectType, "NOTE", map[string]any{})
+
+	if _, err := live.Submit(repA1, as(repA1, live.submission("invariantproject.caseitem.create", "invariantproject.caseitem", "C1", map[string]any{"title": "Alpha"})), invariantClock); err != nil {
+		t.Fatalf("rep-a1 create with default owner: %v", err)
+	}
+	if _, err := live.Submit(repB1, as(repB1, live.submission("invariantproject.caseitem.create", "invariantproject.caseitem", "C2", map[string]any{"title": "Beta"})), invariantClock); err != nil {
+		t.Fatalf("rep-b1 create with default owner: %v", err)
+	}
+	live.accept(t, "invariantproject.casenote.create", "invariantproject.casenote", "N1", map[string]any{"title": "Note A", "subject": "C1"})
+	live.accept(t, "invariantproject.casenote.create", "invariantproject.casenote", "N2", map[string]any{"title": "Note B", "subject": "C2"})
+
+	if _, err := live.RecordOf(t.Context(), repA2, "invariantproject.caseitem", "C1", invariantClock); err != nil {
+		t.Fatalf("teammate rep-a2 could not read C1: %v", err)
+	}
+	if _, err := live.RecordOf(t.Context(), repA2, "invariantproject.caseitem", "C2", invariantClock); err == nil {
+		t.Fatal("rep-a2 read out-of-team record C2")
+	}
+	pageA2, err := live.Records(t.Context(), repA2, "invariantproject.caseitem", platform.Query{Limit: 10}, invariantClock)
+	if err != nil || pageA2.Total != 1 || len(pageA2.Records) != 1 {
+		t.Fatalf("rep-a2 list/count mismatch: total=%d len=%d err=%v", pageA2.Total, len(pageA2.Records), err)
+	}
+	noteViewA2, err := live.RecordOf(t.Context(), repA2, "invariantproject.casenote", "N2", invariantClock)
+	if err != nil {
+		t.Fatalf("rep-a2 read note N2: %v", err)
+	}
+	if noteViewA2.Refs["subject"]["C2"] != "" {
+		t.Fatalf("rep-a2 resolved out-of-team reference label for C2: %v", noteViewA2.Refs)
+	}
+	pageMgr, err := live.Records(t.Context(), mgr, "invariantproject.caseitem", platform.Query{Limit: 10}, invariantClock)
+	if err != nil || pageMgr.Total != 2 {
+		t.Fatalf("manager list/count mismatch: total=%d err=%v", pageMgr.Total, err)
+	}
+
+	if _, err := live.Submit(mgr, as(mgr, live.submission("invariantproject.caseitem.edit", "invariantproject.caseitem", "C2", map[string]any{"owner": "rep-a1"})), invariantClock); err != nil {
+		t.Fatalf("manager assign C2 to rep-a1: %v", err)
+	}
+	if _, err := live.RecordOf(t.Context(), repA2, "invariantproject.caseitem", "C2", invariantClock); err != nil {
+		t.Fatalf("rep-a2 could not read C2 immediately after assignment to teammate rep-a1: %v", err)
+	}
+	if _, err := live.RecordOf(t.Context(), repB1, "invariantproject.caseitem", "C2", invariantClock); err == nil {
+		t.Fatal("rep-b1 still read C2 after reassignment out of team")
 	}
 }

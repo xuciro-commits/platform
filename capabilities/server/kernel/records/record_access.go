@@ -19,6 +19,7 @@ import (
 type ScopeDirectory interface {
 	Units(party, structure string, day platform.Date) []string
 	Below(units []string, structure string, day platform.Date) []string
+	Holders(structure, unit, role string, day platform.Date) []string
 }
 
 func FieldView(m platform.Member, source platform.RecordTypeInfo) (view platform.RecordTypeInfo, hidden []platform.FieldInfo) {
@@ -153,6 +154,35 @@ func scopeExpr(directory ScopeDirectory, m platform.Member, info platform.Record
 			return boolLit(false), true
 		}
 		return compare("=", owner, textLit(m.ID)), true
+	case platform.ScopeTeam:
+		members := []string{m.ID}
+		if directory != nil {
+			day := m.Today(now)
+			for _, unit := range directory.Units("member:"+m.ID, "", day) {
+				for _, colleague := range directory.Holders("", unit, "", day) {
+					if !slices.Contains(members, colleague) {
+						members = append(members, colleague)
+					}
+				}
+			}
+		}
+		owner := ruleexpr.RefOf("text", createdBy.Ref)
+		if scope.Owner != platform.OwnerCreated {
+			var ok bool
+			owner, ok = textField(scope.Owner)
+			if !ok {
+				return boolLit(false), true
+			}
+		}
+		items := make([]any, len(members))
+		for i, id := range members {
+			items[i] = id
+		}
+		var options []ruleexpr.Expr
+		for chunk := range slices.Chunk(items, ruleexpr.MaxSet) {
+			options = append(options, ruleexpr.Expr{Op: "in", Kind: "boolean", Args: []ruleexpr.Expr{owner, setLit("text", chunk)}})
+		}
+		return combine("or", options...), true
 	case platform.ScopeUnit, platform.ScopeBelow:
 		var units []string
 		if directory != nil {

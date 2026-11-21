@@ -2050,7 +2050,17 @@
         {
           "app": "build",
           "kind": "page",
+          "name": "crm.product"
+        },
+        {
+          "app": "build",
+          "kind": "page",
           "name": "crm.task"
+        },
+        {
+          "app": "build",
+          "kind": "page",
+          "name": "crm.territory"
         }
       ],
       "provides": []
@@ -2265,7 +2275,9 @@
               "state": {
                 "type": "string",
                 "enum": [
-                  "open"
+                  "open",
+                  "won",
+                  "lost"
                 ]
               },
               "status": {
@@ -2665,7 +2677,10 @@
               "state": {
                 "type": "string",
                 "enum": [
-                  "open"
+                  "open",
+                  "converted",
+                  "unqualified",
+                  "junk"
                 ]
               },
               "status": {
@@ -3411,6 +3426,42 @@
       "path": "integrations/matching/crmorganizationmatch.json",
       "contractVersion": 1,
       "sourceVersion": "1.matching-1"
+    },
+    {
+      "ref": {
+        "app": "build",
+        "kind": "page",
+        "name": "crm.product"
+      },
+      "path": "pages/crm.product.json",
+      "contractVersion": 1,
+      "sourceVersion": "1",
+      "requires": [
+        {
+          "app": "build",
+          "kind": "object",
+          "name": "crm.product"
+        }
+      ],
+      "provides": []
+    },
+    {
+      "ref": {
+        "app": "build",
+        "kind": "page",
+        "name": "crm.territory"
+      },
+      "path": "pages/crm.territory.json",
+      "contractVersion": 1,
+      "sourceVersion": "1",
+      "requires": [
+        {
+          "app": "build",
+          "kind": "object",
+          "name": "crm.territory"
+        }
+      ],
+      "provides": []
     }
   ]
 }

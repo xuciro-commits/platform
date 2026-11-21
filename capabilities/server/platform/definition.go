@@ -102,9 +102,9 @@ type ApplicationPageReplacement struct {
 	View string `json:"view"`
 	Page string `json:"page"`
 }
-
 type AppGroup struct {
 	Title string   `json:"title"`
+	Roles []string `json:"roles,omitempty"`
 	Pages []string `json:"pages"`
 }
 

@@ -105,6 +105,44 @@ func CheckNaming(o Object) error {
 	return platform.Sequence{Name: o.Type(), Pattern: o.Naming, Yearly: strings.Contains(o.Naming, "{year}")}.Check()
 }
 
+func CheckDefaults(o Object) error {
+	for _, f := range o.Fields {
+		if f.Default == "" {
+			continue
+		}
+		if f.ReadOnly || f.AliasOf != "" || f.Formula != "" || f.FormulaExpr != nil {
+			return fmt.Errorf("field %s cannot declare a default when read-only or calculated", f.Name)
+		}
+		switch {
+		case f.Default == "member":
+			if f.Type != "member" && f.Type != "text" {
+				return fmt.Errorf("field %s default member requires a member or text field", f.Name)
+			}
+		case f.Default == "today":
+			if f.Type != "date" && f.Type != "text" {
+				return fmt.Errorf("field %s default today requires a date or text field", f.Name)
+			}
+		case f.Default == "now":
+			if f.Type != "datetime" && f.Type != "text" {
+				return fmt.Errorf("field %s default now requires a datetime or text field", f.Name)
+			}
+		case strings.HasPrefix(f.Default, "setting:"):
+			if strings.TrimPrefix(f.Default, "setting:") == "" {
+				return fmt.Errorf("field %s default setting needs a setting name", f.Name)
+			}
+		case f.Type == "choice":
+			if !slices.Contains(ValueChoices(f.Choices), f.Default) {
+				return fmt.Errorf("field %s default %q is not among its choices", f.Name, f.Default)
+			}
+		case f.Type == "boolean":
+			if f.Default != "true" && f.Default != "false" {
+				return fmt.Errorf("field %s default %q must be true or false", f.Name, f.Default)
+			}
+		}
+	}
+	return nil
+}
+
 func CompileAccess(o Object, builderRole, userRole string) (platform.Standard, platform.Scope, []string) {
 	std := platform.Standard{Create: true, Edit: true, Archive: true, Roles: []string{builderRole, userRole}, Capability: o.Name}
 	if len(o.Access) == 0 {

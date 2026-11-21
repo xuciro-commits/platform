@@ -78,6 +78,12 @@ func CompileObjectShape(o Object, app, builderRole string) platform.RecordType {
 			tag += ` provenance:"formula"`
 		} else if f.From != nil {
 			tag += ` provenance:"from"`
+			if f.From.Op == "path" && len(f.From.Args) == 1 && f.From.Args[0].Ref != "" {
+				tag += fmt.Sprintf(` from:%q`, f.From.Args[0].Ref)
+			}
+		}
+		if f.Default != "" {
+			tag += fmt.Sprintf(` default:%q`, f.Default)
 		}
 		switch f.Type {
 		case "longtext", "date", "datetime", "member":

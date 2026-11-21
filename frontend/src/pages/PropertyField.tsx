@@ -220,6 +220,9 @@ export function PropertyField(props: PropertyFieldProps) {
     </HStack>
   );
   const source = field.provenance && sources[field.provenance];
-  const about = [field.help && t(field.help), source && t(source.text)].filter(Boolean).join(" ");
-  return labelHidden ? shown : <Field label={label} inputID={id} labelIcon={source?.icon} labelTooltip={about || undefined}>{shown}</Field>;
+  const sourceField = field.fromField ? described?.fields.find((candidate) => candidate.name === field.fromField) : undefined;
+  const fromNote = sourceField ? t("From {field}").replace("{field}", t(sourceField.title)) : undefined;
+  const about = [field.help && t(field.help), fromNote, source && t(source.text)].filter(Boolean).join(" ");
+  const content = fromNote ? <VStack gap={0}>{shown}<Text type="supporting" color="secondary">{fromNote}</Text></VStack> : shown;
+  return labelHidden ? shown : <Field label={label} inputID={id} labelIcon={source?.icon} labelTooltip={about || undefined}>{content}</Field>;
 }

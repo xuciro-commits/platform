@@ -70,6 +70,7 @@ type Field struct {
 	ReadOnly    bool                   `json:"readOnly,omitempty" title:"Read only"`
 	AliasOf     string                 `json:"aliasOf,omitempty" title:"Read alias" help:"Read alias of. The retained old name reads this field; it cannot be written directly"`
 	When        string                 `json:"when,omitempty" title:"Only when" help:"field=value,value — another choice or boolean field of this object and the values that make this field apply" example:"kind=refund,return"`
+	Default     string                 `json:"default,omitempty" title:"Default" help:"Default value on creation: literal, today, now, member, or setting:<name>"`
 	FormulaExpr *platform.Expr         `json:"formulaExpr,omitempty" type:"json" field:"aside"`
 	From        *platform.Expr         `json:"from,omitempty" type:"json" field:"aside"`
 	Formula     string                 `json:"formula,omitempty" help:"For a number: price * qty, (ordered - received), …" example:"price * qty"`
@@ -160,7 +161,7 @@ type Set = platform.TxnSet
 
 type Access struct {
 	Role    string `json:"role" field:"required" help:"A role of the builder app, lower-case letters and digits" example:"desk"`
-	Read    string `json:"read" field:"required" choices:"all,below,unit,own,none" help:"all: every record; below: those of the member's units and the units under them; unit: those of the member's own units; own: their own; none: not the object at all"`
+	Read    string `json:"read" field:"required" choices:"all,below,unit,team,own,none" help:"all: every record; below: those of the member's units and the units under them; unit: those of the member's own units; team: those of colleagues in the member's units; own: their own; none: not the object at all"`
 	Create  bool   `json:"create,omitempty"`
 	Edit    bool   `json:"edit,omitempty"`
 	Archive bool   `json:"archive,omitempty"`

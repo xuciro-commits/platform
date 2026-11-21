@@ -373,6 +373,7 @@ export type AppEntry = {
 
 export type AppGroup = {
   title: string;
+  roles?: string[];
   pages: string[];
 };
 
@@ -2163,6 +2164,8 @@ export type FieldInfo = {
   search?: boolean;
   readOnly?: boolean;
   provenance?: "formula" | "from" | "action";
+  fromField?: string;
+  default?: string;
   aliasOf?: string;
   aside?: boolean;
   choices?: string[];

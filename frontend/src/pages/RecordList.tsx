@@ -242,7 +242,7 @@ export function Records({ declared, listPath, id, back }: { declared: Declared; 
   const kept = records.answer.records as Row[];
   const act = useAct(described);
   const lifecycle = (described?.lifecycle?.states.length ?? 0) > 1 ? described?.lifecycle : undefined;
-  const laneField = lifecycle ? described?.field(lifecycle.field) : described?.lanes.find((field) => field.name === view.lanes) ?? described?.lanes[0];
+  const laneField = (view.lanes ? described?.lanes.find((field) => field.name === view.lanes) : undefined) ?? (lifecycle ? described?.field(lifecycle.field) : described?.lanes[0]);
   const allowed = (id: string, schema: string) => records.answer.actions?.[id]?.some((action) => action.schema === schema && action.allowed);
   const byId = useMemo(() => new Map(kept.map((row) => [String(row.id), row])), [kept]);
   const actionFor = (id: string, to: string) => {
@@ -250,10 +250,19 @@ export function Records({ declared, listPath, id, back }: { declared: Declared; 
     const row = byId.get(id);
     if (!row) return;
     const current = String(row[laneField.name] ?? "");
-    const step = lifecycle ? described.step(current, to) : undefined;
-    const action = lifecycle ? step?.action : described.edit;
+    const state = lifecycle ? String(row[lifecycle.field] ?? "") : "";
+    const step = lifecycle ? described.step(state, to) : undefined;
+    if (step) {
+      const action = step.action;
+      if (!action.confirmationOnly && allowed(id, action.schema) &&
+          !action.payload.some((parameter) => parameter.required && !enterable(parameter))) return { row, current: state, step, action };
+      return;
+    }
+    if (lifecycle && laneField.name === lifecycle.field) return;
+    if (lifecycle && (state !== lifecycle.initial || lifecycle.states.some((candidate) => candidate.name === to && candidate.name !== lifecycle.initial))) return;
+    const action = described.edit;
     if (action && !action.confirmationOnly && allowed(id, action.schema) &&
-        !action.payload.some((parameter) => parameter.required && !enterable(parameter))) return { row, current, step, action };
+        !action.payload.some((parameter) => parameter.required && !enterable(parameter))) return { row, current, step: undefined, action };
   };
   const move: Move = async (id, to) => {
     const moving = actionFor(id, to);
@@ -283,7 +292,7 @@ export function Records({ declared, listPath, id, back }: { declared: Declared; 
   const numericField = described?.table.find((field) => numeric.has(field.type));
   const board: RecordShape["board"] = laneField ? {
     key: laneField.name,
-    lanes: lifecycle ? lifecycle.states.map((state) => ({ key: state.name, label: t(state.title) }))
+    lanes: lifecycle && laneField.name === lifecycle.field ? lifecycle.states.map((state) => ({ key: state.name, label: t(state.title) }))
       : laneField.type === "reference" ? (options[laneField.name] ?? []).map((option) => ({ key: option.value, label: option.label, dot: option.dot }))
       : (laneField.choices ?? []).map((key, index) => ({ key, label: t(laneField.choiceTitles?.[index] ?? key) })),
     of: (row) => String(row[laneField.name] ?? ""),

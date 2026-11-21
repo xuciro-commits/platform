@@ -171,5 +171,6 @@
   "Each reference record is an object with its own id": "每条参考记录都要是带自己 id 的对象",
   "Reference record {id} names the unknown field {field}": "参考记录 {id} 用了不存在的字段 {field}",
   "Reference records": "参考记录",
-  "Rows shipped with the type, such as the stages of a pipeline; a publish or an install adds the ones this workspace lacks": "随类型一起交付的记录，例如销售管道的各个阶段；发布或安装时补上本工作区还没有的几条"
+  "Rows shipped with the type, such as the stages of a pipeline; a publish or an install adds the ones this workspace lacks": "随类型一起交付的记录，例如销售管道的各个阶段；发布或安装时补上本工作区还没有的几条",
+  "Only members holding one of these roles see the group; empty for everyone": "只有持有其中某个角色的成员能看到这一组；留空则所有人可见"
 }

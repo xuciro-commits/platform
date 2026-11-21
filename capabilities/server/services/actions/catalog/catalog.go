@@ -64,7 +64,11 @@ func EntityActions(e platform.RecordType) []platform.Action {
 		if f.Ref == "enterprise.element" {
 			field.Ref, field.Stereotype, field.Stereotypes = f.Ref, f.Stereotype, slices.Clone(f.Stereotypes)
 		}
-		fields = append(fields, field)
+		createField := field
+		if f.Default != "" {
+			createField.Default = defaultPayload(f.Type, f.Default)
+		}
+		fields = append(fields, createField)
 		field.Required = false
 		editable = append(editable, field)
 	}
@@ -193,4 +197,19 @@ func roles(s platform.Standard, verb string) []string {
 		return own
 	}
 	return s.Roles
+}
+
+func defaultPayload(kind, raw string) []byte {
+	if raw == "member" || raw == "today" || raw == "now" || strings.HasPrefix(raw, "setting:") {
+		return platform.Raw(raw)
+	}
+	switch kind {
+	case "boolean":
+		if raw == "true" || raw == "false" {
+			return []byte(raw)
+		}
+	case "integer", "decimal":
+		return []byte(raw)
+	}
+	return platform.Raw(raw)
 }

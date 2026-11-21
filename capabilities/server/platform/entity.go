@@ -56,29 +56,25 @@ type RecordType struct {
 	ComputeAt         func(c Caller, record, previous any, now time.Time) *Error
 	Validate          func(c Caller, record any) *Error
 
-	Type                   string
-	Title, Plural          string
-	Description            string
-	Synonyms               string
-	Model                  any
-	RecordFormat           string
-	RecordImages           []RecordImageFormat
-	Display, Naming        string
-	ObjectView             *ObjectView     `json:"objectView,omitempty"`
-	View                   json.RawMessage `json:"view,omitempty"`
-	Icon                   string
-	Color                  string
-	Scope                  Scope
-	KnowledgeFiles         bool
-	Standard               Standard
-	Implements             []string
-	Extends                string
-	ExtensionSource        *ExtensionSource
-	Lifecycle              *Lifecycle
-	TransactionDestination func(subject, field string, txn *BusinessTxn, inputs []Field) ([]string, string)
-	Seed                   []any
-	Derived                []Derivation
-	Withheld               string
+	Type, Title, Plural, Description, Synonyms string
+	Model                                      any
+	RecordFormat                               string
+	RecordImages                               []RecordImageFormat
+	Display, Naming                            string
+	ObjectView                                 *ObjectView     `json:"objectView,omitempty"`
+	View                                       json.RawMessage `json:"view,omitempty"`
+	Icon, Color                                string
+	Scope                                      Scope
+	KnowledgeFiles                             bool
+	Standard                                   Standard
+	Implements                                 []string
+	Extends                                    string
+	ExtensionSource                            *ExtensionSource
+	Lifecycle                                  *Lifecycle
+	TransactionDestination                     func(subject, field string, txn *BusinessTxn, inputs []Field) ([]string, string)
+	Seed                                       []any
+	Derived                                    []Derivation
+	Withheld                                   string
 }
 
 type DataSourceBinding struct {
@@ -199,6 +195,7 @@ const (
 	ScopeTenant  = "tenant"
 	ScopeBelow   = "below"
 	ScopeUnit    = "unit"
+	ScopeTeam    = "team"
 	ScopeOwn     = "own"
 	ScopeNone    = "none"
 	OwnerCreated = "created"
@@ -240,6 +237,8 @@ type FieldInfo struct {
 	Search       bool              `json:"search,omitempty"`
 	ReadOnly     bool              `json:"readOnly,omitempty"`
 	Provenance   string            `json:"provenance,omitempty" enum:"formula,from,action"`
+	FromField    string            `json:"fromField,omitempty"`
+	Default      string            `json:"default,omitempty"`
 	AliasOf      string            `json:"aliasOf,omitempty"`
 	Aside        bool              `json:"aside,omitempty"`
 	Choices      []string          `json:"choices,omitempty"`

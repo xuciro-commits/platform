@@ -97,8 +97,8 @@ func Describe(app string, e Entity, typeOf func(reflect.Type) string) (EntityInf
 		}
 		return out
 	}(), e.Scope.Default) {
-		if l != "" && l != platform.ScopeTenant && l != platform.ScopeBelow && l != platform.ScopeUnit && l != platform.ScopeOwn && l != platform.ScopeNone ||
-			(l == platform.ScopeOwn && e.Scope.Owner == "") || ((l == platform.ScopeUnit || l == platform.ScopeBelow) && (e.Scope.Unit == "" || e.Scope.Structure == "")) {
+		if l != "" && l != platform.ScopeTenant && l != platform.ScopeBelow && l != platform.ScopeUnit && l != platform.ScopeTeam && l != platform.ScopeOwn && l != platform.ScopeNone ||
+			((l == platform.ScopeOwn || l == platform.ScopeTeam) && e.Scope.Owner == "") || ((l == platform.ScopeUnit || l == platform.ScopeBelow) && (e.Scope.Unit == "" || e.Scope.Structure == "")) {
 			return EntityInfo{}, fmt.Errorf("entity %s: scope level %q without the field it needs", e.Type, l)
 		}
 	}
@@ -245,6 +245,8 @@ func describeFields(e Entity, t reflect.Type, from int, typeOf func(reflect.Type
 			}
 		}
 		f.Provenance = sf.Tag.Get("provenance")
+		f.FromField = sf.Tag.Get("from")
+		f.Default = sf.Tag.Get("default")
 		if f.Provenance == "" && f.ReadOnly && f.AliasOf == "" {
 			f.Provenance = "action"
 		}

@@ -180,7 +180,14 @@
       "revenue": "营收",
       "todo": "待处理",
       "unqualified": "不合格",
-      "won": "赢单"
+      "won": "赢单",
+      "Mark won": "标记赢单",
+      "Mark lost": "标记丢单",
+      "Mark unqualified": "标记不合格",
+      "Mark junk": "标记无效",
+      "Reopen": "重新打开",
+      "Settings": "设置",
+      "Workspace": "工作区"
     }
   },
   "name": "crm",
@@ -190,7 +197,33 @@
     "crm.organization",
     "crm.contact",
     "crm.task",
-    "crm.note"
+    "crm.note",
+    "crm.product",
+    "crm.territory"
   ],
-  "title": "CRM"
+  "title": "CRM",
+  "groups": [
+    {
+      "title": "Workspace",
+      "pages": [
+        "crm.lead",
+        "crm.deal",
+        "crm.organization",
+        "crm.contact",
+        "crm.task",
+        "crm.note"
+      ]
+    },
+    {
+      "title": "Settings",
+      "roles": [
+        "salesmanager",
+        "builder"
+      ],
+      "pages": [
+        "crm.product",
+        "crm.territory"
+      ]
+    }
+  ]
 }

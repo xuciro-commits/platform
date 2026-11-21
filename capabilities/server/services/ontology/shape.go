@@ -363,4 +363,4 @@ func CheckAccess(o Object, builderRole, userRole string) error {
 	return nil
 }
 
-var readLevels = map[string]string{"all": platform.ScopeTenant, "below": platform.ScopeBelow, "unit": platform.ScopeUnit, "own": platform.ScopeOwn, "none": platform.ScopeNone}
+var readLevels = map[string]string{"all": platform.ScopeTenant, "below": platform.ScopeBelow, "unit": platform.ScopeUnit, "team": platform.ScopeTeam, "own": platform.ScopeOwn, "none": platform.ScopeNone}

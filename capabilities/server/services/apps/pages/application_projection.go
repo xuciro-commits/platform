@@ -22,13 +22,40 @@ func ProjectApplication(registered platform.Definition, projection publication.A
 	if len(application.Pages) == 0 && len(application.Resources) == 0 && registered.Source != "code" {
 		return platform.Definition{}, false
 	}
+	roleSet := m.RolesFor(def.Ref.App, def.Ref.Name+".")
+	groupAllowed := func(roles []string) bool {
+		if len(roles) == 0 {
+			return true
+		}
+		for _, role := range roleSet {
+			if slices.Contains(roles, role) {
+				return true
+			}
+		}
+		return false
+	}
+	hiddenByGroup := map[string]bool{}
+	shownByGroup := map[string]bool{}
 	groups := make([]platform.AppGroup, 0, len(application.Groups))
 	for _, g := range application.Groups {
+		if !groupAllowed(g.Roles) {
+			for _, name := range g.Pages {
+				hiddenByGroup[name] = true
+			}
+			continue
+		}
 		if g.Pages = slices.DeleteFunc(slices.Clone(g.Pages), closed); len(g.Pages) > 0 {
+			for _, name := range g.Pages {
+				shownByGroup[name] = true
+			}
 			groups = append(groups, g)
 		}
 	}
 	application.Groups = groups
+	application.Pages = slices.DeleteFunc(application.Pages, func(name string) bool { return hiddenByGroup[name] && !shownByGroup[name] })
+	if len(application.Pages) == 0 && len(application.Resources) == 0 && registered.Source != "code" {
+		return platform.Definition{}, false
+	}
 	application.Header = VisibleApplicationHeader(application)
 	application.Resources = slices.DeleteFunc(slices.Clone(application.Resources), func(ref platform.AssetRef) bool {
 		if ref.Kind == platform.AssetFlow {
