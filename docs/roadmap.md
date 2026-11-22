@@ -25,7 +25,33 @@
 
 - 业务对照只读 `study/from-frappe-crm/matrix.md`；`study/**/captures/` 与 `study/**/evidence/` 只为核对某个具体细节时定向看一张。
 
-顺序：2.7 → 2.3 余项。
+顺序：2.7（下面各项按序）→ 2.3 余项。
+
+## 2.7 空租户
+
+灵魂：一个什么都没装的租户，管理员十分钟内把 CRM 装上、配好人，销售就能干活；包的来源、升级、卸载都在界面里，没有命令行。
+
+- **2.7.1 空租户从市场安装。** 夹具加租户 `blank`：不装包，座位王丹（管理员）、田雪、赵敏，都没有应用角色。
+  市场列出 CRM；“审阅并安装”列出依赖、应用、角色与连接；装好后应用栏出现 CRM，列表为空。验收：trunk。
+- **2.7.2 配角色。** 管理 → 成员的记录页授予已装包声明的角色（`platform.member.grant`），选项只列已装包的角色。
+  田雪得到 salesrep 后应用栏出现 CRM、能新建线索；撤销后入口消失。验收：trunk。
+- **2.7.3 销售走完主线。** 田雪新建线索 → 已联系 → 转成商机 → 推进到赢单；赵敏（salesmanager）在看板与报表里看到这一单。
+  验收：trunk 一个用例从 2.7.1 走到赢单；负责人手走十分钟内完成。
+- **2.7.4 卸载与重装。** 管理 → 安装：“标记卸载”→ 排空 → “退役”；应用栏的 CRM 消失，记录保留、不可写。
+  再装同一版本：定义、记录与角色授予都回来。验收：trunk。
+- **2.7.5 改字段后升级。** 夹具在 `scripts/frontend-fixtures/` 留 CRM 上一版的制品（照 `production-provider-0.1.4.json` 的做法），
+  当前版给线索多一个可选字段。`blank` 先装上一版，市场显示可升级；审阅列出新增字段；升级后旧记录与已填的值都在，记录页出现新字段。
+  不兼容的改动（删字段、改类型）在审阅里被拒并写明原因；宿主缺这项检查就补，并写成内核不变量。验收：trunk 与 `make test`。
+- **2.7.6 从独立库安装。** 市场“⋯ → 从地址或文件安装”：粘贴 https 地址或选一个包文件，经 `POST /v1/packages/inspect` 取到候选，
+  审阅页显示来源（地址或“本地文件”）与摘要，确认后 `platform.package.import`，再走同一个安装。验收：trunk 用文件，不走网络。
+- **2.7.7 市场库。** 市场“⋯ → 管理库”添加库地址；库是一份目录（每条：id、版本、标题、包地址、sha256 摘要）。
+  代码库地址映射到默认分支根上的 `catalog.json` 原始文件（github、gitee 等已知托管）；取目录与取包都只走 https、不带凭据、16 MiB 上限，按摘要核对。
+  目录里的包与内置索引并列显示、标出来源，装法同 2.7.6。夹具宿主经启动参数放行回环地址的 http，trunk 自己起一个目录。验收：trunk。
+- **2.7.8 删除 `web/`。** 先搬走 `frontend/` 还在用的：`web/packages/api/src/gen/` 的宿主类型搬到 `frontend/src/host/gen/`，
+  改 `cmd/api-types` 的输出与 `frontend/package.json` 的 `@platform/api` 链接；`cmd/page-contract` 的输出与 `make check` 第 4 步的比对只留 `frontend/` 用到的。
+  `scripts/check-i18n.mjs`、`generate-catalog.mjs`、`rule-browser.mjs` 先查谁用，只服务 `web/` 的删掉。
+  再删 Makefile 的 `web`、`check-web`、`e2e` 与 `verify` 里的这两项，`.githooks/pre-commit` 的 `web/` 分支，
+  以及 AGENTS.md、architecture、frontend“旧前端”一节、plan 冻结表里的 `web/`。验收：`make check`、`make check-frontend`、全量 `make trunk`。
 
 ## 承重的要求
 
