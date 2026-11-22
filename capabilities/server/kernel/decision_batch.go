@@ -80,11 +80,17 @@ func (d *Decision) BatchResult(src ResultSources, app string, request *pb.Submis
 		if owner == nil || d.Logs[owner.Authority()] == nil {
 			return nil, fmt.Errorf("batch decision has no staged ledger for %s", event.App)
 		}
+		// Look the receipt up by its idempotency key: the ledger keeps one record per key, so this
+		// is the same membership test as scanning Records, without reading the archived history.
 		logged := false
-		for _, record := range d.Logs[owner.Authority()].Records(src.Tenant) {
-			if proto.Equal(record, event.Record) {
-				logged = true
-				break
+		if key := event.Record.GetSubmission().GetIdempotencyKey(); key != "" {
+			logged = proto.Equal(d.Logs[owner.Authority()].Accepted(src.Tenant, key), event.Record)
+		} else {
+			for _, record := range d.Logs[owner.Authority()].Records(src.Tenant) {
+				if proto.Equal(record, event.Record) {
+					logged = true
+					break
+				}
 			}
 		}
 		if !logged {

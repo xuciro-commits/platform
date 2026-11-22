@@ -14,6 +14,7 @@ type ChangeArchive interface {
 
 type ChangeLog interface {
 	Records(tenant string) []*pb.ChangeRecord
+	Accepted(tenant, key string) *pb.ChangeRecord
 	Last(tenant string) *pb.ChangeRecord
 	ApplyAccepted(*pb.ChangeRecord) (bool, error)
 	SubmitChecked(*pb.Submission, time.Time, func() *Error, func() *Error) (*pb.ChangeRecord, *Error)
