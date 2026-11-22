@@ -12,6 +12,7 @@ import (
 	runtimeprotocol "platformserver/kernel/protocol"
 	"platformserver/platform"
 	"platformserver/services/ai"
+	"platformserver/services/devops/packages"
 	build "platformserver/services/resources/authoring"
 	"platformserver/services/work"
 )
@@ -20,7 +21,11 @@ func main() {
 	deployment := platformserver.Flags("127.0.0.1:8495")
 	tenant := flag.String("tenant", "workspace", "default tenant when -tenants is not configured")
 	admin := flag.String("admin", "", "explicit administrator subject for the default tenant")
+	allowLoopback := flag.Bool("allow-loopback-packages", false, "allow HTTP package and catalog addresses on loopback hosts for tests")
 	flag.Parse()
+	if *allowLoopback {
+		packages.SetAllowLoopback(true)
+	}
 	configureStandalone(deployment, admin)
 	deployment.RebuildWithCapabilities = func(id string, services runtimeprotocol.RuntimeCapabilities) (*platformserver.Tenant, error) {
 		return composition.NewTenantWithCapabilities(id, services, deployment.SeatsFor(id)...)

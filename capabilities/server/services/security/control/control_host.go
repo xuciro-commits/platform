@@ -149,24 +149,25 @@ func (d *Console) Identities() []runtimeprotocol.LoginIdentity {
 }
 
 type consoleState struct {
-	PackageSources map[string]runtimeprotocol.PackageSource     `json:"packageSources,omitempty"`
-	Credentials    map[string]runtimeprotocol.CredentialState   `json:"credentials,omitempty"`
-	Members        map[string]*platform.Member                  `json:"members"`
-	Subjects       map[string]string                            `json:"subjects"`
-	Profiles       map[string]*runtimeprotocol.Profile          `json:"profiles,omitempty"`
-	Projects       map[string]*platform.BuildProject            `json:"projects,omitempty"`
-	Packages       map[string]*runtimeprotocol.InstalledPackage `json:"packages,omitempty"`
-	Markings       map[string]*platform.Marking                 `json:"markings,omitempty"`
-	Roles          map[string]*platform.CustomRole              `json:"roles,omitempty"`
-	Policies       map[string]*platform.PolicyRecord            `json:"policies,omitempty"`
-	Teams          map[string]*platform.Team                    `json:"teams,omitempty"`
-	Tokens         map[string]*Token                            `json:"tokens,omitempty"`
-	AccessRequests map[string]*AccessRequest                    `json:"accessRequests,omitempty"`
+	PackageSources   map[string]runtimeprotocol.PackageSource     `json:"packageSources,omitempty"`
+	PackageLibraries map[string]runtimeprotocol.PackageLibrary    `json:"packageLibraries,omitempty"`
+	Credentials      map[string]runtimeprotocol.CredentialState   `json:"credentials,omitempty"`
+	Members          map[string]*platform.Member                  `json:"members"`
+	Subjects         map[string]string                            `json:"subjects"`
+	Profiles         map[string]*runtimeprotocol.Profile          `json:"profiles,omitempty"`
+	Projects         map[string]*platform.BuildProject            `json:"projects,omitempty"`
+	Packages         map[string]*runtimeprotocol.InstalledPackage `json:"packages,omitempty"`
+	Markings         map[string]*platform.Marking                 `json:"markings,omitempty"`
+	Roles            map[string]*platform.CustomRole              `json:"roles,omitempty"`
+	Policies         map[string]*platform.PolicyRecord            `json:"policies,omitempty"`
+	Teams            map[string]*platform.Team                    `json:"teams,omitempty"`
+	Tokens           map[string]*Token                            `json:"tokens,omitempty"`
+	AccessRequests   map[string]*AccessRequest                    `json:"accessRequests,omitempty"`
 }
 
 func (d *Console) state() consoleState {
 	policies, packages := d.ConsolePolicies.SnapshotState(), d.ConsolePackages.SnapshotState()
-	return consoleState{Credentials: d.Credentials.SnapshotState(), Members: d.members, Subjects: d.subjects, Profiles: d.profiles, Projects: policies.Projects, Packages: packages.Packages, PackageSources: packages.Sources, Markings: policies.Markings, Roles: policies.Roles, Policies: policies.Policies, Teams: policies.Teams, Tokens: d.tokens, AccessRequests: d.accessRequests}
+	return consoleState{Credentials: d.Credentials.SnapshotState(), Members: d.members, Subjects: d.subjects, Profiles: d.profiles, Projects: policies.Projects, Packages: packages.Packages, PackageSources: packages.Sources, PackageLibraries: packages.Libraries, Markings: policies.Markings, Roles: policies.Roles, Policies: policies.Policies, Teams: policies.Teams, Tokens: d.tokens, AccessRequests: d.accessRequests}
 }
 
 func (d *Console) SnapshotFormat() string { return "platform.console.v1" }
@@ -196,7 +197,7 @@ func (d *Console) Restore(raw json.RawMessage) error {
 }
 
 func (d *Console) restoreAccess(s consoleState) {
-	d.ConsolePackages.Restore(runtimeprotocol.PackageState{Packages: s.Packages, Sources: s.PackageSources})
+	d.ConsolePackages.Restore(runtimeprotocol.PackageState{Packages: s.Packages, Sources: s.PackageSources, Libraries: s.PackageLibraries})
 	d.Credentials.Restore(s.Credentials)
 	d.ConsolePolicies.Restore(platform.AuthorizationState{Markings: s.Markings, Projects: s.Projects, Roles: s.Roles, Policies: s.Policies, Teams: s.Teams})
 	d.tokens = s.Tokens
@@ -281,7 +282,7 @@ func (d *Console) Fork(authority platform.Authority) (platform.Service, error) {
 	fork.members, fork.subjects = state.Members, state.Subjects
 	fork.ConsolePolicies.Restore(platform.AuthorizationState{Markings: state.Markings, Projects: state.Projects, Roles: state.Roles, Policies: state.Policies, Teams: state.Teams})
 	fork.ConsolePolicies.Attach(d.host)
-	fork.ConsolePackages.Restore(runtimeprotocol.PackageState{Packages: state.Packages, Sources: state.PackageSources})
+	fork.ConsolePackages.Restore(runtimeprotocol.PackageState{Packages: state.Packages, Sources: state.PackageSources, Libraries: state.PackageLibraries})
 	if state.Credentials != nil {
 		fork.Credentials.Restore(state.Credentials)
 	}

@@ -3631,6 +3631,15 @@ export type PackageBlueprint = {
   setup?: PackageSetup;
 };
 
+export type PackageCatalogEntry = {
+  id: string;
+  version: string;
+  title: string;
+  description?: string;
+  url: string;
+  sha256: string;
+};
+
 export type PackageConnection = {
   ref: AssetRef;
   title: string;
@@ -3716,6 +3725,21 @@ export type PackageInstallStep = {
   status: string;
   installedVersion?: string;
   problem?: string;
+};
+
+export type PackageLibraryRefreshRequest = {
+  id?: string;
+};
+
+export type PackageLibraryView = {
+  id: string;
+  url: string;
+  resolvedUrl?: string;
+  title?: string;
+  status: string;
+  error?: string;
+  fetchedAt?: string;
+  entries: PackageCatalogEntry[];
 };
 
 export type PackageLifecycleImpact = {

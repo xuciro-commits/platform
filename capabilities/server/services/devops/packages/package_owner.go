@@ -24,13 +24,14 @@ import (
 )
 
 type Owner struct {
-	mu             sync.Mutex
-	tenant         string
-	resolver       publication.Resolver
-	packages       map[string]*protocol.InstalledPackage
-	packageSources map[string]protocol.PackageSource
-	index          *protocol.PackageIndex
-	host           protocol.PackageHost
+	mu               sync.Mutex
+	tenant           string
+	resolver         publication.Resolver
+	packages         map[string]*protocol.InstalledPackage
+	packageSources   map[string]protocol.PackageSource
+	packageLibraries map[string]protocol.PackageLibrary
+	index            *protocol.PackageIndex
+	host             protocol.PackageHost
 }
 
 func New(tenant string, resolver publication.Resolver) *Owner {
@@ -50,7 +51,7 @@ func (d *Owner) BoundIndex() *protocol.PackageIndex { d.mu.Lock(); defer d.mu.Un
 func (d *Owner) SnapshotState() protocol.PackageState {
 	d.mu.Lock()
 	defer d.mu.Unlock()
-	return protocol.PackageState{Packages: maps.Clone(d.packages), Sources: maps.Clone(d.packageSources)}
+	return protocol.PackageState{Packages: maps.Clone(d.packages), Sources: maps.Clone(d.packageSources), Libraries: maps.Clone(d.packageLibraries)}
 }
 
 func (d *Owner) Restore(s protocol.PackageState) {
@@ -58,6 +59,7 @@ func (d *Owner) Restore(s protocol.PackageState) {
 	defer d.mu.Unlock()
 	d.packages = s.Packages
 	d.packageSources = s.Sources
+	d.packageLibraries = s.Libraries
 	if d.packages == nil {
 		d.packages = map[string]*protocol.InstalledPackage{}
 	}
@@ -91,6 +93,8 @@ func Actions() []platform.Action {
 	return []platform.Action{
 		{Schema: SchemaPackageImport, Target: protocol.PackageType, Capability: "packages", Title: "Add reviewed package", Description: "Keep exactly the reviewed package in this tenant's available library; install separately.", Payload: []platform.Field{{Name: "id", Type: "string", Required: true}, {Name: "digest", Type: "string", Required: true}}, Roles: admin},
 		{Schema: SchemaPackageRemoveSource, Target: protocol.PackageType, Capability: "packages", Title: "Remove package source", Description: "Remove an uninstalled source from the library; installed artifacts and business history stay.", Payload: []platform.Field{{Name: "id", Type: "string", Required: true}, {Name: "digest", Type: "string", Required: true}}, Roles: admin},
+		{Schema: SchemaPackageLibraryAdd, Target: protocol.PackageType, Capability: "packages", Title: "Add package library", Description: "Register a remote catalog address so its package versions appear in this tenant's marketplace.", Payload: []platform.Field{{Name: "url", Type: "string", Required: true}, {Name: "title", Type: "string"}}, Roles: admin},
+		{Schema: SchemaPackageLibraryRemove, Target: protocol.PackageType, Capability: "packages", Title: "Remove package library", Description: "Remove a remote catalog address from this tenant's marketplace; installed packages stay.", Payload: []platform.Field{{Name: "id", Type: "string", Required: true}}, Roles: admin},
 		{Schema: SchemaPackageInstall, Target: protocol.PackageType, Capability: "packages", Title: "Install package",
 			Description: "Precheck a package's requirements and register the contributions it brings.", Payload: fields, Roles: admin},
 		{Schema: SchemaPackageUpgrade, Target: protocol.PackageType, Capability: "packages", Title: "Upgrade package",
@@ -402,6 +406,9 @@ func latestRetained(retained []protocol.RetainedArtifact) (protocol.RetainedArti
 func (d *Owner) decide(c platform.Caller, s *pb.Submission) (func(*pb.ChangeRecord), *platform.Error) {
 	if s.GetSchema().GetName() == SchemaPackageImport || s.GetSchema().GetName() == SchemaPackageRemoveSource {
 		return d.decidePackageSource(c, s)
+	}
+	if s.GetSchema().GetName() == SchemaPackageLibraryAdd || s.GetSchema().GetName() == SchemaPackageLibraryRemove {
+		return d.decidePackageLibrary(c, s)
 	}
 	invalid := &platform.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 	var p struct {

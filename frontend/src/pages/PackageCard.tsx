@@ -10,6 +10,7 @@ import {
   BuildingOffice2Icon,
   BuildingStorefrontIcon,
   CheckBadgeIcon,
+  CloudArrowDownIcon,
   Cog6ToothIcon,
   CpuChipIcon,
   CubeIcon,
@@ -143,6 +144,62 @@ export function PackageCard({
             <StackItem size="fill" />
             <Text type="supporting" color="secondary" hasTabularNumbers maxLines={1}>
               {id} · {version}
+            </Text>
+          </HStack>
+        </VStack>
+      </ClickableCard>
+    </VStack>
+  );
+}
+
+export function CatalogEntryCard({
+  entry,
+  libraryTitle,
+  onSelect,
+}: {
+  entry: Api.PackageCatalogEntry;
+  libraryTitle: string;
+  onSelect: () => void;
+}) {
+  const display = t(entry.title || entry.id);
+  const summary = entry.description ? t(entry.description) : `${display} (${entry.id})`;
+  const icon = packageIcon(entry.id, { apps: 1, plugins: 0 });
+
+  return (
+    <VStack role="listitem" height="100%">
+      <ClickableCard label={display} elevation="none" padding={4} height="100%" onClick={onSelect}>
+        <VStack gap={3} height="100%">
+          <HStack gap={3} vAlign="start">
+            <VStack xstyle={styles.iconBox}>
+              <Icon icon={icon} size="md" color="secondary" />
+            </VStack>
+            <StackItem size="fill">
+              <VStack gap={0.5}>
+                <Text type="body" weight="medium" maxLines={1}>{display}</Text>
+                <HStack gap={1.5} vAlign="center">
+                  <Icon icon={CloudArrowDownIcon} size="xsm" color="secondary" />
+                  <Text type="supporting" color="secondary" maxLines={1}>{libraryTitle || t("Market library")}</Text>
+                </HStack>
+              </VStack>
+            </StackItem>
+            <Button
+              label={t("Install")}
+              variant="secondary"
+              size="sm"
+              xstyle={styles.action}
+              onClick={onSelect}
+            />
+          </HStack>
+          <StackItem size="fill">
+            <Text type="supporting" color="secondary" maxLines={2}>
+              {summary}
+            </Text>
+          </StackItem>
+          <HStack gap={2} vAlign="center">
+            <Text type="supporting" color="secondary" maxLines={1}>{t("Market library")}</Text>
+            <StackItem size="fill" />
+            <Text type="supporting" color="secondary" hasTabularNumbers maxLines={1}>
+              {entry.id} · {entry.version}
             </Text>
           </HStack>
         </VStack>

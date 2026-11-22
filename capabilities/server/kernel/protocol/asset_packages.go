@@ -110,6 +110,38 @@ type PackageSource struct {
 	Origin  string `json:"origin"`
 }
 
+type PackageLibrary struct {
+	ID          string    `json:"id"`
+	URL         string    `json:"url"`
+	ResolvedURL string    `json:"resolvedUrl,omitempty"`
+	Title       string    `json:"title,omitempty"`
+	AddedAt     time.Time `json:"addedAt,omitempty"`
+}
+
+type PackageCatalogEntry struct {
+	ID          string `json:"id"`
+	Version     string `json:"version"`
+	Title       string `json:"title"`
+	Description string `json:"description,omitempty"`
+	URL         string `json:"url"`
+	Sha256      string `json:"sha256"`
+}
+
+type PackageLibraryView struct {
+	ID          string                `json:"id"`
+	URL         string                `json:"url"`
+	ResolvedURL string                `json:"resolvedUrl,omitempty"`
+	Title       string                `json:"title,omitempty"`
+	Status      string                `json:"status"`
+	Error       string                `json:"error,omitempty"`
+	FetchedAt   time.Time             `json:"fetchedAt,omitempty"`
+	Entries     []PackageCatalogEntry `json:"entries"`
+}
+
+type PackageLibraryRefreshRequest struct {
+	ID string `json:"id,omitempty"`
+}
+
 type PackageInspectRequest struct {
 	URL            string          `json:"url,omitempty"`
 	Content        json.RawMessage `json:"content,omitempty"`
@@ -136,8 +168,9 @@ type PackageRemoval struct {
 }
 
 type PackageState struct {
-	Packages map[string]*InstalledPackage
-	Sources  map[string]PackageSource
+	Packages  map[string]*InstalledPackage
+	Sources   map[string]PackageSource
+	Libraries map[string]PackageLibrary
 }
 
 type PackageHost interface {
@@ -162,6 +195,7 @@ type ConsolePackages interface {
 	Prepare(platform.Caller, *pb.Submission) (func(*pb.ChangeRecord), *platform.Error)
 	BlueprintViews() []PackageView
 	PackageViews() []PackageView
+	PackageLibraries() []PackageLibrary
 	Contributions() []Contribution
 	Precheck(platform.PackageDescriptor) Precheck
 	Offer(string) (Offer, error)

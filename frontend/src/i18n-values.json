@@ -270,5 +270,20 @@
   "Independent declarative production batch example. Install and publish using platform capabilities; configure external cooperation after installation. Quantities are local facts, and cross-system receipts remain independent.": "跨组织生产批次协同套件，支持独立核对收发数量与外部系统对接。",
   "Configuration needed after installation": "安装后需补充配置",
   "Held": "已持有",
-  "Dependent packages": "依赖此包的包"
+  "Dependent packages": "依赖此包的包",
+  "Manage library": "管理库",
+  "Market library": "市场库",
+  "Add a catalog.json address or a GitHub/Gitee repository to list verified packages in Marketplace.": "添加 catalog.json 目录地址或 GitHub/Gitee 代码库地址，将经过校验的产品包展示在市场中。",
+  "Library URL": "库地址",
+  "https://github.com/org/packages or https://example.com/catalog.json": "https://github.com/org/packages 或 https://example.com/catalog.json",
+  "Library name": "库名称",
+  "Optional display name": "可选显示名称",
+  "Add library": "添加库",
+  "No remote libraries configured": "尚未配置远程市场库",
+  "Cached": "已缓存",
+  "Not synced": "未同步",
+  "packages": "个包",
+  "Refresh all": "全部刷新",
+  "Showing cached catalog from last sync": "当前展示上次同步的离线缓存目录",
+  "Sync failed": "同步失败"
 }

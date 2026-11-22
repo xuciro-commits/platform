@@ -25,17 +25,27 @@ func (h *Host) routesPackages(rt *routes) {
 	}))
 	h.routesPackageReview(rt)
 	rt.authorized(transport.Route{Pattern: "POST /v1/packages/inspect", Summary: "Inspect an online or local platform package without installing or executing it", Body: protocol.PackageInspectRequest{}, Answer: protocol.PackagePreview{}}, controlowner.PlatformApp, []string{controlowner.Admin}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
-		var request protocol.PackageInspectRequest
-		err := transport.DecodeBodyLimit(r, &request, packages.MaxPackageImportBytes+4096)
-		var preview protocol.PackagePreview
-		if err == nil {
-			preview, err = t.inspectPackage(r.Context(), request)
-		}
-		if err != nil {
+		var req protocol.PackageInspectRequest
+		if err := transport.DecodeBodyLimit(r, &req, packages.MaxPackageImportBytes+4096); err != nil {
 			WriteJSON(w, http.StatusBadRequest, map[string]string{"error": t.Say(t.Language(m, r), err.Error())})
-			return
+		} else if preview, err := t.inspectPackage(r.Context(), req); err != nil {
+			WriteJSON(w, http.StatusBadRequest, map[string]string{"error": t.Say(t.Language(m, r), err.Error())})
+		} else {
+			WriteJSON(w, http.StatusOK, preview)
 		}
-		WriteJSON(w, http.StatusOK, preview)
+	})
+	rt.authorized(transport.Route{Pattern: "GET /v1/packages/libraries", Summary: "List configured remote package libraries and their cached catalog entries", Answer: []protocol.PackageLibraryView{}}, controlowner.PlatformApp, []string{controlowner.Admin}, func(w http.ResponseWriter, r *http.Request, _ platform.Member, t *Tenant) {
+		WriteJSON(w, http.StatusOK, packages.ReadLibraries(r.Context(), t.ID, readOnly(t, func(t *Tenant) []protocol.PackageLibrary { return t.PackageOwner.PackageLibraries() }), t.files()))
+	})
+	rt.authorized(transport.Route{Pattern: "POST /v1/packages/libraries/refresh", Summary: "Refresh one or all configured remote package libraries", Body: protocol.PackageLibraryRefreshRequest{}, Answer: []protocol.PackageLibraryView{}}, controlowner.PlatformApp, []string{controlowner.Admin}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
+		var req protocol.PackageLibraryRefreshRequest
+		_ = transport.DecodeBodyLimit(r, &req, 4096)
+		libs := readOnly(t, func(t *Tenant) []protocol.PackageLibrary { return t.PackageOwner.PackageLibraries() })
+		if views, err := packages.RefreshLibraries(r.Context(), t.ID, libs, req.ID, t.sender(), t.files()); err != nil {
+			WriteJSON(w, http.StatusBadRequest, map[string]string{"error": t.Say(t.Language(m, r), err.Error())})
+		} else {
+			WriteJSON(w, http.StatusOK, views)
+		}
 	})
 	h.routesComposition(rt)
 }
@@ -50,37 +60,29 @@ func (t *Tenant) PackagePreparation(ctx context.Context, m platform.Member, id, 
 				_, refusal := t.read(m, "packages")
 				return refusal
 			},
-			Resolver: PublicationResolver(),
-			Source:   func() (packages.PreparationOwner, bool) { return t.PackageOwner, t.PackageOwner != nil },
-			Drafts:   func() (build.ConstructionDrafts, bool) { owner := t.builders[build.ID]; return owner, owner != nil },
+			Resolver: PublicationResolver(), Source: func() (packages.PreparationOwner, bool) { return t.PackageOwner, t.PackageOwner != nil },
+			Drafts: func() (build.ConstructionDrafts, bool) { owner := t.builders[build.ID]; return owner, owner != nil },
 			Records: func(typ string, q platform.Query) (int, []any, *platform.Error) {
-				page, refusal := t.objectOwner(t.Projection).Records(packages.PreparationReader(m), typ, q, at)
-				return page.Total, page.Records, refusal
+				p, r := t.objectOwner(t.Projection).Records(packages.PreparationReader(m), typ, q, at)
+				return p.Total, p.Records, r
 			},
 			App: (hostView{t: t}).App,
 			Resolve: func(purpose, model string, options platform.ModelOptions) (string, *platform.Error) {
-				binding, _, refusal := t.modelResolver().Resolve(purpose, model, options)
-				return binding.Model, refusal
+				b, _, r := t.modelResolver().Resolve(purpose, model, options)
+				return b.Model, r
 			},
-			Callable: func(model string) *platform.Error {
-				_, _, refusal := t.Models.Callable(m, model)
-				return refusal
-			},
+			Callable: func(model string) *platform.Error { _, _, r := t.Models.Callable(m, model); return r },
 		})
 	})
 }
 
 func (t *Tenant) inspectPackage(ctx context.Context, request protocol.PackageInspectRequest) (protocol.PackagePreview, error) {
-	send := t.sender()
-	return packages.Inspect(ctx, PublicationResolver(), t.ID, request, send, t.files(), func(ctx context.Context, descriptor platform.PackageDescriptor) (protocol.Precheck, error) {
+	return packages.Inspect(ctx, PublicationResolver(), t.ID, request, t.sender(), t.files(), func(ctx context.Context, descriptor platform.PackageDescriptor) (protocol.Precheck, error) {
 		precheck, refusal := recordRead(t, ctx, func(t *Tenant) (protocol.Precheck, *platform.Error) {
-			owner, ok := t.App(controlowner.PlatformApp).(interface {
-				Precheck(platform.PackageDescriptor) protocol.Precheck
-			})
-			if !ok {
+			if t.PackageOwner == nil {
 				return protocol.Precheck{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Package management is unavailable")
 			}
-			return owner.Precheck(descriptor), nil
+			return t.PackageOwner.Precheck(descriptor), nil
 		})
 		if refusal != nil {
 			return protocol.Precheck{}, fmt.Errorf("The package dependencies could not be inspected")

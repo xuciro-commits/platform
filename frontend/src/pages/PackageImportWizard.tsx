@@ -5,7 +5,7 @@ import { MetadataList, MetadataListItem } from "@astryxdesign/core/MetadataList"
 import { SegmentedControl, SegmentedControlItem } from "@astryxdesign/core/SegmentedControl";
 import { Text } from "@astryxdesign/core/Text";
 import { TextInput } from "@astryxdesign/core/TextInput";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { type Api, request, reread, useRead } from "../host";
 import { t } from "../i18n";
 import { reasonOf, send } from "./act";
@@ -14,17 +14,31 @@ import { PackageReviewContent } from "./PackageReviewContent";
 
 type SourceMode = "file" | "url";
 
-export function PackageImportWizard({ onClose, onDone }: { onClose: () => void; onDone: () => void }) {
+export type InitialPackageSource = {
+  url: string;
+  sha256?: string;
+};
+
+export function PackageImportWizard({
+  initialSource,
+  onClose,
+  onDone,
+}: {
+  initialSource?: InitialPackageSource;
+  onClose: () => void;
+  onDone: () => void;
+}) {
   const [step, setStep] = useState(0);
-  const [sourceMode, setSourceMode] = useState<SourceMode>("file");
+  const [sourceMode, setSourceMode] = useState<SourceMode>(initialSource ? "url" : "file");
   const [file, setFile] = useState<File | null>(null);
-  const [url, setUrl] = useState("");
-  const [expectedSha256, setExpectedSha256] = useState("");
+  const [url, setUrl] = useState(initialSource?.url ?? "");
+  const [expectedSha256, setExpectedSha256] = useState(initialSource?.sha256 ?? "");
   const [preview, setPreview] = useState<Api.PackagePreview>();
   const [imported, setImported] = useState(false);
   const [namespace, setNamespace] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const autoInspected = useRef(false);
 
   const packages = useRead<Api.PackageView[]>("/v1/packages");
   const catalog = useRead<Api.Action[]>("/v1/actions");
@@ -124,6 +138,12 @@ export function PackageImportWizard({ onClose, onDone }: { onClose: () => void; 
       setBusy(false);
     }
   };
+
+  useEffect(() => {
+    if (!initialSource?.url || autoInspected.current) return;
+    autoInspected.current = true;
+    void inspectSource();
+  }, []);
 
   const importCandidate = async () => {
     if (!preview || !importAction) return;

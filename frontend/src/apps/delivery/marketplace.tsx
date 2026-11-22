@@ -14,8 +14,9 @@ import { type Api, useRead } from "../../host";
 import { t } from "../../i18n";
 import { navigate } from "../../router";
 import { PageTitle, useGutter } from "../../pages/frame";
-import { PackageCard, packageCounts } from "../../pages/PackageCard";
-import { PackageImportWizard } from "../../pages/PackageImportWizard";
+import { CatalogEntryCard, PackageCard, packageCounts } from "../../pages/PackageCard";
+import { type InitialPackageSource, PackageImportWizard } from "../../pages/PackageImportWizard";
+import { PackageLibraryManager } from "../../pages/PackageLibraryManager";
 import { PackageReview } from "../../pages/PackageReview";
 
 type Tab = "all" | "apps" | "plugins" | "installed";
@@ -26,20 +27,39 @@ const styles = stylex.create({
 
 export default function Marketplace() {
   const packages = useRead<Api.PackageView[]>("/v1/packages");
+  const libraries = useRead<Api.PackageLibraryView[]>("/v1/packages/libraries");
   const [selected, setSelected] = useState<{ view: Api.PackageView; mode: "install" | "manage" }>();
   const [importing, setImporting] = useState(false);
+  const [importSource, setImportSource] = useState<InitialPackageSource>();
+  const [managingLibraries, setManagingLibraries] = useState(false);
   const [tab, setTab] = useState<Tab>("all");
   const [source, setSource] = useState("all");
   const [query, setQuery] = useState("");
   const gutter = useGutter();
   const rows = packages.status === "ready" ? packages.data : [];
 
+  const remoteEntries = useMemo(() => {
+    if (libraries.status !== "ready") return [];
+    const existing = new Set(rows.map((view) => `${view.descriptor.id}@${view.descriptor.version}`));
+    const seen = new Set<string>();
+    const out: { entry: Api.PackageCatalogEntry; libraryTitle: string }[] = [];
+    for (const lib of libraries.data) {
+      for (const entry of lib.entries ?? []) {
+        const key = `${entry.id}@${entry.version}`;
+        if (existing.has(key) || seen.has(key)) continue;
+        seen.add(key);
+        out.push({ entry, libraryTitle: lib.title || lib.url });
+      }
+    }
+    return out;
+  }, [libraries, rows]);
+
   const counts = useMemo(() => ({
-    all: rows.length,
+    all: rows.length + remoteEntries.length,
     apps: rows.filter((view) => packageCounts(view).apps > 0).length,
     plugins: rows.filter((view) => packageCounts(view).plugins > 0).length,
     installed: rows.filter((view) => Boolean(view.installed && view.installed.state !== "retired")).length,
-  }), [rows]);
+  }), [rows, remoteEntries]);
 
   const filtered = useMemo(() => {
     const term = query.trim().toLowerCase();
@@ -53,11 +73,28 @@ export default function Marketplace() {
     });
   }, [rows, tab, source, query]);
 
+  const filteredRemote = useMemo(() => {
+    if (tab !== "all") return [];
+    if (source !== "all" && source !== "library") return [];
+    const term = query.trim().toLowerCase();
+    return remoteEntries.filter(({ entry, libraryTitle }) => {
+      if (!term) return true;
+      return `${entry.title} ${entry.id} ${entry.version} ${entry.description ?? ""} ${libraryTitle}`.toLowerCase().includes(term);
+    });
+  }, [remoteEntries, tab, source, query]);
+
   const modeOf = (view: Api.PackageView): "install" | "manage" => {
     const retired = view.installed?.state === "retired";
     const current = Boolean(view.installed && !retired && view.installed.version === view.descriptor.version && !view.update && !view.downgrade && !view.rollback);
     return current ? "manage" : "install";
   };
+
+  const openRemoteImport = (entry: Api.PackageCatalogEntry) => {
+    setImportSource({ url: entry.url, sha256: entry.sha256 });
+    setImporting(true);
+  };
+
+  const totalVisible = filtered.length + filteredRemote.length;
 
   return (
     <>
@@ -73,7 +110,10 @@ export default function Marketplace() {
                   <MoreMenu
                     label={t("More actions")}
                     alignment="end"
-                    items={[{ id: "import-package", label: t("Install from URL or file"), onClick: () => setImporting(true) }]}
+                    items={[
+                      { id: "import-package", label: t("Install from URL or file"), onClick: () => { setImportSource(undefined); setImporting(true); } },
+                      { id: "manage-library", label: t("Manage library"), onClick: () => setManagingLibraries(true) },
+                    ]}
                   />
                 }
               >
@@ -98,6 +138,7 @@ export default function Marketplace() {
                       { value: "index", label: t("Built-in index") },
                       { value: "product", label: t("Product version") },
                       { value: "imported", label: t("Local library") },
+                      { value: "library", label: t("Market library") },
                       { value: "installed", label: t("Installed") },
                     ]}
                   />
@@ -121,14 +162,14 @@ export default function Marketplace() {
                   {[0, 1, 2].map((index) => <Skeleton key={index} height={156} index={index} />)}
                 </Grid>
               )}
-              {packages.status !== "loading" && filtered.length === 0 && (
+              {packages.status !== "loading" && totalVisible === 0 && (
                 <EmptyState
                   headingLevel={2}
-                  title={rows.length === 0 ? t("No package versions are available.") : t("No matches")}
-                  description={rows.length === 0 ? t("Review versions, dependencies and their installation scope before adding them to this workspace.") : t("Try a different search.")}
+                  title={counts.all === 0 ? t("No package versions are available.") : t("No matches")}
+                  description={counts.all === 0 ? t("Review versions, dependencies and their installation scope before adding them to this workspace.") : t("Try a different search.")}
                 />
               )}
-              {filtered.length > 0 && (
+              {totalVisible > 0 && (
                 <Grid columns={{ minWidth: 320, max: 3 }} gap={4} role="list">
                   {filtered.map((view) => (
                     <PackageCard
@@ -136,6 +177,14 @@ export default function Marketplace() {
                       view={view}
                       onInspect={() => setSelected({ view, mode: modeOf(view) })}
                       onAction={() => setSelected({ view, mode: modeOf(view) })}
+                    />
+                  ))}
+                  {filteredRemote.map(({ entry, libraryTitle }) => (
+                    <CatalogEntryCard
+                      key={`remote:${entry.id}@${entry.version}`}
+                      entry={entry}
+                      libraryTitle={libraryTitle}
+                      onSelect={() => openRemoteImport(entry)}
                     />
                   ))}
                 </Grid>
@@ -160,12 +209,17 @@ export default function Marketplace() {
       )}
       {importing && (
         <PackageImportWizard
-          onClose={() => setImporting(false)}
+          initialSource={importSource}
+          onClose={() => { setImporting(false); setImportSource(undefined); }}
           onDone={() => {
             setImporting(false);
+            setImportSource(undefined);
             navigate("/delivery/installations");
           }}
         />
+      )}
+      {managingLibraries && (
+        <PackageLibraryManager onClose={() => setManagingLibraries(false)} />
       )}
     </>
   );

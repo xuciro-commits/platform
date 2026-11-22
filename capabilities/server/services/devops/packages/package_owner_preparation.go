@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"net/url"
 	"platformserver/kernel/protocol"
 
 	"slices"
@@ -195,18 +194,18 @@ func Inspect(ctx context.Context, resolver publication.Resolver, tenant string, 
 		return preview, fmt.Errorf("Choose one package source: a URL or a local package file")
 	}
 	if request.URL != "" {
-		address, err := url.Parse(request.URL)
-		if err != nil || address.Scheme != "https" || address.Host == "" || address.User != nil || address.Fragment != "" {
-			return preview, fmt.Errorf("Use an HTTPS address for a platform package, without embedded credentials")
+		address, allowPrivate, err := ValidatePackageURL(request.URL)
+		if err != nil {
+			return preview, err
 		}
-		ctx, cancel := context.WithTimeout(ctx, 20*time.Second)
+		ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 		defer cancel()
 		req, err := http.NewRequestWithContext(ctx, http.MethodGet, address.String(), nil)
 		if err != nil {
 			return preview, err
 		}
 		req.Header.Set("Accept", "application/json")
-		response, err := send(req, false)
+		response, err := send(req, allowPrivate)
 		if err != nil {
 			return preview, fmt.Errorf("The package could not be downloaded; check its address and try again")
 		}
@@ -261,6 +260,8 @@ func Inspect(ctx context.Context, resolver publication.Resolver, tenant string, 
 type PreparationOwner interface {
 	PreparationBlueprint(id, version string) (platform.PackageBlueprint, *protocol.InstalledPackage, error)
 	PackagePrerequisites(id, version string) ([]platform.ReleaseAsset, error)
+	Precheck(platform.PackageDescriptor) protocol.Precheck
+	PackageLibraries() []protocol.PackageLibrary
 }
 
 type PreparationHooks struct {

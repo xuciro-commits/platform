@@ -1,8 +1,14 @@
 package host
 
 import (
+	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
+	"io"
+	"net/http"
+	"net/url"
 	"platformserver/kernel/protocol"
 
 	"slices"
@@ -328,5 +334,105 @@ func TestInvariantK9PackageUpgradeFieldReviewAndIncompatibleGate(t *testing.T) {
 	}
 	if _, err := target.inspectPackage(context.Background(), protocol.PackageInspectRequest{Content: rawV1, ExpectedSha256: checked.ArtifactSha256}); err != nil {
 		t.Fatalf("matching expectedSha256 must succeed: %v", err)
+	}
+}
+
+func TestInvariantK9PackageMarketLibrary(t *testing.T) {
+	packages.SetAllowLoopback(true)
+	t.Cleanup(func() { packages.SetAllowLoopback(false) })
+	source := newInvariantTenant(t, "pkg-lib-src")
+	source.accept(t, "build.object.create", build.ObjectType, "OBJ1", invariantObject("item", "Item"))
+	source.accept(t, "build.app.create", protocol.AppType, "APP1", map[string]any{
+		"name": "itemapp", "title": "Item app",
+		"resources": []platform.AssetRef{{App: build.ID, Kind: platform.AssetObject, Name: "invariantproject.item"}},
+	})
+	candidateID := invariantPublishData(t, source, source.member(t), []build.JointDraftRef{
+		{Kind: platform.AssetObject, ID: "OBJ1"},
+		{Kind: platform.AssetApp, ID: "APP1"},
+	}, "pkg-lib")
+	candidate, err := PublicationResolver().ReadCandidate(candidateID, source.releases.Raw(candidateID))
+	if err != nil {
+		t.Fatal(err)
+	}
+	desc := platform.PackageDescriptor{
+		ID: "itempkg", Version: "1.0.0", Namespace: "itempkg", Title: "Item package",
+		Blueprint: &platform.PackageBlueprint{
+			Roots:  []platform.AssetRef{{App: build.ID, Kind: platform.AssetApp, Name: "itemapp"}},
+			Assets: candidate.Assets,
+		},
+	}
+	pkgBytes := platform.Raw(desc)
+	sum := sha256.Sum256(pkgBytes)
+	pkgSha := "sha256:" + hex.EncodeToString(sum[:])
+	catalogBytes := platform.Raw(map[string]any{
+		"version": 1,
+		"title":   "Acme Library",
+		"packages": []map[string]any{{
+			"id":          desc.ID,
+			"version":     desc.Version,
+			"title":       desc.Title,
+			"description": "Remote catalog item package",
+			"url":         "./packages/itempkg-1.0.0.json",
+			"sha256":      pkgSha,
+		}},
+	})
+
+	seat := protocol.Seat{Subjects: []string{"package-admin"}, Member: platform.Member{
+		ID: "package-admin", Roles: map[string]string{"platform": "admin"},
+	}}
+	target := newInvariantTenant(t, "pkg-lib-target", seat)
+	admin, _ := target.Member("package-admin")
+	online := true
+	target.Outbound = func(req *http.Request, _ bool) (*http.Response, error) {
+		if !online {
+			return nil, io.ErrUnexpectedEOF
+		}
+		switch req.URL.Path {
+		case "/repo/catalog.json":
+			return &http.Response{StatusCode: http.StatusOK, Body: io.NopCloser(bytes.NewReader(catalogBytes))}, nil
+		case "/repo/packages/itempkg-1.0.0.json":
+			return &http.Response{StatusCode: http.StatusOK, Body: io.NopCloser(bytes.NewReader(pkgBytes))}, nil
+		default:
+			return &http.Response{StatusCode: http.StatusNotFound, Body: io.NopCloser(strings.NewReader("not found"))}, nil
+		}
+	}
+	submit := func(schema, id string, payload any) *platform.Error {
+		submission := target.submission(schema, protocol.PackageType, id, payload)
+		submission.Authority, submission.PrincipalId = "platform", admin.ID
+		_, refusal := target.Submit(admin, submission, invariantClock)
+		return refusal
+	}
+	libURL := (&url.URL{Scheme: "http", Host: "127.0.0.1:18999", Path: "/repo"}).String()
+	libID := packages.LibraryID(libURL)
+	if refusal := submit(packages.SchemaPackageLibraryAdd, libID, map[string]any{"url": libURL}); refusal != nil {
+		t.Fatalf("add library: %#v", refusal)
+	}
+	views, err := packages.RefreshLibraries(t.Context(), target.ID, target.PackageOwner.PackageLibraries(), libID, target.sender(), target.files())
+	if err != nil || len(views) != 1 || views[0].Status != "ready" || len(views[0].Entries) != 1 {
+		t.Fatalf("refresh library: %+v err=%v", views, err)
+	}
+	entry := views[0].Entries[0]
+	expectedPkgURL := (&url.URL{Scheme: "http", Host: "127.0.0.1:18999", Path: "/repo/packages/itempkg-1.0.0.json"}).String()
+	if entry.URL != expectedPkgURL || entry.Sha256 != pkgSha {
+		t.Fatalf("resolved catalog entry mismatch: %+v", entry)
+	}
+	preview, err := target.inspectPackage(t.Context(), protocol.PackageInspectRequest{URL: entry.URL, ExpectedSha256: entry.Sha256})
+	if err != nil || preview.Descriptor.ID != desc.ID {
+		t.Fatalf("inspect from catalog entry: %+v err=%v", preview, err)
+	}
+	online = false
+	stale, err := packages.RefreshLibraries(t.Context(), target.ID, target.PackageOwner.PackageLibraries(), libID, target.sender(), target.files())
+	if err != nil || len(stale) != 1 || stale[0].Status != "stale" || len(stale[0].Entries) != 1 {
+		t.Fatalf("offline refresh must preserve last-good cached entries: %+v err=%v", stale, err)
+	}
+	replayed := target.restore(t, target.entries, seat)
+	if got := replayed.PackageOwner.PackageLibraries(); len(got) != 1 || got[0].ID != libID {
+		t.Fatalf("replay lost configured package library: %+v", got)
+	}
+	if refusal := submit(packages.SchemaPackageLibraryRemove, libID, map[string]any{"id": libID}); refusal != nil {
+		t.Fatalf("remove library: %#v", refusal)
+	}
+	if got := target.PackageOwner.PackageLibraries(); len(got) != 0 {
+		t.Fatalf("library not removed: %+v", got)
 	}
 }
