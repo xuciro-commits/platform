@@ -313,4 +313,16 @@ func TestInvariantK9PackageUpgradeFieldReviewAndIncompatibleGate(t *testing.T) {
 	if refusal := submit(packages.SchemaPackageUpgrade, map[string]any{"id": v4BadRemove.ID, "version": v4BadRemove.Version}); refusal == nil {
 		t.Fatal("field-removal upgrade must be refused on submit")
 	}
+
+	rawV1 := platform.Raw(v1)
+	if _, err := target.inspectPackage(context.Background(), protocol.PackageInspectRequest{Content: rawV1, ExpectedSha256: "sha256:0000000000000000000000000000000000000000000000000000000000000000"}); err == nil {
+		t.Fatal("mismatched expectedSha256 must be refused")
+	}
+	checked, err := target.inspectPackage(context.Background(), protocol.PackageInspectRequest{Content: rawV1})
+	if err != nil || !strings.HasPrefix(checked.ArtifactSha256, "sha256:") {
+		t.Fatalf("inspect must return artifactSha256: %+v err=%v", checked, err)
+	}
+	if _, err := target.inspectPackage(context.Background(), protocol.PackageInspectRequest{Content: rawV1, ExpectedSha256: checked.ArtifactSha256}); err != nil {
+		t.Fatalf("matching expectedSha256 must succeed: %v", err)
+	}
 }

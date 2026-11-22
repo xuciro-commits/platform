@@ -1,6 +1,7 @@
 import { EmptyState } from "@astryxdesign/core/EmptyState";
 import { Grid } from "@astryxdesign/core/Grid";
 import { HStack, Layout, LayoutContent, LayoutHeader, StackItem, VStack } from "@astryxdesign/core/Layout";
+import { MoreMenu } from "@astryxdesign/core/MoreMenu";
 import { SegmentedControl, SegmentedControlItem } from "@astryxdesign/core/SegmentedControl";
 import { Selector } from "@astryxdesign/core/Selector";
 import { Skeleton } from "@astryxdesign/core/Skeleton";
@@ -12,6 +13,7 @@ import { t } from "../../i18n";
 import { navigate } from "../../router";
 import { PageTitle, useGutter } from "../../pages/frame";
 import { PackageCard, packageCounts } from "../../pages/PackageCard";
+import { PackageImportWizard } from "../../pages/PackageImportWizard";
 import { PackageReview } from "../../pages/PackageReview";
 
 type Tab = "all" | "apps" | "plugins" | "installed";
@@ -19,6 +21,7 @@ type Tab = "all" | "apps" | "plugins" | "installed";
 export default function Marketplace() {
   const packages = useRead<Api.PackageView[]>("/v1/packages");
   const [selected, setSelected] = useState<{ view: Api.PackageView; mode: "install" | "manage" }>();
+  const [importing, setImporting] = useState(false);
   const [tab, setTab] = useState<Tab>("all");
   const [source, setSource] = useState("all");
   const [query, setQuery] = useState("");
@@ -57,7 +60,16 @@ export default function Marketplace() {
         header={
           <LayoutHeader padding={gutter} hasDivider>
             <VStack gap={4}>
-              <PageTitle title={t("Marketplace")}>
+              <PageTitle
+                title={t("Marketplace")}
+                actions={
+                  <MoreMenu
+                    label={t("More actions")}
+                    alignment="end"
+                    items={[{ id: "import-package", label: t("Install from URL or file"), onClick: () => setImporting(true) }]}
+                  />
+                }
+              >
                 <Text type="body" color="secondary">{t("Review versions, dependencies and their installation scope before adding them to this workspace.")}</Text>
               </PageTitle>
               <HStack gap={3} vAlign="center" wrap="wrap">
@@ -135,6 +147,15 @@ export default function Marketplace() {
           close={() => setSelected(undefined)}
           done={() => {
             setSelected(undefined);
+            navigate("/delivery/installations");
+          }}
+        />
+      )}
+      {importing && (
+        <PackageImportWizard
+          onClose={() => setImporting(false)}
+          onDone={() => {
+            setImporting(false);
             navigate("/delivery/installations");
           }}
         />

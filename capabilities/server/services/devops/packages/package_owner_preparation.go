@@ -224,6 +224,16 @@ func Inspect(ctx context.Context, resolver publication.Resolver, tenant string, 
 	if len(content) == 0 || len(content) > MaxPackageImportBytes {
 		return preview, fmt.Errorf("A platform package must be non-empty and at most 16 MiB")
 	}
+	rawSum := sha256.Sum256(content)
+	artifactSha256 := "sha256:" + hex.EncodeToString(rawSum[:])
+	if want := strings.ToLower(strings.TrimSpace(request.ExpectedSha256)); want != "" {
+		if !strings.HasPrefix(want, "sha256:") {
+			want = "sha256:" + want
+		}
+		if artifactSha256 != want {
+			return preview, fmt.Errorf("The package SHA-256 checksum does not match the expected digest")
+		}
+	}
 	descriptor, err := DecodeContent(content)
 	if err != nil {
 		return preview, err
@@ -244,7 +254,7 @@ func Inspect(ctx context.Context, resolver publication.Resolver, tenant string, 
 	if err = files.Put(ctx, OfferKey(tenant, digest), raw, "application/json"); err != nil {
 		return protocol.PackagePreview{}, err
 	}
-	return protocol.PackagePreview{Descriptor: descriptor, Digest: digest, Origin: origin, Precheck: precheck}, nil
+	return protocol.PackagePreview{Descriptor: descriptor, Digest: digest, ArtifactSha256: artifactSha256, Origin: origin, Precheck: precheck}, nil
 
 }
 
