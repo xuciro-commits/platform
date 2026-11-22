@@ -1,5 +1,7 @@
 import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
+import { createServer } from "node:http";
+import type { AddressInfo } from "node:net";
 import { fileURLToPath } from "node:url";
 import { expect, test } from "@playwright/test";
 import { open, property, edit } from "./support";
@@ -257,5 +259,57 @@ test("upgrade tenant: CRM upgrades to a version with a new optional lead field a
     linkedin.press("Enter"),
   ]);
   await expect(property(page, "LinkedIn")).toContainText("linkedin.com/in/zhouning");
+});
+});
+
+test.describe.serial("library tenant", () => {
+const previous = fileURLToPath(new URL("../../scripts/frontend-fixtures/crm-0.1.21.json", import.meta.url));
+
+test("library tenant: a remote catalog lists its package beside the built-in index, and its entry installs after the digest is checked", async ({ page }) => {
+  const bytes = readFileSync(previous);
+  const sha256 = "sha256:" + createHash("sha256").update(bytes).digest("hex");
+  const catalog = JSON.stringify({ version: 1, title: "Acme packages", packages: [
+    { id: "crm", version: "0.1.21", title: "Acme CRM", description: "CRM from the Acme library", url: "./crm-0.1.21.json", sha256 },
+  ] });
+  const server = createServer((request, response) => {
+    if (request.url === "/catalog.json") response.writeHead(200, { "content-type": "application/json" }).end(catalog);
+    else if (request.url === "/crm-0.1.21.json") response.writeHead(200, { "content-type": "application/json" }).end(bytes);
+    else response.writeHead(404).end();
+  });
+  await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+  const address = `http://127.0.0.1:${(server.address() as AddressInfo).port}/catalog.json`;
+  try {
+    await page.goto("/");
+    await page.getByRole("button", { name: "admin-1 · library" }).click();
+    await expect(page.getByRole("button", { name: "Account", exact: true })).toBeVisible();
+    await open(page, "Delivery", "Marketplace");
+    await page.getByRole("button", { name: "More actions", exact: true }).click();
+    await page.getByRole("menuitem", { name: "Manage library", exact: true }).click();
+    const manager = page.getByRole("dialog", { name: "Manage library" });
+    await manager.getByRole("textbox", { name: /Library URL/ }).fill(address);
+    await manager.getByRole("textbox", { name: /Library name/ }).fill("Acme packages");
+    await manager.getByRole("button", { name: "Add library", exact: true }).click();
+    await expect(manager.getByText("Ready", { exact: true })).toBeVisible({ timeout: 20_000 });
+    await manager.getByRole("button", { name: "Close", exact: true }).last().click();
+
+    const remote = page.getByRole("listitem").filter({ hasText: "Acme CRM" });
+    await expect(remote).toContainText("Acme packages");
+    await expect(remote).toContainText("crm · 0.1.21");
+    await expect(page.getByRole("listitem").filter({ hasText: /^CRM/ }).filter({ hasText: "crm · 0.1.22" })).toBeVisible();
+
+    await remote.getByRole("button", { name: "Install", exact: true }).click();
+    const wizard = page.getByRole("dialog", { name: /Install from URL or file/ });
+    await expect(wizard.getByText(address.replace("catalog.json", "crm-0.1.21.json"), { exact: true })).toBeVisible({ timeout: 20_000 });
+    await expect(wizard.getByText(sha256, { exact: true })).toBeVisible();
+    await wizard.getByRole("button", { name: "Add to library", exact: true }).click();
+    await expect(wizard.getByRole("textbox", { name: /Project API name/ })).toHaveValue("crm");
+    await wizard.getByRole("button", { name: "Continue", exact: true }).click();
+    await wizard.getByRole("button", { name: "Install package", exact: true }).click();
+    await expect(wizard).toBeHidden({ timeout: 30_000 });
+    await open(page, "Delivery", "Installations");
+    await expect(page.getByRole("listitem").filter({ hasText: /^CRM/ })).toContainText("0.1.21");
+  } finally {
+    server.close();
+  }
 });
 });

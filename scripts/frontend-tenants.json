@@ -263,5 +263,24 @@
         "roles": {}
       }
     ]
+  },
+  {
+    "id": "library",
+    "settings": {
+      "language": "en",
+      "timezone": "UTC",
+      "currency": "USD"
+    },
+    "seats": [
+      {
+        "id": "admin-1",
+        "subjects": [
+          "admin"
+        ],
+        "roles": {
+          "platform": "admin"
+        }
+      }
+    ]
   }
 ]
