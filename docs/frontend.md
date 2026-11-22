@@ -203,7 +203,7 @@ pnpm --dir frontend astryx docs tokens
 | 静态 | `make check-frontend`：裸元素、内联样式、硬编码值、未批准的依赖与导入、没翻译的文字、注释、文件长度、类型检查与构建 |
 | 真实数据 | `make frontend-host` 起夹具宿主（自带示例销售项目：客户与商机）；`frontend/.env` 写 `PLATFORM_HOST=http://127.0.0.1:18511`；`pnpm --dir frontend dev`，打开 `http://localhost:8496`，登录页选 `admin-1` |
 | 正式登录 | `make local` 起整套（身份服务在内）；入口 `http://localhost:8495` 就是 `frontend/` 的 Vite（热更新，代理到 18495），用身份服务里的账号登录。另开 8496 时 `deploy/local/identity.py` 也把它登记为允许的来源与回跳地址 |
-| 主干验收 | `make trunk`：`frontend/e2e/trunk.spec.ts` 按阶段门槛的演示路径走，自己起内存宿主、灌示例数据、起前端。只走主干，不测单个组件；每做一行给它加一步，控件按角色与可见的名字找 |
+| 主干验收 | `make trunk`：`frontend/e2e/` 按模块分文件，共用的在 `support.ts`，平时用 `make trunk-changed`。自己起内存宿主、灌示例数据、起前端；只走主干，每做一行给对应文件加一步，控件按角色与名字找 |
 | 观感 | 亮色与暗色、窄窗口、中文各看一眼；然后交给负责人按 [design](design.md) 的六步看 |
 
 检查报错就按它说的改，不改检查脚本。没有在浏览器里看过的界面，报告里要说没看过。

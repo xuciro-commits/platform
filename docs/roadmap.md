@@ -7,7 +7,10 @@
 
 - 一项一次提交。先写能跑的验收，再动手；做完把这一项删掉，一行的项删完就删掉 plan 里的那一行。
 - 路上发现的新项加在本行末尾，不另起清单。
-- 验收里的“trunk”指在 `frontend/e2e/trunk.spec.ts` 加一步并让 `make trunk` 通过；“夹具”指 `scripts/frontend-seed.json`。
+- 验收里的“trunk”指在 `frontend/e2e/<模块>.spec.ts`（records、builder、crm、workspace、marketplace）加一步并让它通过；
+  共用的登录与取值在 `e2e/support.ts`。`make trunk-changed` 按 `scripts/trunk-affected.mjs` 的映射只跑改动影响到的文件，
+  碰到宿主、契约、`host/`、`shell/`、公共 `pages/`、夹具或 `support.ts` 就跑全部；`make trunk SPEC=crm` 只跑一个文件。“夹具”指 `scripts/frontend-seed.json`。
+- 改到哪个 spec 文件就顺手整理它：只读写自己的租户、互不依赖的用例去掉 `serial`、前置状态经接口造好，界面只走要验的那一步。
 - 每一行做完，负责人按 [design](design.md)“负责人怎样看”的六步看一遍。
 - 这里写到的文件、读取与动作都已对过宿主（夹具宿主 18511）；照写的做，对不上先停下问，不自己改设计。
 
@@ -43,10 +46,9 @@
 - **2.7.7 市场库（补验收）。** 已有：库的添加、移除、刷新，目录解析、https 与大小门禁、离线缓存（K9 `TestInvariantK9PackageMarketLibrary`）。
   还缺：`frontend/e2e/playwright.config.ts` 的宿主命令加 `-allow-loopback-packages`；trunk 自己起一个回环 http 目录 →
   “⋯ → 管理库”添加 → 目录条目与内置索引并列、标出来源 → 装上。验收：trunk。
-- **2.7.8 删除 `web/`（收尾）。** 已有：目录、三个脚本与生成路径都已迁走，Makefile、pre-commit 与各文档已改。
-  全量 trunk（4.4 分钟，70 过、1 挂、1 未跑）挂在 “applications: shared records … after retirement”：`e88592529` 把管理安装改成术语与值两栏，
-  用例还找 “Business records retained: 2” 整句，值仍是 2。用例改按术语取值；“builder and applications” 里装示例、保留记录、交付三个用例重跑通过即收。
-- **2.7.9 负责人走门槛。** 2.7.5–2.7.8 收完，负责人在 8495 按 plan 阶段 2 的门槛手走一遍：空租户安装 → 线索到赢单 → 期间没有改宿主。
+- **2.7.9 长用例进一分钟。** 单跑超过一分钟的四个：builder 的 gate（60s）、marketplace 的空租户主线（59s）、crm 的全类型看板（50s）与转化赢单（39s）。
+  前置状态经接口造好，界面只验各自的那一步；marketplace 的主线拆成安装、配角色、主线、卸载重装四个串行用例。验收：每个文件 `make trunk SPEC=…` 单跑一分钟内。
+- **2.7.10 负责人走门槛。** 2.7.5–2.7.9 收完，负责人在 8495 按 plan 阶段 2 的门槛手走一遍：空租户安装 → 线索到赢单 → 期间没有改宿主。
   全量 `make trunk` 在这里跑一次。走完即删 plan 里的 2.7 行，阶段 2 关门，再开阶段 3 的批次。
 
 ## 承重的要求

@@ -12,7 +12,7 @@ GOPROXY ?= https://goproxy.cn,direct
 STEP := bash scripts/make-step.sh
 export GOPROXY
 
-.PHONY: help hooks bootstrap setup local docker infra infra-down build-compute dev dev-light host lite build bundle contract local-update packages check check-frontend verify verify-sql load-sql frontend-host frontend-dev trunk test
+.PHONY: help hooks bootstrap setup local docker infra infra-down build-compute dev dev-light host lite build bundle contract local-update packages check check-frontend verify verify-sql load-sql frontend-host frontend-dev trunk trunk-changed test
 
 help:
 	@bash -c '\
@@ -29,7 +29,8 @@ help:
 	printf "\n%s检查与验收%s\n" "$$B" "$$R"; \
 	printf "  %s%-18s%s %s\n" "$$C" "check" "$$R" "后端与仓库全检（Go 编译/边界/产品包/契约/文档）"; \
 	printf "  %s%-18s%s %s\n" "$$C" "check-frontend" "$$R" "新前端静态门禁、类型检查与生产构建"; \
-	printf "  %s%-18s%s %s  %s%s%s\n" "$$C" "trunk" "$$R" "新前端浏览器主干验收" "$$D" "HEADED=1 可看过程" "$$R"; \
+	printf "  %s%-18s%s %s  %s%s%s\n" "$$C" "trunk" "$$R" "新前端浏览器主干验收" "$$D" "SPEC=crm 只跑一个文件，HEADED=1 可看过程" "$$R"; \
+	printf "  %s%-18s%s %s  %s%s%s\n" "$$C" "trunk-changed" "$$R" "只跑改动影响到的主干用例文件" "$$D" "BASE=origin/main 连同已提交的改动" "$$R"; \
 	printf "  %s%-18s%s %s  %s%s%s\n" "$$C" "test" "$$R" "内核不变量测试" "$$D" "RUN=K13 只跑指定编号" "$$R"; \
 	printf "  %s%-18s%s %s\n" "$$C" "verify" "$$R" "check + check-frontend + test + trunk 全量验收"; \
 	printf "  %s%-18s%s %s\n" "$$C" "verify-sql" "$$R" "临时 PostgreSQL 写入与重启恢复验收"; \
@@ -143,7 +144,13 @@ check-frontend:
 	@printf '\033[32m✓ 新前端检查全部通过\033[0m\n\n'
 
 trunk:
-	cd frontend && $(PNPM) exec playwright test -c e2e $(if $(HEADED),--headed)
+	cd frontend && $(PNPM) exec playwright test -c e2e $(foreach spec,$(SPEC),e2e/$(spec).spec.ts) $(if $(HEADED),--headed)
+
+trunk-changed:
+	@specs="$$(node scripts/trunk-affected.mjs $(BASE))"; \
+	if [ -z "$$specs" ]; then echo "没有影响主干用例的改动"; \
+	elif [ "$$specs" = all ]; then cd frontend && $(PNPM) exec playwright test -c e2e $(if $(HEADED),--headed); \
+	else echo "只跑：$$specs"; cd frontend && $(PNPM) exec playwright test -c e2e $$specs $(if $(HEADED),--headed); fi
 
 test:
 	node scripts/check-invariants.mjs '$(RUN)'
