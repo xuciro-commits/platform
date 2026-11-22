@@ -1,9 +1,9 @@
 {
   "format": 2,
   "package": "crm",
-  "version": "0.1.21",
+  "version": "0.1.22",
   "requires": [],
-  "artifact": "sha256:91c70db9b7e6cd38cc260639f79b4a850e86cc9cffda15c848313e66ccee0c01",
+  "artifact": "sha256:74ee52d4b04907d760f576326ebf1c4b524a3f7233022459a9be8338d4dbe003",
   "assets": {
     "action/crm.contact.create": {
       "digest": "sha256:045344c0162d332f6ebd6cfc7e06e51978b5414a68a0885c958f8e8ab2d1a8f2",
@@ -31,12 +31,12 @@
       "sourceVersion": "1.action-1"
     },
     "action/crm.lead.create": {
-      "digest": "sha256:853b5aa074ef5be6c750b76d3be60ed906ffabdcdc05d0b5e80930756c6a27ee",
+      "digest": "sha256:a7d5747fecb9ae1f529d3dc5982f8aeac011aabd7bd189eeff65cef8f8eee300",
       "contractVersion": 1,
       "sourceVersion": "1"
     },
     "action/crm.lead.edit": {
-      "digest": "sha256:8f477f0df7a4dbe2dbce65044dded8f3499c5bcdc25932681133793c58b4c23f",
+      "digest": "sha256:bf9b43d436d93e7d9260a839379a0c3d59a5fdf1b75b8bce561e03e6cda8e5c4",
       "contractVersion": 1,
       "sourceVersion": "1"
     },
@@ -71,7 +71,7 @@
       "sourceVersion": "1"
     },
     "app/crm": {
-      "digest": "sha256:29008c170b717fda6b1e921c3f2b355b9f6df22602d80c6df98393226eebf4cb",
+      "digest": "sha256:66d6a2bd32131515a5942c4b0d51c632f70b1c7abc8661689332f14998eacb4a",
       "contractVersion": 1,
       "sourceVersion": "1"
     },
@@ -167,7 +167,7 @@
       ]
     },
     "object/crm.lead": {
-      "digest": "sha256:b6f8b16317bbe981a284d5871d052e2eef66befafd27e778951d07a0c5b2d67b",
+      "digest": "sha256:ad29f7872d8ca25a788c7a175975df3f65fa02933d4d69c97343d119fd3fd48d",
       "contractVersion": 1,
       "sourceVersion": "1",
       "schemaVersions": [
@@ -193,6 +193,10 @@
         },
         {
           "version": "schema.sha256.3b25ecde7872a3da3bdcc1abd8986ee225e0d0de877a986f70f28f9290f88954",
+          "family": 5
+        },
+        {
+          "version": "schema.sha256.a942475d2345b91f25dc96b4d0505a46fb5abb5ff57d38e82a7fdcce0bde03d7",
           "family": 5
         }
       ]

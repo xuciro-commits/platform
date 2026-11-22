@@ -1,6 +1,6 @@
 {
   "id": "crm",
-  "version": "0.1.21",
+  "version": "0.1.22",
   "title": "CRM",
   "namespace": "crm",
   "description": "Leads, deals, organizations, contacts, tasks and notes, with lead-to-deal conversion. Built in the crm project and released through Delivery.",
@@ -621,6 +621,7 @@
                 "name": "dealvalue",
                 "type": "money",
                 "description": "Deal value",
+                "default": "setting:currency",
                 "group": "Commercial"
               },
               {
@@ -679,7 +680,8 @@
               {
                 "name": "owner",
                 "type": "string",
-                "description": "Deal owner"
+                "description": "Deal owner",
+                "default": "member"
               }
             ]
           }
@@ -1257,6 +1259,10 @@
                   "type": "string",
                   "description": "Job title"
                 },
+                "linkedin": {
+                  "type": "string",
+                  "description": "LinkedIn"
+                },
                 "lostnotes": {
                   "type": "string",
                   "description": "Lost notes"
@@ -1364,6 +1370,12 @@
                 "group": "Contact"
               },
               {
+                "name": "linkedin",
+                "type": "string",
+                "description": "LinkedIn",
+                "group": "Contact"
+              },
+              {
                 "name": "jobtitle",
                 "type": "string",
                 "description": "Job title",
@@ -1428,7 +1440,25 @@
               {
                 "name": "owner",
                 "type": "string",
-                "description": "Lead owner"
+                "description": "Lead owner",
+                "default": "member"
+              },
+              {
+                "name": "responseby",
+                "type": "datetime",
+                "description": "Respond by",
+                "default": "now+4h"
+              },
+              {
+                "name": "slastatus",
+                "type": "string",
+                "description": "First response (due, fulfilled, failed)",
+                "choices": [
+                  "due",
+                  "fulfilled",
+                  "failed"
+                ],
+                "default": "due"
               }
             ]
           }
@@ -1474,6 +1504,12 @@
                 "description": "Website",
                 "group": "Contact",
                 "name": "website",
+                "type": "string"
+              },
+              {
+                "description": "LinkedIn",
+                "group": "Contact",
+                "name": "linkedin",
                 "type": "string"
               },
               {
@@ -1650,6 +1686,10 @@
                   "type": "string",
                   "description": "Job title"
                 },
+                "linkedin": {
+                  "type": "string",
+                  "description": "LinkedIn"
+                },
                 "lostnotes": {
                   "type": "string",
                   "description": "Lost notes"
@@ -1752,6 +1792,12 @@
                 "group": "Contact"
               },
               {
+                "name": "linkedin",
+                "type": "string",
+                "description": "LinkedIn",
+                "group": "Contact"
+              },
+              {
                 "name": "jobtitle",
                 "type": "string",
                 "description": "Job title",
@@ -1816,6 +1862,21 @@
                 "name": "owner",
                 "type": "string",
                 "description": "Lead owner"
+              },
+              {
+                "name": "responseby",
+                "type": "datetime",
+                "description": "Respond by"
+              },
+              {
+                "name": "slastatus",
+                "type": "string",
+                "description": "First response (due, fulfilled, failed)",
+                "choices": [
+                  "due",
+                  "fulfilled",
+                  "failed"
+                ]
               }
             ]
           }
@@ -1859,6 +1920,12 @@
                 "description": "Website",
                 "group": "Contact",
                 "name": "website",
+                "type": "string"
+              },
+              {
+                "description": "LinkedIn",
+                "group": "Contact",
+                "name": "linkedin",
                 "type": "string"
               },
               {
@@ -3189,6 +3256,21 @@
         "requires": [
           {
             "app": "build",
+            "kind": "flow",
+            "name": "build.leadbalance"
+          },
+          {
+            "app": "build",
+            "kind": "flow",
+            "name": "build.leadresponded"
+          },
+          {
+            "app": "build",
+            "kind": "flow",
+            "name": "build.leadresponse"
+          },
+          {
+            "app": "build",
             "kind": "page",
             "name": "crm.contact"
           },
@@ -3226,24 +3308,8 @@
             "app": "build",
             "kind": "page",
             "name": "crm.territory"
-          },
-          {
-            "app": "build",
-            "kind": "flow",
-            "name": "build.leadresponded"
-          },
-          {
-            "app": "build",
-            "kind": "flow",
-            "name": "build.leadresponse"
-          },
-          {
-            "app": "build",
-            "kind": "flow",
-            "name": "build.leadbalance"
           }
         ],
-        "provides": [],
         "body": {
           "icon": "users",
           "languages": {
@@ -3334,6 +3400,7 @@
               "Lead owner": "线索负责人",
               "Lead source": "线索来源",
               "Lead sources": "线索来源",
+              "LinkedIn": "领英",
               "Leads": "线索",
               "Leave empty to create a new organization from the lead.": "不选就按线索新建一个组织。",
               "Link to organization": "关联已有组织",
@@ -3588,6 +3655,420 @@
       {
         "ref": {
           "app": "build",
+          "kind": "flow",
+          "name": "build.leadbalance"
+        },
+        "contractVersion": 1,
+        "sourceVersion": "1",
+        "requires": [
+          {
+            "app": "build",
+            "kind": "action",
+            "name": "crm.lead.edit"
+          },
+          {
+            "app": "build",
+            "kind": "object",
+            "name": "crm.lead"
+          }
+        ],
+        "provides": [
+          {
+            "kind": "operation",
+            "name": "build.leadbalance",
+            "inputs": {
+              "type": ""
+            },
+            "outputs": {
+              "type": ""
+            },
+            "roles": null,
+            "side": "authoritative"
+          }
+        ],
+        "body": {
+          "name": "build.leadbalance",
+          "subject": {
+            "app": "build",
+            "kind": "object",
+            "name": "crm.lead"
+          },
+          "actions": [
+            {
+              "app": "build",
+              "kind": "action",
+              "name": "crm.lead.edit"
+            }
+          ],
+          "definition": {
+            "name": "leadbalance",
+            "title": "Assign website leads evenly",
+            "kind": "automation",
+            "object": "crm.lead",
+            "trigger": {
+              "op": "and",
+              "kind": "boolean",
+              "args": [
+                {
+                  "op": "=",
+                  "kind": "boolean",
+                  "args": [
+                    {
+                      "op": "",
+                      "kind": "json",
+                      "ref": "subject.status"
+                    },
+                    {
+                      "op": "",
+                      "kind": "json",
+                      "lit": {
+                        "value": "new"
+                      }
+                    }
+                  ]
+                },
+                {
+                  "op": "or",
+                  "kind": "boolean",
+                  "args": [
+                    {
+                      "op": "=",
+                      "kind": "boolean",
+                      "args": [
+                        {
+                          "op": "",
+                          "kind": "json",
+                          "ref": "subject.source"
+                        },
+                        {
+                          "op": "",
+                          "kind": "json",
+                          "lit": {
+                            "value": "SRC-013"
+                          }
+                        }
+                      ]
+                    },
+                    {
+                      "op": "=",
+                      "kind": "boolean",
+                      "args": [
+                        {
+                          "op": "",
+                          "kind": "json",
+                          "ref": "subject.source"
+                        },
+                        {
+                          "op": "",
+                          "kind": "json",
+                          "lit": {
+                            "value": "SRC-014"
+                          }
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            "steps": [
+              {
+                "name": "assign",
+                "kind": "action",
+                "balance": {
+                  "owner": {
+                    "app": "crm",
+                    "role": "salesrep",
+                    "open": {
+                      "source": [
+                        "SRC-013",
+                        "SRC-014"
+                      ],
+                      "status": [
+                        "new"
+                      ]
+                    }
+                  }
+                },
+                "act": "edit"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "ref": {
+          "app": "build",
+          "kind": "flow",
+          "name": "build.leadresponded"
+        },
+        "contractVersion": 1,
+        "sourceVersion": "1",
+        "requires": [
+          {
+            "app": "build",
+            "kind": "action",
+            "name": "crm.lead.edit"
+          },
+          {
+            "app": "build",
+            "kind": "object",
+            "name": "crm.lead"
+          }
+        ],
+        "provides": [
+          {
+            "kind": "operation",
+            "name": "build.leadresponded",
+            "inputs": {
+              "type": ""
+            },
+            "outputs": {
+              "type": ""
+            },
+            "roles": null,
+            "side": "authoritative"
+          }
+        ],
+        "body": {
+          "name": "build.leadresponded",
+          "subject": {
+            "app": "build",
+            "kind": "object",
+            "name": "crm.lead"
+          },
+          "actions": [
+            {
+              "app": "build",
+              "kind": "action",
+              "name": "crm.lead.edit"
+            }
+          ],
+          "definition": {
+            "name": "leadresponded",
+            "title": "Record the first response",
+            "kind": "automation",
+            "object": "crm.lead",
+            "trigger": {
+              "op": "and",
+              "kind": "boolean",
+              "args": [
+                {
+                  "op": "not",
+                  "kind": "boolean",
+                  "args": [
+                    {
+                      "op": "=",
+                      "kind": "boolean",
+                      "args": [
+                        {
+                          "op": "",
+                          "kind": "json",
+                          "ref": "subject.status"
+                        },
+                        {
+                          "op": "",
+                          "kind": "json",
+                          "lit": {
+                            "value": "new"
+                          }
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "op": "=",
+                  "kind": "boolean",
+                  "args": [
+                    {
+                      "op": "",
+                      "kind": "json",
+                      "ref": "subject.slastatus"
+                    },
+                    {
+                      "op": "",
+                      "kind": "json",
+                      "lit": {
+                        "value": "due"
+                      }
+                    }
+                  ]
+                }
+              ]
+            },
+            "steps": [
+              {
+                "name": "respond",
+                "kind": "action",
+                "inputs": {
+                  "slastatus": {
+                    "source": "literal",
+                    "value": "fulfilled"
+                  }
+                },
+                "act": "edit"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "ref": {
+          "app": "build",
+          "kind": "flow",
+          "name": "build.leadresponse"
+        },
+        "contractVersion": 1,
+        "sourceVersion": "1",
+        "requires": [
+          {
+            "app": "build",
+            "kind": "action",
+            "name": "crm.lead.edit"
+          },
+          {
+            "app": "build",
+            "kind": "object",
+            "name": "crm.lead"
+          }
+        ],
+        "provides": [
+          {
+            "kind": "operation",
+            "name": "build.leadresponse",
+            "inputs": {
+              "type": ""
+            },
+            "outputs": {
+              "type": ""
+            },
+            "roles": null,
+            "side": "authoritative"
+          }
+        ],
+        "body": {
+          "name": "build.leadresponse",
+          "subject": {
+            "app": "build",
+            "kind": "object",
+            "name": "crm.lead"
+          },
+          "actions": [
+            {
+              "app": "build",
+              "kind": "action",
+              "name": "crm.lead.edit"
+            }
+          ],
+          "definition": {
+            "name": "leadresponse",
+            "title": "Watch the first response deadline",
+            "kind": "flow",
+            "object": "crm.lead",
+            "when": "open",
+            "steps": [
+              {
+                "name": "deadline",
+                "kind": "wait",
+                "waitUntil": {
+                  "source": "subject",
+                  "path": [
+                    "responseby"
+                  ]
+                },
+                "next": "pending"
+              },
+              {
+                "name": "pending",
+                "kind": "switch",
+                "value": {
+                  "source": "subject",
+                  "path": [
+                    "slastatus"
+                  ]
+                },
+                "cases": {
+                  "due": "overdue"
+                },
+                "next": "done"
+              },
+              {
+                "name": "overdue",
+                "kind": "action",
+                "inputs": {
+                  "slastatus": {
+                    "source": "literal",
+                    "value": "failed"
+                  }
+                },
+                "next": "tell",
+                "act": "edit"
+              },
+              {
+                "name": "tell",
+                "notify": {
+                  "title": "First response overdue",
+                  "body": "This lead passed its first response deadline while still new.",
+                  "field": "owner"
+                },
+                "kind": "notify",
+                "next": "done"
+              },
+              {
+                "name": "done",
+                "kind": "end"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "ref": {
+          "app": "build",
+          "kind": "matching",
+          "name": "crmorganizationmatch"
+        },
+        "contractVersion": 1,
+        "sourceVersion": "1.matching-1",
+        "requires": [
+          {
+            "app": "build",
+            "kind": "object",
+            "name": "crm.organization"
+          }
+        ],
+        "provides": [
+          {
+            "kind": "operation",
+            "name": "crmorganizationmatch",
+            "inputs": {
+              "type": ""
+            },
+            "outputs": {
+              "type": ""
+            },
+            "roles": null,
+            "side": "effect"
+          }
+        ],
+        "body": {
+          "keys": [
+            {
+              "fields": [
+                "name"
+              ],
+              "normalize": "folded"
+            }
+          ],
+          "name": "crmorganizationmatch",
+          "object": "crm.organization",
+          "title": "Match organizations by name"
+        }
+      },
+      {
+        "ref": {
+          "app": "build",
           "kind": "object",
           "name": "crm.contact"
         },
@@ -3735,16 +4216,6 @@
           "name": "contact",
           "namespace": "crm",
           "plural": "Contacts",
-          "schemaVersions": [
-            {
-              "family": 1,
-              "version": "schema.sha256.f8f27149ef68896b8aa988cd551958cf1ba903d53a633382e089487ee4aad955"
-            },
-            {
-              "family": 2,
-              "version": "schema.sha256.fd9735338b8f481c3a41f3cd52c49fa5fa998e55917097bf3631139e6dec4044"
-            }
-          ],
           "title": "Contact",
           "type": "crm.contact",
           "view": {
@@ -3768,7 +4239,17 @@
             ],
             "version": 1
           },
-          "naming": "CRM-CON-{year}-{n:5}"
+          "naming": "CRM-CON-{year}-{n:5}",
+          "schemaVersions": [
+            {
+              "version": "schema.sha256.f8f27149ef68896b8aa988cd551958cf1ba903d53a633382e089487ee4aad955",
+              "family": 1
+            },
+            {
+              "version": "schema.sha256.fd9735338b8f481c3a41f3cd52c49fa5fa998e55917097bf3631139e6dec4044",
+              "family": 2
+            }
+          ]
         }
       },
       {
@@ -4352,24 +4833,6 @@
               }
             }
           },
-          "schemaVersions": [
-            {
-              "family": 1,
-              "version": "schema.sha256.22697d4df8a4616ed41e029edbe6119213290f6b2f5a3166ddf677ea1fd7b522"
-            },
-            {
-              "family": 2,
-              "version": "schema.sha256.9da734151855ceb823739eb4e66f306f9d1bad230690eb010daf943f339f22c5"
-            },
-            {
-              "family": 3,
-              "version": "schema.sha256.a369ed82e0af48b1dc4e56ad62cc2a2bc6581ad7be35bc705d5bd9cf1655b181"
-            },
-            {
-              "family": 4,
-              "version": "schema.sha256.1f042c28d96f82660ff3b82624adb2740a4c5e66aa6e1a467dd855998c535d50"
-            }
-          ],
           "scope": {
             "owner": "owner"
           },
@@ -4828,6 +5291,24 @@
               },
               "message": "A closed deal's status cannot be edited directly; reopen it first."
             }
+          ],
+          "schemaVersions": [
+            {
+              "version": "schema.sha256.22697d4df8a4616ed41e029edbe6119213290f6b2f5a3166ddf677ea1fd7b522",
+              "family": 1
+            },
+            {
+              "version": "schema.sha256.9da734151855ceb823739eb4e66f306f9d1bad230690eb010daf943f339f22c5",
+              "family": 2
+            },
+            {
+              "version": "schema.sha256.a369ed82e0af48b1dc4e56ad62cc2a2bc6581ad7be35bc705d5bd9cf1655b181",
+              "family": 3
+            },
+            {
+              "version": "schema.sha256.1f042c28d96f82660ff3b82624adb2740a4c5e66aa6e1a467dd855998c535d50",
+              "family": 4
+            }
           ]
         }
       },
@@ -5038,12 +5519,6 @@
           "name": "dealline",
           "namespace": "crm",
           "plural": "Deal product lines",
-          "schemaVersions": [
-            {
-              "family": 1,
-              "version": "schema.sha256.645da2ad5ac95bcbac188dead35f9e6c2309e0d41f5dd851335a42a04b5ee05d"
-            }
-          ],
           "title": "Deal product line",
           "type": "crm.dealline",
           "view": {
@@ -5062,7 +5537,13 @@
             "search": "",
             "sort": [],
             "version": 1
-          }
+          },
+          "schemaVersions": [
+            {
+              "version": "schema.sha256.645da2ad5ac95bcbac188dead35f9e6c2309e0d41f5dd851335a42a04b5ee05d",
+              "family": 1
+            }
+          ]
         }
       },
       {
@@ -5230,12 +5711,6 @@
               "kind": "lost"
             }
           ],
-          "schemaVersions": [
-            {
-              "family": 1,
-              "version": "schema.sha256.67ac5656a5a76d10fce2911014f62be0aa579061853affedd195b9db0ef224be"
-            }
-          ],
           "title": "Deal status",
           "type": "crm.dealstatus",
           "view": {
@@ -5258,7 +5733,13 @@
               }
             ],
             "version": 1
-          }
+          },
+          "schemaVersions": [
+            {
+              "version": "schema.sha256.67ac5656a5a76d10fce2911014f62be0aa579061853affedd195b9db0ef224be",
+              "family": 1
+            }
+          ]
         }
       },
       {
@@ -5316,12 +5797,6 @@
           "name": "industry",
           "namespace": "crm",
           "plural": "Industries",
-          "schemaVersions": [
-            {
-              "family": 1,
-              "version": "schema.sha256.a13db67be4f613c26aeb2b3eef6babb3f97683bb9a25c1f9cad93fc8891d835a"
-            }
-          ],
           "title": "Industry",
           "type": "crm.industry",
           "view": {
@@ -5340,7 +5815,13 @@
               }
             ],
             "version": 1
-          }
+          },
+          "schemaVersions": [
+            {
+              "version": "schema.sha256.a13db67be4f613c26aeb2b3eef6babb3f97683bb9a25c1f9cad93fc8891d835a",
+              "family": 1
+            }
+          ]
         }
       },
       {
@@ -5453,6 +5934,9 @@
                 "jobtitle": {
                   "type": "string"
                 },
+                "linkedin": {
+                  "type": "string"
+                },
                 "lostnotes": {
                   "type": "string"
                 },
@@ -5471,8 +5955,19 @@
                 "phone": {
                   "type": "string"
                 },
+                "responseby": {
+                  "type": "string"
+                },
                 "revision": {
                   "type": "integer"
+                },
+                "slastatus": {
+                  "type": "string",
+                  "enum": [
+                    "due",
+                    "fulfilled",
+                    "failed"
+                  ]
                 },
                 "source": {
                   "type": "string"
@@ -6165,6 +6660,12 @@
             },
             {
               "group": "Contact",
+              "name": "linkedin",
+              "title": "LinkedIn",
+              "type": "text"
+            },
+            {
+              "group": "Contact",
               "name": "jobtitle",
               "title": "Job title",
               "type": "text"
@@ -6267,32 +6768,6 @@
           "name": "lead",
           "namespace": "crm",
           "plural": "Leads",
-          "schemaVersions": [
-            {
-              "family": 1,
-              "version": "schema.sha256.9cce78107ec08366dcb01eddfd76ac378ea74feb32746b3869875c91dd89757f"
-            },
-            {
-              "family": 2,
-              "version": "schema.sha256.ebe5a34c5a2ce3eb40b649def0265579f3c8e01c0586cf7f740496ae4b36afcb"
-            },
-            {
-              "family": 2,
-              "version": "schema.sha256.f81247f1347aea9c95bd66a7791a2f6cf7017cf1eccafa79bc79c12e10145c8e"
-            },
-            {
-              "family": 3,
-              "version": "schema.sha256.f4fd41b66fe5577b38dfb7f8e4dfdfb09c96e931f902ee98e4ea8c8062ad16c3"
-            },
-            {
-              "family": 4,
-              "version": "schema.sha256.7e1655787e80503cece98cfa16dfb2b8cc3075a81615dafb7c45eda85a917efb"
-            },
-            {
-              "family": 5,
-              "version": "schema.sha256.3b25ecde7872a3da3bdcc1abd8986ee225e0d0de877a986f70f28f9290f88954"
-            }
-          ],
           "scope": {
             "owner": "owner"
           },
@@ -6636,6 +7111,36 @@
               },
               "message": "A closed lead's status cannot be edited directly; reopen it first."
             }
+          ],
+          "schemaVersions": [
+            {
+              "version": "schema.sha256.9cce78107ec08366dcb01eddfd76ac378ea74feb32746b3869875c91dd89757f",
+              "family": 1
+            },
+            {
+              "version": "schema.sha256.ebe5a34c5a2ce3eb40b649def0265579f3c8e01c0586cf7f740496ae4b36afcb",
+              "family": 2
+            },
+            {
+              "version": "schema.sha256.f81247f1347aea9c95bd66a7791a2f6cf7017cf1eccafa79bc79c12e10145c8e",
+              "family": 2
+            },
+            {
+              "version": "schema.sha256.f4fd41b66fe5577b38dfb7f8e4dfdfb09c96e931f902ee98e4ea8c8062ad16c3",
+              "family": 3
+            },
+            {
+              "version": "schema.sha256.7e1655787e80503cece98cfa16dfb2b8cc3075a81615dafb7c45eda85a917efb",
+              "family": 4
+            },
+            {
+              "version": "schema.sha256.3b25ecde7872a3da3bdcc1abd8986ee225e0d0de877a986f70f28f9290f88954",
+              "family": 5
+            },
+            {
+              "version": "schema.sha256.a942475d2345b91f25dc96b4d0505a46fb5abb5ff57d38e82a7fdcce0bde03d7",
+              "family": 5
+            }
           ]
         }
       },
@@ -6789,12 +7294,6 @@
               "kind": "lost"
             }
           ],
-          "schemaVersions": [
-            {
-              "family": 1,
-              "version": "schema.sha256.05467177b2ed04b96a00fb644cb70e550b9d1736dc306c7fd9ad38a5d8eb55a7"
-            }
-          ],
           "title": "Lead status",
           "type": "crm.leadstatus",
           "view": {
@@ -6816,7 +7315,13 @@
               }
             ],
             "version": 1
-          }
+          },
+          "schemaVersions": [
+            {
+              "version": "schema.sha256.05467177b2ed04b96a00fb644cb70e550b9d1736dc306c7fd9ad38a5d8eb55a7",
+              "family": 1
+            }
+          ]
         }
       },
       {
@@ -6882,12 +7387,6 @@
           "name": "lostreason",
           "namespace": "crm",
           "plural": "Lost reasons",
-          "schemaVersions": [
-            {
-              "family": 1,
-              "version": "schema.sha256.b84151a2ea6f42c3d8553333cf0c29815dd962690e110e6e4ecbd6a2fc44ac9b"
-            }
-          ],
           "title": "Lost reason",
           "type": "crm.lostreason",
           "view": {
@@ -6906,7 +7405,13 @@
               }
             ],
             "version": 1
-          }
+          },
+          "schemaVersions": [
+            {
+              "version": "schema.sha256.b84151a2ea6f42c3d8553333cf0c29815dd962690e110e6e4ecbd6a2fc44ac9b",
+              "family": 1
+            }
+          ]
         }
       },
       {
@@ -7018,12 +7523,6 @@
           "name": "note",
           "namespace": "crm",
           "plural": "Notes",
-          "schemaVersions": [
-            {
-              "family": 1,
-              "version": "schema.sha256.ce0ceb6d14d4e5bbea604869b214069187d31d5852c2b29fdaa82434458fc4c0"
-            }
-          ],
           "title": "Note",
           "type": "crm.note",
           "view": {
@@ -7040,7 +7539,13 @@
             "search": "",
             "sort": [],
             "version": 1
-          }
+          },
+          "schemaVersions": [
+            {
+              "version": "schema.sha256.ce0ceb6d14d4e5bbea604869b214069187d31d5852c2b29fdaa82434458fc4c0",
+              "family": 1
+            }
+          ]
         }
       },
       {
@@ -7197,16 +7702,6 @@
           "name": "organization",
           "namespace": "crm",
           "plural": "Organizations",
-          "schemaVersions": [
-            {
-              "family": 1,
-              "version": "schema.sha256.164e93d04edab558838850309316c9776b247fa1c8b5e27904307ba9eff5a03a"
-            },
-            {
-              "family": 2,
-              "version": "schema.sha256.be337673f3bd0c116d06161d9fa22f12660ebf1ef49b4a6a1a4280c6ecf3715a"
-            }
-          ],
           "title": "Organization",
           "type": "crm.organization",
           "view": {
@@ -7230,7 +7725,17 @@
             ],
             "version": 1
           },
-          "naming": "CRM-ORG-{year}-{n:5}"
+          "naming": "CRM-ORG-{year}-{n:5}",
+          "schemaVersions": [
+            {
+              "version": "schema.sha256.164e93d04edab558838850309316c9776b247fa1c8b5e27904307ba9eff5a03a",
+              "family": 1
+            },
+            {
+              "version": "schema.sha256.be337673f3bd0c116d06161d9fa22f12660ebf1ef49b4a6a1a4280c6ecf3715a",
+              "family": 2
+            }
+          ]
         }
       },
       {
@@ -7335,12 +7840,6 @@
           "name": "product",
           "namespace": "crm",
           "plural": "Products",
-          "schemaVersions": [
-            {
-              "family": 1,
-              "version": "schema.sha256.d213741506882421f39808dad3fd13f6f925df1690f5c22742a4a59d9f1bcda4"
-            }
-          ],
           "title": "Product",
           "type": "crm.product",
           "view": {
@@ -7362,7 +7861,13 @@
               }
             ],
             "version": 1
-          }
+          },
+          "schemaVersions": [
+            {
+              "version": "schema.sha256.d213741506882421f39808dad3fd13f6f925df1690f5c22742a4a59d9f1bcda4",
+              "family": 1
+            }
+          ]
         }
       },
       {
@@ -7428,12 +7933,6 @@
           "name": "source",
           "namespace": "crm",
           "plural": "Lead sources",
-          "schemaVersions": [
-            {
-              "family": 1,
-              "version": "schema.sha256.b5cdb66afd8bf2ee111f1adeda72f3156492cdce5ab823e94d1414da039729cd"
-            }
-          ],
           "title": "Lead source",
           "type": "crm.source",
           "view": {
@@ -7452,7 +7951,13 @@
               }
             ],
             "version": 1
-          }
+          },
+          "schemaVersions": [
+            {
+              "version": "schema.sha256.b5cdb66afd8bf2ee111f1adeda72f3156492cdce5ab823e94d1414da039729cd",
+              "family": 1
+            }
+          ]
         }
       },
       {
@@ -7737,12 +8242,6 @@
           "name": "task",
           "namespace": "crm",
           "plural": "Tasks",
-          "schemaVersions": [
-            {
-              "family": 1,
-              "version": "schema.sha256.bed1c0d31017d2023726bdfbb2c8686d1c50ff41a683ef625d278155b57350ff"
-            }
-          ],
           "states": [
             {
               "description": "CRM task.",
@@ -7780,7 +8279,13 @@
                 ]
               }
             }
-          }
+          },
+          "schemaVersions": [
+            {
+              "version": "schema.sha256.bed1c0d31017d2023726bdfbb2c8686d1c50ff41a683ef625d278155b57350ff",
+              "family": 1
+            }
+          ]
         }
       },
       {
@@ -7863,12 +8368,6 @@
           "name": "territory",
           "namespace": "crm",
           "plural": "Territories",
-          "schemaVersions": [
-            {
-              "family": 1,
-              "version": "schema.sha256.8cb6e434dc1a55aa049d5faba06e978bfe13e379b83a2a7189e6898ab2580628"
-            }
-          ],
           "title": "Territory",
           "type": "crm.territory",
           "view": {
@@ -7885,7 +8384,13 @@
             "search": "",
             "sort": [],
             "version": 1
-          }
+          },
+          "schemaVersions": [
+            {
+              "version": "schema.sha256.8cb6e434dc1a55aa049d5faba06e978bfe13e379b83a2a7189e6898ab2580628",
+              "family": 1
+            }
+          ]
         }
       },
       {
@@ -7913,7 +8418,6 @@
             "name": "crm.contact"
           }
         ],
-        "provides": [],
         "body": {
           "actionTriggers": [
             {
@@ -8150,7 +8654,6 @@
             "name": "crm.deal"
           }
         ],
-        "provides": [],
         "body": {
           "actionTriggers": [
             {
@@ -8446,7 +8949,6 @@
             "name": "crm.lead"
           }
         ],
-        "provides": [],
         "body": {
           "actionTriggers": [
             {
@@ -8754,7 +9256,6 @@
             "name": "crm.note"
           }
         ],
-        "provides": [],
         "body": {
           "actionTriggers": [
             {
@@ -8967,7 +9468,6 @@
             "name": "crm.organization"
           }
         ],
-        "provides": [],
         "body": {
           "actionTriggers": [
             {
@@ -9177,6 +9677,218 @@
         "ref": {
           "app": "build",
           "kind": "page",
+          "name": "crm.product"
+        },
+        "contractVersion": 1,
+        "sourceVersion": "1",
+        "requires": [
+          {
+            "app": "build",
+            "kind": "action",
+            "name": "crm.product.create"
+          },
+          {
+            "app": "build",
+            "kind": "action",
+            "name": "crm.product.edit"
+          },
+          {
+            "app": "build",
+            "kind": "object",
+            "name": "crm.product"
+          }
+        ],
+        "body": {
+          "actionTriggers": [
+            {
+              "actions": [
+                {
+                  "app": "build",
+                  "kind": "action",
+                  "name": "crm.product.create"
+                },
+                {
+                  "app": "build",
+                  "kind": "action",
+                  "name": "crm.product.edit"
+                }
+              ],
+              "binding": "page",
+              "id": "page"
+            },
+            {
+              "binding": "list",
+              "id": "list",
+              "owner": "binding:list"
+            },
+            {
+              "binding": "detail",
+              "id": "detail",
+              "owner": "binding:detail"
+            }
+          ],
+          "dataBindings": [
+            {
+              "fields": [
+                {
+                  "name": "code"
+                },
+                {
+                  "name": "name"
+                },
+                {
+                  "name": "rate"
+                },
+                {
+                  "name": "disabled"
+                }
+              ],
+              "id": "list",
+              "kind": "record",
+              "model": {
+                "fields": [
+                  {
+                    "name": "code"
+                  },
+                  {
+                    "name": "name"
+                  },
+                  {
+                    "name": "rate"
+                  },
+                  {
+                    "name": "disabled"
+                  }
+                ],
+                "type": "crm.product"
+              },
+              "object": {
+                "app": "build",
+                "kind": "object",
+                "name": "crm.product"
+              },
+              "owner": "binding:list",
+              "ports": {
+                "parentable": "true",
+                "selectionMode": "write",
+                "widget": "table"
+              }
+            },
+            {
+              "fields": [
+                {
+                  "name": "code"
+                },
+                {
+                  "name": "name"
+                },
+                {
+                  "name": "rate"
+                },
+                {
+                  "name": "disabled"
+                },
+                {
+                  "name": "description"
+                }
+              ],
+              "id": "detail",
+              "kind": "record",
+              "model": {
+                "fields": [
+                  {
+                    "name": "code"
+                  },
+                  {
+                    "name": "name"
+                  },
+                  {
+                    "name": "rate"
+                  },
+                  {
+                    "name": "disabled"
+                  },
+                  {
+                    "name": "description"
+                  }
+                ],
+                "type": "crm.product"
+              },
+              "object": {
+                "app": "build",
+                "kind": "object",
+                "name": "crm.product"
+              },
+              "owner": "binding:detail",
+              "ports": {
+                "selectionMode": "read",
+                "widget": "detail"
+              }
+            }
+          ],
+          "format": 4,
+          "inputSchema": {},
+          "name": "crm.product",
+          "object": {
+            "app": "build",
+            "kind": "object",
+            "name": "crm.product"
+          },
+          "scopeVisibility": {
+            "owners": {
+              "detail": "binding:detail",
+              "list": "binding:list"
+            },
+            "root": "page",
+            "scopes": [
+              {
+                "id": "page",
+                "kind": "page"
+              },
+              {
+                "binding": "list",
+                "id": "binding:list",
+                "kind": "page",
+                "parent": "page"
+              },
+              {
+                "binding": "detail",
+                "id": "binding:detail",
+                "kind": "page",
+                "parent": "page"
+              }
+            ]
+          },
+          "title": "Products",
+          "widgetSpec": {
+            "body": {
+              "document": null,
+              "layout": "list-detail",
+              "sections": [
+                {
+                  "binding": "list",
+                  "id": "list",
+                  "triggers": [
+                    "list"
+                  ]
+                },
+                {
+                  "binding": "detail",
+                  "id": "detail",
+                  "triggers": [
+                    "detail"
+                  ]
+                }
+              ]
+            },
+            "format": "platform.page.web.v1"
+          }
+        }
+      },
+      {
+        "ref": {
+          "app": "build",
+          "kind": "page",
           "name": "crm.task"
         },
         "contractVersion": 1,
@@ -9198,7 +9910,6 @@
             "name": "crm.task"
           }
         ],
-        "provides": [],
         "body": {
           "actionTriggers": [
             {
@@ -9431,231 +10142,6 @@
       {
         "ref": {
           "app": "build",
-          "kind": "matching",
-          "name": "crmorganizationmatch"
-        },
-        "contractVersion": 1,
-        "sourceVersion": "1.matching-1",
-        "body": {
-          "keys": [
-            {
-              "fields": [
-                "name"
-              ],
-              "normalize": "folded"
-            }
-          ],
-          "name": "crmorganizationmatch",
-          "object": "crm.organization",
-          "title": "Match organizations by name"
-        }
-      },
-      {
-        "ref": {
-          "app": "build",
-          "kind": "page",
-          "name": "crm.product"
-        },
-        "contractVersion": 1,
-        "sourceVersion": "1",
-        "requires": [
-          {
-            "app": "build",
-            "kind": "object",
-            "name": "crm.product"
-          }
-        ],
-        "provides": [],
-        "body": {
-          "actionTriggers": [
-            {
-              "actions": [
-                {
-                  "app": "build",
-                  "kind": "action",
-                  "name": "crm.product.create"
-                },
-                {
-                  "app": "build",
-                  "kind": "action",
-                  "name": "crm.product.edit"
-                }
-              ],
-              "binding": "page",
-              "id": "page"
-            },
-            {
-              "binding": "list",
-              "id": "list",
-              "owner": "binding:list"
-            },
-            {
-              "binding": "detail",
-              "id": "detail",
-              "owner": "binding:detail"
-            }
-          ],
-          "dataBindings": [
-            {
-              "fields": [
-                {
-                  "name": "code"
-                },
-                {
-                  "name": "name"
-                },
-                {
-                  "name": "rate"
-                },
-                {
-                  "name": "disabled"
-                }
-              ],
-              "id": "list",
-              "kind": "record",
-              "model": {
-                "fields": [
-                  {
-                    "name": "code"
-                  },
-                  {
-                    "name": "name"
-                  },
-                  {
-                    "name": "rate"
-                  },
-                  {
-                    "name": "disabled"
-                  }
-                ],
-                "type": "crm.product"
-              },
-              "object": {
-                "app": "build",
-                "kind": "object",
-                "name": "crm.product"
-              },
-              "owner": "binding:list",
-              "ports": {
-                "parentable": "true",
-                "selectionMode": "write",
-                "widget": "table"
-              }
-            },
-            {
-              "fields": [
-                {
-                  "name": "code"
-                },
-                {
-                  "name": "name"
-                },
-                {
-                  "name": "rate"
-                },
-                {
-                  "name": "disabled"
-                },
-                {
-                  "name": "description"
-                }
-              ],
-              "id": "detail",
-              "kind": "record",
-              "model": {
-                "fields": [
-                  {
-                    "name": "code"
-                  },
-                  {
-                    "name": "name"
-                  },
-                  {
-                    "name": "rate"
-                  },
-                  {
-                    "name": "disabled"
-                  },
-                  {
-                    "name": "description"
-                  }
-                ],
-                "type": "crm.product"
-              },
-              "object": {
-                "app": "build",
-                "kind": "object",
-                "name": "crm.product"
-              },
-              "owner": "binding:detail",
-              "ports": {
-                "selectionMode": "read",
-                "widget": "detail"
-              }
-            }
-          ],
-          "format": 4,
-          "inputSchema": {},
-          "name": "crm.product",
-          "object": {
-            "app": "build",
-            "kind": "object",
-            "name": "crm.product"
-          },
-          "scopeVisibility": {
-            "owners": {
-              "detail": "binding:detail",
-              "list": "binding:list"
-            },
-            "root": "page",
-            "scopes": [
-              {
-                "id": "page",
-                "kind": "page"
-              },
-              {
-                "binding": "list",
-                "id": "binding:list",
-                "kind": "page",
-                "parent": "page"
-              },
-              {
-                "binding": "detail",
-                "id": "binding:detail",
-                "kind": "page",
-                "parent": "page"
-              }
-            ]
-          },
-          "title": "Products",
-          "widgetSpec": {
-            "body": {
-              "document": null,
-              "layout": "list-detail",
-              "sections": [
-                {
-                  "binding": "list",
-                  "id": "list",
-                  "triggers": [
-                    "list"
-                  ]
-                },
-                {
-                  "binding": "detail",
-                  "id": "detail",
-                  "triggers": [
-                    "detail"
-                  ]
-                }
-              ]
-            },
-            "format": "platform.page.web.v1"
-          }
-        }
-      },
-      {
-        "ref": {
-          "app": "build",
           "kind": "page",
           "name": "crm.territory"
         },
@@ -9664,11 +10150,20 @@
         "requires": [
           {
             "app": "build",
+            "kind": "action",
+            "name": "crm.territory.create"
+          },
+          {
+            "app": "build",
+            "kind": "action",
+            "name": "crm.territory.edit"
+          },
+          {
+            "app": "build",
             "kind": "object",
             "name": "crm.territory"
           }
         ],
-        "provides": [],
         "body": {
           "actionTriggers": [
             {
@@ -9847,299 +10342,6 @@
               ]
             },
             "format": "platform.page.web.v1"
-          }
-        }
-      },
-      {
-        "ref": {
-          "app": "build",
-          "kind": "flow",
-          "name": "build.leadresponded"
-        },
-        "contractVersion": 1,
-        "sourceVersion": "1",
-        "body": {
-          "name": "build.leadresponded",
-          "subject": {
-            "app": "build",
-            "kind": "object",
-            "name": "crm.lead"
-          },
-          "actions": [
-            {
-              "app": "build",
-              "kind": "action",
-              "name": "crm.lead.edit"
-            }
-          ],
-          "definition": {
-            "name": "leadresponded",
-            "title": "Record the first response",
-            "kind": "automation",
-            "object": "crm.lead",
-            "trigger": {
-              "op": "and",
-              "kind": "boolean",
-              "args": [
-                {
-                  "op": "not",
-                  "kind": "boolean",
-                  "args": [
-                    {
-                      "op": "=",
-                      "kind": "boolean",
-                      "args": [
-                        {
-                          "op": "",
-                          "kind": "json",
-                          "ref": "subject.status"
-                        },
-                        {
-                          "op": "",
-                          "kind": "json",
-                          "lit": {
-                            "value": "new"
-                          }
-                        }
-                      ]
-                    }
-                  ]
-                },
-                {
-                  "op": "=",
-                  "kind": "boolean",
-                  "args": [
-                    {
-                      "op": "",
-                      "kind": "json",
-                      "ref": "subject.slastatus"
-                    },
-                    {
-                      "op": "",
-                      "kind": "json",
-                      "lit": {
-                        "value": "due"
-                      }
-                    }
-                  ]
-                }
-              ]
-            },
-            "steps": [
-              {
-                "name": "respond",
-                "kind": "action",
-                "inputs": {
-                  "slastatus": {
-                    "source": "literal",
-                    "value": "fulfilled"
-                  }
-                },
-                "act": "edit"
-              }
-            ]
-          }
-        }
-      },
-      {
-        "ref": {
-          "app": "build",
-          "kind": "flow",
-          "name": "build.leadresponse"
-        },
-        "contractVersion": 1,
-        "sourceVersion": "1",
-        "body": {
-          "name": "build.leadresponse",
-          "subject": {
-            "app": "build",
-            "kind": "object",
-            "name": "crm.lead"
-          },
-          "actions": [
-            {
-              "app": "build",
-              "kind": "action",
-              "name": "crm.lead.edit"
-            }
-          ],
-          "definition": {
-            "name": "leadresponse",
-            "title": "Watch the first response deadline",
-            "kind": "flow",
-            "object": "crm.lead",
-            "when": "open",
-            "steps": [
-              {
-                "name": "deadline",
-                "kind": "wait",
-                "waitUntil": {
-                  "source": "subject",
-                  "path": [
-                    "responseby"
-                  ]
-                },
-                "next": "pending"
-              },
-              {
-                "name": "pending",
-                "kind": "switch",
-                "value": {
-                  "source": "subject",
-                  "path": [
-                    "slastatus"
-                  ]
-                },
-                "cases": {
-                  "due": "overdue"
-                },
-                "next": "done"
-              },
-              {
-                "name": "overdue",
-                "kind": "action",
-                "inputs": {
-                  "slastatus": {
-                    "source": "literal",
-                    "value": "failed"
-                  }
-                },
-                "next": "tell",
-                "act": "edit"
-              },
-              {
-                "name": "tell",
-                "notify": {
-                  "title": "First response overdue",
-                  "body": "This lead passed its first response deadline while still new.",
-                  "field": "owner"
-                },
-                "kind": "notify",
-                "next": "done"
-              },
-              {
-                "name": "done",
-                "kind": "end"
-              }
-            ]
-          }
-        }
-      },
-      {
-        "ref": {
-          "app": "build",
-          "kind": "flow",
-          "name": "build.leadbalance"
-        },
-        "contractVersion": 1,
-        "sourceVersion": "1",
-        "body": {
-          "name": "build.leadbalance",
-          "subject": {
-            "app": "build",
-            "kind": "object",
-            "name": "crm.lead"
-          },
-          "actions": [
-            {
-              "app": "build",
-              "kind": "action",
-              "name": "crm.lead.edit"
-            }
-          ],
-          "definition": {
-            "name": "leadbalance",
-            "title": "Assign website leads evenly",
-            "kind": "automation",
-            "object": "crm.lead",
-            "trigger": {
-              "op": "and",
-              "kind": "boolean",
-              "args": [
-                {
-                  "op": "=",
-                  "kind": "boolean",
-                  "args": [
-                    {
-                      "op": "",
-                      "kind": "json",
-                      "ref": "subject.status"
-                    },
-                    {
-                      "op": "",
-                      "kind": "json",
-                      "lit": {
-                        "value": "new"
-                      }
-                    }
-                  ]
-                },
-                {
-                  "op": "or",
-                  "kind": "boolean",
-                  "args": [
-                    {
-                      "op": "=",
-                      "kind": "boolean",
-                      "args": [
-                        {
-                          "op": "",
-                          "kind": "json",
-                          "ref": "subject.source"
-                        },
-                        {
-                          "op": "",
-                          "kind": "json",
-                          "lit": {
-                            "value": "SRC-013"
-                          }
-                        }
-                      ]
-                    },
-                    {
-                      "op": "=",
-                      "kind": "boolean",
-                      "args": [
-                        {
-                          "op": "",
-                          "kind": "json",
-                          "ref": "subject.source"
-                        },
-                        {
-                          "op": "",
-                          "kind": "json",
-                          "lit": {
-                            "value": "SRC-014"
-                          }
-                        }
-                      ]
-                    }
-                  ]
-                }
-              ]
-            },
-            "steps": [
-              {
-                "name": "assign",
-                "kind": "action",
-                "balance": {
-                  "owner": {
-                    "app": "crm",
-                    "role": "salesrep",
-                    "open": {
-                      "source": [
-                        "SRC-013",
-                        "SRC-014"
-                      ],
-                      "status": [
-                        "new"
-                      ]
-                    }
-                  }
-                },
-                "act": "edit"
-              }
-            ]
           }
         }
       }

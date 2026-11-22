@@ -399,6 +399,10 @@ fields:
     title: Website
     type: text
   - group: Contact
+    name: linkedin
+    title: LinkedIn
+    type: text
+  - group: Contact
     name: jobtitle
     title: Job title
     type: text

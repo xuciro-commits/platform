@@ -26,6 +26,10 @@ action:
       group: Contact
       name: website
       type: string
+    - description: LinkedIn
+      group: Contact
+      name: linkedin
+      type: string
     - description: Job title
       group: Contact
       name: jobtitle

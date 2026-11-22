@@ -35,19 +35,18 @@
 灵魂：一个什么都没装的租户，管理员十分钟内把 CRM 装上、配好人，销售就能干活；包的来源、升级、卸载都在界面里，没有命令行。
 
 2.7.1–2.7.4 已由 trunk “blank tenant: install CRM …” 一个用例从安装走到赢单、卸载与重装。下面几项的宿主与界面已提交，只差验收。
-2.7.6 已由 marketplace 的 “upgrade tenant: install CRM from a local package file …” 验收；它装的 `crm-0.1.21.json` 就是 2.7.5 的上一版。
-顺序：2.7.5 → 2.7.7 → 2.7.9 → 2.7.10，再开 2.8。
+2.7.5、2.7.6 已由 marketplace 的 “upgrade tenant” 两个用例验收：从文件装 `crm-0.1.21.json`，再升级到带可选字段 `linkedin` 的 0.1.22。
+顺序：2.7.7 → 2.7.9 → 2.7.11 → 2.7.10，再开 2.8。
 
-- **2.7.5 改字段后升级（补验收）。** 已有：字段级审阅，删字段、改类型、新增必填在审阅与提交两层被拒（K9 `TestInvariantK9PackageUpgradeFieldReviewAndIncompatibleGate`）。
-  还缺：夹具 `crm` 升到 0.1.22，线索多一个可选字段，`deploy/packages/crm.json` 换成新快照。发之前，动作里的 `schemaVersion` 改由打包器按目标对象的模式历史生成：
-  CRM 现有 13 个动作里 7 个已落后于对象（`crm.lead.convert` 停在族 4，对象已到族 5），先在 K9 里写清宿主怎样用它，再改。
-  trunk 接着 2.7.6：`upgrade` 里建一条线索并填值 → 市场显示可升级 → 审阅列出新增字段 → 升级后旧记录与已填的值都在，记录页出现新字段。验收：trunk 与 `make test RUN=K9`。
 - **2.7.7 市场库（补验收）。** 已有：库的添加、移除、刷新，目录解析、https 与大小门禁、离线缓存（K9 `TestInvariantK9PackageMarketLibrary`）。
   还缺：`frontend/e2e/playwright.config.ts` 的宿主命令加 `-allow-loopback-packages`；trunk 自己起一个回环 http 目录 →
   “⋯ → 管理库”添加 → 目录条目与内置索引并列、标出来源 → 装上。验收：trunk。
 - **2.7.9 长用例进一分钟。** 单跑超过一分钟的四个：builder 的 gate（60s）、marketplace 的空租户主线（59s）、crm 的全类型看板（50s）与转化赢单（39s）。
   前置状态经接口造好，界面只验各自的那一步；marketplace 的主线拆成安装、配角色、主线、卸载重装四个串行用例。验收：每个文件 `make trunk SPEC=…` 单跑一分钟内。
-- **2.7.10 负责人走门槛。** 2.7.5–2.7.9 收完，负责人在 8495 按 plan 阶段 2 的门槛手走一遍：空租户安装 → 线索到赢单 → 期间没有改宿主。
+- **2.7.11 平台变更写后即读。** 导入包被接受后，紧接着的 `GET /v1/packages` 读到的是接受之前的读映像，界面不再收到变更，停在“加载中”。
+  导入向导暂以轮询兜住（`PackageImportWizard` 的 `listed`）。根因在宿主：平台自身的接受结果推进读映像后才回应，或回应里带上要等的位置。
+  先在 K13 写清“接受之后同一成员的下一次读看得到它”，再改，删掉向导里的轮询。验收：`make test RUN=K13`、marketplace 的 trunk。
+- **2.7.10 负责人走门槛。** 2.7.7–2.7.11 收完，负责人在 8495 按 plan 阶段 2 的门槛手走一遍：空租户安装 → 线索到赢单 → 期间没有改宿主。
   全量 `make trunk` 在这里跑一次。走完即删 plan 里的 2.7 行，阶段 2 关门，再开阶段 3 的批次。
 
 ## 2.8 开放应用接入

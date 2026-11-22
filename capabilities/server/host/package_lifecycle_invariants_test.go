@@ -209,21 +209,22 @@ func TestInvariantK9PackageUpgradeFieldReviewAndIncompatibleGate(t *testing.T) {
 		}
 	}
 
+	size := map[string]any{"name": "size", "title": "Size", "type": "choice", "choices": "small,large"}
 	v1 := publishVersion("1.0.0", []map[string]any{
-		{"name": "note", "title": "Note", "type": "text"},
+		{"name": "note", "title": "Note", "type": "text"}, size,
 	})
 	v2 := publishVersion("1.1.0", []map[string]any{
-		{"name": "note", "title": "Note", "type": "text"},
+		{"name": "note", "title": "Note", "type": "text"}, size,
 		{"name": "channel", "title": "Channel", "type": "text"},
 		{"name": "score", "title": "Score", "type": "integer"},
 	})
 	v3BadType := publishVersion("1.2.0", []map[string]any{
-		{"name": "note", "title": "Note", "type": "integer"},
+		{"name": "note", "title": "Note", "type": "integer"}, size,
 		{"name": "channel", "title": "Channel", "type": "text"},
 		{"name": "score", "title": "Score", "type": "integer"},
 	})
 	v4BadRemove := publishVersion("1.3.0", []map[string]any{
-		{"name": "note", "title": "Note", "type": "text"},
+		{"name": "note", "title": "Note", "type": "text"}, size,
 	})
 
 	seat := protocol.Seat{Subjects: []string{"package-admin"}, Member: platform.Member{

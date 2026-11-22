@@ -197,4 +197,65 @@ test("upgrade tenant: install CRM from a local package file after checking its o
   await expect(crm).toContainText("active");
   await expect(crm).toContainText("0.1.21");
 });
+
+test("upgrade tenant: CRM upgrades to a version with a new optional lead field and the lead keeps its values", async ({ page }) => {
+  const signIn = async () => {
+    await page.goto("/");
+    await page.getByRole("button", { name: "admin-1 · upgrade" }).click();
+    await expect(page.getByRole("button", { name: "Account", exact: true })).toBeVisible();
+  };
+  await signIn();
+  await open(page, "Admin", "Members");
+  await page.getByRole("row", { name: /王丹/ }).click();
+  const memberPane = page.getByRole("dialog", { name: "Details" }).or(page.getByRole("complementary", { name: "Details" }));
+  await memberPane.getByRole("combobox", { name: "Package role", exact: true }).click();
+  await page.getByRole("option", { name: /salesrep/ }).click();
+  await memberPane.getByRole("button", { name: "Grant role", exact: true }).click();
+  await expect(memberPane.getByRole("listitem").filter({ hasText: /salesrep/ })).toBeVisible();
+
+  await page.getByRole("button", { name: "Account", exact: true }).click();
+  await page.getByRole("menuitem", { name: "Sign out", exact: true }).click();
+  await signIn();
+  const nav = page.getByRole("navigation", { name: "Primary navigation" });
+  await page.getByRole("link", { name: "CRM", exact: true }).click();
+  await nav.getByRole("link", { name: "Leads", exact: true }).click();
+  await page.getByRole("button", { name: "New", exact: true }).click();
+  const lead = page.getByRole("dialog");
+  await lead.getByRole("textbox", { name: "Full name" }).fill("周宁");
+  await lead.getByRole("combobox", { name: "Status" }).click();
+  await page.getByRole("option", { name: "New", exact: true }).click();
+  await lead.getByRole("button", { name: "Create", exact: true }).click();
+  await expect(page.getByRole("heading", { level: 1, name: "周宁", exact: true })).toBeVisible();
+  const record = page.url();
+  await edit(page, "Email");
+  const email = page.getByRole("textbox", { name: "Email", exact: true });
+  await email.fill("zhou.ning@example.com");
+  await Promise.all([
+    page.waitForResponse((response) => response.url().endsWith("/v1/submissions") && response.ok()),
+    email.press("Enter"),
+  ]);
+  await expect(property(page, "Email")).toContainText("zhou.ning@example.com");
+
+  await open(page, "Delivery", "Marketplace");
+  await page.getByRole("listitem").filter({ hasText: /^CRM/ }).getByRole("button", { name: "Upgrade", exact: true }).first().click();
+  const review = page.getByRole("dialog", { name: /Review and install/ });
+  await expect(review.getByText(/crm\.lead/).first()).toBeVisible();
+  await expect(review.getByText(/\+ linkedin/)).toBeVisible();
+  await review.getByRole("button", { name: "Upgrade package", exact: true }).click();
+  await expect(review).toBeHidden({ timeout: 30_000 });
+  await open(page, "Delivery", "Installations");
+  await expect(page.getByRole("listitem").filter({ hasText: /^CRM/ })).toContainText("0.1.22");
+
+  await page.goto(record);
+  await expect(page.getByRole("heading", { level: 1, name: "周宁", exact: true })).toBeVisible();
+  await expect(property(page, "Email")).toContainText("zhou.ning@example.com");
+  await edit(page, "LinkedIn");
+  const linkedin = page.getByRole("textbox", { name: "LinkedIn", exact: true });
+  await linkedin.fill("linkedin.com/in/zhouning");
+  await Promise.all([
+    page.waitForResponse((response) => response.url().endsWith("/v1/submissions") && response.ok()),
+    linkedin.press("Enter"),
+  ]);
+  await expect(property(page, "LinkedIn")).toContainText("linkedin.com/in/zhouning");
+});
 });

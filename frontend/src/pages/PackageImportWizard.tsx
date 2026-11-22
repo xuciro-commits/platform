@@ -151,6 +151,7 @@ export function PackageImportWizard({
     setError("");
     try {
       await send(importAction, preview.descriptor.id, { id: preview.descriptor.id, digest: preview.digest });
+      await listed(preview.descriptor.id, preview.descriptor.version);
       setImported(true);
       reread();
       setStep(2);
@@ -331,4 +332,12 @@ function base64Of(file: File) {
     reader.onerror = () => reject(reader.error);
     reader.readAsDataURL(file);
   });
+}
+
+async function listed(id: string, version: string) {
+  for (let attempt = 0; attempt < 20; attempt++) {
+    const views = await request<Api.PackageView[]>("/v1/packages");
+    if (views.some((view) => view.descriptor.id === id && view.descriptor.version === version)) return;
+    await new Promise((resolve) => setTimeout(resolve, 250));
+  }
 }

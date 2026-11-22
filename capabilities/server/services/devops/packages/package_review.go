@@ -1,6 +1,7 @@
 package packages
 
 import (
+	"bytes"
 	"encoding/json"
 	"platformserver/kernel/protocol"
 
@@ -176,11 +177,11 @@ func (rv Review) Of(views []protocol.PackageView, chosen *protocol.PackageView, 
 }
 
 type reviewedObjectField struct {
-	Name     string   `json:"name"`
-	Type     string   `json:"type"`
-	Required bool     `json:"required"`
-	Ref      string   `json:"ref"`
-	Choices  []string `json:"choices"`
+	Name     string          `json:"name"`
+	Type     string          `json:"type"`
+	Required bool            `json:"required"`
+	Ref      string          `json:"ref"`
+	Choices  json.RawMessage `json:"choices"`
 }
 
 func diffObjectFields(object string, beforeRaw, afterRaw json.RawMessage, checkUpgrade bool) []protocol.PackageFieldChange {
@@ -210,7 +211,7 @@ func diffObjectFields(object string, beforeRaw, afterRaw json.RawMessage, checkU
 			out = append(out, item)
 			continue
 		}
-		if prev.Type != field.Type || prev.Required != field.Required || prev.Ref != field.Ref || !slices.Equal(prev.Choices, field.Choices) {
+		if prev.Type != field.Type || prev.Required != field.Required || prev.Ref != field.Ref || !bytes.Equal(prev.Choices, field.Choices) {
 			item := protocol.PackageFieldChange{Name: field.Name, Change: "changed", Before: prev.Type, After: field.Type}
 			if checkUpgrade {
 				item.Incompatible = true
