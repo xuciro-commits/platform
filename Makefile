@@ -100,7 +100,7 @@ frontend-host:
 	mkdir -p .build/frontend-host
 	cp scripts/frontend-tenants.json .build/frontend-host/tenants.json
 	node scripts/frontend-seed.mjs &
-	cd capabilities/server && $(GO) run ./cmd/platform-server -addr 127.0.0.1:18511 -tenants ../../.build/frontend-host/tenants.json -host-admins admin,root
+	cd capabilities/server && $(GO) run ./cmd/platform-server -addr 127.0.0.1:18511 -tenants ../../.build/frontend-host/tenants.json -packages ../../deploy/packages -host-admins admin,root
 
 frontend-dev:
 	$(PNPM) --dir frontend dev

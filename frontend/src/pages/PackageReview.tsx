@@ -70,8 +70,9 @@ export function PackageReview({ view, mode, close, done }: { view: Api.PackageVi
               {mode === "install" && review.status === "ready" && (
                 <VStack gap={2}>
                   <Text type="body" weight="bold">{t("Installation scope")}</Text>
-                  <Text type="body">{t("Applications")}: {review.data.changes.filter((change) => change.ref.kind === "app").length}</Text>
+                  <Text type="body">{t("Applications")}: {preparation.status === "ready" && preparation.data.applications.length ? preparation.data.applications.map((app) => app.title || app.ref.name).join(", ") : review.data.changes.filter((change) => change.ref.kind === "app").length}</Text>
                   <Text type="body">{t("Dependencies")}: {impact?.dependencies.length ? impact.dependencies.join(", ") : t("None")}</Text>
+                  <Text type="body">{t("Roles")}: {preparation.status === "ready" && preparation.data.roles.length ? preparation.data.roles.map((entry) => entry.role).join(", ") : t("None")}</Text>
                   <Text type="body">{t("Connections")}: {impact?.connections.length ?? 0}</Text>
                   <Text type="body">{t("Existing records affected")}: {impact?.outputs.reduce((sum, output) => sum + output.records, 0) ?? 0}</Text>
                 </VStack>

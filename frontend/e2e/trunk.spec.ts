@@ -2537,3 +2537,30 @@ test("menu: every entry in every app opens a page with its own title", async ({ 
 });
 
 });
+
+test.describe.serial("blank tenant", () => {
+test("blank tenant: install CRM from the marketplace, review scope, and open its empty app", async ({ page }) => {
+  await page.goto("/");
+  await page.getByRole("button", { name: "admin-1 · blank" }).click();
+  await expect(page.getByRole("button", { name: "Account", exact: true })).toBeVisible();
+  await expect(page.getByRole("link", { name: "CRM", exact: true })).toHaveCount(0);
+
+  await open(page, "Delivery", "Marketplace");
+  const crm = page.getByRole("listitem").filter({ hasText: /^CRM/ }).first();
+  await expect(crm).toBeVisible();
+  await crm.getByRole("button", { name: "Review and install", exact: true }).click();
+  const review = page.getByRole("dialog", { name: /Review and install/ });
+  await expect(review.getByText(/Applications:/)).toBeVisible();
+  await expect(review.getByText(/Dependencies:/)).toBeVisible();
+  await expect(review.getByText(/Roles:/)).toBeVisible();
+  await expect(review.getByText(/Connections:/)).toBeVisible();
+  await review.getByRole("button", { name: "Install package", exact: true }).click();
+  await expect(page).toHaveURL(/\/delivery\/installations$/, { timeout: 30_000 });
+
+  await page.getByRole("link", { name: "CRM", exact: true }).click();
+  const nav = page.getByRole("navigation", { name: "Primary navigation" });
+  await nav.getByRole("link", { name: "Leads", exact: true }).click();
+  await expect(page.getByRole("heading", { level: 1, name: "Leads", exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 2, name: "Nothing here yet", exact: true })).toBeVisible();
+});
+});
