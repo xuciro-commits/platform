@@ -31,25 +31,23 @@
 
 灵魂：一个什么都没装的租户，管理员十分钟内把 CRM 装上、配好人，销售就能干活；包的来源、升级、卸载都在界面里，没有命令行。
 
-- **2.7.2 配角色。** 管理 → 成员的记录页授予已装包声明的角色（`platform.member.grant`），选项只列已装包的角色。
-  田雪得到 salesrep 后应用栏出现 CRM、能新建线索；撤销后入口消失。验收：trunk。
-- **2.7.3 销售走完主线。** 田雪新建线索 → 已联系 → 转成商机 → 推进到赢单；赵敏（salesmanager）在看板与报表里看到这一单。
-  验收：trunk 一个用例从 2.7.1 走到赢单；负责人手走十分钟内完成。
-- **2.7.4 卸载与重装。** 管理 → 安装：“标记卸载”→ 排空 → “退役”；应用栏的 CRM 消失，记录保留、不可写。
-  再装同一版本：定义、记录与角色授予都回来。验收：trunk。
-- **2.7.5 改字段后升级。** 夹具在 `scripts/frontend-fixtures/` 留 CRM 上一版的制品（照 `production-provider-0.1.4.json` 的做法），
-  当前版给线索多一个可选字段。`blank` 先装上一版，市场显示可升级；审阅列出新增字段；升级后旧记录与已填的值都在，记录页出现新字段。
-  不兼容的改动（删字段、改类型）在审阅里被拒并写明原因；宿主缺这项检查就补，并写成内核不变量。验收：trunk 与 `make test`。
-- **2.7.6 从独立库安装。** 市场“⋯ → 从地址或文件安装”：粘贴 https 地址或选一个包文件，经 `POST /v1/packages/inspect` 取到候选，
-  审阅页显示来源（地址或“本地文件”）与摘要，确认后 `platform.package.import`，再走同一个安装。验收：trunk 用文件，不走网络。
-- **2.7.7 市场库。** 市场“⋯ → 管理库”添加库地址；库是一份目录（每条：id、版本、标题、包地址、sha256 摘要）。
-  代码库地址映射到默认分支根上的 `catalog.json` 原始文件（github、gitee 等已知托管）；取目录与取包都只走 https、不带凭据、16 MiB 上限，按摘要核对。
-  目录里的包与内置索引并列显示、标出来源，装法同 2.7.6。夹具宿主经启动参数放行回环地址的 http，trunk 自己起一个目录。验收：trunk。
-- **2.7.8 删除 `web/`。** 先搬走 `frontend/` 还在用的：`web/packages/api/src/gen/` 的宿主类型搬到 `frontend/src/host/gen/`，
-  改 `cmd/api-types` 的输出与 `frontend/package.json` 的 `@platform/api` 链接；`cmd/page-contract` 的输出与 `make check` 第 4 步的比对只留 `frontend/` 用到的。
-  `scripts/check-i18n.mjs`、`generate-catalog.mjs`、`rule-browser.mjs` 先查谁用，只服务 `web/` 的删掉。
-  再删 Makefile 的 `web`、`check-web`、`e2e` 与 `verify` 里的这两项，`.githooks/pre-commit` 的 `web/` 分支，
-  以及 AGENTS.md、architecture、frontend“旧前端”一节、plan 冻结表里的 `web/`。验收：`make check`、`make check-frontend`、全量 `make trunk`。
+2.7.1–2.7.4 已由 trunk “blank tenant: install CRM …” 一个用例从安装走到赢单、卸载与重装。下面几项的宿主与界面已提交，只差验收。
+2.7.6 先做：它的“从文件安装”就是 2.7.5 装上一版的路。两项用新的夹具租户 `upgrade`（与 `blank` 同样三人、无预装包），不动 `blank` 的用例。
+
+- **2.7.6 从独立库安装（补验收）。** 已有：`inspect` 的制品 SHA-256 核验与四步 `PackageImportWizard`。
+  还缺：`scripts/frontend-fixtures/crm-0.1.21.json`（当前 CRM 制品的拷贝，照 `production-provider-0.1.4.json` 的做法）与 `upgrade` 租户；
+  trunk：`upgrade` 的管理员在市场“⋯ → 从地址或文件安装”选这个文件 → 审阅页显示“本地文件”与摘要 → 确认后安装，CRM 是 active。不走网络。
+- **2.7.5 改字段后升级（补验收）。** 已有：字段级审阅，删字段、改类型、新增必填在审阅与提交两层被拒（K9 `TestInvariantK9PackageUpgradeFieldReviewAndIncompatibleGate`）。
+  还缺：CRM 升到 0.1.22，线索多一个可选字段；制品按 CRM 包原来的做法重新发布，不手改 `schemaVersions`。
+  trunk 接着 2.7.6：`upgrade` 里建一条线索并填值 → 市场显示可升级 → 审阅列出新增字段 → 升级后旧记录与已填的值都在，记录页出现新字段。验收：trunk 与 `make test RUN=K9`。
+- **2.7.7 市场库（补验收）。** 已有：库的添加、移除、刷新，目录解析、https 与大小门禁、离线缓存（K9 `TestInvariantK9PackageMarketLibrary`）。
+  还缺：`frontend/e2e/playwright.config.ts` 的宿主命令加 `-allow-loopback-packages`；trunk 自己起一个回环 http 目录 →
+  “⋯ → 管理库”添加 → 目录条目与内置索引并列、标出来源 → 装上。验收：trunk。
+- **2.7.8 删除 `web/`（收尾）。** 已有：目录、三个脚本与生成路径都已迁走，Makefile、pre-commit 与各文档已改。
+  全量 trunk（4.4 分钟，70 过、1 挂、1 未跑）挂在 “applications: shared records … after retirement”：`e88592529` 把管理安装改成术语与值两栏，
+  用例还找 “Business records retained: 2” 整句，值仍是 2。用例改按术语取值；“builder and applications” 里装示例、保留记录、交付三个用例重跑通过即收。
+- **2.7.9 负责人走门槛。** 2.7.5–2.7.8 收完，负责人在 8495 按 plan 阶段 2 的门槛手走一遍：空租户安装 → 线索到赢单 → 期间没有改宿主。
+  全量 `make trunk` 在这里跑一次。走完即删 plan 里的 2.7 行，阶段 2 关门，再开阶段 3 的批次。
 
 ## 承重的要求
 
@@ -57,7 +55,9 @@
 - 一项能力一个实现：发号只经 `Caller.Next`（`platform.Sequence`），表达式只经 Expr 求值，授权只经唯一的决定点；不新写第二套。
 - 不写 CRM 特化代码：能力声明在类型、动作、角色上，CRM 包只用声明；所有类型同时得到。
 - 重放得到同样的字节：宿主算出的号、默认值、带出值写进接受结果，重放读回，不重算。
-- 每项一次提交：先写 trunk 步骤或内核不变量，再实现；改宿主类型后 `make contract`；`make check`、`make check-frontend`、相关 `make test RUN=K…`、全量 `make trunk` 通过才提交。
+- 每项一次提交：先写 trunk 步骤或内核不变量，再实现；改宿主类型后 `make contract`；`make check`、`make check-frontend`、相关 `make test RUN=K…`、
+  改到的 trunk 用例（`--grep`）通过才提交。全量 `make trunk` 只在一行收尾时跑一次；没有改动不重跑。
+- 每条命令计时，控制在一分钟内；用例拆到单个一分钟内，超过的写明命令交负责人在外面跑。
 
 ## 之后的行
 

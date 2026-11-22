@@ -60,7 +60,6 @@ deploy/packages       产品包的源与制品
 deploy                本地、容器与无 Docker 的部署
 scripts               检查、生成、打包
 docs                  十份文档
-web                   旧前端，冻结，将删除
 ```
 
 ```bash
