@@ -16,7 +16,7 @@ import (
 
 func (h *Host) routesPackages(rt *routes) {
 	h.routesPackageOwnership(rt)
-	rt.authorized(transport.Route{Pattern: "GET /v1/packages/{id}/preparation", Summary: "Describe every application and target-environment prerequisite before creating or publishing a package", Answer: packages.PackagePreparation{}}, build.ID, []string{build.Builder}, transport.Answering(func(r *http.Request, m platform.Member, t *Tenant) (packages.PackagePreparation, *platform.Error) {
+	rt.recordRead(transport.Route{Pattern: "GET /v1/packages/{id}/preparation", Summary: "Describe every application and target-environment prerequisite before creating or publishing a package", Answer: packages.PackagePreparation{}}, transport.Answering(func(r *http.Request, m platform.Member, t *Tenant) (packages.PackagePreparation, *platform.Error) {
 		value, err := t.PackagePreparation(r.Context(), m, r.PathValue("id"), r.URL.Query().Get("version"), h.Now())
 		for i := range value.AI {
 			value.AI[i].Problem = t.i18n.Say(t.Language(m, r), value.AI[i].Problem)
@@ -44,7 +44,7 @@ func (t *Tenant) PackagePreparation(ctx context.Context, m platform.Member, id, 
 	return coordinatedRecordRead(t, ctx, func(t *Tenant) (packages.PackagePreparation, *platform.Error) {
 		return packages.Prepare(id, version, m, packages.PreparationHooks{
 			Authorize: func() *platform.Error {
-				if !build.HoldsIndependentRole(m, build.Builder) {
+				if !m.Holds(controlowner.PlatformApp, controlowner.Admin) && !build.HoldsIndependentRole(m, build.Builder) {
 					return platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "Builder role required")
 				}
 				_, refusal := t.read(m, "packages")
@@ -54,7 +54,7 @@ func (t *Tenant) PackagePreparation(ctx context.Context, m platform.Member, id, 
 			Source:   func() (packages.PreparationOwner, bool) { return t.PackageOwner, t.PackageOwner != nil },
 			Drafts:   func() (build.ConstructionDrafts, bool) { owner := t.builders[build.ID]; return owner, owner != nil },
 			Records: func(typ string, q platform.Query) (int, []any, *platform.Error) {
-				page, refusal := t.objectOwner(t.Projection).Records(m, typ, q, at)
+				page, refusal := t.objectOwner(t.Projection).Records(packages.PreparationReader(m), typ, q, at)
 				return page.Total, page.Records, refusal
 			},
 			App: (hostView{t: t}).App,

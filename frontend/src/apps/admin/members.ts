@@ -2,16 +2,17 @@ import { createElement } from "react";
 import type { Api } from "../../host";
 import { listPage } from "../../pages/ListEntry";
 import { MemberDirectoryEntry } from "../../pages/MemberDirectoryEntry";
+import { MemberRoles } from "../../pages/MemberRoles";
 import { useSearch } from "../../router";
 
-const Members = listPage<Api.Member[], Api.Member>({
+const Members = listPage<Api.MemberView[], Api.MemberView>({
   title: "Members",
   about: "A member is a person or agent who can sign in to this workspace.",
   read: "/v1/members",
   rows: (answer) => answer,
   id: (member) => member.id,
   columns: [
-    { key: "id", header: "Member", text: (member) => member.id },
+    { key: "id", header: "Member", text: (member) => member.profile?.displayName || member.id },
     {
       key: "roles",
       header: "Roles",
@@ -24,6 +25,7 @@ const Members = listPage<Api.Member[], Api.Member>({
     { key: "timezone", header: "Time zone", width: 140, text: (member) => member.timezone ?? "" },
   ],
   groups: [{ key: "status", label: "Status", of: (member) => member.status ?? "active" }],
+  detail: (_, member) => (member ? createElement(MemberRoles, { member }) : null),
 });
 
 export default function MemberEntry() {

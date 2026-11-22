@@ -22,12 +22,13 @@ export function PackageReview({ view, mode, close, done }: { view: Api.PackageVi
   const named = mode === "install" && !view.installed && !!view.space;
   const [namespace, setNamespace] = useState(view.space ?? "");
   const actions = catalog.status === "ready" ? catalog.data : [];
-  const installAction = actions.find((action) => action.schema === (view.update ? "platform.package.upgrade" : view.downgrade ? "platform.package.downgrade" : "platform.package.install"));
+  const installAction = actions.find((action) => action.schema === (view.rollback ? "platform.package.rollback" : view.update ? "platform.package.upgrade" : view.downgrade ? "platform.package.downgrade" : "platform.package.install"));
   const drainAction = actions.find((action) => action.schema === "platform.package.drain");
   const retireAction = actions.find((action) => action.schema === "platform.package.retire");
   const problems = [
     ...(mode === "install" ? [...(view.plan.problems ?? []), ...(view.precheck.problems ?? [])] : []),
     ...(review.status === "ready" ? review.data.problems ?? [] : review.status === "loading" ? [] : [review.reason]),
+    ...(mode === "install" && (preparation.status === "error" || preparation.status === "refused") ? [preparation.reason] : []),
     ...(preparation.status === "ready" ? preparation.data.connections.filter((connection) => !connection.ready).map((connection) => `${connection.title}: ${t("Not configured")}`) : []),
     ...(preparation.status === "ready" ? preparation.data.ai.filter((requirement) => requirement.problem).map((requirement) => requirement.problem!) : []),
   ];

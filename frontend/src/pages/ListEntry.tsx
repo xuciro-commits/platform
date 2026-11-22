@@ -3,7 +3,7 @@ import { Button } from "@astryxdesign/core/Button";
 import { HStack, VStack } from "@astryxdesign/core/Layout";
 import { MoreMenu } from "@astryxdesign/core/MoreMenu";
 import { useToast } from "@astryxdesign/core/Toast";
-import { useMemo, useRef, useState } from "react";
+import { type ReactNode, useMemo, useRef, useState } from "react";
 import { type Api, type Read, request, useRead } from "../host";
 import { t } from "../i18n";
 import { useSearch } from "../router";
@@ -18,11 +18,12 @@ import { newView, readView } from "./view";
 export type RowAction = { schema: string; id?: string; fixed?: Values; initial?: Values; label?: string; revision?: number };
 type Change<Row> = { schema: string; parameter: string; id: (row: Row) => string; fixed?: (row: Row) => Values; value: (row: Row) => unknown };
 type EntryColumn<Row> = ListColumn<Row> & { change?: Change<Row> };
-export type ListDefinition<Answer, Row> = Omit<ListShape<Answer, Row>, "columns" | "page" | "remote"> & {
+export type ListDefinition<Answer, Row> = Omit<ListShape<Answer, Row>, "columns" | "page" | "remote" | "detail"> & {
   read: string;
   columns: EntryColumn<Row>[] | { (answer: Answer): EntryColumn<Row>[] };
   more?: (answer: Answer) => string | undefined;
   actions?: { create?: string; row?: (row: Row) => RowAction[] };
+  detail?: (id: string, row?: Row) => ReactNode;
   import?: (answer: Answer, action: (schema: string) => Api.Action | undefined) => ImportTarget | undefined;
   export?: string;
   query?: string;
@@ -133,7 +134,7 @@ export function listPage<Answer, Row>(definition: ListDefinition<Answer, Row>) {
               ))}
             </HStack>
           )}
-          {definition.detail?.(id)}
+          {definition.detail?.(id, row)}
         </VStack>
       );
     } : undefined;

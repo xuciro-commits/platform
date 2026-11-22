@@ -2539,7 +2539,13 @@ test("menu: every entry in every app opens a page with its own title", async ({ 
 });
 
 test.describe.serial("blank tenant", () => {
-test("blank tenant: install CRM from the marketplace, review scope, and open its empty app", async ({ page }) => {
+test("blank tenant: install CRM from the marketplace, grant roles, and run the sales mainline to Won", async ({ page }) => {
+  test.setTimeout(120000);
+  const signOut = async () => {
+    await page.getByRole("button", { name: "Account", exact: true }).click();
+    await page.getByRole("menuitem", { name: "Sign out", exact: true }).click();
+  };
+
   await page.goto("/");
   await page.getByRole("button", { name: "admin-1 · blank" }).click();
   await expect(page.getByRole("button", { name: "Account", exact: true })).toBeVisible();
@@ -2550,9 +2556,9 @@ test("blank tenant: install CRM from the marketplace, review scope, and open its
   await expect(crm).toBeVisible();
   await crm.getByRole("button", { name: "Review and install", exact: true }).click();
   const review = page.getByRole("dialog", { name: /Review and install/ });
-  await expect(review.getByText(/Applications:/)).toBeVisible();
+  await expect(review.getByText(/Applications:.*CRM/)).toBeVisible();
   await expect(review.getByText(/Dependencies:/)).toBeVisible();
-  await expect(review.getByText(/Roles:/)).toBeVisible();
+  await expect(review.getByText(/Roles:.*salesrep/)).toBeVisible();
   await expect(review.getByText(/Connections:/)).toBeVisible();
   await review.getByRole("button", { name: "Install package", exact: true }).click();
   await expect(page).toHaveURL(/\/delivery\/installations$/, { timeout: 30_000 });
@@ -2562,5 +2568,98 @@ test("blank tenant: install CRM from the marketplace, review scope, and open its
   await nav.getByRole("link", { name: "Leads", exact: true }).click();
   await expect(page.getByRole("heading", { level: 1, name: "Leads", exact: true })).toBeVisible();
   await expect(page.getByRole("heading", { level: 2, name: "Nothing here yet", exact: true })).toBeVisible();
+
+  await open(page, "Admin", "Members");
+  await page.getByRole("row", { name: /田雪/ }).click();
+  const memberPane = page.getByRole("dialog", { name: "Details" }).or(page.getByRole("complementary", { name: "Details" }));
+  await memberPane.getByRole("combobox", { name: "Package role", exact: true }).click();
+  await expect(page.getByRole("option", { name: /salesrep/ })).toBeVisible();
+  await expect(page.getByRole("option", { name: /salesmanager/ })).toBeVisible();
+  await expect(page.getByRole("option", { name: /admin|builder/i })).toHaveCount(0);
+  await page.getByRole("option", { name: /salesrep/ }).click();
+  await memberPane.getByRole("button", { name: "Grant role", exact: true }).click();
+  await expect(memberPane.getByText(/salesrep/)).toBeVisible();
+
+  await signOut();
+  await page.getByRole("button", { name: "user-1 · blank" }).click();
+  await expect(page.getByRole("link", { name: "CRM", exact: true })).toBeVisible();
+  await page.getByRole("link", { name: "CRM", exact: true }).click();
+  await nav.getByRole("link", { name: "Leads", exact: true }).click();
+  await page.getByRole("button", { name: "New", exact: true }).click();
+  const firstLead = page.getByRole("dialog");
+  await firstLead.getByRole("textbox", { name: "Full name" }).fill("林海");
+  await firstLead.getByRole("combobox", { name: "Status" }).click();
+  await page.getByRole("option", { name: "New", exact: true }).click();
+  await firstLead.getByRole("button", { name: "Create", exact: true }).click();
+  await expect(page.getByRole("heading", { level: 1, name: "林海", exact: true })).toBeVisible();
+
+  await signOut();
+  await page.getByRole("button", { name: "admin-1 · blank" }).click();
+  await open(page, "Admin", "Members");
+  await page.getByRole("row", { name: /田雪/ }).click();
+  await memberPane.getByRole("listitem").filter({ hasText: /salesrep/ }).getByRole("button", { name: "Revoke", exact: true }).click();
+  await expect(memberPane.getByRole("listitem").filter({ hasText: /salesrep/ })).toHaveCount(0);
+
+  await signOut();
+  await page.getByRole("button", { name: "user-1 · blank" }).click();
+  await expect(page.getByRole("button", { name: "Account", exact: true })).toBeVisible();
+  await expect(page.getByRole("link", { name: "CRM", exact: true })).toHaveCount(0);
+
+  await signOut();
+  await page.getByRole("button", { name: "admin-1 · blank" }).click();
+  await open(page, "Admin", "Members");
+  await page.getByRole("row", { name: /田雪/ }).click();
+  await memberPane.getByRole("combobox", { name: "Package role", exact: true }).click();
+  await page.getByRole("option", { name: /salesrep/ }).click();
+  await memberPane.getByRole("button", { name: "Grant role", exact: true }).click();
+  await expect(memberPane.getByText(/salesrep/)).toBeVisible();
+
+  await page.getByRole("row", { name: /赵敏/ }).click();
+  await memberPane.getByRole("combobox", { name: "Package role", exact: true }).click();
+  await page.getByRole("option", { name: /salesmanager/ }).click();
+  await memberPane.getByRole("button", { name: "Grant role", exact: true }).click();
+  await expect(memberPane.getByText(/salesmanager/)).toBeVisible();
+
+  await signOut();
+  await page.getByRole("button", { name: "user-1 · blank" }).click();
+  await page.getByRole("link", { name: "CRM", exact: true }).click();
+  await nav.getByRole("link", { name: "Leads", exact: true }).click();
+  await page.getByRole("link", { name: "林海", exact: true }).click();
+  await edit(page, "Organization");
+  const org = page.getByRole("textbox", { name: "Organization", exact: true });
+  await org.fill("星海制造");
+  await org.press("Enter");
+  await edit(page, "Status");
+  await page.getByRole("combobox", { name: "Status" }).fill("Contacted");
+  await page.getByRole("option", { name: "Contacted", exact: true }).click();
+  await expect(property(page, "Status")).toContainText("Contacted");
+  await page.getByRole("button", { name: "Convert to deal", exact: true }).click();
+  const convert = page.getByRole("dialog", { name: "Convert to deal", exact: true });
+  await convert.getByRole("button", { name: "Convert to deal", exact: true }).click();
+  await expect(convert).toBeHidden();
+  await expect(page.getByRole("heading", { level: 1, name: "星海制造", exact: true })).toBeVisible();
+  await nav.getByRole("link", { name: "Deals", exact: true }).click();
+  await page.getByRole("radio", { name: "Board" }).click();
+  const card = page.getByRole("region", { name: "Qualification", exact: true }).getByRole("heading", { level: 4, name: "星海制造", exact: true });
+  await expect(card).toBeVisible();
+  const won = page.getByRole("region", { name: "Won", exact: true });
+  const from = (await card.boundingBox())!;
+  const to = (await won.boundingBox())!;
+  await page.mouse.move(from.x + 2, from.y - 4);
+  await page.mouse.down();
+  await page.mouse.move(from.x + 40, from.y + 20, { steps: 4 });
+  await page.mouse.move(to.x + to.width / 2, to.y + to.height / 2, { steps: 8 });
+  await page.mouse.up();
+  await expect(won.getByRole("heading", { level: 4, name: "星海制造", exact: true })).toBeVisible();
+
+  await signOut();
+  await page.getByRole("button", { name: "manager-1 · blank" }).click();
+  await page.getByRole("link", { name: "CRM", exact: true }).click();
+  await nav.getByRole("link", { name: "Deals", exact: true }).click();
+  await page.getByRole("radio", { name: "Board" }).click();
+  await expect(page.getByRole("region", { name: "Won", exact: true }).getByRole("heading", { level: 4, name: "星海制造", exact: true })).toBeVisible();
+  await page.goto("/crm/dashboard");
+  await expect(page.getByRole("main").getByRole("link", { name: "Won deals", exact: true })).toBeVisible();
+  await expect(page.getByRole("main").getByRole("heading", { level: 1, name: "1", exact: true }).first()).toBeVisible();
 });
 });

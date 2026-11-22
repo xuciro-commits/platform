@@ -279,6 +279,19 @@ func (h PreparationHooks) modelProblem(purpose, model string, options platform.M
 	return resolved, ""
 }
 
+func PreparationReader(m platform.Member) platform.Member {
+	if !m.Holds("platform", "admin") || build.HoldsIndependentRole(m, build.Builder) {
+		return m
+	}
+	reader := m
+	reader.Roles = map[string]string{}
+	for app, role := range m.Roles {
+		reader.Roles[app] = role
+	}
+	reader.Roles[build.ID] = build.Builder
+	return reader
+}
+
 func Prepare(id, version string, m platform.Member, hooks PreparationHooks) (PackagePreparation, *platform.Error) {
 	fail := func(err error) (PackagePreparation, *platform.Error) {
 		return PackagePreparation{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "{why}", err.Error())

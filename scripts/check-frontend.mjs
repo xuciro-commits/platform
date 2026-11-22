@@ -48,7 +48,11 @@ for (const name of Object.keys({ ...manifest.dependencies, ...manifest.devDepend
 }
 
 const dictionary = readFileSync(join(src, "i18n.ts"), "utf8");
-const translated = new Set([...dictionary.matchAll(/^\s+(?:"([^"]+)"|([A-Za-z_]\w*)): "/gm)].map((match) => match[1] ?? match[2]));
+const valueDictionary = JSON.parse(readFileSync(join(src, "i18n-values.json"), "utf8"));
+const translated = new Set([
+  ...[...dictionary.matchAll(/^\s+(?:"([^"]+)"|([A-Za-z_]\w*)): "/gm)].map((match) => match[1] ?? match[2]),
+  ...Object.keys(valueDictionary),
+]);
 const needsTranslation = (file, line, text) => {
   if (!translated.has(text)) report(file, line, `"${text}" has no zh-CN entry. Add it to zhCN in src/i18n.ts.`);
 };

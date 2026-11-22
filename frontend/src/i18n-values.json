@@ -182,5 +182,11 @@
   "Filled in from other fields; you can change it": "由其他字段带出，可以改",
   "Changed only by actions": "只由动作改动",
   "changes": "项变更",
-  "Dashboard": "仪表盘"
+  "Dashboard": "仪表盘",
+  "Grant role": "授予角色",
+  "Revoke role": "撤销角色",
+  "Package role": "已装包角色",
+  "Active roles": "当前角色",
+  "Revoke": "撤销",
+  "No installed package roles are available.": "当前没有已安装包声明的角色。"
 }
