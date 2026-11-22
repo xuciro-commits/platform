@@ -96,6 +96,11 @@ func TestInvariantK9PackageRetireAndReinstallPreserveData(t *testing.T) {
 		t.Fatalf("installed resource is not managed: %+v", resource)
 	}
 
+	earlyRetire := target.submission(packages.SchemaPackageRetire, protocol.PackageType, descriptor.ID, map[string]any{"id": descriptor.ID})
+	earlyRetire.Authority, earlyRetire.PrincipalId = "platform", admin.ID
+	if _, refusal := target.Submit(admin, earlyRetire, invariantClock); refusal == nil {
+		t.Fatal("retiring an active package without draining first must be refused")
+	}
 	submit(packages.SchemaPackageDrain, map[string]any{"id": descriptor.ID})
 	submit(packages.SchemaPackageRetire, map[string]any{"id": descriptor.ID})
 	if resource := resourceRecord(t, target, objectRef); !resource.Archived {

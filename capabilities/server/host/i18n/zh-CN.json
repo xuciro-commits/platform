@@ -2927,5 +2927,6 @@
   "teal": "青绿",
   "changes": "变更",
   "update": "更新",
-  "Resources": "资源"
+  "Resources": "资源",
+  "Mark the package for uninstall before retiring it": "请先将包标记为待卸载，再执行退役"
 }

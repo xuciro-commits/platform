@@ -2661,5 +2661,34 @@ test("blank tenant: install CRM from the marketplace, grant roles, and run the s
   await page.goto("/crm/dashboard");
   await expect(page.getByRole("main").getByRole("link", { name: "Won deals", exact: true })).toBeVisible();
   await expect(page.getByRole("main").getByRole("heading", { level: 1, name: "1", exact: true }).first()).toBeVisible();
+
+  await signOut();
+  await page.getByRole("button", { name: "admin-1 · blank" }).click();
+  await open(page, "Delivery", "Installations");
+  const crmRow = page.getByRole("listitem").filter({ hasText: /^CRM/ });
+  await crmRow.getByRole("button", { name: "Manage installation", exact: true }).click();
+  const manage = page.getByRole("dialog", { name: /Manage installation/ });
+  await expect(manage.getByRole("button", { name: "Retire package", exact: true })).toBeDisabled();
+  await manage.getByRole("button", { name: "Mark for uninstall", exact: true }).click();
+  await expect(manage).toBeHidden();
+  await expect(crmRow).toContainText("draining");
+  await crmRow.getByRole("button", { name: "Manage installation", exact: true }).click();
+  await manage.getByRole("button", { name: "Retire package", exact: true }).click();
+  await expect(manage).toBeHidden();
+  await expect(crmRow).toContainText("retired");
+  await expect(page.getByRole("link", { name: "CRM", exact: true })).toHaveCount(0);
+
+  await crmRow.getByRole("button", { name: "Reinstall", exact: true }).click();
+  const reinstall = page.getByRole("dialog", { name: /Review and install/ });
+  await reinstall.getByRole("button", { name: "Reinstall package", exact: true }).click();
+  await expect(reinstall).toBeHidden();
+  await expect(page.getByRole("link", { name: "CRM", exact: true })).toBeVisible();
+
+  await signOut();
+  await page.getByRole("button", { name: "user-1 · blank" }).click();
+  await expect(page.getByRole("link", { name: "CRM", exact: true })).toBeVisible();
+  await page.getByRole("link", { name: "CRM", exact: true }).click();
+  await nav.getByRole("link", { name: "Deals", exact: true }).click();
+  await expect(page.getByRole("link", { name: "星海制造", exact: true })).toBeVisible();
 });
 });

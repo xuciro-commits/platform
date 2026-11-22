@@ -427,6 +427,9 @@ func (d *Owner) decide(c platform.Caller, s *pb.Submission) (func(*pb.ChangeReco
 		if schema == SchemaPackageDrain {
 			removal.OK = len(impact.Dependencies) == 0
 		} else {
+			if held.State != "draining" {
+				return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Mark the package for uninstall before retiring it")
+			}
 			for _, run := range impact.Runs {
 				removal.Blockers = append(removal.Blockers, "Work is still in flight: "+run.Kind+"/"+run.ID)
 			}

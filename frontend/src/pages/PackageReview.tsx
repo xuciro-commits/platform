@@ -101,7 +101,7 @@ export function PackageReview({ view, mode, close, done }: { view: Api.PackageVi
                   onClick={() => run(drainAction, { id })} />
               )}
               {mode === "manage" && state !== "retired" && (
-                <Button label={t("Retire package")} variant="destructive" isDisabled={busy || loading || !retireAction || problems.length > 0} onClick={() => run(retireAction, { id })} />
+                <Button label={t("Retire package")} variant="destructive" isDisabled={busy || loading || !retireAction || state !== "draining" || problems.length > 0} onClick={() => run(retireAction, { id })} />
               )}
             </HStack>
           </LayoutFooter>
