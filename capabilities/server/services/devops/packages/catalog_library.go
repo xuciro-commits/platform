@@ -19,6 +19,7 @@ import (
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	runtimeprotocol "platformserver/kernel/protocol"
 	"platformserver/platform"
+	packagedesc "platformserver/services/devops/descriptor"
 )
 
 const (
@@ -181,6 +182,11 @@ func DecodeCatalog(raw []byte, baseURL string) (string, []runtimeprotocol.Packag
 			return "", nil, err
 		}
 		entry.Sha256 = sum
+		if entry.Listing != nil {
+			if err := packagedesc.CheckListing(*entry.Listing); err != nil {
+				return "", nil, fmt.Errorf("Catalog entry %s@%s: %s", entry.ID, entry.Version, err)
+			}
+		}
 		rel, err := url.Parse(entry.URL)
 		if err != nil {
 			return "", nil, fmt.Errorf("Catalog entry %s@%s has an invalid package address", entry.ID, entry.Version)

@@ -119,12 +119,29 @@ type PackageLibrary struct {
 }
 
 type PackageCatalogEntry struct {
-	ID          string `json:"id"`
-	Version     string `json:"version"`
-	Title       string `json:"title"`
-	Description string `json:"description,omitempty"`
-	URL         string `json:"url"`
-	Sha256      string `json:"sha256"`
+	ID          string          `json:"id"`
+	Version     string          `json:"version"`
+	Title       string          `json:"title"`
+	Description string          `json:"description,omitempty"`
+	URL         string          `json:"url"`
+	Sha256      string          `json:"sha256"`
+	Listing     *PackageListing `json:"listing,omitempty"`
+}
+
+type PackageListing struct {
+	Industries   []string              `json:"industries,omitempty"`
+	Capabilities []string              `json:"capabilities,omitempty"`
+	Keywords     []string              `json:"keywords,omitempty"`
+	Stage        string                `json:"stage,omitempty"`
+	Source       *PackageListingSource `json:"source,omitempty"`
+}
+
+type PackageListingSource struct {
+	Ecosystem string `json:"ecosystem"`
+	App       string `json:"app"`
+	Version   string `json:"version,omitempty"`
+	License   string `json:"license,omitempty"`
+	Relation  string `json:"relation"`
 }
 
 type PackageLibraryView struct {

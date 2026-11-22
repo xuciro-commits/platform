@@ -3,6 +3,19 @@ version: 0.1.5
 namespace: application.production-provider
 title: Production batch provider
 description: Independent declarative production batch example. Install and publish using platform capabilities; configure external cooperation after installation. Quantities are local facts, and cross-system receipts remain independent.
+listing:
+  industries:
+    - manufacturing
+  capabilities:
+    - production
+  keywords:
+    - batch
+    - production-order
+  stage: test
+  source:
+    ecosystem: platform
+    app: fixtures
+    relation: original
 roots:
   - app: build
     kind: app

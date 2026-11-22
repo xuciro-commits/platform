@@ -278,11 +278,13 @@ test("upgrade tenant: CRM upgrades to a version with a new optional lead field a
 test.describe.serial("library tenant", () => {
 const previous = fileURLToPath(new URL("../../scripts/frontend-fixtures/crm-0.1.21.json", import.meta.url));
 
-test("library tenant: a remote catalog lists its package beside the built-in index, and its entry installs after the digest is checked", async ({ page }) => {
+test("library tenant: a remote catalog lists its package beside the built-in index, filters by its listing, and its entry installs after the digest is checked", async ({ page }) => {
   const bytes = readFileSync(previous);
   const sha256 = "sha256:" + createHash("sha256").update(bytes).digest("hex");
   const catalog = JSON.stringify({ version: 1, title: "Acme packages", packages: [
-    { id: "crm", version: "0.1.21", title: "Acme CRM", description: "CRM from the Acme library", url: "./crm-0.1.21.json", sha256 },
+    { id: "crm", version: "0.1.21", title: "Acme CRM", description: "CRM from the Acme library", url: "./crm-0.1.21.json", sha256,
+      listing: { industries: ["general"], capabilities: ["sales"], keywords: ["pipeline"], stage: "preview", source: { ecosystem: "frappe", app: "crm", relation: "redesign" } } },
+    { id: "acme.demo", version: "1.0.0", title: "Acme demo", url: "./crm-0.1.21.json", sha256, listing: { capabilities: ["hr"], stage: "test" } },
   ] });
   const server = createServer((request, response) => {
     if (request.url === "/catalog.json") response.writeHead(200, { "content-type": "application/json" }).end(catalog);
@@ -309,6 +311,27 @@ test("library tenant: a remote catalog lists its package beside the built-in ind
     await expect(remote).toContainText("Acme packages");
     await expect(remote).toContainText("crm · 0.1.21");
     await expect(page.getByRole("listitem").filter({ hasText: /^CRM/ }).filter({ hasText: "crm · 0.1.22" })).toBeVisible();
+    await expect(remote).toContainText("Preview");
+    await expect(remote).toContainText("Redesigned after crm");
+    const demo = page.getByRole("listitem").filter({ hasText: "Acme demo" });
+    await expect(demo).toHaveCount(0);
+    const choose = async (filter: string, option: string) => {
+      await page.getByRole("combobox", { name: filter, exact: true }).click();
+      await page.getByRole("option", { name: option, exact: true }).click();
+    };
+    await choose("Stage filter", "Test packages");
+    await expect(demo).toBeVisible();
+    await expect(remote).toHaveCount(0);
+    await choose("Stage filter", "All stages");
+    await choose("Capability filter", "Sales");
+    await expect(remote).toBeVisible();
+    await expect(demo).toHaveCount(0);
+    await expect(page.getByRole("listitem").filter({ hasText: "crm · 0.1.22" })).toHaveCount(0);
+    await choose("Capability filter", "All capabilities");
+    await choose("Stage filter", "Released packages");
+    await page.getByRole("textbox", { name: "Search", exact: true }).fill("pipeline");
+    await expect(remote).toBeVisible();
+    await page.getByRole("textbox", { name: "Search", exact: true }).fill("");
 
     await remote.getByRole("button", { name: "Install", exact: true }).click();
     const wizard = page.getByRole("dialog", { name: /Install from URL or file/ });

@@ -15,6 +15,7 @@ import (
 	"strings"
 
 	"platformserver/host"
+	"platformserver/kernel/protocol"
 	"platformserver/platform"
 	packagedesc "platformserver/services/devops/descriptor"
 	"platformserver/services/ontology"
@@ -74,10 +75,13 @@ func (l lock) text() string {
 
 type built struct {
 	id, version  string
+	title        string
+	description  string
 	artifact     string
 	artifactName string
 	lock         lock
 	assets       int
+	listing      *protocol.PackageListing
 }
 
 type resource struct {
@@ -445,6 +449,11 @@ func build(dir string, previous *platform.PackageDescriptor) (built, error) {
 	}
 	manifest.remove("roots")
 	manifest.remove("artifact")
+	listing, err := readListing(manifest)
+	if err != nil {
+		return built{}, fmt.Errorf("%s: %w", manifestFile, err)
+	}
+	manifest.remove("listing")
 
 	prior, err := readLock(dir)
 	if err != nil {
@@ -520,7 +529,7 @@ func build(dir string, previous *platform.PackageDescriptor) (built, error) {
 	if err := packagedesc.Validate(descriptor, resolver.WithDependencies); err != nil {
 		return built{}, err
 	}
-	return built{id: id, version: version, artifact: artifact, artifactName: artifactName, lock: next, assets: len(assets)}, nil
+	return built{id: id, version: version, title: descriptor.Title, description: descriptor.Description, artifact: artifact, artifactName: artifactName, lock: next, assets: len(assets), listing: listing}, nil
 }
 
 func snapshot(dir string) (*platform.PackageDescriptor, []byte, error) {
@@ -633,4 +642,29 @@ func sameJSON(a, b any) bool {
 	x, errA := json.Marshal(a)
 	y, errB := json.Marshal(b)
 	return errA == nil && errB == nil && bytes.Equal(x, y)
+}
+
+func readListing(manifest *object) (*protocol.PackageListing, error) {
+	value, ok := manifest.get("listing")
+	if !ok {
+		return nil, nil
+	}
+	var listing protocol.PackageListing
+	if err := platform.DecodeJSON([]byte(stringify(value)), &listing, "listing"); err != nil {
+		return nil, err
+	}
+	if err := packagedesc.CheckListing(listing); err != nil {
+		return nil, err
+	}
+	return &listing, nil
+}
+
+type catalogDocument struct {
+	Version  int                            `json:"version"`
+	Title    string                         `json:"title,omitempty"`
+	Packages []protocol.PackageCatalogEntry `json:"packages"`
+}
+
+func catalogEntry(b built, url string) protocol.PackageCatalogEntry {
+	return protocol.PackageCatalogEntry{ID: b.id, Version: b.version, Title: b.title, Description: b.description, URL: url, Sha256: b.lock.Artifact, Listing: b.listing}
 }

@@ -3,6 +3,7 @@ import { ClickableCard } from "@astryxdesign/core/ClickableCard";
 import { Icon } from "@astryxdesign/core/Icon";
 import { HStack, StackItem, VStack } from "@astryxdesign/core/Layout";
 import { StatusDot } from "@astryxdesign/core/StatusDot";
+import { Token } from "@astryxdesign/core/Token";
 import { Text } from "@astryxdesign/core/Text";
 import { colorVars, radiusVars } from "@astryxdesign/core/theme/tokens.stylex";
 import {
@@ -35,6 +36,20 @@ const styles = stylex.create({
     borderRadius: radiusVars["--radius-element"],
   },
 });
+
+const listingLabels: Record<string, string> = {
+  general: "General", manufacturing: "Manufacturing", retail: "Retail", distribution: "Distribution", hospitality: "Hospitality",
+  healthcare: "Healthcare", education: "Education", finance: "Finance", "professional-services": "Professional services",
+  construction: "Construction", "real-estate": "Real estate", energy: "Energy", logistics: "Logistics", agriculture: "Agriculture",
+  nonprofit: "Nonprofit", "public-sector": "Public sector", sales: "Sales", marketing: "Marketing", service: "Service", hr: "HR",
+  payroll: "Payroll", accounting: "Accounting", inventory: "Inventory", purchasing: "Purchasing", production: "Production",
+  projects: "Project management", assets: "Assets", maintenance: "Maintenance", quality: "Quality", learning: "Learning",
+  knowledge: "Knowledge management", lending: "Lending", operations: "Business operations",
+};
+
+export function listingLabel(value: string) {
+  return t(listingLabels[value] ?? value);
+}
 
 export function sourceMeta(source: string): { label: string; color: "green" | "blue" | "purple" | "gray"; icon: typeof CheckBadgeIcon } {
   if (source === "index") return { label: t("Built-in index"), color: "green", icon: CheckBadgeIcon };
@@ -195,8 +210,15 @@ export function CatalogEntryCard({
               {summary}
             </Text>
           </StackItem>
-          <HStack gap={2} vAlign="center">
-            <Text type="supporting" color="secondary" maxLines={1}>{t("Market library")}</Text>
+          <HStack gap={2} vAlign="center" wrap="wrap">
+            {entry.listing?.stage === "test" && <Token label={t("Test")} color="orange" size="sm" />}
+            {entry.listing?.stage === "preview" && <Token label={t("Preview")} color="blue" size="sm" />}
+            {[...(entry.listing?.industries ?? []), ...(entry.listing?.capabilities ?? [])].slice(0, 3).map((value) => (
+              <Token key={value} label={listingLabel(value)} color="gray" size="sm" />
+            ))}
+            {entry.listing?.source?.relation === "redesign" && (
+              <Text type="supporting" color="secondary" maxLines={1}>{t("Redesigned after {app}").replace("{app}", entry.listing.source.app)}</Text>
+            )}
             <StackItem size="fill" />
             <Text type="supporting" color="secondary" hasTabularNumbers maxLines={1}>
               {entry.id} · {entry.version}

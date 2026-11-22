@@ -5,6 +5,22 @@ title: MES
 description: Shop-floor execution, quality, equipment and upstream production coordination.
 requires:
   - manufacturing.core@1.0.0
+listing:
+  industries:
+    - manufacturing
+  capabilities:
+    - production
+    - quality
+    - maintenance
+  keywords:
+    - mes
+    - work-order
+    - downtime
+  stage: test
+  source:
+    ecosystem: platform
+    app: fixtures
+    relation: original
 roots:
   - app: build
     kind: app

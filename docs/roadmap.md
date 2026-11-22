@@ -42,9 +42,6 @@
 普查已做（2.8.1）：各家、各自的应用、许可与接入顺序在官方包库的 [sources](https://github.com/xuciro-commits/platform-packages/blob/main/docs/sources.md)。
 `idea/` 不入库，只在负责人的机器上：来源的截图、DOM 与能力矩阵放在那里，结论写进 sources 与各包的设计稿。
 
-- **2.8.2 分类进目录。** `package.yaml` 的 `industries`、`capabilities`、`keywords`、`stage`、`source` 由 `pkg` 按官方包库的
-  [分类表](https://github.com/xuciro-commits/platform-packages/blob/main/docs/taxonomy.md) 校验，不进制品，进 `catalog.json`；
-  市场按行业、能力、关键词筛选，`stage: test` 默认不列。八个夹具包标 `stage: test`。验收：`make check`、marketplace 的 trunk。
 - **2.8.3 第一个：重新设计 Frappe CRM。** 输入是 `idea/from-frappe-crm/matrix.md`。先写设计稿：对象、状态与转换、动作、角色、页面、流程，
   与来源的对应和取舍；再做成官方包 `crm`，在夹具宿主装进空租户走完线索到赢单，PR 经 CI，发 `crm/v0.1.0`。
   夹具 `crm` 留给主干验收；官方 `crm` 稳定后，主干验收改装它，夹具退役。

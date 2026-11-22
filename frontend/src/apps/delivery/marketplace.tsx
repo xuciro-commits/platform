@@ -14,7 +14,7 @@ import { type Api, useRead } from "../../host";
 import { t } from "../../i18n";
 import { navigate } from "../../router";
 import { PageTitle, useGutter } from "../../pages/frame";
-import { CatalogEntryCard, PackageCard, packageCounts } from "../../pages/PackageCard";
+import { CatalogEntryCard, PackageCard, listingLabel, packageCounts } from "../../pages/PackageCard";
 import { type InitialPackageSource, PackageImportWizard } from "../../pages/PackageImportWizard";
 import { PackageLibraryManager } from "../../pages/PackageLibraryManager";
 import { PackageReview } from "../../pages/PackageReview";
@@ -34,6 +34,9 @@ export default function Marketplace() {
   const [managingLibraries, setManagingLibraries] = useState(false);
   const [tab, setTab] = useState<Tab>("all");
   const [source, setSource] = useState("all");
+  const [industry, setIndustry] = useState("all");
+  const [capability, setCapability] = useState("all");
+  const [stage, setStage] = useState("released");
   const [query, setQuery] = useState("");
   const gutter = useGutter();
   const rows = packages.status === "ready" ? packages.data : [];
@@ -54,6 +57,17 @@ export default function Marketplace() {
     return out;
   }, [libraries, rows]);
 
+  const facets = useMemo(() => {
+    const industries = new Set<string>();
+    const capabilities = new Set<string>();
+    for (const { entry } of remoteEntries) {
+      entry.listing?.industries?.forEach((value) => industries.add(value));
+      entry.listing?.capabilities?.forEach((value) => capabilities.add(value));
+    }
+    return { industries: [...industries].sort(), capabilities: [...capabilities].sort() };
+  }, [remoteEntries]);
+  const classified = industry !== "all" || capability !== "all" || stage === "test";
+
   const counts = useMemo(() => ({
     all: rows.length + remoteEntries.length,
     apps: rows.filter((view) => packageCounts(view).apps > 0).length,
@@ -68,20 +82,26 @@ export default function Marketplace() {
       if (tab === "plugins" && packageCounts(view).plugins === 0) return false;
       if (tab === "installed" && (!view.installed || view.installed.state === "retired")) return false;
       if (source !== "all" && view.source !== source) return false;
+      if (classified) return false;
       if (!term) return true;
       return `${view.descriptor.title ?? ""} ${view.descriptor.id} ${view.descriptor.version} ${view.descriptor.description ?? ""}`.toLowerCase().includes(term);
     });
-  }, [rows, tab, source, query]);
+  }, [rows, tab, source, query, classified]);
 
   const filteredRemote = useMemo(() => {
     if (tab !== "all") return [];
     if (source !== "all" && source !== "library") return [];
     const term = query.trim().toLowerCase();
     return remoteEntries.filter(({ entry, libraryTitle }) => {
+      const listing = entry.listing;
+      if (stage === "released" && listing?.stage === "test") return false;
+      if (stage === "test" && listing?.stage !== "test") return false;
+      if (industry !== "all" && !listing?.industries?.includes(industry)) return false;
+      if (capability !== "all" && !listing?.capabilities?.includes(capability)) return false;
       if (!term) return true;
-      return `${entry.title} ${entry.id} ${entry.version} ${entry.description ?? ""} ${libraryTitle}`.toLowerCase().includes(term);
+      return `${entry.title} ${entry.id} ${entry.version} ${entry.description ?? ""} ${libraryTitle} ${(listing?.keywords ?? []).join(" ")}`.toLowerCase().includes(term);
     });
-  }, [remoteEntries, tab, source, query]);
+  }, [remoteEntries, tab, source, query, industry, capability, stage]);
 
   const modeOf = (view: Api.PackageView): "install" | "manage" => {
     const retired = view.installed?.state === "retired";
@@ -140,6 +160,31 @@ export default function Marketplace() {
                       { value: "imported", label: t("Local library") },
                       { value: "library", label: t("Market library") },
                       { value: "installed", label: t("Installed") },
+                    ]}
+                  />
+                  <Selector
+                    label={t("Industry filter")}
+                    isLabelHidden
+                    value={industry}
+                    onChange={setIndustry}
+                    options={[{ value: "all", label: t("All industries") }, ...facets.industries.map((value) => ({ value, label: listingLabel(value) }))]}
+                  />
+                  <Selector
+                    label={t("Capability filter")}
+                    isLabelHidden
+                    value={capability}
+                    onChange={setCapability}
+                    options={[{ value: "all", label: t("All capabilities") }, ...facets.capabilities.map((value) => ({ value, label: listingLabel(value) }))]}
+                  />
+                  <Selector
+                    label={t("Stage filter")}
+                    isLabelHidden
+                    value={stage}
+                    onChange={setStage}
+                    options={[
+                      { value: "released", label: t("Released packages") },
+                      { value: "test", label: t("Test packages") },
+                      { value: "all", label: t("All stages") },
                     ]}
                   />
                   <TextInput

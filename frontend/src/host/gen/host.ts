@@ -3635,6 +3635,7 @@ export type PackageCatalogEntry = {
   description?: string;
   url: string;
   sha256: string;
+  listing?: PackageListing;
 };
 
 export type PackageConnection = {
@@ -3747,6 +3748,22 @@ export type PackageLifecycleImpact = {
   runs: ApplicationRun[];
   connections: PackageImpactConnection[];
   outputs: PackageImpactOutput[];
+};
+
+export type PackageListing = {
+  industries?: string[];
+  capabilities?: string[];
+  keywords?: string[];
+  stage?: string;
+  source?: PackageListingSource;
+};
+
+export type PackageListingSource = {
+  ecosystem: string;
+  app: string;
+  version?: string;
+  license?: string;
+  relation: string;
 };
 
 export type PackageOwnership = {

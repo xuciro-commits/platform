@@ -3,6 +3,19 @@ version: 1.0.0
 namespace: manufacturing.core
 title: Manufacturing Foundation
 description: Shared manufacturing contracts and supplier inquiry service.
+listing:
+  industries:
+    - manufacturing
+  capabilities:
+    - purchasing
+  keywords:
+    - supplier
+    - lead-time
+  stage: test
+  source:
+    ecosystem: platform
+    app: fixtures
+    relation: original
 roots:
   - app: build
     kind: app
