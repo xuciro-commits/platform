@@ -105,12 +105,13 @@ type FunctionOutcome struct {
 type NotificationEffect struct {
 	Title string `json:"title"`
 	Body  string `json:"body"`
-	Role  string `json:"role"`
+	Role  string `json:"role,omitempty"`
+	Field string `json:"field,omitempty"`
 }
 
 func (n NotificationEffect) Check() error {
-	if strings.TrimSpace(n.Title) == "" || strings.TrimSpace(n.Body) == "" || n.Role == "" {
-		return fmt.Errorf("A notification needs a title, message and recipient role")
+	if strings.TrimSpace(n.Title) == "" || strings.TrimSpace(n.Body) == "" || (n.Role == "") == (n.Field == "") {
+		return fmt.Errorf("A notification needs a title, message and one recipient: a role or a member field of its record")
 	}
 	return nil
 }

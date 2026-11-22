@@ -224,6 +224,10 @@ func applyDefault(c platform.Caller, f ontology.Field, record any, now time.Time
 			value = now.UTC().Format(time.RFC3339)
 		}
 	default:
+		if offset, ok := ontology.NowOffset(f.Default); ok {
+			value = now.UTC().Add(offset)
+			break
+		}
 		switch f.Type {
 		case "boolean":
 			value = f.Default == "true"

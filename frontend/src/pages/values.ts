@@ -33,6 +33,7 @@ export function present(field: Api.FieldInfo, value: unknown) {
   if (field.type === "member") return given ? t("Unnamed member") : "";
   if (field.type === "choice" && typeof given === "string") return field.choiceTitles?.[field.choices?.indexOf(given) ?? -1] ?? given;
   if (field.type === "boolean" && typeof given === "boolean") return given ? t("Yes") : t("No");
+  if (field.type === "datetime" && typeof given === "string" && given) return new Date(given).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" });
   if (field.type === "money") {
     const price = money(given);
     if (!price) return "";

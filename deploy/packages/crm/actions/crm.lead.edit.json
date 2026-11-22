@@ -104,12 +104,32 @@
         "description": "Lead owner",
         "name": "owner",
         "type": "string"
+      },
+      {
+        "description": "Respond by",
+        "name": "responseby",
+        "type": "datetime"
+      },
+      {
+        "choiceTitles": [
+          "due",
+          "fulfilled",
+          "failed"
+        ],
+        "choices": [
+          "due",
+          "fulfilled",
+          "failed"
+        ],
+        "description": "First response (due, fulfilled, failed)",
+        "name": "slastatus",
+        "type": "string"
       }
     ],
     "schema": "crm.lead.edit",
     "schemaVersion": {
-      "family": 4,
-      "version": "schema.sha256.e386827c34b8da79dcac0cd4ca21a5a5844fefebf51690b39296b584f3d82617"
+      "family": 5,
+      "version": "schema.sha256.3b25ecde7872a3da3bdcc1abd8986ee225e0d0de877a986f70f28f9290f88954"
     },
     "target": "crm.lead",
     "title": "Edit lead"

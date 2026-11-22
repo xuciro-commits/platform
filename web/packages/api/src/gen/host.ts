@@ -3256,7 +3256,8 @@ export type Notification = {
 export type NotificationEffect = {
   title: string;
   body: string;
-  role: string;
+  role?: string;
+  field?: string;
 };
 
 export type ObjectChange = {

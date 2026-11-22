@@ -859,6 +859,19 @@
                 "type": "string",
                 "description": "Phone"
               },
+              "responseby": {
+                "type": "string",
+                "description": "Respond by"
+              },
+              "slastatus": {
+                "type": "string",
+                "enum": [
+                  "due",
+                  "fulfilled",
+                  "failed"
+                ],
+                "description": "First response (due, fulfilled, failed)"
+              },
               "source": {
                 "type": "string",
                 "description": "Source"
@@ -1089,6 +1102,19 @@
               "phone": {
                 "type": "string",
                 "description": "Phone"
+              },
+              "responseby": {
+                "type": "string",
+                "description": "Respond by"
+              },
+              "slastatus": {
+                "type": "string",
+                "enum": [
+                  "due",
+                  "fulfilled",
+                  "failed"
+                ],
+                "description": "First response (due, fulfilled, failed)"
               },
               "source": {
                 "type": "string",
@@ -2061,6 +2087,16 @@
           "app": "build",
           "kind": "page",
           "name": "crm.territory"
+        },
+        {
+          "app": "build",
+          "kind": "flow",
+          "name": "build.leadresponded"
+        },
+        {
+          "app": "build",
+          "kind": "flow",
+          "name": "build.leadresponse"
         }
       ],
       "provides": []
@@ -3462,6 +3498,26 @@
         }
       ],
       "provides": []
+    },
+    {
+      "ref": {
+        "app": "build",
+        "kind": "flow",
+        "name": "build.leadresponded"
+      },
+      "path": "flows/leadresponded.json",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    {
+      "ref": {
+        "app": "build",
+        "kind": "flow",
+        "name": "build.leadresponse"
+      },
+      "path": "flows/leadresponse.json",
+      "contractVersion": 1,
+      "sourceVersion": "1"
     }
   ]
 }

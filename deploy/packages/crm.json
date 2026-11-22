@@ -1,6 +1,6 @@
 {
   "id": "crm",
-  "version": "0.1.18",
+  "version": "0.1.19",
   "title": "CRM",
   "namespace": "crm",
   "description": "Leads, deals, organizations, contacts, tasks and notes, with lead-to-deal conversion. Built in the crm project and released through Delivery.",
@@ -1281,6 +1281,19 @@
                   "type": "string",
                   "description": "Phone"
                 },
+                "responseby": {
+                  "type": "string",
+                  "description": "Respond by"
+                },
+                "slastatus": {
+                  "type": "string",
+                  "enum": [
+                    "due",
+                    "fulfilled",
+                    "failed"
+                  ],
+                  "description": "First response (due, fulfilled, failed)"
+                },
                 "source": {
                   "type": "string",
                   "description": "Source"
@@ -1530,12 +1543,34 @@
                 "name": "owner",
                 "type": "string",
                 "default": "member"
+              },
+              {
+                "default": "now+4h",
+                "description": "Respond by",
+                "name": "responseby",
+                "type": "datetime"
+              },
+              {
+                "choiceTitles": [
+                  "due",
+                  "fulfilled",
+                  "failed"
+                ],
+                "choices": [
+                  "due",
+                  "fulfilled",
+                  "failed"
+                ],
+                "default": "due",
+                "description": "First response (due, fulfilled, failed)",
+                "name": "slastatus",
+                "type": "string"
               }
             ],
             "schema": "crm.lead.create",
             "schemaVersion": {
-              "family": 4,
-              "version": "schema.sha256.e386827c34b8da79dcac0cd4ca21a5a5844fefebf51690b39296b584f3d82617"
+              "family": 5,
+              "version": "schema.sha256.3b25ecde7872a3da3bdcc1abd8986ee225e0d0de877a986f70f28f9290f88954"
             },
             "target": "crm.lead",
             "title": "Create lead"
@@ -1638,6 +1673,19 @@
                 "phone": {
                   "type": "string",
                   "description": "Phone"
+                },
+                "responseby": {
+                  "type": "string",
+                  "description": "Respond by"
+                },
+                "slastatus": {
+                  "type": "string",
+                  "enum": [
+                    "due",
+                    "fulfilled",
+                    "failed"
+                  ],
+                  "description": "First response (due, fulfilled, failed)"
                 },
                 "source": {
                   "type": "string",
@@ -1878,12 +1926,32 @@
                 "description": "Lead owner",
                 "name": "owner",
                 "type": "string"
+              },
+              {
+                "description": "Respond by",
+                "name": "responseby",
+                "type": "datetime"
+              },
+              {
+                "choiceTitles": [
+                  "due",
+                  "fulfilled",
+                  "failed"
+                ],
+                "choices": [
+                  "due",
+                  "fulfilled",
+                  "failed"
+                ],
+                "description": "First response (due, fulfilled, failed)",
+                "name": "slastatus",
+                "type": "string"
               }
             ],
             "schema": "crm.lead.edit",
             "schemaVersion": {
-              "family": 4,
-              "version": "schema.sha256.e386827c34b8da79dcac0cd4ca21a5a5844fefebf51690b39296b584f3d82617"
+              "family": 5,
+              "version": "schema.sha256.3b25ecde7872a3da3bdcc1abd8986ee225e0d0de877a986f70f28f9290f88954"
             },
             "target": "crm.lead",
             "title": "Edit lead"
@@ -3158,6 +3226,16 @@
             "app": "build",
             "kind": "page",
             "name": "crm.territory"
+          },
+          {
+            "app": "build",
+            "kind": "flow",
+            "name": "build.leadresponded"
+          },
+          {
+            "app": "build",
+            "kind": "flow",
+            "name": "build.leadresponse"
           }
         ],
         "provides": [],
@@ -3359,7 +3437,16 @@
               "Leads by source": "线索来源",
               "Leads by status": "线索状态",
               "New deals": "新增商机",
-              "Dashboard": "仪表盘"
+              "Dashboard": "仪表盘",
+              "Respond by": "首响期限",
+              "First response": "首次响应",
+              "Due": "待响应",
+              "Fulfilled": "已响应",
+              "Failed": "已超期",
+              "First response overdue": "首次响应超期",
+              "This lead passed its first response deadline while still new.": "这条线索到了首响期限仍是新线索。",
+              "Record the first response": "记录首次响应",
+              "Watch the first response deadline": "盯住首响期限"
             }
           },
           "name": "crm",
@@ -3471,6 +3558,18 @@
               "kind": "line",
               "object": "crm.deal",
               "group": "created:month"
+            }
+          ],
+          "resources": [
+            {
+              "app": "build",
+              "kind": "flow",
+              "name": "build.leadresponded"
+            },
+            {
+              "app": "build",
+              "kind": "flow",
+              "name": "build.leadresponse"
             }
           ]
         }
@@ -6137,6 +6236,21 @@
               "title": "Lead owner",
               "type": "member",
               "default": "member"
+            },
+            {
+              "aside": true,
+              "name": "responseby",
+              "title": "Respond by",
+              "type": "datetime",
+              "default": "now+4h"
+            },
+            {
+              "aside": true,
+              "name": "slastatus",
+              "title": "First response",
+              "type": "choice",
+              "choices": "due:Due,fulfilled:Fulfilled,failed:Failed",
+              "default": "due"
             }
           ],
           "name": "lead",
@@ -6162,6 +6276,10 @@
             {
               "family": 4,
               "version": "schema.sha256.7e1655787e80503cece98cfa16dfb2b8cc3075a81615dafb7c45eda85a917efb"
+            },
+            {
+              "family": 5,
+              "version": "schema.sha256.3b25ecde7872a3da3bdcc1abd8986ee225e0d0de877a986f70f28f9290f88954"
             }
           ],
           "scope": {
@@ -6202,6 +6320,7 @@
               "status",
               "email",
               "mobile",
+              "slastatus",
               "owner"
             ],
             "filters": [],
@@ -9706,6 +9825,181 @@
               ]
             },
             "format": "platform.page.web.v1"
+          }
+        }
+      },
+      {
+        "ref": {
+          "app": "build",
+          "kind": "flow",
+          "name": "build.leadresponded"
+        },
+        "contractVersion": 1,
+        "sourceVersion": "1",
+        "body": {
+          "name": "build.leadresponded",
+          "subject": {
+            "app": "build",
+            "kind": "object",
+            "name": "crm.lead"
+          },
+          "actions": [
+            {
+              "app": "build",
+              "kind": "action",
+              "name": "crm.lead.edit"
+            }
+          ],
+          "definition": {
+            "name": "leadresponded",
+            "title": "Record the first response",
+            "kind": "automation",
+            "object": "crm.lead",
+            "trigger": {
+              "op": "and",
+              "kind": "boolean",
+              "args": [
+                {
+                  "op": "not",
+                  "kind": "boolean",
+                  "args": [
+                    {
+                      "op": "=",
+                      "kind": "boolean",
+                      "args": [
+                        {
+                          "op": "",
+                          "kind": "json",
+                          "ref": "subject.status"
+                        },
+                        {
+                          "op": "",
+                          "kind": "json",
+                          "lit": {
+                            "value": "new"
+                          }
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "op": "=",
+                  "kind": "boolean",
+                  "args": [
+                    {
+                      "op": "",
+                      "kind": "json",
+                      "ref": "subject.slastatus"
+                    },
+                    {
+                      "op": "",
+                      "kind": "json",
+                      "lit": {
+                        "value": "due"
+                      }
+                    }
+                  ]
+                }
+              ]
+            },
+            "steps": [
+              {
+                "name": "respond",
+                "kind": "action",
+                "inputs": {
+                  "slastatus": {
+                    "source": "literal",
+                    "value": "fulfilled"
+                  }
+                },
+                "act": "edit"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "ref": {
+          "app": "build",
+          "kind": "flow",
+          "name": "build.leadresponse"
+        },
+        "contractVersion": 1,
+        "sourceVersion": "1",
+        "body": {
+          "name": "build.leadresponse",
+          "subject": {
+            "app": "build",
+            "kind": "object",
+            "name": "crm.lead"
+          },
+          "actions": [
+            {
+              "app": "build",
+              "kind": "action",
+              "name": "crm.lead.edit"
+            }
+          ],
+          "definition": {
+            "name": "leadresponse",
+            "title": "Watch the first response deadline",
+            "kind": "flow",
+            "object": "crm.lead",
+            "when": "open",
+            "steps": [
+              {
+                "name": "deadline",
+                "kind": "wait",
+                "waitUntil": {
+                  "source": "subject",
+                  "path": [
+                    "responseby"
+                  ]
+                },
+                "next": "pending"
+              },
+              {
+                "name": "pending",
+                "kind": "switch",
+                "value": {
+                  "source": "subject",
+                  "path": [
+                    "slastatus"
+                  ]
+                },
+                "cases": {
+                  "due": "overdue"
+                },
+                "next": "done"
+              },
+              {
+                "name": "overdue",
+                "kind": "action",
+                "inputs": {
+                  "slastatus": {
+                    "source": "literal",
+                    "value": "failed"
+                  }
+                },
+                "next": "tell",
+                "act": "edit"
+              },
+              {
+                "name": "tell",
+                "notify": {
+                  "title": "First response overdue",
+                  "body": "This lead passed its first response deadline while still new.",
+                  "field": "owner"
+                },
+                "kind": "notify",
+                "next": "done"
+              },
+              {
+                "name": "done",
+                "kind": "end"
+              }
+            ]
           }
         }
       }

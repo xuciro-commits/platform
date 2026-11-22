@@ -1916,6 +1916,31 @@ test("follow-up: the activity tab shows how long a lead sat in each status", asy
   await expect(stays.getByRole("listitem").nth(1)).toHaveAccessibleName(/^Contacted: \d+/);
 });
 
+test("follow-up: a lead past its first response deadline fails and tells its owner, a contacted lead is fulfilled", async ({ page }) => {
+  await signIn(page, "admin-1 · crm");
+  const settles = async (state: string) => expect(async () => {
+    await page.reload();
+    await expect(property(page, "First response")).toContainText(state, { timeout: 1_000 });
+  }).toPass({ timeout: 20_000 });
+  await page.goto("/crm/crm.lead/LED-018/properties");
+  await settles("Failed");
+  await expect(property(page, "Respond by")).toContainText("Nov 1, 2026");
+  await page.getByRole("button", { name: "Notifications", exact: true }).click();
+  await page.getByRole("menuitem", { name: /Inbox/ }).click();
+  await page.getByRole("link", { name: /Notifications/ }).click();
+  await page.getByRole("row", { name: /First response overdue: 聂涛/ }).click();
+  await page.getByRole("link", { name: "聂涛", exact: true }).click();
+  await expect(property(page.getByRole("dialog", { name: "聂涛" }), "First response")).toContainText("Failed");
+
+  await page.goto("/crm/crm.lead/LED-002/properties");
+  await expect(property(page, "First response")).toContainText("Due");
+  await edit(page, "Status");
+  await page.getByRole("combobox", { name: "Status" }).fill("Contacted");
+  await page.getByRole("option", { name: "Contacted", exact: true }).click();
+  await expect(property(page, "Status")).toContainText("Contacted");
+  await settles("Fulfilled");
+});
+
 test("import: an Excel workbook of leads maps by column title, refused rows are fixed in place and retried, and the list exports what it shows as CSV", async ({ page }) => {
   await signIn(page, "admin-1 · crm");
   await page.goto("/crm/crm.lead");

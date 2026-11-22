@@ -198,7 +198,16 @@
         "Leads by source": "线索来源",
         "Leads by status": "线索状态",
         "New deals": "新增商机",
-        "Dashboard": "仪表盘"
+        "Dashboard": "仪表盘",
+        "Respond by": "首响期限",
+        "First response": "首次响应",
+        "Due": "待响应",
+        "Fulfilled": "已响应",
+        "Failed": "已超期",
+        "First response overdue": "首次响应超期",
+        "This lead passed its first response deadline while still new.": "这条线索到了首响期限仍是新线索。",
+        "Record the first response": "记录首次响应",
+        "Watch the first response deadline": "盯住首响期限"
       }
     }
   },
@@ -1241,6 +1250,7 @@
             "status",
             "email",
             "mobile",
+            "slastatus",
             "owner"
           ],
           "sort": [],
@@ -1366,6 +1376,21 @@
             "type": "member",
             "aside": true,
             "default": "member"
+          },
+          {
+            "name": "responseby",
+            "title": "Respond by",
+            "type": "datetime",
+            "default": "now+4h",
+            "aside": true
+          },
+          {
+            "name": "slastatus",
+            "title": "First response",
+            "type": "choice",
+            "choices": "due:Due,fulfilled:Fulfilled,failed:Failed",
+            "default": "due",
+            "aside": true
           }
         ],
         "states": [
@@ -2094,6 +2119,7 @@
           "mobile": "+86-135-0029-1118",
           "status": "new",
           "owner": "admin-1",
+          "responseby": "2026-11-01T09:00:00Z",
           "source": "SRC-001",
           "industry": "IND-003",
           "territory": "TER-004"
@@ -3859,6 +3885,21 @@
             "type": "member",
             "aside": true,
             "default": "member"
+          },
+          {
+            "name": "responseby",
+            "title": "Respond by",
+            "type": "datetime",
+            "default": "now+4h",
+            "aside": true
+          },
+          {
+            "name": "slastatus",
+            "title": "First response",
+            "type": "choice",
+            "choices": "due:Due,fulfilled:Fulfilled,failed:Failed",
+            "default": "due",
+            "aside": true
           }
         ]
       }
@@ -4444,6 +4485,153 @@
       "build.app.publish",
       "build.app",
       "crm",
+      {}
+    ],
+    [
+      "build.process.create",
+      "build.process",
+      "CRM-LEAD-RESPONDED",
+      {
+        "name": "leadresponded",
+        "title": "Record the first response",
+        "project": "crm",
+        "kind": "automation",
+        "object": "crm.lead",
+        "trigger": {
+          "op": "and",
+          "kind": "boolean",
+          "args": [
+            {
+              "op": "not",
+              "kind": "boolean",
+              "args": [
+                {
+                  "op": "=",
+                  "kind": "boolean",
+                  "args": [
+                    {
+                      "kind": "json",
+                      "ref": "subject.status"
+                    },
+                    {
+                      "kind": "json",
+                      "lit": {
+                        "value": "new"
+                      }
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "op": "=",
+              "kind": "boolean",
+              "args": [
+                {
+                  "kind": "json",
+                  "ref": "subject.slastatus"
+                },
+                {
+                  "kind": "json",
+                  "lit": {
+                    "value": "due"
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        "steps": [
+          {
+            "name": "respond",
+            "kind": "action",
+            "act": "edit",
+            "inputs": {
+              "slastatus": {
+                "source": "literal",
+                "value": "fulfilled"
+              }
+            }
+          }
+        ]
+      }
+    ],
+    [
+      "build.process.publish",
+      "build.process",
+      "CRM-LEAD-RESPONDED",
+      {}
+    ],
+    [
+      "build.process.create",
+      "build.process",
+      "CRM-LEAD-RESPONSE",
+      {
+        "name": "leadresponse",
+        "title": "Watch the first response deadline",
+        "project": "crm",
+        "kind": "flow",
+        "object": "crm.lead",
+        "when": "open",
+        "steps": [
+          {
+            "name": "deadline",
+            "kind": "wait",
+            "waitUntil": {
+              "source": "subject",
+              "path": [
+                "responseby"
+              ]
+            },
+            "next": "pending"
+          },
+          {
+            "name": "pending",
+            "kind": "switch",
+            "value": {
+              "source": "subject",
+              "path": [
+                "slastatus"
+              ]
+            },
+            "cases": {
+              "due": "overdue"
+            },
+            "next": "done"
+          },
+          {
+            "name": "overdue",
+            "kind": "action",
+            "act": "edit",
+            "inputs": {
+              "slastatus": {
+                "source": "literal",
+                "value": "failed"
+              }
+            },
+            "next": "tell"
+          },
+          {
+            "name": "tell",
+            "kind": "notify",
+            "notify": {
+              "title": "First response overdue",
+              "body": "This lead passed its first response deadline while still new.",
+              "field": "owner"
+            },
+            "next": "done"
+          },
+          {
+            "name": "done",
+            "kind": "end"
+          }
+        ]
+      }
+    ],
+    [
+      "build.process.publish",
+      "build.process",
+      "CRM-LEAD-RESPONSE",
       {}
     ]
   ]

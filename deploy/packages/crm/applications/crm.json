@@ -196,7 +196,16 @@
       "Leads by source": "线索来源",
       "Leads by status": "线索状态",
       "New deals": "新增商机",
-      "Dashboard": "仪表盘"
+      "Dashboard": "仪表盘",
+      "Respond by": "首响期限",
+      "First response": "首次响应",
+      "Due": "待响应",
+      "Fulfilled": "已响应",
+      "Failed": "已超期",
+      "First response overdue": "首次响应超期",
+      "This lead passed its first response deadline while still new.": "这条线索到了首响期限仍是新线索。",
+      "Record the first response": "记录首次响应",
+      "Watch the first response deadline": "盯住首响期限"
     }
   },
   "name": "crm",
@@ -308,6 +317,18 @@
       "kind": "line",
       "object": "crm.deal",
       "group": "created:month"
+    }
+  ],
+  "resources": [
+    {
+      "app": "build",
+      "kind": "flow",
+      "name": "build.leadresponded"
+    },
+    {
+      "app": "build",
+      "kind": "flow",
+      "name": "build.leadresponse"
     }
   ]
 }

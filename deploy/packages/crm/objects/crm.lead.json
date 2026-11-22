@@ -740,6 +740,21 @@
       "title": "Lead owner",
       "type": "member",
       "default": "member"
+    },
+    {
+      "aside": true,
+      "name": "responseby",
+      "title": "Respond by",
+      "type": "datetime",
+      "default": "now+4h"
+    },
+    {
+      "aside": true,
+      "name": "slastatus",
+      "title": "First response",
+      "type": "choice",
+      "choices": "due:Due,fulfilled:Fulfilled,failed:Failed",
+      "default": "due"
     }
   ],
   "name": "lead",
@@ -765,6 +780,10 @@
     {
       "family": 4,
       "version": "schema.sha256.7e1655787e80503cece98cfa16dfb2b8cc3075a81615dafb7c45eda85a917efb"
+    },
+    {
+      "family": 5,
+      "version": "schema.sha256.3b25ecde7872a3da3bdcc1abd8986ee225e0d0de877a986f70f28f9290f88954"
     }
   ],
   "scope": {
@@ -805,6 +824,7 @@
       "status",
       "email",
       "mobile",
+      "slastatus",
       "owner"
     ],
     "filters": [],

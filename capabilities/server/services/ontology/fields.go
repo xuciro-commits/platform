@@ -5,6 +5,7 @@ import (
 	"platformserver/kernel/protocol"
 	"slices"
 	"strings"
+	"time"
 
 	"platformserver/platform"
 )
@@ -126,6 +127,10 @@ func CheckDefaults(o Object) error {
 			if f.Type != "datetime" && f.Type != "text" {
 				return fmt.Errorf("field %s default now requires a datetime or text field", f.Name)
 			}
+		case strings.HasPrefix(f.Default, "now+"):
+			if _, ok := NowOffset(f.Default); !ok || f.Type != "datetime" {
+				return fmt.Errorf("field %s default now+<duration> needs a datetime field and a duration up to a year, such as now+4h", f.Name)
+			}
 		case strings.HasPrefix(f.Default, "setting:"):
 			if strings.TrimPrefix(f.Default, "setting:") == "" {
 				return fmt.Errorf("field %s default setting needs a setting name", f.Name)
@@ -173,4 +178,10 @@ func CompileAccess(o Object, builderRole, userRole string) (platform.Standard, p
 		}
 	}
 	return std, scope, roles
+}
+
+func NowOffset(value string) (time.Duration, bool) {
+	text, ok := strings.CutPrefix(value, "now+")
+	offset, err := time.ParseDuration(text)
+	return offset, ok && err == nil && offset > 0 && offset <= 366*24*time.Hour
 }

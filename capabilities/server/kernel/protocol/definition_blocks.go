@@ -35,7 +35,7 @@ type BlockPort struct {
 
 func ControlBlocks() []CapabilityDescriptor {
 	kinds := []struct{ name, title, description, group, icon, tone string }{
-		{"notify", "Send notification", "Notify the members holding a role.", "People", "bell", "info"},
+		{"notify", "Send notification", "Notify the members holding a role, or the person in a member field of the record.", "People", "bell", "info"},
 		{"payload", "Input", "Start with the workflow's typed input.", "Flow", "log-in", "neutral"},
 		{"transform", "Transform", "Bind fields and constants into an output object.", "Data", "braces", "info"},
 		{"branch", "Branch", "Choose a true or false control path.", "Logic", "git-branch", "warning"},

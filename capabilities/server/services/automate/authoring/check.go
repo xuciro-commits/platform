@@ -112,6 +112,15 @@ func CheckProcess(p protocol.Process, entity platform.RecordType, lookup Process
 		nodes[step.Name] = step
 	}
 	parents := map[string]string{}
+	fieldOf := func(path []string) (platform.FieldInfo, error) {
+		return platform.RecordPathField(p.Object, path, func(typ string) (platform.RecordTypeInfo, bool) {
+			if model, ok := actionModels[typ]; ok {
+				info, err := records.Describe(lookup.App, model, func(reflect.Type) string { return "" })
+				return info, err == nil
+			}
+			return lookup.Entity(typ)
+		})
+	}
 	for _, step := range p.Steps {
 		problem := func(message string) *platform.Error { return refuse("Node " + step.Name + ": " + message) }
 		if !slices.Contains([]string{"payload", "query", "notify", "action", "transform", "branch", "switch", "foreach", "while", "fork", "join", "ask", "wait", "subflow", "ai", "compute", "end", "fail", "break", "continue"}, step.Kind) {
@@ -167,6 +176,11 @@ func CheckProcess(p protocol.Process, entity platform.RecordType, lookup Process
 			}
 			if err := step.Notify.Check(); err != nil {
 				return problem(err.Error())
+			}
+			if step.Notify.Field != "" {
+				if field, err := fieldOf([]string{step.Notify.Field}); p.Object == "" || err != nil || field.Type != "member" {
+					return problem("a notification field must be a member field of the source object")
+				}
 			}
 		case "ask":
 			if step.Ask == "" {
@@ -346,13 +360,7 @@ func CheckProcess(p protocol.Process, entity platform.RecordType, lookup Process
 					}
 				}
 				if step.WaitUntil.Source == "subject" {
-					field, err := platform.RecordPathField(p.Object, step.WaitUntil.Path, func(typ string) (platform.RecordTypeInfo, bool) {
-						if model, ok := actionModels[typ]; ok {
-							info, err := records.Describe(lookup.App, model, func(reflect.Type) string { return "" })
-							return info, err == nil
-						}
-						return lookup.Entity(typ)
-					})
+					field, err := fieldOf(step.WaitUntil.Path)
 					if err != nil || field.Type != "datetime" {
 						return problem("a deadline must read a declared timestamp")
 					}

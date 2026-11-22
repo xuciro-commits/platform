@@ -24,6 +24,16 @@ func Notify(c platform.Caller, run *platform.Run, step string, n protocol.Notifi
 		}
 
 	}
-	to := c.Notify(platform.Notification{Category: protocol.NotificationSystem, Title: title, Body: n.Body, Ref: ref, Key: key}, now, platform.Recipient{AppRole: n.Role})
+	category, recipient := protocol.NotificationSystem, platform.Recipient{AppRole: n.Role}
+	if n.Field != "" {
+		var record map[string]any
+		_ = json.Unmarshal(subject, &record)
+		member, _ := record[n.Field].(string)
+		if member == "" {
+			return platform.Raw(map[string]any{"recipients": []string{}})
+		}
+		category, recipient = protocol.NotificationAssignment, platform.Recipient{Member: member}
+	}
+	to := c.Notify(platform.Notification{Category: category, Title: title, Body: n.Body, Ref: ref, Key: key}, now, recipient)
 	return platform.Raw(map[string]any{"recipients": to})
 }
