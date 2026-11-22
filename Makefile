@@ -125,13 +125,13 @@ contract:
 	cd capabilities/server && $(GO) run ./cmd/api-types
 
 packages:
-	node scripts/package-source.mjs pack
+	cd capabilities/server && $(GO) run ./cmd/pkg build -packages ../../deploy/packages
 
 check:
 	@printf '\n\033[1mEIDOS · 后端与仓库全检\033[0m\n'
 	@$(STEP) "[1/6]" "Go 编译、vet 与代码格式" 'cd capabilities/server && $(GO) build ./... && $(GO) vet ./... && test -z "$$(gofmt -l .)"'
 	@$(STEP) "[2/6]" "模块边界与代码形状棘轮" 'node scripts/check-boundaries.mjs'
-	@$(STEP) "[3/6]" "产品包清单完整性" 'node scripts/package-source.mjs check'
+	@$(STEP) "[3/6]" "产品包清单完整性" 'cd capabilities/server && $(GO) run ./cmd/pkg check -packages ../../deploy/packages'
 	@$(STEP) "[4/6]" "宿主契约零漂移校验" 'mkdir -p .build/contract && cp frontend/src/host/gen/host.ts .build/contract/host.ts && cp frontend/src/host/gen/enterprise-sdk.ts .build/contract/enterprise-sdk.ts && cp capabilities/server/services/apps/pages/page_compat.json .build/contract/page_compat.json && $(MAKE) -s contract && cmp .build/contract/host.ts frontend/src/host/gen/host.ts && cmp .build/contract/enterprise-sdk.ts frontend/src/host/gen/enterprise-sdk.ts && cmp .build/contract/page_compat.json capabilities/server/services/apps/pages/page_compat.json'
 	@$(STEP) "[5/6]" "文档预算与引用检查" 'node scripts/check-docs.mjs'
 	@$(STEP) "[6/6]" "Git 空白字符检查" 'git diff HEAD --check'

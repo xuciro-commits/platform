@@ -32,14 +32,8 @@ manufacturing.mes/
 
 ```bash
 make packages
-node scripts/package-source.mjs pack deploy/packages/manufacturing.mes
-node scripts/package-source.mjs check deploy/packages/manufacturing.mes
-```
-
-把另一份已有的制品迁移成作者态源目录：
-
-```bash
-node scripts/package-source.mjs split deploy/packages/<artifact>.json
+cd capabilities/server && go run ./cmd/pkg build ../../deploy/packages/manufacturing.mes
+cd capabilities/server && go run ./cmd/pkg check ../../deploy/packages/manufacturing.mes
 ```
 
 ## 包边界
