@@ -566,7 +566,20 @@ func (j *Postgres) StateChanges(ctx context.Context, tenant, app, key, id string
 }
 
 func stateChanges(ctx context.Context, db stateQueries, tenant, app, key, id string, through int) ([][]byte, error) {
-	rows, err := db.Query(ctx, `select image from runtime_changes where tenant=$1 and app=$2 and num<=$3 and ($4='' or key=$4) and ($5='' or id=$5) order by num`, tenant, app, through, key, id)
+	// One statement per filter: a single statement with ($4='' or key=$4) gets a generic plan
+	// once cached, which walks the (tenant,app,num) index and filters every row, so a lookup by
+	// key or id reads the whole change history instead of one row.
+	query := `select image from runtime_changes where tenant=$1 and app=$2 and num<=$3`
+	args := []any{tenant, app, through}
+	switch {
+	case key != "" && id != "":
+		query, args = query+` and key=$4 and id=$5`, append(args, key, id)
+	case key != "":
+		query, args = query+` and key=$4`, append(args, key)
+	case id != "":
+		query, args = query+` and id=$4`, append(args, id)
+	}
+	rows, err := db.Query(ctx, query+` order by num`, args...)
 	if err != nil {
 		return nil, err
 	}
