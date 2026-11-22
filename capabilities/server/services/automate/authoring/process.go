@@ -59,6 +59,7 @@ type ProcessExecution struct {
 	StateField        string
 	Refused           func(platform.Caller, *platform.Error, time.Time)
 	Notify            func(platform.Caller, *platform.Run, string, protocol.NotificationEffect, json.RawMessage) (json.RawMessage, *platform.Error)
+	Balance           func(platform.Caller, *platform.Run, string, protocol.BalanceRule) (string, *platform.Error)
 	Paused            func(platform.Caller) bool
 	ContinuousEnabled func(platform.Caller) bool
 	Subject           func(platform.Caller, *platform.Run) (json.RawMessage, *platform.Error)

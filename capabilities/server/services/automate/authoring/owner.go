@@ -307,6 +307,14 @@ func (o *Owner) Flow(p protocol.Process) platform.Flow {
 			info, _ := o.env.Entity(p.Object)
 			return automateowner.Notify(o.env.Host().Caller(c, member, o.env.AppID()), r, step, n, p.Object, info.Display, subject, r.Now), nil
 		},
+		Balance: func(c platform.Caller, r *platform.Run, field string, rule protocol.BalanceRule) (string, *platform.Error) {
+			member, ok := o.env.Host().Member(r.OnBehalf)
+			if !ok {
+				return "", platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "The initiating member is no longer available")
+			}
+			info, _ := o.env.Entity(p.Object)
+			return automateowner.Balance(o.env.Host().Caller(c, member, o.env.AppID()), info, field, rule, o.env.Host().Holding(rule.App, rule.Role))
+		},
 		Paused: func(c platform.Caller) bool {
 			current, ok := platform.Get[protocol.Process](o.env.Host().Automation(c, o.env.AppID()), p.ID)
 			return ok && current.Paused

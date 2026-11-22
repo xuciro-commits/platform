@@ -1,6 +1,6 @@
 {
   "id": "crm",
-  "version": "0.1.20",
+  "version": "0.1.21",
   "title": "CRM",
   "namespace": "crm",
   "description": "Leads, deals, organizations, contacts, tasks and notes, with lead-to-deal conversion. Built in the crm project and released through Delivery.",
@@ -3236,6 +3236,11 @@
             "app": "build",
             "kind": "flow",
             "name": "build.leadresponse"
+          },
+          {
+            "app": "build",
+            "kind": "flow",
+            "name": "build.leadbalance"
           }
         ],
         "provides": [],
@@ -3446,7 +3451,8 @@
               "First response overdue": "首次响应超期",
               "This lead passed its first response deadline while still new.": "这条线索到了首响期限仍是新线索。",
               "Record the first response": "记录首次响应",
-              "Watch the first response deadline": "盯住首响期限"
+              "Watch the first response deadline": "盯住首响期限",
+              "Assign website leads evenly": "网站线索均衡指派"
             }
           },
           "name": "crm",
@@ -3570,6 +3576,11 @@
               "app": "build",
               "kind": "flow",
               "name": "build.leadresponse"
+            },
+            {
+              "app": "build",
+              "kind": "flow",
+              "name": "build.leadbalance"
             }
           ]
         }
@@ -10009,6 +10020,124 @@
               {
                 "name": "done",
                 "kind": "end"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "ref": {
+          "app": "build",
+          "kind": "flow",
+          "name": "build.leadbalance"
+        },
+        "contractVersion": 1,
+        "sourceVersion": "1",
+        "body": {
+          "name": "build.leadbalance",
+          "subject": {
+            "app": "build",
+            "kind": "object",
+            "name": "crm.lead"
+          },
+          "actions": [
+            {
+              "app": "build",
+              "kind": "action",
+              "name": "crm.lead.edit"
+            }
+          ],
+          "definition": {
+            "name": "leadbalance",
+            "title": "Assign website leads evenly",
+            "kind": "automation",
+            "object": "crm.lead",
+            "trigger": {
+              "op": "and",
+              "kind": "boolean",
+              "args": [
+                {
+                  "op": "=",
+                  "kind": "boolean",
+                  "args": [
+                    {
+                      "op": "",
+                      "kind": "json",
+                      "ref": "subject.status"
+                    },
+                    {
+                      "op": "",
+                      "kind": "json",
+                      "lit": {
+                        "value": "new"
+                      }
+                    }
+                  ]
+                },
+                {
+                  "op": "or",
+                  "kind": "boolean",
+                  "args": [
+                    {
+                      "op": "=",
+                      "kind": "boolean",
+                      "args": [
+                        {
+                          "op": "",
+                          "kind": "json",
+                          "ref": "subject.source"
+                        },
+                        {
+                          "op": "",
+                          "kind": "json",
+                          "lit": {
+                            "value": "SRC-013"
+                          }
+                        }
+                      ]
+                    },
+                    {
+                      "op": "=",
+                      "kind": "boolean",
+                      "args": [
+                        {
+                          "op": "",
+                          "kind": "json",
+                          "ref": "subject.source"
+                        },
+                        {
+                          "op": "",
+                          "kind": "json",
+                          "lit": {
+                            "value": "SRC-014"
+                          }
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            "steps": [
+              {
+                "name": "assign",
+                "kind": "action",
+                "balance": {
+                  "owner": {
+                    "app": "crm",
+                    "role": "salesrep",
+                    "open": {
+                      "source": [
+                        "SRC-013",
+                        "SRC-014"
+                      ],
+                      "status": [
+                        "new"
+                      ]
+                    }
+                  }
+                },
+                "act": "edit"
               }
             ]
           }

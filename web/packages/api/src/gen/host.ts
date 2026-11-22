@@ -770,6 +770,12 @@ export type AuthzRequest = {
   from?: string;
 };
 
+export type BalanceRule = {
+  app: string;
+  role: string;
+  open?: Record<string, string[]>;
+};
+
 export type Binding = {
   source: "literal" | "input" | "subject" | "step" | "item" | "index" | "answer";
   step?: string;
@@ -4332,6 +4338,7 @@ export type ProcessStep = {
   kind: "payload" | "query" | "notify" | "action" | "transform" | "branch" | "switch" | "foreach" | "while" | "fork" | "join" | "ask" | "wait" | "subflow" | "ai" | "compute" | "end" | "fail" | "break" | "continue";
   lane?: string;
   inputs?: Record<string, Binding>;
+  balance?: Record<string, BalanceRule>;
   value?: Binding;
   target?: Binding;
   condition?: Expr;

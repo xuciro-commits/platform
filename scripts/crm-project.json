@@ -207,7 +207,8 @@
         "First response overdue": "首次响应超期",
         "This lead passed its first response deadline while still new.": "这条线索到了首响期限仍是新线索。",
         "Record the first response": "记录首次响应",
-        "Watch the first response deadline": "盯住首响期限"
+        "Watch the first response deadline": "盯住首响期限",
+        "Assign website leads evenly": "网站线索均衡指派"
       }
     }
   },
@@ -3418,7 +3419,11 @@
             "member": "assignee",
             "due": "duedate",
             "open": {
-              "status": ["backlog", "todo", "inprogress"]
+              "status": [
+                "backlog",
+                "todo",
+                "inprogress"
+              ]
             }
           }
         },
@@ -4639,6 +4644,106 @@
       "build.process.publish",
       "build.process",
       "CRM-LEAD-RESPONSE",
+      {}
+    ],
+    [
+      "build.process.create",
+      "build.process",
+      "CRM-LEAD-BALANCE",
+      {
+        "name": "leadbalance",
+        "title": "Assign website leads evenly",
+        "project": "crm",
+        "kind": "automation",
+        "object": "crm.lead",
+        "trigger": {
+          "op": "and",
+          "kind": "boolean",
+          "args": [
+            {
+              "op": "=",
+              "kind": "boolean",
+              "args": [
+                {
+                  "kind": "json",
+                  "ref": "subject.status"
+                },
+                {
+                  "kind": "json",
+                  "lit": {
+                    "value": "new"
+                  }
+                }
+              ]
+            },
+            {
+              "op": "or",
+              "kind": "boolean",
+              "args": [
+                {
+                  "op": "=",
+                  "kind": "boolean",
+                  "args": [
+                    {
+                      "kind": "json",
+                      "ref": "subject.source"
+                    },
+                    {
+                      "kind": "json",
+                      "lit": {
+                        "value": "SRC-013"
+                      }
+                    }
+                  ]
+                },
+                {
+                  "op": "=",
+                  "kind": "boolean",
+                  "args": [
+                    {
+                      "kind": "json",
+                      "ref": "subject.source"
+                    },
+                    {
+                      "kind": "json",
+                      "lit": {
+                        "value": "SRC-014"
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        "steps": [
+          {
+            "name": "assign",
+            "kind": "action",
+            "act": "edit",
+            "balance": {
+              "owner": {
+                "app": "crm",
+                "role": "salesrep",
+                "open": {
+                  "status": [
+                    "new"
+                  ],
+                  "source": [
+                    "SRC-013",
+                    "SRC-014"
+                  ]
+                }
+              }
+            }
+          }
+        ]
+      }
+    ],
+    [
+      "build.process.publish",
+      "build.process",
+      "CRM-LEAD-BALANCE",
       {}
     ]
   ]

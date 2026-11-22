@@ -1958,6 +1958,32 @@ test("follow-up: a task due by today waits in To do, opens its record and leaves
   await expect(page.getByRole("row", { name: /完成曦和的安全评审/ })).toHaveCount(0);
 });
 
+test("follow-up: new website leads are assigned evenly across the sales reps", async ({ page }) => {
+  await signIn(page, "admin-1 · crm");
+  const owners: string[] = [];
+  for (const person of ["官网访客甲", "官网访客乙", "官网访客丙"]) {
+    await page.goto("/crm/crm.lead");
+    await page.getByRole("button", { name: "New", exact: true }).click();
+    const lead = page.getByRole("dialog");
+    await lead.getByRole("textbox", { name: "Full name" }).fill(person);
+    await lead.getByRole("combobox", { name: "Status" }).click();
+    await page.getByRole("option", { name: "New", exact: true }).click();
+    await lead.getByRole("button", { name: "Create", exact: true }).click();
+    await expect(page.getByRole("heading", { level: 1, name: person, exact: true })).toBeVisible();
+    await edit(page, "Source");
+    await page.getByRole("combobox", { name: "Source", exact: true }).fill("官网");
+    await page.getByRole("option", { name: /官网/ }).first().click();
+    await expect(property(page, "Source")).toContainText("官网");
+    const owner = property(page, "Lead owner");
+    await expect(async () => {
+      await page.reload();
+      await expect(owner).toContainText(/韩奥|田雪/, { timeout: 1_000 });
+    }).toPass({ timeout: 30_000 });
+    owners.push((await owner.innerText()).trim());
+  }
+  expect(new Set(owners)).toEqual(new Set(["韩奥", "田雪"]));
+});
+
 test("import: an Excel workbook of leads maps by column title, refused rows are fixed in place and retried, and the list exports what it shows as CSV", async ({ page }) => {
   await signIn(page, "admin-1 · crm");
   await page.goto("/crm/crm.lead");

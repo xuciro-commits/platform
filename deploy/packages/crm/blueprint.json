@@ -2097,6 +2097,11 @@
           "app": "build",
           "kind": "flow",
           "name": "build.leadresponse"
+        },
+        {
+          "app": "build",
+          "kind": "flow",
+          "name": "build.leadbalance"
         }
       ],
       "provides": []
@@ -3516,6 +3521,16 @@
         "name": "build.leadresponse"
       },
       "path": "flows/leadresponse.json",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    {
+      "ref": {
+        "app": "build",
+        "kind": "flow",
+        "name": "build.leadbalance"
+      },
+      "path": "flows/leadbalance.json",
       "contractVersion": 1,
       "sourceVersion": "1"
     }

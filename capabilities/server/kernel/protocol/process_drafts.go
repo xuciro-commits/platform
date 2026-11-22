@@ -65,6 +65,7 @@ type ProcessStep struct {
 	Kind           string                      `json:"kind" enum:"payload,query,notify,action,transform,branch,switch,foreach,while,fork,join,ask,wait,subflow,ai,compute,end,fail,break,continue"`
 	Lane           string                      `json:"lane,omitempty" title:"Lane" help:"The lane responsible for this step"`
 	Inputs         map[string]platform.Binding `json:"inputs,omitempty" type:"json"`
+	Balance        map[string]BalanceRule      `json:"balance,omitempty" type:"json" title:"Balance" help:"Action inputs filled with the member of a role who has the fewest open records of this object in that field"`
 	Value          *platform.Binding           `json:"value,omitempty" type:"json"`
 	Target         *platform.Binding           `json:"target,omitempty" type:"json"`
 	Condition      *platform.Expr              `json:"condition,omitempty" type:"json"`
@@ -100,6 +101,12 @@ type FunctionOutcome struct {
 	Output  string
 	Reason  string
 	Sources []string
+}
+
+type BalanceRule struct {
+	App  string              `json:"app"`
+	Role string              `json:"role"`
+	Open map[string][]string `json:"open,omitempty"`
 }
 
 type NotificationEffect struct {

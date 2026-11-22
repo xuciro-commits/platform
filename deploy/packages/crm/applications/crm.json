@@ -205,7 +205,8 @@
       "First response overdue": "首次响应超期",
       "This lead passed its first response deadline while still new.": "这条线索到了首响期限仍是新线索。",
       "Record the first response": "记录首次响应",
-      "Watch the first response deadline": "盯住首响期限"
+      "Watch the first response deadline": "盯住首响期限",
+      "Assign website leads evenly": "网站线索均衡指派"
     }
   },
   "name": "crm",
@@ -329,6 +330,11 @@
       "app": "build",
       "kind": "flow",
       "name": "build.leadresponse"
+    },
+    {
+      "app": "build",
+      "kind": "flow",
+      "name": "build.leadbalance"
     }
   ]
 }

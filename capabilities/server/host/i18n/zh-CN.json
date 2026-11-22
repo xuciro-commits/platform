@@ -1196,6 +1196,7 @@
   "A manual run needs a stable key": "手动运行需要稳定的运行键",
   "This tenant runs no manual processes": "此租户没有手动流程",
   "The initiating member is no longer available": "发起成员已不可用",
+  "Nobody holds the role {role} to assign this to": "没有人担任角色 {role}，无法指派",
   "Action target must be a record ID": "动作目标必须是记录 ID",
   "ForEach needs an array": "逐项循环需要数组",
   "Native business actions require an isolated owner test fixture": "原生业务动作需要隔离的所属应用测试样本",

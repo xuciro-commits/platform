@@ -40,7 +40,8 @@
           "builder"
         ],
         "roles": {
-          "build": "builder"
+          "build": "builder",
+          "crm": "salesrep"
         }
       },
       {
@@ -172,7 +173,8 @@
           "builder"
         ],
         "roles": {
-          "build": "builder"
+          "build": "builder",
+          "crm": "salesrep"
         }
       },
       {

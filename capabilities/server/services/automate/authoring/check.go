@@ -135,6 +135,21 @@ func CheckProcess(p protocol.Process, entity platform.RecordType, lookup Process
 		if step.Notify != nil && step.Kind != "notify" || step.Ask != "" && step.Kind != "ask" || step.Act != "" && step.Kind != "action" || step.Function != nil && step.Kind != "ai" || step.Operation != nil && step.Kind != "compute" || (step.Query != "" || step.QueryVersion != 0) && step.Kind != "query" || len(step.Answers) > 0 && step.Kind != "ask" || len(step.Cases) > 0 && step.Kind != "ask" && step.Kind != "branch" && step.Kind != "switch" || len(step.Branches) > 0 && step.Kind != "fork" || step.Body != "" && step.Kind != "foreach" && step.Kind != "while" {
 			return problem("configuration must match this block kind")
 		}
+		if len(step.Balance) > 0 && (step.Kind != "action" || p.Object == "" || len(step.Balance) > 8) {
+			return problem("balanced inputs belong to an action block of a process with an object, at most eight")
+		}
+		for name, rule := range step.Balance {
+			field, err := fieldOf([]string{name})
+			_, bound := step.Inputs[name]
+			if err != nil || field.Type != "member" || bound || rule.App == "" || rule.Role == "" || len(rule.Open) > 8 {
+				return problem("balanced input " + name + " needs a member field of the source object, an app role and no other binding")
+			}
+			for open := range rule.Open {
+				if _, err := fieldOf([]string{open}); err != nil {
+					return problem("balanced input " + name + " counts by an unknown field " + open)
+				}
+			}
+		}
 		if step.TimeoutSeconds < 0 || step.TimeoutSeconds > 30*86400 || step.UntilSeconds < 0 || step.UntilSeconds > 30*86400 {
 			return problem("wait/timeout exceeds its bound")
 		}
@@ -232,7 +247,7 @@ func CheckProcess(p protocol.Process, entity platform.RecordType, lookup Process
 				_ = owner
 				for _, field := range action.Payload {
 					if field.Required {
-						if _, ok := step.Inputs[field.Name]; !ok {
+						if _, ok := step.Inputs[field.Name]; !ok && step.Balance[field.Name].Role == "" {
 							return problem("required action input " + field.Name + " is missing")
 						}
 					}

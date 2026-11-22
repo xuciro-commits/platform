@@ -81,6 +81,13 @@ func CompileProcess(p protocol.Process, execution ProcessExecution) platform.Flo
 				}
 				values[name] = value
 			}
+			for _, name := range slices.Sorted(maps.Keys(s.Balance)) {
+				member, err := execution.Balance(c, r, name, s.Balance[name])
+				if err != nil {
+					return nil, err
+				}
+				values[name] = platform.Raw(member)
+			}
 			return platform.Raw(values), nil
 		}
 		predicate := func(c platform.Caller, r *platform.Run) (bool, *platform.Error) {
