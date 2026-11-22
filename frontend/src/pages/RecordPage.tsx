@@ -242,6 +242,7 @@ export function RecordPage({ described, id, listPath, listTitle, instances, enti
           )}
           {kept && tab === "details" && (
             <VStack gap={6}>
+              {editor.stale && <Banner status="info" title={t("This record has new changes")} />}
               {refusal && <Banner status="error" title={t("Not done")} description={refusal} />}
               <FieldGroup described={detail} editor={editor} sections={body.sections} direction="horizontal-labels" focusEmpty={fresh} fold={!fresh} refs={refs} restricted={restricted} />
               {definition && <DefinitionRows described={detail} source={definition} entities={entities} catalog={catalog} id={id} revision={kept.revision} />}

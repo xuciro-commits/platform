@@ -400,7 +400,12 @@ func (s *Store) RememberChange(change, ref string)  { s.recentChanges.Remember(c
 func (s *Store) Changed(change string) []string {
 	return slices.Clone(s.recentChanges.Entries.Get(change))
 }
-func (s *Store) LiveVersion(typ string) uint64           { return s.liveVersions[typ] }
+func (s *Store) LiveVersion(typ string) uint64 { return s.liveVersions[typ] }
+func (s *Store) LiveVersions() map[string]uint64 {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return maps.Clone(s.liveVersions)
+}
 func (s *Store) SetTouched(touched func(string, string)) { s.touched = touched }
 func (s *Store) InheritDecision(base *Store) {
 	s.parent, s.baseGeneration, s.writes = base.parent, base.baseGeneration, maps.Clone(base.writes)

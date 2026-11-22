@@ -37,6 +37,9 @@ var liveGzipPool = sync.Pool{New: func() any {
 }}
 
 func compressible(contentType string) bool {
+	if strings.HasPrefix(contentType, "text/event-stream") {
+		return false
+	}
 	switch {
 	case strings.HasPrefix(contentType, "text/"),
 		strings.HasPrefix(contentType, "application/json"),

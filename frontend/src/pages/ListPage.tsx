@@ -19,7 +19,7 @@ import { AdjustmentsHorizontalIcon, ArrowPathIcon, CalendarDaysIcon, MagnifyingG
 import { AdjustmentsHorizontalIcon as AdjustmentsHorizontalSolidIcon } from "@heroicons/react/24/solid";
 import * as stylex from "@stylexjs/stylex";
 import { type ReactNode, useEffect, useMemo, useState } from "react";
-import { type Read, reread } from "../host";
+import { HostRefusal, type Read, reread } from "../host";
 import { t } from "../i18n";
 import { navigate, usePath, useSearch } from "../router";
 import { PageTitle, useGutter } from "./frame";
@@ -155,6 +155,10 @@ export function ListView<Answer, Row>({ definition, read, primary, back }: ListV
   const [selected, setSelected] = useState<Set<string>>(() => new Set());
   const [collapsed, setCollapsed] = useState<Set<string>>(() => new Set());
   const [failure, setFailure] = useState("");
+  const moveFailed = (refused: Error) => {
+    if (refused instanceof HostRefusal && refused.reasonCode === "stale_revision") reread();
+    setFailure(refused.message);
+  };
   const group = definition.groups?.find((candidate) => candidate.key === view.group);
   const lanes = definition.board;
   const board = view.layout === "board" ? lanes : undefined;
@@ -533,10 +537,7 @@ export function ListView<Answer, Row>({ definition, read, primary, back }: ListV
                   };
                 })}
                 accepts={board.accepts}
-                onMove={board.move && ((id, to) => {
-                  setFailure("");
-                  board.move?.(id, to).catch((refused: Error) => setFailure(refused.message));
-                })}
+                onMove={board.move && ((id, to) => { setFailure(""); return board.move?.(id, to).catch((err: Error) => { moveFailed(err); throw err; }); })}
               />
             )}
             {ready && calendar && (
@@ -549,10 +550,7 @@ export function ListView<Answer, Row>({ definition, read, primary, back }: ListV
                 page={definition.page}
                 items={shown.map((cells) => ({ id: cells[idKey], day: cells.__day, title: cells[orderedColumns[0].key], href: cells.__href }))}
                 accepts={calendar.accepts}
-                onMove={calendar.move && ((id, day) => {
-                  setFailure("");
-                  calendar.move?.(id, dateField, day).catch((refused: Error) => setFailure(refused.message));
-                })}
+                onMove={calendar.move && ((id, day) => { setFailure(""); calendar.move?.(id, dateField, day).catch(moveFailed); })}
               />
             )}
             {ready && shown.length > 0 && !board && !calendar && (

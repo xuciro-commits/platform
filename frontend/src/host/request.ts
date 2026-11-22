@@ -23,6 +23,21 @@ export function refusal(status: number, body: Failure | null) {
   return new HostRefusal(status, code, said === code ? "" : said, error?.reasonCode, error?.currentRevision);
 }
 
+const inflight = new Map<string, Promise<unknown>>();
+
+function withAbort<T>(promise: Promise<T>, signal?: AbortSignal): Promise<T> {
+  if (!signal) return promise;
+  if (signal.aborted) return Promise.reject(signal.reason ?? new DOMException("Aborted", "AbortError"));
+  return new Promise<T>((resolve, reject) => {
+    const onAbort = () => reject(signal.reason ?? new DOMException("Aborted", "AbortError"));
+    signal.addEventListener("abort", onAbort, { once: true });
+    promise.then(
+      (value) => { signal.removeEventListener("abort", onAbort); resolve(value); },
+      (error) => { signal.removeEventListener("abort", onAbort); reject(error); },
+    );
+  });
+}
+
 async function respond(path: string, options: Options) {
   const session = currentSession();
   const headers: Record<string, string> = { ...options.headers };
@@ -37,6 +52,16 @@ async function respond(path: string, options: Options) {
 }
 
 export async function request<Answer>(path: string, options: Options = {}): Promise<Answer> {
+  if (options.body === undefined && !options.headers) {
+    const session = currentSession();
+    const key = `${session?.tenant ?? ""} ${session?.token ?? ""} ${path}`;
+    let shared = inflight.get(key) as Promise<Answer> | undefined;
+    if (!shared) {
+      shared = respond(path, {}).then((res) => res.json() as Promise<Answer>).finally(() => { inflight.delete(key); });
+      inflight.set(key, shared);
+    }
+    return withAbort(shared, options.signal);
+  }
   return (await respond(path, options)).json();
 }
 

@@ -7,18 +7,19 @@ import { StatusDot } from "@astryxdesign/core/StatusDot";
 import { Heading, Text } from "@astryxdesign/core/Text";
 import { Timestamp } from "@astryxdesign/core/Timestamp";
 import * as stylex from "@stylexjs/stylex";
-import type { PointerEvent as ReactPointerEvent, ReactNode } from "react";
+import { type PointerEvent as ReactPointerEvent, type ReactNode, useEffect, useMemo, useState } from "react";
 import { t } from "../i18n";
 import { dragStyles, useDrag } from "./drag";
 import { useGutter } from "./frame";
 import type { Dot } from "./Transitions";
 
 export type BoardCard = { id: string; column: string; title: string; href: string; lines: string[]; amount?: number; currency?: string; owner?: string; updated?: string; related?: string };
+type MoveResult = Promise<unknown> | void;
 type BoardProps = {
   columns: { key: string; label: string; dot?: Dot }[];
   cards: BoardCard[];
   total?: string;
-  onMove?: (id: string, to: string) => void;
+  onMove?: (id: string, to: string) => MoveResult;
   accepts?: (id: string, to: string) => boolean;
   page?: { hasMore: boolean; loading: boolean; loadMore: () => void };
 };
@@ -62,14 +63,45 @@ function CardBody({ card }: { card: BoardCard }) {
 
 export function BoardView({ columns, cards, onMove, accepts, page, total }: BoardProps) {
   const gutter = useGutter();
-  const { drag, press, floating, target, item } = useDrag(onMove, accepts);
+  const [optimistic, setOptimistic] = useState<Record<string, string>>({});
 
-  const lifted = drag ? cards.find((card) => card.id === drag.id) : undefined;
+  useEffect(() => {
+    setOptimistic((previous) => {
+      if (Object.keys(previous).length === 0) return previous;
+      const next: Record<string, string> = {};
+      for (const [id, col] of Object.entries(previous)) {
+        const card = cards.find((entry) => entry.id === id);
+        if (card && card.column !== col) next[id] = col;
+      }
+      return Object.keys(next).length === Object.keys(previous).length ? previous : next;
+    });
+  }, [cards]);
+
+  const handleMove = onMove && ((id: string, to: string) => {
+    setOptimistic((previous) => ({ ...previous, [id]: to }));
+    const clear = () => setOptimistic((previous) => {
+      if (!(id in previous)) return previous;
+      const { [id]: _, ...rest } = previous;
+      return rest;
+    });
+    const pending = onMove(id, to);
+    if (pending && typeof pending.then === "function") {
+      pending.catch(clear);
+    }
+  });
+
+  const shownCards = useMemo(
+    () => (Object.keys(optimistic).length === 0 ? cards : cards.map((card) => (card.id in optimistic ? { ...card, column: optimistic[card.id] } : card))),
+    [cards, optimistic],
+  );
+  const { drag, press, floating, target, item } = useDrag(handleMove, accepts);
+
+  const lifted = drag ? shownCards.find((card) => card.id === drag.id) : undefined;
 
   const known = new Set(columns.map((column) => column.key));
-  const missing = cards.filter((card) => !known.has(card.column));
+  const missing = shownCards.filter((card) => !known.has(card.column));
   const column = ({ key, label, dot }: BoardProps["columns"][number]): ReactNode => {
-    const own = key ? cards.filter((card) => card.column === key) : missing;
+    const own = key ? shownCards.filter((card) => card.column === key) : missing;
     const resting = drag ? own.filter((card) => card.id !== drag.id) : own;
     const sums = new Map<string, number>();
     for (const card of own) {

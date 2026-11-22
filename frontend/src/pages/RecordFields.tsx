@@ -21,6 +21,7 @@ import { MemberLabel } from "./MemberField";
 type Conflict = { name: string; before: unknown; mine: unknown; saved: unknown; revision: number };
 export type Editor = {
   values: Values;
+  stale?: boolean;
   conflict?: Conflict;
   resolve: (keep: "mine" | "saved") => void;
   status: Record<string, InputStatus>;
@@ -46,13 +47,20 @@ export function useEditor(described: Described, id: string, values: Values, revi
   const reasons = useRef(new Map<string, string>());
   const latest = useRef(revision);
   const pending = useRef(drafts);
+  const origins = useRef<Values>({});
   const queue = useRef(Promise.resolve());
   const sent = useRef<Values>({});
-  latest.current = Math.max(latest.current, revision);
+  const hasDraft = Object.keys(drafts).length > 0;
+  if (!hasDraft && !conflict) latest.current = Math.max(latest.current, revision);
   pending.current = drafts;
+  const stale = hasDraft && revision > latest.current;
 
   useEffect(() => {
-    setDrafts((previous) => Object.fromEntries(Object.entries(previous).filter(([name, value]) => !same(value, values[name]))));
+    setDrafts((previous) => {
+      const next = Object.fromEntries(Object.entries(previous).filter(([name, value]) => !same(value, values[name])));
+      for (const name of Object.keys(origins.current)) if (!(name in next)) delete origins.current[name];
+      return next;
+    });
     setStatus((previous) => Object.fromEntries(Object.entries(previous).filter(([, entry]) => entry.type === "error")));
   }, [values]);
 
@@ -61,9 +69,10 @@ export function useEditor(described: Described, id: string, values: Values, revi
     try {
       const accepted = await send(edit, id, { ...together, [name]: value }, latest.current);
       latest.current = accepted.revision;
-      for (const sent of [name, ...Object.keys(together)]) {
-        refused.current.delete(sent);
-        reasons.current.delete(sent);
+      for (const field of [name, ...Object.keys(together)]) {
+        refused.current.delete(field);
+        reasons.current.delete(field);
+        delete origins.current[field];
       }
       setStatus((previous) => ({ ...previous, ...Object.fromEntries([name, ...Object.keys(together)].map((sent) => [sent, { type: "success" as const }])) }));
     } catch (problem) {
@@ -76,27 +85,28 @@ export function useEditor(described: Described, id: string, values: Values, revi
         return;
       }
       const now = await request<Api.RecordView>(`/v1/records/${edit.target}/${encodeURIComponent(id)}`);
-      const revision = (now.record as { revision: number }).revision;
+      const nextRevision = (now.record as { revision: number }).revision;
       const saved = plain(now.values?.[name]);
-      latest.current = revision;
+      latest.current = nextRevision;
       if (same(saved, before)) return write(name, value, before, together);
-      setConflict({ name, before, mine: value, saved, revision });
+      setConflict({ name, before, mine: value, saved, revision: nextRevision });
     }
   };
 
   const save = (name: string, value: unknown) => {
-    if (!edit || same(value, values[name]) || (name in sent.current && sent.current[name] === value)) return;
+    const before = name in origins.current ? origins.current[name] : values[name];
+    if (!edit || same(value, before) || (name in sent.current && sent.current[name] === value)) return;
     const drafted = (other: string) => other !== name && other in pending.current && !same(pending.current[other], values[other]);
     const form = { ...values, ...pending.current, [name]: value };
     const controller = described.field(name)?.when?.field;
     const together: Values = controller && drafted(controller) ? { [controller]: pending.current[controller] } : {};
     const field = described.field(name);
     if (field && !blank(value)) for (const sibling of described.members(field)) if (sibling.name !== name && !blank(values[sibling.name])) together[sibling.name] = "";
-    const changed = [name, ...Object.keys(together)];
+    const changedFields = [name, ...Object.keys(together)];
     for (const field of described.entity.fields) {
-      if (field.when && changed.includes(field.when.field) && drafted(field.name) && described.shows(field, form)) together[field.name] = pending.current[field.name];
+      if (field.when && changedFields.includes(field.when.field) && drafted(field.name) && described.shows(field, form)) together[field.name] = pending.current[field.name];
     }
-    const missing = described.needs(form, changed).filter((field) => field.name !== name && !(field.name in together));
+    const missing = described.needs(form, changedFields).filter((field) => field.name !== name && !(field.name in together));
     if (missing.length) {
       const message = `${t("Also fill in")}: ${missing.map((field) => t(field.title)).join(", ")}`;
       refused.current.add(name);
@@ -106,7 +116,6 @@ export function useEditor(described: Described, id: string, values: Values, revi
     }
     sent.current[name] = value;
     Object.assign(sent.current, together);
-    const before = values[name];
     setSaving((previous) => new Set(previous).add(name));
     queue.current = queue.current.then(() => write(name, value, before, together)).finally(() => setSaving((previous) => {
       const next = new Set(previous);
@@ -119,6 +128,7 @@ export function useEditor(described: Described, id: string, values: Values, revi
     if (!conflict) return;
     setConflict(undefined);
     delete sent.current[conflict.name];
+    delete origins.current[conflict.name];
     if (keep === "mine") queue.current = queue.current.then(() => write(conflict.name, conflict.mine, conflict.saved));
     else {
       setDrafts(({ [conflict.name]: _, ...rest }) => rest);
@@ -147,7 +157,10 @@ export function useEditor(described: Described, id: string, values: Values, revi
       setLeave(() => (discard: boolean) => {
         setLeave(undefined);
         if (discard) {
-          for (const name of refused.current) delete sent.current[name];
+          for (const name of refused.current) {
+            delete sent.current[name];
+            delete origins.current[name];
+          }
           refused.current.clear();
           setDrafts({});
           setStatus({});
@@ -159,6 +172,7 @@ export function useEditor(described: Described, id: string, values: Values, revi
 
   return {
     values: { ...values, ...drafts },
+    stale,
     leave,
     status,
     saving,
@@ -167,6 +181,7 @@ export function useEditor(described: Described, id: string, values: Values, revi
     change: (parameter, value) => {
       refused.current.delete(parameter.name);
       reasons.current.delete(parameter.name);
+      if (!(parameter.name in origins.current)) origins.current[parameter.name] = values[parameter.name];
       const field = described.field(parameter.name);
       const cleared = field && !blank(value) ? described.members(field).filter((sibling) => sibling.name !== parameter.name).map((sibling) => [sibling.name, ""]) : [];
       setDrafts((previous) => ({ ...previous, ...Object.fromEntries(cleared), [parameter.name]: value }));

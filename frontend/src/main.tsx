@@ -8,7 +8,7 @@ import * as stylex from "@stylexjs/stylex";
 import { StrictMode, useEffect } from "react";
 import { createRoot } from "react-dom/client";
 import { defaultThemeSlug, themes } from "./astryx-themes";
-import { useSession } from "./host";
+import { useLiveChanges, useSession } from "./host";
 import { useLocale } from "./i18n";
 import { PeekProvider } from "./pages/RecordPeek";
 import { RouterLink } from "./router";
@@ -27,6 +27,7 @@ const theme = { ...base, icons: { ...base.icons, arrowsUpDown: <ArrowUpIcon {...
 function Root() {
   const locale = useLocale();
   const tenant = useSession()?.tenant;
+  useLiveChanges();
   useEffect(() => {
     document.documentElement.lang = locale;
   }, [locale]);
