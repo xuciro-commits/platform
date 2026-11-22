@@ -3,17 +3,25 @@ import { readFileSync } from "node:fs";
 import { createServer } from "node:http";
 import type { AddressInfo } from "node:net";
 import { fileURLToPath } from "node:url";
-import { expect, test } from "@playwright/test";
+import { type Locator, type Page, expect, test } from "@playwright/test";
 import { open, property, edit } from "./support";
 
 test.describe.serial("blank tenant", () => {
-test("blank tenant: install CRM from the marketplace, grant roles, and run the sales mainline to Won", async ({ page }) => {
-  test.setTimeout(120000);
-  const signOut = async () => {
-    await page.getByRole("button", { name: "Account", exact: true }).click();
-    await page.getByRole("menuitem", { name: "Sign out", exact: true }).click();
-  };
+let page: Page;
+let nav: Locator;
+const signOut = async () => {
+  await page.getByRole("button", { name: "Account", exact: true }).click();
+  await page.getByRole("menuitem", { name: "Sign out", exact: true }).click();
+};
+test.beforeAll(async ({ browser }) => {
+  page = await browser.newPage();
+  nav = page.getByRole("navigation", { name: "Primary navigation" });
+});
+test.afterAll(async () => {
+  await page.close();
+});
 
+test("blank tenant: an administrator installs CRM from the marketplace after reviewing its applications and roles", async () => {
   await page.goto("/");
   await page.getByRole("button", { name: "admin-1 · blank" }).click();
   await expect(page.getByRole("button", { name: "Account", exact: true })).toBeVisible();
@@ -32,8 +40,9 @@ test("blank tenant: install CRM from the marketplace, grant roles, and run the s
   await expect(page).toHaveURL(/\/delivery\/installations$/, { timeout: 30_000 });
   await expect(page.getByRole("listitem").filter({ hasText: /^CRM/ })).toContainText("active");
   await expect(page.getByRole("link", { name: "CRM", exact: true })).toHaveCount(0);
-  const nav = page.getByRole("navigation", { name: "Primary navigation" });
+});
 
+test("blank tenant: a package role granted to a member opens CRM for them and revoking it closes it", async () => {
   await open(page, "Admin", "Members");
   await page.getByRole("row", { name: /田雪/ }).click();
   const memberPane = page.getByRole("dialog", { name: "Details" }).or(page.getByRole("complementary", { name: "Details" }));
@@ -84,7 +93,9 @@ test("blank tenant: install CRM from the marketplace, grant roles, and run the s
   await page.getByRole("option", { name: /salesmanager/ }).click();
   await memberPane.getByRole("button", { name: "Grant role", exact: true }).click();
   await expect(memberPane.getByRole("listitem").filter({ hasText: /salesmanager/ })).toBeVisible();
+});
 
+test("blank tenant: the sales rep runs a lead to Won and the sales manager sees it on the board and the dashboard", async () => {
   await signOut();
   await page.getByRole("button", { name: "user-1 · blank" }).click();
   await page.getByRole("link", { name: "CRM", exact: true }).click();
@@ -134,7 +145,9 @@ test("blank tenant: install CRM from the marketplace, grant roles, and run the s
   await page.goto("/crm/dashboard");
   await expect(page.getByRole("main").getByRole("link", { name: "Won deals", exact: true })).toBeVisible();
   await expect(page.getByRole("main").getByRole("heading", { level: 1, name: "1", exact: true }).first()).toBeVisible();
+});
 
+test("blank tenant: retiring CRM removes its entry and keeps the records, reinstalling brings both back", async () => {
   await signOut();
   await page.getByRole("button", { name: "admin-1 · blank" }).click();
   await open(page, "Delivery", "Installations");

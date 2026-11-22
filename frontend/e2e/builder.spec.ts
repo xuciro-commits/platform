@@ -147,8 +147,16 @@ test("object definition: create and bind an action type before publishing a tran
 });
 
 
-test("gate: build a type and use it, install a package and use its action, then check each role", async ({ page, browser }) => {
-  test.setTimeout(120000);
+test.describe.serial("gate", () => {
+let page: Page;
+test.beforeAll(async ({ browser }) => {
+  page = await browser.newPage();
+});
+test.afterAll(async () => {
+  await page.close();
+});
+
+test("gate: a builder creates a type with fields, states and a transition, publishes it and moves a record through it", async () => {
   await signIn(page);
   await open(page, "Ontology", "Object types");
   await page.getByRole("button", { name: "New", exact: true }).click();
@@ -196,7 +204,9 @@ test("gate: build a type and use it, install a package and use its action, then 
   const confirm = page.getByRole("alertdialog");
   await confirm.getByRole("button", { name: "Activate gate item", exact: true }).click();
   await expect(page.getByText("Active", { exact: true }).first()).toBeVisible();
+});
 
+test("gate: a type of the same name in another project is its own type with its own records", async () => {
   await open(page, "Ontology", "Object types");
   await page.getByRole("button", { name: "New", exact: true }).click();
   const twin = page.getByRole("dialog");
@@ -227,7 +237,9 @@ test("gate: build a type and use it, install a package and use its action, then 
   await page.goto("/ontology/objects/sales.gateitem");
   await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
   await expect(page.locator(`a[href$="/${twinRecord}"]`)).toHaveCount(0);
+});
 
+test("gate: an installed package contributes an app whose record action runs", async () => {
   await open(page, "Delivery", "Marketplace");
   const provider = page.getByRole("listitem").filter({ hasText: "application.production-provider · 0.1.4" });
   await provider.getByRole("button", { name: "Install", exact: true }).click();
@@ -256,7 +268,9 @@ test("gate: build a type and use it, install a package and use its action, then 
   await contributed.getByRole("button", { name: "Start upstream production", exact: true }).click();
   await expect(contributed).toBeHidden();
   await expect(page.getByText("Running", { exact: true }).first()).toBeVisible();
+});
 
+test("gate: builders and users see no administration entries", async ({ browser }) => {
   for (const seat of ["builder-1", "user-1"]) {
     const context = await browser.newContext();
     const member = await context.newPage();
@@ -267,6 +281,7 @@ test("gate: build a type and use it, install a package and use its action, then 
     await expect(member.getByRole("link", { name: "Host", exact: true })).toHaveCount(0);
     await context.close();
   }
+});
 });
 
 
@@ -463,7 +478,9 @@ test("delivery: a builder publishes a version, which installs beside its source 
   const review = page.getByRole("dialog");
   const name = review.getByRole("textbox", { name: "Project API name" });
   await expect(name).toHaveValue("crm");
-  await review.getByRole("button", { name: "Install package", exact: true }).click();
+  const install = review.getByRole("button", { name: "Install package", exact: true });
+  await expect(install).toBeEnabled({ timeout: 30_000 });
+  await install.click();
   await expect(review.getByText("A project named crm already exists; install under another name")).toBeVisible();
   await name.fill("pipeline");
   await review.getByRole("button", { name: "Install package", exact: true }).click();

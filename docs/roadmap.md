@@ -36,16 +36,12 @@
 
 2.7.1–2.7.4 已由 trunk “blank tenant: install CRM …” 一个用例从安装走到赢单、卸载与重装。下面几项的宿主与界面已提交，只差验收。
 2.7.5、2.7.6 已由 marketplace 的 “upgrade tenant” 两个用例验收：从文件装 `crm-0.1.21.json`，再升级到带可选字段 `linkedin` 的 0.1.22。
+2.7.9 已做：四个长用例拆成串行的短用例（crm 的全类型拆成每类一个，gate 与空租户主线各拆四段，共用一个页面）。
 2.7.7 已由 “library tenant” 验收：用例自己在回环地址起一个 `catalog.json`，“管理库”添加后条目与内置索引并列，按摘要核对后装上。
-顺序：2.7.9 → 2.7.11 → 2.7.10，再开 2.8。
+顺序：2.7.10，然后主库发版与包库 CI 改用发行版（2.8.0），再开 2.8.1。
 
-- **2.7.9 长用例进一分钟。** 单跑超过一分钟的四个：builder 的 gate（60s）、marketplace 的空租户主线（59s）、crm 的全类型看板（50s）与转化赢单（39s）。
-  前置状态经接口造好，界面只验各自的那一步；marketplace 的主线拆成安装、配角色、主线、卸载重装四个串行用例。验收：每个文件 `make trunk SPEC=…` 单跑一分钟内。
-- **2.7.11 平台变更写后即读。** 导入包被接受后，紧接着的 `GET /v1/packages` 读到的是接受之前的读映像，界面不再收到变更，停在“加载中”。
-  导入向导暂以轮询兜住（`PackageImportWizard` 的 `listed`）。根因在宿主：平台自身的接受结果推进读映像后才回应，或回应里带上要等的位置。
-  先在 K13 写清“接受之后同一成员的下一次读看得到它”，再改，删掉向导里的轮询。验收：`make test RUN=K13`、marketplace 的 trunk。
-- **2.7.10 负责人走门槛。** 2.7.9、2.7.11 收完，负责人在 8495 按 plan 阶段 2 的门槛手走一遍：空租户安装 → 线索到赢单 → 期间没有改宿主。
-  全量 `make trunk` 在这里跑一次。走完即删 plan 里的 2.7 行，阶段 2 关门，再开阶段 3 的批次。
+- **2.7.10 负责人走门槛。** 负责人在 8495 按 plan 阶段 2 的门槛手走一遍：空租户安装 → 线索到赢单 → 期间没有改宿主。
+  全量 `make trunk` 在这里跑一次。走完即删 plan 里的 2.7 行。
 
 ## 2.8 开放应用接入
 
@@ -54,6 +50,9 @@
 每接一个，踩过的坑写进 Skill，下一个照着走；官方包在 [platform-packages](https://github.com/xuciro-commits/platform-packages)，
 分类与发版让管理简单明确。`deploy/packages/` 里现有的八个包是平台的测试夹具，不进官方包库。
 
+- **2.8.0 主库发版，包库 CI 用发行版。** 主库只在推 `v*` tag 时跑 `release.yml`：一次构建前端，五个平台各出内嵌前端的单体 `platform-<os>-<arch>`
+  与 `pkg-<os>-<arch>`，附 `SHA256SUMS` 与来源证明。包库的 `platform.lock` 写主库的发行版 tag，CI 下载 `pkg-linux-amd64` 并核对摘要，不再拉源码编译；
+  包库 CI 只在 PR 与手动触发时跑，不在每次推送 main 时跑。验收：主库 `v0.2.0` 发出；包库一个 PR 的 CI 用它跑通。
 - **2.8.1 普查。** 开放应用有哪几家（Frappe、Odoo 社区版与 OCA、Apache OFBiz、Dolibarr、Tryton、InvenTree 等，以核实为准），
   每家有哪些业务应用：许可、能参考还是能转换、业务价值、与平台已有能力的重叠，给出接入顺序。
   产出 `study/open-apps/index.md` 一张表，每家一节；许可以各仓库的 LICENSE 文件为准，不凭记忆。
@@ -84,6 +83,11 @@
 
 ## 之后的行
 
+- **包的读在并发下慢。** 全量 trunk（三个 worker）里 `GET /v1/packages` 要 3.5–6.2 秒，`review` 6.3 秒，`preparation` 超过 10 秒：
+  每次读都为索引里每个包重算预检与安装计划。按定义纪元缓存包视图，审阅与准备只算被问的那个包。验收：同样负载下三个读各在 1 秒内。
+- **平台变更写后即读（2.8 之后）。** 导入包被接受后，紧接着的 `GET /v1/packages` 读到的是接受之前的读映像，界面不再收到变更，停在“加载中”。
+  导入向导暂以轮询兜住（`PackageImportWizard` 的 `listed`）。根因在宿主：平台自身的接受结果推进读映像后才回应，或回应里带上要等的位置。
+  先在 K13 写清“接受之后同一成员的下一次读看得到它”，再改，删掉向导里的轮询。验收：`make test RUN=K13`、marketplace 的 trunk。
 - 界面微件第二批落在各行：每个做成 `src/pages/` 里的一个表现，所有类型同时得到；一个一次提交，trunk 加一步用到它。
 - 旧前端已归档于 Git 标签 `archive/web-final`（`git show archive/web-final:<路径>` 查阅原始意图），未落地能力按后续阶段以 Astryx 重做：
   - 记录与数据微件（`web/packages/ui/src/records/`）：`RecordGantt`、`RecordTimeline`、`EditableRecordGrid`、
