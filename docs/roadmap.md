@@ -37,9 +37,8 @@
 每接一个，踩过的坑写进 Skill，下一个照着走；官方包在 [platform-packages](https://github.com/xuciro-commits/platform-packages)，
 分类与发版让管理简单明确。`deploy/packages/` 里现有的八个包是平台的测试夹具，不进官方包库。
 
-- **2.8.0 主库发版，包库 CI 用发行版。** 主库只在推 `v*` tag 时跑 `release.yml`：一次构建前端，五个平台各出内嵌前端的单体 `platform-<os>-<arch>`
-  与 `pkg-<os>-<arch>`，附 `SHA256SUMS` 与来源证明。包库的 `platform.lock` 写主库的发行版 tag，CI 下载 `pkg-linux-amd64` 并核对摘要，不再拉源码编译；
-  包库 CI 只在 PR 与手动触发时跑，不在每次推送 main 时跑。验收：主库 `v0.2.0` 发出；包库一个 PR 的 CI 用它跑通。
+平台发行版带单体宿主与 `pkg`（`v*` tag 才跑 `release.yml`）；包库的 `platform.lock` 写发行版，CI 下载 `pkg` 并核对摘要，只在 PR 与手动触发时跑。
+
 - **2.8.1 普查。** 开放应用有哪几家（Frappe、Odoo 社区版与 OCA、Apache OFBiz、Dolibarr、Tryton、InvenTree 等，以核实为准），
   每家有哪些业务应用：许可、能参考还是能转换、业务价值、与平台已有能力的重叠，给出接入顺序。
   产出 `study/open-apps/index.md` 一张表，每家一节；许可以各仓库的 LICENSE 文件为准，不凭记忆。
