@@ -1,39 +1,159 @@
 {
-  "format": 1,
+  "format": 2,
   "package": "application.heating",
   "version": "0.1.1",
   "requires": [],
-  "artifact": "sha256:6d592dd3e73f570599a5739949614d1f033228163990a107e7f32d19362bd98c",
+  "artifact": "sha256:5ba9a227a1186253fc4dafc84591eaaeb2f0a7bc5361294eb57e47851abcb5c7",
   "assets": {
-    "app/heatingops": "sha256:7b23c6e0271b888ca0aa508c113450fea547c947749e400d942780206395d174",
-    "connection/heatingfield": "sha256:bc5ed99eeb87bd9b5f7e610de82f4ee0e810fcd615d2f38c2a8ef33f4b033340",
-    "connection/propertyfeed": "sha256:b97b636d1cee3064f839b3ffdde1a664669b6fb16852566031a1d974eccd481e",
-    "evaluation-set/heatingadvicequality": "sha256:d0c79ce769aa2a85365cb1b461a5c774cc63e531e425fe80a2051041859b41fa",
-    "flow/build.heatingrepair": "sha256:0a9a14aa4a6b71eed4414f78638bcdf4fb86fcb357eabbfe16599855a2750cbc",
-    "function/heatingadvice": "sha256:5755c5c1cbc6b6eef9b247ea713205c1895ec29b4bcdab5edfa9f6136c0143e8",
-    "object/build.accesspass": "sha256:62ad57a0a54d64eb05daca8e388ef9fcb5e5b79a9928b124085664e465681cf9",
-    "object/build.accesspoint": "sha256:4dfeab22f5c9c52936ba4ec940cf6605bffc1d7335a8505b53320410bd242269",
-    "object/build.alarm": "sha256:e843bfc2d4d934a30b12e9375d99ea8f97efacec2973b324c24b3c2115d07bfe",
-    "object/build.building": "sha256:99c27c0453a942d0232977dbfa835fb7707c166daad807d2db7e470d0d427d02",
-    "object/build.circuit": "sha256:55cd5ae26617db73c033c5d79f6809cda70c625faa943e0ef1c9712a5a39c739",
-    "object/build.device": "sha256:e48283ae83fab1b876727f7d13805214af67f77ade2b2d337bc9031c5e6bf40e",
-    "object/build.floor": "sha256:9d2edf53192ca30810bdc376a7fcddb85a2eca5d703fbb74ee968b3c859f947c",
-    "object/build.point": "sha256:df890a4082cae71874196217457bf0b51bc5c92b40568be9a39b613a166f372c",
-    "object/build.workorder": "sha256:2400b4544689af9aa36ca7722bf5d71db1d76ecc29994e18ee545b59420a89aa",
-    "object/build.zone": "sha256:38877684700a6aa398b6316b8fa40bc286d3c53fc7b1ac528afb9ce845129635",
-    "observation/heatinghealth": "sha256:16f6e78291d5b926ef23b4f126e87374e715c280fc802f2290c344b423b5345c",
-    "observation/heatingposition": "sha256:8e9459098bb7d7f4e128428f678ed4e5354460113bc323fa305e2a9eb1c3dfce",
-    "observation/heatingtemperature": "sha256:6086c3983316aa90916486b02e0dcbce8ee9a665a352eb3e5eccb2cf30ecf94f",
-    "page/heatingaccess": "sha256:3b61191574de021a8876b01a8f2d3afaa01f162bc952dea99fad7199ab995759",
-    "page/heatingalarms": "sha256:d5afcb4c3a17fc00b82ced1c4c825b00aabd1057810faec72cd598006188d481",
-    "page/heatingdevices": "sha256:d828891bb12f8d25c1d1e5233a6fa518764bb2ce8139b76f03fbee451893b305",
-    "page/heatinghealth": "sha256:ca61f49ae52e714627bcda1ebf5e592fe4c435863232c1aa2e611c83ba01c4c1",
-    "page/heatingoverview": "sha256:a2511593cf583f4fc9b15cc8da07aacb16374e358e69420cbd4c5f91a18f4e58",
-    "sample-set/heatingdemo": "sha256:15a00b26109f714bd8025733a5a0cf57798e00bef95b1e9a170ebf1a8016e0ad",
-    "test-plan/heatingaccess": "sha256:b0fec731727b228197dd7fd07794d365e074ec18cb2327ad1df4eac5ca7e9795",
-    "test-plan/heatingalarmonce": "sha256:9df1ce66c83a2cfcefbcf6e5d9481fc5b7d6c47d566248bd572252abed5eb648",
-    "test-plan/heatingvalvebounds": "sha256:093fd8628a235c754b5bf09797927bceab0b39d039e7fd1eaacf2aba55acf686",
-    "writeback/heatingnotice": "sha256:07b05313f502c424151029148d27b22d415e89dc3e2e4457387c3ea999e40455",
-    "writeback/heatingsetvalve": "sha256:dcd44ea11f28ae5bc7a7ef89560bf757d39be6a1556a9f8900a8746f4eccca35"
+    "app/heatingops": {
+      "digest": "sha256:8a9886497c2c2a979fce922f1fcc7529d01c05586fb277e15c694d5ffe592289",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    "connection/heatingfield": {
+      "digest": "sha256:88960156de0a9ead6546dace1d61ca27b8ca88bdf297b87db5ba699a6a4ba6d3",
+      "contractVersion": 1,
+      "sourceVersion": "1.connection-1"
+    },
+    "connection/propertyfeed": {
+      "digest": "sha256:7ae54b4055463890cccf015fd250a2547618540eb3ca569308932b23c1ffb147",
+      "contractVersion": 1,
+      "sourceVersion": "1.connection-1"
+    },
+    "evaluation-set/heatingadvicequality": {
+      "digest": "sha256:69ac90e37e5820de99c9a11ed90fff1e00b04264002491a72b2e172eba97b67c",
+      "contractVersion": 1,
+      "sourceVersion": "1.evaluation-1"
+    },
+    "flow/build.heatingrepair": {
+      "digest": "sha256:7581043810b9937d1f3a28e451c57ba8430fea323a509e0822b469614e9d2275",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    "function/heatingadvice": {
+      "digest": "sha256:b48db35254ccc9f35527f94f957040058bc029bc877b013bedf43877fc624b12",
+      "contractVersion": 1,
+      "sourceVersion": "1.function-1"
+    },
+    "object/build.accesspass": {
+      "digest": "sha256:c6949763ad6ea40526c2fb2cbf3cd3fe6d65035be2f6ba62cc8bc8446ed1317e",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    "object/build.accesspoint": {
+      "digest": "sha256:b8dbfdfa5dfd9b0b9d1afc6ebf6a4755a81edab9a0dd1136be252b042b1edd24",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    "object/build.alarm": {
+      "digest": "sha256:d0b17db24d52da720c218363577787c0855a9b3eb8e70a0072e32d79afd01b27",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    "object/build.building": {
+      "digest": "sha256:f8df02e6d4571fdf862124b58d4da54df8ead9a2631167290ed397b313e86f38",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    "object/build.circuit": {
+      "digest": "sha256:8ebcf83f36d3e517722721a24aeed3906411152f33de99903e68327316c358d8",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    "object/build.device": {
+      "digest": "sha256:c017abbea5996ec6260c0629a51eb3def4ec3c1c7e06f772ab9c03c401990fc5",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    "object/build.floor": {
+      "digest": "sha256:8839dde463eb27aecf3d13f1aa789a66d485a6a559707ba006435d20acf2a89d",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    "object/build.point": {
+      "digest": "sha256:8402fee5f99d7b6c670b45a862fb4bd701fb4388dfbd59b02c5ed87501d4cf2d",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    "object/build.workorder": {
+      "digest": "sha256:14723b1c1d17802e4db14ad8fadce7716d9662f4c55d7e38b849ab3b5e340b60",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    "object/build.zone": {
+      "digest": "sha256:7a38c1bcf163f4173697c452155d102e9ffd3df618a671282ecf39d9c0e3df14",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    "observation/heatinghealth": {
+      "digest": "sha256:ba2f1cb0f3a0e6755270b17b2a6828b5a4eb4498b09a361fefc20925b7996937",
+      "contractVersion": 1,
+      "sourceVersion": "1.observation-1"
+    },
+    "observation/heatingposition": {
+      "digest": "sha256:44a08e998e63b081620be22c753448675a2c78dc743a01c9c5dc1614894c3b4d",
+      "contractVersion": 1,
+      "sourceVersion": "1.observation-1"
+    },
+    "observation/heatingtemperature": {
+      "digest": "sha256:58911fd1c32b6cdcd21701f7906edda725af8b3cb8c8c3c6c89060b418e58d12",
+      "contractVersion": 1,
+      "sourceVersion": "1.observation-1"
+    },
+    "page/heatingaccess": {
+      "digest": "sha256:6ebff710165071f7d3289eaddcb299f582d4dd3ec974760584b376bda564425e",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    "page/heatingalarms": {
+      "digest": "sha256:cb9af29713f06cdc3cb01e751699f324a6db745c6de72dcc0a7d43ab3bacb2a8",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    "page/heatingdevices": {
+      "digest": "sha256:c8c8d342a115ca75904c02ffbe1cccf8a8decb38ceaa4428529fff39134de857",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    "page/heatinghealth": {
+      "digest": "sha256:5933546e43601de3e68bd4dc1dec50490a9b00ff577845a48e3199c4aa2e6a09",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    "page/heatingoverview": {
+      "digest": "sha256:dee2274b87d7ff5725fd86862c1a07173d23761bc0e9a529e88c0a8162b0c0a3",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    "sample-set/heatingdemo": {
+      "digest": "sha256:b94f996f68a9511cd516c2c43a113cf8bbc5dc8ac27c410b47bfd2e7fc6478f0",
+      "contractVersion": 1,
+      "sourceVersion": "1.samples-1"
+    },
+    "test-plan/heatingaccess": {
+      "digest": "sha256:362e77320f464bdd830f1339ac372789eb9757e52f82675d526731eab249e376",
+      "contractVersion": 1,
+      "sourceVersion": "1.tests-1"
+    },
+    "test-plan/heatingalarmonce": {
+      "digest": "sha256:26ba5b0ecfdd08719e6a436938de26f0e1b2c0523e890b5aabc6bf7fb15474dd",
+      "contractVersion": 1,
+      "sourceVersion": "1.tests-1"
+    },
+    "test-plan/heatingvalvebounds": {
+      "digest": "sha256:bc620fc86bcbab3c2de4831a717042cf9dce6c6db7f065a88a6c307157f5a59b",
+      "contractVersion": 1,
+      "sourceVersion": "1.tests-1"
+    },
+    "writeback/heatingnotice": {
+      "digest": "sha256:dd1a67b821d075ddbdc34427a2fbf73196631324c8e6a057f238346031b2b0e4",
+      "contractVersion": 1,
+      "sourceVersion": "1.writeback-1"
+    },
+    "writeback/heatingsetvalve": {
+      "digest": "sha256:f3276287260b3547990c97f786b9fd1626709de60880da29b9f141b2dca253ae",
+      "contractVersion": 1,
+      "sourceVersion": "1.writeback-1"
+    }
   }
 }

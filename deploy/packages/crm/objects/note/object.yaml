@@ -1,0 +1,48 @@
+display: title
+fields:
+  - group: Note
+    name: title
+    required: true
+    search: true
+    title: Title
+    type: text
+  - group: Note
+    name: content
+    title: Content
+    type: longtext
+  - group: Note
+    inverse: notes
+    name: lead
+    oneOf: Related to
+    ref: crm.lead
+    title: Lead
+    type: reference
+  - group: Note
+    inverse: notes
+    name: deal
+    oneOf: Related to
+    ref: crm.deal
+    title: Deal
+    type: reference
+  - aside: true
+    name: pinned
+    title: Pinned
+    type: boolean
+name: note
+namespace: crm
+plural: Notes
+title: Note
+type: crm.note
+view:
+  columns:
+    - title
+    - lead
+    - deal
+    - pinned
+  filters: []
+  group: none
+  lanes: ""
+  layout: table
+  search: ""
+  sort: []
+  version: 1

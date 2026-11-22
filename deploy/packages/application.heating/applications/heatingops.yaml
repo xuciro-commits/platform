@@ -1,0 +1,261 @@
+name: heatingops
+title: Heating operations
+description: 'Declarative heating operations for a fictional teaching site: buildings and zones, accepted device health, exception handling, approved valve requests and time-limited physical access permissions. Thresholds and city data are examples, not engineering standards.'
+icon: thermometer
+pages:
+  - heatingoverview
+  - heatingdevices
+  - heatingalarms
+  - heatingaccess
+  - heatinghealth
+groups:
+  - title: Operations
+    pages:
+      - heatingoverview
+      - heatingdevices
+      - heatingalarms
+  - title: Site checks
+    pages:
+      - heatingaccess
+      - heatinghealth
+resources:
+  - app: build
+    kind: object
+    name: build.building
+  - app: build
+    kind: object
+    name: build.floor
+  - app: build
+    kind: object
+    name: build.zone
+  - app: build
+    kind: object
+    name: build.device
+  - app: build
+    kind: object
+    name: build.point
+  - app: build
+    kind: object
+    name: build.circuit
+  - app: build
+    kind: object
+    name: build.accesspoint
+  - app: build
+    kind: object
+    name: build.alarm
+  - app: build
+    kind: object
+    name: build.workorder
+  - app: build
+    kind: object
+    name: build.accesspass
+  - app: build
+    kind: connection
+    name: heatingfield
+  - app: build
+    kind: writeback
+    name: heatingsetvalve
+  - app: build
+    kind: observation
+    name: heatingtemperature
+  - app: build
+    kind: observation
+    name: heatinghealth
+  - app: build
+    kind: observation
+    name: heatingposition
+  - app: build
+    kind: flow
+    name: build.heatingrepair
+  - app: build
+    kind: sample-set
+    name: heatingdemo
+  - app: build
+    kind: test-plan
+    name: heatingalarmonce
+  - app: build
+    kind: test-plan
+    name: heatingaccess
+  - app: build
+    kind: test-plan
+    name: heatingvalvebounds
+  - app: build
+    kind: function
+    name: heatingadvice
+  - app: build
+    kind: connection
+    name: propertyfeed
+  - app: build
+    kind: writeback
+    name: heatingnotice
+  - app: build
+    kind: evaluation-set
+    name: heatingadvicequality
+languages:
+  zh-CN:
+    Accepted health score: 已接受的健康分
+    Accepted observed result: 已接受的观测结果
+    Accepted position sampled at: 已接受阀位的采样时间
+    Accepted supply temperature (C): 已接受的供水温度（°C）
+    Accepted valve opening (%): 已接受的阀门开度（%）
+    Access management: 门禁管理
+    Access permission: 通行许可
+    Access permissions are checked as business data: 通行许可按业务数据核验
+    Access point: 门禁点
+    Access point name: 门禁点名称
+    Acknowledge alarm: 确认告警
+    Acknowledged: 已确认
+    Acknowledgement note: 确认说明
+    Activate access permission: 启用通行许可
+    Actual sample time: 实际采样时间
+    Alarm handling: 告警处理
+    Alarm summary: 告警摘要
+    An alarm contains the accepted exception result and its threshold. It does not copy the original measurement window.: 告警记录已接受的异常结果及其阈值，不复制原始测量窗口。
+    ? An approval authorizes one absolute setting. RPC acceptance is only delivery evidence. A fresh Observation must match the requested opening before the circuit becomes stable and Dispatch can complete.
+    : 一次审批只授权一个绝对设定值。RPC 接受只是送达的证据；要等新的观测与请求的开度一致，回路才算稳定，派发才能完成。
+    Approve absolute valve setting: 批准阀门绝对设定
+    Awaiting approval: 待审批
+    Awaiting position evidence: 等待阀位证据
+    Building: 楼栋
+    Building code: 楼栋编码
+    Building name: 楼栋名称
+    Building overview: 楼栋概览
+    Buildings: 楼栋
+    ? Buildings served by the heating operation. The sample site is fictional; thresholds are teaching values, not engineering standards.
+    : 供暖运营覆盖的楼栋。示例站点是虚构的，阈值是教学用值，不是工程标准。
+    Business use: 业务用途
+    Check physical access permission: 核验通行许可
+    Choose a building to inspect its floors, zones and devices.: 选一个楼栋，查看它的楼层、分区与设备。
+    Circuit code: 回路编码
+    Circuit name: 回路名称
+    City: 城市
+    Command requested at: 指令请求时间
+    Compare recorded health assessments and inspect their timestamps.: 比较已记录的健康评估并查看其时间。
+    Complete inspection: 完成巡检
+    Complete the work order: 完成工单
+    Completed: 已完成
+    Completed at: 完成时间
+    Completion evidence: 完成证据
+    Confirm healthy after inspection: 巡检后确认健康
+    Confirm the device was inspected and repaired: 确认设备已巡检并修复
+    Controller: 控制器
+    Decision threshold: 判定阈值
+    ? 'Declarative heating operations for a fictional teaching site: buildings and zones, accepted device health, exception handling, approved valve requests and time-limited physical access permissions. Thresholds and city data are examples, not engineering standards.'
+    : 面向虚构教学站点的声明式供暖运营：楼栋与分区、已接受的设备健康、异常处理、经批准的阀门请求，以及有时限的通行许可。阈值与城市数据都是示例，不是工程标准。
+    Device advice synthetic acceptance: 设备建议的合成验收
+    Device code: 设备编码
+    Device details: 设备详情
+    Device health assessment: 设备健康评估
+    Device kind: 设备类别
+    Device name: 设备名称
+    Disable access checks: 停用通行核验
+    Disabled: 已停用
+    Enable access checks: 启用通行核验
+    Explain device health: 解释设备健康
+    Floor: 楼层
+    Floor code: 楼层编码
+    Floor name: 楼层名称
+    Floors: 楼层
+    Health alarm summary: 健康告警摘要
+    Health dashboard: 健康看板
+    Healthy: 健康
+    Heating alarm: 供暖告警
+    Heating alarms: 供暖告警
+    Heating circuit: 供暖回路
+    Heating circuits: 供暖回路
+    Heating device: 供暖设备
+    Heating devices: 供暖设备
+    Heating field gateway: 供暖现场网关
+    Heating operations: 供暖运营
+    Heating teaching site: 供暖教学站点
+    Heating work order: 供暖工单
+    Heating work orders: 供暖工单
+    Heating zone: 供暖分区
+    Heating zones: 供暖分区
+    Inspect a device, its measurement points and its heating circuits.: 查看一台设备、它的测点与供暖回路。
+    Inspect and confirm heating repair: 巡检并确认供暖修复
+    Inspection evidence: 巡检证据
+    Inspection instructions: 巡检说明
+    Inspection steps for a person to review: 供人审阅的巡检步骤
+    Last accepted assessment: 最近一次已接受的评估
+    Last checked permission: 最近核验的许可
+    Last permission result: 最近一次许可结果
+    Last successful permission check: 最近一次成功的许可核验
+    Lower room temperature (C): 室温下限（°C）
+    Minimum healthy score: 健康分下限
+    Needs inspection: 需要巡检
+    Observed health score: 观测到的健康分
+    Observed signal: 观测信号
+    Observed supply temperature (C): 观测到的供水温度（°C）
+    Observed valve opening (%): 观测到的阀门开度（%）
+    Offline: 离线
+    Offline evidence: 离线证据
+    One exception produces one alarm and repair order: 一次异常只产生一条告警和一张维修工单
+    ? Only accepted business summaries are stored here. Raw protocol measurements remain in the external observation store. A repeated temperature observation while already warning does not create another alarm.
+    : 这里只保存已接受的业务摘要；原始协议测量值留在外部观测存储。已处于告警时再次观测到温度异常，不会再产生告警。
+    Open low health alarm: 发起低健康分告警
+    Open temperature alarm: 发起温度告警
+    Opened at: 发起时间
+    Operations: 运营
+    Operator note: 操作员说明
+    Person identifier: 人员标识
+    Person, place, validity period and revocation are business facts. They grant no platform role and do not widen record access.: 人员、地点、有效期与撤销都是业务事实，不授予平台角色，也不放宽记录访问。
+    Physical access permission: 通行许可
+    Physical access permissions: 通行许可
+    ? Physical access permissions are business records, not platform authorization scopes. This action checks a permission only; it neither opens a door nor claims that a door opened.
+    : 通行许可是业务记录，不是平台授权范围。这个动作只核验许可，既不开门，也不声称门已打开。
+    Physical access point: 门禁点
+    Physical access points: 门禁点
+    Point definition: 测点定义
+    Point definitions: 测点定义
+    ? Point metadata connects a business device to a protocol signal. It deliberately contains no measurement value or raw sample history.
+    : 测点元数据把业务设备连到协议信号，刻意不含测量值或原始采样历史。
+    Point name: 测点名称
+    Property notification endpoint: 物业通知端点
+    Protocol device ID: 协议设备标识
+    Protocol signal ID: 协议信号标识
+    ? Read-only analysis of accepted device evidence. A person checks the suggested next steps; this function does not control equipment.
+    : 对已接受的设备证据做只读分析，由人核对建议的下一步；这个函数不控制设备。
+    Readback evidence: 回读证据
+    Record observed valve position: 记录观测到的阀位
+    Related alarm: 相关告警
+    Repair recorded: 已记录维修
+    Report device offline: 报告设备离线
+    Request valve opening: 请求阀门开度
+    Requested valve opening (%): 请求的阀门开度（%）
+    Resolution evidence: 处理证据
+    Resolve alarm: 处理告警
+    Resolved: 已处理
+    Resolved at: 处理时间
+    Review access points and time-limited physical access passes.: 查看门禁点与有时限的通行证。
+    Review alarms, record decisions and handle the associated work.: 查看告警、记录决定并处理相关工作。
+    Revocation reason: 撤销原因
+    Revoke access permission: 撤销通行许可
+    Revoked: 已撤销
+    Revoked at: 撤销时间
+    Room comfort targets for the example site. Supply-water warning limits belong to each device.: 示例站点的室内舒适目标；供水告警限值属于各台设备。
+    Send accepted temperature alarm: 发送已接受的温度告警
+    Set absolute valve opening: 设定阀门绝对开度
+    Severity: 严重程度
+    Site checks: 站点检查
+    Stable: 稳定
+    Start inspection: 开始巡检
+    Supply temperature warning: 供水温度告警
+    Supply temperature warning limit (C): 供水温度告警限值（°C）
+    ? Synthetic teaching rules only. An incomplete, stale, uncertain or offline window cannot authorize a business decision. Raw samples remain external.
+    : 仅为合成的教学规则。不完整、过期、不确定或离线的窗口不能支撑业务决定；原始采样留在外部。
+    Target room temperature (C): 目标室温（°C）
+    ? The retained heatingrepair workflow asks an operator to confirm repair, then invokes the original complete action. Publishing a changed workflow does not rewrite an already waiting run.
+    : 保留的供暖维修流程请操作员确认修复，再调用原来的完成动作。发布改过的流程不会改写已在等待的运行。
+    Under inspection: 巡检中
+    Upper room temperature (C): 室温上限（°C）
+    Valid from: 生效时间
+    Valid until: 失效时间
+    Valve requests reject values outside the declared range: 阀门请求拒绝超出声明范围的值
+    Verified absolute valve position: 已核实的阀门绝对位置
+    Verified health score: 已核实的健康分
+    Verified supply temperature (C): 已核实的供水温度（°C）
+    Visit purpose: 来访目的
+    What the supplied device evidence shows: 所给设备证据说明了什么
+    Work order name: 工单名称
+    Zone name: 分区名称

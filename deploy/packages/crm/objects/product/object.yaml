@@ -1,0 +1,42 @@
+display: name
+fields:
+  - name: code
+    required: true
+    search: true
+    title: Product code
+    type: text
+  - name: name
+    required: true
+    search: true
+    title: Product name
+    type: text
+  - name: rate
+    required: true
+    title: Standard rate
+    type: money
+  - name: disabled
+    title: Disabled
+    type: boolean
+  - name: description
+    title: Description
+    type: longtext
+name: product
+namespace: crm
+plural: Products
+title: Product
+type: crm.product
+view:
+  columns:
+    - code
+    - name
+    - rate
+    - disabled
+  filters: []
+  group: none
+  lanes: ""
+  layout: table
+  search: ""
+  sort:
+    - direction: ascending
+      sortKey: code
+  version: 1

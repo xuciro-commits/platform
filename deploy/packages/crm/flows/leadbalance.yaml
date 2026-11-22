@@ -1,0 +1,65 @@
+name: build.leadbalance
+subject:
+  app: build
+  kind: object
+  name: crm.lead
+actions:
+  - app: build
+    kind: action
+    name: crm.lead.edit
+definition:
+  name: leadbalance
+  title: Assign website leads evenly
+  kind: automation
+  object: crm.lead
+  trigger:
+    op: and
+    kind: boolean
+    args:
+      - op: =
+        kind: boolean
+        args:
+          - op: ""
+            kind: json
+            ref: subject.status
+          - op: ""
+            kind: json
+            lit:
+              value: new
+      - op: or
+        kind: boolean
+        args:
+          - op: =
+            kind: boolean
+            args:
+              - op: ""
+                kind: json
+                ref: subject.source
+              - op: ""
+                kind: json
+                lit:
+                  value: SRC-013
+          - op: =
+            kind: boolean
+            args:
+              - op: ""
+                kind: json
+                ref: subject.source
+              - op: ""
+                kind: json
+                lit:
+                  value: SRC-014
+  steps:
+    - name: assign
+      kind: action
+      balance:
+        owner:
+          app: crm
+          role: salesrep
+          open:
+            source:
+              - SRC-013
+              - SRC-014
+            status:
+              - new
+      act: edit

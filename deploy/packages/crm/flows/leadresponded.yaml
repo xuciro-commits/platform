@@ -1,0 +1,49 @@
+name: build.leadresponded
+subject:
+  app: build
+  kind: object
+  name: crm.lead
+actions:
+  - app: build
+    kind: action
+    name: crm.lead.edit
+definition:
+  name: leadresponded
+  title: Record the first response
+  kind: automation
+  object: crm.lead
+  trigger:
+    op: and
+    kind: boolean
+    args:
+      - op: not
+        kind: boolean
+        args:
+          - op: =
+            kind: boolean
+            args:
+              - op: ""
+                kind: json
+                ref: subject.status
+              - op: ""
+                kind: json
+                lit:
+                  value: new
+      - op: =
+        kind: boolean
+        args:
+          - op: ""
+            kind: json
+            ref: subject.slastatus
+          - op: ""
+            kind: json
+            lit:
+              value: due
+  steps:
+    - name: respond
+      kind: action
+      inputs:
+        slastatus:
+          source: literal
+          value: fulfilled
+      act: edit

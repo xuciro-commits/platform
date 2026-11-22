@@ -1,0 +1,12 @@
+id: manufacturing.erp
+version: 1.0.0
+namespace: manufacturing.erp
+title: ERP
+description: Purchasing, inventory, production accounting and upstream production contracts.
+requires:
+  - manufacturing.core@1.0.0
+roots:
+  - app: build
+    kind: app
+    name: erpapp
+artifact: manufacturing-erp.json

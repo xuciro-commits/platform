@@ -1,73 +1,329 @@
 {
-  "format": 1,
+  "format": 2,
   "package": "application.hospitality",
   "version": "0.1.1",
   "requires": [],
-  "artifact": "sha256:a78a58db94298d7b9d93f49942d7e681b6ceb49d54264ae736af93492c6a0eca",
+  "artifact": "sha256:8d8627b9e6b88e93874a56b73c40e1b70bc881bcaf48492e22f01987b96354c6",
   "assets": {
-    "agent/salesassistant": "sha256:1ccd29242b9f25643abb03f18b491bd26d546ee44d40d11331a0c145e1d90735",
-    "app/crmapp": "sha256:4302489b38f2f52db3725ff0bce049f2d604113b94094634b9a83deb56b301fe",
-    "app/pmsapp": "sha256:3ae2e7b70f8e2def25f8d466ec288fd3c687a57dfd6481cb674fd2323eed7b09",
-    "connection/hotelchannel": "sha256:0838767c48e13255cb22a0b6a476bdb4afc7997d84cbb0a9d3ba8770531d9137",
-    "connection/lodgingupstream": "sha256:e143bf3d4432508f49f4f90955dfd190f583dfe44e8ae5cf80bb19982432c59f",
-    "dataset/lodgingreceipts": "sha256:f9bdddafbee87c4df93bb0d2410699d29458c77428b6d7f2c8ee98f95a91a358",
-    "evaluation-set/crmreviewquality": "sha256:6d784b29a7ff21791b9121e82557d44ebbcc36fc4822ec23ff372176305e7953",
-    "flow/build.crmbooked": "sha256:375b7e0f27931ccc8845c265bdf48789b44e26d06e8e19df662fd04fefa2301b",
-    "flow/build.crmcanceled": "sha256:05448c048ada0392d6f190df4240ad9b44add3ebb6b7f472986bd107a7bc6253",
-    "flow/build.crmcancelrefused": "sha256:96e7a169170edb15a561d8dd884ef13434e6e5eba08cc2741d2bf1c62604fcb2",
-    "flow/build.crmconfirmrefused": "sha256:2e9cbf1453b999c4644ee15d87f5000a6b920519340e3872ffc8825c53b33791",
-    "flow/build.crmgroupcompensating": "sha256:5f129a659e57fa1ebb4ba42f87a187744b117ddf92af1e5007a433bc842e53a9",
-    "flow/build.crmgroupconfirming": "sha256:d29fbb370cd473d7fa8acb7a8eacf22a61f5da02a2f0aa705cd7338c1c06d581",
-    "flow/build.crmgroupexpiry": "sha256:e33e829426f5a228dde425ee6e88abbcaf9434b2574dcd38ff6c97f2042bd0e4",
-    "flow/build.crmgroupfailed": "sha256:365d5450f1be414f91ec76d95899dfa8fa11fefa83cd2d095447cc8100293267",
-    "flow/build.crmgroupneedsreview": "sha256:3f1ede65c3b526015b8e5d753120fd55495bc3499e21871d7f5a82c0b8d4c1e2",
-    "flow/build.crmgroupreleased": "sha256:a1c03e65d75717876b8b88455463b7a2a89f26cc8102c99e2660ea1c722eb64f",
-    "flow/build.crmgroupreleasing": "sha256:21d0777f1d5868a63481ee3af31209542c6f9215b2e8de9164fa4d9daa6d243f",
-    "flow/build.crmgroupwon": "sha256:6723091f2940a4ed34edb6bde7d02108a7730122bef65c584e90eb0a8b59ef85",
-    "flow/build.crmheld": "sha256:523ceb15afdd4dfbb35c99993e29c3bb42f05ae1273cfc23cf6024cdef93f647",
-    "flow/build.crmhold": "sha256:d0ce43faabea9ff2ea1bdb8d697ee64ce5082431e737256ae6e6a0788ea45932",
-    "flow/build.crmholdrefused": "sha256:853c03e1bc05c7a51289826085d0cd093da45f47b27134eb4a374e88d7b8edca",
-    "flow/build.crmopportunityclosing": "sha256:ec056454e9e62622b053d3a01c1e79b2a2cb8d9d95fa62512ade489e7bc95274",
-    "flow/build.crmopportunitylost": "sha256:8d01dc9eace492ee33abeacc061b832aa126d436d310aff3622f4edf4a9e6c9b",
-    "flow/build.crmreleased": "sha256:6f5450fa05bf44babde32ed483a6486314e58da49c2a85c3bf5dcf0f941cefb6",
-    "flow/build.crmreleaserefused": "sha256:18bf285936cf0251d46433115ad7e72383bca903a79d910a2289af97ec9508bb",
-    "flow/build.pmsarrivals": "sha256:64fde3ed16c0d7c857f57eddf184a347430fddcab634da51601f7111d59e763e",
-    "flow/build.pmschannel": "sha256:4d4b46445e3b1ea1ebc39030f15b61d77eecb69d12f9b9923d5f269d7b0c0161",
-    "flow/build.pmsexpiry": "sha256:68842b339b0d2b256c8ee0e41d527fbc2aa079cfd9135e83f9f1488e9f76fcbb",
-    "function/crmreview": "sha256:8f2138067cf5ddc4dfaf4b98e13c427608c7e10a1507be8ae15d6f760c1756b5",
-    "object/build.crmclosing": "sha256:b3e90b63c45b1b7c671b4c71138370e78d145cc239a99794274fa4ff594fcf57",
-    "object/build.crmcustomer": "sha256:b45b0594aa9152cb311213cc66891915b2ddaf7d51b64c25c4cd8b44dde6cb26",
-    "object/build.crmgroup": "sha256:98d140e66860f3fbd1659639c11474df06314edc3ecaa65010fe0d9d6aa46b3d",
-    "object/build.crmlodgingoffer": "sha256:c044e2234f9243e2ff507864b348702cddfb20841d0432a1f7b9535c8f9c1c87",
-    "object/build.crmopportunity": "sha256:b742c4019a18c50c54f15ef716e1422726521527d4b7c3d1e49c76726289fa44",
-    "object/build.crmroom": "sha256:db18c7adb30e51b1359697e79e4774f1bd7768c24bfc1d3ba81a52c4f351d0cb",
-    "object/build.pmschannelmessage": "sha256:7f8a22c0ac8d8abc86c4e2986eaa9c74100e8873f6322ed0513bdf8f81c24a7e",
-    "object/build.pmsoccupancy": "sha256:e55a37be98eae9145c810a76406b022541ae1c2b63618ed7512bdd678cce0669",
-    "object/build.pmsreservation": "sha256:e0838f0b0ae62b9cbb55341f860e089afef467b786cdf54375a1c2d7a5b0dfb6",
-    "object/build.pmsroomtype": "sha256:10e3542362694edb7a1087d6a33d94dddcdb6ce092007a3c2216fb2d79c22bd4",
-    "object/build.pmsslot": "sha256:efe5d3d4190a62cc67b23e0ce92bdea959dc3b62bca6afcaffb280ea9bcfe0ea",
-    "page/crmcustomer": "sha256:250548d50b24026461f6934ccdf63e796c380d8ab98409fcc924d93558d9244c",
-    "page/crmgroup": "sha256:2d06305d77c4c8d36a8ab80f10b9876f65e91e2c3a42751e5c4fabddd6fc1c2c",
-    "page/crmlodgingoffer": "sha256:6b17f129489a4ff8a6cfd8f103a1e864388525d468526f9a138572a5261186f0",
-    "page/crmopportunity": "sha256:010859a2cc68d6e74071636c27b41d122f3611fb3a253d45d73d12c7fd8840e8",
-    "page/crmroom": "sha256:dce8e99fe80576715b7611dae56dc1a7fa98b9a790460b59034b961520f383e2",
-    "page/pmschannelmessage": "sha256:fa0d1812dbbb265b4b0a5b6c1f3182f380cf2cf021b6fbd7eee9753404f6d6e3",
-    "page/pmsreservation": "sha256:5a42dbeea0265464debfe07869dd4c8163db0cf12110ac4fe629ead85dbfe7e9",
-    "page/pmsroomtype": "sha256:b9c9b232ce021cb13a820a200147c7eced8e3b7aca2ce55d0966e6f39d69789f",
-    "query/crmgroups": "sha256:d57a088d63dcc8d45291ce4f202e50732cd9cce180a2fd9251e48b20115bc659",
-    "query/crmopenopportunities": "sha256:58fd0e5598b71a9706ad6269e9757f3ac1273afe85a5170a0734b8657d525ff2",
-    "query/crmrooms": "sha256:927f49d72a757c49f67002b3231dcccbd20076a381a87d35dd42ebb3e6acfb96",
-    "query/pmsarrivals": "sha256:51c600665d8dacb1e77398bfd6f480c9e5aad78ad150e0105cabc2974f7f43bf",
-    "sample-set/hospitalityexample": "sha256:0d620f40e71b795354232ef42216bf0f7c46a7c81332a75d11cabd73035678a0",
-    "source/hotelchannelinput": "sha256:a8ec5389535991f7ca9368c70f6062b9b2b8c4ba93ca4187df692ca96647db54",
-    "source/lodgingoffers": "sha256:1d5b07238a7242616fcf515f9f0b85eea74600c877c712ee823f25c0e9eb09eb",
-    "source/lodgingreceipts": "sha256:c0c0755666e860a6f66d1e4c277bcb1f67a32dcf612d319c703b88ba1c56a3b1",
-    "test-plan/hospitalitycapacity": "sha256:62b40397e18d9d8104493b24789cc988b1d89fc2fd4b635c6ad79b4af3cbed33",
-    "test-plan/hospitalitysales": "sha256:83e2a8c542f77c70ea5ec7137e8321917b4de5c11a2f989dfd0f398fda5a9612",
-    "writeback/lodgingcancel": "sha256:e858d39c57fe08baf3b7892104e4fd95f79dcfe9f1f145e735c76310a4d697a1",
-    "writeback/lodgingconfirm": "sha256:8bbb46d96d6d9ec98f380b4b4b5510bdc65c8d3c72fb86f6fa22446408769b41",
-    "writeback/lodgingholdday": "sha256:c9550913fe06ff9084363595216e76ff14de4b872d605791632e9907e0a0aa8c",
-    "writeback/lodgingholdhour": "sha256:76d4be107b6076a59824964ed505cbd3f1df2c84880bcdbe852ff7c64052f62f",
-    "writeback/lodgingrelease": "sha256:2ffa5fc47088f8fe284538d03bbac264f0d917af9206332e992d991026a712af"
+    "agent/salesassistant": {
+      "digest": "sha256:de78e65b5fa609a5d28854df96212ee257192fdc9bb08c7c8f5b46c9d5c816a7",
+      "contractVersion": 1,
+      "sourceVersion": "1.agent-1"
+    },
+    "app/crmapp": {
+      "digest": "sha256:95cf13e6e22417a6c33e27b9a3d179a640156dba3555d885a31414f85113d3e0",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    "app/pmsapp": {
+      "digest": "sha256:f3547a6cb381d937bc1c5819a39f86627249d6df0d191db779d03f43d588ab64",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    "connection/hotelchannel": {
+      "digest": "sha256:a8794dac4f86ec9cba87c40f0fc4daafaeef07069673a24c7f1425eb2c243316",
+      "contractVersion": 1,
+      "sourceVersion": "1.connection-1"
+    },
+    "connection/lodgingupstream": {
+      "digest": "sha256:9318fff579881d93d920dbe9f922ef8b1009ec283c81c77f9a787b559ac8d264",
+      "contractVersion": 1,
+      "sourceVersion": "1.connection-1"
+    },
+    "dataset/lodgingreceipts": {
+      "digest": "sha256:efbbfc1defffc4e16e7e28bc7aa7309aef63edf0dd494584c5199af92ec7bfb3",
+      "contractVersion": 1,
+      "sourceVersion": "1.dataset-1"
+    },
+    "evaluation-set/crmreviewquality": {
+      "digest": "sha256:19b1595de8a1a6db0df7a74241729270edcd714432de2ad93ea756c59c8eb80f",
+      "contractVersion": 1,
+      "sourceVersion": "1.evaluation-1"
+    },
+    "flow/build.crmbooked": {
+      "digest": "sha256:c666ccf5f0a18655249b4053c59d73fce939fd29858edb29b314f85ed743994c",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    "flow/build.crmcanceled": {
+      "digest": "sha256:a2403c0ba596a20a7d38df2bb137762f2b3b54f0ff8d3706a8fd91d87924c184",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    "flow/build.crmcancelrefused": {
+      "digest": "sha256:624da806620198c573ec998661364645ca50f0476c9717dbd03ab91e120bcd9f",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    "flow/build.crmconfirmrefused": {
+      "digest": "sha256:11e317651fd1e6dd340cfb974644e2fe93b8df108131a1dbfcafada7f1ebbd58",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    "flow/build.crmgroupcompensating": {
+      "digest": "sha256:1ec8e349dd112aa9b800019be337ed8837b987c27b411298abd805eef99f4d8b",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    "flow/build.crmgroupconfirming": {
+      "digest": "sha256:af1274ddce7b38969e2462282b5675dedf13488eda2792cab99987e4aed56a9b",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    "flow/build.crmgroupexpiry": {
+      "digest": "sha256:3167b59788c3a8515075fbd9b7e8c16d3696db13ae2b4ef4e13e63d3b3e75ada",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    "flow/build.crmgroupfailed": {
+      "digest": "sha256:eef0098f31eedf486187a75b490417a1099a3d84821a4ad0f71b0e8bf4cff541",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    "flow/build.crmgroupneedsreview": {
+      "digest": "sha256:92ff1ef7c6efcf4f578bed816fb4d45760b98d975452a73d3ae0d9d557c26aaf",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    "flow/build.crmgroupreleased": {
+      "digest": "sha256:8356202d7bf2b17e56e386e4eea67817bf1f2794d99d7e98eb73e4bab18cbe6d",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    "flow/build.crmgroupreleasing": {
+      "digest": "sha256:e79d5b64f6cc890aa721a40eea3843d33a5bed839db22cafd8df61f2853e4af2",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    "flow/build.crmgroupwon": {
+      "digest": "sha256:cd1adc2dad3da6584a731f18d0b8c973ae5399387b46b18e63134a3305171406",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    "flow/build.crmheld": {
+      "digest": "sha256:7dde3a9c3bf405ab8b298f63f143e98504abc255ebe0be17f1a3a94535a92693",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    "flow/build.crmhold": {
+      "digest": "sha256:966939b928277f24434a5900b9fb4ffc7c8745bac196bd231fcb5874179382ae",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    "flow/build.crmholdrefused": {
+      "digest": "sha256:abb12c6f05967b0c142b77cf021e70b1a06f0d676665e4e5719250f6b1241887",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    "flow/build.crmopportunityclosing": {
+      "digest": "sha256:8d2c2ac6da3f1f7b3b2c14e238127e1307d4e915f59249e1116cea55c449c314",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    "flow/build.crmopportunitylost": {
+      "digest": "sha256:dd9df8fd6b38f4b8f89dec6bfa2b1156b3914b86da75c0ddf17f505645497082",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    "flow/build.crmreleased": {
+      "digest": "sha256:ad9a0e31e68c9093285c45ea27f0caccba01ea3fdc69e729296ef5b1638b0d5a",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    "flow/build.crmreleaserefused": {
+      "digest": "sha256:7bedf0d165c70ca565b2bee535f0404d3503c6aa259a6e9bc061dee37c6c4d26",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    "flow/build.pmsarrivals": {
+      "digest": "sha256:ab9701740bbaec2300a9c8768063f2551dc0247f799fb48969dd2666d9f70643",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    "flow/build.pmschannel": {
+      "digest": "sha256:e39a8f113df19beae4ce9e4dcda1eae70af96fd58f99749eb531b244fa5813aa",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    "flow/build.pmsexpiry": {
+      "digest": "sha256:8e19a807234ed2b7e01b21e53f256a850bbb3c66da5b3da1e4662d1a52b59b45",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    "function/crmreview": {
+      "digest": "sha256:315995e42713a37238964a4e74f28af55eb2158d293f9cb933d28f7463f13dad",
+      "contractVersion": 1,
+      "sourceVersion": "1.function-1"
+    },
+    "object/build.crmclosing": {
+      "digest": "sha256:8f8b81affadd7eecf225f498c07ec117bc24615aaa8157b86b79a17f3f84756d",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    "object/build.crmcustomer": {
+      "digest": "sha256:bf230cdb64d0eea56bf12464a9b53af3534f8bffb9367b176794b4abd924cb11",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    "object/build.crmgroup": {
+      "digest": "sha256:5ade7254b8a045b165c89977efe6ce80b39524bc40f445b75b1e638f6dba9026",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    "object/build.crmlodgingoffer": {
+      "digest": "sha256:1de245b3d9155773980d3d6989f8a82191783af4dbf3d18b5996e6e42a1d4463",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    "object/build.crmopportunity": {
+      "digest": "sha256:7ef6441bf009bc5880e60bc5e3df3d7e7f0792e492c177e8fe04b3c08a18c273",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    "object/build.crmroom": {
+      "digest": "sha256:e0225e6576f3704bfacfbf020e773eecafe077ca0a2b46df5679210f8a15ea0c",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    "object/build.pmschannelmessage": {
+      "digest": "sha256:b977eda076469ca9144fad563083d7c8f2db133e8bf2138f151bba85c4d4fb1b",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    "object/build.pmsoccupancy": {
+      "digest": "sha256:eef029aac60911fa2cddf38f926f8045e5fe0b74427b1733345de65e22a8e744",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    "object/build.pmsreservation": {
+      "digest": "sha256:fdbb092f81b2f120d247b7258dc15d8d9fbc031ec216b48c6dc530175237acd0",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    "object/build.pmsroomtype": {
+      "digest": "sha256:b19f63a66aeb3b03d9d7b0c19febbc3dbf0838d1a4ecc42086e607927ccee4c6",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    "object/build.pmsslot": {
+      "digest": "sha256:9d88e1d1494a2cfb8c80238aa7285da5603639ac9455a08899df7b6515cd305d",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    "page/crmcustomer": {
+      "digest": "sha256:4b994d8bac6e33e275e4902a05b5f2506191d19396b5d6bba50d65ef1936bd68",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    "page/crmgroup": {
+      "digest": "sha256:34d7f0638f21c7ec1735dfaab294e50fcdef68e67ea35da4cfe3ff272a56bf46",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    "page/crmlodgingoffer": {
+      "digest": "sha256:b1bb600de05b6ab65e51e2f814050c62a8c8cc97c1a0bd6458147b9a7f95057f",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    "page/crmopportunity": {
+      "digest": "sha256:e73d3e56965e7a79c2612d357a60f3ba7cac698077ba113811e2c1b5a4259b91",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    "page/crmroom": {
+      "digest": "sha256:3e89cf599ef6e7b8a81ae37d8e67a75ae384d94438417ef125a22b837193daf8",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    "page/pmschannelmessage": {
+      "digest": "sha256:812bcba254be02d7fbbdd0328faae6424022b8a5cece9ee7e1a58d9baf8d7601",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    "page/pmsreservation": {
+      "digest": "sha256:3fc2c0167715743e7484f9db7ee808360caeb4d718c7d897be94a3e2d8096732",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    "page/pmsroomtype": {
+      "digest": "sha256:943b38c403c772f3e9cd0c0abee5911f16d42acf02326d775629f14680c8d2c3",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    "query/crmgroups": {
+      "digest": "sha256:789a8cabffb252b3cb1197880b70836b26a139630e0a929a49ac9d09ed9707d2",
+      "contractVersion": 1,
+      "sourceVersion": "1.query-1"
+    },
+    "query/crmopenopportunities": {
+      "digest": "sha256:e698c60e576e96155fdc159bd700ab46629400cf5b5ed53857497efcc83673e3",
+      "contractVersion": 1,
+      "sourceVersion": "1.query-1"
+    },
+    "query/crmrooms": {
+      "digest": "sha256:b55379910dd12f3276136eaa8de5b14f81325fd1a783007b7f92a009f9c4e818",
+      "contractVersion": 1,
+      "sourceVersion": "1.query-1"
+    },
+    "query/pmsarrivals": {
+      "digest": "sha256:cbd095f29cbccf13dc0247033992fe8476c4a1b1590e1c733e5039256c928ecf",
+      "contractVersion": 1,
+      "sourceVersion": "1.query-1"
+    },
+    "sample-set/hospitalityexample": {
+      "digest": "sha256:c4bf4832301d349640d04d88705c9d372634c059d56bb720eaeaafc661084760",
+      "contractVersion": 1,
+      "sourceVersion": "1.samples-1"
+    },
+    "source/hotelchannelinput": {
+      "digest": "sha256:5f91dd01fb2eab69aecfdfd0b153fdff43a13fabd73b2d06e628c1078ad7348d",
+      "contractVersion": 1,
+      "sourceVersion": "1.source-1"
+    },
+    "source/lodgingoffers": {
+      "digest": "sha256:5e6ba8ad2480cd09194ffe3238385d709d8275af8e099bdccb2304603da8b7c0",
+      "contractVersion": 1,
+      "sourceVersion": "1.source-1"
+    },
+    "source/lodgingreceipts": {
+      "digest": "sha256:88892f798e70b70160a9bfab7caf9f168d4ffd3d4009ae23778d128d9e34fb96",
+      "contractVersion": 1,
+      "sourceVersion": "1.source-1"
+    },
+    "test-plan/hospitalitycapacity": {
+      "digest": "sha256:d5f64dd5f0650a08692473875319a3f07e86d2e409b901cde761968846acccc2",
+      "contractVersion": 1,
+      "sourceVersion": "1.tests-1"
+    },
+    "test-plan/hospitalitysales": {
+      "digest": "sha256:c1ada57e5b25f7f15babdccbf92322b6946d466402e36118e1070810e4e5149b",
+      "contractVersion": 1,
+      "sourceVersion": "1.tests-1"
+    },
+    "writeback/lodgingcancel": {
+      "digest": "sha256:d93f1dd2d23aad946d5c3879a259b597d3e5b4e4f559a68333c049ad3d32a11e",
+      "contractVersion": 1,
+      "sourceVersion": "1.writeback-1"
+    },
+    "writeback/lodgingconfirm": {
+      "digest": "sha256:10aedf00d1b6585fcf03ccc1808ff72c9cf98d7714e40e8dfb8d653fbac4c816",
+      "contractVersion": 1,
+      "sourceVersion": "1.writeback-1"
+    },
+    "writeback/lodgingholdday": {
+      "digest": "sha256:b88598c9c040c6e5f88bb44d1175ee711551e6385ccad47b3b4eab799c3bd4fa",
+      "contractVersion": 1,
+      "sourceVersion": "1.writeback-1"
+    },
+    "writeback/lodgingholdhour": {
+      "digest": "sha256:4fe9e882205c4c5a6e1f0cd87f496331665ed6ddbd6477730abda97f6852fdbb",
+      "contractVersion": 1,
+      "sourceVersion": "1.writeback-1"
+    },
+    "writeback/lodgingrelease": {
+      "digest": "sha256:df60f8051f0b62304edc0a9877e10195e01ce9ada91d796d42e7f9f329dc326e",
+      "contractVersion": 1,
+      "sourceVersion": "1.writeback-1"
+    }
   }
 }

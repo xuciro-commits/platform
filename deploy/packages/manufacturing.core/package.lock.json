@@ -1,15 +1,39 @@
 {
-  "format": 1,
+  "format": 2,
   "package": "manufacturing.core",
   "version": "1.0.0",
   "requires": [],
-  "artifact": "sha256:70ee3d7d206bbb7a1bf61845f13ca280fb4ce1fdc203c18b88596b0ea1a4301d",
+  "artifact": "sha256:b49413c585a2329c2819f54f259c25a61f4ea049df649e1dc5422aeb45300a04",
   "assets": {
-    "app/manufacturingfoundation": "sha256:0dccda6b3dbd8999e4fd9a7d2b9d7730d4b0232d48dff9e9bc6f0b4c2a1d004e",
-    "connection/supplieragent": "sha256:3aa1cdcca90992b18621c823ab27b36c87e4d29dcf61c7f986d7d1737a36f1c6",
-    "object/build.mesleadtime": "sha256:9cb9303859aaa3f890a6e5b32dc6b22ea6600fca1d0bc4319747a9bc97276d27",
-    "page/mesleadtime": "sha256:7b103cd4b116a627a280af52b3c850c4f8575b393d1cb7c5470672aaa8817074",
-    "query/supplieranswers": "sha256:dcf4dfe23434dd842fe764b2a402555d45c2cc6fe7ce0aedeb9b895f379d6cdd",
-    "writeback/supplierinquiry": "sha256:841fc659172b85edb6dd87a1b5a37e398863ac7f1f99c451add0968b7936320b"
+    "app/manufacturingfoundation": {
+      "digest": "sha256:a8833b8131d2f4c6c71061c2cff44c9c4b19542691716fbb881eb98b37b13e69",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    "connection/supplieragent": {
+      "digest": "sha256:d62647e4b777ac220c8fb1a86fb72f48ad0782b93ec81cf314390b101abe683e",
+      "contractVersion": 1,
+      "sourceVersion": "1.connection-1"
+    },
+    "object/build.mesleadtime": {
+      "digest": "sha256:9ebf60f1f1a678a553cdcd8b6cfde2bffc9447973686d0ec63ffa7a8676d4e10",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    "page/mesleadtime": {
+      "digest": "sha256:0662be5db5444b9e904ab7a90978a2f48e3c4747e4906594ef6dfb98e9ad96d4",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    "query/supplieranswers": {
+      "digest": "sha256:419e0c9ded6cce5dc1fa85516e46efc79ea0f3ddc0bd34a37962e84b9da0db2e",
+      "contractVersion": 1,
+      "sourceVersion": "1.query-1"
+    },
+    "writeback/supplierinquiry": {
+      "digest": "sha256:02df03c54dc732298fd7993ac0db4398534cf10fb567c6c7cbcb605b01e21ba9",
+      "contractVersion": 1,
+      "sourceVersion": "1.writeback-1"
+    }
   }
 }

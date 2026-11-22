@@ -1,0 +1,102 @@
+actionTriggers:
+  - actions:
+      - app: build
+        kind: action
+        name: crm.note.create
+      - app: build
+        kind: action
+        name: crm.note.edit
+    binding: page
+    id: page
+  - binding: list
+    id: list
+    owner: binding:list
+  - binding: detail
+    id: detail
+    owner: binding:detail
+dataBindings:
+  - fields:
+      - name: title
+      - name: content
+      - name: lead
+      - name: deal
+    id: list
+    kind: record
+    model:
+      fields:
+        - name: title
+        - name: content
+        - name: lead
+        - name: deal
+      type: crm.note
+    object:
+      app: build
+      kind: object
+      name: crm.note
+    owner: binding:list
+    ports:
+      parentable: "true"
+      selectionMode: write
+      widget: table
+  - fields:
+      - name: title
+      - name: content
+      - name: lead
+      - name: deal
+      - name: pinned
+    id: detail
+    kind: record
+    model:
+      fields:
+        - name: title
+        - name: content
+        - name: lead
+        - name: deal
+        - name: pinned
+      type: crm.note
+    object:
+      app: build
+      kind: object
+      name: crm.note
+    owner: binding:detail
+    ports:
+      selectionMode: read
+      widget: detail
+format: 4
+inputSchema: {}
+name: crm.note
+object:
+  app: build
+  kind: object
+  name: crm.note
+scopeVisibility:
+  owners:
+    detail: binding:detail
+    list: binding:list
+  root: page
+  scopes:
+    - id: page
+      kind: page
+    - binding: list
+      id: binding:list
+      kind: page
+      parent: page
+    - binding: detail
+      id: binding:detail
+      kind: page
+      parent: page
+title: Notes
+widgetSpec:
+  body:
+    document: null
+    layout: list-detail
+    sections:
+      - binding: list
+        id: list
+        triggers:
+          - list
+      - binding: detail
+        id: detail
+        triggers:
+          - detail
+  format: platform.page.web.v1

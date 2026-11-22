@@ -1,53 +1,221 @@
 {
-  "format": 1,
+  "format": 2,
   "package": "manufacturing.erp",
   "version": "1.0.0",
   "requires": [
     "manufacturing.core@1.0.0"
   ],
-  "artifact": "sha256:721d1b73efc1948a67dab6f20dd7c3a7d22ce0f7d1df5c0903be52945269917e",
+  "artifact": "sha256:e5d9e034208fddee7914e9fde61248d1fc3e24f64f7d8cdb781d39507a07c67f",
   "assets": {
-    "app/erpapp": "sha256:a34127b3e54133d7eea95b7b8f3d4534d3e2ee076c16155187c3aacb44b96984",
-    "object/build.erpaccount": "sha256:550ac8304ac24eefce545aa457450079288c184ce4e68423a5baa1976c66a3e3",
-    "object/build.erpcomponent": "sha256:91d8f776140a774e328c975130b1c24c01bf886401d63c07139b537052e32eec",
-    "object/build.erpentry": "sha256:18eec90e512d2df43e7ea490088b66fd82229da12e535b46afee2c97fdf1f02c",
-    "object/build.erpitem": "sha256:4723a9f6cc2e05c0765822844d66f65999ac19a331570666cad24570797e69d7",
-    "object/build.erpline": "sha256:f746b3726dde3757c20977439757567c821b06cf208f05adc56e2fe31cefaf18",
-    "object/build.erpmove": "sha256:cebfdb53698a72ecab5e0b363fe028ae8f5c2c22729e932f8248fa7eae1c4594",
-    "object/build.erppartner": "sha256:d92ce76dc074fadb831a3ee1fa0daaba553ada56fe82b16a982afea0048eaf92",
-    "object/build.erppolicy": "sha256:e0ade588fed1c16ac2411b61b116b3f4fadcb2e8ef5f32468d9b2cd5e841f9de",
-    "object/build.erpproductioncomponent": "sha256:e5f0ba3a66a093017390f87156444e4d42f5b4bf139c706c9119a182ae0d6e0f",
-    "object/build.erpproductionpolicy": "sha256:26a3d44d109ccd2ec22cbd319f84f58fb69a4c54af5476e6ff61942014aaeaf7",
-    "object/build.erpproductionposting": "sha256:434e35afd571195cccede458df68a319837a46c7ff0223540c34dc116a6416be",
-    "object/build.erppurchase": "sha256:3dd8369d1897749203cd5e9aff53d6cf244ebd083abe4daa68d1aa26edfc2afc",
-    "object/build.erppurchaseline": "sha256:9cb6bb335d3fe0e318fbd1a1eb320f20a4b97a15bb5177b8f806d7d32b14ae81",
-    "object/build.erpreceipt": "sha256:01a8ebc9ee2c90ffc5d74098e517fc371df83b848cc675ee6144c4fb4c7675f3",
-    "object/build.erpstock": "sha256:c5e52386deea99f5ff90db76c0a4fd83d60e17f5b659a9275e808ee2d5ff0ed9",
-    "object/build.productionbatch": "sha256:3893980bdb8e9582ee56190e2b162ae43d24950cf3fb5915c3bc807d1a27e0d9",
-    "object/build.productionorder": "sha256:a113e1c2da809f5bb1f4e66d5db3392431413c34c6adbb1c35bb8cebd733ad61",
-    "page/erpaccounts": "sha256:bbf4806e56e70e5d0a7923fb2567e1b31263307565a817ea35d3c9b3f470932e",
-    "page/erpcomponent": "sha256:2a869f86f200f6a2881c236905b9ea38cebb0e22324874e3347c2b003b0df269",
-    "page/erpentry": "sha256:abe9e24f82142395bfd108e5a9c3951d29a69bbd1c4752f57725fbe3a66cfac7",
-    "page/erpitem": "sha256:a88ede007b508001cccbaf23e93b4ad27fcb0ed2bed8c0837ea75560573c9c13",
-    "page/erpjournals": "sha256:a56aeccfb71e38bb28520e45504e9ccefff7a7d0cdaee76d476a101b8a6dd4a9",
-    "page/erpline": "sha256:d5845371568c201225b8af29956c8986c2e5f8f4de01b47a4d63229317919e08",
-    "page/erpmove": "sha256:70ca948e1f5a85b5c50153df5476043a4b79fe775a9015cc766200591eec1c45",
-    "page/erppartner": "sha256:13ca3984ee2424e9f2eff0b9443ab6d1769c0dda46507d185388d5f75b911631",
-    "page/erppolicy": "sha256:e48255dc9758ed0c2339bec0ae2803b9995f1f51c9a205009450d544496d006d",
-    "page/erpproductioncomponent": "sha256:8d1b5b2820c4a74fcfea3d80c390ccdb916102bc73837663042fd59096a7e537",
-    "page/erpproductionpolicy": "sha256:6dd6a95170ce1e359a77dbf3a11f51809e3407c61cd878945e9ee16c1df4e8d0",
-    "page/erpproductionposting": "sha256:b700b4fb54f2a291b45fcdd23ed887fcb8d429ad01c7d20f8fb925914ccf2e80",
-    "page/erppurchase": "sha256:9fbcdafbeeaf040d1de277f19c527e2a3f3b9d12cb08219cb1537167f0dd584a",
-    "page/erppurchaseline": "sha256:8fe2c727257a42ed14e78f1ebc3153abf6d33a146956f8281cd7063b9725737b",
-    "page/erpreceipt": "sha256:1d824ff99888dfb069a64ee7452addd11af99bd50ced55f029343e3249de2348",
-    "page/erpstock": "sha256:db31df497d36247db23e44c1e20d4d700b0d362ca54416b5f62dae9cf4413e18",
-    "page/productionbatch": "sha256:77249500b12be035ff630e1850b6ccb04166fbc0c78d4ef253e9fc8dc2a5ec09",
-    "page/productionorder": "sha256:8610f6c786058bed9d5f8d6ef801a16e067133a87fba3b75b39a871b6833f48e",
-    "query/erpcomponentsbyproduct": "sha256:0fa41d0c30ad5767a28ae43ad5ba545a03767fc26d045a88a3818371796082cd",
-    "query/erpstockquantity": "sha256:8bf89ee9a710e36c1b73b513e881e0ba6b9a858067ce2cfea7fc60430f1fa6c2",
-    "query/erpstockvalue": "sha256:e159cb48145577a1cc4b09193a2be93ab4553dc369e8f8b27a2381fc9a883012",
-    "query/productionbatchupstream": "sha256:b2b69c0c2c95cd6632a47eec65a2b77707a5c79afa5c9f01ed025f06cefb7304",
-    "query/productionorderupstream": "sha256:2f9b42ac807ed8e37996bd14bfa1289458a0187433f13df961de1d3857fa3e87",
-    "test-plan/manufacturingaccounting": "sha256:b6be258a5ac8886c2d11b0a121d1f1761d16de4e1aaa3cd517395ee64a82b4b5"
+    "app/erpapp": {
+      "digest": "sha256:74a83284289c8b392c05f0db15d9979646d8504d1a802c542928f6718d9f571f",
+      "contractVersion": 1,
+      "sourceVersion": "2"
+    },
+    "object/build.erpaccount": {
+      "digest": "sha256:a09c2b9f7a6a5a4e2728c8cb46cd8dd35895a420369eba8fb1114129378b68ed",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    "object/build.erpcomponent": {
+      "digest": "sha256:0dd63650d914cc434b45b2318a381d90fdad28257653ef73e0ac2769ecd803ab",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    "object/build.erpentry": {
+      "digest": "sha256:af07a976e333f0a403485daf8b375fc5ffc30f4eddd758489d0096e3a2a432c4",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    "object/build.erpitem": {
+      "digest": "sha256:c0948b06963de92a616d919c27906b739c99cfac933f0650b1d47c8276f5104b",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    "object/build.erpline": {
+      "digest": "sha256:66638e82718c361fb35948d5dba4c39279b5610c2c212c8b7ec8e2c36ff08c3b",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    "object/build.erpmove": {
+      "digest": "sha256:d98d27ed337532b145078189fff47b9c3d9196994672d728a40c665ffc2be5b6",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    "object/build.erppartner": {
+      "digest": "sha256:3a0113ccbcfcf48a96484c36d51f42dcb13c0a37ac29489e509feaf8fc838d31",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    "object/build.erppolicy": {
+      "digest": "sha256:7ea86a663956d6c9c1c51268826100ddf9ef6d2274a2314e9e6c7f0bfaf5568f",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    "object/build.erpproductioncomponent": {
+      "digest": "sha256:2a2aa013b9ae356319c8cc601b92b56c292889152422020d2780fdbeb55e59e4",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    "object/build.erpproductionpolicy": {
+      "digest": "sha256:42bcbb0d1dc15c695b5931c794c7aedf63f7c5af7ac9e90782fd4ac12e62c955",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    "object/build.erpproductionposting": {
+      "digest": "sha256:0cf1ec92a86fd302468b25c1c9cb03af258961d42873c5423fb24c03b6bbb7c8",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    "object/build.erppurchase": {
+      "digest": "sha256:b8ee4f308e9ea57c5bb4022bf9ddf92fb72217bf13eda82da958167c78a197ad",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    "object/build.erppurchaseline": {
+      "digest": "sha256:f360094fc951f16b0b0f349c5e93530499a402516f1cd930563ebcf134144bb7",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    "object/build.erpreceipt": {
+      "digest": "sha256:2914550d345700d79812114763073bdf2c779817e153732f27739081dd52192a",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    "object/build.erpstock": {
+      "digest": "sha256:0962e0b500922db269d538768a51bc8300aba7d06fe5eeb320b85d76380cdbde",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    "object/build.productionbatch": {
+      "digest": "sha256:62a8d155714dea50e49ccc27c67019d7ab701dcbdc30f7c579040ebc3910bed8",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    "object/build.productionorder": {
+      "digest": "sha256:47728c2c0f2e0c51400508e123a0452e9522e163de33d04289ffbc55f8d08035",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    "page/erpaccounts": {
+      "digest": "sha256:04aab1629ad59a71feb13f670e9f4b49b867db22c018b5f8ce6d6b8f530ab797",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    "page/erpcomponent": {
+      "digest": "sha256:6400d71960e83121da2940a381c1828dad8a371732126c8631cb35f6581f8e5a",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    "page/erpentry": {
+      "digest": "sha256:83ab925c2c0d9b5704edf16779fca8ec52372d141e851f584696b3d42c9d9071",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    "page/erpitem": {
+      "digest": "sha256:3212c7e422b6c038c87d3237dad95ba230139e7e7978146f98511b68fac4e6dc",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    "page/erpjournals": {
+      "digest": "sha256:e80603b71f019a2650fe485d4b9cc3557cc8d8531343288ac8c472799010595f",
+      "contractVersion": 1,
+      "sourceVersion": "2"
+    },
+    "page/erpline": {
+      "digest": "sha256:04a1dec3597a888a93cd48631301f059d9ea59b94400fff16dbba050538f037b",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    "page/erpmove": {
+      "digest": "sha256:69df652d5251be0167b8c0e008e9df55538958e0787cd55858fb44212f8fc0a8",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    "page/erppartner": {
+      "digest": "sha256:46c541b509b44ece861cb187c6d85fb3f0db48908dc91a4372c720b1105c8ada",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    "page/erppolicy": {
+      "digest": "sha256:86dd4d6218c3863bd2d513a4890cd06772740042b3d8d24cad9292c087fd34be",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    "page/erpproductioncomponent": {
+      "digest": "sha256:8042102998cc8d96005b2a4105402d4ca98d2dc554ac6daf39b0317aa99305cb",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    "page/erpproductionpolicy": {
+      "digest": "sha256:f82476a0668f038c0431b9522dd3e6fb3e1209de85d8fc5d45d6cf191f627c04",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    "page/erpproductionposting": {
+      "digest": "sha256:e9b78df82daafeac0a631c3d9f2744e8423c228457cd60b09b9433f89d0df5a1",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    "page/erppurchase": {
+      "digest": "sha256:baaddd4cbe52b51b6398255e1760593c4fd4ebafabad9d454ecfe3e35b88ce1d",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    "page/erppurchaseline": {
+      "digest": "sha256:ef51dfb401f8d9f854d87082d96ae9237b2303927ff47b7784f1654163116708",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    "page/erpreceipt": {
+      "digest": "sha256:4a77c41afce193437d5a13ce382b852db7ea292b774bdfe40c111c0f936c786f",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    "page/erpstock": {
+      "digest": "sha256:63605654553d449fce54bdb25f1676486424ecc33bc83e13f15c27245d686b73",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    "page/productionbatch": {
+      "digest": "sha256:df7aef9c3dea1d967586eb58aded89c3003ae10bcb9be77edd3b2b1365fbe628",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    "page/productionorder": {
+      "digest": "sha256:4195d286f9fd9ac45d86e865284063270c030f79212a004c39469f42a1711c54",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    "query/erpcomponentsbyproduct": {
+      "digest": "sha256:0f706ffc239d7d5f2e365068b80700555a06c99924043d5bd2e25e392bb99085",
+      "contractVersion": 1,
+      "sourceVersion": "1.query-1"
+    },
+    "query/erpstockquantity": {
+      "digest": "sha256:6fdf891048b208b64ce33d87f16a47fc3508f1eb4f6516fa9bf6726f9026bf94",
+      "contractVersion": 1,
+      "sourceVersion": "1.query-1"
+    },
+    "query/erpstockvalue": {
+      "digest": "sha256:697539e0c4de6fd959189489b677876b1ccc937f5fabb1964f245e5fb5f1af2d",
+      "contractVersion": 1,
+      "sourceVersion": "1.query-1"
+    },
+    "query/productionbatchupstream": {
+      "digest": "sha256:072a73607230040aea318491107e23f99e530b0f4af08a013ebc95478441f6de",
+      "contractVersion": 1,
+      "sourceVersion": "1.query-1"
+    },
+    "query/productionorderupstream": {
+      "digest": "sha256:6a352cd89d297338dba0d950dd251f4176422630d8e60738455341eec8dab0b4",
+      "contractVersion": 1,
+      "sourceVersion": "1.query-1"
+    },
+    "test-plan/manufacturingaccounting": {
+      "digest": "sha256:02b0bc9fc4d9d203caae3fe644a57a1a8d4f7125c89761f87f01c202eae1a2d2",
+      "contractVersion": 1,
+      "sourceVersion": "1.tests-1"
+    }
   }
 }

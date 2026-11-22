@@ -1,49 +1,333 @@
 {
-  "format": 1,
+  "format": 2,
   "package": "crm",
   "version": "0.1.21",
   "requires": [],
-  "artifact": "sha256:6c81842476afd1f758c5584535120dd6e164796741ea8aab7813aee93d4b5070",
+  "artifact": "sha256:91c70db9b7e6cd38cc260639f79b4a850e86cc9cffda15c848313e66ccee0c01",
   "assets": {
-    "action/crm.contact.create": "sha256:045344c0162d332f6ebd6cfc7e06e51978b5414a68a0885c958f8e8ab2d1a8f2",
-    "action/crm.contact.edit": "sha256:e1c0a064a086f181e042fbb786dc25255beca5be15e9168ec143379ddd467cb9",
-    "action/crm.deal.create": "sha256:7ff6e090aeb3979fb37f5a54eb5b2c08606db304971fecb1e49436116a634695",
-    "action/crm.deal.edit": "sha256:92ee58e70dda2f8bb2f80e1765265510fefcfe91f2b9d4784f0c06bd0f78563f",
-    "action/crm.lead.convert": "sha256:48993342ec64327e1928606fe15b21d5c5d7ee44dc81d26204b8351e946f3c23",
-    "action/crm.lead.create": "sha256:baeb48bb2e396cae814120379942aad31cdfa81675f99dd0b259ab1642ae41c4",
-    "action/crm.lead.edit": "sha256:1382a7f36091582a66b00c863efea60f9a7622a61cec23510792478213bde6fb",
-    "action/crm.note.create": "sha256:ce7bfa29e5422751e471559a79ae6d845f861a358e9cc0b85d64c5010a036669",
-    "action/crm.note.edit": "sha256:e29f509db1524b6148f2912372cac751ee294d6787307b27349207183a710b0c",
-    "action/crm.organization.create": "sha256:fec79cbd555e5cdfcf0c19fd3c04d41b7cd246995fa72e52c60af27fd8110cd5",
-    "action/crm.organization.edit": "sha256:30fb2acc48ae89e139eccde9b5db77782d42b4a5d1e3128b569c1ba48687588a",
-    "action/crm.task.create": "sha256:ddd61cb6cf4b8522c99c12baf19142f9cc7b7e3ce21031d89c0af736449bb0f1",
-    "action/crm.task.edit": "sha256:1153611462a1429c11e06b1fcfd2db575f45a88f42b9cd4a8d4a99768881f0ba",
-    "app/crm": "sha256:40cda4fe7bba14412b6bd436e9a1f03e83f6d709ab3be3038480b7388a949043",
-    "flow/build.leadbalance": "sha256:b70543f64b627188384ac7155db39f5f1b2833ecdec8bd38b6f8e19596203753",
-    "flow/build.leadresponded": "sha256:a3bde54bd2f7812b1fa72ec8d11e473f2c75bda97ee4b22c124434cf5080e7ac",
-    "flow/build.leadresponse": "sha256:1b385c5dbf2ec6d14f8fc8ec86c23f26e785d9e7071c38ced03c5ea50ccb8cd8",
-    "matching/crmorganizationmatch": "sha256:8e54e36ce10837a630e2cb0ee097c87aaed02ae7aa98db62d0acc6b38b230d84",
-    "object/crm.contact": "sha256:715ae3fd90d97836abe7b3dd7ca293f95536c23b223f8b329f04d15fe101786c",
-    "object/crm.deal": "sha256:798a488560876bc9f96ac39b2696fb127728500ff5e4292564b7b096c59307c4",
-    "object/crm.dealline": "sha256:c712af6df1e973c73b0155f09511ce38182d4093e4b1885ec245f0d7d19503af",
-    "object/crm.dealstatus": "sha256:8f9e0f6dfdc8771bae3f2d43102b04150530507962bbde4a2758b5bfd3d931a6",
-    "object/crm.industry": "sha256:d4f94cff8efd0203b6d9c8e1cec41d58cdea5b52e39663a268bfcd18fa96128e",
-    "object/crm.lead": "sha256:ab8fb016d8d45a35046c8ce6f588e0afaad9a9f0f9c519cf42d13617f7969555",
-    "object/crm.leadstatus": "sha256:722b720629e88cb2844ba25ba8b3c178a259d5134f03f76676502f8611138e44",
-    "object/crm.lostreason": "sha256:0494b8b282da1b619f3df1215bdcbb2e6ccbdf20ee8a2b5cb833e5500daf13a1",
-    "object/crm.note": "sha256:4cf41fef43c99093439ae750929760179e276052d88f0ea6fb5c3947d6edcf4c",
-    "object/crm.organization": "sha256:28da00ae1df19953d92b06ba26064c45672e82d4aa9aec960cee1488416185b1",
-    "object/crm.product": "sha256:fa4e2fd4aecdd7db310ff16d605cc230cf9e044b6da6c04888f3c1d989010fc0",
-    "object/crm.source": "sha256:bef7235fb0757e5fdd2e496b2778f53df9f7d0476369aca12fa3ca6be06772be",
-    "object/crm.task": "sha256:468bd3a60d99f140d614edcf7fe9c8233d4db108f815c45e69b0954043222ec7",
-    "object/crm.territory": "sha256:8477880c9c25795f5b24fb4e5136a20145c424a7cb8a6ee6c5d805baf514a23b",
-    "page/crm.contact": "sha256:2faf56c839d4e7ee0beac9b272d10b7bfb7ff5db1481c34fbfa25e8ab15ba40e",
-    "page/crm.deal": "sha256:a7a5c905b0cc271313921bfe4ee8986664067e1ad18d2d3d6434dbe676064ebb",
-    "page/crm.lead": "sha256:f20286aa30d513f5b36acdc08eb2ce87e11d64203cf058398c0d774a76b5aa4c",
-    "page/crm.note": "sha256:23ce65a39fe808c9410abe14fc753fece74cf3d434dce03477ca2af5b5628e2f",
-    "page/crm.organization": "sha256:4251440662af54f0dddee40735401755103cb539b6b013bffe1b9e345edfb4e0",
-    "page/crm.product": "sha256:873f100eccda20056da751bfff600c4f59ae49b42f5cbad249c0bdeeddace14e",
-    "page/crm.task": "sha256:269fe7a833da4f8e48f855d75581561e4db512bbdae71d32f3413e1ea2ff82be",
-    "page/crm.territory": "sha256:87ed1d22a2325290884915c018160ab4b4a1fac905b28e72c0afede1220f3582"
+    "action/crm.contact.create": {
+      "digest": "sha256:045344c0162d332f6ebd6cfc7e06e51978b5414a68a0885c958f8e8ab2d1a8f2",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    "action/crm.contact.edit": {
+      "digest": "sha256:e1c0a064a086f181e042fbb786dc25255beca5be15e9168ec143379ddd467cb9",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    "action/crm.deal.create": {
+      "digest": "sha256:73952a58bfe9ff5706c78d12d9b84d0644d92e2e3dbed6b4732b16dfed050d67",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    "action/crm.deal.edit": {
+      "digest": "sha256:92ee58e70dda2f8bb2f80e1765265510fefcfe91f2b9d4784f0c06bd0f78563f",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    "action/crm.lead.convert": {
+      "digest": "sha256:48993342ec64327e1928606fe15b21d5c5d7ee44dc81d26204b8351e946f3c23",
+      "contractVersion": 1,
+      "sourceVersion": "1.action-1"
+    },
+    "action/crm.lead.create": {
+      "digest": "sha256:853b5aa074ef5be6c750b76d3be60ed906ffabdcdc05d0b5e80930756c6a27ee",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    "action/crm.lead.edit": {
+      "digest": "sha256:8f477f0df7a4dbe2dbce65044dded8f3499c5bcdc25932681133793c58b4c23f",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    "action/crm.note.create": {
+      "digest": "sha256:ce7bfa29e5422751e471559a79ae6d845f861a358e9cc0b85d64c5010a036669",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    "action/crm.note.edit": {
+      "digest": "sha256:e29f509db1524b6148f2912372cac751ee294d6787307b27349207183a710b0c",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    "action/crm.organization.create": {
+      "digest": "sha256:fec79cbd555e5cdfcf0c19fd3c04d41b7cd246995fa72e52c60af27fd8110cd5",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    "action/crm.organization.edit": {
+      "digest": "sha256:30fb2acc48ae89e139eccde9b5db77782d42b4a5d1e3128b569c1ba48687588a",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    "action/crm.task.create": {
+      "digest": "sha256:ddd61cb6cf4b8522c99c12baf19142f9cc7b7e3ce21031d89c0af736449bb0f1",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    "action/crm.task.edit": {
+      "digest": "sha256:1153611462a1429c11e06b1fcfd2db575f45a88f42b9cd4a8d4a99768881f0ba",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    "app/crm": {
+      "digest": "sha256:29008c170b717fda6b1e921c3f2b355b9f6df22602d80c6df98393226eebf4cb",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    "flow/build.leadbalance": {
+      "digest": "sha256:bd111c1920803b22b5aaf7f53ef2efb2ba8dea759969c817a49d4bf0d28bafba",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    "flow/build.leadresponded": {
+      "digest": "sha256:0c36682dff132b2265c2983f71c7b4003531bdb4d7227a68dc4242c38c565a9c",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    "flow/build.leadresponse": {
+      "digest": "sha256:3e703577f86e498722e6d3709e258e359b2ea57f993ca10f4b93cf423ca7a8db",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    "matching/crmorganizationmatch": {
+      "digest": "sha256:fecde3e45983dd87d6dc6be4407add3c46e864a3c64306d856f071fcf871363a",
+      "contractVersion": 1,
+      "sourceVersion": "1.matching-1"
+    },
+    "object/crm.contact": {
+      "digest": "sha256:2ae0bbc11d718bcace9dddc86e8378ff6e21f0fa5f3b4c43601bab294d571ffa",
+      "contractVersion": 1,
+      "sourceVersion": "1",
+      "schemaVersions": [
+        {
+          "version": "schema.sha256.f8f27149ef68896b8aa988cd551958cf1ba903d53a633382e089487ee4aad955",
+          "family": 1
+        },
+        {
+          "version": "schema.sha256.fd9735338b8f481c3a41f3cd52c49fa5fa998e55917097bf3631139e6dec4044",
+          "family": 2
+        }
+      ]
+    },
+    "object/crm.deal": {
+      "digest": "sha256:b02908d684a89a2e28036bf083c4461fea7217b72a2fd9db823bb1a8454c5692",
+      "contractVersion": 1,
+      "sourceVersion": "1",
+      "schemaVersions": [
+        {
+          "version": "schema.sha256.22697d4df8a4616ed41e029edbe6119213290f6b2f5a3166ddf677ea1fd7b522",
+          "family": 1
+        },
+        {
+          "version": "schema.sha256.9da734151855ceb823739eb4e66f306f9d1bad230690eb010daf943f339f22c5",
+          "family": 2
+        },
+        {
+          "version": "schema.sha256.a369ed82e0af48b1dc4e56ad62cc2a2bc6581ad7be35bc705d5bd9cf1655b181",
+          "family": 3
+        },
+        {
+          "version": "schema.sha256.1f042c28d96f82660ff3b82624adb2740a4c5e66aa6e1a467dd855998c535d50",
+          "family": 4
+        }
+      ]
+    },
+    "object/crm.dealline": {
+      "digest": "sha256:ad8356ffb7242edea38f09995b379a165e4d83108d48b2488d33bac4a1af3893",
+      "contractVersion": 1,
+      "sourceVersion": "1",
+      "schemaVersions": [
+        {
+          "version": "schema.sha256.645da2ad5ac95bcbac188dead35f9e6c2309e0d41f5dd851335a42a04b5ee05d",
+          "family": 1
+        }
+      ]
+    },
+    "object/crm.dealstatus": {
+      "digest": "sha256:5e5ca0fa2cda69f7fbb512cf55604390b97072b80d7145fb5d005783a8b03f2a",
+      "contractVersion": 1,
+      "sourceVersion": "1",
+      "schemaVersions": [
+        {
+          "version": "schema.sha256.67ac5656a5a76d10fce2911014f62be0aa579061853affedd195b9db0ef224be",
+          "family": 1
+        }
+      ]
+    },
+    "object/crm.industry": {
+      "digest": "sha256:b3a59b8b50d7da4686f782dd4592def248a559875ad483692980d1f031cc24ce",
+      "contractVersion": 1,
+      "sourceVersion": "1",
+      "schemaVersions": [
+        {
+          "version": "schema.sha256.a13db67be4f613c26aeb2b3eef6babb3f97683bb9a25c1f9cad93fc8891d835a",
+          "family": 1
+        }
+      ]
+    },
+    "object/crm.lead": {
+      "digest": "sha256:b6f8b16317bbe981a284d5871d052e2eef66befafd27e778951d07a0c5b2d67b",
+      "contractVersion": 1,
+      "sourceVersion": "1",
+      "schemaVersions": [
+        {
+          "version": "schema.sha256.9cce78107ec08366dcb01eddfd76ac378ea74feb32746b3869875c91dd89757f",
+          "family": 1
+        },
+        {
+          "version": "schema.sha256.ebe5a34c5a2ce3eb40b649def0265579f3c8e01c0586cf7f740496ae4b36afcb",
+          "family": 2
+        },
+        {
+          "version": "schema.sha256.f81247f1347aea9c95bd66a7791a2f6cf7017cf1eccafa79bc79c12e10145c8e",
+          "family": 2
+        },
+        {
+          "version": "schema.sha256.f4fd41b66fe5577b38dfb7f8e4dfdfb09c96e931f902ee98e4ea8c8062ad16c3",
+          "family": 3
+        },
+        {
+          "version": "schema.sha256.7e1655787e80503cece98cfa16dfb2b8cc3075a81615dafb7c45eda85a917efb",
+          "family": 4
+        },
+        {
+          "version": "schema.sha256.3b25ecde7872a3da3bdcc1abd8986ee225e0d0de877a986f70f28f9290f88954",
+          "family": 5
+        }
+      ]
+    },
+    "object/crm.leadstatus": {
+      "digest": "sha256:da4d5b0ceafde0866cc214f5c65b1be834b48877998f291d2bf6794c5b07bf8f",
+      "contractVersion": 1,
+      "sourceVersion": "1",
+      "schemaVersions": [
+        {
+          "version": "schema.sha256.05467177b2ed04b96a00fb644cb70e550b9d1736dc306c7fd9ad38a5d8eb55a7",
+          "family": 1
+        }
+      ]
+    },
+    "object/crm.lostreason": {
+      "digest": "sha256:90694cae17ced97aae59f39d4e3c7aabe4916bf321990e097b745c8e1be074dd",
+      "contractVersion": 1,
+      "sourceVersion": "1",
+      "schemaVersions": [
+        {
+          "version": "schema.sha256.b84151a2ea6f42c3d8553333cf0c29815dd962690e110e6e4ecbd6a2fc44ac9b",
+          "family": 1
+        }
+      ]
+    },
+    "object/crm.note": {
+      "digest": "sha256:465989e9a5d090ebe69db6f1bb3856edda49e9d40ffb7adbe2597cf3a9b5b29d",
+      "contractVersion": 1,
+      "sourceVersion": "1",
+      "schemaVersions": [
+        {
+          "version": "schema.sha256.ce0ceb6d14d4e5bbea604869b214069187d31d5852c2b29fdaa82434458fc4c0",
+          "family": 1
+        }
+      ]
+    },
+    "object/crm.organization": {
+      "digest": "sha256:7fac978e362e97422707bd45f859c5cfc961156d411e81db9040c825832a9181",
+      "contractVersion": 1,
+      "sourceVersion": "1",
+      "schemaVersions": [
+        {
+          "version": "schema.sha256.164e93d04edab558838850309316c9776b247fa1c8b5e27904307ba9eff5a03a",
+          "family": 1
+        },
+        {
+          "version": "schema.sha256.be337673f3bd0c116d06161d9fa22f12660ebf1ef49b4a6a1a4280c6ecf3715a",
+          "family": 2
+        }
+      ]
+    },
+    "object/crm.product": {
+      "digest": "sha256:e8bbaadef8f80442c910c289c8a3ccc990018576e9e469317b8aae2e59c1fc72",
+      "contractVersion": 1,
+      "sourceVersion": "1",
+      "schemaVersions": [
+        {
+          "version": "schema.sha256.d213741506882421f39808dad3fd13f6f925df1690f5c22742a4a59d9f1bcda4",
+          "family": 1
+        }
+      ]
+    },
+    "object/crm.source": {
+      "digest": "sha256:dc32ea86c3c7a17a4e707388d295574cda6a00d24ff4ebc888a1ac7029268c6a",
+      "contractVersion": 1,
+      "sourceVersion": "1",
+      "schemaVersions": [
+        {
+          "version": "schema.sha256.b5cdb66afd8bf2ee111f1adeda72f3156492cdce5ab823e94d1414da039729cd",
+          "family": 1
+        }
+      ]
+    },
+    "object/crm.task": {
+      "digest": "sha256:a228e888153b798a9dca5a18318dcbfbd5b91026b9fdfef3413aede55db8a727",
+      "contractVersion": 1,
+      "sourceVersion": "1",
+      "schemaVersions": [
+        {
+          "version": "schema.sha256.bed1c0d31017d2023726bdfbb2c8686d1c50ff41a683ef625d278155b57350ff",
+          "family": 1
+        }
+      ]
+    },
+    "object/crm.territory": {
+      "digest": "sha256:54d5b62d7f646f94b395287df6280ee69b1a9d87d840dfbfc7ee3ce26d068b93",
+      "contractVersion": 1,
+      "sourceVersion": "1",
+      "schemaVersions": [
+        {
+          "version": "schema.sha256.8cb6e434dc1a55aa049d5faba06e978bfe13e379b83a2a7189e6898ab2580628",
+          "family": 1
+        }
+      ]
+    },
+    "page/crm.contact": {
+      "digest": "sha256:4a508f87ba385b598f132ab5863aa1fdc39f833b33bbc4c46ae4eeade3a8ff12",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    "page/crm.deal": {
+      "digest": "sha256:e359eab6fe6e25a1d9ff20ed51ce71dc2e1ec9bd0063a754cf14ca6a8525b1d7",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    "page/crm.lead": {
+      "digest": "sha256:8ef477866a4cfcea309e5f30353bd28d52c1028acd11b6be6271fa02dfa11375",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    "page/crm.note": {
+      "digest": "sha256:34c9a1aed03e7f1b84238b7729f9a85023816c815a3c62363e38a2f7b1b68937",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    "page/crm.organization": {
+      "digest": "sha256:c503b934659702dbd1ee4811817cf277732e47b9c73a0b2fba124571c5ec9554",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    "page/crm.product": {
+      "digest": "sha256:9d727bb76b3fcd7a55ad305aa778ab8fcc1fb8a32af5355cfa2fb3683a6bc4d5",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    "page/crm.task": {
+      "digest": "sha256:05de7c7497b007633d71013594cf221dff6caa7d2ae7b8a60e507d74a058976a",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    "page/crm.territory": {
+      "digest": "sha256:0368ca294c91e71b8d58b1ce1e2594e597c20e96e51947f59654285209f76151",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    }
   }
 }

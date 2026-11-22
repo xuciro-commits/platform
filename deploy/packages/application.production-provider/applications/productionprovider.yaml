@@ -1,0 +1,48 @@
+name: productionprovider
+title: Production order provider
+pages:
+  - batchproviderorder
+  - batchproviderbatch
+  - finishedstock
+  - stockreceipt
+resources:
+  - app: build
+    kind: test-plan
+    name: productionbatches
+languages:
+  zh-CN:
+    Accept production batch: 接收生产批次
+    Acceptance status: 接收状态
+    Batch identity: 批次标识
+    Closed: 已关闭
+    Complete upstream order: 完成上游订单
+    Final batch: 末批
+    Finished stock: 成品库存
+    Finished stocks: 成品库存
+    First shop order: 首个工单
+    Good units: 合格数量
+    On hand: 在库
+    Order: 订单
+    Order number: 订单号
+    Ordered quantity: 订购数量
+    Partial production and cumulative limits: 部分生产与累计限额
+    Product: 产品
+    Production batch: 生产批次
+    Production batchs: 生产批次
+    Production order: 生产订单
+    Production order provider: 生产订单供应方
+    Production order released: 生产订单已下达
+    Production orders: 生产订单
+    Production value: 产值
+    Received quantity: 已收数量
+    Released: 已下达
+    Remaining quantity: 剩余数量
+    Running: 运行中
+    Scrapped units: 报废数量
+    Set shop order: 设置车间工单
+    Set the shop order on this production order.: 为这张生产订单设置车间工单。
+    Shop order: 工单
+    Start upstream production: 启动上游生产
+    Stock receipt: 入库单
+    Stock receipts: 入库单
+    Unit production cost: 单位生产成本

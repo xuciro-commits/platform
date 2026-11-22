@@ -1,0 +1,7 @@
+name: productionorderupstream
+title: Upstream production orders
+description: Published production orders visible to the calling member.
+object: build.productionorder
+sort:
+  - id
+limit: 200

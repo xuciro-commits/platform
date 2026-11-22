@@ -1,0 +1,73 @@
+action:
+  capability: deal
+  description: Change fields of a deal; fields left out keep their value.
+  payload:
+    - description: Deal
+      group: Commercial
+      name: title
+      type: string
+    - description: Organization
+      group: Commercial
+      name: organization
+      type: string
+    - description: Primary contact
+      group: Commercial
+      name: contact
+      type: string
+    - description: Source lead
+      group: Commercial
+      name: lead
+      type: string
+    - description: Deal value
+      group: Commercial
+      name: dealvalue
+      type: money
+    - description: Expected close
+      group: Commercial
+      name: expectedclose
+      type: date
+    - description: Closed date
+      group: Commercial
+      name: closeddate
+      type: date
+    - description: Source
+      group: Classification
+      name: source
+      type: string
+    - description: Industry
+      group: Classification
+      name: industry
+      type: string
+    - description: Territory
+      group: Classification
+      name: territory
+      type: string
+    - description: Lost reason
+      group: Closure
+      name: lostreason
+      type: string
+    - description: Lost notes
+      group: Closure
+      name: lostnotes
+      type: string
+    - description: Status
+      name: status
+      type: string
+    - description: Probability %
+      name: probability
+      type: integer
+    - description: Deal owner
+      name: owner
+      type: string
+  schema: crm.deal.edit
+  schemaVersion:
+    family: 4
+    version: schema.sha256.aedacc2b654ea7e00e052822554cee03764f3dc502ddb1fde19bcfd465f72e34
+  target: crm.deal
+  title: Edit deal
+roles:
+  - builder
+  - salesrep
+  - salesmanager
+schema: crm.deal.edit
+target: crm.deal

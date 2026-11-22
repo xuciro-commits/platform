@@ -1,15 +1,39 @@
 {
-  "format": 1,
+  "format": 2,
   "package": "application.production-provider",
   "version": "0.1.5",
   "requires": [],
-  "artifact": "sha256:da5da62cbbe8e88a4c58b7819a7840f5f0b37b6c30eb28432c6eb6ac9c82082a",
+  "artifact": "sha256:8d993bf52655f2aa4363312dfb5ae803a19d79febbcca4dc2675f6384a5284d9",
   "assets": {
-    "app/productionprovider": "sha256:6587cb66b2295531ad36936a5ebffbc9e013433a2a2a17e0b73dccc28f621eba",
-    "object/build.batchproviderbatch": "sha256:13ba692c657c6810331c0ee34216ae1b1377f0a080d934d1a6244d85687d78d8",
-    "object/build.batchproviderorder": "sha256:bf23e54d53b7a9c7533e2a7c1813bb7f5264ffaab05da0a969d28b651fb2b565",
-    "object/build.finishedstock": "sha256:8dbd89a9b5fe1d6ca06aac4ced25addf5c01d4ee850d3bb19a49443b85974836",
-    "object/build.stockreceipt": "sha256:3891857808217c0785f9000b2a66799b063b897d97c0f36c1b0164ab2d994932",
-    "test-plan/productionbatches": "sha256:2dbe5e0526a7efe0848fb91b3671a0c709a03dfbfd506e430acab7b606d503d8"
+    "app/productionprovider": {
+      "digest": "sha256:0136e1173fe8f8dc5d8a9cad5d8b575b3cf245d4bdb7f36201ffa0323ad40255",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    "object/build.batchproviderbatch": {
+      "digest": "sha256:6fc95252876b7b59a95729811e78e85635354258a95c66905d96e9ef1930a5fe",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    "object/build.batchproviderorder": {
+      "digest": "sha256:0ceef774d6b3ffeff61b935a5df68e438e76300d48af67f3ac06eb8cde458dc4",
+      "contractVersion": 1,
+      "sourceVersion": "3"
+    },
+    "object/build.finishedstock": {
+      "digest": "sha256:20efd522b7e1ec3266e4132568973147367e0009fc067ba196ed3fc98260636c",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    "object/build.stockreceipt": {
+      "digest": "sha256:f28e25089d3925ca5f7bb330211259d50b1a84dfbeff016b56243114b2549c08",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    "test-plan/productionbatches": {
+      "digest": "sha256:0c343031b8fd87707f625c3485a1077f20c836837879f1eb4ee533540ea3baa9",
+      "contractVersion": 1,
+      "sourceVersion": "1.tests-1"
+    }
   }
 }

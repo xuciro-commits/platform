@@ -1,0 +1,108 @@
+actionTriggers:
+  - actions:
+      - app: build
+        kind: action
+        name: crm.organization.create
+      - app: build
+        kind: action
+        name: crm.organization.edit
+    binding: page
+    id: page
+  - binding: list
+    id: list
+    owner: binding:list
+  - binding: detail
+    id: detail
+    owner: binding:detail
+dataBindings:
+  - fields:
+      - name: name
+      - name: website
+      - name: industry
+      - name: territory
+    id: list
+    kind: record
+    model:
+      fields:
+        - name: name
+        - name: website
+        - name: industry
+        - name: territory
+      type: crm.organization
+    object:
+      app: build
+      kind: object
+      name: crm.organization
+    owner: binding:list
+    ports:
+      parentable: "true"
+      selectionMode: write
+      widget: table
+  - fields:
+      - name: name
+      - name: website
+      - name: industry
+      - name: territory
+      - name: employees
+      - name: revenue
+      - name: address
+      - name: description
+    id: detail
+    kind: record
+    model:
+      fields:
+        - name: name
+        - name: website
+        - name: industry
+        - name: territory
+        - name: employees
+        - name: revenue
+        - name: address
+        - name: description
+      type: crm.organization
+    object:
+      app: build
+      kind: object
+      name: crm.organization
+    owner: binding:detail
+    ports:
+      selectionMode: read
+      widget: detail
+format: 4
+inputSchema: {}
+name: crm.organization
+object:
+  app: build
+  kind: object
+  name: crm.organization
+scopeVisibility:
+  owners:
+    detail: binding:detail
+    list: binding:list
+  root: page
+  scopes:
+    - id: page
+      kind: page
+    - binding: list
+      id: binding:list
+      kind: page
+      parent: page
+    - binding: detail
+      id: binding:detail
+      kind: page
+      parent: page
+title: Organizations
+widgetSpec:
+  body:
+    document: null
+    layout: list-detail
+    sections:
+      - binding: list
+        id: list
+        triggers:
+          - list
+      - binding: detail
+        id: detail
+        triggers:
+          - detail
+  format: platform.page.web.v1

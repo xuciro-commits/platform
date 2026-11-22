@@ -1,39 +1,32 @@
 # 产品包作者态源
 
-这里的每个目录是一份产品版本的作者态源。当前八个产品都用这个布局。
-顶层的 `*.json` 是生成的 `PackageDescriptor` 制品，由 `PLATFORM_PACKAGES_DIR` 读取；不手改。
+每个目录是一个产品包的作者态源（格式 v2：YAML，一个资源一个文件）。
+顶层的 `*.json` 是已发布版本的制品快照，宿主由 `PLATFORM_PACKAGES_DIR` 读取；不手改，也不从源重建。
 
 ```text
-manufacturing.mes/
-├── package.json
-├── blueprint.json
-├── package.lock.json
-├── setup.json
-├── roles/requirements.json
-├── objects/
-├── actions/
-├── queries/
-├── pages/
-├── applications/
-├── flows/
-├── functions/
-├── agents/
-├── integrations/{connections,sources,listeners,writebacks,...}/
-├── tests/{sample-sets,test-plans,evaluations}/
-├── docs/guide.md
-└── assets/
+crm/
+├── package.yaml            id、version、标题、简介、依赖、roots；artifact 指向同版本的快照
+├── package.lock.json       生成：每个资源的摘要、contractVersion、sourceVersion，对象的 schemaVersions 历史
+├── setup.yaml              可选：初始化步骤与角色要求
+├── docs/guide.md           可选：包的说明
+├── objects/<对象>/
+│   ├── object.yaml
+│   ├── page.yaml           与对象同名的页面
+│   └── actions/<动词>.yaml  以这个对象为目标的动作
+├── applications/  flows/  pages/  actions/  queries/  functions/  agents/
+├── integrations/{connections,sources,listeners,writebacks,matching,...}/
+└── tests/{sample-sets,test-plans,evaluations}/
 ```
 
-只建含有资源的目录。可选的 `migrations/` 与 `assets/` 目录在包第一次需要它们时出现。
-
-`package.json` 装描述字段，外加 `artifact`：生成的运行时文件名。
-`blueprint.json` 装根资源与一份资源索引，每个资源一条路径。
-`setup.json` 装初始化步骤，`roles/requirements.json` 装角色要求。打包器把它们合成运行时制品。
+- 资源的标识由位置与内容得出：目录定种类；名字取 `name`，对象取 `namespace.name`（没有命名空间时 `build.name`），动作取 `schema`。源里不写 ref。
+- 依赖、提供的能力与动作输入的模式由打包器用宿主的同一实现算出，写进制品，不进源。
+- `schemaVersions` 只在锁文件里。改了对象的模式，`make packages` 追加一条；与上一版不兼容时升一个族。没有历史的旧对象保持没有。
+- `make check` 第 3 步：每个包能打成宿主接受的制品，锁文件没有过期，版本号没变时与快照等价（宿主读到的一样）。
 
 ```bash
 make packages
-cd capabilities/server && go run ./cmd/pkg build ../../deploy/packages/manufacturing.mes
-cd capabilities/server && go run ./cmd/pkg check ../../deploy/packages/manufacturing.mes
+cd capabilities/server && go run ./cmd/pkg build -o /tmp/crm.json ../../deploy/packages/crm
+cd capabilities/server && go run ./cmd/pkg split ../../deploy/packages/crm.json /tmp/crm
 ```
 
 ## 包边界

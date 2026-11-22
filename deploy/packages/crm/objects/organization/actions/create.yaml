@@ -1,0 +1,54 @@
+action:
+  capability: organization
+  description: Create an organization.
+  new: true
+  payload:
+    - description: Organization
+      group: Details
+      name: name
+      required: true
+      type: string
+    - description: Website
+      group: Details
+      name: website
+      type: string
+    - description: Industry
+      group: Details
+      name: industry
+      type: string
+    - description: Territory
+      group: Details
+      name: territory
+      type: string
+    - choices:
+        - 1-10
+        - 11-50
+        - 51-200
+        - 201-500
+        - 501-1000
+        - 1000+
+      description: Employees (1-10, 11-50, 51-200, 201-500, 501-1000, 1000+)
+      name: employees
+      type: string
+    - description: Annual revenue
+      group: Details
+      name: revenue
+      type: money
+    - description: Address
+      name: address
+      type: string
+    - description: Company description
+      group: Details
+      name: description
+      type: string
+  schema: crm.organization.create
+  schemaVersion:
+    family: 1
+    version: schema.sha256.164e93d04edab558838850309316c9776b247fa1c8b5e27904307ba9eff5a03a
+  target: crm.organization
+  title: Create organization
+roles:
+  - builder
+  - user
+schema: crm.organization.create
+target: crm.organization

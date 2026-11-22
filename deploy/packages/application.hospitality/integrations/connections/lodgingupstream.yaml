@@ -1,0 +1,4 @@
+name: lodgingupstream
+title: Lodging reservation provider
+kind: http
+credential: true

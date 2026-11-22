@@ -1,0 +1,147 @@
+display: title
+fields:
+  - group: Task
+    name: title
+    required: true
+    search: true
+    title: Title
+    type: text
+  - group: Task
+    name: description
+    title: Description
+    type: longtext
+  - group: Task
+    inverse: tasks
+    name: lead
+    oneOf: Related to
+    ref: crm.lead
+    title: Lead
+    type: reference
+  - group: Task
+    inverse: tasks
+    name: deal
+    oneOf: Related to
+    ref: crm.deal
+    title: Deal
+    type: reference
+  - aside: true
+    choices: backlog:Backlog,todo:Todo,inprogress:In Progress,done:Done,canceled:Canceled
+    format:
+      - tone: neutral
+        when:
+          args:
+            - kind: text
+              op: ""
+              ref: status
+            - kind: text
+              lit:
+                value: backlog
+              op: ""
+          kind: boolean
+          op: =
+      - tone: info
+        when:
+          args:
+            - kind: text
+              op: ""
+              ref: status
+            - kind: text
+              lit:
+                value: todo
+              op: ""
+          kind: boolean
+          op: =
+      - tone: warning
+        when:
+          args:
+            - kind: text
+              op: ""
+              ref: status
+            - kind: text
+              lit:
+                value: inprogress
+              op: ""
+          kind: boolean
+          op: =
+      - tone: success
+        when:
+          args:
+            - kind: text
+              op: ""
+              ref: status
+            - kind: text
+              lit:
+                value: done
+              op: ""
+          kind: boolean
+          op: =
+      - tone: danger
+        when:
+          args:
+            - kind: text
+              op: ""
+              ref: status
+            - kind: text
+              lit:
+                value: canceled
+              op: ""
+          kind: boolean
+          op: =
+    name: status
+    required: true
+    title: Status
+    type: choice
+  - aside: true
+    choices: low:Low,medium:Medium,high:High
+    name: priority
+    title: Priority
+    type: choice
+  - aside: true
+    name: assignee
+    title: Assigned to
+    type: member
+  - aside: true
+    name: startdate
+    title: Start date
+    type: date
+  - aside: true
+    name: duedate
+    title: Due date
+    type: date
+  - aside: true
+    name: allday
+    title: All day
+    type: boolean
+name: task
+namespace: crm
+plural: Tasks
+states:
+  - description: CRM task.
+    name: open
+    title: Open
+    tone: info
+title: Task
+type: crm.task
+view:
+  columns:
+    - title
+    - status
+    - priority
+    - duedate
+    - assignee
+  filters: []
+  group: none
+  lanes: status
+  layout: table
+  search: ""
+  sort: []
+  version: 1
+  dates: duedate
+  inbox:
+    member: assignee
+    due: duedate
+    open:
+      status:
+        - backlog
+        - todo
+        - inprogress

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"flag"
 	"fmt"
 	"io"
@@ -8,7 +9,11 @@ import (
 	"path/filepath"
 )
 
-const usage = "usage: pkg build|check [-packages dir] [package-dir ...]"
+const usage = `usage:
+  pkg lock  [-packages dir] [package-dir ...]   refresh package.lock.json from the sources
+  pkg check [-packages dir] [package-dir ...]   validate, check the lock, compare with the released snapshot
+  pkg build -o file package-dir                 write the artifact of one package
+  pkg split artifact.json package-dir           turn a released artifact into a source directory`
 
 func main() {
 	if err := run(os.Args[1:], os.Stdout); err != nil {
@@ -19,34 +24,59 @@ func main() {
 
 func run(args []string, out io.Writer) error {
 	if len(args) == 0 {
-		return fmt.Errorf(usage)
-	}
-	var step func(string) (packed, error)
-	verb := "checked"
-	switch args[0] {
-	case "build":
-		step, verb = build, "packed"
-	case "check":
-		step = check
-	default:
-		return fmt.Errorf(usage)
+		return errors.New(usage)
 	}
 	flags := flag.NewFlagSet(args[0], flag.ContinueOnError)
 	flags.SetOutput(io.Discard)
 	root := flags.String("packages", "deploy/packages", "directory holding package sources")
+	output := flags.String("o", "", "artifact file to write")
 	if err := flags.Parse(args[1:]); err != nil {
-		return fmt.Errorf("%w; %s", err, usage)
+		return fmt.Errorf("%w\n%s", err, usage)
 	}
-	dirs, err := sources(*root, flags.Args())
-	if err != nil {
-		return err
-	}
-	for _, dir := range dirs {
-		p, err := step(dir)
+	switch args[0] {
+	case "split":
+		if flags.NArg() != 2 {
+			return errors.New(usage)
+		}
+		if err := split(flags.Arg(0), flags.Arg(1)); err != nil {
+			return err
+		}
+		fmt.Fprintf(out, "split %s -> %s\n", flags.Arg(0), flags.Arg(1))
+		return nil
+	case "build":
+		if flags.NArg() != 1 || *output == "" {
+			return errors.New(usage)
+		}
+		previous, _, err := snapshot(flags.Arg(0))
 		if err != nil {
 			return err
 		}
-		fmt.Fprintf(out, "%s %s@%s -> %s (%d assets)\n", verb, p.id, p.version, filepath.Base(p.artifactPath), p.assets)
+		b, err := build(flags.Arg(0), previous)
+		if err != nil {
+			return err
+		}
+		if err := writeFile(*output, b.artifact); err != nil {
+			return err
+		}
+		fmt.Fprintf(out, "built %s@%s -> %s (%d resources, %s)\n", b.id, b.version, *output, b.assets, b.lock.Artifact)
+		return nil
+	case "lock", "check":
+		step, verb := lockPackage, "locked"
+		if args[0] == "check" {
+			step, verb = check, "checked"
+		}
+		dirs, err := sources(*root, flags.Args())
+		if err != nil {
+			return err
+		}
+		for _, dir := range dirs {
+			b, err := step(dir)
+			if err != nil {
+				return err
+			}
+			fmt.Fprintf(out, "%s %s@%s (%d resources) in %s\n", verb, b.id, b.version, b.assets, filepath.Base(dir))
+		}
+		return nil
 	}
-	return nil
+	return errors.New(usage)
 }

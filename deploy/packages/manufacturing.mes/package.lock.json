@@ -1,70 +1,306 @@
 {
-  "format": 1,
+  "format": 2,
   "package": "manufacturing.mes",
   "version": "1.0.0",
   "requires": [
     "manufacturing.core@1.0.0"
   ],
-  "artifact": "sha256:433ad30fc22aef70fb409bfab850e2495dbdf4cd5eacd4d48c469371a049d201",
+  "artifact": "sha256:b3d5afee6b92dfb0edcf6617210f492e31b5c6fad807130fa178f76ad9612a02",
   "assets": {
-    "agent/erpcorrection": "sha256:4f4ebde2b59143fadb3ac4696a337375f2ca5d6991cad2a8ec49d37de99b8a4a",
-    "agent/materialplanner": "sha256:8e4c594f4d35cffc3253eb971d4bac6b462ba4947662115c9141812a436252a3",
-    "app/mesapp": "sha256:0de589dad594161729b05b5d50e25b6d3e26b470192e8c2ec9ce811fb0a422e4",
-    "connection/mesobservations": "sha256:8429c93f70dfe64caa260ff820827d4a100ed9ddee3557271edea3e1189c090b",
-    "connection/productionupstream": "sha256:c0e3e2831b9372d7b70898b654292a367da2e53c596359f9a5e833da8a3b4e99",
-    "dataset/mesproductionreceipts": "sha256:a8f6551be9eb28c144bd4e3005c53e24e2af1851455bba110e40c79a5b993768",
-    "evaluation-set/mesreviewquality": "sha256:e5762d5e469ad91a945612aa457495c2a20f4396cf030c7d93df3af9cbb9ff20",
-    "flow/build.mesdowntimereview": "sha256:2257d346435b4dc117339b88e22f67afded9c2a56f33d3d65dc5386d4c2f08c6",
-    "flow/build.mesfirststart": "sha256:ac72f4cbcd38304e993147efefa8e60d65e1802e178ed829e95759bd794b25ce",
-    "flow/build.mesproductioncorrectstart": "sha256:128848a87aa197694ea37945d945b75f0aa1c8425968ade30b5db01c340167a4",
-    "flow/build.mesproductionresultdispatch": "sha256:1f95037ea534454b76ed7a769b8e7e2f46b7601a672166c99696314817418426",
-    "flow/build.mesproductionstartdispatch": "sha256:f03b02bd35c55a7f63c24aa72f304db5e21776601f23586f57e15f4c9d3c1c80",
-    "function/mesreview": "sha256:0db7fb320a737b6848c751c97bbb31d985c87ca8769dd960b82fa95d4850167e",
-    "link-type/mesdowntimehistory": "sha256:1aa69db7bd010c523cbbfed0eb046823de2ca70bfb3682d1f92f0755b6d217f3",
-    "object/build.mesbatch": "sha256:8897f17882a9fac36919048bb7237f473ca1ffebb4a284ad2a2067cf74aa76df",
-    "object/build.mescapability": "sha256:b904c8955e6e60cd5722793c1eb2cafea3ebc9fe9a70b21183f642e5730a984d",
-    "object/build.mescenter": "sha256:ea5b23950f38ea3b2315b1739cbf18a5246867a30b5c3887fd35dcb18964a99d",
-    "object/build.mesdevice": "sha256:5d87a21099bee4a131318e5fe15cd0124960e6f0f3a6689dbaaff41940f6fd34",
-    "object/build.mesdowntime": "sha256:abe3d1ef7dce5ba3284438e5ebf5500c0b168f88a76fbbbe6761cd3bd7a113bd",
-    "object/build.mesissue": "sha256:7b4c0e18b873ccb9d337d58c66e2df3785873c239f4a7efeec9daafada5cca15",
-    "object/build.mesoperation": "sha256:be7e288d60e3d6b46326233b953fb6e21e42145e6728e0a5e663740b65b496a5",
-    "object/build.mesorder": "sha256:e9a58608a70c32b7f3c40233d2fd18cb32f619d3da8d6c9b03692b6bf667d43e",
-    "object/build.mesproductionresult": "sha256:af34d037b94569d0cd6610364c2e1d53569ffd20ee3badcef943966312cde882",
-    "object/build.mesproductionstart": "sha256:943a98f9b74638379a4d153bd1e2b80e85326c35a1dda8259efb52f97d0a440f",
-    "object/build.mesrequirement": "sha256:162a934c91f7a17e55349e5d19ee95d75cfbe5d4a43781267021d873fa32ee80",
-    "object/build.mesresource": "sha256:daeecb8e74ac4f7b229fac465cbdf7486441e8656818ceae7c731213f1275bb8",
-    "object/build.mesrouting": "sha256:b323e833ce243854d4ed46dad10d27d12b805fd5944250024c007595fbd902e8",
-    "object/build.messignature": "sha256:e88c0750e57208a2b4219b7ad8647906847cca80c5ed65aaf68e09c8235195d9",
-    "object/build.messkill": "sha256:606f93f8f2d8696d2eb37d5bbd76303c524f3ddc915be939a90f33004a2decae",
-    "object/build.mesupstreamorder": "sha256:3fbaca3dfd366a8209614b72d9f47e79ffc8e7c3d36060487d4d1a2df5d92a5e",
-    "observation/messtates": "sha256:7710a39588529b70e5b2cea6f11f2489f919a556a476994e485e2f9aa6d40c05",
-    "page/mesbatch": "sha256:25f026a43d8f0616af5d7b519119ee7216fc71980bef91b741829b98c661b885",
-    "page/mescapability": "sha256:9e35b6b272dc9ef8a0a217bfaa3777032097f714b5e1af5ba4a6c5f1e81b2b42",
-    "page/mescenter": "sha256:fedd2a6d9ce4f20b106c1d35a0d7419b8628323bc099627da71868380d9cb393",
-    "page/mesdevice": "sha256:14e58c3cabc9dd195a0155d57e09f91017ec86a797ffe5a4e691fe3259a0df24",
-    "page/mesdowntime": "sha256:ae54182e729c196594d2d906f3953702a4cefc8f53971ad686916db63d9e5d9a",
-    "page/mesissue": "sha256:f7f1cc74bdf7bc293e114b0a4428231b40c2690e3dd685de54050261b0f89085",
-    "page/mesoperation": "sha256:5045a67a0de13203b16b87e479e78251ffa9aa7b1df235b68c72a904621fd934",
-    "page/mesorder": "sha256:ac6adc24e6ef63bd40a7d9bd2fc09a87431ee55597e454df7d6ca5ce34652203",
-    "page/mesproductionresult": "sha256:c2c2e88fb3f9f6fa808485adda3ddd28d6595e9ad0a69bb233a6fe1ad2b31a8c",
-    "page/mesproductionstart": "sha256:3c6046f06407164df2e9173b917d0ee6b9efc9fd45039a34dfd56ac18bcb8f58",
-    "page/mesrequirement": "sha256:15703858ca26743f6cbcc8be2d621b49a6129b0f9771e8964081525be7b326de",
-    "page/mesresource": "sha256:a3aa0e5e1bb8437192564484a60ac59e4ee94edb49543dcc84e07d986cd8e21e",
-    "page/mesrouting": "sha256:355ca99cc04c461848247f408a94607da8ce7ae7a40d1ef873101f679d69725b",
-    "page/messignature": "sha256:5156093fe33e250dd3a251bc77e1180a126cb71b7ce14e095cd90fc941d94a44",
-    "page/messkill": "sha256:531acd0663c0c5f79d36970c838cd00f8ca9d7463e237285dc5259a02d860104",
-    "page/mesupstreamorder": "sha256:b1ac6ad6328740da0d2212bcdb299a394988f460302e4a67426f710af0a75b55",
-    "query/mesproductionoutcomes": "sha256:a5e7f5f3c083ee4f9a9c6f6aa224a060b6a28f36612dfa79b90f63bf57e9b149",
-    "query/mesproductionplans": "sha256:29719533fe74a812035bb8305498a4400d529aa498c2bb6ad4211238605d112a",
-    "query/mesrequirements": "sha256:a1f4da48c6637130ce21fc67ac275f1567ae6fdd16ac2fb779531f5654679295",
-    "query/messkills": "sha256:ed515a910fcd9569e16f476d68259f3cec45e1c53e50e43c33b0e9d80f3bd852",
-    "sample-set/manufacturingexample": "sha256:6fb30bb926f91faaf0839e38f860ac519f46f5a842813ba94eb670899c1f9dfe",
-    "source/mesproductionplansource": "sha256:d02bda990b63247aae6d691b265c852aa8131ccd668a71cbad44fee6e5b9ef4e",
-    "source/mesproductionreceiptsource": "sha256:406aaf915789830f004f15fb7f3e7a67e8c5a8df860e4cf8acce17f558bb8484",
-    "test-plan/manufacturingassembly": "sha256:7b1ad5eb8ac4a5d64dd1722000d4ad75a0f7c22227650f590f8a45f5ce5e0aaf",
-    "test-plan/manufacturingmachining": "sha256:b5a27a89c0a468b289616ecbff364588ebaac7863b078932ea9e41deb9ed8dc4",
-    "writeback/mesproductionconfirm": "sha256:7ef38b47ac45090de6d81fdfd81e2c3aadc9f9c2083bbe4663106b076a5dac2c",
-    "writeback/mesproductionrestart": "sha256:88791b6176d9ad1a552db29ba1c8efcfa368a1e60bb5714ff08b6030b38f36ea",
-    "writeback/mesproductionstart": "sha256:5deb0d0225c07b5747f330080f887170d96d2665583e3df6724968f321dffe54"
+    "agent/erpcorrection": {
+      "digest": "sha256:4ecb0fc663abba85c7b679d5a0c83bdc100e56ee91e31134a5a0ee7090e447da",
+      "contractVersion": 1,
+      "sourceVersion": "1.agent-1"
+    },
+    "agent/materialplanner": {
+      "digest": "sha256:3de18d658453c2011a6b8bc91ffac6b5d38ef3481a7086f5f54fb4d7715c49c3",
+      "contractVersion": 1,
+      "sourceVersion": "1.agent-1"
+    },
+    "app/mesapp": {
+      "digest": "sha256:921c47907f4cfba59a4bea7b7f42731040d654be22e9c6d7cc46df14434ca8d2",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    "connection/mesobservations": {
+      "digest": "sha256:70b110211ad5738caac6e03d56f0903e26e16860b8750645d69ecdf56193575e",
+      "contractVersion": 1,
+      "sourceVersion": "1.connection-1"
+    },
+    "connection/productionupstream": {
+      "digest": "sha256:bac452d0734d518f918f0f7166bdb7c10846f855a19c494b95190265ac30be3f",
+      "contractVersion": 1,
+      "sourceVersion": "1.connection-1"
+    },
+    "dataset/mesproductionreceipts": {
+      "digest": "sha256:46d63c1cc297e92223e4a901b9d11f17e79454b836df43fd2ce4080965973dc0",
+      "contractVersion": 1,
+      "sourceVersion": "1.dataset-1"
+    },
+    "evaluation-set/mesreviewquality": {
+      "digest": "sha256:0a16eee152727fe6815837a5e0bd118a8caf08bfdd2e96393870b0a7ad49e557",
+      "contractVersion": 1,
+      "sourceVersion": "1.evaluation-1"
+    },
+    "flow/build.mesdowntimereview": {
+      "digest": "sha256:e041a45379ff1ae5c29a56c7d5123be8f364be14ec36139c7c1f0548788b0b96",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    "flow/build.mesfirststart": {
+      "digest": "sha256:ff3c3a3c9898c20e617c25165106e87ab7dc3b28c84af91b411e3f32d11db7d0",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    "flow/build.mesproductioncorrectstart": {
+      "digest": "sha256:91202c77a6c1a3b2a96156532ac2e2306ed37c8fd375e4732842a167cfb2ee16",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    "flow/build.mesproductionresultdispatch": {
+      "digest": "sha256:69d890c9ad26bc4edafca7b5c70e9b4dfb12d9fa48f059105c9f7a29c79b61c7",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    "flow/build.mesproductionstartdispatch": {
+      "digest": "sha256:316f14cdfb469a3588fd19c1169f7bbe387e5d44e22ffa26d1c1042167c8d636",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    "function/mesreview": {
+      "digest": "sha256:a8874698e5cecbc3861384a0f53c8eb40cd743577adf1fa2e5f75eba51a1387e",
+      "contractVersion": 1,
+      "sourceVersion": "1.function-1"
+    },
+    "link-type/mesdowntimehistory": {
+      "digest": "sha256:225e0ec56f830839b79784220a5d1bdb16a6c0302520930e826397a0c43f500a",
+      "contractVersion": 4,
+      "sourceVersion": "1.link-1"
+    },
+    "object/build.mesbatch": {
+      "digest": "sha256:b70447633c400bf569fd15fa0f72fbb26384ebbb198306a195cd6dda5dc04588",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    "object/build.mescapability": {
+      "digest": "sha256:68477ada03b05ee5af93118cebe9069a05e4068b992710bf1fd34693729042a3",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    "object/build.mescenter": {
+      "digest": "sha256:d7bc9c36e4bd417bcf4e482c1761d0db273e382535ed35e9b741a9954ef4fbd1",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    "object/build.mesdevice": {
+      "digest": "sha256:3fd6f085dcc998f2cab5aa7394ae537d0602fb1b8068f38751a44bbf5c9066e2",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    "object/build.mesdowntime": {
+      "digest": "sha256:78471bf3cf99e1a117e42930f7106a2bf0be574ce572134349905254f3cf77d7",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    "object/build.mesissue": {
+      "digest": "sha256:f810e883b8d66af6519184c8889c0441da8a18c3f5f764fb11ffef23b51f073e",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    "object/build.mesoperation": {
+      "digest": "sha256:f247a959085e48e87ded93f16cac75f7e655bf4e48209e57caa75051213ed4bb",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    "object/build.mesorder": {
+      "digest": "sha256:32e16b67dc3bd1d1fe5b2ec3b7485694c590b03e7e9d649c3c00078a14f146d6",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    "object/build.mesproductionresult": {
+      "digest": "sha256:98173e7e1f4a2305323f77864678ff8914404550a3782b78f89a3a59361ca052",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    "object/build.mesproductionstart": {
+      "digest": "sha256:b4152a5093db3bfbe6d44c545108c855f5e5d0b8029021ced9077da522cd6105",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    "object/build.mesrequirement": {
+      "digest": "sha256:43c115162ca07d05330f206bb42d81c5df6e94b255b732147a38b14d415fcecd",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    "object/build.mesresource": {
+      "digest": "sha256:00dff7cbc5d29b1b0b1e886d9b9e14dd10a022e41a30351f9499ddfd0bc54660",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    "object/build.mesrouting": {
+      "digest": "sha256:417013f29f0a8bf33ece2266b16b57d62665771335829b564ca9bbc9cb7bf158",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    "object/build.messignature": {
+      "digest": "sha256:030e65b7cd66ecd6b739a16b6c9b065234d12a92604f50f65747a23447c0995f",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    "object/build.messkill": {
+      "digest": "sha256:be951df197e4cefb8a250a385b6d9e898bd215f534b5b15791681bf864c24b64",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    "object/build.mesupstreamorder": {
+      "digest": "sha256:82d115fb87b899bdc495bfec4daff2737ca3db311e6c270086809d1583e41c23",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    "observation/messtates": {
+      "digest": "sha256:3fc64f8e3ceb26a7d08332cf0a8c014764924c70762a350093b039cedd0ffb3d",
+      "contractVersion": 1,
+      "sourceVersion": "1.observation-1"
+    },
+    "page/mesbatch": {
+      "digest": "sha256:9e8c79ba28cea5c954758b1e54e9a23f89529b7076a973f614ae1f5e7d7f3a25",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    "page/mescapability": {
+      "digest": "sha256:e695fddcf2b3266654716ec97fd18fd7782da99efb4cbf0d06c62af765d6a79a",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    "page/mescenter": {
+      "digest": "sha256:2d9553d83e08ec5d8a762df0416dcbff10dfde9d4888c0aa5a3037450459f203",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    "page/mesdevice": {
+      "digest": "sha256:f3fa50778605e7f7fc117b9c5f54207270b6c591cff7add2b015c0eeb86fbfe9",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    "page/mesdowntime": {
+      "digest": "sha256:c626cb47d201286598fe0716ea9700421edb7ebccea652b45fdd080797c155c6",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    "page/mesissue": {
+      "digest": "sha256:8460347f1ebfdc172e61c1cc5791d522463df4d7cc4cac7a028180eaaaae817e",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    "page/mesoperation": {
+      "digest": "sha256:d2a39de5bbef22226a3841fce4af26eb5afc91b29b7ac3e775f7908c6cd308f4",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    "page/mesorder": {
+      "digest": "sha256:2819be1690befa4ffc072ab7132208abd8e06b6479873c06d764a8b1a0272f7b",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    "page/mesproductionresult": {
+      "digest": "sha256:e8e51c91f542a542dbad67ba46271e0eae09400664a498abd84768fbe0ada115",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    "page/mesproductionstart": {
+      "digest": "sha256:1a71740d982d91b029d4277283e50b8d29db5f01afb211e3aa0f492dc378a211",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    "page/mesrequirement": {
+      "digest": "sha256:7acc01418837202e037cbddcf95231b49d454cfb643b97b092c5413eef0375cc",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    "page/mesresource": {
+      "digest": "sha256:36406d4434071d12013e5d07efda9dcfaca5d29f4c94265f1f07ab06fbc7813f",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    "page/mesrouting": {
+      "digest": "sha256:e5c62b9bd90b125433dad0f13d28215b58e9f1c2ee1bcf03aa26142f2b28e483",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    "page/messignature": {
+      "digest": "sha256:f9fecc36f42a7ba7e3ed32e40b3d8561c514ba725bc8b2b832cc543eaa908787",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    "page/messkill": {
+      "digest": "sha256:4262212cd7e850e89a900f32c4f848f25002cc3687737a26d11c993c6c12a0c2",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    "page/mesupstreamorder": {
+      "digest": "sha256:81d5a2c97ddb167673457f36c04c0e394539cf511f71c9d190e3b1f2a96adb8a",
+      "contractVersion": 1,
+      "sourceVersion": "1"
+    },
+    "query/mesproductionoutcomes": {
+      "digest": "sha256:964c70147f275818ed25bb2de3dbc206540d02bfece67cb7c7e520089d8e5839",
+      "contractVersion": 1,
+      "sourceVersion": "1.query-1"
+    },
+    "query/mesproductionplans": {
+      "digest": "sha256:b180e6a14eee730c69648fc41ad7e48bafcc9d100a9c06bb01551eec7bb23ca8",
+      "contractVersion": 1,
+      "sourceVersion": "1.query-1"
+    },
+    "query/mesrequirements": {
+      "digest": "sha256:c4b9554de3c7c404ec4a44a0043142f06f32c3bcf5b376c062ba8164ca38792d",
+      "contractVersion": 1,
+      "sourceVersion": "1.query-1"
+    },
+    "query/messkills": {
+      "digest": "sha256:95b02f0ac5525232e67b2fa0420544a2ebd40dd058bdb98a15d56dc048662997",
+      "contractVersion": 1,
+      "sourceVersion": "1.query-1"
+    },
+    "sample-set/manufacturingexample": {
+      "digest": "sha256:e2bcdd318ee3d6147416592139704ce50f3f617bb319f025b83b3f662b530630",
+      "contractVersion": 1,
+      "sourceVersion": "1.samples-1"
+    },
+    "source/mesproductionplansource": {
+      "digest": "sha256:df7c9c28285a25c337fa5ebc6759243cf27a894476e10eb3cb320298de481cee",
+      "contractVersion": 1,
+      "sourceVersion": "1.source-1"
+    },
+    "source/mesproductionreceiptsource": {
+      "digest": "sha256:469966923b1b737909ef99bd096ac4add34b26112ca38e12f38bec31b62d5bbf",
+      "contractVersion": 1,
+      "sourceVersion": "1.source-1"
+    },
+    "test-plan/manufacturingassembly": {
+      "digest": "sha256:8ae9d8cc949b67670fafd6ed6ff16a175eb84aebe340af87c655ed0c2769c262",
+      "contractVersion": 1,
+      "sourceVersion": "1.tests-1"
+    },
+    "test-plan/manufacturingmachining": {
+      "digest": "sha256:8b52bb011fcc5fdd83f23b769652a3fa75e682fd5c3d126a6625f9bf4eae2cc2",
+      "contractVersion": 1,
+      "sourceVersion": "1.tests-1"
+    },
+    "writeback/mesproductionconfirm": {
+      "digest": "sha256:4d77aeb691b5d66c4d5e3ff25299ab627d259860d9df9e11d03e19e5e608c3ab",
+      "contractVersion": 1,
+      "sourceVersion": "1.writeback-1"
+    },
+    "writeback/mesproductionrestart": {
+      "digest": "sha256:d1da410d78e74cd1d985f1370eee98b6bb9655312879f3c0f2e7094f060f5e4e",
+      "contractVersion": 1,
+      "sourceVersion": "1.writeback-1"
+    },
+    "writeback/mesproductionstart": {
+      "digest": "sha256:20904b71df4f76e0371b839b7d579f9983f7128f10300ab4da5c533d33e265c4",
+      "contractVersion": 1,
+      "sourceVersion": "1.writeback-1"
+    }
   }
 }

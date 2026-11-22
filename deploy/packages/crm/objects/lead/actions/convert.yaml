@@ -1,0 +1,23 @@
+action:
+  capability: lead
+  description: Create or link the organization, create the contact and the deal from this lead, and mark the lead converted.
+  open: deal
+  payload:
+    - constraints: {}
+      description: Leave empty to create a new organization from the lead.
+      label: Link to organization
+      name: organization
+      ref: crm.organization
+      type: string
+  schema: crm.lead.convert
+  schemaVersion:
+    family: 4
+    version: schema.sha256.e386827c34b8da79dcac0cd4ca21a5a5844fefebf51690b39296b584f3d82617
+  target: crm.lead
+  title: Convert to deal
+roles:
+  - builder
+  - salesrep
+  - salesmanager
+schema: crm.lead.convert
+target: crm.lead

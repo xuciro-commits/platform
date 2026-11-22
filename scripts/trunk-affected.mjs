@@ -21,8 +21,10 @@ const rules = [
   [/^frontend\/src\/apps\/(home|ai|data|operations|host)\//, ["workspace"]],
   [/^frontend\/src\/pages\/(Package[A-Za-z]*|FormWizard|MemberRoles)\.tsx$/, ["builder", "marketplace"]],
   [/^frontend\/src\/pages\/(CalendarView|AppDashboard|DashboardPage|ImportWizard)\.tsx$/, ["crm", "workspace"]],
-  [/^deploy\/packages\/crm(\.json|\/)/, ["crm", "marketplace"]],
-  [/^deploy\/packages\//, ["builder"]],
+  [/^deploy\/packages\/crm\.json$/, ["crm", "marketplace"]],
+  [/^deploy\/packages\/[^/]+\.json$/, ["builder"]],
+  [/^deploy\/packages\/[^/]+\//, []],
+  [/^capabilities\/server\/cmd\/pkg\//, []],
 ];
 
 function changedFiles(base) {

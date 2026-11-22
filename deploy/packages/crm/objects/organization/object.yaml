@@ -1,0 +1,62 @@
+display: name
+fields:
+  - group: Details
+    name: name
+    required: true
+    search: true
+    title: Organization
+    type: text
+  - group: Details
+    name: website
+    search: true
+    title: Website
+    type: text
+  - group: Details
+    name: industry
+    ref: crm.industry
+    title: Industry
+    type: reference
+  - group: Details
+    name: territory
+    ref: crm.territory
+    title: Territory
+    type: reference
+  - aside: true
+    choices: 1-10,11-50,51-200,201-500,501-1000,1000+
+    name: employees
+    title: Employees
+    type: choice
+  - group: Details
+    name: revenue
+    title: Annual revenue
+    type: money
+  - aside: true
+    name: address
+    title: Address
+    type: text
+  - group: Details
+    name: description
+    title: Company description
+    type: longtext
+name: organization
+namespace: crm
+plural: Organizations
+title: Organization
+type: crm.organization
+view:
+  columns:
+    - name
+    - website
+    - industry
+    - territory
+    - revenue
+  filters: []
+  group: none
+  lanes: ""
+  layout: table
+  search: ""
+  sort:
+    - direction: ascending
+      sortKey: name
+  version: 1
+naming: CRM-ORG-{year}-{n:5}

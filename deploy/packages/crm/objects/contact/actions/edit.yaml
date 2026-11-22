@@ -1,0 +1,57 @@
+action:
+  capability: contact
+  description: Change fields of a contact; fields left out keep their value.
+  payload:
+    - description: Full name
+      group: Contact
+      name: fullname
+      type: string
+    - description: Email
+      group: Contact
+      name: email
+      type: string
+    - description: Mobile no.
+      group: Contact
+      name: mobile
+      type: string
+    - description: Phone
+      group: Contact
+      name: phone
+      type: string
+    - description: Organization
+      group: Contact
+      name: organization
+      type: string
+    - description: Designation
+      group: Contact
+      name: designation
+      type: string
+    - choices:
+        - mr
+        - ms
+        - dr
+        - prof
+      description: Salutation (mr, ms, dr, prof)
+      name: salutation
+      type: string
+    - choices:
+        - female
+        - male
+        - other
+      description: Gender (female, male, other)
+      name: gender
+      type: string
+    - description: Address
+      name: address
+      type: string
+  schema: crm.contact.edit
+  schemaVersion:
+    family: 1
+    version: schema.sha256.f8f27149ef68896b8aa988cd551958cf1ba903d53a633382e089487ee4aad955
+  target: crm.contact
+  title: Edit contact
+roles:
+  - builder
+  - user
+schema: crm.contact.edit
+target: crm.contact

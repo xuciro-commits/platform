@@ -229,8 +229,8 @@
 | 运行、接受结果、审计 | 保留 | 保留 | 默认不删 |
 | 客户扩展、客户项目、连接地址、凭据引用、授权 | 保留 | 保留，需确认配置 | 不随包删除 |
 
-作者态源：每个包在 `deploy/packages/<id>/`，一个资源一个文件；`make packages` 生成制品与锁文件，
-`make check` 校验它们没有过期。顶层的 `deploy/packages/*.json` 是生成物，不手改。各个包自己的边界写在 `deploy/packages/README.md`。
+作者态源：每个包在 `deploy/packages/<id>/`，YAML，一个资源一个文件；依赖、能力与模式历史由 `cmd/pkg` 用宿主的同一实现算出，不进源。
+顶层的 `deploy/packages/*.json` 是已发布版本的快照，不手改、不重建；`make check` 核对源与同版本快照等价。格式与各包的边界在 `deploy/packages/README.md`。
 
 外部定义的转换（Frappe 应用）是仓库里的构建工具 `scripts/frappe-read.mjs`，不是租户里的能力：
 

@@ -1,0 +1,23 @@
+name: manufacturingfoundation
+title: Manufacturing Foundation
+icon: boxes
+pages:
+  - mesleadtime
+resources:
+  - app: build
+    kind: object
+    name: build.mesleadtime
+  - app: build
+    kind: connection
+    name: supplieragent
+  - app: build
+    kind: writeback
+    name: supplierinquiry
+  - app: build
+    kind: query
+    name: supplieranswers
+languages:
+  zh-CN:
+    An authorized supplier inquiry and the original external answer; delivery alone is not a promised lead time.: 已获授权的供应商询问及原始外部答复；仅送达询问不代表已承诺交期。
+    Current readable inquiries and original supplier answers, without invented delivery dates.: 当前可读的询问与供应商原始答复，不编造交付日期。
+    Manufacturing Foundation: 制造基础
