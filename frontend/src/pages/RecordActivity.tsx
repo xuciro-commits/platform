@@ -13,10 +13,10 @@ import { ChatBubbleLeftIcon, ChevronDownIcon, ChevronRightIcon, DocumentTextIcon
 import * as stylex from "@stylexjs/stylex";
 import { type KeyboardEvent, useState } from "react";
 import { type Api, type Read, useRead } from "../host";
-import { t } from "../i18n";
+import { t, useLocale } from "../i18n";
 import { ActionDialog } from "./ActionDialog";
 import { reasonOf, send } from "./act";
-import type { Described } from "./describe";
+import { type Described, statusField } from "./describe";
 import { plain, present } from "./values";
 
 type Comment = { id: string; text: string; by: string; created: { at: string } };
@@ -39,6 +39,14 @@ const styles = stylex.create({
   body: { minWidth: 0, paddingBlockEnd: spacingVars["--spacing-4"] },
   stamp: { flexShrink: 0, marginInlineStart: "auto" },
 });
+
+type Stay = { value: string; label: string; from: string; until?: string; by: string };
+
+function duration(locale: string, from: string, until?: string) {
+  const minutes = Math.max(0, (Date.parse(until ?? new Date().toISOString()) - Date.parse(from)) / 60000);
+  const [amount, unit] = minutes < 60 ? [minutes, "minute"] : minutes < 48 * 60 ? [minutes / 60, "hour"] : [minutes / 1440, "day"];
+  return new Intl.NumberFormat(locale, { style: "unit", unit, unitDisplay: "short", maximumFractionDigits: 0 }).format(Math.floor(amount));
+}
 
 function collapse(events: Event[]): TimelineItem[] {
   const result: TimelineItem[] = [];
@@ -100,6 +108,19 @@ export function RecordActivity({ described, id, comments, catalog }: { described
     return field.name === described.lifecycle?.field ? t(described.state({ [field.name]: given })?.title ?? present(field, given)) : present(field, given);
   };
   const person = (member: string) => people[member] ?? t("Unnamed member");
+  const locale = useLocale();
+  const status = statusField(described);
+  const stays: Stay[] = [];
+  if (history.status === "ready" && status) {
+    const ordered = [...(history.data.history ?? [])].sort((a, b) => Date.parse(a.at) - Date.parse(b.at));
+    for (const change of ordered) {
+      const entry = change.fields.find((candidate) => candidate.field === status.name);
+      if (!entry || entry.after == null) continue;
+      const previous = stays.at(-1);
+      if (previous) previous.until = change.at;
+      stays.push({ value: String(plain(entry.after)), label: say(status, entry.after), from: change.at, by: change.by });
+    }
+  }
   const events: Event[] = [];
   if (history.status === "ready") {
     for (const change of history.data.history ?? []) {
@@ -153,6 +174,19 @@ export function RecordActivity({ described, id, comments, catalog }: { described
           <TextArea label={t("Write a comment")} value={text} onChange={setText} isDisabled={busy}
             status={failure ? { type: "error", message: failure } : undefined} />
           <HStack hAlign="end"><Button label={t("Post comment")} variant="primary" isDisabled={!text.trim() || busy} onClick={post} /></HStack>
+        </VStack>
+      )}
+      {stays.length > 0 && (
+        <VStack gap={2}>
+          <Text type="label" color="secondary">{t("Time in each state")}</Text>
+          <HStack gap={4} wrap="wrap" role="list" aria-label={t("Time in each state")}>
+            {stays.map((stay) => (
+              <VStack key={stay.from} gap={0} role="listitem" aria-label={`${stay.label}: ${duration(locale, stay.from, stay.until)}`}>
+                <Text type="body" weight="medium">{stay.label}</Text>
+                <Text type="supporting" color="secondary">{`${duration(locale, stay.from, stay.until)} · ${person(stay.by)}`}</Text>
+              </VStack>
+            ))}
+          </HStack>
         </VStack>
       )}
       {unavailable && <Banner status="warning" title={t("Some activity is unavailable")} description={unavailable.reason} />}

@@ -1,5 +1,4 @@
 import values from "./i18n-values.json";
-
 export { setLanguage, t, useLocale } from "./language";
 export const zhCN: Record<string, string> = {
   Search: "搜索",
@@ -165,6 +164,7 @@ export const zhCN: Record<string, string> = {
   "Next month": "下个月",
   "Today": "今天",
   "Date field": "日期字段",
+  "Time in each state": "各状态停留",
   "Where they arrive": "送到哪里",
   "In the workspace": "工作台内",
   "The bell and the inbox.": "铃铛与收件箱。",

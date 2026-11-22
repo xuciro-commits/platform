@@ -47,6 +47,11 @@ const ungrouped = "Details";
 
 export const numeric = new Set(["integer", "decimal", "money"]);
 
+export function statusField(described: Described) {
+  const laneKey = (described.entity.view as { lanes?: string } | undefined)?.lanes;
+  return (laneKey ? described.field(laneKey) : undefined) ?? described.lanes[0];
+}
+
 export function grouped(fields: Api.FieldInfo[], field: Api.FieldInfo) {
   return field.oneOf ? fields.filter((other) => other.oneOf === field.oneOf) : [field];
 }

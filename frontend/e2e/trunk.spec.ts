@@ -1903,6 +1903,19 @@ test("calendar: tasks sit on their due dates, the month pages, a drag reschedule
   await expect(page).toHaveURL(/\/crm\/crm\.task\/TSK-\d+/);
 });
 
+test("follow-up: the activity tab shows how long a lead sat in each status", async ({ page }) => {
+  await signIn(page, "admin-1 · crm");
+  await page.goto("/crm/crm.lead/LED-003/activity");
+  const stays = page.getByRole("list", { name: "Time in each state", exact: true });
+  await expect(stays.getByRole("listitem")).toHaveCount(1);
+  await expect(stays.getByRole("listitem").first()).toHaveAccessibleName(/^New: \d+/);
+  await edit(page, "Status");
+  await page.getByRole("combobox", { name: "Status" }).fill("Contacted");
+  await page.getByRole("option", { name: "Contacted", exact: true }).click();
+  await expect(stays.getByRole("listitem")).toHaveCount(2);
+  await expect(stays.getByRole("listitem").nth(1)).toHaveAccessibleName(/^Contacted: \d+/);
+});
+
 test("import: an Excel workbook of leads maps by column title, refused rows are fixed in place and retried, and the list exports what it shows as CSV", async ({ page }) => {
   await signIn(page, "admin-1 · crm");
   await page.goto("/crm/crm.lead");

@@ -16,7 +16,7 @@ import { originOf, usePath, useSearch } from "../router";
 import { useCommandSearch } from "../shell/CommandSearch";
 import { PageTitle, useGutter } from "./frame";
 import { DefinitionRows, stateProblem } from "./DefinitionRows";
-import { describe, type Described, type Values, withRestrictedFields } from "./describe";
+import { describe, type Described, statusField, type Values, withRestrictedFields } from "./describe";
 import { KeyboardHelp } from "./KeyboardHelp";
 import { type Editor, FieldGroup, useEditor } from "./RecordFields";
 import { RecordFiles, RecordLinks, relatedGroups } from "./RecordAttachments";
@@ -110,8 +110,7 @@ export function RecordPage({ described, id, listPath, listTitle, instances, enti
   const detail = useMemo(() => restrictedFields?.length ? describe(withRestrictedFields(described.entity, restrictedFields), catalog) : described, [catalog, described, restrictedFields]);
   const editor = useEditor(described, id, values, kept?.revision ?? 0);
   const state = described.state(values);
-  const laneKey = (described.entity.view as { lanes?: string } | undefined)?.lanes;
-  const laneField = (laneKey ? described.field(laneKey) : undefined) ?? described.lanes[0];
+  const laneField = statusField(described);
   const ownerField = described.entity.fields.find((field) => field.type === "member");
   const heading = kept ? [laneField, ownerField].flatMap((field) => field && !restricted.has(field.name) ? [field] : []) : [];
   const headed = heading.map((field) => field.name).join(",");
