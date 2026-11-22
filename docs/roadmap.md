@@ -28,7 +28,7 @@
 
 - 业务对照只读 `study/from-frappe-crm/matrix.md`；`study/**/captures/` 与 `study/**/evidence/` 只为核对某个具体细节时定向看一张。
 
-顺序：2.7（下面各项按序）。
+顺序：2.7，然后 2.8（各自的项按序）。
 
 ## 2.7 空租户
 
@@ -36,28 +36,44 @@
 
 2.7.1–2.7.4 已由 trunk “blank tenant: install CRM …” 一个用例从安装走到赢单、卸载与重装。下面几项的宿主与界面已提交，只差验收。
 2.7.6 已由 marketplace 的 “upgrade tenant: install CRM from a local package file …” 验收；它装的 `crm-0.1.21.json` 就是 2.7.5 的上一版。
-包的来源是官方包库：先做 2.7.12–2.7.13，2.7.5 的新版本在新仓库里第一次正式发版。顺序：2.7.12 → 13 → 2.7.5 → 2.7.7 → 2.7.9 → 2.7.10。
+顺序：2.7.5 → 2.7.7 → 2.7.9 → 2.7.10，再开 2.8。
 
-- **2.7.12 官方包库仓库。** 公开仓库 `xuciro-commits/platform-packages`，`git filter-repo` 带历史迁出八个包；自研包 Apache-2.0，GPL 转换包另建仓库。
-  `pkg diff <上一版>` 直接调宿主的 `packages.Review`，输出与平台“审阅升级”一字不差；CI 与包作者都用它。
-  有 README、开发文档（入门、概念、格式、版本、测试、发版、自建库、评审清单）、`templates/{app,plugin}` 与 CODEOWNERS。
-  PR 的 CI 跑 validate、两次 build 比摘要、diff 对上一版、译文齐全与 CHANGELOG；合入要一位非作者批准。
-  版本由机器核：补丁不许有模式变化，次版本只许新增可选内容，声明比实际改动小即拒。验收：故意提删字段的 PR，CI 拒绝。
-- **2.7.13 首次正式发版。** 只有 release 工作流打 `<id>/v<version>`；Release 带制品、`SHA256SUMS` 与来源证明，并生成 `catalog.json`
-  （2.7.7 的格式加 summary、publisher、trust、license、yanked；制品永不删，撤回只标 yanked）。
-  平台仓库删 `deploy/packages/<id>/` 源，只留发行快照与 `packages.lock`；`make packages-sync` 拉取并核对摘要，trunk 照旧离线。
-  `domain.md`“产品包”与 `deploy/packages/README.md` 改指新仓库。验收：`make packages-sync` 后 `make check` 与 `make trunk-changed`。
 - **2.7.5 改字段后升级（补验收）。** 已有：字段级审阅，删字段、改类型、新增必填在审阅与提交两层被拒（K9 `TestInvariantK9PackageUpgradeFieldReviewAndIncompatibleGate`）。
-  还缺：在官方包库发 `crm/v0.1.22`，线索多一个可选字段；平台快照同步它。发之前，动作里的 `schemaVersion` 改由打包器按目标对象的模式历史生成：
+  还缺：夹具 `crm` 升到 0.1.22，线索多一个可选字段，`deploy/packages/crm.json` 换成新快照。发之前，动作里的 `schemaVersion` 改由打包器按目标对象的模式历史生成：
   CRM 现有 13 个动作里 7 个已落后于对象（`crm.lead.convert` 停在族 4，对象已到族 5），先在 K9 里写清宿主怎样用它，再改。
   trunk 接着 2.7.6：`upgrade` 里建一条线索并填值 → 市场显示可升级 → 审阅列出新增字段 → 升级后旧记录与已填的值都在，记录页出现新字段。验收：trunk 与 `make test RUN=K9`。
 - **2.7.7 市场库（补验收）。** 已有：库的添加、移除、刷新，目录解析、https 与大小门禁、离线缓存（K9 `TestInvariantK9PackageMarketLibrary`）。
   还缺：`frontend/e2e/playwright.config.ts` 的宿主命令加 `-allow-loopback-packages`；trunk 自己起一个回环 http 目录 →
-  “⋯ → 管理库”添加 → 目录条目与内置索引并列、标出来源 → 装上。8495 上添加官方包库地址能列出并装上。验收：trunk。
+  “⋯ → 管理库”添加 → 目录条目与内置索引并列、标出来源 → 装上。验收：trunk。
 - **2.7.9 长用例进一分钟。** 单跑超过一分钟的四个：builder 的 gate（60s）、marketplace 的空租户主线（59s）、crm 的全类型看板（50s）与转化赢单（39s）。
   前置状态经接口造好，界面只验各自的那一步；marketplace 的主线拆成安装、配角色、主线、卸载重装四个串行用例。验收：每个文件 `make trunk SPEC=…` 单跑一分钟内。
 - **2.7.10 负责人走门槛。** 2.7.5–2.7.9 收完，负责人在 8495 按 plan 阶段 2 的门槛手走一遍：空租户安装 → 线索到赢单 → 期间没有改宿主。
   全量 `make trunk` 在这里跑一次。走完即删 plan 里的 2.7 行，阶段 2 关门，再开阶段 3 的批次。
+
+## 2.8 开放应用接入
+
+灵魂：别家开放的应用，能被轻易、高效地接进平台。转化的是业务内容与产品设计：读懂它解决什么、怎样流转，
+按平台的对象、动作、状态、角色重新设计，合并、拆分、舍弃都写明理由；不搬来源的定义与代码，不逐一复刻。
+每接一个，踩过的坑写进 Skill，下一个照着走；官方包在 [platform-packages](https://github.com/xuciro-commits/platform-packages)，
+分类与发版让管理简单明确。`deploy/packages/` 里现有的八个包是平台的测试夹具，不进官方包库。
+
+- **2.8.1 普查。** 开放应用有哪几家（Frappe、Odoo 社区版与 OCA、Apache OFBiz、Dolibarr、Tryton、InvenTree 等，以核实为准），
+  每家有哪些业务应用：许可、能参考还是能转换、业务价值、与平台已有能力的重叠，给出接入顺序。
+  产出 `study/open-apps/index.md` 一张表，每家一节；许可以各仓库的 LICENSE 文件为准，不凭记忆。
+- **2.8.2 分类进目录。** `package.yaml` 的 `industries`、`capabilities`、`keywords`、`stage`、`source` 由 `pkg` 按官方包库的
+  [分类表](https://github.com/xuciro-commits/platform-packages/blob/main/docs/taxonomy.md) 校验，不进制品，进 `catalog.json`；
+  市场按行业、能力、关键词筛选，`stage: test` 默认不列。八个夹具包标 `stage: test`。验收：`make check`、marketplace 的 trunk。
+- **2.8.3 第一个：重新设计 Frappe CRM。** 输入是 `study/from-frappe-crm/matrix.md`。先写设计稿：对象、状态与转换、动作、角色、页面、流程，
+  与来源的对应和取舍；再做成官方包 `crm`，在夹具宿主装进空租户走完线索到赢单，PR 经 CI，发 `crm/v0.1.0`。
+  夹具 `crm` 留给主干验收；官方 `crm` 稳定后，主干验收改装它，夹具退役。
+- **2.8.4 黄金路线 v1 写成 Skill。** `.claude/skills/open-app-intake/SKILL.md`：普查 → 读来源（`scripts/frappe-read.mjs`）→ 能力矩阵 →
+  重新设计 → 打包 → 夹具宿主走主线 → 分类 → PR → 发版；每步的输入、产出、检查与易错点。验收：照它从零做第二个包，不需要另加说明。
+- **2.8.5 发版链路。** 只有 release 工作流打 `<id>/v<version>`；Release 带制品、`SHA256SUMS` 与来源证明，并重新生成 `catalog.json`。
+  平台市场的“管理库”默认带官方包库，`pkg diff <上一版>` 调宿主的 `packages.Review`，输出与平台“审阅升级”一致，CI 用它守版本号。
+- **2.8.6 起逐个接入。** 按 2.8.1 的顺序一个包一项，先 Frappe（Helpdesk、HRMS，ERPNext 按能力拆成销售、采购、库存、会计、制造、项目、资产、质量），
+  再下一家。每接一个，Skill 补上新坑；与已有官方包重叠的能力，扩展已有的包，不另起一个。
+- 许可：重新设计只读来源的业务与产品设计，产出按官方包库的 Apache-2.0 发布，`source.relation` 写 `redesign`；
+  由来源定义转换的（`derived`）沿用来源许可，不进官方包库（domain“产品包”）。向客户交付前，负责人先取得法律意见。
 
 ## 承重的要求
 

@@ -1,6 +1,7 @@
 # 产品包作者态源
 
-每个目录是一个产品包的作者态源（格式 v2：YAML，一个资源一个文件）。
+每个目录是一个平台内置测试包的作者态源（格式 v2：YAML，一个资源一个文件），供主干验收与示例用。
+官方包不在这里，在 [platform-packages](https://github.com/xuciro-commits/platform-packages)：由开放应用按平台语义重新设计。
 顶层的 `*.json` 是已发布版本的制品快照，宿主由 `PLATFORM_PACKAGES_DIR` 读取；不手改，也不从源重建。
 
 ```text
