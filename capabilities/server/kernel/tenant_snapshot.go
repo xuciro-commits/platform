@@ -217,17 +217,28 @@ func (h TenantSnapshots[Job, Endpoint]) Snapshot(q *Sequence, position func() in
 }
 
 func (h TenantSnapshots[Job, Endpoint]) SnapshotRuntime(q *Sequence, ctx context.Context, j persistence.Journals) (json.RawMessage, int64, error) {
+	raw, seq, _, release, err := h.SnapshotRuntimePinned(q, ctx, j)
+	release()
+	return raw, seq, err
+}
+
+// SnapshotRuntimePinned captures like SnapshotRuntime. When the capture owns its SQL read view, the
+// view stays open and its PostgreSQL snapshot is exported, so the checkpoint can copy the SQL state at
+// exactly the captured position while later writes go on. The caller calls release after saving.
+func (h TenantSnapshots[Job, Endpoint]) SnapshotRuntimePinned(q *Sequence, ctx context.Context, j persistence.Journals) (json.RawMessage, int64, string, func(), error) {
+	none := func() {}
 	var views persistence.StateReadViews
 	switch value := j.(type) {
 	case persistence.StateReadViews:
 		views = value
 	}
 	if views == nil || q.Projection.Current().Backend() == nil {
-		return h.Snapshot(q, func() int64 { return j.Position(q.ID) })
+		raw, seq, err := h.Snapshot(q, func() int64 { return j.Position(q.ID) })
+		return raw, seq, "", none, err
 	}
 	compatibility, err := h.Compatibility()
 	if err != nil {
-		return nil, 0, err
+		return nil, 0, "", none, err
 	}
 	var view persistence.StateReadView
 	var viewErr error
@@ -250,36 +261,50 @@ func (h TenantSnapshots[Job, Endpoint]) SnapshotRuntime(q *Sequence, ctx context
 		return position
 	}, false, nil)
 	if err != nil {
-		return nil, 0, err
+		return nil, 0, "", none, err
 	}
 	if viewErr != nil {
 		if view != nil && ownsRead {
 			_ = view.Close()
 		}
-		return nil, 0, viewErr
+		return nil, 0, "", none, viewErr
 	}
 	if view == nil {
-		return nil, 0, fmt.Errorf("tenant %s: SQL snapshot read view unavailable", q.ID)
+		return nil, 0, "", none, fmt.Errorf("tenant %s: SQL snapshot read view unavailable", q.ID)
 	}
+	release := none
 	if ownsRead {
-		defer view.Close()
+		release = func() { _ = view.Close() }
 	}
 	digest, err := view.Checkpoint(ctx, q.ID)
 	if err != nil {
-		return nil, 0, err
+		release()
+		return nil, 0, "", none, err
+	}
+	pinned := ""
+	if ownsRead {
+		switch exporter := view.(type) {
+		case persistence.SnapshotExporter:
+			pinned, _ = exporter.ExportSnapshot(ctx)
+		}
 	}
 	s.Runtime = &SQLCheckpoint{Format: SQLCheckpointFormat, Position: seq, Records: digest}
 	compatibility.Host = TenantSQLSnapshotFormat
 	s.Checkpoint = &SnapshotCheckpoint{SnapshotCompatibility: compatibility, Tenant: q.ID, Position: seq, Build: h.Build()}
 	raw, err := json.Marshal(s)
-	return raw, seq, err
+	if err != nil {
+		release()
+		return nil, 0, "", none, err
+	}
+	return raw, seq, pinned, release, nil
 }
 
 func (h TenantSnapshots[Job, Endpoint]) Checkpoint(q *Sequence, ctx context.Context, j persistence.Journals, code string) (int64, error) {
-	state, seq, err := h.SnapshotRuntime(q, ctx, j)
+	state, seq, pinned, release, err := h.SnapshotRuntimePinned(q, ctx, j)
 	if err != nil {
 		return 0, err
 	}
+	defer release()
 	compatibility, err := h.Compatibility()
 	if err != nil {
 		return 0, err
@@ -288,7 +313,7 @@ func (h TenantSnapshots[Job, Endpoint]) Checkpoint(q *Sequence, ctx context.Cont
 	if err != nil {
 		return 0, err
 	}
-	if err = SaveCheckpoint(ctx, j, q.ID, seq, key, state); err != nil {
+	if err = SaveCheckpoint(persistence.WithSnapshot(ctx, pinned), j, q.ID, seq, key, state); err != nil {
 		return 0, err
 	}
 	return seq, nil

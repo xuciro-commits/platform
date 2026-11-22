@@ -9,6 +9,7 @@ import (
 	"fmt"
 	pgx "github.com/jackc/pgx/v5"
 	"platformserver/platform"
+	"regexp"
 	"slices"
 )
 
@@ -19,6 +20,33 @@ type StateSnapshotStorage interface {
 
 type StateSnapshotVerifier interface {
 	VerifyStateSnapshot(context.Context, string, int64, int64, []StateDelta) error
+}
+
+// SnapshotExporter is a SQL read view that can hand its PostgreSQL snapshot to another transaction.
+type SnapshotExporter interface {
+	ExportSnapshot(context.Context) (string, error)
+}
+
+type exportedSnapshotKey struct{}
+
+var exportedSnapshotID = regexp.MustCompile(`^[0-9A-Fa-f]+-[0-9A-Fa-f]+(-[0-9]+)?$`)
+
+// WithSnapshot makes SaveStateSnapshot copy the tenant's SQL state inside the exported snapshot id,
+// which must stay open until the save starts. The copy then holds exactly the state at the captured
+// position, whatever was accepted since, so a busy tenant can still be checkpointed.
+func WithSnapshot(ctx context.Context, id string) context.Context {
+	if id == "" {
+		return ctx
+	}
+	return context.WithValue(ctx, exportedSnapshotKey{}, id)
+}
+
+func (v *postgresStateRead) ExportSnapshot(ctx context.Context) (string, error) {
+	return readState(v, ctx, v.tenant, func(db stateQueries) (string, error) {
+		var id string
+		err := db.QueryRow(ctx, `select pg_export_snapshot()`).Scan(&id)
+		return id, err
+	})
 }
 
 var stateSnapshotSchema = []string{
@@ -35,13 +63,29 @@ func (j *Postgres) SaveStateSnapshot(ctx context.Context, tenant string, positio
 	if err != nil {
 		return err
 	}
-	tx, err := j.pool.Begin(ctx)
+	pinned, _ := ctx.Value(exportedSnapshotKey{}).(string)
+	if pinned != "" && !exportedSnapshotID.MatchString(pinned) {
+		return fmt.Errorf("tenant %s checkpoint snapshot identity is invalid", tenant)
+	}
+	var tx pgx.Tx
+	if pinned != "" {
+		tx, err = j.pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.RepeatableRead})
+	} else {
+		tx, err = j.pool.Begin(ctx)
+	}
 	if err != nil {
 		return err
 	}
 	defer tx.Rollback(ctx)
 	var actual int64
-	if err = tx.QueryRow(ctx, `select seq from runtime_tenants where tenant=$1 for update`, tenant).Scan(&actual); err != nil {
+	if pinned != "" {
+		if _, err = tx.Exec(ctx, `set transaction snapshot '`+pinned+`'`); err == nil {
+			err = tx.QueryRow(ctx, `select seq from runtime_tenants where tenant=$1`, tenant).Scan(&actual)
+		}
+	} else {
+		err = tx.QueryRow(ctx, `select seq from runtime_tenants where tenant=$1 for update`, tenant).Scan(&actual)
+	}
+	if err != nil {
 		return err
 	}
 	if actual != position {

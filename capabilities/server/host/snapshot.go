@@ -23,8 +23,10 @@ var snapshotBuild = sync.OnceValue(func() string { return CodeOf() })
 
 func (t *Tenant) snapshotSource(ctx context.Context, j Journals, code string) runtimekernel.SnapshotSource {
 	return runtimekernel.SnapshotSource{ID: t.ID, Quarantined: t.quarantined,
-		Capture: func() ([]byte, int64, error) { return t.snapshotRuntime(ctx, j) },
-		Key:     func(state []byte) (string, error) { return t.snapshotStorageKey(code, state) }}
+		Capture: func() ([]byte, int64, string, func(), error) {
+			return t.snapshots().SnapshotRuntimePinned(&t.Sequence, ctx, j)
+		},
+		Key: func(state []byte) (string, error) { return t.snapshotStorageKey(code, state) }}
 }
 
 func (t *Tenant) restoreRecords(saved map[string][]records.StoredState) (map[string][]records.StoredState, error) {
@@ -63,10 +65,6 @@ func (t *Tenant) snapshots() runtimekernel.TenantSnapshots[automation.Task, acti
 
 func (t *Tenant) Snapshot(position func() int64) (json.RawMessage, int64, error) {
 	return t.snapshots().Snapshot(&t.Sequence, position)
-}
-
-func (t *Tenant) snapshotRuntime(ctx context.Context, j Journals) (json.RawMessage, int64, error) {
-	return t.snapshots().SnapshotRuntime(&t.Sequence, ctx, j)
 }
 
 func (t *Tenant) Restore(raw json.RawMessage) error {

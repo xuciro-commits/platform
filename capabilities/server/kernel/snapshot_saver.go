@@ -16,10 +16,12 @@ type SnapshotSaver struct {
 	saved   map[string]int64
 }
 
+// SnapshotSource.Capture returns the state, its position, an optional exported SQL snapshot of that
+// position (empty when there is none) and a release the saver calls once the checkpoint is saved.
 type SnapshotSource struct {
 	ID          string
 	Quarantined func() bool
-	Capture     func() ([]byte, int64, error)
+	Capture     func() ([]byte, int64, string, func(), error)
 	Key         func(state []byte) (string, error)
 }
 
@@ -44,7 +46,11 @@ func (s *SnapshotSaver) Save(ctx context.Context, t SnapshotSource, final bool) 
 		return
 	}
 	started := time.Now()
-	state, seq, err := t.Capture()
+	state, seq, pinned, release, err := t.Capture()
+	if release == nil {
+		release = func() {}
+	}
+	defer release()
 	if t.Quarantined() {
 		return
 	}
@@ -52,7 +58,7 @@ func (s *SnapshotSaver) Save(ctx context.Context, t SnapshotSource, final bool) 
 		var key string
 		key, err = t.Key(state)
 		if err == nil {
-			err = SaveCheckpoint(ctx, s.Journal, t.ID, seq, key, state)
+			err = SaveCheckpoint(persistence.WithSnapshot(ctx, pinned), s.Journal, t.ID, seq, key, state)
 		}
 	}
 	if err != nil {
