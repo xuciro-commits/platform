@@ -361,6 +361,8 @@ test("conflict: the second writer sees both values and chooses", async ({ browse
   await first.getByRole("textbox", { name: "Next step" }).fill("Pilot in six stores");
   await first.getByRole("textbox", { name: "Next step" }).press("Enter");
   await expect(first.getByRole("complementary").getByText("4", { exact: true })).toBeVisible();
+  await expect(second.getByText("This record has new changes", { exact: true })).toBeVisible();
+  await expect(second.getByRole("textbox", { name: "Next step" })).toHaveValue("Pilot in two stores");
   await second.getByRole("textbox", { name: "Next step" }).press("Enter");
   const choice = second.getByRole("dialog");
   await expect(choice).toContainText("Pilot in six stores");
@@ -368,7 +370,6 @@ test("conflict: the second writer sees both values and chooses", async ({ browse
   await choice.getByRole("button", { name: "Use mine" }).click();
   await expect(second.getByRole("complementary").getByText("5", { exact: true })).toBeVisible();
 
-  await first.reload();
   await expect(property(first, "Next step")).toHaveText("Pilot in two stores");
   await Promise.all(pages.map((page) => page.close()));
 });
@@ -412,6 +413,7 @@ test("shape: every record page has the same header, tabs and rail", async ({ pag
 
 
 test("batch: retries a stale row without submitting a successful row again", async ({ page, context }) => {
+  await page.route("**/v1/changes", (route) => route.abort());
   await signIn(page);
   await open(page, "Ontology", "Objects");
   await page.getByRole("link", { name: "Opportunities" }).click();
@@ -1938,7 +1940,7 @@ test("follow-up: a lead past its first response deadline fails and tells its own
   await page.getByRole("combobox", { name: "Status" }).fill("Contacted");
   await page.getByRole("option", { name: "Contacted", exact: true }).click();
   await expect(property(page, "Status")).toContainText("Contacted");
-  await settles("Fulfilled");
+  await expect(property(page, "First response")).toContainText("Fulfilled", { timeout: 20_000 });
 });
 
 test("follow-up: a task due by today waits in To do, opens its record and leaves when done", async ({ page }) => {
@@ -1975,10 +1977,7 @@ test("follow-up: new website leads are assigned evenly across the sales reps", a
     await page.getByRole("option", { name: /官网/ }).first().click();
     await expect(property(page, "Source")).toContainText("官网");
     const owner = property(page, "Lead owner");
-    await expect(async () => {
-      await page.reload();
-      await expect(owner).toContainText(/韩奥|田雪/, { timeout: 1_000 });
-    }).toPass({ timeout: 30_000 });
+    await expect(owner).toContainText(/韩奥|田雪/, { timeout: 30_000 });
     owners.push((await owner.innerText()).trim());
   }
   expect(new Set(owners)).toEqual(new Set(["韩奥", "田雪"]));

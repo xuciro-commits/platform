@@ -92,8 +92,8 @@ function watchScope(path: string | null, body?: unknown): WatchScope {
     if (parts.length >= 3 && parts[2] === "sections") {
       const sec = parts[3] ?? "";
       const keys = typ ? [`type:${typ}`] : [];
-      if (sec === "comments") keys.push("scope:owner:comments", "scope:owner:work");
-      else if (sec === "links") keys.push("scope:owner:links");
+      if (sec === "comments") keys.push("scope:owner:relations", "scope:owner:work");
+      else if (sec === "links") keys.push("scope:owner:relations");
       else if (sec === "files") keys.push("scope:owner:files", "type:files.file");
       else return { kind: "any" };
       return { kind: "keys", keys };
