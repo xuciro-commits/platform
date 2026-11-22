@@ -29,6 +29,7 @@ import { usePath } from "../router";
 import { reasonOf, send } from "./act";
 import { type InboxItem, type InboxTab, inTab, inboxTabs, useInbox } from "./inbox";
 import { ReferenceLink } from "./ReferenceField";
+import { useRecordHref } from "../apps/entries";
 
 const base = "/home/inbox";
 const HOVER_INTENT_MS = 90;
@@ -92,7 +93,7 @@ function useActions() {
 
 function ReceivedCell({ item, reveal, act, isOverlaid }: { item: InboxItem; reveal: UseContainerRevealReturn; act: Act; isOverlaid: boolean }) {
   const label = item.kind === "task" ? t("Done") : t("Mark as read");
-  const can = item.kind === "task" ? item.open && !item.task?.answers?.length : item.unread;
+  const can = item.kind === "task" ? item.open && !item.task?.answers?.length : item.kind === "notification" && item.unread;
   return (
     <HStack gap={1} vAlign="center" hAlign="end" height={28}>
       {can && (
@@ -118,6 +119,8 @@ function ReceivedCell({ item, reveal, act, isOverlaid }: { item: InboxItem; reve
   );
 }
 
+const kindOf = (item: InboxItem) => t(item.record?.kind ?? (item.kind === "task" ? "Task" : "Notification"));
+
 function RelatedRecord({ reference }: { reference: string }) {
   const [type, id] = reference.split("/");
   const types = useRead<Api.EntityInfo[]>("/v1/entities");
@@ -140,6 +143,7 @@ function ItemPane({ item, act, onClose, isFullWidth }: { item: InboxItem; act: A
   const gutter = useGutter();
   const close = <IconButton variant="ghost" label={t("Close")} tooltip={t("Close")} icon={<Icon icon={XMarkIcon} size="sm" />} onClick={onClose} />;
   const record = item.ref && !item.ref.startsWith("work.task/") ? item.ref : undefined;
+  const recordHref = useRecordHref();
   return (
     <VStack height="100%">
       <VStack paddingBlockStart={gutter} paddingInline={isFullWidth ? 0 : gutter}>
@@ -165,7 +169,7 @@ function ItemPane({ item, act, onClose, isFullWidth }: { item: InboxItem; act: A
             </Heading>
           )}
           <HStack gap={2} vAlign="center">
-            <Token size="sm" label={t(item.kind === "task" ? "Task" : "Notification")} />
+            <Token size="sm" label={kindOf(item)} />
             {task && <Token size="sm" color={task.state === "open" ? "blue" : "default"} label={t(task.state === "open" ? "Open" : task.state === "done" ? "Done" : "Canceled")} />}
           </HStack>
           {item.body && (
@@ -187,6 +191,11 @@ function ItemPane({ item, act, onClose, isFullWidth }: { item: InboxItem; act: A
                 <Text type="body">{task.assignee}</Text>
               </MetadataListItem>
             )}
+            {item.record?.due && (
+              <MetadataListItem label={t("Due")}>
+                <Timestamp value={item.record.due.length === 10 ? `${item.record.due}T00:00:00` : item.record.due} format="date" type="body" color="primary" />
+              </MetadataListItem>
+            )}
             {task?.due && (
               <MetadataListItem label={t("Due")}>
                 <Timestamp value={task.due} format="date" type="body" color="primary" />
@@ -198,6 +207,11 @@ function ItemPane({ item, act, onClose, isFullWidth }: { item: InboxItem; act: A
               </MetadataListItem>
             )}
           </MetadataList>
+          {item.record && (
+            <HStack gap={2}>
+              <Button label={t("Open full page")} variant="primary" href={recordHref(item.record.type, item.record.id)} />
+            </HStack>
+          )}
           {task?.state === "open" && (
             <HStack gap={2} wrap="wrap">
               {task.answers?.length ? (
@@ -337,7 +351,7 @@ export function InboxPage() {
           key: "kind",
           header: t("Kind"),
           width: pixel(130),
-          renderCell: (item) => <Token size="sm" label={t(item.kind === "task" ? "Task" : "Notification")} />,
+          renderCell: (item) => <Token size="sm" label={kindOf(item)} />,
         },
         received,
       ];

@@ -27,8 +27,10 @@ export function useRecordHref() {
   if (views.status === "ready") remembered.set(key, views.data);
   const loaded = views.status === "ready" ? views.data : remembered.get(key);
   return useCallback((type: string, id?: string) => {
-    const page = loaded?.find((view) => (view.name || view.app) === app)?.menu?.flatMap((group) => group.entries).find((entry) => entry.object === type);
-    const list = page ? `/${app}/${page.name}` : homes.get(type) ?? `/ontology/objects/${encodeURIComponent(type)}`;
+    const pageIn = (view?: Api.ApplicationView) => view?.menu?.flatMap((group) => group.entries).find((entry) => entry.object === type);
+    const page = pageIn(loaded?.find((view) => (view.name || view.app) === app));
+    const owner = page || homes.has(type) ? undefined : loaded?.find((view) => pageIn(view));
+    const list = page ? `/${app}/${page.name}` : owner ? `/${owner.name || owner.app}/${pageIn(owner)?.name}` : homes.get(type) ?? `/ontology/objects/${encodeURIComponent(type)}`;
     return id === undefined ? list : `${list}/${encodeURIComponent(id)}`;
   }, [app, loaded]);
 }

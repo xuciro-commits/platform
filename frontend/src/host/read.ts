@@ -38,13 +38,34 @@ export function useRead<Answer>(path: string | null, body?: unknown): Read<Answe
       request<Answer>(path, { signal: controller.signal, body: sent === undefined ? undefined : JSON.parse(sent) }).then(
         (data) => setRead({ status: "ready", path, data }),
         (failure: unknown) => {
-          if (controller.signal.aborted) return;
-          if (failure instanceof HostRefusal && failure.status < 500) setRead({ status: "refused", path, reason: failure.message });
-          else setRead({ status: "error", path, reason: failure instanceof Error ? failure.message : String(failure) });
+          if (!controller.signal.aborted) setRead(failed(failure, path));
         },
       );
     });
     return () => controller.abort();
   }, [path, sent, session, seen]);
+  return read;
+}
+
+function failed(failure: unknown, path?: string | null): Read<never> {
+  if (failure instanceof HostRefusal && failure.status < 500) return { status: "refused", path, reason: failure.message };
+  return { status: "error", path, reason: failure instanceof Error ? failure.message : String(failure) };
+}
+
+export function useReads<Answer>(paths: string[]): Read<Answer[]> {
+  const session = useSession();
+  const seen = useSyncExternalStore(subscribe, () => version);
+  const [read, setRead] = useState<Read<Answer[]>>({ status: "loading" });
+  const asked = JSON.stringify(paths);
+  useEffect(() => {
+    const controller = new AbortController();
+    Promise.all((JSON.parse(asked) as string[]).map((path) => request<Answer>(path, { signal: controller.signal }))).then(
+      (data) => setRead({ status: "ready", data }),
+      (failure: unknown) => {
+        if (!controller.signal.aborted) setRead(failed(failure));
+      },
+    );
+    return () => controller.abort();
+  }, [asked, session, seen]);
   return read;
 }

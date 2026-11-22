@@ -1941,6 +1941,23 @@ test("follow-up: a lead past its first response deadline fails and tells its own
   await settles("Fulfilled");
 });
 
+test("follow-up: a task due by today waits in To do, opens its record and leaves when done", async ({ page }) => {
+  await signIn(page, "admin-1 · crm");
+  await page.goto("/home/inbox/todo");
+  await page.getByRole("row", { name: /完成曦和的安全评审/ }).click();
+  const pane = page.getByRole("complementary", { name: "Item" });
+  await expect(pane.getByRole("heading", { name: "完成曦和的安全评审" })).toBeVisible();
+  await expect(pane.getByText("Nov 20, 2026", { exact: true })).toBeVisible();
+  await pane.getByRole("link", { name: "Open full page" }).click();
+  await expect(page).toHaveURL(/\/crm\/crm\.task\/TSK-003$/);
+  await edit(page, "Status");
+  await page.getByRole("listbox", { name: "Status" }).getByRole("option", { name: "Done", exact: true }).click();
+  await expect(property(page, "Status")).toContainText("Done");
+  await page.goto("/home/inbox/todo");
+  await expect(page.getByRole("heading", { name: "Inbox", exact: true })).toBeVisible();
+  await expect(page.getByRole("row", { name: /完成曦和的安全评审/ })).toHaveCount(0);
+});
+
 test("import: an Excel workbook of leads maps by column title, refused rows are fixed in place and retried, and the list exports what it shows as CSV", async ({ page }) => {
   await signIn(page, "admin-1 · crm");
   await page.goto("/crm/crm.lead");

@@ -1,9 +1,9 @@
 {
   "format": 1,
   "package": "crm",
-  "version": "0.1.19",
+  "version": "0.1.20",
   "requires": [],
-  "artifact": "sha256:beab8eb426db4e65de89cc531a0713a2f46ec05ecd9e3bb90aaada000594f9e4",
+  "artifact": "sha256:0a3b994af2c94ccae72e395df145b0b5d18f4966c05ec51d8c83a32562cd9193",
   "assets": {
     "action/crm.contact.create": "sha256:045344c0162d332f6ebd6cfc7e06e51978b5414a68a0885c958f8e8ab2d1a8f2",
     "action/crm.contact.edit": "sha256:e1c0a064a086f181e042fbb786dc25255beca5be15e9168ec143379ddd467cb9",
@@ -34,7 +34,7 @@
     "object/crm.organization": "sha256:28da00ae1df19953d92b06ba26064c45672e82d4aa9aec960cee1488416185b1",
     "object/crm.product": "sha256:fa4e2fd4aecdd7db310ff16d605cc230cf9e044b6da6c04888f3c1d989010fc0",
     "object/crm.source": "sha256:bef7235fb0757e5fdd2e496b2778f53df9f7d0476369aca12fa3ca6be06772be",
-    "object/crm.task": "sha256:d221251f44fc3eb586fffecc7fe0f3e7669f9bd4a58313e2f7e1b36976ce4200",
+    "object/crm.task": "sha256:468bd3a60d99f140d614edcf7fe9c8233d4db108f815c45e69b0954043222ec7",
     "object/crm.territory": "sha256:8477880c9c25795f5b24fb4e5136a20145c424a7cb8a6ee6c5d805baf514a23b",
     "page/crm.contact": "sha256:2faf56c839d4e7ee0beac9b272d10b7bfb7ff5db1481c34fbfa25e8ab15ba40e",
     "page/crm.deal": "sha256:a7a5c905b0cc271313921bfe4ee8986664067e1ad18d2d3d6434dbe676064ebb",

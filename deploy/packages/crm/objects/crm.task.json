@@ -214,6 +214,17 @@
     "search": "",
     "sort": [],
     "version": 1,
-    "dates": "duedate"
+    "dates": "duedate",
+    "inbox": {
+      "member": "assignee",
+      "due": "duedate",
+      "open": {
+        "status": [
+          "backlog",
+          "todo",
+          "inprogress"
+        ]
+      }
+    }
   }
 }

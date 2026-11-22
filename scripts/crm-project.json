@@ -3413,7 +3413,14 @@
           "search": "",
           "group": "none",
           "lanes": "status",
-          "dates": "duedate"
+          "dates": "duedate",
+          "inbox": {
+            "member": "assignee",
+            "due": "duedate",
+            "open": {
+              "status": ["backlog", "todo", "inprogress"]
+            }
+          }
         },
         "fields": [
           {
@@ -3620,7 +3627,7 @@
           "status": "inprogress",
           "priority": "high",
           "assignee": "admin-1",
-          "duedate": "2026-11-25"
+          "duedate": "2026-11-20"
         },
         {
           "title": "准备至日的价格档位",

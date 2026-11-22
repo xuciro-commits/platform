@@ -1,8 +1,8 @@
-import { type Api, useRead } from "../host";
+import { type Api, type Read, useRead, useReads } from "../host";
 
 export type InboxItem = {
   id: string;
-  kind: "task" | "notification";
+  kind: "task" | "notification" | "record";
   title: string;
   body?: string;
   ref?: string;
@@ -12,7 +12,10 @@ export type InboxItem = {
   open: boolean;
   task?: Api.InboxTask;
   note?: Api.Notification;
+  record?: { type: string; id: string; kind: string; due: string };
 };
+
+type Follow = { member: string; due: string; open?: Record<string, string[]> };
 
 export type InboxTab = "all" | "todo" | "mentions" | "notifications" | "closed";
 
@@ -26,7 +29,7 @@ export const inboxTabs: { value: InboxTab; label: string }[] = [
 
 export function inTab(item: InboxItem, tab: InboxTab) {
   if (tab === "all") return item.open;
-  if (tab === "todo") return item.kind === "task" && item.open;
+  if (tab === "todo") return item.kind !== "notification" && item.open;
   if (tab === "mentions") return item.kind === "notification" && item.note?.category === "mention";
   if (tab === "notifications") return item.kind === "notification";
   return item.kind === "task" && !item.open;
@@ -34,13 +37,49 @@ export function inTab(item: InboxItem, tab: InboxTab) {
 
 const taskKey = (id: string) => `task:${id}`;
 
+const today = () => {
+  const now = new Date();
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+};
+
+function useFollowUps(): { status: Read<unknown>["status"]; reason?: string; data: InboxItem[] } {
+  const me = useRead<Api.MeView>("/v1/me");
+  const types = useRead<Api.EntityInfo[]>("/v1/entities");
+  const declared = me.status === "ready" && types.status === "ready"
+    ? types.data.flatMap((entity) => {
+      const follow = (entity.view as { inbox?: Follow } | undefined)?.inbox;
+      return follow?.member && follow.due ? [{ entity, follow, who: me.data.principalId }] : [];
+    })
+    : [];
+  const pages = useReads<Api.RecordPage>(declared.map(({ entity, follow, who }) => {
+    const domain = [[follow.member, "=", who], [follow.due, "<=", today()], ...Object.entries(follow.open ?? {}).map(([field, values]) => [field, "in", values])];
+    return `/v1/records/${encodeURIComponent(entity.type)}?limit=100&domain=${encodeURIComponent(JSON.stringify(domain))}`;
+  }));
+  const failed = [me, types, pages].find((read) => read.status === "error" || read.status === "refused");
+  if (failed && (failed.status === "error" || failed.status === "refused")) return { status: failed.status, reason: failed.reason, data: [] };
+  if (pages.status !== "ready" || pages.data.length !== declared.length) return { status: "loading", data: [] };
+  const data = declared.flatMap(({ entity, follow }, index) => (pages.data[index].records as (Record<string, unknown> & { id: string; created?: { by?: string }; changed?: { at?: string } })[]).map((row): InboxItem => ({
+    id: `${entity.type}/${row.id}`,
+    kind: "record",
+    title: String(row[entity.display] ?? row.id),
+    ref: `${entity.type}/${row.id}`,
+    from: row.created?.by ?? entity.title,
+    at: row.changed?.at ?? "",
+    unread: false,
+    open: true,
+    record: { type: entity.type, id: row.id, kind: entity.title, due: String(row[follow.due] ?? "") },
+  })));
+  return { status: "ready", data };
+}
+
 export function useInbox() {
   const offered = useRead<Api.InboxTask[]>("/v1/inbox");
   const notes = useRead<Api.Notification[]>("/v1/notifications");
   const tasks = useRead<Api.RecordPage>("/v1/records/work.task?limit=100");
-  const status = [offered, notes, tasks].find((read) => read.status !== "ready")?.status ?? "ready";
-  const reason = [offered, notes, tasks].flatMap((read) => (read.status === "error" || read.status === "refused" ? [read.reason] : []))[0] ?? "";
-  if (offered.status !== "ready" || notes.status !== "ready" || tasks.status !== "ready") return { status, reason, items: [] as InboxItem[] };
+  const followed = useFollowUps();
+  const status = [offered, notes, tasks, followed].find((read) => read.status !== "ready")?.status ?? "ready";
+  const reason = [offered, notes, tasks, followed].flatMap((read) => (read.status === "error" || read.status === "refused" ? [read.reason ?? ""] : []))[0] ?? "";
+  if (offered.status !== "ready" || notes.status !== "ready" || tasks.status !== "ready" || followed.status !== "ready") return { status, reason, items: [] as InboxItem[] };
   const byKey = new Map(notes.data.map((note) => [note.key ?? "", note]));
   const open = new Map(offered.data.map((task) => [task.id, task]));
   const closed = (tasks.data.records as Api.InboxTask[]).filter((task) => task.state !== "open" && !open.has(task.id));
@@ -64,6 +103,6 @@ export function useInbox() {
   const noteItems = notes.data
     .filter((note) => !known.has(note.key ?? ""))
     .map((note): InboxItem => ({ id: note.id, kind: "notification", title: note.title, body: note.body, ref: note.ref, from: note.app, at: note.at, unread: !note.read, open: true, note }));
-  const items = [...taskItems, ...noteItems].sort((a, b) => b.at.localeCompare(a.at));
+  const items = [...followed.data, ...taskItems, ...noteItems].sort((a, b) => b.at.localeCompare(a.at));
   return { status, reason, items };
 }
