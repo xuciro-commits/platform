@@ -15,10 +15,17 @@ import (
 )
 
 type ViewCache struct {
-	mu    sync.Mutex
-	gen   uint64
-	entry map[string]*viewEntry
-	live  map[string]*liveView
+	mu      sync.Mutex
+	gen     uint64
+	entry   map[string]*viewEntry
+	live    map[string]*liveView
+	flights map[string]*viewFlight
+}
+
+type viewFlight struct {
+	ready chan struct{}
+	body  *viewBody
+	err   error
 }
 
 const maxViewEntries = 8
@@ -219,8 +226,38 @@ func (c *ViewCache) cachedView(gen uint64, key, kind, lang string, source func()
 	if body, ok := c.body(gen, key, bodyKey); ok {
 		return body, nil
 	}
+	flightKey := strconv.FormatUint(gen, 10) + "\x00" + key + "\x00" + bodyKey
+	c.mu.Lock()
+	if c.gen == gen {
+		if e := c.entry[key]; e != nil && e.bodies != nil {
+			if body, ok := e.bodies[bodyKey]; ok {
+				c.mu.Unlock()
+				return body, nil
+			}
+		}
+	}
+	if existing := c.flights[flightKey]; existing != nil {
+		c.mu.Unlock()
+		<-existing.ready
+		return existing.body, existing.err
+	}
+	flight := &viewFlight{ready: make(chan struct{})}
+	if c.flights == nil {
+		c.flights = map[string]*viewFlight{}
+	}
+	c.flights[flightKey] = flight
+	c.mu.Unlock()
+
+	defer func() {
+		c.mu.Lock()
+		delete(c.flights, flightKey)
+		c.mu.Unlock()
+		close(flight.ready)
+	}()
+
 	value, err := source()
 	if err != nil {
+		flight.err = err
 		return nil, err
 	}
 	if lang != "" {
@@ -228,11 +265,13 @@ func (c *ViewCache) cachedView(gen uint64, key, kind, lang string, source func()
 	}
 	plain, err := json.Marshal(value)
 	if err != nil {
+		flight.err = err
 		return nil, err
 	}
 	sum := sha256.Sum256(plain)
 	body := &viewBody{plain: plain, etag: `"` + hex.EncodeToString(sum[:16]) + `"`}
 	c.putBody(gen, key, bodyKey, body)
+	flight.body = body
 	return body, nil
 }
 

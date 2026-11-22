@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { useEffect, useState, useSyncExternalStore } from "react";
 import { HostRefusal, request } from "./request";
 import { useSession } from "./session";
 
@@ -8,11 +8,17 @@ export type Read<Answer> =
   | { status: "refused"; path?: string | null; reason: string }
   | { status: "error"; path?: string | null; reason: string };
 
+type Cached = { seen: string; data: unknown };
+
+const maxCached = 256;
 const listeners = new Set<() => void>();
+const keyVersions = new Map<string, number>();
+const readCache = new Map<string, Cached>();
+const pendingReads = new Map<string, Promise<unknown>>();
+let cacheSession = "";
 let globalVersion = 0;
 let metaVersion = 0;
 let anyVersion = 0;
-const keyVersions = new Map<string, number>();
 
 const metaPaths = new Set([
   "/v1/me",
@@ -30,6 +36,50 @@ function isMetaType(typ: string): boolean {
 
 function bump(key: string) {
   keyVersions.set(key, (keyVersions.get(key) ?? 0) + 1);
+}
+
+function syncSession(sessionKey: string) {
+  if (sessionKey === cacheSession) return;
+  cacheSession = sessionKey;
+  readCache.clear();
+  pendingReads.clear();
+}
+
+function cachedRead<Answer>(key: string): Cached | undefined {
+  const entry = readCache.get(key);
+  if (!entry) return undefined;
+  readCache.delete(key);
+  readCache.set(key, entry);
+  return entry as { seen: string; data: Answer };
+}
+
+function storeRead(key: string, seen: string, data: unknown) {
+  if (readCache.has(key)) readCache.delete(key);
+  else if (readCache.size >= maxCached) {
+    const oldest = readCache.keys().next().value;
+    if (oldest !== undefined) readCache.delete(oldest);
+  }
+  readCache.set(key, { seen, data });
+}
+
+function loadRead<Answer>(sessionKey: string, path: string, sent: string | undefined, seen: string): Promise<Answer> {
+  const cacheKey = `${sessionKey}\0${path}\0${sent ?? ""}`;
+  const hit = cachedRead<Answer>(cacheKey);
+  if (hit && hit.seen === seen) return Promise.resolve(hit.data as Answer);
+  const flightKey = `${cacheKey}\0${seen}`;
+  let shared = pendingReads.get(flightKey) as Promise<Answer> | undefined;
+  if (!shared) {
+    shared = request<Answer>(path, { body: sent === undefined ? undefined : JSON.parse(sent) })
+      .then((data) => {
+        if (sessionKey === cacheSession) storeRead(cacheKey, seen, data);
+        return data;
+      })
+      .finally(() => {
+        pendingReads.delete(flightKey);
+      });
+    pendingReads.set(flightKey, shared);
+  }
+  return shared;
 }
 
 export function changed() {
@@ -92,8 +142,8 @@ function watchScope(path: string | null, body?: unknown): WatchScope {
     if (parts.length >= 3 && parts[2] === "sections") {
       const sec = parts[3] ?? "";
       const keys = typ ? [`type:${typ}`] : [];
-      if (sec === "comments") keys.push("scope:owner:relations", "scope:owner:work");
-      else if (sec === "links") keys.push("scope:owner:relations");
+      if (sec === "comments") keys.push("scope:owner:comments", "scope:owner:work");
+      else if (sec === "links") keys.push("scope:owner:links");
       else if (sec === "files") keys.push("scope:owner:files", "type:files.file");
       else return { kind: "any" };
       return { kind: "keys", keys };
@@ -115,28 +165,47 @@ function snapshotFor(scope: WatchScope): string {
 
 export function useRead<Answer>(path: string | null, body?: unknown): Read<Answer> {
   const session = useSession();
+  const sessionKey = `${session?.tenant ?? ""} ${session?.token ?? ""}`;
+  syncSession(sessionKey);
   const scope = watchScope(path, body);
   const seen = useSyncExternalStore(subscribe, () => snapshotFor(scope));
-  const [read, setRead] = useState<Read<Answer>>({ status: "loading" });
-  const shown = useRef("");
   const sent = body === undefined ? undefined : JSON.stringify(body);
+  const cacheKey = path === null ? "" : `${sessionKey}\0${path}\0${sent ?? ""}`;
+  const cached = path === null ? undefined : cachedRead<Answer>(cacheKey);
+  const [read, setRead] = useState<Read<Answer>>(() =>
+    cached ? { status: "ready", path, data: cached.data as Answer } : { status: "loading", path },
+  );
   useEffect(() => {
-    const asked = `${session?.tenant} ${session?.token} ${path} ${sent}`;
-    if (shown.current !== asked) setRead({ status: "loading", path });
-    shown.current = asked;
-    if (path === null) return;
-    const controller = new AbortController();
+    if (path === null) {
+      setRead({ status: "loading", path: null });
+      return;
+    }
+    const current = cachedRead<Answer>(cacheKey);
+    if (current) {
+      setRead({ status: "ready", path, data: current.data as Answer });
+      if (current.seen === seen) return;
+    } else {
+      setRead({ status: "loading", path });
+    }
+    let active = true;
     queueMicrotask(() => {
-      if (controller.signal.aborted) return;
-      request<Answer>(path, { signal: controller.signal, body: sent === undefined ? undefined : JSON.parse(sent) }).then(
-        (data) => setRead({ status: "ready", path, data }),
+      if (!active) return;
+      loadRead<Answer>(sessionKey, path, sent, seen).then(
+        (data) => {
+          if (active) setRead({ status: "ready", path, data });
+        },
         (failure: unknown) => {
-          if (!controller.signal.aborted) setRead(failed(failure, path));
+          if (active) setRead(failed(failure, path));
         },
       );
     });
-    return () => controller.abort();
-  }, [path, sent, session, seen]);
+    return () => {
+      active = false;
+    };
+  }, [cacheKey, path, sent, sessionKey, seen]);
+  if (path !== null && cached && cached.seen === seen) {
+    return { status: "ready", path, data: cached.data as Answer };
+  }
   return read;
 }
 
@@ -147,19 +216,43 @@ function failed(failure: unknown, path?: string | null): Read<never> {
 
 export function useReads<Answer>(paths: string[]): Read<Answer[]> {
   const session = useSession();
+  const sessionKey = `${session?.tenant ?? ""} ${session?.token ?? ""}`;
+  syncSession(sessionKey);
   const scopes = paths.map((path) => watchScope(path));
+  const snapshots = scopes.map(snapshotFor);
   const seen = useSyncExternalStore(subscribe, () => scopes.map(snapshotFor).join("|"));
-  const [read, setRead] = useState<Read<Answer[]>>({ status: "loading" });
   const asked = JSON.stringify(paths);
+  const allFresh = paths.every((path, index) => {
+    const entry = cachedRead<Answer>(`${sessionKey}\0${path}\0`);
+    return Boolean(entry && entry.seen === snapshots[index]);
+  });
+  const [read, setRead] = useState<Read<Answer[]>>(() =>
+    allFresh
+      ? { status: "ready", data: paths.map((path) => cachedRead<Answer>(`${sessionKey}\0${path}\0`)!.data as Answer) }
+      : { status: "loading" },
+  );
   useEffect(() => {
-    const controller = new AbortController();
-    Promise.all((JSON.parse(asked) as string[]).map((path) => request<Answer>(path, { signal: controller.signal }))).then(
-      (data) => setRead({ status: "ready", data }),
+    const list = JSON.parse(asked) as string[];
+    const versions = seen.split("|");
+    if (list.every((path, index) => cachedRead<Answer>(`${sessionKey}\0${path}\0`)?.seen === versions[index])) {
+      setRead({ status: "ready", data: list.map((path) => cachedRead<Answer>(`${sessionKey}\0${path}\0`)!.data as Answer) });
+      return;
+    }
+    let active = true;
+    Promise.all(list.map((path, index) => loadRead<Answer>(sessionKey, path, undefined, versions[index] ?? ""))).then(
+      (data) => {
+        if (active) setRead({ status: "ready", data });
+      },
       (failure: unknown) => {
-        if (!controller.signal.aborted) setRead(failed(failure));
+        if (active) setRead(failed(failure));
       },
     );
-    return () => controller.abort();
-  }, [asked, session, seen]);
+    return () => {
+      active = false;
+    };
+  }, [asked, sessionKey, seen]);
+  if (allFresh) {
+    return { status: "ready", data: paths.map((path) => cachedRead<Answer>(`${sessionKey}\0${path}\0`)!.data as Answer) };
+  }
   return read;
 }

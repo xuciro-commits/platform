@@ -27,6 +27,8 @@ type translationDictionary struct {
 	words    map[string]string
 	once     sync.Once
 	patterns []pattern
+	sayMu    sync.RWMutex
+	said     map[string]string
 }
 
 func (x *Translator) appManifest(a platform.Service) platform.Manifest {
@@ -312,8 +314,29 @@ func (x *Translator) saysInApp(app, lang, s string, depth int) bool {
 	return false
 }
 
+func (p pattern) couldMatch(s string) bool {
+	if len(s) < p.fixed || !strings.HasPrefix(s, p.parts[0]) || !strings.HasSuffix(s, p.parts[len(p.parts)-1]) {
+		return false
+	}
+	rest := s[len(p.parts[0]) : len(s)-len(p.parts[len(p.parts)-1])]
+	if len(rest) < len(p.names) {
+		return false
+	}
+	for _, lit := range p.parts[1 : len(p.parts)-1] {
+		if len(rest) < 2 {
+			return false
+		}
+		i := strings.Index(rest[1:], lit)
+		if i < 0 {
+			return false
+		}
+		rest = rest[1+i+len(lit):]
+	}
+	return len(rest) > 0
+}
+
 func (x *Translator) split(app, lang string, p pattern, s string, depth int) ([]string, bool) {
-	if !p.re.MatchString(s) {
+	if !p.couldMatch(s) {
 		return nil, false
 	}
 	for _, values := range p.splits(s, 32) {
@@ -370,15 +393,31 @@ func (x *Translator) say(app, lang, s string, depth int) string {
 	if tr, ok := x.lookup(app, lang, s); ok {
 		return tr
 	}
+	var dict *translationDictionary
+	if depth == 0 {
+		dict = x.dictionary(app, lang)
+		dict.sayMu.RLock()
+		tr, ok := dict.said[s]
+		dict.sayMu.RUnlock()
+		if ok {
+			return tr
+		}
+	}
+	out := s
 	var p pattern
 	var filled []string
 	for _, q := range x.patterns(app, lang) {
+		if !q.couldMatch(s) {
+			continue
+		}
 		if found, ok := x.split(app, lang, q, s, depth); ok {
 			p, filled = q, found
 			break
 		}
-		if m := q.re.FindStringSubmatch(s); m != nil && filled == nil {
-			p, filled = q, m[1:]
+		if filled == nil {
+			if m := q.re.FindStringSubmatch(s); m != nil {
+				p, filled = q, m[1:]
+			}
 		}
 	}
 	if filled != nil {
@@ -386,14 +425,24 @@ func (x *Translator) say(app, lang, s string, depth int) string {
 		for i, name := range p.names {
 			values[name] = x.say(app, lang, filled[i], depth+1)
 		}
-		return placeholder.ReplaceAllStringFunc(p.out, func(x string) string {
+		out = placeholder.ReplaceAllStringFunc(p.out, func(x string) string {
 			if v, ok := values[x[1:len(x)-1]]; ok {
 				return v
 			}
 			return x
 		})
 	}
-	return s
+	if dict != nil {
+		dict.sayMu.Lock()
+		if dict.said == nil {
+			dict.said = map[string]string{}
+		}
+		if len(dict.said) < 8192 {
+			dict.said[s] = out
+		}
+		dict.sayMu.Unlock()
+	}
+	return out
 }
 
 func (tr *Translator) TranslateMessages(v any, lang string) any {

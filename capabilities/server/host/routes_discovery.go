@@ -153,7 +153,7 @@ func (t *Tenant) DispatchTargets(member platform.Member, id string, at time.Time
 
 func (t *Tenant) WriteView(kind string, m platform.Member, lang string, w http.ResponseWriter, r *http.Request) error {
 	m = t.authorizationMember(m)
-	return t.viewCache().WriteView(t.definitionsFingerprint(), transport.Rights(m)+"/"+strconv.FormatUint(t.Projection.Generation(), 10), kind, lang, w, r, func() (any, error) {
+	return t.viewCache().WriteView(t.definitionsFingerprint(), transport.Rights(m)+"/"+strconv.FormatUint(t.Projection.LiveVersion(build.ResourceType), 10), kind, lang, w, r, func() (any, error) {
 		switch kind {
 		case "entities":
 			return t.Entities(m), nil

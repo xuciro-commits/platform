@@ -48,7 +48,7 @@ func (t *Tenant) Definitions(m platform.Member) []platform.Definition {
 
 func (t *Tenant) DefinitionsFor(m platform.Member) ([]platform.Definition, error) {
 	m = t.authorizationMember(m)
-	gen, key := t.definitionsFingerprint(), transport.Rights(m)+"/"+strconv.FormatUint(t.Projection.Generation(), 10)
+	gen, key := t.definitionsFingerprint(), transport.Rights(m)+"/"+strconv.FormatUint(t.Projection.LiveVersion(build.ResourceType), 10)
 	if out, ok := t.viewCache().Definitions(gen, key); ok {
 		return out, nil
 	}
