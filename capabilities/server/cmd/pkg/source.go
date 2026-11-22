@@ -44,6 +44,20 @@ var kindDirectories = map[string]string{
 
 var defaultContract = map[string]int{"link-type": 4}
 
+var sourceFamily = map[string]string{
+	"agent": "agent", "connection": "connection", "dataset": "dataset", "evaluation-set": "evaluation", "function": "function",
+	"link-type": "link", "matching": "matching", "observation": "observation", "query": "query", "sample-set": "samples",
+	"source": "source", "test-plan": "tests", "writeback": "writeback", "listener": "listener", "mediaset": "mediaset",
+	"schedule": "schedule", "pipeline": "pipeline",
+}
+
+func firstSourceVersion(kind string) string {
+	if family, ok := sourceFamily[kind]; ok {
+		return "1." + family + "-1"
+	}
+	return "1"
+}
+
 var unsafeName = regexp.MustCompile(`[^A-Za-z0-9._-]+`)
 
 type lockedAsset struct {
@@ -475,7 +489,7 @@ func build(dir string, previous *platform.PackageDescriptor) (built, error) {
 		key := string(r.ref.Kind) + "/" + r.ref.Name
 		entry, locked := prior.Assets[key]
 		if !locked {
-			entry = lockedAsset{ContractVersion: max(1, defaultContract[string(r.ref.Kind)]), SourceVersion: "1"}
+			entry = lockedAsset{ContractVersion: max(1, defaultContract[string(r.ref.Kind)]), SourceVersion: firstSourceVersion(string(r.ref.Kind))}
 		}
 		body := asObject(r.body)
 		if r.ref.Kind == platform.AssetObject {
