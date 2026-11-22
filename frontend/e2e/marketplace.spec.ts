@@ -42,7 +42,7 @@ test("blank tenant: an administrator installs CRM from the marketplace after rev
   await expect(page.getByRole("link", { name: "CRM", exact: true })).toHaveCount(0);
 });
 
-test("blank tenant: a package role granted to a member opens CRM for them and revoking it closes it", async () => {
+test("blank tenant: a package role granted to a member opens CRM for them, its empty pipeline shows every stage, and revoking it closes it", async () => {
   await open(page, "Admin", "Members");
   await page.getByRole("row", { name: /田雪/ }).click();
   const memberPane = page.getByRole("dialog", { name: "Details" }).or(page.getByRole("complementary", { name: "Details" }));
@@ -58,6 +58,11 @@ test("blank tenant: a package role granted to a member opens CRM for them and re
   await page.getByRole("button", { name: "user-1 · blank" }).click();
   await expect(page.getByRole("link", { name: "CRM", exact: true })).toBeVisible();
   await page.getByRole("link", { name: "CRM", exact: true }).click();
+  await nav.getByRole("link", { name: "Deals", exact: true }).click();
+  await page.getByRole("radio", { name: "Board" }).click();
+  await expect(page.getByRole("region", { name: "Qualification", exact: true })).toContainText("Nothing in this column yet");
+  await expect(page.getByRole("region", { name: "Won", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "New", exact: true })).toBeVisible();
   await nav.getByRole("link", { name: "Leads", exact: true }).click();
   await page.getByRole("button", { name: "New", exact: true }).click();
   const firstLead = page.getByRole("dialog");

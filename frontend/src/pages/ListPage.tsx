@@ -420,7 +420,7 @@ export function ListView<Answer, Row>({ definition, read, primary, back, exportR
               {definition.page?.loading && <ProgressBar label={t("Loading…")} isLabelHidden isIndeterminate xstyle={styles.progress} />}
               <Section variant="transparent" padding={gutter} paddingBlockEnd={3} xstyle={styles.toolbarContainer}>
                 <VStack gap={4}>
-                  <PageTitle title={t(definition.title)} back={back && { href: back.href, label: t(back.label) }} actions={(!empty || dirty) && primary} />
+                  <PageTitle title={t(definition.title)} back={back && { href: back.href, label: t(back.label) }} actions={(!empty || dirty || Boolean(board)) && primary} />
                   {toolbar && (
                     <HStack gap={3} vAlign="center" wrap="wrap" minHeight={32}>
                       <StackItem size="fill" xstyle={styles.toolbarPrimary}>
@@ -497,7 +497,7 @@ export function ListView<Answer, Row>({ definition, read, primary, back, exportR
               </VStack>
             )}
             {read.status === "refused" && <EmptyState headingLevel={2} title={t("You cannot see this list")} description={read.reason || t("Ask an administrator of this workspace for access.")} />}
-            {ready && shown.length === 0 && !dirty && !calendar && <EmptyState headingLevel={2} title={t("Nothing here yet")} description={t(definition.about)} actions={primary} />}
+            {ready && shown.length === 0 && !dirty && !calendar && !board && <EmptyState headingLevel={2} title={t("Nothing here yet")} description={t(definition.about)} actions={primary} />}
             {ready && shown.length === 0 && dirty && !calendar && (
               <EmptyState
                 headingLevel={2}
@@ -517,7 +517,7 @@ export function ListView<Answer, Row>({ definition, read, primary, back, exportR
                 <Banner status="error" title={t("Not saved")} description={failure} />
               </VStack>
             )}
-            {ready && shown.length > 0 && board && (
+            {ready && board && (shown.length > 0 || !dirty) && (
               <BoardView
                 columns={board.lanes}
                 page={definition.page}

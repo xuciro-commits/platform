@@ -138,6 +138,7 @@ export function BoardView({ columns, cards, onMove, accepts, page, total }: Boar
               padding={2}
               ref={target(key)}>
               <VStack gap={2}>
+                {own.length === 0 && !drag && <Text type="supporting" color="secondary">{t("Nothing in this column yet")}</Text>}
                 {resting.map((card) => (
                   <Card
                     key={card.id}
