@@ -230,5 +230,38 @@
         "roles": {}
       }
     ]
+  },
+  {
+    "id": "upgrade",
+    "settings": {
+      "language": "en",
+      "timezone": "UTC",
+      "currency": "USD"
+    },
+    "seats": [
+      {
+        "id": "admin-1",
+        "subjects": [
+          "admin"
+        ],
+        "roles": {
+          "platform": "admin"
+        }
+      },
+      {
+        "id": "user-1",
+        "subjects": [
+          "user"
+        ],
+        "roles": {}
+      },
+      {
+        "id": "manager-1",
+        "subjects": [
+          "manager"
+        ],
+        "roles": {}
+      }
+    ]
   }
 ]

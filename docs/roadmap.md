@@ -35,11 +35,8 @@
 灵魂：一个什么都没装的租户，管理员十分钟内把 CRM 装上、配好人，销售就能干活；包的来源、升级、卸载都在界面里，没有命令行。
 
 2.7.1–2.7.4 已由 trunk “blank tenant: install CRM …” 一个用例从安装走到赢单、卸载与重装。下面几项的宿主与界面已提交，只差验收。
-2.7.6 先做：它的“从文件安装”就是 2.7.5 装上一版的路。两项用新的夹具租户 `upgrade`（与 `blank` 同样三人、无预装包），不动 `blank` 的用例。
+2.7.6 已由 marketplace 的 “upgrade tenant: install CRM from a local package file …” 验收；它装的 `crm-0.1.21.json` 就是 2.7.5 的上一版。
 
-- **2.7.6 从独立库安装（补验收）。** 已有：`inspect` 的制品 SHA-256 核验与四步 `PackageImportWizard`。
-  还缺：`scripts/frontend-fixtures/crm-0.1.21.json`（当前 CRM 制品的拷贝，照 `production-provider-0.1.4.json` 的做法）与 `upgrade` 租户；
-  trunk：`upgrade` 的管理员在市场“⋯ → 从地址或文件安装”选这个文件 → 审阅页显示“本地文件”与摘要 → 确认后安装，CRM 是 active。不走网络。
 - **2.7.5 改字段后升级（补验收）。** 已有：字段级审阅，删字段、改类型、新增必填在审阅与提交两层被拒（K9 `TestInvariantK9PackageUpgradeFieldReviewAndIncompatibleGate`）。
   还缺：CRM 升到 0.1.22，线索多一个可选字段；制品按 CRM 包原来的做法重新发布，不手改 `schemaVersions`。
   trunk 接着 2.7.6：`upgrade` 里建一条线索并填值 → 市场显示可升级 → 审阅列出新增字段 → 升级后旧记录与已填的值都在，记录页出现新字段。验收：trunk 与 `make test RUN=K9`。

@@ -26,7 +26,7 @@ func (h *Host) routesPackages(rt *routes) {
 	h.routesPackageReview(rt)
 	rt.authorized(transport.Route{Pattern: "POST /v1/packages/inspect", Summary: "Inspect an online or local platform package without installing or executing it", Body: protocol.PackageInspectRequest{}, Answer: protocol.PackagePreview{}}, controlowner.PlatformApp, []string{controlowner.Admin}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
 		var req protocol.PackageInspectRequest
-		if err := transport.DecodeBodyLimit(r, &req, packages.MaxPackageImportBytes+4096); err != nil {
+		if err := transport.DecodeBodyLimit(r, &req, packages.MaxPackageImportBytes/3*4+4096); err != nil {
 			WriteJSON(w, http.StatusBadRequest, map[string]string{"error": t.Say(t.Language(m, r), err.Error())})
 		} else if preview, err := t.inspectPackage(r.Context(), req); err != nil {
 			WriteJSON(w, http.StatusBadRequest, map[string]string{"error": t.Say(t.Language(m, r), err.Error())})

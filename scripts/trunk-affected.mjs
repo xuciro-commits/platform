@@ -60,4 +60,4 @@ for (const file of changedFiles(base)) {
 
 for (const reason of reasons) console.error(reason);
 if (chosen.has(ALL)) console.log(ALL);
-else console.log([...chosen].sort().map((spec) => `e2e/${spec}.spec.ts`).join(" "));
+else console.log([...chosen].sort().map((spec) => `${spec}.spec.ts`).join(" "));

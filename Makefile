@@ -144,7 +144,7 @@ check-frontend:
 	@printf '\033[32m✓ 新前端检查全部通过\033[0m\n\n'
 
 trunk:
-	cd frontend && $(PNPM) exec playwright test -c e2e $(foreach spec,$(SPEC),e2e/$(spec).spec.ts) $(if $(HEADED),--headed)
+	cd frontend && $(PNPM) exec playwright test -c e2e $(foreach spec,$(SPEC),$(spec).spec.ts) $(if $(HEADED),--headed)
 
 trunk-changed:
 	@specs="$$(node scripts/trunk-affected.mjs $(BASE))"; \

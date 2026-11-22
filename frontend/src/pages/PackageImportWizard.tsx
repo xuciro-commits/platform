@@ -121,7 +121,7 @@ export function PackageImportWizard({
       const body: Api.PackageInspectRequest = {};
       if (sourceMode === "file") {
         if (!file) throw new Error(t("Choose a package file first."));
-        body.content = JSON.parse(await file.text());
+        body.contentBase64 = await base64Of(file);
       } else {
         if (!url.trim()) throw new Error(t("Enter an HTTPS package URL."));
         body.url = url.trim();
@@ -322,4 +322,13 @@ export function PackageImportWizard({
       )}
     </FormWizard>
   );
+}
+
+function base64Of(file: File) {
+  return new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result).slice(String(reader.result).indexOf(",") + 1));
+    reader.onerror = () => reject(reader.error);
+    reader.readAsDataURL(file);
+  });
 }

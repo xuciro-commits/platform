@@ -190,6 +190,12 @@ type PreparationSource struct {
 func Inspect(ctx context.Context, resolver publication.Resolver, tenant string, request protocol.PackageInspectRequest, send func(*http.Request, bool) (*http.Response, error), files platform.FileStore, check func(context.Context, platform.PackageDescriptor) (protocol.Precheck, error)) (protocol.PackagePreview, error) {
 	var preview protocol.PackagePreview
 	content, origin := []byte(request.Content), "local-file"
+	if len(request.ContentBase64) > 0 {
+		if len(content) > 0 {
+			return preview, fmt.Errorf("Choose one package source: a URL or a local package file")
+		}
+		content = request.ContentBase64
+	}
 	if (request.URL == "") == (len(content) == 0) {
 		return preview, fmt.Errorf("Choose one package source: a URL or a local package file")
 	}

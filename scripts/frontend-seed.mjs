@@ -201,11 +201,12 @@ for (const file of files) {
   }
 }
 
-const blank = await connect("blank").catch(() => undefined);
-if (blank) {
-  const existing = await blank.call("/v1/members");
+for (const name of ["blank", "upgrade"]) {
+  const empty = await connect(name).catch(() => undefined);
+  if (!empty) continue;
+  const existing = await empty.call("/v1/members");
   const named = new Map(existing.map((entry) => [entry.id, entry.profile?.displayName ?? ""]));
   for (const [id, displayName] of Object.entries({ "admin-1": "王丹", "user-1": "田雪", "manager-1": "赵敏" })) {
-    if (!named.get(id)) await blank.submit("platform.profile", id, "update", { displayName }, "platform");
+    if (!named.get(id)) await empty.submit("platform.profile", id, "update", { displayName }, "platform");
   }
 }

@@ -3706,6 +3706,7 @@ export type PackageImpactReference = {
 export type PackageInspectRequest = {
   url?: string;
   content?: unknown;
+  contentBase64?: string;
   expectedSha256?: string;
 };
 

@@ -335,6 +335,16 @@ func TestInvariantK9PackageUpgradeFieldReviewAndIncompatibleGate(t *testing.T) {
 	if _, err := target.inspectPackage(context.Background(), protocol.PackageInspectRequest{Content: rawV1, ExpectedSha256: checked.ArtifactSha256}); err != nil {
 		t.Fatalf("matching expectedSha256 must succeed: %v", err)
 	}
+	file := append(append([]byte{}, rawV1...), '\n')
+	fileSum := sha256.Sum256(file)
+	fileDigest := "sha256:" + hex.EncodeToString(fileSum[:])
+	exact, err := target.inspectPackage(context.Background(), protocol.PackageInspectRequest{ContentBase64: file, ExpectedSha256: fileDigest})
+	if err != nil || exact.ArtifactSha256 != fileDigest || exact.Origin != "local-file" {
+		t.Fatalf("a local file is checked by the SHA-256 of its exact bytes: %+v err=%v", exact, err)
+	}
+	if _, err := target.inspectPackage(context.Background(), protocol.PackageInspectRequest{Content: rawV1, ContentBase64: file}); err == nil {
+		t.Fatal("content and contentBase64 together must be refused")
+	}
 }
 
 func TestInvariantK9PackageMarketLibrary(t *testing.T) {

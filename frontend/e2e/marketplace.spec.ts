@@ -1,3 +1,6 @@
+import { createHash } from "node:crypto";
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import { expect, test } from "@playwright/test";
 import { open, property, edit } from "./support";
 
@@ -158,5 +161,40 @@ test("blank tenant: install CRM from the marketplace, grant roles, and run the s
   await page.getByRole("link", { name: "CRM", exact: true }).click();
   await nav.getByRole("link", { name: "Deals", exact: true }).click();
   await expect(page.getByRole("link", { name: "星海制造", exact: true }).first()).toBeVisible();
+});
+});
+
+test.describe.serial("upgrade tenant", () => {
+const previous = fileURLToPath(new URL("../../scripts/frontend-fixtures/crm-0.1.21.json", import.meta.url));
+
+test("upgrade tenant: install CRM from a local package file after checking its origin and SHA-256", async ({ page }) => {
+  const bytes = readFileSync(previous);
+  const sha256 = createHash("sha256").update(bytes).digest("hex");
+  await page.goto("/");
+  await page.getByRole("button", { name: "admin-1 · upgrade" }).click();
+  await expect(page.getByRole("button", { name: "Account", exact: true })).toBeVisible();
+
+  await open(page, "Delivery", "Marketplace");
+  await page.getByRole("button", { name: "More actions", exact: true }).click();
+  await page.getByRole("menuitem", { name: "Install from URL or file", exact: true }).click();
+  const wizard = page.getByRole("dialog", { name: /Install from URL or file/ });
+  await wizard.locator('input[type="file"]').setInputFiles({ name: "crm-0.1.21.json", mimeType: "application/json", buffer: bytes });
+  await wizard.getByRole("button", { name: "Inspect package", exact: true }).click();
+
+  await expect(wizard.getByText("crm · 0.1.21", { exact: true })).toBeVisible();
+  await expect(wizard.getByText("Local file", { exact: true }).last()).toBeVisible();
+  await expect(wizard.getByText(new RegExp(sha256))).toBeVisible();
+  await wizard.getByRole("button", { name: "Add to library", exact: true }).click();
+
+  await expect(wizard.getByRole("textbox", { name: /Project API name/ })).toHaveValue("crm");
+  await expect(wizard.getByText(/salesrep/).first()).toBeVisible();
+  await wizard.getByRole("button", { name: "Continue", exact: true }).click();
+  await wizard.getByRole("button", { name: "Install package", exact: true }).click();
+  await expect(wizard).toBeHidden({ timeout: 30_000 });
+
+  await open(page, "Delivery", "Installations");
+  const crm = page.getByRole("listitem").filter({ hasText: /^CRM/ });
+  await expect(crm).toContainText("active");
+  await expect(crm).toContainText("0.1.21");
 });
 });

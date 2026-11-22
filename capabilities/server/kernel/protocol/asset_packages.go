@@ -145,6 +145,7 @@ type PackageLibraryRefreshRequest struct {
 type PackageInspectRequest struct {
 	URL            string          `json:"url,omitempty"`
 	Content        json.RawMessage `json:"content,omitempty"`
+	ContentBase64  []byte          `json:"contentBase64,omitempty"`
 	ExpectedSha256 string          `json:"expectedSha256,omitempty"`
 }
 
