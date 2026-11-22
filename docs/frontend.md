@@ -116,7 +116,7 @@ export default recordList({
 
 视图状态：
 
-- 结构 `{ version: 1, layout, columns, sort, filters, search, group, lanes, density, stickyStart, stickyEnd }`，缺的键按默认读入；`filters` 保存控件的选择，取数前转成宿主 `domain` 的前缀条件。
+- 结构 `{ version: 1, layout, columns, sort, filters, search, group, lanes, dates, month, density, stickyStart, stickyEnd }`，缺的键按默认读入；`filters` 保存控件的选择，取数前转成宿主 `domain` 的前缀条件。
 - 可分享的视图状态用地址的 `view` 查询值编码，筛选、排序、分组、布局与列顺序即时写回；含敏感值的条件只经有权限的保存视图读取。列表按一页 100 条向宿主取数，带 `domain`、`sort`、`search`、`offset`、`limit` 与 `actions=1`，筛选时另读无筛选总数；宿主只给游标时，未读完用加号表示还有数据。
 - Astryx Table 的行窗口只接纳纯文本单元且不接分组；记录表要放链接、状态点与布尔图标，因此每个列表（含分组）都由 `ListWindow` 开窗：
   表格自己的滚动区就是唯一滚动区，表头吸顶，按最常见的实测行高只渲染视口与前后各十二行。滚到末尾加载下一页；滚动位置按规范化视图存在会话中，返回时先恢复。
@@ -150,9 +150,10 @@ export default recordList({
 | 表现 | 给出什么 | 起点 |
 |---|---|---|
 | `frame` | 全站唯一的页边距与页头标题（返回、H1、主动作、说明行）；每个表现都用它，不另写页边距 | 官方 `LayoutHeader` 的页头 |
-| `ListView` | 列表：条件筛选、排序、分组、勾选批量、表格与看板切换 | 官方 `table-grouped`、`table-filter` |
+| `ListView` | 列表：条件筛选、排序、分组、勾选批量、表格、看板与日历切换 | 官方 `table-grouped`、`table-filter` |
 | `TreeList` | 树表：父行由子行汇总（不存）；兄弟间排序，搜索剪枝后重算汇总并强制展开；只有一个根时默认展开它；方向键走树 | 官方 `table-tree` |
 | `BoardView` | 看板：按可编辑的选项字段分列，拖卡即提交编辑动作 | 官方 `kanban-board` |
+| `CalendarView` | 日历：按日期字段排进月格（周一起），只取可见六周的记录，拖到另一天即提交编辑动作；拖动与看板共用 `drag.ts` | 官方 `Calendar` 的 `useCalendarDays`、`useCalendarNavigation` |
 | `RecordPeek` | 记录侧滑抽屉：点引用字段与列表详情共用，显示页头、状态、字段、主动作与“打开完整页面”，Esc 关闭并回焦 | 官方 `Drawer`、`DrawerHeader` |
 | `RecordPage` | 记录页：页头、页签（字段、活动、关联、文件）、右栏。活动按时间合并历史、活动事件与评论；关联与附件分别读宿主小节，页签进地址 | 官方 `work-item-detail`、`detail-page` |
 | `Transitions` | 记录页头的状态流转：按类型的生命周期给出当前可做的转换，没有时把声明的状态不变动作提为主动作；有参数开表单，无参数且回不去的先确认 | 官方 `AlertDialog` |

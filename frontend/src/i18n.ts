@@ -1,7 +1,6 @@
 import values from "./i18n-values.json";
 
 export { setLanguage, t, useLocale } from "./language";
-
 export const zhCN: Record<string, string> = {
   Search: "搜索",
   Columns: "列",
@@ -161,6 +160,11 @@ export const zhCN: Record<string, string> = {
   "Follows you to every device you sign in on.": "在你登录的每台设备上都生效。",
   "Not set": "未设置",
   "Dashboard": "仪表盘",
+  "Calendar": "日历",
+  "Previous month": "上个月",
+  "Next month": "下个月",
+  "Today": "今天",
+  "Date field": "日期字段",
   "Where they arrive": "送到哪里",
   "In the workspace": "工作台内",
   "The bell and the inbox.": "铃铛与收件箱。",

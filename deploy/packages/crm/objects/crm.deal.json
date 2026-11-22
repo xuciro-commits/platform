@@ -492,7 +492,8 @@
     "layout": "table",
     "search": "",
     "sort": [],
-    "version": 1
+    "version": 1,
+    "dates": "expectedclose"
   },
   "naming": "CRM-DEAL-{year}-{n:5}",
   "actions": [

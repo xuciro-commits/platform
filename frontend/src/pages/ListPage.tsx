@@ -15,7 +15,7 @@ import type { TableColumn, TablePlugin } from "@astryxdesign/core/Table";
 import { ToggleButton } from "@astryxdesign/core/ToggleButton";
 import { useMediaQuery } from "@astryxdesign/core/hooks";
 import { colorVars } from "@astryxdesign/core/theme/tokens.stylex";
-import { AdjustmentsHorizontalIcon, ArrowPathIcon, MagnifyingGlassIcon, TableCellsIcon, ViewColumnsIcon } from "@heroicons/react/24/outline";
+import { AdjustmentsHorizontalIcon, ArrowPathIcon, CalendarDaysIcon, MagnifyingGlassIcon, TableCellsIcon, ViewColumnsIcon } from "@heroicons/react/24/outline";
 import { AdjustmentsHorizontalIcon as AdjustmentsHorizontalSolidIcon } from "@heroicons/react/24/solid";
 import * as stylex from "@stylexjs/stylex";
 import { type ReactNode, useEffect, useMemo, useState } from "react";
@@ -24,6 +24,7 @@ import { t } from "../i18n";
 import { navigate, usePath, useSearch } from "../router";
 import { PageTitle, useGutter } from "./frame";
 import { BoardView } from "./BoardView";
+import { CalendarView } from "./CalendarView";
 import { useListWindow } from "./ListWindow";
 import { type CellEdit, CellProperty } from "./PropertyField";
 import { type Chip, FilterBar } from "./ListFilters";
@@ -31,7 +32,7 @@ import { ListOptions } from "./ListOptions";
 import { type Cells, dotOf, idKey, ListCell, ListDetail, targetOf, typeOf } from "./ListDetail";
 import { useSavedViews } from "./SavedViews";
 import type { Dot } from "./Transitions";
-import { type Density, newView, readView, hasFilters, type StickyEdge, type ViewSort, type ViewState } from "./view";
+import { type Density, newView, readView, hasFilters, shownMonth, type StickyEdge, type ViewSort, type ViewState } from "./view";
 
 export type ListColumn<Row> = {
   key: string;
@@ -61,6 +62,12 @@ type ListBoard<Row> = {
   total?: { label: string; value: (row: Row) => { amount: number; currency?: string } | undefined };
   related?: (row: Row) => string | undefined;
 };
+type ListCalendar<Row> = {
+  fields: { key: string; label: string }[];
+  of: (row: Row, field: string) => string;
+  accepts?: (id: string) => boolean;
+  move?: (id: string, field: string, day: string) => Done;
+};
 export type ListShape<Answer, Row> = {
   title: string;
   about: string;
@@ -70,6 +77,7 @@ export type ListShape<Answer, Row> = {
   columns: ListColumn<Row>[];
   groups?: ListGroup<Row>[];
   board?: ListBoard<Row>;
+  calendar?: ListCalendar<Row>;
   bulk?: (ids: string[], clear: () => void) => ReactNode;
   detail?: (id: string) => ReactNode;
   peekType?: string;
@@ -150,6 +158,8 @@ export function ListView<Answer, Row>({ definition, read, primary, back }: ListV
   const group = definition.groups?.find((candidate) => candidate.key === view.group);
   const lanes = definition.board;
   const board = view.layout === "board" ? lanes : undefined;
+  const calendar = view.layout === "calendar" && definition.calendar?.fields.length ? definition.calendar : undefined;
+  const dateField = calendar ? (calendar.fields.find((field) => field.key === view.dates) ?? calendar.fields[0]).key : "";
   const orderedColumns = useMemo(() => {
     const ordered = view.columns.flatMap((key) => definition.columns.find((column) => column.key === key) ?? []);
     const shownColumns = ordered.filter((column, position) => position === 0 || column.key !== view.group);
@@ -207,7 +217,7 @@ export function ListView<Answer, Row>({ definition, read, primary, back }: ListV
       const href = definition.link?.(row) ?? "";
       const params = new URLSearchParams(currentSearch);
       if (definition.carryView) params.set("view", JSON.stringify(view));
-      const cells: Cells = { [idKey]: definition.id(row), __group: group ? group.of(row) : "", __lane: board ? board.of(row) : "", __href: href && definition.carryView ? href + "?" + params : href };
+      const cells: Cells = { [idKey]: definition.id(row), __group: group ? group.of(row) : "", __lane: board ? board.of(row) : "", __day: calendar ? calendar.of(row, dateField) : "", __href: href && definition.carryView ? href + "?" + params : href };
       const raw: Raw = { [idKey]: cells[idKey] };
       for (const column of definition.columns) {
         cells[column.key] = column.text(row);
@@ -228,7 +238,7 @@ export function ListView<Answer, Row>({ definition, read, primary, back }: ListV
       }
       return { cells, raw, row };
     });
-  }, [read, definition, group, board, currentSearch, view]);
+  }, [read, definition, group, board, calendar, dateField, currentSearch, view]);
   const rowOf = useMemo(() => new Map(all.map((entry) => [entry.cells[idKey], entry.row])), [all]);
 
   const shown = useMemo(() => {
@@ -421,10 +431,11 @@ export function ListView<Answer, Row>({ definition, read, primary, back }: ListV
                         {powerToggle}
                         <Divider orientation="vertical" />
                         <HStack gap={1} vAlign="center" role="group" aria-label={t("View options")}>
-                          {lanes && (
-                            <SegmentedControl size="sm" label={t("Layout")} value={view.layout} onChange={(layout) => update({ layout: layout as ViewState["layout"], lanes: lanes.key })}>
+                          {(lanes || Boolean(definition.calendar?.fields.length)) && (
+                            <SegmentedControl size="sm" label={t("Layout")} value={view.layout} onChange={(layout) => update({ layout: layout as ViewState["layout"], lanes: lanes?.key ?? view.lanes })}>
                               <SegmentedControlItem value="table" label={t("Table")} icon={<Icon icon={TableCellsIcon} size="sm" />} />
-                              <SegmentedControlItem value="board" label={t("Board")} icon={<Icon icon={ViewColumnsIcon} size="sm" />} />
+                              {lanes && <SegmentedControlItem value="board" label={t("Board")} icon={<Icon icon={ViewColumnsIcon} size="sm" />} />}
+                              {Boolean(definition.calendar?.fields.length) && <SegmentedControlItem value="calendar" label={t("Calendar")} icon={<Icon icon={CalendarDaysIcon} size="sm" />} />}
                             </SegmentedControl>
                           )}
                           <ListOptions view={view} update={update} columns={definition.columns} locked={orderedColumns[0]?.key ?? ""} defaults={fallback.columns}
@@ -480,8 +491,8 @@ export function ListView<Answer, Row>({ definition, read, primary, back }: ListV
               </VStack>
             )}
             {read.status === "refused" && <EmptyState headingLevel={2} title={t("You cannot see this list")} description={read.reason || t("Ask an administrator of this workspace for access.")} />}
-            {ready && shown.length === 0 && !dirty && <EmptyState headingLevel={2} title={t("Nothing here yet")} description={t(definition.about)} actions={primary} />}
-            {ready && shown.length === 0 && dirty && (
+            {ready && shown.length === 0 && !dirty && !calendar && <EmptyState headingLevel={2} title={t("Nothing here yet")} description={t(definition.about)} actions={primary} />}
+            {ready && shown.length === 0 && dirty && !calendar && (
               <EmptyState
                 headingLevel={2}
                 icon={<Icon icon={MagnifyingGlassIcon} size="lg" />}
@@ -528,7 +539,23 @@ export function ListView<Answer, Row>({ definition, read, primary, back }: ListV
                 })}
               />
             )}
-            {ready && shown.length > 0 && !board && (
+            {ready && calendar && (
+              <CalendarView
+                month={shownMonth(view)}
+                field={dateField}
+                fields={calendar.fields}
+                onMonth={(month) => update({ month })}
+                onField={(dates) => update({ dates })}
+                page={definition.page}
+                items={shown.map((cells) => ({ id: cells[idKey], day: cells.__day, title: cells[orderedColumns[0].key], href: cells.__href }))}
+                accepts={calendar.accepts}
+                onMove={calendar.move && ((id, day) => {
+                  setFailure("");
+                  calendar.move?.(id, dateField, day).catch((refused: Error) => setFailure(refused.message));
+                })}
+              />
+            )}
+            {ready && shown.length > 0 && !board && !calendar && (
               <VStack height="100%" paddingInline={gutter}>
                 <Table
                   data={rows.slice(first, last)}

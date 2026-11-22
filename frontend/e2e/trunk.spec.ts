@@ -1876,6 +1876,33 @@ test("dashboard: an application's home shows its numbers and charts, and each bl
   await expect(page.getByRole("row").nth(1)).toContainText("Won");
 });
 
+test("calendar: tasks sit on their due dates, the month pages, a drag reschedules and a task opens its record", async ({ page }) => {
+  await signIn(page, "admin-1 · crm");
+  await page.goto("/crm/crm.task");
+  await page.getByRole("radio", { name: "Calendar" }).click();
+  await expect(page.getByRole("button", { name: "Today", exact: true })).toBeVisible();
+  await page.goto(`/crm/crm.task?view=${encodeURIComponent(JSON.stringify({ version: 1, layout: "calendar", month: "2026-11" }))}`);
+  const day = (date: string) => page.getByRole("group", { name: date, exact: true });
+  const task = day("November 18, 2026").getByText("安排北境合同签署", { exact: true });
+  await expect(task).toBeVisible();
+  const from = (await task.boundingBox())!;
+  const to = (await day("November 20, 2026").boundingBox())!;
+  await page.mouse.move(from.x + 4, from.y + 4);
+  await page.mouse.down();
+  await page.mouse.move(from.x + 40, from.y + 20, { steps: 4 });
+  await page.mouse.move(to.x + to.width / 2, to.y + to.height / 2, { steps: 8 });
+  await page.mouse.up();
+  await expect(day("November 20, 2026")).toContainText("安排北境合同签署");
+  await page.reload();
+  await expect(day("November 20, 2026")).toContainText("安排北境合同签署");
+  await expect(day("November 18, 2026")).not.toContainText("安排北境合同签署");
+  await page.getByRole("button", { name: "Next month", exact: true }).click();
+  await expect(page.getByRole("heading", { level: 3, name: "December 2026", exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Previous month", exact: true }).click();
+  await day("November 20, 2026").getByText("安排北境合同签署", { exact: true }).click();
+  await expect(page).toHaveURL(/\/crm\/crm\.task\/TSK-\d+/);
+});
+
 test("import: an Excel workbook of leads maps by column title, refused rows are fixed in place and retried, and the list exports what it shows as CSV", async ({ page }) => {
   await signIn(page, "admin-1 · crm");
   await page.goto("/crm/crm.lead");

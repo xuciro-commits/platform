@@ -11,13 +11,13 @@ import { type Intent, reasonOf, send, stepIntent, useAct } from "./act";
 import { type ListShape, ListView, type Move } from "./ListPage";
 import { ImportWizard } from "./ImportWizard";
 import { enterable } from "./ParameterInput";
-import { type Described, describe, numeric } from "./describe";
+import { type Described, describe, numeric, type Step } from "./describe";
 import { BatchActions, canBatch } from "./BatchActions";
 import { type Options, useOptions, useRelatedCounts } from "./options";
 import { RecordPage } from "./RecordPage";
 import { type Dot, dots, Transitions } from "./Transitions";
 import { money, plain, present } from "./values";
-import { domainOf, hasFilters, newView, readView, type ViewState } from "./view";
+import { domainOf, hasFilters, monthSpan, newView, readView, shownMonth, type ViewState } from "./view";
 
 type Row = Record<string, unknown>;
 type Creator = ComponentType<{ onClose: () => void; onDone: (id: string) => void }>;
@@ -63,8 +63,8 @@ function mergePage(loaded: LoadedPage, page: Api.RecordPage): LoadedPage {
   };
 }
 
-function useRecordPages(type: string, view: ViewState, enabled: boolean, choiceValue: (field: string, value: string) => string, externalDomain: string) {
-  const conditions = domainOf(view.filters, choiceValue);
+function useRecordPages(type: string, view: ViewState, enabled: boolean, choiceValue: (field: string, value: string) => string, externalDomain: string, range: unknown[][]) {
+  const conditions = [...domainOf(view.filters, choiceValue), ...range];
   try {
     const external = externalDomain ? (JSON.parse(externalDomain) as unknown) : [];
     if (Array.isArray(external)) conditions.push(...external.filter(Array.isArray));
@@ -124,6 +124,26 @@ function useRecordPages(type: string, view: ViewState, enabled: boolean, choiceV
   };
 }
 
+function boundOf(field: Api.FieldInfo, day: string) {
+  return field.type === "date" ? day : new Date(`${day}T00:00:00`).toISOString();
+}
+
+function dayOf(value: unknown) {
+  const given = plain(value);
+  if (typeof given !== "string" || !given) return "";
+  if (given.length === 10) return given;
+  const at = new Date(given);
+  return `${at.getFullYear()}-${String(at.getMonth() + 1).padStart(2, "0")}-${String(at.getDate()).padStart(2, "0")}`;
+}
+
+function dayValue(field: Api.FieldInfo, old: unknown, day: string) {
+  if (field.type === "date") return day;
+  const before = new Date(String(plain(old)));
+  const after = new Date(`${day}T00:00:00`);
+  after.setHours(before.getHours(), before.getMinutes(), before.getSeconds());
+  return after.toISOString();
+}
+
 function keyOf(field: Api.FieldInfo | undefined, title: string) {
   const index = field?.choiceTitles?.indexOf(title) ?? -1;
   return index >= 0 ? field?.choices?.[index] : title;
@@ -131,7 +151,7 @@ function keyOf(field: Api.FieldInfo | undefined, title: string) {
 
 type RecordShape = ListShape<Api.RecordPage, Row>;
 
-function shape(described: Described, declared: Declared, listPath: string, extra?: Pick<RecordShape, "board" | "bulk" | "detail">, options: Options = {}): RecordShape {
+function shape(described: Described, declared: Declared, listPath: string, extra?: Pick<RecordShape, "board" | "calendar" | "bulk" | "detail">, options: Options = {}): RecordShape {
   const lifecycle = described.lifecycle;
   const states = lifecycle?.states ?? [];
   const linked = (field: Api.FieldInfo, row: Row) => described.members(field).find((member) => row[member.name]) ?? field;
@@ -245,7 +265,11 @@ export function Records({ declared, listPath, id, back }: { declared: Declared; 
   }, [declared, described, listPath]);
   const view = useMemo(() => readView(new URLSearchParams(currentSearch).get("view"), fallback), [currentSearch, fallback]);
   const externalDomain = new URLSearchParams(currentSearch).get("domain") ?? "";
-  const records = useRecordPages(declared.type, view, Boolean(described && !id), (field, value) => keyOf(described?.field(field), value) ?? value, externalDomain);
+  const dateFields = useMemo(() => described?.entity.fields.filter((field) => field.type === "date" || field.type === "datetime") ?? [], [described]);
+  const dateField = view.layout === "calendar" ? dateFields.find((field) => field.name === view.dates) ?? dateFields[0] : undefined;
+  const span = monthSpan(shownMonth(view));
+  const range = dateField ? [[dateField.name, ">=", boundOf(dateField, span.start)], [dateField.name, "<", boundOf(dateField, span.end)]] : [];
+  const records = useRecordPages(declared.type, view, Boolean(described && !id), (field, value) => keyOf(described?.field(field), value) ?? value, externalDomain, range);
   const kept = records.answer.records as Row[];
   const act = useAct(described);
   const lifecycle = (described?.lifecycle?.states.length ?? 0) > 1 ? described?.lifecycle : undefined;
@@ -267,18 +291,29 @@ export function Records({ declared, listPath, id, back }: { declared: Declared; 
     }
     if (lifecycle && laneField.name === lifecycle.field) return;
     if (lifecycle && (state !== lifecycle.initial || lifecycle.states.some((candidate) => candidate.name === to && candidate.name !== lifecycle.initial))) return;
-    const action = described.edit;
-    if (action && !action.confirmationOnly && allowed(id, action.schema) &&
-        !action.payload.some((parameter) => parameter.required && !enterable(parameter))) return { row, current, step: undefined, action };
+    const action = editFor(id);
+    if (action) return { row, current, step: undefined, action };
+  };
+  const editFor = (id: string) => {
+    const action = described?.edit;
+    return action && !action.confirmationOnly && allowed(id, action.schema) && !action.payload.some((parameter) => parameter.required && !enterable(parameter)) ? action : undefined;
   };
   const move: Move = async (id, to) => {
     const moving = actionFor(id, to);
-    if (!moving || !described || !laneField) return;
-    const { row, current, step, action } = moving;
+    if (moving && laneField) await change(id, moving.row, laneField.name, to, moving.action, moving.step, moving.current);
+  };
+  const reschedule = async (id: string, field: string, day: string) => {
+    const row = byId.get(id);
+    const action = editFor(id);
+    const target = described?.field(field);
+    if (row && action && target) await change(id, row, field, dayValue(target, row[field], day), action);
+  };
+  const change = async (id: string, row: Row, field: string, to: string, action: Api.Action, step?: Step, current = "") => {
+    if (!described) return;
     const revision = Number(row.revision);
-    const only = step ? undefined : described.needs({ ...row, [laneField.name]: to }, [laneField.name]).map((field) => field.name);
-    if (!step && !only?.length && !action.needsApproval && !action.payload.some((parameter) => parameter.required && parameter.name !== laneField.name)) {
-      await send(action, id, { [laneField.name]: to }, revision);
+    const only = step ? undefined : described.needs({ ...row, [field]: to }, [field]).map((need) => need.name);
+    if (!step && !only?.length && !action.needsApproval && !action.payload.some((parameter) => parameter.required && parameter.name !== field)) {
+      await send(action, id, { [field]: to }, revision);
       return;
     }
     await new Promise<void>((resolve, reject) => {
@@ -290,7 +325,7 @@ export function Records({ declared, listPath, id, back }: { declared: Declared; 
       } satisfies Pick<Intent, "onRefused" | "onDone" | "onCancel">;
       const intent = step ? stepIntent(described, step, current, record, callbacks, to)
         : { action, ...record, label: t(action.title), reversible: false, only: only?.length ? only : undefined, ...callbacks };
-      const target = step ? step.transition.toInput : laneField.name;
+      const target = step ? step.transition.toInput : field;
       act.run(target ? { ...intent, fixed: { [target]: to }, reversible: false } : intent);
     });
   };
@@ -315,6 +350,12 @@ export function Records({ declared, listPath, id, back }: { declared: Declared; 
         return typeof amount === "number" && Number.isFinite(amount) ? { amount } : undefined;
       },
     },
+  } : undefined;
+  const calendar: RecordShape["calendar"] = dateFields.length ? {
+    fields: dateFields.map((field) => ({ key: field.name, label: t(field.title) })),
+    of: (row, field) => dayOf(row[field]),
+    accepts: (id) => Boolean(editFor(id)),
+    move: reschedule,
   } : undefined;
   const [detailFailure, setDetailFailure] = useState("");
   const detail: ListShape<Api.RecordPage, Row>["detail"] = described && ((chosen) => {
@@ -341,12 +382,12 @@ export function Records({ declared, listPath, id, back }: { declared: Declared; 
   const definition = useMemo(() => {
     if (!described) return pending;
     return {
-      ...shape(described, declared, listPath, { board, bulk, detail }, options),
+      ...shape(described, declared, listPath, { board, calendar, bulk, detail }, options),
       remote: "all" as const,
       unfiltered: records.unfiltered,
       page: { total: records.total, loaded: records.loaded, hasMore: records.hasMore, loading: records.loading, loadMore: records.loadMore },
     };
-  }, [described, declared, listPath, pending, board, bulk, options, detail, records.total, records.unfiltered, records.loaded, records.hasMore, records.loading, records.loadMore]);
+  }, [described, declared, listPath, pending, board, calendar, bulk, options, detail, records.total, records.unfiltered, records.loaded, records.hasMore, records.loading, records.loadMore]);
   const create = described?.create;
   const exportList = async () => {
     setExportFailure("");

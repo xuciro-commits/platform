@@ -7,8 +7,9 @@ import { StatusDot } from "@astryxdesign/core/StatusDot";
 import { Heading, Text } from "@astryxdesign/core/Text";
 import { Timestamp } from "@astryxdesign/core/Timestamp";
 import * as stylex from "@stylexjs/stylex";
-import { type PointerEvent as ReactPointerEvent, type ReactNode, useEffect, useRef, useState } from "react";
+import type { PointerEvent as ReactPointerEvent, ReactNode } from "react";
 import { t } from "../i18n";
+import { dragStyles, useDrag } from "./drag";
 import { useGutter } from "./frame";
 import type { Dot } from "./Transitions";
 
@@ -21,20 +22,12 @@ type BoardProps = {
   accepts?: (id: string, to: string) => boolean;
   page?: { hasMore: boolean; loading: boolean; loadMore: () => void };
 };
-type Drag = { id: string; width: number; height: number; x: number; y: number; target: string | null };
-
-const dragThreshold = 5;
 const columnWidth = 300;
 
 const styles = stylex.create({
   columns: { overflowX: "auto", overflowY: "hidden", height: "100%" },
   column: { flexShrink: 0, flexBasis: columnWidth, height: "100%" },
-  card: { cursor: "grab", userSelect: "none", touchAction: "none", transition: "box-shadow 120ms ease", ":hover": { boxShadow: "var(--shadow-med)" } },
   cardBody: { minWidth: 0 },
-  fixed: { cursor: "default" },
-  floating: { position: "fixed", insetBlockStart: 0, insetInlineStart: 0, pointerEvents: "none", willChange: "transform", boxShadow: "var(--shadow-high)", zIndex: 1000 },
-  floatingAt: (x: number, y: number, width: number) => ({ width, transform: `translate3d(${x}px, ${y}px, 0)` }),
-  ghost: (height: number) => ({ height, borderRadius: "var(--radius-container)", backgroundColor: "var(--color-background-muted)" }),
 });
 
 function CardBody({ card }: { card: BoardCard }) {
@@ -69,68 +62,7 @@ function CardBody({ card }: { card: BoardCard }) {
 
 export function BoardView({ columns, cards, onMove, accepts, page, total }: BoardProps) {
   const gutter = useGutter();
-  const [drag, setDrag] = useState<Drag | null>(null);
-  const columnElements = useRef(new Map<string, HTMLElement>());
-  const cardElements = useRef(new Map<string, HTMLElement>());
-  const floatingElement = useRef<HTMLDivElement | null>(null);
-  const teardown = useRef<(() => void) | null>(null);
-
-  useEffect(() => () => teardown.current?.(), []);
-
-  const press = (event: ReactPointerEvent, card: BoardCard) => {
-    const element = cardElements.current.get(card.id);
-    if (!onMove || event.button !== 0 || !element || (event.target as HTMLElement).closest("a, button")) return;
-    event.preventDefault();
-    window.getSelection()?.removeAllRanges();
-    const box = element.getBoundingClientRect();
-    const startX = event.clientX;
-    const startY = event.clientY;
-    const offsetX = startX - box.left;
-    const offsetY = startY - box.top;
-    const rects = [...columnElements.current].map(([key, node]) => ({ key, box: node.getBoundingClientRect() }));
-    const columnAt = (x: number, y: number) => rects.find((entry) => x >= entry.box.left && x <= entry.box.right && y >= entry.box.top && y <= entry.box.bottom)?.key ?? null;
-    const prevSelect = document.body.style.userSelect;
-    const prevCursor = document.body.style.cursor;
-    let started = false;
-    let target: string | null = null;
-    const move = (moved: PointerEvent) => {
-      if (!started && Math.abs(moved.clientX - startX) + Math.abs(moved.clientY - startY) < dragThreshold) return;
-      const x = moved.clientX - offsetX;
-      const y = moved.clientY - offsetY;
-      const over = columnAt(moved.clientX, moved.clientY);
-      const nextTarget = over && (over === card.column || !accepts || accepts(card.id, over)) ? over : null;
-      if (!started) {
-        started = true;
-        target = nextTarget;
-        document.body.style.userSelect = "none";
-        document.body.style.cursor = "grabbing";
-        window.getSelection()?.removeAllRanges();
-        setDrag({ id: card.id, width: box.width, height: box.height, x, y, target: nextTarget });
-        return;
-      }
-      if (floatingElement.current) floatingElement.current.style.transform = `translate3d(${x}px, ${y}px, 0)`;
-      if (nextTarget !== target) {
-        target = nextTarget;
-        setDrag((current) => (current ? { ...current, x, y, target: nextTarget } : null));
-      }
-    };
-    const release = () => {
-      teardown.current?.();
-      if (started && target && target !== card.column) onMove(card.id, target);
-      setDrag(null);
-    };
-    teardown.current = () => {
-      window.removeEventListener("pointermove", move);
-      window.removeEventListener("pointerup", release);
-      window.removeEventListener("pointercancel", release);
-      document.body.style.userSelect = prevSelect;
-      document.body.style.cursor = prevCursor;
-      teardown.current = null;
-    };
-    window.addEventListener("pointermove", move);
-    window.addEventListener("pointerup", release);
-    window.addEventListener("pointercancel", release);
-  };
+  const { drag, press, floating, target, item } = useDrag(onMove, accepts);
 
   const lifted = drag ? cards.find((card) => card.id === drag.id) : undefined;
 
@@ -172,26 +104,20 @@ export function BoardView({ columns, cards, onMove, accepts, page, total }: Boar
               role="region"
               label={label}
               padding={2}
-              ref={(element: HTMLDivElement | null) => {
-                if (element && key) columnElements.current.set(key, element);
-                else columnElements.current.delete(key);
-              }}>
+              ref={target(key)}>
               <VStack gap={2}>
                 {resting.map((card) => (
                   <Card
                     key={card.id}
                     padding={3}
-                    xstyle={[styles.card, !onMove && styles.fixed]}
-                    ref={(element: HTMLDivElement | null) => {
-                      if (element) cardElements.current.set(card.id, element);
-                      else cardElements.current.delete(card.id);
-                    }}
-                    onPointerDown={(event: ReactPointerEvent) => press(event, card)}>
+                    xstyle={[dragStyles.item, !onMove && dragStyles.fixed]}
+                    ref={item(card.id)}
+                    onPointerDown={(event: ReactPointerEvent) => press(event, card.id, card.column)}>
                     <CardBody card={card} />
                   </Card>
                 ))}
                 {page?.hasMore && <Button label={t("Load more")} variant="secondary" size="sm" isLoading={page.loading} onClick={page.loadMore} />}
-                {drag && drag.target === key && <VStack xstyle={styles.ghost(drag.height)} />}
+                {drag && drag.target === key && <VStack xstyle={dragStyles.ghost(drag.height)} />}
               </VStack>
             </LayoutContent>
           }
@@ -207,7 +133,7 @@ export function BoardView({ columns, cards, onMove, accepts, page, total }: Boar
         {missing.length > 0 && column({ key: "", label: t("None") })}
       </HStack>
       {drag && lifted && (
-        <Card ref={floatingElement} padding={3} xstyle={[styles.floating, styles.floatingAt(drag.x, drag.y, drag.width)]}>
+        <Card ref={floating} padding={3} xstyle={[dragStyles.floating, dragStyles.floatingAt(drag.x, drag.y, drag.width)]}>
           <CardBody card={lifted} />
         </Card>
       )}

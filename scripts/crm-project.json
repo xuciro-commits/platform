@@ -2149,7 +2149,8 @@
           "filters": [],
           "search": "",
           "group": "none",
-          "lanes": "status"
+          "lanes": "status",
+          "dates": "expectedclose"
         },
         "fields": [
           {
@@ -3385,7 +3386,8 @@
           "filters": [],
           "search": "",
           "group": "none",
-          "lanes": "status"
+          "lanes": "status",
+          "dates": "duedate"
         },
         "fields": [
           {
