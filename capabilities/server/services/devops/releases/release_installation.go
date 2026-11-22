@@ -64,8 +64,8 @@ type ReleaseUpgradePlan struct {
 	Additions   []ReleaseFieldAddition `json:"additions"`
 }
 
-func OptionalStoredAddition(old, next platform.RecordTypeInfo) *platform.FieldInfo {
-	if len(next.Fields) != len(old.Fields)+1 {
+func OptionalStoredAdditions(old, next platform.RecordTypeInfo) []platform.FieldInfo {
+	if len(next.Fields) <= len(old.Fields) {
 		return nil
 	}
 	for _, field := range old.Fields {
@@ -74,6 +74,7 @@ func OptionalStoredAddition(old, next platform.RecordTypeInfo) *platform.FieldIn
 			return nil
 		}
 	}
+	var added []platform.FieldInfo
 	for _, field := range next.Fields {
 		if _, exists := old.Field(field.Name); exists {
 			continue
@@ -81,9 +82,20 @@ func OptionalStoredAddition(old, next platform.RecordTypeInfo) *platform.FieldIn
 		if field.Required || field.Ref != "" || field.Property != nil || field.ValueType != nil || len(field.Choices) != 0 || !slices.Contains([]string{"text", "longtext", "integer", "decimal", "boolean", "date", "datetime"}, field.Type) {
 			return nil
 		}
-		return &field
+		added = append(added, field)
 	}
-	return nil
+	if len(added) == 0 {
+		return nil
+	}
+	return added
+}
+
+func OptionalStoredAddition(old, next platform.RecordTypeInfo) *platform.FieldInfo {
+	added := OptionalStoredAdditions(old, next)
+	if len(added) != 1 {
+		return nil
+	}
+	return &added[0]
 }
 
 func CompatibleStoredRemoval(old, next platform.RecordTypeInfo) bool {
@@ -171,15 +183,17 @@ func UpgradePlan(candidate, active string, shapes []StoredShape) (*ReleaseUpgrad
 		if shape.Records == 0 || SameStoredFields(shape.Before, shape.After) {
 			continue
 		}
-		field := OptionalStoredAddition(shape.Before, shape.After)
-		if field == nil {
+		fields := OptionalStoredAdditions(shape.Before, shape.After)
+		if len(fields) == 0 {
 			return nil, fmt.Errorf("object %s needs an unsupported storage migration", shape.Before.Type)
 		}
 		digest, err := platform.CanonicalDigest(shape.Before.Fields)
 		if err != nil {
 			return nil, err
 		}
-		plan.Additions = append(plan.Additions, ReleaseFieldAddition{Type: shape.Before.Type, Field: field.Name, Kind: field.Type, Records: shape.Records, SourceShape: digest})
+		for _, field := range fields {
+			plan.Additions = append(plan.Additions, ReleaseFieldAddition{Type: shape.Before.Type, Field: field.Name, Kind: field.Type, Records: shape.Records, SourceShape: digest})
+		}
 	}
 
 	if len(plan.Additions) == 0 {
@@ -384,7 +398,7 @@ func CheckStorage(shapes []StoredShape, before, after []platform.Definition, upg
 		if SameStoredFields(shape.Before, shape.After) {
 			continue
 		}
-		if upgrade && OptionalStoredAddition(shape.Before, shape.After) != nil {
+		if upgrade && len(OptionalStoredAdditions(shape.Before, shape.After)) > 0 {
 			continue
 		}
 		if allowContraction && CompatibleStoredRemoval(shape.Before, shape.After) {

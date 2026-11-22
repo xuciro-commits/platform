@@ -3663,6 +3663,15 @@ export type PackageDescriptor = {
   description?: string;
 };
 
+export type PackageFieldChange = {
+  name: string;
+  change: string;
+  before?: string;
+  after?: string;
+  incompatible?: boolean;
+  reason?: string;
+};
+
 export type PackageImpactConnection = {
   resource: AssetRef;
   configured: boolean;
@@ -3691,6 +3700,7 @@ export type PackageImpactReference = {
 export type PackageInspectRequest = {
   url?: string;
   content?: unknown;
+  expectedSha256?: string;
 };
 
 export type PackageInstallPlan = {
@@ -3753,6 +3763,7 @@ export type PackagePreparation = {
 export type PackagePreview = {
   descriptor: PackageDescriptor;
   digest: string;
+  artifactSha256?: string;
   origin: string;
   precheck: Precheck;
 };
@@ -3773,6 +3784,7 @@ export type PackageResourceChange = {
   change: string;
   before?: string;
   after?: string;
+  fields?: PackageFieldChange[];
 };
 
 export type PackageReview = {

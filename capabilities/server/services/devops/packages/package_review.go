@@ -67,10 +67,19 @@ type Review struct {
 func (rv Review) Of(views []protocol.PackageView, chosen *protocol.PackageView, uninstall bool) (PackageReview, error) {
 	answer := PackageReview{ID: chosen.Descriptor.ID, Version: chosen.Descriptor.Version, Changes: []protocol.PackageResourceChange{}, Extensions: []platform.PackageImpactExtension{}}
 	before, after := map[platform.AssetRef]platform.ReleaseAsset{}, map[platform.AssetRef]platform.ReleaseAsset{}
+	space := ""
 	if held := chosen.Installed; held != nil && held.State != "retired" {
+		space = held.Space
 		for _, view := range views {
 			if view.Descriptor.ID == held.ID && view.Descriptor.Version == held.Version && view.Descriptor.Blueprint != nil {
-				assets, err := rv.Blueprint(view.Descriptor.Blueprint.Assets)
+				desc := view.Descriptor
+				if space != "" {
+					var err error
+					if desc, err = Rebind(desc, space); err != nil {
+						return answer, err
+					}
+				}
+				assets, err := rv.Blueprint(desc.Blueprint.Assets)
 				if err != nil {
 					return answer, err
 				}
@@ -80,7 +89,14 @@ func (rv Review) Of(views []protocol.PackageView, chosen *protocol.PackageView, 
 			}
 		}
 	}
-	if blueprint := chosen.Descriptor.Blueprint; blueprint != nil {
+	chosenDesc := chosen.Descriptor
+	if space != "" && chosenDesc.Blueprint != nil {
+		var err error
+		if chosenDesc, err = Rebind(chosenDesc, space); err != nil {
+			return answer, err
+		}
+	}
+	if blueprint := chosenDesc.Blueprint; blueprint != nil {
 		assets, err := rv.Blueprint(blueprint.Assets)
 		if err != nil {
 			return answer, err
@@ -139,7 +155,16 @@ func (rv Review) Of(views []protocol.PackageView, chosen *protocol.PackageView, 
 		if exists {
 			change = "Changed"
 		}
-		answer.Changes = append(answer.Changes, protocol.PackageResourceChange{Ref: ref, Change: change, Before: old.SourceVersion, After: asset.SourceVersion})
+		entry := protocol.PackageResourceChange{Ref: ref, Change: change, Before: old.SourceVersion, After: asset.SourceVersion}
+		if exists && ref.Kind == platform.AssetObject {
+			entry.Fields = diffObjectFields(ref.Name, old.Body, asset.Body, !chosen.Downgrade)
+			for _, field := range entry.Fields {
+				if field.Incompatible && field.Reason != "" {
+					answer.Problems = append(answer.Problems, field.Reason)
+				}
+			}
+		}
+		answer.Changes = append(answer.Changes, entry)
 	}
 	for ref, asset := range before {
 		if _, exists := after[ref]; !exists {
@@ -148,4 +173,62 @@ func (rv Review) Of(views []protocol.PackageView, chosen *protocol.PackageView, 
 	}
 	slices.SortFunc(answer.Changes, func(a, b protocol.PackageResourceChange) int { return strings.Compare(a.Ref.String(), b.Ref.String()) })
 	return answer, nil
+}
+
+type reviewedObjectField struct {
+	Name     string   `json:"name"`
+	Type     string   `json:"type"`
+	Required bool     `json:"required"`
+	Ref      string   `json:"ref"`
+	Choices  []string `json:"choices"`
+}
+
+func diffObjectFields(object string, beforeRaw, afterRaw json.RawMessage, checkUpgrade bool) []protocol.PackageFieldChange {
+	var oldDoc, newDoc struct {
+		Fields []reviewedObjectField `json:"fields"`
+	}
+	if json.Unmarshal(beforeRaw, &oldDoc) != nil || json.Unmarshal(afterRaw, &newDoc) != nil {
+		return nil
+	}
+	oldMap := map[string]reviewedObjectField{}
+	for _, field := range oldDoc.Fields {
+		oldMap[field.Name] = field
+	}
+	newMap := map[string]reviewedObjectField{}
+	for _, field := range newDoc.Fields {
+		newMap[field.Name] = field
+	}
+	var out []protocol.PackageFieldChange
+	for _, field := range newDoc.Fields {
+		prev, exists := oldMap[field.Name]
+		if !exists {
+			item := protocol.PackageFieldChange{Name: field.Name, Change: "added", After: field.Type}
+			if checkUpgrade && field.Required {
+				item.Incompatible = true
+				item.Reason = "Adding required field " + object + "." + field.Name + " is incompatible with existing records"
+			}
+			out = append(out, item)
+			continue
+		}
+		if prev.Type != field.Type || prev.Required != field.Required || prev.Ref != field.Ref || !slices.Equal(prev.Choices, field.Choices) {
+			item := protocol.PackageFieldChange{Name: field.Name, Change: "changed", Before: prev.Type, After: field.Type}
+			if checkUpgrade {
+				item.Incompatible = true
+				item.Reason = "Changing field " + object + "." + field.Name + " from " + prev.Type + " to " + field.Type + " is incompatible with existing records"
+			}
+			out = append(out, item)
+		}
+	}
+	for _, prev := range oldDoc.Fields {
+		if _, exists := newMap[prev.Name]; !exists {
+			item := protocol.PackageFieldChange{Name: prev.Name, Change: "removed", Before: prev.Type}
+			if checkUpgrade {
+				item.Incompatible = true
+				item.Reason = "Removing field " + object + "." + prev.Name + " is incompatible with existing records"
+			}
+			out = append(out, item)
+		}
+	}
+	slices.SortFunc(out, func(a, b protocol.PackageFieldChange) int { return strings.Compare(a.Name, b.Name) })
+	return out
 }

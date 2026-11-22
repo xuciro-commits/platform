@@ -65,11 +65,21 @@ type PackageInstallStep struct {
 	Problem          string `json:"problem,omitempty"`
 }
 
+type PackageFieldChange struct {
+	Name         string `json:"name"`
+	Change       string `json:"change"`
+	Before       string `json:"before,omitempty"`
+	After        string `json:"after,omitempty"`
+	Incompatible bool   `json:"incompatible,omitempty"`
+	Reason       string `json:"reason,omitempty"`
+}
+
 type PackageResourceChange struct {
-	Ref    platform.AssetRef `json:"ref"`
-	Change string            `json:"change"`
-	Before string            `json:"before,omitempty"`
-	After  string            `json:"after,omitempty"`
+	Ref    platform.AssetRef    `json:"ref"`
+	Change string               `json:"change"`
+	Before string               `json:"before,omitempty"`
+	After  string               `json:"after,omitempty"`
+	Fields []PackageFieldChange `json:"fields,omitempty"`
 }
 
 type PackageInstallPlan struct {
@@ -101,15 +111,17 @@ type PackageSource struct {
 }
 
 type PackageInspectRequest struct {
-	URL     string          `json:"url,omitempty"`
-	Content json.RawMessage `json:"content,omitempty"`
+	URL            string          `json:"url,omitempty"`
+	Content        json.RawMessage `json:"content,omitempty"`
+	ExpectedSha256 string          `json:"expectedSha256,omitempty"`
 }
 
 type PackagePreview struct {
-	Descriptor platform.PackageDescriptor `json:"descriptor"`
-	Digest     string                     `json:"digest"`
-	Origin     string                     `json:"origin"`
-	Precheck   Precheck                   `json:"precheck"`
+	Descriptor     platform.PackageDescriptor `json:"descriptor"`
+	Digest         string                     `json:"digest"`
+	ArtifactSha256 string                     `json:"artifactSha256,omitempty"`
+	Origin         string                     `json:"origin"`
+	Precheck       Precheck                   `json:"precheck"`
 }
 
 type Offer struct {

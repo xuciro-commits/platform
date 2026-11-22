@@ -121,14 +121,20 @@ export function PackageReviewContent({
 
       {mode === "install" && changes.length > 0 && (
         <List header={`${t("Resource changes")} (${changes.length})`} hasDividers>
-          {changes.slice(0, 12).map((change) => (
-            <ListItem
-              key={`${change.ref.kind}:${change.ref.name}`}
-              label={change.ref.name}
-              description={`${t(change.ref.kind)}${change.before || change.after ? ` · ${change.before ?? "—"} → ${change.after ?? "—"}` : ""}`}
-              endContent={<Token label={t(change.change)} color={changeColor(change.change)} size="sm" />}
-            />
-          ))}
+          {changes.slice(0, 12).map((change) => {
+            const fieldSummary = (change.fields ?? [])
+              .map((field) => `${field.change === "added" ? "+" : field.change === "removed" ? "-" : "~"} ${field.name}${field.before || field.after ? ` (${field.before ?? ""}${field.before && field.after ? " → " : ""}${field.after ?? ""})` : ""}`)
+              .join(", ");
+            const hasIncompatible = (change.fields ?? []).some((field) => field.incompatible);
+            return (
+              <ListItem
+                key={`${change.ref.kind}:${change.ref.name}`}
+                label={change.ref.name}
+                description={`${t(change.ref.kind)}${fieldSummary ? ` · ${fieldSummary}` : change.before || change.after ? ` · ${change.before ?? "—"} → ${change.after ?? "—"}` : ""}`}
+                endContent={<Token label={t(change.change)} color={hasIncompatible ? "red" : changeColor(change.change)} size="sm" />}
+              />
+            );
+          })}
         </List>
       )}
 

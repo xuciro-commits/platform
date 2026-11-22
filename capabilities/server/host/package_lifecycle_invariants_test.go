@@ -170,3 +170,147 @@ func TestInvariantK9PackageRetireAndReinstallPreserveData(t *testing.T) {
 		t.Fatalf("rollback installed %s, want %s", version, next.Version)
 	}
 }
+
+func TestInvariantK9PackageUpgradeFieldReviewAndIncompatibleGate(t *testing.T) {
+	publishVersion := func(tag string, fields []map[string]any) platform.PackageDescriptor {
+		t.Helper()
+		source := newInvariantTenant(t, "pkg-upg-src-"+tag)
+		object := invariantObject("lead", "Lead")
+		object["fields"] = fields
+		source.accept(t, "build.object.create", build.ObjectType, "OBJ1", object)
+		source.accept(t, "build.app.create", protocol.AppType, "APP1", map[string]any{
+			"name": "leadapp", "title": "Lead application",
+			"resources": []platform.AssetRef{{App: build.ID, Kind: platform.AssetObject, Name: "invariantproject.lead"}},
+		})
+		candidateID := invariantPublishData(t, source, source.member(t), []build.JointDraftRef{
+			{Kind: platform.AssetObject, ID: "OBJ1"},
+			{Kind: platform.AssetApp, ID: "APP1"},
+		}, "pkg-upg-"+tag)
+		candidate, err := PublicationResolver().ReadCandidate(candidateID, source.releases.Raw(candidateID))
+		if err != nil {
+			t.Fatal(err)
+		}
+		return platform.PackageDescriptor{
+			ID: "leadpkg", Version: tag, Namespace: "leadpkg", Title: "Lead package",
+			Blueprint: &platform.PackageBlueprint{
+				Roots:  []platform.AssetRef{{App: build.ID, Kind: platform.AssetApp, Name: "leadapp"}},
+				Assets: candidate.Assets,
+			},
+		}
+	}
+
+	v1 := publishVersion("1.0.0", []map[string]any{
+		{"name": "note", "title": "Note", "type": "text"},
+	})
+	v2 := publishVersion("1.1.0", []map[string]any{
+		{"name": "note", "title": "Note", "type": "text"},
+		{"name": "channel", "title": "Channel", "type": "text"},
+		{"name": "score", "title": "Score", "type": "integer"},
+	})
+	v3BadType := publishVersion("1.2.0", []map[string]any{
+		{"name": "note", "title": "Note", "type": "integer"},
+		{"name": "channel", "title": "Channel", "type": "text"},
+		{"name": "score", "title": "Score", "type": "integer"},
+	})
+	v4BadRemove := publishVersion("1.3.0", []map[string]any{
+		{"name": "note", "title": "Note", "type": "text"},
+	})
+
+	seat := protocol.Seat{Subjects: []string{"package-admin"}, Member: platform.Member{
+		ID: "package-admin", Roles: map[string]string{"platform": "admin"},
+	}}
+	target := newInvariantTenant(t, "pkg-upg-target", seat)
+	admin, _ := target.Member("package-admin")
+	submit := func(schema string, payload any) *platform.Error {
+		submission := target.submission(schema, protocol.PackageType, v1.ID, payload)
+		submission.Authority, submission.PrincipalId = "platform", admin.ID
+		_, refusal := target.Submit(admin, submission, invariantClock)
+		return refusal
+	}
+	importDesc := func(desc platform.PackageDescriptor) {
+		t.Helper()
+		preview, err := target.inspectPackage(context.Background(), protocol.PackageInspectRequest{Content: platform.Raw(desc)})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if refusal := submit(packages.SchemaPackageImport, map[string]any{"id": desc.ID, "digest": preview.Digest}); refusal != nil {
+			t.Fatalf("import %s: %#v", desc.Version, refusal)
+		}
+	}
+	reviewVersion := func(version string) packages.PackageReview {
+		t.Helper()
+		catalog := target.App("platform").(interface {
+			PackageViews() []protocol.PackageView
+			LifecycleImpact(platform.Caller, string, []platform.ReleaseAsset) (platform.PackageLifecycleImpact, error)
+		})
+		views := catalog.PackageViews()
+		chosen := packages.FindView(views, v1.ID, version)
+		if chosen == nil {
+			t.Fatalf("version %s not found", version)
+		}
+		c := target.caller(admin, target.App("platform"), false)
+		answer, err := packages.Review{
+			Resolver:  PublicationResolver(),
+			Blueprint: target.builders[build.ID].CompleteBlueprintAssets,
+			Impact: func(id string, after []platform.ReleaseAsset) (platform.PackageLifecycleImpact, error) {
+				return catalog.LifecycleImpact(c, id, after)
+			},
+		}.Of(views, chosen, false)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return answer
+	}
+
+	importDesc(v1)
+	if refusal := submit(packages.SchemaPackageInstall, map[string]any{"id": v1.ID, "version": v1.Version, "namespace": "leadpkg"}); refusal != nil {
+		t.Fatalf("install v1: %#v", refusal)
+	}
+	target.accept(t, "leadpkg.lead.create", "leadpkg.lead", "L1", map[string]any{"note": "Keep lead"})
+
+	importDesc(v2)
+	rev2 := reviewVersion("1.1.0")
+	if len(rev2.Problems) != 0 {
+		t.Fatalf("compatible upgrade review had problems: %+v", rev2.Problems)
+	}
+	var addedFields []string
+	for _, change := range rev2.Changes {
+		for _, field := range change.Fields {
+			if field.Change == "added" {
+				addedFields = append(addedFields, field.Name)
+			}
+		}
+	}
+	if !slices.Contains(addedFields, "channel") || !slices.Contains(addedFields, "score") {
+		t.Fatalf("upgrade review missing added fields: %+v", rev2.Changes)
+	}
+	if refusal := submit(packages.SchemaPackageUpgrade, map[string]any{"id": v2.ID, "version": v2.Version}); refusal != nil {
+		t.Fatalf("upgrade to v2 with two optional fields failed: %#v", refusal)
+	}
+	view, refusal := target.RecordOf(t.Context(), target.member(t), "leadpkg.lead", "L1", invariantClock)
+	if refusal != nil {
+		t.Fatalf("read record after v2 upgrade: %v", refusal)
+	}
+	var rec map[string]any
+	if json.Unmarshal(platform.Raw(view.Record), &rec) != nil || rec["note"] != "Keep lead" {
+		t.Fatalf("upgrade lost existing record value: %#v", rec)
+	}
+
+	importDesc(v3BadType)
+	rev3 := reviewVersion("1.2.0")
+	if len(rev3.Problems) == 0 || !strings.Contains(strings.Join(rev3.Problems, ";"), "Changing field") {
+		t.Fatalf("type-change upgrade must be refused in review: %+v", rev3.Problems)
+	}
+	if refusal := submit(packages.SchemaPackageUpgrade, map[string]any{"id": v3BadType.ID, "version": v3BadType.Version}); refusal == nil {
+		t.Fatal("type-change upgrade must be refused on submit")
+	}
+
+	importDesc(v4BadRemove)
+	rev4 := reviewVersion("1.3.0")
+	if len(rev4.Problems) == 0 || !strings.Contains(strings.Join(rev4.Problems, ";"), "Removing field") {
+		t.Fatalf("field-removal upgrade must be refused in review: %+v", rev4.Problems)
+	}
+	if refusal := submit(packages.SchemaPackageUpgrade, map[string]any{"id": v4BadRemove.ID, "version": v4BadRemove.Version}); refusal == nil {
+		t.Fatal("field-removal upgrade must be refused on submit")
+	}
+}
