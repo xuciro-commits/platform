@@ -9,11 +9,19 @@ import (
 )
 
 type changeEvent struct {
-	Seq   int64    `json:"seq"`
-	Types []string `json:"types,omitempty"`
+	Seq    int64    `json:"seq"`
+	Types  []string `json:"types,omitempty"`
+	Scopes []string `json:"scopes,omitempty"`
 }
 
-func FollowChanges(w http.ResponseWriter, r *http.Request, state func() (int64, int64, <-chan struct{}), versions ...func() map[string]uint64) {
+type ChangeFeedSources struct {
+	State   func() (int64, int64, <-chan struct{})
+	Types   func() map[string]uint64
+	Owners  func() (int64, int64, int64, map[string]int64, map[string]int64)
+	Notices func() int64
+}
+
+func FollowChanges(w http.ResponseWriter, r *http.Request, src ChangeFeedSources) {
 	flusher, ok := flushWriter(w)
 	if !ok {
 		http.Error(w, "streaming unsupported", http.StatusInternalServerError)
@@ -22,31 +30,47 @@ func FollowChanges(w http.ResponseWriter, r *http.Request, state func() (int64, 
 	w.Header().Set("Content-Type", "text/event-stream")
 	w.Header().Set("Cache-Control", "no-cache")
 	var data int64 = -1
-	var seen map[string]uint64
+	var seenTypes map[string]uint64
+	var seenOwners map[string]int64
+	var seenNotices int64 = -1
 	var lastPush time.Time
-	readVersions := func() map[string]uint64 {
-		if len(versions) == 0 || versions[0] == nil {
-			return nil
-		}
-		return versions[0]()
-	}
 	for {
-		seq, nextData, wake := state()
+		seq, nextData, wake := src.State()
 		event := "operations"
 		payload := changeEvent{Seq: seq}
 		if data != nextData {
 			event = "changed"
-			if current := readVersions(); current != nil {
-				if seen != nil {
+			if src.Types != nil {
+				current := src.Types()
+				if seenTypes != nil {
 					for typ, ver := range current {
-						if seen[typ] != ver {
+						if seenTypes[typ] != ver {
 							payload.Types = append(payload.Types, typ)
 						}
 					}
 					slices.Sort(payload.Types)
 				}
-				seen = current
+				seenTypes = current
 			}
+			if src.Owners != nil {
+				_, _, _, owners, _ := src.Owners()
+				if seenOwners != nil {
+					for owner, ver := range owners {
+						if owner != "" && seenOwners[owner] != ver {
+							payload.Scopes = append(payload.Scopes, "owner:"+owner)
+						}
+					}
+				}
+				seenOwners = owners
+			}
+			if src.Notices != nil {
+				ver := src.Notices()
+				if seenNotices >= 0 && ver != seenNotices {
+					payload.Scopes = append(payload.Scopes, "notifications")
+				}
+				seenNotices = ver
+			}
+			slices.Sort(payload.Scopes)
 		}
 		data = nextData
 		raw, _ := json.Marshal(payload)

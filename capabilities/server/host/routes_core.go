@@ -28,7 +28,7 @@ func (h *Host) routesCore(rt *routes) {
 			t.liveFollow(m, mux).Serve(w, r)
 			return
 		}
-		transport.FollowChanges(w, r, t.change.State, t.Projection.LiveVersions)
+		transport.FollowChanges(w, r, transport.ChangeFeedSources{State: t.change.State, Types: t.Projection.LiveVersions, Owners: t.change.Versions, Notices: t.Notices.Version})
 	})
 	rt.authorized(transport.Route{Pattern: "POST /v1/recovery/retry", Summary: "Retry recovery of this quarantined tenant from the durable journal after an operator repairs its cause", Answer: TenantHealth{}}, controlowner.PlatformApp, []string{controlowner.Admin}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
 		if h.Recover == nil {

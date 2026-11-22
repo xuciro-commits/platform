@@ -1,5 +1,5 @@
 import type { Api } from "./contract";
-import { changed, changedTypes } from "./read";
+import { changed, changedScopes } from "./read";
 import { refusal, request } from "./request";
 import { currentSession } from "./session";
 
@@ -47,7 +47,10 @@ export async function submit(action: Api.Action, id: string, payload: Record<str
     },
   });
   if (!answer.record) throw refusal(200, answer);
-  if (action.target) changedTypes([action.target]);
+  const scopes: string[] = [];
+  if (authority) scopes.push(`owner:${authority}`);
+  if (action.target === "notification" || action.schema.includes("notification")) scopes.push("notifications");
+  if (action.target || scopes.length > 0) changedScopes(action.target ? [action.target] : undefined, scopes);
   else changed();
   return { ...answer.record, id: answer.record.submission?.target?.id || id };
 }

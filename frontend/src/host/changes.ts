@@ -1,8 +1,8 @@
 import { useEffect } from "react";
-import { changedTypes } from "./read";
+import { changedScopes } from "./read";
 import { endSession, useSession } from "./session";
 
-type ChangePayload = { seq?: number; types?: string[] };
+type ChangePayload = { seq?: number; types?: string[]; scopes?: string[] };
 
 function parseFrame(frame: string): { event: string; data: string } | null {
   let event = "";
@@ -14,13 +14,16 @@ function parseFrame(frame: string): { event: string; data: string } | null {
   return event ? { event, data } : null;
 }
 
-function typesOf(data: string): string[] | undefined {
-  if (!data.startsWith("{")) return undefined;
+function parseChange(data: string): { types?: string[]; scopes?: string[] } {
+  if (!data.startsWith("{")) return {};
   try {
     const parsed = JSON.parse(data) as ChangePayload;
-    return Array.isArray(parsed.types) && parsed.types.length > 0 ? parsed.types : undefined;
+    return {
+      types: Array.isArray(parsed.types) && parsed.types.length > 0 ? parsed.types : undefined,
+      scopes: Array.isArray(parsed.scopes) && parsed.scopes.length > 0 ? parsed.scopes : undefined,
+    };
   } catch {
-    return undefined;
+    return {};
   }
 }
 
@@ -37,14 +40,18 @@ export function useLiveChanges() {
     let connectedBefore = false;
     let missedAll = false;
     const missedTypes = new Set<string>();
+    const missedScopes = new Set<string>();
 
-    const dispatch = (types?: string[]) => {
+    const dispatch = (types?: string[], scopes?: string[]) => {
       if (document.visibilityState !== "visible") {
-        if (!types || types.length === 0) missedAll = true;
-        else for (const typ of types) missedTypes.add(typ);
+        if ((!types || types.length === 0) && (!scopes || scopes.length === 0)) missedAll = true;
+        else {
+          for (const typ of types ?? []) missedTypes.add(typ);
+          for (const scope of scopes ?? []) missedScopes.add(scope);
+        }
         return;
       }
-      changedTypes(types);
+      changedScopes(types, scopes);
     };
 
     const onVisibility = () => {
@@ -52,11 +59,14 @@ export function useLiveChanges() {
       if (missedAll) {
         missedAll = false;
         missedTypes.clear();
-        changedTypes();
-      } else if (missedTypes.size > 0) {
+        missedScopes.clear();
+        changedScopes();
+      } else if (missedTypes.size > 0 || missedScopes.size > 0) {
         const types = [...missedTypes];
+        const scopes = [...missedScopes];
         missedTypes.clear();
-        changedTypes(types);
+        missedScopes.clear();
+        changedScopes(types, scopes);
       }
     };
     document.addEventListener("visibilitychange", onVisibility);
@@ -95,7 +105,8 @@ export function useLiveChanges() {
               firstChanged = false;
               continue;
             }
-            dispatch(typesOf(parsed.data));
+            const delta = parseChange(parsed.data);
+            dispatch(delta.types, delta.scopes);
           }
         }
       } catch {

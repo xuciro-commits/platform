@@ -19,6 +19,13 @@ type NoticeBoard struct {
 	mu  sync.Mutex
 	all []platform.Notification
 	seq int
+	ver int64
+}
+
+func (b *NoticeBoard) Version() int64 {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.ver
 }
 
 func (b *NoticeBoard) State() ([]platform.Notification, int) {
@@ -31,6 +38,7 @@ func (b *NoticeBoard) Restore(all []platform.Notification, seq int) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	b.all, b.seq = all, seq
+	b.ver++
 }
 
 func (b *NoticeBoard) Post(n platform.Notification, member string) (platform.Notification, bool) {
@@ -40,6 +48,7 @@ func (b *NoticeBoard) Post(n platform.Notification, member string) (platform.Not
 		return n, false
 	}
 	b.seq++
+	b.ver++
 	n.ID, n.Member = fmt.Sprintf("n-%d", b.seq), member
 	b.all = append(b.all, n)
 	if len(b.all) > NoticesKept {
@@ -76,8 +85,9 @@ func (b *NoticeBoard) Owner(id string) (string, bool) {
 func (b *NoticeBoard) MarkRead(id string) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
-	if i := slices.IndexFunc(b.all, func(x platform.Notification) bool { return x.ID == id }); i >= 0 {
+	if i := slices.IndexFunc(b.all, func(x platform.Notification) bool { return x.ID == id }); i >= 0 && !b.all[i].Read {
 		b.all[i].Read = true
+		b.ver++
 	}
 }
 
@@ -85,8 +95,9 @@ func (b *NoticeBoard) MarkKeysRead(app string, keys []string) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	for i, n := range b.all {
-		if n.App == app && slices.Contains(keys, n.Key) {
+		if n.App == app && slices.Contains(keys, n.Key) && !b.all[i].Read {
 			b.all[i].Read = true
+			b.ver++
 		}
 	}
 }
