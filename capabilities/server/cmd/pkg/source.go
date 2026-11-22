@@ -369,7 +369,7 @@ func readResources(dir string) ([]resource, error) {
 			return err
 		}
 		rel, _ := filepath.Rel(dir, path)
-		if rel == manifestFile || rel == setupFile {
+		if rel == manifestFile || rel == setupFile || strings.HasPrefix(filepath.ToSlash(rel), localesDir+"/") {
 			return nil
 		}
 		kind, ok := classify(rel)
@@ -385,6 +385,9 @@ func readResources(dir string) ([]resource, error) {
 			return fmt.Errorf("%s: a resource is a mapping", rel)
 		}
 		ref := platform.AssetRef{App: "build", Kind: platform.AssetKind(kind), Name: refName(kind, body)}
+		if kind == "action" && !body.has("schema") && strings.HasPrefix(filepath.ToSlash(rel), "objects/") {
+			ref.Name = "@" + filepath.ToSlash(rel)
+		}
 		if strings.HasSuffix(ref.Name, ".") || ref.Name == "" || ref.Name == "build." {
 			return fmt.Errorf("%s: the resource needs a name", rel)
 		}
@@ -475,6 +478,9 @@ func build(dir string, previous *platform.PackageDescriptor) (built, error) {
 	}
 	resources, err := readResources(dir)
 	if err != nil {
+		return built{}, err
+	}
+	if resources, err = expand(dir, resources, previous != nil && previous.Version == version); err != nil {
 		return built{}, err
 	}
 	resolver := host.PublicationResolver()

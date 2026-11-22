@@ -39,6 +39,16 @@ function walk(dir) {
 const problems = [];
 const report = (file, line, message) => problems.push(`frontend/src/${file}:${line}: ${message}`);
 
+{
+  const head = readFileSync(join(src, "pages/icons.ts"), "utf8").split('} from "@heroicons')[0];
+  const kebab = (name) => name.replace(/Icon$/, "").replace(/([a-z])([A-Z0-9])/g, "$1-$2").replace(/([A-Z0-9])([A-Z][a-z])/g, "$1-$2").toLowerCase();
+  const shown = [...new Set(head.match(/\b[A-Z][A-Za-z0-9]*Icon\b/g) ?? [])].filter((name) => name !== "IconType").map(kebab).sort();
+  const checked = [...readFileSync(resolve(root, "../capabilities/server/services/devops/descriptor/icons.go"), "utf8").matchAll(/"([a-z0-9-]+)"/g)].map((m) => m[1]).sort();
+  if (shown.join() !== checked.join()) {
+    problems.push("frontend/src/pages/icons.ts and capabilities/server/services/devops/descriptor/icons.go list different icons; packages are checked against the Go list");
+  }
+}
+
 const manifest = JSON.parse(readFileSync(join(root, "package.json"), "utf8"));
 for (const name of Object.keys({ ...manifest.dependencies, ...manifest.devDependencies })) {
   if (!allowedPackages.includes(name)) {
