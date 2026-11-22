@@ -43,14 +43,18 @@ export function PackageImportWizard({ onClose, onDone }: { onClose: () => void; 
   const review = useRead<Api.PackageReview>(imported && id && version ? `/v1/packages/${encodeURIComponent(id)}/review?version=${encodeURIComponent(version)}` : null);
   const preparation = useRead<Api.PackagePreparation>(imported && id && version ? `/v1/packages/${encodeURIComponent(id)}/preparation?version=${encodeURIComponent(version)}` : null);
 
-  const reviewProblems = [
+  const reviewProblems = [...new Set([
     ...(importedView?.plan.problems ?? []),
     ...(importedView?.precheck.problems ?? []),
     ...(review.status === "ready" ? review.data.problems ?? [] : review.status === "loading" ? [] : [review.reason]),
     ...(preparation.status === "error" || preparation.status === "refused" ? [preparation.reason] : []),
-    ...(preparation.status === "ready" ? preparation.data.connections.filter((connection) => !connection.ready).map((connection) => `${connection.title}: ${t("Not configured")}`) : []),
-    ...(preparation.status === "ready" ? preparation.data.ai.filter((requirement) => requirement.problem).map((requirement) => requirement.problem!) : []),
-  ];
+  ])];
+  const setupNotices = preparation.status === "ready"
+    ? [...new Set([
+      ...preparation.data.connections.filter((connection) => !connection.ready).map((connection) => `${connection.title}: ${t("Not configured")}`),
+      ...preparation.data.ai.filter((requirement) => requirement.problem).map((requirement) => requirement.problem!),
+    ])]
+    : [];
 
   const steps: WizardStep[] = [
     {
@@ -163,7 +167,7 @@ export function PackageImportWizard({ onClose, onDone }: { onClose: () => void; 
 
   const canProceed =
     step === 0 ? (sourceMode === "file" ? Boolean(file) : Boolean(url.trim()))
-    : step === 1 ? Boolean(preview && importAction)
+    : step === 1 ? Boolean(preview && importAction && (preview.precheck.problems?.length ?? 0) === 0)
     : step === 2 ? Boolean(importedView && review.status === "ready" && preparation.status !== "loading" && reviewProblems.length === 0 && (importedView.installed || namespace.trim()))
     : Boolean(preview && (importedView?.update ? upgradeAction : installAction));
 
@@ -247,22 +251,29 @@ export function PackageImportWizard({ onClose, onDone }: { onClose: () => void; 
         </VStack>
       )}
 
-      {step === 2 && importedView && (
-        <VStack gap={4}>
-          {reviewProblems.length > 0 && (
-            <Banner status="error" title={t("This version cannot be used as it stands")} description={reviewProblems.join(" · ")} />
-          )}
-          {!importedView.installed && (
-            <TextInput
-              label={t("Project API name")}
-              isRequired
-              value={namespace}
-              onChange={setNamespace}
-              description={t("The managed project, its types and its actions take this name. Choose another when this tenant already has a project with it.")}
-            />
-          )}
-          <PackageReviewContent view={importedView} mode="install" review={review} preparation={preparation} />
-        </VStack>
+      {step === 2 && (
+        importedView ? (
+          <VStack gap={4}>
+            {reviewProblems.length > 0 && (
+              <Banner status="error" title={t("This version cannot be used as it stands")} description={reviewProblems.join(" · ")} />
+            )}
+            {setupNotices.length > 0 && (
+              <Banner status="warning" title={t("Configuration needed after installation")} description={setupNotices.join(" · ")} />
+            )}
+            {!importedView.installed && (
+              <TextInput
+                label={t("Project API name")}
+                isRequired
+                value={namespace}
+                onChange={setNamespace}
+                description={t("The managed project, its types and its actions take this name. Choose another when this tenant already has a project with it.")}
+              />
+            )}
+            <PackageReviewContent view={importedView} mode="install" review={review} preparation={preparation} />
+          </VStack>
+        ) : (
+          <Text type="supporting" color="secondary">{t("Loading…")}</Text>
+        )
       )}
 
       {step === 3 && preview && (

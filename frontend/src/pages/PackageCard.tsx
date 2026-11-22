@@ -5,7 +5,19 @@ import { HStack, StackItem, VStack } from "@astryxdesign/core/Layout";
 import { StatusDot } from "@astryxdesign/core/StatusDot";
 import { Text } from "@astryxdesign/core/Text";
 import { colorVars, radiusVars } from "@astryxdesign/core/theme/tokens.stylex";
-import { ArchiveBoxIcon, CheckBadgeIcon, CubeIcon, PuzzlePieceIcon, Squares2X2Icon } from "@heroicons/react/24/outline";
+import {
+  ArchiveBoxIcon,
+  BuildingOffice2Icon,
+  BuildingStorefrontIcon,
+  CheckBadgeIcon,
+  Cog6ToothIcon,
+  CpuChipIcon,
+  CubeIcon,
+  FireIcon,
+  PuzzlePieceIcon,
+  Squares2X2Icon,
+  UsersIcon,
+} from "@heroicons/react/24/outline";
 import * as stylex from "@stylexjs/stylex";
 import type { Api } from "../host";
 import { t } from "../i18n";
@@ -37,6 +49,19 @@ export function packageCounts(view: Api.PackageView) {
   return { apps, plugins };
 }
 
+function packageIcon(id: string, counts: { apps: number; plugins: number }) {
+  const key = id.toLowerCase();
+  if (key.includes("crm")) return UsersIcon;
+  if (key.includes("erp")) return BuildingOffice2Icon;
+  if (key.includes("mes")) return CpuChipIcon;
+  if (key.includes("hospitality")) return BuildingStorefrontIcon;
+  if (key.includes("heating")) return FireIcon;
+  if (key.includes("production")) return Cog6ToothIcon;
+  if (key.includes("core") || (counts.apps > 0 && counts.plugins > 0)) return Squares2X2Icon;
+  if (counts.plugins > 0) return PuzzlePieceIcon;
+  return CubeIcon;
+}
+
 export function PackageCard({
   view,
   onInspect,
@@ -61,7 +86,7 @@ export function PackageCard({
       : retired && installed?.version === version
         ? t("Reinstall")
         : t("Install");
-  const icon = counts.apps > 0 && counts.plugins > 0 ? Squares2X2Icon : counts.plugins > 0 ? PuzzlePieceIcon : CubeIcon;
+  const icon = packageIcon(id, counts);
   const parts = [
     counts.apps > 0 ? `${counts.apps} ${counts.apps === 1 ? t("app root") : t("app roots")}` : "",
     counts.plugins > 0 ? `${counts.plugins} ${counts.plugins === 1 ? t("plugin capability") : t("plugin capabilities")}` : "",

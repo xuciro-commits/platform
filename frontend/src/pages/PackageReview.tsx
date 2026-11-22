@@ -34,13 +34,17 @@ export function PackageReview({ view, mode, close, done }: { view: Api.PackageVi
   const installAction = actions.find((action) => action.schema === installSchema);
   const drainAction = actions.find((action) => action.schema === "platform.package.drain");
   const retireAction = actions.find((action) => action.schema === "platform.package.retire");
-  const problems = [
+  const problems = [...new Set([
     ...(mode === "install" ? [...(view.plan.problems ?? []), ...(view.precheck.problems ?? [])] : []),
     ...(review.status === "ready" ? review.data.problems ?? [] : review.status === "loading" ? [] : [review.reason]),
     ...(mode === "install" && (preparation.status === "error" || preparation.status === "refused") ? [preparation.reason] : []),
-    ...(preparation.status === "ready" ? preparation.data.connections.filter((connection) => !connection.ready).map((connection) => `${connection.title}: ${t("Not configured")}`) : []),
-    ...(preparation.status === "ready" ? preparation.data.ai.filter((requirement) => requirement.problem).map((requirement) => requirement.problem!) : []),
-  ];
+  ])];
+  const setupNotices = mode === "install" && preparation.status === "ready"
+    ? [...new Set([
+      ...preparation.data.connections.filter((connection) => !connection.ready).map((connection) => `${connection.title}: ${t("Not configured")}`),
+      ...preparation.data.ai.filter((requirement) => requirement.problem).map((requirement) => requirement.problem!),
+    ])]
+    : [];
   const impact = review.status === "ready" ? review.data.impact : undefined;
   const loading = review.status === "loading" || catalog.status === "loading" || (mode === "install" && preparation.status === "loading");
   const state = installed?.state ?? "";
@@ -85,6 +89,9 @@ export function PackageReview({ view, mode, close, done }: { view: Api.PackageVi
                 {failure && <Banner status="error" title={t("Not done")} description={failure} />}
                 {loading && <Text type="supporting" color="secondary">{t("Loading…")}</Text>}
                 {problems.length > 0 && <Banner status="error" title={t("This version cannot be used as it stands")} description={problems.join(" · ")} />}
+                {setupNotices.length > 0 && (
+                  <Banner status="warning" title={t("Configuration needed after installation")} description={setupNotices.join(" · ")} />
+                )}
                 {named && (
                   <TextInput label={t("Project API name")} isRequired value={namespace} onChange={setNamespace}
                     description={t("The managed project, its types and its actions take this name. Choose another when this tenant already has a project with it.")} />

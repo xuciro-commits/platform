@@ -1,10 +1,13 @@
 import { Banner } from "@astryxdesign/core/Banner";
+import { Button } from "@astryxdesign/core/Button";
 import { Divider } from "@astryxdesign/core/Divider";
 import { HStack, VStack } from "@astryxdesign/core/Layout";
 import { List, ListItem } from "@astryxdesign/core/List";
 import { MetadataList, MetadataListItem } from "@astryxdesign/core/MetadataList";
 import { Heading, Text } from "@astryxdesign/core/Text";
 import { Token } from "@astryxdesign/core/Token";
+import { Tooltip } from "@astryxdesign/core/Tooltip";
+import { useState } from "react";
 import type { Api, Read } from "../host";
 import { t } from "../i18n";
 import { sourceMeta } from "./PackageCard";
@@ -36,6 +39,7 @@ export function PackageReviewContent({
   review: Read<Api.PackageReview>;
   preparation: Read<Api.PackagePreparation>;
 }) {
+  const [copied, setCopied] = useState(false);
   const { id, version, description, contributions } = view.descriptor;
   const source = sourceMeta(view.source);
   const installed = view.installed;
@@ -47,9 +51,12 @@ export function PackageReviewContent({
   const apps = preparation.status === "ready" && preparation.data.applications.length
     ? preparation.data.applications.map((app) => t(app.title || app.ref.name)).join(", ")
     : String(changes.filter((change) => change.ref.kind === "app").length);
-  const roles = preparation.status === "ready" && preparation.data.roles.length
-    ? preparation.data.roles.map((entry) => entry.role).join(", ")
-    : t("None");
+  const prerequisites = [
+    ...(view.descriptor.requires ?? []),
+    ...steps.filter((step) => step.id !== id).map((step) => `${t(step.title || step.id)} (${step.id} · ${step.version})`),
+  ];
+  const uniquePrerequisites = [...new Set(prerequisites)];
+  const roles = preparation.status === "ready" ? preparation.data.roles : [];
 
   const byKind = new Map<string, number>();
   for (const change of changes) {
@@ -57,6 +64,14 @@ export function PackageReviewContent({
   }
   const changeSummary = [...byKind.entries()].map(([kind, count]) => `${t(kind)} ${count}`).join(" · ");
   const notableChanges = changes.filter((change) => (change.fields?.length ?? 0) > 0 || change.change.toLowerCase() === "removed");
+
+  const copyDigest = () => {
+    if (!digest) return;
+    void navigator.clipboard?.writeText(digest).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1800);
+    });
+  };
 
   return (
     <VStack gap={4}>
@@ -82,7 +97,12 @@ export function PackageReviewContent({
         )}
         {digest && (
           <MetadataListItem label={t("Digest")}>
-            <Text type="code" color="secondary" maxLines={1}>{digest}</Text>
+            <HStack gap={2} vAlign="center">
+              <Tooltip content={digest}>
+                <Text type="code" color="secondary" maxLines={1}>{digest.length > 26 ? `${digest.slice(0, 18)}…${digest.slice(-8)}` : digest}</Text>
+              </Tooltip>
+              <Button label={copied ? t("Copied") : t("Copy")} variant="ghost" size="sm" onClick={copyDigest} />
+            </HStack>
           </MetadataListItem>
         )}
       </MetadataList>
@@ -97,10 +117,23 @@ export function PackageReviewContent({
                 <Text type="body">{apps}</Text>
               </MetadataListItem>
               <MetadataListItem label={t("Dependencies")}>
-                <Text type="body">{impact?.dependencies.length ? impact.dependencies.join(", ") : t("None")}</Text>
+                <Text type="body">{uniquePrerequisites.length ? uniquePrerequisites.join(", ") : t("None")}</Text>
               </MetadataListItem>
               <MetadataListItem label={t("Roles")}>
-                <Text type="body">{roles}</Text>
+                {roles.length > 0 ? (
+                  <HStack gap={1.5} wrap="wrap" vAlign="center">
+                    {roles.map((entry) => (
+                      <Token
+                        key={`${entry.app}:${entry.role}`}
+                        label={entry.held ? `${entry.role} · ${t("Held")}` : entry.role}
+                        color={entry.held ? "green" : "gray"}
+                        size="sm"
+                      />
+                    ))}
+                  </HStack>
+                ) : (
+                  <Text type="body">{t("None")}</Text>
+                )}
               </MetadataListItem>
               <MetadataListItem label={t("Connections")}>
                 <Text type="body" hasTabularNumbers>{preparation.status === "ready" ? preparation.data.connections.length : impact?.connections.length ?? 0}</Text>
@@ -218,6 +251,9 @@ export function PackageReviewContent({
                   <Text type="body">{installed?.state || t("Unknown")}</Text>
                   {installed?.state && <Token label={t(installed.state)} color={installed.state === "active" ? "green" : installed.state === "draining" ? "orange" : "gray"} size="sm" />}
                 </HStack>
+              </MetadataListItem>
+              <MetadataListItem label={t("Dependent packages")}>
+                <Text type="body">{impact?.dependencies.length ? impact.dependencies.join(", ") : t("None")}</Text>
               </MetadataListItem>
               <MetadataListItem label={t("References retained")}>
                 <Text type="body" hasTabularNumbers>{impact?.references.length ?? 0}</Text>
