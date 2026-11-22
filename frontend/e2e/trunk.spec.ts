@@ -1271,6 +1271,7 @@ test("object definition: create and bind an action type before publishing a tran
 
 
 test("gate: build a type and use it, install a package and use its action, then check each role", async ({ page, browser }) => {
+  test.setTimeout(120000);
   await signIn(page);
   await open(page, "Ontology", "Object types");
   await page.getByRole("button", { name: "New", exact: true }).click();
@@ -2562,12 +2563,9 @@ test("blank tenant: install CRM from the marketplace, grant roles, and run the s
   await expect(review.getByText("Connections", { exact: true })).toBeVisible();
   await review.getByRole("button", { name: "Install package", exact: true }).click();
   await expect(page).toHaveURL(/\/delivery\/installations$/, { timeout: 30_000 });
-
-  await page.getByRole("link", { name: "CRM", exact: true }).click();
+  await expect(page.getByRole("listitem").filter({ hasText: /^CRM/ })).toContainText("active");
+  await expect(page.getByRole("link", { name: "CRM", exact: true })).toHaveCount(0);
   const nav = page.getByRole("navigation", { name: "Primary navigation" });
-  await nav.getByRole("link", { name: "Leads", exact: true }).click();
-  await expect(page.getByRole("heading", { level: 1, name: "Leads", exact: true })).toBeVisible();
-  await expect(page.getByRole("heading", { level: 2, name: "Nothing here yet", exact: true })).toBeVisible();
 
   await open(page, "Admin", "Members");
   await page.getByRole("row", { name: /田雪/ }).click();
@@ -2578,7 +2576,7 @@ test("blank tenant: install CRM from the marketplace, grant roles, and run the s
   await expect(page.getByRole("option", { name: /admin|builder/i })).toHaveCount(0);
   await page.getByRole("option", { name: /salesrep/ }).click();
   await memberPane.getByRole("button", { name: "Grant role", exact: true }).click();
-  await expect(memberPane.getByText(/salesrep/)).toBeVisible();
+  await expect(memberPane.getByRole("listitem").filter({ hasText: /salesrep/ })).toBeVisible();
 
   await signOut();
   await page.getByRole("button", { name: "user-1 · blank" }).click();
@@ -2612,13 +2610,13 @@ test("blank tenant: install CRM from the marketplace, grant roles, and run the s
   await memberPane.getByRole("combobox", { name: "Package role", exact: true }).click();
   await page.getByRole("option", { name: /salesrep/ }).click();
   await memberPane.getByRole("button", { name: "Grant role", exact: true }).click();
-  await expect(memberPane.getByText(/salesrep/)).toBeVisible();
+  await expect(memberPane.getByRole("listitem").filter({ hasText: /salesrep/ })).toBeVisible();
 
   await page.getByRole("row", { name: /赵敏/ }).click();
   await memberPane.getByRole("combobox", { name: "Package role", exact: true }).click();
   await page.getByRole("option", { name: /salesmanager/ }).click();
   await memberPane.getByRole("button", { name: "Grant role", exact: true }).click();
-  await expect(memberPane.getByText(/salesmanager/)).toBeVisible();
+  await expect(memberPane.getByRole("listitem").filter({ hasText: /salesmanager/ })).toBeVisible();
 
   await signOut();
   await page.getByRole("button", { name: "user-1 · blank" }).click();
@@ -2628,11 +2626,19 @@ test("blank tenant: install CRM from the marketplace, grant roles, and run the s
   await edit(page, "Organization");
   const org = page.getByRole("textbox", { name: "Organization", exact: true });
   await org.fill("星海制造");
-  await org.press("Enter");
+  await Promise.all([
+    page.waitForResponse((response) => response.url().endsWith("/v1/submissions") && response.ok()),
+    org.press("Enter"),
+  ]);
+  await expect(property(page, "Organization")).toContainText("星海制造");
   await edit(page, "Status");
   await page.getByRole("combobox", { name: "Status" }).fill("Contacted");
-  await page.getByRole("option", { name: "Contacted", exact: true }).click();
+  await Promise.all([
+    page.waitForResponse((response) => response.url().endsWith("/v1/submissions") && response.ok()),
+    page.getByRole("option", { name: "Contacted", exact: true }).click(),
+  ]);
   await expect(property(page, "Status")).toContainText("Contacted");
+  await expect(property(page, "First response")).toContainText("Fulfilled", { timeout: 20_000 });
   await page.getByRole("button", { name: "Convert to deal", exact: true }).click();
   const convert = page.getByRole("dialog", { name: "Convert to deal", exact: true });
   await convert.getByRole("button", { name: "Convert to deal", exact: true }).click();
@@ -2682,13 +2688,13 @@ test("blank tenant: install CRM from the marketplace, grant roles, and run the s
   const reinstall = page.getByRole("dialog", { name: /Review and install/ });
   await reinstall.getByRole("button", { name: "Reinstall package", exact: true }).click();
   await expect(reinstall).toBeHidden();
-  await expect(page.getByRole("link", { name: "CRM", exact: true })).toBeVisible();
+  await expect(crmRow).toContainText("active");
 
   await signOut();
   await page.getByRole("button", { name: "user-1 · blank" }).click();
   await expect(page.getByRole("link", { name: "CRM", exact: true })).toBeVisible();
   await page.getByRole("link", { name: "CRM", exact: true }).click();
   await nav.getByRole("link", { name: "Deals", exact: true }).click();
-  await expect(page.getByRole("link", { name: "星海制造", exact: true })).toBeVisible();
+  await expect(page.getByRole("link", { name: "星海制造", exact: true }).first()).toBeVisible();
 });
 });

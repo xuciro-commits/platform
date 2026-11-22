@@ -295,7 +295,7 @@ def prepare_docker():
 def docker():
     configuration()
     dirty = subprocess.check_output(['git', 'status', '--porcelain', '--', 'capabilities/server', 'apps',
-                                    'protocols', 'contract', 'web/packages', 'frontend/src'],
+                                    'protocols', 'contract', 'frontend/src'],
                                    cwd=ROOT, text=True)
     if dirty:
         raise RuntimeError('请先提交源码再切到 Docker，以便核对镜像版本；本地环境仍保留运行。')

@@ -6,14 +6,11 @@ import (
 	"flag"
 	"fmt"
 	"os"
-	"path/filepath"
 	"slices"
 	"strings"
 
 	resourceauthoring "platformserver/services/resources/authoring"
 )
-
-const manifestPrefix = "export const pageUIManifest = "
 
 type rulesFile struct {
 	Format             json.RawMessage       `json:"format"`
@@ -150,28 +147,17 @@ type resourceContract struct {
 }
 
 func main() {
-	manifestPath := flag.String("manifest", "../../web/packages/app/src/pageui/manifest.ts", "the page UI manifest")
+	manifestPath := flag.String("manifest", "platform/page_ui_manifest.json", "the page UI manifest")
 	rulesPath := flag.String("rules", "platform/page_compat_rules.json", "the server-only page contract rules")
 	compatPath := flag.String("compat", "services/apps/pages/page_compat.json", "the generated server page contract")
-	safetyPath := flag.String("safety", "../../web/packages/app/src/pageui/safety.ts", "the generated page safety contract")
 	appRegistryPath := flag.String("app-registry", "platform/app_registry.json", "the application registry")
-	appContractPath := flag.String("app-contract", "../../web/packages/app/src/gen/apps.ts", "the generated frontend application registry")
-	resourceContractPath := flag.String("resource-contract", "../../web/packages/build/src/gen/resources.ts", "the generated frontend resource contract")
 	flag.Parse()
 
 	resources, err := resourceauthoring.ResourceMetadata()
 	if err != nil {
 		fail(err)
 	}
-	if err := writeResourceContract(*resourceContractPath, resources); err != nil {
-		fail(err)
-	}
-
-	appRegistry, err := readApplicationRegistry(*appRegistryPath, resources)
-	if err != nil {
-		fail(err)
-	}
-	if err := writeApplicationContract(*appContractPath, appRegistry); err != nil {
+	if _, err := readApplicationRegistry(*appRegistryPath, resources); err != nil {
 		fail(err)
 	}
 
@@ -235,11 +221,6 @@ func main() {
 	body := bytes.TrimRight(buf.Bytes(), "\n")
 	compat := append(append([]byte{}, body...), '\n')
 	if err := os.WriteFile(*compatPath, compat, 0o644); err != nil {
-		fail(err)
-	}
-	safety := append([]byte("export const pageSafetyContract = "), body...)
-	safety = append(safety, []byte(" as const;\n")...)
-	if err := os.WriteFile(*safetyPath, safety, 0o644); err != nil {
 		fail(err)
 	}
 }
@@ -393,54 +374,6 @@ func validateApplicationAccess(path, app string, rule registeredAccess, manifest
 	return nil
 }
 
-func writeApplicationContract(path string, registry applicationContract) error {
-	manifests, err := applicationContractValue(registry.Manifests)
-	if err != nil {
-		return err
-	}
-	applications, err := applicationContractValue(registry.Apps)
-	if err != nil {
-		return err
-	}
-	body := "export const registeredManifests = " + manifests + " as const;\n" +
-		"export const registeredApplications = " + applications + " as const;\n" +
-		"export type RegisteredManifestID = keyof typeof registeredManifests;\n" +
-		"export type RegisteredApplicationID = keyof typeof registeredApplications;\n"
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-		return err
-	}
-	return os.WriteFile(path, []byte(body), 0o644)
-}
-
-func writeResourceContract(path string, resources []resourceauthoring.ResourceMetadataEntry) error {
-	body, err := applicationContractValue(resourceContract{Format: 1, Resources: resources})
-	if err != nil {
-		return err
-	}
-	generated := "export const resourceContract = " + body + " as const;\n" +
-		"export const resourcePresentations = resourceContract.resources;\n" +
-		"export const draftResourcePresentations = resourcePresentations.filter(resource => resource.listed);\n" +
-		"export const releaseResourcePresentations = resourcePresentations.filter(resource => resource.release);\n" +
-		"export type ResourceKind = (typeof resourcePresentations)[number][\"kind\"] | \"definition\";\n" +
-		"export type ReleaseKind = Extract<(typeof resourcePresentations)[number], { release: true }>[\"releaseKind\"];\n" +
-		"export type ResourceRouteMode = (typeof resourcePresentations)[number][\"route\"];\n"
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-		return err
-	}
-	return os.WriteFile(path, []byte(generated), 0o644)
-}
-
-func applicationContractValue(value any) (string, error) {
-	var out bytes.Buffer
-	encoder := json.NewEncoder(&out)
-	encoder.SetEscapeHTML(false)
-	encoder.SetIndent("", "  ")
-	if err := encoder.Encode(value); err != nil {
-		return "", err
-	}
-	return strings.TrimRight(out.String(), "\n"), nil
-}
-
 func projectRuntime(raw json.RawMessage) (json.RawMessage, error) {
 	var source map[string]json.RawMessage
 	if err := json.Unmarshal(raw, &source); err != nil {
@@ -497,13 +430,8 @@ func readManifest(path string) (manifestFile, error) {
 	if err != nil {
 		return manifestFile{}, err
 	}
-	text := strings.TrimSpace(string(raw))
-	if !strings.HasPrefix(text, manifestPrefix) {
-		return manifestFile{}, fmt.Errorf("%s does not start with %q", path, manifestPrefix)
-	}
-	body := strings.TrimSpace(strings.TrimSuffix(strings.TrimPrefix(text, manifestPrefix), "as const;"))
 	var manifest manifestFile
-	if err := json.Unmarshal([]byte(body), &manifest); err != nil {
+	if err := json.Unmarshal(raw, &manifest); err != nil {
 		return manifestFile{}, fmt.Errorf("%s: %w", path, err)
 	}
 	return manifest, nil

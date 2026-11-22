@@ -36,7 +36,7 @@
 
 - 八个承重决定不动：一条写入路径、一套模型、一个进程、一种交付物、一个授权决定点、AI 是调用者、一个格式纪元、一个界面运行时。
 - 只做 plan 当前阶段的行，按 roadmap 的细目做；其余没有功能在等的搬迁与改名保持冻结。
-- 只有一个前端：`frontend/`。`web/` 冻结，只修让它起不来或让检查过不去的缺陷。
+- 只有一个前端：`frontend/`。
 - 界面由类型生成：不为单个类型写界面，不从空白写页面；先找 Astryx 官方模板与块，改造一次，所有类型共用。
 - 平台不含行业代码；行业概念只在产品包里用对象与动作表达。
 - 一项能力只有一个实现；规则求值、约束、授权、依赖解析各只有一个。
@@ -76,13 +76,12 @@
 | 快速检查 | `make check`：Go 构建、vet 与格式，包边界与形状，产品包，契约，文案，文档，空白 |
 | 前端检查 | `make check-frontend`（改了 `frontend/` 时） |
 | 主干验收 | `make trunk`：自己起宿主、灌数据、起前端，浏览器走一遍演示路径；`HEADED=1` 看着它走 |
-| 旧前端 | `make check-web`（改了 `web/` 时）；`make web` 在 8497 起它对照 |
 | 宿主类型与契约 | `make contract`（改了宿主类型之后） |
 | 内核不变量 | `make test RUN=K13` 定点跑相关编号；不给 `RUN` 跑全部 |
 | SQL 模式 | `make verify-sql`（隔离的临时 PostgreSQL：写入、重启、读取） |
 | 产品包 | `make packages`（由作者态源生成制品） |
 
-提交钩子（`.githooks/`，通过 `make hooks` 启用）自动跑 `make check`，暂存里有 `frontend/` 或 `web/` 时加跑对应的检查，并用 `scripts/check-commit-msg.mjs` 拦截不合规范的提交信息。
+提交钩子（`.githooks/`，通过 `make hooks` 启用）自动跑 `make check`，暂存里有 `frontend/` 时加跑 `make check-frontend`，并用 `scripts/check-commit-msg.mjs` 拦截不合规范的提交信息。
 
 ## 工作方式
 

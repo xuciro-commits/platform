@@ -4,13 +4,12 @@ import { fileURLToPath } from "node:url";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "../frontend");
 const src = join(root, "src");
-const vendored = (file) => file.startsWith("templates/") || file === "astryx-themes.js";
+const vendored = (file) => file.startsWith("templates/") || file.startsWith("host/gen/") || file === "astryx-themes.js";
 
 const allowedPackages = [
   "@astryxdesign/core",
   "@astryxdesign/theme-neutral",
   "@heroicons/react",
-  "@platform/api",
   "@stylexjs/stylex",
   "lucide-react",
   "pdfjs-dist",
@@ -83,7 +82,6 @@ for (const path of walk(src)) {
     const trimmed = text.trim();
     for (const match of text.matchAll(/(?:from|import)\s*\(?\s*"([^"]+)"/g)) {
       const target = match[1];
-      if (target === "@platform/api/host-contract" && file.startsWith("host/")) continue;
       if (!allowedImports.some((pattern) => pattern.test(target))) {
         report(file, line, `import "${target}" is not allowed. Use Astryx, heroicons or a file under frontend/src; never import from web/ or a new package.`);
       } else if (target.startsWith(".") && relative(src, resolve(dirname(path), target)).startsWith("..")) {

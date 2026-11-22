@@ -175,9 +175,6 @@ importers:
       '@heroicons/react':
         specifier: ^2.2.0
         version: 2.2.0(react@19.3.1)
-      '@platform/api':
-        specifier: link:../web/packages/api
-        version: link:../web/packages/api
       '@stylexjs/stylex':
         specifier: ^0.19.2
         version: 0.19.2

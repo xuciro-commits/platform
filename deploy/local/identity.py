@@ -14,7 +14,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 LOCAL = ROOT / '.build/local'
-MARK = ROOT / 'web/public/favicon.svg'
+MARK = ROOT / 'frontend/public/favicon.svg'
 KEY_NAME = 'platform-branding'
 FRONTEND = 'http://localhost:8496'
 DEADLINE_SECONDS = 30

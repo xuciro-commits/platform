@@ -45,8 +45,11 @@ type PermissionsReport struct {
 
 func (p PermissionsReport) Permissions() []AppPermissions {
 	out := []AppPermissions{}
+	seen := map[string]bool{}
+	spaceRoles := map[string][]string{}
 	for _, a := range p.Apps() {
 		m := a.Manifest()
+		seen[m.ID] = true
 		ap := AppPermissions{App: m.ID, Title: m.Title, Reads: append([]string{}, m.Reads...), Everyone: append([]string{}, m.Everyone...), Roles: []RolePermissions{}}
 		if ap.Title == "" {
 			ap.Title = m.ID
@@ -57,6 +60,28 @@ func (p PermissionsReport) Permissions() []AppPermissions {
 				rp.Actions = append(rp.Actions, PermissionAction{ID: act.Schema, Title: act.Title, Scope: act.Target})
 			}
 			ap.Roles = append(ap.Roles, rp)
+		}
+		out = append(out, ap)
+		for _, entity := range m.Entities {
+			space, _, ok := strings.Cut(entity.Type, ".")
+			if !ok || space == "" || space == m.ID {
+				continue
+			}
+			for role := range entity.Scope.Levels {
+				if role != "builder" && !slices.Contains(spaceRoles[space], role) {
+					spaceRoles[space] = append(spaceRoles[space], role)
+				}
+			}
+		}
+	}
+	for space, roles := range spaceRoles {
+		if seen[space] || len(roles) == 0 {
+			continue
+		}
+		slices.Sort(roles)
+		ap := AppPermissions{App: space, Title: space, Reads: []string{}, Everyone: []string{}, Roles: make([]RolePermissions, 0, len(roles))}
+		for _, role := range roles {
+			ap.Roles = append(ap.Roles, RolePermissions{Role: role, Holders: p.Holders(space, role), Actions: []PermissionAction{}})
 		}
 		out = append(out, ap)
 	}

@@ -1,1 +1,1 @@
-export type * as Api from "@platform/api/host-contract";
+export type * as Api from "./gen/host";
