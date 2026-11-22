@@ -29,6 +29,7 @@ let measured;
 let administrator;
 let schemas = new Map();
 let sequence = 0;
+let editBase = 2;
 
 function request(path, subject = "loadadmin", body, extraHeaders = {}, recordMeasurement = true) {
   const started = performance.now();
@@ -70,7 +71,7 @@ async function submit(type, id, action, payload, revision, recordMeasurement = t
   if (revision === undefined) revision = action === "create" ? 0 : (await request(`/v1/records/${type}/${encodeURIComponent(id)}`, "loadadmin", undefined, {}, recordMeasurement)).record.revision;
   const version = schemas.get(name);
   const submission = {
-    tenantId: tenant, principalId: subject === "loadadmin" ? administrator.principalId : subject, authority: type.split(".")[0], target: { type, id },
+    tenantId: tenant, principalId: subject === "loadadmin" ? administrator.principalId : subject, authority: type.startsWith("platform.") ? "platform" : "build", target: { type, id },
     schema: { name, version: version?.family ?? 1 }, expectedRevision: revision,
     idempotencyKey: `load-${Date.now()}-${sequence++}`, payload: Buffer.from(JSON.stringify(payload)).toString("base64"),
   };
@@ -81,7 +82,7 @@ async function submit(type, id, action, payload, revision, recordMeasurement = t
 
 async function seed() {
   administrator = await request("/v1/me");
-  const project = "loadproject", object = "build.loaditem", draftID = "LOADOBJECT";
+  const project = "loadproject", object = `${project}.loaditem`, draftID = "LOADOBJECT";
   await submit("build.app", project, "create", { name: project, title: "Load verification" });
   await submit("platform.project", project, "save", { title: "Load verification", members: [{ member: administrator.principalId, role: "owner" }] }, 0);
   const parts = Array.from({ length: Math.ceil(rows / 5000) }, (_, index) => ({ dataset: `LOADDATA${index}`, pipeline: `LOADPIPE${index}`, index }));
@@ -207,7 +208,7 @@ async function runStage(count, fixture) {
     const n = operation++, member = n % count, kind = n % 20 < 16 ? "list" : n % 20 < 19 ? "record" : "edit";
     const begin = performance.now();
     const perform = kind === "edit"
-      ? submit(fixture.object, rowID(Math.floor(n / 20) % rows), "edit", { note: `Edited ${count}-${n}` }, 1, true, userSubject(member))
+      ? submit(fixture.object, rowID((editBase + Math.floor(n / 20)) % fixture.rows), "edit", { note: `Edited ${count}-${n}` }, 1, true, userSubject(member))
       : request(kind === "list" ? `/v1/records/${fixture.object}?limit=25` : `/v1/records/${fixture.object}/${rowID(member % rows)}`, userSubject(member));
     const result = perform.then(value => {
       if (kind === "list" && (value.total !== fixture.rows || value.records.length !== 25 && fixture.rows >= 25)) throw Error("incorrect list window");
@@ -232,6 +233,7 @@ async function runStage(count, fixture) {
     await delay(20);
   }
   await Promise.all([...pending, probe]);
+  editBase += Math.ceil(operation / 20);
   const elapsed = performance.now() - started;
   measured = undefined;
   stage.stopping = true;

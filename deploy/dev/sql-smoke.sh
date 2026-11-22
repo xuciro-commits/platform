@@ -173,7 +173,7 @@ import sys
 
 def find(path):
     data = json.load(open(path))["resources"]
-    matches = [r for r in data if r["ref"]["name"] in ("sqlobject", "build.sqlobject") and r["project"] == "sqlproject"]
+    matches = [r for r in data if r["ref"]["name"] in ("sqlobject", "build.sqlobject", "sqlproject.sqlobject") and r["project"] == "sqlproject"]
     assert len(matches) == 1, matches
     return matches[0]
 
@@ -235,7 +235,7 @@ import json
 import sys
 
 resources = json.load(open(sys.argv[1]))["resources"]
-assert any(r["ref"]["name"] in ("sqlobject", "build.sqlobject") and r["project"] == "sqlproject" and r["canOpen"] for r in resources), resources
+assert any(r["ref"]["name"] in ("sqlobject", "build.sqlobject", "sqlproject.sqlobject") and r["project"] == "sqlproject" and r["canOpen"] for r in resources), resources
 PY
 stop
 

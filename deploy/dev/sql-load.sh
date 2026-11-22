@@ -15,6 +15,13 @@ binary="${PLATFORM_LOAD_BINARY:-$PWD/.build/host/platform-server}"
 pid=""
 sampler_pid=""
 mkdir -p "$output"
+runner=(node scripts/check-load.mjs --run)
+run_alarm=1800
+if [[ -n "${PLATFORM_LOAD_IMPORT_ROWS:-}" ]]; then
+  export PLATFORM_LOAD_ROWS="${PLATFORM_LOAD_ROWS:-100}"
+  runner=(node scripts/check-import.mjs)
+  run_alarm="${PLATFORM_LOAD_IMPORT_ALARM:-5400}"
+fi
 
 cleanup() {
   if [[ -n "$sampler_pid" ]]; then
@@ -41,6 +48,7 @@ docker exec platform-postgres-1 sh -ec 'createdb -U "$POSTGRES_USER" "$1"' _ "$d
 export PLATFORM_LOAD_BASE="http://127.0.0.1:${port}"
 export PLATFORM_LOAD_TENANT="$tenant"
 export PLATFORM_LOAD_OUTPUT="$output"
+export PLATFORM_LOAD_DATABASE="$db"
 python3 - "$tenant" >"$work/tenants.json" <<'PY'
 import json
 import os
@@ -56,7 +64,7 @@ PY
 database="postgres://platform:${POSTGRES_PASSWORD}@127.0.0.1:${PG_PORT}/${db}"
 
 start() {
-  "$binary" -addr "127.0.0.1:${port}" -tenants "$work/tenants.json" -database "$database" -project >>"$work/server.log" 2>&1 &
+  "$binary" -addr "127.0.0.1:${port}" -tenants "$work/tenants.json" -database "$database" -project ${PLATFORM_LOAD_SNAPSHOT_EVERY:+-snapshot-every="$PLATFORM_LOAD_SNAPSHOT_EVERY"} >>"$work/server.log" 2>&1 &
   pid=$!
   (
     while kill -0 "$pid" 2>/dev/null; do
@@ -95,8 +103,8 @@ perl -e 'alarm 900; exec @ARGV' node scripts/check-load.mjs --seed
 stop
 start "$output/run-rss.txt"
 result=0
-perl -e 'alarm 1800; exec @ARGV' node scripts/check-load.mjs --run || result=$?
-docker exec platform-postgres-1 sh -ec 'psql -U "$POSTGRES_USER" -d "$1" -tAc "select json_build_object('\''position'\'',(select seq from runtime_tenants where tenant='\''$2'\''),'\''records'\'',(select count(*) from runtime_records where tenant='\''$2'\'' and type='\''build.loaditem'\''))"' _ "$db" "$tenant" >"$output/sql-state.json"
+perl -e 'alarm shift; exec @ARGV' "$run_alarm" "${runner[@]}" || result=$?
+docker exec platform-postgres-1 sh -ec 'psql -U "$POSTGRES_USER" -d "$1" -tAc "select json_build_object('\''position'\'',(select seq from runtime_tenants where tenant='\''$2'\''),'\''records'\'',(select count(*) from runtime_records where tenant='\''$2'\'' and type='\''loadproject.loaditem'\''))"' _ "$db" "$tenant" >"$output/sql-state.json"
 stop
 echo "SQL load verification finished: $output/results.json"
 exit "$result"
