@@ -16,6 +16,16 @@ import { t } from "../i18n";
 import { reasonOf } from "./act";
 import type { Described } from "./describe";
 
+type ImportRows = Promise<Api.ImportRow[]>;
+export type ImportField = { name: string; title: string };
+export type ImportTarget = {
+  type: string;
+  title: string;
+  fields: ImportField[];
+  withId?: boolean;
+  run: (rows: Record<string, string>[], preview: boolean) => ImportRows;
+};
+
 type Line = { row: number; cells: string[]; result?: Api.ImportRow; done?: boolean };
 
 const steps = ["File", "Columns", "Check"];
@@ -25,7 +35,27 @@ const plain = (text: string) => text.trim().toLowerCase();
 const quote = (cell: string) => `"${cell.replaceAll("\"", "\"\"")}"`;
 const unreadable = "ERROR_CODE_INVALID_ARGUMENT: ";
 
-export function ImportWizard({ described, onClose }: { described: Described; onClose: () => void }) {
+function targetOf(described: Described): ImportTarget {
+  const fields = (described.create?.payload ?? []).flatMap((parameter) => {
+    const field = described.field(parameter.name);
+    return field && !field.readOnly && field.type !== "lines" && field.type !== "attachment" ? [{ name: field.name, title: field.title }] : [];
+  });
+  return {
+    type: described.type,
+    title: described.plural,
+    fields,
+    withId: true,
+    run: (rows, preview) => {
+      const names = rows[0] ? Object.keys(rows[0]) : [];
+      const csv = [names, ...rows.map((row) => names.map((name) => row[name] ?? ""))]
+        .map((cells) => cells.map(quote).join(",")).join("\r\n");
+      return request<Api.ImportRow[]>(`/v1/import/${encodeURIComponent(described.type)}${preview ? "?preview=true" : ""}`, { body: new Blob([csv], { type: "text/csv" }) });
+    },
+  };
+}
+
+export function ImportWizard({ described, target, onClose }: { described?: Described; target?: ImportTarget; onClose: () => void }) {
+  const resolved = target ?? (described ? targetOf(described) : undefined);
   const [step, setStep] = useState(0);
   const [file, setFile] = useState<File | null>(null);
   const [columns, setColumns] = useState<string[]>([]);
@@ -34,18 +64,16 @@ export function ImportWizard({ described, onClose }: { described: Described; onC
   const [imported, setImported] = useState(0);
   const [busy, setBusy] = useState(false);
   const [failure, setFailure] = useState("");
-  const fields = (described.create?.payload ?? []).flatMap((parameter) => {
-    const field = described.field(parameter.name);
-    return field && !field.readOnly && field.type !== "lines" && field.type !== "attachment" ? [field] : [];
-  });
+  if (!resolved) return null;
   const options = [
     { value: skip, label: t("Skip this column") },
-    { value: "id", label: t("Record ID") },
-    ...fields.map((field) => ({ value: field.name, label: t(field.title) })),
+    ...(resolved.withId ? [{ value: "id", label: t("Record ID") }] : []),
+    ...resolved.fields.map((field) => ({ value: field.name, label: t(field.title) })),
   ];
+  const rawTitle = (name: string) => resolved.fields.find((field) => field.name === name)?.title ?? "";
   const titleOf = (name: string) => options.find((option) => option.value === name)?.label ?? name;
   const guess = (column: string) => options.find((option) => option.value !== skip &&
-    [option.value, option.label, described.field(option.value)?.title ?? ""].some((name) => plain(name) === plain(column)))?.value;
+    [option.value, option.label, rawTitle(option.value)].some((name) => plain(name) === plain(column)))?.value;
 
   const read = async (next: File | null) => {
     setFile(next);
@@ -54,7 +82,7 @@ export function ImportWizard({ described, onClose }: { described: Described; onC
     if (!next) return;
     setBusy(true);
     try {
-      const sheet = await request<Api.ImportSheet>(`/v1/import/${encodeURIComponent(described.type)}/sheet`, { body: next });
+      const sheet = await request<Api.ImportSheet>(`/v1/import/${encodeURIComponent(resolved.type)}/sheet`, { body: next });
       const taken = new Set<string>();
       setColumns(sheet.columns);
       setMapping(sheet.columns.map((column) => {
@@ -75,12 +103,11 @@ export function ImportWizard({ described, onClose }: { described: Described; onC
   const pending = lines.filter((line) => !line.done);
   const run = async (preview: boolean) => {
     const sending = preview ? pending : pending.filter((line) => line.result?.outcome === "ok");
-    const csv = [used.map(({ name }) => name), ...sending.map((line) => used.map(({ index }) => line.cells[index] ?? ""))]
-      .map((cells) => cells.map(quote).join(",")).join("\r\n");
+    const rows = sending.map((line) => Object.fromEntries(used.map(({ name, index }) => [name, line.cells[index] ?? ""])));
     setBusy(true);
     setFailure("");
     try {
-      const results = await request<Api.ImportRow[]>(`/v1/import/${encodeURIComponent(described.type)}${preview ? "?preview=true" : ""}`, { body: new Blob([csv], { type: "text/csv" }) });
+      const results = await resolved.run(rows, preview);
       const answered = new Map(sending.map((line, index) => [line.row, results[index]]));
       setLines((current) => current.map((line) => {
         const result = answered.get(line.row);
@@ -125,7 +152,7 @@ export function ImportWizard({ described, onClose }: { described: Described; onC
         defaultHasDividers
         header={
           <>
-            <DialogHeader title={`${t("Import")} · ${t(described.plural)}`} onOpenChange={(open) => !open && onClose()} hasDivider={false} />
+            <DialogHeader title={`${t("Import")} · ${t(resolved.title)}`} onOpenChange={(open) => !open && onClose()} hasDivider={false} />
             <LayoutHeader hasDivider={false}>
               <Stepper activeStep={step} orientation="horizontal" density="compact" label={t("Import")}>
                 {steps.map((label, index) => <Step key={label} step={index} label={t(label)} />)}

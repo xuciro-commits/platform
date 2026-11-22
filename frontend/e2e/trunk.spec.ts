@@ -2263,6 +2263,39 @@ test("vocabulary: a workspace translation wins over the shipped one and reverts"
   await page.getByRole("button", { name: "Revert to the shipped translation", exact: true }).click();
   await page.getByRole("alertdialog").getByRole("button", { name: "Revert to the shipped translation", exact: true }).click();
   await expect(row).toContainText("Missing");
+
+  const started = page.waitForEvent("download");
+  await page.getByRole("button", { name: "More actions", exact: true }).click();
+  await page.getByRole("menuitem", { name: "Export as CSV", exact: true }).click();
+  const exported = readFileSync((await (await started).path())!, "utf8");
+  expect(exported).toContain("Opportunity");
+  expect(exported).not.toContain("Budget approved");
+
+  await page.getByRole("button", { name: "More actions", exact: true }).click();
+  await page.getByRole("menuitem", { name: "Import", exact: true }).click();
+  const wizard = page.getByRole("dialog", { name: "Import · Language and vocabulary", exact: true });
+  await wizard.locator('input[type="file"]').setInputFiles({
+    name: "words.csv",
+    mimeType: "text/csv",
+    buffer: Buffer.from("Text,Translation\nOpportunity,销售商机\n,缺失原文\n", "utf8"),
+  });
+  await expect(wizard.getByText("2 records", { exact: true })).toBeVisible();
+  await wizard.getByRole("button", { name: "Continue", exact: true }).click();
+  await wizard.getByRole("button", { name: "Continue", exact: true }).click();
+  await expect(wizard.getByText("1 can be imported · 1 need fixing", { exact: true })).toBeVisible();
+  await wizard.getByRole("textbox", { name: "Text · Row 2", exact: true }).fill("Customer");
+  await wizard.getByRole("button", { name: "Check", exact: true }).click();
+  await expect(wizard.getByText("2 can be imported · 0 need fixing", { exact: true })).toBeVisible();
+  await wizard.getByRole("button", { name: "Import 2", exact: true }).click();
+  await expect(wizard.getByText("2 records imported", { exact: true })).toBeVisible();
+  await wizard.getByRole("button", { name: "Done", exact: true }).click();
+  await expect(wizard).toBeHidden();
+  await expect(row).toContainText("销售商机");
+  await expect(row).toContainText("Overridden");
+  await row.getByRole("cell", { name: "Opportunity", exact: true }).click();
+  await page.getByRole("button", { name: "Revert to the shipped translation", exact: true }).click();
+  await page.getByRole("alertdialog").getByRole("button", { name: "Revert to the shipped translation", exact: true }).click();
+  await expect(row).toContainText("Missing");
 });
 
 

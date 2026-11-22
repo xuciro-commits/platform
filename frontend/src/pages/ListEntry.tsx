@@ -1,14 +1,16 @@
 import { Banner } from "@astryxdesign/core/Banner";
 import { Button } from "@astryxdesign/core/Button";
 import { HStack, VStack } from "@astryxdesign/core/Layout";
+import { MoreMenu } from "@astryxdesign/core/MoreMenu";
 import { useToast } from "@astryxdesign/core/Toast";
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { type Api, type Read, request, useRead } from "../host";
 import { t } from "../i18n";
 import { useSearch } from "../router";
 import { reasonOf, send, useAct } from "./act";
 import { ActionDialog } from "./ActionDialog";
 import type { Values } from "./describe";
+import { type ImportTarget, ImportWizard } from "./ImportWizard";
 import { type ListColumn, type ListShape, ListView } from "./ListPage";
 import { enterable } from "./ParameterInput";
 import { newView, readView } from "./view";
@@ -21,10 +23,13 @@ export type ListDefinition<Answer, Row> = Omit<ListShape<Answer, Row>, "columns"
   columns: EntryColumn<Row>[] | { (answer: Answer): EntryColumn<Row>[] };
   more?: (answer: Answer) => string | undefined;
   actions?: { create?: string; row?: (row: Row) => RowAction[] };
+  import?: (answer: Answer, action: (schema: string) => Api.Action | undefined) => ImportTarget | undefined;
+  export?: string;
   query?: string;
 };
 
 type Later<Answer> = { base?: Read<Answer>; answers: Answer[]; loading: boolean };
+const quoteCell = (cell: string) => `"${cell.replaceAll("\"", "\"\"")}"`;
 
 function nameOf(payload: Values) {
   const words = String(payload.title ?? payload.name ?? "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 40);
@@ -59,7 +64,7 @@ export function listPage<Answer, Row>(definition: ListDefinition<Answer, Row>) {
       () => (typeof definition.columns === "function" ? (first.status === "ready" ? definition.columns(first.data) : []) : definition.columns),
       [first],
     );
-    const catalog = useRead<Api.Action[]>(definition.actions || declared.some((column) => column.change) ? "/v1/actions" : null);
+    const catalog = useRead<Api.Action[]>(definition.actions || definition.import || declared.some((column) => column.change) ? "/v1/actions" : null);
     const action = (schema: string) => (catalog.status === "ready" ? catalog.data.find((candidate) => candidate.schema === schema) : undefined);
     const columns = useMemo(() => declared.map(({ change, ...column }): ListColumn<Row> => {
       const found = change && action(change.schema);
@@ -70,9 +75,26 @@ export function listPage<Answer, Row>(definition: ListDefinition<Answer, Row>) {
     }), [declared, catalog]);
     const create = definition.actions?.create ? action(definition.actions.create) : undefined;
     const creatable = create && !create.payload.some((parameter) => parameter.required && !enterable(parameter));
+    const importTarget = first.status === "ready" && definition.import ? definition.import(first.data, action) : undefined;
     const [creating, setCreating] = useState(false);
+    const [importing, setImporting] = useState(false);
+    const exportRef = useRef<(() => { headers: string[]; rows: string[][] }) | null>(null);
     const act = useAct();
     const [refusal, setRefusal] = useState({ id: "", reason: "" });
+
+    const exportList = () => {
+      const snapshot = exportRef.current?.();
+      if (!snapshot || !definition.export) return;
+      const csv = "\uFEFF" + [snapshot.headers, ...snapshot.rows].map((line) => line.map(quoteCell).join(",")).join("\r\n");
+      const href = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
+      Object.assign(document.createElement("a"), { href, download: `${definition.export}.csv` }).click();
+      setTimeout(() => URL.revokeObjectURL(href), 1000);
+    };
+
+    const moreItems = [
+      ...(importTarget ? [{ id: "import-rows", label: t("Import"), onClick: () => setImporting(true) }] : []),
+      ...(definition.export ? [{ id: "export-rows", label: t("Export as CSV"), onClick: exportList }] : []),
+    ];
 
     const rowActions = definition.actions?.row;
     const detail = rowActions || definition.detail ? (id: string) => {
@@ -131,8 +153,15 @@ export function listPage<Answer, Row>(definition: ListDefinition<Answer, Row>) {
             page: definition.more ? { total: rows.length, loaded: rows.length, hasMore: Boolean(next), loading: own && later.loading, loadMore } : undefined,
           }}
           read={first}
-          primary={creatable ? <Button label={t("New")} variant="primary" onClick={() => setCreating(true)} /> : undefined}
+          exportRef={definition.export ? exportRef : undefined}
+          primary={creatable || moreItems.length > 0 ? (
+            <HStack gap={2} vAlign="center">
+              {creatable && <Button label={t("New")} variant="primary" onClick={() => setCreating(true)} />}
+              {moreItems.length > 0 && <MoreMenu label={t("More actions")} alignment="end" items={moreItems} />}
+            </HStack>
+          ) : undefined}
         />
+        {importing && importTarget && <ImportWizard target={importTarget} onClose={() => setImporting(false)} />}
         {act.element}
         {creating && create && (
           <ActionDialog action={create} heading={t(create.title)} confirm={t("Create")} onClose={() => setCreating(false)} onDone={() => setCreating(false)}

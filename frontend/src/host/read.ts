@@ -123,6 +123,7 @@ function watchScope(path: string | null, body?: unknown): WatchScope {
   if (!path) return { kind: "meta" };
   const clean = path.split("?")[0];
   if (metaPaths.has(clean)) return { kind: "meta" };
+  if (clean === "/v1/words") return { kind: "keys", keys: ["scope:owner:platform", "type:platform.translation"] };
   if (clean === "/v1/notifications") return { kind: "keys", keys: ["scope:notifications"] };
   if (clean === "/v1/inbox" || clean === "/v1/requests") return { kind: "keys", keys: ["scope:owner:work", "type:work.task"] };
   if (clean === "/v1/flows") return { kind: "keys", keys: ["scope:owner:flow"] };

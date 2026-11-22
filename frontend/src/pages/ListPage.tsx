@@ -127,9 +127,10 @@ type ListViewProps<Answer, Row> = {
   read: Read<Answer>;
   primary?: ReactNode;
   back?: { href: string; label: string };
+  exportRef?: { current: (() => { headers: string[]; rows: string[][] }) | null };
 };
 
-export function ListView<Answer, Row>({ definition, read, primary, back }: ListViewProps<Answer, Row>) {
+export function ListView<Answer, Row>({ definition, read, primary, back, exportRef }: ListViewProps<Answer, Row>) {
   const currentPath = usePath();
   const currentSearch = useSearch();
   const gutter = useGutter();
@@ -264,6 +265,7 @@ export function ListView<Answer, Row>({ definition, read, primary, back }: ListV
       })
       .map((entry) => entry.cells);
   }, [all, view.filters, view.search, view.sort, group, applyFilters, definition.columns, definition.remote]);
+  if (exportRef) exportRef.current = () => ({ headers: orderedColumns.map((column) => t(column.header)), rows: shown.map((cells) => orderedColumns.map((column) => cells[column.key] ?? "")) });
   const grouped = useTableGroupedRows<Cells>({
     data: shown,
     groupBy: (cells) => cells.__group,
