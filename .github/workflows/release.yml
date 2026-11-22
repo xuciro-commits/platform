@@ -1,0 +1,73 @@
+name: release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+  id-token: write
+  attestations: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  binaries:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: capabilities/server/go.mod
+          cache-dependency-path: capabilities/server/go.sum
+
+      - uses: pnpm/action-setup@v4
+        with:
+          package_json_file: frontend/package.json
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: frontend/pnpm-lock.yaml
+
+      - name: Check the tag is the release in the source
+        run: |
+          case "$GITHUB_REF_NAME" in v[0-9]*.[0-9]*.[0-9]*) ;; *) echo "tags look like v1.2.3" >&2; exit 1 ;; esac
+
+      - name: Build the workspace
+        working-directory: frontend
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm build
+
+      - name: Build the host and pkg for every platform
+        env:
+          CGO_ENABLED: "0"
+          GOPROXY: https://proxy.golang.org,direct
+        run: |
+          set -euo pipefail
+          mkdir -p dist capabilities/server/cmd/platform-server/webdist
+          cp -R frontend/dist/. capabilities/server/cmd/platform-server/webdist/
+          cd capabilities/server
+          for target in linux/amd64 linux/arm64 darwin/amd64 darwin/arm64 windows/amd64; do
+            os=${target%/*}; arch=${target#*/}; ext=""; [ "$os" = windows ] && ext=".exe"
+            GOOS=$os GOARCH=$arch go build -trimpath -tags embedweb -ldflags="-s -w" -o "../../dist/platform-$os-$arch$ext" ./cmd/platform-server
+            GOOS=$os GOARCH=$arch go build -trimpath -ldflags="-s -w" -o "../../dist/pkg-$os-$arch$ext" ./cmd/pkg
+          done
+          cd ../../dist
+          sha256sum * > SHA256SUMS
+          cat SHA256SUMS
+
+      - uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: dist/*
+
+      - name: Publish the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "$GITHUB_REF_NAME" dist/* --title "$GITHUB_REF_NAME" --generate-notes --verify-tag
