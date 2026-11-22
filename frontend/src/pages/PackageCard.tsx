@@ -2,18 +2,33 @@ import { Button } from "@astryxdesign/core/Button";
 import { ClickableCard } from "@astryxdesign/core/ClickableCard";
 import { Icon } from "@astryxdesign/core/Icon";
 import { HStack, StackItem, VStack } from "@astryxdesign/core/Layout";
+import { StatusDot } from "@astryxdesign/core/StatusDot";
 import { Text } from "@astryxdesign/core/Text";
-import { Token } from "@astryxdesign/core/Token";
-import { CubeIcon, PuzzlePieceIcon, Squares2X2Icon } from "@heroicons/react/24/outline";
+import { colorVars, radiusVars } from "@astryxdesign/core/theme/tokens.stylex";
+import { ArchiveBoxIcon, CheckBadgeIcon, CubeIcon, PuzzlePieceIcon, Squares2X2Icon } from "@heroicons/react/24/outline";
+import * as stylex from "@stylexjs/stylex";
 import type { Api } from "../host";
 import { t } from "../i18n";
 
-export function sourceMeta(source: string): { label: string; color: "green" | "blue" | "purple" | "gray" } {
-  if (source === "index") return { label: t("Built-in index"), color: "green" };
-  if (source === "product") return { label: t("Product version"), color: "blue" };
-  if (source === "imported") return { label: t("Local library"), color: "purple" };
-  if (source === "installed") return { label: t("Installed"), color: "green" };
-  return { label: t("Retained"), color: "gray" };
+const styles = stylex.create({
+  action: { flexShrink: 0 },
+  iconBox: {
+    width: 36,
+    height: 36,
+    flexShrink: 0,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: colorVars["--color-background-muted"],
+    borderRadius: radiusVars["--radius-element"],
+  },
+});
+
+export function sourceMeta(source: string): { label: string; color: "green" | "blue" | "purple" | "gray"; icon: typeof CheckBadgeIcon } {
+  if (source === "index") return { label: t("Built-in index"), color: "green", icon: CheckBadgeIcon };
+  if (source === "product") return { label: t("Product version"), color: "blue", icon: CubeIcon };
+  if (source === "imported") return { label: t("Local library"), color: "purple", icon: ArchiveBoxIcon };
+  if (source === "installed") return { label: t("Installed"), color: "green", icon: CheckBadgeIcon };
+  return { label: t("Retained"), color: "gray", icon: ArchiveBoxIcon };
 }
 
 export function packageCounts(view: Api.PackageView) {
@@ -32,7 +47,8 @@ export function PackageCard({
   onAction: () => void;
 }) {
   const { id, version, title, description } = view.descriptor;
-  const display = title || id;
+  const display = t(title || id);
+  const summary = description ? t(description) : `${display} (${id})`;
   const source = sourceMeta(view.source);
   const counts = packageCounts(view);
   const installed = view.installed;
@@ -41,51 +57,66 @@ export function PackageCard({
   const actionLabel = current
     ? t("Manage")
     : view.update
-      ? t("Review upgrade")
+      ? t("Upgrade")
       : retired && installed?.version === version
         ? t("Reinstall")
-        : t("Review and install");
+        : t("Install");
   const icon = counts.apps > 0 && counts.plugins > 0 ? Squares2X2Icon : counts.plugins > 0 ? PuzzlePieceIcon : CubeIcon;
+  const parts = [
+    counts.apps > 0 ? `${counts.apps} ${counts.apps === 1 ? t("app root") : t("app roots")}` : "",
+    counts.plugins > 0 ? `${counts.plugins} ${counts.plugins === 1 ? t("plugin capability") : t("plugin capabilities")}` : "",
+  ].filter(Boolean);
 
   return (
     <VStack role="listitem" height="100%">
-      <ClickableCard label={display} elevation="low" padding={4} height="100%" onClick={onInspect}>
+      <ClickableCard label={display} elevation="none" padding={4} height="100%" onClick={onInspect}>
         <VStack gap={3} height="100%">
           <HStack gap={3} vAlign="start">
-            <Icon icon={icon} size="lg" />
+            <VStack xstyle={styles.iconBox}>
+              <Icon icon={icon} size="md" color="secondary" />
+            </VStack>
             <StackItem size="fill">
-              <VStack gap={1}>
-                <Text type="body" weight="bold" maxLines={1}>{display}</Text>
-                <HStack gap={1} vAlign="center" wrap="wrap">
-                  <Token label={source.label} color={source.color} size="sm" />
-                  {installed && !retired && <Token label={`${t("Installed")} ${installed.version}`} color="green" size="sm" />}
-                  {retired && <Token label={t("Retired")} color="gray" size="sm" />}
+              <VStack gap={0.5}>
+                <Text type="body" weight="medium" maxLines={1}>{display}</Text>
+                <HStack gap={1.5} vAlign="center">
+                  <Icon icon={source.icon} size="xsm" color={source.color === "green" ? "success" : "secondary"} />
+                  <Text type="supporting" color="secondary" maxLines={1}>{source.label}</Text>
+                  {installed && !retired && (
+                    <>
+                      <StatusDot variant="success" label={t("Installed")} />
+                      <Text type="supporting" color="secondary" maxLines={1}>{installed.version}</Text>
+                    </>
+                  )}
+                  {retired && (
+                    <>
+                      <StatusDot variant="neutral" label={t("Retired")} />
+                      <Text type="supporting" color="secondary" maxLines={1}>{t("Retired")}</Text>
+                    </>
+                  )}
                 </HStack>
               </VStack>
             </StackItem>
             <Button
               label={actionLabel}
-              variant={current ? "secondary" : "primary"}
+              variant="secondary"
               size="sm"
+              xstyle={styles.action}
               onClick={onAction}
             />
           </HStack>
 
           <StackItem size="fill">
-            <Text type="body" color="secondary" maxLines={2}>
-              {description || `${display} (${id})`}
+            <Text type="supporting" color="secondary" maxLines={2}>
+              {summary}
             </Text>
           </StackItem>
 
-          <HStack gap={2} vAlign="center" wrap="wrap">
-            {counts.apps > 0 && (
-              <Token label={`${counts.apps} ${counts.apps === 1 ? t("app root") : t("app roots")}`} color="blue" size="sm" />
-            )}
-            {counts.plugins > 0 && (
-              <Token label={`${counts.plugins} ${counts.plugins === 1 ? t("plugin capability") : t("plugin capabilities")}`} color="purple" size="sm" />
+          <HStack gap={2} vAlign="center">
+            {parts.length > 0 && (
+              <Text type="supporting" color="secondary" maxLines={1}>{parts.join(" · ")}</Text>
             )}
             <StackItem size="fill" />
-            <Text type="supporting" color="secondary" maxLines={1}>
+            <Text type="supporting" color="secondary" hasTabularNumbers maxLines={1}>
               {id} · {version}
             </Text>
           </HStack>

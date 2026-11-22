@@ -1,10 +1,11 @@
 import { Banner } from "@astryxdesign/core/Banner";
 import { Button } from "@astryxdesign/core/Button";
 import { Dialog, DialogHeader } from "@astryxdesign/core/Dialog";
-import { HStack, Layout, LayoutContent, LayoutFooter, LayoutPanel, StackItem, VStack } from "@astryxdesign/core/Layout";
+import { HStack, Layout, LayoutContent, LayoutFooter, LayoutHeader, LayoutPanel, StackItem, VStack } from "@astryxdesign/core/Layout";
 import { Step, Stepper } from "@astryxdesign/core/Stepper";
-import { Text } from "@astryxdesign/core/Text";
+import { Heading, Text } from "@astryxdesign/core/Text";
 import { useMediaQuery } from "@astryxdesign/core/hooks";
+import * as stylex from "@stylexjs/stylex";
 import type { ReactNode } from "react";
 import { t } from "../i18n";
 
@@ -30,6 +31,10 @@ type FormWizardProps = {
   error?: string;
   children: ReactNode;
 };
+
+const styles = stylex.create({
+  shell: { height: "min(680px, calc(100dvh - 4rem))" },
+});
 
 export function FormWizard({
   title,
@@ -73,58 +78,65 @@ export function FormWizard({
   );
 
   return (
-    <Dialog isOpen onOpenChange={() => !busy && onClose()} width={showGuidance ? 1040 : 840} purpose="form">
-      <Layout
-        padding={0}
-        header={<DialogHeader title={title} onOpenChange={() => !busy && onClose()} />}
-        start={showSideRail ? (
-          <LayoutPanel width={240} padding={4} hasDivider>
-            {stepper("vertical")}
-          </LayoutPanel>
-        ) : undefined}
-        end={showGuidance && current && current.help.length > 0 ? (
-          <LayoutPanel width={260} padding={4} role="complementary" hasDivider>
-            <VStack gap={3}>
-              <Text type="body" weight="bold">{t("Guidance")}</Text>
-              {current.help.map((item, index) => (
-                <Text key={index} type="supporting" color="secondary">{item}</Text>
-              ))}
-            </VStack>
-          </LayoutPanel>
-        ) : undefined}
-        content={
-          <LayoutContent padding={5}>
-            <VStack gap={4}>
-              {!showSideRail && stepper("horizontal")}
-              {current && (
-                <VStack gap={1}>
-                  <Text type="body" weight="bold">{current.label}</Text>
-                  <Text type="supporting" color="secondary">{current.description}</Text>
-                </VStack>
-              )}
-              {error && <Banner status="error" title={t("Not done")} description={error} />}
-              {children}
-            </VStack>
-          </LayoutContent>
-        }
-        footer={
-          <LayoutFooter padding={4} hasDivider>
-            <HStack gap={2} vAlign="center">
-              <Button label={t("Cancel")} variant="secondary" isDisabled={busy} onClick={onClose} />
-              <StackItem size="fill" />
-              {activeStep > 0 && onBack && (
-                <Button label={t("Back")} variant="secondary" isDisabled={busy} onClick={onBack} />
-              )}
-              <Button
-                label={primaryLabel ?? (isLast ? t("Done") : t("Continue"))}
-                variant="primary"
-                isDisabled={busy || !canProceed}
-                onClick={onNext}
-              />
-            </HStack>
-          </LayoutFooter>
-        }
-      />
+    <Dialog isOpen onOpenChange={() => !busy && onClose()} width={showGuidance ? 1040 : 840} padding={0} purpose="form">
+      <VStack xstyle={styles.shell}>
+        <Layout
+          height="fill"
+          padding={0}
+          header={
+            <LayoutHeader padding={4} hasDivider>
+              <DialogHeader title={title} onOpenChange={() => !busy && onClose()} />
+            </LayoutHeader>
+          }
+          start={showSideRail ? (
+            <LayoutPanel width={240} padding={4} isScrollable hasDivider>
+              {stepper("vertical")}
+            </LayoutPanel>
+          ) : undefined}
+          end={showGuidance && current && current.help.length > 0 ? (
+            <LayoutPanel width={256} padding={4} role="complementary" isScrollable hasDivider>
+              <VStack gap={3}>
+                <Heading level={4}>{t("Guidance")}</Heading>
+                {current.help.map((item, index) => (
+                  <Text key={index} type="supporting" color="secondary">{item}</Text>
+                ))}
+              </VStack>
+            </LayoutPanel>
+          ) : undefined}
+          content={
+            <LayoutContent isScrollable padding={5}>
+              <VStack gap={4}>
+                {!showSideRail && stepper("horizontal")}
+                {current && (
+                  <VStack gap={1}>
+                    <Heading level={3}>{current.label}</Heading>
+                    <Text type="supporting" color="secondary">{current.description}</Text>
+                  </VStack>
+                )}
+                {error && <Banner status="error" title={t("Not done")} description={error} />}
+                {children}
+              </VStack>
+            </LayoutContent>
+          }
+          footer={
+            <LayoutFooter padding={4} hasDivider>
+              <HStack gap={2} vAlign="center">
+                <Button label={t("Cancel")} variant="secondary" isDisabled={busy} onClick={onClose} />
+                <StackItem size="fill" />
+                {activeStep > 0 && onBack && (
+                  <Button label={t("Back")} variant="secondary" isDisabled={busy} onClick={onBack} />
+                )}
+                <Button
+                  label={primaryLabel ?? (isLast ? t("Done") : t("Continue"))}
+                  variant="primary"
+                  isDisabled={busy || !canProceed}
+                  onClick={onNext}
+                />
+              </HStack>
+            </LayoutFooter>
+          }
+        />
+      </VStack>
     </Dialog>
   );
 }

@@ -228,7 +228,7 @@ export function PackageImportWizard({ onClose, onDone }: { onClose: () => void; 
           )}
           <MetadataList columns="single" label={{ position: "start", width: 140 }}>
             <MetadataListItem label={t("Title")}>
-              <Text type="body" weight="bold">{preview.descriptor.title || preview.descriptor.id}</Text>
+              <Text type="body" weight="medium">{t(preview.descriptor.title || preview.descriptor.id)}</Text>
             </MetadataListItem>
             <MetadataListItem label={t("Version")}>
               <Text type="body">{preview.descriptor.id} · {preview.descriptor.version}</Text>
@@ -243,7 +243,7 @@ export function PackageImportWizard({ onClose, onDone }: { onClose: () => void; 
               <Text type="code" color="secondary">{preview.descriptor.namespace}</Text>
             </MetadataListItem>
           </MetadataList>
-          {preview.descriptor.description && <Text type="body" color="secondary">{preview.descriptor.description}</Text>}
+          {preview.descriptor.description && <Text type="supporting" color="secondary">{t(preview.descriptor.description)}</Text>}
         </VStack>
       )}
 
@@ -269,7 +269,7 @@ export function PackageImportWizard({ onClose, onDone }: { onClose: () => void; 
         <VStack gap={4}>
           <MetadataList columns="single" label={{ position: "start", width: 140 }}>
             <MetadataListItem label={t("Title")}>
-              <Text type="body" weight="bold">{preview.descriptor.title || preview.descriptor.id}</Text>
+              <Text type="body" weight="medium">{t(preview.descriptor.title || preview.descriptor.id)}</Text>
             </MetadataListItem>
             <MetadataListItem label={t("Version")}>
               <Text type="body">{preview.descriptor.id} · {preview.descriptor.version}</Text>

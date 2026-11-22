@@ -1,9 +1,10 @@
 import { Banner } from "@astryxdesign/core/Banner";
 import { Button } from "@astryxdesign/core/Button";
 import { Dialog, DialogHeader } from "@astryxdesign/core/Dialog";
-import { HStack, Layout, LayoutContent, LayoutFooter, StackItem, VStack } from "@astryxdesign/core/Layout";
+import { HStack, Layout, LayoutContent, LayoutFooter, LayoutHeader, StackItem, VStack } from "@astryxdesign/core/Layout";
 import { Text } from "@astryxdesign/core/Text";
 import { TextInput } from "@astryxdesign/core/TextInput";
+import * as stylex from "@stylexjs/stylex";
 import { useState } from "react";
 import { type Api, reread, useRead } from "../host";
 import { t } from "../i18n";
@@ -11,6 +12,10 @@ import { reasonOf, send } from "./act";
 import { PackageReviewContent } from "./PackageReviewContent";
 
 type Mode = "install" | "manage";
+
+const styles = stylex.create({
+  shell: { height: "min(680px, calc(100dvh - 4rem))" },
+});
 
 export function PackageReview({ view, mode, close, done }: { view: Api.PackageView; mode: Mode; close: () => void; done: () => void }) {
   const id = view.descriptor.id;
@@ -64,49 +69,56 @@ export function PackageReview({ view, mode, close, done }: { view: Api.PackageVi
   };
 
   return (
-    <Dialog isOpen onOpenChange={close} width={820} purpose="form">
-      <Layout
-        padding={4}
-        header={<DialogHeader title={`${mode === "install" ? t("Review and install") : t("Manage installation")}: ${view.descriptor.title || id}`} onOpenChange={close} />}
-        content={
-          <LayoutContent>
-            <VStack gap={4}>
-              {failure && <Banner status="error" title={t("Not done")} description={failure} />}
-              {loading && <Text type="supporting">{t("Loading…")}</Text>}
-              {problems.length > 0 && <Banner status="error" title={t("This version cannot be used as it stands")} description={problems.join(" · ")} />}
-              {named && (
-                <TextInput label={t("Project API name")} isRequired value={namespace} onChange={setNamespace}
-                  description={t("The managed project, its types and its actions take this name. Choose another when this tenant already has a project with it.")} />
-              )}
-              <PackageReviewContent view={view} mode={mode} review={review} preparation={preparation} />
-            </VStack>
-          </LayoutContent>
-        }
-        footer={
-          <LayoutFooter>
-            <HStack gap={2} vAlign="center">
-              <StackItem size="fill" />
-              <Button label={t("Cancel")} variant="secondary" onClick={close} />
-              {mode === "install" && (
-                <Button
-                  label={primaryLabel}
-                  variant="primary"
-                  isDisabled={busy || loading || !installAction || (!retired && installed?.version === version) || problems.length > 0 || (named && !namespace)}
-                  onClick={() => run(installAction, named ? { id, version, namespace } : { id, version })}
-                />
-              )}
-              {mode === "manage" && state !== "draining" && state !== "retired" && (
-                <Button label={t("Mark for uninstall")} variant="secondary"
-                  isDisabled={busy || loading || !drainAction || review.status !== "ready" || (impact?.dependencies.length ?? 0) > 0}
-                  onClick={() => run(drainAction, { id })} />
-              )}
-              {mode === "manage" && state !== "retired" && (
-                <Button label={t("Retire package")} variant="destructive" isDisabled={busy || loading || !retireAction || state !== "draining" || problems.length > 0} onClick={() => run(retireAction, { id })} />
-              )}
-            </HStack>
-          </LayoutFooter>
-        }
-      />
+    <Dialog isOpen onOpenChange={close} width={800} padding={0} purpose="form">
+      <VStack xstyle={styles.shell}>
+        <Layout
+          height="fill"
+          padding={0}
+          header={
+            <LayoutHeader padding={4} hasDivider>
+              <DialogHeader title={`${mode === "install" ? t("Review and install") : t("Manage installation")}: ${t(view.descriptor.title || id)}`} onOpenChange={close} />
+            </LayoutHeader>
+          }
+          content={
+            <LayoutContent isScrollable padding={5}>
+              <VStack gap={5}>
+                {failure && <Banner status="error" title={t("Not done")} description={failure} />}
+                {loading && <Text type="supporting" color="secondary">{t("Loading…")}</Text>}
+                {problems.length > 0 && <Banner status="error" title={t("This version cannot be used as it stands")} description={problems.join(" · ")} />}
+                {named && (
+                  <TextInput label={t("Project API name")} isRequired value={namespace} onChange={setNamespace}
+                    description={t("The managed project, its types and its actions take this name. Choose another when this tenant already has a project with it.")} />
+                )}
+                <PackageReviewContent view={view} mode={mode} review={review} preparation={preparation} />
+              </VStack>
+            </LayoutContent>
+          }
+          footer={
+            <LayoutFooter padding={4} hasDivider>
+              <HStack gap={2} vAlign="center">
+                <StackItem size="fill" />
+                <Button label={t("Cancel")} variant="secondary" onClick={close} />
+                {mode === "install" && (
+                  <Button
+                    label={primaryLabel}
+                    variant="primary"
+                    isDisabled={busy || loading || !installAction || (!retired && installed?.version === version) || problems.length > 0 || (named && !namespace)}
+                    onClick={() => run(installAction, named ? { id, version, namespace } : { id, version })}
+                  />
+                )}
+                {mode === "manage" && state !== "draining" && state !== "retired" && (
+                  <Button label={t("Mark for uninstall")} variant="secondary"
+                    isDisabled={busy || loading || !drainAction || review.status !== "ready" || (impact?.dependencies.length ?? 0) > 0}
+                    onClick={() => run(drainAction, { id })} />
+                )}
+                {mode === "manage" && state !== "retired" && (
+                  <Button label={t("Retire package")} variant="destructive" isDisabled={busy || loading || !retireAction || state !== "draining" || problems.length > 0} onClick={() => run(retireAction, { id })} />
+                )}
+              </HStack>
+            </LayoutFooter>
+          }
+        />
+      </VStack>
     </Dialog>
   );
 }

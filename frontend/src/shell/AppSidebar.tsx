@@ -16,7 +16,7 @@ import { navigate, useSearch } from "../router";
 type Preference = { entity: string; pinned?: string[] };
 
 const styles = stylex.create({
-  sidebar: { backgroundColor: `color-mix(in srgb, ${colorVars["--color-background-body"]}, ${colorVars["--color-background-surface"]})` },
+  sidebar: { backgroundColor: colorVars["--color-background-body"] },
 });
 
 export function AppSidebar({ app, item, apps, object, listPath, onCollapse }: { app: App; item: NavItem; apps: App[]; object?: string; listPath?: string; onCollapse?: () => void }) {

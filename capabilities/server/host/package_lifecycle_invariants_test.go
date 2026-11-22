@@ -62,6 +62,10 @@ func TestInvariantK9PackageRetireAndReinstallPreserveData(t *testing.T) {
 		}
 	}
 	submit(packages.SchemaPackageImport, map[string]any{"id": descriptor.ID, "digest": inspected.Digest})
+	prep, prepErr := target.PackagePreparation(t.Context(), admin, descriptor.ID, descriptor.Version, invariantClock)
+	if prepErr != nil || len(prep.Applications) != 1 {
+		t.Fatalf("admin without builder role must read package preparation: %+v err=%#v", prep, prepErr)
+	}
 	taken := target.submission(packages.SchemaPackageInstall, protocol.PackageType, descriptor.ID, map[string]any{"id": descriptor.ID, "version": descriptor.Version})
 	taken.Authority, taken.PrincipalId = "platform", admin.ID
 	if _, refusal := target.Submit(admin, taken, invariantClock); refusal == nil || !strings.Contains(refusal.Message, "already exists") {

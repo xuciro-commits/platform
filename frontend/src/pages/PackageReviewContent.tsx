@@ -1,18 +1,28 @@
 import { Banner } from "@astryxdesign/core/Banner";
+import { Divider } from "@astryxdesign/core/Divider";
 import { HStack, VStack } from "@astryxdesign/core/Layout";
 import { List, ListItem } from "@astryxdesign/core/List";
 import { MetadataList, MetadataListItem } from "@astryxdesign/core/MetadataList";
-import { Text } from "@astryxdesign/core/Text";
+import { Heading, Text } from "@astryxdesign/core/Text";
 import { Token } from "@astryxdesign/core/Token";
 import type { Api, Read } from "../host";
 import { t } from "../i18n";
 import { sourceMeta } from "./PackageCard";
 
 function changeColor(kind: string): "green" | "blue" | "red" | "gray" {
-  if (kind === "added") return "green";
-  if (kind === "changed") return "blue";
-  if (kind === "removed") return "red";
+  const normalized = kind.toLowerCase();
+  if (normalized === "added") return "green";
+  if (normalized === "changed") return "blue";
+  if (normalized === "removed") return "red";
   return "gray";
+}
+
+function stepLabel(action: string, status: string) {
+  if (action === "platform.package.install") return t("Install");
+  if (action === "platform.package.upgrade") return t("Upgrade");
+  if (action === "platform.package.downgrade") return t("Downgrade");
+  if (action === "platform.package.rollback") return t("Roll back");
+  return t(action || status);
 }
 
 export function PackageReviewContent({
@@ -35,22 +45,29 @@ export function PackageReviewContent({
   const steps = view.plan.steps ?? [];
   const digest = view.descriptor.artifactDigest || view.sourceDigest || installed?.artifact;
   const apps = preparation.status === "ready" && preparation.data.applications.length
-    ? preparation.data.applications.map((app) => app.title || app.ref.name).join(", ")
+    ? preparation.data.applications.map((app) => t(app.title || app.ref.name)).join(", ")
     : String(changes.filter((change) => change.ref.kind === "app").length);
   const roles = preparation.status === "ready" && preparation.data.roles.length
     ? preparation.data.roles.map((entry) => entry.role).join(", ")
     : t("None");
+
+  const byKind = new Map<string, number>();
+  for (const change of changes) {
+    byKind.set(change.ref.kind, (byKind.get(change.ref.kind) ?? 0) + 1);
+  }
+  const changeSummary = [...byKind.entries()].map(([kind, count]) => `${t(kind)} ${count}`).join(" · ");
+  const notableChanges = changes.filter((change) => (change.fields?.length ?? 0) > 0 || change.change.toLowerCase() === "removed");
 
   return (
     <VStack gap={4}>
       {view.source === "imported" && (
         <Banner status="warning" title={t("Local library")} description={t("Self-declared metadata from an external source")} />
       )}
-      {description && <Text type="body" color="secondary">{description}</Text>}
+      {description && <Text type="supporting" color="secondary">{t(description)}</Text>}
 
-      <MetadataList columns="single" label={{ position: "start", width: 120 }}>
+      <MetadataList columns="single" label={{ position: "start", width: 140 }}>
         <MetadataListItem label={t("Version")}>
-          <Text type="body">{id} · {version}</Text>
+          <Text type="body" hasTabularNumbers>{id} · {version}</Text>
         </MetadataListItem>
         <MetadataListItem label={t("Source")}>
           <Token label={source.label} color={source.color} size="sm" />
@@ -71,97 +88,146 @@ export function PackageReviewContent({
       </MetadataList>
 
       {mode === "install" && review.status === "ready" && (
-        <VStack gap={2}>
-          <Text type="body" weight="bold">{t("Installation scope")}</Text>
-          <Text type="body">{t("Applications")}: {apps}</Text>
-          <Text type="body">{t("Dependencies")}: {impact?.dependencies.length ? impact.dependencies.join(", ") : t("None")}</Text>
-          <Text type="body">{t("Roles")}: {roles}</Text>
-          <Text type="body">{t("Connections")}: {preparation.status === "ready" ? preparation.data.connections.length : impact?.connections.length ?? 0}</Text>
-          <Text type="body">{t("Existing records affected")}: {impact?.outputs.reduce((sum, output) => sum + output.records, 0) ?? 0}</Text>
-        </VStack>
+        <>
+          <Divider />
+          <VStack gap={2}>
+            <Heading level={4}>{t("Installation scope")}</Heading>
+            <MetadataList columns="single" label={{ position: "start", width: 140 }}>
+              <MetadataListItem label={t("Applications")}>
+                <Text type="body">{apps}</Text>
+              </MetadataListItem>
+              <MetadataListItem label={t("Dependencies")}>
+                <Text type="body">{impact?.dependencies.length ? impact.dependencies.join(", ") : t("None")}</Text>
+              </MetadataListItem>
+              <MetadataListItem label={t("Roles")}>
+                <Text type="body">{roles}</Text>
+              </MetadataListItem>
+              <MetadataListItem label={t("Connections")}>
+                <Text type="body" hasTabularNumbers>{preparation.status === "ready" ? preparation.data.connections.length : impact?.connections.length ?? 0}</Text>
+              </MetadataListItem>
+              <MetadataListItem label={t("Existing records affected")}>
+                <Text type="body" hasTabularNumbers>{impact?.outputs.reduce((sum, output) => sum + output.records, 0) ?? 0}</Text>
+              </MetadataListItem>
+            </MetadataList>
+          </VStack>
+        </>
       )}
 
       {mode === "install" && steps.length > 0 && (
-        <List header={t("Install plan")} hasDividers>
-          {steps.map((step) => (
-            <ListItem
-              key={`${step.id}@${step.version}`}
-              label={step.title || step.id}
-              description={`${step.id} · ${step.version}${step.problem ? ` · ${step.problem}` : ""}`}
-              endContent={<Token label={t(step.action || step.status)} color={step.problem ? "red" : "blue"} size="sm" />}
-            />
-          ))}
-        </List>
+        <>
+          <Divider />
+          <List header={t("Install plan")} hasDividers>
+            {steps.map((step) => (
+              <ListItem
+                key={`${step.id}@${step.version}`}
+                label={t(step.title || step.id)}
+                description={`${step.id} · ${step.version}${step.problem ? ` · ${step.problem}` : ""}`}
+                endContent={<Token label={stepLabel(step.action, step.status)} color={step.problem ? "red" : "blue"} size="sm" />}
+              />
+            ))}
+          </List>
+        </>
       )}
 
       {mode === "install" && (contributions?.length ?? 0) > 0 && (
-        <List header={t("Contributions")} hasDividers>
-          {(contributions ?? []).map((item) => (
-            <ListItem
-              key={`${item.surface ?? "work"}:${item.view}`}
-              label={item.title || item.view}
-              description={`${item.kind || "view"} · ${item.surface || "work"}${item.app ? ` · ${item.app}` : ""}`}
-            />
-          ))}
-        </List>
+        <>
+          <Divider />
+          <List header={t("Contributions")} hasDividers>
+            {(contributions ?? []).map((item) => (
+              <ListItem
+                key={`${item.surface ?? "work"}:${item.view}`}
+                label={item.title || item.view}
+                description={`${item.kind || "view"} · ${item.surface || "work"}${item.app ? ` · ${item.app}` : ""}`}
+              />
+            ))}
+          </List>
+        </>
       )}
 
       {mode === "install" && preparation.status === "ready" && preparation.data.connections.length > 0 && (
-        <List header={t("Connections")} hasDividers>
-          {preparation.data.connections.map((conn) => (
-            <ListItem
-              key={conn.ref.name}
-              label={conn.title || conn.ref.name}
-              description={conn.kind}
-              endContent={<Token label={conn.ready ? t("Ready") : t("Not configured")} color={conn.ready ? "green" : "orange"} size="sm" />}
-            />
-          ))}
-        </List>
+        <>
+          <Divider />
+          <List header={t("Connections")} hasDividers>
+            {preparation.data.connections.map((conn) => (
+              <ListItem
+                key={conn.ref.name}
+                label={conn.title || conn.ref.name}
+                description={conn.kind}
+                endContent={<Token label={conn.ready ? t("Ready") : t("Not configured")} color={conn.ready ? "green" : "orange"} size="sm" />}
+              />
+            ))}
+          </List>
+        </>
       )}
 
       {mode === "install" && changes.length > 0 && (
-        <List header={`${t("Resource changes")} (${changes.length})`} hasDividers>
-          {changes.slice(0, 12).map((change) => {
-            const fieldSummary = (change.fields ?? [])
-              .map((field) => `${field.change === "added" ? "+" : field.change === "removed" ? "-" : "~"} ${field.name}${field.before || field.after ? ` (${field.before ?? ""}${field.before && field.after ? " → " : ""}${field.after ?? ""})` : ""}`)
-              .join(", ");
-            const hasIncompatible = (change.fields ?? []).some((field) => field.incompatible);
-            return (
-              <ListItem
-                key={`${change.ref.kind}:${change.ref.name}`}
-                label={change.ref.name}
-                description={`${t(change.ref.kind)}${fieldSummary ? ` · ${fieldSummary}` : change.before || change.after ? ` · ${change.before ?? "—"} → ${change.after ?? "—"}` : ""}`}
-                endContent={<Token label={t(change.change)} color={hasIncompatible ? "red" : changeColor(change.change)} size="sm" />}
-              />
-            );
-          })}
-        </List>
+        <>
+          <Divider />
+          <VStack gap={2}>
+            <Heading level={4}>{`${t("Resource changes")} (${changes.length})`}</Heading>
+            <Text type="supporting" color="secondary">{changeSummary}</Text>
+            {notableChanges.length > 0 && (
+              <List header={t("Field changes")} hasDividers>
+                {notableChanges.map((change) => {
+                  const fieldSummary = (change.fields ?? [])
+                    .map((field) => `${field.change === "added" ? "+" : field.change === "removed" ? "-" : "~"} ${field.name}${field.before || field.after ? ` (${field.before ?? ""}${field.before && field.after ? " → " : ""}${field.after ?? ""})` : ""}`)
+                    .join(", ");
+                  const hasIncompatible = (change.fields ?? []).some((field) => field.incompatible);
+                  return (
+                    <ListItem
+                      key={`${change.ref.kind}:${change.ref.name}`}
+                      label={change.ref.name}
+                      description={`${t(change.ref.kind)}${fieldSummary ? ` · ${fieldSummary}` : ""}`}
+                      endContent={<Token label={t(change.change)} color={hasIncompatible ? "red" : changeColor(change.change)} size="sm" />}
+                    />
+                  );
+                })}
+              </List>
+            )}
+          </VStack>
+        </>
       )}
 
       {mode === "install" && extensions.length > 0 && (
-        <List header={t("Extensions")} hasDividers>
-          {extensions.map((ext) => (
-            <ListItem
-              key={ext.type}
-              label={ext.type}
-              description={ext.issue || ext.fields.join(", ")}
-              endContent={<Token label={ext.issue ? t("Error") : t("OK")} color={ext.issue ? "red" : "green"} size="sm" />}
-            />
-          ))}
-        </List>
+        <>
+          <Divider />
+          <List header={t("Extensions")} hasDividers>
+            {extensions.map((ext) => (
+              <ListItem
+                key={ext.type}
+                label={ext.type}
+                description={ext.issue || ext.fields.join(", ")}
+                endContent={<Token label={ext.issue ? t("Error") : t("OK")} color={ext.issue ? "red" : "green"} size="sm" />}
+              />
+            ))}
+          </List>
+        </>
       )}
 
       {mode === "manage" && (
-        <VStack gap={2}>
-          <Text type="body" weight="bold">{t("Lifecycle")}</Text>
-          <HStack gap={2} vAlign="center">
-            <Text type="body">{t("Installed version")}: {installed?.version ?? t("Not installed")}</Text>
-            {installed?.state && <Token label={t(installed.state)} color={installed.state === "active" ? "green" : "gray"} size="sm" />}
-          </HStack>
-          <Text type="body">{t("State")}: {installed?.state || t("Unknown")}</Text>
-          <Text type="body">{t("References retained")}: {impact?.references.length ?? 0}</Text>
-          <Text type="body">{t("Business records retained")}: {impact?.outputs.reduce((sum, output) => sum + (output.retained ? output.records : 0), 0) ?? 0}</Text>
-        </VStack>
+        <>
+          <Divider />
+          <VStack gap={2}>
+            <Heading level={4}>{t("Lifecycle")}</Heading>
+            <MetadataList columns="single" label={{ position: "start", width: 140 }}>
+              <MetadataListItem label={t("Installed version")}>
+                <Text type="body" hasTabularNumbers>{installed?.version ?? t("Not installed")}</Text>
+              </MetadataListItem>
+              <MetadataListItem label={t("State")}>
+                <HStack gap={2} vAlign="center">
+                  <Text type="body">{installed?.state || t("Unknown")}</Text>
+                  {installed?.state && <Token label={t(installed.state)} color={installed.state === "active" ? "green" : installed.state === "draining" ? "orange" : "gray"} size="sm" />}
+                </HStack>
+              </MetadataListItem>
+              <MetadataListItem label={t("References retained")}>
+                <Text type="body" hasTabularNumbers>{impact?.references.length ?? 0}</Text>
+              </MetadataListItem>
+              <MetadataListItem label={t("Business records retained")}>
+                <Text type="body" hasTabularNumbers>{impact?.outputs.reduce((sum, output) => sum + (output.retained ? output.records : 0), 0) ?? 0}</Text>
+              </MetadataListItem>
+            </MetadataList>
+          </VStack>
+        </>
       )}
     </VStack>
   );

@@ -3,7 +3,13 @@ import { HStack, Layout, LayoutContent, LayoutHeader } from "@astryxdesign/core/
 import { List, ListItem } from "@astryxdesign/core/List";
 import { Text } from "@astryxdesign/core/Text";
 import { Token } from "@astryxdesign/core/Token";
+import { colorVars } from "@astryxdesign/core/theme/tokens.stylex";
+import * as stylex from "@stylexjs/stylex";
 import { useState } from "react";
+
+const styles = stylex.create({
+  surface: { backgroundColor: colorVars["--color-background-surface"] },
+});
 import { type Api, useRead } from "../../host";
 import { t } from "../../i18n";
 import { PageTitle, useGutter } from "../../pages/frame";
@@ -24,6 +30,7 @@ export default function Installations() {
     <>
       <Layout
         height="fill"
+        xstyle={styles.surface}
         header={
           <LayoutHeader padding={gutter} hasDivider>
             <PageTitle title={t("Installations")}>

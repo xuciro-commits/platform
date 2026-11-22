@@ -1352,7 +1352,7 @@ test("gate: build a type and use it, install a package and use its action, then 
 
   await open(page, "Delivery", "Marketplace");
   const provider = page.getByRole("listitem").filter({ hasText: "application.production-provider · 0.1.4" });
-  await provider.getByRole("button", { name: "Review and install", exact: true }).click();
+  await provider.getByRole("button", { name: "Install", exact: true }).click();
   const review = page.getByRole("dialog", { name: /Review and install/ });
   await expect(review).toContainText("application.production-provider");
   await review.getByRole("button", { name: "Install package", exact: true }).click();
@@ -1433,7 +1433,7 @@ test("applications: install the sample version and run a contributed record acti
   await signIn(page);
   await open(page, "Delivery", "Marketplace");
   const provider = page.getByRole("listitem").filter({ hasText: "application.production-provider · 0.1.5" });
-  await provider.getByRole("button", { name: "Review and install", exact: true }).click();
+  await provider.getByRole("button", { name: "Install", exact: true }).click();
   const review = page.getByRole("dialog", { name: /Review and install/ });
   await expect(review.getByText("Installation scope", { exact: true })).toBeVisible();
   await review.getByRole("button", { name: "Install package", exact: true }).click();
@@ -1579,7 +1579,7 @@ test("delivery: a builder publishes a version, which installs beside its source 
   await release.getByRole("button", { name: "Cancel", exact: true }).click();
 
   await page.goto("/delivery/marketplace");
-  await page.getByRole("listitem").filter({ hasText: "crm · 0.1.0" }).getByRole("button", { name: "Review and install" }).click();
+  await page.getByRole("listitem").filter({ hasText: "crm · 0.1.0" }).getByRole("button", { name: "Install" }).click();
   const review = page.getByRole("dialog");
   const name = review.getByRole("textbox", { name: "Project API name" });
   await expect(name).toHaveValue("crm");
@@ -2554,12 +2554,12 @@ test("blank tenant: install CRM from the marketplace, grant roles, and run the s
   await open(page, "Delivery", "Marketplace");
   const crm = page.getByRole("listitem").filter({ hasText: /^CRM/ }).first();
   await expect(crm).toBeVisible();
-  await crm.getByRole("button", { name: "Review and install", exact: true }).click();
+  await crm.getByRole("button", { name: "Install", exact: true }).click();
   const review = page.getByRole("dialog", { name: /Review and install/ });
-  await expect(review.getByText(/Applications:.*CRM/)).toBeVisible();
-  await expect(review.getByText(/Dependencies:/)).toBeVisible();
-  await expect(review.getByText(/Roles:.*salesrep/)).toBeVisible();
-  await expect(review.getByText(/Connections:/)).toBeVisible();
+  await expect(review.getByText("Applications", { exact: true })).toBeVisible();
+  await expect(review.getByText("Dependencies", { exact: true })).toBeVisible();
+  await expect(review.getByText(/salesrep/)).toBeVisible();
+  await expect(review.getByText("Connections", { exact: true })).toBeVisible();
   await review.getByRole("button", { name: "Install package", exact: true }).click();
   await expect(page).toHaveURL(/\/delivery\/installations$/, { timeout: 30_000 });
 

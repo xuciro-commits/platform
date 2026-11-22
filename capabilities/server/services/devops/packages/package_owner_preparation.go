@@ -299,6 +299,7 @@ func PreparationReader(m platform.Member) platform.Member {
 		reader.Roles[app] = role
 	}
 	reader.Roles[build.ID] = build.Builder
+	reader.Grants = append(slices.Clone(m.Grants), platform.Grant{App: build.ID, Role: build.Builder})
 	return reader
 }
 
@@ -332,6 +333,9 @@ func Prepare(id, version string, m platform.Member, hooks PreparationHooks) (Pac
 	find := func(typ, name string) (DraftState, error) {
 		total, found, refusal := hooks.Records(typ, platform.Query{Domain: platform.Raw([]any{[]any{"name", "=", name}}), Limit: 2})
 		if refusal != nil {
+			if refusal.Code == pb.ErrorCode_ERROR_CODE_POLICY_DENIED && m.Holds("platform", "admin") && !build.HoldsIndependentRole(m, build.Builder) {
+				return DraftState{}, nil
+			}
 			return DraftState{}, refusal
 		}
 		if total > 1 {

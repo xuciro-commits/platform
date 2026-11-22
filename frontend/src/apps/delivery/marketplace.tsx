@@ -7,6 +7,8 @@ import { Selector } from "@astryxdesign/core/Selector";
 import { Skeleton } from "@astryxdesign/core/Skeleton";
 import { Text } from "@astryxdesign/core/Text";
 import { TextInput } from "@astryxdesign/core/TextInput";
+import { colorVars } from "@astryxdesign/core/theme/tokens.stylex";
+import * as stylex from "@stylexjs/stylex";
 import { useMemo, useState } from "react";
 import { type Api, useRead } from "../../host";
 import { t } from "../../i18n";
@@ -17,6 +19,10 @@ import { PackageImportWizard } from "../../pages/PackageImportWizard";
 import { PackageReview } from "../../pages/PackageReview";
 
 type Tab = "all" | "apps" | "plugins" | "installed";
+
+const styles = stylex.create({
+  surface: { backgroundColor: colorVars["--color-background-surface"] },
+});
 
 export default function Marketplace() {
   const packages = useRead<Api.PackageView[]>("/v1/packages");
@@ -57,6 +63,7 @@ export default function Marketplace() {
     <>
       <Layout
         height="fill"
+        xstyle={styles.surface}
         header={
           <LayoutHeader padding={gutter} hasDivider>
             <VStack gap={4}>

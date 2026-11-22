@@ -116,7 +116,7 @@ const styles = stylex.create({
   activeRow: {
     backgroundColor: colorVars["--color-overlay-pressed"],
     "--table-row-overlay": colorVars["--color-overlay-pressed"],
-    "--table-sticky-background": `color-mix(in srgb, ${colorVars["--color-background-surface"]} 90%, ${colorVars["--color-text-primary"]})`,
+    "--table-sticky-background": colorVars["--color-background-muted"],
   },
   editable: { cursor: "text" },
   surface: { backgroundColor: colorVars["--color-background-surface"], "--table-sticky-background": colorVars["--color-background-surface"] },
