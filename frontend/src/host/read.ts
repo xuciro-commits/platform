@@ -1,4 +1,4 @@
-import { useEffect, useState, useSyncExternalStore } from "react";
+import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import { HostRefusal, request } from "./request";
 import { useSession } from "./session";
 
@@ -142,8 +142,8 @@ function watchScope(path: string | null, body?: unknown): WatchScope {
     if (parts.length >= 3 && parts[2] === "sections") {
       const sec = parts[3] ?? "";
       const keys = typ ? [`type:${typ}`] : [];
-      if (sec === "comments") keys.push("scope:owner:comments", "scope:owner:work");
-      else if (sec === "links") keys.push("scope:owner:links");
+      if (sec === "comments") keys.push("scope:owner:relations", "scope:owner:work");
+      else if (sec === "links") keys.push("scope:owner:relations");
       else if (sec === "files") keys.push("scope:owner:files", "type:files.file");
       else return { kind: "any" };
       return { kind: "keys", keys };
@@ -203,10 +203,12 @@ export function useRead<Answer>(path: string | null, body?: unknown): Read<Answe
       active = false;
     };
   }, [cacheKey, path, sent, sessionKey, seen]);
-  if (path !== null && cached && cached.seen === seen) {
-    return { status: "ready", path, data: cached.data as Answer };
-  }
-  return read;
+  const fresh = cached && cached.seen === seen ? cached : undefined;
+  const shown = useMemo<Read<Answer> | undefined>(
+    () => (fresh ? { status: "ready", path, data: fresh.data as Answer } : undefined),
+    [fresh, path],
+  );
+  return shown ?? read;
 }
 
 function failed(failure: unknown, path?: string | null): Read<never> {
@@ -251,8 +253,12 @@ export function useReads<Answer>(paths: string[]): Read<Answer[]> {
       active = false;
     };
   }, [asked, sessionKey, seen]);
-  if (allFresh) {
-    return { status: "ready", data: paths.map((path) => cachedRead<Answer>(`${sessionKey}\0${path}\0`)!.data as Answer) };
-  }
-  return read;
+  const shown = useMemo<Read<Answer[]> | undefined>(
+    () =>
+      allFresh
+        ? { status: "ready", data: (JSON.parse(asked) as string[]).map((path) => cachedRead<Answer>(`${sessionKey}\0${path}\0`)!.data as Answer) }
+        : undefined,
+    [allFresh, asked, sessionKey, seen],
+  );
+  return shown ?? read;
 }
