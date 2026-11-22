@@ -26,7 +26,7 @@
 5. **说明不进代码。** 我们不写注释：模板说明里讲的道理，留在这里或 [frontend](frontend.md)，代码里删掉注释。
 6. **一个表现服务所有入口。** 新表现做成 `src/pages/` 里的一个声明函数（像 `recordList`、`listPage`），入口只写一句声明。
 
-- 业务对照只读 `study/from-frappe-crm/matrix.md`；`study/**/captures/` 与 `study/**/evidence/` 只为核对某个具体细节时定向看一张。
+- 业务对照只读 `idea/from-frappe-crm/matrix.md`；`idea/**/captures/` 与 `idea/**/evidence/` 只为核对某个具体细节时定向看一张。
 
 顺序：2.8（下面各项按序）。
 
@@ -39,23 +39,23 @@
 
 平台发行版带单体宿主与 `pkg`（`v*` tag 才跑 `release.yml`）；包库的 `platform.lock` 写发行版，CI 下载 `pkg` 并核对摘要，只在 PR 与手动触发时跑。
 
-- **2.8.1 普查。** 开放应用有哪几家（Frappe、Odoo 社区版与 OCA、Apache OFBiz、Dolibarr、Tryton、InvenTree 等，以核实为准），
-  每家有哪些业务应用：许可、能参考还是能转换、业务价值、与平台已有能力的重叠，给出接入顺序。
-  产出 `study/open-apps/index.md` 一张表，每家一节；许可以各仓库的 LICENSE 文件为准，不凭记忆。
+普查已做（2.8.1）：各家、各自的应用、许可与接入顺序在官方包库的 [sources](https://github.com/xuciro-commits/platform-packages/blob/main/docs/sources.md)。
+`idea/` 不入库，只在负责人的机器上：来源的截图、DOM 与能力矩阵放在那里，结论写进 sources 与各包的设计稿。
+
 - **2.8.2 分类进目录。** `package.yaml` 的 `industries`、`capabilities`、`keywords`、`stage`、`source` 由 `pkg` 按官方包库的
   [分类表](https://github.com/xuciro-commits/platform-packages/blob/main/docs/taxonomy.md) 校验，不进制品，进 `catalog.json`；
   市场按行业、能力、关键词筛选，`stage: test` 默认不列。八个夹具包标 `stage: test`。验收：`make check`、marketplace 的 trunk。
-- **2.8.3 第一个：重新设计 Frappe CRM。** 输入是 `study/from-frappe-crm/matrix.md`。先写设计稿：对象、状态与转换、动作、角色、页面、流程，
+- **2.8.3 第一个：重新设计 Frappe CRM。** 输入是 `idea/from-frappe-crm/matrix.md`。先写设计稿：对象、状态与转换、动作、角色、页面、流程，
   与来源的对应和取舍；再做成官方包 `crm`，在夹具宿主装进空租户走完线索到赢单，PR 经 CI，发 `crm/v0.1.0`。
   夹具 `crm` 留给主干验收；官方 `crm` 稳定后，主干验收改装它，夹具退役。
 - **2.8.4 黄金路线 v1 写成 Skill。** `.claude/skills/open-app-intake/SKILL.md`：普查 → 读来源（`scripts/frappe-read.mjs`）→ 能力矩阵 →
   重新设计 → 打包 → 夹具宿主走主线 → 分类 → PR → 发版；每步的输入、产出、检查与易错点。验收：照它从零做第二个包，不需要另加说明。
 - **2.8.5 发版链路。** 只有 release 工作流打 `<id>/v<version>`；Release 带制品、`SHA256SUMS` 与来源证明，并重新生成 `catalog.json`。
   平台市场的“管理库”默认带官方包库，`pkg diff <上一版>` 调宿主的 `packages.Review`，输出与平台“审阅升级”一致，CI 用它守版本号。
-- **2.8.6 起逐个接入。** 按 2.8.1 的顺序一个包一项，先 Frappe（Helpdesk、HRMS，ERPNext 按能力拆成销售、采购、库存、会计、制造、项目、资产、质量），
-  再下一家。每接一个，Skill 补上新坑；与已有官方包重叠的能力，扩展已有的包，不另起一个。
-- 许可：重新设计只读来源的业务与产品设计，产出按官方包库的 Apache-2.0 发布，`source.relation` 写 `redesign`；
-  由来源定义转换的（`derived`）沿用来源许可，不进官方包库（domain“产品包”）。向客户交付前，负责人先取得法律意见。
+- **2.8.6 起逐个接入。** 按 sources 的波次一个包一项：第一波 helpdesk、hr-core、assets、projects，第二波库存、购销、会计、制造与质量，
+  每个能力参考多家取最好的设计。每接一个，Skill 补上新坑；与已有官方包重叠的能力，扩展已有的包，不另起一个。
+- 许可：借业务流程、模块划分、字段含义与交互思路，做出的是我们自己的设计（`redesign`），以 Apache-2.0 发布，不沿用来源的 GPL、AGPL；
+  逐个翻写定义属于转换（`derived`），只对宽松许可的来源做。细则在官方包库的 sources；向客户交付前，负责人先取得法律意见。
 
 ## 承重的要求
 

@@ -237,7 +237,7 @@
 - 只读来源的定义，从不执行来源里的代码。能转的是结构；控制器、客户端脚本、报表、打印格式不转，行为用动作与函数重建。
 - 许可随来源走：Framework、frappe-ui、Studio、Builder 是 MIT；ERPNext、HRMS、Lending、Webshop、Education 是 GPLv3；
   CRM、Helpdesk、LMS、Insights、Drive、Gameplan 是 AGPLv3。
-- 只转 GPLv3 的 ERPNext 与 HRMS；AGPLv3 的应用只作交互参考，不转。
+- 只转 GPLv3 的 ERPNext 与 HRMS，AGPLv3 的不转。只借流程、模块划分与字段含义的重新设计不是转换，以官方包库的 Apache-2.0 发布。
 - 转出来的包是原应用的衍生作品，沿用原许可，清单里记下来源与许可，放在本仓库之外；平台代码不从中复制，不用原产品的名字与商标。
 - 向客户交付含转换内容的包之前，负责人先取得法律意见。
 
