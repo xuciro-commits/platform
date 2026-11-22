@@ -36,13 +36,26 @@
 
 2.7.1–2.7.4 已由 trunk “blank tenant: install CRM …” 一个用例从安装走到赢单、卸载与重装。下面几项的宿主与界面已提交，只差验收。
 2.7.6 已由 marketplace 的 “upgrade tenant: install CRM from a local package file …” 验收；它装的 `crm-0.1.21.json` 就是 2.7.5 的上一版。
+包的来源是官方包库：先做 2.7.11–2.7.13，2.7.5 的新版本在新仓库里第一次正式发版。顺序：2.7.11 → 12 → 13 → 2.7.5 → 2.7.7 → 2.7.9 → 2.7.10。
 
+- **2.7.11 源格式 v2 与 `pkg`。** 打包器移到 Go 的 `cmd/pkg`（build、check、split、validate、diff），删 `scripts/package-source.mjs`；
+  校验、依赖与审阅直接用宿主的 `packagedesc.Validate`、`WithDependencies` 与 `packages.Review`，报错与装进租户时一字不差。
+  作者态源改为 YAML，一个资源一个文件，按对象分目录；`requires`、`provides`、动作输入模式、`contractVersion` 由打包器算，
+  `schemaVersions` 历史记在生成的 `package.lock`。先移植后换格式：两步之后八个包的制品都与现在逐字节相同。验收：`go test ./cmd/pkg`、`make check`。
+- **2.7.12 官方包库仓库。** 公开仓库 `xuciro-commits/platform-packages`，`git filter-repo` 带历史迁出八个包；自研包 Apache-2.0，GPL 转换包另建仓库。
+  有 README、开发文档（入门、概念、格式、版本、测试、发版、自建库、评审清单）、`templates/{app,plugin}` 与 CODEOWNERS。
+  PR 的 CI 跑 validate、两次 build 比摘要、diff 对上一版、译文齐全与 CHANGELOG；合入要一位非作者批准。
+  版本由机器核：补丁不许有模式变化，次版本只许新增可选内容，声明比实际改动小即拒。验收：故意提删字段的 PR，CI 拒绝。
+- **2.7.13 首次正式发版。** 只有 release 工作流打 `<id>/v<version>`；Release 带制品、`SHA256SUMS` 与来源证明，并生成 `catalog.json`
+  （2.7.7 的格式加 summary、publisher、trust、license、yanked；制品永不删，撤回只标 yanked）。
+  平台仓库删 `deploy/packages/<id>/` 源，只留发行快照与 `packages.lock`；`make packages-sync` 拉取并核对摘要，trunk 照旧离线。
+  `domain.md`“产品包”与 `deploy/packages/README.md` 改指新仓库。验收：`make packages-sync` 后 `make check` 与 `make trunk-changed`。
 - **2.7.5 改字段后升级（补验收）。** 已有：字段级审阅，删字段、改类型、新增必填在审阅与提交两层被拒（K9 `TestInvariantK9PackageUpgradeFieldReviewAndIncompatibleGate`）。
-  还缺：CRM 升到 0.1.22，线索多一个可选字段；制品按 CRM 包原来的做法重新发布，不手改 `schemaVersions`。
+  还缺：在官方包库发 `crm/v0.1.22`，线索多一个可选字段；平台快照同步它。
   trunk 接着 2.7.6：`upgrade` 里建一条线索并填值 → 市场显示可升级 → 审阅列出新增字段 → 升级后旧记录与已填的值都在，记录页出现新字段。验收：trunk 与 `make test RUN=K9`。
 - **2.7.7 市场库（补验收）。** 已有：库的添加、移除、刷新，目录解析、https 与大小门禁、离线缓存（K9 `TestInvariantK9PackageMarketLibrary`）。
   还缺：`frontend/e2e/playwright.config.ts` 的宿主命令加 `-allow-loopback-packages`；trunk 自己起一个回环 http 目录 →
-  “⋯ → 管理库”添加 → 目录条目与内置索引并列、标出来源 → 装上。验收：trunk。
+  “⋯ → 管理库”添加 → 目录条目与内置索引并列、标出来源 → 装上。8495 上添加官方包库地址能列出并装上。验收：trunk。
 - **2.7.9 长用例进一分钟。** 单跑超过一分钟的四个：builder 的 gate（60s）、marketplace 的空租户主线（59s）、crm 的全类型看板（50s）与转化赢单（39s）。
   前置状态经接口造好，界面只验各自的那一步；marketplace 的主线拆成安装、配角色、主线、卸载重装四个串行用例。验收：每个文件 `make trunk SPEC=…` 单跑一分钟内。
 - **2.7.10 负责人走门槛。** 2.7.5–2.7.9 收完，负责人在 8495 按 plan 阶段 2 的门槛手走一遍：空租户安装 → 线索到赢单 → 期间没有改宿主。
