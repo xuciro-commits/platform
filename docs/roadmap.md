@@ -42,9 +42,8 @@
 普查已做（2.8.1）：各家、各自的应用、许可与接入顺序在官方包库的 [sources](https://github.com/xuciro-commits/platform-packages/blob/main/docs/sources.md)。
 `idea/` 不入库，只在负责人的机器上：来源的截图、DOM 与能力矩阵放在那里，结论写进 sources 与各包的设计稿。
 
-- **2.8.3 第一个：重新设计 Frappe CRM。** 输入是 `idea/from-frappe-crm/matrix.md`。先写设计稿：对象、状态与转换、动作、角色、页面、流程，
-  与来源的对应和取舍；再做成官方包 `crm`，在夹具宿主装进空租户走完线索到赢单，PR 经 CI，发 `crm/v0.2.0`（接在夹具 0.1.x 之后）。
-  夹具 `crm` 留给主干验收；官方 `crm` 稳定后，主干验收改装它，夹具退役。
+- **2.8.3 第一个：重新设计 Frappe CRM。** 官方 `crm` 0.2.1 已发；official 的 trunk 装它走完线索、转化、按人可见、赢单与首页收入。
+  剩夹具退役：crm 的 trunk 改装官方包，删 `deploy/packages/crm`，夹具专有的用例（关注、甘特等）挪到 records 的夹具类型上。
 - **2.8.6 起逐个接入。** 按 sources 的波次一个包一项：第一波 helpdesk、hr-core、assets、projects，第二波库存、购销、会计、制造与质量，
   每个能力参考多家取最好的设计。每接一个，官方包库的 Skill `open-app-intake` 补上新坑；与已有官方包重叠的能力，扩展已有的包，不另起一个。
 - 许可：借业务流程、模块划分、字段含义与交互思路，做出的是我们自己的设计（`redesign`），以 Apache-2.0 发布，不沿用来源的 GPL、AGPL；
