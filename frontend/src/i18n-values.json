@@ -340,5 +340,6 @@
   "Add official library": "添加官方包库",
   "Applications redesigned for this platform, released with checksums and build provenance.": "为本平台重新设计的应用，随校验和与构建来源证明发布。",
   "Third-party library": "第三方包库",
-  "Official": "官方"
+  "Official": "官方",
+  "Some package libraries could not be synced. Retry from Manage library.": "部分包库未能同步，可在“管理库”里重试。"
 }

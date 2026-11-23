@@ -1,3 +1,4 @@
+import { Banner } from "@astryxdesign/core/Banner";
 import { EmptyState } from "@astryxdesign/core/EmptyState";
 import { Grid } from "@astryxdesign/core/Grid";
 import { HStack, Layout, LayoutContent, LayoutHeader, StackItem, VStack } from "@astryxdesign/core/Layout";
@@ -13,6 +14,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { type Api, request, reread, useRead } from "../../host";
 import { t } from "../../i18n";
 import { navigate } from "../../router";
+import { reasonOf } from "../../pages/act";
 import { PageTitle, useGutter } from "../../pages/frame";
 import { CatalogEntryCard, PackageCard, listingLabel, packageCounts } from "../../pages/PackageCard";
 import { type InitialPackageSource, PackageImportWizard } from "../../pages/PackageImportWizard";
@@ -41,12 +43,14 @@ export default function Marketplace() {
   const gutter = useGutter();
   const rows = packages.status === "ready" ? packages.data : [];
   const autoSynced = useRef(false);
+  const [syncFailure, setSyncFailure] = useState("");
+  const libraryName = (lib: Api.PackageLibraryView) => (lib.builtin ? t("Official library") : (lib.title || lib.url));
 
   useEffect(() => {
     if (autoSynced.current || libraries.status !== "ready") return;
     if (!libraries.data.some((lib) => lib.status === "pending")) return;
     autoSynced.current = true;
-    void request<Api.PackageLibraryView[]>("/v1/packages/libraries/refresh", { body: {} }).then(() => reread()).catch(() => {});
+    void request<Api.PackageLibraryView[]>("/v1/packages/libraries/refresh", { body: {} }).then(() => reread()).catch((problem) => setSyncFailure(reasonOf(problem)));
   }, [libraries]);
 
   const remoteEntries = useMemo(() => {
@@ -59,7 +63,7 @@ export default function Marketplace() {
         const key = `${entry.id}@${entry.version}`;
         if (existing.has(key) || seen.has(key)) continue;
         seen.add(key);
-        out.push({ entry, libraryTitle: lib.builtin ? t("Official library") : (lib.title || lib.url), official: Boolean(lib.builtin) });
+        out.push({ entry, libraryTitle: libraryName(lib), official: Boolean(lib.builtin) });
       }
     }
     return out;
@@ -125,6 +129,8 @@ export default function Marketplace() {
   };
 
   const totalVisible = filtered.length + filteredRemote.length;
+  const failedLibraries = libraries.status === "ready" ? libraries.data.filter((lib) => lib.status === "error") : [];
+  const libraryProblem = syncFailure || failedLibraries.map((lib) => (lib.error ? `${libraryName(lib)}: ${lib.error}` : libraryName(lib))).join(" · ");
 
   return (
     <>
@@ -213,6 +219,9 @@ export default function Marketplace() {
         content={
           <LayoutContent padding={gutter} role="main">
             <VStack gap={5}>
+              {libraryProblem && (
+                <Banner status="warning" title={t("Some package libraries could not be synced. Retry from Manage library.")} description={libraryProblem} />
+              )}
               {packages.status === "loading" && (
                 <Grid columns={{ minWidth: 320, max: 3 }} gap={4}>
                   {[0, 1, 2].map((index) => <Skeleton key={index} height={156} index={index} />)}
@@ -276,7 +285,7 @@ export default function Marketplace() {
         />
       )}
       {managingLibraries && (
-        <PackageLibraryManager onClose={() => setManagingLibraries(false)} />
+        <PackageLibraryManager onClose={() => { setManagingLibraries(false); setSyncFailure(""); }} />
       )}
     </>
   );
