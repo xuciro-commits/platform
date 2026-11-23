@@ -368,5 +368,19 @@
   "Clear demo data": "清理演示数据",
   "Demo data cleared": "演示数据已清理",
   "This archives the sample records installed with this app. Your settings, reference data, and any records you created stay.": "这会归档随本应用安装的演示记录。你的设置、参考数据以及你自己创建的记录都会保留。",
-  "Master data": "主数据"
+  "Master data": "主数据",
+  "Find in the organization": "在组织里查找",
+  "Nothing in the organization matches": "组织里没有匹配的",
+  "The people in your organization. An account signs in as one of them; applications attach their own details to a person.": "组织里的人。账号登录为其中一人；各应用把自己的信息挂在人上。",
+  "Units": "所属单元",
+  "New person": "新建人员",
+  "Unlink account": "解除账号",
+  "No account signs in as this person.": "还没有账号登录为此人。",
+  "Account that signs in as this person": "登录为此人的账号",
+  "Link account": "关联账号",
+  "Nothing filled in yet.": "还没有填写内容。",
+  "This person is not in the organization": "组织里没有这个人",
+  "Not placed in any unit.": "还没有放进任何单元。",
+  "Named in": "出现在",
+  "Sign-in account": "登录账号"
 }

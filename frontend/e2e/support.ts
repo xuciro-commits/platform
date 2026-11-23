@@ -199,3 +199,37 @@ export async function crmMainline(page: Page, go: (type: string, plural: string)
   await page.getByRole("dialog", { name: company }).getByRole("link", { name: "Open full page", exact: true }).click();
   await expect(page).toHaveURL((url) => url.pathname.split("/").pop() === organizationId);
 }
+
+export async function submit(page: Page, schema: string, targetType: string, targetId: string, payload: Record<string, unknown>, revision?: number) {
+  return page.evaluate(async ({ schema, targetType, targetId, payload, revision }) => {
+    const session = JSON.parse(sessionStorage.getItem("platform:session")!);
+    const headers = { Authorization: `Bearer ${session.token}`, "Platform-Tenant": session.tenant, "Content-Type": "application/json" };
+    const [catalog, identity, declarations] = await Promise.all([
+      fetch("/v1/actions", { headers }).then((r) => r.json()),
+      fetch("/v1/me", { headers }).then((r) => r.json()),
+      fetch("/v1/declarations", { headers }).then((r) => r.json()),
+    ]);
+    const action = catalog.find((entry: { schema: string }) => entry.schema === schema);
+    if (!action) throw new Error(`missing action ${schema}`);
+    const bytes = new TextEncoder().encode(JSON.stringify(payload));
+    const encoded = btoa(String.fromCharCode(...bytes));
+    const body: Record<string, unknown> = {
+      tenantId: identity.tenantId,
+      principalId: identity.principalId,
+      authority: declarations.find((entry: { dataClass: string }) => entry.dataClass === targetType)?.authorityId ?? "build",
+      target: { type: targetType, id: targetId },
+      schema: { name: schema, version: action.schemaVersion.family },
+      idempotencyKey: crypto.randomUUID(),
+      payload: encoded,
+    };
+    if (revision !== undefined) body.expectedRevision = revision;
+    const response = await fetch("/v1/submissions", {
+      method: "POST",
+      headers: { ...headers, "Platform-Schema-Version": action.schemaVersion.version },
+      body: JSON.stringify(body),
+    });
+    const answer = await response.json();
+    if (!response.ok || answer.error) throw new Error(JSON.stringify(answer));
+    return answer;
+  }, { schema, targetType, targetId, payload, revision });
+}

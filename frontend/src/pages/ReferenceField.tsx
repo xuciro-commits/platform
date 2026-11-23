@@ -15,6 +15,8 @@ import { useRecordHref } from "../apps/entries";
 import { type Api, request, useRead } from "../host";
 import { t } from "../i18n";
 import { ActionDialog } from "./ActionDialog";
+import { ElementInput, ElementLink } from "./ElementField";
+import { elementType, stereotypesOf } from "./enterprise";
 import { enterable, type InputStatus } from "./ParameterInput";
 import { usePeek } from "./RecordPeek";
 import { plain, present, shown } from "./values";
@@ -26,7 +28,11 @@ function canCreate(actions: Api.Action[] | undefined, type: string) {
   return actions?.find((action) => action.target === type && action.schema === `${type}.create` && !action.payload.some((parameter) => parameter.required && !enterable(parameter)));
 }
 
-export function ReferenceLink({ type, id, name, compact }: { type: string; id: string; name: string; compact?: boolean }) {
+export function ReferenceLink(props: { type: string; id: string; name: string; compact?: boolean }) {
+  return props.type === elementType ? <ElementLink id={props.id} name={props.name} compact={props.compact} /> : <RecordReferenceLink {...props} />;
+}
+
+function RecordReferenceLink({ type, id, name, compact }: { type: string; id: string; name: string; compact?: boolean }) {
   const [open, setOpen] = useState(false);
   const href = useRecordHref();
   const peek = usePeek();
@@ -81,10 +87,15 @@ type ReferenceInputProps = {
   focused?: boolean;
   labelHidden?: boolean;
   status?: InputStatus;
+  stereotypes?: string[];
   onChange: (value: string) => void;
 };
 
-export function ReferenceInput({ type, id, name, label, description, required, focused, labelHidden, status, onChange, control }: ReferenceInputProps) {
+export function ReferenceInput(props: ReferenceInputProps) {
+  return props.type === elementType ? <ElementInput {...props} /> : <RecordReferenceInput {...props} />;
+}
+
+function RecordReferenceInput({ type, id, name, label, description, required, focused, labelHidden, status, onChange, control }: ReferenceInputProps) {
   const [picked, setPicked] = useState<Reference>();
   const [creating, setCreating] = useState(false);
   const [searchFailed, setSearchFailed] = useState(false);
@@ -216,7 +227,7 @@ export function OneOfInput({ title, members, values, names, status, onChange }: 
           {members.map((member) => <SegmentedControlItem key={member.name} value={member.name} label={t(member.title)} />)}
         </SegmentedControl>
         <ReferenceInput key={active.name} type={String(active.ref)} id={String(values[active.name] ?? "")} name={names?.[active.name]} label={t(active.title)} labelHidden
-          status={status} onChange={(next) => onChange(active.name, next)} />
+          stereotypes={stereotypesOf(active)} status={status} onChange={(next) => onChange(active.name, next)} />
       </VStack>
     </Field>
   );

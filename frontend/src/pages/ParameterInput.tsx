@@ -23,6 +23,7 @@ import { reasonOf, send } from "./act";
 import { MemberInput } from "./MemberField";
 import { money } from "./values";
 import { ReferenceInput } from "./ReferenceField";
+import { stereotypesOf } from "./enterprise";
 
 export type InputStatus = { type: "error" | "success"; message?: string };
 type ParameterInputProps = {
@@ -274,7 +275,8 @@ export function ParameterInput({ parameter, described, value, form, status, onCh
   const reference = parameter.ref ?? (field?.type === "reference" ? field.ref : undefined);
   if (reference) {
     return <ReferenceInput type={reference} id={String(value ?? "")} name={referenceName} label={label} description={description}
-      required={parameter.required} focused={focused} labelHidden={labelHidden} status={status} onChange={onChange} control={control} />;
+      stereotypes={stereotypesOf(parameter) ?? stereotypesOf(field)} required={parameter.required} focused={focused} labelHidden={labelHidden} status={status}
+      onChange={onChange} control={control} />;
   }
   if (field?.type === "member" || parameter.type === "member") {
     return <MemberInput id={String(value ?? "")} name={referenceName} label={label} description={description}

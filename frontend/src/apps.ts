@@ -54,6 +54,7 @@ import {
   TagIcon,
   TruckIcon,
   UserGroupIcon,
+  UserIcon,
   UsersIcon,
   WindowIcon,
   WrenchScrewdriverIcon,
@@ -242,6 +243,7 @@ export const apps: App[] = [
         title: "People",
         items: [
           { id: "organization", label: "Organization", icon: BuildingOffice2Icon },
+          { id: "people", label: "People", icon: UserIcon },
           { id: "members", label: "Members", icon: UsersIcon },
           { id: "teams", label: "Teams", icon: UserGroupIcon },
         ],

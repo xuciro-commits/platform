@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { expect, test } from "@playwright/test";
 import type { Api } from "../src/host";
-import { signIn, open } from "./support";
+import { signIn, open, submit } from "./support";
 
 test.describe.serial("workspace and admin", () => {
 test("legacy links: open records and mapped views, and explain unavailable views", async ({ page }) => {
@@ -382,4 +382,38 @@ test("menu: every entry in every app opens a page with its own title", async ({ 
   }
 });
 
+});
+
+
+test("people: a person gets a sign-in account and shows what an application attaches to them", async ({ page }) => {
+  await signIn(page);
+  const suffix = Date.now().toString(36);
+  const person = `Trunk Person ${suffix}`;
+  const object = `profile${suffix}`;
+  await submit(page, "enterprise.element.add", "enterprise.element", `person-${suffix}`, { stereotype: "ActualPerson", name: person });
+  await submit(page, "build.object.create", "build.object", `PROFILE-${suffix}`, {
+    project: "sales", name: object, title: "Staff profile", plural: "Staff profiles", extends: "enterprise.element", display: "skill",
+    fields: [
+      { name: "base", title: "Person", type: "reference", ref: "enterprise.element", stereotype: "ActualPerson", required: true },
+      { name: "skill", title: "Main skill", type: "text", search: true },
+    ],
+    access: [{ role: "user", read: "all", create: true, edit: true }],
+  });
+  await submit(page, "build.object.publish", "build.object", `PROFILE-${suffix}`, {});
+  await submit(page, `sales.${object}.create`, `sales.${object}`, "P1", { base: `person-${suffix}`, skill: "Welding" });
+
+  const main = page.getByRole("main");
+  await open(page, "Admin", "People");
+  await main.getByRole("row").filter({ hasText: person }).getByRole("link", { name: person }).click();
+  await expect(page.getByRole("heading", { level: 1, name: person })).toBeVisible();
+  await expect(main.getByRole("heading", { name: "Staff profile" })).toBeVisible();
+  await expect(main.getByText("Welding", { exact: true })).toBeVisible();
+
+  await main.getByRole("combobox", { name: "Account that signs in as this person" }).click();
+  await page.getByRole("option", { name: /田雪/ }).click();
+  await main.getByRole("button", { name: "Link account", exact: true }).click();
+  await expect(main.getByRole("button", { name: "Unlink account", exact: true })).toBeVisible();
+
+  await open(page, "Admin", "People");
+  await expect(main.getByRole("row").filter({ hasText: person })).toContainText("田雪");
 });
