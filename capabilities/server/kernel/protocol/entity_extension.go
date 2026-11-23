@@ -9,6 +9,19 @@ import (
 	"strings"
 )
 
+const EnterpriseBase = "enterprise.element"
+
+func CheckEnterpriseExtension(extension platform.RecordTypeInfo) error {
+	link, ok := extension.Field("base")
+	if !ok || link.Type != "reference" || link.Ref != EnterpriseBase || !link.Required || link.Stereotype == "" || len(link.Stereotypes) > 0 {
+		return fmt.Errorf("extension %s of the organisation needs a required base reference to one enterprise element type", extension.Type)
+	}
+	if !slices.Contains([]string{"ActualPerson", "ActualLocation", "ActualOrganization"}, link.Stereotype) {
+		return fmt.Errorf("extension %s can attach to people, places or organisations, not %s", extension.Type, link.Stereotype)
+	}
+	return nil
+}
+
 func CheckExtension(extension, base platform.RecordTypeInfo) error {
 	if extension.Extends == "" || extension.Extends != base.Type || extension.Type == base.Type {
 		return fmt.Errorf("extension %s has an unavailable base %s", extension.Type, extension.Extends)

@@ -20,6 +20,14 @@ func (b *Build) captureExtensionSource(object *ontology.Object) error {
 		object.ExtensionSource = nil
 		return b.checkExtensionDependents(*object)
 	}
+	if object.Extends == protocol.EnterpriseBase {
+		object.ExtensionSource = nil
+		info, err := records.Describe(ID, Entity(*object), func(reflect.Type) string { return "" })
+		if err != nil {
+			return err
+		}
+		return protocol.CheckEnterpriseExtension(info)
+	}
 	base, exists := b.lookupEntity(object.Extends)
 	if !exists || b.host == nil {
 		return fmt.Errorf("extension base %s is unavailable", object.Extends)

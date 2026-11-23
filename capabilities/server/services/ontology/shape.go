@@ -250,6 +250,13 @@ func CheckObjectShape(o Object, app, objectType string, model platform.RecordTyp
 			}
 		}
 	}
+	if o.Extends == protocol.EnterpriseBase {
+		info, err := records.Describe(app, model, func(reflect.Type) string { return "" })
+		if err != nil {
+			return err
+		}
+		return protocol.CheckEnterpriseExtension(info)
+	}
 	if o.Extends != "" {
 		if o.Extends == objectType || (known == nil || !known(o.Extends)) {
 			return fmt.Errorf("the object cannot extend %s: not an object type this tenant has", o.Extends)

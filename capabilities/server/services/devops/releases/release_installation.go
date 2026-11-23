@@ -218,6 +218,12 @@ func CheckExtensions(entities []platform.RecordTypeInfo, lookup func(string) (pl
 		if info.Extends == "" {
 			continue
 		}
+		if info.Extends == ruleprotocol.EnterpriseBase {
+			if err := ruleprotocol.CheckEnterpriseExtension(info); err != nil {
+				return err
+			}
+			continue
+		}
 		base, exists := lookup(info.Extends)
 		if !exists {
 			return fmt.Errorf("extension %s base %s is unavailable", info.Type, info.Extends)
@@ -266,7 +272,11 @@ func ExtensionReview(candidate ruleprotocol.ReleaseCandidate, entities []platfor
 				row.Fields = append(row.Fields, field.Name)
 			}
 		}
-		if !exists {
+		if extension.Extends == ruleprotocol.EnterpriseBase {
+			if err := ruleprotocol.CheckEnterpriseExtension(extension); err != nil {
+				row.Issue = err.Error()
+			}
+		} else if !exists {
 			row.Issue = "extension base is unavailable"
 		} else if err := ruleprotocol.CheckExtension(extension, base); err != nil {
 			row.Issue = err.Error()

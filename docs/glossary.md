@@ -116,7 +116,7 @@
 | Business concept | 业务概念 | 项目中对象类型与动作的业务视图 | 主页 |
 | Connector | 连接器 | 连接的访问类型（数据库、REST、文件、消息）；也是能力实现的一种形态 | 数据 |
 | Person | 人 | 组织里的一个人类；账号可以登录为某人 | 管理 |
-| Facet | 附属对象 | 包挂在下层名词（人、地点、当事人）上的一组自己的字段，以那个名词为唯一键 | architecture |
+| Facet | 附属对象 | 包用 `extends` 挂在下层名词（人、地点、当事人）上的一组自己的字段，经 `base` 一对一 | architecture |
 | Base data package | 基础数据包 | 多个应用共用的名词与参考数据（当事人、区划、计量单位） | architecture |
 | Capability contract | 能力契约 | 一项能力的带版本接口：动作、读取、事件、计量与一致性测试 | architecture |
 | Implementation | 能力实现 | 实现某个能力契约的东西：声明式、连接器、沙箱代码或受管服务 | architecture |

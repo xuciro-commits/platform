@@ -154,7 +154,7 @@ func validateObject(o Object, model any, env ObjectRuntimeEnvironment) func(plat
 		if o.Extends == "" {
 			return nil
 		}
-		if !c.Replaying && env.Lookup != nil {
+		if !c.Replaying && env.Lookup != nil && o.Extends != protocol.EnterpriseBase {
 			base, exists := env.Lookup(o.Extends)
 			if !exists {
 				return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Extension base {type} is unavailable", o.Extends)
@@ -172,6 +172,9 @@ func validateObject(o Object, model any, env ObjectRuntimeEnvironment) func(plat
 			return nil
 		}
 		id := value.Field(0).Interface().(platform.Record).ID
+		if prior, exists := c.RecordValue(typ, id); exists && reflect.ValueOf(prior).FieldByName(GoName(BaseField)).String() != base.String() {
+			return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "{object} records stay with the record they were created for", o.Title)
+		}
 		domain, _ := json.Marshal([][]any{{BaseField, "=", base.String()}})
 		found, _, err := c.FindOf(typ, platform.Query{Domain: domain})
 		if err != nil {
