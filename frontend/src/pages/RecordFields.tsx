@@ -269,7 +269,7 @@ export function FieldGroup({ described, editor, sections, direction, focusEmpty,
       {editor.conflict && sections.some((section) => section.fields.some((field) => field.name === editor.conflict?.name)) && <EditorConflict editor={editor} described={described} />}
       {shownSections.map((section) => (
         <VStack key={section.title} gap={3}>
-          <Heading level={3}>{t(section.title)}</Heading>
+          <Heading level={3} accessibilityLevel={2}>{t(section.title)}</Heading>
           <FormLayout direction={direction} defaultOptionality="optional" xstyle={direction === "horizontal-labels" ? styles.aligned : undefined}>
             {section.fields.map((field) => {
               const parameter = parameters.get(field.name);

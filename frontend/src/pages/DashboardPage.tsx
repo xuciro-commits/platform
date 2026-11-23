@@ -41,7 +41,7 @@ export function dashboardPage<Answer>(definition: DashboardDefinition<Answer>) {
             <VStack gap={6}>
               <PageTitle title={t(definition.title)} />
               {read.status === "loading" && (
-                <Grid columns={{ minWidth: 240, repeat: "fit" }} gap={4}>
+                <Grid columns={{ minWidth: 200, max: 4 }} gap={4}>
                   {definition.metrics.map((metric, index) => (
                     <Skeleton key={metric.title} height={120} index={index} />
                   ))}
@@ -58,12 +58,12 @@ export function dashboardPage<Answer>(definition: DashboardDefinition<Answer>) {
                 />
               )}
               {read.status === "ready" && (
-                <Grid columns={{ minWidth: 240, repeat: "fit" }} gap={4}>
+                <Grid columns={{ minWidth: 200, max: 4 }} gap={4}>
                   {definition.metrics.map((metric) => (
                     <Card key={metric.title}>
                       <VStack gap={2}>
-                        <Heading level={4}>{t(metric.title)}</Heading>
-                        <Heading level={2}>{metric.value(read.data).toLocaleString()}</Heading>
+                        <Heading level={4} accessibilityLevel={2}>{t(metric.title)}</Heading>
+                        <Text type="large" size="2xl" weight="semibold">{metric.value(read.data).toLocaleString()}</Text>
                         <Link href={metric.href}>{t("View all")}</Link>
                       </VStack>
                     </Card>
@@ -87,7 +87,7 @@ export function dashboardPage<Answer>(definition: DashboardDefinition<Answer>) {
                       <Card key={table.title}>
                         <VStack gap={6}>
                           <HStack hAlign="between" vAlign="center">
-                            <Heading level={4}>{t(table.title)}</Heading>
+                            <Heading level={4} accessibilityLevel={2}>{t(table.title)}</Heading>
                             <Link href={table.href}>{t(table.label)}</Link>
                           </HStack>
                           <Table<Cells> data={table.rows(read.data)} columns={columns} idKey="id" density="compact" dividers="rows" hasHover />

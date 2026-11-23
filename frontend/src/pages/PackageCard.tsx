@@ -179,7 +179,6 @@ export function PackageCard({
               onClick={onAction}
             />
           </HStack>
-
           <HStack gap={3} vAlign="start">
             {cover && <Card variant="transparent" padding={0} xstyle={styles.cover(cover)} />}
             <StackItem size="fill">
@@ -188,7 +187,7 @@ export function PackageCard({
               </Text>
             </StackItem>
           </HStack>
-
+          <StackItem size="fill" />
           <HStack gap={2} vAlign="center">
             {parts.length > 0 && (
               <Text type="supporting" color="secondary" maxLines={1}>{parts.join(" · ")}</Text>
@@ -264,6 +263,7 @@ export function CatalogEntryCard({
               </Text>
             </StackItem>
           </HStack>
+          <StackItem size="fill" />
           <VStack gap={2}>
             {(entry.listing?.stage === "test" || entry.listing?.stage === "preview" || (entry.listing?.industries?.length ?? 0) > 0 || (entry.listing?.capabilities?.length ?? 0) > 0) && (
               <HStack gap={1.5} vAlign="center" wrap="wrap">

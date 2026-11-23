@@ -1,4 +1,5 @@
 import { AppShell, useAppShellMobile } from "@astryxdesign/core/AppShell";
+import { Button } from "@astryxdesign/core/Button";
 import { Divider } from "@astryxdesign/core/Divider";
 import { EmptyState } from "@astryxdesign/core/EmptyState";
 import { useHotkeys } from "@astryxdesign/core/hooks";
@@ -7,7 +8,7 @@ import { ChartPieIcon, Cog6ToothIcon, RectangleGroupIcon } from "@heroicons/reac
 import { MobileNav } from "@astryxdesign/core/MobileNav";
 import { useToast } from "@astryxdesign/core/Toast";
 import { lazy, Suspense, useEffect, useMemo, useState } from "react";
-import { type App, apps, locate, type NavItem, type NavSection } from "../apps";
+import { type App, apps, locate, type NavItem, type NavSection, pathOf } from "../apps";
 import { entries, recordHref } from "../apps/entries";
 import { type Api, useRead, useSession } from "../host";
 import { Records } from "../pages/RecordList";
@@ -47,7 +48,7 @@ function installedApps(views: Api.ApplicationView[], entities: Api.EntityInfo[])
     const dashboard = view.dashboard?.length && !sections.some((section) => section.items.some((page) => page.id === "dashboard")) ? view.dashboard : undefined;
     const overview: NavItem[] = dashboard ? [{ id: "dashboard", label: "Dashboard", icon: ChartPieIcon }] : [];
     sections[0].items = [...overview, ...sections[0].items];
-    return [{ id: view.name || view.app, label: view.title, icon: iconOf(view.icon, RectangleGroupIcon), group: "installed", sections, dashboard, packageId: view.package, hasDemo: view.hasDemo }];
+    return [{ id: view.name || view.app, label: view.title, icon: iconOf(view.icon, RectangleGroupIcon), badge: !view.icon, group: "installed", sections, dashboard, packageId: view.package, hasDemo: view.hasDemo }];
   });
 }
 
@@ -92,16 +93,18 @@ export function Shell() {
     const fixed = apps.filter((known) => me.status !== "ready" || known.group !== "manage" || granted[known.id]);
     return projected.status === "ready" ? [...fixed, ...installedApps(projected.data, entities.status === "ready" ? entities.data : []).filter((app) => !apps.some((known) => known.id === app.id))] : fixed;
   }, [projected, me, entities]);
-  const { app, item } = locate(path, available);
+  const { app, item, found } = locate(path, available);
   const object = item.object ?? (app.id === "ontology" && item.id === "objects" ? decodeURIComponent(segments[3] ?? "") : "");
   const listPath = app.id === "ontology" && item.id === "objects" ? `/ontology/objects/${encodeURIComponent(object)}` : item.object ? `/${app.id}/${item.id}` : undefined;
   if (!session) return <SignIn />;
   if (legacy) return null;
   const Entry = entries[`${app.id}/${item.id}`];
   const retiredLink = projected.status === "ready" && segments[3] && !available.some((application) => application.id === segments[1]);
+  const missing = !found && projected.status === "ready" && me.status === "ready";
   const content = retiredLink ? <RetainedRecord key={path} path={path} />
+    : missing ? <Missing home={pathOf(app)} label={t(app.label)} />
     : Entry ? <Entry key={`${app.id}/${item.id}`} />
-    : app.dashboard && item.id === "dashboard" ? <AppDashboard key={app.id} title={app.label} blocks={app.dashboard} listOf={(type) => listOf(app, type)} />
+    : app.dashboard && item.id === "dashboard" ? <AppDashboard key={app.id} title={item.label} blocks={app.dashboard} listOf={(type) => listOf(app, type)} />
     : app.group === "installed" && item.settings ? <SettingsTables key={`${app.id}/${item.id}`} title={item.label} types={item.settings} />
     : app.group === "installed" && item.object && listPath ? <Records key={`${app.id}/${item.id}`} declared={{ title: item.label, about: item.description ?? "", type: item.object }} listPath={listPath} id={segments[3]} />
     : null;
@@ -109,10 +112,10 @@ export function Shell() {
     <CommandSearch app={app} item={item} apps={available} tenant={session.tenant}>
       <AppShell
         contentPadding={0}
-        sideNav={<Navigation app={app} item={item} apps={available} object={object || undefined} listPath={listPath} />}
+        sideNav={<Navigation app={app} item={found ? item : undefined} apps={available} object={object || undefined} listPath={listPath} />}
         mobileNav={{ content: (
           <MobileNav header={<AppRail current={app} apps={available} compact />}>
-            <AppSidebar app={app} item={item} apps={available} object={object || undefined} listPath={listPath} />
+            <AppSidebar app={app} item={found ? item : undefined} apps={available} object={object || undefined} listPath={listPath} inDrawer />
           </MobileNav>
         ) }}
       >
@@ -127,6 +130,17 @@ export function Shell() {
 function listOf(app: App, type: string) {
   const page = app.sections.flatMap((section) => section.items).find((item) => item.object === type);
   return page && `/${app.id}/${page.id}`;
+}
+
+function Missing({ home, label }: { home: string; label: string }) {
+  return (
+    <EmptyState
+      headingLevel={1}
+      title={t("This page does not exist")}
+      description={t("The address may be mistyped, or the page was moved or removed.")}
+      actions={<Button label={t("Open {app}").replace("{app}", label)} variant="primary" href={home} />}
+    />
+  );
 }
 
 function RetainedRecord({ path }: { path: string }) {
@@ -145,7 +159,7 @@ function RetainedRecord({ path }: { path: string }) {
 
 const collapsedKey = "platform:sidebar-collapsed";
 
-function Navigation({ app, item, apps, object, listPath }: { app: App; item: NavItem; apps: App[]; object?: string; listPath?: string }) {
+function Navigation({ app, item, apps, object, listPath }: { app: App; item?: NavItem; apps: App[]; object?: string; listPath?: string }) {
   const { isMobile } = useAppShellMobile();
   const [collapsed, setCollapsed] = useState(() => localStorage.getItem(collapsedKey) === "true");
   const collapse = (next: boolean) => {

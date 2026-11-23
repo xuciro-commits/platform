@@ -1,5 +1,5 @@
 import type { Api } from "../../host";
-import { t } from "../../i18n";
+import { dateText, t } from "../../i18n";
 import { dashboardPage } from "../../pages/DashboardPage";
 
 export default dashboardPage<Api.TenantHealth>({
@@ -60,7 +60,7 @@ export default dashboardPage<Api.TenantHealth>({
         destination: breaker.destination,
         state: t(breaker.state),
         failures: String(breaker.failures),
-        until: breaker.until ? new Date(breaker.until).toLocaleString() : "",
+        until: breaker.until ? dateText(breaker.until) : "",
       })),
     },
   ],

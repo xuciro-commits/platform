@@ -148,8 +148,7 @@ test("blank tenant: the sales rep runs a lead to Won and the sales manager sees 
   await page.getByRole("radio", { name: "Board" }).click();
   await expect(page.getByRole("region", { name: "Won", exact: true }).getByRole("heading", { level: 4, name: "星海制造", exact: true })).toBeVisible();
   await page.goto("/crm/dashboard");
-  await expect(page.getByRole("main").getByRole("link", { name: "Won deals", exact: true })).toBeVisible();
-  await expect(page.getByRole("main").getByRole("heading", { level: 1, name: "1", exact: true }).first()).toBeVisible();
+  await expect(page.getByRole("main").getByRole("link", { name: "Won deals", exact: true }).locator("..")).toHaveText(/\D1$/);
 });
 
 test("blank tenant: retiring CRM removes its entry and keeps the records, reinstalling brings both back", async () => {

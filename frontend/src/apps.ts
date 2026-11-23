@@ -63,7 +63,7 @@ import {
 export type NavItem = { id: string; label: string; icon: IconType; object?: string; description?: string; settings?: string[] };
 export type NavSection = { title: string; items: NavItem[] };
 export type RailGroup = "start" | "installed" | "build" | "run" | "manage";
-export type App = { id: string; label: string; icon: IconType; group: RailGroup; sections: NavSection[]; dashboard?: Api.DashboardBlock[]; packageId?: string; hasDemo?: boolean };
+export type App = { id: string; label: string; icon: IconType; badge?: boolean; group: RailGroup; sections: NavSection[]; dashboard?: Api.DashboardBlock[]; packageId?: string; hasDemo?: boolean };
 
 export const apps: App[] = [
   {
@@ -289,7 +289,7 @@ export function locate(path: string, available: App[] = apps) {
   const app = available.find((candidate) => candidate.id === appId) ?? available[0];
   const items = app.sections.flatMap((section) => section.items);
   const item = items.find((candidate) => candidate.id === itemId) ?? items[0];
-  return { app, item };
+  return { app, item, found: (!appId || app.id === appId) && (!itemId || item.id === itemId) };
 }
 
 export function pathOf(app: App, item?: NavItem) {

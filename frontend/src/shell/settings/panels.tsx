@@ -11,7 +11,7 @@ import {
 } from "@heroicons/react/24/outline";
 import { useState } from "react";
 import { type Api, request, reread, useRead } from "../../host";
-import { t } from "../../i18n";
+import { dateText, t } from "../../i18n";
 import { reasonOf } from "../../pages/act";
 import { type ProfileValues, useAccount } from "../account";
 import { controlWidth, SettingsCard, SettingsRow, TextSetting, ThemeChoiceCards } from "../../pages/SettingsRows";
@@ -77,7 +77,7 @@ export function SecurityPanel() {
       {open.map((session) => (
         <SettingsRow key={session.id} title={deviceOf(session.agent)} icon={/iPhone|Android/.test(session.agent ?? "") ? DevicePhoneMobileIcon : ComputerDesktopIcon}
           titleAccessory={session.current ? <Token label={t("This session")} size="sm" /> : undefined}
-          description={`${t("Last active")} ${new Date(session.last).toLocaleString()}`} />
+          description={`${t("Last active")} ${dateText(session.last)}`} />
       ))}
       <SettingsRow title={t("Sign out other sessions")} icon={ClockIcon} description={t("Every other device has to sign in again.")}
         control={<Button label={t("Sign out others")} variant="secondary" size="sm" isLoading={busy} isDisabled={open.length < 2} onClick={endOthers} />} />

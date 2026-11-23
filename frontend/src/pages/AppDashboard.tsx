@@ -113,7 +113,7 @@ function Block({ block, entity, list }: { block: Api.DashboardBlock; entity?: Ap
       <ClickableCard label={t(block.title)} href={href(base)} isDisabled={!list} height="100%">
         <VStack gap={1}>
           <Text type="label" color="secondary">{t(block.title)}</Text>
-          {shown ? <Heading level={1}>{shown.points[0] ? shown.format(shown.points[0].amount) : "0"}</Heading> : <Pending read={read} />}
+          {shown ? <Text type="large" size="2xl" weight="semibold">{shown.points[0] ? shown.format(shown.points[0].amount) : "0"}</Text> : <Pending read={read} />}
         </VStack>
       </ClickableCard>
     );
@@ -122,7 +122,7 @@ function Block({ block, entity, list }: { block: Api.DashboardBlock; entity?: Ap
     <Card height="100%">
       <VStack gap={4}>
         <HStack hAlign="between" vAlign="center">
-          <Heading level={4}>{t(block.title)}</Heading>
+          <Heading level={4} accessibilityLevel={2}>{t(block.title)}</Heading>
           {list && <Link href={href(base) ?? list}>{t("View all")}</Link>}
         </HStack>
         {!shown ? <Pending read={read} /> : shown.points.length === 0 ? <Text type="supporting" color="secondary">{t("No data yet")}</Text> : block.kind === "share" ? <Share shown={shown} /> : <Chart kind={block.kind} shown={shown} />}

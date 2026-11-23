@@ -20,6 +20,10 @@ export function useLocale() {
   }, () => locale);
 }
 
+export function dateText(value: string | number | Date, options: Intl.DateTimeFormatOptions = { dateStyle: "medium", timeStyle: "short" }) {
+  return new Date(value).toLocaleString(locale, options);
+}
+
 export function t(text: string) {
   return locale === "zh-CN" ? (zhCN[text] ?? text) : text;
 }

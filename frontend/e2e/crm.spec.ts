@@ -277,8 +277,9 @@ test("dashboard: an application's home shows its numbers and charts, and each bl
   await page.goto("/crm/dashboard");
   const home = page.getByRole("main");
   for (const title of ["Leads", "Open deals", "Won deals", "Average deal value"]) await expect(home.getByRole("link", { name: title, exact: true })).toBeVisible();
-  await expect(home.getByRole("heading", { level: 1 }).filter({ hasText: /^\d+$/ })).toHaveCount(3);
-  await expect(home.getByRole("heading", { level: 1 }).filter({ hasText: /USD$/ })).toHaveCount(1);
+  for (const title of ["Leads", "Open deals", "Won deals"]) await expect(home.getByRole("link", { name: title, exact: true }).locator("..")).toHaveText(/\D\d+$/);
+  await expect(home.getByRole("link", { name: "Average deal value", exact: true }).locator("..")).toHaveText(/\d USD$/);
+  await expect(home.getByRole("heading", { level: 1 })).toHaveCount(1);
   for (const title of ["Sales funnel", "Deal value by stage", "Leads by source", "New deals"]) await expect(home.getByRole("heading", { name: title, exact: true })).toBeVisible();
   await home.locator(".recharts-bar-rectangle").first().click();
   await expect(page).toHaveURL(/\/crm\/crm\.deal\?domain=.*open.*status/);

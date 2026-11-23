@@ -72,15 +72,15 @@ export function AppRail({ current, compact, apps, collapsed, onExpand }: { curre
   if (compact) return <HStack gap={1} vAlign="center">{search}{notifications}{member}</HStack>;
   const link = (app: App, icon: ReactNode) => (
     <Tip key={app.id} label={t(app.label)}>
-      <IconButton label={t(app.label)} variant={app.id === current.id ? "secondary" : "ghost"} icon={icon} href={pathOf(app)} onClick={onExpand} />
+      <IconButton label={t(app.label)} variant={app.id === current.id ? "secondary" : "ghost"} icon={icon} href={pathOf(app)} onClick={onExpand} aria-current={app.id === current.id ? "page" : undefined} />
     </Tip>
   );
-  const of = (group: RailGroup) => apps.filter((app) => app.group === group).map((app) => link(app, app.group === "installed"
-    ? <Avatar name={t(app.label)} size="sm" shape="rounded" tooltip={false} />
+  const of = (group: RailGroup) => apps.filter((app) => app.group === group).map((app) => link(app, app.badge
+    ? <Avatar name={t(app.label)} size="sm" shape="square" tooltip={false} />
     : <Icon icon={app.icon} />));
   const groups = middle.map(of).filter((links) => links.length);
   return (
-    <VStack padding={2} hAlign="center" vAlign="between" height="100%" xstyle={styles.rail}>
+    <VStack padding={2} paddingBlockStart={6} hAlign="center" vAlign="between" height="100%" xstyle={styles.rail}>
       <VStack gap={1} hAlign="center">
         {of("start")}
         {search}

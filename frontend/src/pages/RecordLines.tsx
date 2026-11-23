@@ -35,7 +35,7 @@ export function RecordLines({ parent, id, set, child }: { parent: string; id: st
   return (
     <VStack gap={3}>
       <HStack vAlign="center" gap={2}>
-        <StackItem size="fill"><Heading level={3}>{title}</Heading></StackItem>
+        <StackItem size="fill"><Heading level={3} accessibilityLevel={2}>{title}</Heading></StackItem>
         {answer && create && <Button label={t("Add a row")} variant="secondary" onClick={() => setCreating(true)} />}
       </HStack>
       {read.status === "loading" && <Text type="supporting">{t("Loading…")}</Text>}

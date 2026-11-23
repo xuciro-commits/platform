@@ -2,6 +2,7 @@ import type { Api } from "../../host";
 import { useRead } from "../../host";
 import { WorkspaceWelcome } from "../../pages/WorkspaceWelcome";
 import { dashboardPage } from "../../pages/DashboardPage";
+import { dateText } from "../../i18n";
 
 type Directory = { resources: Api.ResourceEntry[] };
 
@@ -14,7 +15,7 @@ const latest = (answer: Directory, kind: string) =>
       id: resource.id,
       title: resource.title,
       owner: resource.ref.app,
-      changed: resource.changed.at ? new Date(resource.changed.at).toLocaleString() : "",
+      changed: resource.changed.at ? dateText(resource.changed.at) : "",
     }));
 const columns = [
   { key: "title", header: "Name" },

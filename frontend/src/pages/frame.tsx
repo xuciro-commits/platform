@@ -1,8 +1,8 @@
 import { useMediaQuery } from "@astryxdesign/core/hooks";
 import { HStack, StackItem, VStack } from "@astryxdesign/core/Layout";
-import { Heading } from "@astryxdesign/core/Text";
+import { Link } from "@astryxdesign/core/Link";
+import { Heading, Text } from "@astryxdesign/core/Text";
 import type { ReactNode } from "react";
-import { BackLink } from "./BackLink";
 
 export type Gutter = 4 | 6;
 
@@ -13,10 +13,17 @@ export function useGutter(): Gutter {
 export function PageTitle({ title, back, actions, children }: { title: string; back?: { href: string; label: string }; actions?: ReactNode; children?: ReactNode }) {
   return (
     <VStack gap={2}>
-      {back && <BackLink href={back.href} label={back.label} />}
-      <HStack gap={3} vAlign="center" wrap="wrap" minHeight={36}>
+      <HStack gap={3} vAlign="center" wrap="wrap" minHeight={32}>
         <StackItem size="fill">
-          <Heading level={1} maxLines={2}>{title}</Heading>
+          <HStack gap={2} vAlign="center">
+            {back && (
+              <>
+                <Link href={back.href} type="large" size="2xl" weight="semibold" color="secondary" maxLines={1}>{back.label}</Link>
+                <Text type="large" size="2xl" weight="semibold" color="secondary" aria-hidden="true">/</Text>
+              </>
+            )}
+            <Heading level={1} maxLines={2}>{title}</Heading>
+          </HStack>
         </StackItem>
         {actions}
       </HStack>

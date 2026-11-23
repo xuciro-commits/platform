@@ -18,7 +18,7 @@ import { borderVars, colorVars, durationVars, easeVars, fontWeightVars, radiusVa
 import { MagnifyingGlassIcon } from "@heroicons/react/24/outline";
 import * as stylex from "@stylexjs/stylex";
 import { type ReactNode, useEffect, useState } from "react";
-import { t } from "../i18n";
+import { dateText, t } from "../i18n";
 
 export type Chip = { key: string; label: string; kind: "many" | "range" | "date" | "boolean"; options: { value: string; label: string }[] };
 type Range = [number | null, number | null];
@@ -68,7 +68,7 @@ const dateOf = (filter: PowerSearchFilter | undefined) => {
   const value = filter?.value as { unixSeconds?: number } | undefined;
   return value?.unixSeconds == null ? null : new Date(value.unixSeconds * 1000);
 };
-const shortDate = (date: Date) => date.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+const shortDate = (date: Date) => dateText(date, { month: "short", day: "numeric" });
 const startOfToday = () => {
   const now = new Date();
   return new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();

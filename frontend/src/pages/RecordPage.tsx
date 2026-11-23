@@ -9,7 +9,7 @@ import { StatusDot } from "@astryxdesign/core/StatusDot";
 import { Tab, TabList } from "@astryxdesign/core/TabList";
 import { Heading, Text } from "@astryxdesign/core/Text";
 import { Timestamp } from "@astryxdesign/core/Timestamp";
-import { Fragment, type ReactNode, useEffect, useMemo, useState } from "react";
+import { type ReactNode, useEffect, useMemo, useState } from "react";
 import { type Api, useRead } from "../host";
 import { t } from "../i18n";
 import { originOf, usePath, useSearch } from "../router";
@@ -33,14 +33,6 @@ type Stamp = { by?: string; at?: string };
 type Kept = { id: string; revision: number; created: Stamp; changed: Stamp; archived?: boolean };
 export type RecordPageProps = { described: Described; id: string; listPath: string; listTitle: string; instances?: Instances; entities: Api.EntityInfo[]; catalog: Api.Action[] };
 
-function Bullet() {
-  return (
-    <Text type="supporting" color="secondary">
-      {"・"}
-    </Text>
-  );
-}
-
 function Loading() {
   return (
     <VStack gap={2}>
@@ -57,7 +49,7 @@ function Rail({ described, editor, kept, refs, people, restricted, collaboration
       <FieldGroup described={described} editor={editor} sections={[{ title: "Properties", fields: described.aside }]} direction="vertical" refs={refs} restricted={restricted} />
       {collaboration}
       <VStack gap={4}>
-        <Heading level={3}>{t("Record")}</Heading>
+        <Heading level={3} accessibilityLevel={2}>{t("Record")}</Heading>
         <MetadataList>
           <MetadataListItem label={t("Created")}>{kept.created.at && <Timestamp value={kept.created.at} format="date_time" type="body" color="primary" />}</MetadataListItem>
           <MetadataListItem label={t("Created by")}>
@@ -120,7 +112,8 @@ export function RecordPage({ described, id, listPath, listTitle, instances, enti
   }, [detail, headed]);
   const options = useOptions(described, laneField ? [laneField.name] : []);
   const parameters = new Map((described.edit?.payload ?? []).filter(enterable).map((parameter) => [parameter.name, parameter]));
-  const status = kept?.archived ? { tone: "neutral", title: "Archived" } : laneField && (described.lifecycle?.states?.length ?? 0) <= 1 ? undefined : state;
+  const settled = Boolean(state) && !(described.lifecycle?.transitions ?? []).some((transition) => transition.from.includes(state?.name ?? ""));
+  const status = kept?.archived ? { tone: "neutral", title: "Archived" } : laneField && ((described.lifecycle?.states?.length ?? 0) <= 1 || !settled) ? undefined : state;
   const name = described.name(values, id);
   const search = useCommandSearch();
   const loaded = read.status === "ready";
@@ -161,43 +154,34 @@ export function RecordPage({ described, id, listPath, listTitle, instances, enti
         <LayoutHeader padding={gutter} paddingBlockEnd={0} hasDivider>
           <VStack gap={4}>
             <PageTitle title={name} back={origin ? { href: origin.href, label: origin.title || t(listTitle) } : { href: listHref, label: t(listTitle) }} actions={!narrow && actions}>
-                  <HStack gap={1} vAlign="center" wrap="wrap">
+                  <HStack gap={4} vAlign="center" wrap="wrap">
                     <Text type="code" color="secondary">
                       {id}
                     </Text>
                     {status && (
-                      <>
-                        <Bullet />
-                        <HStack gap={2} vAlign="center">
-                          <StatusDot variant={dots[(status.tone ?? "neutral") as keyof typeof dots] ?? dots.neutral} label={t(status.title)} />
-                          <Text type="supporting">{t(status.title)}</Text>
-                        </HStack>
-                      </>
+                      <HStack gap={2} vAlign="center">
+                        <StatusDot variant={dots[(status.tone ?? "neutral") as keyof typeof dots] ?? dots.neutral} label={t(status.title)} />
+                        <Text type="supporting">{t(status.title)}</Text>
+                      </HStack>
                     )}
                     {heading.map((field) => {
                       const value = editor.values[field.name];
                       const parameter = parameters.get(field.name);
                       return (
-                        <Fragment key={field.name}>
-                          <Bullet />
-                          <PropertyField field={field} parameter={parameter} described={described.entity} value={value} form={editor.values}
-                            name={refs?.[field.name]?.[String(value ?? "")]} dot={options[field.name]?.find((option) => option.value === String(value ?? ""))?.dot}
-                            status={editor.status[field.name]} saving={editor.saving.has(field.name)} labelHidden hint={t(field.title)}
-                            onChange={parameter && ((next: unknown) => editor.change(parameter, next))} onCommit={() => editor.commit(field.name)} />
-                        </Fragment>
+                        <PropertyField key={field.name} field={field} parameter={parameter} described={described.entity} value={value} form={editor.values}
+                          name={refs?.[field.name]?.[String(value ?? "")]} dot={options[field.name]?.find((option) => option.value === String(value ?? ""))?.dot}
+                          status={editor.status[field.name]} saving={editor.saving.has(field.name)} labelHidden hint={t(field.title)}
+                          onChange={parameter && ((next: unknown) => editor.change(parameter, next))} onCommit={() => editor.commit(field.name)} />
                       );
                     })}
-                    {changes.length > 0 && (
-                      <><Bullet /><Text type="supporting" color="secondary">{t("Unpublished changes")}</Text></>
-                    )}
+                    {changes.length > 0 && <Text type="supporting" color="secondary">{t("Unpublished changes")}</Text>}
                     {kept?.changed.at && (
-                      <>
-                        <Bullet />
+                      <HStack gap={1} vAlign="center">
                         <Text type="supporting" color="secondary">
                           {t("Updated")}
                         </Text>
                         <Timestamp value={kept.changed.at} format="auto" />
-                      </>
+                      </HStack>
                     )}
                   </HStack>
             </PageTitle>

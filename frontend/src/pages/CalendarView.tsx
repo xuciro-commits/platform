@@ -12,7 +12,7 @@ import { colorVars, radiusVars } from "@astryxdesign/core/theme/tokens.stylex";
 import { ChevronLeftIcon, ChevronRightIcon } from "@heroicons/react/24/outline";
 import * as stylex from "@stylexjs/stylex";
 import type { PointerEvent as ReactPointerEvent } from "react";
-import { t } from "../i18n";
+import { dateText, t } from "../i18n";
 import { dragStyles, useDrag } from "./drag";
 import { useGutter } from "./frame";
 
@@ -106,7 +106,7 @@ export function CalendarView({ month, field, fields, items, onMonth, onField, on
           ))}
           {weeks.flat().map((day) => {
             const own = items.filter((entry) => entry.day === day.iso && entry.id !== drag?.id);
-            const label = new Date(`${day.iso}T00:00:00`).toLocaleDateString(undefined, { dateStyle: "long" });
+            const label = dateText(`${day.iso}T00:00:00`, { dateStyle: "long" });
             const isToday = day.iso === now;
             return (
               <VStack key={day.iso} ref={target(day.iso)} role="group" aria-label={label} aria-current={isToday ? "date" : undefined} gap={1} padding={2} xstyle={[styles.cell, day.isOutside && styles.outside]}>

@@ -25,7 +25,7 @@ const styles = stylex.create({
   sidebar: { backgroundColor: colorVars["--color-background-body"] },
 });
 
-export function AppSidebar({ app, item, apps, object, listPath, onCollapse }: { app: App; item: NavItem; apps: App[]; object?: string; listPath?: string; onCollapse?: () => void }) {
+export function AppSidebar({ app, item, apps, object, listPath, onCollapse, inDrawer }: { app: App; item?: NavItem; apps: App[]; object?: string; listPath?: string; onCollapse?: () => void; inDrawer?: boolean }) {
   const selected = new URLSearchParams(useSearch()).get("saved");
   const domain = object ? encodeURIComponent(JSON.stringify([["entity", "=", object]])) : "";
   const views = useRead<Api.RecordPage>(object ? `/v1/records/work.view?domain=${domain}&limit=200` : null);
@@ -56,15 +56,17 @@ export function AppSidebar({ app, item, apps, object, listPath, onCollapse }: { 
     }
   };
   const header = onCollapse ? (
-    <SideNavHeading
-      heading={t(app.label)}
-      headerEndContent={
-        <Tooltip content={<HStack gap={2} vAlign="center">{t("Hide sidebar")}<Kbd keys="mod+b" /></HStack>} placement="end">
-          <IconButton label={t("Hide sidebar")} variant="ghost" size="sm" icon={<Icon icon={ChevronDoubleLeftIcon} />} onClick={onCollapse} />
-        </Tooltip>
-      }
-    />
-  ) : (
+    <VStack paddingBlockStart={4}>
+      <SideNavHeading
+        heading={t(app.label)}
+        headerEndContent={
+          <Tooltip content={<HStack gap={2} vAlign="center">{t("Hide sidebar")}<Kbd keys="mod+b" /></HStack>} placement="end">
+            <IconButton label={t("Hide sidebar")} variant="ghost" size="sm" icon={<Icon icon={ChevronDoubleLeftIcon} />} onClick={onCollapse} />
+          </Tooltip>
+        }
+      />
+    </VStack>
+  ) : inDrawer ? undefined : (
     <DropdownMenu
       button={{ label: t(app.label), variant: "ghost", width: "100%" }}
       items={apps.map((candidate) => ({ label: t(candidate.label), onClick: () => navigate(pathOf(candidate)) }))}
@@ -94,7 +96,7 @@ export function AppSidebar({ app, item, apps, object, listPath, onCollapse }: { 
                 label={t(entry.label)}
                 icon={entry.icon}
                 href={pathOf(app, entry)}
-                isSelected={entry.id === item.id}
+                isSelected={entry.id === item?.id}
               />
             ))}
           </SideNavSection>

@@ -23,10 +23,10 @@ export type TransitionsProps = {
   onFailure: (reason: string) => void;
 };
 
-function Gated({ label, primary, verdict, busy, onClick }: { label: string; primary: boolean; verdict: Api.RecordAction; busy: boolean; onClick: () => void }) {
+function Gated({ label, verdict, busy, onClick }: { label: string; verdict: Api.RecordAction; busy: boolean; onClick: () => void }) {
   return (
     <HStack gap={1} vAlign="center">
-      <Button label={label} variant={primary ? "primary" : "secondary"} isDisabled={!verdict.allowed || busy} onClick={onClick} />
+      <Button label={label} variant="primary" isDisabled={!verdict.allowed || busy} onClick={onClick} />
       {!verdict.allowed && verdict.reason && <InfoTip label={`${t("Why unavailable")} · ${label}`} content={verdict.reason} />}
     </HStack>
   );
@@ -52,21 +52,32 @@ export function Transitions({ described, id, values, revision, title, instances,
   const declared = new Set(lifecycle?.transitions.filter((transition) => transition.from.includes(current)).map((transition) => transition.schema));
   const lead = offered.length ? undefined : offeredMore.find(({ action }) => declared.has(action.schema));
   const run = (action: Api.Action, verdict: Api.RecordAction) => act.run({ action, id, revision, label: t(action.title), name: title, reversible: false, prefill: verdict.inputs as Values | undefined, onRefused: onFailure });
-  const items = offeredMore.filter((entry) => entry !== lead).map(({ action, verdict }) => {
-    const label = t(action.title);
-    return {
+  const tones = ["success", "info", "neutral", "warning", "danger"];
+  const rank = ({ step }: (typeof offered)[number]) => {
+    const tone = lifecycle?.states.find((state) => state.name === step.transition.to[0])?.tone ?? "neutral";
+    return tones.indexOf(tone);
+  };
+  const first = offered.reduce<(typeof offered)[number] | undefined>((best, entry) => (!best || rank(entry) < rank(best) ? entry : best), undefined);
+  const rest = offered.filter((entry) => entry !== first);
+  const items = [
+    ...rest.map(({ step, verdict }) => ({
+      id: `step:${step.transition.name}`,
+      label: t(step.transition.title),
+      description: verdict.allowed ? undefined : verdict.reason,
+      isDisabled: !verdict.allowed || act.busy,
+      onClick: () => click(step, verdict),
+    })),
+    ...offeredMore.filter((entry) => entry !== lead).map(({ action, verdict }) => ({
       id: action.schema,
-      label,
+      label: t(action.title),
       description: verdict.allowed ? undefined : verdict.reason,
       isDisabled: !verdict.allowed || act.busy,
       onClick: () => run(action, verdict),
-    };
-  });
+    })),
+  ];
 
   usePageCommands(act.busy ? [] : [
-    ...offered.filter(({ verdict }) => verdict.allowed).map(({ step, verdict }) => ({
-      id: `step:${step.transition.name}`, label: t(step.transition.title), run: () => click(step, verdict),
-    })),
+    ...(first?.verdict.allowed ? [{ id: `step:${first.step.transition.name}`, label: t(first.step.transition.title), run: () => click(first.step, first.verdict) }] : []),
     ...(lead?.verdict.allowed ? [{ id: lead.action.schema, label: t(lead.action.title), run: () => run(lead.action, lead.verdict) }] : []),
     ...items.filter((item) => !item.isDisabled).map((item) => ({ id: item.id, label: item.label, run: item.onClick })),
   ]);
@@ -75,10 +86,8 @@ export function Transitions({ described, id, values, revision, title, instances,
     <>
       <HStack gap={2} vAlign="center">
         {link && <Button label={t("Open records")} variant="secondary" href={link} />}
-        {offered.map(({ step, verdict }, index) => (
-          <Gated key={step.transition.name} label={t(step.transition.title)} primary={index === 0} verdict={verdict} busy={act.busy} onClick={() => click(step, verdict)} />
-        ))}
-        {lead && <Gated label={t(lead.action.title)} primary verdict={lead.verdict} busy={act.busy} onClick={() => run(lead.action, lead.verdict)} />}
+        {first && <Gated label={t(first.step.transition.title)} verdict={first.verdict} busy={act.busy} onClick={() => click(first.step, first.verdict)} />}
+        {lead && <Gated label={t(lead.action.title)} verdict={lead.verdict} busy={act.busy} onClick={() => run(lead.action, lead.verdict)} />}
         {items.length > 0 && <MoreMenu label={t("More actions")} items={items} alignment="end" />}
       </HStack>
       {act.element}

@@ -1,5 +1,5 @@
 import values from "./i18n-values.json";
-export { setLanguage, t, useLocale } from "./language";
+export { dateText, setLanguage, t, useLocale } from "./language";
 export const zhCN: Record<string, string> = {
   "Welcome back": "欢迎回来",
   "Sign in to your Platform workspace": "登录你的 Platform 工作区",
@@ -592,5 +592,8 @@ export const zhCN: Record<string, string> = {
   "Continue": "继续",
   "Import": "导入",
   "Export as CSV": "导出为 CSV",
+  "This page does not exist": "这个页面不存在",
+  "The address may be mistyped, or the page was moved or removed.": "地址可能有误，或者页面已移动、已删除。",
+  "Open {app}": "打开{app}",
   ...values,
 };
