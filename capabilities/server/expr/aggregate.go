@@ -9,6 +9,7 @@ type NumericAggregate struct {
 	op, kind, currency string
 	count              int64
 	total              *big.Rat
+	mixed              bool
 }
 
 func NewNumericAggregate(op, kind, currency string) (*NumericAggregate, error) {
@@ -36,14 +37,10 @@ func (a *NumericAggregate) Add(value Value) error {
 	n, currency := numericParts(x)
 	if a.total == nil {
 		a.total = new(big.Rat).Set(n)
-		if a.currency != "" && a.currency != currency {
-			return fail("currency", "aggregate", "aggregate currencies differ")
-		}
+		a.mixed = a.currency != "" && a.currency != currency
 		a.currency = currency
 	} else {
-		if a.currency != currency {
-			return fail("currency", "aggregate", "aggregate currencies differ")
-		}
+		a.mixed = a.mixed || a.currency != currency
 		switch a.op {
 		case "sum", "avg":
 			a.total.Add(a.total, n)
@@ -67,6 +64,9 @@ func (a *NumericAggregate) Add(value Value) error {
 func (a *NumericAggregate) Result() (Value, error) {
 	if a.op == "count" {
 		return Present("integer", big.NewInt(a.count).String()), nil
+	}
+	if a.mixed {
+		return Null(a.kind), nil
 	}
 	if a.count == 0 {
 		if a.op != "sum" {
