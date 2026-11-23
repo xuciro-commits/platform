@@ -263,7 +263,7 @@ func Write(info platform.RecordTypeInfo, receipt *pb.ChangeRecord, prev *Row, v 
 			v.FieldByIndex(f.Index).SetString(l.Initial)
 		}
 	}
-	if owner := info.Scope.Owner; prev == nil && owner != "" && owner != platform.OwnerCreated {
+	if owner := info.Scope.Owner; prev == nil && owner != "" && owner != platform.OwnerCreated && !info.Scope.Assigned {
 		if f, _ := info.Field(owner); f.Type != "reference" && v.FieldByIndex(f.Index).String() == "" {
 			v.FieldByIndex(f.Index).SetString(stamp.By)
 		}

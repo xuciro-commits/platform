@@ -173,6 +173,7 @@ type ObjectScope struct {
 	Owner     string `json:"owner,omitempty" help:"The field holding the member a record belongs to; empty: whoever created it"`
 	Unit      string `json:"unit,omitempty" help:"The field holding the record's organisation (a reference to enterprise.element, or its id)"`
 	Structure string `json:"structure,omitempty" help:"The relationship kind \"below\" follows in the enterprise model, e.g. management"`
+	Assigned  bool   `json:"assigned,omitempty" help:"Leave the owner empty for assignment unless the creator could not see the record otherwise"`
 }
 
 type PropertyType struct {

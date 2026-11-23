@@ -19,13 +19,17 @@ func computeRulesOf(o ontology.Object, lookup func(string) (platform.RecordTypeI
 	list, orderErr := ontology.FormulaOrder(o.Fields)
 	followed := slices.DeleteFunc(slices.Clone(o.Fields), func(f ontology.Field) bool { return f.From == nil })
 	defaults := slices.DeleteFunc(slices.Clone(o.Fields), func(f ontology.Field) bool { return f.Default == "" })
-	if len(list) == 0 && len(followed) == 0 && len(defaults) == 0 {
+	assigned := o.Scope != nil && o.Scope.Assigned && o.Scope.Owner != ""
+	if len(list) == 0 && len(followed) == 0 && len(defaults) == 0 && !assigned {
 		return nil
 	}
 	lookup = ruleLookup(o, lookup)
 	return func(c platform.Caller, record, previous any, now time.Time) *platform.Error {
 		if orderErr != nil {
 			return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, orderErr.Error())
+		}
+		if previous == nil && assigned {
+			ownUnlessSeen(c, o, record)
 		}
 		if previous == nil {
 			for _, f := range defaults {
@@ -181,6 +185,18 @@ func follow(c platform.Caller, o ontology.Object, f ontology.Field, lookup func(
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
 	}
 	return nil
+}
+
+func ownUnlessSeen(c platform.Caller, o ontology.Object, record any) {
+	target := reflect.ValueOf(record).Elem().FieldByName(ontology.GoName(o.Scope.Owner))
+	if c.ID == "" || strings.HasPrefix(c.ID, "app:") || !target.IsValid() || target.Kind() != reflect.String || target.String() != "" {
+		return
+	}
+	roles := c.RolesIn(o.Type())
+	if slices.ContainsFunc(o.Access, func(a ontology.Access) bool { return a.Read == "all" && slices.Contains(roles, a.Role) }) {
+		return
+	}
+	target.SetString(c.ID)
 }
 
 func derivedContext(c platform.Caller, e platform.Expr, s platform.RuleReadSpec, lookup func(string) (platform.RecordTypeInfo, bool), record any, now time.Time) (platform.ExprContext, error) {

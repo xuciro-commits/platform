@@ -160,7 +160,7 @@ func CompileAccess(o Object, builderRole, userRole string) (platform.Standard, p
 		if o.Scope.Owner != "" {
 			scope.Owner = o.Scope.Owner
 		}
-		scope.Unit, scope.Structure = o.Scope.Unit, o.Scope.Structure
+		scope.Unit, scope.Structure, scope.Assigned = o.Scope.Unit, o.Scope.Structure, o.Scope.Assigned
 	}
 	scope.Levels[builderRole] = platform.ScopeTenant
 	roles := []string{builderRole}

@@ -182,13 +182,13 @@ type Standard struct {
 }
 
 type Scope struct {
-	Levels             map[string]string
-	Default, Structure string
-	Unit               string
-	Owner              string
-	Participants       func(record any) []string
-	Through            func(record any) string
-	Share              func(record any, member string) (visible bool, project string)
+	Levels                   map[string]string
+	Default, Structure, Unit string
+	Owner                    string
+	Assigned                 bool
+	Participants             func(record any) []string
+	Through                  func(record any) string
+	Share                    func(record any, member string) (visible bool, project string)
 }
 
 const (
