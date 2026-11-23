@@ -378,6 +378,8 @@ func check(e Expr, s Schema, at string, depth int, nodes *int, mode int) (Type, 
 	case "add-days", "add-months", "add-hours":
 		good = arity(2, 2) && (args[0].Kind == "date" || args[0].Kind == "datetime") && args[1].Kind == "integer" && same(e.Kind, args[0].Kind)
 		good = good && (e.Op != "add-hours" || args[0].Kind == "datetime")
+	case "workdays":
+		good = arity(2, 2) && args[0].Kind == "date" && args[1].Kind == "date" && e.Kind == "integer"
 	case "diff-days", "diff-hours":
 		good = arity(2, 2) && same(args[0].Kind, args[1].Kind) && (args[0].Kind == "date" || args[0].Kind == "datetime") && e.Kind == "integer"
 		good = good && (e.Op != "diff-hours" || args[0].Kind == "datetime")

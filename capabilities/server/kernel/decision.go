@@ -57,6 +57,30 @@ type Decision struct {
 	Rules             ConstraintRules
 	DirectRows        func([]acceptedformat.InputRow, string, time.Time) error
 	BusinessQuery     func(platform.RecordTypeInfo, platform.Query, platform.Member, time.Time) platform.Query
+	DirectoryOf       func() platform.Directory
+}
+
+func (d *Decision) roles() OptionalRoles {
+	if d.DirectoryOf == nil {
+		return OptionalRoles{}
+	}
+	return OptionalRoles{Directory: d.DirectoryOf()}
+}
+
+func (d *Decision) Units(c platform.Caller, structure string, now time.Time) []string {
+	return d.roles().MemberUnits(c, structure, now)
+}
+
+func (d *Decision) Calendar(c platform.Caller, now time.Time) platform.Calendar {
+	return d.roles().MemberCalendar(c, now)
+}
+
+func (d *Decision) Element(_ platform.Caller, id string, now time.Time) (platform.ElementInfo, bool) {
+	return d.roles().Element(id, now)
+}
+
+func (d *Decision) Related(_ platform.Caller, element, stereotype string, outgoing bool, now time.Time) []string {
+	return d.roles().Related(element, stereotype, outgoing, now)
 }
 
 func NewDecision(base *records.Store, s *Sequence, simulation bool) Decision {

@@ -94,6 +94,8 @@ type OrgSeed struct {
 	Memberships []Membership `json:"memberships"`
 }
 
+func (c Caller) Calendar(now time.Time) Calendar { return c.rt.Calendar(c, now) }
+
 func (c Caller) Units(structure string, now time.Time) []string {
 	if c.rt == nil {
 		return nil

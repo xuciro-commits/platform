@@ -43,6 +43,10 @@ func (o OptionalRoles) Holders(structure, unit, role string, day platform.Date) 
 	return nil
 }
 
+func (o OptionalRoles) MemberCalendar(c platform.Caller, now time.Time) platform.Calendar {
+	return o.Calendar("member:"+c.ID, c.Today(now))
+}
+
 func (o OptionalRoles) MemberUnits(c platform.Caller, structure string, now time.Time) []string {
 	return o.PartyUnits("member:"+c.ID, structure, c.Today(now))
 }

@@ -1481,6 +1481,8 @@ export type Context = {
   me: string;
   now: string;
   today: string;
+  workdays?: number[];
+  holidays?: string[];
 };
 
 export type ContextView = {

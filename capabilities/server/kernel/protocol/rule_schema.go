@@ -163,6 +163,10 @@ func RuleContext(c platform.Caller, expr platform.Expr, spec platform.RuleReadSp
 	for name, fact := range observationRuleFacts(c) {
 		ctx.Refs[name] = fact
 	}
+	if c.HasRuntime() && usesOp(expr, "workdays") {
+		calendar := c.Calendar(now)
+		ctx.Workdays, ctx.Holidays = calendar.Workdays, calendar.Holidays
+	}
 	for name, typ := range spec.Inputs {
 		v, ok := inputs[name]
 		if ok {
@@ -523,4 +527,16 @@ func ruleRecordSet(c platform.Caller, object, id, name string, record any, at ti
 		return runtime.ReadDecisionRecordSet(c, object, id, name, platform.Raw(record), at)
 	}
 	return c.ReadRecordSet(object, id, name, at)
+}
+
+func usesOp(e platform.Expr, op string) bool {
+	if e.Op == op {
+		return true
+	}
+	for _, arg := range e.Args {
+		if usesOp(arg, op) {
+			return true
+		}
+	}
+	return e.In != nil && usesOp(*e.In, op)
 }

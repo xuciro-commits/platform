@@ -75,15 +75,17 @@ type Collection struct {
 	Withheld bool   `json:"withheld,omitempty"`
 }
 type Context struct {
-	Sources []string                 `json:"sources,omitempty"`
-	Windows map[string]WindowSummary `json:"windows,omitempty"`
-	Refs    map[string]Value         `json:"refs"`
-	Sets    map[string]Collection    `json:"sets,omitempty"`
-	Me      string                   `json:"me"`
-	Now     time.Time                `json:"now"`
-	Today   string                   `json:"today"`
-	item    *itemScope
-	source  RefSource
+	Sources  []string                 `json:"sources,omitempty"`
+	Windows  map[string]WindowSummary `json:"windows,omitempty"`
+	Refs     map[string]Value         `json:"refs"`
+	Sets     map[string]Collection    `json:"sets,omitempty"`
+	Me       string                   `json:"me"`
+	Now      time.Time                `json:"now"`
+	Today    string                   `json:"today"`
+	Workdays []int                    `json:"workdays,omitempty"`
+	Holidays []string                 `json:"holidays,omitempty"`
+	item     *itemScope
+	source   RefSource
 }
 type Issue struct {
 	Code    string `json:"code"`

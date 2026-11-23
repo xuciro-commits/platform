@@ -64,6 +64,7 @@ type SettingRuntime interface {
 
 type OrganizationRuntime interface {
 	Units(Caller, string, time.Time) []string
+	Calendar(Caller, time.Time) Calendar
 	Element(Caller, string, time.Time) (ElementInfo, bool)
 	Related(Caller, string, string, bool, time.Time) []string
 	Links(Caller, string) []string

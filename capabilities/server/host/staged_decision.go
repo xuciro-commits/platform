@@ -54,7 +54,11 @@ func (t *Tenant) newStagedDecisionOn(base *records.Store) *stagedDecision {
 		_, err := t.prepareAcceptedDirectRows(rows, member, at)
 		return err
 	}
-	return &stagedDecision{tenant: t, Decision: decision}
+	staged := &stagedDecision{tenant: t, Decision: decision}
+	if t.Directory != nil {
+		staged.DirectoryOf = staged.directoryView
+	}
+	return staged
 }
 
 func (d *stagedDecision) Decide(c platform.Caller, app platform.Service, s *pb.Submission, at time.Time) (*pb.ChangeRecord, *platform.Error) {
@@ -139,24 +143,6 @@ func (d *stagedDecision) CheckEnterpriseTenantConnection(c platform.Caller, id s
 	return d.routingTenant().checkTenantConnection(c, id, now)
 }
 
-func (d *stagedDecision) Units(c platform.Caller, structure string, now time.Time) []string {
-	if d.tenant.Directory == nil {
-		return nil
-	}
-	return d.directoryView().Units("member:"+c.ID, structure, c.Today(now))
-}
-func (d *stagedDecision) Element(c platform.Caller, id string, now time.Time) (platform.ElementInfo, bool) {
-	if d.tenant.Directory == nil {
-		return platform.ElementInfo{}, false
-	}
-	return d.directoryView().Element(id, now.UTC().Format(time.DateOnly))
-}
-func (d *stagedDecision) Related(c platform.Caller, element, stereotype string, outgoing bool, now time.Time) []string {
-	if d.tenant.Directory == nil {
-		return nil
-	}
-	return d.directoryView().Related(element, stereotype, outgoing, now.UTC().Format(time.DateOnly))
-}
 func (d *stagedDecision) Links(c platform.Caller, entity string) []string {
 	var out []string
 	if d.tenant.Linker != nil {

@@ -67,6 +67,9 @@ func (r runtime) roles() runtimekernel.OptionalRoles {
 func (r runtime) Units(c platform.Caller, structure string, now time.Time) []string {
 	return r.roles().MemberUnits(c, structure, now)
 }
+func (r runtime) Calendar(c platform.Caller, now time.Time) platform.Calendar {
+	return r.roles().MemberCalendar(c, now)
+}
 
 func (r runtime) Element(_ platform.Caller, id string, now time.Time) (platform.ElementInfo, bool) {
 	return r.roles().Element(id, now)

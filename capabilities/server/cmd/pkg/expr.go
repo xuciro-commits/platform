@@ -485,7 +485,7 @@ func (s exprScope) operands(args []*exprNode, want string) ([]any, string, error
 var resultKinds = map[string]string{
 	"contains": "boolean", "starts-with": "boolean", "ends-with": "boolean", "icontains": "boolean", "matches": "boolean",
 	"before": "boolean", "after": "boolean", "within-period": "boolean", "overlaps": "boolean", "not-empty": "boolean",
-	"is-null": "boolean", "is-not-null": "boolean", "length": "integer", "diff-days": "integer", "diff-hours": "integer",
+	"is-null": "boolean", "is-not-null": "boolean", "length": "integer", "diff-days": "integer", "diff-hours": "integer", "workdays": "integer",
 	"date-part": "integer", "concat": "text", "lower": "text", "upper": "text", "trim": "text", "replace": "text",
 	"start-of-day": "date", "add-days": "date", "add-months": "date", "start-of-hour": "datetime", "add-hours": "datetime",
 	"parse-decimal": "decimal", "parse-number": "decimal",

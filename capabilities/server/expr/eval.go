@@ -491,6 +491,26 @@ func (p *Program) eval(e Expr, c Context, at string, reasons *[]Issue) (Value, e
 			return Value{}, fail("time", at, "result date is outside supported years")
 		}
 		return temporalValue(e.Kind, t), nil
+	case "workdays":
+		from, to := values[0].(time.Time), values[1].(time.Time)
+		if to.Sub(from) > 3660*24*time.Hour {
+			return Value{}, fail("budget", at, "workdays spans more than ten years")
+		}
+		workdays := c.Workdays
+		if len(workdays) == 0 {
+			workdays = []int{1, 2, 3, 4, 5}
+		}
+		n := 0
+		for day := from; !day.After(to); day = day.AddDate(0, 0, 1) {
+			weekday := int(day.Weekday())
+			if weekday == 0 {
+				weekday = 7
+			}
+			if slices.Contains(workdays, weekday) && !slices.Contains(c.Holidays, day.Format(time.DateOnly)) {
+				n++
+			}
+		}
+		return out(n)
 	case "diff-days":
 		return out((values[0].(time.Time).Unix() - values[1].(time.Time).Unix()) / 86400)
 	case "diff-hours":
