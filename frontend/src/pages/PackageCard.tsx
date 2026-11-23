@@ -28,8 +28,11 @@ import { t } from "../i18n";
 const styles = stylex.create({
   action: { flexShrink: 0 },
   cover: (src: string) => ({
-    width: "100%",
-    aspectRatio: "8 / 5",
+    width: "32%",
+    minWidth: 88,
+    maxWidth: 124,
+    aspectRatio: "4 / 3",
+    flexShrink: 0,
     backgroundImage: "url(" + src + ")",
     backgroundSize: "cover",
     backgroundPosition: "center",
@@ -56,10 +59,16 @@ const listingLabels: Record<string, string> = {
   knowledge: "Knowledge management", lending: "Lending", operations: "Business operations", "master-data": "Master data",
 };
 
-const officialCovers = new Set(["crm", "helpdesk"]);
-const coverFor = (id: string) => officialCovers.has(id)
-  ? "https://raw.githubusercontent.com/xuciro-commits/platform-packages/main/packages/" + id + "/assets/cover.avif"
-  : undefined;
+const officialCovers = new Set(["crm", "helpdesk", "hr-core", "party", "uom"]);
+const coverBase = "https://raw.githubusercontent.com/xuciro-commits/platform-packages/cdc2e70089f688ffdb4050d9322d8597b251e6e2/";
+function coverFor(id: string, source: "index" | "official") {
+  if (source === "index") {
+    if (id === "crm") return coverBase + "marketplace/covers/crm-index.avif";
+    if (id === "application.production-provider") return coverBase + "marketplace/covers/application.production-provider.avif";
+    return undefined;
+  }
+  return officialCovers.has(id) ? coverBase + "packages/" + id + "/assets/cover.avif" : undefined;
+}
 
 export function listingLabel(value: string) {
   return t(listingLabels[value] ?? value);
@@ -127,6 +136,7 @@ export function PackageCard({
         ? t("Reinstall")
         : t("Install");
   const icon = packageIcon(id, counts);
+  const cover = view.source === "index" ? coverFor(id, "index") : undefined;
   const parts = [
     counts.apps > 0 ? `${counts.apps} ${counts.apps === 1 ? t("app root") : t("app roots")}` : "",
     counts.plugins > 0 ? `${counts.plugins} ${counts.plugins === 1 ? t("plugin capability") : t("plugin capabilities")}` : "",
@@ -136,7 +146,6 @@ export function PackageCard({
     <VStack role="listitem" height="100%">
       <ClickableCard label={display} elevation="none" padding={4} height="100%" onClick={onInspect}>
         <VStack gap={3} height="100%">
-          {coverFor(id) && <Card variant="transparent" padding={0} xstyle={styles.cover(coverFor(id) ?? "")} />}
           <HStack gap={3} vAlign="start">
             <VStack xstyle={styles.iconBox}>
               <Icon icon={icon} size="md" color="secondary" />
@@ -171,11 +180,14 @@ export function PackageCard({
             />
           </HStack>
 
-          <StackItem size="fill">
-            <Text type="supporting" color="secondary" maxLines={2}>
-              {summary}
-            </Text>
-          </StackItem>
+          <HStack gap={3} vAlign="start">
+            {cover && <Card variant="transparent" padding={0} xstyle={styles.cover(cover)} />}
+            <StackItem size="fill">
+              <Text type="supporting" color="secondary" maxLines={2}>
+                {summary}
+              </Text>
+            </StackItem>
+          </HStack>
 
           <HStack gap={2} vAlign="center">
             {parts.length > 0 && (
@@ -208,6 +220,7 @@ export function CatalogEntryCard({
   const display = t(entry.title || entry.id);
   const summary = entry.description ? t(entry.description) : `${display} (${entry.id})`;
   const icon = packageIcon(entry.id, { apps: 1, plugins: 0 });
+  const cover = official ? coverFor(entry.id, "official") : undefined;
   const activeInstalled = installed && installed.state !== "retired" ? installed : undefined;
   const upgradable = Boolean(activeInstalled && compareVersions(entry.version, activeInstalled.version) > 0);
   const actionLabel = upgradable ? t("Upgrade") : t("Install");
@@ -216,7 +229,6 @@ export function CatalogEntryCard({
     <VStack role="listitem" height="100%">
       <ClickableCard label={display} elevation="none" padding={4} height="100%" onClick={onSelect}>
         <VStack gap={3} height="100%">
-          {official && coverFor(entry.id) && <Card variant="transparent" padding={0} xstyle={styles.cover(coverFor(entry.id) ?? "")} />}
           <HStack gap={3} vAlign="start">
             <VStack xstyle={styles.iconBox}>
               <Icon icon={icon} size="md" color="secondary" />
@@ -244,11 +256,14 @@ export function CatalogEntryCard({
               onClick={onSelect}
             />
           </HStack>
-          <StackItem size="fill">
-            <Text type="supporting" color="secondary" maxLines={2}>
-              {summary}
-            </Text>
-          </StackItem>
+          <HStack gap={3} vAlign="start">
+            {cover && <Card variant="transparent" padding={0} xstyle={styles.cover(cover)} />}
+            <StackItem size="fill">
+              <Text type="supporting" color="secondary" maxLines={2}>
+                {summary}
+              </Text>
+            </StackItem>
+          </HStack>
           <VStack gap={2}>
             {(entry.listing?.stage === "test" || entry.listing?.stage === "preview" || (entry.listing?.industries?.length ?? 0) > 0 || (entry.listing?.capabilities?.length ?? 0) > 0) && (
               <HStack gap={1.5} vAlign="center" wrap="wrap">
