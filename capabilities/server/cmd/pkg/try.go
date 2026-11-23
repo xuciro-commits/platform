@@ -365,3 +365,25 @@ func try(dirs []string, scriptPath string, out io.Writer) error {
 	fmt.Fprintf(out, "%s: %d steps passed\n", filepath.Base(scriptPath), len(script.Steps))
 	return nil
 }
+
+func installCheck(dirs []string, checked []built, out io.Writer) error {
+	if len(dirs) != 1 || !exists(filepath.Join(dirs[0], tryFile)) {
+		tr, err := newTrial(nil, time.Now().UTC().Truncate(time.Second), out)
+		if err != nil {
+			return err
+		}
+		for _, b := range checked {
+			if err := tr.install(b); err != nil {
+				return err
+			}
+		}
+	}
+	for _, dir := range dirs {
+		if exists(filepath.Join(dir, tryFile)) {
+			if err := try([]string{dir}, "", out); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}

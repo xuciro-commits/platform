@@ -15,7 +15,8 @@ import (
 
 const usage = `usage:
   pkg lock  [-packages dir] [package-dir ...]   refresh package.lock.json from the sources
-  pkg check [-packages dir] [package-dir ...]   validate, check the lock, compare with the released snapshot
+  pkg check [-packages dir] [-install=false] [package-dir ...]   validate, check the lock, compare with the released snapshot,
+      then (unless -install=false) install them together into an in-memory tenant and run each package's try.yaml
   pkg diff  [-packages dir] [package-dir ...]   review the upgrade from the released snapshot and check the version bump
   pkg build -o file package-dir                 write the artifact of one package
   pkg split artifact.json package-dir           turn a released artifact into a source directory
@@ -42,6 +43,7 @@ func run(args []string, out io.Writer) error {
 	title := flags.String("title", "", "catalog title")
 	prefix := flags.String("url", "./", "address template of each artifact in the catalog")
 	script := flags.String("script", "", "trial script; defaults to try.yaml in the last package")
+	install := flags.Bool("install", true, "check: also install the packages into an in-memory tenant and run their try.yaml")
 	if err := flags.Parse(args[1:]); err != nil {
 		return fmt.Errorf("%w\n%s", err, usage)
 	}
@@ -111,12 +113,17 @@ func run(args []string, out io.Writer) error {
 		if err != nil {
 			return err
 		}
+		var checked []built
 		for _, dir := range dirs {
 			b, err := step(dir)
 			if err != nil {
 				return err
 			}
 			fmt.Fprintf(out, "%s %s@%s (%d resources) in %s\n", verb, b.id, b.version, b.assets, filepath.Base(dir))
+			checked = append(checked, b)
+		}
+		if args[0] == "check" && *install {
+			return installCheck(dirs, checked, out)
 		}
 		return nil
 	}

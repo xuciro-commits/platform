@@ -11,5 +11,5 @@
 
 ```bash
 make packages
-cd capabilities/server && go run ./cmd/pkg check -packages ../../deploy/packages
+cd capabilities/server && go run ./cmd/pkg try -script /tmp/crm-try.yaml ../../deploy/packages/crm
 ```

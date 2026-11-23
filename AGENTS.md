@@ -79,7 +79,7 @@
 | 宿主类型与契约 | `make contract`（改了宿主类型之后） |
 | 内核不变量 | `make test RUN=K13` 定点跑相关编号；不给 `RUN` 跑全部 |
 | SQL 模式 | `make verify-sql`（隔离的临时 PostgreSQL：写入、重启、读取） |
-| 产品包 | `make packages`（刷新作者态源的锁文件；顶层制品是发布快照，不重建） |
+| 产品包 | `make packages`（刷新作者态源的锁文件，并把夹具一起装进内存租户检查；顶层制品是发布快照，不重建）；试跑动作用 `pkg try` |
 
 提交钩子（`.githooks/`，通过 `make hooks` 启用）自动跑 `make check`，暂存里有 `frontend/` 时加跑 `make check-frontend`，并用 `scripts/check-commit-msg.mjs` 拦截不合规范的提交信息。
 
