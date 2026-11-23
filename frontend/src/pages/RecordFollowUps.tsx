@@ -43,7 +43,7 @@ export function useFollowUps(described: Described, id: string, entities: Api.Ent
     return field ? [{ described: describe(entity, catalog), field: field.name }] : [];
   }), [entities, catalog, described.type]);
   const reads = useReads<Api.RecordPage>(sources.map(({ described: source, field }) =>
-    `/v1/records/${encodeURIComponent(source.type)}?${new URLSearchParams({ limit: "50", domain: JSON.stringify([[field, "=", id]]) })}`));
+    `/v1/records/${encodeURIComponent(source.type)}?${new URLSearchParams({ limit: "50", actions: "1", domain: JSON.stringify([[field, "=", id]]) })}`));
   const directory = useRead<Api.MemberOption[]>(sources.length ? "/v1/member-directory" : null);
   const people: Record<string, string> = directory.status === "ready" ? Object.fromEntries(directory.data.map((member) => [member.id, member.name])) : {};
   const items: FollowUp[] = [];
