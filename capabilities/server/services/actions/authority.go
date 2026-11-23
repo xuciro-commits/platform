@@ -469,28 +469,30 @@ func executeAction(c platform.Caller, e platform.RecordType, t platform.ActionTy
 			}
 		}
 	}
-	if err := c.PrepareBusinessVersions(v.Interface(), now); err != nil {
-		return nil, err
-	}
-	if e.ComputeAt != nil {
-		var previous any
-		if t.Name != "create" {
-			previous = existing
-		}
-		if err := e.ComputeAt(c, v.Interface(), previous, now); err != nil {
+	if t.Name != "archive" {
+		if err := c.PrepareBusinessVersions(v.Interface(), now); err != nil {
 			return nil, err
 		}
-	}
-	if e.Compute != nil {
-		e.Compute(v.Interface())
-	}
-	if e.Validate != nil {
-		if err := e.Validate(c, v.Interface()); err != nil {
-			return nil, err
+		if e.ComputeAt != nil {
+			var previous any
+			if t.Name != "create" {
+				previous = existing
+			}
+			if err := e.ComputeAt(c, v.Interface(), previous, now); err != nil {
+				return nil, err
+			}
+		}
+		if e.Compute != nil {
+			e.Compute(v.Interface())
+		}
+		if e.Validate != nil {
+			if err := e.Validate(c, v.Interface()); err != nil {
+				return nil, err
+			}
 		}
 	}
 	value := v.Elem().Interface()
-	if t.Name != "create" || e.CreateTxn == nil || c.Replaying || c.SourceProjection() {
+	if t.Name != "archive" && (t.Name != "create" || e.CreateTxn == nil || c.Replaying || c.SourceProjection()) {
 		if err := c.Check(value); err != nil {
 			return nil, err
 		}

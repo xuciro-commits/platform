@@ -45,7 +45,7 @@ function installedApps(views: Api.ApplicationView[], entities: Api.EntityInfo[])
     const dashboard = view.dashboard?.length && !sections.some((section) => section.items.some((page) => page.id === "dashboard")) ? view.dashboard : undefined;
     const overview: NavItem[] = dashboard ? [{ id: "dashboard", label: "Dashboard", icon: ChartPieIcon }] : [];
     sections[0].items = [...overview, ...sections[0].items];
-    return [{ id: view.name || view.app, label: view.title, icon: iconOf(view.icon, RectangleGroupIcon), group: "installed", sections, dashboard }];
+    return [{ id: view.name || view.app, label: view.title, icon: iconOf(view.icon, RectangleGroupIcon), group: "installed", sections, dashboard, packageId: view.package, hasDemo: view.hasDemo }];
   });
 }
 

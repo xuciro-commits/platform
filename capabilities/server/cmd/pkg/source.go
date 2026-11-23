@@ -26,6 +26,7 @@ const (
 	manifestFile = "package.yaml"
 	lockFile     = "package.lock.json"
 	setupFile    = "setup.yaml"
+	seedFile     = "seed.yaml"
 	guideFile    = "docs/guide.md"
 	lockFormat   = 2
 )
@@ -333,6 +334,13 @@ func split(artifactPath, dir string) error {
 			return err
 		}
 	}
+	if seed, ok := blueprint.get("seed"); ok {
+		doc := &object{}
+		doc.set("records", seed)
+		if err := writeYAML(filepath.Join(dir, seedFile), doc); err != nil {
+			return err
+		}
+	}
 	if err := writeYAML(filepath.Join(dir, manifestFile), manifest); err != nil {
 		return err
 	}
@@ -369,7 +377,7 @@ func readResources(dir string) ([]resource, error) {
 			return err
 		}
 		rel, _ := filepath.Rel(dir, path)
-		if rel == manifestFile || rel == setupFile || rel == tryFile || strings.HasPrefix(filepath.ToSlash(rel), localesDir+"/") {
+		if rel == manifestFile || rel == setupFile || rel == seedFile || rel == tryFile || strings.HasPrefix(filepath.ToSlash(rel), localesDir+"/") {
 			return nil
 		}
 		kind, ok := classify(rel)
@@ -554,6 +562,24 @@ func build(dir string, previous *platform.PackageDescriptor) (built, error) {
 		}
 		blueprint.set("setup", setup)
 	}
+	if exists(filepath.Join(dir, seedFile)) {
+		seedValue, err := readYAML(filepath.Join(dir, seedFile))
+		if err != nil {
+			return built{}, err
+		}
+		seedObj := asObject(seedValue)
+		if seedObj == nil {
+			return built{}, fmt.Errorf("%s: records is a list", seedFile)
+		}
+		records, ok := seedObj.get("records")
+		if !ok {
+			return built{}, fmt.Errorf("%s: records is a list", seedFile)
+		}
+		if _, ok := records.([]any); !ok {
+			return built{}, fmt.Errorf("%s: records is a list", seedFile)
+		}
+		blueprint.set("seed", records)
+	}
 	manifest.set("blueprint", blueprint)
 	artifact := stringify(manifest)
 	next.Artifact = digest(artifact)
@@ -640,7 +666,7 @@ func equivalent(released, rebuilt []byte) error {
 	}
 	slices.SortFunc(ab.Roots, publication.CompareAssetRef)
 	slices.SortFunc(bb.Roots, publication.CompareAssetRef)
-	if !sameJSON(ab.Roots, bb.Roots) || ab.Guide != bb.Guide || !sameJSON(ab.Setup, bb.Setup) {
+	if !sameJSON(ab.Roots, bb.Roots) || ab.Guide != bb.Guide || !sameJSON(ab.Setup, bb.Setup) || !sameJSON(ab.Seed, bb.Seed) {
 		return errors.New("roots, guide or setup differ")
 	}
 	index := map[platform.AssetRef]platform.ReleaseAsset{}

@@ -155,3 +155,99 @@ func TestInvariantK24InstalledPackageContributesOnlyActiveAuthorizedNavigationAn
 		t.Fatalf("retired package action direct submission: %+v", refusal)
 	}
 }
+
+func TestInvariantK24PackageDemoSeedInstallAndClear(t *testing.T) {
+	live := newInvariantTenant(t, "invariant-k24-demo",
+		protocol.Seat{Subjects: []string{"admin"}, Member: platform.Member{ID: "admin", Roles: map[string]string{"platform": "admin", build.ID: ontology.BuilderRole}}},
+	)
+	const name, typ = "productionprovider", "build.batchproviderorder"
+	raw, err := os.ReadFile("../../../deploy/packages/production-provider.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var offer platform.PackageDescriptor
+	if err := json.Unmarshal(raw, &offer); err != nil {
+		t.Fatal(err)
+	}
+	offer.Blueprint.Seed = []json.RawMessage{
+		platform.Raw(map[string]any{"type": typ, "id": "demo-order-1", "values": map[string]any{"number": "DEMO-1", "product": "sample", "quantity": 2, "unitcost": 5}}),
+	}
+	preview, err := live.InspectPackage(t.Context(), protocol.PackageInspectRequest{Content: platform.Raw(offer)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	descriptor := preview.Descriptor
+	admin, _ := live.Member("admin")
+	submit := func(schema string, body any) *platform.Error {
+		t.Helper()
+		request := live.submission(schema, protocol.PackageType, descriptor.ID, body)
+		request.Authority, request.PrincipalId = "platform", admin.ID
+		_, refusal := live.Submit(admin, request, invariantClock)
+		if refusal == nil {
+			live.Work(invariantClock)
+		}
+		return refusal
+	}
+	_, handler := observationHost(live.Tenant)
+	get := func(path string) *bytes.Buffer {
+		t.Helper()
+		res := observationRequest(t, handler, live.ID, observationToken(live.ID, "admin"), path, nil)
+		if res.Code != http.StatusOK {
+			t.Fatalf("%s: %d %s", path, res.Code, res.Body)
+		}
+		return res.Body
+	}
+	appView := func() protocol.ApplicationView {
+		t.Helper()
+		var views []protocol.ApplicationView
+		if err := json.Unmarshal(get("/v1/applications").Bytes(), &views); err != nil {
+			t.Fatal(err)
+		}
+		index := slices.IndexFunc(views, func(view protocol.ApplicationView) bool { return view.Name == name })
+		if index < 0 {
+			t.Fatalf("missing application %s", name)
+		}
+		return views[index]
+	}
+	recordIDs := func() []string {
+		t.Helper()
+		var page struct {
+			Records []struct {
+				ID string `json:"id"`
+			} `json:"records"`
+		}
+		if err := json.Unmarshal(get("/v1/records/"+typ).Bytes(), &page); err != nil {
+			t.Fatal(err)
+		}
+		ids := make([]string, 0, len(page.Records))
+		for _, r := range page.Records {
+			ids = append(ids, r.ID)
+		}
+		return ids
+	}
+	if refusal := submit(packages.SchemaPackageImport, map[string]any{"id": descriptor.ID, "digest": preview.Digest}); refusal != nil {
+		t.Fatalf("import: %v", refusal)
+	}
+	if refusal := submit(packages.SchemaPackageInstall, map[string]any{"id": descriptor.ID, "version": descriptor.Version}); refusal != nil {
+		t.Fatalf("install: %v", refusal)
+	}
+	if view := appView(); view.Package != descriptor.ID || !view.HasDemo {
+		t.Fatalf("expected active demo data on app view, got %+v", view)
+	}
+	if ids := recordIDs(); !slices.Equal(ids, []string{"demo-order-1"}) {
+		t.Fatalf("expected seeded demo record, got %v", ids)
+	}
+	live.accept(t, typ+".create", typ, "user-order-1", map[string]any{"number": "USER-1", "product": "real", "quantity": 1, "unitcost": 10})
+	if refusal := submit(packages.SchemaPackageClearDemo, map[string]any{"id": descriptor.ID}); refusal != nil {
+		t.Fatalf("clear-demo: %v", refusal)
+	}
+	if view := appView(); view.Package != descriptor.ID || view.HasDemo {
+		t.Fatalf("expected hasDemo=false after clearing, got %+v", view)
+	}
+	if ids := recordIDs(); !slices.Equal(ids, []string{"user-order-1"}) {
+		t.Fatalf("expected only user record after clear-demo, got %v", ids)
+	}
+	if refusal := submit(packages.SchemaPackageClearDemo, map[string]any{"id": descriptor.ID}); refusal == nil || refusal.Code != pb.ErrorCode_ERROR_CODE_CONFLICT {
+		t.Fatalf("second clear-demo should be refused, got %v", refusal)
+	}
+}

@@ -390,6 +390,9 @@ func (tr *trial) run(script tryScript) error {
 			if err != nil {
 				return fmt.Errorf("step %d: %s refused: %w", i+1, step.Do, err)
 			}
+			if typ == protocol.PackageType && len(step.Show) == 0 && len(step.Expect) == 0 {
+				continue
+			}
 		} else {
 			fmt.Fprintf(tr.out, "%d. read %s as %s\n", i+1, target, who.ID)
 			if step.Refused {

@@ -364,5 +364,8 @@
   "No scheduled records in this period": "该时段内没有已排期的记录",
   "Resize end date": "调整结束日期",
   "All records have dates": "所有记录都已排期",
-  "Dependency": "依赖"
+  "Dependency": "依赖",
+  "Clear demo data": "清理演示数据",
+  "Demo data cleared": "演示数据已清理",
+  "This archives the sample records installed with this app. Your settings, reference data, and any records you created stay.": "这会归档随本应用安装的演示记录。你的设置、参考数据以及你自己创建的记录都会保留。"
 }

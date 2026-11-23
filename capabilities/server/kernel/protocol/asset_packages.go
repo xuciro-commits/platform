@@ -21,6 +21,7 @@ type InstalledPackage struct {
 	InstalledAt   time.Time                      `json:"installedAt,omitempty"`
 	ChangedAt     time.Time                      `json:"changedAt,omitempty"`
 	Retained      []RetainedArtifact             `json:"retained,omitempty"`
+	DemoRecords   []string                       `json:"demoRecords,omitempty"`
 }
 
 type RetainedArtifact struct {
@@ -221,6 +222,8 @@ type ConsolePackages interface {
 	Offer(string) (Offer, error)
 	PreparationBlueprint(string, string) (platform.PackageBlueprint, *InstalledPackage, error)
 	PackagePrerequisites(string, string) ([]platform.ReleaseAsset, error)
+	InstalledPackages() map[string]*InstalledPackage
+	PackageSeed(string) ([]json.RawMessage, bool)
 }
 
 const PackageType = "platform.package"

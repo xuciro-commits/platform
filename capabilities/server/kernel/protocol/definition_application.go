@@ -1,6 +1,7 @@
 package protocol
 
 import (
+	"encoding/json"
 	"platformserver/platform"
 	"time"
 )
@@ -57,6 +58,7 @@ type BuildHost interface {
 	ValidateRecordSet(platform.RecordTypeInfo, platform.RecordSet) error
 	ValidateCodeAsset(platform.ReleaseAsset) error
 	ProductVersion(platform.ProductVersionRequest) (platform.FrozenProductVersion, error)
+	PackageSeed(string) ([]json.RawMessage, bool)
 }
 
 type ModelPageHost interface {
@@ -231,6 +233,8 @@ type ApplicationView struct {
 	Description string                 `json:"description,omitempty"`
 	Icon        string                 `json:"icon,omitempty"`
 	Source      string                 `json:"source"`
+	Package     string                 `json:"package,omitempty"`
+	HasDemo     bool                   `json:"hasDemo,omitempty"`
 }
 
 type PageView struct {

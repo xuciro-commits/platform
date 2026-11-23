@@ -78,14 +78,37 @@ func Validate(p platform.PackageDescriptor, withDependencies func(platform.Relea
 		}
 	}
 	seen := map[platform.AssetRef]bool{}
+	objects := map[string]bool{}
 	for _, asset := range b.Assets {
 		if seen[asset.Ref] || asset.Ref.App != "build" || asset.ContractVersion < 1 || asset.SourceVersion == "" {
 			return fmt.Errorf("blueprint owner definitions need unique pinned identities")
 		}
 		seen[asset.Ref] = true
+		if asset.Ref.Kind == platform.AssetObject {
+			objects[asset.Ref.Name] = true
+		}
 		if _, err := withDependencies(asset); err != nil {
 			return err
 		}
+	}
+	if len(b.Seed) > 200 {
+		return fmt.Errorf("a package ships at most 200 demo seed records")
+	}
+	seeded := map[string]bool{}
+	for _, raw := range b.Seed {
+		var seed struct {
+			Type   string         `json:"type"`
+			ID     string         `json:"id"`
+			Values map[string]any `json:"values"`
+		}
+		if len(raw) > 64<<10 || json.Unmarshal(raw, &seed) != nil || seed.Type == "" || seed.ID == "" || !objects[seed.Type] || seed.Values == nil {
+			return fmt.Errorf("seed records need unique object type and id pairs with bounded JSON object values")
+		}
+		key := seed.Type + "/" + seed.ID
+		if seeded[key] {
+			return fmt.Errorf("seed records need unique object type and id pairs with bounded JSON object values")
+		}
+		seeded[key] = true
 	}
 	return nil
 }

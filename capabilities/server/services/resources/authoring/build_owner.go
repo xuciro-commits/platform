@@ -268,7 +268,7 @@ func (b *Build) Manifest() platform.Manifest {
 }
 
 func (b *Build) Interested(names []string, _ platform.Event) bool {
-	return ontology.FillsReference(names)
+	return ontology.FillsReference(names) || ontology.HandlesPackageDemo(names)
 }
 
 func (b *Build) Handle(c platform.Caller, e platform.Event) *platform.Error {
@@ -276,19 +276,54 @@ func (b *Build) Handle(c platform.Caller, e platform.Event) *platform.Error {
 }
 
 func (b *Build) Listen(c platform.Caller, e platform.Event, names []string, now time.Time) *platform.Error {
-	if !ontology.FillsReference(names) {
+	if !ontology.FillsReference(names) && !ontology.HandlesPackageDemo(names) {
 		return nil
 	}
-	member, _ := b.host.Member(e.Record.GetSubmission().GetPrincipalId())
-	lang := cmp.Or(member.Language, b.host.Caller(c, member, "platform").Setting("language"))
 	model := func(typ string) (reflect.Type, bool) {
 		installed, ok := b.installed[typ]
 		return reflect.TypeOf(installed.Model), ok
 	}
-	return ontology.FillReference(c, lang, model, func(s *pb.Submission) *platform.Error {
+	submit := func(s *pb.Submission) *platform.Error {
 		_, refusal := b.Submit(c, s, now)
 		return refusal
-	})
+	}
+	member, _ := b.host.Member(e.Record.GetSubmission().GetPrincipalId())
+	if ontology.FillsReference(names) {
+		lang := cmp.Or(member.Language, b.host.Caller(c, member, "platform").Setting("language"))
+		if refusal := ontology.FillReference(c, lang, model, submit); refusal != nil {
+			return refusal
+		}
+	}
+	pkgID := e.Record.GetSubmission().GetTarget().GetId()
+	seedCaller := c
+	if member.ID != "" {
+		seedCaller.Member = member
+	}
+	roles := maps.Clone(seedCaller.Member.Roles)
+	if roles == nil {
+		roles = map[string]string{}
+	}
+	roles[ID] = Builder
+	seedCaller.Member.Roles = roles
+	seedSubmit := func(s *pb.Submission) *platform.Error {
+		_, refusal := b.Submit(seedCaller, s, now)
+		return refusal
+	}
+	if slices.Contains(names, "platform.package.install") {
+		if seeds, ok := b.host.PackageSeed(pkgID); ok {
+			if refusal := ontology.FillSeed(seedCaller, pkgID, seeds, model, seedSubmit); refusal != nil {
+				return refusal
+			}
+		}
+	}
+	if slices.Contains(names, "platform.package.clear-demo") {
+		if seeds, ok := b.host.PackageSeed(pkgID); ok {
+			if refusal := ontology.ClearSeed(seedCaller, pkgID, seeds, model, seedSubmit); refusal != nil {
+				return refusal
+			}
+		}
+	}
+	return nil
 }
 
 func sortedTypes(installed map[string]platform.RecordType) []string {

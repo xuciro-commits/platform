@@ -14,8 +14,14 @@ const referenceLimit = 200
 
 var referenceEvents = []string{SchemaPublish, "platform.package.install", "platform.package.upgrade", "platform.package.downgrade", "platform.package.rollback"}
 
+var packageDemoEvents = []string{"platform.package.install", "platform.package.clear-demo"}
+
 func FillsReference(names []string) bool {
 	return slices.ContainsFunc(names, func(name string) bool { return slices.Contains(referenceEvents, name) })
+}
+
+func HandlesPackageDemo(names []string) bool {
+	return slices.ContainsFunc(names, func(name string) bool { return slices.Contains(packageDemoEvents, name) })
 }
 
 func checkReferenceRecords(o *Object) *platform.Error {
@@ -75,6 +81,59 @@ func FillReference(c platform.Caller, lang string, model func(string) (reflect.T
 				Target: &pb.EntityRef{Type: typ, Id: id}, Schema: &pb.SchemaRef{Name: typ + ".create", Version: 1}, Payload: platform.Raw(values)}); refusal != nil {
 				return refusal
 			}
+		}
+	}
+	return nil
+}
+
+func FillSeed(c platform.Caller, pkgID string, seeds []json.RawMessage, model func(string) (reflect.Type, bool), submit func(*pb.Submission) *platform.Error) *platform.Error {
+	for _, raw := range seeds {
+		var seed struct {
+			Type   string          `json:"type"`
+			ID     string          `json:"id"`
+			Values json.RawMessage `json:"values"`
+		}
+		if json.Unmarshal(raw, &seed) != nil || seed.Type == "" || seed.ID == "" {
+			continue
+		}
+		target, installed := model(seed.Type)
+		if !installed {
+			continue
+		}
+		if _, exists := c.RecordValue(target, seed.ID); exists {
+			continue
+		}
+		if refusal := submit(&pb.Submission{TenantId: c.Tenant, PrincipalId: c.ID, Authority: AppID, IdempotencyKey: "seed:" + pkgID + ":" + seed.Type + "/" + seed.ID,
+			Target: &pb.EntityRef{Type: seed.Type, Id: seed.ID}, Schema: &pb.SchemaRef{Name: seed.Type + ".create", Version: 1}, Payload: seed.Values}); refusal != nil {
+			return refusal
+		}
+	}
+	return nil
+}
+
+func ClearSeed(c platform.Caller, pkgID string, seeds []json.RawMessage, model func(string) (reflect.Type, bool), submit func(*pb.Submission) *platform.Error) *platform.Error {
+	for i := len(seeds) - 1; i >= 0; i-- {
+		var seed struct {
+			Type string `json:"type"`
+			ID   string `json:"id"`
+		}
+		if json.Unmarshal(seeds[i], &seed) != nil || seed.Type == "" || seed.ID == "" {
+			continue
+		}
+		target, installed := model(seed.Type)
+		if !installed {
+			continue
+		}
+		val, exists := c.RecordValue(target, seed.ID)
+		if !exists {
+			continue
+		}
+		if archived := reflect.ValueOf(val).FieldByName("Archived"); archived.IsValid() && archived.Kind() == reflect.Bool && archived.Bool() {
+			continue
+		}
+		if refusal := submit(&pb.Submission{TenantId: c.Tenant, PrincipalId: c.ID, Authority: AppID, IdempotencyKey: "clear-demo:" + pkgID + ":" + seed.Type + "/" + seed.ID,
+			Target: &pb.EntityRef{Type: seed.Type, Id: seed.ID}, Schema: &pb.SchemaRef{Name: seed.Type + ".archive", Version: 1}, Payload: []byte("{}")}); refusal != nil {
+			return refusal
 		}
 	}
 	return nil

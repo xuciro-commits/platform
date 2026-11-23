@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"platformserver/kernel/protocol"
+	"platformserver/kernel/records"
 	"platformserver/services/resources/publication"
 
 	"slices"
@@ -82,6 +83,7 @@ const (
 	SchemaPackageRollback  = "platform.package.rollback"
 	SchemaPackageDrain     = "platform.package.drain"
 	SchemaPackageRetire    = "platform.package.retire"
+	SchemaPackageClearDemo = "platform.package.clear-demo"
 	platformCompatibility  = "1"
 )
 
@@ -109,6 +111,9 @@ func Actions() []platform.Action {
 		{Schema: SchemaPackageRetire, Target: protocol.PackageType, Capability: "packages", Title: "Retire package",
 			Description: "Archive the package's managed definitions and project; business records, extensions, history and artifacts stay.",
 			Payload:     []platform.Field{{Name: "id", Type: "string", Required: true}}, Roles: admin},
+		{Schema: SchemaPackageClearDemo, Target: protocol.PackageType, Capability: "packages", Title: "Clear demo data",
+			Description: "Archive the sample records installed with this package so you can start with your own data.",
+			Payload:     []platform.Field{{Name: "id", Type: "string", Required: true, Description: "The package's ID"}}, Roles: admin},
 	}
 }
 
@@ -207,6 +212,63 @@ func (d *Owner) BlueprintViews() []protocol.PackageView {
 	}
 	slices.SortFunc(out, func(a, b protocol.PackageView) int { return strings.Compare(a.Descriptor.ID, b.Descriptor.ID) })
 	return out
+}
+
+func (d *Owner) InstalledPackages() map[string]*protocol.InstalledPackage {
+	return d.packagesOf()
+}
+
+func (d *Owner) PackageSeed(id string) ([]json.RawMessage, bool) {
+	held := d.packagesOf()[id]
+	if held == nil || held.Artifact == "" {
+		return nil, false
+	}
+	descriptor, err := d.sealedPackageDescriptor(held.ID, held.Version, held.Artifact)
+	if err != nil || descriptor.Blueprint == nil || len(descriptor.Blueprint.Seed) == 0 {
+		return nil, false
+	}
+	if space := cmp.Or(held.Space, held.Namespace); space != "" && space != Space(descriptor) {
+		rebound, err := Rebind(descriptor, space)
+		if err != nil {
+			return nil, false
+		}
+		descriptor = rebound
+	}
+	return slices.Clone(descriptor.Blueprint.Seed), true
+}
+
+func SeedOf(owner PreparationOwner, id string) ([]json.RawMessage, bool) {
+	if owner == nil {
+		return nil, false
+	}
+	return owner.PackageSeed(id)
+}
+
+func AttachDemo(views []protocol.ApplicationView, owner PreparationOwner, store *records.Store) []protocol.ApplicationView {
+	if owner == nil {
+		return views
+	}
+	state := owner.InstalledPackages()
+	byApp := map[string]*protocol.InstalledPackage{}
+	for _, pkg := range state {
+		if pkg != nil && pkg.State != "retired" {
+			byApp[cmp.Or(pkg.Space, pkg.Namespace)] = pkg
+		}
+	}
+	for _, res := range Resources(store) {
+		if res.Type == protocol.AppType && res.ManagedBy != "" && !res.Archived {
+			if pkg := state[res.ManagedBy]; pkg != nil && pkg.State != "retired" {
+				byApp[res.Ref.Name] = pkg
+			}
+		}
+	}
+	for i := range views {
+		if pkg := byApp[views[i].Name]; pkg != nil {
+			views[i].Package = pkg.ID
+			views[i].HasDemo = len(pkg.DemoRecords) > 0
+		}
+	}
+	return views
 }
 
 func (d *Owner) packagesOf() map[string]*protocol.InstalledPackage {
@@ -418,6 +480,21 @@ func (d *Owner) decide(c platform.Caller, s *pb.Submission) (func(*pb.ChangeReco
 		return nil, invalid
 	}
 	schema := s.GetSchema().GetName()
+	if schema == SchemaPackageClearDemo {
+		held := d.packagesOf()[p.ID]
+		if held == nil || held.State == "retired" {
+			return nil, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
+		}
+		if len(held.DemoRecords) == 0 {
+			return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "This package has no demo data to clear")
+		}
+		return func(*pb.ChangeRecord) {
+			copy := *held
+			copy.DemoRecords = nil
+			copy.ChangedAt = time.Now().UTC()
+			d.packages[p.ID] = &copy
+		}, nil
+	}
 	if schema == SchemaPackageRetire || schema == SchemaPackageDrain {
 		installed := d.packagesOf()
 		held := installed[p.ID]
@@ -585,6 +662,21 @@ func (d *Owner) decide(c platform.Caller, s *pb.Submission) (func(*pb.ChangeReco
 		installed := &protocol.InstalledPackage{ID: descriptor.ID, Version: descriptor.Version, Namespace: descriptor.Namespace,
 			Title: descriptor.Title, State: "active", Contributions: descriptor.Contributions, Digest: descriptor.ArtifactDigest,
 			Artifact: sealed, InstalledAt: now, ChangedAt: now, Space: namespace}
+		if prior != nil && prior.State != "retired" {
+			installed.DemoRecords = slices.Clone(prior.DemoRecords)
+		} else if descriptor.Blueprint != nil && len(descriptor.Blueprint.Seed) > 0 {
+			demo := make([]string, 0, len(descriptor.Blueprint.Seed))
+			for _, raw := range descriptor.Blueprint.Seed {
+				var seed struct {
+					Type string `json:"type"`
+					ID   string `json:"id"`
+				}
+				if json.Unmarshal(raw, &seed) == nil && seed.Type != "" && seed.ID != "" {
+					demo = append(demo, seed.Type+"/"+seed.ID)
+				}
+			}
+			installed.DemoRecords = demo
+		}
 		if prior != nil {
 			installed.InstalledAt = prior.InstalledAt
 			installed.Retained = slices.DeleteFunc(slices.Clone(prior.Retained), func(r protocol.RetainedArtifact) bool {

@@ -267,6 +267,8 @@ type PreparationOwner interface {
 	PackagePrerequisites(id, version string) ([]platform.ReleaseAsset, error)
 	Precheck(platform.PackageDescriptor) protocol.Precheck
 	PackageLibraries() []protocol.PackageLibrary
+	InstalledPackages() map[string]*protocol.InstalledPackage
+	PackageSeed(id string) ([]json.RawMessage, bool)
 }
 
 type PreparationHooks struct {

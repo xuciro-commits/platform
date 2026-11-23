@@ -662,6 +662,8 @@ export type ApplicationView = {
   description?: string;
   icon?: string;
   source: string;
+  package?: string;
+  hasDemo?: boolean;
 };
 
 export type ApplicationWarning = {
@@ -2534,6 +2536,7 @@ export type InstalledPackage = {
   installedAt?: string;
   changedAt?: string;
   retained?: RetainedArtifact[];
+  demoRecords?: string[];
 };
 
 export type IntegrationEffect = {
@@ -3630,6 +3633,7 @@ export type PackageBlueprint = {
   assets: ReleaseAsset[];
   guide?: string;
   setup?: PackageSetup;
+  seed?: unknown[];
 };
 
 export type PackageCatalogEntry = {

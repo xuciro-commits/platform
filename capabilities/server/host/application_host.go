@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	"platformserver/kernel/protocol"
+	"platformserver/services/devops/packages"
 	compute "platformserver/services/functions/runtime"
 	"platformserver/services/objects"
 	"platformserver/services/resources/monitoring"
@@ -22,7 +23,7 @@ import (
 )
 
 func (t *Tenant) Applications(m platform.Member) []protocol.ApplicationView {
-	return appowner.Applications(t.Definitions(m))
+	return packages.AttachDemo(appowner.Applications(t.Definitions(m)), t.PackageOwner, t.Projection)
 }
 func (t *Tenant) PageView(m platform.Member, app, owner, page string) (protocol.PageView, *platform.Error) {
 	return appowner.PageView(t.Definitions(m), t.Entities(m), t.Catalog(m), app, owner, page)

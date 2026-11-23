@@ -92,8 +92,8 @@ function useRecordPages(type: string, view: ViewState, enabled: boolean, choiceV
   }, [loaded.signature, signature]);
   useEffect(() => {
     if (page.status !== "ready" || page.path !== path) return;
-    setLoaded((previous) => mergePage(previous.signature === signature ? previous : noPage(signature), page.data));
-  }, [page, path, signature]);
+    setLoaded((previous) => mergePage(previous.signature === signature && currentOffset > 0 ? previous : noPage(signature), page.data));
+  }, [page, path, signature, currentOffset]);
   const answer: Api.RecordPage = {
     records: loaded.records,
     refs: loaded.refs,

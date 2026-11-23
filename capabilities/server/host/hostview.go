@@ -1,8 +1,10 @@
 package host
 
 import (
+	"encoding/json"
 	"fmt"
 	pageowner "platformserver/services/apps/pages"
+	"platformserver/services/devops/packages"
 	"platformserver/services/objects"
 	"platformserver/services/ontology"
 	"platformserver/services/security"
@@ -344,4 +346,8 @@ func (h hostView) CheckResourceSchema(schema string, version *platform.SchemaVer
 
 func (h hostView) CompartmentExists(id string) bool {
 	return security.CompartmentExists(h.t.App("platform"), id)
+}
+
+func (h hostView) PackageSeed(id string) ([]json.RawMessage, bool) {
+	return packages.SeedOf(h.t.PackageOwner, id)
 }
