@@ -127,6 +127,10 @@ func FillSeed(c platform.Caller, pkgID string, seeds []json.RawMessage, demo boo
 			ID     string                       `json:"id"`
 			Values json.RawMessage              `json:"values"`
 			Rows   []map[string]json.RawMessage `json:"rows"`
+			Then   []struct {
+				Action string          `json:"action"`
+				With   json.RawMessage `json:"with"`
+			} `json:"then"`
 		}
 		if json.Unmarshal(raw, &seed) != nil || seed.Type == "" {
 			continue
@@ -154,6 +158,16 @@ func FillSeed(c platform.Caller, pkgID string, seeds []json.RawMessage, demo boo
 		if refusal := submit(&pb.Submission{TenantId: c.Tenant, PrincipalId: c.ID, Authority: AppID, IdempotencyKey: "seed:" + pkgID + ":" + seed.Type + "/" + seed.ID,
 			Target: &pb.EntityRef{Type: seed.Type, Id: seed.ID}, Schema: &pb.SchemaRef{Name: seed.Type + ".create", Version: 1}, Payload: seed.Values}); refusal != nil {
 			return refusal
+		}
+		for _, step := range seed.Then {
+			payload := step.With
+			if len(payload) == 0 {
+				payload = []byte("{}")
+			}
+			if refusal := submit(&pb.Submission{TenantId: c.Tenant, PrincipalId: c.ID, Authority: AppID, IdempotencyKey: "seed:" + pkgID + ":" + seed.Type + "/" + seed.ID + ":" + step.Action,
+				Target: &pb.EntityRef{Type: seed.Type, Id: seed.ID}, Schema: &pb.SchemaRef{Name: seed.Type + "." + step.Action, Version: 1}, Payload: payload}); refusal != nil {
+				return refusal
+			}
 		}
 	}
 	return nil

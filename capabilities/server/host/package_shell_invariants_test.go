@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"os"
 	"slices"
+	"strings"
 	"testing"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
@@ -170,7 +171,8 @@ func TestInvariantK24PackageDemoSeedInstallAndClear(t *testing.T) {
 		t.Fatal(err)
 	}
 	offer.Blueprint.Seed = []json.RawMessage{
-		platform.Raw(map[string]any{"type": typ, "id": "demo-order-1", "values": map[string]any{"number": "DEMO-1", "product": "sample", "quantity": 2, "unitcost": 5}}),
+		platform.Raw(map[string]any{"type": typ, "id": "demo-order-1", "values": map[string]any{"number": "DEMO-1", "product": "sample", "quantity": 2, "unitcost": 5},
+			"then": []map[string]any{{"action": "edit", "with": map[string]any{"product": "sample after an action"}}}}),
 	}
 	preview, err := live.InspectPackage(t.Context(), protocol.PackageInspectRequest{Content: platform.Raw(offer)})
 	if err != nil {
@@ -236,6 +238,9 @@ func TestInvariantK24PackageDemoSeedInstallAndClear(t *testing.T) {
 	}
 	if ids := recordIDs(); !slices.Equal(ids, []string{"demo-order-1"}) {
 		t.Fatalf("expected seeded demo record, got %v", ids)
+	}
+	if view, refusal := live.RecordOf(t.Context(), admin, typ, "demo-order-1", invariantClock); refusal != nil || !strings.Contains(string(platform.Raw(view.Record)), "sample after an action") {
+		t.Fatalf("a demo record's then steps run after it is created, got %v %v", view.Record, refusal)
 	}
 	live.accept(t, typ+".create", typ, "user-order-1", map[string]any{"number": "USER-1", "product": "real", "quantity": 1, "unitcost": 10})
 	offer.Version = "0.1.6"
