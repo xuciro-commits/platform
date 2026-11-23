@@ -12,7 +12,7 @@ import { type App, apps, locate, type NavItem, type NavSection, pathOf } from ".
 import { entries, recordHref } from "../apps/entries";
 import { type Api, useRead, useSession } from "../host";
 import { Records } from "../pages/RecordList";
-import { setLanguage, t } from "../i18n";
+import { setLanguage, setTimeZone, t } from "../i18n";
 import { navigate, useHash, usePath, useSearch } from "../router";
 import { AppRail } from "./AppRail";
 import { setAppearance } from "./appearance";
@@ -67,6 +67,7 @@ export function Shell() {
   useEffect(() => {
     if (me.status !== "ready") return;
     setLanguage(me.data.language);
+    setTimeZone(me.data.account.effective.timezone);
     setAppearance(me.data.account.theme);
   }, [me]);
   const signedIn = session && me.status !== "loading";

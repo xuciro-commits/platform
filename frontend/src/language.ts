@@ -3,6 +3,7 @@ import { zhCN } from "./i18n";
 
 const supported = (language: string) => (language.startsWith("zh") ? "zh-CN" : "en");
 let locale = supported(navigator.language);
+let zone: string | undefined;
 const listeners = new Set<() => void>();
 
 export function setLanguage(language: string) {
@@ -13,6 +14,10 @@ export function setLanguage(language: string) {
   listeners.forEach((notify) => notify());
 }
 
+export function setTimeZone(next: string) {
+  zone = next || undefined;
+}
+
 export function useLocale() {
   return useSyncExternalStore((notify) => {
     listeners.add(notify);
@@ -21,7 +26,8 @@ export function useLocale() {
 }
 
 export function dateText(value: string | number | Date, options: Intl.DateTimeFormatOptions = { dateStyle: "medium", timeStyle: "short" }) {
-  return new Date(value).toLocaleString(locale, options);
+  const timed = Boolean(options.timeStyle || options.hour);
+  return new Date(value).toLocaleString(locale, timed && zone && !options.timeZone ? { ...options, timeZone: zone } : options);
 }
 
 export function t(text: string) {
