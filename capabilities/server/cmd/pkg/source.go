@@ -369,7 +369,7 @@ func readResources(dir string) ([]resource, error) {
 			return err
 		}
 		rel, _ := filepath.Rel(dir, path)
-		if rel == manifestFile || rel == setupFile || strings.HasPrefix(filepath.ToSlash(rel), localesDir+"/") {
+		if rel == manifestFile || rel == setupFile || rel == tryFile || strings.HasPrefix(filepath.ToSlash(rel), localesDir+"/") {
 			return nil
 		}
 		kind, ok := classify(rel)

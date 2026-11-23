@@ -55,7 +55,7 @@ func TestInvariantK9PackageRetireAndReinstallPreserveData(t *testing.T) {
 	if admin.Holds(build.ID, build.Builder) {
 		t.Fatal("the installation administrator must not need a builder role")
 	}
-	inspected, err := target.inspectPackage(context.Background(), protocol.PackageInspectRequest{Content: platform.Raw(descriptor)})
+	inspected, err := target.InspectPackage(context.Background(), protocol.PackageInspectRequest{Content: platform.Raw(descriptor)})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -157,7 +157,7 @@ func TestInvariantK9PackageRetireAndReinstallPreserveData(t *testing.T) {
 
 	next := descriptor
 	next.Version = "1.1.0"
-	nextOffer, err := target.inspectPackage(context.Background(), protocol.PackageInspectRequest{Content: platform.Raw(next)})
+	nextOffer, err := target.InspectPackage(context.Background(), protocol.PackageInspectRequest{Content: platform.Raw(next)})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -240,7 +240,7 @@ func TestInvariantK9PackageUpgradeFieldReviewAndIncompatibleGate(t *testing.T) {
 	}
 	importDesc := func(desc platform.PackageDescriptor) {
 		t.Helper()
-		preview, err := target.inspectPackage(context.Background(), protocol.PackageInspectRequest{Content: platform.Raw(desc)})
+		preview, err := target.InspectPackage(context.Background(), protocol.PackageInspectRequest{Content: platform.Raw(desc)})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -326,24 +326,24 @@ func TestInvariantK9PackageUpgradeFieldReviewAndIncompatibleGate(t *testing.T) {
 	}
 
 	rawV1 := platform.Raw(v1)
-	if _, err := target.inspectPackage(context.Background(), protocol.PackageInspectRequest{Content: rawV1, ExpectedSha256: "sha256:0000000000000000000000000000000000000000000000000000000000000000"}); err == nil {
+	if _, err := target.InspectPackage(context.Background(), protocol.PackageInspectRequest{Content: rawV1, ExpectedSha256: "sha256:0000000000000000000000000000000000000000000000000000000000000000"}); err == nil {
 		t.Fatal("mismatched expectedSha256 must be refused")
 	}
-	checked, err := target.inspectPackage(context.Background(), protocol.PackageInspectRequest{Content: rawV1})
+	checked, err := target.InspectPackage(context.Background(), protocol.PackageInspectRequest{Content: rawV1})
 	if err != nil || !strings.HasPrefix(checked.ArtifactSha256, "sha256:") {
 		t.Fatalf("inspect must return artifactSha256: %+v err=%v", checked, err)
 	}
-	if _, err := target.inspectPackage(context.Background(), protocol.PackageInspectRequest{Content: rawV1, ExpectedSha256: checked.ArtifactSha256}); err != nil {
+	if _, err := target.InspectPackage(context.Background(), protocol.PackageInspectRequest{Content: rawV1, ExpectedSha256: checked.ArtifactSha256}); err != nil {
 		t.Fatalf("matching expectedSha256 must succeed: %v", err)
 	}
 	file := append(append([]byte{}, rawV1...), '\n')
 	fileSum := sha256.Sum256(file)
 	fileDigest := "sha256:" + hex.EncodeToString(fileSum[:])
-	exact, err := target.inspectPackage(context.Background(), protocol.PackageInspectRequest{ContentBase64: file, ExpectedSha256: fileDigest})
+	exact, err := target.InspectPackage(context.Background(), protocol.PackageInspectRequest{ContentBase64: file, ExpectedSha256: fileDigest})
 	if err != nil || exact.ArtifactSha256 != fileDigest || exact.Origin != "local-file" {
 		t.Fatalf("a local file is checked by the SHA-256 of its exact bytes: %+v err=%v", exact, err)
 	}
-	if _, err := target.inspectPackage(context.Background(), protocol.PackageInspectRequest{Content: rawV1, ContentBase64: file}); err == nil {
+	if _, err := target.InspectPackage(context.Background(), protocol.PackageInspectRequest{Content: rawV1, ContentBase64: file}); err == nil {
 		t.Fatal("content and contentBase64 together must be refused")
 	}
 }
@@ -444,7 +444,7 @@ func TestInvariantK9PackageMarketLibrary(t *testing.T) {
 			t.Fatalf("a listing outside the taxonomy must be refused: %v", bad)
 		}
 	}
-	preview, err := target.inspectPackage(t.Context(), protocol.PackageInspectRequest{URL: entry.URL, ExpectedSha256: entry.Sha256})
+	preview, err := target.InspectPackage(t.Context(), protocol.PackageInspectRequest{URL: entry.URL, ExpectedSha256: entry.Sha256})
 	if err != nil || preview.Descriptor.ID != desc.ID {
 		t.Fatalf("inspect from catalog entry: %+v err=%v", preview, err)
 	}
@@ -452,7 +452,7 @@ func TestInvariantK9PackageMarketLibrary(t *testing.T) {
 		t.Fatalf("a followed redirect keeps the catalog address as the origin: %q", preview.Origin)
 	}
 	plain := (&url.URL{Scheme: "http", Host: "127.0.0.1:18999", Path: "/repo/packages/plain.json"}).String()
-	if _, err := target.inspectPackage(t.Context(), protocol.PackageInspectRequest{URL: plain}); err == nil || !strings.Contains(err.Error(), "not HTTPS") {
+	if _, err := target.InspectPackage(t.Context(), protocol.PackageInspectRequest{URL: plain}); err == nil || !strings.Contains(err.Error(), "not HTTPS") {
 		t.Fatalf("a redirect to a plain HTTP address must be refused: %v", err)
 	}
 	online = false

@@ -28,7 +28,7 @@ func (h *Host) routesPackages(rt *routes) {
 		var req protocol.PackageInspectRequest
 		if err := transport.DecodeBodyLimit(r, &req, packages.MaxPackageImportBytes/3*4+4096); err != nil {
 			WriteJSON(w, http.StatusBadRequest, map[string]string{"error": t.Say(t.Language(m, r), err.Error())})
-		} else if preview, err := t.inspectPackage(r.Context(), req); err != nil {
+		} else if preview, err := t.InspectPackage(r.Context(), req); err != nil {
 			WriteJSON(w, http.StatusBadRequest, map[string]string{"error": t.Say(t.Language(m, r), err.Error())})
 		} else {
 			WriteJSON(w, http.StatusOK, preview)
@@ -76,7 +76,7 @@ func (t *Tenant) PackagePreparation(ctx context.Context, m platform.Member, id, 
 	})
 }
 
-func (t *Tenant) inspectPackage(ctx context.Context, request protocol.PackageInspectRequest) (protocol.PackagePreview, error) {
+func (t *Tenant) InspectPackage(ctx context.Context, request protocol.PackageInspectRequest) (protocol.PackagePreview, error) {
 	return packages.Inspect(ctx, PublicationResolver(), t.ID, request, t.sender(), t.files(), func(ctx context.Context, descriptor platform.PackageDescriptor) (protocol.Precheck, error) {
 		precheck, refusal := recordRead(t, ctx, func(t *Tenant) (protocol.Precheck, *platform.Error) {
 			if t.PackageOwner == nil {

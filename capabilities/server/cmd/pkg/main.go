@@ -19,6 +19,8 @@ const usage = `usage:
   pkg diff  [-packages dir] [package-dir ...]   review the upgrade from the released snapshot and check the version bump
   pkg build -o file package-dir                 write the artifact of one package
   pkg split artifact.json package-dir           turn a released artifact into a source directory
+  pkg try [-script file] package-dir ...        install the packages in order into an in-memory tenant and run the script;
+      the script defaults to try.yaml in the last package and lists steps of do/on/with or read, with show, expect and refused
   pkg catalog -o catalog.json [-title t] [-url template] package-dir ...   write a catalog entry per package;
       the template may use {id}, {version} and {artifact}; without {artifact} the file name is appended`
 
@@ -39,10 +41,13 @@ func run(args []string, out io.Writer) error {
 	output := flags.String("o", "", "artifact file to write")
 	title := flags.String("title", "", "catalog title")
 	prefix := flags.String("url", "./", "address template of each artifact in the catalog")
+	script := flags.String("script", "", "trial script; defaults to try.yaml in the last package")
 	if err := flags.Parse(args[1:]); err != nil {
 		return fmt.Errorf("%w\n%s", err, usage)
 	}
 	switch args[0] {
+	case "try":
+		return try(flags.Args(), *script, out)
 	case "split":
 		if flags.NArg() != 2 {
 			return errors.New(usage)

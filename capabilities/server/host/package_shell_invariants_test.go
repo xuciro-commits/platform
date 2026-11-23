@@ -51,7 +51,7 @@ func TestInvariantK24InstalledPackageContributesOnlyActiveAuthorizedNavigationAn
 			offer.Blueprint.Assets[i].Body = platform.Raw(body)
 		}
 	}
-	preview, err := live.inspectPackage(t.Context(), protocol.PackageInspectRequest{Content: platform.Raw(offer)})
+	preview, err := live.InspectPackage(t.Context(), protocol.PackageInspectRequest{Content: platform.Raw(offer)})
 	if err != nil {
 		t.Fatal(err)
 	}

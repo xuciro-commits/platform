@@ -36,7 +36,7 @@ func (h *Host) hostCompositionRoutes(mux *http.ServeMux) {
 			WriteJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
 			return
 		}
-		preview, err := t.inspectPackage(r.Context(), body)
+		preview, err := t.InspectPackage(r.Context(), body)
 		if err != nil {
 			WriteJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
 			return

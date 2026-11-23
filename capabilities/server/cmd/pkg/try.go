@@ -1,0 +1,367 @@
+package main
+
+import (
+	"bytes"
+	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"io"
+	"os"
+	"path/filepath"
+	"regexp"
+	"slices"
+	"strings"
+	"time"
+
+	"go.yaml.in/yaml/v3"
+
+	pb "platformkernel/gen/platform/kernel/v1alpha1"
+	"platformserver/host"
+	"platformserver/host/composition"
+	"platformserver/kernel/protocol"
+	"platformserver/platform"
+	"platformserver/services/ai"
+	"platformserver/services/devops/packages"
+	authoring "platformserver/services/resources/authoring"
+	"platformserver/services/security"
+	controlowner "platformserver/services/security/control"
+	"platformserver/services/work"
+)
+
+const (
+	tryFile   = "try.yaml"
+	tryMember = "author"
+	tryRounds = 1000
+)
+
+type tryScript struct {
+	Roles map[string]string `yaml:"roles"`
+	At    string            `yaml:"at"`
+	Steps []tryStep         `yaml:"steps"`
+}
+
+type tryStep struct {
+	Do      string         `yaml:"do"`
+	On      string         `yaml:"on"`
+	Read    string         `yaml:"read"`
+	With    map[string]any `yaml:"with"`
+	Show    []string       `yaml:"show"`
+	Expect  map[string]any `yaml:"expect"`
+	Refused bool           `yaml:"refused"`
+}
+
+type trial struct {
+	tenant *host.Tenant
+	member platform.Member
+	at     time.Time
+	keys   int
+	out    io.Writer
+}
+
+var placeholder = regexp.MustCompile(`\{([A-Za-z0-9_.-]+)/([^{}./]+)\.([^{}]+)\}`)
+
+func readTryScript(path string) (tryScript, error) {
+	var script tryScript
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		return script, err
+	}
+	decoder := yaml.NewDecoder(bytes.NewReader(raw))
+	decoder.KnownFields(true)
+	if err := decoder.Decode(&script); err != nil && !errors.Is(err, io.EOF) {
+		return script, fmt.Errorf("%s: %w", path, err)
+	}
+	for i, step := range script.Steps {
+		if (step.Do == "") == (step.Read == "") {
+			return script, fmt.Errorf("%s: step %d needs exactly one of do and read", path, i+1)
+		}
+		if step.Do != "" && step.On == "" {
+			return script, fmt.Errorf("%s: step %d (%s) needs on: <type>/<id>", path, i+1, step.Do)
+		}
+		if step.Read != "" && (step.With != nil || step.Refused) {
+			return script, fmt.Errorf("%s: step %d reads a record and takes no with or refused", path, i+1)
+		}
+	}
+	return script, nil
+}
+
+func newTrial(roles map[string]string, at time.Time, out io.Writer) (*trial, error) {
+	granted := map[string]string{
+		controlowner.PlatformApp: controlowner.Admin, authoring.ID: authoring.Builder, ai.ID: ai.Admin,
+		work.ID: work.Admin, protocol.AgentApp: protocol.AgentAdmin,
+	}
+	for app, role := range roles {
+		granted[app] = role
+	}
+	seat := protocol.Seat{Subjects: []string{tryMember}, Member: platform.Member{ID: tryMember, Roles: granted}}
+	tenant, err := composition.NewTenantWithCapabilities("try", protocol.DefaultRuntimeCapabilities(security.Standard{}), seat)
+	if err != nil {
+		return nil, err
+	}
+	tenant.AcceptResult = func(e host.Entry, _, _ string) ([]byte, error) { return e.Body, nil }
+	member, ok := tenant.Member(tryMember)
+	if !ok {
+		return nil, errors.New("the trial member is not seated")
+	}
+	return &trial{tenant: tenant, member: member, at: at, out: out}, nil
+}
+
+func (tr *trial) submit(authority, schema, typ, id string, payload any) error {
+	tr.keys++
+	sub := &pb.Submission{TenantId: tr.tenant.ID, PrincipalId: tr.member.ID, Authority: authority,
+		IdempotencyKey: fmt.Sprintf("try-%d", tr.keys), Target: &pb.EntityRef{Type: typ, Id: id},
+		Schema: &pb.SchemaRef{Name: schema, Version: 1}, Payload: platform.Raw(payload)}
+	if _, refusal := tr.tenant.Submit(tr.member, sub, tr.at); refusal != nil {
+		lines := []string{refusal.Code.String() + ": " + refusal.Message}
+		sub.IdempotencyKey += "-simulated"
+		if simulated, err := tr.tenant.Simulate(tr.member, "", "", sub, tr.at); err == nil {
+			for _, issue := range simulated.Issues {
+				lines = append(lines, string(platform.Raw(issue)))
+			}
+		}
+		return errors.New(strings.Join(lines, "\n    "))
+	}
+	tr.settle()
+	return nil
+}
+
+func (tr *trial) settle() {
+	for range tryRounds {
+		if !tr.tenant.Round(tr.at, 1) {
+			return
+		}
+	}
+	fmt.Fprintf(tr.out, "  work did not settle after %d rounds\n", tryRounds)
+}
+
+func (tr *trial) install(b built) error {
+	started := time.Now()
+	preview, err := tr.tenant.InspectPackage(context.Background(), protocol.PackageInspectRequest{Content: json.RawMessage(b.artifact)})
+	if err != nil {
+		return fmt.Errorf("%s@%s: inspect: %w", b.id, b.version, err)
+	}
+	if err := tr.submit(controlowner.PlatformApp, packages.SchemaPackageImport, protocol.PackageType, b.id, map[string]any{"id": b.id, "digest": preview.Digest}); err != nil {
+		return fmt.Errorf("%s@%s: import refused: %w", b.id, b.version, err)
+	}
+	if err := tr.submit(controlowner.PlatformApp, packages.SchemaPackageInstall, protocol.PackageType, b.id, map[string]any{"id": b.id, "version": b.version}); err != nil {
+		return fmt.Errorf("%s@%s: install refused: %w", b.id, b.version, err)
+	}
+	fmt.Fprintf(tr.out, "installed %s@%s (%d resources) in %s\n", b.id, b.version, b.assets, time.Since(started).Round(time.Millisecond))
+	return nil
+}
+
+func (tr *trial) record(ref string) (map[string]any, error) {
+	typ, id, ok := strings.Cut(ref, "/")
+	if !ok || typ == "" || id == "" {
+		return nil, fmt.Errorf("%q is not <type>/<id>", ref)
+	}
+	view, refusal := tr.tenant.RecordOf(context.Background(), tr.member, typ, id, tr.at)
+	if refusal != nil {
+		return nil, fmt.Errorf("read %s: %s", ref, refusal.Message)
+	}
+	var rec map[string]any
+	if err := json.Unmarshal(platform.Raw(view.Record), &rec); err != nil {
+		return nil, fmt.Errorf("read %s: %w", ref, err)
+	}
+	return rec, nil
+}
+
+func (tr *trial) resolve(value any) (any, error) {
+	switch v := value.(type) {
+	case string:
+		if whole := placeholder.FindStringSubmatchIndex(v); whole != nil && whole[0] == 0 && whole[1] == len(v) {
+			return tr.lookup(placeholder.FindStringSubmatch(v))
+		}
+		var failure error
+		out := placeholder.ReplaceAllStringFunc(v, func(match string) string {
+			found, err := tr.lookup(placeholder.FindStringSubmatch(match))
+			if err != nil {
+				failure = err
+				return match
+			}
+			if s, ok := found.(string); ok {
+				return s
+			}
+			return string(platform.Raw(found))
+		})
+		return out, failure
+	case map[string]any:
+		out := make(map[string]any, len(v))
+		for key, item := range v {
+			resolved, err := tr.resolve(item)
+			if err != nil {
+				return nil, err
+			}
+			out[key] = resolved
+		}
+		return out, nil
+	case []any:
+		out := make([]any, len(v))
+		for i, item := range v {
+			resolved, err := tr.resolve(item)
+			if err != nil {
+				return nil, err
+			}
+			out[i] = resolved
+		}
+		return out, nil
+	}
+	return value, nil
+}
+
+func (tr *trial) lookup(match []string) (any, error) {
+	rec, err := tr.record(match[1] + "/" + match[2])
+	if err != nil {
+		return nil, err
+	}
+	value, ok := field(rec, match[3])
+	if !ok || value == nil {
+		return nil, fmt.Errorf("%s/%s has no value at %s", match[1], match[2], match[3])
+	}
+	return value, nil
+}
+
+func field(rec map[string]any, path string) (any, bool) {
+	var current any = rec
+	for _, part := range strings.Split(path, ".") {
+		m, ok := current.(map[string]any)
+		if !ok {
+			return nil, false
+		}
+		if current, ok = m[part]; !ok {
+			return nil, false
+		}
+	}
+	return current, true
+}
+
+func subset(want, got any) bool {
+	if w, ok := want.(map[string]any); ok {
+		g, ok := got.(map[string]any)
+		if !ok {
+			return false
+		}
+		for key, item := range w {
+			if !subset(item, g[key]) {
+				return false
+			}
+		}
+		return true
+	}
+	return sameJSON(want, got)
+}
+
+func (tr *trial) run(script tryScript) error {
+	for i, step := range script.Steps {
+		ref, err := tr.resolve(step.On + step.Read)
+		if err != nil {
+			return fmt.Errorf("step %d: %w", i+1, err)
+		}
+		target := ref.(string)
+		if step.Do != "" {
+			fmt.Fprintf(tr.out, "%d. %s %s\n", i+1, step.Do, target)
+			input, err := tr.resolve(map[string]any(step.With))
+			if err != nil {
+				return fmt.Errorf("step %d: %w", i+1, err)
+			}
+			typ, id, _ := strings.Cut(target, "/")
+			authority := tr.tenant.AuthorityOf(typ)
+			if authority == "" {
+				return fmt.Errorf("step %d: no installed app holds records of type %s", i+1, typ)
+			}
+			err = tr.submit(authority, step.Do, typ, id, input)
+			if step.Refused {
+				if err == nil {
+					return fmt.Errorf("step %d: %s was accepted, the script expects a refusal", i+1, step.Do)
+				}
+				fmt.Fprintf(tr.out, "  refused as expected: %v\n", err)
+				continue
+			}
+			if err != nil {
+				return fmt.Errorf("step %d: %s refused: %w", i+1, step.Do, err)
+			}
+		} else {
+			fmt.Fprintf(tr.out, "%d. read %s\n", i+1, target)
+		}
+		rec, err := tr.record(target)
+		if err != nil {
+			return fmt.Errorf("step %d: %w", i+1, err)
+		}
+		show := step.Show
+		if len(show) == 0 {
+			for key := range rec {
+				show = append(show, key)
+			}
+			slices.Sort(show)
+		}
+		for _, name := range show {
+			value, _ := field(rec, name)
+			fmt.Fprintf(tr.out, "  %s: %s\n", name, platform.Raw(value))
+		}
+		var expect map[string]any
+		if err := json.Unmarshal(platform.Raw(step.Expect), &expect); err != nil {
+			return fmt.Errorf("step %d: expect: %w", i+1, err)
+		}
+		names := make([]string, 0, len(expect))
+		for name := range expect {
+			names = append(names, name)
+		}
+		slices.Sort(names)
+		for _, name := range names {
+			if value, _ := field(rec, name); !subset(expect[name], value) {
+				return fmt.Errorf("step %d: %s %s is %s, the script expects %s", i+1, target, name, platform.Raw(value), platform.Raw(expect[name]))
+			}
+		}
+	}
+	return nil
+}
+
+func try(dirs []string, scriptPath string, out io.Writer) error {
+	if len(dirs) == 0 {
+		return errors.New(usage)
+	}
+	if scriptPath == "" {
+		if candidate := filepath.Join(dirs[len(dirs)-1], tryFile); exists(candidate) {
+			scriptPath = candidate
+		}
+	}
+	var script tryScript
+	at := time.Now().UTC().Truncate(time.Second)
+	if scriptPath != "" {
+		var err error
+		if script, err = readTryScript(scriptPath); err != nil {
+			return err
+		}
+		if script.At != "" {
+			if at, err = time.Parse(time.RFC3339, script.At); err != nil {
+				return fmt.Errorf("%s: at: %w", scriptPath, err)
+			}
+		}
+	}
+	tr, err := newTrial(script.Roles, at, out)
+	if err != nil {
+		return err
+	}
+	for _, dir := range dirs {
+		previous, _, err := snapshot(dir)
+		if err != nil {
+			return err
+		}
+		b, err := build(dir, previous)
+		if err != nil {
+			return err
+		}
+		if err := tr.install(b); err != nil {
+			return err
+		}
+	}
+	if scriptPath == "" {
+		return nil
+	}
+	if err := tr.run(script); err != nil {
+		return fmt.Errorf("%s: %w", scriptPath, err)
+	}
+	fmt.Fprintf(out, "%s: %d steps passed\n", filepath.Base(scriptPath), len(script.Steps))
+	return nil
+}
