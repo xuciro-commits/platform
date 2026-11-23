@@ -401,8 +401,11 @@ func readLocales(dir string) (map[string]*object, error) {
 	return out, nil
 }
 
-func expand(dir string, resources []resource, released bool) ([]resource, error) {
+func expand(dir string, resources []resource, released bool, external map[string]map[string]exprField) ([]resource, error) {
 	types := map[string]map[string]exprField{}
+	for name, fields := range external {
+		types[name] = fields
+	}
 	definitions := map[string]map[string]*object{}
 	var out []resource
 	for _, r := range resources {

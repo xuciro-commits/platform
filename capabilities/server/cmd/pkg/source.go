@@ -369,6 +369,26 @@ func readLock(dir string) (lock, error) {
 	return out, nil
 }
 
+func requiredTypes(dir string, requires []string) (map[string]map[string]exprField, error) {
+	out := map[string]map[string]exprField{}
+	for _, need := range requires {
+		source := filepath.Join(filepath.Dir(dir), requiredID(need))
+		if !exists(filepath.Join(source, manifestFile)) {
+			return nil, fmt.Errorf("%s: requires %s, but there is no package source at %s", manifestFile, need, source)
+		}
+		resources, err := readResources(source)
+		if err != nil {
+			return nil, err
+		}
+		for _, r := range resources {
+			if r.ref.Kind == "object" {
+				out[r.ref.Name] = objectFields(asObject(r.body))
+			}
+		}
+	}
+	return out, nil
+}
+
 func readResources(dir string) ([]resource, error) {
 	var out []resource
 	seen := map[platform.AssetRef]string{}
@@ -495,16 +515,20 @@ func build(dir string, previous *platform.PackageDescriptor) (built, error) {
 	if err != nil {
 		return built{}, err
 	}
-	if resources, err = expand(dir, resources, previous != nil && previous.Version == version); err != nil {
-		return built{}, err
-	}
-	resolver := host.PublicationResolver()
 	next := lock{Format: lockFormat, Package: id, Version: version, Requires: []string{}, Assets: map[string]lockedAsset{}}
 	if requires, ok := manifest.get("requires"); ok {
 		if err := json.Unmarshal([]byte(stringify(requires)), &next.Requires); err != nil {
 			return built{}, fmt.Errorf("%s: requires: %w", manifestFile, err)
 		}
 	}
+	external, err := requiredTypes(dir, next.Requires)
+	if err != nil {
+		return built{}, err
+	}
+	if resources, err = expand(dir, resources, previous != nil && previous.Version == version, external); err != nil {
+		return built{}, err
+	}
+	resolver := host.PublicationResolver()
 	assets := []any{}
 	for _, r := range resources {
 		key := string(r.ref.Kind) + "/" + r.ref.Name

@@ -31,7 +31,7 @@ func CheckExtension(extension, base platform.RecordTypeInfo) error {
 		return fmt.Errorf("extension %s needs a required base reference to %s", extension.Type, base.Type)
 	}
 	for _, field := range extension.Fields {
-		if field.Name == "base" || field.ReadOnly && field.AliasOf != "" {
+		if field.Name == "base" || field.ReadOnly && field.AliasOf != "" || strings.HasPrefix(field.Name, "rulesources") || strings.HasPrefix(field.Name, "aisources") || field.Name == "rulewithheld" {
 			continue
 		}
 		if _, exists := base.Field(field.Name); exists {

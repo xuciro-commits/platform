@@ -94,6 +94,10 @@ func Validate(p platform.PackageDescriptor, withDependencies func(platform.Relea
 	if len(b.Seed) > 200 {
 		return fmt.Errorf("a package ships at most 200 demo seed records")
 	}
+	for _, need := range p.Requires {
+		required, _, _ := strings.Cut(need, "@")
+		objects[required+".*"] = true
+	}
 	seeded := map[string]bool{}
 	for _, raw := range b.Seed {
 		var seed struct {
@@ -101,7 +105,7 @@ func Validate(p platform.PackageDescriptor, withDependencies func(platform.Relea
 			ID     string         `json:"id"`
 			Values map[string]any `json:"values"`
 		}
-		if len(raw) > 64<<10 || json.Unmarshal(raw, &seed) != nil || seed.Type == "" || seed.ID == "" || !objects[seed.Type] || seed.Values == nil {
+		if len(raw) > 64<<10 || json.Unmarshal(raw, &seed) != nil || seed.Type == "" || seed.ID == "" || !objects[seed.Type] && !objects[strings.SplitN(seed.Type, ".", 2)[0]+".*"] || seed.Values == nil {
 			return fmt.Errorf("seed records need unique object type and id pairs with bounded JSON object values")
 		}
 		key := seed.Type + "/" + seed.ID
