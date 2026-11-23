@@ -398,5 +398,12 @@
   "You do not have access to this data": "无权查看此数据",
   "Switch workspace": "切换租户",
   "New workspace": "新建租户",
-  "Workspace settings": "租户设置"
+  "Workspace settings": "租户设置",
+  "Add account": "添加账户",
+  "Choose an account to add to this session.": "选择一个账户加入当前会话。",
+  "Signed in": "已登录",
+  "days": "天",
+  "Drag to move · Drag edges to resize": "拖动移动排期 · 拖动左右边缘调整区间",
+  "Drag onto timeline to schedule": "长按拖到左侧时间线排期 · 单击查看详情",
+  "Resize start date": "调整开始日期"
 }

@@ -61,8 +61,10 @@ function Close({ onClose }: { onClose: () => void }) {
   return <IconButton label={t("Close")} variant="ghost" size="sm" icon={<Icon icon="close" size="sm" />} onClick={onClose} />;
 }
 
-export function SettingsDialog({ onClose }: { onClose: () => void }) {
-  const [active, setActive] = useState<PanelId>("profile");
+export type SettingsPanelId = PanelId;
+
+export function SettingsDialog({ onClose, initialPanel = "profile" }: { onClose: () => void; initialPanel?: PanelId }) {
+  const [active, setActive] = useState<PanelId>(initialPanel);
   const titleId = useId();
   const isNarrow = useMediaQuery("(max-width: 640px)");
   const account = useAccount();

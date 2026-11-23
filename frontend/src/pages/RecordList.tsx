@@ -294,17 +294,20 @@ export function Records({ declared, listPath, id, back }: { declared: Declared; 
     } catch {
       conditions.push(["id", "in", []]);
     }
-    const query = new URLSearchParams({ limit: String(pageSize), domain: JSON.stringify(conditions) });
+    const query = new URLSearchParams({ limit: String(pageSize), actions: "1", domain: JSON.stringify(conditions) });
     if (view.search.trim()) query.set("search", view.search.trim());
     return `/v1/records/${declared.type}?${query}`;
   }, [view.layout, view.filters, view.search, ganttStartField, ganttEndField, described, id, externalDomain, declared.type]);
   const unscheduledRead = useRead<Api.RecordPage>(unscheduledPath);
+  const unscheduledRows = unscheduledRead.status === "ready" ? (unscheduledRead.data.records as Row[]) : [];
+  const unscheduledActions = unscheduledRead.status === "ready" ? unscheduledRead.data.actions : undefined;
   const kept = records.answer.records as Row[];
   const act = useAct(described);
   const lifecycle = (described?.lifecycle?.states.length ?? 0) > 1 ? described?.lifecycle : undefined;
   const laneField = (view.lanes ? described?.lanes.find((field) => field.name === view.lanes) : undefined) ?? (lifecycle ? described?.field(lifecycle.field) : described?.lanes[0]);
-  const allowed = (id: string, schema: string) => records.answer.actions?.[id]?.some((action) => action.schema === schema && action.allowed);
+  const allowed = (id: string, schema: string) => (records.answer.actions?.[id] ?? unscheduledActions?.[id])?.some((action) => action.schema === schema && action.allowed);
   const byId = useMemo(() => new Map(kept.map((row) => [String(row.id), row])), [kept]);
+  const unscheduledById = useMemo(() => new Map(unscheduledRows.map((row) => [String(row.id), row])), [unscheduledRows]);
   const actionFor = (id: string, to: string) => {
     if (!described || !laneField) return;
     const row = byId.get(id);
@@ -338,7 +341,7 @@ export function Records({ declared, listPath, id, back }: { declared: Declared; 
     if (row && action && target) await change(id, row, field, dayValue(target, row[field], day), action);
   };
   const rescheduleGantt = async (id: string, startField: string, endField: string, startDay: string, endDay: string) => {
-    const row = byId.get(id);
+    const row = byId.get(id) ?? unscheduledById.get(id);
     const action = editFor(id);
     const startInfo = described?.field(startField);
     const endInfo = described?.field(endField);

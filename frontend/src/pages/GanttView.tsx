@@ -1,4 +1,5 @@
 import { Button } from "@astryxdesign/core/Button";
+import { HoverCard } from "@astryxdesign/core/HoverCard";
 import { Icon } from "@astryxdesign/core/Icon";
 import { IconButton } from "@astryxdesign/core/IconButton";
 import { HStack, StackItem, VStack } from "@astryxdesign/core/Layout";
@@ -6,12 +7,12 @@ import { SegmentedControl, SegmentedControlItem } from "@astryxdesign/core/Segme
 import { Selector } from "@astryxdesign/core/Selector";
 import { Heading, Text } from "@astryxdesign/core/Text";
 import { ToggleButton } from "@astryxdesign/core/ToggleButton";
-import { Tooltip } from "@astryxdesign/core/Tooltip";
 import { ChevronDownIcon, ChevronLeftIcon, ChevronRightIcon, QueueListIcon } from "@heroicons/react/24/outline";
 import { type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent, useEffect, useMemo, useRef, useState } from "react";
 import { t, useLocale } from "../i18n";
 import { DotMark } from "./DotMark";
 import { useGutter } from "./frame";
+import { GanttBarCard, GanttUnscheduled } from "./GanttUnscheduled";
 import {
   addDays, buildDependencyArrows, buildGanttRows, buildTimeline, diffDays, type GanttItem, type GanttUnscheduledItem,
   laneAccentColor, nameColumnWidth, periodHeading, rowHeight, shiftMonth, stepMonthsFor, todayIso,
@@ -42,9 +43,11 @@ export type GanttProps = {
   page?: { hasMore: boolean; loading: boolean; loadMore: () => void };
 };
 
+type DragMode = "move" | "resize-start" | "resize-end";
+
 type DragSession = {
   id: string;
-  mode: "move" | "resize";
+  mode: DragMode;
   originStart: string;
   originEnd: string;
   deltaDays: number;
@@ -61,6 +64,18 @@ const dragThreshold = 4;
 const overscan = 12;
 const headerHeight = 52;
 const defaultDurationOf: Record<GanttScale, number> = { day: 3, week: 7, month: 14 };
+
+function nextDates(mode: DragMode, originStart: string, originEnd: string, deltaDays: number) {
+  if (mode === "move") {
+    return { start: addDays(originStart, deltaDays), end: addDays(originEnd, deltaDays) };
+  }
+  if (mode === "resize-start") {
+    const candidate = addDays(originStart, deltaDays);
+    return { start: diffDays(candidate, originEnd) < 0 ? originEnd : candidate, end: originEnd };
+  }
+  const candidate = addDays(originEnd, deltaDays);
+  return { start: originStart, end: diffDays(originStart, candidate) < 0 ? originStart : candidate };
+}
 
 export function GanttView({
   month, scale, startField, endField, fields, items, unscheduled, grouped = false, groupOrder,
@@ -122,10 +137,8 @@ export function GanttView({
       const override = optimistic[item.id];
       const base = override ? { ...item, start: override.start, end: override.end } : item;
       if (drag && drag.id === item.id) {
-        const nextStart = drag.mode === "move" ? addDays(drag.originStart, drag.deltaDays) : drag.originStart;
-        const rawEnd = addDays(drag.originEnd, drag.deltaDays);
-        const nextEnd = diffDays(nextStart, rawEnd) < 0 ? nextStart : rawEnd;
-        return { ...base, start: nextStart, end: nextEnd };
+        const moved = nextDates(drag.mode, drag.originStart, drag.originEnd, drag.deltaDays);
+        return { ...base, start: moved.start, end: moved.end };
       }
       return base;
     });
@@ -167,7 +180,7 @@ export function GanttView({
 
   const canEdit = (id: string) => Boolean(onMove && (!accepts || accepts(id)));
 
-  const startPointerDrag = (event: ReactPointerEvent, item: GanttItem, mode: "move" | "resize") => {
+  const startPointerDrag = (event: ReactPointerEvent, item: GanttItem, mode: DragMode) => {
     if (event.button !== 0 || !canEdit(item.id)) return;
     event.stopPropagation();
     event.preventDefault();
@@ -183,7 +196,7 @@ export function GanttView({
       if (!started) {
         started = true;
         document.body.style.userSelect = "none";
-        document.body.style.cursor = mode === "resize" ? "ew-resize" : "grabbing";
+        document.body.style.cursor = mode === "move" ? "grabbing" : "ew-resize";
       }
       const deltaDays = Math.round(dx / timeline.dayWidth);
       if (deltaDays !== latestDelta || !drag) {
@@ -199,10 +212,8 @@ export function GanttView({
       suppressClick.current = true;
       setTimeout(() => { suppressClick.current = false; }, 0);
       if (latestDelta === 0) return;
-      const nextStart = mode === "move" ? addDays(item.start, latestDelta) : item.start;
-      const rawEnd = addDays(item.end, latestDelta);
-      const nextEnd = diffDays(nextStart, rawEnd) < 0 ? nextStart : rawEnd;
-      if (nextStart !== item.start || nextEnd !== item.end) commitMove(item.id, nextStart, nextEnd);
+      const moved = nextDates(mode, item.start, item.end, latestDelta);
+      if (moved.start !== item.start || moved.end !== item.end) commitMove(item.id, moved.start, moved.end);
     };
 
     teardown.current = () => {
@@ -315,6 +326,7 @@ export function GanttView({
   const previewOffset = scheduling?.dropStart ? diffDays(span.start, scheduling.dropStart) : -1;
   const previewLeft = previewOffset >= 0 ? previewOffset * timeline.dayWidth : 0;
   const previewWidth = Math.max(24, Math.min(span.days - Math.max(0, previewOffset), previewDuration) * timeline.dayWidth - 2);
+  const hoveringEnabled = !drag && !scheduling;
 
   return (
     <VStack gap={3} paddingInline={gutter} paddingBlockEnd={gutter} xstyle={styles.root}>
@@ -452,7 +464,14 @@ export function GanttView({
                       {timeline.weekends.map((band, index) => <VStack key={index} xstyle={styles.weekendBand(band.left, band.width)} />)}
                       {timeline.todayX !== null && <VStack xstyle={styles.todayLine(timeline.todayX)} />}
                       {visibleBar && (
-                        <Tooltip content={rangeSummary} hasHoverIndication={false}>
+                        <HoverCard
+                          isEnabled={hoveringEnabled}
+                          delay={240}
+                          hideDelay={120}
+                          placement="above"
+                          xstyle={styles.hoverCard}
+                          content={<GanttBarCard item={entry} durationDays={durationDays} editable={editable} />}
+                        >
                           <HStack
                             ref={(node: HTMLElement | null) => {
                               if (node) barRefs.current.set(entry.id, node);
@@ -475,6 +494,16 @@ export function GanttView({
                             onClick={() => { if (!suppressClick.current) onSelect(entry.id); }}
                             onKeyDown={(event) => handleBarKeyDown(event, entry)}
                           >
+                            {editable && (
+                              <VStack
+                                role="presentation"
+                                aria-label={t("Resize start date")}
+                                xstyle={styles.resizeStart}
+                                onPointerDown={(event) => startPointerDrag(event, entry, "resize-start")}
+                              >
+                                <VStack xstyle={styles.resizeGrip} />
+                              </VStack>
+                            )}
                             <Text type="supporting" color="primary" weight="medium" maxLines={1} xstyle={styles.barLabel}>
                               {entry.title || entry.id}
                             </Text>
@@ -482,12 +511,14 @@ export function GanttView({
                               <VStack
                                 role="presentation"
                                 aria-label={t("Resize end date")}
-                                xstyle={styles.resizeHandle}
-                                onPointerDown={(event) => startPointerDrag(event, entry, "resize")}
-                              />
+                                xstyle={styles.resizeEnd}
+                                onPointerDown={(event) => startPointerDrag(event, entry, "resize-end")}
+                              >
+                                <VStack xstyle={styles.resizeGrip} />
+                              </VStack>
                             )}
                           </HStack>
-                        </Tooltip>
+                        </HoverCard>
                       )}
                     </HStack>
                   </HStack>
@@ -530,46 +561,14 @@ export function GanttView({
         </VStack>
 
         {showUnscheduled && (
-          <VStack gap={0} role="region" aria-label={t("Unscheduled")} xstyle={styles.sidebar}>
-            <HStack vAlign="center" hAlign="between" xstyle={styles.sidebarHeader}>
-              <Text type="label" color="secondary">{t("Unscheduled")}</Text>
-              <Text type="supporting" color="secondary" hasTabularNumbers>{visibleUnscheduled.length}</Text>
-            </HStack>
-            <VStack gap={1.5} xstyle={styles.sidebarBody}>
-              {visibleUnscheduled.length === 0 ? (
-                <Text type="supporting" color="secondary">{t("All records have dates")}</Text>
-              ) : (
-                visibleUnscheduled.map((entry) => {
-                  const editable = canEdit(entry.id);
-                  return (
-                    <HStack
-                      key={entry.id}
-                      gap={2}
-                      vAlign="center"
-                      role="button"
-                      tabIndex={0}
-                      xstyle={[
-                        styles.unscheduledItem,
-                        editable && styles.unscheduledDraggable,
-                        scheduling?.item.id === entry.id && styles.unscheduledDragging,
-                      ]}
-                      onPointerDown={(event) => startUnscheduledDrag(event, entry)}
-                      onClick={() => { if (!suppressClick.current) onSelect(entry.id); }}
-                      onKeyDown={(event) => {
-                        if (event.key === "Enter" || event.key === " ") {
-                          event.preventDefault();
-                          onSelect(entry.id);
-                        }
-                      }}
-                    >
-                      {entry.dot && <DotMark dot={entry.dot} label={entry.title || entry.id} />}
-                      <Text type="supporting" color="primary" maxLines={1}>{entry.title || entry.id}</Text>
-                    </HStack>
-                  );
-                })
-              )}
-            </VStack>
-          </VStack>
+          <GanttUnscheduled
+            items={visibleUnscheduled}
+            hoveringEnabled={hoveringEnabled}
+            draggingId={scheduling?.item.id}
+            canEdit={canEdit}
+            onDragStart={startUnscheduledDrag}
+            onSelect={(id) => { if (!suppressClick.current) onSelect(id); }}
+          />
         )}
       </HStack>
       {scheduling && (
