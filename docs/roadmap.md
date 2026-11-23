@@ -43,7 +43,7 @@
 `idea/` 不入库，只在负责人的机器上：来源的截图、DOM 与能力矩阵放在那里，结论写进 sources 与各包的设计稿。
 
 - **2.8.3 第一个：重新设计 Frappe CRM。** official 与 crm 两个租户的 trunk 都装官方 `crm`（0.2.2 待发）；`deploy/packages/crm` 只留给 marketplace 的升级用例。
-  剩：发 crm 0.2.2（等平台 v0.2.8）；演示数据补赢单与丢单的商机，让赢率、赢单收入开箱有数。
+  剩：平台发 v0.2.8 后，包库把 platform.lock 改回 tag，发 crm 0.2.2（PR #15，演示数据已带赢单与丢单）。
 - **2.8.6 起逐个接入。** 按 sources 的波次一个包一项：第一波 helpdesk、hr-core、assets、projects，第二波库存、购销、会计、制造与质量，
   每个能力参考多家取最好的设计。每接一个，官方包库的 Skill `open-app-intake` 补上新坑；与已有官方包重叠的能力，扩展已有的包，不另起一个。
 - 许可：借业务流程、模块划分、字段含义与交互思路，做出的是我们自己的设计（`redesign`），以 Apache-2.0 发布，不沿用来源的 GPL、AGPL；
