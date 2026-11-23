@@ -232,7 +232,7 @@
 作者态源：每个包在 `deploy/packages/<id>/`，YAML，一个资源一个文件；依赖、能力与模式历史由 `cmd/pkg` 用宿主的同一实现算出，不进源。
 顶层的 `deploy/packages/*.json` 是已发布版本的快照，不手改、不重建；`make check` 核对源与同版本快照等价。格式与各包的边界在 `deploy/packages/README.md`。
 
-外部定义的转换（Frappe 应用）是仓库里的构建工具 `scripts/frappe-read.mjs`，不是租户里的能力：
+读外部定义（Frappe 应用）的工具在官方包库的 `scripts/frappe-read.mjs`，是作者的构建工具，不是租户里的能力：
 
 - 只读来源的定义，从不执行来源里的代码。能转的是结构；控制器、客户端脚本、报表、打印格式不转，行为用动作与函数重建。
 - 许可随来源走：Framework、frappe-ui、Studio、Builder 是 MIT；ERPNext、HRMS、Lending、Webshop、Education 是 GPLv3；

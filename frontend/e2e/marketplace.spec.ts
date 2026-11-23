@@ -306,6 +306,7 @@ test("library tenant: a remote catalog lists its package beside the built-in ind
     await page.getByRole("button", { name: "More actions", exact: true }).click();
     await page.getByRole("menuitem", { name: "Manage library", exact: true }).click();
     const manager = page.getByRole("dialog", { name: "Manage library" });
+    await expect(manager.getByRole("button", { name: "Add official library", exact: true })).toBeVisible();
     await manager.getByRole("textbox", { name: /Library URL/ }).fill(address);
     await manager.getByRole("textbox", { name: /Library name/ }).fill("Acme packages");
     await manager.getByRole("button", { name: "Add library", exact: true }).click();

@@ -1,4 +1,5 @@
 import { Banner } from "@astryxdesign/core/Banner";
+import { Card } from "@astryxdesign/core/Card";
 import { Button } from "@astryxdesign/core/Button";
 import { Dialog } from "@astryxdesign/core/Dialog";
 import { Divider } from "@astryxdesign/core/Divider";
@@ -8,7 +9,7 @@ import { HStack, Layout, LayoutContent, LayoutFooter, LayoutHeader, StackItem, V
 import { Text } from "@astryxdesign/core/Text";
 import { TextInput } from "@astryxdesign/core/TextInput";
 import { Token } from "@astryxdesign/core/Token";
-import { ArrowPathIcon, TrashIcon, XMarkIcon } from "@heroicons/react/24/outline";
+import { ArrowPathIcon, CheckBadgeIcon, TrashIcon, XMarkIcon } from "@heroicons/react/24/outline";
 import * as stylex from "@stylexjs/stylex";
 import { useState } from "react";
 import { type Api, request, reread, useRead } from "../host";
@@ -25,6 +26,8 @@ const styles = stylex.create({
     wordBreak: "break-all",
   },
 });
+
+export const officialLibrary = "https://github.com/xuciro-commits/platform-packages";
 
 function statusToken(status: string): { label: string; color: "green" | "orange" | "red" | "gray" } {
   if (status === "ready") return { label: t("Ready"), color: "green" };
@@ -62,12 +65,12 @@ export function PackageLibraryManager({ onClose }: { onClose: () => void }) {
     }
   };
 
-  const addLibrary = async () => {
-    if (!addAction || !url.trim()) return;
+  const addLibrary = async (address = url.trim(), name = title.trim()) => {
+    if (!addAction || !address) return;
     setBusy(true);
     setError("");
     try {
-      await send(addAction, "library", title.trim() ? { url: url.trim(), title: title.trim() } : { url: url.trim() });
+      await send(addAction, "library", name ? { url: address, title: name } : { url: address });
       const updated = await request<Api.PackageLibraryView[]>("/v1/packages/libraries/refresh", { body: {} });
       setLive(updated);
       setUrl("");
@@ -122,6 +125,20 @@ export function PackageLibraryManager({ onClose }: { onClose: () => void }) {
           <LayoutContent isScrollable padding={5}>
             <VStack gap={5}>
               {error && <Banner status="error" title={error} />}
+              {addAction && rows.every((lib) => lib.url.replace(/\/+$/, "") !== officialLibrary) && (
+                <Card padding={4}>
+                  <HStack gap={3} vAlign="center" wrap="wrap">
+                    <Icon icon={CheckBadgeIcon} size="md" color="accent" />
+                    <VStack gap={1}>
+                      <Text type="body" weight="medium">{t("Official library")}</Text>
+                      <Text type="supporting" color="secondary">{t("Applications redesigned for this platform, released with checksums and build provenance.")}</Text>
+                    </VStack>
+                    <StackItem size="fill" />
+                    <Button variant="secondary" size="sm" label={t("Add official library")} isDisabled={busy}
+                      onClick={() => void addLibrary(officialLibrary, t("Official library"))} />
+                  </HStack>
+                </Card>
+              )}
               <VStack gap={3}>
                 <TextInput
                   label={t("Library URL")}

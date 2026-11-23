@@ -93,7 +93,6 @@
 | 智能体、助手、检索与评估的新功能 | `services/ai` | 阶段 5 |
 | 运营观测、容量剖面 | `services/resources/monitoring` | 阶段 4 |
 | 把内置应用改成系统产品包 | `services/work` 等 | 阶段 2 之后 |
-| Frappe 应用读取 | `scripts/frappe-read.mjs` | 2.8 解冻：作为接入路线读来源定义的工具 |
 
 ## 条件触发
 

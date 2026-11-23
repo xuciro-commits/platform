@@ -8,6 +8,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"platformserver/kernel/protocol"
 )
@@ -15,9 +16,11 @@ import (
 const usage = `usage:
   pkg lock  [-packages dir] [package-dir ...]   refresh package.lock.json from the sources
   pkg check [-packages dir] [package-dir ...]   validate, check the lock, compare with the released snapshot
+  pkg diff  [-packages dir] [package-dir ...]   review the upgrade from the released snapshot and check the version bump
   pkg build -o file package-dir                 write the artifact of one package
   pkg split artifact.json package-dir           turn a released artifact into a source directory
-  pkg catalog -o catalog.json [-title t] [-url prefix] package-dir ...   write a catalog entry per package`
+  pkg catalog -o catalog.json [-title t] [-url template] package-dir ...   write a catalog entry per package;
+      the template may use {id}, {version} and {artifact}; without {artifact} the file name is appended`
 
 func main() {
 	if err := run(os.Args[1:], os.Stdout); err != nil {
@@ -35,7 +38,7 @@ func run(args []string, out io.Writer) error {
 	root := flags.String("packages", "deploy/packages", "directory holding package sources")
 	output := flags.String("o", "", "artifact file to write")
 	title := flags.String("title", "", "catalog title")
-	prefix := flags.String("url", "./", "address prefix of each artifact in the catalog")
+	prefix := flags.String("url", "./", "address template of each artifact in the catalog")
 	if err := flags.Parse(args[1:]); err != nil {
 		return fmt.Errorf("%w\n%s", err, usage)
 	}
@@ -80,7 +83,7 @@ func run(args []string, out io.Writer) error {
 			if err != nil {
 				return err
 			}
-			doc.Packages = append(doc.Packages, catalogEntry(b, *prefix+b.artifactName))
+			doc.Packages = append(doc.Packages, catalogEntry(b, artifactURL(*prefix, b)))
 		}
 		raw, err := json.MarshalIndent(doc, "", "  ")
 		if err != nil {
@@ -91,10 +94,13 @@ func run(args []string, out io.Writer) error {
 		}
 		fmt.Fprintf(out, "catalog %s: %d packages\n", *output, len(doc.Packages))
 		return nil
-	case "lock", "check":
+	case "lock", "check", "diff":
 		step, verb := lockPackage, "locked"
-		if args[0] == "check" {
+		switch args[0] {
+		case "check":
 			step, verb = check, "checked"
+		case "diff":
+			step, verb = func(dir string) (built, error) { return diff(dir, out) }, "reviewed"
 		}
 		dirs, err := sources(*root, flags.Args())
 		if err != nil {
@@ -110,4 +116,11 @@ func run(args []string, out io.Writer) error {
 		return nil
 	}
 	return errors.New(usage)
+}
+
+func artifactURL(template string, b built) string {
+	if !strings.Contains(template, "{artifact}") {
+		template += "{artifact}"
+	}
+	return strings.NewReplacer("{id}", b.id, "{version}", b.version, "{artifact}", b.artifactName).Replace(template)
 }

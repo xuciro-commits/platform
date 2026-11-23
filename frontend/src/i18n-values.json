@@ -335,5 +335,8 @@
   "New in {column}": "在“{column}”新建",
   "Pinned": "置顶",
   "Comments": "评论",
-  "Show": "显示"
+  "Show": "显示",
+  "Official library": "官方包库",
+  "Add official library": "添加官方包库",
+  "Applications redesigned for this platform, released with checksums and build provenance.": "为本平台重新设计的应用，随校验和与构建来源证明发布。"
 }
