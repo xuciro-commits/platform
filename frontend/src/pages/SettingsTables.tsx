@@ -32,6 +32,7 @@ type Row = Record<string, unknown> & { id: string; revision?: number };
 
 const styles = stylex.create({
   wash: { backgroundColor: colorVars["--color-background-body"] },
+  scroll: { overflowX: "auto", maxWidth: "100%" },
   cell: (width: number) => ({ width, flexShrink: 0, minWidth: 0 }),
   first: { flexGrow: 1, minWidth: 160 },
   tile: {
@@ -159,7 +160,11 @@ function Group({ described, isOpen, onOpenChange }: { described: Described; isOp
                   />
                 ))}
               </List>
-            ) : <Table data={rows} columns={columns} idKey="id" density="compact" dividers="rows" textOverflow="truncate" />
+            ) : (
+              <VStack xstyle={styles.scroll}>
+                <Table data={rows} columns={columns} idKey="id" density="compact" dividers="rows" textOverflow="truncate" />
+              </VStack>
+            )
           )}
           {described.create && (
             <HStack paddingInline={2} paddingBlockEnd={1}>

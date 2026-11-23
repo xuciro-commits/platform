@@ -117,7 +117,7 @@ export function PackageReviewContent({
                 <Text type="body">{apps}</Text>
               </MetadataListItem>
               <MetadataListItem label={t("Dependencies")}>
-                <Text type="body">{uniquePrerequisites.length ? uniquePrerequisites.join(", ") : t("None")}</Text>
+                <Text type="body">{uniquePrerequisites.length ? uniquePrerequisites.join(", ") : t("No dependencies")}</Text>
               </MetadataListItem>
               <MetadataListItem label={t("Roles")}>
                 {roles.length > 0 ? (
@@ -132,7 +132,7 @@ export function PackageReviewContent({
                     ))}
                   </HStack>
                 ) : (
-                  <Text type="body">{t("None")}</Text>
+                  <Text type="body">{t("No roles")}</Text>
                 )}
               </MetadataListItem>
               <MetadataListItem label={t("Connections")}>
@@ -253,7 +253,7 @@ export function PackageReviewContent({
                 </HStack>
               </MetadataListItem>
               <MetadataListItem label={t("Dependent packages")}>
-                <Text type="body">{impact?.dependencies.length ? impact.dependencies.join(", ") : t("None")}</Text>
+                <Text type="body">{impact?.dependencies.length ? impact.dependencies.join(", ") : t("No dependents")}</Text>
               </MetadataListItem>
               <MetadataListItem label={t("References retained")}>
                 <Text type="body" hasTabularNumbers>{impact?.references.length ?? 0}</Text>

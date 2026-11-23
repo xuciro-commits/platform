@@ -59,6 +59,16 @@ export function sourceMeta(source: string): { label: string; color: "green" | "b
   return { label: t("Retained"), color: "gray", icon: ArchiveBoxIcon };
 }
 
+export function compareVersions(left: string, right: string) {
+  const a = left.split(/[^0-9]+/).filter(Boolean).map(Number);
+  const b = right.split(/[^0-9]+/).filter(Boolean).map(Number);
+  for (let index = 0; index < Math.max(a.length, b.length); index++) {
+    const diff = (a[index] ?? 0) - (b[index] ?? 0);
+    if (diff !== 0) return diff;
+  }
+  return left.localeCompare(right);
+}
+
 export function packageCounts(view: Api.PackageView) {
   const apps = (view.descriptor.blueprint?.roots ?? []).filter((root) => root.kind === "app").length;
   const plugins = (view.descriptor.contributions ?? []).length + (view.descriptor.capabilities ?? []).length;
@@ -171,16 +181,21 @@ export function CatalogEntryCard({
   entry,
   libraryTitle,
   official = false,
+  installed,
   onSelect,
 }: {
   entry: Api.PackageCatalogEntry;
   libraryTitle: string;
   official?: boolean;
+  installed?: Api.InstalledPackage;
   onSelect: () => void;
 }) {
   const display = t(entry.title || entry.id);
   const summary = entry.description ? t(entry.description) : `${display} (${entry.id})`;
   const icon = packageIcon(entry.id, { apps: 1, plugins: 0 });
+  const activeInstalled = installed && installed.state !== "retired" ? installed : undefined;
+  const upgradable = Boolean(activeInstalled && compareVersions(entry.version, activeInstalled.version) > 0);
+  const actionLabel = upgradable ? t("Upgrade") : t("Install");
 
   return (
     <VStack role="listitem" height="100%">
@@ -196,11 +211,17 @@ export function CatalogEntryCard({
                 <HStack gap={1.5} vAlign="center">
                   <Icon icon={official ? CheckBadgeIcon : CloudArrowDownIcon} size="xsm" color={official ? "accent" : "secondary"} />
                   <Text type="supporting" color="secondary" maxLines={1}>{libraryTitle || t("Market library")}</Text>
+                  {activeInstalled && (
+                    <>
+                      <StatusDot variant="success" label={t("Installed")} />
+                      <Text type="supporting" color="secondary" maxLines={1}>{activeInstalled.version}</Text>
+                    </>
+                  )}
                 </HStack>
               </VStack>
             </StackItem>
             <Button
-              label={t("Install")}
+              label={actionLabel}
               variant="secondary"
               size="sm"
               xstyle={styles.action}
@@ -212,20 +233,26 @@ export function CatalogEntryCard({
               {summary}
             </Text>
           </StackItem>
-          <HStack gap={2} vAlign="center" wrap="wrap">
-            {entry.listing?.stage === "test" && <Token label={t("Test")} color="orange" size="sm" />}
-            {entry.listing?.stage === "preview" && <Token label={t("Preview")} color="blue" size="sm" />}
-            {[...(entry.listing?.industries ?? []), ...(entry.listing?.capabilities ?? [])].slice(0, 3).map((value) => (
-              <Token key={value} label={listingLabel(value)} color="gray" size="sm" />
-            ))}
-            {entry.listing?.source?.relation === "redesign" && (
-              <Text type="supporting" color="secondary" maxLines={1}>{t("Redesigned after {app}").replace("{app}", entry.listing.source.app)}</Text>
+          <VStack gap={2}>
+            {(entry.listing?.stage === "test" || entry.listing?.stage === "preview" || (entry.listing?.industries?.length ?? 0) > 0 || (entry.listing?.capabilities?.length ?? 0) > 0) && (
+              <HStack gap={1.5} vAlign="center" wrap="wrap">
+                {entry.listing?.stage === "test" && <Token label={t("Test")} color="orange" size="sm" />}
+                {entry.listing?.stage === "preview" && <Token label={t("Preview")} color="blue" size="sm" />}
+                {[...(entry.listing?.industries ?? []), ...(entry.listing?.capabilities ?? [])].slice(0, 3).map((value) => (
+                  <Token key={value} label={listingLabel(value)} color="gray" size="sm" />
+                ))}
+              </HStack>
             )}
-            <StackItem size="fill" />
-            <Text type="supporting" color="secondary" hasTabularNumbers maxLines={1}>
-              {entry.id} · {entry.version}
-            </Text>
-          </HStack>
+            <HStack gap={2} vAlign="center">
+              {entry.listing?.source?.relation === "redesign" && (
+                <Text type="supporting" color="secondary" maxLines={1}>{t("Redesigned after {app}").replace("{app}", entry.listing.source.app)}</Text>
+              )}
+              <StackItem size="fill" />
+              <Text type="supporting" color="secondary" hasTabularNumbers maxLines={1}>
+                {entry.id} · {entry.version}
+              </Text>
+            </HStack>
+          </VStack>
         </VStack>
       </ClickableCard>
     </VStack>

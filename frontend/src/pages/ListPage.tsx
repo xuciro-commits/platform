@@ -97,7 +97,7 @@ const compare = (left: unknown, right: unknown) =>
   : String(left ?? "").localeCompare(String(right ?? ""));
 const textKey = "__text";
 const fillKey = "__fill";
-const widthOf: Record<string, number> = { string: 148, person: 140, email: 212, phone: 144, code: 150, enum: 112, member: 116, number: 110, time: 116, boolean: 96 };
+const widthOf: Record<string, number> = { string: 148, person: 140, email: 212, phone: 144, code: 150, enum: 112, member: 116, number: 148, time: 116, boolean: 96 };
 const headerWidth = (text: string) => [...text].reduce((sum, letter) => sum + (letter.charCodeAt(0) > 0x2e7f ? 14 : 8), 48);
 const groupPrefix = "__group_";
 const compactQuery = "(max-width: 768px), (max-width: 1024px) and (pointer: coarse) and (hover: none)";
@@ -499,7 +499,7 @@ export function ListView<Answer, Row>({ definition, read, primary, back, exportR
             )}
             {read.status === "refused" && <EmptyState headingLevel={2} title={t("You cannot see this list")} description={read.reason || t("Ask an administrator of this workspace for access.")} />}
             {ready && shown.length === 0 && !dirty && !calendar && !board && <EmptyState headingLevel={2} title={t("Nothing here yet")} description={t(definition.about)} actions={primary} />}
-            {ready && shown.length === 0 && dirty && !calendar && (
+            {ready && shown.length === 0 && dirty && !calendar && !board && (
               <EmptyState
                 headingLevel={2}
                 icon={<Icon icon={MagnifyingGlassIcon} size="lg" />}
@@ -518,7 +518,7 @@ export function ListView<Answer, Row>({ definition, read, primary, back, exportR
                 <Banner status="error" title={t("Not saved")} description={failure} />
               </VStack>
             )}
-            {ready && board && (shown.length > 0 || !dirty) && (
+            {ready && board && (
               <BoardView
                 columns={board.lanes}
                 page={definition.page}
@@ -531,7 +531,7 @@ export function ListView<Answer, Row>({ definition, read, primary, back, exportR
                     column: cells.__lane,
                     title: cells[orderedColumns[0].key],
                     href: cells.__href,
-                    lines: orderedColumns.slice(1, 5).filter((column) => column.key !== board.key && column.kind !== "time" && column.key !== ownerCol?.key && cells[column.key]).map((column) => cells[column.key]),
+                    lines: orderedColumns.slice(1, 5).filter((column) => column.key !== board.key && column.kind !== "time" && column.key !== ownerCol?.key && cells[column.key]).map((column) => ({ label: t(column.header), value: cells[column.key], kind: column.kind })),
                     amount: cells.__amount === undefined ? undefined : Number(cells.__amount),
                     currency: cells.__currency,
                     owner: ownerCol ? cells[ownerCol.key] : undefined,

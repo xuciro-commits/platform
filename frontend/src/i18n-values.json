@@ -198,6 +198,8 @@
   "Reinstall": "重新安装",
   "Apps only": "含应用",
   "Plugins": "含插件能力",
+  "Available": "可安装",
+  "Updates": "可升级",
   "Source filter": "来源筛选",
   "All sources": "全部来源",
   "app root": "个应用根",
@@ -341,5 +343,11 @@
   "Applications redesigned for this platform, released with checksums and build provenance.": "为本平台重新设计的应用，随校验和与构建来源证明发布。",
   "Third-party library": "第三方包库",
   "Official": "官方",
-  "Some package libraries could not be synced. Retry from Manage library.": "部分包库未能同步，可在“管理库”里重试。"
+  "Some package libraries could not be synced. Retry from Manage library.": "部分包库未能同步，可在“管理库”里重试。",
+  "No dependencies": "无依赖",
+  "No roles": "无角色",
+  "No dependents": "无依赖包",
+  "test-plan": "测试计划",
+  "sample-set": "样本集",
+  "evaluation": "评估"
 }

@@ -16,7 +16,8 @@ import { useGutter } from "./frame";
 import type { Dot } from "./Transitions";
 import { DotMark } from "./DotMark";
 
-export type BoardCard = { id: string; column: string; title: string; href: string; lines: string[]; amount?: number; currency?: string; owner?: string; updated?: string; related?: string };
+export type BoardLine = string | { label: string; value: string; kind?: string };
+export type BoardCard = { id: string; column: string; title: string; href: string; lines: BoardLine[]; amount?: number; currency?: string; owner?: string; updated?: string; related?: string };
 type MoveResult = Promise<unknown> | void;
 type BoardProps = {
   columns: { key: string; label: string; dot?: Dot }[];
@@ -42,11 +43,24 @@ function CardBody({ card }: { card: BoardCard }) {
         <Heading level={4}>
           <Link href={card.href} maxLines={1}>{card.title || card.id}</Link>
         </Heading>
-        {card.lines.map((line, position) => (
-          <Text key={position} type="supporting" color="secondary" maxLines={1}>
-            {line}
-          </Text>
-        ))}
+        {card.lines.map((line, position) => {
+          if (typeof line === "string") {
+            return <Text key={position} type="supporting" color="secondary" maxLines={1}>{line}</Text>;
+          }
+          const money = line.kind === "number" && /[A-Z]{3}$/.test(line.value);
+          if (money) {
+            return <Text key={position} type="supporting" color="primary" weight="medium" hasTabularNumbers maxLines={1}>{line.value}</Text>;
+          }
+          if (line.kind === "number") {
+            return (
+              <HStack key={position} gap={1.5} vAlign="center">
+                <Text type="supporting" color="secondary" maxLines={1}>{line.label}</Text>
+                <Text type="supporting" color="primary" hasTabularNumbers maxLines={1}>{line.value}</Text>
+              </HStack>
+            );
+          }
+          return <Text key={position} type="supporting" color="secondary" maxLines={1}>{line.value}</Text>;
+        })}
         {card.related && <Text type="supporting" color="secondary" maxLines={1}>{card.related}</Text>}
       </VStack>
       {(card.owner || card.updated) && (

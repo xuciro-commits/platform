@@ -2,12 +2,11 @@ import { Banner } from "@astryxdesign/core/Banner";
 import { Card } from "@astryxdesign/core/Card";
 import { ClickableCard } from "@astryxdesign/core/ClickableCard";
 import { Grid, GridSpan } from "@astryxdesign/core/Grid";
-import { Icon } from "@astryxdesign/core/Icon";
 import { HStack, Layout, LayoutContent, VStack } from "@astryxdesign/core/Layout";
 import { Link } from "@astryxdesign/core/Link";
 import { Skeleton } from "@astryxdesign/core/Skeleton";
 import { Heading, Text } from "@astryxdesign/core/Text";
-import { StopIcon } from "@heroicons/react/24/solid";
+import * as stylex from "@stylexjs/stylex";
 import { useMemo } from "react";
 import { Bar, BarChart, CartesianGrid, Cell, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { type Api, type Read, useRead } from "../host";
@@ -26,6 +25,16 @@ const hues: Hue[] = ["blue", "orange", "green", "purple", "teal", "pink", "cyan"
 const colour = (hue: Hue) => `var(--color-data-categorical-${hue})`;
 const tick = { fontSize: "var(--font-size-sm)", fill: "var(--color-text-secondary)" };
 const grid = "var(--color-border)";
+
+const styles = stylex.create({
+  swatch: (hue: Hue) => ({
+    width: 8,
+    height: 8,
+    borderRadius: 2,
+    flexShrink: 0,
+    backgroundColor: `var(--color-data-categorical-${hue})`,
+  }),
+});
 
 export function AppDashboard({ title, blocks, listOf }: { title: string; blocks: Api.DashboardBlock[]; listOf: (object: string) => string | undefined }) {
   const gutter = useGutter();
@@ -135,7 +144,7 @@ function Pending({ read }: { read: Read<Api.RecordsAggregate> }) {
 function Swatch({ hue, label }: { hue: Hue; label: string }) {
   return (
     <HStack gap={2} vAlign="center">
-      <Icon icon={StopIcon} size="xsm" color={hue} />
+      <HStack xstyle={styles.swatch(hue)} aria-hidden="true" />
       <Text type="supporting">{label}</Text>
     </HStack>
   );
@@ -143,21 +152,28 @@ function Swatch({ hue, label }: { hue: Hue; label: string }) {
 
 function Share({ shown }: { shown: Shown }) {
   const total = shown.points.reduce((sum, point) => sum + point.amount, 0) || 1;
+  const sorted = shown.points.length > 6 ? [...shown.points].sort((a, b) => b.amount - a.amount) : shown.points;
+  const slices = sorted.length > 6
+    ? [
+        ...sorted.slice(0, 5).map((point, index) => ({ ...point, hue: hues[index % hues.length] })),
+        { key: "__other", value: undefined, label: t("Other"), amount: sorted.slice(5).reduce((sum, point) => sum + point.amount, 0), hue: hues[5] },
+      ]
+    : sorted;
   return (
     <VStack gap={4}>
       <ResponsiveContainer width="100%" height={24}>
-        <BarChart data={[Object.fromEntries(shown.points.map((point) => [point.key, point.amount]))]} layout="vertical" margin={{ top: 0, right: 0, bottom: 0, left: 0 }} barCategoryGap={0}>
+        <BarChart data={[Object.fromEntries(slices.map((point) => [point.key, point.amount]))]} layout="vertical" margin={{ top: 0, right: 0, bottom: 0, left: 0 }} barCategoryGap={0}>
           <XAxis type="number" hide />
           <YAxis type="category" hide />
-          {shown.points.map((point, index) => (
+          {slices.map((point, index) => (
             <Bar key={point.key} dataKey={point.key} name={point.label} stackId="share" fill={colour(point.hue)} isAnimationActive={false}
-              radius={[index === 0 ? 4 : 0, index === shown.points.length - 1 ? 4 : 0, index === shown.points.length - 1 ? 4 : 0, index === 0 ? 4 : 0]}
+              radius={[index === 0 ? 4 : 0, index === slices.length - 1 ? 4 : 0, index === slices.length - 1 ? 4 : 0, index === 0 ? 4 : 0]}
               cursor={point.href ? "pointer" : undefined} onClick={() => point.href && void navigate(point.href)} />
           ))}
         </BarChart>
       </ResponsiveContainer>
       <HStack gap={4} wrap="wrap">
-        {shown.points.map((point) => (
+        {slices.map((point) => (
           <VStack key={point.key} gap={0}>
             {point.href ? <Link href={point.href}><Swatch hue={point.hue} label={point.label} /></Link> : <Swatch hue={point.hue} label={point.label} />}
             <Text type="supporting" color="secondary">{`${shown.format(point.amount)} · ${Math.round((point.amount / total) * 100)}%`}</Text>
@@ -187,15 +203,16 @@ function Chart({ kind, shown }: { kind: string; shown: Shown }) {
     );
   }
   const funnel = kind === "funnel";
+  const trimTick = (value: string) => (value.length > 12 ? `${value.slice(0, 11)}…` : value);
   return (
     <ResponsiveContainer width="100%" height={funnel ? Math.max(160, shown.points.length * 40) : 240}>
-      <BarChart data={shown.points} layout={funnel ? "vertical" : "horizontal"} margin={{ top: 0, right: 24, left: 8, bottom: 0 }} barCategoryGap={funnel ? 10 : "20%"}>
+      <BarChart data={shown.points} layout={funnel ? "vertical" : "horizontal"} margin={{ top: 0, right: 24, left: 8, bottom: 0 }} barCategoryGap={funnel ? 10 : "20%"} >
         <CartesianGrid horizontal={!funnel} vertical={funnel} stroke={grid} />
-        {funnel ? <XAxis type="number" tick={tick} axisLine={false} tickLine={false} tickFormatter={axis} allowDecimals={shown.money} /> : <XAxis dataKey="label" tick={tick} axisLine={false} tickLine={false} />}
+        {funnel ? <XAxis type="number" tick={tick} axisLine={false} tickLine={false} tickFormatter={axis} allowDecimals={shown.money} /> : <XAxis dataKey="label" interval={0} tickFormatter={trimTick} tick={tick} axisLine={false} tickLine={false} />}
         {funnel ? <YAxis type="category" dataKey="label" tick={tick} axisLine={false} tickLine={false} width={120} /> : <YAxis tick={tick} axisLine={false} tickLine={false} width={48} tickFormatter={axis} allowDecimals={shown.money} />}
         {tip}
         <Bar dataKey="amount" radius={4} isAnimationActive={false} cursor="pointer" onClick={(entry) => open(entry.payload as Point)}>
-          {shown.points.map((point) => <Cell key={point.key} fill={colour(funnel ? point.hue : "blue")} />)}
+          {shown.points.map((point) => <Cell key={point.key} fill={colour(point.hue)} />)}
         </Bar>
       </BarChart>
     </ResponsiveContainer>

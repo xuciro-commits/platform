@@ -8,6 +8,7 @@ import { IconButton } from "@astryxdesign/core/IconButton";
 import { HStack, StackItem, VStack } from "@astryxdesign/core/Layout";
 import { Selector } from "@astryxdesign/core/Selector";
 import { Heading, Text } from "@astryxdesign/core/Text";
+import { colorVars, radiusVars } from "@astryxdesign/core/theme/tokens.stylex";
 import { ChevronLeftIcon, ChevronRightIcon } from "@heroicons/react/24/outline";
 import * as stylex from "@stylexjs/stylex";
 import type { PointerEvent as ReactPointerEvent } from "react";
@@ -29,7 +30,43 @@ type CalendarProps = {
 };
 
 const styles = stylex.create({
-  day: { minHeight: 112, minWidth: 0 },
+  board: {
+    borderWidth: 1,
+    borderStyle: "solid",
+    borderColor: colorVars["--color-border"],
+    borderRadius: radiusVars["--radius-container"],
+    backgroundColor: colorVars["--color-border"],
+    overflow: "hidden",
+  },
+  grid: { gap: 1 },
+  weekday: {
+    backgroundColor: colorVars["--color-background-body"],
+    paddingBlock: 8,
+    paddingInline: 10,
+  },
+  cell: {
+    minHeight: 88,
+    minWidth: 0,
+    backgroundColor: colorVars["--color-background-surface"],
+  },
+  outside: {
+    backgroundColor: colorVars["--color-background-body"],
+  },
+  todayBadge: {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    width: 24,
+    height: 24,
+    borderRadius: 999,
+    backgroundColor: colorVars["--color-accent-muted"],
+  },
+  dayNumber: {
+    display: "inline-flex",
+    alignItems: "center",
+    height: 24,
+    paddingInline: 4,
+  },
   title: { minWidth: 0 },
 });
 
@@ -60,15 +97,22 @@ export function CalendarView({ month, field, fields, items, onMonth, onField, on
         )}
         {page?.hasMore && <Button label={t("Load more")} variant="secondary" size="sm" isLoading={page.loading} onClick={page.loadMore} />}
       </HStack>
-      <Grid columns={7} gap={1}>
-        {dayNames.map((name) => <Text key={name} type="label" color="secondary">{name}</Text>)}
-        {weeks.flat().map((day) => {
-          const own = items.filter((entry) => entry.day === day.iso && entry.id !== drag?.id);
-          const label = new Date(`${day.iso}T00:00:00`).toLocaleDateString(undefined, { dateStyle: "long" });
-          return (
-            <Card key={day.iso} padding={0} variant={day.isOutside ? "transparent" : "muted"}>
-              <VStack ref={target(day.iso)} role="group" aria-label={label} gap={1} padding={1.5} xstyle={styles.day}>
-                <Text type="supporting" color={day.iso === now ? "accent" : day.isOutside ? "disabled" : "secondary"} weight={day.iso === now ? "semibold" : undefined}>{day.dayNumber}</Text>
+      <VStack xstyle={styles.board}>
+        <Grid columns={7} gap={0} xstyle={styles.grid}>
+          {dayNames.map((name) => (
+            <VStack key={name} xstyle={styles.weekday}>
+              <Text type="label" color="secondary">{name}</Text>
+            </VStack>
+          ))}
+          {weeks.flat().map((day) => {
+            const own = items.filter((entry) => entry.day === day.iso && entry.id !== drag?.id);
+            const label = new Date(`${day.iso}T00:00:00`).toLocaleDateString(undefined, { dateStyle: "long" });
+            const isToday = day.iso === now;
+            return (
+              <VStack key={day.iso} ref={target(day.iso)} role="group" aria-label={label} aria-current={isToday ? "date" : undefined} gap={1} padding={2} xstyle={[styles.cell, day.isOutside && styles.outside]}>
+                <HStack xstyle={isToday ? styles.todayBadge : styles.dayNumber}>
+                  <Text type="supporting" color={isToday ? "accent" : day.isOutside ? "disabled" : "secondary"} weight={isToday ? "semibold" : undefined}>{day.dayNumber}</Text>
+                </HStack>
                 {own.map((entry) => (
                   <ClickableCard key={entry.id} label={entry.title || entry.id} href={entry.href} padding={1} ref={item(entry.id)} xstyle={[dragStyles.item, !onMove && dragStyles.fixed]}
                     onPointerDown={(event: ReactPointerEvent) => press(event, entry.id, entry.day)}>
@@ -77,10 +121,10 @@ export function CalendarView({ month, field, fields, items, onMonth, onField, on
                 ))}
                 {drag && drag.target === day.iso && <VStack xstyle={dragStyles.ghost(drag.height)} />}
               </VStack>
-            </Card>
-          );
-        })}
-      </Grid>
+            );
+          })}
+        </Grid>
+      </VStack>
       {drag && lifted && (
         <Card ref={floating} padding={1} xstyle={[dragStyles.floating, dragStyles.floatingAt(drag.x, drag.y, drag.width)]}>
           <Text type="body" maxLines={1}>{lifted.title || lifted.id}</Text>
