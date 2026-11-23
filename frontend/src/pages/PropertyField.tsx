@@ -5,7 +5,6 @@ import { IconButton } from "@astryxdesign/core/IconButton";
 import { Markdown } from "@astryxdesign/core/Markdown";
 import { HStack, StackItem, VStack } from "@astryxdesign/core/Layout";
 import { Spinner } from "@astryxdesign/core/Spinner";
-import { StatusDot } from "@astryxdesign/core/StatusDot";
 import { Text } from "@astryxdesign/core/Text";
 import { VisuallyHidden } from "@astryxdesign/core/VisuallyHidden";
 import { useClickableContainer, usePressFeedback } from "@astryxdesign/core/hooks";
@@ -23,6 +22,7 @@ import { ReferenceLink } from "./ReferenceField";
 import type { Dot } from "./Transitions";
 import { iconField, icons } from "./icons";
 import { present } from "./values";
+import { DotMark } from "./DotMark";
 
 const layers = "[role=listbox], [role=dialog], [role=menu], [role=grid], [role=tooltip]";
 const direct = new Set(["boolean", "attachment", "lines", "member[]", "action[]"]);
@@ -74,7 +74,7 @@ export function PropertyValue({ field, value, name, dot }: { field: Api.FieldInf
   }
   if (dot && !blank(value)) {
     const text = name ?? present(field, value);
-    return <HStack gap={2} vAlign="center"><StatusDot variant={dot} label={text} /><Text type="body">{text}</Text></HStack>;
+    return <HStack gap={2} vAlign="center"><DotMark dot={dot} label={text} /><Text type="body">{text}</Text></HStack>;
   }
   if (field.type === "reference" && field.ref && name && !blank(value)) return <ReferenceLink type={field.ref} id={String(value)} name={name} />;
   const text = present(field, value);

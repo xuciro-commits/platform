@@ -3,7 +3,6 @@ import { Icon } from "@astryxdesign/core/Icon";
 import { HStack, VStack } from "@astryxdesign/core/Layout";
 import { Link } from "@astryxdesign/core/Link";
 import { MetadataList, MetadataListItem } from "@astryxdesign/core/MetadataList";
-import { StatusDot } from "@astryxdesign/core/StatusDot";
 import { Text } from "@astryxdesign/core/Text";
 import { Timestamp } from "@astryxdesign/core/Timestamp";
 import { Tooltip } from "@astryxdesign/core/Tooltip";
@@ -13,6 +12,7 @@ import { PersonLabel } from "./MemberField";
 import { PeekDrawer, type PeekSurfaceMode, RecordPeek } from "./RecordPeek";
 import { ReferenceLink } from "./ReferenceField";
 import type { Dot } from "./Transitions";
+import { DotMark } from "./DotMark";
 
 export type Cells = Record<string, string>;
 export const idKey = "__id";
@@ -34,7 +34,7 @@ export function ListCell({ column, cells, first }: { column: Column; cells: Cell
   if (cells[dotOf(column.key)]) {
     return (
       <HStack gap={2} vAlign="center">
-        <StatusDot variant={cells[dotOf(column.key)] as Dot} label={value} />
+        <DotMark dot={cells[dotOf(column.key)] as Dot} label={value} />
         <Text type="body" maxLines={1}>
           {value}
         </Text>
@@ -122,7 +122,7 @@ export function ListDetail({ recordType, activeId, columns, title, cells, action
       title={heading}
       subtitle={state && (
         <HStack gap={2} vAlign="center">
-          <StatusDot variant={shown[dotOf(state.key)] as Dot} label={shown[state.key]} />
+          <DotMark dot={shown[dotOf(state.key)] as Dot} label={shown[state.key]} />
           <Text type="supporting" color="secondary">{shown[state.key]}</Text>
         </HStack>
       )}

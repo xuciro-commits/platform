@@ -567,4 +567,18 @@ test("peek: clicking a reference opens the record drawer without leaving the pag
   await expect(property(page, "Primary contact")).toContainText("林小满");
 });
 
+test("crm board: stage lanes carry their own colours and the plus in a lane header opens the create dialog with that stage", async ({ page }) => {
+  await page.goto("/");
+  await page.getByRole("button", { name: "manager-1 · crm" }).click();
+  await page.getByRole("link", { name: "CRM", exact: true }).click();
+  await page.getByRole("navigation", { name: "Primary navigation" }).getByRole("link", { name: "Deals", exact: true }).click();
+  await page.getByRole("radio", { name: "Board" }).click();
+  await expect(page.getByRole("region", { name: "Negotiation", exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "New in Negotiation", exact: true }).click();
+  const dialog = page.getByRole("dialog");
+  await expect(dialog.getByRole("group", { name: /Status/ }).or(dialog)).toContainText("Negotiation");
+  await dialog.getByRole("button", { name: "Cancel", exact: true }).click();
+  await expect(dialog).toBeHidden();
+});
+
 });

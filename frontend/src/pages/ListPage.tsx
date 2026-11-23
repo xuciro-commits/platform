@@ -61,6 +61,7 @@ type ListBoard<Row> = {
   move?: Move;
   total?: { label: string; value: (row: Row) => { amount: number; currency?: string } | undefined };
   related?: (row: Row) => string | undefined;
+  create?: (lane: string) => void;
 };
 type ListCalendar<Row> = {
   fields: { key: string; label: string }[];
@@ -539,6 +540,7 @@ export function ListView<Answer, Row>({ definition, read, primary, back, exportR
                   };
                 })}
                 accepts={board.accepts}
+                onCreate={board.create}
                 onMove={board.move && ((id, to) => { setFailure(""); return board.move?.(id, to).catch((err: Error) => { moveFailed(err); throw err; }); })}
               />
             )}

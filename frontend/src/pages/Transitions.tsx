@@ -10,7 +10,7 @@ import type { Described, Step, Values } from "./describe";
 
 export type Instances = { field: string; path: string };
 export const dots = { info: "accent", success: "success", warning: "warning", danger: "error", neutral: "neutral" } as const;
-export type Dot = (typeof dots)[keyof typeof dots];
+export type Dot = (typeof dots)[keyof typeof dots] | "blue" | "purple" | "cyan" | "pink" | "green" | "orange" | "red";
 export type TransitionsProps = {
   described: Described;
   id: string;

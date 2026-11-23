@@ -3,8 +3,10 @@ import { Button } from "@astryxdesign/core/Button";
 import { Card } from "@astryxdesign/core/Card";
 import { HStack, Layout, LayoutContent, LayoutHeader, StackItem, VStack } from "@astryxdesign/core/Layout";
 import { Link } from "@astryxdesign/core/Link";
-import { StatusDot } from "@astryxdesign/core/StatusDot";
 import { Heading, Text } from "@astryxdesign/core/Text";
+import { Icon } from "@astryxdesign/core/Icon";
+import { IconButton } from "@astryxdesign/core/IconButton";
+import { PlusIcon } from "@heroicons/react/24/outline";
 import { Timestamp } from "@astryxdesign/core/Timestamp";
 import * as stylex from "@stylexjs/stylex";
 import { type PointerEvent as ReactPointerEvent, type ReactNode, useEffect, useMemo, useState } from "react";
@@ -12,6 +14,7 @@ import { t } from "../i18n";
 import { dragStyles, useDrag } from "./drag";
 import { useGutter } from "./frame";
 import type { Dot } from "./Transitions";
+import { DotMark } from "./DotMark";
 
 export type BoardCard = { id: string; column: string; title: string; href: string; lines: string[]; amount?: number; currency?: string; owner?: string; updated?: string; related?: string };
 type MoveResult = Promise<unknown> | void;
@@ -21,6 +24,7 @@ type BoardProps = {
   total?: string;
   onMove?: (id: string, to: string) => MoveResult;
   accepts?: (id: string, to: string) => boolean;
+  onCreate?: (column: string) => void;
   page?: { hasMore: boolean; loading: boolean; loadMore: () => void };
 };
 const columnWidth = 300;
@@ -61,7 +65,7 @@ function CardBody({ card }: { card: BoardCard }) {
   );
 }
 
-export function BoardView({ columns, cards, onMove, accepts, page, total }: BoardProps) {
+export function BoardView({ columns, cards, onMove, accepts, onCreate, page, total }: BoardProps) {
   const gutter = useGutter();
   const [optimistic, setOptimistic] = useState<Record<string, string>>({});
 
@@ -122,10 +126,16 @@ export function BoardView({ columns, cards, onMove, accepts, page, total }: Boar
               <VStack gap={1}>
                 <HStack hAlign="between" vAlign="center">
                   <HStack gap={2} vAlign="center">
-                    {dot && <StatusDot variant={dot} label={label} />}
+                    {dot && <DotMark dot={dot} label={label} />}
                     <Heading level={4}>{label}</Heading>
                   </HStack>
-                  <Text type="supporting" color="secondary" hasTabularNumbers>{own.length.toLocaleString()}{page?.hasMore ? "+" : ""}</Text>
+                  <HStack gap={1} vAlign="center">
+                    <Text type="supporting" color="secondary" hasTabularNumbers>{own.length.toLocaleString()}{page?.hasMore ? "+" : ""}</Text>
+                    {onCreate && key && (
+                      <IconButton label={t("New in {column}").replace("{column}", label)} tooltip={t("New in {column}").replace("{column}", label)}
+                        variant="ghost" size="sm" icon={<Icon icon={PlusIcon} size="sm" />} onClick={() => onCreate(key)} />
+                    )}
+                  </HStack>
                 </HStack>
                 {total && subtotal && <Text type="supporting" color="secondary" hasTabularNumbers>{t(total)} · {page?.hasMore ? t("Loaded subtotal") : t("Total")} · {subtotal}</Text>}
               </VStack>

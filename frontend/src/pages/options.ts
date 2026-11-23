@@ -8,7 +8,7 @@ import { newView, readView } from "./view";
 
 type Row = Record<string, unknown>;
 export type Options = Record<string, { value: string; label: string; dot?: Dot }[]>;
-export const palette: Record<string, Dot> = { gray: "neutral", blue: "accent", purple: "accent", cyan: "accent", pink: "accent", green: "success", orange: "warning", amber: "warning", red: "error" };
+export const palette: Record<string, Dot> = { gray: "neutral", amber: "warning", blue: "blue", purple: "purple", cyan: "cyan", pink: "pink", green: "green", orange: "orange", red: "red" };
 
 export function useOptions(described: Described | undefined, only?: string[]) {
   const wanted = only?.join(",");

@@ -331,5 +331,6 @@
   "Nothing in this column yet": "这一列还没有内容",
   "Collapse all": "全部收起",
   "Expand all": "全部展开",
-  "Lists the rest of the application picks from. Changes apply to new and existing records at once.": "应用里其他地方从这些列表里挑选。改动对新旧记录立即生效。"
+  "Lists the rest of the application picks from. Changes apply to new and existing records at once.": "应用里其他地方从这些列表里挑选。改动对新旧记录立即生效。",
+  "New in {column}": "在“{column}”新建"
 }

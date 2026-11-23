@@ -253,7 +253,7 @@ export function Records({ declared, listPath, id, back }: { declared: Declared; 
   const pending = useMemo<ListShape<Api.RecordPage, Row>>(() => ({ title: declared.title ?? "", about: declared.about, rows: () => [], id: () => "", columns: [] }), [declared]);
   const types = useRead<Api.EntityInfo[]>("/v1/entities");
   const actions = useRead<Api.Action[]>("/v1/actions");
-  const [creating, setCreating] = useState(false);
+  const [creating, setCreating] = useState<Record<string, unknown> | false>(false);
   const [importing, setImporting] = useState(false);
   const [exportFailure, setExportFailure] = useState("");
   const entity = types.status === "ready" ? types.data.find((candidate) => candidate.type === declared.type) : undefined;
@@ -332,6 +332,7 @@ export function Records({ declared, listPath, id, back }: { declared: Declared; 
   const options = useOptions(described);
   const related = useRelatedCounts(described, types.status === "ready" ? types.data : undefined, kept.map((row) => String(row.id)), view.layout === "board");
   const numericField = described?.table.find((field) => numeric.has(field.type));
+  const create = described?.create;
   const board: RecordShape["board"] = laneField ? {
     key: laneField.name,
     lanes: lifecycle && laneField.name === lifecycle.field ? lifecycle.states.map((state) => ({ key: state.name, label: t(state.title) }))
@@ -341,6 +342,9 @@ export function Records({ declared, listPath, id, back }: { declared: Declared; 
     accepts: (id, to) => Boolean(actionFor(id, to)),
     move,
     related: (row) => related[String(row.id)],
+    create: create && (!lifecycle || laneField.name !== lifecycle.field)
+      && create.payload.some((parameter) => parameter.name === laneField.name && enterable(parameter))
+      ? (lane) => setCreating({ [laneField.name]: lane }) : undefined,
     total: numericField && {
       label: numericField.title,
       value: (row) => {
@@ -388,7 +392,6 @@ export function Records({ declared, listPath, id, back }: { declared: Declared; 
       page: { total: records.total, loaded: records.loaded, hasMore: records.hasMore, loading: records.loading, loadMore: records.loadMore },
     };
   }, [described, declared, listPath, pending, board, calendar, bulk, options, detail, records.total, records.unfiltered, records.loaded, records.hasMore, records.loading, records.loadMore]);
-  const create = described?.create;
   const exportList = async () => {
     setExportFailure("");
     try {
@@ -424,7 +427,7 @@ export function Records({ declared, listPath, id, back }: { declared: Declared; 
         back={back}
         primary={described ? (
           <HStack gap={2} vAlign="center">
-            {create && <Button label={t("New")} variant="primary" onClick={() => setCreating(true)} />}
+            {create && <Button label={t("New")} variant="primary" onClick={() => setCreating({})} />}
             <MoreMenu label={t("More actions")} alignment="end" items={[
               ...(create ? [{ id: "import-records", label: t("Import"), onClick: () => setImporting(true) }] : []),
               { id: "export-records", label: t("Export as CSV"), onClick: () => void exportList() },
@@ -445,6 +448,7 @@ export function Records({ declared, listPath, id, back }: { declared: Declared; 
           heading={t(create.title)}
           confirm={t("Create")}
           revision={0}
+          initial={creating}
           owned={declared.project}
           onClose={() => setCreating(false)}
           quick

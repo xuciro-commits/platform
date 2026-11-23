@@ -8,7 +8,6 @@ import { Section } from "@astryxdesign/core/Section";
 import { SegmentedControl, SegmentedControlItem } from "@astryxdesign/core/SegmentedControl";
 import { Selector } from "@astryxdesign/core/Selector";
 import { Skeleton } from "@astryxdesign/core/Skeleton";
-import { StatusDot } from "@astryxdesign/core/StatusDot";
 import { Table, pixel, proportional, useTableSortable, useTableSortableState, useTableTreeData, useTableTreeState } from "@astryxdesign/core/Table";
 import type { TableColumn, TablePlugin } from "@astryxdesign/core/Table";
 import { Text } from "@astryxdesign/core/Text";
@@ -22,6 +21,7 @@ import { reread, useRead } from "../host";
 import { t } from "../i18n";
 import { PageTitle, useGutter } from "./frame";
 import type { Dot } from "./Transitions";
+import { DotMark } from "./DotMark";
 
 export type TreeColumn<Row> = {
   key: string;
@@ -166,7 +166,7 @@ function Cell<Row>({ column, row }: { column: TreeColumn<Row>; row: Row }) {
   if (dot) {
     return (
       <HStack gap={2} vAlign="center">
-        <StatusDot variant={dot} label={text} />
+        <DotMark dot={dot} label={text} />
         <Text maxLines={1}>{text}</Text>
       </HStack>
     );
