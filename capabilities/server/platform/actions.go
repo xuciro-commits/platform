@@ -181,6 +181,8 @@ const (
 	ApprovalReturned = ".returned"
 )
 
+const ManagerRole = "manager"
+
 type ApprovalLevel struct {
 	Title           string
 	Structure, Role string

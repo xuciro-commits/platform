@@ -121,9 +121,10 @@ type ActionApproval struct {
 }
 
 type ApproverLevel struct {
-	Title string `json:"title" title:"Level name" help:"What this level is called"`
-	Role  string `json:"role" title:"Approver role"`
-	All   bool   `json:"all,omitempty" title:"Unanimous approval" help:"Everyone in the role must approve"`
+	Title   string `json:"title" title:"Level name" help:"What this level is called"`
+	Role    string `json:"role,omitempty" title:"Approver role"`
+	Manager bool   `json:"manager,omitempty" title:"Requester's manager" help:"The manager of the requester's own organization unit; with a role, holders of the role may approve too"`
+	All     bool   `json:"all,omitempty" title:"Unanimous approval" help:"Everyone in the role must approve"`
 }
 
 type Input struct {

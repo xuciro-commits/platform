@@ -74,10 +74,10 @@ func CheckProcess(o Object, app, objectType, builderRole, userRole, functionCall
 				return fmt.Errorf("%s waiting for approval needs an approver level", where)
 			}
 			for i, level := range approval.Levels {
-				if strings.TrimSpace(level.Title) == "" || level.Role == "" {
-					return fmt.Errorf("%s approval level %d needs a title and role", where, i+1)
+				if strings.TrimSpace(level.Title) == "" || level.Role == "" && !level.Manager {
+					return fmt.Errorf("%s approval level %d needs a title and a role or the requester's manager", where, i+1)
 				}
-				if level.Role != builderRole && (len(o.Access) == 0 && level.Role != userRole || len(o.Access) > 0 && !slices.ContainsFunc(o.Access, func(x Access) bool { return x.Role == level.Role && x.Read == "all" })) {
+				if level.Role != "" && level.Role != builderRole && (len(o.Access) == 0 && level.Role != userRole || len(o.Access) > 0 && !slices.ContainsFunc(o.Access, func(x Access) bool { return x.Role == level.Role && x.Read == "all" })) {
 					return fmt.Errorf("%s approval level %d names %q, which cannot read every record of this object", where, i+1, level.Role)
 				}
 			}

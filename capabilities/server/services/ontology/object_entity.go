@@ -101,7 +101,11 @@ func compileLifecycle(o Object, roles []string, env ObjectRuntimeEnvironment) *p
 		if action.Approval != nil {
 			approval = &platform.Approval{Pending: action.Approval.Pending, Rejected: action.Approval.Rejected}
 			for _, level := range action.Approval.Levels {
-				approval.Levels = append(approval.Levels, platform.ApprovalLevel{Title: level.Title, AppRole: level.Role, All: level.All})
+				next := platform.ApprovalLevel{Title: level.Title, AppRole: level.Role, All: level.All}
+				if level.Manager {
+					next.Role = platform.ManagerRole
+				}
+				approval.Levels = append(approval.Levels, next)
 			}
 		}
 		criteria, _ := ActionCriteria(o, AppID, BuilderRole, action, env.Lookup)
