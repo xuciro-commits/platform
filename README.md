@@ -40,14 +40,14 @@ pnpm --dir frontend dev
 
 | 想知道 | 读 |
 |---|---|
-| 为谁、凭什么赢、什么不做、哪些决定不能动 | [意图](docs/intent.md) |
+| 为谁、凭什么赢、什么不做、哪些决定不能动 | [意图](docs/intent.md) · [PRODUCT.md](PRODUCT.md) |
 | 现在在哪、下一步、什么先不碰 | [长期规划](docs/plan.md) |
 | 系统的组成，写入、读取、发布的路径 | [架构](docs/architecture.md) |
 | 资源、类型、对象、动作、权限、产品包 | [领域模型](docs/domain.md) |
 | Go 代码的位置与规矩 | [后端](docs/backend.md) |
 | 界面代码的位置与做法 | [前端](docs/frontend.md) |
 | 导航、页面、操作、文字 | [界面与交互](docs/ux.md) |
-| 观感与禁忌 | [审美](docs/design.md) |
+| 观感与禁忌、视觉令牌与规约 | [审美](docs/design.md) · [DESIGN.md](DESIGN.md) |
 | 名字与翻译 | [术语表](docs/glossary.md) |
 
 ## 仓库

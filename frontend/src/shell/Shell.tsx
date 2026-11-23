@@ -4,7 +4,7 @@ import { Divider } from "@astryxdesign/core/Divider";
 import { EmptyState } from "@astryxdesign/core/EmptyState";
 import { useHotkeys } from "@astryxdesign/core/hooks";
 import { HStack } from "@astryxdesign/core/HStack";
-import { ChartPieIcon, Cog6ToothIcon, RectangleGroupIcon } from "@heroicons/react/24/outline";
+import { ChartPieIcon, Cog6ToothIcon, RectangleGroupIcon, WrenchScrewdriverIcon } from "@heroicons/react/24/outline";
 import { MobileNav } from "@astryxdesign/core/MobileNav";
 import { useToast } from "@astryxdesign/core/Toast";
 import { lazy, Suspense, useEffect, useMemo, useState } from "react";
@@ -48,7 +48,9 @@ function installedApps(views: Api.ApplicationView[], entities: Api.EntityInfo[])
     const dashboard = view.dashboard?.length && !sections.some((section) => section.items.some((page) => page.id === "dashboard")) ? view.dashboard : undefined;
     const overview: NavItem[] = dashboard ? [{ id: "dashboard", label: "Dashboard", icon: ChartPieIcon }] : [];
     sections[0].items = [...overview, ...sections[0].items];
-    return [{ id: view.name || view.app, label: view.title, icon: iconOf(view.icon, RectangleGroupIcon), badge: !view.icon, group: "installed", sections, dashboard, packageId: view.package, hasDemo: view.hasDemo }];
+    const id = view.name || view.app;
+    const builtinIcon = id === "build" ? WrenchScrewdriverIcon : undefined;
+    return [{ id, label: view.title, icon: view.icon ? iconOf(view.icon, RectangleGroupIcon) : (builtinIcon ?? RectangleGroupIcon), badge: !view.icon && !builtinIcon, group: "installed", sections, dashboard, packageId: view.package, hasDemo: view.hasDemo }];
   });
 }
 

@@ -18,17 +18,17 @@
 |---|---|
 | 做什么、先后、什么先不碰 | [plan](docs/plan.md) |
 | 当前阶段每一行的细目、验收与分工 | [roadmap](docs/roadmap.md) |
-| 该不该做、属不属于平台、八个承重决定 | [intent](docs/intent.md) |
+| 该不该做、属不属于平台、八个承重决定 | [intent](docs/intent.md)（产品真值见 [PRODUCT.md](PRODUCT.md)） |
 | 写入、读取、发布各走哪条路；并发；版本与纪元；怎样算对 | [architecture](docs/architecture.md) |
 | 资源、类型、对象、动作、权限、产品包 | [domain](docs/domain.md) |
 | Go 包、代码规范、内核不变量、后端易错点 | [backend](docs/backend.md) |
 | 界面代码：三层、表现、Astryx 的用法、核对、前端易错点 | [frontend](docs/frontend.md) |
 | 导航、四种页面、保存模型、文字 | [ux](docs/ux.md) |
-| 观感、数据怎样显示、什么不许出现 | [design](docs/design.md) |
+| 观感、数据怎样显示、什么不许出现 | [design](docs/design.md)（令牌与规约见 [DESIGN.md](DESIGN.md)） |
 | 命名与翻译 | [glossary](docs/glossary.md) |
 | 文档的规矩、谁决定什么、一行怎样算做完 | [docs/README](docs/README.md) |
 
-改界面之前用技能 `platform-design`。
+改界面之前用技能 `platform-design`（设计打磨可配合 `impeccable`，读 [PRODUCT.md](PRODUCT.md) 与 [DESIGN.md](DESIGN.md)）。
 
 ## 硬规则
 

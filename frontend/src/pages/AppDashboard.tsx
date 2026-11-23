@@ -47,8 +47,8 @@ export function AppDashboard({ title, blocks, listOf }: { title: string; blocks:
     <Layout
       height="fill"
       content={
-        <LayoutContent role="main" padding={gutter}>
-          <VStack gap={6}>
+        <LayoutContent role="main" padding={0}>
+          <VStack gap={6} padding={gutter} paddingBlockStart={3}>
             <PageTitle title={t(title)} />
             <Grid columns={{ minWidth: 200, max: 4 }} gap={4}>
               {metrics.map((block) => <ErrorBoundary key={block.title} compact><Block block={block} entity={entityOf(block)} list={listOf(block.object)} /></ErrorBoundary>)}

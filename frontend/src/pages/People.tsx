@@ -184,8 +184,10 @@ export function PersonPage({ id }: { id: string }) {
       height="fill"
       contentWidth={1260}
       header={
-        <LayoutHeader padding={gutter} paddingBlockEnd={4} hasDivider>
-          <PageTitle title={element.name} back={{ href: "/admin/people", label: t("People") }} />
+        <LayoutHeader padding={0} hasDivider>
+          <VStack padding={gutter} paddingBlockStart={3} paddingBlockEnd={4}>
+            <PageTitle title={element.name} back={{ href: "/admin/people", label: t("People") }} />
+          </VStack>
         </LayoutHeader>
       }
       content={

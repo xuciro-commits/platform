@@ -1,7 +1,7 @@
 # 前端
 
 这份文档回答：界面代码放在哪，一个新界面怎样做出来，怎样确认它是对的。
-界面该怎样用在 [ux](ux.md)，该是什么观感在 [design](design.md)。
+界面该怎样用在 [ux](ux.md)，该是什么观感在 [design](design.md)，视觉令牌与组件规约在 [DESIGN.md](../DESIGN.md)。
 
 ## 规则
 

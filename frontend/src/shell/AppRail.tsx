@@ -79,12 +79,20 @@ export function AppRail({ current, compact, apps, collapsed, onExpand }: { curre
     ? <Avatar name={t(app.label)} size="sm" shape="square" tooltip={false} />
     : <Icon icon={app.icon} />));
   const groups = middle.map(of).filter((links) => links.length);
+  const logo = (
+    <Tip label={t("Platform")}>
+      <IconButton label={t("Platform")} variant="ghost" href="/home/overview" onClick={onExpand} icon={<Avatar src="/media/logo.svg" name={t("Platform")} size="sm" shape="rounded" tooltip={false} />} />
+    </Tip>
+  );
   return (
-    <VStack padding={2} paddingBlockStart={6} hAlign="center" vAlign="between" height="100%" xstyle={styles.rail}>
-      <VStack gap={1} hAlign="center">
-        {of("start")}
-        {search}
-        {groups.map((links, index) => <Fragment key={index}><Divider />{links}</Fragment>)}
+    <VStack padding={2} paddingBlockStart={3} hAlign="center" vAlign="between" height="100%" xstyle={styles.rail}>
+      <VStack gap={4} hAlign="center">
+        {logo}
+        <VStack gap={1} hAlign="center">
+          {of("start")}
+          {search}
+          {groups.map((links, index) => <Fragment key={index}><Divider />{links}</Fragment>)}
+        </VStack>
       </VStack>
       <VStack gap={1} hAlign="center">
         {collapsed && (

@@ -2,7 +2,7 @@
 
 平台前端：只有一个。界面由类型生成。仓库根的 `AGENTS.md` 依然适用；本文件补这个目录特有的部分。
 
-- 动这里之前先读 `docs/frontend.md`，并用技能 `platform-design`。结构与行为见 `docs/ux.md`，观感见 `docs/design.md`。
+- 动这里之前先读 `docs/frontend.md`，并用技能 `platform-design`（设计打磨可配合 `impeccable`）。结构与行为见 `docs/ux.md`，观感见 `docs/design.md`，视觉令牌与产品真值见仓库根 `DESIGN.md`、`PRODUCT.md` 与 `.impeccable/design.json`。
 - 三层：契约在 `src/host/`；表现在 `src/pages/`（每个由一份官方模板改造一次）；入口是 `src/apps/<应用>/<入口>.ts` 里的一句声明。永不为单个类型写页面；改表现或契约，让每个类型都得到。
 - 先找官方模板或块（`pnpm astryx build`、`pnpm astryx search`）；只改数据形状和它缺的表现。
 - `web/` 是旧前端，冻结。不读，也不改。

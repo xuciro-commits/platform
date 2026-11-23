@@ -13,4 +13,4 @@ paths:
 - 短句，常用词，一行一件事；一行不超过 200 个字。
 - 预算由 `make check` 核对：每份文档 250 行，plan 150 行，`AGENTS.md` 120 行，路径规则 40 行，技能 150 行。
 - 报告、审计、评审、方案草稿和 roadmap 以外的任务分解不入库。
-- 改意图（docs/intent.md）与增加文档，是负责人的决定。
+- 改意图（docs/intent.md）与增加文档，是负责人的决定；改动产品定位或视觉令牌时同步更新仓库根 `PRODUCT.md`、`DESIGN.md` 与 `.impeccable/design.json`。

@@ -201,12 +201,14 @@ export function SettingsTables({ title, types }: { title: string; types: string[
       contentWidth={1200}
       xstyle={styles.wash}
       header={
-        <LayoutHeader padding={gutter}>
-          <PageTitle
-            title={t(title)}
-            actions={<Button label={allOpen ? t("Collapse all") : t("Expand all")} variant="ghost" onClick={() => setClosed(allOpen ? new Set(types) : new Set())} />}>
-            <Text type="body" color="secondary">{t("Lists the rest of the application picks from. Changes apply to new and existing records at once.")}</Text>
-          </PageTitle>
+        <LayoutHeader padding={0}>
+          <VStack padding={gutter} paddingBlockStart={3} paddingBlockEnd={3}>
+            <PageTitle
+              title={t(title)}
+              actions={<Button label={allOpen ? t("Collapse all") : t("Expand all")} variant="ghost" onClick={() => setClosed(allOpen ? new Set(types) : new Set())} />}>
+              <Text type="body" color="secondary">{t("Lists the rest of the application picks from. Changes apply to new and existing records at once.")}</Text>
+            </PageTitle>
+          </VStack>
         </LayoutHeader>
       }
       content={

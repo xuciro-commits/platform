@@ -37,8 +37,8 @@ export function dashboardPage<Answer>(definition: DashboardDefinition<Answer>) {
       <Layout
         height="fill"
         content={
-          <LayoutContent role="main" padding={gutter}>
-            <VStack gap={6}>
+          <LayoutContent role="main" padding={0}>
+            <VStack gap={6} padding={gutter} paddingBlockStart={3}>
               <PageTitle title={t(definition.title)} />
               {read.status === "loading" && (
                 <Grid columns={{ minWidth: 200, max: 4 }} gap={4}>

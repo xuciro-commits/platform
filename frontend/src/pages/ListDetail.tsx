@@ -26,7 +26,7 @@ export function ListCell({ column, cells, first }: { column: Column; cells: Cell
   const value = cells[column.key] ?? "";
   if (first && cells.__href) {
     return (
-      <Link href={cells.__href} color="primary" weight="medium" maxLines={1}>
+      <Link href={cells.__href} color="primary" weight="normal" maxLines={1}>
         {(column.kind === "member" || column.kind === "person") && value ? <PersonLabel name={value} /> : value || cells[idKey]}
       </Link>
     );
@@ -74,7 +74,7 @@ export function ListCell({ column, cells, first }: { column: Column; cells: Cell
     );
   }
   return (
-    <Text type="body" maxLines={1} weight={first ? "medium" : undefined} hasTabularNumbers={column.kind === "number"}>
+    <Text type="body" maxLines={1} hasTabularNumbers={column.kind === "number"}>
       {value}
     </Text>
   );

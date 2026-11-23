@@ -364,7 +364,7 @@ export function InboxPage() {
       header={
         <LayoutHeader hasDivider={isPaneFullWidth} padding={0}>
           <VStack gap={0}>
-            <VStack padding={gutter} paddingBlockEnd={3}>
+            <VStack padding={gutter} paddingBlockStart={3} paddingBlockEnd={3}>
               <PageTitle title={t("Inbox")} actions={<Button label={t("Refresh")} variant="ghost" icon={<Icon icon={ArrowPathIcon} size="sm" />} onClick={reread} />}>
                 <Text type="supporting">
                   {unreadCount} {t("unread")}

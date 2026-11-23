@@ -7,7 +7,7 @@
 
 | 想知道 | 读 |
 |---|---|
-| 项目为谁、凭什么赢、什么不做、哪些决定不能动 | [intent](intent.md) |
+| 项目为谁、凭什么赢、什么不做、哪些决定不能动 | [intent](intent.md)（产品真值见 [PRODUCT.md](../PRODUCT.md)） |
 | 现在在哪、下一步做什么、什么先不碰 | [plan](plan.md) |
 | 当前阶段每一行拆成哪几项，怎样验收，谁来做 | [roadmap](roadmap.md) |
 | 系统由哪几块组成，写入、读取、发布各走哪条路 | [architecture](architecture.md) |
@@ -15,7 +15,7 @@
 | Go 代码放在哪，守什么规矩 | [backend](backend.md) |
 | 界面代码放在哪，新界面怎样做出来 | [frontend](frontend.md) |
 | 用户看到什么结构，怎样操作，文字怎么写 | [ux](ux.md) |
-| 界面该是什么观感，什么不许出现 | [design](design.md) |
+| 界面该是什么观感，什么不许出现 | [design](design.md)（令牌与规约见 [DESIGN.md](../DESIGN.md)） |
 | 一个东西该叫什么，中文怎么说 | [glossary](glossary.md) |
 
 每次会话自动加载的只有仓库根的 `AGENTS.md`：硬规则、命令与易错点。其余按上表在需要时读，只读相关的一节。

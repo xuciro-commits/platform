@@ -259,7 +259,7 @@ export function treeList<Answer, Row>(definition: TreeDefinition<Answer, Row>) {
         xstyle={styles.surface}
         header={
           <LayoutHeader label={t("List filters and actions")}>
-            <Section variant="transparent" padding={gutter} paddingBlockEnd={3}>
+            <Section variant="transparent" padding={gutter} paddingBlockStart={3} paddingBlockEnd={3}>
               <VStack gap={4}>
                 <PageTitle title={t(definition.title)} actions={<HStack gap={3} vAlign="center">
                   {views.length >= 2 && views.length <= 3 && (

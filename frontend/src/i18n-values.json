@@ -395,5 +395,8 @@
   "This section could not be displayed": "该区域暂时无法显示",
   "Try again": "重试",
   "No data yet": "暂无数据",
-  "You do not have access to this data": "无权查看此数据"
+  "You do not have access to this data": "无权查看此数据",
+  "Switch workspace": "切换租户",
+  "New workspace": "新建租户",
+  "Workspace settings": "租户设置"
 }

@@ -151,8 +151,8 @@ export function RecordPage({ described, id, listPath, listTitle, instances, enti
       height="fill"
       contentWidth={1260}
       header={
-        <LayoutHeader padding={gutter} paddingBlockEnd={0} hasDivider>
-          <VStack gap={4}>
+        <LayoutHeader padding={0} hasDivider>
+          <VStack gap={4} padding={gutter} paddingBlockStart={3} paddingBlockEnd={0}>
             <PageTitle title={name} back={origin ? { href: origin.href, label: origin.title || t(listTitle) } : { href: listHref, label: t(listTitle) }} actions={!narrow && actions}>
                   <HStack gap={4} vAlign="center" wrap="wrap">
                     <Text type="code" color="secondary">

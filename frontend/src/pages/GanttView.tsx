@@ -50,8 +50,17 @@ type DragSession = {
   deltaDays: number;
 };
 
+type ScheduleDrag = {
+  item: GanttUnscheduledItem;
+  clientX: number;
+  clientY: number;
+  dropStart: string | null;
+};
+
 const dragThreshold = 4;
 const overscan = 12;
+const headerHeight = 52;
+const defaultDurationOf: Record<GanttScale, number> = { day: 3, week: 7, month: 14 };
 
 export function GanttView({
   month, scale, startField, endField, fields, items, unscheduled, grouped = false, groupOrder,
@@ -66,6 +75,7 @@ export function GanttView({
   const [showUnscheduled, setShowUnscheduled] = useState(() => unscheduled.length > 0);
   const [optimistic, setOptimistic] = useState<Record<string, { start: string; end: string }>>({});
   const [drag, setDrag] = useState<DragSession | null>(null);
+  const [scheduling, setScheduling] = useState<ScheduleDrag | null>(null);
   const [scrollTop, setScrollTop] = useState(0);
   const [viewportHeight, setViewportHeight] = useState(600);
   const scrollerRef = useRef<HTMLDivElement | null>(null);
@@ -94,14 +104,21 @@ export function GanttView({
       const next: Record<string, { start: string; end: string }> = {};
       for (const [id, dates] of Object.entries(previous)) {
         const entry = items.find((item) => item.id === id);
-        if (entry && (entry.start !== dates.start || entry.end !== dates.end)) next[id] = dates;
+        if (!entry || entry.start !== dates.start || entry.end !== dates.end) next[id] = dates;
       }
       return Object.keys(next).length === Object.keys(previous).length ? previous : next;
     });
   }, [items]);
 
-  const effectiveItems = useMemo(
-    () => items.map((item) => {
+  const effectiveItems = useMemo(() => {
+    const scheduledIds = new Set(items.map((item) => item.id));
+    const promoted: GanttItem[] = unscheduled.flatMap((entry) => {
+      const override = optimistic[entry.id];
+      if (!override || scheduledIds.has(entry.id)) return [];
+      return [{ id: entry.id, title: entry.title, start: override.start, end: override.end, group: entry.group, dot: entry.dot, href: entry.href }];
+    });
+    const merged = [...items, ...promoted];
+    return merged.map((item) => {
       const override = optimistic[item.id];
       const base = override ? { ...item, start: override.start, end: override.end } : item;
       if (drag && drag.id === item.id) {
@@ -111,8 +128,12 @@ export function GanttView({
         return { ...base, start: nextStart, end: nextEnd };
       }
       return base;
-    }),
-    [items, optimistic, drag],
+    });
+  }, [items, unscheduled, optimistic, drag]);
+
+  const visibleUnscheduled = useMemo(
+    () => unscheduled.filter((entry) => !(entry.id in optimistic)),
+    [unscheduled, optimistic],
   );
 
   const rows = useMemo(
@@ -197,6 +218,64 @@ export function GanttView({
     window.addEventListener("pointercancel", onPointerUp);
   };
 
+  const startUnscheduledDrag = (event: ReactPointerEvent, entry: GanttUnscheduledItem) => {
+    if (event.button !== 0 || !canEdit(entry.id)) return;
+    event.stopPropagation();
+    event.preventDefault();
+    const originX = event.clientX;
+    const originY = event.clientY;
+    let started = false;
+    let latestDrop: string | null = null;
+    const prevCursor = document.body.style.cursor;
+    const prevSelect = document.body.style.userSelect;
+
+    const dropDateAt = (clientX: number, clientY: number) => {
+      const node = scrollerRef.current;
+      if (!node) return null;
+      const rect = node.getBoundingClientRect();
+      const insideX = clientX >= rect.left + nameColumnWidth && clientX <= rect.right;
+      const insideY = clientY >= rect.top + headerHeight && clientY <= rect.bottom;
+      if (!insideX || !insideY) return null;
+      const xInTrack = clientX - rect.left + node.scrollLeft - nameColumnWidth;
+      const dayIndex = Math.max(0, Math.min(span.days - 1, Math.floor(xInTrack / timeline.dayWidth)));
+      return addDays(span.start, dayIndex);
+    };
+
+    const onPointerMove = (moved: PointerEvent) => {
+      if (!started && Math.hypot(moved.clientX - originX, moved.clientY - originY) < dragThreshold) return;
+      if (!started) {
+        started = true;
+        document.body.style.userSelect = "none";
+        document.body.style.cursor = "grabbing";
+      }
+      latestDrop = dropDateAt(moved.clientX, moved.clientY);
+      setScheduling({ item: entry, clientX: moved.clientX, clientY: moved.clientY, dropStart: latestDrop });
+    };
+
+    const onPointerUp = () => {
+      teardown.current?.();
+      setScheduling(null);
+      if (!started) return;
+      suppressClick.current = true;
+      setTimeout(() => { suppressClick.current = false; }, 0);
+      if (!latestDrop) return;
+      const duration = defaultDurationOf[scale];
+      commitMove(entry.id, latestDrop, addDays(latestDrop, duration - 1));
+    };
+
+    teardown.current = () => {
+      window.removeEventListener("pointermove", onPointerMove);
+      window.removeEventListener("pointerup", onPointerUp);
+      window.removeEventListener("pointercancel", onPointerUp);
+      document.body.style.cursor = prevCursor;
+      document.body.style.userSelect = prevSelect;
+      teardown.current = null;
+    };
+    window.addEventListener("pointermove", onPointerMove);
+    window.addEventListener("pointerup", onPointerUp);
+    window.addEventListener("pointercancel", onPointerUp);
+  };
+
   const handleBarKeyDown = (event: ReactKeyboardEvent, item: GanttItem) => {
     if (event.key === "Enter" || event.key === " ") {
       event.preventDefault();
@@ -232,6 +311,10 @@ export function GanttView({
   };
 
   const step = stepMonthsFor(scale);
+  const previewDuration = defaultDurationOf[scale];
+  const previewOffset = scheduling?.dropStart ? diffDays(span.start, scheduling.dropStart) : -1;
+  const previewLeft = previewOffset >= 0 ? previewOffset * timeline.dayWidth : 0;
+  const previewWidth = Math.max(24, Math.min(span.days - Math.max(0, previewOffset), previewDuration) * timeline.dayWidth - 2);
 
   return (
     <VStack gap={3} paddingInline={gutter} paddingBlockEnd={gutter} xstyle={styles.root}>
@@ -255,7 +338,7 @@ export function GanttView({
           </HStack>
         )}
         <ToggleButton
-          label={`${t("Unscheduled")} (${unscheduled.length})`}
+          label={`${t("Unscheduled")} (${visibleUnscheduled.length})`}
           size="sm"
           isPressed={showUnscheduled}
           icon={<Icon icon={QueueListIcon} size="sm" />}
@@ -295,7 +378,7 @@ export function GanttView({
             </HStack>
 
             <VStack gap={0} xstyle={styles.body}>
-              {rows.length === 0 && (
+              {rows.length === 0 && !scheduling?.dropStart && (
                 <VStack padding={4} hAlign="center">
                   <Text type="supporting" color="secondary">{t("No scheduled records in this period")}</Text>
                 </VStack>
@@ -410,6 +493,23 @@ export function GanttView({
                   </HStack>
                 );
               })}
+              {scheduling?.dropStart && (
+                <HStack gap={0} vAlign="center" xstyle={[styles.row, styles.dropRow]}>
+                  <HStack gap={2} vAlign="center" xstyle={[styles.nameCell, styles.activeNameCell]}>
+                    {scheduling.item.dot && <DotMark dot={scheduling.item.dot} label={scheduling.item.title || scheduling.item.id} />}
+                    <Text type="body" color="primary" maxLines={1}>{scheduling.item.title || scheduling.item.id}</Text>
+                  </HStack>
+                  <HStack gap={0} xstyle={styles.track(timeline.totalWidth)}>
+                    {timeline.weekends.map((band, index) => <VStack key={index} xstyle={styles.weekendBand(band.left, band.width)} />)}
+                    {timeline.todayX !== null && <VStack xstyle={styles.todayLine(timeline.todayX)} />}
+                    <HStack gap={1} vAlign="center" xstyle={[styles.barBase, styles.barAt(previewLeft, previewWidth, laneAccentColor(scheduling.item.dot)), styles.barPreview]}>
+                      <Text type="supporting" color="primary" weight="medium" maxLines={1} xstyle={styles.barLabel}>
+                        {scheduling.dropStart}
+                      </Text>
+                    </HStack>
+                  </HStack>
+                </HStack>
+              )}
               {lastRow < rows.length && <VStack xstyle={styles.spacer((rows.length - lastRow) * rowHeight)} />}
               {dependencies.length > 0 && (
                 <VStack xstyle={styles.depLayer(timeline.totalWidth)}>
@@ -433,37 +533,53 @@ export function GanttView({
           <VStack gap={0} role="region" aria-label={t("Unscheduled")} xstyle={styles.sidebar}>
             <HStack vAlign="center" hAlign="between" xstyle={styles.sidebarHeader}>
               <Text type="label" color="secondary">{t("Unscheduled")}</Text>
-              <Text type="supporting" color="secondary" hasTabularNumbers>{unscheduled.length}</Text>
+              <Text type="supporting" color="secondary" hasTabularNumbers>{visibleUnscheduled.length}</Text>
             </HStack>
             <VStack gap={1.5} xstyle={styles.sidebarBody}>
-              {unscheduled.length === 0 ? (
+              {visibleUnscheduled.length === 0 ? (
                 <Text type="supporting" color="secondary">{t("All records have dates")}</Text>
               ) : (
-                unscheduled.map((entry) => (
-                  <HStack
-                    key={entry.id}
-                    gap={2}
-                    vAlign="center"
-                    role="button"
-                    tabIndex={0}
-                    xstyle={styles.unscheduledItem}
-                    onClick={() => onSelect(entry.id)}
-                    onKeyDown={(event) => {
-                      if (event.key === "Enter" || event.key === " ") {
-                        event.preventDefault();
-                        onSelect(entry.id);
-                      }
-                    }}
-                  >
-                    {entry.dot && <DotMark dot={entry.dot} label={entry.title || entry.id} />}
-                    <Text type="supporting" color="primary" maxLines={1}>{entry.title || entry.id}</Text>
-                  </HStack>
-                ))
+                visibleUnscheduled.map((entry) => {
+                  const editable = canEdit(entry.id);
+                  return (
+                    <HStack
+                      key={entry.id}
+                      gap={2}
+                      vAlign="center"
+                      role="button"
+                      tabIndex={0}
+                      xstyle={[
+                        styles.unscheduledItem,
+                        editable && styles.unscheduledDraggable,
+                        scheduling?.item.id === entry.id && styles.unscheduledDragging,
+                      ]}
+                      onPointerDown={(event) => startUnscheduledDrag(event, entry)}
+                      onClick={() => { if (!suppressClick.current) onSelect(entry.id); }}
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter" || event.key === " ") {
+                          event.preventDefault();
+                          onSelect(entry.id);
+                        }
+                      }}
+                    >
+                      {entry.dot && <DotMark dot={entry.dot} label={entry.title || entry.id} />}
+                      <Text type="supporting" color="primary" maxLines={1}>{entry.title || entry.id}</Text>
+                    </HStack>
+                  );
+                })
               )}
             </VStack>
           </VStack>
         )}
       </HStack>
+      {scheduling && (
+        <HStack gap={2} vAlign="center" xstyle={styles.dragGhost(scheduling.clientX + 12, scheduling.clientY + 12)}>
+          {scheduling.item.dot && <DotMark dot={scheduling.item.dot} label={scheduling.item.title || scheduling.item.id} />}
+          <Text type="supporting" color="primary" maxLines={1}>
+            {scheduling.dropStart ? `${scheduling.item.title || scheduling.item.id} · ${scheduling.dropStart}` : scheduling.item.title || scheduling.item.id}
+          </Text>
+        </HStack>
+      )}
     </VStack>
   );
 }

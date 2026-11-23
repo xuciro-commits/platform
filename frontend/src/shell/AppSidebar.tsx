@@ -5,8 +5,8 @@ import { DropdownMenu } from "@astryxdesign/core/DropdownMenu";
 import { Icon } from "@astryxdesign/core/Icon";
 import { IconButton } from "@astryxdesign/core/IconButton";
 import { Kbd } from "@astryxdesign/core/Kbd";
-import { HStack, VStack } from "@astryxdesign/core/Layout";
-import { SideNav, SideNavHeading, SideNavItem, SideNavSection } from "@astryxdesign/core/SideNav";
+import { HStack, StackItem, VStack } from "@astryxdesign/core/Layout";
+import { SideNav, SideNavItem, SideNavSection } from "@astryxdesign/core/SideNav";
 import { colorVars } from "@astryxdesign/core/theme/tokens.stylex";
 import { useToast } from "@astryxdesign/core/Toast";
 import { Tooltip } from "@astryxdesign/core/Tooltip";
@@ -18,6 +18,7 @@ import { type Api, reread, useRead } from "../host";
 import { t } from "../i18n";
 import { reasonOf, send } from "../pages/act";
 import { navigate, useSearch } from "../router";
+import { TenantSwitcher } from "./TenantSwitcher";
 
 type Preference = { entity: string; pinned?: string[] };
 
@@ -56,16 +57,14 @@ export function AppSidebar({ app, item, apps, object, listPath, onCollapse, inDr
     }
   };
   const header = onCollapse ? (
-    <VStack paddingBlockStart={4}>
-      <SideNavHeading
-        heading={t(app.label)}
-        headerEndContent={
-          <Tooltip content={<HStack gap={2} vAlign="center">{t("Hide sidebar")}<Kbd keys="mod+b" /></HStack>} placement="end">
-            <IconButton label={t("Hide sidebar")} variant="ghost" size="sm" icon={<Icon icon={ChevronDoubleLeftIcon} />} onClick={onCollapse} />
-          </Tooltip>
-        }
-      />
-    </VStack>
+    <HStack gap={1} vAlign="center" minHeight={32} paddingBlockStart={1}>
+      <StackItem size="fill">
+        <TenantSwitcher />
+      </StackItem>
+      <Tooltip content={<HStack gap={2} vAlign="center">{t("Hide sidebar")}<Kbd keys="mod+b" /></HStack>} placement="end">
+        <IconButton label={t("Hide sidebar")} variant="ghost" size="sm" icon={<Icon icon={ChevronDoubleLeftIcon} />} onClick={onCollapse} />
+      </Tooltip>
+    </HStack>
   ) : inDrawer ? undefined : (
     <DropdownMenu
       button={{ label: t(app.label), variant: "ghost", width: "100%" }}

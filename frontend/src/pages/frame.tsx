@@ -18,11 +18,11 @@ export function PageTitle({ title, back, actions, children }: { title: string; b
           <HStack gap={2} vAlign="center">
             {back && (
               <>
-                <Link href={back.href} type="large" size="2xl" weight="semibold" color="secondary" maxLines={1}>{back.label}</Link>
-                <Text type="large" size="2xl" weight="semibold" color="secondary" aria-hidden="true">/</Text>
+                <Link href={back.href} type="large" size="lg" weight="semibold" color="secondary" maxLines={1}>{back.label}</Link>
+                <Text type="large" size="lg" weight="semibold" color="secondary" aria-hidden="true">/</Text>
               </>
             )}
-            <Heading level={1} maxLines={2}>{title}</Heading>
+            <Heading level={3} accessibilityLevel={1} maxLines={2}>{title}</Heading>
           </HStack>
         </StackItem>
         {actions}

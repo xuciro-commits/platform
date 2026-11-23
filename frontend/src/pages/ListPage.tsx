@@ -370,7 +370,7 @@ export function ListView<Answer, Row>({ definition, read, primary, back, exportR
           <LayoutHeader label={t("List filters and actions")}>
             <VStack gap={0} xstyle={styles.headerWrap}>
               {definition.page?.loading && <ProgressBar label={t("Loading…")} isLabelHidden isIndeterminate xstyle={styles.progress} />}
-              <Section variant="transparent" padding={gutter} paddingBlockEnd={3} xstyle={styles.toolbarContainer}>
+              <Section variant="transparent" padding={gutter} paddingBlockStart={3} paddingBlockEnd={3} xstyle={styles.toolbarContainer}>
                 <VStack gap={4}>
                   <PageTitle title={t(definition.title)} back={back && { href: back.href, label: t(back.label) }} actions={(!empty || dirty || Boolean(board)) && primary} />
                   {toolbar && (

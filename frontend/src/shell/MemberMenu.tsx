@@ -2,7 +2,6 @@ import { Avatar } from "@astryxdesign/core/Avatar";
 import {
   DropdownMenu,
   DropdownMenuDivider,
-  DropdownMenuGroup,
   DropdownMenuItem,
   DropdownMenuRadioGroup,
   DropdownMenuRadioItem,
@@ -10,11 +9,9 @@ import {
 } from "@astryxdesign/core/DropdownMenu";
 import { IconButton } from "@astryxdesign/core/IconButton";
 import { Tooltip } from "@astryxdesign/core/Tooltip";
-import { apps } from "../apps";
-import { endSession, startSession, useSession } from "../host";
+import { endSession } from "../host";
 import { t } from "../i18n";
 import { useState } from "react";
-import { navigate, usePath } from "../router";
 import { useAccount } from "./account";
 import { SettingsDialog } from "./settings/SettingsDialog";
 
@@ -29,16 +26,9 @@ function nameOf(language: string) {
 }
 
 export function MemberMenu({ compact }: { compact?: boolean }) {
-  const session = useSession();
-  const [, app, entry] = usePath().split("/");
   const [settings, setSettings] = useState(false);
   const { me: data, name, canSave, save } = useAccount();
   const languages = data ? ["en", ...data.languages.filter((language) => language !== "en")] : [];
-  const switchTo = (tenant: string) => {
-    if (!session || tenant === session.tenant) return;
-    startSession({ token: session.token, tenant });
-    navigate(apps.some((known) => known.id === app) && entry ? `/${app}/${entry}` : "/");
-  };
   return (
     <>
     <DropdownMenu
@@ -55,16 +45,6 @@ export function MemberMenu({ compact }: { compact?: boolean }) {
     >
       <DropdownMenuItem label={name} description={data?.tenant.name || data?.tenantId} isDisabled />
       <DropdownMenuDivider />
-      {data && data.tenants.length > 1 && (
-        <>
-          <DropdownMenuGroup title={t("Tenant")}>
-            <DropdownMenuRadioGroup label={t("Tenant")} value={data.tenantId} onChange={switchTo}>
-              {data.tenants.map((tenant) => <DropdownMenuRadioItem key={tenant.id} value={tenant.id} label={tenant.name || tenant.id} />)}
-            </DropdownMenuRadioGroup>
-          </DropdownMenuGroup>
-          <DropdownMenuDivider />
-        </>
-      )}
       <DropdownMenuSubMenu label={t("Language")} isDisabled={!canSave}>
         <DropdownMenuRadioGroup label={t("Language")} value={data?.account.language ?? ""} onChange={(language) => save({ language })}>
           <DropdownMenuRadioItem value="" label={t("Automatic")} />

@@ -5,7 +5,7 @@ description: 平台前端（frontend/）任何界面活的作业顺序与观感�
 
 # 平台界面活
 
-规矩在文档里：结构与行为见 `docs/ux.md`，观感见 `docs/design.md`，代码怎么摆见 `docs/frontend.md`。这份技能给的是干活的顺序。目标是做出胜过 Frappe 的应用框架：声明一个类型就得到现代界面，所以不为单个类型写页面。
+规矩在文档里：结构与行为见 `docs/ux.md`，观感见 `docs/design.md`，视觉令牌与产品真值见仓库根 `DESIGN.md`、`PRODUCT.md` 与 `.impeccable/design.json`，代码怎么摆见 `docs/frontend.md`。这份技能给的是干活的顺序。目标是做出胜过 Frappe 的应用框架：声明一个类型就得到现代界面，所以不为单个类型写页面。
 
 Astryx 命令行是组件的参照，`frontend/AGENTS.md` 是它生成的速查表：
 
@@ -34,7 +34,7 @@ pnpm --dir frontend astryx docs tokens               # 令牌参考
 
 ## 观感要点
 
-观感由 `docs/design.md` 定：静、密、准。机器最容易犯的错：
+观感由 `docs/design.md` 与 `DESIGN.md` 定：静、密、准（The Quiet Instrument）。机器最容易犯的错：
 
 - **只用主题。** 颜色、间距、尺寸、圆角、阴影、字体与动效都来自主题令牌。永不写字面值。
 - **一条样式路径。** 先组件属性，再令牌；模板需要更多时，用 `stylex.create()` 经 `xstyle` 传入，像官方模板那样。不写裸元素、类名、行内样式或手写 CSS。

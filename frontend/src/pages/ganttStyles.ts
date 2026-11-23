@@ -5,6 +5,9 @@ const nameColumnWidth = 240;
 const rowHeight = 36;
 const sidebarWidth = 240;
 const barHeight = 26;
+const bandHeight = 28;
+const tickHeight = 24;
+const headerHeight = bandHeight + tickHeight;
 
 export const ganttStyles = stylex.create({
   root: { height: "100%", minHeight: 0 },
@@ -30,7 +33,10 @@ export const ganttStyles = stylex.create({
   headerRow: {
     position: "sticky",
     insetBlockStart: 0,
-    zIndex: 4,
+    zIndex: 5,
+    height: headerHeight,
+    minHeight: headerHeight,
+    boxSizing: "content-box",
     backgroundColor: colorVars["--color-background-body"],
     borderBlockEndWidth: borderVars["--border-width"],
     borderBlockEndStyle: "solid",
@@ -39,8 +45,9 @@ export const ganttStyles = stylex.create({
   corner: {
     position: "sticky",
     insetInlineStart: 0,
-    zIndex: 5,
+    zIndex: 6,
     width: nameColumnWidth,
+    height: headerHeight,
     flexShrink: 0,
     backgroundColor: colorVars["--color-background-body"],
     borderInlineEndWidth: borderVars["--border-width"],
@@ -51,9 +58,10 @@ export const ganttStyles = stylex.create({
   },
   bandCell: (width: number) => ({
     width,
+    height: bandHeight,
     flexShrink: 0,
     paddingInline: 8,
-    paddingBlock: 4,
+    alignItems: "center",
     whiteSpace: "nowrap",
     overflow: "hidden",
     borderInlineEndWidth: borderVars["--border-width"],
@@ -65,8 +73,8 @@ export const ganttStyles = stylex.create({
   }),
   tickCell: (width: number) => ({
     width,
+    height: tickHeight,
     flexShrink: 0,
-    height: 24,
     paddingInline: 2,
     whiteSpace: "nowrap",
     overflow: "hidden",
@@ -90,10 +98,11 @@ export const ganttStyles = stylex.create({
   },
   groupRow: { backgroundColor: colorVars["--color-background-body"] },
   activeRow: { backgroundColor: colorVars["--color-overlay-pressed"] },
+  dropRow: { backgroundColor: colorVars["--color-accent-muted"] },
   nameCell: {
     position: "sticky",
     insetInlineStart: 0,
-    zIndex: 2,
+    zIndex: 4,
     width: nameColumnWidth,
     flexShrink: 0,
     height: "100%",
@@ -166,6 +175,13 @@ export const ganttStyles = stylex.create({
     backgroundColor: colorVars["--color-background-surface"],
   },
   barDragging: { opacity: 0.85, cursor: "grabbing", zIndex: 3 },
+  barPreview: {
+    opacity: 0.9,
+    borderStyle: "dashed",
+    borderColor: colorVars["--color-accent"],
+    pointerEvents: "none",
+    zIndex: 3,
+  },
   barLabel: { minWidth: 0, whiteSpace: "nowrap", overflow: "hidden" },
   resizeHandle: {
     position: "absolute",
@@ -185,8 +201,10 @@ export const ganttStyles = stylex.create({
     backgroundColor: colorVars["--color-background-body"],
   },
   sidebarHeader: {
+    height: headerHeight,
+    minHeight: headerHeight,
+    boxSizing: "content-box",
     paddingInline: 12,
-    paddingBlock: 8,
     borderBlockEndWidth: borderVars["--border-width"],
     borderBlockEndStyle: "solid",
     borderBlockEndColor: colorVars["--color-border"],
@@ -201,10 +219,30 @@ export const ganttStyles = stylex.create({
     borderStyle: "solid",
     borderColor: colorVars["--color-border"],
     cursor: "pointer",
+    userSelect: "none",
+    touchAction: "none",
     outlineWidth: { default: 0, ":focus-visible": 2 },
     outlineStyle: { default: "none", ":focus-visible": "solid" },
     outlineColor: { default: "transparent", ":focus-visible": colorVars["--color-accent"] },
   },
+  unscheduledDraggable: { cursor: "grab" },
+  unscheduledDragging: { opacity: 0.45 },
+  dragGhost: (left: number, top: number) => ({
+    position: "fixed",
+    insetInlineStart: left,
+    insetBlockStart: top,
+    zIndex: 40,
+    pointerEvents: "none",
+    paddingInline: 10,
+    paddingBlock: 6,
+    borderRadius: radiusVars["--radius-element"],
+    backgroundColor: colorVars["--color-background-surface"],
+    borderWidth: borderVars["--border-width"],
+    borderStyle: "solid",
+    borderColor: colorVars["--color-accent"],
+    maxWidth: 220,
+    opacity: 0.92,
+  }),
   depLayer: (width: number) => ({
     position: "absolute",
     insetBlockStart: 0,
