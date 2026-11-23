@@ -35,7 +35,7 @@ func CheckConstraints(info platform.RecordTypeInfo, lookup func(string) (platfor
 	}
 	for _, c := range info.Constraints {
 		if !platform.PageNodeID.MatchString(c.Name) || len(c.Name) > 64 || seen[c.Name] || strings.TrimSpace(c.Message) == "" || len(c.Message) > 512 || len(c.Fields) == 0 || len(c.Fields) > 16 {
-			return fmt.Errorf("constraint needs a unique stable name, message and 1-16 fields")
+			return fmt.Errorf("constraint %q on %s needs a unique stable name, a message and 1-16 fields", c.Name, info.Type)
 		}
 		seen[c.Name] = true
 		if !slices.Contains([]string{"required", "unique", "range", "pattern", "expression", "cardinality", "immutable", "temporal"}, c.Kind) {
