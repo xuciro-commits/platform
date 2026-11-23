@@ -72,7 +72,7 @@ func computeRulesOf(o ontology.Object, lookup func(string) (platform.RecordTypeI
 			if err != nil {
 				return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
 			}
-			ctx, err := ruleprotocol.RuleContext(c, e, s, lookup, record, nil, now)
+			ctx, err := derivedContext(c, e, s, lookup, record, now)
 			if err != nil {
 				return platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, err.Error())
 			}
@@ -154,7 +154,7 @@ func follow(c platform.Caller, o ontology.Object, f ontology.Field, lookup func(
 	if err != nil {
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
 	}
-	ctx, err := ruleprotocol.RuleContext(c, *f.From, s, lookup, record, nil, now)
+	ctx, err := derivedContext(c, *f.From, s, lookup, record, now)
 	if err != nil {
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, err.Error())
 	}
@@ -181,6 +181,21 @@ func follow(c platform.Caller, o ontology.Object, f ontology.Field, lookup func(
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
 	}
 	return nil
+}
+
+func derivedContext(c platform.Caller, e platform.Expr, s platform.RuleReadSpec, lookup func(string) (platform.RecordTypeInfo, bool), record any, now time.Time) (platform.ExprContext, error) {
+	reader := platform.ActingCaller(c, platform.Member{ID: "app:" + ID, Tenant: c.Tenant}, ID, true)
+	ctx, err := ruleprotocol.RuleContext(reader, e, s, lookup, record, nil, now)
+	if err != nil {
+		return ctx, err
+	}
+	ctx.Refs["caller.id"] = platform.ExprPresent("text", c.ID)
+	ctx.Me, ctx.Today = c.ID, c.Today(now)
+	if (ctx.Workdays != nil || ctx.Holidays != nil) && c.HasRuntime() {
+		calendar := c.Calendar(now)
+		ctx.Workdays, ctx.Holidays = calendar.Workdays, calendar.Holidays
+	}
+	return ctx, nil
 }
 
 func applyDefault(c platform.Caller, f ontology.Field, record any, now time.Time) *platform.Error {
