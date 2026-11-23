@@ -338,5 +338,7 @@
   "Show": "显示",
   "Official library": "官方包库",
   "Add official library": "添加官方包库",
-  "Applications redesigned for this platform, released with checksums and build provenance.": "为本平台重新设计的应用，随校验和与构建来源证明发布。"
+  "Applications redesigned for this platform, released with checksums and build provenance.": "为本平台重新设计的应用，随校验和与构建来源证明发布。",
+  "Third-party library": "第三方仓库",
+  "Official": "官方"
 }

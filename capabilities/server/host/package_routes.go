@@ -35,12 +35,12 @@ func (h *Host) routesPackages(rt *routes) {
 		}
 	})
 	rt.authorized(transport.Route{Pattern: "GET /v1/packages/libraries", Summary: "List configured remote package libraries and their cached catalog entries", Answer: []protocol.PackageLibraryView{}}, controlowner.PlatformApp, []string{controlowner.Admin}, func(w http.ResponseWriter, r *http.Request, _ platform.Member, t *Tenant) {
-		WriteJSON(w, http.StatusOK, packages.ReadLibraries(r.Context(), t.ID, readOnly(t, func(t *Tenant) []protocol.PackageLibrary { return t.PackageOwner.PackageLibraries() }), t.files()))
+		WriteJSON(w, http.StatusOK, packages.ReadLibraries(r.Context(), t.ID, packages.EffectiveLibraries(readOnly(t, func(t *Tenant) []protocol.PackageLibrary { return t.PackageOwner.PackageLibraries() })), t.files()))
 	})
 	rt.authorized(transport.Route{Pattern: "POST /v1/packages/libraries/refresh", Summary: "Refresh one or all configured remote package libraries", Body: protocol.PackageLibraryRefreshRequest{}, Answer: []protocol.PackageLibraryView{}}, controlowner.PlatformApp, []string{controlowner.Admin}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
 		var req protocol.PackageLibraryRefreshRequest
 		_ = transport.DecodeBodyLimit(r, &req, 4096)
-		libs := readOnly(t, func(t *Tenant) []protocol.PackageLibrary { return t.PackageOwner.PackageLibraries() })
+		libs := packages.EffectiveLibraries(readOnly(t, func(t *Tenant) []protocol.PackageLibrary { return t.PackageOwner.PackageLibraries() }))
 		if views, err := packages.RefreshLibraries(r.Context(), t.ID, libs, req.ID, t.sender(), t.files()); err != nil {
 			WriteJSON(w, http.StatusBadRequest, map[string]string{"error": t.Say(t.Language(m, r), err.Error())})
 		} else {

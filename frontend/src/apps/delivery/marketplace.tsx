@@ -9,8 +9,8 @@ import { Text } from "@astryxdesign/core/Text";
 import { TextInput } from "@astryxdesign/core/TextInput";
 import { colorVars } from "@astryxdesign/core/theme/tokens.stylex";
 import * as stylex from "@stylexjs/stylex";
-import { useMemo, useState } from "react";
-import { type Api, useRead } from "../../host";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { type Api, request, reread, useRead } from "../../host";
 import { t } from "../../i18n";
 import { navigate } from "../../router";
 import { PageTitle, useGutter } from "../../pages/frame";
@@ -40,18 +40,26 @@ export default function Marketplace() {
   const [query, setQuery] = useState("");
   const gutter = useGutter();
   const rows = packages.status === "ready" ? packages.data : [];
+  const autoSynced = useRef(false);
+
+  useEffect(() => {
+    if (autoSynced.current || libraries.status !== "ready") return;
+    if (!libraries.data.some((lib) => lib.status === "pending")) return;
+    autoSynced.current = true;
+    void request<Api.PackageLibraryView[]>("/v1/packages/libraries/refresh", { body: {} }).then(() => reread()).catch(() => {});
+  }, [libraries]);
 
   const remoteEntries = useMemo(() => {
     if (libraries.status !== "ready") return [];
     const existing = new Set(rows.map((view) => `${view.descriptor.id}@${view.descriptor.version}`));
     const seen = new Set<string>();
-    const out: { entry: Api.PackageCatalogEntry; libraryTitle: string }[] = [];
+    const out: { entry: Api.PackageCatalogEntry; libraryTitle: string; official: boolean }[] = [];
     for (const lib of libraries.data) {
       for (const entry of lib.entries ?? []) {
         const key = `${entry.id}@${entry.version}`;
         if (existing.has(key) || seen.has(key)) continue;
         seen.add(key);
-        out.push({ entry, libraryTitle: lib.title || lib.url });
+        out.push({ entry, libraryTitle: lib.builtin ? t("Official library") : (lib.title || lib.url), official: Boolean(lib.builtin) });
       }
     }
     return out;
@@ -90,9 +98,11 @@ export default function Marketplace() {
 
   const filteredRemote = useMemo(() => {
     if (tab !== "all") return [];
-    if (source !== "all" && source !== "library") return [];
+    if (source !== "all" && source !== "official" && source !== "third-party") return [];
     const term = query.trim().toLowerCase();
-    return remoteEntries.filter(({ entry, libraryTitle }) => {
+    return remoteEntries.filter(({ entry, libraryTitle, official }) => {
+      if (source === "official" && !official) return false;
+      if (source === "third-party" && official) return false;
       const listing = entry.listing;
       if (stage === "released" && listing?.stage === "test") return false;
       if (stage === "test" && listing?.stage !== "test") return false;
@@ -156,9 +166,10 @@ export default function Marketplace() {
                     options={[
                       { value: "all", label: t("All sources") },
                       { value: "index", label: t("Built-in index") },
+                      { value: "official", label: t("Official library") },
+                      { value: "third-party", label: t("Third-party library") },
                       { value: "product", label: t("Product version") },
                       { value: "imported", label: t("Local library") },
-                      { value: "library", label: t("Market library") },
                       { value: "installed", label: t("Installed") },
                     ]}
                   />
@@ -224,11 +235,12 @@ export default function Marketplace() {
                       onAction={() => setSelected({ view, mode: modeOf(view) })}
                     />
                   ))}
-                  {filteredRemote.map(({ entry, libraryTitle }) => (
+                  {filteredRemote.map(({ entry, libraryTitle, official }) => (
                     <CatalogEntryCard
                       key={`remote:${entry.id}@${entry.version}`}
                       entry={entry}
                       libraryTitle={libraryTitle}
+                      official={official}
                       onSelect={() => openRemoteImport(entry)}
                     />
                   ))}

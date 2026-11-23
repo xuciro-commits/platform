@@ -27,7 +27,36 @@ const (
 	MaxCatalogBytes            = 2 << 20
 	SchemaPackageLibraryAdd    = "platform.package.library.add"
 	SchemaPackageLibraryRemove = "platform.package.library.remove"
+	OfficialLibraryID          = "official"
+	OfficialLibraryTitle       = "Official library"
 )
+
+func OfficialLibraryURL() string {
+	return (&url.URL{Scheme: "https", Host: "github.com", Path: "/xuciro-commits/platform-packages"}).String()
+}
+
+func OfficialLibrary() runtimeprotocol.PackageLibrary {
+	raw := OfficialLibraryURL()
+	resolved := ""
+	if candidates, err := ResolveCatalogCandidates(raw); err == nil && len(candidates) > 0 {
+		resolved = candidates[0]
+	}
+	return runtimeprotocol.PackageLibrary{ID: OfficialLibraryID, URL: raw, ResolvedURL: resolved, Title: OfficialLibraryTitle, Builtin: true}
+}
+
+func EffectiveLibraries(custom []runtimeprotocol.PackageLibrary) []runtimeprotocol.PackageLibrary {
+	official := OfficialLibrary()
+	officialKey := strings.TrimRight(official.URL, "/")
+	out := make([]runtimeprotocol.PackageLibrary, 0, len(custom)+1)
+	out = append(out, official)
+	for _, lib := range custom {
+		if strings.TrimRight(strings.TrimSpace(lib.URL), "/") == officialKey {
+			continue
+		}
+		out = append(out, lib)
+	}
+	return out
+}
 
 var allowLoopbackPackages atomic.Bool
 
@@ -251,6 +280,7 @@ func ReadLibraries(ctx context.Context, tenant string, libs []runtimeprotocol.Pa
 			URL:         lib.URL,
 			ResolvedURL: lib.ResolvedURL,
 			Title:       lib.Title,
+			Builtin:     lib.Builtin,
 			Status:      "pending",
 			Entries:     []runtimeprotocol.PackageCatalogEntry{},
 		}
@@ -334,6 +364,7 @@ func FetchLibraryCatalog(ctx context.Context, tenant string, lib runtimeprotocol
 			URL:         lib.URL,
 			ResolvedURL: resolvedURL,
 			Title:       title,
+			Builtin:     lib.Builtin,
 			Status:      "ready",
 			FetchedAt:   now,
 			Entries:     entries,
@@ -344,6 +375,7 @@ func FetchLibraryCatalog(ctx context.Context, tenant string, lib runtimeprotocol
 		URL:         lib.URL,
 		ResolvedURL: lib.ResolvedURL,
 		Title:       lib.Title,
+		Builtin:     lib.Builtin,
 		Status:      "error",
 		Error:       err.Error(),
 		Entries:     []runtimeprotocol.PackageCatalogEntry{},

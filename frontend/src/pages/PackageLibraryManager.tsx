@@ -125,7 +125,7 @@ export function PackageLibraryManager({ onClose }: { onClose: () => void }) {
           <LayoutContent isScrollable padding={5}>
             <VStack gap={5}>
               {error && <Banner status="error" title={error} />}
-              {addAction && rows.every((lib) => lib.url.replace(/\/+$/, "") !== officialLibrary) && (
+              {addAction && rows.every((lib) => !lib.builtin && lib.url.replace(/\/+$/, "") !== officialLibrary) && (
                 <Card padding={4}>
                   <HStack gap={3} vAlign="center" wrap="wrap">
                     <Icon icon={CheckBadgeIcon} size="md" color="accent" />
@@ -183,7 +183,8 @@ export function PackageLibraryManager({ onClose }: { onClose: () => void }) {
                         <HStack gap={3} vAlign="center" wrap="wrap">
                           <VStack gap={1}>
                             <HStack gap={2} vAlign="center" wrap="wrap">
-                              <Text type="body" weight="medium">{lib.title || lib.url}</Text>
+                              <Text type="body" weight="medium">{lib.builtin ? t("Official library") : (lib.title || lib.url)}</Text>
+                              {lib.builtin && <Token label={t("Official")} color="blue" size="sm" />}
                               <Token label={badge.label} color={badge.color} size="sm" />
                               <Token label={`${count} ${t("packages")}`} color="gray" size="sm" />
                             </HStack>
@@ -202,7 +203,7 @@ export function PackageLibraryManager({ onClose }: { onClose: () => void }) {
                               isDisabled={busy}
                               onClick={() => void refresh(lib.id)}
                             />
-                            {removeAction && (
+                            {removeAction && !lib.builtin && (
                               <Button
                                 variant="ghost"
                                 size="sm"

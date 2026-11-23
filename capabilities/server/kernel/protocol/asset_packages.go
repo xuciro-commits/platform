@@ -115,6 +115,7 @@ type PackageLibrary struct {
 	URL         string    `json:"url"`
 	ResolvedURL string    `json:"resolvedUrl,omitempty"`
 	Title       string    `json:"title,omitempty"`
+	Builtin     bool      `json:"builtin,omitempty"`
 	AddedAt     time.Time `json:"addedAt,omitempty"`
 }
 
@@ -149,6 +150,7 @@ type PackageLibraryView struct {
 	URL         string                `json:"url"`
 	ResolvedURL string                `json:"resolvedUrl,omitempty"`
 	Title       string                `json:"title,omitempty"`
+	Builtin     bool                  `json:"builtin,omitempty"`
 	Status      string                `json:"status"`
 	Error       string                `json:"error,omitempty"`
 	FetchedAt   time.Time             `json:"fetchedAt,omitempty"`

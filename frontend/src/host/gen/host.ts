@@ -3737,6 +3737,7 @@ export type PackageLibraryView = {
   url: string;
   resolvedUrl?: string;
   title?: string;
+  builtin?: boolean;
   status: string;
   error?: string;
   fetchedAt?: string;

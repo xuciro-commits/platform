@@ -170,10 +170,12 @@ export function PackageCard({
 export function CatalogEntryCard({
   entry,
   libraryTitle,
+  official = false,
   onSelect,
 }: {
   entry: Api.PackageCatalogEntry;
   libraryTitle: string;
+  official?: boolean;
   onSelect: () => void;
 }) {
   const display = t(entry.title || entry.id);
@@ -192,7 +194,7 @@ export function CatalogEntryCard({
               <VStack gap={0.5}>
                 <Text type="body" weight="medium" maxLines={1}>{display}</Text>
                 <HStack gap={1.5} vAlign="center">
-                  <Icon icon={CloudArrowDownIcon} size="xsm" color="secondary" />
+                  <Icon icon={official ? CheckBadgeIcon : CloudArrowDownIcon} size="xsm" color={official ? "accent" : "secondary"} />
                   <Text type="supporting" color="secondary" maxLines={1}>{libraryTitle || t("Market library")}</Text>
                 </HStack>
               </VStack>

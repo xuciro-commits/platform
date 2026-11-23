@@ -4,6 +4,8 @@ import (
 	"net/url"
 	"strings"
 	"testing"
+
+	runtimeprotocol "platformserver/kernel/protocol"
 )
 
 func TestResolveCatalogCandidates(t *testing.T) {
@@ -25,5 +27,16 @@ func TestResolveCatalogCandidates(t *testing.T) {
 	t.Cleanup(func() { SetAllowLoopback(false) })
 	if _, allowPrivate, err := ValidatePackageURL(loopURL); err != nil || !allowPrivate {
 		t.Fatalf("loopback HTTP should be permitted when enabled: allowPrivate=%v err=%v", allowPrivate, err)
+	}
+}
+
+func TestEffectiveLibrariesIncludesOfficialAndDedupes(t *testing.T) {
+	third := (&url.URL{Scheme: "https", Host: "github.com", Path: "/acme/community-packages"}).String()
+	libs := EffectiveLibraries([]runtimeprotocol.PackageLibrary{
+		{ID: "dup", URL: OfficialLibraryURL() + "/", Title: "Duplicate"},
+		{ID: "third", URL: third, Title: "Acme"},
+	})
+	if len(libs) != 2 || !libs[0].Builtin || libs[0].ID != OfficialLibraryID || libs[1].ID != "third" || libs[1].Builtin {
+		t.Fatalf("unexpected effective libraries: %+v", libs)
 	}
 }
