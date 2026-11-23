@@ -47,7 +47,7 @@ test("mobile: the navigation drawer contains the application controls", async ({
   await expect(drawer.getByRole("button", { name: "Notifications", exact: true })).toBeVisible();
   await drawer.getByRole("button", { name: "Account", exact: true }).click();
   await page.getByRole("menuitem", { name: "Sign out", exact: true }).click();
-  await expect(page.getByRole("heading", { name: "Sign in", exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Welcome back", exact: true })).toBeVisible();
 });
 
 
