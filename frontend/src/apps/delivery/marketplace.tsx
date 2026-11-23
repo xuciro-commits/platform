@@ -16,16 +16,25 @@ import { t } from "../../i18n";
 import { navigate } from "../../router";
 import { reasonOf } from "../../pages/act";
 import { PageTitle, useGutter } from "../../pages/frame";
-import { CatalogEntryCard, PackageCard, listingLabel, packageCounts } from "../../pages/PackageCard";
+import { CatalogEntryCard, PackageCard, compareVersions, listingLabel } from "../../pages/PackageCard";
 import { type InitialPackageSource, PackageImportWizard } from "../../pages/PackageImportWizard";
 import { PackageLibraryManager } from "../../pages/PackageLibraryManager";
 import { PackageReview } from "../../pages/PackageReview";
 
-type Tab = "all" | "apps" | "plugins" | "installed";
+type Tab = "all" | "available" | "updates" | "installed";
+
+const LIBRARY_TTL_MS = 5 * 60 * 1000;
 
 const styles = stylex.create({
   surface: { backgroundColor: colorVars["--color-background-surface"] },
 });
+
+function libraryNeedsRefresh(lib: Api.PackageLibraryView) {
+  if (lib.status === "pending" || lib.status === "stale") return true;
+  if (lib.status !== "ready") return false;
+  const fetched = Date.parse(lib.fetchedAt ?? "");
+  return !Number.isFinite(fetched) || Date.now() - fetched > LIBRARY_TTL_MS;
+}
 
 export default function Marketplace() {
   const packages = useRead<Api.PackageView[]>("/v1/packages");
@@ -46,12 +55,29 @@ export default function Marketplace() {
   const [syncFailure, setSyncFailure] = useState("");
   const libraryName = (lib: Api.PackageLibraryView) => (lib.builtin ? t("Official library") : (lib.title || lib.url));
 
+  const refreshLibraries = () => {
+    setSyncFailure("");
+    void request<Api.PackageLibraryView[]>("/v1/packages/libraries/refresh", { body: {} })
+      .then(() => reread())
+      .catch((problem) => setSyncFailure(reasonOf(problem)));
+  };
+
   useEffect(() => {
     if (autoSynced.current || libraries.status !== "ready") return;
-    if (!libraries.data.some((lib) => lib.status === "pending")) return;
+    if (!libraries.data.some(libraryNeedsRefresh)) return;
     autoSynced.current = true;
-    void request<Api.PackageLibraryView[]>("/v1/packages/libraries/refresh", { body: {} }).then(() => reread()).catch((problem) => setSyncFailure(reasonOf(problem)));
+    refreshLibraries();
   }, [libraries]);
+
+  const installedById = useMemo(() => {
+    const map = new Map<string, Api.InstalledPackage>();
+    for (const view of rows) {
+      if (view.installed && view.installed.state !== "retired") {
+        map.set(view.descriptor.id, view.installed);
+      }
+    }
+    return map;
+  }, [rows]);
 
   const remoteEntries = useMemo(() => {
     if (libraries.status !== "ready") return [];
@@ -80,28 +106,28 @@ export default function Marketplace() {
   }, [remoteEntries]);
   const classified = industry !== "all" || capability !== "all" || stage === "test";
 
-  const counts = useMemo(() => ({
-    all: rows.length + remoteEntries.length,
-    apps: rows.filter((view) => packageCounts(view).apps > 0).length,
-    plugins: rows.filter((view) => packageCounts(view).plugins > 0).length,
-    installed: rows.filter((view) => Boolean(view.installed && view.installed.state !== "retired")).length,
-  }), [rows, remoteEntries]);
+  const isLocalInstalled = (view: Api.PackageView) =>
+    Boolean(view.installed && view.installed.state !== "retired" && view.installed.version === view.descriptor.version);
+  const isLocalUpdate = (view: Api.PackageView) => Boolean(view.update);
+  const isLocalAvailable = (view: Api.PackageView) => !isLocalInstalled(view) && !isLocalUpdate(view);
 
-  const filtered = useMemo(() => {
+  const isRemoteUpdate = (entry: Api.PackageCatalogEntry) => {
+    const installed = installedById.get(entry.id);
+    return Boolean(installed && compareVersions(entry.version, installed.version) > 0);
+  };
+  const isRemoteAvailable = (entry: Api.PackageCatalogEntry) => !installedById.has(entry.id);
+
+  const baseLocal = useMemo(() => {
     const term = query.trim().toLowerCase();
     return rows.filter((view) => {
-      if (tab === "apps" && packageCounts(view).apps === 0) return false;
-      if (tab === "plugins" && packageCounts(view).plugins === 0) return false;
-      if (tab === "installed" && (!view.installed || view.installed.state === "retired")) return false;
       if (source !== "all" && view.source !== source) return false;
       if (classified) return false;
       if (!term) return true;
       return `${view.descriptor.title ?? ""} ${view.descriptor.id} ${view.descriptor.version} ${view.descriptor.description ?? ""}`.toLowerCase().includes(term);
     });
-  }, [rows, tab, source, query, classified]);
+  }, [rows, source, query, classified]);
 
-  const filteredRemote = useMemo(() => {
-    if (tab !== "all") return [];
+  const baseRemote = useMemo(() => {
     if (source !== "all" && source !== "official" && source !== "third-party") return [];
     const term = query.trim().toLowerCase();
     return remoteEntries.filter(({ entry, libraryTitle, official }) => {
@@ -115,7 +141,28 @@ export default function Marketplace() {
       if (!term) return true;
       return `${entry.title} ${entry.id} ${entry.version} ${entry.description ?? ""} ${libraryTitle} ${(listing?.keywords ?? []).join(" ")}`.toLowerCase().includes(term);
     });
-  }, [remoteEntries, tab, source, query, industry, capability, stage]);
+  }, [remoteEntries, source, query, industry, capability, stage]);
+
+  const counts = useMemo(() => ({
+    all: baseLocal.length + baseRemote.length,
+    available: baseLocal.filter(isLocalAvailable).length + baseRemote.filter(({ entry }) => isRemoteAvailable(entry)).length,
+    updates: baseLocal.filter(isLocalUpdate).length + baseRemote.filter(({ entry }) => isRemoteUpdate(entry)).length,
+    installed: baseLocal.filter(isLocalInstalled).length,
+  }), [baseLocal, baseRemote, installedById]);
+
+  const filtered = useMemo(() => {
+    if (tab === "available") return baseLocal.filter(isLocalAvailable);
+    if (tab === "updates") return baseLocal.filter(isLocalUpdate);
+    if (tab === "installed") return baseLocal.filter(isLocalInstalled);
+    return baseLocal;
+  }, [baseLocal, tab]);
+
+  const filteredRemote = useMemo(() => {
+    if (tab === "installed") return [];
+    if (tab === "available") return baseRemote.filter(({ entry }) => isRemoteAvailable(entry));
+    if (tab === "updates") return baseRemote.filter(({ entry }) => isRemoteUpdate(entry));
+    return baseRemote;
+  }, [baseRemote, tab, installedById]);
 
   const modeOf = (view: Api.PackageView): "install" | "manage" => {
     const retired = view.installed?.state === "retired";
@@ -147,6 +194,7 @@ export default function Marketplace() {
                     label={t("More actions")}
                     alignment="end"
                     items={[
+                      { id: "refresh-libraries", label: t("Refresh all"), onClick: refreshLibraries },
                       { id: "import-package", label: t("Install from URL or file"), onClick: () => { setImportSource(undefined); setImporting(true); } },
                       { id: "manage-library", label: t("Manage library"), onClick: () => setManagingLibraries(true) },
                     ]}
@@ -158,8 +206,8 @@ export default function Marketplace() {
               <HStack gap={3} vAlign="center" wrap="wrap">
                 <SegmentedControl size="sm" label={t("Filter")} value={tab} onChange={(next) => setTab(next as Tab)}>
                   <SegmentedControlItem value="all" label={`${t("All")} ${counts.all}`} />
-                  <SegmentedControlItem value="apps" label={`${t("Apps only")} ${counts.apps}`} />
-                  <SegmentedControlItem value="plugins" label={`${t("Plugins")} ${counts.plugins}`} />
+                  <SegmentedControlItem value="available" label={`${t("Available")} ${counts.available}`} />
+                  <SegmentedControlItem value="updates" label={`${t("Updates")} ${counts.updates}`} />
                   <SegmentedControlItem value="installed" label={`${t("Installed")} ${counts.installed}`} />
                 </SegmentedControl>
                 <StackItem size="fill" />
@@ -250,6 +298,7 @@ export default function Marketplace() {
                       entry={entry}
                       libraryTitle={libraryTitle}
                       official={official}
+                      installed={installedById.get(entry.id)}
                       onSelect={() => openRemoteImport(entry)}
                     />
                   ))}
