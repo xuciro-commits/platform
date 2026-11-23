@@ -24,6 +24,14 @@ func (l *authority) ApplyTxnRecord(c platform.Caller, r *pb.ChangeRecord, e plat
 			c.Trace(event)
 		}()
 	}
+	refresh := verb == "refresh"
+	if refresh {
+		var given map[string]json.RawMessage
+		if json.Unmarshal(payload, &given) != nil || len(given) > 0 {
+			return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "A refresh recomputes derived fields and takes no values")
+		}
+		verb = "edit"
+	}
 	if !c.Staging() || c.Replaying || c.App != l.authority || r.GetSubmission().GetAuthority() != c.App ||
 		r.GetSubmission().GetTenantId() != l.tenant || r.GetSubmission().GetPrincipalId() != c.ID || r.GetChangeId() == "" || id == "" || platform.OwnerOfType(e.Type) != c.App ||
 		(verb != "create" && verb != "edit" && verb != "archive") {
@@ -53,8 +61,11 @@ func (l *authority) ApplyTxnRecord(c platform.Caller, r *pb.ChangeRecord, e plat
 			authorization = invocation
 		}
 	}
+	if refresh && !c.Readable(e.Type+"/"+id) {
+		return notFound()
+	}
 	decision := catalog.DecideSubmission(c, authorization, now)
-	if !decision.Allow {
+	if !refresh && !decision.Allow {
 		layer := "verb"
 		if len(decision.Layers) > 0 {
 			layer = decision.Layers[len(decision.Layers)-1].Name

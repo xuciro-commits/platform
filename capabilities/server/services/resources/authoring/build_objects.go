@@ -261,7 +261,7 @@ func (b *Build) entity(o ontology.Object) platform.RecordType {
 			if !ok {
 				return nil
 			}
-			return b.authority.ApplyTxnRecord(c, r, e, "edit", id, json.RawMessage(`{}`), now)
+			return b.authority.ApplyTxnRecord(c, r, e, "refresh", id, json.RawMessage(`{}`), now)
 		},
 	})
 	entity.ComputeAt = computeRulesOf(o, b.conditionLookup)
