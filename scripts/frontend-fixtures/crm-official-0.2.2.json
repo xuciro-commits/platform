@@ -1,6 +1,6 @@
 {
   "id": "crm",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "title": "CRM",
   "namespace": "crm",
   "description": "Leads with response times and qualification, a stage-based pipeline where every open deal has a next step, accounts and contacts with roles on each deal, products, activities, win and loss analysis, and a sales dashboard.",
@@ -3992,7 +3992,8 @@
           "display": "fullname",
           "naming": "LEAD-{year}-{n:5}",
           "scope": {
-            "owner": "owner"
+            "owner": "owner",
+            "assigned": true
           },
           "fields": [
             {
@@ -4814,6 +4815,10 @@
             {
               "version": "schema.sha256.057a7bcb444e67fa2473874f1253fc7086044642e7299d4688b63f576eae5e58",
               "family": 1
+            },
+            {
+              "version": "schema.sha256.5866bf402e14a8678e42448793a7a2c66f62177af0a0fd087f0d277cb574d480",
+              "family": 2
             }
           ]
         }
@@ -9382,8 +9387,7 @@
           "territory": "apac",
           "employees": "201-500",
           "revenue": {
-            "amount": 4800000000,
-            "currency": "CNY"
+            "amount": 4800000000
           },
           "relationship": "customer",
           "description": "Precision CNC and industrial automation supplier modernizing regional sales operations."
@@ -9400,8 +9404,7 @@
           "territory": "emea",
           "employees": "501-1000",
           "revenue": {
-            "amount": 12000000000,
-            "currency": "CNY"
+            "amount": 12000000000
           },
           "relationship": "prospect",
           "description": "Multi-hub freight operator evaluating a unified pipeline across three regional branches."
@@ -9418,8 +9421,7 @@
           "territory": "americas",
           "employees": "51-200",
           "revenue": {
-            "amount": 1800000000,
-            "currency": "CNY"
+            "amount": 1800000000
           },
           "relationship": "partner",
           "description": "Independent software vendor co-selling vertical workflow solutions."
@@ -9481,8 +9483,7 @@
           "code": "ENT-ANNUAL",
           "category": "subscription",
           "price": {
-            "amount": 18000000,
-            "currency": "CNY"
+            "amount": 18000000
           },
           "description": "Annual platform workspace subscription for up to 100 active seats.",
           "active": true
@@ -9496,8 +9497,7 @@
           "code": "SVC-ONBOARD",
           "category": "service",
           "price": {
-            "amount": 6500000,
-            "currency": "CNY"
+            "amount": 6500000
           },
           "description": "Fixed-scope onboarding, role setup, and historical pipeline migration.",
           "active": true
@@ -9511,8 +9511,7 @@
           "code": "SUP-PREM",
           "category": "subscription",
           "price": {
-            "amount": 3600000,
-            "currency": "CNY"
+            "amount": 3600000
           },
           "description": "Dedicated response SLA and quarterly architecture review.",
           "active": true
@@ -9533,8 +9532,7 @@
           "employees": "51-200",
           "need": "Replace scattered spreadsheets with a shared sales pipeline and weekly forecast.",
           "budget": {
-            "amount": 22000000,
-            "currency": "CNY"
+            "amount": 22000000
           },
           "timeframe": "quarter",
           "authority": "decisionmaker"
@@ -9555,8 +9553,7 @@
           "employees": "201-500",
           "need": "Track wholesale partner accounts and quarterly renewal commitments.",
           "budget": {
-            "amount": 31000000,
-            "currency": "CNY"
+            "amount": 31000000
           },
           "timeframe": "month",
           "authority": "influencer"
@@ -9577,8 +9574,7 @@
           "employees": "501-1000",
           "need": "Standardize regional deal approvals and multi-stakeholder account tracking.",
           "budget": {
-            "amount": 45000000,
-            "currency": "CNY"
+            "amount": 45000000
           },
           "timeframe": "half",
           "authority": "decisionmaker"
@@ -9592,8 +9588,7 @@
           "account": "demo-account-1",
           "contact": "demo-contact-1",
           "amount": {
-            "amount": 24500000,
-            "currency": "CNY"
+            "amount": 24500000
           },
           "expectedclose": "2026-12-20",
           "source": "customer",
@@ -9611,8 +9606,7 @@
           "account": "demo-account-2",
           "contact": "demo-contact-2",
           "amount": {
-            "amount": 42000000,
-            "currency": "CNY"
+            "amount": 42000000
           },
           "expectedclose": "2027-01-15",
           "source": "outbound",
@@ -9630,8 +9624,7 @@
           "account": "demo-account-3",
           "contact": "demo-contact-4",
           "amount": {
-            "amount": 14500000,
-            "currency": "CNY"
+            "amount": 14500000
           },
           "expectedclose": "2026-12-10",
           "source": "partner",
@@ -9648,8 +9641,7 @@
           "account": "demo-account-2",
           "contact": "demo-contact-2",
           "amount": {
-            "amount": 16000000,
-            "currency": "CNY"
+            "amount": 16000000
           },
           "expectedclose": "2027-02-10",
           "source": "referral",

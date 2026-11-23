@@ -96,6 +96,17 @@ async function reference(session, sample, installed) {
   }
 }
 
+async function filled(session, descriptor) {
+  for (const asset of descriptor.blueprint.assets.filter((each) => each.ref.kind === "object" && each.body.records?.length)) {
+    for (let attempt = 0; ; attempt += 1) {
+      const { records: rows } = await session.call(`/v1/records/${asset.ref.name}?limit=500`);
+      if (asset.body.records.every(({ id }) => rows.some((row) => row.id === id))) break;
+      if (attempt === 100) throw new Error(`${asset.ref.name}: reference records were not filled`);
+      await new Promise((resolve) => setTimeout(resolve, 200));
+    }
+  }
+}
+
 async function words(session, sample) {
   if (!sample.words || Object.keys(sample.words).length === 0) return;
   const authority = session.authorityFor("platform.translation");
@@ -194,9 +205,12 @@ for (const file of files) {
     await tenant.refresh();
     const kinds = new Set(descriptor.blueprint.assets.filter((asset) => asset.ref.kind === "object").map((asset) => asset.ref.name));
     await members(tenant, sample.install);
-    await reference(tenant, sample, kinds);
-    const copied = await records(tenant, sample, kinds);
-    await words(tenant, sample);
+    if (sample.install.copy === false) await filled(tenant, descriptor);
+    const copied = sample.install.copy === false ? 0 : await records(tenant, sample, kinds);
+    if (sample.install.copy !== false) {
+      await reference(tenant, sample, kinds);
+      await words(tenant, sample);
+    }
     console.log(`frontend-seed: installed ${descriptor.id}@${descriptor.version} with ${copied} records in tenant ${sample.install.tenant}`);
   }
 }

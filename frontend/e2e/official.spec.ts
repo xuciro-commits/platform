@@ -3,7 +3,7 @@ import { fileURLToPath } from "node:url";
 import { type Page, expect, test } from "@playwright/test";
 import { edit, property } from "./support";
 
-const artifact = fileURLToPath(new URL("../../scripts/frontend-fixtures/crm-official-0.2.1.json", import.meta.url));
+const artifact = fileURLToPath(new URL("../../scripts/frontend-fixtures/crm-official-0.2.2.json", import.meta.url));
 
 test.describe.serial("official tenant", () => {
 let page: Page;
@@ -39,7 +39,7 @@ test("official tenant: the released CRM installs from its file", async () => {
   const wizard = page.getByRole("dialog", { name: /Install from URL or file/ });
   await wizard.locator('input[type="file"]').setInputFiles({ name: "crm.json", mimeType: "application/json", buffer: readFileSync(artifact) });
   await wizard.getByRole("button", { name: "Inspect package", exact: true }).click();
-  await expect(wizard.getByText("crm · 0.2.1", { exact: true })).toBeVisible();
+  await expect(wizard.getByText("crm · 0.2.2", { exact: true })).toBeVisible();
   await wizard.getByRole("button", { name: "Add to library", exact: true }).click();
   await wizard.getByRole("button", { name: "Continue", exact: true }).click({ timeout: 20_000 });
   await wizard.getByRole("button", { name: "Install package", exact: true }).click();

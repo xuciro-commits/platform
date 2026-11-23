@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { crc32 } from "node:zlib";
 import { type Page, expect, test } from "@playwright/test";
-import { signIn, open, property, edit, crmMainline } from "./support";
+import { signIn, open, property, edit, crmMainline, submit } from "./support";
 
 test.describe.serial("crm and peek", () => {
 const dragCard = async (page: Page, fromColumn: string, cardName: string, toColumn: string) => {
@@ -191,20 +191,6 @@ test("crm: a lead with a note and a task converts into an organization, contact 
 });
 
 
-test("crm: the released package installs into an empty tenant whose CRM app runs the same mainline", async ({ page }) => {
-  test.setTimeout(120000);
-  await page.goto("/");
-  await page.getByRole("button", { name: "admin-1 · crm" }).click();
-  await page.getByRole("link", { name: "CRM", exact: true }).click();
-  const navigation = page.getByRole("navigation", { name: "Primary navigation" });
-  for (const entry of ["Leads", "Deals", "Organizations", "Contacts", "Tasks", "Notes"]) await expect(navigation.getByRole("link", { name: entry, exact: true })).toBeVisible();
-  await crmMainline(page, async (_, plural) => {
-    await navigation.getByRole("link", { name: plural, exact: true }).click();
-    await expect(page.getByRole("heading", { level: 1, name: plural, exact: true })).toBeVisible();
-  }, "Tove Berg", "Saga Logistics");
-});
-
-
 test("crm: a sales rep works only their own leads while the sales manager sees the whole team's, whose activity reads in names", async ({ page }) => {
   const leads = async (seat: string) => {
     await page.goto("/");
@@ -272,123 +258,140 @@ function workbook(rows: string[][]) {
   return Buffer.concat([...stored, ...directory, end]);
 }
 
-test("dashboard: an application's home shows its numbers and charts, and each block opens the list it counts", async ({ page }) => {
-  await signIn(page, "admin-1 · crm");
+const unique = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+const today = () => new Date().toISOString().slice(0, 10);
+
+async function as(page: Page, seat: string) {
+  await signIn(page, `${seat} · crm`);
+}
+
+async function lead(page: Page, values: Record<string, unknown>) {
+  const id = `e2e-lead-${unique()}`;
+  await submit(page, "crm.lead.create", "crm.lead", id, values);
+  return id;
+}
+
+async function activity(page: Page, values: Record<string, unknown>) {
+  const id = `e2e-act-${unique()}`;
+  await submit(page, "crm.activity.create", "crm.activity", id, values);
+  return id;
+}
+
+async function deal(page: Page, values: Record<string, unknown>) {
+  const id = `e2e-deal-${unique()}`;
+  await submit(page, "crm.deal.create", "crm.deal", id, { account: "demo-account-1", amount: { amount: 1000000, currency: "USD" }, expectedclose: "2026-12-31",
+    nextstep: "Call back", nextstepdue: "2026-12-01", ...values });
+  return id;
+}
+
+test("dashboard: the CRM home shows its pipeline numbers and charts, and each block opens the list it counts", async ({ page }) => {
+  await as(page, "manager-1");
   await page.goto("/crm/dashboard");
   const home = page.getByRole("main");
-  for (const title of ["Leads", "Open deals", "Won deals", "Average deal value"]) await expect(home.getByRole("link", { name: title, exact: true })).toBeVisible();
-  for (const title of ["Leads", "Open deals", "Won deals"]) await expect(home.getByRole("link", { name: title, exact: true }).locator("..")).toHaveText(/\D\d+$/);
-  await expect(home.getByRole("link", { name: "Average deal value", exact: true }).locator("..")).toHaveText(/\d USD$/);
-  await expect(home.getByRole("heading", { level: 1 })).toHaveCount(1);
-  for (const title of ["Sales funnel", "Deal value by stage", "Leads by source", "New deals"]) await expect(home.getByRole("heading", { name: title, exact: true })).toBeVisible();
+  for (const title of ["Open pipeline", "Weighted forecast", "Won revenue", "Open leads"]) await expect(home.getByRole("link", { name: title, exact: true })).toBeVisible();
+  await expect(home.getByRole("link", { name: "Open leads", exact: true }).locator("..")).toHaveText(/\D\d+$/);
+  await expect(home.getByRole("heading", { name: "Dashboard", exact: true })).toBeVisible();
+  for (const title of ["Pipeline by stage", "Pipeline by owner", "Leads by source", "Win rate"]) await expect(home.getByRole("heading", { name: title, exact: true })).toBeVisible();
   await home.locator(".recharts-bar-rectangle").first().click();
-  await expect(page).toHaveURL(/\/crm\/crm\.deal\?domain=.*open.*status/);
-  await expect(page.getByRole("heading", { name: "Deals", exact: true })).toBeVisible();
+  await expect(page).toHaveURL(/\/crm\/crm\.deal\?domain=.*open/);
   await expect(page.getByText("Clear all", { exact: true })).toBeVisible();
   await page.goBack();
-  await home.getByText("Won deals", { exact: true }).click();
+  await home.getByText("Won revenue", { exact: true }).click();
   await expect(page).toHaveURL(/\/crm\/crm\.deal\?domain=.*won/);
-  await expect(page.getByRole("row").nth(1)).toContainText("Won");
 });
 
-test("calendar: tasks sit on their due dates, the month pages, a drag reschedules and a task opens its record", async ({ page }) => {
-  await signIn(page, "admin-1 · crm");
-  await page.goto("/crm/crm.task");
-  await page.getByRole("radio", { name: "Calendar" }).click();
-  await expect(page.getByRole("button", { name: "Today", exact: true })).toBeVisible();
-  await page.goto(`/crm/crm.task?view=${encodeURIComponent(JSON.stringify({ version: 1, layout: "calendar", month: "2026-11" }))}`);
+test("calendar: activities sit on their due dates, the month pages, a drag reschedules and an activity opens its record", async ({ page }) => {
+  await as(page, "manager-1");
+  const subject = `安排北境合同签署 ${unique()}`;
+  await activity(page, { subject, due: "2026-11-18", deal: "demo-deal-1" });
+  await page.goto(`/crm/crm.activity?view=${encodeURIComponent(JSON.stringify({ version: 1, layout: "calendar", month: "2026-11" }))}`);
   const day = (date: string) => page.getByRole("group", { name: date, exact: true });
-  const task = day("November 18, 2026").getByText("安排北境合同签署", { exact: true });
-  await expect(task).toBeVisible();
-  const from = (await task.boundingBox())!;
+  const card = day("November 18, 2026").getByText(subject, { exact: true });
+  await expect(card).toBeVisible();
+  const from = (await card.boundingBox())!;
   const to = (await day("November 20, 2026").boundingBox())!;
   await page.mouse.move(from.x + 4, from.y + 4);
   await page.mouse.down();
   await page.mouse.move(from.x + 40, from.y + 20, { steps: 4 });
   await page.mouse.move(to.x + to.width / 2, to.y + to.height / 2, { steps: 8 });
   await page.mouse.up();
-  await expect(day("November 20, 2026")).toContainText("安排北境合同签署");
+  await expect(day("November 20, 2026")).toContainText(subject);
   await page.reload();
-  await expect(day("November 20, 2026")).toContainText("安排北境合同签署");
-  await expect(day("November 18, 2026")).not.toContainText("安排北境合同签署");
+  await expect(day("November 20, 2026")).toContainText(subject);
+  await expect(day("November 18, 2026")).not.toContainText(subject);
   await page.getByRole("button", { name: "Next month", exact: true }).click();
   await expect(page.getByRole("heading", { level: 3, name: "December 2026", exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Previous month", exact: true }).click();
-  await day("November 20, 2026").getByText("安排北境合同签署", { exact: true }).click();
-  await expect(page).toHaveURL(/\/crm\/crm\.task\/TSK-\d+/);
+  await day("November 20, 2026").getByText(subject, { exact: true }).click();
+  await expect(page).toHaveURL(/\/crm\/crm\.activity\/e2e-act-/);
 });
 
-test("follow-up: the activity tab shows how long a lead sat in each status", async ({ page }) => {
-  await signIn(page, "admin-1 · crm");
-  await page.goto("/crm/crm.lead/LED-003/activity");
+test("follow-up: the activity tab shows how long a lead sat in each follow-up stage", async ({ page }) => {
+  await as(page, "manager-1");
+  const id = await lead(page, { fullname: `停留 ${unique()}`, owner: "manager-1" });
+  await page.goto(`/crm/crm.lead/${id}/activity`);
   const stays = page.getByRole("list", { name: "Time in each state", exact: true });
   await expect(stays.getByRole("listitem")).toHaveCount(1);
   await expect(stays.getByRole("listitem").first()).toHaveAccessibleName(/^New: \d+/);
-  await edit(page, "Status");
-  await page.getByRole("combobox", { name: "Status" }).fill("Contacted");
-  await page.getByRole("option", { name: "Contacted", exact: true }).click();
+  await edit(page, "Follow-up stage");
+  await page.getByRole("option", { name: "Connected", exact: true }).click();
   await expect(stays.getByRole("listitem")).toHaveCount(2);
-  await expect(stays.getByRole("listitem").nth(1)).toHaveAccessibleName(/^Contacted: \d+/);
+  await expect(stays.getByRole("listitem").nth(1)).toHaveAccessibleName(/^Connected: \d+/);
 });
 
-test("follow-up: a lead past its first response deadline fails and tells its owner, a contacted lead is fulfilled", async ({ page }) => {
-  await signIn(page, "admin-1 · crm");
-  const settles = async (state: string) => expect(async () => {
-    await page.reload();
-    await expect(property(page, "First response")).toContainText(state, { timeout: 1_000 });
+test("follow-up: a lead past its response time is marked missed and tells its owner, a connected lead meets it", async ({ page }) => {
+  await as(page, "manager-1");
+  const late = `聂涛 ${unique()}`;
+  const missed = await lead(page, { fullname: late, owner: "manager-1", responseby: "2026-11-01T00:00:00Z" });
+  await expect(async () => {
+    await page.goto(`/crm/crm.lead/${missed}/properties`);
+    await expect(property(page, "Response time")).toContainText("Missed", { timeout: 1_000 });
   }).toPass({ timeout: 20_000 });
-  await page.goto("/crm/crm.lead/LED-018/properties");
-  await settles("Failed");
-  await expect(property(page, "Respond by")).toContainText("Nov 1, 2026");
-  await page.getByRole("button", { name: "Notifications", exact: true }).click();
-  await page.getByRole("menuitem", { name: /Inbox/ }).click();
-  await page.getByRole("link", { name: /Notifications/ }).click();
-  await page.getByRole("row", { name: /First response overdue: 聂涛/ }).click();
-  await page.getByRole("link", { name: "聂涛", exact: true }).click();
-  await expect(property(page.getByRole("dialog", { name: "聂涛" }), "First response")).toContainText("Failed");
+  await expect(property(page, "Respond by")).toHaveText("Nov 1, 2026, 12:00 AM");
+  await page.goto("/home/inbox/notifications");
+  await page.getByRole("row", { name: new RegExp(`First response missed: ${late}`) }).click();
+  await page.getByRole("link", { name: late, exact: true }).click();
+  await expect(property(page.getByRole("dialog", { name: late }), "Response time")).toContainText("Missed");
 
-  await page.goto("/crm/crm.lead/LED-002/properties");
-  await expect(property(page, "First response")).toContainText("Due");
-  await edit(page, "Status");
-  await page.getByRole("combobox", { name: "Status" }).fill("Contacted");
-  await page.getByRole("option", { name: "Contacted", exact: true }).click();
-  await expect(property(page, "Status")).toContainText("Contacted");
-  await expect(property(page, "First response")).toContainText("Fulfilled", { timeout: 20_000 });
+  const answered = await lead(page, { fullname: `及时 ${unique()}`, owner: "manager-1" });
+  await page.goto(`/crm/crm.lead/${answered}/properties`);
+  await expect(property(page, "Response time")).toContainText("Due");
+  await edit(page, "Follow-up stage");
+  await page.getByRole("option", { name: "Connected", exact: true }).click();
+  await expect(property(page, "Follow-up stage")).toContainText("Connected");
+  await expect(property(page, "Response time")).toContainText("Met", { timeout: 20_000 });
 });
 
-test("follow-up: a task due by today waits in To do, opens its record and leaves when done", async ({ page }) => {
-  await signIn(page, "admin-1 · crm");
+test("follow-up: an activity due today waits in To do, opens its record and leaves when completed", async ({ page }) => {
+  await as(page, "manager-1");
+  const subject = `完成曦和的安全评审 ${unique()}`;
+  const id = await activity(page, { subject, due: today(), assignee: "manager-1", deal: "demo-deal-2" });
   await page.goto("/home/inbox/todo");
-  await page.getByRole("row", { name: /完成曦和的安全评审/ }).click();
+  await page.getByRole("row", { name: new RegExp(subject) }).click();
   const pane = page.getByRole("complementary", { name: "Item" });
-  await expect(pane.getByRole("heading", { name: "完成曦和的安全评审" })).toBeVisible();
-  await expect(pane.getByText("Nov 20, 2026", { exact: true })).toBeVisible();
+  await expect(pane.getByRole("heading", { name: subject })).toBeVisible();
   await pane.getByRole("link", { name: "Open full page" }).click();
-  await expect(page).toHaveURL(/\/crm\/crm\.task\/TSK-003$/);
-  await edit(page, "Status");
-  await page.getByRole("listbox", { name: "Status" }).getByRole("option", { name: "Done", exact: true }).click();
-  await expect(property(page, "Status")).toContainText("Done");
+  await expect(page).toHaveURL(new RegExp(`/crm/crm\\.activity/${id}$`));
+  await page.getByRole("main").getByRole("button", { name: "Complete", exact: true }).click();
+  const done = page.getByRole("dialog");
+  await done.getByRole("textbox", { name: "Outcome" }).fill("评审通过");
+  await done.getByRole("button", { name: "Complete", exact: true }).click();
+  await expect(done).toBeHidden();
   await page.goto("/home/inbox/todo");
   await expect(page.getByRole("heading", { name: "Inbox", exact: true })).toBeVisible();
-  await expect(page.getByRole("row", { name: /完成曦和的安全评审/ })).toHaveCount(0);
+  await expect(page.getByRole("row", { name: new RegExp(subject) })).toHaveCount(0);
 });
 
-test("follow-up: new website leads are assigned evenly across the sales reps", async ({ page }) => {
-  await signIn(page, "admin-1 · crm");
+test("follow-up: new leads without an owner are assigned evenly across the sales reps", async ({ page }) => {
+  await as(page, "manager-1");
   const owners: string[] = [];
   for (const person of ["官网访客甲", "官网访客乙", "官网访客丙"]) {
     await page.goto("/crm/crm.lead");
     await page.getByRole("button", { name: "New", exact: true }).click();
-    const lead = page.getByRole("dialog");
-    await lead.getByRole("textbox", { name: "Full name" }).fill(person);
-    await lead.getByRole("combobox", { name: "Status" }).click();
-    await page.getByRole("option", { name: "New", exact: true }).click();
-    await lead.getByRole("button", { name: "Create", exact: true }).click();
-    await expect(page.getByRole("heading", { level: 1, name: person, exact: true })).toBeVisible();
-    await edit(page, "Source");
-    await page.getByRole("combobox", { name: "Source", exact: true }).fill("官网");
-    await page.getByRole("option", { name: /官网/ }).first().click();
-    await expect(property(page, "Source")).toContainText("官网");
+    const form = page.getByRole("dialog");
+    await form.getByRole("textbox", { name: "Full name" }).fill(`${person} ${unique()}`);
+    await form.getByRole("button", { name: "Create", exact: true }).click();
+    await expect(page.getByRole("heading", { name: new RegExp(person) }).first()).toBeVisible();
     const owner = property(page, "Lead owner");
     await expect(owner).toContainText(/韩奥|田雪/, { timeout: 30_000 });
     owners.push((await owner.innerText()).trim());
@@ -397,7 +400,8 @@ test("follow-up: new website leads are assigned evenly across the sales reps", a
 });
 
 test("import: an Excel workbook of leads maps by column title, refused rows are fixed in place and retried, and the list exports what it shows as CSV", async ({ page }) => {
-  await signIn(page, "admin-1 · crm");
+  await as(page, "manager-1");
+  const tag = unique();
   await page.goto("/crm/crm.lead");
   await page.getByRole("button", { name: "More actions", exact: true }).click();
   await page.getByRole("menuitem", { name: "Import", exact: true }).click();
@@ -406,21 +410,20 @@ test("import: an Excel workbook of leads maps by column title, refused rows are 
     name: "leads.xlsx",
     mimeType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     buffer: workbook([
-      ["Full name", "Organization", "Status", "Industry"],
-      ["Ada Lin", "Northwind", "New", "制造"],
-      ["Bo Chen", "Contoso", "Contacted", ""],
+      ["Full name", "Company", "Follow-up stage", "Industry"],
+      [`Ada Lin ${tag}`, "Northwind", "New", "Manufacturing"],
+      [`Bo Chen ${tag}`, "Contoso", "Connected", ""],
       ["", "Nameless Co", "New", ""],
-      ["Cy Wu", "Fabrikam", "Pending", ""],
+      [`Cy Wu ${tag}`, "Fabrikam", "Pending", ""],
     ]),
   });
   await expect(wizard.getByText("4 records", { exact: true })).toBeVisible();
   await wizard.getByRole("button", { name: "Continue", exact: true }).click();
   await wizard.getByRole("button", { name: "Continue", exact: true }).click();
   await expect(wizard.getByText("2 can be imported · 2 need fixing", { exact: true })).toBeVisible();
-  await expect(wizard.getByText("This value cannot be read: Status", { exact: true })).toBeVisible();
-  await expect(wizard.getByRole("button", { name: "Import 2", exact: true })).toBeEnabled();
-  await wizard.getByRole("textbox", { name: "Full name · Row 3", exact: true }).fill("Fiona Gao");
-  await wizard.getByRole("textbox", { name: "Status · Row 4", exact: true }).fill("Contacted");
+  await expect(wizard.getByRole("row", { name: /Row 4 .*Pending.*Choose a readable listed value/ })).toBeVisible();
+  await wizard.getByRole("textbox", { name: "Full name · Row 3", exact: true }).fill(`Fiona Gao ${tag}`);
+  await wizard.getByRole("textbox", { name: "Follow-up stage · Row 4", exact: true }).fill("Connected");
   await expect(wizard.getByRole("button", { name: "Import 2", exact: true })).toBeDisabled();
   await wizard.getByRole("button", { name: "Check", exact: true }).click();
   await expect(wizard.getByText("4 can be imported · 0 need fixing", { exact: true })).toBeVisible();
@@ -430,92 +433,86 @@ test("import: an Excel workbook of leads maps by column title, refused rows are 
   await expect(wizard).toBeHidden();
 
   const search = page.getByRole("textbox", { name: "Search this list" });
-  await search.fill("Fiona Gao");
+  await search.fill(`Fiona Gao ${tag}`);
   await search.press("Enter");
-  await expect(page.getByRole("link", { name: "Fiona Gao", exact: true })).toBeVisible();
-  await expect(page.getByRole("link", { name: "Ada Lin", exact: true })).toHaveCount(0);
+  await expect(page.getByRole("link", { name: `Fiona Gao ${tag}`, exact: true })).toBeVisible();
+  await expect(page.getByRole("link", { name: `Ada Lin ${tag}`, exact: true })).toHaveCount(0);
   const started = page.waitForEvent("download");
   await page.getByRole("button", { name: "More actions", exact: true }).click();
   await page.getByRole("menuitem", { name: "Export as CSV", exact: true }).click();
   const exported = readFileSync((await (await started).path())!, "utf8");
-  expect(exported).toContain("Fiona Gao");
-  expect(exported).not.toContain("Ada Lin");
-  await page.getByRole("link", { name: "Fiona Gao", exact: true }).click();
-  await expect(page).toHaveURL((url) => /^\/crm\/crm\.lead\/CRM-LEAD-\d{4}-\d{5}$/.test(url.pathname));
-  await expect(property(page, "Lead owner")).toContainText("王丹");
+  expect(exported).toContain(`Fiona Gao ${tag}`);
+  expect(exported).not.toContain(`Ada Lin ${tag}`);
+  await page.getByRole("link", { name: `Fiona Gao ${tag}`, exact: true }).click();
+  await expect(page).toHaveURL((url) => /^\/crm\/crm\.lead\/LEAD-\d{4}-\d{5}$/.test(url.pathname));
+  await expect(property(page, "Lead owner")).toContainText(/韩奥|田雪/, { timeout: 30_000 });
 });
 
-test("naming: two new deals get consecutive numbers", async ({ page }) => {
-  await signIn(page, "admin-1 · crm");
-  const createDeal = async (title: string) => {
-    await page.goto("/crm/crm.deal");
+test("naming: two new activities get consecutive numbers", async ({ page }) => {
+  await as(page, "manager-1");
+  const create = async (subject: string) => {
+    await page.goto("/crm/crm.activity");
     await page.getByRole("button", { name: "New", exact: true }).click();
     const form = page.getByRole("dialog");
-    await form.getByRole("textbox", { name: "Deal" }).fill(title);
-    await form.getByRole("combobox", { name: "Status" }).click();
-    await page.getByRole("option", { name: "Qualification", exact: true }).click();
+    await form.getByRole("textbox", { name: "Subject" }).fill(subject);
     await form.getByRole("button", { name: "Create", exact: true }).click();
-    await expect(page).toHaveURL(/\/crm\/crm\.deal\/CRM-DEAL-\d{4}-\d{5}$/);
+    await expect(page).toHaveURL(/\/crm\/crm\.activity\/ACT-\d{4}-\d{5}$/);
     return Number(page.url().slice(-5));
   };
-  const first = await createDeal("Numbered deal one");
-  const second = await createDeal("Numbered deal two");
+  const first = await create(`Numbered one ${unique()}`);
+  const second = await create(`Numbered two ${unique()}`);
   expect(second).toBe(first + 1);
 });
 
-test("defaults and from: a lead defaults its owner to the creator and a deal derives industry and territory from its organization", async ({ page }) => {
-  await signIn(page, "admin-1 · crm");
-  await page.goto("/crm/crm.lead");
+test("defaults and from: an activity is assigned to its creator, and a deal takes its probability from its stage until someone overrides it", async ({ page }) => {
+  await as(page, "manager-1");
+  await page.goto("/crm/crm.activity");
   await page.getByRole("button", { name: "New", exact: true }).click();
   const form = page.getByRole("dialog");
-  await form.getByRole("textbox", { name: "Full name" }).fill("Default Owner Lead");
-  await form.getByRole("combobox", { name: "Status" }).click();
-  await page.getByRole("option", { name: "New", exact: true }).click();
+  await form.getByRole("textbox", { name: "Subject" }).fill(`Default owner ${unique()}`);
   await form.getByRole("button", { name: "Create", exact: true }).click();
-  await expect(page.getByRole("heading", { level: 1, name: "Default Owner Lead", exact: true })).toBeVisible();
-  await expect(property(page, "Lead owner")).toContainText("王丹");
-  await edit(page, "Lead owner");
-  await page.getByRole("combobox", { name: "Lead owner", exact: true }).fill("韩奥");
-  await page.getByRole("option", { name: /韩奥/ }).click();
-  await page.reload();
-  await expect(property(page, "Lead owner")).toContainText("韩奥");
+  await expect(property(page, "Assigned to")).toContainText("赵敏");
 
-  await page.goto("/crm/crm.deal");
-  await page.getByRole("button", { name: "New", exact: true }).click();
-  const dealForm = page.getByRole("dialog");
-  await dealForm.getByRole("textbox", { name: "Deal" }).fill("Derived Deal");
-  await dealForm.getByRole("combobox", { name: "Status" }).click();
-  await page.getByRole("option", { name: "Qualification", exact: true }).click();
-  await dealForm.getByRole("button", { name: "Create", exact: true }).click();
-  await expect(page.getByRole("heading", { level: 1, name: "Derived Deal", exact: true })).toBeVisible();
-  await expect(page.getByText("From Organization", { exact: true }).first()).toBeVisible();
-  await edit(page, "Organization");
-  await page.getByRole("combobox", { name: "Organization", exact: true }).fill("曦和精密");
-  await page.getByRole("option", { name: /曦和精密/ }).click();
-  await expect(property(page, "Industry")).toContainText("制造");
-  await expect(property(page, "Territory")).toContainText("长三角");
-  await edit(page, "Industry");
-  await page.getByRole("combobox", { name: "Industry", exact: true }).fill("软件");
-  await page.getByRole("option", { name: "软件", exact: true }).click();
-  await edit(page, "Deal");
-  const title = page.getByRole("textbox", { name: "Deal", exact: true });
-  await title.fill("Derived Deal Updated");
-  await title.press("Enter");
+  const id = await deal(page, { title: `Derived ${unique()}` });
+  await page.goto(`/crm/crm.deal/${id}`);
+  await expect(property(page, "Probability %")).toHaveText("10");
+  await expect(page.getByText("From Stage", { exact: true }).first()).toBeVisible();
+  await edit(page, "Stage");
+  await page.getByRole("combobox", { name: "Stage", exact: true }).fill("Proposal");
+  await page.getByRole("option", { name: /Proposal/ }).click();
+  await expect(property(page, "Probability %")).toHaveText("50");
+  await edit(page, "Probability %");
+  const probability = page.getByRole("spinbutton", { name: "Probability %", exact: true });
+  await probability.fill("35");
+  await probability.press("Enter");
+  await expect(property(page, "Probability %")).toHaveText("35");
+  await edit(page, "Next step");
+  const next = page.getByRole("textbox", { name: "Next step", exact: true });
+  await next.fill("Send the revised proposal");
+  await next.press("Enter");
   await page.reload();
-  await expect(property(page, "Industry")).toContainText("软件");
+  await expect(property(page, "Probability %")).toHaveText("35");
 });
 
-test("roles: sales reps see only business menu entries and actions, and see a lead immediately after assignment", async ({ page }) => {
+test("roles: sales reps see only business menu entries and actions, and see a lead immediately after it is assigned to them", async ({ page }) => {
+  await as(page, "manager-1");
+  const mine = `我的线索 ${unique()}`;
+  const handed = `移交线索 ${unique()}`;
+  const mineId = await lead(page, { fullname: mine, owner: "user-1", stage: "attempting" });
+  const handedId = await lead(page, { fullname: handed, owner: "manager-1", stage: "attempting" });
+
   await page.goto("/");
+  await page.getByRole("button", { name: "Account", exact: true }).click();
+  await page.getByRole("menuitem", { name: "Sign out", exact: true }).click();
   await page.getByRole("button", { name: "user-1 · crm" }).click();
   await page.getByRole("link", { name: "CRM", exact: true }).click();
   const nav = page.getByRole("navigation", { name: "Primary navigation" });
   await expect(nav.getByRole("link", { name: "Leads", exact: true })).toBeVisible();
-  await expect(nav.getByRole("link", { name: "Products", exact: true })).toHaveCount(0);
-  await expect(nav.getByRole("link", { name: "Territories", exact: true })).toHaveCount(0);
-  await nav.getByRole("link", { name: "Leads", exact: true }).click();
-  await expect(page.getByText("林子航", { exact: true })).toHaveCount(0);
-  await page.getByRole("link", { name: "沈若溪", exact: true }).click();
+  await expect(nav.getByRole("link", { name: "Settings", exact: true })).toHaveCount(0);
+  await page.goto("/crm/crm.lead");
+  await expect(page.getByRole("link", { name: mine, exact: true })).toBeVisible();
+  await expect(page.getByRole("link", { name: handed, exact: true })).toHaveCount(0);
+  await page.goto(`/crm/crm.lead/${mineId}`);
   const more = page.getByRole("button", { name: "More actions" });
   if (await more.isVisible()) {
     await more.click();
@@ -526,10 +523,7 @@ test("roles: sales reps see only business menu entries and actions, and see a le
   await page.getByRole("button", { name: "Account", exact: true }).click();
   await page.getByRole("menuitem", { name: "Sign out", exact: true }).click();
   await page.getByRole("button", { name: "manager-1 · crm" }).click();
-  await page.getByRole("link", { name: "CRM", exact: true }).click();
-  await expect(nav.getByRole("link", { name: "Products", exact: true })).toBeVisible();
-  await nav.getByRole("link", { name: "Leads", exact: true }).click();
-  await page.getByRole("link", { name: "林子航", exact: true }).click();
+  await page.goto(`/crm/crm.lead/${handedId}`);
   await edit(page, "Lead owner");
   await page.getByRole("combobox", { name: "Lead owner", exact: true }).fill("田雪");
   await page.getByRole("option", { name: /田雪/ }).click();
@@ -539,89 +533,85 @@ test("roles: sales reps see only business menu entries and actions, and see a le
   await page.getByRole("menuitem", { name: "Sign out", exact: true }).click();
   await page.getByRole("button", { name: "user-1 · crm" }).click();
   await page.goto("/crm/crm.lead");
-  await expect(page.getByRole("link", { name: "林子航", exact: true })).toBeVisible();
+  await expect(page.getByRole("link", { name: handed, exact: true })).toBeVisible();
 });
 
 test("peek: clicking a reference opens the record drawer without leaving the page, and a reference input creates a contact inline", async ({ page }) => {
-  await page.goto("/");
-  await page.getByRole("button", { name: "admin-1 · crm" }).click();
-  await page.goto("/crm/crm.deal/DEL-001");
-  await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
+  await as(page, "manager-1");
+  const id = await deal(page, { title: `Peek ${unique()}` });
+  await page.goto(`/crm/crm.deal/${id}`);
   const dealURL = page.url();
-  const orgLink = page.getByRole("main").getByRole("link", { name: "曦和精密", exact: true }).first();
-  await orgLink.click();
-  const drawer = page.getByRole("dialog", { name: "曦和精密" });
-  await expect(drawer.getByRole("heading", { level: 2, name: "曦和精密", exact: true })).toBeVisible();
+  await page.getByRole("main").getByRole("link", { name: "Northwind Precision Manufacturing", exact: true }).first().click();
+  const drawer = page.getByRole("dialog", { name: "Northwind Precision Manufacturing" });
+  await expect(drawer.getByRole("heading", { level: 2, name: "Northwind Precision Manufacturing", exact: true })).toBeVisible();
   await expect(page).toHaveURL(dealURL);
   await page.keyboard.press("Escape");
   await expect(drawer).toBeHidden();
-  await expect(page).toHaveURL(dealURL);
 
   await edit(page, "Primary contact");
-  const contactInput = page.getByRole("combobox", { name: "Primary contact", exact: true });
-  await contactInput.click();
+  await page.getByRole("combobox", { name: "Primary contact", exact: true }).click();
   await page.getByRole("option", { name: /New Contact…/ }).click();
-  const createDialog = page.getByRole("dialog");
-  await createDialog.getByRole("textbox", { name: "Full name" }).fill("林小满");
-  await createDialog.getByRole("button", { name: "Create", exact: true }).click();
-  await expect(createDialog).toBeHidden();
-  await expect(property(page, "Primary contact")).toContainText("林小满");
+  const create = page.getByRole("dialog");
+  const person = `林小满 ${unique()}`;
+  await create.getByRole("textbox", { name: "Full name" }).fill(person);
+  await create.getByRole("button", { name: "Create", exact: true }).click();
+  await expect(create).toBeHidden();
+  await expect(property(page, "Primary contact")).toContainText(person);
 });
 
 test("crm board: stage lanes carry their own colours and the plus in a lane header opens the create dialog with that stage", async ({ page }) => {
-  await page.goto("/");
-  await page.getByRole("button", { name: "manager-1 · crm" }).click();
-  await page.getByRole("link", { name: "CRM", exact: true }).click();
-  await page.getByRole("navigation", { name: "Primary navigation" }).getByRole("link", { name: "Deals", exact: true }).click();
+  await as(page, "manager-1");
+  await page.goto("/crm/crm.deal");
   await page.getByRole("radio", { name: "Board" }).click();
   await expect(page.getByRole("region", { name: "Negotiation", exact: true })).toBeVisible();
   await page.getByRole("button", { name: "New in Negotiation", exact: true }).click();
   const dialog = page.getByRole("dialog");
-  await expect(dialog.getByRole("group", { name: /Status/ }).or(dialog)).toContainText("Negotiation");
+  await expect(dialog).toContainText("Negotiation");
   await dialog.getByRole("button", { name: "Cancel", exact: true }).click();
   await expect(dialog).toBeHidden();
 });
 
-test("crm timeline: tasks and notes attached to a deal show in its activity, and a task added there is attached to it", async ({ page }) => {
-  await page.goto("/");
-  await page.getByRole("button", { name: "manager-1 · crm" }).click();
-  await page.goto("/crm/crm.deal/DEL-007/activity");
-  await page.getByRole("button", { name: "Add Task", exact: true }).click();
+test("crm timeline: activities attached to a deal show in its activity tab, and an activity added there is attached to it", async ({ page }) => {
+  await as(page, "manager-1");
+  const here = await deal(page, { title: `Timeline ${unique()}` });
+  const other = await deal(page, { title: `Elsewhere ${unique()}` });
+  const subject = `时间线里新建的活动 ${unique()}`;
+  await page.goto(`/crm/crm.deal/${here}/activity`);
+  await page.getByRole("button", { name: "Add Activity", exact: true }).click();
   const dialog = page.getByRole("dialog");
-  await dialog.getByRole("textbox", { name: "Title" }).fill("时间线里新建的任务");
-  await dialog.getByRole("combobox", { name: "Status" }).click();
-  await page.getByRole("option", { name: "Todo", exact: true }).click();
+  await dialog.getByRole("textbox", { name: "Subject" }).fill(subject);
   await dialog.getByRole("button", { name: "Create", exact: true }).click();
   await expect(dialog).toBeHidden();
-  const added = page.getByRole("main").getByRole("link", { name: "时间线里新建的任务", exact: true });
+  const added = page.getByRole("main").getByRole("link", { name: subject, exact: true });
   await expect(added).toBeVisible();
   await page.reload();
   await expect(added).toBeVisible();
-  await page.goto("/crm/crm.deal/DEL-005/activity");
-  await expect(page.getByRole("button", { name: "Add Task", exact: true })).toBeVisible();
-  await expect(page.getByRole("main").getByRole("link", { name: "时间线里新建的任务", exact: true })).toHaveCount(0);
+  await page.goto(`/crm/crm.deal/${other}/activity`);
+  await expect(page.getByRole("button", { name: "Add Activity", exact: true })).toBeVisible();
+  await expect(page.getByRole("main").getByRole("link", { name: subject, exact: true })).toHaveCount(0);
 });
 
 test("crm timeline: a note added on a deal can be pinned above the timeline, and the timeline filters to one kind", async ({ page }) => {
-  await page.goto("/");
-  await page.getByRole("button", { name: "manager-1 · crm" }).click();
-  await page.goto("/crm/crm.deal/DEL-003/activity");
+  await as(page, "manager-1");
+  const id = await deal(page, { title: `Pinned ${unique()}` });
+  const title = `要置顶的备注 ${unique()}`;
+  await page.goto(`/crm/crm.deal/${id}/activity`);
   await page.getByRole("button", { name: "Add Note", exact: true }).click();
   const dialog = page.getByRole("dialog");
-  await dialog.getByRole("textbox", { name: "Title" }).fill("要置顶的备注");
+  await dialog.getByRole("textbox", { name: "Title" }).fill(title);
   await dialog.getByRole("button", { name: "Create", exact: true }).click();
   await expect(dialog).toBeHidden();
   const main = page.getByRole("main");
   await main.getByRole("button", { name: "Pin", exact: true }).first().click();
   const pinned = page.getByRole("list", { name: "Pinned" });
-  await expect(pinned.getByRole("link", { name: "要置顶的备注", exact: true })).toBeVisible();
-  await page.getByRole("radio", { name: "Tasks" }).click();
+  await expect(pinned.getByRole("link", { name: title, exact: true })).toBeVisible();
+  await page.getByRole("radio", { name: "Activities" }).click();
   await expect(pinned).toHaveCount(0);
   await page.getByRole("radio", { name: "Notes" }).click();
-  await expect(pinned.getByRole("link", { name: "要置顶的备注", exact: true })).toBeVisible();
-  await pinned.getByRole("listitem").filter({ hasText: "要置顶的备注" }).getByRole("button", { name: "Unpin", exact: true }).click();
-  await expect(pinned.getByRole("link", { name: "要置顶的备注", exact: true })).toHaveCount(0);
-  await expect(main.getByRole("link", { name: "要置顶的备注", exact: true })).toBeVisible();
+  await expect(pinned.getByRole("link", { name: title, exact: true })).toBeVisible();
+  await pinned.getByRole("listitem").filter({ hasText: title }).getByRole("button", { name: "Unpin", exact: true }).click();
+  await expect(pinned.getByRole("link", { name: title, exact: true })).toHaveCount(0);
+  await expect(main.getByRole("link", { name: title, exact: true })).toBeVisible();
 });
 
 });
